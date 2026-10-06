@@ -71,7 +71,7 @@ service cloud.firestore {
               || get(/databases/$(database)/documents/invites/$(request.resource.data.code)).data.fid == fid);
         allow update: if signedIn()
           && uid == request.auth.uid
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'canCall', 'lastActive', 'lastOnline'])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'canCall', 'lastActive', 'lastOnline', 'callable', 'face'])
           && request.resource.data.name is string
           && request.resource.data.name.size() > 0
           && request.resource.data.name.size() <= 40;
@@ -130,7 +130,7 @@ service cloud.firestore {
       match /calls/{cid} {
         allow read: if isMember(fid);
         allow create: if isMember(fid)
-          && request.resource.data.keys().hasOnly(['callerUid', 'callerName', 'state', 'offer', 'answer', 'createdAt', 'endedAt'])
+          && request.resource.data.keys().hasOnly(['callerUid', 'callerName', 'calleeUid', 'calleeName', 'state', 'offer', 'answer', 'createdAt', 'endedAt'])
           && request.resource.data.callerUid == request.auth.uid
           && request.resource.data.state == 'ringing';
         allow update: if isMember(fid)

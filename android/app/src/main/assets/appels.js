@@ -1,4 +1,4 @@
-// Appels vidéo sur la tablette : sonnerie, « Décrocher », appel en WebRTC.
+// Appels vidéo sur la tablette : sonnerie, « Décrocher », et appels vers la famille (visages sur l'accueil).
 // Chargé seulement si le navigateur de la tablette sait faire de la vidéo (Android 5 et plus, à jour).
 // La tablette a ici sa propre identité Firebase (SDK web, en temps réel) ; le reste de l'écran
 // passe par l'app Android (Sync.java).
@@ -32,6 +32,9 @@ const android = () => window.PapoteAndroid;
 let fid = null;
 let ringing = null;  // { id, data }
 let active = null;   // { id, pc, stream, stops }
+let familyName = '';
+const MAX_CONTACTS = 4;
+const RING_TIMEOUT_MS = 45_000;
 
 function user() {
   return new Promise((resolve) => {
@@ -88,8 +91,8 @@ function watchCalls() {
   onSnapshot(q, (snap) => {
     const now = Date.now();
     const fresh = snap.docs.filter((d) => {
-      const created = d.data({ serverTimestamps: 'estimate' }).createdAt;
-      return created && now - created.toMillis() < FRESH_MS;
+      const data = d.data({ serverTimestamps: 'estimate' });
+      return !data.calleeUid && data.createdAt && now - data.createdAt.toMillis() < FRESH_MS;
     });
     // L'appel qui sonnait a été annulé par l'appelant.
     if (ringing && !fresh.some((d) => d.id === ringing.id)) hideRing();
@@ -178,6 +181,7 @@ function hangup(message, remoteEnded) {
 
 function closeView() {
   $('call-view').hidden = true;
+  $('call-outgoing').hidden = true;
   $('call-remote').srcObject = null;
   $('call-local').srcObject = null;
   if (android()) android().inCall(false);
@@ -217,6 +221,117 @@ function watchFamily() {
   if (android() && android().realtime) android().realtime(true);
 }
 
+// ---------- Visages sur l'accueil : appeler la famille ----------
+
+function renderContacts(members) {
+  const box = $('contacts');
+  const list = members
+    .filter((m) => m.role === 'famille' && m.callable && m.face)
+    .slice(0, MAX_CONTACTS);
+  box.replaceChildren();
+  box.hidden = list.length === 0;
+  for (const m of list) {
+    const b = document.createElement('button');
+    b.className = 'contact';
+    const img = document.createElement('img');
+    img.src = m.face;
+    img.alt = '';
+    const name = document.createElement('span');
+    name.textContent = m.name;
+    b.append(img, name);
+    b.addEventListener('click', () => callFamily(m));
+    box.append(b);
+  }
+}
+
+function watchMembers() {
+  onSnapshot(collection(db, 'families', fid, 'members'), (snap) => {
+    renderContacts(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+  }, (err) => console.error('Membres', err));
+}
+
+async function callFamily(member) {
+  if (active || ringing) return;
+  if (window.Papote && window.Papote.closeOverlayForCall) window.Papote.closeOverlayForCall();
+  $('call-view').hidden = false;
+  $('call-outgoing').hidden = false;
+  $('call-face').src = member.face;
+  $('call-name').textContent = member.name;
+  setStatus(`Appel de ${member.name}…`);
+  if (android()) android().inCall(true);
+
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: { echoCancellation: true, noiseSuppression: true },
+    });
+  } catch (e) {
+    console.error(e);
+    setStatus('La caméra ne répond pas.');
+    setTimeout(closeView, 3000);
+    return;
+  }
+  $('call-local').srcObject = stream;
+
+  const callRef = doc(collection(db, 'families', fid, 'calls'));
+  const pc = new RTCPeerConnection(ICE_SERVERS);
+  active = { id: callRef.id, pc, stream, stops: [] };
+  stream.getTracks().forEach((t) => pc.addTrack(t, stream));
+  pc.ontrack = (e) => {
+    $('call-remote').srcObject = e.streams[0];
+    $('call-remote').play().catch(() => {});
+  };
+  pc.onicecandidate = (e) => {
+    if (e.candidate) addDoc(collection(callRef, 'callerCandidates'), e.candidate.toJSON()).catch(() => {});
+  };
+  pc.onconnectionstatechange = () => {
+    if (pc.connectionState === 'connected') {
+      $('call-outgoing').hidden = true;
+      setStatus('');
+    }
+    if (pc.connectionState === 'failed') hangup('La connexion a été perdue.');
+  };
+
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  await setDoc(callRef, {
+    callerUid: auth.currentUser.uid,
+    callerName: familyName || 'La tablette',
+    calleeUid: member.id,
+    calleeName: member.name,
+    state: 'ringing',
+    offer: { type: offer.type, sdp: offer.sdp },
+    answer: null,
+    createdAt: serverTimestamp(),
+    endedAt: null,
+  });
+
+  const callId = callRef.id;
+  const noAnswer = setTimeout(() => {
+    if (active && active.id === callId && !pc.currentRemoteDescription) {
+      updateDoc(callRef, { state: 'missed', endedAt: serverTimestamp() }).catch(() => {});
+      hangup(`${member.name} ne répond pas`, true);
+    }
+  }, RING_TIMEOUT_MS);
+  active.stops.push(() => clearTimeout(noAnswer));
+  active.stops.push(onSnapshot(callRef, async (snap) => {
+    const data = snap.data();
+    if (!data) return;
+    if (data.answer && !pc.currentRemoteDescription) {
+      await pc.setRemoteDescription(data.answer);
+      setStatus('Connexion…');
+    }
+    if (data.state === 'declined') hangup(`${member.name} ne peut pas répondre`, true);
+    if (data.state === 'ended') hangup('Appel terminé', true);
+  }));
+  active.stops.push(onSnapshot(collection(callRef, 'calleeCandidates'), (snap) => {
+    snap.docChanges().forEach((c) => {
+      if (c.type === 'added') pc.addIceCandidate(c.doc.data()).catch(() => {});
+    });
+  }));
+}
+
 async function start() {
   try {
     fid = await joinFamily();
@@ -227,8 +342,13 @@ async function start() {
     setTimeout(start, 60_000); // tablette pas encore reliée ou hors ligne : on réessaie
     return;
   }
+  try {
+    const fam = await getDoc(doc(db, 'families', fid));
+    familyName = (fam.exists() && fam.data().name) || '';
+  } catch (e) { /* nom facultatif */ }
   watchCalls();
   watchFamily();
+  watchMembers();
 }
 
 start();

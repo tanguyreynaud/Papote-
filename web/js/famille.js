@@ -3,7 +3,10 @@ import {
   loadMembership, createFamily, joinFamily, leaveFamily, watchPosts, watchMembers,
   addPost, deletePost, loadMedia, formatCode, normalizeCode, toDate, CodeInconnuError,
 } from './firebase.js';
-import { startCall } from './appel.js';
+import {
+  startCall, watchIncoming, answerCall, declineCall,
+} from './appel.js';
+import { db, doc, updateDoc } from './firebase.js';
 import { startAgenda, stopAgenda } from './agenda.js';
 
 const $ = (id) => document.getElementById(id);
@@ -19,7 +22,6 @@ function show(view) {
   for (const id of ['loading', 'view-join', 'view-app', 'view-settings']) {
     $(id).hidden = id !== view;
   }
-  $('btn-settings').hidden = view !== 'view-app';
 }
 
 function showError(el, message) {
@@ -172,6 +174,8 @@ function openComposer(next) {
   $('voice-recorder').hidden = mode !== 'voice' || !!pendingVoice;
   $('post-text').hidden = mode === 'voice';
   $('post-text').placeholder = MODES[mode].placeholder || `Écrire un message à ${session.family.name}…`;
+  $('post-text').maxLength = mode === 'photo' ? 80 : 160;
+  updateCount();
   $('actions').hidden = true;
   $('form-post').hidden = false;
   setStatus('');
@@ -193,6 +197,14 @@ document.querySelectorAll('.tile[data-mode]').forEach((tile) => {
   tile.addEventListener('click', () => openComposer(tile.dataset.mode));
 });
 $('composer-close').addEventListener('click', closeComposer);
+
+function updateCount() {
+  const max = $('post-text').maxLength;
+  const left = max - $('post-text').value.length;
+  $('text-count').textContent = `${left} caractère${left > 1 ? 's' : ''} restant${left > 1 ? 's' : ''}`;
+  $('text-count').hidden = mode === 'voice';
+}
+$('post-text').addEventListener('input', updateCount);
 
 function showSent() {
   $('sent-toast').hidden = false;
@@ -450,11 +462,8 @@ function renderMembers(members) {
   renderActivity();
   // Le bouton d'appel n'apparaît que si une tablette sait recevoir les appels (Android 5 et plus).
   const canCall = members.some((m) => m.role === 'tablette' && m.canCall);
-  const callable = canCall && !!navigator.mediaDevices;
-  $('tile-call').disabled = !callable;
-  $('tile-call-sub').textContent = callable
-    ? `Appeler ${session.family.name}`
-    : 'Pas possible avec cette tablette';
+  $('tile-call').disabled = !(canCall && !!navigator.mediaDevices);
+  renderCallable(members);
   const list = $('members');
   list.replaceChildren();
   let tabletShown = false;
@@ -686,6 +695,152 @@ function renderActivity() {
 
 setInterval(() => { if (session) renderActivity(); }, 60_000);
 
+// ---------- Être appelé(e) depuis la tablette (4 personnes au plus) ----------
+
+const MAX_CALLABLE = 4;
+let pendingFace = null;
+let currentMembers = [];
+
+function renderCallable(members) {
+  currentMembers = members;
+  const me = members.find((m) => m.id === session.uid) || {};
+  const others = members.filter((m) => m.callable && m.id !== session.uid).length;
+  if (!pendingFace) {
+    $('face-preview').hidden = !me.face;
+    $('face-empty').hidden = !!me.face;
+    if (me.face) $('face-preview').src = me.face;
+  }
+  if (!$('callable-name').value) $('callable-name').value = me.name || '';
+  $('btn-callable-remove').hidden = !me.callable;
+  const full = !me.callable && others >= MAX_CALLABLE;
+  $('btn-callable-save').disabled = full;
+  $('callable-help').textContent = full
+    ? `Déjà ${MAX_CALLABLE} personnes sur la tablette : il faut qu'une d'elles se retire avant.`
+    : `Ajoutez votre visage et votre prénom : ils apparaîtront sur la tablette (${others + (me.callable ? 1 : 0)}/${MAX_CALLABLE}), et un simple appui vous appellera.`;
+}
+
+async function onFaceChosen(e) {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  const img = await loadImage(file);
+  // Visage carré, petit : il est lu par la tablette à chaque démarrage.
+  const side = Math.min(img.naturalWidth, img.naturalHeight);
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 320;
+  canvas.getContext('2d').drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, 320, 320);
+  pendingFace = canvas.toDataURL('image/jpeg', 0.8);
+  $('face-preview').src = pendingFace;
+  $('face-preview').hidden = false;
+  $('face-empty').hidden = true;
+}
+$('face-camera').addEventListener('click', () => $('face-input-camera').click());
+$('face-gallery').addEventListener('click', () => $('face-input-gallery').click());
+$('face-input-camera').addEventListener('change', onFaceChosen);
+$('face-input-gallery').addEventListener('change', onFaceChosen);
+
+function callableStatus(text) {
+  $('callable-status').textContent = text;
+  $('callable-status').hidden = !text;
+}
+
+$('btn-callable-save').addEventListener('click', async () => {
+  const me = currentMembers.find((m) => m.id === session.uid) || {};
+  const face = pendingFace || me.face;
+  const name = $('callable-name').value.trim();
+  if (!face) { callableStatus('Ajoutez d\'abord une photo de votre visage.'); return; }
+  if (!name) { callableStatus('Indiquez votre prénom.'); return; }
+  try {
+    await updateDoc(doc(db, 'families', session.fid, 'members', session.uid), { callable: true, face, name });
+    session.member.name = name;
+    pendingFace = null;
+    callableStatus('Enregistré ✓ Vous apparaissez sur la tablette.');
+  } catch (err) {
+    console.error(err);
+    callableStatus("L'enregistrement a échoué. Vérifiez la connexion.");
+  }
+});
+
+$('btn-callable-remove').addEventListener('click', async () => {
+  await updateDoc(doc(db, 'families', session.fid, 'members', session.uid), { callable: false });
+  callableStatus('Vous n\'apparaissez plus sur la tablette.');
+});
+
+// ---------- Appel venant de la tablette ----------
+
+let incoming = null;
+let stopIncoming = null;
+let ringTimer = null;
+let audioCtx = null;
+
+function ringTone(on) {
+  clearInterval(ringTimer);
+  if (!on) return;
+  const beep = () => {
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      const t = audioCtx.currentTime;
+      [0, 0.4].forEach((d) => {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.frequency.value = 880;
+        gain.gain.setValueAtTime(0.3, t + d);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + d + 0.3);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(t + d);
+        osc.stop(t + d + 0.3);
+      });
+    } catch (e) { /* pas de son */ }
+  };
+  beep();
+  ringTimer = setInterval(beep, 2000);
+  if (navigator.vibrate) navigator.vibrate([400, 200, 400]);
+}
+
+function onIncoming(call) {
+  if (currentCall) return;
+  incoming = call;
+  $('incoming').hidden = !call;
+  ringTone(!!call);
+  if (!call) return;
+  $('incoming-name').textContent = `${call.callerName || session.family.name} vous appelle`;
+  const tablet = currentMembers.find((m) => m.role === 'tablette' && m.face);
+  $('incoming-face').hidden = !tablet;
+  if (tablet) $('incoming-face').src = tablet.face;
+}
+
+$('incoming-decline').addEventListener('click', async () => {
+  const call = incoming;
+  onIncoming(null);
+  if (call) await declineCall(session.fid, call).catch(() => {});
+});
+
+$('incoming-answer').addEventListener('click', async () => {
+  const call = incoming;
+  onIncoming(null);
+  if (!call) return;
+  $('call').hidden = false;
+  setCallStatus('Connexion…');
+  try {
+    currentCall = await answerCall(session.fid, call, {
+      local: $('call-local'),
+      remote: $('call-remote'),
+      onState: (state) => setCallStatus(state === 'connected' ? '' : 'Connexion…'),
+      onEnd: (reason) => {
+        currentCall = null;
+        setCallStatus(END_MESSAGES[reason] || 'Appel terminé');
+        setTimeout(() => { if (!currentCall) $('call').hidden = true; }, 2000);
+      },
+    });
+  } catch (err) {
+    console.error(err);
+    currentCall = null;
+    setCallStatus("Impossible d'accéder à la caméra ou au micro.");
+    setTimeout(() => { if (!currentCall) $('call').hidden = true; }, 4000);
+  }
+});
+
 // ---------- Onglets Messages / Agenda ----------
 
 document.querySelectorAll('.tab').forEach((tab) => {
@@ -714,6 +869,8 @@ async function start() {
   stopMembers = watchMembers(session.fid, renderMembers);
   history.replaceState(null, '', location.pathname);
   startAgenda(session);
+  stopIncoming?.();
+  stopIncoming = watchIncoming(session.fid, session.uid, onIncoming);
   renderInstallCard();
   show('view-app');
 }

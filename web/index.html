@@ -21,7 +21,6 @@
       <h1>Papote</h1>
       <p id="family-title" class="subtitle"></p>
     </div>
-    <button id="btn-settings" class="icon-btn" hidden aria-label="Réglages">⚙︎</button>
   </header>
 
   <main>
@@ -77,22 +76,22 @@
         <button type="button" class="tile tile-call" id="tile-call">
           <span class="tile-icon">📞</span>
           <span class="tile-title">Appel vidéo</span>
-          <span class="tile-sub" id="tile-call-sub">Appeler</span>
         </button>
         <button type="button" class="tile tile-photo" data-mode="photo">
           <span class="tile-icon">📷</span>
           <span class="tile-title">Photo</span>
-          <span class="tile-sub">Prendre ou choisir</span>
         </button>
         <button type="button" class="tile tile-message" data-mode="message">
           <span class="tile-icon">✉️</span>
           <span class="tile-title">Message</span>
-          <span class="tile-sub">Écrire un mot</span>
         </button>
         <button type="button" class="tile tile-voice" data-mode="voice">
           <span class="tile-icon">🎤</span>
           <span class="tile-title">Vocal</span>
-          <span class="tile-sub">Enregistrer sa voix</span>
+        </button>
+        <button type="button" class="tile tile-settings" id="btn-settings">
+          <span class="tile-icon">⚙️</span>
+          <span class="tile-title">Réglages</span>
         </button>
       </div>
       <p id="sent-toast" class="sent-toast" hidden>Envoyé ✓</p>
@@ -116,7 +115,8 @@
           <audio id="voice-audio" controls></audio>
           <button type="button" class="link danger small" id="voice-remove">Recommencer</button>
         </div>
-        <textarea id="post-text" rows="4" maxlength="2000"></textarea>
+        <textarea id="post-text" rows="4" maxlength="160"></textarea>
+        <p id="text-count" class="text-count muted small"></p>
         <button type="submit" class="action-btn wide send-btn" id="btn-send">Envoyer</button>
         <input id="post-camera" type="file" accept="image/*" capture="environment" hidden>
         <input id="post-photos" type="file" accept="image/*" multiple hidden>
@@ -179,6 +179,26 @@
         <button id="btn-share" class="primary">Partager le lien</button>
       </div>
       <div class="card">
+        <h2>Être appelé(e) depuis la tablette</h2>
+        <p class="muted" id="callable-help">Ajoutez votre visage et votre prénom : ils apparaîtront sur la tablette, et un simple appui vous appellera.</p>
+        <div class="face-row">
+          <img id="face-preview" class="face-preview" alt="" hidden>
+          <div class="face-empty" id="face-empty">🙂</div>
+          <div class="face-buttons">
+            <button type="button" class="secondary" id="face-camera">📷 Prendre</button>
+            <button type="button" class="secondary" id="face-gallery">🖼️ Choisir</button>
+          </div>
+        </div>
+        <input id="face-input-camera" type="file" accept="image/*" capture="user" hidden>
+        <input id="face-input-gallery" type="file" accept="image/*" hidden>
+        <label>Prénom affiché
+          <input id="callable-name" maxlength="20" placeholder="Julie">
+        </label>
+        <button type="button" class="action-btn wide" id="btn-callable-save">Enregistrer</button>
+        <button type="button" class="link danger wide" id="btn-callable-remove" hidden>Ne plus apparaître sur la tablette</button>
+        <p id="callable-status" class="muted small" hidden></p>
+      </div>
+      <div class="card">
         <h2>Membres</h2>
         <ul id="members" class="members"></ul>
       </div>
@@ -197,6 +217,16 @@
   <div id="lightbox" class="lightbox" hidden>
     <img id="lightbox-img" alt="">
     <p class="lightbox-hint">Touchez pour fermer</p>
+  </div>
+
+  <!-- Appel de la tablette -->
+  <div id="incoming" class="incoming" hidden>
+    <img id="incoming-face" alt="">
+    <p id="incoming-name" class="incoming-name"></p>
+    <div class="incoming-actions">
+      <button id="incoming-decline" class="call-round decline">Refuser</button>
+      <button id="incoming-answer" class="call-round answer">Décrocher</button>
+    </div>
   </div>
 
   <!-- Appel vidéo en cours -->

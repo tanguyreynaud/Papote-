@@ -6,17 +6,14 @@ et une app pour que la famille lui envoie photos et messages depuis iPhone ou An
 ## Ce que ça fait
 
 **Sur la tablette** (Android 4.4 ou plus récent, toujours allumée sur son chargeur) :
-- l'heure, la date et la météo de Saint-Martin-de-Valamas en très grand ;
-- un cadre photo qui fait défiler les dernières photos de la famille ;
+- l'heure et la date en très grand, la dernière photo de la famille sur tout le bord droit ;
+- jusqu'à 4 visages de la famille : un appui lance un appel vidéo (tablettes Android 5 et plus) ;
 - deux gros boutons « Photos » et « Messages » ;
-- chaque nouvel envoi s'affiche en grand avec un petit son, et un bouton « ❤️ Envoyer un bisou » ;
-- passage en couleurs sombres la nuit (21 h – 7 h), retour automatique à l'accueil ;
-- rappels (médicaments, rendez-vous) affichés en grand à l'heure, avec « C'est fait », et un agenda
-  des 7 prochains jours ;
-- messages vocaux (convertis en MP3 pour être lisibles partout) ;
-- veille : l'app famille indique si la tablette est en ligne et quand elle a été utilisée ;
-- appels vidéo de la famille vers la tablette, avec un gros bouton « Décrocher »
-  (tablettes Android 5 et plus seulement ; WebRTC gratuit, signalisation par Firestore).
+- chaque nouvel envoi s'affiche en plein écran : photo, message (texte calibré pour tenir sans défiler),
+  message vocal (« Écouter » d'abord, puis « Réécouter », « Envoyer un bisou » ou « OK ») ;
+- rappels en plein écran 15 minutes avant (« Dans 15 minutes ») puis à l'heure (« C'est l'heure ! ») ;
+- appels vidéo de la famille vers la tablette, avec un gros bouton « Décrocher » ;
+- passage en couleurs sombres la nuit (21 h – 7 h), retour automatique à l'accueil.
 
 **Sur le téléphone de la famille** : https://papote-famille.web.app
 - rejoindre avec le code famille, sans créer de compte ;

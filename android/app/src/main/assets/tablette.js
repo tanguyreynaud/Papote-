@@ -1,7 +1,7 @@
 /*
  * Écran de la tablette Papote. Écrit en JavaScript ES5 pour le navigateur d'Android 4.4.
- * Les données arrivent de l'app Android par window.Papote.onStatus / onPosts / onWeather ;
- * les actions repartent par window.PapoteAndroid.markSeen / sendHeart.
+ * Les données arrivent de l'app Android par window.Papote.onStatus / onPosts / onReminders ;
+ * les actions repartent par window.PapoteAndroid (markSeen, sendHeart, playVoice…).
  */
 (function () {
   'use strict';
@@ -13,7 +13,6 @@
   var MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août',
     'septembre', 'octobre', 'novembre', 'décembre'];
 
-  var familyName = '';
   var posts = [];
   var photos = [];
   var photoIndex = 0;
@@ -31,75 +30,19 @@
   }
   function isShown(id) { return !$(id).hasAttribute('hidden'); }
   function on(el, event, fn) { el.addEventListener(event, fn, false); }
+  function pad(n) { return n < 10 ? '0' + n : String(n); }
 
   // ---------- Icônes (SVG : les emojis d'Android 4.4 sont incomplets) ----------
 
   var ICONS = {
     camera: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M9 3 7.2 5H4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3.2L15 3H9zm3 5a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9zm0 2a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z"/></svg>',
     letter: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M3 5h18a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zm1.4 2 7.6 5.6L19.6 7H4.4zM20 8.6l-8 5.9-8-5.9V17h16V8.6z"/></svg>',
-    calendar: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M7 2h2v2h6V2h2v2h3a1 1 0 0 1 1 1v15a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h3V2zm12 8H5v9h14v-9zM5 6v2h14V6H5zm2 6h4v4H7v-4z"/></svg>',
     pill: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M4.2 13.4 13.4 4.2a5 5 0 0 1 7.1 7.1l-9.2 9.2a5 5 0 0 1-7.1-7.1zm1.4 1.4a3 3 0 0 0 4.2 4.2l4.2-4.2-4.2-4.2-4.2 4.2z"/></svg>',
     doctor: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M10 3h4v7h7v4h-7v7h-4v-7H3v-4h7V3z"/></svg>',
     pin: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a7 7 0 0 1 7 7c0 5-7 13-7 13S5 14 5 9a7 7 0 0 1 7-7zm0 4a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg>',
     play: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M7 4v16l13-8z"/></svg>',
     heart: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 21s-7.5-4.6-9.6-9C.9 8.8 2.6 5 6.3 4.6 8.6 4.4 10.4 5.6 12 7.6c1.6-2 3.4-3.2 5.7-3 3.7.4 5.4 4.2 3.9 7.4C19.5 16.4 12 21 12 21z"/></svg>'
   };
-
-  function sun(cx, cy, r) {
-    var rays = '';
-    for (var i = 0; i < 8; i++) {
-      var a = i * Math.PI / 4;
-      rays += '<line x1="' + (cx + Math.cos(a) * (r + 4)) + '" y1="' + (cy + Math.sin(a) * (r + 4)) +
-        '" x2="' + (cx + Math.cos(a) * (r + 9)) + '" y2="' + (cy + Math.sin(a) * (r + 9)) + '"/>';
-    }
-    return '<g stroke="#f59e0b" stroke-width="3.5" stroke-linecap="round">' + rays + '</g>' +
-      '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="#fbbf24"/>';
-  }
-  var CLOUD = '<path fill="#cbd5e1" stroke="#94a3b8" stroke-width="2" d="M20 58h40a12 12 0 0 0 0-24 18 18 0 0 0-34-4A13 13 0 0 0 20 58z"/>';
-  var MOON = '<path fill="#fde68a" d="M44 10a24 24 0 1 0 22 33A20 20 0 0 1 44 10z"/>';
-  function drops(color) {
-    return '<g stroke="' + color + '" stroke-width="4" stroke-linecap="round">' +
-      '<line x1="28" y1="64" x2="24" y2="74"/><line x1="42" y1="64" x2="38" y2="74"/><line x1="56" y1="64" x2="52" y2="74"/></g>';
-  }
-  var SNOW = '<g fill="#93c5fd"><circle cx="26" cy="68" r="3.5"/><circle cx="40" cy="72" r="3.5"/><circle cx="54" cy="68" r="3.5"/></g>';
-  var BOLT = '<path fill="#facc15" d="M42 56 32 72h9l-4 10 14-18h-9l4-8z"/>';
-  var FOG = '<g stroke="#94a3b8" stroke-width="4" stroke-linecap="round"><line x1="12" y1="40" x2="68" y2="40"/><line x1="18" y1="52" x2="62" y2="52"/><line x1="12" y1="64" x2="68" y2="64"/></g>';
-
-  function weatherSvg(kind, isDay) {
-    var body;
-    switch (kind) {
-      case 'clear': body = isDay ? sun(40, 40, 15) : MOON; break;
-      case 'partly': body = (isDay ? sun(30, 28, 11) : '<g transform="translate(-8,-8) scale(.8)">' + MOON + '</g>') + CLOUD; break;
-      case 'cloudy': body = CLOUD; break;
-      case 'fog': body = FOG; break;
-      case 'rain': body = CLOUD + drops('#3b82f6'); break;
-      case 'snow': body = CLOUD + SNOW; break;
-      case 'storm': body = CLOUD + BOLT; break;
-      default: body = CLOUD;
-    }
-    return '<svg viewBox="0 0 80 80">' + body + '</svg>';
-  }
-
-  var WEATHER = {
-    0: ['clear', 'Grand soleil'], 1: ['partly', 'Plutôt ensoleillé'], 2: ['partly', 'Quelques nuages'],
-    3: ['cloudy', 'Couvert'], 45: ['fog', 'Brouillard'], 48: ['fog', 'Brouillard givrant'],
-    51: ['rain', 'Bruine légère'], 53: ['rain', 'Bruine'], 55: ['rain', 'Forte bruine'],
-    56: ['rain', 'Bruine verglaçante'], 57: ['rain', 'Bruine verglaçante'],
-    61: ['rain', 'Petite pluie'], 63: ['rain', 'Pluie'], 65: ['rain', 'Forte pluie'],
-    66: ['rain', 'Pluie verglaçante'], 67: ['rain', 'Pluie verglaçante'],
-    71: ['snow', 'Un peu de neige'], 73: ['snow', 'Neige'], 75: ['snow', 'Forte neige'], 77: ['snow', 'Grains de neige'],
-    80: ['rain', 'Averses'], 81: ['rain', 'Averses'], 82: ['storm', 'Fortes averses'],
-    85: ['snow', 'Averses de neige'], 86: ['snow', 'Fortes averses de neige'],
-    95: ['storm', 'Orage'], 96: ['storm', 'Orage avec grêle'], 99: ['storm', 'Orage avec grêle']
-  };
-
-  function describe(code, isDay) {
-    var w = WEATHER[code] || ['cloudy', ''];
-    var label = w[1];
-    if (!isDay && code === 0) label = 'Ciel dégagé';
-    if (!isDay && code === 1) label = 'Peu nuageux';
-    return { kind: w[0], label: label };
-  }
 
   function fillIcons() {
     var els = document.querySelectorAll('[data-icon]');
@@ -109,7 +52,7 @@
   // ---------- Navigation ----------
 
   function showView(view) {
-    var ids = ['view-home', 'view-photos', 'view-messages', 'view-agenda', 'view-setup'];
+    var ids = ['view-home', 'view-photos', 'view-messages', 'view-setup'];
     for (var i = 0; i < ids.length; i++) show($(ids[i]), ids[i] === view);
     resetIdle();
   }
@@ -123,57 +66,33 @@
 
   // ---------- Horloge, date, mode nuit ----------
 
-  function pad(n) { return n < 10 ? '0' + n : String(n); }
-
-  function greetingFor(hour) {
-    if (hour < 6 || hour >= 22) return 'Bonne nuit';
-    if (hour < 12) return 'Bonjour';
-    if (hour < 18) return 'Bon après-midi';
-    return 'Bonsoir';
-  }
-
   function tick() {
     var now = new Date();
-    var time = pad(now.getHours()) + ':' + pad(now.getMinutes());
+    var time = now.getHours() + ':' + pad(now.getMinutes());
     $('clock').textContent = time;
     $('setup-clock').textContent = time;
     var day = JOURS[now.getDay()];
     $('date').textContent = day.charAt(0).toUpperCase() + day.slice(1) + ' ' + now.getDate() +
-      (now.getDate() === 1 ? 'er' : '') + ' ' + MOIS[now.getMonth()] + ' ' + now.getFullYear();
+      (now.getDate() === 1 ? 'er' : '') + ' ' + MOIS[now.getMonth()];
     var hour = now.getHours();
-    $('greeting').textContent = greetingFor(hour) + (familyName ? ' ' + familyName : '');
-    var night = hour >= 21 || hour < 7;
-    if (night) document.body.className = 'night'; else document.body.className = '';
+    document.body.className = (hour >= 21 || hour < 7) ? 'night' : '';
   }
-
-  // ---------- Textes ----------
 
   function whenLabel(ms) {
     if (!ms) return '';
     var d = new Date(ms);
     var now = new Date();
     var yesterday = new Date(now.getTime() - 86400000);
-    var hm = pad(d.getHours()) + 'h' + pad(d.getMinutes());
+    var hm = d.getHours() + 'h' + pad(d.getMinutes());
     if (d.toDateString() === now.toDateString()) return "aujourd'hui à " + hm;
     if (d.toDateString() === yesterday.toDateString()) return 'hier à ' + hm;
     return 'le ' + JOURS[d.getDay()] + ' ' + d.getDate() + ' ' + MOIS[d.getMonth()];
   }
 
-  // ---------- Météo ----------
-
-  function onWeather(data) {
-    try {
-      var now = describe(data.current.weather_code, data.current.is_day);
-      $('weather-icon').innerHTML = weatherSvg(now.kind, data.current.is_day);
-      $('weather-temp').textContent = Math.round(data.current.temperature_2m) + '°';
-      $('weather-label').textContent = now.label;
-      $('weather-minmax').textContent = "Aujourd'hui : de " + Math.round(data.daily.temperature_2m_min[0]) +
-        '° à ' + Math.round(data.daily.temperature_2m_max[0]) + '°';
-      var tomorrow = describe(data.daily.weather_code[1], 1);
-      $('weather-tomorrow').textContent = 'Demain : ' + tomorrow.label.toLowerCase() + ', ' +
-        Math.round(data.daily.temperature_2m_max[1]) + '°';
-      show($('weather'), true);
-    } catch (e) { /* données incomplètes : on garde l'affichage précédent */ }
+  // Taille du texte selon sa longueur : il tient toujours à l'écran sans faire défiler.
+  function sizeClass(text) {
+    var n = (text || '').length;
+    return n <= 50 ? 'size-l' : n <= 110 ? 'size-m' : 'size-s';
   }
 
   // ---------- Accueil : cadre photo et compteurs ----------
@@ -201,7 +120,7 @@
     for (var i = 0; i < posts.length; i++) {
       if (posts[i].seen) continue;
       if (posts[i].image) unseenPhotos++;
-      if (posts[i].text || posts[i].audio) unseenMessages++;
+      else if (posts[i].text || posts[i].audio) unseenMessages++;
     }
     setBadge('badge-photos', unseenPhotos);
     setBadge('badge-messages', unseenMessages);
@@ -221,7 +140,7 @@
     if (!p) return;
     $('photo-img').setAttribute('src', p.image);
     var caption = p.authorName + ', ' + whenLabel(p.createdAt);
-    $('photo-caption').textContent = p.text ? '« ' + p.text + ' »  ' + caption : caption;
+    $('photo-caption').textContent = p.text ? p.text + ' — ' + caption : caption;
     if (photoIndex >= photos.length - 1) $('photo-prev').setAttribute('disabled', ''); else $('photo-prev').removeAttribute('disabled');
     if (photoIndex === 0) $('photo-next').setAttribute('disabled', ''); else $('photo-next').removeAttribute('disabled');
     markSeen(p);
@@ -231,7 +150,7 @@
   function olderPhoto() { if (photoIndex < photos.length - 1) { photoIndex++; renderPhoto(); } }
   function newerPhoto() { if (photoIndex > 0) { photoIndex--; renderPhoto(); } }
 
-  // ---------- Messages ----------
+  // ---------- Liste des messages ----------
 
   function renderMessages() {
     var list = $('message-list');
@@ -239,37 +158,31 @@
     var count = 0;
     for (var i = 0; i < posts.length; i++) {
       var p = posts[i];
-      if (!p.text && !p.audio) continue;
+      if (p.image || (!p.text && !p.audio)) continue;
       count++;
       var item = document.createElement('div');
-      item.className = p.seen ? 'message' : 'message unseen';
+      item.className = 'message' + (p.audio ? ' voice' : '') + (p.seen ? '' : ' unseen');
       var head = document.createElement('p');
       head.className = 'message-head';
       head.textContent = p.authorName + ', ' + whenLabel(p.createdAt);
-      var body = document.createElement('p');
-      body.className = 'message-body';
-      body.textContent = p.text;
       item.appendChild(head);
-      if (p.text) item.appendChild(body);
       if (p.audio) {
         var label = document.createElement('p');
         label.className = 'voice-label';
         label.textContent = 'Message vocal' + (p.duration ? ' (' + formatDuration(p.duration) + ')' : '');
-        item.insertBefore(label, item.children[1] || null);
-      }
-      if (p.audio) {
+        item.appendChild(label);
         var actions = document.createElement('div');
         actions.className = 'message-actions';
-        actions.appendChild(playButton(p, 'small-btn play'));
+        actions.appendChild(playButton(p));
         item.appendChild(actions);
-      }
-      if (p.image) {
-        var img = document.createElement('img');
-        img.setAttribute('src', p.image);
-        item.appendChild(img);
+      } else {
+        var body = document.createElement('p');
+        body.className = 'message-body';
+        body.textContent = p.text;
+        item.appendChild(body);
+        markSeen(p);
       }
       list.appendChild(item);
-      markSeen(p);
     }
     show($('message-empty'), count === 0);
   }
@@ -295,13 +208,68 @@
     }, 2500);
   }
 
-  // ---------- Fenêtre « nouveau » ----------
+  // ---------- Messages vocaux ----------
+
+  var playing = null; // { post, onEnd }
+
+  function formatDuration(s) {
+    return Math.floor(s / 60) + ':' + pad(s % 60);
+  }
+
+  function playVoice(p, onEnd) {
+    stopAudio();
+    playing = { post: p, onEnd: onEnd };
+    if (android() && android().playVoice) {
+      android().playVoice(p.audio);
+    } else {
+      $('player').setAttribute('src', p.audio);
+      $('player').play();
+    }
+    markSeen(p);
+  }
+
+  function stopAudio() {
+    if (!playing) return;
+    if (android() && android().stopVoice) android().stopVoice();
+    else $('player').pause();
+    playing = null;
+  }
+
+  // Fin de lecture (appelé par Android quand le vocal est terminé).
+  function voiceEnded() {
+    var p = playing;
+    playing = null;
+    if (p && p.onEnd) p.onEnd();
+  }
+
+  function playButton(p) {
+    var b = document.createElement('button');
+    b.className = 'small-btn';
+    b.innerHTML = '<span class="icon">' + ICONS.play + '</span>Écouter';
+    on(b, 'click', function () {
+      if (playing && playing.post.id === p.id) {
+        stopAudio();
+        b.className = 'small-btn';
+        b.lastChild.textContent = 'Écouter';
+        return;
+      }
+      b.className = 'small-btn playing';
+      b.lastChild.textContent = 'Arrêter';
+      playVoice(p, function () {
+        b.className = 'small-btn';
+        b.lastChild.textContent = 'Écouter';
+      });
+    });
+    return b;
+  }
+
+  // ---------- Plein écran : nouvelle photo, message ou vocal ----------
 
   function queueUnseen() {
     var newestPhoto = null;
     for (var i = posts.length - 1; i >= 0; i--) {
       var p = posts[i];
-      // Une photo n'est montrée que lorsqu'elle est téléchargée.
+      // Une photo ou un vocal n'est montré que lorsqu'il est téléchargé.
       if (p.seen || shownInOverlay[p.id] || (p.type === 'photo' && !p.image) || (p.type === 'voice' && !p.audio)) continue;
       shownInOverlay[p.id] = true;
       if (p.image) newestPhoto = p; else overlayQueue.push(p);
@@ -327,6 +295,11 @@
     nextOverlay();
   }
 
+  function setOverlayActions(visible, withReplay) {
+    show($('overlay-actions'), visible);
+    show($('overlay-replay'), !!withReplay);
+  }
+
   function nextOverlay() {
     overlayPost = overlayQueue.shift() || null;
     if (!overlayPost) {
@@ -334,20 +307,40 @@
       return;
     }
     var p = overlayPost;
-    $('overlay-title').textContent = p.type === 'photo'
-      ? 'Nouvelle photo de ' + p.authorName
-      : p.type === 'voice' ? 'Message vocal de ' + p.authorName
-        : 'Message de ' + p.authorName;
-    show($('overlay-play'), !!p.audio);
-    setPlayLabel($('overlay-play'), false);
-    show($('overlay-img'), !!p.image);
-    if (p.image) $('overlay-img').setAttribute('src', p.image);
+    var mode = p.image ? 'photo' : p.type === 'voice' ? 'voice' : 'message';
+    $('overlay').className = 'overlay mode-' + mode;
+    $('overlay-kind').textContent = mode === 'photo' ? 'Nouvelle photo' : mode === 'voice' ? 'Message vocal' : 'Nouveau message';
+    $('overlay-from').textContent = 'De ' + p.authorName;
+    show($('overlay-img'), mode === 'photo');
+    if (mode === 'photo') $('overlay-img').setAttribute('src', p.image);
     show($('overlay-text'), !!p.text);
     $('overlay-text').textContent = p.text || '';
-    // Photo : en plein écran, légende et boutons par-dessus.
-    if (p.image) $('overlay').classList.add('photo-mode'); else $('overlay').classList.remove('photo-mode');
+    $('overlay-text').className = 'ov-text ' + sizeClass(p.text);
+    show($('overlay-play'), mode === 'voice');
+    $('overlay-play').className = 'ov-play';
+    $('overlay-play').querySelector('.label').textContent = 'Écouter';
+    // Vocal : d'abord seulement « Écouter » ; les autres boutons viennent une fois le vocal fini.
+    setOverlayActions(mode !== 'voice', false);
     show($('overlay'), true);
-    // Le son est joué par l'app Android (son de notification de la tablette).
+    if (mode === 'message') markSeen(p);
+  }
+
+  function listenOverlay() {
+    var p = overlayPost;
+    if (!p || !p.audio || playing) return;
+    $('overlay-play').className = 'ov-play playing';
+    $('overlay-play').querySelector('.label').textContent = 'Écoute…';
+    setOverlayActions(false);
+    playVoice(p, function () {
+      if (overlayPost !== p) return;
+      show($('overlay-play'), false);
+      setOverlayActions(true, true);
+    });
+  }
+
+  function replayOverlay() {
+    show($('overlay-play'), true);
+    listenOverlay();
   }
 
   // ---------- Données venant d'Android ----------
@@ -364,7 +357,6 @@
 
   function onPosts(payload) {
     hasData = true;
-    familyName = payload.familyName || '';
     // On garde « vu » localement même si Firebase ne l'a pas encore enregistré.
     var seenBefore = {};
     for (var i = 0; i < posts.length; i++) if (posts[i].seen) seenBefore[posts[i].id] = true;
@@ -375,7 +367,6 @@
       if (posts[j].image) photos.push(posts[j]);
     }
     if (isShown('view-setup')) showView('view-home');
-    tick();
     renderFrame();
     renderBadges();
     if (isShown('view-messages')) renderMessages();
@@ -390,66 +381,15 @@
     queueUnseen();
   }
 
-  // ---------- Messages vocaux ----------
-
-  var playingId = null;
-  var playingButton = null;
-
-  function formatDuration(s) {
-    return Math.floor(s / 60) + ':' + pad(s % 60);
-  }
-
-  function setPlayLabel(button, playing) {
-    var label = button.querySelector('.label');
-    var text = playing ? 'Arrêter' : 'Écouter';
-    if (label) label.textContent = text; else button.textContent = text;
-    if (playing) button.classList.add('playing'); else button.classList.remove('playing');
-  }
-
-  function stopAudio() {
-    if (android() && android().stopVoice) android().stopVoice();
-    else $('player').pause();
-    resetPlayUi();
-  }
-
-  // Fin de lecture (appelé aussi par Android quand le vocal est terminé).
-  function resetPlayUi() {
-    if (playingButton) setPlayLabel(playingButton, false);
-    playingId = null;
-    playingButton = null;
-  }
-
-  function togglePlay(p, button) {
-    var wasPlaying = playingId === p.id;
-    stopAudio();
-    if (wasPlaying) return;
-    if (android() && android().playVoice) {
-      android().playVoice(p.audio);
-    } else {
-      $('player').setAttribute('src', p.audio);
-      $('player').play();
-    }
-    playingId = p.id;
-    playingButton = button;
-    setPlayLabel(button, true);
-    markSeen(p);
-  }
-
-  function playButton(p, className) {
-    var b = document.createElement('button');
-    b.className = className;
-    b.textContent = 'Écouter';
-    on(b, 'click', function () { togglePlay(p, b); });
-    return b;
-  }
-
-  // ---------- Rappels et agenda ----------
+  // ---------- Rappels : en grand un peu avant, puis à l'heure ----------
 
   var reminders = [];
+  var EARLY_MIN = 15;            // annonce « Dans 15 minutes »
   var REMINDER_WINDOW_MIN = 60;  // un rappel manqué reste affiché pendant 1 heure
   var RESOUND_MIN = 5;           // le son est rejoué toutes les 5 minutes tant que ce n'est pas fait
-  var alerting = null;           // { r: rappel, key: 'AAAA-MM-JJ', lastSound: minutes }
-  var handled = {};              // rappels déjà confirmés sur la tablette : id|date -> true
+  var alerting = null;           // { r, key, early, lastSound }
+  var handled = {};              // rappels confirmés : id|date -> true
+  var announced = {};            // annonces « bientôt » déjà vues : id|date -> true
 
   function dateKey(d) {
     return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
@@ -474,56 +414,49 @@
     return ICONS[kind === 'medicament' ? 'pill' : kind === 'rdv' ? 'doctor' : 'pin'];
   }
 
-  function todaysItems(d) {
-    var items = [];
-    for (var i = 0; i < reminders.length; i++) if (happensOn(reminders[i], d)) items.push(reminders[i]);
-    items.sort(function (a, b) { return minutesOf(a.time) - minutesOf(b.time); });
-    return items;
-  }
-
-  function renderNextReminder() {
-    var now = new Date();
-    var nowMin = now.getHours() * 60 + now.getMinutes();
-    var key = dateKey(now);
-    var items = todaysItems(now);
-    var next = null;
-    for (var i = 0; i < items.length; i++) {
-      if (minutesOf(items[i].time) >= nowMin && !isDone(items[i], key)) { next = items[i]; break; }
-    }
-    show($('next-reminder'), !!next);
-    if (next) $('next-reminder').textContent = 'À ' + next.time.replace(':', 'h') + ' : ' + next.title;
+  function timeLabel(time) {
+    var m = minutesOf(time);
+    return Math.floor(m / 60) + 'h' + pad(m % 60);
   }
 
   function checkReminders() {
     var now = new Date();
     var nowMin = now.getHours() * 60 + now.getMinutes();
     var key = dateKey(now);
+    var items = [];
+    for (var i = 0; i < reminders.length; i++) if (happensOn(reminders[i], now)) items.push(reminders[i]);
+    items.sort(function (a, b) { return minutesOf(a.time) - minutesOf(b.time); });
+
     if (alerting) {
-      if (isDone(alerting.r, alerting.key) || nowMin - minutesOf(alerting.r.time) > REMINDER_WINDOW_MIN) {
+      var late = nowMin - minutesOf(alerting.r.time);
+      if (isDone(alerting.r, alerting.key) || late > REMINDER_WINDOW_MIN) {
         closeReminder();
-      } else if (nowMin - alerting.lastSound >= RESOUND_MIN) {
+      } else if (alerting.early && late >= 0) {
+        openReminder(alerting.r, key, nowMin, false); // l'annonce devient « C'est l'heure ! »
+      } else if (!alerting.early && nowMin - alerting.lastSound >= RESOUND_MIN) {
         alerting.lastSound = nowMin;
         if (android()) android().alert();
       }
       return;
     }
-    var items = todaysItems(now);
-    for (var i = 0; i < items.length; i++) {
-      var r = items[i];
-      var late = nowMin - minutesOf(r.time);
-      if (late >= 0 && late <= REMINDER_WINDOW_MIN && !isDone(r, key)) {
-        openReminder(r, key, nowMin);
-        return;
-      }
+    for (var j = 0; j < items.length; j++) {
+      var r = items[j];
+      var delta = minutesOf(r.time) - nowMin;
+      if (isDone(r, key)) continue;
+      if (delta <= 0 && -delta <= REMINDER_WINDOW_MIN) { openReminder(r, key, nowMin, false); return; }
+      if (delta > 0 && delta <= EARLY_MIN && !announced[r.id + '|' + key]) { openReminder(r, key, nowMin, true); return; }
     }
   }
 
-  function openReminder(r, key, nowMin) {
-    alerting = { r: r, key: key, lastSound: nowMin };
+  function openReminder(r, key, nowMin, early) {
+    alerting = { r: r, key: key, early: early, lastSound: nowMin };
+    var delta = minutesOf(r.time) - nowMin;
+    $('reminder-when').textContent = early ? 'Dans ' + delta + ' minute' + (delta > 1 ? 's' : '') : "C'est l'heure !";
     $('reminder-icon').innerHTML = '<span class="icon">' + kindIcon(r.kind) + '</span>';
     $('reminder-title').textContent = r.title;
-    $('reminder-time').textContent = r.kind === 'rdv' ? 'Rendez-vous à ' + r.time.replace(':', 'h') : r.time.replace(':', 'h');
-    $('reminder-done').textContent = r.kind === 'rdv' ? "J'ai bien noté" : "C'est fait";
+    $('reminder-title').className = 'ov-text ' + sizeClass(r.title);
+    $('reminder-time').textContent = (r.kind === 'rdv' ? 'Rendez-vous à ' : 'À ') + timeLabel(r.time);
+    $('reminder-done').textContent = early ? "J'ai compris" : r.kind === 'rdv' ? "J'ai bien noté" : "C'est fait";
     show($('reminder-alert'), true);
     if (android()) android().alert();
   }
@@ -531,60 +464,24 @@
   function closeReminder() {
     alerting = null;
     show($('reminder-alert'), false);
-    renderNextReminder();
-    if (isShown('view-agenda')) renderAgenda();
   }
 
   function confirmReminder() {
     if (!alerting) return;
-    var now = new Date();
-    handled[alerting.r.id + '|' + alerting.key] = true;
-    if (android()) android().ackReminder(alerting.r.id, dateKey(now) + ' ' + pad(now.getHours()) + ':' + pad(now.getMinutes()));
+    var id = alerting.r.id + '|' + alerting.key;
+    if (alerting.early) {
+      announced[id] = true;
+    } else {
+      var now = new Date();
+      handled[id] = true;
+      if (android()) android().ackReminder(alerting.r.id, dateKey(now) + ' ' + pad(now.getHours()) + ':' + pad(now.getMinutes()));
+    }
     closeReminder();
     setTimeout(checkReminders, 500);
   }
 
-  function renderAgenda() {
-    var list = $('agenda-list');
-    list.innerHTML = '';
-    var now = new Date();
-    var nowMin = now.getHours() * 60 + now.getMinutes();
-    var count = 0;
-    for (var offset = 0; offset < 7; offset++) {
-      var d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
-      var items = todaysItems(d);
-      if (!items.length) continue;
-      var title = document.createElement('p');
-      title.className = 'agenda-day';
-      title.textContent = offset === 0 ? "Aujourd'hui" : offset === 1 ? 'Demain'
-        : JOURS[d.getDay()].charAt(0).toUpperCase() + JOURS[d.getDay()].slice(1) + ' ' + d.getDate() + ' ' + MOIS[d.getMonth()];
-      list.appendChild(title);
-      for (var i = 0; i < items.length; i++) {
-        var r = items[i];
-        var done = offset === 0 && isDone(r, dateKey(d));
-        var row = document.createElement('div');
-        row.className = 'agenda-item' + (offset === 0 && minutesOf(r.time) < nowMin ? ' past' : '');
-        row.innerHTML = '<span class="time"></span><span class="icon"></span>&nbsp;<span class="what"></span>';
-        row.querySelector('.time').textContent = r.time.replace(':', 'h');
-        row.querySelector('.icon').innerHTML = kindIcon(r.kind);
-        row.querySelector('.what').textContent = r.title;
-        if (done) {
-          var mark = document.createElement('span');
-          mark.className = 'done-mark';
-          mark.textContent = 'Fait';
-          row.appendChild(mark);
-        }
-        list.appendChild(row);
-        count++;
-      }
-    }
-    show($('agenda-empty'), count === 0);
-  }
-
   function onReminders(payload) {
     reminders = payload.reminders || [];
-    renderNextReminder();
-    if (isShown('view-agenda')) renderAgenda();
     checkReminders();
   }
 
@@ -593,15 +490,18 @@
     var m = new Date().getMinutes();
     if (m === lastMinute) return;
     lastMinute = m;
-    renderNextReminder();
     checkReminders();
   }, 1000);
 
   window.Papote = {
-    onStatus: onStatus, onPosts: onPosts, onWeather: onWeather, onReminders: onReminders,
-    onVoiceEnded: function () { resetPlayUi(); },
+    onStatus: onStatus,
+    onPosts: onPosts,
+    onWeather: function () { /* météo retirée de l'écran */ },
+    onReminders: onReminders,
+    onVoiceEnded: voiceEnded,
     onLeave: function () { if (window.papoteAppelsLeave) window.papoteAppelsLeave(); },
-    closeOverlayForCall: closeOverlayForCall
+    closeOverlayForCall: closeOverlayForCall,
+    goHome: function () { showView('view-home'); }
   };
 
   // ---------- Événements ----------
@@ -619,14 +519,30 @@
     on(document, 'touchstart', resetIdle);
     on(document, 'mousedown', resetIdle);
     var homes = document.querySelectorAll('[data-home]');
-    for (var i = 0; i < homes.length; i++) on(homes[i], 'click', function () { showView('view-home'); });
+    for (var i = 0; i < homes.length; i++) {
+      on(homes[i], 'click', function () { stopAudio(); showView('view-home'); });
+    }
     on($('btn-photos'), 'click', function () { openPhotos(0); });
     on($('home-frame'), 'click', function () { openPhotos(frameIndex); });
     on($('btn-messages'), 'click', function () { renderMessages(); showView('view-messages'); });
-    on($('btn-agenda'), 'click', function () { renderAgenda(); showView('view-agenda'); });
     on($('reminder-done'), 'click', confirmReminder);
-    on($('overlay-play'), 'click', function () { if (overlayPost) togglePlay(overlayPost, $('overlay-play')); });
-    on($('player'), 'ended', resetPlayUi);
+    on($('overlay-play'), 'click', listenOverlay);
+    on($('overlay-replay'), 'click', replayOverlay);
+    on($('player'), 'ended', voiceEnded);
+    on($('photo-prev'), 'click', olderPhoto);
+    on($('photo-next'), 'click', newerPhoto);
+    on($('photo-heart'), 'click', function () { heart(photos[photoIndex], $('photo-heart'), 'Envoyer un bisou'); });
+    on($('overlay-close'), 'click', function () {
+      stopAudio();
+      if (overlayPost) markSeen(overlayPost);
+      nextOverlay();
+    });
+    on($('overlay-heart'), 'click', function () {
+      if (!overlayPost) return;
+      stopAudio();
+      heart(overlayPost, $('overlay-heart'), 'Envoyer un bisou');
+      setTimeout(nextOverlay, 1200);
+    });
 
     // Veille : on signale à l'app que Mamie utilise la tablette (au plus une fois par minute).
     var lastTouch = 0;
@@ -635,19 +551,6 @@
       if (now - lastTouch < 60000) return;
       lastTouch = now;
       if (android() && android().touched) android().touched();
-    });
-    on($('photo-prev'), 'click', olderPhoto);
-    on($('photo-next'), 'click', newerPhoto);
-    on($('photo-heart'), 'click', function () { heart(photos[photoIndex], $('photo-heart'), 'Bisou'); });
-    on($('overlay-close'), 'click', function () {
-      stopAudio();
-      if (overlayPost) markSeen(overlayPost);
-      nextOverlay();
-    });
-    on($('overlay-heart'), 'click', function () {
-      if (!overlayPost) return;
-      heart(overlayPost, $('overlay-heart'), 'Envoyer un bisou');
-      setTimeout(nextOverlay, 1200);
     });
 
     // Glisser le doigt sur la photo pour passer à la suivante.
