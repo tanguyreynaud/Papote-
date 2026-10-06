@@ -70,16 +70,16 @@
         <textarea id="post-text" rows="3" maxlength="2000" placeholder="Écrire un message…"></textarea>
         <div id="previews" class="previews"></div>
         <div class="composer-actions">
-          <label class="action-btn" id="btn-camera">
-            📷 Caméra
-            <input id="post-camera" type="file" accept="image/*" capture="environment" hidden>
-          </label>
-          <label class="action-btn" id="btn-gallery">
-            🖼️ Galerie
-            <input id="post-photos" type="file" accept="image/*" multiple hidden>
-          </label>
+          <button type="button" class="action-btn" id="btn-photo">📷 Photo</button>
           <button type="submit" class="action-btn" id="btn-send">Envoyer</button>
         </div>
+        <!-- Choix de la source de la photo -->
+        <div id="photo-menu" class="photo-menu" hidden>
+          <button type="button" class="menu-item" id="photo-from-camera">📷 Prendre une photo</button>
+          <button type="button" class="menu-item" id="photo-from-gallery">🖼️ Choisir dans la galerie</button>
+        </div>
+        <input id="post-camera" type="file" accept="image/*" capture="environment" hidden>
+        <input id="post-photos" type="file" accept="image/*" multiple hidden>
         <p id="post-status" class="muted small" hidden></p>
       </form>
 

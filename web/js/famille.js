@@ -135,6 +135,11 @@ async function onPhotosChosen(e) {
 $('post-photos').addEventListener('change', onPhotosChosen);
 $('post-camera').addEventListener('change', onPhotosChosen);
 
+// Un seul bouton « Photo » qui propose la caméra ou la galerie.
+$('btn-photo').addEventListener('click', () => { $('photo-menu').hidden = !$('photo-menu').hidden; });
+$('photo-from-camera').addEventListener('click', () => { $('photo-menu').hidden = true; $('post-camera').click(); });
+$('photo-from-gallery').addEventListener('click', () => { $('photo-menu').hidden = true; $('post-photos').click(); });
+
 // Bouton « Envoyer » transformé en indicateur de chargement pendant l'envoi.
 function setBusy(label) {
   const btn = $('btn-send');
@@ -142,6 +147,8 @@ function setBusy(label) {
   $('post-text').disabled = !!label;
   $('post-photos').disabled = !!label;
   $('post-camera').disabled = !!label;
+  $('btn-photo').disabled = !!label;
+  if (label) $('photo-menu').hidden = true;
   $('form-post').classList.toggle('busy', !!label);
   btn.replaceChildren();
   if (label) {
