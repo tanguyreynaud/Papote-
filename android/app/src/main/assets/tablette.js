@@ -559,6 +559,10 @@
     on($('home-frame'), 'click', function () { openPhotos(frameIndex); });
     on($('reminder-done'), 'click', confirmReminder);
     on($('overlay-play'), 'click', listenOverlay);
+    // Vocal ou vidéo : toucher l'illustration lance aussi la lecture.
+    on(document.querySelector('#overlay .ln-wood'), 'click', function () {
+      if (overlayPost && (overlayPost.audio || overlayPost.video) && isShown('overlay-play')) listenOverlay();
+    });
     on($('overlay-replay'), 'click', replayOverlay);
     on($('player'), 'ended', voiceEnded);
     on($('photo-prev'), 'click', olderPhoto);

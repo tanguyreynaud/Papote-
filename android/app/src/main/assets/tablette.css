@@ -504,3 +504,110 @@ body.night .weather-label { color: #a8998d; }
 .home-left { -webkit-justify-content: center; justify-content: center; }
 .clock { font-size: 34vmin; }
 .date { font-size: 8vmin; }
+
+/* ---------- Fonds illustrés (à la place du bois) ---------- */
+
+.overlay.ln .ln-wood {
+  background-color: #fbf3ea;
+  background-image: none;
+  background-repeat: no-repeat;
+  background-position: center bottom;
+  -webkit-background-size: cover;
+  background-size: cover;
+}
+.overlay.mode-message .ln-wood { background-color: #fbe9dd; background-image: url(bg/message.svg); }
+.overlay.mode-voice .ln-wood { background-color: #ece4fd; background-image: url(bg/voice.svg); background-position: center; }
+.overlay.mode-photo .ln-wood { background-color: #e4f0f8; background-image: url(bg/photo.svg); background-position: center; }
+.overlay.mode-video .ln-wood { background-color: #d9eff2; background-image: url(bg/video.svg); background-position: center; }
+.overlay.reminder .ln-wood { background-color: #def3e8; background-image: url(bg/reminder.svg); background-position: center; }
+.overlay.call-ring .ln-wood { background-color: #dcf3e3; background-image: url(bg/call.svg); background-position: center; }
+
+/* Message : la feuille semble sortir de l'enveloppe */
+.overlay.mode-message .ln-wood { -webkit-align-items: flex-start; align-items: flex-start; padding-top: 4vmin; }
+.overlay.mode-message .ln-note { max-width: 120vmin; max-height: 82%; }
+
+/* Vocal, vidéo, rappel, appel : l'illustration au centre, le texte en haut, le bouton en bas */
+.overlay.mode-voice .ln-wood, .overlay.mode-video .ln-wood,
+.overlay.reminder .ln-wood, .overlay.call-ring .ln-wood {
+  position: relative;
+  -webkit-align-items: flex-start;
+  align-items: flex-start;
+  padding-top: 3vmin;
+}
+.overlay.mode-voice .ln-note, .overlay.mode-video .ln-note, .overlay.call-ring .ln-note {
+  width: auto;
+  max-width: 92%;
+  padding: 3vmin 7vmin;
+  border-radius: 3vmin;
+  -webkit-transform: none;
+  transform: none;
+  text-align: center;
+}
+.overlay.mode-voice .ln-play, .overlay.mode-video .ln-play {
+  position: absolute;
+  left: 50%;
+  bottom: 4vmin;
+  width: 64vmin;
+  margin: 0 0 0 -32vmin;
+  box-shadow: 0 1.5vmin 4vmin rgba(0, 0, 0, .3);
+}
+.overlay.mode-voice .ln-play { background: #6d4fc6; }
+.overlay.mode-video .ln-play { background: #2f8fa0; }
+.overlay.mode-voice .ln-play.playing, .overlay.mode-video .ln-play.playing { background: #a8a29e; }
+
+/* Rappel : la feuille en haut, le réveil dessous en partie visible */
+.overlay.reminder .ln-note { max-width: 120vmin; }
+
+/* Vocal / vidéo : titre sur une ligne, illustration au milieu, bouton en bas */
+.overlay.mode-voice .ln-text, .overlay.mode-video .ln-text { font-size: 7vmin; }
+.overlay.mode-voice .ln-wood, .overlay.mode-video .ln-wood {
+  -webkit-background-size: auto 58%;
+  background-size: auto 58%;
+  background-position: center 52%;
+}
+.overlay.mode-voice .ln-wood { background-color: #ebe3fc; }
+.overlay.mode-video .ln-wood { background-color: #d8eef1; }
+.overlay.call-ring .ln-wood, .overlay.reminder .ln-wood {
+  -webkit-background-size: auto 70%;
+  background-size: auto 70%;
+  background-position: center 85%;
+}
+.overlay.call-ring .ln-wood { background-color: #d8f1e0; }
+.overlay.reminder .ln-wood { background-color: #d9f1e5; }
+
+/* L'illustration (fond transparent) posée sur un dégradé doux qui remplit tout l'espace */
+.overlay.mode-voice .ln-wood {
+  background-image: url(bg/voice.svg), -webkit-linear-gradient(top left, #f5f0ff, #ddd0fb);
+  background-image: url(bg/voice.svg), linear-gradient(135deg, #f5f0ff, #ddd0fb);
+  -webkit-background-size: auto 58%, cover;
+  background-size: auto 58%, cover;
+  background-position: center 52%, center;
+}
+.overlay.mode-video .ln-wood {
+  background-image: url(bg/video.svg), -webkit-linear-gradient(top left, #ecf7f8, #c8e8ec);
+  background-image: url(bg/video.svg), linear-gradient(135deg, #ecf7f8, #c8e8ec);
+  -webkit-background-size: auto 58%, cover;
+  background-size: auto 58%, cover;
+  background-position: center 52%, center;
+}
+.overlay.reminder .ln-wood {
+  background-image: url(bg/reminder.svg), -webkit-linear-gradient(top, #f0faf5, #cdeedd);
+  background-image: url(bg/reminder.svg), linear-gradient(to bottom, #f0faf5, #cdeedd);
+  -webkit-background-size: auto 70%, cover;
+  background-size: auto 70%, cover;
+  background-position: center 85%, center;
+}
+.overlay.call-ring .ln-wood {
+  background-image: url(bg/call.svg), -webkit-linear-gradient(top left, #effaf2, #c7ecd2);
+  background-image: url(bg/call.svg), linear-gradient(135deg, #effaf2, #c7ecd2);
+  -webkit-background-size: auto 70%, cover;
+  background-size: auto 70%, cover;
+  background-position: center 85%, center;
+}
+.ln-clock { font-size: 5vmin; }
+.ln-btn { padding: 0 4vmin; font-size: 5.5vmin; }
+.overlay.mode-voice .ln-wood, .overlay.mode-video .ln-wood {
+  -webkit-background-size: auto 50%, cover;
+  background-size: auto 50%, cover;
+  background-position: center 42%, center;
+}

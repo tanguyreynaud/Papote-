@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f5f0ff"/>
+      <stop offset="1" stop-color="#ddd0fb"/>
+    </linearGradient>
+    <linearGradient id="bar" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#a78bfa"/>
+      <stop offset="1" stop-color="#7c5bd6"/>
+    </linearGradient>
+    <linearGradient id="mic" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#8b6fe0"/>
+      <stop offset="1" stop-color="#6d4fc6"/>
+    </linearGradient>
+  </defs>
+
+
+  <!-- Ondes sonores qui s'élargissent depuis le micro -->
+  <g fill="none" stroke="#a78bfa" stroke-linecap="round" opacity=".35">
+    <path d="M330 300a170 170 0 0 0 0 240" stroke-width="14"/>
+    <path d="M270 250a240 240 0 0 0 0 340" stroke-width="12" opacity=".7"/>
+    <path d="M210 200a310 310 0 0 0 0 440" stroke-width="10" opacity=".5"/>
+    <path d="M870 300a170 170 0 0 1 0 240" stroke-width="14"/>
+    <path d="M930 250a240 240 0 0 1 0 340" stroke-width="12" opacity=".7"/>
+    <path d="M990 200a310 310 0 0 1 0 440" stroke-width="10" opacity=".5"/>
+  </g>
+
+  <!-- Micro ancien, au centre -->
+  <g transform="translate(600 420)">
+    <ellipse cx="0" cy="330" rx="200" ry="20" fill="#7c5bd6" opacity=".15"/>
+    <rect x="-95" y="-230" width="190" height="300" rx="95" fill="url(#mic)"/>
+    <g stroke="#c4b5fd" stroke-width="8" stroke-linecap="round" opacity=".7">
+      <line x1="-55" y1="-150" x2="55" y2="-150"/>
+      <line x1="-60" y1="-105" x2="60" y2="-105"/>
+      <line x1="-60" y1="-60" x2="60" y2="-60"/>
+      <line x1="-55" y1="-15" x2="55" y2="-15"/>
+    </g>
+    <path d="M-150 10a150 150 0 0 0 300 0" fill="none" stroke="#7c5bd6" stroke-width="22" stroke-linecap="round"/>
+    <rect x="-12" y="160" width="24" height="120" rx="8" fill="#7c5bd6"/>
+    <rect x="-110" y="275" width="220" height="30" rx="15" fill="#6d4fc6"/>
+  </g>
+
+  <!-- Égaliseur discret en bas -->
+  <g fill="url(#bar)" opacity=".28">
+    <rect x="40" y="690" width="30" height="110" rx="15"/>
+    <rect x="90" y="650" width="30" height="150" rx="15"/>
+    <rect x="140" y="710" width="30" height="90" rx="15"/>
+    <rect x="190" y="670" width="30" height="130" rx="15"/>
+    <rect x="980" y="680" width="30" height="120" rx="15"/>
+    <rect x="1030" y="640" width="30" height="160" rx="15"/>
+    <rect x="1080" y="700" width="30" height="100" rx="15"/>
+    <rect x="1130" y="660" width="30" height="140" rx="15"/>
+  </g>
+</svg>

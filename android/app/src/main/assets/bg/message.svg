@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fdf3ea"/>
+      <stop offset="1" stop-color="#f8dccb"/>
+    </linearGradient>
+    <linearGradient id="back" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e9a690"/>
+      <stop offset="1" stop-color="#dc8f78"/>
+    </linearGradient>
+    <linearGradient id="front" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f6c0ab"/>
+      <stop offset="1" stop-color="#eeac95"/>
+    </linearGradient>
+    <linearGradient id="side" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#f2b39c"/>
+      <stop offset="1" stop-color="#f7c6b2"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="800" fill="url(#sky)"/>
+
+  <!-- Petits cœurs et points flottants -->
+  <g fill="#f0a08a" opacity=".35">
+    <path d="M160 170c-14-16-40-2-28 20l28 30 28-30c12-22-14-36-28-20z"/>
+    <path d="M1040 140c-10-12-30-2-21 15l21 22 21-22c9-17-11-27-21-15z"/>
+    <path d="M1080 520c-8-9-24-1-17 12l17 18 17-18c7-13-9-21-17-12z"/>
+    <path d="M110 560c-9-10-26-1-19 13l19 19 19-19c7-14-10-23-19-13z"/>
+  </g>
+  <g fill="#e9a690" opacity=".25">
+    <circle cx="260" cy="90" r="10"/>
+    <circle cx="960" cy="300" r="14"/>
+    <circle cx="220" cy="380" r="7"/>
+    <circle cx="1000" cy="680" r="9"/>
+  </g>
+
+  <!-- Grande enveloppe ouverte : la feuille du message semble en sortir -->
+  <g transform="translate(600 520)">
+    <ellipse cx="0" cy="300" rx="430" ry="26" fill="#c98067" opacity=".18"/>
+    <!-- rabat ouvert -->
+    <path d="M-400 -40 L0 -330 L400 -40 Z" fill="url(#back)"/>
+    <!-- fond de l'enveloppe -->
+    <rect x="-400" y="-40" width="800" height="330" rx="22" fill="url(#back)"/>
+    <!-- poche avant -->
+    <path d="M-400 -30 L0 150 L400 -30 L400 268 Q400 290 378 290 L-378 290 Q-400 290 -400 268 Z" fill="url(#front)"/>
+    <path d="M-400 290 L-30 70 Q0 52 30 70 L400 290 Z" fill="url(#side)" opacity=".9"/>
+    <path d="M-400 -30 L0 150 L400 -30" fill="none" stroke="#e39a83" stroke-width="4" opacity=".6"/>
+    <!-- cachet en forme de cœur -->
+    <circle cx="0" cy="150" r="46" fill="#d9534f" opacity=".92"/>
+    <path d="M0 136c-12-14-34-2-24 18l24 25 24-25c10-20-12-32-24-18z" fill="#fde2dc"/>
+  </g>
+</svg>
