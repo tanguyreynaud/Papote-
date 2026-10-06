@@ -82,33 +82,51 @@ $res = Adb install -r -g $Apk
 if ($res -notmatch 'Success') { Fail "L'installation a échoué :`n$res" }
 Say 'App installée.' 'Green'
 
-# 4. Mode kiosque (propriétaire de l'appareil)
-$owners = Adb shell dpm list-owners
-if ($owners -match $Package) {
-    Say 'Mode kiosque déjà actif.' 'Green'
+# 4. Réglages : date et heure automatiques (indispensable pour les connexions sécurisées),
+#    écran allumé tant que la tablette est branchée
+Adb shell settings put global auto_time 1 | Out-Null
+Adb shell settings put global auto_time_zone 1 | Out-Null
+Adb shell settings put global stay_on_while_plugged_in 7 | Out-Null
+
+# 5. Mode kiosque (propriétaire de l'appareil, Android 5 et plus)
+$sdk = [int](Adb shell getprop ro.build.version.sdk)
+$homeChooser = $false
+if ($sdk -lt 21) {
+    Say "`nAndroid $android n'a pas de mode kiosque : Papote devient l'écran d'accueil." 'Yellow'
+    $homeChooser = $true
 } else {
-    $res = Adb shell dpm set-device-owner "$Package/.AdminReceiver"
-    if ($res -match 'Success') {
-        Say 'Mode kiosque activé : la tablette reste sur Papote.' 'Green'
+    $owners = Adb shell dpm list-owners
+    if ($owners -match $Package) {
+        Say 'Mode kiosque déjà actif.' 'Green'
     } else {
-        Say "`nLe mode kiosque complet n'a pas pu être activé." 'Yellow'
-        if ($res -match 'account') {
-            Say ("Android l'exige sur une tablette sans compte (Google, Samsung…). " +
-                 "Pour l'avoir : supprimez les comptes dans Paramètres > Comptes, ou réinitialisez la tablette " +
-                 "sans ajouter de compte, puis relancez ce script.") 'Yellow'
+        $res = Adb shell dpm set-device-owner "$Package/.AdminReceiver"
+        if ($res -match 'Success') {
+            Say 'Mode kiosque activé : la tablette reste sur Papote.' 'Green'
         } else {
-            Say $res 'DarkGray'
+            Say "`nLe mode kiosque complet n'a pas pu être activé." 'Yellow'
+            if ($res -match 'account') {
+                Say ("Android l'exige sur une tablette sans compte (Google, Samsung…). " +
+                     "Pour l'avoir : supprimez les comptes dans Paramètres > Comptes, ou réinitialisez la tablette " +
+                     "sans ajouter de compte, puis relancez ce script.") 'Yellow'
+            } else {
+                Say $res 'DarkGray'
+            }
+            Say "En attendant, Papote devient l'écran d'accueil de la tablette." 'Yellow'
+            $res = Adb shell cmd package set-home-activity "$Package/.MainActivity"
+            if ($res -notmatch 'Success') { $homeChooser = $true }
         }
-        Say "En attendant, Papote devient l'écran d'accueil de la tablette." 'Yellow'
-        Adb shell cmd package set-home-activity "$Package/.MainActivity" | Out-Null
     }
 }
 
-# 5. Réglages : écran allumé tant que la tablette est branchée
-Adb shell settings put global stay_on_while_plugged_in 7 | Out-Null
-
 # 6. Lancement relié à la famille
 Adb shell am start -n "$Package/.MainActivity" --es code $Code --ez lock true | Out-Null
+
+if ($homeChooser) {
+    Start-Sleep -Seconds 2
+    Adb shell am start -a android.intent.action.MAIN -c android.intent.category.HOME | Out-Null
+    Say "`nSur la tablette, choisissez « Papote » puis « Toujours »." 'Yellow'
+    Say 'Le bouton Accueil ramènera ainsi toujours sur Papote.' 'Yellow'
+}
 
 Say "`n=== Terminé ! La tablette affiche Papote. ===" 'Cyan'
 Say 'Vous pouvez débrancher le câble USB (laissez la tablette sur son chargeur).'

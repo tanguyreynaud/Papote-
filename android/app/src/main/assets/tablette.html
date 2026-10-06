@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>Papote</title>
-  <link rel="stylesheet" href="css/tablette.css">
+  <link rel="stylesheet" href="tablette.css">
 </head>
 <body>
   <!-- Accueil -->
@@ -24,42 +24,43 @@
           <p id="weather-tomorrow" class="weather-tomorrow"></p>
         </div>
       </div>
-      <button id="home-frame" class="home-frame" aria-label="Voir les photos">
+      <div id="home-frame" class="home-frame">
         <img id="frame-img" alt="" hidden>
         <span id="frame-caption" class="frame-caption" hidden></span>
         <span id="frame-empty" class="frame-empty">Les photos de la famille s'afficheront ici</span>
-      </button>
+      </div>
     </div>
-    <nav class="home-buttons">
+    <div class="home-buttons">
       <button id="btn-photos" class="big-btn">
-        <span class="big-icon">📷</span> Photos <span id="badge-photos" class="badge" hidden></span>
+        <span class="icon" data-icon="camera"></span> Photos <span id="badge-photos" class="badge" hidden></span>
       </button>
       <button id="btn-messages" class="big-btn">
-        <span class="big-icon">✉️</span> Messages <span id="badge-messages" class="badge" hidden></span>
+        <span class="icon" data-icon="letter"></span> Messages <span id="badge-messages" class="badge" hidden></span>
       </button>
-    </nav>
+    </div>
+    <p id="offline" class="offline" hidden>Pas de connexion internet pour le moment</p>
   </section>
 
   <!-- Photos -->
   <section id="view-photos" class="view" hidden>
-    <div class="photo-stage">
+    <div id="photo-stage" class="photo-stage">
       <img id="photo-img" alt="">
-      <button id="photo-prev" class="arrow left" aria-label="Photo précédente">‹</button>
-      <button id="photo-next" class="arrow right" aria-label="Photo suivante">›</button>
+      <button id="photo-prev" class="arrow left">&#8249;</button>
+      <button id="photo-next" class="arrow right">&#8250;</button>
     </div>
     <div class="photo-bar">
       <p id="photo-caption" class="photo-caption"></p>
-      <button id="photo-heart" class="heart-btn">❤️ Bisou</button>
+      <button id="photo-heart" class="heart-btn"><span class="icon" data-icon="heart"></span> <span class="label">Bisou</span></button>
     </div>
-    <button class="home-btn" data-home>⌂ Accueil</button>
+    <button class="home-btn" data-home="1">Accueil</button>
   </section>
 
   <!-- Messages -->
   <section id="view-messages" class="view" hidden>
     <h1 class="view-title">Messages</h1>
-    <ul id="message-list" class="message-list"></ul>
+    <div id="message-list" class="message-list"></div>
     <p id="message-empty" class="empty" hidden>Pas encore de message.</p>
-    <button class="home-btn" data-home>⌂ Accueil</button>
+    <button class="home-btn" data-home="1">Accueil</button>
   </section>
 
   <!-- Nouveau message ou nouvelle photo -->
@@ -69,7 +70,7 @@
       <img id="overlay-img" alt="" hidden>
       <p id="overlay-text" class="overlay-text" hidden></p>
       <div class="overlay-actions">
-        <button id="overlay-heart" class="big-btn heart">❤️ Envoyer un bisou</button>
+        <button id="overlay-heart" class="big-btn heart"><span class="icon" data-icon="heart"></span> <span class="label">Envoyer un bisou</span></button>
         <button id="overlay-close" class="big-btn">OK</button>
       </div>
     </div>
@@ -82,6 +83,6 @@
     <p id="setup-detail" class="setup-detail"></p>
   </section>
 
-  <script type="module" src="js/tablette.js"></script>
+  <script src="tablette.js"></script>
 </body>
 </html>

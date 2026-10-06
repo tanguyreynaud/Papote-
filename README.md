@@ -5,7 +5,7 @@ et une app pour que la famille lui envoie photos et messages depuis iPhone ou An
 
 ## Ce que ça fait
 
-**Sur la tablette** (verrouillée sur Papote, toujours allumée sur son chargeur) :
+**Sur la tablette** (Android 4.4 ou plus récent, toujours allumée sur son chargeur) :
 - l'heure, la date et la météo de Saint-Martin-de-Valamas en très grand ;
 - un cadre photo qui fait défiler les dernières photos de la famille ;
 - deux gros boutons « Photos » et « Messages » ;
@@ -25,8 +25,10 @@ et une app pour que la famille lui envoie photos et messages depuis iPhone ou An
    puis Options pour les développeurs > activer « Débogage USB ».
 2. Pour le mode kiosque complet, la tablette ne doit avoir **aucun compte** (Google, Samsung…).
    Le plus simple : la réinitialiser et passer la configuration sans ajouter de compte.
-3. Brancher la tablette au PC en USB et double-cliquer sur `installation/installer-tablette.bat`.
-4. Entrer le code famille (dans l'app famille, menu ⚙︎ Réglages).
+3. Sur Android 4.4 (comme la Galaxy Tab E), le mode kiosque n'existe pas : Papote devient l'écran
+   d'accueil et bloque le volet des notifications. Au premier lancement, choisir « Papote » puis « Toujours ».
+4. Brancher la tablette au PC en USB et double-cliquer sur `installation/installer-tablette.bat`.
+5. Entrer le code famille (dans l'app famille, menu ⚙︎ Réglages).
 
 Pour remettre la tablette à la normale : `installation/retirer-papote.bat`.
 
@@ -38,13 +40,15 @@ Maintenance par ADB :
 
 | Dossier | Contenu |
 |---|---|
-| `web/` | App famille (`index.html`) et écran tablette (`tablette.html`), hébergés sur Firebase Hosting |
-| `android/` | Petite app Android qui affiche l'écran tablette en plein écran et gère le mode kiosque |
+| `web/` | App famille (`index.html`), hébergée sur Firebase Hosting |
+| `android/` | App de la tablette : écran (`app/src/main/assets/`), synchronisation Firebase et météo en Java, mode kiosque |
 | `installation/` | `Papote.apk` prêt à installer et les scripts d'installation |
 | `firestore.rules` | Règles de sécurité : seuls les membres d'une famille voient ses photos |
 
-L'écran de la tablette est une page web : une modification de `web/` arrive sur toutes les tablettes
-après `firebase deploy --only hosting`, sans réinstaller l'app.
+L'écran de la tablette est une page locale écrite pour le navigateur d'Android 4.4 (JavaScript ES5).
+Les accès réseau passent par le Java (`Sync.java`), qui active TLS 1.2 et un chiffrement à jour
+via les services Google Play sur les vieilles tablettes. Après une modification, reconstruire l'APK
+puis relancer `installer-tablette.bat`.
 
 ## Coûts
 

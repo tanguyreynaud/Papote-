@@ -1,0 +1,296 @@
+/* Écrit pour le navigateur d'Android 4.4 : pas de variables CSS, pas de grid. */
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: rgba(0, 0, 0, 0); }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #fff8f1;
+  color: #1f1a17;
+  font-family: Roboto, "Droid Sans", sans-serif;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  border: none;
+  background: none;
+  padding: 0;
+  outline: none;
+}
+
+[hidden] { display: none !important; }
+
+.icon { display: inline-block; width: 1.1em; height: 1.1em; vertical-align: middle; }
+.icon svg { width: 100%; height: 100%; display: block; }
+
+.view {
+  position: absolute;
+  top: 0; right: 0; bottom: 0; left: 0;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-flex-direction: column;
+  flex-direction: column;
+  padding: 3vmin;
+}
+.view > * + * { margin-top: 3vmin; }
+
+/* ---------- Accueil ---------- */
+
+.home-grid {
+  -webkit-flex: 1;
+  flex: 1;
+  min-height: 0;
+  display: -webkit-flex;
+  display: flex;
+}
+.home-left {
+  -webkit-flex: 1;
+  flex: 1;
+  min-width: 0;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-flex-direction: column;
+  flex-direction: column;
+  -webkit-justify-content: center;
+  justify-content: center;
+  margin-right: 3vmin;
+}
+.greeting { margin: 0; font-size: 4.5vmin; color: #5c5049; }
+.clock { margin: 0; font-size: 22vmin; font-weight: bold; line-height: 1; letter-spacing: -0.03em; }
+.date { margin: 1vmin 0 3vmin; font-size: 5.5vmin; font-weight: bold; }
+
+.weather {
+  background: #ffffff;
+  border: 2px solid #ecdccd;
+  border-radius: 3vmin;
+  padding: 2.5vmin 3vmin;
+}
+.weather-now { display: -webkit-flex; display: flex; -webkit-align-items: center; align-items: center; }
+.weather-icon { width: 12vmin; height: 12vmin; margin-right: 2vmin; }
+.weather-icon svg { width: 100%; height: 100%; display: block; }
+.weather-temp { font-size: 10vmin; font-weight: bold; }
+.weather-label { margin: 0.5vmin 0 0; font-size: 4.5vmin; font-weight: bold; }
+.weather-minmax, .weather-tomorrow { margin: 0.8vmin 0 0; font-size: 3.4vmin; color: #5c5049; }
+
+.home-frame {
+  -webkit-flex: 1.3;
+  flex: 1.3;
+  position: relative;
+  border-radius: 3vmin;
+  overflow: hidden;
+  background: #ffffff;
+  border: 2px solid #ecdccd;
+  min-height: 0;
+}
+.home-frame img {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.frame-caption {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  padding: 4vmin 3vmin 2vmin;
+  background: -webkit-linear-gradient(top, rgba(0, 0, 0, 0), rgba(0, 0, 0, .65));
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0), rgba(0, 0, 0, .65));
+  color: #fff;
+  font-size: 4vmin;
+  font-weight: bold;
+}
+.frame-empty {
+  position: absolute;
+  top: 0; right: 0; bottom: 0; left: 0;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-align-items: center;
+  align-items: center;
+  -webkit-justify-content: center;
+  justify-content: center;
+  padding: 5vmin;
+  font-size: 4.5vmin;
+  color: #5c5049;
+  text-align: center;
+}
+
+.home-buttons { display: -webkit-flex; display: flex; }
+.home-buttons .big-btn + .big-btn { margin-left: 3vmin; }
+
+.big-btn {
+  -webkit-flex: 1;
+  flex: 1;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-align-items: center;
+  align-items: center;
+  -webkit-justify-content: center;
+  justify-content: center;
+  min-height: 14vmin;
+  padding: 2vmin 4vmin;
+  border-radius: 3vmin;
+  background: #c2410c;
+  color: #fff;
+  font-size: 6vmin;
+  font-weight: bold;
+}
+.big-btn .icon { margin-right: 2vmin; }
+.big-btn:active { opacity: .85; }
+.big-btn[disabled] { opacity: .7; }
+
+.badge {
+  min-width: 6vmin;
+  height: 6vmin;
+  line-height: 6vmin;
+  padding: 0 1.5vmin;
+  margin-left: 2vmin;
+  border-radius: 3vmin;
+  background: #fff;
+  color: #c2410c;
+  font-size: 4vmin;
+  text-align: center;
+}
+
+.offline { margin: 0; text-align: center; font-size: 3.4vmin; color: #5c5049; }
+
+/* ---------- Photos ---------- */
+
+.photo-stage {
+  -webkit-flex: 1;
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  border-radius: 3vmin;
+  overflow: hidden;
+  background: #000;
+}
+.photo-stage img {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.arrow {
+  position: absolute;
+  top: 50%;
+  margin-top: -7vmin;
+  width: 14vmin;
+  height: 14vmin;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .85);
+  color: #1f1a17;
+  font-size: 11vmin;
+  line-height: 12vmin;
+  text-align: center;
+}
+.arrow.left { left: 2vmin; }
+.arrow.right { right: 2vmin; }
+.arrow[disabled] { opacity: .25; }
+
+.photo-bar { display: -webkit-flex; display: flex; -webkit-align-items: center; align-items: center; }
+.photo-caption { -webkit-flex: 1; flex: 1; margin: 0 3vmin 0 0; font-size: 4.2vmin; font-weight: bold; }
+.heart-btn {
+  padding: 2vmin 4vmin;
+  border-radius: 3vmin;
+  background: #ffedd5;
+  color: #be123c;
+  font-size: 4.5vmin;
+  font-weight: bold;
+}
+
+.home-btn {
+  min-height: 12vmin;
+  border-radius: 3vmin;
+  background: #ffffff;
+  border: 3px solid #c2410c;
+  color: #c2410c;
+  font-size: 5.5vmin;
+  font-weight: bold;
+}
+
+/* ---------- Messages ---------- */
+
+.view-title { margin: 0; font-size: 7vmin; }
+.message-list {
+  -webkit-flex: 1;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.message {
+  background: #ffffff;
+  border: 2px solid #ecdccd;
+  border-radius: 3vmin;
+  padding: 3vmin;
+  margin-bottom: 2.5vmin;
+}
+.message.unseen { border-color: #c2410c; }
+.message-head { margin: 0 0 1vmin; font-size: 3.6vmin; color: #5c5049; font-weight: bold; }
+.message-body { margin: 0; font-size: 5.5vmin; line-height: 1.35; white-space: pre-wrap; }
+.message img { margin-top: 2vmin; max-width: 100%; max-height: 50vh; border-radius: 2vmin; display: block; }
+.empty { -webkit-flex: 1; flex: 1; font-size: 5vmin; color: #5c5049; text-align: center; }
+
+/* ---------- Fenêtre « nouveau » ---------- */
+
+.overlay {
+  position: fixed;
+  top: 0; right: 0; bottom: 0; left: 0;
+  z-index: 10;
+  background: rgba(0, 0, 0, .7);
+  padding: 3vmin;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-align-items: center;
+  align-items: center;
+}
+.overlay-card {
+  width: 100%;
+  max-height: 100%;
+  background: #fff8f1;
+  border-radius: 4vmin;
+  padding: 4vmin;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-flex-direction: column;
+  flex-direction: column;
+}
+.overlay-card > * + * { margin-top: 3vmin; }
+.overlay-title { margin: 0; font-size: 6vmin; font-weight: bold; color: #c2410c; }
+.overlay-card img { max-width: 100%; max-height: 55vh; object-fit: contain; border-radius: 2vmin; -webkit-align-self: center; align-self: center; }
+.overlay-text { margin: 0; font-size: 6vmin; line-height: 1.35; white-space: pre-wrap; overflow-y: auto; max-height: 40vh; }
+.overlay-actions { display: -webkit-flex; display: flex; }
+.overlay-actions .big-btn + .big-btn { margin-left: 3vmin; }
+.big-btn.heart { background: #ffedd5; color: #be123c; }
+
+/* ---------- Installation ---------- */
+
+.setup { -webkit-align-items: center; align-items: center; -webkit-justify-content: center; justify-content: center; text-align: center; }
+.setup-text { font-size: 5vmin; font-weight: bold; margin: 0; }
+.setup-detail { font-size: 4vmin; color: #5c5049; margin: 0; }
+
+/* ---------- Nuit (21 h – 7 h) : couleurs sombres ---------- */
+
+body.night { background: #0f0c0a; color: #e9dfd7; }
+body.night .greeting, body.night .weather-minmax, body.night .weather-tomorrow,
+body.night .frame-empty, body.night .message-head, body.night .empty,
+body.night .setup-detail, body.night .offline { color: #a8998d; }
+body.night .weather, body.night .home-frame, body.night .message { background: #1c1714; border-color: #2e2621; }
+body.night .big-btn { background: #9a3412; }
+body.night .big-btn.heart, body.night .heart-btn { background: #3a2415; color: #fb7185; }
+body.night .home-btn { background: #1c1714; border-color: #fb923c; color: #fb923c; }
+body.night .overlay-card { background: #1c1714; }
+body.night .overlay-title { color: #fb923c; }
+
+/* ---------- Tablette en portrait : on empile ---------- */
+
+@media (orientation: portrait) {
+  .home-grid { -webkit-flex-direction: column; flex-direction: column; }
+  .home-left { margin: 0 0 3vmin 0; -webkit-flex: none; flex: none; }
+  .clock { font-size: 26vmin; }
+}

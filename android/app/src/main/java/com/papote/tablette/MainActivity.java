@@ -1,5 +1,6 @@
 package com.papote.tablette;
 
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.ActivityManager;
 import android.app.admin.DevicePolicyManager;
@@ -9,168 +10,168 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.graphics.Color;
-import android.net.ConnectivityManager;
-import android.net.Network;
-import android.net.NetworkCapabilities;
-import android.net.Uri;
+import android.graphics.PixelFormat;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
 import android.util.Log;
+import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
-import android.webkit.WebResourceError;
+import android.webkit.JavascriptInterface;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
+import org.json.JSONObject;
+
 /**
- * Plein écran sur la page tablette de Papote, verrouillé en mode kiosque
- * quand l'app est propriétaire de l'appareil (« device owner »).
+ * Écran Papote en plein écran. L'interface est une page locale (assets/tablette.html) ;
+ * les données (Firebase, météo) sont récupérées par {@link Sync} en Java, ce qui marche
+ * aussi sur les tablettes anciennes (Android 4.4).
  *
- * Commandes de maintenance par ADB (voir installation/README.md) :
+ * Commandes de maintenance par ADB (voir README.md) :
  *   --es code ABCD2345     relie la tablette à une famille
- *   --ez unlock true       sort du mode kiosque jusqu'au prochain redémarrage de l'app
+ *   --ez unlock true       sort du mode kiosque jusqu'au prochain « lock »
+ *   --ez lock true         revient en mode kiosque
  *   --ez remove_owner true retire le mode kiosque définitivement (avant désinstallation)
  */
-public class MainActivity extends Activity {
+public class MainActivity extends Activity implements Sync.Listener {
     private static final String TAG = "Papote";
-    private static final String HOST = "papote-famille.web.app";
-    private static final String BASE_URL = "https://" + HOST + "/tablette.html";
-    private static final long RETRY_MS = 20_000;
+    private static final String PAGE = "file:///android_asset/tablette.html";
 
     private WebView web;
     private SharedPreferences prefs;
-    private boolean kioskPaused = false;
-    private boolean loadFailed = false;
+    private Sync sync;
+    private View statusBarBlocker;
     private final Handler handler = new Handler(Looper.getMainLooper());
-    private ConnectivityManager.NetworkCallback networkCallback;
 
+    @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         prefs = getSharedPreferences("papote", MODE_PRIVATE);
 
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
-                | WindowManager.LayoutParams.FLAG_FULLSCREEN);
+                | WindowManager.LayoutParams.FLAG_FULLSCREEN
+                | WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
+                | WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
+                | WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON);
 
         web = new WebView(this);
         web.setBackgroundColor(Color.parseColor("#FFF8F1"));
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
+        s.setAllowFileAccess(true);
         s.setMediaPlaybackRequiresUserGesture(false);
         s.setTextZoom(100);
         s.setSupportZoom(false);
         s.setBuiltInZoomControls(false);
-        s.setAllowFileAccess(false);
         web.setLongClickable(false);
         web.setOnLongClickListener(v -> true);
-        web.setWebViewClient(new KioskClient());
+        web.setHapticFeedbackEnabled(false);
+        web.addJavascriptInterface(new Bridge(), "PapoteAndroid");
+        web.setWebViewClient(new WebViewClient() {
+            @SuppressWarnings("deprecation")
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, String url) {
+                return true; // aucun lien ne fait sortir de l'écran Papote
+            }
+
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                return true;
+            }
+        });
         setContentView(web);
 
+        sync = new Sync(this, prefs, this);
         handleIntent(getIntent());
         setupDeviceOwner();
-        watchNetwork();
-        load();
+        web.loadUrl(PAGE);
+        sync.start();
     }
 
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
-        if (handleIntent(intent)) load();
+        handleIntent(intent);
     }
 
-    /** Retourne true si l'adresse de la page a changé. */
-    private boolean handleIntent(Intent intent) {
-        if (intent == null) return false;
+    private void handleIntent(Intent intent) {
+        if (intent == null) return;
         if (intent.getBooleanExtra("remove_owner", false)) {
+            setKioskPaused(true);
             removeDeviceOwner();
-            return false;
         }
-        if (intent.getBooleanExtra("unlock", false)) {
-            kioskPaused = true;
-            try { stopLockTask(); } catch (Exception e) { Log.w(TAG, "stopLockTask", e); }
-            return false;
-        }
-        if (intent.getBooleanExtra("lock", false)) {
-            kioskPaused = false;
-            enterKiosk();
-        }
+        if (intent.getBooleanExtra("unlock", false)) setKioskPaused(true);
+        if (intent.getBooleanExtra("lock", false)) setKioskPaused(false);
         String code = intent.getStringExtra("code");
-        if (code != null && !code.trim().isEmpty()) {
-            prefs.edit().putString("code", code.trim()).apply();
-            return true;
-        }
-        return false;
-    }
-
-    private String pageUrl() {
-        String code = prefs.getString("code", null);
-        if (code == null) return BASE_URL;
-        // Le code est renvoyé à chaque chargement : si les données de la page sont effacées,
-        // la tablette se reconnecte toute seule à la famille.
-        return BASE_URL + "?code=" + Uri.encode(code);
-    }
-
-    private void load() {
-        loadFailed = false;
-        web.getSettings().setCacheMode(isOnline()
-                ? WebSettings.LOAD_DEFAULT
-                : WebSettings.LOAD_CACHE_ELSE_NETWORK);
-        web.loadUrl(pageUrl());
-    }
-
-    private boolean isOnline() {
-        ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
-        Network n = cm.getActiveNetwork();
-        if (n == null) return false;
-        NetworkCapabilities caps = cm.getNetworkCapabilities(n);
-        return caps != null && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET);
-    }
-
-    private void watchNetwork() {
-        ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
-        networkCallback = new ConnectivityManager.NetworkCallback() {
-            @Override
-            public void onAvailable(Network network) {
-                handler.post(() -> { if (loadFailed) load(); });
+        if (code != null) {
+            code = code.toUpperCase().replaceAll("[^A-Z0-9]", "");
+            if (code.length() == 8 && !code.equals(prefs.getString("code", null))) {
+                prefs.edit().putString("code", code).apply();
+                if (sync != null) sync.reset();
             }
-        };
-        cm.registerDefaultNetworkCallback(networkCallback);
-    }
-
-    private class KioskClient extends WebViewClient {
-        @Override
-        public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-            // On reste sur Papote : aucun lien ne doit faire sortir de l'app.
-            return !HOST.equals(request.getUrl().getHost());
-        }
-
-        @Override
-        public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
-            if (!request.isForMainFrame()) return;
-            loadFailed = true;
-            view.loadDataWithBaseURL(null, offlinePage(), "text/html", "utf-8", null);
-            handler.removeCallbacksAndMessages(null);
-            handler.postDelayed(MainActivity.this::load, RETRY_MS);
         }
     }
 
-    private static String offlinePage() {
-        return "<html><body style=\"margin:0;height:100vh;display:flex;flex-direction:column;"
-                + "align-items:center;justify-content:center;background:#fff8f1;color:#1f1a17;"
-                + "font-family:sans-serif;text-align:center\">"
-                + "<p style=\"font-size:7vmin;font-weight:bold;margin:0\">Pas de connexion internet</p>"
-                + "<p style=\"font-size:4.5vmin;color:#5c5049\">La tablette réessaie toute seule.</p>"
-                + "</body></html>";
+    // ---------- Lien avec la page ----------
+
+    private final class Bridge {
+        @JavascriptInterface
+        public void ready() {
+            sync.resend();
+        }
+
+        @JavascriptInterface
+        public void markSeen(String id) {
+            sync.markSeen(id, false);
+        }
+
+        @JavascriptInterface
+        public void sendHeart(String id) {
+            sync.markSeen(id, true);
+        }
     }
+
+    private void callPage(final String function, final JSONObject payload) {
+        // JSON est du JavaScript valide, sauf les séparateurs de ligne Unicode.
+        final String json = payload.toString().replace("\u2028", "\\u2028").replace("\u2029", "\\u2029");
+        handler.post(() -> {
+            if (web == null) return;
+            String js = "window.Papote && Papote." + function + "(" + json + ")";
+            web.evaluateJavascript(js, null);
+        });
+    }
+
+    @Override public void onStatus(JSONObject status) { callPage("onStatus", status); }
+    @Override public void onPosts(JSONObject payload) { callPage("onPosts", payload); }
+    @Override public void onWeather(JSONObject weather) { callPage("onWeather", weather); }
 
     // ---------- Mode kiosque ----------
+
+    private boolean kioskPaused() {
+        return prefs.getBoolean("kioskPaused", false);
+    }
+
+    private void setKioskPaused(boolean paused) {
+        prefs.edit().putBoolean("kioskPaused", paused).apply();
+        if (paused) {
+            if (Build.VERSION.SDK_INT >= 21) {
+                try { stopLockTask(); } catch (Exception e) { Log.w(TAG, "stopLockTask", e); }
+            }
+            removeStatusBarBlocker();
+        } else {
+            enterKiosk();
+        }
+    }
 
     private ComponentName admin() {
         return new ComponentName(this, AdminReceiver.class);
@@ -181,16 +182,16 @@ public class MainActivity extends Activity {
     }
 
     private boolean isDeviceOwner() {
-        return dpm().isDeviceOwnerApp(getPackageName());
+        return Build.VERSION.SDK_INT >= 21 && dpm().isDeviceOwnerApp(getPackageName());
     }
 
     private void setupDeviceOwner() {
-        if (!isDeviceOwner()) return;
+        if (Build.VERSION.SDK_INT < 21 || !isDeviceOwner()) return;
         DevicePolicyManager dpm = dpm();
         ComponentName admin = admin();
         try {
             dpm.setLockTaskPackages(admin, new String[]{getPackageName()});
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            if (Build.VERSION.SDK_INT >= 28) {
                 // Garde le menu du bouton marche/arrêt pour pouvoir éteindre ou redémarrer.
                 dpm.setLockTaskFeatures(admin, DevicePolicyManager.LOCK_TASK_FEATURE_GLOBAL_ACTIONS);
             }
@@ -199,8 +200,10 @@ public class MainActivity extends Activity {
             home.addCategory(Intent.CATEGORY_DEFAULT);
             dpm.addPersistentPreferredActivity(admin, home,
                     new ComponentName(getPackageName(), MainActivity.class.getName()));
-            dpm.setKeyguardDisabled(admin, true);
-            dpm.setStatusBarDisabled(admin, true);
+            if (Build.VERSION.SDK_INT >= 23) {
+                dpm.setKeyguardDisabled(admin, true);
+                dpm.setStatusBarDisabled(admin, true);
+            }
             // Écran toujours allumé quand la tablette est branchée (secteur, USB ou sans fil).
             dpm.setGlobalSetting(admin, Settings.Global.STAY_ON_WHILE_PLUGGED_IN, "7");
         } catch (Exception e) {
@@ -209,30 +212,75 @@ public class MainActivity extends Activity {
     }
 
     private void removeDeviceOwner() {
-        if (!isDeviceOwner()) return;
+        if (Build.VERSION.SDK_INT < 21 || !isDeviceOwner()) return;
         DevicePolicyManager dpm = dpm();
         ComponentName admin = admin();
         try {
-            stopLockTask();
-        } catch (Exception ignored) { }
-        try {
             dpm.clearPackagePersistentPreferredActivities(admin, getPackageName());
-            dpm.setKeyguardDisabled(admin, false);
-            dpm.setStatusBarDisabled(admin, false);
+            if (Build.VERSION.SDK_INT >= 23) {
+                dpm.setKeyguardDisabled(admin, false);
+                dpm.setStatusBarDisabled(admin, false);
+            }
             dpm.setLockTaskPackages(admin, new String[0]);
         } catch (Exception e) {
             Log.w(TAG, "Nettoyage du kiosque", e);
         }
         dpm.clearDeviceOwnerApp(getPackageName());
-        kioskPaused = true;
     }
 
     private void enterKiosk() {
-        if (kioskPaused || !dpm().isLockTaskPermitted(getPackageName())) return;
-        ActivityManager am = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
-        if (am.getLockTaskModeState() == ActivityManager.LOCK_TASK_MODE_NONE) {
-            try { startLockTask(); } catch (Exception e) { Log.w(TAG, "startLockTask", e); }
+        if (kioskPaused()) return;
+        if (Build.VERSION.SDK_INT >= 21 && isDeviceOwner()
+                && (Build.VERSION.SDK_INT < 23 || dpm().isLockTaskPermitted(getPackageName()))) {
+            ActivityManager am = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
+            boolean locked = Build.VERSION.SDK_INT >= 23
+                    ? am.getLockTaskModeState() != ActivityManager.LOCK_TASK_MODE_NONE
+                    : am.isInLockTaskMode();
+            if (!locked) {
+                try { startLockTask(); } catch (Exception e) { Log.w(TAG, "startLockTask", e); }
+            }
+        } else if (Build.VERSION.SDK_INT < 23) {
+            addStatusBarBlocker();
         }
+    }
+
+    /**
+     * Sans mode kiosque (Android 4.4) : une bande invisible en haut de l'écran
+     * empêche d'ouvrir le volet des notifications.
+     */
+    @SuppressWarnings("deprecation")
+    private void addStatusBarBlocker() {
+        if (statusBarBlocker != null) return;
+        int height = (int) (40 * getResources().getDisplayMetrics().density);
+        WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT, height,
+                WindowManager.LayoutParams.TYPE_SYSTEM_ERROR,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                        | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+                        | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                PixelFormat.TRANSPARENT);
+        lp.gravity = Gravity.TOP;
+        View v = new View(this) {
+            @SuppressLint("ClickableViewAccessibility")
+            @Override
+            public boolean onTouchEvent(MotionEvent event) {
+                return true;
+            }
+        };
+        try {
+            ((WindowManager) getSystemService(WINDOW_SERVICE)).addView(v, lp);
+            statusBarBlocker = v;
+        } catch (Exception e) {
+            Log.w(TAG, "Blocage de la barre d'état impossible", e);
+        }
+    }
+
+    private void removeStatusBarBlocker() {
+        if (statusBarBlocker == null) return;
+        try {
+            ((WindowManager) getSystemService(WINDOW_SERVICE)).removeView(statusBarBlocker);
+        } catch (Exception ignored) { }
+        statusBarBlocker = null;
     }
 
     private void hideSystemBars() {
@@ -263,16 +311,22 @@ public class MainActivity extends Activity {
     protected void onPause() {
         web.onPause();
         super.onPause();
+        // Sans mode kiosque, si une autre app passe devant (bouton « récents »), on revient.
+        if (!kioskPaused() && !isDeviceOwner()) {
+            handler.postDelayed(() -> {
+                ActivityManager am = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
+                am.moveTaskToFront(getTaskId(), 0);
+            }, 800);
+        }
     }
 
     @Override
     protected void onDestroy() {
-        if (networkCallback != null) {
-            ((ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE))
-                    .unregisterNetworkCallback(networkCallback);
-        }
+        removeStatusBarBlocker();
+        sync.stop();
         handler.removeCallbacksAndMessages(null);
         web.destroy();
+        web = null;
         super.onDestroy();
     }
 

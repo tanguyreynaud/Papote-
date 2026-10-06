@@ -16,10 +16,10 @@ android {
 
     defaultConfig {
         applicationId = "com.papote.tablette"
-        minSdk = 24
+        minSdk = 19
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
     }
 
     signingConfigs {
@@ -44,4 +44,9 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+}
+
+dependencies {
+    // Chiffrement à jour sur Android 4.4 (ProviderInstaller) ; la version 17.x reste compatible Android 4.4.
+    implementation("com.google.android.gms:play-services-basement:17.6.0")
 }
