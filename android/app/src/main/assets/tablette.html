@@ -83,6 +83,23 @@
     <p id="setup-detail" class="setup-detail"></p>
   </section>
 
+  <!-- Appel entrant -->
+  <div id="call-ring" class="call-ring" hidden>
+    <p id="ring-name" class="ring-name"></p>
+    <div class="ring-actions">
+      <button id="ring-decline" class="ring-btn decline">Refuser</button>
+      <button id="ring-answer" class="ring-btn answer">Décrocher</button>
+    </div>
+  </div>
+
+  <!-- Appel en cours -->
+  <div id="call-view" class="call-view" hidden>
+    <video id="call-remote" autoplay playsinline></video>
+    <video id="call-local" autoplay playsinline muted></video>
+    <p id="call-status" class="call-status" hidden></p>
+    <button id="call-hangup" class="call-hangup">Raccrocher</button>
+  </div>
+
   <script src="tablette.js"></script>
 </body>
 </html>

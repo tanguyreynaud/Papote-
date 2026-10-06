@@ -3,6 +3,7 @@ import {
   loadMembership, createFamily, joinFamily, leaveFamily, watchPosts, watchMembers,
   addPost, deletePost, formatCode, normalizeCode, toDate, CodeInconnuError,
 } from './firebase.js';
+import { startCall } from './appel.js';
 
 const $ = (id) => document.getElementById(id);
 const MAX_IMAGE_CHARS = 900_000; // un document Firestore est limité à 1 Mo
@@ -276,10 +277,68 @@ $('btn-leave').addEventListener('click', async () => {
   show('view-join');
 });
 
+// ---------- Appel vidéo ----------
+
+let currentCall = null;
+
+const CALL_MESSAGES = {
+  ringing: () => `Ça sonne chez ${session.family.name}…`,
+  accepted: () => 'Connexion…',
+  connected: () => '',
+};
+const END_MESSAGES = {
+  ended: 'Appel terminé',
+  declined: `L'appel a été refusé`,
+  missed: 'Pas de réponse',
+  failed: 'La connexion vidéo a échoué',
+};
+
+function setCallStatus(text) {
+  $('call-status').textContent = text;
+  $('call-status').hidden = !text;
+}
+
+$('btn-call').addEventListener('click', async () => {
+  if (currentCall) return;
+  $('call').hidden = false;
+  setCallStatus('Préparation de la caméra…');
+  try {
+    currentCall = await startCall(session.fid, { uid: session.uid, name: session.member.name }, {
+      local: $('call-local'),
+      remote: $('call-remote'),
+      onState: (state) => setCallStatus(CALL_MESSAGES[state]()),
+      onEnd: (reason) => {
+        currentCall = null;
+        setCallStatus(END_MESSAGES[reason] || 'Appel terminé');
+        setTimeout(() => { if (!currentCall) $('call').hidden = true; }, 2000);
+      },
+    });
+  } catch (err) {
+    console.error(err);
+    currentCall = null;
+    setCallStatus("Impossible d'accéder à la caméra ou au micro. Autorisez-les dans les réglages du navigateur.");
+    setTimeout(() => { if (!currentCall) $('call').hidden = true; }, 4000);
+  }
+});
+
+$('call-hangup').addEventListener('click', () => {
+  if (currentCall) currentCall.hangup();
+  else $('call').hidden = true;
+});
+
 function renderMembers(members) {
+  // Le bouton d'appel n'apparaît que si une tablette sait recevoir les appels (Android 5 et plus).
+  const canCall = members.some((m) => m.role === 'tablette' && m.canCall);
+  $('btn-call').hidden = !canCall || !navigator.mediaDevices;
+  $('btn-call').textContent = `📞 Appeler ${session.family.name} en vidéo`;
   const list = $('members');
   list.replaceChildren();
+  let tabletShown = false;
   for (const m of members) {
+    if (m.role === 'tablette') {
+      if (tabletShown) continue;
+      tabletShown = true;
+    }
     const li = document.createElement('li');
     li.textContent = m.role === 'tablette' ? `📺 Tablette de ${session.family.name}` : `👤 ${m.name}`;
     list.append(li);

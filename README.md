@@ -10,7 +10,9 @@ et une app pour que la famille lui envoie photos et messages depuis iPhone ou An
 - un cadre photo qui fait défiler les dernières photos de la famille ;
 - deux gros boutons « Photos » et « Messages » ;
 - chaque nouvel envoi s'affiche en grand avec un petit son, et un bouton « ❤️ Envoyer un bisou » ;
-- passage en couleurs sombres la nuit (21 h – 7 h), retour automatique à l'accueil.
+- passage en couleurs sombres la nuit (21 h – 7 h), retour automatique à l'accueil ;
+- appels vidéo de la famille vers la tablette, avec un gros bouton « Décrocher »
+  (tablettes Android 5 et plus seulement ; WebRTC gratuit, signalisation par Firestore).
 
 **Sur le téléphone de la famille** : https://papote-famille.web.app
 - rejoindre avec le code famille, sans créer de compte ;

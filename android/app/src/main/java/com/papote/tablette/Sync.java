@@ -314,7 +314,7 @@ final class Sync {
                     continue;
                 }
             }
-            p.imagePath = "file://" + file.getAbsolutePath();
+            p.imagePath = LocalContent.photoUrl(p.id);
         }
     }
 

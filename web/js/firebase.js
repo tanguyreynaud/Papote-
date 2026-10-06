@@ -31,6 +31,8 @@ try {
   db = initializeFirestore(app, {});
 }
 export { db };
+// Pour les appels vidéo (appel.js).
+export { doc, collection, setDoc, addDoc, updateDoc, onSnapshot, serverTimestamp };
 
 const FID_KEY = 'papote.fid';
 

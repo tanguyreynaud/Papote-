@@ -60,6 +60,7 @@
 
     <!-- Dans une famille -->
     <section id="view-app" hidden>
+      <button id="btn-call" class="primary call-btn wide" hidden>📞 Appeler en vidéo</button>
       <form id="form-post" class="card composer">
         <textarea id="post-text" rows="3" maxlength="2000" placeholder="Écrire un message…"></textarea>
         <div id="previews" class="previews"></div>
@@ -100,6 +101,14 @@
       <button id="btn-leave" class="link danger wide">Quitter la famille sur ce téléphone</button>
     </section>
   </main>
+
+  <!-- Appel vidéo en cours -->
+  <div id="call" class="call" hidden>
+    <video id="call-remote" autoplay playsinline></video>
+    <video id="call-local" autoplay playsinline muted></video>
+    <p id="call-status" class="call-status"></p>
+    <button id="call-hangup" class="call-hangup">Raccrocher</button>
+  </div>
 
   <script type="module" src="js/famille.js"></script>
 </body>

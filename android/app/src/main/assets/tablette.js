@@ -396,6 +396,15 @@
 
     showView('view-home');
     if (android()) android().ready();
+
+    // Appels vidéo : seulement si le navigateur de la tablette sait faire de la vidéo (Android 5+).
+    var probe = document.createElement('script');
+    if ('noModule' in probe && window.RTCPeerConnection && navigator.mediaDevices) {
+      var calls = document.createElement('script');
+      calls.type = 'module';
+      calls.src = 'appels.js';
+      document.body.appendChild(calls);
+    }
   }
 
   start();

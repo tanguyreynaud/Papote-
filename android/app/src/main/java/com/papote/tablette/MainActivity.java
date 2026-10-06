@@ -25,7 +25,12 @@ import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
+import android.Manifest;
+import android.content.pm.PackageManager;
 import android.webkit.JavascriptInterface;
+import android.webkit.PermissionRequest;
+import android.webkit.WebChromeClient;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -46,12 +51,12 @@ import org.json.JSONObject;
  */
 public class MainActivity extends Activity implements Sync.Listener {
     private static final String TAG = "Papote";
-    private static final String PAGE = "file:///android_asset/tablette.html";
 
     private WebView web;
     private SharedPreferences prefs;
     private Sync sync;
     private View statusBarBlocker;
+    private CallAudio callAudio;
     private final Handler handler = new Handler(Looper.getMainLooper());
 
     @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
@@ -91,13 +96,42 @@ public class MainActivity extends Activity implements Sync.Listener {
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 return true;
             }
+
+            @SuppressWarnings("deprecation")
+            @Override
+            public WebResourceResponse shouldInterceptRequest(WebView view, String url) {
+                return LocalContent.intercept(MainActivity.this, Uri.parse(url));
+            }
+
+            @Override
+            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                return LocalContent.intercept(MainActivity.this, request.getUrl());
+            }
+        });
+        web.setWebChromeClient(new WebChromeClient() {
+            // Caméra et micro pour les appels vidéo, uniquement pour l'écran Papote.
+            @Override
+            public void onPermissionRequest(PermissionRequest request) {
+                if (Build.VERSION.SDK_INT >= 21
+                        && LocalContent.HOST.equals(request.getOrigin().getHost())) {
+                    request.grant(request.getResources());
+                } else if (Build.VERSION.SDK_INT >= 21) {
+                    request.deny();
+                }
+            }
         });
         setContentView(web);
+        callAudio = new CallAudio(this);
+        if (Build.VERSION.SDK_INT >= 23
+                && (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED
+                || checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED)) {
+            requestPermissions(new String[]{Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO}, 1);
+        }
 
         sync = new Sync(this, prefs, this);
         handleIntent(getIntent());
         setupDeviceOwner();
-        web.loadUrl(PAGE);
+        web.loadUrl(LocalContent.PAGE);
         sync.start();
     }
 
@@ -142,6 +176,21 @@ public class MainActivity extends Activity implements Sync.Listener {
         @JavascriptInterface
         public void sendHeart(String id) {
             sync.markSeen(id, true);
+        }
+
+        @JavascriptInterface
+        public String getCode() {
+            return prefs.getString("code", null);
+        }
+
+        @JavascriptInterface
+        public void ring(boolean on) {
+            handler.post(() -> callAudio.ring(on));
+        }
+
+        @JavascriptInterface
+        public void inCall(boolean on) {
+            handler.post(() -> callAudio.inCall(on));
         }
     }
 
@@ -350,6 +399,7 @@ public class MainActivity extends Activity implements Sync.Listener {
     @Override
     protected void onDestroy() {
         removeStatusBarBlocker();
+        callAudio.release();
         sync.stop();
         handler.removeCallbacksAndMessages(null);
         web.destroy();

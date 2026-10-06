@@ -47,7 +47,7 @@ service cloud.firestore {
         && request.resource.data.name.size() <= 40
         && request.resource.data.code is string;
       allow update: if isMember(fid)
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'canCall'])
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
         && request.resource.data.name.size() <= 40;
@@ -57,7 +57,7 @@ service cloud.firestore {
         allow read: if isMember(fid);
         allow create: if signedIn()
           && uid == request.auth.uid
-          && request.resource.data.keys().hasOnly(['name', 'role', 'code', 'joinedAt'])
+          && request.resource.data.keys().hasOnly(['name', 'role', 'code', 'joinedAt', 'canCall'])
           && request.resource.data.name is string
           && request.resource.data.name.size() > 0
           && request.resource.data.name.size() <= 40
@@ -91,6 +91,25 @@ service cloud.firestore {
           && request.resource.data.hearts >= resource.data.hearts
           && request.resource.data.hearts <= resource.data.hearts + 1;
         allow delete: if signedIn() && resource.data.authorUid == request.auth.uid;
+      }
+
+      // Appels vidéo : la famille appelle la tablette (signalisation WebRTC).
+      match /calls/{cid} {
+        allow read: if isMember(fid);
+        allow create: if isMember(fid)
+          && request.resource.data.keys().hasOnly(['callerUid', 'callerName', 'state', 'offer', 'answer', 'createdAt', 'endedAt'])
+          && request.resource.data.callerUid == request.auth.uid
+          && request.resource.data.state == 'ringing';
+        allow update: if isMember(fid)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state', 'answer', 'endedAt'])
+          && request.resource.data.state in ['ringing', 'accepted', 'declined', 'missed', 'ended'];
+        allow delete: if false;
+
+        match /{side}/{candidate} {
+          allow read: if isMember(fid);
+          allow create: if isMember(fid) && side in ['callerCandidates', 'calleeCandidates'];
+          allow update, delete: if false;
+        }
       }
     }
   }
