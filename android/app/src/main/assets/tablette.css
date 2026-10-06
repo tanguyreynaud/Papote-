@@ -353,11 +353,22 @@ body.night .big-btn.messages { background: #9a3412; }
 .overlay.reminder .ov-kind { font-size: 9vmin; text-transform: none; letter-spacing: 0; opacity: 1; }
 
 /* ---------- Écrans d'un nouvel envoi, des rappels et des appels ----------
- * Fond : la dernière photo de la famille, floutée et assombrie (ou un dégradé doux),
- * et au centre une grande carte claire, très lisible. Boutons : texte seul, centré.
+ * Dans l'esprit de Linote : un mot sur une feuille de papier posée sur du bois,
+ * la photo à droite, et en bas une barre avec l'heure et la date.
  */
 
-.overlay, .call-ring {
+@font-face {
+  font-family: 'Alegreya Sans';
+  font-weight: 500;
+  src: url(fonts/alegreya-sans-500.ttf) format('truetype');
+}
+@font-face {
+  font-family: 'Alegreya Sans';
+  font-weight: 700;
+  src: url(fonts/alegreya-sans-700.ttf) format('truetype');
+}
+
+.overlay.ln {
   position: fixed;
   top: 0; right: 0; bottom: 0; left: 0;
   z-index: 10;
@@ -365,146 +376,114 @@ body.night .big-btn.messages { background: #9a3412; }
   display: flex;
   -webkit-flex-direction: column;
   flex-direction: column;
-  -webkit-align-items: center;
-  align-items: center;
-  -webkit-justify-content: center;
-  justify-content: center;
-  padding: 5vmin 7vmin;
-  overflow: hidden;
-  background: #3f3a36;
-  background: -webkit-linear-gradient(top, #57534e, #292524);
-  background: linear-gradient(to bottom, #57534e, #292524);
-  color: #22201d;
+  padding: 0;
+  background: #9c744e;
+  color: #5b4566;
+  font-family: 'Alegreya Sans', Roboto, sans-serif;
 }
-.overlay.reminder { z-index: 20; }
-.call-ring { z-index: 30; }
+.overlay.ln.reminder { z-index: 20; }
+.overlay.ln.call-ring { z-index: 30; }
 
-.ov-backdrop {
-  position: absolute;
-  top: -6vmin; right: -6vmin; bottom: -6vmin; left: -6vmin;
-  background-size: cover;
-  background-position: center;
-}
-/* Voile sombre pour que la carte claire ressorte */
-.ov-backdrop:after {
-  content: '';
-  position: absolute;
-  top: 0; right: 0; bottom: 0; left: 0;
-  background: rgba(20, 16, 12, .45);
-}
-
-.ov-card {
-  position: relative;
-  z-index: 1;
-  width: 100%;
-  max-width: 150vmin;
+.ln-main {
   -webkit-flex: 1;
   flex: 1;
   min-height: 0;
   display: -webkit-flex;
   display: flex;
-  -webkit-flex-direction: column;
-  flex-direction: column;
+}
+.ln-wood {
+  -webkit-flex: 1;
+  flex: 1;
+  min-width: 0;
+  display: -webkit-flex;
+  display: flex;
   -webkit-align-items: center;
   align-items: center;
   -webkit-justify-content: center;
   justify-content: center;
-  padding: 5vmin 7vmin;
-  border-radius: 6vmin;
-  background: #fffaf3;
-  text-align: center;
-  box-shadow: 0 2vmin 8vmin rgba(0, 0, 0, .35);
+  padding: 5vmin 6vmin;
+  background-color: #a98058;
+  /* Planches de bois horizontales, dessinées en CSS (unités en px : Android 4.4 gère mal les vmin ici) */
+  background-image:
+    -webkit-repeating-linear-gradient(top, rgba(0, 0, 0, 0) 0px, rgba(0, 0, 0, 0) 116px, rgba(60, 34, 12, .5) 116px, rgba(60, 34, 12, .5) 120px),
+    -webkit-repeating-linear-gradient(top, rgba(255, 235, 205, .08) 0px, rgba(80, 45, 15, .10) 60px, rgba(255, 235, 205, .08) 120px, rgba(80, 45, 15, .03) 240px, rgba(255, 235, 205, .07) 360px),
+    -webkit-repeating-linear-gradient(left, rgba(255, 240, 220, .05) 0px, rgba(60, 35, 15, .07) 9px, rgba(255, 240, 220, .04) 23px),
+    -webkit-linear-gradient(left, #a98058, #bb9064 50%, #a47b53);
+  background-image:
+    repeating-linear-gradient(to bottom, rgba(0, 0, 0, 0) 0px, rgba(0, 0, 0, 0) 116px, rgba(60, 34, 12, .5) 116px, rgba(60, 34, 12, .5) 120px),
+    repeating-linear-gradient(to bottom, rgba(255, 235, 205, .08) 0px, rgba(80, 45, 15, .10) 60px, rgba(255, 235, 205, .08) 120px, rgba(80, 45, 15, .03) 240px, rgba(255, 235, 205, .07) 360px),
+    repeating-linear-gradient(to right, rgba(255, 240, 220, .05) 0px, rgba(60, 35, 15, .07) 9px, rgba(255, 240, 220, .04) 23px),
+    linear-gradient(to right, #a98058, #bb9064 50%, #a47b53);
 }
-.ov-from { margin: 0 0 4vmin; font-size: 7vmin; font-weight: bold; color: #57534e; }
-.ov-text { margin: 0; line-height: 1.25; font-weight: bold; white-space: pre-wrap; color: #22201d; }
-.ov-text.size-l { font-size: 11vmin; }
-.ov-text.size-m { font-size: 8.5vmin; }
-.ov-text.size-s { font-size: 6.5vmin; }
-.ov-caption {
-  position: relative;
-  z-index: 1;
-  margin: 3vmin 0 0;
-  padding: 1.5vmin 4vmin;
-  border-radius: 3vmin;
-  background: rgba(0, 0, 0, .55);
-  color: #fff;
-  font-size: 6vmin;
-  font-weight: bold;
-  text-align: center;
-}
-
-.ov-play {
-  min-width: 70vmin;
-  min-height: 26vmin;
-  padding: 3vmin 8vmin;
-  border-radius: 13vmin;
-  background: #c2410c;
-  color: #fff;
-  font-size: 10vmin;
-  font-weight: bold;
-  text-align: center;
-  box-shadow: 0 1.5vmin 4vmin rgba(0, 0, 0, .25);
-}
-.ov-play .icon { display: none; }
-.ov-play.playing { background: #a8a29e; }
-.overlay.mode-voice .ov-play { background: #6d28d9; }
-.overlay.mode-video .ov-play { background: #1d4ed8; }
-
-.ov-actions {
-  position: relative;
-  z-index: 1;
+.ln-note {
   width: 100%;
-  max-width: 150vmin;
+  max-width: 140vmin;
+  max-height: 100%;
+  padding: 6vmin 7vmin;
+  background: #fbfaf6;
+  box-shadow: 0 1.2vmin 3vmin rgba(40, 24, 10, .45);
+  -webkit-transform: rotate(-1.2deg);
+  transform: rotate(-1.2deg);
+}
+.ln-text { margin: 0; font-weight: 700; line-height: 1.22; white-space: pre-wrap; color: #5b4566; }
+.ln-text.size-l { font-size: 11vmin; }
+.ln-text.size-m { font-size: 8.5vmin; }
+.ln-text.size-s { font-size: 6.8vmin; }
+.ln-sign { margin: 3vmin 0 0; font-size: 6.5vmin; font-weight: 500; color: #8a7392; text-align: right; }
+.ln-when { margin: 0 0 2vmin; font-size: 8vmin; font-weight: 700; color: #b45309; }
+.reminder-icon { margin: 0 0 2vmin; color: #5b4566; }
+.reminder-icon .icon { width: 13vmin; height: 13vmin; }
+
+.ln-play {
+  display: block;
+  margin: 5vmin auto 0;
+  min-width: 60vmin;
+  min-height: 20vmin;
+  padding: 2vmin 8vmin;
+  border-radius: 10vmin;
+  background: #5e4b63;
+  color: #fff;
+  font-family: 'Alegreya Sans', Roboto, sans-serif;
+  font-size: 9vmin;
+  font-weight: 700;
+}
+.ln-play.playing { background: #a8a29e; }
+
+/* La photo (ou la vidéo) occupe la moitié droite, du haut jusqu'à la barre */
+.ln-media { width: 54%; position: relative; overflow: hidden; background: #000; }
+.ln-media img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
+.overlay.mode-photo .ln-wood { -webkit-flex: none; flex: none; width: 46%; padding: 4vmin; }
+.overlay.mode-photo .ln-note { padding: 5vmin; }
+
+/* Barre du bas : l'heure à gauche, les boutons à droite */
+.ln-bar {
   display: -webkit-flex;
   display: flex;
-  margin-top: 4vmin;
+  -webkit-align-items: center;
+  align-items: center;
+  min-height: 17vmin;
+  padding: 2vmin 3vmin 2vmin 5vmin;
+  background: #5e4b63;
+  color: #fff;
 }
-.ov-actions .big-btn, .bottom-bar .big-btn, .ring-actions .ring-btn {
-  -webkit-flex: 1;
-  flex: 1;
-  min-height: 18vmin;
-  padding: 2vmin 3vmin;
-  font-size: 7vmin;
-  text-align: center;
+.ln-clock { -webkit-flex: 1; flex: 1; margin: 0; font-family: 'Alegreya Sans', Roboto, sans-serif; font-size: 6vmin; font-weight: 500; }
+.ln-actions { display: -webkit-flex; display: flex; }
+.ln-btn {
+  min-height: 13vmin;
+  padding: 0 5vmin;
+  margin-left: 2.5vmin;
+  border-radius: 3vmin;
+  background: rgba(255, 255, 255, .18);
+  color: #fff;
+  font-family: 'Alegreya Sans', Roboto, sans-serif;
+  font-size: 6vmin;
+  font-weight: 700;
   white-space: nowrap;
 }
-.ov-actions .big-btn + .big-btn { margin-left: 3vmin; }
-/* Pas d'icône dans les boutons d'action : un seul mot, bien lisible. */
-.ov-actions .icon, .bottom-bar .icon { display: none; }
-.big-btn.replay { background: #57534e; }
-
-/* Photo : en plein écran sur fond noir, prénom en haut, légende et boutons en bas */
-.overlay.mode-photo { background: #000; -webkit-justify-content: flex-end; justify-content: flex-end; }
-.overlay.mode-photo .ov-card {
-  -webkit-flex: none;
-  flex: none;
-  width: auto;
-  background: rgba(0, 0, 0, .55);
-  box-shadow: none;
-  padding: 2.5vmin 5vmin;
-  margin-bottom: auto;
-}
-.overlay.mode-photo .ov-from { margin: 0; color: #fff; }
-
-.ov-img {
-  position: absolute;
-  top: 0; left: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
-
-/* Rappels */
-.reminder-icon { margin: 0 0 2vmin; color: #0f766e; }
-.reminder-icon .icon { width: 16vmin; height: 16vmin; }
-.reminder-when { margin: 0 0 3vmin; font-size: 9vmin; font-weight: bold; color: #0f766e; }
-.reminder-time { margin: 3vmin 0 0; font-size: 7vmin; font-weight: bold; color: #57534e; }
-
-/* Appel entrant */
-.ring-name { margin: 0; font-size: 10vmin; font-weight: bold; color: #22201d; }
-.ring-actions { position: relative; z-index: 1; width: 100%; max-width: 150vmin; display: -webkit-flex; display: flex; margin-top: 4vmin; }
-.ring-actions .ring-btn { margin: 0; border-radius: 4vmin; min-height: 20vmin; }
-.ring-actions .ring-btn + .ring-btn { margin-left: 3vmin; }
+.ln-btn.heart { background: #e11d48; }
+.ln-btn.ok, .ln-btn.answer { background: #16a34a; }
+.ln-btn.decline { background: #dc2626; }
+.ln-btn[disabled] { opacity: .7; }
 
 /* Vidéo jouée par Android par-dessus l'écran */
 body.video-playing .overlay { visibility: hidden; }

@@ -47,6 +47,7 @@ final class LocalContent {
         if (name.endsWith(".css")) return "text/css";
         if (name.endsWith(".svg")) return "image/svg+xml";
         if (name.endsWith(".png")) return "image/png";
+        if (name.endsWith(".ttf")) return "font/ttf";
         if (name.endsWith(".jpg")) return "image/jpeg";
         if (name.endsWith(".m4a")) return "audio/mp4";
         if (name.endsWith(".mp3")) return "audio/mpeg";

@@ -42,46 +42,66 @@
     </div>
   </section>
 
-  <!-- Écran d'un nouvel envoi : photo, message, message vocal ou vidéo (un à la fois) -->
-  <div id="overlay" class="overlay" hidden>
-    <div class="ov-backdrop"></div>
-    <img id="overlay-img" class="ov-img" alt="" hidden>
-    <div class="ov-card">
-      <p id="overlay-from" class="ov-from"></p>
-      <p id="overlay-text" class="ov-text" hidden></p>
-      <button id="overlay-play" class="ov-play" hidden><span class="icon" data-icon="play"></span><span class="label">Écouter</span></button>
+  <!-- Écran d'un nouvel envoi (photo, message, vocal, vidéo), dans l'esprit de Linote :
+       un mot sur papier posé sur du bois, la photo à droite, l'heure en bas. -->
+  <div id="overlay" class="overlay ln" hidden>
+    <div class="ln-main">
+      <div class="ln-wood">
+        <div class="ln-note">
+          <p id="overlay-text" class="ln-text"></p>
+          <p id="overlay-from" class="ln-sign"></p>
+          <button id="overlay-play" class="ln-play" hidden><span class="label">Écouter</span></button>
+        </div>
+      </div>
+      <div id="ln-media" class="ln-media" hidden>
+        <img id="overlay-img" alt="">
+      </div>
     </div>
-    <p id="overlay-caption" class="ov-caption" hidden></p>
-    <div id="overlay-actions" class="ov-actions">
-      <button id="overlay-replay" class="big-btn replay" hidden><span class="label">Réécouter</span></button>
-      <button id="overlay-heart" class="big-btn heart"><span class="label">Envoyer un bisou</span></button>
-      <button id="overlay-close" class="big-btn ok">OK</button>
+    <div class="ln-bar">
+      <p class="ln-clock"></p>
+      <div id="overlay-actions" class="ln-actions">
+        <button id="overlay-replay" class="ln-btn replay" hidden><span class="label">Réécouter</span></button>
+        <button id="overlay-heart" class="ln-btn heart"><span class="label">Envoyer un bisou</span></button>
+        <button id="overlay-close" class="ln-btn ok">OK</button>
+      </div>
     </div>
   </div>
 
   <!-- Rappel : un peu avant, puis à l'heure -->
-  <div id="reminder-alert" class="overlay reminder" hidden>
-    <div class="ov-backdrop"></div>
-    <div class="ov-card">
-      <p id="reminder-when" class="reminder-when"></p>
-      <p id="reminder-icon" class="reminder-icon"></p>
-      <p id="reminder-title" class="ov-text size-m"></p>
-      <p id="reminder-time" class="reminder-time"></p>
+  <div id="reminder-alert" class="overlay ln reminder" hidden>
+    <div class="ln-main">
+      <div class="ln-wood">
+        <div class="ln-note">
+          <p id="reminder-when" class="ln-when"></p>
+          <p id="reminder-icon" class="reminder-icon"></p>
+          <p id="reminder-title" class="ln-text size-m"></p>
+          <p id="reminder-time" class="ln-sign"></p>
+        </div>
+      </div>
     </div>
-    <div class="ov-actions">
-      <button id="reminder-done" class="big-btn ok">C'est fait</button>
+    <div class="ln-bar">
+      <p class="ln-clock"></p>
+      <div class="ln-actions">
+        <button id="reminder-done" class="ln-btn ok">C'est fait</button>
+      </div>
     </div>
   </div>
 
   <!-- Appel entrant -->
-  <div id="call-ring" class="call-ring" hidden>
-    <div class="ov-backdrop"></div>
-    <div class="ov-card">
-      <p id="ring-name" class="ring-name"></p>
+  <div id="call-ring" class="overlay ln call-ring" hidden>
+    <div class="ln-main">
+      <div class="ln-wood">
+        <div class="ln-note">
+          <p id="ring-name" class="ln-text size-l"></p>
+        </div>
+      </div>
     </div>
-    <div class="ring-actions">
-      <button id="ring-decline" class="ring-btn decline">Refuser</button>
-      <button id="ring-answer" class="ring-btn answer">Décrocher</button>
+    <div class="ln-bar">
+      <p class="ln-clock"></p>
+      <div class="ln-actions">
+        <button id="ring-decline" class="ln-btn decline">Refuser</button>
+        <button id="ring-answer" class="ln-btn answer">Décrocher</button>
+      </div>
     </div>
   </div>
 

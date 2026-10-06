@@ -75,7 +75,13 @@
     $('date').textContent = day.charAt(0).toUpperCase() + day.slice(1) + ' ' + now.getDate() +
       (now.getDate() === 1 ? 'er' : '') + ' ' + MOIS[now.getMonth()];
     var hour = now.getHours();
-    document.body.className = (hour >= 21 || hour < 7) ? 'night' : '';
+    document.body.className = ((hour >= 21 || hour < 7) ? 'night' : '') +
+      (playing && playing.post.video ? ' video-playing' : '');
+    // Barre du bas des écrans : « Il est 18h21, samedi 12 juillet »
+    var bar = 'Il est ' + hour + 'h' + pad(now.getMinutes()) + ', ' + day + ' ' + now.getDate() +
+      (now.getDate() === 1 ? 'er' : '') + ' ' + MOIS[now.getMonth()];
+    var clocks = document.querySelectorAll('.ln-clock');
+    for (var i = 0; i < clocks.length; i++) clocks[i].textContent = bar;
   }
 
   function whenLabel(ms) {
@@ -330,19 +336,21 @@
     var p = overlayPost;
     var mode = p.image ? 'photo' : p.type === 'voice' ? 'voice' : p.type === 'video' ? 'video' : 'message';
     var media = mode === 'voice' || mode === 'video';
-    $('overlay').className = 'overlay mode-' + mode;
-    // Une seule phrase claire, au centre : « Message de Julie », « Vidéo de Julie »…
-    $('overlay-from').textContent = { photo: 'Photo de ', voice: 'Message vocal de ', video: 'Vidéo de ', message: 'Message de ' }[mode] + p.authorName;
-    show($('overlay-img'), mode === 'photo');
+    $('overlay').className = 'overlay ln mode-' + mode;
+    // Comme un mot écrit à la main : le texte, puis la signature.
+    var text = mode === 'message' ? p.text
+      : mode === 'photo' ? (p.text || 'Une nouvelle photo pour vous !')
+        : mode === 'voice' ? 'Un message vocal de ' + p.authorName
+          : 'Une vidéo de ' + p.authorName + (p.text ? ' : ' + p.text : '');
+    $('overlay-text').textContent = text;
+    $('overlay-text').className = 'ln-text ' + (mode === 'photo' ? 'size-m' : sizeClass(text));
+    show($('overlay-from'), !media);
+    $('overlay-from').textContent = '— ' + p.authorName;
+    // Photo : à droite, sur toute la hauteur.
+    show($('ln-media'), mode === 'photo');
     if (mode === 'photo') $('overlay-img').setAttribute('src', p.image);
-    // Message : le texte sur une grande carte ; photo ou vidéo : la légende.
-    show($('overlay-text'), mode === 'message');
-    $('overlay-text').textContent = mode === 'message' ? p.text : '';
-    $('overlay-text').className = 'ov-text ' + sizeClass(p.text);
-    show($('overlay-caption'), mode !== 'message' && !!p.text);
-    $('overlay-caption').textContent = mode !== 'message' ? (p.text || '') : '';
     show($('overlay-play'), media);
-    $('overlay-play').className = 'ov-play';
+    $('overlay-play').className = 'ln-play';
     $('overlay-play').querySelector('.label').textContent = mode === 'video' ? 'Regarder' : 'Écouter';
     $('overlay-replay').querySelector('.label').textContent = mode === 'video' ? 'Revoir' : 'Réécouter';
     // Vocal ou vidéo : d'abord seulement « Écouter » / « Regarder » ; le reste vient une fois fini.
@@ -354,7 +362,7 @@
   function listenOverlay() {
     var p = overlayPost;
     if (!p || !(p.audio || p.video) || playing) return;
-    $('overlay-play').className = 'ov-play playing';
+    $('overlay-play').className = 'ln-play playing';
     $('overlay-play').querySelector('.label').textContent = p.video ? 'Lecture…' : 'Écoute…';
     setOverlayActions(false);
     playVoice(p, function () {
@@ -480,7 +488,7 @@
     $('reminder-when').textContent = early ? 'Dans ' + delta + ' minute' + (delta > 1 ? 's' : '') : "C'est l'heure !";
     $('reminder-icon').innerHTML = '<span class="icon">' + kindIcon(r.kind) + '</span>';
     $('reminder-title').textContent = r.title;
-    $('reminder-title').className = 'ov-text ' + sizeClass(r.title);
+    $('reminder-title').className = 'ln-text ' + sizeClass(r.title);
     $('reminder-time').textContent = (r.kind === 'rdv' ? 'Rendez-vous à ' : 'À ') + timeLabel(r.time);
     $('reminder-done').textContent = early ? "J'ai compris" : r.kind === 'rdv' ? "J'ai bien noté" : "C'est fait";
     show($('reminder-alert'), true);
