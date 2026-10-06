@@ -47,10 +47,15 @@ service cloud.firestore {
         && request.resource.data.name.size() <= 40
         && request.resource.data.code is string;
       allow update: if isMember(fid)
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name'])
-        && request.resource.data.name is string
-        && request.resource.data.name.size() > 0
-        && request.resource.data.name.size() <= 40;
+        && (
+          (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name'])
+            && request.resource.data.name is string
+            && request.resource.data.name.size() > 0
+            && request.resource.data.name.size() <= 40)
+          // Marqueur de changement : les tablettes ne relisent que lorsqu'il bouge.
+          || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rev'])
+            && request.resource.data.rev is int)
+        );
       allow delete: if false;
 
       match /members/{uid} {
@@ -76,7 +81,7 @@ service cloud.firestore {
       match /posts/{pid} {
         allow read: if isMember(fid);
         allow create: if isMember(fid)
-          && request.resource.data.keys().hasOnly(['type', 'text', 'image', 'audio', 'duration', 'replyTo', 'authorUid', 'authorName', 'createdAt', 'seenAt', 'hearts'])
+          && request.resource.data.keys().hasOnly(['type', 'text', 'image', 'thumb', 'hasMedia', 'audio', 'duration', 'replyTo', 'authorUid', 'authorName', 'createdAt', 'seenAt', 'hearts'])
           && request.resource.data.authorUid == request.auth.uid
           && request.resource.data.type in ['photo', 'message', 'voice', 'reply']
           && (!('audio' in request.resource.data) || request.resource.data.audio == null || request.resource.data.audio is string)
@@ -92,6 +97,19 @@ service cloud.firestore {
           && request.resource.data.hearts >= resource.data.hearts
           && request.resource.data.hearts <= resource.data.hearts + 1;
         allow delete: if signedIn() && resource.data.authorUid == request.auth.uid;
+
+        // Photo ou son en taille réelle, chargé seulement à la demande.
+        match /media/{kind} {
+          allow read: if isMember(fid);
+          allow create: if isMember(fid)
+            && kind in ['image', 'audio']
+            && request.resource.data.keys().hasOnly(['data'])
+            && request.resource.data.data is string
+            && getAfter(/databases/$(database)/documents/families/$(fid)/posts/$(pid)).data.authorUid == request.auth.uid;
+          allow update: if false;
+          allow delete: if signedIn()
+            && get(/databases/$(database)/documents/families/$(fid)/posts/$(pid)).data.authorUid == request.auth.uid;
+        }
       }
 
       // Rappels et agenda : la famille les gère, la tablette note « c'est fait ».

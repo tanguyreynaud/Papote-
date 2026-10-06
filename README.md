@@ -60,7 +60,14 @@ puis relancer `installer-tablette.bat`.
 ## Coûts
 
 0 € : Firebase en offre gratuite (Spark), météo Open-Meteo (gratuite, sans clé).
-Les photos sont stockées dans Firestore (environ 200 à 600 Ko chacune, 1 Go gratuit).
+
+Pour limiter les coûts si le nombre de tablettes grandit :
+- chaque modification côté famille incrémente `families/{fid}.rev` ; la tablette ne lit que ce
+  marqueur (1 lecture toutes les 20 s), et ne relit envois et rappels que s'il a changé ;
+  sur les tablettes récentes, la page l'écoute en direct et la tablette ne vérifie plus que toutes les 10 min ;
+- un envoi ne contient qu'un aperçu (~10 à 40 Ko) ; la photo ou le son complets sont dans
+  `posts/{id}/media/{image|audio}`, chargés seulement à la demande ;
+- l'app famille garde photos et vocaux déjà ouverts en cache sur le téléphone.
 
 ## Reconstruire l'app Android
 

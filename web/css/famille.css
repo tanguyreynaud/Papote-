@@ -294,3 +294,19 @@ select {
 .post-audio { width: 100%; margin-bottom: 10px; }
 .post.reply { border-left: 4px solid var(--ok); }
 .reply-text { margin: 0 0 4px; font-size: 18px; font-weight: 600; }
+
+.post-thumb { cursor: zoom-in; }
+.voice-play { margin-bottom: 10px; }
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 25;
+  background: rgba(0, 0, 0, .92);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.lightbox img { max-width: 100%; max-height: 85vh; object-fit: contain; border-radius: 8px; }
+.lightbox-hint { color: #ccc; font-size: 14px; }

@@ -204,6 +204,18 @@ public class MainActivity extends Activity implements Sync.Listener {
             handler.post(() -> voicePlayer.stop());
         }
 
+        /** La page écoute la famille en direct (tablettes récentes). */
+        @JavascriptInterface
+        public void realtime(boolean on) {
+            sync.setRealtime(on);
+        }
+
+        /** Quelque chose a changé dans la famille : synchroniser tout de suite. */
+        @JavascriptInterface
+        public void changed() {
+            sync.poke();
+        }
+
         @JavascriptInterface
         public void touched() {
             sync.touched();

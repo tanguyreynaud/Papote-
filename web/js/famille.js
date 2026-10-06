@@ -1,7 +1,7 @@
 // App famille : envoyer photos et messages vers la tablette.
 import {
   loadMembership, createFamily, joinFamily, leaveFamily, watchPosts, watchMembers,
-  addPost, deletePost, formatCode, normalizeCode, toDate, CodeInconnuError,
+  addPost, deletePost, loadMedia, formatCode, normalizeCode, toDate, CodeInconnuError,
 } from './firebase.js';
 import { startCall } from './appel.js';
 import { startAgenda, stopAgenda } from './agenda.js';
@@ -10,7 +10,7 @@ const $ = (id) => document.getElementById(id);
 const MAX_IMAGE_CHARS = 900_000; // un document Firestore est limité à 1 Mo
 
 let session = null; // { fid, family, member, uid }
-let pendingPhotos = []; // data URLs prêtes à envoyer
+let pendingPhotos = []; // { full, thumb } : data URLs prêtes à envoyer
 let pendingVoice = null; // { dataUrl, duration }
 let stopFeed = null;
 let stopMembers = null;
@@ -77,8 +77,21 @@ function loadImage(file) {
   });
 }
 
+function resize(img, maxSide, quality) {
+  const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(img.naturalWidth * scale);
+  canvas.height = Math.round(img.naturalHeight * scale);
+  canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL('image/jpeg', quality);
+}
+
 async function compressPhoto(file) {
   const img = await loadImage(file);
+  return { full: fullSize(img), thumb: resize(img, 480, 0.7) };
+}
+
+function fullSize(img) {
   let maxSide = 1600;
   let quality = 0.82;
   for (;;) {
@@ -97,11 +110,11 @@ async function compressPhoto(file) {
 function renderPreviews() {
   const box = $('previews');
   box.replaceChildren();
-  pendingPhotos.forEach((src, i) => {
+  pendingPhotos.forEach((photo, i) => {
     const wrap = document.createElement('div');
     wrap.className = 'preview';
     const img = document.createElement('img');
-    img.src = src;
+    img.src = photo.thumb;
     img.alt = '';
     const remove = document.createElement('button');
     remove.type = 'button';
@@ -187,7 +200,7 @@ $('form-post').addEventListener('submit', async (e) => {
         setBusy(pendingPhotos.length > 1 ? `Photo ${i + 1} sur ${pendingPhotos.length}…` : 'Envoi…');
         // Le texte accompagne la première photo.
         await addPost(session.fid, {
-          type: 'photo', text: i === 0 ? text : '', image: pendingPhotos[i], ...author,
+          type: 'photo', text: i === 0 ? text : '', image: pendingPhotos[i].full, thumb: pendingPhotos[i].thumb, ...author,
         });
       }
     } else if (!pendingVoice) {
@@ -238,19 +251,37 @@ function renderFeed(posts) {
       continue;
     }
     li.className = 'card post';
-    if (post.audio) {
-      const audio = document.createElement('audio');
-      audio.controls = true;
-      audio.preload = 'none';
-      audio.src = post.audio;
-      audio.className = 'post-audio';
-      li.append(audio);
+    if (post.type === 'voice') {
+      const play = document.createElement('button');
+      play.className = 'action-btn wide voice-play';
+      play.textContent = `▶ Écouter le vocal${post.duration ? ` (${Math.floor(post.duration / 60)}:${String(post.duration % 60).padStart(2, '0')})` : ''}`;
+      play.addEventListener('click', async () => {
+        play.disabled = true;
+        play.textContent = 'Chargement…';
+        try {
+          const src = await loadMedia(session.fid, post, 'audio');
+          const audio = document.createElement('audio');
+          audio.controls = true;
+          audio.className = 'post-audio';
+          audio.src = src;
+          play.replaceWith(audio);
+          audio.play().catch(() => {});
+        } catch (err) {
+          console.error(err);
+          play.disabled = false;
+          play.textContent = 'Réessayer';
+        }
+      });
+      li.append(play);
     }
-    if (post.image) {
+    const preview = post.thumb || post.image;
+    if (preview) {
       const img = document.createElement('img');
-      img.src = post.image;
+      img.src = preview;
       img.alt = '';
       img.loading = 'lazy';
+      img.className = 'post-thumb';
+      img.addEventListener('click', () => openPhoto(post));
       li.append(img);
     }
     if (post.text) {
@@ -274,7 +305,7 @@ function renderFeed(posts) {
       del.className = 'link danger small';
       del.textContent = 'Supprimer';
       del.addEventListener('click', async () => {
-        if (confirm('Supprimer cet envoi de la tablette ?')) await deletePost(session.fid, post.id);
+        if (confirm('Supprimer cet envoi de la tablette ?')) await deletePost(session.fid, post);
       });
       li.append(del);
     }
@@ -430,6 +461,21 @@ $('btn-install').addEventListener('click', async () => {
       + 'puis <strong>« Ajouter à l\'écran d\'accueil »</strong> ou <strong>« Installer l\'application »</strong>.</p>';
   }
 });
+
+// ---------- Photo en grand ----------
+
+async function openPhoto(post) {
+  $('lightbox').hidden = false;
+  $('lightbox-img').src = post.thumb || post.image;
+  try {
+    const src = await loadMedia(session.fid, post, 'image');
+    if (src && !$('lightbox').hidden) $('lightbox-img').src = src;
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+$('lightbox').addEventListener('click', () => { $('lightbox').hidden = true; });
 
 // ---------- Message vocal ----------
 

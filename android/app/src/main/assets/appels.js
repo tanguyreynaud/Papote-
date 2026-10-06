@@ -202,6 +202,20 @@ $('ring-answer').addEventListener('click', answer);
 $('ring-decline').addEventListener('click', decline);
 $('call-hangup').addEventListener('click', () => hangup());
 
+// Écoute en direct du marqueur de changement : la tablette se met à jour aussitôt,
+// et l'app Android peut espacer ses vérifications (moins de lectures, donc moins de coûts).
+function watchFamily() {
+  let first = true;
+  onSnapshot(doc(db, 'families', fid), () => {
+    if (first) { first = false; return; }
+    if (android() && android().changed) android().changed();
+  }, (err) => {
+    console.error('Écoute de la famille', err);
+    if (android() && android().realtime) android().realtime(false);
+  });
+  if (android() && android().realtime) android().realtime(true);
+}
+
 async function start() {
   try {
     fid = await joinFamily();
@@ -213,6 +227,7 @@ async function start() {
     return;
   }
   watchCalls();
+  watchFamily();
 }
 
 start();

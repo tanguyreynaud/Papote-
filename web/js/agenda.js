@@ -1,6 +1,6 @@
 // Rappels et agenda côté famille : créer, lister, supprimer ; voir quand Mamie a confirmé.
 import {
-  db, doc, collection, addDoc, onSnapshot, serverTimestamp, deleteDoc,
+  db, doc, collection, onSnapshot, serverTimestamp, writeBatch, bumpRev,
 } from './firebase.js';
 
 const $ = (id) => document.getElementById(id);
@@ -51,7 +51,11 @@ function render(list) {
     del.className = 'link danger small';
     del.textContent = 'Supprimer';
     del.addEventListener('click', async () => {
-      if (confirm(`Supprimer le rappel « ${r.title} » ?`)) await deleteDoc(doc(db, 'families', session.fid, 'reminders', r.id));
+      if (!confirm(`Supprimer le rappel « ${r.title} » ?`)) return;
+      const batch = writeBatch(db);
+      batch.delete(doc(db, 'families', session.fid, 'reminders', r.id));
+      bumpRev(batch, session.fid);
+      await batch.commit();
     });
     li.append(del);
     ul.append(li);
@@ -76,7 +80,8 @@ $('form-reminder').addEventListener('submit', async (e) => {
   if (repeat === 'once' && !$('rem-date').value) { err.textContent = 'Choisissez une date.'; err.hidden = false; return; }
   $('btn-reminder').disabled = true;
   try {
-    await addDoc(collection(db, 'families', session.fid, 'reminders'), {
+    const batch = writeBatch(db);
+    batch.set(doc(collection(db, 'families', session.fid, 'reminders')), {
       title: $('rem-title').value.trim(),
       kind: document.querySelector('input[name="rem-kind"]:checked').value,
       time: $('rem-time').value,
@@ -87,6 +92,8 @@ $('form-reminder').addEventListener('submit', async (e) => {
       createdAt: serverTimestamp(),
       lastAck: null,
     });
+    bumpRev(batch, session.fid);
+    await batch.commit();
     $('rem-title').value = '';
   } catch (error) {
     console.error(error);

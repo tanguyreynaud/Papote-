@@ -32,7 +32,9 @@ try {
 }
 export { db };
 // Pour les appels vidéo (appel.js).
-export { doc, collection, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp };
+export {
+  doc, collection, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, writeBatch,
+};
 
 const FID_KEY = 'papote.fid';
 
@@ -160,18 +162,78 @@ export function watchMembers(fid, callback) {
   });
 }
 
-export function addPost(fid, {
-  type, text, image, audio, duration, authorUid, authorName,
-}) {
-  const extra = type === 'voice' ? { audio, duration } : {};
-  return addDoc(collection(db, 'families', fid, 'posts'), {
-    type, text, image: image || null, ...extra, authorUid, authorName,
-    createdAt: serverTimestamp(), seenAt: null, hearts: 0,
-  });
+// Signale aux tablettes qu'il y a du nouveau : elles ne relisent que lorsque ce compteur bouge.
+export function bumpRev(batch, fid) {
+  batch.update(doc(db, 'families', fid), { rev: increment(1) });
 }
 
-export function deletePost(fid, pid) {
-  return deleteDoc(doc(db, 'families', fid, 'posts', pid));
+/**
+ * Un envoi : le document ne contient qu'un petit aperçu (thumb) ; la photo ou le son en taille
+ * réelle sont dans posts/{id}/media/{image|audio} et ne sont téléchargés qu'à la demande.
+ */
+export async function addPost(fid, {
+  type, text, image, thumb, audio, duration, authorUid, authorName,
+}) {
+  const postRef = doc(collection(db, 'families', fid, 'posts'));
+  const batch = writeBatch(db);
+  const data = {
+    type, text, image: null, authorUid, authorName,
+    createdAt: serverTimestamp(), seenAt: null, hearts: 0,
+  };
+  if (image) { data.thumb = thumb; data.hasMedia = true; }
+  if (audio) { data.hasMedia = true; data.duration = duration; }
+  batch.set(postRef, data);
+  if (image) batch.set(doc(postRef, 'media', 'image'), { data: image });
+  if (audio) batch.set(doc(postRef, 'media', 'audio'), { data: audio });
+  bumpRev(batch, fid);
+  await batch.commit();
+  return postRef;
+}
+
+export async function deletePost(fid, post) {
+  const postRef = doc(db, 'families', fid, 'posts', post.id);
+  const batch = writeBatch(db);
+  if (post.hasMedia) {
+    batch.delete(doc(postRef, 'media', 'image'));
+    batch.delete(doc(postRef, 'media', 'audio'));
+  }
+  batch.delete(postRef);
+  bumpRev(batch, fid);
+  await batch.commit();
+}
+
+// ---------- Photos et sons en taille réelle, gardés en cache sur le téléphone ----------
+
+const MEDIA_CACHE = 'papote-media-v1';
+
+async function cacheGet(key) {
+  try {
+    const cache = await caches.open(MEDIA_CACHE);
+    const hit = await cache.match(key);
+    return hit ? URL.createObjectURL(await hit.blob()) : null;
+  } catch (e) { return null; }
+}
+
+async function cachePut(key, blob) {
+  try {
+    const cache = await caches.open(MEDIA_CACHE);
+    await cache.put(key, new Response(blob, { headers: { 'Content-Type': blob.type } }));
+  } catch (e) { /* cache indisponible */ }
+}
+
+/** Renvoie une adresse affichable (blob:) pour la photo ou le son d'un envoi. */
+export async function loadMedia(fid, post, kind) {
+  // Anciens envois : le média est directement dans le document.
+  const inline = kind === 'image' ? post.image : post.audio;
+  if (inline) return inline;
+  const key = `/media/${fid}/${post.id}/${kind}`;
+  const cached = await cacheGet(key);
+  if (cached) return cached;
+  const snap = await getDoc(doc(db, 'families', fid, 'posts', post.id, 'media', kind));
+  if (!snap.exists()) return null;
+  const blob = await (await fetch(snap.data().data)).blob();
+  await cachePut(key, blob);
+  return URL.createObjectURL(blob);
 }
 
 export function markSeen(fid, pid) {

@@ -38,9 +38,10 @@ final class Sync {
 
     private static final String TAG = "PapoteSync";
     private static final long POLL_MS = 20_000;               // nouveaux envois
-    private static final long FULL_REFRESH_MS = 30 * 60_000;  // suppressions, vus, bisous
+    private static final long FULL_REFRESH_MS = 6 * 3600_000; // relecture complète de sécurité
+    private static final long REALTIME_POLL_MS = 10 * 60_000; // quand la page reçoit les changements en direct
     private static final long WEATHER_MS = 30 * 60_000;
-    private static final long REMINDERS_MS = 5 * 60_000;
+    private static final long REMINDERS_MS = 6 * 3600_000;
     private static final int MAX_POSTS = 60;
     private static final double LAT = 44.9372;                // Saint-Martin-de-Valamas
     private static final double LON = 4.3687;
@@ -71,6 +72,8 @@ final class Sync {
     private final Map<String, Post> posts = new LinkedHashMap<>();
     private String familyName;
     private long lastFullRefresh;
+    private long lastRev = Long.MIN_VALUE; // marqueur de changement de la famille
+    private volatile boolean realtime;
     private boolean loadedOnce;
     private long lastReminders;
     private String lastRemindersJson;
@@ -100,6 +103,7 @@ final class Sync {
             prefs.edit().remove("fid").apply();
             posts.clear();
             lastFullRefresh = 0;
+            lastRev = Long.MIN_VALUE;
             lastPostsJson = null;
             File[] files = imageDir.listFiles();
             if (files != null) for (File f : files) f.delete();
@@ -136,9 +140,22 @@ final class Sync {
             } catch (Exception e) {
                 Log.w(TAG, "Synchronisation", e);
             }
-            handler.postDelayed(this, POLL_MS);
+            handler.postDelayed(this, realtime ? REALTIME_POLL_MS : POLL_MS);
         }
     };
+
+    /**
+     * Sur les tablettes récentes, la page écoute la famille en direct (Firebase web) :
+     * on n'interroge alors plus le serveur que toutes les 10 minutes, et tout de suite à chaque changement.
+     */
+    void setRealtime(boolean on) {
+        realtime = on;
+    }
+
+    void poke() {
+        handler.removeCallbacks(loop);
+        handler.post(loop);
+    }
 
     // ---------- Famille ----------
 
@@ -195,14 +212,26 @@ final class Sync {
         if (fid == null) return;
 
         long now = System.currentTimeMillis();
-        boolean full = now - lastFullRefresh > FULL_REFRESH_MS || posts.isEmpty();
+        boolean full = true;
         JSONArray result;
         try {
-            if (familyName == null || full) {
-                JSONObject family = firebase.get("families/" + fid, "name");
-                if (family != null) familyName = Firebase.str(family.getJSONObject("fields"), "name");
+            // Une seule lecture : le marqueur « rev » ne bouge que si la famille a envoyé ou supprimé
+            // quelque chose (ou modifié les rappels). Sinon, rien d'autre à lire.
+            JSONObject family = firebase.get("families/" + fid, "name", "rev");
+            long rev = 0;
+            JSONObject ff = family == null ? null : family.optJSONObject("fields");
+            if (ff != null) {
+                familyName = Firebase.str(ff, "name");
+                rev = Firebase.integer(ff, "rev");
             }
-            result = firebase.runQuery("families/" + fid, postsQuery(full));
+            if (rev == lastRev && now - lastFullRefresh < FULL_REFRESH_MS) {
+                status("ok", null);
+                heartbeat(fid, "lastOnline");
+                return;
+            }
+            lastRev = rev;
+            lastReminders = 0; // les rappels ont peut-être changé aussi
+            result = firebase.runQuery("families/" + fid, postsQuery(true));
         } catch (Firebase.ApiException e) {
             if (e.code == 403 || e.code == 404) {
                 // Plus membre (famille supprimée ou tablette retirée) : on rejoindra avec le code.
@@ -315,10 +344,16 @@ final class Sync {
             File file = existing(p.id);
             if (file == null) {
                 try {
-                    JSONObject doc = firebase.get("families/" + fid + "/posts/" + p.id, field);
-                    if (doc == null) continue;
-                    String dataUrl = Firebase.str(doc.optJSONObject("fields") == null
-                            ? new JSONObject() : doc.getJSONObject("fields"), field);
+                    String dataUrl = null;
+                    JSONObject media = firebase.get("families/" + fid + "/posts/" + p.id + "/media/" + field);
+                    if (media != null && media.optJSONObject("fields") != null) {
+                        dataUrl = Firebase.str(media.getJSONObject("fields"), "data");
+                    }
+                    if (dataUrl == null) {
+                        JSONObject doc = firebase.get("families/" + fid + "/posts/" + p.id, field);
+                        if (doc == null || doc.optJSONObject("fields") == null) continue;
+                        dataUrl = Firebase.str(doc.getJSONObject("fields"), field);
+                    }
                     if (dataUrl == null) continue;
                     file = new File(imageDir, p.id + "." + extension(dataUrl));
                     byte[] bytes = Base64.decode(dataUrl.substring(dataUrl.indexOf(',') + 1), Base64.DEFAULT);
