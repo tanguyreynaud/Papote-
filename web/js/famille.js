@@ -4,12 +4,14 @@ import {
   addPost, deletePost, formatCode, normalizeCode, toDate, CodeInconnuError,
 } from './firebase.js';
 import { startCall } from './appel.js';
+import { startAgenda, stopAgenda } from './agenda.js';
 
 const $ = (id) => document.getElementById(id);
 const MAX_IMAGE_CHARS = 900_000; // un document Firestore est limité à 1 Mo
 
 let session = null; // { fid, family, member, uid }
 let pendingPhotos = []; // data URLs prêtes à envoyer
+let pendingVoice = null; // { dataUrl, duration }
 let stopFeed = null;
 let stopMembers = null;
 
@@ -148,6 +150,7 @@ function setBusy(label) {
   $('post-photos').disabled = !!label;
   $('post-camera').disabled = !!label;
   $('btn-photo').disabled = !!label;
+  $('btn-voice').disabled = !!label;
   if (label) $('photo-menu').hidden = true;
   $('form-post').classList.toggle('busy', !!label);
   btn.replaceChildren();
@@ -168,10 +171,17 @@ function setStatus(text) {
 $('form-post').addEventListener('submit', async (e) => {
   e.preventDefault();
   const text = $('post-text').value.trim();
-  if (!text && !pendingPhotos.length) return;
+  if (!text && !pendingPhotos.length && !pendingVoice) return;
   setBusy('Envoi…');
   const author = { authorUid: session.uid, authorName: session.member.name };
   try {
+    if (pendingVoice) {
+      setBusy('Envoi du vocal…');
+      await addPost(session.fid, {
+        type: 'voice', text: pendingPhotos.length ? '' : text,
+        audio: pendingVoice.dataUrl, duration: pendingVoice.duration, ...author,
+      });
+    }
     if (pendingPhotos.length) {
       for (let i = 0; i < pendingPhotos.length; i++) {
         setBusy(pendingPhotos.length > 1 ? `Photo ${i + 1} sur ${pendingPhotos.length}…` : 'Envoi…');
@@ -180,10 +190,11 @@ $('form-post').addEventListener('submit', async (e) => {
           type: 'photo', text: i === 0 ? text : '', image: pendingPhotos[i], ...author,
         });
       }
-    } else {
+    } else if (!pendingVoice) {
       await addPost(session.fid, { type: 'message', text, ...author });
     }
     pendingPhotos = [];
+    clearVoice();
     renderPreviews();
     $('post-text').value = '';
     setStatus('Envoyé ✓');
@@ -214,7 +225,27 @@ function renderFeed(posts) {
   const grand = session.family?.name || 'la tablette';
   for (const post of posts) {
     const li = document.createElement('li');
+    if (post.type === 'reply') {
+      li.className = 'card post reply';
+      const p = document.createElement('p');
+      p.className = 'reply-text';
+      p.textContent = `${grand} : ${post.text}`;
+      const when = document.createElement('p');
+      when.className = 'muted small';
+      when.textContent = timeLabel(toDate(post.createdAt));
+      li.append(p, when);
+      feed.append(li);
+      continue;
+    }
     li.className = 'card post';
+    if (post.audio) {
+      const audio = document.createElement('audio');
+      audio.controls = true;
+      audio.preload = 'none';
+      audio.src = post.audio;
+      audio.className = 'post-audio';
+      li.append(audio);
+    }
     if (post.image) {
       const img = document.createElement('img');
       img.src = post.image;
@@ -283,6 +314,7 @@ $('btn-leave').addEventListener('click', async () => {
   if (!confirm('Quitter la famille sur ce téléphone ? Vous pourrez revenir avec le code famille.')) return;
   stopFeed?.();
   stopMembers?.();
+  stopAgenda();
   await leaveFamily(session.fid, session.uid);
   session = null;
   $('family-title').textContent = '';
@@ -339,6 +371,8 @@ $('call-hangup').addEventListener('click', () => {
 });
 
 function renderMembers(members) {
+  tabletMembers = members.filter((m) => m.role === 'tablette');
+  renderActivity();
   // Le bouton d'appel n'apparaît que si une tablette sait recevoir les appels (Android 5 et plus).
   const canCall = members.some((m) => m.role === 'tablette' && m.canCall);
   $('btn-call').hidden = !canCall || !navigator.mediaDevices;
@@ -397,6 +431,174 @@ $('btn-install').addEventListener('click', async () => {
   }
 });
 
+// ---------- Message vocal ----------
+
+const MAX_VOICE_S = 120;
+let recorder = null;
+let recordTimer = null;
+
+function pickMime() {
+  // AAC (mp4) se lit partout, y compris sur les tablettes anciennes ; sinon WebM/Opus.
+  for (const m of ['audio/mp4;codecs=mp4a.40.2', 'audio/mp4', 'audio/webm;codecs=opus', 'audio/webm']) {
+    if (window.MediaRecorder && MediaRecorder.isTypeSupported(m)) return m;
+  }
+  return '';
+}
+
+// Les tablettes anciennes (Android 4.4) ne lisent ni le WebM ni le MP4 des navigateurs :
+// on convertit l'enregistrement en MP3 mono 16 kHz, lisible partout.
+let lameLoading = null;
+function loadLame() {
+  if (window.lamejs) return Promise.resolve();
+  lameLoading = lameLoading || new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'vendor/lame.min.js';
+    script.onload = resolve;
+    script.onerror = reject;
+    document.head.append(script);
+  });
+  return lameLoading;
+}
+
+async function toMp3(blob) {
+  const RATE = 16000;
+  await loadLame();
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const decoded = await ctx.decodeAudioData(await blob.arrayBuffer());
+  ctx.close();
+  const offline = new OfflineAudioContext(1, Math.ceil(decoded.duration * RATE), RATE);
+  const src = offline.createBufferSource();
+  src.buffer = decoded;
+  src.connect(offline.destination);
+  src.start();
+  const mono = (await offline.startRendering()).getChannelData(0);
+  const pcm = new Int16Array(mono.length);
+  for (let i = 0; i < mono.length; i++) pcm[i] = Math.max(-1, Math.min(1, mono[i])) * 0x7fff;
+  const encoder = new window.lamejs.Mp3Encoder(1, RATE, 32);
+  const parts = [];
+  for (let i = 0; i < pcm.length; i += 1152) {
+    const out = encoder.encodeBuffer(pcm.subarray(i, i + 1152));
+    if (out.length) parts.push(new Uint8Array(out));
+  }
+  const end = encoder.flush();
+  if (end.length) parts.push(new Uint8Array(end));
+  return new Blob(parts, { type: 'audio/mpeg' });
+}
+
+function clearVoice() {
+  pendingVoice = null;
+  $('voice-preview').hidden = true;
+  $('voice-audio').removeAttribute('src');
+}
+
+$('voice-remove').addEventListener('click', clearVoice);
+
+$('btn-voice').addEventListener('click', async () => {
+  if (recorder) { recorder.stop(); return; }
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+  } catch (err) {
+    setStatus("Impossible d'accéder au micro. Autorisez-le dans les réglages du navigateur.");
+    return;
+  }
+  const mimeType = pickMime();
+  recorder = new MediaRecorder(stream, mimeType ? { mimeType, audioBitsPerSecond: 32000 } : undefined);
+  const chunks = [];
+  const started = Date.now();
+  recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+  recorder.onstop = async () => {
+    clearInterval(recordTimer);
+    stream.getTracks().forEach((t) => t.stop());
+    const blob = new Blob(chunks, { type: recorder.mimeType || mimeType || 'audio/webm' });
+    const duration = Math.round((Date.now() - started) / 1000);
+    recorder = null;
+    $('btn-voice').textContent = '🎤 Vocal';
+    $('btn-voice').classList.remove('recording');
+    setStatus('Préparation du vocal…');
+    let mp3;
+    try {
+      mp3 = await toMp3(blob);
+    } catch (err) {
+      console.error(err);
+      setStatus("Le vocal n'a pas pu être préparé. Réessayez.");
+      return;
+    }
+    setStatus('');
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (reader.result.length > 950_000) {
+        setStatus('Le message vocal est trop long. Gardez-le sous 2 minutes.');
+        return;
+      }
+      pendingVoice = { dataUrl: reader.result, duration };
+      $('voice-audio').src = reader.result;
+      $('voice-preview').hidden = false;
+    };
+    reader.readAsDataURL(mp3);
+  };
+  recorder.start();
+  $('btn-voice').textContent = '⏹ Arrêter';
+  $('btn-voice').classList.add('recording');
+  const tick = () => {
+    const s = Math.round((Date.now() - started) / 1000);
+    setStatus(`🔴 Enregistrement… ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')} (touchez Arrêter pour finir)`);
+    if (s >= MAX_VOICE_S && recorder) recorder.stop();
+  };
+  tick();
+  recordTimer = setInterval(tick, 500);
+});
+
+// ---------- Veille : activité de la tablette ----------
+
+let tabletMembers = [];
+
+function ago(ms) {
+  const min = Math.round((Date.now() - ms) / 60000);
+  if (min < 2) return "à l'instant";
+  if (min < 60) return `il y a ${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `il y a ${h} h`;
+  const d = new Date(ms);
+  return `le ${d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })} à ${d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
+}
+
+function renderActivity() {
+  const el = $('activity');
+  const latest = (field) => Math.max(0, ...tabletMembers.map((m) => (m[field] ? toDate(m[field]).getTime() : 0)));
+  const online = latest('lastOnline');
+  const active = latest('lastActive');
+  if (!online) { el.hidden = true; return; }
+  const name = session.family.name;
+  const now = Date.now();
+  const hour = new Date().getHours();
+  el.hidden = false;
+  el.classList.remove('warn');
+  if (now - online > 45 * 60_000) {
+    el.classList.add('warn');
+    el.textContent = `⚠️ La tablette ne répond plus depuis ${ago(online).replace('il y a ', '')}. Est-elle branchée et connectée au wifi ?`;
+  } else if (active && now - active > 12 * 3600_000 && hour >= 10 && hour < 21) {
+    el.classList.add('warn');
+    el.textContent = `⚠️ ${name} n'a pas touché la tablette depuis ${ago(active).replace('il y a ', '')}.`;
+  } else {
+    el.textContent = active
+      ? `✅ Tablette en ligne. ${name} l'a utilisée ${ago(active)}.`
+      : '✅ Tablette en ligne.';
+  }
+}
+
+setInterval(() => { if (session) renderActivity(); }, 60_000);
+
+// ---------- Onglets Messages / Agenda ----------
+
+document.querySelectorAll('.tab').forEach((tab) => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t === tab));
+    $('tab-messages').hidden = tab.dataset.tab !== 'messages';
+    $('tab-agenda').hidden = tab.dataset.tab !== 'agenda';
+  });
+});
+
 // ---------- Démarrage ----------
 
 async function start() {
@@ -414,6 +616,7 @@ async function start() {
   stopFeed = watchPosts(session.fid, 30, renderFeed);
   stopMembers = watchMembers(session.fid, renderMembers);
   history.replaceState(null, '', location.pathname);
+  startAgenda(session);
   renderInstallCard();
   show('view-app');
 }

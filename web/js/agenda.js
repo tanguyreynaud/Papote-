@@ -1,0 +1,114 @@
+// Rappels et agenda côté famille : créer, lister, supprimer ; voir quand Mamie a confirmé.
+import {
+  db, doc, collection, addDoc, onSnapshot, serverTimestamp, deleteDoc,
+} from './firebase.js';
+
+const $ = (id) => document.getElementById(id);
+const JOURS_COURTS = ['dim', 'lun', 'mar', 'mer', 'jeu', 'ven', 'sam'];
+const ICONS = { medicament: '💊', rdv: '🩺', autre: '📌' };
+
+let session = null;
+let stop = null;
+
+function todayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function describe(r) {
+  if (r.repeat === 'daily') return `Tous les jours à ${r.time}`;
+  if (r.repeat === 'weekly') {
+    const days = [1, 2, 3, 4, 5, 6, 0].filter((d) => (r.days || []).includes(d)).map((d) => JOURS_COURTS[d]);
+    return `Le ${days.join(', ')} à ${r.time}`;
+  }
+  const date = r.date ? new Date(`${r.date}T00:00`) : null;
+  const label = date ? date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) : '';
+  return `Le ${label} à ${r.time}`;
+}
+
+function render(list) {
+  const ul = $('reminders');
+  ul.replaceChildren();
+  $('reminders-empty').hidden = list.length > 0;
+  list.sort((a, b) => a.time.localeCompare(b.time));
+  for (const r of list) {
+    const li = document.createElement('li');
+    li.className = 'card reminder';
+    const title = document.createElement('p');
+    title.className = 'reminder-title';
+    title.textContent = `${ICONS[r.kind] || '📌'} ${r.title}`;
+    const when = document.createElement('p');
+    when.className = 'muted small reminder-when';
+    when.textContent = describe(r);
+    li.append(title, when);
+    if (r.lastAck && r.lastAck.startsWith(todayKey())) {
+      const ack = document.createElement('p');
+      ack.className = 'seen small';
+      ack.textContent = `${session.family.name} a confirmé aujourd'hui à ${r.lastAck.slice(11)} ✓`;
+      li.append(ack);
+    }
+    const del = document.createElement('button');
+    del.className = 'link danger small';
+    del.textContent = 'Supprimer';
+    del.addEventListener('click', async () => {
+      if (confirm(`Supprimer le rappel « ${r.title} » ?`)) await deleteDoc(doc(db, 'families', session.fid, 'reminders', r.id));
+    });
+    li.append(del);
+    ul.append(li);
+  }
+}
+
+function syncRepeatFields() {
+  const repeat = $('rem-repeat').value;
+  $('rem-date-wrap').hidden = repeat !== 'once';
+  $('rem-days').hidden = repeat !== 'weekly';
+}
+
+$('rem-repeat').addEventListener('change', syncRepeatFields);
+
+$('form-reminder').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const repeat = $('rem-repeat').value;
+  const days = Array.from($('rem-days').querySelectorAll('input:checked')).map((i) => Number(i.value));
+  const err = $('rem-error');
+  err.hidden = true;
+  if (repeat === 'weekly' && !days.length) { err.textContent = 'Choisissez au moins un jour.'; err.hidden = false; return; }
+  if (repeat === 'once' && !$('rem-date').value) { err.textContent = 'Choisissez une date.'; err.hidden = false; return; }
+  $('btn-reminder').disabled = true;
+  try {
+    await addDoc(collection(db, 'families', session.fid, 'reminders'), {
+      title: $('rem-title').value.trim(),
+      kind: document.querySelector('input[name="rem-kind"]:checked').value,
+      time: $('rem-time').value,
+      repeat,
+      date: repeat === 'once' ? $('rem-date').value : null,
+      days: repeat === 'weekly' ? days : [],
+      createdBy: session.member.name,
+      createdAt: serverTimestamp(),
+      lastAck: null,
+    });
+    $('rem-title').value = '';
+  } catch (error) {
+    console.error(error);
+    err.textContent = "Le rappel n'a pas pu être enregistré. Vérifiez la connexion.";
+    err.hidden = false;
+  } finally {
+    $('btn-reminder').disabled = false;
+  }
+});
+
+export function startAgenda(current) {
+  session = current;
+  $('rem-date').min = todayKey();
+  $('rem-date').value = todayKey();
+  syncRepeatFields();
+  stop?.();
+  stop = onSnapshot(collection(db, 'families', session.fid, 'reminders'), (snap) => {
+    render(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+  });
+}
+
+export function stopAgenda() {
+  stop?.();
+  stop = null;
+}

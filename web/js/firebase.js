@@ -32,7 +32,7 @@ try {
 }
 export { db };
 // Pour les appels vidéo (appel.js).
-export { doc, collection, setDoc, addDoc, updateDoc, onSnapshot, serverTimestamp };
+export { doc, collection, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp };
 
 const FID_KEY = 'papote.fid';
 
@@ -160,9 +160,12 @@ export function watchMembers(fid, callback) {
   });
 }
 
-export function addPost(fid, { type, text, image, authorUid, authorName }) {
+export function addPost(fid, {
+  type, text, image, audio, duration, authorUid, authorName,
+}) {
+  const extra = type === 'voice' ? { audio, duration } : {};
   return addDoc(collection(db, 'families', fid, 'posts'), {
-    type, text, image: image || null, authorUid, authorName,
+    type, text, image: image || null, ...extra, authorUid, authorName,
     createdAt: serverTimestamp(), seenAt: null, hearts: 0,
   });
 }

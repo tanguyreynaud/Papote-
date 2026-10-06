@@ -57,6 +57,7 @@ public class MainActivity extends Activity implements Sync.Listener {
     private Sync sync;
     private View statusBarBlocker;
     private CallAudio callAudio;
+    private VoicePlayer voicePlayer;
     private final Handler handler = new Handler(Looper.getMainLooper());
 
     @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
@@ -122,6 +123,7 @@ public class MainActivity extends Activity implements Sync.Listener {
         });
         setContentView(web);
         callAudio = new CallAudio(this);
+        voicePlayer = new VoicePlayer(this, () -> callPage("onVoiceEnded", new JSONObject()));
         if (Build.VERSION.SDK_INT >= 23
                 && (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED
                 || checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED)) {
@@ -179,6 +181,37 @@ public class MainActivity extends Activity implements Sync.Listener {
         }
 
         @JavascriptInterface
+        public void reply(String postId, String text) {
+            sync.reply(postId, text);
+        }
+
+        @JavascriptInterface
+        public void playVoice(String url) {
+            handler.post(() -> voicePlayer.play(url));
+        }
+
+        @JavascriptInterface
+        public void stopVoice() {
+            handler.post(() -> voicePlayer.stop());
+        }
+
+        @JavascriptInterface
+        public void touched() {
+            sync.touched();
+        }
+
+        @JavascriptInterface
+        public void ackReminder(String id, String when) {
+            sync.ackReminder(id, when);
+        }
+
+        /** Son de notification et écran allumé (rappel à l'heure). */
+        @JavascriptInterface
+        public void alert() {
+            onNewArrival();
+        }
+
+        @JavascriptInterface
         public String getCode() {
             return prefs.getString("code", null);
         }
@@ -207,6 +240,7 @@ public class MainActivity extends Activity implements Sync.Listener {
     @Override public void onStatus(JSONObject status) { callPage("onStatus", status); }
     @Override public void onPosts(JSONObject payload) { callPage("onPosts", payload); }
     @Override public void onWeather(JSONObject weather) { callPage("onWeather", weather); }
+    @Override public void onReminders(JSONObject payload) { callPage("onReminders", payload); }
 
     /** Nouvel envoi : on allume l'écran et on joue le son de notification de la tablette. */
     @SuppressWarnings("deprecation")
@@ -400,6 +434,7 @@ public class MainActivity extends Activity implements Sync.Listener {
     protected void onDestroy() {
         removeStatusBarBlocker();
         callAudio.release();
+        voicePlayer.stop();
         sync.stop();
         handler.removeCallbacksAndMessages(null);
         web.destroy();

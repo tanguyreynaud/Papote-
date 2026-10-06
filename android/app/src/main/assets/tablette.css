@@ -362,3 +362,91 @@ body.night .overlay-title { color: #fb923c; }
   font-size: 6vmin;
   font-weight: bold;
 }
+
+/* ---------- Rappels et agenda ---------- */
+
+.next-reminder {
+  margin: 0 0 3vmin;
+  padding: 1.5vmin 2.5vmin;
+  border-radius: 2vmin;
+  background: #ffedd5;
+  color: #9a3412;
+  font-size: 4vmin;
+  font-weight: bold;
+}
+body.night .next-reminder { background: #3a2415; color: #fdba74; }
+.home-buttons .big-btn { font-size: 5.2vmin; }
+
+.reminder-overlay { z-index: 20; }
+.reminder-overlay .overlay-card { text-align: center; -webkit-align-items: center; align-items: center; }
+.reminder-icon { margin: 0; font-size: 16vmin; line-height: 1; }
+.reminder-icon .icon { width: 16vmin; height: 16vmin; }
+.reminder-big { margin: 0; font-size: 8vmin; font-weight: bold; }
+.reminder-time { margin: 0; font-size: 5vmin; color: #5c5049; }
+.big-btn.done { background: #15803d; -webkit-flex: none; flex: none; min-width: 60vmin; }
+
+.agenda-day { margin: 2vmin 0 1vmin; font-size: 4.5vmin; font-weight: bold; color: #c2410c; }
+.agenda-item {
+  display: -webkit-flex;
+  display: flex;
+  -webkit-align-items: center;
+  align-items: center;
+  background: #ffffff;
+  border: 2px solid #ecdccd;
+  border-radius: 3vmin;
+  padding: 2.5vmin 3vmin;
+  margin-bottom: 2vmin;
+  font-size: 5vmin;
+}
+.agenda-item .time { font-weight: bold; min-width: 18vmin; }
+.agenda-item .what { -webkit-flex: 1; flex: 1; }
+.agenda-item .done-mark { color: #15803d; font-weight: bold; font-size: 4vmin; }
+.agenda-item.past { opacity: .55; }
+body.night .agenda-item { background: #1c1714; border-color: #2e2621; }
+body.night .agenda-day { color: #fb923c; }
+
+/* ---------- Vocaux et réponses ---------- */
+
+.big-btn.play { background: #1d4ed8; -webkit-flex: none; flex: none; }
+.big-btn.play.playing { background: #b91c1c; }
+.big-btn.reply { background: #15803d; }
+.overlay-actions .big-btn { font-size: 5vmin; }
+.message-actions { display: -webkit-flex; display: flex; margin-top: 2vmin; }
+.message-actions .small-btn + .small-btn { margin-left: 2vmin; }
+.small-btn {
+  padding: 1.8vmin 3.5vmin;
+  border-radius: 2.5vmin;
+  font-size: 4.2vmin;
+  font-weight: bold;
+  color: #fff;
+  background: #15803d;
+}
+.small-btn.play { background: #1d4ed8; }
+.small-btn.play.playing { background: #b91c1c; }
+.voice-label { margin: 0; font-size: 5vmin; font-weight: bold; }
+
+.reply-overlay { z-index: 15; }
+.reply-grid { display: -webkit-flex; display: flex; -webkit-flex-wrap: wrap; flex-wrap: wrap; }
+.reply-grid .reply-choice {
+  -webkit-flex: 1 1 40%;
+  flex: 1 1 40%;
+  margin: 1.5vmin;
+  min-height: 16vmin;
+  background: #15803d;
+  font-size: 5vmin;
+}
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 6vmin;
+  width: 60vmin;
+  margin: 0 0 0 -30vmin;
+  padding: 3vmin;
+  border-radius: 3vmin;
+  background: #15803d;
+  color: #fff;
+  font-size: 5vmin;
+  font-weight: bold;
+  text-align: center;
+  z-index: 40;
+}

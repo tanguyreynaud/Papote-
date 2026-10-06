@@ -65,12 +65,24 @@
         <button id="btn-install" class="action-btn wide">📲 Ajouter à l'écran d'accueil</button>
         <div id="install-help" class="install-help" hidden></div>
       </div>
+      <p id="activity" class="activity" hidden></p>
+      <nav class="tabs">
+        <button type="button" class="tab active" data-tab="messages">💬 Messages</button>
+        <button type="button" class="tab" data-tab="agenda">📅 Agenda</button>
+      </nav>
+
+      <div id="tab-messages">
       <button id="btn-call" class="primary call-btn wide" hidden>📞 Appeler en vidéo</button>
       <form id="form-post" class="card composer">
         <textarea id="post-text" rows="3" maxlength="2000" placeholder="Écrire un message…"></textarea>
         <div id="previews" class="previews"></div>
+        <div id="voice-preview" class="voice-preview" hidden>
+          <audio id="voice-audio" controls></audio>
+          <button type="button" class="link danger small" id="voice-remove">Retirer</button>
+        </div>
         <div class="composer-actions">
           <button type="button" class="action-btn" id="btn-photo">📷 Photo</button>
+          <button type="button" class="action-btn" id="btn-voice">🎤 Vocal</button>
           <button type="submit" class="action-btn" id="btn-send">Envoyer</button>
         </div>
         <!-- Choix de la source de la photo -->
@@ -86,6 +98,48 @@
       <h2 class="section-title">Derniers envois</h2>
       <ul id="feed" class="feed"></ul>
       <p id="feed-empty" class="center muted" hidden>Rien pour l'instant. Envoyez la première photo !</p>
+      </div>
+
+      <div id="tab-agenda" hidden>
+        <form id="form-reminder" class="card">
+          <h2>Nouveau rappel</h2>
+          <label>Quoi ?
+            <input id="rem-title" maxlength="120" placeholder="Prendre le Doliprane" required>
+          </label>
+          <div class="choice" role="radiogroup" aria-label="Type de rappel">
+            <label><input type="radio" name="rem-kind" value="medicament" checked> 💊 Médicament</label>
+            <label><input type="radio" name="rem-kind" value="rdv"> 🩺 Rendez-vous</label>
+            <label><input type="radio" name="rem-kind" value="autre"> 📌 Autre</label>
+          </div>
+          <label>Quand ?
+            <select id="rem-repeat">
+              <option value="daily">Tous les jours</option>
+              <option value="weekly">Certains jours de la semaine</option>
+              <option value="once">Une seule fois</option>
+            </select>
+          </label>
+          <label id="rem-date-wrap" hidden>Date
+            <input id="rem-date" type="date">
+          </label>
+          <div id="rem-days" class="days" hidden>
+            <label><input type="checkbox" value="1"> Lun</label>
+            <label><input type="checkbox" value="2"> Mar</label>
+            <label><input type="checkbox" value="3"> Mer</label>
+            <label><input type="checkbox" value="4"> Jeu</label>
+            <label><input type="checkbox" value="5"> Ven</label>
+            <label><input type="checkbox" value="6"> Sam</label>
+            <label><input type="checkbox" value="0"> Dim</label>
+          </div>
+          <label>Heure
+            <input id="rem-time" type="time" value="09:00" required>
+          </label>
+          <button type="submit" class="action-btn wide" id="btn-reminder">Ajouter le rappel</button>
+          <p id="rem-error" class="error" hidden></p>
+        </form>
+        <h2 class="section-title">Rappels</h2>
+        <ul id="reminders" class="feed"></ul>
+        <p id="reminders-empty" class="center muted" hidden>Aucun rappel pour l'instant.</p>
+      </div>
     </section>
 
     <!-- Réglages -->

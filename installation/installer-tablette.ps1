@@ -66,7 +66,10 @@ while ($true) {
 
 $model = Adb shell getprop ro.product.model
 $android = Adb shell getprop ro.build.version.release
-Say "Tablette détectée : $model (Android $android)" 'Green'
+Say "Appareil détecté : $model (Android $android)" 'Green'
+# Garde-fou : ne jamais installer le mode kiosque sur un téléphone branché par erreur.
+$answer = Read-Host "Installer Papote sur cet appareil ? (O/N)"
+if ($answer -notmatch '^[oOyY]') { Fail 'Installation annulée.' }
 
 # 2. Code famille
 if (-not $Code) {
@@ -78,7 +81,9 @@ if ($Code.Length -ne 8) { Fail "Le code famille doit contenir 8 caractères (re�
 
 # 3. Installation de l'app
 Say "`nInstallation de l'app…"
-$res = Adb install -r -g $Apk
+# -g (accorder caméra et micro d'office) n'existe qu'à partir d'Android 6.
+$sdkLevel = [int](Adb shell getprop ro.build.version.sdk)
+if ($sdkLevel -ge 23) { $res = Adb install -r -g $Apk } else { $res = Adb install -r $Apk }
 if ($res -notmatch 'Success') { Fail "L'installation a échoué :`n$res" }
 Say 'App installée.' 'Green'
 

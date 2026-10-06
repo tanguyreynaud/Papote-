@@ -11,6 +11,11 @@ et une app pour que la famille lui envoie photos et messages depuis iPhone ou An
 - deux gros boutons « Photos » et « Messages » ;
 - chaque nouvel envoi s'affiche en grand avec un petit son, et un bouton « ❤️ Envoyer un bisou » ;
 - passage en couleurs sombres la nuit (21 h – 7 h), retour automatique à l'accueil ;
+- rappels (médicaments, rendez-vous) affichés en grand à l'heure, avec « C'est fait », et un agenda
+  des 7 prochains jours ;
+- messages vocaux (convertis en MP3 pour être lisibles partout) ;
+- réponses toutes faites de Mamie (« Je vais bien », « Appelle-moi »…) visibles dans l'app famille ;
+- veille : l'app famille indique si la tablette est en ligne et quand elle a été utilisée ;
 - appels vidéo de la famille vers la tablette, avec un gros bouton « Décrocher »
   (tablettes Android 5 et plus seulement ; WebRTC gratuit, signalisation par Firestore).
 

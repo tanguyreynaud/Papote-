@@ -19,8 +19,9 @@ final class LocalContent {
 
     private LocalContent() { }
 
-    static String photoUrl(String id) {
-        return ORIGIN + "/photos/" + id + ".jpg";
+    /** Adresse d'un fichier téléchargé (photo ou message vocal). */
+    static String mediaUrl(String fileName) {
+        return ORIGIN + "/photos/" + fileName;
     }
 
     /** Renvoie la ressource locale, ou null pour laisser passer la requête vers internet. */
@@ -31,7 +32,7 @@ final class LocalContent {
         try {
             if (path.startsWith("/photos/")) {
                 File f = new File(new File(context.getFilesDir(), "photos"), path.substring("/photos/".length()));
-                return new WebResourceResponse("image/jpeg", null, new FileInputStream(f));
+                return new WebResourceResponse(mime(f.getName()), null, new FileInputStream(f));
             }
             String asset = path.startsWith("/") ? path.substring(1) : path;
             return new WebResourceResponse(mime(asset), "utf-8", context.getAssets().open(asset));
@@ -46,6 +47,11 @@ final class LocalContent {
         if (name.endsWith(".css")) return "text/css";
         if (name.endsWith(".svg")) return "image/svg+xml";
         if (name.endsWith(".png")) return "image/png";
+        if (name.endsWith(".jpg")) return "image/jpeg";
+        if (name.endsWith(".m4a")) return "audio/mp4";
+        if (name.endsWith(".mp3")) return "audio/mpeg";
+        if (name.endsWith(".webm")) return "audio/webm";
+        if (name.endsWith(".ogg")) return "audio/ogg";
         return "application/octet-stream";
     }
 }

@@ -37,6 +37,11 @@
   var ICONS = {
     camera: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M9 3 7.2 5H4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3.2L15 3H9zm3 5a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9zm0 2a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z"/></svg>',
     letter: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M3 5h18a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zm1.4 2 7.6 5.6L19.6 7H4.4zM20 8.6l-8 5.9-8-5.9V17h16V8.6z"/></svg>',
+    calendar: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M7 2h2v2h6V2h2v2h3a1 1 0 0 1 1 1v15a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h3V2zm12 8H5v9h14v-9zM5 6v2h14V6H5zm2 6h4v4H7v-4z"/></svg>',
+    pill: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M4.2 13.4 13.4 4.2a5 5 0 0 1 7.1 7.1l-9.2 9.2a5 5 0 0 1-7.1-7.1zm1.4 1.4a3 3 0 0 0 4.2 4.2l4.2-4.2-4.2-4.2-4.2 4.2z"/></svg>',
+    doctor: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M10 3h4v7h7v4h-7v7h-4v-7H3v-4h7V3z"/></svg>',
+    pin: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a7 7 0 0 1 7 7c0 5-7 13-7 13S5 14 5 9a7 7 0 0 1 7-7zm0 4a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg>',
+    play: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M7 4v16l13-8z"/></svg>',
     heart: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 21s-7.5-4.6-9.6-9C.9 8.8 2.6 5 6.3 4.6 8.6 4.4 10.4 5.6 12 7.6c1.6-2 3.4-3.2 5.7-3 3.7.4 5.4 4.2 3.9 7.4C19.5 16.4 12 21 12 21z"/></svg>'
   };
 
@@ -104,7 +109,7 @@
   // ---------- Navigation ----------
 
   function showView(view) {
-    var ids = ['view-home', 'view-photos', 'view-messages', 'view-setup'];
+    var ids = ['view-home', 'view-photos', 'view-messages', 'view-agenda', 'view-setup'];
     for (var i = 0; i < ids.length; i++) show($(ids[i]), ids[i] === view);
     resetIdle();
   }
@@ -196,7 +201,7 @@
     for (var i = 0; i < posts.length; i++) {
       if (posts[i].seen) continue;
       if (posts[i].image) unseenPhotos++;
-      if (posts[i].text) unseenMessages++;
+      if (posts[i].text || posts[i].audio) unseenMessages++;
     }
     setBadge('badge-photos', unseenPhotos);
     setBadge('badge-messages', unseenMessages);
@@ -234,7 +239,7 @@
     var count = 0;
     for (var i = 0; i < posts.length; i++) {
       var p = posts[i];
-      if (!p.text) continue;
+      if (!p.text && !p.audio) continue;
       count++;
       var item = document.createElement('div');
       item.className = p.seen ? 'message' : 'message unseen';
@@ -245,7 +250,23 @@
       body.className = 'message-body';
       body.textContent = p.text;
       item.appendChild(head);
-      item.appendChild(body);
+      if (p.text) item.appendChild(body);
+      if (p.audio) {
+        var label = document.createElement('p');
+        label.className = 'voice-label';
+        label.textContent = 'Message vocal' + (p.duration ? ' (' + formatDuration(p.duration) + ')' : '');
+        item.insertBefore(label, item.children[1] || null);
+      }
+      var actions = document.createElement('div');
+      actions.className = 'message-actions';
+      if (p.audio) actions.appendChild(playButton(p, 'small-btn play'));
+      var replyBtn = document.createElement('button');
+      replyBtn.className = 'small-btn';
+      replyBtn.textContent = 'Répondre';
+      replyBtn.setAttribute('data-post', p.id);
+      on(replyBtn, 'click', function () { openReply(this.getAttribute('data-post')); });
+      actions.appendChild(replyBtn);
+      item.appendChild(actions);
       if (p.image) {
         var img = document.createElement('img');
         img.setAttribute('src', p.image);
@@ -284,7 +305,7 @@
     for (var i = posts.length - 1; i >= 0; i--) {
       var p = posts[i];
       // Une photo n'est montrée que lorsqu'elle est téléchargée.
-      if (p.seen || shownInOverlay[p.id] || (p.type === 'photo' && !p.image)) continue;
+      if (p.seen || shownInOverlay[p.id] || (p.type === 'photo' && !p.image) || (p.type === 'voice' && !p.audio)) continue;
       shownInOverlay[p.id] = true;
       overlayQueue.push(p);
     }
@@ -300,7 +321,10 @@
     var p = overlayPost;
     $('overlay-title').textContent = p.type === 'photo'
       ? 'Nouvelle photo de ' + p.authorName
-      : 'Message de ' + p.authorName;
+      : p.type === 'voice' ? 'Message vocal de ' + p.authorName
+        : 'Message de ' + p.authorName;
+    show($('overlay-play'), !!p.audio);
+    setPlayLabel($('overlay-play'), false);
     show($('overlay-img'), !!p.image);
     if (p.image) $('overlay-img').setAttribute('src', p.image);
     show($('overlay-text'), !!p.text);
@@ -349,7 +373,235 @@
     queueUnseen();
   }
 
-  window.Papote = { onStatus: onStatus, onPosts: onPosts, onWeather: onWeather };
+  // ---------- Messages vocaux ----------
+
+  var playingId = null;
+  var playingButton = null;
+
+  function formatDuration(s) {
+    return Math.floor(s / 60) + ':' + pad(s % 60);
+  }
+
+  function setPlayLabel(button, playing) {
+    var label = button.querySelector('.label');
+    var text = playing ? 'Arrêter' : 'Écouter';
+    if (label) label.textContent = text; else button.textContent = text;
+    if (playing) button.classList.add('playing'); else button.classList.remove('playing');
+  }
+
+  function stopAudio() {
+    if (android() && android().stopVoice) android().stopVoice();
+    else $('player').pause();
+    resetPlayUi();
+  }
+
+  // Fin de lecture (appelé aussi par Android quand le vocal est terminé).
+  function resetPlayUi() {
+    if (playingButton) setPlayLabel(playingButton, false);
+    playingId = null;
+    playingButton = null;
+  }
+
+  function togglePlay(p, button) {
+    var wasPlaying = playingId === p.id;
+    stopAudio();
+    if (wasPlaying) return;
+    if (android() && android().playVoice) {
+      android().playVoice(p.audio);
+    } else {
+      $('player').setAttribute('src', p.audio);
+      $('player').play();
+    }
+    playingId = p.id;
+    playingButton = button;
+    setPlayLabel(button, true);
+    markSeen(p);
+  }
+
+  function playButton(p, className) {
+    var b = document.createElement('button');
+    b.className = className;
+    b.textContent = 'Écouter';
+    on(b, 'click', function () { togglePlay(p, b); });
+    return b;
+  }
+
+  // ---------- Réponses toutes faites ----------
+
+  var replyTo = null;
+
+  function openReply(postId) {
+    replyTo = postId || null;
+    show($('reply-panel'), true);
+  }
+
+  function sendReply(text) {
+    if (android()) android().reply(replyTo || '', text);
+    for (var i = 0; i < posts.length; i++) if (posts[i].id === replyTo) posts[i].seen = true;
+    show($('reply-panel'), false);
+    show($('reply-sent'), true);
+    setTimeout(function () { show($('reply-sent'), false); }, 2500);
+    replyTo = null;
+  }
+
+  // ---------- Rappels et agenda ----------
+
+  var reminders = [];
+  var REMINDER_WINDOW_MIN = 60;  // un rappel manqué reste affiché pendant 1 heure
+  var RESOUND_MIN = 5;           // le son est rejoué toutes les 5 minutes tant que ce n'est pas fait
+  var alerting = null;           // { r: rappel, key: 'AAAA-MM-JJ', lastSound: minutes }
+  var handled = {};              // rappels déjà confirmés sur la tablette : id|date -> true
+
+  function dateKey(d) {
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  }
+
+  function minutesOf(time) {
+    var parts = (time || '00:00').split(':');
+    return Number(parts[0]) * 60 + Number(parts[1]);
+  }
+
+  function happensOn(r, d) {
+    if (r.repeat === 'daily') return true;
+    if (r.repeat === 'weekly') return r.days.indexOf(d.getDay()) >= 0;
+    return r.date === dateKey(d);
+  }
+
+  function isDone(r, key) {
+    return handled[r.id + '|' + key] || (r.lastAck && r.lastAck.indexOf(key) === 0);
+  }
+
+  function kindIcon(kind) {
+    return ICONS[kind === 'medicament' ? 'pill' : kind === 'rdv' ? 'doctor' : 'pin'];
+  }
+
+  function todaysItems(d) {
+    var items = [];
+    for (var i = 0; i < reminders.length; i++) if (happensOn(reminders[i], d)) items.push(reminders[i]);
+    items.sort(function (a, b) { return minutesOf(a.time) - minutesOf(b.time); });
+    return items;
+  }
+
+  function renderNextReminder() {
+    var now = new Date();
+    var nowMin = now.getHours() * 60 + now.getMinutes();
+    var key = dateKey(now);
+    var items = todaysItems(now);
+    var next = null;
+    for (var i = 0; i < items.length; i++) {
+      if (minutesOf(items[i].time) >= nowMin && !isDone(items[i], key)) { next = items[i]; break; }
+    }
+    show($('next-reminder'), !!next);
+    if (next) $('next-reminder').textContent = 'À ' + next.time.replace(':', 'h') + ' : ' + next.title;
+  }
+
+  function checkReminders() {
+    var now = new Date();
+    var nowMin = now.getHours() * 60 + now.getMinutes();
+    var key = dateKey(now);
+    if (alerting) {
+      if (isDone(alerting.r, alerting.key) || nowMin - minutesOf(alerting.r.time) > REMINDER_WINDOW_MIN) {
+        closeReminder();
+      } else if (nowMin - alerting.lastSound >= RESOUND_MIN) {
+        alerting.lastSound = nowMin;
+        if (android()) android().alert();
+      }
+      return;
+    }
+    var items = todaysItems(now);
+    for (var i = 0; i < items.length; i++) {
+      var r = items[i];
+      var late = nowMin - minutesOf(r.time);
+      if (late >= 0 && late <= REMINDER_WINDOW_MIN && !isDone(r, key)) {
+        openReminder(r, key, nowMin);
+        return;
+      }
+    }
+  }
+
+  function openReminder(r, key, nowMin) {
+    alerting = { r: r, key: key, lastSound: nowMin };
+    $('reminder-icon').innerHTML = '<span class="icon">' + kindIcon(r.kind) + '</span>';
+    $('reminder-title').textContent = r.title;
+    $('reminder-time').textContent = r.kind === 'rdv' ? 'Rendez-vous à ' + r.time.replace(':', 'h') : r.time.replace(':', 'h');
+    $('reminder-done').textContent = r.kind === 'rdv' ? "J'ai bien noté" : "C'est fait";
+    show($('reminder-alert'), true);
+    if (android()) android().alert();
+  }
+
+  function closeReminder() {
+    alerting = null;
+    show($('reminder-alert'), false);
+    renderNextReminder();
+    if (isShown('view-agenda')) renderAgenda();
+  }
+
+  function confirmReminder() {
+    if (!alerting) return;
+    var now = new Date();
+    handled[alerting.r.id + '|' + alerting.key] = true;
+    if (android()) android().ackReminder(alerting.r.id, dateKey(now) + ' ' + pad(now.getHours()) + ':' + pad(now.getMinutes()));
+    closeReminder();
+    setTimeout(checkReminders, 500);
+  }
+
+  function renderAgenda() {
+    var list = $('agenda-list');
+    list.innerHTML = '';
+    var now = new Date();
+    var nowMin = now.getHours() * 60 + now.getMinutes();
+    var count = 0;
+    for (var offset = 0; offset < 7; offset++) {
+      var d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
+      var items = todaysItems(d);
+      if (!items.length) continue;
+      var title = document.createElement('p');
+      title.className = 'agenda-day';
+      title.textContent = offset === 0 ? "Aujourd'hui" : offset === 1 ? 'Demain'
+        : JOURS[d.getDay()].charAt(0).toUpperCase() + JOURS[d.getDay()].slice(1) + ' ' + d.getDate() + ' ' + MOIS[d.getMonth()];
+      list.appendChild(title);
+      for (var i = 0; i < items.length; i++) {
+        var r = items[i];
+        var done = offset === 0 && isDone(r, dateKey(d));
+        var row = document.createElement('div');
+        row.className = 'agenda-item' + (offset === 0 && minutesOf(r.time) < nowMin ? ' past' : '');
+        row.innerHTML = '<span class="time"></span><span class="icon"></span>&nbsp;<span class="what"></span>';
+        row.querySelector('.time').textContent = r.time.replace(':', 'h');
+        row.querySelector('.icon').innerHTML = kindIcon(r.kind);
+        row.querySelector('.what').textContent = r.title;
+        if (done) {
+          var mark = document.createElement('span');
+          mark.className = 'done-mark';
+          mark.textContent = 'Fait';
+          row.appendChild(mark);
+        }
+        list.appendChild(row);
+        count++;
+      }
+    }
+    show($('agenda-empty'), count === 0);
+  }
+
+  function onReminders(payload) {
+    reminders = payload.reminders || [];
+    renderNextReminder();
+    if (isShown('view-agenda')) renderAgenda();
+    checkReminders();
+  }
+
+  var lastMinute = -1;
+  setInterval(function () {
+    var m = new Date().getMinutes();
+    if (m === lastMinute) return;
+    lastMinute = m;
+    renderNextReminder();
+    checkReminders();
+  }, 1000);
+
+  window.Papote = {
+    onStatus: onStatus, onPosts: onPosts, onWeather: onWeather, onReminders: onReminders,
+    onVoiceEnded: function () { resetPlayUi(); }
+  };
 
   // ---------- Événements ----------
 
@@ -370,16 +622,43 @@
     on($('btn-photos'), 'click', function () { openPhotos(0); });
     on($('home-frame'), 'click', function () { openPhotos(frameIndex); });
     on($('btn-messages'), 'click', function () { renderMessages(); showView('view-messages'); });
+    on($('btn-agenda'), 'click', function () { renderAgenda(); showView('view-agenda'); });
+    on($('reminder-done'), 'click', confirmReminder);
+    on($('overlay-play'), 'click', function () { if (overlayPost) togglePlay(overlayPost, $('overlay-play')); });
+    on($('overlay-reply'), 'click', function () {
+      if (!overlayPost) return;
+      var id = overlayPost.id;
+      markSeen(overlayPost);
+      stopAudio();
+      nextOverlay();
+      openReply(id);
+    });
+    on($('reply-cancel'), 'click', function () { show($('reply-panel'), false); replyTo = null; });
+    var choices = document.querySelectorAll('.reply-choice');
+    for (var c = 0; c < choices.length; c++) {
+      on(choices[c], 'click', function () { sendReply(this.getAttribute('data-reply')); });
+    }
+    on($('player'), 'ended', resetPlayUi);
+
+    // Veille : on signale à l'app que Mamie utilise la tablette (au plus une fois par minute).
+    var lastTouch = 0;
+    on(document, 'touchstart', function () {
+      var now = Date.now();
+      if (now - lastTouch < 60000) return;
+      lastTouch = now;
+      if (android() && android().touched) android().touched();
+    });
     on($('photo-prev'), 'click', olderPhoto);
     on($('photo-next'), 'click', newerPhoto);
     on($('photo-heart'), 'click', function () { heart(photos[photoIndex], $('photo-heart'), 'Bisou'); });
     on($('overlay-close'), 'click', function () {
+      stopAudio();
       if (overlayPost) markSeen(overlayPost);
       nextOverlay();
     });
     on($('overlay-heart'), 'click', function () {
       if (!overlayPost) return;
-      heart(overlayPost, $('overlay-heart'), 'Envoyer un bisou');
+      heart(overlayPost, $('overlay-heart'), 'Bisou');
       setTimeout(nextOverlay, 1200);
     });
 

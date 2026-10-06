@@ -95,6 +95,15 @@ final class Firebase {
         return new JSONObject(r.body);
     }
 
+    /** Liste les documents d'une collection (jusqu'à 300). */
+    JSONArray list(String path) throws IOException, JSONException {
+        String url = FIRESTORE + DOCS + "/" + path + "?pageSize=300";
+        Http.Response r = http.request("GET", url, null, null, token());
+        if (!r.ok()) throw new ApiException(r.code, r.body);
+        JSONArray docs = new JSONObject(r.body).optJSONArray("documents");
+        return docs == null ? new JSONArray() : docs;
+    }
+
     JSONArray runQuery(String parent, JSONObject structuredQuery) throws IOException, JSONException {
         String url = FIRESTORE + DOCS + (parent.isEmpty() ? "" : "/" + parent) + ":runQuery";
         JSONObject body = new JSONObject().put("structuredQuery", structuredQuery);

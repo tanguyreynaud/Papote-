@@ -14,6 +14,7 @@
         <p id="greeting" class="greeting"></p>
         <p id="clock" class="clock">--:--</p>
         <p id="date" class="date"></p>
+        <p id="next-reminder" class="next-reminder" hidden></p>
         <div id="weather" class="weather" hidden>
           <div class="weather-now">
             <span id="weather-icon" class="weather-icon"></span>
@@ -36,6 +37,9 @@
       </button>
       <button id="btn-messages" class="big-btn">
         <span class="icon" data-icon="letter"></span> Messages <span id="badge-messages" class="badge" hidden></span>
+      </button>
+      <button id="btn-agenda" class="big-btn">
+        <span class="icon" data-icon="calendar"></span> Agenda
       </button>
     </div>
     <p id="offline" class="offline" hidden>Pas de connexion internet pour le moment</p>
@@ -63,18 +67,57 @@
     <button class="home-btn" data-home="1">Accueil</button>
   </section>
 
+  <!-- Agenda -->
+  <section id="view-agenda" class="view" hidden>
+    <h1 class="view-title">Agenda</h1>
+    <div id="agenda-list" class="message-list"></div>
+    <p id="agenda-empty" class="empty" hidden>Rien de prévu.</p>
+    <button class="home-btn" data-home="1">Accueil</button>
+  </section>
+
+  <!-- Rappel à l'heure -->
+  <div id="reminder-alert" class="overlay reminder-overlay" hidden>
+    <div class="overlay-card">
+      <p class="overlay-title">C'est l'heure !</p>
+      <p id="reminder-icon" class="reminder-icon"></p>
+      <p id="reminder-title" class="reminder-big"></p>
+      <p id="reminder-time" class="reminder-time"></p>
+      <div class="overlay-actions">
+        <button id="reminder-done" class="big-btn done">C'est fait</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Nouveau message ou nouvelle photo -->
   <div id="overlay" class="overlay" hidden>
     <div class="overlay-card">
       <p id="overlay-title" class="overlay-title"></p>
       <img id="overlay-img" alt="" hidden>
       <p id="overlay-text" class="overlay-text" hidden></p>
+      <button id="overlay-play" class="big-btn play" hidden><span class="icon" data-icon="play"></span> <span class="label">Écouter</span></button>
       <div class="overlay-actions">
-        <button id="overlay-heart" class="big-btn heart"><span class="icon" data-icon="heart"></span> <span class="label">Envoyer un bisou</span></button>
+        <button id="overlay-heart" class="big-btn heart"><span class="icon" data-icon="heart"></span> <span class="label">Bisou</span></button>
+        <button id="overlay-reply" class="big-btn reply">Répondre</button>
         <button id="overlay-close" class="big-btn">OK</button>
       </div>
     </div>
   </div>
+
+  <!-- Réponses toutes faites -->
+  <div id="reply-panel" class="overlay reply-overlay" hidden>
+    <div class="overlay-card">
+      <p class="overlay-title">Que voulez-vous répondre ?</p>
+      <div class="reply-grid">
+        <button class="big-btn reply-choice" data-reply="Merci, ça me fait plaisir ! ❤️">Merci, ça me fait plaisir !</button>
+        <button class="big-btn reply-choice" data-reply="Je vais bien 😊">Je vais bien</button>
+        <button class="big-btn reply-choice" data-reply="Appelle-moi quand tu peux 📞">Appelle-moi</button>
+        <button class="big-btn reply-choice" data-reply="Je pense à toi, bisous 😘">Je pense à toi</button>
+      </div>
+      <button id="reply-cancel" class="home-btn">Annuler</button>
+    </div>
+  </div>
+  <p id="reply-sent" class="toast" hidden>Réponse envoyée ✓</p>
+  <audio id="player"></audio>
 
   <!-- Tablette pas encore reliée à une famille -->
   <section id="view-setup" class="view setup" hidden>

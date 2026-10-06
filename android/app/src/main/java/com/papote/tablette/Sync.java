@@ -33,12 +33,14 @@ final class Sync {
         void onWeather(JSONObject weather);
         /** Un nouvel envoi vient d'arriver (pas au premier chargement). */
         void onNewArrival();
+        void onReminders(JSONObject payload);
     }
 
     private static final String TAG = "PapoteSync";
     private static final long POLL_MS = 20_000;               // nouveaux envois
     private static final long FULL_REFRESH_MS = 30 * 60_000;  // suppressions, vus, bisous
     private static final long WEATHER_MS = 30 * 60_000;
+    private static final long REMINDERS_MS = 5 * 60_000;
     private static final int MAX_POSTS = 60;
     private static final double LAT = 44.9372;                // Saint-Martin-de-Valamas
     private static final double LON = 4.3687;
@@ -53,6 +55,8 @@ final class Sync {
         long seenAt;
         long hearts;
         String imagePath;
+        String audioPath;
+        long duration;
     }
 
     private final SharedPreferences prefs;
@@ -68,6 +72,8 @@ final class Sync {
     private String familyName;
     private long lastFullRefresh;
     private boolean loadedOnce;
+    private long lastReminders;
+    private String lastRemindersJson;
     private long lastWeather;
     private String lastPostsJson;
     private String lastStatusJson;
@@ -111,6 +117,8 @@ final class Sync {
             publishPosts();
             lastWeather = 0;
             refreshWeather();
+            lastRemindersJson = null;
+            lastReminders = 0;
         });
     }
 
@@ -124,6 +132,7 @@ final class Sync {
             try {
                 refreshWeather();
                 syncPosts();
+                syncReminders();
             } catch (Exception e) {
                 Log.w(TAG, "Synchronisation", e);
             }
@@ -215,8 +224,12 @@ final class Sync {
             Post p = parse(doc);
             seenIds.add(p.id);
             Post old = posts.get(p.id);
-            if (old != null) p.imagePath = old.imagePath;
-            else if (loadedOnce && p.seenAt == 0) newArrival = true;
+            if (old != null) {
+                p.imagePath = old.imagePath;
+                p.audioPath = old.audioPath;
+            } else if (loadedOnce && p.seenAt == 0 && !"reply".equals(p.type)) {
+                newArrival = true;
+            }
             posts.put(p.id, p);
         }
         if (full) {
@@ -225,18 +238,20 @@ final class Sync {
             for (String id : posts.keySet()) if (!seenIds.contains(id)) gone.add(id);
             for (String id : gone) {
                 posts.remove(id);
-                new File(imageDir, id + ".jpg").delete();
+                File[] files = imageDir.listFiles();
+                if (files != null) for (File f : files) if (f.getName().startsWith(id + ".")) f.delete();
             }
         }
         loadedOnce = true;
-        downloadImages(fid);
+        downloadMedia(fid);
         publishPosts();
+        heartbeat(fid, "lastOnline");
         if (newArrival) listener.onNewArrival();
     }
 
     private JSONObject postsQuery(boolean full) throws JSONException {
         JSONArray fields = new JSONArray();
-        for (String f : new String[]{"type", "text", "authorName", "createdAt", "seenAt", "hearts"}) {
+        for (String f : new String[]{"type", "text", "authorName", "createdAt", "seenAt", "hearts", "duration"}) {
             fields.put(new JSONObject().put("fieldPath", f));
         }
         JSONObject q = new JSONObject()
@@ -286,20 +301,26 @@ final class Sync {
         p.createdAt = Firebase.parseTimestamp(p.createdAtRaw);
         p.seenAt = Firebase.timestamp(f, "seenAt");
         p.hearts = Firebase.integer(f, "hearts");
+        p.duration = Firebase.integer(f, "duration");
         return p;
     }
 
-    private void downloadImages(String fid) {
+    /** Télécharge les photos et les messages vocaux en fichiers locaux. */
+    private void downloadMedia(String fid) {
         for (Post p : posts.values()) {
-            if (!"photo".equals(p.type) || p.imagePath != null) continue;
-            File file = new File(imageDir, p.id + ".jpg");
-            if (!file.exists()) {
+            boolean photo = "photo".equals(p.type) && p.imagePath == null;
+            boolean voice = "voice".equals(p.type) && p.audioPath == null;
+            if (!photo && !voice) continue;
+            String field = photo ? "image" : "audio";
+            File file = existing(p.id);
+            if (file == null) {
                 try {
-                    JSONObject doc = firebase.get("families/" + fid + "/posts/" + p.id, "image");
+                    JSONObject doc = firebase.get("families/" + fid + "/posts/" + p.id, field);
                     if (doc == null) continue;
                     String dataUrl = Firebase.str(doc.optJSONObject("fields") == null
-                            ? new JSONObject() : doc.getJSONObject("fields"), "image");
+                            ? new JSONObject() : doc.getJSONObject("fields"), field);
                     if (dataUrl == null) continue;
+                    file = new File(imageDir, p.id + "." + extension(dataUrl));
                     byte[] bytes = Base64.decode(dataUrl.substring(dataUrl.indexOf(',') + 1), Base64.DEFAULT);
                     File tmp = new File(imageDir, p.id + ".tmp");
                     FileOutputStream out = new FileOutputStream(tmp);
@@ -310,12 +331,93 @@ final class Sync {
                     }
                     if (!tmp.renameTo(file)) continue;
                 } catch (Exception e) {
-                    Log.w(TAG, "Photo " + p.id, e);
+                    Log.w(TAG, "Média " + p.id, e);
                     continue;
                 }
             }
-            p.imagePath = LocalContent.photoUrl(p.id);
+            if (photo) p.imagePath = LocalContent.mediaUrl(file.getName());
+            else p.audioPath = LocalContent.mediaUrl(file.getName());
         }
+    }
+
+    private File existing(String id) {
+        File[] files = imageDir.listFiles();
+        if (files != null) {
+            for (File f : files) {
+                if (f.getName().startsWith(id + ".") && !f.getName().endsWith(".tmp")) return f;
+            }
+        }
+        return null;
+    }
+
+    private static String extension(String dataUrl) {
+        if (dataUrl.startsWith("data:image")) return "jpg";
+        if (dataUrl.startsWith("data:audio/mp4") || dataUrl.startsWith("data:audio/aac")) return "m4a";
+        if (dataUrl.startsWith("data:audio/ogg")) return "ogg";
+        if (dataUrl.startsWith("data:audio/mpeg") || dataUrl.startsWith("data:audio/mp3")) return "mp3";
+        return "webm";
+    }
+
+    // ---------- Veille et réponses ----------
+
+    private final java.util.Map<String, Long> lastHeartbeat = new java.util.HashMap<>();
+    private static final long HEARTBEAT_MS = 10 * 60_000;
+
+    /** Note sur la fiche de la tablette qu'elle est en ligne, ou que Mamie l'a touchée. */
+    private void heartbeat(String fid, String field) {
+        long now = System.currentTimeMillis();
+        Long last = lastHeartbeat.get(field);
+        if (fid == null || (last != null && now - last < HEARTBEAT_MS)) return;
+        try {
+            JSONObject write = new JSONObject()
+                    .put("update", new JSONObject()
+                            .put("name", Firebase.docName("families/" + fid + "/members/" + firebase.uid()))
+                            .put("fields", new JSONObject()))
+                    .put("updateMask", new JSONObject().put("fieldPaths", new JSONArray()))
+                    .put("updateTransforms", new JSONArray().put(new JSONObject()
+                            .put("fieldPath", field).put("setToServerValue", "REQUEST_TIME")))
+                    .put("currentDocument", new JSONObject().put("exists", true));
+            firebase.commit(new JSONArray().put(write));
+            lastHeartbeat.put(field, now);
+        } catch (Exception e) {
+            Log.w(TAG, "Veille " + field, e);
+        }
+    }
+
+    void touched() {
+        handler.post(() -> heartbeat(prefs.getString("fid", null), "lastActive"));
+    }
+
+    /** Réponse toute faite de Mamie, visible dans l'app famille. */
+    void reply(final String postId, final String text) {
+        handler.post(() -> {
+            String fid = prefs.getString("fid", null);
+            if (fid == null) return;
+            try {
+                String id = java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 20);
+                JSONObject fields = new JSONObject()
+                        .put("type", Firebase.string("reply"))
+                        .put("text", Firebase.string(text))
+                        .put("image", new JSONObject().put("nullValue", JSONObject.NULL))
+                        .put("replyTo", postId == null || postId.isEmpty()
+                                ? new JSONObject().put("nullValue", JSONObject.NULL) : Firebase.string(postId))
+                        .put("authorUid", Firebase.string(firebase.uid()))
+                        .put("authorName", Firebase.string(familyName == null ? "Tablette" : familyName))
+                        .put("seenAt", new JSONObject().put("nullValue", JSONObject.NULL))
+                        .put("hearts", new JSONObject().put("integerValue", "0"));
+                JSONObject write = new JSONObject()
+                        .put("update", new JSONObject()
+                                .put("name", Firebase.docName("families/" + fid + "/posts/" + id))
+                                .put("fields", fields))
+                        .put("updateTransforms", new JSONArray().put(new JSONObject()
+                                .put("fieldPath", "createdAt").put("setToServerValue", "REQUEST_TIME")))
+                        .put("currentDocument", new JSONObject().put("exists", false));
+                firebase.commit(new JSONArray().put(write));
+                if (postId != null && !postId.isEmpty()) markSeen(postId, false);
+            } catch (Exception e) {
+                Log.w(TAG, "Réponse", e);
+            }
+        });
     }
 
     private void publishPosts() {
@@ -324,6 +426,7 @@ final class Sync {
             Collections.sort(list, (a, b) -> Long.compare(b.createdAt, a.createdAt));
             JSONArray arr = new JSONArray();
             for (Post p : list) {
+                if ("reply".equals(p.type)) continue; // les réponses de Mamie ne s'affichent que chez la famille
                 arr.put(new JSONObject()
                         .put("id", p.id)
                         .put("type", p.type)
@@ -332,7 +435,9 @@ final class Sync {
                         .put("createdAt", p.createdAt)
                         .put("seen", p.seenAt > 0)
                         .put("hearts", p.hearts)
-                        .put("image", p.imagePath == null ? JSONObject.NULL : p.imagePath));
+                        .put("image", p.imagePath == null ? JSONObject.NULL : p.imagePath)
+                        .put("audio", p.audioPath == null ? JSONObject.NULL : p.audioPath)
+                        .put("duration", p.duration));
             }
             JSONObject payload = new JSONObject().put("familyName", familyName == null ? "" : familyName)
                     .put("posts", arr);
@@ -373,6 +478,75 @@ final class Sync {
                 firebase.commit(new JSONArray().put(write));
             } catch (Exception e) {
                 Log.w(TAG, "markSeen " + id, e);
+            }
+        });
+    }
+
+    // ---------- Rappels ----------
+
+    private void syncReminders() {
+        String fid = prefs.getString("fid", null);
+        long now = System.currentTimeMillis();
+        if (fid == null || now - lastReminders < REMINDERS_MS) return;
+        try {
+            JSONArray docs = firebase.list("families/" + fid + "/reminders");
+            JSONArray out = new JSONArray();
+            for (int i = 0; i < docs.length(); i++) {
+                JSONObject doc = docs.getJSONObject(i);
+                JSONObject f = doc.optJSONObject("fields");
+                if (f == null) continue;
+                String name = doc.optString("name");
+                JSONArray days = new JSONArray();
+                JSONObject daysValue = f.optJSONObject("days");
+                JSONArray values = daysValue == null ? null
+                        : daysValue.optJSONObject("arrayValue") == null ? null
+                        : daysValue.getJSONObject("arrayValue").optJSONArray("values");
+                if (values != null) {
+                    for (int j = 0; j < values.length(); j++) {
+                        days.put(Integer.parseInt(values.getJSONObject(j).optString("integerValue", "0")));
+                    }
+                }
+                out.put(new JSONObject()
+                        .put("id", name.substring(name.lastIndexOf('/') + 1))
+                        .put("title", nz(Firebase.str(f, "title")))
+                        .put("kind", nz(Firebase.str(f, "kind")))
+                        .put("time", nz(Firebase.str(f, "time")))
+                        .put("repeat", nz(Firebase.str(f, "repeat")))
+                        .put("date", nz(Firebase.str(f, "date")))
+                        .put("days", days)
+                        .put("lastAck", nz(Firebase.str(f, "lastAck"))));
+            }
+            lastReminders = now;
+            JSONObject payload = new JSONObject().put("reminders", out);
+            String json = payload.toString();
+            if (json.equals(lastRemindersJson)) return;
+            lastRemindersJson = json;
+            listener.onReminders(payload);
+        } catch (Exception e) {
+            Log.w(TAG, "Rappels", e);
+        }
+    }
+
+    private static String nz(String s) {
+        return s == null ? "" : s;
+    }
+
+    /** Mamie a confirmé un rappel : on note la date et l'heure (heure de la tablette). */
+    void ackReminder(final String id, final String when) {
+        handler.post(() -> {
+            String fid = prefs.getString("fid", null);
+            if (fid == null) return;
+            try {
+                JSONObject write = new JSONObject()
+                        .put("update", new JSONObject()
+                                .put("name", Firebase.docName("families/" + fid + "/reminders/" + id))
+                                .put("fields", new JSONObject().put("lastAck", Firebase.string(when))))
+                        .put("updateMask", new JSONObject().put("fieldPaths", new JSONArray().put("lastAck")))
+                        .put("currentDocument", new JSONObject().put("exists", true));
+                firebase.commit(new JSONArray().put(write));
+                lastReminders = 0; // relire pour que la famille et l'écran soient à jour
+            } catch (Exception e) {
+                Log.w(TAG, "ackReminder " + id, e);
             }
         });
     }
