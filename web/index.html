@@ -72,24 +72,52 @@
       </nav>
 
       <div id="tab-messages">
-      <button id="btn-call" class="primary call-btn wide" hidden>📞 Appeler en vidéo</button>
-      <form id="form-post" class="card composer">
-        <textarea id="post-text" rows="3" maxlength="2000" placeholder="Écrire un message…"></textarea>
+      <!-- Quatre actions bien distinctes -->
+      <div id="actions" class="actions-grid">
+        <button type="button" class="tile tile-call" id="tile-call">
+          <span class="tile-icon">📞</span>
+          <span class="tile-title">Appel vidéo</span>
+          <span class="tile-sub" id="tile-call-sub">Appeler</span>
+        </button>
+        <button type="button" class="tile tile-photo" data-mode="photo">
+          <span class="tile-icon">📷</span>
+          <span class="tile-title">Photo</span>
+          <span class="tile-sub">Prendre ou choisir</span>
+        </button>
+        <button type="button" class="tile tile-message" data-mode="message">
+          <span class="tile-icon">✉️</span>
+          <span class="tile-title">Message</span>
+          <span class="tile-sub">Écrire un mot</span>
+        </button>
+        <button type="button" class="tile tile-voice" data-mode="voice">
+          <span class="tile-icon">🎤</span>
+          <span class="tile-title">Vocal</span>
+          <span class="tile-sub">Enregistrer sa voix</span>
+        </button>
+      </div>
+      <p id="sent-toast" class="sent-toast" hidden>Envoyé ✓</p>
+
+      <!-- Écran d'envoi : une seule chose à la fois -->
+      <form id="form-post" class="card composer" hidden>
+        <div class="composer-head">
+          <h2 id="composer-title"></h2>
+          <button type="button" class="link" id="composer-close">✕ Fermer</button>
+        </div>
+        <div id="photo-pickers" class="pickers" hidden>
+          <button type="button" class="picker" id="photo-from-camera">📷 Prendre une photo</button>
+          <button type="button" class="picker" id="photo-from-gallery">🖼️ Choisir dans la galerie</button>
+        </div>
         <div id="previews" class="previews"></div>
+        <div id="voice-recorder" class="recorder" hidden>
+          <button type="button" class="record-btn" id="btn-voice">🎤</button>
+          <p id="voice-hint" class="muted">Touchez pour enregistrer (2 minutes maximum)</p>
+        </div>
         <div id="voice-preview" class="voice-preview" hidden>
           <audio id="voice-audio" controls></audio>
-          <button type="button" class="link danger small" id="voice-remove">Retirer</button>
+          <button type="button" class="link danger small" id="voice-remove">Recommencer</button>
         </div>
-        <div class="composer-actions">
-          <button type="button" class="action-btn" id="btn-photo">📷 Photo</button>
-          <button type="button" class="action-btn" id="btn-voice">🎤 Vocal</button>
-          <button type="submit" class="action-btn" id="btn-send">Envoyer</button>
-        </div>
-        <!-- Choix de la source de la photo -->
-        <div id="photo-menu" class="photo-menu" hidden>
-          <button type="button" class="menu-item" id="photo-from-camera">📷 Prendre une photo</button>
-          <button type="button" class="menu-item" id="photo-from-gallery">🖼️ Choisir dans la galerie</button>
-        </div>
+        <textarea id="post-text" rows="4" maxlength="2000"></textarea>
+        <button type="submit" class="action-btn wide send-btn" id="btn-send">Envoyer</button>
         <input id="post-camera" type="file" accept="image/*" capture="environment" hidden>
         <input id="post-photos" type="file" accept="image/*" multiple hidden>
         <p id="post-status" class="muted small" hidden></p>

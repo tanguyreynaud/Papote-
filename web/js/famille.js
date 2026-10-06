@@ -151,9 +151,53 @@ $('post-photos').addEventListener('change', onPhotosChosen);
 $('post-camera').addEventListener('change', onPhotosChosen);
 
 // Un seul bouton « Photo » qui propose la caméra ou la galerie.
-$('btn-photo').addEventListener('click', () => { $('photo-menu').hidden = !$('photo-menu').hidden; });
-$('photo-from-camera').addEventListener('click', () => { $('photo-menu').hidden = true; $('post-camera').click(); });
-$('photo-from-gallery').addEventListener('click', () => { $('photo-menu').hidden = true; $('post-photos').click(); });
+$('photo-from-camera').addEventListener('click', () => $('post-camera').click());
+$('photo-from-gallery').addEventListener('click', () => $('post-photos').click());
+
+// ---------- Écran d'envoi (photo, message ou vocal) ----------
+
+let mode = null;
+
+const MODES = {
+  photo: { title: 'Envoyer une photo', placeholder: 'Ajouter une légende (facultatif)' },
+  message: { title: 'Écrire un message', placeholder: null },
+  voice: { title: 'Message vocal', placeholder: null },
+};
+
+function openComposer(next) {
+  mode = next;
+  $('composer-title').textContent = MODES[mode].title;
+  $('photo-pickers').hidden = mode !== 'photo';
+  $('previews').hidden = mode !== 'photo';
+  $('voice-recorder').hidden = mode !== 'voice' || !!pendingVoice;
+  $('post-text').hidden = mode === 'voice';
+  $('post-text').placeholder = MODES[mode].placeholder || `Écrire un message à ${session.family.name}…`;
+  $('actions').hidden = true;
+  $('form-post').hidden = false;
+  setStatus('');
+  if (mode === 'message') $('post-text').focus();
+}
+
+function closeComposer() {
+  if (recorder) recorder.stop();
+  mode = null;
+  pendingPhotos = [];
+  renderPreviews();
+  clearVoice();
+  $('post-text').value = '';
+  $('form-post').hidden = true;
+  $('actions').hidden = false;
+}
+
+document.querySelectorAll('.tile[data-mode]').forEach((tile) => {
+  tile.addEventListener('click', () => openComposer(tile.dataset.mode));
+});
+$('composer-close').addEventListener('click', closeComposer);
+
+function showSent() {
+  $('sent-toast').hidden = false;
+  setTimeout(() => { $('sent-toast').hidden = true; }, 2500);
+}
 
 // Bouton « Envoyer » transformé en indicateur de chargement pendant l'envoi.
 function setBusy(label) {
@@ -162,9 +206,9 @@ function setBusy(label) {
   $('post-text').disabled = !!label;
   $('post-photos').disabled = !!label;
   $('post-camera').disabled = !!label;
-  $('btn-photo').disabled = !!label;
   $('btn-voice').disabled = !!label;
-  if (label) $('photo-menu').hidden = true;
+  $('photo-from-camera').disabled = !!label;
+  $('photo-from-gallery').disabled = !!label;
   $('form-post').classList.toggle('busy', !!label);
   btn.replaceChildren();
   if (label) {
@@ -184,34 +228,30 @@ function setStatus(text) {
 $('form-post').addEventListener('submit', async (e) => {
   e.preventDefault();
   const text = $('post-text').value.trim();
-  if (!text && !pendingPhotos.length && !pendingVoice) return;
+  if (mode === 'photo' && !pendingPhotos.length) { setStatus('Choisissez d\'abord une photo.'); return; }
+  if (mode === 'message' && !text) { setStatus('Écrivez d\'abord votre message.'); return; }
+  if (mode === 'voice' && !pendingVoice) { setStatus('Enregistrez d\'abord votre message vocal.'); return; }
   setBusy('Envoi…');
   const author = { authorUid: session.uid, authorName: session.member.name };
   try {
-    if (pendingVoice) {
-      setBusy('Envoi du vocal…');
+    if (mode === 'voice') {
       await addPost(session.fid, {
-        type: 'voice', text: pendingPhotos.length ? '' : text,
-        audio: pendingVoice.dataUrl, duration: pendingVoice.duration, ...author,
+        type: 'voice', text: '', audio: pendingVoice.dataUrl, duration: pendingVoice.duration, ...author,
       });
-    }
-    if (pendingPhotos.length) {
+    } else if (mode === 'photo') {
       for (let i = 0; i < pendingPhotos.length; i++) {
         setBusy(pendingPhotos.length > 1 ? `Photo ${i + 1} sur ${pendingPhotos.length}…` : 'Envoi…');
-        // Le texte accompagne la première photo.
+        // La légende accompagne la première photo.
         await addPost(session.fid, {
           type: 'photo', text: i === 0 ? text : '', image: pendingPhotos[i].full, thumb: pendingPhotos[i].thumb, ...author,
         });
       }
-    } else if (!pendingVoice) {
+    } else {
       await addPost(session.fid, { type: 'message', text, ...author });
     }
-    pendingPhotos = [];
-    clearVoice();
-    renderPreviews();
-    $('post-text').value = '';
-    setStatus('Envoyé ✓');
-    setTimeout(() => setStatus(''), 2500);
+    setBusy('');
+    closeComposer();
+    showSent();
   } catch (err) {
     console.error(err);
     setStatus("L'envoi a échoué. Vérifiez la connexion et réessayez.");
@@ -250,7 +290,11 @@ function renderFeed(posts) {
       feed.append(li);
       continue;
     }
-    li.className = 'card post';
+    li.className = `card post post-${post.type}`;
+    const kind = document.createElement('p');
+    kind.className = 'post-kind';
+    kind.textContent = { photo: '📷 Photo', message: '✉️ Message', voice: '🎤 Message vocal' }[post.type] || '';
+    li.append(kind);
     if (post.type === 'voice') {
       const play = document.createElement('button');
       play.className = 'action-btn wide voice-play';
@@ -373,7 +417,7 @@ function setCallStatus(text) {
   $('call-status').hidden = !text;
 }
 
-$('btn-call').addEventListener('click', async () => {
+$('tile-call').addEventListener('click', async () => {
   if (currentCall) return;
   $('call').hidden = false;
   setCallStatus('Préparation de la caméra…');
@@ -406,8 +450,11 @@ function renderMembers(members) {
   renderActivity();
   // Le bouton d'appel n'apparaît que si une tablette sait recevoir les appels (Android 5 et plus).
   const canCall = members.some((m) => m.role === 'tablette' && m.canCall);
-  $('btn-call').hidden = !canCall || !navigator.mediaDevices;
-  $('btn-call').textContent = `📞 Appeler ${session.family.name} en vidéo`;
+  const callable = canCall && !!navigator.mediaDevices;
+  $('tile-call').disabled = !callable;
+  $('tile-call-sub').textContent = callable
+    ? `Appeler ${session.family.name}`
+    : 'Pas possible avec cette tablette';
   const list = $('members');
   list.replaceChildren();
   let tabletShown = false;
@@ -534,6 +581,7 @@ async function toMp3(blob) {
 function clearVoice() {
   pendingVoice = null;
   $('voice-preview').hidden = true;
+  $('voice-recorder').hidden = mode !== 'voice';
   $('voice-audio').removeAttribute('src');
 }
 
@@ -559,8 +607,9 @@ $('btn-voice').addEventListener('click', async () => {
     const blob = new Blob(chunks, { type: recorder.mimeType || mimeType || 'audio/webm' });
     const duration = Math.round((Date.now() - started) / 1000);
     recorder = null;
-    $('btn-voice').textContent = '🎤 Vocal';
+    $('btn-voice').textContent = '🎤';
     $('btn-voice').classList.remove('recording');
+    $('voice-hint').textContent = 'Touchez pour enregistrer (2 minutes maximum)';
     setStatus('Préparation du vocal…');
     let mp3;
     try {
@@ -580,12 +629,14 @@ $('btn-voice').addEventListener('click', async () => {
       pendingVoice = { dataUrl: reader.result, duration };
       $('voice-audio').src = reader.result;
       $('voice-preview').hidden = false;
+      $('voice-recorder').hidden = true;
     };
     reader.readAsDataURL(mp3);
   };
   recorder.start();
-  $('btn-voice').textContent = '⏹ Arrêter';
+  $('btn-voice').textContent = '⏹';
   $('btn-voice').classList.add('recording');
+  $('voice-hint').textContent = 'Touchez pour arrêter';
   const tick = () => {
     const s = Math.round((Date.now() - started) / 1000);
     setStatus(`🔴 Enregistrement… ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')} (touchez Arrêter pour finir)`);
