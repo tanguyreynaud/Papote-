@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Papote</title>
+  <meta name="theme-color" content="#c2410c">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Papote">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="stylesheet" href="css/famille.css">
+</head>
+<body>
+  <header class="topbar">
+    <img src="icons/icon.svg" alt="" class="logo">
+    <div>
+      <h1>Papote</h1>
+      <p id="family-title" class="subtitle"></p>
+    </div>
+    <button id="btn-settings" class="icon-btn" hidden aria-label="Réglages">⚙︎</button>
+  </header>
+
+  <main>
+    <p id="loading" class="center muted">Chargement…</p>
+
+    <!-- Pas encore dans une famille -->
+    <section id="view-join" hidden>
+      <div class="card">
+        <h2>Rejoindre la famille</h2>
+        <p class="muted">Entrez le code famille qu'on vous a envoyé.</p>
+        <form id="form-join">
+          <label>Code famille
+            <input id="join-code" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABCD-1234" required>
+          </label>
+          <label>Votre prénom
+            <input id="join-name" autocomplete="given-name" maxlength="40" placeholder="Julie" required>
+          </label>
+          <button type="submit" class="primary">Rejoindre</button>
+          <p id="join-error" class="error" hidden></p>
+        </form>
+      </div>
+      <details class="card">
+        <summary>Première fois ? Créer une famille</summary>
+        <form id="form-create">
+          <label>Comment s'appelle la personne qui a la tablette ?
+            <input id="create-grand" maxlength="40" placeholder="Mamie" required>
+          </label>
+          <label>Votre prénom
+            <input id="create-name" autocomplete="given-name" maxlength="40" placeholder="Tanguy" required>
+          </label>
+          <button type="submit" class="primary">Créer la famille</button>
+          <p id="create-error" class="error" hidden></p>
+        </form>
+      </details>
+    </section>
+
+    <!-- Dans une famille -->
+    <section id="view-app" hidden>
+      <form id="form-post" class="card composer">
+        <textarea id="post-text" rows="3" maxlength="2000" placeholder="Écrire un message…"></textarea>
+        <div id="previews" class="previews"></div>
+        <div class="composer-actions">
+          <label class="button secondary">
+            📷 Photos
+            <input id="post-photos" type="file" accept="image/*" multiple hidden>
+          </label>
+          <button type="submit" class="primary" id="btn-send">Envoyer</button>
+        </div>
+        <p id="post-status" class="muted small" hidden></p>
+      </form>
+
+      <h2 class="section-title">Derniers envois</h2>
+      <ul id="feed" class="feed"></ul>
+      <p id="feed-empty" class="center muted" hidden>Rien pour l'instant. Envoyez la première photo !</p>
+    </section>
+
+    <!-- Réglages -->
+    <section id="view-settings" hidden>
+      <div class="card">
+        <h2>Inviter la famille</h2>
+        <p class="muted">Envoyez ce code ou ce lien aux autres membres de la famille.</p>
+        <p class="code" id="settings-code"></p>
+        <button id="btn-share" class="primary">Partager le lien</button>
+      </div>
+      <div class="card">
+        <h2>Membres</h2>
+        <ul id="members" class="members"></ul>
+      </div>
+      <div class="card">
+        <h2>Installer l'app sur votre téléphone</h2>
+        <p class="muted"><strong>iPhone</strong> : dans Safari, touchez le bouton Partager puis « Sur l'écran d'accueil ».</p>
+        <p class="muted"><strong>Android</strong> : dans Chrome, menu ⋮ puis « Ajouter à l'écran d'accueil ».</p>
+        <p class="muted small">Au premier lancement de l'app installée, entrez à nouveau le code famille.</p>
+      </div>
+      <button id="btn-back" class="secondary wide">← Retour</button>
+      <button id="btn-leave" class="link danger wide">Quitter la famille sur ce téléphone</button>
+    </section>
+  </main>
+
+  <script type="module" src="js/famille.js"></script>
+</body>
+</html>

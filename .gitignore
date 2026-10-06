@@ -1,0 +1,19 @@
+# Android
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/signing.properties
+*.jks
+*.keystore
+
+# Firebase
+.firebase/
+firebase-debug.log
+firestore-debug.log
+
+# Divers
+.DS_Store
+Thumbs.db
+.idea/
+.claude/

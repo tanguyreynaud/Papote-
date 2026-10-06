@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>Papote</title>
+  <link rel="stylesheet" href="css/tablette.css">
+</head>
+<body>
+  <!-- Accueil -->
+  <section id="view-home" class="view">
+    <div class="home-grid">
+      <div class="home-left">
+        <p id="greeting" class="greeting"></p>
+        <p id="clock" class="clock">--:--</p>
+        <p id="date" class="date"></p>
+        <div id="weather" class="weather" hidden>
+          <div class="weather-now">
+            <span id="weather-icon" class="weather-icon"></span>
+            <span id="weather-temp" class="weather-temp"></span>
+          </div>
+          <p id="weather-label" class="weather-label"></p>
+          <p id="weather-minmax" class="weather-minmax"></p>
+          <p id="weather-tomorrow" class="weather-tomorrow"></p>
+        </div>
+      </div>
+      <button id="home-frame" class="home-frame" aria-label="Voir les photos">
+        <img id="frame-img" alt="" hidden>
+        <span id="frame-caption" class="frame-caption" hidden></span>
+        <span id="frame-empty" class="frame-empty">Les photos de la famille s'afficheront ici</span>
+      </button>
+    </div>
+    <nav class="home-buttons">
+      <button id="btn-photos" class="big-btn">
+        <span class="big-icon">📷</span> Photos <span id="badge-photos" class="badge" hidden></span>
+      </button>
+      <button id="btn-messages" class="big-btn">
+        <span class="big-icon">✉️</span> Messages <span id="badge-messages" class="badge" hidden></span>
+      </button>
+    </nav>
+  </section>
+
+  <!-- Photos -->
+  <section id="view-photos" class="view" hidden>
+    <div class="photo-stage">
+      <img id="photo-img" alt="">
+      <button id="photo-prev" class="arrow left" aria-label="Photo précédente">‹</button>
+      <button id="photo-next" class="arrow right" aria-label="Photo suivante">›</button>
+    </div>
+    <div class="photo-bar">
+      <p id="photo-caption" class="photo-caption"></p>
+      <button id="photo-heart" class="heart-btn">❤️ Bisou</button>
+    </div>
+    <button class="home-btn" data-home>⌂ Accueil</button>
+  </section>
+
+  <!-- Messages -->
+  <section id="view-messages" class="view" hidden>
+    <h1 class="view-title">Messages</h1>
+    <ul id="message-list" class="message-list"></ul>
+    <p id="message-empty" class="empty" hidden>Pas encore de message.</p>
+    <button class="home-btn" data-home>⌂ Accueil</button>
+  </section>
+
+  <!-- Nouveau message ou nouvelle photo -->
+  <div id="overlay" class="overlay" hidden>
+    <div class="overlay-card">
+      <p id="overlay-title" class="overlay-title"></p>
+      <img id="overlay-img" alt="" hidden>
+      <p id="overlay-text" class="overlay-text" hidden></p>
+      <div class="overlay-actions">
+        <button id="overlay-heart" class="big-btn heart">❤️ Envoyer un bisou</button>
+        <button id="overlay-close" class="big-btn">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tablette pas encore reliée à une famille -->
+  <section id="view-setup" class="view setup" hidden>
+    <p class="clock" id="setup-clock"></p>
+    <p class="setup-text">Cette tablette n'est pas encore reliée à une famille.</p>
+    <p id="setup-detail" class="setup-detail"></p>
+  </section>
+
+  <script type="module" src="js/tablette.js"></script>
+</body>
+</html>
