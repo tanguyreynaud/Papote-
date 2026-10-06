@@ -89,6 +89,10 @@
           <span class="tile-icon">🎤</span>
           <span class="tile-title">Vocal</span>
         </button>
+        <button type="button" class="tile tile-video" data-mode="video">
+          <span class="tile-icon">🎥</span>
+          <span class="tile-title">Vidéo</span>
+        </button>
         <button type="button" class="tile tile-settings" id="btn-settings">
           <span class="tile-icon">⚙️</span>
           <span class="tile-title">Réglages</span>
@@ -106,6 +110,12 @@
           <button type="button" class="picker" id="photo-from-camera">📷 Prendre une photo</button>
           <button type="button" class="picker" id="photo-from-gallery">🖼️ Choisir dans la galerie</button>
         </div>
+        <div id="video-pickers" class="pickers" hidden>
+          <button type="button" class="picker" id="video-from-camera">🎥 Filmer</button>
+          <button type="button" class="picker" id="video-from-gallery">🎞️ Choisir une vidéo</button>
+        </div>
+        <p class="muted small" id="video-hint" hidden>30 secondes au maximum.</p>
+        <video id="video-preview" class="video-preview" controls playsinline hidden></video>
         <div id="previews" class="previews"></div>
         <div id="voice-recorder" class="recorder" hidden>
           <button type="button" class="record-btn" id="btn-voice">🎤</button>
@@ -120,6 +130,8 @@
         <button type="submit" class="action-btn wide send-btn" id="btn-send">Envoyer</button>
         <input id="post-camera" type="file" accept="image/*" capture="environment" hidden>
         <input id="post-photos" type="file" accept="image/*" multiple hidden>
+        <input id="post-video-camera" type="file" accept="video/*" capture="environment" hidden>
+        <input id="post-video-gallery" type="file" accept="video/*" hidden>
         <p id="post-status" class="muted small" hidden></p>
       </form>
 
@@ -179,26 +191,6 @@
         <button id="btn-share" class="primary">Partager le lien</button>
       </div>
       <div class="card">
-        <h2>Être appelé(e) depuis la tablette</h2>
-        <p class="muted" id="callable-help">Ajoutez votre visage et votre prénom : ils apparaîtront sur la tablette, et un simple appui vous appellera.</p>
-        <div class="face-row">
-          <img id="face-preview" class="face-preview" alt="" hidden>
-          <div class="face-empty" id="face-empty">🙂</div>
-          <div class="face-buttons">
-            <button type="button" class="secondary" id="face-camera">📷 Prendre</button>
-            <button type="button" class="secondary" id="face-gallery">🖼️ Choisir</button>
-          </div>
-        </div>
-        <input id="face-input-camera" type="file" accept="image/*" capture="user" hidden>
-        <input id="face-input-gallery" type="file" accept="image/*" hidden>
-        <label>Prénom affiché
-          <input id="callable-name" maxlength="20" placeholder="Julie">
-        </label>
-        <button type="button" class="action-btn wide" id="btn-callable-save">Enregistrer</button>
-        <button type="button" class="link danger wide" id="btn-callable-remove" hidden>Ne plus apparaître sur la tablette</button>
-        <p id="callable-status" class="muted small" hidden></p>
-      </div>
-      <div class="card">
         <h2>Membres</h2>
         <ul id="members" class="members"></ul>
       </div>
@@ -217,16 +209,6 @@
   <div id="lightbox" class="lightbox" hidden>
     <img id="lightbox-img" alt="">
     <p class="lightbox-hint">Touchez pour fermer</p>
-  </div>
-
-  <!-- Appel de la tablette -->
-  <div id="incoming" class="incoming" hidden>
-    <img id="incoming-face" alt="">
-    <p id="incoming-name" class="incoming-name"></p>
-    <div class="incoming-actions">
-      <button id="incoming-decline" class="call-round decline">Refuser</button>
-      <button id="incoming-answer" class="call-round answer">Décrocher</button>
-    </div>
   </div>
 
   <!-- Appel vidéo en cours -->

@@ -486,3 +486,83 @@ body.night .big-btn.messages { background: #9a3412; }
 
 /* Rappel : « Dans 15 minutes » / « C'est l'heure ! » bien visible */
 .overlay.reminder .ov-kind { font-size: 9vmin; text-transform: none; letter-spacing: 0; opacity: 1; }
+
+/* ---------- Écrans dédiés (message, vocal, vidéo, appel) : fond décoré ---------- */
+
+.overlay, .call-ring {
+  background-repeat: repeat, no-repeat;
+  background-size: 34vmin 34vmin, 100% 100%;
+}
+.overlay.mode-message {
+  background-color: #c2410c;
+  background-image:
+    url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cg fill='%23ffffff' fill-opacity='0.09'%3E%3Ccircle cx='22' cy='24' r='14'/%3E%3Ccircle cx='112' cy='66' r='26'/%3E%3Ccircle cx='58' cy='132' r='9'/%3E%3Cpath d='M132 124c-6-7-17 1-10 9l10 11 10-11c7-8-4-16-10-9z'/%3E%3C/g%3E%3C/svg%3E"),
+    -webkit-linear-gradient(top left, #fb923c, #c2410c 55%, #9a3412);
+  background-image:
+    url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cg fill='%23ffffff' fill-opacity='0.09'%3E%3Ccircle cx='22' cy='24' r='14'/%3E%3Ccircle cx='112' cy='66' r='26'/%3E%3Ccircle cx='58' cy='132' r='9'/%3E%3Cpath d='M132 124c-6-7-17 1-10 9l10 11 10-11c7-8-4-16-10-9z'/%3E%3C/g%3E%3C/svg%3E"),
+    linear-gradient(135deg, #fb923c, #c2410c 55%, #9a3412);
+}
+.overlay.mode-voice {
+  background-color: #6d28d9;
+  background-image:
+    url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cg fill='none' stroke='%23ffffff' stroke-opacity='0.12' stroke-width='4' stroke-linecap='round'%3E%3Cpath d='M20 70v20M34 55v50M48 64v32M62 46v68M76 60v40'/%3E%3Ccircle cx='122' cy='122' r='18'/%3E%3Ccircle cx='122' cy='30' r='8'/%3E%3C/g%3E%3C/svg%3E"),
+    -webkit-linear-gradient(top left, #a78bfa, #6d28d9 55%, #4c1d95);
+  background-image:
+    url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cg fill='none' stroke='%23ffffff' stroke-opacity='0.12' stroke-width='4' stroke-linecap='round'%3E%3Cpath d='M20 70v20M34 55v50M48 64v32M62 46v68M76 60v40'/%3E%3Ccircle cx='122' cy='122' r='18'/%3E%3Ccircle cx='122' cy='30' r='8'/%3E%3C/g%3E%3C/svg%3E"),
+    linear-gradient(135deg, #a78bfa, #6d28d9 55%, #4c1d95);
+}
+.overlay.mode-video {
+  background-color: #1d4ed8;
+  background-image:
+    url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cg fill='%23ffffff' fill-opacity='0.09'%3E%3Cpath d='M20 30h50v34H20zM76 40l18-10v34L76 54z'/%3E%3Ccircle cx='118' cy='118' r='22'/%3E%3Ccircle cx='40' cy='128' r='8'/%3E%3C/g%3E%3C/svg%3E"),
+    -webkit-linear-gradient(top left, #60a5fa, #1d4ed8 55%, #1e3a8a);
+  background-image:
+    url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cg fill='%23ffffff' fill-opacity='0.09'%3E%3Cpath d='M20 30h50v34H20zM76 40l18-10v34L76 54z'/%3E%3Ccircle cx='118' cy='118' r='22'/%3E%3Ccircle cx='40' cy='128' r='8'/%3E%3C/g%3E%3C/svg%3E"),
+    linear-gradient(135deg, #60a5fa, #1d4ed8 55%, #1e3a8a);
+}
+.call-ring {
+  background-color: #15803d;
+  background-image:
+    url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cg fill='none' stroke='%23ffffff' stroke-opacity='0.12' stroke-width='5'%3E%3Ccircle cx='80' cy='80' r='20'/%3E%3Ccircle cx='80' cy='80' r='42'/%3E%3Ccircle cx='80' cy='80' r='64'/%3E%3C/g%3E%3C/svg%3E"),
+    -webkit-linear-gradient(top left, #4ade80, #15803d 55%, #14532d);
+  background-image:
+    url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cg fill='none' stroke='%23ffffff' stroke-opacity='0.12' stroke-width='5'%3E%3Ccircle cx='80' cy='80' r='20'/%3E%3Ccircle cx='80' cy='80' r='42'/%3E%3Ccircle cx='80' cy='80' r='64'/%3E%3C/g%3E%3C/svg%3E"),
+    linear-gradient(135deg, #4ade80, #15803d 55%, #14532d);
+}
+
+.ov-pill {
+  display: inline-block;
+  padding: 1.2vmin 3.5vmin;
+  border-radius: 6vmin;
+  background: rgba(255, 255, 255, .22);
+  font-size: 4.5vmin;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+.ov-from { margin: 2vmin 0 0; font-size: 10vmin; }
+
+/* Le texte d'un message sur une grande carte blanche, facile à lire */
+.ov-card {
+  max-width: 92%;
+  padding: 5vmin 7vmin;
+  border-radius: 6vmin;
+  background: #fffaf3;
+  color: #22201d;
+  box-shadow: 0 2vmin 6vmin rgba(0, 0, 0, .25);
+}
+.ov-card .ov-text { text-align: center; }
+.ov-caption {
+  margin: 0;
+  font-size: 7vmin;
+  font-weight: bold;
+  text-align: center;
+  text-shadow: 0 0.4vmin 1.5vmin rgba(0, 0, 0, .95);
+}
+.overlay.mode-video .ov-play { color: #1d4ed8; }
+.overlay.mode-photo .ov-center { -webkit-justify-content: flex-end; justify-content: flex-end; padding-bottom: 3vmin; }
+
+/* Vidéo jouée par Android par-dessus l'écran */
+body.video-playing .overlay { visibility: hidden; }
+
+.home-buttons .big-btn { font-size: 7.5vmin; min-height: 20vmin; }

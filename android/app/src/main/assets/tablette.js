@@ -52,7 +52,7 @@
   // ---------- Navigation ----------
 
   function showView(view) {
-    var ids = ['view-home', 'view-photos', 'view-messages', 'view-setup'];
+    var ids = ['view-home', 'view-photos', 'view-setup'];
     for (var i = 0; i < ids.length; i++) show($(ids[i]), ids[i] === view);
     resetIdle();
   }
@@ -116,14 +116,8 @@
 
   function renderBadges() {
     var unseenPhotos = 0;
-    var unseenMessages = 0;
-    for (var i = 0; i < posts.length; i++) {
-      if (posts[i].seen) continue;
-      if (posts[i].image) unseenPhotos++;
-      else if (posts[i].text || posts[i].audio) unseenMessages++;
-    }
+    for (var i = 0; i < posts.length; i++) if (!posts[i].seen && posts[i].image) unseenPhotos++;
     setBadge('badge-photos', unseenPhotos);
-    setBadge('badge-messages', unseenMessages);
   }
 
   // ---------- Photos ----------
@@ -149,43 +143,6 @@
   // La plus récente est à l'index 0 : « suivante » va vers les plus récentes.
   function olderPhoto() { if (photoIndex < photos.length - 1) { photoIndex++; renderPhoto(); } }
   function newerPhoto() { if (photoIndex > 0) { photoIndex--; renderPhoto(); } }
-
-  // ---------- Liste des messages ----------
-
-  function renderMessages() {
-    var list = $('message-list');
-    list.innerHTML = '';
-    var count = 0;
-    for (var i = 0; i < posts.length; i++) {
-      var p = posts[i];
-      if (p.image || (!p.text && !p.audio)) continue;
-      count++;
-      var item = document.createElement('div');
-      item.className = 'message' + (p.audio ? ' voice' : '') + (p.seen ? '' : ' unseen');
-      var head = document.createElement('p');
-      head.className = 'message-head';
-      head.textContent = p.authorName + ', ' + whenLabel(p.createdAt);
-      item.appendChild(head);
-      if (p.audio) {
-        var label = document.createElement('p');
-        label.className = 'voice-label';
-        label.textContent = 'Message vocal' + (p.duration ? ' (' + formatDuration(p.duration) + ')' : '');
-        item.appendChild(label);
-        var actions = document.createElement('div');
-        actions.className = 'message-actions';
-        actions.appendChild(playButton(p));
-        item.appendChild(actions);
-      } else {
-        var body = document.createElement('p');
-        body.className = 'message-body';
-        body.textContent = p.text;
-        item.appendChild(body);
-        markSeen(p);
-      }
-      list.appendChild(item);
-    }
-    show($('message-empty'), count === 0);
-  }
 
   // ---------- Vu et bisous ----------
 
@@ -219,7 +176,10 @@
   function playVoice(p, onEnd) {
     stopAudio();
     playing = { post: p, onEnd: onEnd };
-    if (android() && android().playVoice) {
+    if (p.video) {
+      document.body.className += ' video-playing';
+      if (android() && android().playVideo) android().playVideo(p.video);
+    } else if (android() && android().playVoice) {
       android().playVoice(p.audio);
     } else {
       $('player').setAttribute('src', p.audio);
@@ -230,47 +190,30 @@
 
   function stopAudio() {
     if (!playing) return;
-    if (android() && android().stopVoice) android().stopVoice();
+    if (playing.post.video) {
+      if (android() && android().stopVideo) android().stopVideo();
+      document.body.className = document.body.className.replace(' video-playing', '');
+    } else if (android() && android().stopVoice) android().stopVoice();
     else $('player').pause();
     playing = null;
   }
 
   // Fin de lecture (appelé par Android quand le vocal est terminé).
   function voiceEnded() {
+    document.body.className = document.body.className.replace(' video-playing', '');
     var p = playing;
     playing = null;
     if (p && p.onEnd) p.onEnd();
   }
 
-  function playButton(p) {
-    var b = document.createElement('button');
-    b.className = 'small-btn';
-    b.innerHTML = '<span class="icon">' + ICONS.play + '</span>Écouter';
-    on(b, 'click', function () {
-      if (playing && playing.post.id === p.id) {
-        stopAudio();
-        b.className = 'small-btn';
-        b.lastChild.textContent = 'Écouter';
-        return;
-      }
-      b.className = 'small-btn playing';
-      b.lastChild.textContent = 'Arrêter';
-      playVoice(p, function () {
-        b.className = 'small-btn';
-        b.lastChild.textContent = 'Écouter';
-      });
-    });
-    return b;
-  }
-
-  // ---------- Plein écran : nouvelle photo, message ou vocal ----------
+  // ---------- Écran d'un nouvel envoi : photo, message, vocal ou vidéo ----------
 
   function queueUnseen() {
     var newestPhoto = null;
     for (var i = posts.length - 1; i >= 0; i--) {
       var p = posts[i];
       // Une photo ou un vocal n'est montré que lorsqu'il est téléchargé.
-      if (p.seen || shownInOverlay[p.id] || (p.type === 'photo' && !p.image) || (p.type === 'voice' && !p.audio)) continue;
+      if (p.seen || shownInOverlay[p.id] || (p.type === 'photo' && !p.image) || (p.type === 'voice' && !p.audio) || (p.type === 'video' && !p.video)) continue;
       shownInOverlay[p.id] = true;
       if (p.image) newestPhoto = p; else overlayQueue.push(p);
     }
@@ -307,29 +250,34 @@
       return;
     }
     var p = overlayPost;
-    var mode = p.image ? 'photo' : p.type === 'voice' ? 'voice' : 'message';
+    var mode = p.image ? 'photo' : p.type === 'voice' ? 'voice' : p.type === 'video' ? 'video' : 'message';
+    var media = mode === 'voice' || mode === 'video';
     $('overlay').className = 'overlay mode-' + mode;
-    $('overlay-kind').textContent = mode === 'photo' ? 'Nouvelle photo' : mode === 'voice' ? 'Message vocal' : 'Nouveau message';
+    $('overlay-kind').textContent = { photo: 'Nouvelle photo', voice: 'Message vocal', video: 'Vidéo', message: 'Nouveau message' }[mode];
     $('overlay-from').textContent = 'De ' + p.authorName;
     show($('overlay-img'), mode === 'photo');
     if (mode === 'photo') $('overlay-img').setAttribute('src', p.image);
-    show($('overlay-text'), !!p.text);
-    $('overlay-text').textContent = p.text || '';
+    // Message : le texte sur une grande carte ; photo ou vidéo : la légende.
+    show($('overlay-card'), mode === 'message');
+    $('overlay-text').textContent = mode === 'message' ? p.text : '';
     $('overlay-text').className = 'ov-text ' + sizeClass(p.text);
-    show($('overlay-play'), mode === 'voice');
+    show($('overlay-caption'), mode !== 'message' && !!p.text);
+    $('overlay-caption').textContent = mode !== 'message' ? (p.text || '') : '';
+    show($('overlay-play'), media);
     $('overlay-play').className = 'ov-play';
-    $('overlay-play').querySelector('.label').textContent = 'Écouter';
-    // Vocal : d'abord seulement « Écouter » ; les autres boutons viennent une fois le vocal fini.
-    setOverlayActions(mode !== 'voice', false);
+    $('overlay-play').querySelector('.label').textContent = mode === 'video' ? 'Regarder' : 'Écouter';
+    $('overlay-replay').querySelector('.label').textContent = mode === 'video' ? 'Revoir' : 'Réécouter';
+    // Vocal ou vidéo : d'abord seulement « Écouter » / « Regarder » ; le reste vient une fois fini.
+    setOverlayActions(!media, false);
     show($('overlay'), true);
     if (mode === 'message') markSeen(p);
   }
 
   function listenOverlay() {
     var p = overlayPost;
-    if (!p || !p.audio || playing) return;
+    if (!p || !(p.audio || p.video) || playing) return;
     $('overlay-play').className = 'ov-play playing';
-    $('overlay-play').querySelector('.label').textContent = 'Écoute…';
+    $('overlay-play').querySelector('.label').textContent = p.video ? 'Lecture…' : 'Écoute…';
     setOverlayActions(false);
     playVoice(p, function () {
       if (overlayPost !== p) return;
@@ -369,7 +317,6 @@
     if (isShown('view-setup')) showView('view-home');
     renderFrame();
     renderBadges();
-    if (isShown('view-messages')) renderMessages();
     if (isShown('view-photos')) {
       if (photos.length) {
         photoIndex = Math.min(photoIndex, photos.length - 1);
@@ -524,7 +471,6 @@
     }
     on($('btn-photos'), 'click', function () { openPhotos(0); });
     on($('home-frame'), 'click', function () { openPhotos(frameIndex); });
-    on($('btn-messages'), 'click', function () { renderMessages(); showView('view-messages'); });
     on($('reminder-done'), 'click', confirmReminder);
     on($('overlay-play'), 'click', listenOverlay);
     on($('overlay-replay'), 'click', replayOverlay);

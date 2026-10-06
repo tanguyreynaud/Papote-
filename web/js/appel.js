@@ -1,9 +1,8 @@
-// Appels vidéo entre la famille et la tablette, en WebRTC (dans les deux sens).
+// Appel vidéo de la famille vers la tablette, en WebRTC.
 // La signalisation passe par Firestore : families/{fid}/calls/{cid} et ses sous-collections de candidats.
 import {
   db, doc, collection, setDoc, addDoc, updateDoc, onSnapshot, serverTimestamp,
 } from './firebase.js';
-import { query, where } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
 
 export const ICE_SERVERS = {
   iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }],
@@ -90,71 +89,3 @@ export async function startCall(fid, caller, ui) {
   return { hangup: () => finish('ended', 'ended') };
 }
 
-const FRESH_MS = 60_000;
-
-/** Écoute les appels de la tablette destinés à cette personne ; cb(call | null). */
-export function watchIncoming(fid, uid, cb) {
-  const q = query(collection(db, 'families', fid, 'calls'),
-    where('calleeUid', '==', uid), where('state', '==', 'ringing'));
-  return onSnapshot(q, (snap) => {
-    const now = Date.now();
-    const fresh = snap.docs
-      .map((d) => ({ id: d.id, ...d.data({ serverTimestamps: 'estimate' }) }))
-      .filter((c) => c.createdAt && now - c.createdAt.toMillis() < FRESH_MS);
-    cb(fresh.length ? fresh[fresh.length - 1] : null);
-  }, (err) => console.error('Écoute des appels', err));
-}
-
-export function declineCall(fid, call) {
-  return updateDoc(doc(db, 'families', fid, 'calls', call.id), { state: 'declined', endedAt: serverTimestamp() });
-}
-
-/** Décroche un appel venant de la tablette. Même interface que startCall. */
-export async function answerCall(fid, call, ui) {
-  const callRef = doc(db, 'families', fid, 'calls', call.id);
-  const stream = await navigator.mediaDevices.getUserMedia({
-    video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
-    audio: { echoCancellation: true, noiseSuppression: true },
-  });
-  ui.local.srcObject = stream;
-  const pc = new RTCPeerConnection(ICE_SERVERS);
-  stream.getTracks().forEach((t) => pc.addTrack(t, stream));
-  pc.ontrack = (e) => {
-    ui.remote.srcObject = e.streams[0];
-    ui.remote.play().catch(() => {});
-  };
-  pc.onicecandidate = (e) => {
-    if (e.candidate) addDoc(collection(callRef, 'calleeCandidates'), e.candidate.toJSON()).catch(() => {});
-  };
-  await pc.setRemoteDescription(call.offer);
-  const answer = await pc.createAnswer();
-  await pc.setLocalDescription(answer);
-  await updateDoc(callRef, { answer: { type: answer.type, sdp: answer.sdp }, state: 'accepted' });
-  ui.onState('accepted');
-
-  let finished = false;
-  const stops = [];
-  const finish = (reason, notify) => {
-    if (finished) return;
-    finished = true;
-    stops.forEach((stop) => stop());
-    pc.close();
-    stream.getTracks().forEach((t) => t.stop());
-    if (notify) updateDoc(callRef, { state: notify, endedAt: serverTimestamp() }).catch(() => {});
-    ui.onEnd(reason);
-  };
-  stops.push(onSnapshot(collection(callRef, 'callerCandidates'), (snap) => {
-    snap.docChanges().forEach((change) => {
-      if (change.type === 'added') pc.addIceCandidate(change.doc.data()).catch(() => {});
-    });
-  }));
-  stops.push(onSnapshot(callRef, (snap) => {
-    const state = snap.data() && snap.data().state;
-    if (state === 'ended' || state === 'missed') finish('ended', null);
-  }));
-  pc.onconnectionstatechange = () => {
-    if (pc.connectionState === 'connected') ui.onState('connected');
-    if (pc.connectionState === 'failed') finish('failed', 'ended');
-  };
-  return { hangup: () => finish('ended', 'ended') };
-}

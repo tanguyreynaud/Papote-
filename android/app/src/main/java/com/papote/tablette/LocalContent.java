@@ -50,7 +50,8 @@ final class LocalContent {
         if (name.endsWith(".jpg")) return "image/jpeg";
         if (name.endsWith(".m4a")) return "audio/mp4";
         if (name.endsWith(".mp3")) return "audio/mpeg";
-        if (name.endsWith(".webm")) return "audio/webm";
+        if (name.endsWith(".mp4")) return "video/mp4";
+        if (name.endsWith(".webm")) return "video/webm";
         if (name.endsWith(".ogg")) return "audio/ogg";
         return "application/octet-stream";
     }

@@ -27,6 +27,8 @@ import android.view.View;
 import android.view.WindowManager;
 import android.Manifest;
 import android.content.pm.PackageManager;
+import android.widget.FrameLayout;
+import android.widget.VideoView;
 import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
@@ -58,6 +60,7 @@ public class MainActivity extends Activity implements Sync.Listener {
     private View statusBarBlocker;
     private CallAudio callAudio;
     private VoicePlayer voicePlayer;
+    private VideoView videoView;
     private final Handler handler = new Handler(Looper.getMainLooper());
 
     @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
@@ -125,7 +128,30 @@ public class MainActivity extends Activity implements Sync.Listener {
                 }
             }
         });
-        setContentView(web);
+        // La page, et par-dessus un lecteur vidéo natif (le navigateur d'Android 4.4 ne lit pas
+        // les vidéos servies localement).
+        FrameLayout root = new FrameLayout(this);
+        root.addView(web, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT));
+        videoView = new VideoView(this);
+        videoView.setVisibility(View.GONE);
+        FrameLayout.LayoutParams vlp = new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT);
+        vlp.gravity = Gravity.CENTER;
+        root.setBackgroundColor(Color.BLACK);
+        root.addView(videoView, vlp);
+        videoView.setOnCompletionListener(mp -> endVideo());
+        videoView.setOnErrorListener((mp, what, extra) -> {
+            Log.w(TAG, "Lecture vidéo impossible " + what + "/" + extra);
+            endVideo();
+            return true;
+        });
+        // Toucher la vidéo l'arrête.
+        videoView.setOnTouchListener((v, e) -> {
+            if (e.getAction() == MotionEvent.ACTION_UP) endVideo();
+            return true;
+        });
+        setContentView(root);
         callAudio = new CallAudio(this);
         voicePlayer = new VoicePlayer(this, () -> callPage("onVoiceEnded", new JSONObject()));
         if (Build.VERSION.SDK_INT >= 23
@@ -200,6 +226,19 @@ public class MainActivity extends Activity implements Sync.Listener {
         }
 
         @JavascriptInterface
+        public void playVideo(String url) {
+            handler.post(() -> startVideo(url));
+        }
+
+        @JavascriptInterface
+        public void stopVideo() {
+            handler.post(() -> {
+                videoView.stopPlayback();
+                videoView.setVisibility(View.GONE);
+            });
+        }
+
+        @JavascriptInterface
         public void stopVoice() {
             handler.post(() -> voicePlayer.stop());
         }
@@ -261,6 +300,25 @@ public class MainActivity extends Activity implements Sync.Listener {
     @Override public void onStatus(JSONObject status) { callPage("onStatus", status); }
     @Override public void onPosts(JSONObject payload) { callPage("onPosts", payload); }
     @Override public void onWeather(JSONObject weather) { callPage("onWeather", weather); }
+
+    private void startVideo(String url) {
+        String name = Uri.parse(url).getLastPathSegment();
+        if (name == null || name.contains("..")) return;
+        java.io.File file = new java.io.File(new java.io.File(getFilesDir(), "photos"), name);
+        if (!file.exists()) {
+            endVideo();
+            return;
+        }
+        videoView.setVisibility(View.VISIBLE);
+        videoView.setVideoPath(file.getAbsolutePath());
+        videoView.start();
+    }
+
+    private void endVideo() {
+        videoView.stopPlayback();
+        videoView.setVisibility(View.GONE);
+        callPage("onVoiceEnded", new JSONObject());
+    }
     @Override public void onReminders(JSONObject payload) { callPage("onReminders", payload); }
 
     /** Nouvel envoi : on allume l'écran et on joue le son de notification de la tablette. */

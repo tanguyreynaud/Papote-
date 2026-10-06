@@ -171,8 +171,11 @@ export function bumpRev(batch, fid) {
  * Un envoi : le document ne contient qu'un petit aperçu (thumb) ; la photo ou le son en taille
  * réelle sont dans posts/{id}/media/{image|audio} et ne sont téléchargés qu'à la demande.
  */
+export const VIDEO_CHUNK = 700_000; // morceaux de base64 (un document Firestore fait 1 Mo au plus)
+export const MAX_VIDEO_CHUNKS = 10;
+
 export async function addPost(fid, {
-  type, text, image, thumb, audio, duration, authorUid, authorName,
+  type, text, image, thumb, audio, duration, video, mime, authorUid, authorName,
 }) {
   const postRef = doc(collection(db, 'families', fid, 'posts'));
   const batch = writeBatch(db);
@@ -182,7 +185,14 @@ export async function addPost(fid, {
   };
   if (image) { data.thumb = thumb; data.hasMedia = true; }
   if (audio) { data.hasMedia = true; data.duration = duration; }
+  // Vidéo : base64 découpé en morceaux posts/{id}/media/video0, video1…
+  const videoParts = [];
+  if (video) {
+    for (let i = 0; i < video.length; i += VIDEO_CHUNK) videoParts.push(video.slice(i, i + VIDEO_CHUNK));
+    Object.assign(data, { thumb, hasMedia: true, duration, chunks: videoParts.length, mime });
+  }
   batch.set(postRef, data);
+  videoParts.forEach((part, i) => batch.set(doc(postRef, 'media', `video${i}`), { data: part }));
   if (image) batch.set(doc(postRef, 'media', 'image'), { data: image });
   if (audio) batch.set(doc(postRef, 'media', 'audio'), { data: audio });
   bumpRev(batch, fid);
@@ -196,6 +206,7 @@ export async function deletePost(fid, post) {
   if (post.hasMedia) {
     batch.delete(doc(postRef, 'media', 'image'));
     batch.delete(doc(postRef, 'media', 'audio'));
+    for (let i = 0; i < (post.chunks || 0); i++) batch.delete(doc(postRef, 'media', `video${i}`));
   }
   batch.delete(postRef);
   bumpRev(batch, fid);
@@ -229,9 +240,20 @@ export async function loadMedia(fid, post, kind) {
   const key = `/media/${fid}/${post.id}/${kind}`;
   const cached = await cacheGet(key);
   if (cached) return cached;
-  const snap = await getDoc(doc(db, 'families', fid, 'posts', post.id, 'media', kind));
-  if (!snap.exists()) return null;
-  const blob = await (await fetch(snap.data().data)).blob();
+  let blob;
+  if (kind === 'video') {
+    const parts = [];
+    for (let i = 0; i < (post.chunks || 0); i++) {
+      const part = await getDoc(doc(db, 'families', fid, 'posts', post.id, 'media', `video${i}`));
+      if (!part.exists()) return null;
+      parts.push(part.data().data);
+    }
+    blob = await (await fetch(`data:${post.mime || 'video/mp4'};base64,${parts.join('')}`)).blob();
+  } else {
+    const snap = await getDoc(doc(db, 'families', fid, 'posts', post.id, 'media', kind));
+    if (!snap.exists()) return null;
+    blob = await (await fetch(snap.data().data)).blob();
+  }
   await cachePut(key, blob);
   return URL.createObjectURL(blob);
 }

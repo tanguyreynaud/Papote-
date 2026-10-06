@@ -57,7 +57,10 @@ final class Sync {
         long hearts;
         String imagePath;
         String audioPath;
+        String videoPath;
         long duration;
+        long chunks;
+        String mime;
     }
 
     private final SharedPreferences prefs;
@@ -256,6 +259,7 @@ final class Sync {
             if (old != null) {
                 p.imagePath = old.imagePath;
                 p.audioPath = old.audioPath;
+                p.videoPath = old.videoPath;
             } else if (loadedOnce && p.seenAt == 0 && !"reply".equals(p.type)) {
                 newArrival = true;
             }
@@ -273,6 +277,7 @@ final class Sync {
         }
         loadedOnce = true;
         downloadMedia(fid);
+        downloadVideos(fid);
         publishPosts();
         heartbeat(fid, "lastOnline");
         if (newArrival) listener.onNewArrival();
@@ -280,7 +285,7 @@ final class Sync {
 
     private JSONObject postsQuery(boolean full) throws JSONException {
         JSONArray fields = new JSONArray();
-        for (String f : new String[]{"type", "text", "authorName", "createdAt", "seenAt", "hearts", "duration"}) {
+        for (String f : new String[]{"type", "text", "authorName", "createdAt", "seenAt", "hearts", "duration", "chunks", "mime"}) {
             fields.put(new JSONObject().put("fieldPath", f));
         }
         JSONObject q = new JSONObject()
@@ -331,6 +336,8 @@ final class Sync {
         p.seenAt = Firebase.timestamp(f, "seenAt");
         p.hearts = Firebase.integer(f, "hearts");
         p.duration = Firebase.integer(f, "duration");
+        p.chunks = Firebase.integer(f, "chunks");
+        p.mime = Firebase.str(f, "mime");
         return p;
     }
 
@@ -372,6 +379,40 @@ final class Sync {
             }
             if (photo) p.imagePath = LocalContent.mediaUrl(file.getName());
             else p.audioPath = LocalContent.mediaUrl(file.getName());
+        }
+    }
+
+    /** Vidéos : le base64 est découpé en posts/{id}/media/video0, video1… */
+    private void downloadVideos(String fid) {
+        for (Post p : posts.values()) {
+            if (!"video".equals(p.type) || p.videoPath != null || p.chunks <= 0) continue;
+            File file = existing(p.id);
+            if (file == null) {
+                try {
+                    StringBuilder b64 = new StringBuilder();
+                    for (int i = 0; i < p.chunks; i++) {
+                        JSONObject part = firebase.get("families/" + fid + "/posts/" + p.id + "/media/video" + i);
+                        if (part == null || part.optJSONObject("fields") == null) { b64 = null; break; }
+                        b64.append(Firebase.str(part.getJSONObject("fields"), "data"));
+                    }
+                    if (b64 == null) continue;
+                    byte[] bytes = Base64.decode(b64.toString(), Base64.DEFAULT);
+                    String ext = p.mime != null && p.mime.contains("webm") ? "webm" : "mp4";
+                    File tmp = new File(imageDir, p.id + ".tmp");
+                    FileOutputStream out = new FileOutputStream(tmp);
+                    try {
+                        out.write(bytes);
+                    } finally {
+                        out.close();
+                    }
+                    file = new File(imageDir, p.id + "." + ext);
+                    if (!tmp.renameTo(file)) continue;
+                } catch (Exception e) {
+                    Log.w(TAG, "Vidéo " + p.id, e);
+                    continue;
+                }
+            }
+            p.videoPath = LocalContent.mediaUrl(file.getName());
         }
     }
 
@@ -492,6 +533,7 @@ final class Sync {
                         .put("hearts", p.hearts)
                         .put("image", p.imagePath == null ? JSONObject.NULL : p.imagePath)
                         .put("audio", p.audioPath == null ? JSONObject.NULL : p.audioPath)
+                        .put("video", p.videoPath == null ? JSONObject.NULL : p.videoPath)
                         .put("duration", p.duration));
             }
             JSONObject payload = new JSONObject().put("familyName", familyName == null ? "" : familyName)

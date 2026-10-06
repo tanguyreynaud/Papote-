@@ -3,10 +3,9 @@ import {
   loadMembership, createFamily, joinFamily, leaveFamily, watchPosts, watchMembers,
   addPost, deletePost, loadMedia, formatCode, normalizeCode, toDate, CodeInconnuError,
 } from './firebase.js';
-import {
-  startCall, watchIncoming, answerCall, declineCall,
-} from './appel.js';
-import { db, doc, updateDoc } from './firebase.js';
+import { startCall } from './appel.js';
+import { prepareVideo } from './video.js';
+import { MAX_VIDEO_CHUNKS, VIDEO_CHUNK } from './firebase.js';
 import { startAgenda, stopAgenda } from './agenda.js';
 
 const $ = (id) => document.getElementById(id);
@@ -15,6 +14,7 @@ const MAX_IMAGE_CHARS = 900_000; // un document Firestore est limité à 1 Mo
 let session = null; // { fid, family, member, uid }
 let pendingPhotos = []; // { full, thumb } : data URLs prêtes à envoyer
 let pendingVoice = null; // { dataUrl, duration }
+let pendingVideo = null; // { base64, mime, thumb, duration }
 let stopFeed = null;
 let stopMembers = null;
 
@@ -164,17 +164,20 @@ const MODES = {
   photo: { title: 'Envoyer une photo', placeholder: 'Ajouter une légende (facultatif)' },
   message: { title: 'Écrire un message', placeholder: null },
   voice: { title: 'Message vocal', placeholder: null },
+  video: { title: 'Envoyer une vidéo', placeholder: 'Ajouter une légende (facultatif)' },
 };
 
 function openComposer(next) {
   mode = next;
   $('composer-title').textContent = MODES[mode].title;
   $('photo-pickers').hidden = mode !== 'photo';
+  $('video-pickers').hidden = mode !== 'video' || !!pendingVideo;
+  $('video-hint').hidden = mode !== 'video' || !!pendingVideo;
   $('previews').hidden = mode !== 'photo';
   $('voice-recorder').hidden = mode !== 'voice' || !!pendingVoice;
   $('post-text').hidden = mode === 'voice';
   $('post-text').placeholder = MODES[mode].placeholder || `Écrire un message à ${session.family.name}…`;
-  $('post-text').maxLength = mode === 'photo' ? 80 : 160;
+  $('post-text').maxLength = mode === 'photo' || mode === 'video' ? 80 : 160;
   updateCount();
   $('actions').hidden = true;
   $('form-post').hidden = false;
@@ -188,6 +191,7 @@ function closeComposer() {
   pendingPhotos = [];
   renderPreviews();
   clearVoice();
+  clearVideo();
   $('post-text').value = '';
   $('form-post').hidden = true;
   $('actions').hidden = false;
@@ -221,6 +225,8 @@ function setBusy(label) {
   $('btn-voice').disabled = !!label;
   $('photo-from-camera').disabled = !!label;
   $('photo-from-gallery').disabled = !!label;
+  $('video-from-camera').disabled = !!label;
+  $('video-from-gallery').disabled = !!label;
   $('form-post').classList.toggle('busy', !!label);
   btn.replaceChildren();
   if (label) {
@@ -243,10 +249,17 @@ $('form-post').addEventListener('submit', async (e) => {
   if (mode === 'photo' && !pendingPhotos.length) { setStatus('Choisissez d\'abord une photo.'); return; }
   if (mode === 'message' && !text) { setStatus('Écrivez d\'abord votre message.'); return; }
   if (mode === 'voice' && !pendingVoice) { setStatus('Enregistrez d\'abord votre message vocal.'); return; }
+  if (mode === 'video' && !pendingVideo) { setStatus('Choisissez d\'abord une vidéo.'); return; }
   setBusy('Envoi…');
   const author = { authorUid: session.uid, authorName: session.member.name };
   try {
-    if (mode === 'voice') {
+    if (mode === 'video') {
+      setBusy('Envoi de la vidéo…');
+      await addPost(session.fid, {
+        type: 'video', text, video: pendingVideo.base64, mime: pendingVideo.mime,
+        thumb: pendingVideo.thumb, duration: pendingVideo.duration, ...author,
+      });
+    } else if (mode === 'voice') {
       await addPost(session.fid, {
         type: 'voice', text: '', audio: pendingVoice.dataUrl, duration: pendingVoice.duration, ...author,
       });
@@ -305,7 +318,7 @@ function renderFeed(posts) {
     li.className = `card post post-${post.type}`;
     const kind = document.createElement('p');
     kind.className = 'post-kind';
-    kind.textContent = { photo: '📷 Photo', message: '✉️ Message', voice: '🎤 Message vocal' }[post.type] || '';
+    kind.textContent = { photo: '📷 Photo', message: '✉️ Message', voice: '🎤 Message vocal', video: '🎥 Vidéo' }[post.type] || '';
     li.append(kind);
     if (post.type === 'voice') {
       const play = document.createElement('button');
@@ -330,6 +343,31 @@ function renderFeed(posts) {
       });
       li.append(play);
     }
+    if (post.type === 'video') {
+      const watch = document.createElement('button');
+      watch.className = 'action-btn wide video-play';
+      watch.textContent = `▶ Regarder la vidéo${post.duration ? ` (${post.duration} s)` : ''}`;
+      watch.addEventListener('click', async () => {
+        watch.disabled = true;
+        watch.textContent = 'Chargement…';
+        try {
+          const src = await loadMedia(session.fid, post, 'video');
+          const v = document.createElement('video');
+          v.controls = true;
+          v.playsInline = true;
+          v.className = 'feed-video';
+          v.src = src;
+          li.querySelector('.post-thumb')?.remove();
+          watch.replaceWith(v);
+          v.play().catch(() => {});
+        } catch (err) {
+          console.error(err);
+          watch.disabled = false;
+          watch.textContent = 'Réessayer';
+        }
+      });
+      li.append(watch);
+    }
     const preview = post.thumb || post.image;
     if (preview) {
       const img = document.createElement('img');
@@ -337,7 +375,7 @@ function renderFeed(posts) {
       img.alt = '';
       img.loading = 'lazy';
       img.className = 'post-thumb';
-      img.addEventListener('click', () => openPhoto(post));
+      if (post.type !== 'video') img.addEventListener('click', () => openPhoto(post));
       li.append(img);
     }
     if (post.text) {
@@ -463,7 +501,6 @@ function renderMembers(members) {
   // Le bouton d'appel n'apparaît que si une tablette sait recevoir les appels (Android 5 et plus).
   const canCall = members.some((m) => m.role === 'tablette' && m.canCall);
   $('tile-call').disabled = !(canCall && !!navigator.mediaDevices);
-  renderCallable(members);
   const list = $('members');
   list.replaceChildren();
   let tabletShown = false;
@@ -517,6 +554,53 @@ $('btn-install').addEventListener('click', async () => {
       + 'puis <strong>« Ajouter à l\'écran d\'accueil »</strong> ou <strong>« Installer l\'application »</strong>.</p>';
   }
 });
+
+// ---------- Vidéo ----------
+
+function clearVideo() {
+  pendingVideo = null;
+  $('video-preview').hidden = true;
+  $('video-preview').removeAttribute('src');
+  $('video-pickers').hidden = mode !== 'video';
+  $('video-hint').hidden = mode !== 'video';
+}
+
+async function onVideoChosen(e) {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  setBusy('Préparation…');
+  try {
+    const result = await prepareVideo(file, (done, total) => {
+      setStatus(`Préparation de la vidéo… ${Math.round(done)} / ${Math.round(total)} s`);
+    });
+    const base64 = await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.slice(reader.result.indexOf(',') + 1));
+      reader.readAsDataURL(result.blob);
+    });
+    if (base64.length > MAX_VIDEO_CHUNKS * VIDEO_CHUNK) {
+      setStatus('La vidéo est trop lourde. Essayez une vidéo plus courte.');
+      return;
+    }
+    pendingVideo = { base64, mime: result.mime, thumb: result.thumb, duration: result.duration };
+    $('video-preview').src = URL.createObjectURL(result.blob);
+    $('video-preview').hidden = false;
+    $('video-pickers').hidden = true;
+    $('video-hint').hidden = true;
+    setStatus('');
+  } catch (err) {
+    console.error(err);
+    setStatus("Cette vidéo n'a pas pu être préparée.");
+  } finally {
+    setBusy('');
+  }
+}
+
+$('video-from-camera').addEventListener('click', () => $('post-video-camera').click());
+$('video-from-gallery').addEventListener('click', () => $('post-video-gallery').click());
+$('post-video-camera').addEventListener('change', onVideoChosen);
+$('post-video-gallery').addEventListener('change', onVideoChosen);
 
 // ---------- Photo en grand ----------
 
@@ -695,152 +779,6 @@ function renderActivity() {
 
 setInterval(() => { if (session) renderActivity(); }, 60_000);
 
-// ---------- Être appelé(e) depuis la tablette (4 personnes au plus) ----------
-
-const MAX_CALLABLE = 4;
-let pendingFace = null;
-let currentMembers = [];
-
-function renderCallable(members) {
-  currentMembers = members;
-  const me = members.find((m) => m.id === session.uid) || {};
-  const others = members.filter((m) => m.callable && m.id !== session.uid).length;
-  if (!pendingFace) {
-    $('face-preview').hidden = !me.face;
-    $('face-empty').hidden = !!me.face;
-    if (me.face) $('face-preview').src = me.face;
-  }
-  if (!$('callable-name').value) $('callable-name').value = me.name || '';
-  $('btn-callable-remove').hidden = !me.callable;
-  const full = !me.callable && others >= MAX_CALLABLE;
-  $('btn-callable-save').disabled = full;
-  $('callable-help').textContent = full
-    ? `Déjà ${MAX_CALLABLE} personnes sur la tablette : il faut qu'une d'elles se retire avant.`
-    : `Ajoutez votre visage et votre prénom : ils apparaîtront sur la tablette (${others + (me.callable ? 1 : 0)}/${MAX_CALLABLE}), et un simple appui vous appellera.`;
-}
-
-async function onFaceChosen(e) {
-  const file = e.target.files && e.target.files[0];
-  e.target.value = '';
-  if (!file) return;
-  const img = await loadImage(file);
-  // Visage carré, petit : il est lu par la tablette à chaque démarrage.
-  const side = Math.min(img.naturalWidth, img.naturalHeight);
-  const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = 320;
-  canvas.getContext('2d').drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, 320, 320);
-  pendingFace = canvas.toDataURL('image/jpeg', 0.8);
-  $('face-preview').src = pendingFace;
-  $('face-preview').hidden = false;
-  $('face-empty').hidden = true;
-}
-$('face-camera').addEventListener('click', () => $('face-input-camera').click());
-$('face-gallery').addEventListener('click', () => $('face-input-gallery').click());
-$('face-input-camera').addEventListener('change', onFaceChosen);
-$('face-input-gallery').addEventListener('change', onFaceChosen);
-
-function callableStatus(text) {
-  $('callable-status').textContent = text;
-  $('callable-status').hidden = !text;
-}
-
-$('btn-callable-save').addEventListener('click', async () => {
-  const me = currentMembers.find((m) => m.id === session.uid) || {};
-  const face = pendingFace || me.face;
-  const name = $('callable-name').value.trim();
-  if (!face) { callableStatus('Ajoutez d\'abord une photo de votre visage.'); return; }
-  if (!name) { callableStatus('Indiquez votre prénom.'); return; }
-  try {
-    await updateDoc(doc(db, 'families', session.fid, 'members', session.uid), { callable: true, face, name });
-    session.member.name = name;
-    pendingFace = null;
-    callableStatus('Enregistré ✓ Vous apparaissez sur la tablette.');
-  } catch (err) {
-    console.error(err);
-    callableStatus("L'enregistrement a échoué. Vérifiez la connexion.");
-  }
-});
-
-$('btn-callable-remove').addEventListener('click', async () => {
-  await updateDoc(doc(db, 'families', session.fid, 'members', session.uid), { callable: false });
-  callableStatus('Vous n\'apparaissez plus sur la tablette.');
-});
-
-// ---------- Appel venant de la tablette ----------
-
-let incoming = null;
-let stopIncoming = null;
-let ringTimer = null;
-let audioCtx = null;
-
-function ringTone(on) {
-  clearInterval(ringTimer);
-  if (!on) return;
-  const beep = () => {
-    try {
-      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-      const t = audioCtx.currentTime;
-      [0, 0.4].forEach((d) => {
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.frequency.value = 880;
-        gain.gain.setValueAtTime(0.3, t + d);
-        gain.gain.exponentialRampToValueAtTime(0.0001, t + d + 0.3);
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.start(t + d);
-        osc.stop(t + d + 0.3);
-      });
-    } catch (e) { /* pas de son */ }
-  };
-  beep();
-  ringTimer = setInterval(beep, 2000);
-  if (navigator.vibrate) navigator.vibrate([400, 200, 400]);
-}
-
-function onIncoming(call) {
-  if (currentCall) return;
-  incoming = call;
-  $('incoming').hidden = !call;
-  ringTone(!!call);
-  if (!call) return;
-  $('incoming-name').textContent = `${call.callerName || session.family.name} vous appelle`;
-  const tablet = currentMembers.find((m) => m.role === 'tablette' && m.face);
-  $('incoming-face').hidden = !tablet;
-  if (tablet) $('incoming-face').src = tablet.face;
-}
-
-$('incoming-decline').addEventListener('click', async () => {
-  const call = incoming;
-  onIncoming(null);
-  if (call) await declineCall(session.fid, call).catch(() => {});
-});
-
-$('incoming-answer').addEventListener('click', async () => {
-  const call = incoming;
-  onIncoming(null);
-  if (!call) return;
-  $('call').hidden = false;
-  setCallStatus('Connexion…');
-  try {
-    currentCall = await answerCall(session.fid, call, {
-      local: $('call-local'),
-      remote: $('call-remote'),
-      onState: (state) => setCallStatus(state === 'connected' ? '' : 'Connexion…'),
-      onEnd: (reason) => {
-        currentCall = null;
-        setCallStatus(END_MESSAGES[reason] || 'Appel terminé');
-        setTimeout(() => { if (!currentCall) $('call').hidden = true; }, 2000);
-      },
-    });
-  } catch (err) {
-    console.error(err);
-    currentCall = null;
-    setCallStatus("Impossible d'accéder à la caméra ou au micro.");
-    setTimeout(() => { if (!currentCall) $('call').hidden = true; }, 4000);
-  }
-});
-
 // ---------- Onglets Messages / Agenda ----------
 
 document.querySelectorAll('.tab').forEach((tab) => {
@@ -869,8 +807,6 @@ async function start() {
   stopMembers = watchMembers(session.fid, renderMembers);
   history.replaceState(null, '', location.pathname);
   startAgenda(session);
-  stopIncoming?.();
-  stopIncoming = watchIncoming(session.fid, session.uid, onIncoming);
   renderInstallCard();
   show('view-app');
 }

@@ -81,9 +81,9 @@ service cloud.firestore {
       match /posts/{pid} {
         allow read: if isMember(fid);
         allow create: if isMember(fid)
-          && request.resource.data.keys().hasOnly(['type', 'text', 'image', 'thumb', 'hasMedia', 'audio', 'duration', 'replyTo', 'authorUid', 'authorName', 'createdAt', 'seenAt', 'hearts'])
+          && request.resource.data.keys().hasOnly(['type', 'text', 'image', 'thumb', 'hasMedia', 'audio', 'duration', 'chunks', 'mime', 'replyTo', 'authorUid', 'authorName', 'createdAt', 'seenAt', 'hearts'])
           && request.resource.data.authorUid == request.auth.uid
-          && request.resource.data.type in ['photo', 'message', 'voice', 'reply']
+          && request.resource.data.type in ['photo', 'message', 'voice', 'video', 'reply']
           && (!('audio' in request.resource.data) || request.resource.data.audio == null || request.resource.data.audio is string)
           && request.resource.data.text is string
           && request.resource.data.text.size() <= 2000
@@ -102,7 +102,7 @@ service cloud.firestore {
         match /media/{kind} {
           allow read: if isMember(fid);
           allow create: if isMember(fid)
-            && kind in ['image', 'audio']
+            && (kind in ['image', 'audio'] || kind.matches('video[0-9]+'))
             && request.resource.data.keys().hasOnly(['data'])
             && request.resource.data.data is string
             && getAfter(/databases/$(database)/documents/families/$(fid)/posts/$(pid)).data.authorUid == request.auth.uid;
