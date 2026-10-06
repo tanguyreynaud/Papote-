@@ -257,16 +257,12 @@
         label.textContent = 'Message vocal' + (p.duration ? ' (' + formatDuration(p.duration) + ')' : '');
         item.insertBefore(label, item.children[1] || null);
       }
-      var actions = document.createElement('div');
-      actions.className = 'message-actions';
-      if (p.audio) actions.appendChild(playButton(p, 'small-btn play'));
-      var replyBtn = document.createElement('button');
-      replyBtn.className = 'small-btn';
-      replyBtn.textContent = 'Répondre';
-      replyBtn.setAttribute('data-post', p.id);
-      on(replyBtn, 'click', function () { openReply(this.getAttribute('data-post')); });
-      actions.appendChild(replyBtn);
-      item.appendChild(actions);
+      if (p.audio) {
+        var actions = document.createElement('div');
+        actions.className = 'message-actions';
+        actions.appendChild(playButton(p, 'small-btn play'));
+        item.appendChild(actions);
+      }
       if (p.image) {
         var img = document.createElement('img');
         img.setAttribute('src', p.image);
@@ -424,24 +420,6 @@
     b.textContent = 'Écouter';
     on(b, 'click', function () { togglePlay(p, b); });
     return b;
-  }
-
-  // ---------- Réponses toutes faites ----------
-
-  var replyTo = null;
-
-  function openReply(postId) {
-    replyTo = postId || null;
-    show($('reply-panel'), true);
-  }
-
-  function sendReply(text) {
-    if (android()) android().reply(replyTo || '', text);
-    for (var i = 0; i < posts.length; i++) if (posts[i].id === replyTo) posts[i].seen = true;
-    show($('reply-panel'), false);
-    show($('reply-sent'), true);
-    setTimeout(function () { show($('reply-sent'), false); }, 2500);
-    replyTo = null;
   }
 
   // ---------- Rappels et agenda ----------
@@ -626,19 +604,6 @@
     on($('btn-agenda'), 'click', function () { renderAgenda(); showView('view-agenda'); });
     on($('reminder-done'), 'click', confirmReminder);
     on($('overlay-play'), 'click', function () { if (overlayPost) togglePlay(overlayPost, $('overlay-play')); });
-    on($('overlay-reply'), 'click', function () {
-      if (!overlayPost) return;
-      var id = overlayPost.id;
-      markSeen(overlayPost);
-      stopAudio();
-      nextOverlay();
-      openReply(id);
-    });
-    on($('reply-cancel'), 'click', function () { show($('reply-panel'), false); replyTo = null; });
-    var choices = document.querySelectorAll('.reply-choice');
-    for (var c = 0; c < choices.length; c++) {
-      on(choices[c], 'click', function () { sendReply(this.getAttribute('data-reply')); });
-    }
     on($('player'), 'ended', resetPlayUi);
 
     // Veille : on signale à l'app que Mamie utilise la tablette (au plus une fois par minute).
@@ -659,7 +624,7 @@
     });
     on($('overlay-heart'), 'click', function () {
       if (!overlayPost) return;
-      heart(overlayPost, $('overlay-heart'), 'Bisou');
+      heart(overlayPost, $('overlay-heart'), 'Envoyer un bisou');
       setTimeout(nextOverlay, 1200);
     });
 
