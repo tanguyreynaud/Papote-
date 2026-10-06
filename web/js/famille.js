@@ -114,7 +114,8 @@ function renderPreviews() {
   });
 }
 
-$('post-photos').addEventListener('change', async (e) => {
+// Même traitement pour une photo prise avec la caméra ou choisie dans la galerie.
+async function onPhotosChosen(e) {
   const files = Array.from(e.target.files || []);
   e.target.value = '';
   if (!files.length) return;
@@ -129,7 +130,10 @@ $('post-photos').addEventListener('change', async (e) => {
   }
   setBusy('');
   renderPreviews();
-});
+}
+
+$('post-photos').addEventListener('change', onPhotosChosen);
+$('post-camera').addEventListener('change', onPhotosChosen);
 
 // Bouton « Envoyer » transformé en indicateur de chargement pendant l'envoi.
 function setBusy(label) {
@@ -137,6 +141,7 @@ function setBusy(label) {
   btn.disabled = !!label;
   $('post-text').disabled = !!label;
   $('post-photos').disabled = !!label;
+  $('post-camera').disabled = !!label;
   $('form-post').classList.toggle('busy', !!label);
   btn.replaceChildren();
   if (label) {
@@ -345,6 +350,46 @@ function renderMembers(members) {
   }
 }
 
+// ---------- Ajouter à l'écran d'accueil ----------
+
+let installPrompt = null;
+const isInstalled = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+const isIos = () => /iphone|ipad|ipod/i.test(navigator.userAgent)
+  || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+// Chrome Android propose l'installation : on garde l'invitation pour notre bouton.
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  installPrompt = e;
+});
+window.addEventListener('appinstalled', () => { $('install-card').hidden = true; });
+
+function renderInstallCard() {
+  $('install-card').hidden = isInstalled();
+}
+
+$('btn-install').addEventListener('click', async () => {
+  if (installPrompt) {
+    installPrompt.prompt();
+    const { outcome } = await installPrompt.userChoice;
+    installPrompt = null;
+    if (outcome === 'accepted') $('install-card').hidden = true;
+    return;
+  }
+  const help = $('install-help');
+  help.hidden = false;
+  if (isIos()) {
+    help.innerHTML = '<p>Sur iPhone, il faut passer par Safari :</p><ol>'
+      + '<li>Touchez le bouton <strong>Partager</strong> (le carré avec une flèche vers le haut) en bas de l\'écran</li>'
+      + '<li>Choisissez <strong>« Sur l\'écran d\'accueil »</strong></li>'
+      + '<li>Touchez <strong>Ajouter</strong></li></ol>'
+      + '<p class="small muted">Au premier lancement, entrez à nouveau le code famille.</p>';
+  } else {
+    help.innerHTML = '<p>Dans Chrome, touchez le menu <strong>⋮</strong> en haut à droite, '
+      + 'puis <strong>« Ajouter à l\'écran d\'accueil »</strong> ou <strong>« Installer l\'application »</strong>.</p>';
+  }
+});
+
 // ---------- Démarrage ----------
 
 async function start() {
@@ -362,6 +407,7 @@ async function start() {
   stopFeed = watchPosts(session.fid, 30, renderFeed);
   stopMembers = watchMembers(session.fid, renderMembers);
   history.replaceState(null, '', location.pathname);
+  renderInstallCard();
   show('view-app');
 }
 

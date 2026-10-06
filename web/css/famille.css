@@ -107,8 +107,33 @@ button:disabled { opacity: .5; }
 .wide { width: 100%; margin-top: 8px; }
 
 .composer textarea { margin-top: 0; }
-.composer-actions { display: flex; gap: 10px; justify-content: space-between; margin-top: 10px; }
-.composer-actions .primary { flex: 1; }
+.composer-actions { display: flex; gap: 10px; margin-top: 10px; }
+/* Caméra, Galerie et Envoyer : trois boutons identiques. */
+.action-btn, label.action-btn {
+  flex: 1;
+  height: 52px;
+  margin: 0;
+  padding: 0 8px;
+  white-space: nowrap;
+  font-size: 16px;
+  border-radius: 12px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-family: inherit;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-align: center;
+  cursor: pointer;
+  border: none;
+}
+.action-btn:has(input:disabled), .action-btn:disabled { opacity: .6; }
+.install-card p { margin: 0 0 12px; }
+.install-help { margin-top: 12px; }
+.install-help ol { margin: 8px 0; padding-left: 22px; }
+.install-help li { margin: 6px 0; }
 
 .previews { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .preview { position: relative; }

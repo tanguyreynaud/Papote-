@@ -60,16 +60,25 @@
 
     <!-- Dans une famille -->
     <section id="view-app" hidden>
+      <div id="install-card" class="card install-card" hidden>
+        <p><strong>Installez Papote sur votre écran d'accueil</strong> pour l'ouvrir comme une app.</p>
+        <button id="btn-install" class="action-btn wide">📲 Ajouter à l'écran d'accueil</button>
+        <div id="install-help" class="install-help" hidden></div>
+      </div>
       <button id="btn-call" class="primary call-btn wide" hidden>📞 Appeler en vidéo</button>
       <form id="form-post" class="card composer">
         <textarea id="post-text" rows="3" maxlength="2000" placeholder="Écrire un message…"></textarea>
         <div id="previews" class="previews"></div>
         <div class="composer-actions">
-          <label class="button secondary">
-            📷 Photos
+          <label class="action-btn" id="btn-camera">
+            📷 Caméra
+            <input id="post-camera" type="file" accept="image/*" capture="environment" hidden>
+          </label>
+          <label class="action-btn" id="btn-gallery">
+            🖼️ Galerie
             <input id="post-photos" type="file" accept="image/*" multiple hidden>
           </label>
-          <button type="submit" class="primary" id="btn-send">Envoyer</button>
+          <button type="submit" class="action-btn" id="btn-send">Envoyer</button>
         </div>
         <p id="post-status" class="muted small" hidden></p>
       </form>
