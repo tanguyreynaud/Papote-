@@ -298,14 +298,33 @@
   // ---------- Fenêtre « nouveau » ----------
 
   function queueUnseen() {
+    var newestPhoto = null;
     for (var i = posts.length - 1; i >= 0; i--) {
       var p = posts[i];
       // Une photo n'est montrée que lorsqu'elle est téléchargée.
       if (p.seen || shownInOverlay[p.id] || (p.type === 'photo' && !p.image) || (p.type === 'voice' && !p.audio)) continue;
       shownInOverlay[p.id] = true;
-      overlayQueue.push(p);
+      if (p.image) newestPhoto = p; else overlayQueue.push(p);
+    }
+    // Une nouvelle photo remplace tout de suite ce qui est affiché, et reste en grand
+    // jusqu'à ce que Mamie réponde (bisou ou OK), qu'une autre photo arrive ou qu'on l'appelle.
+    if (newestPhoto) {
+      if (overlayPost) markSeen(overlayPost);
+      overlayQueue.unshift(newestPhoto);
+      stopAudio();
+      nextOverlay();
+      return;
     }
     if (!overlayPost) nextOverlay();
+  }
+
+  // Un appel arrive : on ferme la photo ou le message affiché.
+  function closeOverlayForCall() {
+    if (!overlayPost) return;
+    markSeen(overlayPost);
+    stopAudio();
+    overlayQueue = [];
+    nextOverlay();
   }
 
   function nextOverlay() {
@@ -325,6 +344,8 @@
     if (p.image) $('overlay-img').setAttribute('src', p.image);
     show($('overlay-text'), !!p.text);
     $('overlay-text').textContent = p.text || '';
+    // Photo : en plein écran, légende et boutons par-dessus.
+    if (p.image) $('overlay').classList.add('photo-mode'); else $('overlay').classList.remove('photo-mode');
     show($('overlay'), true);
     // Le son est joué par l'app Android (son de notification de la tablette).
   }
@@ -579,7 +600,8 @@
   window.Papote = {
     onStatus: onStatus, onPosts: onPosts, onWeather: onWeather, onReminders: onReminders,
     onVoiceEnded: function () { resetPlayUi(); },
-    onLeave: function () { if (window.papoteAppelsLeave) window.papoteAppelsLeave(); }
+    onLeave: function () { if (window.papoteAppelsLeave) window.papoteAppelsLeave(); },
+    closeOverlayForCall: closeOverlayForCall
   };
 
   // ---------- Événements ----------

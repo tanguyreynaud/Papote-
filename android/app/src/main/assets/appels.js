@@ -71,6 +71,7 @@ async function joinFamily() {
 
 function showRing(id, data) {
   ringing = { id, data };
+  if (window.Papote && window.Papote.closeOverlayForCall) window.Papote.closeOverlayForCall();
   $('ring-name').textContent = `${data.callerName} vous appelle`;
   $('call-ring').hidden = false;
   if (android()) android().ring(true);
