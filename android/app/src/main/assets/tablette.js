@@ -95,6 +95,63 @@
     return n <= 50 ? 'size-l' : n <= 110 ? 'size-m' : 'size-s';
   }
 
+  // ---------- Météo ----------
+
+  function sun(cx, cy, r) {
+    var rays = '';
+    for (var i = 0; i < 8; i++) {
+      var a = i * Math.PI / 4;
+      rays += '<line x1="' + (cx + Math.cos(a) * (r + 4)) + '" y1="' + (cy + Math.sin(a) * (r + 4)) +
+        '" x2="' + (cx + Math.cos(a) * (r + 9)) + '" y2="' + (cy + Math.sin(a) * (r + 9)) + '"/>';
+    }
+    return '<g stroke="#f59e0b" stroke-width="3.5" stroke-linecap="round">' + rays + '</g>' +
+      '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="#fbbf24"/>';
+  }
+  var CLOUD = '<path fill="#cbd5e1" stroke="#94a3b8" stroke-width="2" d="M20 58h40a12 12 0 0 0 0-24 18 18 0 0 0-34-4A13 13 0 0 0 20 58z"/>';
+  var MOON = '<path fill="#fde68a" d="M44 10a24 24 0 1 0 22 33A20 20 0 0 1 44 10z"/>';
+  var DROPS = '<g stroke="#3b82f6" stroke-width="4" stroke-linecap="round"><line x1="28" y1="64" x2="24" y2="74"/><line x1="42" y1="64" x2="38" y2="74"/><line x1="56" y1="64" x2="52" y2="74"/></g>';
+  var SNOW = '<g fill="#93c5fd"><circle cx="26" cy="68" r="3.5"/><circle cx="40" cy="72" r="3.5"/><circle cx="54" cy="68" r="3.5"/></g>';
+  var BOLT = '<path fill="#facc15" d="M42 56 32 72h9l-4 10 14-18h-9l4-8z"/>';
+  var FOG = '<g stroke="#94a3b8" stroke-width="4" stroke-linecap="round"><line x1="12" y1="40" x2="68" y2="40"/><line x1="18" y1="52" x2="62" y2="52"/><line x1="12" y1="64" x2="68" y2="64"/></g>';
+
+  var WEATHER = {
+    0: ['clear', 'Grand soleil'], 1: ['partly', 'Plutôt ensoleillé'], 2: ['partly', 'Quelques nuages'],
+    3: ['cloudy', 'Couvert'], 45: ['fog', 'Brouillard'], 48: ['fog', 'Brouillard givrant'],
+    51: ['rain', 'Bruine'], 53: ['rain', 'Bruine'], 55: ['rain', 'Forte bruine'], 56: ['rain', 'Bruine verglaçante'],
+    57: ['rain', 'Bruine verglaçante'], 61: ['rain', 'Petite pluie'], 63: ['rain', 'Pluie'], 65: ['rain', 'Forte pluie'],
+    66: ['rain', 'Pluie verglaçante'], 67: ['rain', 'Pluie verglaçante'], 71: ['snow', 'Un peu de neige'],
+    73: ['snow', 'Neige'], 75: ['snow', 'Forte neige'], 77: ['snow', 'Neige'], 80: ['rain', 'Averses'],
+    81: ['rain', 'Averses'], 82: ['storm', 'Fortes averses'], 85: ['snow', 'Averses de neige'],
+    86: ['snow', 'Averses de neige'], 95: ['storm', 'Orage'], 96: ['storm', 'Orage'], 99: ['storm', 'Orage']
+  };
+
+  function weatherSvg(kind, isDay) {
+    var body = {
+      clear: isDay ? sun(40, 40, 15) : MOON,
+      partly: (isDay ? sun(30, 28, 11) : '<g transform="translate(-8,-8) scale(.8)">' + MOON + '</g>') + CLOUD,
+      cloudy: CLOUD, fog: FOG, rain: CLOUD + DROPS, snow: CLOUD + SNOW, storm: CLOUD + BOLT
+    }[kind] || CLOUD;
+    return '<svg viewBox="0 0 80 80">' + body + '</svg>';
+  }
+
+  function onWeather(data) {
+    try {
+      var now = WEATHER[data.current.weather_code] || ['cloudy', ''];
+      var isDay = data.current.is_day;
+      var label = now[1];
+      if (!isDay && data.current.weather_code === 0) label = 'Ciel dégagé';
+      $('weather-icon').innerHTML = weatherSvg(now[0], isDay);
+      $('weather-temp').textContent = Math.round(data.current.temperature_2m) + '°';
+      var tomorrow = WEATHER[data.daily.weather_code[1]] || ['cloudy', ''];
+      $('weather-label').innerHTML = '';
+      $('weather-label').appendChild(document.createTextNode(label));
+      var small = document.createElement('small');
+      small.textContent = 'Demain : ' + tomorrow[1].toLowerCase() + ', ' + Math.round(data.daily.temperature_2m_max[1]) + '°';
+      $('weather-label').appendChild(small);
+      show($('weather'), true);
+    } catch (e) { /* données incomplètes : on garde l'affichage précédent */ }
+  }
+
   // ---------- Accueil : cadre photo et compteurs ----------
 
   function renderFrame() {
@@ -107,6 +164,31 @@
     var p = photos[frameIndex];
     if ($('frame-img').getAttribute('src') !== p.image) $('frame-img').setAttribute('src', p.image);
     $('frame-caption').textContent = 'De ' + p.authorName;
+  }
+
+  // Fond flouté : la photo est réduite à quelques pixels puis agrandie (le flou CSS
+  // n'existe pas sur Android 4.4).
+  var backdropSrc = null;
+  function setBackdrops() {
+    var url = photos.length ? photos[0].image : '';
+    if (url === backdropSrc) return;
+    backdropSrc = url;
+    var apply = function (bg) {
+      var els = document.querySelectorAll('.ov-backdrop');
+      for (var i = 0; i < els.length; i++) els[i].style.backgroundImage = bg;
+    };
+    if (!url) { apply('none'); return; }
+    var img = new Image();
+    img.onload = function () {
+      try {
+        var c = document.createElement('canvas');
+        c.width = 24;
+        c.height = Math.max(1, Math.round(24 * img.height / img.width));
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        apply('url("' + c.toDataURL('image/jpeg', 0.8) + '")');
+      } catch (e) { apply('none'); }
+    };
+    img.src = url;
   }
 
   function setBadge(id, n) {
@@ -253,12 +335,12 @@
     var mode = p.image ? 'photo' : p.type === 'voice' ? 'voice' : p.type === 'video' ? 'video' : 'message';
     var media = mode === 'voice' || mode === 'video';
     $('overlay').className = 'overlay mode-' + mode;
-    $('overlay-kind').textContent = { photo: 'Nouvelle photo', voice: 'Message vocal', video: 'Vidéo', message: 'Nouveau message' }[mode];
-    $('overlay-from').textContent = 'De ' + p.authorName;
+    // Une seule phrase claire, au centre : « Message de Julie », « Vidéo de Julie »…
+    $('overlay-from').textContent = { photo: 'Photo de ', voice: 'Message vocal de ', video: 'Vidéo de ', message: 'Message de ' }[mode] + p.authorName;
     show($('overlay-img'), mode === 'photo');
     if (mode === 'photo') $('overlay-img').setAttribute('src', p.image);
     // Message : le texte sur une grande carte ; photo ou vidéo : la légende.
-    show($('overlay-card'), mode === 'message');
+    show($('overlay-text'), mode === 'message');
     $('overlay-text').textContent = mode === 'message' ? p.text : '';
     $('overlay-text').className = 'ov-text ' + sizeClass(p.text);
     show($('overlay-caption'), mode !== 'message' && !!p.text);
@@ -315,6 +397,7 @@
       if (posts[j].image) photos.push(posts[j]);
     }
     if (isShown('view-setup')) showView('view-home');
+    setBackdrops();
     renderFrame();
     renderBadges();
     if (isShown('view-photos')) {
@@ -443,7 +526,7 @@
   window.Papote = {
     onStatus: onStatus,
     onPosts: onPosts,
-    onWeather: function () { /* météo retirée de l'écran */ },
+    onWeather: onWeather,
     onReminders: onReminders,
     onVoiceEnded: voiceEnded,
     onLeave: function () { if (window.papoteAppelsLeave) window.papoteAppelsLeave(); },

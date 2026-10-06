@@ -241,141 +241,6 @@ button {
 .bottom-bar .big-btn { -webkit-flex: 1; flex: 1; }
 .bottom-bar .big-btn + .big-btn { margin-left: 3vmin; }
 
-/* ---------- Messages ---------- */
-
-.view-title { margin: 0 0 2vmin; font-size: 8vmin; }
-.message-list {
-  -webkit-flex: 1;
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-}
-.message {
-  background: #fff;
-  border-radius: 4vmin;
-  padding: 3.5vmin 4vmin;
-  margin-bottom: 3vmin;
-  border-left: 2vmin solid #c2410c;
-  box-shadow: 0 0.5vmin 2vmin rgba(0, 0, 0, .08);
-}
-.message.voice { border-left-color: #6d28d9; }
-.message.unseen { background: #fff7ed; }
-.message-head { margin: 0 0 1.5vmin; font-size: 4.5vmin; color: #78716c; font-weight: bold; }
-.message-body { margin: 0; font-size: 7vmin; line-height: 1.3; white-space: pre-wrap; }
-.voice-label { margin: 0; font-size: 6vmin; font-weight: bold; color: #6d28d9; }
-.message-actions { display: -webkit-flex; display: flex; margin-top: 2.5vmin; }
-.message img { margin-top: 2.5vmin; max-width: 100%; max-height: 50vh; border-radius: 3vmin; display: block; }
-.small-btn {
-  padding: 2.5vmin 5vmin;
-  border-radius: 3vmin;
-  font-size: 5.5vmin;
-  font-weight: bold;
-  color: #fff;
-  background: #6d28d9;
-}
-.small-btn .icon { margin-right: 1.5vmin; }
-.small-btn.playing { background: #b91c1c; }
-.empty { -webkit-flex: 1; flex: 1; font-size: 6vmin; color: #78716c; text-align: center; padding-top: 10vmin; }
-
-/* ---------- Plein écran : nouvel envoi et rappels ---------- */
-
-.overlay {
-  position: fixed;
-  top: 0; right: 0; bottom: 0; left: 0;
-  z-index: 10;
-  display: -webkit-flex;
-  display: flex;
-  -webkit-flex-direction: column;
-  flex-direction: column;
-  padding: 5vmin 6vmin;
-  background: #c2410c;
-  background: -webkit-linear-gradient(top, #ea580c, #9a3412);
-  background: linear-gradient(to bottom, #ea580c, #9a3412);
-  color: #fff;
-}
-.overlay.mode-voice {
-  background: #6d28d9;
-  background: -webkit-linear-gradient(top, #7c3aed, #4c1d95);
-  background: linear-gradient(to bottom, #7c3aed, #4c1d95);
-}
-.overlay.mode-photo { background: #000; }
-.overlay.reminder {
-  z-index: 20;
-  background: #0f766e;
-  background: -webkit-linear-gradient(top, #0d9488, #115e59);
-  background: linear-gradient(to bottom, #0d9488, #115e59);
-}
-
-.ov-img {
-  position: absolute;
-  top: 0; left: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
-.ov-top, .ov-center, .ov-actions { position: relative; z-index: 1; }
-.ov-kind { margin: 0; font-size: 5vmin; font-weight: bold; text-transform: uppercase; letter-spacing: .08em; opacity: .85; }
-.ov-from { margin: 0.5vmin 0 0; font-size: 9vmin; font-weight: bold; }
-
-.ov-center {
-  -webkit-flex: 1;
-  flex: 1;
-  min-height: 0;
-  display: -webkit-flex;
-  display: flex;
-  -webkit-flex-direction: column;
-  flex-direction: column;
-  -webkit-align-items: center;
-  align-items: center;
-  -webkit-justify-content: center;
-  justify-content: center;
-  text-align: center;
-}
-.ov-text { margin: 0; line-height: 1.25; font-weight: bold; white-space: pre-wrap; }
-/* Taille du texte selon sa longueur : il doit toujours tenir sans faire défiler. */
-.ov-text.size-l { font-size: 11vmin; }
-.ov-text.size-m { font-size: 8.5vmin; }
-.ov-text.size-s { font-size: 6.5vmin; }
-
-.ov-play {
-  display: -webkit-flex;
-  display: flex;
-  -webkit-align-items: center;
-  align-items: center;
-  -webkit-justify-content: center;
-  justify-content: center;
-  min-width: 70vmin;
-  min-height: 30vmin;
-  padding: 4vmin 8vmin;
-  border-radius: 15vmin;
-  background: #fff;
-  color: #6d28d9;
-  font-size: 11vmin;
-  font-weight: bold;
-  box-shadow: 0 2vmin 5vmin rgba(0, 0, 0, .3);
-}
-.ov-play .icon { margin-right: 3vmin; }
-.ov-play.playing { background: #ede9fe; }
-
-.ov-actions { display: -webkit-flex; display: flex; }
-.ov-actions .big-btn { -webkit-flex: 1; flex: 1; min-height: 18vmin; font-size: 7vmin; }
-.ov-actions .big-btn + .big-btn { margin-left: 3vmin; }
-
-/* Photo : légende et boutons par-dessus l'image */
-.overlay.mode-photo .ov-top {
-  margin: -5vmin -6vmin 0;
-  padding: 4vmin 6vmin 10vmin;
-  background: -webkit-linear-gradient(top, rgba(0, 0, 0, .75), rgba(0, 0, 0, 0));
-  background: linear-gradient(to bottom, rgba(0, 0, 0, .75), rgba(0, 0, 0, 0));
-}
-.overlay.mode-photo .ov-center { -webkit-justify-content: flex-end; justify-content: flex-end; padding-bottom: 3vmin; }
-.overlay.mode-photo .ov-text { font-size: 7vmin; text-shadow: 0 0.4vmin 1.5vmin rgba(0, 0, 0, .95); }
-
-.reminder-icon { margin: 0 0 2vmin; }
-.reminder-icon .icon { width: 22vmin; height: 22vmin; }
-.reminder-time { margin: 2vmin 0 0; font-size: 7vmin; font-weight: bold; opacity: .9; }
-
 /* ---------- Appels vidéo (tablettes Android 5 et plus) ---------- */
 
 .call-ring {
@@ -487,82 +352,171 @@ body.night .big-btn.messages { background: #9a3412; }
 /* Rappel : « Dans 15 minutes » / « C'est l'heure ! » bien visible */
 .overlay.reminder .ov-kind { font-size: 9vmin; text-transform: none; letter-spacing: 0; opacity: 1; }
 
-/* ---------- Écrans dédiés (message, vocal, vidéo, appel) : fond décoré ---------- */
+/* ---------- Écrans d'un nouvel envoi, des rappels et des appels ----------
+ * Fond : la dernière photo de la famille, floutée et assombrie (ou un dégradé doux),
+ * et au centre une grande carte claire, très lisible. Boutons : texte seul, centré.
+ */
 
 .overlay, .call-ring {
-  background-repeat: repeat, no-repeat;
-  background-size: 34vmin 34vmin, 100% 100%;
+  position: fixed;
+  top: 0; right: 0; bottom: 0; left: 0;
+  z-index: 10;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-flex-direction: column;
+  flex-direction: column;
+  -webkit-align-items: center;
+  align-items: center;
+  -webkit-justify-content: center;
+  justify-content: center;
+  padding: 5vmin 7vmin;
+  overflow: hidden;
+  background: #3f3a36;
+  background: -webkit-linear-gradient(top, #57534e, #292524);
+  background: linear-gradient(to bottom, #57534e, #292524);
+  color: #22201d;
 }
-.overlay.mode-message {
-  background-color: #c2410c;
-  background-image:
-    url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cg fill='%23ffffff' fill-opacity='0.09'%3E%3Ccircle cx='22' cy='24' r='14'/%3E%3Ccircle cx='112' cy='66' r='26'/%3E%3Ccircle cx='58' cy='132' r='9'/%3E%3Cpath d='M132 124c-6-7-17 1-10 9l10 11 10-11c7-8-4-16-10-9z'/%3E%3C/g%3E%3C/svg%3E"),
-    -webkit-linear-gradient(top left, #fb923c, #c2410c 55%, #9a3412);
-  background-image:
-    url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cg fill='%23ffffff' fill-opacity='0.09'%3E%3Ccircle cx='22' cy='24' r='14'/%3E%3Ccircle cx='112' cy='66' r='26'/%3E%3Ccircle cx='58' cy='132' r='9'/%3E%3Cpath d='M132 124c-6-7-17 1-10 9l10 11 10-11c7-8-4-16-10-9z'/%3E%3C/g%3E%3C/svg%3E"),
-    linear-gradient(135deg, #fb923c, #c2410c 55%, #9a3412);
+.overlay.reminder { z-index: 20; }
+.call-ring { z-index: 30; }
+
+.ov-backdrop {
+  position: absolute;
+  top: -6vmin; right: -6vmin; bottom: -6vmin; left: -6vmin;
+  background-size: cover;
+  background-position: center;
 }
-.overlay.mode-voice {
-  background-color: #6d28d9;
-  background-image:
-    url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cg fill='none' stroke='%23ffffff' stroke-opacity='0.12' stroke-width='4' stroke-linecap='round'%3E%3Cpath d='M20 70v20M34 55v50M48 64v32M62 46v68M76 60v40'/%3E%3Ccircle cx='122' cy='122' r='18'/%3E%3Ccircle cx='122' cy='30' r='8'/%3E%3C/g%3E%3C/svg%3E"),
-    -webkit-linear-gradient(top left, #a78bfa, #6d28d9 55%, #4c1d95);
-  background-image:
-    url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cg fill='none' stroke='%23ffffff' stroke-opacity='0.12' stroke-width='4' stroke-linecap='round'%3E%3Cpath d='M20 70v20M34 55v50M48 64v32M62 46v68M76 60v40'/%3E%3Ccircle cx='122' cy='122' r='18'/%3E%3Ccircle cx='122' cy='30' r='8'/%3E%3C/g%3E%3C/svg%3E"),
-    linear-gradient(135deg, #a78bfa, #6d28d9 55%, #4c1d95);
-}
-.overlay.mode-video {
-  background-color: #1d4ed8;
-  background-image:
-    url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cg fill='%23ffffff' fill-opacity='0.09'%3E%3Cpath d='M20 30h50v34H20zM76 40l18-10v34L76 54z'/%3E%3Ccircle cx='118' cy='118' r='22'/%3E%3Ccircle cx='40' cy='128' r='8'/%3E%3C/g%3E%3C/svg%3E"),
-    -webkit-linear-gradient(top left, #60a5fa, #1d4ed8 55%, #1e3a8a);
-  background-image:
-    url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cg fill='%23ffffff' fill-opacity='0.09'%3E%3Cpath d='M20 30h50v34H20zM76 40l18-10v34L76 54z'/%3E%3Ccircle cx='118' cy='118' r='22'/%3E%3Ccircle cx='40' cy='128' r='8'/%3E%3C/g%3E%3C/svg%3E"),
-    linear-gradient(135deg, #60a5fa, #1d4ed8 55%, #1e3a8a);
-}
-.call-ring {
-  background-color: #15803d;
-  background-image:
-    url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cg fill='none' stroke='%23ffffff' stroke-opacity='0.12' stroke-width='5'%3E%3Ccircle cx='80' cy='80' r='20'/%3E%3Ccircle cx='80' cy='80' r='42'/%3E%3Ccircle cx='80' cy='80' r='64'/%3E%3C/g%3E%3C/svg%3E"),
-    -webkit-linear-gradient(top left, #4ade80, #15803d 55%, #14532d);
-  background-image:
-    url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cg fill='none' stroke='%23ffffff' stroke-opacity='0.12' stroke-width='5'%3E%3Ccircle cx='80' cy='80' r='20'/%3E%3Ccircle cx='80' cy='80' r='42'/%3E%3Ccircle cx='80' cy='80' r='64'/%3E%3C/g%3E%3C/svg%3E"),
-    linear-gradient(135deg, #4ade80, #15803d 55%, #14532d);
+/* Voile sombre pour que la carte claire ressorte */
+.ov-backdrop:after {
+  content: '';
+  position: absolute;
+  top: 0; right: 0; bottom: 0; left: 0;
+  background: rgba(20, 16, 12, .45);
 }
 
-.ov-pill {
-  display: inline-block;
-  padding: 1.2vmin 3.5vmin;
-  border-radius: 6vmin;
-  background: rgba(255, 255, 255, .22);
-  font-size: 4.5vmin;
-  font-weight: bold;
-  text-transform: uppercase;
-  letter-spacing: .06em;
-}
-.ov-from { margin: 2vmin 0 0; font-size: 10vmin; }
-
-/* Le texte d'un message sur une grande carte blanche, facile à lire */
 .ov-card {
-  max-width: 92%;
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 150vmin;
+  -webkit-flex: 1;
+  flex: 1;
+  min-height: 0;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-flex-direction: column;
+  flex-direction: column;
+  -webkit-align-items: center;
+  align-items: center;
+  -webkit-justify-content: center;
+  justify-content: center;
   padding: 5vmin 7vmin;
   border-radius: 6vmin;
   background: #fffaf3;
-  color: #22201d;
-  box-shadow: 0 2vmin 6vmin rgba(0, 0, 0, .25);
+  text-align: center;
+  box-shadow: 0 2vmin 8vmin rgba(0, 0, 0, .35);
 }
-.ov-card .ov-text { text-align: center; }
+.ov-from { margin: 0 0 4vmin; font-size: 7vmin; font-weight: bold; color: #57534e; }
+.ov-text { margin: 0; line-height: 1.25; font-weight: bold; white-space: pre-wrap; color: #22201d; }
+.ov-text.size-l { font-size: 11vmin; }
+.ov-text.size-m { font-size: 8.5vmin; }
+.ov-text.size-s { font-size: 6.5vmin; }
 .ov-caption {
-  margin: 0;
-  font-size: 7vmin;
+  position: relative;
+  z-index: 1;
+  margin: 3vmin 0 0;
+  padding: 1.5vmin 4vmin;
+  border-radius: 3vmin;
+  background: rgba(0, 0, 0, .55);
+  color: #fff;
+  font-size: 6vmin;
   font-weight: bold;
   text-align: center;
-  text-shadow: 0 0.4vmin 1.5vmin rgba(0, 0, 0, .95);
 }
-.overlay.mode-video .ov-play { color: #1d4ed8; }
-.overlay.mode-photo .ov-center { -webkit-justify-content: flex-end; justify-content: flex-end; padding-bottom: 3vmin; }
+
+.ov-play {
+  min-width: 70vmin;
+  min-height: 26vmin;
+  padding: 3vmin 8vmin;
+  border-radius: 13vmin;
+  background: #c2410c;
+  color: #fff;
+  font-size: 10vmin;
+  font-weight: bold;
+  text-align: center;
+  box-shadow: 0 1.5vmin 4vmin rgba(0, 0, 0, .25);
+}
+.ov-play .icon { display: none; }
+.ov-play.playing { background: #a8a29e; }
+.overlay.mode-voice .ov-play { background: #6d28d9; }
+.overlay.mode-video .ov-play { background: #1d4ed8; }
+
+.ov-actions {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 150vmin;
+  display: -webkit-flex;
+  display: flex;
+  margin-top: 4vmin;
+}
+.ov-actions .big-btn, .bottom-bar .big-btn, .ring-actions .ring-btn {
+  -webkit-flex: 1;
+  flex: 1;
+  min-height: 18vmin;
+  padding: 2vmin 3vmin;
+  font-size: 7vmin;
+  text-align: center;
+  white-space: nowrap;
+}
+.ov-actions .big-btn + .big-btn { margin-left: 3vmin; }
+/* Pas d'icône dans les boutons d'action : un seul mot, bien lisible. */
+.ov-actions .icon, .bottom-bar .icon { display: none; }
+.big-btn.replay { background: #57534e; }
+
+/* Photo : en plein écran sur fond noir, prénom en haut, légende et boutons en bas */
+.overlay.mode-photo { background: #000; -webkit-justify-content: flex-end; justify-content: flex-end; }
+.overlay.mode-photo .ov-card {
+  -webkit-flex: none;
+  flex: none;
+  width: auto;
+  background: rgba(0, 0, 0, .55);
+  box-shadow: none;
+  padding: 2.5vmin 5vmin;
+  margin-bottom: auto;
+}
+.overlay.mode-photo .ov-from { margin: 0; color: #fff; }
+
+.ov-img {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* Rappels */
+.reminder-icon { margin: 0 0 2vmin; color: #0f766e; }
+.reminder-icon .icon { width: 16vmin; height: 16vmin; }
+.reminder-when { margin: 0 0 3vmin; font-size: 9vmin; font-weight: bold; color: #0f766e; }
+.reminder-time { margin: 3vmin 0 0; font-size: 7vmin; font-weight: bold; color: #57534e; }
+
+/* Appel entrant */
+.ring-name { margin: 0; font-size: 10vmin; font-weight: bold; color: #22201d; }
+.ring-actions { position: relative; z-index: 1; width: 100%; max-width: 150vmin; display: -webkit-flex; display: flex; margin-top: 4vmin; }
+.ring-actions .ring-btn { margin: 0; border-radius: 4vmin; min-height: 20vmin; }
+.ring-actions .ring-btn + .ring-btn { margin-left: 3vmin; }
 
 /* Vidéo jouée par Android par-dessus l'écran */
 body.video-playing .overlay { visibility: hidden; }
+
+/* ---------- Météo (accueil) ---------- */
+
+.weather { display: -webkit-flex; display: flex; -webkit-align-items: center; align-items: center; margin-top: 3vmin; }
+.weather-icon { width: 13vmin; height: 13vmin; margin-right: 2.5vmin; }
+.weather-icon svg { width: 100%; height: 100%; display: block; }
+.weather-temp { font-size: 11vmin; font-weight: bold; margin-right: 3vmin; }
+.weather-label { font-size: 5.5vmin; font-weight: bold; color: #57534e; line-height: 1.2; }
+.weather-label small { display: block; font-size: 4.2vmin; font-weight: normal; color: #78716c; }
+body.night .weather-label { color: #a8998d; }
 
 .home-buttons .big-btn { font-size: 7.5vmin; min-height: 20vmin; }

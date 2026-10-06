@@ -13,6 +13,11 @@
       <div class="home-time">
         <p id="clock" class="clock">--:--</p>
         <p id="date" class="date"></p>
+        <div id="weather" class="weather" hidden>
+          <span id="weather-icon" class="weather-icon"></span>
+          <span id="weather-temp" class="weather-temp"></span>
+          <span id="weather-label" class="weather-label"></span>
+        </div>
       </div>
       <div class="home-buttons">
         <button id="btn-photos" class="big-btn photos">
@@ -38,38 +43,33 @@
       <p id="photo-caption" class="photo-caption"></p>
     </div>
     <div class="bottom-bar">
-      <button id="photo-heart" class="big-btn heart"><span class="icon" data-icon="heart"></span><span class="label">Envoyer un bisou</span></button>
+      <button id="photo-heart" class="big-btn heart"><span class="label">Envoyer un bisou</span></button>
       <button class="big-btn home-btn" data-home="1">Accueil</button>
     </div>
   </section>
 
   <!-- Écran d'un nouvel envoi : photo, message, message vocal ou vidéo (un à la fois) -->
   <div id="overlay" class="overlay" hidden>
+    <div class="ov-backdrop"></div>
     <img id="overlay-img" class="ov-img" alt="" hidden>
-    <div class="ov-top">
-      <span id="overlay-kind" class="ov-pill"></span>
+    <div class="ov-card">
       <p id="overlay-from" class="ov-from"></p>
-    </div>
-    <div class="ov-center">
-      <div id="overlay-card" class="ov-card" hidden>
-        <p id="overlay-text" class="ov-text"></p>
-      </div>
-      <p id="overlay-caption" class="ov-caption" hidden></p>
+      <p id="overlay-text" class="ov-text" hidden></p>
       <button id="overlay-play" class="ov-play" hidden><span class="icon" data-icon="play"></span><span class="label">Écouter</span></button>
     </div>
+    <p id="overlay-caption" class="ov-caption" hidden></p>
     <div id="overlay-actions" class="ov-actions">
-      <button id="overlay-replay" class="big-btn replay" hidden><span class="icon" data-icon="play"></span><span class="label">Réécouter</span></button>
-      <button id="overlay-heart" class="big-btn heart"><span class="icon" data-icon="heart"></span><span class="label">Envoyer un bisou</span></button>
+      <button id="overlay-replay" class="big-btn replay" hidden><span class="label">Réécouter</span></button>
+      <button id="overlay-heart" class="big-btn heart"><span class="label">Envoyer un bisou</span></button>
       <button id="overlay-close" class="big-btn ok">OK</button>
     </div>
   </div>
 
   <!-- Rappel : un peu avant, puis à l'heure -->
   <div id="reminder-alert" class="overlay reminder" hidden>
-    <div class="ov-top">
-      <p id="reminder-when" class="ov-kind"></p>
-    </div>
-    <div class="ov-center">
+    <div class="ov-backdrop"></div>
+    <div class="ov-card">
+      <p id="reminder-when" class="reminder-when"></p>
       <p id="reminder-icon" class="reminder-icon"></p>
       <p id="reminder-title" class="ov-text size-m"></p>
       <p id="reminder-time" class="reminder-time"></p>
@@ -81,7 +81,10 @@
 
   <!-- Appel entrant -->
   <div id="call-ring" class="call-ring" hidden>
-    <p id="ring-name" class="ring-name"></p>
+    <div class="ov-backdrop"></div>
+    <div class="ov-card">
+      <p id="ring-name" class="ring-name"></p>
+    </div>
     <div class="ring-actions">
       <button id="ring-decline" class="ring-btn decline">Refuser</button>
       <button id="ring-answer" class="ring-btn answer">Décrocher</button>
