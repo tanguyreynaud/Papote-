@@ -31,6 +31,8 @@ final class Sync {
         void onStatus(JSONObject status);
         void onPosts(JSONObject payload);
         void onWeather(JSONObject weather);
+        /** Un nouvel envoi vient d'arriver (pas au premier chargement). */
+        void onNewArrival();
     }
 
     private static final String TAG = "PapoteSync";
@@ -65,6 +67,7 @@ final class Sync {
     private final Map<String, Post> posts = new LinkedHashMap<>();
     private String familyName;
     private long lastFullRefresh;
+    private boolean loadedOnce;
     private long lastWeather;
     private String lastPostsJson;
     private String lastStatusJson;
@@ -205,6 +208,7 @@ final class Sync {
         status("ok", null);
 
         Set<String> seenIds = new HashSet<>();
+        boolean newArrival = false;
         for (int i = 0; i < result.length(); i++) {
             JSONObject doc = result.getJSONObject(i).optJSONObject("document");
             if (doc == null) continue;
@@ -212,6 +216,7 @@ final class Sync {
             seenIds.add(p.id);
             Post old = posts.get(p.id);
             if (old != null) p.imagePath = old.imagePath;
+            else if (loadedOnce && p.seenAt == 0) newArrival = true;
             posts.put(p.id, p);
         }
         if (full) {
@@ -223,8 +228,10 @@ final class Sync {
                 new File(imageDir, id + ".jpg").delete();
             }
         }
+        loadedOnce = true;
         downloadImages(fid);
         publishPosts();
+        if (newArrival) listener.onNewArrival();
     }
 
     private JSONObject postsQuery(boolean full) throws JSONException {

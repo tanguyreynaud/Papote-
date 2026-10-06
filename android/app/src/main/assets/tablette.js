@@ -171,32 +171,6 @@
     } catch (e) { /* données incomplètes : on garde l'affichage précédent */ }
   }
 
-  // ---------- Son de notification ----------
-
-  var audioCtx = null;
-  function chime() {
-    try {
-      var Ctx = window.AudioContext || window.webkitAudioContext;
-      if (!Ctx) return;
-      audioCtx = audioCtx || new Ctx();
-      var t = audioCtx.currentTime;
-      var notes = [[784, 0], [1047, 0.18]];
-      for (var i = 0; i < notes.length; i++) {
-        var osc = audioCtx.createOscillator();
-        var gain = audioCtx.createGain();
-        osc.frequency.value = notes[i][0];
-        var d = notes[i][1];
-        gain.gain.setValueAtTime(0.0001, t + d);
-        gain.gain.exponentialRampToValueAtTime(0.5, t + d + 0.02);
-        gain.gain.exponentialRampToValueAtTime(0.0001, t + d + 0.8);
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.start(t + d);
-        osc.stop(t + d + 0.9);
-      }
-    } catch (e) { /* pas de son */ }
-  }
-
   // ---------- Accueil : cadre photo et compteurs ----------
 
   function renderFrame() {
@@ -332,7 +306,7 @@
     show($('overlay-text'), !!p.text);
     $('overlay-text').textContent = p.text || '';
     show($('overlay'), true);
-    chime();
+    // Le son est joué par l'app Android (son de notification de la tablette).
   }
 
   // ---------- Données venant d'Android ----------

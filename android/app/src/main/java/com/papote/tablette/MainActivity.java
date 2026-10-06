@@ -15,6 +15,10 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.PowerManager;
+import android.media.Ringtone;
+import android.media.RingtoneManager;
+import android.net.Uri;
 import android.provider.Settings;
 import android.util.Log;
 import android.view.Gravity;
@@ -154,6 +158,29 @@ public class MainActivity extends Activity implements Sync.Listener {
     @Override public void onStatus(JSONObject status) { callPage("onStatus", status); }
     @Override public void onPosts(JSONObject payload) { callPage("onPosts", payload); }
     @Override public void onWeather(JSONObject weather) { callPage("onWeather", weather); }
+
+    /** Nouvel envoi : on allume l'écran et on joue le son de notification de la tablette. */
+    @SuppressWarnings("deprecation")
+    @Override
+    public void onNewArrival() {
+        handler.post(() -> {
+            try {
+                PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+                PowerManager.WakeLock wl = pm.newWakeLock(PowerManager.SCREEN_BRIGHT_WAKE_LOCK
+                        | PowerManager.ACQUIRE_CAUSES_WAKEUP, "papote:nouveau");
+                wl.acquire(15_000);
+            } catch (Exception e) {
+                Log.w(TAG, "Réveil de l'écran", e);
+            }
+            try {
+                Uri sound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
+                Ringtone r = RingtoneManager.getRingtone(this, sound);
+                if (r != null) r.play();
+            } catch (Exception e) {
+                Log.w(TAG, "Son de notification", e);
+            }
+        });
+    }
 
     // ---------- Mode kiosque ----------
 

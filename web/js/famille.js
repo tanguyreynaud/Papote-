@@ -117,7 +117,7 @@ $('post-photos').addEventListener('change', async (e) => {
   const files = Array.from(e.target.files || []);
   e.target.value = '';
   if (!files.length) return;
-  setStatus('Préparation des photos…');
+  setBusy('Préparation…');
   for (const file of files) {
     try {
       pendingPhotos.push(await compressPhoto(file));
@@ -126,9 +126,26 @@ $('post-photos').addEventListener('change', async (e) => {
       alert(`La photo « ${file.name} » n'a pas pu être lue.`);
     }
   }
-  setStatus('');
+  setBusy('');
   renderPreviews();
 });
+
+// Bouton « Envoyer » transformé en indicateur de chargement pendant l'envoi.
+function setBusy(label) {
+  const btn = $('btn-send');
+  btn.disabled = !!label;
+  $('post-text').disabled = !!label;
+  $('post-photos').disabled = !!label;
+  $('form-post').classList.toggle('busy', !!label);
+  btn.replaceChildren();
+  if (label) {
+    const spin = document.createElement('span');
+    spin.className = 'spinner';
+    btn.append(spin, label);
+  } else {
+    btn.textContent = 'Envoyer';
+  }
+}
 
 function setStatus(text) {
   $('post-status').textContent = text;
@@ -139,19 +156,18 @@ $('form-post').addEventListener('submit', async (e) => {
   e.preventDefault();
   const text = $('post-text').value.trim();
   if (!text && !pendingPhotos.length) return;
-  $('btn-send').disabled = true;
+  setBusy('Envoi…');
   const author = { authorUid: session.uid, authorName: session.member.name };
   try {
     if (pendingPhotos.length) {
       for (let i = 0; i < pendingPhotos.length; i++) {
-        setStatus(`Envoi de la photo ${i + 1} sur ${pendingPhotos.length}…`);
+        setBusy(pendingPhotos.length > 1 ? `Photo ${i + 1} sur ${pendingPhotos.length}…` : 'Envoi…');
         // Le texte accompagne la première photo.
         await addPost(session.fid, {
           type: 'photo', text: i === 0 ? text : '', image: pendingPhotos[i], ...author,
         });
       }
     } else {
-      setStatus('Envoi…');
       await addPost(session.fid, { type: 'message', text, ...author });
     }
     pendingPhotos = [];
@@ -163,7 +179,7 @@ $('form-post').addEventListener('submit', async (e) => {
     console.error(err);
     setStatus("L'envoi a échoué. Vérifiez la connexion et réessayez.");
   } finally {
-    $('btn-send').disabled = false;
+    setBusy('');
   }
 });
 
