@@ -611,3 +611,48 @@ body.night .weather-label { color: #a8998d; }
   background-size: auto 50%, cover;
   background-position: center 42%, center;
 }
+
+/* ---------- Retouches ---------- */
+
+/* La photo de l'accueil sans arrondis */
+.home-frame { border-radius: 0; }
+
+/* Vocal / vidéo : le texte en haut, « Écouter » au milieu de l'espace qui reste */
+.overlay.mode-voice .ln-wood, .overlay.mode-video .ln-wood {
+  -webkit-flex-direction: column;
+  flex-direction: column;
+  -webkit-align-items: center;
+  align-items: center;
+  -webkit-justify-content: flex-start;
+  justify-content: flex-start;
+  -webkit-background-size: auto 78%, cover;
+  background-size: auto 78%, cover;
+  background-position: center 70%, center;
+}
+.ln-playzone {
+  -webkit-flex: 1;
+  flex: 1;
+  width: 100%;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-align-items: center;
+  align-items: center;
+  -webkit-justify-content: center;
+  justify-content: center;
+}
+.overlay.mode-voice .ln-play, .overlay.mode-video .ln-play {
+  position: static;
+  width: 64vmin;
+  margin: 0;
+}
+
+/* « Réécouter » / « Revoir » en bleu */
+.ln-btn.replay { background: #2563eb; }
+/* L'illustration se range en bas, sous le bouton « Écouter » / « Regarder » */
+.overlay.mode-voice .ln-wood, .overlay.mode-video .ln-wood {
+  -webkit-background-size: auto 30%, cover;
+  background-size: auto 30%, cover;
+  background-position: center 97%, center;
+}
+
+.ln-btn { -webkit-flex: none; flex: none; padding: 0 5vmin; }

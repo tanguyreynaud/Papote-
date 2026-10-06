@@ -228,7 +228,7 @@
   function olderPhoto() { if (photoIndex < photos.length - 1) { photoIndex++; renderPhoto(); } }
   function newerPhoto() { if (photoIndex > 0) { photoIndex--; renderPhoto(); } }
 
-  // ---------- Vu et bisous ----------
+  // ---------- Vu ----------
 
   function markSeen(p) {
     if (p.seen) return;
@@ -236,18 +236,6 @@
     if (android()) android().markSeen(p.id);
   }
 
-  function heart(p, button, label) {
-    if (!p) return;
-    p.seen = true;
-    if (android()) android().sendHeart(p.id);
-    var span = button.querySelector('.label');
-    span.textContent = 'Envoyé !';
-    button.setAttribute('disabled', '');
-    setTimeout(function () {
-      span.textContent = label;
-      button.removeAttribute('disabled');
-    }, 2500);
-  }
 
   // ---------- Messages vocaux ----------
 
@@ -302,7 +290,7 @@
       if (p.image) newestPhoto = p; else overlayQueue.push(p);
     }
     // Une nouvelle photo remplace tout de suite ce qui est affiché, et reste en grand
-    // jusqu'à ce que Mamie réponde (bisou ou OK), qu'une autre photo arrive ou qu'on l'appelle.
+    // jusqu'à ce que Mamie réponde (OK), qu'une autre photo arrive ou qu'on l'appelle.
     if (newestPhoto) {
       if (overlayPost) markSeen(overlayPost);
       overlayQueue.unshift(newestPhoto);
@@ -349,7 +337,7 @@
     // Photo : à droite, sur toute la hauteur.
     show($('ln-media'), mode === 'photo');
     if (mode === 'photo') $('overlay-img').setAttribute('src', p.image);
-    show($('overlay-play'), media);
+    show($('ln-playzone'), media);
     $('overlay-play').className = 'ln-play';
     $('overlay-play').querySelector('.label').textContent = mode === 'video' ? 'Regarder' : 'Écouter';
     $('overlay-replay').querySelector('.label').textContent = mode === 'video' ? 'Revoir' : 'Réécouter';
@@ -367,13 +355,13 @@
     setOverlayActions(false);
     playVoice(p, function () {
       if (overlayPost !== p) return;
-      show($('overlay-play'), false);
+      show($('ln-playzone'), false);
       setOverlayActions(true, true);
     });
   }
 
   function replayOverlay() {
-    show($('overlay-play'), true);
+    show($('ln-playzone'), true);
     listenOverlay();
   }
 
@@ -561,23 +549,16 @@
     on($('overlay-play'), 'click', listenOverlay);
     // Vocal ou vidéo : toucher l'illustration lance aussi la lecture.
     on(document.querySelector('#overlay .ln-wood'), 'click', function () {
-      if (overlayPost && (overlayPost.audio || overlayPost.video) && isShown('overlay-play')) listenOverlay();
+      if (overlayPost && (overlayPost.audio || overlayPost.video) && isShown('ln-playzone')) listenOverlay();
     });
     on($('overlay-replay'), 'click', replayOverlay);
     on($('player'), 'ended', voiceEnded);
     on($('photo-prev'), 'click', olderPhoto);
     on($('photo-next'), 'click', newerPhoto);
-    on($('photo-heart'), 'click', function () { heart(photos[photoIndex], $('photo-heart'), 'Envoyer un bisou'); });
     on($('overlay-close'), 'click', function () {
       stopAudio();
       if (overlayPost) markSeen(overlayPost);
       nextOverlay();
-    });
-    on($('overlay-heart'), 'click', function () {
-      if (!overlayPost) return;
-      stopAudio();
-      heart(overlayPost, $('overlay-heart'), 'Envoyer un bisou');
-      setTimeout(nextOverlay, 1200);
     });
 
     // Veille : on signale à l'app que Mamie utilise la tablette (au plus une fois par minute).
