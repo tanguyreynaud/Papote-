@@ -196,11 +196,7 @@
     $(id).textContent = n > 9 ? '9+' : String(n);
   }
 
-  function renderBadges() {
-    var unseenPhotos = 0;
-    for (var i = 0; i < posts.length; i++) if (!posts[i].seen && posts[i].image) unseenPhotos++;
-    setBadge('badge-photos', unseenPhotos);
-  }
+  function renderBadges() { /* plus de bouton Photos : la photo de droite ouvre les photos */ }
 
   // ---------- Photos ----------
 
@@ -552,7 +548,6 @@
     for (var i = 0; i < homes.length; i++) {
       on(homes[i], 'click', function () { stopAudio(); showView('view-home'); });
     }
-    on($('btn-photos'), 'click', function () { openPhotos(0); });
     on($('home-frame'), 'click', function () { openPhotos(frameIndex); });
     on($('reminder-done'), 'click', confirmReminder);
     on($('overlay-play'), 'click', listenOverlay);

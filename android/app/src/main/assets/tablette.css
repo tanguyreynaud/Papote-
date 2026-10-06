@@ -520,3 +520,8 @@ body.video-playing .overlay { visibility: hidden; }
 body.night .weather-label { color: #a8998d; }
 
 .home-buttons .big-btn { font-size: 7.5vmin; min-height: 20vmin; }
+
+/* Accueil sans bouton : l'heure, la date et la météo, centrées verticalement */
+.home-left { -webkit-justify-content: center; justify-content: center; }
+.clock { font-size: 34vmin; }
+.date { font-size: 8vmin; }
