@@ -5,7 +5,7 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
 import {
-  getFirestore, doc, getDoc, setDoc, updateDoc, addDoc, collection, query, where,
+  getFirestore, doc, getDoc, setDoc, updateDoc, addDoc, deleteDoc, collection, query, where,
   onSnapshot, serverTimestamp,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
 
@@ -187,6 +187,16 @@ function decline() {
   updateDoc(doc(db, 'families', fid, 'calls', ringing.id), { state: 'declined', endedAt: serverTimestamp() }).catch(() => {});
   hideRing();
 }
+
+// Maintenance : la tablette quitte la famille (commande ADB « leave »).
+window.papoteAppelsLeave = async () => {
+  try {
+    const u = auth.currentUser;
+    if (fid && u) await deleteDoc(doc(db, 'families', fid, 'members', u.uid));
+  } catch (e) { console.error(e); }
+  try { localStorage.removeItem(FID_KEY); } catch (e) { /* pas de stockage */ }
+  fid = null;
+};
 
 $('ring-answer').addEventListener('click', answer);
 $('ring-decline').addEventListener('click', decline);

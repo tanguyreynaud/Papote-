@@ -384,6 +384,26 @@ final class Sync {
         }
     }
 
+    /** Retire la tablette de la famille (maintenance, avant désinstallation). */
+    void leave() {
+        handler.post(() -> {
+            String fid = prefs.getString("fid", null);
+            try {
+                if (fid != null && firebase.uid() != null) {
+                    JSONObject write = new JSONObject().put("delete",
+                            Firebase.docName("families/" + fid + "/members/" + firebase.uid()));
+                    firebase.commit(new JSONArray().put(write));
+                }
+            } catch (Exception e) {
+                Log.w(TAG, "Départ de la famille", e);
+            }
+            prefs.edit().remove("fid").remove("code").apply();
+            posts.clear();
+            lastPostsJson = null;
+            status("setup", "Tablette retirée de la famille.");
+        });
+    }
+
     void touched() {
         handler.post(() -> heartbeat(prefs.getString("fid", null), "lastActive"));
     }

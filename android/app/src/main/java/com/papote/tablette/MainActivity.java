@@ -72,6 +72,10 @@ public class MainActivity extends Activity implements Sync.Listener {
                 | WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
                 | WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON);
 
+        // Inspection de la page depuis Chrome (chrome://inspect), seulement pour les versions de test.
+        if ((getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
+            WebView.setWebContentsDebuggingEnabled(true);
+        }
         web = new WebView(this);
         web.setBackgroundColor(Color.parseColor("#FFF8F1"));
         WebSettings s = web.getSettings();
@@ -152,6 +156,11 @@ public class MainActivity extends Activity implements Sync.Listener {
         }
         if (intent.getBooleanExtra("unlock", false)) setKioskPaused(true);
         if (intent.getBooleanExtra("lock", false)) setKioskPaused(false);
+        if (intent.getBooleanExtra("leave", false) && sync != null) {
+            sync.leave();
+            callPage("onLeave", new JSONObject());
+            return;
+        }
         String code = intent.getStringExtra("code");
         if (code != null) {
             code = code.toUpperCase().replaceAll("[^A-Z0-9]", "");

@@ -600,7 +600,8 @@
 
   window.Papote = {
     onStatus: onStatus, onPosts: onPosts, onWeather: onWeather, onReminders: onReminders,
-    onVoiceEnded: function () { resetPlayUi(); }
+    onVoiceEnded: function () { resetPlayUi(); },
+    onLeave: function () { if (window.papoteAppelsLeave) window.papoteAppelsLeave(); }
   };
 
   // ---------- Événements ----------

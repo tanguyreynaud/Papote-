@@ -1,6 +1,9 @@
 @echo off
 rem Retire le mode kiosque puis désinstalle Papote de la tablette branchée en USB.
 chcp 65001 >nul
+echo Retrait de la famille...
+adb shell am start -n com.papote.tablette/.MainActivity --ez leave true
+timeout /t 5 /nobreak >nul
 echo Retrait du mode kiosque...
 adb shell am start -n com.papote.tablette/.MainActivity --ez remove_owner true
 timeout /t 3 /nobreak >nul
