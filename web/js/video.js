@@ -5,12 +5,12 @@ const MAX_SECONDS = 30;
 const MAX_SIDE = 640;
 
 function pickMime() {
-  // WebM (VP8) d'abord : lisible même par les tablettes anciennes ; MP4 pour iPhone (Safari).
+  // MP4 (H.264) d'abord : lu partout, tablettes récentes et iPhone ; WebM si le navigateur ne sait pas.
   const candidates = [
-    'video/webm;codecs=vp8,opus',
-    'video/webm',
     'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
     'video/mp4',
+    'video/webm;codecs=vp8,opus',
+    'video/webm',
   ];
   return candidates.find((m) => window.MediaRecorder && MediaRecorder.isTypeSupported(m)) || '';
 }
