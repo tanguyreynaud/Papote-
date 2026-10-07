@@ -265,7 +265,7 @@
       next.querySelector('.photo-bg').style.backgroundImage = bg;
       next.style.opacity = '1';
     });
-    $('photo-who').textContent = p.authorName + ', ' + dayLabel(p.createdAt);
+    signWithFace($('photo-who'), p, p.authorName + ', ' + dayLabel(p.createdAt));
     $('photo-text').textContent = p.text || '';
     show($('photo-text'), !!p.text);
     if (photoIndex >= photos.length - 1) $('photo-prev').setAttribute('disabled', ''); else $('photo-prev').removeAttribute('disabled');
@@ -397,7 +397,11 @@
     $('overlay-text').textContent = text;
     $('overlay-text').className = 'ln-text ' + (mode === 'photo' ? 'size-m' : sizeClass(text));
     show($('overlay-from'), !media);
-    $('overlay-from').textContent = '— ' + p.authorName;
+    signWithFace($('overlay-from'), p, '— ' + p.authorName);
+    // Vocal ou vidéo : le visage au-dessus de « Un message vocal de … ».
+    var face = faceOf(p);
+    show($('overlay-face'), media && !!face);
+    if (media && face) $('overlay-face').setAttribute('src', face);
     // Photo : à droite, sur toute la hauteur.
     show($('ln-media'), mode === 'photo');
     if (mode === 'photo') {
@@ -570,6 +574,146 @@
     setTimeout(checkReminders, 500);
   }
 
+  // ---------- Photos de profil ----------
+
+  var faces = {};
+
+  function faceOf(p) {
+    return (p && p.authorUid && faces[p.authorUid]) || null;
+  }
+
+  // Le visage en rond devant le texte ; sans photo de profil, le texte seul.
+  function signWithFace(el, p, text) {
+    while (el.firstChild) el.removeChild(el.firstChild);
+    var face = faceOf(p);
+    if (face) {
+      var img = document.createElement('img');
+      img.className = 'sign-face';
+      img.setAttribute('src', face);
+      img.setAttribute('alt', '');
+      el.appendChild(img);
+    }
+    el.appendChild(document.createTextNode(text));
+  }
+
+  // ---------- Anniversaires ----------
+  // Le jour même : un bandeau sur l'accueil toute la journée, et une fois en plein écran.
+
+  var birthdays = [];
+  var bdayQueue = [];
+  var bdayShown = {};
+
+  function todaysBirthdays() {
+    var now = new Date();
+    var out = [];
+    for (var i = 0; i < birthdays.length; i++) {
+      var b = birthdays[i];
+      if (b.day === now.getDate() && b.month === now.getMonth() + 1 && b.name) out.push(b);
+    }
+    return out;
+  }
+
+  // « de Léa », « d'Anne »
+  function deName(name) {
+    return (/^[aeiouyhàâäéèêëîïôöùûü]/i.test(name) ? "d'" : 'de ') + name;
+  }
+
+  function ageLabel(b) {
+    if (!b.year) return '';
+    var age = new Date().getFullYear() - b.year;
+    return age > 0 ? age + (age > 1 ? ' ans' : ' an') + " aujourd'hui" : '';
+  }
+
+  function dayKey() {
+    var d = new Date();
+    return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+  }
+
+  function alreadyShown(b) {
+    var key = 'bday-' + dayKey() + '-' + b.id;
+    if (bdayShown[key]) return true;
+    try { return window.localStorage.getItem(key) === '1'; } catch (e) { return false; }
+  }
+
+  function markShown(b) {
+    var key = 'bday-' + dayKey() + '-' + b.id;
+    bdayShown[key] = true;
+    try { window.localStorage.setItem(key, '1'); } catch (e) { /* tant pis */ }
+  }
+
+  function renderBirthdayBanner() {
+    var today = todaysBirthdays();
+    var el = $('bday-banner');
+    if (!today.length) { show(el, false); return; }
+    var names = [];
+    for (var i = 0; i < today.length; i++) names.push(deName(today[i].name));
+    var age = today.length === 1 ? ageLabel(today[0]).replace(" aujourd'hui", '') : '';
+    $('bday-banner-text').textContent = "Aujourd'hui, c'est l'anniversaire " + names.join(' et ') + ' !' +
+      (age ? ' ' + age.charAt(0).toUpperCase() + age.slice(1) + '.' : '');
+    show(el, true);
+  }
+
+  function checkBirthdays() {
+    renderBirthdayBanner();
+    if (isShown('bday-alert') || asleep) return;
+    if (isShown('overlay') || isShown('reminder-alert') || isShown('call-ring') || isShown('call-view')) return;
+    var today = todaysBirthdays();
+    for (var i = 0; i < today.length; i++) {
+      if (alreadyShown(today[i])) continue;
+      var b = today[i];
+      $('bday-text').textContent = "Aujourd'hui, c'est l'anniversaire " + deName(b.name) + ' !';
+      $('bday-age').textContent = ageLabel(b);
+      show($('bday-age'), !!ageLabel(b));
+      $('bday-alert').setAttribute('data-id', b.id);
+      bdayQueue = [b];
+      show($('bday-alert'), true);
+      return;
+    }
+  }
+
+  function closeBirthday() {
+    if (bdayQueue.length) markShown(bdayQueue[0]);
+    bdayQueue = [];
+    show($('bday-alert'), false);
+    checkBirthdays();
+  }
+
+  // Bandeau et écran créés ici pour ne pas toucher à tablette.html.
+  function setupFamilyExtras() {
+    var banner = document.createElement('div');
+    banner.id = 'bday-banner';
+    banner.className = 'bday-banner';
+    banner.setAttribute('hidden', '');
+    banner.innerHTML = '<span class="bday-cake"></span><span id="bday-banner-text"></span>';
+    $('weather').parentNode.appendChild(banner);
+
+    var alert = document.createElement('div');
+    alert.id = 'bday-alert';
+    alert.className = 'overlay ln bday';
+    alert.setAttribute('hidden', '');
+    alert.innerHTML = '<div class="ln-main"><div class="ln-wood"><div class="ln-note">' +
+      '<p id="bday-text" class="ln-text size-l"></p><p id="bday-age" class="ln-sign"></p>' +
+      '</div></div></div><div class="ln-bar"><div class="ln-actions">' +
+      '<button id="bday-ok" class="ln-btn ok">OK</button></div></div>';
+    document.body.appendChild(alert);
+    on($('bday-ok'), 'click', closeBirthday);
+
+    var face = document.createElement('img');
+    face.id = 'overlay-face';
+    face.className = 'overlay-face';
+    face.setAttribute('alt', '');
+    face.setAttribute('hidden', '');
+    $('overlay-text').parentNode.insertBefore(face, $('overlay-text'));
+
+    setInterval(checkBirthdays, 30000);
+  }
+
+  function onFamily(payload) {
+    faces = payload.faces || {};
+    birthdays = payload.birthdays || [];
+    checkBirthdays();
+  }
+
   function onReminders(payload) {
     reminders = payload.reminders || [];
     checkReminders();
@@ -588,6 +732,7 @@
     onPosts: onPosts,
     onWeather: onWeather,
     onReminders: onReminders,
+    onFamily: onFamily,
     onVoiceEnded: voiceEnded,
     onLeave: function () { if (window.papoteAppelsLeave) window.papoteAppelsLeave(); },
     closeOverlayForCall: closeOverlayForCall,
@@ -644,6 +789,7 @@
   function start() {
     fillIcons();
     setupSleep();
+    setupFamilyExtras();
     tick();
     setInterval(tick, 1000);
     setInterval(function () {
