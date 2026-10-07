@@ -117,7 +117,9 @@ final class Updater {
         promptUntil = System.currentTimeMillis() + 10 * 60_000;
         Intent install = new Intent(Intent.ACTION_VIEW)
                 .setDataAndType(Uri.fromFile(file), "application/vnd.android.package-archive")
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                // Nouvelle tâche à chaque fois : sinon Android ramène l'écran « Application installée »
+                // de la mise à jour précédente au lieu de proposer la nouvelle.
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
         context.startActivity(install);
     }
 

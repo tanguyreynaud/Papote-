@@ -811,3 +811,70 @@ body.night .night-veil { display: block; }
 .photos .night-veil { z-index: 3; }
 .photos .arrow { z-index: 4; }
 .photos .photo-bar { z-index: 4; }
+
+/* ---------- Photo de profil à côté du prénom ---------- */
+
+.sign-face {
+  display: inline-block;
+  width: 11vmin;
+  height: 11vmin;
+  margin-right: 2vmin;
+  border-radius: 50%;
+  border: .6vmin solid #fff;
+  box-shadow: 0 .6vmin 1.6vmin rgba(0, 0, 0, .25);
+  vertical-align: middle;
+}
+.photo-who .sign-face { width: 10vmin; height: 10vmin; }
+.overlay-face {
+  display: block;
+  width: 18vmin;
+  height: 18vmin;
+  margin: 0 auto 2vmin;
+  border-radius: 50%;
+  border: .8vmin solid #fff;
+  box-shadow: 0 .8vmin 2vmin rgba(0, 0, 0, .25);
+}
+
+/* ---------- Anniversaires ---------- */
+
+.bday-banner {
+  display: -webkit-flex;
+  display: flex;
+  -webkit-align-items: center;
+  align-items: center;
+  margin-top: 4vmin;
+  padding: 2.5vmin 4vmin;
+  border-radius: 4vmin;
+  background: #fde7ef;
+  color: #9d174d;
+  font-size: 5.5vmin;
+  font-weight: bold;
+  line-height: 1.2;
+}
+.bday-banner[hidden] { display: none; }
+.bday-cake {
+  -webkit-flex: none;
+  flex: none;
+  width: 10vmin;
+  height: 10vmin;
+  margin-right: 3vmin;
+  background: url(bg/gateau.svg) center no-repeat;
+  -webkit-background-size: contain;
+  background-size: contain;
+}
+body.night .bday-banner { background: #3b1426; color: #f9a8d4; }
+
+.overlay.bday .ln-wood {
+  -webkit-align-items: flex-start;
+  align-items: flex-start;
+  padding-top: 4vmin;
+  background-color: #fde7ef;
+  background-image: url(bg/anniversaire.svg), -webkit-linear-gradient(top, #fff5f8, #fbd3e1);
+  background-image: url(bg/anniversaire.svg), linear-gradient(to bottom, #fff5f8, #fbd3e1);
+  -webkit-background-size: auto 62%, cover;
+  background-size: auto 62%, cover;
+  background-position: center 92%, center;
+  background-repeat: no-repeat;
+}
+.overlay.bday .ln-note { max-width: 130vmin; text-align: center; }
+.overlay.bday .ln-sign { text-align: center; font-weight: 700; color: #be185d; }

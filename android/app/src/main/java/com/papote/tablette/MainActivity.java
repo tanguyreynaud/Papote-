@@ -358,6 +358,7 @@ public class MainActivity extends Activity implements Sync.Listener {
         callPage("onVoiceEnded", new JSONObject());
     }
     @Override public void onReminders(JSONObject payload) { callPage("onReminders", payload); }
+    @Override public void onFamily(JSONObject payload) { callPage("onFamily", payload); }
 
     /** Nouvel envoi : on allume l'écran et on joue le son de notification de la tablette. */
     @SuppressWarnings("deprecation")

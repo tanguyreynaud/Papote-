@@ -34,6 +34,8 @@ final class Sync {
         /** Un nouvel envoi vient d'arriver (pas au premier chargement). */
         void onNewArrival();
         void onReminders(JSONObject payload);
+        /** Photos de profil des membres et anniversaires. */
+        void onFamily(JSONObject payload);
     }
 
     private static final String TAG = "PapoteSync";
@@ -51,6 +53,9 @@ final class Sync {
         String type;
         String text;
         String authorName;
+        String authorUid;
+        String imageUrl;
+        String videoUrl;
         String createdAtRaw;
         long createdAt;
         long seenAt;
@@ -80,11 +85,15 @@ final class Sync {
     private boolean loadedOnce;
     private long lastReminders;
     private String lastRemindersJson;
+    private long lastFamilyExtras;
+    private String lastFamilyJson;
     private long lastWeather;
     private String lastPostsJson;
     private String lastStatusJson;
+    private final Context context;
 
     Sync(Context context, SharedPreferences prefs, Listener listener) {
+        this.context = context.getApplicationContext();
         this.prefs = prefs;
         this.firebase = new Firebase(context, prefs);
         this.http = new Http(context);
@@ -126,6 +135,8 @@ final class Sync {
             refreshWeather();
             lastRemindersJson = null;
             lastReminders = 0;
+            lastFamilyJson = null;
+            lastFamilyExtras = 0;
         });
     }
 
@@ -140,6 +151,7 @@ final class Sync {
                 refreshWeather();
                 syncPosts();
                 syncReminders();
+                syncFamilyExtras();
             } catch (Exception e) {
                 Log.w(TAG, "Synchronisation", e);
             }
@@ -234,6 +246,7 @@ final class Sync {
             }
             lastRev = rev;
             lastReminders = 0; // les rappels ont peut-être changé aussi
+            lastFamilyExtras = 0; // et les anniversaires
             result = firebase.runQuery("families/" + fid, postsQuery(true));
         } catch (Firebase.ApiException e) {
             if (e.code == 403 || e.code == 404) {
@@ -285,7 +298,7 @@ final class Sync {
 
     private JSONObject postsQuery(boolean full) throws JSONException {
         JSONArray fields = new JSONArray();
-        for (String f : new String[]{"type", "text", "authorName", "createdAt", "seenAt", "hearts", "duration", "chunks", "mime"}) {
+        for (String f : new String[]{"type", "text", "authorName", "authorUid", "createdAt", "seenAt", "hearts", "duration", "chunks", "mime", "imageUrl", "videoUrl"}) {
             fields.put(new JSONObject().put("fieldPath", f));
         }
         JSONObject q = new JSONObject()
@@ -330,6 +343,9 @@ final class Sync {
         p.type = Firebase.str(f, "type");
         p.text = Firebase.str(f, "text");
         p.authorName = Firebase.str(f, "authorName");
+        p.authorUid = Firebase.str(f, "authorUid");
+        p.imageUrl = Firebase.str(f, "imageUrl");
+        p.videoUrl = Firebase.str(f, "videoUrl");
         JSONObject created = f.optJSONObject("createdAt");
         p.createdAtRaw = created == null ? null : created.optString("timestampValue", null);
         p.createdAt = Firebase.parseTimestamp(p.createdAtRaw);
@@ -349,6 +365,14 @@ final class Sync {
             if (!photo && !voice) continue;
             String field = photo ? "image" : "audio";
             File file = existing(p.id);
+            if (file == null && photo && p.imageUrl != null) {
+                // Nouveau format : la photo est sur Firebase Storage, adresse https publique.
+                try {
+                    file = downloadToFile(p.imageUrl, p.id, "jpg");
+                } catch (Exception e) {
+                    Log.w(TAG, "Photo " + p.id, e);
+                }
+            }
             if (file == null) {
                 try {
                     String dataUrl = null;
@@ -385,9 +409,18 @@ final class Sync {
     /** Vidéos : le base64 est découpé en posts/{id}/media/video0, video1… */
     private void downloadVideos(String fid) {
         for (Post p : posts.values()) {
-            if (!"video".equals(p.type) || p.videoPath != null || p.chunks <= 0) continue;
+            if (!"video".equals(p.type) || p.videoPath != null) continue;
+            if (p.chunks <= 0 && p.videoUrl == null) continue;
             File file = existing(p.id);
-            if (file == null) {
+            if (file == null && p.videoUrl != null) {
+                // Nouveau format : jusqu'à ~30 Mo, écrit directement dans un fichier.
+                try {
+                    file = downloadToFile(p.videoUrl, p.id, p.mime != null && p.mime.contains("webm") ? "webm" : "mp4");
+                } catch (Exception e) {
+                    Log.w(TAG, "Vidéo " + p.id, e);
+                }
+            }
+            if (file == null && p.chunks > 0) {
                 try {
                     StringBuilder b64 = new StringBuilder();
                     for (int i = 0; i < p.chunks; i++) {
@@ -414,6 +447,34 @@ final class Sync {
             }
             p.videoPath = LocalContent.mediaUrl(file.getName());
         }
+    }
+
+    /** Télécharge une adresse https dans photos/{id}.{ext}, sans tout garder en mémoire. */
+    private File downloadToFile(String url, String id, String ext) throws Exception {
+        javax.net.ssl.HttpsURLConnection c =
+                (javax.net.ssl.HttpsURLConnection) new java.net.URL(url).openConnection();
+        c.setSSLSocketFactory(Tls.socketFactory(context));
+        c.setConnectTimeout(20_000);
+        c.setReadTimeout(60_000);
+        File tmp = new File(imageDir, id + ".tmp");
+        try {
+            if (c.getResponseCode() != 200) throw new IOException("HTTP " + c.getResponseCode());
+            java.io.InputStream in = c.getInputStream();
+            FileOutputStream out = new FileOutputStream(tmp);
+            try {
+                byte[] buf = new byte[64 * 1024];
+                int n;
+                while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+            } finally {
+                out.close();
+                in.close();
+            }
+        } finally {
+            c.disconnect();
+        }
+        File file = new File(imageDir, id + "." + ext);
+        if (!tmp.renameTo(file)) throw new IOException("Renommage " + id);
+        return file;
     }
 
     private File existing(String id) {
@@ -528,6 +589,7 @@ final class Sync {
                         .put("type", p.type)
                         .put("text", p.text == null ? "" : p.text)
                         .put("authorName", p.authorName == null ? "" : p.authorName)
+                        .put("authorUid", p.authorUid == null ? "" : p.authorUid)
                         .put("createdAt", p.createdAt)
                         .put("seen", p.seenAt > 0)
                         .put("hearts", p.hearts)
@@ -621,6 +683,57 @@ final class Sync {
             listener.onReminders(payload);
         } catch (Exception e) {
             Log.w(TAG, "Rappels", e);
+        }
+    }
+
+    // ---------- Photos de profil et anniversaires ----------
+
+    private void syncFamilyExtras() {
+        String fid = prefs.getString("fid", null);
+        long now = System.currentTimeMillis();
+        if (fid == null || now - lastFamilyExtras < REMINDERS_MS) return;
+        lastFamilyExtras = now;
+        try {
+            JSONObject faces = new JSONObject();
+            try {
+                JSONArray members = firebase.list("families/" + fid + "/members");
+                for (int i = 0; i < members.length(); i++) {
+                    JSONObject doc = members.getJSONObject(i);
+                    JSONObject f = doc.optJSONObject("fields");
+                    String face = f == null ? null : Firebase.str(f, "face");
+                    if (face == null || !face.startsWith("data:image")) continue;
+                    String name = doc.optString("name");
+                    faces.put(name.substring(name.lastIndexOf('/') + 1), face);
+                }
+            } catch (Exception e) {
+                Log.w(TAG, "Photos de profil", e);
+            }
+            JSONArray birthdays = new JSONArray();
+            try {
+                JSONArray docs = firebase.list("families/" + fid + "/birthdays");
+                for (int i = 0; i < docs.length(); i++) {
+                    JSONObject doc = docs.getJSONObject(i);
+                    JSONObject f = doc.optJSONObject("fields");
+                    if (f == null) continue;
+                    String name = doc.optString("name");
+                    birthdays.put(new JSONObject()
+                            .put("id", name.substring(name.lastIndexOf('/') + 1))
+                            .put("name", nz(Firebase.str(f, "name")))
+                            .put("day", Firebase.integer(f, "day"))
+                            .put("month", Firebase.integer(f, "month"))
+                            .put("year", Firebase.integer(f, "year")));
+                }
+            } catch (Exception e) {
+                // La règle Firestore des anniversaires n'est peut-être pas encore en ligne.
+                Log.w(TAG, "Anniversaires", e);
+            }
+            JSONObject payload = new JSONObject().put("faces", faces).put("birthdays", birthdays);
+            String json = payload.toString();
+            if (json.equals(lastFamilyJson)) return;
+            lastFamilyJson = json;
+            listener.onFamily(payload);
+        } catch (JSONException e) {
+            Log.w(TAG, "Famille", e);
         }
     }
 
