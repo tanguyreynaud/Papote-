@@ -62,7 +62,9 @@
   function resetIdle() {
     clearTimeout(idleTimer);
     if (!isShown('view-home') && !isShown('view-setup')) {
-      idleTimer = setTimeout(function () { showView('view-home'); }, IDLE_MS);
+      // Diaporama : retour à l'accueil après 5 minutes sans toucher l'écran.
+      idleTimer = setTimeout(function () { showView('view-home'); },
+        isShown('view-photos') ? 5 * 60000 : IDLE_MS);
     }
   }
 
@@ -306,7 +308,13 @@
     if (photoIndex === 0) $('photo-next').setAttribute('disabled', ''); else $('photo-next').removeAttribute('disabled');
     markSeen(p);
     restartSlides();
+    // Arrivée à l'avant-dernière photo chargée : on en demande 5 de plus.
+    if (photoIndex >= photos.length - 2 && android() && android().morePhotos && askedMoreAt !== photos.length) {
+      askedMoreAt = photos.length;
+      android().morePhotos();
+    }
   }
+  var askedMoreAt = -1;
 
   // Comme un cadre photo : sans toucher l'écran, on passe à la suivante toutes les 10 s,
   // et après la plus ancienne on revient à la plus récente.

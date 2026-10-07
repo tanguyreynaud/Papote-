@@ -91,6 +91,7 @@ final class Sync {
     private long lastWeather;
     private String lastPostsJson;
     private String lastStatusJson;
+    private int photoLimit = 6;
     private final Context context;
 
     Sync(Context context, SharedPreferences prefs, Listener listener) {
@@ -361,8 +362,15 @@ final class Sync {
 
     /** Télécharge les photos et les messages vocaux en fichiers locaux. */
     private void downloadMedia(String fid) {
+        // Photos : seulement les plus récentes (6 au départ, 5 de plus à chaque demande du diaporama).
+        List<Post> recentPhotos = new ArrayList<>();
+        for (Post p : posts.values()) if ("photo".equals(p.type)) recentPhotos.add(p);
+        Collections.sort(recentPhotos, (a, b) -> Long.compare(b.createdAt, a.createdAt));
+        Set<String> allowed = new HashSet<>();
+        for (int i = 0; i < Math.min(photoLimit, recentPhotos.size()); i++) allowed.add(recentPhotos.get(i).id);
         for (Post p : posts.values()) {
-            boolean photo = "photo".equals(p.type) && p.imagePath == null;
+            boolean photo = "photo".equals(p.type) && p.imagePath == null
+                    && (allowed.contains(p.id) || existing(p.id) != null); // déjà sur la tablette : gratuit
             boolean voice = "voice".equals(p.type) && p.audioPath == null;
             if (!photo && !voice) continue;
             String field = photo ? "image" : "audio";
@@ -549,6 +557,17 @@ final class Sync {
             posts.clear();
             lastPostsJson = null;
             status("setup", "Tablette retirée de la famille.");
+        });
+    }
+
+    /** Le diaporama arrive au bout des photos chargées : on en charge 5 de plus. */
+    void morePhotos() {
+        handler.post(() -> {
+            String fid = prefs.getString("fid", null);
+            if (fid == null) return;
+            photoLimit += 5;
+            downloadMedia(fid);
+            publishPosts();
         });
     }
 
