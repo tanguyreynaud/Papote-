@@ -35,6 +35,7 @@ export { db };
 // Pour les appels vidéo (appel.js).
 export {
   doc, getDoc, collection, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, writeBatch,
+  increment,
 };
 
 const FID_KEY = 'papote.fid';

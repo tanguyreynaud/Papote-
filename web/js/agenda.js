@@ -3,6 +3,7 @@
 import {
   db, doc, collection, onSnapshot, serverTimestamp, writeBatch, bumpRev,
 } from './firebase.js';
+import { askConfirm, notice } from './ui.js';
 
 const $ = (id) => document.getElementById(id);
 const JOURS_COURTS = ['dim', 'lun', 'mar', 'mer', 'jeu', 'ven', 'sam'];
@@ -80,7 +81,7 @@ function renderReminders() {
       body.append(ack);
     }
     li.append(deleteButton('Supprimer ce rappel', async () => {
-      if (confirm(`Supprimer le rappel « ${r.title} » ?`)) await remove('reminders', r.id);
+      if (await askConfirm(`Supprimer le rappel « ${r.title} » ?`)) await remove('reminders', r.id);
     }));
     ul.append(li);
   }
@@ -110,7 +111,7 @@ function renderBirthdays() {
     s.textContent = soon;
     body.append(s);
     li.append(deleteButton("Supprimer l'anniversaire", async () => {
-      if (confirm(`Supprimer l'anniversaire de ${b.name} ?`)) await remove('birthdays', b.id);
+      if (await askConfirm(`Supprimer l'anniversaire de ${b.name} ?`)) await remove('birthdays', b.id);
     }));
     ul.append(li);
   }

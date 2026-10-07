@@ -7,11 +7,12 @@ import {
   getStorage, ref, uploadBytes, getDownloadURL, deleteObject,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-storage.js';
 import {
-  db, doc, updateDoc, deleteDoc, collection, onSnapshot, writeBatch, serverTimestamp, bumpRev,
+  db, doc, updateDoc, deleteDoc, collection, onSnapshot, writeBatch, serverTimestamp, bumpRev, increment,
   loadMembership, createFamily, joinFamily, leaveFamily, watchMembers, currentUser, savedFamilyId, saveFamilyId,
   addPost, deletePost, loadMedia, formatCode, normalizeCode, toDate, CodeInconnuError,
   MAX_VIDEO_CHUNKS, VIDEO_CHUNK,
 } from './firebase.js';
+import { askConfirm, notice } from './ui.js';
 import { startCall } from './appel.js';
 import { prepareVideo } from './video.js';
 import { startAgenda, stopAgenda } from './agenda.js';
@@ -231,12 +232,12 @@ function amFamilyAdmin() {
 }
 
 async function confirmDelete(post, what) {
-  if (!confirm(`Supprimer ${what} de la tablette ?`)) return;
+  if (!await askConfirm(`Supprimer ${what} de la tablette ?`)) return;
   try {
     await removePost(post);
   } catch (err) {
     console.error(err);
-    alert("La suppression a échoué. Vérifiez la connexion.");
+    notice("La suppression a échoué. Vérifiez la connexion.");
   }
 }
 
@@ -365,9 +366,9 @@ $('viewer-close').addEventListener('click', () => history.back());
 $('viewer-delete').addEventListener('click', async () => {
   const post = viewerPost;
   const what = post.type === 'video' ? 'cette vidéo' : 'cette photo';
-  if (!confirm(`Supprimer ${what} de la tablette ?`)) return;
+  if (!await askConfirm(`Supprimer ${what} de la tablette ?`)) return;
   history.back();
-  try { await removePost(post); } catch (err) { console.error(err); alert('La suppression a échoué. Vérifiez la connexion.'); }
+  try { await removePost(post); } catch (err) { console.error(err); notice('La suppression a échoué. Vérifiez la connexion.'); }
 });
 
 // Enregistrer sur le téléphone : feuille de partage sur iPhone (« Enregistrer l'image »),
@@ -405,7 +406,7 @@ $('viewer-save').addEventListener('click', async () => {
   } catch (err) {
     if (err.name !== 'AbortError') {
       console.error(err);
-      alert("L'enregistrement a échoué. Vérifiez la connexion.");
+      notice("L'enregistrement a échoué. Vérifiez la connexion.");
     }
   } finally {
     $('viewer-save').disabled = false;
@@ -625,7 +626,7 @@ async function addPhotoFiles(files) {
       pendingPhotos.push(await compressPhoto(file));
     } catch (err) {
       console.error(err);
-      alert(`La photo « ${file.name} » n'a pas pu être lue.`);
+      notice(`La photo « ${file.name} » n'a pas pu être lue.`);
     }
   }
   setStatus('');
@@ -762,7 +763,7 @@ async function queue(item) {
     toast("Pas de réseau : l'envoi partira tout seul");
   } catch (err) {
     console.error(err);
-    alert("L'envoi a échoué. Vérifiez la connexion et réessayez.");
+    notice("L'envoi a échoué. Vérifiez la connexion et réessayez.");
   }
   renderOutbox();
 }
@@ -941,7 +942,7 @@ async function onFaceChosen(e) {
     toast('Photo enregistrée');
   } catch (err) {
     console.error(err);
-    alert("La photo n'a pas pu être enregistrée. Vérifiez la connexion.");
+    notice("La photo n'a pas pu être enregistrée. Vérifiez la connexion.");
   }
 }
 
@@ -950,7 +951,7 @@ $('face-gallery').addEventListener('click', () => $('in-face-gallery').click());
 $('in-face-camera').addEventListener('change', onFaceChosen);
 $('in-face-gallery').addEventListener('change', onFaceChosen);
 $('face-remove').addEventListener('click', async () => {
-  if (!confirm('Retirer votre photo ?')) return;
+  if (!await askConfirm('Retirer votre photo ?')) return;
   myFace = null;
   renderFace();
   try { await saveFace(null); } catch (err) { console.error(err); }
@@ -1021,12 +1022,12 @@ $('btn-share').addEventListener('click', async () => {
     try { await navigator.share({ title: 'Papote', text, url }); } catch (e) { /* annulé */ }
   } else {
     await navigator.clipboard.writeText(`${text}\n${url}`);
-    alert('Lien copié. Collez-le dans un SMS ou un e-mail.');
+    notice('Lien copié. Collez-le dans un SMS ou un e-mail.');
   }
 });
 
 $('btn-leave').addEventListener('click', async () => {
-  if (!confirm(`Quitter la famille de ${session.family.name} ? Il faudra une nouvelle invitation pour revenir.`)) return;
+  if (!await askConfirm(`Quitter la famille de ${session.family.name} ? Il faudra une nouvelle invitation pour revenir.`)) return;
   const { fid, uid } = session;
   stopSession();
   await leaveFamily(fid, uid);
@@ -1200,18 +1201,18 @@ async function setFamilyAdmin(uid, on) {
     await updateDoc(doc(db, 'families', session.fid), { admins: [...admins] });
   } catch (err) {
     console.error(err);
-    alert("Le changement n'a pas pu être enregistré.");
+    notice("Le changement n'a pas pu être enregistré.");
   }
 }
 
 async function removeMember(m) {
-  if (!confirm(`Retirer ${m.name} de la famille ? Son téléphone ne recevra plus rien. Il pourra revenir avec le code famille.`)) return;
+  if (!await askConfirm(`Retirer ${m.name} de la famille ? Son téléphone ne recevra plus rien. Pour revenir, il faudra l'inviter de nouveau.`)) return;
   try {
     await deleteDoc(doc(db, 'families', session.fid, 'members', m.id));
     if ((session.family.admins || []).includes(m.id)) await setFamilyAdmin(m.id, false);
   } catch (err) {
     console.error(err);
-    alert("Ce membre n'a pas pu être retiré.");
+    notice("Ce membre n'a pas pu être retiré.");
   }
 }
 
@@ -1243,14 +1244,14 @@ function renderRequests(pending) {
     ok.className = 'primary small-btn';
     ok.textContent = 'Accepter';
     ok.addEventListener('click', async () => {
-      try { await acceptMember(session.fid, m.id); toast(`${m.name} a rejoint la famille`); } catch (err) { console.error(err); alert("L'acceptation a échoué."); }
+      try { await acceptMember(session.fid, m.id); toast(`${m.name} a rejoint la famille`); } catch (err) { console.error(err); notice("L'acceptation a échoué."); }
     });
     const no = document.createElement('button');
     no.type = 'button';
     no.className = 'link danger small';
     no.textContent = 'Refuser';
     no.addEventListener('click', async () => {
-      if (!confirm(`Refuser la demande de ${m.name} ?`)) return;
+      if (!await askConfirm(`Refuser la demande de ${m.name} ?`)) return;
       try { await deleteDoc(doc(db, 'families', session.fid, 'members', m.id)); } catch (err) { console.error(err); }
     });
     actions.append(ok, no);
@@ -1299,7 +1300,7 @@ $('form-invite').addEventListener('submit', async (e) => {
     }
   } catch (err) {
     console.error(err);
-    alert("L'invitation n'a pas pu être enregistrée.");
+    notice("L'invitation n'a pas pu être enregistrée.");
   }
 });
 
@@ -1311,25 +1312,89 @@ $('btn-tablet-code').addEventListener('click', async () => {
     $('tablet-code').hidden = false;
   } catch (err) {
     console.error(err);
-    alert("Le code n'a pas pu être créé.");
+    notice("Le code n'a pas pu être créé.");
   } finally {
     $('btn-tablet-code').disabled = false;
   }
 });
 
 $('btn-new-code').addEventListener('click', async () => {
-  if (!confirm("Changer le code famille ? L'ancien code et l'ancien QR code ne permettront plus de rejoindre la famille.")) return;
+  if (!await askConfirm("Changer le code famille ? L'ancien code et l'ancien QR code ne permettront plus de rejoindre la famille.")) return;
   try {
     await changeFamilyCode(session.fid, session.family.code);
     toast('Nouveau code famille');
   } catch (err) {
     console.error(err);
-    alert("Le code n'a pas pu être changé.");
+    notice("Le code n'a pas pu être changé.");
+  }
+});
+
+// ---------- Taille du texte sur la tablette ----------
+
+const TEXT_SIZES = ['normal', 'grande', 'tres-grande'];
+document.querySelectorAll('[data-size]').forEach((btn) => btn.addEventListener('click', async () => {
+  try {
+    // Le changement de rev prévient la tablette, qui relit la famille.
+    await updateDoc(doc(db, 'families', session.fid), { textSize: btn.dataset.size, rev: increment(1) });
+    toast('Taille du texte changée sur la tablette');
+  } catch (err) {
+    console.error(err);
+    notice("Le réglage n'a pas pu être enregistré.");
+  }
+}));
+
+function renderTextSize() {
+  const size = TEXT_SIZES.includes(session.family.textSize) ? session.family.textSize : 'normal';
+  document.querySelectorAll('[data-size]').forEach((b) => b.classList.toggle('active', b.dataset.size === size));
+}
+
+// ---------- Supprimer la famille et toutes ses données (responsable) ----------
+
+async function deleteAllIn(path, each) {
+  const snap = await getDocs(collection(db, ...path));
+  for (const d of snap.docs) {
+    if (each) await each(d);
+    await deleteDoc(d.ref);
+  }
+}
+
+$('btn-delete-family').addEventListener('click', async () => {
+  const name = session.family.name;
+  if (!await askConfirm(`Supprimer la famille de ${name} ? Toutes les photos, vidéos, messages, rappels et membres seront effacés pour tout le monde, et la tablette sera déconnectée. C'est définitif.`, 'Tout supprimer')) return;
+  if (!await askConfirm(`Dernière vérification : effacer définitivement toutes les données de la famille de ${name} ?`, 'Effacer')) return;
+  const { fid, uid } = session;
+  toast('Suppression en cours…');
+  try {
+    await deleteAllIn(['families', fid, 'posts'], async (d) => {
+      const post = { id: d.id, ...d.data() };
+      if (post.storagePath && storage) await deleteObject(ref(storage, post.storagePath)).catch(() => {});
+      await deleteAllIn(['families', fid, 'posts', d.id, 'media']);
+    });
+    for (const name2 of ['reminders', 'birthdays', 'invitations']) await deleteAllIn(['families', fid, name2]);
+    await deleteAllIn(['families', fid, 'calls'], async (d) => {
+      await deleteAllIn(['families', fid, 'calls', d.id, 'callerCandidates']);
+      await deleteAllIn(['families', fid, 'calls', d.id, 'calleeCandidates']);
+    });
+    const codes = await getDocs(query(collection(db, 'invites'), where('fid', '==', fid)));
+    for (const d of codes.docs) await deleteDoc(d.ref);
+    const members = await getDocs(collection(db, 'families', fid, 'members'));
+    for (const d of members.docs) if (d.id !== uid) await deleteDoc(d.ref);
+    await deleteDoc(doc(db, 'families', fid));
+    await deleteDoc(doc(db, 'families', fid, 'members', uid));
+    saveFamilyId(null);
+    await notice(`La famille de ${name} et toutes ses données ont été supprimées.`);
+    enterApp();
+  } catch (err) {
+    console.error(err);
+    notice("La suppression n'a pas pu aller jusqu'au bout. Réessayez avec une bonne connexion.");
   }
 });
 
 function applyFamily() {
   const admin = amFamilyAdmin();
+  $('text-size-card').hidden = !admin;
+  $('btn-delete-family').hidden = !admin;
+  renderTextSize();
   $('invite-email-card').hidden = !admin;
   $('tablet-card').hidden = !admin;
   $('btn-new-code').hidden = !admin || !CHANGE_CODE_READY;
@@ -1363,7 +1428,7 @@ $('form-family-name').addEventListener('submit', async (e) => {
     toast('Nom enregistré');
   } catch (err) {
     console.error(err);
-    alert("Le nom n'a pas pu être enregistré.");
+    notice("Le nom n'a pas pu être enregistré.");
   }
 });
 
@@ -1456,9 +1521,15 @@ function renderActivity() {
   const hour = new Date().getHours();
   el.hidden = false;
   el.classList.remove('warn');
+  // Batterie : envoyée par la tablette avec son signal « en ligne » ({ level, charging }).
+  const battery = tabletMembers.filter((m) => m.battery && m.lastOnline)
+    .sort((a, b) => toDate(b.lastOnline) - toDate(a.lastOnline))[0]?.battery;
   if (now - online > 45 * 60_000) {
     el.classList.add('warn');
-    el.textContent = `La tablette ne répond plus depuis ${ago(online).replace('il y a ', '')}. Est-elle branchée et connectée au wifi ?`;
+    el.textContent = `La tablette de ${name} ne répond plus depuis ${ago(online).replace('il y a ', '')}. Est-elle branchée et connectée au wifi ?`;
+  } else if (battery && battery.level < 15 && !battery.charging) {
+    el.classList.add('warn');
+    el.textContent = `Batterie faible sur la tablette de ${name} (${battery.level} %). Pensez à la brancher.`;
   } else if (active && now - active > 12 * 3600_000 && hour >= 10 && hour < 21) {
     el.classList.add('warn');
     el.textContent = `${name} n'a pas touché la tablette depuis ${ago(active).replace('il y a ', '')}.`;
@@ -1563,7 +1634,7 @@ $('form-link-email').addEventListener('submit', async (e) => {
 });
 
 document.querySelectorAll('[data-action=logout]').forEach((btn) => btn.addEventListener('click', async () => {
-  if (!confirm('Se déconnecter de Papote sur ce téléphone ?')) return;
+  if (!await askConfirm('Se déconnecter de Papote sur ce téléphone ?')) return;
   stopSession();
   await logOut();
   showLogin(false);

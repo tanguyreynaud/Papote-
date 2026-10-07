@@ -48,11 +48,14 @@ service cloud.firestore {
       return /databases/$(database)/documents/invites/$(code);
     }
 
-    // Tableau de bord : seul l'administrateur, connecté avec son compte Google, voit toutes les familles.
+    // Tableau de bord : seul l'administrateur voit toutes les familles.
+    // Badge « admin » posé par outils/admin/badge-admin.bat ; l'adresse e-mail reste acceptée
+    // le temps que le badge soit en place, puis elle sera retirée.
     function isAdmin() {
       return request.auth != null
-        && request.auth.token.email == 'tanguyreynaud22@gmail.com'
-        && request.auth.token.email_verified == true;
+        && (request.auth.token.get('admin', false) == true
+          || (request.auth.token.get('email', '') == 'tanguyreynaud22@gmail.com'
+            && request.auth.token.get('email_verified', false) == true));
     }
 
     // Mes familles : chaque fiche membre porte mon uid ; l'administrateur voit toutes les tablettes.
@@ -95,6 +98,8 @@ service cloud.firestore {
         && (isCreatorAfter(request.resource.data.fid) || isFamilyAdmin(request.resource.data.fid));
       allow update: if false;
       allow delete: if isFamilyAdmin(resource.data.fid);
+      // Retrouver les codes d'une famille pour la supprimer (requête where fid == …).
+      allow list: if isFamilyAdmin(resource.data.fid);
     }
 
     match /families/{fid} {
@@ -122,12 +127,17 @@ service cloud.firestore {
           || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['code'])
             && isFamilyAdmin(fid)
             && getAfter(invitePath(request.resource.data.code)).data.fid == fid)
+          // Taille du texte sur la tablette, avec le compteur qui la prévient.
+          || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['textSize', 'rev'])
+            && isFamilyAdmin(fid)
+            && request.resource.data.textSize in ['normal', 'grande', 'tres-grande'])
           || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['admins'])
             && isFamilyAdmin(fid)
             && request.resource.data.admins is list
             && request.resource.data.admins.size() <= 10)
         );
-      allow delete: if false;
+      // Supprimer la famille et toutes ses données (responsable, en dernier).
+      allow delete: if isFamilyAdmin(fid);
 
       match /members/{uid} {
         allow read: if isMember(fid);
@@ -167,7 +177,7 @@ service cloud.firestore {
           && request.resource.data.status == 'active';
         allow update: if signedIn()
           && uid == request.auth.uid
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'canCall', 'lastActive', 'lastOnline', 'callable', 'face', 'appVersion', 'uid', 'email'])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'canCall', 'lastActive', 'lastOnline', 'callable', 'face', 'appVersion', 'uid', 'email', 'battery'])
           // uid et e-mail ajoutés aux fiches d'avant, pour retrouver ses familles.
           && request.resource.data.get('uid', request.auth.uid) == request.auth.uid
           && (request.resource.data.get('email', null) == resource.data.get('email', null)
@@ -179,8 +189,8 @@ service cloud.firestore {
           && request.resource.data.name.size() > 0
           && request.resource.data.name.size() <= 40;
         allow delete: if signedIn() && uid == request.auth.uid;
-        // Un responsable peut retirer un membre de la famille (jamais la tablette).
-        allow delete: if isFamilyAdmin(fid) && resource.data.role == 'famille';
+        // Un responsable peut retirer ou refuser un membre (la tablette seulement en supprimant la famille).
+        allow delete: if isFamilyAdmin(fid);
       }
 
       // Invitations par e-mail : créées par un responsable, effacées par lui ou par l'invité qui a rejoint.
@@ -280,12 +290,13 @@ service cloud.firestore {
         allow update: if isMember(fid)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state', 'answer', 'endedAt'])
           && request.resource.data.state in ['ringing', 'accepted', 'declined', 'missed', 'ended'];
-        allow delete: if false;
+        allow delete: if isFamilyAdmin(fid);
 
         match /{side}/{candidate} {
           allow read: if isMember(fid);
           allow create: if isMember(fid) && side in ['callerCandidates', 'calleeCandidates'];
-          allow update, delete: if false;
+          allow update: if false;
+          allow delete: if isFamilyAdmin(fid);
         }
       }
     }

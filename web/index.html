@@ -295,6 +295,23 @@
           <h2>Membres</h2>
           <ul id="members" class="members"></ul>
         </div>
+        <div id="text-size-card" class="card" hidden>
+          <h2>Taille du texte sur la tablette</h2>
+          <div class="segmented" role="radiogroup" aria-label="Taille du texte sur la tablette">
+            <button type="button" class="seg" data-size="normal">Normale</button>
+            <button type="button" class="seg" data-size="grande">Grande</button>
+            <button type="button" class="seg" data-size="tres-grande">Très grande</button>
+          </div>
+        </div>
+        <details class="card data-card">
+          <summary>Vos données</summary>
+          <p class="muted"><strong>Ce qui est gardé</strong> : les prénoms et adresses e-mail des membres, leur photo de profil, les photos, vidéos et messages envoyés, l'agenda et les anniversaires.</p>
+          <p class="muted"><strong>Qui les voit</strong> : uniquement les membres de la famille et la tablette. Personne d'autre, ni aucune publicité.</p>
+          <p class="muted"><strong>Combien de temps</strong> : les 200 dernières photos et les 40 dernières vidéos ; les plus anciennes s'effacent toutes seules. Un envoi supprimé disparaît aussi de la tablette.</p>
+          <p class="muted"><strong>Où</strong> : sur les serveurs Google Firebase.</p>
+          <p class="muted"><strong>Une question, une demande</strong> : écrivez au support depuis la page Support.</p>
+          <button type="button" id="btn-delete-family" class="link danger wide" hidden>Supprimer la famille et toutes ses données</button>
+        </details>
         <div class="card">
           <h2>Mon compte</h2>
           <p id="account-email" class="muted"></p>
