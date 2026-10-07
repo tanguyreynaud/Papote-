@@ -37,6 +37,7 @@
     <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
     <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M3 7l9 6 9-6"/></symbol>
     <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></symbol>
+    <symbol id="i-google" viewBox="0 0 24 24"><path d="M21 12.2c0-.7-.1-1.3-.2-1.9H12v3.6h5.1a4.4 4.4 0 0 1-1.9 2.9v2.4h3.1c1.8-1.7 2.7-4.1 2.7-7z" fill="#4285F4" stroke="none"/><path d="M12 21.5c2.6 0 4.7-.9 6.3-2.3l-3.1-2.4c-.9.6-1.9.9-3.2.9-2.5 0-4.6-1.7-5.3-3.9H3.5v2.5A9.5 9.5 0 0 0 12 21.5z" fill="#34A853" stroke="none"/><path d="M6.7 13.8a5.7 5.7 0 0 1 0-3.6V7.7H3.5a9.5 9.5 0 0 0 0 8.6z" fill="#FBBC05" stroke="none"/><path d="M12 6.3c1.4 0 2.6.5 3.6 1.4l2.7-2.7A9.5 9.5 0 0 0 3.5 7.7l3.2 2.5C7.4 8 9.5 6.3 12 6.3z" fill="#EA4335" stroke="none"/></symbol>
     <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor"/></symbol>
   </svg>
 
@@ -47,12 +48,68 @@
       <div class="splash-dots"><span></span><span></span><span></span></div>
     </div>
 
+    <!-- Connexion -->
+    <section id="view-login" class="page-pad" hidden>
+      <div class="login-hero">
+        <img src="icons/icon.svg" alt="" class="login-logo">
+        <h1 class="brand">Papote</h1>
+        <p class="muted">Les photos et les messages de la famille, en sécurité.</p>
+      </div>
+      <p id="login-legacy" class="card small" hidden>Pour protéger les photos de la famille, connectez-vous une fois. Vous gardez votre profil et votre famille.</p>
+      <div class="card">
+        <button type="button" id="btn-google" class="google-btn wide"><svg><use href="#i-google"/></svg>Continuer avec Google</button>
+        <div class="or"><span>ou</span></div>
+        <form id="form-email">
+          <label>Recevoir un lien de connexion par e-mail
+            <input id="login-email" type="email" autocomplete="email" placeholder="prenom@exemple.fr" required>
+          </label>
+          <button type="submit" class="primary wide" id="btn-email">Recevoir le lien</button>
+        </form>
+        <p id="email-sent" class="seen small" hidden></p>
+        <p id="login-error" class="error" hidden></p>
+      </div>
+    </section>
+
+    <!-- Lien e-mail ouvert sur un autre appareil : redemander l'adresse -->
+    <section id="view-link-email" class="page-pad" hidden>
+      <h1 class="brand">Papote</h1>
+      <form id="form-link-email" class="card">
+        <h2>Confirmez votre adresse</h2>
+        <p class="muted">Le lien a été ouvert sur un autre appareil. Retapez l'adresse e-mail qui l'a reçu.</p>
+        <label>Adresse e-mail
+          <input id="link-email" type="email" autocomplete="email" required>
+        </label>
+        <button type="submit" class="primary wide">Se connecter</button>
+        <p id="link-error" class="error" hidden></p>
+      </form>
+    </section>
+
+    <!-- Invité par e-mail -->
+    <section id="view-invited" class="page-pad" hidden>
+      <h1 class="brand">Papote</h1>
+      <div id="invitations"></div>
+      <button type="button" id="btn-skip-invites" class="link wide" hidden>Plus tard</button>
+    </section>
+
+    <!-- En attente de validation -->
+    <section id="view-pending" class="page-pad" hidden>
+      <h1 class="brand">Papote</h1>
+      <div class="card center">
+        <h2>Demande envoyée</h2>
+        <p class="muted">Un responsable de la famille doit accepter votre arrivée. Cette page s'ouvrira toute seule dès qu'il l'aura fait.</p>
+        <span class="spinner pending-spin"></span>
+      </div>
+      <button type="button" class="link wide" data-action="other-family">Rejoindre ou créer une autre famille</button>
+      <button type="button" class="link wide" data-action="logout">Se déconnecter</button>
+    </section>
+
     <!-- Pas encore dans une famille -->
     <section id="view-join" class="page-pad" hidden>
       <h1 class="brand">Papote</h1>
+      <p id="join-account" class="muted small"></p>
       <div class="card">
         <h2>Rejoindre la famille</h2>
-        <p class="muted">Entrez le code famille qu'on vous a envoyé.</p>
+        <p class="muted">Entrez le code famille qu'on vous a envoyé. Un responsable de la famille acceptera votre arrivée. Le plus simple : demandez-lui de vous inviter avec votre adresse e-mail.</p>
         <form id="form-join">
           <label>Code famille
             <input id="join-code" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABCD-1234" required>
@@ -77,6 +134,8 @@
           <p id="create-error" class="error" hidden></p>
         </form>
       </details>
+      <button type="button" id="btn-join-back" class="link wide" hidden>← Retour à ma famille</button>
+      <button type="button" class="link wide" data-action="logout">Se déconnecter</button>
     </section>
 
     <!-- Accueil -->
@@ -84,7 +143,9 @@
       <header class="home-head">
         <h1 class="brand">Papote</h1>
         <p id="family-title" class="muted"></p>
+        <select id="family-switch" class="family-switch" aria-label="Changer de famille" hidden></select>
       </header>
+      <button type="button" id="pending-banner" class="pending-banner" hidden></button>
       <p id="activity" class="activity" hidden></p>
       <p id="outbox" class="outbox" hidden></p>
       <div id="install-card" class="card install-card" hidden>
@@ -195,12 +256,32 @@
           <input id="in-face-camera" type="file" accept="image/*" capture="user" hidden>
           <input id="in-face-gallery" type="file" accept="image/*" hidden>
         </div>
+        <div id="requests-card" class="card" hidden>
+          <h2>Demandes pour rejoindre</h2>
+          <ul id="requests" class="members"></ul>
+        </div>
+        <div id="invite-email-card" class="card" hidden>
+          <h2>Inviter par e-mail</h2>
+          <p class="muted small">La personne entre directement dans la famille en se connectant avec cette adresse.</p>
+          <form id="form-invite" class="inline-field">
+            <input id="invite-email" type="email" autocomplete="off" placeholder="adresse@exemple.fr" required>
+            <button type="submit" class="primary">Inviter</button>
+          </form>
+          <ul id="invitations-sent" class="members"></ul>
+        </div>
         <div class="card">
-          <h2>Inviter la famille</h2>
-          <p class="muted">Faites scanner ce QR code avec l'appareil photo de la personne, ou envoyez-lui le lien.</p>
+          <h2>Inviter avec le code famille</h2>
+          <p class="muted">Faites scanner ce QR code avec l'appareil photo de la personne, ou envoyez-lui le lien. Un responsable devra accepter son arrivée.</p>
           <div id="invite-qr" class="qr" aria-label="QR code pour rejoindre la famille"></div>
           <p class="code" id="settings-code"></p>
           <button id="btn-share" class="primary wide">Partager le lien</button>
+          <button id="btn-new-code" class="link wide" hidden>Changer le code famille</button>
+        </div>
+        <div id="tablet-card" class="card" hidden>
+          <h2>Installer une tablette</h2>
+          <p class="muted small">Ce code sert uniquement à installer une nouvelle tablette pour cette famille. Ne le donnez à personne d'autre.</p>
+          <p id="tablet-code" class="code" hidden></p>
+          <button type="button" id="btn-tablet-code" class="secondary wide">Créer un code d'installation</button>
         </div>
         <div id="family-name-card" hidden><form id="form-family-name" class="card">
           <h2>Nom affiché sur la tablette</h2>
@@ -214,7 +295,13 @@
           <h2>Membres</h2>
           <ul id="members" class="members"></ul>
         </div>
-        <button id="btn-leave" class="link danger wide">Quitter la famille sur ce téléphone</button>
+        <div class="card">
+          <h2>Mon compte</h2>
+          <p id="account-email" class="muted"></p>
+          <button type="button" class="secondary wide" data-action="other-family">Rejoindre ou créer une autre famille</button>
+          <button type="button" class="link wide" data-action="logout">Se déconnecter</button>
+        </div>
+        <button id="btn-leave" class="link danger wide">Quitter cette famille</button>
       </div>
     </section>
     <!-- Notifications -->

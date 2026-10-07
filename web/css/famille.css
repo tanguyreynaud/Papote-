@@ -711,3 +711,28 @@ button:disabled { opacity: .45; cursor: default; }
 .read-badge { flex: none; font-size: 13px; font-weight: 700; padding: 3px 10px; border-radius: 999px; }
 .read-badge.read { color: var(--ok); background: color-mix(in srgb, var(--ok) 14%, transparent); }
 .read-badge.unread { color: var(--muted); background: var(--bg); border: 1px solid var(--line); }
+
+/* ---------- Connexion ---------- */
+
+.login-hero { text-align: center; margin: 6vh 0 24px; }
+.login-logo { width: 88px; height: 88px; }
+.login-hero .brand { margin-top: 10px; }
+.login-hero p { margin: 4px 0 0; }
+.google-btn { background: var(--surface); color: var(--text); border: 1px solid var(--line); min-height: 54px; margin-top: 0; }
+.google-btn svg { width: 22px; height: 22px; }
+.or { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 14px; margin: 16px 0 0; }
+.or::before, .or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.pending-spin { display: inline-block; margin: 8px auto 4px; color: var(--accent); }
+
+/* ---------- Plusieurs familles, demandes ---------- */
+
+.family-switch { width: auto; max-width: 100%; margin-top: 6px; padding: 8px 12px; font-weight: 600; background: var(--surface); }
+.pending-banner {
+  width: 100%;
+  margin: 0 0 16px;
+  justify-content: flex-start;
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  color: var(--accent);
+  border-radius: 14px;
+}
+.small-btn { min-height: 0; padding: 8px 14px; font-size: 15px; }

@@ -7,7 +7,8 @@ service firebase.storage {
     match /families/{fid}/media/{file} {
       function isMember() {
         return request.auth != null
-          && firestore.exists(/databases/(default)/documents/families/$(fid)/members/$(request.auth.uid));
+          && firestore.exists(/databases/(default)/documents/families/$(fid)/members/$(request.auth.uid))
+          && firestore.get(/databases/(default)/documents/families/$(fid)/members/$(request.auth.uid)).data.get('status', 'active') != 'pending';
       }
       function isAdmin() {
         return request.auth != null

@@ -11,7 +11,8 @@ import {
 
 const firebaseConfig = {
   apiKey: 'AIzaSyAvoivJR8p-u2VxUWzlyHzTgP20-5ZG_-E',
-  authDomain: 'papote-famille.firebaseapp.com',
+  // Même adresse que l'app : la connexion Google reste sur papote-famille.web.app.
+  authDomain: 'papote-famille.web.app',
   projectId: 'papote-famille',
   storageBucket: 'papote-famille.firebasestorage.app',
   messagingSenderId: '807031084851',
@@ -75,7 +76,7 @@ export function savedFamilyId() {
   try { return localStorage.getItem(FID_KEY); } catch (e) { return null; }
 }
 
-function saveFamilyId(fid) {
+export function saveFamilyId(fid) {
   try {
     if (fid) localStorage.setItem(FID_KEY, fid);
     else localStorage.removeItem(FID_KEY);
@@ -89,7 +90,7 @@ export async function loadMembership() {
   if (!fid || !user) return null;
   try {
     const memberSnap = await getDoc(doc(db, 'families', fid, 'members', user.uid));
-    if (!memberSnap.exists()) return null;
+    if (!memberSnap.exists() || memberSnap.data().status === 'pending') return null;
     const familySnap = await getDoc(doc(db, 'families', fid));
     return {
       fid,
@@ -114,6 +115,7 @@ export async function createFamily(grandParentName, myName) {
   batch.set(doc(db, 'invites', code), { fid, createdBy: user.uid });
   batch.set(doc(db, 'families', fid, 'members', user.uid), {
     name: myName, role: 'famille', code, joinedAt: serverTimestamp(),
+    uid: user.uid, email: (user.email || '').toLowerCase(), status: 'active',
   });
   await batch.commit();
   saveFamilyId(fid);
@@ -132,14 +134,22 @@ export async function joinFamily(rawCode, name, role = 'famille') {
     throw new CodeInconnuError();
   }
   if (!invite.exists()) throw new CodeInconnuError();
-  const { fid } = invite.data();
+  const { fid, kind } = invite.data();
+  // Le code d'installation d'une tablette ne sert pas à rejoindre depuis un téléphone.
+  if (kind === 'tablette' && role !== 'tablette') throw new CodeInconnuError();
   const memberRef = doc(db, 'families', fid, 'members', user.uid);
   let alreadyMember = false;
   try {
     alreadyMember = (await getDoc(memberRef)).exists();
   } catch (e) { /* pas encore membre : lecture refusée */ }
   if (alreadyMember) await updateDoc(memberRef, { name });
-  else await setDoc(memberRef, { name, role, code, joinedAt: serverTimestamp() });
+  else {
+    // Arrivé avec le code famille : un responsable doit accepter le nouveau membre.
+    await setDoc(memberRef, {
+      name, role, code, joinedAt: serverTimestamp(),
+      uid: user.uid, email: (user.email || '').toLowerCase(), status: 'pending',
+    });
+  }
   saveFamilyId(fid);
   return fid;
 }

@@ -8,13 +8,18 @@ import {
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-storage.js';
 import {
   db, doc, updateDoc, deleteDoc, collection, onSnapshot, writeBatch, serverTimestamp, bumpRev,
-  loadMembership, createFamily, joinFamily, leaveFamily, watchMembers,
+  loadMembership, createFamily, joinFamily, leaveFamily, watchMembers, currentUser, savedFamilyId, saveFamilyId,
   addPost, deletePost, loadMedia, formatCode, normalizeCode, toDate, CodeInconnuError,
   MAX_VIDEO_CHUNKS, VIDEO_CHUNK,
 } from './firebase.js';
 import { startCall } from './appel.js';
 import { prepareVideo } from './video.js';
 import { startAgenda, stopAgenda } from './agenda.js';
+import {
+  isRealAccount, myEmail, signInGoogle, sendEmailLink, isEmailLink, completeEmailLink, logOut,
+  myMemberships, familyName, tagLegacyMember, myInvitations, acceptInvitation,
+  inviteByEmail, cancelInvitation, acceptMember, createTabletCode, changeFamilyCode,
+} from './compte.js';
 import {
   startNotifs, stopNotifs, markNotifsRead, setNotifMembers, setNotifReminders,
 } from './notifs.js';
@@ -25,7 +30,7 @@ const MAX_IMAGE_CHARS = 900_000; // un document Firestore est limité à 1 Mo
 let session = null; // { fid, family, member, uid }
 let stopMembers = null;
 
-const VIEWS = ['loading', 'view-join', 'view-home', 'view-photos', 'view-videos', 'view-messages', 'view-agenda', 'view-settings', 'view-notifs', 'view-support'];
+const VIEWS = ['loading', 'view-login', 'view-link-email', 'view-invited', 'view-pending', 'view-join', 'view-home', 'view-photos', 'view-videos', 'view-messages', 'view-agenda', 'view-settings', 'view-notifs', 'view-support'];
 
 function show(view) {
   for (const id of VIEWS) $(id).hidden = id !== view;
@@ -65,7 +70,8 @@ $('form-join').addEventListener('submit', async (e) => {
   showError($('join-error'), '');
   try {
     await joinFamily($('join-code').value, $('join-name').value.trim());
-    await start();
+    forgetInviteCode();
+    await enterApp();
   } catch (err) {
     console.error(err);
     showError($('join-error'), err instanceof CodeInconnuError
@@ -83,7 +89,7 @@ $('form-create').addEventListener('submit', async (e) => {
   showError($('create-error'), '');
   try {
     await createFamily($('create-grand').value.trim(), $('create-name').value.trim());
-    await start();
+    await enterApp();
     openPage('settings');
   } catch (err) {
     console.error(err);
@@ -1020,15 +1026,11 @@ $('btn-share').addEventListener('click', async () => {
 });
 
 $('btn-leave').addEventListener('click', async () => {
-  if (!confirm('Quitter la famille sur ce téléphone ? Vous pourrez revenir avec le code famille.')) return;
-  stopPage?.();
-  stopMembers?.();
-  stopAgenda();
-  stopNotifs();
-  await leaveFamily(session.fid, session.uid);
-  session = null;
-  $('family-title').textContent = '';
-  show('view-join');
+  if (!confirm(`Quitter la famille de ${session.family.name} ? Il faudra une nouvelle invitation pour revenir.`)) return;
+  const { fid, uid } = session;
+  stopSession();
+  await leaveFamily(fid, uid);
+  await enterApp();
 });
 
 // ---------- Appel vidéo ----------
@@ -1121,8 +1123,12 @@ $('call-hangup').addEventListener('click', () => {
 
 let allMembers = [];
 
-function renderMembers(members) {
-  allMembers = members;
+function renderMembers(all) {
+  allMembers = all;
+  // Les demandes en attente sont à part : seuls les responsables les voient et les acceptent.
+  const pending = all.filter((m) => m.status === 'pending');
+  const members = all.filter((m) => m.status !== 'pending');
+  renderRequests(pending);
   tabletMembers = members.filter((m) => m.role === 'tablette');
   faces = Object.fromEntries(members.filter((m) => m.face).map((m) => [m.id, m.face]));
   myFace = faces[session.uid] || null;
@@ -1211,7 +1217,124 @@ async function removeMember(m) {
 
 // ---------- Famille : nom de la personne, responsables ----------
 
+// ---------- Responsables : demandes, invitations par e-mail, tablette, code ----------
+
+// Le code famille ne se change qu'une fois toutes les tablettes à jour (elles retenaient l'ancien code).
+const CHANGE_CODE_READY = false;
+let stopInvitations = null;
+
+function renderRequests(pending) {
+  const admin = amFamilyAdmin();
+  $('requests-card').hidden = !admin || !pending.length;
+  $('pending-banner').hidden = !admin || !pending.length;
+  if (!admin) return;
+  $('pending-banner').textContent = pending.length === 1
+    ? `${pending[0].name} veut rejoindre la famille`
+    : `${pending.length} personnes veulent rejoindre la famille`;
+  $('requests').replaceChildren(...pending.map((m) => {
+    const li = document.createElement('li');
+    const name = document.createElement('span');
+    name.className = 'member-name';
+    name.textContent = m.email ? `${m.name} (${m.email})` : m.name;
+    const actions = document.createElement('div');
+    actions.className = 'member-actions';
+    const ok = document.createElement('button');
+    ok.type = 'button';
+    ok.className = 'primary small-btn';
+    ok.textContent = 'Accepter';
+    ok.addEventListener('click', async () => {
+      try { await acceptMember(session.fid, m.id); toast(`${m.name} a rejoint la famille`); } catch (err) { console.error(err); alert("L'acceptation a échoué."); }
+    });
+    const no = document.createElement('button');
+    no.type = 'button';
+    no.className = 'link danger small';
+    no.textContent = 'Refuser';
+    no.addEventListener('click', async () => {
+      if (!confirm(`Refuser la demande de ${m.name} ?`)) return;
+      try { await deleteDoc(doc(db, 'families', session.fid, 'members', m.id)); } catch (err) { console.error(err); }
+    });
+    actions.append(ok, no);
+    li.append(name, actions);
+    return li;
+  }));
+}
+
+$('pending-banner').addEventListener('click', () => openPage('settings'));
+
+function watchInvitations() {
+  stopInvitations?.();
+  stopInvitations = null;
+  if (!amFamilyAdmin()) return;
+  stopInvitations = onSnapshot(collection(db, 'families', session.fid, 'invitations'), (snap) => {
+    $('invitations-sent').replaceChildren(...snap.docs.map((d) => {
+      const inv = d.data();
+      const li = document.createElement('li');
+      const name = document.createElement('span');
+      name.className = 'member-name';
+      name.textContent = `${inv.email} · invitation envoyée`;
+      const cancel = document.createElement('button');
+      cancel.type = 'button';
+      cancel.className = 'link danger small';
+      cancel.textContent = 'Annuler';
+      cancel.addEventListener('click', () => cancelInvitation(session.fid, inv.email).catch(console.error));
+      li.append(name, cancel);
+      return li;
+    }));
+  }, (err) => console.warn('Invitations illisibles', err));
+}
+
+$('form-invite').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email = $('invite-email').value.trim();
+  try {
+    await inviteByEmail(session.fid, session.family, email, session.member.name);
+    $('invite-email').value = '';
+    toast(`Invitation prête : ${email} peut se connecter à Papote`);
+    if (navigator.share) {
+      navigator.share({
+        title: 'Papote',
+        text: `Je t'invite sur Papote pour envoyer des photos à ${session.family.name}. Connecte-toi avec ${email} :`,
+        url: location.origin,
+      }).catch(() => {});
+    }
+  } catch (err) {
+    console.error(err);
+    alert("L'invitation n'a pas pu être enregistrée.");
+  }
+});
+
+$('btn-tablet-code').addEventListener('click', async () => {
+  $('btn-tablet-code').disabled = true;
+  try {
+    const code = await createTabletCode(session.fid);
+    $('tablet-code').textContent = formatCode(code);
+    $('tablet-code').hidden = false;
+  } catch (err) {
+    console.error(err);
+    alert("Le code n'a pas pu être créé.");
+  } finally {
+    $('btn-tablet-code').disabled = false;
+  }
+});
+
+$('btn-new-code').addEventListener('click', async () => {
+  if (!confirm("Changer le code famille ? L'ancien code et l'ancien QR code ne permettront plus de rejoindre la famille.")) return;
+  try {
+    await changeFamilyCode(session.fid, session.family.code);
+    toast('Nouveau code famille');
+  } catch (err) {
+    console.error(err);
+    alert("Le code n'a pas pu être changé.");
+  }
+});
+
 function applyFamily() {
+  const admin = amFamilyAdmin();
+  $('invite-email-card').hidden = !admin;
+  $('tablet-card').hidden = !admin;
+  $('btn-new-code').hidden = !admin || !CHANGE_CODE_READY;
+  if (admin && !stopInvitations) watchInvitations();
+  if (!$('view-settings').hidden) renderSettings();
   const name = session.family.name;
   $('family-title').textContent = `Pour ${name}`;
   document.querySelectorAll('.grand-name').forEach((el) => { el.textContent = name; });
@@ -1356,31 +1479,251 @@ setInterval(() => { if (session) renderActivity(); }, 60_000);
 
 // ---------- Démarrage ----------
 
-async function start() {
-  const shared = new URLSearchParams(location.search).has('partage');
-  session = await loadMembership();
-  if (!session) {
-    const code = new URLSearchParams(location.search).get('code');
-    show('view-join');
-    // Arrivé par le lien ou le QR code d'invitation : il ne reste que le prénom à donner.
-    if (code) {
-      $('join-code').value = formatCode(normalizeCode(code));
-      $('join-name').focus();
-    }
-    return;
+// ---------- Connexion et choix de la famille ----------
+
+const INVITE_CODE_KEY = 'papote.codeInvite';
+let myFamilies = []; // [{ fid, name }]
+let skipInvites = false;
+let stopPending = null;
+let sharedPending = false;
+
+function rememberInviteCode(code) {
+  try { localStorage.setItem(INVITE_CODE_KEY, code); } catch (e) { /* rien */ }
+}
+function inviteCode() {
+  try { return localStorage.getItem(INVITE_CODE_KEY); } catch (e) { return null; }
+}
+function forgetInviteCode() {
+  try { localStorage.removeItem(INVITE_CODE_KEY); } catch (e) { /* rien */ }
+}
+
+function stopSession() {
+  stopPage?.();
+  stopPage = null;
+  stopMembers?.();
+  stopMembers = null;
+  stopFamily?.();
+  stopFamily = null;
+  stopInvitations?.();
+  stopInvitations = null;
+  stopPending?.();
+  stopPending = null;
+  stopAgenda();
+  stopNotifs();
+  session = null;
+}
+
+function showLoginError(message) {
+  $('login-error').textContent = message;
+  $('login-error').hidden = !message;
+}
+
+$('btn-google').addEventListener('click', async () => {
+  showLoginError('');
+  try {
+    await signInGoogle();
+    await enterApp();
+  } catch (err) {
+    if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') return;
+    console.error(err);
+    showLoginError(err.code === 'auth/popup-blocked'
+      ? 'Le téléphone a bloqué la fenêtre de connexion. Autorisez les fenêtres pour Papote et réessayez.'
+      : 'La connexion a échoué. Vérifiez la connexion internet et réessayez.');
   }
+});
+
+$('form-email').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  showLoginError('');
+  const email = $('login-email').value.trim();
+  $('btn-email').disabled = true;
+  try {
+    await sendEmailLink(email);
+    $('email-sent').textContent = `Lien envoyé à ${email}. Ouvrez l'e-mail sur ce téléphone et touchez le lien (pensez aux courriers indésirables).`;
+    $('email-sent').hidden = false;
+  } catch (err) {
+    console.error(err);
+    showLoginError("L'e-mail n'a pas pu être envoyé. Vérifiez l'adresse.");
+  } finally {
+    $('btn-email').disabled = false;
+  }
+});
+
+$('form-link-email').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  $('link-error').hidden = true;
+  try {
+    await completeEmailLink($('link-email').value.trim());
+    await enterApp();
+  } catch (err) {
+    console.error(err);
+    $('link-error').textContent = 'Ce lien ne fonctionne plus. Demandez-en un nouveau.';
+    $('link-error').hidden = false;
+  }
+});
+
+document.querySelectorAll('[data-action=logout]').forEach((btn) => btn.addEventListener('click', async () => {
+  if (!confirm('Se déconnecter de Papote sur ce téléphone ?')) return;
+  stopSession();
+  await logOut();
+  showLogin(false);
+}));
+
+document.querySelectorAll('[data-action=other-family]').forEach((btn) => btn.addEventListener('click', () => {
+  showJoin(myFamilies.length > 0);
+}));
+
+$('btn-join-back').addEventListener('click', () => enterApp());
+$('btn-skip-invites').addEventListener('click', () => { skipInvites = true; enterApp(); });
+
+$('family-switch').addEventListener('change', () => {
+  saveFamilyId($('family-switch').value);
+  enterApp();
+});
+
+function showLogin(legacy) {
+  $('login-legacy').hidden = !legacy;
+  $('email-sent').hidden = true;
+  showLoginError('');
+  show('view-login');
+}
+
+function showJoin(canGoBack) {
+  $('join-account').textContent = `Connecté avec ${myEmail()}`;
+  $('btn-join-back').hidden = !canGoBack;
+  const code = inviteCode();
+  if (code) $('join-code').value = formatCode(normalizeCode(code));
+  show('view-join');
+  if (code) $('join-name').focus();
+}
+
+function defaultName() {
+  const user = currentAuthUser();
+  return (user?.displayName || '').split(' ')[0] || '';
+}
+
+let authUser = null;
+const currentAuthUser = () => authUser;
+
+function showInvitations(invitations) {
+  const box = $('invitations');
+  box.replaceChildren(...invitations.map((inv) => {
+    const card = document.createElement('form');
+    card.className = 'card';
+    card.innerHTML = '<h2></h2><p class="muted"></p><label>Votre prénom<input maxlength="40" required></label>'
+      + '<button type="submit" class="primary wide">Rejoindre la famille</button><p class="error" hidden></p>';
+    card.querySelector('h2').textContent = `Famille de ${inv.familyName}`;
+    card.querySelector('p.muted').textContent = `${inv.invitedBy || 'Un responsable'} vous invite à rejoindre la famille.`;
+    const input = card.querySelector('input');
+    input.value = defaultName();
+    card.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      card.querySelector('button').disabled = true;
+      try {
+        await acceptInvitation(inv, input.value.trim());
+        saveFamilyId(inv.fid);
+        await enterApp();
+      } catch (err) {
+        console.error(err);
+        const p = card.querySelector('.error');
+        p.textContent = "Impossible de rejoindre pour le moment. L'invitation a peut-être été annulée.";
+        p.hidden = false;
+        card.querySelector('button').disabled = false;
+      }
+    });
+    return card;
+  }));
+  $('btn-skip-invites').hidden = false;
+  show('view-invited');
+}
+
+// En attente : on écoute sa propre fiche, l'app s'ouvre dès qu'un responsable accepte.
+function showPending(fid) {
+  stopPending?.();
+  stopPending = onSnapshot(doc(db, 'families', fid, 'members', authUser.uid), (snap) => {
+    if (!snap.exists()) { stopPending?.(); stopPending = null; enterApp(); return; }
+    if (snap.data().status !== 'pending') {
+      stopPending?.();
+      stopPending = null;
+      saveFamilyId(fid);
+      enterApp();
+    }
+  }, () => {});
+  show('view-pending');
+}
+
+async function enterApp() {
+  stopSession();
+  show('loading');
+  authUser = await currentUser();
+  if (!isRealAccount(authUser)) { showLogin(!!savedFamilyId()); return; }
+  try {
+    const saved = savedFamilyId();
+    if (saved) await tagLegacyMember(saved);
+    const memberships = await myMemberships();
+    const invitations = (await myInvitations()).filter((inv) => !memberships.some((m) => m.fid === inv.fid));
+    if (invitations.length && !skipInvites) { showInvitations(invitations); return; }
+    const active = memberships.filter((m) => m.status !== 'pending');
+    if (!active.length) {
+      const pending = memberships.find((m) => m.status === 'pending');
+      if (pending) showPending(pending.fid);
+      else showJoin(false);
+      return;
+    }
+    const chosen = active.find((m) => m.fid === saved) || active[0];
+    saveFamilyId(chosen.fid);
+    myFamilies = await Promise.all(active.map(async (m) => ({ fid: m.fid, name: await familyName(m.fid) || 'Famille' })));
+    renderFamilySwitch(chosen.fid);
+  } catch (err) {
+    console.error('Familles illisibles', err);
+  }
+  session = await loadMembership();
+  if (!session) { showJoin(false); return; }
+  forgetInviteCode();
   applyFamily();
   watchFamily();
-  stopMembers?.();
   stopMembers = watchMembers(session.fid, renderMembers);
-  history.replaceState(null, '', location.pathname);
   startAgenda(session, setNotifReminders);
   startNotifs(session);
   renderInstallCard();
+  renderAccount();
   goHome();
   renderOutbox();
   flushOutbox();
-  if (shared) openShared();
+  if (sharedPending) { sharedPending = false; openShared(); }
+}
+
+function renderFamilySwitch(current) {
+  const select = $('family-switch');
+  select.replaceChildren(...myFamilies.map((f) => new Option(`Famille de ${f.name}`, f.fid, false, f.fid === current)));
+  select.hidden = myFamilies.length < 2;
+  $('family-title').hidden = myFamilies.length >= 2;
+}
+
+function renderAccount() {
+  $('account-email').textContent = `Connecté avec ${myEmail()}`;
+}
+
+async function start() {
+  const params = new URLSearchParams(location.search);
+  sharedPending = params.has('partage');
+  // Arrivé par le lien ou le QR code d'invitation : le code est gardé le temps de se connecter.
+  if (params.get('code')) rememberInviteCode(params.get('code'));
+  if (isEmailLink()) {
+    try {
+      const user = await completeEmailLink();
+      if (!user) { show('view-link-email'); return; }
+    } catch (err) {
+      console.error(err);
+      history.replaceState(null, '', location.pathname);
+      showLogin(false);
+      showLoginError('Ce lien de connexion ne fonctionne plus. Demandez-en un nouveau.');
+      return;
+    }
+  } else if (params.toString()) {
+    history.replaceState(null, '', location.pathname);
+  }
+  await enterApp();
 }
 
 if ('serviceWorker' in navigator) {

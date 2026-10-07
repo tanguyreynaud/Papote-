@@ -1,9 +1,13 @@
 rules_version = '2';
 
 // Modèle :
-//   invites/{code}                  -> { fid, createdBy }       code famille à 8 caractères
-//   families/{fid}                  -> { name, code, createdBy, createdAt }
-//   families/{fid}/members/{uid}    -> { name, role, code, joinedAt }
+//   invites/{code}                  -> { fid, createdBy, kind? }  code famille à 8 caractères ;
+//                                      kind 'tablette' : code d'installation d'une tablette
+//   families/{fid}                  -> { name, code, createdBy, createdAt, admins? }
+//   families/{fid}/members/{uid}    -> { name, role, code, joinedAt, uid?, email?, status? }
+//                                      status 'pending' : arrivé avec le code, en attente d'un responsable ;
+//                                      absent ou 'active' : membre (les fiches d'avant n'ont pas de status)
+//   families/{fid}/invitations/{email} -> { email, fid, familyName, invitedBy, createdAt }
 //   families/{fid}/posts/{pid}      -> { type, text, image, authorUid, authorName, createdAt, seenAt, hearts }
 //   (photo ou vidéo dans Storage : imageUrl ou videoUrl + storagePath families/{fid}/media/{id}.jpg|mp4|webm)
 //   families/{fid}/birthdays/{bid}  -> { name, day, month, year|null, createdBy, createdAt }
@@ -18,9 +22,30 @@ service cloud.firestore {
       return /databases/$(database)/documents/families/$(fid);
     }
 
+    function memberPath(fid) {
+      return /databases/$(database)/documents/families/$(fid)/members/$(request.auth.uid);
+    }
+
+    // Membre actif : la fiche existe et n'est pas en attente de validation.
     function isMember(fid) {
       return signedIn()
-        && exists(/databases/$(database)/documents/families/$(fid)/members/$(request.auth.uid));
+        && exists(memberPath(fid))
+        && get(memberPath(fid)).data.get('status', 'active') != 'pending';
+    }
+
+    // Connexion Google ou lien e-mail (pas un compte anonyme), adresse vérifiée.
+    function isRealAccount() {
+      return signedIn()
+        && request.auth.token.firebase.sign_in_provider != 'anonymous'
+        && request.auth.token.get('email_verified', false) == true;
+    }
+
+    function myEmail() {
+      return request.auth.token.email.lower();
+    }
+
+    function invitePath(code) {
+      return /databases/$(database)/documents/invites/$(code);
     }
 
     // Tableau de bord : seul l'administrateur, connecté avec son compte Google, voit toutes les familles.
@@ -30,8 +55,15 @@ service cloud.firestore {
         && request.auth.token.email_verified == true;
     }
 
+    // Mes familles : chaque fiche membre porte mon uid ; l'administrateur voit toutes les tablettes.
     match /{path=**}/members/{uid} {
       allow read: if isAdmin();
+      allow read: if signedIn() && resource.data.get('uid', '') == request.auth.uid;
+    }
+
+    // Mes invitations : celles adressées à mon adresse e-mail vérifiée.
+    match /{path=**}/invitations/{email} {
+      allow read: if isRealAccount() && email == myEmail();
     }
 
     // Responsables de la famille : le créateur, plus ceux qu'il a désignés (champ admins).
@@ -55,18 +87,21 @@ service cloud.firestore {
       // Lecture d'un code connu uniquement : impossible de lister les familles.
       allow get: if signedIn();
       allow list: if false;
+      // Code famille (à la création ou quand un responsable le change) ou code d'installation d'une tablette.
       allow create: if signedIn()
-        && request.resource.data.keys().hasOnly(['fid', 'createdBy'])
+        && request.resource.data.keys().hasOnly(['fid', 'createdBy', 'kind'])
         && request.resource.data.createdBy == request.auth.uid
-        && isCreatorAfter(request.resource.data.fid);
-      allow update, delete: if false;
+        && (!('kind' in request.resource.data) || request.resource.data.kind == 'tablette')
+        && (isCreatorAfter(request.resource.data.fid) || isFamilyAdmin(request.resource.data.fid));
+      allow update: if false;
+      allow delete: if isFamilyAdmin(resource.data.fid);
     }
 
     match /families/{fid} {
       allow get: if isMember(fid);
       allow list: if false;
       allow get, list: if isAdmin();
-      allow create: if signedIn()
+      allow create: if isRealAccount()
         && request.resource.data.keys().hasOnly(['name', 'code', 'createdBy', 'createdAt'])
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.name is string
@@ -83,6 +118,10 @@ service cloud.firestore {
           // Marqueur de changement : les tablettes ne relisent que lorsqu'il bouge.
           || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rev'])
             && request.resource.data.rev is int)
+          // Nouveau code famille, créé dans la même opération (l'ancien est effacé).
+          || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['code'])
+            && isFamilyAdmin(fid)
+            && getAfter(invitePath(request.resource.data.code)).data.fid == fid)
           || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['admins'])
             && isFamilyAdmin(fid)
             && request.resource.data.admins is list
@@ -92,18 +131,47 @@ service cloud.firestore {
 
       match /members/{uid} {
         allow read: if isMember(fid);
+        // Un membre en attente ne voit que sa propre fiche.
+        allow get: if signedIn() && uid == request.auth.uid;
         allow create: if signedIn()
           && uid == request.auth.uid
-          && request.resource.data.keys().hasOnly(['name', 'role', 'code', 'joinedAt', 'canCall'])
+          && request.resource.data.keys().hasOnly(['name', 'role', 'code', 'joinedAt', 'canCall', 'uid', 'email', 'status'])
           && request.resource.data.name is string
           && request.resource.data.name.size() > 0
           && request.resource.data.name.size() <= 40
-          && request.resource.data.role in ['famille', 'tablette']
-          && (isCreatorAfter(fid)
-              || get(/databases/$(database)/documents/invites/$(request.resource.data.code)).data.fid == fid);
+          && (
+            // Tablette : seulement avec un code d'installation de tablette, active d'office.
+            (request.resource.data.role == 'tablette'
+              && !('status' in request.resource.data)
+              && get(invitePath(request.resource.data.code)).data.get('kind', '') == 'tablette'
+              && get(invitePath(request.resource.data.code)).data.fid == fid)
+            // Famille : compte Google ou e-mail, avec son uid et son adresse.
+            || (request.resource.data.role == 'famille'
+              && isRealAccount()
+              && request.resource.data.uid == request.auth.uid
+              && request.resource.data.email == myEmail()
+              && (
+                // Créateur de la famille, ou invité par e-mail : actif tout de suite.
+                ((isCreatorAfter(fid)
+                    || exists(/databases/$(database)/documents/families/$(fid)/invitations/$(myEmail())))
+                  && request.resource.data.status == 'active')
+                // Arrivé avec le code famille : en attente d'un responsable.
+                || (get(invitePath(request.resource.data.code)).data.fid == fid
+                  && get(invitePath(request.resource.data.code)).data.get('kind', '') != 'tablette'
+                  && request.resource.data.status == 'pending')
+              ))
+          );
+        // Un responsable accepte un membre en attente.
+        allow update: if isFamilyAdmin(fid)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+          && request.resource.data.status == 'active';
         allow update: if signedIn()
           && uid == request.auth.uid
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'canCall', 'lastActive', 'lastOnline', 'callable', 'face', 'appVersion'])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'canCall', 'lastActive', 'lastOnline', 'callable', 'face', 'appVersion', 'uid', 'email'])
+          // uid et e-mail ajoutés aux fiches d'avant, pour retrouver ses familles.
+          && request.resource.data.get('uid', request.auth.uid) == request.auth.uid
+          && (request.resource.data.get('email', null) == resource.data.get('email', null)
+              || (isRealAccount() && request.resource.data.email == myEmail()))
           // Photo de profil : petite image JPEG en data URL, ou null pour la retirer.
           && (!('face' in request.resource.data) || request.resource.data.face == null
               || (request.resource.data.face is string && request.resource.data.face.size() <= 200000))
@@ -113,6 +181,17 @@ service cloud.firestore {
         allow delete: if signedIn() && uid == request.auth.uid;
         // Un responsable peut retirer un membre de la famille (jamais la tablette).
         allow delete: if isFamilyAdmin(fid) && resource.data.role == 'famille';
+      }
+
+      // Invitations par e-mail : créées par un responsable, effacées par lui ou par l'invité qui a rejoint.
+      match /invitations/{email} {
+        allow read: if isFamilyAdmin(fid);
+        allow create: if isFamilyAdmin(fid)
+          && request.resource.data.keys().hasOnly(['email', 'fid', 'familyName', 'invitedBy', 'createdAt'])
+          && email == email.lower()
+          && request.resource.data.email == email
+          && request.resource.data.fid == fid;
+        allow delete: if isFamilyAdmin(fid) || (isRealAccount() && email == myEmail());
       }
 
       match /posts/{pid} {
