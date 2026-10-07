@@ -423,6 +423,16 @@
     var mode = p.image ? 'photo' : p.type === 'voice' ? 'voice' : p.type === 'video' ? 'video' : 'message';
     var media = mode === 'voice' || mode === 'video';
     $('overlay').className = 'overlay ln mode-' + mode;
+    // Photo en paysage : elle prend toute la largeur, le mot passe dessous en bandeau.
+    if (mode === 'photo') {
+      var probe = new Image();
+      probe.onload = function () {
+        if (overlayPost === p && probe.naturalWidth > probe.naturalHeight * 1.1) {
+          $('overlay').className = 'overlay ln mode-photo wide';
+        }
+      };
+      probe.src = p.image;
+    }
     // Comme un mot écrit à la main : le texte, puis la signature.
     var text = mode === 'message' ? p.text
       : mode === 'photo' ? (p.text || 'Une nouvelle photo pour vous !')
