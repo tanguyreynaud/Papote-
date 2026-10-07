@@ -357,7 +357,7 @@ $('viewer-save').addEventListener('click', async () => {
       // Storage refuse la lecture depuis la page (réglage CORS absent) : on ouvre le fichier,
       // un appui long permet alors de l'enregistrer.
       window.open(src, '_blank');
-      toast('Appuyez longuement sur la photo pour l'enregistrer');
+      toast("Appuyez longuement sur la photo pour l'enregistrer");
       return;
     }
     const ext = video ? ((post.mime || blob.type).includes('mp4') ? 'mp4' : 'webm') : 'jpg';
