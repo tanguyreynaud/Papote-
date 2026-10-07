@@ -322,6 +322,10 @@ button {
 }
 .call-wait { position: absolute; z-index: 1; justify-content: center; }
 
+/* Caméra sur le côté (tablette tenue couchée) : Mamie se place du côté de l'objectif */
+.cam-left .call-ring { flex-direction: row-reverse; }
+.cam-left #call-local { right: auto; left: 3vmin; }
+
 /* ---------- Installation ---------- */
 
 .setup { -webkit-align-items: center; align-items: center; -webkit-justify-content: center; justify-content: center; text-align: center; }

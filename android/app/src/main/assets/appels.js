@@ -384,4 +384,20 @@ async function start() {
   watchFamily();
 }
 
+// Sur une tablette faite pour être tenue debout, la caméra se retrouve sur le côté une fois
+// couchée. On range alors Mamie (son rond et sa petite vidéo) du côté de la caméra :
+// elle regarde vers l'objectif et se voit de face.
+function placeCamera() {
+  const o = screen.orientation;
+  const angle = o ? o.angle : (window.orientation || 0);
+  const landscape = o ? o.type.startsWith('landscape') : window.innerWidth > window.innerHeight;
+  // Paysage à 90° ou 270° : la tablette est « debout » à l'origine, caméra sur le bord court.
+  const side = landscape && angle === 90 ? 'left' : landscape && angle === 270 ? 'right' : '';
+  document.body.classList.toggle('cam-left', side === 'left');
+  document.body.classList.toggle('cam-right', side === 'right');
+}
+placeCamera();
+if (screen.orientation) screen.orientation.addEventListener('change', placeCamera);
+else window.addEventListener('orientationchange', placeCamera);
+
 start();
