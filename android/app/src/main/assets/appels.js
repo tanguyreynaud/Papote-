@@ -22,14 +22,17 @@ const db = getFirestore(app);
 
 // Sans relais TURN, la vidéo ne passe pas entre deux réseaux différents (4G, box…).
 // Le relais est décrit dans Firestore (config/turn), pas dans le code, qui est public :
-//   { url: 'https://<app>.metered.live/api/v1/turn/credentials?apiKey=…' }  identifiants à jour
-//   ou { iceServers: [{ urls, username, credential }, …] }                   identifiants fixes
+//   { url: 'https://…' }  adresse qui renvoie la liste des relais (identifiants à jour)
+//   ou { urls: 'turn:… turn:…', username, credential }                       identifiants fixes
 const STUN = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }];
 
 async function iceServers() {
   try {
     const conf = (await getDoc(doc(db, 'config', 'turn'))).data() || {};
-    let relays = Array.isArray(conf.iceServers) ? conf.iceServers : [];
+    let relays = [];
+    if (conf.urls && conf.username) {
+      relays = [{ urls: String(conf.urls).split(/[\s,]+/).filter(Boolean), username: conf.username, credential: conf.credential }];
+    }
     if (conf.url) {
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 5000);
