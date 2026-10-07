@@ -165,7 +165,19 @@ public class MainActivity extends Activity implements Sync.Listener {
         setupDeviceOwner();
         web.loadUrl(LocalContent.PAGE);
         sync.start();
+        Updater.cleanup(this);
+        handler.postDelayed(updateCheck, 60_000);
     }
+
+    /** Toutes les 6 heures : une nouvelle version de Papote est-elle publiée ? */
+    private final Runnable updateCheck = new Runnable() {
+        @Override
+        public void run() {
+            final boolean owner = isDeviceOwner();
+            new Thread(() -> Updater.check(getApplicationContext(), owner), "papote-maj").start();
+            handler.postDelayed(this, 6 * 3600_000L);
+        }
+    };
 
     @Override
     protected void onNewIntent(Intent intent) {
@@ -236,6 +248,28 @@ public class MainActivity extends Activity implements Sync.Listener {
                 videoView.stopPlayback();
                 videoView.setVisibility(View.GONE);
                 web.setVisibility(View.VISIBLE);
+            });
+        }
+
+        /** La nuit : écran noir et luminosité au minimum ; le jour : luminosité normale. */
+        @JavascriptInterface
+        public void setSleep(boolean asleep) {
+            handler.post(() -> {
+                WindowManager.LayoutParams lp = getWindow().getAttributes();
+                float brightness = asleep ? 0.01f : WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
+                lp.screenBrightness = brightness;
+                getWindow().setAttributes(lp);
+                // Android 4.4 : la bande qui bloque la barre d'état est une fenêtre système placée
+                // au-dessus ; c'est elle qui décide de la luminosité.
+                if (statusBarBlocker != null) {
+                    try {
+                        WindowManager.LayoutParams blp = (WindowManager.LayoutParams) statusBarBlocker.getLayoutParams();
+                        blp.screenBrightness = brightness;
+                        ((WindowManager) getSystemService(WINDOW_SERVICE)).updateViewLayout(statusBarBlocker, blp);
+                    } catch (Exception e) {
+                        Log.w(TAG, "Luminosité de nuit", e);
+                    }
+                }
             });
         }
 
@@ -329,6 +363,9 @@ public class MainActivity extends Activity implements Sync.Listener {
     @SuppressWarnings("deprecation")
     @Override
     public void onNewArrival() {
+        // La nuit (23h-7h), pas de sonnerie ni d'écran allumé : l'envoi attend le matin.
+        int hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY);
+        if (hour >= 23 || hour < 7) return;
         handler.post(() -> {
             try {
                 PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
@@ -507,6 +544,8 @@ public class MainActivity extends Activity implements Sync.Listener {
         // Sans mode kiosque, si une autre app passe devant (bouton « récents »), on revient.
         if (!kioskPaused() && !isDeviceOwner()) {
             handler.postDelayed(() -> {
+                // Laisse l'écran d'installation d'une mise à jour au premier plan.
+                if (Updater.prompting()) return;
                 ActivityManager am = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
                 am.moveTaskToFront(getTaskId(), 0);
             }, 800);

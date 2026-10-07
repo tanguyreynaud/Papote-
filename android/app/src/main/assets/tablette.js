@@ -594,10 +594,56 @@
     goHome: function () { showView('view-home'); }
   };
 
+  // ---------- La nuit, l'écran se met en veille ----------
+  // De 23h à 7h : écran noir et luminosité au minimum. Un toucher le rallume 2 minutes ;
+  // un rappel ou un appel le rallume tant qu'il est affiché. Un nouvel envoi attend le matin
+  // (ou le prochain toucher) pour ne pas allumer l'écran en pleine nuit.
+
+  var SLEEP_FROM = 23;
+  var SLEEP_TO = 7;
+  var WAKE_MS = 120000;
+  var wakeUntil = 0;
+  var asleep = false;
+  var sleepScreen = null;
+
+  function somethingToShow() {
+    var ids = ['reminder-alert', 'call-ring', 'call-view'];
+    for (var i = 0; i < ids.length; i++) if ($(ids[i]) && isShown(ids[i])) return true;
+    return document.body.className.indexOf('video-playing') >= 0;
+  }
+
+  function updateSleep() {
+    var hour = new Date().getHours();
+    var night = hour >= SLEEP_FROM || hour < SLEEP_TO;
+    var should = night && Date.now() > wakeUntil && !somethingToShow();
+    if (should === asleep) return;
+    asleep = should;
+    sleepScreen.style.display = should ? 'block' : 'none';
+    if (should) showView('view-home');
+    if (android() && android().setSleep) android().setSleep(should);
+  }
+
+  function wakeScreen() {
+    wakeUntil = Date.now() + WAKE_MS;
+    updateSleep();
+  }
+
+  function setupSleep() {
+    sleepScreen = document.createElement('div');
+    sleepScreen.style.cssText = 'display:none;position:fixed;top:0;right:0;bottom:0;left:0;z-index:1000;background:#000';
+    document.body.appendChild(sleepScreen);
+    // Le toucher qui rallume l'écran ne déclenche rien d'autre.
+    on(sleepScreen, 'touchstart', function (e) { e.preventDefault(); e.stopPropagation(); wakeScreen(); });
+    on(document, 'touchstart', function () { if (!asleep) wakeUntil = Date.now() + WAKE_MS; });
+    setInterval(updateSleep, 1000);
+    updateSleep();
+  }
+
   // ---------- Événements ----------
 
   function start() {
     fillIcons();
+    setupSleep();
     tick();
     setInterval(tick, 1000);
     setInterval(function () {

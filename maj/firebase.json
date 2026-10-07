@@ -1,0 +1,12 @@
+{
+  "hosting": {
+    "site": "papote-maj",
+    "public": "public",
+    "headers": [
+      {
+        "source": "version.json",
+        "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+      }
+    ]
+  }
+}
