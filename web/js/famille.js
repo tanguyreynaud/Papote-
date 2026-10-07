@@ -7,7 +7,7 @@ import {
   getStorage, ref, uploadBytes, getDownloadURL, deleteObject,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-storage.js';
 import {
-  db, doc, updateDoc, collection, onSnapshot, writeBatch, serverTimestamp, bumpRev,
+  db, doc, updateDoc, deleteDoc, collection, onSnapshot, writeBatch, serverTimestamp, bumpRev,
   loadMembership, createFamily, joinFamily, leaveFamily, watchMembers,
   addPost, deletePost, loadMedia, formatCode, normalizeCode, toDate, CodeInconnuError,
   MAX_VIDEO_CHUNKS, VIDEO_CHUNK,
@@ -190,6 +190,16 @@ function shortLabel(date) {
   return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
 }
 
+// L'auteur supprime ses envois ; un responsable de la famille peut tout supprimer.
+function canDelete(post) {
+  return post.authorUid === session.uid || amFamilyAdmin();
+}
+
+function amFamilyAdmin() {
+  const f = session?.family;
+  return !!f && (f.createdBy === session.uid || (f.admins || []).includes(session.uid));
+}
+
 async function confirmDelete(post, what) {
   if (!confirm(`Supprimer ${what} de la tablette ?`)) return;
   try {
@@ -250,7 +260,7 @@ function galleryItem(post, what, onOpen) {
     info.append(seen);
   }
   meta.append(info);
-  if (post.authorUid === session.uid) {
+  if (canDelete(post)) {
     const del = document.createElement('button');
     del.type = 'button';
     del.className = 'icon-btn del';
@@ -275,7 +285,11 @@ function renderVideos(posts) {
 
 // ---------- Visionneuse ----------
 
+let viewerPost = null;
+
 function openViewer(post) {
+  viewerPost = post;
+  $('viewer-delete').hidden = !canDelete(post);
   $('viewer').hidden = false;
   $('viewer-caption').textContent = post.text || '';
   history.pushState({ page, viewer: true }, '');
@@ -320,6 +334,56 @@ async function openVideo(post) {
 
 $('viewer-close').addEventListener('click', () => history.back());
 
+$('viewer-delete').addEventListener('click', async () => {
+  const post = viewerPost;
+  const what = post.type === 'video' ? 'cette vidéo' : 'cette photo';
+  if (!confirm(`Supprimer ${what} de la tablette ?`)) return;
+  history.back();
+  try { await removePost(post); } catch (err) { console.error(err); alert('La suppression a échoué. Vérifiez la connexion.'); }
+});
+
+// Enregistrer sur le téléphone : feuille de partage sur iPhone (« Enregistrer l'image »),
+// téléchargement ailleurs (la photo arrive dans la galerie, dossier Téléchargements).
+$('viewer-save').addEventListener('click', async () => {
+  const post = viewerPost;
+  const video = post.type === 'video';
+  $('viewer-save').disabled = true;
+  try {
+    const src = (video ? post.videoUrl : post.imageUrl) || await loadMedia(session.fid, post, video ? 'video' : 'image');
+    let blob;
+    try {
+      blob = await (await fetch(src)).blob();
+    } catch (err) {
+      // Storage refuse la lecture depuis la page (réglage CORS absent) : on ouvre le fichier,
+      // un appui long permet alors de l'enregistrer.
+      window.open(src, '_blank');
+      toast('Appuyez longuement sur la photo pour l'enregistrer');
+      return;
+    }
+    const ext = video ? ((post.mime || blob.type).includes('mp4') ? 'mp4' : 'webm') : 'jpg';
+    const file = new File([blob], `papote-${post.id}.${ext}`, { type: blob.type || (video ? 'video/mp4' : 'image/jpeg') });
+    if (isIos() && navigator.canShare?.({ files: [file] })) {
+      await navigator.share({ files: [file] });
+    } else {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(file);
+      a.download = file.name;
+      document.body.append(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 60_000);
+      toast('Enregistré dans le téléphone');
+    }
+  } catch (err) {
+    if (err.name !== 'AbortError') {
+      console.error(err);
+      alert("L'enregistrement a échoué. Vérifiez la connexion.");
+    }
+  } finally {
+    $('viewer-save').disabled = false;
+  }
+});
+
 // ---------- Messages ----------
 
 function renderMessages(posts) {
@@ -348,11 +412,16 @@ function renderMessages(posts) {
     let label = timeLabel(toDate(post.createdAt));
     if (post.type === 'message') label += post.seenAt ? ' · Vu' : '';
     foot.textContent = label;
-    li.append(foot);
-    if (mine) {
-      li.addEventListener('click', () => confirmDelete(post, 'ce message'));
-      li.title = 'Toucher pour supprimer';
+    if (canDelete(post)) {
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'bubble-del';
+      del.setAttribute('aria-label', 'Supprimer ce message');
+      del.append(icon('trash'));
+      del.addEventListener('click', () => confirmDelete(post, 'ce message'));
+      foot.prepend(del);
     }
+    li.append(foot);
     return li;
   });
   list.replaceChildren(...items);
@@ -374,14 +443,16 @@ $('form-message').addEventListener('submit', async (e) => {
   const text = $('message-text').value.trim();
   if (!text) { $('message-text').focus(); return; }
   $('btn-message').disabled = true;
+  const item = { kind: 'message', text, author: { authorUid: session.uid, authorName: session.member.name } };
   try {
-    await addPost(session.fid, { type: 'message', text, authorUid: session.uid, authorName: session.member.name });
+    if (!navigator.onLine) throw new Error('hors ligne');
+    await sendItem(item);
+  } catch (err) {
+    console.warn('Message mis en attente', err);
+    await queue(item);
+  } finally {
     $('message-text').value = '';
     updateCount();
-  } catch (err) {
-    console.error(err);
-    alert("Le message n'est pas parti. Vérifiez la connexion et réessayez.");
-  } finally {
     $('btn-message').disabled = false;
   }
 });
@@ -515,6 +586,10 @@ function setStatus(text) {
 async function onPhotosChosen(e) {
   const files = Array.from(e.target.files || []);
   e.target.value = '';
+  await addPhotoFiles(files);
+}
+
+async function addPhotoFiles(files) {
   if (!files.length) return;
   setStatus('Préparation…');
   for (const file of files) {
@@ -532,6 +607,10 @@ async function onPhotosChosen(e) {
 async function onVideoChosen(e) {
   const file = e.target.files && e.target.files[0];
   e.target.value = '';
+  await addVideoFile(file);
+}
+
+async function addVideoFile(file) {
   if (!file) return;
   $('pickers').hidden = true;
   try {
@@ -553,37 +632,143 @@ $('in-photo-gallery').addEventListener('change', onPhotosChosen);
 $('in-video-camera').addEventListener('change', onVideoChosen);
 $('in-video-gallery').addEventListener('change', onVideoChosen);
 
+// ---------- « Partager vers Papote » depuis la galerie du téléphone (Android) ----------
+// Le service worker reçoit les fichiers partagés, les garde dans un cache et rouvre l'app avec ?partage=1.
+
+async function openShared() {
+  try {
+    const cache = await caches.open('papote-partage');
+    const meta = await cache.match('/partage/meta');
+    if (!meta) return;
+    const { count, text } = await meta.json();
+    const files = [];
+    for (let i = 0; i < count; i++) {
+      const res = await cache.match(`/partage/${i}`);
+      if (!res) continue;
+      const blob = await res.blob();
+      files.push(new File([blob], decodeURIComponent(res.headers.get('X-Name') || `partage-${i}`), { type: blob.type }));
+    }
+    await caches.delete('papote-partage');
+    const video = files.find((f) => f.type.startsWith('video/'));
+    const photos = files.filter((f) => f.type.startsWith('image/'));
+    if (!video && !photos.length) return;
+    openPage(video ? 'videos' : 'photos');
+    openAdd(video ? 'video' : 'photo');
+    if (text) $('post-text').value = text.slice(0, 80);
+    if (video) await addVideoFile(video);
+    else await addPhotoFiles(photos);
+  } catch (err) {
+    console.error('Partage illisible', err);
+  }
+}
+
 $('form-post').addEventListener('submit', async (e) => {
   e.preventDefault();
   const text = $('post-text').value.trim();
   const author = { authorUid: session.uid, authorName: session.member.name };
   setStatus('');
+  const kind = addMode;
+  if (kind === 'video' ? !pendingVideo : !pendingPhotos.length) return;
+  // Une photo à la fois : en cas de coupure, seules les photos restantes sont mises en attente.
+  const items = kind === 'video'
+    ? [{ kind, text, video: pendingVideo, author }]
+    : pendingPhotos.map((photo, i) => ({ kind, text: i === 0 ? text : '', photo, author }));
+  let sent = 0;
   try {
-    if (addMode === 'video') {
-      if (!pendingVideo) return;
-      setBusy('Envoi de la vidéo…');
-      await sendVideo(pendingVideo, text, author);
-    } else {
-      if (!pendingPhotos.length) return;
-      for (let i = 0; i < pendingPhotos.length; i++) {
-        setBusy(pendingPhotos.length > 1 ? `Photo ${i + 1} sur ${pendingPhotos.length}…` : 'Envoi…');
-        // La légende accompagne la première photo.
-        await sendPhoto(pendingPhotos[i], i === 0 ? text : '', author);
-      }
+    for (const item of items) {
+      if (!navigator.onLine) throw new Error('hors ligne');
+      setBusy(kind === 'video' ? 'Envoi de la vidéo…' : items.length > 1 ? `Photo ${sent + 1} sur ${items.length}…` : 'Envoi…');
+      await sendItem(item);
+      sent++;
     }
     setBusy('');
     history.back();
     toast('Envoyé');
-    pruneOld(addMode === 'video' ? 'video' : 'photo');
+    pruneOld(kind);
   } catch (err) {
-    console.error(err);
-    setStatus(/trop lourde/.test(err.message)
-      ? 'Cette vidéo est trop longue pour le moment : gardez-la sous 30 secondes.'
-      : "L'envoi a échoué. Vérifiez la connexion et réessayez.");
+    setBusy('');
+    if (/trop lourde/.test(err.message)) {
+      setStatus('Cette vidéo est trop longue pour le moment : gardez-la sous 30 secondes.');
+      return;
+    }
+    console.warn('Envoi mis en attente', err);
+    for (const item of items.slice(sent)) await queue(item);
+    history.back();
   } finally {
     setBusy('');
   }
 });
+
+// ---------- Envois en attente de réseau ----------
+// Sans réseau (ou si l'envoi échoue), l'envoi est gardé sur le téléphone et part tout seul
+// dès que la connexion revient, même si l'app a été fermée entre-temps.
+
+function sendItem(item) {
+  if (item.kind === 'message') return addPost(session.fid, { type: 'message', text: item.text, ...item.author });
+  if (item.kind === 'video') return sendVideo(item.video, item.text, item.author);
+  return sendPhoto(item.photo, item.text, item.author);
+}
+
+function outboxDb() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('papote-envois', 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('envois', { keyPath: 'id', autoIncrement: true });
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function outbox(mode, fn) {
+  const dbi = await outboxDb();
+  return new Promise((resolve, reject) => {
+    const tx = dbi.transaction('envois', mode);
+    const req = fn(tx.objectStore('envois'));
+    tx.oncomplete = () => resolve(req?.result);
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function queue(item) {
+  try {
+    await outbox('readwrite', (store) => store.add({ ...item, fid: session.fid }));
+    toast("Pas de réseau : l'envoi partira tout seul");
+  } catch (err) {
+    console.error(err);
+    alert("L'envoi a échoué. Vérifiez la connexion et réessayez.");
+  }
+  renderOutbox();
+}
+
+async function renderOutbox() {
+  let count = 0;
+  try { count = await outbox('readonly', (store) => store.count()); } catch (e) { /* stockage indisponible */ }
+  $('outbox').hidden = !count;
+  $('outbox').textContent = count > 1 ? `${count} envois en attente de réseau…` : '1 envoi en attente de réseau…';
+}
+
+let flushing = false;
+async function flushOutbox() {
+  if (flushing || !session || !navigator.onLine) return;
+  flushing = true;
+  try {
+    const items = await outbox('readonly', (store) => store.getAll());
+    for (const item of items) {
+      if (item.fid !== session.fid) { await outbox('readwrite', (store) => store.delete(item.id)); continue; }
+      await sendItem(item);
+      await outbox('readwrite', (store) => store.delete(item.id));
+      pruneOld(item.kind === 'message' ? null : item.kind);
+    }
+    if (items.length) toast(items.length > 1 ? 'Envois en attente partis' : 'Envoi en attente parti');
+  } catch (err) {
+    console.warn('Envois en attente : nouvel essai plus tard', err);
+  } finally {
+    flushing = false;
+    renderOutbox();
+  }
+}
+
+window.addEventListener('online', flushOutbox);
+setInterval(flushOutbox, 60_000);
 
 // ---------- Fichiers dans Firebase Storage ----------
 // Photos et vidéos vont dans Storage (moins cher, vidéos jusqu'à 2 minutes) ; l'envoi garde un petit
@@ -622,6 +807,7 @@ async function sendPhoto(photo, text, author) {
       return;
     } catch (err) {
       console.warn('Storage indisponible, envoi par la base', err);
+      if (!navigator.onLine) throw err;
       storage = null; // pour les envois suivants de cette session
     }
   }
@@ -651,6 +837,7 @@ async function sendVideo(video, text, author) {
       return;
     } catch (err) {
       console.warn('Storage indisponible, envoi par la base', err);
+      if (!navigator.onLine) throw err;
       storage = null; // pour les envois suivants de cette session
     }
   }
@@ -750,6 +937,7 @@ const KEEP = { photo: 200, video: 40 };
 const WEEK = 7 * 86_400_000;
 
 async function pruneOld(type) {
+  if (!KEEP[type]) return;
   try {
     const posts = collection(db, 'families', session.fid, 'posts');
     const count = (await getCountFromServer(query(posts, where('type', '==', type)))).data().count;
@@ -909,7 +1097,10 @@ $('call-hangup').addEventListener('click', () => {
   else leaveCallScreen();
 });
 
+let allMembers = [];
+
 function renderMembers(members) {
+  allMembers = members;
   tabletMembers = members.filter((m) => m.role === 'tablette');
   faces = Object.fromEntries(members.filter((m) => m.face).map((m) => [m.id, m.face]));
   myFace = faces[session.uid] || null;
@@ -935,10 +1126,101 @@ function renderMembers(members) {
       empty.innerHTML = `<svg><use href="#i-${m.role === 'tablette' ? 'home' : 'user'}"/></svg>`;
       li.append(empty);
     }
-    li.append(m.role === 'tablette' ? `Tablette de ${session.family.name}` : m.name);
+    const name = document.createElement('span');
+    name.className = 'member-name';
+    name.textContent = m.role === 'tablette' ? `Tablette de ${session.family.name}` : m.name;
+    li.append(name);
+    if (m.role === 'famille') {
+      const f = session.family;
+      const isCreator = f.createdBy === m.id;
+      const isAdmin = isCreator || (f.admins || []).includes(m.id);
+      if (isAdmin) {
+        const badge = document.createElement('span');
+        badge.className = 'badge';
+        badge.textContent = 'Responsable';
+        name.append(badge);
+      }
+      // Les responsables gèrent les autres membres (le créateur reste toujours responsable).
+      if (amFamilyAdmin() && m.id !== session.uid) {
+        const menu = document.createElement('div');
+        menu.className = 'member-actions';
+        if (!isCreator) {
+          const toggle = document.createElement('button');
+          toggle.type = 'button';
+          toggle.className = 'link small';
+          toggle.textContent = isAdmin ? 'Retirer responsable' : 'Rendre responsable';
+          toggle.addEventListener('click', () => setFamilyAdmin(m.id, !isAdmin));
+          menu.append(toggle);
+        }
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'link danger small';
+        remove.textContent = 'Retirer';
+        remove.addEventListener('click', () => removeMember(m));
+        menu.append(remove);
+        li.append(menu);
+      }
+    }
     list.append(li);
   }
 }
+
+async function setFamilyAdmin(uid, on) {
+  const admins = new Set(session.family.admins || []);
+  if (on) admins.add(uid); else admins.delete(uid);
+  try {
+    await updateDoc(doc(db, 'families', session.fid), { admins: [...admins] });
+  } catch (err) {
+    console.error(err);
+    alert("Le changement n'a pas pu être enregistré.");
+  }
+}
+
+async function removeMember(m) {
+  if (!confirm(`Retirer ${m.name} de la famille ? Son téléphone ne recevra plus rien. Il pourra revenir avec le code famille.`)) return;
+  try {
+    await deleteDoc(doc(db, 'families', session.fid, 'members', m.id));
+    if ((session.family.admins || []).includes(m.id)) await setFamilyAdmin(m.id, false);
+  } catch (err) {
+    console.error(err);
+    alert("Ce membre n'a pas pu être retiré.");
+  }
+}
+
+// ---------- Famille : nom de la personne, responsables ----------
+
+function applyFamily() {
+  const name = session.family.name;
+  $('family-title').textContent = `Pour ${name}`;
+  document.querySelectorAll('.grand-name').forEach((el) => { el.textContent = name; });
+  $('message-text').placeholder = `Écrire à ${name}…`;
+  $('family-name-card').hidden = !amFamilyAdmin();
+  if (document.activeElement !== $('family-name')) $('family-name').value = name;
+  if (allMembers.length) renderMembers(allMembers);
+}
+
+let stopFamily = null;
+function watchFamily() {
+  stopFamily?.();
+  stopFamily = onSnapshot(doc(db, 'families', session.fid), (snap) => {
+    if (!snap.exists()) return;
+    session.family = { ...session.family, ...snap.data() };
+    applyFamily();
+  }, (err) => console.error('Famille illisible', err));
+}
+
+$('form-family-name').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const name = $('family-name').value.trim();
+  if (!name || name === session.family.name) return;
+  try {
+    await updateDoc(doc(db, 'families', session.fid), { name });
+    toast('Nom enregistré');
+  } catch (err) {
+    console.error(err);
+    alert("Le nom n'a pas pu être enregistré.");
+  }
+});
 
 // ---------- Ajouter à l'écran d'accueil ----------
 
@@ -1053,6 +1335,7 @@ setInterval(() => { if (session) renderActivity(); }, 60_000);
 // ---------- Démarrage ----------
 
 async function start() {
+  const shared = new URLSearchParams(location.search).has('partage');
   session = await loadMembership();
   if (!session) {
     const code = new URLSearchParams(location.search).get('code');
@@ -1064,9 +1347,8 @@ async function start() {
     }
     return;
   }
-  $('family-title').textContent = `Pour ${session.family.name}`;
-  document.querySelectorAll('.grand-name').forEach((el) => { el.textContent = session.family.name; });
-  $('message-text').placeholder = `Écrire à ${session.family.name}…`;
+  applyFamily();
+  watchFamily();
   stopMembers?.();
   stopMembers = watchMembers(session.fid, renderMembers);
   history.replaceState(null, '', location.pathname);
@@ -1074,6 +1356,9 @@ async function start() {
   startNotifs(session);
   renderInstallCard();
   goHome();
+  renderOutbox();
+  flushOutbox();
+  if (shared) openShared();
 }
 
 if ('serviceWorker' in navigator) {

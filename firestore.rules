@@ -34,6 +34,13 @@ service cloud.firestore {
       allow read: if isAdmin();
     }
 
+    // Responsables de la famille : le créateur, plus ceux qu'il a désignés (champ admins).
+    function isFamilyAdmin(fid) {
+      let fam = get(familyPath(fid)).data;
+      return isMember(fid)
+        && (fam.createdBy == request.auth.uid || request.auth.uid in fam.get('admins', []));
+    }
+
     function isCreatorAfter(fid) {
       return getAfter(familyPath(fid)).data.createdBy == request.auth.uid;
     }
@@ -69,12 +76,17 @@ service cloud.firestore {
       allow update: if isMember(fid)
         && (
           (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name'])
+            && isFamilyAdmin(fid)
             && request.resource.data.name is string
             && request.resource.data.name.size() > 0
             && request.resource.data.name.size() <= 40)
           // Marqueur de changement : les tablettes ne relisent que lorsqu'il bouge.
           || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rev'])
             && request.resource.data.rev is int)
+          || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['admins'])
+            && isFamilyAdmin(fid)
+            && request.resource.data.admins is list
+            && request.resource.data.admins.size() <= 10)
         );
       allow delete: if false;
 
@@ -99,6 +111,8 @@ service cloud.firestore {
           && request.resource.data.name.size() > 0
           && request.resource.data.name.size() <= 40;
         allow delete: if signedIn() && uid == request.auth.uid;
+        // Un responsable peut retirer un membre de la famille (jamais la tablette).
+        allow delete: if isFamilyAdmin(fid) && resource.data.role == 'famille';
       }
 
       match /posts/{pid} {
@@ -123,6 +137,7 @@ service cloud.firestore {
           && request.resource.data.hearts <= resource.data.hearts + 1;
         // L'auteur supprime ses envois. Pour rester dans le quota gratuit, n'importe quel membre
         // peut aussi effacer un envoi de plus de 7 jours (nettoyage des plus anciennes photos et vidéos).
+        allow delete: if isFamilyAdmin(fid);
         allow delete: if signedIn()
           && (resource.data.authorUid == request.auth.uid
               || (isMember(fid) && resource.data.createdAt < request.time - duration.value(7, 'd')));
@@ -131,6 +146,7 @@ service cloud.firestore {
         match /media/{kind} {
           allow read: if isMember(fid);
           allow read, delete: if isAdmin();
+          allow delete: if isFamilyAdmin(fid);
           allow create: if isMember(fid)
             && (kind in ['image', 'audio'] || kind.matches('video[0-9]+'))
             && request.resource.data.keys().hasOnly(['data'])

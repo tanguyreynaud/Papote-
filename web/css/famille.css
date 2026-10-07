@@ -684,3 +684,27 @@ button:disabled { opacity: .45; cursor: default; }
 .qr svg { stroke: none; }
 .qr svg rect { fill: #fff; }
 .qr svg path { fill: #000; }
+
+/* ---------- Visionneuse : enregistrer, supprimer ---------- */
+
+.viewer-actions { display: flex; gap: 12px; padding: 0 16px calc(16px + env(safe-area-inset-bottom)); }
+.viewer-btn { color: #fff; background: rgba(255, 255, 255, .14); border-radius: 999px; padding: 10px 18px; font-size: 15px; }
+.viewer-btn svg { width: 20px; height: 20px; }
+#viewer-delete { color: #fca5a5; }
+
+/* Corbeille dans les bulles de message */
+.bubble-del { padding: 0 6px 0 0; color: inherit; opacity: .8; vertical-align: middle; }
+.bubble-del svg { width: 16px; height: 16px; }
+
+/* ---------- Réglages : nom de Mamie, responsables ---------- */
+
+.inline-field { display: flex; gap: 8px; margin-top: 10px; }
+.inline-field input { margin: 0; flex: 1; min-width: 0; }
+.inline-field button { min-height: 0; }
+.members li { flex-wrap: wrap; }
+.member-name { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.badge { font-size: 12px; font-weight: 700; color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); padding: 2px 8px; border-radius: 999px; }
+.member-actions { display: flex; gap: 14px; width: 100%; padding-left: 52px; }
+.member-actions .link { padding: 2px 0; }
+
+.outbox { margin: 0 0 16px; padding: 12px 14px; border-radius: 14px; background: color-mix(in srgb, var(--c-agenda) 14%, var(--surface)); font-size: 15px; font-weight: 600; }

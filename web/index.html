@@ -36,6 +36,7 @@
     <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
     <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
     <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M3 7l9 6 9-6"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></symbol>
     <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor"/></symbol>
   </svg>
 
@@ -85,6 +86,7 @@
         <p id="family-title" class="muted"></p>
       </header>
       <p id="activity" class="activity" hidden></p>
+      <p id="outbox" class="outbox" hidden></p>
       <div id="install-card" class="card install-card" hidden>
         <p><strong>Installez Papote sur votre écran d'accueil</strong> pour l'ouvrir comme une app.</p>
         <button id="btn-install" class="primary wide">Ajouter à l'écran d'accueil</button>
@@ -198,6 +200,14 @@
           <p class="code" id="settings-code"></p>
           <button id="btn-share" class="primary wide">Partager le lien</button>
         </div>
+        <div id="family-name-card" hidden><form id="form-family-name" class="card">
+          <h2>Nom affiché sur la tablette</h2>
+          <p class="muted small">C'est le nom de la personne qui a la tablette, utilisé partout dans l'app.</p>
+          <div class="inline-field">
+            <input id="family-name" maxlength="40" required>
+            <button type="submit" class="primary">Enregistrer</button>
+          </div>
+        </form></div>
         <div class="card">
           <h2>Membres</h2>
           <ul id="members" class="members"></ul>
@@ -362,6 +372,10 @@
     <img id="viewer-img" alt="" hidden>
     <video id="viewer-video" controls playsinline hidden></video>
     <p id="viewer-caption" class="viewer-caption"></p>
+    <div class="viewer-actions">
+      <button type="button" id="viewer-save" class="viewer-btn"><svg><use href="#i-download"/></svg>Enregistrer</button>
+      <button type="button" id="viewer-delete" class="viewer-btn"><svg><use href="#i-trash"/></svg>Supprimer</button>
+    </div>
   </div>
 
   <!-- Appel vidéo en cours -->
