@@ -9,8 +9,8 @@ import android.util.Log;
 import java.io.File;
 
 /**
- * Lecture des messages vocaux par Android plutôt que par la page :
- * sur Android 4.4, le lecteur du navigateur ne sait pas lire les fichiers servis localement.
+ * Lecture des messages vocaux par Android plutôt que par la page : le son passe toujours,
+ * même si la page est en veille ou si l'écran vient de se rallumer.
  */
 final class VoicePlayer {
     interface Listener {

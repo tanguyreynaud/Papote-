@@ -10,18 +10,20 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.graphics.Color;
-import android.graphics.PixelFormat;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.UserManager;
 import android.os.PowerManager;
+import android.media.AudioManager;
 import android.media.Ringtone;
 import android.media.RingtoneManager;
 import android.net.Uri;
 import android.provider.Settings;
 import android.util.Log;
 import android.view.Gravity;
+import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
@@ -42,8 +44,8 @@ import org.json.JSONObject;
 
 /**
  * Écran Papote en plein écran. L'interface est une page locale (assets/tablette.html) ;
- * les données (Firebase, météo) sont récupérées par {@link Sync} en Java, ce qui marche
- * aussi sur les tablettes anciennes (Android 4.4).
+ * les données (Firebase, météo) sont récupérées par {@link Sync} en Java.
+ * Prévu pour des tablettes récentes (Android 9 et plus) en mode kiosque (propriétaire de l'appareil).
  *
  * Commandes de maintenance par ADB (voir README.md) :
  *   --es code ABCD2345     relie la tablette à une famille
@@ -57,7 +59,6 @@ public class MainActivity extends Activity implements Sync.Listener {
     private WebView web;
     private SharedPreferences prefs;
     private Sync sync;
-    private View statusBarBlocker;
     private CallAudio callAudio;
     private VoicePlayer voicePlayer;
     private VideoView videoView;
@@ -117,19 +118,24 @@ public class MainActivity extends Activity implements Sync.Listener {
             }
         });
         web.setWebChromeClient(new WebChromeClient() {
+            // Messages et erreurs de la page dans logcat (adb logcat -s PapoteJS).
+            @Override
+            public boolean onConsoleMessage(android.webkit.ConsoleMessage m) {
+                Log.i("PapoteJS", m.message() + " @" + m.sourceId() + ":" + m.lineNumber());
+                return true;
+            }
+
             // Caméra et micro pour les appels vidéo, uniquement pour l'écran Papote.
             @Override
             public void onPermissionRequest(PermissionRequest request) {
-                if (Build.VERSION.SDK_INT >= 21
-                        && LocalContent.HOST.equals(request.getOrigin().getHost())) {
+                if (LocalContent.HOST.equals(request.getOrigin().getHost())) {
                     request.grant(request.getResources());
-                } else if (Build.VERSION.SDK_INT >= 21) {
+                } else {
                     request.deny();
                 }
             }
         });
-        // La page, et par-dessus un lecteur vidéo natif (le navigateur d'Android 4.4 ne lit pas
-        // les vidéos servies localement).
+        // La page, et par-dessus un lecteur vidéo natif plein écran.
         FrameLayout root = new FrameLayout(this);
         root.addView(web, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT));
@@ -154,8 +160,7 @@ public class MainActivity extends Activity implements Sync.Listener {
         setContentView(root);
         callAudio = new CallAudio(this);
         voicePlayer = new VoicePlayer(this, () -> callPage("onVoiceEnded", new JSONObject()));
-        if (Build.VERSION.SDK_INT >= 23
-                && (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED
+        if ((checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED
                 || checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED)) {
             requestPermissions(new String[]{Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO}, 1);
         }
@@ -163,6 +168,8 @@ public class MainActivity extends Activity implements Sync.Listener {
         sync = new Sync(this, prefs, this);
         handleIntent(getIntent());
         setupDeviceOwner();
+        setVolumes();
+        registerReceiver(screenOff, new IntentFilter(Intent.ACTION_SCREEN_OFF));
         web.loadUrl(LocalContent.PAGE);
         sync.start();
         Updater.cleanup(this);
@@ -173,8 +180,9 @@ public class MainActivity extends Activity implements Sync.Listener {
     private final Runnable updateCheck = new Runnable() {
         @Override
         public void run() {
-            final boolean owner = isDeviceOwner();
-            new Thread(() -> Updater.check(getApplicationContext(), owner), "papote-maj").start();
+            if (isDeviceOwner()) {
+                new Thread(() -> Updater.check(getApplicationContext()), "papote-maj").start();
+            }
             handler.postDelayed(this, 6 * 3600_000L);
         }
     };
@@ -251,6 +259,29 @@ public class MainActivity extends Activity implements Sync.Listener {
             });
         }
 
+        /** QR code (image PNG en data URL) du lien d'invitation de la famille. */
+        @JavascriptInterface
+        public String qrCode(String text) {
+            try {
+                com.google.zxing.common.BitMatrix m = new com.google.zxing.qrcode.QRCodeWriter()
+                        .encode(text, com.google.zxing.BarcodeFormat.QR_CODE, 480, 480);
+                int w = m.getWidth(), h = m.getHeight();
+                int[] pixels = new int[w * h];
+                for (int y = 0; y < h; y++) {
+                    for (int x = 0; x < w; x++) pixels[y * w + x] = m.get(x, y) ? Color.BLACK : Color.WHITE;
+                }
+                android.graphics.Bitmap bmp = android.graphics.Bitmap.createBitmap(pixels, w, h,
+                        android.graphics.Bitmap.Config.ARGB_8888);
+                java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+                bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out);
+                return "data:image/png;base64," + android.util.Base64.encodeToString(out.toByteArray(),
+                        android.util.Base64.NO_WRAP);
+            } catch (Exception e) {
+                Log.w(TAG, "QR code", e);
+                return "";
+            }
+        }
+
         /** La nuit : écran noir et luminosité au minimum ; le jour : luminosité normale. */
         @JavascriptInterface
         public void setSleep(boolean asleep) {
@@ -259,17 +290,6 @@ public class MainActivity extends Activity implements Sync.Listener {
                 float brightness = asleep ? 0.01f : WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
                 lp.screenBrightness = brightness;
                 getWindow().setAttributes(lp);
-                // Android 4.4 : la bande qui bloque la barre d'état est une fenêtre système placée
-                // au-dessus ; c'est elle qui décide de la luminosité.
-                if (statusBarBlocker != null) {
-                    try {
-                        WindowManager.LayoutParams blp = (WindowManager.LayoutParams) statusBarBlocker.getLayoutParams();
-                        blp.screenBrightness = brightness;
-                        ((WindowManager) getSystemService(WINDOW_SERVICE)).updateViewLayout(statusBarBlocker, blp);
-                    } catch (Exception e) {
-                        Log.w(TAG, "Luminosité de nuit", e);
-                    }
-                }
             });
         }
 
@@ -278,7 +298,7 @@ public class MainActivity extends Activity implements Sync.Listener {
             handler.post(() -> voicePlayer.stop());
         }
 
-        /** La page écoute la famille en direct (tablettes récentes). */
+        /** La page écoute la famille en direct (Firebase web). */
         @JavascriptInterface
         public void realtime(boolean on) {
             sync.setRealtime(on);
@@ -388,6 +408,67 @@ public class MainActivity extends Activity implements Sync.Listener {
 
     // ---------- Mode kiosque ----------
 
+    private static final String[] RESTRICTIONS = {
+            UserManager.DISALLOW_OUTGOING_CALLS,
+            UserManager.DISALLOW_SMS,
+            UserManager.DISALLOW_SAFE_BOOT,
+    };
+
+    // ---------- Son et écran : ni réglables ni éteignables par erreur ----------
+
+    /** Volume réglé une fois pour toutes : fort pour la sonnerie et les messages vocaux. */
+    private void setVolumes() {
+        AudioManager am = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        int[][] levels = {
+                {AudioManager.STREAM_MUSIC, 85}, {AudioManager.STREAM_RING, 100},
+                {AudioManager.STREAM_NOTIFICATION, 90}, {AudioManager.STREAM_VOICE_CALL, 100},
+                {AudioManager.STREAM_ALARM, 100},
+        };
+        for (int[] l : levels) {
+            try {
+                am.setStreamVolume(l[0], am.getStreamMaxVolume(l[0]) * l[1] / 100, 0);
+            } catch (Exception e) {
+                Log.w(TAG, "Volume " + l[0], e);
+            }
+        }
+    }
+
+    /** Les boutons de volume ne font rien : le son reste au bon niveau. */
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        int code = event.getKeyCode();
+        if (code == KeyEvent.KEYCODE_VOLUME_UP || code == KeyEvent.KEYCODE_VOLUME_DOWN
+                || code == KeyEvent.KEYCODE_VOLUME_MUTE) {
+            return !kioskPaused();
+        }
+        return super.dispatchKeyEvent(event);
+    }
+
+    /**
+     * Android ne laisse aucune appli bloquer le bouton marche/arrêt : un appui éteint l'écran.
+     * En journée, on le rallume dans la foulée (on ne voit qu'un bref noir).
+     * La nuit (23h-7h), on le laisse éteint.
+     */
+    private final android.content.BroadcastReceiver screenOff = new android.content.BroadcastReceiver() {
+        @SuppressWarnings("deprecation")
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            int hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY);
+            if (kioskPaused() || hour >= 23 || hour < 7) return;
+            handler.post(() -> {
+                try {
+                    PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+                    if (pm.isInteractive()) return;
+                    PowerManager.WakeLock wl = pm.newWakeLock(PowerManager.SCREEN_BRIGHT_WAKE_LOCK
+                            | PowerManager.ACQUIRE_CAUSES_WAKEUP, "papote:rallumer");
+                    wl.acquire(5_000);
+                } catch (Exception e) {
+                    Log.w(TAG, "Rallumer l'écran", e);
+                }
+            });
+        }
+    };
+
     private boolean kioskPaused() {
         return prefs.getBoolean("kioskPaused", false);
     }
@@ -395,10 +476,7 @@ public class MainActivity extends Activity implements Sync.Listener {
     private void setKioskPaused(boolean paused) {
         prefs.edit().putBoolean("kioskPaused", paused).apply();
         if (paused) {
-            if (Build.VERSION.SDK_INT >= 21) {
-                try { stopLockTask(); } catch (Exception e) { Log.w(TAG, "stopLockTask", e); }
-            }
-            removeStatusBarBlocker();
+            try { stopLockTask(); } catch (Exception e) { Log.w(TAG, "stopLockTask", e); }
         } else {
             enterKiosk();
         }
@@ -413,28 +491,26 @@ public class MainActivity extends Activity implements Sync.Listener {
     }
 
     private boolean isDeviceOwner() {
-        return Build.VERSION.SDK_INT >= 21 && dpm().isDeviceOwnerApp(getPackageName());
+        return dpm().isDeviceOwnerApp(getPackageName());
     }
 
     private void setupDeviceOwner() {
-        if (Build.VERSION.SDK_INT < 21 || !isDeviceOwner()) return;
+        if (!isDeviceOwner()) return;
         DevicePolicyManager dpm = dpm();
         ComponentName admin = admin();
         try {
             dpm.setLockTaskPackages(admin, new String[]{getPackageName()});
-            if (Build.VERSION.SDK_INT >= 28) {
-                // Garde le menu du bouton marche/arrêt pour pouvoir éteindre ou redémarrer.
-                dpm.setLockTaskFeatures(admin, DevicePolicyManager.LOCK_TASK_FEATURE_GLOBAL_ACTIONS);
-            }
+            // Pas de menu « Éteindre / Redémarrer » sur le bouton marche/arrêt.
+            dpm.setLockTaskFeatures(admin, DevicePolicyManager.LOCK_TASK_FEATURE_NONE);
+            // Pas d'appel ni de SMS par la carte SIM : tout passe par Papote.
+            for (String r : RESTRICTIONS) dpm.addUserRestriction(admin, r);
             IntentFilter home = new IntentFilter(Intent.ACTION_MAIN);
             home.addCategory(Intent.CATEGORY_HOME);
             home.addCategory(Intent.CATEGORY_DEFAULT);
             dpm.addPersistentPreferredActivity(admin, home,
                     new ComponentName(getPackageName(), MainActivity.class.getName()));
-            if (Build.VERSION.SDK_INT >= 23) {
-                dpm.setKeyguardDisabled(admin, true);
-                dpm.setStatusBarDisabled(admin, true);
-            }
+            dpm.setKeyguardDisabled(admin, true);
+            dpm.setStatusBarDisabled(admin, true);
             // Écran toujours allumé quand la tablette est branchée (secteur, USB ou sans fil).
             dpm.setGlobalSetting(admin, Settings.Global.STAY_ON_WHILE_PLUGGED_IN, "7");
         } catch (Exception e) {
@@ -443,15 +519,15 @@ public class MainActivity extends Activity implements Sync.Listener {
     }
 
     private void removeDeviceOwner() {
-        if (Build.VERSION.SDK_INT < 21 || !isDeviceOwner()) return;
+        if (!isDeviceOwner()) return;
         DevicePolicyManager dpm = dpm();
         ComponentName admin = admin();
         try {
             dpm.clearPackagePersistentPreferredActivities(admin, getPackageName());
-            if (Build.VERSION.SDK_INT >= 23) {
-                dpm.setKeyguardDisabled(admin, false);
-                dpm.setStatusBarDisabled(admin, false);
-            }
+            for (String r : RESTRICTIONS) dpm.clearUserRestriction(admin, r);
+            dpm.setLockTaskFeatures(admin, DevicePolicyManager.LOCK_TASK_FEATURE_GLOBAL_ACTIONS);
+            dpm.setKeyguardDisabled(admin, false);
+            dpm.setStatusBarDisabled(admin, false);
             dpm.setLockTaskPackages(admin, new String[0]);
         } catch (Exception e) {
             Log.w(TAG, "Nettoyage du kiosque", e);
@@ -460,58 +536,11 @@ public class MainActivity extends Activity implements Sync.Listener {
     }
 
     private void enterKiosk() {
-        if (kioskPaused()) return;
-        if (Build.VERSION.SDK_INT >= 21 && isDeviceOwner()
-                && (Build.VERSION.SDK_INT < 23 || dpm().isLockTaskPermitted(getPackageName()))) {
-            ActivityManager am = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
-            boolean locked = Build.VERSION.SDK_INT >= 23
-                    ? am.getLockTaskModeState() != ActivityManager.LOCK_TASK_MODE_NONE
-                    : am.isInLockTaskMode();
-            if (!locked) {
-                try { startLockTask(); } catch (Exception e) { Log.w(TAG, "startLockTask", e); }
-            }
-        } else if (Build.VERSION.SDK_INT < 23) {
-            addStatusBarBlocker();
+        if (kioskPaused() || !isDeviceOwner() || !dpm().isLockTaskPermitted(getPackageName())) return;
+        ActivityManager am = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
+        if (am.getLockTaskModeState() == ActivityManager.LOCK_TASK_MODE_NONE) {
+            try { startLockTask(); } catch (Exception e) { Log.w(TAG, "startLockTask", e); }
         }
-    }
-
-    /**
-     * Sans mode kiosque (Android 4.4) : une bande invisible en haut de l'écran
-     * empêche d'ouvrir le volet des notifications.
-     */
-    @SuppressWarnings("deprecation")
-    private void addStatusBarBlocker() {
-        if (statusBarBlocker != null) return;
-        int height = (int) (40 * getResources().getDisplayMetrics().density);
-        WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
-                WindowManager.LayoutParams.MATCH_PARENT, height,
-                WindowManager.LayoutParams.TYPE_SYSTEM_ERROR,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-                        | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
-                        | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-                PixelFormat.TRANSPARENT);
-        lp.gravity = Gravity.TOP;
-        View v = new View(this) {
-            @SuppressLint("ClickableViewAccessibility")
-            @Override
-            public boolean onTouchEvent(MotionEvent event) {
-                return true;
-            }
-        };
-        try {
-            ((WindowManager) getSystemService(WINDOW_SERVICE)).addView(v, lp);
-            statusBarBlocker = v;
-        } catch (Exception e) {
-            Log.w(TAG, "Blocage de la barre d'état impossible", e);
-        }
-    }
-
-    private void removeStatusBarBlocker() {
-        if (statusBarBlocker == null) return;
-        try {
-            ((WindowManager) getSystemService(WINDOW_SERVICE)).removeView(statusBarBlocker);
-        } catch (Exception ignored) { }
-        statusBarBlocker = null;
     }
 
     private void hideSystemBars() {
@@ -542,20 +571,11 @@ public class MainActivity extends Activity implements Sync.Listener {
     protected void onPause() {
         web.onPause();
         super.onPause();
-        // Sans mode kiosque, si une autre app passe devant (bouton « récents »), on revient.
-        if (!kioskPaused() && !isDeviceOwner()) {
-            handler.postDelayed(() -> {
-                // Laisse l'écran d'installation d'une mise à jour au premier plan.
-                if (Updater.prompting()) return;
-                ActivityManager am = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
-                am.moveTaskToFront(getTaskId(), 0);
-            }, 800);
-        }
     }
 
     @Override
     protected void onDestroy() {
-        removeStatusBarBlocker();
+        try { unregisterReceiver(screenOff); } catch (Exception ignored) { }
         callAudio.release();
         voicePlayer.stop();
         sync.stop();

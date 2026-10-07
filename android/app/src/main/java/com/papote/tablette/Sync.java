@@ -79,6 +79,7 @@ final class Sync {
     // Accès uniquement depuis le fil de synchronisation.
     private final Map<String, Post> posts = new LinkedHashMap<>();
     private String familyName;
+    private String familyCode;
     private long lastFullRefresh;
     private long lastRev = Long.MIN_VALUE; // marqueur de changement de la famille
     private volatile boolean realtime;
@@ -232,11 +233,12 @@ final class Sync {
         try {
             // Une seule lecture : le marqueur « rev » ne bouge que si la famille a envoyé ou supprimé
             // quelque chose (ou modifié les rappels). Sinon, rien d'autre à lire.
-            JSONObject family = firebase.get("families/" + fid, "name", "rev");
+            JSONObject family = firebase.get("families/" + fid, "name", "rev", "code");
             long rev = 0;
             JSONObject ff = family == null ? null : family.optJSONObject("fields");
             if (ff != null) {
                 familyName = Firebase.str(ff, "name");
+                familyCode = Firebase.str(ff, "code");
                 rev = Firebase.integer(ff, "rev");
             }
             if (rev == lastRev && now - lastFullRefresh < FULL_REFRESH_MS) {
@@ -453,7 +455,6 @@ final class Sync {
     private File downloadToFile(String url, String id, String ext) throws Exception {
         javax.net.ssl.HttpsURLConnection c =
                 (javax.net.ssl.HttpsURLConnection) new java.net.URL(url).openConnection();
-        c.setSSLSocketFactory(Tls.socketFactory(context));
         c.setConnectTimeout(20_000);
         c.setReadTimeout(60_000);
         File tmp = new File(imageDir, id + ".tmp");
@@ -509,8 +510,10 @@ final class Sync {
             JSONObject write = new JSONObject()
                     .put("update", new JSONObject()
                             .put("name", Firebase.docName("families/" + fid + "/members/" + firebase.uid()))
-                            .put("fields", new JSONObject()))
-                    .put("updateMask", new JSONObject().put("fieldPaths", new JSONArray()))
+                            // La version de l'appli, pour le tableau de bord de la famille.
+                            .put("fields", new JSONObject().put("appVersion",
+                                    new JSONObject().put("stringValue", appVersion()))))
+                    .put("updateMask", new JSONObject().put("fieldPaths", new JSONArray().put("appVersion")))
                     .put("updateTransforms", new JSONArray().put(new JSONObject()
                             .put("fieldPath", field).put("setToServerValue", "REQUEST_TIME")))
                     .put("currentDocument", new JSONObject().put("exists", true));
@@ -518,6 +521,14 @@ final class Sync {
             lastHeartbeat.put(field, now);
         } catch (Exception e) {
             Log.w(TAG, "Veille " + field, e);
+        }
+    }
+
+    private String appVersion() {
+        try {
+            return context.getPackageManager().getPackageInfo(context.getPackageName(), 0).versionName;
+        } catch (Exception e) {
+            return "";
         }
     }
 
@@ -599,6 +610,7 @@ final class Sync {
                         .put("duration", p.duration));
             }
             JSONObject payload = new JSONObject().put("familyName", familyName == null ? "" : familyName)
+                    .put("familyCode", familyCode == null ? "" : familyCode)
                     .put("posts", arr);
             String json = payload.toString();
             if (json.equals(lastPostsJson)) return;

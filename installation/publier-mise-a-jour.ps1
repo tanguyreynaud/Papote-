@@ -4,8 +4,8 @@
 # 2. Enregistrer les changements avec git (commit) : seul le code enregistré est publié.
 # 3. Lancer : powershell -ExecutionPolicy Bypass -File installation\publier-mise-a-jour.ps1
 #
-# Les tablettes vérifient toutes les 6 heures. Android 5 et plus (mode kiosque) : installation
-# silencieuse. Android 4.4 : l'écran d'installation s'ouvre en journée, il suffit de toucher « Installer ».
+# Les tablettes (en mode kiosque) vérifient toutes les 6 heures et s'installent la mise à jour
+# toutes seules, sans rien demander.
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
