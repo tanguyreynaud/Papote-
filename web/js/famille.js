@@ -789,7 +789,8 @@ function renderActivity() {
   const latest = (field) => Math.max(0, ...tabletMembers.map((m) => (m[field] ? toDate(m[field]).getTime() : 0)));
   const online = latest('lastOnline');
   const active = latest('lastActive');
-  if (!online) { el.hidden = true; $('support-status').hidden = true; return; }
+  const copies = ['support-status', 'notifs-status'];
+  if (!online) { el.hidden = true; copies.forEach((id) => { $(id).hidden = true; }); return; }
   const name = session.family.name;
   const now = Date.now();
   const hour = new Date().getHours();
@@ -806,9 +807,12 @@ function renderActivity() {
       ? `Tablette en ligne. ${name} l'a utilisée ${ago(active)}.`
       : 'Tablette en ligne.';
   }
-  $('support-status').hidden = false;
-  $('support-status').className = el.className;
-  $('support-status').textContent = el.textContent;
+  // Même état de la tablette en haut de Notifications et dans Support.
+  for (const id of copies) {
+    $(id).hidden = false;
+    $(id).classList.toggle('warn', el.classList.contains('warn'));
+    $(id).textContent = el.textContent;
+  }
 }
 
 setInterval(() => { if (session) renderActivity(); }, 60_000);
