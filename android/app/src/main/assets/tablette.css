@@ -947,3 +947,8 @@ body.night .invite p { color: #a8998d; }
 .rdv-title { margin-top: 2vmin; font-size: 8.5vmin; font-weight: bold; line-height: 1.15; }
 .rdv-in { margin-top: 3vmin; padding: 1.5vmin 4vmin; border-radius: 6vmin; background: #15803d; color: #fff; font-size: 5.5vmin; font-weight: bold; }
 body.night .frame-rdv { background: #10261a; color: #bbf7d0; }
+
+/* Accueil : l'heure, la date et la météo centrées dans la moitié gauche */
+.home-left { padding-left: 4vmin; padding-right: 4vmin; text-align: center; }
+.home-left .weather { -webkit-justify-content: center; justify-content: center; text-align: left; }
+.home-left .bday-banner { text-align: left; }
