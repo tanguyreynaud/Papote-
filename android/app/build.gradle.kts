@@ -18,8 +18,8 @@ android {
         applicationId = "com.papote.tablette"
         minSdk = 28
         targetSdk = 36
-        versionCode = 15
-        versionName = "2.7"
+        versionCode = 16
+        versionName = "2.8"
     }
 
     signingConfigs {

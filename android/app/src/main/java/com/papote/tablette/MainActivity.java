@@ -311,6 +311,11 @@ public class MainActivity extends Activity implements Sync.Listener {
         }
 
         @JavascriptInterface
+        public void morePhotos() {
+            sync.morePhotos();
+        }
+
+        @JavascriptInterface
         public void touched() {
             sync.touched();
         }
