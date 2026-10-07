@@ -107,7 +107,22 @@ function showRing(id, data) {
   $('ring-name').textContent = `${data.callerName} vous appelle`;
   $('call-ring').hidden = false;
   if (android()) android().ring(true);
+  showCallerFace(id, data.callerUid);
   watchFace();
+}
+
+// Photo de profil de l'appelant (rond JPEG), à côté de son prénom ; sans photo, le prénom seul.
+async function showCallerFace(callId, uid) {
+  ['ring-caller', 'call-wait-face'].forEach((el) => { $(el).hidden = true; $(el).removeAttribute('src'); });
+  if (!uid) return;
+  let face = null;
+  try {
+    const snap = await getDoc(doc(db, 'families', fid, 'members', uid));
+    face = snap.exists() ? snap.data().face : null;
+  } catch (e) { /* pas de photo */ }
+  if (!face || typeof face !== 'string' || !face.startsWith('data:image/')) return;
+  if (!(ringing && ringing.id === callId) && !(active && active.id === callId)) return;
+  ['ring-caller', 'call-wait-face'].forEach((el) => { $(el).src = face; $(el).hidden = false; });
 }
 
 // `keepStream` : la caméra déjà ouverte sert pour l'appel qu'on vient de décrocher.

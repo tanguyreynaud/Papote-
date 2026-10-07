@@ -259,6 +259,16 @@ button {
   text-align: center;
 }
 .call-title { margin: 0; font-size: 11vmin; font-weight: bold; line-height: 1.1; }
+.call-head { display: flex; align-items: center; justify-content: center; }
+.caller-face {
+  width: 20vmin;
+  height: 20vmin;
+  margin-right: 4vmin;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1vmin solid #fff;
+  box-shadow: 0 1vmin 3vmin rgba(0, 0, 0, .2);
+}
 .call-hint { margin: 0; font-size: 6.5vmin; font-weight: bold; }
 .ring-middle {
   flex: 1;
@@ -310,7 +320,7 @@ button {
   transform: scaleX(-1);
 }
 .call-wait { position: absolute; z-index: 1; justify-content: center; }
-.call-wait .call-title { margin-bottom: 4vmin; }
+.call-wait .call-head { margin-bottom: 4vmin; }
 
 /* ---------- Installation ---------- */
 

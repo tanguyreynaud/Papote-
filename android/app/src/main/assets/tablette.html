@@ -90,7 +90,10 @@
 
   <!-- Appel entrant : un seul fond plein écran, comme les autres écrans -->
   <div id="call-ring" class="call-screen call-ring" hidden>
-    <p id="ring-name" class="call-title"></p>
+    <div class="call-head">
+      <img id="ring-caller" class="caller-face" alt="" hidden>
+      <p id="ring-name" class="call-title"></p>
+    </div>
     <div class="ring-middle">
       <video id="ring-face" class="ring-face" autoplay playsinline muted hidden></video>
       <p id="ring-hint" class="call-hint" hidden>Regardez l'écran pour décrocher</p>
@@ -106,7 +109,10 @@
     <video id="call-remote" autoplay playsinline></video>
     <video id="call-local" autoplay playsinline muted></video>
     <div id="call-wait" class="call-screen call-wait">
-      <p id="call-wait-name" class="call-title"></p>
+      <div class="call-head">
+        <img id="call-wait-face" class="caller-face" alt="" hidden>
+        <p id="call-wait-name" class="call-title"></p>
+      </div>
       <p id="call-status" class="call-hint"></p>
     </div>
   </div>
