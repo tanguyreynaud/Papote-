@@ -918,3 +918,32 @@ body.night .moment { color: #fb923c; }
 }
 .invite p { margin: 0; font-size: 4.6vmin; font-weight: bold; color: #57534e; line-height: 1.25; }
 body.night .invite p { color: #a8998d; }
+
+/* ---------- Rendez-vous dans moins d'une heure, à la place de la photo ---------- */
+
+.frame-rdv {
+  position: absolute;
+  top: 0; right: 0; bottom: 0; left: 0;
+  z-index: 2;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-flex-direction: column;
+  flex-direction: column;
+  -webkit-align-items: center;
+  align-items: center;
+  -webkit-justify-content: center;
+  justify-content: center;
+  padding: 5vmin;
+  text-align: center;
+  background: -webkit-linear-gradient(top, #f0faf5, #cdeedd);
+  background: linear-gradient(to bottom, #f0faf5, #cdeedd);
+  color: #14532d;
+}
+.frame-rdv[hidden] { display: none; }
+.rdv-icon { display: block; width: 20vmin; height: 20vmin; color: #15803d; }
+.rdv-icon svg { width: 100%; height: 100%; display: block; }
+.frame-rdv p { margin: 0; }
+.rdv-when { margin-top: 3vmin; font-size: 6vmin; font-weight: bold; color: #15803d; }
+.rdv-title { margin-top: 2vmin; font-size: 8.5vmin; font-weight: bold; line-height: 1.15; }
+.rdv-in { margin-top: 3vmin; padding: 1.5vmin 4vmin; border-radius: 6vmin; background: #15803d; color: #fff; font-size: 5.5vmin; font-weight: bold; }
+body.night .frame-rdv { background: #10261a; color: #bbf7d0; }

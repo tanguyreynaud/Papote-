@@ -174,6 +174,10 @@
   // ---------- Accueil : cadre photo et compteurs ----------
 
   function renderFrame() {
+    // Un rendez-vous dans moins d'une heure passe avant les photos.
+    var rdv = upcomingRdv();
+    showRdv(rdv);
+    if (rdv) return;
     var has = photos.length > 0;
     show($('frame-img'), has);
     show($('frame-caption'), has);
@@ -544,7 +548,43 @@
     return Math.floor(m / 60) + 'h' + pad(m % 60);
   }
 
+  // ---------- Rendez-vous proche : affiché à la place de la photo ----------
+
+  function upcomingRdv() {
+    var now = new Date();
+    var nowMin = now.getHours() * 60 + now.getMinutes();
+    var key = dateKey(now);
+    var next = null;
+    for (var i = 0; i < reminders.length; i++) {
+      var r = reminders[i];
+      if (r.kind !== 'rdv' || !happensOn(r, now) || isDone(r, key)) continue;
+      var delta = minutesOf(r.time) - nowMin;
+      if (delta >= 0 && delta <= 60 && (!next || delta < next.delta)) next = { r: r, delta: delta };
+    }
+    return next;
+  }
+
+  function showRdv(next) {
+    var el = $('frame-rdv');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'frame-rdv';
+      el.className = 'frame-rdv';
+      el.innerHTML = '<span class="rdv-icon"></span><p class="rdv-when"></p>' +
+        '<p class="rdv-title"></p><p class="rdv-in"></p>';
+      $('home-frame').appendChild(el);
+    }
+    show(el, !!next);
+    if (!next) return;
+    el.querySelector('.rdv-icon').innerHTML = kindIcon('rdv');
+    el.querySelector('.rdv-when').textContent = 'Rendez-vous à ' + timeLabel(next.r.time);
+    el.querySelector('.rdv-title').textContent = next.r.title;
+    el.querySelector('.rdv-in').textContent = next.delta === 0 ? "C'est maintenant"
+      : 'Dans ' + next.delta + ' minute' + (next.delta > 1 ? 's' : '');
+  }
+
   function checkReminders() {
+    if (isShown('view-home')) renderFrame();
     var now = new Date();
     var nowMin = now.getHours() * 60 + now.getMinutes();
     var key = dateKey(now);
