@@ -247,16 +247,15 @@ button:disabled { opacity: .45; cursor: default; }
 }
 .fab svg { width: 30px; height: 30px; stroke-width: 2.5; }
 
-/* ---------- Galerie photos / vidéos : images entières, sans arrondi ni déformation ---------- */
+/* ---------- Fil des photos / vidéos : une par ligne, image entière, sans arrondi ---------- */
 
-.gallery { list-style: none; margin: 0; padding: 4px 12px; columns: 2; column-gap: 12px; }
-@media (min-width: 560px) { .gallery { columns: 3; } }
+.gallery { list-style: none; margin: 0 auto; padding: 4px 0; max-width: 640px; }
 .shot {
-  break-inside: avoid;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
   background: var(--surface);
   box-shadow: var(--shadow);
 }
+.feed-more { height: 1px; }
 .shot-frame { display: block; position: relative; width: 100%; padding: 0; border-radius: 0; }
 .shot-frame img { display: block; width: 100%; height: auto; background: var(--line); }
 .shot-play {
@@ -281,10 +280,10 @@ button:disabled { opacity: .45; cursor: default; }
   color: #fff;
   font-size: 13px;
 }
-.shot-meta { display: flex; align-items: flex-start; gap: 4px; padding: 8px 4px 8px 10px; }
+.shot-meta { display: flex; align-items: center; gap: 10px; padding: 10px 6px 12px 16px; }
 .shot-info { flex: 1; min-width: 0; }
 .shot-info p { margin: 0; }
-.shot-caption { font-size: 15px; overflow-wrap: anywhere; }
+.shot-caption { font-size: 17px; margin-bottom: 2px !important; overflow-wrap: anywhere; }
 .shot-meta .muted { font-size: 13px; }
 .shot-meta .seen { font-size: 13px; }
 
@@ -708,3 +707,7 @@ button:disabled { opacity: .45; cursor: default; }
 .member-actions .link { padding: 2px 0; }
 
 .outbox { margin: 0 0 16px; padding: 12px 14px; border-radius: 14px; background: color-mix(in srgb, var(--c-agenda) 14%, var(--surface)); font-size: 15px; font-weight: 600; }
+
+.read-badge { flex: none; font-size: 13px; font-weight: 700; padding: 3px 10px; border-radius: 999px; }
+.read-badge.read { color: var(--ok); background: color-mix(in srgb, var(--ok) 14%, transparent); }
+.read-badge.unread { color: var(--muted); background: var(--bg); border: 1px solid var(--line); }

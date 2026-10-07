@@ -99,9 +99,33 @@ $('form-create').addEventListener('submit', async (e) => {
 let page = null;
 let stopPage = null;
 
+// Photos et vidéos : 10 envois au départ, 10 de plus quand on arrive en bas du fil.
+const FEED_STEP = 10;
+let feedLimit = FEED_STEP;
+let feedCount = 0;
+
+function watchFeed(type, render) {
+  feedLimit = FEED_STEP;
+  let stop = null;
+  const subscribe = () => {
+    stop?.();
+    stop = watchType([type], feedLimit, (posts) => { feedCount = posts.length; render(posts); });
+  };
+  subscribe();
+  const sentinel = $(`${type === 'photo' ? 'photos' : 'videos'}-more`);
+  const observer = new IntersectionObserver((entries) => {
+    if (entries[0].isIntersecting && feedCount >= feedLimit) {
+      feedLimit += FEED_STEP;
+      subscribe();
+    }
+  }, { rootMargin: '600px' });
+  observer.observe(sentinel);
+  return () => { observer.disconnect(); stop?.(); };
+}
+
 const PAGES = {
-  photos: () => watchType(['photo'], 60, renderPhotos),
-  videos: () => watchType(['video'], 30, renderVideos),
+  photos: () => watchFeed('photo', renderPhotos),
+  videos: () => watchFeed('video', renderVideos),
   messages: () => watchType(['message', 'reply'], 60, renderMessages),
   agenda: () => null,
   settings: () => { renderSettings(); return null; },
@@ -251,15 +275,13 @@ function galleryItem(post, what, onOpen) {
   }
   const who = document.createElement('p');
   who.className = 'muted small';
-  who.textContent = `${post.authorName} · ${shortLabel(toDate(post.createdAt))}`;
+  who.textContent = `${post.authorName} · ${timeLabel(toDate(post.createdAt))}`;
   info.append(who);
-  if (post.seenAt) {
-    const seen = document.createElement('p');
-    seen.className = 'seen small';
-    seen.textContent = 'Vu ✓';
-    info.append(seen);
-  }
   meta.append(info);
+  const badge = document.createElement('span');
+  badge.className = `read-badge ${post.seenAt ? 'read' : 'unread'}`;
+  badge.textContent = post.seenAt ? 'Lu' : 'Non lu';
+  meta.append(badge);
   if (canDelete(post)) {
     const del = document.createElement('button');
     del.type = 'button';
@@ -497,7 +519,7 @@ function fullSize(img, forBase = false) {
 
 async function compressPhoto(file) {
   const img = await loadImage(file);
-  return { full: fullSize(img), thumb: resize(img, 480, 0.7) };
+  return { full: fullSize(img), thumb: resize(img, 800, 0.72) };
 }
 
 function openAdd(kind) {
