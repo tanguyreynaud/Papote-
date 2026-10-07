@@ -225,6 +225,8 @@
     var p = photos[photoIndex];
     if (!p) return;
     setPicture($('photo-img'), p.image);
+    $('photo-bg').style.backgroundImage = 'none';
+    tinyCopy(p.image, function (bg) { if (photos[photoIndex] === p) $('photo-bg').style.backgroundImage = bg; });
     var caption = p.authorName + ', ' + whenLabel(p.createdAt);
     $('photo-caption').textContent = p.text ? p.text + ' — ' + caption : caption;
     if (photoIndex >= photos.length - 1) $('photo-prev').setAttribute('disabled', ''); else $('photo-prev').removeAttribute('disabled');

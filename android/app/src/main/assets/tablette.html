@@ -29,15 +29,16 @@
   </section>
 
   <!-- Photos -->
-  <section id="view-photos" class="view dark" hidden>
+  <section id="view-photos" class="view photos" hidden>
     <div id="photo-stage" class="photo-stage">
+      <div id="photo-bg" class="photo-bg"></div>
       <img id="photo-img" alt="">
-      <button id="photo-prev" class="arrow left">&#8249;</button>
-      <button id="photo-next" class="arrow right">&#8250;</button>
-      <p id="photo-caption" class="photo-caption"></p>
+      <button id="photo-prev" class="arrow left"><svg viewBox="0 0 24 24"><path d="M15 4 7 12l8 8"/></svg></button>
+      <button id="photo-next" class="arrow right"><svg viewBox="0 0 24 24"><path d="M9 4l8 8-8 8"/></svg></button>
     </div>
-    <div class="bottom-bar">
-      <button class="big-btn home-btn" data-home="1">Accueil</button>
+    <div class="photo-bar">
+      <button class="ln-btn photo-home" data-home="1">Accueil</button>
+      <p id="photo-caption" class="photo-caption"></p>
     </div>
   </section>
 
