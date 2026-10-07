@@ -846,7 +846,9 @@ function callErrorMessage(err) {
   if (err && err.name === 'NotAllowedError') return "La caméra ou le micro est refusé. Autorisez-les dans les réglages du navigateur, puis réessayez.";
   if (err && (err.name === 'NotReadableError' || err.name === 'AbortError')) return 'La caméra est déjà utilisée par une autre application.';
   if (err && err.name === 'NotFoundError') return "Aucune caméra ou aucun micro n'a été trouvé.";
-  return "L'appel n'a pas pu démarrer. Réessayez dans un instant.";
+  // Le détail aide à comprendre une panne signalée par la famille.
+  const detail = err ? ` (${err.name || 'Erreur'} : ${String(err.message || err).slice(0, 80)})` : '';
+  return `L'appel n'a pas pu démarrer. Réessayez dans un instant.${detail}`;
 }
 
 $('tile-call').addEventListener('click', async () => {
