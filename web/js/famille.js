@@ -16,7 +16,7 @@ import { startCall } from './appel.js';
 import { prepareVideo } from './video.js';
 import { startAgenda, stopAgenda } from './agenda.js';
 import {
-  isRealAccount, myEmail, signInGoogle, sendEmailLink, isEmailLink, completeEmailLink, logOut,
+  isRealAccount, myEmail, signInGoogle, finishRedirect, sendEmailLink, isEmailLink, completeEmailLink, logOut,
   myMemberships, familyName, tagLegacyMember, myInvitations, acceptInvitation,
   inviteByEmail, cancelInvitation, acceptMember, createTabletCode, changeFamilyCode,
 } from './compte.js';
@@ -1521,8 +1521,8 @@ function showLoginError(message) {
 $('btn-google').addEventListener('click', async () => {
   showLoginError('');
   try {
-    await signInGoogle();
-    await enterApp();
+    // null : la page part vers Google et reviendra (redirection).
+    if (await signInGoogle()) await enterApp();
   } catch (err) {
     if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') return;
     console.error(err);
@@ -1709,6 +1709,11 @@ async function start() {
   sharedPending = params.has('partage');
   // Arrivé par le lien ou le QR code d'invitation : le code est gardé le temps de se connecter.
   if (params.get('code')) rememberInviteCode(params.get('code'));
+  try {
+    await finishRedirect();
+  } catch (err) {
+    console.error('Retour de connexion Google', err);
+  }
   if (isEmailLink()) {
     try {
       const user = await completeEmailLink();

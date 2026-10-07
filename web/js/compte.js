@@ -2,6 +2,7 @@
 // d'avant (même uid), puis la liste de ses familles et de ses invitations.
 import {
   GoogleAuthProvider, EmailAuthProvider, signInWithPopup, linkWithPopup, signInWithCredential,
+  signInWithRedirect, linkWithRedirect, getRedirectResult,
   linkWithCredential, sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink, signOut,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
 import {
@@ -26,18 +27,37 @@ export async function signInGoogle() {
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: 'select_account' });
   const user = auth.currentUser;
-  if (user && user.isAnonymous) {
-    // On rattache le compte Google au profil actuel : même uid, la famille est gardée.
-    try {
-      return (await linkWithPopup(user, provider)).user;
-    } catch (err) {
-      if (!ALREADY_USED.includes(err.code)) throw err;
-      // Ce compte Google sert déjà ailleurs : on se connecte avec lui.
-      const cred = GoogleAuthProvider.credentialFromError(err);
-      if (cred) return (await signInWithCredential(auth, cred)).user;
+  try {
+    if (user && user.isAnonymous) {
+      // On rattache le compte Google au profil actuel : même uid, la famille est gardée.
+      try {
+        return (await linkWithPopup(user, provider)).user;
+      } catch (err) {
+        if (!ALREADY_USED.includes(err.code)) throw err;
+        // Ce compte Google sert déjà ailleurs : on se connecte avec lui.
+        const cred = GoogleAuthProvider.credentialFromError(err);
+        if (cred) return (await signInWithCredential(auth, cred)).user;
+      }
     }
+    return (await signInWithPopup(auth, provider)).user;
+  } catch (err) {
+    // Fenêtre bloquée (app installée, certains téléphones) : on passe par une redirection.
+    if (err.code !== 'auth/popup-blocked' && err.code !== 'auth/operation-not-supported-in-this-environment') throw err;
+    if (user && user.isAnonymous) await linkWithRedirect(user, provider);
+    else await signInWithRedirect(auth, provider);
+    return null;
   }
-  return (await signInWithPopup(auth, provider)).user;
+}
+
+/** Retour d'une connexion par redirection (voir signInGoogle). */
+export async function finishRedirect() {
+  try {
+    return (await getRedirectResult(auth))?.user || null;
+  } catch (err) {
+    if (!ALREADY_USED.includes(err.code)) throw err;
+    const cred = GoogleAuthProvider.credentialFromError(err);
+    return cred ? (await signInWithCredential(auth, cred)).user : null;
+  }
 }
 
 export async function sendEmailLink(email) {
