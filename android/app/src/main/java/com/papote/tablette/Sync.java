@@ -455,7 +455,6 @@ final class Sync {
     private File downloadToFile(String url, String id, String ext) throws Exception {
         javax.net.ssl.HttpsURLConnection c =
                 (javax.net.ssl.HttpsURLConnection) new java.net.URL(url).openConnection();
-        c.setSSLSocketFactory(Tls.socketFactory(context));
         c.setConnectTimeout(20_000);
         c.setReadTimeout(60_000);
         File tmp = new File(imageDir, id + ".tmp");

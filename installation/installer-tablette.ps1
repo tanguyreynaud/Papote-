@@ -1,8 +1,12 @@
 ﻿# Installe Papote sur une tablette Android branchée en USB (débogage USB activé).
 # Utilisation : double-cliquer sur installer-tablette.bat, ou
 #   powershell -ExecutionPolicy Bypass -File installer-tablette.ps1 -Code ABCD-2345
+#   (-Serial XXXX pour choisir la tablette si plusieurs appareils sont branchés, -Oui pour ne rien demander)
+# Tablettes Android 9 et plus.
 param(
-    [string]$Code
+    [string]$Code,
+    [string]$Serial,
+    [switch]$Oui
 )
 
 $ErrorActionPreference = 'Stop'
@@ -12,13 +16,13 @@ $Apk = Join-Path $PSScriptRoot 'Papote.apk'
 function Say($text, $color = 'Gray') { Write-Host $text -ForegroundColor $color }
 function Fail($text) {
     Say "`n$text" 'Red'
-    Read-Host "`nAppuyez sur Entrée pour fermer"
+    if (-not $Oui) { Read-Host "`nAppuyez sur Entrée pour fermer" }
     exit 1
 }
 
 function Find-Adb {
-    $cmd = Get-Command adb -ErrorAction SilentlyContinue
-    if ($cmd) { return $cmd.Source }
+    $cmd = Get-Command adb -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($cmd -and $cmd.Path) { return $cmd.Path }
     $candidates = @(
         (Join-Path $PSScriptRoot 'platform-tools\adb.exe'),
         "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe",
@@ -50,12 +54,14 @@ if (-not $script:AdbExe) {
 
 # 1. Tablette branchée et autorisée
 Adb start-server | Out-Null
+if ($Serial) { $env:ANDROID_SERIAL = $Serial }
 while ($true) {
     $lines = (Adb devices) -split "`n" | Select-Object -Skip 1 | Where-Object { $_.Trim() }
+    if ($Serial) { $lines = @($lines | Where-Object { $_ -match "^$([regex]::Escape($Serial))\s" }) }
     $ready = @($lines | Where-Object { $_ -match "`tdevice$" })
     $unauthorized = @($lines | Where-Object { $_ -match 'unauthorized' })
     if ($ready.Count -eq 1) { break }
-    if ($ready.Count -gt 1) { Fail 'Plusieurs appareils sont branchés. Ne laissez que la tablette à installer.' }
+    if ($ready.Count -gt 1) { Fail 'Plusieurs appareils sont branchés. Ne laissez que la tablette à installer (ou utilisez -Serial).' }
     if ($unauthorized.Count) {
         Say "Sur la tablette, acceptez la fenêtre « Autoriser le débogage USB ? » (cochez « Toujours autoriser »)." 'Yellow'
     } else {
@@ -66,10 +72,14 @@ while ($true) {
 
 $model = Adb shell getprop ro.product.model
 $android = Adb shell getprop ro.build.version.release
+$sdk = [int](Adb shell getprop ro.build.version.sdk)
 Say "Appareil détecté : $model (Android $android)" 'Green'
+if ($sdk -lt 28) { Fail "Papote demande une tablette Android 9 ou plus récente (celle-ci : Android $android)." }
 # Garde-fou : ne jamais installer le mode kiosque sur un téléphone branché par erreur.
-$answer = Read-Host "Installer Papote sur cet appareil ? (O/N)"
-if ($answer -notmatch '^[oOyY]') { Fail 'Installation annulée.' }
+if (-not $Oui) {
+    $answer = Read-Host "Installer Papote sur cet appareil ? (O/N)"
+    if ($answer -notmatch '^[oOyY]') { Fail 'Installation annulée.' }
+}
 
 # 2. Code famille
 if (-not $Code) {
@@ -79,11 +89,9 @@ if (-not $Code) {
 $Code = ($Code.ToUpper() -replace '[^A-Z0-9]', '')
 if ($Code.Length -ne 8) { Fail "Le code famille doit contenir 8 caractères (reçu : « $Code »)." }
 
-# 3. Installation de l'app
+# 3. Installation de l'app (-g : caméra et micro accordés d'office pour les appels)
 Say "`nInstallation de l'app…"
-# -g (accorder caméra et micro d'office) n'existe qu'à partir d'Android 6.
-$sdkLevel = [int](Adb shell getprop ro.build.version.sdk)
-if ($sdkLevel -ge 23) { $res = Adb install -r -g $Apk } else { $res = Adb install -r $Apk }
+$res = Adb install -r -g $Apk
 if ($res -notmatch 'Success') { Fail "L'installation a échoué :`n$res" }
 Say 'App installée.' 'Green'
 
@@ -92,49 +100,33 @@ Say 'App installée.' 'Green'
 Adb shell settings put global auto_time 1 | Out-Null
 Adb shell settings put global auto_time_zone 1 | Out-Null
 Adb shell settings put global stay_on_while_plugged_in 7 | Out-Null
-# Android 4.4 : autoriser l'installation des mises à jour de Papote téléchargées par l'app
-if ($sdkLevel -lt 21) { Adb shell settings put secure install_non_market_apps 1 | Out-Null }
 
-# 5. Mode kiosque (propriétaire de l'appareil, Android 5 et plus)
-$sdk = [int](Adb shell getprop ro.build.version.sdk)
-$homeChooser = $false
-if ($sdk -lt 21) {
-    Say "`nAndroid $android n'a pas de mode kiosque : Papote devient l'écran d'accueil." 'Yellow'
-    $homeChooser = $true
+# 5. Mode kiosque (propriétaire de l'appareil) : la tablette reste sur Papote
+#    et les mises à jour s'installent toutes seules.
+$owner = Adb shell dumpsys device_policy
+if ($owner -match "Device Owner[\s\S]*?$([regex]::Escape($Package))") {
+    Say 'Mode kiosque déjà actif.' 'Green'
 } else {
-    $owners = Adb shell dpm list-owners
-    if ($owners -match $Package) {
-        Say 'Mode kiosque déjà actif.' 'Green'
+    $res = Adb shell dpm set-device-owner "$Package/.AdminReceiver"
+    if ($res -match 'Success') {
+        Say 'Mode kiosque activé : la tablette reste sur Papote.' 'Green'
     } else {
-        $res = Adb shell dpm set-device-owner "$Package/.AdminReceiver"
-        if ($res -match 'Success') {
-            Say 'Mode kiosque activé : la tablette reste sur Papote.' 'Green'
+        Say "`nLe mode kiosque n'a pas pu être activé." 'Yellow'
+        if ($res -match 'account') {
+            Say ("Android l'exige sur une tablette sans compte (Google, Samsung…). " +
+                 "Supprimez les comptes dans Paramètres > Comptes, ou réinitialisez la tablette " +
+                 "sans ajouter de compte, puis relancez ce script.") 'Yellow'
         } else {
-            Say "`nLe mode kiosque complet n'a pas pu être activé." 'Yellow'
-            if ($res -match 'account') {
-                Say ("Android l'exige sur une tablette sans compte (Google, Samsung…). " +
-                     "Pour l'avoir : supprimez les comptes dans Paramètres > Comptes, ou réinitialisez la tablette " +
-                     "sans ajouter de compte, puis relancez ce script.") 'Yellow'
-            } else {
-                Say $res 'DarkGray'
-            }
-            Say "En attendant, Papote devient l'écran d'accueil de la tablette." 'Yellow'
-            $res = Adb shell cmd package set-home-activity "$Package/.MainActivity"
-            if ($res -notmatch 'Success') { $homeChooser = $true }
+            Say $res 'DarkGray'
         }
+        Say "En attendant, Papote devient l'écran d'accueil (sans mises à jour automatiques)." 'Yellow'
+        Adb shell cmd package set-home-activity "$Package/.MainActivity" | Out-Null
     }
 }
 
 # 6. Lancement relié à la famille
 Adb shell am start -n "$Package/.MainActivity" --es code $Code --ez lock true | Out-Null
 
-if ($homeChooser) {
-    Start-Sleep -Seconds 2
-    Adb shell am start -a android.intent.action.MAIN -c android.intent.category.HOME | Out-Null
-    Say "`nSur la tablette, choisissez « Papote » puis « Toujours »." 'Yellow'
-    Say 'Le bouton Accueil ramènera ainsi toujours sur Papote.' 'Yellow'
-}
-
 Say "`n=== Terminé ! La tablette affiche Papote. ===" 'Cyan'
 Say 'Vous pouvez débrancher le câble USB (laissez la tablette sur son chargeur).'
-Read-Host "`nAppuyez sur Entrée pour fermer"
+if (-not $Oui) { Read-Host "`nAppuyez sur Entrée pour fermer" }

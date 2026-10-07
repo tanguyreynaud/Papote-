@@ -16,10 +16,10 @@ android {
 
     defaultConfig {
         applicationId = "com.papote.tablette"
-        minSdk = 19
+        minSdk = 28
         targetSdk = 36
-        versionCode = 7
-        versionName = "1.6"
+        versionCode = 8
+        versionName = "2.0"
     }
 
     signingConfigs {
@@ -47,8 +47,6 @@ android {
 }
 
 dependencies {
-    // Chiffrement à jour sur Android 4.4 (ProviderInstaller) ; la version 17.x reste compatible Android 4.4.
-    implementation("com.google.android.gms:play-services-basement:17.6.0")
     // QR code d'invitation affiché sur la tablette
     implementation("com.google.zxing:core:3.5.3")
 }

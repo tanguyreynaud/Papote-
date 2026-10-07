@@ -12,7 +12,7 @@ import java.io.IOException;
 
 /**
  * Accès à Firebase par ses API REST : connexion anonyme et Firestore.
- * Pas de SDK Firebase, pour fonctionner aussi sur Android 4.4.
+ * Pas de SDK Firebase : l'appli reste petite et sans dépendance.
  */
 final class Firebase {
     static final String PROJECT = "papote-famille";

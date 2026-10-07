@@ -5,15 +5,14 @@ et une app pour que la famille lui envoie photos et messages depuis iPhone ou An
 
 ## Ce que ça fait
 
-**Sur la tablette** (Android 4.4 ou plus récent, toujours allumée sur son chargeur) :
-- l'heure et la date en très grand, la dernière photo de la famille sur tout le bord droit ;
-- jusqu'à 4 visages de la famille : un appui lance un appel vidéo (tablettes Android 5 et plus) ;
-- deux gros boutons « Photos » et « Messages » ;
-- chaque nouvel envoi s'affiche en plein écran : photo, message (texte calibré pour tenir sans défiler),
-  message vocal (« Écouter » d'abord, puis « Réécouter », « Envoyer un bisou » ou « OK ») ;
-- rappels en plein écran 15 minutes avant (« Dans 15 minutes ») puis à l'heure (« C'est l'heure ! ») ;
+**Sur la tablette** (Android 9 ou plus récent, en mode kiosque, toujours sur son chargeur) :
+- l'heure, la date, le moment de la journée et la météo en très grand, les photos de la famille à droite
+  (un appui ouvre le diaporama, qui défile tout seul) ;
+- chaque nouvel envoi s'affiche en plein écran : photo, message, message vocal, vidéo ;
+- rappels en plein écran 15 minutes avant puis à l'heure ; anniversaires de la famille ;
 - appels vidéo de la famille vers la tablette, avec un gros bouton « Décrocher » ;
-- passage en couleurs sombres la nuit (21 h – 7 h), retour automatique à l'accueil.
+- couleurs sombres le soir, écran en veille de 23 h à 7 h ;
+- mises à jour installées toutes seules (voir « Publier une mise à jour »).
 
 **Sur le téléphone de la famille** : https://papote-famille.web.app
 - rejoindre avec le code famille, sans créer de compte ;
@@ -28,10 +27,15 @@ et une app pour que la famille lui envoie photos et messages depuis iPhone ou An
    puis Options pour les développeurs > activer « Débogage USB ».
 2. Pour le mode kiosque complet, la tablette ne doit avoir **aucun compte** (Google, Samsung…).
    Le plus simple : la réinitialiser et passer la configuration sans ajouter de compte.
-3. Sur Android 4.4 (comme la Galaxy Tab E), le mode kiosque n'existe pas : Papote devient l'écran
-   d'accueil et bloque le volet des notifications. Au premier lancement, choisir « Papote » puis « Toujours ».
-4. Brancher la tablette au PC en USB et double-cliquer sur `installation/installer-tablette.bat`.
-5. Entrer le code famille (dans l'app famille, menu ⚙︎ Réglages).
+3. Brancher la tablette au PC en USB et double-cliquer sur `installation/installer-tablette.bat`.
+4. Entrer le code famille (dans l'app famille, menu Réglages).
+
+## Publier une mise à jour
+
+1. Augmenter `versionCode` et `versionName` dans `android/app/build.gradle.kts`, puis faire un commit.
+2. Lancer `installation/publier-mise-a-jour.ps1` : il compile le code enregistré, range l'APK sur GitHub
+   et publie le numéro de version sur https://papote-maj.web.app.
+3. Les tablettes vérifient toutes les 6 heures et s'installent la nouvelle version toutes seules.
 
 Pour remettre la tablette à la normale : `installation/retirer-papote.bat`.
 
@@ -48,10 +52,10 @@ Maintenance par ADB :
 | `installation/` | `Papote.apk` prêt à installer et les scripts d'installation |
 | `firestore.rules` | Règles de sécurité : seuls les membres d'une famille voient ses photos |
 
-L'écran de la tablette est une page locale écrite pour le navigateur d'Android 4.4 (JavaScript ES5).
-Les accès réseau passent par le Java (`Sync.java`), qui active TLS 1.2 et un chiffrement à jour
-via les services Google Play sur les vieilles tablettes. Après une modification, reconstruire l'APK
-puis relancer `installer-tablette.bat`.
+L'écran de la tablette est une page locale (`tablette.html`, `tablette.js`, `tablette.css`).
+Les accès à Firebase et à la météo passent par le Java (`Sync.java`, API REST, sans SDK Firebase) ;
+les vidéos et les messages vocaux sont lus par Android. Après une modification, publier une mise à jour
+(ci-dessus) ou relancer `installer-tablette.bat` pour une tablette branchée.
 
 ## Coûts
 

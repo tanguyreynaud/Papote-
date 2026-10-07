@@ -1,83 +1,61 @@
 package com.papote.tablette;
 
-import android.annotation.SuppressLint;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageInstaller;
 import android.content.pm.PackageManager;
-import android.net.Uri;
 import android.os.Build;
 import android.util.Log;
 
 import org.json.JSONObject;
 
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URL;
 import java.security.MessageDigest;
-import java.util.Calendar;
 
 import javax.net.ssl.HttpsURLConnection;
 
 /**
  * Mise à jour à distance : la tablette regarde régulièrement si une nouvelle version de Papote
- * est publiée (installation/publier-mise-a-jour.ps1), la télécharge et l'installe.
+ * est publiée (installation/publier-mise-a-jour.ps1), la télécharge et l'installe sans rien
+ * demander (mode kiosque, propriétaire de l'appareil).
  * Seuls les APK signés avec la même clé que Papote peuvent la remplacer (vérifié par Android).
- * Android 5 et plus en mode kiosque : sans rien demander. Android 4.4 : l'écran d'installation
- * d'Android s'ouvre, il suffit de toucher « Installer ».
  */
 final class Updater {
     private static final String TAG = "Papote";
     private static final String FEED = "https://papote-maj.web.app/version.json";
-    private static final String FILE = "mise-a-jour.apk";
-
-    /** Pendant l'écran d'installation d'Android, Papote ne repasse pas devant. */
-    static volatile long promptUntil = 0;
 
     private Updater() { }
 
-    static boolean prompting() {
-        return System.currentTimeMillis() < promptUntil;
-    }
-
-    /** À appeler hors du fil principal. */
-    static void check(Context context, boolean deviceOwner) {
+    /** À appeler hors du fil principal, seulement en mode kiosque. */
+    static void check(Context context) {
         try {
-            JSONObject feed = new JSONObject(new String(download(context, FEED), "UTF-8"));
+            JSONObject feed = new JSONObject(new String(download(FEED), "UTF-8"));
             int latest = feed.getInt("versionCode");
-            int current = currentVersion(context);
+            long current = currentVersion(context);
             if (latest <= current) return;
-            boolean silent = deviceOwner && Build.VERSION.SDK_INT >= 21;
-            // Sans installation silencieuse, on ne la propose qu'en journée (Android 4.4 à 6).
-            if (!silent) {
-                int hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY);
-                if (Build.VERSION.SDK_INT >= 24 || hour < 9 || hour >= 20) return;
-            }
             Log.i(TAG, "Mise à jour " + current + " -> " + latest);
             // L'APK est rangé sur GitHub (Firebase gratuit refuse les APK), la version sur Firebase.
-            byte[] apk = download(context, feed.getString("url"));
+            byte[] apk = download(feed.getString("url"));
             if (!sha256(apk).equalsIgnoreCase(feed.getString("sha256"))) {
                 Log.w(TAG, "Mise à jour ignorée : empreinte incorrecte");
                 return;
             }
-            if (silent) installSilently(context, apk);
-            else promptInstall(context, apk);
+            install(context, apk);
         } catch (Exception e) {
             Log.w(TAG, "Vérification des mises à jour", e);
         }
     }
 
-    @SuppressWarnings("deprecation")
-    private static int currentVersion(Context context) throws PackageManager.NameNotFoundException {
-        return context.getPackageManager().getPackageInfo(context.getPackageName(), 0).versionCode;
+    private static long currentVersion(Context context) throws PackageManager.NameNotFoundException {
+        return context.getPackageManager().getPackageInfo(context.getPackageName(), 0).getLongVersionCode();
     }
 
-    @SuppressLint("NewApi")
-    private static void installSilently(Context context, byte[] apk) throws IOException {
+    private static void install(Context context, byte[] apk) throws IOException {
         PackageInstaller installer = context.getPackageManager().getPackageInstaller();
         PackageInstaller.SessionParams params =
                 new PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL);
@@ -103,29 +81,8 @@ final class Updater {
         // Une fois installée, Android relance Papote (BootReceiver, MY_PACKAGE_REPLACED).
     }
 
-    @SuppressWarnings("deprecation")
-    @SuppressLint("WorldReadableFiles")
-    private static void promptInstall(Context context, byte[] apk) throws IOException {
-        // L'installeur d'Android 4.4 lit le fichier lui-même : il doit être lisible par tous.
-        FileOutputStream out = context.openFileOutput(FILE, Context.MODE_WORLD_READABLE);
-        try {
-            out.write(apk);
-        } finally {
-            out.close();
-        }
-        File file = new File(context.getFilesDir(), FILE);
-        promptUntil = System.currentTimeMillis() + 10 * 60_000;
-        Intent install = new Intent(Intent.ACTION_VIEW)
-                .setDataAndType(Uri.fromFile(file), "application/vnd.android.package-archive")
-                // Nouvelle tâche à chaque fois : sinon Android ramène l'écran « Application installée »
-                // de la mise à jour précédente au lieu de proposer la nouvelle.
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-        context.startActivity(install);
-    }
-
-    private static byte[] download(Context context, String url) throws Exception {
+    private static byte[] download(String url) throws IOException {
         HttpsURLConnection c = (HttpsURLConnection) new URL(url).openConnection();
-        c.setSSLSocketFactory(Tls.socketFactory(context));
         c.setConnectTimeout(20_000);
         c.setReadTimeout(60_000);
         c.setUseCaches(false);
@@ -153,8 +110,8 @@ final class Updater {
         return sb.toString();
     }
 
-    /** Supprime le fichier téléchargé une fois la mise à jour faite. */
+    /** Supprime le fichier laissé par l'ancienne méthode d'installation (Android 4.4). */
     static void cleanup(Context context) {
-        if (!prompting()) new File(context.getFilesDir(), FILE).delete();
+        new File(context.getFilesDir(), "mise-a-jour.apk").delete();
     }
 }
