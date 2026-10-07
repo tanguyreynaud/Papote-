@@ -2,8 +2,12 @@
 import {
   query, where, orderBy, limit, getDocs, getCountFromServer,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
+import { getApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
 import {
-  db, doc, updateDoc, collection, onSnapshot,
+  getStorage, ref, uploadBytes, getDownloadURL, deleteObject,
+} from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-storage.js';
+import {
+  db, doc, updateDoc, collection, onSnapshot, writeBatch, serverTimestamp, bumpRev,
   loadMembership, createFamily, joinFamily, leaveFamily, watchMembers,
   addPost, deletePost, loadMedia, formatCode, normalizeCode, toDate, CodeInconnuError,
   MAX_VIDEO_CHUNKS, VIDEO_CHUNK,
@@ -189,7 +193,7 @@ function shortLabel(date) {
 async function confirmDelete(post, what) {
   if (!confirm(`Supprimer ${what} de la tablette ?`)) return;
   try {
-    await deletePost(session.fid, post);
+    await removePost(post);
   } catch (err) {
     console.error(err);
     alert("La suppression a échoué. Vérifiez la connexion.");
@@ -291,7 +295,7 @@ async function openPhoto(post) {
   $('viewer-img').hidden = false;
   $('viewer-img').src = post.thumb || post.image;
   try {
-    const src = await loadMedia(session.fid, post, 'image');
+    const src = post.imageUrl || await loadMedia(session.fid, post, 'image');
     if (src && !$('viewer').hidden) $('viewer-img').src = src;
   } catch (err) {
     console.error(err);
@@ -302,7 +306,7 @@ async function openVideo(post) {
   openViewer(post);
   $('viewer-caption').textContent = 'Chargement de la vidéo…';
   try {
-    const src = await loadMedia(session.fid, post, 'video');
+    const src = post.videoUrl || await loadMedia(session.fid, post, 'video');
     if ($('viewer').hidden) return;
     $('viewer-caption').textContent = post.text || '';
     $('viewer-video').hidden = false;
@@ -531,18 +535,8 @@ async function onVideoChosen(e) {
   try {
     const result = await prepareVideo(file, (done, total) => {
       setStatus(`Préparation de la vidéo… ${Math.round(done)} / ${Math.round(total)} s`);
-    });
-    const base64 = await new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result.slice(reader.result.indexOf(',') + 1));
-      reader.readAsDataURL(result.blob);
-    });
-    if (base64.length > MAX_VIDEO_CHUNKS * VIDEO_CHUNK) {
-      setStatus('La vidéo est trop lourde. Essayez une vidéo plus courte.');
-      syncAddSheet();
-      return;
-    }
-    pendingVideo = { base64, mime: result.mime, thumb: result.thumb, duration: result.duration };
+    }, MAX_VIDEO_SECONDS);
+    pendingVideo = { blob: result.blob, mime: result.mime, thumb: result.thumb, duration: result.duration };
     $('video-preview').src = URL.createObjectURL(result.blob);
     setStatus('');
   } catch (err) {
@@ -566,18 +560,13 @@ $('form-post').addEventListener('submit', async (e) => {
     if (addMode === 'video') {
       if (!pendingVideo) return;
       setBusy('Envoi de la vidéo…');
-      await addPost(session.fid, {
-        type: 'video', text, video: pendingVideo.base64, mime: pendingVideo.mime,
-        thumb: pendingVideo.thumb, duration: pendingVideo.duration, ...author,
-      });
+      await sendVideo(pendingVideo, text, author);
     } else {
       if (!pendingPhotos.length) return;
       for (let i = 0; i < pendingPhotos.length; i++) {
         setBusy(pendingPhotos.length > 1 ? `Photo ${i + 1} sur ${pendingPhotos.length}…` : 'Envoi…');
         // La légende accompagne la première photo.
-        await addPost(session.fid, {
-          type: 'photo', text: i === 0 ? text : '', image: pendingPhotos[i].full, thumb: pendingPhotos[i].thumb, ...author,
-        });
+        await sendPhoto(pendingPhotos[i], i === 0 ? text : '', author);
       }
     }
     setBusy('');
@@ -586,11 +575,93 @@ $('form-post').addEventListener('submit', async (e) => {
     pruneOld(addMode === 'video' ? 'video' : 'photo');
   } catch (err) {
     console.error(err);
-    setStatus("L'envoi a échoué. Vérifiez la connexion et réessayez.");
+    setStatus(/trop lourde/.test(err.message)
+      ? 'Cette vidéo est trop longue pour le moment : gardez-la sous 30 secondes.'
+      : "L'envoi a échoué. Vérifiez la connexion et réessayez.");
   } finally {
     setBusy('');
   }
 });
+
+// ---------- Fichiers dans Firebase Storage ----------
+// Photos et vidéos vont dans Storage (moins cher, vidéos jusqu'à 2 minutes) ; l'envoi garde un petit
+// aperçu (thumb) et l'adresse du fichier. Si Storage n'est pas disponible, on repasse par la base.
+
+const MAX_VIDEO_SECONDS = 120;
+let storage = null;
+try {
+  storage = getStorage(getApp());
+  // Sans réponse de Storage, on bascule vite sur la base plutôt que de réessayer 10 minutes.
+  storage.maxUploadRetryTime = 10_000;
+  storage.maxOperationRetryTime = 10_000;
+} catch (e) { /* Storage indisponible */ }
+
+async function upload(blob, ext) {
+  const path = `families/${session.fid}/media/${doc(collection(db, 'families')).id}.${ext}`;
+  const fileRef = ref(storage, path);
+  await uploadBytes(fileRef, blob, { contentType: blob.type });
+  return { path, url: await getDownloadURL(fileRef) };
+}
+
+async function addStoragePost(data) {
+  const batch = writeBatch(db);
+  batch.set(doc(collection(db, 'families', session.fid, 'posts')), {
+    ...data, image: null, createdAt: serverTimestamp(), seenAt: null, hearts: 0,
+  });
+  bumpRev(batch, session.fid);
+  await batch.commit();
+}
+
+async function sendPhoto(photo, text, author) {
+  if (storage) {
+    try {
+      const file = await upload(await (await fetch(photo.full)).blob(), 'jpg');
+      await addStoragePost({ type: 'photo', text, thumb: photo.thumb, imageUrl: file.url, storagePath: file.path, ...author });
+      return;
+    } catch (err) {
+      console.warn('Storage indisponible, envoi par la base', err);
+      storage = null; // pour les envois suivants de cette session
+    }
+  }
+  await addPost(session.fid, { type: 'photo', text, image: photo.full, thumb: photo.thumb, ...author });
+}
+
+function toBase64(blob) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.slice(reader.result.indexOf(',') + 1));
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function sendVideo(video, text, author) {
+  const ext = video.mime.includes('mp4') ? 'mp4' : 'webm';
+  if (storage) {
+    try {
+      const file = await upload(new Blob([video.blob], { type: video.mime }), ext);
+      await addStoragePost({
+        type: 'video', text, thumb: video.thumb, videoUrl: file.url, storagePath: file.path,
+        mime: video.mime, duration: video.duration, ...author,
+      });
+      return;
+    } catch (err) {
+      console.warn('Storage indisponible, envoi par la base', err);
+      storage = null; // pour les envois suivants de cette session
+    }
+  }
+  const base64 = await toBase64(video.blob);
+  if (base64.length > MAX_VIDEO_CHUNKS * VIDEO_CHUNK) throw new Error('Vidéo trop lourde pour la base');
+  await addPost(session.fid, {
+    type: 'video', text, video: base64, mime: video.mime, thumb: video.thumb, duration: video.duration, ...author,
+  });
+}
+
+async function removePost(post) {
+  if (post.storagePath && storage) {
+    try { await deleteObject(ref(storage, post.storagePath)); } catch (err) { console.warn('Fichier déjà absent', err); }
+  }
+  await deletePost(session.fid, post);
+}
 
 // ---------- Support ----------
 
@@ -683,7 +754,7 @@ async function pruneOld(type) {
     for (const d of oldest.docs) {
       const post = { id: d.id, ...d.data() };
       if (!post.createdAt || Date.now() - toDate(post.createdAt).getTime() < WEEK) break;
-      await deletePost(session.fid, post);
+      await removePost(post);
     }
   } catch (err) {
     console.warn('Nettoyage des anciens envois impossible', err);

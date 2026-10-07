@@ -1,4 +1,4 @@
-// Préparation d'une vidéo avant envoi : réduite (640 px, 30 s au plus) et réencodée dans le
+// Préparation d'une vidéo avant envoi : réduite (640 px, 30 s au plus par défaut) et réencodée dans le
 // navigateur, pour qu'elle soit légère et lisible par la tablette.
 
 const MAX_SECONDS = 30;
@@ -26,7 +26,7 @@ function waitFor(el, event) {
  * Renvoie { blob, mime, thumb, duration }. onProgress(secondes traitées, durée totale).
  * Le traitement se fait en temps réel : une vidéo de 20 s prend environ 20 s.
  */
-export async function prepareVideo(file, onProgress) {
+export async function prepareVideo(file, onProgress, maxSeconds = MAX_SECONDS) {
   const url = URL.createObjectURL(file);
   const video = document.createElement('video');
   video.playsInline = true;
@@ -35,7 +35,7 @@ export async function prepareVideo(file, onProgress) {
   await waitFor(video, 'loadedmetadata');
 
   // Certaines vidéos (WebM) n'indiquent pas leur durée : on mesure pendant la lecture.
-  const duration = Number.isFinite(video.duration) ? Math.min(video.duration, MAX_SECONDS) : MAX_SECONDS;
+  const duration = Number.isFinite(video.duration) ? Math.min(video.duration, maxSeconds) : maxSeconds;
   let played = 0;
   const scale = Math.min(1, MAX_SIDE / Math.max(video.videoWidth, video.videoHeight));
   const canvas = document.createElement('canvas');
@@ -74,7 +74,7 @@ export async function prepareVideo(file, onProgress) {
     if (done) return;
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     played = Math.max(played, video.currentTime);
-    onProgress?.(Math.min(video.currentTime, duration), Number.isFinite(video.duration) ? duration : MAX_SECONDS);
+    onProgress?.(Math.min(video.currentTime, duration), Number.isFinite(video.duration) ? duration : maxSeconds);
     if (video.currentTime >= duration || video.ended) {
       done = true;
       video.pause();

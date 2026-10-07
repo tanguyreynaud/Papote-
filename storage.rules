@@ -1,0 +1,20 @@
+rules_version = '2';
+
+// Photos et vidéos des familles : families/{fid}/media/{fichier}.
+// Seuls les membres de la famille lisent, ajoutent et effacent. La tablette lit par l'adresse de téléchargement.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /families/{fid}/media/{file} {
+      function isMember() {
+        return request.auth != null
+          && firestore.exists(/databases/(default)/documents/families/$(fid)/members/$(request.auth.uid));
+      }
+      allow read: if isMember();
+      allow create: if isMember()
+        && request.resource.size < 60 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*|video/.*');
+      allow update: if false;
+      allow delete: if isMember();
+    }
+  }
+}

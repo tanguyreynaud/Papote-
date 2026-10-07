@@ -5,6 +5,7 @@ rules_version = '2';
 //   families/{fid}                  -> { name, code, createdBy, createdAt }
 //   families/{fid}/members/{uid}    -> { name, role, code, joinedAt }
 //   families/{fid}/posts/{pid}      -> { type, text, image, authorUid, authorName, createdAt, seenAt, hearts }
+//   (photo ou vidéo dans Storage : imageUrl ou videoUrl + storagePath families/{fid}/media/{id}.jpg|mp4|webm)
 //   families/{fid}/birthdays/{bid}  -> { name, day, month, year|null, createdBy, createdAt }
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -91,7 +92,7 @@ service cloud.firestore {
       match /posts/{pid} {
         allow read: if isMember(fid);
         allow create: if isMember(fid)
-          && request.resource.data.keys().hasOnly(['type', 'text', 'image', 'thumb', 'hasMedia', 'audio', 'duration', 'chunks', 'mime', 'replyTo', 'authorUid', 'authorName', 'createdAt', 'seenAt', 'hearts'])
+          && request.resource.data.keys().hasOnly(['type', 'text', 'image', 'thumb', 'hasMedia', 'audio', 'duration', 'chunks', 'mime', 'replyTo', 'authorUid', 'authorName', 'createdAt', 'seenAt', 'hearts', 'imageUrl', 'videoUrl', 'storagePath'])
           && request.resource.data.authorUid == request.auth.uid
           && request.resource.data.type in ['photo', 'message', 'voice', 'video', 'reply']
           && (!('audio' in request.resource.data) || request.resource.data.audio == null || request.resource.data.audio is string)
