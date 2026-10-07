@@ -467,8 +467,25 @@ function setCallStatus(text) {
   $('call-status').hidden = !text;
 }
 
+// Pendant l'appel : plein écran et téléphone à l'horizontale, comme l'écran de la tablette.
+// Le verrouillage n'est possible qu'en plein écran ; sinon on reste tel quel.
+function enterCallScreen() {
+  const el = document.documentElement;
+  if (!el.requestFullscreen || document.fullscreenElement) return;
+  el.requestFullscreen({ navigationUI: 'hide' })
+    .then(() => screen.orientation && screen.orientation.lock && screen.orientation.lock('landscape'))
+    .catch(() => {});
+}
+
+function leaveCallScreen() {
+  $('call').hidden = true;
+  try { if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); } catch (e) { /* rien */ }
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+}
+
 $('tile-call').addEventListener('click', async () => {
   if (currentCall) return;
+  enterCallScreen();
   $('call').hidden = false;
   setCallStatus('Préparation de la caméra…');
   try {
@@ -479,20 +496,20 @@ $('tile-call').addEventListener('click', async () => {
       onEnd: (reason) => {
         currentCall = null;
         setCallStatus(END_MESSAGES[reason] || 'Appel terminé');
-        setTimeout(() => { if (!currentCall) $('call').hidden = true; }, 2000);
+        setTimeout(() => { if (!currentCall) leaveCallScreen(); }, 2000);
       },
     });
   } catch (err) {
     console.error(err);
     currentCall = null;
     setCallStatus("Impossible d'accéder à la caméra ou au micro. Autorisez-les dans les réglages du navigateur.");
-    setTimeout(() => { if (!currentCall) $('call').hidden = true; }, 4000);
+    setTimeout(() => { if (!currentCall) leaveCallScreen(); }, 4000);
   }
 });
 
 $('call-hangup').addEventListener('click', () => {
   if (currentCall) currentCall.hangup();
-  else $('call').hidden = true;
+  else leaveCallScreen();
 });
 
 function renderMembers(members) {
