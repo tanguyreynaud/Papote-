@@ -88,29 +88,31 @@
     </div>
   </div>
 
-  <!-- Appel entrant -->
-  <div id="call-ring" class="overlay ln call-ring" hidden>
-    <div class="ln-main">
-      <div class="ln-wood">
-        <div class="ln-note">
-          <p id="ring-name" class="ln-text size-l"></p>
-        </div>
-      </div>
+  <!-- Appel entrant : qui appelle, en grand à gauche ; Mamie et « Décrocher » à droite -->
+  <div id="call-ring" class="call-screen call-ring" hidden>
+    <div class="call-side">
+      <img id="ring-caller" class="caller-face" alt="" hidden>
+      <p id="ring-name" class="call-title"></p>
+      <p class="call-sub">vous appelle</p>
     </div>
-    <div class="ln-bar">
-      <div class="ln-actions">
-        <button id="ring-decline" class="ln-btn decline">Refuser</button>
-        <button id="ring-answer" class="ln-btn answer">Décrocher</button>
-      </div>
+    <div class="call-side me">
+      <video id="ring-face" class="ring-face" autoplay playsinline muted hidden></video>
+      <p id="ring-hint" class="call-hint" hidden>Regardez l'écran pour décrocher</p>
+      <button id="ring-answer" class="call-btn answer">Décrocher</button>
     </div>
   </div>
 
-  <!-- Appel en cours (entrant ou sortant) -->
+  <!-- Appel en cours : c'est la famille qui raccroche -->
   <div id="call-view" class="call-view" hidden>
     <video id="call-remote" autoplay playsinline></video>
     <video id="call-local" autoplay playsinline muted></video>
-    <p id="call-status" class="call-status" hidden></p>
-    <button id="call-hangup" class="call-hangup">Raccrocher</button>
+    <div id="call-wait" class="call-screen call-wait">
+      <div class="call-side">
+        <img id="call-wait-face" class="caller-face" alt="" hidden>
+        <p id="call-wait-name" class="call-title"></p>
+        <p id="call-status" class="call-sub"></p>
+      </div>
+    </div>
   </div>
 
   <!-- Tablette pas encore reliée à une famille -->

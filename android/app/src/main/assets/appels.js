@@ -20,9 +20,47 @@ const app = initializeApp({
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-const ICE_SERVERS = {
-  iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }],
-};
+// Sans relais TURN, la vidéo ne passe pas entre deux réseaux différents (4G, box…).
+// Le relais est décrit dans Firestore (config/turn), pas dans le code, qui est public :
+//   { url: 'https://…' }  service qui renvoie la liste des relais (identifiants à jour, voir turn-worker/)
+//   ou { urls: 'turn:… turn:…', username, credential }                       identifiants fixes
+const STUN = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }];
+
+async function iceServers() {
+  try {
+    const conf = (await getDoc(doc(db, 'config', 'turn'))).data() || {};
+    // Tolérant aux saisies dans la console : liste ou texte, et une adresse https rangée
+    // par erreur dans `urls` est prise pour l'adresse du service.
+    const all = [].concat(conf.urls || []).join(' ').split(/[\s,]+/).filter(Boolean);
+    const relayUrls = all.filter((u) => /^(stun|turns?):/.test(u));
+    const serviceUrl = conf.url || all.find((u) => /^https:\/\//.test(u));
+    let relays = [];
+    if (relayUrls.length && conf.username) {
+      relays = [{ urls: relayUrls, username: conf.username, credential: conf.credential }];
+    }
+    if (serviceUrl) {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 5000);
+      try {
+        // Le service des identifiants (Cloudflare) n'en donne qu'aux apps connectées.
+        const token = auth.currentUser ? await auth.currentUser.getIdToken() : '';
+        const res = await fetch(serviceUrl, { signal: ctrl.signal, headers: { Authorization: `Bearer ${token}` } });
+        if (res.ok) {
+          const list = await res.json();
+          if (Array.isArray(list) && list.length) relays = list;
+        }
+      } catch (e) {
+        console.warn('Service des identifiants injoignable, relais de secours', e);
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+    if (Array.isArray(relays) && relays.length) return { iceServers: [...STUN, ...relays] };
+  } catch (e) {
+    console.warn('Relais TURN indisponible, appel sans relais', e);
+  }
+  return { iceServers: STUN };
+}
 const FRESH_MS = 60_000; // un appel plus ancien n'est plus considéré comme en train de sonner
 const FID_KEY = 'papote.appels.fid';
 
@@ -70,18 +108,137 @@ async function joinFamily() {
 
 // ---------- Sonnerie ----------
 
+const CAMERA = {
+  video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+  audio: { echoCancellation: true, noiseSuppression: true },
+};
+
 function showRing(id, data) {
   ringing = { id, data };
   if (window.Papote && window.Papote.closeOverlayForCall) window.Papote.closeOverlayForCall();
-  $('ring-name').textContent = `${data.callerName} vous appelle`;
+  $('ring-name').textContent = data.callerName;
   $('call-ring').hidden = false;
   if (android()) android().ring(true);
+  showCallerFace(id, data.callerUid);
+  watchFace();
 }
 
-function hideRing() {
+// Photo de profil de l'appelant (rond JPEG), à côté de son prénom ; sans photo, le prénom seul.
+async function showCallerFace(callId, uid) {
+  ['ring-caller', 'call-wait-face'].forEach((el) => { $(el).hidden = true; $(el).removeAttribute('src'); });
+  if (!uid) return;
+  let face = null;
+  try {
+    const snap = await getDoc(doc(db, 'families', fid, 'members', uid));
+    face = snap.exists() ? snap.data().face : null;
+  } catch (e) { /* pas de photo */ }
+  if (!face || typeof face !== 'string' || !face.startsWith('data:image/')) return;
+  if (!(ringing && ringing.id === callId) && !(active && active.id === callId)) return;
+  ['ring-caller', 'call-wait-face'].forEach((el) => { $(el).src = face; $(el).hidden = false; });
+}
+
+// `keepStream` : la caméra déjà ouverte sert pour l'appel qu'on vient de décrocher.
+function hideRing(keepStream) {
   ringing = null;
   $('call-ring').hidden = true;
   if (android()) android().ring(false);
+  return stopFaceWatch(keepStream);
+}
+
+// ---------- Décrocher en regardant l'écran ----------
+// Pendant la sonnerie, la caméra s'allume et Mamie se voit dans le rond.
+// Dès qu'un visage reste bien en face un petit moment, l'appel est décroché.
+// L'image est analysée sur la tablette, rien n'est envoyé. Si la détection
+// ne se charge pas, le bouton « Décrocher » reste là.
+
+const VISION = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.1.0';
+const FACE_MODEL = 'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite';
+const FACE_HOLD_MS = 1200;   // visage vu sans interruption pendant ce temps
+const FACE_MIN_WIDTH = 0.12; // visage assez grand : quelqu'un devant la tablette, pas au fond de la pièce
+
+let detectorPromise = null;
+let faceWatch = null; // { stream, timer, since }
+
+function faceDetector() {
+  if (!detectorPromise) {
+    detectorPromise = (async () => {
+      const { FilesetResolver, FaceDetector } = await import(`${VISION}/vision_bundle.mjs`);
+      const files = await FilesetResolver.forVisionTasks(`${VISION}/wasm`);
+      return FaceDetector.createFromOptions(files, {
+        baseOptions: { modelAssetPath: FACE_MODEL, delegate: 'CPU' },
+        runningMode: 'VIDEO',
+        minDetectionConfidence: 0.6,
+      });
+    })().catch((e) => {
+      console.warn('Détection du visage indisponible', e);
+      detectorPromise = null;
+      return null;
+    });
+  }
+  return detectorPromise;
+}
+
+async function watchFace() {
+  const callId = ringing && ringing.id;
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia(CAMERA);
+  } catch (e) {
+    console.warn('Caméra indisponible pendant la sonnerie', e);
+    return;
+  }
+  if (!ringing || ringing.id !== callId || faceWatch) {
+    stream.getTracks().forEach((t) => t.stop());
+    return;
+  }
+  // Le micro attend l'appel : on ne l'ouvre que pour éviter une deuxième demande.
+  stream.getAudioTracks().forEach((t) => { t.enabled = false; });
+  const video = $('ring-face');
+  video.srcObject = stream;
+  video.hidden = false;
+  faceWatch = { stream, timer: null, since: 0 };
+
+  const detector = await faceDetector();
+  if (!detector || !faceWatch || faceWatch.stream !== stream) return;
+  $('ring-hint').hidden = false;
+
+  const tick = () => {
+    if (!faceWatch || faceWatch.stream !== stream) return;
+    if (video.readyState >= 2 && video.videoWidth) {
+      let seen = false;
+      try {
+        const { detections } = detector.detectForVideo(video, performance.now());
+        seen = detections.some((d) => d.boundingBox && d.boundingBox.width / video.videoWidth >= FACE_MIN_WIDTH);
+      } catch (e) { /* image pas prête */ }
+      const now = Date.now();
+      faceWatch.since = seen ? (faceWatch.since || now) : 0;
+      video.classList.toggle('seen', seen);
+      if (seen && now - faceWatch.since >= FACE_HOLD_MS) {
+        answer();
+        return;
+      }
+    }
+    faceWatch.timer = setTimeout(tick, 200);
+  };
+  tick();
+}
+
+function stopFaceWatch(keepStream) {
+  const watch = faceWatch;
+  faceWatch = null;
+  const video = $('ring-face');
+  video.hidden = true;
+  video.classList.remove('seen');
+  video.srcObject = null;
+  $('ring-hint').hidden = true;
+  if (!watch) return null;
+  clearTimeout(watch.timer);
+  if (keepStream) {
+    watch.stream.getAudioTracks().forEach((t) => { t.enabled = true; });
+    return watch.stream;
+  }
+  watch.stream.getTracks().forEach((t) => t.stop());
+  return null;
 }
 
 function watchCalls() {
@@ -103,26 +260,25 @@ function watchCalls() {
 
 // ---------- Appel ----------
 
+// Tant que la vidéo de la famille n'est pas là, l'écran d'attente reste affiché.
 function setStatus(text) {
   $('call-status').textContent = text;
-  $('call-status').hidden = !text;
+  if (text) $('call-wait').hidden = false;
 }
 
 async function answer() {
   if (!ringing) return;
   const { id, data } = ringing;
-  hideRing();
+  let stream = hideRing(true);
   const callRef = doc(db, 'families', fid, 'calls', id);
+  $('call-wait-name').textContent = data.callerName;
+  $('call-wait').hidden = false;
   $('call-view').hidden = false;
   setStatus('Connexion…');
   if (android()) android().inCall(true);
 
-  let stream;
   try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
-      audio: { echoCancellation: true, noiseSuppression: true },
-    });
+    if (!stream) stream = await navigator.mediaDevices.getUserMedia(CAMERA);
   } catch (e) {
     console.error(e);
     setStatus('La caméra ne répond pas.');
@@ -132,7 +288,7 @@ async function answer() {
   }
   $('call-local').srcObject = stream;
 
-  const pc = new RTCPeerConnection(ICE_SERVERS);
+  const pc = new RTCPeerConnection(await iceServers());
   active = { id, pc, stream, stops: [] };
   stream.getTracks().forEach((t) => pc.addTrack(t, stream));
   pc.ontrack = (e) => {
@@ -143,7 +299,7 @@ async function answer() {
     if (e.candidate) addDoc(collection(callRef, 'calleeCandidates'), e.candidate.toJSON()).catch(() => {});
   };
   pc.onconnectionstatechange = () => {
-    if (pc.connectionState === 'connected') setStatus('');
+    if (pc.connectionState === 'connected') $('call-status').textContent = '';
     if (pc.connectionState === 'failed') hangup('La connexion a été perdue.');
   };
 
@@ -179,15 +335,10 @@ function hangup(message, remoteEnded) {
 
 function closeView() {
   $('call-view').hidden = true;
+  $('call-wait').hidden = false;
   $('call-remote').srcObject = null;
   $('call-local').srcObject = null;
   if (android()) android().inCall(false);
-}
-
-function decline() {
-  if (!ringing) return;
-  updateDoc(doc(db, 'families', fid, 'calls', ringing.id), { state: 'declined', endedAt: serverTimestamp() }).catch(() => {});
-  hideRing();
 }
 
 // Maintenance : la tablette quitte la famille (commande ADB « leave »).
@@ -201,8 +352,7 @@ window.papoteAppelsLeave = async () => {
 };
 
 $('ring-answer').addEventListener('click', answer);
-$('ring-decline').addEventListener('click', decline);
-$('call-hangup').addEventListener('click', () => hangup());
+$('call-remote').addEventListener('playing', () => { if (active) $('call-wait').hidden = true; });
 
 // Écoute en direct du marqueur de changement : la tablette se met à jour aussitôt,
 // et l'app Android peut espacer ses vérifications (moins de lectures, donc moins de coûts).
@@ -229,6 +379,8 @@ async function start() {
     return;
   }
   watchCalls();
+  // Détection du visage chargée à l'avance (puis gardée en cache) pour décrocher sans attendre.
+  setTimeout(faceDetector, 20_000);
   watchFamily();
 }
 
