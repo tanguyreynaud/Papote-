@@ -30,6 +30,11 @@
     <symbol id="i-camera" viewBox="0 0 24 24"><path d="M3 9a2 2 0 0 1 2-2h2.5L9 4.5h6L16.5 7H19a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="3.5"/></symbol>
     <symbol id="i-gallery" viewBox="0 0 24 24"><rect x="7" y="7" width="14" height="14" rx="2"/><path d="M3 17V5a2 2 0 0 1 2-2h12"/></symbol>
     <symbol id="i-send" viewBox="0 0 24 24"><path d="M21 3L10 14M21 3l-7 18-4-7-7-4z"/></symbol>
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10.5L12 3l9 7.5M5 9v11h5v-6h4v6h5V9"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 9a6 6 0 0 1 12 0c0 6 2.5 8 2.5 8h-17S6 15 6 9M10 20.5a2 2 0 0 0 4 0"/></symbol>
+    <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.2a2.6 2.6 0 1 1 3.6 2.4c-.7.3-1.1.9-1.1 1.6v.3M12 17h.01"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
     <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor"/></symbol>
   </svg>
 
@@ -73,7 +78,7 @@
     </section>
 
     <!-- Accueil -->
-    <section id="view-home" class="page-pad" hidden>
+    <section id="view-home" class="page-pad tab-page" hidden>
       <header class="home-head">
         <h1 class="brand">Papote</h1>
         <p id="family-title" class="muted"></p>
@@ -173,16 +178,60 @@
           <h2>Membres</h2>
           <ul id="members" class="members"></ul>
         </div>
-        <div class="card">
-          <h2>Installer l'app sur votre téléphone</h2>
-          <p class="muted"><strong>iPhone</strong> : dans Safari, touchez le bouton Partager puis « Sur l'écran d'accueil ».</p>
-          <p class="muted"><strong>Android</strong> : dans Chrome, menu ⋮ puis « Ajouter à l'écran d'accueil ».</p>
-          <p class="muted small">Au premier lancement de l'app installée, entrez à nouveau le code famille.</p>
-        </div>
         <button id="btn-leave" class="link danger wide">Quitter la famille sur ce téléphone</button>
       </div>
     </section>
+    <!-- Notifications -->
+    <section id="view-notifs" class="page tab-page" hidden>
+      <header class="page-head"><h1>Notifications</h1></header>
+      <ul id="notifs" class="notifs"></ul>
+      <p id="notifs-empty" class="empty" hidden>Rien de nouveau pour l'instant.</p>
+    </section>
+
+    <!-- Support -->
+    <section id="view-support" class="page tab-page" hidden>
+      <header class="page-head"><h1>Support</h1></header>
+      <div class="page-pad">
+        <p id="support-status" class="activity" hidden></p>
+        <div class="faq">
+          <details>
+            <summary>Installer l'app sur mon téléphone</summary>
+            <p><strong>iPhone</strong> : ouvrez le lien dans Safari, touchez le bouton Partager (le carré avec une flèche) puis « Sur l'écran d'accueil ».</p>
+            <p><strong>Android</strong> : dans Chrome, menu ⋮ en haut à droite puis « Ajouter à l'écran d'accueil » ou « Installer l'application ».</p>
+            <p>Au premier lancement de l'app installée, entrez à nouveau le code famille.</p>
+          </details>
+          <details>
+            <summary>Inviter quelqu'un de la famille</summary>
+            <p>Dans Réglages, touchez « Partager le lien » et envoyez-le par SMS ou par e-mail. La personne n'a qu'à l'ouvrir et donner son prénom.</p>
+          </details>
+          <details>
+            <summary>La tablette ne répond plus</summary>
+            <p>Vérifiez que la tablette est branchée et connectée au wifi. Si le problème continue, éteignez-la puis rallumez-la.</p>
+          </details>
+          <details>
+            <summary>L'appel vidéo ne fonctionne pas</summary>
+            <p>Autorisez la caméra et le micro quand le téléphone le demande. Si c'est déjà refusé, rouvrez l'autorisation dans les réglages du navigateur.</p>
+            <p>Le bouton « Appel vidéo » reste grisé tant que la tablette ne peut pas recevoir d'appel.</p>
+          </details>
+          <details>
+            <summary>Supprimer une photo, une vidéo ou un message</summary>
+            <p>Touchez la corbeille sous la photo ou la vidéo, ou touchez votre message. Il disparaît aussi de la tablette. On ne peut supprimer que ses propres envois.</p>
+          </details>
+          <details>
+            <summary>Ce que voit la tablette</summary>
+            <p>Les photos défilent en grand, les vidéos et les messages s'affichent à l'écran, et les rappels de l'agenda apparaissent à l'heure prévue. La page Notifications vous dit quand ils ont été vus ou confirmés.</p>
+          </details>
+        </div>
+      </div>
+    </section>
   </main>
+
+  <!-- Barre de navigation -->
+  <nav id="nav" class="nav" hidden>
+    <button type="button" class="nav-item active" data-tab="home"><svg><use href="#i-home"/></svg><span>Accueil</span></button>
+    <button type="button" class="nav-item" data-tab="notifs"><span class="nav-icon"><svg><use href="#i-bell"/></svg><span id="nav-badge" class="nav-badge" hidden></span></span><span>Notifications</span></button>
+    <button type="button" class="nav-item" data-tab="support"><svg><use href="#i-help"/></svg><span>Support</span></button>
+  </nav>
 
   <!-- Envoyer une photo ou une vidéo -->
   <div id="sheet-post" class="sheet" hidden>

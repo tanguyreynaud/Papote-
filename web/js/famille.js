@@ -11,6 +11,9 @@ import {
 import { startCall } from './appel.js';
 import { prepareVideo } from './video.js';
 import { startAgenda, stopAgenda } from './agenda.js';
+import {
+  startNotifs, stopNotifs, markNotifsRead, setNotifMembers, setNotifReminders,
+} from './notifs.js';
 
 const $ = (id) => document.getElementById(id);
 const MAX_IMAGE_CHARS = 900_000; // un document Firestore est limité à 1 Mo
@@ -18,10 +21,14 @@ const MAX_IMAGE_CHARS = 900_000; // un document Firestore est limité à 1 Mo
 let session = null; // { fid, family, member, uid }
 let stopMembers = null;
 
-const VIEWS = ['loading', 'view-join', 'view-home', 'view-photos', 'view-videos', 'view-messages', 'view-agenda', 'view-settings'];
+const VIEWS = ['loading', 'view-join', 'view-home', 'view-photos', 'view-videos', 'view-messages', 'view-agenda', 'view-settings', 'view-notifs', 'view-support'];
 
 function show(view) {
   for (const id of VIEWS) $(id).hidden = id !== view;
+  // La barre du bas n'apparaît que sur Accueil, Notifications et Support.
+  $('nav').hidden = !$(view).classList.contains('tab-page');
+  document.querySelectorAll('.nav-item').forEach((b) => b.classList.toggle('active', `view-${b.dataset.tab}` === view));
+  if (view === 'view-notifs') markNotifsRead();
   window.scrollTo(0, 0);
 }
 
@@ -112,6 +119,14 @@ function goHome() {
   closeViewer();
   if (session) show('view-home');
 }
+
+// Barre du bas : on change d'onglet sans empiler l'historique.
+document.querySelectorAll('.nav-item').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    if (btn.dataset.tab === 'home') goHome();
+    else show(`view-${btn.dataset.tab}`);
+  });
+});
 
 document.querySelectorAll('.tile[data-page]').forEach((tile) => {
   tile.addEventListener('click', () => openPage(tile.dataset.page));
@@ -598,6 +613,7 @@ $('btn-leave').addEventListener('click', async () => {
   stopPage?.();
   stopMembers?.();
   stopAgenda();
+  stopNotifs();
   await leaveFamily(session.fid, session.uid);
   session = null;
   $('family-title').textContent = '';
@@ -672,6 +688,7 @@ $('call-hangup').addEventListener('click', () => {
 
 function renderMembers(members) {
   tabletMembers = members.filter((m) => m.role === 'tablette');
+  setNotifMembers(members);
   renderActivity();
   // Le bouton d'appel n'apparaît que si une tablette sait recevoir les appels (Android 5 et plus).
   const canCall = members.some((m) => m.role === 'tablette' && m.canCall);
@@ -772,7 +789,7 @@ function renderActivity() {
   const latest = (field) => Math.max(0, ...tabletMembers.map((m) => (m[field] ? toDate(m[field]).getTime() : 0)));
   const online = latest('lastOnline');
   const active = latest('lastActive');
-  if (!online) { el.hidden = true; return; }
+  if (!online) { el.hidden = true; $('support-status').hidden = true; return; }
   const name = session.family.name;
   const now = Date.now();
   const hour = new Date().getHours();
@@ -789,6 +806,9 @@ function renderActivity() {
       ? `Tablette en ligne. ${name} l'a utilisée ${ago(active)}.`
       : 'Tablette en ligne.';
   }
+  $('support-status').hidden = false;
+  $('support-status').className = el.className;
+  $('support-status').textContent = el.textContent;
 }
 
 setInterval(() => { if (session) renderActivity(); }, 60_000);
@@ -808,7 +828,8 @@ async function start() {
   stopMembers?.();
   stopMembers = watchMembers(session.fid, renderMembers);
   history.replaceState(null, '', location.pathname);
-  startAgenda(session);
+  startAgenda(session, setNotifReminders);
+  startNotifs(session);
   renderInstallCard();
   goHome();
 }

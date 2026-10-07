@@ -122,14 +122,16 @@ $('form-reminder').addEventListener('submit', async (e) => {
   }
 });
 
-export function startAgenda(current) {
+export function startAgenda(current, onChange) {
   session = current;
   $('rem-date').min = todayKey();
   $('rem-date').value = todayKey();
   syncRepeatFields();
   stop?.();
   stop = onSnapshot(collection(db, 'families', session.fid, 'reminders'), (snap) => {
-    render(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    render(list);
+    onChange?.(list);
   });
 }
 
