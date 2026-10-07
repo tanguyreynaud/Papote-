@@ -106,7 +106,11 @@ service cloud.firestore {
           && request.resource.data.hearts is int
           && request.resource.data.hearts >= resource.data.hearts
           && request.resource.data.hearts <= resource.data.hearts + 1;
-        allow delete: if signedIn() && resource.data.authorUid == request.auth.uid;
+        // L'auteur supprime ses envois. Pour rester dans le quota gratuit, n'importe quel membre
+        // peut aussi effacer un envoi de plus de 7 jours (nettoyage des plus anciennes photos et vidéos).
+        allow delete: if signedIn()
+          && (resource.data.authorUid == request.auth.uid
+              || (isMember(fid) && resource.data.createdAt < request.time - duration.value(7, 'd')));
 
         // Photo ou son en taille réelle, chargé seulement à la demande.
         match /media/{kind} {
@@ -118,7 +122,9 @@ service cloud.firestore {
             && getAfter(/databases/$(database)/documents/families/$(fid)/posts/$(pid)).data.authorUid == request.auth.uid;
           allow update: if false;
           allow delete: if signedIn()
-            && get(/databases/$(database)/documents/families/$(fid)/posts/$(pid)).data.authorUid == request.auth.uid;
+            && (get(/databases/$(database)/documents/families/$(fid)/posts/$(pid)).data.authorUid == request.auth.uid
+                || (isMember(fid)
+                    && get(/databases/$(database)/documents/families/$(fid)/posts/$(pid)).data.createdAt < request.time - duration.value(7, 'd')));
         }
       }
 

@@ -1,6 +1,6 @@
 // App famille : envoyer photos, vidéos et messages vers la tablette.
 import {
-  query, where, orderBy, limit,
+  query, where, orderBy, limit, getDocs, getCountFromServer,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
 import {
   db, doc, updateDoc, collection, onSnapshot,
@@ -583,6 +583,7 @@ $('form-post').addEventListener('submit', async (e) => {
     setBusy('');
     history.back();
     toast('Envoyé');
+    pruneOld(addMode === 'video' ? 'video' : 'photo');
   } catch (err) {
     console.error(err);
     setStatus("L'envoi a échoué. Vérifiez la connexion et réessayez.");
@@ -664,6 +665,30 @@ $('face-remove').addEventListener('click', async () => {
   try { await saveFace(null); } catch (err) { console.error(err); }
 });
 $('face-nudge').addEventListener('click', () => openPage('settings'));
+
+// ---------- Nettoyage : rester dans le quota gratuit de Firebase ----------
+// On garde les dernières photos et vidéos ; au-delà, les plus anciennes (plus de 7 jours) sont effacées.
+// Environ 0,5 Mo par photo et 7 Mo au plus par vidéo : moins de 400 Mo sur le Go gratuit.
+
+const KEEP = { photo: 200, video: 40 };
+const WEEK = 7 * 86_400_000;
+
+async function pruneOld(type) {
+  try {
+    const posts = collection(db, 'families', session.fid, 'posts');
+    const count = (await getCountFromServer(query(posts, where('type', '==', type)))).data().count;
+    const excess = count - KEEP[type];
+    if (excess <= 0) return;
+    const oldest = await getDocs(query(posts, where('type', '==', type), orderBy('createdAt', 'asc'), limit(Math.min(excess, 20))));
+    for (const d of oldest.docs) {
+      const post = { id: d.id, ...d.data() };
+      if (!post.createdAt || Date.now() - toDate(post.createdAt).getTime() < WEEK) break;
+      await deletePost(session.fid, post);
+    }
+  } catch (err) {
+    console.warn('Nettoyage des anciens envois impossible', err);
+  }
+}
 
 // ---------- Réglages ----------
 
