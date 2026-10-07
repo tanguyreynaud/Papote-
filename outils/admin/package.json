@@ -1,0 +1,8 @@
+{
+  "name": "papote-admin",
+  "private": true,
+  "description": "Outils d'administration Firebase de Papote, à lancer depuis le PC.",
+  "dependencies": {
+    "firebase-admin": "^13.0.0"
+  }
+}

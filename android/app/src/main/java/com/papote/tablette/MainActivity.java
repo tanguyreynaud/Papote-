@@ -48,7 +48,7 @@ import org.json.JSONObject;
  * Prévu pour des tablettes récentes (Android 9 et plus) en mode kiosque (propriétaire de l'appareil).
  *
  * Commandes de maintenance par ADB (voir README.md) :
- *   --es code ABCD2345     relie la tablette à une famille
+ *   --es code ABCD2345     relie la tablette à une famille (code tablette, créé dans l'app famille)
  *   --ez unlock true       sort du mode kiosque jusqu'au prochain « lock »
  *   --ez lock true         revient en mode kiosque
  *   --ez remove_owner true retire le mode kiosque définitivement (avant désinstallation)
@@ -516,6 +516,12 @@ public class MainActivity extends Activity implements Sync.Listener {
                     new ComponentName(getPackageName(), MainActivity.class.getName()));
             dpm.setKeyguardDisabled(admin, true);
             dpm.setStatusBarDisabled(admin, true);
+            // Luminosité automatique en journée, si la tablette a un capteur de lumière.
+            android.hardware.SensorManager sm = (android.hardware.SensorManager) getSystemService(SENSOR_SERVICE);
+            if (sm != null && sm.getDefaultSensor(android.hardware.Sensor.TYPE_LIGHT) != null) {
+                dpm.setSystemSetting(admin, Settings.System.SCREEN_BRIGHTNESS_MODE,
+                        String.valueOf(Settings.System.SCREEN_BRIGHTNESS_MODE_AUTOMATIC));
+            }
             // Écran toujours allumé quand la tablette est branchée (secteur, USB ou sans fil).
             dpm.setGlobalSetting(admin, Settings.Global.STAY_ON_WHILE_PLUGGED_IN, "7");
         } catch (Exception e) {
@@ -548,6 +554,7 @@ public class MainActivity extends Activity implements Sync.Listener {
         }
     }
 
+    @SuppressWarnings("deprecation")
     private void hideSystemBars() {
         getWindow().getDecorView().setSystemUiVisibility(
                 View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
@@ -556,7 +563,26 @@ public class MainActivity extends Activity implements Sync.Listener {
                         | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
                         | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
                         | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
+        if (Build.VERSION.SDK_INT >= 30) {
+            android.view.WindowInsetsController c = getWindow().getInsetsController();
+            if (c != null) {
+                c.setSystemBarsBehavior(android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+                c.hide(android.view.WindowInsets.Type.statusBars() | android.view.WindowInsets.Type.navigationBars());
+            }
+        }
     }
+
+    /**
+     * La barre du haut peut rester affichée après un glissement depuis le bord :
+     * on la masque de nouveau dès qu'elle apparaît, puis toutes les 3 secondes par sécurité.
+     */
+    private final Runnable rehideBars = new Runnable() {
+        @Override
+        public void run() {
+            hideSystemBars();
+            handler.postDelayed(this, 3000);
+        }
+    };
 
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
@@ -568,13 +594,15 @@ public class MainActivity extends Activity implements Sync.Listener {
     protected void onResume() {
         super.onResume();
         web.onResume();
-        hideSystemBars();
+        handler.removeCallbacks(rehideBars);
+        handler.post(rehideBars);
         enterKiosk();
     }
 
     @Override
     protected void onPause() {
         web.onPause();
+        handler.removeCallbacks(rehideBars);
         super.onPause();
     }
 

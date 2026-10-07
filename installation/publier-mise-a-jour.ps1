@@ -43,8 +43,13 @@ $apk = "$work\android\app\build\outputs\apk\release\app-release.apk"
 Copy-Item $apk (Join-Path $root 'installation\Papote.apk') -Force
 git -C $root commit -q -m "Publication de la version $name ($code)" -- installation/Papote.apk
 if ($LASTEXITCODE) { throw "Échec de l'enregistrement de installation\Papote.apk" }
-git -C $root push -q origin HEAD
-if ($LASTEXITCODE) { throw "Échec de l'envoi sur GitHub" }
+# Envoi sur GitHub, avec quelques nouvelles tentatives si le réseau hoquette
+for ($i = 1; $i -le 4; $i++) {
+    git -C $root push -q origin HEAD
+    if (-not $LASTEXITCODE) { break }
+    if ($i -eq 4) { throw "Échec de l'envoi sur GitHub" }
+    Start-Sleep -Seconds ([math]::Pow(2, $i))
+}
 $sha1 = (git -C $root rev-parse HEAD).Trim()
 $remote = (git -C $root remote get-url origin).Trim()
 $repo = [regex]::Match($remote, 'github\.com[:/](.+?)(\.git)?$').Groups[1].Value

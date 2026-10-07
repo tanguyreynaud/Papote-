@@ -1,6 +1,7 @@
 ﻿# Installe Papote sur une tablette Android branchée en USB (débogage USB activé).
 # Utilisation : double-cliquer sur installer-tablette.bat, ou
 #   powershell -ExecutionPolicy Bypass -File installer-tablette.ps1 -Code ABCD-2345
+#   (-Code : code tablette, créé dans l'app famille, Réglages > Installer une tablette)
 #   (-Serial XXXX pour choisir la tablette si plusieurs appareils sont branchés, -Oui pour ne rien demander)
 # Tablettes Android 9 et plus.
 #   -Wifi "Nom du réseau" -MotDePasse "..." pour connecter la tablette au wifi au passage.
@@ -84,13 +85,13 @@ if (-not $Oui) {
     if ($answer -notmatch '^[oOyY]') { Fail 'Installation annulée.' }
 }
 
-# 2. Code famille
+# 2. Code tablette
 if (-not $Code) {
-    Say "`nLe code famille se trouve dans l'app Papote, menu Réglages (exemple : ABCD-2345)."
-    $Code = Read-Host 'Code famille'
+    Say "`nCréez un code tablette dans l'app Papote : Réglages > Installer une tablette (exemple : ABCD-2345)."
+    $Code = Read-Host 'Code tablette'
 }
 $Code = ($Code.ToUpper() -replace '[^A-Z0-9]', '')
-if ($Code.Length -ne 8) { Fail "Le code famille doit contenir 8 caractères (reçu : « $Code »)." }
+if ($Code.Length -ne 8) { Fail "Le code tablette doit contenir 8 caractères (reçu : « $Code »)." }
 
 # 3. Installation de l'app (-g : caméra et micro accordés d'office pour les appels)
 Say "`nInstallation de l'app…"

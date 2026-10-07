@@ -28,7 +28,8 @@ et une app pour que la famille lui envoie photos et messages depuis iPhone ou An
 2. Pour le mode kiosque complet, la tablette ne doit avoir **aucun compte** (Google, Samsung…).
    Le plus simple : la réinitialiser et passer la configuration sans ajouter de compte.
 3. Brancher la tablette au PC en USB et double-cliquer sur `installation/installer-tablette.bat`.
-4. Entrer le code famille (dans l'app famille, menu Réglages).
+4. Entrer le code tablette : dans l'app famille, Réglages > Installer une tablette
+   (le code famille ne marche pas pour une tablette).
 
 ## Publier une mise à jour
 
@@ -49,7 +50,7 @@ Ce que le script fait à la tablette, de A à Z :
    de notifications, pas de menu « Éteindre », pas de démarrage sans échec ;
 4. Papote filtre les appels (rôle « filtrage des appels ») : appels et SMS de la carte SIM refusés ;
 5. désactive les applis inutiles listées dans `installation/applis-inutiles.txt` (rien n'est effacé) ;
-6. relie la tablette à la famille.
+6. relie la tablette à la famille avec le code tablette.
 
 Au démarrage, l'appli règle elle-même le volume (fort), bloque les boutons de volume, rallume l'écran en
 journée si on appuie sur le bouton marche/arrêt, et met l'écran en veille de 23 h à 7 h.

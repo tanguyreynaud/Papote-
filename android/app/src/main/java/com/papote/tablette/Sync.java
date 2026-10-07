@@ -80,6 +80,7 @@ final class Sync {
     private final Map<String, Post> posts = new LinkedHashMap<>();
     private String familyName;
     private String familyCode;
+    private String textSize;
     private long lastFullRefresh;
     private long lastRev = Long.MIN_VALUE; // marqueur de changement de la famille
     private volatile boolean realtime;
@@ -111,7 +112,7 @@ final class Sync {
         handler.post(loop);
     }
 
-    /** Le code famille a changé : on oublie la famille actuelle. */
+    /** Nouveau code tablette donné par ADB : on oublie la famille actuelle. */
     void reset() {
         handler.post(() -> {
             prefs.edit().remove("fid").apply();
@@ -179,17 +180,24 @@ final class Sync {
     private String familyId() throws IOException, JSONException {
         String fid = prefs.getString("fid", null);
         if (fid != null) return fid;
+        // Code tablette : créé dans l'app famille (Réglages > Installer une tablette).
         String code = prefs.getString("code", null);
         if (code == null) {
-            status("setup", "Relancez le script d'installation avec le code famille.");
+            status("setup", "Relancez le script d'installation avec le code tablette.");
             return null;
         }
         JSONObject invite = firebase.get("invites/" + code);
         if (invite == null) {
-            status("setup", "Le code famille « " + code + " » est inconnu.");
+            status("setup", "Le code tablette « " + code + " » est inconnu.");
             return null;
         }
-        fid = Firebase.str(invite.getJSONObject("fields"), "fid");
+        JSONObject inviteFields = invite.getJSONObject("fields");
+        if (!"tablette".equals(Firebase.str(inviteFields, "kind"))) {
+            status("setup", "Ce code est celui de la famille. Pour la tablette, créez un code dans "
+                    + "l'app famille : Réglages > Installer une tablette.");
+            return null;
+        }
+        fid = Firebase.str(inviteFields, "fid");
         String uid = firebase.uid();
         boolean member;
         try {
@@ -202,7 +210,8 @@ final class Sync {
             JSONObject fields = new JSONObject()
                     .put("name", Firebase.string("Tablette"))
                     .put("role", Firebase.string("tablette"))
-                    .put("code", Firebase.string(code));
+                    .put("code", Firebase.string(code))
+                    .put("canCall", new JSONObject().put("booleanValue", true));
             JSONObject write = new JSONObject()
                     .put("update", new JSONObject()
                             .put("name", Firebase.docName("families/" + fid + "/members/" + uid))
@@ -214,6 +223,17 @@ final class Sync {
         }
         prefs.edit().putString("fid", fid).apply();
         return fid;
+    }
+
+    /** La fiche de la tablette existe-t-elle encore ? En cas de doute (réseau), on garde la famille. */
+    private boolean stillMember(String fid) {
+        try {
+            return firebase.get("families/" + fid + "/members/" + firebase.uid()) != null;
+        } catch (Firebase.ApiException e) {
+            return e.code != 403 && e.code != 404;
+        } catch (Exception e) {
+            return true;
+        }
     }
 
     // ---------- Envois ----------
@@ -234,12 +254,13 @@ final class Sync {
         try {
             // Une seule lecture : le marqueur « rev » ne bouge que si la famille a envoyé ou supprimé
             // quelque chose (ou modifié les rappels). Sinon, rien d'autre à lire.
-            JSONObject family = firebase.get("families/" + fid, "name", "rev", "code");
+            JSONObject family = firebase.get("families/" + fid, "name", "rev", "code", "textSize");
             long rev = 0;
             JSONObject ff = family == null ? null : family.optJSONObject("fields");
             if (ff != null) {
                 familyName = Firebase.str(ff, "name");
                 familyCode = Firebase.str(ff, "code");
+                textSize = Firebase.str(ff, "textSize");
                 rev = Firebase.integer(ff, "rev");
             }
             if (rev == lastRev && now - lastFullRefresh < FULL_REFRESH_MS) {
@@ -252,8 +273,9 @@ final class Sync {
             lastFamilyExtras = 0; // et les anniversaires
             result = firebase.runQuery("families/" + fid, postsQuery(true));
         } catch (Firebase.ApiException e) {
-            if (e.code == 403 || e.code == 404) {
-                // Plus membre (famille supprimée ou tablette retirée) : on rejoindra avec le code.
+            // On n'oublie la famille que si la fiche de la tablette a vraiment disparu (famille
+            // supprimée ou tablette retirée), jamais parce que le code famille a changé.
+            if ((e.code == 403 || e.code == 404) && !stillMember(fid)) {
                 prefs.edit().remove("fid").apply();
             }
             status("offline", null);
@@ -530,6 +552,35 @@ final class Sync {
         } catch (Exception e) {
             Log.w(TAG, "Veille " + field, e);
         }
+        if ("lastOnline".equals(field)) reportBattery(fid);
+    }
+
+    /**
+     * Batterie et chargeur, pour que la famille soit prévenue si la tablette est débranchée.
+     * Écrit à part : si les règles Firestore ne l'acceptent pas encore, le signal « en ligne » passe quand même.
+     */
+    private void reportBattery(String fid) {
+        try {
+            android.os.BatteryManager bm =
+                    (android.os.BatteryManager) context.getSystemService(Context.BATTERY_SERVICE);
+            int level = bm.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY);
+            boolean charging = bm.isCharging();
+            android.content.Intent sticky = context.registerReceiver(null,
+                    new android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED));
+            if (sticky != null) charging = charging || sticky.getIntExtra(android.os.BatteryManager.EXTRA_PLUGGED, 0) != 0;
+            JSONObject battery = new JSONObject().put("mapValue", new JSONObject().put("fields", new JSONObject()
+                    .put("level", new JSONObject().put("integerValue", String.valueOf(Math.max(0, Math.min(100, level)))))
+                    .put("charging", new JSONObject().put("booleanValue", charging))));
+            JSONObject write = new JSONObject()
+                    .put("update", new JSONObject()
+                            .put("name", Firebase.docName("families/" + fid + "/members/" + firebase.uid()))
+                            .put("fields", new JSONObject().put("battery", battery)))
+                    .put("updateMask", new JSONObject().put("fieldPaths", new JSONArray().put("battery")))
+                    .put("currentDocument", new JSONObject().put("exists", true));
+            firebase.commit(new JSONArray().put(write));
+        } catch (Exception e) {
+            Log.w(TAG, "Batterie", e);
+        }
     }
 
     private String appVersion() {
@@ -630,6 +681,7 @@ final class Sync {
             }
             JSONObject payload = new JSONObject().put("familyName", familyName == null ? "" : familyName)
                     .put("familyCode", familyCode == null ? "" : familyCode)
+                    .put("textSize", textSize == null ? "" : textSize)
                     .put("posts", arr);
             String json = payload.toString();
             if (json.equals(lastPostsJson)) return;
