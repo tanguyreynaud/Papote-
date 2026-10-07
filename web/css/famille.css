@@ -505,6 +505,9 @@ button:disabled { opacity: .45; cursor: default; }
   border: 2px solid rgba(255, 255, 255, .7);
   transform: scaleX(-1);
 }
+@media (orientation: landscape) {
+  #call-local { aspect-ratio: 4 / 3; width: 22vw; max-width: 220px; }
+}
 .call-status {
   position: absolute;
   left: 16px; right: 16px;

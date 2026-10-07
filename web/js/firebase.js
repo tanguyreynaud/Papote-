@@ -33,7 +33,7 @@ try {
 export { db };
 // Pour les appels vidéo (appel.js).
 export {
-  doc, collection, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, writeBatch,
+  doc, getDoc, collection, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, writeBatch,
 };
 
 const FID_KEY = 'papote.fid';

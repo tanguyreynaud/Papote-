@@ -1,12 +1,38 @@
 // Appel vidéo de la famille vers la tablette, en WebRTC.
 // La signalisation passe par Firestore : families/{fid}/calls/{cid} et ses sous-collections de candidats.
 import {
-  db, doc, collection, setDoc, addDoc, updateDoc, onSnapshot, serverTimestamp,
+  db, doc, getDoc, collection, setDoc, addDoc, updateDoc, onSnapshot, serverTimestamp,
 } from './firebase.js';
 
-export const ICE_SERVERS = {
-  iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }],
-};
+// Sans relais TURN, la vidéo ne passe pas entre deux réseaux différents (4G, box…).
+// Le relais est décrit dans Firestore (config/turn), pas dans le code, qui est public :
+//   { url: 'https://…' }  adresse qui renvoie la liste des relais (identifiants à jour)
+//   ou { urls: 'turn:… turn:…', username, credential }                       identifiants fixes
+const STUN = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }];
+
+async function iceServers() {
+  try {
+    const conf = (await getDoc(doc(db, 'config', 'turn'))).data() || {};
+    let relays = [];
+    if (conf.urls && conf.username) {
+      relays = [{ urls: String(conf.urls).split(/[\s,]+/).filter(Boolean), username: conf.username, credential: conf.credential }];
+    }
+    if (conf.url) {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 5000);
+      try {
+        const res = await fetch(conf.url, { signal: ctrl.signal });
+        if (res.ok) relays = await res.json();
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+    if (Array.isArray(relays) && relays.length) return { iceServers: [...STUN, ...relays] };
+  } catch (e) {
+    console.warn('Relais TURN indisponible, appel sans relais', e);
+  }
+  return { iceServers: STUN };
+}
 
 const RING_TIMEOUT_MS = 45_000;
 
@@ -24,7 +50,7 @@ export async function startCall(fid, caller, ui) {
   });
   ui.local.srcObject = stream;
 
-  const pc = new RTCPeerConnection(ICE_SERVERS);
+  const pc = new RTCPeerConnection(await iceServers());
   stream.getTracks().forEach((t) => pc.addTrack(t, stream));
   pc.ontrack = (e) => {
     ui.remote.srcObject = e.streams[0];
