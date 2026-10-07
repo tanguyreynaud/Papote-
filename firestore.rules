@@ -25,6 +25,12 @@ service cloud.firestore {
       return getAfter(familyPath(fid)).data.createdBy == request.auth.uid;
     }
 
+    // Réglages communs (relais TURN des appels), écrits seulement depuis la console Firebase.
+    match /config/{name} {
+      allow get: if signedIn();
+      allow list, write: if false;
+    }
+
     match /invites/{code} {
       // Lecture d'un code connu uniquement : impossible de lister les familles.
       allow get: if signedIn();
