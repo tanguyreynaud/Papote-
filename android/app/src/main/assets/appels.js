@@ -29,18 +29,28 @@ const STUN = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:
 async function iceServers() {
   try {
     const conf = (await getDoc(doc(db, 'config', 'turn'))).data() || {};
+    // Tolérant aux saisies dans la console : liste ou texte, et une adresse https rangée
+    // par erreur dans `urls` est prise pour l'adresse du service.
+    const all = [].concat(conf.urls || []).join(' ').split(/[\s,]+/).filter(Boolean);
+    const relayUrls = all.filter((u) => /^(stun|turns?):/.test(u));
+    const serviceUrl = conf.url || all.find((u) => /^https:\/\//.test(u));
     let relays = [];
-    if (conf.urls && conf.username) {
-      relays = [{ urls: String(conf.urls).split(/[\s,]+/).filter(Boolean), username: conf.username, credential: conf.credential }];
+    if (relayUrls.length && conf.username) {
+      relays = [{ urls: relayUrls, username: conf.username, credential: conf.credential }];
     }
-    if (conf.url) {
+    if (serviceUrl) {
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 5000);
       try {
         // Le service des identifiants (Cloudflare) n'en donne qu'aux apps connectées.
         const token = auth.currentUser ? await auth.currentUser.getIdToken() : '';
-        const res = await fetch(conf.url, { signal: ctrl.signal, headers: { Authorization: `Bearer ${token}` } });
-        if (res.ok) relays = await res.json();
+        const res = await fetch(serviceUrl, { signal: ctrl.signal, headers: { Authorization: `Bearer ${token}` } });
+        if (res.ok) {
+          const list = await res.json();
+          if (Array.isArray(list) && list.length) relays = list;
+        }
+      } catch (e) {
+        console.warn('Service des identifiants injoignable, relais de secours', e);
       } finally {
         clearTimeout(timer);
       }
