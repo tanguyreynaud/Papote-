@@ -550,6 +550,35 @@ final class Sync {
         } catch (Exception e) {
             Log.w(TAG, "Veille " + field, e);
         }
+        if ("lastOnline".equals(field)) reportBattery(fid);
+    }
+
+    /**
+     * Batterie et chargeur, pour que la famille soit prévenue si la tablette est débranchée.
+     * Écrit à part : si les règles Firestore ne l'acceptent pas encore, le signal « en ligne » passe quand même.
+     */
+    private void reportBattery(String fid) {
+        try {
+            android.os.BatteryManager bm =
+                    (android.os.BatteryManager) context.getSystemService(Context.BATTERY_SERVICE);
+            int level = bm.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY);
+            boolean charging = bm.isCharging();
+            android.content.Intent sticky = context.registerReceiver(null,
+                    new android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED));
+            if (sticky != null) charging = charging || sticky.getIntExtra(android.os.BatteryManager.EXTRA_PLUGGED, 0) != 0;
+            JSONObject battery = new JSONObject().put("mapValue", new JSONObject().put("fields", new JSONObject()
+                    .put("level", new JSONObject().put("integerValue", String.valueOf(Math.max(0, Math.min(100, level)))))
+                    .put("charging", new JSONObject().put("booleanValue", charging))));
+            JSONObject write = new JSONObject()
+                    .put("update", new JSONObject()
+                            .put("name", Firebase.docName("families/" + fid + "/members/" + firebase.uid()))
+                            .put("fields", new JSONObject().put("battery", battery)))
+                    .put("updateMask", new JSONObject().put("fieldPaths", new JSONArray().put("battery")))
+                    .put("currentDocument", new JSONObject().put("exists", true));
+            firebase.commit(new JSONArray().put(write));
+        } catch (Exception e) {
+            Log.w(TAG, "Batterie", e);
+        }
     }
 
     private String appVersion() {
