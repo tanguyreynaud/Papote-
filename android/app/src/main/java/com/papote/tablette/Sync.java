@@ -111,7 +111,7 @@ final class Sync {
         handler.post(loop);
     }
 
-    /** Le code famille a changé : on oublie la famille actuelle. */
+    /** Nouveau code tablette donné par ADB : on oublie la famille actuelle. */
     void reset() {
         handler.post(() -> {
             prefs.edit().remove("fid").apply();
@@ -179,17 +179,24 @@ final class Sync {
     private String familyId() throws IOException, JSONException {
         String fid = prefs.getString("fid", null);
         if (fid != null) return fid;
+        // Code tablette : créé dans l'app famille (Réglages > Installer une tablette).
         String code = prefs.getString("code", null);
         if (code == null) {
-            status("setup", "Relancez le script d'installation avec le code famille.");
+            status("setup", "Relancez le script d'installation avec le code tablette.");
             return null;
         }
         JSONObject invite = firebase.get("invites/" + code);
         if (invite == null) {
-            status("setup", "Le code famille « " + code + " » est inconnu.");
+            status("setup", "Le code tablette « " + code + " » est inconnu.");
             return null;
         }
-        fid = Firebase.str(invite.getJSONObject("fields"), "fid");
+        JSONObject inviteFields = invite.getJSONObject("fields");
+        if (!"tablette".equals(Firebase.str(inviteFields, "kind"))) {
+            status("setup", "Ce code est celui de la famille. Pour la tablette, créez un code dans "
+                    + "l'app famille : Réglages > Installer une tablette.");
+            return null;
+        }
+        fid = Firebase.str(inviteFields, "fid");
         String uid = firebase.uid();
         boolean member;
         try {
@@ -202,7 +209,8 @@ final class Sync {
             JSONObject fields = new JSONObject()
                     .put("name", Firebase.string("Tablette"))
                     .put("role", Firebase.string("tablette"))
-                    .put("code", Firebase.string(code));
+                    .put("code", Firebase.string(code))
+                    .put("canCall", new JSONObject().put("booleanValue", true));
             JSONObject write = new JSONObject()
                     .put("update", new JSONObject()
                             .put("name", Firebase.docName("families/" + fid + "/members/" + uid))
@@ -214,6 +222,17 @@ final class Sync {
         }
         prefs.edit().putString("fid", fid).apply();
         return fid;
+    }
+
+    /** La fiche de la tablette existe-t-elle encore ? En cas de doute (réseau), on garde la famille. */
+    private boolean stillMember(String fid) {
+        try {
+            return firebase.get("families/" + fid + "/members/" + firebase.uid()) != null;
+        } catch (Firebase.ApiException e) {
+            return e.code != 403 && e.code != 404;
+        } catch (Exception e) {
+            return true;
+        }
     }
 
     // ---------- Envois ----------
@@ -252,8 +271,9 @@ final class Sync {
             lastFamilyExtras = 0; // et les anniversaires
             result = firebase.runQuery("families/" + fid, postsQuery(true));
         } catch (Firebase.ApiException e) {
-            if (e.code == 403 || e.code == 404) {
-                // Plus membre (famille supprimée ou tablette retirée) : on rejoindra avec le code.
+            // On n'oublie la famille que si la fiche de la tablette a vraiment disparu (famille
+            // supprimée ou tablette retirée), jamais parce que le code famille a changé.
+            if ((e.code == 403 || e.code == 404) && !stillMember(fid)) {
                 prefs.edit().remove("fid").apply();
             }
             status("offline", null);

@@ -48,7 +48,7 @@ import org.json.JSONObject;
  * Prévu pour des tablettes récentes (Android 9 et plus) en mode kiosque (propriétaire de l'appareil).
  *
  * Commandes de maintenance par ADB (voir README.md) :
- *   --es code ABCD2345     relie la tablette à une famille
+ *   --es code ABCD2345     relie la tablette à une famille (code tablette, créé dans l'app famille)
  *   --ez unlock true       sort du mode kiosque jusqu'au prochain « lock »
  *   --ez lock true         revient en mode kiosque
  *   --ez remove_owner true retire le mode kiosque définitivement (avant désinstallation)
