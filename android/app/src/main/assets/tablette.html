@@ -29,15 +29,17 @@
   </section>
 
   <!-- Photos -->
-  <section id="view-photos" class="view dark" hidden>
+  <section id="view-photos" class="view photos" hidden>
     <div id="photo-stage" class="photo-stage">
-      <img id="photo-img" alt="">
-      <button id="photo-prev" class="arrow left">&#8249;</button>
-      <button id="photo-next" class="arrow right">&#8250;</button>
-      <p id="photo-caption" class="photo-caption"></p>
+      <div id="slide-a" class="slide"><div class="photo-bg"></div><img alt=""></div>
+      <div id="slide-b" class="slide"><div class="photo-bg"></div><img alt=""></div>
+      <div class="night-veil"></div>
+      <button id="photo-prev" class="arrow left"><svg viewBox="0 0 24 24"><path d="M15 4 7 12l8 8"/></svg></button>
+      <button id="photo-next" class="arrow right"><svg viewBox="0 0 24 24"><path d="M9 4l8 8-8 8"/></svg></button>
     </div>
-    <div class="bottom-bar">
-      <button class="big-btn home-btn" data-home="1">Accueil</button>
+    <div class="photo-bar">
+      <button class="ln-btn photo-home" data-home="1">Accueil</button>
+      <div class="photo-caption"><p id="photo-who" class="photo-who"></p><p id="photo-text" class="photo-text"></p></div>
     </div>
   </section>
 
@@ -55,11 +57,11 @@
         </div>
       </div>
       <div id="ln-media" class="ln-media" hidden>
+        <div id="overlay-img-bg" class="ln-media-bg"></div>
         <img id="overlay-img" alt="">
       </div>
     </div>
     <div class="ln-bar">
-      <p class="ln-clock"></p>
       <div id="overlay-actions" class="ln-actions">
         <button id="overlay-replay" class="ln-btn replay" hidden><span class="label">Réécouter</span></button>
         <button id="overlay-close" class="ln-btn ok">OK</button>
@@ -80,37 +82,33 @@
       </div>
     </div>
     <div class="ln-bar">
-      <p class="ln-clock"></p>
       <div class="ln-actions">
         <button id="reminder-done" class="ln-btn ok">C'est fait</button>
       </div>
     </div>
   </div>
 
-  <!-- Appel entrant -->
-  <div id="call-ring" class="overlay ln call-ring" hidden>
-    <div class="ln-main">
-      <div class="ln-wood">
-        <div class="ln-note">
-          <p id="ring-name" class="ln-text size-l"></p>
-        </div>
-      </div>
+  <!-- Appel entrant : un seul fond plein écran, comme les autres écrans -->
+  <div id="call-ring" class="call-screen call-ring" hidden>
+    <p id="ring-name" class="call-title"></p>
+    <div class="ring-middle">
+      <video id="ring-face" class="ring-face" autoplay playsinline muted hidden></video>
+      <p id="ring-hint" class="call-hint" hidden>Regardez l'écran pour décrocher</p>
     </div>
-    <div class="ln-bar">
-      <p class="ln-clock"></p>
-      <div class="ln-actions">
-        <button id="ring-decline" class="ln-btn decline">Refuser</button>
-        <button id="ring-answer" class="ln-btn answer">Décrocher</button>
-      </div>
+    <div class="call-actions">
+      <button id="ring-decline" class="call-btn decline">Refuser</button>
+      <button id="ring-answer" class="call-btn answer">Décrocher</button>
     </div>
   </div>
 
-  <!-- Appel en cours (entrant ou sortant) -->
+  <!-- Appel en cours : c'est la famille qui raccroche -->
   <div id="call-view" class="call-view" hidden>
     <video id="call-remote" autoplay playsinline></video>
     <video id="call-local" autoplay playsinline muted></video>
-    <p id="call-status" class="call-status" hidden></p>
-    <button id="call-hangup" class="call-hangup">Raccrocher</button>
+    <div id="call-wait" class="call-screen call-wait">
+      <p id="call-wait-name" class="call-title"></p>
+      <p id="call-status" class="call-hint"></p>
+    </div>
   </div>
 
   <!-- Tablette pas encore reliée à une famille -->

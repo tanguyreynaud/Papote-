@@ -96,18 +96,122 @@ async function joinFamily() {
 
 // ---------- Sonnerie ----------
 
+const CAMERA = {
+  video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+  audio: { echoCancellation: true, noiseSuppression: true },
+};
+
 function showRing(id, data) {
   ringing = { id, data };
   if (window.Papote && window.Papote.closeOverlayForCall) window.Papote.closeOverlayForCall();
   $('ring-name').textContent = `${data.callerName} vous appelle`;
   $('call-ring').hidden = false;
   if (android()) android().ring(true);
+  watchFace();
 }
 
-function hideRing() {
+// `keepStream` : la caméra déjà ouverte sert pour l'appel qu'on vient de décrocher.
+function hideRing(keepStream) {
   ringing = null;
   $('call-ring').hidden = true;
   if (android()) android().ring(false);
+  return stopFaceWatch(keepStream);
+}
+
+// ---------- Décrocher en regardant l'écran ----------
+// Pendant la sonnerie, la caméra s'allume et Mamie se voit dans le rond.
+// Dès qu'un visage reste bien en face un petit moment, l'appel est décroché.
+// L'image est analysée sur la tablette, rien n'est envoyé. Si la détection
+// ne se charge pas, le bouton « Décrocher » reste là.
+
+const VISION = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.1.0';
+const FACE_MODEL = 'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite';
+const FACE_HOLD_MS = 1200;   // visage vu sans interruption pendant ce temps
+const FACE_MIN_WIDTH = 0.12; // visage assez grand : quelqu'un devant la tablette, pas au fond de la pièce
+
+let detectorPromise = null;
+let faceWatch = null; // { stream, timer, since }
+
+function faceDetector() {
+  if (!detectorPromise) {
+    detectorPromise = (async () => {
+      const { FilesetResolver, FaceDetector } = await import(`${VISION}/vision_bundle.mjs`);
+      const files = await FilesetResolver.forVisionTasks(`${VISION}/wasm`);
+      return FaceDetector.createFromOptions(files, {
+        baseOptions: { modelAssetPath: FACE_MODEL, delegate: 'CPU' },
+        runningMode: 'VIDEO',
+        minDetectionConfidence: 0.6,
+      });
+    })().catch((e) => {
+      console.warn('Détection du visage indisponible', e);
+      detectorPromise = null;
+      return null;
+    });
+  }
+  return detectorPromise;
+}
+
+async function watchFace() {
+  const callId = ringing && ringing.id;
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia(CAMERA);
+  } catch (e) {
+    console.warn('Caméra indisponible pendant la sonnerie', e);
+    return;
+  }
+  if (!ringing || ringing.id !== callId || faceWatch) {
+    stream.getTracks().forEach((t) => t.stop());
+    return;
+  }
+  // Le micro attend l'appel : on ne l'ouvre que pour éviter une deuxième demande.
+  stream.getAudioTracks().forEach((t) => { t.enabled = false; });
+  const video = $('ring-face');
+  video.srcObject = stream;
+  video.hidden = false;
+  faceWatch = { stream, timer: null, since: 0 };
+
+  const detector = await faceDetector();
+  if (!detector || !faceWatch || faceWatch.stream !== stream) return;
+  $('ring-hint').hidden = false;
+
+  const tick = () => {
+    if (!faceWatch || faceWatch.stream !== stream) return;
+    if (video.readyState >= 2 && video.videoWidth) {
+      let seen = false;
+      try {
+        const { detections } = detector.detectForVideo(video, performance.now());
+        seen = detections.some((d) => d.boundingBox && d.boundingBox.width / video.videoWidth >= FACE_MIN_WIDTH);
+      } catch (e) { /* image pas prête */ }
+      const now = Date.now();
+      faceWatch.since = seen ? (faceWatch.since || now) : 0;
+      video.classList.toggle('seen', seen);
+      if (seen && now - faceWatch.since >= FACE_HOLD_MS) {
+        answer();
+        return;
+      }
+    }
+    faceWatch.timer = setTimeout(tick, 200);
+  };
+  tick();
+}
+
+function stopFaceWatch(keepStream) {
+  const watch = faceWatch;
+  faceWatch = null;
+  const video = $('ring-face');
+  video.hidden = true;
+  video.classList.remove('seen');
+  video.srcObject = null;
+  $('ring-hint').hidden = true;
+  if (!watch) return null;
+  clearTimeout(watch.timer);
+  if (keepStream) {
+    watch.stream.getAudioTracks().forEach((t) => { t.enabled = true; });
+    return watch.stream;
+  }
+  watch.stream.getTracks().forEach((t) => t.stop());
+  return null;
 }
 
 function watchCalls() {
@@ -129,26 +233,25 @@ function watchCalls() {
 
 // ---------- Appel ----------
 
+// Tant que la vidéo de la famille n'est pas là, l'écran d'attente reste affiché.
 function setStatus(text) {
   $('call-status').textContent = text;
-  $('call-status').hidden = !text;
+  if (text) $('call-wait').hidden = false;
 }
 
 async function answer() {
   if (!ringing) return;
   const { id, data } = ringing;
-  hideRing();
+  let stream = hideRing(true);
   const callRef = doc(db, 'families', fid, 'calls', id);
+  $('call-wait-name').textContent = data.callerName;
+  $('call-wait').hidden = false;
   $('call-view').hidden = false;
   setStatus('Connexion…');
   if (android()) android().inCall(true);
 
-  let stream;
   try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
-      audio: { echoCancellation: true, noiseSuppression: true },
-    });
+    if (!stream) stream = await navigator.mediaDevices.getUserMedia(CAMERA);
   } catch (e) {
     console.error(e);
     setStatus('La caméra ne répond pas.');
@@ -169,7 +272,7 @@ async function answer() {
     if (e.candidate) addDoc(collection(callRef, 'calleeCandidates'), e.candidate.toJSON()).catch(() => {});
   };
   pc.onconnectionstatechange = () => {
-    if (pc.connectionState === 'connected') setStatus('');
+    if (pc.connectionState === 'connected') $('call-status').textContent = '';
     if (pc.connectionState === 'failed') hangup('La connexion a été perdue.');
   };
 
@@ -205,6 +308,7 @@ function hangup(message, remoteEnded) {
 
 function closeView() {
   $('call-view').hidden = true;
+  $('call-wait').hidden = false;
   $('call-remote').srcObject = null;
   $('call-local').srcObject = null;
   if (android()) android().inCall(false);
@@ -228,7 +332,7 @@ window.papoteAppelsLeave = async () => {
 
 $('ring-answer').addEventListener('click', answer);
 $('ring-decline').addEventListener('click', decline);
-$('call-hangup').addEventListener('click', () => hangup());
+$('call-remote').addEventListener('playing', () => { if (active) $('call-wait').hidden = true; });
 
 // Écoute en direct du marqueur de changement : la tablette se met à jour aussitôt,
 // et l'app Android peut espacer ses vérifications (moins de lectures, donc moins de coûts).
@@ -255,6 +359,8 @@ async function start() {
     return;
   }
   watchCalls();
+  // Détection du visage chargée à l'avance (puis gardée en cache) pour décrocher sans attendre.
+  setTimeout(faceDetector, 20_000);
   watchFamily();
 }
 

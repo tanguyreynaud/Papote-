@@ -235,6 +235,7 @@ public class MainActivity extends Activity implements Sync.Listener {
             handler.post(() -> {
                 videoView.stopPlayback();
                 videoView.setVisibility(View.GONE);
+                web.setVisibility(View.VISIBLE);
             });
         }
 
@@ -309,6 +310,8 @@ public class MainActivity extends Activity implements Sync.Listener {
             endVideo();
             return;
         }
+        // Rien derrière la vidéo : la page est masquée, le fond reste noir.
+        web.setVisibility(View.INVISIBLE);
         videoView.setVisibility(View.VISIBLE);
         videoView.setVideoPath(file.getAbsolutePath());
         videoView.start();
@@ -317,6 +320,7 @@ public class MainActivity extends Activity implements Sync.Listener {
     private void endVideo() {
         videoView.stopPlayback();
         videoView.setVisibility(View.GONE);
+        if (web != null) web.setVisibility(View.VISIBLE);
         callPage("onVoiceEnded", new JSONObject());
     }
     @Override public void onReminders(JSONObject payload) { callPage("onReminders", payload); }

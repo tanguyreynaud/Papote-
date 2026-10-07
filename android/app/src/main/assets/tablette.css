@@ -243,86 +243,74 @@ button {
 
 /* ---------- Appels vidéo (tablettes Android 5 et plus) ---------- */
 
-.call-ring {
+/* Sonnerie et attente : un seul fond illustré sur tout l'écran */
+.call-screen {
   position: fixed;
   top: 0; right: 0; bottom: 0; left: 0;
   z-index: 30;
-  background: #14532d;
-  color: #fff;
-  display: -webkit-flex;
   display: flex;
-  -webkit-flex-direction: column;
   flex-direction: column;
-  -webkit-align-items: center;
   align-items: center;
-  -webkit-justify-content: center;
+  justify-content: space-between;
+  padding: 6vmin 6vmin 7vmin;
+  background: #dcf3e3 url(bg/call.svg) center / cover no-repeat;
+  color: #5b4566;
+  font-family: 'Alegreya Sans', Roboto, sans-serif;
+  text-align: center;
+}
+.call-title { margin: 0; font-size: 11vmin; font-weight: bold; line-height: 1.1; }
+.call-hint { margin: 0; font-size: 6.5vmin; font-weight: bold; }
+.ring-middle {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   justify-content: center;
+  min-height: 0;
 }
-.ring-name { margin: 0 4vmin 8vmin; font-size: 9vmin; font-weight: bold; text-align: center; }
-.ring-actions { display: -webkit-flex; display: flex; }
-.ring-btn {
-  min-width: 40vmin;
-  min-height: 20vmin;
+.ring-face {
+  width: 38vmin;
+  height: 38vmin;
+  margin-bottom: 3vmin;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1.4vmin solid #fff;
+  box-shadow: 0 0 0 1.4vmin #4ade80, 0 2vmin 5vmin rgba(0, 0, 0, .2);
+  transform: scaleX(-1);
+  animation: ring-pulse 1.6s ease-in-out infinite;
+}
+.ring-face.seen { box-shadow: 0 0 0 2.4vmin #16a34a, 0 2vmin 5vmin rgba(0, 0, 0, .2); animation: none; }
+@keyframes ring-pulse { 50% { box-shadow: 0 0 0 3vmin rgba(74, 222, 128, .45), 0 2vmin 5vmin rgba(0, 0, 0, .2); } }
+.call-actions { display: flex; }
+.call-btn {
+  min-height: 17vmin;
   margin: 0 3vmin;
-  border-radius: 10vmin;
-  font-size: 7vmin;
-  font-weight: bold;
+  padding: 0 9vmin;
+  border-radius: 4vmin;
   color: #fff;
+  font-family: 'Alegreya Sans', Roboto, sans-serif;
+  font-size: 7.5vmin;
+  font-weight: bold;
+  box-shadow: 0 1.2vmin 3vmin rgba(0, 0, 0, .25);
 }
-.ring-btn.answer { background: #22c55e; -webkit-animation: pulse 1.2s infinite; animation: pulse 1.2s infinite; }
-.ring-btn.decline { background: #dc2626; }
-@-webkit-keyframes pulse { 50% { -webkit-transform: scale(1.08); } }
-@keyframes pulse { 50% { transform: scale(1.08); } }
+.call-btn.answer { background: #16a34a; animation: pulse 1.2s infinite; }
+.call-btn.decline { background: #dc2626; }
+@keyframes pulse { 50% { transform: scale(1.06); } }
 
+/* Appel en cours : la vidéo de la famille sur tout l'écran, Mamie en petit dans le coin */
 .call-view { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 30; background: #000; }
 #call-remote { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; background: #000; }
 #call-local {
   position: absolute;
   top: 3vmin; right: 3vmin;
-  width: 24vmin; height: 32vmin;
+  width: 32vmin; height: 24vmin;
   object-fit: cover;
   border-radius: 2vmin;
   border: 3px solid rgba(255, 255, 255, .8);
-  -webkit-transform: scaleX(-1);
   transform: scaleX(-1);
 }
-.call-outgoing {
-  position: absolute;
-  top: 0; right: 0; bottom: 0; left: 0;
-  display: -webkit-flex;
-  display: flex;
-  -webkit-flex-direction: column;
-  flex-direction: column;
-  -webkit-align-items: center;
-  align-items: center;
-  -webkit-justify-content: center;
-  justify-content: center;
-  padding-bottom: 20vmin;
-}
-.call-outgoing img { width: 34vmin; height: 34vmin; border-radius: 50%; object-fit: cover; border: 1vmin solid #22c55e; }
-.call-name { margin: 3vmin 0 0; color: #fff; font-size: 9vmin; font-weight: bold; }
-.call-status {
-  position: absolute;
-  left: 0; right: 0; bottom: 26vmin;
-  margin: 0;
-  text-align: center;
-  color: #fff;
-  font-size: 6vmin;
-  font-weight: bold;
-}
-.call-hangup {
-  position: absolute;
-  left: 50%;
-  bottom: 4vmin;
-  width: 50vmin;
-  margin-left: -25vmin;
-  min-height: 16vmin;
-  border-radius: 8vmin;
-  background: #dc2626;
-  color: #fff;
-  font-size: 7vmin;
-  font-weight: bold;
-}
+.call-wait { position: absolute; z-index: 1; justify-content: center; }
+.call-wait .call-title { margin-bottom: 4vmin; }
 
 /* ---------- Installation ---------- */
 
@@ -656,3 +644,160 @@ body.night .weather-label { color: #a8998d; }
 }
 
 .ln-btn { -webkit-flex: none; flex: none; padding: 0 5vmin; }
+
+/* Plus de barre du bas : les boutons seuls, en bas à gauche, avec de la marge */
+.overlay.ln .ln-bar {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  min-height: 0;
+  padding: 0 0 6vmin 6vmin;
+  background: none;
+}
+.overlay.ln .ln-btn {
+  min-height: 17vmin;
+  padding: 0 9vmin;
+  margin: 0 4vmin 0 0;
+  border-radius: 4vmin;
+  font-size: 7.5vmin;
+  box-shadow: 0 1.2vmin 3vmin rgba(0, 0, 0, .25);
+}
+.overlay.mode-photo .ln-wood, .overlay.mode-message .ln-wood, .overlay.reminder .ln-wood {
+  padding-bottom: 29vmin;
+}
+.overlay.mode-message .ln-note { max-height: 100%; }
+/* Appel : Refuser / Décrocher centrés */
+.overlay.call-ring .ln-bar { right: 0; padding-left: 0; -webkit-justify-content: center; justify-content: center; }
+.overlay.call-ring .ln-btn { margin: 0 3vmin; }
+
+/* Photos : posées en fond de l'image (object-fit est ignoré sur Android 4.4) */
+.home-frame img, .photo-stage img, .ln-media img {
+  background-repeat: no-repeat;
+  background-position: center;
+  -webkit-background-size: cover;
+  background-size: cover;
+}
+.photo-stage img, .ln-media img {
+  -webkit-background-size: contain;
+  background-size: contain;
+}
+/* Photo d'un écran : en entier, sur un fond flou et assombri de la même photo */
+.ln-media-bg {
+  position: absolute;
+  top: 0; right: 0; bottom: 0; left: 0;
+  background-position: center;
+  -webkit-background-size: cover;
+  background-size: cover;
+  opacity: .5;
+}
+
+/* ---------- Diaporama : la photo en grand, sur un fond flou d'elle-même ---------- */
+
+.view.photos { padding: 0; background: #1b1620; color: #fff; font-family: 'Alegreya Sans', Roboto, sans-serif; }
+.photos .photo-stage { position: absolute; top: 0; right: 0; bottom: 0; left: 0; overflow: hidden; }
+.photo-bg {
+  position: absolute;
+  top: 0; right: 0; bottom: 0; left: 0;
+  background-position: center;
+  -webkit-background-size: cover;
+  background-size: cover;
+  opacity: .45;
+}
+.photos .photo-stage img, .slide img {
+  -webkit-box-sizing: border-box;
+  box-sizing: border-box;
+  padding: 0;
+  -webkit-background-origin: content-box;
+  background-origin: content-box;
+  -webkit-background-clip: content-box;
+  background-clip: content-box;
+}
+.photos .arrow {
+  margin-top: -14vmin;
+  width: 13vmin;
+  height: 13vmin;
+  padding: 3vmin;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .92);
+  box-shadow: 0 1vmin 3vmin rgba(0, 0, 0, .35);
+}
+.photos .arrow svg { display: block; width: 100%; height: 100%; fill: none; stroke: #5e4b63; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.photos .arrow.left { left: 2vmin; }
+.photos .arrow.right { right: 2vmin; }
+.photos .arrow[disabled] { visibility: hidden; }
+.photo-bar {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-align-items: center;
+  align-items: center;
+  min-height: 24vmin;
+  padding: 0 6vmin 3vmin;
+}
+.photos .ln-btn.photo-home {
+  min-height: 15vmin;
+  padding: 0 7vmin;
+  margin: 0 5vmin 0 0;
+  border-radius: 4vmin;
+  background: #fff;
+  color: #5e4b63;
+  font-size: 7vmin;
+  box-shadow: 0 1vmin 3vmin rgba(0, 0, 0, .3);
+}
+.photos .photo-caption {
+  position: static;
+  -webkit-flex: 1;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  text-align: left;
+  font-size: 6.5vmin;
+  font-weight: 700;
+  line-height: 1.15;
+  text-shadow: 0 .3vmin 1.2vmin rgba(0, 0, 0, .8);
+}
+
+/* Diaporama : la photo sur toute la hauteur, le bouton et la légende par-dessus, en bas */
+.photo-bar {
+  padding: 8vmin 6vmin 4vmin;
+  background: -webkit-linear-gradient(top, rgba(0, 0, 0, 0), rgba(0, 0, 0, .65));
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0), rgba(0, 0, 0, .65));
+}
+.photos .photo-caption p { margin: 0; }
+.photo-who { font-size: 7.5vmin; font-weight: 700; line-height: 1.1; }
+.photo-text { margin-top: 1vmin; font-size: 5.5vmin; font-weight: 500; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.photos .arrow { margin-top: -9.5vmin; }
+
+/* Diaporama : fondu entre les photos */
+.slide {
+  position: absolute;
+  top: 0; right: 0; bottom: 0; left: 0;
+  background: #1b1620;
+  -webkit-transition: opacity .9s ease;
+  transition: opacity .9s ease;
+}
+.slide.instant { -webkit-transition: none; transition: none; }
+.slide-img {
+  position: absolute;
+  top: 0; right: 0; bottom: 0; left: 0;
+  background-repeat: no-repeat;
+  background-position: center;
+  -webkit-background-size: contain;
+  background-size: contain;
+}
+
+/* Mode cadre photo : les flèches s'effacent sans toucher l'écran */
+.photos .arrow {
+  -webkit-transition: opacity .6s, visibility .6s;
+  transition: opacity .6s, visibility .6s;
+}
+.photos.calm .arrow { opacity: 0; visibility: hidden; }
+
+/* La nuit, le diaporama est assombri pour ne pas éblouir */
+.night-veil { display: none; position: absolute; top: 0; right: 0; bottom: 0; left: 0; background: rgba(0, 0, 0, .5); }
+body.night .night-veil { display: block; }
+/* Les calques du fondu restent sous le voile de nuit, les flèches et la barre du bas */
+.photos .night-veil { z-index: 3; }
+.photos .arrow { z-index: 4; }
+.photos .photo-bar { z-index: 4; }

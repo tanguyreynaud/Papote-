@@ -8,6 +8,8 @@
 
   var IDLE_MS = 90000;   // retour à l'accueil après 1 min 30 sans toucher l'écran
   var FRAME_MS = 12000;  // changement de photo sur l'accueil
+  var SLIDE_MS = 10000;  // défilement tout seul du diaporama
+  var CALM_MS = 4000;    // les flèches s'effacent après 4 s sans toucher l'écran
 
   var JOURS = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
   var MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août',
@@ -77,11 +79,6 @@
     var hour = now.getHours();
     document.body.className = ((hour >= 21 || hour < 7) ? 'night' : '') +
       (playing && playing.post.video ? ' video-playing' : '');
-    // Barre du bas des écrans : « Il est 18h21, samedi 12 juillet »
-    var bar = 'Il est ' + hour + 'h' + pad(now.getMinutes()) + ', ' + day + ' ' + now.getDate() +
-      (now.getDate() === 1 ? 'er' : '') + ' ' + MOIS[now.getMonth()];
-    var clocks = document.querySelectorAll('.ln-clock');
-    for (var i = 0; i < clocks.length; i++) clocks[i].textContent = bar;
   }
 
   function whenLabel(ms) {
@@ -93,6 +90,16 @@
     if (d.toDateString() === now.toDateString()) return "aujourd'hui à " + hm;
     if (d.toDateString() === yesterday.toDateString()) return 'hier à ' + hm;
     return 'le ' + JOURS[d.getDay()] + ' ' + d.getDate() + ' ' + MOIS[d.getMonth()];
+  }
+
+  // « aujourd'hui », « hier » ou « mardi 6 octobre »
+  function dayLabel(ms) {
+    if (!ms) return '';
+    var d = new Date(ms);
+    var now = new Date();
+    if (d.toDateString() === now.toDateString()) return "aujourd'hui";
+    if (d.toDateString() === new Date(now.getTime() - 86400000).toDateString()) return 'hier';
+    return JOURS[d.getDay()] + ' ' + d.getDate() + ' ' + MOIS[d.getMonth()];
   }
 
   // Taille du texte selon sa longueur : il tient toujours à l'écran sans faire défiler.
@@ -168,12 +175,26 @@
     if (!has) return;
     frameIndex = frameIndex % Math.min(photos.length, 20);
     var p = photos[frameIndex];
-    if ($('frame-img').getAttribute('src') !== p.image) $('frame-img').setAttribute('src', p.image);
+    setPicture($('frame-img'), p.image);
     $('frame-caption').textContent = 'De ' + p.authorName;
   }
 
   // Fond flouté : la photo est réduite à quelques pixels puis agrandie (le flou CSS
   // n'existe pas sur Android 4.4).
+  function tinyCopy(url, done) {
+    var img = new Image();
+    img.onload = function () {
+      try {
+        var c = document.createElement('canvas');
+        c.width = 24;
+        c.height = Math.max(1, Math.round(24 * img.height / img.width));
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        done('url("' + c.toDataURL('image/jpeg', 0.8) + '")');
+      } catch (e) { done('none'); }
+    };
+    img.onerror = function () { done('none'); };
+    img.src = url;
+  }
   var backdropSrc = null;
   function setBackdrops() {
     var url = photos.length ? photos[0].image : '';
@@ -184,17 +205,17 @@
       for (var i = 0; i < els.length; i++) els[i].style.backgroundImage = bg;
     };
     if (!url) { apply('none'); return; }
-    var img = new Image();
-    img.onload = function () {
-      try {
-        var c = document.createElement('canvas');
-        c.width = 24;
-        c.height = Math.max(1, Math.round(24 * img.height / img.width));
-        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-        apply('url("' + c.toDataURL('image/jpeg', 0.8) + '")');
-      } catch (e) { apply('none'); }
-    };
-    img.src = url;
+    tinyCopy(url, apply);
+  }
+
+  // Photo posée en fond de l'image : le navigateur d'Android 4.4 ignore object-fit et
+  // écraserait la photo ; background-size (cover / contain) garde ses proportions.
+  var BLANK = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+  function setPicture(img, url) {
+    if (img.getAttribute('data-url') === url) return;
+    img.setAttribute('data-url', url);
+    img.setAttribute('src', BLANK);
+    img.style.backgroundImage = 'url("' + url + '")';
   }
 
   function setBadge(id, n) {
@@ -211,17 +232,60 @@
     photoIndex = Math.max(0, Math.min(index, photos.length - 1));
     renderPhoto();
     showView('view-photos');
+    wakeArrows();
+  }
+
+  // Mode cadre photo : sans toucher l'écran, les flèches s'effacent ; elles reviennent au toucher.
+  var calmTimer = null;
+  function wakeArrows() {
+    $('view-photos').className = 'view photos';
+    clearTimeout(calmTimer);
+    calmTimer = setTimeout(function () { $('view-photos').className = 'view photos calm'; }, CALM_MS);
   }
 
   function renderPhoto() {
     var p = photos[photoIndex];
     if (!p) return;
-    $('photo-img').setAttribute('src', p.image);
-    var caption = p.authorName + ', ' + whenLabel(p.createdAt);
-    $('photo-caption').textContent = p.text ? p.text + ' — ' + caption : caption;
+    // Fondu : deux calques qui alternent. L'ancienne photo reste telle quelle dessous
+    // pendant que la nouvelle apparaît par-dessus.
+    var opening = !isShown('view-photos');
+    var cur = $(frontSlide), next = $(frontSlide === 'slide-a' ? 'slide-b' : 'slide-a');
+    frontSlide = next.id;
+    if (opening) cur.style.opacity = '0';
+    cur.style.zIndex = '1';
+    next.style.zIndex = '2';
+    next.className = 'slide instant';
+    next.style.opacity = '0';
+    next.offsetWidth; // applique l'opacité 0 sans transition
+    next.className = 'slide';
+    setPicture(next.querySelector('img'), p.image);
+    var token = ++fadeToken;
+    tinyCopy(p.image, function (bg) {
+      if (token !== fadeToken) return;
+      next.querySelector('.photo-bg').style.backgroundImage = bg;
+      next.style.opacity = '1';
+    });
+    $('photo-who').textContent = p.authorName + ', ' + dayLabel(p.createdAt);
+    $('photo-text').textContent = p.text || '';
+    show($('photo-text'), !!p.text);
     if (photoIndex >= photos.length - 1) $('photo-prev').setAttribute('disabled', ''); else $('photo-prev').removeAttribute('disabled');
     if (photoIndex === 0) $('photo-next').setAttribute('disabled', ''); else $('photo-next').removeAttribute('disabled');
     markSeen(p);
+    restartSlides();
+  }
+
+  // Comme un cadre photo : sans toucher l'écran, on passe à la suivante toutes les 10 s,
+  // et après la plus ancienne on revient à la plus récente.
+  var slideTimer = null;
+  var fadeToken = 0;
+  var frontSlide = 'slide-a';
+  function restartSlides() {
+    clearTimeout(slideTimer);
+    slideTimer = setTimeout(function () {
+      if (!isShown('view-photos') || photos.length < 2) return;
+      photoIndex = (photoIndex + 1) % photos.length;
+      renderPhoto();
+    }, SLIDE_MS);
   }
 
   // La plus récente est à l'index 0 : « suivante » va vers les plus récentes.
@@ -336,7 +400,11 @@
     $('overlay-from').textContent = '— ' + p.authorName;
     // Photo : à droite, sur toute la hauteur.
     show($('ln-media'), mode === 'photo');
-    if (mode === 'photo') $('overlay-img').setAttribute('src', p.image);
+    if (mode === 'photo') {
+      setPicture($('overlay-img'), p.image);
+      $('overlay-img-bg').style.backgroundImage = 'none';
+      tinyCopy(p.image, function (bg) { $('overlay-img-bg').style.backgroundImage = bg; });
+    }
     show($('ln-playzone'), media);
     $('overlay-play').className = 'ln-play';
     $('overlay-play').querySelector('.label').textContent = mode === 'video' ? 'Regarder' : 'Écouter';
@@ -572,7 +640,8 @@
 
     // Glisser le doigt sur la photo pour passer à la suivante.
     var startX = null;
-    on($('photo-stage'), 'touchstart', function (e) { startX = e.touches[0].clientX; });
+    on($('photo-stage'), 'touchstart', function (e) { startX = e.touches[0].clientX; restartSlides(); });
+    on($('view-photos'), 'touchstart', wakeArrows);
     on($('photo-stage'), 'touchend', function (e) {
       if (startX === null) return;
       var dx = e.changedTouches[0].clientX - startX;
