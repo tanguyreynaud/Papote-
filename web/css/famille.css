@@ -116,7 +116,47 @@ button:disabled { opacity: .45; cursor: default; }
 .small { font-size: 14px; }
 .error { color: var(--danger); font-weight: 600; }
 .seen { color: var(--ok); font-weight: 600; margin: 2px 0 0; }
-#loading { padding-top: 40vh; }
+/* ---------- Écran de démarrage ---------- */
+
+.splash {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  background: var(--bg);
+  animation: fade-in .3s ease-out;
+}
+.splash-mark {
+  width: 88px;
+  height: 88px;
+  border-radius: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent);
+  color: var(--accent-text);
+  box-shadow: 0 10px 30px color-mix(in srgb, var(--accent) 35%, transparent);
+  animation: breathe 1.6s ease-in-out infinite;
+}
+.splash-mark svg { width: 46px; height: 46px; stroke-width: 2.2; }
+.splash-name { margin: 0; font-size: 28px; font-weight: 800; letter-spacing: -.02em; }
+.splash-dots { display: flex; gap: 6px; }
+.splash-dots span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+  opacity: .3;
+  animation: dot 1.2s ease-in-out infinite;
+}
+.splash-dots span:nth-child(2) { animation-delay: .15s; }
+.splash-dots span:nth-child(3) { animation-delay: .3s; }
+@keyframes breathe { 50% { transform: scale(1.06); } }
+@keyframes dot { 30% { opacity: 1; transform: translateY(-4px); } }
+@keyframes fade-in { from { opacity: 0; } }
 
 .install-card p { margin: 0 0 8px; }
 .install-help { margin-top: 12px; }
