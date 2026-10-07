@@ -718,7 +718,7 @@ body.night .weather-label { color: #a8998d; }
 .photos .photo-stage img {
   -webkit-box-sizing: border-box;
   box-sizing: border-box;
-  padding: 3vmin 17vmin 24vmin;
+  padding: 0;
   -webkit-background-origin: content-box;
   background-origin: content-box;
   -webkit-background-clip: content-box;
@@ -769,3 +769,14 @@ body.night .weather-label { color: #a8998d; }
   line-height: 1.15;
   text-shadow: 0 .3vmin 1.2vmin rgba(0, 0, 0, .8);
 }
+
+/* Diaporama : la photo sur toute la hauteur, le bouton et la légende par-dessus, en bas */
+.photo-bar {
+  padding: 8vmin 6vmin 4vmin;
+  background: -webkit-linear-gradient(top, rgba(0, 0, 0, 0), rgba(0, 0, 0, .65));
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0), rgba(0, 0, 0, .65));
+}
+.photos .photo-caption p { margin: 0; }
+.photo-who { font-size: 7.5vmin; font-weight: 700; line-height: 1.1; }
+.photo-text { margin-top: 1vmin; font-size: 5.5vmin; font-weight: 500; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.photos .arrow { margin-top: -9.5vmin; }
