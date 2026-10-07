@@ -640,3 +640,4 @@ button:disabled { opacity: .45; cursor: default; }
 .faq details p { margin: 0 0 14px; color: var(--muted); }
 .tab-page .page-head { padding-left: 20px; padding-top: calc(16px + env(safe-area-inset-top)); }
 .notifs-status { margin: 4px 16px 8px; }
+.contact-btn { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 16px; border-radius: 14px; font-weight: 600; text-decoration: none; }

@@ -587,6 +587,20 @@ $('form-post').addEventListener('submit', async (e) => {
   }
 });
 
+// ---------- Support ----------
+
+// L'e-mail part avec le nom de la famille et le téléphone utilisé, pour aider à comprendre le souci.
+$('btn-contact').addEventListener('click', () => {
+  const body = [
+    'Bonjour,', '', '(Décrivez votre problème ici)', '', '---',
+    `Famille : ${session.family.name}`,
+    `Prénom : ${session.member.name}`,
+    `Téléphone : ${navigator.userAgent}`,
+  ].join('\n');
+  $('btn-contact').href = `mailto:tanguyreynaud22@gmail.com?subject=${encodeURIComponent("Papote : besoin d'aide")}`
+    + `&body=${encodeURIComponent(body)}`;
+});
+
 // ---------- Réglages ----------
 
 function inviteLink() {
