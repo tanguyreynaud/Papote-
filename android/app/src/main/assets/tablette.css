@@ -898,3 +898,21 @@ body.night .moment { color: #fb923c; }
 .frame-caption { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-left: 3vmin; padding-right: 3vmin; }
 .frame-caption .sign-face { width: 8vmin; height: 8vmin; margin-right: 1.5vmin; }
 .frame-caption .sign-face { position: static; }
+
+/* ---------- Invitation : QR code tant qu'il n'y a pas de photo ---------- */
+
+.invite { text-align: center; }
+.home-frame .invite-qr {
+  position: static;
+  display: block;
+  width: 46vmin;
+  height: 46vmin;
+  margin: 0 auto 3vmin;
+  padding: 2.5vmin;
+  background: #fff;
+  border-radius: 3vmin;
+  box-shadow: 0 1vmin 3vmin rgba(0, 0, 0, .15);
+  image-rendering: pixelated;
+}
+.invite p { margin: 0; font-size: 4.6vmin; font-weight: bold; color: #57534e; line-height: 1.25; }
+body.night .invite p { color: #a8998d; }

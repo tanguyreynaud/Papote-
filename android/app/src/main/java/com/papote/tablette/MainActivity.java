@@ -251,6 +251,29 @@ public class MainActivity extends Activity implements Sync.Listener {
             });
         }
 
+        /** QR code (image PNG en data URL) du lien d'invitation de la famille. */
+        @JavascriptInterface
+        public String qrCode(String text) {
+            try {
+                com.google.zxing.common.BitMatrix m = new com.google.zxing.qrcode.QRCodeWriter()
+                        .encode(text, com.google.zxing.BarcodeFormat.QR_CODE, 480, 480);
+                int w = m.getWidth(), h = m.getHeight();
+                int[] pixels = new int[w * h];
+                for (int y = 0; y < h; y++) {
+                    for (int x = 0; x < w; x++) pixels[y * w + x] = m.get(x, y) ? Color.BLACK : Color.WHITE;
+                }
+                android.graphics.Bitmap bmp = android.graphics.Bitmap.createBitmap(pixels, w, h,
+                        android.graphics.Bitmap.Config.ARGB_8888);
+                java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+                bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out);
+                return "data:image/png;base64," + android.util.Base64.encodeToString(out.toByteArray(),
+                        android.util.Base64.NO_WRAP);
+            } catch (Exception e) {
+                Log.w(TAG, "QR code", e);
+                return "";
+            }
+        }
+
         /** La nuit : écran noir et luminosité au minimum ; le jour : luminosité normale. */
         @JavascriptInterface
         public void setSleep(boolean asleep) {

@@ -178,11 +178,35 @@
     show($('frame-img'), has);
     show($('frame-caption'), has);
     show($('frame-empty'), !has);
-    if (!has) return;
+    if (!has) { renderInvite(); return; }
     frameIndex = frameIndex % Math.min(photos.length, 20);
     var p = photos[frameIndex];
     setPicture($('frame-img'), p.image);
     signWithFace($('frame-caption'), p, p.authorName + ', ' + dayLabel(p.createdAt));
+  }
+
+  // Sans photo : un QR code pour que la famille rejoigne Papote depuis son téléphone.
+  var familyCode = '';
+  var inviteFor = null;
+  function renderInvite() {
+    var code = familyCode.replace(/-/g, '');
+    if (!code || inviteFor === code || !android() || !android().qrCode) return;
+    var qr = android().qrCode('https://papote-famille.web.app/?code=' + code);
+    if (!qr) return;
+    inviteFor = code;
+    var el = $('frame-empty');
+    el.innerHTML = '';
+    var box = document.createElement('div');
+    box.className = 'invite';
+    var img = document.createElement('img');
+    img.className = 'invite-qr';
+    img.setAttribute('src', qr);
+    img.setAttribute('alt', '');
+    var text = document.createElement('p');
+    text.textContent = 'Famille : scannez ce code avec votre téléphone pour envoyer des photos';
+    box.appendChild(img);
+    box.appendChild(text);
+    el.appendChild(box);
   }
 
   // Fond flouté : la photo est réduite à quelques pixels puis agrandie (le flou CSS
@@ -461,6 +485,7 @@
     var seenBefore = {};
     for (var i = 0; i < posts.length; i++) if (posts[i].seen) seenBefore[posts[i].id] = true;
     posts = payload.posts || [];
+    familyCode = payload.familyCode || '';
     photos = [];
     for (var j = 0; j < posts.length; j++) {
       if (seenBefore[posts[j].id]) posts[j].seen = true;
