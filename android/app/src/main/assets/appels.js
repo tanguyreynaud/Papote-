@@ -85,11 +85,18 @@ async function joinFamily() {
   const code = ((android() && android().getCode()) || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
   if (!saved && !code) return null;
 
+  // Le code saisi à l'installation est un code de tablette (invites/{code}, kind 'tablette') :
+  // le code famille ne permet plus d'y inscrire une tablette.
+  let invite = null;
+  const readInvite = async () => {
+    if (!invite && code) invite = await getDoc(doc(db, 'invites', code));
+    return invite && invite.exists() ? invite.data() : null;
+  };
   let target = saved;
   if (!target) {
-    const invite = await getDoc(doc(db, 'invites', code));
-    if (!invite.exists()) return null;
-    target = invite.data().fid;
+    const data = await readInvite();
+    if (!data) return null;
+    target = data.fid;
   }
   const memberRef = doc(db, 'families', target, 'members', u.uid);
   let member = null;
@@ -97,7 +104,11 @@ async function joinFamily() {
   if (member && member.exists()) {
     if (!member.data().canCall) await updateDoc(memberRef, { canCall: true });
   } else {
-    if (!code) return null;
+    const data = await readInvite();
+    if (!data || data.fid !== target || data.kind !== 'tablette') {
+      console.warn('Appels : code de tablette absent ou invalide, inscription impossible');
+      return null;
+    }
     await setDoc(memberRef, {
       name: 'Tablette', role: 'tablette', code, joinedAt: serverTimestamp(), canCall: true,
     });
