@@ -516,6 +516,12 @@ public class MainActivity extends Activity implements Sync.Listener {
                     new ComponentName(getPackageName(), MainActivity.class.getName()));
             dpm.setKeyguardDisabled(admin, true);
             dpm.setStatusBarDisabled(admin, true);
+            // Luminosité automatique en journée, si la tablette a un capteur de lumière.
+            android.hardware.SensorManager sm = (android.hardware.SensorManager) getSystemService(SENSOR_SERVICE);
+            if (sm != null && sm.getDefaultSensor(android.hardware.Sensor.TYPE_LIGHT) != null) {
+                dpm.setSystemSetting(admin, Settings.System.SCREEN_BRIGHTNESS_MODE,
+                        String.valueOf(Settings.System.SCREEN_BRIGHTNESS_MODE_AUTOMATIC));
+            }
             // Écran toujours allumé quand la tablette est branchée (secteur, USB ou sans fil).
             dpm.setGlobalSetting(admin, Settings.Global.STAY_ON_WHILE_PLUGGED_IN, "7");
         } catch (Exception e) {

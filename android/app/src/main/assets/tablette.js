@@ -111,9 +111,17 @@
   }
 
   // Taille du texte selon sa longueur : il tient toujours à l'écran sans faire défiler.
+  // Taille du texte choisie par la famille (normale, grande, très grande).
+  var textScale = 1;
+  function setTextSize(size) {
+    textScale = size === 'tres-grande' ? 1.3 : size === 'grande' ? 1.15 : 1;
+    document.documentElement.style.setProperty('--ts', String(textScale));
+  }
+
   function sizeClass(text) {
-    var n = (text || '').length;
-    return n <= 50 ? 'size-l' : n <= 110 ? 'size-m' : 'size-s';
+    // Plus le texte est agrandi, plus vite on passe à la taille au-dessous pour qu'il tienne.
+    var n = (text || '').length * textScale * textScale;
+    return n <= 50 ? 'size-l' : n <= 110 ? 'size-m' : n <= 180 ? 'size-s' : 'size-xs';
   }
 
   // ---------- Météo ----------
@@ -508,6 +516,7 @@
     for (var i = 0; i < posts.length; i++) if (posts[i].seen) seenBefore[posts[i].id] = true;
     posts = payload.posts || [];
     familyCode = payload.familyCode || '';
+    setTextSize(payload.textSize);
     photos = [];
     for (var j = 0; j < posts.length; j++) {
       if (seenBefore[posts[j].id]) posts[j].seen = true;

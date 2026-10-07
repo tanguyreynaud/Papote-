@@ -80,6 +80,7 @@ final class Sync {
     private final Map<String, Post> posts = new LinkedHashMap<>();
     private String familyName;
     private String familyCode;
+    private String textSize;
     private long lastFullRefresh;
     private long lastRev = Long.MIN_VALUE; // marqueur de changement de la famille
     private volatile boolean realtime;
@@ -253,12 +254,13 @@ final class Sync {
         try {
             // Une seule lecture : le marqueur « rev » ne bouge que si la famille a envoyé ou supprimé
             // quelque chose (ou modifié les rappels). Sinon, rien d'autre à lire.
-            JSONObject family = firebase.get("families/" + fid, "name", "rev", "code");
+            JSONObject family = firebase.get("families/" + fid, "name", "rev", "code", "textSize");
             long rev = 0;
             JSONObject ff = family == null ? null : family.optJSONObject("fields");
             if (ff != null) {
                 familyName = Firebase.str(ff, "name");
                 familyCode = Firebase.str(ff, "code");
+                textSize = Firebase.str(ff, "textSize");
                 rev = Firebase.integer(ff, "rev");
             }
             if (rev == lastRev && now - lastFullRefresh < FULL_REFRESH_MS) {
@@ -679,6 +681,7 @@ final class Sync {
             }
             JSONObject payload = new JSONObject().put("familyName", familyName == null ? "" : familyName)
                     .put("familyCode", familyCode == null ? "" : familyCode)
+                    .put("textSize", textSize == null ? "" : textSize)
                     .put("posts", arr);
             String json = payload.toString();
             if (json.equals(lastPostsJson)) return;
