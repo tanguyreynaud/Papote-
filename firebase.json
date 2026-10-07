@@ -23,7 +23,11 @@
   },
   "auth": {
     "providers": {
-      "anonymousAuth": true
+      "anonymousAuth": true,
+      "googleSignIn": {
+        "oAuthBrandDisplayName": "Papote",
+        "supportEmail": "tanguyreynaud22@gmail.com"
+      }
     }
   },
   "storage": {

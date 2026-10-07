@@ -23,6 +23,17 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/families/$(fid)/members/$(request.auth.uid));
     }
 
+    // Tableau de bord : seul l'administrateur, connecté avec son compte Google, voit toutes les familles.
+    function isAdmin() {
+      return request.auth != null
+        && request.auth.token.email == 'tanguyreynaud22@gmail.com'
+        && request.auth.token.email_verified == true;
+    }
+
+    match /{path=**}/members/{uid} {
+      allow read: if isAdmin();
+    }
+
     function isCreatorAfter(fid) {
       return getAfter(familyPath(fid)).data.createdBy == request.auth.uid;
     }
@@ -47,6 +58,7 @@ service cloud.firestore {
     match /families/{fid} {
       allow get: if isMember(fid);
       allow list: if false;
+      allow get, list: if isAdmin();
       allow create: if signedIn()
         && request.resource.data.keys().hasOnly(['name', 'code', 'createdBy', 'createdAt'])
         && request.resource.data.createdBy == request.auth.uid
@@ -79,7 +91,7 @@ service cloud.firestore {
               || get(/databases/$(database)/documents/invites/$(request.resource.data.code)).data.fid == fid);
         allow update: if signedIn()
           && uid == request.auth.uid
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'canCall', 'lastActive', 'lastOnline', 'callable', 'face'])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'canCall', 'lastActive', 'lastOnline', 'callable', 'face', 'appVersion'])
           // Photo de profil : petite image JPEG en data URL, ou null pour la retirer.
           && (!('face' in request.resource.data) || request.resource.data.face == null
               || (request.resource.data.face is string && request.resource.data.face.size() <= 200000))
@@ -91,6 +103,8 @@ service cloud.firestore {
 
       match /posts/{pid} {
         allow read: if isMember(fid);
+        // Transfert des anciennes photos et vidéos vers Storage, depuis le tableau de bord.
+        allow read, update: if isAdmin();
         allow create: if isMember(fid)
           && request.resource.data.keys().hasOnly(['type', 'text', 'image', 'thumb', 'hasMedia', 'audio', 'duration', 'chunks', 'mime', 'replyTo', 'authorUid', 'authorName', 'createdAt', 'seenAt', 'hearts', 'imageUrl', 'videoUrl', 'storagePath'])
           && request.resource.data.authorUid == request.auth.uid
@@ -116,6 +130,7 @@ service cloud.firestore {
         // Photo ou son en taille réelle, chargé seulement à la demande.
         match /media/{kind} {
           allow read: if isMember(fid);
+          allow read, delete: if isAdmin();
           allow create: if isMember(fid)
             && (kind in ['image', 'audio'] || kind.matches('video[0-9]+'))
             && request.resource.data.keys().hasOnly(['data'])

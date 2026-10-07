@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Papote · Tableau de bord</title>
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/famille.css">
+  <link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+  <main class="admin">
+    <header class="admin-head">
+      <img src="icons/icon.svg" alt="" class="admin-logo">
+      <div>
+        <h1>Tableau de bord</h1>
+        <p id="who" class="muted small"></p>
+      </div>
+      <button type="button" id="btn-refresh" class="secondary" hidden>Actualiser</button>
+    </header>
+
+    <section id="signin" class="card" hidden>
+      <h2>Réservé à l'administrateur</h2>
+      <p class="muted">Connectez-vous avec votre compte Google pour voir toutes les tablettes.</p>
+      <button type="button" id="btn-signin" class="primary wide">Se connecter avec Google</button>
+      <p id="signin-error" class="error" hidden></p>
+    </section>
+
+    <section id="dashboard" hidden>
+      <div class="stats">
+        <div class="stat"><span id="s-families">–</span><p>familles</p></div>
+        <div class="stat ok"><span id="s-online">–</span><p>tablettes en ligne</p></div>
+        <div class="stat warn"><span id="s-offline">–</span><p>hors ligne</p></div>
+        <div class="stat"><span id="s-idle">–</span><p>pas touchées depuis 24 h</p></div>
+      </div>
+      <p id="loading-families" class="muted">Chargement des familles…</p>
+      <ul id="families" class="families"></ul>
+
+      <div class="card migrate">
+        <h2>Anciennes photos et vidéos</h2>
+        <p class="muted">Les envois faits avant Storage sont encore rangés dans la base. Le transfert les déplace vers Storage, sans rien changer pour les familles, et libère la base.</p>
+        <p id="migrate-count" class="small"></p>
+        <button type="button" id="btn-migrate" class="primary wide" disabled>Transférer vers Storage</button>
+        <pre id="migrate-log" class="log" hidden></pre>
+      </div>
+      <button type="button" id="btn-signout" class="link wide">Se déconnecter</button>
+    </section>
+  </main>
+  <script type="module" src="js/admin.js"></script>
+</body>
+</html>

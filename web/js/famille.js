@@ -411,7 +411,9 @@ function resize(img, maxSide, quality) {
   return canvas.toDataURL('image/jpeg', quality);
 }
 
-function fullSize(img) {
+// Avec Storage, pas de limite de 1 Mo : photo plus nette (2048 px). Sinon, on reste sous 1 Mo.
+function fullSize(img, forBase = false) {
+  if (storage && !forBase) return resize(img, 2048, 0.88);
   let maxSide = 1600;
   let quality = 0.82;
   for (;;) {
@@ -623,7 +625,10 @@ async function sendPhoto(photo, text, author) {
       storage = null; // pour les envois suivants de cette session
     }
   }
-  await addPost(session.fid, { type: 'photo', text, image: photo.full, thumb: photo.thumb, ...author });
+  // Repli sur la base : la photo doit tenir sous 1 Mo.
+  const full = photo.full.length <= MAX_IMAGE_CHARS ? photo.full
+    : fullSize(await loadImage(await (await fetch(photo.full)).blob()), true);
+  await addPost(session.fid, { type: 'photo', text, image: full, thumb: photo.thumb, ...author });
 }
 
 function toBase64(blob) {
@@ -767,8 +772,30 @@ function inviteLink() {
   return `${location.origin}/?code=${formatCode(session.family.code)}`;
 }
 
-function renderSettings() {
+let qrLoading = null;
+function loadQr() {
+  qrLoading = qrLoading || new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'vendor/qrcode.js';
+    script.onload = resolve;
+    script.onerror = reject;
+    document.head.append(script);
+  });
+  return qrLoading;
+}
+
+async function renderSettings() {
   $('settings-code').textContent = formatCode(session.family.code);
+  // QR code du lien d'invitation : l'appareil photo du téléphone ouvre l'app avec le code déjà rempli.
+  try {
+    await loadQr();
+    const qr = window.qrcode(0, 'M');
+    qr.addData(inviteLink());
+    qr.make();
+    $('invite-qr').innerHTML = qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true });
+  } catch (err) {
+    console.error(err);
+  }
 }
 
 $('btn-share').addEventListener('click', async () => {
@@ -1029,8 +1056,12 @@ async function start() {
   session = await loadMembership();
   if (!session) {
     const code = new URLSearchParams(location.search).get('code');
-    if (code) $('join-code').value = formatCode(normalizeCode(code));
     show('view-join');
+    // Arrivé par le lien ou le QR code d'invitation : il ne reste que le prénom à donner.
+    if (code) {
+      $('join-code').value = formatCode(normalizeCode(code));
+      $('join-name').focus();
+    }
     return;
   }
   $('family-title').textContent = `Pour ${session.family.name}`;

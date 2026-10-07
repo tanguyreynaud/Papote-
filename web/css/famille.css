@@ -678,3 +678,9 @@ button:disabled { opacity: .45; cursor: default; }
 .seg.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
 .bday-date { display: grid; grid-template-columns: 1fr 1.6fr 1.4fr; gap: 10px; }
 .bday-date label { margin: 14px 0 0; }
+
+.qr { width: 220px; max-width: 70%; margin: 12px auto; background: #fff; padding: 6px; }
+.qr svg { display: block; width: 100%; height: auto; }
+.qr svg { stroke: none; }
+.qr svg rect { fill: #fff; }
+.qr svg path { fill: #000; }

@@ -9,8 +9,13 @@ service firebase.storage {
         return request.auth != null
           && firestore.exists(/databases/(default)/documents/families/$(fid)/members/$(request.auth.uid));
       }
-      allow read: if isMember();
-      allow create: if isMember()
+      function isAdmin() {
+        return request.auth != null
+          && request.auth.token.email == 'tanguyreynaud22@gmail.com'
+          && request.auth.token.email_verified == true;
+      }
+      allow read: if isMember() || isAdmin();
+      allow create: if (isMember() || isAdmin())
         && request.resource.size < 60 * 1024 * 1024
         && request.resource.contentType.matches('image/.*|video/.*');
       allow update: if false;
