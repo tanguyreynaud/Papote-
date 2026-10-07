@@ -92,6 +92,8 @@ Say 'App installée.' 'Green'
 Adb shell settings put global auto_time 1 | Out-Null
 Adb shell settings put global auto_time_zone 1 | Out-Null
 Adb shell settings put global stay_on_while_plugged_in 7 | Out-Null
+# Android 4.4 : autoriser l'installation des mises à jour de Papote téléchargées par l'app
+if ($sdkLevel -lt 21) { Adb shell settings put secure install_non_market_apps 1 | Out-Null }
 
 # 5. Mode kiosque (propriétaire de l'appareil, Android 5 et plus)
 $sdk = [int](Adb shell getprop ro.build.version.sdk)

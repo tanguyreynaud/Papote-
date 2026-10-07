@@ -17,3 +17,6 @@ firestore-debug.log
 Thumbs.db
 .idea/
 .claude/
+
+# Mises à jour publiées (générées par installation/publier-mise-a-jour.ps1)
+maj/public/
