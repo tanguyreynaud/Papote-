@@ -22,7 +22,7 @@ const db = getFirestore(app);
 
 // Sans relais TURN, la vidéo ne passe pas entre deux réseaux différents (4G, box…).
 // Le relais est décrit dans Firestore (config/turn), pas dans le code, qui est public :
-//   { url: 'https://…' }  adresse qui renvoie la liste des relais (identifiants à jour)
+//   { url: 'https://…' }  service qui renvoie la liste des relais (identifiants à jour, voir turn-worker/)
 //   ou { urls: 'turn:… turn:…', username, credential }                       identifiants fixes
 const STUN = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }];
 
@@ -37,7 +37,9 @@ async function iceServers() {
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 5000);
       try {
-        const res = await fetch(conf.url, { signal: ctrl.signal });
+        // Le service des identifiants (Cloudflare) n'en donne qu'aux apps connectées.
+        const token = auth.currentUser ? await auth.currentUser.getIdToken() : '';
+        const res = await fetch(conf.url, { signal: ctrl.signal, headers: { Authorization: `Bearer ${token}` } });
         if (res.ok) relays = await res.json();
       } finally {
         clearTimeout(timer);
