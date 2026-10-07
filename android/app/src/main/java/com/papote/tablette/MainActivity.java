@@ -548,6 +548,7 @@ public class MainActivity extends Activity implements Sync.Listener {
         }
     }
 
+    @SuppressWarnings("deprecation")
     private void hideSystemBars() {
         getWindow().getDecorView().setSystemUiVisibility(
                 View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
@@ -556,7 +557,26 @@ public class MainActivity extends Activity implements Sync.Listener {
                         | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
                         | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
                         | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
+        if (Build.VERSION.SDK_INT >= 30) {
+            android.view.WindowInsetsController c = getWindow().getInsetsController();
+            if (c != null) {
+                c.setSystemBarsBehavior(android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+                c.hide(android.view.WindowInsets.Type.statusBars() | android.view.WindowInsets.Type.navigationBars());
+            }
+        }
     }
+
+    /**
+     * La barre du haut peut rester affichée après un glissement depuis le bord :
+     * on la masque de nouveau dès qu'elle apparaît, puis toutes les 3 secondes par sécurité.
+     */
+    private final Runnable rehideBars = new Runnable() {
+        @Override
+        public void run() {
+            hideSystemBars();
+            handler.postDelayed(this, 3000);
+        }
+    };
 
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
@@ -568,13 +588,15 @@ public class MainActivity extends Activity implements Sync.Listener {
     protected void onResume() {
         super.onResume();
         web.onResume();
-        hideSystemBars();
+        handler.removeCallbacks(rehideBars);
+        handler.post(rehideBars);
         enterKiosk();
     }
 
     @Override
     protected void onPause() {
         web.onPause();
+        handler.removeCallbacks(rehideBars);
         super.onPause();
     }
 
