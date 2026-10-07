@@ -77,6 +77,12 @@
     $('date').textContent = day.charAt(0).toUpperCase() + day.slice(1) + ' ' + now.getDate() +
       (now.getDate() === 1 ? 'er' : '') + ' ' + MOIS[now.getMonth()];
     var hour = now.getHours();
+    // Le moment de la journée, un repère de plus sous la date.
+    if ($('moment')) {
+      $('moment').textContent = hour >= 5 && hour < 12 ? 'Le matin'
+        : hour >= 12 && hour < 18 ? "L'après-midi"
+          : hour >= 18 && hour < 22 ? 'Le soir' : 'La nuit';
+    }
     document.body.className = ((hour >= 21 || hour < 7) ? 'night' : '') +
       (playing && playing.post.video ? ' video-playing' : '');
   }
@@ -120,7 +126,7 @@
     return '<g stroke="#f59e0b" stroke-width="3.5" stroke-linecap="round">' + rays + '</g>' +
       '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="#fbbf24"/>';
   }
-  var CLOUD = '<path fill="#cbd5e1" stroke="#94a3b8" stroke-width="2" d="M20 58h40a12 12 0 0 0 0-24 18 18 0 0 0-34-4A13 13 0 0 0 20 58z"/>';
+  var CLOUD = '<path fill="#a9bdd4" stroke="#64748b" stroke-width="2.5" d="M20 58h40a12 12 0 0 0 0-24 18 18 0 0 0-34-4A13 13 0 0 0 20 58z"/>';
   var MOON = '<path fill="#fde68a" d="M44 10a24 24 0 1 0 22 33A20 20 0 0 1 44 10z"/>';
   var DROPS = '<g stroke="#3b82f6" stroke-width="4" stroke-linecap="round"><line x1="28" y1="64" x2="24" y2="74"/><line x1="42" y1="64" x2="38" y2="74"/><line x1="56" y1="64" x2="52" y2="74"/></g>';
   var SNOW = '<g fill="#93c5fd"><circle cx="26" cy="68" r="3.5"/><circle cx="40" cy="72" r="3.5"/><circle cx="54" cy="68" r="3.5"/></g>';
@@ -176,7 +182,7 @@
     frameIndex = frameIndex % Math.min(photos.length, 20);
     var p = photos[frameIndex];
     setPicture($('frame-img'), p.image);
-    $('frame-caption').textContent = 'De ' + p.authorName;
+    signWithFace($('frame-caption'), p, p.authorName + ', ' + dayLabel(p.createdAt));
   }
 
   // Fond flouté : la photo est réduite à quelques pixels puis agrandie (le flou CSS
@@ -593,7 +599,10 @@
       img.setAttribute('alt', '');
       el.appendChild(img);
     }
-    el.appendChild(document.createTextNode(text));
+    var span = document.createElement('span');
+    span.className = 'sign-text';
+    span.textContent = text;
+    el.appendChild(span);
   }
 
   // ---------- Anniversaires ----------
@@ -679,6 +688,13 @@
   }
 
   // Bandeau et écran créés ici pour ne pas toucher à tablette.html.
+  function setupHomeExtras() {
+    var moment = document.createElement('p');
+    moment.id = 'moment';
+    moment.className = 'moment';
+    $('date').parentNode.insertBefore(moment, $('date').nextSibling);
+  }
+
   function setupFamilyExtras() {
     var banner = document.createElement('div');
     banner.id = 'bday-banner';
@@ -790,6 +806,8 @@
     fillIcons();
     setupSleep();
     setupFamilyExtras();
+    setupHomeExtras();
+    tick();
     tick();
     setInterval(tick, 1000);
     setInterval(function () {

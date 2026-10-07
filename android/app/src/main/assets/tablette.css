@@ -880,3 +880,21 @@ body.night .bday-banner { background: #3b1426; color: #f9a8d4; }
 }
 .overlay.bday .ln-note { max-width: 130vmin; text-align: center; }
 .overlay.bday .ln-sign { text-align: center; font-weight: 700; color: #be185d; }
+
+/* ---------- Accueil : plus grand, le moment de la journée, météo lisible ---------- */
+
+.clock { font-size: 35vmin; line-height: 1; }
+.date { font-size: 9vmin; margin: 1vmin 0 0; }
+.moment { margin: .5vmin 0 0; font-size: 7.5vmin; font-weight: bold; color: #c2410c; }
+body.night .moment { color: #fb923c; }
+.weather { margin-top: 4vmin; }
+.weather-icon { width: 18vmin; height: 18vmin; }
+.weather-temp { font-size: 13vmin; }
+.weather-label { font-size: 6vmin; }
+.weather-label small { font-size: 4.6vmin; }
+.frame-caption .sign-face { width: 9vmin; height: 9vmin; }
+.weather-label small { font-size: 4.3vmin; white-space: nowrap; }
+.sign-text { vertical-align: middle; }
+.frame-caption { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-left: 3vmin; padding-right: 3vmin; }
+.frame-caption .sign-face { width: 8vmin; height: 8vmin; margin-right: 1.5vmin; }
+.frame-caption .sign-face { position: static; }
