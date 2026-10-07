@@ -256,8 +256,20 @@ public class MainActivity extends Activity implements Sync.Listener {
         public void setSleep(boolean asleep) {
             handler.post(() -> {
                 WindowManager.LayoutParams lp = getWindow().getAttributes();
-                lp.screenBrightness = asleep ? 0.0f : WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
+                float brightness = asleep ? 0.01f : WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
+                lp.screenBrightness = brightness;
                 getWindow().setAttributes(lp);
+                // Android 4.4 : la bande qui bloque la barre d'état est une fenêtre système placée
+                // au-dessus ; c'est elle qui décide de la luminosité.
+                if (statusBarBlocker != null) {
+                    try {
+                        WindowManager.LayoutParams blp = (WindowManager.LayoutParams) statusBarBlocker.getLayoutParams();
+                        blp.screenBrightness = brightness;
+                        ((WindowManager) getSystemService(WINDOW_SERVICE)).updateViewLayout(statusBarBlocker, blp);
+                    } catch (Exception e) {
+                        Log.w(TAG, "Luminosité de nuit", e);
+                    }
+                }
             });
         }
 
