@@ -7,9 +7,6 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Mise à jour à distance -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
-    <!-- Android 4.4 sans mode kiosque : bloquer le volet de notifications et revenir au premier plan. -->
-    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-    <uses-permission android:name="android.permission.REORDER_TASKS" />
     <!-- Appels vidéo -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
@@ -54,6 +51,16 @@
                 <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
             </intent-filter>
         </receiver>
+
+        <!-- Refuse les appels de la carte SIM (rôle « filtrage des appels ») -->
+        <service
+            android:name=".BlockCalls"
+            android:exported="true"
+            android:permission="android.permission.BIND_SCREENING_SERVICE">
+            <intent-filter>
+                <action android:name="android.telecom.CallScreeningService" />
+            </intent-filter>
+        </service>
 
         <receiver
             android:name=".BootReceiver"

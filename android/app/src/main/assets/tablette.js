@@ -174,15 +174,43 @@
   // ---------- Accueil : cadre photo et compteurs ----------
 
   function renderFrame() {
+    // Un rendez-vous dans moins d'une heure passe avant les photos.
+    var rdv = upcomingRdv();
+    showRdv(rdv);
+    if (rdv) return;
     var has = photos.length > 0;
     show($('frame-img'), has);
     show($('frame-caption'), has);
     show($('frame-empty'), !has);
-    if (!has) return;
+    if (!has) { renderInvite(); return; }
     frameIndex = frameIndex % Math.min(photos.length, 20);
     var p = photos[frameIndex];
     setPicture($('frame-img'), p.image);
     signWithFace($('frame-caption'), p, p.authorName + ', ' + dayLabel(p.createdAt));
+  }
+
+  // Sans photo : un QR code pour que la famille rejoigne Papote depuis son téléphone.
+  var familyCode = '';
+  var inviteFor = null;
+  function renderInvite() {
+    var code = familyCode.replace(/-/g, '');
+    if (!code || inviteFor === code || !android() || !android().qrCode) return;
+    var qr = android().qrCode('https://papote-famille.web.app/?code=' + code);
+    if (!qr) return;
+    inviteFor = code;
+    var el = $('frame-empty');
+    el.innerHTML = '';
+    var box = document.createElement('div');
+    box.className = 'invite';
+    var img = document.createElement('img');
+    img.className = 'invite-qr';
+    img.setAttribute('src', qr);
+    img.setAttribute('alt', '');
+    var text = document.createElement('p');
+    text.textContent = 'Famille : scannez ce code avec votre téléphone pour envoyer des photos';
+    box.appendChild(img);
+    box.appendChild(text);
+    el.appendChild(box);
   }
 
   // Fond flouté : la photo est réduite à quelques pixels puis agrandie (le flou CSS
@@ -395,6 +423,16 @@
     var mode = p.image ? 'photo' : p.type === 'voice' ? 'voice' : p.type === 'video' ? 'video' : 'message';
     var media = mode === 'voice' || mode === 'video';
     $('overlay').className = 'overlay ln mode-' + mode;
+    // Photo en paysage : elle prend toute la largeur, le mot passe dessous en bandeau.
+    if (mode === 'photo') {
+      var probe = new Image();
+      probe.onload = function () {
+        if (overlayPost === p && probe.naturalWidth > probe.naturalHeight * 1.1) {
+          $('overlay').className = 'overlay ln mode-photo wide';
+        }
+      };
+      probe.src = p.image;
+    }
     // Comme un mot écrit à la main : le texte, puis la signature.
     var text = mode === 'message' ? p.text
       : mode === 'photo' ? (p.text || 'Une nouvelle photo pour vous !')
@@ -461,6 +499,7 @@
     var seenBefore = {};
     for (var i = 0; i < posts.length; i++) if (posts[i].seen) seenBefore[posts[i].id] = true;
     posts = payload.posts || [];
+    familyCode = payload.familyCode || '';
     photos = [];
     for (var j = 0; j < posts.length; j++) {
       if (seenBefore[posts[j].id]) posts[j].seen = true;
@@ -519,7 +558,43 @@
     return Math.floor(m / 60) + 'h' + pad(m % 60);
   }
 
+  // ---------- Rendez-vous proche : affiché à la place de la photo ----------
+
+  function upcomingRdv() {
+    var now = new Date();
+    var nowMin = now.getHours() * 60 + now.getMinutes();
+    var key = dateKey(now);
+    var next = null;
+    for (var i = 0; i < reminders.length; i++) {
+      var r = reminders[i];
+      if (r.kind !== 'rdv' || !happensOn(r, now) || isDone(r, key)) continue;
+      var delta = minutesOf(r.time) - nowMin;
+      if (delta >= 0 && delta <= 60 && (!next || delta < next.delta)) next = { r: r, delta: delta };
+    }
+    return next;
+  }
+
+  function showRdv(next) {
+    var el = $('frame-rdv');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'frame-rdv';
+      el.className = 'frame-rdv';
+      el.innerHTML = '<span class="rdv-icon"></span><p class="rdv-when"></p>' +
+        '<p class="rdv-title"></p><p class="rdv-in"></p>';
+      $('home-frame').appendChild(el);
+    }
+    show(el, !!next);
+    if (!next) return;
+    el.querySelector('.rdv-icon').innerHTML = kindIcon('rdv');
+    el.querySelector('.rdv-when').textContent = 'Rendez-vous à ' + timeLabel(next.r.time);
+    el.querySelector('.rdv-title').textContent = next.r.title;
+    el.querySelector('.rdv-in').textContent = next.delta === 0 ? "C'est maintenant"
+      : 'Dans ' + next.delta + ' minute' + (next.delta > 1 ? 's' : '');
+  }
+
   function checkReminders() {
+    if (isShown('view-home')) renderFrame();
     var now = new Date();
     var nowMin = now.getHours() * 60 + now.getMinutes();
     var key = dateKey(now);

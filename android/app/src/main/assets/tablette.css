@@ -322,6 +322,10 @@ button {
 }
 .call-wait { position: absolute; z-index: 1; justify-content: center; }
 
+/* Caméra sur le côté (tablette tenue couchée) : Mamie se place du côté de l'objectif */
+.cam-left .call-ring { flex-direction: row-reverse; }
+.cam-left #call-local { right: auto; left: 3vmin; }
+
 /* ---------- Installation ---------- */
 
 .setup { -webkit-align-items: center; align-items: center; -webkit-justify-content: center; justify-content: center; text-align: center; }
@@ -896,3 +900,85 @@ body.night .moment { color: #fb923c; }
 .frame-caption { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-left: 3vmin; padding-right: 3vmin; }
 .frame-caption .sign-face { width: 8vmin; height: 8vmin; margin-right: 1.5vmin; }
 .frame-caption .sign-face { position: static; }
+
+/* ---------- Invitation : QR code tant qu'il n'y a pas de photo ---------- */
+
+.invite { text-align: center; }
+.home-frame .invite-qr {
+  position: static;
+  display: block;
+  width: 46vmin;
+  height: 46vmin;
+  margin: 0 auto 3vmin;
+  padding: 2.5vmin;
+  background: #fff;
+  border-radius: 3vmin;
+  box-shadow: 0 1vmin 3vmin rgba(0, 0, 0, .15);
+  image-rendering: pixelated;
+}
+.invite p { margin: 0; font-size: 4.6vmin; font-weight: bold; color: #57534e; line-height: 1.25; }
+body.night .invite p { color: #a8998d; }
+
+/* ---------- Rendez-vous dans moins d'une heure, à la place de la photo ---------- */
+
+.frame-rdv {
+  position: absolute;
+  top: 0; right: 0; bottom: 0; left: 0;
+  z-index: 2;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-flex-direction: column;
+  flex-direction: column;
+  -webkit-align-items: center;
+  align-items: center;
+  -webkit-justify-content: center;
+  justify-content: center;
+  padding: 5vmin;
+  text-align: center;
+  background: -webkit-linear-gradient(top, #f0faf5, #cdeedd);
+  background: linear-gradient(to bottom, #f0faf5, #cdeedd);
+  color: #14532d;
+}
+.frame-rdv[hidden] { display: none; }
+.rdv-icon { display: block; width: 20vmin; height: 20vmin; color: #15803d; }
+.rdv-icon svg { width: 100%; height: 100%; display: block; }
+.frame-rdv p { margin: 0; }
+.rdv-when { margin-top: 3vmin; font-size: 6vmin; font-weight: bold; color: #15803d; }
+.rdv-title { margin-top: 2vmin; font-size: 8.5vmin; font-weight: bold; line-height: 1.15; }
+.rdv-in { margin-top: 3vmin; padding: 1.5vmin 4vmin; border-radius: 6vmin; background: #15803d; color: #fff; font-size: 5.5vmin; font-weight: bold; }
+body.night .frame-rdv { background: #10261a; color: #bbf7d0; }
+
+/* Accueil : l'heure, la date et la météo centrées dans la moitié gauche */
+.home-left { padding-left: 4vmin; padding-right: 4vmin; text-align: center; }
+.home-left .weather { -webkit-justify-content: center; justify-content: center; text-align: left; }
+.home-left .bday-banner { text-align: left; }
+
+/* ---------- Photo en paysage : la photo en grand, le mot en bandeau dessous ---------- */
+
+.overlay.mode-photo.wide .ln-main {
+  -webkit-flex-direction: column-reverse;
+  flex-direction: column-reverse;
+}
+.overlay.mode-photo.wide .ln-media { width: 100%; -webkit-flex: 1; flex: 1; min-height: 0; }
+.overlay.mode-photo.wide .ln-wood {
+  -webkit-flex: none;
+  flex: none;
+  width: 100%;
+  height: 27%;
+  padding: 2.5vmin 4vmin 2.5vmin 36vmin;
+  -webkit-justify-content: flex-start;
+  justify-content: flex-start;
+}
+.overlay.mode-photo.wide .ln-note {
+  max-width: none;
+  max-height: 100%;
+  overflow: hidden;
+  padding: 2.5vmin 4vmin;
+  -webkit-transform: none;
+  transform: none;
+  border-radius: 2vmin;
+}
+.overlay.mode-photo.wide .ln-text { font-size: 6vmin; line-height: 1.15; }
+.overlay.mode-photo.wide .ln-sign { margin-top: 1vmin; font-size: 4.8vmin; }
+.overlay.mode-photo.wide .ln-sign .sign-face { width: 7vmin; height: 7vmin; }
+.overlay.mode-photo.wide .ln-bar { padding: 0 0 4vmin 5vmin; }

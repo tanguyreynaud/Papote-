@@ -33,15 +33,7 @@ final class Http {
     }
 
     Response request(String method, String url, String contentType, String body, String bearer) throws IOException {
-        HttpsURLConnection c;
-        try {
-            c = (HttpsURLConnection) new URL(url).openConnection();
-            c.setSSLSocketFactory(Tls.socketFactory(context));
-        } catch (IOException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new IOException("TLS indisponible", e);
-        }
+        HttpsURLConnection c = (HttpsURLConnection) new URL(url).openConnection();
         c.setConnectTimeout(20_000);
         c.setReadTimeout(30_000);
         c.setRequestMethod(method);
