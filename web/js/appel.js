@@ -48,6 +48,50 @@ async function iceServers() {
 
 const RING_TIMEOUT_MS = 45_000;
 
+// La tablette est couchée : on lui envoie toujours une image à l'horizontale (16/9),
+// même si le téléphone est tenu debout. On garde alors le haut du buste, là où est le visage.
+function landscapeStream(camera) {
+  const video = document.createElement('video');
+  video.muted = true;
+  video.playsInline = true;
+  video.srcObject = camera;
+  video.play().catch(() => {});
+  const canvas = document.createElement('canvas');
+  canvas.width = 1280;
+  canvas.height = 720;
+  const ctx = canvas.getContext('2d');
+  let running = true;
+  const next = () => {
+    if (!running) return;
+    if (video.requestVideoFrameCallback) video.requestVideoFrameCallback(draw);
+    else requestAnimationFrame(draw);
+  };
+  const draw = () => {
+    const w = video.videoWidth;
+    const h = video.videoHeight;
+    if (w && h) {
+      let sw = w;
+      let sh = (w * 9) / 16;
+      if (sh > h) { sh = h; sw = (h * 16) / 9; }
+      const sx = (w - sw) / 2;
+      const sy = Math.max(0, Math.min(h - sh, h * 0.4 - sh / 2));
+      ctx.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+    }
+    next();
+  };
+  next();
+  const out = canvas.captureStream(30);
+  camera.getAudioTracks().forEach((t) => out.addTrack(t));
+  return {
+    stream: out,
+    stop: () => {
+      running = false;
+      out.getVideoTracks().forEach((t) => t.stop());
+      camera.getTracks().forEach((t) => t.stop());
+    },
+  };
+}
+
 /**
  * Lance un appel. `ui` reçoit les vidéos et les changements d'état :
  *   ui.local / ui.remote : éléments <video>
@@ -56,11 +100,13 @@ const RING_TIMEOUT_MS = 45_000;
  * Renvoie { hangup() }.
  */
 export async function startCall(fid, caller, ui) {
-  const stream = await navigator.mediaDevices.getUserMedia({
+  const camera = await navigator.mediaDevices.getUserMedia({
     video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
     audio: { echoCancellation: true, noiseSuppression: true },
   });
-  ui.local.srcObject = stream;
+  const sent = landscapeStream(camera);
+  const stream = sent.stream;
+  ui.local.srcObject = stream; // l'appelant voit exactement l'image envoyée
 
   const pc = new RTCPeerConnection(await iceServers());
   stream.getTracks().forEach((t) => pc.addTrack(t, stream));
@@ -95,7 +141,7 @@ export async function startCall(fid, caller, ui) {
     clearTimeout(ringTimer);
     stops.forEach((stop) => stop());
     pc.close();
-    stream.getTracks().forEach((t) => t.stop());
+    sent.stop();
     if (notify) updateDoc(callRef, { state: notify, endedAt: serverTimestamp() }).catch(() => {});
     ui.onEnd(reason);
   };

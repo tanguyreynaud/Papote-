@@ -842,14 +842,12 @@ function setCallStatus(text) {
   $('call-status').hidden = !text;
 }
 
-// Pendant l'appel : plein écran et téléphone à l'horizontale, comme l'écran de la tablette.
-// Le verrouillage n'est possible qu'en plein écran ; sinon on reste tel quel.
+// Pendant l'appel : plein écran. L'écran n'est pas forcé à l'horizontale : un téléphone tenu
+// debout filmerait alors de travers. L'image envoyée est mise à l'horizontale dans appel.js.
 function enterCallScreen() {
   const el = document.documentElement;
   if (!el.requestFullscreen || document.fullscreenElement) return;
-  el.requestFullscreen({ navigationUI: 'hide' })
-    .then(() => screen.orientation && screen.orientation.lock && screen.orientation.lock('landscape'))
-    .catch(() => {});
+  el.requestFullscreen({ navigationUI: 'hide' }).catch(() => {});
 }
 
 function leaveCallScreen() {
