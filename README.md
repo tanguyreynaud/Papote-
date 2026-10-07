@@ -37,6 +37,23 @@ et une app pour que la famille lui envoie photos et messages depuis iPhone ou An
    et publie le numéro de version sur https://papote-maj.web.app.
 3. Les tablettes vérifient toutes les 6 heures et s'installent la nouvelle version toutes seules.
 
+En une commande, depuis un PowerShell dans `installation/` :
+
+    .\installer-tablette.ps1 -Code ABCD-2345 -Wifi "Nom du wifi" -MotDePasse "..." -Oui
+
+Ce que le script fait à la tablette, de A à Z :
+1. installe Papote (caméra et micro autorisés d'office) ;
+2. date et heure automatiques, écran toujours allumé sur le chargeur, barre de navigation du bas masquée,
+   wifi si demandé ;
+3. mode kiosque (propriétaire de l'appareil) : Papote est l'écran d'accueil et ne se quitte pas, pas de volet
+   de notifications, pas de menu « Éteindre », pas de démarrage sans échec ;
+4. Papote filtre les appels (rôle « filtrage des appels ») : appels et SMS de la carte SIM refusés ;
+5. désactive les applis inutiles listées dans `installation/applis-inutiles.txt` (rien n'est effacé) ;
+6. relie la tablette à la famille.
+
+Au démarrage, l'appli règle elle-même le volume (fort), bloque les boutons de volume, rallume l'écran en
+journée si on appuie sur le bouton marche/arrêt, et met l'écran en veille de 23 h à 7 h.
+
 Pour remettre la tablette à la normale : `installation/retirer-papote.bat`.
 
 Maintenance par ADB :

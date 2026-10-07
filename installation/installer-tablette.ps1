@@ -3,9 +3,12 @@
 #   powershell -ExecutionPolicy Bypass -File installer-tablette.ps1 -Code ABCD-2345
 #   (-Serial XXXX pour choisir la tablette si plusieurs appareils sont branchés, -Oui pour ne rien demander)
 # Tablettes Android 9 et plus.
+#   -Wifi "Nom du réseau" -MotDePasse "..." pour connecter la tablette au wifi au passage.
 param(
     [string]$Code,
     [string]$Serial,
+    [string]$Wifi,
+    [string]$MotDePasse,
     [switch]$Oui
 )
 
@@ -100,6 +103,13 @@ Say 'App installée.' 'Green'
 Adb shell settings put global auto_time 1 | Out-Null
 Adb shell settings put global auto_time_zone 1 | Out-Null
 Adb shell settings put global stay_on_while_plugged_in 7 | Out-Null
+# Barre de navigation du bas masquée pour de bon (réglage des tablettes UNISOC, sans effet ailleurs)
+Adb shell settings put system show_navigationbar 0 | Out-Null
+# Wifi (facultatif)
+if ($Wifi) {
+    $res = if ($MotDePasse) { Adb shell cmd wifi connect-network "`"$Wifi`"" wpa2 "`"$MotDePasse`"" } else { Adb shell cmd wifi connect-network "`"$Wifi`"" open }
+    Say "Wifi « $Wifi » : $res" 'DarkGray'
+}
 
 # 5. Mode kiosque (propriétaire de l'appareil) : la tablette reste sur Papote
 #    et les mises à jour s'installent toutes seules.
