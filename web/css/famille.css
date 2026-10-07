@@ -4,16 +4,16 @@
   --text: #1c1917;
   --muted: #78716c;
   --line: #e7e5e4;
-  --accent: #ea580c;
+  --accent: #4f46e5;
   --accent-text: #ffffff;
   --danger: #dc2626;
   --ok: #16a34a;
   --shadow: 0 1px 2px rgba(28, 25, 23, .06), 0 4px 16px rgba(28, 25, 23, .06);
   --c-call: #16a34a;
-  --c-photo: #2563eb;
+  --c-photo: #0891b2;
   --c-video: #db2777;
-  --c-message: #ea580c;
-  --c-agenda: #7c3aed;
+  --c-message: #4f46e5;
+  --c-agenda: #d97706;
   --c-settings: #57534e;
   color-scheme: light dark;
 }
@@ -25,16 +25,16 @@
     --text: #f5f5f4;
     --muted: #a8a29e;
     --line: #2e2b28;
-    --accent: #fb923c;
+    --accent: #818cf8;
     --accent-text: #1c1917;
     --danger: #f87171;
     --ok: #4ade80;
     --shadow: none;
     --c-call: #4ade80;
-    --c-photo: #60a5fa;
+    --c-photo: #22d3ee;
     --c-video: #f472b6;
-    --c-message: #fb923c;
-    --c-agenda: #a78bfa;
+    --c-message: #818cf8;
+    --c-agenda: #fbbf24;
     --c-settings: #d6d3d1;
   }
 }
@@ -130,18 +130,11 @@ button:disabled { opacity: .45; cursor: default; }
   animation: fade-in .3s ease-out;
 }
 .splash-mark {
-  width: 88px;
-  height: 88px;
-  border-radius: 26px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--accent);
-  color: var(--accent-text);
-  box-shadow: 0 10px 30px color-mix(in srgb, var(--accent) 35%, transparent);
+  width: 96px;
+  height: 96px;
+  filter: drop-shadow(0 10px 24px color-mix(in srgb, var(--accent) 35%, transparent));
   animation: breathe 1.6s ease-in-out infinite;
 }
-.splash-mark svg { width: 46px; height: 46px; stroke-width: 2.2; }
 .splash-name { margin: 0; font-size: 28px; font-weight: 800; letter-spacing: -.02em; }
 .splash-dots { display: flex; gap: 6px; }
 .splash-dots span {
@@ -250,7 +243,7 @@ button:disabled { opacity: .45; cursor: default; }
   border-radius: 50%;
   background: var(--accent);
   color: var(--accent-text);
-  box-shadow: 0 6px 20px rgba(234, 88, 12, .4);
+  box-shadow: 0 6px 20px color-mix(in srgb, var(--accent) 40%, transparent);
 }
 .fab svg { width: 30px; height: 30px; stroke-width: 2.5; }
 

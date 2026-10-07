@@ -676,19 +676,42 @@ function renderMembers(members) {
 // ---------- Ajouter à l'écran d'accueil ----------
 
 let installPrompt = null;
-const isInstalled = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+const INSTALLED_KEY = 'papote.installed';
 const isIos = () => /iphone|ipad|ipod/i.test(navigator.userAgent)
   || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+// Lancée depuis l'icône de l'écran d'accueil (Android, iPhone) ?
+function launchedFromHomeScreen() {
+  return ['standalone', 'fullscreen', 'minimal-ui'].some((m) => window.matchMedia(`(display-mode: ${m})`).matches)
+    || navigator.standalone === true
+    || document.referrer.startsWith('android-app://');
+}
+
+function rememberInstalled() {
+  try { localStorage.setItem(INSTALLED_KEY, '1'); } catch (e) { /* stockage indisponible */ }
+  $('install-card').hidden = true;
+}
+
+function knownInstalled() {
+  try { return localStorage.getItem(INSTALLED_KEY) === '1'; } catch (e) { return false; }
+}
 
 // Chrome Android propose l'installation : on garde l'invitation pour notre bouton.
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
   installPrompt = e;
 });
-window.addEventListener('appinstalled', () => { $('install-card').hidden = true; });
+window.addEventListener('appinstalled', rememberInstalled);
 
-function renderInstallCard() {
-  $('install-card').hidden = isInstalled();
+// La carte « Installez Papote » ne s'affiche que si l'app n'est pas déjà sur l'écran d'accueil.
+async function renderInstallCard() {
+  if (launchedFromHomeScreen()) { rememberInstalled(); return; }
+  $('install-card').hidden = knownInstalled();
+  // Chrome Android sait dire si l'app est déjà installée, même ouverte dans le navigateur.
+  try {
+    const apps = await navigator.getInstalledRelatedApps?.();
+    if (apps && apps.length) rememberInstalled();
+  } catch (e) { /* non pris en charge */ }
 }
 
 $('btn-install').addEventListener('click', async () => {
@@ -696,7 +719,7 @@ $('btn-install').addEventListener('click', async () => {
     installPrompt.prompt();
     const { outcome } = await installPrompt.userChoice;
     installPrompt = null;
-    if (outcome === 'accepted') $('install-card').hidden = true;
+    if (outcome === 'accepted') rememberInstalled();
     return;
   }
   const help = $('install-help');
