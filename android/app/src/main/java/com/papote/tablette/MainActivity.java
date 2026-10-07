@@ -445,7 +445,8 @@ public class MainActivity extends Activity implements Sync.Listener {
     }
 
     /**
-     * Un appui sur le bouton marche/arrêt éteint l'écran : en journée, on le rallume aussitôt.
+     * Android ne laisse aucune appli bloquer le bouton marche/arrêt : un appui éteint l'écran.
+     * En journée, on le rallume dans la foulée (on ne voit qu'un bref noir).
      * La nuit (23h-7h), on le laisse éteint.
      */
     private final android.content.BroadcastReceiver screenOff = new android.content.BroadcastReceiver() {
@@ -454,7 +455,7 @@ public class MainActivity extends Activity implements Sync.Listener {
         public void onReceive(Context context, Intent intent) {
             int hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY);
             if (kioskPaused() || hour >= 23 || hour < 7) return;
-            handler.postDelayed(() -> {
+            handler.post(() -> {
                 try {
                     PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
                     if (pm.isInteractive()) return;
@@ -464,7 +465,7 @@ public class MainActivity extends Activity implements Sync.Listener {
                 } catch (Exception e) {
                     Log.w(TAG, "Rallumer l'écran", e);
                 }
-            }, 1500);
+            });
         }
     };
 
