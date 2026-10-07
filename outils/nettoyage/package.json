@@ -1,0 +1,8 @@
+{
+  "name": "papote-nettoyage",
+  "private": true,
+  "description": "Supprime les comptes anonymes Firebase qui ne sont membres d'aucune famille.",
+  "dependencies": {
+    "firebase-admin": "^13.0.0"
+  }
+}
