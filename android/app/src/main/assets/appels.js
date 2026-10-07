@@ -104,7 +104,7 @@ const CAMERA = {
 function showRing(id, data) {
   ringing = { id, data };
   if (window.Papote && window.Papote.closeOverlayForCall) window.Papote.closeOverlayForCall();
-  $('ring-name').textContent = `${data.callerName} vous appelle`;
+  $('ring-name').textContent = data.callerName;
   $('call-ring').hidden = false;
   if (android()) android().ring(true);
   showCallerFace(id, data.callerUid);
@@ -329,12 +329,6 @@ function closeView() {
   if (android()) android().inCall(false);
 }
 
-function decline() {
-  if (!ringing) return;
-  updateDoc(doc(db, 'families', fid, 'calls', ringing.id), { state: 'declined', endedAt: serverTimestamp() }).catch(() => {});
-  hideRing();
-}
-
 // Maintenance : la tablette quitte la famille (commande ADB « leave »).
 window.papoteAppelsLeave = async () => {
   try {
@@ -346,7 +340,6 @@ window.papoteAppelsLeave = async () => {
 };
 
 $('ring-answer').addEventListener('click', answer);
-$('ring-decline').addEventListener('click', decline);
 $('call-remote').addEventListener('playing', () => { if (active) $('call-wait').hidden = true; });
 
 // Écoute en direct du marqueur de changement : la tablette se met à jour aussitôt,

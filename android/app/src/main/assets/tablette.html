@@ -88,18 +88,16 @@
     </div>
   </div>
 
-  <!-- Appel entrant : un seul fond plein écran, comme les autres écrans -->
+  <!-- Appel entrant : qui appelle, en grand à gauche ; Mamie et « Décrocher » à droite -->
   <div id="call-ring" class="call-screen call-ring" hidden>
-    <div class="call-head">
+    <div class="call-side">
       <img id="ring-caller" class="caller-face" alt="" hidden>
       <p id="ring-name" class="call-title"></p>
+      <p class="call-sub">vous appelle</p>
     </div>
-    <div class="ring-middle">
+    <div class="call-side me">
       <video id="ring-face" class="ring-face" autoplay playsinline muted hidden></video>
       <p id="ring-hint" class="call-hint" hidden>Regardez l'écran pour décrocher</p>
-    </div>
-    <div class="call-actions">
-      <button id="ring-decline" class="call-btn decline">Refuser</button>
       <button id="ring-answer" class="call-btn answer">Décrocher</button>
     </div>
   </div>
@@ -109,11 +107,11 @@
     <video id="call-remote" autoplay playsinline></video>
     <video id="call-local" autoplay playsinline muted></video>
     <div id="call-wait" class="call-screen call-wait">
-      <div class="call-head">
+      <div class="call-side">
         <img id="call-wait-face" class="caller-face" alt="" hidden>
         <p id="call-wait-name" class="call-title"></p>
+        <p id="call-status" class="call-sub"></p>
       </div>
-      <p id="call-status" class="call-hint"></p>
     </div>
   </div>
 
