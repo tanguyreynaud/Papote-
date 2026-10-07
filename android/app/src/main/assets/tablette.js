@@ -8,6 +8,8 @@
 
   var IDLE_MS = 90000;   // retour à l'accueil après 1 min 30 sans toucher l'écran
   var FRAME_MS = 12000;  // changement de photo sur l'accueil
+  var SLIDE_MS = 10000;  // défilement tout seul du diaporama
+  var CALM_MS = 4000;    // les flèches s'effacent après 4 s sans toucher l'écran
 
   var JOURS = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
   var MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août',
@@ -88,6 +90,16 @@
     if (d.toDateString() === now.toDateString()) return "aujourd'hui à " + hm;
     if (d.toDateString() === yesterday.toDateString()) return 'hier à ' + hm;
     return 'le ' + JOURS[d.getDay()] + ' ' + d.getDate() + ' ' + MOIS[d.getMonth()];
+  }
+
+  // « aujourd'hui », « hier » ou « mardi 6 octobre »
+  function dayLabel(ms) {
+    if (!ms) return '';
+    var d = new Date(ms);
+    var now = new Date();
+    if (d.toDateString() === now.toDateString()) return "aujourd'hui";
+    if (d.toDateString() === new Date(now.getTime() - 86400000).toDateString()) return 'hier';
+    return JOURS[d.getDay()] + ' ' + d.getDate() + ' ' + MOIS[d.getMonth()];
   }
 
   // Taille du texte selon sa longueur : il tient toujours à l'écran sans faire défiler.
@@ -180,6 +192,7 @@
         done('url("' + c.toDataURL('image/jpeg', 0.8) + '")');
       } catch (e) { done('none'); }
     };
+    img.onerror = function () { done('none'); };
     img.src = url;
   }
   var backdropSrc = null;
@@ -219,19 +232,60 @@
     photoIndex = Math.max(0, Math.min(index, photos.length - 1));
     renderPhoto();
     showView('view-photos');
+    wakeArrows();
+  }
+
+  // Mode cadre photo : sans toucher l'écran, les flèches s'effacent ; elles reviennent au toucher.
+  var calmTimer = null;
+  function wakeArrows() {
+    $('view-photos').className = 'view photos';
+    clearTimeout(calmTimer);
+    calmTimer = setTimeout(function () { $('view-photos').className = 'view photos calm'; }, CALM_MS);
   }
 
   function renderPhoto() {
     var p = photos[photoIndex];
     if (!p) return;
-    setPicture($('photo-img'), p.image);
-    $('photo-bg').style.backgroundImage = 'none';
-    tinyCopy(p.image, function (bg) { if (photos[photoIndex] === p) $('photo-bg').style.backgroundImage = bg; });
-    var caption = p.authorName + ', ' + whenLabel(p.createdAt);
-    $('photo-caption').textContent = p.text ? p.text + ' — ' + caption : caption;
+    // Fondu : deux calques qui alternent. L'ancienne photo reste telle quelle dessous
+    // pendant que la nouvelle apparaît par-dessus.
+    var opening = !isShown('view-photos');
+    var cur = $(frontSlide), next = $(frontSlide === 'slide-a' ? 'slide-b' : 'slide-a');
+    frontSlide = next.id;
+    if (opening) cur.style.opacity = '0';
+    cur.style.zIndex = '1';
+    next.style.zIndex = '2';
+    next.className = 'slide instant';
+    next.style.opacity = '0';
+    next.offsetWidth; // applique l'opacité 0 sans transition
+    next.className = 'slide';
+    setPicture(next.querySelector('img'), p.image);
+    var token = ++fadeToken;
+    tinyCopy(p.image, function (bg) {
+      if (token !== fadeToken) return;
+      next.querySelector('.photo-bg').style.backgroundImage = bg;
+      next.style.opacity = '1';
+    });
+    $('photo-who').textContent = p.authorName + ', ' + dayLabel(p.createdAt);
+    $('photo-text').textContent = p.text || '';
+    show($('photo-text'), !!p.text);
     if (photoIndex >= photos.length - 1) $('photo-prev').setAttribute('disabled', ''); else $('photo-prev').removeAttribute('disabled');
     if (photoIndex === 0) $('photo-next').setAttribute('disabled', ''); else $('photo-next').removeAttribute('disabled');
     markSeen(p);
+    restartSlides();
+  }
+
+  // Comme un cadre photo : sans toucher l'écran, on passe à la suivante toutes les 10 s,
+  // et après la plus ancienne on revient à la plus récente.
+  var slideTimer = null;
+  var fadeToken = 0;
+  var frontSlide = 'slide-a';
+  function restartSlides() {
+    clearTimeout(slideTimer);
+    slideTimer = setTimeout(function () {
+      if (!isShown('view-photos') || photos.length < 2) return;
+      photoIndex = (photoIndex + 1) % photos.length;
+      renderPhoto();
+    }, SLIDE_MS);
   }
 
   // La plus récente est à l'index 0 : « suivante » va vers les plus récentes.
@@ -586,7 +640,8 @@
 
     // Glisser le doigt sur la photo pour passer à la suivante.
     var startX = null;
-    on($('photo-stage'), 'touchstart', function (e) { startX = e.touches[0].clientX; });
+    on($('photo-stage'), 'touchstart', function (e) { startX = e.touches[0].clientX; restartSlides(); });
+    on($('view-photos'), 'touchstart', wakeArrows);
     on($('photo-stage'), 'touchend', function (e) {
       if (startX === null) return;
       var dx = e.changedTouches[0].clientX - startX;
