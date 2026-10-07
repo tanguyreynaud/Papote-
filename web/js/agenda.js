@@ -5,7 +5,7 @@ import {
 
 const $ = (id) => document.getElementById(id);
 const JOURS_COURTS = ['dim', 'lun', 'mar', 'mer', 'jeu', 'ven', 'sam'];
-const ICONS = { medicament: '💊', rdv: '🩺', autre: '📌' };
+const KINDS = { medicament: 'Médicament', rdv: 'Rendez-vous', autre: 'Autre' };
 
 let session = null;
 let stop = null;
@@ -33,23 +33,31 @@ function render(list) {
   list.sort((a, b) => a.time.localeCompare(b.time));
   for (const r of list) {
     const li = document.createElement('li');
-    li.className = 'card reminder';
+    li.className = 'reminder';
+    const body = document.createElement('div');
+    body.className = 'reminder-body';
+    const kind = document.createElement('p');
+    kind.className = `reminder-kind k-${r.kind || 'autre'}`;
+    kind.textContent = KINDS[r.kind] || 'Autre';
     const title = document.createElement('p');
     title.className = 'reminder-title';
-    title.textContent = `${ICONS[r.kind] || '📌'} ${r.title}`;
+    title.textContent = r.title;
     const when = document.createElement('p');
     when.className = 'muted small reminder-when';
     when.textContent = describe(r);
-    li.append(title, when);
+    body.append(kind, title, when);
+    li.append(body);
     if (r.lastAck && r.lastAck.startsWith(todayKey())) {
       const ack = document.createElement('p');
       ack.className = 'seen small';
       ack.textContent = `${session.family.name} a confirmé aujourd'hui à ${r.lastAck.slice(11)} ✓`;
-      li.append(ack);
+      body.append(ack);
     }
     const del = document.createElement('button');
-    del.className = 'link danger small';
-    del.textContent = 'Supprimer';
+    del.type = 'button';
+    del.className = 'icon-btn del';
+    del.setAttribute('aria-label', 'Supprimer ce rappel');
+    del.innerHTML = '<svg><use href="#i-trash"/></svg>';
     del.addEventListener('click', async () => {
       if (!confirm(`Supprimer le rappel « ${r.title} » ?`)) return;
       const batch = writeBatch(db);
@@ -69,6 +77,15 @@ function syncRepeatFields() {
 }
 
 $('rem-repeat').addEventListener('change', syncRepeatFields);
+
+$('add-reminder').addEventListener('click', () => {
+  $('rem-error').hidden = true;
+  $('sheet-reminder').hidden = false;
+  history.pushState({ page: 'agenda', sheet: true }, '');
+  $('rem-title').focus();
+});
+$('reminder-close').addEventListener('click', () => history.back());
+$('sheet-reminder').addEventListener('click', (e) => { if (e.target === $('sheet-reminder')) history.back(); });
 
 $('form-reminder').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -95,6 +112,7 @@ $('form-reminder').addEventListener('submit', async (e) => {
     bumpRev(batch, session.fid);
     await batch.commit();
     $('rem-title').value = '';
+    history.back();
   } catch (error) {
     console.error(error);
     err.textContent = "Le rappel n'a pas pu être enregistré. Vérifiez la connexion.";

@@ -1,32 +1,48 @@
-// App famille : envoyer photos et messages vers la tablette.
+// App famille : envoyer photos, vidéos et messages vers la tablette.
 import {
-  loadMembership, createFamily, joinFamily, leaveFamily, watchPosts, watchMembers,
+  query, where, orderBy, limit,
+} from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
+import {
+  db, collection, onSnapshot,
+  loadMembership, createFamily, joinFamily, leaveFamily, watchMembers,
   addPost, deletePost, loadMedia, formatCode, normalizeCode, toDate, CodeInconnuError,
+  MAX_VIDEO_CHUNKS, VIDEO_CHUNK,
 } from './firebase.js';
 import { startCall } from './appel.js';
 import { prepareVideo } from './video.js';
-import { MAX_VIDEO_CHUNKS, VIDEO_CHUNK } from './firebase.js';
 import { startAgenda, stopAgenda } from './agenda.js';
 
 const $ = (id) => document.getElementById(id);
 const MAX_IMAGE_CHARS = 900_000; // un document Firestore est limité à 1 Mo
 
 let session = null; // { fid, family, member, uid }
-let pendingPhotos = []; // { full, thumb } : data URLs prêtes à envoyer
-let pendingVoice = null; // { dataUrl, duration }
-let pendingVideo = null; // { base64, mime, thumb, duration }
-let stopFeed = null;
 let stopMembers = null;
 
+const VIEWS = ['loading', 'view-join', 'view-home', 'view-photos', 'view-videos', 'view-messages', 'view-agenda', 'view-settings'];
+
 function show(view) {
-  for (const id of ['loading', 'view-join', 'view-app', 'view-settings']) {
-    $(id).hidden = id !== view;
-  }
+  for (const id of VIEWS) $(id).hidden = id !== view;
+  window.scrollTo(0, 0);
 }
 
 function showError(el, message) {
   el.textContent = message;
   el.hidden = !message;
+}
+
+function icon(name) {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+  use.setAttribute('href', `#i-${name}`);
+  svg.append(use);
+  return svg;
+}
+
+function toast(text) {
+  $('toast').textContent = text;
+  $('toast').hidden = false;
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => { $('toast').hidden = true; }, 2500);
 }
 
 // ---------- Rejoindre / créer ----------
@@ -57,8 +73,7 @@ $('form-create').addEventListener('submit', async (e) => {
   try {
     await createFamily($('create-grand').value.trim(), $('create-name').value.trim());
     await start();
-    show('view-settings');
-    renderSettings();
+    openPage('settings');
   } catch (err) {
     console.error(err);
     showError($('create-error'), 'Impossible de créer la famille. Vérifiez la connexion internet.');
@@ -67,7 +82,292 @@ $('form-create').addEventListener('submit', async (e) => {
   }
 });
 
-// ---------- Photos ----------
+// ---------- Navigation : l'accueil et une page par type d'envoi ----------
+// Chaque page ouverte ajoute une entrée d'historique : le bouton retour d'Android ramène à l'accueil.
+
+let page = null;
+let stopPage = null;
+
+const PAGES = {
+  photos: () => watchType(['photo'], 60, renderPhotos),
+  videos: () => watchType(['video'], 30, renderVideos),
+  messages: () => watchType(['message', 'reply'], 60, renderMessages),
+  agenda: () => null,
+  settings: () => { renderSettings(); return null; },
+};
+
+function openPage(name, push = true) {
+  stopPage?.();
+  stopPage = PAGES[name]();
+  page = name;
+  if (push) history.pushState({ page: name }, '');
+  show(`view-${name}`);
+}
+
+function goHome() {
+  stopPage?.();
+  stopPage = null;
+  page = null;
+  closeSheets();
+  closeViewer();
+  if (session) show('view-home');
+}
+
+document.querySelectorAll('.tile[data-page]').forEach((tile) => {
+  tile.addEventListener('click', () => openPage(tile.dataset.page));
+});
+document.querySelectorAll('.page .back').forEach((btn) => {
+  btn.addEventListener('click', () => history.back());
+});
+window.addEventListener('popstate', (e) => {
+  // Une feuille ou la visionneuse ouverte se ferme d'abord.
+  if (!$('viewer').hidden || !$('sheet-post').hidden || !$('sheet-reminder').hidden) {
+    closeSheets();
+    closeViewer();
+    return;
+  }
+  const next = e.state?.page;
+  if (next && session) openPage(next, false);
+  else goHome();
+});
+
+// Les derniers envois d'un type, du plus récent au plus ancien.
+// Sans l'index Firestore (type + date), on lit les derniers envois et on trie ici.
+function watchType(types, max, callback) {
+  const posts = collection(db, 'families', session.fid, 'posts');
+  const read = (snap) => snap.docs.map((d) => ({ id: d.id, ...d.data({ serverTimestamps: 'estimate' }) }));
+  let stop = onSnapshot(
+    query(posts, where('type', 'in', types), orderBy('createdAt', 'desc'), limit(max)),
+    (snap) => callback(read(snap)),
+    (err) => {
+      if (err.code !== 'failed-precondition') { console.error('Lecture des envois impossible', err); return; }
+      stop = onSnapshot(query(posts, orderBy('createdAt', 'desc'), limit(150)), (snap) => {
+        callback(read(snap).filter((p) => types.includes(p.type)).slice(0, max));
+      }, (e) => console.error('Lecture des envois impossible', e));
+    },
+  );
+  return () => stop();
+}
+
+function timeLabel(date) {
+  if (!date) return '';
+  const now = new Date();
+  const hm = date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  if (date.toDateString() === now.toDateString()) return `aujourd'hui à ${hm}`;
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (date.toDateString() === yesterday.toDateString()) return `hier à ${hm}`;
+  return `${date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })} à ${hm}`;
+}
+
+// Version courte pour les galeries : « 09:34 », « hier », « 12 oct. ».
+function shortLabel(date) {
+  if (!date) return '';
+  const now = new Date();
+  if (date.toDateString() === now.toDateString()) return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (date.toDateString() === yesterday.toDateString()) return 'hier';
+  return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+}
+
+async function confirmDelete(post, what) {
+  if (!confirm(`Supprimer ${what} de la tablette ?`)) return;
+  try {
+    await deletePost(session.fid, post);
+  } catch (err) {
+    console.error(err);
+    alert("La suppression a échoué. Vérifiez la connexion.");
+  }
+}
+
+// ---------- Photos et vidéos : galerie ----------
+
+function galleryItem(post, what, onOpen) {
+  const li = document.createElement('li');
+  li.className = 'shot';
+  const frame = document.createElement('button');
+  frame.type = 'button';
+  frame.className = 'shot-frame';
+  frame.setAttribute('aria-label', `Voir ${what}`);
+  const img = document.createElement('img');
+  img.src = post.thumb || post.image || '';
+  img.alt = '';
+  img.loading = 'lazy';
+  frame.append(img);
+  if (post.type === 'video') {
+    const play = document.createElement('span');
+    play.className = 'shot-play';
+    play.append(icon('play'));
+    frame.append(play);
+    if (post.duration) {
+      const d = document.createElement('span');
+      d.className = 'shot-duration';
+      d.textContent = `${post.duration} s`;
+      frame.append(d);
+    }
+  }
+  frame.addEventListener('click', onOpen);
+  li.append(frame);
+
+  const meta = document.createElement('div');
+  meta.className = 'shot-meta';
+  const info = document.createElement('div');
+  info.className = 'shot-info';
+  if (post.text) {
+    const caption = document.createElement('p');
+    caption.className = 'shot-caption';
+    caption.textContent = post.text;
+    info.append(caption);
+  }
+  const who = document.createElement('p');
+  who.className = 'muted small';
+  who.textContent = `${post.authorName} · ${shortLabel(toDate(post.createdAt))}`;
+  info.append(who);
+  if (post.seenAt) {
+    const seen = document.createElement('p');
+    seen.className = 'seen small';
+    seen.textContent = 'Vu ✓';
+    info.append(seen);
+  }
+  meta.append(info);
+  if (post.authorUid === session.uid) {
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'icon-btn del';
+    del.setAttribute('aria-label', `Supprimer ${what}`);
+    del.append(icon('trash'));
+    del.addEventListener('click', () => confirmDelete(post, what));
+    meta.append(del);
+  }
+  li.append(meta);
+  return li;
+}
+
+function renderPhotos(posts) {
+  $('photos').replaceChildren(...posts.map((p) => galleryItem(p, 'cette photo', () => openPhoto(p))));
+  $('photos-empty').hidden = posts.length > 0;
+}
+
+function renderVideos(posts) {
+  $('videos').replaceChildren(...posts.map((p) => galleryItem(p, 'cette vidéo', () => openVideo(p))));
+  $('videos-empty').hidden = posts.length > 0;
+}
+
+// ---------- Visionneuse ----------
+
+function openViewer(post) {
+  $('viewer').hidden = false;
+  $('viewer-caption').textContent = post.text || '';
+  history.pushState({ page, viewer: true }, '');
+}
+
+function closeViewer() {
+  $('viewer').hidden = true;
+  $('viewer-video').pause();
+  $('viewer-video').removeAttribute('src');
+  $('viewer-video').hidden = true;
+  $('viewer-img').hidden = true;
+  $('viewer-img').removeAttribute('src');
+}
+
+async function openPhoto(post) {
+  openViewer(post);
+  $('viewer-img').hidden = false;
+  $('viewer-img').src = post.thumb || post.image;
+  try {
+    const src = await loadMedia(session.fid, post, 'image');
+    if (src && !$('viewer').hidden) $('viewer-img').src = src;
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+async function openVideo(post) {
+  openViewer(post);
+  $('viewer-caption').textContent = 'Chargement de la vidéo…';
+  try {
+    const src = await loadMedia(session.fid, post, 'video');
+    if ($('viewer').hidden) return;
+    $('viewer-caption').textContent = post.text || '';
+    $('viewer-video').hidden = false;
+    $('viewer-video').src = src;
+    $('viewer-video').play().catch(() => {});
+  } catch (err) {
+    console.error(err);
+    $('viewer-caption').textContent = "La vidéo n'a pas pu être chargée.";
+  }
+}
+
+$('viewer-close').addEventListener('click', () => history.back());
+
+// ---------- Messages ----------
+
+function renderMessages(posts) {
+  const list = $('messages');
+  const grand = session.family.name;
+  const items = posts.slice().reverse().map((post) => {
+    const mine = post.authorUid === session.uid;
+    const li = document.createElement('li');
+    li.className = `bubble ${mine ? 'mine' : 'theirs'}${post.type === 'reply' ? ' reply' : ''}`;
+    if (!mine) {
+      const who = document.createElement('p');
+      who.className = 'bubble-who';
+      who.textContent = post.type === 'reply' ? grand : post.authorName;
+      li.append(who);
+    }
+    const text = document.createElement('p');
+    text.className = 'bubble-text';
+    text.textContent = post.text;
+    li.append(text);
+    const foot = document.createElement('p');
+    foot.className = 'bubble-foot';
+    let label = timeLabel(toDate(post.createdAt));
+    if (post.type === 'message') label += post.seenAt ? ' · Vu' : '';
+    foot.textContent = label;
+    li.append(foot);
+    if (mine) {
+      li.addEventListener('click', () => confirmDelete(post, 'ce message'));
+      li.title = 'Toucher pour supprimer';
+    }
+    return li;
+  });
+  list.replaceChildren(...items);
+  $('messages-empty').hidden = posts.length > 0;
+  requestAnimationFrame(() => window.scrollTo(0, document.body.scrollHeight));
+}
+
+function updateCount() {
+  const left = 160 - $('message-text').value.length;
+  $('message-count').textContent = left <= 40 ? `${left}` : '';
+  // La zone de texte grandit avec le message.
+  $('message-text').style.height = 'auto';
+  $('message-text').style.height = `${$('message-text').scrollHeight}px`;
+}
+$('message-text').addEventListener('input', updateCount);
+
+$('form-message').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const text = $('message-text').value.trim();
+  if (!text) { $('message-text').focus(); return; }
+  $('btn-message').disabled = true;
+  try {
+    await addPost(session.fid, { type: 'message', text, authorUid: session.uid, authorName: session.member.name });
+    $('message-text').value = '';
+    updateCount();
+  } catch (err) {
+    console.error(err);
+    alert("Le message n'est pas parti. Vérifiez la connexion et réessayez.");
+  } finally {
+    $('btn-message').disabled = false;
+  }
+});
+
+// ---------- Ajouter une photo ou une vidéo ----------
+
+let addMode = null; // 'photo' | 'video'
+let pendingPhotos = []; // { full, thumb } : data URLs prêtes à envoyer
+let pendingVideo = null; // { base64, mime, thumb, duration }
 
 function loadImage(file) {
   return new Promise((resolve, reject) => {
@@ -88,26 +388,63 @@ function resize(img, maxSide, quality) {
   return canvas.toDataURL('image/jpeg', quality);
 }
 
-async function compressPhoto(file) {
-  const img = await loadImage(file);
-  return { full: fullSize(img), thumb: resize(img, 480, 0.7) };
-}
-
 function fullSize(img) {
   let maxSide = 1600;
   let quality = 0.82;
   for (;;) {
-    const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.round(img.naturalWidth * scale);
-    canvas.height = Math.round(img.naturalHeight * scale);
-    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-    const dataUrl = canvas.toDataURL('image/jpeg', quality);
+    const dataUrl = resize(img, maxSide, quality);
     if (dataUrl.length <= MAX_IMAGE_CHARS || maxSide <= 600) return dataUrl;
     if (quality > 0.6) quality -= 0.1;
     else maxSide -= 200;
   }
 }
+
+async function compressPhoto(file) {
+  const img = await loadImage(file);
+  return { full: fullSize(img), thumb: resize(img, 480, 0.7) };
+}
+
+function openAdd(kind) {
+  addMode = kind;
+  pendingPhotos = [];
+  pendingVideo = null;
+  $('post-title').textContent = kind === 'photo' ? 'Envoyer une photo' : 'Envoyer une vidéo';
+  $('pick-camera-label').textContent = kind === 'photo' ? 'Prendre une photo' : 'Filmer';
+  $('pick-gallery-label').textContent = kind === 'photo' ? 'Choisir dans la galerie' : 'Choisir une vidéo';
+  $('post-text').value = '';
+  setStatus('');
+  syncAddSheet();
+  $('sheet-post').hidden = false;
+  history.pushState({ page, sheet: true }, '');
+}
+
+// Avant le choix : les deux boutons ; après : l'aperçu, la légende et « Envoyer ».
+function syncAddSheet() {
+  const chosen = addMode === 'photo' ? pendingPhotos.length > 0 : !!pendingVideo;
+  $('pickers').hidden = chosen;
+  $('video-hint').hidden = addMode !== 'video' || chosen;
+  $('post-extra').hidden = !chosen;
+  $('previews').hidden = addMode !== 'photo';
+  $('video-preview').hidden = addMode !== 'video' || !chosen;
+  renderPreviews();
+}
+
+function closeSheets() {
+  $('sheet-post').hidden = true;
+  $('sheet-reminder').hidden = true;
+  $('video-preview').removeAttribute('src');
+  pendingPhotos = [];
+  pendingVideo = null;
+}
+
+document.querySelectorAll('.fab[data-add]').forEach((fab) => {
+  fab.addEventListener('click', () => openAdd(fab.dataset.add));
+});
+$('post-close').addEventListener('click', () => history.back());
+$('sheet-post').addEventListener('click', (e) => { if (e.target === $('sheet-post')) history.back(); });
+
+$('pick-camera').addEventListener('click', () => $(addMode === 'photo' ? 'in-photo-camera' : 'in-video-camera').click());
+$('pick-gallery').addEventListener('click', () => $(addMode === 'photo' ? 'in-photo-gallery' : 'in-video-gallery').click());
 
 function renderPreviews() {
   const box = $('previews');
@@ -120,113 +457,20 @@ function renderPreviews() {
     img.alt = '';
     const remove = document.createElement('button');
     remove.type = 'button';
-    remove.textContent = '×';
+    remove.append(icon('close'));
     remove.setAttribute('aria-label', 'Retirer cette photo');
     remove.addEventListener('click', () => {
       pendingPhotos.splice(i, 1);
-      renderPreviews();
+      syncAddSheet();
     });
     wrap.append(img, remove);
     box.append(wrap);
   });
 }
 
-// Même traitement pour une photo prise avec la caméra ou choisie dans la galerie.
-async function onPhotosChosen(e) {
-  const files = Array.from(e.target.files || []);
-  e.target.value = '';
-  if (!files.length) return;
-  setBusy('Préparation…');
-  for (const file of files) {
-    try {
-      pendingPhotos.push(await compressPhoto(file));
-    } catch (err) {
-      console.error(err);
-      alert(`La photo « ${file.name} » n'a pas pu être lue.`);
-    }
-  }
-  setBusy('');
-  renderPreviews();
-}
-
-$('post-photos').addEventListener('change', onPhotosChosen);
-$('post-camera').addEventListener('change', onPhotosChosen);
-
-// Un seul bouton « Photo » qui propose la caméra ou la galerie.
-$('photo-from-camera').addEventListener('click', () => $('post-camera').click());
-$('photo-from-gallery').addEventListener('click', () => $('post-photos').click());
-
-// ---------- Écran d'envoi (photo, message ou vocal) ----------
-
-let mode = null;
-
-const MODES = {
-  photo: { title: 'Envoyer une photo', placeholder: 'Ajouter une légende (facultatif)' },
-  message: { title: 'Écrire un message', placeholder: null },
-  voice: { title: 'Message vocal', placeholder: null },
-  video: { title: 'Envoyer une vidéo', placeholder: 'Ajouter une légende (facultatif)' },
-};
-
-function openComposer(next) {
-  mode = next;
-  $('composer-title').textContent = MODES[mode].title;
-  $('photo-pickers').hidden = mode !== 'photo';
-  $('video-pickers').hidden = mode !== 'video' || !!pendingVideo;
-  $('video-hint').hidden = mode !== 'video' || !!pendingVideo;
-  $('previews').hidden = mode !== 'photo';
-  $('voice-recorder').hidden = mode !== 'voice' || !!pendingVoice;
-  $('post-text').hidden = mode === 'voice';
-  $('post-text').placeholder = MODES[mode].placeholder || `Écrire un message à ${session.family.name}…`;
-  $('post-text').maxLength = mode === 'photo' || mode === 'video' ? 80 : 160;
-  updateCount();
-  $('actions').hidden = true;
-  $('form-post').hidden = false;
-  setStatus('');
-  if (mode === 'message') $('post-text').focus();
-}
-
-function closeComposer() {
-  if (recorder) recorder.stop();
-  mode = null;
-  pendingPhotos = [];
-  renderPreviews();
-  clearVoice();
-  clearVideo();
-  $('post-text').value = '';
-  $('form-post').hidden = true;
-  $('actions').hidden = false;
-}
-
-document.querySelectorAll('.tile[data-mode]').forEach((tile) => {
-  tile.addEventListener('click', () => openComposer(tile.dataset.mode));
-});
-$('composer-close').addEventListener('click', closeComposer);
-
-function updateCount() {
-  const max = $('post-text').maxLength;
-  const left = max - $('post-text').value.length;
-  $('text-count').textContent = `${left} caractère${left > 1 ? 's' : ''} restant${left > 1 ? 's' : ''}`;
-  $('text-count').hidden = mode === 'voice';
-}
-$('post-text').addEventListener('input', updateCount);
-
-function showSent() {
-  $('sent-toast').hidden = false;
-  setTimeout(() => { $('sent-toast').hidden = true; }, 2500);
-}
-
-// Bouton « Envoyer » transformé en indicateur de chargement pendant l'envoi.
 function setBusy(label) {
   const btn = $('btn-send');
-  btn.disabled = !!label;
-  $('post-text').disabled = !!label;
-  $('post-photos').disabled = !!label;
-  $('post-camera').disabled = !!label;
-  $('btn-voice').disabled = !!label;
-  $('photo-from-camera').disabled = !!label;
-  $('photo-from-gallery').disabled = !!label;
-  $('video-from-camera').disabled = !!label;
-  $('video-from-gallery').disabled = !!label;
+  for (const id of ['btn-send', 'post-text', 'pick-camera', 'pick-gallery']) $(id).disabled = !!label;
   $('form-post').classList.toggle('busy', !!label);
   btn.replaceChildren();
   if (label) {
@@ -243,27 +487,72 @@ function setStatus(text) {
   $('post-status').hidden = !text;
 }
 
+async function onPhotosChosen(e) {
+  const files = Array.from(e.target.files || []);
+  e.target.value = '';
+  if (!files.length) return;
+  setStatus('Préparation…');
+  for (const file of files) {
+    try {
+      pendingPhotos.push(await compressPhoto(file));
+    } catch (err) {
+      console.error(err);
+      alert(`La photo « ${file.name} » n'a pas pu être lue.`);
+    }
+  }
+  setStatus('');
+  syncAddSheet();
+}
+
+async function onVideoChosen(e) {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  $('pickers').hidden = true;
+  try {
+    const result = await prepareVideo(file, (done, total) => {
+      setStatus(`Préparation de la vidéo… ${Math.round(done)} / ${Math.round(total)} s`);
+    });
+    const base64 = await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.slice(reader.result.indexOf(',') + 1));
+      reader.readAsDataURL(result.blob);
+    });
+    if (base64.length > MAX_VIDEO_CHUNKS * VIDEO_CHUNK) {
+      setStatus('La vidéo est trop lourde. Essayez une vidéo plus courte.');
+      syncAddSheet();
+      return;
+    }
+    pendingVideo = { base64, mime: result.mime, thumb: result.thumb, duration: result.duration };
+    $('video-preview').src = URL.createObjectURL(result.blob);
+    setStatus('');
+  } catch (err) {
+    console.error(err);
+    setStatus("Cette vidéo n'a pas pu être préparée.");
+  }
+  syncAddSheet();
+}
+
+$('in-photo-camera').addEventListener('change', onPhotosChosen);
+$('in-photo-gallery').addEventListener('change', onPhotosChosen);
+$('in-video-camera').addEventListener('change', onVideoChosen);
+$('in-video-gallery').addEventListener('change', onVideoChosen);
+
 $('form-post').addEventListener('submit', async (e) => {
   e.preventDefault();
   const text = $('post-text').value.trim();
-  if (mode === 'photo' && !pendingPhotos.length) { setStatus('Choisissez d\'abord une photo.'); return; }
-  if (mode === 'message' && !text) { setStatus('Écrivez d\'abord votre message.'); return; }
-  if (mode === 'voice' && !pendingVoice) { setStatus('Enregistrez d\'abord votre message vocal.'); return; }
-  if (mode === 'video' && !pendingVideo) { setStatus('Choisissez d\'abord une vidéo.'); return; }
-  setBusy('Envoi…');
   const author = { authorUid: session.uid, authorName: session.member.name };
+  setStatus('');
   try {
-    if (mode === 'video') {
+    if (addMode === 'video') {
+      if (!pendingVideo) return;
       setBusy('Envoi de la vidéo…');
       await addPost(session.fid, {
         type: 'video', text, video: pendingVideo.base64, mime: pendingVideo.mime,
         thumb: pendingVideo.thumb, duration: pendingVideo.duration, ...author,
       });
-    } else if (mode === 'voice') {
-      await addPost(session.fid, {
-        type: 'voice', text: '', audio: pendingVoice.dataUrl, duration: pendingVoice.duration, ...author,
-      });
-    } else if (mode === 'photo') {
+    } else {
+      if (!pendingPhotos.length) return;
       for (let i = 0; i < pendingPhotos.length; i++) {
         setBusy(pendingPhotos.length > 1 ? `Photo ${i + 1} sur ${pendingPhotos.length}…` : 'Envoi…');
         // La légende accompagne la première photo.
@@ -271,12 +560,10 @@ $('form-post').addEventListener('submit', async (e) => {
           type: 'photo', text: i === 0 ? text : '', image: pendingPhotos[i].full, thumb: pendingPhotos[i].thumb, ...author,
         });
       }
-    } else {
-      await addPost(session.fid, { type: 'message', text, ...author });
     }
     setBusy('');
-    closeComposer();
-    showSent();
+    history.back();
+    toast('Envoyé');
   } catch (err) {
     console.error(err);
     setStatus("L'envoi a échoué. Vérifiez la connexion et réessayez.");
@@ -284,128 +571,6 @@ $('form-post').addEventListener('submit', async (e) => {
     setBusy('');
   }
 });
-
-// ---------- Fil des envois ----------
-
-function timeLabel(date) {
-  if (!date) return '';
-  const now = new Date();
-  const sameDay = date.toDateString() === now.toDateString();
-  const hm = date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-  if (sameDay) return `aujourd'hui à ${hm}`;
-  return `${date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })} à ${hm}`;
-}
-
-function renderFeed(posts) {
-  const feed = $('feed');
-  feed.replaceChildren();
-  $('feed-empty').hidden = posts.length > 0;
-  const grand = session.family?.name || 'la tablette';
-  for (const post of posts) {
-    const li = document.createElement('li');
-    if (post.type === 'reply') {
-      li.className = 'card post reply';
-      const p = document.createElement('p');
-      p.className = 'reply-text';
-      p.textContent = `${grand} : ${post.text}`;
-      const when = document.createElement('p');
-      when.className = 'muted small';
-      when.textContent = timeLabel(toDate(post.createdAt));
-      li.append(p, when);
-      feed.append(li);
-      continue;
-    }
-    li.className = `card post post-${post.type}`;
-    const kind = document.createElement('p');
-    kind.className = 'post-kind';
-    kind.textContent = { photo: '📷 Photo', message: '✉️ Message', voice: '🎤 Message vocal', video: '🎥 Vidéo' }[post.type] || '';
-    li.append(kind);
-    if (post.type === 'voice') {
-      const play = document.createElement('button');
-      play.className = 'action-btn wide voice-play';
-      play.textContent = `▶ Écouter le vocal${post.duration ? ` (${Math.floor(post.duration / 60)}:${String(post.duration % 60).padStart(2, '0')})` : ''}`;
-      play.addEventListener('click', async () => {
-        play.disabled = true;
-        play.textContent = 'Chargement…';
-        try {
-          const src = await loadMedia(session.fid, post, 'audio');
-          const audio = document.createElement('audio');
-          audio.controls = true;
-          audio.className = 'post-audio';
-          audio.src = src;
-          play.replaceWith(audio);
-          audio.play().catch(() => {});
-        } catch (err) {
-          console.error(err);
-          play.disabled = false;
-          play.textContent = 'Réessayer';
-        }
-      });
-      li.append(play);
-    }
-    if (post.type === 'video') {
-      const watch = document.createElement('button');
-      watch.className = 'action-btn wide video-play';
-      watch.textContent = `▶ Regarder la vidéo${post.duration ? ` (${post.duration} s)` : ''}`;
-      watch.addEventListener('click', async () => {
-        watch.disabled = true;
-        watch.textContent = 'Chargement…';
-        try {
-          const src = await loadMedia(session.fid, post, 'video');
-          const v = document.createElement('video');
-          v.controls = true;
-          v.playsInline = true;
-          v.className = 'feed-video';
-          v.src = src;
-          li.querySelector('.post-thumb')?.remove();
-          watch.replaceWith(v);
-          v.play().catch(() => {});
-        } catch (err) {
-          console.error(err);
-          watch.disabled = false;
-          watch.textContent = 'Réessayer';
-        }
-      });
-      li.append(watch);
-    }
-    const preview = post.thumb || post.image;
-    if (preview) {
-      const img = document.createElement('img');
-      img.src = preview;
-      img.alt = '';
-      img.loading = 'lazy';
-      img.className = 'post-thumb';
-      if (post.type !== 'video') img.addEventListener('click', () => openPhoto(post));
-      li.append(img);
-    }
-    if (post.text) {
-      const p = document.createElement('p');
-      p.className = 'post-text';
-      p.textContent = post.text;
-      li.append(p);
-    }
-    const meta = document.createElement('div');
-    meta.className = 'post-meta';
-    const who = document.createElement('span');
-    who.textContent = `${post.authorName}, ${timeLabel(toDate(post.createdAt))}`;
-    const seen = document.createElement('span');
-    seen.className = post.seenAt ? 'seen' : 'muted';
-    seen.textContent = post.seenAt ? `Vu par ${grand} ✓` : 'Pas encore vu';
-    if (post.hearts > 0) seen.textContent += `  ${'❤️'.repeat(Math.min(post.hearts, 5))}`;
-    meta.append(who, seen);
-    li.append(meta);
-    if (post.authorUid === session.uid) {
-      const del = document.createElement('button');
-      del.className = 'link danger small';
-      del.textContent = 'Supprimer';
-      del.addEventListener('click', async () => {
-        if (confirm('Supprimer cet envoi de la tablette ?')) await deletePost(session.fid, post);
-      });
-      li.append(del);
-    }
-    feed.append(li);
-  }
-}
 
 // ---------- Réglages ----------
 
@@ -416,13 +581,6 @@ function inviteLink() {
 function renderSettings() {
   $('settings-code').textContent = formatCode(session.family.code);
 }
-
-$('btn-settings').addEventListener('click', () => {
-  renderSettings();
-  show('view-settings');
-});
-
-$('btn-back').addEventListener('click', () => show('view-app'));
 
 $('btn-share').addEventListener('click', async () => {
   const text = `Rejoins la famille sur Papote pour envoyer des photos à ${session.family.name} ! Code famille : ${formatCode(session.family.code)}`;
@@ -437,7 +595,7 @@ $('btn-share').addEventListener('click', async () => {
 
 $('btn-leave').addEventListener('click', async () => {
   if (!confirm('Quitter la famille sur ce téléphone ? Vous pourrez revenir avec le code famille.')) return;
-  stopFeed?.();
+  stopPage?.();
   stopMembers?.();
   stopAgenda();
   await leaveFamily(session.fid, session.uid);
@@ -510,7 +668,7 @@ function renderMembers(members) {
       tabletShown = true;
     }
     const li = document.createElement('li');
-    li.textContent = m.role === 'tablette' ? `📺 Tablette de ${session.family.name}` : `👤 ${m.name}`;
+    li.textContent = m.role === 'tablette' ? `Tablette de ${session.family.name}` : m.name;
     list.append(li);
   }
 }
@@ -555,190 +713,6 @@ $('btn-install').addEventListener('click', async () => {
   }
 });
 
-// ---------- Vidéo ----------
-
-function clearVideo() {
-  pendingVideo = null;
-  $('video-preview').hidden = true;
-  $('video-preview').removeAttribute('src');
-  $('video-pickers').hidden = mode !== 'video';
-  $('video-hint').hidden = mode !== 'video';
-}
-
-async function onVideoChosen(e) {
-  const file = e.target.files && e.target.files[0];
-  e.target.value = '';
-  if (!file) return;
-  setBusy('Préparation…');
-  try {
-    const result = await prepareVideo(file, (done, total) => {
-      setStatus(`Préparation de la vidéo… ${Math.round(done)} / ${Math.round(total)} s`);
-    });
-    const base64 = await new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result.slice(reader.result.indexOf(',') + 1));
-      reader.readAsDataURL(result.blob);
-    });
-    if (base64.length > MAX_VIDEO_CHUNKS * VIDEO_CHUNK) {
-      setStatus('La vidéo est trop lourde. Essayez une vidéo plus courte.');
-      return;
-    }
-    pendingVideo = { base64, mime: result.mime, thumb: result.thumb, duration: result.duration };
-    $('video-preview').src = URL.createObjectURL(result.blob);
-    $('video-preview').hidden = false;
-    $('video-pickers').hidden = true;
-    $('video-hint').hidden = true;
-    setStatus('');
-  } catch (err) {
-    console.error(err);
-    setStatus("Cette vidéo n'a pas pu être préparée.");
-  } finally {
-    setBusy('');
-  }
-}
-
-$('video-from-camera').addEventListener('click', () => $('post-video-camera').click());
-$('video-from-gallery').addEventListener('click', () => $('post-video-gallery').click());
-$('post-video-camera').addEventListener('change', onVideoChosen);
-$('post-video-gallery').addEventListener('change', onVideoChosen);
-
-// ---------- Photo en grand ----------
-
-async function openPhoto(post) {
-  $('lightbox').hidden = false;
-  $('lightbox-img').src = post.thumb || post.image;
-  try {
-    const src = await loadMedia(session.fid, post, 'image');
-    if (src && !$('lightbox').hidden) $('lightbox-img').src = src;
-  } catch (err) {
-    console.error(err);
-  }
-}
-
-$('lightbox').addEventListener('click', () => { $('lightbox').hidden = true; });
-
-// ---------- Message vocal ----------
-
-const MAX_VOICE_S = 120;
-let recorder = null;
-let recordTimer = null;
-
-function pickMime() {
-  // AAC (mp4) se lit partout, y compris sur les tablettes anciennes ; sinon WebM/Opus.
-  for (const m of ['audio/mp4;codecs=mp4a.40.2', 'audio/mp4', 'audio/webm;codecs=opus', 'audio/webm']) {
-    if (window.MediaRecorder && MediaRecorder.isTypeSupported(m)) return m;
-  }
-  return '';
-}
-
-// Les tablettes anciennes (Android 4.4) ne lisent ni le WebM ni le MP4 des navigateurs :
-// on convertit l'enregistrement en MP3 mono 16 kHz, lisible partout.
-let lameLoading = null;
-function loadLame() {
-  if (window.lamejs) return Promise.resolve();
-  lameLoading = lameLoading || new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = 'vendor/lame.min.js';
-    script.onload = resolve;
-    script.onerror = reject;
-    document.head.append(script);
-  });
-  return lameLoading;
-}
-
-async function toMp3(blob) {
-  const RATE = 16000;
-  await loadLame();
-  const ctx = new (window.AudioContext || window.webkitAudioContext)();
-  const decoded = await ctx.decodeAudioData(await blob.arrayBuffer());
-  ctx.close();
-  const offline = new OfflineAudioContext(1, Math.ceil(decoded.duration * RATE), RATE);
-  const src = offline.createBufferSource();
-  src.buffer = decoded;
-  src.connect(offline.destination);
-  src.start();
-  const mono = (await offline.startRendering()).getChannelData(0);
-  const pcm = new Int16Array(mono.length);
-  for (let i = 0; i < mono.length; i++) pcm[i] = Math.max(-1, Math.min(1, mono[i])) * 0x7fff;
-  const encoder = new window.lamejs.Mp3Encoder(1, RATE, 32);
-  const parts = [];
-  for (let i = 0; i < pcm.length; i += 1152) {
-    const out = encoder.encodeBuffer(pcm.subarray(i, i + 1152));
-    if (out.length) parts.push(new Uint8Array(out));
-  }
-  const end = encoder.flush();
-  if (end.length) parts.push(new Uint8Array(end));
-  return new Blob(parts, { type: 'audio/mpeg' });
-}
-
-function clearVoice() {
-  pendingVoice = null;
-  $('voice-preview').hidden = true;
-  $('voice-recorder').hidden = mode !== 'voice';
-  $('voice-audio').removeAttribute('src');
-}
-
-$('voice-remove').addEventListener('click', clearVoice);
-
-$('btn-voice').addEventListener('click', async () => {
-  if (recorder) { recorder.stop(); return; }
-  let stream;
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
-  } catch (err) {
-    setStatus("Impossible d'accéder au micro. Autorisez-le dans les réglages du navigateur.");
-    return;
-  }
-  const mimeType = pickMime();
-  recorder = new MediaRecorder(stream, mimeType ? { mimeType, audioBitsPerSecond: 32000 } : undefined);
-  const chunks = [];
-  const started = Date.now();
-  recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
-  recorder.onstop = async () => {
-    clearInterval(recordTimer);
-    stream.getTracks().forEach((t) => t.stop());
-    const blob = new Blob(chunks, { type: recorder.mimeType || mimeType || 'audio/webm' });
-    const duration = Math.round((Date.now() - started) / 1000);
-    recorder = null;
-    $('btn-voice').textContent = '🎤';
-    $('btn-voice').classList.remove('recording');
-    $('voice-hint').textContent = 'Touchez pour enregistrer (2 minutes maximum)';
-    setStatus('Préparation du vocal…');
-    let mp3;
-    try {
-      mp3 = await toMp3(blob);
-    } catch (err) {
-      console.error(err);
-      setStatus("Le vocal n'a pas pu être préparé. Réessayez.");
-      return;
-    }
-    setStatus('');
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (reader.result.length > 950_000) {
-        setStatus('Le message vocal est trop long. Gardez-le sous 2 minutes.');
-        return;
-      }
-      pendingVoice = { dataUrl: reader.result, duration };
-      $('voice-audio').src = reader.result;
-      $('voice-preview').hidden = false;
-      $('voice-recorder').hidden = true;
-    };
-    reader.readAsDataURL(mp3);
-  };
-  recorder.start();
-  $('btn-voice').textContent = '⏹';
-  $('btn-voice').classList.add('recording');
-  $('voice-hint').textContent = 'Touchez pour arrêter';
-  const tick = () => {
-    const s = Math.round((Date.now() - started) / 1000);
-    setStatus(`🔴 Enregistrement… ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')} (touchez Arrêter pour finir)`);
-    if (s >= MAX_VOICE_S && recorder) recorder.stop();
-  };
-  tick();
-  recordTimer = setInterval(tick, 500);
-});
-
 // ---------- Veille : activité de la tablette ----------
 
 let tabletMembers = [];
@@ -766,28 +740,18 @@ function renderActivity() {
   el.classList.remove('warn');
   if (now - online > 45 * 60_000) {
     el.classList.add('warn');
-    el.textContent = `⚠️ La tablette ne répond plus depuis ${ago(online).replace('il y a ', '')}. Est-elle branchée et connectée au wifi ?`;
+    el.textContent = `La tablette ne répond plus depuis ${ago(online).replace('il y a ', '')}. Est-elle branchée et connectée au wifi ?`;
   } else if (active && now - active > 12 * 3600_000 && hour >= 10 && hour < 21) {
     el.classList.add('warn');
-    el.textContent = `⚠️ ${name} n'a pas touché la tablette depuis ${ago(active).replace('il y a ', '')}.`;
+    el.textContent = `${name} n'a pas touché la tablette depuis ${ago(active).replace('il y a ', '')}.`;
   } else {
     el.textContent = active
-      ? `✅ Tablette en ligne. ${name} l'a utilisée ${ago(active)}.`
-      : '✅ Tablette en ligne.';
+      ? `Tablette en ligne. ${name} l'a utilisée ${ago(active)}.`
+      : 'Tablette en ligne.';
   }
 }
 
 setInterval(() => { if (session) renderActivity(); }, 60_000);
-
-// ---------- Onglets Messages / Agenda ----------
-
-document.querySelectorAll('.tab').forEach((tab) => {
-  tab.addEventListener('click', () => {
-    document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t === tab));
-    $('tab-messages').hidden = tab.dataset.tab !== 'messages';
-    $('tab-agenda').hidden = tab.dataset.tab !== 'agenda';
-  });
-});
 
 // ---------- Démarrage ----------
 
@@ -800,15 +764,13 @@ async function start() {
     return;
   }
   $('family-title').textContent = `Pour ${session.family.name}`;
-  $('post-text').placeholder = `Écrire un message à ${session.family.name}…`;
-  stopFeed?.();
+  $('message-text').placeholder = `Écrire à ${session.family.name}…`;
   stopMembers?.();
-  stopFeed = watchPosts(session.fid, 30, renderFeed);
   stopMembers = watchMembers(session.fid, renderMembers);
   history.replaceState(null, '', location.pathname);
   startAgenda(session);
   renderInstallCard();
-  show('view-app');
+  goHome();
 }
 
 if ('serviceWorker' in navigator) {
