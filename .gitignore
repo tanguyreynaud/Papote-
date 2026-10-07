@@ -20,3 +20,7 @@ Thumbs.db
 
 # Mises à jour publiées (générées par installation/publier-mise-a-jour.ps1)
 maj/public/
+
+# Outils
+outils/*/node_modules/
+outils/*/package-lock.json
