@@ -202,14 +202,42 @@ async function watchFace() {
   if (!detector || !faceWatch || faceWatch.stream !== stream) return;
   $('ring-hint').hidden = false;
 
+  // L'image est réduite (plus rapide sur une petite tablette) et, si aucun visage n'est vu,
+  // essayée tournée d'un quart de tour : avec la caméra sur le côté, certaines tablettes
+  // livrent une image couchée.
+  const frame = document.createElement('canvas');
+  const fctx = frame.getContext('2d');
+  const angles = [0, 90, 270];
+  let turn = 0;
+  const look = (angle) => {
+    const w = video.videoWidth;
+    const h = video.videoHeight;
+    const k = Math.min(1, 480 / Math.max(w, h));
+    const fw = Math.round(w * k);
+    const fh = Math.round(h * k);
+    const side = angle === 0 ? fw : fh;
+    frame.width = side;
+    frame.height = angle === 0 ? fh : fw;
+    fctx.save();
+    fctx.translate(frame.width / 2, frame.height / 2);
+    fctx.rotate((angle * Math.PI) / 180);
+    fctx.drawImage(video, -fw / 2, -fh / 2, fw, fh);
+    fctx.restore();
+    const { detections } = detector.detectForVideo(frame, performance.now());
+    return detections.some((d) => d.boundingBox && d.boundingBox.width / side >= FACE_MIN_WIDTH);
+  };
+
   const tick = () => {
     if (!faceWatch || faceWatch.stream !== stream) return;
     if (video.readyState >= 2 && video.videoWidth) {
       let seen = false;
       try {
-        const { detections } = detector.detectForVideo(video, performance.now());
-        seen = detections.some((d) => d.boundingBox && d.boundingBox.width / video.videoWidth >= FACE_MIN_WIDTH);
-      } catch (e) { /* image pas prête */ }
+        // Le bon sens trouvé est gardé ; sinon on passe au suivant à chaque coup d'œil.
+        seen = look(angles[turn]);
+        if (!seen) turn = (turn + 1) % angles.length;
+      } catch (e) {
+        console.warn('Détection du visage', e);
+      }
       const now = Date.now();
       faceWatch.since = seen ? (faceWatch.since || now) : 0;
       video.classList.toggle('seen', seen);
@@ -218,7 +246,7 @@ async function watchFace() {
         return;
       }
     }
-    faceWatch.timer = setTimeout(tick, 200);
+    faceWatch.timer = setTimeout(tick, 150);
   };
   tick();
 }
