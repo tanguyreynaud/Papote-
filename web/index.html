@@ -90,6 +90,10 @@
         <button id="btn-install" class="primary wide">Ajouter à l'écran d'accueil</button>
         <div id="install-help" class="install-help" hidden></div>
       </div>
+      <button type="button" id="face-nudge" class="card nudge" hidden>
+        <span class="avatar avatar-empty"><svg><use href="#i-user"/></svg></span>
+        <span><strong>Ajoutez votre photo</strong><br><span class="muted small">Pour que <span class="grand-name"></span> vous reconnaisse</span></span>
+      </button>
       <div class="tiles">
         <button type="button" class="tile t-call" id="tile-call">
           <svg class="tile-icon"><use href="#i-call"/></svg><span>Appel vidéo</span>
@@ -157,8 +161,11 @@
         <button type="button" class="icon-btn back" aria-label="Retour"><svg><use href="#i-back"/></svg></button>
         <h1>Agenda</h1>
       </header>
+      <h2 class="list-title" id="birthdays-title" hidden>Anniversaires</h2>
+      <ul id="birthdays" class="list"></ul>
+      <h2 class="list-title" id="reminders-title" hidden>Rappels</h2>
       <ul id="reminders" class="list"></ul>
-      <p id="reminders-empty" class="empty" hidden>Aucun rappel pour l'instant.<br>Touchez + pour en ajouter un.</p>
+      <p id="reminders-empty" class="empty" hidden>Aucun rappel ni anniversaire pour l'instant.<br>Touchez + pour en ajouter un.</p>
       <button type="button" class="fab" id="add-reminder" aria-label="Ajouter un rappel"><svg><use href="#i-plus"/></svg></button>
     </section>
 
@@ -169,6 +176,21 @@
         <h1>Réglages</h1>
       </header>
       <div class="page-pad">
+        <div class="card">
+          <h2>Ma photo</h2>
+          <p class="muted">Pour que <span class="grand-name"></span> vous reconnaisse quand vous envoyez quelque chose ou que vous appelez.</p>
+          <div class="face-row">
+            <img id="face-img" class="avatar avatar-lg" alt="" hidden>
+            <span id="face-empty" class="avatar avatar-lg avatar-empty"><svg><use href="#i-user"/></svg></span>
+            <div class="face-buttons">
+              <button type="button" class="secondary" id="face-camera"><svg><use href="#i-camera"/></svg>Prendre une photo</button>
+              <button type="button" class="secondary" id="face-gallery"><svg><use href="#i-gallery"/></svg>Choisir une photo</button>
+              <button type="button" class="link danger" id="face-remove" hidden>Retirer ma photo</button>
+            </div>
+          </div>
+          <input id="in-face-camera" type="file" accept="image/*" capture="user" hidden>
+          <input id="in-face-gallery" type="file" accept="image/*" hidden>
+        </div>
         <div class="card">
           <h2>Inviter la famille</h2>
           <p class="muted">Envoyez ce code ou ce lien aux autres membres de la famille.</p>
@@ -266,11 +288,33 @@
   <div id="sheet-reminder" class="sheet" hidden>
     <form id="form-reminder" class="sheet-body">
       <div class="sheet-head">
-        <h2>Nouveau rappel</h2>
+        <h2>Ajouter à l'agenda</h2>
         <button type="button" class="icon-btn" id="reminder-close" aria-label="Fermer"><svg><use href="#i-close"/></svg></button>
       </div>
+      <div class="segmented" role="tablist">
+        <button type="button" class="seg active" data-seg="reminder">Rappel</button>
+        <button type="button" class="seg" data-seg="birthday">Anniversaire</button>
+      </div>
+      <div id="bday-fields" hidden>
+        <label>Prénom
+          <input id="bday-name" maxlength="40" placeholder="Léa">
+        </label>
+        <div class="bday-date">
+          <label>Jour
+            <select id="bday-day"></select>
+          </label>
+          <label>Mois
+            <select id="bday-month"></select>
+          </label>
+          <label>Année
+            <input id="bday-year" type="number" inputmode="numeric" min="1900" max="2100" placeholder="facultatif">
+          </label>
+        </div>
+        <p class="muted small">La tablette le rappellera à <span class="grand-name"></span> le jour J, avec l'âge si vous donnez l'année.</p>
+      </div>
+      <div id="rem-fields">
       <label>Quoi ?
-        <input id="rem-title" maxlength="120" placeholder="Prendre le Doliprane" required>
+        <input id="rem-title" maxlength="120" placeholder="Prendre le Doliprane">
       </label>
       <div class="choice" role="radiogroup" aria-label="Type de rappel">
         <label><input type="radio" name="rem-kind" value="medicament" checked> Médicament</label>
@@ -297,8 +341,9 @@
         <label><input type="checkbox" value="0"> Dim</label>
       </div>
       <label>Heure
-        <input id="rem-time" type="time" value="09:00" required>
+        <input id="rem-time" type="time" value="09:00">
       </label>
+      </div>
       <button type="submit" class="primary wide" id="btn-reminder">Ajouter le rappel</button>
       <p id="rem-error" class="error" hidden></p>
     </form>

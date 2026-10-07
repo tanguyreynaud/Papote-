@@ -3,7 +3,7 @@ import {
   query, where, orderBy, limit,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
 import {
-  db, collection, onSnapshot,
+  db, doc, updateDoc, collection, onSnapshot,
   loadMembership, createFamily, joinFamily, leaveFamily, watchMembers,
   addPost, deletePost, loadMedia, formatCode, normalizeCode, toDate, CodeInconnuError,
   MAX_VIDEO_CHUNKS, VIDEO_CHUNK,
@@ -325,6 +325,10 @@ function renderMessages(posts) {
     const mine = post.authorUid === session.uid;
     const li = document.createElement('li');
     li.className = `bubble ${mine ? 'mine' : 'theirs'}${post.type === 'reply' ? ' reply' : ''}`;
+    if (!mine && post.type !== 'reply' && faces[post.authorUid]) {
+      li.classList.add('with-face');
+      li.append(avatar(faces[post.authorUid]));
+    }
     if (!mine) {
       const who = document.createElement('p');
       who.className = 'bubble-who';
@@ -601,6 +605,66 @@ $('btn-contact').addEventListener('click', () => {
     + `&body=${encodeURIComponent(body)}`;
 });
 
+// ---------- Photo de profil ----------
+// Petite photo carrée gardée dans la fiche du membre : la tablette l'affiche à côté des envois et des appels.
+
+let faces = {}; // uid -> photo
+let myFace = null;
+
+function avatar(src) {
+  const img = document.createElement('img');
+  img.className = 'avatar';
+  img.src = src;
+  img.alt = '';
+  return img;
+}
+
+function renderFace() {
+  $('face-img').hidden = !myFace;
+  $('face-empty').hidden = !!myFace;
+  $('face-remove').hidden = !myFace;
+  if (myFace) $('face-img').src = myFace;
+  $('face-nudge').hidden = !!myFace;
+}
+
+async function saveFace(face) {
+  await updateDoc(doc(db, 'families', session.fid, 'members', session.uid), { face });
+}
+
+async function onFaceChosen(e) {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  try {
+    const img = await loadImage(file);
+    const side = Math.min(img.naturalWidth, img.naturalHeight);
+    const canvas = document.createElement('canvas');
+    canvas.width = 320;
+    canvas.height = 320;
+    // Carré pris au centre, sans déformer le visage.
+    canvas.getContext('2d').drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, 320, 320);
+    myFace = canvas.toDataURL('image/jpeg', 0.8);
+    renderFace();
+    await saveFace(myFace);
+    toast('Photo enregistrée');
+  } catch (err) {
+    console.error(err);
+    alert("La photo n'a pas pu être enregistrée. Vérifiez la connexion.");
+  }
+}
+
+$('face-camera').addEventListener('click', () => $('in-face-camera').click());
+$('face-gallery').addEventListener('click', () => $('in-face-gallery').click());
+$('in-face-camera').addEventListener('change', onFaceChosen);
+$('in-face-gallery').addEventListener('change', onFaceChosen);
+$('face-remove').addEventListener('click', async () => {
+  if (!confirm('Retirer votre photo ?')) return;
+  myFace = null;
+  renderFace();
+  try { await saveFace(null); } catch (err) { console.error(err); }
+});
+$('face-nudge').addEventListener('click', () => openPage('settings'));
+
 // ---------- Réglages ----------
 
 function inviteLink() {
@@ -702,6 +766,9 @@ $('call-hangup').addEventListener('click', () => {
 
 function renderMembers(members) {
   tabletMembers = members.filter((m) => m.role === 'tablette');
+  faces = Object.fromEntries(members.filter((m) => m.face).map((m) => [m.id, m.face]));
+  myFace = faces[session.uid] || null;
+  renderFace();
   setNotifMembers(members);
   renderActivity();
   // Le bouton d'appel n'apparaît que si une tablette sait recevoir les appels (Android 5 et plus).
@@ -716,7 +783,14 @@ function renderMembers(members) {
       tabletShown = true;
     }
     const li = document.createElement('li');
-    li.textContent = m.role === 'tablette' ? `Tablette de ${session.family.name}` : m.name;
+    if (m.face) li.append(avatar(m.face));
+    else {
+      const empty = document.createElement('span');
+      empty.className = 'avatar avatar-empty';
+      empty.innerHTML = `<svg><use href="#i-${m.role === 'tablette' ? 'home' : 'user'}"/></svg>`;
+      li.append(empty);
+    }
+    li.append(m.role === 'tablette' ? `Tablette de ${session.family.name}` : m.name);
     list.append(li);
   }
 }
@@ -842,6 +916,7 @@ async function start() {
     return;
   }
   $('family-title').textContent = `Pour ${session.family.name}`;
+  document.querySelectorAll('.grand-name').forEach((el) => { el.textContent = session.family.name; });
   $('message-text').placeholder = `Écrire à ${session.family.name}…`;
   stopMembers?.();
   stopMembers = watchMembers(session.fid, renderMembers);

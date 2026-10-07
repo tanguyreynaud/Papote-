@@ -641,3 +641,40 @@ button:disabled { opacity: .45; cursor: default; }
 .tab-page .page-head { padding-left: 20px; padding-top: calc(16px + env(safe-area-inset-top)); }
 .notifs-status { margin: 4px 16px 8px; }
 .contact-btn { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 16px; border-radius: 14px; font-weight: 600; text-decoration: none; }
+
+/* ---------- Photos de profil ---------- */
+
+.avatar {
+  width: 40px; height: 40px;
+  flex: none;
+  border-radius: 50%;
+  object-fit: cover;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.avatar-lg { width: 96px; height: 96px; }
+.avatar-empty { background: var(--bg); color: var(--muted); border: 2px dashed var(--line); }
+.avatar-empty svg { width: 45%; height: 45%; }
+.face-row { display: flex; align-items: center; gap: 16px; margin-top: 12px; }
+.face-buttons { flex: 1; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.secondary { background: var(--bg); color: var(--text); border: 1px solid var(--line); justify-content: flex-start; font-size: 15px; padding: 10px 14px; }
+.secondary svg { width: 20px; height: 20px; color: var(--accent); }
+.face-buttons .link { justify-content: flex-start; padding: 4px 0; font-size: 15px; }
+
+.nudge { display: flex; align-items: center; gap: 14px; width: 100%; text-align: left; font-weight: 400; }
+.nudge .avatar-empty { width: 48px; height: 48px; color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
+
+.members li { display: flex; align-items: center; gap: 12px; }
+.bubble.with-face { position: relative; margin-left: 46px; }
+.bubble.with-face > .avatar { position: absolute; left: -46px; bottom: 0; width: 36px; height: 36px; }
+
+/* ---------- Agenda : rappels et anniversaires ---------- */
+
+.list-title { font-size: 15px; color: var(--muted); margin: 16px 20px 8px; text-transform: uppercase; letter-spacing: .05em; }
+.k-anniv { color: var(--accent); }
+.segmented { display: flex; gap: 4px; padding: 4px; margin: 4px 0 8px; border-radius: 14px; background: var(--bg); }
+.seg { flex: 1; padding: 10px; border-radius: 10px; color: var(--muted); }
+.seg.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+.bday-date { display: grid; grid-template-columns: 1fr 1.6fr 1.4fr; gap: 10px; }
+.bday-date label { margin: 14px 0 0; }

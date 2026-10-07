@@ -5,6 +5,7 @@ rules_version = '2';
 //   families/{fid}                  -> { name, code, createdBy, createdAt }
 //   families/{fid}/members/{uid}    -> { name, role, code, joinedAt }
 //   families/{fid}/posts/{pid}      -> { type, text, image, authorUid, authorName, createdAt, seenAt, hearts }
+//   families/{fid}/birthdays/{bid}  -> { name, day, month, year|null, createdBy, createdAt }
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -78,6 +79,9 @@ service cloud.firestore {
         allow update: if signedIn()
           && uid == request.auth.uid
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'canCall', 'lastActive', 'lastOnline', 'callable', 'face'])
+          // Photo de profil : petite image JPEG en data URL, ou null pour la retirer.
+          && (!('face' in request.resource.data) || request.resource.data.face == null
+              || (request.resource.data.face is string && request.resource.data.face.size() <= 200000))
           && request.resource.data.name is string
           && request.resource.data.name.size() > 0
           && request.resource.data.name.size() <= 40;
@@ -129,6 +133,23 @@ service cloud.firestore {
           && request.resource.data.kind in ['rdv', 'medicament', 'autre']
           && request.resource.data.repeat in ['once', 'daily', 'weekly']
           && request.resource.data.time is string;
+        allow delete: if isMember(fid);
+      }
+
+      // Anniversaires de la famille : la tablette les rappelle le jour J.
+      match /birthdays/{bid} {
+        allow read: if isMember(fid);
+        allow create, update: if isMember(fid)
+          && request.resource.data.keys().hasOnly(['name', 'day', 'month', 'year', 'createdBy', 'createdAt'])
+          && request.resource.data.name is string
+          && request.resource.data.name.size() > 0
+          && request.resource.data.name.size() <= 40
+          && request.resource.data.day is int
+          && request.resource.data.day >= 1 && request.resource.data.day <= 31
+          && request.resource.data.month is int
+          && request.resource.data.month >= 1 && request.resource.data.month <= 12
+          && (request.resource.data.year == null
+              || (request.resource.data.year is int && request.resource.data.year >= 1900 && request.resource.data.year <= 2100));
         allow delete: if isMember(fid);
       }
 
