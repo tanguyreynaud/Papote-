@@ -831,16 +831,38 @@ function leaveCallScreen() {
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
 }
 
+// Caméra et micro déjà autorisés ? Sinon, la demande d'autorisation passe avant le plein écran,
+// qui la ferait disparaître en faisant tourner l'écran.
+async function cameraAllowed() {
+  try {
+    const [cam, mic] = await Promise.all(['camera', 'microphone'].map((name) => navigator.permissions.query({ name })));
+    return cam.state === 'granted' && mic.state === 'granted';
+  } catch (e) {
+    return false;
+  }
+}
+
+function callErrorMessage(err) {
+  if (err && err.name === 'NotAllowedError') return "La caméra ou le micro est refusé. Autorisez-les dans les réglages du navigateur, puis réessayez.";
+  if (err && (err.name === 'NotReadableError' || err.name === 'AbortError')) return 'La caméra est déjà utilisée par une autre application.';
+  if (err && err.name === 'NotFoundError') return "Aucune caméra ou aucun micro n'a été trouvé.";
+  return "L'appel n'a pas pu démarrer. Réessayez dans un instant.";
+}
+
 $('tile-call').addEventListener('click', async () => {
   if (currentCall) return;
-  enterCallScreen();
+  const allowed = await cameraAllowed();
+  if (allowed) enterCallScreen();
   $('call').hidden = false;
   setCallStatus('Préparation de la caméra…');
   try {
     currentCall = await startCall(session.fid, { uid: session.uid, name: session.member.name }, {
       local: $('call-local'),
       remote: $('call-remote'),
-      onState: (state) => setCallStatus(CALL_MESSAGES[state]()),
+      onState: (state) => {
+        if (!allowed && state === 'ringing') enterCallScreen();
+        setCallStatus(CALL_MESSAGES[state]());
+      },
       onEnd: (reason) => {
         currentCall = null;
         setCallStatus(END_MESSAGES[reason] || 'Appel terminé');
@@ -850,7 +872,7 @@ $('tile-call').addEventListener('click', async () => {
   } catch (err) {
     console.error(err);
     currentCall = null;
-    setCallStatus("Impossible d'accéder à la caméra ou au micro. Autorisez-les dans les réglages du navigateur.");
+    setCallStatus(callErrorMessage(err));
     setTimeout(() => { if (!currentCall) leaveCallScreen(); }, 4000);
   }
 });
