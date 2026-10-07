@@ -77,11 +77,6 @@
     var hour = now.getHours();
     document.body.className = ((hour >= 21 || hour < 7) ? 'night' : '') +
       (playing && playing.post.video ? ' video-playing' : '');
-    // Barre du bas des écrans : « Il est 18h21, samedi 12 juillet »
-    var bar = 'Il est ' + hour + 'h' + pad(now.getMinutes()) + ', ' + day + ' ' + now.getDate() +
-      (now.getDate() === 1 ? 'er' : '') + ' ' + MOIS[now.getMonth()];
-    var clocks = document.querySelectorAll('.ln-clock');
-    for (var i = 0; i < clocks.length; i++) clocks[i].textContent = bar;
   }
 
   function whenLabel(ms) {
@@ -168,12 +163,25 @@
     if (!has) return;
     frameIndex = frameIndex % Math.min(photos.length, 20);
     var p = photos[frameIndex];
-    if ($('frame-img').getAttribute('src') !== p.image) $('frame-img').setAttribute('src', p.image);
+    setPicture($('frame-img'), p.image);
     $('frame-caption').textContent = 'De ' + p.authorName;
   }
 
   // Fond flouté : la photo est réduite à quelques pixels puis agrandie (le flou CSS
   // n'existe pas sur Android 4.4).
+  function tinyCopy(url, done) {
+    var img = new Image();
+    img.onload = function () {
+      try {
+        var c = document.createElement('canvas');
+        c.width = 24;
+        c.height = Math.max(1, Math.round(24 * img.height / img.width));
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        done('url("' + c.toDataURL('image/jpeg', 0.8) + '")');
+      } catch (e) { done('none'); }
+    };
+    img.src = url;
+  }
   var backdropSrc = null;
   function setBackdrops() {
     var url = photos.length ? photos[0].image : '';
@@ -184,17 +192,17 @@
       for (var i = 0; i < els.length; i++) els[i].style.backgroundImage = bg;
     };
     if (!url) { apply('none'); return; }
-    var img = new Image();
-    img.onload = function () {
-      try {
-        var c = document.createElement('canvas');
-        c.width = 24;
-        c.height = Math.max(1, Math.round(24 * img.height / img.width));
-        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-        apply('url("' + c.toDataURL('image/jpeg', 0.8) + '")');
-      } catch (e) { apply('none'); }
-    };
-    img.src = url;
+    tinyCopy(url, apply);
+  }
+
+  // Photo posée en fond de l'image : le navigateur d'Android 4.4 ignore object-fit et
+  // écraserait la photo ; background-size (cover / contain) garde ses proportions.
+  var BLANK = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+  function setPicture(img, url) {
+    if (img.getAttribute('data-url') === url) return;
+    img.setAttribute('data-url', url);
+    img.setAttribute('src', BLANK);
+    img.style.backgroundImage = 'url("' + url + '")';
   }
 
   function setBadge(id, n) {
@@ -216,7 +224,7 @@
   function renderPhoto() {
     var p = photos[photoIndex];
     if (!p) return;
-    $('photo-img').setAttribute('src', p.image);
+    setPicture($('photo-img'), p.image);
     var caption = p.authorName + ', ' + whenLabel(p.createdAt);
     $('photo-caption').textContent = p.text ? p.text + ' — ' + caption : caption;
     if (photoIndex >= photos.length - 1) $('photo-prev').setAttribute('disabled', ''); else $('photo-prev').removeAttribute('disabled');
@@ -336,7 +344,11 @@
     $('overlay-from').textContent = '— ' + p.authorName;
     // Photo : à droite, sur toute la hauteur.
     show($('ln-media'), mode === 'photo');
-    if (mode === 'photo') $('overlay-img').setAttribute('src', p.image);
+    if (mode === 'photo') {
+      setPicture($('overlay-img'), p.image);
+      $('overlay-img-bg').style.backgroundImage = 'none';
+      tinyCopy(p.image, function (bg) { $('overlay-img-bg').style.backgroundImage = bg; });
+    }
     show($('ln-playzone'), media);
     $('overlay-play').className = 'ln-play';
     $('overlay-play').querySelector('.label').textContent = mode === 'video' ? 'Regarder' : 'Écouter';

@@ -656,3 +656,49 @@ body.night .weather-label { color: #a8998d; }
 }
 
 .ln-btn { -webkit-flex: none; flex: none; padding: 0 5vmin; }
+
+/* Plus de barre du bas : les boutons seuls, en bas à gauche, avec de la marge */
+.overlay.ln .ln-bar {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  min-height: 0;
+  padding: 0 0 6vmin 6vmin;
+  background: none;
+}
+.overlay.ln .ln-btn {
+  min-height: 17vmin;
+  padding: 0 9vmin;
+  margin: 0 4vmin 0 0;
+  border-radius: 4vmin;
+  font-size: 7.5vmin;
+  box-shadow: 0 1.2vmin 3vmin rgba(0, 0, 0, .25);
+}
+.overlay.mode-photo .ln-wood, .overlay.mode-message .ln-wood, .overlay.reminder .ln-wood {
+  padding-bottom: 29vmin;
+}
+.overlay.mode-message .ln-note { max-height: 100%; }
+/* Appel : Refuser / Décrocher centrés */
+.overlay.call-ring .ln-bar { right: 0; padding-left: 0; -webkit-justify-content: center; justify-content: center; }
+.overlay.call-ring .ln-btn { margin: 0 3vmin; }
+
+/* Photos : posées en fond de l'image (object-fit est ignoré sur Android 4.4) */
+.home-frame img, .photo-stage img, .ln-media img {
+  background-repeat: no-repeat;
+  background-position: center;
+  -webkit-background-size: cover;
+  background-size: cover;
+}
+.photo-stage img, .ln-media img {
+  -webkit-background-size: contain;
+  background-size: contain;
+}
+/* Photo d'un écran : en entier, sur un fond flou et assombri de la même photo */
+.ln-media-bg {
+  position: absolute;
+  top: 0; right: 0; bottom: 0; left: 0;
+  background-position: center;
+  -webkit-background-size: cover;
+  background-size: cover;
+  opacity: .5;
+}
