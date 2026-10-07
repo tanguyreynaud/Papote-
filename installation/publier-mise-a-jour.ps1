@@ -38,19 +38,26 @@ Push-Location "$work\android"
 try { & .\gradlew.bat assembleRelease -q; if ($LASTEXITCODE) { throw "Échec de la compilation" } } finally { Pop-Location }
 $apk = "$work\android\app\build\outputs\apk\release\app-release.apk"
 
-# Fichiers publiés
+# L'APK est rangé dans le dépôt GitHub (le Firebase gratuit refuse les APK) :
+# installation/Papote.apk, enregistré et envoyé, puis adressé par son commit.
+Copy-Item $apk (Join-Path $root 'installation\Papote.apk') -Force
+git -C $root commit -q -m "Publication de la version $name ($code)" -- installation/Papote.apk
+if ($LASTEXITCODE) { throw "Échec de l'enregistrement de installation\Papote.apk" }
+git -C $root push -q origin HEAD
+if ($LASTEXITCODE) { throw "Échec de l'envoi sur GitHub" }
+$sha1 = (git -C $root rev-parse HEAD).Trim()
+$remote = (git -C $root remote get-url origin).Trim()
+$repo = [regex]::Match($remote, 'github\.com[:/](.+?)(\.git)?$').Groups[1].Value
+$url = "https://raw.githubusercontent.com/$repo/$sha1/installation/Papote.apk"
+
+# Le petit fichier de version, sur Firebase
 $public = Join-Path $root 'maj\public'
 if (Test-Path $public) { Remove-Item -Recurse -Force $public }
 New-Item -ItemType Directory -Force $public | Out-Null
-$file = "Papote-$code.apk"
-Copy-Item $apk "$public\$file"
-$sha = (Get-FileHash "$public\$file" -Algorithm SHA256).Hash.ToLower()
-$json = @{ versionCode = $code; versionName = $name; apk = $file; sha256 = $sha } | ConvertTo-Json
+$sha = (Get-FileHash $apk -Algorithm SHA256).Hash.ToLower()
+$json = @{ versionCode = $code; versionName = $name; url = $url; sha256 = $sha } | ConvertTo-Json
 [System.IO.File]::WriteAllText("$public\version.json", $json, (New-Object System.Text.UTF8Encoding $false))
-
-# Même APK pour les nouvelles installations par câble
-Copy-Item $apk (Join-Path $root 'installation\Papote.apk') -Force
 
 firebase deploy --only hosting --config "$root\maj\firebase.json" --project papote-famille
 if ($LASTEXITCODE) { throw "Échec de la publication" }
-Write-Host "Version $name ($code) publiée. Pensez à enregistrer installation\Papote.apk (commit)." -ForegroundColor Green
+Write-Host "Version $name ($code) publiée." -ForegroundColor Green

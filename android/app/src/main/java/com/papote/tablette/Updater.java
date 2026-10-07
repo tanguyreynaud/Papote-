@@ -26,13 +26,13 @@ import javax.net.ssl.HttpsURLConnection;
 /**
  * Mise à jour à distance : la tablette regarde régulièrement si une nouvelle version de Papote
  * est publiée (installation/publier-mise-a-jour.ps1), la télécharge et l'installe.
+ * Seuls les APK signés avec la même clé que Papote peuvent la remplacer (vérifié par Android).
  * Android 5 et plus en mode kiosque : sans rien demander. Android 4.4 : l'écran d'installation
  * d'Android s'ouvre, il suffit de toucher « Installer ».
  */
 final class Updater {
     private static final String TAG = "Papote";
     private static final String FEED = "https://papote-maj.web.app/version.json";
-    private static final String BASE = "https://papote-maj.web.app/";
     private static final String FILE = "mise-a-jour.apk";
 
     /** Pendant l'écran d'installation d'Android, Papote ne repasse pas devant. */
@@ -58,7 +58,8 @@ final class Updater {
                 if (Build.VERSION.SDK_INT >= 24 || hour < 9 || hour >= 20) return;
             }
             Log.i(TAG, "Mise à jour " + current + " -> " + latest);
-            byte[] apk = download(context, BASE + feed.getString("apk"));
+            // L'APK est rangé sur GitHub (Firebase gratuit refuse les APK), la version sur Firebase.
+            byte[] apk = download(context, feed.getString("url"));
             if (!sha256(apk).equalsIgnoreCase(feed.getString("sha256"))) {
                 Log.w(TAG, "Mise à jour ignorée : empreinte incorrecte");
                 return;
