@@ -14,13 +14,16 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.UserManager;
 import android.os.PowerManager;
+import android.media.AudioManager;
 import android.media.Ringtone;
 import android.media.RingtoneManager;
 import android.net.Uri;
 import android.provider.Settings;
 import android.util.Log;
 import android.view.Gravity;
+import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
@@ -115,6 +118,13 @@ public class MainActivity extends Activity implements Sync.Listener {
             }
         });
         web.setWebChromeClient(new WebChromeClient() {
+            // Messages et erreurs de la page dans logcat (adb logcat -s PapoteJS).
+            @Override
+            public boolean onConsoleMessage(android.webkit.ConsoleMessage m) {
+                Log.i("PapoteJS", m.message() + " @" + m.sourceId() + ":" + m.lineNumber());
+                return true;
+            }
+
             // Caméra et micro pour les appels vidéo, uniquement pour l'écran Papote.
             @Override
             public void onPermissionRequest(PermissionRequest request) {
@@ -158,6 +168,8 @@ public class MainActivity extends Activity implements Sync.Listener {
         sync = new Sync(this, prefs, this);
         handleIntent(getIntent());
         setupDeviceOwner();
+        setVolumes();
+        registerReceiver(screenOff, new IntentFilter(Intent.ACTION_SCREEN_OFF));
         web.loadUrl(LocalContent.PAGE);
         sync.start();
         Updater.cleanup(this);
@@ -396,6 +408,66 @@ public class MainActivity extends Activity implements Sync.Listener {
 
     // ---------- Mode kiosque ----------
 
+    private static final String[] RESTRICTIONS = {
+            UserManager.DISALLOW_OUTGOING_CALLS,
+            UserManager.DISALLOW_SMS,
+            UserManager.DISALLOW_SAFE_BOOT,
+    };
+
+    // ---------- Son et écran : ni réglables ni éteignables par erreur ----------
+
+    /** Volume réglé une fois pour toutes : fort pour la sonnerie et les messages vocaux. */
+    private void setVolumes() {
+        AudioManager am = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        int[][] levels = {
+                {AudioManager.STREAM_MUSIC, 85}, {AudioManager.STREAM_RING, 100},
+                {AudioManager.STREAM_NOTIFICATION, 90}, {AudioManager.STREAM_VOICE_CALL, 100},
+                {AudioManager.STREAM_ALARM, 100},
+        };
+        for (int[] l : levels) {
+            try {
+                am.setStreamVolume(l[0], am.getStreamMaxVolume(l[0]) * l[1] / 100, 0);
+            } catch (Exception e) {
+                Log.w(TAG, "Volume " + l[0], e);
+            }
+        }
+    }
+
+    /** Les boutons de volume ne font rien : le son reste au bon niveau. */
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        int code = event.getKeyCode();
+        if (code == KeyEvent.KEYCODE_VOLUME_UP || code == KeyEvent.KEYCODE_VOLUME_DOWN
+                || code == KeyEvent.KEYCODE_VOLUME_MUTE) {
+            return !kioskPaused();
+        }
+        return super.dispatchKeyEvent(event);
+    }
+
+    /**
+     * Un appui sur le bouton marche/arrêt éteint l'écran : en journée, on le rallume aussitôt.
+     * La nuit (23h-7h), on le laisse éteint.
+     */
+    private final android.content.BroadcastReceiver screenOff = new android.content.BroadcastReceiver() {
+        @SuppressWarnings("deprecation")
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            int hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY);
+            if (kioskPaused() || hour >= 23 || hour < 7) return;
+            handler.postDelayed(() -> {
+                try {
+                    PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+                    if (pm.isInteractive()) return;
+                    PowerManager.WakeLock wl = pm.newWakeLock(PowerManager.SCREEN_BRIGHT_WAKE_LOCK
+                            | PowerManager.ACQUIRE_CAUSES_WAKEUP, "papote:rallumer");
+                    wl.acquire(5_000);
+                } catch (Exception e) {
+                    Log.w(TAG, "Rallumer l'écran", e);
+                }
+            }, 1500);
+        }
+    };
+
     private boolean kioskPaused() {
         return prefs.getBoolean("kioskPaused", false);
     }
@@ -427,8 +499,10 @@ public class MainActivity extends Activity implements Sync.Listener {
         ComponentName admin = admin();
         try {
             dpm.setLockTaskPackages(admin, new String[]{getPackageName()});
-            // Garde le menu du bouton marche/arrêt pour pouvoir éteindre ou redémarrer.
-            dpm.setLockTaskFeatures(admin, DevicePolicyManager.LOCK_TASK_FEATURE_GLOBAL_ACTIONS);
+            // Pas de menu « Éteindre / Redémarrer » sur le bouton marche/arrêt.
+            dpm.setLockTaskFeatures(admin, DevicePolicyManager.LOCK_TASK_FEATURE_NONE);
+            // Pas d'appel ni de SMS par la carte SIM : tout passe par Papote.
+            for (String r : RESTRICTIONS) dpm.addUserRestriction(admin, r);
             IntentFilter home = new IntentFilter(Intent.ACTION_MAIN);
             home.addCategory(Intent.CATEGORY_HOME);
             home.addCategory(Intent.CATEGORY_DEFAULT);
@@ -449,6 +523,8 @@ public class MainActivity extends Activity implements Sync.Listener {
         ComponentName admin = admin();
         try {
             dpm.clearPackagePersistentPreferredActivities(admin, getPackageName());
+            for (String r : RESTRICTIONS) dpm.clearUserRestriction(admin, r);
+            dpm.setLockTaskFeatures(admin, DevicePolicyManager.LOCK_TASK_FEATURE_GLOBAL_ACTIONS);
             dpm.setKeyguardDisabled(admin, false);
             dpm.setStatusBarDisabled(admin, false);
             dpm.setLockTaskPackages(admin, new String[0]);
@@ -498,6 +574,7 @@ public class MainActivity extends Activity implements Sync.Listener {
 
     @Override
     protected void onDestroy() {
+        try { unregisterReceiver(screenOff); } catch (Exception ignored) { }
         callAudio.release();
         voicePlayer.stop();
         sync.stop();

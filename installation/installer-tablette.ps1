@@ -124,7 +124,13 @@ if ($owner -match "Device Owner[\s\S]*?$([regex]::Escape($Package))") {
     }
 }
 
-# 6. Lancement relié à la famille
+# 6. Appels et SMS de la carte SIM refusés (Papote filtre les appels), applis inutiles désactivées
+Adb shell cmd role add-role-holder android.app.role.CALL_SCREENING $Package | Out-Null
+$useless = Get-Content (Join-Path $PSScriptRoot 'applis-inutiles.txt') | Where-Object { $_ -and $_ -notmatch '^#' }
+foreach ($p in $useless) { Adb shell pm disable-user --user 0 $p.Trim() | Out-Null }
+Say 'Appels de la carte SIM bloqués, applis inutiles désactivées.' 'Green'
+
+# 7. Lancement relié à la famille
 Adb shell am start -n "$Package/.MainActivity" --es code $Code --ez lock true | Out-Null
 
 Say "`n=== Terminé ! La tablette affiche Papote. ===" 'Cyan'
