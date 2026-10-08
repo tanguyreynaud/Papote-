@@ -57,6 +57,9 @@ Ce que le script fait à la tablette, de A à Z :
 Au démarrage, l'appli règle elle-même le volume (fort), bloque les boutons de volume, rallume l'écran en
 journée si on appuie sur le bouton marche/arrêt, et met l'écran en veille de 23 h à 7 h.
 
+Pour vérifier une tablette branchée (avant un envoi, ou en cas de souci) : `installation/diagnostic.bat`.
+Il contrôle la version, le mode kiosque, les réglages, le réseau, la batterie et affiche le journal récent.
+
 Pour remettre la tablette à la normale : `installation/retirer-papote.bat`.
 
 Maintenance par ADB :
