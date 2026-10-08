@@ -126,12 +126,17 @@ function secretFirebase(nom, valeur) {
 }
 
 (async () => {
-  const cle = process.env.STRIPE_SECRET
+  const saisie = process.env.STRIPE_SECRET
     || await demander('Clé secrète Stripe (Développeurs > Clés API, sk_test_... ou sk_live_...) : ');
-  if (!/^(sk|rk)_(test|live)_/.test(cle)) {
-    console.error('Ce n\'est pas une clé secrète Stripe.');
+  // Un collage dans la fenêtre Windows peut ajouter des caractères invisibles ou des guillemets.
+  const trouvee = String(saisie).match(/(sk|rk)_(test|live)_[A-Za-z0-9]+/);
+  if (!trouvee) {
+    const debut = String(saisie).replace(/[^\x20-\x7e]/g, '?').trim().slice(0, 3);
+    console.error(`Ce n'est pas une clé secrète Stripe (reçu « ${debut}… », ${String(saisie).length} caractères).`);
+    console.error('La clé secrète commence par sk_test_ (mode test) ; la clé publique pk_ ne convient pas.');
     process.exit(1);
   }
+  const cle = trouvee[0];
   const stripe = new Stripe(cle);
   console.log(cle.includes('_live_') ? 'Mode réel (paiements encaissés)' : 'Mode test (aucun paiement réel)');
   await tarifs(stripe);
