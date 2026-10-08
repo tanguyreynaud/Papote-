@@ -35,7 +35,7 @@ const MAX_IMAGE_CHARS = 900_000; // un document Firestore est limité à 1 Mo
 let session = null; // { fid, family, member, uid }
 let stopMembers = null;
 
-const VIEWS = ['view-pair', 'loading', 'view-login', 'view-link-email', 'view-invited', 'view-pending', 'view-join', 'view-home', 'view-photos', 'view-videos', 'view-messages', 'view-agenda', 'view-settings', 'view-notifs', 'view-support'];
+const VIEWS = ['view-profile', 'view-pair', 'loading', 'view-login', 'view-link-email', 'view-invited', 'view-pending', 'view-join', 'view-home', 'view-photos', 'view-videos', 'view-messages', 'view-agenda', 'view-settings', 'view-notifs', 'view-support'];
 
 function show(view) {
   for (const id of VIEWS) $(id).hidden = id !== view;
@@ -229,6 +229,11 @@ function shortLabel(date) {
 // L'auteur supprime ses envois ; un responsable de la famille peut tout supprimer.
 function canDelete(post) {
   return post.authorUid === session.uid || amFamilyAdmin();
+}
+
+// Propriétaire : celui qui a créé la famille (et payé la tablette) ; lui seul règle la tablette.
+function amOwner() {
+  return !!session?.family && session.family.createdBy === session.uid;
 }
 
 function amFamilyAdmin() {
@@ -1443,7 +1448,7 @@ const dateLongue = (ts) => (ts ? toDate(ts).toLocaleDateString('fr-FR', { day: '
 // Abonnement en pause : envois, agenda et appels bloqués, avec une explication.
 function paused() {
   if (abonnementOk(session?.family)) return false;
-  notice(amFamilyAdmin()
+  notice(amOwner()
     ? "Papote est en pause : l'abonnement de la famille doit être réglé. Allez dans Réglages > Abonnement."
     : "Papote est en pause : l'abonnement de la famille doit être réglé par un responsable de la famille.");
   return true;
@@ -1508,9 +1513,9 @@ $('abo-formules').replaceChildren(...FORMULES.map((f) => {
 
 function renderAbonnement() {
   const abo = session.family.abonnement;
-  const admin = amFamilyAdmin();
+  const admin = amOwner(); // l'abonnement est l'affaire du propriétaire, celui qui paie
   const statut = abo?.statut;
-  $('abo-card').hidden = !admin || !abo;
+  $('abo-card').hidden = !amOwner() || !abo;
   if (abo) {
     $('abo-status').textContent = LIBELLES[statut] || statut;
     $('abo-status').className = `abo-status s-${statut}`;
@@ -1640,7 +1645,7 @@ $('form-wifi').addEventListener('submit', async (e) => {
 function renderRemote() {
   const admin = amFamilyAdmin();
   const tablet = targetTablet();
-  $('remote-card').hidden = !admin || !tablet;
+  $('remote-card').hidden = !amOwner() || !tablet;
   if (tablet) {
     const online = tablet.lastOnline ? toDate(tablet.lastOnline) : null;
     $('remote-tablet').textContent = online ? `Tablette vue en ligne ${ago(online.getTime())}.` : 'Tablette reliée.';
@@ -1708,15 +1713,32 @@ $('btn-delete-family').addEventListener('click', async () => {
   }
 });
 
+$('form-my-name').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const name = $('my-name').value.trim();
+  if (!name || name === session.member.name) return;
+  try {
+    await updateDoc(doc(db, 'families', session.fid, 'members', session.uid), { name });
+    session.member.name = name;
+    toast('Prénom enregistré');
+  } catch (err) {
+    console.error(err);
+    notice("Le prénom n'a pas pu être enregistré.");
+  }
+});
+
 function applyFamily() {
   renderAbonnement();
   renderRemote();
   const admin = amFamilyAdmin();
-  $('text-size-card').hidden = !admin;
-  $('btn-delete-family').hidden = !admin;
+  // Réglages : responsables seulement (Profil est pour tout le monde).
+  $('tile-settings').hidden = !admin;
+  if (document.activeElement !== $('my-name')) $('my-name').value = session.member.name;
+  $('text-size-card').hidden = !amOwner();
+  $('btn-delete-family').hidden = !amOwner();
   renderTextSize();
   $('invite-email-card').hidden = !admin;
-  $('tablet-card').hidden = !admin;
+  $('tablet-card').hidden = !amOwner();
   $('btn-new-code').hidden = !admin || !CHANGE_CODE_READY;
   if (admin && !stopInvitations) watchInvitations();
   if (!$('view-settings').hidden) renderSettings();
@@ -1724,7 +1746,7 @@ function applyFamily() {
   $('family-title').textContent = `Pour ${name}`;
   document.querySelectorAll('.grand-name').forEach((el) => { el.textContent = name; });
   $('message-text').placeholder = `Écrire à ${name}…`;
-  $('family-name-card').hidden = !amFamilyAdmin();
+  $('family-name-card').hidden = !amOwner();
   if (document.activeElement !== $('family-name')) $('family-name').value = name;
   if (allMembers.length) renderMembers(allMembers);
 }

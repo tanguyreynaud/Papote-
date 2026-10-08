@@ -217,7 +217,7 @@
         <button type="button" class="tile t-agenda" data-page="agenda">
           <svg class="tile-icon"><use href="#i-agenda"/></svg><span>Agenda</span>
         </button>
-        <button type="button" class="tile t-settings" data-page="settings">
+        <button type="button" class="tile t-settings" id="tile-settings" data-page="settings">
           <svg class="tile-icon"><use href="#i-settings"/></svg><span>Réglages</span>
         </button>
       </div>
@@ -285,21 +285,6 @@
         <h1>Réglages</h1>
       </header>
       <div class="page-pad">
-        <div class="card">
-          <h2>Ma photo</h2>
-          <p class="muted">Pour que <span class="grand-name"></span> vous reconnaisse quand vous envoyez quelque chose ou que vous appelez.</p>
-          <div class="face-row">
-            <img id="face-img" class="avatar avatar-lg" alt="" hidden>
-            <span id="face-empty" class="avatar avatar-lg avatar-empty"><svg><use href="#i-user"/></svg></span>
-            <div class="face-buttons">
-              <button type="button" class="secondary" id="face-camera"><svg><use href="#i-camera"/></svg>Prendre une photo</button>
-              <button type="button" class="secondary" id="face-gallery"><svg><use href="#i-gallery"/></svg>Choisir une photo</button>
-              <button type="button" class="link danger" id="face-remove" hidden>Retirer ma photo</button>
-            </div>
-          </div>
-          <input id="in-face-camera" type="file" accept="image/*" capture="user" hidden>
-          <input id="in-face-gallery" type="file" accept="image/*" hidden>
-        </div>
         <div id="requests-card" class="card" hidden>
           <h2>Demandes pour rejoindre</h2>
           <ul id="requests" class="members"></ul>
@@ -355,7 +340,7 @@
           <p id="remote-result" class="remote-result" hidden></p>
         </div>
         <div id="tablet-card" class="card" hidden>
-          <h2>Installer une tablette</h2>
+          <h2>Ajouter une tablette</h2>
           <button type="button" id="btn-pair" class="primary wide">Ajouter ma tablette</button>
           <p class="muted small">Installation par câble avec le script : créez un code d'installation, à ne donner à personne d'autre.</p>
           <p id="tablet-code" class="code" hidden></p>
@@ -395,6 +380,34 @@
             <button type="button" class="seg" data-size="tres-grande">Très grande</button>
           </div>
         </div>
+      </div>
+    </section>
+    <!-- Profil : pour chaque membre -->
+    <section id="view-profile" class="page tab-page" hidden>
+      <header class="page-head"><h1>Profil</h1></header>
+      <div class="page-pad">
+        <div class="card">
+          <h2>Ma photo</h2>
+          <p class="muted">Pour que <span class="grand-name"></span> vous reconnaisse quand vous envoyez quelque chose ou que vous appelez.</p>
+          <div class="face-row">
+            <img id="face-img" class="avatar avatar-lg" alt="" hidden>
+            <span id="face-empty" class="avatar avatar-lg avatar-empty"><svg><use href="#i-user"/></svg></span>
+            <div class="face-buttons">
+              <button type="button" class="secondary" id="face-camera"><svg><use href="#i-camera"/></svg>Prendre une photo</button>
+              <button type="button" class="secondary" id="face-gallery"><svg><use href="#i-gallery"/></svg>Choisir une photo</button>
+              <button type="button" class="link danger" id="face-remove" hidden>Retirer ma photo</button>
+            </div>
+          </div>
+          <input id="in-face-camera" type="file" accept="image/*" capture="user" hidden>
+          <input id="in-face-gallery" type="file" accept="image/*" hidden>
+        </div>
+        <form id="form-my-name" class="card">
+          <h2>Mon prénom</h2>
+          <div class="inline-field">
+            <input id="my-name" maxlength="40" autocomplete="given-name" required>
+            <button type="submit" class="primary">Enregistrer</button>
+          </div>
+        </form>
         <div class="card">
           <h2>Apparence</h2>
           <div class="segmented" role="radiogroup" aria-label="Apparence">
@@ -421,6 +434,7 @@
         <button id="btn-leave" class="link danger wide">Quitter cette famille</button>
       </div>
     </section>
+
     <!-- Notifications -->
     <section id="view-notifs" class="page tab-page" hidden>
       <header class="page-head"><h1>Notifications</h1></header>
@@ -477,6 +491,7 @@
     <button type="button" class="nav-item active" data-tab="home"><svg><use href="#i-home"/></svg><span>Accueil</span></button>
     <button type="button" class="nav-item" data-tab="notifs"><span class="nav-icon"><svg><use href="#i-bell"/></svg><span id="nav-badge" class="nav-badge" hidden></span></span><span>Notifications</span></button>
     <button type="button" class="nav-item" data-tab="support"><svg><use href="#i-help"/></svg><span>Support</span></button>
+    <button type="button" class="nav-item" data-tab="profile"><svg><use href="#i-user"/></svg><span>Profil</span></button>
   </nav>
 
   <!-- Envoyer une photo ou une vidéo -->
