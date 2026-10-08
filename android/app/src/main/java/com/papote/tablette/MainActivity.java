@@ -170,6 +170,7 @@ public class MainActivity extends Activity implements Sync.Listener {
         setupDeviceOwner();
         setVolumes();
         registerReceiver(screenOff, new IntentFilter(Intent.ACTION_SCREEN_OFF));
+        handler.postDelayed(daytimeWatch, 60_000);
         web.loadUrl(LocalContent.PAGE);
         sync.start();
         Updater.cleanup(this);
@@ -581,6 +582,37 @@ public class MainActivity extends Activity implements Sync.Listener {
         public void run() {
             hideSystemBars();
             handler.postDelayed(this, 3000);
+        }
+    };
+
+    /**
+     * Chaque minute : en journée (7h-23h), l'écran doit être allumé, à luminosité normale.
+     * Rallume l'écran le matin s'il s'est éteint dans la nuit (bouton, coupure), et rétablit
+     * la luminosité si la page n'a pas pu le faire elle-même.
+     */
+    private final Runnable daytimeWatch = new Runnable() {
+        @SuppressWarnings("deprecation")
+        @Override
+        public void run() {
+            handler.postDelayed(this, 60_000);
+            int hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY);
+            if (kioskPaused() || hour < 7 || hour >= 23) return;
+            try {
+                PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+                if (!pm.isInteractive()) {
+                    Log.i(TAG, "Journée : on rallume l'écran");
+                    PowerManager.WakeLock wl = pm.newWakeLock(PowerManager.SCREEN_BRIGHT_WAKE_LOCK
+                            | PowerManager.ACQUIRE_CAUSES_WAKEUP, "papote:matin");
+                    wl.acquire(10_000);
+                }
+                WindowManager.LayoutParams lp = getWindow().getAttributes();
+                if (lp.screenBrightness >= 0 && lp.screenBrightness < 0.05f) {
+                    lp.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
+                    getWindow().setAttributes(lp);
+                }
+            } catch (Exception e) {
+                Log.w(TAG, "Réveil du matin", e);
+            }
         }
     };
 
