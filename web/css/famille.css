@@ -831,3 +831,4 @@ button:disabled { opacity: .45; cursor: default; }
 
 .remote-buttons #btn-logs { grid-column: 1 / -1; }
 .logs { max-height: 50vh; overflow: auto; margin: 6px 0 0; padding: 10px; border-radius: 10px; background: var(--bg); font-size: 11px; line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere; }
+.abo-banner { flex-wrap: wrap; }
