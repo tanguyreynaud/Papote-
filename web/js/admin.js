@@ -12,6 +12,7 @@ import {
 import {
   getStorage, ref, uploadBytes, getDownloadURL,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-storage.js';
+import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-functions.js';
 
 const app = initializeApp({
   apiKey: 'AIzaSyAvoivJR8p-u2VxUWzlyHzTgP20-5ZG_-E',
@@ -24,6 +25,7 @@ const app = initializeApp({
 const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
+const functions = getFunctions(app, 'europe-west1');
 
 const $ = (id) => document.getElementById(id);
 const OFFLINE_MS = 45 * 60_000;
@@ -92,8 +94,46 @@ async function loadOrders() {
   }
 }
 
+// Tablettes incluses à rendre après la fin d'un abonnement (restitution écrite par le serveur).
+async function loadReturns() {
+  try {
+    const snap = await getDocs(query(collection(db, 'commandes'), where('restitution.statut', 'in', ['attendue', 'echec'])));
+    $('returns-empty').hidden = !snap.empty;
+    $('returns').replaceChildren(...snap.docs.map((d) => {
+      const c = d.data();
+      const r = c.restitution || {};
+      const avant = toDate(r.avant);
+      const li = document.createElement('li');
+      li.innerHTML = '<strong></strong><span class="muted small"></span><span class="small"></span><button type="button" class="secondary small-btn">Tablette rendue</button>';
+      li.querySelector('strong').textContent = c.livraison?.nom || c.nom || c.email;
+      li.querySelector('.muted').textContent = `${c.email}${c.telephone ? ` · ${c.telephone}` : ''}`;
+      li.querySelector('span.small:not(.muted)').textContent = r.statut === 'echec'
+        ? `Prélèvement de 100 € échoué${r.erreur ? ` (${r.erreur})` : ''} : à relancer depuis Stripe.`
+        : `À rendre avant le ${avant ? avant.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' }) : '?'}.`;
+      const btn = li.querySelector('button');
+      btn.addEventListener('click', async () => {
+        if (!confirm(`La tablette de ${c.email} est bien revenue ?`)) return;
+        btn.disabled = true;
+        try {
+          await httpsCallable(functions, 'tabletteRendue')({ commande: d.id });
+          li.remove();
+        } catch (err) {
+          console.error(err);
+          alert("L'enregistrement a échoué.");
+          btn.disabled = false;
+        }
+      });
+      return li;
+    }));
+  } catch (err) {
+    console.warn('Restitutions illisibles', err);
+    $('returns-empty').hidden = false;
+  }
+}
+
 async function load() {
   loadOrders();
+  loadReturns();
   $('loading-families').hidden = false;
   try {
     const [famSnap, tabletSnap] = await Promise.all([
