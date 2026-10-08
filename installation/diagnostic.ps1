@@ -48,7 +48,7 @@ Say "`nMode kiosque" 'Cyan'
 $dp = Adb shell dumpsys device_policy
 if ($dp -match "Device Owner[\s\S]*?$Package") { Ok 'Propriétaire de l''appareil (kiosque complet, mises à jour automatiques)' }
 else { Bad 'Mode kiosque inactif' 'Supprimer les comptes de la tablette puis relancer installer-tablette.bat' }
-if ($dp -match 'no_sms' -and $dp -match 'no_outgoing_calls') { Ok 'SMS et appels de la carte SIM bloqués' } else { Bad 'Blocage SIM absent' 'Relancer installer-tablette.bat' }
+if ($dp -match 'no_outgoing_calls') { Ok 'Appels sortants de la carte SIM bloqués' } else { Bad 'Blocage des appels sortants absent' 'Relancer installer-tablette.bat' }
 $role = Adb shell dumpsys role
 if ($role -match "CALL_SCREENING[\s\S]{0,200}holders=$Package") { Ok 'Appels de la carte SIM refusés (filtrage des appels)' }
 else { Bad 'Filtrage des appels inactif' 'Relancer installer-tablette.bat' }
