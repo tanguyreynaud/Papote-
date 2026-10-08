@@ -7,7 +7,7 @@ const MUETTE_MS = 48 * 3600_000;
 
 const toDate = (v) => (v && v.toDate ? v.toDate() : v ? new Date(v) : null);
 const quand = (d) => (d ? d.toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '–');
-const go = (mo) => (mo == null ? '–' : mo >= 1024 ? `${(mo / 1024).toFixed(1)} Go` : `${Math.round(mo)} Mo`);
+const go = (mo) => (mo == null || mo < 0 ? '–' : mo >= 1024 ? `${(mo / 1024).toFixed(1)} Go` : `${Math.round(mo)} Mo`);
 const last4 = (iccid) => (iccid ? String(iccid).replace(/\D/g, '').slice(-4) : '');
 
 function rowFor(fam, list) {
@@ -40,7 +40,7 @@ export function refreshSim(families, tablets) {
     li.querySelector('code').textContent = sim?.iccid ? `ICCID …${last4(sim.iccid)}` : 'pas de SIM';
     const items = [
       ['Opérateur', sim?.operateur || '–'],
-      ['Réseau', sim ? `${sim.reseau || '?'}${sim.signal != null ? `, signal ${sim.signal}/4` : ''}` : '–'],
+      ['Réseau', sim ? `${sim.reseau || '?'}${sim.signal >= 0 ? `, signal ${sim.signal}/4` : ''}` : '–'],
       ['Data du mois', go(sim?.dataMoisMo)],
       ['SIM vue le', quand(toDate(sim?.vuLe))],
       ['Tablette en ligne', quand(seen)],
