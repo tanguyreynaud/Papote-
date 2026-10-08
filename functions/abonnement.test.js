@@ -72,3 +72,11 @@ test('résiliation : pas avant la fin de l\'engagement, ni avant la fin du mois 
   assert.strictEqual(a.dateResiliation(engagement, periode, T0), engagement);
   assert.strictEqual(a.dateResiliation(T0 - JOUR, periode, T0), periode);
 });
+
+test('tablette incluse non rendue : pénalité après 30 jours', () => {
+  assert.strictEqual(a.limiteRestitution(T0), T0 + 30 * JOUR);
+  assert.strictEqual(a.restitutionEchue({ statut: 'attendue', avant: T0 - 1 }, T0), true);
+  assert.strictEqual(a.restitutionEchue({ statut: 'attendue', avant: T0 + JOUR }, T0), false);
+  assert.strictEqual(a.restitutionEchue({ statut: 'rendue', avant: T0 - 1 }, T0), false);
+  assert.strictEqual(a.restitutionEchue({ statut: 'facturee', avant: T0 - 1 }, T0), false);
+});

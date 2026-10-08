@@ -13,6 +13,9 @@ const JOUR = 24 * 60 * 60 * 1000;
 const DELAI_GRACE_JOURS = 7;
 const ESSAI_JOURS = 15;
 const ENGAGEMENT_MOIS = 12;
+// Tablette incluse : à rendre dans les 30 jours après la fin de l'abonnement, sinon 100 €.
+const RESTITUTION_JOURS = 30;
+const PENALITE_NON_RESTITUTION = 10000; // centimes
 
 const STATUTS_OK = ['offert', 'actif', 'impaye'];
 
@@ -93,6 +96,18 @@ function dateResiliation(finEngagementMs, finPeriodeMs, maintenant) {
   return Math.max(finEngagementMs || 0, finPeriodeMs || 0, maintenant);
 }
 
+// Date limite de retour d'une tablette incluse, à partir de la fin de l'abonnement.
+function limiteRestitution(finMs) {
+  return finMs + RESTITUTION_JOURS * JOUR;
+}
+
+// Faut-il prélever la pénalité ? Seulement si la tablette est attendue et le délai dépassé.
+function restitutionEchue(restitution, maintenant) {
+  if (!restitution || restitution.statut !== 'attendue') return false;
+  const limite = enMillis(restitution.avant);
+  return limite != null && limite <= maintenant;
+}
+
 // Faut-il appliquer un événement Stripe à cette famille ? Une famille offerte ne change jamais.
 function peutModifier(actuel) {
   return !(actuel && actuel.statut === 'offert');
@@ -103,6 +118,10 @@ module.exports = {
   ESSAI_JOURS,
   ENGAGEMENT_MOIS,
   finEngagement,
+  RESTITUTION_JOURS,
+  PENALITE_NON_RESTITUTION,
+  limiteRestitution,
+  restitutionEchue,
   dateResiliation,
   STATUTS_OK,
   TARIFS,

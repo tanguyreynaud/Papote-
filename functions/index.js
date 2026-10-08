@@ -7,7 +7,9 @@
 //   annulerResiliation appel depuis l'appli famille : garde l'abonnement
 //   rattacherCommande  appel depuis l'appli famille : relie une commande du site à la famille
 //   stripeWebhook      Stripe prévient ici de chaque paiement ou changement d'abonnement
-//   finDeGrace         chaque jour : suspend les familles dont le délai de grâce est dépassé
+//   finDeGrace         chaque heure : suspend les familles dont le délai de grâce est dépassé
+//   restitutions       chaque jour : prélève 100 € si une tablette incluse n'est pas rendue à temps
+//   tabletteRendue     appel depuis le tableau de bord admin : la tablette incluse est revenue
 //   nouvelleFamille    famille créée : sans commande, statut « aucun »
 //   nouveauMembre      créateur d'une famille : rattache sa commande faite sur le site
 //
@@ -163,9 +165,24 @@ async function appliquer(fid, abonnementId) {
     });
   });
   await db.doc(`commandes/${abo.id}`).set({ fid, statutStripe: abo.status }, { merge: true });
+  await attendreRestitution(abo);
   if (abo.metadata.fid !== fid) {
     await stripe().subscriptions.update(abo.id, { metadata: { ...abo.metadata, fid } });
   }
+}
+
+// Fin d'un abonnement avec tablette incluse : la tablette est attendue sous 30 jours.
+async function attendreRestitution(abo) {
+  if (abo.status !== 'canceled' || abo.metadata.tablette !== 'incluse') return;
+  const ref = db.doc(`commandes/${abo.id}`);
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (snap.exists && snap.get('restitution')) return;
+    const fin = (abo.ended_at || abo.canceled_at || Math.floor(Date.now() / 1000)) * 1000;
+    tx.set(ref, {
+      restitution: { statut: 'attendue', avant: versTimestamp(regles.limiteRestitution(fin)) },
+    }, { merge: true });
+  });
 }
 
 // Familles dont ce compte est responsable et qui n'ont pas d'abonnement en cours.
@@ -373,6 +390,68 @@ exports.finDeGrace = onSchedule(
       logger.info(`Famille ${snap.id} suspendue : délai de grâce dépassé.`);
     }
   });
+
+// Tablette incluse non rendue dans les 30 jours : 100 € prélevés sur la carte de l'abonnement.
+exports.restitutions = onSchedule(
+  { schedule: 'every day 09:00', timeZone: 'Europe/Paris', secrets: [STRIPE_SECRET] },
+  async () => {
+    const maintenant = Date.now();
+    const attendues = await db.collection('commandes').where('restitution.statut', '==', 'attendue').get();
+    for (const snap of attendues.docs) {
+      if (!regles.restitutionEchue(snap.get('restitution'), maintenant)) continue;
+      try {
+        const abo = await stripe().subscriptions.retrieve(snap.id, { expand: ['customer'] });
+        const moyen = abo.default_payment_method
+          || (abo.customer.invoice_settings && abo.customer.invoice_settings.default_payment_method);
+        if (!moyen) throw new Error('Aucune carte enregistrée');
+        const paiement = await stripe().paymentIntents.create({
+          amount: regles.PENALITE_NON_RESTITUTION,
+          currency: 'eur',
+          customer: abo.customer.id,
+          payment_method: typeof moyen === 'string' ? moyen : moyen.id,
+          off_session: true,
+          confirm: true,
+          description: 'Papote : tablette non rendue',
+          metadata: { commande: snap.id },
+        }, { idempotencyKey: `restitution-${snap.id}` });
+        await snap.ref.update({
+          'restitution.statut': 'facturee',
+          'restitution.paiement': paiement.id,
+          'restitution.majLe': FieldValue.serverTimestamp(),
+        });
+        logger.info(`Commande ${snap.id} : tablette non rendue, 100 € prélevés.`);
+      } catch (e) {
+        // Carte expirée ou refusée : à relancer à la main, depuis le tableau de bord Stripe.
+        await snap.ref.update({
+          'restitution.statut': 'echec',
+          'restitution.erreur': e.message,
+          'restitution.majLe': FieldValue.serverTimestamp(),
+        });
+        logger.warn(`Commande ${snap.id} : prélèvement de la tablette non rendue refusé`, e.message);
+      }
+    }
+  });
+
+// Le tableau de bord admin marque la tablette incluse comme revenue.
+exports.tabletteRendue = onCall(async (request) => {
+  const token = request.auth && request.auth.token;
+  // Même règle que isAdmin() des règles Firestore : badge admin, ou l'adresse de Tanguy le temps du badge.
+  const estAdmin = token && (token.admin === true
+    || (token.email === 'tanguyreynaud22@gmail.com' && token.email_verified === true));
+  if (!estAdmin) throw new HttpsError('permission-denied', 'Réservé à l\'administrateur.');
+  const { commande } = request.data || {};
+  if (typeof commande !== 'string' || !commande) throw new HttpsError('invalid-argument', 'Commande manquante.');
+  const ref = db.doc(`commandes/${commande}`);
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Commande introuvable.');
+  if (snap.get('restitution.statut') === 'facturee') {
+    throw new HttpsError('failed-precondition', 'Les 100 € ont déjà été prélevés : remboursez-les depuis Stripe.');
+  }
+  await ref.set({
+    restitution: { statut: 'rendue', majLe: FieldValue.serverTimestamp() },
+  }, { merge: true });
+  return { ok: true };
+});
 
 exports.nouvelleFamille = onDocumentCreated('families/{fid}', async (event) => {
   const ref = event.data.ref;

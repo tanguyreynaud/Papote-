@@ -3,6 +3,7 @@
 //   node abonnements.js                 : liste les familles et leur abonnement
 //   node abonnements.js offert <famille> : statut « offert », jamais suspendue (famille de Tanguy)
 //   node abonnements.js aucun <famille>  : la famille devra s'abonner (tablette en pause)
+//   node abonnements.js rendue <e-mail>  : la tablette incluse de ce client est revenue (pas de pénalité)
 // <famille> : nom exact (sans tenir compte des majuscules) ou identifiant Firestore.
 // Les paiements eux-mêmes sont gérés par les fonctions serveur (functions/), pas ici.
 // Clé d'administration : %USERPROFILE%\.papote\cle-admin-firebase.json (jamais dans le dépôt).
@@ -16,8 +17,8 @@ const keyPath = process.env.PAPOTE_CLE_ADMIN
 const [action, ...reste] = process.argv.slice(2);
 const cible = reste.join(' ').trim();
 
-if (action && (!['offert', 'aucun'].includes(action) || !cible)) {
-  console.error('Usage : abonnements.bat [offert|aucun "nom de la famille"]');
+if (action && (!['offert', 'aucun', 'rendue'].includes(action) || !cible)) {
+  console.error('Usage : abonnements.bat [offert|aucun "nom de la famille"] [rendue adresse@mail]');
   process.exit(1);
 }
 if (!fs.existsSync(keyPath)) {
@@ -35,12 +36,41 @@ function texteStatut(abo) {
   return `${abo.statut}${abo.formule ? ` (${abo.formule}, tablette ${abo.tablette})` : ''}${fin}`;
 }
 
+async function tabletteRendue(email) {
+  const commandes = await db.collection('commandes')
+    .where('email', '==', email.toLowerCase()).where('restitution.statut', 'in', ['attendue', 'echec']).get();
+  if (commandes.empty) {
+    console.error(`Aucune tablette attendue pour ${email}.`);
+    process.exit(1);
+  }
+  for (const c of commandes.docs) {
+    await c.ref.set({ restitution: { statut: 'rendue', majLe: FieldValue.serverTimestamp() } }, { merge: true });
+  }
+  console.log(`Tablette de ${email} marquée comme rendue.`);
+}
+
+async function listeRestitutions() {
+  const attendues = await db.collection('commandes').where('restitution.statut', 'in', ['attendue', 'echec']).get();
+  if (attendues.empty) return;
+  console.log('\nTablettes incluses à récupérer :');
+  for (const c of attendues.docs) {
+    const r = c.get('restitution');
+    const avant = r.avant ? r.avant.toDate().toLocaleDateString('fr-FR') : '?';
+    console.log(`  ${c.get('email')}  avant le ${avant}${r.statut === 'echec' ? `  (prélèvement refusé : ${r.erreur})` : ''}`);
+  }
+}
+
 (async () => {
+  if (action === 'rendue') {
+    await tabletteRendue(cible);
+    return;
+  }
   const familles = await db.collection('families').get();
   if (!action) {
     for (const f of familles.docs) {
       console.log(`${f.get('name')}  [${f.id}]  ${texteStatut(f.get('abonnement'))}`);
     }
+    await listeRestitutions();
     return;
   }
   const trouvees = familles.docs.filter((f) => f.id === cible
