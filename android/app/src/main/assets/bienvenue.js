@@ -27,10 +27,25 @@
     document.body.appendChild(root);
   }
 
+  // Étape en cours (1 nom, 2 wifi, 3 famille), affichée en haut ; 0 = pas d'étapes (wifi plus tard).
+  var stepNum = 0;
+
   function screen(title, subtitle) {
     root.innerHTML = '';
     var box = el('div', 'welcome-box');
-    box.appendChild(el('p', 'welcome-brand', 'Papote'));
+    var head = el('div', 'welcome-head');
+    var logo = el('img', 'welcome-logo');
+    logo.src = 'logo.svg';
+    logo.alt = '';
+    head.appendChild(logo);
+    head.appendChild(el('span', 'welcome-brand', 'Papote'));
+    if (stepNum && !repair) {
+      var steps = el('div', 'welcome-dots');
+      for (var i = 1; i <= 3; i++) steps.appendChild(el('span', 'dot' + (i < stepNum ? ' done' : i === stepNum ? ' on' : '')));
+      steps.appendChild(el('span', 'welcome-stepnum', 'Étape ' + stepNum + ' sur 3'));
+      head.appendChild(steps);
+    }
+    box.appendChild(head);
     box.appendChild(el('h1', 'welcome-title', title));
     if (subtitle) box.appendChild(el('p', 'welcome-sub', subtitle));
     root.appendChild(box);
@@ -46,6 +61,7 @@
   // ---------- 1. Nom de la tablette ----------
 
   function showName() {
+    stepNum = 1;
     var box = screen('Bienvenue !', 'Pour commencer, donnez un nom à cette tablette.');
     var input = el('input', 'welcome-input');
     input.type = 'text';
@@ -70,6 +86,7 @@
   }
 
   function showWifi() {
+    stepNum = 2;
     var st = wifiState();
     // Carte SIM avec internet : pas besoin de wifi.
     if (!repair && st.mobile && st.internet && !st.wifi) { finishWifi(); return; }
@@ -171,6 +188,7 @@
   function pretty(code) { return code.slice(0, 4) + '-' + code.slice(4); }
 
   function showPair(s) {
+    stepNum = 3;
     var box = screen('Reliez la tablette à votre famille', '');
     if (s.error) {
       box.appendChild(el('p', 'welcome-error', s.error));
@@ -196,6 +214,7 @@
   // ---------- 4. Confirmation ----------
 
   function showConfirm(s) {
+    stepNum = 3;
     var who = s.claimedName || 'Quelqu\'un';
     var fam = s.familyName ? ' à la famille de ' + s.familyName : '';
     var box = screen(who + ' veut relier cette tablette' + fam + '.', 'C\'est bien vous ?');

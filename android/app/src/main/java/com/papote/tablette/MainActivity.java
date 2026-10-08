@@ -213,6 +213,11 @@ public class MainActivity extends Activity implements Sync.Listener {
         if (intent.getBooleanExtra("bienvenue", false) && sync != null) {
             sync.resetToWelcome();
             callPage("onLeave", new JSONObject());
+            // La page repart de zéro (appels compris) : plus rien de l'ancienne famille en mémoire.
+            handler.postDelayed(() -> {
+                android.webkit.WebStorage.getInstance().deleteAllData();
+                if (web != null) web.reload();
+            }, 1500);
             return;
         }
         if (intent.getBooleanExtra("leave", false) && sync != null) {
