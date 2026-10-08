@@ -4,8 +4,7 @@
 // passe par l'app Android (Sync.java).
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
 import {
-  getAuth, onAuthStateChanged, EmailAuthProvider, linkWithCredential,
-  signInWithEmailAndPassword, createUserWithEmailAndPassword,
+  getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
 import {
   getFirestore, doc, getDoc, setDoc, updateDoc, addDoc, deleteDoc, collection, query, where,
@@ -82,8 +81,8 @@ function user() {
 }
 
 // Compte de la tablette pour les appels : une adresse et un mot de passe créés une fois par
-// l'app Android (pont callsAccount()). Plus de compte anonyme : l'ancien est converti sur place
-// (même uid, donc même fiche membre), sinon on se connecte avec ce compte.
+// l'app Android (pont callsAccount()). Plus de compte anonyme : la tablette se connecte avec
+// ce compte (créé côté Firebase au premier démarrage), puis s'inscrit avec son code de tablette.
 function callsAccount() {
   try {
     const account = JSON.parse(android().callsAccount());
@@ -93,30 +92,16 @@ function callsAccount() {
   }
 }
 
-const ALREADY_USED = ['auth/email-already-in-use', 'auth/credential-already-in-use', 'auth/provider-already-linked'];
-
 async function signIn() {
   const current = await user();
-  if (current && !current.isAnonymous) return current;
   const account = android() && android().callsAccount ? callsAccount() : null;
-  if (!account) return current;
-  if (current) {
-    try {
-      const credential = EmailAuthProvider.credential(account.email, account.password);
-      return (await linkWithCredential(current, credential)).user;
-    } catch (e) {
-      // Conversion refusée pour une autre raison : on garde la session actuelle, nouvel essai au prochain démarrage.
-      if (!ALREADY_USED.includes(e.code)) {
-        console.warn('Appels : conversion du compte impossible', e.code);
-        return current;
-      }
-    }
-  }
+  if (!account) return null;
+  if (current && !current.isAnonymous && current.email === account.email) return current;
   try {
     return (await signInWithEmailAndPassword(auth, account.email, account.password)).user;
   } catch (e) {
     if (e.code !== 'auth/invalid-credential' && e.code !== 'auth/user-not-found') throw e;
-    // Compte pas encore créé côté Firebase.
+    // Premier démarrage : le compte n'existe pas encore.
     return (await createUserWithEmailAndPassword(auth, account.email, account.password)).user;
   }
 }
