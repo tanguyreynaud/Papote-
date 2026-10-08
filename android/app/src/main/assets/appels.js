@@ -3,7 +3,10 @@
 // La tablette a ici sa propre identité Firebase (SDK web, en temps réel) ; le reste de l'écran
 // passe par l'app Android (Sync.java).
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
-import { getAuth, signInAnonymously, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
+import {
+  getAuth, onAuthStateChanged, EmailAuthProvider, linkWithCredential,
+  signInWithEmailAndPassword, createUserWithEmailAndPassword,
+} from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
 import {
   getFirestore, doc, getDoc, setDoc, updateDoc, addDoc, deleteDoc, collection, query, where,
   onSnapshot, serverTimestamp,
@@ -78,8 +81,49 @@ function user() {
   });
 }
 
+// Compte de la tablette pour les appels : une adresse et un mot de passe créés une fois par
+// l'app Android (pont callsAccount()). Plus de compte anonyme : l'ancien est converti sur place
+// (même uid, donc même fiche membre), sinon on se connecte avec ce compte.
+function callsAccount() {
+  try {
+    const account = JSON.parse(android().callsAccount());
+    return account && account.email && account.password ? account : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+const ALREADY_USED = ['auth/email-already-in-use', 'auth/credential-already-in-use', 'auth/provider-already-linked'];
+
+async function signIn() {
+  const current = await user();
+  if (current && !current.isAnonymous) return current;
+  const account = android() && android().callsAccount ? callsAccount() : null;
+  if (!account) return current;
+  if (current) {
+    try {
+      const credential = EmailAuthProvider.credential(account.email, account.password);
+      return (await linkWithCredential(current, credential)).user;
+    } catch (e) {
+      // Conversion refusée pour une autre raison : on garde la session actuelle, nouvel essai au prochain démarrage.
+      if (!ALREADY_USED.includes(e.code)) {
+        console.warn('Appels : conversion du compte impossible', e.code);
+        return current;
+      }
+    }
+  }
+  try {
+    return (await signInWithEmailAndPassword(auth, account.email, account.password)).user;
+  } catch (e) {
+    if (e.code !== 'auth/invalid-credential' && e.code !== 'auth/user-not-found') throw e;
+    // Compte pas encore créé côté Firebase.
+    return (await createUserWithEmailAndPassword(auth, account.email, account.password)).user;
+  }
+}
+
 async function joinFamily() {
-  const u = (await user()) || (await signInAnonymously(auth)).user;
+  const u = await signIn();
+  if (!u) return null;
   let saved = null;
   try { saved = localStorage.getItem(FID_KEY); } catch (e) { /* pas de stockage */ }
   const code = ((android() && android().getCode()) || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
