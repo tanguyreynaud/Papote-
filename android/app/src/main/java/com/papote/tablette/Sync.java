@@ -291,6 +291,7 @@ final class Sync {
                 return;
             }
             lastRev = rev;
+            runCommands(fid); // ordres envoyés depuis l'appli famille (wifi, redémarrage, état)
             lastReminders = 0; // les rappels ont peut-être changé aussi
             lastFamilyExtras = 0; // et les anniversaires
             result = firebase.runQuery("families/" + fid, postsQuery(true));
@@ -610,7 +611,10 @@ final class Sync {
         } catch (Exception e) {
             Log.w(TAG, "Veille " + field, e);
         }
-        if ("lastOnline".equals(field)) reportBattery(fid);
+        if ("lastOnline".equals(field)) {
+            reportBattery(fid);
+            uploadJournal(fid, false);
+        }
     }
 
     /**
@@ -927,6 +931,133 @@ final class Sync {
         }
     }
 
+    // ---------- Ordres de l'appli famille : families/{fid}/commands ----------
+
+    private Wifi wifi;
+
+    private Wifi wifi() {
+        if (wifi == null) wifi = new Wifi(context, new android.content.ComponentName(context, AdminReceiver.class));
+        return wifi;
+    }
+
+    private void runCommands(String fid) {
+        try {
+            JSONObject q = new JSONObject()
+                    .put("from", new JSONArray().put(new JSONObject().put("collectionId", "commands")))
+                    .put("where", new JSONObject().put("compositeFilter", new JSONObject()
+                            .put("op", "AND")
+                            .put("filters", new JSONArray()
+                                    .put(eq("target", firebase.uid()))
+                                    .put(eq("state", "pending")))))
+                    .put("limit", 5);
+            JSONArray rows = firebase.runQuery("families/" + fid, q);
+            for (int i = 0; i < rows.length(); i++) {
+                JSONObject doc = rows.getJSONObject(i).optJSONObject("document");
+                if (doc != null) runCommand(doc);
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "Ordres de la famille", e);
+        }
+    }
+
+    private static JSONObject eq(String field, String value) throws JSONException {
+        return new JSONObject().put("fieldFilter", new JSONObject()
+                .put("field", new JSONObject().put("fieldPath", field))
+                .put("op", "EQUAL")
+                .put("value", new JSONObject().put("stringValue", value)));
+    }
+
+    private void runCommand(JSONObject doc) throws IOException, JSONException {
+        JSONObject f = doc.getJSONObject("fields");
+        String type = nz(Firebase.str(f, "type"));
+        boolean ok = true;
+        String result;
+        boolean reboot = false;
+        if ("wifi".equals(type)) {
+            String ssid = nz(Firebase.str(f, "ssid"));
+            ok = !ssid.isEmpty() && wifi().connect(ssid, nz(Firebase.str(f, "password")));
+            result = ok ? "La tablette se connecte au wifi « " + ssid + " »." : "Le wifi « " + ssid + " » n'a pas pu être ajouté.";
+        } else if ("restart".equals(type)) {
+            result = "La tablette redémarre.";
+            reboot = true;
+        } else if ("status".equals(type)) {
+            result = statusText();
+            uploadJournal(prefs.getString("fid", null), true);
+        } else {
+            ok = false;
+            result = "Ordre inconnu.";
+        }
+        // Résultat, et le mot de passe du wifi effacé dans la même écriture.
+        JSONObject write = new JSONObject()
+                .put("update", new JSONObject()
+                        .put("name", doc.getString("name"))
+                        .put("fields", new JSONObject()
+                                .put("state", Firebase.string(ok ? "done" : "failed"))
+                                .put("result", Firebase.string(result))))
+                .put("updateMask", new JSONObject().put("fieldPaths",
+                        new JSONArray().put("state").put("result").put("password")))
+                .put("updateTransforms", new JSONArray().put(new JSONObject()
+                        .put("fieldPath", "doneAt").put("setToServerValue", "REQUEST_TIME")));
+        firebase.commit(new JSONArray().put(write));
+        Journal.log(context, "Ordre " + type + " : " + result);
+        if (reboot) {
+            handler.postDelayed(() -> {
+                try {
+                    android.app.admin.DevicePolicyManager dpm = (android.app.admin.DevicePolicyManager)
+                            context.getSystemService(Context.DEVICE_POLICY_SERVICE);
+                    dpm.reboot(new android.content.ComponentName(context, AdminReceiver.class));
+                } catch (Exception e) {
+                    Log.w(TAG, "Redémarrage", e);
+                }
+            }, 3000);
+        }
+    }
+
+    /** État de la tablette en une phrase, pour l'appli famille. */
+    private String statusText() {
+        StringBuilder sb = new StringBuilder();
+        try {
+            JSONObject w = new JSONObject(wifi().status());
+            sb.append(w.optString("wifi").isEmpty() ? "Pas de wifi" : "Wifi « " + w.optString("wifi") + " »");
+            sb.append(w.optBoolean("internet") ? ", internet OK" : ", pas d'internet");
+            if (w.optBoolean("sim")) sb.append(", carte SIM présente");
+            android.os.BatteryManager bm =
+                    (android.os.BatteryManager) context.getSystemService(Context.BATTERY_SERVICE);
+            sb.append(". Batterie ").append(bm.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY))
+                    .append(" %").append(bm.isCharging() ? " (en charge)" : "");
+            sb.append(". Version ").append(appVersion()).append('.');
+        } catch (Exception e) {
+            sb.append("État indisponible.");
+        }
+        return sb.toString();
+    }
+
+    private long lastJournalUpload;
+    private String lastJournalSent;
+
+    /** Journal envoyé au plus une fois par heure (ou tout de suite pour l'ordre « état »). */
+    private void uploadJournal(String fid, boolean now) {
+        long t = System.currentTimeMillis();
+        if (fid == null || (!now && t - lastJournalUpload < 3600_000)) return;
+        String lines = Journal.tail(context, 200);
+        if (!now && lines.equals(lastJournalSent)) return;
+        try {
+            JSONObject write = new JSONObject()
+                    .put("update", new JSONObject()
+                            .put("name", Firebase.docName("families/" + fid + "/logs/" + firebase.uid()))
+                            .put("fields", new JSONObject()
+                                    .put("lines", Firebase.string(lines))
+                                    .put("version", Firebase.string(appVersion()))))
+                    .put("updateTransforms", new JSONArray().put(new JSONObject()
+                            .put("fieldPath", "updatedAt").put("setToServerValue", "REQUEST_TIME")));
+            firebase.commit(new JSONArray().put(write));
+            lastJournalUpload = t;
+            lastJournalSent = lines;
+        } catch (Exception e) {
+            Log.w(TAG, "Envoi du journal", e);
+        }
+    }
+
     /** Abonnement suspendu, résilié ou absent côté serveur : Papote est en pause. */
     boolean paused() {
         return "suspendu".equals(subscription) || "resilie".equals(subscription) || "aucun".equals(subscription);
@@ -1075,7 +1206,13 @@ final class Sync {
         });
     }
 
+    private String lastState = "";
+
     private void status(String state, String message) {
+        if (!state.equals(lastState)) {
+            Journal.log(context, "Synchronisation : " + state + (message == null ? "" : " (" + message + ")"));
+            lastState = state;
+        }
         try {
             JSONObject s = new JSONObject().put("state", state);
             if (message != null) s.put("message", message);

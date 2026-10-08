@@ -1016,3 +1016,21 @@ html .ln-text.size-xs { font-size: calc(5.4vmin * var(--ts, 1)); }
 }
 .pause-title { margin: 0 0 3vmin; font-size: 11vmin; font-weight: 700; }
 .pause-text { margin: 0; font-size: 6vmin; line-height: 1.3; color: #6b625b; }
+
+/* Bouton « régler le wifi » quand internet manque depuis 10 minutes */
+.wifi-help {
+  position: absolute;
+  left: 4vmin;
+  bottom: 4vmin;
+  z-index: 5;
+  min-height: 12vmin;
+  padding: 0 5vmin;
+  border: 0;
+  border-radius: 3vmin;
+  background: #b45309;
+  color: #fff;
+  font-size: 5vmin;
+  font-weight: bold;
+  box-shadow: 0 1vmin 3vmin rgba(0, 0, 0, .2);
+}
+.wifi-help[hidden] { display: none; }

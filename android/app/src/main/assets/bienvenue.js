@@ -72,15 +72,16 @@
   function showWifi() {
     var st = wifiState();
     // Carte SIM avec internet : pas besoin de wifi.
-    if (st.mobile && st.internet && !st.wifi) { android().wifiDone(); return; }
+    if (!repair && st.mobile && st.internet && !st.wifi) { finishWifi(); return; }
     var box = screen('Connexion à internet', 'Touchez le nom de votre box.');
     if (st.wifi && st.internet) {
       box.appendChild(el('p', 'welcome-ok', 'Connectée à « ' + st.wifi + ' »'));
-      box.appendChild(button('Continuer', 'primary', function () { android().wifiDone(); }));
+      box.appendChild(button('Continuer', 'primary', finishWifi));
     }
     var list = el('div', 'welcome-list');
     box.appendChild(list);
     box.appendChild(button('Chercher à nouveau', '', function () { fillNetworks(list); }));
+    if (repair) box.appendChild(button('Fermer', 'no', closeRepair));
     fillNetworks(list);
   }
 
@@ -130,7 +131,7 @@
       if (st.wifi === chosen.ssid && st.internet) {
         clearInterval(wifiTimer);
         box.appendChild(el('p', 'welcome-ok', 'C\'est bon, la tablette a internet !'));
-        setTimeout(function () { android().wifiDone(); }, 1500);
+        setTimeout(finishWifi, 1500);
       } else if (tries > 20) {
         clearInterval(wifiTimer);
         box.appendChild(el('p', 'welcome-error', 'La connexion n\'a pas marché. Vérifiez le mot de passe.'));
@@ -138,6 +139,57 @@
         box.appendChild(button('Choisir un autre réseau', '', function () { current = ''; showWifi(); }));
       }
     }, 1500);
+  }
+
+  // ---------- Wifi plus tard : bouton « Wifi » de l'accueil quand internet manque ----------
+
+  var repair = false;
+
+  function finishWifi() {
+    if (repair) closeRepair();
+    else android().wifiDone();
+  }
+
+  function closeRepair() {
+    repair = false;
+    clearInterval(wifiTimer);
+    if (root) root.setAttribute('hidden', '');
+    current = '';
+  }
+
+  // Code PIN donné à l'installation : Mamie ne change pas le wifi par erreur.
+  function askPin(onOk) {
+    var box = screen('Code de la famille', 'Tapez le code à 4 chiffres pour régler le wifi.');
+    var shown = el('p', 'welcome-code', '');
+    box.appendChild(shown);
+    var typed = '';
+    var pad = el('div', 'welcome-pad');
+    var keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '⌫', '0', 'OK'];
+    for (var i = 0; i < keys.length; i++) {
+      (function (k) {
+        pad.appendChild(button(k, k === 'OK' ? 'primary' : '', function () {
+          if (k === '⌫') typed = typed.slice(0, -1);
+          else if (k === 'OK') {
+            if (android().checkPin(typed)) { onOk(); return; }
+            typed = '';
+            shown.textContent = 'Code incorrect';
+            return;
+          } else if (typed.length < 8) typed += k;
+          shown.textContent = new Array(typed.length + 1).join('•');
+        }));
+      })(keys[i]);
+    }
+    box.appendChild(pad);
+    box.appendChild(button('Fermer', 'no', closeRepair));
+  }
+
+  function openRepair() {
+    ensureRoot();
+    repair = true;
+    current = 'repair';
+    root.removeAttribute('hidden');
+    if (android().hasPin && android().hasPin()) askPin(showWifi);
+    else showWifi();
   }
 
   // ---------- 3. Code et QR code ----------
@@ -196,7 +248,9 @@
       else if (s.step === 'pair') showPair(s);
       else if (s.step === 'confirm') showConfirm(s);
     },
+    openWifi: openRepair,
     hide: function () {
+      if (repair) return; // le réglage du wifi en cours reste affiché
       if (!root) return;
       root.setAttribute('hidden', '');
       current = '';

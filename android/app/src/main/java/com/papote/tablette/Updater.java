@@ -39,6 +39,7 @@ final class Updater {
             long current = currentVersion(context);
             if (latest <= current) return;
             Log.i(TAG, "Mise à jour " + current + " -> " + latest);
+            Journal.log(context, "Mise à jour " + current + " -> " + latest);
             // L'APK est rangé sur GitHub (Firebase gratuit refuse les APK), la version sur Firebase.
             byte[] apk = download(feed.getString("url"));
             if (!sha256(apk).equalsIgnoreCase(feed.getString("sha256"))) {
