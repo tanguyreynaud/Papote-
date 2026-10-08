@@ -310,8 +310,10 @@
       next.style.opacity = '1';
     });
     signWithFace($('photo-who'), p, p.authorName + ', ' + dayLabel(p.createdAt));
-    $('photo-text').textContent = p.text || '';
-    show($('photo-text'), !!p.text);
+    var partLabel = p.parts > 1 ? 'Photo ' + p.part + ' sur ' + p.parts : '';
+    var caption = p.text && partLabel ? p.text + ' · ' + partLabel : (p.text || partLabel);
+    $('photo-text').textContent = caption;
+    show($('photo-text'), !!caption);
     if (photoIndex >= photos.length - 1) $('photo-prev').setAttribute('disabled', ''); else $('photo-prev').removeAttribute('disabled');
     if (photoIndex === 0) $('photo-next').setAttribute('disabled', ''); else $('photo-next').removeAttribute('disabled');
     markSeen(p);
@@ -520,7 +522,19 @@
     photos = [];
     for (var j = 0; j < posts.length; j++) {
       if (seenBefore[posts[j].id]) posts[j].seen = true;
-      if (posts[j].image) photos.push(posts[j]);
+      if (!posts[j].image) continue;
+      // Envoi de plusieurs photos : chacune a sa place dans la galerie, avec le même mot.
+      var extra = posts[j].images || [];
+      posts[j].part = 1;
+      posts[j].parts = extra.length + 1;
+      photos.push(posts[j]);
+      for (var k = 0; k < extra.length; k++) {
+        var copy = {};
+        for (var key in posts[j]) if (posts[j].hasOwnProperty(key)) copy[key] = posts[j][key];
+        copy.image = extra[k];
+        copy.part = k + 2;
+        photos.push(copy);
+      }
     }
     if (isShown('view-setup')) showView('view-home');
     setBackdrops();

@@ -63,6 +63,9 @@ final class Sync {
         String imagePath;
         String audioPath;
         String videoPath;
+        /** Envoi de plusieurs photos : adresses et fichiers des photos 2 à 5. */
+        List<String> extraUrls = new ArrayList<>();
+        List<String> extraPaths = new ArrayList<>();
         long duration;
         long chunks;
         String mime;
@@ -298,6 +301,7 @@ final class Sync {
                 p.imagePath = old.imagePath;
                 p.audioPath = old.audioPath;
                 p.videoPath = old.videoPath;
+                p.extraPaths = old.extraPaths;
             } else if (loadedOnce && p.seenAt == 0 && !"reply".equals(p.type)) {
                 newArrival = true;
             }
@@ -310,7 +314,11 @@ final class Sync {
             for (String id : gone) {
                 posts.remove(id);
                 File[] files = imageDir.listFiles();
-                if (files != null) for (File f : files) if (f.getName().startsWith(id + ".")) f.delete();
+                if (files != null) {
+                    for (File f : files) {
+                        if (f.getName().startsWith(id + ".") || f.getName().startsWith(id + "_")) f.delete();
+                    }
+                }
             }
         }
         loadedOnce = true;
@@ -323,7 +331,7 @@ final class Sync {
 
     private JSONObject postsQuery(boolean full) throws JSONException {
         JSONArray fields = new JSONArray();
-        for (String f : new String[]{"type", "text", "authorName", "authorUid", "createdAt", "seenAt", "hearts", "duration", "chunks", "mime", "imageUrl", "videoUrl"}) {
+        for (String f : new String[]{"type", "text", "authorName", "authorUid", "createdAt", "seenAt", "hearts", "duration", "chunks", "mime", "imageUrl", "videoUrl", "photos"}) {
             fields.put(new JSONObject().put("fieldPath", f));
         }
         JSONObject q = new JSONObject()
@@ -371,6 +379,18 @@ final class Sync {
         p.authorUid = Firebase.str(f, "authorUid");
         p.imageUrl = Firebase.str(f, "imageUrl");
         p.videoUrl = Firebase.str(f, "videoUrl");
+        // photos : [{ imageUrl, storagePath, thumb }, …], la 1re étant aussi dans imageUrl.
+        JSONObject photosValue = f.optJSONObject("photos");
+        JSONArray items = photosValue == null || photosValue.optJSONObject("arrayValue") == null ? null
+                : photosValue.optJSONObject("arrayValue").optJSONArray("values");
+        if (items != null) {
+            for (int i = 1; i < items.length() && i < 5; i++) {
+                JSONObject map = items.optJSONObject(i) == null ? null : items.optJSONObject(i).optJSONObject("mapValue");
+                JSONObject mf = map == null ? null : map.optJSONObject("fields");
+                String url = mf == null ? null : Firebase.str(mf, "imageUrl");
+                if (url != null) p.extraUrls.add(url);
+            }
+        }
         JSONObject created = f.optJSONObject("createdAt");
         p.createdAtRaw = created == null ? null : created.optString("timestampValue", null);
         p.createdAt = Firebase.parseTimestamp(p.createdAtRaw);
@@ -435,6 +455,25 @@ final class Sync {
             }
             if (photo) p.imagePath = LocalContent.mediaUrl(file.getName());
             else p.audioPath = LocalContent.mediaUrl(file.getName());
+        }
+        // Envoi de plusieurs photos : les suivantes, rangées en {id}_1.jpg, {id}_2.jpg…
+        for (Post p : posts.values()) {
+            if (!"photo".equals(p.type) || p.extraUrls.isEmpty() || p.imagePath == null) continue;
+            if (p.extraPaths.size() == p.extraUrls.size()) continue;
+            List<String> paths = new ArrayList<>();
+            for (int i = 0; i < p.extraUrls.size(); i++) {
+                File f = new File(imageDir, p.id + "_" + (i + 1) + ".jpg");
+                if (!f.exists()) {
+                    try {
+                        f = downloadToFile(p.extraUrls.get(i), p.id + "_" + (i + 1), "jpg");
+                    } catch (Exception e) {
+                        Log.w(TAG, "Photo " + p.id + " n°" + (i + 2), e);
+                        break;
+                    }
+                }
+                paths.add(LocalContent.mediaUrl(f.getName()));
+            }
+            p.extraPaths = paths;
         }
     }
 
@@ -675,6 +714,7 @@ final class Sync {
                         .put("seen", p.seenAt > 0)
                         .put("hearts", p.hearts)
                         .put("image", p.imagePath == null ? JSONObject.NULL : p.imagePath)
+                        .put("images", new JSONArray(p.extraPaths))
                         .put("audio", p.audioPath == null ? JSONObject.NULL : p.audioPath)
                         .put("video", p.videoPath == null ? JSONObject.NULL : p.videoPath)
                         .put("duration", p.duration));
