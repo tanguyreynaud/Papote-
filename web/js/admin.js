@@ -13,7 +13,7 @@ import {
   getStorage, ref, uploadBytes, getDownloadURL,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-storage.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-functions.js';
-import { setupSim, refreshSim } from './sim.js';
+import { refreshSim } from './sim.js';
 
 const app = initializeApp({
   apiKey: 'AIzaSyAvoivJR8p-u2VxUWzlyHzTgP20-5ZG_-E',
@@ -27,7 +27,6 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
 const functions = getFunctions(app, 'europe-west1');
-setupSim(db);
 
 const $ = (id) => document.getElementById(id);
 const OFFLINE_MS = 45 * 60_000;

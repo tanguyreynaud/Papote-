@@ -123,11 +123,6 @@ service cloud.firestore {
     }
 
     // Commandes reçues de Stripe (écrites par le serveur) : visibles de l'administrateur seulement.
-    // Registre des cartes SIM (saisi par l'administrateur, avant même que la tablette existe).
-    match /simLines/{id} {
-      allow read, write: if isAdmin();
-    }
-
     match /commandes/{id} {
       allow read: if isAdmin();
       allow write: if false;
