@@ -27,6 +27,11 @@
 
   function $(id) { return document.getElementById(id); }
   function android() { return window.PapoteAndroid; }
+
+  // Erreurs de la page notées dans le journal de la tablette (envoyé à la famille).
+  window.onerror = function (msg, src, line) {
+    try { if (window.PapoteAndroid && window.PapoteAndroid.logError) window.PapoteAndroid.logError(msg + ' @' + src + ':' + line); } catch (e) { /* rien */ }
+  };
   function show(el, visible) {
     if (visible) el.removeAttribute('hidden'); else el.setAttribute('hidden', '');
   }

@@ -70,6 +70,8 @@ public class MainActivity extends Activity implements Sync.Listener {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         prefs = getSharedPreferences("papote", MODE_PRIVATE);
+        Journal.catchCrashes(this);
+        Journal.log(this, "Démarrage de Papote " + appVersionName());
 
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
                 | WindowManager.LayoutParams.FLAG_FULLSCREEN
@@ -290,6 +292,7 @@ public class MainActivity extends Activity implements Sync.Listener {
         /** La nuit : écran noir et luminosité au minimum ; le jour : luminosité normale. */
         @JavascriptInterface
         public void setSleep(boolean asleep) {
+            Journal.log(MainActivity.this, asleep ? "Veille de nuit : écran noir" : "Fin de la veille de nuit");
             handler.post(() -> {
                 WindowManager.LayoutParams lp = getWindow().getAttributes();
                 float brightness = asleep ? 0.01f : WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
@@ -370,6 +373,12 @@ public class MainActivity extends Activity implements Sync.Listener {
         }
 
         /** Code PIN de la famille (donné à l'installation) pour régler le wifi plus tard. */
+        /** Erreurs de la page, notées dans le journal. */
+        @JavascriptInterface
+        public void logError(String message) {
+            Journal.log(MainActivity.this, "Erreur page : " + message);
+        }
+
         @JavascriptInterface
         public boolean hasPin() {
             return prefs.getString("pin", null) != null;
@@ -476,6 +485,14 @@ public class MainActivity extends Activity implements Sync.Listener {
 
     // ---------- Mode kiosque ----------
 
+    private String appVersionName() {
+        try {
+            return getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+        } catch (Exception e) {
+            return "?";
+        }
+    }
+
     private static final String[] RESTRICTIONS = {
             UserManager.DISALLOW_OUTGOING_CALLS,
             UserManager.DISALLOW_SMS,
@@ -522,6 +539,7 @@ public class MainActivity extends Activity implements Sync.Listener {
         @Override
         public void onReceive(Context context, Intent intent) {
             int hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY);
+            Journal.log(MainActivity.this, "Écran éteint (bouton marche/arrêt ou système)");
             if (kioskPaused() || hour >= 23 || hour < 7) return;
             handler.post(() -> {
                 try {
@@ -663,6 +681,7 @@ public class MainActivity extends Activity implements Sync.Listener {
                 PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
                 if (!pm.isInteractive()) {
                     Log.i(TAG, "Journée : on rallume l'écran");
+                    Journal.log(MainActivity.this, "Journée : écran trouvé éteint, rallumé");
                     PowerManager.WakeLock wl = pm.newWakeLock(PowerManager.SCREEN_BRIGHT_WAKE_LOCK
                             | PowerManager.ACQUIRE_CAUSES_WAKEUP, "papote:matin");
                     wl.acquire(10_000);
