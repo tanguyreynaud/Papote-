@@ -794,3 +794,14 @@ button:disabled { opacity: .45; cursor: default; }
 .shot-strip .shot-frame { flex: 0 0 100%; scroll-snap-align: center; }
 .shot-strip img { max-height: 75vh; object-fit: contain; }
 .shot-count { position: absolute; right: 10px; top: 10px; padding: 3px 10px; border-radius: 999px; background: rgba(0, 0, 0, .6); color: #fff; font-size: 13px; font-weight: 700; }
+
+/* ---------- Abonnement ---------- */
+
+.abo-banner { display: flex; align-items: center; gap: 12px; margin: 0 0 16px; padding: 12px 14px; border-radius: 14px; background: color-mix(in srgb, var(--danger) 12%, var(--surface)); color: var(--danger); font-weight: 600; }
+.abo-banner p { margin: 0; flex: 1; font-size: 15px; }
+.abo-status { margin: 4px 0; font-size: 18px; font-weight: 700; }
+.abo-status.s-actif, .abo-status.s-offert { color: var(--ok); }
+.abo-status.s-impaye, .abo-status.s-suspendu, .abo-status.s-resilie, .abo-status.s-aucun { color: var(--danger); }
+.abo-formules { display: grid; gap: 10px; margin: 10px 0; }
+.abo-formule { flex-direction: column; align-items: flex-start; gap: 2px; padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--bg); text-align: left; }
+.abo-formule span { color: var(--muted); font-weight: 500; font-size: 15px; }

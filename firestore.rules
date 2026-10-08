@@ -44,6 +44,13 @@ service cloud.firestore {
       return request.auth.token.email.lower();
     }
 
+    // Abonnement (écrit par le serveur seulement) : champ absent ou statut offert, actif ou impayé
+    // = tout fonctionne ; suspendu, résilié ou aucun = envois, agenda et appels bloqués.
+    function abonnementOk(fid) {
+      let abo = get(familyPath(fid)).data.get('abonnement', null);
+      return abo == null || abo.get('statut', '') in ['offert', 'actif', 'impaye'];
+    }
+
     function invitePath(code) {
       return /databases/$(database)/documents/invites/$(code);
     }
@@ -113,6 +120,12 @@ service cloud.firestore {
         && request.resource.data.status in ['confirmed', 'refused'];
       allow delete: if signedIn()
         && (request.auth.uid == resource.data.tabletUid || request.time > resource.data.expiresAt);
+    }
+
+    // Commandes reçues de Stripe (écrites par le serveur) : visibles de l'administrateur seulement.
+    match /commandes/{id} {
+      allow read: if isAdmin();
+      allow write: if false;
     }
 
     match /config/{name} {
@@ -253,7 +266,7 @@ service cloud.firestore {
         allow read: if isMember(fid);
         // Transfert des anciennes photos et vidéos vers Storage, depuis le tableau de bord.
         allow read, update: if isAdmin();
-        allow create: if isMember(fid)
+        allow create: if isMember(fid) && abonnementOk(fid)
           && request.resource.data.keys().hasOnly(['type', 'text', 'image', 'thumb', 'hasMedia', 'audio', 'duration', 'chunks', 'mime', 'replyTo', 'authorUid', 'authorName', 'createdAt', 'seenAt', 'hearts', 'imageUrl', 'videoUrl', 'storagePath', 'photos'])
           // Plusieurs photos dans un envoi : 5 au plus.
           && (!('photos' in request.resource.data) || (request.resource.data.photos is list && request.resource.data.photos.size() <= 5))
@@ -299,7 +312,7 @@ service cloud.firestore {
       // Rappels et agenda : la famille les gère, la tablette note « c'est fait ».
       match /reminders/{rid} {
         allow read: if isMember(fid);
-        allow create, update: if isMember(fid)
+        allow create, update: if isMember(fid) && abonnementOk(fid)
           && request.resource.data.keys().hasOnly(['title', 'kind', 'time', 'repeat', 'date', 'days', 'createdBy', 'createdAt', 'lastAck'])
           && request.resource.data.title is string
           && request.resource.data.title.size() > 0
@@ -313,7 +326,7 @@ service cloud.firestore {
       // Anniversaires de la famille : la tablette les rappelle le jour J.
       match /birthdays/{bid} {
         allow read: if isMember(fid);
-        allow create, update: if isMember(fid)
+        allow create, update: if isMember(fid) && abonnementOk(fid)
           && request.resource.data.keys().hasOnly(['name', 'day', 'month', 'year', 'createdBy', 'createdAt'])
           && request.resource.data.name is string
           && request.resource.data.name.size() > 0
@@ -330,7 +343,7 @@ service cloud.firestore {
       // Appels vidéo : la famille appelle la tablette (signalisation WebRTC).
       match /calls/{cid} {
         allow read: if isMember(fid);
-        allow create: if isMember(fid)
+        allow create: if isMember(fid) && abonnementOk(fid)
           && request.resource.data.keys().hasOnly(['callerUid', 'callerName', 'calleeUid', 'calleeName', 'state', 'offer', 'answer', 'createdAt', 'endedAt'])
           && request.resource.data.callerUid == request.auth.uid
           && request.resource.data.state == 'ringing';

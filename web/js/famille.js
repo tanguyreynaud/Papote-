@@ -13,6 +13,9 @@ import {
   MAX_VIDEO_CHUNKS, VIDEO_CHUNK,
 } from './firebase.js';
 import { askConfirm, notice } from './ui.js';
+import {
+  abonnementOk, FORMULES, LIBELLES, ouvrirPortail, payer, rattacherCommande,
+} from './abonnement.js';
 import { startCall } from './appel.js';
 import { prepareVideo } from './video.js';
 import { startAgenda, stopAgenda } from './agenda.js';
@@ -500,6 +503,7 @@ $('form-message').addEventListener('submit', async (e) => {
   e.preventDefault();
   const text = $('message-text').value.trim();
   if (!text) { $('message-text').focus(); return; }
+  if (paused()) return;
   $('btn-message').disabled = true;
   const item = { kind: 'message', text, author: { authorUid: session.uid, authorName: session.member.name } };
   try {
@@ -560,6 +564,7 @@ async function compressPhoto(file) {
 }
 
 function openAdd(kind) {
+  if (paused()) return;
   addMode = kind;
   pendingPhotos = [];
   pendingVideo = null;
@@ -1156,6 +1161,7 @@ function callErrorMessage(err) {
 
 $('tile-call').addEventListener('click', async () => {
   if (currentCall) return;
+  if (paused()) return;
   const allowed = await cameraAllowed();
   if (allowed) enterCallScreen();
   $('call').hidden = false;
@@ -1427,6 +1433,90 @@ document.querySelectorAll('[data-theme-choice]').forEach((btn) => btn.addEventLi
 }));
 applyTheme(currentTheme());
 
+// ---------- Abonnement ----------
+
+const ABO_OK_KEY = 'papote.retourPaiement';
+const dateLongue = (ts) => (ts ? toDate(ts).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : '');
+
+// Abonnement en pause : envois, agenda et appels bloqués, avec une explication.
+function paused() {
+  if (abonnementOk(session?.family)) return false;
+  notice(amFamilyAdmin()
+    ? "Papote est en pause : l'abonnement de la famille doit être réglé. Allez dans Réglages > Abonnement."
+    : "Papote est en pause : l'abonnement de la famille doit être réglé par un responsable de la famille.");
+  return true;
+}
+
+async function withAboError(fn) {
+  $('abo-error').hidden = true;
+  try {
+    await fn();
+  } catch (err) {
+    console.error(err);
+    $('abo-error').textContent = err.code === 'functions/not-found'
+      ? `Aucun paiement trouvé pour ${myEmail()}. Utilisez la même adresse que sur le site.`
+      : "L'opération n'a pas pu aboutir. Réessayez dans un instant.";
+    $('abo-error').hidden = false;
+  }
+}
+
+$('btn-portail').addEventListener('click', () => withAboError(() => ouvrirPortail(session.fid)));
+$('abo-banner-btn').addEventListener('click', () => {
+  if (session.family.abonnement?.statut === 'impaye') withAboError(() => ouvrirPortail(session.fid));
+  else openPage('settings');
+});
+$('btn-rattacher').addEventListener('click', () => withAboError(async () => {
+  await rattacherCommande(session.fid);
+  toast('Paiement retrouvé : abonnement rattaché');
+}));
+$('abo-formules').replaceChildren(...FORMULES.map((f) => {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'abo-formule';
+  b.innerHTML = '<strong></strong><span></span>';
+  b.querySelector('strong').textContent = f.titre;
+  b.querySelector('span').textContent = f.prix;
+  b.addEventListener('click', () => withAboError(() => payer(session.fid, f.formule, f.tablette)));
+  return b;
+}));
+
+function renderAbonnement() {
+  const abo = session.family.abonnement;
+  const admin = amFamilyAdmin();
+  const statut = abo?.statut;
+  $('abo-card').hidden = !admin || !abo;
+  if (abo) {
+    $('abo-status').textContent = LIBELLES[statut] || statut;
+    $('abo-status').className = `abo-status s-${statut}`;
+    const details = [];
+    if (abo.formule) details.push(`Formule ${abo.formule === 'sim' ? 'carte SIM' : 'Wi-Fi'}, tablette ${abo.tablette === 'incluse' ? 'incluse' : 'achetée'}`);
+    if (abo.resiliationPrevue && abo.finPeriode) details.push(`Résiliation prévue le ${dateLongue(abo.finPeriode)}`);
+    else if (abo.finPeriode && statut === 'actif') details.push(`Prochaine échéance le ${dateLongue(abo.finPeriode)}`);
+    $('abo-details').textContent = details.join(' · ');
+    $('btn-portail').hidden = !abo.stripeCustomerId || statut === 'offert';
+    $('abo-choices').hidden = !['aucun', 'resilie', 'suspendu'].includes(statut);
+  }
+  // Bandeaux : retard de paiement (responsables), pause (tout le monde).
+  let text = '';
+  if (statut === 'impaye' && admin) {
+    text = `Le dernier paiement a échoué. La tablette se mettra en pause le ${dateLongue(abo.graceJusqua)}.`;
+  } else if (!abonnementOk(session.family)) {
+    text = admin
+      ? "Papote est en pause : l'abonnement de la famille doit être réglé. Tout reviendra automatiquement."
+      : "Papote est en pause : l'abonnement de la famille doit être réglé par un responsable.";
+  }
+  $('abo-banner').hidden = !text;
+  $('abo-banner-text').textContent = text;
+  $('abo-banner-btn').hidden = !admin;
+  // Retour de la page de paiement : on confirme dès que le serveur a activé l'abonnement.
+  let waiting = false;
+  try { waiting = localStorage.getItem(ABO_OK_KEY) === '1'; } catch (e) { /* rien */ }
+  if (waiting && statut === 'actif') {
+    try { localStorage.removeItem(ABO_OK_KEY); } catch (e) { /* rien */ }
+    notice('Abonnement activé. Merci !');
+  }
+}
+
 // ---------- Taille du texte sur la tablette ----------
 
 const TEXT_SIZES = ['normal', 'grande', 'tres-grande'];
@@ -1489,6 +1579,7 @@ $('btn-delete-family').addEventListener('click', async () => {
 });
 
 function applyFamily() {
+  renderAbonnement();
   const admin = amFamilyAdmin();
   $('text-size-card').hidden = !admin;
   $('btn-delete-family').hidden = !admin;
@@ -1982,6 +2073,9 @@ async function start() {
   sharedPending = params.has('partage');
   // Arrivé par le lien ou le QR code d'invitation : le code est gardé le temps de se connecter.
   if (params.get('code')) rememberInviteCode(params.get('code'));
+  if (params.get('abonnement') === 'ok') {
+    try { localStorage.setItem('papote.retourPaiement', '1'); } catch (e) { /* rien */ }
+  }
   // QR code affiché par une nouvelle tablette : on ouvre « Ajouter ma tablette » après la connexion.
   if (params.get('tablette')) rememberPairCode(params.get('tablette'));
   try {

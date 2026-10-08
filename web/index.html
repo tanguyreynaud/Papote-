@@ -186,6 +186,10 @@
         <select id="family-switch" class="family-switch" aria-label="Changer de famille" hidden></select>
       </header>
       <button type="button" id="pending-banner" class="pending-banner" hidden></button>
+      <div id="abo-banner" class="abo-banner" hidden>
+        <p id="abo-banner-text"></p>
+        <button type="button" id="abo-banner-btn" class="primary small-btn" hidden>Régler</button>
+      </div>
       <p id="activity" class="activity" hidden></p>
       <p id="outbox" class="outbox" hidden></p>
       <div id="install-card" class="card install-card" hidden>
@@ -335,6 +339,18 @@
         <div class="card">
           <h2>Membres</h2>
           <ul id="members" class="members"></ul>
+        </div>
+        <div id="abo-card" class="card" hidden>
+          <h2>Abonnement</h2>
+          <p id="abo-status" class="abo-status"></p>
+          <p id="abo-details" class="muted small"></p>
+          <button type="button" id="btn-portail" class="primary wide" hidden>Gérer mon abonnement</button>
+          <div id="abo-choices" hidden>
+            <p class="muted small">Choisissez la formule. Le paiement se fait sur la page sécurisée de Stripe.</p>
+            <div id="abo-formules" class="abo-formules"></div>
+            <button type="button" id="btn-rattacher" class="link wide">J'ai déjà payé sur le site</button>
+          </div>
+          <p id="abo-error" class="error" hidden></p>
         </div>
         <div id="text-size-card" class="card" hidden>
           <h2>Taille du texte sur la tablette</h2>

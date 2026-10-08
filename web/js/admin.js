@@ -69,7 +69,31 @@ onAuthStateChanged(auth, (user) => {
 
 // ---------- Familles et tablettes ----------
 
+// Commandes payées sur le site, tablette à préparer (écrites par le serveur Stripe).
+async function loadOrders() {
+  try {
+    const snap = await getDocs(query(collection(db, 'commandes'), where('expedition', '==', 'a-preparer')));
+    const list = snap.docs.map((d) => d.data())
+      .sort((a, b) => (toDate(a.creeLe)?.getTime() || 0) - (toDate(b.creeLe)?.getTime() || 0));
+    $('orders-empty').hidden = list.length > 0;
+    $('orders').replaceChildren(...list.map((c) => {
+      const li = document.createElement('li');
+      const a = c.livraison?.adresse || {};
+      const adresse = [a.line1, a.line2, `${a.postal_code || ''} ${a.city || ''}`.trim(), a.country].filter(Boolean).join(', ');
+      li.innerHTML = '<strong></strong><span class="muted small"></span><span></span>';
+      li.querySelector('strong').textContent = `${c.livraison?.nom || c.nom || c.email} · ${c.formule === 'sim' ? 'carte SIM' : 'Wi-Fi'}, tablette ${c.tablette === 'incluse' ? 'incluse' : 'achetée'}`;
+      li.querySelector('.muted').textContent = `${c.email}${c.telephone ? ` · ${c.telephone}` : ''} · commandé ${ago(toDate(c.creeLe))}${c.fid ? ' · famille créée' : ''}`;
+      li.querySelector('span:last-child').textContent = adresse || 'Adresse non fournie';
+      return li;
+    }));
+  } catch (err) {
+    console.warn('Commandes illisibles', err);
+    $('orders-empty').hidden = false;
+  }
+}
+
 async function load() {
+  loadOrders();
   $('loading-families').hidden = false;
   try {
     const [famSnap, tabletSnap] = await Promise.all([
