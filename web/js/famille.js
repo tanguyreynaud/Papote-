@@ -1329,6 +1329,26 @@ $('btn-new-code').addEventListener('click', async () => {
   }
 });
 
+// ---------- Apparence : clair, sombre ou automatique (propre à ce téléphone) ----------
+
+const THEME_KEY = 'papote.theme';
+
+function currentTheme() {
+  try { return localStorage.getItem(THEME_KEY) || 'auto'; } catch (e) { return 'auto'; }
+}
+
+function applyTheme(theme) {
+  if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
+  else delete document.documentElement.dataset.theme;
+  document.querySelectorAll('[data-theme-choice]').forEach((b) => b.classList.toggle('active', b.dataset.themeChoice === theme));
+}
+
+document.querySelectorAll('[data-theme-choice]').forEach((btn) => btn.addEventListener('click', () => {
+  try { localStorage.setItem(THEME_KEY, btn.dataset.themeChoice); } catch (e) { /* rien */ }
+  applyTheme(btn.dataset.themeChoice);
+}));
+applyTheme(currentTheme());
+
 // ---------- Taille du texte sur la tablette ----------
 
 const TEXT_SIZES = ['normal', 'grande', 'tres-grande'];

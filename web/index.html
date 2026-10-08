@@ -13,6 +13,10 @@
   <meta name="apple-mobile-web-app-title" content="Papote">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <link rel="stylesheet" href="css/famille.css">
+  <script>
+    // Thème choisi dans Réglages, appliqué avant l'affichage pour éviter un flash.
+    try { const t = localStorage.getItem('papote.theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) { /* rien */ }
+  </script>
 </head>
 <body>
   <!-- Icônes au trait, réutilisées partout avec <use href="#i-…"> -->
@@ -301,6 +305,14 @@
             <button type="button" class="seg" data-size="normal">Normale</button>
             <button type="button" class="seg" data-size="grande">Grande</button>
             <button type="button" class="seg" data-size="tres-grande">Très grande</button>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Apparence</h2>
+          <div class="segmented" role="radiogroup" aria-label="Apparence">
+            <button type="button" class="seg" data-theme-choice="light">Clair</button>
+            <button type="button" class="seg" data-theme-choice="dark">Sombre</button>
+            <button type="button" class="seg" data-theme-choice="auto">Automatique</button>
           </div>
         </div>
         <details class="card data-card">
