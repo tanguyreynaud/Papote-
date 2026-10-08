@@ -2,7 +2,9 @@
 //
 //   commander          GET  depuis le site vitrine : ouvre la page de paiement Stripe
 //   creerPaiement      appel depuis l'appli famille : paiement pour une famille existante
-//   portailClient      appel depuis l'appli famille : carte bancaire, factures, résiliation
+//   portailClient      appel depuis l'appli famille : carte bancaire, factures
+//   resilierAbonnement appel depuis l'appli famille : résilie à la fin de l'engagement de 12 mois
+//   annulerResiliation appel depuis l'appli famille : garde l'abonnement
 //   rattacherCommande  appel depuis l'appli famille : relie une commande du site à la famille
 //   stripeWebhook      Stripe prévient ici de chaque paiement ou changement d'abonnement
 //   finDeGrace         chaque jour : suspend les familles dont le délai de grâce est dépassé
@@ -45,10 +47,15 @@ function versTimestamp(millis) {
   return millis == null ? null : Timestamp.fromMillis(millis);
 }
 
-function finDePeriode(abo) {
+function finDePeriodeMs(abo) {
   const fin = abo.current_period_end
     || (abo.items && abo.items.data[0] && abo.items.data[0].current_period_end);
-  return fin ? Timestamp.fromMillis(fin * 1000) : null;
+  return fin ? fin * 1000 : null;
+}
+
+// Engagement de 12 mois à partir de la fin de l'essai (ou du début de l'abonnement).
+function finEngagementMs(abo) {
+  return regles.finEngagement((abo.trial_end || abo.start_date) * 1000);
 }
 
 async function tarifs(formule, tablette) {
@@ -62,9 +69,15 @@ async function tarifs(formule, tablette) {
   return cles.map((cle) => ({ price: parCle[cle], quantity: 1 }));
 }
 
+// Essai gratuit de 15 jours pour un nouveau client ; pas pour un client déjà abonné une fois.
 async function sessionPaiement({ formule, tablette, fid, email, client }) {
   const metadata = { formule, tablette };
   if (fid) metadata.fid = fid;
+  const subscriptionData = { metadata };
+  if (!client) {
+    subscriptionData.trial_period_days = regles.ESSAI_JOURS;
+    subscriptionData.trial_settings = { end_behavior: { missing_payment_method: 'cancel' } };
+  }
   const params = {
     mode: 'subscription',
     line_items: await tarifs(formule, tablette),
@@ -73,7 +86,8 @@ async function sessionPaiement({ formule, tablette, fid, email, client }) {
     billing_address_collection: 'auto',
     phone_number_collection: { enabled: true },
     metadata,
-    subscription_data: { metadata },
+    subscription_data: subscriptionData,
+    payment_method_collection: 'always',
     success_url: fid ? `${APPLI_FAMILLE}?abonnement=ok` : `${SITE_VITRINE.value()}/merci.html`,
     cancel_url: fid ? APPLI_FAMILLE : `${SITE_VITRINE.value()}/#tarifs`,
   };
@@ -136,8 +150,11 @@ async function appliquer(fid, abonnementId) {
         formule: abo.metadata.formule || null,
         tablette: abo.metadata.tablette || null,
         graceJusqua: versTimestamp(graceJusqua),
-        finPeriode: finDePeriode(abo),
-        resiliationPrevue: Boolean(abo.cancel_at_period_end),
+        finPeriode: versTimestamp(finDePeriodeMs(abo)),
+        essaiJusqua: versTimestamp(abo.status === 'trialing' && abo.trial_end ? abo.trial_end * 1000 : null),
+        engagementJusqua: versTimestamp(finEngagementMs(abo)),
+        resiliationLe: versTimestamp(abo.cancel_at ? abo.cancel_at * 1000
+          : (abo.cancel_at_period_end ? finDePeriodeMs(abo) : null)),
         stripeCustomerId: abo.customer,
         stripeSubscriptionId: abo.id,
         majLe: FieldValue.serverTimestamp(),
@@ -223,6 +240,38 @@ exports.portailClient = onCall({ secrets: [STRIPE_SECRET] }, async (request) => 
     locale: 'fr',
   });
   return { url: session.url };
+});
+
+// Résiliation en ligne : l'abonnement s'arrête à la fin de l'engagement, ou à la fin du mois
+// déjà payé si l'engagement est terminé. Pendant l'essai gratuit : arrêt à la fin de l'essai.
+exports.resilierAbonnement = onCall({ secrets: [STRIPE_SECRET] }, async (request) => {
+  const { uid } = compteVerifie(request);
+  const { fid } = request.data || {};
+  const fam = await familleDuResponsable(fid, uid);
+  const id = fam.abonnement && fam.abonnement.stripeSubscriptionId;
+  if (!id) throw new HttpsError('failed-precondition', "Cette famille n'a pas d'abonnement.");
+  const abo = await stripe().subscriptions.retrieve(id);
+  const maintenant = Date.now();
+  const le = abo.status === 'trialing' && abo.trial_end
+    ? abo.trial_end * 1000
+    : regles.dateResiliation(finEngagementMs(abo), finDePeriodeMs(abo), maintenant);
+  await stripe().subscriptions.update(id, {
+    cancel_at: Math.ceil(le / 1000),
+    proration_behavior: 'none',
+  });
+  await appliquer(fid, id);
+  return { le };
+});
+
+exports.annulerResiliation = onCall({ secrets: [STRIPE_SECRET] }, async (request) => {
+  const { uid } = compteVerifie(request);
+  const { fid } = request.data || {};
+  const fam = await familleDuResponsable(fid, uid);
+  const id = fam.abonnement && fam.abonnement.stripeSubscriptionId;
+  if (!id) throw new HttpsError('failed-precondition', "Cette famille n'a pas d'abonnement.");
+  await stripe().subscriptions.update(id, { cancel_at: '' });
+  await appliquer(fid, id);
+  return { ok: true };
 });
 
 exports.rattacherCommande = onCall({ secrets: [STRIPE_SECRET] }, async (request) => {

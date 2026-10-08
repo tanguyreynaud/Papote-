@@ -2,7 +2,7 @@
 //
 //  1. Tarifs : 20 €, 25 €, 30 €, 35 € par mois et la tablette à 100 €, retrouvés par
 //     les fonctions grâce à leur « lookup key » (functions/abonnement.js).
-//  2. Portail client : carte bancaire, factures, résiliation en fin de mois payé.
+//  2. Portail client : carte bancaire et factures (la résiliation passe par l'appli famille).
 //  3. Webhook vers la fonction stripeWebhook (recréé à chaque lancement pour obtenir son secret).
 //  4. firebase functions:secrets:set STRIPE_SECRET et STRIPE_WEBHOOK_SECRET.
 //
@@ -93,7 +93,8 @@ async function portail(stripe) {
       invoice_history: { enabled: true },
       payment_method_update: { enabled: true },
       customer_update: { enabled: true, allowed_updates: ['email', 'address', 'phone'] },
-      subscription_cancel: { enabled: true, mode: 'at_period_end' },
+      // Résiliation depuis l'appli famille (fonction resilierAbonnement), qui respecte l'engagement.
+      subscription_cancel: { enabled: false },
     },
   });
   console.log('  Portail client : créé');

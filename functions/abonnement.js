@@ -11,6 +11,8 @@
 
 const JOUR = 24 * 60 * 60 * 1000;
 const DELAI_GRACE_JOURS = 7;
+const ESSAI_JOURS = 15;
+const ENGAGEMENT_MOIS = 12;
 
 const STATUTS_OK = ['offert', 'actif', 'impaye'];
 
@@ -72,6 +74,25 @@ function graceDepassee(abonnement, maintenant) {
   return grace != null && grace <= maintenant;
 }
 
+// Fin de l'engagement de 12 mois, compté à partir de la fin de l'essai gratuit.
+// debut : en millisecondes (fin d'essai, ou début de l'abonnement sans essai).
+function finEngagement(debut) {
+  const d = new Date(debut);
+  const jour = d.getUTCDate();
+  d.setUTCDate(1);
+  d.setUTCMonth(d.getUTCMonth() + ENGAGEMENT_MOIS);
+  // 31 janvier + 12 mois reste le 31 janvier ; 29 février devient le 28 février.
+  const dernierJour = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
+  d.setUTCDate(Math.min(jour, dernierJour));
+  return d.getTime();
+}
+
+// Date d'arrêt d'une résiliation demandée maintenant : fin du mois déjà payé,
+// et jamais avant la fin de l'engagement.
+function dateResiliation(finEngagementMs, finPeriodeMs, maintenant) {
+  return Math.max(finEngagementMs || 0, finPeriodeMs || 0, maintenant);
+}
+
 // Faut-il appliquer un événement Stripe à cette famille ? Une famille offerte ne change jamais.
 function peutModifier(actuel) {
   return !(actuel && actuel.statut === 'offert');
@@ -79,6 +100,10 @@ function peutModifier(actuel) {
 
 module.exports = {
   DELAI_GRACE_JOURS,
+  ESSAI_JOURS,
+  ENGAGEMENT_MOIS,
+  finEngagement,
+  dateResiliation,
   STATUTS_OK,
   TARIFS,
   TARIF_TABLETTE,
