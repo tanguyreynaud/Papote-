@@ -214,6 +214,8 @@ public class MainActivity extends Activity implements Sync.Listener {
             callPage("onLeave", new JSONObject());
             return;
         }
+        String canal = intent.getStringExtra("canal");
+        if (canal != null) prefs.edit().putString("canal", "test".equals(canal) ? "test" : "").apply();
         String numbers = intent.getStringExtra("numeros");
         if (numbers != null) prefs.edit().putString("alertNumbers", numbers.replaceAll("[^0-9+,]", "")).apply();
         String pin = intent.getStringExtra("pin");

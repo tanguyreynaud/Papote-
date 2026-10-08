@@ -4,21 +4,27 @@
 # 2. Enregistrer les changements avec git (commit) : seul le code enregistré est publié.
 # 3. Lancer : powershell -ExecutionPolicy Bypass -File installation\publier-mise-a-jour.ps1
 #
+# Mises à jour par étapes :
+#   -Test       : seulement les tablettes de test (installées avec -Canal test)
+#   (sans -Test) : toutes les tablettes
+#   promouvoir-mise-a-jour.ps1 : passe la version de test à toutes les tablettes, sans recompiler.
+#
 # Les tablettes (en mode kiosque) vérifient toutes les 6 heures et s'installent la mise à jour
 # toutes seules, sans rien demander.
+param([switch]$Test)
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
-$feed = 'https://papote-maj.web.app/version.json'
+. (Join-Path $PSScriptRoot 'maj-commun.ps1')
 
 # Version du code enregistré
 $gradle = git -C $root show HEAD:android/app/build.gradle.kts | Out-String
 $code = [int]([regex]::Match($gradle, 'versionCode = (\d+)').Groups[1].Value)
 $name = [regex]::Match($gradle, 'versionName = "([^"]+)"').Groups[1].Value
 
-# Version déjà publiée
-$published = 0
-try { $published = [int](Invoke-RestMethod -Uri $feed -Headers @{ 'Cache-Control' = 'no-cache' }).versionCode } catch { }
+# Versions déjà publiées
+$feeds = Get-PublishedFeeds
+$published = [int]($(if ($Test) { $feeds.test } else { $feeds.stable }).versionCode)
 if ($code -le $published) {
     throw "La version $code est déjà publiée (en ligne : $published). Augmentez versionCode dans android/app/build.gradle.kts puis faites un commit."
 }
@@ -38,31 +44,15 @@ Push-Location "$work\android"
 try { & .\gradlew.bat assembleRelease -q; if ($LASTEXITCODE) { throw "Échec de la compilation" } } finally { Pop-Location }
 $apk = "$work\android\app\build\outputs\apk\release\app-release.apk"
 
-# L'APK est rangé dans le dépôt GitHub (le Firebase gratuit refuse les APK) :
-# installation/Papote.apk, enregistré et envoyé, puis adressé par son commit.
-Copy-Item $apk (Join-Path $root 'installation\Papote.apk') -Force
-git -C $root commit -q -m "Publication de la version $name ($code)" -- installation/Papote.apk
-if ($LASTEXITCODE) { throw "Échec de l'enregistrement de installation\Papote.apk" }
-# Envoi sur GitHub, avec quelques nouvelles tentatives si le réseau hoquette
-for ($i = 1; $i -le 4; $i++) {
-    git -C $root push -q origin HEAD
-    if (-not $LASTEXITCODE) { break }
-    if ($i -eq 4) { throw "Échec de l'envoi sur GitHub" }
-    Start-Sleep -Seconds ([math]::Pow(2, $i))
-}
-$sha1 = (git -C $root rev-parse HEAD).Trim()
-$remote = (git -C $root remote get-url origin).Trim()
-$repo = [regex]::Match($remote, 'github\.com[:/](.+?)(\.git)?$').Groups[1].Value
-$url = "https://raw.githubusercontent.com/$repo/$sha1/installation/Papote.apk"
+# L'APK est rangé dans le dépôt GitHub (le Firebase gratuit refuse les APK), adressé par son commit :
+# installation/Papote.apk pour tout le monde, installation/Papote-test.apk pour les tablettes de test.
+$file = if ($Test) { 'Papote-test.apk' } else { 'Papote.apk' }
+Copy-Item $apk (Join-Path $root "installation\$file") -Force
+$entry = Save-ApkOnGitHub $file "Publication de la version $name ($code)$(if ($Test) { ' pour les tablettes de test' })"
+$entry.versionCode = $code
+$entry.versionName = $name
 
-# Le petit fichier de version, sur Firebase
-$public = Join-Path $root 'maj\public'
-if (Test-Path $public) { Remove-Item -Recurse -Force $public }
-New-Item -ItemType Directory -Force $public | Out-Null
-$sha = (Get-FileHash $apk -Algorithm SHA256).Hash.ToLower()
-$json = @{ versionCode = $code; versionName = $name; url = $url; sha256 = $sha } | ConvertTo-Json
-[System.IO.File]::WriteAllText("$public\version.json", $json, (New-Object System.Text.UTF8Encoding $false))
-
-firebase deploy --only hosting --config "$root\maj\firebase.json" --project papote-famille
-if ($LASTEXITCODE) { throw "Échec de la publication" }
-Write-Host "Version $name ($code) publiée." -ForegroundColor Green
+# Fichiers de version : la version de test suit toujours au moins la version stable.
+if ($Test) { $feeds.test = $entry } else { $feeds.stable = $entry; $feeds.test = $entry }
+Publish-Feeds $feeds
+Write-Host "Version $name ($code) publiée$(if ($Test) { ' pour les tablettes de test' } else { ' pour toutes les tablettes' })." -ForegroundColor Green

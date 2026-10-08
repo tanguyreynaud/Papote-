@@ -28,13 +28,16 @@ import javax.net.ssl.HttpsURLConnection;
 final class Updater {
     private static final String TAG = "Papote";
     private static final String FEED = "https://papote-maj.web.app/version.json";
+    /** Tablettes de test (installées avec -Canal test) : elles reçoivent les nouvelles versions en premier. */
+    private static final String FEED_TEST = "https://papote-maj.web.app/version-test.json";
 
     private Updater() { }
 
     /** À appeler hors du fil principal, seulement en mode kiosque. */
     static void check(Context context) {
         try {
-            JSONObject feed = new JSONObject(new String(download(FEED), "UTF-8"));
+            boolean test = "test".equals(context.getSharedPreferences("papote", Context.MODE_PRIVATE).getString("canal", ""));
+            JSONObject feed = new JSONObject(new String(download(test ? FEED_TEST : FEED), "UTF-8"));
             int latest = feed.getInt("versionCode");
             long current = currentVersion(context);
             if (latest <= current) return;

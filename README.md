@@ -36,9 +36,11 @@ et une app pour que la famille lui envoie photos et messages depuis iPhone ou An
 ## Publier une mise à jour
 
 1. Augmenter `versionCode` et `versionName` dans `android/app/build.gradle.kts`, puis faire un commit.
-2. Lancer `installation/publier-mise-a-jour.ps1` : il compile le code enregistré, range l'APK sur GitHub
-   et publie le numéro de version sur https://papote-maj.web.app.
-3. Les tablettes vérifient toutes les 6 heures et s'installent la nouvelle version toutes seules.
+2. Lancer `installation/publier-mise-a-jour.ps1 -Test` : seules les tablettes de test (installées avec
+   `-Canal test`) reçoivent la nouvelle version.
+3. Si tout va bien, `installation/promouvoir-mise-a-jour.ps1` la passe à toutes les tablettes, sans recompiler.
+   (Sans `-Test`, `publier-mise-a-jour.ps1` publie directement pour toutes les tablettes.)
+4. Les tablettes vérifient toutes les 6 heures et s'installent la nouvelle version toutes seules.
 
 En une commande, depuis un PowerShell dans `installation/` :
 

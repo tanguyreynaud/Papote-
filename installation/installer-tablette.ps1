@@ -14,6 +14,8 @@ param(
     [string]$Pin,
     # Numéros prévenus par SMS si la tablette (avec carte SIM) perd internet, séparés par des virgules
     [string]$Numeros,
+    # -Canal test : tablette de test, qui reçoit les nouvelles versions avant les autres
+    [string]$Canal,
     [switch]$Oui
 )
 
@@ -150,6 +152,7 @@ Say 'Appels de la carte SIM bloqués, applis inutiles désactivées.' 'Green'
 # 7. Lancement relié à la famille
 $pinArgs = @()
 if ($Numeros) { $pinArgs += @('--es', 'numeros', ($Numeros -replace '[^0-9+,]', '')) }
+if ($Canal) { $pinArgs += @('--es', 'canal', $(if ($Canal -eq 'test') { 'test' } else { 'stable' })) }
 if ($Pin -match '^[0-9]{4,8}$') { $pinArgs = @('--es', 'pin', $Pin) }
 elseif ($Pin) { Say 'Code PIN ignoré : il faut 4 à 8 chiffres.' 'Yellow' }
 if ($Code) {
