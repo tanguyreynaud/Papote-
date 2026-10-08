@@ -48,6 +48,36 @@
       <p id="loading-families" class="muted">Chargement des familles…</p>
       <ul id="families" class="families"></ul>
 
+      <section class="card sim">
+        <div class="sim-top">
+          <h2>Cartes SIM</h2>
+          <button type="button" id="sim-add" class="primary small-btn">Ajouter une ligne</button>
+        </div>
+        <p id="sim-count" class="muted small"></p>
+        <p id="sim-missing" class="sim-missing" hidden></p>
+        <form id="sim-form" class="sim-form" hidden>
+          <h3 id="sim-form-title"></h3>
+          <div class="sim-grid">
+            <label>Famille <select id="sim-fid"></select></label>
+            <label>ICCID (ou 4 derniers chiffres) <input id="sim-iccid" inputmode="numeric" autocomplete="off"></label>
+            <label>Numéro de ligne <input id="sim-numero" inputmode="tel" autocomplete="off"></label>
+            <label>Opérateur <input id="sim-operateur" placeholder="YouPrice, Free Pro…" autocomplete="off"></label>
+            <label>Identifiant client <input id="sim-idClient" autocomplete="off"></label>
+            <label>Prix (€/mois) <input id="sim-prix" inputmode="decimal" autocomplete="off"></label>
+            <label>Date d'activation <input id="sim-dateActivation" type="date"></label>
+            <label>Fin de la promo <input id="sim-finPromo" type="date"></label>
+          </div>
+          <label>Note <input id="sim-note" autocomplete="off"></label>
+          <div class="sim-actions">
+            <button type="submit" class="primary small-btn">Enregistrer</button>
+            <button type="button" id="sim-cancel" class="link small">Annuler</button>
+            <button type="button" id="sim-delete" class="link danger small">Supprimer</button>
+          </div>
+        </form>
+        <ul id="sim-lines" class="sim-lines"></ul>
+        <p id="sim-empty" class="muted small" hidden>Aucune ligne enregistrée. « Ajouter une ligne » pour commencer, même avant d'avoir la tablette.</p>
+      </section>
+
       <div class="card migrate">
         <h2>Anciennes photos et vidéos</h2>
         <p class="muted">Les envois faits avant Storage sont encore rangés dans la base. Le transfert les déplace vers Storage, sans rien changer pour les familles, et libère la base.</p>

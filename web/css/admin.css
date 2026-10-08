@@ -45,3 +45,24 @@ main.admin { max-width: 1100px; padding: calc(20px + env(safe-area-inset-top)) 1
 .orders li:last-child { border-bottom: none; }
 .orders li .small-btn { align-self: flex-start; margin-top: 6px; }
 .small-btn { min-height: 0; padding: 8px 14px; font-size: 15px; }
+
+/* ---------- Cartes SIM ---------- */
+
+.sim-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.sim-top h2 { margin: 0; }
+.sim-missing { color: var(--danger); font-weight: 600; }
+.sim-form { margin: 12px 0; padding: 14px; border-radius: 14px; background: var(--bg); }
+.sim-form h3 { margin: 0 0 6px; }
+.sim-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0 14px; }
+.sim-form label { margin: 8px 0; font-size: 14px; }
+.sim-actions { display: flex; align-items: center; gap: 16px; }
+.sim-lines { list-style: none; margin: 12px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.sim-line { margin: 0; border-left: 5px solid var(--ok); }
+.sim-line.warn { border-left-color: var(--danger); }
+.sim-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.sim-head strong { flex: 1; min-width: 0; }
+.sim-head code { color: var(--muted); }
+.sim-line dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin: 0; font-size: 14px; }
+.sim-line dt { color: var(--muted); }
+.sim-line dd { margin: 0; }
+.sim-alerts { margin: 8px 0 0; padding-left: 18px; color: var(--danger); font-size: 14px; font-weight: 600; }

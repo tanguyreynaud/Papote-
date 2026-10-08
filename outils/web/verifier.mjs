@@ -47,7 +47,7 @@ for (const file of scripts.filter((f) => f.startsWith('js/'))) {
 }
 
 // 3. Identifiants d'éléments utilisés au chargement des pages.
-const pages = { 'index.html': ['js/famille.js', 'js/agenda.js', 'js/notifs.js'], 'admin.html': ['js/admin.js'] };
+const pages = { 'index.html': ['js/famille.js', 'js/agenda.js', 'js/notifs.js'], 'admin.html': ['js/admin.js', 'js/sim.js'] };
 for (const [page, files] of Object.entries(pages)) {
   const html = read(page);
   const ids = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]));
