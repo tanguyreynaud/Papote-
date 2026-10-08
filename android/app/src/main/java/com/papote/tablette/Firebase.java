@@ -93,6 +93,15 @@ final class Firebase {
      * Quand on donne un nouveau code tablette, on l'abandonne : la tablette crée son compte
      * e-mail et mot de passe et rejoint la famille avec ce code.
      */
+    /** Remise sur l'écran Bienvenue : la tablette oublie ses comptes (tablette et appels). */
+    synchronized void forgetAll() {
+        idToken = null;
+        idTokenExpiry = 0;
+        prefs.edit().remove("refreshToken").remove("uid").remove("email").remove("password")
+                .remove("accountConverted").remove("callEmail").remove("callPassword")
+                .remove("callAccountCreated").remove("callUid").apply();
+    }
+
     synchronized void forgetAnonymous() {
         if (prefs.getBoolean("accountConverted", false)) return;
         idToken = null;
