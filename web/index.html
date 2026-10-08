@@ -103,14 +103,14 @@
         <p class="muted">Un responsable de la famille doit accepter votre arrivée. Cette page s'ouvrira toute seule dès qu'il l'aura fait.</p>
         <span class="spinner pending-spin"></span>
       </div>
-      <button type="button" class="link wide" data-action="other-family">Rejoindre ou créer une autre famille</button>
+      <button type="button" class="link wide" data-action="other-family">Rejoindre une autre famille ou ajouter une tablette</button>
       <button type="button" class="link wide" data-action="logout">Se déconnecter</button>
     </section>
 
     <!-- Ajouter ma tablette (jumelage) -->
     <section id="view-pair" class="page" hidden>
       <header class="page-head">
-        <button type="button" class="icon-btn back" aria-label="Retour"><svg><use href="#i-back"/></svg></button>
+        <button type="button" class="icon-btn" id="pair-back" aria-label="Retour"><svg><use href="#i-back"/></svg></button>
         <h1>Ajouter ma tablette</h1>
       </header>
       <div class="page-pad">
@@ -127,6 +127,15 @@
           <label id="pair-family-wrap">Famille
             <select id="pair-family"></select>
           </label>
+          <div id="pair-new" hidden>
+            <p class="muted">Première tablette : la famille se crée avec elle.</p>
+            <label>Prénom de la personne qui aura la tablette
+              <input id="pair-grand" maxlength="40" placeholder="Mamie">
+            </label>
+            <label>Votre prénom
+              <input id="pair-myname" maxlength="40" autocomplete="given-name">
+            </label>
+          </div>
           <button type="submit" class="primary wide" id="btn-pair-claim"></button>
           <p class="muted small">La tablette vous demandera ensuite de confirmer, pour être sûr que c'est bien elle.</p>
         </form>
@@ -148,6 +157,11 @@
       <h1 class="brand">Papote</h1>
       <p id="join-account" class="muted small"></p>
       <div class="card">
+        <h2>Vous avez reçu une tablette Papote ?</h2>
+        <p class="muted">Allumez-la : elle affiche un QR code. Scannez-le avec l'appareil photo de ce téléphone, ou tapez le code affiché.</p>
+        <button type="button" id="btn-join-pair" class="primary wide">J'ai le code de la tablette</button>
+      </div>
+      <div class="card">
         <h2>Rejoindre la famille</h2>
         <p class="muted">Entrez le code famille qu'on vous a envoyé. Un responsable de la famille acceptera votre arrivée. Le plus simple : demandez-lui de vous inviter avec votre adresse e-mail.</p>
         <form id="form-join">
@@ -161,8 +175,8 @@
           <p id="join-error" class="error" hidden></p>
         </form>
       </div>
-      <details class="card">
-        <summary>Première fois ? Créer une famille</summary>
+      <details class="card" hidden>
+        <summary>Créer une famille</summary>
         <form id="form-create">
           <label>Comment s'appelle la personne qui a la tablette ?
             <input id="create-grand" maxlength="40" placeholder="Mamie" required>
@@ -428,7 +442,7 @@
         <div class="card">
           <h2>Mon compte</h2>
           <p id="account-email" class="muted"></p>
-          <button type="button" class="secondary wide" data-action="other-family">Rejoindre ou créer une autre famille</button>
+          <button type="button" class="secondary wide" data-action="other-family">Rejoindre une autre famille ou ajouter une tablette</button>
           <button type="button" class="link wide" data-action="logout">Se déconnecter</button>
         </div>
         <button id="btn-leave" class="link danger wide">Quitter cette famille</button>

@@ -1917,20 +1917,31 @@ function resetPairing() {
   if (code) $('form-pair-code').requestSubmit();
 }
 
+// La famille se crée avec la première tablette : le client qui scanne le QR code n'a rien d'autre à faire.
+const NEW_FAMILY = '__nouvelle__';
+
 async function loadAdminFamilies() {
   const list = [];
   for (const f of myFamilies) {
     try {
       const snap = await getDoc(doc(db, 'families', f.fid));
       const data = snap.data();
-      if (data && (data.createdBy === session.uid || (data.admins || []).includes(session.uid))) list.push({ fid: f.fid, name: data.name });
+      if (data && (data.createdBy === authUser.uid || (data.admins || []).includes(authUser.uid))) list.push({ fid: f.fid, name: data.name });
     } catch (e) { /* famille illisible */ }
   }
   return list;
 }
 
 $('btn-pair').addEventListener('click', () => openPage('pair'));
-$('btn-pair-home').addEventListener('click', () => history.back());
+// Sans famille : la page de jumelage s'ouvre hors de toute famille (pas de session).
+function openPairingWithoutFamily() {
+  resetPairing();
+  show('view-pair');
+}
+$('btn-join-pair').addEventListener('click', openPairingWithoutFamily);
+$('pair-back').addEventListener('click', () => { if (page === 'pair') history.back(); else showJoin(myFamilies.length > 0); });
+// Retour : dans la famille qui vient d'être reliée (ou créée), sinon à l'accueil.
+$('btn-pair-home').addEventListener('click', () => enterApp());
 
 $('form-pair-code').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -1944,12 +1955,16 @@ $('form-pair-code').addEventListener('submit', async (e) => {
     if (toDate(data.expiresAt) < new Date()) return fail('Ce code a expiré. La tablette en affichera un nouveau.');
     if (data.status !== 'waiting') return fail('Cette tablette est déjà en cours d\'installation.');
     adminFamilies = await loadAdminFamilies();
-    if (!adminFamilies.length) return fail('Seul un responsable de la famille peut ajouter une tablette.');
     pairing = { code, data };
     forgetPairCode();
     $('pair-name').textContent = `Tablette « ${data.name} »`;
-    $('pair-family').replaceChildren(...adminFamilies.map((f) => new Option(`Famille de ${f.name}`, f.fid, false, f.fid === session.fid)));
-    $('pair-family-wrap').hidden = adminFamilies.length < 2;
+    $('pair-family').replaceChildren(
+      ...adminFamilies.map((f) => new Option(`Famille de ${f.name}`, f.fid, false, f.fid === session?.fid)),
+      new Option('Une nouvelle famille', NEW_FAMILY, false, !adminFamilies.length),
+    );
+    $('pair-family-wrap').hidden = !adminFamilies.length;
+    $('pair-grand').value = data.name || '';
+    $('pair-myname').value = session?.member.name || (authUser.displayName || '').split(' ')[0];
     syncClaimLabel();
     pairStep('form-pair-claim');
   } catch (err) {
@@ -1959,18 +1974,29 @@ $('form-pair-code').addEventListener('submit', async (e) => {
 });
 
 function syncClaimLabel() {
-  const fam = adminFamilies.find((f) => f.fid === $('pair-family').value) || adminFamilies[0];
-  $('btn-pair-claim').textContent = `Relier à la famille de ${fam.name}`;
+  const isNew = $('pair-family').value === NEW_FAMILY;
+  $('pair-new').hidden = !isNew;
+  const fam = adminFamilies.find((f) => f.fid === $('pair-family').value);
+  $('btn-pair-claim').textContent = isNew ? 'Créer la famille et relier la tablette' : `Relier à la famille de ${fam.name}`;
 }
 $('pair-family').addEventListener('change', syncClaimLabel);
 
 $('form-pair-claim').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const fam = adminFamilies.find((f) => f.fid === $('pair-family').value) || adminFamilies[0];
+  let fam = adminFamilies.find((f) => f.fid === $('pair-family').value);
+  let myName = session?.member.name;
   const ref2 = doc(db, 'pairings', pairing.code);
   try {
+    if ($('pair-family').value === NEW_FAMILY) {
+      const grand = $('pair-grand').value.trim();
+      myName = $('pair-myname').value.trim();
+      if (!grand || !myName) { notice('Indiquez le prénom de la personne qui aura la tablette, et le vôtre.'); return; }
+      const fid = await createFamily(grand, myName);
+      fam = { fid, name: grand };
+      adminFamilies.push(fam);
+    }
     await updateDoc(ref2, {
-      status: 'claimed', fid: fam.fid, familyName: fam.name, claimedBy: session.uid, claimedName: session.member.name,
+      status: 'claimed', fid: fam.fid, familyName: fam.name, claimedBy: authUser.uid, claimedName: myName,
     });
   } catch (err) {
     console.error(err);
@@ -1979,7 +2005,7 @@ $('form-pair-claim').addEventListener('submit', async (e) => {
     pairStep('form-pair-code');
     return;
   }
-  $('pair-wait-text').textContent = `La tablette « ${pairing.data.name} » affiche « ${session.member.name} veut relier cette tablette à la famille de ${fam.name} ». Touchez Accepter sur la tablette.`;
+  $('pair-wait-text').textContent = `La tablette « ${pairing.data.name} » affiche « ${myName} veut relier cette tablette à la famille de ${fam.name} ». Touchez Accepter sur la tablette.`;
   pairStep('pair-wait');
   stopPair?.();
   stopPair = onSnapshot(ref2, (snap) => {
@@ -1988,6 +2014,7 @@ $('form-pair-claim').addEventListener('submit', async (e) => {
     stopPair?.();
     stopPair = null;
     $('pair-done-title').textContent = status === 'confirmed' ? 'Tablette reliée' : 'Tablette non reliée';
+    if (status === 'confirmed') saveFamilyId(fam.fid);
     $('pair-done-text').textContent = status === 'confirmed'
       ? `La tablette « ${pairing.data.name} » fait maintenant partie de la famille de ${fam.name}. Elle affichera les photos et messages dans un instant.`
       : 'La tablette a refusé. Si ce n\'était pas une erreur, recommencez avec le nouveau code affiché.';
@@ -2182,7 +2209,8 @@ async function enterApp() {
     const active = memberships.filter((m) => m.status !== 'pending');
     if (!active.length) {
       const pending = memberships.find((m) => m.status === 'pending');
-      if (pending) showPending(pending.fid);
+      if (pairCode()) openPairingWithoutFamily();
+      else if (pending) showPending(pending.fid);
       else showJoin(false);
       return;
     }
