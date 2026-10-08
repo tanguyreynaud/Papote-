@@ -1985,11 +1985,13 @@ $('form-pair-code').addEventListener('submit', async (e) => {
     pairing = { code, data };
     forgetPairCode();
     $('pair-name').textContent = `Tablette « ${data.name} »`;
-    $('pair-family').replaceChildren(
-      ...adminFamilies.map((f) => new Option(`Famille de ${f.name}`, f.fid, false, f.fid === session?.fid)),
-      new Option('Une nouvelle famille', NEW_FAMILY, false, !adminFamilies.length),
-    );
-    $('pair-family-wrap').hidden = !adminFamilies.length;
+    // Responsable d'une ou plusieurs familles : la tablette rejoint l'une d'elles (la famille ouverte
+    // d'abord). Une nouvelle famille seulement pour qui n'en a aucune.
+    const ordered = [...adminFamilies].sort((x, y) => (y.fid === session?.fid) - (x.fid === session?.fid));
+    $('pair-family').replaceChildren(...(ordered.length
+      ? ordered.map((f, i) => new Option(`Famille de ${f.name}`, f.fid, false, i === 0))
+      : [new Option('Une nouvelle famille', NEW_FAMILY, false, true)]));
+    $('pair-family-wrap').hidden = ordered.length < 2;
     $('pair-grand').value = data.name || '';
     // Première tablette : la famille porte le nom donné sur la tablette, il ne reste que son prénom.
     $('pair-grand-wrap').hidden = !!data.name;
