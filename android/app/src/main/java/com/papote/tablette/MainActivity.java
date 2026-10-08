@@ -63,6 +63,7 @@ public class MainActivity extends Activity implements Sync.Listener {
     private VoicePlayer voicePlayer;
     private VideoView videoView;
     private Wifi wifi;
+    private SmsAlert smsAlert;
     private final Handler handler = new Handler(Looper.getMainLooper());
 
     @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
@@ -170,6 +171,7 @@ public class MainActivity extends Activity implements Sync.Listener {
 
         sync = new Sync(this, prefs, this);
         wifi = new Wifi(this, admin());
+        smsAlert = new SmsAlert(this, prefs, wifi);
         handleIntent(getIntent());
         setupDeviceOwner();
         setVolumes();
@@ -212,8 +214,10 @@ public class MainActivity extends Activity implements Sync.Listener {
             callPage("onLeave", new JSONObject());
             return;
         }
-        String pin = intent.getStringExtra("pin");
-        if (pin != null && pin.matches("[0-9]{4,8}")) prefs.edit().putString("pin", pin).apply();
+        String canal = intent.getStringExtra("canal");
+        if (canal != null) prefs.edit().putString("canal", "test".equals(canal) ? "test" : "").apply();
+        String numbers = intent.getStringExtra("numeros");
+        if (numbers != null) prefs.edit().putString("alertNumbers", numbers.replaceAll("[^0-9+,]", "")).apply();
         String code = intent.getStringExtra("code");
         if (code != null) {
             code = code.toUpperCase().replaceAll("[^A-Z0-9]", "");
@@ -379,16 +383,6 @@ public class MainActivity extends Activity implements Sync.Listener {
             Journal.log(MainActivity.this, "Erreur page : " + message);
         }
 
-        @JavascriptInterface
-        public boolean hasPin() {
-            return prefs.getString("pin", null) != null;
-        }
-
-        @JavascriptInterface
-        public boolean checkPin(String pin) {
-            String expected = prefs.getString("pin", null);
-            return expected == null || expected.equals(pin);
-        }
 
         @JavascriptInterface
         public void wifiDone() {
@@ -495,7 +489,6 @@ public class MainActivity extends Activity implements Sync.Listener {
 
     private static final String[] RESTRICTIONS = {
             UserManager.DISALLOW_OUTGOING_CALLS,
-            UserManager.DISALLOW_SMS,
             UserManager.DISALLOW_SAFE_BOOT,
     };
 
@@ -590,6 +583,11 @@ public class MainActivity extends Activity implements Sync.Listener {
             dpm.setLockTaskFeatures(admin, DevicePolicyManager.LOCK_TASK_FEATURE_NONE);
             // Pas d'appel ni de SMS par la carte SIM : tout passe par Papote.
             for (String r : RESTRICTIONS) dpm.addUserRestriction(admin, r);
+            // Les SMS servent aux alertes de Papote : plus bloqués (l'appli Messages reste désactivée,
+            // rien ne s'affiche). Envoi autorisé d'office.
+            dpm.clearUserRestriction(admin, UserManager.DISALLOW_SMS);
+            dpm.setPermissionGrantState(admin, getPackageName(), Manifest.permission.SEND_SMS,
+                    DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED);
             IntentFilter home = new IntentFilter(Intent.ACTION_MAIN);
             home.addCategory(Intent.CATEGORY_HOME);
             home.addCategory(Intent.CATEGORY_DEFAULT);
@@ -675,6 +673,8 @@ public class MainActivity extends Activity implements Sync.Listener {
         @Override
         public void run() {
             handler.postDelayed(this, 60_000);
+            final SmsAlert alert = smsAlert;
+            if (alert != null) new Thread(alert::check, "papote-sms").start();
             int hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY);
             if (kioskPaused() || hour < 7 || hour >= 23) return;
             try {

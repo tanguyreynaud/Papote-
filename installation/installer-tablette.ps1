@@ -10,8 +10,10 @@ param(
     [string]$Serial,
     [string]$Wifi,
     [string]$MotDePasse,
-    # Code PIN (4 à 8 chiffres) demandé pour régler le wifi depuis la tablette
-    [string]$Pin,
+    # Numéros prévenus par SMS si la tablette (avec carte SIM) perd internet, séparés par des virgules
+    [string]$Numeros,
+    # -Canal test : tablette de test, qui reçoit les nouvelles versions avant les autres
+    [string]$Canal,
     [switch]$Oui
 )
 
@@ -147,8 +149,8 @@ Say 'Appels de la carte SIM bloqués, applis inutiles désactivées.' 'Green'
 
 # 7. Lancement relié à la famille
 $pinArgs = @()
-if ($Pin -match '^[0-9]{4,8}$') { $pinArgs = @('--es', 'pin', $Pin) }
-elseif ($Pin) { Say 'Code PIN ignoré : il faut 4 à 8 chiffres.' 'Yellow' }
+if ($Numeros) { $pinArgs += @('--es', 'numeros', ($Numeros -replace '[^0-9+,]', '')) }
+if ($Canal) { $pinArgs += @('--es', 'canal', $(if ($Canal -eq 'test') { 'test' } else { 'stable' })) }
 if ($Code) {
     Adb shell am start -n "$Package/.MainActivity" --es code $Code @pinArgs --ez lock true | Out-Null
 } else {

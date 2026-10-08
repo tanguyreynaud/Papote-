@@ -36,9 +36,11 @@ et une app pour que la famille lui envoie photos et messages depuis iPhone ou An
 ## Publier une mise à jour
 
 1. Augmenter `versionCode` et `versionName` dans `android/app/build.gradle.kts`, puis faire un commit.
-2. Lancer `installation/publier-mise-a-jour.ps1` : il compile le code enregistré, range l'APK sur GitHub
-   et publie le numéro de version sur https://papote-maj.web.app.
-3. Les tablettes vérifient toutes les 6 heures et s'installent la nouvelle version toutes seules.
+2. Lancer `installation/publier-mise-a-jour.ps1 -Test` : seules les tablettes de test (installées avec
+   `-Canal test`) reçoivent la nouvelle version.
+3. Si tout va bien, `installation/promouvoir-mise-a-jour.ps1` la passe à toutes les tablettes, sans recompiler.
+   (Sans `-Test`, `publier-mise-a-jour.ps1` publie directement pour toutes les tablettes.)
+4. Les tablettes vérifient toutes les 6 heures et s'installent la nouvelle version toutes seules.
 
 En une commande, depuis un PowerShell dans `installation/` :
 
@@ -50,12 +52,19 @@ Ce que le script fait à la tablette, de A à Z :
    wifi si demandé ;
 3. mode kiosque (propriétaire de l'appareil) : Papote est l'écran d'accueil et ne se quitte pas, pas de volet
    de notifications, pas de menu « Éteindre », pas de démarrage sans échec ;
-4. Papote filtre les appels (rôle « filtrage des appels ») : appels et SMS de la carte SIM refusés ;
+4. Papote filtre les appels (rôle « filtrage des appels ») : appels de la carte SIM refusés ; les SMS reçus ne
+   s'affichent nulle part (appli Messages désactivée) et Papote peut envoyer ses alertes ;
 5. désactive les applis inutiles listées dans `installation/applis-inutiles.txt` (rien n'est effacé) ;
 6. relie la tablette à la famille avec le code tablette.
 
+Option : `-Numeros "0612345678,0698765432"`
+(avec une carte SIM : SMS d'alerte quand la tablette n'a plus internet depuis 30 minutes, puis quand il revient).
+
 Au démarrage, l'appli règle elle-même le volume (fort), bloque les boutons de volume, rallume l'écran en
 journée si on appuie sur le bouton marche/arrêt, et met l'écran en veille de 23 h à 7 h.
+
+Pour vérifier une tablette branchée (avant un envoi, ou en cas de souci) : `installation/diagnostic.bat`.
+Il contrôle la version, le mode kiosque, les réglages, le réseau, la batterie et affiche le journal récent.
 
 Pour remettre la tablette à la normale : `installation/retirer-papote.bat`.
 

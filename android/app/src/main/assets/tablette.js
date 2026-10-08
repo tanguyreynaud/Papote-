@@ -829,7 +829,7 @@
 
   // Bandeau et écran créés ici pour ne pas toucher à tablette.html.
   // Plus d'internet depuis 10 minutes (et pas de carte SIM qui prend le relais) :
-  // un bouton « Wifi » apparaît sur l'accueil, protégé par le code PIN de la famille.
+  // un bouton « Wifi » apparaît sur l'accueil.
   var offlineSince = 0;
   var wifiButton = null;
   function checkConnection() {

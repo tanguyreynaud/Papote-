@@ -157,39 +157,13 @@
     current = '';
   }
 
-  // Code PIN donné à l'installation : Mamie ne change pas le wifi par erreur.
-  function askPin(onOk) {
-    var box = screen('Code de la famille', 'Tapez le code à 4 chiffres pour régler le wifi.');
-    var shown = el('p', 'welcome-code', '');
-    box.appendChild(shown);
-    var typed = '';
-    var pad = el('div', 'welcome-pad');
-    var keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '⌫', '0', 'OK'];
-    for (var i = 0; i < keys.length; i++) {
-      (function (k) {
-        pad.appendChild(button(k, k === 'OK' ? 'primary' : '', function () {
-          if (k === '⌫') typed = typed.slice(0, -1);
-          else if (k === 'OK') {
-            if (android().checkPin(typed)) { onOk(); return; }
-            typed = '';
-            shown.textContent = 'Code incorrect';
-            return;
-          } else if (typed.length < 8) typed += k;
-          shown.textContent = new Array(typed.length + 1).join('•');
-        }));
-      })(keys[i]);
-    }
-    box.appendChild(pad);
-    box.appendChild(button('Fermer', 'no', closeRepair));
-  }
-
   function openRepair() {
     ensureRoot();
     repair = true;
     current = 'repair';
     root.removeAttribute('hidden');
-    if (android().hasPin && android().hasPin()) askPin(showWifi);
-    else showWifi();
+    // Pas de code : le bouton n'apparaît que lorsqu'internet est déjà coupé, il n'y a rien à casser.
+    showWifi();
   }
 
   // ---------- 3. Code et QR code ----------
