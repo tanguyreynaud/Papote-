@@ -210,6 +210,8 @@ public class MainActivity extends Activity implements Sync.Listener {
             callPage("onLeave", new JSONObject());
             return;
         }
+        String pin = intent.getStringExtra("pin");
+        if (pin != null && pin.matches("[0-9]{4,8}")) prefs.edit().putString("pin", pin).apply();
         String code = intent.getStringExtra("code");
         if (code != null) {
             code = code.toUpperCase().replaceAll("[^A-Z0-9]", "");
@@ -365,6 +367,18 @@ public class MainActivity extends Activity implements Sync.Listener {
         @JavascriptInterface
         public String wifiStatus() {
             return wifi.status();
+        }
+
+        /** Code PIN de la famille (donné à l'installation) pour régler le wifi plus tard. */
+        @JavascriptInterface
+        public boolean hasPin() {
+            return prefs.getString("pin", null) != null;
+        }
+
+        @JavascriptInterface
+        public boolean checkPin(String pin) {
+            String expected = prefs.getString("pin", null);
+            return expected == null || expected.equals(pin);
         }
 
         @JavascriptInterface

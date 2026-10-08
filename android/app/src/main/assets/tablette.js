@@ -823,7 +823,31 @@
   }
 
   // Bandeau et écran créés ici pour ne pas toucher à tablette.html.
+  // Plus d'internet depuis 10 minutes (et pas de carte SIM qui prend le relais) :
+  // un bouton « Wifi » apparaît sur l'accueil, protégé par le code PIN de la famille.
+  var offlineSince = 0;
+  var wifiButton = null;
+  function checkConnection() {
+    if (!android() || !android().wifiStatus) return;
+    var st = {};
+    try { st = JSON.parse(android().wifiStatus()); } catch (e) { return; }
+    var now = Date.now();
+    if (st.internet) offlineSince = 0;
+    else if (!offlineSince) offlineSince = now;
+    var showIt = offlineSince && now - offlineSince > 10 * 60000 && !st.mobile;
+    if (!wifiButton) {
+      if (!showIt) return;
+      wifiButton = document.createElement('button');
+      wifiButton.className = 'wifi-help';
+      wifiButton.textContent = 'Pas d'internet : régler le wifi';
+      on(wifiButton, 'click', function () { if (window.PapoteBienvenue) window.PapoteBienvenue.openWifi(); });
+      $('view-home').appendChild(wifiButton);
+    }
+    show(wifiButton, !!showIt);
+  }
+
   function setupHomeExtras() {
+    setInterval(checkConnection, 30000);
     var moment = document.createElement('p');
     moment.id = 'moment';
     moment.className = 'moment';

@@ -10,6 +10,8 @@ param(
     [string]$Serial,
     [string]$Wifi,
     [string]$MotDePasse,
+    # Code PIN (4 à 8 chiffres) demandé pour régler le wifi depuis la tablette
+    [string]$Pin,
     [switch]$Oui
 )
 
@@ -144,10 +146,13 @@ foreach ($p in $useless) { Adb shell pm disable-user --user 0 $p.Trim() | Out-Nu
 Say 'Appels de la carte SIM bloqués, applis inutiles désactivées.' 'Green'
 
 # 7. Lancement relié à la famille
+$pinArgs = @()
+if ($Pin -match '^[0-9]{4,8}$') { $pinArgs = @('--es', 'pin', $Pin) }
+elseif ($Pin) { Say 'Code PIN ignoré : il faut 4 à 8 chiffres.' 'Yellow' }
 if ($Code) {
-    Adb shell am start -n "$Package/.MainActivity" --es code $Code --ez lock true | Out-Null
+    Adb shell am start -n "$Package/.MainActivity" --es code $Code @pinArgs --ez lock true | Out-Null
 } else {
-    Adb shell am start -n "$Package/.MainActivity" --ez lock true | Out-Null
+    Adb shell am start -n "$Package/.MainActivity" @pinArgs --ez lock true | Out-Null
     Say "`nLa tablette affiche « Bienvenue » : le client lui donnera un nom, choisira son wifi et la reliera à sa famille." 'Cyan'
 }
 
