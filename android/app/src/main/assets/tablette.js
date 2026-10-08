@@ -851,7 +851,7 @@
       if (!showIt) return;
       wifiButton = document.createElement('button');
       wifiButton.className = 'wifi-help';
-      wifiButton.textContent = 'Pas d'internet : régler le wifi';
+      wifiButton.textContent = 'Pas d’internet : régler le wifi';
       on(wifiButton, 'click', function () { if (window.PapoteBienvenue) window.PapoteBienvenue.openWifi(); });
       $('view-home').appendChild(wifiButton);
     }
