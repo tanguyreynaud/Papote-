@@ -832,6 +832,7 @@
   // un bouton « Wifi » apparaît sur l'accueil.
   var offlineSince = 0;
   var wifiButton = null;
+  var wifiAutoOpened = false;
   function checkConnection() {
     if (!android() || !android().wifiStatus) return;
     var st = {};
@@ -840,6 +841,12 @@
     if (st.internet) offlineSince = 0;
     else if (!offlineSince) offlineSince = now;
     var showIt = offlineSince && now - offlineSince > 10 * 60000 && !st.mobile;
+    // Tablette qui démarre sans internet ni données de la famille (par exemple une tablette de
+    // remplacement arrivée chez le client) : l'écran du wifi s'ouvre tout de suite, une fois.
+    if (!st.internet && !st.mobile && !hasData && !wifiAutoOpened && window.PapoteBienvenue) {
+      wifiAutoOpened = true;
+      window.PapoteBienvenue.openWifi();
+    }
     if (!wifiButton) {
       if (!showIt) return;
       wifiButton = document.createElement('button');
@@ -853,6 +860,7 @@
 
   function setupHomeExtras() {
     setInterval(checkConnection, 30000);
+    setTimeout(checkConnection, 20000);
     var moment = document.createElement('p');
     moment.id = 'moment';
     moment.className = 'moment';
