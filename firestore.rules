@@ -340,6 +340,27 @@ service cloud.firestore {
         allow delete: if isMember(fid);
       }
 
+      // Commandes à distance pour la tablette (responsables) : Wi-Fi, redémarrage, état.
+      // La tablette les exécute, écrit le résultat et efface le mot de passe dans la même écriture.
+      match /commands/{cid} {
+        allow read: if isFamilyAdmin(fid) || (signedIn() && resource.data.target == request.auth.uid);
+        allow create: if isFamilyAdmin(fid)
+          && request.resource.data.keys().hasOnly(['type', 'target', 'createdBy', 'createdAt', 'ssid', 'security', 'password', 'state'])
+          && request.resource.data.type in ['wifi', 'restart', 'status']
+          && request.resource.data.target is string
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.state == 'pending'
+          && (request.resource.data.type != 'wifi'
+            || (request.resource.data.ssid is string && request.resource.data.ssid.size() > 0
+              && request.resource.data.security in ['wpa2', 'wpa3', 'open']));
+        allow update: if signedIn()
+          && resource.data.target == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state', 'result', 'doneAt', 'password'])
+          && !('password' in request.resource.data)
+          && request.resource.data.state in ['done', 'failed'];
+        allow delete: if isFamilyAdmin(fid);
+      }
+
       // Appels vidéo : la famille appelle la tablette (signalisation WebRTC).
       match /calls/{cid} {
         allow read: if isMember(fid);

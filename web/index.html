@@ -321,6 +321,34 @@
           <button id="btn-share" class="primary wide">Partager le lien</button>
           <button id="btn-new-code" class="link wide" hidden>Changer le code famille</button>
         </div>
+        <div id="remote-card" class="card" hidden>
+          <h2>Tablette à distance</h2>
+          <p id="remote-tablet" class="muted small"></p>
+          <div class="remote-buttons">
+            <button type="button" class="secondary" data-cmd="status">État</button>
+            <button type="button" class="secondary" data-cmd="restart">Redémarrer</button>
+          </div>
+          <details class="remote-wifi">
+            <summary>Changer le Wi-Fi</summary>
+            <form id="form-wifi">
+              <label>Nom du réseau
+                <input id="wifi-ssid" autocomplete="off" required>
+              </label>
+              <label>Sécurité
+                <select id="wifi-security">
+                  <option value="wpa2">WPA2 (le plus courant)</option>
+                  <option value="wpa3">WPA3</option>
+                  <option value="open">Aucune (réseau ouvert)</option>
+                </select>
+              </label>
+              <label id="wifi-password-wrap">Mot de passe
+                <input id="wifi-password" type="password" autocomplete="off">
+              </label>
+              <button type="submit" class="primary wide">Envoyer à la tablette</button>
+            </form>
+          </details>
+          <p id="remote-result" class="remote-result" hidden></p>
+        </div>
         <div id="tablet-card" class="card" hidden>
           <h2>Installer une tablette</h2>
           <button type="button" id="btn-pair" class="primary wide">Ajouter ma tablette</button>

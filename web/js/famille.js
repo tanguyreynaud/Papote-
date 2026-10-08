@@ -1220,6 +1220,7 @@ function renderMembers(all) {
   renderFace();
   setNotifMembers(members);
   renderActivity();
+  renderRemote();
   // Le bouton d'appel n'apparaît que si une tablette sait recevoir les appels (Android 5 et plus).
   const canCall = members.some((m) => m.role === 'tablette' && m.canCall);
   $('tile-call').disabled = !(canCall && !!navigator.mediaDevices);
@@ -1547,6 +1548,84 @@ function renderAbonnement() {
   }
 }
 
+// ---------- Tablette à distance (responsables) ----------
+// families/{fid}/commands/{cid} : la tablette exécute la commande à sa prochaine synchro
+// (le changement de rev l'appelle tout de suite), puis écrit state, result et doneAt.
+
+let stopCommand = null;
+
+// La tablette visée : sa fiche la plus récemment en ligne (elle en a deux, synchro et appels).
+function targetTablet() {
+  return tabletMembers.filter((m) => m.lastOnline)
+    .sort((a, b) => toDate(b.lastOnline) - toDate(a.lastOnline))[0] || tabletMembers[0] || null;
+}
+
+function showRemote(text, cls = '') {
+  $('remote-result').textContent = text;
+  $('remote-result').className = `remote-result ${cls}`;
+  $('remote-result').hidden = !text;
+}
+
+async function sendCommand(type, extra = {}) {
+  const tablet = targetTablet();
+  if (!tablet) { showRemote("Aucune tablette n'est reliée à cette famille.", 'warn'); return; }
+  const ref2 = doc(collection(db, 'families', session.fid, 'commands'));
+  const batch = writeBatch(db);
+  batch.set(ref2, {
+    type, target: tablet.id, createdBy: session.uid, createdAt: serverTimestamp(), state: 'pending', ...extra,
+  });
+  bumpRev(batch, session.fid);
+  try {
+    await batch.commit();
+  } catch (err) {
+    console.error(err);
+    showRemote("La commande n'a pas pu être envoyée.", 'warn');
+    return;
+  }
+  showRemote('Envoyé, en attente de la tablette…');
+  stopCommand?.();
+  let timer = setTimeout(() => showRemote("La tablette n'a pas encore répondu. Elle exécutera la commande dès qu'elle sera connectée.", 'warn'), 90_000);
+  stopCommand = onSnapshot(ref2, (snap) => {
+    const cmd = snap.data();
+    if (!cmd || cmd.state === 'pending') return;
+    clearTimeout(timer);
+    stopCommand?.();
+    stopCommand = null;
+    showRemote(cmd.result || (cmd.state === 'done' ? 'C\'est fait.' : 'La tablette n\'a pas pu le faire.'), cmd.state === 'done' ? 'ok' : 'warn');
+    // Résultat affiché : la commande n'a plus besoin d'être gardée.
+    deleteDoc(ref2).catch(() => {});
+  }, (err) => console.warn('Commande illisible', err));
+}
+
+document.querySelectorAll('[data-cmd]').forEach((btn) => btn.addEventListener('click', async () => {
+  if (btn.dataset.cmd === 'restart' && !await askConfirm('Redémarrer la tablette ? Elle sera indisponible une minute.', 'Redémarrer')) return;
+  sendCommand(btn.dataset.cmd);
+}));
+
+$('wifi-security').addEventListener('change', () => {
+  $('wifi-password-wrap').hidden = $('wifi-security').value === 'open';
+});
+
+$('form-wifi').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const security = $('wifi-security').value;
+  const password = $('wifi-password').value;
+  if (security !== 'open' && password.length < 8) { showRemote('Le mot de passe Wi-Fi fait au moins 8 caractères.', 'warn'); return; }
+  if (!await askConfirm(`Envoyer le réseau « ${$('wifi-ssid').value.trim()} » à la tablette ? Si le nom ou le mot de passe est faux, elle garde son Wi-Fi actuel.`, 'Envoyer')) return;
+  await sendCommand('wifi', { ssid: $('wifi-ssid').value.trim(), security, ...(security === 'open' ? {} : { password }) });
+  $('wifi-password').value = '';
+});
+
+function renderRemote() {
+  const admin = amFamilyAdmin();
+  const tablet = targetTablet();
+  $('remote-card').hidden = !admin || !tablet;
+  if (tablet) {
+    const online = tablet.lastOnline ? toDate(tablet.lastOnline) : null;
+    $('remote-tablet').textContent = online ? `Tablette vue en ligne ${ago(online.getTime())}.` : 'Tablette reliée.';
+  }
+}
+
 // ---------- Taille du texte sur la tablette ----------
 
 const TEXT_SIZES = ['normal', 'grande', 'tres-grande'];
@@ -1610,6 +1689,7 @@ $('btn-delete-family').addEventListener('click', async () => {
 
 function applyFamily() {
   renderAbonnement();
+  renderRemote();
   const admin = amFamilyAdmin();
   $('text-size-card').hidden = !admin;
   $('btn-delete-family').hidden = !admin;
