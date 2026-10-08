@@ -11,8 +11,8 @@ import {
 
 const firebaseConfig = {
   apiKey: 'AIzaSyAvoivJR8p-u2VxUWzlyHzTgP20-5ZG_-E',
-  // Même adresse que l'app : la connexion Google reste sur papote-famille.web.app.
-  authDomain: 'papote-famille.web.app',
+  // Domaine déclaré auprès de Google pour la connexion (adresse de retour autorisée).
+  authDomain: 'papote-famille.firebaseapp.com',
   projectId: 'papote-famille',
   storageBucket: 'papote-famille.firebasestorage.app',
   messagingSenderId: '807031084851',
