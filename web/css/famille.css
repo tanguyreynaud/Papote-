@@ -786,3 +786,11 @@ button:disabled { opacity: .45; cursor: default; }
 .dialog-buttons button { flex: 1; min-height: 48px; justify-content: center; }
 .danger-btn { background: var(--danger); color: #fff; }
 .data-card p { margin: 10px 0; } .data-card summary { font-size: 19px; }
+
+/* Envoi de plusieurs photos : défilement horizontal, une photo à la fois */
+.shot-multi { position: relative; }
+.shot-strip { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; align-items: center; background: #000; }
+.shot-strip::-webkit-scrollbar { display: none; }
+.shot-strip .shot-frame { flex: 0 0 100%; scroll-snap-align: center; }
+.shot-strip img { max-height: 75vh; object-fit: contain; }
+.shot-count { position: absolute; right: 10px; top: 10px; padding: 3px 10px; border-radius: 999px; background: rgba(0, 0, 0, .6); color: #fff; font-size: 13px; font-weight: 700; }

@@ -269,6 +269,34 @@ function galleryItem(post, what, onOpen) {
   }
   frame.addEventListener('click', onOpen);
   li.append(frame);
+  // Plusieurs photos dans un envoi : on les fait défiler du doigt, avec « 2 / 5 ».
+  if (post.photos?.length > 1) {
+    const strip = document.createElement('div');
+    strip.className = 'shot-strip';
+    post.photos.forEach((p, i) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'shot-frame';
+      b.setAttribute('aria-label', `Voir la photo ${i + 1}`);
+      const im = document.createElement('img');
+      im.src = i === 0 ? (post.thumb || p.thumb) : p.thumb;
+      im.alt = '';
+      im.loading = 'lazy';
+      b.append(im);
+      b.addEventListener('click', () => openPhoto({ ...post, thumb: p.thumb, imageUrl: p.imageUrl }));
+      strip.append(b);
+    });
+    const count = document.createElement('span');
+    count.className = 'shot-count';
+    count.textContent = `1 / ${post.photos.length}`;
+    strip.addEventListener('scroll', () => {
+      count.textContent = `${Math.round(strip.scrollLeft / strip.clientWidth) + 1} / ${post.photos.length}`;
+    }, { passive: true });
+    const wrap = document.createElement('div');
+    wrap.className = 'shot-multi';
+    wrap.append(strip, count);
+    frame.replaceWith(wrap);
+  }
 
   const meta = document.createElement('div');
   meta.className = 'shot-meta';
@@ -526,7 +554,8 @@ function fullSize(img, forBase = false) {
 
 async function compressPhoto(file) {
   const img = await loadImage(file);
-  return { full: fullSize(img), thumb: resize(img, 800, 0.72) };
+  // small : aperçu léger quand la photo fait partie d'un envoi de plusieurs photos.
+  return { full: fullSize(img), thumb: resize(img, 800, 0.72), small: resize(img, 480, 0.65) };
 }
 
 function openAdd(kind) {
@@ -618,8 +647,13 @@ async function onPhotosChosen(e) {
   await addPhotoFiles(files);
 }
 
-async function addPhotoFiles(files) {
-  if (!files.length) return;
+const MAX_PHOTOS = 5;
+
+async function addPhotoFiles(all) {
+  if (!all.length) return;
+  const room = MAX_PHOTOS - pendingPhotos.length;
+  const files = all.slice(0, Math.max(0, room));
+  if (all.length > room) notice(`${MAX_PHOTOS} photos au plus par envoi : les ${files.length} premières sont gardées.`);
   setStatus('Préparation…');
   for (const file of files) {
     try {
@@ -701,12 +735,12 @@ $('form-post').addEventListener('submit', async (e) => {
   // Une photo à la fois : en cas de coupure, seules les photos restantes sont mises en attente.
   const items = kind === 'video'
     ? [{ kind, text, video: pendingVideo, author }]
-    : pendingPhotos.map((photo, i) => ({ kind, text: i === 0 ? text : '', photo, author }));
+    : [{ kind, text, photos: pendingPhotos.slice(0, MAX_PHOTOS), author }];
   let sent = 0;
   try {
     for (const item of items) {
       if (!navigator.onLine) throw new Error('hors ligne');
-      setBusy(kind === 'video' ? 'Envoi de la vidéo…' : items.length > 1 ? `Photo ${sent + 1} sur ${items.length}…` : 'Envoi…');
+      setBusy(kind === 'video' ? 'Envoi de la vidéo…' : pendingPhotos.length > 1 ? `Envoi des ${pendingPhotos.length} photos…` : 'Envoi…');
       await sendItem(item);
       sent++;
     }
@@ -735,7 +769,7 @@ $('form-post').addEventListener('submit', async (e) => {
 function sendItem(item) {
   if (item.kind === 'message') return addPost(session.fid, { type: 'message', text: item.text, ...item.author });
   if (item.kind === 'video') return sendVideo(item.video, item.text, item.author);
-  return sendPhoto(item.photo, item.text, item.author);
+  return sendPhotos(item.photos || [item.photo], item.text, item.author);
 }
 
 function outboxDb() {
@@ -828,6 +862,33 @@ async function addStoragePost(data) {
   await batch.commit();
 }
 
+// Jusqu'à 5 photos dans un seul envoi : la première reste dans imageUrl/thumb (les anciennes
+// tablettes l'affichent seule), la liste complète est dans photos[] { imageUrl, storagePath, thumb }.
+async function sendPhotos(photos, text, author) {
+  if (photos.length === 1 || !storage) {
+    for (let i = 0; i < photos.length; i++) await sendPhoto(photos[i], i === 0 ? text : '', author);
+    return;
+  }
+  const uploaded = [];
+  try {
+    for (const photo of photos) {
+      const file = await upload(await (await fetch(photo.full)).blob(), 'jpg');
+      uploaded.push({ imageUrl: file.url, storagePath: file.path, thumb: photo.small || photo.thumb });
+    }
+  } catch (err) {
+    if (!navigator.onLine) throw err;
+    console.warn('Storage indisponible, une photo par envoi', err);
+    for (const f of uploaded) deleteObject(ref(storage, f.storagePath)).catch(() => {});
+    storage = null;
+    for (let i = 0; i < photos.length; i++) await sendPhoto(photos[i], i === 0 ? text : '', author);
+    return;
+  }
+  await addStoragePost({
+    type: 'photo', text, thumb: photos[0].thumb, imageUrl: uploaded[0].imageUrl,
+    storagePath: uploaded[0].storagePath, photos: uploaded, ...author,
+  });
+}
+
 async function sendPhoto(photo, text, author) {
   if (storage) {
     try {
@@ -878,8 +939,11 @@ async function sendVideo(video, text, author) {
 }
 
 async function removePost(post) {
-  if (post.storagePath && storage) {
-    try { await deleteObject(ref(storage, post.storagePath)); } catch (err) { console.warn('Fichier déjà absent', err); }
+  const paths = new Set([post.storagePath, ...(post.photos || []).map((p) => p.storagePath)].filter(Boolean));
+  if (storage) {
+    for (const path of paths) {
+      try { await deleteObject(ref(storage, path)); } catch (err) { console.warn('Fichier déjà absent', err); }
+    }
   }
   await deletePost(session.fid, post);
 }
@@ -1106,7 +1170,11 @@ $('tile-call').addEventListener('click', async () => {
       onEnd: (reason) => {
         currentCall = null;
         setCallStatus(END_MESSAGES[reason] || 'Appel terminé');
-        setTimeout(() => { if (!currentCall) leaveCallScreen(); }, 2000);
+        setTimeout(() => {
+          if (currentCall) return;
+          leaveCallScreen();
+          if (reason === 'missed' || reason === 'declined') offerVideoMessage();
+        }, 2000);
       },
     });
   } catch (err) {
@@ -1116,6 +1184,15 @@ $('tile-call').addEventListener('click', async () => {
     setTimeout(() => { if (!currentCall) leaveCallScreen(); }, 4000);
   }
 });
+
+// Mamie n'a pas répondu : proposer de lui laisser un petit message vidéo à la place.
+async function offerVideoMessage() {
+  const name = session.family.name;
+  if (!await askConfirm(`${name} n'a pas répondu. Lui laisser un message vidéo ?`, 'Filmer')) return;
+  openPage('videos');
+  openAdd('video');
+  $('in-video-camera').click();
+}
 
 $('call-hangup').addEventListener('click', () => {
   if (currentCall) currentCall.hangup();

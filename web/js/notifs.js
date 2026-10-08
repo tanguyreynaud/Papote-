@@ -44,7 +44,7 @@ function events() {
     const verb = author === 'Vous' ? 'avez' : 'a';
     const text = p.type === 'message'
       ? `${author} ${verb} écrit : « ${p.text} »`
-      : `${author} ${verb} envoyé ${WHAT[p.type]}${p.text ? ` : « ${p.text} »` : ''}`;
+      : `${author} ${verb} envoyé ${p.photos?.length > 1 ? `${p.photos.length} photos` : WHAT[p.type]}${p.text ? ` : « ${p.text} »` : ''}`;
     add(toDate(p.createdAt), p.type, text, author === 'Vous');
     if (p.seenAt) {
       const of = p.authorUid === session.uid
