@@ -14,7 +14,7 @@ import {
 } from './firebase.js';
 import { askConfirm, notice } from './ui.js';
 import {
-  abonnementOk, FORMULES, LIBELLES, ouvrirPortail, payer, rattacherCommande,
+  abonnementOk, FORMULES, LIBELLES, ouvrirPortail, payer, rattacherCommande, resilier, annulerResiliation,
 } from './abonnement.js';
 import { startCall } from './appel.js';
 import { prepareVideo } from './video.js';
@@ -1465,6 +1465,30 @@ $('abo-banner-btn').addEventListener('click', () => {
   if (session.family.abonnement?.statut === 'impaye') withAboError(() => ouvrirPortail(session.fid));
   else openPage('settings');
 });
+// Date d'arrêt annoncée avant de résilier : fin d'engagement, sinon fin de la période payée.
+function dateArret(abo) {
+  const fin = [abo.engagementJusqua, abo.finPeriode].map((t) => (t ? toDate(t) : null)).filter(Boolean)
+    .sort((a, b) => b - a)[0];
+  return fin ? fin.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : null;
+}
+
+$('btn-resilier').addEventListener('click', async () => {
+  const quand = dateArret(session.family.abonnement);
+  const msg = quand
+    ? `Résilier l'abonnement ? Papote continuera de fonctionner jusqu'au ${quand}, puis la tablette se mettra en pause.`
+    : "Résilier l'abonnement ? La tablette se mettra en pause à la fin de la période payée.";
+  if (!await askConfirm(msg, 'Résilier')) return;
+  withAboError(async () => {
+    const { le } = await resilier(session.fid);
+    notice(`Résiliation enregistrée. Papote fonctionnera jusqu'au ${dateLongue(le) || quand || 'terme de la période payée'}.`);
+  });
+});
+
+$('btn-garder').addEventListener('click', () => withAboError(async () => {
+  await annulerResiliation(session.fid);
+  toast('Abonnement gardé');
+}));
+
 $('btn-rattacher').addEventListener('click', () => withAboError(async () => {
   await rattacherCommande(session.fid);
   toast('Paiement retrouvé : abonnement rattaché');
@@ -1490,10 +1514,16 @@ function renderAbonnement() {
     $('abo-status').className = `abo-status s-${statut}`;
     const details = [];
     if (abo.formule) details.push(`Formule ${abo.formule === 'sim' ? 'carte SIM' : 'Wi-Fi'}, tablette ${abo.tablette === 'incluse' ? 'incluse' : 'achetée'}`);
-    if (abo.resiliationPrevue && abo.finPeriode) details.push(`Résiliation prévue le ${dateLongue(abo.finPeriode)}`);
-    else if (abo.finPeriode && statut === 'actif') details.push(`Prochaine échéance le ${dateLongue(abo.finPeriode)}`);
+    const futur = (t) => t && toDate(t) > new Date();
+    if (futur(abo.essaiJusqua)) details.push(`Essai gratuit jusqu'au ${dateLongue(abo.essaiJusqua)}`);
+    if (futur(abo.engagementJusqua)) details.push(`Engagement jusqu'au ${dateLongue(abo.engagementJusqua)}`);
+    if (abo.resiliationLe) details.push(`Résiliation prévue le ${dateLongue(abo.resiliationLe)}`);
+    else if (abo.finPeriode && statut === 'actif' && !futur(abo.essaiJusqua)) details.push(`Prochaine échéance le ${dateLongue(abo.finPeriode)}`);
     $('abo-details').textContent = details.join(' · ');
+    const enCours = ['actif', 'impaye'].includes(statut);
     $('btn-portail').hidden = !abo.stripeCustomerId || statut === 'offert';
+    $('btn-resilier').hidden = !enCours || !!abo.resiliationLe || !abo.stripeSubscriptionId;
+    $('btn-garder').hidden = !enCours || !abo.resiliationLe;
     $('abo-choices').hidden = !['aucun', 'resilie', 'suspendu'].includes(statut);
   }
   // Bandeaux : retard de paiement (responsables), pause (tout le monde).

@@ -43,3 +43,12 @@ export async function payer(fid, formule, tablette) {
 export function rattacherCommande(fid) {
   return call('rattacherCommande', { fid });
 }
+
+/** Résilier : l'abonnement s'arrête à la date renvoyée ({ le }), après l'engagement. */
+export function resilier(fid) {
+  return call('resilierAbonnement', { fid });
+}
+
+export function annulerResiliation(fid) {
+  return call('annulerResiliation', { fid });
+}
