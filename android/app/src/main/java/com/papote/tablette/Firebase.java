@@ -61,7 +61,6 @@ final class Firebase {
                 JSONObject j = new JSONObject(r.body);
                 remember(j.getString("id_token"), j.getString("refresh_token"),
                         j.getString("user_id"), j.optLong("expires_in", 3600));
-                if (!prefs.getBoolean("accountConverted", false)) convertAnonymous();
                 return idToken;
             }
             if (r.code != 400) throw new ApiException(r.code, r.body);
@@ -90,34 +89,19 @@ final class Firebase {
     }
 
     /**
-     * Ancien compte anonyme : on lui ajoute un e-mail et un mot de passe sans changer son uid,
-     * pour que la tablette reste membre de sa famille.
+     * Ancien compte anonyme : Firebase n'accepte pas d'y ajouter une adresse non vérifiée.
+     * Quand on donne un nouveau code tablette, on l'abandonne : la tablette crée son compte
+     * e-mail et mot de passe et rejoint la famille avec ce code.
      */
-    private void convertAnonymous() {
-        try {
-            String email = prefs.getString("email", null);
-            String password = prefs.getString("password", null);
-            if (email == null || password == null) {
-                email = "tablette-" + uid().toLowerCase() + ACCOUNT_DOMAIN;
-                password = randomString(32);
-                // Enregistrés avant l'appel : si la réponse se perd, on pourra quand même se reconnecter.
-                prefs.edit().putString("email", email).putString("password", password).apply();
-            }
-            Http.Response r = authCall("update", email, password, idToken);
-            if (r.ok()) {
-                JSONObject j = new JSONObject(r.body);
-                if (j.has("idToken")) rememberAuth(j);
-                prefs.edit().putBoolean("accountConverted", true).apply();
-                android.util.Log.i("Papote", "Compte de la tablette converti (e-mail et mot de passe)");
-            } else if (r.body.contains("EMAIL_EXISTS")) {
-                // Déjà fait lors d'un essai précédent.
-                prefs.edit().putBoolean("accountConverted", true).apply();
-            } else {
-                android.util.Log.w("Papote", "Conversion du compte : HTTP " + r.code + " " + r.body);
-            }
-        } catch (Exception e) {
-            android.util.Log.w("Papote", "Conversion du compte", e);
-        }
+    synchronized void forgetAnonymous() {
+        if (prefs.getBoolean("accountConverted", false)) return;
+        idToken = null;
+        idTokenExpiry = 0;
+        prefs.edit().remove("refreshToken").remove("uid").remove("email").remove("password").apply();
+    }
+
+    boolean isAnonymous() {
+        return !prefs.getBoolean("accountConverted", false);
     }
 
     private Http.Response authCall(String action, String email, String password, String idTokenOrNull)
@@ -135,7 +119,7 @@ final class Firebase {
 
     /**
      * Second compte, pour les appels vidéo (appels.js a sa propre connexion Firebase) :
-     * créé une fois, puis toujours le même. {"email": "...", "password": "..."}
+     * créé une fois sur Firebase, puis toujours le même. {"email": "...", "password": "..."}
      */
     synchronized String callsAccount() {
         String email = prefs.getString("callEmail", null);
@@ -149,6 +133,22 @@ final class Firebase {
             return new JSONObject().put("email", email).put("password", password).toString();
         } catch (JSONException e) {
             return "{}";
+        }
+    }
+
+    /** Crée le compte des appels sur Firebase s'il n'existe pas encore (hors du fil principal). */
+    synchronized void ensureCallsAccount() {
+        if (prefs.getBoolean("callAccountCreated", false)) return;
+        try {
+            JSONObject creds = new JSONObject(callsAccount());
+            Http.Response r = authCall("signUp", creds.getString("email"), creds.getString("password"), null);
+            if (r.ok() || r.body.contains("EMAIL_EXISTS")) {
+                prefs.edit().putBoolean("callAccountCreated", true).apply();
+            } else {
+                android.util.Log.w("Papote", "Compte des appels : HTTP " + r.code + " " + r.body);
+            }
+        } catch (Exception e) {
+            android.util.Log.w("Papote", "Compte des appels", e);
         }
     }
 

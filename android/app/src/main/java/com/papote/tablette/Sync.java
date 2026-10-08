@@ -118,6 +118,9 @@ final class Sync {
     /** Nouveau code tablette donné par ADB : on oublie la famille actuelle. */
     void reset() {
         handler.post(() -> {
+            // Tablette encore sur un ancien compte anonyme : elle passe à son compte e-mail
+            // et rejoint la famille avec le nouveau code.
+            firebase.forgetAnonymous();
             prefs.edit().remove("fid").apply();
             posts.clear();
             lastFullRefresh = 0;
@@ -182,7 +185,10 @@ final class Sync {
 
     private String familyId() throws IOException, JSONException {
         String fid = prefs.getString("fid", null);
-        if (fid != null) return fid;
+        if (fid != null) {
+            firebase.ensureCallsAccount();
+            return fid;
+        }
         // Code tablette : créé dans l'app famille (Réglages > Installer une tablette).
         String code = prefs.getString("code", null);
         if (code == null) {

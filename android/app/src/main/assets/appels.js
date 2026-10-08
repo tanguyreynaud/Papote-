@@ -3,7 +3,9 @@
 // La tablette a ici sa propre identité Firebase (SDK web, en temps réel) ; le reste de l'écran
 // passe par l'app Android (Sync.java).
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
-import { getAuth, signInAnonymously, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
+import {
+  getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword,
+} from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
 import {
   getFirestore, doc, getDoc, setDoc, updateDoc, addDoc, deleteDoc, collection, query, where,
   onSnapshot, serverTimestamp,
@@ -78,8 +80,35 @@ function user() {
   });
 }
 
+// Compte de la tablette pour les appels : une adresse et un mot de passe créés une fois par
+// l'app Android (pont callsAccount()). Plus de compte anonyme : la tablette se connecte avec
+// ce compte (créé côté Firebase au premier démarrage), puis s'inscrit avec son code de tablette.
+function callsAccount() {
+  try {
+    const account = JSON.parse(android().callsAccount());
+    return account && account.email && account.password ? account : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function signIn() {
+  const current = await user();
+  const account = android() && android().callsAccount ? callsAccount() : null;
+  if (!account) return null;
+  if (current && !current.isAnonymous && current.email === account.email) return current;
+  try {
+    return (await signInWithEmailAndPassword(auth, account.email, account.password)).user;
+  } catch (e) {
+    if (e.code !== 'auth/invalid-credential' && e.code !== 'auth/user-not-found') throw e;
+    // Premier démarrage : le compte n'existe pas encore.
+    return (await createUserWithEmailAndPassword(auth, account.email, account.password)).user;
+  }
+}
+
 async function joinFamily() {
-  const u = (await user()) || (await signInAnonymously(auth)).user;
+  const u = await signIn();
+  if (!u) return null;
   let saved = null;
   try { saved = localStorage.getItem(FID_KEY); } catch (e) { /* pas de stockage */ }
   const code = ((android() && android().getCode()) || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
