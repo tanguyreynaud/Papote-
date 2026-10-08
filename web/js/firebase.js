@@ -1,7 +1,7 @@
 // Initialisation Firebase et accès aux données, partagés par l'app famille et la tablette.
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
 import {
-  getAuth, signInAnonymously, onAuthStateChanged,
+  getAuth, onAuthStateChanged,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
 import {
   initializeFirestore, persistentLocalCache, persistentSingleTabManager,
@@ -69,8 +69,8 @@ export function currentUser() {
 export async function ensureSignedIn() {
   const user = await currentUser();
   if (user) return user;
-  const cred = await signInAnonymously(auth);
-  return cred.user;
+  // Plus de compte anonyme : il faut s'être connecté (Google ou lien e-mail) avant.
+  throw new Error('Connexion requise');
 }
 
 export function savedFamilyId() {
