@@ -502,6 +502,11 @@
   // ---------- Données venant d'Android ----------
 
   function onStatus(status) {
+    // Première installation chez le client : nom, wifi, puis appairage (bienvenue.js).
+    if (window.PapoteBienvenue) {
+      if (status.state === 'welcome') { window.PapoteBienvenue.show(status); return; }
+      window.PapoteBienvenue.hide();
+    }
     if (status.state === 'setup') {
       $('setup-detail').textContent = status.message || '';
       if (!hasData) showView('view-setup');

@@ -164,7 +164,8 @@ final class Sync {
             } catch (Exception e) {
                 Log.w(TAG, "Synchronisation", e);
             }
-            handler.postDelayed(this, realtime ? REALTIME_POLL_MS : POLL_MS);
+            // Pendant l'appairage, on regarde souvent si quelqu'un a tapé le code.
+            handler.postDelayed(this, pairingActive() ? 4_000 : realtime ? REALTIME_POLL_MS : POLL_MS);
         }
     };
 
@@ -192,7 +193,8 @@ final class Sync {
         // Code tablette : créé dans l'app famille (Réglages > Installer une tablette).
         String code = prefs.getString("code", null);
         if (code == null) {
-            status("setup", "Relancez le script d'installation avec le code tablette.");
+            // Pas de code donné à l'installation : c'est le client qui relie la tablette (écran Bienvenue).
+            pairingStep();
             return null;
         }
         JSONObject invite = firebase.get("invites/" + code);
@@ -911,6 +913,149 @@ final class Sync {
         } catch (Exception e) {
             Log.w(TAG, "Météo", e);
         }
+    }
+
+    // ---------- Écran Bienvenue : nom, wifi, puis appairage avec la famille ----------
+
+    private static final long PAIRING_MS = 15 * 60_000;
+    private static final String CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+    boolean pairingActive() {
+        return prefs.getString("fid", null) == null && prefs.getString("code", null) == null;
+    }
+
+    void setTabletName(String name) {
+        handler.post(() -> {
+            prefs.edit().putString("tabletName", name.trim()).apply();
+            poke();
+        });
+    }
+
+    void wifiDone() {
+        handler.post(() -> {
+            prefs.edit().putBoolean("wifiDone", true).apply();
+            poke();
+        });
+    }
+
+    String pairingCode() {
+        return prefs.getString("pairing", null);
+    }
+
+    private void welcome(JSONObject s) {
+        try {
+            s.put("state", "welcome");
+            String json = s.toString();
+            if (json.equals(lastStatusJson)) return;
+            lastStatusJson = json;
+            listener.onStatus(s);
+        } catch (JSONException ignored) { }
+    }
+
+    private void pairingStep() throws IOException, JSONException {
+        String name = prefs.getString("tabletName", null);
+        if (name == null || name.isEmpty()) { welcome(new JSONObject().put("step", "name")); return; }
+        if (!prefs.getBoolean("wifiDone", false)) { welcome(new JSONObject().put("step", "wifi").put("name", name)); return; }
+        firebase.token();
+        firebase.ensureCallsAccount();
+        String code = prefs.getString("pairing", null);
+        long expires = prefs.getLong("pairingExpires", 0);
+        if (code == null || System.currentTimeMillis() > expires) {
+            code = newPairing(name);
+            if (code == null) {
+                welcome(new JSONObject().put("step", "pair").put("name", name)
+                        .put("error", "Impossible de créer le code. Vérifiez la connexion internet."));
+                return;
+            }
+        }
+        JSONObject doc = firebase.get("pairings/" + code);
+        JSONObject f = doc == null ? null : doc.optJSONObject("fields");
+        String state = f == null ? "gone" : Firebase.str(f, "status");
+        if ("claimed".equals(state)) {
+            welcome(new JSONObject().put("step", "confirm").put("name", name).put("code", code)
+                    .put("claimedName", nz(Firebase.str(f, "claimedName")))
+                    .put("familyName", nz(Firebase.str(f, "familyName"))));
+        } else if ("waiting".equals(state)) {
+            welcome(new JSONObject().put("step", "pair").put("name", name).put("code", code)
+                    .put("expires", prefs.getLong("pairingExpires", 0)));
+        } else {
+            // Refusé, expiré ou disparu : un nouveau code au prochain tour.
+            prefs.edit().remove("pairing").remove("pairingExpires").apply();
+        }
+    }
+
+    private String newPairing(String name) {
+        java.security.SecureRandom rnd = new java.security.SecureRandom();
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < 8; i++) sb.append(CODE_ALPHABET.charAt(rnd.nextInt(CODE_ALPHABET.length())));
+        String code = sb.toString();
+        long expires = System.currentTimeMillis() + PAIRING_MS;
+        try {
+            java.text.SimpleDateFormat iso = new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US);
+            iso.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+            JSONObject fields = new JSONObject()
+                    .put("tabletUid", Firebase.string(firebase.uid()))
+                    .put("name", Firebase.string(name))
+                    .put("status", Firebase.string("waiting"))
+                    .put("expiresAt", new JSONObject().put("timestampValue", iso.format(new java.util.Date(expires))));
+            if (firebase.callsUid() != null) fields.put("callsUid", Firebase.string(firebase.callsUid()));
+            JSONObject write = new JSONObject()
+                    .put("update", new JSONObject()
+                            .put("name", Firebase.docName("pairings/" + code))
+                            .put("fields", fields))
+                    .put("updateTransforms", new JSONArray().put(new JSONObject()
+                            .put("fieldPath", "createdAt").put("setToServerValue", "REQUEST_TIME")))
+                    .put("currentDocument", new JSONObject().put("exists", false));
+            firebase.commit(new JSONArray().put(write));
+            prefs.edit().putString("pairing", code).putLong("pairingExpires", expires).apply();
+            return code;
+        } catch (Exception e) {
+            Log.w(TAG, "Code d'appairage", e);
+            return null;
+        }
+    }
+
+    /** Réponse sur la tablette : « C'est bien vous ? » Oui / Non. */
+    void confirmPairing(boolean yes) {
+        handler.post(() -> {
+            String code = prefs.getString("pairing", null);
+            if (code == null) return;
+            try {
+                JSONObject doc = firebase.get("pairings/" + code);
+                JSONObject f = doc == null ? null : doc.optJSONObject("fields");
+                if (f == null || !"claimed".equals(Firebase.str(f, "status"))) return;
+                String fid = Firebase.str(f, "fid");
+                JSONObject update = new JSONObject()
+                        .put("update", new JSONObject()
+                                .put("name", Firebase.docName("pairings/" + code))
+                                .put("fields", new JSONObject().put("status", Firebase.string(yes ? "confirmed" : "refused"))))
+                        .put("updateMask", new JSONObject().put("fieldPaths", new JSONArray().put("status")));
+                firebase.commit(new JSONArray().put(update));
+                if (!yes || fid == null) {
+                    prefs.edit().remove("pairing").remove("pairingExpires").apply();
+                    poke();
+                    return;
+                }
+                JSONObject fields = new JSONObject()
+                        .put("name", Firebase.string(prefs.getString("tabletName", "Tablette")))
+                        .put("role", Firebase.string("tablette"))
+                        .put("pairing", Firebase.string(code))
+                        .put("canCall", new JSONObject().put("booleanValue", true));
+                JSONObject member = new JSONObject()
+                        .put("update", new JSONObject()
+                                .put("name", Firebase.docName("families/" + fid + "/members/" + firebase.uid()))
+                                .put("fields", fields))
+                        .put("updateTransforms", new JSONArray().put(new JSONObject()
+                                .put("fieldPath", "joinedAt").put("setToServerValue", "REQUEST_TIME")))
+                        .put("currentDocument", new JSONObject().put("exists", false));
+                firebase.commit(new JSONArray().put(member));
+                prefs.edit().putString("fid", fid).apply();
+                status("ok", null);
+                poke();
+            } catch (Exception e) {
+                Log.w(TAG, "Confirmation de l'appairage", e);
+            }
+        });
     }
 
     private void status(String state, String message) {
