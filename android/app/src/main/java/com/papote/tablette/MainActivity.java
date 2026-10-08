@@ -385,6 +385,8 @@ public class MainActivity extends Activity implements Sync.Listener {
 
         @JavascriptInterface
         public void ring(boolean on) {
+            // Papote en pause (abonnement) : pas de sonnerie.
+            if (on && sync.paused()) return;
             handler.post(() -> callAudio.ring(on));
         }
 

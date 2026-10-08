@@ -111,6 +111,28 @@
   }
 
   // Taille du texte selon sa longueur : il tient toujours à l'écran sans faire défiler.
+  // Abonnement suspendu, résilié ou absent (écrit par le serveur) : Papote est en pause.
+  // Champ absent ou tablette hors ligne : rien ne change.
+  var pauseScreen = null;
+  function setPaused(statut) {
+    var paused = statut === 'suspendu' || statut === 'resilie' || statut === 'aucun';
+    window.papotePaused = paused; // lu par appels.js pour ne pas sonner
+    if (!pauseScreen) {
+      if (!paused) return;
+      pauseScreen = document.createElement('div');
+      pauseScreen.className = 'pause-screen';
+      pauseScreen.innerHTML = '<div class="pause-box"><p class="pause-title">Papote est en pause</p>' +
+        '<p class="pause-text">La famille a été prévenue.<br>Tout reviendra dès que ce sera réglé.</p></div>';
+      document.body.appendChild(pauseScreen);
+    }
+    pauseScreen.style.display = paused ? 'flex' : 'none';
+    if (paused) {
+      overlayQueue = [];
+      if (overlayPost) { overlayPost = null; show($('overlay'), false); }
+      showView('view-home');
+    }
+  }
+
   // Taille du texte choisie par la famille (normale, grande, très grande).
   var textScale = 1;
   function setTextSize(size) {
@@ -397,6 +419,7 @@
   // ---------- Écran d'un nouvel envoi : photo, message, vocal ou vidéo ----------
 
   function queueUnseen() {
+    if (window.papotePaused) return; // en pause : rien ne s'affiche ni n'est marqué « vu »
     var newestPhoto = null;
     for (var i = posts.length - 1; i >= 0; i--) {
       var p = posts[i];
@@ -524,6 +547,7 @@
     posts = payload.posts || [];
     familyCode = payload.familyCode || '';
     setTextSize(payload.textSize);
+    setPaused(payload.subscription);
     photos = [];
     for (var j = 0; j < posts.length; j++) {
       if (seenBefore[posts[j].id]) posts[j].seen = true;

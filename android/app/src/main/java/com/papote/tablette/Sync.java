@@ -84,6 +84,8 @@ final class Sync {
     private String familyName;
     private String familyCode;
     private String textSize;
+    /** Statut de l'abonnement (écrit par le serveur), vide si absent. */
+    private String subscription = "";
     private long lastFullRefresh;
     private long lastRev = Long.MIN_VALUE; // marqueur de changement de la famille
     private volatile boolean realtime;
@@ -265,13 +267,22 @@ final class Sync {
         try {
             // Une seule lecture : le marqueur « rev » ne bouge que si la famille a envoyé ou supprimé
             // quelque chose (ou modifié les rappels). Sinon, rien d'autre à lire.
-            JSONObject family = firebase.get("families/" + fid, "name", "rev", "code", "textSize");
+            JSONObject family = firebase.get("families/" + fid, "name", "rev", "code", "textSize", "abonnement");
             long rev = 0;
             JSONObject ff = family == null ? null : family.optJSONObject("fields");
             if (ff != null) {
                 familyName = Firebase.str(ff, "name");
                 familyCode = Firebase.str(ff, "code");
                 textSize = Firebase.str(ff, "textSize");
+                JSONObject ab = ff.optJSONObject("abonnement");
+                JSONObject abf = ab == null || ab.optJSONObject("mapValue") == null ? null
+                        : ab.getJSONObject("mapValue").optJSONObject("fields");
+                String statut = abf == null ? "" : nz(Firebase.str(abf, "statut"));
+                if (!statut.equals(subscription)) {
+                    subscription = statut;
+                    lastPostsJson = null; // la page doit l'apprendre tout de suite
+                    publishPosts();
+                }
                 rev = Firebase.integer(ff, "rev");
             }
             if (rev == lastRev && now - lastFullRefresh < FULL_REFRESH_MS) {
@@ -334,7 +345,7 @@ final class Sync {
         downloadVideos(fid);
         publishPosts();
         heartbeat(fid, "lastOnline");
-        if (newArrival) listener.onNewArrival();
+        if (newArrival && !paused()) listener.onNewArrival();
     }
 
     private JSONObject postsQuery(boolean full) throws JSONException {
@@ -734,6 +745,7 @@ final class Sync {
             JSONObject payload = new JSONObject().put("familyName", familyName == null ? "" : familyName)
                     .put("familyCode", familyCode == null ? "" : familyCode)
                     .put("textSize", textSize == null ? "" : textSize)
+                    .put("subscription", subscription)
                     .put("posts", arr);
             String json = payload.toString();
             if (json.equals(lastPostsJson)) return;
@@ -913,6 +925,11 @@ final class Sync {
         } catch (Exception e) {
             Log.w(TAG, "Météo", e);
         }
+    }
+
+    /** Abonnement suspendu, résilié ou absent côté serveur : Papote est en pause. */
+    boolean paused() {
+        return "suspendu".equals(subscription) || "resilie".equals(subscription) || "aucun".equals(subscription);
     }
 
     // ---------- Écran Bienvenue : nom, wifi, puis appairage avec la famille ----------
