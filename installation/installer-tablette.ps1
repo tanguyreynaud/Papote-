@@ -141,6 +141,15 @@ if ($owner -match "Device Owner[\s\S]*?$([regex]::Escape($Package))") {
     }
 }
 
+# Carte SIM : numéro ICCID noté pour la page « Forfaits SIM »
+$sim = Adb shell content query --uri content://telephony/siminfo --projection icc_id:display_name
+$iccids = @([regex]::Matches($sim, 'icc_id=(\d{10,22})') | ForEach-Object { $_.Groups[1].Value } | Select-Object -Unique)
+if ((Adb shell getprop gsm.sim.state) -match 'READY|LOADED' -and $iccids.Count) {
+    Say "Carte SIM : ICCID $($iccids -join ', ')" 'Green'
+} else {
+    Say 'Pas de carte SIM.' 'DarkGray'
+}
+
 # 6. Appels et SMS de la carte SIM refusés (Papote filtre les appels), applis inutiles désactivées
 Adb shell cmd role add-role-holder android.app.role.CALL_SCREENING $Package | Out-Null
 $useless = Get-Content (Join-Path $PSScriptRoot 'applis-inutiles.txt') | Where-Object { $_ -and $_ -notmatch '^#' }

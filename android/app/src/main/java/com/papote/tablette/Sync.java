@@ -613,6 +613,7 @@ final class Sync {
         }
         if ("lastOnline".equals(field)) {
             reportBattery(fid);
+            reportSim(fid);
             uploadJournal(fid, false);
         }
     }
@@ -1030,6 +1031,43 @@ final class Sync {
             sb.append("État indisponible.");
         }
         return sb.toString();
+    }
+
+    /** Carte SIM (page « Forfaits SIM ») : sim = {iccid, operateur, reseau, signal, dataMoisMo, vuLe}, ou null. */
+    private void reportSim(String fid) {
+        try {
+            JSONObject info = SimInfo.read(context);
+            JSONObject value;
+            if (info == null) {
+                value = new JSONObject().put("nullValue", JSONObject.NULL);
+            } else {
+                JSONObject fields = new JSONObject()
+                        .put("iccid", Firebase.string(info.optString("iccid")))
+                        .put("operateur", Firebase.string(info.optString("operateur")))
+                        .put("reseau", Firebase.string(info.optString("reseau")))
+                        .put("signal", new JSONObject().put("integerValue", String.valueOf(info.optInt("signal", -1))))
+                        .put("dataMoisMo", new JSONObject().put("integerValue", String.valueOf(info.optLong("dataMoisMo", -1))))
+                        // Heure de la tablette (réglée automatiquement) : un horodatage serveur ne peut pas
+                        // viser un champ à l'intérieur de « sim » écrit dans la même requête.
+                        .put("vuLe", new JSONObject().put("timestampValue", isoNow()));
+                value = new JSONObject().put("mapValue", new JSONObject().put("fields", fields));
+            }
+            JSONObject write = new JSONObject()
+                    .put("update", new JSONObject()
+                            .put("name", Firebase.docName("families/" + fid + "/members/" + firebase.uid()))
+                            .put("fields", new JSONObject().put("sim", value)))
+                    .put("updateMask", new JSONObject().put("fieldPaths", new JSONArray().put("sim")))
+                    .put("currentDocument", new JSONObject().put("exists", true));
+            firebase.commit(new JSONArray().put(write));
+        } catch (Exception e) {
+            Log.w(TAG, "Carte SIM", e);
+        }
+    }
+
+    private static String isoNow() {
+        java.text.SimpleDateFormat iso = new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US);
+        iso.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+        return iso.format(new java.util.Date());
     }
 
     private long lastJournalUpload;

@@ -67,7 +67,11 @@ $wifi = Adb shell dumpsys wifi
 if ($wifi -match 'mWifiInfo SSID: "?([^",]+)"?,') { Ok "Wifi : $($Matches[1])" } else { Say '  [ ? ]  Wifi : non connecté' 'Yellow' }
 $ping = Adb shell ping -c 1 -W 3 8.8.8.8
 if ($ping -match '1 received') { Ok 'Internet fonctionne' } else { Bad 'Pas d''internet' 'Vérifier la box, ou le bouton « régler le wifi » sur la tablette' }
-if ((Adb shell getprop gsm.sim.state) -match 'READY|LOADED') { Ok 'Carte SIM présente' } else { Say '  [ - ]  Pas de carte SIM' 'DarkGray' }
+if ((Adb shell getprop gsm.sim.state) -match 'READY|LOADED') {
+    $sim = Adb shell content query --uri content://telephony/siminfo --projection icc_id
+    $iccid = ([regex]::Matches($sim, 'icc_id=(\d{10,22})') | Select-Object -First 1).Groups[1].Value
+    Ok "Carte SIM présente (ICCID $iccid)"
+} else { Say '  [ - ]  Pas de carte SIM' 'DarkGray' }
 
 Say "`nBatterie et stockage" 'Cyan'
 $bat = Adb shell dumpsys battery
