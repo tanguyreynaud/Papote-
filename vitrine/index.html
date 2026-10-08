@@ -176,6 +176,7 @@ section { padding-block: clamp(3.5rem, 8vw, 6rem); }
 .choice b { font-size: 1.02rem; }
 .choice small { grid-column: 1; color: var(--muted); font-size: .95rem; }
 .choice .amount { grid-row: 1 / span 2; grid-column: 2; font: 800 1.35rem/1.1 var(--display); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.choice-btn { grid-column: 1 / -1; min-height: 2.75rem; margin-top: .5rem; }
 .choice .amount em { display: block; font: 400 .85rem/1.2 var(--body); color: var(--muted); font-style: normal; }
 .included { list-style: none; padding: 0; margin: 0; display: grid; gap: .5rem; }
 .included li { display: grid; grid-template-columns: 1.4rem minmax(0, 1fr); gap: .6rem; font-size: 1.02rem; }
@@ -235,7 +236,7 @@ footer a { color: var(--muted); }
       <a href="#fonctionnement">Comment ça marche</a>
       <a href="#tarifs">Tarifs</a>
       <a href="#questions">Questions</a>
-      <a class="btn btn-primary" href="#contact">Je suis intéressé</a>
+      <a class="btn btn-primary" href="#tarifs">Commander</a>
     </nav>
   </div>
 </header>
@@ -248,8 +249,8 @@ footer a { color: var(--muted); }
         <h1>Les photos de la famille arrivent chez Mamie. <span>Elle n'a rien à toucher.</span></h1>
         <p class="lead">Papote, c'est une tablette prête à l'emploi pour votre proche, et une appli sur le téléphone de toute la famille. Photos, vidéos, messages et appels vidéo s'affichent tout seuls.</p>
         <div class="hero-actions">
-          <a class="btn btn-primary" href="#contact">Je suis intéressé</a>
-          <a class="btn btn-ghost" href="#tarifs">Voir les tarifs</a>
+          <a class="btn btn-primary" href="#tarifs">Choisir ma formule</a>
+          <a class="btn btn-ghost" href="#fonctionnement">Comment ça marche</a>
         </div>
         <p class="hero-note">À partir de 20 € par mois. Tablette à 100 €, ou incluse dans l'abonnement.</p>
       </div>
@@ -357,8 +358,8 @@ footer a { color: var(--muted); }
           </div>
           <div class="price"><strong>20 €</strong><span>par mois</span></div>
           <div class="choices">
-            <div class="choice"><b>J'achète la tablette</b><small>Elle vous appartient.</small><span class="amount">100 €<em>une fois, puis 20 €/mois</em></span></div>
-            <div class="choice"><b>Tablette incluse</b><small>Rien à payer au départ.</small><span class="amount">25 €<em>par mois</em></span></div>
+            <div class="choice"><b>J'achète la tablette</b><small>Elle vous appartient.</small><span class="amount">100 €<em>une fois, puis 20 €/mois</em></span><a class="btn btn-ghost choice-btn" href="https://europe-west1-papote-famille.cloudfunctions.net/commander?formule=wifi&amp;tablette=achetee">Commander</a></div>
+            <div class="choice"><b>Tablette incluse</b><small>Rien à payer au départ.</small><span class="amount">25 €<em>par mois</em></span><a class="btn btn-primary choice-btn" href="https://europe-west1-papote-famille.cloudfunctions.net/commander?formule=wifi&amp;tablette=incluse">Commander</a></div>
           </div>
           <ul class="included">
             <li><svg><use href="#i-check"/></svg>Tablette livrée prête à brancher</li>
@@ -376,8 +377,8 @@ footer a { color: var(--muted); }
           </div>
           <div class="price"><strong>30 €</strong><span>par mois</span></div>
           <div class="choices">
-            <div class="choice"><b>J'achète la tablette</b><small>Elle vous appartient.</small><span class="amount">100 €<em>une fois, puis 30 €/mois</em></span></div>
-            <div class="choice"><b>Tablette incluse</b><small>Rien à payer au départ.</small><span class="amount">35 €<em>par mois</em></span></div>
+            <div class="choice"><b>J'achète la tablette</b><small>Elle vous appartient.</small><span class="amount">100 €<em>une fois, puis 30 €/mois</em></span><a class="btn btn-ghost choice-btn" href="https://europe-west1-papote-famille.cloudfunctions.net/commander?formule=sim&amp;tablette=achetee">Commander</a></div>
+            <div class="choice"><b>Tablette incluse</b><small>Rien à payer au départ.</small><span class="amount">35 €<em>par mois</em></span><a class="btn btn-primary choice-btn" href="https://europe-west1-papote-famille.cloudfunctions.net/commander?formule=sim&amp;tablette=incluse">Commander</a></div>
           </div>
           <ul class="included">
             <li><svg><use href="#i-check"/></svg>Tout ce qu'offre la formule Wifi</li>
@@ -385,7 +386,7 @@ footer a { color: var(--muted); }
           </ul>
         </article>
       </div>
-      <p class="plans-note">Prix par tablette. Toute la famille utilise l'appli sans supplément.</p>
+      <p class="plans-note">Prix par tablette. Toute la famille utilise l'appli sans supplément. Paiement sécurisé par carte ou prélèvement, résiliable depuis l'appli famille.</p>
     </div>
   </section>
 
@@ -425,6 +426,14 @@ footer a { color: var(--muted); }
           <p>Elle reste branchée et affiche vos photos toute la journée. La nuit, de 23 h à 7 h, l'écran se met en veille, et il s'assombrit en soirée pour ne pas éblouir.</p>
         </details>
         <details>
+          <summary>Comment se passe le paiement ?</summary>
+          <p>Par carte bancaire, sur une page de paiement sécurisée (Stripe). L'abonnement est prélevé chaque mois. Depuis l'appli famille, dans Réglages, vous retrouvez vos factures, changez de carte ou résiliez.</p>
+        </details>
+        <details>
+          <summary>Et si un paiement échoue ?</summary>
+          <p>Vous êtes prévenu par e-mail et tout continue de fonctionner pendant 7 jours. Sans règlement, la tablette se met en pause. Elle repart toute seule dès que le paiement passe.</p>
+        </details>
+        <details>
           <summary>Que deviennent nos photos et nos données ?</summary>
           <p>Elles servent uniquement à les afficher sur la tablette de votre famille. Elles ne sont ni revendues ni utilisées pour de la publicité. Depuis la page « Vos données » de l'appli, un responsable peut consulter ce qui est conservé et supprimer la famille entière à tout moment.</p>
         </details>
@@ -438,9 +447,9 @@ footer a { color: var(--muted); }
 
   <section id="contact" class="contact">
     <div class="wrap">
-      <h2>Envie d'essayer Papote ?</h2>
-      <p>Écrivez-nous quelques mots sur votre proche et sa connexion internet. Nous vous répondons pour organiser l'envoi de la tablette.</p>
-      <a class="btn btn-primary" id="cta-mail" href="mailto:tanguyreynaud22@gmail.com?subject=Je%20suis%20int%C3%A9ress%C3%A9%20par%20Papote">Je suis intéressé</a>
+      <h2>Une question avant de commander ?</h2>
+      <p>Écrivez-nous quelques mots sur votre proche et sa connexion internet. Nous vous aidons à choisir la bonne formule.</p>
+      <a class="btn btn-primary" id="cta-mail" href="mailto:tanguyreynaud22@gmail.com?subject=Une%20question%20sur%20Papote">Nous écrire</a>
       <div class="mail">
         <span>Ou écrivez à <code id="mail-addr">tanguyreynaud22@gmail.com</code></span>
         <button type="button" id="copy-mail">Copier l'adresse</button>
