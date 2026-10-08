@@ -7,7 +7,7 @@ import {
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
 import {
   getFirestore, collection, collectionGroup, query, where, orderBy, limit,
-  getDocs, getDoc, doc, writeBatch, getCountFromServer,
+  getDocs, getDoc, doc, writeBatch, getCountFromServer, setDoc, deleteDoc,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
 import {
   getStorage, ref, uploadBytes, getDownloadURL,
@@ -177,6 +177,55 @@ async function load() {
   }
 }
 
+// Tablette de remplacement : un code d'installation pour cette famille. Installée avec
+// installer-tablette.ps1 -Code, elle arrive déjà dans la famille, sans écran de bienvenue.
+const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+async function prepareReplacement(f, li) {
+  const out = li.querySelector('.replace-out');
+  if (!confirm(`Préparer une tablette de remplacement pour la famille de ${f.name} ?`)) return;
+  const bytes = crypto.getRandomValues(new Uint8Array(8));
+  const code = Array.from(bytes, (b) => CODE_ALPHABET[b % CODE_ALPHABET.length]).join('');
+  try {
+    await setDoc(doc(db, 'invites', code), { fid: f.id, createdBy: auth.currentUser.uid, kind: 'tablette' });
+  } catch (err) {
+    console.error(err);
+    alert("Le code n'a pas pu être créé.");
+    return;
+  }
+  const shown = `${code.slice(0, 4)}-${code.slice(4)}`;
+  out.hidden = false;
+  out.innerHTML = '';
+  const p1 = document.createElement('p');
+  p1.textContent = `Installez la nouvelle tablette avec : installer-tablette.ps1 -Code ${shown}`;
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'link danger small';
+  btn.textContent = "Retirer l'ancienne tablette de la famille";
+  btn.addEventListener('click', () => removeOldTablets(f, btn));
+  out.append(p1, btn);
+}
+
+// À faire une fois la nouvelle tablette installée : l'ancienne ne reçoit plus rien.
+async function removeOldTablets(f, btn) {
+  const snap = await getDocs(query(collection(db, 'families', f.id, 'members'), where('role', '==', 'tablette')));
+  const list = snap.docs.map((d) => ({ ref: d.ref, ...d.data() }))
+    .sort((a, b) => (toDate(b.joinedAt)?.getTime() || 0) - (toDate(a.joinedAt)?.getTime() || 0));
+  // On garde les fiches de la tablette la plus récente (ses deux comptes, inscrits à la même installation).
+  const newest = toDate(list[0]?.joinedAt)?.getTime() || 0;
+  const old = list.filter((t) => newest - (toDate(t.joinedAt)?.getTime() || 0) > 10 * 60_000);
+  if (!old.length) { alert("Aucune ancienne tablette à retirer : installez d'abord la nouvelle."); return; }
+  if (!confirm(`Retirer ${old.length} fiche(s) d'ancienne tablette de la famille de ${f.name} ?`)) return;
+  btn.disabled = true;
+  try {
+    for (const t of old) await deleteDoc(t.ref);
+    btn.textContent = 'Ancienne tablette retirée';
+  } catch (err) {
+    console.error(err);
+    alert('Le retrait a échoué.');
+    btn.disabled = false;
+  }
+}
+
 function state(f) {
   if (!f.hasTablet) return { cls: 'none', label: 'Pas de tablette' };
   if (!f.online || Date.now() - f.online.getTime() > OFFLINE_MS) return { cls: 'off', label: `Hors ligne, vue ${ago(f.online)}` };
@@ -207,7 +256,9 @@ function render() {
       ['Envois', f.posts ?? '–'],
       ['Dernier envoi', ago(f.lastPost)],
     ];
-    li.innerHTML = `<div class="family-head"><span class="dot"></span><strong></strong><code></code></div><dl></dl>`;
+    li.innerHTML = `<div class="family-head"><span class="dot"></span><strong></strong><code></code></div><dl></dl>
+      <div class="replace"><button type="button" class="link small replace-btn">Tablette de remplacement</button><p class="replace-out small" hidden></p></div>`;
+    li.querySelector('.replace-btn').addEventListener('click', () => prepareReplacement(f, li));
     li.querySelector('strong').textContent = f.name;
     li.querySelector('code').textContent = f.code ? `${f.code.slice(0, 4)}-${f.code.slice(4)}` : '';
     const dl = li.querySelector('dl');

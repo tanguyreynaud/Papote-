@@ -142,7 +142,9 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly(['fid', 'createdBy', 'kind'])
         && request.resource.data.createdBy == request.auth.uid
         && (!('kind' in request.resource.data) || request.resource.data.kind == 'tablette')
-        && (isCreatorAfter(request.resource.data.fid) || isFamilyAdmin(request.resource.data.fid));
+        && (isCreatorAfter(request.resource.data.fid) || isFamilyAdmin(request.resource.data.fid)
+          // Tablette de remplacement préparée par l'administrateur depuis le tableau de bord.
+          || (isAdmin() && request.resource.data.kind == 'tablette'));
       allow update: if false;
       allow delete: if isFamilyAdmin(resource.data.fid);
       // Retrouver les codes d'une famille pour la supprimer (requête where fid == …).
@@ -247,6 +249,8 @@ service cloud.firestore {
           && request.resource.data.name.size() > 0
           && request.resource.data.name.size() <= 40;
         allow delete: if signedIn() && uid == request.auth.uid;
+        // Ancienne tablette retirée par l'administrateur (remplacement).
+        allow delete: if isAdmin() && resource.data.role == 'tablette';
         // Un responsable peut retirer ou refuser un membre (la tablette seulement en supprimant la famille).
         allow delete: if isFamilyAdmin(fid);
       }

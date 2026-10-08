@@ -1991,6 +1991,8 @@ $('form-pair-code').addEventListener('submit', async (e) => {
     );
     $('pair-family-wrap').hidden = !adminFamilies.length;
     $('pair-grand').value = data.name || '';
+    // Première tablette : la famille porte le nom donné sur la tablette, il ne reste que son prénom.
+    $('pair-grand-wrap').hidden = !!data.name;
     $('pair-myname').value = session?.member.name || (authUser.displayName || '').split(' ')[0];
     syncClaimLabel();
     pairStep('form-pair-claim');
@@ -2004,7 +2006,7 @@ function syncClaimLabel() {
   const isNew = $('pair-family').value === NEW_FAMILY;
   $('pair-new').hidden = !isNew;
   const fam = adminFamilies.find((f) => f.fid === $('pair-family').value);
-  $('btn-pair-claim').textContent = isNew ? 'Créer la famille et relier la tablette' : `Relier à la famille de ${fam.name}`;
+  $('btn-pair-claim').textContent = isNew ? 'Valider' : `Relier à la famille de ${fam.name}`;
 }
 $('pair-family').addEventListener('change', syncClaimLabel);
 
