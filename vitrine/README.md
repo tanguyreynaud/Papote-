@@ -1,36 +1,15 @@
 # Site vitrine Papote
 
-Page de présentation publique (fonctionnement, tarifs, FAQ, contact). Fichiers statiques, sans dépendance : `index.html` et `icon.svg`.
+Page de présentation publique : fonctionnement, tarifs, FAQ, boutons Commander (paiement Stripe, voir `functions/`) et page `merci.html` après paiement. Fichiers statiques, sans dépendance.
 
-## Déploiement prévu
+## Publication
 
-Un second site Firebase Hosting dans le projet `papote-famille`, à côté de l'appli famille (dont l'adresse ne change pas).
+Second site Firebase Hosting du projet `papote-famille`, à côté de l'app famille (dont l'adresse ne change pas).
 
-1. Créer le site une fois : `firebase hosting:sites:create papote` (ou un autre nom libre, par exemple `papote-tablette`). Il sera servi sur `https://<nom>.web.app`.
-2. Associer les cibles :
-   ```
-   firebase target:apply hosting famille papote-famille
-   firebase target:apply hosting vitrine <nom>
-   ```
-3. Dans `firebase.json`, `hosting` devient une liste de deux entrées (voir ci-dessous).
-4. Déployer le site seul : `firebase deploy --only hosting:vitrine`.
+Une seule fois : `firebase hosting:sites:create papote --project papote-famille` (adresse https://papote.web.app ; si le nom est pris, en choisir un autre et le reporter dans `.firebaserc` et `functions/.env`).
 
-```json
-"hosting": [
-  {
-    "target": "famille",
-    "public": "web",
-    "ignore": ["firebase.json", "**/.*"],
-    "headers": [
-      { "source": "**", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] }
-    ]
-  },
-  {
-    "target": "vitrine",
-    "public": "vitrine",
-    "ignore": ["README.md", "**/.*"]
-  }
-]
-```
+Ensuite, comme l'app famille :
+- `node outils/vitrine/publier.mjs test` : adresse de test à vérifier ;
+- `node outils/vitrine/publier.mjs en-ligne` : mise en ligne.
 
-Avec ce changement, `firebase deploy --only hosting` déploie les deux sites ; `--only hosting:famille` ne déploie que l'appli famille.
+Prérequis dans `firebase.json` et `.firebaserc` (fil de l'app famille) : cibles d'hébergement `famille` (web/) et `vitrine` (vitrine/).
