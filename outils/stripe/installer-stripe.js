@@ -62,7 +62,7 @@ function lirePressePapiers() {
 
 function viderPressePapiers() {
   try {
-    execSync('powershell -NoProfile -Command Set-Clipboard -Value " "');
+    execSync('cmd /c "echo.| clip"', { stdio: 'ignore' });
   } catch (e) { /* sans importance */ }
 }
 
