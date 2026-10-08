@@ -50,6 +50,36 @@ const PRODUITS = [
   },
 ];
 
+// Sous Windows, coller dans la fenêtre ne marche pas toujours : la clé est lue dans le
+// presse-papiers (copiée depuis Stripe), puis le presse-papiers est vidé.
+function lirePressePapiers() {
+  try {
+    return execSync('powershell -NoProfile -Command Get-Clipboard', { encoding: 'utf8' });
+  } catch (e) {
+    return '';
+  }
+}
+
+function viderPressePapiers() {
+  try {
+    execSync('powershell -NoProfile -Command Set-Clipboard -Value " "');
+  } catch (e) { /* sans importance */ }
+}
+
+async function cleDepuisPressePapiers() {
+  for (;;) {
+    const reponse = await demander('Copiez la clé secrète dans Stripe (Développeurs > Clés API, sk_test_...),\n'
+      + 'puis appuyez sur Entrée ici (ou collez-la puis Entrée) : ');
+    const lue = /(sk|rk)_(test|live)_[A-Za-z0-9]+/.test(reponse) ? reponse : lirePressePapiers();
+    if (/(sk|rk)_(test|live)_[A-Za-z0-9]+/.test(lue)) {
+      viderPressePapiers();
+      console.log('Clé lue.');
+      return lue;
+    }
+    console.log('Aucune clé secrète (sk_...) dans le presse-papiers. Copiez-la dans Stripe et réessayez.');
+  }
+}
+
 function demander(question) {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((ok) => rl.question(question, (r) => { rl.close(); ok(r.trim()); }));
@@ -126,8 +156,7 @@ function secretFirebase(nom, valeur) {
 }
 
 (async () => {
-  const saisie = process.env.STRIPE_SECRET
-    || await demander('Clé secrète Stripe (Développeurs > Clés API, sk_test_... ou sk_live_...) : ');
+  const saisie = process.env.STRIPE_SECRET || await cleDepuisPressePapiers();
   // Un collage dans la fenêtre Windows peut ajouter des caractères invisibles ou des guillemets.
   const trouvee = String(saisie).match(/(sk|rk)_(test|live)_[A-Za-z0-9]+/);
   if (!trouvee) {
