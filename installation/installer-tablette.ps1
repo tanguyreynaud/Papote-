@@ -86,12 +86,14 @@ if (-not $Oui) {
 }
 
 # 2. Code tablette
-if (-not $Code) {
-    Say "`nCréez un code tablette dans l'app Papote : Réglages > Installer une tablette (exemple : ABCD-2345)."
+# Sans code : la tablette affichera l'écran « Bienvenue » et le client la reliera lui-même
+# (nom, wifi, puis QR code à scanner avec l'app famille).
+if (-not $Code -and -not $Oui) {
+    Say "`nCode tablette (app Papote : Réglages > Installer une tablette), ou Entrée pour laisser le client la relier lui-même."
     $Code = Read-Host 'Code tablette'
 }
 $Code = ($Code.ToUpper() -replace '[^A-Z0-9]', '')
-if ($Code.Length -ne 8) { Fail "Le code tablette doit contenir 8 caractères (reçu : « $Code »)." }
+if ($Code -and $Code.Length -ne 8) { Fail "Le code tablette doit contenir 8 caractères (reçu : « $Code »)." }
 
 # 3. Installation de l'app (-g : caméra et micro accordés d'office pour les appels)
 Say "`nInstallation de l'app…"
@@ -142,7 +144,12 @@ foreach ($p in $useless) { Adb shell pm disable-user --user 0 $p.Trim() | Out-Nu
 Say 'Appels de la carte SIM bloqués, applis inutiles désactivées.' 'Green'
 
 # 7. Lancement relié à la famille
-Adb shell am start -n "$Package/.MainActivity" --es code $Code --ez lock true | Out-Null
+if ($Code) {
+    Adb shell am start -n "$Package/.MainActivity" --es code $Code --ez lock true | Out-Null
+} else {
+    Adb shell am start -n "$Package/.MainActivity" --ez lock true | Out-Null
+    Say "`nLa tablette affiche « Bienvenue » : le client lui donnera un nom, choisira son wifi et la reliera à sa famille." 'Cyan'
+}
 
 Say "`n=== Terminé ! La tablette affiche Papote. ===" 'Cyan'
 Say 'Vous pouvez débrancher le câble USB (laissez la tablette sur son chargeur).'

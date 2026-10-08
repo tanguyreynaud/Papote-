@@ -1,0 +1,67 @@
+/* Écran « Bienvenue » : première installation chez le client */
+
+.welcome {
+  position: fixed;
+  top: 0; right: 0; bottom: 0; left: 0;
+  z-index: 900;
+  overflow-y: auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 4vmin;
+  background: linear-gradient(135deg, #fff8f1, #fde9d8);
+  color: #2d2420;
+  font-family: 'Alegreya Sans', Roboto, sans-serif;
+}
+.welcome[hidden] { display: none; }
+.welcome-box { width: 100%; max-width: 150vmin; text-align: center; }
+.welcome-brand { margin: 0; font-size: 5vmin; font-weight: 700; color: #c2410c; }
+.welcome-title { margin: 1vmin 0 1.5vmin; font-size: 8vmin; line-height: 1.1; }
+.welcome-sub { margin: 0 0 3vmin; font-size: 5vmin; color: #57534e; }
+.welcome-input {
+  display: block;
+  width: 100%;
+  max-width: 110vmin;
+  margin: 2vmin auto 3vmin;
+  padding: 2.5vmin 3vmin;
+  border: .6vmin solid #d6c7b8;
+  border-radius: 3vmin;
+  background: #fff;
+  font: inherit;
+  font-size: 7vmin;
+  text-align: center;
+}
+.welcome-btn {
+  display: inline-block;
+  min-height: 14vmin;
+  margin: 1.5vmin;
+  padding: 0 7vmin;
+  border: 0;
+  border-radius: 4vmin;
+  background: #fff;
+  color: #5e4b63;
+  font: inherit;
+  font-size: 6vmin;
+  font-weight: 700;
+  box-shadow: 0 1vmin 2.5vmin rgba(0, 0, 0, .15);
+}
+.welcome-btn.primary { background: #16a34a; color: #fff; }
+.welcome-btn.no { background: #dc2626; color: #fff; }
+.welcome-btn[disabled] { opacity: .6; }
+.welcome-list { display: flex; flex-wrap: wrap; justify-content: center; }
+.welcome-btn.network { position: relative; min-width: 60vmin; padding-right: 12vmin; text-align: left; }
+.bars { position: absolute; right: 4vmin; top: 50%; width: 5vmin; height: 5vmin; margin-top: -2.5vmin;
+  border-radius: 1vmin; background: #d6c7b8; }
+.bars-2 { background: #fbbf24; }
+.bars-3 { background: #16a34a; }
+.welcome-ok { margin: 2vmin 0; font-size: 6vmin; font-weight: 700; color: #15803d; }
+.welcome-error { margin: 2vmin 0; font-size: 5.5vmin; font-weight: 700; color: #b91c1c; }
+.welcome-pair { display: flex; align-items: center; justify-content: center; gap: 6vmin; margin-top: 2vmin; }
+.welcome-qr { width: 48vmin; height: 48vmin; padding: 2vmin; background: #fff; border-radius: 3vmin;
+  box-shadow: 0 1vmin 3vmin rgba(0, 0, 0, .15); }
+.welcome-steps { max-width: 70vmin; text-align: left; }
+.welcome-step { margin: 0; font-size: 5vmin; line-height: 1.25; }
+.welcome-or { margin: 2vmin 0; font-size: 5vmin; font-weight: 700; color: #a8998d; }
+.welcome-code { margin: 1.5vmin 0; font-size: 10vmin; font-weight: 700; letter-spacing: .5vmin; color: #c2410c; }
+.welcome-actions { margin-top: 4vmin; }
+.welcome-actions .welcome-btn { min-width: 40vmin; min-height: 18vmin; font-size: 8vmin; }

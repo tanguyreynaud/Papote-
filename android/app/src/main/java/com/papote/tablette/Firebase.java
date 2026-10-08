@@ -138,12 +138,16 @@ final class Firebase {
 
     /** Crée le compte des appels sur Firebase s'il n'existe pas encore (hors du fil principal). */
     synchronized void ensureCallsAccount() {
-        if (prefs.getBoolean("callAccountCreated", false)) return;
+        if (prefs.getBoolean("callAccountCreated", false) && prefs.getString("callUid", null) != null) return;
         try {
             JSONObject creds = new JSONObject(callsAccount());
             Http.Response r = authCall("signUp", creds.getString("email"), creds.getString("password"), null);
-            if (r.ok() || r.body.contains("EMAIL_EXISTS")) {
-                prefs.edit().putBoolean("callAccountCreated", true).apply();
+            if (!r.ok() && r.body.contains("EMAIL_EXISTS")) {
+                r = authCall("signInWithPassword", creds.getString("email"), creds.getString("password"), null);
+            }
+            if (r.ok()) {
+                prefs.edit().putBoolean("callAccountCreated", true)
+                        .putString("callUid", new JSONObject(r.body).getString("localId")).apply();
             } else {
                 android.util.Log.w("Papote", "Compte des appels : HTTP " + r.code + " " + r.body);
             }
@@ -152,7 +156,11 @@ final class Firebase {
         }
     }
 
-    private static String randomString(int length) {
+    String callsUid() {
+        return prefs.getString("callUid", null);
+    }
+
+    static String randomString(int length) {
         String alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
         java.security.SecureRandom rnd = new java.security.SecureRandom();
         StringBuilder sb = new StringBuilder();

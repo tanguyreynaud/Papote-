@@ -999,3 +999,20 @@ html .bday-banner { font-size: calc(5.5vmin * var(--ts, 1)); }
 html .rdv-title { font-size: calc(8.5vmin * var(--ts, 1)); }
 html .frame-caption { font-size: calc(5vmin * var(--ts, 1)); }
 html .ln-text.size-xs { font-size: calc(5.4vmin * var(--ts, 1)); }
+
+/* ---------- Papote en pause (abonnement) ---------- */
+
+.pause-screen {
+  position: fixed;
+  top: 0; right: 0; bottom: 0; left: 0;
+  z-index: 950;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #f5f0ea, #e7ddd2);
+  color: #3f3a36;
+  font-family: 'Alegreya Sans', Roboto, sans-serif;
+  text-align: center;
+}
+.pause-title { margin: 0 0 3vmin; font-size: 11vmin; font-weight: 700; }
+.pause-text { margin: 0; font-size: 6vmin; line-height: 1.3; color: #6b625b; }

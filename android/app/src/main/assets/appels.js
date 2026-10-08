@@ -106,12 +106,54 @@ async function signIn() {
   }
 }
 
+// Jumelage (nouvelle tablette) : la tablette affiche un code, un responsable la réclame,
+// puis elle confirme à l'écran. On attend en direct que pairings/{code} passe à « confirmed ».
+// Renvoie le document de jumelage confirmé, ou null s'il est refusé ou expiré.
+function waitPairing(pairing) {
+  return new Promise((resolve) => {
+    let stop = () => {};
+    const done = (value) => { stop(); resolve(value); };
+    stop = onSnapshot(doc(db, 'pairings', pairing), (snap) => {
+      const data = snap.data();
+      if (!data) { done(null); return; }
+      if (data.status === 'confirmed' && data.fid) { done(data); return; }
+      if (!['waiting', 'claimed'].includes(data.status)) done(null);
+    }, (err) => {
+      console.warn('Appels : jumelage illisible', err && err.code);
+      done(null);
+    });
+  });
+}
+
+async function joinByPairing(u, pairing, saved) {
+  if (saved) {
+    let member = null;
+    try { member = await getDoc(doc(db, 'families', saved, 'members', u.uid)); } catch (e) { /* pas membre */ }
+    if (member && member.exists()) return saved;
+  }
+  const data = await waitPairing(pairing);
+  if (!data) return null;
+  const memberRef = doc(db, 'families', data.fid, 'members', u.uid);
+  let member = null;
+  try { member = await getDoc(memberRef); } catch (e) { /* pas encore membre */ }
+  if (!member || !member.exists()) {
+    // Les règles n'acceptent cette fiche que dans l'heure qui suit l'expiration du code.
+    await setDoc(memberRef, {
+      name: (data.name || 'Tablette').slice(0, 40), role: 'tablette', pairing, joinedAt: serverTimestamp(), canCall: true,
+    });
+  }
+  try { localStorage.setItem(FID_KEY, data.fid); } catch (e) { /* pas de stockage */ }
+  return data.fid;
+}
+
 async function joinFamily() {
   const u = await signIn();
   if (!u) return null;
   let saved = null;
   try { saved = localStorage.getItem(FID_KEY); } catch (e) { /* pas de stockage */ }
   const code = ((android() && android().getCode()) || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const pairing = !code && android() && android().getPairing ? (android().getPairing() || '') : '';
+  if (pairing) return joinByPairing(u, pairing, saved);
   if (!saved && !code) return null;
 
   // Le code saisi à l'installation est un code de tablette (invites/{code}, kind 'tablette') :
@@ -309,6 +351,26 @@ function stopFaceWatch(keepStream) {
   return null;
 }
 
+// ---------- Pause (abonnement suspendu) ----------
+// L'app Android met window.papotePaused à true pendant la pause.
+
+const paused = () => window.papotePaused === true;
+
+function refuseWhilePaused(id) {
+  updateDoc(doc(db, 'families', fid, 'calls', id), { state: 'missed', endedAt: serverTimestamp() }).catch(() => {});
+}
+
+// La pause peut commencer pendant une sonnerie ou un appel : on coupe aussitôt.
+setInterval(() => {
+  if (!paused()) return;
+  if (ringing) {
+    const { id } = ringing;
+    hideRing();
+    refuseWhilePaused(id);
+  }
+  if (active) hangup('');
+}, 2000);
+
 function watchCalls() {
   const q = query(collection(db, 'families', fid, 'calls'), where('state', '==', 'ringing'));
   onSnapshot(q, (snap) => {
@@ -317,6 +379,11 @@ function watchCalls() {
       const data = d.data({ serverTimestamps: 'estimate' });
       return !data.calleeUid && data.createdAt && now - data.createdAt.toMillis() < FRESH_MS;
     });
+    // Abonnement suspendu : la tablette est en pause, aucun appel. L'appelant voit « Pas de réponse ».
+    if (paused()) {
+      fresh.forEach((d) => refuseWhilePaused(d.id));
+      return;
+    }
     // L'appel qui sonnait a été annulé par l'appelant.
     if (ringing && !fresh.some((d) => d.id === ringing.id)) hideRing();
     if (!ringing && !active && fresh.length) {
@@ -335,7 +402,7 @@ function setStatus(text) {
 }
 
 async function answer() {
-  if (!ringing) return;
+  if (!ringing || paused()) return;
   const { id, data } = ringing;
   let stream = hideRing(true);
   const callRef = doc(db, 'families', fid, 'calls', id);

@@ -28,8 +28,10 @@ et une app pour que la famille lui envoie photos et messages depuis iPhone ou An
 2. Pour le mode kiosque complet, la tablette ne doit avoir **aucun compte** (Google, Samsung…).
    Le plus simple : la réinitialiser et passer la configuration sans ajouter de compte.
 3. Brancher la tablette au PC en USB et double-cliquer sur `installation/installer-tablette.bat`.
-4. Entrer le code tablette : dans l'app famille, Réglages > Installer une tablette
-   (le code famille ne marche pas pour une tablette).
+4. Entrer le code tablette (app famille, Réglages > Installer une tablette), ou rien :
+   la tablette affiche alors l'écran « Bienvenue » et le client la configure lui-même, sans PC :
+   nom de la tablette, wifi (sauté s'il y a une carte SIM avec internet), puis QR code ou code à taper
+   dans l'app famille (« Ajouter ma tablette »), et confirmation « C'est bien vous ? » sur la tablette.
 
 ## Publier une mise à jour
 

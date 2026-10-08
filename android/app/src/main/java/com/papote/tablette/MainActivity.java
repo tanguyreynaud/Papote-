@@ -62,6 +62,7 @@ public class MainActivity extends Activity implements Sync.Listener {
     private CallAudio callAudio;
     private VoicePlayer voicePlayer;
     private VideoView videoView;
+    private Wifi wifi;
     private final Handler handler = new Handler(Looper.getMainLooper());
 
     @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
@@ -166,6 +167,7 @@ public class MainActivity extends Activity implements Sync.Listener {
         }
 
         sync = new Sync(this, prefs, this);
+        wifi = new Wifi(this, admin());
         handleIntent(getIntent());
         setupDeviceOwner();
         setVolumes();
@@ -343,8 +345,48 @@ public class MainActivity extends Activity implements Sync.Listener {
             return sync.callsAccount();
         }
 
+        // ---------- Écran Bienvenue (première installation chez le client) ----------
+
+        @JavascriptInterface
+        public void setTabletName(String name) {
+            if (name != null && !name.trim().isEmpty()) sync.setTabletName(name.length() > 40 ? name.substring(0, 40) : name);
+        }
+
+        @JavascriptInterface
+        public String wifiScan() {
+            return wifi.scan();
+        }
+
+        @JavascriptInterface
+        public boolean wifiConnect(String ssid, String password) {
+            return wifi.connect(ssid, password);
+        }
+
+        @JavascriptInterface
+        public String wifiStatus() {
+            return wifi.status();
+        }
+
+        @JavascriptInterface
+        public void wifiDone() {
+            sync.wifiDone();
+        }
+
+        @JavascriptInterface
+        public void confirmPairing(boolean yes) {
+            sync.confirmPairing(yes);
+        }
+
+        /** Code d'appairage en cours (pour l'inscription du compte des appels), ou null. */
+        @JavascriptInterface
+        public String getPairing() {
+            return sync.pairingCode();
+        }
+
         @JavascriptInterface
         public void ring(boolean on) {
+            // Papote en pause (abonnement) : pas de sonnerie.
+            if (on && sync.paused()) return;
             handler.post(() -> callAudio.ring(on));
         }
 
