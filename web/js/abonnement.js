@@ -40,8 +40,10 @@ export async function payer(fid, formule, tablette) {
   location.href = url;
 }
 
-export function rattacherCommande(fid) {
-  return call('rattacherCommande', { fid });
+/** Relier une commande payée sur le site : par son code (« ABCD-EFGH »), sinon par l'e-mail du compte. */
+export function rattacherCommande(fid, code) {
+  const clean = (code || '').trim();
+  return call('rattacherCommande', clean ? { fid, code: clean } : { fid });
 }
 
 /** Résilier : l'abonnement s'arrête à la date renvoyée ({ le }), après l'engagement. */

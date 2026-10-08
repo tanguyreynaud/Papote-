@@ -832,3 +832,8 @@ button:disabled { opacity: .45; cursor: default; }
 .remote-buttons #btn-logs { grid-column: 1 / -1; }
 .logs { max-height: 50vh; overflow: auto; margin: 6px 0 0; padding: 10px; border-radius: 10px; background: var(--bg); font-size: 11px; line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere; }
 .abo-banner { flex-wrap: wrap; }
+
+.order-wrap { width: 100%; color: var(--text); font-weight: 400; }
+.order-wrap p { margin: 4px 0 8px; }
+.order-link { display: flex; gap: 8px; }
+.order-link input { margin: 0; flex: 1; min-width: 0; text-transform: uppercase; }

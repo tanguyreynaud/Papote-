@@ -203,7 +203,13 @@
       <div id="abo-banner" class="abo-banner" hidden>
         <p id="abo-banner-text"></p>
         <button type="button" id="abo-banner-btn" class="primary small-btn" hidden>Régler</button>
-        <button type="button" id="abo-banner-paid" class="primary small-btn" hidden>J'ai déjà payé sur le site</button>
+        <div id="abo-banner-paid" class="order-wrap" hidden>
+          <p class="small">Déjà commandé sur le site ? Entrez le code de commande (sur la page de confirmation ou la facture), ou laissez vide pour chercher avec votre adresse e-mail.</p>
+          <form class="order-link" data-order-form>
+          <input class="order-code" placeholder="ABCD-EFGH" aria-label="Code de commande" autocapitalize="characters" autocomplete="off" spellcheck="false">
+          <button type="submit" class="primary small-btn">Relier</button>
+        </form>
+        </div>
       </div>
       <p id="activity" class="activity" hidden></p>
       <p id="outbox" class="outbox" hidden></p>
@@ -383,7 +389,11 @@
           <div id="abo-choices" hidden>
             <p class="muted small">Choisissez la formule. Le paiement se fait sur la page sécurisée de Stripe.</p>
             <div id="abo-formules" class="abo-formules"></div>
-            <button type="button" id="btn-rattacher" class="link wide">J'ai déjà payé sur le site</button>
+            <p class="muted small">Déjà payé sur le site ? Entrez le code de commande, ou laissez vide pour chercher avec votre adresse e-mail.</p>
+            <form class="order-link" data-order-form>
+              <input class="order-code" placeholder="ABCD-EFGH" aria-label="Code de commande" autocapitalize="characters" autocomplete="off" spellcheck="false">
+              <button type="submit" class="primary small-btn">Relier</button>
+            </form>
           </div>
           <p id="abo-error" class="error" hidden></p>
         </div>

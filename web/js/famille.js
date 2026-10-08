@@ -1468,21 +1468,31 @@ async function withAboError(fn) {
 }
 
 $('btn-portail').addEventListener('click', () => withAboError(() => ouvrirPortail(session.fid)));
-// Commande payée sur le site avec une autre adresse : le propriétaire la rattache depuis l'accueil.
-$('abo-banner-paid').addEventListener('click', async () => {
-  $('abo-banner-paid').disabled = true;
+// Commande payée sur le site : le propriétaire la relie avec son code, ou avec l'e-mail du compte.
+document.querySelectorAll('[data-order-form]').forEach((form) => form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const input = form.querySelector('.order-code');
+  const btn = form.querySelector('button');
+  btn.disabled = true;
   try {
-    await rattacherCommande(session.fid);
-    toast('Paiement retrouvé : la tablette va démarrer');
+    await rattacherCommande(session.fid, input.value);
+    input.value = '';
+    toast('Commande reliée : la tablette va démarrer');
   } catch (err) {
     console.error(err);
-    notice(err.code === 'functions/not-found'
-      ? `Aucun paiement trouvé pour ${myEmail()}. Connectez-vous à Papote avec l'adresse e-mail utilisée lors de la commande, ou écrivez au support depuis la page Support.`
-      : 'La vérification a échoué. Réessayez dans un instant.');
+    const code = err.code || '';
+    notice(code.endsWith('not-found')
+      ? (input.value.trim()
+        ? 'Ce code de commande est inconnu. Vérifiez-le sur la page de confirmation ou la facture.'
+        : `Aucune commande trouvée pour ${myEmail()}. Entrez le code de commande, il est sur la page de confirmation et sur la facture.`)
+      : code.endsWith('invalid-argument') ? 'Ce code de commande n\'a pas le bon format (8 lettres, comme ABCD-EFGH).'
+        : code.endsWith('failed-precondition') ? 'Cette famille a déjà un abonnement.'
+          : code.endsWith('permission-denied') ? 'Seul le propriétaire de la famille peut relier une commande.'
+            : 'La vérification a échoué. Réessayez dans un instant.');
   } finally {
-    $('abo-banner-paid').disabled = false;
+    btn.disabled = false;
   }
-});
+}));
 
 $('abo-banner-btn').addEventListener('click', () => {
   if (session.family.abonnement?.statut === 'impaye') withAboError(() => ouvrirPortail(session.fid));
@@ -1512,10 +1522,7 @@ $('btn-garder').addEventListener('click', () => withAboError(async () => {
   toast('Abonnement gardé');
 }));
 
-$('btn-rattacher').addEventListener('click', () => withAboError(async () => {
-  await rattacherCommande(session.fid);
-  toast('Paiement retrouvé : abonnement rattaché');
-}));
+
 $('abo-formules').replaceChildren(...FORMULES.map((f) => {
   const b = document.createElement('button');
   b.type = 'button';
@@ -1558,13 +1565,13 @@ function renderAbonnement() {
       ? "Papote est en pause : l'abonnement de la famille doit être réglé. Tout reviendra automatiquement."
       : "Papote est en pause : l'abonnement de la famille doit être réglé par un responsable.";
   }
-  // Famille sans abonnement rattaché (souvent : commande passée avec une autre adresse).
-  const aucun = statut === 'aucun' && admin;
-  if (aucun) text = 'La tablette attend son abonnement. Vous avez déjà commandé sur le site ?';
+  // Sans abonnement en cours : le propriétaire peut relier une commande déjà payée sur le site.
+  const sansAbo = ['aucun', 'resilie', 'suspendu'].includes(statut) && admin;
+  if (statut === 'aucun' && admin) text = 'La tablette attend son abonnement.';
   $('abo-banner').hidden = !text;
   $('abo-banner-text').textContent = text;
-  $('abo-banner-btn').hidden = !admin || aucun;
-  $('abo-banner-paid').hidden = !aucun;
+  $('abo-banner-btn').hidden = !admin || statut === 'aucun';
+  $('abo-banner-paid').hidden = !sansAbo;
   // Retour de la page de paiement : on confirme dès que le serveur a activé l'abonnement.
   let waiting = false;
   try { waiting = localStorage.getItem(ABO_OK_KEY) === '1'; } catch (e) { /* rien */ }
