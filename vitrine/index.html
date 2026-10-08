@@ -1,0 +1,516 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Papote</title>
+<meta name="description" content="Papote : une tablette prête à l'emploi pour les aînés. La famille envoie photos, vidéos et messages depuis son téléphone, et appelle en vidéo. La tablette décroche toute seule.">
+<meta name="theme-color" content="#4f46e5">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&display=swap">
+<style>
+/* Mise en page : une colonne de lecture large, des sections pleine largeur alternées, la tablette en vedette dans l'en-tête. */
+:root {
+  --bg: #f7f6fb;
+  --surface: #ffffff;
+  --band: #eeedf8;
+  --text: #1b1a2e;
+  --muted: #5d5b74;
+  --line: #dddbee;
+  --accent: #4f46e5;
+  --accent-strong: #3730a3;
+  --accent-text: #ffffff;
+  --accent-soft: #e4e2fc;
+  --ok: #15803d;
+  --device: #22212f;
+  --screen: #101018;
+  --screen-text: #f5f4ff;
+  --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121220;
+    --surface: #1b1b2c;
+    --band: #181829;
+    --text: #f0effa;
+    --muted: #aba9c3;
+    --line: #2d2c44;
+    --accent: #8b85f8;
+    --accent-strong: #b4b0ff;
+    --accent-text: #121220;
+    --accent-soft: #2a2852;
+    --ok: #4ade80;
+    --device: #34334a;
+    --screen: #0a0a12;
+    --screen-text: #f5f4ff;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121220;
+  --surface: #1b1b2c;
+  --band: #181829;
+  --text: #f0effa;
+  --muted: #aba9c3;
+  --line: #2d2c44;
+  --accent: #8b85f8;
+  --accent-strong: #b4b0ff;
+  --accent-text: #121220;
+  --accent-soft: #2a2852;
+  --ok: #4ade80;
+  --device: #34334a;
+  --screen: #0a0a12;
+  --screen-text: #f5f4ff;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 400 1.125rem/1.6 var(--body);
+  -webkit-font-smoothing: antialiased;
+}
+img, svg { max-width: 100%; }
+a { color: var(--accent-strong); }
+a:focus-visible, button:focus-visible, summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+h1, h2, h3 { font-family: var(--display); font-weight: 800; line-height: 1.1; text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
+h1 { font-size: clamp(2.3rem, 6vw, 3.9rem); }
+h2 { font-size: clamp(1.8rem, 4vw, 2.6rem); }
+h3 { font-size: 1.3rem; font-weight: 600; }
+p { margin: 0; }
+
+.wrap { width: 100%; max-width: 72rem; margin-inline: auto; padding-inline: 20px; }
+section { padding-block: clamp(3.5rem, 8vw, 6rem); }
+.band { background: var(--band); }
+.eyebrow { font-size: .85rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--accent-strong); }
+.lead { font-size: 1.25rem; color: var(--muted); max-width: 38rem; }
+.section-head { display: grid; gap: .75rem; margin-bottom: 2.5rem; max-width: 42rem; }
+
+/* Boutons */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+  min-height: 3.25rem; padding: .75rem 1.5rem;
+  font: 700 1.05rem/1.2 var(--body); text-decoration: none;
+  border-radius: 999px; border: 2px solid transparent; cursor: pointer;
+  transition: background-color .15s, color .15s, border-color .15s;
+}
+.btn-primary { background: var(--accent); color: var(--accent-text); }
+.btn-primary:hover { background: var(--accent-strong); }
+.btn-ghost { background: transparent; color: var(--text); border-color: var(--line); }
+.btn-ghost:hover { border-color: var(--accent); }
+
+/* Barre du haut */
+.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 10; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+.top .wrap { display: flex; align-items: center; justify-content: space-between; gap: 1rem; min-height: 4rem; }
+.brand { display: flex; align-items: center; gap: .6rem; font: 800 1.45rem/1 var(--display); color: var(--text); text-decoration: none; }
+.brand img { width: 2rem; height: 2rem; }
+.top nav { display: flex; align-items: center; gap: 1.5rem; }
+.top nav a { color: var(--muted); text-decoration: none; font-weight: 700; font-size: 1rem; }
+.top nav a:hover { color: var(--text); }
+.top nav .btn { min-height: 2.6rem; padding: .5rem 1.1rem; font-size: .95rem; color: var(--accent-text); }
+.top nav .btn:hover { color: var(--accent-text); }
+@media (max-width: 760px) { .top nav a:not(.btn) { display: none; } }
+
+/* En-tête */
+.hero { padding-block: clamp(2.5rem, 6vw, 5rem) clamp(3rem, 7vw, 5.5rem); }
+.hero .wrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: clamp(2rem, 5vw, 4rem); align-items: center; }
+.hero-text { display: grid; gap: 1.5rem; min-width: 0; }
+.hero-text h1 span { color: var(--accent); }
+.hero-actions { display: flex; flex-wrap: wrap; gap: .75rem; }
+.hero-note { font-size: 1rem; color: var(--muted); }
+@media (max-width: 900px) { .hero .wrap { grid-template-columns: minmax(0, 1fr); } }
+
+/* Tablette dessinée : reprend l'écran d'accueil réel (heure, date, météo, photo). */
+.tablet { background: var(--device); padding: clamp(10px, 2vw, 16px); border-radius: clamp(18px, 3vw, 28px); box-shadow: 0 30px 60px -20px rgba(27, 26, 46, .45); max-width: 100%; }
+.screen { aspect-ratio: 16 / 10; background: var(--screen); color: var(--screen-text); display: grid; grid-template-columns: 38% 62%; overflow: hidden; border-radius: 6px; }
+.screen-left { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: .3em; padding: 4%; font-size: clamp(.6rem, 1.6vw, 1rem); text-align: center; }
+.clock { font: 800 4em/1 var(--display); font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.date { font-size: 1.25em; }
+.weather { display: flex; align-items: center; gap: .4em; font-size: 1.15em; margin-top: .4em; opacity: .9; }
+.weather svg { width: 1.6em; height: 1.6em; }
+.screen-photo { position: relative; min-width: 0; }
+.screen-photo svg { display: block; width: 100%; height: 100%; }
+.caption { position: absolute; left: 0; right: 0; bottom: 0; padding: 4% 5%; background: linear-gradient(transparent, rgba(0, 0, 0, .72)); color: #fff; font-size: clamp(.6rem, 1.5vw, .95rem); line-height: 1.3; }
+.caption b { display: block; font-size: .85em; opacity: .85; font-weight: 400; }
+
+/* Étapes */
+.steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.5rem; counter-reset: step; }
+.step { display: grid; gap: .6rem; align-content: start; padding-top: 1.25rem; border-top: 3px solid var(--accent); }
+.step::before { counter-increment: step; content: "Étape " counter(step); font-size: .85rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--accent-strong); }
+.step p { color: var(--muted); }
+@media (max-width: 760px) { .steps { grid-template-columns: minmax(0, 1fr); } }
+
+/* Deux publics */
+.split { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(2rem, 5vw, 4rem); }
+@media (max-width: 860px) { .split { grid-template-columns: minmax(0, 1fr); } }
+.side { display: grid; gap: 1.25rem; align-content: start; min-width: 0; }
+.side h2 { font-size: clamp(1.6rem, 3.4vw, 2.2rem); }
+.feats { list-style: none; margin: 0; padding: 0; display: grid; gap: 1rem; }
+.feats li { display: grid; grid-template-columns: 2.5rem minmax(0, 1fr); gap: .9rem; align-items: start; }
+.feats .ic { width: 2.5rem; height: 2.5rem; border-radius: 12px; background: var(--accent-soft); color: var(--accent-strong); display: grid; place-items: center; }
+.feats .ic svg { width: 1.35rem; height: 1.35rem; }
+.feats b { display: block; }
+.feats span { color: var(--muted); font-size: 1.02rem; }
+
+/* Tarifs */
+.plans { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.5rem; }
+@media (max-width: 760px) { .plans { grid-template-columns: minmax(0, 1fr); } }
+.plan { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: clamp(1.5rem, 3vw, 2.25rem); display: grid; gap: 1.25rem; align-content: start; }
+.plan.featured { border: 2px solid var(--accent); }
+.plan-head { display: grid; gap: .35rem; }
+.plan-head p { color: var(--muted); }
+.tag { justify-self: start; font-size: .8rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; background: var(--accent-soft); color: var(--accent-strong); padding: .25rem .7rem; border-radius: 999px; }
+.price { display: flex; align-items: baseline; gap: .4rem; font-family: var(--display); }
+.price strong { font-size: clamp(3rem, 7vw, 4rem); font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+.price span { font-family: var(--body); color: var(--muted); font-size: 1.05rem; }
+.choices { display: grid; gap: 0; border-top: 1px solid var(--line); }
+.choice { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .25rem 1rem; padding-block: .9rem; border-bottom: 1px solid var(--line); align-items: baseline; }
+.choice b { font-size: 1.02rem; }
+.choice small { grid-column: 1; color: var(--muted); font-size: .95rem; }
+.choice .amount { grid-row: 1 / span 2; grid-column: 2; font: 800 1.35rem/1.1 var(--display); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.choice-btn { grid-column: 1 / -1; min-height: 2.75rem; margin-top: .5rem; }
+.choice .amount em { display: block; font: 400 .85rem/1.2 var(--body); color: var(--muted); font-style: normal; }
+.included { list-style: none; padding: 0; margin: 0; display: grid; gap: .5rem; }
+.included li { display: grid; grid-template-columns: 1.4rem minmax(0, 1fr); gap: .6rem; font-size: 1.02rem; }
+.included svg { width: 1.2rem; height: 1.2rem; color: var(--ok); margin-top: .2rem; }
+.plans-note { margin-top: 1.5rem; color: var(--muted); font-size: 1rem; max-width: 46rem; }
+
+/* FAQ */
+.faq { display: grid; gap: .75rem; max-width: 50rem; }
+.faq details { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
+.faq summary { cursor: pointer; list-style: none; padding: 1.1rem 1.25rem; font-weight: 700; font-size: 1.1rem; display: flex; justify-content: space-between; gap: 1rem; align-items: center; }
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::after { content: "+"; font: 600 1.6rem/1 var(--display); color: var(--accent); flex: none; transition: transform .2s; }
+.faq details[open] summary::after { transform: rotate(45deg); }
+.faq details p { padding: 0 1.25rem 1.25rem; color: var(--muted); }
+
+/* Contact */
+.contact { background: var(--accent); color: var(--accent-text); }
+.contact .wrap { display: grid; gap: 1.5rem; justify-items: start; max-width: 50rem; }
+.contact p { font-size: 1.2rem; opacity: .92; max-width: 38rem; }
+.contact .btn-primary { background: var(--accent-text); color: var(--accent); }
+.contact .btn-primary:hover { background: var(--accent-text); color: var(--accent-strong); }
+.mail { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; font-size: 1rem; }
+.mail code { font: 700 1rem/1.4 var(--body); user-select: all; word-break: break-all; }
+.mail button { font: 700 .95rem/1 var(--body); background: transparent; color: inherit; border: 1.5px solid currentColor; border-radius: 999px; padding: .45rem .9rem; cursor: pointer; opacity: .9; }
+
+footer { padding-block: 2.5rem; color: var(--muted); font-size: .95rem; }
+footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 1rem; }
+footer a { color: var(--muted); }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-photo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="m21 16-5-5-8 8"/></symbol>
+    <symbol id="i-video" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6" width="13" height="12" rx="2"/><path d="m15.5 10.5 6-3.5v10l-6-3.5"/></symbol>
+    <symbol id="i-call" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="9" r="4"/><path d="M4.5 20c1.2-3.5 4-5 7.5-5s6.3 1.5 7.5 5"/><path d="M18 3.5a6 6 0 0 1 2 4.5M6 3.5A6 6 0 0 0 4 8"/></symbol>
+    <symbol id="i-message" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H9l-5 4z"/></symbol>
+    <symbol id="i-agenda" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/></symbol>
+    <symbol id="i-hand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21a8 8 0 1 1 0-16 8 8 0 0 1 0 16z"/><path d="M9 13.5c.8 1 1.8 1.5 3 1.5s2.2-.5 3-1.5M9.5 10h.01M14.5 10h.01"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></symbol>
+    <symbol id="i-text" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19 9 6l5 13M5.8 15h6.4M15 19l3-8 3 8M15.8 17h4.4"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/></symbol>
+    <symbol id="i-signal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19v-3M10 19v-6M15 19V9M20 19V5"/></symbol>
+    <symbol id="i-phone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6.5" y="2.5" width="11" height="19" rx="2.5"/><path d="M11 18.5h2"/></symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></symbol>
+    <symbol id="i-people" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3 19.5c.8-3 3.2-4.5 6-4.5s5.2 1.5 6 4.5"/><circle cx="17" cy="9" r="2.5"/><path d="M17 14.5c2 0 3.5 1.2 4 3.5"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+  </defs>
+</svg>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#"><img src="icon.svg" alt="">Papote</a>
+    <nav aria-label="Menu">
+      <a href="#fonctionnement">Comment ça marche</a>
+      <a href="#tarifs">Tarifs</a>
+      <a href="#questions">Questions</a>
+      <a class="btn btn-primary" href="#tarifs">Commander</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="wrap">
+      <div class="hero-text">
+        <p class="eyebrow">Tablette pour nos aînés</p>
+        <h1>Les photos de la famille arrivent chez Mamie. <span>Elle n'a rien à toucher.</span></h1>
+        <p class="lead">Papote, c'est une tablette prête à l'emploi pour votre proche, et une appli sur le téléphone de toute la famille. Photos, vidéos, messages et appels vidéo s'affichent tout seuls.</p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="#tarifs">Choisir ma formule</a>
+          <a class="btn btn-ghost" href="#fonctionnement">Comment ça marche</a>
+        </div>
+        <p class="hero-note">15 jours d'essai gratuit, puis à partir de 20 € par mois. Tablette à 100 €, ou incluse dans l'abonnement.</p>
+      </div>
+
+      <figure class="tablet" style="margin:0" aria-label="L'écran d'accueil de la tablette Papote : l'heure, la date, la météo et la dernière photo reçue">
+        <div class="screen">
+          <div class="screen-left">
+            <div class="clock" id="demo-clock">10:24</div>
+            <div class="date" id="demo-date">jeudi 8 octobre</div>
+            <div class="weather">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="9" cy="9" r="3.2"/><path d="M9 2.5v1.5M3.5 9H2M4.5 4.5l1 1M13.5 4.5l-1 1"/><path d="M8 19h10a3.5 3.5 0 0 0 0-7 5 5 0 0 0-9.6 1.2A3 3 0 0 0 8 19z" fill="var(--screen)"/></svg>
+              17° Nuageux
+            </div>
+          </div>
+          <div class="screen-photo">
+            <svg viewBox="0 0 620 400" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+              <defs>
+                <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f6b980"/><stop offset=".55" stop-color="#f7d6a6"/><stop offset="1" stop-color="#e9e1c9"/></linearGradient>
+                <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5f8fb0"/><stop offset="1" stop-color="#2f5c7c"/></linearGradient>
+              </defs>
+              <rect width="620" height="400" fill="url(#sky)"/>
+              <circle cx="430" cy="205" r="46" fill="#fbe8c4"/>
+              <rect y="230" width="620" height="90" fill="url(#sea)"/>
+              <path d="M0 230h620" stroke="#fbe8c4" stroke-opacity=".5"/>
+              <path d="M0 300c120-22 260-30 380-18s180 10 240 0v118H0z" fill="#e8d2a6"/>
+              <path d="M0 340c140-16 300-14 620-26v86H0z" fill="#d9bd8b"/>
+              <g fill="#3b3346">
+                <circle cx="190" cy="236" r="13"/><path d="M174 252h32l6 62h-44z"/>
+                <circle cx="232" cy="248" r="10"/><path d="M220 260h24l4 48h-32z"/>
+                <circle cx="262" cy="230" r="14"/><path d="M245 247h34l6 68h-46z"/>
+              </g>
+            </svg>
+            <p class="caption"><b>Julie · il y a 5 minutes</b>Bisous de Biarritz ! Les petits ont adoré la plage.</p>
+          </div>
+        </div>
+      </figure>
+    </div>
+  </section>
+
+  <section id="fonctionnement" class="band">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">Comment ça marche</p>
+        <h2>Toute la famille partage, votre proche regarde.</h2>
+      </div>
+      <div class="steps">
+        <div class="step">
+          <h3>Vous envoyez depuis votre téléphone</h3>
+          <p>Une photo de vacances, une vidéo des petits, un mot doux ou un rappel de rendez-vous. Rien à installer depuis un magasin d'applis : l'appli Papote s'ouvre dans le navigateur.</p>
+        </div>
+        <div class="step">
+          <h3>La tablette l'affiche aussitôt</h3>
+          <p>Le nouvel envoi apparaît en grand, avec le prénom de celui qui l'a envoyé. Le reste du temps, la tablette fait défiler vos photos comme un cadre.</p>
+        </div>
+        <div class="step">
+          <h3>Vous appelez en vidéo</h3>
+          <p>Pas de bouton à trouver : dès que votre proche se met face à l'écran, la tablette décroche. Vous vous voyez, vous papotez.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap split">
+      <div class="side">
+        <p class="eyebrow">Pour votre proche</p>
+        <h2>Une tablette qui ne se dérègle pas</h2>
+        <ul class="feats">
+          <li><span class="ic"><svg><use href="#i-hand"/></svg></span><p><b>Aucun geste à apprendre</b><span>Elle décroche seule les appels vidéo quand elle voit un visage. Pas de code, pas de mot de passe.</span></p></li>
+          <li><span class="ic"><svg><use href="#i-lock"/></svg></span><p><b>Rien d'autre que Papote</b><span>Pas de publicité, pas d'autres applis, pas de réglage qu'on change par erreur.</span></p></li>
+          <li><span class="ic"><svg><use href="#i-text"/></svg></span><p><b>Lisible de loin</b><span>Grande horloge, date, météo du jour. Le texte peut être agrandi à distance.</span></p></li>
+          <li><span class="ic"><svg><use href="#i-moon"/></svg></span><p><b>Elle dort la nuit</b><span>L'écran se met en veille de 23 h à 7 h et s'assombrit en soirée. La luminosité suit celle de la pièce.</span></p></li>
+          <li><span class="ic"><svg><use href="#i-signal"/></svg></span><p><b>Avec ou sans box internet</b><span>En wifi, ou avec une carte SIM pour les logements sans connexion.</span></p></li>
+        </ul>
+      </div>
+      <div class="side">
+        <p class="eyebrow">Pour la famille</p>
+        <h2>Une appli sur chaque téléphone</h2>
+        <ul class="feats">
+          <li><span class="ic"><svg><use href="#i-photo"/></svg></span><p><b>Photos et vidéos</b><span>Jusqu'à cinq photos à la fois avec une légende, ou une vidéo filmée sur le moment.</span></p></li>
+          <li><span class="ic"><svg><use href="#i-call"/></svg></span><p><b>Appels vidéo</b><span>Elle n'a pas répondu ? Laissez-lui un message vidéo qu'elle verra en passant.</span></p></li>
+          <li><span class="ic"><svg><use href="#i-agenda"/></svg></span><p><b>Messages et agenda</b><span>Un mot qui reste affiché, un rappel avant le passage de l'infirmière ou un anniversaire.</span></p></li>
+          <li><span class="ic"><svg><use href="#i-sliders"/></svg></span><p><b>Réglages à distance</b><span>Taille du texte, wifi : vous changez tout depuis votre téléphone, sans vous déplacer.</span></p></li>
+          <li><span class="ic"><svg><use href="#i-bell"/></svg></span><p><b>Vous êtes prévenu</b><span>Batterie faible, tablette qui ne répond plus : l'appli vous le signale.</span></p></li>
+          <li><span class="ic"><svg><use href="#i-people"/></svg></span><p><b>Toute la famille, sur invitation</b><span>Enfants, petits-enfants, voisins : un responsable valide chaque nouvelle personne.</span></p></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="tarifs" class="band">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">Tarifs</p>
+        <h2>Deux formules, une seule question : a-t-elle internet ?</h2>
+        <p class="lead">Ensuite, achetez la tablette une fois pour toutes, ou laissez-la incluse dans l'abonnement. Les 15 premiers jours d'abonnement sont offerts.</p>
+      </div>
+
+      <div class="plans">
+        <article class="plan">
+          <div class="plan-head">
+            <span class="tag">Wifi</span>
+            <h3>Papote</h3>
+            <p>Votre proche a une box internet.</p>
+          </div>
+          <div class="price"><strong>20 €</strong><span>par mois</span></div>
+          <div class="choices">
+            <div class="choice"><b>J'achète la tablette</b><small>Elle vous appartient.</small><span class="amount">100 €<em>une fois, puis 20 €/mois</em></span><a class="btn btn-ghost choice-btn" href="https://europe-west1-papote-famille.cloudfunctions.net/commander?formule=wifi&amp;tablette=achetee">Commander</a></div>
+            <div class="choice"><b>Tablette incluse</b><small>Rien à payer au départ. À rendre en fin d'abonnement.</small><span class="amount">25 €<em>par mois</em></span><a class="btn btn-primary choice-btn" href="https://europe-west1-papote-famille.cloudfunctions.net/commander?formule=wifi&amp;tablette=incluse">Commander</a></div>
+          </div>
+          <ul class="included">
+            <li><svg><use href="#i-check"/></svg>Tablette livrée prête à brancher</li>
+            <li><svg><use href="#i-check"/></svg>Appli famille pour tous vos proches</li>
+            <li><svg><use href="#i-check"/></svg>Photos, vidéos, messages, agenda, appels vidéo</li>
+            <li><svg><use href="#i-check"/></svg>Mises à jour automatiques</li>
+          </ul>
+        </article>
+
+        <article class="plan featured">
+          <div class="plan-head">
+            <span class="tag">Wifi + carte SIM</span>
+            <h3>Papote partout</h3>
+            <p>Pas de box internet, ou une connexion capricieuse.</p>
+          </div>
+          <div class="price"><strong>30 €</strong><span>par mois</span></div>
+          <div class="choices">
+            <div class="choice"><b>J'achète la tablette</b><small>Elle vous appartient.</small><span class="amount">100 €<em>une fois, puis 30 €/mois</em></span><a class="btn btn-ghost choice-btn" href="https://europe-west1-papote-famille.cloudfunctions.net/commander?formule=sim&amp;tablette=achetee">Commander</a></div>
+            <div class="choice"><b>Tablette incluse</b><small>Rien à payer au départ. À rendre en fin d'abonnement.</small><span class="amount">35 €<em>par mois</em></span><a class="btn btn-primary choice-btn" href="https://europe-west1-papote-famille.cloudfunctions.net/commander?formule=sim&amp;tablette=incluse">Commander</a></div>
+          </div>
+          <ul class="included">
+            <li><svg><use href="#i-check"/></svg>Tout ce qu'offre la formule Wifi</li>
+            <li><svg><use href="#i-check"/></svg>Fonctionne avec une carte SIM, sans box</li>
+          </ul>
+        </article>
+      </div>
+      <p class="plans-note">Prix par tablette, toute la famille utilise l'appli sans supplément. 15 jours d'essai gratuit, puis engagement de 12 mois ; ensuite, l'abonnement continue de mois en mois et se résilie à tout moment depuis l'appli famille. La tablette achetée (100 €) est payée à la commande. Paiement sécurisé par carte.</p>
+    </div>
+  </section>
+
+  <section id="questions">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">Questions fréquentes</p>
+        <h2>Ce qu'on nous demande souvent</h2>
+      </div>
+      <div class="faq">
+        <details>
+          <summary>Mon proche n'a jamais utilisé de tablette. Est-ce un problème ?</summary>
+          <p>Non, c'est pour ça que Papote existe. La tablette n'a qu'un écran d'accueil : l'heure, la date, la météo et vos photos. Les envois s'affichent seuls, les appels vidéo décrochent seuls. Pour voir les anciennes photos, il suffit de toucher l'écran.</p>
+        </details>
+        <details>
+          <summary>Comment se passe l'installation ?</summary>
+          <p>La tablette arrive prête. Vous la branchez, vous la connectez au wifi si besoin, puis vous scannez le QR code affiché à l'écran depuis l'appli Papote sur votre téléphone, ou vous tapez un code court. Votre famille est créée à ce moment-là, et il ne reste qu'à inviter vos proches. C'est fait en quelques minutes.</p>
+        </details>
+        <details>
+          <summary>Mon proche peut-il appeler la famille ?</summary>
+          <p>Non. Papote est pensée pour recevoir : c'est la famille qui appelle, et la tablette décroche. Il n'y a pas de bouton à chercher ni de risque d'appeler quelqu'un par erreur.</p>
+        </details>
+        <details>
+          <summary>Faut-il une box internet chez mon proche ?</summary>
+          <p>Avec la formule Wifi, oui. Sans box, choisissez la formule avec carte SIM : la tablette se connecte par le réseau mobile.</p>
+        </details>
+        <details>
+          <summary>Qui peut envoyer des photos ?</summary>
+          <p>Les personnes de la famille que vous invitez. Chaque nouvelle personne est validée par un responsable de la famille avant de pouvoir envoyer quoi que ce soit. Personne d'autre ne peut écrire à la tablette.</p>
+        </details>
+        <details>
+          <summary>Faut-il installer une application sur mon téléphone ?</summary>
+          <p>Il suffit d'ouvrir le lien Papote dans le navigateur, sur Android comme sur iPhone. Vous pouvez ensuite l'ajouter à l'écran d'accueil comme une appli, sans passer par un magasin d'applications.</p>
+        </details>
+        <details>
+          <summary>La tablette reste-t-elle allumée tout le temps ?</summary>
+          <p>Elle reste branchée et affiche vos photos toute la journée. La nuit, de 23 h à 7 h, l'écran se met en veille, et il s'assombrit en soirée pour ne pas éblouir.</p>
+        </details>
+        <details>
+          <summary>Comment se passe le paiement ?</summary>
+          <p>Par carte bancaire, sur une page de paiement sécurisée (Stripe). L'abonnement est prélevé chaque mois. Depuis l'appli famille, dans Réglages, vous retrouvez vos factures, changez de carte ou résiliez.</p>
+        </details>
+        <details>
+          <summary>Y a-t-il un essai gratuit ?</summary>
+          <p>Oui : les 15 premiers jours d'abonnement sont offerts. Votre carte est enregistrée à la commande, mais le premier mois n'est prélevé qu'à la fin de l'essai. Vous pouvez résilier pendant l'essai sans rien payer pour l'abonnement.</p>
+        </details>
+        <details>
+          <summary>Suis-je engagé ? Comment résilier ?</summary>
+          <p>Après l'essai, l'abonnement est conclu pour 12 mois. Ensuite, il continue de mois en mois sans engagement. Un responsable de la famille résilie en ligne, depuis l'appli (Réglages, puis Abonnement) : l'abonnement s'arrête à la fin des 12 mois, ou à la fin du mois en cours si les 12 mois sont passés.</p>
+        </details>
+        <details>
+          <summary>Que se passe-t-il à la fin de l'abonnement ?</summary>
+          <p>Si vous avez acheté la tablette, elle reste à vous. Si elle était incluse dans l'abonnement, vous nous la renvoyez dans les 30 jours qui suivent la fin de l'abonnement, avec son chargeur et son socle. Une tablette non rendue dans ce délai est facturée 100 € sur la carte enregistrée.</p>
+        </details>
+        <details>
+          <summary>Quelles garanties sur la tablette ?</summary>
+          <p>Vous disposez de 14 jours après la réception pour changer d'avis et nous renvoyer la tablette. Une tablette achetée bénéficie de la garantie légale de conformité de 2 ans : en cas de panne, nous la réparons ou la remplaçons. Une tablette incluse dans l'abonnement reste la nôtre : si elle tombe en panne, nous la remplaçons, et elle nous est rendue en fin d'abonnement. La casse accidentelle (chute, écran brisé, liquide renversé) n'est pas couverte par la garantie : la réparation ou le remplacement est alors à votre charge.</p>
+        </details>
+        <details>
+          <summary>Et si un paiement échoue ?</summary>
+          <p>Vous êtes prévenu par e-mail et tout continue de fonctionner pendant 7 jours. Sans règlement, la tablette se met en pause. Elle repart toute seule dès que le paiement passe.</p>
+        </details>
+        <details>
+          <summary>Que deviennent nos photos et nos données ?</summary>
+          <p>Elles servent uniquement à les afficher sur la tablette de votre famille. Elles ne sont ni revendues ni utilisées pour de la publicité. Depuis la page « Vos données » de l'appli, un responsable peut consulter ce qui est conservé et supprimer la famille entière à tout moment.</p>
+        </details>
+        <details>
+          <summary>Qui contacter en cas de souci ?</summary>
+          <p>Écrivez-nous depuis l'appli (Réglages, puis « Contacter le support ») ou à l'adresse ci-dessous. La plupart des réglages se changent à distance, sans vous déplacer chez votre proche.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <section id="contact" class="contact">
+    <div class="wrap">
+      <h2>Une question avant de commander ?</h2>
+      <p>Écrivez-nous quelques mots sur votre proche et sa connexion internet. Nous vous aidons à choisir la bonne formule.</p>
+      <a class="btn btn-primary" id="cta-mail" href="mailto:tanguyreynaud22@gmail.com?subject=Une%20question%20sur%20Papote">Nous écrire</a>
+      <div class="mail">
+        <span>Ou écrivez à <code id="mail-addr">tanguyreynaud22@gmail.com</code></span>
+        <button type="button" id="copy-mail">Copier l'adresse</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 Papote</span>
+    <a href="https://papote-famille.web.app">Déjà client ? Ouvrir l'appli famille</a>
+  </div>
+</footer>
+
+<script>
+  // Heure et date réelles sur la tablette dessinée.
+  (function () {
+    var clock = document.getElementById('demo-clock');
+    var date = document.getElementById('demo-date');
+    function tick() {
+      var now = new Date();
+      clock.textContent = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+      date.textContent = now.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+    }
+    tick();
+    setInterval(tick, 20000);
+  })();
+
+  document.getElementById('copy-mail').addEventListener('click', function () {
+    var btn = this;
+    var addr = document.getElementById('mail-addr');
+    function done() { btn.textContent = 'Adresse copiée'; }
+    function select() {
+      var range = document.createRange();
+      range.selectNodeContents(addr);
+      var sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+      btn.textContent = 'Adresse sélectionnée';
+    }
+    try {
+      navigator.clipboard.writeText(addr.textContent).then(done, select);
+    } catch (e) { select(); }
+  });
+</script>
+</body>
+</html>
