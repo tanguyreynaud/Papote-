@@ -13,6 +13,7 @@ import {
   MAX_VIDEO_CHUNKS, VIDEO_CHUNK,
 } from './firebase.js';
 import { askConfirm, notice } from './ui.js';
+import { showGuideOnce } from './guide.js';
 import {
   abonnementOk, FORMULES, LIBELLES, ouvrirPortail, payer, rattacherCommande, resilier, annulerResiliation,
 } from './abonnement.js';
@@ -1602,6 +1603,26 @@ document.querySelectorAll('[data-cmd]').forEach((btn) => btn.addEventListener('c
   sendCommand(btn.dataset.cmd);
 }));
 
+// Journal de la tablette : ses dernières lignes d'erreur, envoyées au plus toutes les heures
+// (et juste après une demande d'état).
+$('btn-logs').addEventListener('click', async () => {
+  if (!$('logs-box').hidden) { $('logs-box').hidden = true; return; }
+  $('logs-box').hidden = false;
+  $('logs-info').textContent = 'Chargement…';
+  $('logs').textContent = '';
+  try {
+    const snap = await getDocs(collection(db, 'families', session.fid, 'logs'));
+    const latest = snap.docs.map((d) => d.data())
+      .sort((a, b) => (toDate(b.updatedAt)?.getTime() || 0) - (toDate(a.updatedAt)?.getTime() || 0))[0];
+    if (!latest) { $('logs-info').textContent = "La tablette n'a encore envoyé aucun journal."; return; }
+    $('logs-info').textContent = `Envoyé ${ago(toDate(latest.updatedAt).getTime())}${latest.version ? ` · version ${latest.version}` : ''}. Touchez « État » pour en recevoir un tout neuf.`;
+    $('logs').textContent = latest.lines || '(vide)';
+  } catch (err) {
+    console.error(err);
+    $('logs-info').textContent = "Le journal n'a pas pu être lu.";
+  }
+});
+
 $('wifi-security').addEventListener('change', () => {
   $('wifi-password-wrap').hidden = $('wifi-security').value === 'open';
 });
@@ -2163,6 +2184,7 @@ async function enterApp() {
   goHome();
   renderOutbox();
   flushOutbox();
+  showGuideOnce(session.family.name);
   if (sharedPending) { sharedPending = false; openShared(); }
   else if (pairCode()) openPage('pair');
 }

@@ -361,6 +361,18 @@ service cloud.firestore {
         allow delete: if isFamilyAdmin(fid);
       }
 
+      // Journal d'erreurs de la tablette (200 dernières lignes), lisible des responsables.
+      match /logs/{uid} {
+        allow read: if isFamilyAdmin(fid);
+        allow create, update: if signedIn()
+          && request.auth.uid == uid
+          && isMember(fid)
+          && request.resource.data.keys().hasOnly(['lines', 'version', 'updatedAt'])
+          && request.resource.data.lines is string
+          && request.resource.data.lines.size() <= 60000
+          && request.resource.data.updatedAt == request.time;
+      }
+
       // Appels vidéo : la famille appelle la tablette (signalisation WebRTC).
       match /calls/{cid} {
         allow read: if isMember(fid);
