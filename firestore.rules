@@ -81,6 +81,40 @@ service cloud.firestore {
     }
 
     // Réglages communs (relais TURN des appels), écrits seulement depuis la console Firebase.
+    // Jumelage d'une nouvelle tablette : elle affiche un code (et un QR code), un responsable
+    // le réclame pour sa famille depuis l'app, puis la tablette confirme à l'écran.
+    //   pairings/{code} -> { tabletUid, callsUid, name, createdAt, expiresAt, status,
+    //                        fid?, familyName?, claimedBy?, claimedName? }
+    match /pairings/{code} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['tabletUid', 'callsUid', 'name', 'createdAt', 'expiresAt', 'status'])
+        && request.resource.data.tabletUid == request.auth.uid
+        && request.resource.data.status == 'waiting'
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 40
+        && request.resource.data.expiresAt is timestamp
+        && request.resource.data.expiresAt <= request.time + duration.value(20, 'm');
+      // Un responsable réclame la tablette pour sa famille, avant l'expiration du code.
+      allow update: if isRealAccount()
+        && resource.data.status == 'waiting'
+        && request.time < resource.data.expiresAt
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'fid', 'familyName', 'claimedBy', 'claimedName'])
+        && request.resource.data.status == 'claimed'
+        && request.resource.data.claimedBy == request.auth.uid
+        && isFamilyAdmin(request.resource.data.fid);
+      // La tablette accepte ou refuse la famille qui l'a réclamée.
+      allow update: if signedIn()
+        && request.auth.uid == resource.data.tabletUid
+        && resource.data.status == 'claimed'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+        && request.resource.data.status in ['confirmed', 'refused'];
+      allow delete: if signedIn()
+        && (request.auth.uid == resource.data.tabletUid || request.time > resource.data.expiresAt);
+    }
+
     match /config/{name} {
       allow get: if signedIn();
       allow list, write: if false;
@@ -145,16 +179,27 @@ service cloud.firestore {
         allow get: if signedIn() && uid == request.auth.uid;
         allow create: if signedIn()
           && uid == request.auth.uid
-          && request.resource.data.keys().hasOnly(['name', 'role', 'code', 'joinedAt', 'canCall', 'uid', 'email', 'status'])
+          && request.resource.data.keys().hasOnly(['name', 'role', 'code', 'joinedAt', 'canCall', 'uid', 'email', 'status', 'pairing'])
           && request.resource.data.name is string
           && request.resource.data.name.size() > 0
           && request.resource.data.name.size() <= 40
           && (
-            // Tablette : seulement avec un code d'installation de tablette, active d'office.
+            // Tablette : avec un code d'installation de tablette, active d'office…
             (request.resource.data.role == 'tablette'
               && !('status' in request.resource.data)
+              && !('pairing' in request.resource.data)
               && get(invitePath(request.resource.data.code)).data.get('kind', '') == 'tablette'
               && get(invitePath(request.resource.data.code)).data.fid == fid)
+            // … ou par jumelage confirmé sur la tablette (ses deux comptes, dans l'heure qui suit).
+            || (request.resource.data.role == 'tablette'
+              && !('status' in request.resource.data)
+              && !('code' in request.resource.data)
+              && get(/databases/$(database)/documents/pairings/$(request.resource.data.pairing)).data.status == 'confirmed'
+              && get(/databases/$(database)/documents/pairings/$(request.resource.data.pairing)).data.fid == fid
+              && request.auth.uid in [
+                get(/databases/$(database)/documents/pairings/$(request.resource.data.pairing)).data.tabletUid,
+                get(/databases/$(database)/documents/pairings/$(request.resource.data.pairing)).data.callsUid]
+              && request.time < get(/databases/$(database)/documents/pairings/$(request.resource.data.pairing)).data.expiresAt + duration.value(1, 'h'))
             // Famille : compte Google ou e-mail, avec son uid et son adresse.
             || (request.resource.data.role == 'famille'
               && isRealAccount()

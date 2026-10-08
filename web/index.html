@@ -107,6 +107,42 @@
       <button type="button" class="link wide" data-action="logout">Se déconnecter</button>
     </section>
 
+    <!-- Ajouter ma tablette (jumelage) -->
+    <section id="view-pair" class="page" hidden>
+      <header class="page-head">
+        <button type="button" class="icon-btn back" aria-label="Retour"><svg><use href="#i-back"/></svg></button>
+        <h1>Ajouter ma tablette</h1>
+      </header>
+      <div class="page-pad">
+        <form id="form-pair-code" class="card">
+          <p class="muted">Allumez la tablette : elle affiche un QR code et un code à 8 caractères. Scannez le QR code avec l'appareil photo du téléphone, ou tapez le code ici.</p>
+          <label>Code affiché sur la tablette
+            <input id="pair-code" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABCD-1234" required>
+          </label>
+          <button type="submit" class="primary wide">Continuer</button>
+          <p id="pair-error" class="error" hidden></p>
+        </form>
+        <form id="form-pair-claim" class="card" hidden>
+          <h2 id="pair-name"></h2>
+          <label id="pair-family-wrap">Famille
+            <select id="pair-family"></select>
+          </label>
+          <button type="submit" class="primary wide" id="btn-pair-claim"></button>
+          <p class="muted small">La tablette vous demandera ensuite de confirmer, pour être sûr que c'est bien elle.</p>
+        </form>
+        <div id="pair-wait" class="card center" hidden>
+          <h2>Confirmez sur la tablette</h2>
+          <p class="muted" id="pair-wait-text"></p>
+          <span class="spinner pending-spin"></span>
+        </div>
+        <div id="pair-done" class="card center" hidden>
+          <h2 id="pair-done-title"></h2>
+          <p class="muted" id="pair-done-text"></p>
+          <button type="button" class="primary wide" id="btn-pair-home">Retour à l'accueil</button>
+        </div>
+      </div>
+    </section>
+
     <!-- Pas encore dans une famille -->
     <section id="view-join" class="page-pad" hidden>
       <h1 class="brand">Papote</h1>
@@ -283,7 +319,8 @@
         </div>
         <div id="tablet-card" class="card" hidden>
           <h2>Installer une tablette</h2>
-          <p class="muted small">Ce code sert uniquement à installer une nouvelle tablette pour cette famille. Ne le donnez à personne d'autre.</p>
+          <button type="button" id="btn-pair" class="primary wide">Ajouter ma tablette</button>
+          <p class="muted small">Installation par câble avec le script : créez un code d'installation, à ne donner à personne d'autre.</p>
           <p id="tablet-code" class="code" hidden></p>
           <button type="button" id="btn-tablet-code" class="secondary wide">Créer un code d'installation</button>
         </div>

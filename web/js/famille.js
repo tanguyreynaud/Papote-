@@ -7,7 +7,7 @@ import {
   getStorage, ref, uploadBytes, getDownloadURL, deleteObject,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-storage.js';
 import {
-  db, doc, updateDoc, deleteDoc, collection, onSnapshot, writeBatch, serverTimestamp, bumpRev, increment,
+  db, doc, getDoc, updateDoc, deleteDoc, collection, onSnapshot, writeBatch, serverTimestamp, bumpRev, increment,
   loadMembership, createFamily, joinFamily, leaveFamily, watchMembers, currentUser, savedFamilyId, saveFamilyId,
   addPost, deletePost, loadMedia, formatCode, normalizeCode, toDate, CodeInconnuError,
   MAX_VIDEO_CHUNKS, VIDEO_CHUNK,
@@ -31,7 +31,7 @@ const MAX_IMAGE_CHARS = 900_000; // un document Firestore est limité à 1 Mo
 let session = null; // { fid, family, member, uid }
 let stopMembers = null;
 
-const VIEWS = ['loading', 'view-login', 'view-link-email', 'view-invited', 'view-pending', 'view-join', 'view-home', 'view-photos', 'view-videos', 'view-messages', 'view-agenda', 'view-settings', 'view-notifs', 'view-support'];
+const VIEWS = ['view-pair', 'loading', 'view-login', 'view-link-email', 'view-invited', 'view-pending', 'view-join', 'view-home', 'view-photos', 'view-videos', 'view-messages', 'view-agenda', 'view-settings', 'view-notifs', 'view-support'];
 
 function show(view) {
   for (const id of VIEWS) $(id).hidden = id !== view;
@@ -135,6 +135,7 @@ const PAGES = {
   videos: () => watchFeed('video', renderVideos),
   messages: () => watchType(['message', 'reply'], 60, renderMessages),
   agenda: () => null,
+  pair: () => { resetPairing(); return () => { stopPair?.(); stopPair = null; }; },
   settings: () => { renderSettings(); return null; },
 };
 
@@ -1647,6 +1648,109 @@ setInterval(() => { if (session) renderActivity(); }, 60_000);
 
 // ---------- Démarrage ----------
 
+// ---------- Ajouter ma tablette : jumelage par code ou QR code ----------
+// La tablette crée pairings/{code} ; un responsable la réclame pour une famille, la tablette confirme.
+
+const PAIR_KEY = 'papote.codeTablette';
+let pairing = null; // { code, data }
+let stopPair = null;
+let adminFamilies = [];
+
+function rememberPairCode(code) { try { localStorage.setItem(PAIR_KEY, code); } catch (e) { /* rien */ } }
+function pairCode() { try { return localStorage.getItem(PAIR_KEY); } catch (e) { return null; } }
+function forgetPairCode() { try { localStorage.removeItem(PAIR_KEY); } catch (e) { /* rien */ } }
+
+function pairStep(step) {
+  for (const id of ['form-pair-code', 'form-pair-claim', 'pair-wait', 'pair-done']) $(id).hidden = id !== step;
+}
+
+function resetPairing() {
+  pairing = null;
+  $('pair-error').hidden = true;
+  const code = pairCode();
+  $('pair-code').value = code ? formatCode(normalizeCode(code)) : '';
+  pairStep('form-pair-code');
+  if (code) $('form-pair-code').requestSubmit();
+}
+
+async function loadAdminFamilies() {
+  const list = [];
+  for (const f of myFamilies) {
+    try {
+      const snap = await getDoc(doc(db, 'families', f.fid));
+      const data = snap.data();
+      if (data && (data.createdBy === session.uid || (data.admins || []).includes(session.uid))) list.push({ fid: f.fid, name: data.name });
+    } catch (e) { /* famille illisible */ }
+  }
+  return list;
+}
+
+$('btn-pair').addEventListener('click', () => openPage('pair'));
+$('btn-pair-home').addEventListener('click', () => history.back());
+
+$('form-pair-code').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const code = normalizeCode($('pair-code').value);
+  const fail = (msg) => { $('pair-error').textContent = msg; $('pair-error').hidden = false; };
+  $('pair-error').hidden = true;
+  try {
+    const snap = await getDoc(doc(db, 'pairings', code));
+    const data = snap.data();
+    if (!data) return fail('Ce code ne correspond à aucune tablette. Vérifiez-le sur l\'écran de la tablette.');
+    if (toDate(data.expiresAt) < new Date()) return fail('Ce code a expiré. La tablette en affichera un nouveau.');
+    if (data.status !== 'waiting') return fail('Cette tablette est déjà en cours d\'installation.');
+    adminFamilies = await loadAdminFamilies();
+    if (!adminFamilies.length) return fail('Seul un responsable de la famille peut ajouter une tablette.');
+    pairing = { code, data };
+    forgetPairCode();
+    $('pair-name').textContent = `Tablette « ${data.name} »`;
+    $('pair-family').replaceChildren(...adminFamilies.map((f) => new Option(`Famille de ${f.name}`, f.fid, false, f.fid === session.fid)));
+    $('pair-family-wrap').hidden = adminFamilies.length < 2;
+    syncClaimLabel();
+    pairStep('form-pair-claim');
+  } catch (err) {
+    console.error(err);
+    fail('Impossible de lire ce code. Vérifiez la connexion internet.');
+  }
+});
+
+function syncClaimLabel() {
+  const fam = adminFamilies.find((f) => f.fid === $('pair-family').value) || adminFamilies[0];
+  $('btn-pair-claim').textContent = `Relier à la famille de ${fam.name}`;
+}
+$('pair-family').addEventListener('change', syncClaimLabel);
+
+$('form-pair-claim').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const fam = adminFamilies.find((f) => f.fid === $('pair-family').value) || adminFamilies[0];
+  const ref2 = doc(db, 'pairings', pairing.code);
+  try {
+    await updateDoc(ref2, {
+      status: 'claimed', fid: fam.fid, familyName: fam.name, claimedBy: session.uid, claimedName: session.member.name,
+    });
+  } catch (err) {
+    console.error(err);
+    $('pair-error').textContent = "La tablette n'a pas pu être réclamée. Le code a peut-être expiré.";
+    $('pair-error').hidden = false;
+    pairStep('form-pair-code');
+    return;
+  }
+  $('pair-wait-text').textContent = `La tablette « ${pairing.data.name} » affiche « ${session.member.name} veut relier cette tablette à la famille de ${fam.name} ». Touchez Accepter sur la tablette.`;
+  pairStep('pair-wait');
+  stopPair?.();
+  stopPair = onSnapshot(ref2, (snap) => {
+    const status = snap.data()?.status;
+    if (status !== 'confirmed' && status !== 'refused') return;
+    stopPair?.();
+    stopPair = null;
+    $('pair-done-title').textContent = status === 'confirmed' ? 'Tablette reliée' : 'Tablette non reliée';
+    $('pair-done-text').textContent = status === 'confirmed'
+      ? `La tablette « ${pairing.data.name} » fait maintenant partie de la famille de ${fam.name}. Elle affichera les photos et messages dans un instant.`
+      : 'La tablette a refusé. Si ce n\'était pas une erreur, recommencez avec le nouveau code affiché.';
+    pairStep('pair-done');
+  }, (err) => console.warn('Jumelage illisible', err));
+});
+
 // ---------- Connexion et choix de la famille ----------
 
 const INVITE_CODE_KEY = 'papote.codeInvite';
@@ -1859,6 +1963,7 @@ async function enterApp() {
   renderOutbox();
   flushOutbox();
   if (sharedPending) { sharedPending = false; openShared(); }
+  else if (pairCode()) openPage('pair');
 }
 
 function renderFamilySwitch(current) {
@@ -1877,6 +1982,8 @@ async function start() {
   sharedPending = params.has('partage');
   // Arrivé par le lien ou le QR code d'invitation : le code est gardé le temps de se connecter.
   if (params.get('code')) rememberInviteCode(params.get('code'));
+  // QR code affiché par une nouvelle tablette : on ouvre « Ajouter ma tablette » après la connexion.
+  if (params.get('tablette')) rememberPairCode(params.get('tablette'));
   try {
     await finishRedirect();
   } catch (err) {
