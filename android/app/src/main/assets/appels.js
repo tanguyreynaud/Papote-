@@ -351,6 +351,26 @@ function stopFaceWatch(keepStream) {
   return null;
 }
 
+// ---------- Pause (abonnement suspendu) ----------
+// L'app Android met window.papotePaused à true pendant la pause.
+
+const paused = () => window.papotePaused === true;
+
+function refuseWhilePaused(id) {
+  updateDoc(doc(db, 'families', fid, 'calls', id), { state: 'missed', endedAt: serverTimestamp() }).catch(() => {});
+}
+
+// La pause peut commencer pendant une sonnerie ou un appel : on coupe aussitôt.
+setInterval(() => {
+  if (!paused()) return;
+  if (ringing) {
+    const { id } = ringing;
+    hideRing();
+    refuseWhilePaused(id);
+  }
+  if (active) hangup('');
+}, 2000);
+
 function watchCalls() {
   const q = query(collection(db, 'families', fid, 'calls'), where('state', '==', 'ringing'));
   onSnapshot(q, (snap) => {
@@ -359,6 +379,11 @@ function watchCalls() {
       const data = d.data({ serverTimestamps: 'estimate' });
       return !data.calleeUid && data.createdAt && now - data.createdAt.toMillis() < FRESH_MS;
     });
+    // Abonnement suspendu : la tablette est en pause, aucun appel. L'appelant voit « Pas de réponse ».
+    if (paused()) {
+      fresh.forEach((d) => refuseWhilePaused(d.id));
+      return;
+    }
     // L'appel qui sonnait a été annulé par l'appelant.
     if (ringing && !fresh.some((d) => d.id === ringing.id)) hideRing();
     if (!ringing && !active && fresh.length) {
@@ -377,7 +402,7 @@ function setStatus(text) {
 }
 
 async function answer() {
-  if (!ringing) return;
+  if (!ringing || paused()) return;
   const { id, data } = ringing;
   let stream = hideRing(true);
   const callRef = doc(db, 'families', fid, 'calls', id);
