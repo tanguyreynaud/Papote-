@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400">
+  <!-- La box et les ondes du wifi jusqu'à la tablette -->
+  <circle cx="200" cy="200" r="170" fill="#ffffff" opacity=".08"/>
+  <g fill="none" stroke="#ffffff" stroke-linecap="round">
+    <path d="M110 150a130 130 0 0 1 180 0" stroke-width="18" opacity=".35"/>
+    <path d="M140 185a85 85 0 0 1 120 0" stroke-width="18" opacity=".6"/>
+    <path d="M170 220a42 42 0 0 1 60 0" stroke-width="18"/>
+  </g>
+  <circle cx="200" cy="250" r="12" fill="#ffffff"/>
+  <rect x="115" y="290" width="170" height="52" rx="16" fill="#1e1b4b" opacity=".25" transform="translate(5 7)"/>
+  <rect x="115" y="290" width="170" height="52" rx="16" fill="#ffffff"/>
+  <circle cx="145" cy="316" r="7" fill="#22c55e"/>
+  <circle cx="170" cy="316" r="7" fill="#c7d2fe"/>
+  <rect x="195" y="311" width="70" height="10" rx="5" fill="#e0e7ff"/>
+  <rect x="135" y="268" width="10" height="26" rx="5" fill="#ffffff"/>
+  <rect x="255" y="268" width="10" height="26" rx="5" fill="#ffffff"/>
+  <path d="M325 110l5 12 12 5-12 5-5 12-5-12-12-5 12-5z" fill="#fde68a"/>
+  <circle cx="80" cy="120" r="6" fill="#fde68a"/>
+</svg>

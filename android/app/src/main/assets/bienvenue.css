@@ -25,16 +25,34 @@
 }
 .welcome[hidden] { display: none; }
 
-.welcome-box {
+.welcome-card {
+  display: flex;
   width: 100%;
-  max-width: 150vmin;
+  max-width: 156vmin;
   margin: auto;
-  padding: 4.5vmin 6vmin 5vmin;
+  overflow: hidden;
   border-radius: 4vmin;
   background: var(--w-surface);
-  box-shadow: 0 .2vmin .4vmin rgba(28, 25, 23, .06), 0 1vmin 4vmin rgba(28, 25, 23, .08);
+  box-shadow: 0 .2vmin .4vmin rgba(28, 25, 23, .06), 0 1.5vmin 5vmin rgba(28, 25, 23, .1);
+}
+.welcome-art {
+  flex: 0 0 38%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4vmin;
+  background: radial-gradient(circle at 30% 20%, #818cf8 0%, #4f46e5 55%, #3730a3 100%);
+}
+.welcome-art img { width: 100%; max-width: 52vmin; height: auto; }
+.welcome-box {
+  flex: 1;
+  min-width: 0;
+  padding: 4.5vmin 6vmin 5vmin;
   text-align: center;
 }
+.with-art .welcome-box { text-align: left; }
+.with-art .welcome-input { margin-left: 0; }
+.with-art .welcome-btn.primary { margin-left: 0; }
 
 .welcome-head { display: flex; align-items: center; gap: 2vmin; margin-bottom: 3.5vmin; }
 .welcome-logo { width: 8vmin; height: 8vmin; }
@@ -124,3 +142,6 @@
 .welcome-actions { display: flex; justify-content: center; gap: 3vmin; margin-top: 2vmin; }
 .welcome-actions .welcome-btn { min-width: 38vmin; min-height: 14vmin; font-size: 6vmin; }
 .welcome-actions .welcome-btn.no { border-color: var(--w-line); background: var(--w-surface); color: var(--w-text); }
+.welcome-list .welcome-btn.network { min-height: 10vmin; }
+.welcome-list { gap: 1.2vmin; }
+.with-art .welcome-title { font-size: 6.2vmin; }

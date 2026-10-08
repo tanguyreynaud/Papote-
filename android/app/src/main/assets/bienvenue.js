@@ -30,9 +30,22 @@
   // Étape en cours (1 nom, 2 wifi, 3 famille), affichée en haut ; 0 = pas d'étapes (wifi plus tard).
   var stepNum = 0;
 
+  // Illustration de l'étape (bienvenue/<nom>.svg), dans le panneau de gauche ; vide = pas de panneau.
+  var art = '';
+
   function screen(title, subtitle) {
     root.innerHTML = '';
+    var card = el('div', 'welcome-card' + (art ? ' with-art' : ''));
+    if (art) {
+      var panel = el('div', 'welcome-art');
+      var img = el('img', '');
+      img.src = 'bienvenue/' + art + '.svg';
+      img.alt = '';
+      panel.appendChild(img);
+      card.appendChild(panel);
+    }
     var box = el('div', 'welcome-box');
+    card.appendChild(box);
     var head = el('div', 'welcome-head');
     var logo = el('img', 'welcome-logo');
     logo.src = 'logo.svg';
@@ -48,7 +61,7 @@
     box.appendChild(head);
     box.appendChild(el('h1', 'welcome-title', title));
     if (subtitle) box.appendChild(el('p', 'welcome-sub', subtitle));
-    root.appendChild(box);
+    root.appendChild(card);
     return box;
   }
 
@@ -62,6 +75,7 @@
 
   function showName() {
     stepNum = 1;
+    art = 'nom';
     var box = screen('Bienvenue !', 'Pour commencer, donnez un nom à cette tablette.');
     var input = el('input', 'welcome-input');
     input.type = 'text';
@@ -87,6 +101,7 @@
 
   function showWifi() {
     stepNum = 2;
+    art = 'wifi';
     var st = wifiState();
     // Carte SIM avec internet : pas besoin de wifi.
     if (!repair && st.mobile && st.internet && !st.wifi) { finishWifi(); return; }
@@ -112,7 +127,7 @@
       if (!nets.length) {
         list.appendChild(el('p', 'welcome-sub', 'Aucun réseau trouvé. Rapprochez la tablette de la box, puis touchez « Chercher à nouveau ».'));
       }
-      for (var i = 0; i < nets.length && i < 8; i++) {
+      for (var i = 0; i < nets.length && i < 6; i++) {
         (function (n) {
           var b = button(n.ssid, 'network', function () { askPassword(n); });
           b.appendChild(el('span', 'bars bars-' + n.level));
@@ -189,6 +204,7 @@
 
   function showPair(s) {
     stepNum = 3;
+    art = ''; // le QR code est l'illustration
     var box = screen('Reliez la tablette à votre famille', '');
     if (s.error) {
       box.appendChild(el('p', 'welcome-error', s.error));
@@ -215,6 +231,7 @@
 
   function showConfirm(s) {
     stepNum = 3;
+    art = 'confirmer';
     var who = s.claimedName || 'Quelqu\'un';
     var fam = s.familyName ? ' à la famille de ' + s.familyName : '';
     var box = screen(who + ' veut relier cette tablette' + fam + '.', 'C\'est bien vous ?');
