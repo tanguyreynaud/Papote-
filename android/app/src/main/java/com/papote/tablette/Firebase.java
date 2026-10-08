@@ -11,7 +11,7 @@ import org.json.JSONObject;
 import java.io.IOException;
 
 /**
- * Accès à Firebase par ses API REST : connexion anonyme et Firestore.
+ * Accès à Firebase par ses API REST : compte de la tablette (e-mail et mot de passe) et Firestore.
  * Pas de SDK Firebase : l'appli reste petite et sans dépendance.
  */
 final class Firebase {
@@ -44,7 +44,10 @@ final class Firebase {
         return prefs.getString("uid", null);
     }
 
-    // ---------- Connexion anonyme ----------
+    // ---------- Compte de la tablette (e-mail et mot de passe, plus de compte anonyme) ----------
+
+    private static final String ACCOUNT_DOMAIN = "@tablettes.papote-famille.web.app";
+    private static final String AUTH = "https://identitytoolkit.googleapis.com/v1/accounts:";
 
     synchronized String token() throws IOException, JSONException {
         if (idToken != null && System.currentTimeMillis() < idTokenExpiry) return idToken;
@@ -58,19 +61,103 @@ final class Firebase {
                 JSONObject j = new JSONObject(r.body);
                 remember(j.getString("id_token"), j.getString("refresh_token"),
                         j.getString("user_id"), j.optLong("expires_in", 3600));
+                if (!prefs.getBoolean("accountConverted", false)) convertAnonymous();
                 return idToken;
             }
             if (r.code != 400) throw new ApiException(r.code, r.body);
-            // Jeton refusé (compte supprimé) : on repart sur un nouveau compte anonyme.
+            // Jeton refusé : on se reconnecte avec l'e-mail et le mot de passe de la tablette.
         }
-        Http.Response r = http.request("POST",
-                "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=" + API_KEY,
-                "application/json", "{\"returnSecureToken\":true}", null);
+        String email = prefs.getString("email", null);
+        String password = prefs.getString("password", null);
+        if (email != null && password != null) {
+            Http.Response r = authCall("signInWithPassword", email, password, null);
+            if (r.ok()) {
+                rememberAuth(new JSONObject(r.body));
+                prefs.edit().putBoolean("accountConverted", true).apply();
+                return idToken;
+            }
+            if (r.code != 400) throw new ApiException(r.code, r.body);
+        }
+        // Première installation : le compte est créé directement avec e-mail et mot de passe.
+        email = "tablette-" + randomString(20).toLowerCase() + ACCOUNT_DOMAIN;
+        password = randomString(32);
+        prefs.edit().putString("email", email).putString("password", password).apply();
+        Http.Response r = authCall("signUp", email, password, null);
         if (!r.ok()) throw new ApiException(r.code, r.body);
-        JSONObject j = new JSONObject(r.body);
+        rememberAuth(new JSONObject(r.body));
+        prefs.edit().putBoolean("accountConverted", true).apply();
+        return idToken;
+    }
+
+    /**
+     * Ancien compte anonyme : on lui ajoute un e-mail et un mot de passe sans changer son uid,
+     * pour que la tablette reste membre de sa famille.
+     */
+    private void convertAnonymous() {
+        try {
+            String email = prefs.getString("email", null);
+            String password = prefs.getString("password", null);
+            if (email == null || password == null) {
+                email = "tablette-" + uid().toLowerCase() + ACCOUNT_DOMAIN;
+                password = randomString(32);
+                // Enregistrés avant l'appel : si la réponse se perd, on pourra quand même se reconnecter.
+                prefs.edit().putString("email", email).putString("password", password).apply();
+            }
+            Http.Response r = authCall("update", email, password, idToken);
+            if (r.ok()) {
+                JSONObject j = new JSONObject(r.body);
+                if (j.has("idToken")) rememberAuth(j);
+                prefs.edit().putBoolean("accountConverted", true).apply();
+                android.util.Log.i("Papote", "Compte de la tablette converti (e-mail et mot de passe)");
+            } else if (r.body.contains("EMAIL_EXISTS")) {
+                // Déjà fait lors d'un essai précédent.
+                prefs.edit().putBoolean("accountConverted", true).apply();
+            } else {
+                android.util.Log.w("Papote", "Conversion du compte : HTTP " + r.code + " " + r.body);
+            }
+        } catch (Exception e) {
+            android.util.Log.w("Papote", "Conversion du compte", e);
+        }
+    }
+
+    private Http.Response authCall(String action, String email, String password, String idTokenOrNull)
+            throws IOException, JSONException {
+        JSONObject body = new JSONObject().put("email", email).put("password", password)
+                .put("returnSecureToken", true);
+        if (idTokenOrNull != null) body.put("idToken", idTokenOrNull);
+        return http.request("POST", AUTH + action + "?key=" + API_KEY, "application/json", body.toString(), null);
+    }
+
+    private void rememberAuth(JSONObject j) throws JSONException {
         remember(j.getString("idToken"), j.getString("refreshToken"),
                 j.getString("localId"), j.optLong("expiresIn", 3600));
-        return idToken;
+    }
+
+    /**
+     * Second compte, pour les appels vidéo (appels.js a sa propre connexion Firebase) :
+     * créé une fois, puis toujours le même. {"email": "...", "password": "..."}
+     */
+    synchronized String callsAccount() {
+        String email = prefs.getString("callEmail", null);
+        String password = prefs.getString("callPassword", null);
+        if (email == null || password == null) {
+            email = "tablette-appels-" + randomString(20).toLowerCase() + ACCOUNT_DOMAIN;
+            password = randomString(32);
+            prefs.edit().putString("callEmail", email).putString("callPassword", password).apply();
+        }
+        try {
+            return new JSONObject().put("email", email).put("password", password).toString();
+        } catch (JSONException e) {
+            return "{}";
+        }
+    }
+
+    private static String randomString(int length) {
+        String alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+        java.security.SecureRandom rnd = new java.security.SecureRandom();
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < length; i++) sb.append(alphabet.charAt(rnd.nextInt(alphabet.length())));
+        return sb.toString();
     }
 
     private void remember(String id, String refresh, String uid, long expiresIn) {

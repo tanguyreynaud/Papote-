@@ -650,6 +650,10 @@ final class Sync {
         });
     }
 
+    String callsAccount() {
+        return firebase.callsAccount();
+    }
+
     /** Le diaporama arrive au bout des photos chargées : on en charge 5 de plus. */
     void morePhotos() {
         handler.post(() -> {
