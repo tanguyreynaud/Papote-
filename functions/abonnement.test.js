@@ -80,3 +80,13 @@ test('tablette incluse non rendue : pénalité après 30 jours', () => {
   assert.strictEqual(a.restitutionEchue({ statut: 'rendue', avant: T0 - 1 }, T0), false);
   assert.strictEqual(a.restitutionEchue({ statut: 'facturee', avant: T0 - 1 }, T0), false);
 });
+
+test('code de commande', () => {
+  const code = a.nouveauCode();
+  assert.strictEqual(code.length, 8);
+  assert.strictEqual(a.normaliserCode(code), code);
+  assert.strictEqual(a.normaliserCode(' abcd-efgh '), 'ABCDEFGH');
+  assert.strictEqual(a.normaliserCode('ABCD-EFG0'), null);
+  assert.strictEqual(a.normaliserCode('ABC'), null);
+  assert.strictEqual(a.afficherCode('ABCDEFGH'), 'ABCD-EFGH');
+});

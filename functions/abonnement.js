@@ -108,6 +108,28 @@ function restitutionEchue(restitution, maintenant) {
   return limite != null && limite <= maintenant;
 }
 
+// Code de commande à 8 caractères (sans 0, O, 1, I, L), affiché XXXX-XXXX : il relie une commande
+// à la famille quand le client ne se connecte pas avec l'adresse e-mail du paiement.
+const ALPHABET_CODE = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+
+function nouveauCode(aleatoire = Math.random) {
+  let code = '';
+  for (let i = 0; i < 8; i++) code += ALPHABET_CODE[Math.floor(aleatoire() * ALPHABET_CODE.length)];
+  return code;
+}
+
+// « abcd efgh », « ABCD-EFGH » → « ABCDEFGH » ; null si ce n'est pas un code.
+function normaliserCode(saisie) {
+  if (typeof saisie !== 'string') return null;
+  const code = saisie.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (code.length !== 8 || [...code].some((c) => !ALPHABET_CODE.includes(c))) return null;
+  return code;
+}
+
+function afficherCode(code) {
+  return `${code.slice(0, 4)}-${code.slice(4)}`;
+}
+
 // Faut-il appliquer un événement Stripe à cette famille ? Une famille offerte ne change jamais.
 function peutModifier(actuel) {
   return !(actuel && actuel.statut === 'offert');
@@ -131,4 +153,7 @@ module.exports = {
   statutDepuisStripe,
   graceDepassee,
   peutModifier,
+  nouveauCode,
+  normaliserCode,
+  afficherCode,
 };

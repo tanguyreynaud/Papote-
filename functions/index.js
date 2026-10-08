@@ -6,6 +6,8 @@
 //   resilierAbonnement appel depuis l'appli famille : résilie à la fin de l'engagement de 12 mois
 //   annulerResiliation appel depuis l'appli famille : garde l'abonnement
 //   rattacherCommande  appel depuis l'appli famille : relie une commande du site à la famille
+//                      (par l'e-mail du compte, ou par le code de commande XXXX-XXXX)
+//   codeCommande       GET depuis merci.html : code de commande à noter après le paiement
 //   stripeWebhook      Stripe prévient ici de chaque paiement ou changement d'abonnement
 //   finDeGrace         chaque heure : suspend les familles dont le délai de grâce est dépassé
 //   restitutions       chaque jour : prélève 100 € si une tablette incluse n'est pas rendue à temps
@@ -90,7 +92,8 @@ async function sessionPaiement({ formule, tablette, fid, email, client }) {
     metadata,
     subscription_data: subscriptionData,
     payment_method_collection: 'always',
-    success_url: fid ? `${APPLI_FAMILLE}?abonnement=ok` : `${SITE_VITRINE.value()}/merci.html`,
+    success_url: fid ? `${APPLI_FAMILLE}?abonnement=ok`
+      : `${SITE_VITRINE.value()}/merci.html?session={CHECKOUT_SESSION_ID}`,
     cancel_url: fid ? APPLI_FAMILLE : `${SITE_VITRINE.value()}/#tarifs`,
   };
   // Adresse de livraison de la tablette.
@@ -291,17 +294,59 @@ exports.annulerResiliation = onCall({ secrets: [STRIPE_SECRET] }, async (request
   return { ok: true };
 });
 
+// Code de commande d'un abonnement : créé une seule fois, à la première demande.
+async function codeDe(abonnementId) {
+  const ref = db.doc(`commandes/${abonnementId}`);
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (snap.exists && snap.get('code')) return snap.get('code');
+    let code;
+    do {
+      code = regles.nouveauCode();
+    } while (!(await tx.get(db.collection('commandes').where('code', '==', code).limit(1))).empty);
+    tx.set(ref, { code }, { merge: true });
+    return code;
+  });
+}
+
+exports.codeCommande = onRequest({ secrets: [STRIPE_SECRET], cors: true }, async (req, res) => {
+  const session = String(req.query.session || '');
+  if (!/^cs_[A-Za-z0-9_]+$/.test(session)) {
+    res.status(400).json({ erreur: 'Paiement inconnu' });
+    return;
+  }
+  try {
+    const s = await stripe().checkout.sessions.retrieve(session);
+    if (s.status !== 'complete' || !s.subscription) {
+      res.status(404).json({ erreur: 'Paiement inconnu' });
+      return;
+    }
+    res.json({ code: regles.afficherCode(await codeDe(s.subscription)) });
+  } catch (e) {
+    logger.warn('codeCommande', e.message);
+    res.status(404).json({ erreur: 'Paiement inconnu' });
+  }
+});
+
 exports.rattacherCommande = onCall({ secrets: [STRIPE_SECRET] }, async (request) => {
   const { uid, email } = compteVerifie(request);
-  const { fid } = request.data || {};
+  const { fid, code: saisie } = request.data || {};
   const fam = await familleDuResponsable(fid, uid);
   if (fam.abonnement && ['actif', 'impaye', 'offert'].includes(fam.abonnement.statut)) {
     throw new HttpsError('failed-precondition', 'Cette famille a déjà un abonnement.');
   }
-  const commandes = await db.collection('commandes')
-    .where('email', '==', email).where('fid', '==', null).get();
-  if (commandes.empty) {
-    throw new HttpsError('not-found', `Aucune commande en attente pour ${email}.`);
+  let commandes;
+  if (saisie) {
+    const code = regles.normaliserCode(saisie);
+    if (!code) throw new HttpsError('invalid-argument', 'Ce code de commande ne ressemble pas à XXXX-XXXX.');
+    commandes = await db.collection('commandes').where('code', '==', code).where('fid', '==', null).get();
+    if (commandes.empty) throw new HttpsError('not-found', 'Aucune commande en attente avec ce code.');
+  } else {
+    commandes = await db.collection('commandes')
+      .where('email', '==', email).where('fid', '==', null).get();
+    if (commandes.empty) {
+      throw new HttpsError('not-found', `Aucune commande en attente pour ${email}.`);
+    }
   }
   const plusRecente = commandes.docs
     .sort((a, b) => (b.get('creeLe')?.toMillis() || 0) - (a.get('creeLe')?.toMillis() || 0))[0];
@@ -347,7 +392,8 @@ async function paiementTermine(session) {
   const meta = session.metadata || {};
   const ref = db.doc(`commandes/${session.subscription}`);
   const existante = await ref.get();
-  if (!existante.exists) {
+  // La commande peut déjà exister avec son seul code, si merci.html l'a demandé avant ce message.
+  if (!existante.exists || !existante.get('email')) {
     await ref.set({
       email,
       nom: details.name || null,
@@ -358,10 +404,15 @@ async function paiementTermine(session) {
       // Tablette à préparer et envoyer par Tanguy (« envoyee » une fois partie).
       expedition: 'a-preparer',
       stripeCustomerId: session.customer,
-      fid: null,
+      fid: (existante.exists && existante.get('fid')) || null,
       creeLe: FieldValue.serverTimestamp(),
-    });
+    }, { merge: true });
   }
+  // Le code figure aussi sur les factures Stripe du client.
+  const code = regles.afficherCode(await codeDe(session.subscription));
+  await stripe().customers.update(session.customer, {
+    invoice_settings: { custom_fields: [{ name: 'Code de commande Papote', value: code }] },
+  });
   const fid = meta.fid || (existante.exists && existante.get('fid')) || await chercherFamille(email);
   if (fid) await appliquer(fid, session.subscription);
 }
