@@ -218,8 +218,6 @@ public class MainActivity extends Activity implements Sync.Listener {
         if (canal != null) prefs.edit().putString("canal", "test".equals(canal) ? "test" : "").apply();
         String numbers = intent.getStringExtra("numeros");
         if (numbers != null) prefs.edit().putString("alertNumbers", numbers.replaceAll("[^0-9+,]", "")).apply();
-        String pin = intent.getStringExtra("pin");
-        if (pin != null && pin.matches("[0-9]{4,8}")) prefs.edit().putString("pin", pin).apply();
         String code = intent.getStringExtra("code");
         if (code != null) {
             code = code.toUpperCase().replaceAll("[^A-Z0-9]", "");
@@ -385,16 +383,6 @@ public class MainActivity extends Activity implements Sync.Listener {
             Journal.log(MainActivity.this, "Erreur page : " + message);
         }
 
-        @JavascriptInterface
-        public boolean hasPin() {
-            return prefs.getString("pin", null) != null;
-        }
-
-        @JavascriptInterface
-        public boolean checkPin(String pin) {
-            String expected = prefs.getString("pin", null);
-            return expected == null || expected.equals(pin);
-        }
 
         @JavascriptInterface
         public void wifiDone() {

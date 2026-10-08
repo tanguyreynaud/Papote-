@@ -57,7 +57,7 @@ Ce que le script fait à la tablette, de A à Z :
 5. désactive les applis inutiles listées dans `installation/applis-inutiles.txt` (rien n'est effacé) ;
 6. relie la tablette à la famille avec le code tablette.
 
-Options : `-Pin 1234` (code demandé pour régler le wifi depuis la tablette) et `-Numeros "0612345678,0698765432"`
+Option : `-Numeros "0612345678,0698765432"`
 (avec une carte SIM : SMS d'alerte quand la tablette n'a plus internet depuis 30 minutes, puis quand il revient).
 
 Au démarrage, l'appli règle elle-même le volume (fort), bloque les boutons de volume, rallume l'écran en
