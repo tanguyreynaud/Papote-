@@ -337,6 +337,12 @@ public class MainActivity extends Activity implements Sync.Listener {
             return prefs.getString("code", null);
         }
 
+        /** Compte e-mail et mot de passe réservé aux appels vidéo (appels.js), en JSON. */
+        @JavascriptInterface
+        public String callsAccount() {
+            return sync.callsAccount();
+        }
+
         @JavascriptInterface
         public void ring(boolean on) {
             handler.post(() -> callAudio.ring(on));
