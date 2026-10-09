@@ -732,7 +732,7 @@ async function openShared() {
     if (!video && !photos.length) return;
     openPage(video ? 'videos' : 'photos');
     openAdd(video ? 'video' : 'photo');
-    if (text) $('post-text').value = text.slice(0, 80);
+    if (text) $('post-text').value = text.slice(0, 40);
     if (video) await addVideoFile(video);
     else await addPhotoFiles(photos);
   } catch (err) {
