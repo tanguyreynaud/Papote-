@@ -6,8 +6,8 @@
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#f6f5f3",
-  "theme_color": "#f6f5f3",
+  "background_color": "#fdfaf5",
+  "theme_color": "#fdfaf5",
   "related_applications": [
     {
       "platform": "webapp",
