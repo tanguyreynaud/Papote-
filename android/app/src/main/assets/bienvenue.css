@@ -194,10 +194,18 @@
   padding: 6vmin 9vmin;
 }
 .welcome-box > * { flex-shrink: 0; }
-.welcome-head { position: absolute; top: 5vmin; left: 7vmin; right: 7vmin; margin: 0; }
-.with-art .welcome-head { left: calc(44% + 9vmin); right: 7vmin; }
-.welcome-box { padding-top: 18vmin; }
+/* Logo en haut, le reste centré dans la hauteur ; si c'est trop long, ça défile sans rien couper. */
+.welcome-box { padding-top: 5vmin; }
+.welcome-head { margin: 0 0 2vmin; }
+.welcome-head + * { margin-top: auto; }
+.welcome-box > :last-child { margin-bottom: auto; }
 .with-art .welcome-list { margin-left: 0; }
 .with-art .welcome-btn { margin-left: 0; }
 .with-art .welcome-actions { justify-content: flex-start; }
 .with-art .welcome-actions .welcome-btn { min-width: 30vmin; margin: 0; }
+.welcome { display: block; }
+.welcome-box { justify-content: flex-start; }
+.welcome-art { position: sticky; top: 0; align-self: flex-start; height: 100vh; box-sizing: border-box; }
+.with-art::before { content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: 44%; background: #f6efe4; z-index: -1; }
+.welcome-card { position: relative; z-index: 0; }
+.welcome-card { overflow: visible; }

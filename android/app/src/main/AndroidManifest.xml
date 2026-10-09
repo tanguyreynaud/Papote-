@@ -8,6 +8,9 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <!-- Localisation accordée « tout le temps » : sinon Android peut refuser la recherche wifi
+         quand il croit, à tort, que Papote n'est pas au premier plan -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     <!-- Alerte par SMS (carte SIM) quand internet est coupé -->
     <uses-permission android:name="android.permission.SEND_SMS" />
     <!-- Carte SIM (ICCID, opérateur, réseau) pour la page « Forfaits SIM » de la famille -->
