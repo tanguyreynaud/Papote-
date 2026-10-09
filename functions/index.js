@@ -504,7 +504,10 @@ exports.tabletteRendue = onCall(async (request) => {
   return { ok: true };
 });
 
-exports.nouvelleFamille = onDocumentCreated('families/{fid}', async (event) => {
+// Les déclencheurs Firestore doivent tourner dans la région de la base (REGION_FIRESTORE dans .env).
+const REGION_FIRESTORE = process.env.REGION_FIRESTORE || 'europe-west1';
+
+exports.nouvelleFamille = onDocumentCreated({ document: 'families/{fid}', region: REGION_FIRESTORE }, async (event) => {
   const ref = event.data.ref;
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
@@ -516,7 +519,7 @@ exports.nouvelleFamille = onDocumentCreated('families/{fid}', async (event) => {
 });
 
 exports.nouveauMembre = onDocumentCreated(
-  { document: 'families/{fid}/members/{uid}', secrets: [STRIPE_SECRET] },
+  { document: 'families/{fid}/members/{uid}', region: REGION_FIRESTORE, secrets: [STRIPE_SECRET] },
   async (event) => {
     const membre = event.data.data();
     const { fid, uid } = event.params;
