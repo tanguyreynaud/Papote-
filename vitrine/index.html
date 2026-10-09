@@ -95,8 +95,7 @@ section { padding-block: clamp(3.5rem, 8vw, 6rem); }
 .hero-note { font-size: 1rem; color: var(--muted); }
 @media (max-width: 900px) { .hero .wrap { grid-template-columns: minmax(0, 1fr); } }
 .hero-photo { position: relative; margin: 0; min-width: 0; }
-.hero-photo img { display: block; width: 100%; height: auto; aspect-ratio: 4 / 5; object-fit: cover; object-position: 74% 30%; background: var(--band); }
-@media (max-width: 900px) { .hero-photo img { aspect-ratio: 4 / 3; } }
+.hero-photo img { display: block; width: 100%; height: auto; aspect-ratio: 4 / 3; object-fit: cover; object-position: 60% 30%; background: var(--band); }
 .hero-card { position: absolute; left: clamp(-1.5rem, -2vw, 0rem); bottom: 1.5rem; max-width: 19rem; background: var(--surface); border-radius: 16px; padding: .9rem 1.1rem; box-shadow: 0 18px 40px -18px rgba(36, 33, 47, .45); display: grid; grid-template-columns: 2.4rem minmax(0, 1fr); gap: .75rem; align-items: center; font-size: 1rem; line-height: 1.35; }
 .hero-card .ic { width: 2.4rem; height: 2.4rem; border-radius: 50%; background: var(--warm-soft); color: var(--warm); display: grid; place-items: center; }
 .hero-card .ic svg { width: 1.2rem; height: 1.2rem; }
@@ -246,7 +245,7 @@ footer a { color: var(--muted); }
       </div>
 
       <figure class="hero-photo">
-        <img src="mamie.jpg" alt="Une grand-mère souriante" width="1400" height="788" fetchpriority="high">
+        <img src="mamie.jpg" alt="Une grand-mère sourit en regardant sa tablette" width="1365" height="768" fetchpriority="high">
         <div class="hero-card" aria-hidden="true">
           <span class="ic"><svg><use href="#i-heart"/></svg></span>
           <p>Léo a fait ses premiers pas !<small>Julie · il y a 2 minutes</small></p>
