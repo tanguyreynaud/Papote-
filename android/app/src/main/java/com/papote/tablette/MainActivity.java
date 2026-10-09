@@ -209,6 +209,17 @@ public class MainActivity extends Activity implements Sync.Listener {
         }
         if (intent.getBooleanExtra("unlock", false)) setKioskPaused(true);
         if (intent.getBooleanExtra("lock", false)) setKioskPaused(false);
+        // Remise sur l'écran Bienvenue (test du parcours client) : quitte la famille, sans rien effacer d'autre.
+        if (intent.getBooleanExtra("bienvenue", false) && sync != null) {
+            sync.resetToWelcome();
+            callPage("onLeave", new JSONObject());
+            // La page repart de zéro (appels compris) : plus rien de l'ancienne famille en mémoire.
+            handler.postDelayed(() -> {
+                android.webkit.WebStorage.getInstance().deleteAllData();
+                if (web != null) web.reload();
+            }, 1500);
+            return;
+        }
         if (intent.getBooleanExtra("leave", false) && sync != null) {
             sync.leave();
             callPage("onLeave", new JSONObject());

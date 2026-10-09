@@ -674,6 +674,27 @@ final class Sync {
         });
     }
 
+    /**
+     * Remise sur l'écran Bienvenue : la tablette oublie sa famille, son nom, son wifi validé et ses
+     * comptes, puis repart comme une tablette neuve (mode kiosque et réglages gardés).
+     * Sa fiche dans l'ancienne famille n'est pas supprimée ici (nettoyage par le script d'administration).
+     */
+    void resetToWelcome() {
+        handler.post(() -> {
+            Journal.log(context, "Remise sur l'écran Bienvenue");
+            prefs.edit().remove("fid").remove("code").remove("pairing").remove("pairingExpires")
+                    .remove("tabletName").remove("wifiDone").apply();
+            firebase.forgetAll();
+            posts.clear();
+            lastPostsJson = null;
+            lastStatusJson = null;
+            lastRev = Long.MIN_VALUE;
+            File[] files = imageDir.listFiles();
+            if (files != null) for (File f : files) f.delete();
+            poke();
+        });
+    }
+
     String callsAccount() {
         return firebase.callsAccount();
     }

@@ -39,6 +39,16 @@ New-Item -ItemType Directory -Force $work | Out-Null
 git -C $root archive -o "$work\src.zip" HEAD android
 Expand-Archive "$work\src.zip" -DestinationPath $work
 Copy-Item "$root\android\local.properties", "$root\android\signing.properties" "$work\android\"
+
+# Vérification du JavaScript de la tablette avant de compiler : une seule faute de frappe bloque tout l'écran.
+$assets = "$work\android\app\src\main\assets"
+foreach ($js in 'tablette.js', 'bienvenue.js') {
+    & node --check "$assets\$js"
+    if ($LASTEXITCODE) { throw "Erreur de syntaxe dans $js : publication annulée." }
+}
+Get-Content -Raw "$assets\appels.js" | & node --input-type=module --check
+if ($LASTEXITCODE) { throw "Erreur de syntaxe dans appels.js : publication annulée." }
+
 $env:JAVA_HOME = 'C:\Program Files\Android\Android Studio\jbr'
 Push-Location "$work\android"
 try { & .\gradlew.bat assembleRelease -q; if ($LASTEXITCODE) { throw "Échec de la compilation" } } finally { Pop-Location }

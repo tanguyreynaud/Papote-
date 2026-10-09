@@ -1,0 +1,8 @@
+{
+  "name": "papote-stripe",
+  "private": true,
+  "description": "Installation de Stripe pour Papote, à lancer une fois depuis le PC.",
+  "dependencies": {
+    "stripe": "^17.5.0"
+  }
+}

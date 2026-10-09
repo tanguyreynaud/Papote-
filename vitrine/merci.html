@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Merci · Papote</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#4f46e5">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,800&display=swap">
+<style>
+:root { --bg: #f7f6fb; --text: #1b1a2e; --muted: #5d5b74; --accent: #4f46e5; --accent-text: #ffffff; --line: #dddbee; color-scheme: light; }
+@media (prefers-color-scheme: dark) { :root { --bg: #121220; --text: #f0effa; --muted: #aba9c3; --accent: #8b85f8; --accent-text: #121220; --line: #2d2c44; color-scheme: dark; } }
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px 20px; background: var(--bg); color: var(--text); font: 400 1.125rem/1.6 "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif; }
+main { max-width: 36rem; display: grid; gap: 1.25rem; }
+img { width: 3.5rem; height: 3.5rem; }
+h1 { margin: 0; font: 800 clamp(2rem, 6vw, 2.8rem)/1.1 "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif; text-wrap: balance; }
+p { margin: 0; color: var(--muted); }
+ol { margin: 0; padding-left: 1.3rem; display: grid; gap: .5rem; }
+.code { display: grid; gap: .25rem; padding: 1rem 1.25rem; border: 2px dashed var(--line); border-radius: 14px; }
+.code strong { font: 800 1.8rem/1.2 "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif; letter-spacing: .08em; color: var(--text); user-select: all; }
+.code span { font-size: 1rem; color: var(--muted); }
+a.btn { justify-self: start; display: inline-flex; align-items: center; min-height: 3.25rem; padding: .75rem 1.5rem; border-radius: 999px; background: var(--accent); color: var(--accent-text); font-weight: 700; text-decoration: none; }
+</style>
+</head>
+<body>
+<main>
+  <img src="icon.svg" alt="">
+  <h1>Merci, votre commande est enregistrée.</h1>
+  <p>Vous recevez un e-mail de confirmation avec votre reçu. Vos 15 jours d'essai gratuit commencent aujourd'hui : le premier mois sera prélevé à leur fin.</p>
+  <div class="code" id="code" hidden>
+    <span>Votre code de commande</span>
+    <strong id="code-valeur"></strong>
+    <span>Notez-le. Il figure aussi sur vos factures. Il sert si vous vous connectez à l'appli avec une autre adresse e-mail que celle du paiement.</span>
+  </div>
+  <ol>
+    <li>À l'arrivée de la tablette, branchez-la et connectez-la au wifi si besoin.</li>
+    <li>Ouvrez l'appli Papote sur votre téléphone, connectez-vous avec la même adresse e-mail que pour le paiement, et scannez le QR code affiché sur la tablette. Votre famille est créée et l'abonnement s'y rattache tout seul.</li>
+    <li>Invitez vos proches depuis l'appli.</li>
+  </ol>
+  <a class="btn" href="https://papote-famille.web.app">Ouvrir l'appli famille</a>
+</main>
+<script>
+  // Code de commande, demandé au serveur avec l'identifiant du paiement Stripe.
+  (function () {
+    var session = new URLSearchParams(location.search).get('session');
+    if (!session) return;
+    fetch('https://europe-west1-papote-famille.cloudfunctions.net/codeCommande?session=' + encodeURIComponent(session))
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (!d || !d.code) return;
+        document.getElementById('code-valeur').textContent = d.code;
+        document.getElementById('code').hidden = false;
+      })
+      .catch(function () {});
+  })();
+</script>
+</body>
+</html>

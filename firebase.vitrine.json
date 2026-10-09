@@ -1,0 +1,13 @@
+{
+  "hosting": {
+    "site": "papote",
+    "public": "vitrine",
+    "ignore": ["README.md", "**/.*"],
+    "headers": [
+      {
+        "source": "**",
+        "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+      }
+    ]
+  }
+}

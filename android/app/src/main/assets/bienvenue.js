@@ -27,13 +27,41 @@
     document.body.appendChild(root);
   }
 
+  // Étape en cours (1 nom, 2 wifi, 3 famille), affichée en haut ; 0 = pas d'étapes (wifi plus tard).
+  var stepNum = 0;
+
+  // Illustration de l'étape (bienvenue/<nom>.svg), dans le panneau de gauche ; vide = pas de panneau.
+  var art = '';
+
   function screen(title, subtitle) {
     root.innerHTML = '';
+    var card = el('div', 'welcome-card' + (art ? ' with-art' : ''));
+    if (art) {
+      var panel = el('div', 'welcome-art');
+      var img = el('img', '');
+      img.src = 'bienvenue/' + art + '.svg';
+      img.alt = '';
+      panel.appendChild(img);
+      card.appendChild(panel);
+    }
     var box = el('div', 'welcome-box');
-    box.appendChild(el('p', 'welcome-brand', 'Papote'));
+    card.appendChild(box);
+    var head = el('div', 'welcome-head');
+    var logo = el('img', 'welcome-logo');
+    logo.src = 'logo.svg';
+    logo.alt = '';
+    head.appendChild(logo);
+    head.appendChild(el('span', 'welcome-brand', 'Papote'));
+    if (stepNum && !repair) {
+      var steps = el('div', 'welcome-dots');
+      for (var i = 1; i <= 3; i++) steps.appendChild(el('span', 'dot' + (i < stepNum ? ' done' : i === stepNum ? ' on' : '')));
+      steps.appendChild(el('span', 'welcome-stepnum', 'Étape ' + stepNum + ' sur 3'));
+      head.appendChild(steps);
+    }
+    box.appendChild(head);
     box.appendChild(el('h1', 'welcome-title', title));
     if (subtitle) box.appendChild(el('p', 'welcome-sub', subtitle));
-    root.appendChild(box);
+    root.appendChild(card);
     return box;
   }
 
@@ -46,6 +74,8 @@
   // ---------- 1. Nom de la tablette ----------
 
   function showName() {
+    stepNum = 1;
+    art = 'nom';
     var box = screen('Bienvenue !', 'Pour commencer, donnez un nom à cette tablette.');
     var input = el('input', 'welcome-input');
     input.type = 'text';
@@ -70,6 +100,8 @@
   }
 
   function showWifi() {
+    stepNum = 2;
+    art = 'wifi';
     var st = wifiState();
     // Carte SIM avec internet : pas besoin de wifi.
     if (!repair && st.mobile && st.internet && !st.wifi) { finishWifi(); return; }
@@ -95,7 +127,7 @@
       if (!nets.length) {
         list.appendChild(el('p', 'welcome-sub', 'Aucun réseau trouvé. Rapprochez la tablette de la box, puis touchez « Chercher à nouveau ».'));
       }
-      for (var i = 0; i < nets.length && i < 8; i++) {
+      for (var i = 0; i < nets.length && i < 6; i++) {
         (function (n) {
           var b = button(n.ssid, 'network', function () { askPassword(n); });
           b.appendChild(el('span', 'bars bars-' + n.level));
@@ -171,6 +203,8 @@
   function pretty(code) { return code.slice(0, 4) + '-' + code.slice(4); }
 
   function showPair(s) {
+    stepNum = 3;
+    art = ''; // le QR code est l'illustration
     var box = screen('Reliez la tablette à votre famille', '');
     if (s.error) {
       box.appendChild(el('p', 'welcome-error', s.error));
@@ -196,6 +230,8 @@
   // ---------- 4. Confirmation ----------
 
   function showConfirm(s) {
+    stepNum = 3;
+    art = 'confirmer';
     var who = s.claimedName || 'Quelqu\'un';
     var fam = s.familyName ? ' à la famille de ' + s.familyName : '';
     var box = screen(who + ' veut relier cette tablette' + fam + '.', 'C\'est bien vous ?');

@@ -125,12 +125,9 @@ function waitPairing(pairing) {
   });
 }
 
-async function joinByPairing(u, pairing, saved) {
-  if (saved) {
-    let member = null;
-    try { member = await getDoc(doc(db, 'families', saved, 'members', u.uid)); } catch (e) { /* pas membre */ }
-    if (member && member.exists()) return saved;
-  }
+// La famille vient toujours du jumelage, jamais d'une famille d'avant gardée en mémoire :
+// une tablette rejumelée chez un autre client ne doit pas rester dans l'ancienne famille.
+async function joinByPairing(u, pairing) {
   const data = await waitPairing(pairing);
   if (!data) return null;
   const memberRef = doc(db, 'families', data.fid, 'members', u.uid);
@@ -152,8 +149,9 @@ async function joinFamily() {
   let saved = null;
   try { saved = localStorage.getItem(FID_KEY); } catch (e) { /* pas de stockage */ }
   const code = ((android() && android().getCode()) || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-  const pairing = !code && android() && android().getPairing ? (android().getPairing() || '') : '';
-  if (pairing) return joinByPairing(u, pairing, saved);
+  // Un jumelage en cours ou fait passe avant un ancien code resté en mémoire.
+  const pairing = android() && android().getPairing ? (android().getPairing() || '') : '';
+  if (pairing) return joinByPairing(u, pairing);
   if (!saved && !code) return null;
 
   // Le code saisi à l'installation est un code de tablette (invites/{code}, kind 'tablette') :
