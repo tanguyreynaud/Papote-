@@ -16,7 +16,7 @@ Abonnements et paiements Stripe. Plan complet et état des familles : `abonnemen
 
 ## Livraison en point relais et e-mails
 
-- Le site fait choisir un point relais Mondial Relay (`vitrine/commande.html`) avant le paiement. Le code enseigne de test `BDTEST` est à remplacer par celui du compte pro dans ce fichier.
+- Le site fait choisir un point relais Mondial Relay avant le paiement (`vitrine/commande.html`, sélecteur Sendcloud : clé publique de l'intégration « Papote » dans SENDCLOUD_CLE). `livraison.id` est l'identifiant Sendcloud du point relais, à utiliser pour créer l'étiquette dans Sendcloud.
 - Colis parti : bouton du tableau de bord admin (fonction `tabletteEnvoyee`) ou `outils\admin\abonnements.bat envoyee <e-mail|code> <numéro de suivi>`. Le client reçoit l'e-mail avec le lien de suivi (`commandeModifiee`).
 - Tablette pas jumelée : rappels au client 5 et 12 jours après l'envoi (`rappelsJumelage`), puis `alerteJumelage: true` sur la commande à 20 jours.
 - E-mails envoyés par SMTP : `MAIL_SMTP` et `MAIL_EXPEDITEUR` dans `.env`, mot de passe rangé par `outils\mail\installer-mail.bat` (secret `MAIL_MOT_DE_PASSE`, à créer AVANT le déploiement).
