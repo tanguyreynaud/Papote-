@@ -68,3 +68,7 @@ main.admin { max-width: 1100px; padding: calc(20px + env(safe-area-inset-top)) 1
 .sim-alerts { margin: 8px 0 0; padding-left: 18px; color: var(--danger); font-size: 14px; font-weight: 600; }
 .replace { margin-top: 8px; border-top: 1px solid var(--line); padding-top: 6px; }
 .replace-out p { margin: 4px 0; }
+.ship { display: flex; gap: 8px; margin-top: 8px; }
+.ship input { margin: 0; flex: 1; min-width: 0; padding: 8px 12px; }
+.orders li.alert { border-left: 4px solid var(--danger); padding-left: 10px; }
+.orders li.alert strong { color: var(--danger); }

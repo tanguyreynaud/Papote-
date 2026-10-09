@@ -73,25 +73,85 @@ onAuthStateChanged(auth, (user) => {
 // ---------- Familles et tablettes ----------
 
 // Commandes payées sur le site, tablette à préparer (écrites par le serveur Stripe).
+// Adresse de livraison : point relais Mondial Relay, ou adresse postale des anciennes commandes.
+function livraisonTexte(c) {
+  const l = c.livraison || {};
+  if (l.transporteur === 'mondial-relay') {
+    return `Point relais ${l.nom || ''} (n° ${l.id || '?'}) · ${[l.adresse, `${l.cp || ''} ${l.ville || ''}`.trim(), l.pays].filter(Boolean).join(', ')}`;
+  }
+  const a = l.adresse || {};
+  const postale = [a.line1, a.line2, `${a.postal_code || ''} ${a.city || ''}`.trim(), a.country].filter(Boolean).join(', ');
+  return postale ? `Adresse : ${postale}` : 'Adresse non fournie';
+}
+
+const lienSuivi = (c) => `https://www.mondialrelay.fr/suivi-de-colis/?numeroExpedition=${encodeURIComponent(c.suivi || '')}&codePostal=${encodeURIComponent(c.livraison?.cp || '')}`;
+
+function orderHead(c) {
+  return `${c.nom || c.email} · ${c.formule === 'sim' ? 'carte SIM' : 'Wi-Fi'}, tablette ${c.tablette === 'incluse' ? 'incluse' : 'achetée'}`;
+}
+
+// Tablettes à envoyer : point relais, puis numéro de suivi et « Envoyée » (e-mail au client par le serveur).
 async function loadOrders() {
   try {
     const snap = await getDocs(query(collection(db, 'commandes'), where('expedition', '==', 'a-preparer')));
-    const list = snap.docs.map((d) => d.data())
+    const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
       .sort((a, b) => (toDate(a.creeLe)?.getTime() || 0) - (toDate(b.creeLe)?.getTime() || 0));
     $('orders-empty').hidden = list.length > 0;
     $('orders').replaceChildren(...list.map((c) => {
       const li = document.createElement('li');
-      const a = c.livraison?.adresse || {};
-      const adresse = [a.line1, a.line2, `${a.postal_code || ''} ${a.city || ''}`.trim(), a.country].filter(Boolean).join(', ');
-      li.innerHTML = '<strong></strong><span class="muted small"></span><span></span>';
-      li.querySelector('strong').textContent = `${c.livraison?.nom || c.nom || c.email} · ${c.formule === 'sim' ? 'carte SIM' : 'Wi-Fi'}, tablette ${c.tablette === 'incluse' ? 'incluse' : 'achetée'}`;
+      li.innerHTML = '<strong></strong><span class="muted small"></span><span class="small"></span>'
+        + '<form class="ship"><input placeholder="N° de suivi Mondial Relay" autocomplete="off" required><button type="submit" class="primary small-btn">Envoyée</button></form>';
+      li.querySelector('strong').textContent = orderHead(c);
       li.querySelector('.muted').textContent = `${c.email}${c.telephone ? ` · ${c.telephone}` : ''} · commandé ${ago(toDate(c.creeLe))}${c.fid ? ' · famille créée' : ''}`;
-      li.querySelector('span:last-child').textContent = adresse || 'Adresse non fournie';
+      li.querySelector('span.small:not(.muted)').textContent = livraisonTexte(c);
+      const form = li.querySelector('form');
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const suivi = form.querySelector('input').value.trim();
+        form.querySelector('button').disabled = true;
+        try {
+          await httpsCallable(functions, 'tabletteEnvoyee')({ commande: c.id, suivi });
+          loadOrders();
+          loadShipped();
+        } catch (err) {
+          console.error(err);
+          alert(err.code?.endsWith('invalid-argument') ? 'Ce numéro de suivi ne semble pas valide.' : "L'enregistrement a échoué.");
+          form.querySelector('button').disabled = false;
+        }
+      });
       return li;
     }));
   } catch (err) {
     console.warn('Commandes illisibles', err);
     $('orders-empty').hidden = false;
+  }
+}
+
+// Envoyées mais pas encore reliées à une famille : suivi du colis, alerte au bout de 20 jours.
+async function loadShipped() {
+  try {
+    const snap = await getDocs(query(collection(db, 'commandes'), where('expedition', '==', 'envoyee'), where('fid', '==', null)));
+    const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => (b.alerteJumelage === true) - (a.alerteJumelage === true)
+        || (toDate(a.envoyeeLe)?.getTime() || 0) - (toDate(b.envoyeeLe)?.getTime() || 0));
+    $('shipped-empty').hidden = list.length > 0;
+    $('shipped').replaceChildren(...list.map((c) => {
+      const li = document.createElement('li');
+      if (c.alerteJumelage) li.classList.add('alert');
+      li.innerHTML = '<strong></strong><span class="muted small"></span><span class="small"></span><a target="_blank" rel="noopener" class="small"></a>';
+      li.querySelector('strong').textContent = orderHead(c);
+      const infos = [c.email, `envoyée ${ago(toDate(c.envoyeeLe))}`, `${c.rappels || 0} rappel(s) envoyé(s)`];
+      if (c.alerteJumelage) infos.push('pas jumelée après 20 jours : appeler le client');
+      li.querySelector('.muted').textContent = infos.join(' · ');
+      li.querySelector('span.small:not(.muted)').textContent = c.mailErreur ? `E-mail non parti : ${c.mailErreur}` : livraisonTexte(c);
+      const a = li.querySelector('a');
+      a.href = lienSuivi(c);
+      a.textContent = `Suivre le colis ${c.suivi || ''}`;
+      return li;
+    }));
+  } catch (err) {
+    console.warn('Envois illisibles', err);
+    $('shipped-empty').hidden = false;
   }
 }
 
@@ -134,6 +194,7 @@ async function loadReturns() {
 
 async function load() {
   loadOrders();
+  loadShipped();
   loadReturns();
   $('loading-families').hidden = false;
   try {
