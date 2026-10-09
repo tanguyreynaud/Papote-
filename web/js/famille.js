@@ -23,7 +23,7 @@ import { startAgenda, stopAgenda } from './agenda.js';
 import {
   isRealAccount, myEmail, signInGoogle, finishRedirect, sendEmailLink, isEmailLink, completeEmailLink, logOut,
   myMemberships, familyName, tagLegacyMember, myInvitations, acceptInvitation,
-  inviteByEmail, cancelInvitation, acceptMember, createTabletCode, changeFamilyCode,
+  inviteByEmail, cancelInvitation, acceptMember, changeFamilyCode,
 } from './compte.js';
 import {
   startNotifs, stopNotifs, markNotifsRead, setNotifMembers, setNotifReminders,
@@ -1406,19 +1406,6 @@ $('form-invite').addEventListener('submit', async (e) => {
   }
 });
 
-$('btn-tablet-code').addEventListener('click', async () => {
-  $('btn-tablet-code').disabled = true;
-  try {
-    const code = await createTabletCode(session.fid);
-    $('tablet-code').textContent = formatCode(code);
-    $('tablet-code').hidden = false;
-  } catch (err) {
-    console.error(err);
-    notice("Le code n'a pas pu être créé.");
-  } finally {
-    $('btn-tablet-code').disabled = false;
-  }
-});
 
 $('btn-new-code').addEventListener('click', async () => {
   if (!await askConfirm("Changer le code famille ? L'ancien code et l'ancien QR code ne permettront plus de rejoindre la famille.")) return;
@@ -1805,7 +1792,6 @@ function applyFamily() {
   $('btn-delete-family').hidden = !amOwner();
   renderTextSize();
   $('invite-email-card').hidden = !admin;
-  $('tablet-card').hidden = !amOwner();
   $('btn-new-code').hidden = !admin || !CHANGE_CODE_READY;
   if (admin && !stopInvitations) watchInvitations();
   if (!$('view-settings').hidden) renderSettings();
@@ -1857,7 +1843,7 @@ function launchedFromHomeScreen() {
 
 function rememberInstalled() {
   try { localStorage.setItem(INSTALLED_KEY, '1'); } catch (e) { /* stockage indisponible */ }
-  $('install-card').hidden = true;
+  $('btn-install').hidden = true;
 }
 
 function knownInstalled() {
@@ -1874,7 +1860,7 @@ window.addEventListener('appinstalled', rememberInstalled);
 // La carte « Installez Papote » ne s'affiche que si l'app n'est pas déjà sur l'écran d'accueil.
 async function renderInstallCard() {
   if (launchedFromHomeScreen()) { rememberInstalled(); return; }
-  $('install-card').hidden = knownInstalled();
+  $('btn-install').hidden = knownInstalled();
   // Chrome Android sait dire si l'app est déjà installée, même ouverte dans le navigateur.
   try {
     const apps = await navigator.getInstalledRelatedApps?.();
@@ -1890,18 +1876,10 @@ $('btn-install').addEventListener('click', async () => {
     if (outcome === 'accepted') rememberInstalled();
     return;
   }
-  const help = $('install-help');
-  help.hidden = false;
-  if (isIos()) {
-    help.innerHTML = '<p>Sur iPhone, il faut passer par Safari :</p><ol>'
-      + '<li>Touchez le bouton <strong>Partager</strong> (le carré avec une flèche vers le haut) en bas de l\'écran</li>'
-      + '<li>Choisissez <strong>« Sur l\'écran d\'accueil »</strong></li>'
-      + '<li>Touchez <strong>Ajouter</strong></li></ol>'
-      + '<p class="small muted">Au premier lancement, entrez à nouveau le code famille.</p>';
-  } else {
-    help.innerHTML = '<p>Dans Chrome, touchez le menu <strong>⋮</strong> en haut à droite, '
-      + 'puis <strong>« Ajouter à l\'écran d\'accueil »</strong> ou <strong>« Installer l\'application »</strong>.</p>';
-  }
+  // Pas d'invitation du navigateur (iPhone, ou Chrome qui ne l'a pas proposée) : on explique.
+  notice(isIos()
+    ? "Sur iPhone, dans Safari : touchez le bouton Partager (le carré avec une flèche vers le haut), choisissez « Sur l'écran d'accueil », puis « Ajouter »."
+    : "Dans Chrome : touchez le menu ⋮ en haut à droite, puis « Installer l'application » ou « Ajouter à l'écran d'accueil ».");
 });
 
 // ---------- Veille : activité de la tablette ----------
@@ -1999,7 +1977,6 @@ async function loadAdminFamilies() {
   return list;
 }
 
-$('btn-pair').addEventListener('click', () => openPage('pair'));
 // Sans famille : la page de jumelage s'ouvre hors de toute famille (pas de session).
 function openPairingWithoutFamily() {
   resetPairing();

@@ -179,13 +179,6 @@ function randomCode() {
   return Array.from(bytes, (b) => CODE_ALPHABET[b % CODE_ALPHABET.length]).join('');
 }
 
-/** Code d'installation d'une tablette : seul ce code permet d'inscrire une tablette. */
-export async function createTabletCode(fid) {
-  const code = randomCode();
-  await setDoc(doc(db, 'invites', code), { fid, createdBy: auth.currentUser.uid, kind: 'tablette' });
-  return code;
-}
-
 /** Nouveau code famille : l'ancien ne permet plus de rejoindre. */
 export async function changeFamilyCode(fid, oldCode) {
   const code = randomCode();

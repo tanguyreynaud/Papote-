@@ -218,15 +218,11 @@
       </div>
       <p id="activity" class="activity" hidden></p>
       <p id="outbox" class="outbox" hidden></p>
-      <div id="install-card" class="card install-card" hidden>
-        <p><strong>Installez Papote sur votre écran d'accueil</strong> pour l'ouvrir comme une app.</p>
-        <button id="btn-install" class="primary wide">Ajouter à l'écran d'accueil</button>
-        <div id="install-help" class="install-help" hidden></div>
-      </div>
       <button type="button" id="face-nudge" class="card nudge" hidden>
         <span class="avatar avatar-empty"><svg><use href="#i-user"/></svg></span>
         <span><strong>Ajoutez votre photo</strong><br><span class="muted small">Pour que <span class="grand-name"></span> vous reconnaisse</span></span>
       </button>
+      <button type="button" id="btn-install" class="install-fab" hidden><svg><use href="#i-download"/></svg>Installer l'app</button>
       <div class="tiles">
         <button type="button" class="tile t-call" id="tile-call">
           <svg class="tile-icon"><use href="#i-call"/></svg><span>Appel vidéo</span>
@@ -347,13 +343,6 @@
             </form>
           </details>
           <p id="remote-result" class="remote-result" hidden></p>
-        </div>
-        <div id="tablet-card" class="card" hidden>
-          <h2>Ajouter une tablette</h2>
-          <button type="button" id="btn-pair" class="primary wide">Ajouter ma tablette</button>
-          <p class="muted small">Installation par câble avec le script : créez un code d'installation, à ne donner à personne d'autre.</p>
-          <p id="tablet-code" class="code" hidden></p>
-          <button type="button" id="btn-tablet-code" class="secondary wide">Créer un code d'installation</button>
         </div>
         <div id="family-name-card" hidden><form id="form-family-name" class="card">
           <h2>Nom affiché sur la tablette</h2>

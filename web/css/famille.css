@@ -861,3 +861,20 @@ h1, h2, h3, .brand, .tile, .splash-name { font-family: var(--display); letter-sp
   }
 }
 .site-link { display: flex; justify-content: center; text-decoration: none; margin-top: 16px; border-radius: 14px; padding: 13px 18px; font-weight: 600; }
+
+/* Bouton flottant « Installer l'app » (disparaît une fois l'app installée) */
+.install-fab {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(88px + env(safe-area-inset-bottom));
+  z-index: 7;
+  gap: 8px;
+  padding: 14px 22px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-text);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--accent) 40%, transparent);
+  white-space: nowrap;
+}
+.install-fab svg { width: 22px; height: 22px; }
