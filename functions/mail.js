@@ -5,6 +5,8 @@
 const nodemailer = require('nodemailer');
 
 const APPLI = 'https://papote-famille.web.app';
+// Lien vers l'appli qui garde le code de commande : la famille créée s'y rattache toute seule.
+const lienAppli = (code) => (code ? `${APPLI}/?commande=${encodeURIComponent(code)}` : APPLI);
 
 function echapper(t) {
   return String(t == null ? '' : t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -45,7 +47,7 @@ function colisParti({ nom, suivi, lien, relais, code }) {
     `Bonjour${nom ? ` ${echapper(nom)}` : ''},`,
     `Votre tablette vient de partir. Vous recevrez un message de Mondial Relay dès qu'elle sera disponible${relais ? ` au point relais <b>${relaisEnTexte(relais)}</b>` : ' au point relais choisi'}.`,
     `Numéro de suivi : <b>${echapper(suivi)}</b>.`,
-    'À son arrivée : branchez la tablette, donnez-lui un nom, puis ouvrez l\'appli Papote sur votre téléphone avec la même adresse e-mail que pour la commande, et scannez le QR code affiché sur la tablette.',
+    `À son arrivée : branchez la tablette, donnez-lui un nom, puis <a href="${echapper(lienAppli(code))}" style="color:#4f46e5">ouvrez l'appli Papote</a> sur votre téléphone avec la même adresse e-mail que pour la commande, et scannez le QR code affiché sur la tablette.`,
     code ? `Si vous utilisez une autre adresse e-mail, votre code de commande est <b>${echapper(code)}</b>.` : '',
   ].filter(Boolean), { texte: 'Suivre mon colis', lien });
 }
@@ -60,7 +62,7 @@ function rappelJumelage({ nom, numero, code }) {
     '1. Branchez la tablette et donnez-lui un nom.<br>2. Ouvrez l\'appli Papote sur votre téléphone, avec la même adresse e-mail que pour la commande.<br>3. Scannez le QR code affiché sur la tablette.',
     code ? `Avec une autre adresse e-mail, touchez « J'ai déjà payé sur le site » et tapez votre code de commande : <b>${echapper(code)}</b>.` : '',
     'Rappel : vos 15 jours d\'essai gratuit ont commencé à la commande.',
-  ].filter(Boolean), { texte: 'Ouvrir l\'appli Papote', lien: APPLI });
+  ].filter(Boolean), { texte: 'Ouvrir l\'appli Papote', lien: lienAppli(code) });
 }
 
 // smtp : « hote:port:utilisateur » (MAIL_SMTP), expediteur : adresse affichée (MAIL_EXPEDITEUR).
