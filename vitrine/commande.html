@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Votre commande · Papote</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#fdfaf5">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,800&display=swap">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+/* Étape avant le paiement : choix du point relais Mondial Relay où la tablette sera livrée. */
+:root { --bg: #fdfaf5; --surface: #ffffff; --text: #24212f; --muted: #5f5a6b; --line: #e9e1d4; --accent: #4f46e5; --accent-strong: #3730a3; --accent-text: #ffffff; --warm: #c2410c; --warm-soft: #fde7d6; color-scheme: light; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 400 1.125rem/1.6 "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif; }
+main { max-width: 48rem; margin: 0 auto; padding: 24px 20px 48px; display: grid; gap: 1.5rem; }
+.top { display: flex; align-items: center; gap: .6rem; font: 800 1.4rem/1 "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif; color: var(--text); text-decoration: none; }
+.top img { width: 2rem; height: 2rem; }
+h1 { margin: 0; font: 800 clamp(1.9rem, 5vw, 2.6rem)/1.1 "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif; text-wrap: balance; }
+p { margin: 0; }
+.muted { color: var(--muted); }
+.eyebrow { font-size: .85rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--warm); }
+.recap { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 1rem 1.25rem; display: flex; flex-wrap: wrap; justify-content: space-between; gap: .5rem 1rem; align-items: baseline; }
+.recap b { font-size: 1.1rem; }
+.recap a { font-size: 1rem; }
+#Zone_Widget { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: .75rem; min-height: 20rem; overflow: hidden; }
+#Zone_Widget * { font-family: inherit !important; }
+.choisi { display: grid; gap: .25rem; padding: 1rem 1.25rem; border: 2px solid var(--accent); border-radius: 16px; background: var(--surface); }
+.choisi[hidden] { display: none; }
+.btn { display: inline-flex; align-items: center; justify-content: center; min-height: 3.25rem; padding: .75rem 1.5rem; border-radius: 999px; background: var(--accent); color: var(--accent-text); font: 700 1.05rem/1.2 inherit; text-decoration: none; border: 0; cursor: pointer; justify-self: start; }
+.btn:hover { background: var(--accent-strong); }
+.btn[aria-disabled="true"] { background: #c9c6d8; pointer-events: none; }
+.erreur { color: var(--warm); }
+</style>
+</head>
+<body>
+<main>
+  <a class="top" href="./"><img src="icon.svg" alt="">Papote</a>
+  <div>
+    <p class="eyebrow">Étape 1 sur 2 · Livraison</p>
+    <h1>Où souhaitez-vous recevoir la tablette ?</h1>
+  </div>
+  <p class="muted">La tablette est livrée dans un point relais Mondial Relay près de chez vous ou de chez votre proche, en France, en Belgique ou au Luxembourg. Vous recevez un e-mail avec le suivi dès son départ.</p>
+
+  <div class="recap" id="recap"></div>
+
+  <div id="Zone_Widget"></div>
+  <p class="erreur" id="erreur-carte" hidden>La carte des points relais ne s'affiche pas. Rechargez la page, ou écrivez-nous à tanguyreynaud22@gmail.com.</p>
+
+  <div class="choisi" id="choisi" hidden>
+    <span class="muted">Point relais choisi</span>
+    <b id="choisi-nom"></b>
+    <span id="choisi-adresse"></span>
+  </div>
+
+  <a class="btn" id="payer" href="#" aria-disabled="true">Continuer vers le paiement</a>
+  <p class="muted">Étape 2 : paiement sécurisé par carte (Stripe). 15 jours d'essai gratuit, rien n'est prélevé pour l'abonnement avant leur fin.</p>
+</main>
+
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://widget.mondialrelay.com/parcelshop-picker/jquery.plugin.mondialrelay.parcelshoppicker.min.js"></script>
+<script>
+(function () {
+  // Code enseigne Mondial Relay : « BDTEST  » (test) à remplacer par celui du compte pro de Papote.
+  var ENSEIGNE = 'BDTEST  ';
+  var COMMANDER = 'https://europe-west1-papote-famille.cloudfunctions.net/commander';
+  var OFFRES = {
+    wifi: { nom: 'Papote (wifi)', achetee: '100 € puis 20 € par mois', incluse: '25 € par mois, tablette incluse' },
+    sim: { nom: 'Papote partout (wifi + carte SIM)', achetee: '100 € puis 30 € par mois', incluse: '35 € par mois, tablette incluse' }
+  };
+
+  var q = new URLSearchParams(location.search);
+  var formule = q.get('formule');
+  var tablette = q.get('tablette');
+  var offre = OFFRES[formule];
+  if (!offre || !offre[tablette]) { location.replace('./#tarifs'); return; }
+
+  var recap = document.getElementById('recap');
+  var b = document.createElement('b');
+  b.textContent = offre.nom + ' · ' + offre[tablette];
+  var changer = document.createElement('a');
+  changer.href = './#tarifs';
+  changer.textContent = 'Changer de formule';
+  recap.append(b, changer);
+
+  var payer = document.getElementById('payer');
+
+  function choisir(p) {
+    if (!p || !p.ID) return;
+    var adresse = [p.Adresse1, p.Adresse2].filter(Boolean).join(' ').trim();
+    document.getElementById('choisi-nom').textContent = p.Nom;
+    document.getElementById('choisi-adresse').textContent = adresse + ', ' + p.CP + ' ' + p.Ville;
+    document.getElementById('choisi').hidden = false;
+    var params = new URLSearchParams({
+      formule: formule, tablette: tablette, relais: p.ID, rnom: p.Nom, radr: adresse,
+      rcp: p.CP, rville: p.Ville, rpays: p.Pays || 'FR'
+    });
+    payer.href = COMMANDER + '?' + params.toString();
+    payer.setAttribute('aria-disabled', 'false');
+  }
+
+  try {
+    $('#Zone_Widget').MR_ParcelShopPicker({
+      Brand: ENSEIGNE,
+      Country: 'FR',
+      AllowedCountries: 'FR,BE,LU',
+      ColLivMod: '24R',
+      NbResults: '7',
+      Responsive: true,
+      ShowResultsOnMap: true,
+      OnParcelShopSelected: choisir
+    });
+  } catch (e) {
+    document.getElementById('erreur-carte').hidden = false;
+  }
+})();
+</script>
+</body>
+</html>
