@@ -7,7 +7,7 @@ import {
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
 import {
   getFirestore, collection, collectionGroup, query, where, orderBy, limit,
-  getDocs, getDoc, doc, writeBatch, getCountFromServer, setDoc, deleteDoc,
+  getDocs, getDoc, doc, writeBatch, getCountFromServer, setDoc, deleteDoc, updateDoc,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
 import {
   getStorage, ref, uploadBytes, getDownloadURL,
@@ -238,6 +238,47 @@ async function load() {
   }
 }
 
+// Demandes en attente dans une famille : l'administrateur peut les accepter, et désigner le
+// propriétaire (par exemple après un changement de compte, quand plus personne ne peut accepter).
+async function showPending(f, li) {
+  let snap;
+  try {
+    snap = await getDocs(query(collection(db, 'families', f.id, 'members'), where('status', '==', 'pending')));
+  } catch (err) { return; }
+  if (snap.empty) return;
+  const box = document.createElement('div');
+  box.className = 'replace';
+  for (const d of snap.docs) {
+    const m = d.data();
+    const row = document.createElement('p');
+    row.className = 'small pending-row';
+    row.textContent = `En attente : ${m.name}${m.email ? ` (${m.email})` : ''} `;
+    const ok = document.createElement('button');
+    ok.type = 'button';
+    ok.className = 'link small';
+    ok.textContent = 'Accepter';
+    const owner = document.createElement('button');
+    owner.type = 'button';
+    owner.className = 'link small';
+    owner.textContent = 'Accepter comme propriétaire';
+    const accept = async (asOwner) => {
+      try {
+        await updateDoc(d.ref, { status: 'active' });
+        if (asOwner) await updateDoc(doc(db, 'families', f.id), { createdBy: d.id });
+        row.textContent = asOwner ? `${m.name} est maintenant propriétaire.` : `${m.name} a été accepté.`;
+      } catch (err) {
+        console.error(err);
+        alert("L'opération a échoué.");
+      }
+    };
+    ok.addEventListener('click', () => accept(false));
+    owner.addEventListener('click', () => { if (confirm(`Faire de ${m.name} le propriétaire de la famille de ${f.name} ?`)) accept(true); });
+    row.append(ok, ' · ', owner);
+    box.append(row);
+  }
+  li.append(box);
+}
+
 // Tablette de remplacement : un code d'installation pour cette famille. Installée avec
 // installer-tablette.ps1 -Code, elle arrive déjà dans la famille, sans écran de bienvenue.
 const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -320,6 +361,7 @@ function render() {
     li.innerHTML = `<div class="family-head"><span class="dot"></span><strong></strong><code></code></div><dl></dl>
       <div class="replace"><button type="button" class="link small replace-btn">Tablette de remplacement</button><p class="replace-out small" hidden></p></div>`;
     li.querySelector('.replace-btn').addEventListener('click', () => prepareReplacement(f, li));
+    showPending(f, li);
     li.querySelector('strong').textContent = f.name;
     li.querySelector('code').textContent = f.code ? `${f.code.slice(0, 4)}-${f.code.slice(4)}` : '';
     const dl = li.querySelector('dl');

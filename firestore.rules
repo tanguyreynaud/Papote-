@@ -182,6 +182,10 @@ service cloud.firestore {
             && request.resource.data.admins is list
             && request.resource.data.admins.size() <= 10)
         );
+      // L'administrateur désigne le propriétaire d'une famille (secours depuis le tableau de bord).
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['createdBy', 'admins']);
+
       // Supprimer la famille et toutes ses données (responsable, en dernier).
       allow delete: if isFamilyAdmin(fid);
 
@@ -228,6 +232,10 @@ service cloud.firestore {
                   && request.resource.data.status == 'pending')
               ))
           );
+        // L'administrateur accepte un membre en attente (secours depuis le tableau de bord).
+        allow update: if isAdmin()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+          && request.resource.data.status == 'active';
         // Un responsable accepte un membre en attente.
         allow update: if isFamilyAdmin(fid)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
