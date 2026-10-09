@@ -172,3 +172,32 @@
 .welcome-input { border-radius: 3vmin; border-color: #e9e1d4; }
 .welcome-dots .dot.done { background: #c7c3f7; }
 .welcome-stepnum { display: none; }
+
+/* ---------- Plein écran : plus de carte, le bandeau illustré occupe toute la hauteur à gauche ---------- */
+
+.welcome { padding: 0; align-items: stretch; }
+.welcome-card {
+  max-width: none;
+  min-height: 100%;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: #fdfaf5;
+}
+.welcome-art { flex-basis: 44%; padding: 6vmin; }
+.welcome-art img { max-width: 70vmin; }
+.welcome-box {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 6vmin 9vmin;
+}
+.welcome-box > * { flex-shrink: 0; }
+.welcome-head { position: absolute; top: 5vmin; left: 7vmin; right: 7vmin; margin: 0; }
+.with-art .welcome-head { left: calc(44% + 9vmin); right: 7vmin; }
+.welcome-box { padding-top: 18vmin; }
+.with-art .welcome-list { margin-left: 0; }
+.with-art .welcome-btn { margin-left: 0; }
+.with-art .welcome-actions { justify-content: flex-start; }
+.with-art .welcome-actions .welcome-btn { min-width: 30vmin; margin: 0; }
