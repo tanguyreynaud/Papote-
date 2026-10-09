@@ -584,7 +584,26 @@ public class MainActivity extends Activity implements Sync.Listener {
         return dpm().isDeviceOwnerApp(getPackageName());
     }
 
+    // Tablette en français : menus d'Android et clavier AZERTY. Possible seulement si l'installateur
+    // a accordé CHANGE_CONFIGURATION et WRITE_SETTINGS ; sinon rien ne change.
+    private void setFrench() {
+        if (getResources().getConfiguration().getLocales().get(0).getLanguage().equals("fr")) return;
+        if (checkSelfPermission("android.permission.CHANGE_CONFIGURATION") != PackageManager.PERMISSION_GRANTED) {
+            Log.i(TAG, "Langue : permission CHANGE_CONFIGURATION absente");
+            return;
+        }
+        try {
+            Class.forName("com.android.internal.app.LocalePicker")
+                    .getMethod("updateLocales", android.os.LocaleList.class)
+                    .invoke(null, new android.os.LocaleList(java.util.Locale.FRANCE));
+            Log.i(TAG, "Langue : tablette passée en français");
+        } catch (Throwable e) {
+            Log.w(TAG, "Langue : passage en français impossible", e);
+        }
+    }
+
     private void setupDeviceOwner() {
+        setFrench();
         if (!isDeviceOwner()) return;
         DevicePolicyManager dpm = dpm();
         ComponentName admin = admin();
