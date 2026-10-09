@@ -14,6 +14,9 @@
 //   tabletteRendue     appel depuis le tableau de bord admin : la tablette incluse est revenue
 //   nouvelleFamille    famille créée : sans commande, statut « aucun »
 //   nouveauMembre      créateur d'une famille : rattache sa commande faite sur le site
+//   tabletteEnvoyee    appel depuis le tableau de bord admin : colis parti, numéro de suivi Mondial Relay
+//   commandeModifiee   commande passée à « envoyee » : e-mail au client avec le lien de suivi
+//   rappelsJumelage    chaque jour : rappel au client dont la tablette n'est pas jumelée (J+5, J+12)
 //
 // État écrit sur families/{fid}.abonnement (voir abonnement.js), avec rev + 1 pour que la
 // tablette relise la famille. Commandes : commandes/{id de l'abonnement Stripe}.
@@ -21,12 +24,14 @@
 
 const { onRequest, onCall, HttpsError } = require('firebase-functions/v2/https');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
-const { onDocumentCreated } = require('firebase-functions/v2/firestore');
+const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore');
 const { setGlobalOptions, logger } = require('firebase-functions/v2');
 const { defineSecret, defineString } = require('firebase-functions/params');
 const admin = require('firebase-admin');
 const Stripe = require('stripe');
 const regles = require('./abonnement');
+const livraison = require('./livraison');
+const mail = require('./mail');
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -38,6 +43,17 @@ const STRIPE_SECRET = defineSecret('STRIPE_SECRET');
 const STRIPE_WEBHOOK_SECRET = defineSecret('STRIPE_WEBHOOK_SECRET');
 const SITE_VITRINE = defineString('SITE_VITRINE', { default: 'https://papote.web.app' });
 const APPLI_FAMILLE = 'https://papote-famille.web.app/';
+// E-mails : MAIL_SMTP (« hote:port:utilisateur ») et MAIL_EXPEDITEUR dans .env, mot de passe en secret.
+const MAIL_SMTP = defineString('MAIL_SMTP', { default: 'smtp.gmail.com:465:' });
+const MAIL_EXPEDITEUR = defineString('MAIL_EXPEDITEUR', { default: '' });
+const MAIL_MOT_DE_PASSE = defineSecret('MAIL_MOT_DE_PASSE');
+
+function envoyerMail(a, contenu) {
+  return mail.envoyer({
+    smtp: MAIL_SMTP.value(), expediteur: MAIL_EXPEDITEUR.value(),
+    motDePasse: MAIL_MOT_DE_PASSE.value(), a, contenu,
+  });
+}
 
 let stripeClient;
 function stripe() {
@@ -74,8 +90,8 @@ async function tarifs(formule, tablette) {
 }
 
 // Essai gratuit de 15 jours pour un nouveau client ; pas pour un client déjà abonné une fois.
-async function sessionPaiement({ formule, tablette, fid, email, client }) {
-  const metadata = { formule, tablette };
+async function sessionPaiement({ formule, tablette, fid, email, client, relais }) {
+  const metadata = { formule, tablette, ...(relais ? livraison.relaisVersMeta(relais) : {}) };
   if (fid) metadata.fid = fid;
   const subscriptionData = { metadata };
   if (!client) {
@@ -96,8 +112,8 @@ async function sessionPaiement({ formule, tablette, fid, email, client }) {
       : `${SITE_VITRINE.value()}/merci.html?session={CHECKOUT_SESSION_ID}`,
     cancel_url: fid ? APPLI_FAMILLE : `${SITE_VITRINE.value()}/#tarifs`,
   };
-  // Adresse de livraison de la tablette.
-  params.shipping_address_collection = { allowed_countries: ['FR', 'BE', 'CH', 'LU'] };
+  // Commande du site : livrée au point relais choisi avant le paiement. Depuis l'appli : à l'adresse saisie.
+  if (!relais) params.shipping_address_collection = { allowed_countries: ['FR', 'BE', 'LU'] };
   if (client) params.customer = client;
   else if (email) params.customer_email = email;
   return stripe().checkout.sessions.create(params);
@@ -224,8 +240,14 @@ exports.commander = onRequest({ secrets: [STRIPE_SECRET] }, async (req, res) => 
     res.redirect(303, `${SITE_VITRINE.value()}/#tarifs`);
     return;
   }
+  // Sans point relais, retour à la page de choix du point relais.
+  const relais = livraison.relaisDepuisRequete(req.query);
+  if (!relais) {
+    res.redirect(303, `${SITE_VITRINE.value()}/commande.html?formule=${formule}&tablette=${tablette}`);
+    return;
+  }
   try {
-    const session = await sessionPaiement({ formule, tablette });
+    const session = await sessionPaiement({ formule, tablette, relais });
     res.redirect(303, session.url);
   } catch (e) {
     logger.error('commander', e);
@@ -386,7 +408,7 @@ exports.stripeWebhook = onRequest(
 async function paiementTermine(session) {
   if (!session.subscription) return;
   const details = session.customer_details || {};
-  const livraison = (session.collected_information && session.collected_information.shipping_details)
+  const adresse = (session.collected_information && session.collected_information.shipping_details)
     || session.shipping_details || null;
   const email = (details.email || session.customer_email || '').toLowerCase();
   const meta = session.metadata || {};
@@ -400,7 +422,8 @@ async function paiementTermine(session) {
       telephone: details.phone || null,
       formule: meta.formule || null,
       tablette: meta.tablette || null,
-      livraison: livraison ? { nom: livraison.name || null, adresse: livraison.address || null } : null,
+      livraison: livraison.relaisDepuisMeta(meta)
+        || (adresse ? { nom: adresse.name || null, adresse: adresse.address || null } : null),
       // Tablette à préparer et envoyer par Tanguy (« envoyee » une fois partie).
       expedition: 'a-preparer',
       stripeCustomerId: session.customer,
@@ -484,12 +507,16 @@ exports.restitutions = onSchedule(
   });
 
 // Le tableau de bord admin marque la tablette incluse comme revenue.
-exports.tabletteRendue = onCall(async (request) => {
+// Même règle que isAdmin() des règles Firestore : badge admin, ou l'adresse de Tanguy le temps du badge.
+function verifierAdmin(request) {
   const token = request.auth && request.auth.token;
-  // Même règle que isAdmin() des règles Firestore : badge admin, ou l'adresse de Tanguy le temps du badge.
   const estAdmin = token && (token.admin === true
     || (token.email === 'tanguyreynaud22@gmail.com' && token.email_verified === true));
   if (!estAdmin) throw new HttpsError('permission-denied', 'Réservé à l\'administrateur.');
+}
+
+exports.tabletteRendue = onCall(async (request) => {
+  verifierAdmin(request);
   const { commande } = request.data || {};
   if (typeof commande !== 'string' || !commande) throw new HttpsError('invalid-argument', 'Commande manquante.');
   const ref = db.doc(`commandes/${commande}`);
@@ -530,4 +557,77 @@ exports.nouveauMembre = onDocumentCreated(
       .where('email', '==', membre.email.toLowerCase()).where('fid', '==', null).limit(1).get();
     if (commandes.empty) return;
     await appliquer(fid, commandes.docs[0].id);
+  });
+
+// ---------- Envoi de la tablette ----------
+
+// Le tableau de bord admin note le départ du colis : { commande, suivi } (numéro Mondial Relay).
+// Corriger un numéro déjà saisi renvoie l'e-mail avec le bon lien.
+exports.tabletteEnvoyee = onCall(async (request) => {
+  verifierAdmin(request);
+  const { commande } = request.data || {};
+  const suivi = livraison.normaliserSuivi((request.data || {}).suivi);
+  if (typeof commande !== 'string' || !commande) throw new HttpsError('invalid-argument', 'Commande manquante.');
+  if (!suivi) throw new HttpsError('invalid-argument', 'Numéro de suivi invalide.');
+  const ref = db.doc(`commandes/${commande}`);
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Commande introuvable.');
+  await ref.update({
+    expedition: 'envoyee',
+    suivi,
+    envoyeeLe: snap.get('envoyeeLe') || FieldValue.serverTimestamp(),
+    rappels: snap.get('rappels') || 0,
+  });
+  return { ok: true, lien: livraison.lienSuivi(suivi, snap.get('livraison.cp')) };
+});
+
+// Colis parti (ou numéro corrigé) : e-mail au client avec le lien de suivi.
+// Écrit par tabletteEnvoyee ou par outils/admin/abonnements.bat envoyee.
+exports.commandeModifiee = onDocumentUpdated(
+  { document: 'commandes/{id}', region: REGION_FIRESTORE, secrets: [MAIL_MOT_DE_PASSE] },
+  async (event) => {
+    const avant = event.data.before.data();
+    const apres = event.data.after.data();
+    if (apres.expedition !== 'envoyee' || !apres.suivi || !apres.email) return;
+    if (avant.expedition === 'envoyee' && avant.suivi === apres.suivi) return;
+    const relais = apres.livraison && apres.livraison.transporteur ? apres.livraison : null;
+    const code = apres.code ? regles.afficherCode(apres.code) : null;
+    try {
+      await envoyerMail(apres.email, mail.colisParti({
+        nom: apres.nom, suivi: apres.suivi, relais, code,
+        lien: livraison.lienSuivi(apres.suivi, relais && relais.cp),
+      }));
+      await event.data.after.ref.update({ mailEnvoiLe: FieldValue.serverTimestamp(), mailErreur: FieldValue.delete() });
+    } catch (e) {
+      logger.error(`Commande ${event.params.id} : e-mail d'envoi non parti`, e.message);
+      await event.data.after.ref.update({ mailErreur: e.message });
+    }
+  });
+
+// Chaque jour : rappel au client dont la tablette est partie mais pas encore jumelée (J+5, J+12),
+// puis signalement à l'administrateur (alerteJumelage) à J+20.
+exports.rappelsJumelage = onSchedule(
+  { schedule: 'every day 10:00', timeZone: 'Europe/Paris', secrets: [MAIL_MOT_DE_PASSE] },
+  async () => {
+    const maintenant = Date.now();
+    const envoyees = await db.collection('commandes')
+      .where('expedition', '==', 'envoyee').where('fid', '==', null).get();
+    for (const snap of envoyees.docs) {
+      const c = snap.data();
+      const depart = c.envoyeeLe && c.envoyeeLe.toMillis();
+      if (livraison.alerteDue(depart, maintenant) && !c.alerteJumelage) {
+        await snap.ref.update({ alerteJumelage: true });
+        logger.warn(`Commande ${snap.id} : tablette toujours pas jumelée 20 jours après l'envoi.`);
+      }
+      const numero = livraison.rappelDu(depart, c.rappels, maintenant);
+      if (!numero || !c.email) continue;
+      try {
+        await envoyerMail(c.email, mail.rappelJumelage({
+          nom: c.nom, numero, code: c.code ? regles.afficherCode(c.code) : null,
+        }));
+        await snap.ref.update({ rappels: numero, dernierRappelLe: FieldValue.serverTimestamp() });
+      } catch (e) {
+        logger.error(`Commande ${snap.id} : rappel de jumelage non parti`, e.message);
+      }
+    }
   });
