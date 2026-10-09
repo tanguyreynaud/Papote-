@@ -84,7 +84,7 @@ section { padding-block: clamp(3.5rem, 8vw, 6rem); }
 .top nav a:hover { color: var(--text); }
 .top nav .btn { min-height: 2.6rem; padding: .5rem 1.1rem; font-size: .95rem; color: var(--accent-text); }
 .top nav .btn:hover { color: var(--accent-text); }
-@media (max-width: 760px) { .top nav a:not(.btn) { display: none; } }
+@media (max-width: 760px) { .top nav a:not(.btn):not(.client) { display: none; } }
 
 /* En-tête */
 .hero { padding: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); min-height: min(calc(100vh - 4rem), 52rem); }
@@ -229,6 +229,7 @@ footer a { color: var(--muted); }
       <a href="#fonctionnement">Comment ça marche</a>
       <a href="#tarifs">Tarifs</a>
       <a href="#questions">Questions</a>
+      <a class="client" href="https://papote-famille.web.app">Espace client</a>
       <a class="btn btn-primary" href="#tarifs">Commander</a>
     </nav>
   </div>
