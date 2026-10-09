@@ -1092,3 +1092,20 @@ body.night .bday-banner { background: #3b1a0c; color: #fdba74; }
 .date { font-size: 7.5vmin; }
 .moment { font-size: 6.8vmin; }
 html .bday-banner { font-size: calc(4.8vmin * var(--ts, 1)); }
+
+/* Légende d'une photo ou d'une vidéo, jusqu'à 80 caractères pour les anciens envois : jamais plus
+   de place que prévu, coupée avec « … » (3 lignes à côté d'une photo en hauteur, sinon une seule). */
+.overlay.mode-photo .ln-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  white-space: normal;
+}
+.overlay.mode-photo.wide .ln-text, .overlay.mode-video .ln-text {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
