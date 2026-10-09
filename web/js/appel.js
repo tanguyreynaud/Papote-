@@ -66,16 +66,36 @@ function landscapeStream(camera) {
     if (video.requestVideoFrameCallback) video.requestVideoFrameCallback(draw);
     else requestAnimationFrame(draw);
   };
+  // Écran resté en portrait mais appel tourné en CSS (famille.js, .force-landscape) : le téléphone
+  // est tenu couché alors que la caméra livre l'image dans le sens de l'écran, donc couchée.
+  // On la redresse d'un quart de tour (le haut du monde est à gauche de l'image brute).
+  const forcedTurn = () => !!document.querySelector('.call.force-landscape')
+    && window.matchMedia('(orientation: portrait)').matches;
   const draw = () => {
-    const w = video.videoWidth;
-    const h = video.videoHeight;
-    if (w && h) {
+    const vw = video.videoWidth;
+    const vh = video.videoHeight;
+    if (vw && vh) {
+      const turn = forcedTurn() && vh > vw;
+      // Dimensions de l'image une fois redressée.
+      const w = turn ? vh : vw;
+      const h = turn ? vw : vh;
       let sw = w;
       let sh = (w * 9) / 16;
       if (sh > h) { sh = h; sw = (h * 16) / 9; }
       const sx = (w - sw) / 2;
       const sy = Math.max(0, Math.min(h - sh, h * 0.4 - sh / 2));
-      ctx.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+      if (turn) {
+        const k = canvas.width / sw;
+        ctx.save();
+        ctx.scale(k, k);
+        ctx.translate(-sx, -sy);
+        ctx.translate(w, 0);
+        ctx.rotate(Math.PI / 2);
+        ctx.drawImage(video, 0, 0, vw, vh);
+        ctx.restore();
+      } else {
+        ctx.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+      }
     }
     next();
   };
