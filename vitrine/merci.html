@@ -39,7 +39,6 @@ a.btn { justify-self: start; display: inline-flex; align-items: center; min-heig
     <li>Ouvrez l'appli Papote sur votre téléphone, connectez-vous avec la même adresse e-mail que pour le paiement, et scannez le QR code affiché sur la tablette. Votre famille est créée et l'abonnement s'y rattache tout seul.</li>
     <li>Invitez vos proches depuis l'appli.</li>
   </ol>
-  <a class="btn" id="appli" href="https://papote-famille.web.app">Ouvrir l'appli famille</a>
 </main>
 <script>
   // Code de commande, demandé au serveur avec l'identifiant du paiement Stripe.
@@ -52,8 +51,6 @@ a.btn { justify-self: start; display: inline-flex; align-items: center; min-heig
         if (!d || !d.code) return;
         document.getElementById('code-valeur').textContent = d.code;
         document.getElementById('code').hidden = false;
-        // L'appli garde le code et y rattache la famille dès sa création.
-        document.getElementById('appli').href = 'https://papote-famille.web.app/?commande=' + encodeURIComponent(d.code);
       })
       .catch(function () {});
   })();
