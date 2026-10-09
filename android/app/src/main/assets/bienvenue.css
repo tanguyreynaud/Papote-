@@ -2,14 +2,14 @@
    Mêmes couleurs que l'appli famille (indigo, fond clair, cartes blanches). */
 
 .welcome {
-  --w-bg: #f6f5f3;
+  --w-bg: #fdfaf5;
   --w-surface: #ffffff;
-  --w-text: #1c1917;
-  --w-muted: #78716c;
-  --w-line: #e7e5e4;
+  --w-text: #24212f;
+  --w-muted: #5f5a6b;
+  --w-line: #e9e1d4;
   --w-accent: #4f46e5;
-  --w-accent-soft: #eef2ff;
-  --w-ok: #16a34a;
+  --w-accent-soft: #e8e6fd;
+  --w-ok: #15803d;
   --w-danger: #dc2626;
   position: fixed;
   top: 0; right: 0; bottom: 0; left: 0;
@@ -21,7 +21,7 @@
   padding: 3vmin;
   background: var(--w-bg);
   color: var(--w-text);
-  font-family: Roboto, system-ui, sans-serif;
+  font-family: 'Atkinson Hyperlegible', Roboto, sans-serif;
 }
 .welcome[hidden] { display: none; }
 
@@ -145,3 +145,118 @@
 .welcome-list .welcome-btn.network { min-height: 10vmin; }
 .welcome-list { gap: 1.2vmin; }
 .with-art .welcome-title { font-size: 6.2vmin; }
+
+.welcome-title, .welcome-brand { font-family: 'Bricolage Grotesque', 'Atkinson Hyperlegible', Roboto, sans-serif; font-weight: 800; }
+.welcome-btn, .welcome-input { font-family: 'Atkinson Hyperlegible', Roboto, sans-serif; }
+
+/* ---------- Comme le site Papote : fond crème, bandeau chaud, titres Bricolage, boutons en pilule ---------- */
+
+.welcome { background: #fdfaf5; }
+.welcome-card { border: .3vmin solid #e9e1d4; box-shadow: 0 1.5vmin 5vmin rgba(36, 33, 47, .08); }
+.welcome-art { background: #f6efe4; }
+.welcome-art img { filter: drop-shadow(0 1vmin 2vmin rgba(36, 33, 47, .12)); }
+.welcome-eyebrow {
+  margin: 0 0 1.2vmin;
+  font-size: 3.4vmin;
+  font-weight: 700;
+  letter-spacing: .5vmin;
+  text-transform: uppercase;
+  color: #c2410c;
+}
+.welcome-title { font-size: 7.6vmin; line-height: 1.08; letter-spacing: -.1vmin; }
+.with-art .welcome-title { font-size: 7vmin; }
+.welcome-sub { font-size: 4.6vmin; }
+.welcome-btn { border-radius: 99vmin; font-weight: 700; }
+.welcome-btn.primary { box-shadow: 0 1vmin 2.5vmin rgba(79, 70, 229, .25); }
+.welcome-btn.network { border-radius: 3vmin; }
+.welcome-input { border-radius: 3vmin; border-color: #e9e1d4; }
+.welcome-dots .dot.done { background: #c7c3f7; }
+.welcome-stepnum { display: none; }
+
+/* ---------- Plein écran : plus de carte, le bandeau illustré occupe toute la hauteur à gauche ---------- */
+
+.welcome { padding: 0; align-items: stretch; }
+.welcome-card {
+  max-width: none;
+  min-height: 100%;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: #fdfaf5;
+}
+.welcome-art { flex-basis: 44%; padding: 6vmin; }
+.welcome-art img { max-width: 70vmin; }
+.welcome-box {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 6vmin 9vmin;
+}
+.welcome-box > * { flex-shrink: 0; }
+/* Logo en haut, le reste centré dans la hauteur ; si c'est trop long, ça défile sans rien couper. */
+.welcome-box { padding-top: 5vmin; }
+.welcome-head { margin: 0 0 2vmin; }
+.welcome-head + * { margin-top: auto; }
+.welcome-box > :last-child { margin-bottom: auto; }
+.with-art .welcome-list { margin-left: 0; }
+.with-art .welcome-btn { margin-left: 0; }
+.with-art .welcome-actions { justify-content: flex-start; }
+.with-art .welcome-actions .welcome-btn { min-width: 30vmin; margin: 0; }
+.welcome { display: block; }
+.welcome-box { justify-content: flex-start; }
+.welcome-art { position: sticky; top: 0; align-self: flex-start; height: 100vh; box-sizing: border-box; }
+.with-art::before { content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: 44%; background: #f6efe4; z-index: -1; }
+.welcome-card { position: relative; z-index: 0; }
+.welcome-card { overflow: visible; }
+
+/* ---------- Fenêtre « Choisir un réseau », comme sur Android ---------- */
+
+.welcome-modal {
+  position: fixed;
+  top: 0; right: 0; bottom: 0; left: 0;
+  z-index: 950;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4vmin;
+  background: rgba(36, 33, 47, .45);
+}
+.welcome-sheet {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 110vmin;
+  max-height: 92vh;
+  padding: 5vmin 5vmin 3vmin;
+  border-radius: 4vmin;
+  background: #fff;
+  box-shadow: 0 2vmin 6vmin rgba(36, 33, 47, .25);
+  text-align: left;
+}
+.welcome-sheet-title {
+  margin: 0 0 3vmin;
+  font-family: 'Bricolage Grotesque', 'Atkinson Hyperlegible', Roboto, sans-serif;
+  font-size: 6.4vmin;
+  font-weight: 800;
+  color: #24212f;
+}
+.welcome-sheet .welcome-list { flex: 1; min-height: 0; max-width: none; margin: 0; overflow-y: auto; gap: 0; }
+.welcome-sheet .welcome-btn.network {
+  min-height: 12vmin;
+  padding: 0 2vmin;
+  gap: 4vmin;
+  border: 0;
+  border-bottom: .3vmin solid #f1ebe1;
+  border-radius: 0;
+  background: transparent;
+  font-weight: 400;
+}
+.welcome-sheet .welcome-btn.network:active { background: #f6efe4; }
+.wifi-icon { flex: 0 0 auto; width: 8vmin; height: 8vmin; }
+.network-text { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; }
+.network-name { font-size: 5vmin; color: #24212f; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 80vmin; }
+.network-state { font-size: 3.6vmin; color: #15803d; font-weight: 700; }
+.welcome-sheet-actions { display: flex; justify-content: flex-end; gap: 2vmin; margin-top: 2vmin; }
+.welcome-sheet-actions .welcome-btn { margin: 0; min-height: 10vmin; font-size: 4.4vmin; }
+.welcome-sheet .welcome-sub { margin: 2vmin 0; }

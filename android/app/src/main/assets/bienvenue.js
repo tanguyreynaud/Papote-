@@ -59,6 +59,7 @@
       head.appendChild(steps);
     }
     box.appendChild(head);
+    if (stepNum && !repair) box.appendChild(el('p', 'welcome-eyebrow', 'Étape ' + stepNum + ' sur 3'));
     box.appendChild(el('h1', 'welcome-title', title));
     if (subtitle) box.appendChild(el('p', 'welcome-sub', subtitle));
     root.appendChild(card);
@@ -80,7 +81,7 @@
     var input = el('input', 'welcome-input');
     input.type = 'text';
     input.maxLength = 40;
-    input.placeholder = 'Par exemple : Mamie Jeanne';
+    input.placeholder = 'Ex. : Mamie Jeanne';
     box.appendChild(input);
     var go = button('Continuer', 'primary', function () {
       var name = input.value.trim();
@@ -105,16 +106,55 @@
     var st = wifiState();
     // Carte SIM avec internet : pas besoin de wifi.
     if (!repair && st.mobile && st.internet && !st.wifi) { finishWifi(); return; }
-    var box = screen('Connexion à internet', 'Touchez le nom de votre box.');
-    if (st.wifi && st.internet) {
+    var connected = st.wifi && st.internet;
+    var box = screen('Connexion à internet', connected ? '' : 'Choisissez le wifi de votre box.');
+    if (connected) {
       box.appendChild(el('p', 'welcome-ok', 'Connectée à « ' + st.wifi + ' »'));
       box.appendChild(button('Continuer', 'primary', finishWifi));
+      box.appendChild(button('Choisir un autre réseau', '', openNetworks));
+    } else {
+      box.appendChild(button('Choisir un réseau', 'primary', openNetworks));
     }
-    var list = el('div', 'welcome-list');
-    box.appendChild(list);
-    box.appendChild(button('Chercher à nouveau', '', function () { fillNetworks(list); }));
     if (repair) box.appendChild(button('Fermer', 'no', closeRepair));
+    if (!connected) openNetworks();
+  }
+
+  // Icône wifi comme sur Android : un éventail plein jusqu'à la force du signal (0 à 3), cadenas si protégé.
+  var FAN = 'M12 21L23.5 6.5C23.05 6.16 18.57 2.5 12 2.5S.95 6.16.5 6.5L12 21z';
+  function wifiIcon(level, secure) {
+    var scale = [0.42, 0.6, 0.8, 1][Math.max(0, Math.min(3, level))];
+    var svg = '<svg viewBox="0 0 24 24" width="100%" height="100%" aria-hidden="true">' +
+      '<path d="' + FAN + '" fill="#e9e1d4"/>' +
+      '<path d="' + FAN + '" fill="#4f46e5" transform="translate(12 21) scale(' + scale + ') translate(-12 -21)"/>' +
+      (secure ? '<g transform="translate(15.5 14.5)"><rect x="0" y="3" width="8" height="6.5" rx="1.3" fill="#24212f"/>' +
+        '<path d="M1.8 3V1.9a2.2 2.2 0 0 1 4.4 0V3" fill="none" stroke="#24212f" stroke-width="1.4"/></g>' : '') +
+      '</svg>';
+    var span = el('span', 'wifi-icon');
+    span.innerHTML = svg;
+    return span;
+  }
+
+  // Fenêtre « Choisir un réseau » par-dessus l'étape 2.
+  function openNetworks() {
+    closeNetworks();
+    var veil = el('div', 'welcome-modal');
+    veil.addEventListener('click', function (e) { if (e.target === veil) closeNetworks(); }, false);
+    var sheet = el('div', 'welcome-sheet');
+    sheet.appendChild(el('h2', 'welcome-sheet-title', 'Choisir un réseau'));
+    var list = el('div', 'welcome-list');
+    sheet.appendChild(list);
+    var row = el('div', 'welcome-sheet-actions');
+    row.appendChild(button('Actualiser', '', function () { fillNetworks(list); }));
+    row.appendChild(button('Fermer', 'no', closeNetworks));
+    sheet.appendChild(row);
+    veil.appendChild(sheet);
+    root.appendChild(veil);
     fillNetworks(list);
+  }
+
+  function closeNetworks() {
+    var old = root && root.querySelector('.welcome-modal');
+    if (old) old.parentNode.removeChild(old);
   }
 
   function fillNetworks(list) {
@@ -123,14 +163,19 @@
     setTimeout(function () {
       var nets = [];
       try { nets = JSON.parse(android().wifiScan()); } catch (e) { nets = []; }
+      var current = wifiState().wifi;
       list.innerHTML = '';
       if (!nets.length) {
-        list.appendChild(el('p', 'welcome-sub', 'Aucun réseau trouvé. Rapprochez la tablette de la box, puis touchez « Chercher à nouveau ».'));
+        list.appendChild(el('p', 'welcome-sub', 'Aucun réseau trouvé. Rapprochez la tablette de la box, puis touchez « Actualiser ».'));
       }
-      for (var i = 0; i < nets.length && i < 6; i++) {
+      for (var i = 0; i < nets.length && i < 12; i++) {
         (function (n) {
-          var b = button(n.ssid, 'network', function () { askPassword(n); });
-          b.appendChild(el('span', 'bars bars-' + n.level));
+          var b = button('', 'network', function () { closeNetworks(); askPassword(n); });
+          b.appendChild(wifiIcon(n.level, n.secure));
+          var text = el('span', 'network-text');
+          text.appendChild(el('span', 'network-name', n.ssid));
+          if (n.ssid === current) text.appendChild(el('span', 'network-state', 'Connecté'));
+          b.appendChild(text);
           list.appendChild(b);
         })(nets[i]);
       }

@@ -4,6 +4,7 @@ import android.Manifest;
 import android.app.admin.DevicePolicyManager;
 import android.content.ComponentName;
 import android.content.Context;
+import android.content.pm.PackageManager;
 import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.NetworkCapabilities;
@@ -47,8 +48,11 @@ final class Wifi {
         DevicePolicyManager dpm = (DevicePolicyManager) context.getSystemService(Context.DEVICE_POLICY_SERVICE);
         if (dpm == null || !dpm.isDeviceOwnerApp(context.getPackageName())) return;
         try {
-            dpm.setPermissionGrantState(admin, context.getPackageName(), Manifest.permission.ACCESS_FINE_LOCATION,
-                    DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED);
+            for (String p : new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_BACKGROUND_LOCATION}) {
+                if (context.checkSelfPermission(p) == PackageManager.PERMISSION_GRANTED) continue;
+                dpm.setPermissionGrantState(admin, context.getPackageName(), p,
+                        DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED);
+            }
             if (Build.VERSION.SDK_INT >= 30) dpm.setLocationEnabled(admin, true);
         } catch (Exception e) {
             Log.w(TAG, "Localisation pour le wifi", e);
