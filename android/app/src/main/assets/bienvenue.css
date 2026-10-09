@@ -2,14 +2,14 @@
    Mêmes couleurs que l'appli famille (indigo, fond clair, cartes blanches). */
 
 .welcome {
-  --w-bg: #f6f5f3;
+  --w-bg: #fdfaf5;
   --w-surface: #ffffff;
-  --w-text: #1c1917;
-  --w-muted: #78716c;
-  --w-line: #e7e5e4;
+  --w-text: #24212f;
+  --w-muted: #5f5a6b;
+  --w-line: #e9e1d4;
   --w-accent: #4f46e5;
-  --w-accent-soft: #eef2ff;
-  --w-ok: #16a34a;
+  --w-accent-soft: #e8e6fd;
+  --w-ok: #15803d;
   --w-danger: #dc2626;
   position: fixed;
   top: 0; right: 0; bottom: 0; left: 0;
@@ -21,7 +21,7 @@
   padding: 3vmin;
   background: var(--w-bg);
   color: var(--w-text);
-  font-family: Roboto, system-ui, sans-serif;
+  font-family: 'Atkinson Hyperlegible', Roboto, sans-serif;
 }
 .welcome[hidden] { display: none; }
 
@@ -145,3 +145,6 @@
 .welcome-list .welcome-btn.network { min-height: 10vmin; }
 .welcome-list { gap: 1.2vmin; }
 .with-art .welcome-title { font-size: 6.2vmin; }
+
+.welcome-title, .welcome-brand { font-family: 'Bricolage Grotesque', 'Atkinson Hyperlegible', Roboto, sans-serif; font-weight: 800; }
+.welcome-btn, .welcome-input { font-family: 'Atkinson Hyperlegible', Roboto, sans-serif; }

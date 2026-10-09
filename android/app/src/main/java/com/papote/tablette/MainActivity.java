@@ -85,7 +85,7 @@ public class MainActivity extends Activity implements Sync.Listener {
             WebView.setWebContentsDebuggingEnabled(true);
         }
         web = new WebView(this);
-        web.setBackgroundColor(Color.parseColor("#FFF8F1"));
+        web.setBackgroundColor(Color.parseColor("#FDFAF5"));
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);

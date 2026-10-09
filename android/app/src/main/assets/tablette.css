@@ -1034,3 +1034,61 @@ html .ln-text.size-xs { font-size: calc(5.4vmin * var(--ts, 1)); }
   box-shadow: 0 1vmin 3vmin rgba(0, 0, 0, .2);
 }
 .wifi-help[hidden] { display: none; }
+
+/* ================================================================
+   Couleurs et polices du site Papote (vitrine) — mêmes que l'appli famille.
+   Polices embarquées : la tablette n'est pas toujours en ligne.
+   ================================================================ */
+
+@font-face { font-family: 'Atkinson Hyperlegible'; font-weight: 400; src: url(fonts/atkinson-400.ttf); }
+@font-face { font-family: 'Atkinson Hyperlegible'; font-weight: 700; src: url(fonts/atkinson-700.ttf); }
+@font-face { font-family: 'Bricolage Grotesque'; font-weight: 200 800; src: url(fonts/bricolage.ttf); }
+
+html, body {
+  background: #fdfaf5;
+  color: #24212f;
+  font-family: 'Atkinson Hyperlegible', Roboto, sans-serif;
+}
+.clock, .pause-title, .welcome-title, .welcome-brand, .rdv-title, .photo-who {
+  font-family: 'Bricolage Grotesque', 'Atkinson Hyperlegible', Roboto, sans-serif;
+  font-weight: 800;
+}
+.clock { color: #24212f; letter-spacing: -0.03em; }
+.date, .weather-label { color: #5f5a6b; }
+.weather-label small, .offline, .frame-empty, .invite p { color: #5f5a6b; }
+.moment { color: #c2410c; }
+.home-frame { background: #f6efe4; }
+
+/* Écrans d'un envoi : texte du site sur la feuille, signature en gris doux */
+.overlay.ln, .ln-btn, .ln-play, .view.photos, .photo-text, .frame-caption {
+  font-family: 'Atkinson Hyperlegible', Roboto, sans-serif;
+}
+.ln-text { color: #24212f; }
+.ln-sign { color: #5f5a6b; }
+.ln-note { background: #ffffff; }
+.ln-btn.ok, .ln-btn.answer { background: #15803d; }
+.ln-btn.replay { background: #4f46e5; }
+.ln-when { color: #c2410c; }
+.overlay.mode-voice .ln-play { background: #4f46e5; }
+.overlay.mode-voice .ln-play.playing, .overlay.mode-video .ln-play.playing { background: #8e8899; }
+
+/* Anniversaire, rendez-vous, wifi, pause */
+.bday-banner { background: #fde7d6; color: #c2410c; }
+.frame-rdv { background: linear-gradient(to bottom, #f6f5ff, #e8e6fd); color: #3730a3; }
+.rdv-icon, .rdv-when { color: #4f46e5; }
+.rdv-in { background: #4f46e5; }
+.wifi-help { background: #c2410c; font-family: 'Atkinson Hyperlegible', Roboto, sans-serif; }
+.pause-screen { background: linear-gradient(135deg, #fdfaf5, #f6efe4); color: #24212f; }
+.pause-text { color: #5f5a6b; font-family: 'Atkinson Hyperlegible', Roboto, sans-serif; }
+
+/* Le soir et la nuit : mêmes polices, couleurs sombres (inchangées pour ménager les yeux) */
+body.night { background: #0f0c0a; color: #e9dfd7; }
+body.night .clock { color: #f3ede6; }
+body.night .date, body.night .weather-label { color: #a8998d; }
+body.night .home-frame { background: #1c1714; }
+body.night .bday-banner { background: #3b1a0c; color: #fdba74; }
+/* Bricolage est plus haute que l'ancienne police : l'heure un peu plus petite pour que tout tienne */
+.clock { font-size: 29vmin; line-height: 1.02; }
+.date { font-size: 7.5vmin; }
+.moment { font-size: 6.8vmin; }
+html .bday-banner { font-size: calc(4.8vmin * var(--ts, 1)); }
