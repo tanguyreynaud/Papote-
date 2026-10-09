@@ -307,25 +307,46 @@
         <h1>Réglages</h1>
       </header>
       <div class="page-pad">
+        <h3 class="settings-group">La famille</h3>
         <div id="requests-card" class="card" hidden>
           <h2>Demandes pour rejoindre</h2>
           <ul id="requests" class="members"></ul>
         </div>
-        <div id="remote-card" class="card" hidden>
-          <h2>Tablette à distance</h2>
-          <p id="remote-tablet" class="muted small"></p>
-          <div class="remote-buttons">
-            <button type="button" class="secondary" data-cmd="status">État</button>
-            <button type="button" class="secondary" data-cmd="restart">Redémarrer</button>
-            <button type="button" class="secondary" id="btn-logs">Journal de la tablette</button>
+        <div class="card">
+          <h2>Membres</h2>
+          <ul id="members" class="members"></ul>
+        </div>
+        <h3 class="settings-group owner-only" id="group-tablet">La tablette</h3>
+        <div id="family-name-card" hidden><form id="form-family-name" class="card">
+          <h2>Prénom de la personne</h2>
+          <p class="muted small">Le prénom de la personne qui a la tablette (« Mamie », « Jeanne »…). Il apparaît partout dans l'app.</p>
+          <div class="inline-field">
+            <input id="family-name" maxlength="40" required>
+            <button type="submit" class="primary">Enregistrer</button>
           </div>
-          <div id="logs-box" hidden>
-            <p id="logs-info" class="muted small"></p>
-            <pre id="logs" class="logs"></pre>
+        </form></div>
+        <div id="text-size-card" class="card" hidden>
+          <h2>Taille du texte</h2>
+          <div class="segmented" role="radiogroup" aria-label="Taille du texte sur la tablette">
+            <button type="button" class="seg" data-size="normal">Normale</button>
+            <button type="button" class="seg" data-size="grande">Grande</button>
+            <button type="button" class="seg" data-size="tres-grande">Très grande</button>
           </div>
-          <details class="remote-wifi">
-            <summary>Changer le Wi-Fi</summary>
-            <form id="form-wifi">
+        </div>
+        <div id="sleep-card" class="card" hidden>
+          <h2>Écran éteint la nuit</h2>
+          <p class="muted small">La nuit, l'écran s'éteint ; un toucher le rallume, et un appel ou un rappel le réveille.</p>
+          <label class="switch-row"><input type="checkbox" id="sleep-on"> Éteindre l'écran la nuit</label>
+          <div id="sleep-hours" class="sleep-hours">
+            <label>De <select id="sleep-from"><option value="0">0 h</option><option value="1">1 h</option><option value="2">2 h</option><option value="3">3 h</option><option value="4">4 h</option><option value="5">5 h</option><option value="6">6 h</option><option value="7">7 h</option><option value="8">8 h</option><option value="9">9 h</option><option value="10">10 h</option><option value="11">11 h</option><option value="12">12 h</option><option value="13">13 h</option><option value="14">14 h</option><option value="15">15 h</option><option value="16">16 h</option><option value="17">17 h</option><option value="18">18 h</option><option value="19">19 h</option><option value="20">20 h</option><option value="21">21 h</option><option value="22">22 h</option><option value="23">23 h</option></select></label>
+            <label>à <select id="sleep-to"><option value="0">0 h</option><option value="1">1 h</option><option value="2">2 h</option><option value="3">3 h</option><option value="4">4 h</option><option value="5">5 h</option><option value="6">6 h</option><option value="7">7 h</option><option value="8">8 h</option><option value="9">9 h</option><option value="10">10 h</option><option value="11">11 h</option><option value="12">12 h</option><option value="13">13 h</option><option value="14">14 h</option><option value="15">15 h</option><option value="16">16 h</option><option value="17">17 h</option><option value="18">18 h</option><option value="19">19 h</option><option value="20">20 h</option><option value="21">21 h</option><option value="22">22 h</option><option value="23">23 h</option></select></label>
+          </div>
+          <button type="button" id="btn-sleep" class="primary wide">Enregistrer</button>
+        </div>
+        <div id="wifi-card" class="card" hidden>
+          <h2>Wi-Fi de la tablette</h2>
+          <p class="muted small">Si la box internet change, envoyez le nouveau réseau à la tablette. Si le nom ou le mot de passe est faux, elle garde son Wi-Fi actuel.</p>
+                      <form id="form-wifi">
               <label>Nom du réseau
                 <input id="wifi-ssid" autocomplete="off" required>
               </label>
@@ -341,38 +362,21 @@
               </label>
               <button type="submit" class="primary wide">Envoyer à la tablette</button>
             </form>
-          </details>
+        </div>
+        <div id="remote-card" class="card" hidden>
+          <h2>Dépanner la tablette</h2>
+          <p class="muted small">À utiliser si la tablette ne répond plus ou se comporte bizarrement.</p>
+          <p id="remote-tablet" class="muted small"></p>
+          <div class="remote-buttons">
+            <button type="button" class="secondary" data-cmd="status">Obtenir l'état</button>
+            <button type="button" class="secondary" data-cmd="restart">Redémarrer la tablette</button>
+            <button type="button" class="secondary" id="btn-logs">Obtenir le journal</button>
+          </div>
+          <div id="logs-box" hidden>
+            <p id="logs-info" class="muted small"></p>
+            <pre id="logs" class="logs"></pre>
+          </div>
           <p id="remote-result" class="remote-result" hidden></p>
-        </div>
-        <div id="family-name-card" hidden><form id="form-family-name" class="card">
-          <h2>Nom affiché sur la tablette</h2>
-          <p class="muted small">C'est le nom de la personne qui a la tablette, utilisé partout dans l'app.</p>
-          <div class="inline-field">
-            <input id="family-name" maxlength="40" required>
-            <button type="submit" class="primary">Enregistrer</button>
-          </div>
-        </form></div>
-        <div id="sleep-card" class="card" hidden>
-          <h2>Mise en veille de la tablette</h2>
-          <p class="muted small">La nuit, l'écran s'éteint ; un toucher le rallume, et un appel ou un rappel le réveille.</p>
-          <label class="switch-row"><input type="checkbox" id="sleep-on"> Éteindre l'écran la nuit</label>
-          <div id="sleep-hours" class="sleep-hours">
-            <label>De <select id="sleep-from"><option value="0">0 h</option><option value="1">1 h</option><option value="2">2 h</option><option value="3">3 h</option><option value="4">4 h</option><option value="5">5 h</option><option value="6">6 h</option><option value="7">7 h</option><option value="8">8 h</option><option value="9">9 h</option><option value="10">10 h</option><option value="11">11 h</option><option value="12">12 h</option><option value="13">13 h</option><option value="14">14 h</option><option value="15">15 h</option><option value="16">16 h</option><option value="17">17 h</option><option value="18">18 h</option><option value="19">19 h</option><option value="20">20 h</option><option value="21">21 h</option><option value="22">22 h</option><option value="23">23 h</option></select></label>
-            <label>à <select id="sleep-to"><option value="0">0 h</option><option value="1">1 h</option><option value="2">2 h</option><option value="3">3 h</option><option value="4">4 h</option><option value="5">5 h</option><option value="6">6 h</option><option value="7">7 h</option><option value="8">8 h</option><option value="9">9 h</option><option value="10">10 h</option><option value="11">11 h</option><option value="12">12 h</option><option value="13">13 h</option><option value="14">14 h</option><option value="15">15 h</option><option value="16">16 h</option><option value="17">17 h</option><option value="18">18 h</option><option value="19">19 h</option><option value="20">20 h</option><option value="21">21 h</option><option value="22">22 h</option><option value="23">23 h</option></select></label>
-          </div>
-          <button type="button" id="btn-sleep" class="primary wide">Enregistrer</button>
-        </div>
-        <div id="text-size-card" class="card" hidden>
-          <h2>Taille du texte sur la tablette</h2>
-          <div class="segmented" role="radiogroup" aria-label="Taille du texte sur la tablette">
-            <button type="button" class="seg" data-size="normal">Normale</button>
-            <button type="button" class="seg" data-size="grande">Grande</button>
-            <button type="button" class="seg" data-size="tres-grande">Très grande</button>
-          </div>
-        </div>
-        <div class="card">
-          <h2>Membres</h2>
-          <ul id="members" class="members"></ul>
         </div>
       </div>
     </section>

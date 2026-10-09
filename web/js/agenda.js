@@ -226,7 +226,17 @@ export function startAgenda(current, onChange) {
   syncRepeatFields();
   stopAgenda();
   stops.push(onSnapshot(collection(db, 'families', session.fid, 'reminders'), (snap) => {
-    reminders = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const all = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    // Rappels « une seule fois » dont le jour est passé : effacés automatiquement.
+    const today = todayKey();
+    const past = all.filter((r) => r.repeat === 'once' && r.date && r.date < today);
+    if (past.length) {
+      const batch = writeBatch(db);
+      past.forEach((r) => batch.delete(doc(db, 'families', session.fid, 'reminders', r.id)));
+      bumpRev(batch, session.fid);
+      batch.commit().catch((err) => console.warn('Rappels passés non effacés', err));
+    }
+    reminders = all.filter((r) => !past.includes(r));
     renderReminders();
     onChange?.(reminders);
   }));

@@ -883,3 +883,7 @@ h1, h2, h3, .brand, .tile, .splash-name { font-family: var(--display); letter-sp
 .switch-row input { width: 22px; height: 22px; margin: 0; accent-color: var(--accent); }
 .sleep-hours { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .sleep-hours label { margin: 6px 0; }
+
+.settings-group { margin: 22px 4px 10px; font-size: 14px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.settings-group:first-of-type { margin-top: 4px; }
+.remote-buttons { grid-template-columns: 1fr; }

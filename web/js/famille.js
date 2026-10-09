@@ -1698,6 +1698,8 @@ function renderRemote() {
   const admin = amFamilyAdmin();
   const tablet = targetTablet();
   $('remote-card').hidden = !amOwner() || !tablet;
+  $('wifi-card').hidden = !amOwner() || !tablet;
+  $('group-tablet').hidden = !amOwner();
   if (tablet) {
     const online = tablet.lastOnline ? toDate(tablet.lastOnline) : null;
     $('remote-tablet').textContent = online ? `Tablette vue en ligne ${ago(online.getTime())}.` : 'Tablette reliée.';
