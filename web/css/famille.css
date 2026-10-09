@@ -844,3 +844,19 @@ button:disabled { opacity: .45; cursor: default; }
 
 /* Titres dans la police du site */
 h1, h2, h3, .brand, .tile, .splash-name { font-family: var(--display); letter-spacing: -.01em; }
+
+/* Bouton « Inviter » en haut à droite de l'accueil */
+.home-head { position: relative; }
+.invite-btn { position: absolute; right: 0; top: 4px; gap: 6px; padding: 8px 14px; border-radius: 999px; font-size: 15px; background: var(--surface); color: var(--accent); box-shadow: var(--shadow); }
+.invite-btn svg { width: 20px; height: 20px; }
+
+/* Appel à l'horizontale même quand le téléphone ne tourne pas l'écran */
+@media (orientation: portrait) {
+  .call.force-landscape {
+    inset: auto;
+    top: 0; left: 100vw;
+    width: 100vh; height: 100vw;
+    transform-origin: top left;
+    transform: rotate(90deg);
+  }
+}

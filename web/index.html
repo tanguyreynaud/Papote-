@@ -46,6 +46,7 @@
     <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M3 7l9 6 9-6"/></symbol>
     <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></symbol>
     <symbol id="i-google" viewBox="0 0 24 24"><path d="M21 12.2c0-.7-.1-1.3-.2-1.9H12v3.6h5.1a4.4 4.4 0 0 1-1.9 2.9v2.4h3.1c1.8-1.7 2.7-4.1 2.7-7z" fill="#4285F4" stroke="none"/><path d="M12 21.5c2.6 0 4.7-.9 6.3-2.3l-3.1-2.4c-.9.6-1.9.9-3.2.9-2.5 0-4.6-1.7-5.3-3.9H3.5v2.5A9.5 9.5 0 0 0 12 21.5z" fill="#34A853" stroke="none"/><path d="M6.7 13.8a5.7 5.7 0 0 1 0-3.6V7.7H3.5a9.5 9.5 0 0 0 0 8.6z" fill="#FBBC05" stroke="none"/><path d="M12 6.3c1.4 0 2.6.5 3.6 1.4l2.7-2.7A9.5 9.5 0 0 0 3.5 7.7l3.2 2.5C7.4 8 9.5 6.3 12 6.3z" fill="#EA4335" stroke="none"/></symbol>
+    <symbol id="i-user-plus" viewBox="0 0 24 24"><circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0M19 8v6M16 11h6"/></symbol>
     <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor"/></symbol>
   </svg>
 
@@ -198,6 +199,7 @@
     <!-- Accueil -->
     <section id="view-home" class="page-pad tab-page" hidden>
       <header class="home-head">
+        <button type="button" id="btn-invite" class="invite-btn" data-page="invite"><svg><use href="#i-user-plus"/></svg>Inviter</button>
         <h1 class="brand">Papote</h1>
         <p id="family-title" class="muted"></p>
         <select id="family-switch" class="family-switch" aria-label="Changer de famille" hidden></select>
@@ -313,23 +315,6 @@
           <h2>Demandes pour rejoindre</h2>
           <ul id="requests" class="members"></ul>
         </div>
-        <div id="invite-email-card" class="card" hidden>
-          <h2>Inviter par e-mail</h2>
-          <p class="muted small">La personne entre directement dans la famille en se connectant avec cette adresse.</p>
-          <form id="form-invite" class="inline-field">
-            <input id="invite-email" type="email" autocomplete="off" placeholder="adresse@exemple.fr" required>
-            <button type="submit" class="primary">Inviter</button>
-          </form>
-          <ul id="invitations-sent" class="members"></ul>
-        </div>
-        <div class="card">
-          <h2>Inviter avec le code famille</h2>
-          <p class="muted">Faites scanner ce QR code avec l'appareil photo de la personne, ou envoyez-lui le lien. Un responsable devra accepter son arrivée.</p>
-          <div id="invite-qr" class="qr" aria-label="QR code pour rejoindre la famille"></div>
-          <p class="code" id="settings-code"></p>
-          <button id="btn-share" class="primary wide">Partager le lien</button>
-          <button id="btn-new-code" class="link wide" hidden>Changer le code famille</button>
-        </div>
         <div id="remote-card" class="card" hidden>
           <h2>Tablette à distance</h2>
           <p id="remote-tablet" class="muted small"></p>
@@ -410,6 +395,33 @@
         </div>
       </div>
     </section>
+    <!-- Inviter : bouton en haut à droite de l'accueil -->
+    <section id="view-invite" class="page" hidden>
+      <header class="page-head">
+        <button type="button" class="icon-btn back" aria-label="Retour"><svg><use href="#i-back"/></svg></button>
+        <h1>Inviter la famille</h1>
+      </header>
+      <div class="page-pad">
+        <div id="invite-email-card" class="card" hidden>
+          <h2>Inviter par e-mail</h2>
+          <p class="muted small">La personne entre directement dans la famille en se connectant avec cette adresse.</p>
+          <form id="form-invite" class="inline-field">
+            <input id="invite-email" type="email" autocomplete="off" placeholder="adresse@exemple.fr" required>
+            <button type="submit" class="primary">Inviter</button>
+          </form>
+          <ul id="invitations-sent" class="members"></ul>
+        </div>
+        <div class="card">
+          <h2>Inviter avec le code famille</h2>
+          <p class="muted">Faites scanner ce QR code avec l'appareil photo de la personne, ou envoyez-lui le lien. Un responsable devra accepter son arrivée.</p>
+          <div id="invite-qr" class="qr" aria-label="QR code pour rejoindre la famille"></div>
+          <p class="code" id="settings-code"></p>
+          <button id="btn-share" class="primary wide">Partager le lien</button>
+          <button id="btn-new-code" class="link wide" hidden>Changer le code famille</button>
+        </div>
+      </div>
+    </section>
+
     <!-- Profil : pour chaque membre -->
     <section id="view-profile" class="page tab-page" hidden>
       <header class="page-head"><h1>Profil</h1></header>

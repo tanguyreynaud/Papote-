@@ -35,7 +35,7 @@ const MAX_IMAGE_CHARS = 900_000; // un document Firestore est limité à 1 Mo
 let session = null; // { fid, family, member, uid }
 let stopMembers = null;
 
-const VIEWS = ['view-profile', 'view-pair', 'loading', 'view-login', 'view-link-email', 'view-invited', 'view-pending', 'view-join', 'view-home', 'view-photos', 'view-videos', 'view-messages', 'view-agenda', 'view-settings', 'view-notifs', 'view-support'];
+const VIEWS = ['view-invite', 'view-profile', 'view-pair', 'loading', 'view-login', 'view-link-email', 'view-invited', 'view-pending', 'view-join', 'view-home', 'view-photos', 'view-videos', 'view-messages', 'view-agenda', 'view-settings', 'view-notifs', 'view-support'];
 
 function show(view) {
   for (const id of VIEWS) $(id).hidden = id !== view;
@@ -141,6 +141,7 @@ const PAGES = {
   agenda: () => null,
   pair: () => { resetPairing(); return () => { stopPair?.(); stopPair = null; }; },
   settings: () => { renderSettings(); return null; },
+  invite: () => { renderSettings(); return null; },
 };
 
 function openPage(name, push = true) {
@@ -167,6 +168,8 @@ document.querySelectorAll('.nav-item').forEach((btn) => {
     else show(`view-${btn.dataset.tab}`);
   });
 });
+
+$('btn-invite').addEventListener('click', () => openPage('invite'));
 
 document.querySelectorAll('.tile[data-page]').forEach((tile) => {
   tile.addEventListener('click', () => openPage(tile.dataset.page));
@@ -1133,14 +1136,22 @@ function setCallStatus(text) {
 
 // Pendant l'appel : plein écran. L'écran n'est pas forcé à l'horizontale : un téléphone tenu
 // debout filmerait alors de travers. L'image envoyée est mise à l'horizontale dans appel.js.
+// Pendant l'appel : plein écran et toujours à l'horizontale, même sans rotation automatique.
+// Android : l'écran est verrouillé à l'horizontale. Sinon (iPhone), l'écran d'appel est tourné
+// d'un quart de tour tant que le téléphone est tenu debout. L'image envoyée reste à l'horizontale (appel.js).
 function enterCallScreen() {
+  $('call').classList.add('force-landscape');
   const el = document.documentElement;
   if (!el.requestFullscreen || document.fullscreenElement) return;
-  el.requestFullscreen({ navigationUI: 'hide' }).catch(() => {});
+  el.requestFullscreen({ navigationUI: 'hide' })
+    .then(() => screen.orientation?.lock?.('landscape'))
+    .then(() => $('call').classList.remove('force-landscape'))
+    .catch(() => {});
 }
 
 function leaveCallScreen() {
   $('call').hidden = true;
+  $('call').classList.remove('force-landscape');
   try { if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); } catch (e) { /* rien */ }
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
 }
