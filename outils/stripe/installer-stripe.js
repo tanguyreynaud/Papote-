@@ -1,6 +1,6 @@
 // Prépare le compte Stripe de Papote et range les clés dans Firebase (Secret Manager).
 //
-//  1. Tarifs : 20 €, 25 €, 30 €, 35 € par mois et la tablette à 100 €, retrouvés par
+//  1. Tarifs : 20 €, 25 €, 30 €, 35 € par mois et la tablette à 120 €, retrouvés par
 //     les fonctions grâce à leur « lookup key » (functions/abonnement.js).
 //  2. Portail client : carte bancaire et factures (la résiliation passe par l'appli famille).
 //  3. Webhook vers la fonction stripeWebhook (recréé à chaque lancement pour obtenir son secret).
@@ -46,7 +46,7 @@ const PRODUITS = [
   {
     nom: 'Tablette Papote',
     description: 'Tablette prête à brancher, achetée une fois.',
-    tarifs: [{ cle: 'papote_tablette', montant: 10000, nom: 'Achat', unique: true }],
+    tarifs: [{ cle: 'papote_tablette', montant: 12000, nom: 'Achat', unique: true }],
   },
 ];
 
@@ -89,6 +89,23 @@ async function tarifs(stripe) {
   const cles = PRODUITS.flatMap((p) => p.tarifs.map((t) => t.cle));
   const { data } = await stripe.prices.list({ lookup_keys: cles, active: true, limit: 20 });
   const existants = new Set(data.map((p) => p.lookup_key));
+  // Prix changé (ex. tablette 100 € -> 120 €) : nouveau tarif sur le même produit, qui reprend la
+  // « lookup key » ; l'ancien est archivé. Les abonnements déjà en cours ne changent pas.
+  for (const t of PRODUITS.flatMap((p) => p.tarifs)) {
+    const ancien = data.find((p) => p.lookup_key === t.cle);
+    if (!ancien || ancien.unit_amount === t.montant) continue;
+    await stripe.prices.create({
+      product: ancien.product,
+      currency: 'eur',
+      unit_amount: t.montant,
+      nickname: t.nom,
+      lookup_key: t.cle,
+      transfer_lookup_key: true,
+      ...(t.unique ? {} : { recurring: { interval: 'month' } }),
+    });
+    await stripe.prices.update(ancien.id, { active: false });
+    console.log(`  ${t.cle} : prix passé à ${t.montant / 100} €`);
+  }
   for (const produit of PRODUITS) {
     const manquants = produit.tarifs.filter((t) => !existants.has(t.cle));
     if (!manquants.length) {
