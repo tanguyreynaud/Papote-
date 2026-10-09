@@ -41,7 +41,7 @@ function extraire(texte) {
 (async () => {
   let motDePasse = null;
   while (!motDePasse) {
-    const reponse = await demander('Copiez le mot de passe d\'application Google (16 lettres),\n'
+    const reponse = await demander('Copiez la clé SMTP Brevo (xsmtpsib-...) ou le mot de passe d\'application Google,\n'
       + 'puis appuyez sur Entrée ici (ou collez-le puis Entrée) : ');
     motDePasse = extraire(reponse) || extraire(lirePressePapiers());
     if (!motDePasse) console.log('Pas de mot de passe d\'application dans le presse-papiers. Copiez-le et réessayez.');
