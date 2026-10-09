@@ -860,3 +860,4 @@ h1, h2, h3, .brand, .tile, .splash-name { font-family: var(--display); letter-sp
     transform: rotate(90deg);
   }
 }
+.site-link { display: flex; justify-content: center; text-decoration: none; margin-top: 16px; border-radius: 14px; padding: 13px 18px; font-weight: 600; }

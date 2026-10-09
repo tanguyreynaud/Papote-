@@ -1545,8 +1545,27 @@ $('abo-formules').replaceChildren(...FORMULES.map((f) => {
   return b;
 }));
 
+// Code de commande arrivé par le lien du site : prérempli, et relié tout seul si la famille l'attend.
+let autoLinkTried = false;
+async function useOrderCodeFromSite(statut, owner) {
+  let code = null;
+  try { code = localStorage.getItem('papote.codeCommande'); } catch (e) { /* rien */ }
+  if (!code) return;
+  document.querySelectorAll('.order-code').forEach((input) => { if (!input.value) input.value = code; });
+  if (!owner || statut !== 'aucun' || autoLinkTried) return;
+  autoLinkTried = true;
+  try {
+    await rattacherCommande(session.fid, code);
+    try { localStorage.removeItem('papote.codeCommande'); } catch (e) { /* rien */ }
+    toast('Commande reliée : la tablette va démarrer');
+  } catch (err) {
+    console.warn('Commande du site non reliée', err);
+  }
+}
+
 function renderAbonnement() {
   const abo = session.family.abonnement;
+  useOrderCodeFromSite(abo?.statut, amOwner());
   const admin = amOwner(); // l'abonnement est l'affaire du propriétaire, celui qui paie
   const statut = abo?.statut;
   $('abo-card').hidden = !amOwner() || !abo;
@@ -2297,6 +2316,10 @@ async function start() {
   sharedPending = params.has('partage');
   // Arrivé par le lien ou le QR code d'invitation : le code est gardé le temps de se connecter.
   if (params.get('code')) rememberInviteCode(params.get('code'));
+  // Lien du site après une commande : le code est gardé jusqu'à ce que la famille existe.
+  if (params.get('commande')) {
+    try { localStorage.setItem('papote.codeCommande', params.get('commande')); } catch (e) { /* rien */ }
+  }
   if (params.get('abonnement') === 'ok') {
     try { localStorage.setItem('papote.retourPaiement', '1'); } catch (e) { /* rien */ }
   }
