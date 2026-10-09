@@ -315,24 +315,6 @@
           <h2>Demandes pour rejoindre</h2>
           <ul id="requests" class="members"></ul>
         </div>
-        <div id="abo-card" class="card" hidden>
-          <h2>Abonnement</h2>
-          <p id="abo-status" class="abo-status"></p>
-          <p id="abo-details" class="muted small"></p>
-          <button type="button" id="btn-portail" class="secondary wide" hidden>Carte bancaire et factures</button>
-          <button type="button" id="btn-garder" class="primary wide" hidden>Garder mon abonnement</button>
-          <button type="button" id="btn-resilier" class="link danger wide" hidden>Résilier</button>
-          <div id="abo-choices" hidden>
-            <p class="muted small">Choisissez la formule. Le paiement se fait sur la page sécurisée de Stripe.</p>
-            <div id="abo-formules" class="abo-formules"></div>
-            <p class="muted small">Déjà payé sur le site ? Entrez le code de commande, ou laissez vide pour chercher avec votre adresse e-mail.</p>
-            <form class="order-link" data-order-form>
-              <input class="order-code" placeholder="ABCD-EFGH" aria-label="Code de commande" autocapitalize="characters" autocomplete="off" spellcheck="false">
-              <button type="submit" class="primary small-btn">Relier</button>
-            </form>
-          </div>
-          <p id="abo-error" class="error" hidden></p>
-        </div>
         <div id="remote-card" class="card" hidden>
           <h2>Tablette à distance</h2>
           <p id="remote-tablet" class="muted small"></p>
@@ -441,6 +423,24 @@
           <input id="in-face-camera" type="file" accept="image/*" capture="user" hidden>
           <input id="in-face-gallery" type="file" accept="image/*" hidden>
         </div>
+        <div id="abo-card" class="card" hidden>
+          <h2>Abonnement</h2>
+          <p id="abo-status" class="abo-status"></p>
+          <p id="abo-details" class="muted small"></p>
+          <button type="button" id="btn-portail" class="secondary wide" hidden>Carte bancaire et factures</button>
+          <button type="button" id="btn-garder" class="primary wide" hidden>Garder mon abonnement</button>
+          <button type="button" id="btn-resilier" class="link danger wide" hidden>Résilier</button>
+          <div id="abo-choices" hidden>
+            <p class="muted small">Choisissez la formule. Le paiement se fait sur la page sécurisée de Stripe.</p>
+            <div id="abo-formules" class="abo-formules"></div>
+            <p class="muted small">Déjà payé sur le site ? Entrez le code de commande, ou laissez vide pour chercher avec votre adresse e-mail.</p>
+            <form class="order-link" data-order-form>
+              <input class="order-code" placeholder="ABCD-EFGH" aria-label="Code de commande" autocapitalize="characters" autocomplete="off" spellcheck="false">
+              <button type="submit" class="primary small-btn">Relier</button>
+            </form>
+          </div>
+          <p id="abo-error" class="error" hidden></p>
+        </div>
         <form id="form-my-name" class="card">
           <h2>Mon prénom</h2>
           <div class="inline-field">
@@ -546,7 +546,7 @@
         <button type="button" class="picker" id="pick-camera"><svg><use href="#i-camera"/></svg><span id="pick-camera-label"></span></button>
         <button type="button" class="picker" id="pick-gallery"><svg><use href="#i-gallery"/></svg><span id="pick-gallery-label"></span></button>
       </div>
-      <p class="muted small" id="video-hint" hidden>2 minutes au maximum.</p>
+      <p class="muted small" id="video-hint" hidden>1 minute au maximum.</p>
       <video id="video-preview" class="video-preview" controls playsinline hidden></video>
       <div id="previews" class="previews"></div>
       <div id="post-extra" hidden>

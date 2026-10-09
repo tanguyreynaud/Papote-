@@ -852,7 +852,7 @@ setInterval(flushOutbox, 60_000);
 // Photos et vidéos vont dans Storage (moins cher, vidéos jusqu'à 2 minutes) ; l'envoi garde un petit
 // aperçu (thumb) et l'adresse du fichier. Si Storage n'est pas disponible, on repasse par la base.
 
-const MAX_VIDEO_SECONDS = 120;
+const MAX_VIDEO_SECONDS = 60;
 let storage = null;
 try {
   storage = getStorage(getApp());
@@ -1568,7 +1568,15 @@ function renderAbonnement() {
   useOrderCodeFromSite(abo?.statut, amOwner());
   const admin = amOwner(); // l'abonnement est l'affaire du propriétaire, celui qui paie
   const statut = abo?.statut;
-  $('abo-card').hidden = !amOwner() || !abo;
+  // Bloc Abonnement en haut du Profil, pour le propriétaire, même sans abonnement payant.
+  $('abo-card').hidden = !amOwner();
+  if (!abo) {
+    $('abo-status').textContent = 'Formule d\u2019origine, sans abonnement payant';
+    $('abo-status').className = 'abo-status s-offert';
+    $('abo-details').textContent = 'Rien à régler pour cette famille.';
+    for (const id of ['btn-portail', 'btn-resilier', 'btn-garder']) $(id).hidden = true;
+    $('abo-choices').hidden = true;
+  }
   if (abo) {
     $('abo-status').textContent = LIBELLES[statut] || statut;
     $('abo-status').className = `abo-status s-${statut}`;
@@ -1790,6 +1798,8 @@ function applyFamily() {
   const admin = amFamilyAdmin();
   // Réglages : responsables seulement (Profil est pour tout le monde).
   $('tile-settings').hidden = !admin;
+  // Un responsable ne quitte pas sa famille (il pourrait ne plus jamais revenir).
+  $('btn-leave').hidden = admin;
   if (document.activeElement !== $('my-name')) $('my-name').value = session.member.name;
   $('text-size-card').hidden = !amOwner();
   $('btn-delete-family').hidden = !amOwner();

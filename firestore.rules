@@ -245,7 +245,9 @@ service cloud.firestore {
           && request.resource.data.name is string
           && request.resource.data.name.size() > 0
           && request.resource.data.name.size() <= 40;
-        allow delete: if signedIn() && uid == request.auth.uid;
+        // Quitter la famille : pas pour le propriétaire (personne ne pourrait le faire revenir).
+        allow delete: if signedIn() && uid == request.auth.uid
+          && get(familyPath(fid)).data.createdBy != request.auth.uid;
         // Ancienne tablette retirée par l'administrateur (remplacement).
         allow delete: if isAdmin() && resource.data.role == 'tablette';
         // Un responsable peut retirer ou refuser un membre (la tablette seulement en supprimant la famille).

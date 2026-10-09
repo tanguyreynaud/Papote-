@@ -145,11 +145,16 @@ export async function joinFamily(rawCode, name, role = 'famille') {
   } catch (e) { /* pas encore membre : lecture refusée */ }
   if (alreadyMember) await updateDoc(memberRef, { name });
   else {
-    // Arrivé avec le code famille : un responsable doit accepter le nouveau membre.
-    await setDoc(memberRef, {
-      name, role, code, joinedAt: serverTimestamp(),
-      uid: user.uid, email: (user.email || '').toLowerCase(), status: 'pending',
-    });
+    const base = {
+      name, role, code, joinedAt: serverTimestamp(), uid: user.uid, email: (user.email || '').toLowerCase(),
+    };
+    try {
+      // Le propriétaire qui revient dans sa famille (ou un invité par e-mail) entre directement…
+      await setDoc(memberRef, { ...base, status: 'active' });
+    } catch (e) {
+      // … sinon il arrive en attente : un responsable doit l'accepter.
+      await setDoc(memberRef, { ...base, status: 'pending' });
+    }
   }
   saveFamilyId(fid);
   return fid;
