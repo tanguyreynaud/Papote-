@@ -56,13 +56,10 @@ service cloud.firestore {
     }
 
     // Tableau de bord : seul l'administrateur voit toutes les familles.
-    // Badge « admin » posé par outils/admin/badge-admin.bat ; l'adresse e-mail reste acceptée
-    // le temps que le badge soit en place, puis elle sera retirée.
+    // Badge « admin » posé par outils/admin/badge-admin.bat.
     function isAdmin() {
       return request.auth != null
-        && (request.auth.token.get('admin', false) == true
-          || (request.auth.token.get('email', '') == 'tanguyreynaud22@gmail.com'
-            && request.auth.token.get('email_verified', false) == true));
+        && request.auth.token.get('admin', false) == true;
     }
 
     // Mes familles : chaque fiche membre porte mon uid ; l'administrateur voit toutes les tablettes.

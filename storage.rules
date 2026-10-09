@@ -12,9 +12,7 @@ service firebase.storage {
       }
       function isAdmin() {
         return request.auth != null
-          && (request.auth.token.get('admin', false) == true
-            || (request.auth.token.get('email', '') == 'tanguyreynaud22@gmail.com'
-              && request.auth.token.get('email_verified', false) == true));
+          && request.auth.token.get('admin', false) == true;
       }
       allow read: if isMember() || isAdmin();
       allow create: if (isMember() || isAdmin())
