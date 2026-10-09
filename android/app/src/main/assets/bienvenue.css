@@ -148,3 +148,27 @@
 
 .welcome-title, .welcome-brand { font-family: 'Bricolage Grotesque', 'Atkinson Hyperlegible', Roboto, sans-serif; font-weight: 800; }
 .welcome-btn, .welcome-input { font-family: 'Atkinson Hyperlegible', Roboto, sans-serif; }
+
+/* ---------- Comme le site Papote : fond crème, bandeau chaud, titres Bricolage, boutons en pilule ---------- */
+
+.welcome { background: #fdfaf5; }
+.welcome-card { border: .3vmin solid #e9e1d4; box-shadow: 0 1.5vmin 5vmin rgba(36, 33, 47, .08); }
+.welcome-art { background: #f6efe4; }
+.welcome-art img { filter: drop-shadow(0 1vmin 2vmin rgba(36, 33, 47, .12)); }
+.welcome-eyebrow {
+  margin: 0 0 1.2vmin;
+  font-size: 3.4vmin;
+  font-weight: 700;
+  letter-spacing: .5vmin;
+  text-transform: uppercase;
+  color: #c2410c;
+}
+.welcome-title { font-size: 7.6vmin; line-height: 1.08; letter-spacing: -.1vmin; }
+.with-art .welcome-title { font-size: 7vmin; }
+.welcome-sub { font-size: 4.6vmin; }
+.welcome-btn { border-radius: 99vmin; font-weight: 700; }
+.welcome-btn.primary { box-shadow: 0 1vmin 2.5vmin rgba(79, 70, 229, .25); }
+.welcome-btn.network { border-radius: 3vmin; }
+.welcome-input { border-radius: 3vmin; border-color: #e9e1d4; }
+.welcome-dots .dot.done { background: #c7c3f7; }
+.welcome-stepnum { display: none; }

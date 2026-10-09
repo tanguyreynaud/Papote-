@@ -59,6 +59,7 @@
       head.appendChild(steps);
     }
     box.appendChild(head);
+    if (stepNum && !repair) box.appendChild(el('p', 'welcome-eyebrow', 'Étape ' + stepNum + ' sur 3'));
     box.appendChild(el('h1', 'welcome-title', title));
     if (subtitle) box.appendChild(el('p', 'welcome-sub', subtitle));
     root.appendChild(card);
