@@ -13,9 +13,9 @@ const JOUR = 24 * 60 * 60 * 1000;
 const DELAI_GRACE_JOURS = 7;
 const ESSAI_JOURS = 15;
 const ENGAGEMENT_MOIS = 12;
-// Tablette incluse : à rendre dans les 30 jours après la fin de l'abonnement, sinon 100 €.
+// Tablette incluse : à rendre dans les 30 jours après la fin de l'abonnement, sinon 120 €.
 const RESTITUTION_JOURS = 30;
-const PENALITE_NON_RESTITUTION = 10000; // centimes
+const PENALITE_NON_RESTITUTION = 12000; // centimes
 
 const STATUTS_OK = ['offert', 'actif', 'impaye'];
 
