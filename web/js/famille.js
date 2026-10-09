@@ -732,7 +732,7 @@ async function openShared() {
     if (!video && !photos.length) return;
     openPage(video ? 'videos' : 'photos');
     openAdd(video ? 'video' : 'photo');
-    if (text) $('post-text').value = text.slice(0, 40);
+    if (text) $('post-text').value = text.slice(0, 30);
     if (video) await addVideoFile(video);
     else await addPhotoFiles(photos);
   } catch (err) {
@@ -1704,6 +1704,31 @@ function renderRemote() {
   }
 }
 
+// ---------- Mise en veille de la tablette (propriétaire) ----------
+// families/{fid}.veille = { active, de, a } ; par défaut l'écran s'éteint de 23 h à 7 h.
+
+function renderSleep() {
+  const v = session.family.veille || { active: true, de: 23, a: 7 };
+  if (document.activeElement?.closest?.('#sleep-card')) return;
+  $('sleep-on').checked = v.active !== false;
+  $('sleep-from').value = String(v.de ?? 23);
+  $('sleep-to').value = String(v.a ?? 7);
+  $('sleep-hours').hidden = !$('sleep-on').checked;
+}
+
+$('sleep-on').addEventListener('change', () => { $('sleep-hours').hidden = !$('sleep-on').checked; });
+$('btn-sleep').addEventListener('click', async () => {
+  const veille = { active: $('sleep-on').checked, de: Number($('sleep-from').value), a: Number($('sleep-to').value) };
+  if (veille.active && veille.de === veille.a) { notice("L'heure de fin doit être différente de l'heure de début."); return; }
+  try {
+    await updateDoc(doc(db, 'families', session.fid), { veille, rev: increment(1) });
+    toast('Mise en veille enregistrée');
+  } catch (err) {
+    console.error(err);
+    notice("Le réglage n'a pas pu être enregistré.");
+  }
+});
+
 // ---------- Taille du texte sur la tablette ----------
 
 const TEXT_SIZES = ['normal', 'grande', 'tres-grande'];
@@ -1789,6 +1814,8 @@ function applyFamily() {
   $('btn-leave').hidden = admin;
   if (document.activeElement !== $('my-name')) $('my-name').value = session.member.name;
   $('text-size-card').hidden = !amOwner();
+  $('sleep-card').hidden = !amOwner();
+  renderSleep();
   $('btn-delete-family').hidden = !amOwner();
   renderTextSize();
   $('invite-email-card').hidden = !admin;

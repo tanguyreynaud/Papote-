@@ -352,6 +352,16 @@
             <button type="submit" class="primary">Enregistrer</button>
           </div>
         </form></div>
+        <div id="sleep-card" class="card" hidden>
+          <h2>Mise en veille de la tablette</h2>
+          <p class="muted small">La nuit, l'écran s'éteint ; un toucher le rallume, et un appel ou un rappel le réveille.</p>
+          <label class="switch-row"><input type="checkbox" id="sleep-on"> Éteindre l'écran la nuit</label>
+          <div id="sleep-hours" class="sleep-hours">
+            <label>De <select id="sleep-from"><option value="0">0 h</option><option value="1">1 h</option><option value="2">2 h</option><option value="3">3 h</option><option value="4">4 h</option><option value="5">5 h</option><option value="6">6 h</option><option value="7">7 h</option><option value="8">8 h</option><option value="9">9 h</option><option value="10">10 h</option><option value="11">11 h</option><option value="12">12 h</option><option value="13">13 h</option><option value="14">14 h</option><option value="15">15 h</option><option value="16">16 h</option><option value="17">17 h</option><option value="18">18 h</option><option value="19">19 h</option><option value="20">20 h</option><option value="21">21 h</option><option value="22">22 h</option><option value="23">23 h</option></select></label>
+            <label>à <select id="sleep-to"><option value="0">0 h</option><option value="1">1 h</option><option value="2">2 h</option><option value="3">3 h</option><option value="4">4 h</option><option value="5">5 h</option><option value="6">6 h</option><option value="7">7 h</option><option value="8">8 h</option><option value="9">9 h</option><option value="10">10 h</option><option value="11">11 h</option><option value="12">12 h</option><option value="13">13 h</option><option value="14">14 h</option><option value="15">15 h</option><option value="16">16 h</option><option value="17">17 h</option><option value="18">18 h</option><option value="19">19 h</option><option value="20">20 h</option><option value="21">21 h</option><option value="22">22 h</option><option value="23">23 h</option></select></label>
+          </div>
+          <button type="button" id="btn-sleep" class="primary wide">Enregistrer</button>
+        </div>
         <div id="text-size-card" class="card" hidden>
           <h2>Taille du texte sur la tablette</h2>
           <div class="segmented" role="radiogroup" aria-label="Taille du texte sur la tablette">
@@ -539,7 +549,7 @@
       <video id="video-preview" class="video-preview" controls playsinline hidden></video>
       <div id="previews" class="previews"></div>
       <div id="post-extra" hidden>
-        <input id="post-text" maxlength="40" placeholder="Légende courte (40 caractères)">
+        <input id="post-text" maxlength="30" placeholder="Légende courte (30 caractères)">
         <button type="submit" class="primary wide send-btn" id="btn-send">Envoyer</button>
       </div>
       <p id="post-status" class="muted small" hidden></p>

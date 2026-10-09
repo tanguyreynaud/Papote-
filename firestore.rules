@@ -173,6 +173,13 @@ service cloud.firestore {
           || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['code'])
             && isFamilyAdmin(fid)
             && getAfter(invitePath(request.resource.data.code)).data.fid == fid)
+          // Mise en veille de la tablette la nuit : { active, de, a } (heures 0-23).
+          || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['veille', 'rev'])
+            && isFamilyAdmin(fid)
+            && request.resource.data.veille.keys().hasOnly(['active', 'de', 'a'])
+            && request.resource.data.veille.active is bool
+            && request.resource.data.veille.de is int && request.resource.data.veille.de >= 0 && request.resource.data.veille.de <= 23
+            && request.resource.data.veille.a is int && request.resource.data.veille.a >= 0 && request.resource.data.veille.a <= 23)
           // Taille du texte sur la tablette, avec le compteur qui la prévient.
           || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['textSize', 'rev'])
             && isFamilyAdmin(fid)

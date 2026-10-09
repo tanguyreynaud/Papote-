@@ -878,3 +878,8 @@ h1, h2, h3, .brand, .tile, .splash-name { font-family: var(--display); letter-sp
   white-space: nowrap;
 }
 .install-fab svg { width: 22px; height: 22px; }
+
+.switch-row { display: flex; align-items: center; gap: 10px; font-weight: 600; }
+.switch-row input { width: 22px; height: 22px; margin: 0; accent-color: var(--accent); }
+.sleep-hours { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.sleep-hours label { margin: 6px 0; }
