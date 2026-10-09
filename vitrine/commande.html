@@ -65,7 +65,7 @@ p { margin: 0; }
   <p class="muted">Étape 2 : paiement sécurisé par carte (Stripe). 15 jours d'essai gratuit, rien n'est prélevé pour l'abonnement avant leur fin.</p>
 </main>
 
-<script src="https://embed.sendcloud.sc/spp/1.0.0/api.js"></script>
+<script src="https://embed.sendcloud.sc/spp/1.0.0/api.min.js"></script>
 <script>
 (function () {
   // Clé PUBLIQUE de l'intégration Sendcloud « Papote » (points relais Mondial Relay). Pas un secret.
@@ -118,7 +118,11 @@ p { margin: 0; }
         postalCode: document.getElementById('cp').value.trim(),
         language: 'fr-fr',
         carriers: 'mondial_relay'
-      }, choisir, function () { erreur.hidden = false; });
+      }, choisir, function (erreurs) {
+        if (erreurs && erreurs.indexOf('Closed') !== -1) return;
+        console.error('Points relais :', erreurs);
+        erreur.hidden = false;
+      });
     } catch (err) {
       erreur.hidden = false;
     }
