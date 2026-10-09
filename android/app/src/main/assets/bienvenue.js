@@ -81,7 +81,7 @@
     var input = el('input', 'welcome-input');
     input.type = 'text';
     input.maxLength = 40;
-    input.placeholder = 'Par exemple : Mamie Jeanne';
+    input.placeholder = 'Ex. : Mamie Jeanne';
     box.appendChild(input);
     var go = button('Continuer', 'primary', function () {
       var name = input.value.trim();
