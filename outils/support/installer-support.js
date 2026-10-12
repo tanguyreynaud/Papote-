@@ -29,8 +29,9 @@ function demander(question) {
 }
 
 function extraire(texte) {
+  // Une clé collée deux fois d'affilée : on ne garde que la première.
   const m = (texte || '').match(/sk-ant-api[A-Za-z0-9_-]+/);
-  return m ? m[0] : null;
+  return m ? m[0].split(/(?=sk-ant-)/)[0] : null;
 }
 
 (async () => {
