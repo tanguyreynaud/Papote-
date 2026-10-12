@@ -20,6 +20,18 @@ ol { margin: 0; padding-left: 1.3rem; display: grid; gap: .5rem; }
 .code { display: grid; gap: .25rem; padding: 1rem 1.25rem; border: 2px dashed var(--line); border-radius: 14px; }
 .code strong { font: 800 1.8rem/1.2 "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif; letter-spacing: .08em; color: var(--text); user-select: all; }
 .code span { font-size: 1rem; color: var(--muted); }
+.recap { display: grid; gap: .6rem; padding: 1rem 1.25rem; background: #fff; border: 1px solid var(--line); border-radius: 14px; }
+.recap[hidden] { display: none; }
+.recap h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif; }
+.recap dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: .35rem 1rem; }
+.recap dt { color: var(--muted); }
+.recap dd { margin: 0; font-weight: 700; }
+button.btn { justify-self: start; font: inherit; font-weight: 700; border: 2px solid var(--accent); background: transparent; color: var(--accent); min-height: 3.25rem; padding: .7rem 1.4rem; border-radius: 999px; cursor: pointer; }
+@media print {
+  body { background: #fff; display: block; padding: 0; }
+  .ecran, .code, #imprimer, .ps-bouton, .ps-panneau { display: none !important; }
+  .recap { border: 0; padding: 0; }
+}
 a.btn { justify-self: start; display: inline-flex; align-items: center; min-height: 3.25rem; padding: .75rem 1.5rem; border-radius: 999px; background: var(--accent); color: var(--accent-text); font-weight: 700; text-decoration: none; }
 </style>
 </head>
@@ -27,12 +39,18 @@ a.btn { justify-self: start; display: inline-flex; align-items: center; min-heig
 <main>
   <img src="icon.svg" alt="">
   <h1>Merci, votre commande est enregistrée.</h1>
-  <p>Vous recevez un e-mail de confirmation avec votre reçu. Vos 15 jours d'essai gratuit commencent aujourd'hui : le premier mois sera prélevé à leur fin.</p>
+  <p class="ecran">Vous recevez un e-mail de confirmation. Vos 15 jours d'essai gratuit commencent aujourd'hui : le premier mois sera prélevé à leur fin.</p>
   <div class="code" id="code" hidden>
     <span>Votre code de commande</span>
     <strong id="code-valeur"></strong>
     <span>Notez-le. Il figure aussi sur vos factures. Il sert si vous vous connectez à l'appli avec une autre adresse e-mail que celle du paiement.</span>
   </div>
+  <section class="recap" id="recap" hidden>
+    <h2>Récapitulatif de votre commande</h2>
+    <dl id="recap-liste"></dl>
+    <p>Papote · contact@mapapote.fr · https://mapapote.fr</p>
+  </section>
+  <button class="btn" type="button" id="imprimer" hidden>🖨️ Imprimer ou enregistrer en PDF</button>
   <ol>
     <li>Dès que la tablette part, vous recevez un e-mail avec le suivi du colis. Retirez-la au point relais choisi quand Mondial Relay vous prévient.</li>
     <li>Branchez-la, donnez-lui un nom et connectez-la au wifi si besoin.</li>
@@ -41,6 +59,32 @@ a.btn { justify-self: start; display: inline-flex; align-items: center; min-heig
   </ol>
 </main>
 <script>
+  // Récapitulatif imprimable (« Enregistrer en PDF » dans la fenêtre d'impression).
+  function recap(d) {
+    var r = d.relais;
+    var lignes = [
+      ['Commande', d.code],
+      ['Date', d.date ? new Date(d.date * 1000).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : ''],
+      ['Client', [d.nom, d.email].filter(Boolean).join(' · ')],
+      ['Abonnement', d.formule === 'sim' ? '30 € par mois, internet inclus' : '20 € par mois'],
+      ['Essai', '15 jours gratuits, puis engagement de 12 mois'],
+      ['Payé aujourd\'hui', typeof d.payeCentimes === 'number' ? (d.payeCentimes / 100).toLocaleString('fr-FR') + ' € (mise en service)' : ''],
+      ['Tablette', 'Prêtée, à rendre en fin d\'abonnement'],
+      ['Livraison', r ? 'Offerte, point relais ' + [r.nom, r.adresse, [r.cp, r.ville].filter(Boolean).join(' ')].filter(Boolean).join(', ') : 'Offerte']
+    ];
+    var dl = document.getElementById('recap-liste');
+    lignes.forEach(function (l) {
+      if (!l[1]) return;
+      var dt = document.createElement('dt'); dt.textContent = l[0];
+      var dd = document.createElement('dd'); dd.textContent = l[1];
+      dl.append(dt, dd);
+    });
+    document.getElementById('recap').hidden = false;
+    var b = document.getElementById('imprimer');
+    b.hidden = false;
+    b.addEventListener('click', function () { window.print(); });
+  }
+
   // Code de commande, demandé au serveur avec l'identifiant du paiement Stripe.
   (function () {
     var session = new URLSearchParams(location.search).get('session');
@@ -51,6 +95,7 @@ a.btn { justify-self: start; display: inline-flex; align-items: center; min-heig
         if (!d || !d.code) return;
         document.getElementById('code-valeur').textContent = d.code;
         document.getElementById('code').hidden = false;
+        recap(d);
       })
       .catch(function () {});
   })();
