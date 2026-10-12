@@ -1026,7 +1026,7 @@ $('face-remove').addEventListener('click', async () => {
   renderFace();
   try { await saveFace(null); } catch (err) { console.error(err); }
 });
-$('face-nudge').addEventListener('click', () => openPage('settings'));
+$('face-nudge').addEventListener('click', () => document.querySelector('.nav-item[data-tab="profile"]').click());
 
 // ---------- Nettoyage : rester dans le quota gratuit de Firebase ----------
 // On garde les dernières photos et vidéos ; au-delà, les plus anciennes (plus de 7 jours) sont effacées.
