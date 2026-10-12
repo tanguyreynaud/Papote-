@@ -44,3 +44,7 @@ test('repère la marque de passage de main', () => {
   assert.deepStrictEqual(lireReponse('Quelqu’un va vous recontacter.\n[CONTACT]'), { reponse: 'Quelqu’un va vous recontacter.', contact: true });
   assert.deepStrictEqual(lireReponse('20 € par mois.'), { reponse: '20 € par mois.', contact: false });
 });
+
+test('retire le gras markdown', () => {
+  assert.strictEqual(lireReponse('Allez dans **Réglages**.').reponse, 'Allez dans Réglages.');
+});
