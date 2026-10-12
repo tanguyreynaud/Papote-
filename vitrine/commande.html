@@ -13,7 +13,7 @@
 :root { --bg: #fdfaf5; --surface: #ffffff; --text: #24212f; --muted: #5f5a6b; --line: #e9e1d4; --accent: #4f46e5; --accent-strong: #3730a3; --accent-text: #ffffff; --warm: #4338ca; --warm-soft: #e8e6fd; color-scheme: light; }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--text); font: 400 1.125rem/1.6 "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif; }
-main { max-width: 48rem; margin: 0 auto; padding: 24px 20px 48px; display: grid; gap: 1.5rem; }
+main { max-width: 48rem; margin: 0 auto; padding: 24px 20px 7rem; display: grid; gap: 1.5rem; }
 .top { display: flex; align-items: center; gap: .6rem; font: 800 1.4rem/1 "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif; color: var(--text); text-decoration: none; }
 .top img { width: 2rem; height: 2rem; }
 .haut { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
@@ -104,6 +104,15 @@ h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-u
 </main>
 
 <script>
+  // Statistiques sans cookie : une seule fois par visite et par étape (outils/admin/statistiques.bat).
+  function compter(e) {
+    try { if (sessionStorage.getItem('papote-' + e)) return; sessionStorage.setItem('papote-' + e, '1'); } catch (_) {}
+    var url = 'https://europe-west1-papote-famille.cloudfunctions.net/compter?e=' + e;
+    try { if (navigator.sendBeacon && navigator.sendBeacon(url)) return; } catch (_) {}
+    fetch(url, { method: 'POST', keepalive: true }).catch(function () {});
+  }
+</script>
+<script>
 (function () {
   // Clé PUBLIQUE de l'intégration Sendcloud « Papote » (points relais Mondial Relay). Pas un secret.
   var SENDCLOUD_CLE = 'f8875927-f7be-4ad7-ac24-22fd11c0efc5';
@@ -136,6 +145,7 @@ h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-u
   // Point relais renvoyé par le sélecteur Sendcloud.
   function choisir(p) {
     if (!p || !p.id) return;
+    compter('relais');
     relais = p;
     relais.adresse = [p.street, p.house_number].filter(Boolean).join(' ').trim();
     document.getElementById('choisi-nom').textContent = p.name;
@@ -299,6 +309,8 @@ h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-u
     }, function () { fin(false); }, { maximumAge: 600000 });
   });
 
+  payer.addEventListener('click', function () { if (relais) compter('paiement'); });
+  compter('commande');
   maj();
 })();
 </script>
