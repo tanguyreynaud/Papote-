@@ -24,7 +24,7 @@
 
 const { onRequest, onCall, HttpsError } = require('firebase-functions/v2/https');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
-const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore');
+const { onDocumentCreated, onDocumentUpdated, onDocumentWritten } = require('firebase-functions/v2/firestore');
 const { setGlobalOptions, logger } = require('firebase-functions/v2');
 const { defineSecret, defineString } = require('firebase-functions/params');
 const admin = require('firebase-admin');
@@ -632,3 +632,19 @@ exports.rappelsJumelage = onSchedule(
     }
   });
 exports.supportChat = require('./support').supportChat;
+
+// Nombre de proches d'une famille (membres « famille » qui ont rejoint), lu par les règles
+// Firestore pour refuser un 31e proche. Recalculé à chaque arrivée, départ ou changement de membre.
+exports.compterProches = onDocumentWritten(
+  { document: 'families/{fid}/members/{uid}', region: REGION_FIRESTORE },
+  async (event) => {
+    const famille = admin.firestore().doc(`families/${event.params.fid}`);
+    const membres = await famille.collection('members').where('role', '==', 'famille').get();
+    const nbProches = membres.docs.filter((d) => d.get('status') !== 'pending').length;
+    try {
+      await famille.update({ nbProches });
+    } catch (e) {
+      // Famille supprimée : rien à compter.
+      if (e.code !== 5) throw e;
+    }
+  });
