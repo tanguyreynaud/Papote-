@@ -17,6 +17,7 @@
 //   tabletteEnvoyee    appel depuis le tableau de bord admin : colis parti, numéro de suivi Mondial Relay
 //   commandeModifiee   commande passée à « envoyee » : e-mail au client avec le lien de suivi
 //   rappelsJumelage    chaque jour : rappel au client dont la tablette n'est pas jumelée (J+5, J+12)
+//   gestion*           page de gestion admin : stock, commandes, factures, comptabilité (gestion.js)
 //
 // État écrit sur families/{fid}.abonnement (voir abonnement.js), avec rev + 1 pour que la
 // tablette relise la famille. Commandes : commandes/{id de l'abonnement Stripe}.
@@ -688,6 +689,13 @@ exports.rappelsJumelage = onSchedule(
 const support = require('./support');
 exports.supportChat = support.supportChat;
 exports.bilanSupport = support.bilanSupport;
+
+// Stock de tablettes, commandes, factures et comptabilité (page web/gestion.html, admin).
+const gestion = require('./gestion');
+exports.gestionDonnees = gestion.gestionDonnees;
+exports.gestionStock = gestion.gestionStock;
+exports.gestionDepense = gestion.gestionDepense;
+exports.gestionStripe = gestion.gestionStripe;
 
 // Nombre de proches d'une famille (membres « famille » qui ont rejoint), lu par les règles
 // Firestore pour refuser un 31e proche. Recalculé à chaque arrivée, départ ou changement de membre.
