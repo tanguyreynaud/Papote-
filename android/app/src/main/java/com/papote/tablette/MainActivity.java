@@ -461,6 +461,7 @@ public class MainActivity extends Activity implements Sync.Listener {
     }
     @Override public void onReminders(JSONObject payload) { callPage("onReminders", payload); }
     @Override public void onFamily(JSONObject payload) { callPage("onFamily", payload); }
+    @Override public void onVolume(int volume) { handler.post(this::setVolumes); }
 
     /** Nouvel envoi : on allume l'écran et on joue le son de notification de la tablette. */
     @SuppressWarnings("deprecation")
@@ -505,13 +506,19 @@ public class MainActivity extends Activity implements Sync.Listener {
 
     // ---------- Son et écran : ni réglables ni éteignables par erreur ----------
 
-    /** Volume réglé une fois pour toutes : fort pour la sonnerie et les messages vocaux. */
+    /**
+     * Volume fort pour la sonnerie et les messages vocaux, ou celui réglé depuis l'app famille
+     * (médias, et appels vidéo un peu moins forts que les médias à cause de l'écho).
+     */
     private void setVolumes() {
         AudioManager am = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        int family = prefs.getInt("volume", -1);
+        int media = family < 0 ? 85 : family;
+        // Appels vidéo un peu moins forts : au maximum, le micro reprend le haut-parleur (écho).
+        int call = family < 0 ? 72 : Math.round(family * 72f / 85f);
         int[][] levels = {
-                {AudioManager.STREAM_MUSIC, 85}, {AudioManager.STREAM_RING, 100},
-                // Appels vidéo un peu moins forts : au maximum, le micro reprend le haut-parleur (écho).
-                {AudioManager.STREAM_NOTIFICATION, 90}, {AudioManager.STREAM_VOICE_CALL, 72},
+                {AudioManager.STREAM_MUSIC, media}, {AudioManager.STREAM_RING, 100},
+                {AudioManager.STREAM_NOTIFICATION, 90}, {AudioManager.STREAM_VOICE_CALL, Math.min(100, call)},
                 {AudioManager.STREAM_ALARM, 100},
         };
         for (int[] l : levels) {
