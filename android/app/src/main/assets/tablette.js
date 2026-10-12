@@ -90,7 +90,7 @@
         : hour >= 12 && hour < 18 ? "L'après-midi"
           : hour >= 18 && hour < 22 ? 'Le soir' : 'La nuit';
     }
-    document.body.className = ((hour >= 21 || hour < 7) ? 'night' : '') +
+    document.body.className = (isEvening(hour) ? 'night' : '') +
       (playing && playing.post.video ? ' video-playing' : '');
   }
 
@@ -529,7 +529,26 @@
 
   // ---------- Données venant d'Android ----------
 
+  // ---------- Chargement du démarrage ----------
+  // Visible au moins un instant (pas de clignement), retiré dès qu'Android a parlé, 20 s au plus.
+
+  var bootStart = Date.now();
+  var bootDone = false;
+
+  function hideBoot() {
+    if (bootDone) return;
+    bootDone = true;
+    setTimeout(function () {
+      var boot = $('boot');
+      if (!boot) return;
+      boot.className = 'boot gone';
+      setTimeout(function () { if (boot.parentNode) boot.parentNode.removeChild(boot); }, 500);
+    }, Math.max(0, 1200 - (Date.now() - bootStart)));
+  }
+  setTimeout(hideBoot, 20000);
+
   function onStatus(status) {
+    hideBoot();
     // Première installation chez le client : nom, wifi, puis appairage (bienvenue.js).
     if (window.PapoteBienvenue) {
       if (status.state === 'welcome') { window.PapoteBienvenue.show(status); return; }
@@ -545,6 +564,7 @@
   }
 
   function onPosts(payload) {
+    hideBoot();
     hasData = true;
     // On garde « vu » localement même si Firebase ne l'a pas encore enregistré.
     var seenBefore = {};
@@ -553,6 +573,7 @@
     familyCode = payload.familyCode || '';
     setTextSize(payload.textSize);
     setPaused(payload.subscription);
+    setVeille(payload.veille);
     photos = [];
     for (var j = 0; j < posts.length; j++) {
       if (seenBefore[posts[j].id]) posts[j].seen = true;
@@ -928,12 +949,32 @@
   };
 
   // ---------- La nuit, l'écran se met en veille ----------
-  // De 23h à 7h : écran noir et luminosité au minimum. Un toucher le rallume 2 minutes ;
+  // Pendant la veille (23h-7h sauf réglage de la famille) : écran noir et luminosité au minimum. Un toucher le rallume 2 minutes ;
   // un rappel ou un appel le rallume tant qu'il est affiché. Un nouvel envoi attend le matin
   // (ou le prochain toucher) pour ne pas allumer l'écran en pleine nuit.
 
-  var SLEEP_FROM = 23;
-  var SLEEP_TO = 7;
+  // Heures de veille réglées par la famille (families/{fid}.veille) ; sans réglage, 23h-7h.
+  var veille = { active: true, de: 23, a: 7 };
+
+  function setVeille(v) {
+    veille = v && typeof v.de === 'number' && typeof v.a === 'number'
+      ? { active: v.active !== false, de: v.de, a: v.a }
+      : { active: true, de: 23, a: 7 };
+  }
+
+  // Heure dans [de, a[, en passant minuit si besoin ; de === a : jamais.
+  function inHours(hour, from, to) {
+    if (from < to) return hour >= from && hour < to;
+    if (from > to) return hour >= from || hour < to;
+    return false;
+  }
+
+  function isNight(hour) { return veille.active && inHours(hour, veille.de, veille.a); }
+
+  // Couleurs du soir : deux heures avant la veille jusqu'au réveil (21h-7h sans réglage).
+  function isEvening(hour) {
+    return veille.active ? inHours(hour, (veille.de + 22) % 24, veille.a) : inHours(hour, 21, 7);
+  }
   var WAKE_MS = 120000;
   var wakeUntil = 0;
   var asleep = false;
@@ -947,7 +988,7 @@
 
   function updateSleep() {
     var hour = new Date().getHours();
-    var night = hour >= SLEEP_FROM || hour < SLEEP_TO;
+    var night = isNight(hour);
     var should = night && Date.now() > wakeUntil && !somethingToShow();
     if (should === asleep) return;
     asleep = should;

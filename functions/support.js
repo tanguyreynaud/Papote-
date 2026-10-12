@@ -12,7 +12,7 @@
 // alors de laisser un téléphone ou un e-mail. La demande est gardée dans supportDemandes/ et
 // envoyée par e-mail à l'adresse de support, avec la conversation.
 // Clé Anthropic dans Secret Manager (outils/support/installer-support.bat), jamais dans le dépôt.
-// Garde-fous : 30 questions et 3 demandes de rappel par jour et par visiteur, 2 000 questions par jour au total.
+// Garde-fous : 300 questions (30 après la phase de test) et 3 demandes de rappel par jour et par visiteur, 2 000 questions par jour au total.
 
 const { onRequest } = require('firebase-functions/v2/https');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
@@ -33,7 +33,8 @@ const MAIL_MOT_DE_PASSE = defineSecret('MAIL_MOT_DE_PASSE');
 
 const MODELE = 'claude-haiku-5-5';
 const EMAIL_SUPPORT = 'contact@mapapote.fr';
-const QUOTA_VISITEUR = 30;
+// 300 pendant la phase de test (demande de Tanguy, 2026-10-12) ; remettre à 30 avant l'ouverture au public.
+const QUOTA_VISITEUR = 300;
 const QUOTA_TOTAL = 2000;
 const QUOTA_RAPPELS = 3;
 const MARQUE_CONTACT = '[CONTACT]';

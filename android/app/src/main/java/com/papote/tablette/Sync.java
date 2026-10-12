@@ -36,6 +36,8 @@ final class Sync {
         void onReminders(JSONObject payload);
         /** Photos de profil des membres et anniversaires. */
         void onFamily(JSONObject payload);
+        /** Volume réglé depuis l'app famille (0-100), -1 si aucun réglage. */
+        default void onVolume(int volume) { }
     }
 
     private static final String TAG = "PapoteSync";
@@ -267,7 +269,7 @@ final class Sync {
         try {
             // Une seule lecture : le marqueur « rev » ne bouge que si la famille a envoyé ou supprimé
             // quelque chose (ou modifié les rappels). Sinon, rien d'autre à lire.
-            JSONObject family = firebase.get("families/" + fid, "name", "rev", "code", "textSize", "abonnement");
+            JSONObject family = firebase.get("families/" + fid, "name", "rev", "code", "textSize", "abonnement", "veille", "volume");
             long rev = 0;
             JSONObject ff = family == null ? null : family.optJSONObject("fields");
             if (ff != null) {
@@ -283,6 +285,8 @@ final class Sync {
                     lastPostsJson = null; // la page doit l'apprendre tout de suite
                     publishPosts();
                 }
+                readVeille(ff);
+                readVolume(ff);
                 rev = Firebase.integer(ff, "rev");
             }
             if (rev == lastRev && now - lastFullRefresh < FULL_REFRESH_MS) {
@@ -772,6 +776,8 @@ final class Sync {
                     .put("familyCode", familyCode == null ? "" : familyCode)
                     .put("textSize", textSize == null ? "" : textSize)
                     .put("subscription", subscription)
+                    .put("veille", new JSONObject().put("active", Veille.active(context))
+                            .put("de", Veille.from(context)).put("a", Veille.to(context)))
                     .put("posts", arr);
             String json = payload.toString();
             if (json.equals(lastPostsJson)) return;
@@ -1114,6 +1120,36 @@ final class Sync {
             lastJournalSent = lines;
         } catch (Exception e) {
             Log.w(TAG, "Envoi du journal", e);
+        }
+    }
+
+    /** Volume réglé par la famille (families/{fid}.volume, 0-100) ; absent = volume actuel. */
+    private void readVolume(JSONObject ff) {
+        int volume = ff.has("volume") ? (int) Math.max(0, Math.min(100, Firebase.integer(ff, "volume"))) : -1;
+        if (volume == prefs.getInt("volume", -1)) return;
+        prefs.edit().putInt("volume", volume).apply();
+        listener.onVolume(volume);
+    }
+
+    /** Heures de veille réglées par la famille ({active, de, a}) ; absent = 23h-7h. */
+    private void readVeille(JSONObject ff) {
+        JSONObject v = ff.optJSONObject("veille");
+        JSONObject vf = v == null || v.optJSONObject("mapValue") == null ? null
+                : v.optJSONObject("mapValue").optJSONObject("fields");
+        boolean before = Veille.active(context);
+        int beforeFrom = Veille.from(context), beforeTo = Veille.to(context);
+        if (vf == null) {
+            Veille.save(context, null, 0, 0);
+        } else {
+            JSONObject act = vf.optJSONObject("active");
+            boolean active = act == null || act.optBoolean("booleanValue", true);
+            int from = vf.has("de") ? (int) Firebase.integer(vf, "de") : Veille.DEFAULT_FROM;
+            int to = vf.has("a") ? (int) Firebase.integer(vf, "a") : Veille.DEFAULT_TO;
+            Veille.save(context, active, from, to);
+        }
+        if (before != Veille.active(context) || beforeFrom != Veille.from(context) || beforeTo != Veille.to(context)) {
+            lastPostsJson = null; // la page doit l'apprendre tout de suite
+            publishPosts();
         }
     }
 

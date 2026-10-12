@@ -29,9 +29,14 @@ function demander(question) {
 }
 
 function extraire(texte) {
+<<<<<<< HEAD
   // Une clé collée deux fois d'affilée : on ne garde que la première.
   const m = (texte || '').match(/sk-ant-api[A-Za-z0-9_-]+/);
   return m ? m[0].split(/(?=sk-ant-)/)[0] : null;
+=======
+  const m = (texte || '').match(/sk-ant-[A-Za-z0-9_-]{20,}/);
+  return m ? m[0] : null;
+>>>>>>> origin/main
 }
 
 (async () => {
@@ -39,7 +44,11 @@ function extraire(texte) {
   while (!cle) {
     const reponse = await demander('Copiez la clé Anthropic (sk-ant-api...), puis appuyez sur Entrée ici (ou collez-la puis Entrée) : ');
     cle = extraire(reponse) || extraire(lirePressePapiers());
-    if (!cle) console.log('Pas de clé Anthropic dans le presse-papiers. Copiez-la et réessayez.');
+    if (!cle) {
+      // Seulement le début du presse-papiers, jamais une clé entière.
+      const debut = (lirePressePapiers() || '').trim().slice(0, 7);
+      console.log(`Pas de clé Anthropic (sk-ant-...) dans le presse-papiers${debut ? ` (il commence par « ${debut} »)` : ' (il est vide)'}. Copiez-la et réessayez.`);
+    }
   }
   viderPressePapiers();
   const fichier = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'papote-')), 'secret.txt');
