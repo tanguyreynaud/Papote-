@@ -10,12 +10,15 @@
 //   codeCommande       GET depuis merci.html : code de commande à noter après le paiement
 //   stripeWebhook      Stripe prévient ici de chaque paiement ou changement d'abonnement
 //   finDeGrace         chaque heure : suspend les familles dont le délai de grâce est dépassé
-//   restitutions       chaque jour : prélève 120 € si une tablette incluse n'est pas rendue à temps
+//   retracter          appel depuis l'appli famille : annule la commande (14 jours), remboursée au retour
+//   finDeContrat       appel depuis l'appli famille : rétractation possible, retour attendu, remboursement
+//   restitutions       chaque jour : rappel 7 jours avant, puis 120 € si la tablette n'est pas rendue à temps
 //   tabletteRendue     appel depuis le tableau de bord admin : la tablette incluse est revenue
+//   etiquetteRetour    appel depuis le tableau de bord admin : lien de l'étiquette de retour prépayée
 //   nouvelleFamille    famille créée : sans commande, statut « aucun »
 //   nouveauMembre      créateur d'une famille : rattache sa commande faite sur le site
 //   tabletteEnvoyee    appel depuis le tableau de bord admin : colis parti, numéro de suivi Mondial Relay
-//   commandeModifiee   commande passée à « envoyee » : e-mail au client avec le lien de suivi
+//   commandeModifiee   commande modifiée : e-mail d'envoi, de retour, d'étiquette ; remboursement au retour
 //   rappelsJumelage    chaque jour : rappel au client dont la tablette n'est pas jumelée (J+5, J+12)
 //
 // État écrit sur families/{fid}.abonnement (voir abonnement.js), avec rev + 1 pour que la
@@ -198,7 +201,8 @@ async function attendreRestitution(abo) {
   const ref = db.doc(`commandes/${abo.id}`);
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
-    if (snap.exists && snap.get('restitution')) return;
+    // Rien à rendre si la tablette n'est jamais partie.
+    if (snap.exists && (snap.get('restitution') || ['a-preparer', 'annulee'].includes(snap.get('expedition')))) return;
     const fin = (abo.ended_at || abo.canceled_at || Math.floor(Date.now() / 1000)) * 1000;
     tx.set(ref, {
       restitution: { statut: 'attendue', avant: versTimestamp(regles.limiteRestitution(fin)) },
@@ -316,6 +320,107 @@ exports.annulerResiliation = onCall({ secrets: [STRIPE_SECRET] }, async (request
   await stripe().subscriptions.update(id, { cancel_at: '' });
   await appliquer(fid, id);
   return { ok: true };
+});
+
+// ---------- Rétractation et fin de contrat ----------
+
+// Factures payées de l'abonnement (mise en service de 50 €, mois déjà prélevés).
+async function facturesPayees(abonnementId) {
+  const { data } = await stripe().invoices.list({ subscription: abonnementId, status: 'paid', limit: 100 });
+  return data.filter((f) => f.amount_paid > 0 && f.payment_intent);
+}
+
+async function montantPaye(abonnementId) {
+  return (await facturesPayees(abonnementId)).reduce((t, f) => t + f.amount_paid, 0);
+}
+
+// Rembourse tout ce qui a été payé pour cet abonnement. Rejouable sans double remboursement.
+async function rembourser(abonnementId) {
+  let total = 0;
+  for (const f of await facturesPayees(abonnementId)) {
+    const pi = typeof f.payment_intent === 'string' ? f.payment_intent : f.payment_intent.id;
+    const r = await stripe().refunds.create({
+      payment_intent: pi, reason: 'requested_by_customer', metadata: { commande: abonnementId },
+    }, { idempotencyKey: `retractation-${f.id}` });
+    total += r.amount;
+  }
+  return total;
+}
+
+async function commandeDeLaFamille(fid, uid) {
+  const fam = await familleDuResponsable(fid, uid);
+  const id = fam.abonnement && fam.abonnement.stripeSubscriptionId;
+  if (!id) throw new HttpsError('failed-precondition', "Cette famille n'a pas d'abonnement.");
+  const ref = db.doc(`commandes/${id}`);
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Commande introuvable.');
+  return { id, ref, snap };
+}
+
+// Annulation dans les 14 jours : l'abonnement s'arrête tout de suite. Tablette pas encore partie :
+// remboursement immédiat. Déjà partie : remboursement dès son retour (voir commandeModifiee).
+exports.retracter = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE] }, async (request) => {
+  const { uid } = compteVerifie(request);
+  const { fid } = request.data || {};
+  const { id, ref } = await commandeDeLaFamille(fid, uid);
+  const montant = await montantPaye(id);
+  const maintenant = Date.now();
+  const partie = await db.runTransaction(async (tx) => {
+    const c = (await tx.get(ref)).data();
+    if (!regles.retractationPossible(c, maintenant)) {
+      throw new HttpsError('failed-precondition', 'Le délai de 14 jours pour annuler la commande est dépassé.');
+    }
+    const envoyee = c.expedition !== 'a-preparer';
+    tx.update(ref, envoyee ? {
+      retractation: { le: Timestamp.fromMillis(maintenant), montant },
+      remboursement: { statut: 'au-retour', montant },
+      restitution: { statut: 'attendue', motif: 'retractation', avant: versTimestamp(regles.limiteRestitution(maintenant)) },
+    } : {
+      retractation: { le: Timestamp.fromMillis(maintenant), montant },
+      expedition: 'annulee',
+      remboursement: { statut: 'en-cours', montant },
+    });
+    return envoyee;
+  });
+  const abo = await stripe().subscriptions.retrieve(id);
+  if (abo.status !== 'canceled') await stripe().subscriptions.cancel(id, { prorate: false, invoice_now: false });
+  await appliquer(fid, id);
+  if (partie) return { ok: true, remboursement: 'au-retour', montant };
+
+  const c = (await ref.get()).data();
+  try {
+    const rembourse = await rembourser(id);
+    await ref.update({ remboursement: { statut: 'fait', montant: rembourse, le: FieldValue.serverTimestamp() } });
+    const envois = [envoyerMail(EMAIL_PAPOTE, mail.annulationAvantEnvoi({
+      nom: c.nom, email: c.email, code: c.code ? regles.afficherCode(c.code) : null,
+    }))];
+    if (c.email) envois.push(envoyerMail(c.email, mail.commandeAnnulee({ nom: c.nom, rembourse })));
+    (await Promise.allSettled(envois)).filter((r) => r.status === 'rejected')
+      .forEach((r) => logger.error(`Commande ${id} : e-mail d'annulation non parti`, r.reason));
+    return { ok: true, remboursement: 'fait', montant: rembourse };
+  } catch (e) {
+    logger.error(`Commande ${id} : remboursement refusé`, e.message);
+    await ref.update({ 'remboursement.statut': 'echec', 'remboursement.erreur': e.message });
+    throw new HttpsError('internal', 'La commande est annulée, mais le remboursement a échoué : nous le faisons à la main.');
+  }
+});
+
+// Ce que l'appli affiche dans Abonnement : annulation possible, tablette à rendre, remboursement.
+exports.finDeContrat = onCall({ secrets: [STRIPE_SECRET] }, async (request) => {
+  const { uid } = compteVerifie(request);
+  const { id, snap } = await commandeDeLaFamille((request.data || {}).fid, uid);
+  const c = snap.data();
+  const ms = (t) => (t && typeof t.toMillis === 'function' ? t.toMillis() : null);
+  const possible = regles.retractationPossible(c, Date.now());
+  const r = c.restitution;
+  return {
+    retractation: possible ? {
+      jusqua: c.expedition === 'a-preparer' ? null : regles.limiteRetractation(ms(c.creeLe), ms(c.envoyeeLe)),
+      montant: await montantPaye(id),
+    } : null,
+    restitution: r ? { statut: r.statut, avant: ms(r.avant), etiquette: r.etiquette || null } : null,
+    remboursement: c.remboursement ? { statut: c.remboursement.statut, montant: c.remboursement.montant || 0 } : null,
+  };
 });
 
 // Code de commande d'un abonnement : créé une seule fois, à la première demande.
@@ -521,11 +626,22 @@ exports.finDeGrace = onSchedule(
 
 // Tablette incluse non rendue dans les 30 jours : 120 € prélevés sur la carte de l'abonnement.
 exports.restitutions = onSchedule(
-  { schedule: 'every day 09:00', timeZone: 'Europe/Paris', secrets: [STRIPE_SECRET] },
+  { schedule: 'every day 09:00', timeZone: 'Europe/Paris', secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE] },
   async () => {
     const maintenant = Date.now();
     const attendues = await db.collection('commandes').where('restitution.statut', '==', 'attendue').get();
     for (const snap of attendues.docs) {
+      const r = snap.get('restitution');
+      if (regles.rappelRestitutionDu(r, maintenant) && snap.get('email')) {
+        try {
+          await envoyerMail(snap.get('email'), mail.rappelRestitution({
+            nom: snap.get('nom'), avant: r.avant.toMillis(), lien: r.etiquette || null,
+          }));
+          await snap.ref.update({ 'restitution.rappelLe': FieldValue.serverTimestamp() });
+        } catch (e) {
+          logger.error(`Commande ${snap.id} : rappel de retour non parti`, e.message);
+        }
+      }
       if (!regles.restitutionEchue(snap.get('restitution'), maintenant)) continue;
       try {
         const abo = await stripe().subscriptions.retrieve(snap.id, { expand: ['customer'] });
@@ -585,6 +701,24 @@ exports.tabletteRendue = onCall(async (request) => {
   return { ok: true };
 });
 
+// Lien de l'étiquette de retour prépayée (Mondial Relay, Sendcloud...) : envoyé au client par commandeModifiee.
+exports.etiquetteRetour = onCall(async (request) => {
+  verifierAdmin(request);
+  const { commande, lien } = request.data || {};
+  if (typeof commande !== 'string' || !commande) throw new HttpsError('invalid-argument', 'Commande manquante.');
+  if (typeof lien !== 'string' || !/^https:\/\/\S{4,500}$/.test(lien.trim())) {
+    throw new HttpsError('invalid-argument', 'Le lien doit commencer par https://');
+  }
+  const ref = db.doc(`commandes/${commande}`);
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Commande introuvable.');
+  if (!['attendue', 'echec'].includes(snap.get('restitution.statut'))) {
+    throw new HttpsError('failed-precondition', "Aucune tablette n'est attendue pour cette commande.");
+  }
+  await ref.update({ 'restitution.etiquette': lien.trim(), 'restitution.etiquetteLe': FieldValue.serverTimestamp() });
+  return { ok: true };
+});
+
 // Les déclencheurs Firestore doivent tourner dans la région de la base (REGION_FIRESTORE dans .env).
 const REGION_FIRESTORE = process.env.REGION_FIRESTORE || 'europe-west1';
 
@@ -637,26 +771,81 @@ exports.tabletteEnvoyee = onCall(async (request) => {
 
 // Colis parti (ou numéro corrigé) : e-mail au client avec le lien de suivi.
 // Écrit par tabletteEnvoyee ou par outils/admin/abonnements.bat envoyee.
+// Aussi : tablette attendue (e-mails de retour), étiquette ajoutée, tablette revenue (remboursement).
 exports.commandeModifiee = onDocumentUpdated(
-  { document: 'commandes/{id}', region: REGION_FIRESTORE, secrets: [MAIL_MOT_DE_PASSE] },
+  { document: 'commandes/{id}', region: REGION_FIRESTORE, secrets: [MAIL_MOT_DE_PASSE, STRIPE_SECRET] },
   async (event) => {
     const avant = event.data.before.data();
     const apres = event.data.after.data();
-    if (apres.expedition !== 'envoyee' || !apres.suivi || !apres.email) return;
-    if (avant.expedition === 'envoyee' && avant.suivi === apres.suivi) return;
-    const relais = apres.livraison && apres.livraison.transporteur ? apres.livraison : null;
-    const code = apres.code ? regles.afficherCode(apres.code) : null;
-    try {
-      await envoyerMail(apres.email, mail.colisParti({
-        nom: apres.nom, suivi: apres.suivi, relais, code,
-        lien: livraison.lienSuivi(apres.suivi, relais && relais.cp),
-      }));
-      await event.data.after.ref.update({ mailEnvoiLe: FieldValue.serverTimestamp(), mailErreur: FieldValue.delete() });
-    } catch (e) {
-      logger.error(`Commande ${event.params.id} : e-mail d'envoi non parti`, e.message);
-      await event.data.after.ref.update({ mailErreur: e.message });
-    }
+    await mailEnvoi(event, avant, apres);
+    await suiviRetour(event, avant.restitution || {}, apres.restitution || {}, apres);
   });
+
+async function mailEnvoi(event, avant, apres) {
+  if (apres.expedition !== 'envoyee' || !apres.suivi || !apres.email) return;
+  if (avant.expedition === 'envoyee' && avant.suivi === apres.suivi) return;
+  const relais = apres.livraison && apres.livraison.transporteur ? apres.livraison : null;
+  const code = apres.code ? regles.afficherCode(apres.code) : null;
+  try {
+    await envoyerMail(apres.email, mail.colisParti({
+      nom: apres.nom, suivi: apres.suivi, relais, code,
+      lien: livraison.lienSuivi(apres.suivi, relais && relais.cp),
+    }));
+    await event.data.after.ref.update({ mailEnvoiLe: FieldValue.serverTimestamp(), mailErreur: FieldValue.delete() });
+  } catch (e) {
+    logger.error(`Commande ${event.params.id} : e-mail d'envoi non parti`, e.message);
+    await event.data.after.ref.update({ mailErreur: e.message });
+  }
+}
+
+async function suiviRetour(event, rAvant, r, c) {
+  const ref = event.data.after.ref;
+  const id = event.params.id;
+  const retractation = c.remboursement && c.remboursement.statut === 'au-retour' ? c.remboursement.montant : null;
+
+  if (r.statut === 'attendue' && rAvant.statut !== 'attendue' && !r.mailLe) {
+    await ref.update({ 'restitution.mailLe': FieldValue.serverTimestamp() });
+    const avantMs = r.avant.toMillis();
+    const envois = [envoyerMail(EMAIL_PAPOTE, mail.retourAPreparer({
+      nom: c.nom, email: c.email, telephone: c.telephone, code: c.code ? regles.afficherCode(c.code) : null,
+      relais: c.livraison, avant: avantMs, retractation,
+    }))];
+    if (c.email) envois.push(envoyerMail(c.email, mail.retourTablette({ nom: c.nom, avant: avantMs, retractation })));
+    (await Promise.allSettled(envois)).filter((x) => x.status === 'rejected')
+      .forEach((x) => logger.error(`Commande ${id} : e-mail de retour non parti`, x.reason));
+  }
+
+  if (r.etiquette && r.etiquette !== rAvant.etiquette && c.email) {
+    try {
+      await envoyerMail(c.email, mail.etiquetteRetour({
+        nom: c.nom, lien: r.etiquette, avant: r.avant ? r.avant.toMillis() : null,
+      }));
+    } catch (e) {
+      logger.error(`Commande ${id} : étiquette de retour non envoyée`, e.message);
+      await ref.update({ 'restitution.mailErreur': e.message });
+    }
+  }
+
+  if (r.statut === 'rendue' && rAvant.statut !== 'rendue') {
+    let rembourse = 0;
+    if (retractation != null) {
+      try {
+        rembourse = await rembourser(id);
+        await ref.update({ remboursement: { statut: 'fait', montant: rembourse, le: FieldValue.serverTimestamp() } });
+      } catch (e) {
+        logger.error(`Commande ${id} : remboursement refusé`, e.message);
+        await ref.update({ 'remboursement.statut': 'echec', 'remboursement.erreur': e.message });
+        return;
+      }
+    }
+    if (!c.email) return;
+    try {
+      await envoyerMail(c.email, mail.tabletteRecue({ nom: c.nom, rembourse }));
+    } catch (e) {
+      logger.error(`Commande ${id} : e-mail « tablette reçue » non parti`, e.message);
+    }
+  }
+}
 
 // Chaque jour : rappel au client dont la tablette est partie mais pas encore jumelée (J+5, J+12),
 // puis signalement à l'administrateur (alerteJumelage) à J+20.

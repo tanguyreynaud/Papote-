@@ -103,6 +103,34 @@ function limiteRestitution(finMs) {
   return finMs + RESTITUTION_JOURS * JOUR;
 }
 
+// Rétractation (Code de la consommation) : 14 jours après la réception de la tablette.
+// Réception estimée à l'envoi + 3 jours (Mondial Relay) ; avant l'envoi, toujours possible.
+// Au plus tôt, 14 jours après la commande.
+const RETRACTATION_JOURS = 14;
+const ACHEMINEMENT_JOURS = 3;
+// Rappel avant de prélever les 120 € d'une tablette non rendue.
+const RAPPEL_RESTITUTION_JOURS = 7;
+
+function limiteRetractation(creeMs, envoyeeMs) {
+  const depart = Math.max(creeMs || 0, envoyeeMs != null ? envoyeeMs + ACHEMINEMENT_JOURS * JOUR : 0);
+  return depart + RETRACTATION_JOURS * JOUR;
+}
+
+// La commande peut-elle encore être annulée et remboursée ?
+// commande : commandes/{id} (expedition, creeLe, envoyeeLe, retractation).
+function retractationPossible(commande, maintenant) {
+  if (!commande || commande.retractation) return false;
+  if (commande.expedition === 'a-preparer') return true;
+  return maintenant <= limiteRetractation(enMillis(commande.creeLe), enMillis(commande.envoyeeLe));
+}
+
+// Rappel « dernière semaine pour rendre la tablette » : une seule fois, 7 jours avant la limite.
+function rappelRestitutionDu(restitution, maintenant) {
+  if (!restitution || restitution.statut !== 'attendue' || restitution.rappelLe) return false;
+  const limite = enMillis(restitution.avant);
+  return limite != null && limite - RAPPEL_RESTITUTION_JOURS * JOUR <= maintenant && maintenant < limite;
+}
+
 // Faut-il prélever la pénalité ? Seulement si la tablette est attendue et le délai dépassé.
 function restitutionEchue(restitution, maintenant) {
   if (!restitution || restitution.statut !== 'attendue') return false;
@@ -146,6 +174,10 @@ module.exports = {
   PENALITE_NON_RESTITUTION,
   limiteRestitution,
   restitutionEchue,
+  RETRACTATION_JOURS,
+  limiteRetractation,
+  retractationPossible,
+  rappelRestitutionDu,
   dateResiliation,
   STATUTS_OK,
   TARIFS,

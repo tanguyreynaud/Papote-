@@ -90,3 +90,28 @@ test('code de commande', () => {
   assert.strictEqual(a.normaliserCode('ABC'), null);
   assert.strictEqual(a.afficherCode('ABCDEFGH'), 'ABCD-EFGH');
 });
+
+test('rétractation : toujours possible avant l\'envoi', () => {
+  assert.strictEqual(a.retractationPossible({ expedition: 'a-preparer', creeLe: T0 - 60 * JOUR }, T0), true);
+});
+
+test('rétractation : 14 jours après la réception estimée (envoi + 3 jours)', () => {
+  const c = { expedition: 'envoyee', creeLe: T0, envoyeeLe: T0 + 2 * JOUR };
+  assert.strictEqual(a.limiteRetractation(T0, T0 + 2 * JOUR), T0 + 19 * JOUR);
+  assert.strictEqual(a.retractationPossible(c, T0 + 19 * JOUR), true);
+  assert.strictEqual(a.retractationPossible(c, T0 + 19 * JOUR + 1), false);
+});
+
+test('rétractation : une seule fois', () => {
+  assert.strictEqual(a.retractationPossible({ expedition: 'a-preparer', retractation: { le: T0 } }, T0), false);
+  assert.strictEqual(a.retractationPossible(null, T0), false);
+});
+
+test('rappel de restitution : une fois, dans les 7 derniers jours', () => {
+  const r = { statut: 'attendue', avant: T0 + 10 * JOUR };
+  assert.strictEqual(a.rappelRestitutionDu(r, T0), false);
+  assert.strictEqual(a.rappelRestitutionDu(r, T0 + 3 * JOUR), true);
+  assert.strictEqual(a.rappelRestitutionDu({ ...r, rappelLe: T0 }, T0 + 3 * JOUR), false);
+  assert.strictEqual(a.rappelRestitutionDu(r, T0 + 10 * JOUR), false);
+  assert.strictEqual(a.rappelRestitutionDu({ ...r, statut: 'rendue' }, T0 + 3 * JOUR), false);
+});
