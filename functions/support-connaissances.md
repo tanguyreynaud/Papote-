@@ -14,7 +14,7 @@ les fonctions suffit pour que le chat en tienne compte.
 - L'appli garde les 200 dernières photos et les 40 dernières vidéos ; au-delà, les plus anciennes s'effacent toutes seules. Il faut garder ses originaux sur son téléphone.
 - Agenda : rappels (rendez-vous, médicament…) une fois, tous les jours ou certains jours, et anniversaires (la tablette le rappelle le jour J, avec l'âge si on donne l'année).
 - La page Notifications indique quand un envoi ou un rappel a été vu ou confirmé sur la tablette.
-- Données : Réglages, « Vos données » permet de les consulter et de demander leur suppression.
+- Données : dans Réglages, la page « Vos données » permet à un responsable de voir ce qui est conservé et de supprimer la famille entière à tout moment. Les photos ne sont ni revendues ni utilisées pour de la publicité.
 - Profil : ajouter sa photo pour que le proche reconnaisse qui envoie ou appelle.
 
 ## Inviter la famille
