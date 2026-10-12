@@ -16,6 +16,9 @@ body { margin: 0; background: var(--bg); color: var(--text); font: 400 1.125rem/
 main { max-width: 48rem; margin: 0 auto; padding: 24px 20px 48px; display: grid; gap: 1.5rem; }
 .top { display: flex; align-items: center; gap: .6rem; font: 800 1.4rem/1 "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif; color: var(--text); text-decoration: none; }
 .top img { width: 2rem; height: 2rem; }
+.haut { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.retour { display: inline-flex; align-items: center; min-height: 2.75rem; padding: .5rem 1.1rem; border: 2px solid var(--accent); border-radius: 999px; color: var(--accent-strong); font-weight: 700; text-decoration: none; }
+.retour:hover { background: #e8e6fd; }
 h1 { margin: 0; font: 800 clamp(1.9rem, 5vw, 2.6rem)/1.1 "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif; text-wrap: balance; }
 p { margin: 0; }
 .muted { color: var(--muted); }
@@ -54,7 +57,10 @@ h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-u
 <body>
 <p class="bandeau">🚚 Livraison offerte · ✨ 15 jours d'essai gratuit</p>
 <main>
-  <a class="top" href="./"><img src="icon.svg" alt="">Papote</a>
+  <div class="haut">
+    <a class="top" href="./"><img src="icon.svg" alt="">Papote</a>
+    <a class="retour" href="./">← Retour</a>
+  </div>
   <div>
     <p class="eyebrow">Votre commande</p>
     <h1>Papote pour votre proche</h1>

@@ -83,8 +83,9 @@ section { padding-block: clamp(3.5rem, 8vw, 6rem); }
 .top nav { display: flex; align-items: center; gap: 1.5rem; }
 .top nav a { color: var(--muted); text-decoration: none; font-weight: 700; font-size: 1rem; }
 .top nav a:hover { color: var(--text); }
-.top nav a.client { white-space: nowrap; }
-@media (max-width: 420px) { .top nav a.client { display: none; } }
+.top nav a.client { white-space: nowrap; display: inline-flex; align-items: center; min-height: 2.6rem; padding: .5rem 1.1rem; border: 2px solid var(--accent); border-radius: 999px; color: var(--accent-strong); font-size: .95rem; }
+.top nav a.client:hover { background: var(--accent-soft); color: var(--accent-strong); }
+@media (max-width: 440px) { .top nav { gap: .5rem; } .top nav a.client, .top nav .btn { padding: .45rem .8rem; font-size: .9rem; } .brand { font-size: 0; gap: 0; } .brand img { width: 2.2rem; height: 2.2rem; } }
 .top nav .btn { min-height: 2.6rem; padding: .5rem 1.1rem; font-size: .95rem; color: var(--accent-text); }
 .top nav .btn:hover { color: var(--accent-text); }
 @media (max-width: 760px) { .top nav a:not(.btn):not(.client) { display: none; } }
