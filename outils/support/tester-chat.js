@@ -34,7 +34,7 @@ const CAS = [
   for (const [question, page, attendu] of CAS) {
     const r = await fetch(API, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Origin: 'https://papote.web.app' },
+      headers: { 'Content-Type': 'application/json', Origin: 'https://mapapote.fr' },
       body: JSON.stringify({ messages: [{ role: 'user', content: question }], page }),
     });
     const d = await r.json().catch(() => ({}));
