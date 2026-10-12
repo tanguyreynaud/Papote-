@@ -443,10 +443,10 @@ async function paiementTermine(session) {
   await confirmerCommande(ref, email, code);
 }
 
-// E-mail « commande confirmée », une seule fois (Stripe peut renvoyer le même événement).
-// Un échec d'envoi ne doit pas faire échouer le paiement : on le note seulement.
+// E-mails « commande confirmée » au client et « nouvelle commande » à Papote, une seule fois
+// (Stripe peut renvoyer le même événement). Un échec d'envoi ne fait pas échouer le paiement.
+const EMAIL_PAPOTE = 'contact@mapapote.fr';
 async function confirmerCommande(ref, email, code) {
-  if (!email) return;
   const premier = await db.runTransaction(async (t) => {
     const snap = await t.get(ref);
     if (snap.get('mailConfirmation')) return null;
@@ -454,14 +454,12 @@ async function confirmerCommande(ref, email, code) {
     return snap.data();
   });
   if (!premier) return;
-  try {
-    await envoyerMail(email, mail.commandeConfirmee({
-      nom: premier.nom, code, relais: premier.livraison, formule: premier.formule,
-    }));
-  } catch (e) {
-    logger.error(`E-mail de confirmation non envoyé (${ref.id})`, e);
-    await ref.update({ mailConfirmation: FieldValue.delete() }).catch(() => {});
-  }
+  const infos = { nom: premier.nom, code, relais: premier.livraison, formule: premier.formule };
+  const envois = [envoyerMail(EMAIL_PAPOTE, mail.nouvelleCommande({ ...infos, email, telephone: premier.telephone }))];
+  if (email) envois.push(envoyerMail(email, mail.commandeConfirmee(infos)));
+  const resultats = await Promise.allSettled(envois);
+  resultats.filter((r) => r.status === 'rejected')
+    .forEach((r) => logger.error(`E-mail de commande non envoyé (${ref.id})`, r.reason));
 }
 
 async function abonnementModifie(abo) {
