@@ -261,6 +261,33 @@ function faceDetector() {
   return detectorPromise;
 }
 
+// Pour l'écran Bienvenue (« Placez la tablette ») : le même détecteur, et une aide qui passe
+// par une copie réduite de l'image. Sur la tablette UNISOC, analyser la <video> directement
+// échoue (erreurs graphiques) : préférer papoteLocateFace.
+window.papoteFaceDetector = faceDetector;
+const locateFrame = document.createElement('canvas');
+// Renvoie le visage le plus grand { x, y, width, height } en fractions de l'image (0 à 1), ou null.
+window.papoteLocateFace = async (video) => {
+  const detector = await faceDetector();
+  if (!detector || !video || video.readyState < 2 || !video.videoWidth) return null;
+  const k = Math.min(1, 480 / Math.max(video.videoWidth, video.videoHeight));
+  locateFrame.width = Math.round(video.videoWidth * k);
+  locateFrame.height = Math.round(video.videoHeight * k);
+  locateFrame.getContext('2d').drawImage(video, 0, 0, locateFrame.width, locateFrame.height);
+  const { detections } = detector.detectForVideo(locateFrame, performance.now());
+  const box = detections
+    .map((d) => d.boundingBox)
+    .filter(Boolean)
+    .sort((a, c) => c.width * c.height - a.width * a.height)[0];
+  if (!box) return null;
+  return {
+    x: box.originX / locateFrame.width,
+    y: box.originY / locateFrame.height,
+    width: box.width / locateFrame.width,
+    height: box.height / locateFrame.height,
+  };
+};
+
 // Renvoie une fonction qui dit si un visage est bien en face sur l'image actuelle de `video`.
 // L'image est réduite (plus rapide sur une petite tablette) et, si aucun visage n'est vu,
 // essayée tournée d'un quart de tour : avec la caméra sur le côté, certaines tablettes
