@@ -49,11 +49,11 @@ les fonctions suffit pour que le chat en tienne compte.
 - Batterie : elle est faite pour rester branchée en permanence, comme un cadre photo.
 - Son : il est fort, pensé pour les personnes qui entendent mal.
 - Deux tablettes dans la même famille (par exemple deux grands-parents à deux endroits) : c'est possible, avec deux abonnements.
-- Maison de retraite (EHPAD) : ça marche avec le Wi-Fi de l'établissement s'il ne demande pas de page de connexion ; sinon, prendre la formule avec carte SIM.
+- Maison de retraite (EHPAD) : ça marche avec le Wi-Fi de l'établissement s'il ne demande pas de page de connexion ; sinon, prendre l'option internet inclus (carte SIM).
 - Box 4G ou partage de connexion d'un téléphone : ça marche, c'est un Wi-Fi comme un autre.
 - Carte SIM : l'opérateur n'est pas fixe ; on choisit celui qui couvre le mieux le domicile du client.
 - Autres usages (Internet, jeux, YouTube) : non, la tablette est réservée à Papote pour rester simple et sans risque.
-- Tablette perdue ou volée : il n'y a pas de garantie pour cela. Il faut nous le signaler pour suspendre le contrat. Si la tablette était incluse dans l'abonnement, la caution de 120 € peut être appliquée puisqu'elle ne pourra pas être rendue. Pour en avoir une nouvelle, il faut en racheter une ; cela reste un seul abonnement. Pour le signaler : demande de contact.
+- Tablette perdue ou volée : il n'y a pas de garantie pour cela. Il faut nous le signaler pour suspendre le contrat. La tablette est prêtée : les 120 € prévus pour une tablette non rendue peuvent être appliqués. Pour en recevoir une nouvelle : demande de contact. Pour le signaler : demande de contact.
 - Nombre de proches dans la famille : jusqu'à 30.
 - Enfants : ils peuvent envoyer des photos, il n'y a pas d'âge minimum.
 - Le proche âgé ne peut pas répondre ni envoyer de photo : la tablette ne fait que recevoir, il n'a rien à manipuler. Il peut seulement confirmer un rappel.
@@ -62,6 +62,6 @@ les fonctions suffit pour que le chat en tienne compte.
 - Délai de livraison : 5 à 7 jours ouvrés au maximum après la commande, le temps de préparer la tablette.
 - Offrir Papote en cadeau, payé par un autre proche : bien sûr.
 - Livraison hors France, Belgique et Luxembourg (Suisse, DOM-TOM…) : pas pour le moment.
-- Changer de formule : passer du Wi-Fi à la carte SIM demande de nous renvoyer la tablette pour la modifier ; passer de la SIM au Wi-Fi est envisageable. Dans les deux cas : demande de contact.
+- Changer de formule : passer à l'option internet inclus (carte SIM) demande de nous renvoyer la tablette pour la modifier ; passer de la SIM au Wi-Fi est envisageable. Dans les deux cas : demande de contact.
 - Paiement : par carte bancaire uniquement ; les factures sont dans la page Abonnement de l'appli.
 - Aide fiscale (services à la personne) : pas pour le moment.

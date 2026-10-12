@@ -25,6 +25,8 @@ const TARIFS = {
   sim: { achetee: 'papote_sim_achetee', incluse: 'papote_sim_incluse' },
 };
 const TARIF_TABLETTE = 'papote_tablette';
+// Tablette prêtée (incluse) : 50 € une fois à la commande, puis l'abonnement.
+const TARIF_MISE_EN_SERVICE = 'papote_mise_en_service';
 
 function formuleValide(formule, tablette) {
   return Boolean(TARIFS[formule] && TARIFS[formule][tablette]);
@@ -148,6 +150,7 @@ module.exports = {
   STATUTS_OK,
   TARIFS,
   TARIF_TABLETTE,
+  TARIF_MISE_EN_SERVICE,
   formuleValide,
   estActif,
   statutDepuisStripe,

@@ -9,7 +9,7 @@
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,800&display=swap">
 <style>
-/* Étape avant le paiement : choix du point relais Mondial Relay où la tablette sera livrée. */
+/* Commande en une page : option internet, point relais Mondial Relay, puis paiement Stripe. */
 :root { --bg: #fdfaf5; --surface: #ffffff; --text: #24212f; --muted: #5f5a6b; --line: #e9e1d4; --accent: #4f46e5; --accent-strong: #3730a3; --accent-text: #ffffff; --warm: #c2410c; --warm-soft: #fde7d6; color-scheme: light; }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--text); font: 400 1.125rem/1.6 "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif; }
@@ -24,6 +24,12 @@ p { margin: 0; }
 .recap { display: grid; justify-content: stretch; }
 .recap-total { display: flex; flex-wrap: wrap; gap: .25rem 1rem; align-items: baseline; }
 .recap-total b { font-size: 1.3rem; }
+.inclus { margin: 0; padding-left: 1.2rem; color: var(--muted); font-size: 1rem; }
+h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif; }
+.badges { display: flex; flex-wrap: wrap; gap: .5rem; margin: 0; }
+.badges span { background: #e8e6fd; color: var(--accent-strong); font-weight: 700; font-size: .95rem; padding: .35rem .8rem; border-radius: 999px; }
+.stock { color: var(--warm); font-weight: 700; font-size: 1rem; }
+.btn.payer { justify-self: stretch; font-size: 1.15rem; }
 .opt { display: flex; gap: .6rem; align-items: center; font-size: 1.05rem; cursor: pointer; }
 .opt .muted { white-space: nowrap; margin-left: auto; }
 .opt input { width: 1.3rem; height: 1.3rem; accent-color: var(--accent); }
@@ -44,18 +50,24 @@ p { margin: 0; }
 <body>
 <main>
   <a class="top" href="./"><img src="icon.svg" alt="">Papote</a>
+  <p class="badges"><span>🚚 Livraison offerte</span><span>✨ 15 jours d'essai gratuit</span></p>
   <div>
-    <p class="eyebrow">Étape 1 sur 2 · Livraison</p>
-    <h1>Où souhaitez-vous recevoir la tablette ?</h1>
+    <p class="eyebrow">Votre commande</p>
+    <h1>Papote pour votre proche</h1>
   </div>
-  <p class="muted">Livraison offerte. La tablette est livrée dans un point relais Mondial Relay près de chez vous ou de chez votre proche, en France, en Belgique ou au Luxembourg. Vous recevez un e-mail avec le suivi dès son départ.</p>
 
   <form class="recap" id="recap">
-    <div class="recap-total"><b id="total">20 € par mois</b><span class="muted" id="total-detail"></span></div>
-    <label class="opt"><input type="checkbox" name="loc"> Location de la tablette <span class="muted">+5 €/mois</span></label>
-    <label class="opt"><input type="checkbox" name="net"> Internet inclus, sans box <span class="muted">+10 €/mois</span></label>
+    <div class="recap-total"><b id="total">20 € par mois</b><span class="muted">après 15 jours d'essai gratuit</span></div>
+    <ul class="inclus">
+      <li>Tablette prêtée, configurée et prête à l'emploi</li>
+      <li>Appli famille pour tous vos proches</li>
+      <li>50 € à la commande pour la mise en service, livraison offerte</li>
+    </ul>
+    <label class="opt"><input type="checkbox" name="net"> Internet inclus <span class="muted">+10 €/mois</span></label>
   </form>
 
+  <h2>Où livrer la tablette ?</h2>
+  <p class="muted">Dans un point relais Mondial Relay près de chez vous ou de chez votre proche, en France, en Belgique ou au Luxembourg.</p>
   <form class="cherche" id="cherche">
     <label>Code postal<input id="cp" inputmode="numeric" autocomplete="postal-code" required maxlength="10"></label>
     <label>Pays<select id="pays"><option value="fr">France</option><option value="be">Belgique</option><option value="lu">Luxembourg</option></select></label>
@@ -71,8 +83,9 @@ p { margin: 0; }
     <span id="choisi-adresse"></span>
   </div>
 
-  <a class="btn" id="payer" href="#" aria-disabled="true">Continuer vers le paiement</a>
-  <p class="muted">Étape 2 : paiement sécurisé par carte (Stripe). 15 jours d'essai gratuit, rien n'est prélevé pour l'abonnement avant leur fin.</p>
+  <p class="stock">Petite entreprise familiale : chaque tablette est préparée à la main, en quantité limitée.</p>
+  <a class="btn payer" id="payer" href="#" aria-disabled="true">Choisissez un point relais</a>
+  <p class="muted">Paiement sécurisé par carte (Stripe). Aujourd'hui : 50 €. L'abonnement commence après les 15 jours d'essai, avec un engagement de 12 mois. La tablette reste la nôtre et nous est rendue en fin d'abonnement.</p>
 </main>
 
 <script src="https://embed.sendcloud.sc/spp/1.0.0/api.min.js"></script>
@@ -83,15 +96,12 @@ p { margin: 0; }
   var COMMANDER = 'https://europe-west1-papote-famille.cloudfunctions.net/commander';
   var q = new URLSearchParams(location.search);
   var recap = document.getElementById('recap');
-  recap.loc.checked = q.get('tablette') === 'incluse';
   recap.net.checked = q.get('formule') === 'sim';
   var relais = null;
 
-  // Prix : abonnement 20 €, location +5 €, internet +10 € ; sans location, tablette achetée 120 €.
+  // Prix : abonnement 20 €, ou 30 € avec internet inclus ; 50 € de mise en service à la commande.
   function maj() {
-    var loc = recap.loc.checked, net = recap.net.checked;
-    document.getElementById('total').textContent = (20 + (loc ? 5 : 0) + (net ? 10 : 0)) + ' € par mois';
-    document.getElementById('total-detail').textContent = loc ? 'tablette prêtée' : '+ 120 € pour la tablette, à la commande';
+    document.getElementById('total').textContent = (recap.net.checked ? 30 : 20) + ' € par mois';
     if (relais) lienPaiement();
   }
   recap.addEventListener('change', maj);
@@ -100,12 +110,13 @@ p { margin: 0; }
 
   function lienPaiement() {
     var params = new URLSearchParams({
-      formule: recap.net.checked ? 'sim' : 'wifi', tablette: recap.loc.checked ? 'incluse' : 'achetee',
+      formule: recap.net.checked ? 'sim' : 'wifi', tablette: 'incluse',
       relais: String(relais.id), rnom: relais.name, radr: relais.adresse,
       rcp: relais.postal_code, rville: relais.city, rpays: (relais.country || 'FR').toUpperCase()
     });
     payer.href = COMMANDER + '?' + params.toString();
     payer.setAttribute('aria-disabled', 'false');
+    payer.textContent = 'Payer 50 € et commander';
   }
 
   // Point relais renvoyé par le sélecteur Sendcloud.

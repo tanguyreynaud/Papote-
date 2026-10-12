@@ -1,6 +1,6 @@
 // Prépare le compte Stripe de Papote et range les clés dans Firebase (Secret Manager).
 //
-//  1. Tarifs : 20 €, 25 €, 30 €, 35 € par mois et la tablette à 120 €, retrouvés par
+//  1. Tarifs : 20 € ou 30 € par mois, tablette prêtée avec 50 € de mise en service, retrouvés par
 //     les fonctions grâce à leur « lookup key » (functions/abonnement.js).
 //  2. Portail client : carte bancaire et factures (la résiliation passe par l'appli famille).
 //  3. Webhook vers la fonction stripeWebhook (recréé à chaque lancement pour obtenir son secret).
@@ -28,20 +28,25 @@ const EVENEMENTS = [
 
 const PRODUITS = [
   {
-    nom: 'Papote Wifi',
+    nom: 'Abonnement Papote',
     description: 'Tablette Papote reliée en wifi, appli famille illimitée.',
     tarifs: [
       { cle: 'papote_wifi_achetee', montant: 2000, nom: 'Tablette achetée' },
-      { cle: 'papote_wifi_incluse', montant: 2500, nom: 'Tablette incluse' },
+      { cle: 'papote_wifi_incluse', montant: 2000, nom: 'Tablette incluse' },
     ],
   },
   {
-    nom: 'Papote partout (wifi + carte SIM)',
+    nom: 'Abonnement Papote, internet inclus',
     description: 'Tablette Papote avec carte SIM, sans box internet.',
     tarifs: [
       { cle: 'papote_sim_achetee', montant: 3000, nom: 'Tablette achetée' },
-      { cle: 'papote_sim_incluse', montant: 3500, nom: 'Tablette incluse' },
+      { cle: 'papote_sim_incluse', montant: 3000, nom: 'Tablette incluse' },
     ],
+  },
+  {
+    nom: 'Mise en service Papote',
+    description: 'Tablette prêtée, configurée et livrée en point relais.',
+    tarifs: [{ cle: 'papote_mise_en_service', montant: 5000, nom: 'Mise en service', unique: true }],
   },
   {
     nom: 'Tablette Papote',
@@ -105,6 +110,11 @@ async function tarifs(stripe) {
     });
     await stripe.prices.update(ancien.id, { active: false });
     console.log(`  ${t.cle} : prix passé à ${t.montant / 100} €`);
+  }
+  // Noms des produits existants mis à jour (ils s'affichent sur la page de paiement et les factures).
+  for (const produit of PRODUITS) {
+    const prix = data.find((p) => produit.tarifs.some((t) => t.cle === p.lookup_key));
+    if (prix) await stripe.products.update(prix.product, { name: produit.nom, description: produit.description });
   }
   for (const produit of PRODUITS) {
     const manquants = produit.tarifs.filter((t) => !existants.has(t.cle));
