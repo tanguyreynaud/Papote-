@@ -165,13 +165,43 @@ async function loadReturns() {
       const r = c.restitution || {};
       const avant = toDate(r.avant);
       const li = document.createElement('li');
-      li.innerHTML = '<strong></strong><span class="muted small"></span><span class="small"></span><button type="button" class="secondary small-btn">Tablette rendue</button>';
+      li.innerHTML = '<strong></strong><span class="muted small"></span><span class="small"></span><span class="small remb"></span>'
+        + '<form class="etiquette"><input type="url" placeholder="Lien de l\'étiquette de retour" aria-label="Étiquette de retour"><button type="submit" class="secondary small-btn">Envoyer l\'étiquette</button></form>'
+        + '<button type="button" class="secondary small-btn rendue">Tablette rendue</button>';
       li.querySelector('strong').textContent = c.livraison?.nom || c.nom || c.email;
       li.querySelector('.muted').textContent = `${c.email}${c.telephone ? ` · ${c.telephone}` : ''}`;
-      li.querySelector('span.small:not(.muted)').textContent = r.statut === 'echec'
-        ? `Prélèvement de 100 € échoué${r.erreur ? ` (${r.erreur})` : ''} : à relancer depuis Stripe.`
-        : `À rendre avant le ${avant ? avant.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' }) : '?'}.`;
-      const btn = li.querySelector('button');
+      li.querySelector('span.small:not(.muted):not(.remb)').textContent = (r.statut === 'echec'
+        ? `Prélèvement échoué${r.erreur ? ` (${r.erreur})` : ''} : à relancer depuis Stripe.`
+        : `À rendre avant le ${avant ? avant.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' }) : '?'}.`)
+        + (r.motif === 'retractation' ? ' Rétractation.' : '');
+      const remb = c.remboursement;
+      const rembEl = li.querySelector('.remb');
+      if (remb) {
+        const montant = remb.montant ? `${(remb.montant / 100).toLocaleString('fr-FR')} €` : '';
+        rembEl.textContent = remb.statut === 'echec'
+          ? `Remboursement ${montant} échoué${remb.erreur ? ` (${remb.erreur})` : ''} : à rembourser depuis Stripe.`
+          : `Remboursement ${montant} : ${remb.statut === 'au-retour' ? 'au retour de la tablette' : remb.statut}.`;
+        rembEl.classList.toggle('error', remb.statut === 'echec');
+      }
+      const form = li.querySelector('.etiquette');
+      const input = form.querySelector('input');
+      if (r.etiquette) input.value = r.etiquette;
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const lien = input.value.trim();
+        if (!/^https:\/\//.test(lien)) { alert('Collez le lien https de l\'étiquette prépayée.'); return; }
+        const sb = form.querySelector('button');
+        sb.disabled = true;
+        try {
+          await httpsCallable(functions, 'etiquetteRetour')({ commande: d.id, lien });
+          sb.textContent = 'Étiquette envoyée au client';
+        } catch (err) {
+          console.error(err);
+          alert("L'étiquette n'a pas pu être envoyée.");
+          sb.disabled = false;
+        }
+      });
+      const btn = li.querySelector('button.rendue');
       btn.addEventListener('click', async () => {
         if (!confirm(`La tablette de ${c.email} est bien revenue ?`)) return;
         btn.disabled = true;

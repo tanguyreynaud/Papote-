@@ -897,3 +897,19 @@ h1, h2, h3, .brand, .tile, .splash-name { font-family: var(--display); letter-sp
 body:not(.on-support) .ps-bouton, body:not(.on-support) .ps-panneau { display: none !important; }
 /* Place sous le dernier élément pour la barre du bas et le bouton du chat. */
 .support-pad { padding-bottom: calc(170px + env(safe-area-inset-bottom)); }
+
+.remote-panel { position: relative; margin-top: 12px; padding: 12px 14px; padding-right: 44px; border: 1px solid var(--line); border-radius: 14px; background: var(--bg); }
+.remote-panel .remote-result { margin: 0; padding: 0; background: none; }
+.panel-close { position: absolute; top: 6px; right: 6px; }
+#wifi-box { padding-right: 14px; }
+#wifi-box form { margin-top: 28px; }
+
+.abo-retour { margin-top: 14px; padding: 14px; border-radius: 14px; background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
+.abo-retour-title { margin: 0 0 8px; font-weight: 700; }
+.abo-retour .primary { display: block; text-align: center; text-decoration: none; }
+
+.dialog-title { margin: 0 0 8px; font-family: var(--display); font-size: 22px; }
+.dialog-list { margin: 0 0 12px; padding-left: 20px; }
+.dialog-list li { margin: 4px 0; }
+.dialog-buttons.stack { flex-direction: column; align-items: stretch; }
+.dialog-buttons.stack button { width: 100%; }

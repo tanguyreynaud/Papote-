@@ -12,10 +12,11 @@ import {
   addPost, deletePost, loadMedia, formatCode, normalizeCode, toDate, CodeInconnuError,
   MAX_VIDEO_CHUNKS, VIDEO_CHUNK,
 } from './firebase.js';
-import { askConfirm, notice } from './ui.js';
+import { askConfirm, notice, avantDePartir } from './ui.js';
 import { showGuideOnce } from './guide.js';
 import {
   abonnementOk, FORMULES, LIBELLES, ouvrirPortail, payer, rattacherCommande, resilier, annulerResiliation,
+  finDeContrat, retracter,
 } from './abonnement.js';
 import { startCall } from './appel.js';
 import { prepareVideo } from './video.js';
@@ -1233,9 +1234,8 @@ function hangupCall() {
   if (currentCall) currentCall.hangup();
 }
 
-// L'app quittée ou passée en arrière-plan : on raccroche, la caméra ne tourne jamais sans être vue.
+// L'app fermée : on raccroche. Passer en arrière-plan ne coupe pas l'appel.
 window.addEventListener('pagehide', hangupCall);
-document.addEventListener('visibilitychange', () => { if (document.hidden) hangupCall(); });
 
 $('call-hangup').addEventListener('click', () => {
   const wasConnected = !!currentCall;
@@ -1536,12 +1536,22 @@ function dateArret(abo) {
 
 $('btn-resilier').addEventListener('click', async () => {
   const quand = dateArret(session.family.abonnement);
-  const msg = quand
-    ? `Résilier l'abonnement ? Papote continuera de fonctionner jusqu'au ${quand}, puis la tablette se mettra en pause.`
-    : "Résilier l'abonnement ? La tablette se mettra en pause à la fin de la période payée.";
-  const aRendre = session.family.abonnement?.tablette !== 'achetee'
-    ? ' La tablette prêtée sera à renvoyer ; si elle n\'est pas rendue, 120 € seront facturés.' : '';
-  if (!await askConfirm(msg + aRendre, 'Résilier')) return;
+  const nom = session.family.name;
+  // Une seule étape avant la résiliation (la loi veut une résiliation en ligne simple).
+  const suite = [quand
+    ? `Votre abonnement s'arrêtera le ${quand} (fin de l'engagement ou du mois payé).`
+    : "Votre abonnement s'arrêtera à la fin de la période payée."];
+  if (session.family.abonnement?.tablette !== 'achetee') suite.push('La tablette sera à nous renvoyer, l\'étiquette est offerte.');
+  const partir = await avantDePartir({
+    intro: `En résiliant, ${nom} perdra :`,
+    perdu: [
+      'les photos et les vidéos de la famille sur sa tablette',
+      `les appels vidéo avec ${nom}`,
+      'les messages et les rappels de l\'agenda',
+    ],
+    suite,
+  });
+  if (!partir) { toast('Merci de rester avec Papote'); return; }
   withAboError(async () => {
     const { le } = await resilier(session.fid);
     notice(`Résiliation enregistrée. Papote fonctionnera jusqu'au ${dateLongue(le) || quand || 'terme de la période payée'}.`);
@@ -1583,13 +1593,81 @@ async function useOrderCodeFromSite(statut, owner) {
   }
 }
 
+// ---------- Fin de contrat : annulation de commande et tablette à rendre ----------
+
+let finCle = null;
+let finInfo = null;
+const euros = (centimes) => `${(centimes / 100).toLocaleString('fr-FR', { minimumFractionDigits: centimes % 100 ? 2 : 0 })} €`;
+const jourMois = (ms) => new Date(ms).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+
+// Demandé au serveur une fois par état d'abonnement (pas à chaque mise à jour de la famille).
+async function renderFinDeContrat(abo) {
+  const cle = `${session.fid}|${JSON.stringify(abo || null)}`;
+  if (!abo || !amFamilyAdmin()) {
+    finCle = cle;
+    finInfo = null;
+  } else if (cle !== finCle) {
+    finCle = cle;
+    try { finInfo = await finDeContrat(session.fid); } catch (err) { console.warn('Fin de contrat illisible', err); finInfo = null; }
+    if (cle !== finCle) return;
+  }
+  const r = finInfo?.retractation;
+  $('btn-retracter').hidden = !r;
+  $('retract-info').hidden = !r?.jusqua;
+  if (r?.jusqua) $('retract-info').textContent = `Annulation possible jusqu'au ${jourMois(r.jusqua)}.`;
+  const rest = finInfo?.restitution;
+  const remb = finInfo?.remboursement;
+  const box = $('retour-box');
+  box.hidden = true;
+  $('retour-etiquette').hidden = true;
+  $('retour-info').hidden = true;
+  if (rest && ['attendue', 'echec'].includes(rest.statut)) {
+    box.hidden = false;
+    $('retour-text').textContent = rest.avant ? `Tablette à nous rendre avant le ${jourMois(rest.avant)}` : 'Tablette à nous rendre';
+    if (rest.etiquette) {
+      $('retour-etiquette').href = rest.etiquette;
+      $('retour-etiquette').hidden = false;
+    }
+    const infos = [];
+    if (!rest.etiquette) infos.push("L'étiquette de retour prépayée arrive par e-mail.");
+    if (remb?.statut === 'au-retour') infos.push(`${euros(remb.montant)} remboursés dès réception de la tablette.`);
+    $('retour-info').textContent = infos.join(' ');
+    $('retour-info').hidden = !infos.length;
+  } else if (rest?.statut === 'rendue') {
+    box.hidden = false;
+    $('retour-text').textContent = 'Tablette bien reçue, merci';
+    if (remb && ['en-cours', 'fait'].includes(remb.statut)) {
+      $('retour-info').textContent = `${euros(remb.montant)} remboursés.`;
+      $('retour-info').hidden = false;
+    }
+  }
+}
+
+$('btn-retracter').addEventListener('click', async () => {
+  const r = finInfo?.retractation;
+  if (!r) return;
+  const quand = r.jusqua === null || r.jusqua === undefined ? 'tout de suite' : 'dès que la tablette nous revient';
+  const montant = r.montant ? ` Vous serez remboursé de ${euros(r.montant)} ${quand}.` : '';
+  if (!await askConfirm(`Annuler votre commande ? Votre abonnement s'arrête tout de suite.${montant}`, 'Annuler ma commande')) return;
+  withAboError(async () => {
+    const res = await retracter(session.fid);
+    finCle = null;
+    notice(res?.remboursement === 'fait'
+      ? `Commande annulée. ${res.montant ? `${euros(res.montant)} vous sont remboursés.` : ''}`
+      : "Commande annulée. Vous recevez par e-mail les instructions pour nous renvoyer la tablette ; le remboursement suit sa réception.");
+  });
+});
+
 function renderAbonnement() {
   const abo = session.family.abonnement;
+  renderFinDeContrat(abo);
   useOrderCodeFromSite(abo?.statut, amOwner());
   const admin = amOwner(); // l'abonnement est l'affaire du propriétaire, celui qui paie
   const statut = abo?.statut;
-  // Bloc Abonnement en haut du Profil, pour le propriétaire, même sans abonnement payant.
-  $('abo-card').hidden = !amOwner();
+  // Bloc Abonnement du Profil (avant « Mon compte ») : tout le monde voit l'état,
+  // seul le propriétaire peut payer, changer de carte ou résilier.
+  $('abo-card').hidden = false;
+  $('abo-readonly').hidden = admin || !abo;
   if (!abo) {
     $('abo-status').textContent = 'Formule d\u2019origine, sans abonnement payant';
     $('abo-status').className = 'abo-status s-offert';
@@ -1601,7 +1679,7 @@ function renderAbonnement() {
     $('abo-status').textContent = LIBELLES[statut] || statut;
     $('abo-status').className = `abo-status s-${statut}`;
     const details = [];
-    if (abo.formule) details.push(`${abo.formule === 'sim' ? 'Internet inclus' : 'Avec le Wi-Fi de la maison'}, ${abo.tablette === 'achetee' ? 'tablette achetée' : 'tablette prêtée'}`);
+    if (abo.formule) details.push(`${abo.formule === 'sim' ? 'Internet inclus, 30 € par mois' : 'Avec le Wi-Fi de la maison, 20 € par mois'}, ${abo.tablette === 'achetee' ? 'tablette achetée' : 'tablette prêtée'}`);
     const futur = (t) => t && toDate(t) > new Date();
     if (futur(abo.essaiJusqua)) details.push(`Essai gratuit jusqu'au ${dateLongue(abo.essaiJusqua)}`);
     if (futur(abo.engagementJusqua)) details.push(`Engagement jusqu'au ${dateLongue(abo.engagementJusqua)}`);
@@ -1609,10 +1687,10 @@ function renderAbonnement() {
     else if (abo.finPeriode && statut === 'actif' && !futur(abo.essaiJusqua)) details.push(`Prochaine échéance le ${dateLongue(abo.finPeriode)}`);
     $('abo-details').textContent = details.join(' · ');
     const enCours = ['actif', 'impaye'].includes(statut);
-    $('btn-portail').hidden = !abo.stripeCustomerId || statut === 'offert';
-    $('btn-resilier').hidden = !enCours || !!abo.resiliationLe || !abo.stripeSubscriptionId;
-    $('btn-garder').hidden = !enCours || !abo.resiliationLe;
-    $('abo-choices').hidden = !['aucun', 'resilie', 'suspendu'].includes(statut);
+    $('btn-portail').hidden = !admin || !abo.stripeCustomerId || statut === 'offert';
+    $('btn-resilier').hidden = !admin || !enCours || !!abo.resiliationLe || !abo.stripeSubscriptionId;
+    $('btn-garder').hidden = !admin || !enCours || !abo.resiliationLe;
+    $('abo-choices').hidden = !admin || !['aucun', 'resilie', 'suspendu'].includes(statut);
   }
   // Bandeaux : retard de paiement (responsables), pause (tout le monde).
   let text = '';
@@ -1654,7 +1732,7 @@ function targetTablet() {
 function showRemote(text, cls = '') {
   $('remote-result').textContent = text;
   $('remote-result').className = `remote-result ${cls}`;
-  $('remote-result').hidden = !text;
+  $('remote-result-box').hidden = !text;
 }
 
 async function sendCommand(type, extra = {}) {
@@ -1713,6 +1791,15 @@ $('btn-logs').addEventListener('click', async () => {
   }
 });
 
+// Chaque encadré (état, journal, Wi-Fi) se ferme par sa croix.
+document.querySelectorAll('[data-close]').forEach((btn) => btn.addEventListener('click', () => {
+  $(btn.dataset.close).hidden = true;
+}));
+$('btn-wifi').addEventListener('click', () => {
+  $('wifi-box').hidden = !$('wifi-box').hidden;
+  if (!$('wifi-box').hidden) $('wifi-ssid').focus();
+});
+
 $('wifi-security').addEventListener('change', () => {
   $('wifi-password-wrap').hidden = $('wifi-security').value === 'open';
 });
@@ -1731,7 +1818,6 @@ function renderRemote() {
   const admin = amFamilyAdmin();
   const tablet = targetTablet();
   $('remote-card').hidden = !amOwner() || !tablet;
-  $('wifi-card').hidden = !amOwner() || !tablet;
   $('group-tablet').hidden = !amOwner();
   if (tablet) {
     const online = tablet.lastOnline ? toDate(tablet.lastOnline) : null;
@@ -1915,7 +2001,6 @@ $('form-family-name').addEventListener('submit', async (e) => {
 // ---------- Ajouter à l'écran d'accueil ----------
 
 let installPrompt = null;
-const INSTALLED_KEY = 'papote.installed';
 const isIos = () => /iphone|ipad|ipod/i.test(navigator.userAgent)
   || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
@@ -1927,12 +2012,7 @@ function launchedFromHomeScreen() {
 }
 
 function rememberInstalled() {
-  try { localStorage.setItem(INSTALLED_KEY, '1'); } catch (e) { /* stockage indisponible */ }
   $('btn-install').hidden = true;
-}
-
-function knownInstalled() {
-  try { return localStorage.getItem(INSTALLED_KEY) === '1'; } catch (e) { return false; }
 }
 
 // Chrome Android propose l'installation : on garde l'invitation pour notre bouton.
@@ -1945,7 +2025,9 @@ window.addEventListener('appinstalled', rememberInstalled);
 // La carte « Installez Papote » ne s'affiche que si l'app n'est pas déjà sur l'écran d'accueil.
 async function renderInstallCard() {
   if (launchedFromHomeScreen()) { rememberInstalled(); return; }
-  $('btn-install').hidden = knownInstalled();
+  // L'ancien souvenir « déjà installée » cachait le bouton même après une désinstallation.
+  try { localStorage.removeItem('papote.installed'); } catch (e) { /* rien */ }
+  $('btn-install').hidden = false;
   // Chrome Android sait dire si l'app est déjà installée, même ouverte dans le navigateur.
   try {
     const apps = await navigator.getInstalledRelatedApps?.();

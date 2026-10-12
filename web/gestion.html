@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Papote · Gestion</title>
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/famille.css">
+  <link rel="stylesheet" href="css/admin.css">
+  <link rel="stylesheet" href="css/gestion.css">
+</head>
+<body>
+  <main class="admin gestion">
+    <header class="admin-head">
+      <img src="icons/icon.svg" alt="" class="admin-logo">
+      <div>
+        <h1>Gestion</h1>
+        <p id="who" class="muted small"></p>
+      </div>
+      <a href="admin.html" class="secondary small-btn no-print">Tableau de bord</a>
+    </header>
+
+    <section id="signin" class="card" hidden>
+      <h2>Réservé à l'administrateur</h2>
+      <p class="muted">Connectez-vous avec votre compte Google.</p>
+      <button type="button" id="btn-signin" class="primary wide">Se connecter avec Google</button>
+      <p id="signin-error" class="error" hidden></p>
+    </section>
+
+    <section id="app" hidden>
+      <nav class="onglets no-print" role="tablist">
+        <button type="button" role="tab" data-onglet="bilan" aria-selected="true">Bilan</button>
+        <button type="button" role="tab" data-onglet="stock">Stock</button>
+        <button type="button" role="tab" data-onglet="commandes">Commandes</button>
+        <button type="button" role="tab" data-onglet="factures">Factures</button>
+        <button type="button" role="tab" data-onglet="compta">Comptabilité</button>
+      </nav>
+
+      <div class="periode card no-print" id="periode">
+        <label>Période
+          <select id="p-choix">
+            <option value="mois">Ce mois-ci</option>
+            <option value="mois-1">Mois dernier</option>
+            <option value="trimestre">Ce trimestre</option>
+            <option value="annee" selected>Cette année</option>
+            <option value="annee-1">Année dernière</option>
+            <option value="perso">Autre période…</option>
+          </select>
+        </label>
+        <label id="p-du-l" hidden>Du <input type="date" id="p-du"></label>
+        <label id="p-au-l" hidden>Au (inclus) <input type="date" id="p-au"></label>
+        <p id="p-etat" class="muted small"></p>
+      </div>
+      <p id="erreur" class="error" hidden></p>
+
+      <!-- ---------- Bilan ---------- -->
+      <section data-panneau="bilan">
+        <h2 class="titre-print" id="bilan-titre">Bilan</h2>
+        <div class="stats" id="kpi-argent"></div>
+        <div class="stats" id="kpi-activite"></div>
+        <div class="card">
+          <div class="tete">
+            <h2>Mois par mois</h2>
+            <div class="actions no-print">
+              <button type="button" class="secondary small-btn" id="x-bilan">Exporter (CSV)</button>
+              <button type="button" class="secondary small-btn" id="imprimer">Imprimer / PDF</button>
+            </div>
+          </div>
+          <div class="table"><table id="t-bilan"></table></div>
+          <p class="muted small">Encaissé : paiements reçus par carte (Stripe). Résultat = encaissé − remboursements − frais Stripe − dépenses du registre des achats.</p>
+        </div>
+        <div class="card">
+          <h2>Dépenses par catégorie</h2>
+          <div class="table"><table id="t-categories"></table></div>
+        </div>
+      </section>
+
+      <!-- ---------- Stock ---------- -->
+      <section data-panneau="stock" hidden>
+        <div class="stats" id="kpi-stock"></div>
+        <p id="alerte-stock" class="alerte" hidden></p>
+        <details class="card" id="ajout-stock">
+          <summary><h2>Ajouter des tablettes achetées</h2></summary>
+          <form id="f-stock" class="grille">
+            <label>Quantité <input type="number" name="quantite" min="1" max="200" value="1" required></label>
+            <label>Modèle <input name="modele" placeholder="ex. Teclast P30"></label>
+            <label>Fournisseur <input name="fournisseur" placeholder="ex. Cdiscount"></label>
+            <label>Prix unitaire TTC (€) <input name="prix" inputmode="decimal" placeholder="89,90" required></label>
+            <label>dont TVA par tablette (€) <input name="tva" inputmode="decimal" placeholder="facultatif"></label>
+            <label>Date d'achat <input type="date" name="date" required></label>
+            <label class="large">Numéros de série, un par ligne (facultatif)
+              <textarea name="numeros" rows="3"></textarea></label>
+            <label class="large">Lien vers la facture d'achat (facultatif) <input type="url" name="justificatif" placeholder="https://"></label>
+            <label class="case large"><input type="checkbox" name="depense" checked> Ajouter aussi l'achat au registre des dépenses</label>
+            <button type="submit" class="primary">Ajouter au stock</button>
+            <p class="f-msg small" hidden></p>
+          </form>
+        </details>
+        <div class="card">
+          <div class="tete">
+            <h2>Parc de tablettes</h2>
+            <div class="actions no-print">
+              <select id="filtre-stock"><option value="">Toutes</option></select>
+              <button type="button" class="secondary small-btn" id="x-stock">Exporter (CSV)</button>
+            </div>
+          </div>
+          <div class="table"><table id="t-stock"></table></div>
+          <p id="stock-vide" class="muted small" hidden>Aucune tablette enregistrée. Ajoutez votre premier achat ci-dessus.</p>
+        </div>
+      </section>
+
+      <!-- ---------- Commandes ---------- -->
+      <section data-panneau="commandes" hidden>
+        <div class="stats" id="kpi-commandes"></div>
+        <div class="card">
+          <div class="tete">
+            <h2>Commandes</h2>
+            <div class="actions no-print">
+              <select id="filtre-commandes">
+                <option value="">Toutes</option>
+                <option value="a-envoyer">À envoyer</option>
+                <option value="en-route">Envoyées, pas jumelées</option>
+                <option value="active">En service</option>
+                <option value="retour">Tablette à récupérer</option>
+                <option value="terminee">Terminées</option>
+                <option value="annulee">Annulées</option>
+              </select>
+              <button type="button" class="secondary small-btn" id="x-commandes">Exporter (CSV)</button>
+            </div>
+          </div>
+          <p class="muted small">L'envoi (n° de suivi) et le retour se font depuis le <a href="admin.html">tableau de bord</a>.</p>
+          <div class="table"><table id="t-commandes"></table></div>
+        </div>
+      </section>
+
+      <!-- ---------- Factures ---------- -->
+      <section data-panneau="factures" hidden>
+        <div class="stats" id="kpi-factures"></div>
+        <div class="card">
+          <div class="tete">
+            <h2>Factures émises</h2>
+            <div class="actions no-print">
+              <select id="filtre-factures">
+                <option value="">Toutes</option>
+                <option value="paid">Payées</option>
+                <option value="open">À payer</option>
+                <option value="uncollectible">Irrécouvrables</option>
+                <option value="void">Annulées</option>
+              </select>
+              <button type="button" class="secondary small-btn" id="x-factures">Exporter (CSV)</button>
+            </div>
+          </div>
+          <p class="muted small">Factures créées automatiquement par Stripe à chaque échéance. Le PDF est celui envoyé au client.</p>
+          <div class="table"><table id="t-factures"></table></div>
+        </div>
+      </section>
+
+      <!-- ---------- Comptabilité ---------- -->
+      <section data-panneau="compta" hidden>
+        <div class="card">
+          <div class="tete">
+            <h2>Pour le comptable</h2>
+            <button type="button" class="primary small-btn no-print" id="x-tout">Tout exporter (4 fichiers CSV)</button>
+          </div>
+          <p class="muted small">Livre des recettes, registre des achats, factures et relevé Stripe de la période choisie. Fichiers lisibles dans Excel.</p>
+        </div>
+        <div class="card">
+          <div class="tete">
+            <h2>Livre des recettes</h2>
+            <button type="button" class="secondary small-btn no-print" id="x-recettes">Exporter (CSV)</button>
+          </div>
+          <p class="muted small">Chaque paiement reçu et chaque remboursement, à la date où il a eu lieu.</p>
+          <div class="table"><table id="t-recettes"></table></div>
+        </div>
+        <div class="card">
+          <div class="tete">
+            <h2>Registre des achats</h2>
+            <button type="button" class="secondary small-btn no-print" id="x-achats">Exporter (CSV)</button>
+          </div>
+          <details class="no-print">
+            <summary class="small">Ajouter une dépense</summary>
+            <form id="f-depense" class="grille">
+              <label>Date <input type="date" name="date" required></label>
+              <label>Catégorie <select name="categorie" required></select></label>
+              <label>Fournisseur <input name="fournisseur"></label>
+              <label>Libellé <input name="libelle" required placeholder="ex. Forfaits SIM octobre"></label>
+              <label>Montant TTC (€) <input name="montant" inputmode="decimal" required placeholder="12,00"></label>
+              <label>dont TVA (€) <input name="tva" inputmode="decimal" placeholder="facultatif"></label>
+              <label class="large">Lien vers le justificatif (facultatif) <input type="url" name="justificatif" placeholder="https://"></label>
+              <button type="submit" class="primary">Ajouter</button>
+              <p class="f-msg small" hidden></p>
+            </form>
+          </details>
+          <div class="table"><table id="t-achats"></table></div>
+        </div>
+        <div class="card">
+          <div class="tete">
+            <h2>Virements Stripe vers la banque</h2>
+            <button type="button" class="secondary small-btn no-print" id="x-mouvements">Relevé Stripe complet (CSV)</button>
+          </div>
+          <p class="muted small">Pour pointer avec le relevé bancaire.</p>
+          <div class="table"><table id="t-virements"></table></div>
+        </div>
+      </section>
+
+      <button type="button" id="btn-signout" class="link wide no-print">Se déconnecter</button>
+    </section>
+  </main>
+  <script type="module" src="js/gestion.js"></script>
+</body>
+</html>
