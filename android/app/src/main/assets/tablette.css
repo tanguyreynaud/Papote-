@@ -1141,3 +1141,55 @@ html .bday-banner { font-size: calc(4.8vmin * var(--ts, 1)); }
   animation: boot-spin 1s linear infinite;
 }
 @keyframes boot-spin { to { transform: rotate(360deg); } }
+
+/* Pas d'internet : carte à la place de la photo de l'accueil, avec le bouton du wifi */
+.home-frame { position: relative; }
+.wifi-card {
+  position: absolute;
+  top: 0; right: 0; bottom: 0; left: 0;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 5vmin;
+  background: #f6efe4;
+  text-align: center;
+}
+.wifi-card[hidden] { display: none; }
+.wifi-card-art { width: 46vmin; max-width: 80%; height: auto; margin-bottom: 3vmin; filter: drop-shadow(0 1vmin 2vmin rgba(36, 33, 47, .12)); }
+.wifi-card-title {
+  margin: 0 0 1.5vmin;
+  font-family: 'Bricolage Grotesque', 'Atkinson Hyperlegible', Roboto, sans-serif;
+  font-size: 7vmin;
+  font-weight: 800;
+  color: #24212f;
+}
+.wifi-card-text { margin: 0 0 4vmin; font-size: 4.6vmin; color: #5f5a6b; font-family: 'Atkinson Hyperlegible', Roboto, sans-serif; }
+.wifi-card-btn {
+  min-height: 13vmin;
+  padding: 0 8vmin;
+  border: 0;
+  border-radius: 99vmin;
+  background: #4f46e5;
+  color: #fff;
+  font-family: 'Atkinson Hyperlegible', Roboto, sans-serif;
+  font-size: 5.4vmin;
+  font-weight: 700;
+  box-shadow: 0 1vmin 2.5vmin rgba(79, 70, 229, .3);
+}
+.wifi-card-btn:active { transform: scale(.97); }
+body.night .wifi-card { background: #1c1714; }
+body.night .wifi-card-title { color: #e9dfd7; }
+body.night .wifi-card-text { color: #a8998d; }
+.home-frame .wifi-card .wifi-card-art {
+  position: static;
+  display: block;
+  width: 42vmin;
+  height: 42vmin;
+  max-width: 80%;
+  object-fit: contain;
+  -webkit-transform: none;
+  transform: none;
+  background: none;
+}

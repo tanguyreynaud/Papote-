@@ -848,11 +848,11 @@
     checkBirthdays();
   }
 
-  // Bandeau et écran créés ici pour ne pas toucher à tablette.html.
-  // Plus d'internet depuis 10 minutes (et pas de carte SIM qui prend le relais) :
-  // un bouton « Wifi » apparaît sur l'accueil.
+  // Plus d'internet depuis une minute (et pas de carte SIM qui prend le relais) : à la place de la
+  // photo de l'accueil, une carte « Pas d'internet » avec un grand bouton pour régler le wifi.
+  // Elle reste tant que la tablette n'est pas reconnectée.
   var offlineSince = 0;
-  var wifiButton = null;
+  var wifiCard = null;
   var wifiAutoOpened = false;
   function checkConnection() {
     if (!android() || !android().wifiStatus) return;
@@ -861,22 +861,29 @@
     var now = Date.now();
     if (st.internet) offlineSince = 0;
     else if (!offlineSince) offlineSince = now;
-    var showIt = offlineSince && now - offlineSince > 10 * 60000 && !st.mobile;
+    var showIt = offlineSince && now - offlineSince > 60000 && !st.mobile;
     // Tablette qui démarre sans internet ni données de la famille (par exemple une tablette de
     // remplacement arrivée chez le client) : l'écran du wifi s'ouvre tout de suite, une fois.
     if (!st.internet && !st.mobile && !hasData && !wifiAutoOpened && window.PapoteBienvenue) {
       wifiAutoOpened = true;
       window.PapoteBienvenue.openWifi();
     }
-    if (!wifiButton) {
+    if (!wifiCard) {
       if (!showIt) return;
-      wifiButton = document.createElement('button');
-      wifiButton.className = 'wifi-help';
-      wifiButton.textContent = 'Pas d’internet : régler le wifi';
-      on(wifiButton, 'click', function () { if (window.PapoteBienvenue) window.PapoteBienvenue.openWifi(); });
-      $('view-home').appendChild(wifiButton);
+      wifiCard = document.createElement('div');
+      wifiCard.className = 'wifi-card';
+      wifiCard.innerHTML = '<img class="wifi-card-art" src="bienvenue/wifi.svg" alt="">' +
+        '<p class="wifi-card-title">Pas d’internet</p>' +
+        '<p class="wifi-card-text">La tablette n’est plus connectée au wifi.</p>' +
+        '<button class="wifi-card-btn">Régler le wifi</button>';
+      // Toucher la carte n'ouvre pas la galerie photo (le cadre en dessous) ; le bouton ouvre le wifi.
+      on(wifiCard, 'click', function (e) {
+        e.stopPropagation();
+        if (e.target.tagName === 'BUTTON' && window.PapoteBienvenue) window.PapoteBienvenue.openWifi();
+      });
+      $('home-frame').appendChild(wifiCard);
     }
-    show(wifiButton, !!showIt);
+    show(wifiCard, !!showIt);
   }
 
   function setupHomeExtras() {
