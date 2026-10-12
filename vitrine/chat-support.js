@@ -117,30 +117,46 @@
     // Formulaire « être recontacté », proposé seulement quand l'assistant n'a pas pu répondre.
     function proposerRappel() {
       var form = el('form', 'ps-rappel');
+      form.noValidate = true;
       var lNom = el('label', '', 'Votre prénom');
       var nom = el('input');
       nom.autocomplete = 'given-name';
       nom.maxLength = 60;
       lNom.appendChild(nom);
-      var lCoord = el('label', '', 'Votre téléphone ou e-mail');
-      var coord = el('input');
-      coord.autocomplete = 'tel';
-      coord.maxLength = 120;
-      coord.required = true;
-      lCoord.appendChild(coord);
+      var lTel = el('label', '', 'Votre téléphone');
+      var tel = el('input');
+      tel.type = 'tel';
+      tel.autocomplete = 'tel';
+      tel.maxLength = 30;
+      tel.required = true;
+      lTel.appendChild(tel);
+      var lMel = el('label', '', 'Votre e-mail');
+      var mel = el('input');
+      mel.type = 'email';
+      mel.autocomplete = 'email';
+      mel.maxLength = 120;
+      mel.required = true;
+      lMel.appendChild(mel);
       var erreur = el('div', 'ps-erreur');
       var go = el('button', '', 'Être recontacté');
       go.type = 'submit';
       form.appendChild(lNom);
-      form.appendChild(lCoord);
+      form.appendChild(lTel);
+      form.appendChild(lMel);
       form.appendChild(erreur);
       form.appendChild(go);
       form.onsubmit = function (e) {
         e.preventDefault();
-        var v = coord.value.trim();
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) && v.replace(/\D/g, '').length < 9) {
-          erreur.textContent = 'Indiquez un numéro de téléphone ou une adresse e-mail.';
-          coord.focus();
+        var t = tel.value.trim();
+        var m = mel.value.trim();
+        if (t.replace(/\D/g, '').length < 9) {
+          erreur.textContent = 'Indiquez votre numéro de téléphone.';
+          tel.focus();
+          return;
+        }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(m)) {
+          erreur.textContent = 'Indiquez votre adresse e-mail.';
+          mel.focus();
           return;
         }
         erreur.textContent = '';
@@ -150,7 +166,7 @@
         fetch(API, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages: conversation, contact: { nom: nom.value, coordonnees: v } }),
+          body: JSON.stringify({ messages: conversation, contact: { nom: nom.value, telephone: t, email: m } }),
         })
           .then(function (r) { return r.json().then(function (d) { return r.ok && d.ok ? d : Promise.reject(d); }); })
           .then(function () {

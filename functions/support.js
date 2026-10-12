@@ -1,7 +1,7 @@
 // Chat IA de support : répond aux questions des visiteurs du site vitrine et de l'appli famille.
 //
 //   supportChat  POST {messages: [{role: 'user'|'assistant', content}], page?} → {reponse, contact?}
-//                POST {messages, contact: {nom, coordonnees}} → {ok}  demande de rappel
+//                POST {messages, contact: {nom, telephone, email}} → {ok}  demande de rappel
 //   bilanSupport chaque lundi 9 h : e-mail à l'adresse de support avec le nombre de questions
 //                de la semaine et celles auxquelles l'IA n'a pas su répondre (supportSansReponse/),
 //                pour compléter support-connaissances.md.
@@ -9,7 +9,7 @@
 // Les réponses s'appuient sur le texte du site vitrine (FAQ, tarifs), relu au plus une fois
 // par heure, et sur support-connaissances.md (appli famille, tablette, dépannage).
 // Quand l'IA est sûre de ne pas pouvoir répondre, elle termine par [CONTACT] : la page propose
-// alors de laisser un téléphone ou un e-mail. La demande est gardée dans supportDemandes/ et
+// alors de laisser son téléphone et son e-mail. La demande est gardée dans supportDemandes/ et
 // envoyée par e-mail à l'adresse de support, avec la conversation.
 // Clé Anthropic dans Secret Manager (outils/support/installer-support.bat), jamais dans le dépôt.
 // Garde-fous : 300 questions (30 après la phase de test) et 3 demandes de rappel par jour et par visiteur, 2 000 questions par jour au total.
@@ -58,7 +58,7 @@ Fais tout pour répondre toi-même avant de passer la main :
 - Si la question est floue, pose d'abord une question pour la préciser.
 - Pour un problème (tablette, appel, appli), donne d'abord les étapes du guide et demande si cela a marché.
 - Si la réponse est dans le guide ou sur le site, même en partie, donne-la.
-Seulement quand tu es sûr de ne pas pouvoir aider, termine ta réponse par ${MARQUE_CONTACT} sur une ligne seule. C'est le cas quand : l'information n'est vraiment ni dans le guide ni sur le site ; la demande touche un compte, une commande, un colis, un remboursement ou un paiement précis ; les étapes de dépannage ont été essayées sans succès ; la personne demande à parler à quelqu'un ou est mécontente. Dans ce cas, dis en une phrase que quelqu'un de l'équipe va la recontacter et qu'elle peut laisser son téléphone ou son e-mail juste en dessous. N'écris jamais ${MARQUE_CONTACT} dans les autres cas.`;
+Seulement quand tu es sûr de ne pas pouvoir aider, termine ta réponse par ${MARQUE_CONTACT} sur une ligne seule. C'est le cas quand : l'information n'est vraiment ni dans le guide ni sur le site ; la demande touche un compte, une commande, un colis, un remboursement ou un paiement précis ; les étapes de dépannage ont été essayées sans succès ; la personne demande à parler à quelqu'un ou est mécontente. Dans ce cas, dis en une phrase que quelqu'un de l'équipe va la recontacter et qu'elle peut laisser son téléphone et son e-mail juste en dessous. N'écris jamais ${MARQUE_CONTACT} dans les autres cas.`;
 
 let client;
 let site = { texte: '', lu: 0 };
@@ -132,8 +132,13 @@ function lireReponse(texte) {
 
 async function demandeDeRappel(ip, messages, contact) {
   const nom = String(contact.nom || '').trim().slice(0, 60);
-  const coord = coordonneesValides(contact.coordonnees);
-  if (!coord) return { status: 400, corps: { erreur: 'Téléphone ou e-mail invalide' } };
+  // Téléphone ET e-mail : selon la demande, l'équipe rappelle ou répond par e-mail.
+  // (contact.coordonnees seul : ancienne version de la bulle, encore en cache chez certains visiteurs.)
+  const tel = coordonneesValides(contact.telephone);
+  const mel = coordonneesValides(contact.email);
+  const coord = contact.coordonnees ? coordonneesValides(contact.coordonnees)
+    : (tel && tel.telephone && mel && mel.email ? { telephone: tel.telephone, email: mel.email } : null);
+  if (!coord) return { status: 400, corps: { erreur: 'Indiquez votre numéro de téléphone et votre adresse e-mail.' } };
   if (!(await quotaOk(ip, true))) {
     return { status: 429, corps: { erreur: `Écrivez-nous à ${EMAIL_SUPPORT}.` } };
   }
@@ -178,7 +183,7 @@ exports.supportChat = onRequest(
     // Plus de questions possibles aujourd'hui, IA en panne ou refus : on propose d'être recontacté.
     const passerLaMain = (reponse) => res.json({ reponse, contact: true });
     if (!(await quotaOk(ip))) {
-      return passerLaMain('Je ne peux plus répondre aujourd’hui. Laissez votre téléphone ou votre e-mail, nous vous recontacterons.');
+      return passerLaMain('Je ne peux plus répondre aujourd’hui. Laissez votre téléphone et votre e-mail, nous vous recontacterons.');
     }
 
     try {
@@ -207,11 +212,11 @@ exports.supportChat = onRequest(
           creeLe: admin.firestore.FieldValue.serverTimestamp(),
         }).catch((e) => logger.warn('supportSansReponse', e));
       }
-      if (!lu.reponse) return passerLaMain('Je ne sais pas répondre à cela. Laissez votre téléphone ou votre e-mail, nous vous recontacterons.');
+      if (!lu.reponse) return passerLaMain('Je ne sais pas répondre à cela. Laissez votre téléphone et votre e-mail, nous vous recontacterons.');
       res.json(lu);
     } catch (e) {
       logger.error('supportChat', e);
-      passerLaMain('Je suis indisponible pour le moment. Laissez votre téléphone ou votre e-mail, nous vous recontacterons.');
+      passerLaMain('Je suis indisponible pour le moment. Laissez votre téléphone et votre e-mail, nous vous recontacterons.');
     }
   });
 
