@@ -39,6 +39,7 @@ const VIEWS = ['view-invite', 'view-profile', 'view-pair', 'loading', 'view-logi
 
 function show(view) {
   for (const id of VIEWS) $(id).hidden = id !== view;
+  document.body.classList.toggle('on-support', view === 'view-support');
   // La barre du bas n'apparaît que sur Accueil, Notifications et Support.
   $('nav').hidden = !$(view).classList.contains('tab-page');
   document.querySelectorAll('.nav-item').forEach((b) => b.classList.toggle('active', `view-${b.dataset.tab}` === view));
@@ -965,17 +966,7 @@ async function removePost(post) {
 
 // ---------- Support ----------
 
-// L'e-mail part avec le nom de la famille et le téléphone utilisé, pour aider à comprendre le souci.
-$('btn-contact').addEventListener('click', () => {
-  const body = [
-    'Bonjour,', '', '(Décrivez votre problème ici)', '', '---',
-    `Famille : ${session.family.name}`,
-    `Prénom : ${session.member.name}`,
-    `Téléphone : ${navigator.userAgent}`,
-  ].join('\n');
-  $('btn-contact').href = `mailto:tanguyreynaud22@gmail.com?subject=${encodeURIComponent("Papote : besoin d'aide")}`
-    + `&body=${encodeURIComponent(body)}`;
-});
+// Le chat d'aide « Une question ? » n'apparaît que sur la page Support (voir famille.css).
 
 // ---------- Photo de profil ----------
 // Petite photo carrée gardée dans la fiche du membre : la tablette l'affiche à côté des envois et des appels.

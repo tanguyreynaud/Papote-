@@ -892,3 +892,8 @@ h1, h2, h3, .brand, .tile, .splash-name { font-family: var(--display); letter-sp
 .volume-row input { flex: 1; margin: 0; padding: 0; accent-color: var(--accent); background: none; border: none; }
 .volume-value { min-width: 52px; text-align: right; font-weight: 700; }
 .disabled-card { opacity: .5; pointer-events: none; }
+
+/* Chat d'aide (chat-support.js) : seulement sur la page Support. */
+body:not(.on-support) .ps-bouton, body:not(.on-support) .ps-panneau { display: none !important; }
+/* Place sous le dernier élément pour la barre du bas et le bouton du chat. */
+.support-pad { padding-bottom: calc(170px + env(safe-area-inset-bottom)); }
