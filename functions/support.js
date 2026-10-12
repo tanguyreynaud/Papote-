@@ -1,7 +1,10 @@
 // Chat IA de support : répond aux questions des visiteurs du site vitrine et de l'appli famille.
 //
-//   supportChat  POST {messages: [{role: 'user'|'assistant', content}]} → {reponse, contact?}
+//   supportChat  POST {messages: [{role: 'user'|'assistant', content}], page?} → {reponse, contact?}
 //                POST {messages, contact: {nom, coordonnees}} → {ok}  demande de rappel
+//   bilanSupport chaque lundi 9 h : e-mail à l'adresse de support avec le nombre de questions
+//                de la semaine et celles auxquelles l'IA n'a pas su répondre (supportSansReponse/),
+//                pour compléter support-connaissances.md.
 //
 // Les réponses s'appuient sur le texte du site vitrine (FAQ, tarifs), relu au plus une fois
 // par heure, et sur support-connaissances.md (appli famille, tablette, dépannage).
@@ -12,6 +15,7 @@
 // Garde-fous : 30 questions et 3 demandes de rappel par jour et par visiteur, 2 000 questions par jour au total.
 
 const { onRequest } = require('firebase-functions/v2/https');
+const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { defineSecret, defineString } = require('firebase-functions/params');
 const { logger } = require('firebase-functions/v2');
 const admin = require('firebase-admin');
@@ -161,6 +165,7 @@ exports.supportChat = onRequest(
     if (req.method !== 'POST') return res.status(405).json({ erreur: 'POST attendu' });
     const messages = nettoyer(req.body && req.body.messages);
     if (!messages) return res.status(400).json({ erreur: 'Conversation invalide' });
+    const page = req.body.page === 'appli' ? 'appli' : 'site';
     const ip = String(req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim() || 'inconnu';
 
     if (req.body.contact) {
@@ -184,18 +189,54 @@ exports.supportChat = onRequest(
         system: [
           { type: 'text', text: CONSIGNES },
           { type: 'text', text: `${CONNAISSANCES}\n\n# Contenu du site Papote\n\n${texte}`, cache_control: { type: 'ephemeral' } },
+          { type: 'text', text: page === 'appli'
+            ? 'La personne écrit depuis l\u2019appli famille : elle est déjà cliente. Guide-la dans l\u2019appli (« dans Réglages… »).'
+            : 'La personne écrit depuis le site : elle découvre peut-être Papote.' },
         ],
         messages,
       });
       const brut = reponse.stop_reason === 'refusal' ? ''
         : reponse.content.filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim();
       const lu = lireReponse(brut);
+      if (lu.contact) {
+        await admin.firestore().collection('supportSansReponse').add({
+          question: messages[messages.length - 1].content, conversation: messages, page,
+          creeLe: admin.firestore.FieldValue.serverTimestamp(),
+        }).catch((e) => logger.warn('supportSansReponse', e));
+      }
       if (!lu.reponse) return passerLaMain('Je ne sais pas répondre à cela. Laissez votre téléphone ou votre e-mail, nous vous recontacterons.');
       res.json(lu);
     } catch (e) {
       logger.error('supportChat', e);
       passerLaMain('Je suis indisponible pour le moment. Laissez votre téléphone ou votre e-mail, nous vous recontacterons.');
     }
+  });
+
+exports.bilanSupport = onSchedule(
+  { schedule: 'every monday 09:00', timeZone: 'Europe/Paris', secrets: [MAIL_MOT_DE_PASSE] },
+  async () => {
+    const db = admin.firestore();
+    const depuis = new Date(Date.now() - 7 * 86400e3);
+    const jours = [];
+    for (let i = 1; i <= 7; i++) jours.push(new Date(Date.now() - i * 86400e3).toISOString().slice(0, 10));
+    const quotas = await Promise.all(jours.map((j) => db.doc(`supportQuota/${j}`).get()));
+    const questions = quotas.reduce((n, d) => n + (d.get('n') || 0), 0);
+    const rappels = quotas.reduce((n, d) => n + (d.get('rappels') || 0), 0);
+    const sans = await db.collection('supportSansReponse').where('creeLe', '>=', depuis).orderBy('creeLe').get();
+    if (!questions && sans.empty) return;
+    const liste = sans.docs.map((d) => `• ${d.get('question')}`);
+    const titre = `Support Papote : ${questions} questions cette semaine, ${sans.size} sans réponse`;
+    const intro = `${questions} questions posées au chat, ${rappels} demandes de rappel, ${sans.size} questions sans réponse.`;
+    const fin = 'Pour que le chat sache y répondre, ajoutez la réponse dans functions/support-connaissances.md (ou donnez-la à Claude).';
+    await mail.envoyer({
+      smtp: MAIL_SMTP.value(), expediteur: MAIL_EXPEDITEUR.value(), motDePasse: MAIL_MOT_DE_PASSE.value(),
+      a: EMAIL_SUPPORT,
+      contenu: {
+        subject: titre,
+        text: [intro, '', ...liste, '', fin].join('\n'),
+        html: `<p>${intro}</p>${liste.length ? `<ul>${sans.docs.map((d) => `<li>${mail.echapper(d.get('question'))}</li>`).join('')}</ul>` : ''}<p>${fin}</p>`,
+      },
+    });
   });
 
 exports._test = { nettoyer, coordonneesValides, lireReponse };

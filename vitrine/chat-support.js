@@ -14,6 +14,8 @@
   var script = document.currentScript || {};
   var cote = script.dataset && script.dataset.cote === 'gauche' ? 'left' : 'right';
   var bas = (script.dataset && parseInt(script.dataset.bas, 10)) || 20;
+  // Dans l'appli famille, la personne est déjà cliente : l'assistant la guide dans l'appli.
+  var PAGE = location.hostname === 'papote-famille.web.app' ? 'appli' : 'site';
   var SUGGESTIONS = ['Combien ça coûte ?', 'Faut-il une box internet ?', 'Comment se passe l’installation ?'];
 
   var css = '' +
@@ -211,7 +213,7 @@
       fetch(API, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: historique.slice(-12) }),
+        body: JSON.stringify({ messages: historique.slice(-12), page: PAGE }),
       })
         .then(function (r) { return r.json(); })
         .catch(function () { return {}; })
