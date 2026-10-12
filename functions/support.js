@@ -1,27 +1,39 @@
 // Chat IA de support : répond aux questions des visiteurs du site vitrine et de l'appli famille.
 //
-//   supportChat  POST {messages: [{role: 'user'|'assistant', content}]} → {reponse}
+//   supportChat  POST {messages: [{role: 'user'|'assistant', content}]} → {reponse, contact?}
+//                POST {messages, contact: {nom, coordonnees}} → {ok}  demande de rappel
 //
 // Les réponses s'appuient sur le texte du site vitrine (FAQ, tarifs), relu au plus une fois
-// par heure : modifier le site suffit pour mettre le chat à jour. Quand l'IA ne sait pas,
-// elle renvoie vers l'e-mail de support.
+// par heure, et sur support-connaissances.md (appli famille, tablette, dépannage).
+// Quand l'IA est sûre de ne pas pouvoir répondre, elle termine par [CONTACT] : la page propose
+// alors de laisser un téléphone ou un e-mail. La demande est gardée dans supportDemandes/ et
+// envoyée par e-mail à l'adresse de support, avec la conversation.
 // Clé Anthropic dans Secret Manager (outils/support/installer-support.bat), jamais dans le dépôt.
-// Garde-fous de coût : 30 questions par jour et par visiteur, 2 000 par jour au total.
+// Garde-fous : 30 questions et 3 demandes de rappel par jour et par visiteur, 2 000 questions par jour au total.
 
 const { onRequest } = require('firebase-functions/v2/https');
 const { defineSecret, defineString } = require('firebase-functions/params');
 const { logger } = require('firebase-functions/v2');
 const admin = require('firebase-admin');
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 const Anthropic = require('@anthropic-ai/sdk');
+const mail = require('./mail');
 
 const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
 const SITE_VITRINE = defineString('SITE_VITRINE', { default: 'https://papote.web.app' });
+const MAIL_SMTP = defineString('MAIL_SMTP', { default: 'smtp.gmail.com:465:' });
+const MAIL_EXPEDITEUR = defineString('MAIL_EXPEDITEUR', { default: '' });
+const MAIL_MOT_DE_PASSE = defineSecret('MAIL_MOT_DE_PASSE');
 
 const MODELE = 'claude-haiku-5-5';
 const EMAIL_SUPPORT = 'contact@mapapote.fr';
 const QUOTA_VISITEUR = 30;
 const QUOTA_TOTAL = 2000;
+const QUOTA_RAPPELS = 3;
+const MARQUE_CONTACT = '[CONTACT]';
+const CONNAISSANCES = fs.readFileSync(path.join(__dirname, 'support-connaissances.md'), 'utf8');
 const MAX_MESSAGES = 12;
 const MAX_CARACTERES = 1000;
 const ORIGINES = [
@@ -35,7 +47,13 @@ const CONSIGNES = `Tu es l'assistant de support de Papote, une tablette pour les
 
 Tu parles à des familles et à des personnes âgées, en français, avec des phrases simples et chaleureuses. Réponds en trois ou quatre phrases au plus, sans titres, sans tableaux et sans jargon technique. Vouvoie la personne.
 
-Appuie-toi uniquement sur le contenu du site ci-dessous. Si la réponse n'y est pas, si la question concerne une commande, un paiement, une livraison ou une panne précise, ou si la personne est mécontente, dis-le simplement et invite-la à écrire à ${EMAIL_SUPPORT} en précisant son code de commande si elle en a un. N'invente jamais un prix, un délai ou une fonction. Ne demande jamais de mot de passe ni de numéro de carte bancaire. Si la question n'a rien à voir avec Papote, réponds poliment que tu ne peux aider que sur Papote.`;
+Appuie-toi uniquement sur le guide et le contenu du site ci-dessous. N'invente jamais un prix, un délai ou une fonction. Ne demande jamais de mot de passe ni de numéro de carte bancaire. Si la question n'a rien à voir avec Papote, réponds poliment que tu ne peux aider que sur Papote, sans proposer de contact.
+
+Fais tout pour répondre toi-même avant de passer la main :
+- Si la question est floue, pose d'abord une question pour la préciser.
+- Pour un problème (tablette, appel, appli), donne d'abord les étapes du guide et demande si cela a marché.
+- Si la réponse est dans le guide ou sur le site, même en partie, donne-la.
+Seulement quand tu es sûr de ne pas pouvoir aider, termine ta réponse par ${MARQUE_CONTACT} sur une ligne seule. C'est le cas quand : l'information n'est vraiment ni dans le guide ni sur le site ; la demande touche un compte, une commande, un colis, un remboursement ou un paiement précis ; les étapes de dépannage ont été essayées sans succès ; la personne demande à parler à quelqu'un ou est mécontente. Dans ce cas, dis en une phrase que quelqu'un de l'équipe va la recontacter et qu'elle peut laisser son téléphone ou son e-mail juste en dessous. N'écris jamais ${MARQUE_CONTACT} dans les autres cas.`;
 
 let client;
 let site = { texte: '', lu: 0 };
@@ -73,8 +91,8 @@ function nettoyer(messages) {
   return liste;
 }
 
-// Compte une question ; false si le visiteur ou l'ensemble a dépassé son quota du jour.
-async function quotaOk(ip) {
+// Compte une question (ou une demande de rappel) ; false si le quota du jour est dépassé.
+async function quotaOk(ip, rappel) {
   const jour = new Date().toISOString().slice(0, 10);
   const visiteur = crypto.createHash('sha256').update(jour + ip).digest('hex').slice(0, 24);
   const db = admin.firestore();
@@ -82,26 +100,78 @@ async function quotaOk(ip) {
   const refJour = db.doc(`supportQuota/${jour}`);
   return db.runTransaction(async (t) => {
     const [v, j] = await Promise.all([t.get(refVisiteur), t.get(refJour)]);
-    const nV = (v.get('n') || 0) + 1;
-    const nJ = (j.get('n') || 0) + 1;
-    if (nV > QUOTA_VISITEUR || nJ > QUOTA_TOTAL) return false;
-    t.set(refVisiteur, { n: nV });
-    t.set(refJour, { n: nJ, expire: new Date(Date.now() + 7 * 86400e3) });
+    const champ = rappel ? 'rappels' : 'n';
+    const nV = (v.get(champ) || 0) + 1;
+    const nJ = (j.get(champ) || 0) + 1;
+    if (nV > (rappel ? QUOTA_RAPPELS : QUOTA_VISITEUR) || (!rappel && nJ > QUOTA_TOTAL)) return false;
+    t.set(refVisiteur, { [champ]: nV }, { merge: true });
+    t.set(refJour, { [champ]: nJ, expire: new Date(Date.now() + 7 * 86400e3) }, { merge: true });
     return true;
   });
 }
 
+// Téléphone (au moins 9 chiffres) ou e-mail ; null sinon.
+function coordonneesValides(t) {
+  const v = String(t || '').trim().slice(0, 120);
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return { email: v };
+  if (/^[+\d][\d\s.\-()]{7,}$/.test(v) && v.replace(/\D/g, '').length >= 9) return { telephone: v };
+  return null;
+}
+
+// Réponse de l'IA : texte sans la marque, et contact = true si elle a passé la main.
+function lireReponse(texte) {
+  const contact = texte.includes(MARQUE_CONTACT);
+  return { reponse: texte.split(MARQUE_CONTACT).join('').trim(), contact };
+}
+
+async function demandeDeRappel(ip, messages, contact) {
+  const nom = String(contact.nom || '').trim().slice(0, 60);
+  const coord = coordonneesValides(contact.coordonnees);
+  if (!coord) return { status: 400, corps: { erreur: 'Téléphone ou e-mail invalide' } };
+  if (!(await quotaOk(ip, true))) {
+    return { status: 429, corps: { erreur: `Écrivez-nous à ${EMAIL_SUPPORT}.` } };
+  }
+  const conversation = messages.map((m) => `${m.role === 'user' ? 'Visiteur' : 'Assistant'} : ${m.content}`).join('\n\n');
+  await admin.firestore().collection('supportDemandes').add({
+    nom, ...coord, conversation: messages, statut: 'nouvelle', creeLe: admin.firestore.FieldValue.serverTimestamp(),
+  });
+  const qui = [nom, coord.telephone, coord.email].filter(Boolean).join(' · ');
+  try {
+    await mail.envoyer({
+      smtp: MAIL_SMTP.value(), expediteur: MAIL_EXPEDITEUR.value(), motDePasse: MAIL_MOT_DE_PASSE.value(),
+      a: EMAIL_SUPPORT,
+      contenu: {
+        subject: `Demande de rappel : ${qui}`,
+        text: `${qui}\n\nL'assistant n'a pas su répondre. Conversation :\n\n${conversation}`,
+        html: `<p><strong>${mail.echapper(qui)}</strong></p><p>L'assistant n'a pas su répondre. Conversation :</p>`
+          + messages.map((m) => `<p><strong>${m.role === 'user' ? 'Visiteur' : 'Assistant'} :</strong> ${mail.echapper(m.content).replace(/\n/g, '<br>')}</p>`).join(''),
+        ...(coord.email ? { replyTo: coord.email } : {}),
+      },
+    });
+  } catch (e) {
+    // La demande reste dans supportDemandes/ : rien n'est perdu.
+    logger.error('Demande de rappel : e-mail non envoyé', e);
+  }
+  return { status: 200, corps: { ok: true } };
+}
+
 exports.supportChat = onRequest(
-  { secrets: [ANTHROPIC_API_KEY], cors: ORIGINES, maxInstances: 3, timeoutSeconds: 60 },
+  { secrets: [ANTHROPIC_API_KEY, MAIL_MOT_DE_PASSE], cors: ORIGINES, maxInstances: 3, timeoutSeconds: 60 },
   async (req, res) => {
     if (req.method !== 'POST') return res.status(405).json({ erreur: 'POST attendu' });
     const messages = nettoyer(req.body && req.body.messages);
     if (!messages) return res.status(400).json({ erreur: 'Conversation invalide' });
+    const ip = String(req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim() || 'inconnu';
 
-    if (!(await quotaOk(String(req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim() || 'inconnu'))) {
-      return res.json({
-        reponse: `Je ne peux plus répondre aujourd'hui. Écrivez-nous à ${EMAIL_SUPPORT}, nous vous répondrons rapidement.`,
-      });
+    if (req.body.contact) {
+      const { status, corps } = await demandeDeRappel(ip, messages, req.body.contact);
+      return res.status(status).json(corps);
+    }
+
+    // Plus de questions possibles aujourd'hui, IA en panne ou refus : on propose d'être recontacté.
+    const passerLaMain = (reponse) => res.json({ reponse, contact: true });
+    if (!(await quotaOk(ip))) {
+      return passerLaMain('Je ne peux plus répondre aujourd’hui. Laissez votre téléphone ou votre e-mail, nous vous recontacterons.');
     }
 
     try {
@@ -110,24 +180,22 @@ exports.supportChat = onRequest(
       const reponse = await client.messages.create({
         model: MODELE,
         max_tokens: 1024,
-        output_config: { effort: 'low' },
+        output_config: { effort: 'medium' },
         system: [
           { type: 'text', text: CONSIGNES },
-          { type: 'text', text: `Contenu du site Papote :\n\n${texte}`, cache_control: { type: 'ephemeral' } },
+          { type: 'text', text: `${CONNAISSANCES}\n\n# Contenu du site Papote\n\n${texte}`, cache_control: { type: 'ephemeral' } },
         ],
         messages,
       });
-      const texteReponse = reponse.stop_reason === 'refusal' ? ''
+      const brut = reponse.stop_reason === 'refusal' ? ''
         : reponse.content.filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim();
-      res.json({
-        reponse: texteReponse || `Je ne sais pas répondre à cela. Écrivez-nous à ${EMAIL_SUPPORT}.`,
-      });
+      const lu = lireReponse(brut);
+      if (!lu.reponse) return passerLaMain('Je ne sais pas répondre à cela. Laissez votre téléphone ou votre e-mail, nous vous recontacterons.');
+      res.json(lu);
     } catch (e) {
       logger.error('supportChat', e);
-      res.status(502).json({
-        reponse: `Je suis indisponible pour le moment. Écrivez-nous à ${EMAIL_SUPPORT}.`,
-      });
+      passerLaMain('Je suis indisponible pour le moment. Laissez votre téléphone ou votre e-mail, nous vous recontacterons.');
     }
   });
 
-exports._test = { nettoyer };
+exports._test = { nettoyer, coordonneesValides, lireReponse };
