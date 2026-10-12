@@ -907,3 +907,9 @@ body:not(.on-support) .ps-bouton, body:not(.on-support) .ps-panneau { display: n
 .abo-retour { margin-top: 14px; padding: 14px; border-radius: 14px; background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
 .abo-retour-title { margin: 0 0 8px; font-weight: 700; }
 .abo-retour .primary { display: block; text-align: center; text-decoration: none; }
+
+.dialog-title { margin: 0 0 8px; font-family: var(--display); font-size: 22px; }
+.dialog-list { margin: 0 0 12px; padding-left: 20px; }
+.dialog-list li { margin: 4px 0; }
+.dialog-buttons.stack { flex-direction: column; align-items: stretch; }
+.dialog-buttons.stack button { width: 100%; }

@@ -12,7 +12,7 @@ import {
   addPost, deletePost, loadMedia, formatCode, normalizeCode, toDate, CodeInconnuError,
   MAX_VIDEO_CHUNKS, VIDEO_CHUNK,
 } from './firebase.js';
-import { askConfirm, notice } from './ui.js';
+import { askConfirm, notice, avantDePartir } from './ui.js';
 import { showGuideOnce } from './guide.js';
 import {
   abonnementOk, FORMULES, LIBELLES, ouvrirPortail, payer, rattacherCommande, resilier, annulerResiliation,
@@ -1537,12 +1537,22 @@ function dateArret(abo) {
 
 $('btn-resilier').addEventListener('click', async () => {
   const quand = dateArret(session.family.abonnement);
-  const msg = quand
-    ? `Résilier l'abonnement ? Papote continuera de fonctionner jusqu'au ${quand}, puis la tablette se mettra en pause.`
-    : "Résilier l'abonnement ? La tablette se mettra en pause à la fin de la période payée.";
-  const aRendre = session.family.abonnement?.tablette !== 'achetee'
-    ? ' La tablette prêtée sera à renvoyer ; si elle n\'est pas rendue, 120 € seront facturés.' : '';
-  if (!await askConfirm(msg + aRendre, 'Résilier')) return;
+  const nom = session.family.name;
+  // Une seule étape avant la résiliation (la loi veut une résiliation en ligne simple).
+  const suite = [quand
+    ? `Votre abonnement s'arrêtera le ${quand} (fin de l'engagement ou du mois payé).`
+    : "Votre abonnement s'arrêtera à la fin de la période payée."];
+  if (session.family.abonnement?.tablette !== 'achetee') suite.push('La tablette sera à nous renvoyer, l\'étiquette est offerte.');
+  const partir = await avantDePartir({
+    intro: `En résiliant, ${nom} perdra :`,
+    perdu: [
+      'les photos et les vidéos de la famille sur sa tablette',
+      `les appels vidéo avec ${nom}`,
+      'les messages et les rappels de l\'agenda',
+    ],
+    suite,
+  });
+  if (!partir) { toast('Merci de rester avec Papote'); return; }
   withAboError(async () => {
     const { le } = await resilier(session.fid);
     notice(`Résiliation enregistrée. Papote fonctionnera jusqu'au ${dateLongue(le) || quand || 'terme de la période payée'}.`);

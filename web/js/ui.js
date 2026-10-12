@@ -1,6 +1,6 @@
 // Fenêtres de l'app à la place des confirm() et alert() du navigateur, jugées vieillottes.
 
-function dialog(message, buttons) {
+function dialog(message, buttons, extra = null) {
   return new Promise((resolve) => {
     const back = document.createElement('div');
     back.className = 'dialog-back';
@@ -10,7 +10,7 @@ function dialog(message, buttons) {
     const text = document.createElement('p');
     text.textContent = message;
     const row = document.createElement('div');
-    row.className = 'dialog-buttons';
+    row.className = extra?.stack ? 'dialog-buttons stack' : 'dialog-buttons';
     const close = (value) => {
       back.classList.add('closing');
       setTimeout(() => back.remove(), 150);
@@ -25,10 +25,32 @@ function dialog(message, buttons) {
       row.append(b);
     }
     back.addEventListener('click', (e) => { if (e.target === back) close(false); });
-    box.append(text, row);
+    if (extra?.title) {
+      const h = document.createElement('h2');
+      h.className = 'dialog-title';
+      h.textContent = extra.title;
+      box.append(h);
+    }
+    box.append(text);
+    if (extra?.list) {
+      const ul = document.createElement('ul');
+      ul.className = 'dialog-list';
+      for (const item of extra.list) {
+        const li = document.createElement('li');
+        li.textContent = item;
+        ul.append(li);
+      }
+      box.append(ul);
+    }
+    for (const line of extra?.after || []) {
+      const p = document.createElement('p');
+      p.textContent = line;
+      box.append(p);
+    }
+    box.append(row);
     back.append(box);
     document.body.append(back);
-    row.lastChild.focus();
+    (extra?.stack ? row.firstChild : row.lastChild).focus();
   });
 }
 
@@ -45,6 +67,14 @@ export function askConfirm(message, okLabel = actionLabel(message)) {
     { label: 'Annuler', value: false, cls: 'secondary' },
     { label: okLabel, value: true, cls: danger ? 'primary danger-btn' : 'primary' },
   ]);
+}
+
+/** Étape « Avant de partir » avant une résiliation : garder (principal) ou résilier quand même. */
+export function avantDePartir({ intro, perdu, suite }) {
+  return dialog(intro, [
+    { label: 'Garder Papote', value: false, cls: 'primary' },
+    { label: 'Résilier quand même', value: true, cls: 'secondary' },
+  ], { title: 'Avant de partir', list: perdu, after: suite, stack: true });
 }
 
 export function notice(message) {
