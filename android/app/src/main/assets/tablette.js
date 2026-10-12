@@ -445,6 +445,41 @@
     if (!overlayPost) nextOverlay();
   }
 
+  // ---------- Visage vu sans OK : on ferme au bout de 2 minutes ----------
+  // La caméra (appels.js, window.papoteWatchPresence) regarde si quelqu'un est devant la tablette.
+  // Dès que son visage est vu, l'envoi ou le rappel affiché se ferme tout seul 2 minutes plus
+  // tard s'il n'a pas touché OK. Jamais vu : il reste affiché, pour qu'elle ne rate rien.
+
+  var SEEN_CLOSE_MS = 120000;
+  var watchers = {};
+
+  function watchSeen(slot, close) {
+    unwatchSeen(slot);
+    if (typeof window.papoteWatchPresence !== 'function') return;
+    var w = { stop: null, timer: null };
+    watchers[slot] = w;
+    try {
+      w.stop = window.papoteWatchPresence(function () {
+        if (watchers[slot] !== w || w.timer) return;
+        w.timer = setTimeout(function () {
+          if (watchers[slot] !== w) return;
+          unwatchSeen(slot);
+          close();
+        }, SEEN_CLOSE_MS);
+      });
+    } catch (e) {
+      delete watchers[slot];
+    }
+  }
+
+  function unwatchSeen(slot) {
+    var w = watchers[slot];
+    if (!w) return;
+    delete watchers[slot];
+    clearTimeout(w.timer);
+    try { if (typeof w.stop === 'function') w.stop(); } catch (e) { }
+  }
+
   // Un appel arrive : on ferme la photo ou le message affiché.
   function closeOverlayForCall() {
     if (!overlayPost) return;
@@ -460,11 +495,18 @@
   }
 
   function nextOverlay() {
+    unwatchSeen('overlay');
     overlayPost = overlayQueue.shift() || null;
     if (!overlayPost) {
       show($('overlay'), false);
       return;
     }
+    watchSeen('overlay', function () {
+      if (!overlayPost) return;
+      stopAudio();
+      markSeen(overlayPost);
+      nextOverlay();
+    });
     var p = overlayPost;
     var mode = p.image ? 'photo' : p.type === 'voice' ? 'voice' : p.type === 'video' ? 'video' : 'message';
     var media = mode === 'voice' || mode === 'video';
@@ -720,9 +762,18 @@
     $('reminder-done').textContent = early ? "J'ai compris" : r.kind === 'rdv' ? "J'ai bien noté" : "C'est fait";
     show($('reminder-alert'), true);
     if (android()) android().alert();
+    // Vu mais pas confirmé : le rappel se ferme sans prévenir la famille que c'est fait.
+    watchSeen('reminder', function () {
+      if (!alerting) return;
+      var id = alerting.r.id + '|' + alerting.key;
+      if (alerting.early) announced[id] = true; else handled[id] = true;
+      closeReminder();
+      setTimeout(checkReminders, 500);
+    });
   }
 
   function closeReminder() {
+    unwatchSeen('reminder');
     alerting = null;
     show($('reminder-alert'), false);
   }
