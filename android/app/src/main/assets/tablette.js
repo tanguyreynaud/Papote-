@@ -529,7 +529,26 @@
 
   // ---------- Données venant d'Android ----------
 
+  // ---------- Chargement du démarrage ----------
+  // Visible au moins un instant (pas de clignement), retiré dès qu'Android a parlé, 20 s au plus.
+
+  var bootStart = Date.now();
+  var bootDone = false;
+
+  function hideBoot() {
+    if (bootDone) return;
+    bootDone = true;
+    setTimeout(function () {
+      var boot = $('boot');
+      if (!boot) return;
+      boot.className = 'boot gone';
+      setTimeout(function () { if (boot.parentNode) boot.parentNode.removeChild(boot); }, 500);
+    }, Math.max(0, 1200 - (Date.now() - bootStart)));
+  }
+  setTimeout(hideBoot, 20000);
+
   function onStatus(status) {
+    hideBoot();
     // Première installation chez le client : nom, wifi, puis appairage (bienvenue.js).
     if (window.PapoteBienvenue) {
       if (status.state === 'welcome') { window.PapoteBienvenue.show(status); return; }
@@ -545,6 +564,7 @@
   }
 
   function onPosts(payload) {
+    hideBoot();
     hasData = true;
     // On garde « vu » localement même si Firebase ne l'a pas encore enregistré.
     var seenBefore = {};

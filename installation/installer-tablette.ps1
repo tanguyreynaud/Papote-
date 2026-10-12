@@ -147,8 +147,15 @@ if ($owner -match "Device Owner[\s\S]*?$([regex]::Escape($Package))") {
 # Carte SIM : numéro ICCID noté pour la page « Forfaits SIM »
 $sim = Adb shell content query --uri content://telephony/siminfo --projection icc_id:display_name
 $iccids = @([regex]::Matches($sim, 'icc_id=(\d{10,22})') | ForEach-Object { $_.Groups[1].Value } | Select-Object -Unique)
-if ((Adb shell getprop gsm.sim.state) -match 'READY|LOADED' -and $iccids.Count) {
+$simState = Adb shell getprop gsm.sim.state
+if ($simState -match 'PIN_REQUIRED|PUK_REQUIRED|NETWORK_LOCKED') {
+    # Le client ne connaît pas ce code : la tablette resterait bloquée sur la demande au démarrage.
+    Say "`nATTENTION : la carte SIM demande un code PIN." 'Red'
+    Say 'Avant l''envoi, retirez Papote (retirer-papote.bat), tapez le code PIN, puis désactivez-le :' 'Red'
+    Say 'Paramètres > Sécurité > Verrouillage de la carte SIM. Relancez ensuite cette installation.' 'Red'
+} elseif ($simState -match 'READY|LOADED' -and $iccids.Count) {
     Say "Carte SIM : ICCID $($iccids -join ', ')" 'Green'
+    Say 'Si elle a demandé un code PIN au démarrage, désactivez-le avant l''envoi (Paramètres > Sécurité > Verrouillage de la carte SIM).' 'Yellow'
 } else {
     Say 'Pas de carte SIM.' 'DarkGray'
 }

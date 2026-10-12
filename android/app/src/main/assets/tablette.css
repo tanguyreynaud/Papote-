@@ -1109,3 +1109,35 @@ html .bday-banner { font-size: calc(4.8vmin * var(--ts, 1)); }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ---------- Chargement au démarrage ---------- */
+
+.boot {
+  position: fixed;
+  top: 0; right: 0; bottom: 0; left: 0;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #fdfaf5;
+  transition: opacity .5s;
+}
+.boot.gone { opacity: 0; pointer-events: none; }
+.boot-logo { width: 22vmin; height: 22vmin; }
+.boot-name {
+  margin: 3vmin 0 6vmin;
+  font-family: 'Bricolage Grotesque', 'Atkinson Hyperlegible', Roboto, sans-serif;
+  font-size: 9vmin;
+  font-weight: 800;
+  color: #24212f;
+}
+.boot-spin {
+  width: 9vmin;
+  height: 9vmin;
+  border: 1.2vmin solid #e8e6fd;
+  border-top-color: #4f46e5;
+  border-radius: 50%;
+  animation: boot-spin 1s linear infinite;
+}
+@keyframes boot-spin { to { transform: rotate(360deg); } }
