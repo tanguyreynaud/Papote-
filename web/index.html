@@ -352,10 +352,20 @@
           </div>
           <button type="button" id="btn-sleep" class="primary wide">Enregistrer</button>
         </div>
-        <div id="wifi-card" class="card" hidden>
-          <h2>Wi-Fi de la tablette</h2>
-          <p class="muted small">Si la box internet change, envoyez le nouveau réseau à la tablette. Si le nom ou le mot de passe est faux, elle garde son Wi-Fi actuel.</p>
-                      <form id="form-wifi">
+        <div id="remote-card" class="card" hidden>
+          <h2>Dépanner la tablette</h2>
+          <p class="muted small">À utiliser si la tablette ne répond plus ou se comporte bizarrement.</p>
+          <p id="remote-tablet" class="muted small"></p>
+          <div class="remote-buttons">
+            <button type="button" class="secondary" data-cmd="status">Obtenir l'état</button>
+            <button type="button" class="secondary" data-cmd="restart">Redémarrer la tablette</button>
+            <button type="button" class="secondary" id="btn-logs">Obtenir le journal</button>
+            <button type="button" class="secondary" id="btn-wifi">Changer le Wi-Fi</button>
+          </div>
+          <div id="wifi-box" class="remote-panel" hidden>
+            <button type="button" class="icon-btn panel-close" data-close="wifi-box" aria-label="Fermer"><svg><use href="#i-close"/></svg></button>
+            <form id="form-wifi">
+              <p class="muted small">Si la box internet change, envoyez le nouveau réseau à la tablette. Si le nom ou le mot de passe est faux, elle garde son Wi-Fi actuel.</p>
               <label>Nom du réseau
                 <input id="wifi-ssid" autocomplete="off" required>
               </label>
@@ -371,21 +381,16 @@
               </label>
               <button type="submit" class="primary wide">Envoyer à la tablette</button>
             </form>
-        </div>
-        <div id="remote-card" class="card" hidden>
-          <h2>Dépanner la tablette</h2>
-          <p class="muted small">À utiliser si la tablette ne répond plus ou se comporte bizarrement.</p>
-          <p id="remote-tablet" class="muted small"></p>
-          <div class="remote-buttons">
-            <button type="button" class="secondary" data-cmd="status">Obtenir l'état</button>
-            <button type="button" class="secondary" data-cmd="restart">Redémarrer la tablette</button>
-            <button type="button" class="secondary" id="btn-logs">Obtenir le journal</button>
           </div>
-          <div id="logs-box" hidden>
+          <div id="logs-box" class="remote-panel" hidden>
+            <button type="button" class="icon-btn panel-close" data-close="logs-box" aria-label="Fermer"><svg><use href="#i-close"/></svg></button>
             <p id="logs-info" class="muted small"></p>
             <pre id="logs" class="logs"></pre>
           </div>
-          <p id="remote-result" class="remote-result" hidden></p>
+          <div id="remote-result-box" class="remote-panel" hidden>
+            <button type="button" class="icon-btn panel-close" data-close="remote-result-box" aria-label="Fermer"><svg><use href="#i-close"/></svg></button>
+            <p id="remote-result" class="remote-result"></p>
+          </div>
         </div>
       </div>
     </section>

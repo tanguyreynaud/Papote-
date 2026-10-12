@@ -1627,7 +1627,7 @@ function targetTablet() {
 function showRemote(text, cls = '') {
   $('remote-result').textContent = text;
   $('remote-result').className = `remote-result ${cls}`;
-  $('remote-result').hidden = !text;
+  $('remote-result-box').hidden = !text;
 }
 
 async function sendCommand(type, extra = {}) {
@@ -1686,6 +1686,15 @@ $('btn-logs').addEventListener('click', async () => {
   }
 });
 
+// Chaque encadré (état, journal, Wi-Fi) se ferme par sa croix.
+document.querySelectorAll('[data-close]').forEach((btn) => btn.addEventListener('click', () => {
+  $(btn.dataset.close).hidden = true;
+}));
+$('btn-wifi').addEventListener('click', () => {
+  $('wifi-box').hidden = !$('wifi-box').hidden;
+  if (!$('wifi-box').hidden) $('wifi-ssid').focus();
+});
+
 $('wifi-security').addEventListener('change', () => {
   $('wifi-password-wrap').hidden = $('wifi-security').value === 'open';
 });
@@ -1704,7 +1713,6 @@ function renderRemote() {
   const admin = amFamilyAdmin();
   const tablet = targetTablet();
   $('remote-card').hidden = !amOwner() || !tablet;
-  $('wifi-card').hidden = !amOwner() || !tablet;
   $('group-tablet').hidden = !amOwner();
   if (tablet) {
     const online = tablet.lastOnline ? toDate(tablet.lastOnline) : null;
@@ -1888,7 +1896,6 @@ $('form-family-name').addEventListener('submit', async (e) => {
 // ---------- Ajouter à l'écran d'accueil ----------
 
 let installPrompt = null;
-const INSTALLED_KEY = 'papote.installed';
 const isIos = () => /iphone|ipad|ipod/i.test(navigator.userAgent)
   || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
@@ -1900,12 +1907,7 @@ function launchedFromHomeScreen() {
 }
 
 function rememberInstalled() {
-  try { localStorage.setItem(INSTALLED_KEY, '1'); } catch (e) { /* stockage indisponible */ }
   $('btn-install').hidden = true;
-}
-
-function knownInstalled() {
-  try { return localStorage.getItem(INSTALLED_KEY) === '1'; } catch (e) { return false; }
 }
 
 // Chrome Android propose l'installation : on garde l'invitation pour notre bouton.
@@ -1918,7 +1920,9 @@ window.addEventListener('appinstalled', rememberInstalled);
 // La carte « Installez Papote » ne s'affiche que si l'app n'est pas déjà sur l'écran d'accueil.
 async function renderInstallCard() {
   if (launchedFromHomeScreen()) { rememberInstalled(); return; }
-  $('btn-install').hidden = knownInstalled();
+  // L'ancien souvenir « déjà installée » cachait le bouton même après une désinstallation.
+  try { localStorage.removeItem('papote.installed'); } catch (e) { /* rien */ }
+  $('btn-install').hidden = false;
   // Chrome Android sait dire si l'app est déjà installée, même ouverte dans le navigateur.
   try {
     const apps = await navigator.getInstalledRelatedApps?.();
