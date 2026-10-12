@@ -7,7 +7,7 @@
   --line: #e9e1d4;
   --accent: #4f46e5;
   --accent-text: #ffffff;
-  --warm: #c2410c;
+  --warm: #4338ca;
   --danger: #dc2626;
   --ok: #15803d;
   --shadow: 0 1px 2px rgba(36, 33, 47, .05), 0 6px 20px rgba(120, 90, 50, .08);
@@ -15,7 +15,7 @@
   --c-photo: #0891b2;
   --c-video: #db2777;
   --c-message: #4f46e5;
-  --c-agenda: #c2410c;
+  --c-agenda: #7c3aed;
   --c-settings: #5f5a6b;
   --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
   --body: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -39,7 +39,7 @@
     --c-photo: #22d3ee;
     --c-video: #f472b6;
     --c-message: #818cf8;
-    --c-agenda: #fbbf24;
+    --c-agenda: #a78bfa;
     --c-settings: #d6d3d1;
   }
 }
@@ -59,7 +59,7 @@
   --c-photo: #22d3ee;
   --c-video: #f472b6;
   --c-message: #818cf8;
-  --c-agenda: #fbbf24;
+  --c-agenda: #a78bfa;
   --c-settings: #d6d3d1;
 }
 :root[data-theme="light"] { color-scheme: light; }

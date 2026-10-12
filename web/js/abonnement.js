@@ -14,11 +14,10 @@ export function abonnementOk(family) {
   return !abo || OK_STATUTS.includes(abo.statut);
 }
 
+// La tablette est toujours prêtée : 50 € de mise en service à la commande, puis l'abonnement.
 export const FORMULES = [
-  { formule: 'wifi', tablette: 'achetee', titre: 'Wi-Fi, j\'achète la tablette', prix: '100 € une fois, puis 20 € par mois' },
-  { formule: 'wifi', tablette: 'incluse', titre: 'Wi-Fi, tablette incluse', prix: '25 € par mois' },
-  { formule: 'sim', tablette: 'achetee', titre: 'Carte SIM, j\'achète la tablette', prix: '100 € une fois, puis 30 € par mois' },
-  { formule: 'sim', tablette: 'incluse', titre: 'Carte SIM, tablette incluse', prix: '35 € par mois' },
+  { formule: 'wifi', tablette: 'incluse', titre: 'Avec le Wi-Fi de la maison', prix: '20 € par mois' },
+  { formule: 'sim', tablette: 'incluse', titre: 'Internet inclus', prix: '30 € par mois, sans box ni Wi-Fi' },
 ];
 
 export const LIBELLES = {

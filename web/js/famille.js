@@ -1519,7 +1519,9 @@ $('btn-resilier').addEventListener('click', async () => {
   const msg = quand
     ? `Résilier l'abonnement ? Papote continuera de fonctionner jusqu'au ${quand}, puis la tablette se mettra en pause.`
     : "Résilier l'abonnement ? La tablette se mettra en pause à la fin de la période payée.";
-  if (!await askConfirm(msg, 'Résilier')) return;
+  const aRendre = session.family.abonnement?.tablette !== 'achetee'
+    ? ' La tablette prêtée sera à renvoyer ; si elle n\'est pas rendue, 120 € seront facturés.' : '';
+  if (!await askConfirm(msg + aRendre, 'Résilier')) return;
   withAboError(async () => {
     const { le } = await resilier(session.fid);
     notice(`Résiliation enregistrée. Papote fonctionnera jusqu'au ${dateLongue(le) || quand || 'terme de la période payée'}.`);
@@ -1579,7 +1581,7 @@ function renderAbonnement() {
     $('abo-status').textContent = LIBELLES[statut] || statut;
     $('abo-status').className = `abo-status s-${statut}`;
     const details = [];
-    if (abo.formule) details.push(`Formule ${abo.formule === 'sim' ? 'carte SIM' : 'Wi-Fi'}, tablette ${abo.tablette === 'incluse' ? 'incluse' : 'achetée'}`);
+    if (abo.formule) details.push(`${abo.formule === 'sim' ? 'Internet inclus' : 'Avec le Wi-Fi de la maison'}, ${abo.tablette === 'achetee' ? 'tablette achetée' : 'tablette prêtée'}`);
     const futur = (t) => t && toDate(t) > new Date();
     if (futur(abo.essaiJusqua)) details.push(`Essai gratuit jusqu'au ${dateLongue(abo.essaiJusqua)}`);
     if (futur(abo.engagementJusqua)) details.push(`Engagement jusqu'au ${dateLongue(abo.engagementJusqua)}`);
