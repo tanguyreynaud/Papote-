@@ -6,6 +6,8 @@ Page de présentation publique : fonctionnement, tarifs, FAQ, boutons Commander 
 
 Second site Firebase Hosting du projet `papote-famille`, à côté de l'app famille (dont l'adresse ne change pas).
 
+Adresse du site : https://mapapote.fr (et www), branchée sur ce site dans la console Firebase > Hosting > « Ajouter un domaine personnalisé ». L'ancienne adresse https://papote.web.app marche toujours.
+
 Une seule fois : `firebase hosting:sites:create papote --project papote-famille` (adresse https://papote.web.app ; si le nom est pris, en choisir un autre et le reporter dans `firebase.vitrine.json` et `functions/.env`).
 
 Ensuite, comme l'app famille :
