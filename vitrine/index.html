@@ -83,6 +83,7 @@ section { padding-block: clamp(3.5rem, 8vw, 6rem); }
 .top nav a { color: var(--muted); text-decoration: none; font-weight: 700; font-size: 1rem; }
 .top nav a:hover { color: var(--text); }
 .top nav a.client { white-space: nowrap; }
+@media (max-width: 420px) { .top nav a.client { display: none; } }
 .top nav .btn { min-height: 2.6rem; padding: .5rem 1.1rem; font-size: .95rem; color: var(--accent-text); }
 .top nav .btn:hover { color: var(--accent-text); }
 @media (max-width: 760px) { .top nav a:not(.btn):not(.client) { display: none; } }
@@ -185,6 +186,9 @@ section { padding-block: clamp(3.5rem, 8vw, 6rem); }
 .option-prix { font: 800 1.25rem/1.1 var(--display); text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .option-prix em { display: block; font: 400 .85rem/1.2 var(--body); color: var(--muted); font-style: normal; }
 .offre-btn { justify-self: stretch; margin-top: .5rem; }
+.hero-badges { display: flex; flex-wrap: wrap; gap: .5rem; margin: 0; }
+.hero-badges span { background: var(--accent-soft); color: var(--accent-strong); font-weight: 700; font-size: .95rem; padding: .35rem .8rem; border-radius: 999px; }
+.stock { color: var(--warm); font-weight: 700; font-size: .95rem; text-align: center; }
 .plans-note { margin-top: 1.5rem; color: var(--muted); font-size: 1rem; max-width: 46rem; }
 
 /* FAQ */
@@ -243,7 +247,7 @@ footer a { color: var(--muted); }
       <a href="#tarifs">Tarifs</a>
       <a href="#questions">Questions</a>
       <a class="client" href="https://papote-famille.web.app">Espace client</a>
-      <a class="btn btn-primary" href="#tarifs">Commander</a>
+      <a class="btn btn-primary" href="commande.html">Commander</a>
     </nav>
   </div>
 </header>
@@ -251,14 +255,15 @@ footer a { color: var(--muted); }
 <main>
   <section class="hero">
       <div class="hero-text">
+        <p class="hero-badges"><span>🚚 Livraison offerte</span><span>✨ 15 jours d'essai gratuit</span></p>
         <p class="eyebrow">Zéro clic pour Mamie</p>
         <h1>Toute la famille près de Mamie. <span>Sans qu'elle touche à rien.</span></h1>
         <p class="lead">Photos des petits, mots doux, appels vidéo : tout arrive tout seul sur sa tablette. Pas de bouton à chercher, pas de mot de passe. Elle regarde, elle sourit, elle vous voit.</p>
         <div class="hero-actions">
-          <a class="btn btn-primary" href="#tarifs">Choisir ma formule</a>
+          <a class="btn btn-primary" href="commande.html">Commander</a>
           <a class="btn btn-ghost" href="#fonctionnement">Comment ça marche</a>
         </div>
-        <p class="hero-note">15 jours d'essai gratuit, puis à partir de 20 € par mois. Tablette à 120 €, ou incluse dans l'abonnement.</p>
+        <p class="hero-note">15 jours d'essai gratuit, puis 20 € par mois, tablette prêtée.</p>
       </div>
 
       <figure class="hero-photo">
@@ -350,7 +355,7 @@ footer a { color: var(--muted); }
           <li><span class="ic"><svg><use href="#i-lock"/></svg></span><p><b>Rien d'autre que Papote</b><span>Pas de publicité, pas d'autres applis, pas de réglage qu'on change par erreur.</span></p></li>
           <li><span class="ic"><svg><use href="#i-text"/></svg></span><p><b>Lisible de loin</b><span>Grande horloge, date, météo du jour. Le texte peut être agrandi à distance.</span></p></li>
           <li><span class="ic"><svg><use href="#i-moon"/></svg></span><p><b>Elle dort la nuit</b><span>L'écran se met en veille de 23 h à 7 h et s'assombrit en soirée. La luminosité suit celle de la pièce.</span></p></li>
-          <li><span class="ic"><svg><use href="#i-signal"/></svg></span><p><b>Avec ou sans box internet</b><span>En wifi, ou avec une carte SIM pour les logements sans connexion.</span></p></li>
+          <li><span class="ic"><svg><use href="#i-signal"/></svg></span><p><b>Avec ou sans box internet</b><span>En wifi, ou avec l'option internet inclus quand il n'y a pas de box.</span></p></li>
         </ul>
       </div>
       <div class="side">
@@ -372,8 +377,8 @@ footer a { color: var(--muted); }
     <div class="wrap">
       <div class="section-head">
         <p class="eyebrow">Tarifs</p>
-        <h2>Un abonnement, deux options si besoin.</h2>
-        <p class="lead">Partez de l'abonnement à 20 € par mois, puis ajoutez seulement ce qui vous sert. Les 15 premiers jours sont offerts.</p>
+        <h2>Un seul abonnement, tablette comprise.</h2>
+        <p class="lead">La tablette est prêtée pendant toute la durée de l'abonnement. Les 15 premiers jours sont offerts.</p>
       </div>
 
       <form class="offre" id="offre" action="commande.html">
@@ -381,7 +386,7 @@ footer a { color: var(--muted); }
           <div class="plan-head">
             <span class="tag">Abonnement Papote</span>
             <div class="price"><strong id="offre-prix">20 €</strong><span>par mois</span></div>
-            <p id="offre-detail">+ 120 € une fois pour la tablette, qui vous appartient.</p>
+            <p>Tablette prêtée et incluse. 50 € à la commande pour la mise en service.</p>
           </div>
           <ul class="included">
             <li><svg><use href="#i-check"/></svg>Tablette livrée configurée et prête à l'emploi, livraison offerte</li>
@@ -392,19 +397,15 @@ footer a { color: var(--muted); }
         </div>
         <div class="offre-options">
           <label class="option">
-            <input type="checkbox" name="tablette" value="incluse">
-            <span><b>Location de la tablette</b><small>Rien à payer au départ. La tablette est à rendre en fin d'abonnement.</small></span>
-            <span class="option-prix">+5 €<em>par mois</em></span>
-          </label>
-          <label class="option">
             <input type="checkbox" name="formule" value="sim">
-            <span><b>Internet inclus</b><small>Pas besoin de box internet à la maison : la tablette a sa propre connexion.</small></span>
+            <span><b>Internet inclus</b><small>Pas besoin de box : la tablette a sa propre connexion.</small></span>
             <span class="option-prix">+10 €<em>par mois</em></span>
           </label>
           <button class="btn btn-primary offre-btn" type="submit">Commander</button>
+          <p class="stock">Petite entreprise familiale : tablettes préparées à la main, en quantité limitée.</p>
         </div>
       </form>
-      <p class="plans-note">Prix par tablette, toute la famille utilise l'appli sans supplément. 15 jours d'essai gratuit, puis engagement de 12 mois ; ensuite, l'abonnement continue de mois en mois et se résilie à tout moment depuis l'appli famille. Sans l'option location, la tablette (120 €) est payée à la commande et vous appartient. Paiement sécurisé par carte.</p>
+      <p class="plans-note">Prix par tablette, toute la famille utilise l'appli sans supplément. 15 jours d'essai gratuit, puis engagement de 12 mois ; ensuite, l'abonnement continue de mois en mois et se résilie à tout moment depuis l'appli famille. 50 € sont payés à la commande pour la mise en service ; la tablette est prêtée et nous est rendue en fin d'abonnement. Paiement sécurisé par carte.</p>
     </div>
   </section>
 
@@ -433,7 +434,7 @@ footer a { color: var(--muted); }
         </details>
         <details>
           <summary>Faut-il une box internet chez mon proche ?</summary>
-          <p>Avec la formule Wifi, oui. Sans box, choisissez la formule avec carte SIM : la tablette se connecte par le réseau mobile.</p>
+          <p>Non. Sans box, prenez l'option internet inclus : la tablette se connecte par le réseau mobile.</p>
         </details>
         <details>
           <summary>Qui peut envoyer des photos ?</summary>
@@ -461,11 +462,11 @@ footer a { color: var(--muted); }
         </details>
         <details>
           <summary>Que se passe-t-il à la fin de l'abonnement ?</summary>
-          <p>Si vous avez acheté la tablette, elle reste à vous. Si elle était incluse dans l'abonnement, vous nous la renvoyez dans les 30 jours qui suivent la fin de l'abonnement, avec son chargeur et son socle. Une tablette non rendue dans ce délai est facturée 120 € sur la carte enregistrée.</p>
+          <p>La tablette est prêtée : vous nous la renvoyez dans les 30 jours qui suivent la fin de l'abonnement, avec son chargeur et son socle. Une tablette non rendue dans ce délai est facturée 120 € sur la carte enregistrée.</p>
         </details>
         <details>
           <summary>Quelles garanties sur la tablette ?</summary>
-          <p>Vous disposez de 14 jours après la réception pour changer d'avis et nous renvoyer la tablette. Une tablette achetée bénéficie de la garantie légale de conformité de 2 ans : en cas de panne, nous la réparons ou la remplaçons. Une tablette incluse dans l'abonnement reste la nôtre : si elle tombe en panne, nous la remplaçons, et elle nous est rendue en fin d'abonnement. La casse accidentelle (chute, écran brisé, liquide renversé) n'est pas couverte par la garantie : la réparation ou le remplacement est alors à votre charge.</p>
+          <p>Vous disposez de 14 jours après la réception pour changer d'avis et nous renvoyer la tablette. La tablette reste la nôtre : si elle tombe en panne, nous la remplaçons, et elle nous est rendue en fin d'abonnement. La casse accidentelle (chute, écran brisé, liquide renversé) n'est pas couverte par la garantie : la réparation ou le remplacement est alors à votre charge.</p>
         </details>
         <details>
           <summary>Et si un paiement échoue ?</summary>
@@ -535,22 +536,17 @@ footer a { color: var(--muted); }
   });
 </script>
 <script>
-  // Tarifs : abonnement 20 € + options location (+5 €) et internet (+10 €), envoyées à la page de commande.
+  // Tarifs : abonnement 20 €, 30 € avec internet inclus ; le choix est repris sur la page de commande.
   (function () {
     var offre = document.getElementById('offre');
     if (!offre) return;
     function maj() {
-      var loc = offre.tablette.checked, net = offre.formule.checked;
-      document.getElementById('offre-prix').textContent = (20 + (loc ? 5 : 0) + (net ? 10 : 0)) + ' €';
-      document.getElementById('offre-detail').textContent = loc
-        ? 'Tablette prêtée, rien à payer au départ.'
-        : '+ 120 € une fois pour la tablette, qui vous appartient.';
+      document.getElementById('offre-prix').textContent = (offre.formule.checked ? 30 : 20) + ' €';
     }
     offre.addEventListener('change', maj);
     offre.addEventListener('submit', function (e) {
       e.preventDefault();
-      location.href = 'commande.html?formule=' + (offre.formule.checked ? 'sim' : 'wifi')
-        + '&tablette=' + (offre.tablette.checked ? 'incluse' : 'achetee');
+      location.href = 'commande.html' + (offre.formule.checked ? '?formule=sim' : '');
     });
     maj();
   })();
