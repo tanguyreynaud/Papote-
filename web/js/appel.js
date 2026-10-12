@@ -117,9 +117,15 @@ function landscapeStream(camera) {
  *   ui.local / ui.remote : éléments <video>
  *   ui.onState(state)    : 'ringing' | 'accepted' | 'connected'
  *   ui.onEnd(reason)     : 'ended' | 'declined' | 'missed' | 'failed'
- * Renvoie { hangup() }.
+ *   ui.signal            : AbortSignal ; « Raccrocher » avant la fin du démarrage annule tout
+ * Renvoie { hangup() }, ou lève une AbortError si l'appel a été annulé pendant le démarrage.
  */
 export async function startCall(fid, caller, ui) {
+  // Raccrocher pendant le démarrage ne doit jamais laisser la caméra tourner ni l'appel sonner
+  // chez Mamie (elle peut décrocher toute seule en regardant l'écran).
+  const signal = ui.signal;
+  const cancelled = () => !!(signal && signal.aborted);
+  const abortError = () => new DOMException('Appel annulé', 'AbortError');
   const camera = await navigator.mediaDevices.getUserMedia({
     video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
     audio: { echoCancellation: true, noiseSuppression: true },
@@ -127,8 +133,11 @@ export async function startCall(fid, caller, ui) {
   const sent = landscapeStream(camera);
   const stream = sent.stream;
   ui.local.srcObject = stream; // l'appelant voit exactement l'image envoyée
+  if (cancelled()) { sent.stop(); throw abortError(); }
 
-  const pc = new RTCPeerConnection(await iceServers());
+  const ice = await iceServers();
+  if (cancelled()) { sent.stop(); throw abortError(); }
+  const pc = new RTCPeerConnection(ice);
   stream.getTracks().forEach((t) => pc.addTrack(t, stream));
   pc.ontrack = (e) => {
     ui.remote.srcObject = e.streams[0];
@@ -142,6 +151,7 @@ export async function startCall(fid, caller, ui) {
 
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
+  if (cancelled()) { pc.close(); sent.stop(); throw abortError(); }
   await setDoc(callRef, {
     callerUid: caller.uid,
     callerName: caller.name,
@@ -189,6 +199,12 @@ export async function startCall(fid, caller, ui) {
     if (pc.connectionState === 'connected') ui.onState('connected');
     if (pc.connectionState === 'failed') finish('failed', 'ended');
   };
+
+  // Annulé pendant l'écriture de l'appel, ou plus tard : on raccroche pour de bon.
+  if (signal) {
+    if (cancelled()) finish('ended', 'ended');
+    else signal.addEventListener('abort', () => finish('ended', 'ended'), { once: true });
+  }
 
   return { hangup: () => finish('ended', 'ended') };
 }

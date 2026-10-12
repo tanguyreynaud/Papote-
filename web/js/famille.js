@@ -1167,15 +1167,23 @@ function callErrorMessage(err) {
   return `L'appel n'a pas pu démarrer. Réessayez dans un instant.${detail}`;
 }
 
+let callAbort = null; // annule un appel encore en train de démarrer
+let callStarting = false; // un seul démarrage à la fois, même annulé
+
 $('tile-call').addEventListener('click', async () => {
-  if (currentCall) return;
+  if (currentCall || callStarting) return;
   if (paused()) return;
+  callStarting = true;
+  const abort = new AbortController();
+  callAbort = abort;
   const allowed = await cameraAllowed();
+  if (abort.signal.aborted) { callStarting = false; return; }
   if (allowed) enterCallScreen();
   $('call').hidden = false;
   setCallStatus('Préparation de la caméra…');
   try {
     currentCall = await startCall(session.fid, { uid: session.uid, name: session.member.name }, {
+      signal: abort.signal,
       local: $('call-local'),
       remote: $('call-remote'),
       onState: (state) => {
@@ -1184,6 +1192,7 @@ $('tile-call').addEventListener('click', async () => {
       },
       onEnd: (reason) => {
         currentCall = null;
+        callAbort = null;
         setCallStatus(END_MESSAGES[reason] || 'Appel terminé');
         setTimeout(() => {
           if (currentCall) return;
@@ -1193,10 +1202,17 @@ $('tile-call').addEventListener('click', async () => {
       },
     });
   } catch (err) {
-    console.error(err);
     currentCall = null;
+    callAbort = null;
+    if (err && err.name === 'AbortError') {
+      leaveCallScreen();
+      return;
+    }
+    console.error(err);
     setCallStatus(callErrorMessage(err));
     setTimeout(() => { if (!currentCall) leaveCallScreen(); }, 4000);
+  } finally {
+    callStarting = false;
   }
 });
 
@@ -1209,9 +1225,22 @@ async function offerVideoMessage() {
   $('in-video-camera').click();
 }
 
-$('call-hangup').addEventListener('click', () => {
+// Raccrocher, même pendant le démarrage : l'appel est annulé, la caméra s'éteint.
+function hangupCall() {
+  const abort = callAbort;
+  callAbort = null;
+  if (abort) abort.abort();
   if (currentCall) currentCall.hangup();
-  else leaveCallScreen();
+}
+
+// L'app quittée ou passée en arrière-plan : on raccroche, la caméra ne tourne jamais sans être vue.
+window.addEventListener('pagehide', hangupCall);
+document.addEventListener('visibilitychange', () => { if (document.hidden) hangupCall(); });
+
+$('call-hangup').addEventListener('click', () => {
+  const wasConnected = !!currentCall;
+  hangupCall();
+  if (!wasConnected) leaveCallScreen();
 });
 
 let allMembers = [];
