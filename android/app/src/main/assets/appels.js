@@ -201,6 +201,7 @@ function showRing(id, data) {
   $('ring-name').textContent = data.callerName;
   $('call-ring').hidden = false;
   if (android()) android().ring(true);
+  stopPresence(); // la caméra passe à la sonnerie
   showCallerFace(id, data.callerUid);
   watchFace();
 }
@@ -260,6 +261,39 @@ function faceDetector() {
   return detectorPromise;
 }
 
+// Renvoie une fonction qui dit si un visage est bien en face sur l'image actuelle de `video`.
+// L'image est réduite (plus rapide sur une petite tablette) et, si aucun visage n'est vu,
+// essayée tournée d'un quart de tour : avec la caméra sur le côté, certaines tablettes
+// livrent une image couchée. Le bon sens trouvé est gardé ; sinon on passe au suivant.
+function makeLooker(video, detector) {
+  const frame = document.createElement('canvas');
+  const fctx = frame.getContext('2d');
+  const angles = [0, 90, 270];
+  let turn = 0;
+  const lookAt = (angle) => {
+    const w = video.videoWidth;
+    const h = video.videoHeight;
+    const k = Math.min(1, 480 / Math.max(w, h));
+    const fw = Math.round(w * k);
+    const fh = Math.round(h * k);
+    const side = angle === 0 ? fw : fh;
+    frame.width = side;
+    frame.height = angle === 0 ? fh : fw;
+    fctx.save();
+    fctx.translate(frame.width / 2, frame.height / 2);
+    fctx.rotate((angle * Math.PI) / 180);
+    fctx.drawImage(video, -fw / 2, -fh / 2, fw, fh);
+    fctx.restore();
+    const { detections } = detector.detectForVideo(frame, performance.now());
+    return detections.some((d) => d.boundingBox && d.boundingBox.width / side >= FACE_MIN_WIDTH);
+  };
+  return () => {
+    const seen = lookAt(angles[turn]);
+    if (!seen) turn = (turn + 1) % angles.length;
+    return seen;
+  };
+}
+
 async function watchFace() {
   const callId = ringing && ringing.id;
   let stream;
@@ -284,39 +318,14 @@ async function watchFace() {
   if (!detector || !faceWatch || faceWatch.stream !== stream) return;
   $('ring-hint').hidden = false;
 
-  // L'image est réduite (plus rapide sur une petite tablette) et, si aucun visage n'est vu,
-  // essayée tournée d'un quart de tour : avec la caméra sur le côté, certaines tablettes
-  // livrent une image couchée.
-  const frame = document.createElement('canvas');
-  const fctx = frame.getContext('2d');
-  const angles = [0, 90, 270];
-  let turn = 0;
-  const look = (angle) => {
-    const w = video.videoWidth;
-    const h = video.videoHeight;
-    const k = Math.min(1, 480 / Math.max(w, h));
-    const fw = Math.round(w * k);
-    const fh = Math.round(h * k);
-    const side = angle === 0 ? fw : fh;
-    frame.width = side;
-    frame.height = angle === 0 ? fh : fw;
-    fctx.save();
-    fctx.translate(frame.width / 2, frame.height / 2);
-    fctx.rotate((angle * Math.PI) / 180);
-    fctx.drawImage(video, -fw / 2, -fh / 2, fw, fh);
-    fctx.restore();
-    const { detections } = detector.detectForVideo(frame, performance.now());
-    return detections.some((d) => d.boundingBox && d.boundingBox.width / side >= FACE_MIN_WIDTH);
-  };
+  const look = makeLooker(video, detector);
 
   const tick = () => {
     if (!faceWatch || faceWatch.stream !== stream) return;
     if (video.readyState >= 2 && video.videoWidth) {
       let seen = false;
       try {
-        // Le bon sens trouvé est gardé ; sinon on passe au suivant à chaque coup d'œil.
-        seen = look(angles[turn]);
-        if (!seen) turn = (turn + 1) % angles.length;
+        seen = look();
       } catch (e) {
         console.warn('Détection du visage', e);
       }
@@ -341,6 +350,7 @@ function stopFaceWatch(keepStream) {
   video.classList.remove('seen');
   video.srcObject = null;
   $('ring-hint').hidden = true;
+  if (!keepStream) setTimeout(startPresence, 500); // sonnerie finie sans appel : on reprend
   if (!watch) return null;
   clearTimeout(watch.timer);
   if (keepStream) {
@@ -349,6 +359,79 @@ function stopFaceWatch(keepStream) {
   }
   watch.stream.getTracks().forEach((t) => t.stop());
   return null;
+}
+
+// ---------- Présence devant l'écran ----------
+// Pour tablette.js : un envoi ou un rappel affiché se ferme tout seul un moment après que
+// Mamie a été vue. window.papoteWatchPresence(onSeen) renvoie stop(). La caméra (image seule,
+// sans micro) est partagée entre les surveillances, et laissée à la sonnerie quand un appel arrive.
+
+const presence = { watchers: new Set(), stream: null, video: null, timer: null, starting: false };
+
+window.papoteWatchPresence = (onSeen) => {
+  const watcher = { onSeen, since: 0, done: false };
+  presence.watchers.add(watcher);
+  startPresence();
+  return () => {
+    presence.watchers.delete(watcher);
+    if (!presence.watchers.size) stopPresence();
+  };
+};
+
+async function startPresence() {
+  if (presence.stream || presence.starting || ringing || active) return;
+  if (![...presence.watchers].some((w) => !w.done)) return;
+  presence.starting = true;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: CAMERA.video, audio: false });
+    if (!presence.watchers.size || ringing || active) {
+      stream.getTracks().forEach((t) => t.stop());
+      return;
+    }
+    const video = document.createElement('video');
+    video.muted = true;
+    video.playsInline = true;
+    video.srcObject = stream;
+    video.play().catch(() => {});
+    presence.stream = stream;
+    presence.video = video;
+
+    const detector = await faceDetector();
+    if (!detector || presence.stream !== stream) return;
+    const look = makeLooker(video, detector);
+    const tick = () => {
+      if (presence.stream !== stream) return;
+      if (video.readyState >= 2 && video.videoWidth) {
+        let seen = false;
+        try { seen = look(); } catch (e) { console.warn('Présence : détection', e); }
+        const now = Date.now();
+        presence.watchers.forEach((w) => {
+          if (w.done) return;
+          w.since = seen ? (w.since || now) : 0;
+          if (seen && now - w.since >= FACE_HOLD_MS) {
+            w.done = true;
+            try { w.onSeen(); } catch (e) { console.warn('Présence : onSeen', e); }
+          }
+        });
+        // Tout le monde a été servi : la caméra s'éteint.
+        if (![...presence.watchers].some((w) => !w.done)) { stopPresence(); return; }
+      }
+      presence.timer = setTimeout(tick, 500);
+    };
+    tick();
+  } catch (e) {
+    console.warn('Présence : caméra indisponible', e);
+  } finally {
+    presence.starting = false;
+  }
+}
+
+function stopPresence() {
+  clearTimeout(presence.timer);
+  if (presence.stream) presence.stream.getTracks().forEach((t) => t.stop());
+  if (presence.video) presence.video.srcObject = null;
+  presence.stream = null;
+  presence.video = null;
 }
 
 // ---------- Pause (abonnement suspendu) ----------
@@ -469,6 +552,7 @@ function hangup(message, remoteEnded) {
 }
 
 function closeView() {
+  setTimeout(startPresence, 500);
   $('call-view').hidden = true;
   $('call-wait').hidden = false;
   $('call-remote').srcObject = null;
