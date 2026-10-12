@@ -51,6 +51,12 @@ service cloud.firestore {
       return abo == null || abo.get('statut', '') in ['offert', 'actif', 'impaye'];
     }
 
+    // 30 proches au plus par famille (la tablette ne compte pas). nbProches est tenu à jour
+    // côté serveur ; tant qu'il n'existe pas, aucune limite.
+    function familleAPlace(fid) {
+      return get(familyPath(fid)).data.get('nbProches', 0) < 30;
+    }
+
     function invitePath(code) {
       return /databases/$(database)/documents/invites/$(code);
     }
@@ -180,6 +186,11 @@ service cloud.firestore {
             && request.resource.data.veille.active is bool
             && request.resource.data.veille.de is int && request.resource.data.veille.de >= 0 && request.resource.data.veille.de <= 23
             && request.resource.data.veille.a is int && request.resource.data.veille.a >= 0 && request.resource.data.veille.a <= 23)
+          // Volume de la tablette (0 à 100), avec le compteur qui la prévient.
+          || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['volume', 'rev'])
+            && isFamilyAdmin(fid)
+            && request.resource.data.volume is int
+            && request.resource.data.volume >= 0 && request.resource.data.volume <= 100)
           // Taille du texte sur la tablette, avec le compteur qui la prévient.
           || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['textSize', 'rev'])
             && isFamilyAdmin(fid)
@@ -225,6 +236,7 @@ service cloud.firestore {
               && request.time < get(/databases/$(database)/documents/pairings/$(request.resource.data.pairing)).data.expiresAt + duration.value(1, 'h'))
             // Famille : compte Google ou e-mail, avec son uid et son adresse.
             || (request.resource.data.role == 'famille'
+              && familleAPlace(fid)
               && isRealAccount()
               && request.resource.data.uid == request.auth.uid
               && request.resource.data.email == myEmail()
@@ -243,8 +255,9 @@ service cloud.firestore {
         allow update: if isAdmin()
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
           && request.resource.data.status == 'active';
-        // Un responsable accepte un membre en attente.
+        // Un responsable accepte un membre en attente (s'il reste de la place).
         allow update: if isFamilyAdmin(fid)
+          && familleAPlace(fid)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
           && request.resource.data.status == 'active';
         allow update: if signedIn()

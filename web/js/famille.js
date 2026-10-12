@@ -1225,11 +1225,19 @@ $('call-hangup').addEventListener('click', () => {
 
 let allMembers = [];
 
+// 30 proches au plus par famille (la tablette ne compte pas) : vérifié aussi par les règles.
+const MAX_PROCHES = 30;
+let familyFull = false;
+
 function renderMembers(all) {
   allMembers = all;
   // Les demandes en attente sont à part : seuls les responsables les voient et les acceptent.
   const pending = all.filter((m) => m.status === 'pending');
   const members = all.filter((m) => m.status !== 'pending');
+  familyFull = members.filter((m) => m.role === 'famille').length >= MAX_PROCHES;
+  $('family-full').hidden = !familyFull || !pending.length;
+  $('invite-full').hidden = !familyFull;
+  $('invite-email-card').classList.toggle('disabled-card', familyFull);
   renderRequests(pending);
   tabletMembers = members.filter((m) => m.role === 'tablette');
   faces = Object.fromEntries(members.filter((m) => m.face).map((m) => [m.id, m.face]));
@@ -1345,7 +1353,9 @@ function renderRequests(pending) {
     ok.type = 'button';
     ok.className = 'primary small-btn';
     ok.textContent = 'Accepter';
+    ok.disabled = familyFull;
     ok.addEventListener('click', async () => {
+      if (familyFull) { notice('La famille est complète : 30 proches au maximum.'); return; }
       try { await acceptMember(session.fid, m.id); toast(`${m.name} a rejoint la famille`); } catch (err) { console.error(err); notice("L'acceptation a échoué."); }
     });
     const no = document.createElement('button');
@@ -1389,6 +1399,7 @@ function watchInvitations() {
 $('form-invite').addEventListener('submit', async (e) => {
   e.preventDefault();
   const email = $('invite-email').value.trim();
+  if (familyFull) { notice('La famille est complète : 30 proches au maximum.'); return; }
   try {
     await inviteByEmail(session.fid, session.family, email, session.member.name);
     $('invite-email').value = '';
@@ -1731,6 +1742,27 @@ $('btn-sleep').addEventListener('click', async () => {
   }
 });
 
+// ---------- Volume de la tablette ----------
+// families/{fid}.volume (0 à 100), appliqué par la tablette au son des vidéos et des appels.
+
+function renderVolume() {
+  if (document.activeElement === $('volume')) return;
+  const v = Number.isInteger(session.family.volume) ? session.family.volume : 80;
+  $('volume').value = String(v);
+  $('volume-value').textContent = `${v} %`;
+}
+
+$('volume').addEventListener('input', () => { $('volume-value').textContent = `${$('volume').value} %`; });
+$('volume').addEventListener('change', async () => {
+  try {
+    await updateDoc(doc(db, 'families', session.fid), { volume: Number($('volume').value), rev: increment(1) });
+    toast('Volume envoyé à la tablette');
+  } catch (err) {
+    console.error(err);
+    notice("Le volume n'a pas pu être enregistré.");
+  }
+});
+
 // ---------- Taille du texte sur la tablette ----------
 
 const TEXT_SIZES = ['normal', 'grande', 'tres-grande'];
@@ -1818,6 +1850,8 @@ function applyFamily() {
   $('text-size-card').hidden = !amOwner();
   $('sleep-card').hidden = !amOwner();
   renderSleep();
+  $('volume-card').hidden = !amOwner();
+  renderVolume();
   $('btn-delete-family').hidden = !amOwner();
   renderTextSize();
   $('invite-email-card').hidden = !admin;

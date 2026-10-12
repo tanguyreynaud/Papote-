@@ -311,6 +311,7 @@
         <div id="requests-card" class="card" hidden>
           <h2>Demandes pour rejoindre</h2>
           <ul id="requests" class="members"></ul>
+          <p id="family-full" class="error small" hidden>La famille est complète : 30 proches au maximum. Retirez quelqu'un pour en accepter un autre.</p>
         </div>
         <div class="card">
           <h2>Membres</h2>
@@ -325,6 +326,14 @@
             <button type="submit" class="primary">Enregistrer</button>
           </div>
         </form></div>
+        <div id="volume-card" class="card" hidden>
+          <h2>Volume du son</h2>
+          <p class="muted small">Le son des vidéos et des appels sur la tablette.</p>
+          <div class="volume-row">
+            <input id="volume" type="range" min="0" max="100" step="5" aria-label="Volume de la tablette">
+            <span id="volume-value" class="volume-value"></span>
+          </div>
+        </div>
         <div id="text-size-card" class="card" hidden>
           <h2>Taille du texte</h2>
           <div class="segmented" role="radiogroup" aria-label="Taille du texte sur la tablette">
@@ -387,6 +396,7 @@
         <h1>Inviter la famille</h1>
       </header>
       <div class="page-pad">
+        <p id="invite-full" class="card error" hidden>La famille est complète : 30 proches au maximum. Pour inviter quelqu'un, un responsable doit d'abord retirer un membre.</p>
         <div id="invite-email-card" class="card" hidden>
           <h2>Inviter par e-mail</h2>
           <p class="muted small">La personne entre directement dans la famille en se connectant avec cette adresse.</p>

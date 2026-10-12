@@ -887,3 +887,8 @@ h1, h2, h3, .brand, .tile, .splash-name { font-family: var(--display); letter-sp
 .settings-group { margin: 22px 4px 10px; font-size: 14px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
 .settings-group:first-of-type { margin-top: 4px; }
 .remote-buttons { grid-template-columns: 1fr; }
+
+.volume-row { display: flex; align-items: center; gap: 12px; }
+.volume-row input { flex: 1; margin: 0; padding: 0; accent-color: var(--accent); background: none; border: none; }
+.volume-value { min-width: 52px; text-align: right; font-weight: 700; }
+.disabled-card { opacity: .5; pointer-events: none; }
