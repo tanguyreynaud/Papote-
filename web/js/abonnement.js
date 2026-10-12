@@ -50,6 +50,16 @@ export function resilier(fid) {
   return call('resilierAbonnement', { fid });
 }
 
+/** Fin de contrat : délai de rétractation, tablette à rendre, remboursement (voir functions/). */
+export function finDeContrat(fid) {
+  return call('finDeContrat', { fid });
+}
+
+/** Annuler la commande (rétractation) : l'abonnement s'arrête tout de suite. */
+export function retracter(fid) {
+  return call('retracter', { fid });
+}
+
 export function annulerResiliation(fid) {
   return call('annulerResiliation', { fid });
 }

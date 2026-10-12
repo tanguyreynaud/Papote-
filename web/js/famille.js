@@ -16,6 +16,7 @@ import { askConfirm, notice } from './ui.js';
 import { showGuideOnce } from './guide.js';
 import {
   abonnementOk, FORMULES, LIBELLES, ouvrirPortail, payer, rattacherCommande, resilier, annulerResiliation,
+  finDeContrat, retracter,
 } from './abonnement.js';
 import { startCall } from './appel.js';
 import { prepareVideo } from './video.js';
@@ -1583,8 +1584,74 @@ async function useOrderCodeFromSite(statut, owner) {
   }
 }
 
+// ---------- Fin de contrat : annulation de commande et tablette à rendre ----------
+
+let finCle = null;
+let finInfo = null;
+const euros = (centimes) => `${(centimes / 100).toLocaleString('fr-FR', { minimumFractionDigits: centimes % 100 ? 2 : 0 })} €`;
+const jourMois = (ms) => new Date(ms).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+
+// Demandé au serveur une fois par état d'abonnement (pas à chaque mise à jour de la famille).
+async function renderFinDeContrat(abo) {
+  const cle = `${session.fid}|${JSON.stringify(abo || null)}`;
+  if (!abo || !amFamilyAdmin()) {
+    finCle = cle;
+    finInfo = null;
+  } else if (cle !== finCle) {
+    finCle = cle;
+    try { finInfo = await finDeContrat(session.fid); } catch (err) { console.warn('Fin de contrat illisible', err); finInfo = null; }
+    if (cle !== finCle) return;
+  }
+  const r = finInfo?.retractation;
+  $('btn-retracter').hidden = !r;
+  $('retract-info').hidden = !r?.jusqua;
+  if (r?.jusqua) $('retract-info').textContent = `Annulation possible jusqu'au ${jourMois(r.jusqua)}.`;
+  const rest = finInfo?.restitution;
+  const remb = finInfo?.remboursement;
+  const box = $('retour-box');
+  box.hidden = true;
+  $('retour-etiquette').hidden = true;
+  $('retour-info').hidden = true;
+  if (rest && ['attendue', 'echec'].includes(rest.statut)) {
+    box.hidden = false;
+    $('retour-text').textContent = rest.avant ? `Tablette à nous rendre avant le ${jourMois(rest.avant)}` : 'Tablette à nous rendre';
+    if (rest.etiquette) {
+      $('retour-etiquette').href = rest.etiquette;
+      $('retour-etiquette').hidden = false;
+    }
+    const infos = [];
+    if (!rest.etiquette) infos.push("L'étiquette de retour prépayée arrive par e-mail.");
+    if (remb?.statut === 'au-retour') infos.push(`${euros(remb.montant)} remboursés dès réception de la tablette.`);
+    $('retour-info').textContent = infos.join(' ');
+    $('retour-info').hidden = !infos.length;
+  } else if (rest?.statut === 'rendue') {
+    box.hidden = false;
+    $('retour-text').textContent = 'Tablette bien reçue, merci';
+    if (remb && ['en-cours', 'fait'].includes(remb.statut)) {
+      $('retour-info').textContent = `${euros(remb.montant)} remboursés.`;
+      $('retour-info').hidden = false;
+    }
+  }
+}
+
+$('btn-retracter').addEventListener('click', async () => {
+  const r = finInfo?.retractation;
+  if (!r) return;
+  const quand = r.jusqua === null || r.jusqua === undefined ? 'tout de suite' : 'dès que la tablette nous revient';
+  const montant = r.montant ? ` Vous serez remboursé de ${euros(r.montant)} ${quand}.` : '';
+  if (!await askConfirm(`Annuler votre commande ? Votre abonnement s'arrête tout de suite.${montant}`, 'Annuler ma commande')) return;
+  withAboError(async () => {
+    const res = await retracter(session.fid);
+    finCle = null;
+    notice(res?.remboursement === 'fait'
+      ? `Commande annulée. ${res.montant ? `${euros(res.montant)} vous sont remboursés.` : ''}`
+      : "Commande annulée. Vous recevez par e-mail les instructions pour nous renvoyer la tablette ; le remboursement suit sa réception.");
+  });
+});
+
 function renderAbonnement() {
   const abo = session.family.abonnement;
+  renderFinDeContrat(abo);
   useOrderCodeFromSite(abo?.statut, amOwner());
   const admin = amOwner(); // l'abonnement est l'affaire du propriétaire, celui qui paie
   const statut = abo?.statut;
