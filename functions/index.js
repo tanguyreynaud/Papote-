@@ -81,6 +81,7 @@ function finEngagementMs(abo) {
 async function tarifs(formule, tablette) {
   const cles = [regles.TARIFS[formule][tablette]];
   if (tablette === 'achetee') cles.push(regles.TARIF_TABLETTE);
+  if (tablette === 'incluse') cles.push(regles.TARIF_MISE_EN_SERVICE);
   const { data } = await stripe().prices.list({ lookup_keys: cles, active: true });
   const parCle = Object.fromEntries(data.map((p) => [p.lookup_key, p.id]));
   for (const cle of cles) {
@@ -110,7 +111,7 @@ async function sessionPaiement({ formule, tablette, fid, email, client, relais }
     payment_method_collection: 'always',
     success_url: fid ? `${APPLI_FAMILLE}?abonnement=ok`
       : `${SITE_VITRINE.value()}/merci.html?session={CHECKOUT_SESSION_ID}`,
-    cancel_url: fid ? APPLI_FAMILLE : `${SITE_VITRINE.value()}/#tarifs`,
+    cancel_url: fid ? APPLI_FAMILLE : `${SITE_VITRINE.value()}/commande.html?formule=${formule}`,
   };
   // Commande du site : livrée au point relais choisi avant le paiement. Depuis l'appli : à l'adresse saisie.
   if (!relais) params.shipping_address_collection = { allowed_countries: ['FR', 'BE', 'LU'] };

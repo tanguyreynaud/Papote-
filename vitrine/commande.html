@@ -9,7 +9,7 @@
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,800&display=swap">
 <style>
-/* Étape avant le paiement : choix du point relais Mondial Relay où la tablette sera livrée. */
+/* Commande en une page : option internet, point relais Mondial Relay, puis paiement Stripe. */
 :root { --bg: #fdfaf5; --surface: #ffffff; --text: #24212f; --muted: #5f5a6b; --line: #e9e1d4; --accent: #4f46e5; --accent-strong: #3730a3; --accent-text: #ffffff; --warm: #c2410c; --warm-soft: #fde7d6; color-scheme: light; }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--text); font: 400 1.125rem/1.6 "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif; }
@@ -21,14 +21,24 @@ p { margin: 0; }
 .muted { color: var(--muted); }
 .eyebrow { font-size: .85rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--warm); }
 .recap { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 1rem 1.25rem; display: flex; flex-wrap: wrap; justify-content: space-between; gap: .5rem 1rem; align-items: baseline; }
-.recap b { font-size: 1.1rem; }
-.recap a { font-size: 1rem; }
+.recap { display: grid; justify-content: stretch; }
+.recap-total { display: flex; flex-wrap: wrap; gap: .25rem 1rem; align-items: baseline; }
+.recap-total b { font-size: 1.3rem; }
+.inclus { margin: 0; padding-left: 1.2rem; color: var(--muted); font-size: 1rem; }
+h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif; }
+.badges { display: flex; flex-wrap: wrap; gap: .5rem; margin: 0; }
+.badges span { background: #e8e6fd; color: var(--accent-strong); font-weight: 700; font-size: .95rem; padding: .35rem .8rem; border-radius: 999px; }
+.stock { color: var(--warm); font-weight: 700; font-size: 1rem; }
+.btn.payer { justify-self: stretch; font-size: 1.15rem; }
+.opt { display: flex; gap: .6rem; align-items: center; font-size: 1.05rem; cursor: pointer; }
+.opt .muted { white-space: nowrap; margin-left: auto; }
+.opt input { width: 1.3rem; height: 1.3rem; accent-color: var(--accent); }
 .cherche { display: flex; flex-wrap: wrap; gap: .75rem; align-items: end; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 1rem 1.25rem; }
 .cherche label { display: grid; gap: .25rem; font-size: 1rem; color: var(--muted); }
 .cherche input, .cherche select { font: inherit; color: var(--text); min-height: 3rem; padding: .5rem .75rem; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); }
 .cherche input { width: 8rem; }
-.btn-ghost { background: transparent; color: var(--text); border: 2px solid var(--line); }
-.btn-ghost:hover { background: transparent; border-color: var(--accent); }
+.btn.btn-ghost { background: transparent; color: var(--text); border: 2px solid var(--line); }
+.btn.btn-ghost:hover { background: transparent; border-color: var(--accent); }
 .choisi { display: grid; gap: .25rem; padding: 1rem 1.25rem; border: 2px solid var(--accent); border-radius: 16px; background: var(--surface); }
 .choisi[hidden] { display: none; }
 .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 3.25rem; padding: .75rem 1.5rem; border-radius: 999px; background: var(--accent); color: var(--accent-text); font: 700 1.05rem/1.2 inherit; text-decoration: none; border: 0; cursor: pointer; justify-self: start; }
@@ -40,19 +50,31 @@ p { margin: 0; }
 <body>
 <main>
   <a class="top" href="./"><img src="icon.svg" alt="">Papote</a>
+  <p class="badges"><span>🚚 Livraison offerte</span><span>✨ 15 jours d'essai gratuit</span></p>
   <div>
-    <p class="eyebrow">Étape 1 sur 2 · Livraison</p>
-    <h1>Où souhaitez-vous recevoir la tablette ?</h1>
+    <p class="eyebrow">Votre commande</p>
+    <h1>Papote pour votre proche</h1>
   </div>
-  <p class="muted">Livraison offerte. La tablette est livrée dans un point relais Mondial Relay près de chez vous ou de chez votre proche, en France, en Belgique ou au Luxembourg. Vous recevez un e-mail avec le suivi dès son départ.</p>
 
-  <div class="recap" id="recap"></div>
+  <form class="recap" id="recap">
+    <div class="recap-total"><b id="total">20 € par mois</b><span class="muted">après 15 jours d'essai gratuit</span></div>
+    <ul class="inclus">
+      <li>Tablette prêtée, configurée et prête à l'emploi</li>
+      <li>Appli famille pour tous vos proches</li>
+      <li>50 € à la commande pour la mise en service, livraison offerte</li>
+    </ul>
+    <label class="opt"><input type="checkbox" name="net"> Internet inclus <span class="muted">+10 €/mois</span></label>
+  </form>
 
+  <h2>Où livrer la tablette ?</h2>
+  <p class="muted">Dans un point relais Mondial Relay près de chez vous ou de chez votre proche, en France, en Belgique ou au Luxembourg.</p>
   <form class="cherche" id="cherche">
     <label>Code postal<input id="cp" inputmode="numeric" autocomplete="postal-code" required maxlength="10"></label>
     <label>Pays<select id="pays"><option value="fr">France</option><option value="be">Belgique</option><option value="lu">Luxembourg</option></select></label>
     <button class="btn btn-ghost" type="submit">Voir les points relais</button>
+    <button class="btn btn-ghost" type="button" id="autour">📍 Autour de moi</button>
   </form>
+  <p class="erreur" id="erreur-position" hidden>Impossible de trouver votre position. Tapez votre code postal.</p>
   <p class="erreur" id="erreur-carte" hidden>La carte des points relais ne s'affiche pas. Rechargez la page, ou écrivez-nous à contact@mapapote.fr.</p>
 
   <div class="choisi" id="choisi" hidden>
@@ -61,8 +83,9 @@ p { margin: 0; }
     <span id="choisi-adresse"></span>
   </div>
 
-  <a class="btn" id="payer" href="#" aria-disabled="true">Continuer vers le paiement</a>
-  <p class="muted">Étape 2 : paiement sécurisé par carte (Stripe). 15 jours d'essai gratuit, rien n'est prélevé pour l'abonnement avant leur fin.</p>
+  <p class="stock">Petite entreprise familiale : chaque tablette est préparée à la main, en quantité limitée.</p>
+  <a class="btn payer" id="payer" href="#" aria-disabled="true">Choisissez un point relais</a>
+  <p class="muted">Paiement sécurisé par carte (Stripe). Aujourd'hui : 50 €. L'abonnement commence après les 15 jours d'essai, avec un engagement de 12 mois. La tablette reste la nôtre et nous est rendue en fin d'abonnement.</p>
 </main>
 
 <script src="https://embed.sendcloud.sc/spp/1.0.0/api.min.js"></script>
@@ -71,46 +94,52 @@ p { margin: 0; }
   // Clé PUBLIQUE de l'intégration Sendcloud « Papote » (points relais Mondial Relay). Pas un secret.
   var SENDCLOUD_CLE = 'f8875927-f7be-4ad7-ac24-22fd11c0efc5';
   var COMMANDER = 'https://europe-west1-papote-famille.cloudfunctions.net/commander';
-  var OFFRES = {
-    wifi: { nom: 'Papote (wifi)', achetee: '120 € puis 20 € par mois', incluse: '25 € par mois, tablette incluse' },
-    sim: { nom: 'Papote partout (tout inclus, sans box)', achetee: '120 € puis 30 € par mois', incluse: '35 € par mois, tablette incluse' }
-  };
-
   var q = new URLSearchParams(location.search);
-  var formule = q.get('formule');
-  var tablette = q.get('tablette');
-  var offre = OFFRES[formule];
-  if (!offre || !offre[tablette]) { location.replace('./#tarifs'); return; }
-
   var recap = document.getElementById('recap');
-  var b = document.createElement('b');
-  b.textContent = offre.nom + ' · ' + offre[tablette];
-  var changer = document.createElement('a');
-  changer.href = './#tarifs';
-  changer.textContent = 'Changer de formule';
-  recap.append(b, changer);
+  recap.net.checked = q.get('formule') === 'sim';
+  var relais = null;
+
+  // Prix : abonnement 20 €, ou 30 € avec internet inclus ; 50 € de mise en service à la commande.
+  function maj() {
+    document.getElementById('total').textContent = (recap.net.checked ? 30 : 20) + ' € par mois';
+    if (relais) lienPaiement();
+  }
+  recap.addEventListener('change', maj);
 
   var payer = document.getElementById('payer');
+
+  function lienPaiement() {
+    var params = new URLSearchParams({
+      formule: recap.net.checked ? 'sim' : 'wifi', tablette: 'incluse',
+      relais: String(relais.id), rnom: relais.name, radr: relais.adresse,
+      rcp: relais.postal_code, rville: relais.city, rpays: (relais.country || 'FR').toUpperCase()
+    });
+    payer.href = COMMANDER + '?' + params.toString();
+    payer.setAttribute('aria-disabled', 'false');
+    payer.textContent = 'Payer 50 € et commander';
+  }
 
   // Point relais renvoyé par le sélecteur Sendcloud.
   function choisir(p) {
     if (!p || !p.id) return;
-    var adresse = [p.street, p.house_number].filter(Boolean).join(' ').trim();
+    relais = p;
+    relais.adresse = [p.street, p.house_number].filter(Boolean).join(' ').trim();
     document.getElementById('choisi-nom').textContent = p.name;
-    document.getElementById('choisi-adresse').textContent = adresse + ', ' + p.postal_code + ' ' + p.city;
+    document.getElementById('choisi-adresse').textContent = relais.adresse + ', ' + p.postal_code + ' ' + p.city;
     document.getElementById('choisi').hidden = false;
-    var params = new URLSearchParams({
-      formule: formule, tablette: tablette, relais: String(p.id), rnom: p.name, radr: adresse,
-      rcp: p.postal_code, rville: p.city, rpays: (p.country || 'FR').toUpperCase()
-    });
-    payer.href = COMMANDER + '?' + params.toString();
-    payer.setAttribute('aria-disabled', 'false');
+    lienPaiement();
+    payer.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 
-  document.getElementById('cherche').addEventListener('submit', function (e) {
-    e.preventDefault();
+  // Une seule carte à la fois : une deuxième ouverture (code postal complet puis Entrée, par
+  // exemple) empilait deux cartes, et « Choisir » ou la croix semblaient ne plus rien faire.
+  var carteOuverte = false;
+  function ouvrirCarte() {
+    // (Si la carte a disparu sans prévenir, on peut la rouvrir.)
+    if (carteOuverte && document.querySelector('iframe')) return;
     var erreur = document.getElementById('erreur-carte');
     erreur.hidden = true;
+    carteOuverte = true;
     try {
       sendcloud.servicePoints.open({
         apiKey: SENDCLOUD_CLE,
@@ -118,15 +147,64 @@ p { margin: 0; }
         postalCode: document.getElementById('cp').value.trim(),
         language: 'fr-fr',
         carriers: 'mondial_relay'
-      }, choisir, function (erreurs) {
+      }, function (p) {
+        carteOuverte = false;
+        choisir(p);
+      }, function (erreurs) {
+        carteOuverte = false;
         if (erreurs && erreurs.indexOf('Closed') !== -1) return;
         console.error('Points relais :', erreurs);
         erreur.hidden = false;
       });
     } catch (err) {
+      carteOuverte = false;
       erreur.hidden = false;
     }
+  }
+
+  var cp = document.getElementById('cp');
+  document.getElementById('cherche').addEventListener('submit', function (e) {
+    e.preventDefault();
+    ouvrirCarte();
   });
+  // Code postal complet (5 chiffres en France, 4 en Belgique et au Luxembourg) : carte ouverte tout de suite.
+  cp.addEventListener('input', function () {
+    var n = document.getElementById('pays').value === 'fr' ? 5 : 4;
+    if (new RegExp('^\\d{' + n + '}$').test(cp.value.trim())) ouvrirCarte();
+  });
+
+  // « Autour de moi » : position du téléphone, puis code postal via la Base Adresse Nationale (France).
+  var autour = document.getElementById('autour');
+  autour.addEventListener('click', function () {
+    var erreur = document.getElementById('erreur-position');
+    erreur.hidden = true;
+    if (!navigator.geolocation) { erreur.hidden = false; return; }
+    var texte = autour.textContent;
+    autour.textContent = 'Recherche de votre position…';
+    autour.disabled = true;
+    function fin(ok) {
+      autour.textContent = texte;
+      autour.disabled = false;
+      if (!ok) erreur.hidden = false;
+    }
+    // Pas de délai maximum : la première fois, le téléphone demande l'autorisation, et le temps
+    // de répondre ne doit pas faire échouer la recherche (il fallait alors recliquer).
+    navigator.geolocation.getCurrentPosition(function (pos) {
+      fetch('https://api-adresse.data.gouv.fr/reverse/?lon=' + pos.coords.longitude + '&lat=' + pos.coords.latitude)
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          var code = d.features && d.features[0] && d.features[0].properties.postcode;
+          if (!code) throw new Error('pas de code postal');
+          document.getElementById('pays').value = 'fr';
+          cp.value = code;
+          fin(true);
+          ouvrirCarte();
+        })
+        .catch(function () { fin(false); });
+    }, function () { fin(false); }, { maximumAge: 600000 });
+  });
+
+  maj();
 })();
 </script>
 <script src="chat-support.js" defer></script>
