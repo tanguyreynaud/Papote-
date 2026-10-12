@@ -112,7 +112,13 @@
     var now = new Date();
     if (d.toDateString() === now.toDateString()) return "aujourd'hui";
     if (d.toDateString() === new Date(now.getTime() - 86400000).toDateString()) return 'hier';
-    return JOURS[d.getDay()] + ' ' + d.getDate() + ' ' + MOIS[d.getMonth()];
+    // Plus court qu'une date : « il y a 3 jours », puis en semaines et en mois.
+    var days = Math.round((new Date(now.getFullYear(), now.getMonth(), now.getDate()) -
+      new Date(d.getFullYear(), d.getMonth(), d.getDate())) / 86400000);
+    if (days < 14) return 'il y a ' + days + ' jours';
+    if (days < 60) return 'il y a ' + Math.floor(days / 7) + ' semaines';
+    var months = Math.floor(days / 30);
+    return months < 12 ? 'il y a ' + months + ' mois' : (months < 24 ? 'il y a 1 an' : 'il y a ' + Math.floor(months / 12) + ' ans');
   }
 
   // Taille du texte selon sa longueur : il tient toujours à l'écran sans faire défiler.
@@ -223,7 +229,7 @@
     frameIndex = frameIndex % Math.min(photos.length, 20);
     var p = photos[frameIndex];
     setPicture($('frame-img'), p.image);
-    signWithFace($('frame-caption'), p, p.authorName + ', ' + dayLabel(p.createdAt));
+    signWithFace($('frame-caption'), p, p.authorName + ', ' + dayLabel(p.createdAt).replace(/ /g, ' '));
   }
 
   // Sans photo : un QR code pour que la famille rejoigne Papote depuis son téléphone.

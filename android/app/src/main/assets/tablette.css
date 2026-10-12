@@ -1193,3 +1193,15 @@ body.night .wifi-card-text { color: #a8998d; }
   transform: none;
   background: none;
 }
+
+/* Signature de la photo de l'accueil : prénom et « il y a X jours », sur deux lignes au plus */
+.frame-caption { white-space: normal; text-overflow: clip; display: flex; align-items: center; }
+.frame-caption .sign-face { flex: 0 0 auto; }
+.frame-caption .sign-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  line-height: 1.15;
+  min-width: 0;
+}
