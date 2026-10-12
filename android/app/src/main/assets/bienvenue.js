@@ -27,7 +27,9 @@
     document.body.appendChild(root);
   }
 
-  // Étape en cours (1 nom, 2 wifi, 3 famille), affichée en haut ; 0 = pas d'étapes (wifi plus tard).
+  // Étape en cours (1 nom, 2 wifi, 3 famille, 4 placement), affichée en haut ; 0 = pas d'étapes
+  // (wifi plus tard).
+  var STEPS = 4;
   var stepNum = 0;
 
   // Illustration de l'étape (bienvenue/<nom>.svg), dans le panneau de gauche ; vide = pas de panneau.
@@ -54,12 +56,12 @@
     head.appendChild(el('span', 'welcome-brand', 'Papote'));
     if (stepNum && !repair) {
       var steps = el('div', 'welcome-dots');
-      for (var i = 1; i <= 3; i++) steps.appendChild(el('span', 'dot' + (i < stepNum ? ' done' : i === stepNum ? ' on' : '')));
-      steps.appendChild(el('span', 'welcome-stepnum', 'Étape ' + stepNum + ' sur 3'));
+      for (var i = 1; i <= STEPS; i++) steps.appendChild(el('span', 'dot' + (i < stepNum ? ' done' : i === stepNum ? ' on' : '')));
+      steps.appendChild(el('span', 'welcome-stepnum', 'Étape ' + stepNum + ' sur ' + STEPS));
       head.appendChild(steps);
     }
     box.appendChild(head);
-    if (stepNum && !repair) box.appendChild(el('p', 'welcome-eyebrow', 'Étape ' + stepNum + ' sur 3'));
+    if (stepNum && !repair) box.appendChild(el('p', 'welcome-eyebrow', 'Étape ' + stepNum + ' sur ' + STEPS));
     box.appendChild(el('h1', 'welcome-title', title));
     if (subtitle) box.appendChild(el('p', 'welcome-sub', subtitle));
     root.appendChild(card);
@@ -283,15 +285,114 @@
     var row = el('div', 'welcome-actions');
     row.appendChild(button('Non', 'no', function () { android().confirmPairing(false); }));
     row.appendChild(button('Oui', 'primary', function () {
-      root.innerHTML = '';
-      screen('C\'est fait !', 'La tablette est reliée à la famille.');
       android().confirmPairing(true);
+      showPlacement();
     }));
     box.appendChild(row);
   }
 
+  // ---------- 5. Placement de la tablette ----------
+  // La caméra décroche les appels et sait qu'un envoi a été vu : la personne qui installe s'assoit à
+  // la place habituelle et tourne la tablette jusqu'à voir son visage dans le rond. Le guidage utilise
+  // le détecteur des appels (appels.js, window.papoteFaceDetector) ; sans lui, l'image seule.
+
+  var placing = false;
+  var placeStream = null;
+  var placeTimer = null;
+
+  function showPlacement() {
+    placing = true;
+    current = 'place';
+    stepNum = 4;
+    art = '';
+    var box = screen('Placez la tablette', 'Asseyez-vous là où la personne s’installe d’habitude, puis tournez doucement la tablette.');
+    // L'image de la caméra prend la place de l'illustration, à gauche.
+    var card = box.parentNode;
+    card.className = 'welcome-card with-art';
+    var panel = el('div', 'welcome-art');
+    var view = el('div', 'place-view');
+    var video = el('video', 'place-video');
+    video.muted = true;
+    video.autoplay = true;
+    video.setAttribute('playsinline', '');
+    view.appendChild(video);
+    view.appendChild(el('span', 'place-ring'));
+    panel.appendChild(view);
+    card.insertBefore(panel, box);
+    var hint = el('p', 'place-hint', 'Ouverture de la caméra…');
+    box.appendChild(hint);
+    box.appendChild(button('C’est bon', 'primary', finishPlacement));
+    box.appendChild(button('Passer cette étape', 'no', finishPlacement));
+    startPlacementCamera(video, hint);
+  }
+
+  function startPlacementCamera(video, hint) {
+    var none = 'Caméra indisponible : vous pouvez passer cette étape.';
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { hint.textContent = none; return; }
+    navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user', width: { ideal: 960 }, height: { ideal: 720 }, aspectRatio: { ideal: 4 / 3 } },
+      audio: false
+    }).then(function (stream) {
+      if (!placing) { stream.getTracks().forEach(function (t) { t.stop(); }); return; }
+      placeStream = stream;
+      video.srcObject = stream;
+      hint.textContent = 'Tournez la tablette jusqu’à voir votre visage dans le rond.';
+      if (typeof window.papoteLocateFace === 'function') guide(video, hint);
+    }, function () { hint.textContent = none; });
+  }
+
+  // Le visage est-il au milieu de l'image ? window.papoteLocateFace(video) (appels.js) donne le plus
+  // grand visage en fractions de l'image, ou null. Le premier appel charge le modèle (quelques s).
+  function guide(video, hint) {
+    var good = 0;
+    var busy = false;
+    clearInterval(placeTimer);
+    placeTimer = setInterval(function () {
+      if (!placing || busy || !video.videoWidth) return;
+      busy = true;
+      Promise.resolve(window.papoteLocateFace(video)).then(function (f) {
+        busy = false;
+        if (placing) showFace(f);
+      }, function () { busy = false; });
+    }, 350);
+
+    function showFace(f) {
+      var view = video.parentNode;
+      if (!f) {
+        good = 0;
+        view.className = 'place-view';
+        hint.textContent = 'Votre visage n’est pas visible : tournez doucement la tablette vers vous.';
+        return;
+      }
+      var cx = f.x + f.width / 2;
+      var cy = f.y + f.height / 2;
+      if (Math.max(Math.abs(cx - 0.5), Math.abs(cy - 0.5)) < 0.15) {
+        good++;
+        view.className = 'place-view ok';
+        hint.textContent = good > 2 ? 'C’est parfait : la tablette est bien placée.' : 'Presque… ne bougez plus.';
+      } else {
+        good = 0;
+        view.className = 'place-view';
+        hint.textContent = 'On vous voit, mais pas au centre : tournez encore un peu la tablette.';
+      }
+    }
+  }
+
+  function finishPlacement() {
+    placing = false;
+    clearInterval(placeTimer);
+    if (placeStream) placeStream.getTracks().forEach(function (t) { t.stop(); });
+    placeStream = null;
+    current = '';
+    if (root) {
+      root.innerHTML = '';
+      root.setAttribute('hidden', '');
+    }
+  }
+
   window.PapoteBienvenue = {
     show: function (s) {
+      if (placing) return; // la tablette est reliée : on finit le placement avant tout le reste
       ensureRoot();
       root.removeAttribute('hidden');
       var key = s.step + '|' + (s.code || '') + '|' + (s.error || '') + '|' + (s.claimedName || '');
@@ -305,7 +406,7 @@
     },
     openWifi: openRepair,
     hide: function () {
-      if (repair) return; // le réglage du wifi en cours reste affiché
+      if (repair || placing) return; // le réglage du wifi ou le placement en cours reste affiché
       if (!root) return;
       root.setAttribute('hidden', '');
       current = '';
