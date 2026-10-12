@@ -189,7 +189,9 @@ async function joinFamily() {
 // ---------- Sonnerie ----------
 
 const CAMERA = {
-  video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+  // 4:3 comme le capteur (1600x1200) : sur la tablette UNISOC, le 16:9 est découpé sur un bord
+  // et rate la personne assise en face.
+  video: { facingMode: 'user', width: { ideal: 960 }, height: { ideal: 720 }, aspectRatio: { ideal: 4 / 3 } },
   audio: { echoCancellation: true, noiseSuppression: true },
 };
 
