@@ -466,9 +466,9 @@ public class MainActivity extends Activity implements Sync.Listener {
     @SuppressWarnings("deprecation")
     @Override
     public void onNewArrival() {
-        // La nuit (23h-7h), pas de sonnerie ni d'écran allumé : l'envoi attend le matin.
-        int hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY);
-        if (hour >= 23 || hour < 7) return;
+        // Pendant la veille (23h-7h sauf réglage de la famille), pas de sonnerie ni d'écran
+        // allumé : l'envoi attend le matin.
+        if (Veille.isNight(this)) return;
         handler.post(() -> {
             try {
                 PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
@@ -543,9 +543,8 @@ public class MainActivity extends Activity implements Sync.Listener {
         @SuppressWarnings("deprecation")
         @Override
         public void onReceive(Context context, Intent intent) {
-            int hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY);
             Journal.log(MainActivity.this, "Écran éteint (bouton marche/arrêt ou système)");
-            if (kioskPaused() || hour >= 23 || hour < 7) return;
+            if (kioskPaused() || Veille.isNight(MainActivity.this)) return;
             handler.post(() -> {
                 try {
                     PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
@@ -709,8 +708,7 @@ public class MainActivity extends Activity implements Sync.Listener {
             handler.postDelayed(this, 60_000);
             final SmsAlert alert = smsAlert;
             if (alert != null) new Thread(alert::check, "papote-sms").start();
-            int hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY);
-            if (kioskPaused() || hour < 7 || hour >= 23) return;
+            if (kioskPaused() || Veille.isNight(MainActivity.this)) return;
             try {
                 PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
                 if (!pm.isInteractive()) {
