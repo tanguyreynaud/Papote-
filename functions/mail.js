@@ -52,6 +52,30 @@ function colisParti({ nom, suivi, lien, relais, code }) {
   ].filter(Boolean), { texte: 'Suivre mon colis', lien });
 }
 
+function commandeConfirmee({ nom, code, relais, formule }) {
+  return message('Votre commande Papote est confirmée', [
+    `Bonjour${nom ? ` ${echapper(nom)}` : ''},`,
+    'Merci pour votre commande ! Nous préparons votre tablette à la main et vous prévenons par e-mail dès qu\'elle part.',
+    relais && relais.transporteur
+      ? `Livraison offerte au point relais <b>${relaisEnTexte(relais)}</b>.`
+      : 'Livraison offerte à l\'adresse indiquée.',
+    `Votre abonnement : ${formule === 'sim' ? '30 € par mois, internet inclus' : '20 € par mois'}, après vos 15 jours d'essai gratuit. La tablette est prêtée et configurée.`,
+    code ? `Votre code de commande : <b>${echapper(code)}</b>.` : '',
+  ].filter(Boolean));
+}
+
+// Prévient Papote qu'une tablette est à préparer.
+function nouvelleCommande({ nom, email, telephone, code, relais, formule }) {
+  return message(`Nouvelle commande ${code || ''}`.trim(), [
+    `Client : <b>${echapper(nom || '?')}</b>, ${echapper(email || 'sans e-mail')}${telephone ? `, ${echapper(telephone)}` : ''}.`,
+    `Formule : ${formule === 'sim' ? '30 € par mois, internet inclus (SIM)' : '20 € par mois (wifi)'}.`,
+    relais && relais.transporteur
+      ? `Point relais : <b>${relaisEnTexte(relais)}</b> (n° ${echapper(relais.id)}).`
+      : `Livraison : ${relaisEnTexte(relais) || 'adresse non trouvée, voir Stripe'}.`,
+    'Tablette à préparer, puis à marquer « envoyée » dans le tableau de bord.',
+  ]);
+}
+
 function rappelJumelage({ nom, numero, code }) {
   const titre = numero === 1 ? 'Votre tablette Papote vous attend' : 'Besoin d\'un coup de main avec Papote ?';
   return message(titre, [
@@ -79,4 +103,4 @@ async function envoyer({ smtp, motDePasse, expediteur, a, contenu }) {
   await transport.sendMail({ from: `Papote <${expediteur}>`, replyTo: expediteur, to: a, ...contenu });
 }
 
-module.exports = { colisParti, rappelJumelage, envoyer, echapper };
+module.exports = { colisParti, commandeConfirmee, nouvelleCommande, rappelJumelage, envoyer, echapper };

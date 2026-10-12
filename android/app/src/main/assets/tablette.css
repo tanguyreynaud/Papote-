@@ -63,11 +63,11 @@ button {
 .big-btn:active { -webkit-transform: scale(.97); transform: scale(.97); }
 .big-btn[disabled] { opacity: .7; }
 .big-btn.photos { background: #2563eb; }
-.big-btn.messages { background: #c2410c; }
+.big-btn.messages { background: #3730a3; }
 .big-btn.heart { background: #e11d48; }
 .big-btn.ok { background: #15803d; }
 .big-btn.replay { background: #6d28d9; }
-.big-btn.home-btn { background: #fff; color: #c2410c; border: 0.8vmin solid #c2410c; box-shadow: none; }
+.big-btn.home-btn { background: #fff; color: #4f46e5; border: 0.8vmin solid #4f46e5; box-shadow: none; }
 
 .badge {
   position: absolute;
@@ -79,7 +79,7 @@ button {
   padding: 0 2vmin;
   border-radius: 4vmin;
   background: #fff;
-  color: #c2410c;
+  color: #4f46e5;
   font-size: 5vmin;
   text-align: center;
   box-shadow: 0 0.5vmin 1.5vmin rgba(0, 0, 0, .25);
@@ -342,7 +342,7 @@ body.night .message { background: #1c1714; }
 body.night .message.unseen { background: #2a1d14; }
 body.night .big-btn.home-btn { background: #1c1714; }
 body.night .big-btn.photos { background: #1e40af; }
-body.night .big-btn.messages { background: #9a3412; }
+body.night .big-btn.messages { background: #312e81; }
 
 /* ---------- Tablette en portrait : on empile ---------- */
 
@@ -887,8 +887,8 @@ body.night .bday-banner { background: #3b1426; color: #f9a8d4; }
 
 .clock { font-size: 35vmin; line-height: 1; }
 .date { font-size: 9vmin; margin: 1vmin 0 0; }
-.moment { margin: .5vmin 0 0; font-size: 7.5vmin; font-weight: bold; color: #c2410c; }
-body.night .moment { color: #fb923c; }
+.moment { margin: .5vmin 0 0; font-size: 7.5vmin; font-weight: bold; color: #4f46e5; }
+body.night .moment { color: #a5b4fc; }
 .weather { margin-top: 4vmin; }
 .weather-icon { width: 18vmin; height: 18vmin; }
 .weather-temp { font-size: 13vmin; }
@@ -1056,7 +1056,7 @@ html, body {
 .clock { color: #24212f; letter-spacing: -0.03em; }
 .date, .weather-label { color: #5f5a6b; }
 .weather-label small, .offline, .frame-empty, .invite p { color: #5f5a6b; }
-.moment { color: #c2410c; }
+.moment { color: #4f46e5; }
 .home-frame { background: #f6efe4; }
 
 /* Écrans d'un envoi : texte du site sur la feuille, signature en gris doux */
@@ -1068,16 +1068,16 @@ html, body {
 .ln-note { background: #ffffff; }
 .ln-btn.ok, .ln-btn.answer { background: #15803d; }
 .ln-btn.replay { background: #4f46e5; }
-.ln-when { color: #c2410c; }
+.ln-when { color: #4f46e5; }
 .overlay.mode-voice .ln-play { background: #4f46e5; }
 .overlay.mode-voice .ln-play.playing, .overlay.mode-video .ln-play.playing { background: #8e8899; }
 
 /* Anniversaire, rendez-vous, wifi, pause */
-.bday-banner { background: #fde7d6; color: #c2410c; }
+.bday-banner { background: #e8e6fd; color: #3730a3; }
 .frame-rdv { background: linear-gradient(to bottom, #f6f5ff, #e8e6fd); color: #3730a3; }
 .rdv-icon, .rdv-when { color: #4f46e5; }
 .rdv-in { background: #4f46e5; }
-.wifi-help { background: #c2410c; font-family: 'Atkinson Hyperlegible', Roboto, sans-serif; }
+.wifi-help { background: #4f46e5; font-family: 'Atkinson Hyperlegible', Roboto, sans-serif; }
 .pause-screen { background: linear-gradient(135deg, #fdfaf5, #f6efe4); color: #24212f; }
 .pause-text { color: #5f5a6b; font-family: 'Atkinson Hyperlegible', Roboto, sans-serif; }
 

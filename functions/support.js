@@ -26,7 +26,7 @@ const Anthropic = require('@anthropic-ai/sdk');
 const mail = require('./mail');
 
 const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
-const SITE_VITRINE = defineString('SITE_VITRINE', { default: 'https://papote.web.app' });
+const SITE_VITRINE = defineString('SITE_VITRINE', { default: 'https://mapapote.fr' });
 const MAIL_SMTP = defineString('MAIL_SMTP', { default: 'smtp.gmail.com:465:' });
 const MAIL_EXPEDITEUR = defineString('MAIL_EXPEDITEUR', { default: '' });
 const MAIL_MOT_DE_PASSE = defineSecret('MAIL_MOT_DE_PASSE');

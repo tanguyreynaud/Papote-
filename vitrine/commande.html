@@ -10,12 +10,15 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,800&display=swap">
 <style>
 /* Commande en une page : option internet, point relais Mondial Relay, puis paiement Stripe. */
-:root { --bg: #fdfaf5; --surface: #ffffff; --text: #24212f; --muted: #5f5a6b; --line: #e9e1d4; --accent: #4f46e5; --accent-strong: #3730a3; --accent-text: #ffffff; --warm: #c2410c; --warm-soft: #fde7d6; color-scheme: light; }
+:root { --bg: #fdfaf5; --surface: #ffffff; --text: #24212f; --muted: #5f5a6b; --line: #e9e1d4; --accent: #4f46e5; --accent-strong: #3730a3; --accent-text: #ffffff; --warm: #4338ca; --warm-soft: #e8e6fd; color-scheme: light; }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--text); font: 400 1.125rem/1.6 "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif; }
 main { max-width: 48rem; margin: 0 auto; padding: 24px 20px 48px; display: grid; gap: 1.5rem; }
 .top { display: flex; align-items: center; gap: .6rem; font: 800 1.4rem/1 "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif; color: var(--text); text-decoration: none; }
 .top img { width: 2rem; height: 2rem; }
+.haut { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.retour { display: inline-flex; align-items: center; min-height: 2.75rem; padding: .5rem 1.1rem; border: 2px solid var(--accent); border-radius: 999px; color: var(--accent-strong); font-weight: 700; text-decoration: none; }
+.retour:hover { background: #e8e6fd; }
 h1 { margin: 0; font: 800 clamp(1.9rem, 5vw, 2.6rem)/1.1 "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif; text-wrap: balance; }
 p { margin: 0; }
 .muted { color: var(--muted); }
@@ -26,9 +29,13 @@ p { margin: 0; }
 .recap-total b { font-size: 1.3rem; }
 .inclus { margin: 0; padding-left: 1.2rem; color: var(--muted); font-size: 1rem; }
 h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif; }
-.badges { display: flex; flex-wrap: wrap; gap: .5rem; margin: 0; }
-.badges span { background: #e8e6fd; color: var(--accent-strong); font-weight: 700; font-size: .95rem; padding: .35rem .8rem; border-radius: 999px; }
-.stock { color: var(--warm); font-weight: 700; font-size: 1rem; }
+.bandeau { margin: 0; padding: .5rem .75rem; background: var(--accent); color: var(--accent-text); text-align: center; font-weight: 700; font-size: .92rem; }
+.points { display: grid; gap: .6rem; }
+.points[hidden] { display: none; }
+.point { display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: center; justify-content: space-between; padding: .9rem 1.1rem; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; }
+.point div { display: grid; }
+.point .btn { min-height: 2.75rem; padding: .5rem 1.25rem; }
+.lien { background: none; border: 0; padding: 0; font: inherit; color: var(--accent); text-decoration: underline; cursor: pointer; justify-self: start; }
 .btn.payer { justify-self: stretch; font-size: 1.15rem; }
 .opt { display: flex; gap: .6rem; align-items: center; font-size: 1.05rem; cursor: pointer; }
 .opt .muted { white-space: nowrap; margin-left: auto; }
@@ -44,13 +51,16 @@ h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-u
 .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 3.25rem; padding: .75rem 1.5rem; border-radius: 999px; background: var(--accent); color: var(--accent-text); font: 700 1.05rem/1.2 inherit; text-decoration: none; border: 0; cursor: pointer; justify-self: start; }
 .btn:hover { background: var(--accent-strong); }
 .btn[aria-disabled="true"] { background: #c9c6d8; pointer-events: none; }
-.erreur { color: var(--warm); }
+.erreur { color: #b91c1c; }
 </style>
 </head>
 <body>
+<p class="bandeau">🚚 Livraison offerte · ✨ 15 jours d'essai gratuit</p>
 <main>
-  <a class="top" href="./"><img src="icon.svg" alt="">Papote</a>
-  <p class="badges"><span>🚚 Livraison offerte</span><span>✨ 15 jours d'essai gratuit</span></p>
+  <div class="haut">
+    <a class="top" href="./"><img src="icon.svg" alt="">Papote</a>
+    <a class="retour" href="./">← Retour</a>
+  </div>
   <div>
     <p class="eyebrow">Votre commande</p>
     <h1>Papote pour votre proche</h1>
@@ -75,6 +85,9 @@ h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-u
     <button class="btn btn-ghost" type="button" id="autour">📍 Autour de moi</button>
   </form>
   <p class="erreur" id="erreur-position" hidden>Impossible de trouver votre position. Tapez votre code postal.</p>
+  <p class="muted" id="recherche" hidden>Recherche des points relais…</p>
+  <div class="points" id="points" hidden></div>
+  <button class="lien" type="button" id="voir-carte" hidden>Voir les points relais sur une carte</button>
   <p class="erreur" id="erreur-carte" hidden>La carte des points relais ne s'affiche pas. Rechargez la page, ou écrivez-nous à contact@mapapote.fr.</p>
 
   <div class="choisi" id="choisi" hidden>
@@ -83,12 +96,10 @@ h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-u
     <span id="choisi-adresse"></span>
   </div>
 
-  <p class="stock">Petite entreprise familiale : chaque tablette est préparée à la main, en quantité limitée.</p>
   <a class="btn payer" id="payer" href="#" aria-disabled="true">Choisissez un point relais</a>
   <p class="muted">Paiement sécurisé par carte (Stripe). Aujourd'hui : 50 €. L'abonnement commence après les 15 jours d'essai, avec un engagement de 12 mois. La tablette reste la nôtre et nous est rendue en fin d'abonnement.</p>
 </main>
 
-<script src="https://embed.sendcloud.sc/spp/1.0.0/api.min.js"></script>
 <script>
 (function () {
   // Clé PUBLIQUE de l'intégration Sendcloud « Papote » (points relais Mondial Relay). Pas un secret.
@@ -131,20 +142,98 @@ h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-u
     payer.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 
-  // Une seule carte à la fois : une deuxième ouverture (code postal complet puis Entrée, par
-  // exemple) empilait deux cartes, et « Choisir » ou la croix semblaient ne plus rien faire.
+  // La carte Sendcloud est lourde à afficher : on montre d'abord une simple liste des points relais
+  // les plus proches (même service, même clé publique). La carte reste là en secours.
+  var cp = document.getElementById('cp');
+  var pays = document.getElementById('pays');
+  var liste = document.getElementById('points');
+  var attente = document.getElementById('recherche');
+  var voirCarte = document.getElementById('voir-carte');
+  var derniere = '';
+
+  function chercher(position) {
+    var cle = position ? position.latitude + ',' + position.longitude : pays.value + cp.value.trim();
+    if (cle === derniere) return;
+    derniere = cle;
+    document.getElementById('erreur-carte').hidden = true;
+    liste.hidden = true;
+    attente.hidden = false;
+    var params = new URLSearchParams({ country: pays.value.toUpperCase(), carrier: 'mondial_relay', access_token: SENDCLOUD_CLE });
+    if (position) { params.set('latitude', position.latitude); params.set('longitude', position.longitude); }
+    else params.set('address', cp.value.trim());
+    fetch('https://servicepoints.sendcloud.sc/api/v2/service-points/?' + params.toString())
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function (d) {
+        var points = (Array.isArray(d) ? d : (d && d.results) || []).filter(function (p) { return p && p.id; });
+        if (!points.length) throw new Error('aucun point');
+        points.sort(function (x, y) { return (x.distance || 0) - (y.distance || 0); });
+        afficher(points.slice(0, 6));
+      })
+      .catch(function (err) {
+        console.warn('Liste des points relais indisponible, carte à la place :', err);
+        attente.hidden = true;
+        derniere = '';
+        ouvrirCarte();
+      });
+  }
+
+  function afficher(points) {
+    liste.textContent = '';
+    points.forEach(function (p) {
+      var ligne = document.createElement('div');
+      ligne.className = 'point';
+      var texte = document.createElement('div');
+      var nom = document.createElement('b');
+      nom.textContent = p.name;
+      var adr = document.createElement('span');
+      adr.className = 'muted';
+      adr.textContent = [p.street, p.house_number].filter(Boolean).join(' ') + ', ' + p.postal_code + ' ' + p.city
+        + (p.distance ? ' · ' + (p.distance < 1000 ? p.distance + ' m' : (p.distance / 1000).toFixed(1).replace('.', ',') + ' km') : '');
+      texte.append(nom, adr);
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn';
+      btn.textContent = 'Choisir';
+      btn.addEventListener('click', function () { choisir(p); });
+      ligne.append(texte, btn);
+      liste.append(ligne);
+    });
+    attente.hidden = true;
+    liste.hidden = false;
+    voirCarte.hidden = false;
+  }
+
+  // Le script de la carte n'est chargé qu'au besoin : la page s'ouvre plus vite.
+  var scriptCarte;
+  function chargerCarte() {
+    if (!scriptCarte) {
+      scriptCarte = new Promise(function (ok, ko) {
+        var el = document.createElement('script');
+        el.src = 'https://embed.sendcloud.sc/spp/1.0.0/api.min.js';
+        el.onload = ok;
+        el.onerror = ko;
+        document.head.append(el);
+      });
+      scriptCarte.catch(function () { scriptCarte = null; });
+    }
+    return scriptCarte;
+  }
+
+  // Une seule carte à la fois : une deuxième ouverture empilait deux cartes, et « Choisir »
+  // ou la croix semblaient ne plus rien faire.
   var carteOuverte = false;
   function ouvrirCarte() {
-    // (Si la carte a disparu sans prévenir, on peut la rouvrir.)
     if (carteOuverte && document.querySelector('iframe')) return;
     var erreur = document.getElementById('erreur-carte');
     erreur.hidden = true;
     carteOuverte = true;
-    try {
+    attente.hidden = false;
+    chargerCarte().then(function () {
+      attente.hidden = true;
       sendcloud.servicePoints.open({
         apiKey: SENDCLOUD_CLE,
-        country: document.getElementById('pays').value,
-        postalCode: document.getElementById('cp').value.trim(),
+        country: pays.value,
+        postalCode: cp.value.trim(),
         language: 'fr-fr',
         carriers: 'mondial_relay'
       }, function (p) {
@@ -156,24 +245,28 @@ h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-u
         console.error('Points relais :', erreurs);
         erreur.hidden = false;
       });
-    } catch (err) {
+    }).catch(function () {
       carteOuverte = false;
+      attente.hidden = true;
       erreur.hidden = false;
-    }
+    });
   }
+  voirCarte.addEventListener('click', ouvrirCarte);
 
-  var cp = document.getElementById('cp');
   document.getElementById('cherche').addEventListener('submit', function (e) {
     e.preventDefault();
-    ouvrirCarte();
+    chercher();
   });
-  // Code postal complet (5 chiffres en France, 4 en Belgique et au Luxembourg) : carte ouverte tout de suite.
-  cp.addEventListener('input', function () {
-    var n = document.getElementById('pays').value === 'fr' ? 5 : 4;
-    if (new RegExp('^\\d{' + n + '}$').test(cp.value.trim())) ouvrirCarte();
-  });
+  // Code postal complet (5 chiffres en France, 4 en Belgique et au Luxembourg) : recherche tout de suite.
+  function cpComplet() {
+    var n = pays.value === 'fr' ? 5 : 4;
+    if (new RegExp('^\\d{' + n + '}$').test(cp.value.trim())) chercher();
+  }
+  cp.addEventListener('input', cpComplet);
+  pays.addEventListener('change', cpComplet);
 
-  // « Autour de moi » : position du téléphone, puis code postal via la Base Adresse Nationale (France).
+  // « Autour de moi » : position du téléphone, puis points relais autour (code postal via la
+  // Base Adresse Nationale, pour la carte de secours).
   var autour = document.getElementById('autour');
   autour.addEventListener('click', function () {
     var erreur = document.getElementById('erreur-position');
@@ -190,17 +283,16 @@ h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-u
     // Pas de délai maximum : la première fois, le téléphone demande l'autorisation, et le temps
     // de répondre ne doit pas faire échouer la recherche (il fallait alors recliquer).
     navigator.geolocation.getCurrentPosition(function (pos) {
+      fin(true);
+      pays.value = 'fr';
       fetch('https://api-adresse.data.gouv.fr/reverse/?lon=' + pos.coords.longitude + '&lat=' + pos.coords.latitude)
         .then(function (r) { return r.json(); })
         .then(function (d) {
           var code = d.features && d.features[0] && d.features[0].properties.postcode;
-          if (!code) throw new Error('pas de code postal');
-          document.getElementById('pays').value = 'fr';
-          cp.value = code;
-          fin(true);
-          ouvrirCarte();
+          if (code) cp.value = code;
         })
-        .catch(function () { fin(false); });
+        .catch(function () {})
+        .then(function () { chercher(pos.coords); });
     }, function () { fin(false); }, { maximumAge: 600000 });
   });
 

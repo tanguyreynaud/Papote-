@@ -7,6 +7,7 @@
 <meta name="description" content="Papote garde le lien entre vos aînés et toute la famille : photos, vidéos, messages et appels vidéo arrivent tout seuls sur une tablette simple, sans rien à toucher.">
 <meta name="theme-color" content="#fdfaf5">
 <meta name="color-scheme" content="light">
+<link rel="canonical" href="https://mapapote.fr/">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -24,8 +25,8 @@
   --accent-strong: #3730a3;
   --accent-text: #ffffff;
   --accent-soft: #e8e6fd;
-  --warm: #c2410c;
-  --warm-soft: #fde7d6;
+  --warm: #4338ca;
+  --warm-soft: #e8e6fd;
   --ok: #15803d;
   --device: #f1eee9;
   --screen: #ffffff;
@@ -82,8 +83,9 @@ section { padding-block: clamp(3.5rem, 8vw, 6rem); }
 .top nav { display: flex; align-items: center; gap: 1.5rem; }
 .top nav a { color: var(--muted); text-decoration: none; font-weight: 700; font-size: 1rem; }
 .top nav a:hover { color: var(--text); }
-.top nav a.client { white-space: nowrap; }
-@media (max-width: 420px) { .top nav a.client { display: none; } }
+.top nav a.client { white-space: nowrap; display: inline-flex; align-items: center; min-height: 2.6rem; padding: .5rem 1.1rem; border: 2px solid var(--accent); border-radius: 999px; color: var(--accent-strong); font-size: .95rem; }
+.top nav a.client:hover { background: var(--accent-soft); color: var(--accent-strong); }
+@media (max-width: 440px) { .top nav { gap: .5rem; } .top nav a.client, .top nav .btn { padding: .45rem .8rem; font-size: .9rem; } .brand { font-size: 0; gap: 0; } .brand img { width: 2.2rem; height: 2.2rem; } }
 .top nav .btn { min-height: 2.6rem; padding: .5rem 1.1rem; font-size: .95rem; color: var(--accent-text); }
 .top nav .btn:hover { color: var(--accent-text); }
 @media (max-width: 760px) { .top nav a:not(.btn):not(.client) { display: none; } }
@@ -186,9 +188,7 @@ section { padding-block: clamp(3.5rem, 8vw, 6rem); }
 .option-prix { font: 800 1.25rem/1.1 var(--display); text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .option-prix em { display: block; font: 400 .85rem/1.2 var(--body); color: var(--muted); font-style: normal; }
 .offre-btn { justify-self: stretch; margin-top: .5rem; }
-.hero-badges { display: flex; flex-wrap: wrap; gap: .5rem; margin: 0; }
-.hero-badges span { background: var(--accent-soft); color: var(--accent-strong); font-weight: 700; font-size: .95rem; padding: .35rem .8rem; border-radius: 999px; }
-.stock { color: var(--warm); font-weight: 700; font-size: .95rem; text-align: center; }
+.bandeau { margin: 0; padding: .5rem .75rem; background: var(--accent); color: var(--accent-text); text-align: center; font-weight: 700; font-size: .92rem; }
 .plans-note { margin-top: 1.5rem; color: var(--muted); font-size: 1rem; max-width: 46rem; }
 
 /* FAQ */
@@ -239,6 +239,7 @@ footer a { color: var(--muted); }
   </defs>
 </svg>
 
+<p class="bandeau">🚚 Livraison offerte · ✨ 15 jours d'essai gratuit</p>
 <header class="top">
   <div class="wrap">
     <a class="brand" href="#"><img src="icon.svg" alt="">Papote</a>
@@ -255,7 +256,6 @@ footer a { color: var(--muted); }
 <main>
   <section class="hero">
       <div class="hero-text">
-        <p class="hero-badges"><span>🚚 Livraison offerte</span><span>✨ 15 jours d'essai gratuit</span></p>
         <p class="eyebrow">Zéro clic pour Mamie</p>
         <h1>Toute la famille près de Mamie. <span>Sans qu'elle touche à rien.</span></h1>
         <p class="lead">Photos des petits, mots doux, appels vidéo : tout arrive tout seul sur sa tablette. Pas de bouton à chercher, pas de mot de passe. Elle regarde, elle sourit, elle vous voit.</p>
@@ -402,7 +402,6 @@ footer a { color: var(--muted); }
             <span class="option-prix">+10 €<em>par mois</em></span>
           </label>
           <button class="btn btn-primary offre-btn" type="submit">Commander</button>
-          <p class="stock">Petite entreprise familiale : tablettes préparées à la main, en quantité limitée.</p>
         </div>
       </form>
       <p class="plans-note">Prix par tablette, toute la famille utilise l'appli sans supplément. 15 jours d'essai gratuit, puis engagement de 12 mois ; ensuite, l'abonnement continue de mois en mois et se résilie à tout moment depuis l'appli famille. 50 € sont payés à la commande pour la mise en service ; la tablette est prêtée et nous est rendue en fin d'abonnement. Paiement sécurisé par carte.</p>
