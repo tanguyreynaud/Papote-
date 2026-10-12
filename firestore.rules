@@ -278,6 +278,9 @@ service cloud.firestore {
           && get(familyPath(fid)).data.createdBy != request.auth.uid;
         // Ancienne tablette retirée par l'administrateur (remplacement).
         allow delete: if isAdmin() && resource.data.role == 'tablette';
+        // L'administrateur retire un proche (secours), jamais le propriétaire.
+        allow delete: if isAdmin() && resource.data.role == 'famille'
+          && get(familyPath(fid)).data.createdBy != uid;
         // Un responsable peut retirer ou refuser un membre (la tablette seulement en supprimant la famille).
         allow delete: if isFamilyAdmin(fid);
       }

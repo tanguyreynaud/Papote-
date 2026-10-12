@@ -72,3 +72,5 @@ main.admin { max-width: 1100px; padding: calc(20px + env(safe-area-inset-top)) 1
 .ship input { margin: 0; flex: 1; min-width: 0; padding: 8px 12px; }
 .orders li.alert { border-left: 4px solid var(--danger); padding-left: 10px; }
 .orders li.alert strong { color: var(--danger); }
+.link.danger { color: var(--danger); }
+.members-out { margin-top: 4px; }

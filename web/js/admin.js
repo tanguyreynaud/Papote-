@@ -279,6 +279,71 @@ async function showPending(f, li) {
   li.append(box);
 }
 
+// Membres d'une famille : l'administrateur peut, en secours, nommer ou retirer un responsable,
+// changer le propriétaire et retirer un proche (jamais le propriétaire).
+async function toggleMembers(f, li) {
+  const out = li.querySelector('.members-out');
+  if (!out.hidden) { out.hidden = true; return; }
+  out.hidden = false;
+  out.textContent = 'Chargement…';
+  let snap;
+  let fam;
+  try {
+    [snap, fam] = await Promise.all([
+      getDocs(query(collection(db, 'families', f.id, 'members'), where('role', '==', 'famille'))),
+      getDoc(doc(db, 'families', f.id)),
+    ]);
+  } catch (err) {
+    console.error(err);
+    out.textContent = 'Lecture impossible.';
+    return;
+  }
+  const data = fam.data() || {};
+  const admins = new Set(data.admins || []);
+  const rerender = () => { out.hidden = true; toggleMembers(f, li); };
+  const act = async (fn) => {
+    try { await fn(); rerender(); } catch (err) { console.error(err); alert("L'opération a échoué."); }
+  };
+  const button = (label, onClick, danger) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = `link small${danger ? ' danger' : ''}`;
+    b.textContent = label;
+    b.addEventListener('click', onClick);
+    return b;
+  };
+  const famRef = doc(db, 'families', f.id);
+  const rows = snap.docs.filter((d) => d.data().status !== 'pending').map((d) => {
+    const m = d.data();
+    const isOwner = data.createdBy === d.id;
+    const isResp = isOwner || admins.has(d.id);
+    const row = document.createElement('p');
+    row.className = 'small pending-row';
+    row.textContent = `${m.name}${m.email ? ` (${m.email})` : ''}${isOwner ? ' · propriétaire' : isResp ? ' · responsable' : ''} `;
+    if (isOwner) return row;
+    const parts = [
+      button(isResp ? 'Retirer responsable' : 'Rendre responsable', () => act(() => {
+        const next = new Set(admins);
+        if (isResp) next.delete(d.id); else next.add(d.id);
+        return updateDoc(famRef, { admins: [...next] });
+      })),
+      button('Faire propriétaire', () => {
+        if (confirm(`Faire de ${m.name} le propriétaire de la famille de ${f.name} ?`)) act(() => updateDoc(famRef, { createdBy: d.id }));
+      }),
+      button('Retirer', () => {
+        if (!confirm(`Retirer ${m.name} de la famille de ${f.name} ?`)) return;
+        act(async () => {
+          if (admins.has(d.id)) { const next = new Set(admins); next.delete(d.id); await updateDoc(famRef, { admins: [...next] }); }
+          await deleteDoc(d.ref);
+        });
+      }, true),
+    ];
+    parts.forEach((p, i) => row.append(...(i ? [' · ', p] : [p])));
+    return row;
+  });
+  out.replaceChildren(...(rows.length ? rows : [Object.assign(document.createElement('p'), { className: 'small muted', textContent: 'Aucun proche.' })]));
+}
+
 // Tablette de remplacement : un code d'installation pour cette famille. Installée avec
 // installer-tablette.ps1 -Code, elle arrive déjà dans la famille, sans écran de bienvenue.
 const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -359,8 +424,10 @@ function render() {
       ['Dernier envoi', ago(f.lastPost)],
     ];
     li.innerHTML = `<div class="family-head"><span class="dot"></span><strong></strong><code></code></div><dl></dl>
+      <div class="replace"><button type="button" class="link small members-btn">Gérer les membres</button><div class="members-out" hidden></div></div>
       <div class="replace"><button type="button" class="link small replace-btn">Tablette de remplacement</button><p class="replace-out small" hidden></p></div>`;
     li.querySelector('.replace-btn').addEventListener('click', () => prepareReplacement(f, li));
+    li.querySelector('.members-btn').addEventListener('click', () => toggleMembers(f, li));
     showPending(f, li);
     li.querySelector('strong').textContent = f.name;
     li.querySelector('code').textContent = f.code ? `${f.code.slice(0, 4)}-${f.code.slice(4)}` : '';
