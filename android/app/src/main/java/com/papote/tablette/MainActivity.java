@@ -466,9 +466,9 @@ public class MainActivity extends Activity implements Sync.Listener {
     @SuppressWarnings("deprecation")
     @Override
     public void onNewArrival() {
-        // La nuit (23h-7h), pas de sonnerie ni d'écran allumé : l'envoi attend le matin.
-        int hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY);
-        if (hour >= 23 || hour < 7) return;
+        // Pendant la veille (23h-7h sauf réglage de la famille), pas de sonnerie ni d'écran
+        // allumé : l'envoi attend le matin.
+        if (Veille.isNight(this)) return;
         handler.post(() -> {
             try {
                 PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
@@ -510,7 +510,8 @@ public class MainActivity extends Activity implements Sync.Listener {
         AudioManager am = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
         int[][] levels = {
                 {AudioManager.STREAM_MUSIC, 85}, {AudioManager.STREAM_RING, 100},
-                {AudioManager.STREAM_NOTIFICATION, 90}, {AudioManager.STREAM_VOICE_CALL, 100},
+                // Appels vidéo un peu moins forts : au maximum, le micro reprend le haut-parleur (écho).
+                {AudioManager.STREAM_NOTIFICATION, 90}, {AudioManager.STREAM_VOICE_CALL, 72},
                 {AudioManager.STREAM_ALARM, 100},
         };
         for (int[] l : levels) {
@@ -542,9 +543,8 @@ public class MainActivity extends Activity implements Sync.Listener {
         @SuppressWarnings("deprecation")
         @Override
         public void onReceive(Context context, Intent intent) {
-            int hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY);
             Journal.log(MainActivity.this, "Écran éteint (bouton marche/arrêt ou système)");
-            if (kioskPaused() || hour >= 23 || hour < 7) return;
+            if (kioskPaused() || Veille.isNight(MainActivity.this)) return;
             handler.post(() -> {
                 try {
                     PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
@@ -666,7 +666,7 @@ public class MainActivity extends Activity implements Sync.Listener {
     @SuppressWarnings("deprecation")
     private void hideSystemBars() {
         getWindow().getDecorView().setSystemUiVisibility(
-                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                View.SYSTEM_UI_FLAG_IMMERSIVE
                         | View.SYSTEM_UI_FLAG_FULLSCREEN
                         | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
                         | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
@@ -675,7 +675,10 @@ public class MainActivity extends Activity implements Sync.Listener {
         if (Build.VERSION.SDK_INT >= 30) {
             android.view.WindowInsetsController c = getWindow().getInsetsController();
             if (c != null) {
-                c.setSystemBarsBehavior(android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+                // Pas de barre « passagère » : avec la barre d'état désactivée, Android ne la retire
+                // jamais (bande grise en haut). Un glissement l'affiche pour de bon, et rehideBars
+                // la masque quelques secondes plus tard.
+                c.setSystemBarsBehavior(android.view.WindowInsetsController.BEHAVIOR_SHOW_BARS_BY_SWIPE);
                 c.hide(android.view.WindowInsets.Type.statusBars() | android.view.WindowInsets.Type.navigationBars());
             }
         }
@@ -705,8 +708,7 @@ public class MainActivity extends Activity implements Sync.Listener {
             handler.postDelayed(this, 60_000);
             final SmsAlert alert = smsAlert;
             if (alert != null) new Thread(alert::check, "papote-sms").start();
-            int hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY);
-            if (kioskPaused() || hour < 7 || hour >= 23) return;
+            if (kioskPaused() || Veille.isNight(MainActivity.this)) return;
             try {
                 PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
                 if (!pm.isInteractive()) {

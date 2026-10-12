@@ -631,3 +631,4 @@ exports.rappelsJumelage = onSchedule(
       }
     }
   });
+exports.supportChat = require('./support').supportChat;
