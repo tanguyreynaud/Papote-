@@ -21,6 +21,8 @@ les fonctions suffit pour que le chat en tienne compte.
 - Dans Réglages, « Inviter par e-mail » : la personne entre directement dans la famille en se connectant avec cette adresse. C'est le plus simple.
 - Ou « Partager le lien » / QR code avec le code famille : la personne ouvre le lien, donne son prénom, et un responsable de la famille accepte son arrivée (Réglages, « Demandes pour rejoindre »).
 
+- Membres : dans Réglages, « Membres », un responsable peut retirer quelqu'un de la famille ou rendre un autre membre responsable. Il peut y avoir plusieurs responsables ; celui qui a créé la famille le reste toujours.
+
 ## Recevoir et jumeler la tablette
 - La tablette arrive en point relais, déjà configurée. On choisit le point relais à la commande, où l'on veut (près de chez soi ou près du proche) : pas besoin de passer la main pour cela. Un e-mail donne le numéro de suivi.
 - À l'allumage, elle affiche un écran de bienvenue avec un QR code et un code à 8 caractères. On le scanne avec l'appareil photo du téléphone (ou on tape le code dans l'appli famille, « J'ai le code de la tablette »), puis on confirme sur la tablette.
@@ -34,6 +36,8 @@ les fonctions suffit pour que le chat en tienne compte.
 - Les mises à jour se font toutes seules.
 - Le bouton marche/arrêt ne l'éteint pas (pour éviter les fausses manœuvres) ; un appui d'environ 10 secondes la redémarre.
 - Taille du texte réglable dans Réglages (Normale, Grande, Très grande).
+- Volume : dans Réglages, « Volume du son » (son des vidéos et des appels sur la tablette), réglable par un responsable de la famille.
+- Pas de lecture à voix haute des messages.
 
 ## Dépannage
 - La tablette ne répond plus : vérifier qu'elle est branchée et connectée au Wi-Fi ; puis dans Réglages, « Dépanner la tablette » : « Redémarrer la tablette ». Sinon, appui d'environ 10 secondes sur le bouton marche.
@@ -66,5 +70,7 @@ les fonctions suffit pour que le chat en tienne compte.
 - Offrir Papote en cadeau, payé par un autre proche : bien sûr.
 - Livraison hors France, Belgique et Luxembourg (Suisse, DOM-TOM…) : pas pour le moment.
 - Changer de formule : passer à l'option internet inclus (carte SIM) demande de nous renvoyer la tablette pour la modifier ; passer de la SIM au Wi-Fi est envisageable. Dans les deux cas : demande de contact.
-- Paiement : par carte bancaire uniquement ; les factures sont dans la page Abonnement de l'appli.
+- Paiement : par carte bancaire uniquement (pas de chèque, de virement ni d'espèces) ; les factures sont dans la page Abonnement de l'appli.
 - Aide fiscale (services à la personne) : pas pour le moment.
+- Codes promo : il n'y en a pas pour le moment.
+- Casse : la tablette est faite pour qu'on n'ait rien à manipuler, mais la casse accidentelle n'est pas couverte. En cas de casse : demande de contact.
