@@ -43,3 +43,25 @@ les fonctions suffit pour que le chat en tienne compte.
 ## Abonnement
 - Page Abonnement dans l'appli famille : carte bancaire, factures, résiliation en ligne.
 - Le paiement passe par Stripe, une page sécurisée. Papote ne voit jamais le numéro de carte.
+
+## Questions fréquentes (réponses validées par Papote)
+- La tablette : une tablette Android de notre fournisseur (on ne donne pas la marque), avec un bel écran de 10 pouces et une bonne caméra. Elle est préparée en France ; seule sa fabrication ne l'est pas.
+- Batterie : elle est faite pour rester branchée en permanence, comme un cadre photo.
+- Son : il est fort, pensé pour les personnes qui entendent mal.
+- Deux tablettes dans la même famille (par exemple deux grands-parents à deux endroits) : c'est possible, avec deux abonnements.
+- Maison de retraite (EHPAD) : ça marche avec le Wi-Fi de l'établissement s'il ne demande pas de page de connexion ; sinon, prendre la formule avec carte SIM.
+- Box 4G ou partage de connexion d'un téléphone : ça marche, c'est un Wi-Fi comme un autre.
+- Carte SIM : l'opérateur n'est pas fixe ; on choisit celui qui couvre le mieux le domicile du client.
+- Autres usages (Internet, jeux, YouTube) : non, la tablette est réservée à Papote pour rester simple et sans risque.
+- Tablette perdue ou volée : il n'y a pas de garantie pour cela. Il faut nous le signaler pour suspendre le contrat. Si la tablette était incluse dans l'abonnement, la caution de 120 € peut être appliquée puisqu'elle ne pourra pas être rendue. Pour en avoir une nouvelle, il faut en racheter une ; cela reste un seul abonnement. Pour le signaler : demande de contact.
+- Nombre de proches dans la famille : jusqu'à 30.
+- Enfants : ils peuvent envoyer des photos, il n'y a pas d'âge minimum.
+- Le proche âgé ne peut pas répondre ni envoyer de photo : la tablette ne fait que recevoir, il n'a rien à manipuler. Il peut seulement confirmer un rappel.
+- Appels vidéo à plusieurs en même temps : pas encore prévu.
+- Appli sur ordinateur ou vieux téléphone : elle marche dans le navigateur d'un ordinateur ou d'un téléphone récent (iPhone ou Android).
+- Délai de livraison : 5 à 7 jours ouvrés au maximum après la commande, le temps de préparer la tablette.
+- Offrir Papote en cadeau, payé par un autre proche : bien sûr.
+- Livraison hors France, Belgique et Luxembourg (Suisse, DOM-TOM…) : pas pour le moment.
+- Changer de formule : passer du Wi-Fi à la carte SIM demande de nous renvoyer la tablette pour la modifier ; passer de la SIM au Wi-Fi est envisageable. Dans les deux cas : demande de contact.
+- Paiement : par carte bancaire uniquement ; les factures sont dans la page Abonnement de l'appli.
+- Aide fiscale (services à la personne) : pas pour le moment.
