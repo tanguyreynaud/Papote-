@@ -41,7 +41,7 @@ setGlobalOptions({ region: 'europe-west1', maxInstances: 5 });
 
 const STRIPE_SECRET = defineSecret('STRIPE_SECRET');
 const STRIPE_WEBHOOK_SECRET = defineSecret('STRIPE_WEBHOOK_SECRET');
-const SITE_VITRINE = defineString('SITE_VITRINE', { default: 'https://papote.web.app' });
+const SITE_VITRINE = defineString('SITE_VITRINE', { default: 'https://mapapote.fr' });
 const APPLI_FAMILLE = 'https://papote-famille.web.app/';
 // E-mails : MAIL_SMTP (« hote:port:utilisateur ») et MAIL_EXPEDITEUR dans .env, mot de passe en secret.
 const MAIL_SMTP = defineString('MAIL_SMTP', { default: 'smtp.gmail.com:465:' });
@@ -81,6 +81,7 @@ function finEngagementMs(abo) {
 async function tarifs(formule, tablette) {
   const cles = [regles.TARIFS[formule][tablette]];
   if (tablette === 'achetee') cles.push(regles.TARIF_TABLETTE);
+  if (tablette === 'incluse') cles.push(regles.TARIF_MISE_EN_SERVICE);
   const { data } = await stripe().prices.list({ lookup_keys: cles, active: true });
   const parCle = Object.fromEntries(data.map((p) => [p.lookup_key, p.id]));
   for (const cle of cles) {
@@ -102,7 +103,8 @@ async function sessionPaiement({ formule, tablette, fid, email, client, relais }
     mode: 'subscription',
     line_items: await tarifs(formule, tablette),
     locale: 'fr',
-    allow_promotion_codes: true,
+    // Carte bancaire seulement : pas de « Link » ni de code promo, qui troublent les clients.
+    payment_method_types: ['card'],
     billing_address_collection: 'auto',
     phone_number_collection: { enabled: true },
     metadata,
@@ -110,7 +112,7 @@ async function sessionPaiement({ formule, tablette, fid, email, client, relais }
     payment_method_collection: 'always',
     success_url: fid ? `${APPLI_FAMILLE}?abonnement=ok`
       : `${SITE_VITRINE.value()}/merci.html?session={CHECKOUT_SESSION_ID}`,
-    cancel_url: fid ? APPLI_FAMILLE : `${SITE_VITRINE.value()}/#tarifs`,
+    cancel_url: fid ? APPLI_FAMILLE : `${SITE_VITRINE.value()}/commande.html?formule=${formule}`,
   };
   // Commande du site : livrée au point relais choisi avant le paiement. Depuis l'appli : à l'adresse saisie.
   if (!relais) params.shipping_address_collection = { allowed_countries: ['FR', 'BE', 'LU'] };
@@ -379,7 +381,7 @@ exports.rattacherCommande = onCall({ secrets: [STRIPE_SECRET] }, async (request)
 // ---------- Stripe ----------
 
 exports.stripeWebhook = onRequest(
-  { secrets: [STRIPE_SECRET, STRIPE_WEBHOOK_SECRET] },
+  { secrets: [STRIPE_SECRET, STRIPE_WEBHOOK_SECRET, MAIL_MOT_DE_PASSE] },
   async (req, res) => {
     let event;
     try {
@@ -438,6 +440,26 @@ async function paiementTermine(session) {
   });
   const fid = meta.fid || (existante.exists && existante.get('fid')) || await chercherFamille(email);
   if (fid) await appliquer(fid, session.subscription);
+  await confirmerCommande(ref, email, code);
+}
+
+// E-mails « commande confirmée » au client et « nouvelle commande » à Papote, une seule fois
+// (Stripe peut renvoyer le même événement). Un échec d'envoi ne fait pas échouer le paiement.
+const EMAIL_PAPOTE = 'contact@mapapote.fr';
+async function confirmerCommande(ref, email, code) {
+  const premier = await db.runTransaction(async (t) => {
+    const snap = await t.get(ref);
+    if (snap.get('mailConfirmation')) return null;
+    t.update(ref, { mailConfirmation: FieldValue.serverTimestamp() });
+    return snap.data();
+  });
+  if (!premier) return;
+  const infos = { nom: premier.nom, code, relais: premier.livraison, formule: premier.formule };
+  const envois = [envoyerMail(EMAIL_PAPOTE, mail.nouvelleCommande({ ...infos, email, telephone: premier.telephone }))];
+  if (email) envois.push(envoyerMail(email, mail.commandeConfirmee(infos)));
+  const resultats = await Promise.allSettled(envois);
+  resultats.filter((r) => r.status === 'rejected')
+    .forEach((r) => logger.error(`E-mail de commande non envoyé (${ref.id})`, r.reason));
 }
 
 async function abonnementModifie(abo) {
