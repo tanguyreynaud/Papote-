@@ -27,6 +27,8 @@ p { margin: 0; }
 .recap { display: grid; justify-content: stretch; }
 .recap-total { display: flex; flex-wrap: wrap; gap: .25rem 1rem; align-items: baseline; }
 .recap-total b { font-size: 1.3rem; }
+.mes { margin: 0; padding: .5rem .8rem; border-radius: 10px; background: #e8e6fd; color: var(--accent-strong); }
+.mes b { font-size: 1.15rem; }
 .inclus { margin: 0; padding-left: 1.2rem; color: var(--muted); font-size: 1rem; }
 h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif; }
 .bandeau { margin: 0; padding: .5rem .75rem; background: var(--accent); color: var(--accent-text); text-align: center; font-weight: 700; font-size: .92rem; }
@@ -68,10 +70,11 @@ h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-u
 
   <form class="recap" id="recap">
     <div class="recap-total"><b id="total">20 € par mois</b><span class="muted">après 15 jours d'essai gratuit</span></div>
+    <p class="mes"><b>+ 50 € aujourd'hui</b>, une seule fois, pour la mise en service de la tablette</p>
     <ul class="inclus">
       <li>Tablette prêtée, configurée et prête à l'emploi</li>
       <li>Appli famille pour tous vos proches</li>
-      <li>50 € à la commande pour la mise en service, livraison offerte</li>
+      <li>Livraison offerte en point relais</li>
     </ul>
     <label class="opt"><input type="checkbox" name="net"> Internet inclus <span class="muted">+10 €/mois</span></label>
   </form>
