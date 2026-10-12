@@ -29,3 +29,18 @@ test('coupe les messages trop longs et trop nombreux', () => {
   assert.strictEqual(r[0].role, 'user');
   assert.strictEqual(r[r.length - 1].content, 'fin');
 });
+
+const { coordonneesValides, lireReponse } = require('./support')._test;
+
+test('accepte un téléphone ou un e-mail', () => {
+  assert.deepStrictEqual(coordonneesValides('06 12 34 56 78'), { telephone: '06 12 34 56 78' });
+  assert.deepStrictEqual(coordonneesValides('+33 6 12 34 56 78'), { telephone: '+33 6 12 34 56 78' });
+  assert.deepStrictEqual(coordonneesValides(' a@b.fr '), { email: 'a@b.fr' });
+  assert.strictEqual(coordonneesValides('1234'), null);
+  assert.strictEqual(coordonneesValides('bonjour'), null);
+});
+
+test('repère la marque de passage de main', () => {
+  assert.deepStrictEqual(lireReponse('Quelqu’un va vous recontacter.\n[CONTACT]'), { reponse: 'Quelqu’un va vous recontacter.', contact: true });
+  assert.deepStrictEqual(lireReponse('20 € par mois.'), { reponse: '20 € par mois.', contact: false });
+});

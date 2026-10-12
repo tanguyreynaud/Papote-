@@ -39,6 +39,12 @@
     '.ps-saisie textarea{flex:1;resize:none;border:1px solid var(--ps-ligne);border-radius:12px;padding:.6rem .7rem;font:inherit;font-size:1.05rem;color:var(--ps-texte);background:var(--ps-fond);max-height:7rem}' +
     '.ps-saisie button{border:0;border-radius:12px;background:var(--ps-indigo);color:#fff;font:inherit;font-weight:700;padding:0 1rem;cursor:pointer}' +
     '.ps-saisie button:disabled{opacity:.5;cursor:default}' +
+    '.ps-rappel{align-self:stretch;display:flex;flex-direction:column;gap:.5rem;background:var(--ps-carte);border:1px solid var(--ps-indigo);border-radius:14px;padding:.8rem}' +
+    '.ps-rappel label{font-size:.95rem;color:var(--ps-gris);display:flex;flex-direction:column;gap:.25rem}' +
+    '.ps-rappel input{border:1px solid var(--ps-ligne);border-radius:10px;padding:.55rem .7rem;font:inherit;font-size:1.05rem;color:var(--ps-texte);background:var(--ps-fond)}' +
+    '.ps-rappel button{border:0;border-radius:12px;background:var(--ps-indigo);color:#fff;font:inherit;font-weight:700;padding:.7rem;cursor:pointer}' +
+    '.ps-rappel button:disabled{opacity:.5;cursor:default}' +
+    '.ps-erreur{color:#b91c1c;font-size:.95rem}' +
     '.ps-note{font-size:.8rem;color:var(--ps-gris);text-align:center;padding:0 .75rem .6rem;background:var(--ps-carte)}';
 
   var historique = [];
@@ -106,6 +112,67 @@
       return bulle;
     }
 
+    // Formulaire « être recontacté », proposé seulement quand l'assistant n'a pas pu répondre.
+    function proposerRappel() {
+      var form = el('form', 'ps-rappel');
+      var lNom = el('label', '', 'Votre prénom');
+      var nom = el('input');
+      nom.autocomplete = 'given-name';
+      nom.maxLength = 60;
+      lNom.appendChild(nom);
+      var lCoord = el('label', '', 'Votre téléphone ou e-mail');
+      var coord = el('input');
+      coord.autocomplete = 'tel';
+      coord.maxLength = 120;
+      coord.required = true;
+      lCoord.appendChild(coord);
+      var erreur = el('div', 'ps-erreur');
+      var go = el('button', '', 'Être recontacté');
+      go.type = 'submit';
+      form.appendChild(lNom);
+      form.appendChild(lCoord);
+      form.appendChild(erreur);
+      form.appendChild(go);
+      form.onsubmit = function (e) {
+        e.preventDefault();
+        var v = coord.value.trim();
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) && v.replace(/\D/g, '').length < 9) {
+          erreur.textContent = 'Indiquez un numéro de téléphone ou une adresse e-mail.';
+          coord.focus();
+          return;
+        }
+        erreur.textContent = '';
+        go.disabled = true;
+        var conversation = historique.slice(-12);
+        while (conversation.length && conversation[conversation.length - 1].role !== 'user') conversation.pop();
+        fetch(API, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messages: conversation, contact: { nom: nom.value, coordonnees: v } }),
+        })
+          .then(function (r) { return r.json().then(function (d) { return r.ok && d.ok ? d : Promise.reject(d); }); })
+          .then(function () {
+            form.remove();
+            var merci = 'Merci ! Votre demande est bien arrivée, quelqu\u2019un de l\u2019équipe va vous recontacter.';
+            historique.push({ role: 'user', content: '(Demande de rappel envoyée)' });
+            historique.push({ role: 'assistant', content: merci });
+            sauver();
+            ajouter('assistant', merci);
+          })
+          .catch(function (d) {
+            go.disabled = false;
+            erreur.textContent = (d && d.erreur) || ('Envoi impossible. Écrivez-nous à ' + EMAIL + '.');
+          });
+      };
+      fil.appendChild(form);
+      fil.scrollTop = fil.scrollHeight;
+      nom.focus();
+    }
+
+    function sauver() {
+      try { sessionStorage.setItem(CLE, JSON.stringify(historique.slice(-20))); } catch (e) { /* navigation privée */ }
+    }
+
     function afficher() {
       fil.textContent = '';
       ajouter('assistant', 'Bonjour ! Je réponds à vos questions sur Papote : la tablette, les tarifs, l’installation ou l’appli famille.');
@@ -134,6 +201,8 @@
       if (!question || envoyer.disabled) return;
       var idees = fil.querySelector('.ps-idees');
       if (idees) idees.remove();
+      var rappel = fil.querySelector('.ps-rappel');
+      if (rappel) rappel.remove();
       historique.push({ role: 'user', content: question });
       ajouter('user', question);
       zone.value = '';
@@ -151,9 +220,9 @@
           var reponse = d.reponse || ('Je suis indisponible pour le moment. Écrivez-nous à ' + EMAIL + '.');
           historique.push({ role: 'assistant', content: reponse });
           ajouter('assistant', reponse);
-          try { sessionStorage.setItem(CLE, JSON.stringify(historique.slice(-20))); } catch (e) { /* navigation privée */ }
+          sauver();
           envoyer.disabled = false;
-          zone.focus();
+          if (d.contact) proposerRappel(); else zone.focus();
         });
     }
 
