@@ -345,7 +345,18 @@ exports.codeCommande = onRequest({ secrets: [STRIPE_SECRET], cors: true }, async
       res.status(404).json({ erreur: 'Paiement inconnu' });
       return;
     }
-    res.json({ code: regles.afficherCode(await codeDe(s.subscription)) });
+    // Récapitulatif à imprimer sur merci.html (seul celui qui a payé connaît l'identifiant du paiement).
+    const meta = s.metadata || {};
+    const details = s.customer_details || {};
+    res.json({
+      code: regles.afficherCode(await codeDe(s.subscription)),
+      date: s.created,
+      nom: details.name || null,
+      email: details.email || s.customer_email || null,
+      formule: meta.formule || null,
+      payeCentimes: s.amount_total,
+      relais: livraison.relaisDepuisMeta(meta),
+    });
   } catch (e) {
     logger.warn('codeCommande', e.message);
     res.status(404).json({ erreur: 'Paiement inconnu' });
