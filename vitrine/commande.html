@@ -120,9 +120,15 @@ p { margin: 0; }
     payer.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 
+  // Une seule carte à la fois : une deuxième ouverture (code postal complet puis Entrée, par
+  // exemple) empilait deux cartes, et « Choisir » ou la croix semblaient ne plus rien faire.
+  var carteOuverte = false;
   function ouvrirCarte() {
+    // (Si la carte a disparu sans prévenir, on peut la rouvrir.)
+    if (carteOuverte && document.querySelector('iframe')) return;
     var erreur = document.getElementById('erreur-carte');
     erreur.hidden = true;
+    carteOuverte = true;
     try {
       sendcloud.servicePoints.open({
         apiKey: SENDCLOUD_CLE,
@@ -130,12 +136,17 @@ p { margin: 0; }
         postalCode: document.getElementById('cp').value.trim(),
         language: 'fr-fr',
         carriers: 'mondial_relay'
-      }, choisir, function (erreurs) {
+      }, function (p) {
+        carteOuverte = false;
+        choisir(p);
+      }, function (erreurs) {
+        carteOuverte = false;
         if (erreurs && erreurs.indexOf('Closed') !== -1) return;
         console.error('Points relais :', erreurs);
         erreur.hidden = false;
       });
     } catch (err) {
+      carteOuverte = false;
       erreur.hidden = false;
     }
   }
@@ -152,10 +163,21 @@ p { margin: 0; }
   });
 
   // « Autour de moi » : position du téléphone, puis code postal via la Base Adresse Nationale (France).
-  document.getElementById('autour').addEventListener('click', function () {
+  var autour = document.getElementById('autour');
+  autour.addEventListener('click', function () {
     var erreur = document.getElementById('erreur-position');
     erreur.hidden = true;
     if (!navigator.geolocation) { erreur.hidden = false; return; }
+    var texte = autour.textContent;
+    autour.textContent = 'Recherche de votre position…';
+    autour.disabled = true;
+    function fin(ok) {
+      autour.textContent = texte;
+      autour.disabled = false;
+      if (!ok) erreur.hidden = false;
+    }
+    // Pas de délai maximum : la première fois, le téléphone demande l'autorisation, et le temps
+    // de répondre ne doit pas faire échouer la recherche (il fallait alors recliquer).
     navigator.geolocation.getCurrentPosition(function (pos) {
       fetch('https://api-adresse.data.gouv.fr/reverse/?lon=' + pos.coords.longitude + '&lat=' + pos.coords.latitude)
         .then(function (r) { return r.json(); })
@@ -164,10 +186,11 @@ p { margin: 0; }
           if (!code) throw new Error('pas de code postal');
           document.getElementById('pays').value = 'fr';
           cp.value = code;
+          fin(true);
           ouvrirCarte();
         })
-        .catch(function () { erreur.hidden = false; });
-    }, function () { erreur.hidden = false; }, { timeout: 10000, maximumAge: 600000 });
+        .catch(function () { fin(false); });
+    }, function () { fin(false); }, { maximumAge: 600000 });
   });
 
   maj();
