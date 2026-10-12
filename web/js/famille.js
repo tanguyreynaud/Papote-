@@ -1559,8 +1559,10 @@ function renderAbonnement() {
   useOrderCodeFromSite(abo?.statut, amOwner());
   const admin = amOwner(); // l'abonnement est l'affaire du propriétaire, celui qui paie
   const statut = abo?.statut;
-  // Bloc Abonnement en haut du Profil, pour le propriétaire, même sans abonnement payant.
-  $('abo-card').hidden = !amOwner();
+  // Bloc Abonnement du Profil (avant « Mon compte ») : tout le monde voit l'état,
+  // seul le propriétaire peut payer, changer de carte ou résilier.
+  $('abo-card').hidden = false;
+  $('abo-readonly').hidden = admin || !abo;
   if (!abo) {
     $('abo-status').textContent = 'Formule d\u2019origine, sans abonnement payant';
     $('abo-status').className = 'abo-status s-offert';
@@ -1572,7 +1574,7 @@ function renderAbonnement() {
     $('abo-status').textContent = LIBELLES[statut] || statut;
     $('abo-status').className = `abo-status s-${statut}`;
     const details = [];
-    if (abo.formule) details.push(`${abo.formule === 'sim' ? 'Internet inclus' : 'Avec le Wi-Fi de la maison'}, ${abo.tablette === 'achetee' ? 'tablette achetée' : 'tablette prêtée'}`);
+    if (abo.formule) details.push(`${abo.formule === 'sim' ? 'Internet inclus, 30 € par mois' : 'Avec le Wi-Fi de la maison, 20 € par mois'}, ${abo.tablette === 'achetee' ? 'tablette achetée' : 'tablette prêtée'}`);
     const futur = (t) => t && toDate(t) > new Date();
     if (futur(abo.essaiJusqua)) details.push(`Essai gratuit jusqu'au ${dateLongue(abo.essaiJusqua)}`);
     if (futur(abo.engagementJusqua)) details.push(`Engagement jusqu'au ${dateLongue(abo.engagementJusqua)}`);
@@ -1580,10 +1582,10 @@ function renderAbonnement() {
     else if (abo.finPeriode && statut === 'actif' && !futur(abo.essaiJusqua)) details.push(`Prochaine échéance le ${dateLongue(abo.finPeriode)}`);
     $('abo-details').textContent = details.join(' · ');
     const enCours = ['actif', 'impaye'].includes(statut);
-    $('btn-portail').hidden = !abo.stripeCustomerId || statut === 'offert';
-    $('btn-resilier').hidden = !enCours || !!abo.resiliationLe || !abo.stripeSubscriptionId;
-    $('btn-garder').hidden = !enCours || !abo.resiliationLe;
-    $('abo-choices').hidden = !['aucun', 'resilie', 'suspendu'].includes(statut);
+    $('btn-portail').hidden = !admin || !abo.stripeCustomerId || statut === 'offert';
+    $('btn-resilier').hidden = !admin || !enCours || !!abo.resiliationLe || !abo.stripeSubscriptionId;
+    $('btn-garder').hidden = !admin || !enCours || !abo.resiliationLe;
+    $('abo-choices').hidden = !admin || !['aucun', 'resilie', 'suspendu'].includes(statut);
   }
   // Bandeaux : retard de paiement (responsables), pause (tout le monde).
   let text = '';
