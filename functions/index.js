@@ -103,7 +103,8 @@ async function sessionPaiement({ formule, tablette, fid, email, client, relais }
     mode: 'subscription',
     line_items: await tarifs(formule, tablette),
     locale: 'fr',
-    allow_promotion_codes: true,
+    // Carte bancaire seulement : pas de « Link » ni de code promo, qui troublent les clients.
+    payment_method_types: ['card'],
     billing_address_collection: 'auto',
     phone_number_collection: { enabled: true },
     metadata,
@@ -380,7 +381,7 @@ exports.rattacherCommande = onCall({ secrets: [STRIPE_SECRET] }, async (request)
 // ---------- Stripe ----------
 
 exports.stripeWebhook = onRequest(
-  { secrets: [STRIPE_SECRET, STRIPE_WEBHOOK_SECRET] },
+  { secrets: [STRIPE_SECRET, STRIPE_WEBHOOK_SECRET, MAIL_MOT_DE_PASSE] },
   async (req, res) => {
     let event;
     try {
@@ -439,6 +440,28 @@ async function paiementTermine(session) {
   });
   const fid = meta.fid || (existante.exists && existante.get('fid')) || await chercherFamille(email);
   if (fid) await appliquer(fid, session.subscription);
+  await confirmerCommande(ref, email, code);
+}
+
+// E-mail « commande confirmée », une seule fois (Stripe peut renvoyer le même événement).
+// Un échec d'envoi ne doit pas faire échouer le paiement : on le note seulement.
+async function confirmerCommande(ref, email, code) {
+  if (!email) return;
+  const premier = await db.runTransaction(async (t) => {
+    const snap = await t.get(ref);
+    if (snap.get('mailConfirmation')) return null;
+    t.update(ref, { mailConfirmation: FieldValue.serverTimestamp() });
+    return snap.data();
+  });
+  if (!premier) return;
+  try {
+    await envoyerMail(email, mail.commandeConfirmee({
+      nom: premier.nom, code, relais: premier.livraison, formule: premier.formule,
+    }));
+  } catch (e) {
+    logger.error(`E-mail de confirmation non envoyé (${ref.id})`, e);
+    await ref.update({ mailConfirmation: FieldValue.delete() }).catch(() => {});
+  }
 }
 
 async function abonnementModifie(abo) {
