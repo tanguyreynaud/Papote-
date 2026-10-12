@@ -147,6 +147,18 @@ async function familleDuResponsable(fid, uid) {
   return fam;
 }
 
+// Résiliation et annulation : les responsables de la famille, ou l'administrateur de Papote (badge admin).
+async function familleGeree(fid, request) {
+  const { uid } = compteVerifie(request);
+  if (request.auth.token.admin === true) {
+    if (typeof fid !== 'string' || !fid) throw new HttpsError('invalid-argument', 'Famille manquante.');
+    const snap = await db.doc(`families/${fid}`).get();
+    if (!snap.exists) throw new HttpsError('not-found', 'Famille introuvable.');
+    return snap.data();
+  }
+  return familleDuResponsable(fid, uid);
+}
+
 function compteVerifie(request) {
   const token = request.auth && request.auth.token;
   if (!token || !token.email || !token.email_verified
@@ -293,9 +305,8 @@ exports.portailClient = onCall({ secrets: [STRIPE_SECRET] }, async (request) => 
 // Résiliation en ligne : l'abonnement s'arrête à la fin de l'engagement, ou à la fin du mois
 // déjà payé si l'engagement est terminé. Pendant l'essai gratuit : arrêt à la fin de l'essai.
 exports.resilierAbonnement = onCall({ secrets: [STRIPE_SECRET] }, async (request) => {
-  const { uid } = compteVerifie(request);
   const { fid } = request.data || {};
-  const fam = await familleDuResponsable(fid, uid);
+  const fam = await familleGeree(fid, request);
   const id = fam.abonnement && fam.abonnement.stripeSubscriptionId;
   if (!id) throw new HttpsError('failed-precondition', "Cette famille n'a pas d'abonnement.");
   const abo = await stripe().subscriptions.retrieve(id);
@@ -312,9 +323,8 @@ exports.resilierAbonnement = onCall({ secrets: [STRIPE_SECRET] }, async (request
 });
 
 exports.annulerResiliation = onCall({ secrets: [STRIPE_SECRET] }, async (request) => {
-  const { uid } = compteVerifie(request);
   const { fid } = request.data || {};
-  const fam = await familleDuResponsable(fid, uid);
+  const fam = await familleGeree(fid, request);
   const id = fam.abonnement && fam.abonnement.stripeSubscriptionId;
   if (!id) throw new HttpsError('failed-precondition', "Cette famille n'a pas d'abonnement.");
   await stripe().subscriptions.update(id, { cancel_at: '' });
@@ -347,8 +357,8 @@ async function rembourser(abonnementId) {
   return total;
 }
 
-async function commandeDeLaFamille(fid, uid) {
-  const fam = await familleDuResponsable(fid, uid);
+async function commandeDeLaFamille(fid, request) {
+  const fam = await familleGeree(fid, request);
   const id = fam.abonnement && fam.abonnement.stripeSubscriptionId;
   if (!id) throw new HttpsError('failed-precondition', "Cette famille n'a pas d'abonnement.");
   const ref = db.doc(`commandes/${id}`);
@@ -360,9 +370,8 @@ async function commandeDeLaFamille(fid, uid) {
 // Annulation dans les 14 jours : l'abonnement s'arrête tout de suite. Tablette pas encore partie :
 // remboursement immédiat. Déjà partie : remboursement dès son retour (voir commandeModifiee).
 exports.retracter = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE] }, async (request) => {
-  const { uid } = compteVerifie(request);
   const { fid } = request.data || {};
-  const { id, ref } = await commandeDeLaFamille(fid, uid);
+  const { id, ref } = await commandeDeLaFamille(fid, request);
   const montant = await montantPaye(id);
   const maintenant = Date.now();
   const partie = await db.runTransaction(async (tx) => {
@@ -407,8 +416,7 @@ exports.retracter = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE] }, asyn
 
 // Ce que l'appli affiche dans Abonnement : annulation possible, tablette à rendre, remboursement.
 exports.finDeContrat = onCall({ secrets: [STRIPE_SECRET] }, async (request) => {
-  const { uid } = compteVerifie(request);
-  const { id, snap } = await commandeDeLaFamille((request.data || {}).fid, uid);
+  const { id, snap } = await commandeDeLaFamille((request.data || {}).fid, request);
   const c = snap.data();
   const ms = (t) => (t && typeof t.toMillis === 'function' ? t.toMillis() : null);
   const possible = regles.retractationPossible(c, Date.now());
