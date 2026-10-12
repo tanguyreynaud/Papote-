@@ -543,8 +543,13 @@ async function answer() {
   pc.onicecandidate = (e) => {
     if (e.candidate) addDoc(collection(callRef, 'calleeCandidates'), e.candidate.toJSON()).catch(() => {});
   };
+  // Si la famille disparaît sans raccrocher (app fermée, réseau coupé), la caméra de Mamie
+  // ne reste pas allumée : on raccroche après quelques secondes sans liaison.
+  let lostTimer = null;
   pc.onconnectionstatechange = () => {
+    clearTimeout(lostTimer);
     if (pc.connectionState === 'connected') $('call-status').textContent = '';
+    if (pc.connectionState === 'disconnected') lostTimer = setTimeout(() => hangup('La connexion a été perdue.'), 8000);
     if (pc.connectionState === 'failed') hangup('La connexion a été perdue.');
   };
 
