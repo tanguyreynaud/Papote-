@@ -553,6 +553,16 @@ footer a { color: var(--muted); }
     maj();
   })();
 </script>
+<script>
+  // Statistiques sans cookie : une seule fois par visite et par étape (outils/admin/statistiques.bat).
+  function compter(e) {
+    try { if (sessionStorage.getItem('papote-' + e)) return; sessionStorage.setItem('papote-' + e, '1'); } catch (_) {}
+    var url = 'https://europe-west1-papote-famille.cloudfunctions.net/compter?e=' + e;
+    try { if (navigator.sendBeacon && navigator.sendBeacon(url)) return; } catch (_) {}
+    fetch(url, { method: 'POST', keepalive: true }).catch(function () {});
+  }
+</script>
+<script>compter('accueil');</script>
 <script src="chat-support.js" defer></script>
 </body>
 </html>
