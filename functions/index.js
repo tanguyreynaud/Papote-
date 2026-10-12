@@ -465,6 +465,7 @@ async function confirmerCommande(ref, email, code) {
     return snap.data();
   });
   if (!premier) return;
+  await compterEtape('paye').catch((e) => logger.warn('Statistiques', e.message));
   const infos = { nom: premier.nom, code, relais: premier.livraison, formule: premier.formule };
   const envois = [envoyerMail(EMAIL_PAPOTE, mail.nouvelleCommande({ ...infos, email, telephone: premier.telephone }))];
   if (email) envois.push(envoyerMail(email, mail.commandeConfirmee(infos)));
@@ -479,6 +480,26 @@ async function abonnementModifie(abo) {
   if (fid) await appliquer(fid, abo.id);
   else if (commande.exists) await commande.ref.update({ statutStripe: abo.status });
 }
+
+// ---------- Statistiques de visite (sans cookie ni donnée personnelle) ----------
+// Un compteur par jour dans statistiques/{AAAA-MM-JJ} : accueil, commande (page ouverte),
+// relais (point choisi), paiement (clic sur Payer), paye (paiement reçu).
+// Lecture : outils/admin/statistiques.bat.
+const ETAPES = ['accueil', 'commande', 'relais', 'paiement'];
+function compterEtape(etape) {
+  const jour = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Paris' });
+  return db.doc(`statistiques/${jour}`).set({ [etape]: FieldValue.increment(1) }, { merge: true });
+}
+
+exports.compter = onRequest({ cors: true, maxInstances: 2 }, async (req, res) => {
+  const etape = String(req.query.e || '');
+  if (!ETAPES.includes(etape)) {
+    res.status(400).end();
+    return;
+  }
+  await compterEtape(etape);
+  res.status(204).end();
+});
 
 // ---------- Tâches automatiques ----------
 
