@@ -10,7 +10,7 @@
 //   codeCommande       GET depuis merci.html : code de commande à noter après le paiement
 //   stripeWebhook      Stripe prévient ici de chaque paiement ou changement d'abonnement
 //   finDeGrace         chaque heure : suspend les familles dont le délai de grâce est dépassé
-//   restitutions       chaque jour : prélève 100 € si une tablette incluse n'est pas rendue à temps
+//   restitutions       chaque jour : prélève 120 € si une tablette incluse n'est pas rendue à temps
 //   tabletteRendue     appel depuis le tableau de bord admin : la tablette incluse est revenue
 //   nouvelleFamille    famille créée : sans commande, statut « aucun »
 //   nouveauMembre      créateur d'une famille : rattache sa commande faite sur le site
@@ -465,7 +465,7 @@ exports.finDeGrace = onSchedule(
     }
   });
 
-// Tablette incluse non rendue dans les 30 jours : 100 € prélevés sur la carte de l'abonnement.
+// Tablette incluse non rendue dans les 30 jours : 120 € prélevés sur la carte de l'abonnement.
 exports.restitutions = onSchedule(
   { schedule: 'every day 09:00', timeZone: 'Europe/Paris', secrets: [STRIPE_SECRET] },
   async () => {
@@ -493,7 +493,7 @@ exports.restitutions = onSchedule(
           'restitution.paiement': paiement.id,
           'restitution.majLe': FieldValue.serverTimestamp(),
         });
-        logger.info(`Commande ${snap.id} : tablette non rendue, 100 € prélevés.`);
+        logger.info(`Commande ${snap.id} : tablette non rendue, 120 € prélevés.`);
       } catch (e) {
         // Carte expirée ou refusée : à relancer à la main, depuis le tableau de bord Stripe.
         await snap.ref.update({
@@ -523,7 +523,7 @@ exports.tabletteRendue = onCall(async (request) => {
   const snap = await ref.get();
   if (!snap.exists) throw new HttpsError('not-found', 'Commande introuvable.');
   if (snap.get('restitution.statut') === 'facturee') {
-    throw new HttpsError('failed-precondition', 'Les 100 € ont déjà été prélevés : remboursez-les depuis Stripe.');
+    throw new HttpsError('failed-precondition', 'Les 120 € ont déjà été prélevés : remboursez-les depuis Stripe.');
   }
   await ref.set({
     restitution: { statut: 'rendue', majLe: FieldValue.serverTimestamp() },
