@@ -155,3 +155,10 @@ body.depot-actif::after {
 .fiche .link { padding: 0; min-height: 0; color: var(--accent); text-decoration: underline; }
 .graphique rect, .graphique circle { stroke: none; }
 .graphique .g-axe { font-weight: 400; }
+
+/* ---------- Jauge (franchise de TVA) ---------- */
+
+.jauge { height: 14px; border-radius: 999px; background: #eef0ff; overflow: hidden; margin: 8px 0 10px; }
+.jauge span { display: block; height: 100%; border-radius: 999px; background: var(--accent); }
+.jauge.ko span { background: var(--danger); }
+#f-reglages { margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--line); }

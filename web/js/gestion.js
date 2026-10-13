@@ -158,7 +158,8 @@ function lienPiece(piece) {
 
 let donnees = null; // gestionDonnees
 let stripe = null; // gestionStripe pour la période choisie
-let stripeMois = null; // gestionStripe pour le mois en cours (accueil)
+let stripeMois = null; // le mois en cours (accueil), tiré de stripeAnnee
+let stripeAnnee = null; // gestionStripe pour l'année civile en cours (franchise de TVA)
 let periode = null; // { debut, fin } en millisecondes, fin exclue
 
 function erreur(e) {
@@ -231,10 +232,12 @@ async function chargerDonnees() {
 async function chargerMois() {
   const n = new Date();
   try {
-    stripeMois = await appeler('gestionStripe', {
-      debut: new Date(n.getFullYear(), n.getMonth(), 1).getTime(),
-      fin: new Date(n.getFullYear(), n.getMonth() + 1, 1).getTime(),
+    stripeAnnee = await appeler('gestionStripe', {
+      debut: new Date(n.getFullYear(), 0, 1).getTime(),
+      fin: new Date(n.getFullYear() + 1, 0, 1).getTime(),
     });
+    const debutMois = new Date(n.getFullYear(), n.getMonth(), 1).getTime();
+    stripeMois = { ...stripeAnnee, mouvements: stripeAnnee.mouvements.filter((m) => m.le >= debutMois) };
     afficherAccueil();
   } catch (e) {
     console.warn('Stripe (mois en cours)', e);
@@ -245,6 +248,7 @@ function afficherTout() {
   if (donnees) {
     afficherAccueil();
     afficherStock();
+    afficherSim();
     afficherCommandes();
   }
   if (donnees && stripe) {
@@ -253,6 +257,7 @@ function afficherTout() {
     afficherCompta();
     afficherGraphiques();
     afficherUrssaf();
+    afficherRentabilite();
   }
 }
 
@@ -430,6 +435,8 @@ function afficherAccueil() {
   const aVerifier = donnees.stock.filter((t) => t.etat === 'revenue').length;
   const impayees = stripeMois ? stripeMois.abonnements.filter((a) => a.statut === 'past_due').length : 0;
   const problemes = donnees.automatique ? (donnees.automatique.erreurs || []).length : 0;
+  const simsAResilier = lignesSim().filter((l) => l.aResilier).length;
+  const tva = franchiseTva();
 
   const taches = [
     [aEnvoyer, pluriel(aEnvoyer, 'tablette') + ' à envoyer', '#commandes', manque ? 'ko' : ''],
@@ -439,6 +446,8 @@ function afficherAccueil() {
     [aVerifier, `${pluriel(aVerifier, 'tablette')} revenue${aVerifier > 1 ? 's' : ''}, à vérifier avant de remettre en stock`, '#stock', ''],
     [aRembourser, `${pluriel(aRembourser, 'remboursement')} échoué${aRembourser > 1 ? 's' : ''}, à faire depuis Stripe`, '#commandes', 'ko'],
     [impayees, `${pluriel(impayees, 'abonnement')} impayé${impayees > 1 ? 's' : ''}`, '#factures', 'ko'],
+    [simsAResilier, `${pluriel(simsAResilier, 'forfait SIM')} à résilier ou suspendre`, '#stock', 'ko'],
+    [tva && tva.alerte ? 1 : 0, tva ? tva.alerte : '', '#accueil', 'ko'],
     [problemes, `${pluriel(problemes, 'problème')} lors du dernier passage automatique (détail plus bas)`, '#accueil', 'ko'],
   ].filter(([n]) => n > 0);
   $('a-faire').replaceChildren(...(taches.length
@@ -451,8 +460,9 @@ function afficherAccueil() {
   };
   pastille('n-accueil', taches.length);
   pastille('n-commandes', aEnvoyer + aRecuperer);
-  pastille('n-stock', manque + aVerifier);
+  pastille('n-stock', manque + aVerifier + simsAResilier);
   afficherAutomatique();
+  afficherTva(tva);
 
   if (stripeMois) {
     const n = new Date();
@@ -650,6 +660,38 @@ function afficherStock() {
 }
 $('filtre-stock').addEventListener('change', afficherStock);
 
+// ---------- Lignes SIM ----------
+
+const ETATS_SANS_CLIENT = ['en-stock', 'revenue', 'a-reparer', 'perdue', 'hors-service'];
+const coutSim = (t) => (t.simCout != null ? t.simCout : donnees.reglages.forfaitSim);
+
+// Même règle que simAResilier (functions/gestion.js) : ligne payée, tablette plus chez un client.
+function lignesSim() {
+  if (!donnees) return [];
+  const parId = new Map(donnees.commandes.map((c) => [c.id, c]));
+  return donnees.stock.filter((t) => t.sim).map((t) => {
+    const c = parId.get(t.commande);
+    const finie = c && ((c.restitution && ['rendue', 'facturee'].includes(c.restitution.statut))
+      || ['resilie', 'canceled'].includes(c.abonnement));
+    return { t, c, aResilier: ETATS_SANS_CLIENT.includes(t.etat) || !!finie };
+  });
+}
+
+function afficherSim() {
+  const lignes = lignesSim().sort((a, b) => b.aResilier - a.aResilier);
+  remplirTable($('t-sim'), [
+    { titre: 'Ligne' }, { titre: 'Opérateur' }, { titre: 'Forfait', n: 1 }, { titre: 'Tablette' }, { titre: 'Client' }, { titre: '' },
+  ], lignes.map(({ t, c, aResilier }) => ({
+    onclick: () => ouvrirTablette(t.id),
+    cellules: [t.sim, t.simOperateur || '', h('span', { class: t.simCout == null ? 'muted' : null }, euros(coutSim(t))),
+      `${t.numero || t.modele || ''} · ${donnees.etats[etatTablette(t)] || t.etat}`, c ? nomCommande(c) : '',
+      aResilier ? badge('à résilier', 'ko') : badge('en service', 'ok')],
+  })), {
+    vide: 'Aucune ligne SIM saisie.',
+    total: lignes.length ? ['Total', '', euros(lignes.reduce((s, l) => s + coutSim(l.t), 0)), '', '', ''] : null,
+  });
+}
+
 $('x-stock').addEventListener('click', () => {
   const parId = new Map(donnees.commandes.map((c) => [c.id, c]));
   csv('stock', ['N° de série', 'Modèle', 'Fournisseur', 'État', 'Commande', 'Client', 'SIM', 'Prix d\'achat', 'Achetée le', 'Notes'],
@@ -671,6 +713,8 @@ function ouvrirTablette(id) {
   f.numero.value = t.numero || '';
   f.modele.value = t.modele || '';
   f.sim.value = t.sim || '';
+  f.simOperateur.value = t.simOperateur || '';
+  f.simCout.value = enEuros(t.simCout);
   f.notes.value = t.notes || '';
   f.etat.replaceChildren(...Object.entries(donnees.etats).map(([k, v]) => h('option', { value: k, selected: k === t.etat }, v)));
   const prises = new Set(donnees.stock.filter((x) => x.id !== t.id).map((x) => x.commande).filter(Boolean));
@@ -692,13 +736,15 @@ function ouvrirTablette(id) {
 $('f-tablette').addEventListener('submit', async (e) => {
   e.preventDefault();
   const f = e.target;
+  const simCout = enCentimes(f.simCout.value);
+  if (Number.isNaN(simCout)) return message(f, 'Forfait illisible (ex. 7,99).');
   await enregistrer(f, async () => {
     await appeler('gestionStock', {
       action: 'modifier',
       id: tabletteOuverte,
       champs: {
         numero: f.numero.value, modele: f.modele.value, etat: f.etat.value, commande: f.commande.value || null,
-        sim: f.sim.value, notes: f.notes.value,
+        sim: f.sim.value, simOperateur: f.simOperateur.value, simCout, notes: f.notes.value,
       },
     });
     $('d-tablette').close();
@@ -1361,11 +1407,10 @@ const memoire = {
   lire: (k, defaut) => { try { return localStorage.getItem(k) || defaut; } catch (e) { return defaut; } },
   ecrire: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* navigation privée */ } },
 };
-$('u-taux').value = memoire.lire('papote-urssaf-taux', '21,2');
 $('u-rythme').value = memoire.lire('papote-urssaf-rythme', 'mois');
 
 function afficherUrssaf() {
-  const taux = Number(String($('u-taux').value).replace(',', '.'));
+  const taux = donnees.reglages.tauxUrssaf;
   const ca = new Map();
   for (const m of stripe.mouvements) {
     if (ENCAISSEMENTS.includes(m.nature) || m.nature === 'remboursement' || m.nature === 'litige') {
@@ -1396,10 +1441,6 @@ function afficherUrssaf() {
     total: lignes.length ? ['Total', euros(lignes.reduce((s, x) => s + x.ca, 0)), euros(cotis(lignes.reduce((s, x) => s + x.ca, 0))), ''] : null,
   });
 }
-$('u-taux').addEventListener('change', () => {
-  memoire.ecrire('papote-urssaf-taux', $('u-taux').value);
-  if (stripe) afficherUrssaf();
-});
 $('u-rythme').addEventListener('change', () => {
   memoire.ecrire('papote-urssaf-rythme', $('u-rythme').value);
   if (stripe) afficherUrssaf();
@@ -1461,3 +1502,118 @@ function arreterScan() {
 }
 $('d-scan').addEventListener('close', arreterScan);
 $('scan-fin').addEventListener('click', () => $('d-scan').close());
+
+// ---------- Franchise de TVA ----------
+
+// Chiffre d'affaires encaissé depuis le 1er janvier, projeté à fin décembre avec les abonnements en cours.
+function franchiseTva() {
+  if (!donnees || !stripeAnnee) return null;
+  const seuil = donnees.reglages.seuilTva;
+  let ca = 0;
+  for (const m of stripeAnnee.mouvements) {
+    if (ENCAISSEMENTS.includes(m.nature) || m.nature === 'remboursement' || m.nature === 'litige') ca += m.montant;
+  }
+  const mensuelTotal = stripeAnnee.abonnements.filter((a) => ['active', 'trialing', 'past_due'].includes(a.statut))
+    .reduce((s, a) => s + a.mensuel, 0);
+  const n = new Date();
+  const moisRestants = 11 - n.getMonth() + (1 - n.getDate() / new Date(n.getFullYear(), n.getMonth() + 1, 0).getDate());
+  const projection = Math.round(ca + mensuelTotal * moisRestants);
+  const part = seuil ? ca / seuil : 0;
+  const alerte = !seuil ? null
+    : ca >= seuil ? 'Seuil de franchise de TVA dépassé : à facturer avec TVA, voir le comptable'
+      : projection >= seuil ? 'Le seuil de franchise de TVA sera dépassé avant la fin de l\'année à ce rythme'
+        : part >= 0.8 ? `${Math.round(part * 100)} % du seuil de franchise de TVA atteint` : null;
+  return { ca, seuil, part, projection, alerte };
+}
+
+function afficherTva(t) {
+  if (!t) {
+    $('tva').replaceChildren(h('p', { class: 'muted small' }, 'Lecture de Stripe…'));
+    return;
+  }
+  const pct = Math.min(100, Math.round(t.part * 100));
+  $('tva').replaceChildren(
+    h('div', { class: `jauge${t.alerte ? ' ko' : ''}`, role: 'progressbar', 'aria-valuenow': pct, 'aria-valuemin': 0, 'aria-valuemax': 100 },
+      h('span', { style: `width:${pct}%` })),
+    h('p', { class: 'small' }, `${euros(t.ca)} encaissés depuis le 1er janvier, soit ${pct} % du seuil de ${euros(t.seuil)}. `,
+      `À ce rythme : environ ${euros(t.projection)} fin décembre.`),
+    ...(t.alerte ? [h('p', { class: 'small error' }, t.alerte)] : []),
+    h('p', { class: 'muted small' }, 'Tant que vous restez sous le seuil, vos factures sont sans TVA (art. 293 B du CGI). Seuil réglable dans Comptabilité.'),
+  );
+}
+
+// ---------- Rentabilité par formule ----------
+
+function afficherRentabilite() {
+  const r = donnees.reglages;
+  // Frais Stripe réels de la période (part du montant encaissé), sinon tarif carte européenne.
+  const paiements = stripe.mouvements.filter((m) => ENCAISSEMENTS.includes(m.nature));
+  const encaisse = paiements.reduce((s, m) => s + m.montant, 0);
+  const tauxFrais = encaisse ? paiements.reduce((s, m) => s + m.frais, 0) / encaisse : 0.03;
+  const prixTablettes = donnees.stock.map((t) => t.prixAchat).filter((p) => p > 0);
+  const tablette = Math.round((prixTablettes.length ? prixTablettes.reduce((s, p) => s + p, 0) / prixTablettes.length : 10000)
+    / Math.max(1, r.vieTablette));
+  const enService = lignesSim().filter((l) => !l.aResilier);
+  const forfait = enService.length ? Math.round(enService.reduce((s, l) => s + coutSim(l.t), 0) / enService.length) : r.forfaitSim;
+  const payants = stripe.abonnements.filter((a) => ['active', 'past_due'].includes(a.statut));
+  const lignes = Object.entries(FORMULES).map(([cle, nom]) => {
+    const abos = payants.filter((a) => a.formule === cle);
+    const prix = abos.length ? Math.round(abos.reduce((s, a) => s + a.mensuel, 0) / abos.length) : (cle === 'sim' ? 3000 : 2000);
+    const frais = Math.round(prix * tauxFrais);
+    const urssaf = Math.round((prix * r.tauxUrssaf) / 100);
+    const sim = cle === 'sim' ? forfait : 0;
+    const marge = prix - frais - urssaf - tablette - sim;
+    return { nom, n: abos.length, prix, frais, urssaf, sim, marge };
+  });
+  const signe = (c) => h('span', { class: c < 0 ? 'neg' : null }, euros(c));
+  remplirTable($('t-rentabilite'), [
+    { titre: 'Formule' }, { titre: 'Abonnés', n: 1 }, { titre: 'Prix', n: 1 }, { titre: 'Frais Stripe', n: 1 },
+    { titre: 'URSSAF', n: 1 }, { titre: 'Tablette', n: 1 }, { titre: 'Forfait SIM', n: 1 }, { titre: 'Reste / abonné', n: 1 },
+    { titre: 'Reste / mois', n: 1 },
+  ], lignes.map((l) => [l.nom, String(l.n), euros(l.prix), euros(l.frais), euros(l.urssaf), euros(tablette),
+    l.sim ? euros(l.sim) : '', signe(l.marge), signe(l.marge * l.n)]), {
+    total: ['Total', String(lignes.reduce((s, l) => s + l.n, 0)), '', '', '', '', '', '',
+      signe(lignes.reduce((s, l) => s + l.marge * l.n, 0))],
+  });
+  const f = $('f-reglages');
+  if (!f.contains(document.activeElement)) {
+    f.seuilTva.value = enEuros(r.seuilTva);
+    f.tauxUrssaf.value = String(r.tauxUrssaf).replace('.', ',');
+    f.forfaitSim.value = enEuros(r.forfaitSim);
+    f.vieTablette.value = r.vieTablette;
+  }
+}
+
+$('f-reglages').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const f = e.target;
+  const nombre = (v) => Number(String(v).replace(/\s|€|%/g, '').replace(',', '.'));
+  const valeurs = {
+    seuilTva: enCentimes(f.seuilTva.value),
+    tauxUrssaf: nombre(f.tauxUrssaf.value),
+    forfaitSim: enCentimes(f.forfaitSim.value),
+    vieTablette: nombre(f.vieTablette.value),
+  };
+  if (Object.values(valeurs).some((v) => v == null || !Number.isFinite(v) || v < 0) || !valeurs.vieTablette) {
+    return message(f, 'Une valeur est illisible.');
+  }
+  if (await enregistrer(f, () => appeler('gestionReglages', valeurs))) {
+    message(f, 'Réglages enregistrés.', true);
+    afficherAccueil();
+  }
+});
+
+// ---------- Récap du lundi ----------
+
+$('btn-recap').addEventListener('click', async () => {
+  const b = $('btn-recap');
+  b.disabled = true;
+  try {
+    const r = await appeler('gestionRecapMaintenant');
+    alert(`Récap envoyé à contact@mapapote.fr (${pluriel(r.aFaire, 'point')} à faire).`);
+  } catch (e) {
+    alert(messageErreur(e));
+  } finally {
+    b.disabled = false;
+  }
+});

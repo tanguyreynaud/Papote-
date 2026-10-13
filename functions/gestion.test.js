@@ -78,3 +78,43 @@ test('lecture d\'une facture vers le formulaire', () => {
   assert.strictEqual(v.montant, null);
   assert.strictEqual(v.tablettes, null);
 });
+
+test('réglages de la gestion', () => {
+  assert.strictEqual(g.lireReglages(undefined).seuilTva, 3750000);
+  const r = g.lireReglages({ seuilTva: 4000000, tauxUrssaf: -1, forfaitSim: 'x' });
+  assert.strictEqual(r.seuilTva, 4000000);
+  assert.strictEqual(r.tauxUrssaf, 21.2);
+  assert.strictEqual(r.forfaitSim, 700);
+});
+
+test('forfait SIM à résilier', () => {
+  assert.strictEqual(g.simAResilier({ sim: null, etat: 'en-stock' }), false);
+  assert.strictEqual(g.simAResilier({ sim: '0612', etat: 'en-stock' }), true);
+  assert.strictEqual(g.simAResilier({ sim: '0612', etat: 'envoyee' }, { abonnement: 'actif' }), false);
+  assert.strictEqual(g.simAResilier({ sim: '0612', etat: 'envoyee' }, { abonnement: 'resilie' }), true);
+  assert.strictEqual(g.simAResilier({ sim: '0612', etat: 'en-retour' }, { restitution: { statut: 'rendue' } }), true);
+});
+
+test('liste à faire du récapitulatif', () => {
+  const maintenant = Date.UTC(2026, 9, 12);
+  const liste = g.aFaire({
+    maintenant,
+    commandes: [
+      { id: 'a', expedition: 'a-preparer' },
+      { id: 'b', expedition: 'a-preparer' },
+      { id: 'c', expedition: 'envoyee', envoyeeLe: maintenant - 25 * 864e5 },
+      { id: 'd', expedition: 'annulee' },
+    ],
+    stock: [{ etat: 'en-stock', commande: null }, { etat: 'revenue', sim: '06' }],
+    depenses: [{ date: maintenant - 864e5 }, { date: maintenant - 864e5, pieces: [{}] }],
+    automatique: { erreurs: [] },
+  });
+  assert.deepStrictEqual(liste, [
+    '2 tablettes à envoyer',
+    '1 tablette manquante en stock pour les envoyer',
+    '1 tablette reçue mais pas jumelée après 20 jours',
+    '1 tablette revenue à vérifier',
+    '1 forfait SIM à résilier ou suspendre',
+    '1 dépense des 3 derniers mois sans justificatif',
+  ]);
+});

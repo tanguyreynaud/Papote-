@@ -92,6 +92,10 @@
           <ul id="a-faire" class="a-faire"></ul>
         </div>
         <div class="card">
+          <h2>Franchise de TVA</h2>
+          <div id="tva"></div>
+        </div>
+        <div class="card">
           <h2>Ce mois-ci</h2>
           <div class="stats compact" id="kpi-mois"></div>
         </div>
@@ -105,9 +109,12 @@
         <div class="card">
           <div class="tete">
             <h2>Automatique</h2>
-            <button type="button" class="secondary small-btn" id="btn-automatiser">Lancer maintenant</button>
+            <div class="actions">
+              <button type="button" class="secondary small-btn" id="btn-recap">Envoyer le récap</button>
+              <button type="button" class="secondary small-btn" id="btn-automatiser">Lancer maintenant</button>
+            </div>
           </div>
-          <p class="muted small">Chaque nuit : facture des 120 € de tablette non rendue, avoir pour chaque remboursement, dépenses mensuelles ajoutées au registre.</p>
+          <p class="muted small">Chaque nuit : facture des 120 € de tablette non rendue, avoir pour chaque remboursement, dépenses mensuelles ajoutées au registre. Chaque lundi à 8 h : récap de la semaine par e-mail à contact@mapapote.fr.</p>
           <p id="automatique" class="small"></p>
         </div>
       </section>
@@ -182,6 +189,11 @@
           <div class="table"><table id="t-stock"></table></div>
           <p id="stock-vide" class="muted small" hidden>Aucune tablette enregistrée. Ajoutez votre premier achat.</p>
         </div>
+        <div class="card">
+          <h2>Lignes SIM</h2>
+          <p class="muted small">Le numéro de ligne, l'opérateur et le coût se saisissent dans la fiche de chaque tablette. En rouge : forfait encore payé alors que la tablette n'est plus chez un client.</p>
+          <div class="table"><table id="t-sim"></table></div>
+        </div>
       </section>
 
       <!-- ---------- Factures ---------- -->
@@ -223,6 +235,19 @@
           <p class="muted small">Résultat = encaissé − remboursements − frais Stripe − dépenses. L'export contient le bilan, le livre des recettes, le registre des achats, les factures et le relevé Stripe.</p>
         </div>
         <div class="card">
+          <h2>Rentabilité par formule</h2>
+          <p class="muted small">Ce qui reste chaque mois par abonné payant, d'après les vrais frais Stripe de la période, le prix d'achat moyen des tablettes et le coût des lignes SIM.</p>
+          <div class="table"><table id="t-rentabilite"></table></div>
+          <form id="f-reglages" class="grille no-print">
+            <label>Seuil de franchise de TVA (€) <input name="seuilTva" inputmode="decimal"></label>
+            <label>Taux URSSAF (%) <input name="tauxUrssaf" inputmode="decimal"></label>
+            <label>Forfait SIM par défaut (€/mois) <input name="forfaitSim" inputmode="decimal"></label>
+            <label>Durée de vie d'une tablette (mois) <input name="vieTablette" inputmode="numeric"></label>
+            <button type="submit" class="secondary">Enregistrer les réglages</button>
+            <p class="f-msg small" hidden></p>
+          </form>
+        </div>
+        <div class="card">
           <h2>En images</h2>
           <div class="graphiques">
             <figure><figcaption>Encaissé, dépenses et résultat par mois</figcaption><div id="g-argent"></div></figure>
@@ -237,11 +262,10 @@
                 <option value="mois">Mensuelles</option>
                 <option value="trimestre">Trimestrielles</option>
               </select>
-              <label class="small">Taux <input id="u-taux" inputmode="decimal" size="5" value="21,2"> %</label>
             </div>
           </div>
           <div class="table"><table id="t-urssaf"></table></div>
-          <p class="muted small">Micro-entreprise : on déclare le chiffre d'affaires encaissé (paiements reçus moins remboursements), sans déduire les frais ni les dépenses. Le taux est une estimation à vérifier sur autoentrepreneur.urssaf.fr selon votre activité et vos options.</p>
+          <p class="muted small">Micro-entreprise : on déclare le chiffre d'affaires encaissé (paiements reçus moins remboursements), sans déduire les frais ni les dépenses. Le taux (réglable dans « Rentabilité par formule ») est une estimation à vérifier sur autoentrepreneur.urssaf.fr selon votre activité et vos options.</p>
         </div>
         <div class="card">
           <div class="tete">
@@ -330,7 +354,9 @@
       <label>Modèle <input name="modele"></label>
       <label>État <select name="etat"></select></label>
       <label>Commande <select name="commande"></select></label>
-      <label>Ligne SIM <input name="sim"></label>
+      <label>Ligne SIM <input name="sim" placeholder="n° de téléphone"></label>
+      <label>Opérateur <input name="simOperateur"></label>
+      <label>Forfait (€/mois) <input name="simCout" inputmode="decimal"></label>
       <label class="large">Notes <textarea name="notes" rows="2"></textarea></label>
       <div class="large">
         <p class="small"><strong>Pièces jointes</strong></p>
