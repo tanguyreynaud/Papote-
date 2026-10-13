@@ -10,6 +10,8 @@
 //   gestionLireFacture  lit une facture d'achat (PDF ou photo) avec Claude pour préremplir la saisie
 //   gestionReglages réglages de la gestion (seuil de TVA, taux URSSAF, coût d'un forfait SIM…)
 //   gestionRecap    le lundi : récapitulatif de la semaine par e-mail (gestionRecapMaintenant : tout de suite)
+//   gestionCourrier toutes les heures : factures envoyées à factures@mapapote.fr, lues et rangées
+//                   (« à vérifier ») ; gestionCourrierMaintenant : tout de suite
 //   gestionAutomatique  chaque nuit : factures des 120 € de tablette non rendue, avoirs des
 //                       remboursements, dépenses mensuelles récurrentes (gestionAutomatiser : tout de suite)
 //
@@ -35,6 +37,11 @@ const MAIL_SMTP = defineString('MAIL_SMTP', { default: 'smtp.gmail.com:465:' });
 const MAIL_EXPEDITEUR = defineString('MAIL_EXPEDITEUR', { default: '' });
 const MAIL_MOT_DE_PASSE = defineSecret('MAIL_MOT_DE_PASSE');
 const EMAIL_PAPOTE = 'contact@mapapote.fr';
+// Boîte relevée pour les factures (OVH) : « hote:port:utilisateur », mot de passe en secret
+// (outils/gestion/installer-factures.bat). Seuls les e-mails adressés à FACTURES_ADRESSE sont lus.
+const FACTURES_IMAP = defineString('FACTURES_IMAP', { default: 'ssl0.ovh.net:993:contact@mapapote.fr' });
+const FACTURES_ADRESSE = defineString('FACTURES_ADRESSE', { default: 'factures@mapapote.fr' });
+const FACTURES_MOT_DE_PASSE = defineSecret('FACTURES_MOT_DE_PASSE');
 const ESPACE_ADMIN = 'https://papote-famille.web.app/admin.html';
 const { FieldValue, Timestamp } = admin.firestore;
 const db = () => admin.firestore();
@@ -171,6 +178,18 @@ function simAResilier(tablette, commande) {
     || ['resilie', 'canceled'].includes(commande.abonnement)));
 }
 
+// Pièces jointes d'un e-mail à lire comme factures : PDF et photos, sans les petits logos de signature.
+const MAX_PIECES_MAIL = 10;
+function piecesFacture(pieces) {
+  return (pieces || []).filter((p) => {
+    const type = String(p.contentType || '').toLowerCase();
+    const taille = p.size || (p.content && p.content.length) || 0;
+    if (taille > 6 * 1024 * 1024 || !taille) return false;
+    if (type === 'application/pdf') return true;
+    return /^image\/(png|jpeg|webp|gif)$/.test(type) && taille > 40 * 1024 && p.contentDisposition !== 'inline';
+  }).slice(0, MAX_PIECES_MAIL);
+}
+
 // Euros (nombre lu sur la facture) → centimes, sinon null.
 function euros(valeur) {
   if (typeof valeur !== 'number' || !Number.isFinite(valeur)) return null;
@@ -266,13 +285,14 @@ function effacerPieces(pieces) {
 
 exports.gestionDonnees = onCall(async (request) => {
   verifierAdmin(request);
-  const [commandes, stock, depenses, familles, automatique, reglages] = await Promise.all([
+  const [commandes, stock, depenses, familles, automatique, reglages, courrier] = await Promise.all([
     db().collection('commandes').get(),
     db().collection('stock').get(),
     db().collection('depenses').get(),
     db().collection('families').select('name', 'abonnement').get(),
     db().doc('gestion/automatique').get(),
     db().doc('gestion/reglages').get(),
+    db().doc('gestion/courrier').get(),
   ]);
   const parFid = new Map(familles.docs.map((f) => [f.id, f.data()]));
   return {
@@ -312,62 +332,68 @@ exports.gestionDonnees = onCall(async (request) => {
     categories: CATEGORIES,
     automatique: automatique.exists ? automatique.data() : null,
     reglages: lireReglages(reglages.data()),
+    courrier: courrier.exists ? courrier.data() : null,
   };
 });
 
 // ---------- Stock ----------
+
+// Achat de tablettes : N fiches de stock et la dépense correspondante (sauf depense: false).
+async function ajouterAchat(d, qui) {
+  const quantite = Number(d.quantite);
+  const prix = centimes(d.prixAchat);
+  const achat = ms(d.acheteeLe) || Date.now();
+  if (!Number.isInteger(quantite) || quantite < 1 || quantite > MAX_QUANTITE) {
+    throw new HttpsError('invalid-argument', `Quantité entre 1 et ${MAX_QUANTITE}.`);
+  }
+  if (prix == null) throw new HttpsError('invalid-argument', 'Prix d\'achat unitaire manquant (en centimes).');
+  const numeros = Array.isArray(d.numeros) ? d.numeros.map((n) => texte(n, 80)) : [];
+  const batch = db().batch();
+  let depenseId = null;
+  if (d.depense !== false) {
+    const ref = db().collection('depenses').doc();
+    depenseId = ref.id;
+    batch.set(ref, {
+      date: Timestamp.fromMillis(achat),
+      categorie: 'tablettes',
+      fournisseur: texte(d.fournisseur),
+      numero: texte(d.numeroFacture, 80),
+      libelle: `${quantite} tablette${quantite > 1 ? 's' : ''} ${texte(d.modele) || ''}`.trim(),
+      montant: prix * quantite,
+      tva: centimes(d.tva) != null ? centimes(d.tva) * quantite : null,
+      justificatif: lien(d.justificatif),
+      aVerifier: d.aVerifier === true,
+      source: texte(d.source),
+      creeLe: FieldValue.serverTimestamp(),
+      creePar: qui,
+    });
+  }
+  for (let i = 0; i < quantite; i++) {
+    batch.set(db().collection('stock').doc(), {
+      numero: numeros[i] || null,
+      modele: texte(d.modele),
+      fournisseur: texte(d.fournisseur),
+      prixAchat: prix,
+      acheteeLe: Timestamp.fromMillis(achat),
+      etat: 'en-stock',
+      commande: null,
+      sim: null,
+      notes: null,
+      depense: depenseId,
+      historique: [{ le: Date.now(), etat: 'en-stock', par: qui }],
+      majLe: FieldValue.serverTimestamp(),
+    });
+  }
+  await batch.commit();
+  return { ok: true, ajoutees: quantite, depense: depenseId };
+}
 
 exports.gestionStock = onCall(async (request) => {
   verifierAdmin(request);
   const d = request.data || {};
   const qui = request.auth.token.email || request.auth.uid;
 
-  if (d.action === 'ajouter') {
-    const quantite = Number(d.quantite);
-    const prix = centimes(d.prixAchat);
-    const achat = ms(d.acheteeLe) || Date.now();
-    if (!Number.isInteger(quantite) || quantite < 1 || quantite > MAX_QUANTITE) {
-      throw new HttpsError('invalid-argument', `Quantité entre 1 et ${MAX_QUANTITE}.`);
-    }
-    if (prix == null) throw new HttpsError('invalid-argument', 'Prix d\'achat unitaire manquant (en centimes).');
-    const numeros = Array.isArray(d.numeros) ? d.numeros.map((n) => texte(n, 80)) : [];
-    const batch = db().batch();
-    let depenseId = null;
-    if (d.depense !== false) {
-      const ref = db().collection('depenses').doc();
-      depenseId = ref.id;
-      batch.set(ref, {
-        date: Timestamp.fromMillis(achat),
-        categorie: 'tablettes',
-        fournisseur: texte(d.fournisseur),
-        numero: texte(d.numeroFacture, 80),
-        libelle: `${quantite} tablette${quantite > 1 ? 's' : ''} ${texte(d.modele) || ''}`.trim(),
-        montant: prix * quantite,
-        tva: centimes(d.tva) != null ? centimes(d.tva) * quantite : null,
-        justificatif: lien(d.justificatif),
-        creeLe: FieldValue.serverTimestamp(),
-        creePar: qui,
-      });
-    }
-    for (let i = 0; i < quantite; i++) {
-      batch.set(db().collection('stock').doc(), {
-        numero: numeros[i] || null,
-        modele: texte(d.modele),
-        fournisseur: texte(d.fournisseur),
-        prixAchat: prix,
-        acheteeLe: Timestamp.fromMillis(achat),
-        etat: 'en-stock',
-        commande: null,
-        sim: null,
-        notes: null,
-        depense: depenseId,
-        historique: [{ le: Date.now(), etat: 'en-stock', par: qui }],
-        majLe: FieldValue.serverTimestamp(),
-      });
-    }
-    await batch.commit();
-    return { ok: true, ajoutees: quantite, depense: depenseId };
-  }
+  if (d.action === 'ajouter') return ajouterAchat(d, qui);
 
   if (d.action === 'modifier') {
     if (typeof d.id !== 'string' || !d.id) throw new HttpsError('invalid-argument', 'Tablette manquante.');
@@ -420,34 +446,46 @@ exports.gestionStock = onCall(async (request) => {
 
 // ---------- Dépenses (registre des achats) ----------
 
+// Dépense du registre des achats.
+async function ajouterDepense(d, qui) {
+  const montant = centimes(d.montant);
+  if (montant == null || montant === 0) throw new HttpsError('invalid-argument', 'Montant manquant (en centimes).');
+  if (!CATEGORIES[d.categorie]) throw new HttpsError('invalid-argument', 'Catégorie inconnue.');
+  const libelle = texte(d.libelle);
+  if (!libelle) throw new HttpsError('invalid-argument', 'Libellé manquant.');
+  const date = ms(d.date) || Date.now();
+  const jour = new Date(date).getUTCDate();
+  const ref = await db().collection('depenses').add({
+    date: Timestamp.fromMillis(date),
+    categorie: d.categorie,
+    fournisseur: texte(d.fournisseur),
+    numero: texte(d.numero, 80),
+    libelle,
+    montant,
+    tva: centimes(d.tva),
+    justificatif: lien(d.justificatif),
+    aVerifier: d.aVerifier === true,
+    source: texte(d.source),
+    // Dépense mensuelle (hébergement, forfaits…) : recopiée chaque mois par gestionAutomatique.
+    recurrence: d.recurrente === true ? 'mensuelle' : null,
+    jourRecurrence: d.recurrente === true ? jour : null,
+    prochaine: d.recurrente === true ? Timestamp.fromMillis(moisSuivant(date, jour)) : null,
+    creeLe: FieldValue.serverTimestamp(),
+    creePar: qui,
+  });
+  return { ok: true, id: ref.id };
+}
+
 exports.gestionDepense = onCall(async (request) => {
   verifierAdmin(request);
   const d = request.data || {};
-  if (d.action === 'ajouter') {
-    const montant = centimes(d.montant);
-    if (montant == null || montant === 0) throw new HttpsError('invalid-argument', 'Montant manquant (en centimes).');
-    if (!CATEGORIES[d.categorie]) throw new HttpsError('invalid-argument', 'Catégorie inconnue.');
-    const libelle = texte(d.libelle);
-    if (!libelle) throw new HttpsError('invalid-argument', 'Libellé manquant.');
-    const date = ms(d.date) || Date.now();
-    const jour = new Date(date).getUTCDate();
-    const ref = await db().collection('depenses').add({
-      date: Timestamp.fromMillis(date),
-      categorie: d.categorie,
-      fournisseur: texte(d.fournisseur),
-      numero: texte(d.numero, 80),
-      libelle,
-      montant,
-      tva: centimes(d.tva),
-      justificatif: lien(d.justificatif),
-      // Dépense mensuelle (hébergement, forfaits…) : recopiée chaque mois par gestionAutomatique.
-      recurrence: d.recurrente === true ? 'mensuelle' : null,
-      jourRecurrence: d.recurrente === true ? jour : null,
-      prochaine: d.recurrente === true ? Timestamp.fromMillis(moisSuivant(date, jour)) : null,
-      creeLe: FieldValue.serverTimestamp(),
-      creePar: request.auth.token.email || request.auth.uid,
-    });
-    return { ok: true, id: ref.id };
+  if (d.action === 'ajouter') return ajouterDepense(d, request.auth.token.email || request.auth.uid);
+  // Dépense créée depuis une facture reçue par e-mail, relue par l'administrateur.
+  if (d.action === 'verifier') {
+    const ref = db().doc(`depenses/${d.id || '-'}`);
+    if (!(await ref.get()).exists) throw new HttpsError('not-found', 'Dépense introuvable.');
+    await ref.update({ aVerifier: false });
+    return { ok: true };
   }
   if (d.action === 'arreter') {
     const ref = db().doc(`depenses/${d.id || '-'}`);
@@ -603,6 +641,15 @@ function nomFichier(nom) {
   return t || 'piece';
 }
 
+async function enregistrerPiece(collection, id, nomBrut, type, contenu) {
+  const nom = texte(nomBrut, 120) || 'piece';
+  const chemin = `gestion/${collection}/${id}/${Date.now()}-${nomFichier(nom)}`;
+  await admin.storage().bucket().file(chemin).save(contenu, { contentType: type, resumable: false });
+  const piece = { nom, chemin, type, taille: contenu.length, le: Date.now() };
+  await db().doc(`${collection}/${id}`).update({ pieces: FieldValue.arrayUnion(piece) });
+  return piece;
+}
+
 exports.gestionPiece = onCall({ memory: '512MiB' }, async (request) => {
   verifierAdmin(request);
   const d = request.data || {};
@@ -631,12 +678,7 @@ exports.gestionPiece = onCall({ memory: '512MiB' }, async (request) => {
     const contenu = Buffer.from(String(d.contenu || ''), 'base64');
     if (!contenu.length) throw new HttpsError('invalid-argument', 'Fichier vide.');
     if (contenu.length > MAX_PIECE) throw new HttpsError('invalid-argument', 'Fichier trop lourd (6 Mo au plus).');
-    const nom = texte(d.nom, 120) || 'piece';
-    const chemin = `gestion/${d.collection}/${d.id}/${Date.now()}-${nomFichier(nom)}`;
-    await bucket.file(chemin).save(contenu, { contentType: d.type, resumable: false });
-    const piece = { nom, chemin, type: d.type, taille: contenu.length, le: Date.now() };
-    await ref.update({ pieces: FieldValue.arrayUnion(piece) });
-    return { ok: true, piece };
+    return { ok: true, piece: await enregistrerPiece(d.collection, d.id, d.nom, d.type, contenu) };
   }
 
   if (d.action === 'retirer') {
@@ -662,6 +704,38 @@ Catégories : tablettes (achat de tablettes), sim (cartes SIM, forfaits mobiles)
 logiciels, IA), publicite (annonces, réseaux sociaux), materiel (petit matériel : câbles, chargeurs, supports),
 autre. Pour un achat de tablettes, remplis aussi « tablettes » avec les numéros de série (IMEI ou S/N) lisibles.`;
 
+// contenu : fichier en base64. Erreur HttpsError lisible si la lecture échoue.
+async function lireDocument(contenu, type) {
+  const document = type === 'application/pdf'
+    ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: contenu } }
+    : { type: 'image', source: { type: 'base64', media_type: type, data: contenu } };
+  let reponse;
+  try {
+    const client = new Anthropic({ apiKey: ANTHROPIC_API_KEY.value() });
+    reponse = await client.beta.messages.create({
+      model: MODELE_LECTURE,
+      max_tokens: 16000,
+      betas: ['server-side-fallback-2026-07-01'],
+      fallbacks: 'default',
+      system: CONSIGNE_LECTURE,
+      messages: [{ role: 'user', content: [document, { type: 'text', text: 'Lis ce document.' }] }],
+      output_config: { format: { type: 'json_schema', schema: SCHEMA_FACTURE } },
+    });
+  } catch (e) {
+    logger.warn('Lecture de facture impossible', e.message);
+    throw new HttpsError('unavailable', 'La lecture automatique ne répond pas. Remplissez la fiche à la main.');
+  }
+  const bloc = (reponse.content || []).find((b) => b.type === 'text');
+  if (reponse.stop_reason !== 'end_turn' || !bloc) {
+    throw new HttpsError('failed-precondition', 'Ce document n\'a pas pu être lu. Remplissez la fiche à la main.');
+  }
+  try {
+    return lectureVersFormulaire(JSON.parse(bloc.text));
+  } catch {
+    throw new HttpsError('failed-precondition', 'Ce document n\'a pas pu être lu. Remplissez la fiche à la main.');
+  }
+}
+
 exports.gestionLireFacture = onCall(
   { secrets: [ANTHROPIC_API_KEY], timeoutSeconds: 180, memory: '512MiB' },
   async (request) => {
@@ -670,34 +744,7 @@ exports.gestionLireFacture = onCall(
     if (!TYPES_LECTURE.test(d.type || '')) throw new HttpsError('invalid-argument', 'PDF, JPEG ou PNG seulement.');
     const contenu = String(d.contenu || '');
     if (!contenu || contenu.length > MAX_PIECE * 1.4) throw new HttpsError('invalid-argument', 'Fichier vide ou trop lourd.');
-    const document = d.type === 'application/pdf'
-      ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: contenu } }
-      : { type: 'image', source: { type: 'base64', media_type: d.type, data: contenu } };
-    let reponse;
-    try {
-      const client = new Anthropic({ apiKey: ANTHROPIC_API_KEY.value() });
-      reponse = await client.beta.messages.create({
-        model: MODELE_LECTURE,
-        max_tokens: 16000,
-        betas: ['server-side-fallback-2026-07-01'],
-        fallbacks: 'default',
-        system: CONSIGNE_LECTURE,
-        messages: [{ role: 'user', content: [document, { type: 'text', text: 'Lis ce document.' }] }],
-        output_config: { format: { type: 'json_schema', schema: SCHEMA_FACTURE } },
-      });
-    } catch (e) {
-      logger.warn('Lecture de facture impossible', e.message);
-      throw new HttpsError('unavailable', 'La lecture automatique ne répond pas. Remplissez la fiche à la main.');
-    }
-    const bloc = (reponse.content || []).find((b) => b.type === 'text');
-    if (reponse.stop_reason !== 'end_turn' || !bloc) {
-      throw new HttpsError('failed-precondition', 'Ce document n\'a pas pu être lu. Remplissez la fiche à la main.');
-    }
-    try {
-      return lectureVersFormulaire(JSON.parse(bloc.text));
-    } catch {
-      throw new HttpsError('failed-precondition', 'Ce document n\'a pas pu être lu. Remplissez la fiche à la main.');
-    }
+    return lireDocument(contenu, d.type);
   });
 
 // ---------- Automatismes (chaque nuit, ou tout de suite depuis l'accueil) ----------
@@ -885,6 +932,7 @@ function aFaire({ commandes, stock, depenses, automatique, maintenant }) {
   ajouter(stock.filter((t) => simAResilier(t, parId.get(t.commande))).length, 'forfait(s) SIM à résilier ou suspendre');
   ajouter(depenses.filter((d) => ms(d.date) > maintenant - JOURS(90) && !(d.pieces || []).length && !d.justificatif).length,
     'dépense(s) des 3 derniers mois sans justificatif');
+  ajouter(depenses.filter((d) => d.aVerifier).length, 'facture(s) reçue(s) par e-mail à vérifier');
   ajouter(automatique && automatique.erreurs ? automatique.erreurs.length : 0, 'problème(s) lors du dernier passage automatique');
   return liste;
 }
@@ -967,7 +1015,106 @@ exports.gestionRecapMaintenant = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_P
   }
 });
 
+// ---------- Factures reçues par e-mail ----------
+
+// Facture lue (lectureVersFormulaire) → achat de tablettes ou dépense « à vérifier », avec la pièce jointe.
+async function rangerFacture(r, piece, source) {
+  if (r.numero) {
+    const memes = await db().collection('depenses').where('numero', '==', r.numero).get();
+    if (memes.docs.some((d) => (d.get('fournisseur') || '') === (r.fournisseur || ''))) {
+      return `déjà enregistrée (${r.fournisseur || ''} n° ${r.numero})`;
+    }
+  }
+  let id;
+  if (r.tablettes) {
+    const t = r.tablettes;
+    const prix = t.prixAchat != null ? t.prixAchat : r.montant != null ? Math.round(r.montant / t.quantite) : null;
+    if (prix == null) throw new Error('prix des tablettes illisible');
+    ({ depense: id } = await ajouterAchat({
+      quantite: t.quantite, modele: t.modele, fournisseur: r.fournisseur, prixAchat: prix,
+      tva: r.tva != null ? Math.round(r.tva / t.quantite) : null, acheteeLe: r.date, numeros: t.numeros,
+      numeroFacture: r.numero, aVerifier: true, source,
+    }, 'e-mail'));
+  } else {
+    if (r.montant == null) throw new Error('montant illisible');
+    ({ id } = await ajouterDepense({
+      date: r.date, categorie: r.categorie, fournisseur: r.fournisseur, numero: r.numero,
+      libelle: r.libelle || 'Facture reçue par e-mail', montant: r.montant, tva: r.tva, aVerifier: true, source,
+    }, 'e-mail'));
+  }
+  await enregistrerPiece('depenses', id, piece.filename || 'facture', piece.contentType, piece.content);
+  return null;
+}
+
+async function releverFactures() {
+  const { ImapFlow } = require('imapflow');
+  const { simpleParser } = require('mailparser');
+  const [hote, port, utilisateur] = FACTURES_IMAP.value().split(':');
+  const bilan = { le: Date.now(), rangees: [], ignorees: [], erreurs: [] };
+  const client = new ImapFlow({
+    host: hote, port: Number(port) || 993, secure: true, logger: false,
+    auth: { user: utilisateur, pass: FACTURES_MOT_DE_PASSE.value() },
+  });
+  try {
+    await client.connect();
+    const verrou = await client.getMailboxLock('INBOX');
+    try {
+      const adresse = FACTURES_ADRESSE.value();
+      const uids = await client.search({ seen: false, or: [{ to: adresse }, { cc: adresse }] }, { uid: true }) || [];
+      for (const uid of uids.slice(0, 20)) {
+        const { content } = await client.download(String(uid), undefined, { uid: true });
+        const mailLu = await simpleParser(content);
+        const de = (mailLu.from && mailLu.from.text) || 'expéditeur inconnu';
+        const sujet = mailLu.subject || '(sans objet)';
+        const pieces = piecesFacture(mailLu.attachments);
+        if (!pieces.length) bilan.ignorees.push(`« ${sujet} » (${de}) : aucune facture en pièce jointe`);
+        let reessayer = false;
+        for (const piece of pieces) {
+          try {
+            const r = await lireDocument(piece.content.toString('base64'), piece.contentType);
+            if (!r.facture) {
+              bilan.ignorees.push(`${piece.filename || 'pièce'} (« ${sujet} ») : pas une facture`);
+              continue;
+            }
+            const deja = await rangerFacture(r, piece, `e-mail de ${de}`.slice(0, 200));
+            if (deja) bilan.ignorees.push(`${piece.filename || 'pièce'} : ${deja}`);
+            else bilan.rangees.push(`${r.fournisseur || de} : ${r.libelle || sujet}`);
+          } catch (e) {
+            bilan.erreurs.push(`${piece.filename || 'pièce'} (« ${sujet} ») : ${e.message}`);
+            // Lecture indisponible : l'e-mail reste non lu et sera repris à l'heure suivante.
+            if (e.code === 'unavailable') reessayer = true;
+          }
+        }
+        if (reessayer) continue;
+        await client.messageFlagsAdd(String(uid), ['\\Seen'], { uid: true });
+      }
+    } finally {
+      verrou.release();
+    }
+    await client.logout();
+  } catch (e) {
+    bilan.erreurs.push(`Boîte ${utilisateur} : ${e.authenticationFailed ? 'mot de passe refusé' : e.message}`);
+    client.close();
+  }
+  await db().doc('gestion/courrier').set(bilan);
+  if (bilan.erreurs.length) logger.warn('Factures reçues par e-mail', bilan.erreurs);
+  return bilan;
+}
+
+const OPTIONS_COURRIER = {
+  secrets: [ANTHROPIC_API_KEY, FACTURES_MOT_DE_PASSE], memory: '512MiB', timeoutSeconds: 540,
+};
+
+exports.gestionCourrier = onSchedule(
+  { ...OPTIONS_COURRIER, schedule: 'every 60 minutes', timeZone: 'Europe/Paris' },
+  () => releverFactures());
+
+exports.gestionCourrierMaintenant = onCall(OPTIONS_COURRIER, async (request) => {
+  verifierAdmin(request);
+  return releverFactures();
+});
+
 exports.regles = {
   ETATS, CATEGORIES, natureMouvement, mensuel, centimes, lien, nomFichier, moisSuivant, lectureVersFormulaire, SCHEMA_FACTURE,
-  lireReglages, simAResilier, aFaire,
+  lireReglages, simAResilier, aFaire, piecesFacture,
 };
