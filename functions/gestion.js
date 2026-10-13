@@ -8,6 +8,8 @@
 //   gestionCommande factures et paiements Stripe d'une commande
 //   gestionPiece    pièces jointes (facture d'achat, bon de livraison…) d'une tablette ou d'une dépense
 //   gestionLireFacture  lit une facture d'achat (PDF ou photo) avec Claude pour préremplir la saisie
+//   gestionReglages réglages de la gestion (seuil de TVA, taux URSSAF, coût d'un forfait SIM…)
+//   gestionRecap    le lundi : récapitulatif de la semaine par e-mail (gestionRecapMaintenant : tout de suite)
 //   gestionAutomatique  chaque nuit : factures des 120 € de tablette non rendue, avoirs des
 //                       remboursements, dépenses mensuelles récurrentes (gestionAutomatiser : tout de suite)
 //
@@ -18,15 +20,22 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { logger } = require('firebase-functions/v2');
-const { defineSecret } = require('firebase-functions/params');
+const { defineSecret, defineString } = require('firebase-functions/params');
 const admin = require('firebase-admin');
 const Stripe = require('stripe');
 const Anthropic = require('@anthropic-ai/sdk');
+const mail = require('./mail');
 
 const STRIPE_SECRET = defineSecret('STRIPE_SECRET');
 // Même clé que le chat de support (outils/support/installer-support.bat), jamais dans le dépôt.
 const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
 const MODELE_LECTURE = 'claude-opus-5-5';
+// E-mails : mêmes réglages que le reste des fonctions (index.js).
+const MAIL_SMTP = defineString('MAIL_SMTP', { default: 'smtp.gmail.com:465:' });
+const MAIL_EXPEDITEUR = defineString('MAIL_EXPEDITEUR', { default: '' });
+const MAIL_MOT_DE_PASSE = defineSecret('MAIL_MOT_DE_PASSE');
+const EMAIL_PAPOTE = 'contact@mapapote.fr';
+const ESPACE_ADMIN = 'https://papote-famille.web.app/admin.html';
 const { FieldValue, Timestamp } = admin.firestore;
 const db = () => admin.firestore();
 
@@ -136,6 +145,32 @@ function moisSuivant(le, jour) {
   return Date.UTC(annee, mois, Math.min(jour || d.getUTCDate(), dernier), 12);
 }
 
+// Réglages modifiables depuis la page (gestion/reglages). Montants en centimes.
+const REGLAGES = {
+  seuilTva: 3750000, // franchise en base de TVA des prestations de services (à vérifier chaque année)
+  tauxUrssaf: 21.2, // % du chiffre d'affaires, micro-entreprise
+  forfaitSim: 700, // coût mensuel d'un forfait SIM quand la ligne n'a pas son propre coût
+  vieTablette: 24, // durée de vie d'une tablette, en mois
+};
+
+function lireReglages(donnees) {
+  const r = { ...REGLAGES };
+  for (const k of Object.keys(REGLAGES)) {
+    const v = donnees && donnees[k];
+    if (typeof v === 'number' && Number.isFinite(v) && v >= 0) r[k] = v;
+  }
+  return r;
+}
+
+// Une ligne SIM payée alors que la tablette n'est plus chez un client : forfait à résilier ou suspendre.
+const ETATS_SANS_CLIENT = ['en-stock', 'revenue', 'a-reparer', 'perdue', 'hors-service'];
+function simAResilier(tablette, commande) {
+  if (!tablette.sim) return false;
+  if (ETATS_SANS_CLIENT.includes(tablette.etat)) return true;
+  return !!(commande && ((commande.restitution && ['rendue', 'facturee'].includes(commande.restitution.statut))
+    || ['resilie', 'canceled'].includes(commande.abonnement)));
+}
+
 // Euros (nombre lu sur la facture) → centimes, sinon null.
 function euros(valeur) {
   if (typeof valeur !== 'number' || !Number.isFinite(valeur)) return null;
@@ -231,12 +266,13 @@ function effacerPieces(pieces) {
 
 exports.gestionDonnees = onCall(async (request) => {
   verifierAdmin(request);
-  const [commandes, stock, depenses, familles, automatique] = await Promise.all([
+  const [commandes, stock, depenses, familles, automatique, reglages] = await Promise.all([
     db().collection('commandes').get(),
     db().collection('stock').get(),
     db().collection('depenses').get(),
     db().collection('families').select('name', 'abonnement').get(),
     db().doc('gestion/automatique').get(),
+    db().doc('gestion/reglages').get(),
   ]);
   const parFid = new Map(familles.docs.map((f) => [f.id, f.data()]));
   return {
@@ -275,6 +311,7 @@ exports.gestionDonnees = onCall(async (request) => {
     etats: ETATS,
     categories: CATEGORIES,
     automatique: automatique.exists ? automatique.data() : null,
+    reglages: lireReglages(reglages.data()),
   };
 });
 
@@ -339,9 +376,10 @@ exports.gestionStock = onCall(async (request) => {
     if (!snap.exists) throw new HttpsError('not-found', 'Tablette introuvable.');
     const champs = d.champs || {};
     const maj = { majLe: FieldValue.serverTimestamp() };
-    for (const cle of ['numero', 'modele', 'sim', 'notes']) {
+    for (const cle of ['numero', 'modele', 'sim', 'simOperateur', 'notes']) {
       if (cle in champs) maj[cle] = texte(champs[cle], cle === 'notes' ? 1000 : 80);
     }
+    if ('simCout' in champs) maj.simCout = centimes(champs.simCout);
     if ('commande' in champs) {
       const commande = texte(champs.commande, 100);
       if (commande && !(await db().doc(`commandes/${commande}`).get()).exists) {
@@ -789,6 +827,147 @@ exports.gestionAutomatiser = onCall({ secrets: [STRIPE_SECRET], timeoutSeconds: 
   return automatiser(request.auth.token.email || request.auth.uid);
 });
 
+// ---------- Réglages ----------
+
+exports.gestionReglages = onCall(async (request) => {
+  verifierAdmin(request);
+  const d = request.data || {};
+  const maj = {};
+  for (const k of Object.keys(REGLAGES)) {
+    if (!(k in d)) continue;
+    const v = Number(d[k]);
+    if (!Number.isFinite(v) || v < 0 || v > 1e9) throw new HttpsError('invalid-argument', `Valeur invalide : ${k}.`);
+    maj[k] = v;
+  }
+  await db().doc('gestion/reglages').set(maj, { merge: true });
+  return { ok: true };
+});
+
+// ---------- Récapitulatif du lundi ----------
+
+const JOURS = (n) => n * JOUR;
+
+// Paiements reçus et remboursés depuis une date (centimes).
+async function argentDepuis(depuis) {
+  const t = { encaisse: 0, rembourse: 0, paiements: 0 };
+  const mouvements = await tout(stripe().balanceTransactions.list({
+    created: { gte: Math.floor(depuis / 1000) }, limit: 100,
+  }));
+  for (const bt of mouvements) {
+    const nature = natureMouvement(bt);
+    if (nature === 'abonnement' || nature === 'tablette-non-rendue') {
+      t.encaisse += bt.amount;
+      t.paiements += 1;
+    } else if (nature === 'remboursement' || nature === 'litige') {
+      t.rembourse += -bt.amount;
+    }
+  }
+  return t;
+}
+
+// Ce qui attend l'administrateur, à partir des données Firestore (même logique que l'accueil de la page).
+function aFaire({ commandes, stock, depenses, automatique, maintenant }) {
+  const liste = [];
+  // texte : « tablette(s) reçue(s) » → singulier ou pluriel selon n.
+  const ajouter = (n, texte) => { if (n > 0) liste.push(`${n} ${texte.replace(/\(s\)/g, n > 1 ? 's' : '')}`); };
+  const actives = commandes.filter((c) => c.expedition !== 'annulee');
+  const retour = (c) => c.restitution && ['attendue', 'echec'].includes(c.restitution.statut);
+  const aEnvoyer = actives.filter((c) => c.expedition === 'a-preparer' && !retour(c)).length;
+  const dispo = stock.filter((t) => ['en-stock', 'preparee'].includes(t.etat) && !t.commande).length;
+  ajouter(aEnvoyer, 'tablette(s) à envoyer');
+  ajouter(Math.max(0, aEnvoyer - dispo), 'tablette(s) manquante(s) en stock pour les envoyer');
+  ajouter(actives.filter((c) => c.expedition === 'envoyee' && !c.fid && ms(c.envoyeeLe)
+    && maintenant - ms(c.envoyeeLe) > JOURS(20)).length, 'tablette(s) reçue(s) mais pas jumelée(s) après 20 jours');
+  ajouter(actives.filter(retour).length, 'tablette(s) à récupérer');
+  ajouter(stock.filter((t) => t.etat === 'revenue').length, 'tablette(s) revenue(s) à vérifier');
+  ajouter(actives.filter((c) => c.remboursement && c.remboursement.statut === 'echec').length, 'remboursement(s) échoué(s), à faire depuis Stripe');
+  const parId = new Map(commandes.map((c) => [c.id, c]));
+  ajouter(stock.filter((t) => simAResilier(t, parId.get(t.commande))).length, 'forfait(s) SIM à résilier ou suspendre');
+  ajouter(depenses.filter((d) => ms(d.date) > maintenant - JOURS(90) && !(d.pieces || []).length && !d.justificatif).length,
+    'dépense(s) des 3 derniers mois sans justificatif');
+  ajouter(automatique && automatique.erreurs ? automatique.erreurs.length : 0, 'problème(s) lors du dernier passage automatique');
+  return liste;
+}
+
+const eurosTexte = (c) => `${(c / 100).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
+
+async function recapitulatif() {
+  const maintenant = Date.now();
+  const debutAnnee = new Date(new Date(maintenant).getFullYear(), 0, 1).getTime();
+  const [commandesSnap, stockSnap, depensesSnap, familles, automatique, reglagesSnap, semaine, annee, abonnes] = await Promise.all([
+    db().collection('commandes').get(),
+    db().collection('stock').get(),
+    db().collection('depenses').get(),
+    db().collection('families').select('abonnement').get(),
+    db().doc('gestion/automatique').get(),
+    db().doc('gestion/reglages').get(),
+    argentDepuis(maintenant - JOURS(7)),
+    argentDepuis(debutAnnee),
+    tout(stripe().subscriptions.list({ status: 'active', limit: 100 })),
+  ]);
+  const statut = new Map(familles.docs.map((f) => [f.id, f.get('abonnement.statut') || null]));
+  const commandes = commandesSnap.docs.map((d) => {
+    const c = d.data();
+    return { id: d.id, ...c, abonnement: c.fid ? statut.get(c.fid) : c.statutStripe || null };
+  });
+  const reglages = lireReglages(reglagesSnap.data());
+  const liste = aFaire({
+    commandes,
+    stock: stockSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
+    depenses: depensesSnap.docs.map((d) => d.data()),
+    automatique: automatique.data(),
+    maintenant,
+  });
+  const nouvelles = commandes.filter((c) => ms(c.creeLe) > maintenant - JOURS(7)).length;
+  const ca = annee.encaisse - annee.rembourse;
+  const part = reglages.seuilTva ? Math.round((ca / reglages.seuilTva) * 100) : 0;
+  const lignes = [
+    ['Cette semaine', [
+      `${eurosTexte(semaine.encaisse)} encaissés (${semaine.paiements} paiement${semaine.paiements > 1 ? 's' : ''})`,
+      semaine.rembourse ? `${eurosTexte(semaine.rembourse)} remboursés` : null,
+      `${nouvelles} nouvelle${nouvelles > 1 ? 's' : ''} commande${nouvelles > 1 ? 's' : ''}`,
+      `${abonnes.length} abonnement${abonnes.length > 1 ? 's' : ''} payant${abonnes.length > 1 ? 's' : ''} en cours`,
+    ].filter(Boolean)],
+    ['À faire', liste.length ? liste : ['Rien, tout est à jour.']],
+    ['Franchise de TVA', [`${eurosTexte(ca)} encaissés depuis le 1er janvier, soit ${part} % du seuil de ${eurosTexte(reglages.seuilTva)}.`]],
+  ];
+  const html = `<!doctype html><html lang="fr"><body style="margin:0;background:#fdfaf5;color:#24212f;font:16px/1.6 Arial,sans-serif">
+<div style="max-width:560px;margin:0 auto;padding:28px 20px">
+<p style="margin:0 0 20px;font-weight:bold;font-size:20px;color:#4f46e5">Papote · récap de la semaine</p>
+${lignes.map(([titre, items]) => `<h2 style="font-size:18px;margin:20px 0 6px">${mail.echapper(titre)}</h2>
+<ul style="margin:0;padding-left:20px">${items.map((i) => `<li>${mail.echapper(i)}</li>`).join('')}</ul>`).join('')}
+<p style="margin:28px 0"><a href="${ESPACE_ADMIN}" style="display:inline-block;background:#4f46e5;color:#fff;text-decoration:none;font-weight:bold;padding:12px 22px;border-radius:999px">Ouvrir l'espace admin</a></p>
+</div></body></html>`;
+  const text = [...lignes.flatMap(([titre, items]) => [titre, ...items.map((i) => `- ${i}`), '']), ESPACE_ADMIN].join('\n');
+  await mail.envoyer({
+    smtp: MAIL_SMTP.value(),
+    expediteur: MAIL_EXPEDITEUR.value(),
+    motDePasse: MAIL_MOT_DE_PASSE.value(),
+    a: EMAIL_PAPOTE,
+    contenu: {
+      subject: liste.length ? `Papote : ${liste.length} chose${liste.length > 1 ? 's' : ''} à faire cette semaine` : 'Papote : tout est à jour',
+      html,
+      text,
+    },
+  });
+  return { ok: true, aFaire: liste.length };
+}
+
+exports.gestionRecap = onSchedule(
+  { schedule: 'every monday 08:00', timeZone: 'Europe/Paris', secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE], timeoutSeconds: 300 },
+  () => recapitulatif());
+
+exports.gestionRecapMaintenant = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE], timeoutSeconds: 300 }, async (request) => {
+  verifierAdmin(request);
+  try {
+    return await recapitulatif();
+  } catch (e) {
+    logger.warn('Récap de la semaine', e.message);
+    throw new HttpsError('failed-precondition', `E-mail non envoyé : ${e.message}`);
+  }
+});
+
 exports.regles = {
   ETATS, CATEGORIES, natureMouvement, mensuel, centimes, lien, nomFichier, moisSuivant, lectureVersFormulaire, SCHEMA_FACTURE,
+  lireReglages, simAResilier, aFaire,
 };

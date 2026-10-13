@@ -701,6 +701,9 @@ exports.gestionPiece = gestion.gestionPiece;
 exports.gestionLireFacture = gestion.gestionLireFacture;
 exports.gestionAutomatique = gestion.gestionAutomatique;
 exports.gestionAutomatiser = gestion.gestionAutomatiser;
+exports.gestionReglages = gestion.gestionReglages;
+exports.gestionRecap = gestion.gestionRecap;
+exports.gestionRecapMaintenant = gestion.gestionRecapMaintenant;
 
 // Nombre de proches d'une famille (membres « famille » qui ont rejoint), lu par les règles
 // Firestore pour refuser un 31e proche. Recalculé à chaque arrivée, départ ou changement de membre.
