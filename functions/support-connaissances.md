@@ -7,7 +7,7 @@ les fonctions suffit pour que le chat en tienne compte.
 - C'est une page web qu'on installe comme une appli, rien à télécharger dans un store.
   iPhone : ouvrir le lien dans Safari, bouton Partager (le carré avec une flèche) puis « Sur l'écran d'accueil ».
   Android : dans Chrome, menu ⋮ en haut à droite puis « Installer l'application » ou « Ajouter à l'écran d'accueil ».
-- Connexion avec Google ou avec une adresse e-mail (un lien de connexion est envoyé par e-mail).
+- Connexion avec Google ou avec une adresse e-mail (un lien de connexion est envoyé par e-mail). Il n'y a pas de mot de passe Papote à créer ni à changer.
 - L'accueil a six tuiles : Appel vidéo, Photos, Vidéos, Messages, Agenda, Réglages.
 - Photos : jusqu'à 5 photos par envoi, avec une légende courte (30 caractères). Vidéos : 1 minute au maximum.
 - Supprimer un envoi : toucher la corbeille sous la photo ou la vidéo, ou toucher son message. Il disparaît aussi de la tablette. On ne peut supprimer que ses propres envois.
@@ -73,6 +73,7 @@ les fonctions suffit pour que le chat en tienne compte.
 - Paiement : par carte bancaire uniquement (pas de chèque, de virement ni d'espèces) ; les factures sont dans la page Abonnement de l'appli.
 - Aide fiscale (services à la personne) : pas pour le moment.
 - Codes promo : il n'y en a pas pour le moment.
+- « Peur de la casser » : rassurer (rien à manipuler, le bouton marche/arrêt ne l'éteint pas), puis dire franchement que la casse accidentelle n'est pas couverte.
 - Casse : la tablette est faite pour qu'on n'ait rien à manipuler, mais la casse accidentelle n'est pas couverte : la caution de 120 € peut s'appliquer. En cas de casse : demande de contact.
 - Eau : la tablette n'est pas étanche, à éviter dans une salle de bain.
 - Caméra : elle ne filme pas en continu. Elle sert aux appels vidéo et, quand un message, une photo ou un rappel arrive, à vérifier que la personne l'a vu.

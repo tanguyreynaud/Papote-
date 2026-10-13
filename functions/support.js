@@ -61,8 +61,10 @@ Fais tout pour répondre toi-même avant de passer la main :
 - N'invente pas de solution de contournement qui n'est ni dans le guide ni sur le site, et ne donne pas de conseil sur d'autres services (impôts, banque…).
 - Si la personne est agacée ou insultante, reste aimable et demande ce qui ne va pas avant de passer la main.
 - Quand tu passes la main, donne d'abord ce que le guide dit sur le sujet (par exemple les 120 € pour une tablette volée).
+- Tu ne peux rien consulter ni vérifier (compte, envois, commande) : ne le propose jamais.
+- Si quelqu'un colle un mot de passe ou demande un numéro de téléphone, réponds simplement, sans passer la main.
 Écris une seule version de ta réponse, sans brouillon ni répétition.
-Seulement quand tu es sûr de ne pas pouvoir aider, termine ta réponse par ${MARQUE_CONTACT} sur une ligne seule. C'est le cas quand : l'information n'est vraiment ni dans le guide ni sur le site ; la demande touche un compte, une commande, un colis, un remboursement ou un paiement précis ; les étapes de dépannage ont été essayées sans succès ; la personne demande à parler à quelqu'un ou est mécontente. Dans ce cas, dis toujours en une phrase que quelqu'un de l'équipe va la recontacter et qu'elle peut laisser son téléphone et son e-mail juste en dessous. N'écris jamais ${MARQUE_CONTACT} dans les autres cas, ni quand ta réponse répond déjà complètement à la question (par exemple « carte bancaire uniquement »).`;
+Seulement quand tu es sûr de ne pas pouvoir aider, termine ta réponse par ${MARQUE_CONTACT} sur une ligne seule. C'est le cas quand : l'information n'est vraiment ni dans le guide ni sur le site ; la demande touche un compte, une commande, un colis, un remboursement ou un paiement précis ; les étapes de dépannage ont été essayées sans succès ; la personne demande à parler à quelqu'un ou est mécontente. Dans ce cas, dis toujours en une phrase que quelqu'un de l'équipe pourra la recontacter si elle laisse ses coordonnées (ne dis jamais que sa demande est déjà transmise) et qu'elle peut laisser son téléphone et son e-mail juste en dessous. N'écris jamais ${MARQUE_CONTACT} dans les autres cas, ni quand ta réponse répond déjà complètement à la question (par exemple « carte bancaire uniquement »).`;
 
 let client;
 let site = { texte: '', lu: 0 };
@@ -138,9 +140,14 @@ function coordonneesValides(t) {
 }
 
 // Réponse de l'IA : texte sans la marque, et contact = true si elle a passé la main.
+// Phrase de refus hors sujet : à retirer quand l'IA l'a collée à la fin d'une vraie réponse.
+const REFUS = /\s*Je ne peux vous aider que pour Papote\s*[.:,]?\s*(Avez-vous|avez-vous) une question sur la tablette ou l[’']appli\s*\?\s*$/;
+
 function lireReponse(texte) {
   const contact = texte.includes(MARQUE_CONTACT);
-  const reponse = texte.split(MARQUE_CONTACT).join('').replace(/\*\*(.+?)\*\*/g, '$1').trim();
+  let reponse = texte.split(MARQUE_CONTACT).join('').replace(/\*\*(.+?)\*\*/g, '$1').trim();
+  const sansRefus = reponse.replace(REFUS, '').trim();
+  if (sansRefus) reponse = sansRefus;
   return { reponse, contact };
 }
 
