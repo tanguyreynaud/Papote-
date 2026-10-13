@@ -209,3 +209,31 @@ test('accessoires à prévoir pour les envois', () => {
   ], aEnvoyer);
   assert.deepStrictEqual(r.map((a) => [a.nom, a.besoin, a.manque, a.bas]), [['Clé 4G', 2, 1, false], ['Prise USB', 3, 0, true]]);
 });
+
+test('cartes SIM et accessoires lus sur une facture', () => {
+  const r = g.lectureVersFormulaire({
+    estUneFacture: true, totalTTC: 60, categorie: 'sim', libelle: 'Kits SIM',
+    cartesSim: { quantite: 2, operateur: 'YouPrice', iccids: ['8933 0100 0000 0000 001', '8933010000000000002', 'en trop'], numeros: [],
+      prixCarteTTC: 10, forfaitMensuelTTC: 2.99 },
+    accessoires: [{ nom: 'Clé 4G USB', quantite: 3, prixUnitaireTTC: 9.9 }, { nom: '', quantite: 1, prixUnitaireTTC: 1 }],
+  });
+  assert.deepStrictEqual(r.cartesSim, {
+    quantite: 2, operateur: 'YouPrice', iccids: ['8933010000000000001', '8933010000000000002'], numeros: [], prixCarte: 1000, forfait: 299,
+  });
+  assert.deepStrictEqual(r.accessoires, [{ nom: 'Clé 4G USB', quantite: 3, prixUnitaire: 990 }]);
+  assert.strictEqual(g.lectureVersFormulaire({ cartesSim: null }).cartesSim, null);
+  // Depuis la page : montants déjà en centimes.
+  assert.strictEqual(g.materielLu({ cartesSim: { quantite: 1, iccids: [], numeros: [], forfait: 299 } }, true).cartesSim.forfait, 299);
+  assert.ok(g.memeAccessoire('Clé 4G', 'Clé USB 4G LTE'));
+  assert.ok(g.memeAccessoire('cle 4g', 'Clé 4G'));
+  assert.ok(!g.memeAccessoire('Prise USB double', 'Clé 4G USB'));
+});
+
+test('clients, tablettes et SIM qui ne collent pas', () => {
+  const r = g.incoherences({
+    commandes: [{ id: 'c1', formule: 'sim' }, { id: 'c2', formule: 'sim' }, { id: 'c3', formule: 'wifi' }],
+    stock: [{ commande: 'c1', etat: 'chez-client', sim: null }, { commande: 'c2', etat: 'envoyee', sim: '06' }, { commande: 'c3', etat: 'envoyee' }],
+    sims: [{ statut: 'active', tablette: null }, { statut: 'active', tablette: 't' }, { statut: 'stock', tablette: null }],
+  });
+  assert.deepStrictEqual(r, ['1 client Internet inclus sans carte SIM notée sur sa tablette', '1 ligne SIM active reliée à aucune tablette']);
+});

@@ -106,27 +106,35 @@ async function loadOrders() {
       const li = document.createElement('li');
       li.innerHTML = '<strong></strong><span class="muted small"></span><span class="small"></span>'
         + '<form class="ship"><select class="tablette" aria-label="Tablette du stock"><option value="">Tablette du stock…</option></select>'
-        + '<input placeholder="N° de suivi Mondial Relay" autocomplete="off" required><button type="submit" class="primary small-btn">Envoyée</button></form>';
+        + '<select class="sim" aria-label="Carte SIM du stock" hidden><option value="">Carte SIM du stock…</option></select>'
+        + '<input placeholder="N° de suivi Mondial Relay" autocomplete="off" required><button type="submit" class="primary small-btn">Envoyée</button>'
+        + '<span class="muted small kit"></span></form>';
       li.querySelector('strong').textContent = orderHead(c);
       li.querySelector('.muted').textContent = `${c.email}${c.telephone ? ` · ${c.telephone}` : ''} · commandé ${ago(toDate(c.creeLe))}${c.fid ? ' · famille créée' : ''}`;
       li.querySelector('span.small:not(.muted)').textContent = livraisonTexte(c);
       const form = li.querySelector('form');
-      remplirTablettes(form.querySelector('select.tablette'), c.id);
+      const choix = form.querySelector('select.tablette');
+      const choixSim = form.querySelector('select.sim');
+      remplirKit(form, c);
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const suivi = form.querySelector('input').value.trim();
-        const choix = form.querySelector('select.tablette');
         const tablette = choix.value;
-        // Le stock et les lignes SIM doivent suivre chaque envoi.
+        const sim = choixSim.hidden ? '' : choixSim.value;
+        // Le kit part entier : tablette du stock, et sa carte SIM pour la formule Internet inclus.
         if (!tablette && !confirm('Aucune tablette du stock n\'est choisie : elle ne sortira pas du stock. Envoyer quand même ?')) return;
-        if (tablette && c.formule === 'sim' && !choix.selectedOptions[0].dataset.sim
-          && !confirm('Formule Internet inclus, mais cette tablette n\'a pas de ligne SIM notée dans le stock. Envoyer quand même ?')) return;
+        if (tablette && c.formule === 'sim' && !choix.selectedOptions[0].dataset.sim && !sim
+          && !confirm('Formule Internet inclus, mais aucune carte SIM n\'est choisie. Envoyer quand même ?')) return;
         form.querySelector('button').disabled = true;
         try {
           await httpsCallable(functions, 'tabletteEnvoyee')({ commande: c.id, suivi });
           if (tablette) {
-            await appeler('gestionStock', { action: 'modifier', id: tablette, champs: { etat: 'envoyee', commande: c.id } })
-              .catch((err) => alert(`Colis enregistré, mais la tablette n'a pas pu être sortie du stock : ${err.message}`));
+            try {
+              if (sim) await appeler('gestionSim', { action: 'modifier', id: sim, champs: { tablette } });
+              await appeler('gestionStock', { action: 'modifier', id: tablette, champs: { etat: 'envoyee', commande: c.id } });
+            } catch (err) {
+              alert(`Colis enregistré, mais le kit n'a pas pu être sorti du stock : ${err.message}`);
+            }
           }
           signalerChangement();
           loadOrders();
@@ -145,20 +153,37 @@ async function loadOrders() {
   }
 }
 
-// Tablettes disponibles dans le stock (gestion), pour savoir laquelle part avec la commande.
-async function remplirTablettes(select, commande) {
+// Le kit d'une commande : tablette du stock, carte SIM libre (formule Internet inclus) et accessoires
+// qui partiront avec (gestion), pour que tout sorte du stock ensemble.
+async function remplirKit(form, c) {
+  const select = form.querySelector('select.tablette');
+  const selectSim = form.querySelector('select.sim');
+  const option = (valeur, texte) => {
+    const o = document.createElement('option');
+    o.value = valeur;
+    o.textContent = texte;
+    return o;
+  };
   try {
-    const { stock } = await donnees();
-    const dispo = stock.filter((t) => t.commande === commande || (['en-stock', 'preparee'].includes(t.etat) && !t.commande));
+    const { stock, sims, accessoires } = await donnees();
+    const dispo = stock.filter((t) => t.commande === c.id || (['en-stock', 'preparee'].includes(t.etat) && !t.commande));
     for (const t of dispo) {
-      const o = document.createElement('option');
-      o.value = t.id;
-      o.textContent = [t.numero || 'sans n° de série', t.modele, t.sim ? `SIM ${t.sim}` : null].filter(Boolean).join(' · ');
+      const o = option(t.id, [t.numero || 'sans n° de série', t.modele, t.sim ? `SIM ${t.sim}` : null].filter(Boolean).join(' · '));
       if (t.sim) o.dataset.sim = t.sim;
-      o.selected = t.commande === commande;
+      o.selected = t.commande === c.id;
       select.append(o);
     }
     if (!dispo.length) select.options[0].textContent = 'Stock vide';
+    const libres = (sims || []).filter((l) => !l.tablette && ['stock', 'active'].includes(l.statut));
+    selectSim.append(...libres.map((l) => option(l.id, [l.numero || `ICCID …${String(l.iccid || '').slice(-4)}`, l.operateur].filter(Boolean).join(' · '))));
+    if (!libres.length) selectSim.options[0].textContent = 'Aucune carte SIM libre';
+    // La carte n'est demandée que si la tablette choisie n'en a pas déjà une.
+    const majSim = () => { selectSim.hidden = c.formule !== 'sim' || !!(select.selectedOptions[0] && select.selectedOptions[0].dataset.sim); };
+    select.addEventListener('change', majSim);
+    majSim();
+    const avec = (accessoires || []).filter((a) => a.parEnvoi === 'tous' || (a.parEnvoi && a.parEnvoi === c.formule));
+    form.querySelector('.kit').textContent = avec.length
+      ? `Part aussi : ${avec.map((a) => `${a.nom}${(a.quantite || 0) < 1 ? ' (plus en stock)' : ''}`).join(', ')}` : '';
   } catch (err) {
     select.hidden = true;
   }

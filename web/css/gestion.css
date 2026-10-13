@@ -75,7 +75,7 @@
 .historique { list-style: none; margin: 0; padding: 0; }
 
 /* Lignes d'envoi : tablette du stock + n° de suivi. */
-.ship select.tablette { flex: 1; min-width: 0; margin: 0; padding: 8px 12px; }
+.ship select.tablette, .ship select.sim { flex: 1; min-width: 0; margin: 0; padding: 8px 12px; }
 
 /* ---------- Fenêtres ---------- */
 
@@ -98,7 +98,9 @@
   .fiche dd { margin-bottom: 8px; }
 }
 .ship { flex-wrap: wrap; }
-.ship select.tablette, .ship input { flex: 1 1 200px; }
+.ship select.tablette, .ship select.sim, .ship input { flex: 1 1 200px; }
+.ship .kit { flex-basis: 100%; }
+.ship .kit:empty { display: none; }
 
 /* ---------- Recherche ---------- */
 
@@ -166,3 +168,8 @@ body.depot-actif::after {
 /* Alertes d'une carte SIM : une par ligne, le texte peut passer à la ligne. */
 .alertes { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; max-width: 14rem; }
 .alertes .badge { white-space: normal; }
+
+/* Remplacement d'un élément du kit, dans la fiche commande. */
+.remplacement { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.remplacement select, .remplacement input { flex: 1 1 180px; min-width: 0; margin: 0; padding: 8px 12px; }
+.remplacement p { flex-basis: 100%; margin: 0; }
