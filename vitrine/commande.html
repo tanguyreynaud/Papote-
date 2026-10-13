@@ -46,6 +46,10 @@ h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-u
 .cherche label { display: grid; gap: .25rem; font-size: 1rem; color: var(--muted); }
 .cherche input, .cherche select { font: inherit; color: var(--text); min-height: 3rem; padding: .5rem .75rem; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); }
 .cherche input { width: 8rem; }
+.qui { display: grid; gap: .4rem; font-weight: 700; }
+.qui[hidden] { display: none; }
+.qui input { font: inherit; font-weight: 400; color: var(--text); min-height: 3rem; padding: .5rem .75rem; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.qui .muted { font-weight: 400; font-size: 1rem; }
 .btn.btn-ghost { background: transparent; color: var(--text); border: 2px solid var(--line); }
 .btn.btn-ghost:hover { background: transparent; border-color: var(--accent); }
 .choisi { display: grid; gap: .25rem; padding: 1rem 1.25rem; border: 2px solid var(--accent); border-radius: 16px; background: var(--surface); }
@@ -99,6 +103,11 @@ h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-u
     <span id="choisi-adresse"></span>
   </div>
 
+  <label class="qui" id="qui" hidden>Qui ira chercher la tablette au point relais ?
+    <input id="destinataire" autocomplete="name" maxlength="80" placeholder="Prénom et nom">
+    <span class="muted">Le nom doit correspondre à une pièce d'identité : il figure sur le colis.</span>
+  </label>
+
   <a class="btn payer" id="payer" href="#" aria-disabled="true">Choisissez un point relais</a>
   <p class="muted">Paiement sécurisé par carte (Stripe). Aujourd'hui : 50 €. L'abonnement commence après les 15 jours d'essai, avec un engagement de 12 mois. La tablette reste la nôtre et nous est rendue en fin d'abonnement.</p>
 </main>
@@ -131,8 +140,18 @@ h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-u
 
   var payer = document.getElementById('payer');
 
+  var destinataire = document.getElementById('destinataire');
+  // Payer : point relais choisi ET prénom + nom de la personne qui retire le colis.
   function lienPaiement() {
+    var nom = destinataire.value.trim().replace(/\s+/g, ' ');
+    if (!relais || nom.split(' ').length < 2) {
+      payer.removeAttribute('href');
+      payer.setAttribute('aria-disabled', 'true');
+      payer.textContent = relais ? 'Indiquez qui retire le colis' : 'Choisissez un point relais';
+      return;
+    }
     var params = new URLSearchParams({
+      rdest: nom,
       formule: recap.net.checked ? 'sim' : 'wifi', tablette: 'incluse',
       relais: String(relais.id), rnom: relais.name, radr: relais.adresse,
       rcp: relais.postal_code, rville: relais.city, rpays: (relais.country || 'FR').toUpperCase()
@@ -151,8 +170,11 @@ h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-u
     document.getElementById('choisi-nom').textContent = p.name;
     document.getElementById('choisi-adresse').textContent = relais.adresse + ', ' + p.postal_code + ' ' + p.city;
     document.getElementById('choisi').hidden = false;
+    document.getElementById('qui').hidden = false;
     lienPaiement();
-    payer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    var cible = payer.getAttribute('aria-disabled') === 'false' ? payer : destinataire;
+    cible.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (cible === destinataire) destinataire.focus({ preventScroll: true });
   }
 
   // La carte Sendcloud est lourde à afficher : on montre d'abord une simple liste des points relais
@@ -309,7 +331,8 @@ h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-u
     }, function () { fin(false); }, { maximumAge: 600000 });
   });
 
-  payer.addEventListener('click', function () { if (relais) compter('paiement'); });
+  destinataire.addEventListener('input', lienPaiement);
+  payer.addEventListener('click', function () { if (payer.getAttribute('aria-disabled') === 'false') compter('paiement'); });
   compter('commande');
   maj();
 })();
