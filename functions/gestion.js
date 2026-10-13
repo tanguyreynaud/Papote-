@@ -1578,6 +1578,27 @@ exports.gestionEtiquette = onCall({ secrets: [SENDCLOUD_API, MAIL_MOT_DE_PASSE],
   }
 });
 
+// { commande, email? } : renvoie au client le code de commande (rappel de jumelage), à l'e-mail de la commande
+// ou à une autre adresse donnée par téléphone.
+exports.gestionRenvoyerCode = onCall({ secrets: [MAIL_MOT_DE_PASSE] }, async (request) => {
+  verifierAdmin(request);
+  const d = request.data || {};
+  if (typeof d.commande !== 'string' || !d.commande) throw new HttpsError('invalid-argument', 'Commande manquante.');
+  const snap = await db().doc(`commandes/${d.commande}`).get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Commande introuvable.');
+  const c = snap.data();
+  if (!c.code) throw new HttpsError('failed-precondition', 'Cette commande n\'a pas de code.');
+  const a = typeof d.email === 'string' && d.email.trim() ? d.email.trim().toLowerCase() : c.email;
+  if (!a || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(a)) throw new HttpsError('invalid-argument', 'Adresse e-mail invalide.');
+  const code = `${c.code.slice(0, 4)}-${c.code.slice(4)}`;
+  await mail.envoyer({
+    smtp: MAIL_SMTP.value(), expediteur: MAIL_EXPEDITEUR.value(), motDePasse: MAIL_MOT_DE_PASSE.value(),
+    a, contenu: mail.rappelJumelage({ nom: c.nom, numero: c.expedition === 'envoyee' ? 1 : 2, code }),
+  });
+  await snap.ref.update({ codeRenvoye: FieldValue.arrayUnion({ a, le: Date.now() }) });
+  return { ok: true, a };
+});
+
 // ---------- Récapitulatif du lundi ----------
 
 const JOURS = (n) => n * JOUR;
