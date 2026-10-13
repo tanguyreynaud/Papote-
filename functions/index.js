@@ -20,6 +20,7 @@
 //   tabletteEnvoyee    appel depuis le tableau de bord admin : colis parti, numéro de suivi Mondial Relay
 //   commandeModifiee   commande modifiée : e-mail d'envoi, de retour, d'étiquette ; remboursement au retour
 //   rappelsJumelage    chaque jour : rappel au client dont la tablette n'est pas jumelée (J+5, J+12)
+//   gestion*           page de gestion admin : stock, commandes, factures, comptabilité (gestion.js)
 //
 // État écrit sur families/{fid}.abonnement (voir abonnement.js), avec rev + 1 pour que la
 // tablette relise la famille. Commandes : commandes/{id de l'abonnement Stripe}.
@@ -106,8 +107,8 @@ async function sessionPaiement({ formule, tablette, fid, email, client, relais }
     mode: 'subscription',
     line_items: await tarifs(formule, tablette),
     locale: 'fr',
-    // Carte bancaire seulement : pas de « Link » ni de code promo, qui troublent les clients.
-    payment_method_types: ['card'],
+    // Carte bancaire (Google Pay et Apple Pay compris) et Link, choisi par Tanguy le 2026-10-13. Pas de code promo.
+    payment_method_types: ['card', 'link'],
     billing_address_collection: 'auto',
     phone_number_collection: { enabled: true },
     metadata,
@@ -885,6 +886,25 @@ exports.rappelsJumelage = onSchedule(
 const support = require('./support');
 exports.supportChat = support.supportChat;
 exports.bilanSupport = support.bilanSupport;
+
+// Stock de tablettes, commandes, factures et comptabilité (page web/gestion.html, admin).
+const gestion = require('./gestion');
+exports.gestionDonnees = gestion.gestionDonnees;
+exports.gestionStock = gestion.gestionStock;
+exports.gestionDepense = gestion.gestionDepense;
+exports.gestionStripe = gestion.gestionStripe;
+exports.gestionCommande = gestion.gestionCommande;
+exports.gestionPiece = gestion.gestionPiece;
+exports.gestionLireFacture = gestion.gestionLireFacture;
+exports.gestionAutomatique = gestion.gestionAutomatique;
+exports.gestionAutomatiser = gestion.gestionAutomatiser;
+exports.gestionReglages = gestion.gestionReglages;
+exports.gestionRecap = gestion.gestionRecap;
+exports.gestionRecapMaintenant = gestion.gestionRecapMaintenant;
+exports.gestionCourrier = gestion.gestionCourrier;
+exports.gestionCourrierMaintenant = gestion.gestionCourrierMaintenant;
+exports.gestionCloture = gestion.gestionCloture;
+exports.gestionCloturer = gestion.gestionCloturer;
 
 // Nombre de proches d'une famille (membres « famille » qui ont rejoint), lu par les règles
 // Firestore pour refuser un 31e proche. Recalculé à chaque arrivée, départ ou changement de membre.

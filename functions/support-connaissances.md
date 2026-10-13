@@ -7,7 +7,7 @@ les fonctions suffit pour que le chat en tienne compte.
 - C'est une page web qu'on installe comme une appli, rien à télécharger dans un store.
   iPhone : ouvrir le lien dans Safari, bouton Partager (le carré avec une flèche) puis « Sur l'écran d'accueil ».
   Android : dans Chrome, menu ⋮ en haut à droite puis « Installer l'application » ou « Ajouter à l'écran d'accueil ».
-- Connexion avec Google ou avec une adresse e-mail (un lien de connexion est envoyé par e-mail).
+- Connexion avec Google ou avec une adresse e-mail (un lien de connexion est envoyé par e-mail). Il n'y a pas de mot de passe Papote à créer ni à changer.
 - L'accueil a six tuiles : Appel vidéo, Photos, Vidéos, Messages, Agenda, Réglages.
 - Photos : jusqu'à 5 photos par envoi, avec une légende courte (30 caractères). Vidéos : 1 minute au maximum.
 - Supprimer un envoi : toucher la corbeille sous la photo ou la vidéo, ou toucher son message. Il disparaît aussi de la tablette. On ne peut supprimer que ses propres envois.
@@ -20,6 +20,8 @@ les fonctions suffit pour que le chat en tienne compte.
 ## Inviter la famille
 - Dans Réglages, « Inviter par e-mail » : la personne entre directement dans la famille en se connectant avec cette adresse. C'est le plus simple.
 - Ou « Partager le lien » / QR code avec le code famille : la personne ouvre le lien, donne son prénom, et un responsable de la famille accepte son arrivée (Réglages, « Demandes pour rejoindre »).
+
+- Membres : dans Réglages, « Membres », un responsable peut retirer quelqu'un de la famille ou rendre un autre membre responsable. Il peut y avoir plusieurs responsables ; celui qui a créé la famille le reste toujours.
 
 ## Recevoir et jumeler la tablette
 - La tablette arrive en point relais, déjà configurée. On choisit le point relais à la commande, où l'on veut (près de chez soi ou près du proche) : pas besoin de passer la main pour cela. Un e-mail donne le numéro de suivi.
@@ -34,6 +36,8 @@ les fonctions suffit pour que le chat en tienne compte.
 - Les mises à jour se font toutes seules.
 - Le bouton marche/arrêt ne l'éteint pas (pour éviter les fausses manœuvres) ; un appui d'environ 10 secondes la redémarre.
 - Taille du texte réglable dans Réglages (Normale, Grande, Très grande).
+- Volume : dans Réglages, « Volume du son » (son des vidéos et des appels sur la tablette), réglable par un responsable de la famille.
+- Pas de lecture à voix haute des messages.
 
 ## Dépannage
 - La tablette ne répond plus : vérifier qu'elle est branchée et connectée au Wi-Fi ; puis dans Réglages, « Dépanner la tablette » : « Redémarrer la tablette ». Sinon, appui d'environ 10 secondes sur le bouton marche.
@@ -66,5 +70,20 @@ les fonctions suffit pour que le chat en tienne compte.
 - Offrir Papote en cadeau, payé par un autre proche : bien sûr.
 - Livraison hors France, Belgique et Luxembourg (Suisse, DOM-TOM…) : pas pour le moment.
 - Changer de formule : passer à l'option internet inclus (carte SIM) demande de nous renvoyer la tablette pour la modifier ; passer de la SIM au Wi-Fi est envisageable. Dans les deux cas : demande de contact.
-- Paiement : par carte bancaire uniquement ; les factures sont dans la page Abonnement de l'appli.
+- Paiement : par carte bancaire uniquement (pas de chèque, de virement ni d'espèces) ; les factures sont dans la page Abonnement de l'appli.
 - Aide fiscale (services à la personne) : pas pour le moment.
+- Codes promo : il n'y en a pas pour le moment.
+- « Peur de la casser » : rassurer (rien à manipuler, le bouton marche/arrêt ne l'éteint pas), puis dire franchement que la casse accidentelle n'est pas couverte.
+- Casse : la tablette est faite pour qu'on n'ait rien à manipuler, mais la casse accidentelle n'est pas couverte : la caution de 120 € peut s'appliquer. En cas de casse : demande de contact.
+- Eau : la tablette n'est pas étanche, à éviter dans une salle de bain.
+- Caméra : elle ne filme pas en continu. Elle sert aux appels vidéo et, quand un message, une photo ou un rappel arrive, à vérifier que la personne l'a vu.
+- Données : hébergées chez Firebase (Google).
+- Prix : fixe pendant les 12 mois d'engagement. Il peut éventuellement évoluer ensuite, mais c'est très rare.
+- Décès du proche pendant l'engagement : pas besoin de payer jusqu'au bout, sur preuve du décès. Demande de contact.
+- Son : la tablette fait un son quand une photo, une vidéo ou un message arrive.
+- Résiliation pendant les 15 jours d'essai : les 50 € de mise en service sont remboursés.
+- Réseaux sociaux : Papote est sur Facebook, Instagram, TikTok et YouTube sous le nom « mapapote » (ne donne pas de lien).
+- Coupure de courant : la batterie tient quelques heures.
+- Alexa, Google Home ou autre assistant vocal : non, pas compatible.
+- Établissements (EHPAD, résidences) qui veulent plusieurs tablettes : projet à discuter directement par e-mail à contact@mapapote.fr.
+- Changer d'adresse ou de point relais après la commande : seulement si le colis n'est pas encore parti, en écrivant vite à contact@mapapote.fr.

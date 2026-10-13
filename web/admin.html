@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="fr" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light">
+  <title>Papote · Administration</title>
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/famille.css">
+  <link rel="stylesheet" href="css/admin.css">
+  <link rel="stylesheet" href="css/gestion.css">
+</head>
+<body class="admin-body">
+  <section id="signin" class="signin card" hidden>
+    <img src="icons/icon.svg" alt="" class="admin-logo">
+    <h1>Administration Papote</h1>
+    <p class="muted">Réservé à l'administrateur. Connectez-vous avec votre compte Google.</p>
+    <button type="button" id="btn-signin" class="primary wide">Se connecter avec Google</button>
+    <p id="signin-error" class="error" hidden></p>
+  </section>
+
+  <div id="dashboard" class="shell" hidden>
+    <aside class="nav no-print">
+      <div class="nav-marque">
+        <img src="icons/icon.svg" alt="" class="admin-logo">
+        <strong>Papote</strong>
+      </div>
+      <nav aria-label="Sections">
+        <a href="#accueil" data-page="accueil">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>
+          Accueil<span class="pastille" id="n-accueil" hidden></span></a>
+        <a href="#commandes" data-page="commandes">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7l9-4 9 4v10l-9 4-9-4zM3 7l9 4 9-4M12 11v10"/></svg>
+          Commandes<span class="pastille" id="n-commandes" hidden></span></a>
+        <a href="#familles" data-page="familles">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zM10 17h4"/></svg>
+          Familles et tablettes</a>
+        <a href="#stock" data-page="stock">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h16v12H4zM2 4h20v4H2zM10 12h4"/></svg>
+          Stock<span class="pastille" id="n-stock" hidden></span></a>
+        <a href="#factures" data-page="factures">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h9l5 5v15H6zM14 2v6h6M9 13h8M9 17h8"/></svg>
+          Factures</a>
+        <a href="#compta" data-page="compta">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+          Comptabilité</a>
+        <a href="#outils" data-page="outils">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.5-.5-.5-2.5z"/></svg>
+          Maintenance</a>
+      </nav>
+      <div class="nav-pied">
+        <p id="who" class="muted small"></p>
+        <button type="button" id="btn-signout" class="link small">Se déconnecter</button>
+      </div>
+    </aside>
+
+    <main class="contenu">
+      <header class="contenu-tete">
+        <h1 id="titre-page">Accueil</h1>
+        <div class="recherche no-print">
+          <input type="search" id="recherche" placeholder="Rechercher un client, une commande, un n° de série…" aria-label="Rechercher" autocomplete="off">
+          <ul id="resultats" class="resultats" hidden></ul>
+        </div>
+        <div class="periode no-print" id="periode" hidden>
+          <select id="p-choix" aria-label="Période">
+            <option value="mois">Ce mois-ci</option>
+            <option value="mois-1">Mois dernier</option>
+            <option value="trimestre">Ce trimestre</option>
+            <option value="annee" selected>Cette année</option>
+            <option value="annee-1">Année dernière</option>
+            <option value="perso">Autre période…</option>
+          </select>
+          <label id="p-du-l" hidden>du <input type="date" id="p-du"></label>
+          <label id="p-au-l" hidden>au <input type="date" id="p-au"></label>
+        </div>
+        <button type="button" id="btn-refresh" class="secondary small-btn no-print" hidden>Actualiser</button>
+      </header>
+      <p id="p-etat" class="muted small etat-periode" hidden></p>
+      <p id="erreur" class="bandeau-erreur" hidden></p>
+
+      <!-- ---------- Accueil ---------- -->
+      <section data-panneau="accueil">
+        <div class="stats">
+          <div class="stat"><span id="s-families">–</span><p>familles</p></div>
+          <div class="stat ok"><span id="s-online">–</span><p>tablettes en ligne</p></div>
+          <div class="stat warn"><span id="s-offline">–</span><p>hors ligne</p></div>
+          <div class="stat"><span id="s-idle">–</span><p>pas touchées depuis 24 h</p></div>
+        </div>
+        <div class="card">
+          <h2>À faire</h2>
+          <ul id="a-faire" class="a-faire"></ul>
+        </div>
+        <div class="card">
+          <h2>Franchise de TVA</h2>
+          <div id="tva"></div>
+        </div>
+        <div class="card">
+          <h2>Ce mois-ci</h2>
+          <div class="stats compact" id="kpi-mois"></div>
+        </div>
+        <div class="card">
+          <div class="tete">
+            <h2>Une facture à saisir ?</h2>
+            <button type="button" class="primary small-btn" id="btn-lire">Déposer une facture</button>
+          </div>
+          <p class="muted small">PDF ou photo : elle est lue automatiquement, puis rangée dans le stock (achat de tablettes) ou les dépenses, avec la pièce jointe. Vous pouvez aussi la glisser n'importe où sur la page.</p>
+          <div class="tete">
+            <p class="small">Ou envoyez-la (ou transférez l'e-mail du fournisseur) à <strong>factures@mapapote.fr</strong> : elle est rangée toute seule dans l'heure, « à vérifier ».</p>
+            <button type="button" class="secondary small-btn" id="btn-courrier">Relever maintenant</button>
+          </div>
+          <p id="courrier" class="small muted"></p>
+        </div>
+        <div class="card">
+          <div class="tete">
+            <h2>Automatique</h2>
+            <div class="actions">
+              <button type="button" class="secondary small-btn" id="btn-recap">Envoyer le récap</button>
+              <button type="button" class="secondary small-btn" id="btn-automatiser">Lancer maintenant</button>
+            </div>
+          </div>
+          <p class="muted small">Chaque nuit : facture des 120 € de tablette non rendue, avoir pour chaque remboursement, dépenses mensuelles ajoutées au registre. Chaque lundi à 8 h : récap de la semaine par e-mail à contact@mapapote.fr.</p>
+          <p id="automatique" class="small"></p>
+        </div>
+      </section>
+
+      <!-- ---------- Commandes ---------- -->
+      <section data-panneau="commandes" hidden>
+        <div class="stats" id="kpi-commandes"></div>
+        <div class="card">
+          <h2>Tablettes à envoyer</h2>
+          <p class="muted small">Choisissez la tablette du stock, collez le n° de suivi Mondial Relay, puis « Envoyée » : le client reçoit le lien de suivi.</p>
+          <ul id="orders" class="orders"></ul>
+          <p id="orders-empty" class="muted small" hidden>Aucune commande en attente.</p>
+        </div>
+        <div class="card">
+          <h2>Envoyées, pas encore jumelées</h2>
+          <p class="muted small">Le client reçoit un rappel à J+5 et J+12 ; en rouge, rien après 20 jours.</p>
+          <ul id="shipped" class="orders"></ul>
+          <p id="shipped-empty" class="muted small" hidden>Aucune tablette en route.</p>
+        </div>
+        <div class="card">
+          <h2>Tablettes à récupérer</h2>
+          <p class="muted small">Abonnements terminés. Sans retour avant la date limite, 120 € sont prélevés automatiquement.</p>
+          <ul id="returns" class="orders"></ul>
+          <p id="returns-empty" class="muted small" hidden>Aucune tablette à récupérer.</p>
+        </div>
+        <div class="card">
+          <div class="tete">
+            <h2>Toutes les commandes</h2>
+            <div class="actions no-print">
+              <select id="filtre-commandes" aria-label="Filtrer">
+                <option value="">Toutes</option>
+                <option value="a-envoyer">À envoyer</option>
+                <option value="en-route">Envoyées, pas jumelées</option>
+                <option value="active">En service</option>
+                <option value="retour">Tablette à récupérer</option>
+                <option value="terminee">Terminées</option>
+                <option value="annulee">Annulées</option>
+              </select>
+              <button type="button" class="secondary small-btn" id="x-commandes">Exporter</button>
+            </div>
+          </div>
+          <p class="muted small">Touchez une commande pour voir ses factures et ses paiements.</p>
+          <div class="table"><table id="t-commandes" class="cliquable"></table></div>
+        </div>
+      </section>
+
+      <!-- ---------- Familles et tablettes ---------- -->
+      <section data-panneau="familles" hidden>
+        <p id="loading-families" class="muted">Chargement des familles…</p>
+        <ul id="families" class="families"></ul>
+        <section class="card sim">
+          <h2>Cartes SIM</h2>
+          <p id="sim-count" class="muted small"></p>
+          <ul id="sim-lines" class="sim-lines"></ul>
+          <p id="sim-empty" class="muted small" hidden>Aucune tablette avec SIM pour l'instant.</p>
+        </section>
+      </section>
+
+      <!-- ---------- Stock ---------- -->
+      <section data-panneau="stock" hidden>
+        <div class="stats" id="kpi-stock"></div>
+        <p id="alerte-stock" class="bandeau-erreur" hidden></p>
+        <div class="card">
+          <div class="tete">
+            <h2>Parc de tablettes</h2>
+            <div class="actions no-print">
+              <select id="filtre-stock" aria-label="Filtrer"><option value="">Toutes</option></select>
+              <button type="button" class="secondary small-btn" id="x-stock">Exporter</button>
+              <button type="button" class="primary small-btn" id="btn-achat">Ajouter un achat</button>
+            </div>
+          </div>
+          <div class="table"><table id="t-stock"></table></div>
+          <p id="stock-vide" class="muted small" hidden>Aucune tablette enregistrée. Ajoutez votre premier achat.</p>
+        </div>
+        <div class="card">
+          <h2>Lignes SIM</h2>
+          <p class="muted small">Le numéro de ligne, l'opérateur et le coût se saisissent dans la fiche de chaque tablette. En rouge : forfait encore payé alors que la tablette n'est plus chez un client.</p>
+          <div class="table"><table id="t-sim"></table></div>
+        </div>
+      </section>
+
+      <!-- ---------- Factures ---------- -->
+      <section data-panneau="factures" hidden>
+        <div class="stats" id="kpi-factures"></div>
+        <div class="card">
+          <div class="tete">
+            <h2>Factures clients</h2>
+            <div class="actions no-print">
+              <select id="filtre-factures" aria-label="Filtrer">
+                <option value="">Toutes</option>
+                <option value="paid">Payées</option>
+                <option value="open">À payer</option>
+                <option value="uncollectible">Irrécouvrables</option>
+                <option value="void">Annulées</option>
+              </select>
+              <button type="button" class="secondary small-btn" id="x-factures">Exporter</button>
+            </div>
+          </div>
+          <p class="muted small">Créées et envoyées automatiquement par Stripe à chaque paiement (commande, puis chaque mois). Les 120 € de tablette non rendue reçoivent aussi leur facture, et chaque remboursement son avoir, automatiquement chaque nuit.</p>
+          <div class="table"><table id="t-factures"></table></div>
+        </div>
+      </section>
+
+      <!-- ---------- Comptabilité ---------- -->
+      <section data-panneau="compta" hidden>
+        <h2 class="titre-print" id="bilan-titre">Bilan</h2>
+        <div class="stats" id="kpi-argent"></div>
+        <div class="stats" id="kpi-activite"></div>
+        <div class="card">
+          <div class="tete">
+            <h2>Mois par mois</h2>
+            <div class="actions no-print">
+              <button type="button" class="secondary small-btn" id="imprimer">Imprimer / PDF</button>
+              <button type="button" class="primary small-btn" id="x-tout">Tout exporter pour le comptable</button>
+            </div>
+          </div>
+          <div class="table"><table id="t-bilan"></table></div>
+          <p class="muted small">Résultat = encaissé − remboursements − frais Stripe − dépenses. L'export contient le bilan, le livre des recettes, le registre des achats, les factures et le relevé Stripe.</p>
+        </div>
+        <div class="card">
+          <h2>Rentabilité par formule</h2>
+          <p class="muted small">Ce qui reste chaque mois par abonné payant, d'après les vrais frais Stripe de la période, le prix d'achat moyen des tablettes et le coût des lignes SIM.</p>
+          <div class="table"><table id="t-rentabilite"></table></div>
+          <form id="f-reglages" class="grille no-print">
+            <label>Seuil de franchise de TVA (€) <input name="seuilTva" inputmode="decimal"></label>
+            <label>Taux URSSAF (%) <input name="tauxUrssaf" inputmode="decimal"></label>
+            <label>Forfait SIM par défaut (€/mois) <input name="forfaitSim" inputmode="decimal"></label>
+            <label>Durée de vie d'une tablette (mois) <input name="vieTablette" inputmode="numeric"></label>
+            <button type="submit" class="secondary">Enregistrer les réglages</button>
+            <p class="f-msg small" hidden></p>
+          </form>
+        </div>
+        <div class="card">
+          <h2>En images</h2>
+          <div class="graphiques">
+            <figure><figcaption>Encaissé, dépenses et résultat par mois</figcaption><div id="g-argent"></div></figure>
+            <figure><figcaption>Abonnements en cours, arrivées et départs</figcaption><div id="g-abonnes"></div></figure>
+          </div>
+        </div>
+        <div class="card">
+          <div class="tete">
+            <h2>Déclarations URSSAF</h2>
+            <div class="actions no-print">
+              <select id="u-rythme" aria-label="Rythme des déclarations">
+                <option value="mois">Mensuelles</option>
+                <option value="trimestre">Trimestrielles</option>
+              </select>
+            </div>
+          </div>
+          <div class="table"><table id="t-urssaf"></table></div>
+          <p class="muted small">Micro-entreprise : on déclare le chiffre d'affaires encaissé (paiements reçus moins remboursements), sans déduire les frais ni les dépenses. Le taux (réglable dans « Rentabilité par formule ») est une estimation à vérifier sur autoentrepreneur.urssaf.fr selon votre activité et vos options.</p>
+        </div>
+        <div class="card">
+          <div class="tete">
+            <h2>Dépenses</h2>
+            <button type="button" class="primary small-btn no-print" id="btn-depense">Ajouter une dépense</button>
+          </div>
+          <div class="table"><table id="t-achats"></table></div>
+          <div class="table"><table id="t-categories"></table></div>
+        </div>
+        <div class="card">
+          <h2>Livre des recettes</h2>
+          <p class="muted small">Chaque paiement reçu et chaque remboursement, à sa date.</p>
+          <div class="table"><table id="t-recettes"></table></div>
+        </div>
+        <div class="card">
+          <div class="tete">
+            <h2>Livres comptables archivés</h2>
+            <button type="button" class="secondary small-btn no-print" id="btn-cloturer">Archiver le mois dernier</button>
+          </div>
+          <p class="muted small">Le 1er de chaque mois à 5 h, le livre des recettes et le registre des achats du mois écoulé sont figés ici et envoyés à contact@mapapote.fr. Gardez-les : ce sont les registres obligatoires de la micro-entreprise.</p>
+          <p id="cloture" class="muted small" hidden></p>
+          <div class="table"><table id="t-archives"></table></div>
+          <div class="table"><table id="t-impots"></table></div>
+        </div>
+        <div class="card">
+          <h2>Virements Stripe vers la banque</h2>
+          <p class="muted small">Pour pointer avec le relevé bancaire.</p>
+          <div class="table"><table id="t-virements"></table></div>
+        </div>
+      </section>
+
+      <!-- ---------- Maintenance ---------- -->
+      <section data-panneau="outils" hidden>
+        <div class="card migrate">
+          <h2>Anciennes photos et vidéos</h2>
+          <p class="muted">Les envois faits avant Storage sont encore rangés dans la base. Le transfert les déplace vers Storage, sans rien changer pour les familles, et libère la base.</p>
+          <p id="migrate-count" class="small"></p>
+          <button type="button" id="btn-migrate" class="primary wide" disabled>Transférer vers Storage</button>
+          <pre id="migrate-log" class="log" hidden></pre>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Fenêtres -->
+  <dialog id="d-commande" class="fenetre">
+    <div class="fenetre-tete"><h2 id="dc-titre">Commande</h2><button type="button" class="fermer" aria-label="Fermer">✕</button></div>
+    <div id="dc-corps"></div>
+  </dialog>
+
+  <dialog id="d-achat" class="fenetre">
+    <div class="fenetre-tete"><h2>Ajouter un achat de tablettes</h2><button type="button" class="fermer" aria-label="Fermer">✕</button></div>
+    <form id="f-stock" class="grille">
+      <label class="large depot">Facture ou bon de commande (PDF ou photo, 6 Mo au plus)
+        <input type="file" name="piece" accept="application/pdf,image/*" multiple>
+        <span class="muted small">Elle est lue automatiquement pour remplir la fiche : vérifiez avant d'enregistrer.</span></label>
+      <label>Quantité <input type="number" name="quantite" min="1" max="200" value="1" required></label>
+      <label>Date d'achat <input type="date" name="date" required></label>
+      <label>Modèle <input name="modele" placeholder="ex. Teclast P30"></label>
+      <label>Fournisseur <input name="fournisseur" placeholder="ex. Cdiscount"></label>
+      <label>Prix unitaire TTC (€) <input name="prix" inputmode="decimal" placeholder="89,90" required></label>
+      <label>dont TVA par tablette (€) <input name="tva" inputmode="decimal" placeholder="facultatif"></label>
+      <label>N° de facture <input name="numero" placeholder="facultatif"></label>
+      <label class="large">Numéros de série, un par ligne (facultatif)
+        <textarea name="numeros" rows="3"></textarea></label>
+      <button type="button" class="secondary small-btn scanner" data-cible="numeros" hidden>Scanner les codes-barres</button>
+      <p class="muted small large">L'achat est aussi inscrit dans les dépenses, avec la pièce jointe.</p>
+      <button type="submit" class="primary">Ajouter au stock</button>
+      <p class="f-msg small" hidden></p>
+    </form>
+  </dialog>
+
+  <dialog id="d-depense" class="fenetre">
+    <div class="fenetre-tete"><h2>Ajouter une dépense</h2><button type="button" class="fermer" aria-label="Fermer">✕</button></div>
+    <form id="f-depense" class="grille">
+      <label class="large depot">Justificatif (PDF ou photo, 6 Mo au plus)
+        <input type="file" name="piece" accept="application/pdf,image/*" multiple>
+        <span class="muted small">Il est lu automatiquement pour remplir la fiche : vérifiez avant d'enregistrer.</span></label>
+      <label>Date <input type="date" name="date" required></label>
+      <label>Catégorie <select name="categorie" required></select></label>
+      <label>Fournisseur <input name="fournisseur"></label>
+      <label>Libellé <input name="libelle" required placeholder="ex. Forfaits SIM octobre"></label>
+      <label>Montant TTC (€) <input name="montant" inputmode="decimal" required placeholder="12,00"></label>
+      <label>dont TVA (€) <input name="tva" inputmode="decimal" placeholder="facultatif"></label>
+      <label>N° de facture <input name="numero" placeholder="facultatif"></label>
+      <label class="case large"><input type="checkbox" name="recurrente"> Chaque mois : ajoutée automatiquement au registre à la même date</label>
+      <button type="submit" class="primary">Ajouter</button>
+      <p class="f-msg small" hidden></p>
+    </form>
+  </dialog>
+
+  <dialog id="d-tablette" class="fenetre">
+    <div class="fenetre-tete"><h2 id="dt-titre">Tablette</h2><button type="button" class="fermer" aria-label="Fermer">✕</button></div>
+    <form id="f-tablette" class="grille">
+      <label>N° de série <span class="avec-bouton"><input name="numero"><button type="button" class="secondary small-btn scanner" data-cible="numero" hidden>Scanner</button></span></label>
+      <label>Modèle <input name="modele"></label>
+      <label>État <select name="etat"></select></label>
+      <label>Commande <select name="commande"></select></label>
+      <label>Ligne SIM <input name="sim" placeholder="n° de téléphone"></label>
+      <label>Opérateur <input name="simOperateur"></label>
+      <label>Forfait (€/mois) <input name="simCout" inputmode="decimal"></label>
+      <label class="large">Notes <textarea name="notes" rows="2"></textarea></label>
+      <div class="large">
+        <p class="small"><strong>Pièces jointes</strong></p>
+        <ul class="pieces" id="dt-pieces"></ul>
+        <label class="small">Ajouter (PDF ou photo) <input type="file" id="dt-fichier" accept="application/pdf,image/*" multiple></label>
+      </div>
+      <ul class="historique small muted large" id="dt-historique"></ul>
+      <div class="large boutons">
+        <button type="submit" class="primary">Enregistrer</button>
+        <button type="button" class="link danger" id="dt-retirer" hidden>Retirer (erreur de saisie)</button>
+      </div>
+      <p class="f-msg small" hidden></p>
+    </form>
+  </dialog>
+
+  <dialog id="d-scan" class="fenetre">
+    <div class="fenetre-tete"><h2>Scanner un code-barres</h2><button type="button" class="fermer" aria-label="Fermer">✕</button></div>
+    <video id="scan-video" class="scan-video" playsinline muted></video>
+    <p id="scan-msg" class="muted small">Visez le code-barres du numéro de série (étiquette de la boîte ou au dos de la tablette).</p>
+    <ul id="scan-lus" class="small"></ul>
+    <button type="button" class="primary" id="scan-fin">Terminé</button>
+  </dialog>
+
+  <script type="module" src="js/admin.js"></script>
+  <script type="module" src="js/gestion.js"></script>
+</body>
+</html>
