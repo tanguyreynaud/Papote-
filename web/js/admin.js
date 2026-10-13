@@ -115,7 +115,12 @@ async function loadOrders() {
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const suivi = form.querySelector('input').value.trim();
-        const tablette = form.querySelector('select.tablette').value;
+        const choix = form.querySelector('select.tablette');
+        const tablette = choix.value;
+        // Le stock et les lignes SIM doivent suivre chaque envoi.
+        if (!tablette && !confirm('Aucune tablette du stock n\'est choisie : elle ne sortira pas du stock. Envoyer quand même ?')) return;
+        if (tablette && c.formule === 'sim' && !choix.selectedOptions[0].dataset.sim
+          && !confirm('Formule Internet inclus, mais cette tablette n\'a pas de ligne SIM notée dans le stock. Envoyer quand même ?')) return;
         form.querySelector('button').disabled = true;
         try {
           await httpsCallable(functions, 'tabletteEnvoyee')({ commande: c.id, suivi });
@@ -148,7 +153,8 @@ async function remplirTablettes(select, commande) {
     for (const t of dispo) {
       const o = document.createElement('option');
       o.value = t.id;
-      o.textContent = [t.numero || 'sans n° de série', t.modele].filter(Boolean).join(' · ');
+      o.textContent = [t.numero || 'sans n° de série', t.modele, t.sim ? `SIM ${t.sim}` : null].filter(Boolean).join(' · ');
+      if (t.sim) o.dataset.sim = t.sim;
       o.selected = t.commande === commande;
       select.append(o);
     }
