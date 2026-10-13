@@ -35,3 +35,9 @@ test('saisies : montants et liens', () => {
   assert.strictEqual(g.lien('javascript:alert(1)'), null);
   assert.strictEqual(g.lien(''), null);
 });
+
+test('nom de fichier des pièces jointes', () => {
+  assert.strictEqual(g.nomFichier('Facture Cdiscount n°12 été.pdf'), 'Facture-Cdiscount-n-12-ete.pdf');
+  assert.strictEqual(g.nomFichier('../../secret'), '..-..-secret');
+  assert.strictEqual(g.nomFichier(''), 'piece');
+});

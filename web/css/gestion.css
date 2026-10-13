@@ -1,16 +1,4 @@
-/* Page de gestion de l'administrateur (réutilise famille.css et admin.css). */
-
-.onglets { display: flex; gap: 6px; overflow-x: auto; margin-bottom: 14px; padding-bottom: 2px; }
-.onglets button {
-  flex: none; min-height: 0; padding: 10px 16px; border-radius: 999px; font-size: 15px;
-  background: var(--surface); color: var(--text); border: 1px solid var(--line);
-}
-.onglets button[aria-selected="true"] { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
-
-.periode { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0 14px; padding-top: 6px; padding-bottom: 6px; }
-.periode label { margin: 8px 0; font-size: 14px; }
-.periode select, .periode input { margin-top: 4px; }
-.periode p { margin: 8px 0; flex-basis: 100%; }
+/* Espace d'administration : tableaux, fiches et fenêtres de la gestion (avec famille.css et admin.css). */
 
 .tete { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
 .tete h2 { margin: 0; }
@@ -39,7 +27,7 @@
 .badge.ko { color: var(--danger); border-color: currentColor; }
 .badge.info { color: var(--accent); border-color: currentColor; }
 
-.alerte { padding: 12px 16px; border-radius: 14px; border-left: 5px solid var(--danger); background: var(--surface); font-weight: 600; }
+.bandeau-erreur { padding: 12px 16px; border-radius: 14px; border-left: 5px solid var(--danger); background: var(--surface); font-weight: 600; color: var(--danger); box-shadow: var(--shadow); }
 
 .grille { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0 14px; align-items: end; }
 .grille label { margin: 8px 0; font-size: 14px; }
@@ -49,19 +37,65 @@
 .grille button { margin: 8px 0; }
 .grille .f-msg { grid-column: 1 / -1; margin: 0; }
 
-details.card summary { cursor: pointer; list-style: none; }
-details.card summary::-webkit-details-marker { display: none; }
-details.card summary h2 { display: inline; }
-details.card summary h2::after { content: " +"; color: var(--accent); }
-details.card[open] summary h2::after { content: " −"; }
-details > summary.small { cursor: pointer; color: var(--accent); margin: 8px 0; }
-
 .titre-print { display: none; }
 
 @media print {
-  .no-print, nav, .periode, #btn-signout, .admin-head a { display: none !important; }
-  [data-panneau]:not([data-panneau="bilan"]) { display: none !important; }
+  .no-print, .nav, .periode, #btn-refresh { display: none !important; }
+  .shell { display: block; }
+  .contenu { padding: 0; }
   .titre-print { display: block; }
   .card, .stat { box-shadow: none; border: 1px solid #ccc; break-inside: avoid; }
   body { background: #fff; }
 }
+
+/* ---------- Accueil ---------- */
+
+.stats.compact { margin: 8px 0 0; }
+.stats.compact .stat { box-shadow: none; background: var(--bg); }
+.a-faire { list-style: none; margin: 8px 0 0; padding: 0; }
+.a-faire li { border-bottom: 1px solid var(--line); }
+.a-faire li:last-child { border-bottom: none; }
+.a-faire li.muted { padding: 10px 0; }
+.a-faire a { display: flex; justify-content: space-between; gap: 12px; padding: 12px 0; color: var(--text); text-decoration: none; font-weight: 600; }
+.a-faire a.ko { color: var(--danger); }
+.a-faire a span { color: var(--muted); font-size: 20px; line-height: 1; }
+
+/* ---------- Tableaux cliquables, pièces jointes ---------- */
+
+.table tbody tr[tabindex] { cursor: pointer; }
+.table tbody tr[tabindex]:hover td { background: var(--bg); }
+.pieces-liste { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
+.piece {
+  min-height: 0; padding: 2px 8px; border-radius: 8px; font-size: 13px; font-weight: 400;
+  background: var(--bg); border: 1px solid var(--line); color: var(--accent);
+}
+.pieces { list-style: none; margin: 4px 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.pieces li { display: flex; align-items: center; gap: 8px; }
+.pieces .link { padding: 0; }
+.historique { list-style: none; margin: 0; padding: 0; }
+
+/* Lignes d'envoi : tablette du stock + n° de suivi. */
+.ship select.tablette { flex: 1; min-width: 0; margin: 0; padding: 8px 12px; }
+
+/* ---------- Fenêtres ---------- */
+
+.fenetre {
+  width: min(680px, calc(100vw - 24px)); max-height: calc(100vh - 32px); padding: 20px; border: none;
+  border-radius: 20px; background: var(--surface); color: var(--text); box-shadow: 0 20px 60px rgba(36, 33, 47, .25);
+}
+.fenetre::backdrop { background: rgba(36, 33, 47, .35); }
+.fenetre-tete { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
+.fenetre-tete h2 { margin: 0; font-size: 20px; }
+.fenetre .fermer { min-height: 0; width: 36px; height: 36px; padding: 0; border-radius: 50%; color: var(--muted); }
+.fenetre .fermer:hover { background: var(--bg); }
+.fenetre h3 { font-size: 16px; margin: 18px 0 4px; }
+.fenetre .boutons { display: flex; align-items: center; gap: 16px; }
+.fiche { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 10px 0 0; font-size: 15px; }
+.fiche dt { color: var(--muted); }
+.fiche dd { margin: 0; }
+@media (max-width: 560px) {
+  .fiche { grid-template-columns: 1fr; gap: 0; }
+  .fiche dd { margin-bottom: 8px; }
+}
+.ship { flex-wrap: wrap; }
+.ship select.tablette, .ship input { flex: 1 1 200px; }

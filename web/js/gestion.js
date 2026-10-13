@@ -1,24 +1,12 @@
-// Page de gestion de l'administrateur : bilan, stock de tablettes, commandes, factures et comptabilité.
-// Tout passe par les fonctions serveur gestion* (functions/gestion.js) : l'argent vient de Stripe,
-// le stock et les dépenses de Firestore. Même app Firebase « admin » que le tableau de bord :
-// connecté là-bas, connecté ici.
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
+// Espace d'administration, partie gestion : navigation entre les sections, accueil « À faire »,
+// commandes, stock de tablettes, factures et comptabilité. Tout passe par les fonctions serveur
+// gestion* (functions/gestion.js) : l'argent vient de Stripe, le stock et les dépenses de Firestore.
+// La connexion et les sections familles, envois et maintenance sont dans admin.js.
+import { getApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
+import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
 import {
-  getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut,
-} from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
-import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-functions.js';
-
-const app = initializeApp({
-  apiKey: 'AIzaSyAvoivJR8p-u2VxUWzlyHzTgP20-5ZG_-E',
-  authDomain: 'papote-famille.firebaseapp.com',
-  projectId: 'papote-famille',
-  storageBucket: 'papote-famille.firebasestorage.app',
-  messagingSenderId: '807031084851',
-  appId: '1:807031084851:web:b8048e2952cb1e893b1046',
-}, 'admin');
-const auth = getAuth(app);
-const functions = getFunctions(app, 'europe-west1');
-const appeler = (nom, data) => httpsCallable(functions, nom, { timeout: 130_000 })(data).then((r) => r.data);
+  appeler, donnees as lireDonnees, signalerChangement, messageErreur,
+} from './gestion-api.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -38,7 +26,7 @@ const moisNom = (cle) => {
 const pluriel = (n, mot) => `${n} ${mot}${n > 1 ? 's' : ''}`;
 const codeCommande = (c) => (c && c.length === 8 ? `${c.slice(0, 4)}-${c.slice(4)}` : c || '');
 
-// « 89,90 », « 89.9 », « 1 200 » → centimes ; null si illisible.
+// « 89,90 », « 89.9 », « 1 200 » → centimes ; null si vide, NaN si illisible.
 function enCentimes(saisie) {
   const t = String(saisie || '').replace(/\s|€/g, '').replace(',', '.');
   if (!t) return null;
@@ -64,12 +52,19 @@ function h(tag, attrs = {}, ...enfants) {
 }
 
 // Tableau : colonnes [{ titre, n (nombre aligné à droite) }], lignes de cellules (texte ou Node).
+// lignes peut contenir { cellules, onclick } pour une ligne cliquable.
 function remplirTable(table, colonnes, lignes, { total, vide = 'Rien sur cette période.' } = {}) {
+  const ligne = (l) => {
+    const cellules = Array.isArray(l) ? l : l.cellules;
+    const tr = h('tr', l.onclick ? { tabIndex: 0, onclick: l.onclick, onkeydown: (e) => e.key === 'Enter' && l.onclick() } : {},
+      cellules.map((v, i) => h('td', { class: colonnes[i].n ? 'n' : null }, v ?? '')));
+    if (l.classe) tr.className = l.classe;
+    return tr;
+  };
   table.replaceChildren(
     h('thead', {}, h('tr', {}, colonnes.map((c) => h('th', { class: c.n ? 'n' : null }, c.titre)))),
     h('tbody', {},
-      lignes.length ? lignes.map((l) => h('tr', {}, l.map((v, i) => h('td', { class: colonnes[i].n ? 'n' : null }, v ?? ''))))
-        : h('tr', {}, h('td', { class: 'vide', colSpan: colonnes.length }, vide)),
+      lignes.length ? lignes.map(ligne) : h('tr', {}, h('td', { class: 'vide', colSpan: colonnes.length }, vide)),
       total ? h('tr', { class: 'total' }, total.map((v, i) => h('td', { class: colonnes[i].n ? 'n' : null }, v ?? ''))) : null),
   );
 }
@@ -78,74 +73,185 @@ function stat(valeur, texte, detail, classe) {
   return h('div', { class: 'stat' }, h('span', { class: classe }, valeur), h('p', {}, texte), detail ? h('small', {}, detail) : null);
 }
 
-function badge(texte, classe) {
-  return h('span', { class: `badge ${classe || ''}` }, texte);
-}
+const badge = (texte, classe) => h('span', { class: `badge ${classe || ''}` }, texte);
 
 // ---------- CSV pour Excel (séparateur « ; », virgule décimale, BOM UTF-8) ----------
 
 const csvMontant = (c) => (c == null ? '' : (c / 100).toFixed(2).replace('.', ','));
 
-function csv(nom, entetes, lignes) {
+function csv(nom, entetes, lignes, avecPeriode = true) {
   const cellule = (v) => {
     const t = v == null ? '' : String(v);
     return /[";\n\r]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
   };
   const texte = [entetes, ...lignes].map((l) => l.map(cellule).join(';')).join('\r\n');
   const url = URL.createObjectURL(new Blob(['﻿', texte], { type: 'text/csv;charset=utf-8' }));
-  const a = h('a', { href: url, download: `papote-${nom}-${etiquettePeriode()}.csv` });
+  const suffixe = avecPeriode ? etiquettePeriode() : new Date().toLocaleDateString('sv-SE');
+  const a = h('a', { href: url, download: `papote-${nom}-${suffixe}.csv` });
   document.body.append(a);
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
+// ---------- Pièces jointes ----------
+
+const MAX_PIECE = 6 * 1024 * 1024;
+
+function lireFichier(fichier) {
+  return new Promise((ok, ko) => {
+    const r = new FileReader();
+    r.onload = () => ok(String(r.result).split(',')[1]);
+    r.onerror = () => ko(r.error);
+    r.readAsDataURL(fichier);
+  });
+}
+
+// Photo de téléphone trop lourde : réduite à 2000 px en JPEG.
+async function alleger(fichier) {
+  if (!/^image\/(jpeg|png|webp)$/.test(fichier.type) || fichier.size < 2 * 1024 * 1024) return fichier;
+  try {
+    const image = await createImageBitmap(fichier);
+    const k = Math.min(1, 2000 / Math.max(image.width, image.height));
+    const canvas = h('canvas', { width: Math.round(image.width * k), height: Math.round(image.height * k) });
+    canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise((ok) => canvas.toBlob(ok, 'image/jpeg', 0.85));
+    return blob ? new File([blob], fichier.name.replace(/\.\w+$/, '.jpg'), { type: 'image/jpeg' }) : fichier;
+  } catch (e) {
+    return fichier;
+  }
+}
+
+async function envoyerPieces(collection, id, fichiers) {
+  for (const brut of fichiers) {
+    const fichier = await alleger(brut);
+    if (fichier.size > MAX_PIECE) throw new Error(`${fichier.name} dépasse 6 Mo.`);
+    await appeler('gestionPiece', {
+      action: 'ajouter', collection, id, nom: fichier.name, type: fichier.type, contenu: await lireFichier(fichier),
+    });
+  }
+}
+
+async function ouvrirPiece(piece) {
+  // Fenêtre ouverte tout de suite, sinon le navigateur la bloque après l'attente.
+  const fenetre = window.open('', '_blank');
+  try {
+    const { contenu, type } = await appeler('gestionPiece', { action: 'lire', chemin: piece.chemin });
+    const octets = Uint8Array.from(atob(contenu), (c) => c.charCodeAt(0));
+    const url = URL.createObjectURL(new Blob([octets], { type }));
+    if (fenetre) fenetre.location = url;
+    else h('a', { href: url, download: piece.nom }).click();
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  } catch (e) {
+    if (fenetre) fenetre.close();
+    alert(messageErreur(e));
+  }
+}
+
+function lienPiece(piece) {
+  return h('button', { type: 'button', class: 'piece', title: piece.nom, onclick: (e) => { e.stopPropagation(); ouvrirPiece(piece); } },
+    '📎 ', piece.nom.length > 28 ? `${piece.nom.slice(0, 25)}…` : piece.nom);
+}
+
 // ---------- État ----------
 
 let donnees = null; // gestionDonnees
-let stripe = null; // gestionStripe pour la période
+let stripe = null; // gestionStripe pour la période choisie
+let stripeMois = null; // gestionStripe pour le mois en cours (accueil)
 let periode = null; // { debut, fin } en millisecondes, fin exclue
 
 function erreur(e) {
   console.error(e);
-  $('erreur').textContent = e && e.code === 'functions/permission-denied'
-    ? 'Ce compte n\'a pas le badge administrateur.'
-    : `Erreur : ${(e && e.message) || e}`;
+  $('erreur').textContent = messageErreur(e);
   $('erreur').hidden = false;
 }
 
-// ---------- Connexion ----------
+// ---------- Navigation ----------
 
-$('btn-signin').addEventListener('click', async () => {
-  $('signin-error').hidden = true;
+const TITRES = {
+  accueil: 'Accueil',
+  commandes: 'Commandes',
+  familles: 'Familles et tablettes',
+  stock: 'Stock de tablettes',
+  factures: 'Factures',
+  compta: 'Comptabilité',
+  outils: 'Maintenance',
+};
+const AVEC_PERIODE = ['factures', 'compta'];
+
+function pageCourante() {
+  const p = location.hash.slice(1);
+  return TITRES[p] ? p : 'accueil';
+}
+
+function afficherPage() {
+  const page = pageCourante();
+  document.querySelectorAll('.nav a[data-page]').forEach((a) => {
+    a.classList.toggle('actif', a.dataset.page === page);
+    // Sur téléphone, le menu défile : garder la section choisie visible.
+    if (a.dataset.page === page) a.scrollIntoView({ block: 'nearest', inline: 'center' });
+  });
+  document.querySelectorAll('[data-panneau]').forEach((p) => { p.hidden = p.dataset.panneau !== page; });
+  $('titre-page').textContent = TITRES[page];
+  document.title = `Papote · ${TITRES[page]}`;
+  $('periode').hidden = !AVEC_PERIODE.includes(page);
+  $('p-etat').hidden = !AVEC_PERIODE.includes(page);
+  window.scrollTo(0, 0);
+}
+window.addEventListener('hashchange', afficherPage);
+afficherPage();
+
+// ---------- Chargement ----------
+
+onAuthStateChanged(getAuth(getApp('admin')), (user) => {
+  if (!user) return;
+  chargerDonnees();
+  chargerMois();
+  changerPeriode();
+});
+
+document.addEventListener('papote:maj', () => {
+  chargerDonnees();
+  chargerMois();
+  changerPeriode();
+});
+
+async function chargerDonnees() {
   try {
-    await signInWithPopup(auth, new GoogleAuthProvider());
+    donnees = await lireDonnees();
+    $('erreur').hidden = true;
+    preparerFormulaires();
+    afficherTout();
   } catch (e) {
-    console.error(e);
-    $('signin-error').textContent = 'La connexion a échoué. Réessayez.';
-    $('signin-error').hidden = false;
+    erreur(e);
   }
-});
-$('btn-signout').addEventListener('click', () => signOut(auth));
+}
 
-onAuthStateChanged(auth, (user) => {
-  $('signin').hidden = !!user;
-  $('app').hidden = !user;
-  $('who').textContent = user ? user.email : '';
-  if (user) {
-    chargerDonnees();
-    changerPeriode();
+async function chargerMois() {
+  const n = new Date();
+  try {
+    stripeMois = await appeler('gestionStripe', {
+      debut: new Date(n.getFullYear(), n.getMonth(), 1).getTime(),
+      fin: new Date(n.getFullYear(), n.getMonth() + 1, 1).getTime(),
+    });
+    afficherAccueil();
+  } catch (e) {
+    console.warn('Stripe (mois en cours)', e);
   }
-});
+}
 
-// ---------- Onglets ----------
-
-document.querySelectorAll('[data-onglet]').forEach((b) => b.addEventListener('click', () => {
-  document.querySelectorAll('[data-onglet]').forEach((x) => x.setAttribute('aria-selected', String(x === b)));
-  document.querySelectorAll('[data-panneau]').forEach((p) => { p.hidden = p.dataset.panneau !== b.dataset.onglet; });
-  // Stock et commandes ne dépendent pas de la période.
-  $('periode').hidden = ['stock', 'commandes'].includes(b.dataset.onglet);
-}));
+function afficherTout() {
+  if (donnees) {
+    afficherAccueil();
+    afficherStock();
+    afficherCommandes();
+  }
+  if (donnees && stripe) {
+    afficherBilan();
+    afficherFactures();
+    afficherCompta();
+  }
+}
 
 // ---------- Période ----------
 
@@ -179,7 +285,8 @@ function etiquettePeriode() {
   return `${iso(periode.debut)}_${iso(periode.fin - 1)}`;
 }
 
-const dansPeriode = (ms) => ms != null && ms >= periode.debut && ms < periode.fin;
+const dans = (p, ms) => ms != null && ms >= p.debut && ms < p.fin;
+const dansPeriode = (ms) => dans(periode, ms);
 
 let demande = 0;
 async function changerPeriode() {
@@ -194,13 +301,12 @@ async function changerPeriode() {
   periode = { debut: p.debut.getTime(), fin: p.fin.getTime() };
   $('bilan-titre').textContent = `Bilan Papote du ${jour(periode.debut)} au ${jour(periode.fin - 1)}`;
   $('p-etat').textContent = 'Lecture de Stripe…';
-  $('erreur').hidden = true;
   const n = ++demande;
   try {
     const r = await appeler('gestionStripe', periode);
     if (n !== demande) return;
     stripe = r;
-    $('p-etat').textContent = `Du ${jour(periode.debut)} au ${jour(periode.fin - 1)} · lu à ${new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
+    $('p-etat').textContent = `Du ${jour(periode.debut)} au ${jour(periode.fin - 1)}`;
     afficherTout();
   } catch (e) {
     if (n === demande) {
@@ -213,41 +319,10 @@ $('p-choix').addEventListener('change', changerPeriode);
 $('p-du').addEventListener('change', changerPeriode);
 $('p-au').addEventListener('change', changerPeriode);
 
-async function chargerDonnees() {
-  try {
-    donnees = await appeler('gestionDonnees');
-    preparerFormulaires();
-    afficherTout();
-  } catch (e) {
-    erreur(e);
-  }
-}
-
-function afficherTout() {
-  if (donnees) {
-    afficherStock();
-    afficherCommandes();
-  }
-  if (donnees && stripe) {
-    afficherBilan();
-    afficherFactures();
-    afficherCompta();
-  }
-}
-
 // ---------- Calculs ----------
 
 const ENCAISSEMENTS = ['abonnement', 'tablette-non-rendue'];
 
-function recettes() {
-  return stripe.mouvements.filter((m) => ENCAISSEMENTS.includes(m.nature) || m.nature === 'remboursement' || m.nature === 'litige');
-}
-
-function depensesPeriode() {
-  return donnees.depenses.filter((d) => dansPeriode(d.date)).sort((a, b) => a.date - b.date);
-}
-
-// Totaux d'une liste de mouvements et de dépenses.
 function totaux(mouvements, depenses) {
   const t = { encaisse: 0, rembourse: 0, frais: 0, depenses: 0 };
   for (const m of mouvements) {
@@ -261,6 +336,10 @@ function totaux(mouvements, depenses) {
   t.resultat = t.net - t.depenses;
   return t;
 }
+
+const depensesDe = (p) => donnees.depenses.filter((d) => dans(p, d.date)).sort((a, b) => a.date - b.date);
+const depensesPeriode = () => depensesDe(periode);
+const recettes = () => stripe.mouvements.filter((m) => ENCAISSEMENTS.includes(m.nature) || m.nature === 'remboursement' || m.nature === 'litige');
 
 function moisDeLaPeriode() {
   const cles = [];
@@ -301,7 +380,6 @@ const ETATS_COMMANDE = {
   terminee: ['Terminée', ''],
   annulee: ['Annulée', ''],
 };
-
 const ABONNEMENTS = {
   offert: 'offert', actif: 'actif', impaye: 'impayé', suspendu: 'suspendu', resilie: 'résilié', aucun: 'sans abonnement',
   canceled: 'résilié', active: 'actif', trialing: 'en essai', past_due: 'impayé',
@@ -315,153 +393,75 @@ const REMBOURSEMENTS = {
 const FORMULES = { wifi: 'Wi-Fi', sim: 'Internet inclus' };
 const formuleTexte = (c) => [FORMULES[c.formule] || c.formule, c.tablette === 'achetee' ? 'tablette achetée' : null]
   .filter(Boolean).join(', ');
+const nomCommande = (c) => [codeCommande(c.code), c.nom || c.email].filter(Boolean).join(' · ') || c.id;
 
-function nomCommande(c) {
-  return [codeCommande(c.code), c.nom || c.email].filter(Boolean).join(' · ') || c.id;
+// État affiché d'une tablette : « Envoyée » devient « Chez le client » dès que la famille est jumelée.
+function etatTablette(t) {
+  const c = t.commande && donnees.commandes.find((x) => x.id === t.commande);
+  if (t.etat === 'envoyee' && c && c.fid) return 'chez-client';
+  return t.etat;
 }
+const ETATS_OK = ['chez-client'];
+const ETATS_KO = ['perdue', 'hors-service', 'a-reparer', 'revenue'];
+const classeEtat = (e) => (ETATS_OK.includes(e) ? 'ok' : ETATS_KO.includes(e) ? 'ko' : e === 'en-stock' ? 'info' : '');
 
-// ---------- Bilan ----------
-
-function afficherBilan() {
-  const t = totaux(stripe.mouvements, depensesPeriode());
-  $('kpi-argent').replaceChildren(
-    stat(euros(t.encaisse), 'encaissé', pluriel(stripe.mouvements.filter((m) => ENCAISSEMENTS.includes(m.nature)).length, 'paiement')),
-    stat(euros(t.rembourse), 'remboursé'),
-    stat(euros(t.frais), 'frais Stripe'),
-    stat(euros(t.depenses), 'dépenses'),
-    stat(euros(t.resultat), 'résultat', null, t.resultat < 0 ? 'neg' : null),
-  );
-
-  const abos = stripe.abonnements;
-  const enCours = abos.filter((a) => ['active', 'trialing', 'past_due'].includes(a.statut));
-  const payants = enCours.filter((a) => a.statut !== 'trialing');
-  const mrr = payants.reduce((s, a) => s + a.mensuel, 0);
-  const commandes = donnees.commandes.filter((c) => dansPeriode(c.creeLe));
-  const resilies = abos.filter((a) => dansPeriode(a.finLe));
-  $('kpi-activite').replaceChildren(
-    stat(String(enCours.length), 'abonnements en cours',
-      `${enCours.filter((a) => a.statut === 'trialing').length} en essai · ${enCours.filter((a) => a.statut === 'past_due').length} impayé(s)`),
-    stat(euros(mrr), 'revenu mensuel', 'abonnements payants, par mois'),
-    stat(String(commandes.length), 'commandes sur la période',
-      `${commandes.filter((c) => c.formule === 'sim').length} avec internet inclus`),
-    stat(String(resilies.length), 'abonnements terminés sur la période'),
-  );
-
-  const lignes = bilanMensuel();
-  const total = totaux(stripe.mouvements, depensesPeriode());
-  const montant = (c, neg) => h('span', { class: neg && c ? 'neg' : null }, euros(c));
-  remplirTable($('t-bilan'), [
-    { titre: 'Mois' }, { titre: 'Encaissé', n: 1 }, { titre: 'Remboursé', n: 1 }, { titre: 'Frais Stripe', n: 1 },
-    { titre: 'Net', n: 1 }, { titre: 'Dépenses', n: 1 }, { titre: 'Résultat', n: 1 },
-  ], lignes.map((l) => [moisNom(l.cle), euros(l.encaisse), euros(l.rembourse), euros(l.frais), euros(l.net),
-    euros(l.depenses), montant(l.resultat, l.resultat < 0)]),
-  { total: ['Total', euros(total.encaisse), euros(total.rembourse), euros(total.frais), euros(total.net),
-    euros(total.depenses), montant(total.resultat, total.resultat < 0)] });
-
-  const parCat = {};
-  for (const d of depensesPeriode()) parCat[d.categorie] = (parCat[d.categorie] || 0) + d.montant;
-  remplirTable($('t-categories'), [{ titre: 'Catégorie' }, { titre: 'Montant', n: 1 }],
-    Object.entries(parCat).sort((a, b) => b[1] - a[1]).map(([k, v]) => [donnees.categories[k] || k, euros(v)]),
-    { vide: 'Aucune dépense sur cette période.' });
+// Pièces d'une tablette : les siennes et celles de son achat.
+function piecesTablette(t) {
+  const achat = t.depense && donnees.depenses.find((d) => d.id === t.depense);
+  return [...(t.pieces || []), ...((achat && achat.pieces) || [])];
 }
-
-$('x-bilan').addEventListener('click', () => {
-  const l = bilanMensuel();
-  const t = totaux(stripe.mouvements, depensesPeriode());
-  csv('bilan', ['Mois', 'Encaissé', 'Remboursé', 'Frais Stripe', 'Net', 'Dépenses', 'Résultat'],
-    [...l.map((x) => [moisNom(x.cle), csvMontant(x.encaisse), csvMontant(x.rembourse), csvMontant(x.frais),
-      csvMontant(x.net), csvMontant(x.depenses), csvMontant(x.resultat)]),
-    ['Total', csvMontant(t.encaisse), csvMontant(t.rembourse), csvMontant(t.frais), csvMontant(t.net),
-      csvMontant(t.depenses), csvMontant(t.resultat)]]);
-});
-$('imprimer').addEventListener('click', () => window.print());
-
-// ---------- Stock ----------
 
 const DISPONIBLES = ['en-stock', 'preparee'];
-const CHEZ_CLIENTS = ['envoyee', 'chez-client', 'en-retour'];
 
-function afficherStock() {
-  const stock = donnees.stock;
-  const compte = (etats) => stock.filter((t) => etats.includes(t.etat)).length;
-  const valeur = (etats) => stock.filter((t) => etats.includes(t.etat)).reduce((s, t) => s + (t.prixAchat || 0), 0);
-  const aEnvoyer = donnees.commandes.filter((c) => etatCommande(c) === 'a-envoyer').length;
-  const dispo = compte(DISPONIBLES);
-  $('kpi-stock').replaceChildren(
-    stat(String(dispo), 'disponibles', `valeur ${euros(valeur(DISPONIBLES))}`, dispo < aEnvoyer ? 'neg' : null),
-    stat(String(aEnvoyer), 'commandes à envoyer'),
-    stat(String(compte(CHEZ_CLIENTS)), 'chez les clients', `valeur ${euros(valeur(CHEZ_CLIENTS))}`),
-    stat(String(compte(['a-reparer'])), 'à réparer'),
-    stat(String(compte(['perdue', 'hors-service'])), 'perdues ou hors service'),
-  );
-  const manque = aEnvoyer - dispo;
-  $('alerte-stock').hidden = manque <= 0;
-  $('alerte-stock').textContent = manque > 0
-    ? `Il manque ${manque} tablette${manque > 1 ? 's' : ''} pour envoyer toutes les commandes.` : '';
+// ---------- Accueil ----------
 
-  const filtre = $('filtre-stock').value;
-  const liste = stock.filter((t) => !filtre || t.etat === filtre)
-    .sort((a, b) => (b.acheteeLe || 0) - (a.acheteeLe || 0));
-  $('stock-vide').hidden = stock.length > 0;
-  const commandes = donnees.commandes.slice().sort((a, b) => (b.creeLe || 0) - (a.creeLe || 0));
-  const prises = new Set(stock.map((t) => t.commande).filter(Boolean));
+function afficherAccueil() {
+  if (!donnees) return;
+  const cmd = donnees.commandes;
+  const aEnvoyer = cmd.filter((c) => etatCommande(c) === 'a-envoyer').length;
+  const aRecuperer = cmd.filter((c) => etatCommande(c) === 'retour').length;
+  const sansJumelage = cmd.filter((c) => etatCommande(c) === 'en-route' && c.envoyeeLe && Date.now() - c.envoyeeLe > 20 * 864e5).length;
+  const aRembourser = cmd.filter((c) => c.remboursement && c.remboursement.statut === 'echec').length;
+  const dispo = donnees.stock.filter((t) => DISPONIBLES.includes(t.etat) && !t.commande).length;
+  const manque = Math.max(0, aEnvoyer - dispo);
+  const aVerifier = donnees.stock.filter((t) => t.etat === 'revenue').length;
+  const impayees = stripeMois ? stripeMois.abonnements.filter((a) => a.statut === 'past_due').length : 0;
 
-  remplirTable($('t-stock'), [
-    { titre: 'N° de série' }, { titre: 'Modèle' }, { titre: 'État' }, { titre: 'Commande' }, { titre: 'SIM' },
-    { titre: 'Notes' }, { titre: 'Prix', n: 1 }, { titre: 'Achetée le' }, { titre: '' },
-  ], liste.map((t) => {
-    const enregistrer = (champ) => (e) => modifierTablette(t.id, { [champ]: e.target.value });
-    const supprimable = t.etat === 'en-stock' && !t.commande && (t.historique || []).length <= 1;
-    return [
-      h('input', { value: t.numero || '', placeholder: 'à saisir', onchange: enregistrer('numero') }),
-      t.modele || '',
-      h('select', { onchange: enregistrer('etat') },
-        Object.entries(donnees.etats).map(([k, v]) => h('option', { value: k, selected: k === t.etat }, v))),
-      h('select', { onchange: enregistrer('commande') },
-        h('option', { value: '' }, '—'),
-        commandes.filter((c) => c.id === t.commande || (!prises.has(c.id) && c.expedition !== 'annulee'))
-          .map((c) => h('option', { value: c.id, selected: c.id === t.commande }, nomCommande(c)))),
-      h('input', { value: t.sim || '', placeholder: 'n° de ligne', onchange: enregistrer('sim') }),
-      h('input', { value: t.notes || '', onchange: enregistrer('notes') }),
-      euros(t.prixAchat),
-      jour(t.acheteeLe),
-      supprimable ? h('button', {
-        type: 'button', class: 'link danger', title: 'Erreur de saisie', onclick: () => supprimerTablette(t),
-      }, 'Retirer') : '',
-    ];
-  }), { vide: 'Aucune tablette.' });
-}
-$('filtre-stock').addEventListener('change', afficherStock);
+  const taches = [
+    [aEnvoyer, pluriel(aEnvoyer, 'tablette') + ' à envoyer', '#commandes', manque ? 'ko' : ''],
+    [manque, `Il manque ${pluriel(manque, 'tablette')} en stock pour les envoyer`, '#stock', 'ko'],
+    [sansJumelage, `${pluriel(sansJumelage, 'tablette')} reçue${sansJumelage > 1 ? 's' : ''} mais pas jumelée${sansJumelage > 1 ? 's' : ''} après 20 jours : appeler le client`, '#commandes', 'ko'],
+    [aRecuperer, `${pluriel(aRecuperer, 'tablette')} à récupérer`, '#commandes', ''],
+    [aVerifier, `${pluriel(aVerifier, 'tablette')} revenue${aVerifier > 1 ? 's' : ''}, à vérifier avant de remettre en stock`, '#stock', ''],
+    [aRembourser, `${pluriel(aRembourser, 'remboursement')} échoué${aRembourser > 1 ? 's' : ''}, à faire depuis Stripe`, '#commandes', 'ko'],
+    [impayees, `${pluriel(impayees, 'abonnement')} impayé${impayees > 1 ? 's' : ''}`, '#factures', 'ko'],
+  ].filter(([n]) => n > 0);
+  $('a-faire').replaceChildren(...(taches.length
+    ? taches.map(([, texte, lien, classe]) => h('li', {}, h('a', { href: lien, class: classe }, texte, h('span', { 'aria-hidden': 'true' }, '›'))))
+    : [h('li', { class: 'muted' }, 'Rien à faire pour le moment.')]));
 
-async function modifierTablette(id, champs) {
-  try {
-    await appeler('gestionStock', { action: 'modifier', id, champs });
-    await chargerDonnees();
-  } catch (e) {
-    erreur(e);
-    chargerDonnees();
+  const pastille = (id, n) => {
+    $(id).hidden = !n;
+    $(id).textContent = n || '';
+  };
+  pastille('n-accueil', taches.length);
+  pastille('n-commandes', aEnvoyer + aRecuperer);
+  pastille('n-stock', manque + aVerifier);
+
+  if (stripeMois) {
+    const n = new Date();
+    const mois = { debut: new Date(n.getFullYear(), n.getMonth(), 1).getTime(), fin: new Date(n.getFullYear(), n.getMonth() + 1, 1).getTime() };
+    const t = totaux(stripeMois.mouvements, depensesDe(mois));
+    const enCours = stripeMois.abonnements.filter((a) => ['active', 'trialing', 'past_due'].includes(a.statut));
+    $('kpi-mois').replaceChildren(
+      stat(euros(t.encaisse), 'encaissé'),
+      stat(euros(t.depenses), 'dépensé'),
+      stat(euros(t.resultat), 'résultat', null, t.resultat < 0 ? 'neg' : null),
+      stat(String(cmd.filter((c) => dans(mois, c.creeLe)).length), 'nouvelles commandes'),
+      stat(String(enCours.length), 'abonnements en cours'),
+    );
   }
 }
-
-async function supprimerTablette(t) {
-  if (!confirm(`Retirer la tablette ${t.numero || t.modele || ''} du stock (erreur de saisie) ?`)) return;
-  try {
-    await appeler('gestionStock', { action: 'supprimer', id: t.id });
-    await chargerDonnees();
-  } catch (e) {
-    erreur(e);
-  }
-}
-
-$('x-stock').addEventListener('click', () => {
-  const parId = new Map(donnees.commandes.map((c) => [c.id, c]));
-  csv('stock', ['N° de série', 'Modèle', 'Fournisseur', 'État', 'Commande', 'Client', 'SIM', 'Prix d\'achat', 'Achetée le', 'Notes'],
-    donnees.stock.map((t) => {
-      const c = parId.get(t.commande);
-      return [t.numero, t.modele, t.fournisseur, donnees.etats[t.etat] || t.etat, c ? codeCommande(c.code) : '',
-        c ? c.nom || c.email : '', t.sim, csvMontant(t.prixAchat), jour(t.acheteeLe), t.notes];
-    }));
-});
 
 // ---------- Commandes ----------
 
@@ -472,31 +472,30 @@ function afficherCommandes() {
   $('kpi-commandes').replaceChildren(
     stat(String(toutes.length), 'commandes au total'),
     stat(String(parEtat['a-envoyer'] || 0), 'à envoyer'),
-    stat(String(parEtat['en-route'] || 0), 'envoyées, pas jumelées'),
+    stat(String(parEtat['en-route'] || 0), 'en route'),
     stat(String(parEtat.active || 0), 'en service'),
-    stat(String(parEtat.retour || 0), 'tablettes à récupérer', null, parEtat.retour ? 'neg' : null),
+    stat(String(parEtat.retour || 0), 'à récupérer', null, parEtat.retour ? 'neg' : null),
   );
   const filtre = $('filtre-commandes').value;
   const tablettes = new Map(donnees.stock.filter((t) => t.commande).map((t) => [t.commande, t]));
   remplirTable($('t-commandes'), [
     { titre: 'Date' }, { titre: 'Code' }, { titre: 'Client' }, { titre: 'Formule' }, { titre: 'État' },
-    { titre: 'Famille' }, { titre: 'Tablette' }, { titre: 'Retour / remboursement' },
+    { titre: 'Famille' }, { titre: 'Tablette' },
   ], toutes.filter((c) => !filtre || etatCommande(c) === filtre).map((c) => {
     const [texte, classe] = ETATS_COMMANDE[etatCommande(c)];
     const t = tablettes.get(c.id);
-    const r = c.restitution;
-    const rb = c.remboursement;
-    return [
-      jour(c.creeLe),
-      codeCommande(c.code),
-      h('div', {}, c.nom || '', h('br'), h('span', { class: 'muted' }, [c.email, c.telephone].filter(Boolean).join(' · '))),
-      formuleTexte(c),
-      h('div', {}, badge(texte, classe), c.suivi ? h('div', { class: 'muted' }, `Suivi ${c.suivi}`) : null),
-      c.famille ? `${c.famille}${c.abonnement ? ` (${ABONNEMENTS[c.abonnement] || c.abonnement})` : ''}` : '',
-      t ? t.numero || t.modele || 'affectée' : (etatCommande(c) === 'a-envoyer' ? h('span', { class: 'muted' }, 'à affecter dans Stock') : ''),
-      [r ? `${RETOURS[r.statut] || r.statut}${r.avant && r.statut === 'attendue' ? ` avant le ${jour(r.avant)}` : ''}` : null,
-        rb ? `${euros(rb.montant)} ${REMBOURSEMENTS[rb.statut] || rb.statut}` : null].filter(Boolean).join(' · '),
-    ];
+    return {
+      onclick: () => ouvrirCommande(c),
+      cellules: [
+        jour(c.creeLe),
+        codeCommande(c.code),
+        h('div', {}, c.nom || c.email || '', c.nom ? h('div', { class: 'muted' }, c.email || '') : null),
+        formuleTexte(c),
+        badge(texte, classe),
+        c.famille ? `${c.famille}${c.abonnement ? ` (${ABONNEMENTS[c.abonnement] || c.abonnement})` : ''}` : '',
+        t ? t.numero || t.modele || 'affectée' : '',
+      ],
+    };
   }), { vide: 'Aucune commande.' });
 }
 $('filtre-commandes').addEventListener('change', afficherCommandes);
@@ -511,15 +510,201 @@ $('x-commandes').addEventListener('click', () => {
       ETATS_COMMANDE[etatCommande(c)][0], c.suivi, jour(c.envoyeeLe), c.famille, ABONNEMENTS[c.abonnement] || c.abonnement,
       t ? t.numero || t.modele : '', c.restitution ? RETOURS[c.restitution.statut] || c.restitution.statut : '',
       c.remboursement ? `${csvMontant(c.remboursement.montant)} ${REMBOURSEMENTS[c.remboursement.statut] || c.remboursement.statut}` : ''];
-  }));
+  }), false);
 });
 
-// ---------- Factures ----------
+function livraisonTexte(c) {
+  const l = c.livraison || {};
+  if (l.transporteur === 'mondial-relay') {
+    return `Point relais ${l.nom || ''} (n° ${l.id || '?'}), ${[l.adresse, `${l.cp || ''} ${l.ville || ''}`.trim()].filter(Boolean).join(', ')}`;
+  }
+  const a = l.adresse || {};
+  return [l.nom, a.line1, a.line2, `${a.postal_code || ''} ${a.city || ''}`.trim()].filter(Boolean).join(', ') || '—';
+}
 
 const STATUTS_FACTURE = {
   paid: ['Payée', 'ok'], open: ['À payer', 'info'], uncollectible: ['Irrécouvrable', 'ko'],
   void: ['Annulée', ''], draft: ['Brouillon', ''],
 };
+
+// Fiche d'une commande : client, livraison, tablette, factures et paiements Stripe.
+async function ouvrirCommande(c) {
+  const t = donnees.stock.find((x) => x.commande === c.id);
+  const [texte, classe] = ETATS_COMMANDE[etatCommande(c)];
+  $('dc-titre').textContent = `Commande ${codeCommande(c.code)}`;
+  const ligne = (k, v) => (v ? [h('dt', {}, k), h('dd', {}, v)] : []);
+  const factures = h('div', {}, h('p', { class: 'muted small' }, 'Lecture des factures…'));
+  $('dc-corps').replaceChildren(
+    h('dl', { class: 'fiche' },
+      ligne('État', badge(texte, classe)),
+      ligne('Commandée le', jour(c.creeLe)),
+      ligne('Client', [c.nom, c.email, c.telephone].filter(Boolean).join(' · ')),
+      ligne('Formule', formuleTexte(c)),
+      ligne('Livraison', livraisonTexte(c)),
+      ligne('Suivi', c.suivi ? `${c.suivi}${c.envoyeeLe ? `, envoyée le ${jour(c.envoyeeLe)}` : ''}` : null),
+      ligne('Famille', c.famille ? `${c.famille}${c.abonnement ? ` (${ABONNEMENTS[c.abonnement] || c.abonnement})` : ''}` : null),
+      ligne('Tablette', t ? [t.numero || 'sans n° de série', t.modele].filter(Boolean).join(' · ') : null),
+      ligne('Retour', c.restitution ? `${RETOURS[c.restitution.statut] || c.restitution.statut}${c.restitution.avant && c.restitution.statut === 'attendue' ? ` avant le ${jour(c.restitution.avant)}` : ''}` : null),
+      ligne('Remboursement', c.remboursement ? `${euros(c.remboursement.montant)} ${REMBOURSEMENTS[c.remboursement.statut] || c.remboursement.statut}` : null)),
+    h('h3', {}, 'Factures et paiements'),
+    factures,
+  );
+  $('d-commande').showModal();
+  try {
+    const r = await appeler('gestionCommande', { commande: c.id });
+    const table = h('table');
+    remplirTable(table, [{ titre: 'Date' }, { titre: 'N°' }, { titre: 'Détail' }, { titre: 'Montant', n: 1 }, { titre: 'Statut' }, { titre: '' }],
+      r.factures.sort((a, b) => b.le - a.le).map((f) => {
+        const [s, cl] = STATUTS_FACTURE[f.statut] || [f.statut, ''];
+        return [jour(f.le), f.numero || '—', f.lignes, euros(f.total), badge(s, cl),
+          f.lienPdf ? h('a', { href: f.lienPdf, target: '_blank', rel: 'noopener' }, 'PDF') : ''];
+      }), { vide: 'Aucune facture pour cette commande.' });
+    // Paiements sans facture (tablette non rendue) et remboursements.
+    const autres = r.paiements.filter((p) => !p.facture || p.rembourse);
+    const table2 = h('table');
+    if (autres.length) {
+      remplirTable(table2, [{ titre: 'Date' }, { titre: 'Paiement' }, { titre: 'Montant', n: 1 }, { titre: 'Remboursé', n: 1 }, { titre: '' }],
+        autres.map((p) => [jour(p.le), p.description || (p.facture ? 'Abonnement' : 'Paiement'), euros(p.montant),
+          p.rembourse ? euros(p.rembourse) : '', p.recu ? h('a', { href: p.recu, target: '_blank', rel: 'noopener' }, 'Reçu') : '']));
+    }
+    factures.replaceChildren(h('div', { class: 'table' }, table), ...(autres.length ? [h('div', { class: 'table' }, table2)] : []));
+  } catch (e) {
+    factures.replaceChildren(h('p', { class: 'error small' }, messageErreur(e)));
+  }
+}
+
+// ---------- Stock ----------
+
+function afficherStock() {
+  const stock = donnees.stock.map((t) => ({ ...t, affiche: etatTablette(t) }));
+  const compte = (etats) => stock.filter((t) => etats.includes(t.affiche)).length;
+  const valeur = (etats) => stock.filter((t) => etats.includes(t.affiche)).reduce((s, t) => s + (t.prixAchat || 0), 0);
+  const aEnvoyer = donnees.commandes.filter((c) => etatCommande(c) === 'a-envoyer').length;
+  const dispo = stock.filter((t) => DISPONIBLES.includes(t.etat) && !t.commande).length;
+  const chez = ['envoyee', 'chez-client', 'en-retour'];
+  $('kpi-stock').replaceChildren(
+    stat(String(dispo), 'disponibles', `valeur ${euros(valeur(DISPONIBLES))}`, dispo < aEnvoyer ? 'neg' : null),
+    stat(String(aEnvoyer), 'commandes à envoyer'),
+    stat(String(compte(chez)), 'chez les clients', `valeur ${euros(valeur(chez))}`),
+    stat(String(compte(['revenue', 'a-reparer'])), 'à vérifier ou réparer'),
+    stat(String(compte(['perdue', 'hors-service'])), 'perdues ou hors service'),
+  );
+  const manque = aEnvoyer - dispo;
+  $('alerte-stock').hidden = manque <= 0;
+  $('alerte-stock').textContent = manque > 0
+    ? `Il manque ${pluriel(manque, 'tablette')} pour envoyer toutes les commandes.` : '';
+
+  const filtre = $('filtre-stock').value;
+  const parId = new Map(donnees.commandes.map((c) => [c.id, c]));
+  $('stock-vide').hidden = stock.length > 0;
+  remplirTable($('t-stock'), [
+    { titre: 'N° de série' }, { titre: 'Modèle' }, { titre: 'État' }, { titre: 'Commande' }, { titre: 'SIM' },
+    { titre: 'Pièces' }, { titre: 'Prix', n: 1 }, { titre: 'Achetée le' },
+  ], stock.filter((t) => !filtre || t.affiche === filtre)
+    .sort((a, b) => (b.acheteeLe || 0) - (a.acheteeLe || 0))
+    .map((t) => {
+      const c = parId.get(t.commande);
+      return {
+        onclick: () => ouvrirTablette(t.id),
+        cellules: [
+          t.numero || h('span', { class: 'muted' }, 'à saisir'),
+          t.modele || '',
+          badge(donnees.etats[t.affiche] || t.affiche, classeEtat(t.affiche)),
+          c ? nomCommande(c) : '',
+          t.sim || '',
+          h('div', { class: 'pieces-liste' }, piecesTablette(t).map(lienPiece)),
+          euros(t.prixAchat),
+          jour(t.acheteeLe),
+        ],
+      };
+    }), { vide: 'Aucune tablette.' });
+}
+$('filtre-stock').addEventListener('change', afficherStock);
+
+$('x-stock').addEventListener('click', () => {
+  const parId = new Map(donnees.commandes.map((c) => [c.id, c]));
+  csv('stock', ['N° de série', 'Modèle', 'Fournisseur', 'État', 'Commande', 'Client', 'SIM', 'Prix d\'achat', 'Achetée le', 'Notes'],
+    donnees.stock.map((t) => {
+      const c = parId.get(t.commande);
+      return [t.numero, t.modele, t.fournisseur, donnees.etats[etatTablette(t)] || t.etat, c ? codeCommande(c.code) : '',
+        c ? c.nom || c.email : '', t.sim, csvMontant(t.prixAchat), jour(t.acheteeLe), t.notes];
+    }), false);
+});
+
+// Fiche d'une tablette : modification, pièces jointes, historique.
+let tabletteOuverte = null;
+function ouvrirTablette(id) {
+  const t = donnees.stock.find((x) => x.id === id);
+  if (!t) return;
+  tabletteOuverte = t.id;
+  const f = $('f-tablette');
+  $('dt-titre').textContent = `Tablette ${t.numero || t.modele || ''}`.trim();
+  f.numero.value = t.numero || '';
+  f.modele.value = t.modele || '';
+  f.sim.value = t.sim || '';
+  f.notes.value = t.notes || '';
+  f.etat.replaceChildren(...Object.entries(donnees.etats).map(([k, v]) => h('option', { value: k, selected: k === t.etat }, v)));
+  const prises = new Set(donnees.stock.filter((x) => x.id !== t.id).map((x) => x.commande).filter(Boolean));
+  f.commande.replaceChildren(h('option', { value: '' }, 'Aucune'),
+    ...donnees.commandes.filter((c) => c.id === t.commande || (!prises.has(c.id) && c.expedition !== 'annulee'))
+      .sort((a, b) => (b.creeLe || 0) - (a.creeLe || 0))
+      .map((c) => h('option', { value: c.id, selected: c.id === t.commande }, nomCommande(c))));
+  $('dt-pieces').replaceChildren(...(t.pieces || []).map((p) => h('li', {}, lienPiece(p),
+    h('button', { type: 'button', class: 'link danger small', onclick: () => retirerPiece('stock', t.id, p) }, 'Retirer'))),
+  ...piecesTablette(t).filter((p) => !(t.pieces || []).includes(p)).map((p) => h('li', {}, lienPiece(p), h('span', { class: 'muted small' }, ' (achat)'))));
+  if (!$('dt-pieces').children.length) $('dt-pieces').append(h('li', { class: 'muted small' }, 'Aucune.'));
+  $('dt-historique').replaceChildren(...(t.historique || []).filter((x) => x.le).reverse().map((x) => h('li', {},
+    `${new Date(x.le).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })} : ${donnees.etats[x.etat] || x.etat}`)));
+  $('dt-retirer').hidden = !(t.etat === 'en-stock' && !t.commande && (t.historique || []).length <= 1);
+  f.querySelector('.f-msg').hidden = true;
+  $('d-tablette').showModal();
+}
+
+$('f-tablette').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const f = e.target;
+  await enregistrer(f, async () => {
+    await appeler('gestionStock', {
+      action: 'modifier',
+      id: tabletteOuverte,
+      champs: {
+        numero: f.numero.value, modele: f.modele.value, etat: f.etat.value, commande: f.commande.value || null,
+        sim: f.sim.value, notes: f.notes.value,
+      },
+    });
+    $('d-tablette').close();
+  });
+});
+
+$('dt-fichier').addEventListener('change', async (e) => {
+  const fichiers = [...e.target.files];
+  e.target.value = '';
+  if (!fichiers.length) return;
+  await enregistrer($('f-tablette'), () => envoyerPieces('stock', tabletteOuverte, fichiers), 'Envoi…');
+  ouvrirTablette(tabletteOuverte);
+});
+
+$('dt-retirer').addEventListener('click', async () => {
+  if (!confirm('Retirer cette tablette du stock (erreur de saisie) ?')) return;
+  await enregistrer($('f-tablette'), async () => {
+    await appeler('gestionStock', { action: 'supprimer', id: tabletteOuverte });
+    $('d-tablette').close();
+  });
+});
+
+async function retirerPiece(collection, id, piece) {
+  if (!confirm(`Retirer « ${piece.nom} » ?`)) return;
+  try {
+    await appeler('gestionPiece', { action: 'retirer', collection, id, chemin: piece.chemin });
+    donnees = await lireDonnees(true);
+    afficherTout();
+    if (collection === 'stock') ouvrirTablette(id);
+  } catch (e) {
+    alert(messageErreur(e));
+  }
+}
+
+// ---------- Factures ----------
 
 function afficherFactures() {
   const toutes = stripe.factures.slice().sort((a, b) => b.le - a.le);
@@ -530,16 +715,21 @@ function afficherFactures() {
   $('kpi-factures').replaceChildren(
     stat(String(toutes.filter((f) => f.statut !== 'draft' && f.statut !== 'void').length), 'factures émises'),
     stat(euros(somme(toutes.filter((f) => f.statut === 'paid'), 'total')), 'facturé et payé'),
-    stat(euros(somme(ouvertes, 'du')), 'reste à encaisser', `${ouvertes.length} facture(s)`, ouvertes.length ? 'neg' : null),
+    stat(euros(somme(ouvertes, 'du')), 'reste à encaisser', pluriel(ouvertes.length, 'facture'), ouvertes.length ? 'neg' : null),
   );
+  const parAbonnement = new Map(donnees ? donnees.commandes.map((c) => [c.id, c]) : []);
   remplirTable($('t-factures'), [
     { titre: 'N°' }, { titre: 'Date' }, { titre: 'Client' }, { titre: 'Détail' }, { titre: 'HT', n: 1 },
     { titre: 'TVA', n: 1 }, { titre: 'TTC', n: 1 }, { titre: 'Statut' }, { titre: '' },
   ], liste.map((f) => {
     const [texte, classe] = STATUTS_FACTURE[f.statut] || [f.statut, ''];
-    return [f.numero || '—', jour(f.le), h('div', {}, f.client || '', h('br'), h('span', { class: 'muted' }, f.email || '')),
-      f.lignes, euros(f.ht), euros(f.tva), euros(f.total), badge(texte, classe),
-      f.lienPdf ? h('a', { href: f.lienPdf, target: '_blank', rel: 'noopener' }, 'PDF') : ''];
+    const c = parAbonnement.get(f.abonnement);
+    return {
+      onclick: c ? () => ouvrirCommande(c) : null,
+      cellules: [f.numero || '—', jour(f.le), h('div', {}, f.client || '', h('div', { class: 'muted' }, f.email || '')),
+        f.lignes, euros(f.ht), euros(f.tva), euros(f.total), badge(texte, classe),
+        f.lienPdf ? h('a', { href: f.lienPdf, target: '_blank', rel: 'noopener', onclick: (e) => e.stopPropagation() }, 'PDF') : ''],
+    };
   }), {
     total: liste.length ? ['Total', '', '', '', euros(somme(liste, 'ht')), euros(somme(liste, 'tva')), euros(somme(liste, 'total')), '', ''] : null,
   });
@@ -556,6 +746,35 @@ $('x-factures').addEventListener('click', exporterFactures);
 
 // ---------- Comptabilité ----------
 
+function afficherBilan() {
+  const t = totaux(stripe.mouvements, depensesPeriode());
+  $('kpi-argent').replaceChildren(
+    stat(euros(t.encaisse), 'encaissé', pluriel(stripe.mouvements.filter((m) => ENCAISSEMENTS.includes(m.nature)).length, 'paiement')),
+    stat(euros(t.rembourse), 'remboursé'),
+    stat(euros(t.frais), 'frais Stripe'),
+    stat(euros(t.depenses), 'dépenses'),
+    stat(euros(t.resultat), 'résultat', null, t.resultat < 0 ? 'neg' : null),
+  );
+  const abos = stripe.abonnements;
+  const enCours = abos.filter((a) => ['active', 'trialing', 'past_due'].includes(a.statut));
+  const mrr = enCours.filter((a) => a.statut !== 'trialing').reduce((s, a) => s + a.mensuel, 0);
+  const commandes = donnees.commandes.filter((c) => dansPeriode(c.creeLe));
+  $('kpi-activite').replaceChildren(
+    stat(String(enCours.length), 'abonnements en cours',
+      `${enCours.filter((a) => a.statut === 'trialing').length} en essai · ${enCours.filter((a) => a.statut === 'past_due').length} impayé(s)`),
+    stat(euros(mrr), 'revenu mensuel', 'abonnements payants'),
+    stat(String(commandes.length), 'commandes', `${commandes.filter((c) => c.formule === 'sim').length} avec internet inclus`),
+    stat(String(abos.filter((a) => dansPeriode(a.finLe)).length), 'abonnements terminés'),
+  );
+  const montant = (c) => h('span', { class: c < 0 ? 'neg' : null }, euros(c));
+  remplirTable($('t-bilan'), [
+    { titre: 'Mois' }, { titre: 'Encaissé', n: 1 }, { titre: 'Remboursé', n: 1 }, { titre: 'Frais Stripe', n: 1 },
+    { titre: 'Net', n: 1 }, { titre: 'Dépenses', n: 1 }, { titre: 'Résultat', n: 1 },
+  ], bilanMensuel().map((l) => [moisNom(l.cle), euros(l.encaisse), euros(l.rembourse), euros(l.frais), euros(l.net),
+    euros(l.depenses), montant(l.resultat)]),
+  { total: ['Total', euros(t.encaisse), euros(t.rembourse), euros(t.frais), euros(t.net), euros(t.depenses), montant(t.resultat)] });
+}
+
 const NATURES = {
   abonnement: 'Abonnement Papote',
   'tablette-non-rendue': 'Tablette non rendue',
@@ -568,32 +787,61 @@ const NATURES = {
 
 function numeroFacture(id) {
   const f = id && stripe.factures.find((x) => x.id === id);
-  return f ? f.numero : id || '';
+  return f ? f.numero : '';
 }
 
-function afficherCompta() {
-  const lignes = recettes().sort((a, b) => a.le - b.le);
-  const somme = (k) => lignes.reduce((s, m) => s + m[k], 0);
-  const signe = (c) => h('span', { class: c < 0 ? 'neg' : null }, euros(c));
-  remplirTable($('t-recettes'), [
-    { titre: 'Date' }, { titre: 'Facture' }, { titre: 'Client' }, { titre: 'Nature' }, { titre: 'Règlement' },
-    { titre: 'Montant', n: 1 }, { titre: 'Frais', n: 1 }, { titre: 'Net', n: 1 },
-  ], lignes.map((m) => [jour(m.le), numeroFacture(m.facture), m.client || m.email || '', NATURES[m.nature] || m.nature,
-    'Carte bancaire (Stripe)', signe(m.montant), euros(m.frais), signe(m.net)]),
-  { total: lignes.length ? ['Total', '', '', '', '', signe(somme('montant')), euros(somme('frais')), signe(somme('net'))] : null });
+let fichierDepense = null; // dépense à laquelle ajouter une pièce
+const choixFichier = h('input', { type: 'file', accept: 'application/pdf,image/*', multiple: true, hidden: true });
+document.body.append(choixFichier);
+choixFichier.addEventListener('change', async () => {
+  const fichiers = [...choixFichier.files];
+  choixFichier.value = '';
+  if (!fichiers.length || !fichierDepense) return;
+  try {
+    await envoyerPieces('depenses', fichierDepense, fichiers);
+    donnees = await lireDonnees(true);
+    afficherTout();
+  } catch (e) {
+    alert(messageErreur(e));
+  }
+});
 
+function afficherCompta() {
   const deps = depensesPeriode();
   remplirTable($('t-achats'), [
     { titre: 'Date' }, { titre: 'Fournisseur' }, { titre: 'Libellé' }, { titre: 'Catégorie' }, { titre: 'TTC', n: 1 },
-    { titre: 'dont TVA', n: 1 }, { titre: 'Justificatif' }, { titre: '' },
+    { titre: 'dont TVA', n: 1 }, { titre: 'Justificatifs' }, { titre: '' },
   ], deps.map((d) => [jour(d.date), d.fournisseur || '', d.libelle, donnees.categories[d.categorie] || d.categorie,
-    euros(d.montant), euros(d.tva), d.justificatif ? h('a', { href: d.justificatif, target: '_blank', rel: 'noopener' }, 'Voir') : '',
-    h('button', { type: 'button', class: 'link danger no-print', onclick: () => supprimerDepense(d) }, 'Supprimer')]),
+    euros(d.montant), euros(d.tva),
+    h('div', { class: 'pieces-liste' }, (d.pieces || []).map(lienPiece),
+      d.justificatif ? h('a', { href: d.justificatif, target: '_blank', rel: 'noopener' }, 'Lien') : null,
+      h('button', { type: 'button', class: 'link small no-print', onclick: () => { fichierDepense = d.id; choixFichier.click(); } }, '+ Joindre')),
+    h('button', { type: 'button', class: 'link danger small no-print', onclick: () => supprimerDepense(d) }, 'Supprimer')]),
   {
     total: deps.length ? ['Total', '', '', '', euros(deps.reduce((s, d) => s + d.montant, 0)),
       euros(deps.reduce((s, d) => s + (d.tva || 0), 0)), '', ''] : null,
     vide: 'Aucune dépense sur cette période.',
   });
+
+  const parCat = {};
+  for (const d of deps) parCat[d.categorie] = (parCat[d.categorie] || 0) + d.montant;
+  const cats = Object.entries(parCat).sort((a, b) => b[1] - a[1]);
+  if (cats.length) {
+    remplirTable($('t-categories'), [{ titre: 'Par catégorie' }, { titre: 'Montant', n: 1 }],
+      cats.map(([k, v]) => [donnees.categories[k] || k, euros(v)]));
+  } else {
+    $('t-categories').replaceChildren();
+  }
+
+  const lignes = recettes().sort((a, b) => a.le - b.le);
+  const somme = (k) => lignes.reduce((s, m) => s + m[k], 0);
+  const signe = (c) => h('span', { class: c < 0 ? 'neg' : null }, euros(c));
+  remplirTable($('t-recettes'), [
+    { titre: 'Date' }, { titre: 'Facture' }, { titre: 'Client' }, { titre: 'Nature' },
+    { titre: 'Montant', n: 1 }, { titre: 'Frais', n: 1 }, { titre: 'Net', n: 1 },
+  ], lignes.map((m) => [jour(m.le), numeroFacture(m.facture), m.client || m.email || '', NATURES[m.nature] || m.nature,
+    signe(m.montant), euros(m.frais), signe(m.net)]),
+  { total: lignes.length ? ['Total', '', '', '', signe(somme('montant')), euros(somme('frais')), signe(somme('net'))] : null });
 
   const virements = stripe.mouvements.filter((m) => m.nature === 'virement').sort((a, b) => a.le - b.le);
   remplirTable($('t-virements'), [{ titre: 'Date' }, { titre: 'Arrivée prévue' }, { titre: 'Montant', n: 1 }],
@@ -602,58 +850,70 @@ function afficherCompta() {
 }
 
 async function supprimerDepense(d) {
-  if (!confirm(`Supprimer la dépense « ${d.libelle} » (${euros(d.montant)}) ?`)) return;
+  if (!confirm(`Supprimer la dépense « ${d.libelle} » (${euros(d.montant)}) et ses justificatifs ?`)) return;
   try {
     await appeler('gestionDepense', { action: 'supprimer', id: d.id });
-    await chargerDonnees();
+    signalerChangement();
   } catch (e) {
-    erreur(e);
+    alert(messageErreur(e));
   }
 }
 
-function exporterRecettes() {
-  csv('livre-des-recettes', ['Date', 'Facture', 'Client', 'E-mail', 'Nature', 'Mode de règlement', 'Montant', 'Frais Stripe', 'Net', 'Référence Stripe'],
-    recettes().sort((a, b) => a.le - b.le).map((m) => [jour(m.le), numeroFacture(m.facture), m.client, m.email,
-      NATURES[m.nature] || m.nature, 'Carte bancaire (Stripe)', csvMontant(m.montant), csvMontant(m.frais), csvMontant(m.net), m.source || m.id]));
-}
+$('imprimer').addEventListener('click', () => window.print());
 
-function exporterAchats() {
-  csv('registre-des-achats', ['Date', 'Fournisseur', 'Libellé', 'Catégorie', 'Montant TTC', 'dont TVA', 'Justificatif'],
-    depensesPeriode().map((d) => [jour(d.date), d.fournisseur, d.libelle, donnees.categories[d.categorie] || d.categorie,
-      csvMontant(d.montant), csvMontant(d.tva), d.justificatif]));
-}
-
-function exporterMouvements() {
-  csv('releve-stripe', ['Date', 'Disponible le', 'Type', 'Nature', 'Description', 'Client', 'Montant', 'Frais', 'Net', 'Référence'],
-    stripe.mouvements.slice().sort((a, b) => a.le - b.le).map((m) => [jour(m.le), jour(m.disponibleLe), m.type,
-      NATURES[m.nature] || m.nature, m.description, m.client || m.email, csvMontant(m.montant), csvMontant(m.frais),
-      csvMontant(m.net), m.id]));
-}
-
-$('x-recettes').addEventListener('click', exporterRecettes);
-$('x-achats').addEventListener('click', exporterAchats);
-$('x-mouvements').addEventListener('click', exporterMouvements);
+const attendre = (ms) => new Promise((r) => setTimeout(r, ms));
 $('x-tout').addEventListener('click', async () => {
+  const t = totaux(stripe.mouvements, depensesPeriode());
+  const exports = [
+    () => csv('bilan', ['Mois', 'Encaissé', 'Remboursé', 'Frais Stripe', 'Net', 'Dépenses', 'Résultat'],
+      [...bilanMensuel().map((x) => [moisNom(x.cle), csvMontant(x.encaisse), csvMontant(x.rembourse), csvMontant(x.frais),
+        csvMontant(x.net), csvMontant(x.depenses), csvMontant(x.resultat)]),
+      ['Total', csvMontant(t.encaisse), csvMontant(t.rembourse), csvMontant(t.frais), csvMontant(t.net),
+        csvMontant(t.depenses), csvMontant(t.resultat)]]),
+    () => csv('livre-des-recettes', ['Date', 'Facture', 'Client', 'E-mail', 'Nature', 'Mode de règlement', 'Montant', 'Frais Stripe', 'Net', 'Référence Stripe'],
+      recettes().sort((a, b) => a.le - b.le).map((m) => [jour(m.le), numeroFacture(m.facture), m.client, m.email,
+        NATURES[m.nature] || m.nature, 'Carte bancaire (Stripe)', csvMontant(m.montant), csvMontant(m.frais), csvMontant(m.net), m.source || m.id])),
+    () => csv('registre-des-achats', ['Date', 'Fournisseur', 'Libellé', 'Catégorie', 'Montant TTC', 'dont TVA', 'Justificatifs'],
+      depensesPeriode().map((d) => [jour(d.date), d.fournisseur, d.libelle, donnees.categories[d.categorie] || d.categorie,
+        csvMontant(d.montant), csvMontant(d.tva), [...(d.pieces || []).map((p) => p.nom), d.justificatif].filter(Boolean).join(', ')])),
+    exporterFactures,
+    () => csv('releve-stripe', ['Date', 'Disponible le', 'Type', 'Nature', 'Description', 'Client', 'Montant', 'Frais', 'Net', 'Référence'],
+      stripe.mouvements.slice().sort((a, b) => a.le - b.le).map((m) => [jour(m.le), jour(m.disponibleLe), m.type,
+        NATURES[m.nature] || m.nature, m.description, m.client || m.email, csvMontant(m.montant), csvMontant(m.frais),
+        csvMontant(m.net), m.id])),
+  ];
   // Petit délai entre les fichiers : certains navigateurs bloquent plusieurs téléchargements d'un coup.
-  for (const f of [exporterRecettes, exporterAchats, exporterFactures, exporterMouvements]) {
+  for (const f of exports) {
     f();
-    await new Promise((r) => setTimeout(r, 600));
+    await attendre(600);
   }
 });
 
-// ---------- Formulaires ----------
+// ---------- Fenêtres et formulaires ----------
+
+document.querySelectorAll('dialog .fermer').forEach((b) => b.addEventListener('click', () => b.closest('dialog').close()));
+// Clic sur le fond : ferme la fenêtre.
+document.querySelectorAll('dialog').forEach((d) => d.addEventListener('click', (e) => { if (e.target === d) d.close(); }));
 
 let formulairesPrets = false;
 function preparerFormulaires() {
   if (formulairesPrets) return;
   formulairesPrets = true;
-  const aujourdhui = new Date().toLocaleDateString('sv-SE');
-  document.querySelectorAll('form input[type="date"]').forEach((i) => { i.value = aujourdhui; });
   $('filtre-stock').append(...Object.entries(donnees.etats).map(([k, v]) => h('option', { value: k }, v)));
   $('f-depense').elements.categorie.append(...Object.entries(donnees.categories)
-    .filter(([k]) => k !== 'tablettes').concat([['tablettes', donnees.categories.tablettes]])
-    .map(([k, v]) => h('option', { value: k }, v)));
+    .map(([k, v]) => h('option', { value: k, selected: k === 'autre' }, v)));
 }
+
+function ouvrirFormulaire(id) {
+  const f = $(id).querySelector('form');
+  f.reset();
+  const aujourdhui = new Date().toLocaleDateString('sv-SE');
+  f.querySelectorAll('input[type="date"]').forEach((i) => { i.value = aujourdhui; });
+  f.querySelector('.f-msg').hidden = true;
+  $(id).showModal();
+}
+$('btn-achat').addEventListener('click', () => ouvrirFormulaire('d-achat'));
+$('btn-depense').addEventListener('click', () => ouvrirFormulaire('d-depense'));
 
 const dateSaisie = (v) => {
   const [a, m, j] = v.split('-').map(Number);
@@ -667,6 +927,26 @@ function message(form, texte, ok) {
   p.hidden = false;
 }
 
+// Action d'un formulaire : bouton désactivé pendant l'envoi, message d'erreur lisible, relecture des données.
+async function enregistrer(form, action, attente = 'Enregistrement…') {
+  const boutons = form.querySelectorAll('button');
+  boutons.forEach((b) => { b.disabled = true; });
+  message(form, attente, true);
+  try {
+    await action();
+    form.querySelector('.f-msg').hidden = true;
+    donnees = await lireDonnees(true);
+    afficherTout();
+    return true;
+  } catch (e) {
+    console.error(e);
+    message(form, messageErreur(e));
+    return false;
+  } finally {
+    boutons.forEach((b) => { b.disabled = false; });
+  }
+}
+
 $('f-stock').addEventListener('submit', async (e) => {
   e.preventDefault();
   const f = e.target;
@@ -675,21 +955,18 @@ $('f-stock').addEventListener('submit', async (e) => {
   if (!prix || Number.isNaN(tva)) return message(f, 'Montant illisible (ex. 89,90).');
   const numeros = f.numeros.value.split('\n').map((n) => n.trim()).filter(Boolean);
   const quantite = Number(f.quantite.value);
-  if (numeros.length > quantite) return message(f, `${numeros.length} numéros pour ${quantite} tablette(s).`);
-  f.querySelector('button').disabled = true;
-  try {
-    await appeler('gestionStock', {
+  if (numeros.length > quantite) return message(f, `${numeros.length} numéros pour ${pluriel(quantite, 'tablette')}.`);
+  const fichiers = [...f.piece.files];
+  const ok = await enregistrer(f, async () => {
+    const r = await appeler('gestionStock', {
       action: 'ajouter', quantite, modele: f.modele.value, fournisseur: f.fournisseur.value,
       prixAchat: prix, tva, acheteeLe: dateSaisie(f.date.value), numeros,
-      justificatif: f.justificatif.value, depense: f.depense.checked,
     });
-    message(f, `${quantite} tablette(s) ajoutée(s).`, true);
-    f.numeros.value = '';
-    await chargerDonnees();
-  } catch (err) {
-    message(f, err.message);
-  } finally {
-    f.querySelector('button').disabled = false;
+    if (fichiers.length && r.depense) await envoyerPieces('depenses', r.depense, fichiers);
+  });
+  if (ok) {
+    $('d-achat').close();
+    signalerChangement();
   }
 });
 
@@ -699,21 +976,16 @@ $('f-depense').addEventListener('submit', async (e) => {
   const montant = enCentimes(f.montant.value);
   const tva = enCentimes(f.tva.value);
   if (!montant || Number.isNaN(tva)) return message(f, 'Montant illisible (ex. 12,00).');
-  f.querySelector('button').disabled = true;
-  try {
-    await appeler('gestionDepense', {
+  const fichiers = [...f.piece.files];
+  const ok = await enregistrer(f, async () => {
+    const r = await appeler('gestionDepense', {
       action: 'ajouter', date: dateSaisie(f.date.value), categorie: f.categorie.value,
-      fournisseur: f.fournisseur.value, libelle: f.libelle.value, montant, tva, justificatif: f.justificatif.value,
+      fournisseur: f.fournisseur.value, libelle: f.libelle.value, montant, tva,
     });
-    message(f, 'Dépense ajoutée.', true);
-    f.libelle.value = '';
-    f.montant.value = '';
-    f.tva.value = '';
-    f.justificatif.value = '';
-    await chargerDonnees();
-  } catch (err) {
-    message(f, err.message);
-  } finally {
-    f.querySelector('button').disabled = false;
+    if (fichiers.length) await envoyerPieces('depenses', r.id, fichiers);
+  });
+  if (ok) {
+    $('d-depense').close();
+    signalerChangement();
   }
 });

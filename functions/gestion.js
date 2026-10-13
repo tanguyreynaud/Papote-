@@ -5,10 +5,12 @@
 //   gestionStock    ajoute des tablettes achetées (et la dépense), change l'état d'une tablette
 //   gestionDepense  ajoute ou retire une dépense du registre des achats
 //   gestionStripe   factures, encaissements, remboursements, frais et abonnements Stripe d'une période
+//   gestionCommande factures et paiements Stripe d'une commande
+//   gestionPiece    pièces jointes (facture d'achat, bon de livraison…) d'une tablette ou d'une dépense
 //
 // Stripe est la source de vérité pour l'argent qui rentre ; Firestore garde le stock (stock/{id})
 // et les dépenses (depenses/{id}), écrits seulement ici (aucune règle client : lecture et écriture
-// refusées depuis les applis). Réservé au badge admin.
+// refusées depuis les applis), pièces jointes dans Storage sous gestion/ (idem). Réservé au badge admin.
 
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { defineSecret } = require('firebase-functions/params');
@@ -34,6 +36,7 @@ const ETATS = {
   envoyee: 'Envoyée',
   'chez-client': 'Chez le client',
   'en-retour': 'En retour',
+  revenue: 'Revenue, à vérifier',
   'a-reparer': 'À réparer',
   perdue: 'Perdue',
   'hors-service': 'Hors service',
@@ -137,6 +140,10 @@ function aplatir(valeur) {
   return Object.fromEntries(Object.entries(valeur).map(([k, v]) => [k, aplatir(v)]));
 }
 
+function effacerPieces(pieces) {
+  return Promise.all((pieces || []).map((p) => admin.storage().bucket().file(p.chemin).delete().catch(() => null)));
+}
+
 // ---------- Lecture ----------
 
 exports.gestionDonnees = onCall(async (request) => {
@@ -236,7 +243,7 @@ exports.gestionStock = onCall(async (request) => {
       });
     }
     await batch.commit();
-    return { ok: true, ajoutees: quantite };
+    return { ok: true, ajoutees: quantite, depense: depenseId };
   }
 
   if (d.action === 'modifier') {
@@ -260,7 +267,11 @@ exports.gestionStock = onCall(async (request) => {
       if (!ETATS[champs.etat]) throw new HttpsError('invalid-argument', 'État inconnu.');
       if (champs.etat !== snap.get('etat')) {
         maj.etat = champs.etat;
-        maj.historique = FieldValue.arrayUnion({ le: Date.now(), etat: champs.etat, par: qui });
+        // Remise en stock : la tablette n'appartient plus à la commande (l'historique la garde).
+        if (champs.etat === 'en-stock' && !('commande' in champs)) maj.commande = null;
+        maj.historique = FieldValue.arrayUnion({
+          le: Date.now(), etat: champs.etat, par: qui, commande: maj.commande !== undefined ? maj.commande : snap.get('commande') || null,
+        });
       }
     }
     await ref.update(maj);
@@ -276,6 +287,7 @@ exports.gestionStock = onCall(async (request) => {
       throw new HttpsError('failed-precondition', 'Cette tablette a déjà servi : passez-la en « Perdue » ou « Hors service ».');
     }
     await ref.delete();
+    await effacerPieces(snap.get('pieces'));
     return { ok: true };
   }
 
@@ -308,8 +320,10 @@ exports.gestionDepense = onCall(async (request) => {
   }
   if (d.action === 'supprimer') {
     const ref = db().doc(`depenses/${d.id || '-'}`);
-    if (!(await ref.get()).exists) throw new HttpsError('not-found', 'Dépense introuvable.');
+    const snap = await ref.get();
+    if (!snap.exists) throw new HttpsError('not-found', 'Dépense introuvable.');
     await ref.delete();
+    await effacerPieces(snap.get('pieces'));
     return { ok: true };
   }
   throw new HttpsError('invalid-argument', 'Action inconnue.');
@@ -318,6 +332,28 @@ exports.gestionDepense = onCall(async (request) => {
 // ---------- Stripe : factures, encaissements, abonnements ----------
 
 const MAX_LIGNES = 5000;
+
+function versFacture(f) {
+  return {
+    id: f.id,
+    numero: f.number || null,
+    le: f.created * 1000,
+    client: f.customer_name || null,
+    email: f.customer_email || null,
+    abonnement: typeof f.subscription === 'string' ? f.subscription
+      : (f.subscription && f.subscription.id) || null,
+    statut: f.status,
+    total: f.total,
+    ht: f.total_excluding_tax != null ? f.total_excluding_tax : f.total,
+    tva: f.tax != null ? f.tax
+      : (f.total_taxes || []).reduce((s, t) => s + (t.amount || 0), 0),
+    paye: f.amount_paid,
+    du: f.amount_remaining,
+    lignes: ((f.lines && f.lines.data) || []).map((l) => l.description).filter(Boolean).join(' + '),
+    lienPdf: f.invoice_pdf || null,
+    lienPage: f.hosted_invoice_url || null,
+  };
+}
 
 async function tout(liste) {
   const lignes = [];
@@ -353,23 +389,7 @@ exports.gestionStripe = onCall({ secrets: [STRIPE_SECRET], timeoutSeconds: 120 }
   }
 
   return {
-    factures: factures.map((f) => ({
-      id: f.id,
-      numero: f.number || null,
-      le: f.created * 1000,
-      client: f.customer_name || null,
-      email: f.customer_email || null,
-      statut: f.status,
-      total: f.total,
-      ht: f.total_excluding_tax != null ? f.total_excluding_tax : f.total,
-      tva: f.tax != null ? f.tax
-        : (f.total_taxes || []).reduce((s, t) => s + (t.amount || 0), 0),
-      paye: f.amount_paid,
-      du: f.amount_remaining,
-      lignes: ((f.lines && f.lines.data) || []).map((l) => l.description).filter(Boolean).join(' + '),
-      lienPdf: f.invoice_pdf || null,
-      lienPage: f.hosted_invoice_url || null,
-    })),
+    factures: factures.map(versFacture),
     mouvements: mouvements.map((bt) => {
       const source = bt.source && typeof bt.source === 'object' ? bt.source : {};
       const charge = source.object === 'charge' ? source
@@ -406,4 +426,92 @@ exports.gestionStripe = onCall({ secrets: [STRIPE_SECRET], timeoutSeconds: 120 }
   };
 });
 
-exports.regles = { ETATS, CATEGORIES, natureMouvement, mensuel, centimes, lien };
+// Factures (créées par Stripe à chaque paiement de l'abonnement) et autres paiements d'une commande.
+exports.gestionCommande = onCall({ secrets: [STRIPE_SECRET] }, async (request) => {
+  verifierAdmin(request);
+  const { commande } = request.data || {};
+  if (typeof commande !== 'string' || !commande) throw new HttpsError('invalid-argument', 'Commande manquante.');
+  const snap = await db().doc(`commandes/${commande}`).get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Commande introuvable.');
+  const client = snap.get('stripeCustomerId');
+  const [factures, paiements] = await Promise.all([
+    tout(stripe().invoices.list({ subscription: commande, limit: 100 })),
+    client ? tout(stripe().charges.list({ customer: client, limit: 100 })) : [],
+  ]);
+  return {
+    factures: factures.map(versFacture),
+    paiements: paiements.map((c) => ({
+      id: c.id,
+      le: c.created * 1000,
+      montant: c.amount,
+      rembourse: c.amount_refunded,
+      statut: c.status,
+      description: c.description || null,
+      facture: typeof c.invoice === 'string' ? c.invoice : (c.invoice && c.invoice.id) || null,
+      recu: c.receipt_url || null,
+    })),
+  };
+});
+
+// ---------- Pièces jointes ----------
+
+// Contenu envoyé en base64 par la page : 6 Mo au plus pour rester sous la limite des fonctions appelables.
+const MAX_PIECE = 6 * 1024 * 1024;
+const TYPES_PIECE = /^(application\/pdf|image\/(png|jpeg|webp|heic|heif|gif))$/;
+const COLLECTIONS_PIECE = ['stock', 'depenses'];
+
+function nomFichier(nom) {
+  const t = String(nom || 'piece').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(-80);
+  return t || 'piece';
+}
+
+exports.gestionPiece = onCall({ memory: '512MiB' }, async (request) => {
+  verifierAdmin(request);
+  const d = request.data || {};
+  const bucket = admin.storage().bucket();
+
+  if (d.action === 'lire') {
+    if (typeof d.chemin !== 'string' || !d.chemin.startsWith('gestion/')) {
+      throw new HttpsError('invalid-argument', 'Pièce inconnue.');
+    }
+    const fichier = bucket.file(d.chemin);
+    const [existe] = await fichier.exists();
+    if (!existe) throw new HttpsError('not-found', 'Pièce introuvable.');
+    const [[contenu], [meta]] = await Promise.all([fichier.download(), fichier.getMetadata()]);
+    return { contenu: contenu.toString('base64'), type: meta.contentType || 'application/octet-stream' };
+  }
+
+  if (!COLLECTIONS_PIECE.includes(d.collection) || typeof d.id !== 'string' || !d.id) {
+    throw new HttpsError('invalid-argument', 'Fiche inconnue.');
+  }
+  const ref = db().doc(`${d.collection}/${d.id}`);
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Fiche introuvable.');
+
+  if (d.action === 'ajouter') {
+    if (!TYPES_PIECE.test(d.type || '')) throw new HttpsError('invalid-argument', 'PDF ou photo seulement.');
+    const contenu = Buffer.from(String(d.contenu || ''), 'base64');
+    if (!contenu.length) throw new HttpsError('invalid-argument', 'Fichier vide.');
+    if (contenu.length > MAX_PIECE) throw new HttpsError('invalid-argument', 'Fichier trop lourd (6 Mo au plus).');
+    const nom = texte(d.nom, 120) || 'piece';
+    const chemin = `gestion/${d.collection}/${d.id}/${Date.now()}-${nomFichier(nom)}`;
+    await bucket.file(chemin).save(contenu, { contentType: d.type, resumable: false });
+    const piece = { nom, chemin, type: d.type, taille: contenu.length, le: Date.now() };
+    await ref.update({ pieces: FieldValue.arrayUnion(piece) });
+    return { ok: true, piece };
+  }
+
+  if (d.action === 'retirer') {
+    const pieces = snap.get('pieces') || [];
+    const piece = pieces.find((p) => p.chemin === d.chemin);
+    if (!piece) throw new HttpsError('not-found', 'Pièce introuvable.');
+    await ref.update({ pieces: FieldValue.arrayRemove(piece) });
+    await bucket.file(piece.chemin).delete().catch(() => null);
+    return { ok: true };
+  }
+
+  throw new HttpsError('invalid-argument', 'Action inconnue.');
+});
+
+exports.regles = { ETATS, CATEGORIES, natureMouvement, mensuel, centimes, lien, nomFichier };
