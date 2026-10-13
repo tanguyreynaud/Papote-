@@ -387,6 +387,7 @@ function lectureVersFormulaire(o) {
   const quantite = t && Number.isInteger(t.quantite) && t.quantite >= 1 && t.quantite <= MAX_QUANTITE ? t.quantite : null;
   return {
     facture: o.estUneFacture !== false,
+    confirmation: o.confirmationCommande === true,
     fournisseur: texte(o.fournisseur),
     numero: texte(o.numero, 80),
     date: Number.isFinite(date) ? date : null,
@@ -442,10 +443,11 @@ const nul = (type) => ({ anyOf: [{ type }, { type: 'null' }] });
 const SCHEMA_FACTURE = {
   type: 'object',
   additionalProperties: false,
-  required: ['estUneFacture', 'fournisseur', 'numero', 'date', 'totalTTC', 'tva', 'devise', 'categorie', 'libelle', 'tablettes',
-    'cartesSim', 'accessoires', 'remarque'],
+  required: ['estUneFacture', 'confirmationCommande', 'fournisseur', 'numero', 'date', 'totalTTC', 'tva', 'devise', 'categorie',
+    'libelle', 'tablettes', 'cartesSim', 'accessoires', 'remarque'],
   properties: {
-    estUneFacture: { type: 'boolean', description: 'Faux si le document n\'est ni une facture ni un ticket de caisse.' },
+    estUneFacture: { type: 'boolean', description: 'Faux si le document n\'est ni une facture, ni un ticket de caisse, ni une confirmation de commande avec le montant payé.' },
+    confirmationCommande: { type: 'boolean', description: 'Vrai si c\'est une confirmation de commande d\'un site marchand et non la facture elle-même.' },
     fournisseur: nul('string'),
     numero: { ...nul('string'), description: 'Numéro de la facture.' },
     date: { anyOf: [{ type: 'string', format: 'date' }, { type: 'null' }], description: 'Date de la facture (AAAA-MM-JJ).' },
@@ -1227,6 +1229,28 @@ exports.gestionPiece = onCall({ memory: '512MiB' }, async (request) => {
 // ---------- Lecture automatique d'une facture d'achat ----------
 
 const TYPES_LECTURE = /^(application\/pdf|image\/(png|jpeg|webp|gif))$/;
+
+// Texte d'un e-mail sans facture jointe (confirmation de commande Cdiscount, Temu…), lu comme un justificatif.
+function corpsDuMail(m) {
+  let t = m && m.text ? m.text : '';
+  if (!t.trim() && m && typeof m.html === 'string') {
+    t = m.html.replace(/<(style|script)[\s\S]*?<\/\1>/gi, ' ').replace(/<br\s*\/?>|<\/(p|div|tr|li|h\d)>/gi, '\n')
+      .replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&euro;/g, '€');
+  }
+  t = t.replace(/[ \t]+/g, ' ').replace(/\n\s*\n+/g, '\n').trim();
+  if (t.length < 150) return null;
+  const entete = [`De : ${(m.from && m.from.text) || ''}`, `Objet : ${m.subject || ''}`,
+    m.date ? `Date : ${new Date(m.date).toISOString().slice(0, 10)}` : ''].filter(Boolean).join('\n');
+  const contenu = Buffer.from(`${entete}\n\n${t.slice(0, 60000)}`, 'utf8');
+  return { filename: 'confirmation-commande.txt', contentType: 'text/plain', content: contenu, size: contenu.length };
+}
+
+// Une facture qui arrive après la confirmation de commande du même achat (même vendeur, même montant, à 30 jours).
+function memeAchat(depense, r) {
+  const norm = (x) => String(x || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  return !!depense.confirmation && !!r.fournisseur && norm(depense.fournisseur) === norm(r.fournisseur)
+    && depense.montant === r.montant && Math.abs((depense.date || 0) - (r.date || depense.date || 0)) <= 30 * 24 * 3600 * 1000;
+}
 const CONSIGNE_LECTURE = `Tu lis une facture d'achat (ou un ticket) reçue par Papote, une petite entreprise française
 qui prête des tablettes à des personnes âgées et leur famille. Remplis chaque champ d'après le document seulement :
 null quand l'information n'y figure pas, jamais d'invention. Montants en euros, tels qu'imprimés.
@@ -1236,13 +1260,18 @@ logiciels, IA), publicite (annonces, réseaux sociaux), materiel (petit matérie
 autre. Pour un achat de tablettes, remplis aussi « tablettes » avec les numéros de série (IMEI ou S/N) lisibles.
 Pour des cartes SIM achetées (kits, nouvelles lignes), remplis « cartesSim » avec les ICCID et numéros lisibles ;
 une facture mensuelle de forfaits reste une simple dépense (cartesSim null). Le petit matériel qui part avec les
-tablettes (clé ou routeur 4G, prise, chargeur, câble, support) va dans « accessoires ».`;
+tablettes (clé ou routeur 4G, prise, chargeur, câble, support) va dans « accessoires ».
+Une confirmation de commande d'un site marchand (Cdiscount, Temu, Amazon…) qui donne le montant payé compte comme
+justificatif : estUneFacture vrai et confirmationCommande vrai, numero = numéro de commande. Une publicité, une lettre
+d'information ou un avis d'expédition sans montant payé n'est pas une facture.`;
 
 // contenu : fichier en base64. Erreur HttpsError lisible si la lecture échoue.
 async function lireDocument(contenu, type) {
   const document = type === 'application/pdf'
     ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: contenu } }
-    : { type: 'image', source: { type: 'base64', media_type: type, data: contenu } };
+    : type === 'text/plain'
+      ? { type: 'document', source: { type: 'text', media_type: 'text/plain', data: Buffer.from(contenu, 'base64').toString('utf8') } }
+      : { type: 'image', source: { type: 'base64', media_type: type, data: contenu } };
   let reponse;
   try {
     const client = new Anthropic({ apiKey: ANTHROPIC_API_KEY.value() });
@@ -1847,6 +1876,18 @@ async function rangerFacture(r, piece, source) {
       return `déjà enregistrée (${r.fournisseur || ''} n° ${r.numero})`;
     }
   }
+  if (r.montant != null) {
+    const memeMontant = await db().collection('depenses').where('montant', '==', r.montant).get();
+    const precedente = memeMontant.docs.find((d) => memeAchat({ ...d.data(), date: ms(d.get('date')) }, r)
+      || (r.confirmation && memeAchat({ ...d.data(), confirmation: true, date: ms(d.get('date')) }, r)));
+    if (precedente && r.confirmation) return `déjà enregistrée (${r.fournisseur || ''}, même montant)`;
+    if (precedente) {
+      // La vraie facture remplace la confirmation de commande : pièce jointe ajoutée, rien n'entre deux fois au stock.
+      await precedente.ref.update({ confirmation: false, numero: r.numero || precedente.get('numero') || null });
+      await enregistrerPiece('depenses', precedente.id, piece.filename || 'facture', piece.contentType, piece.content);
+      return { materiel: [], rattachee: true };
+    }
+  }
   let id;
   if (r.tablettes) {
     const t = r.tablettes;
@@ -1864,6 +1905,7 @@ async function rangerFacture(r, piece, source) {
       libelle: r.libelle || 'Facture reçue par e-mail', montant: r.montant, tva: r.tva, aVerifier: true, source,
     }, 'e-mail'));
   }
+  if (r.confirmation) await db().doc(`depenses/${id}`).update({ confirmation: true });
   await enregistrerPiece('depenses', id, piece.filename || 'facture', piece.contentType, piece.content);
   const materiel = await entrerMateriel(r, { depense: id, numeroFacture: r.numero, source }, 'e-mail');
   return materiel.length ? { materiel } : null;
@@ -1890,7 +1932,11 @@ async function releverFactures() {
         const de = (mailLu.from && mailLu.from.text) || 'expéditeur inconnu';
         const sujet = mailLu.subject || '(sans objet)';
         const pieces = piecesFacture(mailLu.attachments);
-        if (!pieces.length) bilan.ignorees.push(`« ${sujet} » (${de}) : aucune facture en pièce jointe`);
+        if (!pieces.length) {
+          const corps = corpsDuMail(mailLu);
+          if (corps) pieces.push(corps);
+          else bilan.ignorees.push(`« ${sujet} » (${de}) : aucune facture en pièce jointe`);
+        }
         let reessayer = false;
         for (const piece of pieces) {
           try {
@@ -1902,7 +1948,8 @@ async function releverFactures() {
             const rangee = await rangerFacture(r, piece, `e-mail de ${de}`.slice(0, 200));
             if (typeof rangee === 'string') bilan.ignorees.push(`${piece.filename || 'pièce'} : ${rangee}`);
             else {
-              const plus = rangee && rangee.materiel ? ` (+ ${rangee.materiel.join(', ')})` : '';
+              const plus = rangee && rangee.rattachee ? ' (facture ajoutée à la confirmation de commande)'
+                : rangee && rangee.materiel && rangee.materiel.length ? ` (+ ${rangee.materiel.join(', ')})` : '';
               bilan.rangees.push(`${r.fournisseur || de} : ${r.libelle || sujet}${plus}`);
             }
           } catch (e) {
@@ -1943,5 +1990,5 @@ exports.gestionCourrierMaintenant = onCall(OPTIONS_COURRIER, async (request) => 
 exports.regles = {
   ETATS, CATEGORIES, natureMouvement, mensuel, centimes, lien, nomFichier, moisSuivant, lectureVersFormulaire, SCHEMA_FACTURE,
   lireReglages, simAResilier, stockAJour, incoherences, materielLu, memeAccessoire, coutLigne, alertesSim, accessoiresAPrevoir, champsSim, aFaire, piecesFacture, debutMoisParis, moisPrecedent, csvTexte, livreDesRecettes,
-  registreDesAchats,
+  registreDesAchats, corpsDuMail, memeAchat,
 };
