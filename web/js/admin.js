@@ -107,6 +107,7 @@ async function loadOrders() {
       li.innerHTML = '<strong></strong><span class="muted small"></span><span class="small"></span>'
         + '<form class="ship"><select class="tablette" aria-label="Tablette du stock"><option value="">Tablette du stock…</option></select>'
         + '<select class="sim" aria-label="Carte SIM du stock" hidden><option value="">Carte SIM du stock…</option></select>'
+        + '<button type="button" class="secondary small-btn etiquette" title="Créer l\'étiquette Mondial Relay avec Sendcloud">Étiquette</button>'
         + '<input placeholder="N° de suivi Mondial Relay" autocomplete="off" required><button type="submit" class="primary small-btn">Envoyée</button>'
         + '<span class="muted small kit"></span></form>';
       li.querySelector('strong').textContent = orderHead(c);
@@ -116,6 +117,30 @@ async function loadOrders() {
       const choix = form.querySelector('select.tablette');
       const choixSim = form.querySelector('select.sim');
       remplirKit(form, c);
+      // Étiquette Sendcloud : remplit le n° de suivi et ouvre le PDF à imprimer.
+      const btnEtiquette = form.querySelector('button.etiquette');
+      if (c.etiquettes?.aller) {
+        form.querySelector('input').value = c.etiquettes.aller.suivi || '';
+        btnEtiquette.textContent = 'Revoir l\'étiquette';
+      }
+      btnEtiquette.addEventListener('click', async () => {
+        if (c.etiquettes?.aller?.url) { window.open(c.etiquettes.aller.url, '_blank', 'noopener'); return; }
+        const fenetre = window.open('', '_blank');
+        btnEtiquette.disabled = true;
+        btnEtiquette.textContent = 'Création…';
+        try {
+          const r = await appeler('gestionEtiquette', { commande: c.id, sens: 'aller' });
+          c.etiquettes = { ...(c.etiquettes || {}), aller: r };
+          if (r.suivi) form.querySelector('input').value = r.suivi;
+          if (fenetre) fenetre.location = r.url;
+          btnEtiquette.textContent = 'Revoir l\'étiquette';
+        } catch (err) {
+          if (fenetre) fenetre.close();
+          alert(`Étiquette impossible : ${err.message}`);
+          btnEtiquette.textContent = 'Étiquette';
+        }
+        btnEtiquette.disabled = false;
+      });
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const suivi = form.querySelector('input').value.trim();
@@ -228,7 +253,7 @@ async function loadReturns() {
       const avant = toDate(r.avant);
       const li = document.createElement('li');
       li.innerHTML = '<strong></strong><span class="muted small"></span><span class="small"></span><span class="small remb"></span>'
-        + '<form class="etiquette"><input type="url" placeholder="Lien de l\'étiquette de retour" aria-label="Étiquette de retour"><button type="submit" class="secondary small-btn">Envoyer l\'étiquette</button></form>'
+        + '<form class="etiquette"><button type="button" class="secondary small-btn sendcloud">Créer avec Sendcloud</button><input type="url" placeholder="ou lien de l\'étiquette de retour" aria-label="Étiquette de retour"><button type="submit" class="secondary small-btn">Envoyer l\'étiquette</button></form>'
         + '<button type="button" class="secondary small-btn rendue">Tablette rendue</button>';
       li.querySelector('strong').textContent = c.livraison?.nom || c.nom || c.email;
       li.querySelector('.muted').textContent = `${c.email}${c.telephone ? ` · ${c.telephone}` : ''}`;
@@ -248,6 +273,22 @@ async function loadReturns() {
       const form = li.querySelector('.etiquette');
       const input = form.querySelector('input');
       if (r.etiquette) input.value = r.etiquette;
+      // Sendcloud crée l'étiquette et le serveur l'envoie au client.
+      const btnSendcloud = form.querySelector('button.sendcloud');
+      btnSendcloud.addEventListener('click', async () => {
+        if (r.etiquette && !confirm('Une étiquette a déjà été envoyée. En créer une nouvelle ?')) return;
+        btnSendcloud.disabled = true;
+        btnSendcloud.textContent = 'Création…';
+        try {
+          const res = await appeler('gestionEtiquette', { commande: d.id, sens: 'retour' });
+          input.value = res.url;
+          btnSendcloud.textContent = 'Étiquette envoyée au client';
+        } catch (err) {
+          alert(`Étiquette impossible : ${err.message}`);
+          btnSendcloud.textContent = 'Créer avec Sendcloud';
+          btnSendcloud.disabled = false;
+        }
+      });
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const lien = input.value.trim();

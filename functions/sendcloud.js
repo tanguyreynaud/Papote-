@@ -1,0 +1,153 @@
+// Étiquettes d'envoi et de retour par Sendcloud (API v3, Mondial Relay).
+// Clés : secret SENDCLOUD_API (« clé publique:clé secrète » de l'intégration « Papote étiquettes »),
+// rangé par outils\gestion\installer-sendcloud.bat. Les fonctions pures sont testées par gestion.test.js.
+
+const API = 'https://panel.sendcloud.sc/api/v3';
+const TRANSPORTEUR = 'mondial_relay';
+
+const propre = (v, max = 100) => (typeof v === 'string' ? v.trim().replace(/\s+/g, ' ').slice(0, max) : '');
+
+// Adresse Sendcloud du client : point relais choisi sur le site, ou adresse Stripe (commande depuis l'appli).
+// { adresse, pointRelais } ; null s'il manque de quoi l'écrire.
+function adresseClient(c) {
+  const l = c.livraison || {};
+  const contact = {
+    name: propre(c.nom || l.nom || c.email, 70),
+    ...(c.telephone ? { phone_number: propre(c.telephone, 20) } : {}),
+    ...(c.email ? { email: propre(c.email, 120) } : {}),
+  };
+  if (l.transporteur === 'mondial-relay' && l.id) {
+    if (!l.cp || !l.ville) return null;
+    return {
+      adresse: { ...contact, address_line_1: propre(l.adresse || l.nom), postal_code: propre(l.cp, 10), city: propre(l.ville), country_code: (l.pays || 'FR').toUpperCase() },
+      pointRelais: String(l.id),
+    };
+  }
+  const a = l.adresse && typeof l.adresse === 'object' ? l.adresse : null;
+  if (!a || !a.line1 || !a.postal_code || !a.city) return null;
+  return {
+    adresse: {
+      ...contact,
+      address_line_1: propre(a.line1),
+      ...(a.line2 ? { address_line_2: propre(a.line2) } : {}),
+      postal_code: propre(a.postal_code, 10), city: propre(a.city), country_code: (a.country || 'FR').toUpperCase(),
+    },
+    pointRelais: null,
+  };
+}
+
+// Adresse de Papote (réglage « expediteur ») : départ des colis, arrivée des retours.
+function adressePapote(e) {
+  if (!e || !e.nom || !e.adresse || !e.cp || !e.ville) return null;
+  return {
+    name: propre(e.nom, 70), address_line_1: propre(e.adresse), postal_code: propre(e.cp, 10), city: propre(e.ville),
+    country_code: 'FR',
+    ...(e.telephone ? { phone_number: propre(e.telephone, 20) } : {}),
+    ...(e.email ? { email: propre(e.email, 120) } : {}),
+  };
+}
+
+const kg = (o) => (o && o.value != null ? Number(o.value) * ({ g: 0.001, kg: 1 }[o.unit] || 1) : null);
+
+// Première option Mondial Relay qui accepte ce poids (kg) et le besoin (point relais, domicile ou retour).
+function choisirOption(options, poids, besoin) {
+  return (options || []).find((o) => {
+    if (!o || !o.code || (o.carrier && o.carrier.code !== TRANSPORTEUR)) return false;
+    const f = o.functionalities || {};
+    if (besoin === 'retour' && !f.returns) return false;
+    if (besoin === 'relais' && f.last_mile !== 'service_point') return false;
+    if (besoin === 'domicile' && (f.returns || f.last_mile === 'service_point')) return false;
+    const min = kg(o.weight && o.weight.min);
+    const max = kg(o.weight && o.weight.max);
+    return (min == null || poids >= min) && (max == null || poids <= max);
+  }) || null;
+}
+
+// Message lisible d'une erreur Sendcloud (400 : { errors: [...] } ou { error: {...} }).
+function erreurLisible(corps) {
+  if (!corps) return 'réponse vide';
+  const liste = corps.errors || (corps.error ? [corps.error] : []);
+  const t = liste.map((e) => [e.field || (e.source && e.source.pointer), e.detail || e.message].filter(Boolean).join(' : '))
+    .filter(Boolean).join(' ; ');
+  return t || corps.message || JSON.stringify(corps).slice(0, 300);
+}
+
+function client(cles) {
+  const [publique, secrete] = String(cles || '').trim().split(':');
+  if (!publique || !secrete) throw new Error('Clés Sendcloud absentes : lancez outils\\gestion\\installer-sendcloud.bat.');
+  const auth = `Basic ${Buffer.from(`${publique}:${secrete}`).toString('base64')}`;
+
+  async function appel(methode, chemin, corps) {
+    const r = await fetch(`${API}${chemin}`, {
+      method: methode,
+      headers: { Authorization: auth, 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: corps ? JSON.stringify(corps) : undefined,
+    });
+    const json = await r.json().catch(() => null);
+    if (r.status === 401 || r.status === 403) throw new Error('Sendcloud refuse les clés : relancez installer-sendcloud.bat.');
+    if (!r.ok) throw new Error(`Sendcloud : ${erreurLisible(json)}`);
+    return json;
+  }
+
+  async function option(de, vers, pointRelais, poids, besoin) {
+    const r = await appel('POST', '/shipping-options', {
+      from_address: { country_code: de.country_code, postal_code: de.postal_code },
+      to_address: { country_code: vers.country_code, postal_code: vers.postal_code },
+      ...(pointRelais ? { to_service_point: { id: pointRelais } } : {}),
+      carrier_code: TRANSPORTEUR,
+      parcels: [{ weight: { value: String(poids), unit: 'kg' } }],
+      functionalities: besoin === 'retour' ? { returns: true } : { last_mile: besoin === 'relais' ? 'service_point' : 'home_delivery' },
+    });
+    const o = choisirOption(r && r.data, poids, besoin);
+    if (!o) {
+      throw new Error(`aucune offre Mondial Relay ${besoin === 'retour' ? 'de retour ' : ''}pour ce colis dans votre compte Sendcloud (activez Mondial Relay dans Sendcloud).`);
+    }
+    return o;
+  }
+
+  // Étiquette PDF d'un colis : elle peut mettre quelques secondes à être prête après l'annonce.
+  async function etiquette(colis) {
+    for (let essai = 0; essai < 6; essai++) {
+      const r = await fetch(`${API}/parcels/${colis}/documents/label?paper_size=A4`, { headers: { Authorization: auth, Accept: 'application/pdf' } });
+      if (r.ok) return Buffer.from(await r.arrayBuffer());
+      await new Promise((ok) => setTimeout(ok, 2000));
+    }
+    throw new Error("l'étiquette n'est pas encore prête chez Sendcloud. Réessayez dans une minute.");
+  }
+
+  return {
+    // Colis aller : { colis, suivi, lienSuivi, pdf }.
+    async envoi({ de, vers, pointRelais, poids, reference }) {
+      const o = await option(de, vers, pointRelais, poids, pointRelais ? 'relais' : 'domicile');
+      const r = await appel('POST', '/shipments/announce', {
+        from_address: de,
+        to_address: vers,
+        ...(pointRelais ? { to_service_point: { id: pointRelais } } : {}),
+        ship_with: { type: 'shipping_option_code', properties: { shipping_option_code: o.code, contract_id: o.contract && o.contract.id } },
+        parcels: [{ weight: { value: String(poids), unit: 'kg' } }],
+        order_number: reference,
+        label_details: { mime_type: 'application/pdf' },
+      });
+      const p = r && r.data && r.data.parcels && r.data.parcels[0];
+      if (!p || !p.id) throw new Error(`Sendcloud : ${erreurLisible(r && r.data)}`);
+      const pdf = p.label_file ? Buffer.from(p.label_file, 'base64') : await etiquette(p.id);
+      return { colis: p.id, suivi: p.tracking_number || null, lienSuivi: p.tracking_url || null, pdf };
+    },
+    // Colis retour, déposé par le client dans un point relais : { colis, pdf }.
+    async retour({ de, vers, poids, reference }) {
+      const o = await option(de, vers, null, poids, 'retour');
+      const r = await appel('POST', '/returns/announce-synchronously', {
+        from_address: de,
+        to_address: vers,
+        ship_with: { type: 'shipping_option_code', shipping_option_code: o.code, ...(o.contract && o.contract.id ? { contract: o.contract.id } : {}) },
+        weight: { value: poids, unit: 'kg' },
+        delivery_option: 'drop_off_point',
+        order_number: reference,
+      });
+      if (!r || !r.parcel_id) throw new Error(`Sendcloud : ${erreurLisible(r)}`);
+      return { colis: r.parcel_id, pdf: await etiquette(r.parcel_id) };
+    },
+  };
+}
+
+module.exports = { adresseClient, adressePapote, choisirOption, erreurLisible, client };

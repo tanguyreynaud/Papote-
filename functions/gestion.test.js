@@ -237,3 +237,42 @@ test('clients, tablettes et SIM qui ne collent pas', () => {
   });
   assert.deepStrictEqual(r, ['1 client Internet inclus sans carte SIM notée sur sa tablette', '1 ligne SIM active reliée à aucune tablette']);
 });
+
+// ---------- Étiquettes Sendcloud ----------
+const sendcloud = require('./sendcloud');
+
+test('adresse Sendcloud du client : point relais ou adresse Stripe', () => {
+  const relais = sendcloud.adresseClient({ nom: 'Jeanne', email: 'j@x.fr', livraison: { transporteur: 'mondial-relay', id: '123', nom: 'Tabac', adresse: '1 rue', cp: '75001', ville: 'Paris', pays: 'FR' } });
+  assert.equal(relais.pointRelais, '123');
+  assert.equal(relais.adresse.postal_code, '75001');
+  assert.equal(relais.adresse.email, 'j@x.fr');
+  const maison = sendcloud.adresseClient({ email: 'a@x.fr', livraison: { nom: 'Paul', adresse: { line1: '2 av', postal_code: '69001', city: 'Lyon', country: 'FR' } } });
+  assert.equal(maison.pointRelais, null);
+  assert.equal(maison.adresse.name, 'Paul');
+  assert.equal(sendcloud.adresseClient({ livraison: null }), null);
+});
+
+test('adresse de Papote complète obligatoire', () => {
+  assert.equal(sendcloud.adressePapote({ nom: 'Papote', adresse: '', cp: '1', ville: 'x' }), null);
+  assert.equal(sendcloud.adressePapote({ nom: 'Papote', adresse: '3 rue', cp: '35000', ville: 'Rennes' }).country_code, 'FR');
+});
+
+test('choix de l\'offre Mondial Relay selon le poids et le besoin', () => {
+  const poids = (min, max) => ({ min: { value: String(min), unit: 'kg' }, max: { value: String(max), unit: 'kg' } });
+  const options = [
+    { code: 'colissimo:x', carrier: { code: 'colissimo' }, functionalities: { last_mile: 'service_point' }, weight: poids(0, 30) },
+    { code: 'mr:petit', carrier: { code: 'mondial_relay' }, functionalities: { last_mile: 'service_point' }, weight: poids(0, 1) },
+    { code: 'mr:relais', carrier: { code: 'mondial_relay' }, functionalities: { last_mile: 'service_point' }, weight: poids(1, 30) },
+    { code: 'mr:retour', carrier: { code: 'mondial_relay' }, functionalities: { returns: true, last_mile: 'service_point' }, weight: poids(0, 30) },
+    { code: 'mr:domicile', carrier: { code: 'mondial_relay' }, functionalities: { last_mile: 'home_delivery' }, weight: poids(0, 30) },
+  ];
+  assert.equal(sendcloud.choisirOption(options, 1.5, 'relais').code, 'mr:relais');
+  assert.equal(sendcloud.choisirOption(options, 1.5, 'retour').code, 'mr:retour');
+  assert.equal(sendcloud.choisirOption(options, 1.5, 'domicile').code, 'mr:domicile');
+  assert.equal(sendcloud.choisirOption(options, 40, 'relais'), null);
+});
+
+test('erreurs Sendcloud lisibles', () => {
+  assert.equal(sendcloud.erreurLisible({ errors: [{ field: 'to_address.postal_code', detail: 'invalide' }] }), 'to_address.postal_code : invalide');
+  assert.equal(sendcloud.erreurLisible({ error: { message: 'Contrat absent' } }), 'Contrat absent');
+});
