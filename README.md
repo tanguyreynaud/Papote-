@@ -32,6 +32,11 @@ et une app pour que la famille lui envoie photos et messages depuis iPhone ou An
    la tablette affiche alors l'écran « Bienvenue » et le client la configure lui-même, sans PC :
    nom de la tablette, wifi (sauté s'il y a une carte SIM avec internet), puis QR code ou code à taper
    dans l'app famille (« Ajouter ma tablette »), et confirmation « C'est bien vous ? » sur la tablette.
+5. Sur le PC qui a la clé d'administration (`%USERPROFILE%\.papote\cle-admin-firebase.json`),
+   l'installation note aussi la tablette dans le stock (`outils/gestion/preparer-tablette.js`,
+   d'après son n° de série) et affiche son numéro, par exemple « >>> Écrivez T-012 sur le carton. ».
+   Écrivez-le sur le carton. Au jumelage chez le client, la tablette envoie ce n° de série et sa
+   commande est reliée à la famille. Sans la clé, cette étape est simplement sautée.
 
 ## Publier une mise à jour
 

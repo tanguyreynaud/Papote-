@@ -177,6 +177,27 @@ if ($Code) {
     Say "`nLa tablette affiche « Bienvenue » : le client lui donnera un nom, choisira son wifi et la reliera à sa famille." 'Cyan'
 }
 
+# 8. Stock : la tablette est notée comme préparée (n° de série), avec son numéro à écrire sur le carton.
+#    Seulement sur le PC qui a la clé d'administration ; un échec n'empêche pas l'installation.
+$cleAdmin = Join-Path $env:USERPROFILE '.papote\cle-admin-firebase.json'
+if (Test-Path $cleAdmin) {
+    $serie = (Adb shell getprop ro.serialno).Trim()
+    $modele = (Adb shell getprop ro.product.model).Trim()
+    $outil = Join-Path $PSScriptRoot '..\outils\gestion\preparer-tablette.js'
+    try {
+        $sortie = (& node $outil --serie $serie --modele $modele 2>&1 | ForEach-Object { "$_" }) -join "`n"
+        if ($LASTEXITCODE) { Say "`nStock : la tablette n'a pas pu être notée ($sortie)" 'Yellow' }
+        else {
+            Say ''
+            foreach ($ligne in ($sortie -split "`n")) {
+                if ($ligne -match '>>>') { Write-Host " $ligne " -ForegroundColor Black -BackgroundColor Yellow } else { Say $ligne 'Green' }
+            }
+        }
+    } catch {
+        Say "`nStock : la tablette n'a pas pu être notée ($($_.Exception.Message))" 'Yellow'
+    }
+}
+
 Say "`n=== Terminé ! La tablette affiche Papote. ===" 'Cyan'
 Say 'Vous pouvez débrancher le câble USB (laissez la tablette sur son chargeur).'
 if (-not $Oui) { Read-Host "`nAppuyez sur Entrée pour fermer" }

@@ -1195,6 +1195,19 @@ final class Sync {
         } catch (JSONException ignored) { }
     }
 
+    /** N° de série Android (le même que « adb shell getprop ro.serialno »), ou null s'il est illisible. */
+    @SuppressWarnings({"deprecation", "MissingPermission"})
+    private static String serialNumber() {
+        String s = null;
+        try {
+            s = android.os.Build.getSerial(); // permis à l'appli propriétaire de l'appareil
+        } catch (Exception e) {
+            Log.w(TAG, "N° de série", e);
+        }
+        if (s == null || s.isEmpty() || android.os.Build.UNKNOWN.equals(s)) s = android.os.Build.SERIAL;
+        return s == null || s.isEmpty() || android.os.Build.UNKNOWN.equals(s) ? null : s;
+    }
+
     private void pairingStep() throws IOException, JSONException {
         String name = prefs.getString("tabletName", null);
         if (name == null || name.isEmpty()) { welcome(new JSONObject().put("step", "name")); return; }
@@ -1242,6 +1255,9 @@ final class Sync {
                     .put("status", Firebase.string("waiting"))
                     .put("expiresAt", new JSONObject().put("timestampValue", iso.format(new java.util.Date(expires))));
             if (firebase.callsUid() != null) fields.put("callsUid", Firebase.string(firebase.callsUid()));
+            // N° de série : le serveur reconnaît la tablette préparée et relie sa commande à la famille.
+            String serie = serialNumber();
+            if (serie != null) fields.put("serie", Firebase.string(serie));
             JSONObject write = new JSONObject()
                     .put("update", new JSONObject()
                             .put("name", Firebase.docName("pairings/" + code))
