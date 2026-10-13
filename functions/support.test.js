@@ -48,3 +48,9 @@ test('repère la marque de passage de main', () => {
 test('retire le gras markdown', () => {
   assert.strictEqual(lireReponse('Allez dans **Réglages**.').reponse, 'Allez dans Réglages.');
 });
+
+test('retire la phrase de refus collée à une vraie réponse', () => {
+  assert.strictEqual(lireReponse('Renvoyez-la sous 30 jours. Je ne peux vous aider que pour Papote : avez-vous une question sur la tablette ou l\'appli ?').reponse, 'Renvoyez-la sous 30 jours.');
+  const refus = 'Je ne peux vous aider que pour Papote. Avez-vous une question sur la tablette ou l\'appli ?';
+  assert.strictEqual(lireReponse(refus).reponse, refus);
+});
