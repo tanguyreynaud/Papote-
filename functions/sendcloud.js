@@ -139,6 +139,16 @@ function client(cles) {
   }
 
   return {
+    // Annule un colis (étiquette non utilisée, remboursée par Sendcloud). Déjà annulé ou supprimé : rien à faire.
+    async annuler(colis) {
+      const r = await fetch(`${API.replace('/v3', '/v2')}/parcels/${colis}/cancel`, {
+        method: 'POST', headers: { Authorization: auth, Accept: 'application/json' },
+      });
+      if (r.ok || r.status === 404 || r.status === 410) return;
+      const json = await r.json().catch(() => null);
+      if (r.status === 401 || r.status === 403) throw new Error('Sendcloud refuse les clés : relancez installer-sendcloud.bat.');
+      throw new Error(`Sendcloud n'annule pas ce colis : ${erreurLisible(json)}`);
+    },
     // Colis aller : { colis, suivi, lienSuivi, pdf }.
     async envoi({ de, vers, pointRelais, poids, reference }) {
       const liste = await options(de, vers, pointRelais, poids, pointRelais ? 'relais' : 'domicile');
