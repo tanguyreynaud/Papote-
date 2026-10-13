@@ -12,7 +12,7 @@ const propre = (v, max = 100) => (typeof v === 'string' ? v.trim().replace(/\s+/
 function adresseClient(c) {
   const l = c.livraison || {};
   const contact = {
-    name: propre(c.nom || l.nom || c.email, 70),
+    name: propre(l.destinataire || c.nom || l.nom || c.email, 70), // personne qui retire le colis, choisie à la commande
     ...(c.telephone ? { phone_number: propre(c.telephone, 20) } : {}),
     ...(c.email ? { email: propre(c.email, 120) } : {}),
   };
