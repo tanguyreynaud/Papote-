@@ -287,3 +287,24 @@ test('une tablette réservée à une commande à envoyer compte pour elle', () =
   });
   assert.deepStrictEqual(liste, ['1 tablette à envoyer']);
 });
+
+test('confirmation de commande lue dans le corps de l\'e-mail', () => {
+  const html = `<html><style>p{color:red}</style><body><p>Merci pour votre commande n° 123&nbsp;!</p>${'<p>Tablette 10 pouces x2 — 159,80 &euro;</p>'.repeat(5)}</body></html>`;
+  const p = g.corpsDuMail({ html, subject: 'Votre commande Cdiscount', from: { text: 'Cdiscount <ne-pas-repondre@cdiscount.com>' }, date: new Date(Date.UTC(2026, 9, 13)) });
+  const t = p.content.toString('utf8');
+  assert.strictEqual(p.contentType, 'text/plain');
+  assert.match(t, /Objet : Votre commande Cdiscount/);
+  assert.match(t, /159,80 €/);
+  assert.doesNotMatch(t, /color:red|<p>/);
+  assert.strictEqual(g.corpsDuMail({ text: 'Bonjour' }), null);
+});
+
+test('la facture rejoint la confirmation du même achat', () => {
+  const jour = 864e5;
+  const conf = { confirmation: true, fournisseur: 'CDISCOUNT', montant: 15980, date: Date.UTC(2026, 9, 1) };
+  assert.ok(g.memeAchat(conf, { fournisseur: 'Cdiscount', montant: 15980, date: conf.date + 10 * jour }));
+  assert.ok(!g.memeAchat(conf, { fournisseur: 'Cdiscount', montant: 15990, date: conf.date }));
+  assert.ok(!g.memeAchat(conf, { fournisseur: 'Temu', montant: 15980, date: conf.date }));
+  assert.ok(!g.memeAchat({ ...conf, confirmation: false }, { fournisseur: 'Cdiscount', montant: 15980, date: conf.date }));
+  assert.ok(!g.memeAchat(conf, { fournisseur: 'Cdiscount', montant: 15980, date: conf.date + 40 * jour }));
+});
