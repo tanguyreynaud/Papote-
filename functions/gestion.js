@@ -15,7 +15,8 @@
 //   gestionCloture  le 1er du mois à 5 h : livre des recettes et registre des achats du mois écoulé, figés
 //                   (gestion/archives), rangés dans Storage et envoyés par e-mail ; gestionCloturer : tout de suite
 //   gestionAutomatique  chaque nuit : factures des 120 € de tablette non rendue, avoirs des
-//                       remboursements, dépenses mensuelles récurrentes (gestionAutomatiser : tout de suite)
+//                       remboursements, dépenses mensuelles récurrentes, états du stock suivant les
+//                       commandes (gestionAutomatiser : tout de suite)
 //
 // Stripe est la source de vérité pour l'argent qui rentre ; Firestore garde le stock (stock/{id})
 // et les dépenses (depenses/{id}), écrits seulement ici (aucune règle client : lecture et écriture
@@ -178,6 +179,24 @@ function simAResilier(tablette, commande) {
   if (ETATS_SANS_CLIENT.includes(tablette.etat)) return true;
   return !!(commande && ((commande.restitution && ['rendue', 'facturee'].includes(commande.restitution.statut))
     || ['resilie', 'canceled'].includes(commande.abonnement)));
+}
+
+// Le stock suit les commandes : ce que la nuit corrige quand une étape n'a pas été notée sur la tablette.
+// Renvoie les champs à changer ({ etat, commande }) ou null.
+const ETATS_PARTIS = ['envoyee', 'chez-client', 'en-retour'];
+function stockAJour(tablette, commande) {
+  if (!commande) return null;
+  const retour = commande.restitution && commande.restitution.statut;
+  if (ETATS_PARTIS.includes(tablette.etat)) {
+    if (retour === 'facturee') return { etat: 'perdue' };
+    if (retour === 'rendue') return { etat: 'revenue' };
+    if (tablette.etat === 'envoyee' && commande.fid) return { etat: 'chez-client' };
+  }
+  // Commande annulée avant le départ : la tablette mise de côté redevient libre.
+  if (commande.expedition === 'annulee' && ['en-stock', 'preparee'].includes(tablette.etat)) {
+    return { etat: 'en-stock', commande: null };
+  }
+  return null;
 }
 
 // Pièces jointes d'un e-mail à lire comme factures : PDF et photos, sans les petits logos de signature.
@@ -944,9 +963,34 @@ async function depensesRecurrentes(maintenant, bilan) {
   }
 }
 
+async function synchroniserStock(bilan) {
+  const [stock, commandes] = await Promise.all([
+    db().collection('stock').where('commande', '!=', null).get(),
+    db().collection('commandes').get(),
+  ]);
+  const parId = new Map(commandes.docs.map((d) => [d.id, d.data()]));
+  for (const t of stock.docs) {
+    const maj = stockAJour(t.data(), parId.get(t.get('commande')));
+    if (!maj) continue;
+    try {
+      await t.ref.update({
+        ...maj,
+        majLe: FieldValue.serverTimestamp(),
+        historique: FieldValue.arrayUnion({
+          le: Date.now(), etat: maj.etat, par: 'automatique', commande: 'commande' in maj ? maj.commande : t.get('commande'),
+        }),
+      });
+      bilan.stock.push(`${t.get('numero') || t.id} : ${ETATS[maj.etat]}`);
+    } catch (e) {
+      bilan.erreurs.push(`Tablette ${t.get('numero') || t.id} : ${e.message}`);
+    }
+  }
+}
+
 async function automatiser(qui) {
   const maintenant = Date.now();
-  const bilan = { factures: [], avoirs: [], depenses: 0, erreurs: [] };
+  const bilan = { factures: [], avoirs: [], depenses: 0, stock: [], erreurs: [] };
+  await synchroniserStock(bilan);
   await depensesRecurrentes(maintenant, bilan);
   await facturerPenalites(maintenant - FENETRE, bilan);
   await avoirsRemboursements(maintenant - FENETRE, bilan);
@@ -1358,6 +1402,6 @@ exports.gestionCourrierMaintenant = onCall(OPTIONS_COURRIER, async (request) => 
 
 exports.regles = {
   ETATS, CATEGORIES, natureMouvement, mensuel, centimes, lien, nomFichier, moisSuivant, lectureVersFormulaire, SCHEMA_FACTURE,
-  lireReglages, simAResilier, aFaire, piecesFacture, debutMoisParis, moisPrecedent, csvTexte, livreDesRecettes,
+  lireReglages, simAResilier, stockAJour, aFaire, piecesFacture, debutMoisParis, moisPrecedent, csvTexte, livreDesRecettes,
   registreDesAchats,
 };

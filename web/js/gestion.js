@@ -1249,6 +1249,7 @@ function afficherAutomatique() {
     a.factures.length ? `${pluriel(a.factures.length, 'facture')} créée${a.factures.length > 1 ? 's' : ''} (${a.factures.join(', ')})` : null,
     a.avoirs.length ? `${pluriel(a.avoirs.length, 'avoir')} (${a.avoirs.join(', ')})` : null,
     a.depenses ? `${pluriel(a.depenses, 'dépense mensuelle')} ajoutée${a.depenses > 1 ? 's' : ''}` : null,
+    (a.stock || []).length ? `stock mis à jour (${a.stock.join(', ')})` : null,
   ].filter(Boolean);
   $('automatique').replaceChildren(
     `Dernier passage le ${quand} : ${fait.length ? fait.join(', ') : 'rien à faire'}.`,

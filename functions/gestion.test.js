@@ -167,3 +167,16 @@ test('livre des recettes et registre des achats', () => {
   assert.strictEqual(a.total, 30200);
   assert.strictEqual(a.csv.trim().split('\r\n')[1], '05/10/2026;Cdiscount;F1;Tablettes;Achat de tablettes;300,00;50,00;f1.pdf');
 });
+
+test('le stock suit les commandes', () => {
+  const partie = { etat: 'envoyee', commande: 'sub_1' };
+  assert.strictEqual(g.stockAJour(partie, undefined), null);
+  assert.strictEqual(g.stockAJour(partie, { expedition: 'envoyee', fid: null }), null);
+  assert.deepStrictEqual(g.stockAJour(partie, { expedition: 'envoyee', fid: 'f1' }), { etat: 'chez-client' });
+  assert.strictEqual(g.stockAJour({ etat: 'chez-client' }, { fid: 'f1' }), null);
+  assert.deepStrictEqual(g.stockAJour({ etat: 'chez-client' }, { fid: 'f1', restitution: { statut: 'facturee' } }), { etat: 'perdue' });
+  assert.deepStrictEqual(g.stockAJour({ etat: 'en-retour' }, { restitution: { statut: 'rendue' } }), { etat: 'revenue' });
+  assert.strictEqual(g.stockAJour({ etat: 'revenue' }, { restitution: { statut: 'rendue' } }), null);
+  assert.deepStrictEqual(g.stockAJour({ etat: 'preparee' }, { expedition: 'annulee' }), { etat: 'en-stock', commande: null });
+  assert.strictEqual(g.stockAJour({ etat: 'envoyee' }, { expedition: 'annulee' }), null);
+});
