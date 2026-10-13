@@ -99,3 +99,59 @@
 }
 .ship { flex-wrap: wrap; }
 .ship select.tablette, .ship input { flex: 1 1 200px; }
+
+/* ---------- Recherche ---------- */
+
+.recherche { position: relative; flex: 1 1 280px; max-width: 420px; }
+.recherche input { margin: 0; width: 100%; padding: 9px 14px; font-size: 15px; border-radius: 999px; }
+.resultats {
+  position: absolute; z-index: 20; top: calc(100% + 6px); left: 0; right: 0; margin: 0; padding: 6px; list-style: none;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); max-height: 60vh; overflow-y: auto;
+}
+.resultats li.muted { padding: 8px 10px; }
+.resultats button {
+  display: block; width: 100%; min-height: 0; padding: 8px 10px; border-radius: 10px; text-align: left;
+  background: none; color: var(--text); font-weight: 600;
+}
+.resultats button:hover, .resultats button:focus-visible { background: #eef0ff; }
+.resultats small { display: block; color: var(--muted); font-weight: 400; }
+
+/* ---------- Dépôt et lecture des factures ---------- */
+
+.grille label.depot { padding: 12px; border: 2px dashed var(--line); border-radius: 14px; background: var(--bg); }
+.grille label.depot span { display: block; margin-top: 4px; font-weight: 400; }
+.grille .scanner { justify-self: start; margin: 0 0 8px; }
+.avec-bouton { display: flex; gap: 8px; align-items: center; }
+.avec-bouton input { flex: 1; min-width: 0; margin: 0; }
+.avec-bouton .scanner { margin: 0; }
+body.depot-actif::after {
+  content: 'Déposez la facture ici'; position: fixed; inset: 12px; z-index: 50; display: grid; place-items: center;
+  border: 3px dashed var(--accent); border-radius: 24px; background: rgba(238, 240, 255, .85);
+  color: var(--accent); font-size: 24px; font-weight: 700; pointer-events: none;
+}
+.scan-video { width: 100%; max-height: 50vh; border-radius: 14px; background: #24212f; object-fit: cover; }
+
+/* ---------- Graphiques ---------- */
+
+.graphiques { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+.graphiques figure { margin: 0; }
+.graphiques figcaption { font-size: 14px; color: var(--muted); margin-bottom: 6px; }
+.graphique { width: 100%; height: auto; display: block; }
+.graphique .g-grille { stroke: var(--line); stroke-width: 1; }
+.graphique .g-zero { stroke: var(--muted); stroke-width: 1; }
+.graphique .g-axe { fill: var(--muted); font-size: 12px; }
+.graphique .g-ligne { fill: none; stroke-width: 2.5; }
+.g-encaisse { fill: #4f46e5; background: #4f46e5; }
+.g-depense { fill: #c7c3ea; background: #c7c3ea; }
+.g-resultat { fill: #24212f; stroke: #24212f; background: #24212f; }
+.g-arrivee { fill: #15803d; background: #15803d; }
+.g-depart { fill: #dc2626; background: #dc2626; }
+.g-encours { fill: #4f46e5; stroke: #4f46e5; background: #4f46e5; }
+.legende { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 6px 0 0; color: var(--muted); }
+.legende span { display: inline-flex; align-items: center; gap: 6px; }
+.legende i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.actions label { display: flex; align-items: center; gap: 6px; margin: 0; font-weight: 400; }
+.actions label input { width: 70px; margin: 0; padding: 8px 10px; }
+.fiche .link { padding: 0; min-height: 0; color: var(--accent); text-decoration: underline; }
+.graphique rect, .graphique circle { stroke: none; }
+.graphique .g-axe { font-weight: 400; }

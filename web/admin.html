@@ -58,6 +58,10 @@
     <main class="contenu">
       <header class="contenu-tete">
         <h1 id="titre-page">Accueil</h1>
+        <div class="recherche no-print">
+          <input type="search" id="recherche" placeholder="Rechercher un client, une commande, un n° de série…" aria-label="Rechercher" autocomplete="off">
+          <ul id="resultats" class="resultats" hidden></ul>
+        </div>
         <div class="periode no-print" id="periode" hidden>
           <select id="p-choix" aria-label="Période">
             <option value="mois">Ce mois-ci</option>
@@ -90,6 +94,21 @@
         <div class="card">
           <h2>Ce mois-ci</h2>
           <div class="stats compact" id="kpi-mois"></div>
+        </div>
+        <div class="card">
+          <div class="tete">
+            <h2>Une facture à saisir ?</h2>
+            <button type="button" class="primary small-btn" id="btn-lire">Déposer une facture</button>
+          </div>
+          <p class="muted small">PDF ou photo : elle est lue automatiquement, puis rangée dans le stock (achat de tablettes) ou les dépenses, avec la pièce jointe. Vous pouvez aussi la glisser n'importe où sur la page.</p>
+        </div>
+        <div class="card">
+          <div class="tete">
+            <h2>Automatique</h2>
+            <button type="button" class="secondary small-btn" id="btn-automatiser">Lancer maintenant</button>
+          </div>
+          <p class="muted small">Chaque nuit : facture des 120 € de tablette non rendue, avoir pour chaque remboursement, dépenses mensuelles ajoutées au registre.</p>
+          <p id="automatique" class="small"></p>
         </div>
       </section>
 
@@ -182,7 +201,7 @@
               <button type="button" class="secondary small-btn" id="x-factures">Exporter</button>
             </div>
           </div>
-          <p class="muted small">Créées et envoyées automatiquement par Stripe à chaque paiement (commande, puis chaque mois).</p>
+          <p class="muted small">Créées et envoyées automatiquement par Stripe à chaque paiement (commande, puis chaque mois). Les 120 € de tablette non rendue reçoivent aussi leur facture, et chaque remboursement son avoir, automatiquement chaque nuit.</p>
           <div class="table"><table id="t-factures"></table></div>
         </div>
       </section>
@@ -202,6 +221,27 @@
           </div>
           <div class="table"><table id="t-bilan"></table></div>
           <p class="muted small">Résultat = encaissé − remboursements − frais Stripe − dépenses. L'export contient le bilan, le livre des recettes, le registre des achats, les factures et le relevé Stripe.</p>
+        </div>
+        <div class="card">
+          <h2>En images</h2>
+          <div class="graphiques">
+            <figure><figcaption>Encaissé, dépenses et résultat par mois</figcaption><div id="g-argent"></div></figure>
+            <figure><figcaption>Abonnements en cours, arrivées et départs</figcaption><div id="g-abonnes"></div></figure>
+          </div>
+        </div>
+        <div class="card">
+          <div class="tete">
+            <h2>Déclarations URSSAF</h2>
+            <div class="actions no-print">
+              <select id="u-rythme" aria-label="Rythme des déclarations">
+                <option value="mois">Mensuelles</option>
+                <option value="trimestre">Trimestrielles</option>
+              </select>
+              <label class="small">Taux <input id="u-taux" inputmode="decimal" size="5" value="21,2"> %</label>
+            </div>
+          </div>
+          <div class="table"><table id="t-urssaf"></table></div>
+          <p class="muted small">Micro-entreprise : on déclare le chiffre d'affaires encaissé (paiements reçus moins remboursements), sans déduire les frais ni les dépenses. Le taux est une estimation à vérifier sur autoentrepreneur.urssaf.fr selon votre activité et vos options.</p>
         </div>
         <div class="card">
           <div class="tete">
@@ -245,16 +285,19 @@
   <dialog id="d-achat" class="fenetre">
     <div class="fenetre-tete"><h2>Ajouter un achat de tablettes</h2><button type="button" class="fermer" aria-label="Fermer">✕</button></div>
     <form id="f-stock" class="grille">
+      <label class="large depot">Facture ou bon de commande (PDF ou photo, 6 Mo au plus)
+        <input type="file" name="piece" accept="application/pdf,image/*" multiple>
+        <span class="muted small">Elle est lue automatiquement pour remplir la fiche : vérifiez avant d'enregistrer.</span></label>
       <label>Quantité <input type="number" name="quantite" min="1" max="200" value="1" required></label>
       <label>Date d'achat <input type="date" name="date" required></label>
       <label>Modèle <input name="modele" placeholder="ex. Teclast P30"></label>
       <label>Fournisseur <input name="fournisseur" placeholder="ex. Cdiscount"></label>
       <label>Prix unitaire TTC (€) <input name="prix" inputmode="decimal" placeholder="89,90" required></label>
       <label>dont TVA par tablette (€) <input name="tva" inputmode="decimal" placeholder="facultatif"></label>
+      <label>N° de facture <input name="numero" placeholder="facultatif"></label>
       <label class="large">Numéros de série, un par ligne (facultatif)
         <textarea name="numeros" rows="3"></textarea></label>
-      <label class="large">Facture ou bon de commande (PDF ou photo, 6 Mo au plus)
-        <input type="file" name="piece" accept="application/pdf,image/*" multiple></label>
+      <button type="button" class="secondary small-btn scanner" data-cible="numeros" hidden>Scanner les codes-barres</button>
       <p class="muted small large">L'achat est aussi inscrit dans les dépenses, avec la pièce jointe.</p>
       <button type="submit" class="primary">Ajouter au stock</button>
       <p class="f-msg small" hidden></p>
@@ -264,14 +307,17 @@
   <dialog id="d-depense" class="fenetre">
     <div class="fenetre-tete"><h2>Ajouter une dépense</h2><button type="button" class="fermer" aria-label="Fermer">✕</button></div>
     <form id="f-depense" class="grille">
+      <label class="large depot">Justificatif (PDF ou photo, 6 Mo au plus)
+        <input type="file" name="piece" accept="application/pdf,image/*" multiple>
+        <span class="muted small">Il est lu automatiquement pour remplir la fiche : vérifiez avant d'enregistrer.</span></label>
       <label>Date <input type="date" name="date" required></label>
       <label>Catégorie <select name="categorie" required></select></label>
       <label>Fournisseur <input name="fournisseur"></label>
       <label>Libellé <input name="libelle" required placeholder="ex. Forfaits SIM octobre"></label>
       <label>Montant TTC (€) <input name="montant" inputmode="decimal" required placeholder="12,00"></label>
       <label>dont TVA (€) <input name="tva" inputmode="decimal" placeholder="facultatif"></label>
-      <label class="large">Justificatif (PDF ou photo, 6 Mo au plus)
-        <input type="file" name="piece" accept="application/pdf,image/*" multiple></label>
+      <label>N° de facture <input name="numero" placeholder="facultatif"></label>
+      <label class="case large"><input type="checkbox" name="recurrente"> Chaque mois : ajoutée automatiquement au registre à la même date</label>
       <button type="submit" class="primary">Ajouter</button>
       <p class="f-msg small" hidden></p>
     </form>
@@ -280,7 +326,7 @@
   <dialog id="d-tablette" class="fenetre">
     <div class="fenetre-tete"><h2 id="dt-titre">Tablette</h2><button type="button" class="fermer" aria-label="Fermer">✕</button></div>
     <form id="f-tablette" class="grille">
-      <label>N° de série <input name="numero"></label>
+      <label>N° de série <span class="avec-bouton"><input name="numero"><button type="button" class="secondary small-btn scanner" data-cible="numero" hidden>Scanner</button></span></label>
       <label>Modèle <input name="modele"></label>
       <label>État <select name="etat"></select></label>
       <label>Commande <select name="commande"></select></label>
@@ -298,6 +344,14 @@
       </div>
       <p class="f-msg small" hidden></p>
     </form>
+  </dialog>
+
+  <dialog id="d-scan" class="fenetre">
+    <div class="fenetre-tete"><h2>Scanner un code-barres</h2><button type="button" class="fermer" aria-label="Fermer">✕</button></div>
+    <video id="scan-video" class="scan-video" playsinline muted></video>
+    <p id="scan-msg" class="muted small">Visez le code-barres du numéro de série (étiquette de la boîte ou au dos de la tablette).</p>
+    <ul id="scan-lus" class="small"></ul>
+    <button type="button" class="primary" id="scan-fin">Terminé</button>
   </dialog>
 
   <script type="module" src="js/admin.js"></script>

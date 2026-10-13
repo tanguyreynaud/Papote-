@@ -7,17 +7,26 @@
 //   gestionStripe   factures, encaissements, remboursements, frais et abonnements Stripe d'une période
 //   gestionCommande factures et paiements Stripe d'une commande
 //   gestionPiece    pièces jointes (facture d'achat, bon de livraison…) d'une tablette ou d'une dépense
+//   gestionLireFacture  lit une facture d'achat (PDF ou photo) avec Claude pour préremplir la saisie
+//   gestionAutomatique  chaque nuit : factures des 120 € de tablette non rendue, avoirs des
+//                       remboursements, dépenses mensuelles récurrentes (gestionAutomatiser : tout de suite)
 //
 // Stripe est la source de vérité pour l'argent qui rentre ; Firestore garde le stock (stock/{id})
 // et les dépenses (depenses/{id}), écrits seulement ici (aucune règle client : lecture et écriture
 // refusées depuis les applis), pièces jointes dans Storage sous gestion/ (idem). Réservé au badge admin.
 
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { onSchedule } = require('firebase-functions/v2/scheduler');
+const { logger } = require('firebase-functions/v2');
 const { defineSecret } = require('firebase-functions/params');
 const admin = require('firebase-admin');
 const Stripe = require('stripe');
+const Anthropic = require('@anthropic-ai/sdk');
 
 const STRIPE_SECRET = defineSecret('STRIPE_SECRET');
+// Même clé que le chat de support (outils/support/installer-support.bat), jamais dans le dépôt.
+const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
+const MODELE_LECTURE = 'claude-opus-5-5';
 const { FieldValue, Timestamp } = admin.firestore;
 const db = () => admin.firestore();
 
@@ -118,6 +127,80 @@ function mensuel(abo) {
   return Math.round(total);
 }
 
+// Échéance suivante d'une dépense mensuelle : même jour le mois d'après (ou le dernier jour du mois).
+function moisSuivant(le, jour) {
+  const d = new Date(le);
+  const annee = d.getUTCFullYear();
+  const mois = d.getUTCMonth() + 1;
+  const dernier = new Date(Date.UTC(annee, mois + 1, 0)).getUTCDate();
+  return Date.UTC(annee, mois, Math.min(jour || d.getUTCDate(), dernier), 12);
+}
+
+// Euros (nombre lu sur la facture) → centimes, sinon null.
+function euros(valeur) {
+  if (typeof valeur !== 'number' || !Number.isFinite(valeur)) return null;
+  return centimes(Math.round(valeur * 100));
+}
+
+// Ce que Claude renvoie (SCHEMA_FACTURE) → valeurs des formulaires d'achat et de dépense.
+function lectureVersFormulaire(o) {
+  o = o || {};
+  const date = typeof o.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(o.date) ? Date.parse(`${o.date}T12:00:00Z`) : null;
+  const t = o.tablettes && typeof o.tablettes === 'object' ? o.tablettes : null;
+  const quantite = t && Number.isInteger(t.quantite) && t.quantite >= 1 && t.quantite <= MAX_QUANTITE ? t.quantite : null;
+  return {
+    facture: o.estUneFacture !== false,
+    fournisseur: texte(o.fournisseur),
+    numero: texte(o.numero, 80),
+    date: Number.isFinite(date) ? date : null,
+    montant: euros(o.totalTTC),
+    tva: euros(o.tva),
+    devise: texte(o.devise, 3),
+    categorie: CATEGORIES[o.categorie] ? o.categorie : 'autre',
+    libelle: texte(o.libelle),
+    tablettes: quantite ? {
+      quantite,
+      modele: texte(t.modele),
+      prixAchat: euros(t.prixUnitaireTTC),
+      numeros: (Array.isArray(t.numerosSerie) ? t.numerosSerie : []).map((n) => texte(n, 80)).filter(Boolean).slice(0, quantite),
+    } : null,
+    remarque: texte(o.remarque, 300),
+  };
+}
+
+const nul = (type) => ({ anyOf: [{ type }, { type: 'null' }] });
+const SCHEMA_FACTURE = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['estUneFacture', 'fournisseur', 'numero', 'date', 'totalTTC', 'tva', 'devise', 'categorie', 'libelle', 'tablettes', 'remarque'],
+  properties: {
+    estUneFacture: { type: 'boolean', description: 'Faux si le document n\'est ni une facture ni un ticket de caisse.' },
+    fournisseur: nul('string'),
+    numero: { ...nul('string'), description: 'Numéro de la facture.' },
+    date: { anyOf: [{ type: 'string', format: 'date' }, { type: 'null' }], description: 'Date de la facture (AAAA-MM-JJ).' },
+    totalTTC: { ...nul('number'), description: 'Total payé, toutes taxes comprises, en euros.' },
+    tva: { ...nul('number'), description: 'Montant total de la TVA en euros, null si aucune.' },
+    devise: { ...nul('string'), description: 'Code ISO de la devise, EUR le plus souvent.' },
+    categorie: { type: 'string', enum: Object.keys(CATEGORIES) },
+    libelle: { type: 'string', description: 'Ce qui a été acheté, en quelques mots, en français.' },
+    tablettes: {
+      anyOf: [{ type: 'null' }, {
+        type: 'object',
+        additionalProperties: false,
+        required: ['quantite', 'modele', 'prixUnitaireTTC', 'numerosSerie'],
+        properties: {
+          quantite: { type: 'integer' },
+          modele: nul('string'),
+          prixUnitaireTTC: nul('number'),
+          numerosSerie: { type: 'array', items: { type: 'string' } },
+        },
+      }],
+      description: 'Seulement pour un achat de tablettes : sinon null.',
+    },
+    remarque: { ...nul('string'), description: 'Un doute à signaler à la personne qui saisit (montant illisible…), sinon null.' },
+  },
+};
+
 // ---------- Accès ----------
 
 function verifierAdmin(request) {
@@ -148,11 +231,12 @@ function effacerPieces(pieces) {
 
 exports.gestionDonnees = onCall(async (request) => {
   verifierAdmin(request);
-  const [commandes, stock, depenses, familles] = await Promise.all([
+  const [commandes, stock, depenses, familles, automatique] = await Promise.all([
     db().collection('commandes').get(),
     db().collection('stock').get(),
     db().collection('depenses').get(),
     db().collection('families').select('name', 'abonnement').get(),
+    db().doc('gestion/automatique').get(),
   ]);
   const parFid = new Map(familles.docs.map((f) => [f.id, f.data()]));
   return {
@@ -190,6 +274,7 @@ exports.gestionDonnees = onCall(async (request) => {
     })),
     etats: ETATS,
     categories: CATEGORIES,
+    automatique: automatique.exists ? automatique.data() : null,
   };
 });
 
@@ -218,6 +303,7 @@ exports.gestionStock = onCall(async (request) => {
         date: Timestamp.fromMillis(achat),
         categorie: 'tablettes',
         fournisseur: texte(d.fournisseur),
+        numero: texte(d.numeroFacture, 80),
         libelle: `${quantite} tablette${quantite > 1 ? 's' : ''} ${texte(d.modele) || ''}`.trim(),
         montant: prix * quantite,
         tva: centimes(d.tva) != null ? centimes(d.tva) * quantite : null,
@@ -305,18 +391,31 @@ exports.gestionDepense = onCall(async (request) => {
     if (!CATEGORIES[d.categorie]) throw new HttpsError('invalid-argument', 'Catégorie inconnue.');
     const libelle = texte(d.libelle);
     if (!libelle) throw new HttpsError('invalid-argument', 'Libellé manquant.');
+    const date = ms(d.date) || Date.now();
+    const jour = new Date(date).getUTCDate();
     const ref = await db().collection('depenses').add({
-      date: Timestamp.fromMillis(ms(d.date) || Date.now()),
+      date: Timestamp.fromMillis(date),
       categorie: d.categorie,
       fournisseur: texte(d.fournisseur),
+      numero: texte(d.numero, 80),
       libelle,
       montant,
       tva: centimes(d.tva),
       justificatif: lien(d.justificatif),
+      // Dépense mensuelle (hébergement, forfaits…) : recopiée chaque mois par gestionAutomatique.
+      recurrence: d.recurrente === true ? 'mensuelle' : null,
+      jourRecurrence: d.recurrente === true ? jour : null,
+      prochaine: d.recurrente === true ? Timestamp.fromMillis(moisSuivant(date, jour)) : null,
       creeLe: FieldValue.serverTimestamp(),
       creePar: request.auth.token.email || request.auth.uid,
     });
     return { ok: true, id: ref.id };
+  }
+  if (d.action === 'arreter') {
+    const ref = db().doc(`depenses/${d.id || '-'}`);
+    if (!(await ref.get()).exists) throw new HttpsError('not-found', 'Dépense introuvable.');
+    await ref.update({ recurrence: null, prochaine: null });
+    return { ok: true };
   }
   if (d.action === 'supprimer') {
     const ref = db().doc(`depenses/${d.id || '-'}`);
@@ -514,4 +613,182 @@ exports.gestionPiece = onCall({ memory: '512MiB' }, async (request) => {
   throw new HttpsError('invalid-argument', 'Action inconnue.');
 });
 
-exports.regles = { ETATS, CATEGORIES, natureMouvement, mensuel, centimes, lien, nomFichier };
+// ---------- Lecture automatique d'une facture d'achat ----------
+
+const TYPES_LECTURE = /^(application\/pdf|image\/(png|jpeg|webp|gif))$/;
+const CONSIGNE_LECTURE = `Tu lis une facture d'achat (ou un ticket) reçue par Papote, une petite entreprise française
+qui prête des tablettes à des personnes âgées et leur famille. Remplis chaque champ d'après le document seulement :
+null quand l'information n'y figure pas, jamais d'invention. Montants en euros, tels qu'imprimés.
+Catégories : tablettes (achat de tablettes), sim (cartes SIM, forfaits mobiles), expedition (transport, colis,
+étiquettes, emballages), hebergement (serveurs, Firebase, Google Cloud, nom de domaine), logiciels (abonnements
+logiciels, IA), publicite (annonces, réseaux sociaux), materiel (petit matériel : câbles, chargeurs, supports),
+autre. Pour un achat de tablettes, remplis aussi « tablettes » avec les numéros de série (IMEI ou S/N) lisibles.`;
+
+exports.gestionLireFacture = onCall(
+  { secrets: [ANTHROPIC_API_KEY], timeoutSeconds: 180, memory: '512MiB' },
+  async (request) => {
+    verifierAdmin(request);
+    const d = request.data || {};
+    if (!TYPES_LECTURE.test(d.type || '')) throw new HttpsError('invalid-argument', 'PDF, JPEG ou PNG seulement.');
+    const contenu = String(d.contenu || '');
+    if (!contenu || contenu.length > MAX_PIECE * 1.4) throw new HttpsError('invalid-argument', 'Fichier vide ou trop lourd.');
+    const document = d.type === 'application/pdf'
+      ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: contenu } }
+      : { type: 'image', source: { type: 'base64', media_type: d.type, data: contenu } };
+    let reponse;
+    try {
+      const client = new Anthropic({ apiKey: ANTHROPIC_API_KEY.value() });
+      reponse = await client.beta.messages.create({
+        model: MODELE_LECTURE,
+        max_tokens: 16000,
+        betas: ['server-side-fallback-2026-07-01'],
+        fallbacks: 'default',
+        system: CONSIGNE_LECTURE,
+        messages: [{ role: 'user', content: [document, { type: 'text', text: 'Lis ce document.' }] }],
+        output_config: { format: { type: 'json_schema', schema: SCHEMA_FACTURE } },
+      });
+    } catch (e) {
+      logger.warn('Lecture de facture impossible', e.message);
+      throw new HttpsError('unavailable', 'La lecture automatique ne répond pas. Remplissez la fiche à la main.');
+    }
+    const bloc = (reponse.content || []).find((b) => b.type === 'text');
+    if (reponse.stop_reason !== 'end_turn' || !bloc) {
+      throw new HttpsError('failed-precondition', 'Ce document n\'a pas pu être lu. Remplissez la fiche à la main.');
+    }
+    try {
+      return lectureVersFormulaire(JSON.parse(bloc.text));
+    } catch {
+      throw new HttpsError('failed-precondition', 'Ce document n\'a pas pu être lu. Remplissez la fiche à la main.');
+    }
+  });
+
+// ---------- Automatismes (chaque nuit, ou tout de suite depuis l'accueil) ----------
+
+const JOUR = 24 * 60 * 60 * 1000;
+const FENETRE = 40 * JOUR; // ce qui s'est passé depuis 40 jours est revu chaque nuit
+
+// Tablette non rendue : le prélèvement de 120 € (restitutions, index.js) n'a pas de facture.
+// On en fait une, marquée payée hors Stripe, pour que chaque encaissement ait sa facture.
+async function facturerPenalites(depuis, bilan) {
+  const charges = await tout(stripe().charges.list({ created: { gte: Math.floor(depuis / 1000) }, limit: 100 }));
+  for (const c of charges) {
+    if (c.status !== 'succeeded' || c.invoice || (c.metadata && c.metadata.facture)) continue;
+    if (natureMouvement({ type: 'charge', source: c }) !== 'tablette-non-rendue' || !c.customer) continue;
+    try {
+      let facture = (await stripe().invoices.search({ query: `metadata['charge']:'${c.id}'` })).data[0];
+      if (!facture) {
+        facture = await stripe().invoices.create({
+          customer: typeof c.customer === 'string' ? c.customer : c.customer.id,
+          collection_method: 'charge_automatically',
+          auto_advance: false,
+          pending_invoice_items_behavior: 'exclude',
+          metadata: { charge: c.id, commande: (c.metadata && c.metadata.commande) || '' },
+        });
+        await stripe().invoiceItems.create({
+          customer: facture.customer,
+          invoice: facture.id,
+          amount: c.amount,
+          currency: c.currency,
+          description: 'Tablette Papote non rendue (indemnité prévue au contrat)',
+        });
+      }
+      if (facture.status === 'draft') facture = await stripe().invoices.finalizeInvoice(facture.id, { auto_advance: false });
+      if (facture.status === 'open') facture = await stripe().invoices.pay(facture.id, { paid_out_of_band: true });
+      await stripe().charges.update(c.id, { metadata: { facture: facture.id } });
+      bilan.factures.push(facture.number || facture.id);
+    } catch (e) {
+      bilan.erreurs.push(`Facture du paiement ${c.id} : ${e.message}`);
+    }
+  }
+}
+
+// Remboursement d'un paiement facturé : avoir rattaché à la facture (la facture seule ne suffit plus).
+async function avoirsRemboursements(depuis, bilan) {
+  const remboursements = await tout(stripe().refunds.list({
+    created: { gte: Math.floor(depuis / 1000) }, limit: 100, expand: ['data.charge'],
+  }));
+  for (const r of remboursements) {
+    if (r.status !== 'succeeded' || (r.metadata && r.metadata.avoir)) continue;
+    const c = r.charge && typeof r.charge === 'object' ? r.charge : {};
+    const facture = (typeof c.invoice === 'string' ? c.invoice : c.invoice && c.invoice.id)
+      || (c.metadata && c.metadata.facture);
+    if (!facture) continue; // paiement sans facture : rien à annuler
+    try {
+      const existants = await tout(stripe().creditNotes.list({ invoice: facture, limit: 100 }));
+      let avoir = existants.find((a) => (typeof a.refund === 'string' ? a.refund : a.refund && a.refund.id) === r.id);
+      if (!avoir) {
+        avoir = await stripe().creditNotes.create({
+          invoice: facture,
+          refund: r.id,
+          lines: [{
+            type: 'custom_line_item', description: 'Remboursement', quantity: 1, unit_amount: r.amount,
+          }],
+        });
+        bilan.avoirs.push(avoir.number || avoir.id);
+      }
+      await stripe().refunds.update(r.id, { metadata: { avoir: avoir.id } });
+    } catch (e) {
+      bilan.erreurs.push(`Avoir du remboursement ${r.id} : ${e.message}`);
+    }
+  }
+}
+
+// Dépenses mensuelles : la copie du mois est ajoutée au registre à son échéance.
+async function depensesRecurrentes(maintenant, bilan) {
+  const modeles = await db().collection('depenses').where('recurrence', '==', 'mensuelle').get();
+  for (const modele of modeles.docs) {
+    try {
+      await db().runTransaction(async (tx) => {
+        const snap = await tx.get(modele.ref);
+        const m = snap.data();
+        if (!m || m.recurrence !== 'mensuelle' || !m.prochaine) return;
+        let prochaine = m.prochaine.toMillis();
+        for (let i = 0; i < 12 && prochaine <= maintenant; i++) {
+          tx.set(db().collection('depenses').doc(), {
+            date: Timestamp.fromMillis(prochaine),
+            categorie: m.categorie,
+            fournisseur: m.fournisseur || null,
+            numero: null,
+            libelle: m.libelle,
+            montant: m.montant,
+            tva: m.tva == null ? null : m.tva,
+            justificatif: null,
+            recurrence: null,
+            depuis: snap.id,
+            creeLe: FieldValue.serverTimestamp(),
+            creePar: 'automatique',
+          });
+          bilan.depenses += 1;
+          prochaine = moisSuivant(prochaine, m.jourRecurrence);
+        }
+        tx.update(modele.ref, { prochaine: Timestamp.fromMillis(prochaine) });
+      });
+    } catch (e) {
+      bilan.erreurs.push(`Dépense mensuelle « ${modele.get('libelle')} » : ${e.message}`);
+    }
+  }
+}
+
+async function automatiser(qui) {
+  const maintenant = Date.now();
+  const bilan = { factures: [], avoirs: [], depenses: 0, erreurs: [] };
+  await depensesRecurrentes(maintenant, bilan);
+  await facturerPenalites(maintenant - FENETRE, bilan);
+  await avoirsRemboursements(maintenant - FENETRE, bilan);
+  await db().doc('gestion/automatique').set({ ...bilan, le: maintenant, par: qui });
+  if (bilan.erreurs.length) logger.warn('Automatismes de gestion', bilan.erreurs);
+  return bilan;
+}
+
+exports.gestionAutomatique = onSchedule(
+  { schedule: 'every day 04:00', timeZone: 'Europe/Paris', secrets: [STRIPE_SECRET], timeoutSeconds: 300 },
+  () => automatiser('automatique'));
+
+exports.gestionAutomatiser = onCall({ secrets: [STRIPE_SECRET], timeoutSeconds: 300 }, async (request) => {
+  verifierAdmin(request);
+  return automatiser(request.auth.token.email || request.auth.uid);
+});
+
+exports.regles = {
+  ETATS, CATEGORIES, natureMouvement, mensuel, centimes, lien, nomFichier, moisSuivant, lectureVersFormulaire, SCHEMA_FACTURE,
+};

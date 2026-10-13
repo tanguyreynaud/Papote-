@@ -41,3 +41,40 @@ test('nom de fichier des pièces jointes', () => {
   assert.strictEqual(g.nomFichier('../../secret'), '..-..-secret');
   assert.strictEqual(g.nomFichier(''), 'piece');
 });
+
+test('échéance suivante d\'une dépense mensuelle', () => {
+  const jour = (s) => new Date(s).toISOString().slice(0, 10);
+  assert.strictEqual(jour(g.moisSuivant(Date.UTC(2026, 0, 15, 12), 15)), '2026-02-15');
+  // Le 31 devient le 28 en février, puis revient au 31 en mars.
+  const fevrier = g.moisSuivant(Date.UTC(2026, 0, 31, 12), 31);
+  assert.strictEqual(jour(fevrier), '2026-02-28');
+  assert.strictEqual(jour(g.moisSuivant(fevrier, 31)), '2026-03-31');
+  assert.strictEqual(jour(g.moisSuivant(Date.UTC(2026, 11, 5, 12), 5)), '2027-01-05');
+});
+
+test('lecture d\'une facture vers le formulaire', () => {
+  const f = g.lectureVersFormulaire({
+    estUneFacture: true,
+    fournisseur: ' Cdiscount ',
+    numero: 'F-123',
+    date: '2026-10-02',
+    totalTTC: 359.7,
+    tva: 59.95,
+    devise: 'EUR',
+    categorie: 'tablettes',
+    libelle: '3 tablettes',
+    tablettes: { quantite: 3, modele: 'M107', prixUnitaireTTC: 119.9, numerosSerie: ['A1', ' ', 'A2', 'A3', 'A4'] },
+    remarque: null,
+  });
+  assert.strictEqual(f.fournisseur, 'Cdiscount');
+  assert.strictEqual(f.date, Date.UTC(2026, 9, 2, 12));
+  assert.strictEqual(f.montant, 35970);
+  assert.strictEqual(f.tva, 5995);
+  assert.deepStrictEqual(f.tablettes, { quantite: 3, modele: 'M107', prixAchat: 11990, numeros: ['A1', 'A2', 'A3'] });
+  // Valeurs absentes ou fantaisistes : rien plutôt qu'une erreur.
+  const v = g.lectureVersFormulaire({ categorie: 'inconnue', date: 'hier', totalTTC: -3, tablettes: { quantite: 0 } });
+  assert.strictEqual(v.categorie, 'autre');
+  assert.strictEqual(v.date, null);
+  assert.strictEqual(v.montant, null);
+  assert.strictEqual(v.tablettes, null);
+});
