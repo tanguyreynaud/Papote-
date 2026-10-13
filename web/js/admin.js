@@ -193,7 +193,7 @@ async function remplirKit(form, c) {
     const { stock, sims, accessoires } = await donnees();
     const dispo = stock.filter((t) => t.commande === c.id || (['en-stock', 'preparee'].includes(t.etat) && !t.commande));
     for (const t of dispo) {
-      const o = option(t.id, [t.numero || 'sans n° de série', t.modele, t.sim ? `SIM ${t.sim}` : null].filter(Boolean).join(' · '));
+      const o = option(t.id, [t.ref, t.numero || (t.ref ? null : 'sans n° de série'), t.modele, t.sim ? `SIM ${t.sim}` : null].filter(Boolean).join(' · '));
       if (t.sim) o.dataset.sim = t.sim;
       o.selected = t.commande === c.id;
       select.append(o);
