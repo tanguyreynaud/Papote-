@@ -49,11 +49,16 @@ async function essayer(publique, secrete) {
 (async () => {
   console.log('Intégration Sendcloud « Papote étiquettes » (pas celle du site).');
   for (;;) {
-    const publique = await demander('Clé publique (Public key), puis Entrée : ');
-    if (!publique) continue;
+    let publique = await demander('Copiez la clé publique (Public key), puis appuyez sur Entrée ici : ');
+    if (!publique) publique = lirePressePapiers();
+    if (!publique) {
+      console.log('Le presse-papiers est vide. Recommençons.');
+      continue;
+    }
+    console.log(`Clé publique : ${publique}`);
     let secrete = await demander('Copiez la clé secrète (Secret key), puis appuyez sur Entrée ici : ');
     if (!secrete) secrete = lirePressePapiers();
-    if (!secrete) {
+    if (!secrete || secrete === publique) {
       console.log('Le presse-papiers est vide. Recommençons.');
       continue;
     }
