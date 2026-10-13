@@ -597,6 +597,7 @@ async function ouvrirCommande(c) {
       ligne('Remboursement', c.remboursement ? `${euros(c.remboursement.montant)} ${REMBOURSEMENTS[c.remboursement.statut] || c.remboursement.statut}` : null)),
     ...(t ? [formulaireRemplacement(c, t)] : []),
     ...(t || c.envoyeeLe ? [boutonEtiquetteRetour(c)] : []),
+    ...(c.code && !c.fid && c.expedition !== 'annulee' ? [boutonRenvoyerCode(c)] : []),
     h('h3', {}, 'Parcours'),
     h('ul', { class: 'historique small' }, parcoursCommande(c).map(([le, texte]) => h('li', {}, le ? `${jour(le)} : ${texte}` : texte))),
     h('h3', {}, 'Factures et paiements'),
@@ -658,6 +659,28 @@ function boutonEtiquetteRetour(c) {
       msg.textContent = messageErreur(err);
       bouton.disabled = false;
     }
+  });
+  return h('div', { class: 'remplacement no-print' }, bouton, msg);
+}
+
+// Client qui a perdu son code de commande (pour relier la tablette avec une autre adresse e-mail).
+function boutonRenvoyerCode(c) {
+  const msg = h('p', { class: 'small muted', hidden: true });
+  const bouton = h('button', { type: 'button', class: 'secondary small-btn' }, 'Renvoyer le code au client');
+  bouton.addEventListener('click', async () => {
+    const email = prompt('Adresse e-mail où envoyer le code de commande :', c.email || '');
+    if (email == null) return;
+    bouton.disabled = true;
+    msg.hidden = false;
+    msg.className = 'small muted';
+    try {
+      const r = await appeler('gestionRenvoyerCode', { commande: c.id, email });
+      msg.textContent = `Code envoyé à ${r.a}.`;
+    } catch (err) {
+      msg.className = 'small error';
+      msg.textContent = messageErreur(err);
+    }
+    bouton.disabled = false;
   });
   return h('div', { class: 'remplacement no-print' }, bouton, msg);
 }
