@@ -129,7 +129,7 @@
         <div class="stats" id="kpi-commandes"></div>
         <div class="card">
           <h2>Tablettes à envoyer</h2>
-          <p class="muted small">Choisissez la tablette du stock, collez le n° de suivi Mondial Relay, puis « Envoyée » : le client reçoit le lien de suivi.</p>
+          <p class="muted small">Choisissez la tablette du stock, puis « Étiquette » (Sendcloud remplit le n° de suivi et ouvre l'étiquette à imprimer) ou collez le n° de suivi Mondial Relay, puis « Envoyée » : le client reçoit le lien de suivi.</p>
           <ul id="orders" class="orders"></ul>
           <p id="orders-empty" class="muted small" hidden>Aucune commande en attente.</p>
         </div>
@@ -144,6 +144,21 @@
           <p class="muted small">Abonnements terminés. Sans retour avant la date limite, 120 € sont prélevés automatiquement.</p>
           <ul id="returns" class="orders"></ul>
           <p id="returns-empty" class="muted small" hidden>Aucune tablette à récupérer.</p>
+        </div>
+        <div class="card">
+          <h2>Étiquettes Sendcloud</h2>
+          <p class="muted small">Adresse de départ des colis et d'arrivée des retours Mondial Relay. Les clés Sendcloud se rangent avec outils\gestion\installer-sendcloud.bat.</p>
+          <form id="f-expediteur" class="grille no-print">
+            <label>Nom <input name="nom" autocomplete="organization"></label>
+            <label>Adresse <input name="adresse" autocomplete="street-address"></label>
+            <label>Code postal <input name="cp" inputmode="numeric" autocomplete="postal-code"></label>
+            <label>Ville <input name="ville" autocomplete="address-level2"></label>
+            <label>Téléphone <input name="telephone" type="tel" autocomplete="tel"></label>
+            <label>E-mail <input name="email" type="email" autocomplete="email"></label>
+            <label>Poids d'un colis (g) <input name="poidsColis" inputmode="numeric"></label>
+            <button type="submit" class="secondary">Enregistrer l'adresse</button>
+            <p class="f-msg small" hidden></p>
+          </form>
         </div>
         <div class="card">
           <div class="tete">
