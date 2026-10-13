@@ -436,6 +436,8 @@ function afficherAccueil() {
   const impayees = stripeMois ? stripeMois.abonnements.filter((a) => a.statut === 'past_due').length : 0;
   const problemes = donnees.automatique ? (donnees.automatique.erreurs || []).length : 0;
   const simsAResilier = lignesSim().filter((l) => l.aResilier).length;
+  const aVerifierMail = donnees.depenses.filter((d) => d.aVerifier).length;
+  const erreursMail = donnees.courrier ? (donnees.courrier.erreurs || []).length : 0;
   const tva = franchiseTva();
 
   const taches = [
@@ -447,6 +449,8 @@ function afficherAccueil() {
     [aRembourser, `${pluriel(aRembourser, 'remboursement')} échoué${aRembourser > 1 ? 's' : ''}, à faire depuis Stripe`, '#commandes', 'ko'],
     [impayees, `${pluriel(impayees, 'abonnement')} impayé${impayees > 1 ? 's' : ''}`, '#factures', 'ko'],
     [simsAResilier, `${pluriel(simsAResilier, 'forfait SIM')} à résilier ou suspendre`, '#stock', 'ko'],
+    [aVerifierMail, `${pluriel(aVerifierMail, 'facture')} reçue${aVerifierMail > 1 ? 's' : ''} par e-mail à vérifier`, '#compta', ''],
+    [erreursMail, `${pluriel(erreursMail, 'problème')} au dernier relevé de factures@mapapote.fr (détail plus bas)`, '#accueil', 'ko'],
     [tva && tva.alerte ? 1 : 0, tva ? tva.alerte : '', '#accueil', 'ko'],
     [problemes, `${pluriel(problemes, 'problème')} lors du dernier passage automatique (détail plus bas)`, '#accueil', 'ko'],
   ].filter(([n]) => n > 0);
@@ -462,6 +466,7 @@ function afficherAccueil() {
   pastille('n-commandes', aEnvoyer + aRecuperer);
   pastille('n-stock', manque + aVerifier + simsAResilier);
   afficherAutomatique();
+  afficherCourrier();
   afficherTva(tva);
 
   if (stripeMois) {
@@ -929,7 +934,18 @@ function libelleDepense(d) {
     d.numero ? h('span', { class: 'muted' }, ` · n° ${d.numero}`) : null,
     d.recurrence ? h('div', {}, badge('chaque mois', 'info'), ' ',
       h('button', { type: 'button', class: 'link small no-print', onclick: () => arreterDepense(d) }, 'Arrêter')) : null,
-    d.depuis ? h('div', { class: 'muted small' }, 'ajoutée automatiquement') : null);
+    d.depuis ? h('div', { class: 'muted small' }, 'ajoutée automatiquement') : null,
+    d.aVerifier ? h('div', {}, badge('à vérifier', 'ko'), ' ', h('span', { class: 'muted small' }, d.source || 'reçue par e-mail'), ' ',
+      h('button', { type: 'button', class: 'link small no-print', onclick: () => verifierDepense(d) }, 'C\'est bon')) : null);
+}
+
+async function verifierDepense(d) {
+  try {
+    await appeler('gestionDepense', { action: 'verifier', id: d.id });
+    signalerChangement();
+  } catch (e) {
+    alert(messageErreur(e));
+  }
 }
 
 async function arreterDepense(d) {
@@ -1613,6 +1629,36 @@ $('btn-recap').addEventListener('click', async () => {
     alert(`Récap envoyé à contact@mapapote.fr (${pluriel(r.aFaire, 'point')} à faire).`);
   } catch (e) {
     alert(messageErreur(e));
+  } finally {
+    b.disabled = false;
+  }
+});
+
+// ---------- Factures reçues par e-mail ----------
+
+function afficherCourrier() {
+  const c = donnees && donnees.courrier;
+  if (!c) {
+    $('courrier').replaceChildren('Pas encore relevée.');
+    return;
+  }
+  const quand = new Date(c.le).toLocaleString('fr-FR', { dateStyle: 'long', timeStyle: 'short' });
+  $('courrier').replaceChildren(
+    `Dernier relevé le ${quand} : ${c.rangees.length ? `${pluriel(c.rangees.length, 'facture')} rangée${c.rangees.length > 1 ? 's' : ''} (${c.rangees.join(' ; ')})` : 'aucune nouvelle facture'}.`,
+    ...c.ignorees.map((x) => h('span', {}, h('br'), `Ignoré : ${x}`)),
+    ...c.erreurs.map((x) => h('span', { class: 'error' }, h('br'), x)),
+  );
+}
+
+$('btn-courrier').addEventListener('click', async () => {
+  const b = $('btn-courrier');
+  b.disabled = true;
+  $('courrier').textContent = 'Relevé de la boîte factures@…';
+  try {
+    await appeler('gestionCourrierMaintenant');
+    signalerChangement();
+  } catch (e) {
+    $('courrier').replaceChildren(h('span', { class: 'error' }, messageErreur(e)));
   } finally {
     b.disabled = false;
   }

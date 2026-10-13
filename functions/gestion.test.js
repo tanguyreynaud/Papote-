@@ -118,3 +118,17 @@ test('liste à faire du récapitulatif', () => {
     '1 dépense des 3 derniers mois sans justificatif',
   ]);
 });
+
+test('pièces jointes lues comme factures', () => {
+  const ko = 1024;
+  const pieces = g.piecesFacture([
+    { contentType: 'application/pdf', size: 80 * ko },
+    { contentType: 'image/png', size: 5 * ko }, // logo de signature
+    { contentType: 'image/jpeg', size: 900 * ko, contentDisposition: 'inline' },
+    { contentType: 'image/jpeg', size: 900 * ko, contentDisposition: 'attachment' },
+    { contentType: 'application/zip', size: 80 * ko },
+    { contentType: 'application/pdf', size: 9 * 1024 * ko },
+  ]);
+  assert.deepStrictEqual(pieces.map((p) => p.contentType), ['application/pdf', 'image/jpeg']);
+  assert.deepStrictEqual(g.piecesFacture(undefined), []);
+});
