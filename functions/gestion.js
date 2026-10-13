@@ -1211,7 +1211,10 @@ exports.gestionPiece = onCall({ memory: '512MiB' }, async (request) => {
     const contenu = Buffer.from(String(d.contenu || ''), 'base64');
     if (!contenu.length) throw new HttpsError('invalid-argument', 'Fichier vide.');
     if (contenu.length > MAX_PIECE) throw new HttpsError('invalid-argument', 'Fichier trop lourd (6 Mo au plus).');
-    return { ok: true, piece: await enregistrerPiece(d.collection, d.id, d.nom, d.type, contenu) };
+    const piece = await enregistrerPiece(d.collection, d.id, d.nom, d.type, contenu);
+    // Facture jointe à la main sur un achat venu d'une confirmation de commande : plus de rappel.
+    if (snap.get('confirmation')) await ref.update({ confirmation: false });
+    return { ok: true, piece };
   }
 
   if (d.action === 'retirer') {
@@ -1620,6 +1623,12 @@ function aFaire({ commandes, stock, depenses, automatique, maintenant, sims = []
   ajouter(stock.filter((t) => simAResilier(t, parId.get(t.commande))).length, 'forfait(s) SIM à résilier ou suspendre');
   ajouter(depenses.filter((d) => ms(d.date) > maintenant - JOURS(90) && !(d.pieces || []).length && !d.justificatif).length,
     'dépense(s) des 3 derniers mois sans justificatif');
+  // Achat enregistré depuis la confirmation de commande : la facture est à télécharger chez le vendeur.
+  const attendues = depenses.filter((d) => d.confirmation && ms(d.date) < maintenant - JOURS(5));
+  if (attendues.length) {
+    liste.push(`Facture à télécharger chez le vendeur puis à envoyer à factures@ : ${attendues
+      .map((d) => `${d.fournisseur || d.libelle}${d.numero ? ` (commande ${d.numero})` : ''}`).join(', ')}`);
+  }
   ajouter(depenses.filter((d) => d.aVerifier).length, 'facture(s) reçue(s) par e-mail à vérifier');
   ajouter(sims.filter((l) => alertesSim(l, maintenant).length).length, 'carte(s) SIM à regarder (promo, activation, carte bancaire)');
   liste.push(...incoherences({ commandes: actives, stock, sims }));

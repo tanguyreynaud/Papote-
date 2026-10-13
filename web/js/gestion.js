@@ -450,6 +450,8 @@ function afficherAccueil() {
     && ['envoyee', 'chez-client', 'en-retour'].includes(parCommande.get(c.id).etat) && !parCommande.get(c.id).sim).length;
   const simsSansTablette = donnees.sims.filter((l) => l.statut === 'active' && !l.tablette).length;
   const accessoires = accessoiresAPrevoir().filter((a) => a.manque || a.bas);
+  // Achats enregistrés depuis la confirmation de commande : facture à télécharger chez le vendeur (après 5 jours).
+  const facturesAttendues = donnees.depenses.filter((d) => d.confirmation && Date.now() - (d.date || 0) > 5 * 864e5);
   const aVerifierMail = donnees.depenses.filter((d) => d.aVerifier).length;
   const erreursMail = donnees.courrier ? (donnees.courrier.erreurs || []).length : 0;
   const tva = franchiseTva();
@@ -468,6 +470,8 @@ function afficherAccueil() {
     [simsSansTablette, `${simsSansTablette} ligne${simsSansTablette > 1 ? 's SIM actives reliées' : ' SIM active reliée'} à aucune tablette`, '#stock', 'ko'],
     [simsARegarder, `${simsARegarder} carte${simsARegarder > 1 ? 's' : ''} SIM à regarder (promo, activation, carte bancaire)`, '#stock', 'ko'],
     ...accessoires.map((a) => [1, a.manque ? `${a.nom} : il en manque ${a.manque} pour les envois` : `${a.nom} : stock bas (${a.quantite || 0})`, '#stock', a.manque ? 'ko' : '']),
+    [facturesAttendues.length, `Facture à télécharger chez le vendeur puis à envoyer à factures@ : ${facturesAttendues
+      .map((d) => `${d.fournisseur || d.libelle}${d.numero ? ` (commande ${d.numero})` : ''}`).join(', ')}`, '#compta', 'ko'],
     [aVerifierMail, `${pluriel(aVerifierMail, 'facture')} reçue${aVerifierMail > 1 ? 's' : ''} par e-mail à vérifier`, '#compta', ''],
     [erreursMail, `${pluriel(erreursMail, 'problème')} au dernier relevé de factures@mapapote.fr (détail plus bas)`, '#accueil', 'ko'],
     [tva && tva.alerte ? 1 : 0, tva ? tva.alerte : '', '#accueil', 'ko'],

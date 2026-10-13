@@ -308,3 +308,18 @@ test('la facture rejoint la confirmation du même achat', () => {
   assert.ok(!g.memeAchat({ ...conf, confirmation: false }, { fournisseur: 'Cdiscount', montant: 15980, date: conf.date }));
   assert.ok(!g.memeAchat(conf, { fournisseur: 'Cdiscount', montant: 15980, date: conf.date + 40 * jour }));
 });
+
+test('rappel des factures à télécharger après une confirmation de commande', () => {
+  const maintenant = Date.UTC(2026, 9, 20);
+  const liste = g.aFaire({
+    maintenant,
+    commandes: [],
+    stock: [],
+    depenses: [
+      { date: maintenant - 10 * 864e5, confirmation: true, fournisseur: 'Cdiscount', numero: '123', pieces: [{}] },
+      { date: maintenant - 864e5, confirmation: true, fournisseur: 'Temu', pieces: [{}] },
+    ],
+    automatique: { erreurs: [] },
+  });
+  assert.deepStrictEqual(liste, ['Facture à télécharger chez le vendeur puis à envoyer à factures@ : Cdiscount (commande 123)']);
+});
