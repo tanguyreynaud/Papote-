@@ -11,6 +11,9 @@ test('point relais choisi sur le site', () => {
   assert.strictEqual(l.relaisDepuisRequete({ relais: '012345', rnom: 'X', rcp: '1000', rville: 'Genève', rpays: 'CH' }), null);
   assert.strictEqual(l.relaisDepuisRequete({ relais: '01 2"', rnom: 'X', rcp: '1', rville: 'Y' }), null);
   assert.strictEqual(l.relaisDepuisRequete({}), null);
+  const d = l.relaisDepuisRequete({ relais: '012345', rnom: 'Tabac', rcp: '64200', rville: 'Biarritz', rdest: ' Jeanne  Martin ' });
+  assert.strictEqual(d.destinataire, 'Jeanne Martin');
+  assert.strictEqual(l.relaisDepuisMeta(l.relaisVersMeta(d)).destinataire, 'Jeanne Martin');
 });
 
 test('aller-retour par les métadonnées Stripe', () => {

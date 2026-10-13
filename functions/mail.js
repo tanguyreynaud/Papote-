@@ -57,7 +57,7 @@ function commandeConfirmee({ nom, code, relais, formule }) {
     `Bonjour${nom ? ` ${echapper(nom)}` : ''},`,
     'Merci pour votre commande ! Nous préparons votre tablette à la main et vous prévenons par e-mail dès qu\'elle part.',
     relais && relais.transporteur
-      ? `Livraison offerte au point relais <b>${relaisEnTexte(relais)}</b>.`
+      ? `Livraison offerte au point relais <b>${relaisEnTexte(relais)}</b>${relais.destinataire ? `, à retirer par <b>${echapper(relais.destinataire)}</b>` : ''}.`
       : 'Livraison offerte à l\'adresse indiquée.',
     `Votre abonnement : ${formule === 'sim' ? '30 € par mois, internet inclus' : '20 € par mois'}, après vos 15 jours d'essai gratuit. La tablette est prêtée et configurée.`,
     code ? `Votre code de commande : <b>${echapper(code)}</b>.` : '',
@@ -70,7 +70,7 @@ function nouvelleCommande({ nom, email, telephone, code, relais, formule }) {
     `Client : <b>${echapper(nom || '?')}</b>, ${echapper(email || 'sans e-mail')}${telephone ? `, ${echapper(telephone)}` : ''}.`,
     `Formule : ${formule === 'sim' ? '30 € par mois, internet inclus (SIM)' : '20 € par mois (wifi)'}.`,
     relais && relais.transporteur
-      ? `Point relais : <b>${relaisEnTexte(relais)}</b> (n° ${echapper(relais.id)}).`
+      ? `Point relais : <b>${relaisEnTexte(relais)}</b> (n° ${echapper(relais.id)}). Retrait par : <b>${echapper(relais.destinataire || nom || '?')}</b>.`
       : `Livraison : ${relaisEnTexte(relais) || 'adresse non trouvée, voir Stripe'}.`,
     'Tablette à préparer, puis à marquer « envoyée » dans le tableau de bord.',
   ]);
