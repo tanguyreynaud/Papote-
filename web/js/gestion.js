@@ -251,6 +251,7 @@ function afficherTout() {
     afficherSim();
     afficherAccessoires();
     afficherCommandes();
+    afficherExpediteur();
   }
   if (donnees && stripe) {
     afficherBilan();
@@ -583,8 +584,10 @@ async function ouvrirCommande(c) {
       ligne('Carte SIM', simDuKit(t)),
       ligne('Accessoires', t && (t.accessoires || []).length ? t.accessoires.join(', ') : null),
       ligne('Retour', c.restitution ? `${RETOURS[c.restitution.statut] || c.restitution.statut}${c.restitution.avant && c.restitution.statut === 'attendue' ? ` avant le ${jour(c.restitution.avant)}` : ''}` : null),
+      ligne('Étiquettes', etiquettesDe(c)),
       ligne('Remboursement', c.remboursement ? `${euros(c.remboursement.montant)} ${REMBOURSEMENTS[c.remboursement.statut] || c.remboursement.statut}` : null)),
-    t ? formulaireRemplacement(c, t) : null,
+    ...(t ? [formulaireRemplacement(c, t)] : []),
+    ...(t || c.envoyeeLe ? [boutonEtiquetteRetour(c)] : []),
     h('h3', {}, 'Parcours'),
     h('ul', { class: 'historique small' }, parcoursCommande(c).map(([le, texte]) => h('li', {}, le ? `${jour(le)} : ${texte}` : texte))),
     h('h3', {}, 'Factures et paiements'),
@@ -614,6 +617,40 @@ async function ouvrirCommande(c) {
   } catch (e) {
     factures.replaceChildren(h('p', { class: 'error small' }, messageErreur(e)));
   }
+}
+
+// Étiquettes Sendcloud de la commande, en liens PDF.
+function etiquettesDe(c) {
+  const e = c.etiquettes || {};
+  const liens = [['aller', 'Envoi'], ['retour', 'Retour']].filter(([k]) => e[k] && e[k].url)
+    .map(([k, nom]) => h('a', { href: e[k].url, target: '_blank', rel: 'noopener' }, `${nom} du ${jour(e[k].le)}`));
+  return liens.length ? liens.flatMap((a, i) => (i ? [' · ', a] : [a])) : null;
+}
+
+// Étiquette de retour Sendcloud (élément remplacé, fin de contrat) : envoyée au client par e-mail.
+function boutonEtiquetteRetour(c) {
+  const msg = h('p', { class: 'small muted', hidden: true });
+  const bouton = h('button', { type: 'button', class: 'secondary small-btn' }, 'Étiquette de retour au client');
+  bouton.addEventListener('click', async () => {
+    if (!confirm(`Créer une étiquette de retour Mondial Relay et l'envoyer à ${c.email || 'ce client'} ?`)) return;
+    const fenetre = window.open('', '_blank');
+    bouton.disabled = true;
+    msg.hidden = false;
+    msg.className = 'small muted';
+    msg.textContent = 'Création chez Sendcloud…';
+    try {
+      const r = await appeler('gestionEtiquette', { commande: c.id, sens: 'retour' });
+      if (fenetre) fenetre.location = r.url;
+      msg.textContent = r.envoyee ? 'Étiquette créée et envoyée au client.' : 'Étiquette créée (pas d\'e-mail client connu).';
+      donnees = await lireDonnees(true);
+    } catch (err) {
+      if (fenetre) fenetre.close();
+      msg.className = 'small error';
+      msg.textContent = messageErreur(err);
+      bouton.disabled = false;
+    }
+  });
+  return h('div', { class: 'remplacement no-print' }, bouton, msg);
 }
 
 // Carte SIM de la tablette d'un client, cliquable vers sa fiche.
@@ -1931,6 +1968,29 @@ $('f-reglages').addEventListener('submit', async (e) => {
   if (await enregistrer(f, () => appeler('gestionReglages', valeurs))) {
     message(f, 'Réglages enregistrés.', true);
     afficherAccueil();
+  }
+});
+
+// ---------- Adresse des étiquettes Sendcloud ----------
+
+function afficherExpediteur() {
+  const f = $('f-expediteur');
+  if (f.contains(document.activeElement)) return;
+  const e = donnees.reglages.expediteur || {};
+  for (const k of ['nom', 'adresse', 'cp', 'ville', 'telephone', 'email']) f[k].value = e[k] || '';
+  f.poidsColis.value = donnees.reglages.poidsColis;
+}
+
+$('f-expediteur').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const f = e.target;
+  const expediteur = Object.fromEntries(['nom', 'adresse', 'cp', 'ville', 'telephone', 'email'].map((k) => [k, f[k].value.trim()]));
+  const poidsColis = Number(f.poidsColis.value.replace(/\s|g/g, ''));
+  if (!Number.isFinite(poidsColis) || poidsColis < 100 || poidsColis > 30000) return message(f, 'Poids illisible (en grammes, ex. 1500).');
+  if (await enregistrer(f, () => appeler('gestionReglages', { expediteur, poidsColis }))) {
+    donnees.reglages.expediteur = expediteur;
+    donnees.reglages.poidsColis = poidsColis;
+    message(f, 'Adresse enregistrée.', true);
   }
 });
 

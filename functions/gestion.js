@@ -32,6 +32,7 @@ const admin = require('firebase-admin');
 const Stripe = require('stripe');
 const Anthropic = require('@anthropic-ai/sdk');
 const mail = require('./mail');
+const sendcloud = require('./sendcloud');
 
 const STRIPE_SECRET = defineSecret('STRIPE_SECRET');
 // Même clé que le chat de support (outils/support/installer-support.bat), jamais dans le dépôt.
@@ -47,6 +48,8 @@ const EMAIL_PAPOTE = 'contact@mapapote.fr';
 const FACTURES_IMAP = defineString('FACTURES_IMAP', { default: 'ssl0.ovh.net:993:contact@mapapote.fr' });
 const FACTURES_ADRESSE = defineString('FACTURES_ADRESSE', { default: 'factures@mapapote.fr' });
 const FACTURES_MOT_DE_PASSE = defineSecret('FACTURES_MOT_DE_PASSE');
+// « clé publique:clé secrète » de l'intégration Sendcloud « Papote étiquettes » (installer-sendcloud.bat).
+const SENDCLOUD_API = defineSecret('SENDCLOUD_API');
 const ESPACE_ADMIN = 'https://papote-famille.web.app/admin.html';
 const { FieldValue, Timestamp } = admin.firestore;
 const db = () => admin.firestore();
@@ -163,7 +166,10 @@ const REGLAGES = {
   tauxUrssaf: 21.2, // % du chiffre d'affaires, micro-entreprise
   forfaitSim: 700, // coût mensuel d'un forfait SIM quand la ligne n'a pas son propre coût
   vieTablette: 24, // durée de vie d'une tablette, en mois
+  poidsColis: 1500, // poids d'un colis tablette, en grammes (étiquettes Sendcloud)
 };
+// Adresse de Papote pour les étiquettes : départ des colis et arrivée des retours.
+const CHAMPS_EXPEDITEUR = ['nom', 'adresse', 'cp', 'ville', 'telephone', 'email'];
 
 function lireReglages(donnees) {
   const r = { ...REGLAGES };
@@ -171,6 +177,8 @@ function lireReglages(donnees) {
     const v = donnees && donnees[k];
     if (typeof v === 'number' && Number.isFinite(v) && v >= 0) r[k] = v;
   }
+  const e = (donnees && donnees.expediteur) || {};
+  r.expediteur = Object.fromEntries(CHAMPS_EXPEDITEUR.map((k) => [k, typeof e[k] === 'string' ? e[k] : '']));
   return r;
 }
 
@@ -557,6 +565,7 @@ exports.gestionDonnees = onCall(async (request) => {
         abonnement: famille && famille.abonnement ? famille.abonnement.statut || null : (c.statutStripe || null),
         restitution: c.restitution ? { statut: c.restitution.statut || null, avant: c.restitution.avant || null } : null,
         remboursement: c.remboursement || null,
+        etiquettes: c.etiquettes || null,
         stripeCustomerId: c.stripeCustomerId || null,
       });
     }),
@@ -1446,8 +1455,95 @@ exports.gestionReglages = onCall(async (request) => {
     if (!Number.isFinite(v) || v < 0 || v > 1e9) throw new HttpsError('invalid-argument', `Valeur invalide : ${k}.`);
     maj[k] = v;
   }
-  await db().doc('gestion/reglages').set(maj, { merge: true });
+  if (d.expediteur && typeof d.expediteur === 'object') {
+    for (const k of CHAMPS_EXPEDITEUR) {
+      const v = d.expediteur[k];
+      if (v != null && (typeof v !== 'string' || v.length > 120)) throw new HttpsError('invalid-argument', `Valeur invalide : ${k}.`);
+      maj[`expediteur.${k}`] = (v || '').trim();
+    }
+  }
+  await db().doc('gestion/reglages').update(maj).catch(async (e) => {
+    if (e.code !== 5) throw e;
+    // Premier enregistrement : le document n'existe pas encore.
+    const premier = {};
+    for (const [k, v] of Object.entries(maj)) {
+      if (k.startsWith('expediteur.')) (premier.expediteur = premier.expediteur || {})[k.slice(11)] = v;
+      else premier[k] = v;
+    }
+    await db().doc('gestion/reglages').set(premier, { merge: true });
+  });
   return { ok: true };
+});
+
+// ---------- Étiquettes Sendcloud ----------
+
+// Range le PDF dans Storage avec un jeton de téléchargement : lien imprimable par l'admin et par le client.
+async function rangerEtiquette(commande, sens, colis, pdf) {
+  const chemin = `gestion/etiquettes/${commande}-${sens}-${colis}.pdf`;
+  const jeton = require('node:crypto').randomUUID();
+  const bucket = admin.storage().bucket();
+  await bucket.file(chemin).save(pdf, {
+    contentType: 'application/pdf', resumable: false, metadata: { metadata: { firebaseStorageDownloadTokens: jeton } },
+  });
+  return `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(chemin)}?alt=media&token=${jeton}`;
+}
+
+// { commande, sens: 'aller' | 'retour' } : crée l'étiquette Mondial Relay chez Sendcloud.
+// Aller : renvoie le n° de suivi pour le formulaire d'envoi. Retour : le client la reçoit par e-mail.
+exports.gestionEtiquette = onCall({ secrets: [SENDCLOUD_API, MAIL_MOT_DE_PASSE], timeoutSeconds: 120 }, async (request) => {
+  verifierAdmin(request);
+  const qui = request.auth.token.email || request.auth.uid;
+  const d = request.data || {};
+  if (typeof d.commande !== 'string' || !d.commande || !['aller', 'retour'].includes(d.sens)) {
+    throw new HttpsError('invalid-argument', 'Commande ou sens manquant.');
+  }
+  const ref = db().doc(`commandes/${d.commande}`);
+  const [snap, reglagesSnap] = await Promise.all([ref.get(), db().doc('gestion/reglages').get()]);
+  if (!snap.exists) throw new HttpsError('not-found', 'Commande introuvable.');
+  const c = snap.data();
+  const reglages = lireReglages(reglagesSnap.data());
+  const papote = sendcloud.adressePapote(reglages.expediteur);
+  if (!papote) throw new HttpsError('failed-precondition', "Renseignez l'adresse d'expédition de Papote (onglet Commandes, Étiquettes).");
+  const cl = sendcloud.adresseClient(c);
+  if (!cl) throw new HttpsError('failed-precondition', "Cette commande n'a pas d'adresse ni de point relais utilisable.");
+  const poids = Math.max(0.1, (reglages.poidsColis || 1500) / 1000);
+  const reference = c.code ? String(c.code) : d.commande.slice(-12);
+  let api;
+  try {
+    api = sendcloud.client(SENDCLOUD_API.value());
+  } catch (e) {
+    throw new HttpsError('failed-precondition', e.message);
+  }
+  try {
+    if (d.sens === 'aller') {
+      const r = await api.envoi({ de: papote, vers: cl.adresse, pointRelais: cl.pointRelais, poids, reference });
+      const url = await rangerEtiquette(d.commande, 'aller', r.colis, r.pdf);
+      await ref.update({ 'etiquettes.aller': { colis: r.colis, suivi: r.suivi, url, le: Date.now(), par: qui } });
+      return { ok: true, suivi: r.suivi, url };
+    }
+    const r = await api.retour({ de: cl.adresse, vers: papote, poids, reference });
+    const url = await rangerEtiquette(d.commande, 'retour', r.colis, r.pdf);
+    const maj = { 'etiquettes.retour': { colis: r.colis, url, le: Date.now(), par: qui } };
+    const attendue = c.restitution && ['attendue', 'echec'].includes(c.restitution.statut);
+    if (attendue) {
+      // Fin de contrat : l'e-mail au client part avec commandeModifiee, comme une étiquette collée à la main.
+      maj['restitution.etiquette'] = url;
+      maj['restitution.etiquetteLe'] = FieldValue.serverTimestamp();
+    }
+    await ref.update(maj);
+    if (!attendue && c.email) {
+      // Remplacement d'un élément du kit : l'étiquette part tout de suite.
+      await mail.envoyer({
+        smtp: MAIL_SMTP.value(), expediteur: MAIL_EXPEDITEUR.value(), motDePasse: MAIL_MOT_DE_PASSE.value(),
+        a: c.email, contenu: mail.etiquetteRetour({ nom: c.nom, lien: url, avant: null }),
+      });
+    }
+    return { ok: true, url, envoyee: !!c.email };
+  } catch (e) {
+    if (e instanceof HttpsError) throw e;
+    logger.error('Étiquette Sendcloud', e);
+    throw new HttpsError('internal', e.message);
+  }
 });
 
 // ---------- Récapitulatif du lundi ----------
