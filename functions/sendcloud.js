@@ -49,9 +49,10 @@ function adressePapote(e) {
 
 const kg = (o) => (o && o.value != null ? Number(o.value) * ({ g: 0.001, kg: 1 }[o.unit] || 1) : null);
 
-// Première option Mondial Relay qui accepte ce poids (kg) et le besoin (point relais, domicile ou retour).
-function choisirOption(options, poids, besoin) {
-  return (options || []).find((o) => {
+// Options Mondial Relay qui acceptent ce poids (kg) et le besoin (point relais, domicile ou retour),
+// celles d'un contrat d'abord (contrat Mondial Relay du compte).
+function optionsPossibles(options, poids, besoin) {
+  return (options || []).filter((o) => {
     if (!o || !o.code || (o.carrier && o.carrier.code !== TRANSPORTEUR)) return false;
     const f = o.functionalities || {};
     if (besoin === 'retour' && !f.returns) return false;
@@ -60,8 +61,13 @@ function choisirOption(options, poids, besoin) {
     const min = kg(o.weight && o.weight.min);
     const max = kg(o.weight && o.weight.max);
     return (min == null || poids >= min) && (max == null || poids <= max);
-  }) || null;
+  }).sort((a, b) => !!(b.contract && b.contract.id) - !!(a.contract && a.contract.id));
 }
+
+const choisirOption = (options, poids, besoin) => optionsPossibles(options, poids, besoin)[0] || null;
+
+// Carton d'une tablette (cm) : certains transporteurs exigent les dimensions.
+const DIMENSIONS = { length: '35', width: '25', height: '8', unit: 'cm' };
 
 // Message lisible d'une erreur Sendcloud (400 : { errors: [...] } ou { error: {...} }).
 function erreurLisible(corps) {
@@ -89,20 +95,37 @@ function client(cles) {
     return json;
   }
 
-  async function option(de, vers, pointRelais, poids, besoin) {
+  const adresseCourte = (a) => ({
+    country_code: a.country_code, postal_code: a.postal_code, city: a.city, address_line_1: a.address_line_1,
+  });
+
+  async function options(de, vers, pointRelais, poids, besoin) {
     const r = await appel('POST', '/shipping-options', {
-      from_address: { country_code: de.country_code, postal_code: de.postal_code },
-      to_address: { country_code: vers.country_code, postal_code: vers.postal_code },
+      from_address: adresseCourte(de),
+      to_address: adresseCourte(vers),
       ...(pointRelais ? { to_service_point: { id: pointRelais } } : {}),
       carrier_code: TRANSPORTEUR,
-      parcels: [{ weight: { value: String(poids), unit: 'kg' } }],
-      functionalities: besoin === 'retour' ? { returns: true } : { last_mile: besoin === 'relais' ? 'service_point' : 'home_delivery' },
+      parcels: [{ weight: { value: String(poids), unit: 'kg' }, dimensions: DIMENSIONS }],
+      ...(besoin === 'retour' ? { functionalities: { returns: true } } : pointRelais ? {} : { functionalities: { last_mile: 'home_delivery' } }),
     });
-    const o = choisirOption(r && r.data, poids, besoin);
-    if (!o) {
-      throw new Error(`aucune offre Mondial Relay ${besoin === 'retour' ? 'de retour ' : ''}pour ce colis dans votre compte Sendcloud (activez Mondial Relay dans Sendcloud).`);
+    const liste = optionsPossibles(r && r.data, poids, besoin);
+    if (!liste.length) {
+      throw new Error(`aucune offre Mondial Relay ${besoin === 'retour' ? 'de retour ' : ''}pour ce colis dans votre compte Sendcloud (${de.postal_code} → ${vers.postal_code}${r && r.message ? ` : ${r.message}` : ''}).`);
     }
-    return o;
+    return liste;
+  }
+
+  // Essaie chaque offre possible : la première acceptée par Sendcloud fait l'étiquette.
+  async function essayer(liste, faire) {
+    const refus = [];
+    for (const o of liste.slice(0, 5)) {
+      try {
+        return await faire(o);
+      } catch (e) {
+        refus.push(`${o.code} : ${e.message.replace(/^Sendcloud : /, '')}`);
+      }
+    }
+    throw new Error(`Sendcloud refuse ${refus.length > 1 ? 'les offres' : 'l\'offre'} ${refus.join(' | ')}`);
   }
 
   // Étiquette PDF d'un colis : elle peut mettre quelques secondes à être prête après l'annonce.
@@ -118,16 +141,19 @@ function client(cles) {
   return {
     // Colis aller : { colis, suivi, lienSuivi, pdf }.
     async envoi({ de, vers, pointRelais, poids, reference }) {
-      const o = await option(de, vers, pointRelais, poids, pointRelais ? 'relais' : 'domicile');
-      const r = await appel('POST', '/shipments/announce', {
+      const liste = await options(de, vers, pointRelais, poids, pointRelais ? 'relais' : 'domicile');
+      const r = await essayer(liste, (o) => appel('POST', '/shipments/announce', {
         from_address: de,
         to_address: vers,
         ...(pointRelais ? { to_service_point: { id: pointRelais } } : {}),
-        ship_with: { type: 'shipping_option_code', properties: { shipping_option_code: o.code, contract_id: o.contract && o.contract.id } },
-        parcels: [{ weight: { value: String(poids), unit: 'kg' } }],
+        ship_with: {
+          type: 'shipping_option_code',
+          properties: { shipping_option_code: o.code, ...(o.contract && o.contract.id ? { contract_id: o.contract.id } : {}) },
+        },
+        parcels: [{ weight: { value: String(poids), unit: 'kg' }, dimensions: DIMENSIONS }],
         order_number: reference,
         label_details: { mime_type: 'application/pdf' },
-      });
+      }));
       const p = r && r.data && r.data.parcels && r.data.parcels[0];
       if (!p || !p.id) throw new Error(`Sendcloud : ${erreurLisible(r && r.data)}`);
       const pdf = p.label_file ? Buffer.from(p.label_file, 'base64') : await etiquette(p.id);
@@ -135,19 +161,20 @@ function client(cles) {
     },
     // Colis retour, déposé par le client dans un point relais : { colis, pdf }.
     async retour({ de, vers, poids, reference }) {
-      const o = await option(de, vers, null, poids, 'retour');
-      const r = await appel('POST', '/returns/announce-synchronously', {
+      const liste = await options(de, vers, null, poids, 'retour');
+      const r = await essayer(liste, (o) => appel('POST', '/returns/announce-synchronously', {
         from_address: de,
         to_address: vers,
         ship_with: { type: 'shipping_option_code', shipping_option_code: o.code, ...(o.contract && o.contract.id ? { contract: o.contract.id } : {}) },
         weight: { value: poids, unit: 'kg' },
+        dimensions: DIMENSIONS,
         delivery_option: 'drop_off_point',
         order_number: reference,
-      });
+      }));
       if (!r || !r.parcel_id) throw new Error(`Sendcloud : ${erreurLisible(r)}`);
       return { colis: r.parcel_id, pdf: await etiquette(r.parcel_id) };
     },
   };
 }
 
-module.exports = { adresseClient, adressePapote, choisirOption, erreurLisible, client };
+module.exports = { adresseClient, adressePapote, choisirOption, optionsPossibles, erreurLisible, client };
