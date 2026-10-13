@@ -438,6 +438,11 @@ function afficherAccueil() {
   const problemes = donnees.automatique ? (donnees.automatique.erreurs || []).length : 0;
   const simsAResilier = lignesSim().filter((l) => l.aResilier).length;
   const simsARegarder = donnees.sims.filter((l) => alertesSim(l).length).length;
+  const remplacees = donnees.stock.filter((t) => t.etat === 'en-retour' && t.remplaceePour).length;
+  const parCommande = new Map(donnees.stock.filter((t) => t.commande).map((t) => [t.commande, t]));
+  const clientsSansSim = cmd.filter((c) => c.expedition !== 'annulee' && c.formule === 'sim' && parCommande.get(c.id)
+    && ['envoyee', 'chez-client', 'en-retour'].includes(parCommande.get(c.id).etat) && !parCommande.get(c.id).sim).length;
+  const simsSansTablette = donnees.sims.filter((l) => l.statut === 'active' && !l.tablette).length;
   const accessoires = accessoiresAPrevoir().filter((a) => a.manque || a.bas);
   const aVerifierMail = donnees.depenses.filter((d) => d.aVerifier).length;
   const erreursMail = donnees.courrier ? (donnees.courrier.erreurs || []).length : 0;
@@ -452,6 +457,9 @@ function afficherAccueil() {
     [aRembourser, `${pluriel(aRembourser, 'remboursement')} échoué${aRembourser > 1 ? 's' : ''}, à faire depuis Stripe`, '#commandes', 'ko'],
     [impayees, `${pluriel(impayees, 'abonnement')} impayé${impayees > 1 ? 's' : ''}`, '#factures', 'ko'],
     [simsAResilier, `${pluriel(simsAResilier, 'forfait SIM')} à résilier ou suspendre`, '#stock', 'ko'],
+    [remplacees, `${pluriel(remplacees, 'tablette')} remplacée${remplacees > 1 ? 's' : ''} à récupérer chez le client`, '#stock', ''],
+    [clientsSansSim, `${clientsSansSim} client${clientsSansSim > 1 ? 's' : ''} Internet inclus sans carte SIM notée sur sa tablette`, '#stock', 'ko'],
+    [simsSansTablette, `${simsSansTablette} ligne${simsSansTablette > 1 ? 's SIM actives reliées' : ' SIM active reliée'} à aucune tablette`, '#stock', 'ko'],
     [simsARegarder, `${simsARegarder} carte${simsARegarder > 1 ? 's' : ''} SIM à regarder (promo, activation, carte bancaire)`, '#stock', 'ko'],
     ...accessoires.map((a) => [1, a.manque ? `${a.nom} : il en manque ${a.manque} pour les envois` : `${a.nom} : stock bas (${a.quantite || 0})`, '#stock', a.manque ? 'ko' : '']),
     [aVerifierMail, `${pluriel(aVerifierMail, 'facture')} reçue${aVerifierMail > 1 ? 's' : ''} par e-mail à vérifier`, '#compta', ''],
@@ -469,7 +477,7 @@ function afficherAccueil() {
   };
   pastille('n-accueil', taches.length);
   pastille('n-commandes', aEnvoyer + aRecuperer);
-  pastille('n-stock', manque + aVerifier + simsAResilier + simsARegarder + accessoires.length);
+  pastille('n-stock', manque + aVerifier + simsAResilier + simsARegarder + accessoires.length + remplacees + clientsSansSim + simsSansTablette);
   afficherAutomatique();
   afficherCourrier();
   afficherArchives();
@@ -571,9 +579,12 @@ async function ouvrirCommande(c) {
       ligne('Suivi', c.suivi ? `${c.suivi}${c.envoyeeLe ? `, envoyée le ${jour(c.envoyeeLe)}` : ''}` : null),
       ligne('Famille', c.famille ? `${c.famille}${c.abonnement ? ` (${ABONNEMENTS[c.abonnement] || c.abonnement})` : ''}` : null),
       ligne('Tablette', t ? h('button', { type: 'button', class: 'link', onclick: () => ouvrirTablette(t.id) },
-        [t.numero || 'sans n° de série', t.modele].filter(Boolean).join(' · ')) : null),
+        [t.numero || 'sans n° de série', t.modele, donnees.etats[etatTablette(t)]].filter(Boolean).join(' · ')) : null),
+      ligne('Carte SIM', simDuKit(t)),
+      ligne('Accessoires', t && (t.accessoires || []).length ? t.accessoires.join(', ') : null),
       ligne('Retour', c.restitution ? `${RETOURS[c.restitution.statut] || c.restitution.statut}${c.restitution.avant && c.restitution.statut === 'attendue' ? ` avant le ${jour(c.restitution.avant)}` : ''}` : null),
       ligne('Remboursement', c.remboursement ? `${euros(c.remboursement.montant)} ${REMBOURSEMENTS[c.remboursement.statut] || c.remboursement.statut}` : null)),
+    t ? formulaireRemplacement(c, t) : null,
     h('h3', {}, 'Parcours'),
     h('ul', { class: 'historique small' }, parcoursCommande(c).map(([le, texte]) => h('li', {}, le ? `${jour(le)} : ${texte}` : texte))),
     h('h3', {}, 'Factures et paiements'),
@@ -605,13 +616,77 @@ async function ouvrirCommande(c) {
   }
 }
 
+// Carte SIM de la tablette d'un client, cliquable vers sa fiche.
+function simDuKit(t) {
+  if (!t || !t.sim) return null;
+  const l = t.simId && donnees.sims.find((x) => x.id === t.simId);
+  const texte = [t.sim, l && l.iccid ? `ICCID ${fin4(l.iccid)}` : null, t.simOperateur].filter(Boolean).join(' · ');
+  return l ? h('button', { type: 'button', class: 'link', onclick: () => ouvrirSim(l.id) }, texte) : texte;
+}
+
+// Remplacer un élément du kit chez le client : tablette, carte SIM ou accessoire.
+function formulaireRemplacement(c, t) {
+  const choix = h('select', { 'aria-label': 'Élément à remplacer' },
+    h('option', { value: '' }, 'Remplacer…'),
+    h('option', { value: 'tablette' }, 'la tablette'),
+    h('option', { value: 'sim' }, 'la carte SIM'),
+    h('option', { value: 'accessoire' }, 'un accessoire'));
+  const nouveau = h('select', { 'aria-label': 'Remplacé par', hidden: true });
+  const motif = h('input', { placeholder: 'Motif (ex. écran cassé)', hidden: true });
+  const bouton = h('button', { type: 'submit', class: 'secondary small-btn', hidden: true }, 'Remplacer');
+  const msg = h('p', { class: 'small muted', hidden: true });
+  const libres = {
+    tablette: () => donnees.stock.filter((x) => DISPONIBLES.includes(x.etat) && !x.commande)
+      .map((x) => [x.id, [x.numero || 'sans n° de série', x.modele].filter(Boolean).join(' · ')]),
+    sim: () => donnees.sims.filter((l) => !l.tablette && ['stock', 'active'].includes(l.statut))
+      .map((l) => [l.id, [l.numero || `ICCID ${fin4(l.iccid)}`, l.operateur].filter(Boolean).join(' · ')]),
+    accessoire: () => donnees.accessoires.map((a) => [a.id, `${a.nom} (${a.quantite || 0} en stock)`]),
+  };
+  const AIDE = {
+    tablette: 'La tablette actuelle passe « en retour » et garde sa place dans « À faire » jusqu\'à son retour. Sa carte SIM passe dans la nouvelle, à jumeler avec l\'appli famille.',
+    sim: 'L\'ancienne carte passe « suspendue » : pense à la résilier chez l\'opérateur.',
+    accessoire: 'L\'accessoire sort du stock.',
+  };
+  choix.addEventListener('change', () => {
+    const k = choix.value;
+    const options = k ? libres[k]() : [];
+    nouveau.replaceChildren(...(options.length ? options.map(([v, x]) => h('option', { value: v }, x))
+      : [h('option', { value: '' }, 'Rien de disponible en stock')]));
+    for (const el of [nouveau, motif, bouton, msg]) el.hidden = !k;
+    msg.className = 'small muted';
+    msg.textContent = k ? AIDE[k] : '';
+  });
+  const form = h('form', { class: 'remplacement no-print' }, choix, nouveau, motif, bouton, msg);
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!nouveau.value) return;
+    bouton.disabled = true;
+    try {
+      await appeler('gestionStock', { action: 'remplacer', commande: c.id, element: choix.value, nouveau: nouveau.value, motif: motif.value });
+      donnees = await lireDonnees(true);
+      afficherTout();
+      signalerChangement();
+      ouvrirCommande(donnees.commandes.find((x) => x.id === c.id) || c);
+    } catch (err) {
+      msg.className = 'small error';
+      msg.textContent = messageErreur(err);
+      bouton.disabled = false;
+    }
+  });
+  return form;
+}
+
 // Grandes étapes d'une commande, de la commande au retour de la tablette.
 function parcoursCommande(c) {
   const etapes = [[c.creeLe, 'commande passée']];
   if (c.envoyeeLe) etapes.push([c.envoyeeLe, `tablette envoyée${c.suivi ? ` (suivi ${c.suivi})` : ''}`]);
   for (const t of donnees.stock) {
     for (const x of t.historique || []) {
-      if (x.le && x.commande === c.id && !['envoyee'].includes(x.etat)) {
+      if (!x.le || x.commande !== c.id) continue;
+      if (x.remplacement || x.sim) {
+        const quoi = x.sim ? `carte SIM ${x.sim}` : x.accessoires ? x.accessoires.join(', ') : `tablette ${t.numero || t.modele || ''}`;
+        etapes.push([x.le, `remplacement : ${quoi}${x.etat === 'en-retour' ? ' à récupérer' : ' envoyée'}${x.motif ? ` (${x.motif})` : ''}`]);
+      } else if (x.etat !== 'envoyee') {
         etapes.push([x.le, `tablette ${t.numero || t.modele || ''} : ${(donnees.etats[x.etat] || x.etat).toLowerCase()}`]);
       }
     }
@@ -1147,6 +1222,7 @@ function libelleDepense(d) {
     d.recurrence ? h('div', {}, badge('chaque mois', 'info'), ' ',
       h('button', { type: 'button', class: 'link small no-print', onclick: () => arreterDepense(d) }, 'Arrêter')) : null,
     d.depuis ? h('div', { class: 'muted small' }, 'ajoutée automatiquement') : null,
+    (d.materiel || []).length ? h('div', { class: 'muted small' }, `Entré au stock : ${d.materiel.join(', ')}`) : null,
     d.aVerifier ? h('div', {}, badge('à vérifier', 'ko'), ' ', h('span', { class: 'muted small' }, d.source || 'reçue par e-mail'), ' ',
       h('button', { type: 'button', class: 'link small no-print', onclick: () => verifierDepense(d) }, 'C\'est bon')) : null);
 }
@@ -1229,6 +1305,7 @@ function preparerFormulaires() {
 function ouvrirFormulaire(id) {
   const f = $(id).querySelector('form');
   f.reset();
+  materielLu.delete(f);
   const aujourdhui = new Date().toLocaleDateString('sv-SE');
   f.querySelectorAll('input[type="date"]').forEach((i) => { i.value = aujourdhui; });
   f.querySelector('.f-msg').hidden = true;
@@ -1283,6 +1360,7 @@ $('f-stock').addEventListener('submit', async (e) => {
     const r = await appeler('gestionStock', {
       action: 'ajouter', quantite, modele: f.modele.value, fournisseur: f.fournisseur.value,
       prixAchat: prix, tva, acheteeLe: dateSaisie(f.date.value), numeros, numeroFacture: f.numero.value,
+      materiel: materielLu.get(f) || null,
     });
     if (fichiers.length && r.depense) await envoyerPieces('depenses', r.depense, fichiers);
   });
@@ -1303,7 +1381,7 @@ $('f-depense').addEventListener('submit', async (e) => {
     const r = await appeler('gestionDepense', {
       action: 'ajouter', date: dateSaisie(f.date.value), categorie: f.categorie.value,
       fournisseur: f.fournisseur.value, libelle: f.libelle.value, montant, tva,
-      numero: f.numero.value, recurrente: f.recurrente.checked,
+      numero: f.numero.value, recurrente: f.recurrente.checked, materiel: materielLu.get(f) || null,
     });
     if (fichiers.length) await envoyerPieces('depenses', r.id, fichiers);
   });
@@ -1359,8 +1437,18 @@ function remplirDepense(f, r) {
   });
 }
 
+// Cartes SIM et accessoires lus sur la facture : ajoutés au stock en même temps que la fiche.
+const materielLu = new Map(); // formulaire → { cartesSim, accessoires }
+function materielTexte(m) {
+  if (!m) return '';
+  const x = [
+    m.cartesSim ? `${m.cartesSim.quantite} carte${m.cartesSim.quantite > 1 ? 's' : ''} SIM` : null,
+    ...(m.accessoires || []).map((a) => `${a.quantite} × ${a.nom}`),
+  ].filter(Boolean);
+  return x.length ? `En plus, iront dans le stock : ${x.join(', ')}.` : '';
+}
 const messageLu = (r) => ['Fiche remplie d\'après le document : vérifiez avant d\'enregistrer.',
-  r.devise && r.devise !== 'EUR' ? `Attention, montants en ${r.devise}.` : null, r.remarque].filter(Boolean).join(' ');
+  r.devise && r.devise !== 'EUR' ? `Attention, montants en ${r.devise}.` : null, materielTexte(r), r.remarque].filter(Boolean).join(' ');
 
 // Lit la facture choisie dans le formulaire et remplit la fiche ; renvoie la lecture (ou null).
 async function preremplir(f, fichier) {
@@ -1374,6 +1462,7 @@ async function preremplir(f, fichier) {
       return null;
     }
     (f.id === 'f-stock' ? remplirAchat : remplirDepense)(f, r);
+    materielLu.set(f, { cartesSim: r.cartesSim, accessoires: r.accessoires });
     message(f, messageLu(r), true);
     return r;
   } catch (e) {
@@ -1409,6 +1498,8 @@ async function deposer(fichier) {
     const fa = $('f-stock');
     mettreFichier(fa, fichier);
     remplirAchat(fa, r);
+    materielLu.set(fa, materielLu.get(fd));
+    materielLu.delete(fd);
     message(fa, messageLu(r), true);
   }
 }
@@ -1505,6 +1596,15 @@ function rechercher(q) {
     if (trouve(t.numero, t.modele, t.sim, t.notes)) {
       res.push({ texte: `Tablette ${t.numero || t.modele || ''}`, detail: donnees.etats[etatTablette(t)] || t.etat, ouvrir: () => ouvrirTablette(t.id) });
     }
+  }
+  for (const l of donnees.sims) {
+    if (trouve(l.numero, l.iccid, l.operateur, l.client, l.note)) {
+      const t = l.tablette && donnees.stock.find((x) => x.id === l.tablette);
+      res.push({ texte: `Carte SIM ${l.numero || fin4(l.iccid)}`, detail: [donnees.statutsSim[l.statut], t ? `tablette ${t.numero || t.modele || ''}` : null].filter(Boolean).join(' · '), ouvrir: () => ouvrirSim(l.id) });
+    }
+  }
+  for (const a of donnees.accessoires) {
+    if (trouve(a.nom)) res.push({ texte: a.nom, detail: `Accessoire · ${a.quantite || 0} en stock`, ouvrir: () => ouvrirAccessoire(a.id) });
   }
   for (const f of donnees.familles) {
     if (trouve(f.nom) && !donnees.commandes.some((c) => c.fid === f.id)) {
