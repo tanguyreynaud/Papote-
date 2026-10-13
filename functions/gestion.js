@@ -25,6 +25,7 @@
 // refusées depuis les applis), pièces jointes dans Storage sous gestion/ (idem). Réservé au badge admin.
 
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { onDocumentUpdated } = require('firebase-functions/v2/firestore');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { logger } = require('firebase-functions/v2');
 const { defineSecret, defineString } = require('firebase-functions/params');
@@ -730,6 +731,8 @@ exports.gestionStock = onCall(async (request) => {
       if (!ETATS[champs.etat]) throw new HttpsError('invalid-argument', 'État inconnu.');
       if (champs.etat !== snap.get('etat')) {
         maj.etat = champs.etat;
+        // Perdue (volée) ou hors service : plus d'accès aux photos de la famille.
+        if (ETATS_BLOQUES.includes(champs.etat) && await retirerDeLaFamille(snap.data())) maj.fid = null;
         // Remise en stock : la tablette n'appartient plus à la commande (l'historique la garde).
         if (champs.etat === 'en-stock' && !('commande' in champs)) maj.commande = null;
         const commande = maj.commande !== undefined ? maj.commande : snap.get('commande') || null;
@@ -1599,6 +1602,71 @@ exports.gestionRenvoyerCode = onCall({ secrets: [MAIL_MOT_DE_PASSE] }, async (re
   return { ok: true, a };
 });
 
+// ---------- Identité des tablettes : préparation et jumelage ----------
+
+// Fonctions de index.js (abonnements) dont le jumelage a besoin, branchées au chargement.
+const vitrine = {};
+exports.brancher = (f) => Object.assign(vitrine, f);
+
+// Tablette perdue ou hors service : retirée de sa famille, jamais plus jumelée.
+const ETATS_BLOQUES = ['perdue', 'hors-service'];
+
+// Que faire quand une tablette du stock est jumelée à une famille (pure, testée).
+// t : fiche stock ; commande : sa commande (ou null) ; fid : famille qui vient de la jumeler.
+function suiteJumelage(t, commande, fid) {
+  if (ETATS_BLOQUES.includes(t.etat)) return { refuser: true };
+  if (!t.commande || !commande) return { alerte: 'jumelée sans commande' };
+  if (!commande.fid) return { relier: true };
+  if (commande.fid !== fid) return { alerte: 'jumelée à une autre famille que celle de sa commande' };
+  return {};
+}
+
+async function ficheDeLaTablette(p) {
+  const par = async (champ, valeur) => (valeur
+    ? (await db().collection('stock').where(champ, '==', valeur).limit(1).get()).docs[0] || null : null);
+  return (await par('tabletUid', p.tabletUid)) || par('serieAndroid', p.serie);
+}
+
+// Jumelage (pairings/{code}, écrit par la tablette et l'appli famille) : la tablette est reconnue par
+// son n° de série Android, noté à la préparation (outils/gestion/preparer-tablette).
+// Première fois : la commande est reliée à la famille, quelle que soit l'adresse e-mail du client.
+exports.gestionJumelage = onDocumentUpdated(
+  { document: 'pairings/{code}', region: process.env.REGION_FIRESTORE || 'europe-west1', secrets: [STRIPE_SECRET] },
+  async (event) => {
+    const avant = event.data.before.data() || {};
+    const p = event.data.after.data() || {};
+    if (avant.status === p.status || !['claimed', 'confirmed'].includes(p.status)) return;
+    const fiche = await ficheDeLaTablette(p);
+    if (!fiche) return;
+    const t = fiche.data();
+    const commande = t.commande ? (await db().doc(`commandes/${t.commande}`).get()).data() || null : null;
+    const suite = suiteJumelage(t, commande, p.fid);
+    if (suite.refuser) {
+      await event.data.after.ref.update({ status: 'refused' });
+      logger.warn(`Jumelage refusé : tablette ${t.ref || fiche.id} ${t.etat}.`);
+      return;
+    }
+    if (p.status !== 'confirmed' || !p.fid) return;
+    const maj = {
+      tabletUid: p.tabletUid || null, callsUid: p.callsUid || null, fid: p.fid,
+      jumeleeLe: Date.now(), alerteJumelage: suite.alerte || null,
+    };
+    if (t.etat === 'envoyee') maj.etat = 'chez-client';
+    await fiche.ref.update(maj);
+    if (suite.relier && vitrine.appliquer) {
+      await vitrine.appliquer(p.fid, t.commande);
+      logger.info(`Commande ${t.commande} reliée à la famille ${p.fid} par la tablette ${t.ref || fiche.id}.`);
+    }
+  });
+
+// Retire une tablette de sa famille (comptes Sync et appels) : elle revient sur l'écran Bienvenue.
+async function retirerDeLaFamille(t) {
+  if (!t.fid) return false;
+  await Promise.all([t.tabletUid, t.callsUid].filter(Boolean)
+    .map((uid) => db().doc(`families/${t.fid}/members/${uid}`).delete()));
+  return true;
+}
+
 // ---------- Récapitulatif du lundi ----------
 
 const JOURS = (n) => n * JOUR;
@@ -1639,6 +1707,7 @@ function aFaire({ commandes, stock, depenses, automatique, maintenant, sims = []
   ajouter(actives.filter(retour).length, 'tablette(s) à récupérer');
   ajouter(stock.filter((t) => t.etat === 'revenue').length, 'tablette(s) revenue(s) à vérifier');
   ajouter(stock.filter((t) => t.etat === 'en-retour' && t.remplaceePour).length, 'tablette(s) remplacée(s) à récupérer chez le client');
+  for (const t of stock.filter((x) => x.alerteJumelage)) liste.push(`Tablette ${t.ref || t.numero || ''} ${t.alerteJumelage}`);
   ajouter(actives.filter((c) => c.remboursement && c.remboursement.statut === 'echec').length, 'remboursement(s) échoué(s), à faire depuis Stripe');
   const parId = new Map(commandes.map((c) => [c.id, c]));
   ajouter(stock.filter((t) => simAResilier(t, parId.get(t.commande))).length, 'forfait(s) SIM à résilier ou suspendre');
@@ -2020,5 +2089,5 @@ exports.gestionCourrierMaintenant = onCall(OPTIONS_COURRIER, async (request) => 
 exports.regles = {
   ETATS, CATEGORIES, natureMouvement, mensuel, centimes, lien, nomFichier, moisSuivant, lectureVersFormulaire, SCHEMA_FACTURE,
   lireReglages, simAResilier, stockAJour, incoherences, materielLu, memeAccessoire, coutLigne, alertesSim, accessoiresAPrevoir, champsSim, aFaire, piecesFacture, debutMoisParis, moisPrecedent, csvTexte, livreDesRecettes,
-  registreDesAchats, corpsDuMail, memeAchat,
+  registreDesAchats, corpsDuMail, memeAchat, suiteJumelage,
 };

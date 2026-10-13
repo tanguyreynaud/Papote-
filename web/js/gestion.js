@@ -451,6 +451,7 @@ function afficherAccueil() {
   const simsSansTablette = donnees.sims.filter((l) => l.statut === 'active' && !l.tablette).length;
   const accessoires = accessoiresAPrevoir().filter((a) => a.manque || a.bas);
   // Achats enregistrés depuis la confirmation de commande : facture à télécharger chez le vendeur (après 5 jours).
+  const jumelagesAVoir = donnees.stock.filter((t) => t.alerteJumelage);
   const facturesAttendues = donnees.depenses.filter((d) => d.confirmation && Date.now() - (d.date || 0) > 5 * 864e5);
   const aVerifierMail = donnees.depenses.filter((d) => d.aVerifier).length;
   const erreursMail = donnees.courrier ? (donnees.courrier.erreurs || []).length : 0;
@@ -470,6 +471,7 @@ function afficherAccueil() {
     [simsSansTablette, `${simsSansTablette} ligne${simsSansTablette > 1 ? 's SIM actives reliées' : ' SIM active reliée'} à aucune tablette`, '#stock', 'ko'],
     [simsARegarder, `${simsARegarder} carte${simsARegarder > 1 ? 's' : ''} SIM à regarder (promo, activation, carte bancaire)`, '#stock', 'ko'],
     ...accessoires.map((a) => [1, a.manque ? `${a.nom} : il en manque ${a.manque} pour les envois` : `${a.nom} : stock bas (${a.quantite || 0})`, '#stock', a.manque ? 'ko' : '']),
+    ...jumelagesAVoir.map((t) => [1, `Tablette ${t.ref || t.numero || ''} ${t.alerteJumelage}`, '#stock', 'ko']),
     [facturesAttendues.length, `Facture à télécharger chez le vendeur puis à envoyer à factures@ : ${facturesAttendues
       .map((d) => `${d.fournisseur || d.libelle}${d.numero ? ` (commande ${d.numero})` : ''}`).join(', ')}`, '#compta', 'ko'],
     [aVerifierMail, `${pluriel(aVerifierMail, 'facture')} reçue${aVerifierMail > 1 ? 's' : ''} par e-mail à vérifier`, '#compta', ''],
@@ -589,7 +591,7 @@ async function ouvrirCommande(c) {
       ligne('Suivi', c.suivi ? `${c.suivi}${c.envoyeeLe ? `, envoyée le ${jour(c.envoyeeLe)}` : ''}` : null),
       ligne('Famille', c.famille ? `${c.famille}${c.abonnement ? ` (${ABONNEMENTS[c.abonnement] || c.abonnement})` : ''}` : null),
       ligne('Tablette', t ? h('button', { type: 'button', class: 'link', onclick: () => ouvrirTablette(t.id) },
-        [t.numero || 'sans n° de série', t.modele, donnees.etats[etatTablette(t)]].filter(Boolean).join(' · ')) : null),
+        [t.ref, t.numero || (t.ref ? null : 'sans n° de série'), t.modele, donnees.etats[etatTablette(t)]].filter(Boolean).join(' · ')) : null),
       ligne('Carte SIM', simDuKit(t)),
       ligne('Accessoires', t && (t.accessoires || []).length ? t.accessoires.join(', ') : null),
       ligne('Retour', c.restitution ? `${RETOURS[c.restitution.statut] || c.restitution.statut}${c.restitution.avant && c.restitution.statut === 'attendue' ? ` avant le ${jour(c.restitution.avant)}` : ''}` : null),
@@ -706,7 +708,7 @@ function formulaireRemplacement(c, t) {
   const msg = h('p', { class: 'small muted', hidden: true });
   const libres = {
     tablette: () => donnees.stock.filter((x) => DISPONIBLES.includes(x.etat) && !x.commande)
-      .map((x) => [x.id, [x.numero || 'sans n° de série', x.modele].filter(Boolean).join(' · ')]),
+      .map((x) => [x.id, [x.ref, x.numero || (x.ref ? null : 'sans n° de série'), x.modele].filter(Boolean).join(' · ')]),
     sim: () => donnees.sims.filter((l) => !l.tablette && ['stock', 'active'].includes(l.statut))
       .map((l) => [l.id, [l.numero || `ICCID ${fin4(l.iccid)}`, l.operateur].filter(Boolean).join(' · ')]),
     accessoire: () => donnees.accessoires.map((a) => [a.id, `${a.nom} (${a.quantite || 0} en stock)`]),
@@ -804,7 +806,8 @@ function afficherStock() {
       return {
         onclick: () => ouvrirTablette(t.id),
         cellules: [
-          t.numero || h('span', { class: 'muted' }, 'à saisir'),
+          h('div', {}, t.ref ? h('strong', {}, `${t.ref} `) : null, t.numero || h('span', { class: 'muted' }, 'à saisir'),
+            t.alerteJumelage ? h('div', {}, badge(t.alerteJumelage, 'ko')) : null),
           t.modele || '',
           badge(donnees.etats[t.affiche] || t.affiche, classeEtat(t.affiche)),
           c ? nomCommande(c) : '',
@@ -922,7 +925,7 @@ function ouvrirSim(id) {
   f.tablette.replaceChildren(h('option', { value: '' }, 'Aucune'),
     ...donnees.stock.filter((t) => t.id === l.tablette || (!t.simId && !t.sim && !['perdue', 'hors-service'].includes(t.etat)))
       .map((t) => h('option', { value: t.id, selected: t.id === l.tablette },
-        [t.numero || 'sans n° de série', t.modele, donnees.etats[etatTablette(t)]].filter(Boolean).join(' · '))));
+        [t.ref, t.numero || (t.ref ? null : 'sans n° de série'), t.modele, donnees.etats[etatTablette(t)]].filter(Boolean).join(' · '))));
   for (const k of ['operateur', 'numero', 'iccid', 'client', 'cb', 'cbExp', 'note']) f.elements[k].value = l[k] || '';
   f.go.value = l.go != null ? l.go : '';
   f.prix.value = enEuros(l.prix);
