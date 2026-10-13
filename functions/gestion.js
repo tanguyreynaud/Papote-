@@ -1575,8 +1575,10 @@ function aFaire({ commandes, stock, depenses, automatique, maintenant, sims = []
   const ajouter = (n, texte) => { if (n > 0) liste.push(`${n} ${texte.replace(/\(s\)/g, n > 1 ? 's' : '')}`); };
   const actives = commandes.filter((c) => c.expedition !== 'annulee');
   const retour = (c) => c.restitution && ['attendue', 'echec'].includes(c.restitution.statut);
-  const aEnvoyer = actives.filter((c) => c.expedition === 'a-preparer' && !retour(c)).length;
-  const dispo = stock.filter((t) => ['en-stock', 'preparee'].includes(t.etat) && !t.commande).length;
+  const idsAEnvoyer = new Set(actives.filter((c) => c.expedition === 'a-preparer' && !retour(c)).map((c) => c.id));
+  const aEnvoyer = idsAEnvoyer.size;
+  // Une tablette réservée à une commande pas encore envoyée compte pour cette commande.
+  const dispo = stock.filter((t) => ['en-stock', 'preparee'].includes(t.etat) && (!t.commande || idsAEnvoyer.has(t.commande))).length;
   ajouter(aEnvoyer, 'tablette(s) à envoyer');
   ajouter(Math.max(0, aEnvoyer - dispo), 'tablette(s) manquante(s) en stock pour les envoyer');
   ajouter(actives.filter((c) => c.expedition === 'envoyee' && !c.fid && ms(c.envoyeeLe)

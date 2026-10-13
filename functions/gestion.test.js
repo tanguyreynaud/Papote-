@@ -276,3 +276,14 @@ test('erreurs Sendcloud lisibles', () => {
   assert.equal(sendcloud.erreurLisible({ errors: [{ field: 'to_address.postal_code', detail: 'invalide' }] }), 'to_address.postal_code : invalide');
   assert.equal(sendcloud.erreurLisible({ error: { message: 'Contrat absent' } }), 'Contrat absent');
 });
+
+test('une tablette réservée à une commande à envoyer compte pour elle', () => {
+  const liste = g.aFaire({
+    maintenant: Date.UTC(2026, 9, 12),
+    commandes: [{ id: 'a', expedition: 'a-preparer' }],
+    stock: [{ etat: 'en-stock', commande: 'a' }],
+    depenses: [],
+    automatique: { erreurs: [] },
+  });
+  assert.deepStrictEqual(liste, ['1 tablette à envoyer']);
+});
