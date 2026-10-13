@@ -180,3 +180,32 @@ test('le stock suit les commandes', () => {
   assert.deepStrictEqual(g.stockAJour({ etat: 'preparee' }, { expedition: 'annulee' }), { etat: 'en-stock', commande: null });
   assert.strictEqual(g.stockAJour({ etat: 'envoyee' }, { expedition: 'annulee' }), null);
 });
+
+test('cartes SIM : coût et alertes', () => {
+  const J = 24 * 3600 * 1000;
+  const now = Date.parse('2026-10-13T12:00:00Z');
+  assert.strictEqual(g.coutLigne({ prix: 299, prixApres: 999, finPromo: now + J }, now), 299);
+  assert.strictEqual(g.coutLigne({ prix: 299, prixApres: 999, finPromo: now - J }, now), 999);
+  assert.strictEqual(g.coutLigne({}, now), null);
+  assert.deepStrictEqual(g.alertesSim({ statut: 'active', prix: 299 }, now), []);
+  assert.deepStrictEqual(g.alertesSim({ statut: 'active', finPromo: now + 10 * J }, now), ['promo finie dans 10 j']);
+  assert.deepStrictEqual(g.alertesSim({ statut: 'active', prix: 299, prixApres: 999, finPromo: now - J }, now), ['promo terminée']);
+  assert.deepStrictEqual(g.alertesSim({ statut: 'stock', activerAvant: now + 20 * J }, now), ['à activer dans les 20 j']);
+  assert.deepStrictEqual(g.alertesSim({ statut: 'stock', activerAvant: now - J }, now), ['date limite d\'activation dépassée']);
+  assert.deepStrictEqual(g.alertesSim({ statut: 'active', cb: '1234', cbExp: '2026-11' }, now), ['carte bancaire 1234 expire dans 49 j']);
+  assert.deepStrictEqual(g.alertesSim({ statut: 'active', cbExp: '2026-09' }, now), ['carte bancaire expirée']);
+  assert.deepStrictEqual(g.alertesSim({ statut: 'resiliee', cbExp: '2026-09' }, now), []);
+  assert.deepStrictEqual(g.champsSim({ iccid: '8933 0123 4567', cb: '4970 1234 5678 9012', prix: 299, go: 50, cbExp: 'x' }),
+    { iccid: '893301234567', cb: '9012', prix: 299, go: 50, cbExp: null });
+});
+
+test('accessoires à prévoir pour les envois', () => {
+  const aEnvoyer = [{ formule: 'sim' }, { formule: 'sim' }, { formule: 'wifi' }];
+  const r = g.accessoiresAPrevoir([
+    { nom: 'Clé 4G', parEnvoi: 'sim', quantite: 1 },
+    { nom: 'Prise USB', parEnvoi: 'tous', quantite: 10, seuil: 7 },
+    { nom: 'Câble', parEnvoi: 'tous', quantite: 10, seuil: 2 },
+    { nom: 'Support', parEnvoi: '', quantite: 0 },
+  ], aEnvoyer);
+  assert.deepStrictEqual(r.map((a) => [a.nom, a.besoin, a.manque, a.bas]), [['Clé 4G', 2, 1, false], ['Prise USB', 3, 0, true]]);
+});

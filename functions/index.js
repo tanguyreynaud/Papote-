@@ -905,6 +905,8 @@ exports.gestionCourrier = gestion.gestionCourrier;
 exports.gestionCourrierMaintenant = gestion.gestionCourrierMaintenant;
 exports.gestionCloture = gestion.gestionCloture;
 exports.gestionCloturer = gestion.gestionCloturer;
+exports.gestionSim = gestion.gestionSim;
+exports.gestionAccessoire = gestion.gestionAccessoire;
 
 // Nombre de proches d'une famille (membres « famille » qui ont rejoint), lu par les règles
 // Firestore pour refuser un 31e proche. Recalculé à chaque arrivée, départ ou changement de membre.

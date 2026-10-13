@@ -249,6 +249,7 @@ function afficherTout() {
     afficherAccueil();
     afficherStock();
     afficherSim();
+    afficherAccessoires();
     afficherCommandes();
   }
   if (donnees && stripe) {
@@ -436,6 +437,8 @@ function afficherAccueil() {
   const impayees = stripeMois ? stripeMois.abonnements.filter((a) => a.statut === 'past_due').length : 0;
   const problemes = donnees.automatique ? (donnees.automatique.erreurs || []).length : 0;
   const simsAResilier = lignesSim().filter((l) => l.aResilier).length;
+  const simsARegarder = donnees.sims.filter((l) => alertesSim(l).length).length;
+  const accessoires = accessoiresAPrevoir().filter((a) => a.manque || a.bas);
   const aVerifierMail = donnees.depenses.filter((d) => d.aVerifier).length;
   const erreursMail = donnees.courrier ? (donnees.courrier.erreurs || []).length : 0;
   const tva = franchiseTva();
@@ -449,6 +452,8 @@ function afficherAccueil() {
     [aRembourser, `${pluriel(aRembourser, 'remboursement')} échoué${aRembourser > 1 ? 's' : ''}, à faire depuis Stripe`, '#commandes', 'ko'],
     [impayees, `${pluriel(impayees, 'abonnement')} impayé${impayees > 1 ? 's' : ''}`, '#factures', 'ko'],
     [simsAResilier, `${pluriel(simsAResilier, 'forfait SIM')} à résilier ou suspendre`, '#stock', 'ko'],
+    [simsARegarder, `${simsARegarder} carte${simsARegarder > 1 ? 's' : ''} SIM à regarder (promo, activation, carte bancaire)`, '#stock', 'ko'],
+    ...accessoires.map((a) => [1, a.manque ? `${a.nom} : il en manque ${a.manque} pour les envois` : `${a.nom} : stock bas (${a.quantite || 0})`, '#stock', a.manque ? 'ko' : '']),
     [aVerifierMail, `${pluriel(aVerifierMail, 'facture')} reçue${aVerifierMail > 1 ? 's' : ''} par e-mail à vérifier`, '#compta', ''],
     [erreursMail, `${pluriel(erreursMail, 'problème')} au dernier relevé de factures@mapapote.fr (détail plus bas)`, '#accueil', 'ko'],
     [tva && tva.alerte ? 1 : 0, tva ? tva.alerte : '', '#accueil', 'ko'],
@@ -464,7 +469,7 @@ function afficherAccueil() {
   };
   pastille('n-accueil', taches.length);
   pastille('n-commandes', aEnvoyer + aRecuperer);
-  pastille('n-stock', manque + aVerifier + simsAResilier);
+  pastille('n-stock', manque + aVerifier + simsAResilier + simsARegarder + accessoires.length);
   afficherAutomatique();
   afficherCourrier();
   afficherArchives();
@@ -683,20 +688,216 @@ function lignesSim() {
   });
 }
 
+// Registre des cartes SIM : mêmes règles qu'alertesSim et coutLigne (functions/gestion.js).
+const JOUR_MS = 864e5;
+function coutLigne(l) {
+  if (l.finPromo && l.finPromo < Date.now() && l.prixApres != null) return l.prixApres;
+  return l.prix != null ? l.prix : null;
+}
+function alertesSim(l) {
+  if (l.statut === 'resiliee') return [];
+  const liste = [];
+  const jours = (t) => Math.ceil((t - Date.now()) / JOUR_MS);
+  if (l.finPromo) {
+    const j = jours(l.finPromo);
+    if (j < 0 && l.prixApres != null && l.prixApres !== l.prix) liste.push('promo terminée');
+    else if (j >= 0 && j <= 30) liste.push(`promo finie dans ${j} j`);
+  }
+  if (l.statut === 'stock' && l.activerAvant) {
+    const j = jours(l.activerAvant);
+    if (j < 0) liste.push('date limite d\'activation dépassée');
+    else if (j <= 45) liste.push(`à activer dans les ${j} j`);
+  }
+  const m = /^(\d{4})-(\d{2})$/.exec(l.cbExp || '');
+  if (m) {
+    const j = jours(Date.UTC(Number(m[1]), Number(m[2]), 0, 23));
+    const carte = `carte bancaire${l.cb ? ` ${l.cb}` : ''}`;
+    if (j < 0) liste.push(`${carte} expirée`);
+    else if (j <= 60) liste.push(`${carte} expire dans ${j} j`);
+  }
+  if (l.statut === 'suspendue') liste.push('suspendue : à résilier ou réactiver');
+  return liste;
+}
+const STATUT_CLASSE = { active: 'ok', stock: 'info', suspendue: 'ko', resiliee: '' };
+const fin4 = (iccid) => (iccid ? `…${String(iccid).slice(-4)}` : '');
+
 function afficherSim() {
-  const lignes = lignesSim().sort((a, b) => b.aResilier - a.aResilier);
+  const aResilier = new Set(lignesSim().filter((x) => x.aResilier).map((x) => x.t.id));
+  const parTablette = new Map(donnees.stock.map((t) => [t.id, t]));
+  const parCommande = new Map(donnees.commandes.map((c) => [c.id, c]));
+  const filtre = $('filtre-sim').value;
+  const ordre = { active: 0, suspendue: 1, stock: 2, resiliee: 3 };
+  const lignes = donnees.sims.filter((l) => (filtre ? l.statut === filtre : l.statut !== 'resiliee'))
+    .map((l) => {
+      const t = l.tablette && parTablette.get(l.tablette);
+      const alertes = alertesSim(l);
+      if (t && aResilier.has(t.id) && l.statut === 'active') alertes.unshift('tablette plus chez un client : à résilier ou suspendre');
+      return { l, t, c: t && parCommande.get(t.commande), alertes };
+    })
+    .sort((a, b) => b.alertes.length - a.alertes.length || (ordre[a.l.statut] ?? 9) - (ordre[b.l.statut] ?? 9));
+  // Anciennes lignes saisies directement sur la fiche d'une tablette, avant le registre.
+  const anciennes = donnees.stock.filter((t) => t.sim && !t.simId);
+  const actives = donnees.sims.filter((l) => l.statut === 'active');
+  const total = actives.reduce((s, l) => s + (coutLigne(l) || 0), 0) + anciennes.reduce((s, t) => s + coutSim(t), 0);
+  const n = actives.length + anciennes.length;
+  $('sim-resume').textContent = `${n} ligne${n > 1 ? 's actives' : ' active'}, ${euros(total)} par mois · `
+    + `${pluriel(donnees.sims.filter((l) => l.statut === 'stock').length, 'carte')} en stock`;
   remplirTable($('t-sim'), [
-    { titre: 'Ligne' }, { titre: 'Opérateur' }, { titre: 'Forfait', n: 1 }, { titre: 'Tablette' }, { titre: 'Client' }, { titre: '' },
-  ], lignes.map(({ t, c, aResilier }) => ({
-    onclick: () => ouvrirTablette(t.id),
-    cellules: [t.sim, t.simOperateur || '', h('span', { class: t.simCout == null ? 'muted' : null }, euros(coutSim(t))),
-      `${t.numero || t.modele || ''} · ${donnees.etats[etatTablette(t)] || t.etat}`, c ? nomCommande(c) : '',
-      aResilier ? badge('à résilier', 'ko') : badge('en service', 'ok')],
-  })), {
-    vide: 'Aucune ligne SIM saisie.',
-    total: lignes.length ? ['Total', '', euros(lignes.reduce((s, l) => s + coutSim(l.t), 0)), '', '', ''] : null,
+    { titre: 'Statut' }, { titre: 'Opérateur' }, { titre: 'Numéro' }, { titre: 'ICCID' }, { titre: 'Tablette' },
+    { titre: 'Client' }, { titre: 'Par mois', n: 1 }, { titre: 'À regarder' },
+  ], [
+    ...lignes.map(({ l, t, c, alertes }) => ({
+      onclick: () => ouvrirSim(l.id),
+      cellules: [badge(donnees.statutsSim[l.statut] || l.statut, STATUT_CLASSE[l.statut]), l.operateur || '', l.numero || '',
+        fin4(l.iccid), t ? t.numero || t.modele || '' : '', c ? nomCommande(c) : '', euros(coutLigne(l)),
+        h('span', { class: 'alertes' }, alertes.map((x) => badge(x, 'ko')))],
+    })),
+    ...anciennes.map((t) => ({
+      onclick: () => ouvrirTablette(t.id),
+      cellules: [badge('Active', 'ok'), t.simOperateur || '', t.sim, h('span', { class: 'muted' }, 'à compléter'),
+        t.numero || t.modele || '', '', euros(coutSim(t)), aResilier.has(t.id) ? badge('à résilier ou suspendre', 'ko') : ''],
+    })),
+  ], { vide: 'Aucune carte SIM enregistrée.' });
+}
+$('filtre-sim').addEventListener('change', afficherSim);
+
+let simOuverte = null;
+const dateChamp = (ms) => (ms ? new Date(ms).toLocaleDateString('sv-SE') : '');
+function ouvrirSim(id) {
+  const l = id ? donnees.sims.find((x) => x.id === id) : { statut: 'stock' };
+  if (!l) return;
+  simOuverte = id || null;
+  const f = $('f-sim');
+  f.reset();
+  $('ds-titre').textContent = id ? `Carte SIM ${l.numero || fin4(l.iccid)}`.trim() : 'Nouvelle carte SIM';
+  f.statut.replaceChildren(...Object.entries(donnees.statutsSim).map(([k, v]) => h('option', { value: k, selected: k === l.statut }, v)));
+  // Tablettes sans autre carte, plus celle de cette ligne.
+  f.tablette.replaceChildren(h('option', { value: '' }, 'Aucune'),
+    ...donnees.stock.filter((t) => t.id === l.tablette || (!t.simId && !t.sim && !['perdue', 'hors-service'].includes(t.etat)))
+      .map((t) => h('option', { value: t.id, selected: t.id === l.tablette },
+        [t.numero || 'sans n° de série', t.modele, donnees.etats[etatTablette(t)]].filter(Boolean).join(' · '))));
+  for (const k of ['operateur', 'numero', 'iccid', 'client', 'cb', 'cbExp', 'note']) f.elements[k].value = l[k] || '';
+  f.go.value = l.go != null ? l.go : '';
+  f.prix.value = enEuros(l.prix);
+  f.prixApres.value = enEuros(l.prixApres);
+  for (const k of ['finPromo', 'activation', 'activerAvant']) f.elements[k].value = dateChamp(l[k]);
+  $('ds-supprimer').hidden = !id;
+  f.querySelector('.f-msg').hidden = true;
+  $('d-sim').showModal();
+}
+$('btn-sim').addEventListener('click', () => ouvrirSim(null));
+
+$('f-sim').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const f = e.target;
+  const prix = enCentimes(f.prix.value);
+  const prixApres = enCentimes(f.prixApres.value);
+  if (Number.isNaN(prix) || Number.isNaN(prixApres)) return message(f, 'Prix illisible (ex. 2,99).');
+  const go = f.go.value.trim() ? Number(f.go.value.replace(',', '.')) : null;
+  if (go != null && !Number.isFinite(go)) return message(f, 'Forfait illisible : un nombre de Go.');
+  const date = (v) => (v ? dateSaisie(v) : null);
+  const champs = {
+    statut: f.statut.value, tablette: f.tablette.value || null, operateur: f.operateur.value, numero: f.numero.value,
+    iccid: f.iccid.value, client: f.client.value, go, prix, prixApres, finPromo: date(f.finPromo.value),
+    activation: date(f.activation.value), activerAvant: date(f.activerAvant.value), cb: f.cb.value, cbExp: f.cbExp.value,
+    note: f.note.value,
+  };
+  await enregistrer(f, async () => {
+    await appeler('gestionSim', simOuverte ? { action: 'modifier', id: simOuverte, champs } : { action: 'ajouter', champs });
+    $('d-sim').close();
+  });
+});
+
+$('ds-supprimer').addEventListener('click', async () => {
+  if (!confirm('Supprimer cette carte du registre (erreur de saisie) ? Pour une ligne arrêtée, choisissez plutôt « Résiliée ».')) return;
+  await enregistrer($('f-sim'), async () => {
+    await appeler('gestionSim', { action: 'supprimer', id: simOuverte });
+    $('d-sim').close();
+  });
+});
+
+// ---------- Accessoires ----------
+
+function accessoiresAPrevoir() {
+  const aEnvoyer = donnees.commandes.filter((c) => etatCommande(c) === 'a-envoyer');
+  return donnees.accessoires.map((a) => {
+    const besoin = a.parEnvoi ? aEnvoyer.filter((c) => a.parEnvoi === 'tous' || a.parEnvoi === c.formule).length : 0;
+    const manque = Math.max(0, besoin - (a.quantite || 0));
+    const bas = !manque && a.seuil != null && (a.quantite || 0) - besoin <= a.seuil;
+    return { ...a, besoin, manque, bas };
   });
 }
+
+function afficherAccessoires() {
+  remplirTable($('t-accessoires'), [
+    { titre: 'Accessoire' }, { titre: 'En stock', n: 1 }, { titre: 'Part avec' }, { titre: 'Prix unitaire', n: 1 }, { titre: '' },
+  ], accessoiresAPrevoir().sort((a, b) => a.nom.localeCompare(b.nom, 'fr')).map((a) => ({
+    onclick: () => ouvrirAccessoire(a.id),
+    cellules: [a.nom, String(a.quantite || 0), donnees.envoisAccessoire[a.parEnvoi || ''], euros(a.prixAchat),
+      a.manque ? badge(`il en manque ${a.manque} pour les envois`, 'ko') : a.bas ? badge('stock bas', 'ko') : ''],
+  })), { vide: 'Aucun accessoire.' });
+}
+
+let accessoireOuvert = null;
+function ouvrirAccessoire(id) {
+  const a = id ? donnees.accessoires.find((x) => x.id === id) : { quantite: 0, parEnvoi: '' };
+  if (!a) return;
+  accessoireOuvert = id || null;
+  const f = $('f-accessoire');
+  f.reset();
+  $('f-livraison').reset();
+  $('dx-titre').textContent = id ? a.nom : 'Nouvel accessoire';
+  f.parEnvoi.replaceChildren(...Object.entries(donnees.envoisAccessoire)
+    .map(([k, v]) => h('option', { value: k, selected: k === (a.parEnvoi || '') }, v)));
+  f.nom.value = a.nom || '';
+  f.quantite.value = a.quantite || 0;
+  f.seuil.value = a.seuil != null ? a.seuil : '';
+  f.prixAchat.value = enEuros(a.prixAchat);
+  f.note.value = a.note || '';
+  $('dx-supprimer').hidden = !id;
+  $('f-livraison').hidden = !id;
+  document.querySelectorAll('#d-accessoire .f-msg').forEach((p) => { p.hidden = true; });
+  $('d-accessoire').showModal();
+}
+$('btn-accessoire').addEventListener('click', () => ouvrirAccessoire(null));
+
+const entier = (v) => (String(v).trim() === '' ? null : /^-?\d+$/.test(String(v).trim()) ? Number(v) : NaN);
+
+$('f-accessoire').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const f = e.target;
+  const quantite = entier(f.quantite.value);
+  const seuil = entier(f.seuil.value);
+  const prixAchat = enCentimes(f.prixAchat.value);
+  if (quantite == null || Number.isNaN(quantite) || Number.isNaN(seuil)) return message(f, 'Quantité illisible : un nombre entier.');
+  if (Number.isNaN(prixAchat)) return message(f, 'Prix illisible (ex. 9,90).');
+  const champs = { nom: f.nom.value, parEnvoi: f.parEnvoi.value, quantite, seuil, prixAchat, note: f.note.value };
+  await enregistrer(f, async () => {
+    await appeler('gestionAccessoire', accessoireOuvert ? { action: 'modifier', id: accessoireOuvert, champs } : { action: 'ajouter', champs });
+    $('d-accessoire').close();
+  });
+});
+
+$('f-livraison').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const f = e.target;
+  const quantite = entier(f.quantite.value);
+  const montant = enCentimes(f.montant.value);
+  if (!quantite || quantite < 1 || Number.isNaN(quantite)) return message(f, 'Quantité illisible : un nombre entier.');
+  if (Number.isNaN(montant)) return message(f, 'Montant illisible (ex. 39,90).');
+  await enregistrer(f, async () => {
+    await appeler('gestionAccessoire', { action: 'entree', id: accessoireOuvert, quantite, montant, fournisseur: f.fournisseur.value });
+    $('d-accessoire').close();
+  });
+});
+
+$('dx-supprimer').addEventListener('click', async () => {
+  if (!confirm('Supprimer cet accessoire ?')) return;
+  await enregistrer($('f-accessoire'), async () => {
+    await appeler('gestionAccessoire', { action: 'supprimer', id: accessoireOuvert });
+    $('d-accessoire').close();
+  });
+});
 
 $('x-stock').addEventListener('click', () => {
   const parId = new Map(donnees.commandes.map((c) => [c.id, c]));
@@ -718,9 +919,12 @@ function ouvrirTablette(id) {
   $('dt-titre').textContent = `Tablette ${t.numero || t.modele || ''}`.trim();
   f.numero.value = t.numero || '';
   f.modele.value = t.modele || '';
-  f.sim.value = t.sim || '';
-  f.simOperateur.value = t.simOperateur || '';
-  f.simCout.value = enEuros(t.simCout);
+  // Carte SIM : une ligne du registre libre, ou l'ancienne saisie sur la fiche (gardée telle quelle).
+  f.simId.replaceChildren(h('option', { value: '' }, 'Aucune'),
+    t.sim && !t.simId ? h('option', { value: 'ancienne', selected: true }, `${t.sim} (ancienne saisie)`) : null,
+    ...donnees.sims.filter((l) => l.id === t.simId || (!l.tablette && l.statut !== 'resiliee'))
+      .map((l) => h('option', { value: l.id, selected: l.id === t.simId },
+        [l.numero || `ICCID ${fin4(l.iccid)}`, l.operateur, donnees.statutsSim[l.statut]].filter(Boolean).join(' · '))));
   f.notes.value = t.notes || '';
   f.etat.replaceChildren(...Object.entries(donnees.etats).map(([k, v]) => h('option', { value: k, selected: k === t.etat }, v)));
   const prises = new Set(donnees.stock.filter((x) => x.id !== t.id).map((x) => x.commande).filter(Boolean));
@@ -742,17 +946,24 @@ function ouvrirTablette(id) {
 $('f-tablette').addEventListener('submit', async (e) => {
   e.preventDefault();
   const f = e.target;
-  const simCout = enCentimes(f.simCout.value);
-  if (Number.isNaN(simCout)) return message(f, 'Forfait illisible (ex. 7,99).');
+  const t = donnees.stock.find((x) => x.id === tabletteOuverte);
+  const simId = f.simId.value;
   await enregistrer(f, async () => {
     await appeler('gestionStock', {
       action: 'modifier',
       id: tabletteOuverte,
       champs: {
         numero: f.numero.value, modele: f.modele.value, etat: f.etat.value, commande: f.commande.value || null,
-        sim: f.sim.value, simOperateur: f.simOperateur.value, simCout, notes: f.notes.value,
+        notes: f.notes.value,
+        // Ancienne saisie retirée : la fiche n'a plus de ligne.
+        ...(simId === '' && t.sim && !t.simId ? { sim: null, simOperateur: null, simCout: null } : {}),
       },
     });
+    if (simId && simId !== 'ancienne' && simId !== t.simId) {
+      await appeler('gestionSim', { action: 'modifier', id: simId, champs: { tablette: tabletteOuverte } });
+    } else if (!simId && t.simId) {
+      await appeler('gestionSim', { action: 'modifier', id: t.simId, champs: { tablette: null } });
+    }
     $('d-tablette').close();
   });
 });
@@ -1010,6 +1221,7 @@ function preparerFormulaires() {
   if (formulairesPrets) return;
   formulairesPrets = true;
   $('filtre-stock').append(...Object.entries(donnees.etats).map(([k, v]) => h('option', { value: k }, v)));
+  $('filtre-sim').append(...Object.entries(donnees.statutsSim).map(([k, v]) => h('option', { value: k }, v)));
   $('f-depense').elements.categorie.append(...Object.entries(donnees.categories)
     .map(([k, v]) => h('option', { value: k, selected: k === 'autre' }, v)));
 }
@@ -1478,7 +1690,8 @@ async function scanner(form, nom) {
   const plusieurs = champ.tagName === 'TEXTAREA';
   const lus = new Set(plusieurs ? champ.value.split('\n').map((x) => x.trim()).filter(Boolean) : []);
   $('scan-lus').replaceChildren();
-  $('scan-msg').textContent = 'Visez le code-barres du numéro de série (étiquette de la boîte ou au dos de la tablette).';
+  $('scan-msg').textContent = nom === 'iccid' ? 'Visez le code-barres de la carte SIM (sur son support en plastique).'
+    : 'Visez le code-barres du numéro de série (étiquette de la boîte ou au dos de la tablette).';
   $('scan-fin').hidden = !plusieurs;
   $('d-scan').showModal();
   try {

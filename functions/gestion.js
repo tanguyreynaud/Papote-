@@ -6,6 +6,8 @@
 //   gestionDepense  ajoute ou retire une dépense du registre des achats
 //   gestionStripe   factures, encaissements, remboursements, frais et abonnements Stripe d'une période
 //   gestionCommande factures et paiements Stripe d'une commande
+//   gestionSim      registre des cartes SIM (en stock, actives…), chacune reliée à sa tablette
+//   gestionAccessoire  accessoires (clé 4G, prise…), sortis du stock à chaque envoi de leur formule
 //   gestionPiece    pièces jointes (facture d'achat, bon de livraison…) d'une tablette ou d'une dépense
 //   gestionLireFacture  lit une facture d'achat (PDF ou photo) avec Claude pour préremplir la saisie
 //   gestionReglages réglages de la gestion (seuil de TVA, taux URSSAF, coût d'un forfait SIM…)
@@ -179,6 +181,64 @@ function simAResilier(tablette, commande) {
   if (ETATS_SANS_CLIENT.includes(tablette.etat)) return true;
   return !!(commande && ((commande.restitution && ['rendue', 'facturee'].includes(commande.restitution.statut))
     || ['resilie', 'canceled'].includes(commande.abonnement)));
+}
+
+// Cartes SIM (registre sims/{id}) et accessoires (accessoires/{id}).
+const STATUTS_SIM = {
+  stock: 'En stock, pas activée',
+  active: 'Active',
+  suspendue: 'Suspendue',
+  resiliee: 'Résiliée',
+};
+// Avec quels envois part un accessoire (clé 4G, prise…) : sorti du stock à chaque tablette envoyée.
+const ENVOIS_ACCESSOIRE = { '': 'Aucun envoi', tous: 'Chaque envoi', sim: 'Envois Internet inclus', wifi: 'Envois Wi-Fi' };
+
+// Prix payé ce mois-ci pour une ligne (centimes) : le prix après la promo quand elle est finie.
+function coutLigne(l, maintenant) {
+  if (l.finPromo && l.finPromo < maintenant && l.prixApres != null) return l.prixApres;
+  return l.prix != null ? l.prix : null;
+}
+
+// Fin du mois d'expiration d'une carte bancaire « AAAA-MM », en ms (null si illisible).
+function finCarte(cbExp) {
+  const m = /^(\d{4})-(\d{2})$/.exec(cbExp || '');
+  return m ? Date.UTC(Number(m[1]), Number(m[2]), 0, 23) : null;
+}
+
+// Ce qui demande une action sur une ligne SIM (mêmes seuils que l'ancien registre).
+function alertesSim(l, maintenant) {
+  if (l.statut === 'resiliee') return [];
+  const liste = [];
+  const jours = (t) => Math.ceil((t - maintenant) / (24 * 3600 * 1000));
+  if (l.finPromo) {
+    const j = jours(l.finPromo);
+    if (j < 0 && l.prixApres != null && l.prixApres !== l.prix) liste.push('promo terminée');
+    else if (j >= 0 && j <= 30) liste.push(`promo finie dans ${j} j`);
+  }
+  if (l.statut === 'stock' && l.activerAvant) {
+    const j = jours(l.activerAvant);
+    if (j < 0) liste.push('date limite d\'activation dépassée');
+    else if (j <= 45) liste.push(`à activer dans les ${j} j`);
+  }
+  const fin = finCarte(l.cbExp);
+  const carte = `carte bancaire${l.cb ? ` ${l.cb}` : ''}`;
+  if (fin) {
+    const j = jours(fin);
+    if (j < 0) liste.push(`${carte} expirée`);
+    else if (j <= 60) liste.push(`${carte} expire dans ${j} j`);
+  }
+  if (l.statut === 'suspendue') liste.push('suspendue : à résilier ou réactiver');
+  return liste;
+}
+
+// Accessoires qui manquent pour les commandes à envoyer, ou sous leur seuil d'alerte.
+function accessoiresAPrevoir(accessoires, aEnvoyer) {
+  return accessoires.map((a) => {
+    const besoin = a.parEnvoi ? aEnvoyer.filter((c) => a.parEnvoi === 'tous' || a.parEnvoi === c.formule).length : 0;
+    const manque = Math.max(0, besoin - (a.quantite || 0));
+    const bas = !manque && a.seuil != null && (a.quantite || 0) - besoin <= a.seuil;
+    return { ...a, besoin, manque, bas };
+  }).filter((a) => a.manque || a.bas);
 }
 
 // Le stock suit les commandes : ce que la nuit corrige quand une étape n'a pas été notée sur la tablette.
@@ -385,7 +445,7 @@ function effacerPieces(pieces) {
 
 exports.gestionDonnees = onCall(async (request) => {
   verifierAdmin(request);
-  const [commandes, stock, depenses, familles, automatique, reglages, courrier, archives] = await Promise.all([
+  const [commandes, stock, depenses, familles, automatique, reglages, courrier, archives, sims, accessoires] = await Promise.all([
     db().collection('commandes').get(),
     db().collection('stock').get(),
     db().collection('depenses').get(),
@@ -394,6 +454,8 @@ exports.gestionDonnees = onCall(async (request) => {
     db().doc('gestion/reglages').get(),
     db().doc('gestion/courrier').get(),
     db().doc('gestion/archives').get(),
+    db().collection('sims').get(),
+    db().collection('accessoires').get(),
   ]);
   const parFid = new Map(familles.docs.map((f) => [f.id, f.data()]));
   return {
@@ -435,6 +497,10 @@ exports.gestionDonnees = onCall(async (request) => {
     reglages: lireReglages(reglages.data()),
     courrier: courrier.exists ? courrier.data() : null,
     archives: archives.exists ? archives.data() : null,
+    sims: sims.docs.map((d) => aplatir({ id: d.id, ...d.data() })),
+    accessoires: accessoires.docs.map((d) => aplatir({ id: d.id, ...d.data() })),
+    statutsSim: STATUTS_SIM,
+    envoisAccessoire: ENVOIS_ACCESSOIRE,
   };
 });
 
@@ -515,19 +581,31 @@ exports.gestionStock = onCall(async (request) => {
       }
       maj.commande = commande;
     }
+    let sortis = [];
     if ('etat' in champs) {
       if (!ETATS[champs.etat]) throw new HttpsError('invalid-argument', 'État inconnu.');
       if (champs.etat !== snap.get('etat')) {
         maj.etat = champs.etat;
         // Remise en stock : la tablette n'appartient plus à la commande (l'historique la garde).
         if (champs.etat === 'en-stock' && !('commande' in champs)) maj.commande = null;
+        const commande = maj.commande !== undefined ? maj.commande : snap.get('commande') || null;
+        // Départ du colis : les accessoires qui partent avec cette formule sortent du stock.
+        if (champs.etat === 'envoyee' && commande) {
+          sortis = await sortirAccessoires(commande);
+          // Carte SIM encore « en stock » dans la tablette qui part : elle est activée à la préparation.
+          const simId = snap.get('simId');
+          const sim = simId && await db().doc(`sims/${simId}`).get();
+          if (sim && sim.exists && sim.get('statut') === 'stock') {
+            await sim.ref.update({ statut: 'active', activation: sim.get('activation') || Date.now(), majLe: FieldValue.serverTimestamp() });
+          }
+        }
         maj.historique = FieldValue.arrayUnion({
-          le: Date.now(), etat: champs.etat, par: qui, commande: maj.commande !== undefined ? maj.commande : snap.get('commande') || null,
+          le: Date.now(), etat: champs.etat, par: qui, commande, ...(sortis.length ? { accessoires: sortis } : {}),
         });
       }
     }
     await ref.update(maj);
-    return { ok: true };
+    return { ok: true, accessoires: sortis };
   }
 
   // Erreur de saisie seulement : une tablette qui a déjà servi garde sa fiche (état perdue ou hors service).
@@ -543,6 +621,155 @@ exports.gestionStock = onCall(async (request) => {
     return { ok: true };
   }
 
+  throw new HttpsError('invalid-argument', 'Action inconnue.');
+});
+
+async function sortirAccessoires(commandeId) {
+  const commande = await db().doc(`commandes/${commandeId}`).get();
+  const formule = commande.get('formule');
+  const accessoires = await db().collection('accessoires').get();
+  const sortis = [];
+  for (const a of accessoires.docs) {
+    const envoi = a.get('parEnvoi');
+    if (!envoi || (envoi !== 'tous' && envoi !== formule)) continue;
+    await a.ref.update({ quantite: FieldValue.increment(-1), majLe: FieldValue.serverTimestamp() });
+    sortis.push(a.get('nom'));
+  }
+  return sortis;
+}
+
+// ---------- Cartes SIM ----------
+
+const dateOuNull = (v) => (Number.isFinite(v) ? v : null);
+
+// Saisie d'une ligne SIM → champs enregistrés (montants en centimes, dates en ms).
+function champsSim(c) {
+  const champs = {};
+  if ('statut' in c) {
+    if (!STATUTS_SIM[c.statut]) throw new HttpsError('invalid-argument', 'Statut inconnu.');
+    champs.statut = c.statut;
+  }
+  for (const cle of ['operateur', 'numero', 'client', 'note']) if (cle in c) champs[cle] = texte(c[cle], cle === 'note' ? 1000 : 80);
+  if ('iccid' in c) champs.iccid = texte(String(c.iccid || '').replace(/\s/g, ''), 30);
+  if ('cb' in c) champs.cb = texte(String(c.cb || '').replace(/\D/g, '').slice(-4), 4);
+  if ('cbExp' in c) champs.cbExp = /^\d{4}-\d{2}$/.test(c.cbExp || '') ? c.cbExp : null;
+  if ('go' in c) champs.go = Number.isFinite(c.go) && c.go >= 0 ? c.go : null;
+  for (const cle of ['prix', 'prixApres']) if (cle in c) champs[cle] = centimes(c[cle]);
+  for (const cle of ['finPromo', 'activation', 'activerAvant']) if (cle in c) champs[cle] = dateOuNull(c[cle]);
+  return champs;
+}
+
+// Ce que la fiche de la tablette garde de sa ligne (utilisé par l'envoi, la rentabilité et les alertes).
+function simSurTablette(id, l) {
+  return {
+    simId: id,
+    sim: l.numero || (l.iccid ? `ICCID …${l.iccid.slice(-4)}` : 'SIM'),
+    simOperateur: l.operateur || null,
+    simCout: coutLigne(l, Date.now()),
+  };
+}
+const SANS_SIM = { simId: null, sim: null, simOperateur: null, simCout: null };
+
+exports.gestionSim = onCall(async (request) => {
+  verifierAdmin(request);
+  const d = request.data || {};
+  const qui = request.auth.token.email || request.auth.uid;
+
+  if (d.action === 'supprimer') {
+    const ref = db().doc(`sims/${d.id || '-'}`);
+    const snap = await ref.get();
+    if (!snap.exists) throw new HttpsError('not-found', 'Ligne introuvable.');
+    if (snap.get('tablette')) await db().doc(`stock/${snap.get('tablette')}`).update(SANS_SIM).catch(() => null);
+    await ref.delete();
+    return { ok: true };
+  }
+
+  if (d.action !== 'ajouter' && d.action !== 'modifier') throw new HttpsError('invalid-argument', 'Action inconnue.');
+  const ref = d.action === 'ajouter' ? db().collection('sims').doc() : db().doc(`sims/${d.id || '-'}`);
+  const avant = d.action === 'ajouter' ? {} : (await ref.get()).data();
+  if (!avant) throw new HttpsError('not-found', 'Ligne introuvable.');
+  const c = d.champs || {};
+  const champs = champsSim(c);
+  if (d.action === 'ajouter' && !champs.statut) champs.statut = 'stock';
+  const ligne = { ...avant, ...champs };
+  // Tablette : une seule ligne par tablette ; une ligne résiliée n'est plus sur aucune tablette.
+  let tablette = 'tablette' in c ? texte(c.tablette, 100) : avant.tablette || null;
+  if (ligne.statut === 'resiliee') tablette = null;
+  if (tablette) {
+    const t = await db().doc(`stock/${tablette}`).get();
+    if (!t.exists) throw new HttpsError('not-found', 'Tablette introuvable.');
+    const autre = t.get('simId');
+    if (autre && autre !== ref.id) await db().doc(`sims/${autre}`).update({ tablette: null }).catch(() => null);
+  }
+  if (avant.tablette && avant.tablette !== tablette) {
+    await db().doc(`stock/${avant.tablette}`).update(SANS_SIM).catch(() => null);
+  }
+  ligne.tablette = tablette;
+  await ref.set({
+    ...champs,
+    tablette,
+    majLe: FieldValue.serverTimestamp(),
+    ...(d.action === 'ajouter' ? { creeLe: FieldValue.serverTimestamp(), par: qui } : {}),
+  }, { merge: true });
+  if (tablette) await db().doc(`stock/${tablette}`).update(simSurTablette(ref.id, ligne));
+  return { ok: true, id: ref.id };
+});
+
+// ---------- Accessoires (clé 4G, prise USB…) ----------
+
+function champsAccessoire(c) {
+  const champs = {};
+  if ('nom' in c) champs.nom = texte(c.nom, 80);
+  if ('parEnvoi' in c) champs.parEnvoi = c.parEnvoi in ENVOIS_ACCESSOIRE ? c.parEnvoi : '';
+  if ('quantite' in c) champs.quantite = Number.isInteger(c.quantite) && Math.abs(c.quantite) <= 10000 ? c.quantite : 0;
+  if ('seuil' in c) champs.seuil = Number.isInteger(c.seuil) && c.seuil >= 0 ? c.seuil : null;
+  if ('prixAchat' in c) champs.prixAchat = centimes(c.prixAchat);
+  if ('note' in c) champs.note = texte(c.note, 1000);
+  return champs;
+}
+
+exports.gestionAccessoire = onCall(async (request) => {
+  verifierAdmin(request);
+  const d = request.data || {};
+  const qui = request.auth.token.email || request.auth.uid;
+
+  if (d.action === 'ajouter') {
+    const champs = champsAccessoire({ quantite: 0, parEnvoi: '', ...(d.champs || {}) });
+    if (!champs.nom) throw new HttpsError('invalid-argument', 'Nom manquant.');
+    const ref = await db().collection('accessoires').add({ ...champs, creeLe: FieldValue.serverTimestamp(), par: qui });
+    return { ok: true, id: ref.id };
+  }
+  const ref = db().doc(`accessoires/${d.id || '-'}`);
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Accessoire introuvable.');
+
+  if (d.action === 'modifier') {
+    const champs = champsAccessoire(d.champs || {});
+    if ('nom' in champs && !champs.nom) throw new HttpsError('invalid-argument', 'Nom manquant.');
+    await ref.update({ ...champs, majLe: FieldValue.serverTimestamp() });
+    return { ok: true };
+  }
+  // Livraison reçue : quantité ajoutée au stock, et la dépense si un montant est donné.
+  if (d.action === 'entree') {
+    const n = Number(d.quantite);
+    if (!Number.isInteger(n) || n < 1 || n > 10000) throw new HttpsError('invalid-argument', 'Quantité invalide.');
+    const montant = centimes(d.montant);
+    await ref.update({
+      quantite: FieldValue.increment(n),
+      ...(montant ? { prixAchat: Math.round(montant / n) } : {}),
+      majLe: FieldValue.serverTimestamp(),
+    });
+    if (montant) {
+      await ajouterDepense({
+        date: Date.now(), categorie: 'materiel', fournisseur: d.fournisseur, libelle: `${n} × ${snap.get('nom')}`, montant,
+      }, qui);
+    }
+    return { ok: true };
+  }
+  if (d.action === 'supprimer') {
+    await ref.delete();
+    return { ok: true };
+  }
   throw new HttpsError('invalid-argument', 'Action inconnue.');
 });
 
@@ -985,6 +1212,16 @@ async function synchroniserStock(bilan) {
       bilan.erreurs.push(`Tablette ${t.get('numero') || t.id} : ${e.message}`);
     }
   }
+  // Fin de promo d'une ligne SIM : la tablette prend le nouveau prix (rentabilité).
+  const maintenant = Date.now();
+  for (const l of (await db().collection('sims').where('tablette', '!=', null).get()).docs) {
+    const cout = coutLigne(l.data(), maintenant);
+    const t = await db().doc(`stock/${l.get('tablette')}`).get();
+    if (t.exists && t.get('simId') === l.id && t.get('simCout') !== cout) {
+      await t.ref.update({ simCout: cout });
+      bilan.stock.push(`${t.get('numero') || t.id} : forfait SIM à ${eurosTexte(cout || 0)}`);
+    }
+  }
 }
 
 async function automatiser(qui) {
@@ -1047,7 +1284,7 @@ async function argentDepuis(depuis) {
 }
 
 // Ce qui attend l'administrateur, à partir des données Firestore (même logique que l'accueil de la page).
-function aFaire({ commandes, stock, depenses, automatique, maintenant }) {
+function aFaire({ commandes, stock, depenses, automatique, maintenant, sims = [], accessoires = [] }) {
   const liste = [];
   // texte : « tablette(s) reçue(s) » → singulier ou pluriel selon n.
   const ajouter = (n, texte) => { if (n > 0) liste.push(`${n} ${texte.replace(/\(s\)/g, n > 1 ? 's' : '')}`); };
@@ -1067,6 +1304,10 @@ function aFaire({ commandes, stock, depenses, automatique, maintenant }) {
   ajouter(depenses.filter((d) => ms(d.date) > maintenant - JOURS(90) && !(d.pieces || []).length && !d.justificatif).length,
     'dépense(s) des 3 derniers mois sans justificatif');
   ajouter(depenses.filter((d) => d.aVerifier).length, 'facture(s) reçue(s) par e-mail à vérifier');
+  ajouter(sims.filter((l) => alertesSim(l, maintenant).length).length, 'carte(s) SIM à regarder (promo, activation, carte bancaire)');
+  for (const a of accessoiresAPrevoir(accessoires, actives.filter((c) => c.expedition === 'a-preparer' && !retour(c)))) {
+    liste.push(a.manque ? `${a.nom} : il en manque ${a.manque} pour les envois` : `${a.nom} : plus que ${a.quantite || 0} en stock`);
+  }
   ajouter(automatique && automatique.erreurs ? automatique.erreurs.length : 0, 'problème(s) lors du dernier passage automatique');
   return liste;
 }
@@ -1076,7 +1317,8 @@ const eurosTexte = (c) => `${(c / 100).toLocaleString('fr-FR', { minimumFraction
 async function recapitulatif() {
   const maintenant = Date.now();
   const debutAnnee = new Date(new Date(maintenant).getFullYear(), 0, 1).getTime();
-  const [commandesSnap, stockSnap, depensesSnap, familles, automatique, reglagesSnap, semaine, annee, abonnes] = await Promise.all([
+  const [commandesSnap, stockSnap, depensesSnap, familles, automatique, reglagesSnap, semaine, annee, abonnes, simsSnap,
+    accessoiresSnap] = await Promise.all([
     db().collection('commandes').get(),
     db().collection('stock').get(),
     db().collection('depenses').get(),
@@ -1086,6 +1328,8 @@ async function recapitulatif() {
     argentDepuis(maintenant - JOURS(7)),
     argentDepuis(debutAnnee),
     tout(stripe().subscriptions.list({ status: 'active', limit: 100 })),
+    db().collection('sims').get(),
+    db().collection('accessoires').get(),
   ]);
   const statut = new Map(familles.docs.map((f) => [f.id, f.get('abonnement.statut') || null]));
   const commandes = commandesSnap.docs.map((d) => {
@@ -1097,6 +1341,8 @@ async function recapitulatif() {
     commandes,
     stock: stockSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
     depenses: depensesSnap.docs.map((d) => d.data()),
+    sims: simsSnap.docs.map((d) => d.data()),
+    accessoires: accessoiresSnap.docs.map((d) => d.data()),
     automatique: automatique.data(),
     maintenant,
   });
@@ -1402,6 +1648,6 @@ exports.gestionCourrierMaintenant = onCall(OPTIONS_COURRIER, async (request) => 
 
 exports.regles = {
   ETATS, CATEGORIES, natureMouvement, mensuel, centimes, lien, nomFichier, moisSuivant, lectureVersFormulaire, SCHEMA_FACTURE,
-  lireReglages, simAResilier, stockAJour, aFaire, piecesFacture, debutMoisParis, moisPrecedent, csvTexte, livreDesRecettes,
+  lireReglages, simAResilier, stockAJour, coutLigne, alertesSim, accessoiresAPrevoir, champsSim, aFaire, piecesFacture, debutMoisParis, moisPrecedent, csvTexte, livreDesRecettes,
   registreDesAchats,
 };
