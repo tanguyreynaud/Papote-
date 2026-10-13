@@ -12,6 +12,8 @@
 //   gestionRecap    le lundi : récapitulatif de la semaine par e-mail (gestionRecapMaintenant : tout de suite)
 //   gestionCourrier toutes les heures : factures envoyées à factures@mapapote.fr, lues et rangées
 //                   (« à vérifier ») ; gestionCourrierMaintenant : tout de suite
+//   gestionCloture  le 1er du mois à 5 h : livre des recettes et registre des achats du mois écoulé, figés
+//                   (gestion/archives), rangés dans Storage et envoyés par e-mail ; gestionCloturer : tout de suite
 //   gestionAutomatique  chaque nuit : factures des 120 € de tablette non rendue, avoirs des
 //                       remboursements, dépenses mensuelles récurrentes (gestionAutomatiser : tout de suite)
 //
@@ -190,6 +192,85 @@ function piecesFacture(pieces) {
   }).slice(0, MAX_PIECES_MAIL);
 }
 
+// ---------- Livres comptables : livre des recettes et registre des achats ----------
+
+const NATURES = {
+  abonnement: 'Abonnement Papote',
+  'tablette-non-rendue': 'Tablette non rendue',
+  remboursement: 'Remboursement',
+  litige: 'Contestation bancaire',
+};
+const ENCAISSEMENTS = ['abonnement', 'tablette-non-rendue'];
+
+// Décalage de Paris par rapport à UTC (ms) à un instant donné.
+function decalageParis(t) {
+  const nom = new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Paris', timeZoneName: 'shortOffset' })
+    .formatToParts(new Date(t)).find((x) => x.type === 'timeZoneName').value; // « GMT+1 »
+  const m = /GMT([+-]\d+)/.exec(nom);
+  return m ? Number(m[1]) * 3600000 : 0;
+}
+
+// Minuit à Paris le 1er du mois (mois de 1 à 12 ; 13 = janvier de l'année suivante), en ms.
+// Le 1er du mois n'est jamais un jour de changement d'heure : le décalage de 0 h UTC est le bon.
+function debutMoisParis(annee, mois) {
+  const utc = Date.UTC(annee, mois - 1, 1);
+  return utc - decalageParis(utc);
+}
+
+// Le mois (à Paris) qui précède l'instant donné : { annee, mois }.
+function moisPrecedent(maintenant) {
+  const d = new Date(maintenant + decalageParis(maintenant));
+  const annee = d.getUTCFullYear();
+  const mois = d.getUTCMonth() + 1;
+  return mois === 1 ? { annee: annee - 1, mois: 12 } : { annee, mois: mois - 1 };
+}
+
+const cleMois = (annee, mois) => `${annee}-${String(mois).padStart(2, '0')}`;
+
+// CSV pour Excel : séparateur « ; », virgule décimale, BOM UTF-8 (comme les exports de la page).
+function csvTexte(entetes, lignes) {
+  const champ = (v) => {
+    const t = v == null ? '' : String(v);
+    return /[";\r\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+  };
+  return `﻿${[entetes, ...lignes].map((l) => l.map(champ).join(';')).join('\r\n')}\r\n`;
+}
+const montantCsv = (c) => (c == null ? '' : (c / 100).toFixed(2).replace('.', ','));
+const jourParis = (t) => (t == null ? '' : new Date(t).toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' }));
+
+// Livre des recettes : chaque paiement reçu et chaque remboursement, dans l'ordre des dates.
+// numeros : Map id de facture Stripe → numéro.
+function livreDesRecettes(mouvements, numeros = new Map()) {
+  const lignes = mouvements
+    .filter((m) => ENCAISSEMENTS.includes(m.nature) || m.nature === 'remboursement' || m.nature === 'litige')
+    .sort((a, b) => a.le - b.le);
+  const total = lignes.reduce((s, m) => s + m.montant, 0);
+  return {
+    total,
+    nombre: lignes.length,
+    csv: csvTexte(
+      ['Date', 'Facture', 'Client', 'E-mail', 'Nature', 'Mode de règlement', 'Montant', 'Frais Stripe', 'Net', 'Référence Stripe'],
+      [...lignes.map((m) => [jourParis(m.le), numeros.get(m.facture) || '', m.client, m.email, NATURES[m.nature],
+        'Carte bancaire (Stripe)', montantCsv(m.montant), montantCsv(m.frais), montantCsv(m.net), m.source || m.id]),
+      ['', '', '', '', 'Total encaissé moins remboursements', '', montantCsv(total), '', '', '']]),
+  };
+}
+
+// Registre des achats : chaque dépense, dans l'ordre des dates.
+function registreDesAchats(depenses) {
+  const lignes = depenses.slice().sort((a, b) => ms(a.date) - ms(b.date));
+  const total = lignes.reduce((s, d) => s + (d.montant || 0), 0);
+  return {
+    total,
+    nombre: lignes.length,
+    csv: csvTexte(
+      ['Date', 'Fournisseur', 'N° de facture', 'Libellé', 'Catégorie', 'Montant TTC', 'dont TVA', 'Justificatifs'],
+      [...lignes.map((d) => [jourParis(ms(d.date)), d.fournisseur, d.numero, d.libelle, CATEGORIES[d.categorie] || d.categorie,
+        montantCsv(d.montant), montantCsv(d.tva), [...(d.pieces || []).map((p) => p.nom), d.justificatif].filter(Boolean).join(', ')]),
+      ['', '', '', 'Total', '', montantCsv(total), '', '']]),
+  };
+}
+
 // Euros (nombre lu sur la facture) → centimes, sinon null.
 function euros(valeur) {
   if (typeof valeur !== 'number' || !Number.isFinite(valeur)) return null;
@@ -285,7 +366,7 @@ function effacerPieces(pieces) {
 
 exports.gestionDonnees = onCall(async (request) => {
   verifierAdmin(request);
-  const [commandes, stock, depenses, familles, automatique, reglages, courrier] = await Promise.all([
+  const [commandes, stock, depenses, familles, automatique, reglages, courrier, archives] = await Promise.all([
     db().collection('commandes').get(),
     db().collection('stock').get(),
     db().collection('depenses').get(),
@@ -293,6 +374,7 @@ exports.gestionDonnees = onCall(async (request) => {
     db().doc('gestion/automatique').get(),
     db().doc('gestion/reglages').get(),
     db().doc('gestion/courrier').get(),
+    db().doc('gestion/archives').get(),
   ]);
   const parFid = new Map(familles.docs.map((f) => [f.id, f.data()]));
   return {
@@ -333,6 +415,7 @@ exports.gestionDonnees = onCall(async (request) => {
     automatique: automatique.exists ? automatique.data() : null,
     reglages: lireReglages(reglages.data()),
     courrier: courrier.exists ? courrier.data() : null,
+    archives: archives.exists ? archives.data() : null,
   };
 });
 
@@ -539,6 +622,44 @@ async function tout(liste) {
   return lignes;
 }
 
+// Mouvements Stripe (balance transactions) d'une période, avec le client du paiement d'origine.
+// periode : { gte, lt } en secondes.
+async function lireMouvements(periode) {
+  const mouvements = await tout(stripe().balanceTransactions.list({
+    created: periode, limit: 100, expand: ['data.source'],
+  }));
+  // Remboursements : le client est sur le paiement d'origine.
+  const charges = new Map();
+  const aLire = [...new Set(mouvements
+    .map((bt) => bt.source && typeof bt.source === 'object' && typeof bt.source.charge === 'string' && bt.source.charge)
+    .filter(Boolean))];
+  for (const id of aLire.slice(0, 200)) {
+    charges.set(id, await stripe().charges.retrieve(id).catch(() => null));
+  }
+  return mouvements.map((bt) => {
+    const source = bt.source && typeof bt.source === 'object' ? bt.source : {};
+    const charge = source.object === 'charge' ? source
+      : (charges.get(source.charge) || {});
+    const facturation = charge.billing_details || {};
+    return {
+      id: bt.id,
+      le: bt.created * 1000,
+      disponibleLe: bt.available_on ? bt.available_on * 1000 : null,
+      type: bt.type,
+      nature: natureMouvement(bt),
+      montant: bt.amount,
+      frais: bt.fee,
+      net: bt.net,
+      description: bt.description || source.description || null,
+      client: facturation.name || null,
+      email: facturation.email || charge.receipt_email || null,
+      facture: typeof charge.invoice === 'string' ? charge.invoice
+        : (charge.invoice && charge.invoice.id) || null,
+      source: source.id || null,
+    };
+  });
+}
+
 exports.gestionStripe = onCall({ secrets: [STRIPE_SECRET], timeoutSeconds: 120 }, async (request) => {
   verifierAdmin(request);
   const { debut, fin } = request.data || {};
@@ -549,44 +670,13 @@ exports.gestionStripe = onCall({ secrets: [STRIPE_SECRET], timeoutSeconds: 120 }
 
   const [factures, mouvements, abonnements] = await Promise.all([
     tout(stripe().invoices.list({ created: periode, limit: 100 })),
-    tout(stripe().balanceTransactions.list({
-      created: periode, limit: 100, expand: ['data.source'],
-    })),
+    lireMouvements(periode),
     tout(stripe().subscriptions.list({ status: 'all', limit: 100 })),
   ]);
-  // Remboursements : le client est sur le paiement d'origine.
-  const charges = new Map();
-  const aLire = [...new Set(mouvements
-    .map((bt) => bt.source && typeof bt.source === 'object' && typeof bt.source.charge === 'string' && bt.source.charge)
-    .filter(Boolean))];
-  for (const id of aLire.slice(0, 200)) {
-    charges.set(id, await stripe().charges.retrieve(id).catch(() => null));
-  }
 
   return {
     factures: factures.map(versFacture),
-    mouvements: mouvements.map((bt) => {
-      const source = bt.source && typeof bt.source === 'object' ? bt.source : {};
-      const charge = source.object === 'charge' ? source
-        : (charges.get(source.charge) || {});
-      const facturation = charge.billing_details || {};
-      return {
-        id: bt.id,
-        le: bt.created * 1000,
-        disponibleLe: bt.available_on ? bt.available_on * 1000 : null,
-        type: bt.type,
-        nature: natureMouvement(bt),
-        montant: bt.amount,
-        frais: bt.fee,
-        net: bt.net,
-        description: bt.description || source.description || null,
-        client: facturation.name || null,
-        email: facturation.email || charge.receipt_email || null,
-        facture: typeof charge.invoice === 'string' ? charge.invoice
-          : (charge.invoice && charge.invoice.id) || null,
-        source: source.id || null,
-      };
-    }),
+    mouvements,
     abonnements: abonnements.map((a) => ({
       id: a.id,
       statut: a.status,
@@ -1015,6 +1105,158 @@ exports.gestionRecapMaintenant = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_P
   }
 });
 
+// ---------- Clôture du mois : livres comptables figés, archivés et envoyés ----------
+
+const MOIS_NOMS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre',
+  'novembre', 'décembre'];
+const MAX_RATTRAPAGE = 12; // mois en arrière rattrapés quand une clôture manque
+
+// Numéros des factures Stripe payées par ces mouvements.
+async function numerosFactures(mouvements, depuis) {
+  const numeros = new Map();
+  for (const f of await tout(stripe().invoices.list({ created: { gte: Math.floor(depuis / 1000) }, limit: 100 }))) {
+    if (f.number) numeros.set(f.id, f.number);
+  }
+  const manquantes = [...new Set(mouvements.map((m) => m.facture).filter((id) => id && !numeros.has(id)))];
+  for (const id of manquantes.slice(0, 50)) {
+    const f = await stripe().invoices.retrieve(id).catch(() => null);
+    if (f && f.number) numeros.set(id, f.number);
+  }
+  return numeros;
+}
+
+async function enregistrerCsv(chemin, contenu) {
+  await admin.storage().bucket().file(chemin).save(Buffer.from(contenu, 'utf8'),
+    { contentType: 'text/csv; charset=utf-8', resumable: false });
+}
+
+// Livres d'une période [debut, fin) : fichiers dans Storage (gestion/archives/{cle}/) et pièces jointes.
+async function livresDe(debut, fin, cle) {
+  const [mouvements, depensesSnap] = await Promise.all([
+    lireMouvements({ gte: Math.floor(debut / 1000), lt: Math.floor(fin / 1000) }),
+    db().collection('depenses')
+      .where('date', '>=', Timestamp.fromMillis(debut)).where('date', '<', Timestamp.fromMillis(fin)).get(),
+  ]);
+  const recettes = livreDesRecettes(mouvements, await numerosFactures(mouvements, debut - JOURS(35)));
+  const achats = registreDesAchats(depensesSnap.docs.map((d) => d.data()));
+  const encaisse = mouvements.filter((m) => ENCAISSEMENTS.includes(m.nature)).reduce((s, m) => s + m.montant, 0);
+  const fichiers = [
+    { nom: `livre-des-recettes-${cle}.csv`, contenu: recettes.csv },
+    { nom: `registre-des-achats-${cle}.csv`, contenu: achats.csv },
+  ];
+  for (const f of fichiers) {
+    f.chemin = `gestion/archives/${cle}/${f.nom}`;
+    f.type = 'text/csv';
+    await enregistrerCsv(f.chemin, f.contenu);
+  }
+  return {
+    fiche: {
+      le: Date.now(),
+      debut,
+      fin,
+      recettes: { nombre: recettes.nombre, total: recettes.total, encaisse, rembourse: encaisse - recettes.total },
+      achats: { nombre: achats.nombre, total: achats.total },
+      fichiers: fichiers.map(({ nom, chemin, type }) => ({ nom, chemin, type })),
+    },
+    pieces: fichiers.map((f) => ({ filename: f.nom, content: f.contenu, contentType: 'text/csv; charset=utf-8' })),
+  };
+}
+
+// Clôture le mois écoulé, rattrape les mois précédents jamais clôturés (tant qu'ils ont de l'activité),
+// ou refait un mois précis (refaire : « AAAA-MM »). En décembre, ajoute l'année entière et le chiffre
+// d'affaires à reporter sur la déclaration de revenus. Envoie le tout à contact@mapapote.fr.
+async function cloturer(maintenant, refaire) {
+  const ref = db().doc('gestion/archives');
+  const deja = (await ref.get()).data() || {};
+  const faits = { ...(deja.mois || {}) };
+  const aFaire = [];
+  if (refaire) {
+    const m = /^(\d{4})-(\d{2})$/.exec(String(refaire));
+    if (!m || Number(m[2]) < 1 || Number(m[2]) > 12) throw new HttpsError('invalid-argument', 'Mois invalide.');
+    const cible = { annee: Number(m[1]), mois: Number(m[2]) };
+    if (debutMoisParis(cible.annee, cible.mois + 1) > maintenant) throw new HttpsError('invalid-argument', 'Ce mois n\'est pas fini.');
+    aFaire.push({ ...cible, toujours: true });
+  } else {
+    let { annee, mois } = moisPrecedent(maintenant);
+    for (let i = 0; i < MAX_RATTRAPAGE; i += 1) {
+      if (!faits[cleMois(annee, mois)]) aFaire.push({ annee, mois, toujours: i === 0 });
+      mois -= 1;
+      if (mois === 0) { annee -= 1; mois = 12; }
+    }
+  }
+
+  const mois = {};
+  const annees = {};
+  const pieces = [];
+  const resume = [];
+  for (const m of aFaire) {
+    const cle = cleMois(m.annee, m.mois);
+    const { fiche, pieces: p } = await livresDe(debutMoisParis(m.annee, m.mois), debutMoisParis(m.annee, m.mois + 1), cle);
+    const vide = !fiche.recettes.nombre && !fiche.achats.nombre;
+    // Rattrapage : on s'arrête au premier mois sans aucune activité (avant le lancement).
+    if (vide && !m.toujours) {
+      await Promise.all(fiche.fichiers.map((f) => admin.storage().bucket().file(f.chemin).delete().catch(() => null)));
+      break;
+    }
+    mois[cle] = fiche;
+    pieces.push(...p);
+    resume.push([`${MOIS_NOMS[m.mois - 1]} ${m.annee}`, [
+      `Recettes : ${fiche.recettes.nombre} ligne${fiche.recettes.nombre > 1 ? 's' : ''}, ${eurosTexte(fiche.recettes.total)}`,
+      `Achats : ${fiche.achats.nombre} ligne${fiche.achats.nombre > 1 ? 's' : ''}, ${eurosTexte(fiche.achats.total)}`,
+    ]]);
+    if (m.mois === 12) {
+      const a = String(m.annee);
+      const { fiche: ficheAnnee, pieces: pa } = await livresDe(debutMoisParis(m.annee, 1), debutMoisParis(m.annee + 1, 1), a);
+      annees[a] = ficheAnnee;
+      pieces.push(...pa);
+      resume.push([`Année ${a}`, [
+        `Chiffre d'affaires encaissé (paiements reçus moins remboursements) : ${eurosTexte(ficheAnnee.recettes.total)}`,
+        'À reporter sur la déclaration de revenus, formulaire 2042-C-PRO (micro-entreprise, case des prestations de services BIC : 5KP, ou 5TB avec le versement libératoire). À vérifier sur impots.gouv.fr.',
+        `Achats de l'année : ${eurosTexte(ficheAnnee.achats.total)}`,
+      ]]);
+    }
+  }
+  if (!Object.keys(mois).length) return { ok: true, mois: [] };
+  await ref.set({ mois, ...(Object.keys(annees).length ? { annees } : {}) }, { merge: true });
+
+  const html = `<!doctype html><html lang="fr"><body style="margin:0;background:#fdfaf5;color:#24212f;font:16px/1.6 Arial,sans-serif">
+<div style="max-width:560px;margin:0 auto;padding:28px 20px">
+<p style="margin:0 0 20px;font-weight:bold;font-size:20px;color:#4f46e5">Papote · livres comptables</p>
+<p>Le livre des recettes et le registre des achats sont joints (fichiers à ouvrir avec Excel) et rangés dans l'espace admin, rubrique Comptabilité. Gardez cet e-mail : ce sont les registres obligatoires de la micro-entreprise.</p>
+${resume.map(([titre, items]) => `<h2 style="font-size:18px;margin:20px 0 6px">${mail.echapper(titre)}</h2>
+<ul style="margin:0;padding-left:20px">${items.map((i) => `<li>${mail.echapper(i)}</li>`).join('')}</ul>`).join('')}
+<p style="margin:28px 0"><a href="${ESPACE_ADMIN}#compta" style="display:inline-block;background:#4f46e5;color:#fff;text-decoration:none;font-weight:bold;padding:12px 22px;border-radius:999px">Ouvrir l'espace admin</a></p>
+</div></body></html>`;
+  const text = ['Le livre des recettes et le registre des achats sont joints et rangés dans l\'espace admin.', '',
+    ...resume.flatMap(([titre, items]) => [titre, ...items.map((i) => `- ${i}`), '']), ESPACE_ADMIN].join('\n');
+  const titres = resume.filter(([t]) => !t.startsWith('Année')).map(([t]) => t);
+  let envoye = true;
+  try {
+    await mail.envoyer({
+      smtp: MAIL_SMTP.value(),
+      expediteur: MAIL_EXPEDITEUR.value(),
+      motDePasse: MAIL_MOT_DE_PASSE.value(),
+      a: EMAIL_PAPOTE,
+      contenu: { subject: `Papote : livres comptables de ${titres.join(', ')}`, html, text, attachments: pieces },
+    });
+  } catch (e) {
+    envoye = false;
+    logger.warn('Livres comptables : e-mail non envoyé', e.message);
+  }
+  return { ok: true, mois: Object.keys(mois), envoye };
+}
+
+const OPTIONS_CLOTURE = { secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE], memory: '512MiB', timeoutSeconds: 540 };
+
+exports.gestionCloture = onSchedule(
+  { ...OPTIONS_CLOTURE, schedule: '0 5 1 * *', timeZone: 'Europe/Paris' },
+  () => cloturer(Date.now()));
+
+exports.gestionCloturer = onCall(OPTIONS_CLOTURE, async (request) => {
+  verifierAdmin(request);
+  return cloturer(Date.now(), (request.data || {}).mois || null);
+});
+
 // ---------- Factures reçues par e-mail ----------
 
 // Facture lue (lectureVersFormulaire) → achat de tablettes ou dépense « à vérifier », avec la pièce jointe.
@@ -1116,5 +1358,6 @@ exports.gestionCourrierMaintenant = onCall(OPTIONS_COURRIER, async (request) => 
 
 exports.regles = {
   ETATS, CATEGORIES, natureMouvement, mensuel, centimes, lien, nomFichier, moisSuivant, lectureVersFormulaire, SCHEMA_FACTURE,
-  lireReglages, simAResilier, aFaire, piecesFacture,
+  lireReglages, simAResilier, aFaire, piecesFacture, debutMoisParis, moisPrecedent, csvTexte, livreDesRecettes,
+  registreDesAchats,
 };

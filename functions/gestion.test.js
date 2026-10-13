@@ -132,3 +132,38 @@ test('pièces jointes lues comme factures', () => {
   assert.deepStrictEqual(pieces.map((p) => p.contentType), ['application/pdf', 'image/jpeg']);
   assert.deepStrictEqual(g.piecesFacture(undefined), []);
 });
+
+test('mois à Paris pour la clôture', () => {
+  // Minuit à Paris : 23 h UTC la veille en hiver, 22 h en été.
+  assert.strictEqual(new Date(g.debutMoisParis(2026, 1)).toISOString(), '2025-12-31T23:00:00.000Z');
+  assert.strictEqual(new Date(g.debutMoisParis(2026, 7)).toISOString(), '2026-06-30T22:00:00.000Z');
+  assert.strictEqual(new Date(g.debutMoisParis(2026, 13)).toISOString(), '2026-12-31T23:00:00.000Z');
+  assert.deepStrictEqual(g.moisPrecedent(Date.parse('2026-11-01T03:00:00Z')), { annee: 2026, mois: 10 });
+  // 31 décembre 23 h 30 UTC = déjà le 1er janvier à Paris.
+  assert.deepStrictEqual(g.moisPrecedent(Date.parse('2026-12-31T23:30:00Z')), { annee: 2026, mois: 12 });
+  assert.deepStrictEqual(g.moisPrecedent(Date.parse('2027-01-15T12:00:00Z')), { annee: 2026, mois: 12 });
+});
+
+test('livre des recettes et registre des achats', () => {
+  assert.strictEqual(g.csvTexte(['a', 'b'], [['x;y', 'il dit "oui"'], [null, 3]]),
+    '﻿a;b\r\n"x;y";"il dit ""oui"""\r\n;3\r\n');
+  const le = Date.parse('2026-10-05T10:00:00Z');
+  const r = g.livreDesRecettes([
+    { id: 'txn_2', le: le + 1000, nature: 'remboursement', montant: -2000, frais: 0, net: -2000, source: 're_1' },
+    { id: 'txn_1', le, nature: 'abonnement', montant: 5000, frais: 90, net: 4910, facture: 'in_1', client: 'Jean', source: 'ch_1' },
+    { id: 'txn_3', le, nature: 'virement', montant: -4000, frais: 0, net: -4000 },
+  ], new Map([['in_1', 'PAP-0001']]));
+  assert.strictEqual(r.nombre, 2);
+  assert.strictEqual(r.total, 3000);
+  const lignes = r.csv.trim().split('\r\n');
+  assert.strictEqual(lignes[1], '05/10/2026;PAP-0001;Jean;;Abonnement Papote;Carte bancaire (Stripe);50,00;0,90;49,10;ch_1');
+  assert.ok(lignes[2].startsWith('05/10/2026;;;;Remboursement;'));
+  assert.ok(lignes[3].includes(';30,00;'));
+  const a = g.registreDesAchats([
+    { date: Date.parse('2026-10-20T10:00:00Z'), fournisseur: 'Free', libelle: 'Forfait', categorie: 'sim', montant: 200 },
+    { date: le, fournisseur: 'Cdiscount', numero: 'F1', libelle: 'Tablettes', categorie: 'tablettes', montant: 30000, tva: 5000,
+      pieces: [{ nom: 'f1.pdf' }] },
+  ]);
+  assert.strictEqual(a.total, 30200);
+  assert.strictEqual(a.csv.trim().split('\r\n')[1], '05/10/2026;Cdiscount;F1;Tablettes;Achat de tablettes;300,00;50,00;f1.pdf');
+});
