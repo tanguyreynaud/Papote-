@@ -1,6 +1,6 @@
 // Tableau de bord : cartes SIM vues par les tablettes (members/{uid}.sim = { iccid, operateur,
 // reseau, signal, dataMoisMo, vuLe }), par famille, avec les alertes. Les contrats (opérateur,
-// prix, promo…) sont tenus dans le registre à part de Tanguy, pas ici.
+// prix, promo…) sont dans le registre « Cartes SIM » de l'onglet Stock (gestion.js).
 const $ = (id) => document.getElementById(id);
 const DATA_MAX_MO = 15 * 1024;
 const MUETTE_MS = 48 * 3600_000;
