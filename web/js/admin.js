@@ -1,5 +1,6 @@
-// Tableau de bord de l'administrateur : toutes les familles et l'état de leurs tablettes,
-// et transfert des anciennes photos et vidéos de la base vers Storage.
+// Espace d'administration (admin.html) : familles et tablettes, envois et retours de commandes,
+// transfert des anciennes photos et vidéos vers Storage. Le stock, les factures et la comptabilité
+// sont dans gestion.js, sur la même page.
 // Une app Firebase à part (« admin ») : la connexion Google ne touche pas à la famille de ce navigateur.
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
 import {
@@ -14,6 +15,7 @@ import {
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-storage.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-functions.js';
 import { refreshSim } from './sim.js';
+import { appeler, donnees, signalerChangement } from './gestion-api.js';
 
 const app = initializeApp({
   apiKey: 'AIzaSyAvoivJR8p-u2VxUWzlyHzTgP20-5ZG_-E',
@@ -60,7 +62,10 @@ $('btn-signin').addEventListener('click', async () => {
 });
 
 $('btn-signout').addEventListener('click', () => signOut(auth));
-$('btn-refresh').addEventListener('click', load);
+$('btn-refresh').addEventListener('click', () => {
+  load();
+  signalerChangement();
+});
 
 onAuthStateChanged(auth, (user) => {
   $('signin').hidden = !!user;
@@ -100,17 +105,25 @@ async function loadOrders() {
     $('orders').replaceChildren(...list.map((c) => {
       const li = document.createElement('li');
       li.innerHTML = '<strong></strong><span class="muted small"></span><span class="small"></span>'
-        + '<form class="ship"><input placeholder="N° de suivi Mondial Relay" autocomplete="off" required><button type="submit" class="primary small-btn">Envoyée</button></form>';
+        + '<form class="ship"><select class="tablette" aria-label="Tablette du stock"><option value="">Tablette du stock…</option></select>'
+        + '<input placeholder="N° de suivi Mondial Relay" autocomplete="off" required><button type="submit" class="primary small-btn">Envoyée</button></form>';
       li.querySelector('strong').textContent = orderHead(c);
       li.querySelector('.muted').textContent = `${c.email}${c.telephone ? ` · ${c.telephone}` : ''} · commandé ${ago(toDate(c.creeLe))}${c.fid ? ' · famille créée' : ''}`;
       li.querySelector('span.small:not(.muted)').textContent = livraisonTexte(c);
       const form = li.querySelector('form');
+      remplirTablettes(form.querySelector('select.tablette'), c.id);
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const suivi = form.querySelector('input').value.trim();
+        const tablette = form.querySelector('select.tablette').value;
         form.querySelector('button').disabled = true;
         try {
           await httpsCallable(functions, 'tabletteEnvoyee')({ commande: c.id, suivi });
+          if (tablette) {
+            await appeler('gestionStock', { action: 'modifier', id: tablette, champs: { etat: 'envoyee', commande: c.id } })
+              .catch((err) => alert(`Colis enregistré, mais la tablette n'a pas pu être sortie du stock : ${err.message}`));
+          }
+          signalerChangement();
           loadOrders();
           loadShipped();
         } catch (err) {
@@ -124,6 +137,24 @@ async function loadOrders() {
   } catch (err) {
     console.warn('Commandes illisibles', err);
     $('orders-empty').hidden = false;
+  }
+}
+
+// Tablettes disponibles dans le stock (gestion), pour savoir laquelle part avec la commande.
+async function remplirTablettes(select, commande) {
+  try {
+    const { stock } = await donnees();
+    const dispo = stock.filter((t) => t.commande === commande || (['en-stock', 'preparee'].includes(t.etat) && !t.commande));
+    for (const t of dispo) {
+      const o = document.createElement('option');
+      o.value = t.id;
+      o.textContent = [t.numero || 'sans n° de série', t.modele].filter(Boolean).join(' · ');
+      o.selected = t.commande === commande;
+      select.append(o);
+    }
+    if (!dispo.length) select.options[0].textContent = 'Stock vide';
+  } catch (err) {
+    select.hidden = true;
   }
 }
 
@@ -207,6 +238,11 @@ async function loadReturns() {
         btn.disabled = true;
         try {
           await httpsCallable(functions, 'tabletteRendue')({ commande: d.id });
+          // La tablette revient dans le stock, à vérifier avant de repartir.
+          const { stock } = await donnees().catch(() => ({ stock: [] }));
+          const t = stock.find((x) => x.commande === d.id);
+          if (t) await appeler('gestionStock', { action: 'modifier', id: t.id, champs: { etat: 'revenue' } }).catch(() => null);
+          signalerChangement();
           li.remove();
         } catch (err) {
           console.error(err);
