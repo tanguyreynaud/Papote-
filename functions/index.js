@@ -104,8 +104,8 @@ async function sessionPaiement({ formule, tablette, fid, email, client, relais }
     mode: 'subscription',
     line_items: await tarifs(formule, tablette),
     locale: 'fr',
-    // Carte bancaire seulement : pas de « Link » ni de code promo, qui troublent les clients.
-    payment_method_types: ['card'],
+    // Carte bancaire (Google Pay et Apple Pay compris) et Link, choisi par Tanguy le 2026-10-13. Pas de code promo.
+    payment_method_types: ['card', 'link'],
     billing_address_collection: 'auto',
     phone_number_collection: { enabled: true },
     metadata,
