@@ -246,6 +246,9 @@ test('adresse Sendcloud du client : point relais ou adresse Stripe', () => {
   assert.equal(relais.pointRelais, '123');
   assert.equal(relais.adresse.postal_code, '75001');
   assert.equal(relais.adresse.email, 'j@x.fr');
+  assert.equal(relais.adresse.name, 'Jeanne');
+  const retrait = sendcloud.adresseClient({ nom: 'Jeanne', livraison: { transporteur: 'mondial-relay', id: '123', cp: '75001', ville: 'Paris', destinataire: 'Marc Dupont' } });
+  assert.equal(retrait.adresse.name, 'Marc Dupont');
   const maison = sendcloud.adresseClient({ email: 'a@x.fr', livraison: { nom: 'Paul', adresse: { line1: '2 av', postal_code: '69001', city: 'Lyon', country: 'FR' } } });
   assert.equal(maison.pointRelais, null);
   assert.equal(maison.adresse.name, 'Paul');
