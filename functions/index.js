@@ -889,6 +889,8 @@ exports.bilanSupport = support.bilanSupport;
 
 // Stock de tablettes, commandes, factures et comptabilité (page web/gestion.html, admin).
 const gestion = require('./gestion');
+// Le jumelage d'une tablette du stock relie sa commande à la famille (gestion.gestionJumelage).
+gestion.brancher({ appliquer });
 exports.gestionDonnees = gestion.gestionDonnees;
 exports.gestionStock = gestion.gestionStock;
 exports.gestionDepense = gestion.gestionDepense;
@@ -909,6 +911,7 @@ exports.gestionSim = gestion.gestionSim;
 exports.gestionAccessoire = gestion.gestionAccessoire;
 exports.gestionEtiquette = gestion.gestionEtiquette;
 exports.gestionRenvoyerCode = gestion.gestionRenvoyerCode;
+exports.gestionJumelage = gestion.gestionJumelage;
 
 // Nombre de proches d'une famille (membres « famille » qui ont rejoint), lu par les règles
 // Firestore pour refuser un 31e proche. Recalculé à chaque arrivée, départ ou changement de membre.

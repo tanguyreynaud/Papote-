@@ -323,3 +323,12 @@ test('rappel des factures à télécharger après une confirmation de commande',
   });
   assert.deepStrictEqual(liste, ['Facture à télécharger chez le vendeur puis à envoyer à factures@ : Cdiscount (commande 123)']);
 });
+
+test('suite du jumelage d\'une tablette du stock', () => {
+  assert.deepStrictEqual(g.suiteJumelage({ etat: 'perdue', commande: 'c' }, { fid: null }, 'f'), { refuser: true });
+  assert.deepStrictEqual(g.suiteJumelage({ etat: 'envoyee', commande: 'c' }, { fid: null }, 'f'), { relier: true });
+  assert.deepStrictEqual(g.suiteJumelage({ etat: 'envoyee', commande: 'c' }, { fid: 'f' }, 'f'), {});
+  assert.deepStrictEqual(g.suiteJumelage({ etat: 'envoyee', commande: 'c' }, { fid: 'autre' }, 'f'),
+    { alerte: 'jumelée à une autre famille que celle de sa commande' });
+  assert.deepStrictEqual(g.suiteJumelage({ etat: 'preparee', commande: null }, null, 'f'), { alerte: 'jumelée sans commande' });
+});
