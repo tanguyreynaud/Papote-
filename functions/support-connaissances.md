@@ -73,4 +73,16 @@ les fonctions suffit pour que le chat en tienne compte.
 - Paiement : par carte bancaire uniquement (pas de chèque, de virement ni d'espèces) ; les factures sont dans la page Abonnement de l'appli.
 - Aide fiscale (services à la personne) : pas pour le moment.
 - Codes promo : il n'y en a pas pour le moment.
-- Casse : la tablette est faite pour qu'on n'ait rien à manipuler, mais la casse accidentelle n'est pas couverte. En cas de casse : demande de contact.
+- Casse : la tablette est faite pour qu'on n'ait rien à manipuler, mais la casse accidentelle n'est pas couverte : la caution de 120 € peut s'appliquer. En cas de casse : demande de contact.
+- Eau : la tablette n'est pas étanche, à éviter dans une salle de bain.
+- Caméra : elle ne filme pas en continu. Elle sert aux appels vidéo et, quand un message, une photo ou un rappel arrive, à vérifier que la personne l'a vu.
+- Données : hébergées chez Firebase (Google).
+- Prix : fixe pendant les 12 mois d'engagement. Il peut éventuellement évoluer ensuite, mais c'est très rare.
+- Décès du proche pendant l'engagement : pas besoin de payer jusqu'au bout, sur preuve du décès. Demande de contact.
+- Son : la tablette fait un son quand une photo, une vidéo ou un message arrive.
+- Résiliation pendant les 15 jours d'essai : les 50 € de mise en service sont remboursés.
+- Réseaux sociaux : Papote est sur Facebook, Instagram, TikTok et YouTube sous le nom « mapapote » (ne donne pas de lien).
+- Coupure de courant : la batterie tient quelques heures.
+- Alexa, Google Home ou autre assistant vocal : non, pas compatible.
+- Établissements (EHPAD, résidences) qui veulent plusieurs tablettes : projet à discuter directement par e-mail à contact@mapapote.fr.
+- Changer d'adresse ou de point relais après la commande : seulement si le colis n'est pas encore parti, en écrivant vite à contact@mapapote.fr.
