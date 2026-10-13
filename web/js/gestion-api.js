@@ -28,7 +28,9 @@ export function signalerChangement() {
 export function messageErreur(e) {
   const code = (e && e.code) || '';
   if (code.endsWith('permission-denied')) return 'Ce compte n\'a pas le badge administrateur.';
-  if (code.endsWith('internal') || code.endsWith('not-found') || code.endsWith('unavailable')) {
+  // Fonction absente ou en panne : le message brut (« internal », « not-found »…) ne dit rien d'utile.
+  const brut = !e.message || /^(internal|not[- ]found|unavailable)$/i.test(e.message);
+  if (code.endsWith('internal') || ((code.endsWith('not-found') || code.endsWith('unavailable')) && brut)) {
     return 'Le serveur de gestion ne répond pas. Les fonctions « gestion » ne sont peut-être pas encore déployées.';
   }
   return (e && e.message) || String(e);
