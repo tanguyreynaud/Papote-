@@ -422,6 +422,11 @@ function piecesTablette(t) {
 }
 
 const DISPONIBLES = ['en-stock', 'preparee'];
+// Tablettes du stock qui peuvent partir : libres, ou déjà réservées à une commande pas encore envoyée.
+function tablettesPretes() {
+  const aEnvoyer = new Set(donnees.commandes.filter((c) => etatCommande(c) === 'a-envoyer').map((c) => c.id));
+  return donnees.stock.filter((t) => DISPONIBLES.includes(t.etat) && (!t.commande || aEnvoyer.has(t.commande)));
+}
 
 // ---------- Accueil ----------
 
@@ -432,7 +437,7 @@ function afficherAccueil() {
   const aRecuperer = cmd.filter((c) => etatCommande(c) === 'retour').length;
   const sansJumelage = cmd.filter((c) => etatCommande(c) === 'en-route' && c.envoyeeLe && Date.now() - c.envoyeeLe > 20 * 864e5).length;
   const aRembourser = cmd.filter((c) => c.remboursement && c.remboursement.statut === 'echec').length;
-  const dispo = donnees.stock.filter((t) => DISPONIBLES.includes(t.etat) && !t.commande).length;
+  const dispo = tablettesPretes().length;
   const manque = Math.max(0, aEnvoyer - dispo);
   const aVerifier = donnees.stock.filter((t) => t.etat === 'revenue').length;
   const impayees = stripeMois ? stripeMois.abonnements.filter((a) => a.statut === 'past_due').length : 0;
@@ -742,10 +747,13 @@ function afficherStock() {
   const compte = (etats) => stock.filter((t) => etats.includes(t.affiche)).length;
   const valeur = (etats) => stock.filter((t) => etats.includes(t.affiche)).reduce((s, t) => s + (t.prixAchat || 0), 0);
   const aEnvoyer = donnees.commandes.filter((c) => etatCommande(c) === 'a-envoyer').length;
-  const dispo = stock.filter((t) => DISPONIBLES.includes(t.etat) && !t.commande).length;
+  const pretes = tablettesPretes();
+  const dispo = pretes.length;
+  const reservees = pretes.filter((t) => t.commande).length;
   const chez = ['envoyee', 'chez-client', 'en-retour'];
   $('kpi-stock').replaceChildren(
-    stat(String(dispo), 'disponibles', `valeur ${euros(valeur(DISPONIBLES))}`, dispo < aEnvoyer ? 'neg' : null),
+    stat(String(dispo), 'disponibles', `valeur ${euros(valeur(DISPONIBLES))}${reservees ? ` · dont ${reservees} réservée${reservees > 1 ? 's' : ''}` : ''}`,
+      dispo < aEnvoyer ? 'neg' : null),
     stat(String(aEnvoyer), 'commandes à envoyer'),
     stat(String(compte(chez)), 'chez les clients', `valeur ${euros(valeur(chez))}`),
     stat(String(compte(['revenue', 'a-reparer'])), 'à vérifier ou réparer'),
