@@ -195,9 +195,24 @@
           <p id="stock-vide" class="muted small" hidden>Aucune tablette enregistrée. Ajoutez votre premier achat.</p>
         </div>
         <div class="card">
-          <h2>Lignes SIM</h2>
-          <p class="muted small">Le numéro de ligne, l'opérateur et le coût se saisissent dans la fiche de chaque tablette. En rouge : forfait encore payé alors que la tablette n'est plus chez un client.</p>
+          <div class="tete">
+            <h2>Cartes SIM</h2>
+            <div class="actions no-print">
+              <select id="filtre-sim" aria-label="Filtrer"><option value="">Toutes sauf résiliées</option></select>
+              <button type="button" class="primary small-btn" id="btn-sim">Ajouter une carte SIM</button>
+            </div>
+          </div>
+          <p class="muted small" id="sim-resume"></p>
           <div class="table"><table id="t-sim"></table></div>
+          <p class="muted small">Une carte par ligne : en stock (pas encore activée), active dans une tablette, suspendue ou résiliée. En rouge : promo, activation ou carte bancaire à surveiller, ou forfait encore payé alors que la tablette n'est plus chez un client.</p>
+        </div>
+        <div class="card">
+          <div class="tete">
+            <h2>Accessoires</h2>
+            <button type="button" class="primary small-btn no-print" id="btn-accessoire">Ajouter un accessoire</button>
+          </div>
+          <div class="table"><table id="t-accessoires"></table></div>
+          <p class="muted small">Clé 4G, prise USB… Chacun sort tout seul du stock quand une tablette part avec la formule choisie.</p>
         </div>
       </section>
 
@@ -369,9 +384,7 @@
       <label>Modèle <input name="modele"></label>
       <label>État <select name="etat"></select></label>
       <label>Commande <select name="commande"></select></label>
-      <label>Ligne SIM <input name="sim" placeholder="n° de téléphone"></label>
-      <label>Opérateur <input name="simOperateur"></label>
-      <label>Forfait (€/mois) <input name="simCout" inputmode="decimal"></label>
+      <label>Carte SIM <select name="simId"></select></label>
       <label class="large">Notes <textarea name="notes" rows="2"></textarea></label>
       <div class="large">
         <p class="small"><strong>Pièces jointes</strong></p>
@@ -383,6 +396,57 @@
         <button type="submit" class="primary">Enregistrer</button>
         <button type="button" class="link danger" id="dt-retirer" hidden>Retirer (erreur de saisie)</button>
       </div>
+      <p class="f-msg small" hidden></p>
+    </form>
+  </dialog>
+
+  <dialog id="d-sim" class="fenetre">
+    <div class="fenetre-tete"><h2 id="ds-titre">Carte SIM</h2><button type="button" class="fermer" aria-label="Fermer">✕</button></div>
+    <form id="f-sim" class="grille">
+      <label>Statut <select name="statut"></select></label>
+      <label>Tablette <select name="tablette"></select></label>
+      <label>Opérateur <input name="operateur" placeholder="ex. YouPrice"></label>
+      <label>Numéro de ligne <input name="numero" inputmode="tel" placeholder="06 12 34 56 78"></label>
+      <label class="large">ICCID (numéro gravé sur la carte) <span class="avec-bouton"><input name="iccid" inputmode="numeric" placeholder="8933…"><button type="button" class="secondary small-btn scanner" data-cible="iccid" hidden>Scanner</button></span></label>
+      <label>Identifiant client <input name="client"></label>
+      <label>Forfait (Go par mois) <input name="go" inputmode="numeric"></label>
+      <label>Prix par mois (€) <input name="prix" inputmode="decimal" placeholder="2,99"></label>
+      <label>Prix après la promo (€) <input name="prixApres" inputmode="decimal"></label>
+      <label>Fin de la promo <input type="date" name="finPromo"></label>
+      <label>Activée le <input type="date" name="activation"></label>
+      <label>À activer avant (carte en stock) <input type="date" name="activerAvant"></label>
+      <label>Carte bancaire (4 derniers chiffres) <input name="cb" inputmode="numeric" maxlength="4"></label>
+      <label>Expiration de la carte <input type="month" name="cbExp"></label>
+      <label class="large">Note <textarea name="note" rows="2"></textarea></label>
+      <div class="large boutons">
+        <button type="submit" class="primary">Enregistrer</button>
+        <button type="button" class="link danger" id="ds-supprimer" hidden>Supprimer (erreur de saisie)</button>
+      </div>
+      <p class="f-msg small" hidden></p>
+    </form>
+  </dialog>
+
+  <dialog id="d-accessoire" class="fenetre">
+    <div class="fenetre-tete"><h2 id="dx-titre">Accessoire</h2><button type="button" class="fermer" aria-label="Fermer">✕</button></div>
+    <form id="f-accessoire" class="grille">
+      <label>Nom <input name="nom" required placeholder="ex. Clé 4G USB"></label>
+      <label>Part avec <select name="parEnvoi"></select></label>
+      <label>En stock <input name="quantite" inputmode="numeric" required></label>
+      <label>Alerte sous (quantité) <input name="seuil" inputmode="numeric" placeholder="facultatif"></label>
+      <label>Prix unitaire (€) <input name="prixAchat" inputmode="decimal"></label>
+      <label class="large">Note <textarea name="note" rows="2"></textarea></label>
+      <div class="large boutons">
+        <button type="submit" class="primary">Enregistrer</button>
+        <button type="button" class="link danger" id="dx-supprimer" hidden>Supprimer</button>
+      </div>
+      <p class="f-msg small" hidden></p>
+    </form>
+    <form id="f-livraison" class="grille" hidden>
+      <p class="large small"><strong>Livraison reçue</strong> : ajoute la quantité au stock, et la dépense si le montant est rempli.</p>
+      <label>Quantité reçue <input name="quantite" inputmode="numeric" required></label>
+      <label>Montant payé (€) <input name="montant" inputmode="decimal" placeholder="facultatif"></label>
+      <label>Fournisseur <input name="fournisseur" placeholder="facultatif"></label>
+      <div class="large boutons"><button type="submit" class="secondary">Ajouter au stock</button></div>
       <p class="f-msg small" hidden></p>
     </form>
   </dialog>
