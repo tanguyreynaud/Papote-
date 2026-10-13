@@ -467,6 +467,7 @@ function afficherAccueil() {
   pastille('n-stock', manque + aVerifier + simsAResilier);
   afficherAutomatique();
   afficherCourrier();
+  afficherArchives();
   afficherTva(tva);
 
   if (stripeMois) {
@@ -1663,3 +1664,52 @@ $('btn-courrier').addEventListener('click', async () => {
     b.disabled = false;
   }
 });
+
+// ---------- Livres comptables archivés (clôture du mois) ----------
+
+function afficherArchives() {
+  const a = (donnees && donnees.archives) || {};
+  const mois = Object.entries(a.mois || {}).sort(([x], [y]) => y.localeCompare(x));
+  // Libellés courts ; le fichier garde son nom complet (livre-des-recettes-2026-10.csv…).
+  const fichiers = (f) => h('span', {}, ...(f.fichiers || []).map((p) => {
+    const b = lienPiece(p);
+    b.lastChild.textContent = p.nom.startsWith('livre') ? 'Recettes' : 'Achats';
+    return b;
+  }));
+  const refaire = (cle) => h('button', {
+    type: 'button', class: 'link', title: 'Refaire avec les données actuelles',
+    onclick: (e) => { e.stopPropagation(); cloturer(cle); },
+  }, 'Refaire');
+  remplirTable($('t-archives'), [
+    { titre: 'Mois' }, { titre: 'Recettes', n: 1 }, { titre: 'Achats', n: 1 }, { titre: 'Fichiers' }, { titre: 'Figé le' }, { titre: '' },
+  ], mois.map(([cle, f]) => [moisNom(cle), euros(f.recettes.total), euros(f.achats.total), fichiers(f), jour(f.le), refaire(cle)]),
+  { vide: 'Premier archivage le 1er du mois prochain.' });
+  const annees = Object.entries(a.annees || {}).sort(([x], [y]) => y.localeCompare(x));
+  $('t-impots').hidden = !annees.length;
+  if (annees.length) {
+    remplirTable($('t-impots'), [
+      { titre: 'Déclaration de revenus' }, { titre: 'Chiffre d\'affaires encaissé', n: 1 }, { titre: 'Où le reporter' }, { titre: 'Fichiers de l\'année' },
+    ], annees.map(([an, f]) => [`Revenus ${an}`, euros(f.recettes.total),
+      '2042-C-PRO, case 5KP (ou 5TB avec versement libératoire), à vérifier', fichiers(f)]));
+  }
+}
+
+async function cloturer(cle) {
+  const b = $('btn-cloturer');
+  b.disabled = true;
+  $('cloture').hidden = false;
+  $('cloture').className = 'muted small';
+  $('cloture').textContent = 'Archivage en cours…';
+  try {
+    const r = await appeler('gestionCloturer', cle ? { mois: cle } : {});
+    $('cloture').textContent = !r.mois.length ? 'Rien de nouveau à archiver.'
+      : `${r.mois.map(moisNom).join(', ')} archivé${r.mois.length > 1 ? 's' : ''}${r.envoye ? ' et envoyé par e-mail' : ', mais l\'e-mail n\'est pas parti'}.`;
+    signalerChangement();
+  } catch (e) {
+    $('cloture').className = 'error small';
+    $('cloture').textContent = messageErreur(e);
+  } finally {
+    b.disabled = false;
+  }
+}
+$('btn-cloturer').addEventListener('click', () => cloturer());
