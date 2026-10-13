@@ -910,6 +910,7 @@ exports.gestionCloturer = gestion.gestionCloturer;
 exports.gestionSim = gestion.gestionSim;
 exports.gestionAccessoire = gestion.gestionAccessoire;
 exports.gestionEtiquette = gestion.gestionEtiquette;
+exports.gestionAnnulerEtiquette = gestion.gestionAnnulerEtiquette;
 exports.gestionRenvoyerCode = gestion.gestionRenvoyerCode;
 exports.gestionJumelage = gestion.gestionJumelage;
 

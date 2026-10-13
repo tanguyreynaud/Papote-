@@ -1581,6 +1581,30 @@ exports.gestionEtiquette = onCall({ secrets: [SENDCLOUD_API, MAIL_MOT_DE_PASSE],
   }
 });
 
+// { commande, sens } : annule l'étiquette chez Sendcloud (ou constate qu'elle l'est déjà) pour pouvoir en refaire une.
+exports.gestionAnnulerEtiquette = onCall({ secrets: [SENDCLOUD_API] }, async (request) => {
+  verifierAdmin(request);
+  const d = request.data || {};
+  if (typeof d.commande !== 'string' || !d.commande || !['aller', 'retour'].includes(d.sens)) {
+    throw new HttpsError('invalid-argument', 'Commande ou sens manquant.');
+  }
+  const ref = db().doc(`commandes/${d.commande}`);
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Commande introuvable.');
+  const e = snap.data().etiquettes && snap.data().etiquettes[d.sens];
+  if (!e) return { ok: true };
+  try {
+    await sendcloud.client(SENDCLOUD_API.value()).annuler(e.colis);
+  } catch (err) {
+    throw new HttpsError('failed-precondition', err.message);
+  }
+  await ref.update({
+    [`etiquettes.${d.sens}`]: FieldValue.delete(),
+    'etiquettes.annulees': FieldValue.arrayUnion({ ...e, sens: d.sens, annuleeLe: Date.now(), par: request.auth.token.email || request.auth.uid }),
+  });
+  return { ok: true };
+});
+
 // { commande, email? } : renvoie au client le code de commande (rappel de jumelage), à l'e-mail de la commande
 // ou à une autre adresse donnée par téléphone.
 exports.gestionRenvoyerCode = onCall({ secrets: [MAIL_MOT_DE_PASSE] }, async (request) => {

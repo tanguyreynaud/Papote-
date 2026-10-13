@@ -108,6 +108,7 @@ async function loadOrders() {
         + '<form class="ship"><select class="tablette" aria-label="Tablette du stock"><option value="">Tablette du stock…</option></select>'
         + '<select class="sim" aria-label="Carte SIM du stock" hidden><option value="">Carte SIM du stock…</option></select>'
         + '<button type="button" class="secondary small-btn etiquette" title="Créer l\'étiquette Mondial Relay avec Sendcloud">Étiquette</button>'
+        + '<button type="button" class="secondary small-btn annuler-etiquette" title="Annuler l\'étiquette chez Sendcloud pour en refaire une" hidden>Annuler l\'étiquette</button>'
         + '<input placeholder="N° de suivi Mondial Relay" autocomplete="off" required><button type="submit" class="primary small-btn">Envoyée</button>'
         + '<span class="muted small kit"></span></form>';
       li.querySelector('strong').textContent = orderHead(c);
@@ -119,10 +120,27 @@ async function loadOrders() {
       remplirKit(form, c);
       // Étiquette Sendcloud : remplit le n° de suivi et ouvre le PDF à imprimer.
       const btnEtiquette = form.querySelector('button.etiquette');
+      const btnAnnuler = form.querySelector('button.annuler-etiquette');
       if (c.etiquettes?.aller) {
         form.querySelector('input').value = c.etiquettes.aller.suivi || '';
         btnEtiquette.textContent = 'Revoir l\'étiquette';
+        btnAnnuler.hidden = false;
       }
+      // Étiquette annulée (ou à refaire) : annulée chez Sendcloud, le bouton repasse à « Étiquette ».
+      btnAnnuler.addEventListener('click', async () => {
+        if (!confirm('Annuler cette étiquette chez Sendcloud ? Vous pourrez en créer une nouvelle.')) return;
+        btnAnnuler.disabled = true;
+        try {
+          await appeler('gestionAnnulerEtiquette', { commande: c.id, sens: 'aller' });
+          if (form.querySelector('input').value === c.etiquettes.aller.suivi) form.querySelector('input').value = '';
+          delete c.etiquettes.aller;
+          btnEtiquette.textContent = 'Étiquette';
+          btnAnnuler.hidden = true;
+        } catch (err) {
+          alert(`Annulation impossible : ${err.message}`);
+        }
+        btnAnnuler.disabled = false;
+      });
       btnEtiquette.addEventListener('click', async () => {
         if (c.etiquettes?.aller?.url) { window.open(c.etiquettes.aller.url, '_blank', 'noopener'); return; }
         const fenetre = window.open('', '_blank');
@@ -134,6 +152,7 @@ async function loadOrders() {
           if (r.suivi) form.querySelector('input').value = r.suivi;
           if (fenetre) fenetre.location = r.url;
           btnEtiquette.textContent = 'Revoir l\'étiquette';
+          btnAnnuler.hidden = false;
         } catch (err) {
           if (fenetre) fenetre.close();
           alert(`Étiquette impossible : ${err.message}`);
