@@ -71,6 +71,15 @@ les fonctions suffit pour que le chat en tienne compte.
 - Livraison hors France, Belgique et Luxembourg (Suisse, DOM-TOM…) : pas pour le moment.
 - Changer de formule : passer à l'option internet inclus (carte SIM) demande de nous renvoyer la tablette pour la modifier ; passer de la SIM au Wi-Fi est envisageable. Dans les deux cas : demande de contact.
 - Paiement : par carte bancaire uniquement (pas de chèque, de virement ni d'espèces) ; les factures sont dans la page Abonnement de l'appli.
+- Panne (tablette qui ne marche plus sans avoir été cassée) : réparée gratuitement. Nous envoyons une étiquette de retour ; comptez le temps de nous l'envoyer, environ 5 jours ouvrés de réparation, puis environ 5 jours ouvrés pour la recevoir de nouveau. Demande de contact pour lancer le retour.
+- Après une résiliation, les photos sont gardées 12 mois puis supprimées. Gardez toujours vos originaux sur votre téléphone.
+- Appels la nuit : oui, on peut appeler à toute heure ; l'appel réveille la tablette même quand l'écran est éteint.
+- Si la tablette est déjà en appel, un autre proche ne peut pas l'appeler en même temps.
+- Appli depuis l'étranger : oui, partout, tant que la connexion internet est bonne.
+- Déménagement du proche : il garde la même tablette et le même abonnement. Pensez à envoyer le nouveau Wi-Fi (Réglages, « Wi-Fi de la tablette ») avant que la tablette perde l'ancien. Pas possible dans un autre pays.
+- Le proche ne veut pas parler : il n'est jamais obligé, il peut simplement ne pas répondre.
+- Changer de carte de paiement : page Abonnement de l'appli (« Carte bancaire et factures »). Pour qu'une autre personne reprenne l'abonnement à son nom : demande de contact.
+- La société s'appelle Papote.
 - Aide fiscale (services à la personne) : pas pour le moment.
 - Codes promo : il n'y en a pas pour le moment.
 - « Peur de la casser » : rassurer (rien à manipuler, le bouton marche/arrêt ne l'éteint pas), puis dire franchement que la casse accidentelle n'est pas couverte.
