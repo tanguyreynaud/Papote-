@@ -87,7 +87,7 @@ les fonctions suffit pour que le chat en tienne compte.
 - La société s'appelle Papote.
 - Ville de la météo fausse : demande de contact, l'équipe la corrige.
 - Message vocal, ou photo programmée pour une date : non, ni l'un ni l'autre.
-- Plus accès à son adresse e-mail : demander à un responsable de la famille de vous inviter avec votre nouvelle adresse (Réglages, « Inviter par e-mail »), puis se connecter avec elle. Sans responsable joignable : demande de contact.
+- Plus accès à son adresse e-mail : si vous vous connectiez avec Google, utilisez ce compte Google. Sinon, demandez à un responsable de la famille de vous inviter avec votre nouvelle adresse (Réglages, « Inviter par e-mail »), connectez-vous avec elle, puis le responsable retire l'ancien profil (Réglages, « Membres »). Si vous étiez le seul responsable : demande de contact.
 - Décroché automatique : la tablette décroche dès qu'elle voit un visage, quel qu'il soit (aide-soignante, voisin…).
 - Fixer la tablette au mur : déconseillé, elle est faite pour être posée sur son support. Multiprise ou rallonge : oui sans problème, elle consomme très peu.
 - Chargeur cassé : s'il est prouvé que le problème vient du chargeur, nous en envoyons un autre (c'est très rare). Demande de contact.
