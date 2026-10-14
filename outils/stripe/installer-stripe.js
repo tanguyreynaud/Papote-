@@ -19,6 +19,7 @@ const PROJET = 'papote-famille';
 const URL_WEBHOOK = `https://europe-west1-${PROJET}.cloudfunctions.net/stripeWebhook`;
 const EVENEMENTS = [
   'checkout.session.completed',
+  'checkout.session.expired',
   'customer.subscription.created',
   'customer.subscription.updated',
   'customer.subscription.deleted',
