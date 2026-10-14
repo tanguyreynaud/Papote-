@@ -238,7 +238,7 @@
   function renderInvite() {
     var code = familyCode.replace(/-/g, '');
     if (!code || inviteFor === code || !android() || !android().qrCode) return;
-    var qr = android().qrCode('https://papote-famille.web.app/?code=' + code);
+    var qr = android().qrCode('https://app.mapapote.fr/?code=' + code);
     if (!qr) return;
     inviteFor = code;
     var el = $('frame-empty');

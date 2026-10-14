@@ -258,7 +258,7 @@
       return;
     }
     var row = el('div', 'welcome-pair');
-    var qr = android().qrCode ? android().qrCode('https://papote-famille.web.app/?tablette=' + s.code) : '';
+    var qr = android().qrCode ? android().qrCode('https://app.mapapote.fr/?tablette=' + s.code) : '';
     if (qr) {
       var img = el('img', 'welcome-qr');
       img.src = qr;
@@ -267,7 +267,7 @@
     var steps = el('div', 'welcome-steps');
     steps.appendChild(el('p', 'welcome-step', 'Avec votre téléphone, scannez ce QR code.'));
     steps.appendChild(el('p', 'welcome-or', 'ou'));
-    steps.appendChild(el('p', 'welcome-step', 'Ouvrez papote-famille.web.app, touchez « Ajouter ma tablette » et tapez :'));
+    steps.appendChild(el('p', 'welcome-step', 'Ouvrez app.mapapote.fr, touchez « Ajouter ma tablette » et tapez :'));
     steps.appendChild(el('p', 'welcome-code', pretty(s.code)));
     steps.appendChild(el('p', 'welcome-sub', 'Le code change toutes les 15 minutes.'));
     row.appendChild(steps);

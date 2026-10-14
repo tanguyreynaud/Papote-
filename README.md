@@ -14,7 +14,7 @@ et une app pour que la famille lui envoie photos et messages depuis iPhone ou An
 - couleurs sombres le soir, écran en veille de 23 h à 7 h ;
 - mises à jour installées toutes seules (voir « Publier une mise à jour »).
 
-**Sur le téléphone de la famille** : https://papote-famille.web.app
+**Sur le téléphone de la famille** : https://app.mapapote.fr
 - rejoindre avec le code famille, sans créer de compte ;
 - envoyer des photos (réduites automatiquement) et des messages ;
 - voir si Mamie a vu l'envoi et si elle a envoyé un bisou ;
