@@ -943,9 +943,36 @@
     show(wifiCard, !!showIt);
   }
 
+  // Débranchée depuis une minute : un bandeau sur l'accueil demande de rebrancher le chargeur.
+  // (La famille est prévenue en même temps, par la fiche de la tablette.)
+  var unpluggedSince = 0;
+  var powerBanner = null;
+  function checkPower() {
+    if (!android() || !android().isCharging) return;
+    var charging = true;
+    try { charging = android().isCharging(); } catch (e) { return; }
+    var now = Date.now();
+    if (charging) unpluggedSince = 0;
+    else if (!unpluggedSince) unpluggedSince = now;
+    var showIt = unpluggedSince && now - unpluggedSince > 60000;
+    if (!powerBanner) {
+      if (!showIt) return;
+      powerBanner = document.createElement('div');
+      powerBanner.className = 'power-banner';
+      powerBanner.innerHTML = '<svg class="power-plug" viewBox="0 0 24 24" aria-hidden="true">' +
+        '<path d="M9 2v5M15 2v5M6 7h12v4a6 6 0 0 1-12 0zM12 17v5" fill="none" stroke="currentColor" ' +
+        'stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
+        '<span>La tablette n’est pas branchée : rebranchez son chargeur.</span>';
+      $('view-home').appendChild(powerBanner);
+    }
+    show(powerBanner, !!showIt);
+  }
+
   function setupHomeExtras() {
     setInterval(checkConnection, 30000);
     setTimeout(checkConnection, 20000);
+    setInterval(checkPower, 15000);
+    setTimeout(checkPower, 5000);
     var moment = document.createElement('p');
     moment.id = 'moment';
     moment.className = 'moment';

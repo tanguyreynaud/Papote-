@@ -176,6 +176,9 @@ public class MainActivity extends Activity implements Sync.Listener {
         setupDeviceOwner();
         setVolumes();
         registerReceiver(screenOff, new IntentFilter(Intent.ACTION_SCREEN_OFF));
+        IntentFilter power = new IntentFilter(Intent.ACTION_POWER_CONNECTED);
+        power.addAction(Intent.ACTION_POWER_DISCONNECTED);
+        registerReceiver(powerChange, power);
         handler.postDelayed(daytimeWatch, 60_000);
         web.loadUrl(LocalContent.PAGE);
         sync.start();
@@ -401,6 +404,12 @@ public class MainActivity extends Activity implements Sync.Listener {
             return wifi.connect(ssid, password);
         }
 
+        /** Branchée sur secteur (chargeur, USB ou sans fil) : sinon la page demande de la brancher. */
+        @JavascriptInterface
+        public boolean isCharging() {
+            return Sync.pluggedIn(MainActivity.this);
+        }
+
         @JavascriptInterface
         public String wifiStatus() {
             return wifi.status();
@@ -565,6 +574,16 @@ public class MainActivity extends Activity implements Sync.Listener {
      * En journée, on le rallume dans la foulée (on ne voit qu'un bref noir).
      * La nuit (23h-7h), on le laisse éteint.
      */
+    /** Chargeur branché ou débranché : la famille est prévenue tout de suite (fiche de la tablette). */
+    private final android.content.BroadcastReceiver powerChange = new android.content.BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            boolean plugged = Intent.ACTION_POWER_CONNECTED.equals(intent.getAction());
+            Journal.log(MainActivity.this, plugged ? "Chargeur branché" : "Chargeur débranché");
+            if (sync != null) sync.powerChanged(plugged);
+        }
+    };
+
     private final android.content.BroadcastReceiver screenOff = new android.content.BroadcastReceiver() {
         @SuppressWarnings("deprecation")
         @Override
@@ -780,6 +799,7 @@ public class MainActivity extends Activity implements Sync.Listener {
     @Override
     protected void onDestroy() {
         try { unregisterReceiver(screenOff); } catch (Exception ignored) { }
+        try { unregisterReceiver(powerChange); } catch (Exception ignored) { }
         callAudio.release();
         voicePlayer.stop();
         sync.stop();

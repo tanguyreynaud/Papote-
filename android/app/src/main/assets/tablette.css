@@ -1205,3 +1205,23 @@ body.night .wifi-card-text { color: #a8998d; }
   line-height: 1.15;
   min-width: 0;
 }
+
+/* Tablette débranchée : bandeau en haut de l'accueil */
+.power-banner {
+  position: absolute;
+  top: 3vmin; left: 3vmin; right: 3vmin;
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  gap: 3vmin;
+  padding: 2.5vmin 4vmin;
+  border-radius: 99vmin;
+  background: #3730a3;
+  color: #fff;
+  font-family: 'Atkinson Hyperlegible', Roboto, sans-serif;
+  font-size: 4.6vmin;
+  font-weight: 700;
+  box-shadow: 0 1vmin 3vmin rgba(36, 33, 47, .25);
+}
+.power-banner[hidden] { display: none; }
+.power-plug { flex: 0 0 auto; width: 7vmin; height: 7vmin; }

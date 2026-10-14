@@ -642,13 +642,18 @@ final class Sync {
             android.os.BatteryManager bm =
                     (android.os.BatteryManager) context.getSystemService(Context.BATTERY_SERVICE);
             int level = bm.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY);
-            boolean charging = bm.isCharging();
-            android.content.Intent sticky = context.registerReceiver(null,
-                    new android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED));
-            if (sticky != null) charging = charging || sticky.getIntExtra(android.os.BatteryManager.EXTRA_PLUGGED, 0) != 0;
+            boolean charging = pluggedIn(context);
+            // Débranchée depuis… : l'appli famille prévient (« débranchée depuis 20 min »).
+            long since = prefs.getLong("unpluggedAt", 0);
+            if (charging && since != 0) { prefs.edit().remove("unpluggedAt").apply(); since = 0; }
+            if (!charging && since == 0) { since = System.currentTimeMillis(); prefs.edit().putLong("unpluggedAt", since).apply(); }
+            java.text.SimpleDateFormat iso = new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US);
+            iso.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
             JSONObject battery = new JSONObject().put("mapValue", new JSONObject().put("fields", new JSONObject()
                     .put("level", new JSONObject().put("integerValue", String.valueOf(Math.max(0, Math.min(100, level)))))
-                    .put("charging", new JSONObject().put("booleanValue", charging))));
+                    .put("charging", new JSONObject().put("booleanValue", charging))
+                    .put("unpluggedAt", since == 0 ? new JSONObject().put("nullValue", JSONObject.NULL)
+                            : new JSONObject().put("timestampValue", iso.format(new java.util.Date(since))))));
             JSONObject write = new JSONObject()
                     .put("update", new JSONObject()
                             .put("name", Firebase.docName("families/" + fid + "/members/" + firebase.uid()))
@@ -659,6 +664,23 @@ final class Sync {
         } catch (Exception e) {
             Log.w(TAG, "Batterie", e);
         }
+    }
+
+    /** Branchée sur secteur (chargeur, USB ou sans fil). */
+    static boolean pluggedIn(Context context) {
+        android.content.Intent sticky = context.registerReceiver(null,
+                new android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED));
+        return sticky != null && sticky.getIntExtra(android.os.BatteryManager.EXTRA_PLUGGED, 0) != 0;
+    }
+
+    /** Chargeur branché ou débranché : la fiche de la tablette est mise à jour tout de suite. */
+    void powerChanged(boolean plugged) {
+        handler.post(() -> {
+            if (plugged) prefs.edit().remove("unpluggedAt").apply();
+            else prefs.edit().putLong("unpluggedAt", System.currentTimeMillis()).apply();
+            String fid = prefs.getString("fid", null);
+            if (fid != null) reportBattery(fid);
+        });
     }
 
     private String appVersion() {
