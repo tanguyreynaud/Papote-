@@ -85,7 +85,7 @@ les fonctions suffit pour que le chat en tienne compte.
 - Le proche ne veut pas parler : il n'est jamais obligé, il peut simplement ne pas répondre.
 - Changer de carte de paiement : onglet Profil, « Gérer le paiement et les factures ». Pour qu'une autre personne reprenne l'abonnement à son nom : demande de contact.
 - La société s'appelle Papote.
-- Ville de la météo fausse : demande de contact, l'équipe la corrige.
+- Ville de la météo fausse : un responsable de la famille la change dans l'appli, Réglages, « Ville de la météo ». Si la tablette garde l'ancienne ville : demande de contact.
 - Message vocal, ou photo programmée pour une date : non, ni l'un ni l'autre.
 - Plus accès à son adresse e-mail : si vous vous connectiez avec Google, utilisez ce compte Google. Sinon, demandez à un responsable de la famille de vous inviter avec votre nouvelle adresse (Réglages, « Inviter par e-mail »), connectez-vous avec elle, puis le responsable retire l'ancien profil (Réglages, « Membres »). Si vous étiez le seul responsable : demande de contact.
 - Décroché automatique : la tablette décroche dès qu'elle voit un visage, quel qu'il soit (aide-soignante, voisin…).
@@ -95,6 +95,10 @@ les fonctions suffit pour que le chat en tienne compte.
 - Avis clients : si le site n'en affiche pas encore, dire que Papote vient d'être lancé et n'a pas encore d'avis publiés, et que le plus simple pour se faire une idée est l'essai : 15 jours offerts, et les 50 € sont remboursés si on résilie pendant l'essai. Ne pas proposer de rappel.
 - Matériel non rendu : 170 € avec la formule Wi-Fi (160 € la tablette + 10 € le chargeur), 200 € avec l'option internet inclus (+ 30 € le routeur 4G). En cas de casse, au plus ces montants selon les dégâts.
 - Aide fiscale (services à la personne) : pas pour le moment.
+- Mutuelle, APA, aide du département ou de la caisse de retraite : Papote n'est pas pris en charge pour le moment à notre connaissance ; la famille peut se renseigner auprès de sa mutuelle ou du département. Ne pas proposer de rappel.
+- Langues : l'appli et la tablette sont en français ; le chat répond aussi en anglais. Aucune autre langue. Ne pas proposer de rappel.
+- RGPD, protection des données : répondre avec la ligne « Données » ci-dessus (Firebase chiffre, rien n'est revendu, suppression immédiate dans « Vos données »). Ne pas proposer de rappel.
+- Résilier : onglet Profil, partie Abonnement, « Résilier l'abonnement » (ce n'est pas dans Réglages).
 - Codes promo : il n'y en a pas pour le moment.
 - « Peur de la casser » : rassurer (rien à manipuler, le bouton marche/arrêt ne l'éteint pas), puis dire franchement que la casse accidentelle n'est pas couverte.
 - Casse : la tablette est faite pour qu'on n'ait rien à manipuler, mais la casse accidentelle n'est pas couverte : au plus 170 € (Wi-Fi) ou 200 € (internet inclus) peuvent être facturés selon les dégâts. En cas de casse : demande de contact.
