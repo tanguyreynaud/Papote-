@@ -30,8 +30,13 @@ et une app pour que la famille lui envoie photos et messages depuis iPhone ou An
 3. Brancher la tablette au PC en USB et double-cliquer sur `installation/installer-tablette.bat`.
 4. Entrer le code tablette (app famille, Réglages > Installer une tablette), ou rien :
    la tablette affiche alors l'écran « Bienvenue » et le client la configure lui-même, sans PC :
-   nom de la tablette, wifi (sauté s'il y a une carte SIM avec internet), puis QR code ou code à taper
-   dans l'app famille (« Ajouter ma tablette »), et confirmation « C'est bien vous ? » sur la tablette.
+   nom de la tablette, wifi (sauté s'il y a une carte SIM avec internet), ville de la météo, puis QR code
+   ou code à taper dans l'app famille (« Ajouter ma tablette »), confirmation « C'est bien vous ? » sur la
+   tablette, et placement de la tablette face à la personne (image de la caméra).
+   Ville de la météo connue d'avance : `-Ville "Lyon"` au script d'installation (l'étape est alors sautée).
+   La famille peut la changer ensuite : l'appli famille écrit `families/{fid}.meteoVille = {nom, lat, lon}`
+   (lat/lon facultatifs, retrouvés d'après le nom), et la tablette indique la ville en cours sur sa fiche
+   (`members/{uid}.meteoVille`).
 5. Sur le PC qui a la clé d'administration (`%USERPROFILE%\.papote\cle-admin-firebase.json`),
    l'installation note aussi la tablette dans le stock (`outils/gestion/preparer-tablette.js`,
    d'après son n° de série) et affiche son numéro, par exemple « >>> Écrivez T-012 sur le carton. ».

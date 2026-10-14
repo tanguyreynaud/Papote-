@@ -229,6 +229,9 @@ public class MainActivity extends Activity implements Sync.Listener {
         if (canal != null) prefs.edit().putString("canal", "test".equals(canal) ? "test" : "").apply();
         String numbers = intent.getStringExtra("numeros");
         if (numbers != null) prefs.edit().putString("alertNumbers", numbers.replaceAll("[^0-9+,]", "")).apply();
+        String ville = intent.getStringExtra("ville");
+        // Cherchée par la synchronisation dès qu'internet est là (script d'installation : -Ville).
+        if (ville != null && !ville.trim().isEmpty()) prefs.edit().putString("meteoAChercher", ville.trim()).apply();
         String code = intent.getStringExtra("code");
         if (code != null) {
             code = code.toUpperCase().replaceAll("[^A-Z0-9]", "");
@@ -370,6 +373,22 @@ public class MainActivity extends Activity implements Sync.Listener {
         @JavascriptInterface
         public void setTabletName(String name) {
             if (name != null && !name.trim().isEmpty()) sync.setTabletName(name.length() > 40 ? name.substring(0, 40) : name);
+        }
+
+        /** Ville de la météo (écran Bienvenue) : communes trouvées pour ce nom. */
+        @JavascriptInterface
+        public String meteoSearch(String query) {
+            return sync.searchMeteo(query);
+        }
+
+        @JavascriptInterface
+        public void meteoChoose(String name, double lat, double lon) {
+            if (name != null && !name.trim().isEmpty()) sync.setMeteo(name.trim(), lat, lon);
+        }
+
+        @JavascriptInterface
+        public void meteoSkip() {
+            sync.setMeteo(null, 0, 0);
         }
 
         @JavascriptInterface

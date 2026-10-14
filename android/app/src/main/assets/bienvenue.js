@@ -27,9 +27,9 @@
     document.body.appendChild(root);
   }
 
-  // Étape en cours (1 nom, 2 wifi, 3 famille, 4 placement), affichée en haut ; 0 = pas d'étapes
+  // Étape en cours (1 nom, 2 wifi, 3 météo, 4 famille, 5 placement), affichée en haut ; 0 = pas d'étapes
   // (wifi plus tard).
-  var STEPS = 4;
+  var STEPS = 5;
   var stepNum = 0;
 
   // Illustration de l'étape (bienvenue/<nom>.svg), dans le panneau de gauche ; vide = pas de panneau.
@@ -245,12 +245,65 @@
     showWifi();
   }
 
-  // ---------- 3. Code et QR code ----------
+  // ---------- 3. Ville de la météo ----------
+  // La famille pourra la changer ensuite depuis son appli (families/{fid}.meteoVille).
+
+  function showMeteo() {
+    stepNum = 3;
+    art = 'meteo';
+    var box = screen('La météo', 'Dans quelle ville se trouve la tablette ? Elle affichera la météo de cette ville.');
+    var input = el('input', 'welcome-input');
+    input.type = 'text';
+    input.maxLength = 60;
+    input.placeholder = 'Ex. : Lyon';
+    box.appendChild(input);
+    var list = el('div', 'welcome-list meteo-list');
+    var go = button('Chercher', 'primary', function () { searchCity(input.value, list); });
+    input.addEventListener('keydown', function (e) { if (e.key === 'Enter') searchCity(input.value, list); }, false);
+    box.appendChild(go);
+    box.appendChild(list);
+    box.appendChild(button('Passer cette étape', 'no', function () { android().meteoSkip(); }));
+    setTimeout(function () { input.focus(); }, 300);
+  }
+
+  function searchCity(query, list) {
+    query = (query || '').trim();
+    if (query.length < 2) return;
+    list.innerHTML = '';
+    list.appendChild(el('p', 'welcome-sub', 'Recherche…'));
+    setTimeout(function () {
+      var found = [];
+      try { found = JSON.parse(android().meteoSearch(query)); } catch (e) { found = []; }
+      list.innerHTML = '';
+      if (!found.length) {
+        list.appendChild(el('p', 'welcome-sub', 'Aucune ville trouvée. Vérifiez l’orthographe, ou tapez le nom d’une ville proche.'));
+        return;
+      }
+      for (var i = 0; i < found.length; i++) {
+        (function (c) {
+          var b = button('', 'network city', function () {
+            list.innerHTML = '';
+            list.appendChild(el('p', 'welcome-ok', 'Météo de ' + c.nom));
+            android().meteoChoose(c.nom, c.lat, c.lon);
+          });
+          var text = el('span', 'network-text');
+          text.appendChild(el('span', 'network-name', c.nom));
+          if (c.detail) text.appendChild(el('span', 'city-detail', c.detail));
+          b.appendChild(text);
+          list.appendChild(b);
+        })(found[i]);
+      }
+      if (document.activeElement) document.activeElement.blur(); // le clavier se ferme
+      setTimeout(function () { list.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 300);
+    }, 50);
+  }
+
+  // ---------- 4. Code et QR code ----------
 
   function pretty(code) { return code.slice(0, 4) + '-' + code.slice(4); }
 
   function showPair(s) {
-    stepNum = 3;
+    stepNum = 4;
     art = ''; // le QR code est l'illustration
     var box = screen('Reliez la tablette à votre famille', '');
     if (s.error) {
@@ -277,7 +330,7 @@
   // ---------- 4. Confirmation ----------
 
   function showConfirm(s) {
-    stepNum = 3;
+    stepNum = 4;
     art = 'confirmer';
     var who = s.claimedName || 'Quelqu\'un';
     var fam = s.familyName ? ' à la famille de ' + s.familyName : '';
@@ -303,7 +356,7 @@
   function showPlacement() {
     placing = true;
     current = 'place';
-    stepNum = 4;
+    stepNum = 5;
     art = '';
     var box = screen('Placez la tablette', 'Asseyez-vous là où la personne s’installe d’habitude, puis tournez doucement la tablette.');
     // L'image de la caméra prend la place de l'illustration, à gauche.
@@ -401,6 +454,7 @@
       clearInterval(wifiTimer);
       if (s.step === 'name') showName();
       else if (s.step === 'wifi') showWifi();
+      else if (s.step === 'meteo') showMeteo();
       else if (s.step === 'pair') showPair(s);
       else if (s.step === 'confirm') showConfirm(s);
     },

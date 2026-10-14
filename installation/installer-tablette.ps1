@@ -5,6 +5,7 @@
 #   (-Serial XXXX pour choisir la tablette si plusieurs appareils sont branchés, -Oui pour ne rien demander)
 # Tablettes Android 9 et plus.
 #   -Wifi "Nom du réseau" -MotDePasse "..." pour connecter la tablette au wifi au passage.
+#   -Ville "Lyon" pour la ville de la météo (sinon le client la choisit sur l'écran Bienvenue).
 param(
     [string]$Code,
     [string]$Serial,
@@ -14,6 +15,8 @@ param(
     [string]$Numeros,
     # -Canal test : tablette de test, qui reçoit les nouvelles versions avant les autres
     [string]$Canal,
+    # Ville de la météo ; la famille peut la changer ensuite depuis son appli
+    [string]$Ville,
     [switch]$Oui
 )
 
@@ -170,6 +173,7 @@ Say 'Appels de la carte SIM bloqués, applis inutiles désactivées.' 'Green'
 $pinArgs = @()
 if ($Numeros) { $pinArgs += @('--es', 'numeros', ($Numeros -replace '[^0-9+,]', '')) }
 if ($Canal) { $pinArgs += @('--es', 'canal', $(if ($Canal -eq 'test') { 'test' } else { 'stable' })) }
+if ($Ville) { $pinArgs += @('--es', 'ville', "`"$($Ville.Trim())`"") }
 if ($Code) {
     Adb shell am start -n "$Package/.MainActivity" --es code $Code @pinArgs --ez lock true | Out-Null
 } else {

@@ -294,3 +294,9 @@
 .place-view.ok .place-ring { border-style: solid; border-color: #15803d; }
 .place-hint { margin: 0 0 3vmin; font-size: 4.6vmin; font-weight: 700; color: #3730a3; line-height: 1.3; }
 .welcome-art .place-view { width: 100%; max-width: 54vmin; height: auto; aspect-ratio: 1; }
+
+/* ---------- Étape 3 : ville de la météo ---------- */
+.meteo-list { margin-top: 2vmin; max-height: 46vh; overflow-y: auto; }
+.welcome-btn.network.city { min-height: 11vmin; padding: 1.2vmin 4vmin; }
+.city-detail { font-size: 3.4vmin; color: #5f5a6b; font-weight: 400; }
+.with-art .meteo-list + .welcome-btn.no { margin-top: 1vmin; }

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400">
+  <!-- Le soleil derrière un nuage, et une épingle sur la ville -->
+  <circle cx="200" cy="200" r="170" fill="#e8e6fd"/>
+  <g stroke="#fbbf24" stroke-width="14" stroke-linecap="round">
+    <path d="M230 70v-22M290 95l15-15M315 155h22M170 95l-15-15"/>
+  </g>
+  <circle cx="230" cy="155" r="58" fill="#fbbf24"/>
+  <path d="M120 270a50 50 0 0 1 12-98 70 70 0 0 1 130 12 45 45 0 0 1 22 86z" fill="#1e1b4b" opacity=".18" transform="translate(6 8)"/>
+  <path d="M120 270a50 50 0 0 1 12-98 70 70 0 0 1 130 12 45 45 0 0 1 22 86z" fill="#ffffff"/>
+  <path d="M200 362c-30-36-46-62-46-84a46 46 0 0 1 92 0c0 22-16 48-46 84z" fill="#4f46e5"/>
+  <circle cx="200" cy="278" r="17" fill="#ffffff"/>
+  <path d="M330 250l5 12 12 5-12 5-5 12-5-12-12-5 12-5z" fill="#a5b4fc"/>
+  <circle cx="75" cy="135" r="6" fill="#fde68a"/>
+</svg>

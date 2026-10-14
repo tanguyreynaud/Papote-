@@ -47,8 +47,10 @@ final class Sync {
     private static final long WEATHER_MS = 30 * 60_000;
     private static final long REMINDERS_MS = 6 * 3600_000;
     private static final int MAX_POSTS = 60;
-    private static final double LAT = 44.9372;                // Saint-Martin-de-Valamas
-    private static final double LON = 4.3687;
+    // Tablettes déjà reliées avant le choix de la ville : la météo de Saint-Martin-de-Valamas, comme avant.
+    private static final String LEGACY_CITY = "Saint-Martin-de-Valamas";
+    private static final double LEGACY_LAT = 44.9372;
+    private static final double LEGACY_LON = 4.3687;
 
     static final class Post {
         String id;
@@ -101,6 +103,7 @@ final class Sync {
     private String lastStatusJson;
     private int photoLimit = 6;
     private final Context context;
+    private boolean meteoReported;
 
     Sync(Context context, SharedPreferences prefs, Listener listener) {
         this.context = context.getApplicationContext();
@@ -110,6 +113,9 @@ final class Sync {
         this.imageDir = new File(context.getFilesDir(), "photos");
         this.listener = listener;
         imageDir.mkdirs();
+        if (prefs.getString("fid", null) != null && !Meteo.done(this.context)) {
+            Meteo.save(this.context, LEGACY_CITY, LEGACY_LAT, LEGACY_LON);
+        }
         thread.start();
         handler = new Handler(thread.getLooper());
     }
@@ -269,7 +275,7 @@ final class Sync {
         try {
             // Une seule lecture : le marqueur « rev » ne bouge que si la famille a envoyé ou supprimé
             // quelque chose (ou modifié les rappels). Sinon, rien d'autre à lire.
-            JSONObject family = firebase.get("families/" + fid, "name", "rev", "code", "textSize", "abonnement", "veille", "volume");
+            JSONObject family = firebase.get("families/" + fid, "name", "rev", "code", "textSize", "abonnement", "veille", "volume", "meteoVille");
             long rev = 0;
             JSONObject ff = family == null ? null : family.optJSONObject("fields");
             if (ff != null) {
@@ -287,6 +293,11 @@ final class Sync {
                 }
                 readVeille(ff);
                 readVolume(ff);
+                if (Meteo.applyFamily(context, http, ff) || !meteoReported) {
+                    lastWeather = 0; // nouvelle ville : la météo est relue tout de suite
+                    reportMeteo(fid);
+                    meteoReported = true;
+                }
                 rev = Firebase.integer(ff, "rev");
             }
             if (rev == lastRev && now - lastFullRefresh < FULL_REFRESH_MS) {
@@ -688,6 +699,7 @@ final class Sync {
             Journal.log(context, "Remise sur l'écran Bienvenue");
             prefs.edit().remove("fid").remove("code").remove("pairing").remove("pairingExpires")
                     .remove("tabletName").remove("wifiDone").apply();
+            Meteo.forget(context);
             firebase.forgetAll();
             posts.clear();
             lastPostsJson = null;
@@ -943,10 +955,13 @@ final class Sync {
     // ---------- Météo ----------
 
     private void refreshWeather() {
+        resolvePendingCity();
         long now = System.currentTimeMillis();
         if (now - lastWeather < WEATHER_MS) return;
         try {
-            String url = "https://api.open-meteo.com/v1/forecast?latitude=" + LAT + "&longitude=" + LON
+            if (!Meteo.hasCity(context)) return; // pas encore de ville : pas de météo
+            String url = "https://api.open-meteo.com/v1/forecast?latitude=" + Meteo.lat(context)
+                    + "&longitude=" + Meteo.lon(context)
                     + "&current=temperature_2m,weather_code,is_day"
                     + "&daily=weather_code,temperature_2m_max,temperature_2m_min"
                     + "&timezone=Europe%2FParis&forecast_days=2";
@@ -1181,6 +1196,62 @@ final class Sync {
         });
     }
 
+    // ---------- Ville de la météo ----------
+
+    /** Communes trouvées pour ce nom (écran Bienvenue) : [{nom, detail, lat, lon}]. */
+    String searchMeteo(String query) {
+        return Meteo.search(http, query).toString();
+    }
+
+    /** Ville choisie sur la tablette ; null = étape passée (pas de météo tant que la famille n'en choisit pas). */
+    void setMeteo(String name, double lat, double lon) {
+        handler.post(() -> {
+            if (name == null) Meteo.skip(context);
+            else if (Meteo.save(context, name, lat, lon)) {
+                lastWeather = 0;
+                refreshWeather();
+                String fid = prefs.getString("fid", null);
+                if (fid != null) reportMeteo(fid);
+            }
+            poke();
+        });
+    }
+
+    /** Ville donnée par le script d'installation (-Ville) : la première commune trouvée, dès qu'internet est là. */
+    private void resolvePendingCity() {
+        String name = prefs.getString("meteoAChercher", null);
+        if (name == null) return;
+        JSONArray found = Meteo.search(http, name);
+        JSONObject first = found.optJSONObject(0);
+        if (first == null) return; // pas d'internet ou nom inconnu : on réessaiera
+        prefs.edit().remove("meteoAChercher").apply();
+        Meteo.save(context, first.optString("nom"), first.optDouble("lat"), first.optDouble("lon"));
+        lastWeather = 0;
+    }
+
+    /**
+     * Ville en cours écrite sur la fiche de la tablette (members/{uid}.meteoVille), pour que l'appli
+     * famille l'affiche. Écrit à part : refusé sans gravité si les règles ne l'acceptent pas encore.
+     */
+    private void reportMeteo(String fid) {
+        if (!Meteo.hasCity(context)) return;
+        try {
+            JSONObject ville = new JSONObject().put("mapValue", new JSONObject().put("fields", new JSONObject()
+                    .put("nom", Firebase.string(Meteo.name(context)))
+                    .put("lat", new JSONObject().put("doubleValue", Meteo.lat(context)))
+                    .put("lon", new JSONObject().put("doubleValue", Meteo.lon(context)))));
+            JSONObject write = new JSONObject()
+                    .put("update", new JSONObject()
+                            .put("name", Firebase.docName("families/" + fid + "/members/" + firebase.uid()))
+                            .put("fields", new JSONObject().put("meteoVille", ville)))
+                    .put("updateMask", new JSONObject().put("fieldPaths", new JSONArray().put("meteoVille")))
+                    .put("currentDocument", new JSONObject().put("exists", true));
+            firebase.commit(new JSONArray().put(write));
+        } catch (Exception e) {
+            Log.w(TAG, "Ville de la météo sur la fiche", e);
+        }
+    }
+
     String pairingCode() {
         return prefs.getString("pairing", null);
     }
@@ -1212,6 +1283,10 @@ final class Sync {
         String name = prefs.getString("tabletName", null);
         if (name == null || name.isEmpty()) { welcome(new JSONObject().put("step", "name")); return; }
         if (!prefs.getBoolean("wifiDone", false)) { welcome(new JSONObject().put("step", "wifi").put("name", name)); return; }
+        if (!Meteo.done(context) && prefs.getString("meteoAChercher", null) == null) {
+            welcome(new JSONObject().put("step", "meteo").put("name", name));
+            return;
+        }
         firebase.token();
         firebase.ensureCallsAccount();
         String code = prefs.getString("pairing", null);
