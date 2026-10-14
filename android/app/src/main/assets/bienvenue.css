@@ -296,7 +296,12 @@
 .welcome-art .place-view { width: 100%; max-width: 54vmin; height: auto; aspect-ratio: 1; }
 
 /* ---------- Étape 3 : ville de la météo ---------- */
-.meteo-list { margin-top: 2vmin; max-height: 46vh; overflow-y: auto; }
-.welcome-btn.network.city { min-height: 11vmin; padding: 1.2vmin 4vmin; }
+.meteo-input { text-align: left; margin-bottom: 2vmin; }
+.meteo-hint { margin: 1vmin 0 1.5vmin; font-size: 4.2vmin; font-weight: 700; color: #3730a3; }
+.meteo-hint[hidden] { display: none; }
+.meteo-list { margin: 0 0 1vmin; gap: 1.2vmin; }
+.welcome-btn.network.city { min-height: 9.5vmin; padding: .8vmin 4vmin; }
 .city-detail { font-size: 3.4vmin; color: #5f5a6b; font-weight: 400; }
-.with-art .meteo-list + .welcome-btn.no { margin-top: 1vmin; }
+/* Résultats affichés : le titre se replie, la liste tient au-dessus du clavier */
+.meteo-results .welcome-eyebrow, .meteo-results .welcome-title, .meteo-results .welcome-sub:not(.meteo-list *) { display: none; }
+.meteo-results .welcome-head { margin-bottom: 1vmin; }

@@ -251,51 +251,63 @@
   function showMeteo() {
     stepNum = 3;
     art = 'meteo';
-    var box = screen('La météo', 'Dans quelle ville se trouve la tablette ? Elle affichera la météo de cette ville.');
-    var input = el('input', 'welcome-input');
+    var box = screen('La météo', 'Tapez le nom de la ville où se trouve la tablette : elle affichera sa météo.');
+    var card = box.parentNode;
+    var input = el('input', 'welcome-input meteo-input');
     input.type = 'text';
     input.maxLength = 60;
     input.placeholder = 'Ex. : Lyon';
     box.appendChild(input);
+    var hint = el('p', 'meteo-hint', 'Touchez votre ville :');
+    hint.setAttribute('hidden', '');
+    box.appendChild(hint);
     var list = el('div', 'welcome-list meteo-list');
-    var go = button('Chercher', 'primary', function () { searchCity(input.value, list); });
-    input.addEventListener('keydown', function (e) { if (e.key === 'Enter') searchCity(input.value, list); }, false);
-    box.appendChild(go);
     box.appendChild(list);
     box.appendChild(button('Passer cette étape', 'no', function () { android().meteoSkip(); }));
+    // La liste se remplit pendant la frappe ; dès qu'il y a des résultats, le haut de l'écran se
+    // replie pour qu'ils tiennent au-dessus du clavier.
+    var timer = null;
+    var last = '';
+    function run() {
+      var q = input.value.trim();
+      if (q === last) return;
+      last = q;
+      searchCity(q, list, hint, card);
+    }
+    input.addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(run, 500); }, false);
+    input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { clearTimeout(timer); run(); input.blur(); } }, false);
     setTimeout(function () { input.focus(); }, 300);
   }
 
-  function searchCity(query, list) {
-    query = (query || '').trim();
-    if (query.length < 2) return;
+  function searchCity(query, list, hint, card) {
     list.innerHTML = '';
-    list.appendChild(el('p', 'welcome-sub', 'Recherche…'));
-    setTimeout(function () {
-      var found = [];
-      try { found = JSON.parse(android().meteoSearch(query)); } catch (e) { found = []; }
-      list.innerHTML = '';
-      if (!found.length) {
-        list.appendChild(el('p', 'welcome-sub', 'Aucune ville trouvée. Vérifiez l’orthographe, ou tapez le nom d’une ville proche.'));
-        return;
-      }
-      for (var i = 0; i < found.length; i++) {
-        (function (c) {
-          var b = button('', 'network city', function () {
-            list.innerHTML = '';
-            list.appendChild(el('p', 'welcome-ok', 'Météo de ' + c.nom));
-            android().meteoChoose(c.nom, c.lat, c.lon);
-          });
-          var text = el('span', 'network-text');
-          text.appendChild(el('span', 'network-name', c.nom));
-          if (c.detail) text.appendChild(el('span', 'city-detail', c.detail));
-          b.appendChild(text);
-          list.appendChild(b);
-        })(found[i]);
-      }
-      if (document.activeElement) document.activeElement.blur(); // le clavier se ferme
-      setTimeout(function () { list.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 300);
-    }, 50);
+    hint.setAttribute('hidden', '');
+    if (query.length < 2) { card.classList.remove('meteo-results'); return; }
+    var found = [];
+    try { found = JSON.parse(android().meteoSearch(query)); } catch (e) { found = []; }
+    card.classList.add('meteo-results');
+    if (!found.length) {
+      list.appendChild(el('p', 'welcome-sub', 'Aucune ville trouvée. Vérifiez l’orthographe, ou tapez le nom d’une ville proche.'));
+      return;
+    }
+    hint.removeAttribute('hidden');
+    for (var i = 0; i < found.length && i < 4; i++) {
+      (function (c) {
+        var b = button('', 'network city', function () {
+          if (document.activeElement) document.activeElement.blur();
+          card.classList.remove('meteo-results');
+          hint.setAttribute('hidden', '');
+          list.innerHTML = '';
+          list.appendChild(el('p', 'welcome-ok', 'Météo de ' + c.nom));
+          android().meteoChoose(c.nom, c.lat, c.lon);
+        });
+        var text = el('span', 'network-text');
+        text.appendChild(el('span', 'network-name', c.nom));
+        if (c.detail) text.appendChild(el('span', 'city-detail', c.detail));
+        b.appendChild(text);
+        list.appendChild(b);
+      })(found[i]);
+    }
   }
 
   // ---------- 4. Code et QR code ----------
