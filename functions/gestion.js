@@ -24,7 +24,7 @@
 // et les dépenses (depenses/{id}), écrits seulement ici (aucune règle client : lecture et écriture
 // refusées depuis les applis), pièces jointes dans Storage sous gestion/ (idem). Réservé au badge admin.
 
-const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { onCall, onRequest, HttpsError } = require('firebase-functions/v2/https');
 const { onDocumentUpdated } = require('firebase-functions/v2/firestore');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { logger } = require('firebase-functions/v2');
@@ -2110,8 +2110,196 @@ exports.gestionCourrierMaintenant = onCall(OPTIONS_COURRIER, async (request) => 
   return releverFactures();
 });
 
+
+// ---------- Clients et e-mails d'information ----------
+// Liste des clients (commandes) et des paniers abandonnés (paniers/, écrits par la vitrine), fusionnés par e-mail.
+// RGPD : un e-mail d'information ne part qu'aux personnes qui l'ont accepté (case cochée à la commande,
+// champ marketing, ou accord noté par l'admin) et pas désinscrites. Chaque e-mail porte un lien de désinscription.
+// contacts/{cle} : { email, consentement, source, desinscritLe, jeton } ; campagnes/{id} : historique des envois.
+
+const URL_DESINSCRIPTION = 'https://europe-west1-papote-famille.cloudfunctions.net/desinscription';
+const ENVOIS_MAX = 300; // limite quotidienne de Brevo en offre gratuite
+const STATUTS_ACTIFS = ['actif', 'offert', 'impaye', 'suspendu'];
+
+const emailPropre = (e) => (typeof e === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim()) ? e.trim().toLowerCase() : null);
+const cleContact = (email) => require('node:crypto').createHash('sha256').update(emailPropre(email) || '').digest('hex').slice(0, 32);
+const enMs = (v) => (v == null ? null : typeof v === 'number' ? v : v.toMillis ? v.toMillis() : v._seconds ? v._seconds * 1000 : Date.parse(v) || null);
+
+// { commandes, paniers, contacts, statutFamille(fid) } → [{ email, nom, telephone, type, statut, formule, depuis, consentement, desinscrit }]
+// type : client (abonnement en cours), ancien (résilié, annulé), panier (panier abandonné sans commande).
+function fusionnerContacts({ commandes = [], paniers = [], contacts = [], statutFamille = () => null }) {
+  const parEmail = new Map();
+  const fiche = (email) => {
+    if (!parEmail.has(email)) parEmail.set(email, { email, nom: null, telephone: null, type: null, statut: null, formule: null, depuis: null, consentement: false, desinscrit: false });
+    return parEmail.get(email);
+  };
+  const rang = { client: 3, ancien: 2, panier: 1 };
+  for (const c of commandes) {
+    const email = emailPropre(c.email);
+    if (!email) continue;
+    const f = fiche(email);
+    const statut = (c.fid && statutFamille(c.fid)) || c.statutStripe || null;
+    const type = c.expedition !== 'annulee' && (STATUTS_ACTIFS.includes(statut) || !statut) ? 'client' : 'ancien';
+    const le = enMs(c.creeLe);
+    if (!f.type || rang[type] > rang[f.type] || (type === f.type && le && le > (f.depuis || 0))) {
+      Object.assign(f, { type, statut: c.expedition === 'annulee' ? 'annulee' : statut, formule: c.formule || null });
+    }
+    f.nom = f.nom || c.nom || null;
+    f.telephone = f.telephone || c.telephone || null;
+    if (le && (!f.depuis || le < f.depuis)) f.depuis = le;
+    if (c.marketing === true) f.consentement = true;
+  }
+  for (const p of paniers) {
+    const email = emailPropre(p.email);
+    if (!email) continue;
+    const f = fiche(email);
+    if (!f.type) Object.assign(f, { type: 'panier', statut: 'panier', formule: p.formule || null });
+    f.nom = f.nom || p.nom || null;
+    f.telephone = f.telephone || p.telephone || null;
+    const le = enMs(p.creeLe || p.le || p.majLe);
+    if (f.type === 'panier' && le && (!f.depuis || le < f.depuis)) f.depuis = le;
+    if (p.marketing === true) f.consentement = true;
+  }
+  for (const k of contacts) {
+    const email = emailPropre(k.email);
+    if (!email || (!parEmail.has(email) && k.consentement !== true)) continue;
+    const f = fiche(email);
+    if (!f.type) f.type = 'contact';
+    if (k.consentement === true) f.consentement = true;
+    if (k.desinscritLe || k.consentement === false) { f.consentement = false; f.desinscrit = !!k.desinscritLe; }
+  }
+  return [...parEmail.values()].sort((a, b) => (b.depuis || 0) - (a.depuis || 0));
+}
+
+async function lireContacts() {
+  const [commandes, paniers, contacts, familles] = await Promise.all([
+    db().collection('commandes').get(),
+    db().collection('paniers').get().catch(() => ({ docs: [] })),
+    db().collection('contacts').get(),
+    db().collection('families').select('abonnement').get(),
+  ]);
+  const statuts = new Map(familles.docs.map((f) => [f.id, f.get('abonnement.statut') || null]));
+  return fusionnerContacts({
+    commandes: commandes.docs.map((d) => d.data()),
+    paniers: paniers.docs.map((d) => d.data()),
+    contacts: contacts.docs.map((d) => d.data()),
+    statutFamille: (fid) => statuts.get(fid) || null,
+  });
+}
+
+// E-mail d'information : texte saisi par l'admin (paragraphes séparés par une ligne vide), {prenom} remplacé.
+function emailInformation({ objet, message, nom, lienDesinscription }) {
+  const prenom = nom ? String(nom).trim().split(/\s+/)[0] : '';
+  const texte = String(message).replace(/\{prenom\}/g, prenom).replace(/ ,/g, ',');
+  const paragraphes = texte.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+  const html = `<!doctype html><html lang="fr"><body style="margin:0;background:#fdfaf5;color:#24212f;font:17px/1.6 Arial,sans-serif">
+<div style="max-width:560px;margin:0 auto;padding:32px 20px">
+<p style="margin:0 0 24px;font-weight:bold;font-size:20px;color:#4f46e5">Papote</p>
+${paragraphes.map((p) => `<p style="margin:0 0 16px">${mail.echapper(p).replace(/\n/g, '<br>')}</p>`).join('')}
+<p style="margin:32px 0 0;font-size:13px;color:#5f5a6b">Vous recevez cet e-mail car vous avez accepté les nouvelles de Papote.
+<a href="${mail.echapper(lienDesinscription)}" style="color:#5f5a6b">Se désinscrire</a></p>
+</div></body></html>`;
+  return {
+    subject: String(objet).trim(),
+    html,
+    text: `${paragraphes.join('\n\n')}\n\n--\nSe désinscrire : ${lienDesinscription}`,
+    headers: { 'List-Unsubscribe': `<${lienDesinscription}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' },
+  };
+}
+
+// Liste des contacts et historique des envois.
+exports.gestionClients = onCall(async (request) => {
+  verifierAdmin(request);
+  const [contacts, campagnes] = await Promise.all([
+    lireContacts(),
+    db().collection('campagnes').orderBy('le', 'desc').limit(20).get(),
+  ]);
+  return { contacts, campagnes: campagnes.docs.map((d) => ({ id: d.id, ...d.data() })), envoisMax: ENVOIS_MAX };
+});
+
+// { email, consentement } : l'admin note un accord donné de vive voix ou par écrit (ou le retire).
+exports.gestionConsentement = onCall(async (request) => {
+  verifierAdmin(request);
+  const d = request.data || {};
+  const email = emailPropre(d.email);
+  if (!email || typeof d.consentement !== 'boolean') throw new HttpsError('invalid-argument', 'E-mail ou choix manquant.');
+  await db().doc(`contacts/${cleContact(email)}`).set({
+    email, consentement: d.consentement, source: 'admin', majLe: Date.now(), par: request.auth.token.email || request.auth.uid,
+    ...(d.consentement ? { desinscritLe: FieldValue.delete() } : {}),
+  }, { merge: true });
+  return { ok: true };
+});
+
+// { objet, message, emails, test } : test → à l'admin seulement ; sinon aux e-mails choisis qui ont accepté.
+exports.gestionCampagne = onCall({ secrets: [MAIL_MOT_DE_PASSE], timeoutSeconds: 540 }, async (request) => {
+  verifierAdmin(request);
+  const d = request.data || {};
+  const objet = typeof d.objet === 'string' ? d.objet.trim().slice(0, 150) : '';
+  const message = typeof d.message === 'string' ? d.message.trim().slice(0, 10000) : '';
+  if (!objet || !message) throw new HttpsError('invalid-argument', 'Objet et message obligatoires.');
+  const smtp = { smtp: MAIL_SMTP.value(), expediteur: MAIL_EXPEDITEUR.value(), motDePasse: MAIL_MOT_DE_PASSE.value() };
+  if (d.test) {
+    const moi = emailPropre(request.auth.token.email);
+    if (!moi) throw new HttpsError('failed-precondition', 'Votre compte admin n\'a pas d\'e-mail.');
+    await mail.envoyer({ ...smtp, a: moi, contenu: emailInformation({ objet: `[Test] ${objet}`, message, nom: 'Tanguy', lienDesinscription: `${URL_DESINSCRIPTION}?test=1` }) });
+    return { envoyes: 1, a: moi };
+  }
+  const voulus = new Set((Array.isArray(d.emails) ? d.emails : []).map(emailPropre).filter(Boolean));
+  const destinataires = (await lireContacts()).filter((c) => voulus.has(c.email) && c.consentement && !c.desinscrit);
+  if (!destinataires.length) throw new HttpsError('failed-precondition', "Personne dans cette liste n'a accepté les e-mails d'information.");
+  if (destinataires.length > ENVOIS_MAX) throw new HttpsError('failed-precondition', `${destinataires.length} destinataires : ${ENVOIS_MAX} au plus par jour avec Brevo. Réduisez la liste.`);
+  const ref = db().collection('campagnes').doc();
+  await ref.set({ objet, message, le: Date.now(), par: request.auth.token.email || request.auth.uid, prevus: destinataires.length, envoyes: 0, ignores: voulus.size - destinataires.length });
+  let envoyes = 0;
+  const erreurs = [];
+  for (const c of destinataires) {
+    try {
+      const cref = db().doc(`contacts/${cleContact(c.email)}`);
+      const snap = await cref.get();
+      let jeton = snap.exists && snap.get('jeton');
+      if (!jeton) {
+        jeton = require('node:crypto').randomBytes(16).toString('hex');
+        await cref.set({ email: c.email, jeton }, { merge: true });
+      }
+      const lien = `${URL_DESINSCRIPTION}?c=${cleContact(c.email)}&j=${jeton}`;
+      await mail.envoyer({ ...smtp, a: c.email, contenu: emailInformation({ objet, message, nom: c.nom, lienDesinscription: lien }) });
+      envoyes++;
+    } catch (e) {
+      erreurs.push(`${c.email} : ${e.message}`);
+    }
+  }
+  await ref.update({ envoyes, erreurs: erreurs.slice(0, 20), finiLe: Date.now() });
+  return { envoyes, ignores: voulus.size - destinataires.length, erreurs: erreurs.slice(0, 5) };
+});
+
+// Lien « Se désinscrire » : la page demande une confirmation (les antivirus ouvrent les liens) ;
+// le bouton, ou le désabonnement en un clic des messageries (POST), retire l'accord.
+exports.desinscription = onRequest(async (req, res) => {
+  const p = { ...(req.query || {}), ...(typeof req.body === 'object' && req.body ? req.body : {}) };
+  const pageHtml = (titre, texte, formulaire) => `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>${titre}</title></head>
+<body style="margin:0;background:#fdfaf5;color:#24212f;font:18px/1.6 Arial,sans-serif"><div style="max-width:520px;margin:0 auto;padding:40px 20px">
+<p style="font-weight:bold;font-size:22px;color:#4f46e5">Papote</p><h1 style="font-size:26px">${titre}</h1><p>${texte}</p>${formulaire || ''}</div></body></html>`;
+  res.set('Cache-Control', 'no-store');
+  if (p.test) { res.send(pageHtml('Lien de test', "C'est ici que vos clients se désinscriront.")); return; }
+  const c = typeof p.c === 'string' && /^[0-9a-f]{32}$/.test(p.c) ? p.c : null;
+  const j = typeof p.j === 'string' && /^[0-9a-f]{32}$/.test(p.j) ? p.j : null;
+  const ref = c && db().doc(`contacts/${c}`);
+  const snap = ref && j ? await ref.get() : null;
+  if (!snap || !snap.exists || snap.get('jeton') !== j) {
+    res.status(404).send(pageHtml('Lien inconnu', 'Ce lien de désinscription n\'est pas valable. Répondez simplement à notre e-mail et nous vous retirerons de la liste.'));
+    return;
+  }
+  if (req.method === 'POST') {
+    await ref.set({ consentement: false, desinscritLe: Date.now() }, { merge: true });
+    res.send(pageHtml('C\'est fait', 'Vous ne recevrez plus nos e-mails d\'information. Les messages liés à votre abonnement (livraison, facture) continuent d\'arriver.'));
+    return;
+  }
+  res.send(pageHtml('Se désinscrire', 'Vous ne recevrez plus les e-mails d\'information de Papote.',
+    `<form method="post" action="?c=${c}&j=${j}"><button type="submit" style="font:inherit;font-weight:bold;background:#4f46e5;color:#fff;border:0;border-radius:999px;padding:14px 26px;cursor:pointer">Me désinscrire</button></form>`));
+});
+
 exports.regles = {
   ETATS, CATEGORIES, natureMouvement, mensuel, centimes, lien, nomFichier, moisSuivant, lectureVersFormulaire, SCHEMA_FACTURE,
   lireReglages, simAResilier, stockAJour, incoherences, materielLu, memeAccessoire, coutLigne, alertesSim, accessoiresAPrevoir, champsSim, aFaire, piecesFacture, debutMoisParis, moisPrecedent, csvTexte, livreDesRecettes,
-  registreDesAchats, corpsDuMail, memeAchat, suiteJumelage,
+  registreDesAchats, corpsDuMail, memeAchat, suiteJumelage, fusionnerContacts, emailInformation, cleContact,
 };

@@ -962,6 +962,10 @@ exports.gestionSim = gestion.gestionSim;
 exports.gestionAccessoire = gestion.gestionAccessoire;
 exports.gestionEtiquette = gestion.gestionEtiquette;
 exports.gestionAnnulerEtiquette = gestion.gestionAnnulerEtiquette;
+exports.gestionClients = gestion.gestionClients;
+exports.gestionConsentement = gestion.gestionConsentement;
+exports.gestionCampagne = gestion.gestionCampagne;
+exports.desinscription = gestion.desinscription;
 exports.gestionRenvoyerCode = gestion.gestionRenvoyerCode;
 exports.gestionJumelage = gestion.gestionJumelage;
 
