@@ -137,23 +137,29 @@ async function tarifs(stripe) {
   }
 }
 
+// Portail client : changer de carte (un autre membre de la famille peut reprendre le paiement),
+// le nom, l'adresse et le numéro de TVA (factures au nom d'une société), voir les factures et
+// la date du prochain prélèvement. Mis à jour à chaque lancement.
+const REGLAGES_PORTAIL = {
+  business_profile: { headline: 'Papote : votre abonnement' },
+  features: {
+    invoice_history: { enabled: true },
+    payment_method_update: { enabled: true },
+    customer_update: { enabled: true, allowed_updates: ['email', 'name', 'address', 'phone', 'tax_id'] },
+    // Résiliation depuis l'appli famille (fonction resilierAbonnement), qui respecte l'engagement.
+    subscription_cancel: { enabled: false },
+  },
+};
+
 async function portail(stripe) {
   const { data } = await stripe.billingPortal.configurations.list({ active: true, limit: 20 });
-  if (data.some((c) => c.metadata && c.metadata.papote === '1')) {
-    console.log('  Portail client : déjà prêt');
+  const existant = data.find((c) => c.metadata && c.metadata.papote === '1');
+  if (existant) {
+    await stripe.billingPortal.configurations.update(existant.id, REGLAGES_PORTAIL);
+    console.log('  Portail client : à jour');
     return;
   }
-  await stripe.billingPortal.configurations.create({
-    metadata: { papote: '1' },
-    business_profile: { headline: 'Papote : votre abonnement' },
-    features: {
-      invoice_history: { enabled: true },
-      payment_method_update: { enabled: true },
-      customer_update: { enabled: true, allowed_updates: ['email', 'address', 'phone'] },
-      // Résiliation depuis l'appli famille (fonction resilierAbonnement), qui respecte l'engagement.
-      subscription_cancel: { enabled: false },
-    },
-  });
+  await stripe.billingPortal.configurations.create({ metadata: { papote: '1' }, ...REGLAGES_PORTAIL });
   console.log('  Portail client : créé');
 }
 
