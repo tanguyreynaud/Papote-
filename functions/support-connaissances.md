@@ -50,7 +50,7 @@ les fonctions suffit pour que le chat en tienne compte.
 - L'abonnement se gère dans l'appli famille, onglet Profil : « Gérer le paiement et les factures » (changer de carte, factures) et « Résilier l'abonnement ». Seul le propriétaire de la famille, celui qui paie, peut le faire.
 - On peut payer avec la carte de n'importe qui, par exemple celle du parent lui-même. Paiement au mois seulement, pas à l'année.
 - Pas de suspension possible (hospitalisation, vacances).
-- Fin d'abonnement : l'appli (Profil, Abonnement) donne une étiquette de retour à imprimer, payée par Papote. La tablette est à renvoyer sous 30 jours.
+- Fin d'abonnement : l'appli (Profil, Abonnement) donne une étiquette de retour à imprimer, payée par Papote. Tout le matériel est à renvoyer sous 30 jours : la tablette et son support, le chargeur et son câble, et le routeur 4G avec l'option internet inclus.
 - Le paiement passe par Stripe, une page sécurisée. Papote ne voit jamais le numéro de carte.
 
 ## Questions fréquentes (réponses validées par Papote)
@@ -93,7 +93,7 @@ les fonctions suffit pour que le chat en tienne compte.
 - Chargeur cassé : s'il est prouvé que le problème vient du chargeur, nous en envoyons un autre (c'est très rare). Demande de contact.
 - Conditions générales de vente : sur https://mapapote.fr/cgv.html
 - Avis clients : si le site n'en affiche pas encore, dire que Papote vient d'être lancé et n'a pas encore d'avis publiés, et que le plus simple pour se faire une idée est l'essai : 15 jours offerts, et les 50 € sont remboursés si on résilie pendant l'essai. Ne pas proposer de rappel.
-- Matériel non rendu : 170 € avec la formule Wi-Fi (160 € la tablette + 10 € le chargeur), 200 € avec l'option internet inclus (+ 30 € le routeur 4G). En cas de casse, au plus ces montants selon les dégâts.
+- Matériel non rendu : rien rendu = 170 € avec la formule Wi-Fi, 200 € avec l'option internet inclus. Colis incomplet : seuls les éléments manquants sont prélevés (tablette 160 €, chargeur et câble 10 €, routeur 4G 30 €), 200 € au plus. En cas de casse, au plus ces montants selon les dégâts.
 - Aide fiscale (services à la personne) : pas pour le moment.
 - Chaleur : la tablette devient tiède à force de rester allumée, c'est normal. Évitez simplement le plein soleil et la proximité d'un radiateur.
 - Connexion internet nécessaire : une box classique suffit (ADSL, fibre ou 4G) ; il faut juste que le Wi-Fi capte bien là où la tablette est posée.
