@@ -46,7 +46,7 @@ setGlobalOptions({ region: 'europe-west1', maxInstances: 5 });
 const STRIPE_SECRET = defineSecret('STRIPE_SECRET');
 const STRIPE_WEBHOOK_SECRET = defineSecret('STRIPE_WEBHOOK_SECRET');
 const SITE_VITRINE = defineString('SITE_VITRINE', { default: 'https://mapapote.fr' });
-const APPLI_FAMILLE = 'https://papote-famille.web.app/';
+const APPLI_FAMILLE = 'https://app.mapapote.fr/';
 // E-mails : MAIL_SMTP (« hote:port:utilisateur ») et MAIL_EXPEDITEUR dans .env, mot de passe en secret.
 const MAIL_SMTP = defineString('MAIL_SMTP', { default: 'smtp.gmail.com:465:' });
 const MAIL_EXPEDITEUR = defineString('MAIL_EXPEDITEUR', { default: '' });
@@ -120,8 +120,13 @@ async function sessionPaiement({ formule, tablette, fid, email, client, relais }
   };
   // Commande du site : livrée au point relais choisi avant le paiement. Depuis l'appli : à l'adresse saisie.
   if (!relais) params.shipping_address_collection = { allowed_countries: ['FR', 'BE', 'LU'] };
-  if (client) params.customer = client;
-  else if (email) params.customer_email = email;
+  // Factures au nom d'une société : numéro de TVA facultatif sur la page de paiement.
+  params.tax_id_collection = { enabled: true };
+  if (client) {
+    params.customer = client;
+    // Stripe l'exige avec tax_id_collection pour un client existant.
+    params.customer_update = { name: 'auto', address: 'auto' };
+  } else if (email) params.customer_email = email;
   return stripe().checkout.sessions.create(params);
 }
 
@@ -910,6 +915,7 @@ exports.gestionCloturer = gestion.gestionCloturer;
 exports.gestionSim = gestion.gestionSim;
 exports.gestionAccessoire = gestion.gestionAccessoire;
 exports.gestionEtiquette = gestion.gestionEtiquette;
+exports.gestionAnnulerEtiquette = gestion.gestionAnnulerEtiquette;
 exports.gestionRenvoyerCode = gestion.gestionRenvoyerCode;
 exports.gestionJumelage = gestion.gestionJumelage;
 

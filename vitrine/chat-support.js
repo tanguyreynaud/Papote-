@@ -15,7 +15,7 @@
   var cote = script.dataset && script.dataset.cote === 'gauche' ? 'left' : 'right';
   var bas = (script.dataset && parseInt(script.dataset.bas, 10)) || 20;
   // Dans l'appli famille, la personne est déjà cliente : l'assistant la guide dans l'appli.
-  var PAGE = location.hostname === 'papote-famille.web.app' ? 'appli' : 'site';
+  var PAGE = ['papote-famille.web.app', 'app.mapapote.fr'].indexOf(location.hostname) !== -1 ? 'appli' : 'site';
   var SUGGESTIONS = ['Combien ça coûte ?', 'Faut-il une box internet ?', 'Comment se passe l’installation ?'];
 
   var css = '' +

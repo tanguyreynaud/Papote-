@@ -24,6 +24,9 @@ function relaisDepuisRequete(q) {
     pays: texte(q.rpays, 2),
   };
   if (!r.id || !/^[A-Za-z0-9-]+$/.test(r.id) || !r.nom || !r.cp || !r.ville) return null;
+  // Prénom et nom de la personne qui retire le colis (étiquette Mondial Relay).
+  const destinataire = texte(q.rdest, 80);
+  if (destinataire) r.destinataire = destinataire;
   r.pays = (r.pays || 'FR').toUpperCase();
   if (!PAYS_RELAIS.includes(r.pays)) return null;
   return r;
@@ -34,6 +37,7 @@ function relaisVersMeta(r) {
   return {
     relais_id: r.id, relais_nom: r.nom, relais_adresse: r.adresse || '',
     relais_cp: r.cp, relais_ville: r.ville, relais_pays: r.pays,
+    relais_destinataire: r.destinataire || '',
   };
 }
 
@@ -43,6 +47,7 @@ function relaisDepuisMeta(m) {
     transporteur: 'mondial-relay', id: m.relais_id, nom: m.relais_nom || null,
     adresse: m.relais_adresse || null, cp: m.relais_cp || null,
     ville: m.relais_ville || null, pays: m.relais_pays || 'FR',
+    destinataire: m.relais_destinataire || null,
   };
 }
 

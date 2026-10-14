@@ -563,7 +563,7 @@ $('x-commandes').addEventListener('click', () => {
 function livraisonTexte(c) {
   const l = c.livraison || {};
   if (l.transporteur === 'mondial-relay') {
-    return `Point relais ${l.nom || ''} (n° ${l.id || '?'}), ${[l.adresse, `${l.cp || ''} ${l.ville || ''}`.trim()].filter(Boolean).join(', ')}`;
+    return `Point relais ${l.nom || ''} (n° ${l.id || '?'}), ${[l.adresse, `${l.cp || ''} ${l.ville || ''}`.trim()].filter(Boolean).join(', ')}${l.destinataire ? `, retrait par ${l.destinataire}` : ''}`;
   }
   const a = l.adresse || {};
   return [l.nom, a.line1, a.line2, `${a.postal_code || ''} ${a.city || ''}`.trim()].filter(Boolean).join(', ') || '—';

@@ -70,7 +70,8 @@ a.btn { justify-self: start; display: inline-flex; align-items: center; min-heig
       ['Essai', '15 jours gratuits, puis engagement de 12 mois'],
       ['Payé aujourd\'hui', typeof d.payeCentimes === 'number' ? (d.payeCentimes / 100).toLocaleString('fr-FR') + ' € (mise en service)' : ''],
       ['Tablette', 'Prêtée, à rendre en fin d\'abonnement'],
-      ['Livraison', r ? 'Offerte, point relais ' + [r.nom, r.adresse, [r.cp, r.ville].filter(Boolean).join(' ')].filter(Boolean).join(', ') : 'Offerte']
+      ['Livraison', r ? 'Offerte, point relais ' + [r.nom, r.adresse, [r.cp, r.ville].filter(Boolean).join(' ')].filter(Boolean).join(', ') : 'Offerte'],
+      ['Retrait par', r && r.destinataire]
     ];
     var dl = document.getElementById('recap-liste');
     lignes.forEach(function (l) {
