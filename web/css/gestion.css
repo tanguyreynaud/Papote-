@@ -173,3 +173,11 @@ body.depot-actif::after {
 .remplacement { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 .remplacement select, .remplacement input { flex: 1 1 180px; min-width: 0; margin: 0; padding: 8px 12px; }
 .remplacement p { flex-basis: 100%; margin: 0; }
+
+/* Clients et e-mails d'information */
+.campagne label { display: block; margin: 8px 0; font-size: 14px; }
+.campagne textarea { width: 100%; box-sizing: border-box; font: inherit; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; resize: vertical; }
+.campagne .actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0; }
+.campagnes { padding-left: 18px; }
+.campagnes li { margin: 4px 0; }
+#cherche-clients { min-width: 0; width: 220px; max-width: 100%; }

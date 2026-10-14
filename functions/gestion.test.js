@@ -335,3 +335,44 @@ test('suite du jumelage d\'une tablette du stock', () => {
     { alerte: 'jumelée à une autre famille que celle de sa commande' });
   assert.deepStrictEqual(g.suiteJumelage({ etat: 'preparee', commande: null }, null, 'f'), { alerte: 'jumelée sans commande' });
 });
+
+test('clients : fusion par e-mail, statut et accord pour les e-mails', () => {
+  const { fusionnerContacts } = g;
+  const liste = fusionnerContacts({
+    commandes: [
+      { email: 'Jeanne@X.fr', nom: 'Jeanne Martin', fid: 'f1', formule: 'wifi', creeLe: 2000, marketing: true },
+      { email: 'paul@x.fr', nom: 'Paul', fid: 'f2', creeLe: 1000 },
+      { email: 'annule@x.fr', expedition: 'annulee', creeLe: 500, marketing: true },
+    ],
+    paniers: [
+      { email: 'jeanne@x.fr', creeLe: 100 },
+      { email: 'prospect@x.fr', nom: 'Léa', creeLe: 3000, marketing: true },
+    ],
+    contacts: [
+      { email: 'paul@x.fr', consentement: true },
+      { email: 'annule@x.fr', consentement: false, desinscritLe: 9 },
+      { email: 'inconnu@x.fr', jeton: 'a' },
+    ],
+    statutFamille: (fid) => ({ f1: 'actif', f2: 'resilie' }[fid]),
+  });
+  const par = Object.fromEntries(liste.map((c) => [c.email, c]));
+  assert.equal(liste.length, 4);
+  assert.equal(par['jeanne@x.fr'].type, 'client');
+  assert.equal(par['jeanne@x.fr'].consentement, true);
+  assert.equal(par['paul@x.fr'].type, 'ancien');
+  assert.equal(par['paul@x.fr'].consentement, true);
+  assert.equal(par['annule@x.fr'].desinscrit, true);
+  assert.equal(par['annule@x.fr'].consentement, false);
+  assert.equal(par['prospect@x.fr'].type, 'panier');
+  assert.equal(liste[0].email, 'prospect@x.fr');
+});
+
+test('e-mail d\'information : prénom, paragraphes échappés, lien de désinscription', () => {
+  const m = g.emailInformation({ objet: ' Nouveauté ', message: 'Bonjour {prenom},\n\n<b>Une</b> nouvelle', nom: 'Jeanne Martin', lienDesinscription: 'https://x/d?c=1' });
+  assert.equal(m.subject, 'Nouveauté');
+  assert.match(m.html, /Bonjour Jeanne,/);
+  assert.match(m.html, /&lt;b&gt;Une/);
+  assert.match(m.text, /Se désinscrire : https:\/\/x\/d\?c=1/);
+  assert.equal(m.headers['List-Unsubscribe'], '<https://x/d?c=1>');
+  assert.equal(g.cleContact('A@x.fr'), g.cleContact(' a@x.fr '));
+});
