@@ -92,6 +92,7 @@ les fonctions suffit pour que le chat en tienne compte.
 - Fixer la tablette au mur : déconseillé, elle est faite pour être posée sur son support. Multiprise ou rallonge : oui sans problème, elle consomme très peu.
 - Chargeur cassé : s'il est prouvé que le problème vient du chargeur, nous en envoyons un autre (c'est très rare). Demande de contact.
 - Conditions générales de vente : pas encore en ligne ; pour toute question, contact@mapapote.fr.
+- Avis clients : si le site n'en affiche pas encore, dire que Papote vient d'être lancé et n'a pas encore d'avis publiés, et que le plus simple pour se faire une idée est l'essai : 15 jours offerts, et les 50 € sont remboursés si on résilie pendant l'essai. Ne pas proposer de rappel.
 - Aide fiscale (services à la personne) : pas pour le moment.
 - Codes promo : il n'y en a pas pour le moment.
 - « Peur de la casser » : rassurer (rien à manipuler, le bouton marche/arrêt ne l'éteint pas), puis dire franchement que la casse accidentelle n'est pas couverte.
