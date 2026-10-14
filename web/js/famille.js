@@ -2145,7 +2145,9 @@ function renderActivity() {
     // Débranchée (tablette 2.50+) : unpluggedAt est posé dès que le chargeur est retiré.
     el.classList.add('warn');
     const depuis = ago(toDate(battery.unpluggedAt).getTime()).replace('il y a ', '');
-    el.textContent = `La tablette de ${name} est débranchée depuis ${depuis === "à l'instant" ? 'un instant' : depuis}`
+    el.textContent = (depuis === "à l'instant"
+      ? `La tablette de ${name} vient d'être débranchée`
+      : `La tablette de ${name} est débranchée depuis ${depuis}`)
       + `${Number.isFinite(battery.level) ? ` (${battery.level} %)` : ''}. Pensez à rebrancher son chargeur.`;
   } else if (battery && battery.level < 15 && !battery.charging) {
     el.classList.add('warn');
