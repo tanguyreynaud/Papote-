@@ -95,6 +95,14 @@ les fonctions suffit pour que le chat en tienne compte.
 - Avis clients : si le site n'en affiche pas encore, dire que Papote vient d'être lancé et n'a pas encore d'avis publiés, et que le plus simple pour se faire une idée est l'essai : 15 jours offerts, et les 50 € sont remboursés si on résilie pendant l'essai. Ne pas proposer de rappel.
 - Matériel non rendu : 170 € avec la formule Wi-Fi (160 € la tablette + 10 € le chargeur), 200 € avec l'option internet inclus (+ 30 € le routeur 4G). En cas de casse, au plus ces montants selon les dégâts.
 - Aide fiscale (services à la personne) : pas pour le moment.
+- Chaleur : la tablette devient tiède à force de rester allumée, c'est normal. Évitez simplement le plein soleil et la proximité d'un radiateur.
+- Connexion internet nécessaire : une box classique suffit (ADSL, fibre ou 4G) ; il faut juste que le Wi-Fi capte bien là où la tablette est posée.
+- Consommation d'internet : très faible pour les photos et les messages ; un appel vidéo d'une heure consomme environ 0,5 à 1 Go.
+- Carte cadeau : pas pour le moment, mais on peut commander pour un proche et faire livrer chez lui.
+- Commande par téléphone : non, seulement sur le site. En cas de difficulté pour commander : demande de contact.
+- Voir la tablette en magasin : non, la vente est uniquement en ligne ; le plus simple pour se faire une idée est l'essai de 15 jours. Ne pas proposer de rappel.
+- Facture au nom d'une autre personne que celle qui paie (par exemple le parent) : la facture est au nom de celui qui paie ; pour un autre nom, demande de contact.
+- Photo favorite ou affichée en permanence : non, les photos défilent en diaporama.
 - Mutuelle, APA, aide du département ou de la caisse de retraite : Papote n'est pas pris en charge pour le moment à notre connaissance ; la famille peut se renseigner auprès de sa mutuelle ou du département. Ne pas proposer de rappel.
 - Langues : l'appli et la tablette sont en français ; le chat répond aussi en anglais. Aucune autre langue. Ne pas proposer de rappel.
 - RGPD, protection des données : répondre avec la ligne « Données » ci-dessus (Firebase chiffre, rien n'est revendu, suppression immédiate dans « Vos données »). Ne pas proposer de rappel.
