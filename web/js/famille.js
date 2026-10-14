@@ -2135,12 +2135,18 @@ function renderActivity() {
   const hour = new Date().getHours();
   el.hidden = false;
   el.classList.remove('warn');
-  // Batterie : envoyée par la tablette avec son signal « en ligne » ({ level, charging }).
+  // Batterie : envoyée par la tablette ({ level, charging, unpluggedAt }).
   const battery = tabletMembers.filter((m) => m.battery && m.lastOnline)
     .sort((a, b) => toDate(b.lastOnline) - toDate(a.lastOnline))[0]?.battery;
   if (now - online > 45 * 60_000) {
     el.classList.add('warn');
     el.textContent = `La tablette de ${name} ne répond plus depuis ${ago(online).replace('il y a ', '')}. Est-elle branchée et connectée au wifi ?`;
+  } else if (battery && battery.charging === false && battery.unpluggedAt) {
+    // Débranchée (tablette 2.50+) : unpluggedAt est posé dès que le chargeur est retiré.
+    el.classList.add('warn');
+    const depuis = ago(toDate(battery.unpluggedAt).getTime()).replace('il y a ', '');
+    el.textContent = `La tablette de ${name} est débranchée depuis ${depuis === "à l'instant" ? 'un instant' : depuis}`
+      + `${Number.isFinite(battery.level) ? ` (${battery.level} %)` : ''}. Pensez à rebrancher son chargeur.`;
   } else if (battery && battery.level < 15 && !battery.charging) {
     el.classList.add('warn');
     el.textContent = `Batterie faible sur la tablette de ${name} (${battery.level} %). Pensez à la brancher.`;
