@@ -110,7 +110,7 @@ function euros(centimes) {
 }
 
 const bonjour = (nom) => `Bonjour${nom ? ` ${echapper(nom)}` : ''},`;
-const COMMENT_RENDRE = 'Mettez la tablette et son chargeur dans un carton, collez l\'étiquette dessus et déposez le colis dans n\'importe quel point relais Mondial Relay. Inutile de l\'effacer : nous nous en chargeons.';
+const COMMENT_RENDRE = 'Mettez la tablette, son support, son chargeur et son câble (et le routeur 4G si vous avez l\'option internet) dans un carton, collez l\'étiquette dessus et déposez le colis dans n\'importe quel point relais Mondial Relay. Inutile de l\'effacer : nous nous en chargeons.';
 
 // Abonnement terminé ou commande annulée après l'envoi : la tablette prêtée est attendue.
 // retractation : montant remboursé au retour (centimes), sinon null.
@@ -124,7 +124,7 @@ function retourTablette({ nom, avant, retractation, montant }) {
     `${COMMENT_RENDRE} Date limite : <b>${dateEnClair(avant)}</b>.`,
     retractation != null && retractation > 0
       ? `Dès que la tablette nous parvient, nous vous remboursons <b>${euros(retractation)}</b> sur votre carte.`
-      : `Sans retour à cette date, ${euros(montant)} seront prélevés sur votre carte.`,
+      : `Sans retour à cette date, ${euros(montant)} seront prélevés sur votre carte. Chaque élément manquant est facturé : tablette 160 €, chargeur et câble 10 €, routeur 4G 30 €.`,
   ]);
 }
 

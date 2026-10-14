@@ -737,20 +737,8 @@ exports.restitutions = onSchedule(
       }
       if (!regles.restitutionEchue(snap.get('restitution'), maintenant)) continue;
       try {
-        const abo = await stripe().subscriptions.retrieve(snap.id, { expand: ['customer'] });
-        const moyen = abo.default_payment_method
-          || (abo.customer.invoice_settings && abo.customer.invoice_settings.default_payment_method);
-        if (!moyen) throw new Error('Aucune carte enregistrée');
-        const paiement = await stripe().paymentIntents.create({
-          amount: regles.penaliteRestitution(snap.get('formule')),
-          currency: 'eur',
-          customer: abo.customer.id,
-          payment_method: typeof moyen === 'string' ? moyen : moyen.id,
-          off_session: true,
-          confirm: true,
-          description: 'Papote : tablette non rendue',
-          metadata: { commande: snap.id },
-        }, { idempotencyKey: `restitution-${snap.id}` });
+        const paiement = await preleverMateriel(snap.id, regles.penaliteRestitution(snap.get('formule')),
+          'Papote : matériel non rendu', `restitution-${snap.id}`);
         await snap.ref.update({
           'restitution.statut': 'facturee',
           'restitution.paiement': paiement.id,
@@ -769,6 +757,25 @@ exports.restitutions = onSchedule(
     }
   });
 
+// Prélève du matériel non rendu sur la carte de l'abonnement. La description contient « non rendu » :
+// gestion.js en fait une facture chaque nuit.
+async function preleverMateriel(abonnement, montant, description, cle) {
+  const abo = await stripe().subscriptions.retrieve(abonnement, { expand: ['customer'] });
+  const moyen = abo.default_payment_method
+    || (abo.customer.invoice_settings && abo.customer.invoice_settings.default_payment_method);
+  if (!moyen) throw new Error('Aucune carte enregistrée');
+  return stripe().paymentIntents.create({
+    amount: montant,
+    currency: 'eur',
+    customer: abo.customer.id,
+    payment_method: typeof moyen === 'string' ? moyen : moyen.id,
+    off_session: true,
+    confirm: true,
+    description,
+    metadata: { commande: abonnement },
+  }, { idempotencyKey: cle });
+}
+
 // Le tableau de bord admin marque la tablette incluse comme revenue.
 // Même règle que isAdmin() des règles Firestore : badge admin, ou l'adresse de Tanguy le temps du badge.
 function verifierAdmin(request) {
@@ -778,20 +785,39 @@ function verifierAdmin(request) {
   if (!estAdmin) throw new HttpsError('permission-denied', 'Réservé à l\'administrateur.');
 }
 
-exports.tabletteRendue = onCall(async (request) => {
+// manquants (facultatif) : éléments absents du colis retour, parmi 'tablette', 'chargeur', 'routeur'.
+// Chacun est prélevé à son prix (tablette 160 €, chargeur et câble 10 €, routeur 30 €).
+exports.tabletteRendue = onCall({ secrets: [STRIPE_SECRET] }, async (request) => {
   verifierAdmin(request);
-  const { commande } = request.data || {};
+  const { commande, manquants } = request.data || {};
   if (typeof commande !== 'string' || !commande) throw new HttpsError('invalid-argument', 'Commande manquante.');
+  if (manquants != null && (!Array.isArray(manquants) || manquants.some((m) => !regles.PRIX_MATERIEL[m]))) {
+    throw new HttpsError('invalid-argument', 'Éléments manquants invalides.');
+  }
   const ref = db.doc(`commandes/${commande}`);
   const snap = await ref.get();
   if (!snap.exists) throw new HttpsError('not-found', 'Commande introuvable.');
   if (snap.get('restitution.statut') === 'facturee') {
-    throw new HttpsError('failed-precondition', 'Les 120 € ont déjà été prélevés : remboursez-les depuis Stripe.');
+    throw new HttpsError('failed-precondition', 'Le matériel non rendu a déjà été prélevé : remboursez depuis Stripe si besoin.');
   }
-  await ref.set({
-    restitution: { statut: 'rendue', majLe: FieldValue.serverTimestamp() },
-  }, { merge: true });
-  return { ok: true };
+  const formule = snap.get('formule');
+  const liste = [...new Set(manquants || [])].filter((m) => regles.materielPrete(formule).includes(m));
+  const montant = regles.montantManquants(formule, liste);
+  const restitution = { statut: 'rendue', majLe: FieldValue.serverTimestamp() };
+  if (montant > 0) {
+    restitution.manquants = liste;
+    try {
+      const paiement = await preleverMateriel(snap.id, montant,
+        `Papote : matériel non rendu (${liste.map((m) => regles.NOMS_MATERIEL[m]).join(', ')})`, `manquants-${snap.id}-${liste.join('-')}`);
+      restitution.paiement = paiement.id;
+      restitution.montant = montant;
+    } catch (e) {
+      restitution.statut = 'echec';
+      restitution.erreur = e.message;
+    }
+  }
+  await ref.set({ restitution }, { merge: true });
+  return { ok: restitution.statut === 'rendue', montant, erreur: restitution.erreur || null };
 });
 
 // Lien de l'étiquette de retour prépayée (Mondial Relay, Sendcloud...) : envoyé au client par commandeModifiee.
