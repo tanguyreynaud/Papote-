@@ -64,7 +64,7 @@ les fonctions suffit pour que le chat en tienne compte.
 - Box 4G ou partage de connexion d'un téléphone : ça marche, c'est un Wi-Fi comme un autre.
 - Carte SIM : l'opérateur n'est pas fixe ; on choisit celui qui couvre le mieux le domicile du client.
 - Autres usages (Internet, jeux, YouTube) : non, la tablette est réservée à Papote pour rester simple et sans risque.
-- Tablette perdue ou volée : il n'y a pas de garantie pour cela. Il faut nous le signaler pour suspendre le contrat. La tablette est prêtée : les 120 € prévus pour une tablette non rendue peuvent être appliqués. Pour en recevoir une nouvelle : demande de contact. Pour le signaler : demande de contact.
+- Tablette perdue ou volée : il n'y a pas de garantie pour cela. Il faut nous le signaler pour suspendre le contrat. La tablette est prêtée : jusqu'à 200 € prévus pour une tablette non rendue peuvent être appliqués. Pour en recevoir une nouvelle : demande de contact. Pour le signaler : demande de contact.
 - Nombre de proches dans la famille : jusqu'à 30.
 - Enfants : ils peuvent envoyer des photos, il n'y a pas d'âge minimum.
 - Le proche âgé ne peut pas répondre ni envoyer de photo : la tablette ne fait que recevoir, il n'a rien à manipuler. Il peut seulement confirmer un rappel.
@@ -93,10 +93,11 @@ les fonctions suffit pour que le chat en tienne compte.
 - Chargeur cassé : s'il est prouvé que le problème vient du chargeur, nous en envoyons un autre (c'est très rare). Demande de contact.
 - Conditions générales de vente : pas encore en ligne ; pour toute question, contact@mapapote.fr.
 - Avis clients : si le site n'en affiche pas encore, dire que Papote vient d'être lancé et n'a pas encore d'avis publiés, et que le plus simple pour se faire une idée est l'essai : 15 jours offerts, et les 50 € sont remboursés si on résilie pendant l'essai. Ne pas proposer de rappel.
+- Matériel non rendu ou abîmé : jusqu'à 200 € au maximum (160 € pour la tablette, 30 € pour le routeur, 10 € pour le chargeur et le câble).
 - Aide fiscale (services à la personne) : pas pour le moment.
 - Codes promo : il n'y en a pas pour le moment.
 - « Peur de la casser » : rassurer (rien à manipuler, le bouton marche/arrêt ne l'éteint pas), puis dire franchement que la casse accidentelle n'est pas couverte.
-- Casse : la tablette est faite pour qu'on n'ait rien à manipuler, mais la casse accidentelle n'est pas couverte : la caution de 120 € peut s'appliquer. En cas de casse : demande de contact.
+- Casse : la tablette est faite pour qu'on n'ait rien à manipuler, mais la casse accidentelle n'est pas couverte : jusqu'à 200 € peuvent être facturés selon les dégâts. En cas de casse : demande de contact.
 - Eau : la tablette n'est pas étanche, à éviter dans une salle de bain.
 - Caméra : elle ne filme pas en continu. Elle sert aux appels vidéo et, quand un message, une photo ou un rappel arrive, à vérifier que la personne l'a vu.
 - Données : hébergées chez Firebase (Google).
