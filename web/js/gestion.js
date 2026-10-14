@@ -173,6 +173,7 @@ function erreur(e) {
 const TITRES = {
   accueil: 'Accueil',
   commandes: 'Commandes',
+  clients: 'Clients',
   familles: 'Familles et tablettes',
   stock: 'Stock de tablettes',
   factures: 'Factures',
@@ -180,6 +181,8 @@ const TITRES = {
   outils: 'Maintenance',
 };
 const AVEC_PERIODE = ['factures', 'compta'];
+
+let connecte = false; // connexion admin faite (onAuthStateChanged plus bas)
 
 function pageCourante() {
   const p = location.hash.slice(1);
@@ -199,6 +202,7 @@ function afficherPage() {
   $('periode').hidden = !AVEC_PERIODE.includes(page);
   $('p-etat').hidden = !AVEC_PERIODE.includes(page);
   window.scrollTo(0, 0);
+  if (page === 'clients' && connecte) chargerClients();
 }
 window.addEventListener('hashchange', afficherPage);
 afficherPage();
@@ -206,7 +210,9 @@ afficherPage();
 // ---------- Chargement ----------
 
 onAuthStateChanged(getAuth(getApp('admin')), (user) => {
+  connecte = !!user;
   if (!user) return;
+  if (pageCourante() === 'clients') chargerClients();
   chargerDonnees();
   chargerMois();
   changerPeriode();
@@ -395,7 +401,7 @@ const ABONNEMENTS = {
   canceled: 'résilié', active: 'actif', trialing: 'en essai', past_due: 'impayé',
 };
 const RETOURS = {
-  attendue: 'Retour attendu', echec: 'Non rendue, prélèvement refusé', rendue: 'Tablette rendue', facturee: 'Non rendue, 120 € prélevés',
+  attendue: 'Retour attendu', echec: 'Non rendue, prélèvement refusé', rendue: 'Tablette rendue', facturee: 'Non rendue, matériel prélevé',
 };
 const REMBOURSEMENTS = {
   'en-cours': 'en cours de remboursement', 'au-retour': 'remboursés au retour', fait: 'remboursés', echec: 'à rembourser depuis Stripe',
@@ -1219,7 +1225,7 @@ function afficherBilan() {
 
 const NATURES = {
   abonnement: 'Abonnement Papote',
-  'tablette-non-rendue': 'Tablette non rendue',
+  'tablette-non-rendue': 'Matériel non rendu',
   remboursement: 'Remboursement',
   litige: 'Contestation bancaire',
   virement: 'Virement vers la banque',
@@ -1969,15 +1975,19 @@ function afficherRentabilite() {
     const frais = Math.round(prix * tauxFrais);
     const urssaf = Math.round((prix * r.tauxUrssaf) / 100);
     const sim = cle === 'sim' ? forfait : 0;
-    const marge = prix - frais - urssaf - tablette - sim;
-    return { nom, n: abos.length, prix, frais, urssaf, sim, marge };
+    // Matériel : tablette, plus les accessoires de chaque envoi (clé 4G, chargeur…), amortis sur la même durée.
+    const accessoires = (donnees.accessoires || []).filter((a) => a.parEnvoi === 'tous' || a.parEnvoi === cle)
+      .reduce((s, a) => s + (a.prixAchat || 0), 0);
+    const materiel = tablette + Math.round(accessoires / Math.max(1, r.vieTablette));
+    const marge = prix - frais - urssaf - materiel - sim;
+    return { nom, n: abos.length, prix, frais, urssaf, materiel, sim, marge };
   });
   const signe = (c) => h('span', { class: c < 0 ? 'neg' : null }, euros(c));
   remplirTable($('t-rentabilite'), [
     { titre: 'Formule' }, { titre: 'Abonnés', n: 1 }, { titre: 'Prix', n: 1 }, { titre: 'Frais Stripe', n: 1 },
-    { titre: 'URSSAF', n: 1 }, { titre: 'Tablette', n: 1 }, { titre: 'Forfait SIM', n: 1 }, { titre: 'Reste / abonné', n: 1 },
+    { titre: 'URSSAF', n: 1 }, { titre: 'Matériel', n: 1 }, { titre: 'Forfait SIM', n: 1 }, { titre: 'Reste / abonné', n: 1 },
     { titre: 'Reste / mois', n: 1 },
-  ], lignes.map((l) => [l.nom, String(l.n), euros(l.prix), euros(l.frais), euros(l.urssaf), euros(tablette),
+  ], lignes.map((l) => [l.nom, String(l.n), euros(l.prix), euros(l.frais), euros(l.urssaf), euros(l.materiel),
     l.sim ? euros(l.sim) : '', signe(l.marge), signe(l.marge * l.n)]), {
     total: ['Total', String(lignes.reduce((s, l) => s + l.n, 0)), '', '', '', '', '', '',
       signe(lignes.reduce((s, l) => s + l.marge * l.n, 0))],
@@ -2126,3 +2136,119 @@ async function cloturer(cle) {
   }
 }
 $('btn-cloturer').addEventListener('click', () => cloturer());
+
+// ---------- Clients et e-mails d'information ----------
+// gestionClients fusionne commandes et paniers abandonnés par e-mail ; l'envoi ne part qu'aux personnes
+// qui ont accepté (vérifié aussi par le serveur), avec un lien de désinscription.
+
+let clients = null;
+const TYPES_CLIENT = { client: 'Abonné', ancien: 'Ancien client', panier: 'Panier abandonné', contact: 'Contact' };
+const STATUTS_CLIENT = {
+  actif: 'actif', offert: 'offert', impaye: 'impayé', suspendu: 'suspendu', resilie: 'résilié', aucun: 'sans abonnement', annulee: 'annulée',
+};
+
+async function chargerClients() {
+  try {
+    clients = await appeler('gestionClients');
+    afficherClients();
+  } catch (e) {
+    erreur(e);
+  }
+}
+
+function clientsAffiches() {
+  if (!clients) return [];
+  const filtre = $('filtre-clients').value;
+  const q = $('cherche-clients').value.trim().toLowerCase();
+  return clients.contacts.filter((c) => {
+    if (filtre === 'accord' ? !(c.consentement && !c.desinscrit) : filtre && c.type !== filtre) return false;
+    return !q || [c.nom, c.email, c.telephone].some((v) => v && v.toLowerCase().includes(q));
+  });
+}
+
+function accordTexte(c) {
+  if (c.desinscrit) return badge('Désinscrit', 'ko');
+  return c.consentement ? badge('Oui', 'ok') : h('span', { class: 'muted' }, 'Non');
+}
+
+function afficherClients() {
+  if (!clients) return;
+  const tous = clients.contacts;
+  const compte = (f) => tous.filter(f).length;
+  $('kpi-clients').replaceChildren(
+    stat(String(compte((c) => c.type === 'client')), 'abonnés'),
+    stat(String(compte((c) => c.type === 'ancien')), 'anciens clients'),
+    stat(String(compte((c) => c.type === 'panier')), 'paniers abandonnés'),
+    stat(String(compte((c) => c.consentement && !c.desinscrit)), 'acceptent les e-mails', `${compte((c) => c.desinscrit)} désinscrits`),
+  );
+  const liste = clientsAffiches();
+  remplirTable($('t-clients'), [
+    { titre: 'Nom' }, { titre: 'E-mail' }, { titre: 'Téléphone' }, { titre: 'Situation' }, { titre: 'Depuis' }, { titre: 'E-mails' },
+  ], liste.map((c) => ({
+    cellules: [
+      c.nom || '', c.email, c.telephone || '',
+      [TYPES_CLIENT[c.type] || '', c.statut && c.type !== 'panier' ? ` (${STATUTS_CLIENT[c.statut] || c.statut})` : '', c.formule ? ` · ${c.formule === 'sim' ? 'internet' : 'Wi-Fi'}` : ''].join(''),
+      jour(c.depuis), accordTexte(c),
+    ],
+    onclick: () => changerAccord(c),
+  })), { vide: 'Personne pour ce filtre.' });
+  const cible = liste.filter((c) => c.consentement && !c.desinscrit).length;
+  $('campagne-cible').textContent = cible
+    ? `Destinataires : ${pluriel(cible, 'personne')} de la liste affichée (${pluriel(liste.length - cible, 'autre')} sans accord, ignorée${liste.length - cible > 1 ? 's' : ''}).`
+    : 'Personne dans la liste affichée n\'a accepté les e-mails d\'information.';
+  $('campagne-envoyer').disabled = !cible;
+  $('campagnes').replaceChildren(...(clients.campagnes.length
+    ? clients.campagnes.map((k) => h('li', {}, h('strong', {}, k.objet), ` · ${jour(k.le)} · ${pluriel(k.envoyes || 0, 'envoi')}`,
+      k.erreurs && k.erreurs.length ? h('span', { class: 'error' }, ` · ${pluriel(k.erreurs.length, 'échec')}`) : null))
+    : [h('li', { class: 'muted' }, 'Aucun envoi pour l\'instant.')]));
+}
+
+async function changerAccord(c) {
+  const accepte = c.consentement && !c.desinscrit;
+  const question = accepte
+    ? `Retirer l'accord de ${c.nom || c.email} ? Il ou elle ne recevra plus les e-mails d'information.`
+    : `${c.nom || c.email} a accepté de recevoir les e-mails d'information de Papote (de vive voix ou par écrit) ?${c.desinscrit ? ' Attention : cette personne s\'était désinscrite.' : ''}`;
+  if (!confirm(question)) return;
+  try {
+    await appeler('gestionConsentement', { email: c.email, consentement: !accepte });
+    await chargerClients();
+  } catch (e) {
+    erreur(e);
+  }
+}
+
+$('filtre-clients').addEventListener('change', afficherClients);
+$('cherche-clients').addEventListener('input', afficherClients);
+$('x-clients').addEventListener('click', () => {
+  csv('clients', ['Nom', 'E-mail', 'Téléphone', 'Situation', 'Statut', 'Formule', 'Depuis', 'Accepte les e-mails'],
+    clientsAffiches().map((c) => [c.nom, c.email, c.telephone, TYPES_CLIENT[c.type] || '', STATUTS_CLIENT[c.statut] || c.statut || '', c.formule || '',
+      jour(c.depuis), c.desinscrit ? 'désinscrit' : c.consentement ? 'oui' : 'non']), false);
+});
+
+async function envoyerCampagne(test) {
+  const form = $('f-campagne');
+  const msg = form.querySelector('.f-msg');
+  const objet = form.objet.value.trim();
+  const message = form.message.value.trim();
+  if (!objet || !message) { form.reportValidity(); return; }
+  const emails = clientsAffiches().filter((c) => c.consentement && !c.desinscrit).map((c) => c.email);
+  if (!test && !confirm(`Envoyer « ${objet} » à ${pluriel(emails.length, 'personne')} ? Pensez à vous envoyer un essai d'abord.`)) return;
+  const boutons = form.querySelectorAll('button');
+  boutons.forEach((b) => { b.disabled = true; });
+  msg.hidden = false;
+  msg.className = 'f-msg small';
+  msg.textContent = test ? 'Envoi de l\'essai…' : `Envoi à ${pluriel(emails.length, 'personne')}…`;
+  try {
+    const r = await appeler('gestionCampagne', { objet, message, emails, test });
+    msg.textContent = test ? `Essai envoyé à ${r.a}.` : `${pluriel(r.envoyes, 'e-mail')} envoyé${r.envoyes > 1 ? 's' : ''}.${r.erreurs && r.erreurs.length ? ` Échecs : ${r.erreurs.join(' ; ')}` : ''}`;
+    if (!test) { form.reset(); await chargerClients(); }
+  } catch (e) {
+    msg.className = 'f-msg small error';
+    msg.textContent = messageErreur(e);
+  }
+  boutons.forEach((b) => { b.disabled = false; });
+  if (clients) afficherClients();
+}
+
+$('campagne-test').addEventListener('click', () => envoyerCampagne(true));
+$('f-campagne').addEventListener('submit', (e) => { e.preventDefault(); envoyerCampagne(false); });

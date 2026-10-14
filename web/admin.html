@@ -33,6 +33,9 @@
         <a href="#commandes" data-page="commandes">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7l9-4 9 4v10l-9 4-9-4zM3 7l9 4 9-4M12 11v10"/></svg>
           Commandes<span class="pastille" id="n-commandes" hidden></span></a>
+        <a href="#clients" data-page="clients">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2 21v-1a6 6 0 0 1 6-6h2a6 6 0 0 1 6 6v1M16 3.5a4 4 0 0 1 0 7M18 14a6 6 0 0 1 4 5.6V21"/></svg>
+          Clients</a>
         <a href="#familles" data-page="familles">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zM10 17h4"/></svg>
           Familles et tablettes</a>
@@ -119,7 +122,7 @@
               <button type="button" class="secondary small-btn" id="btn-automatiser">Lancer maintenant</button>
             </div>
           </div>
-          <p class="muted small">Chaque nuit : facture des 120 € de tablette non rendue, avoir pour chaque remboursement, dépenses mensuelles ajoutées au registre. Chaque lundi à 8 h : récap de la semaine par e-mail à contact@mapapote.fr.</p>
+          <p class="muted small">Chaque nuit : facture du matériel non rendu (170 € en Wi-Fi, 200 € avec internet), avoir pour chaque remboursement, dépenses mensuelles ajoutées au registre. Chaque lundi à 8 h : récap de la semaine par e-mail à contact@mapapote.fr.</p>
           <p id="automatique" class="small"></p>
         </div>
       </section>
@@ -141,7 +144,7 @@
         </div>
         <div class="card">
           <h2>Tablettes à récupérer</h2>
-          <p class="muted small">Abonnements terminés. Sans retour avant la date limite, 120 € sont prélevés automatiquement.</p>
+          <p class="muted small">Abonnements terminés. Sans retour avant la date limite, 170 € (200 € avec internet) sont prélevés automatiquement.</p>
           <ul id="returns" class="orders"></ul>
           <p id="returns-empty" class="muted small" hidden>Aucune tablette à récupérer.</p>
         </div>
@@ -178,6 +181,45 @@
           </div>
           <p class="muted small">Touchez une commande pour voir ses factures et ses paiements.</p>
           <div class="table"><table id="t-commandes" class="cliquable"></table></div>
+        </div>
+      </section>
+
+      <!-- ---------- Clients et e-mails d'information ---------- -->
+      <section data-panneau="clients" hidden>
+        <div class="stats" id="kpi-clients"></div>
+        <div class="card">
+          <div class="tete">
+            <h2>Clients et contacts</h2>
+            <div class="actions no-print">
+              <input id="cherche-clients" type="search" placeholder="Chercher" aria-label="Chercher un nom, un e-mail, un téléphone">
+              <select id="filtre-clients" aria-label="Filtrer">
+                <option value="">Tout le monde</option>
+                <option value="client">Abonnés</option>
+                <option value="ancien">Anciens clients</option>
+                <option value="panier">Paniers abandonnés</option>
+                <option value="accord">Acceptent les e-mails</option>
+              </select>
+              <button type="button" class="secondary small-btn" id="x-clients">Exporter</button>
+            </div>
+          </div>
+          <p class="muted small">Touchez une ligne pour noter qu'une personne accepte (ou refuse) les e-mails d'information, par exemple après un appel.</p>
+          <div class="table"><table id="t-clients" class="cliquable"></table></div>
+        </div>
+        <div class="card">
+          <h2>Envoyer un e-mail d'information</h2>
+          <p class="muted small">Il part seulement aux personnes de la liste affichée ci-dessus qui ont accepté les e-mails, avec un lien « Se désinscrire ». Écrivez {prenom} pour le prénom ; laissez une ligne vide entre deux paragraphes.</p>
+          <form id="f-campagne" class="campagne no-print">
+            <label>Objet <input name="objet" maxlength="150" required></label>
+            <label>Message <textarea name="message" rows="9" required placeholder="Bonjour {prenom},"></textarea></label>
+            <p id="campagne-cible" class="small"></p>
+            <div class="actions">
+              <button type="button" class="secondary" id="campagne-test">M'envoyer un essai</button>
+              <button type="submit" class="primary" id="campagne-envoyer">Envoyer</button>
+            </div>
+            <p class="f-msg small" hidden></p>
+          </form>
+          <h3>Derniers envois</h3>
+          <ul id="campagnes" class="campagnes small"></ul>
         </div>
       </section>
 
@@ -248,7 +290,7 @@
               <button type="button" class="secondary small-btn" id="x-factures">Exporter</button>
             </div>
           </div>
-          <p class="muted small">Créées et envoyées automatiquement par Stripe à chaque paiement (commande, puis chaque mois). Les 120 € de tablette non rendue reçoivent aussi leur facture, et chaque remboursement son avoir, automatiquement chaque nuit.</p>
+          <p class="muted small">Créées et envoyées automatiquement par Stripe à chaque paiement (commande, puis chaque mois). Le matériel non rendu reçoit aussi sa facture, et chaque remboursement son avoir, automatiquement chaque nuit.</p>
           <div class="table"><table id="t-factures"></table></div>
         </div>
       </section>
@@ -271,7 +313,7 @@
         </div>
         <div class="card">
           <h2>Rentabilité par formule</h2>
-          <p class="muted small">Ce qui reste chaque mois par abonné payant, d'après les vrais frais Stripe de la période, le prix d'achat moyen des tablettes et le coût des lignes SIM.</p>
+          <p class="muted small">Ce qui reste chaque mois par abonné payant, d'après les vrais frais Stripe de la période, le prix d'achat moyen des tablettes et des accessoires envoyés (amortis sur leur durée de vie) et le coût des lignes SIM.</p>
           <div class="table"><table id="t-rentabilite"></table></div>
           <form id="f-reglages" class="grille no-print">
             <label>Seuil de franchise de TVA (€) <input name="seuilTva" inputmode="decimal"></label>

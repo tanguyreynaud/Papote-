@@ -13,9 +13,12 @@ const JOUR = 24 * 60 * 60 * 1000;
 const DELAI_GRACE_JOURS = 7;
 const ESSAI_JOURS = 15;
 const ENGAGEMENT_MOIS = 12;
-// Tablette incluse : à rendre dans les 30 jours après la fin de l'abonnement, sinon 120 €.
+// Tablette incluse : à rendre dans les 30 jours après la fin de l'abonnement, sinon facturée
+// (Tanguy, 2026-10-14) : tablette 160 €, chargeur et câble 10 €, routeur 4G 30 € avec l'option internet.
 const RESTITUTION_JOURS = 30;
-const PENALITE_NON_RESTITUTION = 12000; // centimes
+const PENALITE_NON_RESTITUTION = 17000; // centimes, formule Wi-Fi
+const PENALITE_NON_RESTITUTION_SIM = 20000; // centimes, option internet
+const penaliteRestitution = (formule) => (formule === 'sim' ? PENALITE_NON_RESTITUTION_SIM : PENALITE_NON_RESTITUTION);
 
 const STATUTS_OK = ['offert', 'actif', 'impaye'];
 
@@ -108,7 +111,7 @@ function limiteRestitution(finMs) {
 // Au plus tôt, 14 jours après la commande.
 const RETRACTATION_JOURS = 14;
 const ACHEMINEMENT_JOURS = 3;
-// Rappel avant de prélever les 120 € d'une tablette non rendue.
+// Rappel avant de prélever le montant d'une tablette non rendue.
 const RAPPEL_RESTITUTION_JOURS = 7;
 
 function limiteRetractation(creeMs, envoyeeMs) {
@@ -172,6 +175,8 @@ module.exports = {
   finEngagement,
   RESTITUTION_JOURS,
   PENALITE_NON_RESTITUTION,
+  PENALITE_NON_RESTITUTION_SIM,
+  penaliteRestitution,
   limiteRestitution,
   restitutionEchue,
   RETRACTATION_JOURS,

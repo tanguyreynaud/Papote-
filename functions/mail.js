@@ -65,6 +65,15 @@ function commandeConfirmee({ nom, code, relais, formule }) {
 }
 
 // Prévient Papote qu'une tablette est à préparer.
+function relancePanier({ nom, formule, lien }) {
+  return message('Votre commande Papote vous attend', [
+    `Bonjour${nom ? ` ${echapper(nom)}` : ''},`,
+    'Vous avez commencé une commande Papote sans la terminer. Elle est gardée de côté : vous pouvez la reprendre en un clic.',
+    `Pour rappel : livraison offerte, 15 jours d'essai gratuit, puis ${formule === 'sim' ? '30 € par mois, internet inclus' : '20 € par mois'}. La tablette est prêtée et déjà configurée.`,
+    'Une hésitation, une question ? Répondez à cet e-mail, nous vous répondons personnellement.',
+  ], { texte: 'Reprendre ma commande', lien });
+}
+
 function nouvelleCommande({ nom, email, telephone, code, relais, formule }) {
   return message(`Nouvelle commande ${code || ''}`.trim(), [
     `Client : <b>${echapper(nom || '?')}</b>, ${echapper(email || 'sans e-mail')}${telephone ? `, ${echapper(telephone)}` : ''}.`,
@@ -105,7 +114,7 @@ const COMMENT_RENDRE = 'Mettez la tablette et son chargeur dans un carton, colle
 
 // Abonnement terminé ou commande annulée après l'envoi : la tablette prêtée est attendue.
 // retractation : montant remboursé au retour (centimes), sinon null.
-function retourTablette({ nom, avant, retractation }) {
+function retourTablette({ nom, avant, retractation, montant }) {
   return message('Comment nous rendre la tablette Papote', [
     bonjour(nom),
     retractation != null
@@ -115,7 +124,7 @@ function retourTablette({ nom, avant, retractation }) {
     `${COMMENT_RENDRE} Date limite : <b>${dateEnClair(avant)}</b>.`,
     retractation != null && retractation > 0
       ? `Dès que la tablette nous parvient, nous vous remboursons <b>${euros(retractation)}</b> sur votre carte.`
-      : 'Sans retour à cette date, 120 € seront prélevés sur votre carte.',
+      : `Sans retour à cette date, ${euros(montant)} seront prélevés sur votre carte.`,
   ]);
 }
 
@@ -127,10 +136,10 @@ function etiquetteRetour({ nom, lien, avant }) {
   ], { texte: 'Imprimer l\'étiquette', lien });
 }
 
-function rappelRestitution({ nom, avant, lien }) {
+function rappelRestitution({ nom, avant, lien, montant }) {
   return message('Pensez à nous rendre la tablette Papote', [
     bonjour(nom),
-    `Nous n'avons pas encore reçu la tablette. Déposez-la dans un point relais Mondial Relay avant le <b>${dateEnClair(avant)}</b> : sans retour à cette date, 120 € seront prélevés sur votre carte.`,
+    `Nous n'avons pas encore reçu la tablette. Déposez-la dans un point relais Mondial Relay avant le <b>${dateEnClair(avant)}</b> : sans retour à cette date, ${euros(montant)} seront prélevés sur votre carte.`,
     lien ? 'Votre étiquette prépayée est disponible avec le bouton ci-dessous.' : 'Vous n\'avez pas reçu l\'étiquette de retour ? Répondez à cet e-mail : nous vous la renvoyons.',
     'Si vous avez déjà déposé le colis, ne tenez pas compte de ce message.',
   ], lien ? { texte: 'Imprimer l\'étiquette', lien } : undefined);
@@ -187,7 +196,7 @@ async function envoyer({ smtp, motDePasse, expediteur, a, contenu }) {
 }
 
 module.exports = {
-  colisParti, commandeConfirmee, nouvelleCommande, rappelJumelage,
+  colisParti, commandeConfirmee, nouvelleCommande, relancePanier, rappelJumelage,
   retourTablette, etiquetteRetour, rappelRestitution, tabletteRecue, commandeAnnulee, annulationAvantEnvoi, retourAPreparer,
   envoyer, echapper, euros,
 };

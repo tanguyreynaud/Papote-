@@ -8,13 +8,14 @@ les fonctions suffit pour que le chat en tienne compte.
   iPhone : ouvrir le lien dans Safari, bouton Partager (le carré avec une flèche) puis « Sur l'écran d'accueil ».
   Android : dans Chrome, menu ⋮ en haut à droite puis « Installer l'application » ou « Ajouter à l'écran d'accueil ».
 - Connexion avec Google ou avec une adresse e-mail (un lien de connexion est envoyé par e-mail). Il n'y a pas de mot de passe Papote à créer ni à changer.
-- L'accueil a six tuiles : Appel vidéo, Photos, Vidéos, Messages, Agenda, Réglages.
+- L'accueil a six tuiles : Appel vidéo, Photos, Vidéos, Messages, Agenda, Réglages. En bas de l'écran : Accueil, Notifications, Support et Profil.
+- Profil : sa photo, « Mon prénom » (changer son prénom), « Vos données », l'abonnement, « Rejoindre une autre famille » (on peut être dans plusieurs familles et passer de l'une à l'autre en haut de l'accueil) et « Quitter cette famille ».
 - Photos : jusqu'à 5 photos par envoi, avec une légende courte (30 caractères). Vidéos : 1 minute au maximum.
 - Supprimer un envoi : toucher la corbeille sous la photo ou la vidéo, ou toucher son message. Il disparaît aussi de la tablette. On ne peut supprimer que ses propres envois.
 - L'appli garde les 200 dernières photos et les 40 dernières vidéos ; au-delà, les plus anciennes s'effacent toutes seules. Il faut garder ses originaux sur son téléphone.
 - Agenda : rappels (rendez-vous, médicament…) une fois, tous les jours ou certains jours, et anniversaires (la tablette le rappelle le jour J, avec l'âge si on donne l'année).
 - La page Notifications indique quand un envoi ou un rappel a été vu ou confirmé sur la tablette.
-- Données : dans Réglages, la page « Vos données » permet à un responsable de voir ce qui est conservé et de supprimer la famille entière à tout moment. Les photos ne sont ni revendues ni utilisées pour de la publicité.
+- Données : dans Profil, « Vos données » montre ce qui est conservé. Le propriétaire de la famille peut y « Supprimer la famille et toutes ses données » : photos, vidéos et messages sont effacés tout de suite. Les données sont chez Google Firebase, qui les chiffre sur ses serveurs. Les photos ne sont ni revendues ni utilisées pour de la publicité.
 - Profil : ajouter sa photo pour que le proche reconnaisse qui envoie ou appelle.
 
 ## Inviter la famille
@@ -43,10 +44,13 @@ les fonctions suffit pour que le chat en tienne compte.
 - La tablette ne répond plus : vérifier qu'elle est branchée et connectée au Wi-Fi ; puis dans Réglages, « Dépanner la tablette » : « Redémarrer la tablette ». Sinon, appui d'environ 10 secondes sur le bouton marche.
 - Nouvelle box ou nouveau mot de passe Wi-Fi : Réglages, « Wi-Fi de la tablette », entrer le nom du réseau et le mot de passe puis « Envoyer à la tablette ». Si c'est faux, elle garde son Wi-Fi actuel. Cela ne marche que si la tablette est encore connectée. Si le mot de passe de la box a déjà été changé et que la tablette n'a plus internet, l'appli ne peut plus lui envoyer le Wi-Fi : redémarrer ne suffit pas, il faut l'aide du support (demande de contact).
 - L'appel vidéo ne marche pas : autoriser la caméra et le micro quand le téléphone le demande (sinon dans les réglages du navigateur). Le bouton « Appel vidéo » reste grisé tant que la tablette ne peut pas recevoir d'appel (éteinte ou sans internet).
-- La tablette affiche « Papote est en pause » : l'abonnement est suspendu (paiement non réglé ou abonnement terminé). Mettre à jour la carte dans l'appli famille, Réglages, page Abonnement (« Carte bancaire et factures ») ; tout repart dès le paiement.
+- La tablette affiche « Papote est en pause » : l'abonnement est suspendu (paiement non réglé ou abonnement terminé). Mettre à jour la carte dans l'appli famille, onglet Profil, « Gérer le paiement et les factures » ; tout repart dès le paiement.
 
 ## Abonnement
-- Page Abonnement dans l'appli famille : carte bancaire, factures, résiliation en ligne.
+- L'abonnement se gère dans l'appli famille, onglet Profil : « Gérer le paiement et les factures » (changer de carte, factures) et « Résilier l'abonnement ». Seul le propriétaire de la famille, celui qui paie, peut le faire.
+- On peut payer avec la carte de n'importe qui, par exemple celle du parent lui-même. Paiement au mois seulement, pas à l'année.
+- Pas de suspension possible (hospitalisation, vacances).
+- Fin d'abonnement : l'appli (Profil, Abonnement) donne une étiquette de retour à imprimer, payée par Papote. La tablette est à renvoyer sous 30 jours.
 - Le paiement passe par Stripe, une page sécurisée. Papote ne voit jamais le numéro de carte.
 
 ## Questions fréquentes (réponses validées par Papote)
@@ -60,7 +64,7 @@ les fonctions suffit pour que le chat en tienne compte.
 - Box 4G ou partage de connexion d'un téléphone : ça marche, c'est un Wi-Fi comme un autre.
 - Carte SIM : l'opérateur n'est pas fixe ; on choisit celui qui couvre le mieux le domicile du client.
 - Autres usages (Internet, jeux, YouTube) : non, la tablette est réservée à Papote pour rester simple et sans risque.
-- Tablette perdue ou volée : il n'y a pas de garantie pour cela. Il faut nous le signaler pour suspendre le contrat. La tablette est prêtée : les 120 € prévus pour une tablette non rendue peuvent être appliqués. Pour en recevoir une nouvelle : demande de contact. Pour le signaler : demande de contact.
+- Tablette perdue ou volée : il n'y a pas de garantie pour cela. Il faut nous le signaler pour suspendre le contrat. La tablette est prêtée : jusqu'à 200 € prévus pour une tablette non rendue peuvent être appliqués. Pour en recevoir une nouvelle : demande de contact. Pour le signaler : demande de contact.
 - Nombre de proches dans la famille : jusqu'à 30.
 - Enfants : ils peuvent envoyer des photos, il n'y a pas d'âge minimum.
 - Le proche âgé ne peut pas répondre ni envoyer de photo : la tablette ne fait que recevoir, il n'a rien à manipuler. Il peut seulement confirmer un rappel.
@@ -70,11 +74,30 @@ les fonctions suffit pour que le chat en tienne compte.
 - Offrir Papote en cadeau, payé par un autre proche : bien sûr.
 - Livraison hors France, Belgique et Luxembourg (Suisse, DOM-TOM…) : pas pour le moment.
 - Changer de formule : passer à l'option internet inclus (carte SIM) demande de nous renvoyer la tablette pour la modifier ; passer de la SIM au Wi-Fi est envisageable. Dans les deux cas : demande de contact.
-- Paiement : par carte bancaire uniquement (pas de chèque, de virement ni d'espèces) ; les factures sont dans la page Abonnement de l'appli.
+- Paiement : par carte bancaire uniquement (pas de chèque, de virement ni d'espèces) ; les factures sont dans l'appli, onglet Profil, « Gérer le paiement et les factures ».
+- Tablette arrivée abîmée (écran fissuré, colis endommagé) : ce n'est pas de votre faute et ce n'est pas une rétractation. Prenez des photos et faites une demande de contact : l'équipe s'en occupe.
+- Panne (tablette qui ne marche plus sans avoir été cassée) : réparée gratuitement. Nous envoyons une étiquette de retour ; comptez le temps de nous l'envoyer, environ 5 jours ouvrés de réparation, puis environ 5 jours ouvrés pour la recevoir de nouveau. Demande de contact pour lancer le retour.
+- Après une résiliation, les photos sont gardées 12 mois puis supprimées. Gardez toujours vos originaux sur votre téléphone.
+- Appels la nuit : oui, on peut appeler à toute heure ; l'appel réveille la tablette même quand l'écran est éteint.
+- Si la tablette est déjà en appel, un autre proche ne peut pas l'appeler en même temps.
+- Appli depuis l'étranger : oui, partout, tant que la connexion internet est bonne.
+- Déménagement du proche : il garde la même tablette et le même abonnement. Pensez à envoyer le nouveau Wi-Fi (Réglages, « Wi-Fi de la tablette ») avant que la tablette perde l'ancien. Pas possible dans un autre pays.
+- Le proche ne veut pas parler : il n'est jamais obligé, il peut simplement ne pas répondre.
+- Changer de carte de paiement : onglet Profil, « Gérer le paiement et les factures ». Pour qu'une autre personne reprenne l'abonnement à son nom : demande de contact.
+- La société s'appelle Papote.
+- Ville de la météo fausse : demande de contact, l'équipe la corrige.
+- Message vocal, ou photo programmée pour une date : non, ni l'un ni l'autre.
+- Plus accès à son adresse e-mail : si vous vous connectiez avec Google, utilisez ce compte Google. Sinon, demandez à un responsable de la famille de vous inviter avec votre nouvelle adresse (Réglages, « Inviter par e-mail »), connectez-vous avec elle, puis le responsable retire l'ancien profil (Réglages, « Membres »). Si vous étiez le seul responsable : demande de contact.
+- Décroché automatique : la tablette décroche dès qu'elle voit un visage, quel qu'il soit (aide-soignante, voisin…).
+- Fixer la tablette au mur : déconseillé, elle est faite pour être posée sur son support. Multiprise ou rallonge : oui sans problème, elle consomme très peu.
+- Chargeur cassé : s'il est prouvé que le problème vient du chargeur, nous en envoyons un autre (c'est très rare). Demande de contact.
+- Conditions générales de vente : pas encore en ligne ; pour toute question, contact@mapapote.fr.
+- Avis clients : si le site n'en affiche pas encore, dire que Papote vient d'être lancé et n'a pas encore d'avis publiés, et que le plus simple pour se faire une idée est l'essai : 15 jours offerts, et les 50 € sont remboursés si on résilie pendant l'essai. Ne pas proposer de rappel.
+- Matériel non rendu ou abîmé : jusqu'à 200 € au maximum (160 € pour la tablette, 30 € pour le routeur, 10 € pour le chargeur et le câble).
 - Aide fiscale (services à la personne) : pas pour le moment.
 - Codes promo : il n'y en a pas pour le moment.
 - « Peur de la casser » : rassurer (rien à manipuler, le bouton marche/arrêt ne l'éteint pas), puis dire franchement que la casse accidentelle n'est pas couverte.
-- Casse : la tablette est faite pour qu'on n'ait rien à manipuler, mais la casse accidentelle n'est pas couverte : la caution de 120 € peut s'appliquer. En cas de casse : demande de contact.
+- Casse : la tablette est faite pour qu'on n'ait rien à manipuler, mais la casse accidentelle n'est pas couverte : jusqu'à 200 € peuvent être facturés selon les dégâts. En cas de casse : demande de contact.
 - Eau : la tablette n'est pas étanche, à éviter dans une salle de bain.
 - Caméra : elle ne filme pas en continu. Elle sert aux appels vidéo et, quand un message, une photo ou un rappel arrive, à vérifier que la personne l'a vu.
 - Données : hébergées chez Firebase (Google).

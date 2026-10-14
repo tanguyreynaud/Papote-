@@ -12,7 +12,7 @@
 //   finDeGrace         chaque heure : suspend les familles dont le délai de grâce est dépassé
 //   retracter          appel depuis l'appli famille : annule la commande (14 jours), remboursée au retour
 //   finDeContrat       appel depuis l'appli famille : rétractation possible, retour attendu, remboursement
-//   restitutions       chaque jour : rappel 7 jours avant, puis 120 € si la tablette n'est pas rendue à temps
+//   restitutions       chaque jour : rappel 7 jours avant, puis 170 € ou 200 € si la tablette n'est pas rendue à temps
 //   tabletteRendue     appel depuis le tableau de bord admin : la tablette incluse est revenue
 //   etiquetteRetour    appel depuis le tableau de bord admin : lien de l'étiquette de retour prépayée
 //   nouvelleFamille    famille créée : sans commande, statut « aucun »
@@ -36,6 +36,7 @@ const Stripe = require('stripe');
 const regles = require('./abonnement');
 const livraison = require('./livraison');
 const mail = require('./mail');
+const avis = require('./avis');
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -94,6 +95,8 @@ async function tarifs(formule, tablette) {
   return cles.map((cle) => ({ price: parCle[cle], quantity: 1 }));
 }
 
+const RELANCE_APRES_MINUTES = 60;
+
 // Essai gratuit de 15 jours pour un nouveau client ; pas pour un client déjà abonné une fois.
 async function sessionPaiement({ formule, tablette, fid, email, client, relais }) {
   const metadata = { formule, tablette, ...(relais ? livraison.relaisVersMeta(relais) : {}) };
@@ -118,6 +121,13 @@ async function sessionPaiement({ formule, tablette, fid, email, client, relais }
       : `${SITE_VITRINE.value()}/merci.html?session={CHECKOUT_SESSION_ID}`,
     cancel_url: fid ? APPLI_FAMILLE : `${SITE_VITRINE.value()}/commande.html?formule=${formule}`,
   };
+  if (!fid) {
+    // Panier abandonné : la page de paiement expire au bout d'une heure, puis Stripe garde un lien
+    // pour reprendre la commande (30 jours), envoyé par e-mail si le client a accepté (relancerPanier).
+    params.expires_at = Math.floor(Date.now() / 1000) + RELANCE_APRES_MINUTES * 60;
+    params.after_expiration = { recovery: { enabled: true, allow_promotion_codes: false } };
+    params.consent_collection = { promotions: 'auto' };
+  }
   // Commande du site : livrée au point relais choisi avant le paiement. Depuis l'appli : à l'adresse saisie.
   if (!relais) params.shipping_address_collection = { allowed_countries: ['FR', 'BE', 'LU'] };
   // Factures au nom d'une société : numéro de TVA facultatif sur la page de paiement.
@@ -526,6 +536,8 @@ exports.stripeWebhook = onRequest(
     try {
       if (event.type === 'checkout.session.completed') {
         await paiementTermine(event.data.object);
+      } else if (event.type === 'checkout.session.expired') {
+        await relancerPanier(event.data.object);
       } else if (event.type.startsWith('customer.subscription.')) {
         await abonnementModifie(event.data.object);
       }
@@ -563,6 +575,8 @@ async function paiementTermine(session) {
       creeLe: FieldValue.serverTimestamp(),
     }, { merge: true });
   }
+  // Case « nouvelles de Papote par e-mail » de la page de paiement Stripe, lue par l'onglet Clients.
+  if ((session.consent && session.consent.promotions) === 'opt_in') await ref.update({ marketing: true });
   // Le code figure aussi sur les factures Stripe du client.
   const code = regles.afficherCode(await codeDe(session.subscription));
   await stripe().customers.update(session.customer, {
@@ -593,12 +607,76 @@ async function confirmerCommande(ref, email, code) {
     .forEach((r) => logger.error(`E-mail de commande non envoyé (${ref.id})`, r.reason));
 }
 
+// Paiement commencé sur le site mais pas terminé : un seul e-mail avec le lien pour reprendre,
+// seulement si le client a coché l'accord pour recevoir des e-mails de Papote sur la page de paiement.
+// Chaque panier est noté dans paniers/{session} (e-mail, accord) pour la liste des contacts.
+async function relancerPanier(session) {
+  const meta = session.metadata || {};
+  if (session.mode !== 'subscription' || meta.fid) return;
+  const details = session.customer_details || {};
+  const email = (details.email || session.customer_email || '').toLowerCase();
+  if (!email) return;
+  const accord = (session.consent && session.consent.promotions) === 'opt_in';
+  const lien = session.after_expiration && session.after_expiration.recovery
+    && session.after_expiration.recovery.url;
+  const ref = db.doc(`paniers/${session.id}`);
+  const aRelancer = await db.runTransaction(async (t) => {
+    const snap = await t.get(ref);
+    if (snap.exists) return false;
+    t.set(ref, {
+      email, nom: details.name || null, telephone: details.phone || null,
+      formule: meta.formule || null,
+      // Liste « Clients » de l'espace admin : seulement les personnes qui ont accepté.
+      ...(accord ? { marketing: true } : {}),
+      creeLe: FieldValue.serverTimestamp(),
+    });
+    return accord && !!lien;
+  });
+  if (!aRelancer) return;
+  // Déjà client entre-temps (autre paiement réussi) : pas de relance.
+  const deja = await db.collection('commandes').where('email', '==', email).limit(1).get();
+  if (!deja.empty) return;
+  try {
+    await envoyerMail(email, mail.relancePanier({ nom: details.name, formule: meta.formule, lien }));
+    await ref.update({ relanceLe: FieldValue.serverTimestamp() });
+  } catch (e) {
+    logger.error(`Relance de panier non envoyée (${session.id})`, e);
+  }
+}
+
 async function abonnementModifie(abo) {
   const commande = await db.doc(`commandes/${abo.id}`).get();
   const fid = (abo.metadata && abo.metadata.fid) || (commande.exists && commande.get('fid'));
   if (fid) await appliquer(fid, abo.id);
   else if (commande.exists) await commande.ref.update({ statutStripe: abo.status });
 }
+
+// ---------- Page d'accueil du site vitrine, avec les avis (functions/avis.js) ----------
+// firebase.vitrine.json envoie « / » ici. Le gabarit vitrine/accueil.html est relu toutes les 5 minutes ;
+// la page est gardée 5 minutes par le CDN : un avis modifié dans l'admin apparaît en 5 à 10 minutes.
+let gabaritAccueil = { html: '', lu: 0 };
+exports.accueil = onRequest({ maxInstances: 5, memory: '256MiB' }, async (req, res) => {
+  try {
+    if (!gabaritAccueil.html || Date.now() - gabaritAccueil.lu > 300e3) {
+      const r = await fetch(`${SITE_VITRINE.value()}/accueil.html`);
+      if (!r.ok) throw new Error(`accueil.html : ${r.status}`);
+      gabaritAccueil = { html: await r.text(), lu: Date.now() };
+    }
+    let liste = [];
+    try {
+      const snap = await db.collection('avis').where('visible', '==', true).limit(avis.MAX_AVIS * 2).get();
+      liste = snap.docs.map((d) => d.data());
+    } catch (e) {
+      logger.warn('Avis illisibles', e.message);
+    }
+    res.set('Cache-Control', 'public, max-age=60, s-maxage=300');
+    res.type('html').send(avis.pageAvecAvis(gabaritAccueil.html, liste));
+  } catch (e) {
+    logger.error('Page d\'accueil', e);
+    if (gabaritAccueil.html) res.type('html').send(avis.pageAvecAvis(gabaritAccueil.html, []));
+    else res.redirect(302, '/accueil.html');
+  }
+});
 
 // ---------- Statistiques de visite (sans cookie ni donnée personnelle) ----------
 // Un compteur par jour dans statistiques/{AAAA-MM-JJ} : accueil, commande (page ouverte),
@@ -638,7 +716,7 @@ exports.finDeGrace = onSchedule(
     }
   });
 
-// Tablette incluse non rendue dans les 30 jours : 120 € prélevés sur la carte de l'abonnement.
+// Tablette incluse non rendue dans les 30 jours : 170 € (200 € avec l'option internet) prélevés sur la carte de l'abonnement.
 exports.restitutions = onSchedule(
   { schedule: 'every day 09:00', timeZone: 'Europe/Paris', secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE] },
   async () => {
@@ -650,6 +728,7 @@ exports.restitutions = onSchedule(
         try {
           await envoyerMail(snap.get('email'), mail.rappelRestitution({
             nom: snap.get('nom'), avant: r.avant.toMillis(), lien: r.etiquette || null,
+            montant: regles.penaliteRestitution(snap.get('formule')),
           }));
           await snap.ref.update({ 'restitution.rappelLe': FieldValue.serverTimestamp() });
         } catch (e) {
@@ -663,7 +742,7 @@ exports.restitutions = onSchedule(
           || (abo.customer.invoice_settings && abo.customer.invoice_settings.default_payment_method);
         if (!moyen) throw new Error('Aucune carte enregistrée');
         const paiement = await stripe().paymentIntents.create({
-          amount: regles.PENALITE_NON_RESTITUTION,
+          amount: regles.penaliteRestitution(snap.get('formule')),
           currency: 'eur',
           customer: abo.customer.id,
           payment_method: typeof moyen === 'string' ? moyen : moyen.id,
@@ -677,7 +756,7 @@ exports.restitutions = onSchedule(
           'restitution.paiement': paiement.id,
           'restitution.majLe': FieldValue.serverTimestamp(),
         });
-        logger.info(`Commande ${snap.id} : tablette non rendue, 120 € prélevés.`);
+        logger.info(`Commande ${snap.id} : tablette non rendue, ${mail.euros(regles.penaliteRestitution(snap.get('formule')))} prélevés.`);
       } catch (e) {
         // Carte expirée ou refusée : à relancer à la main, depuis le tableau de bord Stripe.
         await snap.ref.update({
@@ -824,7 +903,7 @@ async function suiviRetour(event, rAvant, r, c) {
       nom: c.nom, email: c.email, telephone: c.telephone, code: c.code ? regles.afficherCode(c.code) : null,
       relais: c.livraison, avant: avantMs, retractation,
     }))];
-    if (c.email) envois.push(envoyerMail(c.email, mail.retourTablette({ nom: c.nom, avant: avantMs, retractation })));
+    if (c.email) envois.push(envoyerMail(c.email, mail.retourTablette({ nom: c.nom, avant: avantMs, retractation, montant: regles.penaliteRestitution(c.formule) })));
     (await Promise.allSettled(envois)).filter((x) => x.status === 'rejected')
       .forEach((x) => logger.error(`Commande ${id} : e-mail de retour non parti`, x.reason));
   }
@@ -916,6 +995,10 @@ exports.gestionSim = gestion.gestionSim;
 exports.gestionAccessoire = gestion.gestionAccessoire;
 exports.gestionEtiquette = gestion.gestionEtiquette;
 exports.gestionAnnulerEtiquette = gestion.gestionAnnulerEtiquette;
+exports.gestionClients = gestion.gestionClients;
+exports.gestionConsentement = gestion.gestionConsentement;
+exports.gestionCampagne = gestion.gestionCampagne;
+exports.desinscription = gestion.desinscription;
 exports.gestionRenvoyerCode = gestion.gestionRenvoyerCode;
 exports.gestionJumelage = gestion.gestionJumelage;
 

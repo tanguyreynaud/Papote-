@@ -3,10 +3,18 @@
     "site": "papote",
     "public": "vitrine",
     "ignore": ["README.md", "**/.*"],
+    "rewrites": [
+      { "source": "/", "function": { "functionId": "accueil", "region": "europe-west1" } },
+      { "source": "/index.html", "function": { "functionId": "accueil", "region": "europe-west1" } }
+    ],
     "headers": [
       {
         "source": "**",
         "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+      },
+      {
+        "source": "/accueil.html",
+        "headers": [{ "key": "X-Robots-Tag", "value": "noindex" }]
       }
     ]
   }

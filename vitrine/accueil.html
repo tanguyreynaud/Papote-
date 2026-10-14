@@ -194,6 +194,12 @@ section { padding-block: clamp(3.5rem, 8vw, 6rem); }
 .plans-note { margin-top: 1.5rem; color: var(--muted); font-size: 1rem; max-width: 46rem; }
 
 /* FAQ */
+.avis-liste { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); gap: 1.25rem; }
+.avis-carte { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 1.5rem; display: grid; gap: .75rem; align-content: start; }
+.avis-carte blockquote { margin: 0; font-size: 1.1rem; }
+.avis-carte figcaption { display: grid; color: var(--muted); font-size: 1rem; }
+.avis-carte figcaption b { color: var(--text); }
+.avis-note { color: var(--accent); letter-spacing: .1em; font-size: 1.1rem; }
 .faq { display: grid; gap: .75rem; max-width: 50rem; }
 .faq details { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
 .faq summary { cursor: pointer; list-style: none; padding: 1.1rem 1.25rem; font-weight: 700; font-size: 1.1rem; display: flex; justify-content: space-between; gap: 1rem; align-items: center; }
@@ -375,6 +381,7 @@ footer a { color: var(--muted); }
     </div>
   </section>
 
+  <!-- AVIS -->
   <section id="tarifs" class="band">
     <div class="wrap">
       <div class="section-head">
@@ -464,7 +471,7 @@ footer a { color: var(--muted); }
         </details>
         <details>
           <summary>Que se passe-t-il à la fin de l'abonnement ?</summary>
-          <p>La tablette est prêtée : vous nous la renvoyez dans les 30 jours qui suivent la fin de l'abonnement, avec son chargeur et son socle. Une tablette non rendue dans ce délai est facturée 120 € sur la carte enregistrée.</p>
+          <p>La tablette est prêtée : vous nous la renvoyez dans les 30 jours qui suivent la fin de l'abonnement, avec son chargeur et son socle. Une tablette non rendue dans ce délai est facturée 170 € (200 € avec l'option internet, routeur compris) sur la carte enregistrée.</p>
         </details>
         <details>
           <summary>Quelles garanties sur la tablette ?</summary>
@@ -502,6 +509,8 @@ footer a { color: var(--muted); }
 <footer>
   <div class="wrap">
     <span>© 2026 Papote</span>
+    <a href="cgv.html">Conditions de vente</a>
+    <a href="mentions.html">Mentions légales et confidentialité</a>
     <a href="https://app.mapapote.fr">Déjà client ? Ouvrir l'appli famille</a>
   </div>
 </footer>
