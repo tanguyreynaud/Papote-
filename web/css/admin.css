@@ -1,11 +1,66 @@
-/* Tableau de bord de l'administrateur (réutilise famille.css). */
+/* Espace d'administration (réutilise famille.css), toujours en thème clair. */
 
-main.admin { max-width: 1100px; padding: calc(20px + env(safe-area-inset-top)) 16px 40px; }
-.admin-head { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; }
-.admin-head h1 { margin: 0; font-size: 26px; font-weight: 800; }
-.admin-head p { margin: 0; }
-.admin-head .secondary { margin-left: auto; }
-.admin-logo { width: 48px; height: 48px; }
+:root { color-scheme: light; }
+.admin-logo { width: 40px; height: 40px; flex: none; }
+
+/* ---------- Connexion ---------- */
+
+.signin { max-width: 420px; margin: 12vh auto 0; text-align: center; }
+.signin .admin-logo { width: 56px; height: 56px; }
+.signin h1 { font-size: 24px; margin: 12px 0 4px; }
+
+/* ---------- Coquille : menu latéral + contenu ---------- */
+
+.shell {
+  display: grid; grid-template-columns: 248px minmax(0, 1fr); min-height: 100vh;
+  background: linear-gradient(to right, var(--surface) 247px, var(--line) 247px, var(--line) 248px, var(--bg) 248px);
+}
+.nav {
+  position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; gap: 8px;
+  padding: 20px 14px;
+}
+.nav-marque { display: flex; align-items: center; gap: 10px; padding: 0 8px 14px; }
+.nav-marque strong { font-family: var(--display); font-size: 22px; }
+.nav nav { display: flex; flex-direction: column; gap: 2px; }
+.nav nav a {
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px;
+  color: var(--text); text-decoration: none; font-weight: 600; font-size: 15px;
+}
+.nav nav a svg { width: 20px; height: 20px; color: var(--muted); }
+.nav nav a:hover { background: var(--bg); }
+.nav nav a.actif { background: #eef0ff; color: var(--accent); }
+.nav nav a.actif svg { color: var(--accent); }
+.pastille {
+  margin-left: auto; min-width: 22px; padding: 1px 7px; border-radius: 999px;
+  background: var(--accent); color: #fff; font-size: 12px; text-align: center;
+}
+.nav-pied { margin-top: auto; padding: 0 8px; }
+.nav-pied p { margin: 0; overflow-wrap: anywhere; }
+.nav-pied .link { padding: 4px 0; }
+
+.contenu { padding: 24px 32px 48px; max-width: 1200px; width: 100%; }
+.contenu-tete { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 16px; }
+.contenu-tete h1 { margin: 0; font-size: 28px; font-weight: 800; flex: 1; min-width: 180px; }
+.contenu-tete .periode { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.contenu-tete .periode select, .contenu-tete .periode input { width: auto; margin: 0; padding: 8px 12px; font-size: 15px; }
+.contenu-tete .periode label { display: flex; align-items: center; gap: 6px; margin: 0; font-weight: 400; font-size: 15px; }
+.etat-periode { margin: -8px 0 14px; }
+
+@media (max-width: 860px) {
+  .shell { display: block; background: var(--bg); }
+  .nav {
+    background: var(--surface);
+    position: sticky; top: 0; z-index: 5; height: auto; flex-direction: row; align-items: center;
+    padding: calc(8px + env(safe-area-inset-top)) 8px 8px; border-right: none; border-bottom: 1px solid var(--line);
+    overflow-x: auto; scrollbar-width: none;
+  }
+  .nav-marque, .nav-pied { display: none; }
+  .nav nav { flex-direction: row; }
+  .nav nav a { white-space: nowrap; padding: 8px 12px; font-size: 14px; }
+  .nav nav a svg { display: none; }
+  .contenu { padding: 16px 16px 40px; }
+  .contenu-tete h1 { font-size: 24px; }
+}
 
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
 .stat { background: var(--surface); border-radius: 18px; padding: 16px; box-shadow: var(--shadow); }

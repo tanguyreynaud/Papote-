@@ -99,7 +99,10 @@ service cloud.firestore {
       allow get: if signedIn();
       allow list: if false;
       allow create: if signedIn()
-        && request.resource.data.keys().hasOnly(['tabletUid', 'callsUid', 'name', 'createdAt', 'expiresAt', 'status'])
+        && request.resource.data.keys().hasOnly(['tabletUid', 'callsUid', 'name', 'createdAt', 'expiresAt', 'status', 'serie'])
+        // Numéro de série de la tablette (facultatif), pour la reconnaître dans l'espace admin.
+        && (!('serie' in request.resource.data)
+            || (request.resource.data.serie is string && request.resource.data.serie.size() <= 64))
         && request.resource.data.tabletUid == request.auth.uid
         && request.resource.data.status == 'waiting'
         && request.resource.data.name is string

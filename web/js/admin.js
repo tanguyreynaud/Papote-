@@ -1,5 +1,6 @@
-// Tableau de bord de l'administrateur : toutes les familles et l'état de leurs tablettes,
-// et transfert des anciennes photos et vidéos de la base vers Storage.
+// Espace d'administration (admin.html) : familles et tablettes, envois et retours de commandes,
+// transfert des anciennes photos et vidéos vers Storage. Le stock, les factures et la comptabilité
+// sont dans gestion.js, sur la même page.
 // Une app Firebase à part (« admin ») : la connexion Google ne touche pas à la famille de ce navigateur.
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
 import {
@@ -14,6 +15,7 @@ import {
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-storage.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-functions.js';
 import { refreshSim } from './sim.js';
+import { appeler, donnees, signalerChangement } from './gestion-api.js';
 
 const app = initializeApp({
   apiKey: 'AIzaSyAvoivJR8p-u2VxUWzlyHzTgP20-5ZG_-E',
@@ -60,7 +62,10 @@ $('btn-signin').addEventListener('click', async () => {
 });
 
 $('btn-signout').addEventListener('click', () => signOut(auth));
-$('btn-refresh').addEventListener('click', load);
+$('btn-refresh').addEventListener('click', () => {
+  load();
+  signalerChangement();
+});
 
 onAuthStateChanged(auth, (user) => {
   $('signin').hidden = !!user;
@@ -77,7 +82,7 @@ onAuthStateChanged(auth, (user) => {
 function livraisonTexte(c) {
   const l = c.livraison || {};
   if (l.transporteur === 'mondial-relay') {
-    return `Point relais ${l.nom || ''} (n° ${l.id || '?'}) · ${[l.adresse, `${l.cp || ''} ${l.ville || ''}`.trim(), l.pays].filter(Boolean).join(', ')}`;
+    return `Point relais ${l.nom || ''} (n° ${l.id || '?'}) · ${[l.adresse, `${l.cp || ''} ${l.ville || ''}`.trim(), l.pays].filter(Boolean).join(', ')}${l.destinataire ? ` · retrait par ${l.destinataire}` : ''}`;
   }
   const a = l.adresse || {};
   const postale = [a.line1, a.line2, `${a.postal_code || ''} ${a.city || ''}`.trim(), a.country].filter(Boolean).join(', ');
@@ -100,17 +105,82 @@ async function loadOrders() {
     $('orders').replaceChildren(...list.map((c) => {
       const li = document.createElement('li');
       li.innerHTML = '<strong></strong><span class="muted small"></span><span class="small"></span>'
-        + '<form class="ship"><input placeholder="N° de suivi Mondial Relay" autocomplete="off" required><button type="submit" class="primary small-btn">Envoyée</button></form>';
+        + '<form class="ship"><select class="tablette" aria-label="Tablette du stock"><option value="">Tablette du stock…</option></select>'
+        + '<select class="sim" aria-label="Carte SIM du stock" hidden><option value="">Carte SIM du stock…</option></select>'
+        + '<button type="button" class="secondary small-btn etiquette" title="Créer l\'étiquette Mondial Relay avec Sendcloud">Étiquette</button>'
+        + '<button type="button" class="secondary small-btn annuler-etiquette" title="Annuler l\'étiquette chez Sendcloud pour en refaire une" hidden>Annuler l\'étiquette</button>'
+        + '<input placeholder="N° de suivi Mondial Relay" autocomplete="off" required><button type="submit" class="primary small-btn">Envoyée</button>'
+        + '<span class="muted small kit"></span></form>';
       li.querySelector('strong').textContent = orderHead(c);
       li.querySelector('.muted').textContent = `${c.email}${c.telephone ? ` · ${c.telephone}` : ''} · commandé ${ago(toDate(c.creeLe))}${c.fid ? ' · famille créée' : ''}`;
       li.querySelector('span.small:not(.muted)').textContent = livraisonTexte(c);
       const form = li.querySelector('form');
+      const choix = form.querySelector('select.tablette');
+      const choixSim = form.querySelector('select.sim');
+      remplirKit(form, c);
+      // Étiquette Sendcloud : remplit le n° de suivi et ouvre le PDF à imprimer.
+      const btnEtiquette = form.querySelector('button.etiquette');
+      const btnAnnuler = form.querySelector('button.annuler-etiquette');
+      if (c.etiquettes?.aller) {
+        form.querySelector('input').value = c.etiquettes.aller.suivi || '';
+        btnEtiquette.textContent = 'Revoir l\'étiquette';
+        btnAnnuler.hidden = false;
+      }
+      // Étiquette annulée (ou à refaire) : annulée chez Sendcloud, le bouton repasse à « Étiquette ».
+      btnAnnuler.addEventListener('click', async () => {
+        if (!confirm('Annuler cette étiquette chez Sendcloud ? Vous pourrez en créer une nouvelle.')) return;
+        btnAnnuler.disabled = true;
+        try {
+          await appeler('gestionAnnulerEtiquette', { commande: c.id, sens: 'aller' });
+          if (form.querySelector('input').value === c.etiquettes.aller.suivi) form.querySelector('input').value = '';
+          delete c.etiquettes.aller;
+          btnEtiquette.textContent = 'Étiquette';
+          btnAnnuler.hidden = true;
+        } catch (err) {
+          alert(`Annulation impossible : ${err.message}`);
+        }
+        btnAnnuler.disabled = false;
+      });
+      btnEtiquette.addEventListener('click', async () => {
+        if (c.etiquettes?.aller?.url) { window.open(c.etiquettes.aller.url, '_blank', 'noopener'); return; }
+        const fenetre = window.open('', '_blank');
+        btnEtiquette.disabled = true;
+        btnEtiquette.textContent = 'Création…';
+        try {
+          const r = await appeler('gestionEtiquette', { commande: c.id, sens: 'aller' });
+          c.etiquettes = { ...(c.etiquettes || {}), aller: r };
+          if (r.suivi) form.querySelector('input').value = r.suivi;
+          if (fenetre) fenetre.location = r.url;
+          btnEtiquette.textContent = 'Revoir l\'étiquette';
+          btnAnnuler.hidden = false;
+        } catch (err) {
+          if (fenetre) fenetre.close();
+          alert(`Étiquette impossible : ${err.message}`);
+          btnEtiquette.textContent = 'Étiquette';
+        }
+        btnEtiquette.disabled = false;
+      });
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const suivi = form.querySelector('input').value.trim();
+        const tablette = choix.value;
+        const sim = choixSim.hidden ? '' : choixSim.value;
+        // Le kit part entier : tablette du stock, et sa carte SIM pour la formule Internet inclus.
+        if (!tablette && !confirm('Aucune tablette du stock n\'est choisie : elle ne sortira pas du stock. Envoyer quand même ?')) return;
+        if (tablette && c.formule === 'sim' && !choix.selectedOptions[0].dataset.sim && !sim
+          && !confirm('Formule Internet inclus, mais aucune carte SIM n\'est choisie. Envoyer quand même ?')) return;
         form.querySelector('button').disabled = true;
         try {
           await httpsCallable(functions, 'tabletteEnvoyee')({ commande: c.id, suivi });
+          if (tablette) {
+            try {
+              if (sim) await appeler('gestionSim', { action: 'modifier', id: sim, champs: { tablette } });
+              await appeler('gestionStock', { action: 'modifier', id: tablette, champs: { etat: 'envoyee', commande: c.id } });
+            } catch (err) {
+              alert(`Colis enregistré, mais le kit n'a pas pu être sorti du stock : ${err.message}`);
+            }
+          }
+          signalerChangement();
           loadOrders();
           loadShipped();
         } catch (err) {
@@ -124,6 +194,42 @@ async function loadOrders() {
   } catch (err) {
     console.warn('Commandes illisibles', err);
     $('orders-empty').hidden = false;
+  }
+}
+
+// Le kit d'une commande : tablette du stock, carte SIM libre (formule Internet inclus) et accessoires
+// qui partiront avec (gestion), pour que tout sorte du stock ensemble.
+async function remplirKit(form, c) {
+  const select = form.querySelector('select.tablette');
+  const selectSim = form.querySelector('select.sim');
+  const option = (valeur, texte) => {
+    const o = document.createElement('option');
+    o.value = valeur;
+    o.textContent = texte;
+    return o;
+  };
+  try {
+    const { stock, sims, accessoires } = await donnees();
+    const dispo = stock.filter((t) => t.commande === c.id || (['en-stock', 'preparee'].includes(t.etat) && !t.commande));
+    for (const t of dispo) {
+      const o = option(t.id, [t.ref, t.numero || (t.ref ? null : 'sans n° de série'), t.modele, t.sim ? `SIM ${t.sim}` : null].filter(Boolean).join(' · '));
+      if (t.sim) o.dataset.sim = t.sim;
+      o.selected = t.commande === c.id;
+      select.append(o);
+    }
+    if (!dispo.length) select.options[0].textContent = 'Stock vide';
+    const libres = (sims || []).filter((l) => !l.tablette && ['stock', 'active'].includes(l.statut));
+    selectSim.append(...libres.map((l) => option(l.id, [l.numero || `ICCID …${String(l.iccid || '').slice(-4)}`, l.operateur].filter(Boolean).join(' · '))));
+    if (!libres.length) selectSim.options[0].textContent = 'Aucune carte SIM libre';
+    // La carte n'est demandée que si la tablette choisie n'en a pas déjà une.
+    const majSim = () => { selectSim.hidden = c.formule !== 'sim' || !!(select.selectedOptions[0] && select.selectedOptions[0].dataset.sim); };
+    select.addEventListener('change', majSim);
+    majSim();
+    const avec = (accessoires || []).filter((a) => a.parEnvoi === 'tous' || (a.parEnvoi && a.parEnvoi === c.formule));
+    form.querySelector('.kit').textContent = avec.length
+      ? `Part aussi : ${avec.map((a) => `${a.nom}${(a.quantite || 0) < 1 ? ' (plus en stock)' : ''}`).join(', ')}` : '';
+  } catch (err) {
+    select.hidden = true;
   }
 }
 
@@ -166,7 +272,7 @@ async function loadReturns() {
       const avant = toDate(r.avant);
       const li = document.createElement('li');
       li.innerHTML = '<strong></strong><span class="muted small"></span><span class="small"></span><span class="small remb"></span>'
-        + '<form class="etiquette"><input type="url" placeholder="Lien de l\'étiquette de retour" aria-label="Étiquette de retour"><button type="submit" class="secondary small-btn">Envoyer l\'étiquette</button></form>'
+        + '<form class="etiquette"><button type="button" class="secondary small-btn sendcloud">Créer avec Sendcloud</button><input type="url" placeholder="ou lien de l\'étiquette de retour" aria-label="Étiquette de retour"><button type="submit" class="secondary small-btn">Envoyer l\'étiquette</button></form>'
         + '<button type="button" class="secondary small-btn rendue">Tablette rendue</button>';
       li.querySelector('strong').textContent = c.livraison?.nom || c.nom || c.email;
       li.querySelector('.muted').textContent = `${c.email}${c.telephone ? ` · ${c.telephone}` : ''}`;
@@ -186,6 +292,22 @@ async function loadReturns() {
       const form = li.querySelector('.etiquette');
       const input = form.querySelector('input');
       if (r.etiquette) input.value = r.etiquette;
+      // Sendcloud crée l'étiquette et le serveur l'envoie au client.
+      const btnSendcloud = form.querySelector('button.sendcloud');
+      btnSendcloud.addEventListener('click', async () => {
+        if (r.etiquette && !confirm('Une étiquette a déjà été envoyée. En créer une nouvelle ?')) return;
+        btnSendcloud.disabled = true;
+        btnSendcloud.textContent = 'Création…';
+        try {
+          const res = await appeler('gestionEtiquette', { commande: d.id, sens: 'retour' });
+          input.value = res.url;
+          btnSendcloud.textContent = 'Étiquette envoyée au client';
+        } catch (err) {
+          alert(`Étiquette impossible : ${err.message}`);
+          btnSendcloud.textContent = 'Créer avec Sendcloud';
+          btnSendcloud.disabled = false;
+        }
+      });
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const lien = input.value.trim();
@@ -207,6 +329,11 @@ async function loadReturns() {
         btn.disabled = true;
         try {
           await httpsCallable(functions, 'tabletteRendue')({ commande: d.id });
+          // La tablette revient dans le stock, à vérifier avant de repartir.
+          const { stock } = await donnees().catch(() => ({ stock: [] }));
+          const t = stock.find((x) => x.commande === d.id);
+          if (t) await appeler('gestionStock', { action: 'modifier', id: t.id, champs: { etat: 'revenue' } }).catch(() => null);
+          signalerChangement();
           li.remove();
         } catch (err) {
           console.error(err);

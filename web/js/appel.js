@@ -3,6 +3,7 @@
 import {
   db, auth, doc, getDoc, collection, setDoc, addDoc, updateDoc, onSnapshot, serverTimestamp,
 } from './firebase.js';
+import { query, where, getDocs } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
 
 // Sans relais TURN, la vidéo ne passe pas entre deux réseaux différents (4G, box…).
 // Le relais est décrit dans Firestore (config/turn), pas dans le code, qui est public :
@@ -112,6 +113,19 @@ function landscapeStream(camera) {
   };
 }
 
+// Mamie est-elle déjà en communication (ou un autre proche est-il en train de l'appeler) ?
+// Un appel décroché sans fin depuis plus de 2 h est considéré comme oublié (panne).
+export async function tabletBusy(fid) {
+  const snap = await getDocs(query(collection(db, 'families', fid, 'calls'), where('state', 'in', ['ringing', 'accepted'])));
+  const now = Date.now();
+  return snap.docs.some((d) => {
+    const data = d.data();
+    const at = data.createdAt && data.createdAt.toMillis ? data.createdAt.toMillis() : 0;
+    if (data.state === 'ringing') return now - at < 60_000;
+    return now - at < 2 * 3600_000;
+  });
+}
+
 /**
  * Lance un appel. `ui` reçoit les vidéos et les changements d'état :
  *   ui.local / ui.remote : éléments <video>
@@ -126,6 +140,13 @@ export async function startCall(fid, caller, ui) {
   const signal = ui.signal;
   const cancelled = () => !!(signal && signal.aborted);
   const abortError = () => new DOMException('Appel annulé', 'AbortError');
+  // Une seule communication à la fois avec la tablette.
+  if (await tabletBusy(fid).catch(() => false)) {
+    const busy = new Error('La tablette est déjà en communication');
+    busy.name = 'BusyError';
+    throw busy;
+  }
+  if (cancelled()) throw abortError();
   const camera = await navigator.mediaDevices.getUserMedia({
     video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
     audio: { echoCancellation: true, noiseSuppression: true },
