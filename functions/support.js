@@ -44,6 +44,7 @@ const MAX_CARACTERES = 1000;
 const ORIGINES = [
   'https://papote.web.app',
   'https://papote-famille.web.app',
+  'https://app.mapapote.fr',
   'https://mapapote.fr',
   'https://www.mapapote.fr',
 ];

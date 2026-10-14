@@ -4,7 +4,7 @@
 
 const nodemailer = require('nodemailer');
 
-const APPLI = 'https://papote-famille.web.app';
+const APPLI = 'https://app.mapapote.fr';
 // Lien vers l'appli qui garde le code de commande : la famille créée s'y rattache toute seule.
 const lienAppli = (code) => (code ? `${APPLI}/?commande=${encodeURIComponent(code)}` : APPLI);
 

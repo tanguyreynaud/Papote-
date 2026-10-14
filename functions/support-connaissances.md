@@ -3,7 +3,7 @@
 Ce texte complète le site (tarifs, FAQ), relu automatiquement. Le modifier puis redéployer
 les fonctions suffit pour que le chat en tienne compte.
 
-## L'appli famille (https://papote-famille.web.app)
+## L'appli famille (https://app.mapapote.fr)
 - C'est une page web qu'on installe comme une appli, rien à télécharger dans un store.
   iPhone : ouvrir le lien dans Safari, bouton Partager (le carré avec une flèche) puis « Sur l'écran d'accueil ».
   Android : dans Chrome, menu ⋮ en haut à droite puis « Installer l'application » ou « Ajouter à l'écran d'accueil ».
