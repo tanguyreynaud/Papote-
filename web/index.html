@@ -326,6 +326,16 @@
             <button type="submit" class="primary">Enregistrer</button>
           </div>
         </form></div>
+        <div id="meteo-card" class="card" hidden>
+          <h2>Ville de la météo</h2>
+          <p id="meteo-current" class="muted small"></p>
+          <form id="form-meteo" class="inline-field">
+            <input id="meteo-search" placeholder="Nom de la ville" autocomplete="off" aria-label="Ville de la météo">
+            <button type="submit" class="primary small-btn">Chercher</button>
+          </form>
+          <ul id="meteo-results" class="meteo-results" hidden></ul>
+          <p id="meteo-error" class="error small" hidden></p>
+        </div>
         <div id="volume-card" class="card" hidden>
           <h2>Volume du son</h2>
           <p class="muted small">Le son des vidéos et des appels sur la tablette.</p>

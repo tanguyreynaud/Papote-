@@ -913,3 +913,6 @@ body:not(.on-support) .ps-bouton, body:not(.on-support) .ps-panneau { display: n
 .dialog-list li { margin: 4px 0; }
 .dialog-buttons.stack { flex-direction: column; align-items: stretch; }
 .dialog-buttons.stack button { width: 100%; }
+
+.meteo-results { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; }
+.meteo-choice { width: 100%; text-align: left; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); color: var(--text); font: inherit; font-weight: 600; }

@@ -57,6 +57,14 @@ service cloud.firestore {
       return get(familyPath(fid)).data.get('nbProches', 0) < 30;
     }
 
+    // Ville de la météo : { nom, lat?, lon? }.
+    function villeMeteoOk(v) {
+      return v is map && v.keys().hasAll(['nom']) && v.keys().hasOnly(['nom', 'lat', 'lon'])
+        && v.nom is string && v.nom.size() > 0 && v.nom.size() <= 80
+        && (!('lat' in v) || (v.lat is number && v.lat >= -90 && v.lat <= 90))
+        && (!('lon' in v) || (v.lon is number && v.lon >= -180 && v.lon <= 180));
+    }
+
     function invitePath(code) {
       return /databases/$(database)/documents/invites/$(code);
     }
@@ -189,6 +197,10 @@ service cloud.firestore {
             && request.resource.data.veille.active is bool
             && request.resource.data.veille.de is int && request.resource.data.veille.de >= 0 && request.resource.data.veille.de <= 23
             && request.resource.data.veille.a is int && request.resource.data.veille.a >= 0 && request.resource.data.veille.a <= 23)
+          // Ville de la météo choisie par la famille (l'emporte sur celle de la tablette).
+          || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['meteoVille', 'rev'])
+            && isFamilyAdmin(fid)
+            && villeMeteoOk(request.resource.data.meteoVille))
           // Volume de la tablette (0 à 100), avec le compteur qui la prévient.
           || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['volume', 'rev'])
             && isFamilyAdmin(fid)
@@ -265,7 +277,10 @@ service cloud.firestore {
           && request.resource.data.status == 'active';
         allow update: if signedIn()
           && uid == request.auth.uid
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'canCall', 'lastActive', 'lastOnline', 'callable', 'face', 'appVersion', 'uid', 'email', 'battery', 'sim'])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'canCall', 'lastActive', 'lastOnline', 'callable', 'face', 'appVersion', 'uid', 'email', 'battery', 'sim', 'meteoVille'])
+          // Ville de la météo utilisée par la tablette, affichée dans l'app.
+          && (!('meteoVille' in request.resource.data) || request.resource.data.meteoVille == null
+              || villeMeteoOk(request.resource.data.meteoVille))
           // uid et e-mail ajoutés aux fiches d'avant, pour retrouver ses familles.
           && request.resource.data.get('uid', request.auth.uid) == request.auth.uid
           && (request.resource.data.get('email', null) == resource.data.get('email', null)

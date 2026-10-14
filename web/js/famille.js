@@ -1260,6 +1260,7 @@ function renderMembers(all) {
   $('invite-email-card').classList.toggle('disabled-card', familyFull);
   renderRequests(pending);
   tabletMembers = members.filter((m) => m.role === 'tablette');
+  renderMeteo();
   faces = Object.fromEntries(members.filter((m) => m.face).map((m) => [m.id, m.face]));
   myFace = faces[session.uid] || null;
   renderFace();
@@ -1853,6 +1854,63 @@ $('btn-sleep').addEventListener('click', async () => {
 // ---------- Volume de la tablette ----------
 // families/{fid}.volume (0 à 100), appliqué par la tablette au son des vidéos et des appels.
 
+// ---------- Ville de la météo ----------
+// families/{fid}.meteoVille = { nom, lat, lon } ; la tablette publie la sienne sur sa fiche membre.
+
+function villeTexte(v) { return v?.nom || ''; }
+
+function renderMeteo() {
+  const famille = session.family.meteoVille;
+  const tablette = tabletMembers.map((m) => m.meteoVille).find(Boolean);
+  $('meteo-current').textContent = famille
+    ? `Météo affichée pour ${villeTexte(famille)}.`
+    : tablette ? `Météo affichée pour ${villeTexte(tablette)} (choisie sur la tablette).`
+      : 'Choisissez la ville dont la tablette affiche la météo.';
+}
+
+$('form-meteo').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const q = $('meteo-search').value.trim();
+  $('meteo-error').hidden = true;
+  $('meteo-results').hidden = true;
+  if (q.length < 2) return;
+  let villes = [];
+  try {
+    const r = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=10&language=fr`);
+    villes = (await r.json()).results || [];
+  } catch (err) {
+    console.warn('Recherche de ville impossible', err);
+    showError($('meteo-error'), 'La recherche a échoué. Vérifiez la connexion.');
+    return;
+  }
+  if (!villes.length) { showError($('meteo-error'), 'Aucune ville trouvée. Vérifiez l\'orthographe.'); return; }
+  $('meteo-results').replaceChildren(...villes.map((v) => {
+    const li = document.createElement('li');
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'meteo-choice';
+    const region = v.admin2 || v.admin1;
+    const nom = region ? `${v.name} (${region})` : v.name;
+    b.textContent = v.country_code && v.country_code !== 'FR' ? `${nom}, ${v.country_code}` : nom;
+    b.addEventListener('click', async () => {
+      try {
+        await updateDoc(doc(db, 'families', session.fid), {
+          meteoVille: { nom: nom.slice(0, 80), lat: v.latitude, lon: v.longitude }, rev: increment(1),
+        });
+        $('meteo-results').hidden = true;
+        $('meteo-search').value = '';
+        toast('Ville envoyée à la tablette');
+      } catch (err) {
+        console.error(err);
+        notice("La ville n'a pas pu être enregistrée.");
+      }
+    });
+    li.append(b);
+    return li;
+  }));
+  $('meteo-results').hidden = false;
+});
+
 function renderVolume() {
   if (document.activeElement === $('volume')) return;
   const v = Number.isInteger(session.family.volume) ? session.family.volume : 80;
@@ -1960,6 +2018,8 @@ function applyFamily() {
   renderSleep();
   $('volume-card').hidden = !amOwner();
   renderVolume();
+  $('meteo-card').hidden = !amOwner();
+  renderMeteo();
   $('btn-delete-family').hidden = !amOwner();
   renderTextSize();
   $('invite-email-card').hidden = !admin;
