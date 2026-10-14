@@ -7,7 +7,7 @@ import {
   getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
 import {
-  getFirestore, doc, getDoc, setDoc, updateDoc, addDoc, deleteDoc, collection, query, where,
+  getFirestore, doc, getDoc, getDocs, setDoc, updateDoc, addDoc, deleteDoc, collection, query, where,
   onSnapshot, serverTimestamp,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
 
@@ -466,7 +466,7 @@ function stopPresence() {
 
 const paused = () => window.papotePaused === true;
 
-function refuseWhilePaused(id) {
+function refuseCall(id) {
   updateDoc(doc(db, 'families', fid, 'calls', id), { state: 'missed', endedAt: serverTimestamp() }).catch(() => {});
 }
 
@@ -476,10 +476,24 @@ setInterval(() => {
   if (ringing) {
     const { id } = ringing;
     hideRing();
-    refuseWhilePaused(id);
+    refuseCall(id);
   }
   if (active) hangup('');
 }, 2000);
+
+// Au démarrage, la tablette n'est en communication avec personne : un appel resté
+// « décroché » (coupure, redémarrage) est terminé pour ne pas bloquer les suivants.
+async function closeStaleCalls() {
+  try {
+    const snap = await getDocs(query(collection(db, 'families', fid, 'calls'), where('state', '==', 'accepted')));
+    snap.docs.forEach((d) => {
+      if (active && active.id === d.id) return;
+      updateDoc(d.ref, { state: 'ended', endedAt: serverTimestamp() }).catch(() => {});
+    });
+  } catch (e) {
+    console.warn('Appels : nettoyage des appels oubliés', e && e.code);
+  }
+}
 
 function watchCalls() {
   const q = query(collection(db, 'families', fid, 'calls'), where('state', '==', 'ringing'));
@@ -491,11 +505,14 @@ function watchCalls() {
     });
     // Abonnement suspendu : la tablette est en pause, aucun appel. L'appelant voit « Pas de réponse ».
     if (paused()) {
-      fresh.forEach((d) => refuseWhilePaused(d.id));
+      fresh.forEach((d) => refuseCall(d.id));
       return;
     }
     // L'appel qui sonnait a été annulé par l'appelant.
     if (ringing && !fresh.some((d) => d.id === ringing.id)) hideRing();
+    // Déjà en communication : un deuxième appel est refusé tout de suite (« Pas de réponse »).
+    const current = (active && active.id) || (ringing && ringing.id);
+    if (current) fresh.filter((d) => d.id !== current).forEach((d) => refuseCall(d.id));
     if (!ringing && !active && fresh.length) {
       const latest = fresh[fresh.length - 1];
       showRing(latest.id, latest.data());
@@ -629,6 +646,7 @@ async function start() {
     setTimeout(start, 60_000); // tablette pas encore reliée ou hors ligne : on réessaie
     return;
   }
+  closeStaleCalls();
   watchCalls();
   // Détection du visage chargée à l'avance (puis gardée en cache) pour décrocher sans attendre.
   setTimeout(faceDetector, 20_000);
