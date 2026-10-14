@@ -401,7 +401,7 @@ const ABONNEMENTS = {
   canceled: 'résilié', active: 'actif', trialing: 'en essai', past_due: 'impayé',
 };
 const RETOURS = {
-  attendue: 'Retour attendu', echec: 'Non rendue, prélèvement refusé', rendue: 'Tablette rendue', facturee: 'Non rendue, 120 € prélevés',
+  attendue: 'Retour attendu', echec: 'Non rendue, prélèvement refusé', rendue: 'Tablette rendue', facturee: 'Non rendue, matériel prélevé',
 };
 const REMBOURSEMENTS = {
   'en-cours': 'en cours de remboursement', 'au-retour': 'remboursés au retour', fait: 'remboursés', echec: 'à rembourser depuis Stripe',
@@ -1225,7 +1225,7 @@ function afficherBilan() {
 
 const NATURES = {
   abonnement: 'Abonnement Papote',
-  'tablette-non-rendue': 'Tablette non rendue',
+  'tablette-non-rendue': 'Matériel non rendu',
   remboursement: 'Remboursement',
   litige: 'Contestation bancaire',
   virement: 'Virement vers la banque',
@@ -1975,15 +1975,19 @@ function afficherRentabilite() {
     const frais = Math.round(prix * tauxFrais);
     const urssaf = Math.round((prix * r.tauxUrssaf) / 100);
     const sim = cle === 'sim' ? forfait : 0;
-    const marge = prix - frais - urssaf - tablette - sim;
-    return { nom, n: abos.length, prix, frais, urssaf, sim, marge };
+    // Matériel : tablette, plus les accessoires de chaque envoi (clé 4G, chargeur…), amortis sur la même durée.
+    const accessoires = (donnees.accessoires || []).filter((a) => a.parEnvoi === 'tous' || a.parEnvoi === cle)
+      .reduce((s, a) => s + (a.prixAchat || 0), 0);
+    const materiel = tablette + Math.round(accessoires / Math.max(1, r.vieTablette));
+    const marge = prix - frais - urssaf - materiel - sim;
+    return { nom, n: abos.length, prix, frais, urssaf, materiel, sim, marge };
   });
   const signe = (c) => h('span', { class: c < 0 ? 'neg' : null }, euros(c));
   remplirTable($('t-rentabilite'), [
     { titre: 'Formule' }, { titre: 'Abonnés', n: 1 }, { titre: 'Prix', n: 1 }, { titre: 'Frais Stripe', n: 1 },
-    { titre: 'URSSAF', n: 1 }, { titre: 'Tablette', n: 1 }, { titre: 'Forfait SIM', n: 1 }, { titre: 'Reste / abonné', n: 1 },
+    { titre: 'URSSAF', n: 1 }, { titre: 'Matériel', n: 1 }, { titre: 'Forfait SIM', n: 1 }, { titre: 'Reste / abonné', n: 1 },
     { titre: 'Reste / mois', n: 1 },
-  ], lignes.map((l) => [l.nom, String(l.n), euros(l.prix), euros(l.frais), euros(l.urssaf), euros(tablette),
+  ], lignes.map((l) => [l.nom, String(l.n), euros(l.prix), euros(l.frais), euros(l.urssaf), euros(l.materiel),
     l.sim ? euros(l.sim) : '', signe(l.marge), signe(l.marge * l.n)]), {
     total: ['Total', String(lignes.reduce((s, l) => s + l.n, 0)), '', '', '', '', '', '',
       signe(lignes.reduce((s, l) => s + l.marge * l.n, 0))],
