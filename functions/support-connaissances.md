@@ -71,6 +71,7 @@ les fonctions suffit pour que le chat en tienne compte.
 - Livraison hors France, Belgique et Luxembourg (Suisse, DOM-TOM…) : pas pour le moment.
 - Changer de formule : passer à l'option internet inclus (carte SIM) demande de nous renvoyer la tablette pour la modifier ; passer de la SIM au Wi-Fi est envisageable. Dans les deux cas : demande de contact.
 - Paiement : par carte bancaire uniquement (pas de chèque, de virement ni d'espèces) ; les factures sont dans la page Abonnement de l'appli.
+- Tablette arrivée abîmée (écran fissuré, colis endommagé) : ce n'est pas de votre faute et ce n'est pas une rétractation. Prenez des photos et faites une demande de contact : l'équipe s'en occupe.
 - Panne (tablette qui ne marche plus sans avoir été cassée) : réparée gratuitement. Nous envoyons une étiquette de retour ; comptez le temps de nous l'envoyer, environ 5 jours ouvrés de réparation, puis environ 5 jours ouvrés pour la recevoir de nouveau. Demande de contact pour lancer le retour.
 - Après une résiliation, les photos sont gardées 12 mois puis supprimées. Gardez toujours vos originaux sur votre téléphone.
 - Appels la nuit : oui, on peut appeler à toute heure ; l'appel réveille la tablette même quand l'écran est éteint.
