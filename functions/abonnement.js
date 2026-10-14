@@ -16,9 +16,20 @@ const ENGAGEMENT_MOIS = 12;
 // Tablette incluse : à rendre dans les 30 jours après la fin de l'abonnement, sinon facturée
 // (Tanguy, 2026-10-14) : tablette 160 €, chargeur et câble 10 €, routeur 4G 30 € avec l'option internet.
 const RESTITUTION_JOURS = 30;
-const PENALITE_NON_RESTITUTION = 17000; // centimes, formule Wi-Fi
-const PENALITE_NON_RESTITUTION_SIM = 20000; // centimes, option internet
-const penaliteRestitution = (formule) => (formule === 'sim' ? PENALITE_NON_RESTITUTION_SIM : PENALITE_NON_RESTITUTION);
+// Prix de chaque élément prêté, en centimes : un élément manquant au retour est facturé seul.
+const PRIX_MATERIEL = { tablette: 16000, chargeur: 1000, routeur: 3000 };
+const NOMS_MATERIEL = { tablette: 'tablette', chargeur: 'chargeur et câble', routeur: 'routeur 4G' };
+const materielPrete = (formule) => (formule === 'sim' ? ['tablette', 'chargeur', 'routeur'] : ['tablette', 'chargeur']);
+// Montant des éléments manquants (seulement ceux prêtés avec cette formule).
+function montantManquants(formule, manquants) {
+  const pretes = materielPrete(formule);
+  return [...new Set(manquants || [])].filter((m) => pretes.includes(m))
+    .reduce((total, m) => total + PRIX_MATERIEL[m], 0);
+}
+// Rien de rendu : tout le matériel prêté (170 € en Wi-Fi, 200 € avec l'option internet).
+const penaliteRestitution = (formule) => montantManquants(formule, materielPrete(formule));
+const PENALITE_NON_RESTITUTION = penaliteRestitution('wifi');
+const PENALITE_NON_RESTITUTION_SIM = penaliteRestitution('sim');
 
 const STATUTS_OK = ['offert', 'actif', 'impaye'];
 
@@ -177,6 +188,10 @@ module.exports = {
   PENALITE_NON_RESTITUTION,
   PENALITE_NON_RESTITUTION_SIM,
   penaliteRestitution,
+  PRIX_MATERIEL,
+  NOMS_MATERIEL,
+  materielPrete,
+  montantManquants,
   limiteRestitution,
   restitutionEchue,
   RETRACTATION_JOURS,

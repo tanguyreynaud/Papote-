@@ -115,3 +115,12 @@ test('rappel de restitution : une fois, dans les 7 derniers jours', () => {
   assert.strictEqual(a.rappelRestitutionDu(r, T0 + 10 * JOUR), false);
   assert.strictEqual(a.rappelRestitutionDu({ ...r, statut: 'rendue' }, T0 + 3 * JOUR), false);
 });
+
+test('matériel non rendu : prix par élément, plafonné au matériel prêté', () => {
+  assert.strictEqual(a.penaliteRestitution('wifi'), 17000);
+  assert.strictEqual(a.penaliteRestitution('sim'), 20000);
+  assert.strictEqual(a.montantManquants('wifi', ['chargeur']), 1000);
+  assert.strictEqual(a.montantManquants('wifi', ['routeur', 'chargeur', 'chargeur']), 1000);
+  assert.strictEqual(a.montantManquants('sim', ['routeur']), 3000);
+  assert.strictEqual(a.montantManquants('sim', []), 0);
+});
