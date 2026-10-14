@@ -248,59 +248,71 @@
   // ---------- 3. Ville de la météo ----------
   // La famille pourra la changer ensuite depuis son appli (families/{fid}.meteoVille).
 
+  // Comme pour le wifi : un bouton « Choisir la ville » et une fenêtre avec la recherche et la liste.
   function showMeteo() {
     stepNum = 3;
     art = 'meteo';
-    var box = screen('La météo', 'Tapez le nom de la ville où se trouve la tablette : elle affichera sa météo.');
-    var card = box.parentNode;
+    var box = screen('La météo', 'Choisissez la ville où se trouve la tablette : elle affichera sa météo.');
+    box.appendChild(button('Choisir la ville', 'primary', openCities));
+    box.appendChild(button('Passer cette étape', 'no', function () { closeNetworks(); android().meteoSkip(); }));
+    openCities();
+  }
+
+  var PIN = '<svg viewBox="0 0 24 24" width="100%" height="100%" aria-hidden="true">' +
+    '<path d="M12 22c-4.2-4.9-6.5-8.4-6.5-11.5a6.5 6.5 0 0 1 13 0c0 3.1-2.3 6.6-6.5 11.5z" fill="#4f46e5"/>' +
+    '<circle cx="12" cy="10.3" r="2.6" fill="#fff"/></svg>';
+
+  function openCities() {
+    closeNetworks();
+    var veil = el('div', 'welcome-modal top');
+    veil.addEventListener('click', function (e) { if (e.target === veil) closeNetworks(); }, false);
+    var sheet = el('div', 'welcome-sheet');
+    sheet.appendChild(el('h2', 'welcome-sheet-title', 'Choisir la ville'));
     var input = el('input', 'welcome-input meteo-input');
     input.type = 'text';
     input.maxLength = 60;
-    input.placeholder = 'Ex. : Lyon';
-    box.appendChild(input);
-    var hint = el('p', 'meteo-hint', 'Touchez votre ville :');
-    hint.setAttribute('hidden', '');
-    box.appendChild(hint);
-    var list = el('div', 'welcome-list meteo-list');
-    box.appendChild(list);
-    box.appendChild(button('Passer cette étape', 'no', function () { android().meteoSkip(); }));
-    // La liste se remplit pendant la frappe ; dès qu'il y a des résultats, le haut de l'écran se
-    // replie pour qu'ils tiennent au-dessus du clavier.
+    input.placeholder = 'Tapez le nom de la ville';
+    sheet.appendChild(input);
+    var list = el('div', 'welcome-list');
+    sheet.appendChild(list);
+    var row = el('div', 'welcome-sheet-actions');
+    row.appendChild(button('Fermer', 'no', closeNetworks));
+    sheet.appendChild(row);
+    veil.appendChild(sheet);
+    root.appendChild(veil);
+    // La liste se remplit pendant la frappe.
     var timer = null;
     var last = '';
     function run() {
       var q = input.value.trim();
       if (q === last) return;
       last = q;
-      searchCity(q, list, hint, card);
+      fillCities(q, list);
     }
     input.addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(run, 500); }, false);
     input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { clearTimeout(timer); run(); input.blur(); } }, false);
     setTimeout(function () { input.focus(); }, 300);
   }
 
-  function searchCity(query, list, hint, card) {
+  function fillCities(query, list) {
     list.innerHTML = '';
-    hint.setAttribute('hidden', '');
-    if (query.length < 2) { card.classList.remove('meteo-results'); return; }
+    if (query.length < 2) return;
     var found = [];
     try { found = JSON.parse(android().meteoSearch(query)); } catch (e) { found = []; }
-    card.classList.add('meteo-results');
     if (!found.length) {
       list.appendChild(el('p', 'welcome-sub', 'Aucune ville trouvée. Vérifiez l’orthographe, ou tapez le nom d’une ville proche.'));
       return;
     }
-    hint.removeAttribute('hidden');
-    for (var i = 0; i < found.length && i < 4; i++) {
+    for (var i = 0; i < found.length; i++) {
       (function (c) {
-        var b = button('', 'network city', function () {
+        var b = button('', 'network', function () {
           if (document.activeElement) document.activeElement.blur();
-          card.classList.remove('meteo-results');
-          hint.setAttribute('hidden', '');
-          list.innerHTML = '';
-          list.appendChild(el('p', 'welcome-ok', 'Météo de ' + c.nom));
+          closeNetworks();
           android().meteoChoose(c.nom, c.lat, c.lon);
         });
+        var icon = el('span', 'wifi-icon');
+        icon.innerHTML = PIN;
+        b.appendChild(icon);
         var text = el('span', 'network-text');
         text.appendChild(el('span', 'network-name', c.nom));
         if (c.detail) text.appendChild(el('span', 'city-detail', c.detail));
