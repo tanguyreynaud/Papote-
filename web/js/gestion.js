@@ -401,7 +401,7 @@ const ABONNEMENTS = {
   canceled: 'résilié', active: 'actif', trialing: 'en essai', past_due: 'impayé',
 };
 const RETOURS = {
-  attendue: 'Retour attendu', echec: 'Non rendue, prélèvement refusé', rendue: 'Tablette rendue', facturee: 'Non rendue, matériel prélevé',
+  attendue: 'Retour attendu', echec: 'Non rendue, prélèvement refusé', rendue: 'Tablette rendue', facturee: 'Matériel non rendu, prélevé',
 };
 const REMBOURSEMENTS = {
   'en-cours': 'en cours de remboursement', 'au-retour': 'remboursés au retour', fait: 'remboursés', echec: 'à rembourser depuis Stripe',
