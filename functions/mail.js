@@ -65,6 +65,15 @@ function commandeConfirmee({ nom, code, relais, formule }) {
 }
 
 // Prévient Papote qu'une tablette est à préparer.
+function relancePanier({ nom, formule, lien }) {
+  return message('Votre commande Papote vous attend', [
+    `Bonjour${nom ? ` ${echapper(nom)}` : ''},`,
+    'Vous avez commencé une commande Papote sans la terminer. Elle est gardée de côté : vous pouvez la reprendre en un clic.',
+    `Pour rappel : livraison offerte, 15 jours d'essai gratuit, puis ${formule === 'sim' ? '30 € par mois, internet inclus' : '20 € par mois'}. La tablette est prêtée et déjà configurée.`,
+    'Une hésitation, une question ? Répondez à cet e-mail, nous vous répondons personnellement.',
+  ], { texte: 'Reprendre ma commande', lien });
+}
+
 function nouvelleCommande({ nom, email, telephone, code, relais, formule }) {
   return message(`Nouvelle commande ${code || ''}`.trim(), [
     `Client : <b>${echapper(nom || '?')}</b>, ${echapper(email || 'sans e-mail')}${telephone ? `, ${echapper(telephone)}` : ''}.`,
@@ -187,7 +196,7 @@ async function envoyer({ smtp, motDePasse, expediteur, a, contenu }) {
 }
 
 module.exports = {
-  colisParti, commandeConfirmee, nouvelleCommande, rappelJumelage,
+  colisParti, commandeConfirmee, nouvelleCommande, relancePanier, rappelJumelage,
   retourTablette, etiquetteRetour, rappelRestitution, tabletteRecue, commandeAnnulee, annulationAvantEnvoi, retourAPreparer,
   envoyer, echapper, euros,
 };
