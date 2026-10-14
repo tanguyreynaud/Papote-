@@ -36,6 +36,7 @@ const Stripe = require('stripe');
 const regles = require('./abonnement');
 const livraison = require('./livraison');
 const mail = require('./mail');
+const avis = require('./avis');
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -649,6 +650,33 @@ async function abonnementModifie(abo) {
   if (fid) await appliquer(fid, abo.id);
   else if (commande.exists) await commande.ref.update({ statutStripe: abo.status });
 }
+
+// ---------- Page d'accueil du site vitrine, avec les avis (functions/avis.js) ----------
+// firebase.vitrine.json envoie « / » ici. Le gabarit vitrine/accueil.html est relu toutes les 5 minutes ;
+// la page est gardée 5 minutes par le CDN : un avis modifié dans l'admin apparaît en 5 à 10 minutes.
+let gabaritAccueil = { html: '', lu: 0 };
+exports.accueil = onRequest({ maxInstances: 5, memory: '256MiB' }, async (req, res) => {
+  try {
+    if (!gabaritAccueil.html || Date.now() - gabaritAccueil.lu > 300e3) {
+      const r = await fetch(`${SITE_VITRINE.value()}/accueil.html`);
+      if (!r.ok) throw new Error(`accueil.html : ${r.status}`);
+      gabaritAccueil = { html: await r.text(), lu: Date.now() };
+    }
+    let liste = [];
+    try {
+      const snap = await db.collection('avis').where('visible', '==', true).limit(avis.MAX_AVIS * 2).get();
+      liste = snap.docs.map((d) => d.data());
+    } catch (e) {
+      logger.warn('Avis illisibles', e.message);
+    }
+    res.set('Cache-Control', 'public, max-age=60, s-maxage=300');
+    res.type('html').send(avis.pageAvecAvis(gabaritAccueil.html, liste));
+  } catch (e) {
+    logger.error('Page d\'accueil', e);
+    if (gabaritAccueil.html) res.type('html').send(avis.pageAvecAvis(gabaritAccueil.html, []));
+    else res.redirect(302, '/accueil.html');
+  }
+});
 
 // ---------- Statistiques de visite (sans cookie ni donnée personnelle) ----------
 // Un compteur par jour dans statistiques/{AAAA-MM-JJ} : accueil, commande (page ouverte),
