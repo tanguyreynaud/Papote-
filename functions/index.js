@@ -12,7 +12,7 @@
 //   finDeGrace         chaque heure : suspend les familles dont le délai de grâce est dépassé
 //   retracter          appel depuis l'appli famille : annule la commande (14 jours), remboursée au retour
 //   finDeContrat       appel depuis l'appli famille : rétractation possible, retour attendu, remboursement
-//   restitutions       chaque jour : rappel 7 jours avant, puis 120 € si la tablette n'est pas rendue à temps
+//   restitutions       chaque jour : rappel 7 jours avant, puis 170 € ou 200 € si la tablette n'est pas rendue à temps
 //   tabletteRendue     appel depuis le tableau de bord admin : la tablette incluse est revenue
 //   etiquetteRetour    appel depuis le tableau de bord admin : lien de l'étiquette de retour prépayée
 //   nouvelleFamille    famille créée : sans commande, statut « aucun »
@@ -716,7 +716,7 @@ exports.finDeGrace = onSchedule(
     }
   });
 
-// Tablette incluse non rendue dans les 30 jours : 120 € prélevés sur la carte de l'abonnement.
+// Tablette incluse non rendue dans les 30 jours : 170 € (200 € avec l'option internet) prélevés sur la carte de l'abonnement.
 exports.restitutions = onSchedule(
   { schedule: 'every day 09:00', timeZone: 'Europe/Paris', secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE] },
   async () => {
@@ -728,6 +728,7 @@ exports.restitutions = onSchedule(
         try {
           await envoyerMail(snap.get('email'), mail.rappelRestitution({
             nom: snap.get('nom'), avant: r.avant.toMillis(), lien: r.etiquette || null,
+            montant: regles.penaliteRestitution(snap.get('formule')),
           }));
           await snap.ref.update({ 'restitution.rappelLe': FieldValue.serverTimestamp() });
         } catch (e) {
@@ -741,7 +742,7 @@ exports.restitutions = onSchedule(
           || (abo.customer.invoice_settings && abo.customer.invoice_settings.default_payment_method);
         if (!moyen) throw new Error('Aucune carte enregistrée');
         const paiement = await stripe().paymentIntents.create({
-          amount: regles.PENALITE_NON_RESTITUTION,
+          amount: regles.penaliteRestitution(snap.get('formule')),
           currency: 'eur',
           customer: abo.customer.id,
           payment_method: typeof moyen === 'string' ? moyen : moyen.id,
@@ -755,7 +756,7 @@ exports.restitutions = onSchedule(
           'restitution.paiement': paiement.id,
           'restitution.majLe': FieldValue.serverTimestamp(),
         });
-        logger.info(`Commande ${snap.id} : tablette non rendue, 120 € prélevés.`);
+        logger.info(`Commande ${snap.id} : tablette non rendue, ${mail.euros(regles.penaliteRestitution(snap.get('formule')))} prélevés.`);
       } catch (e) {
         // Carte expirée ou refusée : à relancer à la main, depuis le tableau de bord Stripe.
         await snap.ref.update({
@@ -902,7 +903,7 @@ async function suiviRetour(event, rAvant, r, c) {
       nom: c.nom, email: c.email, telephone: c.telephone, code: c.code ? regles.afficherCode(c.code) : null,
       relais: c.livraison, avant: avantMs, retractation,
     }))];
-    if (c.email) envois.push(envoyerMail(c.email, mail.retourTablette({ nom: c.nom, avant: avantMs, retractation })));
+    if (c.email) envois.push(envoyerMail(c.email, mail.retourTablette({ nom: c.nom, avant: avantMs, retractation, montant: regles.penaliteRestitution(c.formule) })));
     (await Promise.allSettled(envois)).filter((x) => x.status === 'rejected')
       .forEach((x) => logger.error(`Commande ${id} : e-mail de retour non parti`, x.reason));
   }
