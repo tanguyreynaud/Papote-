@@ -376,3 +376,10 @@ test('e-mail d\'information : prénom, paragraphes échappés, lien de désinscr
   assert.equal(m.headers['List-Unsubscribe'], '<https://x/d?c=1>');
   assert.equal(g.cleContact('A@x.fr'), g.cleContact(' a@x.fr '));
 });
+
+test('matériel non rendu : nature du prélèvement et ligne de facture', () => {
+  assert.equal(g.natureMouvement({ type: 'charge', source: { description: 'Tablette Papote non rendue' } }), 'tablette-non-rendue');
+  assert.equal(g.natureMouvement({ type: 'charge', source: { description: 'Matériel Papote non rendu : routeur, chargeur' } }), 'tablette-non-rendue');
+  assert.equal(g.descriptionNonRendu({ description: 'Matériel Papote non rendu : routeur' }), 'Matériel Papote non rendu : routeur (indemnité prévue au contrat)');
+  assert.equal(g.descriptionNonRendu({}), 'Matériel Papote non rendu (indemnité prévue au contrat)');
+});

@@ -122,7 +122,7 @@
               <button type="button" class="secondary small-btn" id="btn-automatiser">Lancer maintenant</button>
             </div>
           </div>
-          <p class="muted small">Chaque nuit : facture des 120 € de tablette non rendue, avoir pour chaque remboursement, dépenses mensuelles ajoutées au registre. Chaque lundi à 8 h : récap de la semaine par e-mail à contact@mapapote.fr.</p>
+          <p class="muted small">Chaque nuit : facture du matériel non rendu (jusqu'à 200 €), avoir pour chaque remboursement, dépenses mensuelles ajoutées au registre. Chaque lundi à 8 h : récap de la semaine par e-mail à contact@mapapote.fr.</p>
           <p id="automatique" class="small"></p>
         </div>
       </section>
@@ -144,7 +144,7 @@
         </div>
         <div class="card">
           <h2>Tablettes à récupérer</h2>
-          <p class="muted small">Abonnements terminés. Sans retour avant la date limite, 120 € sont prélevés automatiquement.</p>
+          <p class="muted small">Abonnements terminés. Sans retour avant la date limite, le matériel manquant est prélevé automatiquement (jusqu'à 200 €).</p>
           <ul id="returns" class="orders"></ul>
           <p id="returns-empty" class="muted small" hidden>Aucune tablette à récupérer.</p>
         </div>
@@ -290,7 +290,7 @@
               <button type="button" class="secondary small-btn" id="x-factures">Exporter</button>
             </div>
           </div>
-          <p class="muted small">Créées et envoyées automatiquement par Stripe à chaque paiement (commande, puis chaque mois). Les 120 € de tablette non rendue reçoivent aussi leur facture, et chaque remboursement son avoir, automatiquement chaque nuit.</p>
+          <p class="muted small">Créées et envoyées automatiquement par Stripe à chaque paiement (commande, puis chaque mois). Le matériel non rendu reçoit aussi sa facture, et chaque remboursement son avoir, automatiquement chaque nuit.</p>
           <div class="table"><table id="t-factures"></table></div>
         </div>
       </section>
@@ -313,7 +313,7 @@
         </div>
         <div class="card">
           <h2>Rentabilité par formule</h2>
-          <p class="muted small">Ce qui reste chaque mois par abonné payant, d'après les vrais frais Stripe de la période, le prix d'achat moyen des tablettes et le coût des lignes SIM.</p>
+          <p class="muted small">Ce qui reste chaque mois par abonné payant, d'après les vrais frais Stripe de la période, le prix d'achat moyen des tablettes et des accessoires envoyés (amortis sur leur durée de vie) et le coût des lignes SIM.</p>
           <div class="table"><table id="t-rentabilite"></table></div>
           <form id="f-reglages" class="grille no-print">
             <label>Seuil de franchise de TVA (€) <input name="seuilTva" inputmode="decimal"></label>

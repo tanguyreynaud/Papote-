@@ -16,7 +16,7 @@
 //                   (« à vérifier ») ; gestionCourrierMaintenant : tout de suite
 //   gestionCloture  le 1er du mois à 5 h : livre des recettes et registre des achats du mois écoulé, figés
 //                   (gestion/archives), rangés dans Storage et envoyés par e-mail ; gestionCloturer : tout de suite
-//   gestionAutomatique  chaque nuit : factures des 120 € de tablette non rendue, avoirs des
+//   gestionAutomatique  chaque nuit : factures du matériel non rendu (jusqu'à 200 €), avoirs des
 //                       remboursements, dépenses mensuelles récurrentes, états du stock suivant les
 //                       commandes (gestionAutomatiser : tout de suite)
 //
@@ -115,7 +115,7 @@ function natureMouvement(bt) {
     case 'charge':
     case 'payment': {
       const desc = `${source.description || bt.description || ''}`.toLowerCase();
-      if (desc.includes('non rendue')) return 'tablette-non-rendue';
+      if (/non rendu/.test(desc)) return 'tablette-non-rendue';
       return 'abonnement';
     }
     case 'refund':
@@ -299,7 +299,7 @@ function piecesFacture(pieces) {
 
 const NATURES = {
   abonnement: 'Abonnement Papote',
-  'tablette-non-rendue': 'Tablette non rendue',
+  'tablette-non-rendue': 'Matériel non rendu',
   remboursement: 'Remboursement',
   litige: 'Contestation bancaire',
 };
@@ -1321,8 +1321,14 @@ exports.gestionLireFacture = onCall(
 const JOUR = 24 * 60 * 60 * 1000;
 const FENETRE = 40 * JOUR; // ce qui s'est passé depuis 40 jours est revu chaque nuit
 
-// Tablette non rendue : le prélèvement de 120 € (restitutions, index.js) n'a pas de facture.
+// Matériel non rendu : le prélèvement (restitutions, index.js ; jusqu'à 200 € selon ce qui manque) n'a pas de facture.
 // On en fait une, marquée payée hors Stripe, pour que chaque encaissement ait sa facture.
+// Ligne de facture : le détail (« tablette, routeur ») vient de la description du prélèvement quand il y est.
+function descriptionNonRendu(c) {
+  const d = String(c.description || '').trim();
+  return d && /non rendu/i.test(d) ? `${d} (indemnité prévue au contrat)` : 'Matériel Papote non rendu (indemnité prévue au contrat)';
+}
+
 async function facturerPenalites(depuis, bilan) {
   const charges = await tout(stripe().charges.list({ created: { gte: Math.floor(depuis / 1000) }, limit: 100 }));
   for (const c of charges) {
@@ -1343,7 +1349,7 @@ async function facturerPenalites(depuis, bilan) {
           invoice: facture.id,
           amount: c.amount,
           currency: c.currency,
-          description: 'Tablette Papote non rendue (indemnité prévue au contrat)',
+          description: descriptionNonRendu(c),
         });
       }
       if (facture.status === 'draft') facture = await stripe().invoices.finalizeInvoice(facture.id, { auto_advance: false });
@@ -2301,5 +2307,5 @@ exports.desinscription = onRequest(async (req, res) => {
 exports.regles = {
   ETATS, CATEGORIES, natureMouvement, mensuel, centimes, lien, nomFichier, moisSuivant, lectureVersFormulaire, SCHEMA_FACTURE,
   lireReglages, simAResilier, stockAJour, incoherences, materielLu, memeAccessoire, coutLigne, alertesSim, accessoiresAPrevoir, champsSim, aFaire, piecesFacture, debutMoisParis, moisPrecedent, csvTexte, livreDesRecettes,
-  registreDesAchats, corpsDuMail, memeAchat, suiteJumelage, fusionnerContacts, emailInformation, cleContact,
+  registreDesAchats, corpsDuMail, memeAchat, suiteJumelage, descriptionNonRendu, fusionnerContacts, emailInformation, cleContact,
 };
