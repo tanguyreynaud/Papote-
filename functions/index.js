@@ -574,6 +574,8 @@ async function paiementTermine(session) {
       creeLe: FieldValue.serverTimestamp(),
     }, { merge: true });
   }
+  // Case « nouvelles de Papote par e-mail » de la page de paiement Stripe, lue par l'onglet Clients.
+  if ((session.consent && session.consent.promotions) === 'opt_in') await ref.update({ marketing: true });
   // Le code figure aussi sur les factures Stripe du client.
   const code = regles.afficherCode(await codeDe(session.subscription));
   await stripe().customers.update(session.customer, {
@@ -622,7 +624,9 @@ async function relancerPanier(session) {
     if (snap.exists) return false;
     t.set(ref, {
       email, nom: details.name || null, telephone: details.phone || null,
-      formule: meta.formule || null, accordMarketing: accord,
+      formule: meta.formule || null,
+      // Liste « Clients » de l'espace admin : seulement les personnes qui ont accepté.
+      ...(accord ? { marketing: true } : {}),
       creeLe: FieldValue.serverTimestamp(),
     });
     return accord && !!lien;
