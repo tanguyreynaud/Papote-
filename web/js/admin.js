@@ -273,7 +273,11 @@ async function loadReturns() {
       const li = document.createElement('li');
       li.innerHTML = '<strong></strong><span class="muted small"></span><span class="small"></span><span class="small remb"></span>'
         + '<form class="etiquette"><button type="button" class="secondary small-btn sendcloud">Créer avec Sendcloud</button><input type="url" placeholder="ou lien de l\'étiquette de retour" aria-label="Étiquette de retour"><button type="submit" class="secondary small-btn">Envoyer l\'étiquette</button></form>'
-        + '<button type="button" class="secondary small-btn rendue">Tablette rendue</button>';
+        + '<div class="manquants small"><span>Manquant :</span>'
+        + '<label><input type="checkbox" value="tablette"> tablette (160 €)</label>'
+        + '<label><input type="checkbox" value="chargeur"> chargeur et câble (10 €)</label>'
+        + (c.formule === 'sim' ? '<label><input type="checkbox" value="routeur"> routeur (30 €)</label>' : '')
+        + '<button type="button" class="secondary small-btn rendue">Matériel reçu</button></div>';
       li.querySelector('strong').textContent = c.livraison?.nom || c.nom || c.email;
       li.querySelector('.muted').textContent = `${c.email}${c.telephone ? ` · ${c.telephone}` : ''}`;
       li.querySelector('span.small:not(.muted):not(.remb)').textContent = (r.statut === 'echec'
@@ -325,16 +329,25 @@ async function loadReturns() {
       });
       const btn = li.querySelector('button.rendue');
       btn.addEventListener('click', async () => {
-        if (!confirm(`La tablette de ${c.email} est bien revenue ?`)) return;
+        // Ce qui manque dans le colis est prélevé sur la carte du client (tabletteRendue, index.js).
+        const manquants = [...li.querySelectorAll('.manquants input:checked')].map((i) => i.value);
+        const prix = { tablette: 160, chargeur: 10, routeur: 30 };
+        const total = manquants.reduce((s, m) => s + prix[m], 0);
+        if (!confirm(total
+          ? `Prélever ${total} € à ${c.email} pour le matériel manquant (${manquants.join(', ')}) ?`
+          : `Tout le matériel de ${c.email} est bien revenu ?`)) return;
         btn.disabled = true;
         try {
-          await httpsCallable(functions, 'tabletteRendue')({ commande: d.id });
-          // La tablette revient dans le stock, à vérifier avant de repartir.
+          const res = await httpsCallable(functions, 'tabletteRendue')({ commande: d.id, manquants }).then((x) => x.data || {});
+          // Tablette revenue : dans le stock, à vérifier avant de repartir. Tablette manquante : perdue (retirée de la famille).
           const { stock } = await donnees().catch(() => ({ stock: [] }));
           const t = stock.find((x) => x.commande === d.id);
-          if (t) await appeler('gestionStock', { action: 'modifier', id: t.id, champs: { etat: 'revenue' } }).catch(() => null);
+          const etat = manquants.includes('tablette') ? 'perdue' : 'revenue';
+          if (t) await appeler('gestionStock', { action: 'modifier', id: t.id, champs: { etat } }).catch(() => null);
+          if (res.erreur) alert(`Prélèvement refusé : ${res.erreur}. La commande reste dans la liste, à relancer depuis Stripe.`);
           signalerChangement();
-          li.remove();
+          if (!res.erreur) li.remove();
+          else btn.disabled = false;
         } catch (err) {
           console.error(err);
           alert("L'enregistrement a échoué.");
