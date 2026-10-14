@@ -16,7 +16,7 @@
 //                   (« à vérifier ») ; gestionCourrierMaintenant : tout de suite
 //   gestionCloture  le 1er du mois à 5 h : livre des recettes et registre des achats du mois écoulé, figés
 //                   (gestion/archives), rangés dans Storage et envoyés par e-mail ; gestionCloturer : tout de suite
-//   gestionAutomatique  chaque nuit : factures du matériel non rendu (jusqu'à 200 €), avoirs des
+//   gestionAutomatique  chaque nuit : factures du matériel non rendu (170 € ou 200 €), avoirs des
 //                       remboursements, dépenses mensuelles récurrentes, états du stock suivant les
 //                       commandes (gestionAutomatiser : tout de suite)
 //
@@ -1321,7 +1321,7 @@ exports.gestionLireFacture = onCall(
 const JOUR = 24 * 60 * 60 * 1000;
 const FENETRE = 40 * JOUR; // ce qui s'est passé depuis 40 jours est revu chaque nuit
 
-// Matériel non rendu : le prélèvement (restitutions, index.js ; jusqu'à 200 € selon ce qui manque) n'a pas de facture.
+// Matériel non rendu : le prélèvement (restitutions, index.js ; 170 € en Wi-Fi, 200 € avec internet) n'a pas de facture.
 // On en fait une, marquée payée hors Stripe, pour que chaque encaissement ait sa facture.
 // Ligne de facture : le détail (« tablette, routeur ») vient de la description du prélèvement quand il y est.
 function descriptionNonRendu(c) {
