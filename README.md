@@ -79,8 +79,8 @@ Les clés et mots de passe sont lus dans le presse-papiers puis effacés : jamai
 Brancher la tablette en USB et double-cliquer sur `installation/remettre-a-zero.bat`.
 Le script affiche le n° de série de la tablette et demande de le retaper pour confirmer.
 La tablette quitte sa famille, puis Android efface tout (famille, photos, wifi, Papote) et
-redémarre sur l'écran de première configuration, comme sortie du carton. Garde-fous : la
-tablette de Mamie est refusée, et Papote n'efface que la tablette dont on lui donne le n° de série.
+redémarre sur l'écran de première configuration, comme sortie du carton. Garde-fou : Papote
+n'efface que la tablette dont on lui donne le n° de série.
 Une tablette qui n'est pas en mode kiosque se remet à zéro à la main :
 Paramètres > Système > Réinitialiser > Effacer toutes les données.
 

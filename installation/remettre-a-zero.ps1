@@ -3,7 +3,7 @@
 #   -Serial XXXX pour choisir la tablette si plusieurs appareils sont branchés.
 # La tablette quitte sa famille, puis Android efface tout (comme Paramètres > Réinitialiser) :
 # photos, comptes, wifi, Papote. Elle redémarre sur l'écran de première configuration.
-# Garde-fous : le n° de série est à retaper, et la tablette de Mamie est refusée.
+# Garde-fou : le n° de série est à retaper.
 param(
     [string]$Serial
 )
@@ -11,8 +11,6 @@ param(
 $ErrorActionPreference = 'Stop'
 $Package = 'com.papote.tablette'
 $Apk = Join-Path $PSScriptRoot 'Papote.apk'
-# Tablettes qu'on ne remet jamais à zéro avec ce script.
-$Protegees = @('2024051516550101') # tablette de Mamie
 # Première version de Papote qui sait se remettre à l'état usine.
 $VersionMini = 61
 
@@ -62,7 +60,6 @@ $serie = (Adb shell getprop ro.serialno).Trim()
 $env:ANDROID_SERIAL = $serie
 $model = Adb shell getprop ro.product.model
 Say "Tablette branchée : $model, n° de série $serie" 'Green'
-if ($Protegees -contains $serie) { Fail "Cette tablette ($serie) est protégée : c'est la tablette de Mamie. Rien n'a été fait." }
 
 # 2. Papote doit être installé, propriétaire de l'appareil, et assez récent
 if ((Adb shell pm list packages $Package) -notmatch [regex]::Escape($Package)) {
