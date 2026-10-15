@@ -158,7 +158,10 @@
 
     <!-- Pas encore dans une famille -->
     <section id="view-join" class="page-pad" hidden>
-      <h1 class="brand">Papote</h1>
+      <div class="join-top">
+        <h1 class="brand">Papote</h1>
+        <button type="button" id="btn-join-back" class="primary small-btn" hidden>Retour</button>
+      </div>
       <p id="join-account" class="muted small"></p>
       <div class="card">
         <h2>Vous avez reçu une tablette Papote ?</h2>
@@ -192,8 +195,7 @@
           <p id="create-error" class="error" hidden></p>
         </form>
       </details>
-      <button type="button" id="btn-join-back" class="link wide" hidden>← Retour à ma famille</button>
-      <button type="button" class="link wide" data-action="logout">Se déconnecter</button>
+      <button type="button" id="join-logout" class="link wide" data-action="logout">Se déconnecter</button>
     </section>
 
     <!-- Accueil -->
@@ -398,14 +400,14 @@
           <p class="muted small">À utiliser si la tablette ne répond plus ou se comporte bizarrement.</p>
           <p id="remote-tablet" class="muted small"></p>
           <div class="remote-buttons">
-            <button type="button" class="secondary" data-cmd="status">Obtenir l'état</button>
-            <button type="button" class="secondary" data-cmd="restart">Redémarrer la tablette</button>
-            <button type="button" class="secondary" id="btn-logs">Obtenir le journal</button>
-            <button type="button" class="secondary" id="btn-wifi">Changer le Wi-Fi</button>
+            <button type="button" class="primary" data-cmd="status">Obtenir l'état</button>
+            <button type="button" class="primary" data-cmd="restart">Redémarrer la tablette</button>
+            <button type="button" class="primary" id="btn-logs">Obtenir le journal</button>
+            <button type="button" class="primary" id="btn-wifi">Changer le Wi-Fi</button>
           </div>
           <div id="wifi-box" class="remote-panel" hidden>
             <button type="button" class="icon-btn panel-close" data-close="wifi-box" aria-label="Fermer"><svg><use href="#i-close"/></svg></button>
-            <button type="button" id="btn-wifi-scan" class="secondary wide">Chercher les réseaux autour de la tablette</button>
+            <button type="button" id="btn-wifi-scan" class="primary wide">Chercher les réseaux autour de la tablette</button>
             <p id="wifi-scan-info" class="muted small" hidden></p>
             <ul id="wifi-list" class="wifi-list" hidden></ul>
             <form id="form-wifi">
@@ -542,7 +544,7 @@
         <div class="card">
           <h2>Mon compte</h2>
           <p id="account-email" class="muted"></p>
-          <button type="button" class="secondary wide" data-action="other-family">Rejoindre une autre famille ou ajouter une tablette</button>
+          <button type="button" class="primary wide" data-action="other-family">Rejoindre une autre famille ou ajouter une tablette</button>
           <button type="button" class="link wide" data-action="logout">Se déconnecter</button>
         </div>
         <button id="btn-leave" class="link danger wide">Quitter cette famille</button>
@@ -595,7 +597,7 @@
             <p>Les photos défilent en grand, les vidéos et les messages s'affichent à l'écran, et les rappels de l'agenda apparaissent à l'heure prévue. La page Notifications vous dit quand ils ont été vus ou confirmés.</p>
           </details>
         </div>
-        <a class="secondary wide site-link" href="https://mapapote.fr" target="_blank" rel="noopener">Le site Papote : offres, commander une tablette</a>
+        <a class="primary wide site-link" href="https://mapapote.fr" target="_blank" rel="noopener">Le site Papote : offres, commander une tablette</a>
       </div>
     </section>
   </main>

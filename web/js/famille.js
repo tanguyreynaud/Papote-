@@ -2499,6 +2499,8 @@ function showLogin(legacy) {
 function showJoin(canGoBack) {
   $('join-account').textContent = `Connecté avec ${myEmail()}`;
   $('btn-join-back').hidden = !canGoBack;
+  // Venu de sa famille : « Retour » en haut à droite, pas de déconnexion ici.
+  $('join-logout').hidden = canGoBack;
   const code = inviteCode();
   if (code) $('join-code').value = formatCode(normalizeCode(code));
   show('view-join');

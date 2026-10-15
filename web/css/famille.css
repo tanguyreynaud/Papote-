@@ -934,3 +934,9 @@ body:not(.on-support) .ps-bouton, body:not(.on-support) .ps-panneau { display: n
 .wifi-meta { flex: none; color: var(--muted); letter-spacing: -1px; }
 #btn-wifi-scan { margin: 28px 0 6px; }
 #wifi-box form { margin-top: 10px; }
+
+.join-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.join-top .brand { margin: 0; }
+.join-top .small-btn { flex: none; min-height: 44px; padding: 0 18px; }
+.site-link { display: flex; align-items: center; justify-content: center; text-decoration: none; margin-top: 16px; border-radius: 14px; font-weight: 600; }
+.remote-buttons .primary { min-height: 50px; }
