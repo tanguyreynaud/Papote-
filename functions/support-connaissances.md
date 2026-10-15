@@ -70,7 +70,7 @@ les fonctions suffit pour que le chat en tienne compte.
 - Le proche âgé ne peut pas répondre ni envoyer de photo : la tablette ne fait que recevoir, il n'a rien à manipuler. Il peut seulement confirmer un rappel.
 - Appels vidéo à plusieurs en même temps : pas encore prévu.
 - Appli sur ordinateur ou vieux téléphone : elle marche dans le navigateur d'un ordinateur ou d'un téléphone récent (iPhone ou Android).
-- Délai de livraison : 5 à 7 jours ouvrés au maximum après la commande, le temps de préparer la tablette.
+- Délai de livraison : la commande est préparée sous 2 à 3 jours ouvrés, puis livrée par Mondial Relay sous 3 à 5 jours ouvrés.
 - Offrir Papote en cadeau, payé par un autre proche : bien sûr.
 - Livraison hors France, Belgique et Luxembourg (Suisse, DOM-TOM…) : pas pour le moment.
 - Changer de formule : passer à l'option internet inclus (carte SIM) demande de nous renvoyer la tablette pour la modifier ; passer de la SIM au Wi-Fi est envisageable. Dans les deux cas : demande de contact.
