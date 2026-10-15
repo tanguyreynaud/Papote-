@@ -170,6 +170,11 @@ function erreur(e) {
 
 // ---------- Navigation ----------
 
+const memoire = {
+  lire: (k, defaut) => { try { return localStorage.getItem(k) || defaut; } catch (e) { return defaut; } },
+  ecrire: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* navigation privée */ } },
+};
+
 const TITRES = {
   accueil: 'Accueil',
   commandes: 'Commandes',
@@ -185,9 +190,33 @@ const AVEC_PERIODE = ['factures', 'compta'];
 let connecte = false; // connexion admin faite (onAuthStateChanged plus bas)
 
 function pageCourante() {
-  const p = location.hash.slice(1);
+  const p = location.hash.slice(1).split('/')[0];
   return TITRES[p] ? p : 'accueil';
 }
+
+// Onglets d'une page (#compta/urssaf) : un seul bloc affiché à la fois, le dernier choisi est retenu.
+function choisirOnglet(page, nom) {
+  const panneau = document.querySelector(`[data-panneau="${page}"]`);
+  const boutons = [...panneau.querySelectorAll('.onglets [data-onglet]')];
+  if (!boutons.length) return;
+  const noms = boutons.map((b) => b.dataset.onglet);
+  if (!noms.includes(nom)) nom = memoire.lire(`papote-onglet-${page}`, noms[0]);
+  if (!noms.includes(nom)) nom = noms[0];
+  memoire.ecrire(`papote-onglet-${page}`, nom);
+  for (const b of boutons) {
+    b.classList.toggle('actif', b.dataset.onglet === nom);
+    b.setAttribute('aria-selected', String(b.dataset.onglet === nom));
+  }
+  panneau.querySelectorAll('[data-onglet]:not(button)').forEach((el) => { el.hidden = el.dataset.onglet !== nom; });
+}
+document.querySelectorAll('[data-panneau] .onglets [data-onglet]').forEach((b) => {
+  b.setAttribute('role', 'tab');
+  b.addEventListener('click', () => {
+    const page = b.closest('[data-panneau]').dataset.panneau;
+    history.replaceState(null, '', `#${page}/${b.dataset.onglet}`);
+    choisirOnglet(page, b.dataset.onglet);
+  });
+});
 
 function afficherPage() {
   const page = pageCourante();
@@ -198,6 +227,7 @@ function afficherPage() {
   });
   document.querySelectorAll('[data-panneau]').forEach((p) => { p.hidden = p.dataset.panneau !== page; });
   $('titre-page').textContent = TITRES[page];
+  choisirOnglet(page, location.hash.slice(1).split('/')[1]);
   document.title = `Papote · ${TITRES[page]}`;
   $('periode').hidden = !AVEC_PERIODE.includes(page);
   $('p-etat').hidden = !AVEC_PERIODE.includes(page);
@@ -471,19 +501,19 @@ function afficherAccueil() {
     [aVerifier, `${pluriel(aVerifier, 'tablette')} revenue${aVerifier > 1 ? 's' : ''}, à vérifier avant de remettre en stock`, '#stock', ''],
     [aRembourser, `${pluriel(aRembourser, 'remboursement')} échoué${aRembourser > 1 ? 's' : ''}, à faire depuis Stripe`, '#commandes', 'ko'],
     [impayees, `${pluriel(impayees, 'abonnement')} impayé${impayees > 1 ? 's' : ''}`, '#factures', 'ko'],
-    [simsAResilier, `${pluriel(simsAResilier, 'forfait SIM')} à résilier ou suspendre`, '#stock', 'ko'],
+    [simsAResilier, `${pluriel(simsAResilier, 'forfait SIM')} à résilier ou suspendre`, '#stock/sim', 'ko'],
     [remplacees, `${pluriel(remplacees, 'tablette')} remplacée${remplacees > 1 ? 's' : ''} à récupérer chez le client`, '#stock', ''],
-    [clientsSansSim, `${clientsSansSim} client${clientsSansSim > 1 ? 's' : ''} Internet inclus sans carte SIM notée sur sa tablette`, '#stock', 'ko'],
-    [simsSansTablette, `${simsSansTablette} ligne${simsSansTablette > 1 ? 's SIM actives reliées' : ' SIM active reliée'} à aucune tablette`, '#stock', 'ko'],
-    [simsARegarder, `${simsARegarder} carte${simsARegarder > 1 ? 's' : ''} SIM à regarder (promo, activation, carte bancaire)`, '#stock', 'ko'],
-    ...accessoires.map((a) => [1, a.manque ? `${a.nom} : il en manque ${a.manque} pour les envois` : `${a.nom} : stock bas (${a.quantite || 0})`, '#stock', a.manque ? 'ko' : '']),
+    [clientsSansSim, `${clientsSansSim} client${clientsSansSim > 1 ? 's' : ''} Internet inclus sans carte SIM notée sur sa tablette`, '#stock/sim', 'ko'],
+    [simsSansTablette, `${simsSansTablette} ligne${simsSansTablette > 1 ? 's SIM actives reliées' : ' SIM active reliée'} à aucune tablette`, '#stock/sim', 'ko'],
+    [simsARegarder, `${simsARegarder} carte${simsARegarder > 1 ? 's' : ''} SIM à regarder (promo, activation, carte bancaire)`, '#stock/sim', 'ko'],
+    ...accessoires.map((a) => [1, a.manque ? `${a.nom} : il en manque ${a.manque} pour les envois` : `${a.nom} : stock bas (${a.quantite || 0})`, '#stock/accessoires', a.manque ? 'ko' : '']),
     ...jumelagesAVoir.map((t) => [1, `Tablette ${t.ref || t.numero || ''} ${t.alerteJumelage}`, '#stock', 'ko']),
     [facturesAttendues.length, `Facture à télécharger chez le vendeur puis à envoyer à factures@ : ${facturesAttendues
-      .map((d) => `${d.fournisseur || d.libelle}${d.numero ? ` (commande ${d.numero})` : ''}`).join(', ')}`, '#compta', 'ko'],
-    [aVerifierMail, `${pluriel(aVerifierMail, 'facture')} reçue${aVerifierMail > 1 ? 's' : ''} par e-mail à vérifier`, '#compta', ''],
-    [erreursMail, `${pluriel(erreursMail, 'problème')} au dernier relevé de factures@mapapote.fr (détail plus bas)`, '#accueil', 'ko'],
-    [tva && tva.alerte ? 1 : 0, tva ? tva.alerte : '', '#accueil', 'ko'],
-    [problemes, `${pluriel(problemes, 'problème')} lors du dernier passage automatique (détail plus bas)`, '#accueil', 'ko'],
+      .map((d) => `${d.fournisseur || d.libelle}${d.numero ? ` (commande ${d.numero})` : ''}`).join(', ')}`, '#compta/depenses', 'ko'],
+    [aVerifierMail, `${pluriel(aVerifierMail, 'facture')} reçue${aVerifierMail > 1 ? 's' : ''} par e-mail à vérifier`, '#compta/depenses', ''],
+    [erreursMail, `${pluriel(erreursMail, 'problème')} au dernier relevé de factures@mapapote.fr (détail en bas de page)`, '#accueil', 'ko'],
+    [tva && tva.alerte ? 1 : 0, tva ? tva.alerte : '', '#compta/urssaf', 'ko'],
+    [problemes, `${pluriel(problemes, 'problème')} lors du dernier passage automatique`, '#outils/automatique', 'ko'],
   ].filter(([n]) => n > 0);
   $('a-faire').replaceChildren(...(taches.length
     ? taches.map(([, texte, lien, classe]) => h('li', {}, h('a', { href: lien, class: classe }, texte, h('span', { 'aria-hidden': 'true' }, '›'))))
@@ -1729,7 +1759,7 @@ function voirDepense(d) {
   $('p-choix').value = 'perso';
   $('p-du').value = new Date(debut.getFullYear(), debut.getMonth(), 1).toLocaleDateString('sv-SE');
   $('p-au').value = new Date(debut.getFullYear(), debut.getMonth() + 1, 0).toLocaleDateString('sv-SE');
-  location.hash = '#compta';
+  location.hash = '#compta/depenses';
   changerPeriode();
 }
 
@@ -1837,10 +1867,6 @@ function afficherGraphiques() {
 
 // ---------- Déclarations URSSAF ----------
 
-const memoire = {
-  lire: (k, defaut) => { try { return localStorage.getItem(k) || defaut; } catch (e) { return defaut; } },
-  ecrire: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* navigation privée */ } },
-};
 $('u-rythme').value = memoire.lire('papote-urssaf-rythme', 'mois');
 
 function afficherUrssaf() {
@@ -1973,7 +1999,7 @@ function afficherTva(t) {
     h('p', { class: 'small' }, `${euros(t.ca)} encaissés depuis le 1er janvier, soit ${pct} % du seuil de ${euros(t.seuil)}. `,
       `À ce rythme : environ ${euros(t.projection)} fin décembre.`),
     ...(t.alerte ? [h('p', { class: 'small error' }, t.alerte)] : []),
-    h('p', { class: 'muted small' }, 'Tant que vous restez sous le seuil, vos factures sont sans TVA (art. 293 B du CGI). Seuil réglable dans Comptabilité.'),
+    h('p', { class: 'muted small' }, 'Tant que vous restez sous le seuil, vos factures sont sans TVA (art. 293 B du CGI). Seuil réglable dans Réglages, Calculs.'),
   );
 }
 
