@@ -1042,6 +1042,33 @@ final class Sync {
             String ssid = nz(Firebase.str(f, "ssid"));
             ok = !ssid.isEmpty() && wifi().connect(ssid, nz(Firebase.str(f, "password")));
             result = ok ? "La tablette se connecte au wifi « " + ssid + " »." : "Le wifi « " + ssid + " » n'a pas pu être ajouté.";
+        } else if ("wifiScan".equals(type)) {
+            // Réseaux autour de la tablette, pour que la famille choisisse le wifi à distance.
+            JSONArray nets = new JSONArray(wifi().scan());
+            JSONArray list = new JSONArray();
+            for (int i = 0; i < nets.length() && i < 40; i++) {
+                JSONObject n = nets.getJSONObject(i);
+                list.put(new JSONObject().put("mapValue", new JSONObject().put("fields", new JSONObject()
+                        .put("ssid", Firebase.string(n.optString("ssid")))
+                        .put("security", Firebase.string(n.optString("security", n.optBoolean("secure") ? "wpa2" : "open")))
+                        .put("signal", new JSONObject().put("integerValue", String.valueOf(n.optInt("signal", n.optInt("level"))))))));
+            }
+            ok = list.length() > 0;
+            if (ok) {
+                JSONObject write = new JSONObject()
+                        .put("update", new JSONObject()
+                                .put("name", doc.getString("name"))
+                                .put("fields", new JSONObject()
+                                        .put("state", Firebase.string("done"))
+                                        .put("reseaux", new JSONObject().put("arrayValue", new JSONObject().put("values", list)))))
+                        .put("updateMask", new JSONObject().put("fieldPaths", new JSONArray().put("state").put("reseaux")))
+                        .put("updateTransforms", new JSONArray().put(new JSONObject()
+                                .put("fieldPath", "doneAt").put("setToServerValue", "REQUEST_TIME")));
+                firebase.commit(new JSONArray().put(write));
+                Journal.log(context, "Ordre wifiScan : " + list.length() + " réseaux");
+                return;
+            }
+            result = "Aucun réseau wifi trouvé autour de la tablette.";
         } else if ("restart".equals(type)) {
             result = "La tablette redémarre.";
             reboot = true;
@@ -1291,7 +1318,7 @@ final class Sync {
 
     /** N° de série Android (le même que « adb shell getprop ro.serialno »), ou null s'il est illisible. */
     @SuppressWarnings({"deprecation", "MissingPermission"})
-    private static String serialNumber() {
+    static String serialNumber() {
         String s = null;
         try {
             s = android.os.Build.getSerial(); // permis à l'appli propriétaire de l'appareil

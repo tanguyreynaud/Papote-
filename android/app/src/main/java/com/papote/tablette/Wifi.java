@@ -81,7 +81,11 @@ final class Wifi {
                 out.put(new JSONObject()
                         .put("ssid", r.SSID)
                         .put("secure", caps.contains("WPA") || caps.contains("WEP") || caps.contains("SAE"))
-                        .put("level", WifiManager.calculateSignalLevel(r.level, 4)));
+                        .put("level", WifiManager.calculateSignalLevel(r.level, 4))
+                        // Pour l'appli famille (ordre « wifiScan ») : type de sécurité et signal de 0 à 4.
+                        .put("security", caps.contains("SAE") && !caps.contains("PSK") ? "wpa3"
+                                : caps.contains("WPA") || caps.contains("WEP") || caps.contains("SAE") ? "wpa2" : "open")
+                        .put("signal", WifiManager.calculateSignalLevel(r.level, 5)));
             }
         } catch (Exception e) {
             Log.w(TAG, "Recherche des réseaux wifi", e);
