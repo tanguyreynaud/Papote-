@@ -391,3 +391,9 @@ test('suppression de famille : Mamie protégée, abonnement en cours refusé, no
   assert.match(g.refusSuppression({ name: 'Durand' }, ''), /ne correspond pas/);
   assert.equal(g.refusSuppression({ name: 'Famille Hélène', abonnement: { statut: 'aucun' } }, ' famille  helene '), null);
 });
+
+test('avancement des parcours nettoyé', () => {
+  const a = g.avancementPropre({ etape: 99, faits: { carton: 5, 'pas bien!': 3, routeur: 'x' }, fini: 0, tablette: 'abc', autre: 'x' }, ['tablette']);
+  assert.deepEqual(a, { etape: 30, faits: { carton: 5 }, fini: null, tablette: 'abc' });
+  assert.deepEqual(g.avancementPropre(null), { etape: 0, faits: {}, fini: null });
+});
