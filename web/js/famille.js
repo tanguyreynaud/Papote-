@@ -31,6 +31,8 @@ import {
 } from './notifs.js';
 
 const $ = (id) => document.getElementById(id);
+// Adresse publique de l'app pour les liens et QR codes partagés (la version test garde la sienne).
+const APP_URL = /--|localhost/.test(location.hostname) ? location.origin : 'https://app.mapapote.fr';
 // Réglages « Modifier / Enregistrer » : { fill, save } par carte (voir plus bas).
 const SETTINGS = {};
 const MAX_IMAGE_CHARS = 900_000; // un document Firestore est limité à 1 Mo
@@ -1062,7 +1064,7 @@ async function pruneOld(type) {
 // ---------- Réglages ----------
 
 function inviteLink() {
-  return `${location.origin}/?code=${formatCode(session.family.code)}`;
+  return `${APP_URL}/?code=${formatCode(session.family.code)}`;
 }
 
 let qrLoading = null;
@@ -1435,7 +1437,7 @@ $('form-invite').addEventListener('submit', async (e) => {
       navigator.share({
         title: 'Papote',
         text: `Je t'invite sur Papote pour envoyer des photos à ${session.family.name}. Connecte-toi avec ${email} :`,
-        url: location.origin,
+        url: APP_URL,
       }).catch(() => {});
     }
   } catch (err) {
