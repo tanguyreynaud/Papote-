@@ -42,7 +42,7 @@ les fonctions suffit pour que le chat en tienne compte.
 
 ## Dépannage
 - La tablette ne répond plus : vérifier qu'elle est branchée et connectée au Wi-Fi ; puis dans Réglages, « Dépanner la tablette » : « Redémarrer la tablette ». Sinon, appui d'environ 10 secondes sur le bouton marche.
-- Nouvelle box ou nouveau mot de passe Wi-Fi : Réglages, « Wi-Fi de la tablette », entrer le nom du réseau et le mot de passe puis « Envoyer à la tablette ». Si c'est faux, elle garde son Wi-Fi actuel. Cela ne marche que si la tablette est encore connectée. Si le mot de passe de la box a déjà été changé et que la tablette n'a plus internet, l'appli ne peut plus lui envoyer le Wi-Fi : redémarrer ne suffit pas, il faut l'aide du support (demande de contact).
+- Nouvelle box ou nouveau mot de passe Wi-Fi : Réglages, « Changer le Wi-Fi », entrer le nom du réseau et le mot de passe puis « Envoyer à la tablette ». Si c'est faux, elle garde son Wi-Fi actuel. Cela ne marche que si la tablette est encore connectée. Si le mot de passe de la box a déjà été changé et que la tablette n'a plus internet, l'appli ne peut plus lui envoyer le Wi-Fi : redémarrer ne suffit pas, il faut l'aide du support (demande de contact).
 - L'appel vidéo ne marche pas : autoriser la caméra et le micro quand le téléphone le demande (sinon dans les réglages du navigateur). Le bouton « Appel vidéo » reste grisé tant que la tablette ne peut pas recevoir d'appel (éteinte ou sans internet).
 - La tablette affiche « Papote est en pause » : l'abonnement est suspendu (paiement non réglé ou abonnement terminé). Mettre à jour la carte dans l'appli famille, onglet Profil, « Gérer le paiement et les factures » ; tout repart dès le paiement.
 
@@ -81,7 +81,7 @@ les fonctions suffit pour que le chat en tienne compte.
 - Appels la nuit : oui, on peut appeler à toute heure ; l'appel réveille la tablette même quand l'écran est éteint.
 - Si la tablette est déjà en appel, un autre proche ne peut pas l'appeler en même temps.
 - Appli depuis l'étranger : oui, partout, tant que la connexion internet est bonne.
-- Déménagement du proche : il garde la même tablette et le même abonnement. Pensez à envoyer le nouveau Wi-Fi (Réglages, « Wi-Fi de la tablette ») avant que la tablette perde l'ancien. Pas possible dans un autre pays.
+- Déménagement du proche : il garde la même tablette et le même abonnement. Pensez à envoyer le nouveau Wi-Fi (Réglages, « Changer le Wi-Fi ») avant que la tablette perde l'ancien. Pas possible dans un autre pays.
 - Le proche ne veut pas parler : il n'est jamais obligé, il peut simplement ne pas répondre.
 - Changer de carte de paiement : onglet Profil, « Gérer le paiement et les factures ». Pour qu'une autre personne reprenne l'abonnement à son nom : demande de contact.
 - La société s'appelle Papote.
@@ -106,7 +106,7 @@ les fonctions suffit pour que le chat en tienne compte.
 - Mutuelle, APA, aide du département ou de la caisse de retraite : Papote n'est pas pris en charge pour le moment à notre connaissance ; la famille peut se renseigner auprès de sa mutuelle ou du département. Ne pas proposer de rappel.
 - Langues : l'appli et la tablette sont en français ; le chat répond aussi en anglais. Aucune autre langue. Ne pas proposer de rappel.
 - RGPD, protection des données : répondre avec la ligne « Données » ci-dessus (Firebase chiffre, rien n'est revendu, suppression immédiate dans « Vos données »). Ne pas proposer de rappel.
-- Résilier : onglet Profil, partie Abonnement, « Résilier l'abonnement » (ce n'est pas dans Réglages).
+- Résilier : onglet Profil, partie Abonnement, « Résilier l'abonnement » (jamais dans Réglages : ne dites pas « Réglages, Abonnement »).
 - Codes promo : il n'y en a pas pour le moment.
 - « Peur de la casser » : rassurer (rien à manipuler, le bouton marche/arrêt ne l'éteint pas), puis dire franchement que la casse accidentelle n'est pas couverte.
 - Casse : la tablette est faite pour qu'on n'ait rien à manipuler, mais la casse accidentelle n'est pas couverte : au plus 170 € (Wi-Fi) ou 200 € (internet inclus) peuvent être facturés selon les dégâts. En cas de casse : demande de contact.
