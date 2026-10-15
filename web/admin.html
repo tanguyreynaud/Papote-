@@ -221,7 +221,8 @@
               <select id="filtre-stock" aria-label="Filtrer"><option value="">Toutes</option></select>
               <div class="actions no-print">
                 <button type="button" class="secondary small-btn" id="x-stock">Exporter</button>
-                <button type="button" class="primary small-btn" id="btn-achat">Ajouter un achat</button>
+                <button type="button" class="secondary small-btn" id="btn-achat">Ajouter un achat</button>
+                <button type="button" class="primary small-btn" id="btn-recevoir">Recevoir une tablette</button>
               </div>
             </div>
             <div class="table"><table id="t-stock"></table></div>
@@ -247,7 +248,10 @@
         <div class="card" data-onglet="accessoires">
           <div class="tete">
             <p class="muted small">Ils sortent tout seuls du stock quand une tablette part avec la formule choisie.</p>
-            <button type="button" class="primary small-btn no-print" id="btn-accessoire">Ajouter un accessoire</button>
+            <div class="actions no-print">
+              <button type="button" class="secondary small-btn" id="btn-accessoire">Ajouter un accessoire</button>
+              <button type="button" class="primary small-btn" id="btn-recevoir-accessoire">Recevoir une livraison</button>
+            </div>
           </div>
           <div class="table"><table id="t-accessoires"></table></div>
         </div>

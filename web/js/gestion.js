@@ -8,6 +8,7 @@ import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/
 import {
   appeler, donnees as lireDonnees, signalerChangement, messageErreur,
 } from './gestion-api.js';
+import { ouvrirParcours, fermerParcours } from './parcours.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -2300,3 +2301,211 @@ async function envoyerCampagne(test) {
 
 $('campagne-test').addEventListener('click', () => envoyerCampagne(true));
 $('f-campagne').addEventListener('submit', (e) => { e.preventDefault(); envoyerCampagne(false); });
+
+
+// ---------- Réception d'une tablette, pas à pas ----------
+// Vérifier, noter le n° de série, préparer, installer Papote (qui donne le numéro T-…), vérifier, ranger.
+
+const libelleTablette = (t) => [t.ref, t.numero, t.modele, t.fournisseur, t.acheteeLe ? `achetée le ${jour(t.acheteeLe)}` : null]
+  .filter(Boolean).join(' · ') || 'Tablette sans nom';
+
+function etapesReceptionTablette() {
+  const fiche = (e) => donnees.stock.find((t) => t.id === e.id);
+  return [
+    {
+      cle: 'reception',
+      titre: 'Réception',
+      texte: 'Ouvrez le carton du vendeur. Quel achat est-ce ?',
+      contenu(zone, e, maj) {
+        const achats = donnees.stock.filter((t) => t.id === e.id || (t.etat === 'en-stock' && !t.ref && !t.commande))
+          .sort((a, b) => (a.acheteeLe || 0) - (b.acheteeLe || 0));
+        if (e.id === undefined) e.id = achats.length ? achats[0].id : null;
+        const choix = h('select', { 'aria-label': 'Achat' },
+          ...achats.map((t) => h('option', { value: t.id, selected: t.id === e.id }, libelleTablette(t))),
+          h('option', { value: '', selected: !e.id }, 'Pas dans la liste (facture pas encore enregistrée)'));
+        const abimee = h('button', { type: 'button', class: 'link small danger' }, 'La tablette est abîmée');
+        choix.addEventListener('change', () => { e.id = choix.value || null; maj(); });
+        abimee.addEventListener('click', async () => {
+          if (!e.id) { alert('Enregistrez d\'abord sa facture (Ajouter un achat), puis notez-la « À réparer ».'); return; }
+          if (!confirm('Noter cette tablette « À réparer » ? Contactez ensuite le vendeur pour l\'échanger.')) return;
+          await appeler('gestionStock', { action: 'modifier', id: e.id, champs: { etat: 'a-reparer' } });
+          signalerChangement();
+          fermerParcours();
+        });
+        e.id = choix.value || null;
+        zone.append(choix, abimee);
+      },
+      cases: ['L\'écran n\'est ni rayé ni fissuré', 'La coque n\'est pas abîmée', 'Le chargeur et le câble sont dans la boîte'],
+    },
+    {
+      cle: 'donnees',
+      titre: 'Les informations',
+      texte: 'Notez le numéro de série (sur la boîte, ou dans Paramètres > À propos de la tablette).',
+      contenu(zone, e, maj) {
+        const t = fiche(e) || {};
+        e.numero = e.numero || t.numero || '';
+        e.modele = e.modele || t.modele || '';
+        const form = h('form', { class: 'grille', onsubmit: (ev) => ev.preventDefault() },
+          h('label', {}, 'N° de série ', h('span', { class: 'avec-bouton' }, h('input', { name: 'numero', value: e.numero, autocomplete: 'off' }),
+            'BarcodeDetector' in window ? h('button', { type: 'button', class: 'secondary small-btn', onclick: () => scanner(form, 'numero') }, 'Scanner') : null)),
+          h('label', {}, 'Modèle ', h('input', { name: 'modele', value: e.modele, placeholder: 'ex. M107' })));
+        const lire = () => { e.numero = form.numero.value.trim(); e.modele = form.modele.value.trim(); maj(); };
+        form.addEventListener('input', lire);
+        $('d-scan').addEventListener('close', lire);
+        zone.append(form);
+      },
+      pret: (e) => !!e.numero,
+      async valider(e) {
+        if (e.id) await appeler('gestionStock', { action: 'modifier', id: e.id, champs: { numero: e.numero, modele: e.modele } });
+      },
+    },
+    {
+      cle: 'preparer',
+      titre: 'Préparer la tablette',
+      texte: 'Allumez la tablette et faites la configuration de départ.',
+      cases: [
+        'Configuration passée SANS ajouter de compte Google ni Samsung',
+        'Paramètres > À propos > « Numéro de build » : touché 7 fois',
+        'Paramètres > Options pour les développeurs > « Débogage USB » : activé',
+      ],
+    },
+    {
+      cle: 'installation',
+      titre: 'Installer Papote',
+      texte: 'Branchez la tablette au PC en USB. Dans PowerShell, dans le dossier Papote, lancez :',
+      contenu(zone, e, maj) {
+        const commande = '.\\installation\\installer-tablette.bat';
+        const copier = h('button', { type: 'button', class: 'secondary small-btn' }, 'Copier');
+        copier.addEventListener('click', () => navigator.clipboard.writeText(commande).then(() => { copier.textContent = 'Copié'; }).catch(() => null));
+        const ref = h('input', { placeholder: 'T-012', value: e.ref || '', autocomplete: 'off', 'aria-label': 'Numéro donné par l\'installation' });
+        ref.addEventListener('input', () => { e.ref = ref.value.trim(); maj(); });
+        zone.append(
+          h('div', { class: 'pc-commande' }, h('code', {}, commande), copier),
+          h('ol', { class: 'pc-liste' },
+            h('li', {}, 'Sur la tablette, acceptez « Autoriser le débogage USB » (cochez « Toujours »).'),
+            h('li', {}, 'Quand le script demande un code, appuyez sur Entrée sans rien taper.'),
+            h('li', {}, 'À la fin, il affiche « Écrivez T-0… sur le carton ». Tapez ce numéro ici :')),
+          ref);
+      },
+      pret: (e) => /^T-?\d{1,5}$/i.test(e.ref || ''),
+      async valider(e) {
+        const r = await appeler('gestionParcours', { type: 'lier', id: e.id || null, ref: e.ref });
+        const sansFiche = !e.id;
+        e.id = r.id;
+        e.ref = r.ref;
+        if (sansFiche && e.numero) await appeler('gestionStock', { action: 'modifier', id: e.id, champs: { numero: e.numero, modele: e.modele } });
+      },
+    },
+    {
+      cle: 'verification',
+      titre: 'Vérifier la tablette',
+      texte: 'Bientôt ici : une vérification guidée de toutes les fonctions (appel vidéo, photos, son). Pour l\'instant :',
+      cases: ['La tablette affiche l\'écran « Bienvenue » de Papote'],
+    },
+    {
+      cle: 'rangement',
+      titre: 'Ranger la tablette',
+      texte: 'Écrivez ce numéro au feutre au dos de la tablette (sur un autocollant) et sur sa boîte :',
+      contenu(zone, e) { zone.append(h('p', { class: 'pc-gros' }, e.ref || '')); },
+      cases: ['Numéro écrit au dos de la tablette', 'Numéro écrit sur la boîte', 'Tablette rangée dans sa boîte avec son chargeur'],
+      bouton: 'Terminer',
+    },
+  ];
+}
+
+async function recevoirTablette() {
+  if (!donnees) return;
+  const enCours = donnees.stock.find((t) => t.reception && !t.reception.fini);
+  const etat = enCours && confirm(`Reprendre la réception de ${libelleTablette(enCours)} ?`)
+    ? { ...enCours.reception, id: enCours.id, ref: enCours.ref || '', numero: enCours.numero || '', modele: enCours.modele || '' }
+    : { etape: 0, faits: {} };
+  await ouvrirParcours({
+    titre: 'Recevoir une tablette',
+    etapes: etapesReceptionTablette(),
+    etat,
+    sauver: (e) => (e.id ? appeler('gestionParcours', { type: 'reception', id: e.id, reception: e }) : null),
+  });
+  signalerChangement();
+}
+$('btn-recevoir').addEventListener('click', recevoirTablette);
+
+// ---------- Réception d'accessoires (routeurs 4G…), pas à pas ----------
+
+const estRouteur = (a) => /routeur|4g|modem|cl[ée]/i.test((a && a.nom) || '');
+
+function etapesReceptionAccessoire() {
+  const acc = (e) => donnees.accessoires.find((a) => a.id === e.id);
+  return [
+    {
+      cle: 'choix',
+      titre: 'Ce qui est arrivé',
+      contenu(zone, e, maj) {
+        const liste = donnees.accessoires.slice().sort((a, b) => estRouteur(b) - estRouteur(a) || a.nom.localeCompare(b.nom, 'fr'));
+        if (!liste.length) {
+          zone.append(h('p', { class: 'error small' }, 'Aucun accessoire : créez-le d\'abord (Ajouter un accessoire).'));
+          return;
+        }
+        e.id = e.id || liste[0].id;
+        const form = h('form', { class: 'grille', onsubmit: (ev) => ev.preventDefault() },
+          h('label', {}, 'Accessoire ', h('select', { name: 'acc' }, ...liste.map((a) => h('option', { value: a.id, selected: a.id === e.id }, a.nom)))),
+          h('label', {}, 'Quantité reçue ', h('input', { name: 'quantite', inputmode: 'numeric', value: e.quantite || '' })),
+          h('label', {}, 'Montant payé (€) ', h('input', { name: 'montant', inputmode: 'decimal', placeholder: 'facultatif', value: e.montant || '' })),
+          h('label', {}, 'Vendeur ', h('input', { name: 'fournisseur', placeholder: 'facultatif', value: e.fournisseur || '' })));
+        const lire = () => {
+          e.id = form.acc.value;
+          e.quantite = form.quantite.value.trim();
+          e.montant = form.montant.value.trim();
+          e.fournisseur = form.fournisseur.value.trim();
+          maj();
+        };
+        form.addEventListener('input', lire);
+        form.addEventListener('change', lire);
+        zone.append(form);
+      },
+      pret: (e) => !!acc(e) && /^\d+$/.test(e.quantite || '') && Number(e.quantite) > 0,
+      valider(e) { e.bons = String(e.quantite); },
+    },
+    {
+      cle: 'test',
+      titre: 'Tester',
+      texte: (e) => (estRouteur(acc(e)) ? 'Testez chaque routeur, un par un :' : 'Vérifiez chaque article :'),
+      cases: (e) => (estRouteur(acc(e)) ? [
+        'Carte SIM de test glissée dans le routeur',
+        'Routeur branché sur une prise USB : le voyant s\'allume',
+        'Après une minute, son Wi-Fi apparaît sur le téléphone (nom et mot de passe sous le capot)',
+        'Téléphone connecté à ce Wi-Fi : une page internet s\'ouvre',
+        'Carte SIM de test retirée',
+      ] : ['Complet et en bon état']),
+      apres: true,
+      contenu(zone, e, maj) {
+        const bons = h('input', { inputmode: 'numeric', value: e.bons || e.quantite, 'aria-label': 'Combien fonctionnent' });
+        bons.addEventListener('input', () => { e.bons = bons.value.trim(); maj(); });
+        zone.append(h('label', { class: 'pc-champ' }, `Combien fonctionnent, sur ${e.quantite} ?`, bons));
+      },
+      pret: (e) => /^\d+$/.test(e.bons || '') && Number(e.bons) <= Number(e.quantite),
+    },
+    {
+      cle: 'stock',
+      titre: 'Ranger',
+      texte: (e) => {
+        const ko = Number(e.quantite) - Number(e.bons);
+        return `${e.bons} ${acc(e) ? acc(e).nom : ''} ajouté${Number(e.bons) > 1 ? 's' : ''} au stock.${ko ? ` Mettez de côté ${ko === 1 ? 'celui qui ne marche pas' : `les ${ko} qui ne marchent pas`} : à renvoyer au vendeur.` : ''}`;
+      },
+      cases: ['Rangés avec le stock'],
+      bouton: 'Ajouter au stock',
+      async valider(e) {
+        if (Number(e.bons) > 0) {
+          await appeler('gestionAccessoire', {
+            action: 'entree', id: e.id, quantite: Number(e.bons), montant: enCentimes(e.montant) || null, fournisseur: e.fournisseur || null,
+          });
+        }
+      },
+    },
+  ];
+}
+
+$('btn-recevoir-accessoire').addEventListener('click', async () => {
+  if (!donnees) return;
+  await ouvrirParcours({ titre: 'Recevoir une livraison', etapes: etapesReceptionAccessoire(), etat: { etape: 0, faits: {} } });
+  signalerChangement();
+});
