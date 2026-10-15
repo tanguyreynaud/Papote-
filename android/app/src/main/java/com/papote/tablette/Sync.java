@@ -168,6 +168,7 @@ final class Sync {
         public void run() {
             try {
                 refreshWeather();
+                reportWifi();
                 syncPosts();
                 syncReminders();
                 syncFamilyExtras();
@@ -663,6 +664,34 @@ final class Sync {
             firebase.commit(new JSONArray().put(write));
         } catch (Exception e) {
             Log.w(TAG, "Batterie", e);
+        }
+    }
+
+    /**
+     * Wifi en cours sur la fiche de la tablette (members/{uid}.wifi = {ssid}, ou null sans wifi),
+     * écrit à chaque changement de réseau : l'appli famille l'affiche dans « Wi-Fi de la tablette ».
+     */
+    private String lastWifiReported = null;
+
+    private void reportWifi() {
+        String fid = prefs.getString("fid", null);
+        if (fid == null) return;
+        try {
+            String ssid = new JSONObject(wifi().status()).optString("wifi", "");
+            if (ssid.equals(lastWifiReported)) return;
+            JSONObject value = ssid.isEmpty() ? new JSONObject().put("nullValue", JSONObject.NULL)
+                    : new JSONObject().put("mapValue", new JSONObject().put("fields",
+                            new JSONObject().put("ssid", Firebase.string(ssid))));
+            JSONObject write = new JSONObject()
+                    .put("update", new JSONObject()
+                            .put("name", Firebase.docName("families/" + fid + "/members/" + firebase.uid()))
+                            .put("fields", new JSONObject().put("wifi", value)))
+                    .put("updateMask", new JSONObject().put("fieldPaths", new JSONArray().put("wifi")))
+                    .put("currentDocument", new JSONObject().put("exists", true));
+            firebase.commit(new JSONArray().put(write));
+            lastWifiReported = ssid;
+        } catch (Exception e) {
+            Log.w(TAG, "Wifi sur la fiche", e);
         }
     }
 
