@@ -71,7 +71,7 @@ let client;
 let site = { texte: '', lu: 0 };
 
 // Adresse de secours si le domaine du site ne sert pas encore la vraie page (page d'attente de l'hébergeur).
-const SITE_SECOURS = 'https://papote.web.app';
+const SITE_SECOURS = 'https://mapapote.fr';
 
 // Texte du site vitrine, sans balises, gardé une heure en mémoire.
 async function lireSite(adresse) {
