@@ -34,6 +34,7 @@ et une app pour que la famille lui envoie photos et messages depuis iPhone ou An
    ou code à taper dans l'app famille (« Ajouter ma tablette »), confirmation « C'est bien vous ? » sur la
    tablette, et placement de la tablette face à la personne (image de la caméra).
    Ville de la météo connue d'avance : `-Ville "Lyon"` au script d'installation (l'étape est alors sautée).
+   Sur la tablette, on tape le code postal puis on choisit la commune dans la liste (geo.api.gouv.fr).
    La famille peut la changer ensuite : l'appli famille écrit `families/{fid}.meteoVille = {nom, lat, lon}`
    (lat/lon facultatifs, retrouvés d'après le nom), et la tablette indique la ville en cours sur sa fiche
    (`members/{uid}.meteoVille`).

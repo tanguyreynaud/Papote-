@@ -8,6 +8,9 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.net.URLEncoder;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * Ville de la météo. Choisie à l'installation (écran Bienvenue ou script d'installation), puis
@@ -53,12 +56,45 @@ final class Meteo {
     }
 
     /**
+     * Communes d'un code postal (5 chiffres) : [{nom, detail, lat, lon}], par ordre alphabétique.
+     * Service gratuit de l'État (geo.api.gouv.fr), sans clé.
+     */
+    static JSONArray searchPostcode(Http http, String code) {
+        JSONArray out = new JSONArray();
+        try {
+            Http.Response r = http.request("GET", "https://geo.api.gouv.fr/communes?codePostal=" + code
+                    + "&fields=nom,centre,departement&format=json", null, null, null);
+            if (!r.ok()) return out;
+            JSONArray communes = new JSONArray(r.body);
+            List<JSONObject> list = new ArrayList<>();
+            for (int i = 0; i < communes.length(); i++) {
+                JSONObject c = communes.getJSONObject(i);
+                JSONArray xy = c.optJSONObject("centre") == null ? null
+                        : c.getJSONObject("centre").optJSONArray("coordinates");
+                if (xy == null || xy.length() < 2) continue;
+                JSONObject dep = c.optJSONObject("departement");
+                list.add(new JSONObject()
+                        .put("nom", c.optString("nom"))
+                        .put("detail", code + (dep == null ? "" : " · " + dep.optString("nom")))
+                        .put("lat", xy.getDouble(1))
+                        .put("lon", xy.getDouble(0)));
+            }
+            Collections.sort(list, (x, y) -> x.optString("nom").compareTo(y.optString("nom")));
+            for (JSONObject o : list) out.put(o);
+        } catch (Exception e) {
+            Log.w(TAG, "Recherche par code postal", e);
+        }
+        return out;
+    }
+
+    /**
      * Communes qui portent ce nom (France d'abord) : [{nom, detail, lat, lon}], au plus 6.
-     * Service gratuit d'Open-Meteo, le même que pour la météo.
+     * Un code postal à 5 chiffres donne toutes ses communes. Service gratuit d'Open-Meteo pour les noms.
      */
     static JSONArray search(Http http, String query) {
         JSONArray out = new JSONArray();
         if (query == null || query.trim().length() < 2) return out;
+        if (query.trim().matches("\\d{5}")) return searchPostcode(http, query.trim());
         try {
             String url = "https://geocoding-api.open-meteo.com/v1/search?count=10&language=fr&format=json&name="
                     + URLEncoder.encode(query.trim(), "UTF-8");

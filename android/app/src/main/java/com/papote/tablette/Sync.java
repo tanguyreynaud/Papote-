@@ -1162,7 +1162,8 @@ final class Sync {
 
     /** Volume réglé par la famille (families/{fid}.volume, 0-100) ; absent = volume actuel. */
     private void readVolume(JSONObject ff) {
-        int volume = ff.has("volume") ? (int) Math.max(0, Math.min(100, Firebase.integer(ff, "volume"))) : -1;
+        // Jamais sous 10 % : la tablette doit toujours s'entendre.
+        int volume = ff.has("volume") ? (int) Math.max(10, Math.min(100, Firebase.integer(ff, "volume"))) : -1;
         if (volume == prefs.getInt("volume", -1)) return;
         prefs.edit().putInt("volume", volume).apply();
         listener.onVolume(volume);

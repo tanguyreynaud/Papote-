@@ -248,11 +248,12 @@
   // ---------- 3. Ville de la météo ----------
   // La famille pourra la changer ensuite depuis son appli (families/{fid}.meteoVille).
 
-  // Comme pour le wifi : un bouton « Choisir la ville » et une fenêtre avec la recherche et la liste.
+  // Comme pour le wifi : un bouton « Choisir la ville » et une fenêtre : le code postal, puis la liste
+  // de ses communes.
   function showMeteo() {
     stepNum = 3;
     art = 'meteo';
-    var box = screen('La météo', 'Choisissez la ville où se trouve la tablette : elle affichera sa météo.');
+    var box = screen('La météo', 'Tapez le code postal de la tablette, puis choisissez la ville : elle affichera sa météo.');
     box.appendChild(button('Choisir la ville', 'primary', openCities));
     box.appendChild(button('Passer cette étape', 'no', function () { closeNetworks(); android().meteoSkip(); }));
     openCities();
@@ -269,9 +270,10 @@
     var sheet = el('div', 'welcome-sheet');
     sheet.appendChild(el('h2', 'welcome-sheet-title', 'Choisir la ville'));
     var input = el('input', 'welcome-input meteo-input');
-    input.type = 'text';
-    input.maxLength = 60;
-    input.placeholder = 'Tapez le nom de la ville';
+    input.type = 'tel';
+    input.inputMode = 'numeric';
+    input.maxLength = 5;
+    input.placeholder = 'Code postal, ex. : 07310';
     sheet.appendChild(input);
     var list = el('div', 'welcome-list');
     sheet.appendChild(list);
@@ -280,17 +282,17 @@
     sheet.appendChild(row);
     veil.appendChild(sheet);
     root.appendChild(veil);
-    // La liste se remplit pendant la frappe.
-    var timer = null;
+    // Dès les 5 chiffres tapés, la liste des communes de ce code postal.
     var last = '';
-    function run() {
-      var q = input.value.trim();
+    list.appendChild(el('p', 'welcome-sub', 'Tapez les 5 chiffres du code postal.'));
+    input.addEventListener('input', function () {
+      input.value = input.value.replace(/\D/g, '').slice(0, 5);
+      var q = input.value;
       if (q === last) return;
       last = q;
-      fillCities(q, list);
-    }
-    input.addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(run, 500); }, false);
-    input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { clearTimeout(timer); run(); input.blur(); } }, false);
+      if (q.length === 5) { input.blur(); fillCities(q, list); }
+      else { list.innerHTML = ''; list.appendChild(el('p', 'welcome-sub', 'Tapez les 5 chiffres du code postal.')); }
+    }, false);
     setTimeout(function () { input.focus(); }, 300);
   }
 
@@ -300,7 +302,7 @@
     var found = [];
     try { found = JSON.parse(android().meteoSearch(query)); } catch (e) { found = []; }
     if (!found.length) {
-      list.appendChild(el('p', 'welcome-sub', 'Aucune ville trouvée. Vérifiez l’orthographe, ou tapez le nom d’une ville proche.'));
+      list.appendChild(el('p', 'welcome-sub', 'Aucune ville pour ce code postal. Vérifiez les chiffres.'));
       return;
     }
     for (var i = 0; i < found.length; i++) {
