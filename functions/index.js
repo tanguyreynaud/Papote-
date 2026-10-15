@@ -137,7 +137,18 @@ async function sessionPaiement({ formule, tablette, fid, email, client, relais }
     // Stripe l'exige avec tax_id_collection pour un client existant.
     params.customer_update = { name: 'auto', address: 'auto' };
   } else if (email) params.customer_email = email;
-  return stripe().checkout.sessions.create(params);
+  try {
+    return await stripe().checkout.sessions.create(params);
+  } catch (e) {
+    // La relance des paniers (expiration, lien de reprise, accord e-mails) ne doit jamais empêcher
+    // de payer : si Stripe refuse ces réglages, la page s'ouvre sans eux.
+    if (!params.after_expiration || e.type !== 'StripeInvalidRequestError') throw e;
+    logger.error('Relance des paniers refusée par Stripe, paiement ouvert sans elle', e.message);
+    delete params.expires_at;
+    delete params.after_expiration;
+    delete params.consent_collection;
+    return stripe().checkout.sessions.create(params);
+  }
 }
 
 // Réglages du portail client créés par outils/stripe/installer-stripe.js (metadata papote=1).
