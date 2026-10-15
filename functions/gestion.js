@@ -569,6 +569,7 @@ exports.gestionDonnees = onCall(async (request) => {
         restitution: c.restitution ? { statut: c.restitution.statut || null, avant: c.restitution.avant || null } : null,
         remboursement: c.remboursement || null,
         etiquettes: c.etiquettes || null,
+        preparation: c.preparation || null,
         stripeCustomerId: c.stripeCustomerId || null,
       });
     }),
@@ -2368,8 +2369,82 @@ exports.gestionSupprimerFamille = onCall({ timeoutSeconds: 540, memory: '512MiB'
   return { ok: true, membres: membres.size };
 });
 
+// ---------- Parcours pas à pas (envoi d'une commande, réception d'une tablette) ----------
+// L'avancement est gardé sur la commande (preparation) ou la fiche tablette (reception) : on reprend où on s'était arrêté.
+
+// Avancement propre : { etape, faits: {cle: ms}, fini, + champs texte permis }.
+function avancementPropre(a, champs = []) {
+  const o = a && typeof a === 'object' ? a : {};
+  const faits = {};
+  for (const [k, v] of Object.entries(o.faits || {}).slice(0, 30)) {
+    if (/^[a-z0-9-]{1,30}$/i.test(k) && Number.isFinite(Number(v))) faits[k] = Number(v);
+  }
+  const propre = {
+    etape: Math.max(0, Math.min(30, Math.floor(Number(o.etape) || 0))),
+    faits,
+    fini: Number.isFinite(Number(o.fini)) && o.fini ? Number(o.fini) : null,
+  };
+  for (const c of champs) propre[c] = texte(o[c], 100);
+  return propre;
+}
+
+// Tablette installée (n° T-xxx donné par l'installation) rattachée à la fiche du parcours de réception :
+// l'installation prend la plus ancienne tablette « en stock », qui n'est pas forcément celle qu'on a en main.
+async function lierInstallation(id, numero, qui) {
+  const ref = texte(numero, 10).toUpperCase().replace(/^T-?/, 'T-');
+  if (!/^T-\d{1,5}$/.test(ref)) throw new HttpsError('invalid-argument', 'Tapez le numéro affiché à la fin de l\'installation, par exemple T-012.');
+  const trouvee = (await db().collection('stock').where('ref', '==', ref).limit(1).get()).docs[0];
+  if (!trouvee) throw new HttpsError('not-found', `${ref} n'est pas dans le stock : l'installation est-elle allée jusqu'au bout ?`);
+  if (!id || trouvee.id === id) return { id: trouvee.id, ref };
+  const fiche = db().doc(`stock/${id}`);
+  const snap = await fiche.get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Tablette introuvable.');
+  if (snap.get('ref') && snap.get('ref') !== ref) throw new HttpsError('failed-precondition', `Cette tablette est déjà ${snap.get('ref')}.`);
+  const t = trouvee.data();
+  if (t.commande) throw new HttpsError('failed-precondition', `${ref} est déjà réservée pour une commande.`);
+  await fiche.update({
+    ref, serieAndroid: t.serieAndroid || null, preparee: t.preparee || Date.now(), etat: 'preparee',
+    ...(t.modele && !snap.get('modele') ? { modele: t.modele } : {}),
+    historique: FieldValue.arrayUnion({ le: Date.now(), etat: 'preparee', par: qui }),
+    majLe: FieldValue.serverTimestamp(),
+  });
+  // Fiche créée par l'installation faute d'achat en stock : elle n'a plus de raison d'être.
+  if (t.prixAchat == null && !t.acheteeLe && !t.depense) await trouvee.ref.delete();
+  else {
+    await trouvee.ref.update({
+      ref: FieldValue.delete(), serieAndroid: FieldValue.delete(), preparee: FieldValue.delete(), etat: 'en-stock',
+      majLe: FieldValue.serverTimestamp(),
+    });
+  }
+  return { id, ref };
+}
+
+// { type: 'envoi', commande, preparation } | { type: 'recu', commande } | { type: 'reception', id, reception }
+// | { type: 'lier', id, ref }
+exports.gestionParcours = onCall(async (request) => {
+  verifierAdmin(request);
+  const d = request.data || {};
+  const qui = request.auth.token.email || request.auth.uid;
+  if (d.type === 'envoi' || d.type === 'recu') {
+    const ref = db().doc(`commandes/${texte(d.commande, 100) || '-'}`);
+    if (!(await ref.get()).exists) throw new HttpsError('not-found', 'Commande introuvable.');
+    if (d.type === 'recu') await ref.update({ 'preparation.recuLe': Date.now(), 'preparation.recuPar': qui });
+    else await ref.update({ preparation: { ...avancementPropre(d.preparation, ['tablette', 'sim', 'suivi']), majLe: Date.now(), par: qui } });
+    return { ok: true };
+  }
+  if (d.type === 'reception') {
+    const ref = db().doc(`stock/${texte(d.id, 100) || '-'}`);
+    if (!(await ref.get()).exists) throw new HttpsError('not-found', 'Tablette introuvable.');
+    await ref.update({ reception: { ...avancementPropre(d.reception), majLe: Date.now(), par: qui } });
+    return { ok: true };
+  }
+  if (d.type === 'lier') return lierInstallation(texte(d.id, 100), d.ref, qui);
+  throw new HttpsError('invalid-argument', 'Parcours inconnu.');
+});
+
 exports.regles = {
   ETATS, CATEGORIES, natureMouvement, mensuel, centimes, lien, nomFichier, moisSuivant, lectureVersFormulaire, SCHEMA_FACTURE,
   lireReglages, simAResilier, stockAJour, incoherences, materielLu, memeAccessoire, coutLigne, alertesSim, accessoiresAPrevoir, champsSim, aFaire, piecesFacture, debutMoisParis, moisPrecedent, csvTexte, livreDesRecettes,
   registreDesAchats, corpsDuMail, memeAchat, suiteJumelage, descriptionNonRendu, refusSuppression, fusionnerContacts, emailInformation, cleContact,
+  avancementPropre,
 };

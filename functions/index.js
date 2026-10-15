@@ -1038,6 +1038,7 @@ exports.gestionCampagne = gestion.gestionCampagne;
 exports.desinscription = gestion.desinscription;
 exports.gestionSupprimerFamille = gestion.gestionSupprimerFamille;
 exports.gestionFamilleOfferte = gestion.gestionFamilleOfferte;
+exports.gestionParcours = gestion.gestionParcours;
 exports.gestionRenvoyerCode = gestion.gestionRenvoyerCode;
 exports.gestionJumelage = gestion.gestionJumelage;
 
