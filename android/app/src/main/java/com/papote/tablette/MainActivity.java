@@ -206,6 +206,28 @@ public class MainActivity extends Activity implements Sync.Listener {
 
     private void handleIntent(Intent intent) {
         if (intent == null) return;
+        // Remise à l'état usine (installation/remettre-a-zero.ps1), pour rendre la tablette au fournisseur.
+        // Le script envoie le n° de série de la tablette : une commande pour une autre tablette ne fait rien.
+        String usine = intent.getStringExtra("usine");
+        if (usine != null) {
+            String serie = Sync.serialNumber();
+            if (isDeviceOwner() && serie != null && serie.equals(usine)) {
+                Journal.log(this, "Remise à l'état usine demandée");
+                try {
+                    if (sync != null) sync.leave();
+                } catch (Exception ignored) { }
+                handler.postDelayed(() -> {
+                    try {
+                        dpm().wipeData(0);
+                    } catch (Exception e) {
+                        Log.w(TAG, "Remise à l'état usine", e);
+                    }
+                }, 4000);
+            } else {
+                Log.w(TAG, "Remise à l'état usine refusée (n° de série ou mode kiosque)");
+            }
+            return;
+        }
         if (intent.getBooleanExtra("remove_owner", false)) {
             setKioskPaused(true);
             removeDeviceOwner();

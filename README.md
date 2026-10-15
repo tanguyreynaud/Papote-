@@ -44,6 +44,16 @@ et une app pour que la famille lui envoie photos et messages depuis iPhone ou An
    Écrivez-le sur le carton. Au jumelage chez le client, la tablette envoie ce n° de série et sa
    commande est reliée à la famille. Sans la clé, cette étape est simplement sautée.
 
+## Remettre une tablette à l'état usine (retour au fournisseur)
+
+Brancher la tablette en USB et double-cliquer sur `installation/remettre-a-zero.bat`.
+Le script affiche le n° de série de la tablette et demande de le retaper pour confirmer.
+La tablette quitte sa famille, puis Android efface tout (famille, photos, wifi, Papote) et
+redémarre sur l'écran de première configuration, comme sortie du carton. Garde-fous : la
+tablette de Mamie est refusée, et Papote n'efface que la tablette dont on lui donne le n° de série.
+Une tablette qui n'est pas en mode kiosque se remet à zéro à la main :
+Paramètres > Système > Réinitialiser > Effacer toutes les données.
+
 ## Publier une mise à jour
 
 1. Augmenter `versionCode` et `versionName` dans `android/app/build.gradle.kts`, puis faire un commit.
