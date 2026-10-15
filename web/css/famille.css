@@ -945,3 +945,39 @@ body:not(.on-support) .ps-bouton, body:not(.on-support) .ps-panneau { display: n
 #form-wifi .wifi-list { margin-top: 4px; }
 #btn-wifi-scan { margin: 0 0 6px; }
 .setting-actions button { justify-content: center; font-size: 16px; font-weight: 700; min-height: 50px; }
+
+/* Lien simple vers le site. */
+.site-line { margin: 18px 0 0; text-align: center; }
+.site-line a { color: var(--accent); font-weight: 600; text-decoration: none; }
+/* Retour (rejoindre une famille) : flèche + texte, en pastille. */
+.back-pill { display: inline-flex; align-items: center; gap: 4px; padding: 8px 16px 8px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--accent); font: inherit; font-weight: 700; font-size: 15px; box-shadow: var(--shadow); }
+.back-pill svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+/* Indicateur de la tablette à l'accueil. */
+.tablet-chip { display: inline-flex; align-items: center; gap: 10px; margin-top: 8px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--text); font: inherit; font-size: 14px; font-weight: 600; box-shadow: var(--shadow); }
+.tablet-chip .chip-part { display: inline-flex; align-items: center; gap: 5px; }
+.tablet-chip svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.tablet-chip .ok { color: var(--ok); }
+.tablet-chip .bad { color: var(--danger); }
+.batt { position: relative; display: inline-block; width: 22px; height: 11px; border: 2px solid currentColor; border-radius: 3px; padding: 1px; }
+.batt::after { content: ''; position: absolute; right: -5px; top: 2px; width: 2px; height: 4px; border-radius: 0 1px 1px 0; background: currentColor; }
+.batt span { display: block; height: 100%; border-radius: 1px; background: currentColor; }
+
+/* Fenêtre Wi-Fi, façon réglages d'un téléphone. */
+#sheet-wifi .wifi-list { margin: 8px 0; gap: 0; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--surface); }
+#sheet-wifi .wifi-list:empty { display: none; }
+.wifi-item + .wifi-item { border-top: 1px solid var(--line); }
+#sheet-wifi .wifi-choice { border: 0; border-radius: 0; background: transparent; min-height: 56px; }
+#sheet-wifi .wifi-choice:disabled { opacity: 1; }
+.wifi-text { display: flex; flex-direction: column; min-width: 0; }
+.wifi-state { font-size: 13px; color: var(--ok); font-weight: 600; }
+.wifi-state:empty { display: none; }
+.wifi-meta { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); }
+.wifi-meta svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2; }
+.bars { display: inline-flex; align-items: flex-end; gap: 2px; height: 14px; }
+.bars i { display: block; width: 3px; border-radius: 1px; background: var(--line); }
+.bars i:nth-child(1) { height: 25%; } .bars i:nth-child(2) { height: 50%; } .bars i:nth-child(3) { height: 75%; } .bars i:nth-child(4) { height: 100%; }
+.bars i.on { background: var(--text); }
+.wifi-join { display: grid; gap: 10px; padding: 0 14px 14px; }
+.wifi-join .error { margin: 0; }
+.spinner-inline { display: inline-block; width: 14px; height: 14px; margin-right: 8px; vertical-align: -2px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }

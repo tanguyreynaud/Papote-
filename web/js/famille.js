@@ -183,7 +183,7 @@ document.querySelectorAll('.page .back').forEach((btn) => {
 });
 window.addEventListener('popstate', (e) => {
   // Une feuille ou la visionneuse ouverte se ferme d'abord.
-  if (!$('viewer').hidden || !$('sheet-post').hidden || !$('sheet-reminder').hidden) {
+  if (!$('viewer').hidden || !$('sheet-post').hidden || !$('sheet-reminder').hidden || !$('sheet-wifi').hidden) {
     closeSheets();
     closeViewer();
     return;
@@ -605,6 +605,9 @@ function syncAddSheet() {
 function closeSheets() {
   $('sheet-post').hidden = true;
   $('sheet-reminder').hidden = true;
+  $('sheet-wifi').hidden = true;
+  stopScan?.();
+  stopScan = null;
   $('video-preview').removeAttribute('src');
   pendingPhotos = [];
   pendingVideo = null;
@@ -1800,35 +1803,99 @@ document.querySelectorAll('[data-close]').forEach((btn) => btn.addEventListener(
   $(btn.dataset.close).hidden = true;
 }));
 
-// Réseaux vus par la tablette : commande wifiScan, la tablette répond avec reseaux
-// [{ ssid, security: 'wpa2'|'wpa3'|'open', signal: 0-4 }] ; on touche un réseau pour le choisir.
+// Wi-Fi : une fenêtre comme celle d'un téléphone. La tablette cherche les réseaux (commande
+// wifiScan, réponse reseaux [{ ssid, security, signal 0-4 }]) ; on touche un réseau, on tape
+// le mot de passe s'il en faut un, et « Se connecter » envoie la commande wifi.
 let stopScan = null;
+
+function wifiCourant() { return tabletMembers.map((m) => m.wifi?.ssid).find(Boolean) || null; }
+
+function barres(signal) {
+  const n = Math.max(1, Math.min(4, signal || 1));
+  return `<span class="bars" aria-label="Signal ${n} sur 4">${[1, 2, 3, 4].map((i) => `<i class="${i <= n ? 'on' : ''}"></i>`).join('')}</span>`;
+}
+
+function ouvrirWifi() {
+  $('sheet-wifi').hidden = false;
+  history.pushState({ page: 'settings', sheet: true }, '');
+  chercherReseaux();
+}
+$('wifi-modify').addEventListener('click', ouvrirWifi);
+$('wifi-close').addEventListener('click', () => history.back());
+$('sheet-wifi').addEventListener('click', (e) => { if (e.target === $('sheet-wifi')) history.back(); });
+
+async function connecter(r, password) {
+  await sendCommand('wifi', { ssid: r.ssid, security: r.security, ...(r.security === 'open' ? {} : { password }) });
+  toast(`La tablette se connecte à « ${r.ssid} »`);
+  history.back();
+}
+
+function ligneReseau(r, actuel) {
+  const li = document.createElement('li');
+  li.className = 'wifi-item';
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'wifi-choice';
+  b.innerHTML = '<span class="wifi-text"><span class="wifi-name"></span><span class="wifi-state"></span></span><span class="wifi-meta"></span>';
+  b.querySelector('.wifi-name').textContent = r.ssid;
+  b.querySelector('.wifi-state').textContent = actuel ? 'Connectée' : '';
+  b.querySelector('.wifi-meta').innerHTML = (r.security === 'open' ? '' : '<svg><use href="#i-lock"/></svg>') + barres(r.signal);
+  li.append(b);
+  if (actuel) { b.disabled = true; return li; }
+  b.addEventListener('click', () => {
+    const ouvert = li.querySelector('.wifi-join');
+    document.querySelectorAll('.wifi-join').forEach((x) => x.remove());
+    if (ouvert) return;
+    const form = document.createElement('form');
+    form.className = 'wifi-join';
+    form.innerHTML = (r.security === 'open'
+      ? '<p class="muted small">Réseau ouvert, sans mot de passe.</p>'
+      : '<input type="password" autocomplete="off" placeholder="Mot de passe" aria-label="Mot de passe du Wi-Fi" required>')
+      + '<button type="submit" class="primary wide">Se connecter</button><p class="error small" hidden></p>';
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const input = form.querySelector('input');
+      const err = form.querySelector('.error');
+      if (input && input.value.length < 8) { showError(err, 'Le mot de passe Wi-Fi fait au moins 8 caractères.'); return; }
+      form.querySelector('button').disabled = true;
+      try {
+        await connecter(r, input?.value || '');
+      } catch (error) {
+        console.error(error);
+        showError(err, "L'envoi a échoué. Vérifiez la connexion.");
+        form.querySelector('button').disabled = false;
+      }
+    });
+    li.append(form);
+    form.querySelector('input')?.focus();
+  });
+  return li;
+}
+
 async function chercherReseaux() {
   const tablet = targetTablet();
   const info = $('wifi-scan-info');
-  $('wifi-list').hidden = true;
+  $('wifi-list').replaceChildren();
   $('btn-wifi-scan').hidden = true;
-  info.hidden = false;
   if (!tablet) { info.textContent = "Aucune tablette n'est reliée à cette famille."; return; }
   const cmdRef = doc(collection(db, 'families', session.fid, 'commands'));
   const batch = writeBatch(db);
   batch.set(cmdRef, { type: 'wifiScan', target: tablet.id, createdBy: session.uid, createdAt: serverTimestamp(), state: 'pending' });
   bumpRev(batch, session.fid);
-  $('btn-wifi-scan').disabled = true;
   try {
     await batch.commit();
   } catch (err) {
     console.error(err);
-    info.textContent = "La demande n'a pas pu être envoyée.";
-    $('btn-wifi-scan').disabled = false;
+    info.textContent = "La demande n'a pas pu être envoyée. Vérifiez la connexion.";
+    $('btn-wifi-scan').hidden = false;
     return;
   }
-  info.textContent = 'La tablette cherche les réseaux…';
+  info.innerHTML = '<span class="spinner-inline"></span>La tablette cherche les réseaux autour d\'elle…';
   stopScan?.();
   const timer = setTimeout(() => {
     stopScan?.();
-    $('btn-wifi-scan').disabled = false;
-    info.textContent = "La tablette n'a pas répondu. Tapez le nom du réseau ci-dessous.";
+    stopScan = null;
+    info.textContent = "La tablette n'a pas répondu.";
     $('btn-wifi-scan').hidden = false;
     deleteDoc(cmdRef).catch(() => {});
   }, 60_000);
@@ -1838,76 +1905,33 @@ async function chercherReseaux() {
     clearTimeout(timer);
     stopScan?.();
     stopScan = null;
-    $('btn-wifi-scan').disabled = false;
     deleteDoc(cmdRef).catch(() => {});
+    $('btn-wifi-scan').hidden = false;
     const vus = new Map();
     for (const r of cmd.reseaux || []) {
       if (r?.ssid && (!vus.has(r.ssid) || (r.signal || 0) > (vus.get(r.ssid).signal || 0))) vus.set(r.ssid, r);
     }
-    const reseaux = [...vus.values()].sort((a, b) => (b.signal || 0) - (a.signal || 0));
-    $('btn-wifi-scan').hidden = false;
-    if (cmd.state !== 'done' || !reseaux.length) {
-      info.textContent = cmd.state === 'done'
-        ? 'Aucun réseau trouvé. Tapez le nom du réseau ci-dessous.'
-        : "La tablette ne sait pas encore chercher les réseaux (une mise à jour arrive). Tapez le nom du réseau ci-dessous.";
-      return;
-    }
-    info.textContent = 'Réseaux autour de la tablette : touchez celui de la box.';
-    $('wifi-list').replaceChildren(...reseaux.map((r) => {
-      const li = document.createElement('li');
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'wifi-choice';
-      const barres = '▂▄▆█'.slice(0, Math.max(1, Math.min(4, r.signal || 1)));
-      b.innerHTML = '<span class="wifi-name"></span><span class="wifi-meta"></span>';
-      b.querySelector('.wifi-name').textContent = r.ssid;
-      b.querySelector('.wifi-meta').textContent = `${r.security === 'open' ? 'ouvert' : '🔒'} ${barres}`;
-      b.addEventListener('click', () => {
-        $('wifi-ssid').value = r.ssid;
-        $('wifi-security').value = ['wpa2', 'wpa3', 'open'].includes(r.security) ? r.security : 'wpa2';
-        $('wifi-password-wrap').hidden = $('wifi-security').value === 'open';
-        document.querySelectorAll('.wifi-choice').forEach((x) => x.classList.toggle('active', x === b));
-        if ($('wifi-security').value !== 'open') $('wifi-password').focus();
-      });
-      li.append(b);
-      return li;
-    }));
-    $('wifi-list').hidden = false;
+    const actuel = wifiCourant();
+    const reseaux = [...vus.values()]
+      .map((r) => ({ ...r, security: ['wpa2', 'wpa3', 'open'].includes(r.security) ? r.security : 'wpa2' }))
+      .sort((x, y) => (y.ssid === actuel) - (x.ssid === actuel) || (y.signal || 0) - (x.signal || 0));
+    if (cmd.state !== 'done') { info.textContent = 'La tablette n\'a pas pu chercher les réseaux.'; return; }
+    if (!reseaux.length) { info.textContent = 'Aucun réseau trouvé autour de la tablette.'; return; }
+    info.textContent = 'Réseaux autour de la tablette';
+    $('wifi-list').replaceChildren(...reseaux.map((r) => ligneReseau(r, r.ssid === actuel)));
   }, (err) => console.warn('Recherche Wi-Fi illisible', err));
 }
 $('btn-wifi-scan').addEventListener('click', chercherReseaux);
 
-// Réseau actuel : la tablette le publie sur sa fiche (wifi = { ssid }).
+// Réseau actuel (la tablette le publie sur sa fiche : wifi = { ssid }). Hors ligne, elle ne
+// recevrait pas le changement : il se fait alors directement sur la tablette.
 function renderWifi() {
-  const ssid = tabletMembers.map((m) => m.wifi?.ssid).find(Boolean);
-  $('wifi-current').textContent = ssid || 'Réseau actuel pas encore connu';
+  const enLigne = tabletteEnLigne();
+  $('wifi-modify').hidden = !enLigne;
+  $('wifi-current').textContent = enLigne
+    ? (wifiCourant() || 'Réseau actuel pas encore connu')
+    : 'Tablette hors ligne : changez le Wi-Fi directement sur la tablette, dans ses réglages.';
 }
-
-SETTINGS['wifi-card'] = {
-  fill() {
-    $('wifi-ssid').value = '';
-    $('wifi-password').value = '';
-    $('wifi-security').value = 'wpa2';
-    $('wifi-password-wrap').hidden = false;
-    chercherReseaux();
-  },
-  async save() {
-    const ssid = $('wifi-ssid').value.trim();
-    const security = $('wifi-security').value;
-    const password = $('wifi-password').value;
-    if (!ssid) { notice('Choisissez un réseau dans la liste ou tapez son nom.'); return false; }
-    if (security !== 'open' && password.length < 8) { notice('Le mot de passe Wi-Fi fait au moins 8 caractères.'); return false; }
-    stopScan?.();
-    await sendCommand('wifi', { ssid, security, ...(security === 'open' ? {} : { password }) });
-    $('wifi-password').value = '';
-    toast(`Réseau « ${ssid} » envoyé à la tablette`);
-    return true;
-  },
-};
-
-$('wifi-security').addEventListener('change', () => {
-  $('wifi-password-wrap').hidden = $('wifi-security').value === 'open';
-});
 
 
 function renderRemote() {
@@ -1945,7 +1969,7 @@ function closeSetting(card) {
 
 document.querySelectorAll('.setting').forEach((card) => {
   card.querySelector('.setting-modify').addEventListener('click', () => openSetting(card));
-  card.querySelector('.setting-cancel').addEventListener('click', () => { if (card.id === 'wifi-card') stopScan?.(); closeSetting(card); });
+  card.querySelector('.setting-cancel').addEventListener('click', () => closeSetting(card));
   card.querySelector('.setting-edit').addEventListener('submit', async (e) => {
     e.preventDefault();
     const btn = card.querySelector('.setting-edit button[type=submit]');
@@ -2229,7 +2253,45 @@ function ago(ms) {
   return `le ${d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })} à ${d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
 }
 
+// Petit indicateur de l'accueil : en ligne (Wi-Fi ou carte SIM), branchée, batterie.
+const EN_LIGNE_MS = 45 * 60_000;
+function tabletteEnLigne() {
+  const t = targetTablet();
+  return !!(t?.lastOnline && Date.now() - toDate(t.lastOnline).getTime() < EN_LIGNE_MS);
+}
+
+function renderTabletChip() {
+  const chip = $('tablet-chip');
+  const t = targetTablet();
+  if (!t?.lastOnline) { chip.hidden = true; return; }
+  const enLigne = tabletteEnLigne();
+  const b = t.battery || {};
+  const parSim = !t.wifi?.ssid && !!t.sim;
+  const niveau = Number.isFinite(b.level) ? Math.max(0, Math.min(100, b.level)) : null;
+  const bas = niveau !== null && niveau < 15 && !b.charging;
+  chip.className = `tablet-chip${enLigne ? '' : ' off'}`;
+  chip.innerHTML = `<span class="chip-part${enLigne ? ' ok' : ' bad'}"><svg><use href="#${parSim ? 'i-signal' : 'i-wifi'}"/></svg></span>`
+    + (b.charging ? '<span class="chip-part ok"><svg><use href="#i-plug"/></svg></span>' : '')
+    + (niveau !== null ? `<span class="chip-part${bas ? ' bad' : ''}"><span class="batt"><span style="width:${niveau}%"></span></span>${niveau} %</span>` : '');
+  chip.hidden = false;
+}
+
+$('tablet-chip').addEventListener('click', () => {
+  const t = targetTablet();
+  if (!t) return;
+  const b = t.battery || {};
+  const lignes = [];
+  if (tabletteEnLigne()) lignes.push(t.wifi?.ssid ? `En ligne par le Wi-Fi « ${t.wifi.ssid} ».` : t.sim ? 'En ligne par la carte SIM.' : 'En ligne.');
+  else lignes.push(`Hors ligne depuis ${ago(toDate(t.lastOnline).getTime()).replace('il y a ', '')}.`);
+  if (b.charging === true) lignes.push('Branchée sur son chargeur.');
+  else if (b.charging === false) lignes.push('Débranchée.');
+  if (Number.isFinite(b.level)) lignes.push(`Batterie : ${b.level} %.`);
+  notice(lignes.join(' '));
+});
+
 function renderActivity() {
+  renderTabletChip();
+  renderWifi();
   const el = $('activity');
   const latest = (field) => Math.max(0, ...tabletMembers.map((m) => (m[field] ? toDate(m[field]).getTime() : 0)));
   const online = latest('lastOnline');

@@ -33,6 +33,10 @@
     <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></symbol>
     <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
     <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></symbol>
+    <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M2 8.5a15 15 0 0 1 20 0"/><path d="M5.5 12a10 10 0 0 1 13 0"/><path d="M9 15.5a5 5 0 0 1 6 0"/><circle cx="12" cy="19" r="1"/></symbol>
+    <symbol id="i-signal" viewBox="0 0 24 24"><path d="M4 20v-3"/><path d="M9 20v-6"/><path d="M14 20v-9"/><path d="M19 20V7"/></symbol>
+    <symbol id="i-plug" viewBox="0 0 24 24"><path d="M9 2v5"/><path d="M15 2v5"/><path d="M6 7h12v4a6 6 0 0 1-12 0z"/><path d="M12 17v5"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></symbol>
     <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></symbol>
     <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
     <symbol id="i-camera" viewBox="0 0 24 24"><path d="M3 9a2 2 0 0 1 2-2h2.5L9 4.5h6L16.5 7H19a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="3.5"/></symbol>
@@ -160,7 +164,7 @@
     <section id="view-join" class="page-pad" hidden>
       <div class="join-top">
         <h1 class="brand">Papote</h1>
-        <button type="button" id="btn-join-back" class="primary small-btn" hidden>Retour</button>
+        <button type="button" id="btn-join-back" class="back-pill" hidden><svg><use href="#i-back"/></svg>Retour</button>
       </div>
       <p id="join-account" class="muted small"></p>
       <div class="card">
@@ -204,6 +208,7 @@
         <button type="button" id="btn-invite" class="invite-btn" data-page="invite"><svg><use href="#i-user-plus"/></svg>Inviter</button>
         <h1 class="brand">Papote</h1>
         <p id="family-title" class="muted"></p>
+        <button type="button" id="tablet-chip" class="tablet-chip" aria-label="État de la tablette" hidden></button>
         <select id="family-switch" class="family-switch" aria-label="Changer de famille" hidden></select>
       </header>
       <button type="button" id="pending-banner" class="pending-banner" hidden></button>
@@ -395,32 +400,9 @@
             </div>
           </form>
         </div>
-        <div id="wifi-card" class="card setting" hidden>
-          <div class="setting-head"><h2>Wi-Fi de la tablette</h2><button type="button" class="link setting-modify">Modifier</button></div>
+        <div id="wifi-card" class="card" hidden>
+          <div class="setting-head"><h2>Wi-Fi de la tablette</h2><button type="button" id="wifi-modify" class="link setting-modify">Modifier</button></div>
           <p id="wifi-current" class="setting-value"></p>
-          <form id="form-wifi" class="setting-edit" hidden>
-            <p id="wifi-scan-info" class="muted small"></p>
-            <ul id="wifi-list" class="wifi-list" hidden></ul>
-            <button type="button" id="btn-wifi-scan" class="link" hidden>Chercher à nouveau</button>
-            <label>Nom du réseau
-              <input id="wifi-ssid" autocomplete="off" required>
-            </label>
-            <label>Sécurité
-              <select id="wifi-security">
-                <option value="wpa2">WPA2 (le plus courant)</option>
-                <option value="wpa3">WPA3</option>
-                <option value="open">Aucune (réseau ouvert)</option>
-              </select>
-            </label>
-            <label id="wifi-password-wrap">Mot de passe
-              <input id="wifi-password" type="password" autocomplete="off">
-            </label>
-            <p class="muted small">Si le nom ou le mot de passe est faux, la tablette garde son Wi-Fi actuel.</p>
-            <div class="setting-actions">
-              <button type="button" class="secondary setting-cancel">Annuler</button>
-              <button type="submit" class="primary">Enregistrer</button>
-            </div>
-          </form>
         </div>
         <div id="remote-card" class="card" hidden>
           <h2>Dépanner la tablette</h2>
@@ -600,7 +582,7 @@
             <p>Les photos défilent en grand, les vidéos et les messages s'affichent à l'écran, et les rappels de l'agenda apparaissent à l'heure prévue. La page Notifications vous dit quand ils ont été vus ou confirmés.</p>
           </details>
         </div>
-        <a class="primary wide site-link" href="https://mapapote.fr" target="_blank" rel="noopener">Le site Papote : offres, commander une tablette</a>
+        <p class="site-line"><a href="https://mapapote.fr" target="_blank" rel="noopener">Le site Papote : offres et commande d'une tablette →</a></p>
       </div>
     </section>
   </main>
@@ -612,6 +594,19 @@
     <button type="button" class="nav-item" data-tab="support"><svg><use href="#i-help"/></svg><span>Support</span></button>
     <button type="button" class="nav-item" data-tab="profile"><svg><use href="#i-user"/></svg><span>Profil</span></button>
   </nav>
+
+  <!-- Wi-Fi de la tablette : les réseaux qu'elle voit, comme sur un téléphone -->
+  <div id="sheet-wifi" class="sheet" hidden>
+    <div class="sheet-body">
+      <div class="sheet-head">
+        <h2>Wi-Fi de la tablette</h2>
+        <button type="button" class="icon-btn" id="wifi-close" aria-label="Fermer"><svg><use href="#i-close"/></svg></button>
+      </div>
+      <p id="wifi-scan-info" class="muted small"></p>
+      <ul id="wifi-list" class="wifi-list"></ul>
+      <button type="button" id="btn-wifi-scan" class="link wide" hidden>Chercher à nouveau</button>
+    </div>
+  </div>
 
   <!-- Envoyer une photo ou une vidéo -->
   <div id="sheet-post" class="sheet" hidden>
