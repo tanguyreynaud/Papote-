@@ -28,7 +28,7 @@ les fonctions suffit pour que le chat en tienne compte.
 - La tablette arrive en point relais, déjà configurée. On choisit le point relais à la commande, où l'on veut (près de chez soi ou près du proche) : pas besoin de passer la main pour cela. Un e-mail donne le numéro de suivi.
 - À l'allumage, elle affiche un écran de bienvenue avec un QR code et un code à 8 caractères. On le scanne avec l'appareil photo du téléphone (ou on tape le code dans l'appli famille, « J'ai le code de la tablette »), puis on confirme sur la tablette.
 - Se connecter à l'appli avec l'adresse e-mail utilisée pour le paiement : la commande se rattache toute seule à la famille.
-- Si la tablette n'a pas de carte SIM, l'écran de bienvenue demande le Wi-Fi de la maison.
+- Avec la formule Wi-Fi, l'écran de bienvenue demande le Wi-Fi de la maison.
 
 ## La tablette au quotidien
 - Elle reste allumée : heure, date, météo et photos en diaporama. Les nouveaux envois s'affichent en grand tout seuls.
@@ -55,14 +55,15 @@ les fonctions suffit pour que le chat en tienne compte.
 
 ## Questions fréquentes (réponses validées par Papote)
 - Acheter la tablette : non, elle n'est jamais vendue ; elle est prêtée pendant l'abonnement et rendue à la fin.
-- Pas d'internet chez le proche : aucun problème, il suffit de choisir l'option internet inclus (carte SIM dans la tablette).
+- Pas d'internet chez le proche : aucun problème avec l'option internet inclus : nous prêtons un petit routeur 4G (avec sa carte SIM) qui crée le Wi-Fi de la tablette, à brancher sur une prise.
 - La tablette : une tablette Android de notre fournisseur (on ne donne pas la marque), avec un bel écran de 10 pouces et une bonne caméra. Elle est préparée en France ; seule sa fabrication ne l'est pas.
 - Batterie : elle est faite pour rester branchée en permanence, comme un cadre photo.
 - Son : il est fort, pensé pour les personnes qui entendent mal.
 - Deux tablettes dans la même famille (par exemple deux grands-parents à deux endroits) : c'est possible, avec deux abonnements.
-- Maison de retraite (EHPAD) : ça marche avec le Wi-Fi de l'établissement s'il ne demande pas de page de connexion ; sinon, prendre l'option internet inclus (carte SIM).
+- Maison de retraite (EHPAD) : ça marche avec le Wi-Fi de l'établissement s'il ne demande pas de page de connexion ; sinon, prendre l'option internet inclus (routeur 4G prêté).
 - Box 4G ou partage de connexion d'un téléphone : ça marche, c'est un Wi-Fi comme un autre.
-- Carte SIM : l'opérateur n'est pas fixe ; on choisit celui qui couvre le mieux le domicile du client.
+- La tablette n'a jamais de carte SIM : avec l'option internet inclus, c'est le routeur 4G prêté (avec sa SIM) qui lui donne internet.
+- Carte SIM du routeur 4G : l'opérateur n'est pas fixe ; on choisit celui qui couvre le mieux le domicile du client.
 - Autres usages (Internet, jeux, YouTube) : non, la tablette est réservée à Papote pour rester simple et sans risque.
 - Tablette perdue ou volée : il n'y a pas de garantie pour cela. Il faut nous le signaler pour suspendre le contrat. La tablette est prêtée : 170 € (Wi-Fi) ou 200 € (internet inclus) prévus pour une tablette non rendue peuvent être appliqués. Pour en recevoir une nouvelle : demande de contact. Pour le signaler : demande de contact.
 - Nombre de proches dans la famille : jusqu'à 30.
@@ -73,7 +74,7 @@ les fonctions suffit pour que le chat en tienne compte.
 - Délai de livraison : la commande est préparée sous 2 à 3 jours ouvrés, puis livrée par Mondial Relay sous 3 à 5 jours ouvrés.
 - Offrir Papote en cadeau, payé par un autre proche : bien sûr.
 - Livraison hors France, Belgique et Luxembourg (Suisse, DOM-TOM…) : pas pour le moment.
-- Changer de formule : passer à l'option internet inclus (carte SIM) demande de nous renvoyer la tablette pour la modifier ; passer de la SIM au Wi-Fi est envisageable. Dans les deux cas : demande de contact.
+- Changer de formule : passer à l'option internet inclus (nous envoyons le routeur 4G) ou revenir au Wi-Fi de la maison (on nous renvoie le routeur) est possible. Dans les deux cas : demande de contact.
 - Paiement : par carte bancaire uniquement (pas de chèque, de virement ni d'espèces) ; les factures sont dans l'appli, onglet Profil, « Gérer le paiement et les factures ».
 - Tablette arrivée abîmée (écran fissuré, colis endommagé) : ce n'est pas de votre faute et ce n'est pas une rétractation. Prenez des photos et faites une demande de contact : l'équipe s'en occupe.
 - Panne (tablette qui ne marche plus sans avoir été cassée) : réparée gratuitement. Nous envoyons une étiquette de retour ; comptez le temps de nous l'envoyer, environ 5 jours ouvrés de réparation, puis environ 5 jours ouvrés pour la recevoir de nouveau. Demande de contact pour lancer le retour.
