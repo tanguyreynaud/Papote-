@@ -65,13 +65,29 @@ function commandeConfirmee({ nom, code, relais, formule }) {
 }
 
 // Prévient Papote qu'une tablette est à préparer.
-function relancePanier({ nom, formule, lien }) {
-  return message('Votre commande Papote vous attend', [
-    `Bonjour${nom ? ` ${echapper(nom)}` : ''},`,
-    'Vous avez commencé une commande Papote sans la terminer. Elle est gardée de côté : vous pouvez la reprendre en un clic.',
-    `Pour rappel : livraison offerte, 15 jours d'essai gratuit, puis ${formule === 'sim' ? '30 € par mois, internet inclus' : '20 € par mois'}. La tablette est prêtée et déjà configurée.`,
-    'Une hésitation, une question ? Répondez à cet e-mail, nous vous répondons personnellement.',
-  ], { texte: 'Reprendre ma commande', lien });
+// Panier abandonné (functions/relances.js) : etape 1 (une heure après), 2 (lendemain soir), 3 (une semaine après).
+function relancePanier({ etape = 1, nom, formule, lien, desinscription }) {
+  const prix = formule === 'sim' ? '30 € par mois, internet inclus' : '20 € par mois';
+  const textes = {
+    1: ['Votre commande Papote vous attend', [
+      'Vous avez commencé une commande Papote sans la terminer. Elle est gardée de côté : vous pouvez la reprendre en un clic, avec le même point relais.',
+      `Pour rappel : livraison offerte, 15 jours d'essai gratuit, puis ${prix}. La tablette est prêtée et déjà configurée.`,
+    ]],
+    2: ['Une question avant de vous décider ?', [
+      'Vous avez regardé Papote hier. Si quelque chose vous fait hésiter, répondez simplement à cet e-mail : nous vous répondons personnellement.',
+      'La tablette arrive prête à brancher, votre proche n\'a rien à manipuler, et vous avez 15 jours d\'essai gratuit pour voir si ça lui plaît.',
+    ]],
+    3: ['Dernier rappel pour votre commande Papote', [
+      'Votre commande Papote est toujours prête. C\'est notre dernier rappel : nous ne vous écrirons plus à ce sujet.',
+      `Livraison offerte, 15 jours d'essai gratuit, puis ${prix}, sans rien à installer pour votre proche.`,
+    ]],
+  };
+  const [titre, corps] = textes[etape] || textes[1];
+  return message(titre, [
+    bonjour(nom),
+    ...corps,
+    desinscription ? `<span style="font-size:14px;color:#5f5a6b">Vous recevez cet e-mail car vous avez accepté les nouvelles de Papote. <a href="${echapper(desinscription)}" style="color:#5f5a6b">Se désinscrire</a>.</span>` : '',
+  ].filter(Boolean), { texte: 'Reprendre ma commande', lien });
 }
 
 function nouvelleCommande({ nom, email, telephone, code, relais, formule }) {

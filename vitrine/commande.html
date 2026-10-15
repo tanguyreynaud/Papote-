@@ -52,7 +52,9 @@ h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-u
 .rassure a { color: var(--accent-strong); }
 .petit { font-size: .95rem; }
 .qui { display: grid; gap: .4rem; font-weight: 700; }
-.qui[hidden] { display: none; }
+.qui[hidden], .accord[hidden] { display: none; }
+.accord { display: flex; gap: .6rem; align-items: flex-start; font-size: 1rem; color: var(--muted); cursor: pointer; }
+.accord input { width: 1.3rem; height: 1.3rem; margin-top: .2rem; flex: none; accent-color: var(--accent); }
 .qui input { font: inherit; font-weight: 400; color: var(--text); min-height: 3rem; padding: .5rem .75rem; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
 .qui .muted { font-weight: 400; font-size: 1rem; }
 .btn.btn-ghost { background: transparent; color: var(--text); border: 2px solid var(--line); }
@@ -114,6 +116,14 @@ h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-u
     <input id="destinataire" autocomplete="name" maxlength="80" placeholder="Prénom et nom">
     <span class="muted">Le nom doit correspondre à une pièce d'identité : il figure sur le colis.</span>
   </label>
+  <label class="qui" id="qui-mail" hidden>Votre e-mail
+    <input id="email" type="email" autocomplete="email" inputmode="email" maxlength="120" placeholder="vous@exemple.fr">
+    <span class="muted">Pour la confirmation de commande et le suivi du colis.</span>
+  </label>
+  <label class="accord" id="qui-accord" hidden>
+    <input type="checkbox" id="accord">
+    <span>J'accepte de recevoir les nouvelles de Papote par e-mail, et un rappel si je ne termine pas ma commande (désinscription en un clic).</span>
+  </label>
 
   <a class="btn payer" id="payer" href="#" aria-disabled="true">Choisissez un point relais</a>
   <ul class="rassure">
@@ -154,17 +164,22 @@ h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-u
   var payer = document.getElementById('payer');
 
   var destinataire = document.getElementById('destinataire');
+  var champEmail = document.getElementById('email');
+  var accord = document.getElementById('accord');
   // Payer : point relais choisi ET prénom + nom de la personne qui retire le colis.
   function lienPaiement() {
     var nom = destinataire.value.trim().replace(/\s+/g, ' ');
-    if (!relais || nom.split(' ').length < 2) {
+    var mel = champEmail.value.trim();
+    var melOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mel);
+    if (!relais || nom.split(' ').length < 2 || !melOk) {
       payer.removeAttribute('href');
       payer.setAttribute('aria-disabled', 'true');
-      payer.textContent = relais ? 'Indiquez qui retire le colis' : 'Choisissez un point relais';
+      payer.textContent = !relais ? 'Choisissez un point relais'
+        : nom.split(' ').length < 2 ? 'Indiquez votre nom complet' : 'Indiquez votre e-mail';
       return;
     }
     var params = new URLSearchParams({
-      rdest: nom,
+      rdest: nom, email: mel, accord: accord.checked ? '1' : '0',
       formule: recap.net.checked ? 'sim' : 'wifi', tablette: 'incluse',
       relais: String(relais.id), rnom: relais.name, radr: relais.adresse,
       rcp: relais.postal_code, rville: relais.city, rpays: (relais.country || 'FR').toUpperCase()
@@ -184,6 +199,8 @@ h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-u
     document.getElementById('choisi-adresse').textContent = relais.adresse + ', ' + p.postal_code + ' ' + p.city;
     document.getElementById('choisi').hidden = false;
     document.getElementById('qui').hidden = false;
+    document.getElementById('qui-mail').hidden = false;
+    document.getElementById('qui-accord').hidden = false;
     lienPaiement();
     var cible = payer.getAttribute('aria-disabled') === 'false' ? payer : destinataire;
     cible.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -407,6 +424,8 @@ h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-u
   });
 
   destinataire.addEventListener('input', lienPaiement);
+  champEmail.addEventListener('input', lienPaiement);
+  accord.addEventListener('change', lienPaiement);
   payer.addEventListener('click', function () { if (payer.getAttribute('aria-disabled') === 'false') compter('paiement'); });
   compter('commande');
   maj();
