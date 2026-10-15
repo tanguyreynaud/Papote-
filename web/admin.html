@@ -211,7 +211,17 @@
       <!-- ---------- Familles et tablettes ---------- -->
       <section data-panneau="familles" hidden>
         <p id="loading-families" class="muted">Chargement des familles…</p>
-        <ul id="families" class="families"></ul>
+        <div id="familles-liste">
+          <div class="stats" id="kpi-familles"></div>
+          <div class="card">
+            <p class="muted small">Touchez une famille pour ouvrir sa page : membres, tablette de remplacement, abonnement offert, suppression.</p>
+            <div class="table"><table id="t-familles" class="cliquable"></table></div>
+          </div>
+        </div>
+        <div id="famille-fiche" hidden>
+          <button type="button" class="link small" id="famille-retour">← Toutes les familles</button>
+          <ul id="families" class="families"></ul>
+        </div>
         <section class="card sim">
           <h2>Cartes SIM</h2>
           <p id="sim-count" class="muted small"></p>
