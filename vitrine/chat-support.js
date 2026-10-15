@@ -46,6 +46,7 @@
     '.ps-rappel input{border:1px solid var(--ps-ligne);border-radius:10px;padding:.55rem .7rem;font:inherit;font-size:1.05rem;color:var(--ps-texte);background:var(--ps-fond)}' +
     '.ps-rappel button{border:0;border-radius:12px;background:var(--ps-indigo);color:#fff;font:inherit;font-weight:700;padding:.7rem;cursor:pointer}' +
     '.ps-rappel button:disabled{opacity:.5;cursor:default}' +
+    '.ps-panneau .ps-fin{display:block;margin:.4rem auto 0;border:0;border-radius:12px;background:var(--ps-indigo);color:#fff;font:inherit;font-weight:700;padding:.7rem 1.2rem;cursor:pointer}' +
     '.ps-erreur{color:#b91c1c;font-size:.95rem}' +
     '.ps-note{font-size:.8rem;color:var(--ps-gris);text-align:center;padding:0 .75rem .6rem;background:var(--ps-carte)}';
 
@@ -176,6 +177,12 @@
             historique.push({ role: 'assistant', content: merci });
             sauver();
             ajouter('assistant', merci);
+            var fin = el('button', 'ps-fin', 'Fermer le chat');
+            fin.type = 'button';
+            fin.onclick = function () { historique = []; sauver(); ouvrir(false); };
+            fil.appendChild(fin);
+            fil.scrollTop = fil.scrollHeight;
+            fin.focus();
           })
           .catch(function (d) {
             go.disabled = false;
