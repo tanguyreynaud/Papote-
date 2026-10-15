@@ -181,3 +181,8 @@ body.depot-actif::after {
 .campagnes { padding-left: 18px; }
 .campagnes li { margin: 4px 0; }
 #cherche-clients { min-width: 0; width: 220px; max-width: 100%; }
+
+/* Commandes : les chiffres servent d'onglets */
+.stat.onglet { cursor: pointer; border: 2px solid transparent; }
+.stat.onglet:hover { border-color: var(--line); }
+.stat.onglet.actif { border-color: var(--accent); }
