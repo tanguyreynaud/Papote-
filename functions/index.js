@@ -37,6 +37,7 @@ const regles = require('./abonnement');
 const livraison = require('./livraison');
 const mail = require('./mail');
 const avis = require('./avis');
+const relances = require('./relances');
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -95,11 +96,11 @@ async function tarifs(formule, tablette) {
   return cles.map((cle) => ({ price: parCle[cle], quantity: 1 }));
 }
 
-const RELANCE_APRES_MINUTES = 60;
-
 // Essai gratuit de 15 jours pour un nouveau client ; pas pour un client déjà abonné une fois.
-async function sessionPaiement({ formule, tablette, fid, email, client, relais }) {
+async function sessionPaiement({ formule, tablette, fid, email, client, relais, accord }) {
   const metadata = { formule, tablette, ...(relais ? livraison.relaisVersMeta(relais) : {}) };
+  // Case « nouvelles de Papote par e-mail » cochée sur commande.html : reportée sur la commande.
+  if (accord) metadata.accord = '1';
   if (fid) metadata.fid = fid;
   const subscriptionData = { metadata };
   if (!client) {
@@ -121,13 +122,6 @@ async function sessionPaiement({ formule, tablette, fid, email, client, relais }
       : `${SITE_VITRINE.value()}/merci.html?session={CHECKOUT_SESSION_ID}`,
     cancel_url: fid ? APPLI_FAMILLE : `${SITE_VITRINE.value()}/commande.html?formule=${formule}`,
   };
-  if (!fid) {
-    // Panier abandonné : la page de paiement expire au bout d'une heure, puis Stripe garde un lien
-    // pour reprendre la commande (30 jours), envoyé par e-mail si le client a accepté (relancerPanier).
-    params.expires_at = Math.floor(Date.now() / 1000) + RELANCE_APRES_MINUTES * 60;
-    params.after_expiration = { recovery: { enabled: true, allow_promotion_codes: false } };
-    params.consent_collection = { promotions: 'auto' };
-  }
   // Commande du site : livrée au point relais choisi avant le paiement. Depuis l'appli : à l'adresse saisie.
   if (!relais) params.shipping_address_collection = { allowed_countries: ['FR', 'BE', 'LU'] };
   // Factures au nom d'une société : numéro de TVA facultatif sur la page de paiement.
@@ -137,18 +131,7 @@ async function sessionPaiement({ formule, tablette, fid, email, client, relais }
     // Stripe l'exige avec tax_id_collection pour un client existant.
     params.customer_update = { name: 'auto', address: 'auto' };
   } else if (email) params.customer_email = email;
-  try {
-    return await stripe().checkout.sessions.create(params);
-  } catch (e) {
-    // La relance des paniers (expiration, lien de reprise, accord e-mails) ne doit jamais empêcher
-    // de payer : si Stripe refuse ces réglages, la page s'ouvre sans eux.
-    if (!params.after_expiration || e.type !== 'StripeInvalidRequestError') throw e;
-    logger.error('Relance des paniers refusée par Stripe, paiement ouvert sans elle', e.message);
-    delete params.expires_at;
-    delete params.after_expiration;
-    delete params.consent_collection;
-    return stripe().checkout.sessions.create(params);
-  }
+  return stripe().checkout.sessions.create(params);
 }
 
 // Réglages du portail client créés par outils/stripe/installer-stripe.js (metadata papote=1).
@@ -291,8 +274,15 @@ exports.commander = onRequest({ secrets: [STRIPE_SECRET] }, async (req, res) => 
     res.redirect(303, `${SITE_VITRINE.value()}/commande.html?formule=${formule}&tablette=${tablette}`);
     return;
   }
+  const email = emailValide(req.query.email);
+  const accord = req.query.accord === '1';
   try {
-    const session = await sessionPaiement({ formule, tablette, relais });
+    const session = await sessionPaiement({ formule, tablette, relais, email, accord });
+    // Lien d'une relance : le panier d'origine est déjà noté.
+    if (email && !req.query.relance) {
+      await noterPanier(session.id, { email, accord, formule, relais, query: req.query })
+        .catch((e) => logger.error('Panier non noté', e.message));
+    }
     res.redirect(303, session.url);
   } catch (e) {
     logger.error('commander', e);
@@ -547,8 +537,6 @@ exports.stripeWebhook = onRequest(
     try {
       if (event.type === 'checkout.session.completed') {
         await paiementTermine(event.data.object);
-      } else if (event.type === 'checkout.session.expired') {
-        await relancerPanier(event.data.object);
       } else if (event.type.startsWith('customer.subscription.')) {
         await abonnementModifie(event.data.object);
       }
@@ -586,8 +574,10 @@ async function paiementTermine(session) {
       creeLe: FieldValue.serverTimestamp(),
     }, { merge: true });
   }
-  // Case « nouvelles de Papote par e-mail » de la page de paiement Stripe, lue par l'onglet Clients.
-  if ((session.consent && session.consent.promotions) === 'opt_in') await ref.update({ marketing: true });
+  // Case « nouvelles de Papote par e-mail » cochée sur commande.html, lue par l'onglet Clients.
+  if (meta.accord === '1') await ref.update({ marketing: true });
+  // Panier de cette personne : payé, plus de relance.
+  if (email) await db.doc(`paniers/${cleContact(email)}`).update({ payeLe: FieldValue.serverTimestamp() }).catch(() => null);
   // Le code figure aussi sur les factures Stripe du client.
   const code = regles.afficherCode(await codeDe(session.subscription));
   await stripe().customers.update(session.customer, {
@@ -618,42 +608,67 @@ async function confirmerCommande(ref, email, code) {
     .forEach((r) => logger.error(`E-mail de commande non envoyé (${ref.id})`, r.reason));
 }
 
-// Paiement commencé sur le site mais pas terminé : un seul e-mail avec le lien pour reprendre,
-// seulement si le client a coché l'accord pour recevoir des e-mails de Papote sur la page de paiement.
-// Chaque panier est noté dans paniers/{session} (e-mail, accord) pour la liste des contacts.
-async function relancerPanier(session) {
-  const meta = session.metadata || {};
-  if (session.mode !== 'subscription' || meta.fid) return;
-  const details = session.customer_details || {};
-  const email = (details.email || session.customer_email || '').toLowerCase();
-  if (!email) return;
-  const accord = (session.consent && session.consent.promotions) === 'opt_in';
-  const lien = session.after_expiration && session.after_expiration.recovery
-    && session.after_expiration.recovery.url;
-  const ref = db.doc(`paniers/${session.id}`);
-  const aRelancer = await db.runTransaction(async (t) => {
-    const snap = await t.get(ref);
-    if (snap.exists) return false;
-    t.set(ref, {
-      email, nom: details.name || null, telephone: details.phone || null,
-      formule: meta.formule || null,
-      // Liste « Clients » de l'espace admin : seulement les personnes qui ont accepté.
-      ...(accord ? { marketing: true } : {}),
-      creeLe: FieldValue.serverTimestamp(),
-    });
-    return accord && !!lien;
-  });
-  if (!aRelancer) return;
-  // Déjà client entre-temps (autre paiement réussi) : pas de relance.
-  const deja = await db.collection('commandes').where('email', '==', email).limit(1).get();
-  if (!deja.empty) return;
-  try {
-    await envoyerMail(email, mail.relancePanier({ nom: details.name, formule: meta.formule, lien }));
-    await ref.update({ relanceLe: FieldValue.serverTimestamp() });
-  } catch (e) {
-    logger.error(`Relance de panier non envoyée (${session.id})`, e);
+// ---------- Paniers abandonnés (functions/relances.js) ----------
+const URL_COMMANDER = 'https://europe-west1-papote-famille.cloudfunctions.net/commander';
+const URL_DESINSCRIPTION = 'https://europe-west1-papote-famille.cloudfunctions.net/desinscription';
+const emailValide = (e) => (typeof e === 'string' && e.length <= 120 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim())
+  ? e.trim().toLowerCase() : null);
+// Même clé que contacts/ dans gestion.js (onglet Clients, désinscription).
+const cleContact = (email) => require('node:crypto').createHash('sha256').update(email).digest('hex').slice(0, 32);
+
+// Ouverture du paiement depuis le site : panier noté dans paniers/{clé de l'e-mail}, un par personne
+// (un nouvel essai repart de zéro), lu par l'onglet Clients.
+// Avec l'accord, l'adresse rejoint contacts/ avec un jeton de désinscription.
+async function noterPanier(sessionId, { email, accord, formule, relais, query }) {
+  const requete = new URLSearchParams();
+  for (const [k, v] of Object.entries(query)) {
+    if (typeof v === 'string' && !['email', 'accord', 'relance'].includes(k)) requete.set(k, v);
   }
+  await db.doc(`paniers/${cleContact(email)}`).set({
+    session: sessionId, email, nom: relais.destinataire || null, telephone: null, formule,
+    ...(accord ? { marketing: true } : {}),
+    requete: requete.toString(), relances: 0,
+    creeLe: FieldValue.serverTimestamp(),
+  });
+  if (!accord) return;
+  const ref = db.doc(`contacts/${cleContact(email)}`);
+  const snap = await ref.get();
+  await ref.set({
+    email, consentement: true, source: 'commande', desinscritLe: FieldValue.delete(),
+    ...(snap.exists && snap.get('jeton') ? {} : { jeton: require('node:crypto').randomBytes(16).toString('hex') }),
+  }, { merge: true });
 }
+
+// Toutes les heures : relances dues (1 h après, lendemain 19 h, une semaine après 19 h),
+// seulement avec l'accord, sans paiement depuis et sans désinscription.
+exports.relancesPaniers = onSchedule(
+  { schedule: 'every 60 minutes', timeZone: 'Europe/Paris', secrets: [MAIL_MOT_DE_PASSE] },
+  async () => {
+    const maintenant = Date.now();
+    const depuis = new Date(maintenant - 9 * relances.JOUR);
+    const paniers = await db.collection('paniers').where('creeLe', '>=', depuis).get();
+    for (const p of paniers.docs) {
+      const d = p.data();
+      if (!d.marketing || d.payeLe || !d.email || !d.creeLe) continue;
+      const etape = relances.relanceDue(d.creeLe.toMillis(), d.relances, maintenant);
+      if (!etape) continue;
+      try {
+        const deja = await db.collection('commandes').where('email', '==', d.email).limit(1).get();
+        const contact = await db.doc(`contacts/${cleContact(d.email)}`).get();
+        if (!deja.empty || (contact.exists && (contact.get('desinscritLe') || contact.get('consentement') === false))) {
+          await p.ref.update({ relances: relances.RELANCES_MAX, relanceArretee: true });
+          continue;
+        }
+        const desinscription = contact.exists && contact.get('jeton')
+          ? `${URL_DESINSCRIPTION}?c=${contact.id}&j=${contact.get('jeton')}` : null;
+        const lien = `${URL_COMMANDER}?${d.requete}&email=${encodeURIComponent(d.email)}&relance=${p.id}`;
+        await envoyerMail(d.email, mail.relancePanier({ etape, nom: d.nom, formule: d.formule, lien, desinscription }));
+        await p.ref.update({ relances: etape, [`relance${etape}Le`]: FieldValue.serverTimestamp() });
+      } catch (e) {
+        logger.error(`Relance ${etape} du panier ${p.id} non envoyée`, e.message);
+      }
+    }
+  });
 
 async function abonnementModifie(abo) {
   const commande = await db.doc(`commandes/${abo.id}`).get();
