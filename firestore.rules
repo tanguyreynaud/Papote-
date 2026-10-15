@@ -201,11 +201,11 @@ service cloud.firestore {
           || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['meteoVille', 'rev'])
             && isFamilyAdmin(fid)
             && villeMeteoOk(request.resource.data.meteoVille))
-          // Volume de la tablette (0 à 100), avec le compteur qui la prévient.
+          // Volume de la tablette (10 à 100), avec le compteur qui la prévient.
           || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['volume', 'rev'])
             && isFamilyAdmin(fid)
             && request.resource.data.volume is int
-            && request.resource.data.volume >= 0 && request.resource.data.volume <= 100)
+            && request.resource.data.volume >= 10 && request.resource.data.volume <= 100)
           // Taille du texte sur la tablette, avec le compteur qui la prévient.
           || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['textSize', 'rev'])
             && isFamilyAdmin(fid)
