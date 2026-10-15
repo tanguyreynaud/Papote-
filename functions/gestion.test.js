@@ -383,3 +383,11 @@ test('matériel non rendu : nature du prélèvement et ligne de facture', () => 
   assert.equal(g.descriptionNonRendu({ description: 'Matériel Papote non rendu : routeur' }), 'Matériel Papote non rendu : routeur (indemnité prévue au contrat)');
   assert.equal(g.descriptionNonRendu({}), 'Matériel Papote non rendu (indemnité prévue au contrat)');
 });
+
+test('suppression de famille : Mamie protégée, abonnement en cours refusé, nom à retaper', () => {
+  assert.match(g.refusSuppression({ name: 'Mamie', abonnement: { statut: 'offert' } }, 'Mamie'), /offerte/);
+  assert.match(g.refusSuppression({ name: 'Durand', abonnement: { statut: 'actif' } }, 'Durand'), /résiliez/);
+  assert.match(g.refusSuppression({ name: 'Durand', abonnement: { statut: 'resilie' } }, 'Dupont'), /ne correspond pas/);
+  assert.match(g.refusSuppression({ name: 'Durand' }, ''), /ne correspond pas/);
+  assert.equal(g.refusSuppression({ name: 'Famille Hélène', abonnement: { statut: 'aucun' } }, ' famille  helene '), null);
+});

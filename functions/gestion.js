@@ -2304,8 +2304,48 @@ exports.desinscription = onRequest(async (req, res) => {
     `<form method="post" action="?c=${c}&j=${j}"><button type="submit" style="font:inherit;font-weight:bold;background:#4f46e5;color:#fff;border:0;border-radius:999px;padding:14px 26px;cursor:pointer">Me désinscrire</button></form>`));
 });
 
+
+// ---------- Suppression d'une famille (demande du client à contact@) ----------
+// Les responsables ne peuvent plus supprimer leur famille dans l'appli : l'admin le fait ici, en retapant le nom.
+// Tout part : la fiche et ses sous-collections (posts, reminders, birthdays, invitations, calls, invites,
+// members, logs, commands…) et les photos et vidéos de Storage (families/{fid}/). Famille offerte (Mamie) refusée.
+
+const STATUTS_A_RESILIER = ['actif', 'impaye', 'suspendu'];
+const nomCompare = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().replace(/\s+/g, ' ').toLowerCase();
+
+// Raison de refuser la suppression, ou null.
+function refusSuppression(famille, nomTape) {
+  const statut = famille.abonnement && famille.abonnement.statut;
+  if (statut === 'offert') return 'Famille offerte (celle de Mamie) : suppression interdite.';
+  if (STATUTS_A_RESILIER.includes(statut)) return "L'abonnement de cette famille est en cours : résiliez-le d'abord, sinon le client continuerait à payer.";
+  if (!nomCompare(nomTape) || nomCompare(nomTape) !== nomCompare(famille.name)) return 'Le nom retapé ne correspond pas au nom de la famille.';
+  return null;
+}
+
+exports.gestionSupprimerFamille = onCall({ timeoutSeconds: 540, memory: '512MiB' }, async (request) => {
+  verifierAdmin(request);
+  const { fid, nom } = request.data || {};
+  if (typeof fid !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(fid)) throw new HttpsError('invalid-argument', 'Famille manquante.');
+  const ref = db().doc(`families/${fid}`);
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Famille introuvable (déjà supprimée ?).');
+  const refus = refusSuppression(snap.data(), nom);
+  if (refus) throw new HttpsError('failed-precondition', refus);
+  const membres = await ref.collection('members').get();
+  // Fichiers d'abord : si la base échoue ensuite, un nouvel essai finit le travail.
+  await admin.storage().bucket().deleteFiles({ prefix: `families/${fid}/`, force: true });
+  await db().recursiveDelete(ref);
+  const commandes = await db().collection('commandes').where('fid', '==', fid).get();
+  await Promise.all(commandes.docs.map((d) => d.ref.update({ familleSupprimeeLe: Date.now() })));
+  await db().collection('suppressions').add({
+    fid, nom: snap.get('name') || null, membres: membres.size, le: Date.now(), par: request.auth.token.email || request.auth.uid,
+  });
+  logger.info(`Famille ${fid} supprimée par ${request.auth.token.email}`);
+  return { ok: true, membres: membres.size };
+});
+
 exports.regles = {
   ETATS, CATEGORIES, natureMouvement, mensuel, centimes, lien, nomFichier, moisSuivant, lectureVersFormulaire, SCHEMA_FACTURE,
   lireReglages, simAResilier, stockAJour, incoherences, materielLu, memeAccessoire, coutLigne, alertesSim, accessoiresAPrevoir, champsSim, aFaire, piecesFacture, debutMoisParis, moisPrecedent, csvTexte, livreDesRecettes,
-  registreDesAchats, corpsDuMail, memeAchat, suiteJumelage, descriptionNonRendu, fusionnerContacts, emailInformation, cleContact,
+  registreDesAchats, corpsDuMail, memeAchat, suiteJumelage, descriptionNonRendu, refusSuppression, fusionnerContacts, emailInformation, cleContact,
 };
