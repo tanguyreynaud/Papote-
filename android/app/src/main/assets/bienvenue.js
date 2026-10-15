@@ -25,6 +25,41 @@
     root = el('div', 'welcome');
     root.setAttribute('hidden', '');
     document.body.appendChild(root);
+    scrollbar(root, true);
+  }
+
+  // Barre de défilement toujours visible (celle d'Android s'efface et passe inaperçue) :
+  // un rail et un curseur à droite de la zone qui défile, cachés quand tout tient à l'écran.
+  // fixed : zone en plein écran (rail collé au bord de l'écran).
+  function scrollbar(area, fixed) {
+    var track = el('div', 'scroll-track' + (fixed ? ' fixed' : ''));
+    var thumb = el('div', 'scroll-thumb');
+    track.appendChild(thumb);
+    (fixed ? document.body : area.parentNode).appendChild(track);
+    function update() {
+      if (!track.parentNode) return;
+      var h = area.clientHeight;
+      var total = area.scrollHeight;
+      var shown = h > 0 && total > h + 2 && !area.hasAttribute('hidden');
+      track.style.display = shown ? 'block' : 'none';
+      if (!shown) return;
+      if (!fixed) {
+        track.style.top = area.offsetTop + 'px';
+        track.style.height = h + 'px';
+      }
+      var trackH = fixed ? window.innerHeight : h;
+      var thumbH = Math.max(trackH * h / total, 40);
+      thumb.style.height = thumbH + 'px';
+      thumb.style.top = ((trackH - thumbH) * area.scrollTop / (total - h)) + 'px';
+    }
+    area.addEventListener('scroll', update, false);
+    window.addEventListener('resize', update, false);
+    if (window.MutationObserver) {
+      new MutationObserver(function () { setTimeout(update, 50); })
+        .observe(area, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden', 'class'] });
+    }
+    setTimeout(update, 300);
+    return update;
   }
 
   // Étape en cours (1 nom, 2 wifi, 3 météo, 4 famille, 5 placement), affichée en haut ; 0 = pas d'étapes
@@ -145,6 +180,7 @@
     sheet.appendChild(el('h2', 'welcome-sheet-title', 'Choisir un réseau'));
     var list = el('div', 'welcome-list');
     sheet.appendChild(list);
+    scrollbar(list, false);
     var row = el('div', 'welcome-sheet-actions');
     row.appendChild(button('Actualiser', '', function () { fillNetworks(list); }));
     row.appendChild(button('Fermer', 'no', closeNetworks));
@@ -277,6 +313,7 @@
     sheet.appendChild(input);
     var list = el('div', 'welcome-list');
     sheet.appendChild(list);
+    scrollbar(list, false);
     var row = el('div', 'welcome-sheet-actions');
     row.appendChild(button('Fermer', 'no', closeNetworks));
     sheet.appendChild(row);

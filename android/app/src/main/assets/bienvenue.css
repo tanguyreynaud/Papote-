@@ -299,3 +299,18 @@
 .welcome-modal.top { align-items: flex-start; padding-top: 3vmin; }
 .meteo-input { text-align: left; margin: 0 0 2vmin; max-width: none; }
 .city-detail { font-size: 3.4vmin; color: #5f5a6b; font-weight: 400; }
+
+/* ---------- Barre de défilement toujours visible (listes et écrans qui dépassent) ---------- */
+.scroll-track {
+  position: absolute;
+  right: .4vmin;
+  width: 1.6vmin;
+  border-radius: 99vmin;
+  background: #e9e1d4;
+  pointer-events: none;
+  z-index: 3;
+}
+.scroll-track.fixed { position: fixed; top: 0; bottom: 0; right: .6vmin; z-index: 960; background: rgba(233, 225, 212, .7); }
+.scroll-thumb { position: absolute; left: 0; right: 0; border-radius: 99vmin; background: #4f46e5; opacity: .75; }
+.welcome-sheet { position: relative; }
+.welcome::-webkit-scrollbar, .welcome-list::-webkit-scrollbar { display: none; }
