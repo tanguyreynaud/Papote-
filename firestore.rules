@@ -219,8 +219,8 @@ service cloud.firestore {
       allow update: if isAdmin()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['createdBy', 'admins']);
 
-      // Supprimer la famille et toutes ses données (responsable, en dernier).
-      allow delete: if isFamilyAdmin(fid);
+      // Supprimer la famille : par l'administrateur seulement, après échange avec le client.
+      allow delete: if isAdmin();
 
       match /members/{uid} {
         allow read: if isMember(fid);

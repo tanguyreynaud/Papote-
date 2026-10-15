@@ -2084,46 +2084,19 @@ SETTINGS['meteo-card'] = {
   },
 };
 
-// ---------- Supprimer la famille et toutes ses données (responsable) ----------
+// ---------- Supprimer la famille et toutes ses données ----------
 
-async function deleteAllIn(path, each) {
-  const snap = await getDocs(collection(db, ...path));
-  for (const d of snap.docs) {
-    if (each) await each(d);
-    await deleteDoc(d.ref);
-  }
-}
+// Suppression de la famille : sur demande au support, jamais en un bouton (c'est définitif pour tous).
+$('btn-delete-family').addEventListener('click', () => {
+  const sujet = `Suppression des données de la famille de ${session.family.name}`;
+  const corps = `Bonjour,
 
-$('btn-delete-family').addEventListener('click', async () => {
-  const name = session.family.name;
-  if (!await askConfirm(`Supprimer la famille de ${name} ? Toutes les photos, vidéos, messages, rappels et membres seront effacés pour tout le monde, et la tablette sera déconnectée. C'est définitif.`, 'Tout supprimer')) return;
-  if (!await askConfirm(`Dernière vérification : effacer définitivement toutes les données de la famille de ${name} ?`, 'Effacer')) return;
-  const { fid, uid } = session;
-  toast('Suppression en cours…');
-  try {
-    await deleteAllIn(['families', fid, 'posts'], async (d) => {
-      const post = { id: d.id, ...d.data() };
-      if (post.storagePath && storage) await deleteObject(ref(storage, post.storagePath)).catch(() => {});
-      await deleteAllIn(['families', fid, 'posts', d.id, 'media']);
-    });
-    for (const name2 of ['reminders', 'birthdays', 'invitations']) await deleteAllIn(['families', fid, name2]);
-    await deleteAllIn(['families', fid, 'calls'], async (d) => {
-      await deleteAllIn(['families', fid, 'calls', d.id, 'callerCandidates']);
-      await deleteAllIn(['families', fid, 'calls', d.id, 'calleeCandidates']);
-    });
-    const codes = await getDocs(query(collection(db, 'invites'), where('fid', '==', fid)));
-    for (const d of codes.docs) await deleteDoc(d.ref);
-    const members = await getDocs(collection(db, 'families', fid, 'members'));
-    for (const d of members.docs) if (d.id !== uid) await deleteDoc(d.ref);
-    await deleteDoc(doc(db, 'families', fid));
-    await deleteDoc(doc(db, 'families', fid, 'members', uid));
-    saveFamilyId(null);
-    await notice(`La famille de ${name} et toutes ses données ont été supprimées.`);
-    enterApp();
-  } catch (err) {
-    console.error(err);
-    notice("La suppression n'a pas pu aller jusqu'au bout. Réessayez avec une bonne connexion.");
-  }
+Je souhaite supprimer la famille de ${session.family.name} et toutes ses données.
+
+---
+Code famille : ${session.family.code || session.fid}
+Prénom : ${session.member.name}`;
+  $('btn-delete-family').href = `mailto:contact@mapapote.fr?subject=${encodeURIComponent(sujet)}&body=${encodeURIComponent(corps)}`;
 });
 
 function applyFamily() {
@@ -2142,7 +2115,7 @@ function applyFamily() {
   renderVolume();
   $('meteo-card').hidden = !amOwner();
   renderMeteo();
-  $('btn-delete-family').hidden = !amOwner();
+  $('delete-family-info').hidden = !amOwner();
   renderTextSize();
   $('invite-email-card').hidden = !admin;
   $('btn-new-code').hidden = !admin || !CHANGE_CODE_READY;
