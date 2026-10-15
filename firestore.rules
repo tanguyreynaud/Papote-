@@ -277,7 +277,11 @@ service cloud.firestore {
           && request.resource.data.status == 'active';
         allow update: if signedIn()
           && uid == request.auth.uid
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'canCall', 'lastActive', 'lastOnline', 'callable', 'face', 'appVersion', 'uid', 'email', 'battery', 'sim', 'meteoVille'])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'canCall', 'lastActive', 'lastOnline', 'callable', 'face', 'appVersion', 'uid', 'email', 'battery', 'sim', 'meteoVille', 'wifi'])
+          // Wi-Fi auquel la tablette est connectée : { ssid }.
+          && (!('wifi' in request.resource.data) || request.resource.data.wifi == null
+              || (request.resource.data.wifi is map && request.resource.data.wifi.keys().hasOnly(['ssid'])
+                  && request.resource.data.wifi.ssid is string && request.resource.data.wifi.ssid.size() <= 64))
           // Ville de la météo utilisée par la tablette, affichée dans l'app.
           && (!('meteoVille' in request.resource.data) || request.resource.data.meteoVille == null
               || villeMeteoOk(request.resource.data.meteoVille))
