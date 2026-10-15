@@ -1826,127 +1826,191 @@ function renderRemote() {
   }
 }
 
-// ---------- Mise en veille de la tablette (propriétaire) ----------
-// families/{fid}.veille = { active, de, a } ; par défaut l'écran s'éteint de 23 h à 7 h.
+// ---------- Réglages : chaque valeur s'affiche, « Modifier » ouvre le champ, « Enregistrer » envoie ----------
+
+const SETTINGS = {};
+
+function openSetting(card) {
+  document.querySelectorAll('.setting.editing').forEach((other) => { if (other !== card) closeSetting(other); });
+  SETTINGS[card.id]?.fill?.();
+  card.classList.add('editing');
+  card.querySelector('.setting-edit').hidden = false;
+  card.querySelector('.setting-value').hidden = true;
+  card.querySelector('.setting-modify').hidden = true;
+  card.querySelector('.setting-edit input:not([type=checkbox]), .setting-edit select')?.focus();
+}
+
+function closeSetting(card) {
+  card.classList.remove('editing');
+  card.querySelector('.setting-edit').hidden = true;
+  card.querySelector('.setting-value').hidden = false;
+  card.querySelector('.setting-modify').hidden = false;
+}
+
+document.querySelectorAll('.setting').forEach((card) => {
+  card.querySelector('.setting-modify').addEventListener('click', () => openSetting(card));
+  card.querySelector('.setting-cancel').addEventListener('click', () => closeSetting(card));
+  card.querySelector('.setting-edit').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = card.querySelector('.setting-edit button[type=submit]');
+    btn.disabled = true;
+    try {
+      if (await SETTINGS[card.id].save() !== false) closeSetting(card);
+    } catch (err) {
+      console.error(err);
+      notice("Le réglage n'a pas pu être enregistré. Vérifiez la connexion.");
+    } finally {
+      btn.disabled = false;
+    }
+  });
+});
+
+const saveFamily = (data, message) => updateDoc(doc(db, 'families', session.fid), { ...data, rev: increment(1) })
+  .then(() => toast(message));
+
+// Prénom de la personne (nom de la famille).
+SETTINGS['family-name-card'] = {
+  fill() { $('family-name').value = session.family.name; },
+  async save() {
+    const name = $('family-name').value.trim();
+    if (!name) return false;
+    if (name === session.family.name) return true;
+    await updateDoc(doc(db, 'families', session.fid), { name });
+    toast('Prénom enregistré');
+    return true;
+  },
+};
+
+// Mon prénom (Profil).
+SETTINGS['my-name-card'] = {
+  fill() { $('my-name').value = session.member.name; },
+  async save() {
+    const name = $('my-name').value.trim();
+    if (!name) return false;
+    if (name === session.member.name) return true;
+    await updateDoc(doc(db, 'families', session.fid, 'members', session.uid), { name });
+    session.member.name = name;
+    $('my-name-value').textContent = name;
+    toast('Prénom enregistré');
+    return true;
+  },
+};
+
+// Mise en veille : families/{fid}.veille = { active, de, a } ; par défaut l'écran s'éteint de 23 h à 7 h.
+const veilleActuelle = () => session.family.veille || { active: true, de: 23, a: 7 };
 
 function renderSleep() {
-  const v = session.family.veille || { active: true, de: 23, a: 7 };
-  if (document.activeElement?.closest?.('#sleep-card')) return;
-  $('sleep-on').checked = v.active !== false;
-  $('sleep-from').value = String(v.de ?? 23);
-  $('sleep-to').value = String(v.a ?? 7);
-  $('sleep-hours').hidden = !$('sleep-on').checked;
+  const v = veilleActuelle();
+  $('sleep-value').textContent = v.active === false ? "Jamais : l'écran reste allumé" : `De ${v.de ?? 23} h à ${v.a ?? 7} h`;
 }
 
 $('sleep-on').addEventListener('change', () => { $('sleep-hours').hidden = !$('sleep-on').checked; });
-$('btn-sleep').addEventListener('click', async () => {
-  const veille = { active: $('sleep-on').checked, de: Number($('sleep-from').value), a: Number($('sleep-to').value) };
-  if (veille.active && veille.de === veille.a) { notice("L'heure de fin doit être différente de l'heure de début."); return; }
-  try {
-    await updateDoc(doc(db, 'families', session.fid), { veille, rev: increment(1) });
-    toast('Mise en veille enregistrée');
-  } catch (err) {
-    console.error(err);
-    notice("Le réglage n'a pas pu être enregistré.");
-  }
-});
+SETTINGS['sleep-card'] = {
+  fill() {
+    const v = veilleActuelle();
+    $('sleep-on').checked = v.active !== false;
+    $('sleep-from').value = String(v.de ?? 23);
+    $('sleep-to').value = String(v.a ?? 7);
+    $('sleep-hours').hidden = !$('sleep-on').checked;
+  },
+  async save() {
+    const veille = { active: $('sleep-on').checked, de: Number($('sleep-from').value), a: Number($('sleep-to').value) };
+    if (veille.active && veille.de === veille.a) { notice("L'heure de fin doit être différente de l'heure de début."); return false; }
+    await saveFamily({ veille }, 'Mise en veille enregistrée');
+    return true;
+  },
+};
 
-// ---------- Volume de la tablette ----------
-// families/{fid}.volume (0 à 100), appliqué par la tablette au son des vidéos et des appels.
+// Volume : families/{fid}.volume (0 à 100), appliqué au son des vidéos et des appels.
+const volumeActuel = () => (Number.isInteger(session.family.volume) ? session.family.volume : 80);
 
-// ---------- Ville de la météo ----------
-// families/{fid}.meteoVille = { nom, lat, lon } ; la tablette publie la sienne sur sa fiche membre.
+function renderVolume() { $('volume-text').textContent = `${volumeActuel()} %`; }
 
-function villeTexte(v) { return v?.nom || ''; }
+$('volume').addEventListener('input', () => { $('volume-value').textContent = `${$('volume').value} %`; });
+SETTINGS['volume-card'] = {
+  fill() {
+    $('volume').value = String(volumeActuel());
+    $('volume-value').textContent = `${volumeActuel()} %`;
+  },
+  async save() {
+    await saveFamily({ volume: Number($('volume').value) }, 'Volume envoyé à la tablette');
+    return true;
+  },
+};
+
+// Taille du texte sur la tablette.
+const TEXT_SIZES = ['normal', 'grande', 'tres-grande'];
+const TEXT_SIZE_LABELS = { normal: 'Normale', grande: 'Grande', 'tres-grande': 'Très grande' };
+const tailleActuelle = () => (TEXT_SIZES.includes(session.family.textSize) ? session.family.textSize : 'normal');
+let tailleChoisie = 'normal';
+
+function renderTextSize() { $('text-size-value').textContent = TEXT_SIZE_LABELS[tailleActuelle()]; }
+
+function markSize() {
+  document.querySelectorAll('[data-size]').forEach((b) => b.classList.toggle('active', b.dataset.size === tailleChoisie));
+}
+document.querySelectorAll('[data-size]').forEach((btn) => btn.addEventListener('click', () => {
+  tailleChoisie = btn.dataset.size;
+  markSize();
+}));
+SETTINGS['text-size-card'] = {
+  fill() { tailleChoisie = tailleActuelle(); markSize(); },
+  async save() {
+    await saveFamily({ textSize: tailleChoisie }, 'Taille du texte changée sur la tablette');
+    return true;
+  },
+};
+
+// Ville de la météo : families/{fid}.meteoVille = { nom, lat, lon }, choisie par code postal ;
+// la tablette publie la sienne sur sa fiche membre, celle de la famille l'emporte.
+let communes = [];
 
 function renderMeteo() {
   const famille = session.family.meteoVille;
   const tablette = tabletMembers.map((m) => m.meteoVille).find(Boolean);
-  $('meteo-current').textContent = famille
-    ? `Météo affichée pour ${villeTexte(famille)}.`
-    : tablette ? `Météo affichée pour ${villeTexte(tablette)} (choisie sur la tablette).`
-      : 'Choisissez la ville dont la tablette affiche la météo.';
+  $('meteo-current').textContent = famille?.nom
+    || (tablette?.nom ? `${tablette.nom} (choisie sur la tablette)` : 'Pas encore choisie');
 }
 
-$('form-meteo').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const q = $('meteo-search').value.trim();
+async function chercherCommunes() {
+  const cp = $('meteo-cp').value.trim();
+  communes = [];
+  $('meteo-commune-wrap').hidden = true;
   $('meteo-error').hidden = true;
-  $('meteo-results').hidden = true;
-  if (q.length < 2) return;
-  let villes = [];
+  if (!/^\d{5}$/.test(cp)) return;
   try {
-    const r = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=10&language=fr`);
-    villes = (await r.json()).results || [];
+    const r = await fetch(`https://geo.api.gouv.fr/communes?codePostal=${cp}&fields=nom,centre,departement&format=json`);
+    communes = (await r.json()).filter((c) => c.centre?.coordinates);
   } catch (err) {
-    console.warn('Recherche de ville impossible', err);
+    console.warn('Recherche de commune impossible', err);
     showError($('meteo-error'), 'La recherche a échoué. Vérifiez la connexion.');
     return;
   }
-  if (!villes.length) { showError($('meteo-error'), 'Aucune ville trouvée. Vérifiez l\'orthographe.'); return; }
-  $('meteo-results').replaceChildren(...villes.map((v) => {
-    const li = document.createElement('li');
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'meteo-choice';
-    const region = v.admin2 || v.admin1;
-    const nom = region ? `${v.name} (${region})` : v.name;
-    b.textContent = v.country_code && v.country_code !== 'FR' ? `${nom}, ${v.country_code}` : nom;
-    b.addEventListener('click', async () => {
-      try {
-        await updateDoc(doc(db, 'families', session.fid), {
-          meteoVille: { nom: nom.slice(0, 80), lat: v.latitude, lon: v.longitude }, rev: increment(1),
-        });
-        $('meteo-results').hidden = true;
-        $('meteo-search').value = '';
-        toast('Ville envoyée à la tablette');
-      } catch (err) {
-        console.error(err);
-        notice("La ville n'a pas pu être enregistrée.");
-      }
-    });
-    li.append(b);
-    return li;
-  }));
-  $('meteo-results').hidden = false;
-});
-
-function renderVolume() {
-  if (document.activeElement === $('volume')) return;
-  const v = Number.isInteger(session.family.volume) ? session.family.volume : 80;
-  $('volume').value = String(v);
-  $('volume-value').textContent = `${v} %`;
+  if ($('meteo-cp').value.trim() !== cp) return;
+  if (!communes.length) { showError($('meteo-error'), 'Aucune commune pour ce code postal.'); return; }
+  $('meteo-commune').replaceChildren(...communes.map((c, i) => new Option([c.nom, cp, c.departement?.nom].filter(Boolean).join(' · '), String(i))));
+  $('meteo-commune-wrap').hidden = false;
 }
 
-$('volume').addEventListener('input', () => { $('volume-value').textContent = `${$('volume').value} %`; });
-$('volume').addEventListener('change', async () => {
-  try {
-    await updateDoc(doc(db, 'families', session.fid), { volume: Number($('volume').value), rev: increment(1) });
-    toast('Volume envoyé à la tablette');
-  } catch (err) {
-    console.error(err);
-    notice("Le volume n'a pas pu être enregistré.");
-  }
+$('meteo-cp').addEventListener('input', () => {
+  $('meteo-cp').value = $('meteo-cp').value.replace(/\D/g, '').slice(0, 5);
+  chercherCommunes();
 });
-
-// ---------- Taille du texte sur la tablette ----------
-
-const TEXT_SIZES = ['normal', 'grande', 'tres-grande'];
-document.querySelectorAll('[data-size]').forEach((btn) => btn.addEventListener('click', async () => {
-  try {
-    // Le changement de rev prévient la tablette, qui relit la famille.
-    await updateDoc(doc(db, 'families', session.fid), { textSize: btn.dataset.size, rev: increment(1) });
-    toast('Taille du texte changée sur la tablette');
-  } catch (err) {
-    console.error(err);
-    notice("Le réglage n'a pas pu être enregistré.");
-  }
-}));
-
-function renderTextSize() {
-  const size = TEXT_SIZES.includes(session.family.textSize) ? session.family.textSize : 'normal';
-  document.querySelectorAll('[data-size]').forEach((b) => b.classList.toggle('active', b.dataset.size === size));
-}
+SETTINGS['meteo-card'] = {
+  fill() {
+    $('meteo-cp').value = '';
+    communes = [];
+    $('meteo-commune-wrap').hidden = true;
+    $('meteo-error').hidden = true;
+  },
+  async save() {
+    const c = communes[Number($('meteo-commune').value)];
+    if (!c) { showError($('meteo-error'), 'Tapez le code postal puis choisissez la commune.'); return false; }
+    const [lon, lat] = c.centre.coordinates;
+    await saveFamily({ meteoVille: { nom: c.nom.slice(0, 80), lat, lon } }, 'Ville envoyée à la tablette');
+    return true;
+  },
+};
 
 // ---------- Supprimer la famille et toutes ses données (responsable) ----------
 
@@ -1990,20 +2054,6 @@ $('btn-delete-family').addEventListener('click', async () => {
   }
 });
 
-$('form-my-name').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const name = $('my-name').value.trim();
-  if (!name || name === session.member.name) return;
-  try {
-    await updateDoc(doc(db, 'families', session.fid, 'members', session.uid), { name });
-    session.member.name = name;
-    toast('Prénom enregistré');
-  } catch (err) {
-    console.error(err);
-    notice("Le prénom n'a pas pu être enregistré.");
-  }
-});
-
 function applyFamily() {
   renderAbonnement();
   renderRemote();
@@ -2012,7 +2062,7 @@ function applyFamily() {
   $('tile-settings').hidden = !admin;
   // Un responsable ne quitte pas sa famille (il pourrait ne plus jamais revenir).
   $('btn-leave').hidden = admin;
-  if (document.activeElement !== $('my-name')) $('my-name').value = session.member.name;
+  $('my-name-value').textContent = session.member.name;
   $('text-size-card').hidden = !amOwner();
   $('sleep-card').hidden = !amOwner();
   renderSleep();
@@ -2031,7 +2081,7 @@ function applyFamily() {
   document.querySelectorAll('.grand-name').forEach((el) => { el.textContent = name; });
   $('message-text').placeholder = `Écrire à ${name}…`;
   $('family-name-card').hidden = !amOwner();
-  if (document.activeElement !== $('family-name')) $('family-name').value = name;
+  $('family-name-value').textContent = name;
   if (allMembers.length) renderMembers(allMembers);
 }
 
@@ -2044,19 +2094,6 @@ function watchFamily() {
     applyFamily();
   }, (err) => console.error('Famille illisible', err));
 }
-
-$('form-family-name').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const name = $('family-name').value.trim();
-  if (!name || name === session.family.name) return;
-  try {
-    await updateDoc(doc(db, 'families', session.fid), { name });
-    toast('Nom enregistré');
-  } catch (err) {
-    console.error(err);
-    notice("Le nom n'a pas pu être enregistré.");
-  }
-});
 
 // ---------- Ajouter à l'écran d'accueil ----------
 

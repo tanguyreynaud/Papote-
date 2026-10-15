@@ -916,3 +916,12 @@ body:not(.on-support) .ps-bouton, body:not(.on-support) .ps-panneau { display: n
 
 .meteo-results { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; }
 .meteo-choice { width: 100%; text-align: left; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); color: var(--text); font: inherit; font-weight: 600; }
+
+/* Réglages : la valeur, un lien « Modifier », puis le champ avec Annuler / Enregistrer. */
+.setting-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.setting-head h2 { margin: 0; }
+.setting-modify { flex: none; font-weight: 700; color: var(--accent); }
+.setting-value { margin: 6px 0 0; font-size: 17px; font-weight: 600; }
+.setting-edit { margin-top: 10px; }
+.setting-edit label { display: block; margin: 8px 0; }
+.setting-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }

@@ -318,49 +318,80 @@
           <ul id="members" class="members"></ul>
         </div>
         <h3 class="settings-group owner-only" id="group-tablet">La tablette</h3>
-        <div id="family-name-card" hidden><form id="form-family-name" class="card">
-          <h2>Prénom de la personne</h2>
-          <p class="muted small">Le prénom de la personne qui a la tablette (« Mamie », « Jeanne »…). Il apparaît partout dans l'app.</p>
-          <div class="inline-field">
-            <input id="family-name" maxlength="40" required>
-            <button type="submit" class="primary">Enregistrer</button>
-          </div>
-        </form></div>
-        <div id="meteo-card" class="card" hidden>
-          <h2>Ville de la météo</h2>
-          <p id="meteo-current" class="muted small"></p>
-          <form id="form-meteo" class="inline-field">
-            <input id="meteo-search" placeholder="Nom de la ville" autocomplete="off" aria-label="Ville de la météo">
-            <button type="submit" class="primary small-btn">Chercher</button>
+        <div id="family-name-card" class="card setting" hidden>
+          <div class="setting-head"><h2>Prénom de la personne</h2><button type="button" class="link setting-modify">Modifier</button></div>
+          <p id="family-name-value" class="setting-value"></p>
+          <form id="form-family-name" class="setting-edit" hidden>
+            <p class="muted small">Le prénom de la personne qui a la tablette (« Mamie », « Jeanne »…). Il apparaît partout dans l'app.</p>
+            <input id="family-name" maxlength="40" required aria-label="Prénom de la personne">
+            <div class="setting-actions">
+              <button type="button" class="secondary setting-cancel">Annuler</button>
+              <button type="submit" class="primary">Enregistrer</button>
+            </div>
           </form>
-          <ul id="meteo-results" class="meteo-results" hidden></ul>
-          <p id="meteo-error" class="error small" hidden></p>
         </div>
-        <div id="volume-card" class="card" hidden>
-          <h2>Volume du son</h2>
-          <p class="muted small">Le son des vidéos et des appels sur la tablette.</p>
-          <div class="volume-row">
-            <input id="volume" type="range" min="0" max="100" step="5" aria-label="Volume de la tablette">
-            <span id="volume-value" class="volume-value"></span>
-          </div>
+        <div id="meteo-card" class="card setting" hidden>
+          <div class="setting-head"><h2>Ville de la météo</h2><button type="button" class="link setting-modify">Modifier</button></div>
+          <p id="meteo-current" class="setting-value"></p>
+          <form id="form-meteo" class="setting-edit" hidden>
+            <label>Code postal
+              <input id="meteo-cp" inputmode="numeric" maxlength="5" pattern="[0-9]{5}" autocomplete="postal-code" placeholder="32000">
+            </label>
+            <label id="meteo-commune-wrap" hidden>Commune
+              <select id="meteo-commune"></select>
+            </label>
+            <p id="meteo-error" class="error small" hidden></p>
+            <div class="setting-actions">
+              <button type="button" class="secondary setting-cancel">Annuler</button>
+              <button type="submit" class="primary">Enregistrer</button>
+            </div>
+          </form>
         </div>
-        <div id="text-size-card" class="card" hidden>
-          <h2>Taille du texte</h2>
-          <div class="segmented" role="radiogroup" aria-label="Taille du texte sur la tablette">
-            <button type="button" class="seg" data-size="normal">Normale</button>
-            <button type="button" class="seg" data-size="grande">Grande</button>
-            <button type="button" class="seg" data-size="tres-grande">Très grande</button>
-          </div>
+        <div id="volume-card" class="card setting" hidden>
+          <div class="setting-head"><h2>Volume du son</h2><button type="button" class="link setting-modify">Modifier</button></div>
+          <p id="volume-text" class="setting-value"></p>
+          <form id="form-volume" class="setting-edit" hidden>
+            <p class="muted small">Le son des vidéos et des appels sur la tablette.</p>
+            <div class="volume-row">
+              <input id="volume" type="range" min="10" max="100" step="5" aria-label="Volume de la tablette">
+              <span id="volume-value" class="volume-value"></span>
+            </div>
+            <div class="setting-actions">
+              <button type="button" class="secondary setting-cancel">Annuler</button>
+              <button type="submit" class="primary">Enregistrer</button>
+            </div>
+          </form>
         </div>
-        <div id="sleep-card" class="card" hidden>
-          <h2>Écran éteint la nuit</h2>
-          <p class="muted small">La nuit, l'écran s'éteint ; un toucher le rallume, et un appel ou un rappel le réveille.</p>
-          <label class="switch-row"><input type="checkbox" id="sleep-on"> Éteindre l'écran la nuit</label>
-          <div id="sleep-hours" class="sleep-hours">
-            <label>De <select id="sleep-from"><option value="0">0 h</option><option value="1">1 h</option><option value="2">2 h</option><option value="3">3 h</option><option value="4">4 h</option><option value="5">5 h</option><option value="6">6 h</option><option value="7">7 h</option><option value="8">8 h</option><option value="9">9 h</option><option value="10">10 h</option><option value="11">11 h</option><option value="12">12 h</option><option value="13">13 h</option><option value="14">14 h</option><option value="15">15 h</option><option value="16">16 h</option><option value="17">17 h</option><option value="18">18 h</option><option value="19">19 h</option><option value="20">20 h</option><option value="21">21 h</option><option value="22">22 h</option><option value="23">23 h</option></select></label>
-            <label>à <select id="sleep-to"><option value="0">0 h</option><option value="1">1 h</option><option value="2">2 h</option><option value="3">3 h</option><option value="4">4 h</option><option value="5">5 h</option><option value="6">6 h</option><option value="7">7 h</option><option value="8">8 h</option><option value="9">9 h</option><option value="10">10 h</option><option value="11">11 h</option><option value="12">12 h</option><option value="13">13 h</option><option value="14">14 h</option><option value="15">15 h</option><option value="16">16 h</option><option value="17">17 h</option><option value="18">18 h</option><option value="19">19 h</option><option value="20">20 h</option><option value="21">21 h</option><option value="22">22 h</option><option value="23">23 h</option></select></label>
-          </div>
-          <button type="button" id="btn-sleep" class="primary wide">Enregistrer</button>
+        <div id="text-size-card" class="card setting" hidden>
+          <div class="setting-head"><h2>Taille du texte</h2><button type="button" class="link setting-modify">Modifier</button></div>
+          <p id="text-size-value" class="setting-value"></p>
+          <form id="form-text-size" class="setting-edit" hidden>
+            <div class="segmented" role="radiogroup" aria-label="Taille du texte sur la tablette">
+              <button type="button" class="seg" data-size="normal">Normale</button>
+              <button type="button" class="seg" data-size="grande">Grande</button>
+              <button type="button" class="seg" data-size="tres-grande">Très grande</button>
+            </div>
+            <div class="setting-actions">
+              <button type="button" class="secondary setting-cancel">Annuler</button>
+              <button type="submit" class="primary">Enregistrer</button>
+            </div>
+          </form>
+        </div>
+        <div id="sleep-card" class="card setting" hidden>
+          <div class="setting-head"><h2>Écran éteint la nuit</h2><button type="button" class="link setting-modify">Modifier</button></div>
+          <p id="sleep-value" class="setting-value"></p>
+          <form id="form-sleep" class="setting-edit" hidden>
+            <p class="muted small">La nuit, l'écran s'éteint ; un toucher le rallume, et un appel ou un rappel le réveille.</p>
+            <label class="switch-row"><input type="checkbox" id="sleep-on"> Éteindre l'écran la nuit</label>
+            <div id="sleep-hours" class="sleep-hours">
+              <label>De <select id="sleep-from"><option value="0">0 h</option><option value="1">1 h</option><option value="2">2 h</option><option value="3">3 h</option><option value="4">4 h</option><option value="5">5 h</option><option value="6">6 h</option><option value="7">7 h</option><option value="8">8 h</option><option value="9">9 h</option><option value="10">10 h</option><option value="11">11 h</option><option value="12">12 h</option><option value="13">13 h</option><option value="14">14 h</option><option value="15">15 h</option><option value="16">16 h</option><option value="17">17 h</option><option value="18">18 h</option><option value="19">19 h</option><option value="20">20 h</option><option value="21">21 h</option><option value="22">22 h</option><option value="23">23 h</option></select></label>
+              <label>à <select id="sleep-to"><option value="0">0 h</option><option value="1">1 h</option><option value="2">2 h</option><option value="3">3 h</option><option value="4">4 h</option><option value="5">5 h</option><option value="6">6 h</option><option value="7">7 h</option><option value="8">8 h</option><option value="9">9 h</option><option value="10">10 h</option><option value="11">11 h</option><option value="12">12 h</option><option value="13">13 h</option><option value="14">14 h</option><option value="15">15 h</option><option value="16">16 h</option><option value="17">17 h</option><option value="18">18 h</option><option value="19">19 h</option><option value="20">20 h</option><option value="21">21 h</option><option value="22">22 h</option><option value="23">23 h</option></select></label>
+            </div>
+            <div class="setting-actions">
+              <button type="button" class="secondary setting-cancel">Annuler</button>
+              <button type="submit" class="primary">Enregistrer</button>
+            </div>
+          </form>
         </div>
         <div id="remote-card" class="card" hidden>
           <h2>Dépanner la tablette</h2>
@@ -451,13 +482,17 @@
           <input id="in-face-camera" type="file" accept="image/*" capture="user" hidden>
           <input id="in-face-gallery" type="file" accept="image/*" hidden>
         </div>
-        <form id="form-my-name" class="card">
-          <h2>Mon prénom</h2>
-          <div class="inline-field">
-            <input id="my-name" maxlength="40" autocomplete="given-name" required>
-            <button type="submit" class="primary">Enregistrer</button>
-          </div>
-        </form>
+        <div id="my-name-card" class="card setting">
+          <div class="setting-head"><h2>Mon prénom</h2><button type="button" class="link setting-modify">Modifier</button></div>
+          <p id="my-name-value" class="setting-value"></p>
+          <form id="form-my-name" class="setting-edit" hidden>
+            <input id="my-name" maxlength="40" autocomplete="given-name" required aria-label="Mon prénom">
+            <div class="setting-actions">
+              <button type="button" class="secondary setting-cancel">Annuler</button>
+              <button type="submit" class="primary">Enregistrer</button>
+            </div>
+          </form>
+        </div>
         <div class="card">
           <h2>Apparence</h2>
           <div class="segmented" role="radiogroup" aria-label="Apparence">
