@@ -46,6 +46,8 @@ h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-u
 .cherche label { display: grid; gap: .25rem; font-size: 1rem; color: var(--muted); }
 .cherche input, .cherche select { font: inherit; color: var(--text); min-height: 3rem; padding: .5rem .75rem; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); }
 .cherche input { width: 8rem; }
+.cherche #ville-texte { width: 12rem; }
+.cherche [hidden] { display: none; }
 .rassure { margin: 0; padding: 0; list-style: none; display: grid; gap: .45rem; font-size: 1rem; }
 .rassure a { color: var(--accent-strong); }
 .petit { font-size: .95rem; }
@@ -90,6 +92,8 @@ h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-u
   <p class="muted">Dans un point relais Mondial Relay près de chez vous ou de chez votre proche, en France, en Belgique ou au Luxembourg.</p>
   <form class="cherche" id="cherche">
     <label>Code postal<input id="cp" inputmode="numeric" autocomplete="postal-code" required maxlength="10"></label>
+    <label id="ville-champ" hidden>Ville<select id="ville"></select></label>
+    <label id="ville-libre" hidden>Ville<input id="ville-texte" autocomplete="address-level2" maxlength="60"></label>
     <label>Pays<select id="pays"><option value="fr">France</option><option value="be">Belgique</option><option value="lu">Luxembourg</option></select></label>
     <button class="btn btn-ghost" type="submit">Voir les points relais</button>
     <button class="btn btn-ghost" type="button" id="autour">📍 Autour de moi</button>
@@ -195,8 +199,54 @@ h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-u
   var voirCarte = document.getElementById('voir-carte');
   var derniere = '';
 
+  // Un code postal peut couvrir plusieurs villes : la ville choisie précise la recherche.
+  var villeChamp = document.getElementById('ville-champ');
+  var ville = document.getElementById('ville');
+  var villeLibre = document.getElementById('ville-libre');
+  var villeTexte = document.getElementById('ville-texte');
+  function villeChoisie() {
+    if (!villeChamp.hidden) return ville.value;
+    if (!villeLibre.hidden) return villeTexte.value.trim();
+    return '';
+  }
+  // France : villes du code postal (geo.api.gouv.fr). Une seule : choisie d'office et recherche lancée ;
+  // plusieurs : la personne choisit. Belgique, Luxembourg ou service indisponible : ville facultative à taper.
+  var villesDe = '';
+  function chargerVilles(choix) {
+    var code = cp.value.trim();
+    if (villesDe === pays.value + code && !choix) return Promise.resolve();
+    villesDe = pays.value + code;
+    if (pays.value !== 'fr') {
+      villeChamp.hidden = true;
+      villeLibre.hidden = false;
+      return Promise.resolve();
+    }
+    return fetch('https://geo.api.gouv.fr/communes?codePostal=' + encodeURIComponent(code) + '&fields=nom')
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function (communes) {
+        var noms = (communes || []).map(function (c) { return c.nom; }).filter(Boolean)
+          .filter(function (n, i, t) { return t.indexOf(n) === i; }).sort();
+        if (!noms.length) throw new Error('aucune ville');
+        ville.textContent = '';
+        if (noms.length > 1) ville.append(new Option('Choisissez la ville', ''));
+        noms.forEach(function (n) { ville.append(new Option(n, n)); });
+        var trouve = choix && noms.filter(function (n) { return n.toLowerCase() === choix.toLowerCase(); })[0];
+        if (trouve) ville.value = trouve;
+        villeLibre.hidden = true;
+        villeChamp.hidden = false;
+      })
+      .catch(function () {
+        villeChamp.hidden = true;
+        villeLibre.hidden = false;
+        if (choix) villeTexte.value = choix;
+      });
+  }
+  ville.addEventListener('change', function () { if (ville.value) chercher(); });
+  villeTexte.addEventListener('change', function () { chercher(); });
+
   function chercher(position) {
-    var cle = position ? position.latitude + ',' + position.longitude : pays.value + cp.value.trim();
+    var adresse = [cp.value.trim(), villeChoisie()].filter(Boolean).join(' ');
+    var cle = position ? position.latitude + ',' + position.longitude : pays.value + adresse;
     if (cle === derniere) return;
     derniere = cle;
     document.getElementById('erreur-carte').hidden = true;
@@ -204,7 +254,7 @@ h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-u
     attente.hidden = false;
     var params = new URLSearchParams({ country: pays.value.toUpperCase(), carrier: 'mondial_relay', access_token: SENDCLOUD_CLE });
     if (position) { params.set('latitude', position.latitude); params.set('longitude', position.longitude); }
-    else params.set('address', cp.value.trim());
+    else params.set('address', adresse);
     fetch('https://servicepoints.sendcloud.sc/api/v2/service-points/?' + params.toString())
       .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
       .then(function (d) {
@@ -299,12 +349,25 @@ h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-u
 
   document.getElementById('cherche').addEventListener('submit', function (e) {
     e.preventDefault();
-    chercher();
+    chargerVilles().then(function () {
+      if (!villeChamp.hidden && !ville.value) { ville.focus(); return; }
+      chercher();
+    });
   });
   // Code postal complet (5 chiffres en France, 4 en Belgique et au Luxembourg) : recherche tout de suite.
   function cpComplet() {
     var n = pays.value === 'fr' ? 5 : 4;
-    if (new RegExp('^\\d{' + n + '}$').test(cp.value.trim())) chercher();
+    if (!new RegExp('^\\d{' + n + '}$').test(cp.value.trim())) {
+      villeChamp.hidden = true;
+      villeLibre.hidden = true;
+      villesDe = '';
+      return;
+    }
+    chargerVilles().then(function () {
+      // Plusieurs villes : on attend le choix de la personne.
+      if (!villeChamp.hidden && !ville.value) { ville.focus(); return; }
+      chercher();
+    });
   }
   cp.addEventListener('input', cpComplet);
   pays.addEventListener('change', cpComplet);
@@ -332,8 +395,11 @@ h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-u
       fetch('https://api-adresse.data.gouv.fr/reverse/?lon=' + pos.coords.longitude + '&lat=' + pos.coords.latitude)
         .then(function (r) { return r.json(); })
         .then(function (d) {
-          var code = d.features && d.features[0] && d.features[0].properties.postcode;
-          if (code) cp.value = code;
+          var props = d.features && d.features[0] && d.features[0].properties;
+          if (props && props.postcode) {
+            cp.value = props.postcode;
+            return chargerVilles(props.city);
+          }
         })
         .catch(function () {})
         .then(function () { chercher(pos.coords); });
