@@ -563,6 +563,27 @@ async function removeOldTablets(f, btn) {
   }
 }
 
+// Suppression définitive demandée par le client (à contact@) : le nom retapé confirme. Le serveur refuse
+// la famille offerte (Mamie) et une famille dont l'abonnement est en cours (gestionSupprimerFamille).
+async function supprimerFamille(f, li, btn) {
+  const nom = prompt(`Supprimer DÉFINITIVEMENT la famille « ${f.name} » : messages, photos, vidéos, rappels, anniversaires, membres et journal. Rien ne pourra être récupéré.\n\nPour confirmer, retapez le nom de la famille :`);
+  if (nom == null) return;
+  const simple = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().replace(/\s+/g, ' ').toLowerCase();
+  if (!simple(nom) || simple(nom) !== simple(f.name)) { alert('Le nom ne correspond pas : rien n\'a été supprimé.'); return; }
+  btn.disabled = true;
+  btn.textContent = 'Suppression…';
+  try {
+    await appeler('gestionSupprimerFamille', { fid: f.id, nom });
+    families = families.filter((x) => x.id !== f.id);
+    li.remove();
+    alert(`La famille « ${f.name} » et toutes ses données sont supprimées.`);
+  } catch (err) {
+    alert(`Suppression impossible : ${err.message}`);
+    btn.disabled = false;
+    btn.textContent = 'Supprimer la famille et toutes ses données';
+  }
+}
+
 function state(f) {
   if (!f.hasTablet) return { cls: 'none', label: 'Pas de tablette' };
   if (!f.online || Date.now() - f.online.getTime() > OFFLINE_MS) return { cls: 'off', label: `Hors ligne, vue ${ago(f.online)}` };
@@ -595,7 +616,11 @@ function render() {
     ];
     li.innerHTML = `<div class="family-head"><span class="dot"></span><strong></strong><code></code></div><dl></dl>
       <div class="replace"><button type="button" class="link small members-btn">Gérer les membres</button><div class="members-out" hidden></div></div>
-      <div class="replace"><button type="button" class="link small replace-btn">Tablette de remplacement</button><p class="replace-out small" hidden></p></div>`;
+      <div class="replace"><button type="button" class="link small replace-btn">Tablette de remplacement</button><p class="replace-out small" hidden></p></div>
+      <div class="replace"><button type="button" class="link small danger delete-btn">Supprimer la famille et toutes ses données</button></div>`;
+    const delBtn = li.querySelector('.delete-btn');
+    if (f.abonnement?.statut === 'offert') delBtn.parentElement.remove();
+    else delBtn.addEventListener('click', () => supprimerFamille(f, li, delBtn));
     li.querySelector('.replace-btn').addEventListener('click', () => prepareReplacement(f, li));
     li.querySelector('.members-btn').addEventListener('click', () => toggleMembers(f, li));
     showPending(f, li);
