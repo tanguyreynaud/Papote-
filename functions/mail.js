@@ -77,7 +77,7 @@ function relancePanier({ nom, formule, lien }) {
 function nouvelleCommande({ nom, email, telephone, code, relais, formule }) {
   return message(`Nouvelle commande ${code || ''}`.trim(), [
     `Client : <b>${echapper(nom || '?')}</b>, ${echapper(email || 'sans e-mail')}${telephone ? `, ${echapper(telephone)}` : ''}.`,
-    `Formule : ${formule === 'sim' ? '30 € par mois, internet inclus (SIM)' : '20 € par mois (wifi)'}.`,
+    `Formule : ${formule === 'sim' ? '30 € par mois, internet inclus (routeur 4G)' : '20 € par mois (wifi)'}.`,
     relais && relais.transporteur
       ? `Point relais : <b>${relaisEnTexte(relais)}</b> (n° ${echapper(relais.id)}). Retrait par : <b>${echapper(relais.destinataire || nom || '?')}</b>.`
       : `Livraison : ${relaisEnTexte(relais) || 'adresse non trouvée, voir Stripe'}.`,
