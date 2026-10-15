@@ -178,7 +178,7 @@ const TITRES = {
   stock: 'Stock de tablettes',
   factures: 'Factures',
   compta: 'Comptabilité',
-  outils: 'Maintenance',
+  outils: 'Réglages et maintenance',
 };
 const AVEC_PERIODE = ['factures', 'compta'];
 
@@ -518,17 +518,39 @@ function afficherAccueil() {
 
 // ---------- Commandes ----------
 
+let vueCommandes = null; // liste affichée dans Commandes (a-envoyer, en-route, retour, toutes)
+
 function afficherCommandes() {
   const toutes = donnees.commandes.slice().sort((a, b) => (b.creeLe || 0) - (a.creeLe || 0));
   const parEtat = {};
   for (const c of toutes) parEtat[etatCommande(c)] = (parEtat[etatCommande(c)] || 0) + 1;
+  // Les chiffres servent d'onglets : chaque statut montre sa liste, « au total » et « en service » le tableau.
+  if (!vueCommandes) vueCommandes = parEtat['a-envoyer'] ? 'a-envoyer' : parEtat.retour ? 'retour' : parEtat['en-route'] ? 'en-route' : 'toutes';
+  const onglet = (vue, valeur, texte, classe, filtre = '') => {
+    const el = stat(String(valeur), texte, null, classe);
+    const actif = vue === vueCommandes && (vue !== 'toutes' || $('filtre-commandes').value === filtre);
+    el.classList.add('onglet');
+    el.classList.toggle('actif', actif);
+    el.tabIndex = 0;
+    el.setAttribute('role', 'button');
+    el.setAttribute('aria-pressed', String(actif));
+    const choisir = () => {
+      vueCommandes = vue;
+      if (vue === 'toutes') $('filtre-commandes').value = filtre;
+      afficherCommandes();
+    };
+    el.addEventListener('click', choisir);
+    el.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choisir(); } });
+    return el;
+  };
   $('kpi-commandes').replaceChildren(
-    stat(String(toutes.length), 'commandes au total'),
-    stat(String(parEtat['a-envoyer'] || 0), 'à envoyer'),
-    stat(String(parEtat['en-route'] || 0), 'en route'),
-    stat(String(parEtat.active || 0), 'en service'),
-    stat(String(parEtat.retour || 0), 'à récupérer', null, parEtat.retour ? 'neg' : null),
+    onglet('a-envoyer', parEtat['a-envoyer'] || 0, 'à envoyer'),
+    onglet('en-route', parEtat['en-route'] || 0, 'en route'),
+    onglet('retour', parEtat.retour || 0, 'à récupérer', parEtat.retour ? 'neg' : null),
+    onglet('toutes', parEtat.active || 0, 'en service', null, 'active'),
+    onglet('toutes', toutes.length, 'commandes au total'),
   );
+  document.querySelectorAll('[data-panneau="commandes"] [data-vue]').forEach((c) => { c.hidden = c.dataset.vue !== vueCommandes; });
   const filtre = $('filtre-commandes').value;
   const tablettes = new Map(donnees.stock.filter((t) => t.commande).map((t) => [t.commande, t]));
   remplirTable($('t-commandes'), [
