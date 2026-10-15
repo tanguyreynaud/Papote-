@@ -981,3 +981,13 @@ body:not(.on-support) .ps-bouton, body:not(.on-support) .ps-panneau { display: n
 .wifi-join .error { margin: 0; }
 .spinner-inline { display: inline-block; width: 14px; height: 14px; margin-right: 8px; vertical-align: -2px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* Barres de défilement dessinées (barreDefilement) : rail clair, curseur indigo. */
+.defil { position: relative; }
+.defil-sheet { width: 100%; max-width: 640px; }
+.defil-zone { scrollbar-width: none; }
+.defil-zone::-webkit-scrollbar { display: none; }
+.defil-rail { position: absolute; top: 6px; bottom: 6px; right: 3px; width: 6px; border-radius: 3px; background: color-mix(in srgb, var(--accent) 14%, transparent); pointer-events: none; }
+.defil-sheet > .defil-rail { top: 28px; bottom: 16px; right: 6px; }
+.defil-rail span { display: block; width: 100%; border-radius: 3px; background: var(--accent); }
+#sheet-wifi .wifi-list { max-height: 55vh; overflow-y: auto; }

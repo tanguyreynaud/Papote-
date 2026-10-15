@@ -2746,3 +2746,34 @@ if ('serviceWorker' in navigator) {
 }
 
 start();
+
+// ---------- Barres de défilement visibles ----------
+// Le téléphone cache sa barre : on en dessine une (rail clair, curseur indigo) sur les listes
+// qui peuvent dépasser, comme sur la tablette.
+function barreDefilement(el) {
+  const wrap = document.createElement('div');
+  wrap.className = `defil${el.classList.contains('sheet-body') ? ' defil-sheet' : ''}`;
+  el.parentNode.insertBefore(wrap, el);
+  wrap.append(el);
+  el.classList.add('defil-zone');
+  const rail = document.createElement('div');
+  rail.className = 'defil-rail';
+  rail.innerHTML = '<span></span>';
+  wrap.append(rail);
+  const pouce = rail.firstChild;
+  const maj = () => {
+    const { scrollHeight: h, clientHeight: c, scrollTop: t } = el;
+    rail.hidden = h <= c + 2;
+    if (rail.hidden) return;
+    const H = rail.clientHeight;
+    const ph = Math.max(28, (H * c) / h);
+    pouce.style.height = `${ph}px`;
+    pouce.style.transform = `translateY(${((H - ph) * t) / (h - c)}px)`;
+  };
+  el.addEventListener('scroll', maj, { passive: true });
+  new ResizeObserver(maj).observe(el);
+  new MutationObserver(maj).observe(el, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden'] });
+  maj();
+}
+['wifi-list', 'logs', 'form-post', 'form-reminder'].forEach((id) => barreDefilement($(id)));
+barreDefilement(document.querySelector('#sheet-wifi .sheet-body'));
