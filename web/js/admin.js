@@ -402,7 +402,7 @@ async function load() {
     refreshSim(families, tablets);
   } catch (err) {
     console.error(err);
-    $('families').innerHTML = '<li class="card error">Lecture impossible. Ce compte a-t-il les droits d\'administrateur ?</li>';
+    $('t-familles').innerHTML = '<tbody><tr><td class="error">Lecture impossible. Ce compte a-t-il les droits d\'administrateur ?</td></tr></tbody>';
   } finally {
     $('loading-families').hidden = true;
   }
@@ -576,6 +576,8 @@ async function supprimerFamille(f, li, btn) {
     await appeler('gestionSupprimerFamille', { fid: f.id, nom });
     families = families.filter((x) => x.id !== f.id);
     li.remove();
+    ficheFamille = null;
+    render();
     alert(`La famille « ${f.name} » et toutes ses données sont supprimées.`);
   } catch (err) {
     alert(`Suppression impossible : ${err.message}`);
@@ -590,19 +592,18 @@ function state(f) {
   return { cls: 'on', label: 'En ligne' };
 }
 
-function render() {
-  const now = Date.now();
-  const withTablet = families.filter((f) => f.hasTablet);
-  const offline = withTablet.filter((f) => state(f).cls === 'off');
-  $('s-families').textContent = families.length;
-  $('s-online').textContent = withTablet.length - offline.length;
-  $('s-offline').textContent = offline.length;
-  $('s-idle').textContent = withTablet.filter((f) => !f.active || now - f.active.getTime() > IDLE_MS).length;
+let vueFamilles = null; // onglet de la liste des familles (off, on, none, toutes)
+let ficheFamille = null; // famille ouverte sur sa page
 
-  // Les tablettes à problème d'abord.
-  const rank = { off: 0, on: 1, none: 2 };
-  const sorted = families.slice().sort((a, b) => rank[state(a).cls] - rank[state(b).cls] || a.name.localeCompare(b.name));
-  $('families').replaceChildren(...sorted.map((f) => {
+function ouvrirFamille(fid) {
+  ficheFamille = fid;
+  render();
+  window.scrollTo(0, 0);
+}
+$('famille-retour').addEventListener('click', () => { ficheFamille = null; render(); });
+
+// Page d'une famille : état de la tablette et toutes les actions.
+function carteFamille(f) {
     const s = state(f);
     const li = document.createElement('li');
     li.className = `family card ${s.cls}`;
@@ -621,6 +622,29 @@ function render() {
     const delBtn = li.querySelector('.delete-btn');
     if (f.abonnement?.statut === 'offert') delBtn.parentElement.remove();
     else delBtn.addEventListener('click', () => supprimerFamille(f, li, delBtn));
+    // Famille offerte (celle de Tanguy) : jamais en pause, jamais supprimable.
+    const offre = document.createElement('div');
+    offre.className = 'replace';
+    offre.innerHTML = '<span class="small"></span> <button type="button" class="link small"></button>';
+    const offerte = f.abonnement?.statut === 'offert';
+    offre.querySelector('span').textContent = offerte ? 'Famille offerte (protégée).' : `Abonnement : ${f.abonnement?.statut || 'aucun'}.`;
+    const offreBtn = offre.querySelector('button');
+    offreBtn.textContent = offerte ? 'Ne plus offrir' : 'Rendre offerte (protégée)';
+    offreBtn.addEventListener('click', async () => {
+      if (!confirm(offerte
+        ? `« ${f.name} » ne sera plus offerte : sans abonnement, sa tablette se mettra en pause. Continuer ?`
+        : `Rendre « ${f.name} » offerte ? Elle ne sera jamais mise en pause ni supprimable.`)) return;
+      offreBtn.disabled = true;
+      try {
+        await appeler('gestionFamilleOfferte', { fid: f.id, offerte: !offerte });
+        f.abonnement = { ...(f.abonnement || {}), statut: offerte ? 'aucun' : 'offert' };
+        render();
+      } catch (err) {
+        alert(`Impossible : ${err.message}`);
+        offreBtn.disabled = false;
+      }
+    });
+    li.querySelector('dl').after(offre);
     li.querySelector('.replace-btn').addEventListener('click', () => prepareReplacement(f, li));
     li.querySelector('.members-btn').addEventListener('click', () => toggleMembers(f, li));
     showPending(f, li);
@@ -635,7 +659,77 @@ function render() {
       dl.append(dt, dd);
     }
     return li;
-  }));
+}
+
+function render() {
+  const now = Date.now();
+  const withTablet = families.filter((f) => f.hasTablet);
+  const offline = withTablet.filter((f) => state(f).cls === 'off');
+  $('s-families').textContent = families.length;
+  $('s-online').textContent = withTablet.length - offline.length;
+  $('s-offline').textContent = offline.length;
+  $('s-idle').textContent = withTablet.filter((f) => !f.active || now - f.active.getTime() > IDLE_MS).length;
+
+  // Liste par statut (les chiffres servent d'onglets) ; une famille ouverte a sa propre page.
+  const rank = { off: 0, on: 1, none: 2 };
+  const sorted = families.slice().sort((a, b) => rank[state(a).cls] - rank[state(b).cls] || a.name.localeCompare(b.name));
+  const compte = (cls) => families.filter((f) => state(f).cls === cls).length;
+  if (!vueFamilles) vueFamilles = compte('off') ? 'off' : 'toutes';
+  const onglet = (vue, n, texte, classe) => {
+    const el = document.createElement('div');
+    el.className = `stat onglet ${classe || ''}${vue === vueFamilles ? ' actif' : ''}`;
+    el.tabIndex = 0;
+    el.setAttribute('role', 'button');
+    el.setAttribute('aria-pressed', String(vue === vueFamilles));
+    el.innerHTML = '<span></span><p></p>';
+    el.querySelector('span').textContent = n;
+    el.querySelector('p').textContent = texte;
+    const choisir = () => { vueFamilles = vue; render(); };
+    el.addEventListener('click', choisir);
+    el.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choisir(); } });
+    return el;
+  };
+  $('kpi-familles').replaceChildren(
+    onglet('off', compte('off'), 'hors ligne', 'warn'),
+    onglet('on', compte('on'), 'en ligne', 'ok'),
+    onglet('none', compte('none'), 'sans tablette'),
+    onglet('toutes', families.length, 'toutes les familles'),
+  );
+  const ABOS = { offert: 'Offert', actif: 'Actif', impaye: 'Impayé', suspendu: 'Suspendu', resilie: 'Résilié', aucun: 'Aucun' };
+  const table = $('t-familles');
+  const tete = ['Famille', 'Code', 'Tablette', 'Abonnement', 'Membres', 'Envois', 'Dernier envoi', 'Version'];
+  const lignes = sorted.filter((f) => vueFamilles === 'toutes' || state(f).cls === vueFamilles).map((f) => {
+    const tr = document.createElement('tr');
+    tr.tabIndex = 0;
+    const cellules = [f.name, f.code ? `${f.code.slice(0, 4)}-${f.code.slice(4)}` : '', state(f).label,
+      ABOS[f.abonnement?.statut] || 'Aucun', f.people ?? '–', f.posts ?? '–', ago(f.lastPost), f.version || '–'];
+    cellules.forEach((v, n) => {
+      const td = document.createElement('td');
+      if (n === 0) {
+        const dot = document.createElement('span');
+        dot.className = `dot ${state(f).cls}`;
+        td.append(dot, ' ');
+        const b = document.createElement('strong');
+        b.textContent = v;
+        td.append(b);
+      } else td.textContent = v;
+      tr.append(td);
+    });
+    tr.addEventListener('click', () => ouvrirFamille(f.id));
+    tr.addEventListener('keydown', (e) => { if (e.key === 'Enter') ouvrirFamille(f.id); });
+    return tr;
+  });
+  const thead = document.createElement('thead');
+  thead.innerHTML = `<tr>${tete.map((t) => `<th>${t}</th>`).join('')}</tr>`;
+  const tbody = document.createElement('tbody');
+  if (lignes.length) tbody.append(...lignes);
+  else tbody.innerHTML = `<tr><td class="vide" colspan="${tete.length}">Aucune famille ici.</td></tr>`;
+  table.replaceChildren(thead, tbody);
+  const ouverte = families.find((f) => f.id === ficheFamille);
+  $('familles-liste').hidden = !!ouverte;
+  $('famille-fiche').hidden = !ouverte;
+  if (ouverte) $('families').replaceChildren(carteFamille(ouverte));
+  else ficheFamille = null;
   const legacy = families.reduce((n, f) => n + (f.legacy || 0), 0);
   $('migrate-count').textContent = legacy
     ? `${legacy} envoi${legacy > 1 ? 's' : ''} encore dans la base (photos, vidéos et anciens vocaux).`

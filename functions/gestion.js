@@ -1544,7 +1544,7 @@ exports.gestionEtiquette = onCall({ secrets: [SENDCLOUD_API, MAIL_MOT_DE_PASSE],
   const c = snap.data();
   const reglages = lireReglages(reglagesSnap.data());
   const papote = sendcloud.adressePapote(reglages.expediteur);
-  if (!papote) throw new HttpsError('failed-precondition', "Renseignez l'adresse d'expédition de Papote (onglet Commandes, Étiquettes).");
+  if (!papote) throw new HttpsError('failed-precondition', "Renseignez l'adresse d'expédition de Papote (Réglages, Étiquettes Sendcloud).");
   const cl = sendcloud.adresseClient(c);
   if (!cl) throw new HttpsError('failed-precondition', "Cette commande n'a pas d'adresse ni de point relais utilisable.");
   const poids = Math.max(0.1, (reglages.poidsColis || 1500) / 1000);
@@ -2304,6 +2304,30 @@ exports.desinscription = onRequest(async (req, res) => {
     `<form method="post" action="?c=${c}&j=${j}"><button type="submit" style="font:inherit;font-weight:bold;background:#4f46e5;color:#fff;border:0;border-radius:999px;padding:14px 26px;cursor:pointer">Me désinscrire</button></form>`));
 });
 
+
+
+// { fid, offerte } : famille offerte (celle de Tanguy) : jamais en pause, jamais supprimable ; ou retour à « aucun ».
+exports.gestionFamilleOfferte = onCall(async (request) => {
+  verifierAdmin(request);
+  const { fid, offerte } = request.data || {};
+  if (typeof fid !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(fid) || typeof offerte !== 'boolean') {
+    throw new HttpsError('invalid-argument', 'Famille ou choix manquant.');
+  }
+  const ref = db().doc(`families/${fid}`);
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Famille introuvable.');
+  const statut = snap.get('abonnement.statut');
+  if (offerte && ['actif', 'impaye', 'suspendu'].includes(statut)) {
+    throw new HttpsError('failed-precondition', "Cette famille a un abonnement payant en cours : résiliez-le d'abord dans Stripe.");
+  }
+  if (!offerte && statut !== 'offert') return { ok: true };
+  await ref.update({
+    'abonnement.statut': offerte ? 'offert' : 'aucun',
+    'abonnement.majLe': FieldValue.serverTimestamp(),
+    'abonnement.par': request.auth.token.email || request.auth.uid,
+  });
+  return { ok: true };
+});
 
 // ---------- Suppression d'une famille (demande du client à contact@) ----------
 // Les responsables ne peuvent plus supprimer leur famille dans l'appli : l'admin le fait ici, en retapant le nom.

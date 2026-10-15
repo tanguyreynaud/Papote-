@@ -50,7 +50,7 @@
           Comptabilité</a>
         <a href="#outils" data-page="outils">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.5-.5-.5-2.5z"/></svg>
-          Maintenance</a>
+          Réglages</a>
       </nav>
       <div class="nav-pied">
         <p id="who" class="muted small"></p>
@@ -95,75 +95,41 @@
           <ul id="a-faire" class="a-faire"></ul>
         </div>
         <div class="card">
-          <h2>Franchise de TVA</h2>
-          <div id="tva"></div>
-        </div>
-        <div class="card">
           <h2>Ce mois-ci</h2>
           <div class="stats compact" id="kpi-mois"></div>
         </div>
         <div class="card">
           <div class="tete">
             <h2>Une facture à saisir ?</h2>
-            <button type="button" class="primary small-btn" id="btn-lire">Déposer une facture</button>
-          </div>
-          <p class="muted small">PDF ou photo : elle est lue automatiquement, puis rangée dans le stock (achat de tablettes) ou les dépenses, avec la pièce jointe. Vous pouvez aussi la glisser n'importe où sur la page.</p>
-          <div class="tete">
-            <p class="small">Ou envoyez-la (ou transférez l'e-mail du fournisseur) à <strong>factures@mapapote.fr</strong> : elle est rangée toute seule dans l'heure, « à vérifier ».</p>
-            <button type="button" class="secondary small-btn" id="btn-courrier">Relever maintenant</button>
-          </div>
-          <p id="courrier" class="small muted"></p>
-        </div>
-        <div class="card">
-          <div class="tete">
-            <h2>Automatique</h2>
             <div class="actions">
-              <button type="button" class="secondary small-btn" id="btn-recap">Envoyer le récap</button>
-              <button type="button" class="secondary small-btn" id="btn-automatiser">Lancer maintenant</button>
+              <button type="button" class="secondary small-btn" id="btn-courrier">Relever factures@</button>
+              <button type="button" class="primary small-btn" id="btn-lire">Déposer une facture</button>
             </div>
           </div>
-          <p class="muted small">Chaque nuit : facture du matériel non rendu (170 € en Wi-Fi, 200 € avec internet), avoir pour chaque remboursement, dépenses mensuelles ajoutées au registre. Chaque lundi à 8 h : récap de la semaine par e-mail à contact@mapapote.fr.</p>
-          <p id="automatique" class="small"></p>
+          <p class="muted small">Déposez-la ici (ou glissez-la sur la page), ou envoyez-la à <strong>factures@mapapote.fr</strong> : elle est lue et rangée toute seule.</p>
+          <p id="courrier" class="small muted"></p>
         </div>
       </section>
 
       <!-- ---------- Commandes ---------- -->
       <section data-panneau="commandes" hidden>
         <div class="stats" id="kpi-commandes"></div>
-        <div class="card">
+        <div class="card" data-vue="a-envoyer">
           <h2>Tablettes à envoyer</h2>
-          <p class="muted small">Choisissez la tablette du stock, puis « Étiquette » (Sendcloud remplit le n° de suivi et ouvre l'étiquette à imprimer) ou collez le n° de suivi Mondial Relay, puis « Envoyée » : le client reçoit le lien de suivi.</p>
           <ul id="orders" class="orders"></ul>
           <p id="orders-empty" class="muted small" hidden>Aucune commande en attente.</p>
         </div>
-        <div class="card">
+        <div class="card" data-vue="en-route">
           <h2>Envoyées, pas encore jumelées</h2>
-          <p class="muted small">Le client reçoit un rappel à J+5 et J+12 ; en rouge, rien après 20 jours.</p>
           <ul id="shipped" class="orders"></ul>
           <p id="shipped-empty" class="muted small" hidden>Aucune tablette en route.</p>
         </div>
-        <div class="card">
+        <div class="card" data-vue="retour">
           <h2>Tablettes à récupérer</h2>
-          <p class="muted small">Abonnements terminés. Sans retour avant la date limite, 170 € (200 € avec internet) sont prélevés automatiquement.</p>
           <ul id="returns" class="orders"></ul>
           <p id="returns-empty" class="muted small" hidden>Aucune tablette à récupérer.</p>
         </div>
-        <div class="card">
-          <h2>Étiquettes Sendcloud</h2>
-          <p class="muted small">Adresse de départ des colis et d'arrivée des retours Mondial Relay. Les clés Sendcloud se rangent avec outils\gestion\installer-sendcloud.bat.</p>
-          <form id="f-expediteur" class="grille no-print">
-            <label>Nom <input name="nom" autocomplete="organization"></label>
-            <label>Adresse <input name="adresse" autocomplete="street-address"></label>
-            <label>Code postal <input name="cp" inputmode="numeric" autocomplete="postal-code"></label>
-            <label>Ville <input name="ville" autocomplete="address-level2"></label>
-            <label>Téléphone <input name="telephone" type="tel" autocomplete="tel"></label>
-            <label>E-mail <input name="email" type="email" autocomplete="email"></label>
-            <label>Poids d'un colis (g) <input name="poidsColis" inputmode="numeric"></label>
-            <button type="submit" class="secondary">Enregistrer l'adresse</button>
-            <p class="f-msg small" hidden></p>
-          </form>
-        </div>
-        <div class="card">
+        <div class="card" data-vue="toutes">
           <div class="tete">
             <h2>Toutes les commandes</h2>
             <div class="actions no-print">
@@ -179,35 +145,37 @@
               <button type="button" class="secondary small-btn" id="x-commandes">Exporter</button>
             </div>
           </div>
-          <p class="muted small">Touchez une commande pour voir ses factures et ses paiements.</p>
           <div class="table"><table id="t-commandes" class="cliquable"></table></div>
         </div>
       </section>
 
       <!-- ---------- Clients et e-mails d'information ---------- -->
       <section data-panneau="clients" hidden>
-        <div class="stats" id="kpi-clients"></div>
-        <div class="card">
-          <div class="tete">
-            <h2>Clients et contacts</h2>
-            <div class="actions no-print">
-              <input id="cherche-clients" type="search" placeholder="Chercher" aria-label="Chercher un nom, un e-mail, un téléphone">
-              <select id="filtre-clients" aria-label="Filtrer">
-                <option value="">Tout le monde</option>
-                <option value="client">Abonnés</option>
-                <option value="ancien">Anciens clients</option>
-                <option value="panier">Paniers abandonnés</option>
-                <option value="accord">Acceptent les e-mails</option>
-              </select>
-              <button type="button" class="secondary small-btn" id="x-clients">Exporter</button>
-            </div>
-          </div>
-          <p class="muted small">Touchez une ligne pour noter qu'une personne accepte (ou refuse) les e-mails d'information, par exemple après un appel.</p>
-          <div class="table"><table id="t-clients" class="cliquable"></table></div>
+        <div class="onglets no-print" role="tablist">
+          <button type="button" data-onglet="liste">Clients</button>
+          <button type="button" data-onglet="email">E-mail d'information</button>
         </div>
-        <div class="card">
-          <h2>Envoyer un e-mail d'information</h2>
-          <p class="muted small">Il part seulement aux personnes de la liste affichée ci-dessus qui ont accepté les e-mails, avec un lien « Se désinscrire ». Écrivez {prenom} pour le prénom ; laissez une ligne vide entre deux paragraphes.</p>
+        <div data-onglet="liste">
+          <div class="stats" id="kpi-clients"></div>
+          <div class="card">
+            <div class="tete">
+              <input id="cherche-clients" type="search" placeholder="Chercher" aria-label="Chercher un nom, un e-mail, un téléphone">
+              <div class="actions no-print">
+                <select id="filtre-clients" aria-label="Filtrer">
+                  <option value="">Tout le monde</option>
+                  <option value="client">Abonnés</option>
+                  <option value="ancien">Anciens clients</option>
+                  <option value="panier">Paniers abandonnés</option>
+                  <option value="accord">Acceptent les e-mails</option>
+                </select>
+                <button type="button" class="secondary small-btn" id="x-clients">Exporter</button>
+              </div>
+            </div>
+            <div class="table"><table id="t-clients" class="cliquable"></table></div>
+          </div>
+        </div>
+        <div class="card" data-onglet="email">
+          <p class="muted small">Part seulement aux personnes de la liste « Clients » (avec son filtre) qui acceptent les e-mails. {prenom} = le prénom.</p>
           <form id="f-campagne" class="campagne no-print">
             <label>Objet <input name="objet" maxlength="150" required></label>
             <label>Message <textarea name="message" rows="9" required placeholder="Bonjour {prenom},"></textarea></label>
@@ -226,50 +194,62 @@
       <!-- ---------- Familles et tablettes ---------- -->
       <section data-panneau="familles" hidden>
         <p id="loading-families" class="muted">Chargement des familles…</p>
-        <ul id="families" class="families"></ul>
-        <section class="card sim">
-          <h2>Cartes SIM</h2>
-          <p id="sim-count" class="muted small"></p>
-          <ul id="sim-lines" class="sim-lines"></ul>
-          <p id="sim-empty" class="muted small" hidden>Aucune tablette avec SIM pour l'instant.</p>
-        </section>
+        <div id="familles-liste">
+          <div class="stats" id="kpi-familles"></div>
+          <div class="card">
+            <div class="table"><table id="t-familles" class="cliquable"></table></div>
+          </div>
+        </div>
+        <div id="famille-fiche" hidden>
+          <button type="button" class="link small" id="famille-retour">← Toutes les familles</button>
+          <ul id="families" class="families"></ul>
+        </div>
       </section>
 
       <!-- ---------- Stock ---------- -->
       <section data-panneau="stock" hidden>
-        <div class="stats" id="kpi-stock"></div>
         <p id="alerte-stock" class="bandeau-erreur" hidden></p>
-        <div class="card">
-          <div class="tete">
-            <h2>Parc de tablettes</h2>
-            <div class="actions no-print">
+        <div class="onglets no-print" role="tablist">
+          <button type="button" data-onglet="tablettes">Tablettes</button>
+          <button type="button" data-onglet="sim">Cartes SIM</button>
+          <button type="button" data-onglet="accessoires">Accessoires</button>
+        </div>
+        <div data-onglet="tablettes">
+          <div class="stats" id="kpi-stock"></div>
+          <div class="card">
+            <div class="tete">
               <select id="filtre-stock" aria-label="Filtrer"><option value="">Toutes</option></select>
-              <button type="button" class="secondary small-btn" id="x-stock">Exporter</button>
-              <button type="button" class="primary small-btn" id="btn-achat">Ajouter un achat</button>
+              <div class="actions no-print">
+                <button type="button" class="secondary small-btn" id="x-stock">Exporter</button>
+                <button type="button" class="primary small-btn" id="btn-achat">Ajouter un achat</button>
+              </div>
             </div>
+            <div class="table"><table id="t-stock"></table></div>
+            <p id="stock-vide" class="muted small" hidden>Aucune tablette enregistrée. Ajoutez votre premier achat.</p>
           </div>
-          <div class="table"><table id="t-stock"></table></div>
-          <p id="stock-vide" class="muted small" hidden>Aucune tablette enregistrée. Ajoutez votre premier achat.</p>
         </div>
-        <div class="card">
-          <div class="tete">
-            <h2>Cartes SIM</h2>
-            <div class="actions no-print">
+        <div data-onglet="sim">
+          <div class="card">
+            <div class="tete">
               <select id="filtre-sim" aria-label="Filtrer"><option value="">Toutes sauf résiliées</option></select>
-              <button type="button" class="primary small-btn" id="btn-sim">Ajouter une carte SIM</button>
+              <button type="button" class="primary small-btn no-print" id="btn-sim">Ajouter une carte SIM</button>
             </div>
+            <p class="muted small" id="sim-resume"></p>
+            <div class="table"><table id="t-sim"></table></div>
           </div>
-          <p class="muted small" id="sim-resume"></p>
-          <div class="table"><table id="t-sim"></table></div>
-          <p class="muted small">Une carte par ligne : en stock (pas encore activée), active dans une tablette, suspendue ou résiliée. En rouge : promo, activation ou carte bancaire à surveiller, ou forfait encore payé alors que la tablette n'est plus chez un client.</p>
+          <section class="card sim">
+            <h2>Vues par les tablettes</h2>
+            <p id="sim-count" class="muted small"></p>
+            <ul id="sim-lines" class="sim-lines"></ul>
+            <p id="sim-empty" class="muted small" hidden>Aucune tablette avec SIM pour l'instant.</p>
+          </section>
         </div>
-        <div class="card">
+        <div class="card" data-onglet="accessoires">
           <div class="tete">
-            <h2>Accessoires</h2>
+            <p class="muted small">Ils sortent tout seuls du stock quand une tablette part avec la formule choisie.</p>
             <button type="button" class="primary small-btn no-print" id="btn-accessoire">Ajouter un accessoire</button>
           </div>
           <div class="table"><table id="t-accessoires"></table></div>
-          <p class="muted small">Clé 4G, prise USB… Chacun sort tout seul du stock quand une tablette part avec la formule choisie.</p>
         </div>
       </section>
 
@@ -278,19 +258,15 @@
         <div class="stats" id="kpi-factures"></div>
         <div class="card">
           <div class="tete">
-            <h2>Factures clients</h2>
-            <div class="actions no-print">
-              <select id="filtre-factures" aria-label="Filtrer">
-                <option value="">Toutes</option>
-                <option value="paid">Payées</option>
-                <option value="open">À payer</option>
-                <option value="uncollectible">Irrécouvrables</option>
-                <option value="void">Annulées</option>
-              </select>
-              <button type="button" class="secondary small-btn" id="x-factures">Exporter</button>
-            </div>
+            <select id="filtre-factures" aria-label="Filtrer">
+              <option value="">Toutes</option>
+              <option value="paid">Payées</option>
+              <option value="open">À payer</option>
+              <option value="uncollectible">Irrécouvrables</option>
+              <option value="void">Annulées</option>
+            </select>
+            <button type="button" class="secondary small-btn no-print" id="x-factures">Exporter</button>
           </div>
-          <p class="muted small">Créées et envoyées automatiquement par Stripe à chaque paiement (commande, puis chaque mois). Le matériel non rendu reçoit aussi sa facture, et chaque remboursement son avoir, automatiquement chaque nuit.</p>
           <div class="table"><table id="t-factures"></table></div>
         </div>
       </section>
@@ -298,23 +274,120 @@
       <!-- ---------- Comptabilité ---------- -->
       <section data-panneau="compta" hidden>
         <h2 class="titre-print" id="bilan-titre">Bilan</h2>
-        <div class="stats" id="kpi-argent"></div>
-        <div class="stats" id="kpi-activite"></div>
-        <div class="card">
-          <div class="tete">
-            <h2>Mois par mois</h2>
-            <div class="actions no-print">
-              <button type="button" class="secondary small-btn" id="imprimer">Imprimer / PDF</button>
-              <button type="button" class="primary small-btn" id="x-tout">Tout exporter pour le comptable</button>
+        <div class="onglets no-print" role="tablist">
+          <button type="button" data-onglet="bilan">Bilan</button>
+          <button type="button" data-onglet="rentabilite">Rentabilité</button>
+          <button type="button" data-onglet="urssaf">URSSAF et TVA</button>
+          <button type="button" data-onglet="depenses">Dépenses</button>
+          <button type="button" data-onglet="registres">Registres</button>
+        </div>
+        <div data-onglet="bilan">
+          <div class="stats" id="kpi-argent"></div>
+          <div class="stats" id="kpi-activite"></div>
+          <div class="card">
+            <div class="tete">
+              <h2>Mois par mois</h2>
+              <div class="actions no-print">
+                <button type="button" class="secondary small-btn" id="imprimer">Imprimer / PDF</button>
+                <button type="button" class="primary small-btn" id="x-tout">Tout exporter pour le comptable</button>
+              </div>
+            </div>
+            <div class="table"><table id="t-bilan"></table></div>
+          </div>
+          <div class="card">
+            <div class="graphiques">
+              <figure><figcaption>Encaissé, dépenses et résultat par mois</figcaption><div id="g-argent"></div></figure>
+              <figure><figcaption>Abonnements en cours, arrivées et départs</figcaption><div id="g-abonnes"></div></figure>
             </div>
           </div>
-          <div class="table"><table id="t-bilan"></table></div>
-          <p class="muted small">Résultat = encaissé − remboursements − frais Stripe − dépenses. L'export contient le bilan, le livre des recettes, le registre des achats, les factures et le relevé Stripe.</p>
         </div>
-        <div class="card">
-          <h2>Rentabilité par formule</h2>
-          <p class="muted small">Ce qui reste chaque mois par abonné payant, d'après les vrais frais Stripe de la période, le prix d'achat moyen des tablettes et des accessoires envoyés (amortis sur leur durée de vie) et le coût des lignes SIM.</p>
+        <div class="card" data-onglet="rentabilite">
+          <p class="muted small">Ce qui reste chaque mois par abonné payant : frais Stripe réels, tablette et accessoires amortis sur leur durée de vie, ligne SIM.</p>
           <div class="table"><table id="t-rentabilite"></table></div>
+        </div>
+        <div data-onglet="urssaf">
+          <div class="card">
+            <h2>Franchise de TVA</h2>
+            <div id="tva"></div>
+          </div>
+          <div class="card">
+            <div class="tete">
+              <h2>Déclarations URSSAF</h2>
+              <select id="u-rythme" class="no-print" aria-label="Rythme des déclarations">
+                <option value="mois">Mensuelles</option>
+                <option value="trimestre">Trimestrielles</option>
+              </select>
+            </div>
+            <div class="table"><table id="t-urssaf"></table></div>
+            <p class="muted small">Chiffre d'affaires encaissé, sans déduire frais ni dépenses. Taux à vérifier sur autoentrepreneur.urssaf.fr (réglable dans Réglages).</p>
+          </div>
+        </div>
+        <div class="card" data-onglet="depenses">
+          <div class="tete">
+            <span></span>
+            <button type="button" class="primary small-btn no-print" id="btn-depense">Ajouter une dépense</button>
+          </div>
+          <div class="table"><table id="t-achats"></table></div>
+          <div class="table"><table id="t-categories"></table></div>
+        </div>
+        <div data-onglet="registres">
+          <div class="card">
+            <h2>Livre des recettes</h2>
+            <div class="table"><table id="t-recettes"></table></div>
+          </div>
+          <div class="card">
+            <div class="tete">
+              <h2>Livres archivés</h2>
+              <button type="button" class="secondary small-btn no-print" id="btn-cloturer">Archiver le mois dernier</button>
+            </div>
+            <p class="muted small">Figés le 1er de chaque mois et envoyés à contact@mapapote.fr : registres obligatoires, à garder.</p>
+            <p id="cloture" class="muted small" hidden></p>
+            <div class="table"><table id="t-archives"></table></div>
+            <div class="table"><table id="t-impots"></table></div>
+          </div>
+          <div class="card">
+            <h2>Virements Stripe vers la banque</h2>
+            <div class="table"><table id="t-virements"></table></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ---------- Réglages et maintenance ---------- -->
+      <section data-panneau="outils" hidden>
+        <div class="onglets no-print" role="tablist">
+          <button type="button" data-onglet="automatique">Automatique</button>
+          <button type="button" data-onglet="expedition">Expédition</button>
+          <button type="button" data-onglet="calculs">Calculs</button>
+          <button type="button" data-onglet="maintenance">Maintenance</button>
+        </div>
+        <div class="card" data-onglet="automatique">
+          <div class="tete">
+            <h2>Tâches automatiques</h2>
+            <div class="actions">
+              <button type="button" class="secondary small-btn" id="btn-recap">Envoyer le récap</button>
+              <button type="button" class="secondary small-btn" id="btn-automatiser">Lancer maintenant</button>
+            </div>
+          </div>
+          <p class="muted small">Chaque nuit : facture du matériel non rendu, avoirs des remboursements, dépenses mensuelles. Chaque lundi à 8 h : récap de la semaine à contact@mapapote.fr.</p>
+          <p id="automatique" class="small"></p>
+        </div>
+        <div class="card" data-onglet="expedition">
+          <h2>Étiquettes Sendcloud</h2>
+          <p class="muted small">Adresse de départ des colis et d'arrivée des retours.</p>
+          <form id="f-expediteur" class="grille no-print">
+            <label>Nom <input name="nom" autocomplete="organization"></label>
+            <label>Adresse <input name="adresse" autocomplete="street-address"></label>
+            <label>Code postal <input name="cp" inputmode="numeric" autocomplete="postal-code"></label>
+            <label>Ville <input name="ville" autocomplete="address-level2"></label>
+            <label>Téléphone <input name="telephone" type="tel" autocomplete="tel"></label>
+            <label>E-mail <input name="email" type="email" autocomplete="email"></label>
+            <label>Poids d'un colis (g) <input name="poidsColis" inputmode="numeric"></label>
+            <button type="submit" class="secondary">Enregistrer l'adresse</button>
+            <p class="f-msg small" hidden></p>
+          </form>
+        </div>
+        <div class="card" data-onglet="calculs">
+          <h2>Calculs de la comptabilité</h2>
           <form id="f-reglages" class="grille no-print">
             <label>Seuil de franchise de TVA (€) <input name="seuilTva" inputmode="decimal"></label>
             <label>Taux URSSAF (%) <input name="tauxUrssaf" inputmode="decimal"></label>
@@ -324,61 +397,9 @@
             <p class="f-msg small" hidden></p>
           </form>
         </div>
-        <div class="card">
-          <h2>En images</h2>
-          <div class="graphiques">
-            <figure><figcaption>Encaissé, dépenses et résultat par mois</figcaption><div id="g-argent"></div></figure>
-            <figure><figcaption>Abonnements en cours, arrivées et départs</figcaption><div id="g-abonnes"></div></figure>
-          </div>
-        </div>
-        <div class="card">
-          <div class="tete">
-            <h2>Déclarations URSSAF</h2>
-            <div class="actions no-print">
-              <select id="u-rythme" aria-label="Rythme des déclarations">
-                <option value="mois">Mensuelles</option>
-                <option value="trimestre">Trimestrielles</option>
-              </select>
-            </div>
-          </div>
-          <div class="table"><table id="t-urssaf"></table></div>
-          <p class="muted small">Micro-entreprise : on déclare le chiffre d'affaires encaissé (paiements reçus moins remboursements), sans déduire les frais ni les dépenses. Le taux (réglable dans « Rentabilité par formule ») est une estimation à vérifier sur autoentrepreneur.urssaf.fr selon votre activité et vos options.</p>
-        </div>
-        <div class="card">
-          <div class="tete">
-            <h2>Dépenses</h2>
-            <button type="button" class="primary small-btn no-print" id="btn-depense">Ajouter une dépense</button>
-          </div>
-          <div class="table"><table id="t-achats"></table></div>
-          <div class="table"><table id="t-categories"></table></div>
-        </div>
-        <div class="card">
-          <h2>Livre des recettes</h2>
-          <p class="muted small">Chaque paiement reçu et chaque remboursement, à sa date.</p>
-          <div class="table"><table id="t-recettes"></table></div>
-        </div>
-        <div class="card">
-          <div class="tete">
-            <h2>Livres comptables archivés</h2>
-            <button type="button" class="secondary small-btn no-print" id="btn-cloturer">Archiver le mois dernier</button>
-          </div>
-          <p class="muted small">Le 1er de chaque mois à 5 h, le livre des recettes et le registre des achats du mois écoulé sont figés ici et envoyés à contact@mapapote.fr. Gardez-les : ce sont les registres obligatoires de la micro-entreprise.</p>
-          <p id="cloture" class="muted small" hidden></p>
-          <div class="table"><table id="t-archives"></table></div>
-          <div class="table"><table id="t-impots"></table></div>
-        </div>
-        <div class="card">
-          <h2>Virements Stripe vers la banque</h2>
-          <p class="muted small">Pour pointer avec le relevé bancaire.</p>
-          <div class="table"><table id="t-virements"></table></div>
-        </div>
-      </section>
-
-      <!-- ---------- Maintenance ---------- -->
-      <section data-panneau="outils" hidden>
-        <div class="card migrate">
+        <div class="card migrate" data-onglet="maintenance">
           <h2>Anciennes photos et vidéos</h2>
-          <p class="muted">Les envois faits avant Storage sont encore rangés dans la base. Le transfert les déplace vers Storage, sans rien changer pour les familles, et libère la base.</p>
+          <p class="muted small">Déplace vers Storage les envois faits avant Storage, sans rien changer pour les familles.</p>
           <p id="migrate-count" class="small"></p>
           <button type="button" id="btn-migrate" class="primary wide" disabled>Transférer vers Storage</button>
           <pre id="migrate-log" class="log" hidden></pre>

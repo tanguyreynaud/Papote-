@@ -215,8 +215,7 @@ section { padding-block: clamp(3.5rem, 8vw, 6rem); }
 .contact .btn-primary { background: var(--accent-text); color: var(--accent); }
 .contact .btn-primary:hover { background: var(--accent-text); color: var(--accent-strong); }
 .mail { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; font-size: 1rem; }
-.mail code { font: 700 1rem/1.4 var(--body); user-select: all; word-break: break-all; }
-.mail button { font: 700 .95rem/1 var(--body); background: transparent; color: inherit; border: 1.5px solid currentColor; border-radius: 999px; padding: .45rem .9rem; cursor: pointer; opacity: .9; }
+.mail a { color: inherit; font-weight: 700; }
 
 footer { padding-block: 2.5rem; color: var(--muted); font-size: .95rem; }
 footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 1rem; }
@@ -443,7 +442,7 @@ footer a { color: var(--muted); }
         </details>
         <details>
           <summary>Faut-il une box internet chez mon proche ?</summary>
-          <p>Non. Sans box, prenez l'option internet inclus : la tablette se connecte par le réseau mobile.</p>
+          <p>Non. Sans box, prenez l'option internet inclus : nous fournissons un petit routeur 4G, à brancher sur une prise, qui crée le wifi de la tablette.</p>
         </details>
         <details>
           <summary>Qui peut envoyer des photos ?</summary>
@@ -496,12 +495,9 @@ footer a { color: var(--muted); }
   <section id="contact" class="contact">
     <div class="wrap">
       <h2>Une question avant de commander ?</h2>
-      <p>Écrivez-nous quelques mots sur votre proche et sa connexion internet. Nous vous aidons à choisir la bonne formule.</p>
-      <a class="btn btn-primary" id="cta-mail" href="mailto:contact@mapapote.fr?subject=Une%20question%20sur%20Papote">Nous écrire</a>
-      <div class="mail">
-        <span>Ou écrivez à <code id="mail-addr">contact@mapapote.fr</code></span>
-        <button type="button" id="copy-mail">Copier l'adresse</button>
-      </div>
+      <p>Posez-la à notre assistant : il connaît Papote par cœur et vous répond tout de suite, à toute heure. Il vous aide aussi à choisir la bonne formule selon la connexion internet de votre proche.</p>
+      <a class="btn btn-primary" id="cta-chat" href="mailto:contact@mapapote.fr?subject=Une%20question%20sur%20Papote">Poser ma question</a>
+      <p class="mail">Vous préférez l'e-mail ? <a href="mailto:contact@mapapote.fr">contact@mapapote.fr</a></p>
     </div>
   </section>
 </main>
@@ -529,21 +525,12 @@ footer a { color: var(--muted); }
     setInterval(tick, 20000);
   })();
 
-  document.getElementById('copy-mail').addEventListener('click', function () {
-    var btn = this;
-    var addr = document.getElementById('mail-addr');
-    function done() { btn.textContent = 'Adresse copiée'; }
-    function select() {
-      var range = document.createRange();
-      range.selectNodeContents(addr);
-      var sel = window.getSelection();
-      sel.removeAllRanges();
-      sel.addRange(range);
-      btn.textContent = 'Adresse sélectionnée';
-    }
-    try {
-      navigator.clipboard.writeText(addr.textContent).then(done, select);
-    } catch (e) { select(); }
+  // « Poser ma question » ouvre le chat d'aide (vitrine/chat-support.js) ; sans lui, l'e-mail.
+  document.getElementById('cta-chat').addEventListener('click', function (e) {
+    var bulle = document.querySelector('.ps-bouton');
+    if (!bulle) return;
+    e.preventDefault();
+    bulle.click();
   });
 </script>
 <script>

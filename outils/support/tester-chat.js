@@ -85,7 +85,7 @@ const CAS = [
     const messages = fil.map((content, i) => ({ role: i % 2 ? 'assistant' : 'user', content }));
     const r = await fetch(API, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Origin: 'https://papote.web.app' },
+      headers: { 'Content-Type': 'application/json', Origin: 'https://mapapote.fr' },
       body: JSON.stringify({ messages, page }),
     });
     const d = await r.json().catch(() => ({}));
