@@ -17,7 +17,7 @@ const CAS = [
   ['Que se passe-t-il à la fin de l\'abonnement ?', 'site', 'renvoyer la tablette sous 30 jours'],
   ['Et si je ne rends pas la tablette ?', 'site', '170 € (Wi-Fi) ou 200 € (internet)'],
   ['La livraison est payante ?', 'site', 'offerte'],
-  ['Combien de temps pour être livré ?', 'site', '5 à 7 jours ouvrés'],
+  ['Combien de temps pour être livré ?', 'site', '2 à 3 jours ouvrés'],
   ['Vous livrez en Suisse ?', 'site', 'pas pour le moment'],
   ['Je peux payer par chèque ?', 'site', 'carte uniquement'],
   ['Je peux l\'offrir à ma grand-mère pour Noël ?', 'site', 'oui'],
