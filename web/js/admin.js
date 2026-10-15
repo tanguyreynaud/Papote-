@@ -728,8 +728,6 @@ function render() {
   const ouverte = families.find((f) => f.id === ficheFamille);
   $('familles-liste').hidden = !!ouverte;
   $('famille-fiche').hidden = !ouverte;
-  const sim = document.querySelector('[data-panneau="familles"] .card.sim');
-  if (sim) sim.hidden = !!ouverte;
   if (ouverte) $('families').replaceChildren(carteFamille(ouverte));
   else ficheFamille = null;
   const legacy = families.reduce((n, f) => n + (f.legacy || 0), 0);

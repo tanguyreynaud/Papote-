@@ -39,11 +39,21 @@
 
 .titre-print { display: none; }
 
+/* Onglets d'une page : un seul bloc affiché à la fois. */
+.onglets { display: flex; gap: 4px; overflow-x: auto; margin: 0 0 14px; border-bottom: 1px solid var(--line); scrollbar-width: none; }
+.onglets button {
+  flex: none; min-height: 0; padding: 10px 14px; border: none; border-bottom: 3px solid transparent; border-radius: 0;
+  background: none; color: var(--muted); font-size: 15px; font-weight: 600; white-space: nowrap; box-shadow: none;
+}
+.onglets button.actif { color: var(--accent); border-bottom-color: var(--accent); }
+.tete > select, .tete > input[type="search"] { width: auto; margin: 0; padding: 8px 12px; font-size: 15px; }
+
 @media print {
   .no-print, .nav, .periode, #btn-refresh { display: none !important; }
   .shell { display: block; }
   .contenu { padding: 0; }
   .titre-print { display: block; }
+  [data-panneau="compta"] [data-onglet][hidden] { display: block !important; }
   .card, .stat { box-shadow: none; border: 1px solid #ccc; break-inside: avoid; }
   body { background: #fff; }
 }
