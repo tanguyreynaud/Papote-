@@ -925,3 +925,12 @@ body:not(.on-support) .ps-bouton, body:not(.on-support) .ps-panneau { display: n
 .setting-edit { margin-top: 10px; }
 .setting-edit label { display: block; margin: 8px 0; }
 .setting-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+
+/* Valeurs des réglages en texte normal, pour les distinguer des titres. */
+.setting-value { font-weight: 400; }
+.wifi-list { list-style: none; margin: 10px 0; padding: 0; display: grid; gap: 6px; }
+.wifi-choice { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--text); font: inherit; text-align: left; }
+.wifi-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wifi-meta { flex: none; color: var(--muted); letter-spacing: -1px; }
+#btn-wifi-scan { margin: 28px 0 6px; }
+#wifi-box form { margin-top: 10px; }

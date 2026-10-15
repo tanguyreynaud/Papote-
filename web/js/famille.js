@@ -1801,6 +1801,78 @@ $('btn-wifi').addEventListener('click', () => {
   if (!$('wifi-box').hidden) $('wifi-ssid').focus();
 });
 
+// Réseaux vus par la tablette : commande wifiScan, la tablette répond avec reseaux
+// [{ ssid, security: 'wpa2'|'wpa3'|'open', signal: 0-4 }] ; on touche un réseau pour le choisir.
+let stopScan = null;
+$('btn-wifi-scan').addEventListener('click', async () => {
+  const tablet = targetTablet();
+  const info = $('wifi-scan-info');
+  $('wifi-list').hidden = true;
+  info.hidden = false;
+  if (!tablet) { info.textContent = "Aucune tablette n'est reliée à cette famille."; return; }
+  const cmdRef = doc(collection(db, 'families', session.fid, 'commands'));
+  const batch = writeBatch(db);
+  batch.set(cmdRef, { type: 'wifiScan', target: tablet.id, createdBy: session.uid, createdAt: serverTimestamp(), state: 'pending' });
+  bumpRev(batch, session.fid);
+  $('btn-wifi-scan').disabled = true;
+  try {
+    await batch.commit();
+  } catch (err) {
+    console.error(err);
+    info.textContent = "La demande n'a pas pu être envoyée.";
+    $('btn-wifi-scan').disabled = false;
+    return;
+  }
+  info.textContent = 'La tablette cherche les réseaux…';
+  stopScan?.();
+  const timer = setTimeout(() => {
+    stopScan?.();
+    $('btn-wifi-scan').disabled = false;
+    info.textContent = "La tablette n'a pas répondu. Tapez le nom du réseau à la main ci-dessous.";
+    deleteDoc(cmdRef).catch(() => {});
+  }, 60_000);
+  stopScan = onSnapshot(cmdRef, (snap) => {
+    const cmd = snap.data();
+    if (!cmd || cmd.state === 'pending') return;
+    clearTimeout(timer);
+    stopScan?.();
+    stopScan = null;
+    $('btn-wifi-scan').disabled = false;
+    deleteDoc(cmdRef).catch(() => {});
+    const vus = new Map();
+    for (const r of cmd.reseaux || []) {
+      if (r?.ssid && (!vus.has(r.ssid) || (r.signal || 0) > (vus.get(r.ssid).signal || 0))) vus.set(r.ssid, r);
+    }
+    const reseaux = [...vus.values()].sort((a, b) => (b.signal || 0) - (a.signal || 0));
+    if (cmd.state !== 'done' || !reseaux.length) {
+      info.textContent = cmd.result || "Aucun réseau trouvé. Tapez le nom du réseau à la main ci-dessous.";
+      return;
+    }
+    info.textContent = 'Touchez le réseau de la box :';
+    $('wifi-list').replaceChildren(...reseaux.map((r) => {
+      const li = document.createElement('li');
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'wifi-choice';
+      const barres = '▂▄▆█'.slice(0, Math.max(1, Math.min(4, r.signal || 1)));
+      b.innerHTML = '<span class="wifi-name"></span><span class="wifi-meta"></span>';
+      b.querySelector('.wifi-name').textContent = r.ssid;
+      b.querySelector('.wifi-meta').textContent = `${r.security === 'open' ? 'ouvert' : '🔒'} ${barres}`;
+      b.addEventListener('click', () => {
+        $('wifi-ssid').value = r.ssid;
+        $('wifi-security').value = ['wpa2', 'wpa3', 'open'].includes(r.security) ? r.security : 'wpa2';
+        $('wifi-password-wrap').hidden = $('wifi-security').value === 'open';
+        $('wifi-list').hidden = true;
+        info.textContent = `Réseau choisi : ${r.ssid}.`;
+        if ($('wifi-security').value !== 'open') $('wifi-password').focus();
+      });
+      li.append(b);
+      return li;
+    }));
+    $('wifi-list').hidden = false;
+  }, (err) => console.warn('Recherche Wi-Fi illisible', err));
+});
+
 $('wifi-security').addEventListener('change', () => {
   $('wifi-password-wrap').hidden = $('wifi-security').value === 'open';
 });

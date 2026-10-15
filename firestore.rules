@@ -398,7 +398,7 @@ service cloud.firestore {
         allow read: if isFamilyAdmin(fid) || (signedIn() && resource.data.target == request.auth.uid);
         allow create: if isFamilyAdmin(fid)
           && request.resource.data.keys().hasOnly(['type', 'target', 'createdBy', 'createdAt', 'ssid', 'security', 'password', 'state'])
-          && request.resource.data.type in ['wifi', 'restart', 'status']
+          && request.resource.data.type in ['wifi', 'restart', 'status', 'wifiScan']
           && request.resource.data.target is string
           && request.resource.data.createdBy == request.auth.uid
           && request.resource.data.state == 'pending'
@@ -407,7 +407,9 @@ service cloud.firestore {
               && request.resource.data.security in ['wpa2', 'wpa3', 'open']));
         allow update: if signedIn()
           && resource.data.target == request.auth.uid
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state', 'result', 'doneAt', 'password'])
+          // reseaux : réponse à wifiScan, [{ ssid, security, signal }] (40 au plus).
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state', 'result', 'doneAt', 'password', 'reseaux'])
+          && (!('reseaux' in request.resource.data) || (request.resource.data.reseaux is list && request.resource.data.reseaux.size() <= 40))
           && !('password' in request.resource.data)
           && request.resource.data.state in ['done', 'failed'];
         allow delete: if isFamilyAdmin(fid);
