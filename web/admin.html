@@ -50,7 +50,7 @@
           Comptabilité</a>
         <a href="#outils" data-page="outils">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.5-.5-.5-2.5z"/></svg>
-          Maintenance</a>
+          Réglages</a>
       </nav>
       <div class="nav-pied">
         <p id="who" class="muted small"></p>
@@ -130,40 +130,25 @@
       <!-- ---------- Commandes ---------- -->
       <section data-panneau="commandes" hidden>
         <div class="stats" id="kpi-commandes"></div>
-        <div class="card">
+        <div class="card" data-vue="a-envoyer">
           <h2>Tablettes à envoyer</h2>
-          <p class="muted small">Choisissez la tablette du stock, puis « Étiquette » (Sendcloud remplit le n° de suivi et ouvre l'étiquette à imprimer) ou collez le n° de suivi Mondial Relay, puis « Envoyée » : le client reçoit le lien de suivi.</p>
+          <p class="muted small">Choisissez la tablette du stock, puis « Étiquette » (adresse de départ dans Réglages ; Sendcloud remplit le n° de suivi et ouvre l'étiquette à imprimer) ou collez le n° de suivi Mondial Relay, puis « Envoyée » : le client reçoit le lien de suivi.</p>
           <ul id="orders" class="orders"></ul>
           <p id="orders-empty" class="muted small" hidden>Aucune commande en attente.</p>
         </div>
-        <div class="card">
+        <div class="card" data-vue="en-route">
           <h2>Envoyées, pas encore jumelées</h2>
           <p class="muted small">Le client reçoit un rappel à J+5 et J+12 ; en rouge, rien après 20 jours.</p>
           <ul id="shipped" class="orders"></ul>
           <p id="shipped-empty" class="muted small" hidden>Aucune tablette en route.</p>
         </div>
-        <div class="card">
+        <div class="card" data-vue="retour">
           <h2>Tablettes à récupérer</h2>
           <p class="muted small">Abonnements terminés. Sans retour avant la date limite, 170 € (200 € avec internet) sont prélevés automatiquement.</p>
           <ul id="returns" class="orders"></ul>
           <p id="returns-empty" class="muted small" hidden>Aucune tablette à récupérer.</p>
         </div>
-        <div class="card">
-          <h2>Étiquettes Sendcloud</h2>
-          <p class="muted small">Adresse de départ des colis et d'arrivée des retours Mondial Relay. Les clés Sendcloud se rangent avec outils\gestion\installer-sendcloud.bat.</p>
-          <form id="f-expediteur" class="grille no-print">
-            <label>Nom <input name="nom" autocomplete="organization"></label>
-            <label>Adresse <input name="adresse" autocomplete="street-address"></label>
-            <label>Code postal <input name="cp" inputmode="numeric" autocomplete="postal-code"></label>
-            <label>Ville <input name="ville" autocomplete="address-level2"></label>
-            <label>Téléphone <input name="telephone" type="tel" autocomplete="tel"></label>
-            <label>E-mail <input name="email" type="email" autocomplete="email"></label>
-            <label>Poids d'un colis (g) <input name="poidsColis" inputmode="numeric"></label>
-            <button type="submit" class="secondary">Enregistrer l'adresse</button>
-            <p class="f-msg small" hidden></p>
-          </form>
-        </div>
-        <div class="card">
+        <div class="card" data-vue="toutes">
           <div class="tete">
             <h2>Toutes les commandes</h2>
             <div class="actions no-print">
@@ -376,6 +361,21 @@
 
       <!-- ---------- Maintenance ---------- -->
       <section data-panneau="outils" hidden>
+        <div class="card">
+          <h2>Étiquettes Sendcloud</h2>
+          <p class="muted small">Adresse de départ des colis et d'arrivée des retours Mondial Relay. Les clés Sendcloud se rangent avec outils\gestion\installer-sendcloud.bat.</p>
+          <form id="f-expediteur" class="grille no-print">
+            <label>Nom <input name="nom" autocomplete="organization"></label>
+            <label>Adresse <input name="adresse" autocomplete="street-address"></label>
+            <label>Code postal <input name="cp" inputmode="numeric" autocomplete="postal-code"></label>
+            <label>Ville <input name="ville" autocomplete="address-level2"></label>
+            <label>Téléphone <input name="telephone" type="tel" autocomplete="tel"></label>
+            <label>E-mail <input name="email" type="email" autocomplete="email"></label>
+            <label>Poids d'un colis (g) <input name="poidsColis" inputmode="numeric"></label>
+            <button type="submit" class="secondary">Enregistrer l'adresse</button>
+            <p class="f-msg small" hidden></p>
+          </form>
+        </div>
         <div class="card migrate">
           <h2>Anciennes photos et vidéos</h2>
           <p class="muted">Les envois faits avant Storage sont encore rangés dans la base. Le transfert les déplace vers Storage, sans rien changer pour les familles, et libère la base.</p>

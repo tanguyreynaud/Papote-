@@ -621,6 +621,29 @@ function render() {
     const delBtn = li.querySelector('.delete-btn');
     if (f.abonnement?.statut === 'offert') delBtn.parentElement.remove();
     else delBtn.addEventListener('click', () => supprimerFamille(f, li, delBtn));
+    // Famille offerte (celle de Tanguy) : jamais en pause, jamais supprimable.
+    const offre = document.createElement('div');
+    offre.className = 'replace';
+    offre.innerHTML = '<span class="small"></span> <button type="button" class="link small"></button>';
+    const offerte = f.abonnement?.statut === 'offert';
+    offre.querySelector('span').textContent = offerte ? 'Famille offerte (protégée).' : `Abonnement : ${f.abonnement?.statut || 'aucun'}.`;
+    const offreBtn = offre.querySelector('button');
+    offreBtn.textContent = offerte ? 'Ne plus offrir' : 'Rendre offerte (protégée)';
+    offreBtn.addEventListener('click', async () => {
+      if (!confirm(offerte
+        ? `« ${f.name} » ne sera plus offerte : sans abonnement, sa tablette se mettra en pause. Continuer ?`
+        : `Rendre « ${f.name} » offerte ? Elle ne sera jamais mise en pause ni supprimable.`)) return;
+      offreBtn.disabled = true;
+      try {
+        await appeler('gestionFamilleOfferte', { fid: f.id, offerte: !offerte });
+        f.abonnement = { ...(f.abonnement || {}), statut: offerte ? 'aucun' : 'offert' };
+        render();
+      } catch (err) {
+        alert(`Impossible : ${err.message}`);
+        offreBtn.disabled = false;
+      }
+    });
+    li.querySelector('dl').after(offre);
     li.querySelector('.replace-btn').addEventListener('click', () => prepareReplacement(f, li));
     li.querySelector('.members-btn').addEventListener('click', () => toggleMembers(f, li));
     showPending(f, li);
