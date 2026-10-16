@@ -1,4 +1,4 @@
-// Copie toutes les données de Papote vers l'Europe : base Firestore (default) -> base « eu »,
+// Copie toutes les données de Papote vers l'Europe : base Firestore (default) -> base « europe »,
 // fichiers Storage de l'ancien bucket -> nouveau bucket. Les adresses des photos et vidéos
 // (imageUrl, videoUrl…) sont réécrites vers le nouveau bucket ; leurs jetons de téléchargement
 // sont gardés, donc les liens restent valides.
@@ -8,7 +8,7 @@
 //
 //   migrer-europe.bat         : compte ce qui serait copié
 //   migrer-europe.bat --oui   : copie
-// Options : --base eu  --bucket papote-famille-eu  --ancien-bucket papote-famille.firebasestorage.app
+// Options : --base europe  --bucket papote-famille-eu  --ancien-bucket papote-famille.firebasestorage.app
 // Clé d'administration : %USERPROFILE%\.papote\cle-admin-firebase.json (jamais dans le dépôt).
 const fs = require('fs');
 const os = require('os');
@@ -24,7 +24,7 @@ function option(name, fallback) {
 const keyPath = process.env.PAPOTE_CLE_ADMIN
   || path.join(os.homedir(), '.papote', 'cle-admin-firebase.json');
 const confirmed = process.argv.includes('--oui');
-const targetDb = option('base', 'eu');
+const targetDb = option('base', 'europe');
 const oldBucketName = option('ancien-bucket', 'papote-famille.firebasestorage.app');
 const newBucketName = option('bucket', 'papote-famille-eu');
 

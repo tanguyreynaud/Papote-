@@ -1,5 +1,5 @@
 @echo off
-rem Copie les données de Papote vers l'Europe (base « eu » et nouveau bucket).
+rem Copie les données de Papote vers l'Europe (base « europe » et nouveau bucket).
 rem   migrer-europe.bat        : compte ce qui serait copié
 rem   migrer-europe.bat --oui  : copie (l'ancienne base reste intacte)
 cd /d "%~dp0"
