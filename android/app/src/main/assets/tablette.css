@@ -1232,3 +1232,247 @@ body.night .wifi-card-text { color: #a8998d; }
 }
 .power-banner[hidden] { display: none; }
 .power-plug { flex: 0 0 auto; width: 7vmin; height: 7vmin; }
+
+
+/* ================================================================
+   Écrans d'un envoi et des rappels, version 2.56 : plus clairs et plus vivants.
+   Une carte bien droite avec, en haut, le visage et le prénom de l'expéditeur et ce qu'il envoie ;
+   un fond pastel propre à chaque sorte d'envoi, où montent doucement des petits cœurs.
+   ================================================================ */
+
+.overlay.ln { --accent: #4f46e5; --chip: #eef2ff; --bg1: #f5f3ff; --bg2: #e0e7ff; }
+.overlay.mode-message { --accent: #db2777; --chip: #fce7f3; --bg1: #fff1f7; --bg2: #ede9fe; }
+.overlay.mode-photo { --accent: #2563eb; --chip: #dbeafe; --bg1: #f0f7ff; --bg2: #e0e7ff; }
+.overlay.mode-voice { --accent: #7c3aed; --chip: #ede9fe; --bg1: #faf5ff; --bg2: #e4dcfd; }
+.overlay.mode-video { --accent: #0f766e; --chip: #ccfbf1; --bg1: #f0fdfa; --bg2: #cdeff0; }
+.overlay.reminder { --accent: #4f46e5; --chip: #e0e7ff; --bg1: #f0fdf6; --bg2: #e0e7ff; }
+
+.overlay.mode-message .ln-wood, .overlay.mode-photo .ln-wood, .overlay.mode-voice .ln-wood,
+.overlay.mode-video .ln-wood, .overlay.reminder .ln-wood {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(160deg, var(--bg1), var(--bg2));
+}
+/* Les petits cœurs qui montent, très lentement */
+.overlay.mode-message .ln-wood::before, .overlay.mode-photo .ln-wood::before, .overlay.mode-voice .ln-wood::before,
+.overlay.mode-video .ln-wood::before, .overlay.reminder .ln-wood::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 200%;
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%22420%22%20height%3D%22420%22%20viewBox%3D%220%200%20420%20420%22%3E%3Cg%20fill%3D%22%23fff%22%20opacity%3D%22.55%22%3E%3Cpath%20d%3D%22M70%2092c-12-14-35-2-25%2018l25%2026%2025-26c10-20-13-32-25-18z%22/%3E%3Cpath%20d%3D%22M318%20268c-9-10-26-1-19%2013l19%2019%2019-19c7-14-10-23-19-13z%22/%3E%3Ccircle%20cx%3D%22300%22%20cy%3D%2270%22%20r%3D%2216%22/%3E%3Ccircle%20cx%3D%22120%22%20cy%3D%22320%22%20r%3D%2210%22/%3E%3Ccircle%20cx%3D%22210%22%20cy%3D%22190%22%20r%3D%226%22/%3E%3Ccircle%20cx%3D%22390%22%20cy%3D%22160%22%20r%3D%228%22/%3E%3Ccircle%20cx%3D%2230%22%20cy%3D%22230%22%20r%3D%225%22/%3E%3C/g%3E%3C/svg%3E");
+  background-size: 420px 420px;
+  animation: ln-rise 60s linear infinite;
+  pointer-events: none;
+}
+@keyframes ln-rise { from { transform: translateY(0); } to { transform: translateY(-50%); } }
+.ln-wood > * { position: relative; z-index: 1; }
+
+/* La carte : droite, arrondie, qui arrive en douceur */
+.overlay.ln .ln-note,
+.overlay.mode-voice .ln-note, .overlay.mode-video .ln-note, .overlay.mode-photo.wide .ln-note {
+  -webkit-transform: none;
+  transform: none;
+  border-radius: 5vmin;
+  background: #fff;
+  box-shadow: 0 2vmin 6vmin rgba(49, 46, 129, .14);
+  animation: ln-pop .7s cubic-bezier(.2, 1.3, .4, 1) both;
+}
+@keyframes ln-pop { from { opacity: 0; transform: translateY(6vmin) scale(.96); } to { opacity: 1; transform: none; } }
+.overlay.mode-message .ln-note, .overlay.reminder .ln-note { padding: 5vmin 6vmin; }
+
+/* Qui l'envoie */
+.ln-head { display: flex; align-items: center; gap: 3.5vmin; margin: 0 0 3.5vmin; text-align: left; }
+.ln-head:empty { display: none; }
+.head-face {
+  flex: none;
+  width: 17vmin;
+  height: 17vmin;
+  border-radius: 50%;
+  border: .9vmin solid #fff;
+  box-shadow: 0 0 0 .7vmin var(--accent);
+  object-fit: cover;
+  animation: ln-breathe 3s ease-in-out infinite;
+}
+span.head-face {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent);
+  color: #fff;
+  font-family: 'Bricolage Grotesque', 'Atkinson Hyperlegible', sans-serif;
+  font-size: 8vmin;
+  font-weight: 800;
+}
+@keyframes ln-breathe { 50% { box-shadow: 0 0 0 1.8vmin rgba(255, 255, 255, 0), 0 0 0 1.4vmin var(--accent); } }
+.head-who { min-width: 0; }
+.head-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 1.5vmin;
+  padding: 1vmin 3vmin 1vmin 2.2vmin;
+  border-radius: 99vmin;
+  background: var(--chip);
+  color: var(--accent);
+  font-size: 4.4vmin;
+  font-weight: 700;
+}
+.head-chip .icon, .head-chip svg { width: 5vmin; height: 5vmin; display: block; }
+.head-name {
+  display: block;
+  margin-top: .8vmin;
+  font-family: 'Bricolage Grotesque', 'Atkinson Hyperlegible', sans-serif;
+  font-size: 8.5vmin;
+  font-weight: 800;
+  line-height: 1.05;
+  color: #24212f;
+}
+.overlay.ln .ln-text { color: #24212f; }
+
+/* Vocal et vidéo : la carte au centre en haut, le grand bouton rond dessous qui « respire » */
+.overlay.mode-voice .ln-note, .overlay.mode-video .ln-note { padding: 4vmin 6vmin; max-width: 86%; }
+.overlay.mode-voice .ln-head, .overlay.mode-video .ln-head { margin: 0; }
+.overlay.mode-video .ln-text { margin-top: 3vmin; text-align: left; }
+.overlay.mode-voice .ln-wood, .overlay.mode-video .ln-wood { padding-top: 6vmin; background-image: none; background: linear-gradient(160deg, var(--bg1), var(--bg2)); }
+.overlay.mode-voice .ln-play, .overlay.mode-video .ln-play {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4vmin;
+  width: auto;
+  min-width: 70vmin;
+  min-height: 24vmin;
+  padding: 0 10vmin 0 5vmin;
+  border-radius: 99vmin;
+  background: var(--accent);
+  font-family: 'Atkinson Hyperlegible', sans-serif;
+  font-size: 9vmin;
+  box-shadow: 0 0 0 0 var(--accent), 0 2vmin 5vmin rgba(49, 46, 129, .3);
+  animation: ln-call 2.2s ease-out infinite;
+}
+@keyframes ln-call { 0% { box-shadow: 0 0 0 0 rgba(79, 70, 229, .45), 0 2vmin 5vmin rgba(49, 46, 129, .3); } 100% { box-shadow: 0 0 0 5vmin rgba(79, 70, 229, 0), 0 2vmin 5vmin rgba(49, 46, 129, .3); } }
+.play-icon {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16vmin;
+  height: 16vmin;
+  border-radius: 50%;
+  background: #fff;
+  color: var(--accent);
+}
+.play-icon svg { width: 8vmin; height: 8vmin; margin-left: 1vmin; }
+.overlay.mode-voice .ln-play.playing, .overlay.mode-video .ln-play.playing { background: #8e8899; animation: none; }
+.overlay.mode-voice .ln-play.playing .play-icon, .overlay.mode-video .ln-play.playing .play-icon { color: #8e8899; }
+
+/* Boutons : grands, en pastille, aux couleurs de Papote */
+.overlay.ln .ln-btn {
+  min-height: 18vmin;
+  padding: 0 11vmin;
+  border-radius: 99vmin;
+  font-size: 8vmin;
+  box-shadow: 0 1.5vmin 4vmin rgba(49, 46, 129, .3);
+}
+.overlay.ln .ln-btn.ok { background: #4f46e5; }
+.overlay.ln .ln-btn.replay { background: #fff; color: #4f46e5; }
+.overlay.mode-message .ln-bar, .overlay.mode-voice .ln-bar, .overlay.mode-video .ln-bar, .overlay.reminder .ln-bar {
+  right: 0;
+  padding-left: 0;
+  justify-content: center;
+}
+.overlay.mode-message .ln-actions, .overlay.mode-voice .ln-actions, .overlay.mode-video .ln-actions, .overlay.reminder .ln-actions { gap: 4vmin; }
+.overlay.mode-message .ln-btn, .overlay.mode-voice .ln-btn, .overlay.mode-video .ln-btn, .overlay.reminder .ln-btn { margin: 0; }
+
+/* Photo : la carte à gauche, la photo entière à droite sur un fond crème (sans flou ni bandes noires) */
+.overlay.mode-photo .ln-media, .overlay.mode-photo.wide .ln-media { background: #f6efe4; }
+.overlay.mode-photo .ln-media-bg { display: none; }
+.overlay.mode-photo .ln-note { padding: 5vmin; }
+.overlay.mode-photo.wide .ln-wood { background: #fdfaf5; }
+.overlay.mode-photo.wide .ln-wood::before { display: none; }
+.overlay.mode-photo.wide .ln-note { display: flex; align-items: center; gap: 4vmin; padding: 2.5vmin 4vmin; border-radius: 4vmin; animation: none; }
+.overlay.mode-photo.wide .ln-head { margin: 0; flex: none; }
+.overlay.mode-photo.wide .head-face { width: 12vmin; height: 12vmin; }
+.overlay.mode-photo.wide .head-name { font-size: 6vmin; }
+.overlay.mode-photo.wide .head-chip { font-size: 3.6vmin; }
+.overlay.mode-photo.wide .ln-text { flex: 1; min-width: 0; }
+.overlay.mode-photo.wide .ln-btn { min-height: 15vmin; padding: 0 9vmin; }
+
+/* Rappel : « C'est l'heure ! » en pastille, l'icône dans un grand rond */
+.overlay.reminder .ln-wood { background-image: none; background: linear-gradient(160deg, var(--bg1), var(--bg2)); }
+.overlay.reminder .ln-note { max-width: 120vmin; }
+.overlay.reminder .ln-when {
+  display: inline-block;
+  padding: 1.2vmin 4vmin;
+  border-radius: 99vmin;
+  background: var(--chip);
+  color: var(--accent);
+  font-size: 6vmin;
+  animation: ln-blink 2s ease-in-out infinite;
+}
+@keyframes ln-blink { 50% { background: #c7d2fe; } }
+.overlay.reminder .reminder-icon .icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18vmin;
+  height: 18vmin;
+  margin-top: 1vmin;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+}
+.overlay.reminder .reminder-icon svg { width: 10vmin; height: 10vmin; }
+.overlay.reminder .ln-sign { text-align: left; font-weight: 700; color: #5f5a6b; }
+
+/* ---------- Accueil : le prochain rappel du jour sous la météo ---------- */
+.home-next {
+  display: flex;
+  align-items: center;
+  gap: 3vmin;
+  margin: 4vmin auto 0;
+  max-width: 92%;
+  padding: 2.5vmin 4.5vmin 2.5vmin 2.5vmin;
+  border-radius: 99vmin;
+  background: #eef2ff;
+  color: #3730a3;
+  text-align: left;
+}
+.home-next[hidden] { display: none; }
+.next-icon {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 11vmin;
+  height: 11vmin;
+  border-radius: 50%;
+  background: #4f46e5;
+  color: #fff;
+}
+.next-icon .icon, .next-icon svg { width: 6vmin; height: 6vmin; display: block; }
+.home-next p { margin: 0; }
+.next-when { font-size: 4vmin; font-weight: 700; color: #4f46e5; }
+.next-title { font-size: calc(5.2vmin * var(--ts, 1)); font-weight: 700; line-height: 1.15; color: #24212f; }
+body.night .home-next { background: #1e1b4b; }
+body.night .next-title { color: #e0e7ff; }
+body.night .next-when { color: #a5b4fc; }
+
+/* Rappel : l'icône à gauche, « C'est l'heure », le titre et l'heure à droite */
+.overlay.reminder .ln-note { display: grid; grid-template-columns: auto 1fr; column-gap: 5vmin; align-items: center; }
+.overlay.reminder .reminder-icon { grid-column: 1; grid-row: 1 / 4; margin: 0; }
+.overlay.reminder .ln-when, .overlay.reminder .ln-text, .overlay.reminder .ln-sign { grid-column: 2; justify-self: start; }
+.overlay.reminder .ln-sign { margin-top: 2vmin; }
+.overlay.reminder .reminder-icon .icon { width: 22vmin; height: 22vmin; }
+.overlay.reminder .reminder-icon svg { width: 12vmin; height: 12vmin; }
+
+/* Photo en hauteur : la pastille sur une ligne, le visage un peu plus petit */
+.head-chip { white-space: nowrap; }
+.overlay.mode-photo .head-face { width: 14vmin; height: 14vmin; }
+.overlay.mode-photo .ln-head { gap: 3vmin; }
+
+/* Le halo du bouton rond de la couleur de l'envoi */
+.overlay.mode-voice .ln-play { animation-name: ln-call-voice; }
+.overlay.mode-video .ln-play { animation-name: ln-call-video; }
+@keyframes ln-call-voice { 0% { box-shadow: 0 0 0 0 rgba(124, 58, 237, .45), 0 2vmin 5vmin rgba(49, 46, 129, .3); } 100% { box-shadow: 0 0 0 5vmin rgba(124, 58, 237, 0), 0 2vmin 5vmin rgba(49, 46, 129, .3); } }
+@keyframes ln-call-video { 0% { box-shadow: 0 0 0 0 rgba(15, 118, 110, .45), 0 2vmin 5vmin rgba(19, 78, 74, .3); } 100% { box-shadow: 0 0 0 5vmin rgba(15, 118, 110, 0), 0 2vmin 5vmin rgba(19, 78, 74, .3); } }
