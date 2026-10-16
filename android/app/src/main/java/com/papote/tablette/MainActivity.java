@@ -376,6 +376,11 @@ public class MainActivity extends Activity implements Sync.Listener {
             sync.ackReminder(id, when);
         }
 
+        @JavascriptInterface
+        public void seenReminder(String id, String when) {
+            sync.seenReminder(id, when);
+        }
+
         /** Son de notification et écran allumé (rappel à l'heure). */
         @JavascriptInterface
         public void alert() {

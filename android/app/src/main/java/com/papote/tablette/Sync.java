@@ -1041,6 +1041,25 @@ final class Sync {
         });
     }
 
+    /** Mamie a regardé le rappel (visage vu par la caméra) : « vu » pour la famille, sans dire « c'est fait ». */
+    void seenReminder(final String id, final String when) {
+        handler.post(() -> {
+            String fid = prefs.getString("fid", null);
+            if (fid == null) return;
+            try {
+                JSONObject write = new JSONObject()
+                        .put("update", new JSONObject()
+                                .put("name", Firebase.docName("families/" + fid + "/reminders/" + id))
+                                .put("fields", new JSONObject().put("lastSeen", Firebase.string(when))))
+                        .put("updateMask", new JSONObject().put("fieldPaths", new JSONArray().put("lastSeen")))
+                        .put("currentDocument", new JSONObject().put("exists", true));
+                firebase.commit(new JSONArray().put(write));
+            } catch (Exception e) {
+                Log.w(TAG, "seenReminder " + id, e);
+            }
+        });
+    }
+
     // ---------- Météo ----------
 
     private void refreshWeather() {

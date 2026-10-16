@@ -451,22 +451,25 @@
     if (!overlayPost) nextOverlay();
   }
 
-  // ---------- Visage vu sans OK : on ferme au bout de 2 minutes ----------
+  // ---------- Visage vu : « lu », lecture, puis fermeture au bout de 2 minutes ----------
   // La caméra (appels.js, window.papoteWatchPresence) regarde si quelqu'un est devant la tablette.
-  // Dès que son visage est vu, l'envoi ou le rappel affiché se ferme tout seul 2 minutes plus
-  // tard s'il n'a pas touché OK. Jamais vu : il reste affiché, pour qu'elle ne rate rien.
+  // Dès que son visage est vu, l'envoi ou le rappel est marqué « lu » pour la famille (onSeen),
+  // une vidéo ou un vocal se lance, puis l'écran se ferme tout seul 2 minutes plus tard s'il n'a
+  // pas touché OK. Jamais vu : il reste affiché, pour qu'elle ne rate rien.
+  // Renvoie false quand la tablette ne sait pas regarder (pas de caméra côté page).
 
   var SEEN_CLOSE_MS = 120000;
   var watchers = {};
 
-  function watchSeen(slot, close) {
+  function watchSeen(slot, onSeen, close) {
     unwatchSeen(slot);
-    if (typeof window.papoteWatchPresence !== 'function') return;
+    if (typeof window.papoteWatchPresence !== 'function') return false;
     var w = { stop: null, timer: null };
     watchers[slot] = w;
     try {
       w.stop = window.papoteWatchPresence(function () {
         if (watchers[slot] !== w || w.timer) return;
+        try { onSeen(); } catch (e) { }
         w.timer = setTimeout(function () {
           if (watchers[slot] !== w) return;
           unwatchSeen(slot);
@@ -475,7 +478,9 @@
       });
     } catch (e) {
       delete watchers[slot];
+      return false;
     }
+    return true;
   }
 
   function unwatchSeen(slot) {
@@ -507,13 +512,19 @@
       show($('overlay'), false);
       return;
     }
-    watchSeen('overlay', function () {
-      if (!overlayPost) return;
-      stopAudio();
-      markSeen(overlayPost);
+    var p = overlayPost;
+    // Visage vu : « lu », et une vidéo ou un vocal démarre tout seul.
+    var watching = watchSeen('overlay', function () {
+      if (overlayPost !== p) return;
+      markSeen(p);
+      if (p.audio || p.video) listenOverlay();
+    }, function closeWhenDone() {
+      if (overlayPost !== p) return;
+      // On ne coupe pas une vidéo ou un vocal en cours : on attend la fin.
+      if (playing && playing.post === p) { setTimeout(closeWhenDone, 10000); return; }
+      markSeen(p);
       nextOverlay();
     });
-    var p = overlayPost;
     var mode = p.image ? 'photo' : p.type === 'voice' ? 'voice' : p.type === 'video' ? 'video' : 'message';
     var media = mode === 'voice' || mode === 'video';
     $('overlay').className = 'overlay ln mode-' + mode;
@@ -554,7 +565,12 @@
     // Vocal ou vidéo : d'abord seulement « Écouter » / « Regarder » ; le reste vient une fois fini.
     setOverlayActions(!media, false);
     show($('overlay'), true);
-    if (mode === 'message') markSeen(p);
+    // Sans caméra, on ne peut pas savoir s'il a été vu : un message compte comme lu à l'affichage,
+    // une vidéo ou un vocal se lance tout de suite.
+    if (!watching) {
+      if (mode === 'message') markSeen(p);
+      if (media) listenOverlay();
+    }
   }
 
   function listenOverlay() {
@@ -768,8 +784,12 @@
     $('reminder-done').textContent = early ? "J'ai compris" : r.kind === 'rdv' ? "J'ai bien noté" : "C'est fait";
     show($('reminder-alert'), true);
     if (android()) android().alert();
-    // Vu mais pas confirmé : le rappel se ferme sans prévenir la famille que c'est fait.
+    // Visage vu : la famille voit « vu » ; sans « C'est fait », le rappel se ferme sans dire que c'est fait.
     watchSeen('reminder', function () {
+      if (!alerting || alerting.r !== r) return;
+      var now = new Date();
+      if (android() && android().seenReminder) android().seenReminder(r.id, dateKey(now) + ' ' + pad(now.getHours()) + ':' + pad(now.getMinutes()));
+    }, function () {
       if (!alerting) return;
       var id = alerting.r.id + '|' + alerting.key;
       if (alerting.early) announced[id] = true; else handled[id] = true;

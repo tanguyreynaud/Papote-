@@ -1102,12 +1102,19 @@ html .bday-banner { font-size: calc(4.8vmin * var(--ts, 1)); }
   overflow: hidden;
   white-space: normal;
 }
-.overlay.mode-photo.wide .ln-text, .overlay.mode-video .ln-text {
+.overlay.mode-photo.wide .ln-text {
   display: block;
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* Vidéo : la légende entière (30 caractères), sur deux lignes au besoin, jamais coupée. */
+.overlay.mode-video .ln-text {
+  display: block;
+  max-width: 100%;
+  white-space: normal;
+  overflow: visible;
 }
 
 /* ---------- Chargement au démarrage ---------- */
