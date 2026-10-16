@@ -369,7 +369,10 @@ service cloud.firestore {
       match /reminders/{rid} {
         allow read: if isMember(fid);
         allow create, update: if isMember(fid) && abonnementOk(fid)
-          && request.resource.data.keys().hasOnly(['title', 'kind', 'time', 'repeat', 'date', 'days', 'createdBy', 'createdAt', 'lastAck'])
+          // lastSeen : « AAAA-MM-JJ HH:MM » quand un visage a regardé le rappel sur la tablette.
+          && request.resource.data.keys().hasOnly(['title', 'kind', 'time', 'repeat', 'date', 'days', 'createdBy', 'createdAt', 'lastAck', 'lastSeen'])
+          && (!('lastSeen' in request.resource.data) || request.resource.data.lastSeen == null
+              || (request.resource.data.lastSeen is string && request.resource.data.lastSeen.size() <= 20))
           && request.resource.data.title is string
           && request.resource.data.title.size() > 0
           && request.resource.data.title.size() <= 120
