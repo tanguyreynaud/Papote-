@@ -22,16 +22,51 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 
-let db;
+// Base et bucket : ceux d'origine, ou ceux que config/base (dans la base d'origine) désigne après la
+// bascule en Europe ({ database: 'eu', bucket: 'papote-famille-eu' }). Le choix est retenu sur le
+// téléphone pour ouvrir directement la bonne base aux lancements suivants.
+const BASE_KEY = 'papote.base';
+let base = { database: '(default)', bucket: null };
 try {
-  // Cache local : la tablette garde ses photos si le wifi coupe.
-  db = initializeFirestore(app, {
-    localCache: persistentLocalCache({ tabManager: persistentSingleTabManager() }),
-  });
-} catch (e) {
-  db = initializeFirestore(app, {});
+  const saved = JSON.parse(localStorage.getItem(BASE_KEY) || 'null');
+  if (saved && typeof saved.database === 'string' && saved.database) base = saved;
+} catch (e) { /* stockage indisponible */ }
+
+function ouvrirBase(database) {
+  const id = database && database !== '(default)' ? database : undefined;
+  try {
+    // Cache local : l'app reste lisible si le réseau coupe.
+    return initializeFirestore(app, {
+      localCache: persistentLocalCache({ tabManager: persistentSingleTabManager() }),
+    }, id);
+  } catch (e) {
+    return initializeFirestore(app, {}, id);
+  }
 }
+
+let db = ouvrirBase(base.database);
 export { db };
+
+/** Bucket Storage à utiliser (undefined = celui d'origine). */
+export function bucketUrl() {
+  return base.bucket ? `gs://${base.bucket}` : undefined;
+}
+
+/** Après la connexion, avant toute lecture : suit config/base si la bascule a eu lieu. */
+export async function choisirBase() {
+  if (base.database !== '(default)') return;
+  try {
+    const snap = await getDoc(doc(db, 'config', 'base'));
+    const c = snap.exists() ? snap.data() : null;
+    if (c && typeof c.database === 'string' && c.database && c.database !== '(default)') {
+      base = { database: c.database, bucket: typeof c.bucket === 'string' && c.bucket ? c.bucket : null };
+      try { localStorage.setItem(BASE_KEY, JSON.stringify(base)); } catch (e) { /* rien */ }
+      db = ouvrirBase(base.database);
+    }
+  } catch (err) {
+    console.warn("config/base illisible, base d'origine gardée", err);
+  }
+}
 // Pour les appels vidéo (appel.js).
 export {
   doc, getDoc, collection, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, writeBatch,

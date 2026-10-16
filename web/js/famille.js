@@ -11,6 +11,7 @@ import {
   loadMembership, createFamily, joinFamily, leaveFamily, watchMembers, currentUser, savedFamilyId, saveFamilyId,
   addPost, deletePost, loadMedia, formatCode, normalizeCode, toDate, CodeInconnuError,
   MAX_VIDEO_CHUNKS, VIDEO_CHUNK,
+  choisirBase, bucketUrl,
 } from './firebase.js';
 import { askConfirm, notice, avantDePartir } from './ui.js';
 import { showGuideOnce } from './guide.js';
@@ -863,11 +864,14 @@ setInterval(flushOutbox, 60_000);
 
 const MAX_VIDEO_SECONDS = 60;
 let storage = null;
-try {
-  storage = getStorage(getApp());
+function ouvrirStorage(bucket) {
+  storage = getStorage(getApp(), bucket);
   // Sans réponse de Storage, on bascule vite sur la base plutôt que de réessayer 10 minutes.
   storage.maxUploadRetryTime = 10_000;
   storage.maxOperationRetryTime = 10_000;
+}
+try {
+  ouvrirStorage(bucketUrl());
 } catch (e) { /* Storage indisponible */ }
 
 async function upload(blob, ext) {
@@ -2655,6 +2659,9 @@ async function enterApp() {
   show('loading');
   authUser = await currentUser();
   if (!isRealAccount(authUser)) { showLogin(!!savedFamilyId()); return; }
+  // Bascule en Europe : la bonne base et le bon bucket avant toute lecture.
+  await choisirBase();
+  if (bucketUrl()) ouvrirStorage(bucketUrl());
   try {
     const saved = savedFamilyId();
     if (saved) await tagLegacyMember(saved);
