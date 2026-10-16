@@ -33,8 +33,15 @@ try {
   admin = require(path.join(__dirname, '..', 'admin', 'node_modules', 'firebase-admin'));
 }
 admin.initializeApp({ credential: admin.credential.cert(require(cle)) });
-const db = admin.firestore();
-const { FieldValue } = admin.firestore;
+let firestore;
+try {
+  firestore = require('firebase-admin/firestore');
+} catch (e) {
+  firestore = require(path.join(__dirname, '..', 'admin', 'node_modules', 'firebase-admin', 'lib', 'firestore'));
+}
+const { FieldValue, getFirestore } = firestore;
+// Base : celle que désigne config/base dans la base d'origine après la bascule en Europe, sinon (default).
+let db = admin.firestore();
 
 async function prochaineRef() {
   const ref = db.doc('gestion/compteurs');
@@ -47,6 +54,8 @@ async function prochaineRef() {
 }
 
 (async () => {
+  const base = (await db.doc('config/base').get()).get('database');
+  if (typeof base === 'string' && base && base !== '(default)') db = getFirestore(admin.app(), base);
   const deja = await db.collection('stock').where('serieAndroid', '==', serie).limit(1).get();
   if (!deja.empty) {
     const t = deja.docs[0].data();

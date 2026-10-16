@@ -30,6 +30,7 @@ const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { logger } = require('firebase-functions/v2');
 const { defineSecret, defineString } = require('firebase-functions/params');
 const admin = require('firebase-admin');
+const { getFirestore } = require('firebase-admin/firestore');
 const Stripe = require('stripe');
 const Anthropic = require('@anthropic-ai/sdk');
 const mail = require('./mail');
@@ -53,7 +54,11 @@ const FACTURES_MOT_DE_PASSE = defineSecret('FACTURES_MOT_DE_PASSE');
 const SENDCLOUD_API = defineSecret('SENDCLOUD_API');
 const ESPACE_ADMIN = 'https://app.mapapote.fr/admin.html';
 const { FieldValue, Timestamp } = admin.firestore;
-const db = () => admin.firestore();
+// Base Firestore et bucket Storage : ceux d'origine (US) jusqu'à la bascule en Europe, où functions/.env
+// reçoit BASE_FIRESTORE=eu et BUCKET_STORAGE=papote-famille-eu (notes/securite-acces.md, section 9).
+const BASE_FIRESTORE = process.env.BASE_FIRESTORE || '(default)';
+const db = () => getFirestore(admin.app(), BASE_FIRESTORE);
+const stockage = () => admin.storage().bucket(process.env.BUCKET_STORAGE || undefined);
 
 let stripeClient;
 function stripe() {
@@ -526,7 +531,7 @@ function aplatir(valeur) {
 }
 
 function effacerPieces(pieces) {
-  return Promise.all((pieces || []).map((p) => admin.storage().bucket().file(p.chemin).delete().catch(() => null)));
+  return Promise.all((pieces || []).map((p) => stockage().file(p.chemin).delete().catch(() => null)));
 }
 
 // ---------- Lecture ----------
@@ -1181,7 +1186,7 @@ function nomFichier(nom) {
 async function enregistrerPiece(collection, id, nomBrut, type, contenu) {
   const nom = texte(nomBrut, 120) || 'piece';
   const chemin = `gestion/${collection}/${id}/${Date.now()}-${nomFichier(nom)}`;
-  await admin.storage().bucket().file(chemin).save(contenu, { contentType: type, resumable: false });
+  await stockage().file(chemin).save(contenu, { contentType: type, resumable: false });
   const piece = { nom, chemin, type, taille: contenu.length, le: Date.now() };
   await db().doc(`${collection}/${id}`).update({ pieces: FieldValue.arrayUnion(piece) });
   return piece;
@@ -1190,7 +1195,7 @@ async function enregistrerPiece(collection, id, nomBrut, type, contenu) {
 exports.gestionPiece = onCall({ memory: '512MiB' }, async (request) => {
   verifierAdmin(request);
   const d = request.data || {};
-  const bucket = admin.storage().bucket();
+  const bucket = stockage();
 
   if (d.action === 'lire') {
     if (typeof d.chemin !== 'string' || !d.chemin.startsWith('gestion/')) {
@@ -1523,7 +1528,7 @@ exports.gestionReglages = onCall(async (request) => {
 async function rangerEtiquette(commande, sens, colis, pdf) {
   const chemin = `gestion/etiquettes/${commande}-${sens}-${colis}.pdf`;
   const jeton = require('node:crypto').randomUUID();
-  const bucket = admin.storage().bucket();
+  const bucket = stockage();
   await bucket.file(chemin).save(pdf, {
     contentType: 'application/pdf', resumable: false, metadata: { metadata: { firebaseStorageDownloadTokens: jeton } },
   });
@@ -1662,7 +1667,7 @@ async function ficheDeLaTablette(p) {
 // son n° de série Android, noté à la préparation (outils/gestion/preparer-tablette).
 // Première fois : la commande est reliée à la famille, quelle que soit l'adresse e-mail du client.
 exports.gestionJumelage = onDocumentUpdated(
-  { document: 'pairings/{code}', region: process.env.REGION_FIRESTORE || 'europe-west1', secrets: [STRIPE_SECRET] },
+  { document: 'pairings/{code}', database: BASE_FIRESTORE, region: process.env.REGION_FIRESTORE || 'europe-west1', secrets: [STRIPE_SECRET] },
   async (event) => {
     const avant = event.data.before.data() || {};
     const p = event.data.after.data() || {};
@@ -1864,7 +1869,7 @@ async function numerosFactures(mouvements, depuis) {
 }
 
 async function enregistrerCsv(chemin, contenu) {
-  await admin.storage().bucket().file(chemin).save(Buffer.from(contenu, 'utf8'),
+  await stockage().file(chemin).save(Buffer.from(contenu, 'utf8'),
     { contentType: 'text/csv; charset=utf-8', resumable: false });
 }
 
@@ -1933,7 +1938,7 @@ async function cloturer(maintenant, refaire) {
     const vide = !fiche.recettes.nombre && !fiche.achats.nombre;
     // Rattrapage : on s'arrête au premier mois sans aucune activité (avant le lancement).
     if (vide && !m.toujours) {
-      await Promise.all(fiche.fichiers.map((f) => admin.storage().bucket().file(f.chemin).delete().catch(() => null)));
+      await Promise.all(fiche.fichiers.map((f) => stockage().file(f.chemin).delete().catch(() => null)));
       break;
     }
     mois[cle] = fiche;
@@ -2358,7 +2363,7 @@ exports.gestionSupprimerFamille = onCall({ timeoutSeconds: 540, memory: '512MiB'
   if (refus) throw new HttpsError('failed-precondition', refus);
   const membres = await ref.collection('members').get();
   // Fichiers d'abord : si la base échoue ensuite, un nouvel essai finit le travail.
-  await admin.storage().bucket().deleteFiles({ prefix: `families/${fid}/`, force: true });
+  await stockage().deleteFiles({ prefix: `families/${fid}/`, force: true });
   await db().recursiveDelete(ref);
   const commandes = await db().collection('commandes').where('fid', '==', fid).get();
   await Promise.all(commandes.docs.map((d) => d.ref.update({ familleSupprimeeLe: Date.now() })));

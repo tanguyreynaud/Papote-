@@ -27,8 +27,19 @@ const app = initializeApp({
   appId: '1:807031084851:web:b8048e2952cb1e893b1046',
 }, 'admin');
 const auth = getAuth(app);
-const db = getFirestore(app);
-const storage = getStorage(app);
+// Base et bucket : ceux d'origine, ou ceux que config/base (dans la base d'origine) désigne après la
+// bascule en Europe ({ database: 'eu', bucket: 'papote-famille-eu' }). Lu une fois, avant tout chargement.
+let db = getFirestore(app);
+let storage = getStorage(app);
+let baseChoisie = null;
+function choisirBase() {
+  baseChoisie = baseChoisie || getDoc(doc(db, 'config', 'base')).then((snap) => {
+    const c = (snap.exists() && snap.data()) || {};
+    if (typeof c.database === 'string' && c.database && c.database !== '(default)') db = getFirestore(app, c.database);
+    if (typeof c.bucket === 'string' && c.bucket) storage = getStorage(app, `gs://${c.bucket}`);
+  }).catch((err) => console.warn('config/base illisible, base d\'origine gardée', err));
+  return baseChoisie;
+}
 const functions = getFunctions(app, 'europe-west1');
 
 const $ = (id) => document.getElementById(id);
@@ -483,6 +494,7 @@ async function loadReturns() {
 }
 
 async function load() {
+  await choisirBase();
   loadOrders();
   loadShipped();
   loadReturns();
