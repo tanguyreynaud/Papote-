@@ -427,6 +427,12 @@ public class MainActivity extends Activity implements Sync.Listener {
         }
 
         /** Branchée sur secteur (chargeur, USB ou sans fil) : sinon la page demande de la brancher. */
+        /** Base Firestore à utiliser par la page (appels) : « (default) » ou « eu » après la migration. */
+        @JavascriptInterface
+        public String firestoreDatabase() {
+            return Firebase.database();
+        }
+
         @JavascriptInterface
         public boolean isCharging() {
             return Sync.pluggedIn(MainActivity.this);
@@ -512,6 +518,11 @@ public class MainActivity extends Activity implements Sync.Listener {
     @Override public void onReminders(JSONObject payload) { callPage("onReminders", payload); }
     @Override public void onFamily(JSONObject payload) { callPage("onFamily", payload); }
     @Override public void onVolume(int volume) { handler.post(this::setVolumes); }
+
+    /** Migration de la base : la page (appels compris) repart sur la nouvelle base. */
+    @Override public void onDatabaseChanged(String database) {
+        handler.post(() -> { if (web != null) web.reload(); });
+    }
 
     /** Nouvel envoi : on allume l'écran et on joue le son de notification de la tablette. */
     @SuppressWarnings("deprecation")

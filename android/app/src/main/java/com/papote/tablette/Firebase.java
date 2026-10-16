@@ -17,7 +17,23 @@ import java.io.IOException;
 final class Firebase {
     static final String PROJECT = "papote-famille";
     private static final String API_KEY = "AIzaSyAvoivJR8p-u2VxUWzlyHzTgP20-5ZG_-E";
-    static final String DOCS = "projects/" + PROJECT + "/databases/(default)/documents";
+    /**
+     * Base Firestore utilisée : « (default) » (États-Unis) puis « eu » (Europe) après la migration.
+     * La tablette lit config/base.database dans l'ancienne base et bascule d'elle-même (Sync).
+     */
+    static final String DEFAULT_DATABASE = "(default)";
+    private static volatile String database = DEFAULT_DATABASE;
+
+    static String database() { return database; }
+
+    static void setDatabase(String name) {
+        database = name == null || name.trim().isEmpty() ? DEFAULT_DATABASE : name.trim();
+    }
+
+    /** Chemin des documents de la base en cours. */
+    static String docs() { return docs(database); }
+
+    static String docs(String db) { return "projects/" + PROJECT + "/databases/" + db + "/documents"; }
     private static final String FIRESTORE = "https://firestore.googleapis.com/v1/";
 
     /** Erreur HTTP renvoyée par Firebase. */
@@ -187,7 +203,7 @@ final class Firebase {
 
     /** Lit un document ; renvoie null s'il n'existe pas. */
     JSONObject get(String path, String... fieldMask) throws IOException, JSONException {
-        StringBuilder url = new StringBuilder(FIRESTORE).append(DOCS).append('/').append(path);
+        StringBuilder url = new StringBuilder(FIRESTORE).append(docs()).append('/').append(path);
         char sep = '?';
         for (String f : fieldMask) {
             url.append(sep).append("mask.fieldPaths=").append(Uri.encode(f));
@@ -201,7 +217,7 @@ final class Firebase {
 
     /** Liste les documents d'une collection (jusqu'à 300). */
     JSONArray list(String path) throws IOException, JSONException {
-        String url = FIRESTORE + DOCS + "/" + path + "?pageSize=300";
+        String url = FIRESTORE + docs() + "/" + path + "?pageSize=300";
         Http.Response r = http.request("GET", url, null, null, token());
         if (!r.ok()) throw new ApiException(r.code, r.body);
         JSONArray docs = new JSONObject(r.body).optJSONArray("documents");
@@ -209,7 +225,7 @@ final class Firebase {
     }
 
     JSONArray runQuery(String parent, JSONObject structuredQuery) throws IOException, JSONException {
-        String url = FIRESTORE + DOCS + (parent.isEmpty() ? "" : "/" + parent) + ":runQuery";
+        String url = FIRESTORE + docs() + (parent.isEmpty() ? "" : "/" + parent) + ":runQuery";
         JSONObject body = new JSONObject().put("structuredQuery", structuredQuery);
         Http.Response r = http.request("POST", url, "application/json", body.toString(), token());
         if (!r.ok()) throw new ApiException(r.code, r.body);
@@ -217,14 +233,28 @@ final class Firebase {
     }
 
     void commit(JSONArray writes) throws IOException, JSONException {
-        String url = FIRESTORE + DOCS + ":commit";
+        String url = FIRESTORE + docs() + ":commit";
         JSONObject body = new JSONObject().put("writes", writes);
         Http.Response r = http.request("POST", url, "application/json", body.toString(), token());
         if (!r.ok()) throw new ApiException(r.code, r.body);
     }
 
     static String docName(String path) {
-        return DOCS + "/" + path;
+        return docs() + "/" + path;
+    }
+
+    /**
+     * Base à utiliser, lue dans l'ANCIENNE base : config/base.database (« eu » après la migration).
+     * null si le document est absent ou illisible (on garde la base en cours).
+     */
+    String targetDatabase() throws IOException, JSONException {
+        String url = FIRESTORE + docs(DEFAULT_DATABASE) + "/config/base?mask.fieldPaths=database";
+        Http.Response r = http.request("GET", url, null, null, token());
+        if (r.code == 404) return DEFAULT_DATABASE;
+        if (!r.ok()) return null;
+        JSONObject f = new JSONObject(r.body).optJSONObject("fields");
+        String db = f == null ? null : str(f, "database");
+        return db == null || db.trim().isEmpty() ? DEFAULT_DATABASE : db.trim();
     }
 
     // ---------- Valeurs Firestore ----------

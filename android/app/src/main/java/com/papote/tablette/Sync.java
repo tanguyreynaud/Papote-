@@ -38,6 +38,8 @@ final class Sync {
         void onFamily(JSONObject payload);
         /** Volume réglé depuis l'app famille (0-100), -1 si aucun réglage. */
         default void onVolume(int volume) { }
+        /** La base Firestore a changé (migration) : la page doit se recharger pour la suivre. */
+        default void onDatabaseChanged(String database) { }
     }
 
     private static final String TAG = "PapoteSync";
@@ -113,6 +115,7 @@ final class Sync {
         this.imageDir = new File(context.getFilesDir(), "photos");
         this.listener = listener;
         imageDir.mkdirs();
+        Firebase.setDatabase(prefs.getString("database", null));
         if (prefs.getString("fid", null) != null && !Meteo.done(this.context)) {
             Meteo.save(this.context, LEGACY_CITY, LEGACY_LAT, LEGACY_LON);
         }
@@ -167,6 +170,7 @@ final class Sync {
         @Override
         public void run() {
             try {
+                checkDatabase();
                 refreshWeather();
                 reportWifi();
                 syncPosts();
@@ -692,6 +696,40 @@ final class Sync {
             lastWifiReported = ssid;
         } catch (Exception e) {
             Log.w(TAG, "Wifi sur la fiche", e);
+        }
+    }
+
+    // ---------- Base Firestore : bascule vers l'Europe ----------
+
+    private static final long DATABASE_CHECK_MS = 5 * 60_000;
+    private long lastDatabaseCheck;
+
+    /**
+     * Toutes les 5 minutes, la base à utiliser est relue dans l'ancienne base (config/base.database).
+     * Si elle change (migration en Europe), la tablette repart sur la nouvelle base, sans réinstallation.
+     */
+    private void checkDatabase() {
+        long now = System.currentTimeMillis();
+        if (now - lastDatabaseCheck < DATABASE_CHECK_MS) return;
+        if (prefs.getString("fid", null) == null && !pairingActive()) return;
+        lastDatabaseCheck = now;
+        try {
+            String target = firebase.targetDatabase();
+            if (target == null || target.equals(Firebase.database())) return;
+            Journal.log(context, "Base Firestore : " + Firebase.database() + " -> " + target);
+            prefs.edit().putString("database", target).remove("pairing").remove("pairingExpires").apply();
+            Firebase.setDatabase(target);
+            // Tout est relu dans la nouvelle base.
+            lastRev = Long.MIN_VALUE;
+            lastFullRefresh = 0;
+            lastReminders = 0;
+            lastFamilyExtras = 0;
+            lastPostsJson = null;
+            meteoReported = false;
+            lastWifiReported = null;
+            listener.onDatabaseChanged(target);
+        } catch (Exception e) {
+            Log.w(TAG, "Base Firestore", e);
         }
     }
 
