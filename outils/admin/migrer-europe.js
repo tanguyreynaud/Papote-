@@ -55,22 +55,23 @@ function rewrite(value) {
 async function copyDocuments(writer) {
   let docs = 0;
   let rewritten = 0;
+  // Une collection = deux requêtes (ses documents d'un coup, plus la liste des documents « vides »
+  // qui n'ont que des sous-collections) ; les sous-collections sont parcourues en parallèle.
   async function walk(collections) {
-    for (const col of collections) {
-      const refs = await col.listDocuments(); // comprend les documents « vides » qui n'ont que des sous-collections
-      for (const ref of refs) {
-        const snap = await ref.get();
-        if (snap.exists) {
-          const data = snap.data();
-          const copy = rewrite(data);
-          if (JSON.stringify(copy) !== JSON.stringify(data)) rewritten++;
-          if (writer) writer.set(target.doc(ref.path), copy);
-          docs++;
-          if (docs % 500 === 0) console.log(`  ${docs} documents…`);
-        }
-        await walk(await ref.listCollections());
+    await Promise.all(collections.map(async (col) => {
+      const [snap, refs] = await Promise.all([col.get(), col.listDocuments()]);
+      for (const d of snap.docs) {
+        const data = d.data();
+        const copy = rewrite(data);
+        if (JSON.stringify(copy) !== JSON.stringify(data)) rewritten++;
+        if (writer) writer.set(target.doc(d.ref.path), copy);
+        docs++;
+        if (docs % 500 === 0) console.log(`  ${docs} documents…`);
       }
-    }
+      for (let i = 0; i < refs.length; i += 20) {
+        await Promise.all(refs.slice(i, i + 20).map(async (ref) => walk(await ref.listCollections())));
+      }
+    }));
   }
   await walk(await source.listCollections());
   return { docs, rewritten };
@@ -84,10 +85,11 @@ async function copyFiles() {
   for (const f of files) bytes += Number(f.metadata.size || 0);
   if (confirmed) {
     let n = 0;
-    for (const f of files) {
+    for (let i = 0; i < files.length; i += 10) {
       // Copie côté Google : les métadonnées (type, jeton de téléchargement) suivent le fichier.
-      await f.copy(newBucket.file(f.name));
-      if (++n % 50 === 0) console.log(`  ${n}/${files.length} fichiers…`);
+      await Promise.all(files.slice(i, i + 10).map((f) => f.copy(newBucket.file(f.name))));
+      n += files.slice(i, i + 10).length;
+      if (n % 50 === 0 || n === files.length) console.log(`  ${n}/${files.length} fichiers…`);
     }
   }
   return { files: files.length, mo: Math.round(bytes / 1e6) };
