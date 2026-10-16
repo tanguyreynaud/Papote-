@@ -39,8 +39,11 @@ const mail = require('./mail');
 const avis = require('./avis');
 const relances = require('./relances');
 
-admin.initializeApp();
-const db = admin.firestore();
+const base = require('./base');
+
+// Bucket Europe après la migration (BUCKET_STORAGE dans .env), sinon celui du projet.
+admin.initializeApp(base.BUCKET_STORAGE ? { storageBucket: base.BUCKET_STORAGE } : undefined);
+const db = base.db();
 const { FieldValue, Timestamp } = admin.firestore;
 
 setGlobalOptions({ region: 'europe-west1', maxInstances: 5 });
@@ -864,10 +867,10 @@ exports.etiquetteRetour = onCall(async (request) => {
   return { ok: true };
 });
 
-// Les déclencheurs Firestore doivent tourner dans la région de la base (REGION_FIRESTORE dans .env).
-const REGION_FIRESTORE = process.env.REGION_FIRESTORE || 'europe-west1';
+// Les déclencheurs Firestore écoutent la base BASE_FIRESTORE et tournent dans sa région (base.js, .env).
+const { REGION_FIRESTORE, BASE_FIRESTORE } = base;
 
-exports.nouvelleFamille = onDocumentCreated({ document: 'families/{fid}', region: REGION_FIRESTORE }, async (event) => {
+exports.nouvelleFamille = onDocumentCreated({ document: 'families/{fid}', database: BASE_FIRESTORE, region: REGION_FIRESTORE }, async (event) => {
   const ref = event.data.ref;
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
@@ -879,7 +882,7 @@ exports.nouvelleFamille = onDocumentCreated({ document: 'families/{fid}', region
 });
 
 exports.nouveauMembre = onDocumentCreated(
-  { document: 'families/{fid}/members/{uid}', region: REGION_FIRESTORE, secrets: [STRIPE_SECRET] },
+  { document: 'families/{fid}/members/{uid}', database: BASE_FIRESTORE, region: REGION_FIRESTORE, secrets: [STRIPE_SECRET] },
   async (event) => {
     const membre = event.data.data();
     const { fid, uid } = event.params;
@@ -918,7 +921,7 @@ exports.tabletteEnvoyee = onCall(async (request) => {
 // Écrit par tabletteEnvoyee ou par outils/admin/abonnements.bat envoyee.
 // Aussi : tablette attendue (e-mails de retour), étiquette ajoutée, tablette revenue (remboursement).
 exports.commandeModifiee = onDocumentUpdated(
-  { document: 'commandes/{id}', region: REGION_FIRESTORE, secrets: [MAIL_MOT_DE_PASSE, STRIPE_SECRET] },
+  { document: 'commandes/{id}', database: BASE_FIRESTORE, region: REGION_FIRESTORE, secrets: [MAIL_MOT_DE_PASSE, STRIPE_SECRET] },
   async (event) => {
     const avant = event.data.before.data();
     const apres = event.data.after.data();
@@ -1060,9 +1063,9 @@ exports.gestionJumelage = gestion.gestionJumelage;
 // Nombre de proches d'une famille (membres « famille » qui ont rejoint), lu par les règles
 // Firestore pour refuser un 31e proche. Recalculé à chaque arrivée, départ ou changement de membre.
 exports.compterProches = onDocumentWritten(
-  { document: 'families/{fid}/members/{uid}', region: REGION_FIRESTORE },
+  { document: 'families/{fid}/members/{uid}', database: BASE_FIRESTORE, region: REGION_FIRESTORE },
   async (event) => {
-    const famille = admin.firestore().doc(`families/${event.params.fid}`);
+    const famille = db.doc(`families/${event.params.fid}`);
     const membres = await famille.collection('members').where('role', '==', 'famille').get();
     const nbProches = membres.docs.filter((d) => d.get('status') !== 'pending').length;
     try {
