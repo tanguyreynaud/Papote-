@@ -20,7 +20,19 @@ const app = initializeApp({
   appId: '1:807031084851:web:b8048e2952cb1e893b1046',
 });
 const auth = getAuth(app);
-const db = getFirestore(app);
+// Base Firestore : « (default) » (États-Unis) puis « eu » (Europe) après la migration.
+// C'est l'app Android qui décide (pont firestoreDatabase()), la page suit au chargement.
+function firestoreDatabase() {
+  try {
+    const name = window.PapoteAndroid && window.PapoteAndroid.firestoreDatabase
+      ? String(window.PapoteAndroid.firestoreDatabase() || '').trim() : '';
+    return name || '(default)';
+  } catch (e) {
+    return '(default)';
+  }
+}
+const DATABASE = firestoreDatabase();
+const db = DATABASE === '(default)' ? getFirestore(app) : getFirestore(app, DATABASE);
 
 // Sans relais TURN, la vidéo ne passe pas entre deux réseaux différents (4G, box…).
 // Le relais est décrit dans Firestore (config/turn), pas dans le code, qui est public :
