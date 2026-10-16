@@ -352,11 +352,18 @@ test('clients : fusion par e-mail, statut et accord pour les e-mails', () => {
       { email: 'paul@x.fr', consentement: true },
       { email: 'annule@x.fr', consentement: false, desinscritLe: 9 },
       { email: 'inconnu@x.fr', jeton: 'a' },
+      { email: 'curieux@x.fr', nom: 'Marc Petit', telephone: '0612345678', chatLe: 50, chatDepuis: 40 },
+      { email: 'jeanne@x.fr', nom: 'Autre nom', chatLe: 60 },
     ],
     statutFamille: (fid) => ({ f1: 'actif', f2: 'resilie' }[fid]),
   });
   const par = Object.fromEntries(liste.map((c) => [c.email, c]));
-  assert.equal(liste.length, 4);
+  assert.equal(liste.length, 5);
+  assert.equal(par['curieux@x.fr'].type, 'chat');
+  assert.equal(par['curieux@x.fr'].telephone, '0612345678');
+  assert.equal(par['curieux@x.fr'].depuis, 40);
+  assert.equal(par['curieux@x.fr'].consentement, false);
+  assert.equal(par['jeanne@x.fr'].nom, 'Jeanne Martin');
   assert.equal(par['jeanne@x.fr'].type, 'client');
   assert.equal(par['jeanne@x.fr'].consentement, true);
   assert.equal(par['paul@x.fr'].type, 'ancien');

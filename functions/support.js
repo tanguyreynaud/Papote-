@@ -39,6 +39,7 @@ const EMAIL_SUPPORT = 'contact@mapapote.fr';
 const QUOTA_VISITEUR = 1000;
 const QUOTA_TOTAL = 2000;
 const QUOTA_RAPPELS = 3;
+const QUOTA_INSCRIPTIONS = 5;
 const MARQUE_CONTACT = '[CONTACT]';
 const CONNAISSANCES = fs.readFileSync(path.join(__dirname, 'support-connaissances.md'), 'utf8');
 const MAX_MESSAGES = 12;
@@ -115,8 +116,9 @@ function nettoyer(messages) {
   return liste;
 }
 
-// Compte une question (ou une demande de rappel) ; false si le quota du jour est dépassé.
-async function quotaOk(ip, rappel) {
+// Compte une question (n), une demande de rappel ou une inscription ; false si le quota du jour est dépassé.
+const QUOTAS = { n: QUOTA_VISITEUR, rappels: QUOTA_RAPPELS, inscriptions: QUOTA_INSCRIPTIONS };
+async function quotaOk(ip, champ = 'n') {
   const jour = new Date().toISOString().slice(0, 10);
   const visiteur = crypto.createHash('sha256').update(jour + ip).digest('hex').slice(0, 24);
   const db = base();
@@ -126,10 +128,9 @@ async function quotaOk(ip, rappel) {
   // échoue malgré les nouvelles tentatives de Firestore, on laisse passer plutôt que de planter.
   return db.runTransaction(async (t) => {
     const [v, j] = await Promise.all([t.get(refVisiteur), t.get(refJour)]);
-    const champ = rappel ? 'rappels' : 'n';
     const nV = (v.get(champ) || 0) + 1;
     const nJ = (j.get(champ) || 0) + 1;
-    if (nV > (rappel ? QUOTA_RAPPELS : QUOTA_VISITEUR) || (!rappel && nJ > QUOTA_TOTAL)) return false;
+    if (nV > QUOTAS[champ] || (champ === 'n' && nJ > QUOTA_TOTAL)) return false;
     t.set(refVisiteur, { [champ]: nV }, { merge: true });
     t.set(refJour, { [champ]: nJ, expire: new Date(Date.now() + 7 * 86400e3) }, { merge: true });
     return true;
@@ -168,7 +169,7 @@ async function demandeDeRappel(ip, messages, contact) {
   const coord = contact.coordonnees ? coordonneesValides(contact.coordonnees)
     : (tel && tel.telephone && mel && mel.email ? { telephone: tel.telephone, email: mel.email } : null);
   if (!coord) return { status: 400, corps: { erreur: 'Indiquez votre numéro de téléphone et votre adresse e-mail.' } };
-  if (!(await quotaOk(ip, true))) {
+  if (!(await quotaOk(ip, 'rappels'))) {
     return { status: 429, corps: { erreur: `Écrivez-nous à ${EMAIL_SUPPORT}.` } };
   }
   const conversation = messages.map((m) => `${m.role === 'user' ? 'Visiteur' : 'Assistant'} : ${m.content}`).join('\n\n');
@@ -195,14 +196,49 @@ async function demandeDeRappel(ip, messages, contact) {
   return { status: 200, corps: { ok: true } };
 }
 
+// Coordonnées demandées à l'ouverture du chat sur le site : fiche dans contacts/ (comme les paniers
+// abandonnés), visible dans l'admin, onglet Clients. L'accord pour les nouvelles de Papote n'est noté
+// que si la case (jamais pré-cochée) est cochée ; une case non cochée ne retire pas un accord déjà donné.
+function inscriptionValide(d) {
+  const court = (v) => String(v || '').trim().replace(/\s+/g, ' ').slice(0, 60);
+  const prenom = court(d && d.prenom);
+  const nom = court(d && d.nom);
+  const tel = coordonneesValides(d && d.telephone);
+  const mel = coordonneesValides(d && d.email);
+  if (!prenom || !nom || !tel || !tel.telephone || !mel || !mel.email) return null;
+  return { prenom, nom, telephone: tel.telephone, email: mel.email.toLowerCase(), marketing: !!(d && d.marketing === true) };
+}
+
+async function inscrire(ip, d) {
+  const v = inscriptionValide(d);
+  if (!v) return { status: 400, corps: { erreur: 'Indiquez votre prénom, votre nom, votre téléphone et votre e-mail.' } };
+  if (!(await quotaOk(ip, 'inscriptions'))) return { status: 429, corps: { erreur: `Écrivez-nous à ${EMAIL_SUPPORT}.` } };
+  // Même clé que gestion.js (cleContact) : une seule fiche par e-mail.
+  const ref = base().doc(`contacts/${crypto.createHash('sha256').update(v.email).digest('hex').slice(0, 32)}`);
+  const maintenant = Date.now();
+  const deja = await ref.get();
+  await ref.set({
+    email: v.email, nom: `${v.prenom} ${v.nom}`, prenom: v.prenom, telephone: v.telephone, chatLe: maintenant,
+    ...(deja.exists && deja.get('chatDepuis') ? {} : { chatDepuis: maintenant }),
+    ...(v.marketing ? {
+      consentement: true, consentementLe: maintenant, consentementSource: 'chat', desinscritLe: admin.firestore.FieldValue.delete(),
+    } : {}),
+  }, { merge: true });
+  return { status: 200, corps: { ok: true } };
+}
+
 exports.supportChat = onRequest(
   { secrets: [ANTHROPIC_API_KEY, MAIL_MOT_DE_PASSE], cors: ORIGINES, maxInstances: 3, timeoutSeconds: 60 },
   async (req, res) => {
     if (req.method !== 'POST') return res.status(405).json({ erreur: 'POST attendu' });
+    const ip = String(req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim() || 'inconnu';
+    if (req.body && req.body.inscription) {
+      const { status, corps } = await inscrire(ip, req.body.inscription);
+      return res.status(status).json(corps);
+    }
     const messages = nettoyer(req.body && req.body.messages);
     if (!messages) return res.status(400).json({ erreur: 'Conversation invalide' });
     const page = req.body.page === 'appli' ? 'appli' : 'site';
-    const ip = String(req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim() || 'inconnu';
 
     if (req.body.contact) {
       const { status, corps } = await demandeDeRappel(ip, messages, req.body.contact);
@@ -276,4 +312,4 @@ exports.bilanSupport = onSchedule(
     });
   });
 
-exports._test = { nettoyer, coordonneesValides, lireReponse };
+exports._test = { nettoyer, coordonneesValides, lireReponse, inscriptionValide };

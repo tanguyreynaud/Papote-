@@ -11,6 +11,7 @@
   var API = 'https://europe-west1-papote-famille.cloudfunctions.net/supportChat';
   var EMAIL = 'contact@mapapote.fr';
   var CLE = 'papote-support';
+  var CLE_CONTACT = 'papote-support-contact';
   var script = document.currentScript || {};
   var cote = script.dataset && script.dataset.cote === 'gauche' ? 'left' : 'right';
   var bas = (script.dataset && parseInt(script.dataset.bas, 10)) || 20;
@@ -46,12 +47,19 @@
     '.ps-rappel input{border:1px solid var(--ps-ligne);border-radius:10px;padding:.55rem .7rem;font:inherit;font-size:1.05rem;color:var(--ps-texte);background:var(--ps-fond)}' +
     '.ps-rappel button{border:0;border-radius:12px;background:var(--ps-indigo);color:#fff;font:inherit;font-weight:700;padding:.7rem;cursor:pointer}' +
     '.ps-rappel button:disabled{opacity:.5;cursor:default}' +
+    '.ps-rappel .ps-case{flex-direction:row;align-items:flex-start;gap:.5rem;color:var(--ps-texte)}' +
+    '.ps-rappel .ps-case input{margin:.2rem 0 0;width:1.2rem;height:1.2rem;flex:none;accent-color:var(--ps-indigo)}' +
+    '.ps-mention{font-size:.8rem;color:var(--ps-gris);margin:0}' +
     '.ps-panneau .ps-fin{display:block;margin:.4rem auto 0;border:0;border-radius:12px;background:var(--ps-indigo);color:#fff;font:inherit;font-weight:700;padding:.7rem 1.2rem;cursor:pointer}' +
     '.ps-erreur{color:#b91c1c;font-size:.95rem}' +
     '.ps-note{font-size:.8rem;color:var(--ps-gris);text-align:center;padding:0 .75rem .6rem;background:var(--ps-carte)}';
 
   var historique = [];
   try { historique = JSON.parse(sessionStorage.getItem(CLE)) || []; } catch (e) { historique = []; }
+  // Coordonnées demandées à la première ouverture sur le site (pas dans l'appli : déjà clients).
+  var contact = null;
+  try { contact = JSON.parse(localStorage.getItem(CLE_CONTACT)); } catch (e) { contact = null; }
+  function faut() { return PAGE === 'site' && !(contact && contact.email); }
 
   function el(tag, cls, texte) {
     var n = document.createElement(tag);
@@ -115,6 +123,79 @@
       return bulle;
     }
 
+    function champ(texte, type, auto, max, valeur) {
+      var l = el('label', '', texte);
+      var i = el('input');
+      i.type = type;
+      i.autocomplete = auto;
+      i.maxLength = max;
+      if (valeur) i.value = valeur;
+      l.appendChild(i);
+      return { label: l, input: i };
+    }
+
+    // Avant la première question sur le site : prénom, nom, téléphone, e-mail, et l'accord
+    // (case jamais pré-cochée) pour recevoir les nouvelles de Papote.
+    function demanderCoordonnees() {
+      zone.disabled = true;
+      envoyer.disabled = true;
+      var form = el('form', 'ps-rappel');
+      form.noValidate = true;
+      var prenom = champ('Votre prénom', 'text', 'given-name', 60);
+      var nom = champ('Votre nom', 'text', 'family-name', 60);
+      var tel = champ('Votre téléphone', 'tel', 'tel', 30);
+      var mel = champ('Votre e-mail', 'email', 'email', 120);
+      var lCase = el('label', 'ps-case');
+      var accord = el('input');
+      accord.type = 'checkbox';
+      lCase.appendChild(accord);
+      lCase.appendChild(document.createTextNode('J\u2019accepte de recevoir les nouvelles et offres de Papote par e-mail.'));
+      var mention = el('p', 'ps-mention', 'Vos coordonnées servent à vous répondre et à vous recontacter si besoin. ');
+      var lien = el('a', '', 'Confidentialité');
+      lien.href = 'https://mapapote.fr/mentions.html#confidentialite';
+      lien.target = '_blank';
+      lien.rel = 'noopener';
+      mention.appendChild(lien);
+      var erreur = el('div', 'ps-erreur');
+      var go = el('button', '', 'Commencer');
+      go.type = 'submit';
+      [prenom.label, nom.label, tel.label, mel.label, lCase, mention, erreur, go].forEach(function (n) { form.appendChild(n); });
+      form.onsubmit = function (e) {
+        e.preventDefault();
+        var v = { prenom: prenom.input.value.trim(), nom: nom.input.value.trim(), telephone: tel.input.value.trim(), email: mel.input.value.trim() };
+        var manque = !v.prenom ? [prenom, 'Indiquez votre prénom.'] : !v.nom ? [nom, 'Indiquez votre nom.']
+          : v.telephone.replace(/\D/g, '').length < 9 ? [tel, 'Indiquez votre numéro de téléphone.']
+          : !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.email) ? [mel, 'Indiquez votre adresse e-mail.'] : null;
+        if (manque) {
+          erreur.textContent = manque[1];
+          manque[0].input.focus();
+          return;
+        }
+        erreur.textContent = '';
+        go.disabled = true;
+        fetch(API, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ inscription: { prenom: v.prenom, nom: v.nom, telephone: v.telephone, email: v.email, marketing: accord.checked } }),
+        })
+          .then(function (r) { return r.json().then(function (d) { return r.ok && d.ok ? d : Promise.reject(d); }); })
+          .then(function () {
+            contact = v;
+            try { localStorage.setItem(CLE_CONTACT, JSON.stringify(v)); } catch (e) { /* navigation privée */ }
+            zone.disabled = false;
+            envoyer.disabled = false;
+            afficher();
+            zone.focus();
+          })
+          .catch(function (d) {
+            go.disabled = false;
+            erreur.textContent = (d && d.erreur) || ('Envoi impossible. Écrivez-nous à ' + EMAIL + '.');
+          });
+      };
+      fil.appendChild(form);
+      prenom.input.focus();
+    }
+
     // Formulaire « être recontacté », proposé seulement quand l'assistant n'a pas pu répondre.
     function proposerRappel() {
       var form = el('form', 'ps-rappel');
@@ -123,6 +204,7 @@
       var nom = el('input');
       nom.autocomplete = 'given-name';
       nom.maxLength = 60;
+      if (contact) nom.value = contact.prenom || '';
       lNom.appendChild(nom);
       var lTel = el('label', '', 'Votre téléphone');
       var tel = el('input');
@@ -130,6 +212,7 @@
       tel.autocomplete = 'tel';
       tel.maxLength = 30;
       tel.required = true;
+      if (contact) tel.value = contact.telephone || '';
       lTel.appendChild(tel);
       var lMel = el('label', '', 'Votre e-mail');
       var mel = el('input');
@@ -137,6 +220,7 @@
       mel.autocomplete = 'email';
       mel.maxLength = 120;
       mel.required = true;
+      if (contact) mel.value = contact.email || '';
       lMel.appendChild(mel);
       var erreur = el('div', 'ps-erreur');
       var go = el('button', '', 'Être recontacté');
@@ -200,6 +284,11 @@
 
     function afficher() {
       fil.textContent = '';
+      if (faut()) {
+        ajouter('assistant', 'Bonjour ! Avant votre première question, laissez-nous vos coordonnées : nous pourrons vous recontacter si besoin.');
+        demanderCoordonnees();
+        return;
+      }
       ajouter('assistant', 'Bonjour ! Je réponds à vos questions sur Papote : la tablette, les tarifs, l’installation ou l’appli famille.');
       if (!historique.length) {
         var idees = el('div', 'ps-idees');
@@ -218,12 +307,12 @@
       panneau.classList.toggle('ps-ouvert', oui);
       bouton.style.display = oui ? 'none' : '';
       bouton.setAttribute('aria-expanded', String(oui));
-      if (oui) { afficher(); zone.focus(); } else { bouton.focus(); }
+      if (oui) { afficher(); if (!faut()) zone.focus(); } else { bouton.focus(); }
     }
 
     function poser(question) {
       question = question.trim();
-      if (!question || envoyer.disabled) return;
+      if (!question || envoyer.disabled || faut()) return;
       var idees = fil.querySelector('.ps-idees');
       if (idees) idees.remove();
       var rappel = fil.querySelector('.ps-rappel');
