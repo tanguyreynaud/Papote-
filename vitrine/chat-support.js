@@ -47,7 +47,9 @@
     '.ps-rappel input{border:1px solid var(--ps-ligne);border-radius:10px;padding:.55rem .7rem;font:inherit;font-size:1.05rem;color:var(--ps-texte);background:var(--ps-fond)}' +
     '.ps-rappel button{border:0;border-radius:12px;background:var(--ps-indigo);color:#fff;font:inherit;font-weight:700;padding:.7rem;cursor:pointer}' +
     '.ps-rappel button:disabled{opacity:.5;cursor:default}' +
-    '.ps-rappel .ps-case{flex-direction:row;align-items:flex-start;gap:.5rem;color:var(--ps-texte)}' +
+    '.ps-rappel .ps-case{flex-direction:row;align-items:flex-start;gap:.6rem;color:var(--ps-texte);background:var(--ps-doux);border-radius:10px;padding:.6rem .7rem;cursor:pointer}' +
+    '.ps-case b{color:var(--ps-indigo-fonce)}' +
+    '.ps-case small{display:block;color:var(--ps-gris);font-size:.85rem;margin-top:.15rem}' +
     '.ps-rappel .ps-case input{margin:.2rem 0 0;width:1.2rem;height:1.2rem;flex:none;accent-color:var(--ps-indigo)}' +
     '.ps-mention{font-size:.8rem;color:var(--ps-gris);margin:0}' +
     '.ps-panneau .ps-fin{display:block;margin:.4rem auto 0;border:0;border-radius:12px;background:var(--ps-indigo);color:#fff;font:inherit;font-weight:700;padding:.7rem 1.2rem;cursor:pointer}' +
@@ -149,7 +151,11 @@
       var accord = el('input');
       accord.type = 'checkbox';
       lCase.appendChild(accord);
-      lCase.appendChild(document.createTextNode('J\u2019accepte de recevoir les nouvelles et offres de Papote par e-mail.'));
+      var texteCase = el('span');
+      texteCase.appendChild(el('b', '', 'Oui, je veux les bons plans Papote'));
+      texteCase.appendChild(document.createTextNode(' : offres, nouveautés et idées pour garder le lien avec vos proches, par e-mail.'));
+      texteCase.appendChild(el('small', '', 'Pas de spam. Désinscription en un clic.'));
+      lCase.appendChild(texteCase);
       var mention = el('p', 'ps-mention', 'Vos coordonnées servent à vous répondre et à vous recontacter si besoin. ');
       var lien = el('a', '', 'Confidentialité');
       lien.href = 'https://mapapote.fr/mentions.html#confidentialite';
