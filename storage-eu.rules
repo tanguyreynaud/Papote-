@@ -1,5 +1,5 @@
 rules_version = '2';
-// Règles du bucket papote-famille-eu (bascule en Europe) : membres lus dans la base « eu ».
+// Règles du bucket papote-famille-eu (bascule en Europe) : membres lus dans la base « europe ».
 
 // Photos et vidéos des familles : families/{fid}/media/{fichier}.
 // Seuls les membres de la famille lisent, ajoutent et effacent. La tablette lit par l'adresse de téléchargement.
@@ -8,8 +8,8 @@ service firebase.storage {
     match /families/{fid}/media/{file} {
       function isMember() {
         return request.auth != null
-          && firestore.exists(/databases/eu/documents/families/$(fid)/members/$(request.auth.uid))
-          && firestore.get(/databases/eu/documents/families/$(fid)/members/$(request.auth.uid)).data.get('status', 'active') != 'pending';
+          && firestore.exists(/databases/europe/documents/families/$(fid)/members/$(request.auth.uid))
+          && firestore.get(/databases/europe/documents/families/$(fid)/members/$(request.auth.uid)).data.get('status', 'active') != 'pending';
       }
       function isAdmin() {
         return request.auth != null

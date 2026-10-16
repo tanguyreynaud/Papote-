@@ -6,7 +6,7 @@
       "indexes": "firestore.indexes.json"
     },
     {
-      "database": "eu",
+      "database": "europe",
       "rules": "firestore.rules",
       "indexes": "firestore.indexes.json"
     }
