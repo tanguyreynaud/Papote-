@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" preserveAspectRatio="xMidYMid slice">
+  <!-- Gâteau d'anniversaire, bougies et confettis -->
+  <g fill="#f472b6" opacity=".35">
+    <circle cx="130" cy="140" r="16"/><circle cx="1050" cy="170" r="20"/><circle cx="1110" cy="560" r="14"/>
+    <circle cx="90" cy="600" r="18"/><circle cx="260" cy="380" r="10"/><circle cx="950" cy="380" r="12"/>
+  </g>
+  <g fill="#f59e0b" opacity=".4">
+    <rect x="200" y="200" width="26" height="12" rx="6" transform="rotate(30 213 206)"/>
+    <rect x="980" y="260" width="26" height="12" rx="6" transform="rotate(-25 993 266)"/>
+    <rect x="160" y="480" width="26" height="12" rx="6" transform="rotate(60 173 486)"/>
+    <rect x="1020" y="470" width="26" height="12" rx="6" transform="rotate(15 1033 476)"/>
+  </g>
+  <g transform="translate(600 430)">
+    <ellipse cx="0" cy="300" rx="330" ry="26" fill="#9d174d" opacity=".15"/>
+    <g fill="#f472b6">
+      <rect x="-110" y="-170" width="22" height="90" rx="11"/><rect x="-11" y="-190" width="22" height="110" rx="11"/>
+      <rect x="88" y="-170" width="22" height="90" rx="11"/>
+    </g>
+    <g fill="#f59e0b">
+      <path d="M-99-230c18 22 18 38 0 46-18-8-18-24 0-46z"/><path d="M0-250c18 22 18 38 0 46-18-8-18-24 0-46z"/>
+      <path d="M99-230c18 22 18 38 0 46-18-8-18-24 0-46z"/>
+    </g>
+    <rect x="-220" y="-80" width="440" height="140" rx="40" fill="#fbcfe8"/>
+    <path d="M-220-10c37 36 73 36 110 0s73-36 110 0 73 36 110 0 73-36 110 0" fill="none" stroke="#fff" stroke-width="22" stroke-linecap="round"/>
+    <rect x="-290" y="60" width="580" height="220" rx="50" fill="#db2777"/>
+    <g fill="#fde68a"><circle cx="-160" cy="170" r="20"/><circle cx="-55" cy="170" r="20"/><circle cx="55" cy="170" r="20"/><circle cx="160" cy="170" r="20"/></g>
+  </g>
+</svg>

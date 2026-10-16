@@ -1,0 +1,7 @@
+{
+  "name": "papote-turn",
+  "private": true,
+  "scripts": { "deploy": "wrangler deploy" },
+  "dependencies": { "jose": "^6.1.0" },
+  "devDependencies": { "wrangler": "^4.148.0" }
+}

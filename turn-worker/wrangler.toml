@@ -1,0 +1,7 @@
+name = "papote-turn"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+
+# Secrets (à définir une fois) :
+#   npx wrangler secret put TURN_KEY_ID
+#   npx wrangler secret put TURN_KEY_API_TOKEN

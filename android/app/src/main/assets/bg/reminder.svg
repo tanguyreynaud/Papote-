@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f0faf5"/>
+      <stop offset="1" stop-color="#cdeedd"/>
+    </linearGradient>
+  </defs>
+
+
+  <!-- Réveil à l'ancienne -->
+  <g transform="translate(600 420)">
+    <ellipse cx="0" cy="320" rx="260" ry="22" fill="#2f855a" opacity=".15"/>
+    <circle cx="-190" cy="-210" r="80" fill="#48a77a"/>
+    <circle cx="190" cy="-210" r="80" fill="#48a77a"/>
+    <rect x="-14" y="-330" width="28" height="70" rx="10" fill="#2f855a"/>
+    <path d="M-200 250 L-250 320" stroke="#2f855a" stroke-width="30" stroke-linecap="round"/>
+    <path d="M200 250 L250 320" stroke="#2f855a" stroke-width="30" stroke-linecap="round"/>
+    <circle cx="0" cy="0" r="290" fill="#5bbf8f"/>
+    <circle cx="0" cy="0" r="240" fill="#fff"/>
+    <g stroke="#9bd8b9" stroke-width="14" stroke-linecap="round">
+      <line x1="0" y1="-210" x2="0" y2="-180"/><line x1="0" y1="180" x2="0" y2="210"/>
+      <line x1="-210" y1="0" x2="-180" y2="0"/><line x1="180" y1="0" x2="210" y2="0"/>
+    </g>
+    <line x1="0" y1="0" x2="0" y2="-150" stroke="#2f855a" stroke-width="22" stroke-linecap="round"/>
+    <line x1="0" y1="0" x2="110" y2="60" stroke="#2f855a" stroke-width="18" stroke-linecap="round"/>
+    <circle cx="0" cy="0" r="22" fill="#2f855a"/>
+  </g>
+  <g fill="#5bbf8f" opacity=".3">
+    <circle cx="140" cy="160" r="22"/><circle cx="1060" cy="200" r="16"/>
+    <circle cx="1080" cy="620" r="26"/><circle cx="120" cy="640" r="14"/>
+  </g>
+</svg>

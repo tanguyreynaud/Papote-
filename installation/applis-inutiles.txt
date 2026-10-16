@@ -1,0 +1,30 @@
+# Applis désactivées sur la tablette par installer-tablette.ps1 (réactivées par retirer-papote.bat).
+# Une par ligne. Désactiver n'efface rien : « adb shell pm enable <nom> » la remet.
+com.adups.fota
+com.android.calculator2
+com.android.camera2
+com.android.chrome
+com.android.dreams.basic
+com.android.dreams.phototable
+com.android.egg
+com.android.fmradio
+com.android.soundrecorder
+com.android.stk
+com.android.wallpaper.livepicker
+com.google.android.apps.docs
+com.google.android.apps.googleassistant
+com.google.android.apps.maps
+com.google.android.apps.messaging
+com.google.android.apps.nbu.files
+com.google.android.apps.photos
+com.google.android.apps.tachyon
+com.google.android.apps.wellbeing
+com.google.android.calendar
+com.google.android.contacts
+com.google.android.deskclock
+com.google.android.gm
+com.google.android.googlequicksearchbox
+com.google.android.marvin.talkback
+com.google.android.projection.gearhead
+com.google.android.videos
+com.sprd.quickcamera

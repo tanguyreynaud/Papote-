@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Petit gâteau d'anniversaire pour le bandeau de l'accueil -->
+  <rect x="47" y="14" width="6" height="18" rx="3" fill="#f472b6"/>
+  <path d="M50 2c5 6 5 10 0 12-5-2-5-6 0-12z" fill="#f59e0b"/>
+  <rect x="16" y="34" width="68" height="24" rx="8" fill="#fbcfe8"/>
+  <path d="M16 46c6 6 11 6 17 0s11-6 17 0 11 6 17 0 11-6 17 0" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round"/>
+  <rect x="8" y="58" width="84" height="32" rx="10" fill="#db2777"/>
+  <circle cx="30" cy="74" r="4" fill="#fde68a"/><circle cx="50" cy="74" r="4" fill="#fde68a"/><circle cx="70" cy="74" r="4" fill="#fde68a"/>
+</svg>
