@@ -30,6 +30,7 @@ const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { logger } = require('firebase-functions/v2');
 const { defineSecret, defineString } = require('firebase-functions/params');
 const admin = require('firebase-admin');
+const { getFirestore } = require('firebase-admin/firestore');
 const Stripe = require('stripe');
 const Anthropic = require('@anthropic-ai/sdk');
 const mail = require('./mail');
@@ -53,7 +54,11 @@ const FACTURES_MOT_DE_PASSE = defineSecret('FACTURES_MOT_DE_PASSE');
 const SENDCLOUD_API = defineSecret('SENDCLOUD_API');
 const ESPACE_ADMIN = 'https://app.mapapote.fr/admin.html';
 const { FieldValue, Timestamp } = admin.firestore;
-const db = () => admin.firestore();
+// Base Firestore et bucket Storage : ceux d'origine (US) jusqu'à la bascule en Europe, où functions/.env
+// reçoit BASE_FIRESTORE=eu et BUCKET_STORAGE=papote-famille-eu (notes/securite-acces.md, section 9).
+const BASE_FIRESTORE = process.env.BASE_FIRESTORE || '(default)';
+const db = () => getFirestore(admin.app(), BASE_FIRESTORE);
+const stockage = () => admin.storage().bucket(process.env.BUCKET_STORAGE || undefined);
 
 let stripeClient;
 function stripe() {
@@ -526,7 +531,7 @@ function aplatir(valeur) {
 }
 
 function effacerPieces(pieces) {
-  return Promise.all((pieces || []).map((p) => admin.storage().bucket().file(p.chemin).delete().catch(() => null)));
+  return Promise.all((pieces || []).map((p) => stockage().file(p.chemin).delete().catch(() => null)));
 }
 
 // ---------- Lecture ----------
@@ -569,6 +574,7 @@ exports.gestionDonnees = onCall(async (request) => {
         restitution: c.restitution ? { statut: c.restitution.statut || null, avant: c.restitution.avant || null } : null,
         remboursement: c.remboursement || null,
         etiquettes: c.etiquettes || null,
+        preparation: c.preparation || null,
         stripeCustomerId: c.stripeCustomerId || null,
       });
     }),
@@ -1180,7 +1186,7 @@ function nomFichier(nom) {
 async function enregistrerPiece(collection, id, nomBrut, type, contenu) {
   const nom = texte(nomBrut, 120) || 'piece';
   const chemin = `gestion/${collection}/${id}/${Date.now()}-${nomFichier(nom)}`;
-  await admin.storage().bucket().file(chemin).save(contenu, { contentType: type, resumable: false });
+  await stockage().file(chemin).save(contenu, { contentType: type, resumable: false });
   const piece = { nom, chemin, type, taille: contenu.length, le: Date.now() };
   await db().doc(`${collection}/${id}`).update({ pieces: FieldValue.arrayUnion(piece) });
   return piece;
@@ -1189,7 +1195,7 @@ async function enregistrerPiece(collection, id, nomBrut, type, contenu) {
 exports.gestionPiece = onCall({ memory: '512MiB' }, async (request) => {
   verifierAdmin(request);
   const d = request.data || {};
-  const bucket = admin.storage().bucket();
+  const bucket = stockage();
 
   if (d.action === 'lire') {
     if (typeof d.chemin !== 'string' || !d.chemin.startsWith('gestion/')) {
@@ -1522,7 +1528,7 @@ exports.gestionReglages = onCall(async (request) => {
 async function rangerEtiquette(commande, sens, colis, pdf) {
   const chemin = `gestion/etiquettes/${commande}-${sens}-${colis}.pdf`;
   const jeton = require('node:crypto').randomUUID();
-  const bucket = admin.storage().bucket();
+  const bucket = stockage();
   await bucket.file(chemin).save(pdf, {
     contentType: 'application/pdf', resumable: false, metadata: { metadata: { firebaseStorageDownloadTokens: jeton } },
   });
@@ -1661,7 +1667,7 @@ async function ficheDeLaTablette(p) {
 // son n° de série Android, noté à la préparation (outils/gestion/preparer-tablette).
 // Première fois : la commande est reliée à la famille, quelle que soit l'adresse e-mail du client.
 exports.gestionJumelage = onDocumentUpdated(
-  { document: 'pairings/{code}', region: process.env.REGION_FIRESTORE || 'europe-west1', secrets: [STRIPE_SECRET] },
+  { document: 'pairings/{code}', database: BASE_FIRESTORE, region: process.env.REGION_FIRESTORE || 'europe-west1', secrets: [STRIPE_SECRET] },
   async (event) => {
     const avant = event.data.before.data() || {};
     const p = event.data.after.data() || {};
@@ -1863,7 +1869,7 @@ async function numerosFactures(mouvements, depuis) {
 }
 
 async function enregistrerCsv(chemin, contenu) {
-  await admin.storage().bucket().file(chemin).save(Buffer.from(contenu, 'utf8'),
+  await stockage().file(chemin).save(Buffer.from(contenu, 'utf8'),
     { contentType: 'text/csv; charset=utf-8', resumable: false });
 }
 
@@ -1932,7 +1938,7 @@ async function cloturer(maintenant, refaire) {
     const vide = !fiche.recettes.nombre && !fiche.achats.nombre;
     // Rattrapage : on s'arrête au premier mois sans aucune activité (avant le lancement).
     if (vide && !m.toujours) {
-      await Promise.all(fiche.fichiers.map((f) => admin.storage().bucket().file(f.chemin).delete().catch(() => null)));
+      await Promise.all(fiche.fichiers.map((f) => stockage().file(f.chemin).delete().catch(() => null)));
       break;
     }
     mois[cle] = fiche;
@@ -2357,7 +2363,7 @@ exports.gestionSupprimerFamille = onCall({ timeoutSeconds: 540, memory: '512MiB'
   if (refus) throw new HttpsError('failed-precondition', refus);
   const membres = await ref.collection('members').get();
   // Fichiers d'abord : si la base échoue ensuite, un nouvel essai finit le travail.
-  await admin.storage().bucket().deleteFiles({ prefix: `families/${fid}/`, force: true });
+  await stockage().deleteFiles({ prefix: `families/${fid}/`, force: true });
   await db().recursiveDelete(ref);
   const commandes = await db().collection('commandes').where('fid', '==', fid).get();
   await Promise.all(commandes.docs.map((d) => d.ref.update({ familleSupprimeeLe: Date.now() })));
@@ -2368,8 +2374,82 @@ exports.gestionSupprimerFamille = onCall({ timeoutSeconds: 540, memory: '512MiB'
   return { ok: true, membres: membres.size };
 });
 
+// ---------- Parcours pas à pas (envoi d'une commande, réception d'une tablette) ----------
+// L'avancement est gardé sur la commande (preparation) ou la fiche tablette (reception) : on reprend où on s'était arrêté.
+
+// Avancement propre : { etape, faits: {cle: ms}, fini, + champs texte permis }.
+function avancementPropre(a, champs = []) {
+  const o = a && typeof a === 'object' ? a : {};
+  const faits = {};
+  for (const [k, v] of Object.entries(o.faits || {}).slice(0, 30)) {
+    if (/^[a-z0-9-]{1,30}$/i.test(k) && Number.isFinite(Number(v))) faits[k] = Number(v);
+  }
+  const propre = {
+    etape: Math.max(0, Math.min(30, Math.floor(Number(o.etape) || 0))),
+    faits,
+    fini: Number.isFinite(Number(o.fini)) && o.fini ? Number(o.fini) : null,
+  };
+  for (const c of champs) propre[c] = texte(o[c], 100);
+  return propre;
+}
+
+// Tablette installée (n° T-xxx donné par l'installation) rattachée à la fiche du parcours de réception :
+// l'installation prend la plus ancienne tablette « en stock », qui n'est pas forcément celle qu'on a en main.
+async function lierInstallation(id, numero, qui) {
+  const ref = texte(numero, 10).toUpperCase().replace(/^T-?/, 'T-');
+  if (!/^T-\d{1,5}$/.test(ref)) throw new HttpsError('invalid-argument', 'Tapez le numéro affiché à la fin de l\'installation, par exemple T-012.');
+  const trouvee = (await db().collection('stock').where('ref', '==', ref).limit(1).get()).docs[0];
+  if (!trouvee) throw new HttpsError('not-found', `${ref} n'est pas dans le stock : l'installation est-elle allée jusqu'au bout ?`);
+  if (!id || trouvee.id === id) return { id: trouvee.id, ref };
+  const fiche = db().doc(`stock/${id}`);
+  const snap = await fiche.get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Tablette introuvable.');
+  if (snap.get('ref') && snap.get('ref') !== ref) throw new HttpsError('failed-precondition', `Cette tablette est déjà ${snap.get('ref')}.`);
+  const t = trouvee.data();
+  if (t.commande) throw new HttpsError('failed-precondition', `${ref} est déjà réservée pour une commande.`);
+  await fiche.update({
+    ref, serieAndroid: t.serieAndroid || null, preparee: t.preparee || Date.now(), etat: 'preparee',
+    ...(t.modele && !snap.get('modele') ? { modele: t.modele } : {}),
+    historique: FieldValue.arrayUnion({ le: Date.now(), etat: 'preparee', par: qui }),
+    majLe: FieldValue.serverTimestamp(),
+  });
+  // Fiche créée par l'installation faute d'achat en stock : elle n'a plus de raison d'être.
+  if (t.prixAchat == null && !t.acheteeLe && !t.depense) await trouvee.ref.delete();
+  else {
+    await trouvee.ref.update({
+      ref: FieldValue.delete(), serieAndroid: FieldValue.delete(), preparee: FieldValue.delete(), etat: 'en-stock',
+      majLe: FieldValue.serverTimestamp(),
+    });
+  }
+  return { id, ref };
+}
+
+// { type: 'envoi', commande, preparation } | { type: 'recu', commande } | { type: 'reception', id, reception }
+// | { type: 'lier', id, ref }
+exports.gestionParcours = onCall(async (request) => {
+  verifierAdmin(request);
+  const d = request.data || {};
+  const qui = request.auth.token.email || request.auth.uid;
+  if (d.type === 'envoi' || d.type === 'recu') {
+    const ref = db().doc(`commandes/${texte(d.commande, 100) || '-'}`);
+    if (!(await ref.get()).exists) throw new HttpsError('not-found', 'Commande introuvable.');
+    if (d.type === 'recu') await ref.update({ 'preparation.recuLe': Date.now(), 'preparation.recuPar': qui });
+    else await ref.update({ preparation: { ...avancementPropre(d.preparation, ['tablette', 'sim', 'suivi']), majLe: Date.now(), par: qui } });
+    return { ok: true };
+  }
+  if (d.type === 'reception') {
+    const ref = db().doc(`stock/${texte(d.id, 100) || '-'}`);
+    if (!(await ref.get()).exists) throw new HttpsError('not-found', 'Tablette introuvable.');
+    await ref.update({ reception: { ...avancementPropre(d.reception), majLe: Date.now(), par: qui } });
+    return { ok: true };
+  }
+  if (d.type === 'lier') return lierInstallation(texte(d.id, 100), d.ref, qui);
+  throw new HttpsError('invalid-argument', 'Parcours inconnu.');
+});
+
 exports.regles = {
   ETATS, CATEGORIES, natureMouvement, mensuel, centimes, lien, nomFichier, moisSuivant, lectureVersFormulaire, SCHEMA_FACTURE,
   lireReglages, simAResilier, stockAJour, incoherences, materielLu, memeAccessoire, coutLigne, alertesSim, accessoiresAPrevoir, champsSim, aFaire, piecesFacture, debutMoisParis, moisPrecedent, csvTexte, livreDesRecettes,
   registreDesAchats, corpsDuMail, memeAchat, suiteJumelage, descriptionNonRendu, refusSuppression, fusionnerContacts, emailInformation, cleContact,
+  avancementPropre,
 };

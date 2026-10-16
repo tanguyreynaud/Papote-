@@ -9,6 +9,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const admin = require('firebase-admin');
+const { ouvrirBase } = require('./base');
 
 const keyPath = process.env.PAPOTE_CLE_ADMIN
   || path.join(os.homedir(), '.papote', 'cle-admin-firebase.json');
@@ -17,7 +18,7 @@ if (!fs.existsSync(keyPath)) {
   console.error(`Clé introuvable : ${keyPath}`);
   process.exit(1);
 }
-admin.initializeApp({ credential: admin.credential.cert(require(keyPath)) });
+const app = admin.initializeApp({ credential: admin.credential.cert(require(keyPath)) });
 
 const COLONNES = [['accueil', 'Accueil'], ['commande', 'Page commande'], ['relais', 'Relais choisi'],
   ['paiement', 'Clic Payer'], ['paye', 'Payé']];
@@ -26,7 +27,8 @@ const pourcent = (a, b) => (b ? `${Math.round((100 * a) / b)} %` : '-');
 (async () => {
   const debut = new Date(Date.now() - (jours - 1) * 86400000)
     .toLocaleDateString('sv-SE', { timeZone: 'Europe/Paris' });
-  const snap = await admin.firestore().collection('statistiques')
+  const db = await ouvrirBase(app);
+  const snap = await db.collection('statistiques')
     .where(admin.firestore.FieldPath.documentId(), '>=', debut).get();
   const total = Object.fromEntries(COLONNES.map(([c]) => [c, 0]));
   const lignes = snap.docs.map((d) => {
