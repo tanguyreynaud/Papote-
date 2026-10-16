@@ -24,6 +24,8 @@ const fs = require('fs');
 const path = require('path');
 const Anthropic = require('@anthropic-ai/sdk');
 const mail = require('./mail');
+// Base Firestore réglée dans .env (BASE_FIRESTORE), comme index.js et gestion.js.
+const { db: base } = require('./base');
 
 const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
 const SITE_VITRINE = defineString('SITE_VITRINE', { default: 'https://mapapote.fr' });
@@ -117,7 +119,7 @@ function nettoyer(messages) {
 async function quotaOk(ip, rappel) {
   const jour = new Date().toISOString().slice(0, 10);
   const visiteur = crypto.createHash('sha256').update(jour + ip).digest('hex').slice(0, 24);
-  const db = admin.firestore();
+  const db = base();
   const refVisiteur = db.doc(`supportQuota/${jour}/visiteurs/${visiteur}`);
   const refJour = db.doc(`supportQuota/${jour}`);
   // Plusieurs visiteurs en même temps se disputent le compteur du jour : si la transaction
@@ -170,7 +172,7 @@ async function demandeDeRappel(ip, messages, contact) {
     return { status: 429, corps: { erreur: `Écrivez-nous à ${EMAIL_SUPPORT}.` } };
   }
   const conversation = messages.map((m) => `${m.role === 'user' ? 'Visiteur' : 'Assistant'} : ${m.content}`).join('\n\n');
-  await admin.firestore().collection('supportDemandes').add({
+  await base().collection('supportDemandes').add({
     nom, ...coord, conversation: messages, statut: 'nouvelle', creeLe: admin.firestore.FieldValue.serverTimestamp(),
   });
   const qui = [nom, coord.telephone, coord.email].filter(Boolean).join(' · ');
@@ -234,7 +236,7 @@ exports.supportChat = onRequest(
         : reponse.content.filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim();
       const lu = lireReponse(brut);
       if (lu.contact) {
-        await admin.firestore().collection('supportSansReponse').add({
+        await base().collection('supportSansReponse').add({
           question: messages[messages.length - 1].content, conversation: messages, page,
           creeLe: admin.firestore.FieldValue.serverTimestamp(),
         }).catch((e) => logger.warn('supportSansReponse', e));
@@ -250,7 +252,7 @@ exports.supportChat = onRequest(
 exports.bilanSupport = onSchedule(
   { schedule: 'every monday 09:00', timeZone: 'Europe/Paris', secrets: [MAIL_MOT_DE_PASSE] },
   async () => {
-    const db = admin.firestore();
+    const db = base();
     const depuis = new Date(Date.now() - 7 * 86400e3);
     const jours = [];
     for (let i = 1; i <= 7; i++) jours.push(new Date(Date.now() - i * 86400e3).toISOString().slice(0, 10));
