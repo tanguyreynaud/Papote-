@@ -451,22 +451,25 @@
     if (!overlayPost) nextOverlay();
   }
 
-  // ---------- Visage vu sans OK : on ferme au bout de 2 minutes ----------
+  // ---------- Visage vu : « lu », lecture, puis fermeture au bout de 2 minutes ----------
   // La caméra (appels.js, window.papoteWatchPresence) regarde si quelqu'un est devant la tablette.
-  // Dès que son visage est vu, l'envoi ou le rappel affiché se ferme tout seul 2 minutes plus
-  // tard s'il n'a pas touché OK. Jamais vu : il reste affiché, pour qu'elle ne rate rien.
+  // Dès que son visage est vu, l'envoi ou le rappel est marqué « lu » pour la famille (onSeen),
+  // une vidéo ou un vocal se lance, puis l'écran se ferme tout seul 2 minutes plus tard s'il n'a
+  // pas touché OK. Jamais vu : il reste affiché, pour qu'elle ne rate rien.
+  // Renvoie false quand la tablette ne sait pas regarder (pas de caméra côté page).
 
   var SEEN_CLOSE_MS = 120000;
   var watchers = {};
 
-  function watchSeen(slot, close) {
+  function watchSeen(slot, onSeen, close) {
     unwatchSeen(slot);
-    if (typeof window.papoteWatchPresence !== 'function') return;
+    if (typeof window.papoteWatchPresence !== 'function') return false;
     var w = { stop: null, timer: null };
     watchers[slot] = w;
     try {
       w.stop = window.papoteWatchPresence(function () {
         if (watchers[slot] !== w || w.timer) return;
+        try { onSeen(); } catch (e) { }
         w.timer = setTimeout(function () {
           if (watchers[slot] !== w) return;
           unwatchSeen(slot);
@@ -475,7 +478,9 @@
       });
     } catch (e) {
       delete watchers[slot];
+      return false;
     }
+    return true;
   }
 
   function unwatchSeen(slot) {
@@ -507,13 +512,19 @@
       show($('overlay'), false);
       return;
     }
-    watchSeen('overlay', function () {
-      if (!overlayPost) return;
-      stopAudio();
-      markSeen(overlayPost);
+    var p = overlayPost;
+    // Visage vu : « lu », et une vidéo ou un vocal démarre tout seul.
+    var watching = watchSeen('overlay', function () {
+      if (overlayPost !== p) return;
+      markSeen(p);
+      if (p.audio || p.video) listenOverlay();
+    }, function closeWhenDone() {
+      if (overlayPost !== p) return;
+      // On ne coupe pas une vidéo ou un vocal en cours : on attend la fin.
+      if (playing && playing.post === p) { setTimeout(closeWhenDone, 10000); return; }
+      markSeen(p);
       nextOverlay();
     });
-    var p = overlayPost;
     var mode = p.image ? 'photo' : p.type === 'voice' ? 'voice' : p.type === 'video' ? 'video' : 'message';
     var media = mode === 'voice' || mode === 'video';
     $('overlay').className = 'overlay ln mode-' + mode;
@@ -527,16 +538,17 @@
       };
       probe.src = p.image;
     }
-    // Comme un mot écrit à la main : le texte, puis la signature.
+    // Message ou photo : en haut, qui l'envoie (visage, prénom, quand) ; dessous, son mot ou sa légende.
+    // Vocal ou vidéo : le visage au-dessus de « Une vidéo de … ».
     var text = mode === 'message' ? p.text
-      : mode === 'photo' ? (p.text || 'Une nouvelle photo pour vous !')
+      : mode === 'photo' ? (p.text || '')
         : mode === 'voice' ? 'Un message vocal de ' + p.authorName
           : 'Une vidéo de ' + p.authorName + (p.text ? ' : ' + p.text : '');
+    fillHead(media ? null : p);
     $('overlay-text').textContent = text;
     $('overlay-text').className = 'ln-text ' + (mode === 'photo' ? 'size-m' : sizeClass(text));
-    show($('overlay-from'), !media);
-    signWithFace($('overlay-from'), p, '— ' + p.authorName);
-    // Vocal ou vidéo : le visage au-dessus de « Un message vocal de … ».
+    show($('overlay-text'), !!text);
+    show($('overlay-from'), false);
     var face = faceOf(p);
     show($('overlay-face'), media && !!face);
     if (media && face) $('overlay-face').setAttribute('src', face);
@@ -554,7 +566,50 @@
     // Vocal ou vidéo : d'abord seulement « Écouter » / « Regarder » ; le reste vient une fois fini.
     setOverlayActions(!media, false);
     show($('overlay'), true);
-    if (mode === 'message') markSeen(p);
+    // Sans caméra, on ne peut pas savoir s'il a été vu : un message compte comme lu à l'affichage,
+    // une vidéo ou un vocal se lance tout de suite.
+    if (!watching) {
+      if (mode === 'message') markSeen(p);
+      if (media) listenOverlay();
+    }
+  }
+
+  // « aujourd'hui à 14h30 », « hier à 9h05 », « il y a 3 jours »
+  function sentLabel(ms) {
+    if (!ms) return '';
+    var d = new Date(ms);
+    var day = dayLabel(ms);
+    return day === "aujourd'hui" || day === 'hier' ? day + ' à ' + d.getHours() + 'h' + pad(d.getMinutes()) : day;
+  }
+
+  function fillHead(p) {
+    var head = $('overlay-head');
+    while (head.firstChild) head.removeChild(head.firstChild);
+    if (!p) return;
+    var face = faceOf(p);
+    var avatar;
+    if (face) {
+      avatar = document.createElement('img');
+      avatar.setAttribute('src', face);
+      avatar.setAttribute('alt', '');
+    } else {
+      // Sans photo de profil : l'initiale dans un rond.
+      avatar = document.createElement('span');
+      avatar.textContent = (p.authorName || '?').charAt(0).toUpperCase();
+    }
+    avatar.className = 'head-face';
+    head.appendChild(avatar);
+    var who = document.createElement('div');
+    who.className = 'head-who';
+    var name = document.createElement('span');
+    name.className = 'head-name';
+    name.textContent = p.authorName || '';
+    var when = document.createElement('span');
+    when.className = 'head-when';
+    when.textContent = sentLabel(p.createdAt);
+    who.appendChild(name);
+    who.appendChild(when);
+    head.appendChild(who);
   }
 
   function listenOverlay() {
@@ -727,6 +782,30 @@
       : 'Dans ' + next.delta + ' minute' + (next.delta > 1 ? 's' : '');
   }
 
+  // ---------- Prochain rappel du jour, sous la météo de l'accueil ----------
+
+  function showNextReminder(items, nowMin, key) {
+    var el = $('home-next');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'home-next';
+      el.className = 'home-next';
+      el.innerHTML = '<span class="next-icon"></span><div><p class="next-when"></p><p class="next-title"></p></div>';
+      $('weather').parentNode.appendChild(el);
+    }
+    var next = null;
+    for (var i = 0; i < items.length; i++) {
+      if (isDone(items[i], key) || minutesOf(items[i].time) < nowMin) continue;
+      next = items[i];
+      break;
+    }
+    show(el, !!next);
+    if (!next) return;
+    el.querySelector('.next-icon').innerHTML = kindIcon(next.kind);
+    el.querySelector('.next-when').textContent = (next.kind === 'rdv' ? 'Rendez-vous à ' : 'Tout à l\'heure, à ') + timeLabel(next.time);
+    el.querySelector('.next-title').textContent = next.title;
+  }
+
   function checkReminders() {
     if (isShown('view-home')) renderFrame();
     var now = new Date();
@@ -735,6 +814,7 @@
     var items = [];
     for (var i = 0; i < reminders.length; i++) if (happensOn(reminders[i], now)) items.push(reminders[i]);
     items.sort(function (a, b) { return minutesOf(a.time) - minutesOf(b.time); });
+    showNextReminder(items, nowMin, key);
 
     if (alerting) {
       var late = nowMin - minutesOf(alerting.r.time);
@@ -768,8 +848,12 @@
     $('reminder-done').textContent = early ? "J'ai compris" : r.kind === 'rdv' ? "J'ai bien noté" : "C'est fait";
     show($('reminder-alert'), true);
     if (android()) android().alert();
-    // Vu mais pas confirmé : le rappel se ferme sans prévenir la famille que c'est fait.
+    // Visage vu : la famille voit « vu » ; sans « C'est fait », le rappel se ferme sans dire que c'est fait.
     watchSeen('reminder', function () {
+      if (!alerting || alerting.r !== r) return;
+      var now = new Date();
+      if (android() && android().seenReminder) android().seenReminder(r.id, dateKey(now) + ' ' + pad(now.getHours()) + ':' + pad(now.getMinutes()));
+    }, function () {
       if (!alerting) return;
       var id = alerting.r.id + '|' + alerting.key;
       if (alerting.early) announced[id] = true; else handled[id] = true;
@@ -999,6 +1083,12 @@
     on($('bday-ok'), 'click', closeBirthday);
 
     var face = document.createElement('img');
+    var head = document.createElement('div');
+    head.id = 'overlay-head';
+    head.className = 'ln-head';
+    $('overlay-text').parentNode.insertBefore(head, $('overlay-text'));
+    $('overlay-play').insertAdjacentHTML('afterbegin', '<span class="play-icon">' + ICONS.play + '</span>');
+
     face.id = 'overlay-face';
     face.className = 'overlay-face';
     face.setAttribute('alt', '');
