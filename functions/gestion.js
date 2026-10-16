@@ -2174,9 +2174,13 @@ function fusionnerContacts({ commandes = [], paniers = [], contacts = [], statut
   }
   for (const k of contacts) {
     const email = emailPropre(k.email);
-    if (!email || (!parEmail.has(email) && k.consentement !== true)) continue;
+    // chatLe : coordonnées laissées à l'ouverture du chat du site (functions/support.js).
+    if (!email || (!parEmail.has(email) && k.consentement !== true && !k.chatLe)) continue;
     const f = fiche(email);
-    if (!f.type) f.type = 'contact';
+    if (!f.type) f.type = k.chatLe ? 'chat' : 'contact';
+    f.nom = f.nom || k.nom || null;
+    f.telephone = f.telephone || k.telephone || null;
+    if (f.type === 'chat' && !f.depuis) f.depuis = enMs(k.chatDepuis || k.chatLe);
     if (k.consentement === true) f.consentement = true;
     if (k.desinscritLe || k.consentement === false) { f.consentement = false; f.desinscrit = !!k.desinscritLe; }
   }

@@ -2191,7 +2191,7 @@ $('btn-cloturer').addEventListener('click', () => cloturer());
 // qui ont accepté (vérifié aussi par le serveur), avec un lien de désinscription.
 
 let clients = null;
-const TYPES_CLIENT = { client: 'Abonné', ancien: 'Ancien client', panier: 'Panier abandonné', contact: 'Contact' };
+const TYPES_CLIENT = { client: 'Abonné', ancien: 'Ancien client', panier: 'Panier abandonné', contact: 'Contact', chat: 'Contact du chat' };
 const STATUTS_CLIENT = {
   actif: 'actif', offert: 'offert', impaye: 'impayé', suspendu: 'suspendu', resilie: 'résilié', aucun: 'sans abonnement', annulee: 'annulée',
 };
@@ -2228,6 +2228,7 @@ function afficherClients() {
     stat(String(compte((c) => c.type === 'client')), 'abonnés'),
     stat(String(compte((c) => c.type === 'ancien')), 'anciens clients'),
     stat(String(compte((c) => c.type === 'panier')), 'paniers abandonnés'),
+    stat(String(compte((c) => c.type === 'chat')), 'contacts du chat'),
     stat(String(compte((c) => c.consentement && !c.desinscrit)), 'acceptent les e-mails', `${compte((c) => c.desinscrit)} désinscrits`),
   );
   const liste = clientsAffiches();

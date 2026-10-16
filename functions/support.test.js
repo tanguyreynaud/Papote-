@@ -54,3 +54,14 @@ test('retire la phrase de refus collée à une vraie réponse', () => {
   const refus = 'Je ne peux vous aider que pour Papote. Avez-vous une question sur la tablette ou l\'appli ?';
   assert.strictEqual(lireReponse(refus).reponse, refus);
 });
+
+test('coordonnées à l\'ouverture du chat : tout est obligatoire, accord seulement si coché', () => {
+  const { inscriptionValide } = require('./support')._test;
+  assert.deepStrictEqual(inscriptionValide({ prenom: ' Léa ', nom: 'Martin', telephone: '06 12 34 56 78', email: 'Lea@X.fr' }),
+    { prenom: 'Léa', nom: 'Martin', telephone: '06 12 34 56 78', email: 'lea@x.fr', marketing: false });
+  assert.strictEqual(inscriptionValide({ prenom: 'Léa', nom: 'Martin', telephone: '0612345678', email: 'lea@x.fr', marketing: 'oui' }).marketing, false);
+  assert.strictEqual(inscriptionValide({ prenom: 'Léa', nom: 'Martin', telephone: '0612345678', email: 'lea@x.fr', marketing: true }).marketing, true);
+  assert.strictEqual(inscriptionValide({ prenom: 'Léa', telephone: '0612345678', email: 'lea@x.fr' }), null);
+  assert.strictEqual(inscriptionValide({ prenom: 'Léa', nom: 'Martin', telephone: '0612', email: 'lea@x.fr' }), null);
+  assert.strictEqual(inscriptionValide({ prenom: 'Léa', nom: 'Martin', telephone: '0612345678', email: 'lea' }), null);
+});
