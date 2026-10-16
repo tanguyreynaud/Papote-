@@ -48,7 +48,6 @@
     doctor: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M10 3h4v7h7v4h-7v7h-4v-7H3v-4h7V3z"/></svg>',
     pin: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a7 7 0 0 1 7 7c0 5-7 13-7 13S5 14 5 9a7 7 0 0 1 7-7zm0 4a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg>',
     play: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M7 4v16l13-8z"/></svg>',
-    mic: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a3.5 3.5 0 0 1 3.5 3.5v6a3.5 3.5 0 0 1-7 0v-6A3.5 3.5 0 0 1 12 2zm-7 9.5h2a5 5 0 0 0 10 0h2a7 7 0 0 1-6 6.9V21h3v2H8v-2h3v-2.6a7 7 0 0 1-6-6.9z"/></svg>',
     heart: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 21s-7.5-4.6-9.6-9C.9 8.8 2.6 5 6.3 4.6 8.6 4.4 10.4 5.6 12 7.6c1.6-2 3.4-3.2 5.7-3 3.7.4 5.4 4.2 3.9 7.4C19.5 16.4 12 21 12 21z"/></svg>'
   };
 
@@ -539,14 +538,20 @@
       };
       probe.src = p.image;
     }
-    // En haut, qui l'envoie (visage et prénom) et ce que c'est ; dessous, son mot ou sa légende.
-    fillHead(p, mode);
-    var text = mode === 'message' ? p.text : (p.text || '');
+    // Message ou photo : en haut, qui l'envoie (visage, prénom, quand) ; dessous, son mot ou sa légende.
+    // Vocal ou vidéo : le visage au-dessus de « Une vidéo de … ».
+    var text = mode === 'message' ? p.text
+      : mode === 'photo' ? (p.text || '')
+        : mode === 'voice' ? 'Un message vocal de ' + p.authorName
+          : 'Une vidéo de ' + p.authorName + (p.text ? ' : ' + p.text : '');
+    fillHead(media ? null : p);
     $('overlay-text').textContent = text;
     $('overlay-text').className = 'ln-text ' + (mode === 'photo' ? 'size-m' : sizeClass(text));
     show($('overlay-text'), !!text);
     show($('overlay-from'), false);
-    show($('overlay-face'), false);
+    var face = faceOf(p);
+    show($('overlay-face'), media && !!face);
+    if (media && face) $('overlay-face').setAttribute('src', face);
     // Photo : à droite, sur toute la hauteur.
     show($('ln-media'), mode === 'photo');
     if (mode === 'photo') {
@@ -569,12 +574,18 @@
     }
   }
 
-  var HEAD_LABELS = { message: 'Nouveau message', photo: 'Nouvelle photo', voice: 'Message vocal', video: 'Nouvelle vidéo' };
-  var HEAD_ICONS = { message: 'letter', photo: 'camera', voice: 'mic', video: 'play' };
+  // « aujourd'hui à 14h30 », « hier à 9h05 », « il y a 3 jours »
+  function sentLabel(ms) {
+    if (!ms) return '';
+    var d = new Date(ms);
+    var day = dayLabel(ms);
+    return day === "aujourd'hui" || day === 'hier' ? day + ' à ' + d.getHours() + 'h' + pad(d.getMinutes()) : day;
+  }
 
-  function fillHead(p, mode) {
+  function fillHead(p) {
     var head = $('overlay-head');
     while (head.firstChild) head.removeChild(head.firstChild);
+    if (!p) return;
     var face = faceOf(p);
     var avatar;
     if (face) {
@@ -590,15 +601,14 @@
     head.appendChild(avatar);
     var who = document.createElement('div');
     who.className = 'head-who';
-    var chip = document.createElement('span');
-    chip.className = 'head-chip';
-    chip.innerHTML = '<span class="icon">' + ICONS[HEAD_ICONS[mode]] + '</span>';
-    chip.appendChild(document.createTextNode(HEAD_LABELS[mode]));
     var name = document.createElement('span');
     name.className = 'head-name';
     name.textContent = p.authorName || '';
-    who.appendChild(chip);
+    var when = document.createElement('span');
+    when.className = 'head-when';
+    when.textContent = sentLabel(p.createdAt);
     who.appendChild(name);
+    who.appendChild(when);
     head.appendChild(who);
   }
 

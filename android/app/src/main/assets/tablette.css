@@ -1476,3 +1476,13 @@ body.night .next-when { color: #a5b4fc; }
 .overlay.mode-video .ln-play { animation-name: ln-call-video; }
 @keyframes ln-call-voice { 0% { box-shadow: 0 0 0 0 rgba(124, 58, 237, .45), 0 2vmin 5vmin rgba(49, 46, 129, .3); } 100% { box-shadow: 0 0 0 5vmin rgba(124, 58, 237, 0), 0 2vmin 5vmin rgba(49, 46, 129, .3); } }
 @keyframes ln-call-video { 0% { box-shadow: 0 0 0 0 rgba(15, 118, 110, .45), 0 2vmin 5vmin rgba(19, 78, 74, .3); } 100% { box-shadow: 0 0 0 5vmin rgba(15, 118, 110, 0), 0 2vmin 5vmin rgba(19, 78, 74, .3); } }
+
+/* Sous le prénom : quand il a été envoyé */
+.head-when { display: block; margin-top: .6vmin; font-size: calc(4.6vmin * var(--ts, 1)); font-weight: 700; color: var(--accent); }
+.head-name { margin-top: 0; }
+.ln-head:empty { display: none; }
+/* Vidéo : le visage au-dessus de « Une vidéo de … », centré comme avant */
+.overlay.mode-voice .ln-text, .overlay.mode-video .ln-text { margin-top: 0; text-align: center; }
+.overlay.mode-voice .overlay-face, .overlay.mode-video .overlay-face { box-shadow: 0 0 0 .7vmin var(--accent); animation: ln-breathe 3s ease-in-out infinite; }
+.overlay.mode-photo.wide .head-when { font-size: 3.8vmin; }
+.overlay.mode-photo .head-when { white-space: nowrap; font-size: calc(4vmin * var(--ts, 1)); }
