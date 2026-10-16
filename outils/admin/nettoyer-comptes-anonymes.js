@@ -14,6 +14,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const admin = require('firebase-admin');
+const { ouvrirBase } = require('./base');
 
 const keyPath = process.env.PAPOTE_CLE_ADMIN
   || path.join(os.homedir(), '.papote', 'cle-admin-firebase.json');
@@ -27,11 +28,12 @@ if (!fs.existsSync(keyPath)) {
   process.exit(1);
 }
 
-admin.initializeApp({ credential: admin.credential.cert(require(keyPath)) });
+const app = admin.initializeApp({ credential: admin.credential.cert(require(keyPath)) });
+let db; // ouvert au démarrage (US ou Europe selon config/base)
 
 // uid -> fiches membres (une par famille).
 async function memberDocs() {
-  const snap = await admin.firestore().collectionGroup('members').get();
+  const snap = await db.collectionGroup('members').get();
   const byUid = new Map();
   for (const d of snap.docs) {
     if (!byUid.has(d.id)) byUid.set(d.id, []);
@@ -60,6 +62,7 @@ function describe(doc) {
 }
 
 (async () => {
+  db = await ouvrirBase(app);
   const members = await memberDocs();
   const anon = await anonymousUsers();
   const linked = anon.filter((u) => members.has(u.uid));
@@ -81,7 +84,7 @@ function describe(doc) {
     return;
   }
   for (let i = 0; i < docsToDelete.length; i += 400) {
-    const batch = admin.firestore().batch();
+    const batch = db.batch();
     docsToDelete.slice(i, i + 400).forEach((d) => batch.delete(d.ref));
     await batch.commit();
   }

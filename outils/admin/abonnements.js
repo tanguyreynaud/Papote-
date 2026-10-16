@@ -12,6 +12,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const admin = require('firebase-admin');
+const { ouvrirBase } = require('./base');
 
 const keyPath = process.env.PAPOTE_CLE_ADMIN
   || path.join(os.homedir(), '.papote', 'cle-admin-firebase.json');
@@ -28,8 +29,8 @@ if (!fs.existsSync(keyPath)) {
   process.exit(1);
 }
 
-admin.initializeApp({ credential: admin.credential.cert(require(keyPath)) });
-const db = admin.firestore();
+const app = admin.initializeApp({ credential: admin.credential.cert(require(keyPath)) });
+let db; // ouvert au démarrage (base.js : US ou Europe selon config/base)
 const { FieldValue } = admin.firestore;
 
 function texteStatut(abo) {
@@ -97,6 +98,7 @@ async function listeRestitutions() {
 }
 
 (async () => {
+  db = await ouvrirBase(app);
   if (action === 'rendue') {
     await tabletteRendue(cible);
     return;
