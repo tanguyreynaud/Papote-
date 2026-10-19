@@ -147,7 +147,9 @@
   // Taille du texte choisie par la famille (normale, grande, très grande).
   var textScale = 1;
   function setTextSize(size) {
-    textScale = size === 'tres-grande' ? 1.3 : size === 'grande' ? 1.15 : 1;
+    // Taille du texte toujours normale (demande de Tanguy) : le réglage de la famille est ignoré,
+    // les écrans sont dessinés pour cette taille.
+    textScale = 1;
     document.documentElement.style.setProperty('--ts', String(textScale));
   }
 
@@ -1100,6 +1102,9 @@
 
   function onFamily(payload) {
     faces = payload.faces || {};
+    // Les photos de profil arrivent parfois après l'envoi affiché : on le met à jour.
+    if (overlayPost) fillHead(overlayPost);
+    if (photos.length) renderFrame();
     birthdays = payload.birthdays || [];
     checkBirthdays();
   }

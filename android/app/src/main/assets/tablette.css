@@ -1486,3 +1486,22 @@ body.night .next-when { color: #a5b4fc; }
 .overlay.mode-voice .overlay-face, .overlay.mode-video .overlay-face { box-shadow: 0 0 0 .7vmin var(--accent); animation: ln-breathe 3s ease-in-out infinite; }
 .overlay.mode-photo.wide .head-when { font-size: 3.8vmin; }
 .overlay.mode-photo .head-when { white-space: nowrap; font-size: calc(4vmin * var(--ts, 1)); }
+
+/* ---------- Écran d'une photo (après 2.56) ----------
+   Fond : la même photo floutée au lieu des bandes crème, en paysage comme en portrait.
+   Légende : en entier, sur deux lignes au plus. Date : jamais coupée ni débordante. */
+.overlay.mode-photo .ln-media-bg { display: block; }
+.overlay.mode-photo .ln-media, .overlay.mode-photo.wide .ln-media { background: #24212f; }
+.overlay.mode-photo.wide .ln-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  white-space: normal;
+  text-overflow: clip;
+  line-height: 1.15;
+}
+.overlay.mode-photo .head-when { white-space: normal; }
+.overlay.mode-photo.wide .head-who { flex: none; max-width: 34vmin; }
+.overlay.mode-photo.wide .head-when { font-size: 3.6vmin; line-height: 1.2; }
+.overlay.mode-photo.wide .ln-text { font-size: 5.4vmin; }
