@@ -1394,6 +1394,10 @@ async function answerFromTablet() {
   closeCallNotification(call.id);
   callStarting = true;
   const caller = call.callerName || session.family.name;
+  // Écran remis à neuf : un appel précédent passé en vidéo ne doit rien laisser derrière lui.
+  $('call-video').disabled = false;
+  $('call-remote').srcObject = null;
+  $('call-local').srcObject = null;
   $('call').classList.add('audio');
   $('call-name').textContent = caller;
   setCallFace($('call-face'), caller);
