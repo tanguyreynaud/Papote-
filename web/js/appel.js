@@ -11,7 +11,22 @@ import { query, where, getDocs, runTransaction } from 'https://www.gstatic.com/f
 //   ou { urls: 'turn:… turn:…', username, credential }                       identifiants fixes
 const STUN = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }];
 
+// Le relais est demandé une fois puis gardé 30 minutes (ses identifiants valent 4 heures) :
+// c'était l'étape la plus lente au moment de répondre.
+let iceCache = null;
 async function iceServers() {
+  if (iceCache && Date.now() - iceCache.at < 30 * 60_000) return iceCache.value;
+  const value = await loadIceServers();
+  if (value.iceServers.length > STUN.length) iceCache = { at: Date.now(), value };
+  return value;
+}
+
+// À l'ouverture de l'app et dès qu'un appel sonne : le relais est prêt avant « Répondre ».
+export function warmUpCalls() {
+  iceServers().catch(() => {});
+}
+
+async function loadIceServers() {
   try {
     const conf = (await getDoc(doc(db, 'config', 'turn'))).data() || {};
     // Tolérant aux saisies dans la console : liste ou texte, et une adresse https rangée
@@ -289,10 +304,11 @@ export async function answerIncoming(fid, callId, me, ui) {
   const first = (await getDoc(ref)).data();
   if (!first || first.state !== 'ringing') throw taken();
 
-  const stream = await navigator.mediaDevices.getUserMedia({
-    audio: { echoCancellation: true, noiseSuppression: true }, video: false,
-  });
-  const pc = new RTCPeerConnection(await iceServers());
+  const [stream, ice] = await Promise.all([
+    navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true }, video: false }),
+    iceServers(),
+  ]);
+  const pc = new RTCPeerConnection(ice);
   stream.getTracks().forEach((t) => pc.addTrack(t, stream));
   pc.ontrack = (e) => { ui.audio.srcObject = e.streams[0]; ui.audio.play().catch(() => {}); };
   let accepted = false;

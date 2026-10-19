@@ -40,7 +40,16 @@ const db = DATABASE === '(default)' ? getFirestore(app) : getFirestore(app, DATA
 //   ou { urls: 'turn:… turn:…', username, credential }                       identifiants fixes
 const STUN = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }];
 
+// Relais gardé 30 minutes (identifiants valables 4 heures) : un appel part sans attendre.
+let iceCache = null;
 async function iceServers() {
+  if (iceCache && Date.now() - iceCache.at < 30 * 60_000) return iceCache.value;
+  const value = await loadIceServers();
+  if (value.iceServers.length > STUN.length) iceCache = { at: Date.now(), value };
+  return value;
+}
+
+async function loadIceServers() {
   try {
     const conf = (await getDoc(doc(db, 'config', 'turn'))).data() || {};
     // Tolérant aux saisies dans la console : liste ou texte, et une adresse https rangée
@@ -670,14 +679,17 @@ window.papoteCallFamily = ({ to = null, onState = () => {} } = {}) => {
     active = { id: null, outgoing: true, finish, stops: call.stops };
     if (android()) android().inCall(true);
 
-    const people = await familyPeople().catch(() => []);
+    // Tout en même temps : proches, nom de la famille, micro et relais.
+    const [people, familyName, stream, ice] = await Promise.all([
+      familyPeople().catch(() => []),
+      getDoc(doc(db, 'families', fid)).then((d) => (d.data() && d.data().name) || 'Mamie').catch(() => 'Mamie'),
+      navigator.mediaDevices.getUserMedia({ audio: CAMERA.audio, video: false }),
+      iceServers(),
+    ]);
+    call.stream = stream;
     const target = to ? people.find((m) => m.uid === to) : null;
-    let familyName = 'Mamie';
-    try { familyName = (await getDoc(doc(db, 'families', fid))).data().name || familyName; } catch (e) { /* nom par défaut */ }
-
-    call.stream = await navigator.mediaDevices.getUserMedia({ audio: CAMERA.audio, video: false });
     if (done) { call.stream.getTracks().forEach((t) => t.stop()); return; }
-    const pc = new RTCPeerConnection(await iceServers());
+    const pc = new RTCPeerConnection(ice);
     call.pc = pc;
     if (done) { pc.close(); return; }
     call.stream.getTracks().forEach((t) => pc.addTrack(t, call.stream));
@@ -784,6 +796,7 @@ async function start() {
   }
   closeStaleCalls();
   watchCalls();
+  iceServers().catch(() => {}); // relais prêt avant le premier appel
   // Détection du visage chargée à l'avance (puis gardée en cache) pour décrocher sans attendre.
   setTimeout(faceDetector, 20_000);
   watchFamily();

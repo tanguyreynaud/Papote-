@@ -19,7 +19,7 @@ import {
   abonnementOk, FORMULES, LIBELLES, ouvrirPortail, payer, rattacherCommande, resilier, annulerResiliation,
   finDeContrat, retracter,
 } from './abonnement.js';
-import { startCall, watchTabletBusy, watchIncomingCalls, answerIncoming } from './appel.js';
+import { startCall, watchTabletBusy, watchIncomingCalls, answerIncoming, warmUpCalls } from './appel.js';
 import { pushSupported, pushAllowed, pushRefused, enablePush, closeCallNotification } from './push.js';
 import { prepareVideo } from './video.js';
 import { startAgenda, stopAgenda } from './agenda.js';
@@ -1197,6 +1197,36 @@ function renderCallTile() {
 }
 
 // ---------- Mamie appelle (audio) ----------
+// Photo de la tablette (ou initiale) et durée de l'appel, pour un écran comme un vrai téléphone.
+function setCallFace(el, name) {
+  const face = tabletMembers.map((m) => m.face).find(Boolean);
+  el.replaceChildren();
+  if (face) {
+    const img = document.createElement('img');
+    img.src = face;
+    img.alt = '';
+    el.appendChild(img);
+  } else {
+    el.textContent = (name || '?').trim().charAt(0).toUpperCase();
+  }
+}
+
+let callTimer = null;
+function startCallTimer() {
+  stopCallTimer();
+  const start = Date.now();
+  const show = () => {
+    const s = Math.floor((Date.now() - start) / 1000);
+    $('call-timer').textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  };
+  show();
+  callTimer = setInterval(show, 1000);
+}
+function stopCallTimer() {
+  clearInterval(callTimer);
+  callTimer = null;
+  $('call-timer').textContent = '';
+}
 // Une sonnerie en plein écran tant que l'appel sonne pour moi ; « Répondre » ouvre un appel
 // audio. Si un autre proche répond avant, la sonnerie s'arrête toute seule.
 let incoming = null;   // appel qui sonne (données de la tablette)
@@ -1237,7 +1267,10 @@ function showIncoming(call) {
   incoming = call;
   $('incoming').hidden = !call;
   if (!call) { stopRingTone(); return; }
-  $('incoming-name').textContent = `${call.callerName || session.family.name} vous appelle`;
+  const caller = call.callerName || session.family.name;
+  $('incoming-name').textContent = caller;
+  setCallFace($('incoming-face'), caller);
+  warmUpCalls();
   startRingTone();
 }
 
@@ -1247,15 +1280,19 @@ async function answerFromTablet() {
   showIncoming(null);
   closeCallNotification(call.id);
   callStarting = true;
+  const caller = call.callerName || session.family.name;
   $('call').classList.add('audio');
+  $('call-name').textContent = caller;
+  setCallFace($('call-face'), caller);
   $('call').hidden = false;
   setCallStatus('Connexion…');
   try {
     currentCall = await answerIncoming(session.fid, call.id, { uid: session.uid, name: session.member.name }, {
       audio: $('call-audio'),
-      onState: () => setCallStatus(`En ligne avec ${call.callerName || session.family.name}`),
+      onState: () => { setCallStatus(''); startCallTimer(); },
       onEnd: (reason) => {
         currentCall = null;
+        stopCallTimer();
         setCallStatus(reason === 'failed' ? 'La connexion a été perdue' : 'Appel terminé');
         renderCallTile();
         setTimeout(() => { if (!currentCall) leaveCallScreen(); }, 2000);
@@ -2816,6 +2853,7 @@ async function enterApp() {
     (uid) => tabletMembers.some((m) => m.id === uid), (list) => showIncoming(list[list.length - 1] || null));
   renderPushNudge();
   if (pushAllowed()) enablePush(session.fid, session.uid);
+  warmUpCalls();
   startAgenda(session, setNotifReminders);
   startNotifs(session);
   renderInstallCard();
