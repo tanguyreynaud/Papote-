@@ -1,0 +1,10 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "fr.mapapote.famille",
+    "sha256_cert_fingerprints": [
+      "A2:AC:EF:00:B4:04:F7:E1:C9:0A:12:B7:C0:24:3E:0A:23:D1:EE:98:FD:CA:9D:CE:1C:5F:18:07:22:38:6E:0B"
+    ]
+  }
+}]

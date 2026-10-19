@@ -15,7 +15,8 @@
     "public": "web",
     "ignore": [
       "firebase.json",
-      "**/.*"
+      "**/.git/**",
+      "**/.DS_Store"
     ],
     "headers": [
       {
