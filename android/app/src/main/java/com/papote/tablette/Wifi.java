@@ -68,8 +68,16 @@ final class Wifi {
             WifiManager wm = wm();
             if (!wm.isWifiEnabled()) wm.setWifiEnabled(true);
             wm.startScan();
+            // Première recherche (tablette neuve, wifi qui vient de s'allumer) : aucun résultat en
+            // mémoire. On attend que la recherche se termine, jusqu'à 8 secondes.
+            List<ScanResult> results = wm.getScanResults();
+            for (int i = 0; i < 16 && (results == null || results.isEmpty()); i++) {
+                try { Thread.sleep(500); } catch (InterruptedException e) { break; }
+                if (i == 6) wm.startScan(); // le wifi venait peut-être de s'allumer : on relance
+                results = wm.getScanResults();
+            }
             Map<String, ScanResult> best = new HashMap<>();
-            for (ScanResult r : wm.getScanResults()) {
+            for (ScanResult r : results == null ? new ArrayList<ScanResult>() : results) {
                 if (r.SSID == null || r.SSID.isEmpty()) continue;
                 ScanResult old = best.get(r.SSID);
                 if (old == null || r.level > old.level) best.put(r.SSID, r);
