@@ -84,6 +84,25 @@ async function loadIceServers() {
   }
   return { iceServers: STUN };
 }
+// Relevé des appels qui échouent (fonction serveur incidentAppel), pour repérer les pannes.
+let incidentFn = null;
+function reportCallIncident(raison, detail = '', cid = null) {
+  (async () => {
+    if (!incidentFn) {
+      const { getFunctions, httpsCallable } = await import('https://www.gstatic.com/firebasejs/12.19.0/firebase-functions.js');
+      incidentFn = httpsCallable(getFunctions(app, 'europe-west1'), 'incidentAppel');
+    }
+    await incidentFn({
+      cote: 'tablette',
+      raison: String(raison).slice(0, 60),
+      detail: String(detail || '').slice(0, 300),
+      cid,
+      relais: !!(iceCache && iceCache.value.iceServers.length > STUN.length),
+      navigateur: navigator.userAgent.slice(0, 200),
+    });
+  })().catch(() => {});
+}
+
 const FRESH_MS = 60_000; // un appel plus ancien n'est plus considéré comme en train de sonner
 const FID_KEY = 'papote.appels.fid';
 
@@ -565,6 +584,7 @@ async function answer() {
     if (!stream) stream = await navigator.mediaDevices.getUserMedia(CAMERA);
   } catch (e) {
     console.error(e);
+    reportCallIncident('camera', `${e && e.name}: ${e && e.message}`, id);
     setStatus('La caméra ne répond pas.');
     updateDoc(callRef, { state: 'ended', endedAt: serverTimestamp() }).catch(() => {});
     setTimeout(closeView, 3000);
@@ -588,8 +608,14 @@ async function answer() {
   pc.onconnectionstatechange = () => {
     clearTimeout(lostTimer);
     if (pc.connectionState === 'connected') $('call-status').textContent = '';
-    if (pc.connectionState === 'disconnected') lostTimer = setTimeout(() => hangup('La connexion a été perdue.'), 8000);
-    if (pc.connectionState === 'failed') hangup('La connexion a été perdue.');
+    if (pc.connectionState === 'disconnected') lostTimer = setTimeout(() => {
+      reportCallIncident('video-coupee', 'liaison perdue 8 s', id);
+      hangup('La connexion a été perdue.');
+    }, 8000);
+    if (pc.connectionState === 'failed') {
+      reportCallIncident('liaison-video', `ice=${pc.iceConnectionState}`, id);
+      hangup('La connexion a été perdue.');
+    }
   };
 
   await pc.setRemoteDescription(data.offer);
@@ -705,8 +731,14 @@ window.papoteCallFamily = ({ to = null, onState = () => {} } = {}) => {
     };
     pc.onconnectionstatechange = () => {
       clearTimeout(call.lostTimer);
-      if (pc.connectionState === 'disconnected') call.lostTimer = setTimeout(() => finish('ended', 'ended'), 8000);
-      if (pc.connectionState === 'failed') finish('failed', 'ended');
+      if (pc.connectionState === 'disconnected') call.lostTimer = setTimeout(() => {
+        reportCallIncident('audio-coupe', 'liaison perdue 8 s', ref.id);
+        finish('ended', 'ended');
+      }, 8000);
+      if (pc.connectionState === 'failed') {
+        reportCallIncident('liaison-audio', `ice=${pc.iceConnectionState}`, ref.id);
+        finish('failed', 'ended');
+      }
     };
 
     const offer = await pc.createOffer();
@@ -759,6 +791,7 @@ window.papoteCallFamily = ({ to = null, onState = () => {} } = {}) => {
     }));
   })().catch((e) => {
     console.warn('Appel sortant', e);
+    reportCallIncident('depart-audio', `${e && e.name}: ${e && e.message}`, call && call.ref ? call.ref.id : null);
     finish('failed', call && call.ref ? 'ended' : null);
   });
 
