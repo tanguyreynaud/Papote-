@@ -2,8 +2,9 @@
 <html lang="fr">
 <head>
   <meta charset="utf-8">
-  <!-- L'ancienne adresse renvoie vers la nouvelle (même page, mêmes paramètres). -->
-  <script>if (location.hostname === 'papote-famille.web.app') location.replace('https://app.mapapote.fr' + location.pathname + location.search + location.hash);</script>
+  <!-- L'ancienne adresse renvoie vers la nouvelle (même page, mêmes paramètres), sauf dans l'app
+       installée depuis l'ancienne adresse : elle s'ouvrirait dans une fenêtre de navigateur. -->
+  <script>if (location.hostname === 'papote-famille.web.app' && !matchMedia('(display-mode: standalone)').matches && navigator.standalone !== true) location.replace('https://app.mapapote.fr' + location.pathname + location.search + location.hash);</script>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Papote</title>
   <meta name="theme-color" content="#fdfaf5" media="(prefers-color-scheme: light)">
