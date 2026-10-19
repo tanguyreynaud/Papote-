@@ -4,6 +4,8 @@
 //   valider(etat) (async, peut lever une erreur affichée), bouton, saute(etat), apres (contenu sous les cases) }.
 // L'avancement est rendu à sauver(etat) après chaque étape : on peut fermer et reprendre plus tard.
 
+import { messageErreur } from './gestion-api.js';
+
 const el = (tag, attrs = {}, ...enfants) => {
   const e = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {
@@ -106,7 +108,7 @@ export function ouvrirParcours({ titre, etapes, etat, sauver, fin }) {
       afficher();
     } catch (err) {
       console.error(err);
-      erreur.textContent = (err && err.message) || String(err);
+      erreur.textContent = messageErreur(err);
       erreur.hidden = false;
       suivant.textContent = texteBouton;
       majBouton();

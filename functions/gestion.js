@@ -721,8 +721,13 @@ exports.gestionStock = onCall(async (request) => {
     if (!snap.exists) throw new HttpsError('not-found', 'Tablette introuvable.');
     const champs = d.champs || {};
     const maj = { majLe: FieldValue.serverTimestamp() };
-    for (const cle of ['numero', 'modele', 'sim', 'simOperateur', 'notes']) {
+    for (const cle of ['numero', 'modele', 'fournisseur', 'sim', 'simOperateur', 'notes']) {
       if (cle in champs) maj[cle] = texte(champs[cle], cle === 'notes' ? 1000 : 80);
+    }
+    // Vendeur corrigé : la dépense de l'achat suit (même faute de frappe des deux côtés).
+    if (maj.fournisseur && maj.fournisseur !== snap.get('fournisseur') && snap.get('depense')) {
+      const dep = db().doc(`depenses/${snap.get('depense')}`);
+      if ((await dep.get()).exists) await dep.update({ fournisseur: maj.fournisseur, majLe: FieldValue.serverTimestamp() });
     }
     if ('simCout' in champs) maj.simCout = centimes(champs.simCout);
     if ('commande' in champs) {
@@ -1473,6 +1478,7 @@ async function automatiser(qui) {
   const maintenant = Date.now();
   const bilan = { factures: [], avoirs: [], depenses: 0, stock: [], erreurs: [] };
   await synchroniserStock(bilan);
+  await rattraperJumelages(bilan);
   await depensesRecurrentes(maintenant, bilan);
   await facturerPenalites(maintenant - FENETRE, bilan);
   await avoirsRemboursements(maintenant - FENETRE, bilan);
@@ -1672,28 +1678,58 @@ exports.gestionJumelage = onDocumentUpdated(
     const avant = event.data.before.data() || {};
     const p = event.data.after.data() || {};
     if (avant.status === p.status || !['claimed', 'confirmed'].includes(p.status)) return;
-    const fiche = await ficheDeLaTablette(p);
-    if (!fiche) return;
-    const t = fiche.data();
-    const commande = t.commande ? (await db().doc(`commandes/${t.commande}`).get()).data() || null : null;
-    const suite = suiteJumelage(t, commande, p.fid);
-    if (suite.refuser) {
-      await event.data.after.ref.update({ status: 'refused' });
-      logger.warn(`Jumelage refusé : tablette ${t.ref || fiche.id} ${t.etat}.`);
-      return;
-    }
-    if (p.status !== 'confirmed' || !p.fid) return;
-    const maj = {
-      tabletUid: p.tabletUid || null, callsUid: p.callsUid || null, fid: p.fid,
-      jumeleeLe: Date.now(), alerteJumelage: suite.alerte || null,
-    };
-    if (t.etat === 'envoyee') maj.etat = 'chez-client';
-    await fiche.ref.update(maj);
-    if (suite.relier && vitrine.appliquer) {
-      await vitrine.appliquer(p.fid, t.commande);
-      logger.info(`Commande ${t.commande} reliée à la famille ${p.fid} par la tablette ${t.ref || fiche.id}.`);
-    }
+    await appliquerJumelage(p, event.data.after.ref);
   });
+
+// Fiche stock et commande mises à jour d'après un jumelage (déclencheur, ou rattrapage de la nuit).
+// Renvoie la fiche mise à jour, ou null s'il n'y avait rien à faire.
+async function appliquerJumelage(p, pairingRef) {
+  const fiche = await ficheDeLaTablette(p);
+  if (!fiche) {
+    logger.info(`Jumelage ${pairingRef.id} : aucune tablette du stock pour le n° de série ${p.serie || '?'}.`);
+    return null;
+  }
+  const t = fiche.data();
+  const commande = t.commande ? (await db().doc(`commandes/${t.commande}`).get()).data() || null : null;
+  const suite = suiteJumelage(t, commande, p.fid);
+  if (suite.refuser) {
+    await pairingRef.update({ status: 'refused' });
+    logger.warn(`Jumelage refusé : tablette ${t.ref || fiche.id} ${t.etat}.`);
+    return null;
+  }
+  if (p.status !== 'confirmed' || !p.fid) return null;
+  const maj = {
+    tabletUid: p.tabletUid || null, callsUid: p.callsUid || null, fid: p.fid,
+    jumeleeLe: Date.now(), alerteJumelage: suite.alerte || null,
+  };
+  if (t.etat === 'envoyee') maj.etat = 'chez-client';
+  await fiche.ref.update(maj);
+  if (suite.relier && vitrine.appliquer) {
+    await vitrine.appliquer(p.fid, t.commande);
+    logger.info(`Commande ${t.commande} reliée à la famille ${p.fid} par la tablette ${t.ref || fiche.id}.`);
+  }
+  return fiche;
+}
+
+// Rattrapage (chaque nuit et « Lancer maintenant ») : tablette préparée ou envoyée, jumelée (pairing
+// confirmé avec son n° de série) mais dont la fiche n'a pas suivi, par exemple si le déclencheur a manqué.
+async function rattraperJumelages(bilan) {
+  const fiches = (await db().collection('stock').where('etat', 'in', ['preparee', 'envoyee', 'en-stock']).get()).docs
+    .filter((d) => d.get('serieAndroid') && !d.get('fid'));
+  for (const d of fiches) {
+    try {
+      const pairings = (await db().collection('pairings').where('serie', '==', d.get('serieAndroid')).get()).docs
+        .filter((x) => x.get('status') === 'confirmed' && x.get('fid'))
+        .sort((a, b) => (b.get('createdAt')?.toMillis?.() || 0) - (a.get('createdAt')?.toMillis?.() || 0));
+      if (!pairings.length) continue;
+      if (await appliquerJumelage(pairings[0].data(), pairings[0].ref)) {
+        bilan.stock.push(`${d.get('ref') || d.get('numero') || d.id} : jumelage rattrapé`);
+      }
+    } catch (e) {
+      bilan.erreurs.push(`Jumelage de ${d.get('ref') || d.id} : ${e.message}`);
+    }
+  }
+}
 
 // Retire une tablette de sa famille (comptes Sync et appels) : elle revient sur l'écran Bienvenue.
 async function retirerDeLaFamille(t) {
