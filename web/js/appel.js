@@ -333,9 +333,12 @@ export async function answerIncoming(fid, callId, me, ui) {
       return;
     }
     // Vidéo de la tablette : elle arrive quand Mamie répond à notre caméra.
-    e.track.onunmute = () => ui.onVideo && ui.onVideo(e.track);
+    // On ne montre la vidéo de Mamie que si l'on a soi-même allumé sa caméra.
+    remoteVideo = e.track;
+    e.track.onunmute = () => { if (cam && ui.onVideo) ui.onVideo(e.track); };
   };
   let cam = null; // caméra allumée pendant l'appel (« Passer en vidéo »)
+  let remoteVideo = null;
   let accepted = false;
   const pending = [];
   pc.onicecandidate = (e) => {
@@ -415,6 +418,9 @@ export async function answerIncoming(fid, callId, me, ui) {
       });
       cam = landscapeStream(camera);
       await videoTx.sender.replaceTrack(cam.stream.getVideoTracks()[0]);
+      // Signal explicite pour la tablette : elle n'allume sa caméra qu'à ce moment-là.
+      updateDoc(ref, { 'answer.video': true }).catch(() => {});
+      if (remoteVideo && !remoteVideo.muted && ui.onVideo) ui.onVideo(remoteVideo);
       return cam.stream;
     },
   };
