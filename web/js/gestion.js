@@ -2336,6 +2336,30 @@ async function envoyerCampagne(test) {
 }
 
 $('campagne-test').addEventListener('click', () => envoyerCampagne(true));
+
+// E-mail d'ouverture des commandes à la liste d'attente (lancementListeAttente, functions/index.js).
+async function envoyerLancement(test) {
+  if (!test && !confirm("Envoyer l'e-mail « Papote est disponible : vous pouvez commander » à toute la liste d'attente ?\n\n"
+    + "Chaque personne ne le reçoit qu'une fois. Pensez à vous envoyer un test d'abord.")) return;
+  const msg = $('lancement-msg');
+  const boutons = [$('lancement-test'), $('lancement-envoyer')];
+  boutons.forEach((b) => { b.disabled = true; });
+  msg.hidden = false;
+  msg.className = 'small';
+  msg.textContent = test ? 'Envoi du test…' : 'Envoi à la liste d\'attente…';
+  try {
+    const r = await appeler('lancementListeAttente', test ? { test: true } : {});
+    msg.textContent = test ? 'Test envoyé à votre adresse.'
+      : `${pluriel(r.envoyes || 0, 'e-mail')} envoyé${r.envoyes > 1 ? 's' : ''}${r.erreurs ? `, ${pluriel(r.erreurs, 'échec')} (voir les journaux)` : ''}.`;
+    if (!test && r.erreurs) msg.className = 'small error';
+  } catch (e) {
+    msg.className = 'small error';
+    msg.textContent = messageErreur(e);
+  }
+  boutons.forEach((b) => { b.disabled = false; });
+}
+$('lancement-test').addEventListener('click', () => envoyerLancement(true));
+$('lancement-envoyer').addEventListener('click', () => envoyerLancement(false));
 $('f-campagne').addEventListener('submit', (e) => { e.preventDefault(); envoyerCampagne(false); });
 
 
