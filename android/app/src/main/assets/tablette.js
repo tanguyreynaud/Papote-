@@ -225,12 +225,57 @@
     if (rdv) return;
     var has = photos.length > 0;
     show($('frame-img'), has);
+    if (frameBack) show(frameBack, has);
     show($('frame-caption'), has);
     show($('frame-empty'), !has);
     if (!has) { renderInvite(); return; }
     frameIndex = frameIndex % Math.min(photos.length, 20);
     var p = photos[frameIndex];
-    setPicture($('frame-img'), p.image);
+    crossfadeFrame(p, function () { setCaption(p); });
+  }
+
+  // Changement de photo de l'accueil en fondu enchaîné : la nouvelle photo est chargée à part,
+  // puis apparaît doucement par-dessus l'ancienne (avec un très léger zoom), la légende en fondu.
+  var frameBack = null;
+  var frameShown = '';
+  function crossfadeFrame(p, done) {
+    var front = $('frame-img');
+    if (!frameBack) {
+      frameBack = front.cloneNode(false);
+      frameBack.id = 'frame-img-b';
+      frameBack.removeAttribute('data-url');
+      front.parentNode.insertBefore(frameBack, front.nextSibling);
+    }
+    if (frameShown === p.image) { done(); return; }
+    var first = !frameShown;
+    frameShown = p.image;
+    var probe = new Image();
+    probe.onload = probe.onerror = function () {
+      if (frameShown !== p.image) return;
+      // La couche du dessous reçoit la nouvelle photo, transparente, passe au-dessus et apparaît.
+      var top = front.style.zIndex === '2' ? front : frameBack;
+      var next = top === front ? frameBack : front;
+      next.style.transition = 'none';
+      next.style.opacity = first ? '1' : '0';
+      next.style.transform = 'scale(1)';
+      setPicture(next, p.image);
+      next.style.zIndex = '2';
+      top.style.zIndex = '1';
+      var cap = $('frame-caption');
+      cap.style.transition = 'opacity .5s';
+      cap.style.opacity = '0';
+      setTimeout(function () {
+        next.style.transition = 'opacity 1.4s ease, transform 12s linear';
+        next.style.opacity = '1';
+        next.style.transform = 'scale(1.04)';
+        done();
+        cap.style.opacity = '1';
+      }, first ? 0 : 60);
+    };
+    probe.src = p.image;
+  }
+
+  function setCaption(p) {
     signWithFace($('frame-caption'), p, p.authorName + ', ' + dayLabel(p.createdAt).replace(/ /g, ' '));
   }
 

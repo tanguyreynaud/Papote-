@@ -1615,3 +1615,7 @@ body.night .next-when { color: #a5b4fc; }
 .home-left .next-title { font-size: 4.6vmin; }
 .home-left .call-btn { margin-top: 3vmin; min-height: 12.5vmin; font-size: 6.2vmin; }
 .home-left .call-btn .icon { width: 6.5vmin; height: 6.5vmin; }
+
+/* Photo de l'accueil : deux couches pour le fondu enchaîné, la légende toujours au-dessus */
+.home-frame #frame-img, .home-frame #frame-img-b { transform-origin: center; will-change: opacity, transform; }
+.home-frame .frame-caption { z-index: 3; }
