@@ -20,7 +20,7 @@ import {
   finDeContrat, retracter,
 } from './abonnement.js';
 import { startCall, watchTabletBusy, watchIncomingCalls, answerIncoming, warmUpCalls, declineIncoming, reportCallIncident } from './appel.js';
-import { pushSupported, pushAllowed, pushRefused, enablePush, closeCallNotification, rememberNativeToken } from './push.js';
+import { pushSupported, pushAllowed, pushRefused, enablePush, closeCallNotification, rememberNativeToken, inNativeApp } from './push.js';
 import { prepareVideo } from './video.js';
 import { startAgenda, stopAgenda } from './agenda.js';
 import {
@@ -1568,13 +1568,16 @@ function showIncoming(call) {
     answerFromTablet();
     return;
   }
-  $('incoming').hidden = !call;
+  // Dans l'app Android, le téléphone sonne déjà par elle : pas de deuxième sonnerie, et l'écran
+  // « X vous appelle » de l'app seulement si on est dessus (sinon on répond depuis Android).
+  const natif = inNativeApp();
+  $('incoming').hidden = !call || (natif && document.visibilityState !== 'visible');
   if (!call) { stopRingTone(); return; }
   const caller = call.callerName || session.family.name;
   $('incoming-name').textContent = caller;
   setCallFace($('incoming-face'), caller);
   warmUpCalls();
-  startRingTone();
+  if (!natif) startRingTone();
 }
 
 async function answerFromTablet() {

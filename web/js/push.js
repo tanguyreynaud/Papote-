@@ -15,6 +15,11 @@ export function rememberNativeToken(jeton) {
   try { localStorage.setItem(CLE_NATIF, jeton); } catch (e) { /* rien */ }
 }
 
+// Ouvert dans l'app Android : c'est elle qui fait sonner le téléphone.
+export function inNativeApp() {
+  return !!nativeToken();
+}
+
 function nativeToken() {
   try { return localStorage.getItem(CLE_NATIF); } catch (e) { return null; }
 }
