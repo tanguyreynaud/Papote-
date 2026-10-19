@@ -1597,3 +1597,6 @@ body.night .next-when { color: #a5b4fc; }
 .call-nav { display: flex; align-items: center; gap: 4vmin; margin-top: 2vmin; }
 .call-page { border: .4vmin solid #e8e6fd; border-radius: 99vmin; background: #fff; color: #3730a3; font-size: 5vmin; font-weight: 700; padding: 2vmin 5vmin; }
 .call-page[disabled] { opacity: .35; }
+
+/* « Le matin / Le soir » retiré : la place va au bouton « Appeler » */
+#moment { display: none; }
