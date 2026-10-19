@@ -315,6 +315,8 @@ export function watchIncomingCalls(fid, uid, isTablet, onChange) {
  */
 export async function answerIncoming(fid, callId, me, ui) {
   const ref = doc(db, 'families', fid, 'calls', callId);
+  const t0 = performance.now();
+  const temps = {};
   const taken = () => { const e = new Error('Un autre proche a déjà répondu'); e.name = 'TakenError'; return e; };
   const first = (await getDoc(ref)).data();
   if (!first || first.state !== 'ringing') throw taken();
@@ -323,6 +325,7 @@ export async function answerIncoming(fid, callId, me, ui) {
     navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true }, video: false }),
     iceServers(),
   ]);
+  temps.microRelais = Math.round(performance.now() - t0);
   const pc = new RTCPeerConnection(ice);
   let videoTx = null;
   stream.getTracks().forEach((t) => pc.addTrack(t, stream));
@@ -383,6 +386,7 @@ export async function answerIncoming(fid, callId, me, ui) {
     throw e;
   }
   accepted = true;
+  temps.reponse = Math.round(performance.now() - t0);
   pending.forEach((c) => addDoc(collection(ref, 'calleeCandidates'), c).catch(() => {}));
 
   stops.push(onSnapshot(collection(ref, 'callerCandidates'), (snap) => {
@@ -396,7 +400,15 @@ export async function answerIncoming(fid, callId, me, ui) {
   }));
   pc.onconnectionstatechange = () => {
     clearTimeout(lostTimer);
-    if (pc.connectionState === 'connected') ui.onState('connected');
+    if (pc.connectionState === 'connected') {
+      ui.onState('connected');
+      temps.liaison = Math.round(performance.now() - t0);
+      // Mise en relation lente : on note le détail de chaque étape et le chemin choisi.
+      if (temps.liaison > 4000) {
+        cheminChoisi(pc).then((chemin) => reportCallIncident('lent',
+          `micro+relais=${temps.microRelais}ms reponse=${temps.reponse}ms liaison=${temps.liaison}ms chemin=${chemin}`, callId));
+      }
+    }
     if (pc.connectionState === 'disconnected') lostTimer = setTimeout(() => {
       reportCallIncident('audio-coupe', 'liaison perdue 8 s', callId);
       finish('failed', 'ended');
@@ -451,4 +463,19 @@ export function reportCallIncident(raison, detail = '', cid = null) {
       navigateur: navigator.userAgent.slice(0, 200),
     });
   })().catch(() => {});
+}
+
+// Chemin de la liaison : « host » (même réseau), « srflx » (direct par internet) ou « relay ».
+async function cheminChoisi(pc) {
+  try {
+    const stats = await pc.getStats();
+    let pair = null;
+    stats.forEach((r) => { if (r.type === 'candidate-pair' && r.state === 'succeeded' && (r.nominated || r.selected)) pair = r; });
+    if (!pair) return 'inconnu';
+    const local = stats.get(pair.localCandidateId) || {};
+    const distant = stats.get(pair.remoteCandidateId) || {};
+    return `${local.candidateType || '?'}/${local.protocol || '?'}-${distant.candidateType || '?'}`;
+  } catch (e) {
+    return 'inconnu';
+  }
 }
