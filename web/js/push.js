@@ -71,7 +71,8 @@ export async function enablePush(fid, uid) {
 async function enableNativePush(fid, uid) {
   const ref = doc(db, 'families', fid, 'members', uid, 'private', 'push');
   try {
-    await setDoc(ref, { natifs: arrayUnion(nativeToken()), majLe: serverTimestamp() }, { merge: true });
+    // Un seul jeton par compte : celui de l'app installée aujourd'hui (une réinstallation en change).
+    await setDoc(ref, { natifs: [nativeToken()], majLe: serverTimestamp() }, { merge: true });
   } catch (e) {
     console.warn('Notifications : jeton de l\'app impossible à ranger', e);
     return false;
