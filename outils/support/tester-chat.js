@@ -18,6 +18,11 @@ const CAS = [
   ['Et si je ne rends pas la tablette ?', 'site', '170 € (Wi-Fi) ou 200 € (internet)'],
   ['La livraison est payante ?', 'site', 'offerte'],
   ['Combien de temps pour être livré ?', 'site', '2 à 3 jours ouvrés'],
+  // Avant le lancement : commandes fermées, liste d'attente
+  ['Comment je commande ?', 'site', 'pas encore ouvert, bouton « Être prévenu », pas de contact'],
+  ['Je veux commander une tablette pour ma mère tout de suite', 'site', 'liste d\'attente, pas de lien de commande'],
+  ['C\'est disponible quand ?', 'site', 'très bientôt, pas de date, liste d\'attente'],
+  ['Je peux précommander ?', 'site', 'non, liste d\'attente'],
   ['Vous livrez en Suisse ?', 'site', 'pas pour le moment'],
   ['Je peux payer par chèque ?', 'site', 'carte uniquement'],
   ['Je peux l\'offrir à ma grand-mère pour Noël ?', 'site', 'oui'],

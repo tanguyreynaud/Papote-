@@ -3,6 +3,12 @@
 Ce texte complète le site (tarifs, FAQ), relu automatiquement. Le modifier puis redéployer
 les fonctions suffit pour que le chat en tienne compte.
 
+## Commander : pas encore ouvert (liste d'attente)
+- Papote n'est pas encore ouvert à la commande : les premières tablettes partent très bientôt. Ne dis jamais qu'on peut commander maintenant, ne renvoie jamais vers une page de commande.
+- Pour être prévenu du lancement : sur la page d'accueil de mapapote.fr, bouton « Être prévenu », puis laisser son e-mail dans « Soyez prévenu du lancement ». Un e-mail part au lancement, et ces personnes sont parmi les premières à pouvoir commander.
+- Les tarifs, la livraison, l'essai de 15 jours et le reste de ce guide restent valables : réponds normalement, en précisant si besoin que ce sera ainsi au lancement.
+- Date de lancement : pas encore fixée. Ne donne jamais de date. Pas de précommande, pas de réservation, pas de rappel pour commander.
+
 ## L'appli famille (https://app.mapapote.fr)
 - C'est une page web qu'on installe comme une appli, rien à télécharger dans un store.
   iPhone : ouvrir le lien dans Safari, bouton Partager (le carré avec une flèche) puis « Sur l'écran d'accueil ».
@@ -99,8 +105,8 @@ les fonctions suffit pour que le chat en tienne compte.
 - Chaleur : la tablette devient tiède à force de rester allumée, c'est normal. Évitez simplement le plein soleil et la proximité d'un radiateur.
 - Connexion internet nécessaire : une box classique suffit (ADSL, fibre ou 4G) ; il faut juste que le Wi-Fi capte bien là où la tablette est posée.
 - Consommation d'internet : très faible pour les photos et les messages ; un appel vidéo d'une heure consomme environ 0,5 à 1 Go.
-- Carte cadeau : pas pour le moment, mais on peut commander pour un proche et faire livrer chez lui.
-- Commande par téléphone : non, seulement sur le site. En cas de difficulté pour commander : demande de contact.
+- Carte cadeau : pas pour le moment, mais au lancement on pourra commander pour un proche et faire livrer chez lui.
+- Commande par téléphone : non, seulement sur le site, au lancement (liste d'attente en attendant).
 - Voir la tablette en magasin : non, la vente est uniquement en ligne ; le plus simple pour se faire une idée est l'essai de 15 jours. Ne pas proposer de rappel.
 - Facture au nom d'une autre personne que celle qui paie (par exemple le parent) : la facture est au nom de celui qui paie ; pour un autre nom, demande de contact.
 - Photo favorite ou affichée en permanence : non, les photos défilent en diaporama.
