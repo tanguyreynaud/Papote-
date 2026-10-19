@@ -1075,3 +1075,6 @@ exports.compterProches = onDocumentWritten(
       if (e.code !== 5) throw e;
     }
   });
+
+// Appels de la tablette vers la famille : sonnerie et appel manqué par notification push.
+Object.assign(exports, require('./appels'));
