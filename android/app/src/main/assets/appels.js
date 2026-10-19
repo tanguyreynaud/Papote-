@@ -103,6 +103,21 @@ function reportCallIncident(raison, detail = '', cid = null) {
   })().catch(() => {});
 }
 
+// Chemin de la liaison : « host » (même réseau), « srflx » (direct par internet) ou « relay ».
+async function cheminChoisi(pc) {
+  try {
+    const stats = await pc.getStats();
+    let pair = null;
+    stats.forEach((r) => { if (r.type === 'candidate-pair' && r.state === 'succeeded' && (r.nominated || r.selected)) pair = r; });
+    if (!pair) return 'inconnu';
+    const local = stats.get(pair.localCandidateId) || {};
+    const distant = stats.get(pair.remoteCandidateId) || {};
+    return `${local.candidateType || '?'}/${local.protocol || '?'}-${distant.candidateType || '?'}`;
+  } catch (e) {
+    return 'inconnu';
+  }
+}
+
 const FRESH_MS = 60_000; // un appel plus ancien n'est plus considéré comme en train de sonner
 const FID_KEY = 'papote.appels.fid';
 
@@ -768,6 +783,11 @@ window.papoteCallFamily = ({ to = null, onState = () => {} } = {}) => {
     };
     pc.onconnectionstatechange = () => {
       clearTimeout(call.lostTimer);
+      // Mise en relation lente (de la réponse du proche à la liaison) : détail et chemin notés.
+      if (pc.connectionState === 'connected' && call.answeredAt) {
+        const ms = Math.round(performance.now() - call.answeredAt);
+        if (ms > 3000) cheminChoisi(pc).then((chemin) => reportCallIncident('lent', `liaison=${ms}ms chemin=${chemin}`, ref.id));
+      }
       if (pc.connectionState === 'disconnected') call.lostTimer = setTimeout(() => {
         reportCallIncident('audio-coupe', 'liaison perdue 8 s', ref.id);
         finish('ended', 'ended');
@@ -805,6 +825,7 @@ window.papoteCallFamily = ({ to = null, onState = () => {} } = {}) => {
       if (!data || done) return;
       if (data.answer && !answered) {
         answered = true;
+        call.answeredAt = performance.now();
         clearTimeout(call.timer);
         try {
           await pc.setRemoteDescription({ type: data.answer.type, sdp: data.answer.sdp });
