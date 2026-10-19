@@ -1394,6 +1394,9 @@
     if (android() && android().seen) android().seen();
   }
 
+  // Un toucher sur l'écran (OK sur un message lu, Appeler…) compte aussi : elle est là.
+  document.addEventListener('pointerdown', noteSeen, true);
+
   function lookForPresence() {
     if (asleep || typeof window.papoteWatchPresence !== 'function') return;
     if (callScreen && !callScreen.hasAttribute('hidden')) return;
