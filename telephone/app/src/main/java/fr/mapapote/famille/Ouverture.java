@@ -1,7 +1,6 @@
 package fr.mapapote.famille;
 
 import android.Manifest;
-import android.app.AlertDialog;
 import android.app.NotificationManager;
 import android.content.Context;
 import android.content.Intent;
@@ -96,31 +95,11 @@ public class Ouverture extends LauncherActivity {
     }
 
     // Android 11+ met en pause une app pas ouverte depuis quelques mois : elle ne recevrait plus
-    // les appels. Tant que ce n'est pas réglé, une petite fenêtre propose de l'éviter en un geste.
+    // les appels. Tant que ce n'est pas réglé, une notification discrète mène au bon réglage.
     private void demanderSansPause() {
-        if (Build.VERSION.SDK_INT < 30 || getPackageManager().isAutoRevokeWhitelisted()) {
-            recupererJeton();
-            return;
-        }
-        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Light_Dialog_Alert)
-                .setTitle(R.string.sans_pause_titre)
-                .setMessage(R.string.sans_pause_texte)
-                .setCancelable(false)
-                .setPositiveButton(R.string.sans_pause_activer, (d, w) -> {
-                    try {
-                        // Depuis Android 12, l'interrupteur est sur la page « Infos sur l'appli »,
-                        // plus sur celle des autorisations (comme IntentCompat d'AndroidX).
-                        String action = Build.VERSION.SDK_INT >= 31
-                                ? Settings.ACTION_APPLICATION_DETAILS_SETTINGS
-                                : Intent.ACTION_AUTO_REVOKE_PERMISSIONS;
-                        startActivity(new Intent(action, Uri.parse("package:" + getPackageName())));
-                        auRetour = this::recupererJeton;
-                    } catch (Exception e) {
-                        recupererJeton(); // réglage absent sur ce téléphone
-                    }
-                })
-                .setNegativeButton(R.string.plus_tard, (d, w) -> recupererJeton())
-                .show();
+        Appels.conseilSansPause(this,
+                Build.VERSION.SDK_INT >= 30 && !getPackageManager().isAutoRevokeWhitelisted());
+        recupererJeton();
     }
 
     // onRestart et non onResume : la fermeture de la demande d'autorisation relance aussi onResume,

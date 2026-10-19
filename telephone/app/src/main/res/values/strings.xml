@@ -6,14 +6,8 @@
          sans lui, Chrome afficherait une barre d'adresse en haut de l'app. -->
     <string name="asset_statements" translatable="false">[{\"relation\": [\"delegate_permission/common.handle_all_urls\"], \"target\": {\"namespace\": \"web\", \"site\": \"https://app.mapapote.fr\"}}]</string>
     <string name="sans_pause_titre">Ne manquez aucun appel</string>
-    <string name="sans_pause_texte">Pour que Papote sonne toujours, même si vous ne l\'ouvrez pas pendant longtemps :
-
-1. Touchez « Activer ».
-2. Faites défiler tout en bas de l\'écran, jusqu\'à « Applis inutilisées ».
-3. Désactivez l\'interrupteur « Suspendre l\'activité… ».
-4. Revenez avec la flèche retour.</string>
-    <string name="sans_pause_activer">Activer</string>
-    <string name="plus_tard">Plus tard</string>
+    <string name="sans_pause_court">Touchez ici pour que Papote sonne toujours.</string>
+    <string name="sans_pause_texte">Touchez ici, descendez tout en bas jusqu\'à « Applis inutilisées » et désactivez « Suspendre l\'activité… ». Sinon, Papote pourrait ne plus sonner si vous ne l\'ouvrez pas pendant quelques mois.</string>
     <string name="canal_appels">Appels de la tablette</string>
     <string name="canal_appels_texte">Sonnerie quand la tablette vous appelle</string>
     <string name="canal_infos">Appels manqués et alertes</string>
