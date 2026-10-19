@@ -742,6 +742,35 @@ exports.relancesPaniers = onSchedule(
     }
   });
 
+// Admin : e-mail d'ouverture des commandes à la liste d'attente. { test: true } l'envoie seulement à l'admin
+// qui appelle. Sinon, une fois par contact (lancementEnvoyeLe), avec l'accord et sans désinscription.
+exports.lancementListeAttente = onCall({ secrets: [MAIL_MOT_DE_PASSE], timeoutSeconds: 540 }, async (request) => {
+  verifierAdmin(request);
+  if (request.data && request.data.test === true) {
+    const email = request.auth.token.email;
+    if (!email) throw new HttpsError('failed-precondition', 'Compte sans e-mail.');
+    await envoyerMail(email, mail.lancement({ prenom: 'Tanguy', desinscription: `${URL_DESINSCRIPTION}?c=test&j=test` }));
+    return { envoyes: 1, test: true };
+  }
+  const contacts = await db.collection('contacts').where('listeAttente', '==', true).get();
+  let envoyes = 0;
+  let erreurs = 0;
+  for (const c of contacts.docs) {
+    const d = c.data();
+    if (!d.email || d.consentement !== true || d.desinscritLe || d.lancementEnvoyeLe) continue;
+    try {
+      const desinscription = d.jeton ? `${URL_DESINSCRIPTION}?c=${c.id}&j=${d.jeton}` : null;
+      await envoyerMail(d.email, mail.lancement({ prenom: d.prenom, desinscription }));
+      await c.ref.update({ lancementEnvoyeLe: FieldValue.serverTimestamp() });
+      envoyes += 1;
+    } catch (e) {
+      erreurs += 1;
+      logger.error(`E-mail de lancement non envoyé (${c.id})`, e.message);
+    }
+  }
+  return { envoyes, erreurs };
+});
+
 async function abonnementModifie(abo) {
   const commande = await db.doc(`commandes/${abo.id}`).get();
   const fid = (abo.metadata && abo.metadata.fid) || (commande.exists && commande.get('fid'));
