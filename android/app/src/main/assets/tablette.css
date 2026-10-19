@@ -1505,3 +1505,89 @@ body.night .next-when { color: #a5b4fc; }
 .overlay.mode-photo.wide .head-who { flex: none; max-width: 34vmin; }
 .overlay.mode-photo.wide .head-when { font-size: 3.6vmin; line-height: 1.2; }
 .overlay.mode-photo.wide .ln-text { font-size: 5.4vmin; }
+
+/* ---------- Appeler la famille (appel audio) ---------- */
+.home-left .call-btn {
+  align-self: center;
+  margin: 4vmin auto 0;
+  min-width: 52vmin;
+  min-height: 15vmin;
+  padding: 0 7vmin;
+  border: 0;
+  border-radius: 99vmin;
+  background: #15803d;
+  color: #fff;
+  font-family: 'Bricolage Grotesque', 'Atkinson Hyperlegible', sans-serif;
+  font-size: 7vmin;
+  font-weight: 800;
+  box-shadow: 0 1.2vmin 3vmin rgba(21, 128, 61, .3);
+}
+.home-left .call-btn .icon { width: 8vmin; height: 8vmin; margin-right: 3vmin; }
+.call-out {
+  position: fixed;
+  top: 0; right: 0; bottom: 0; left: 0;
+  z-index: 880;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 5vmin;
+  background: linear-gradient(160deg, #f6f5ff, #e8e6fd);
+  color: #24212f;
+  font-family: 'Atkinson Hyperlegible', Roboto, sans-serif;
+  text-align: center;
+}
+.call-out[hidden] { display: none; }
+.call-face {
+  width: 34vmin;
+  height: 34vmin;
+  border-radius: 50%;
+  border: 1.4vmin solid #fff;
+  box-shadow: 0 0 0 1vmin #4f46e5;
+  object-fit: cover;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #4f46e5;
+  color: #fff;
+  font-family: 'Bricolage Grotesque', 'Atkinson Hyperlegible', sans-serif;
+  font-size: 15vmin;
+  font-weight: 800;
+}
+.call-face svg { width: 60%; height: 60%; }
+.state-ringing .call-face, .state-starting .call-face { animation: call-pulse 1.4s ease-in-out infinite; }
+.state-connected .call-face { box-shadow: 0 0 0 1vmin #15803d; }
+@keyframes call-pulse { 50% { box-shadow: 0 0 0 4vmin rgba(79, 70, 229, .25); } }
+.call-out .call-title {
+  margin: 5vmin 0 1.5vmin;
+  font-family: 'Bricolage Grotesque', 'Atkinson Hyperlegible', sans-serif;
+  font-size: 9vmin;
+  font-weight: 800;
+}
+.call-sub { margin: 0; font-size: 5vmin; color: #5f5a6b; }
+.call-hangup {
+  margin-top: 6vmin;
+  min-width: 60vmin;
+  min-height: 16vmin;
+  border: 0;
+  border-radius: 99vmin;
+  background: #dc2626;
+  color: #fff;
+  font-family: 'Bricolage Grotesque', 'Atkinson Hyperlegible', sans-serif;
+  font-size: 7.5vmin;
+  font-weight: 800;
+  box-shadow: 0 1.2vmin 3vmin rgba(220, 38, 38, .3);
+}
+.call-people { display: flex; flex-wrap: wrap; justify-content: center; gap: 4vmin; margin: 3vmin 0; }
+.call-person {
+  display: flex; flex-direction: column; align-items: center; gap: 2vmin;
+  padding: 3vmin; border: 0; border-radius: 4vmin; background: #fff;
+  box-shadow: 0 1vmin 3vmin rgba(36, 33, 47, .1); min-width: 34vmin;
+}
+.call-person-face {
+  width: 24vmin; height: 24vmin; border-radius: 50%; object-fit: cover;
+  display: flex; align-items: center; justify-content: center;
+  background: #4f46e5; color: #fff; font-size: 11vmin; font-weight: 800;
+}
+.call-person-name { font-size: 6vmin; font-weight: 700; color: #24212f; }
+.call-back { margin-top: 3vmin; border: 0; background: transparent; color: #5f5a6b; font-size: 5.5vmin; font-weight: 700; }

@@ -1054,7 +1054,157 @@
     show(powerBanner, !!showIt);
   }
 
+  // ---------- Appeler la famille (appel audio, sans vidéo) ----------
+  // Un gros bouton « Appeler » sur l'accueil. CALL_MODE 'famille' : tout le monde sonne, le premier
+  // qui décroche a l'appel. 'personne' : on choisit qui appeler, avec sa photo.
+  // L'appel lui-même : window.papoteCallFamily({ to, onState }) dans appels.js (fil des appels).
+
+  var CALL_MODE = 'famille';
+  var people = [];
+  var callScreen = null;
+  var outCall = null;
+
+  function setPeople(list) { people = list || []; }
+
+  function callApiReady() { return typeof window.papoteCallFamily === 'function'; }
+
+  function initialOf(name) { return (name || '?').charAt(0).toUpperCase(); }
+
+  function faceEl(uid, name, cls) {
+    var face = uid && faces[uid];
+    var e;
+    if (face) {
+      e = document.createElement('img');
+      e.setAttribute('src', face);
+      e.setAttribute('alt', '');
+    } else {
+      e = document.createElement('span');
+      e.textContent = initialOf(name);
+    }
+    e.className = cls;
+    return e;
+  }
+
+  function ensureCallScreen() {
+    if (callScreen) return;
+    callScreen = document.createElement('div');
+    callScreen.className = 'call-out';
+    callScreen.setAttribute('hidden', '');
+    document.body.appendChild(callScreen);
+  }
+
+  function closeCallScreen() {
+    if (callScreen) { callScreen.setAttribute('hidden', ''); callScreen.innerHTML = ''; }
+    outCall = null;
+  }
+
+  function el2(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text) e.textContent = text;
+    return e;
+  }
+
+  // Choix de la personne (mode 'personne') : les visages en grand.
+  function showPicker() {
+    ensureCallScreen();
+    callScreen.innerHTML = '';
+    callScreen.removeAttribute('hidden');
+    callScreen.appendChild(el2('h1', 'call-title', 'Qui voulez-vous appeler ?'));
+    var grid = el2('div', 'call-people');
+    var list = people.length ? people : [];
+    for (var i = 0; i < list.length; i++) {
+      (function (p) {
+        var b = el2('button', 'call-person');
+        b.appendChild(faceEl(p.uid, p.name, 'call-person-face'));
+        b.appendChild(el2('span', 'call-person-name', p.name));
+        on(b, 'click', function () { startCall(p.uid, p.name); });
+        grid.appendChild(b);
+      })(list[i]);
+    }
+    callScreen.appendChild(grid);
+    var back = el2('button', 'call-back', 'Retour');
+    on(back, 'click', closeCallScreen);
+    callScreen.appendChild(back);
+  }
+
+  function onCallButton() {
+    if (CALL_MODE === 'personne' && people.length > 1) showPicker();
+    else if (CALL_MODE === 'personne' && people.length === 1) startCall(people[0].uid, people[0].name);
+    else startCall(null, '');
+  }
+
+  // Écran d'appel : la personne (ou « la famille »), l'état, et le grand bouton rouge.
+  function renderCall(state, title, sub, uid, name) {
+    ensureCallScreen();
+    callScreen.innerHTML = '';
+    callScreen.removeAttribute('hidden');
+    callScreen.className = 'call-out state-' + state;
+    var face = uid || name ? faceEl(uid, name, 'call-face') : el2('span', 'call-face family', '');
+    if (!uid && !name) face.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M16 11a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm-8 0a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm0 2c-2.3 0-7 1.2-7 3.5V19h14v-2.5C15 14.2 10.3 13 8 13zm8 0c-.3 0-.6 0-1 .1 1.2.8 2 1.9 2 3.4V19h6v-2.5c0-2.3-4.7-3.5-7-3.5z"/></svg>';
+    callScreen.appendChild(face);
+    callScreen.appendChild(el2('h1', 'call-title', title));
+    if (sub) callScreen.appendChild(el2('p', 'call-sub', sub));
+    if (state === 'ringing' || state === 'connected' || state === 'starting') {
+      var hang = el2('button', 'call-hangup', 'Raccrocher');
+      on(hang, 'click', function () {
+        if (outCall && outCall.hangup) { try { outCall.hangup(); } catch (e) { } }
+        closeCallScreen();
+      });
+      callScreen.appendChild(hang);
+    }
+  }
+
+  function startCall(uid, name) {
+    if (!callApiReady()) {
+      renderCall('failed', 'L’appel n’est pas encore disponible', 'Réessayez dans un moment.', uid, name);
+      setTimeout(closeCallScreen, 4000);
+      return;
+    }
+    var who = name || 'la famille';
+    renderCall('starting', 'Appel de ' + who + '…', '', uid, name);
+    var finished = false;
+    function finish(title, sub) {
+      if (finished) return;
+      finished = true;
+      renderCall('ended', title, sub, uid, name);
+      setTimeout(closeCallScreen, 4000);
+    }
+    try {
+      outCall = window.papoteCallFamily({
+        to: uid || null,
+        onState: function (state, info) {
+          info = info || {};
+          if (state === 'ringing') {
+            renderCall('ringing', 'Ça sonne…', uid ? 'Chez ' + who : (info.names && info.names.length ? 'Chez ' + info.names.join(', ') : 'Chez toute la famille'), uid, name);
+          } else if (state === 'connected') {
+            renderCall('connected', 'En ligne avec ' + (info.name || who), 'Parlez normalement, la tablette vous entend.', uid || null, info.name || name);
+          } else if (state === 'ended') {
+            finish('Appel terminé', '');
+          } else if (state === 'missed') {
+            finish('Personne n’a répondu', 'Ils verront votre appel et vous rappelleront.');
+          } else if (state === 'busy') {
+            finish('Occupé', 'Réessayez dans un moment.');
+          } else if (state === 'failed') {
+            finish('L’appel n’a pas pu partir', 'Vérifiez qu’il y a internet, puis réessayez.');
+          }
+        }
+      });
+    } catch (e) {
+      finish('L’appel n’a pas pu partir', 'Réessayez dans un moment.');
+    }
+  }
+
+  function setupCallButton() {
+    var b = el2('button', 'big-btn call-btn');
+    b.innerHTML = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.6a1 1 0 0 1-.25 1z"/></svg>' +
+      '<span>Appeler</span>';
+    on(b, 'click', onCallButton);
+    document.querySelector('#view-home .home-left').appendChild(b);
+  }
+
   function setupHomeExtras() {
+    setupCallButton();
     setInterval(checkConnection, 30000);
     setTimeout(checkConnection, 20000);
     setInterval(checkPower, 15000);
@@ -1102,6 +1252,7 @@
 
   function onFamily(payload) {
     faces = payload.faces || {};
+    setPeople(payload.people);
     // Les photos de profil arrivent parfois après l'envoi affiché : on le met à jour.
     if (overlayPost) fillHead(overlayPost);
     if (photos.length) renderFrame();

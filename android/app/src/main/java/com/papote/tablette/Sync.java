@@ -975,11 +975,17 @@ final class Sync {
         lastFamilyExtras = now;
         try {
             JSONObject faces = new JSONObject();
+            // Les personnes de la famille (pas les tablettes), pour l'écran « Appeler ».
+            JSONArray people = new JSONArray();
             try {
                 JSONArray members = firebase.list("families/" + fid + "/members");
                 for (int i = 0; i < members.length(); i++) {
                     JSONObject doc = members.getJSONObject(i);
                     JSONObject f = doc.optJSONObject("fields");
+                    String uid = doc.optString("name").substring(doc.optString("name").lastIndexOf('/') + 1);
+                    if (f != null && !"tablette".equals(Firebase.str(f, "role"))) {
+                        people.put(new JSONObject().put("uid", uid).put("name", nz(Firebase.str(f, "name"))));
+                    }
                     String face = f == null ? null : Firebase.str(f, "face");
                     if (face == null || !face.startsWith("data:image")) continue;
                     String name = doc.optString("name");
@@ -1007,7 +1013,7 @@ final class Sync {
                 // La règle Firestore des anniversaires n'est peut-être pas encore en ligne.
                 Log.w(TAG, "Anniversaires", e);
             }
-            JSONObject payload = new JSONObject().put("faces", faces).put("birthdays", birthdays);
+            JSONObject payload = new JSONObject().put("faces", faces).put("birthdays", birthdays).put("people", people);
             String json = payload.toString();
             if (json.equals(lastFamilyJson)) return;
             lastFamilyJson = json;
