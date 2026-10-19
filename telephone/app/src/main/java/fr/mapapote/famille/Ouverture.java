@@ -11,6 +11,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -31,11 +32,13 @@ public class Ouverture extends LauncherActivity {
     private static final String JETON = "jeton";
     private static final String NOTIFS_DEMANDEES = "notifsDemandees";
     private static final String PLEIN_ECRAN_DEMANDE = "pleinEcranDemande";
+    private static final String SANS_PAUSE_DEMANDE = "sansPauseDemande";
     /** Sans réseau, le jeton peut ne jamais arriver : on ouvre quand même l'app. */
     private static final long ATTENTE_JETON_MS = 4000;
 
     private boolean lance;
-    private boolean attendReglage;
+    /** Étape suivante, au retour d'un écran de réglages ouvert par l'app. */
+    private Runnable auRetour;
 
     @Override
     protected boolean shouldLaunchImmediately() {
@@ -81,21 +84,44 @@ public class Ouverture extends LauncherActivity {
             try {
                 startActivity(new Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT,
                         Uri.parse("package:" + getPackageName())));
-                attendReglage = true;
+                auRetour = this::demanderSansPause;
                 return;
             } catch (Exception e) {
                 // Réglage absent sur ce téléphone : tant pis, le bandeau sonnera quand même.
             }
         }
+        demanderSansPause();
+    }
+
+    // Android 11+ met en pause une app pas ouverte depuis quelques mois : elle ne recevrait plus
+    // les appels. Un proche qui ne décroche jamais serait concerné ; on propose de l'éviter.
+    private void demanderSansPause() {
+        if (Build.VERSION.SDK_INT >= 30
+                && !getPackageManager().isAutoRevokeWhitelisted()
+                && !prefs(this).getBoolean(SANS_PAUSE_DEMANDE, false)) {
+            prefs(this).edit().putBoolean(SANS_PAUSE_DEMANDE, true).apply();
+            try {
+                startActivity(new Intent(Intent.ACTION_AUTO_REVOKE_PERMISSIONS,
+                        Uri.parse("package:" + getPackageName())));
+                Toast.makeText(this, R.string.sans_pause, Toast.LENGTH_LONG).show();
+                auRetour = this::recupererJeton;
+                return;
+            } catch (Exception e) {
+                // Réglage absent sur ce téléphone.
+            }
+        }
         recupererJeton();
     }
 
+    // onRestart et non onResume : la fermeture de la demande d'autorisation relance aussi onResume,
+    // alors que l'écran de réglages tout juste ouvert n'a pas encore été vu.
     @Override
-    protected void onResume() {
-        super.onResume();
-        if (attendReglage) {
-            attendReglage = false;
-            recupererJeton();
+    protected void onRestart() {
+        super.onRestart();
+        if (auRetour != null && !isFinishing()) {
+            Runnable suite = auRetour;
+            auRetour = null;
+            suite.run();
         }
     }
 
