@@ -804,11 +804,11 @@ body.night .weather-label { color: #a8998d; }
 }
 
 /* Mode cadre photo : les flèches s'effacent sans toucher l'écran */
-.photos .arrow {
+.photos .arrow, .photos .ln-btn.photo-home {
   -webkit-transition: opacity .6s, visibility .6s;
   transition: opacity .6s, visibility .6s;
 }
-.photos.calm .arrow { opacity: 0; visibility: hidden; }
+.photos.calm .arrow, .photos.calm .ln-btn.photo-home { opacity: 0; visibility: hidden; }
 
 /* La nuit, le diaporama est assombri pour ne pas éblouir */
 .night-veil { display: none; position: absolute; top: 0; right: 0; bottom: 0; left: 0; background: rgba(0, 0, 0, .5); }

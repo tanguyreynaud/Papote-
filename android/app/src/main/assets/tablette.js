@@ -1199,7 +1199,23 @@
       row.appendChild(next);
     }
     callScreen.appendChild(row);
+    armPickerIdle();
   }
+
+  // Liste « Qui voulez-vous appeler ? » : retour à l'accueil après 1 minute sans toucher l'écran.
+  var PICKER_IDLE_MS = 60000;
+  var pickerTimer = null;
+  function pickerOpen() {
+    return !!callScreen && !callScreen.hasAttribute('hidden') && /\bpicker\b/.test(callScreen.className);
+  }
+  function armPickerIdle() {
+    clearTimeout(pickerTimer);
+    if (!pickerOpen()) return;
+    pickerTimer = setTimeout(function () {
+      if (pickerOpen()) { pickerPage = 0; closeCallScreen(); }
+    }, PICKER_IDLE_MS);
+  }
+  document.addEventListener('pointerdown', armPickerIdle, true);
 
   function onCallButton() {
     pickerPage = 0;
