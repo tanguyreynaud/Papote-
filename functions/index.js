@@ -21,6 +21,8 @@
 //   tabletteEnvoyee    appel depuis le tableau de bord admin : colis parti, numéro de suivi Mondial Relay
 //   commandeModifiee   commande modifiée : e-mail d'envoi, de retour, d'étiquette ; remboursement au retour
 //   rappelsJumelage    chaque jour : rappel au client dont la tablette n'est pas jumelée (J+5, J+12)
+//   coupeCircuit       avis du budget Google Cloud : e-mail à 30 € et 100 €, facturation coupée à 150 € (budget.js)
+//   quota*             plafonds de stockage par famille appliqués par le serveur (quota.js)
 //   gestion*           page de gestion admin : stock, commandes, factures, comptabilité (gestion.js)
 //
 // État écrit sur families/{fid}.abonnement (voir abonnement.js), avec rev + 1 pour que la
@@ -1144,6 +1146,10 @@ exports.compterProches = onDocumentWritten(
 
 // Appels de la tablette vers la famille : sonnerie et appel manqué par notification push.
 Object.assign(exports, require('./appels'));
+
+// Protections contre une facture qui s'emballe : coupe-circuit à 150 € et plafonds de stockage.
+exports.coupeCircuit = require('./budget').coupeCircuit;
+Object.assign(exports, (({ quotaFichier, quotaFichierEfface, quotaEnvois }) => ({ quotaFichier, quotaFichierEfface, quotaEnvois }))(require('./quota')));
 
 // Alertes sur le téléphone des responsables : tablette débranchée ou qui ne répond plus.
 exports.alertesTablettes = require('./alertes').alertesTablettes;
