@@ -593,7 +593,7 @@ function introVue() {
 function showIntroTablette() {
   if (!introAFaire()) return false;
   const nom = session.family.name;
-  const choix = { veille: { active: true, de: 23, a: 7 }, textSize: 'grande', volume: 80,
+  const choix = { veille: { active: true, de: 23, a: 7 }, volume: 80,
     options: { lecture: true, reponseVocale: false, radio: { active: false, nom: RADIOS[0].nom, url: RADIOS[0].url } } };
   const back = document.createElement('div');
   back.className = 'guide-back intro-back';
@@ -614,13 +614,7 @@ function showIntroTablette() {
         </div>
       </div>
       <div class="intro-step" data-step="3" hidden>
-        <h2>Lire et entendre</h2>
-        <p class="muted">Taille du texte sur la tablette</p>
-        <div class="segmented" role="radiogroup" aria-label="Taille du texte">
-          <button type="button" class="seg" data-intro-size="normal">Normale</button>
-          <button type="button" class="seg" data-intro-size="grande">Grande</button>
-          <button type="button" class="seg" data-intro-size="tres-grande">Très grande</button>
-        </div>
+        <h2>Le son</h2>
         <p class="muted">Volume du son : <strong id="intro-volume-val"></strong></p>
         <input id="intro-volume" type="range" min="10" max="100" step="5" aria-label="Volume">
       </div>
@@ -661,9 +655,6 @@ function showIntroTablette() {
   loc.label = 'Locales (ex-France Bleu)';
   RADIOS.forEach((r, k) => (r.locale ? loc : nat).append(new Option(r.nom, String(k))));
   $i('#intro-station').append(nat, loc);
-  const markSizeIntro = () => back.querySelectorAll('[data-intro-size]').forEach((b) => b.classList.toggle('active', b.dataset.introSize === choix.textSize));
-  markSizeIntro();
-  back.querySelectorAll('[data-intro-size]').forEach((b) => b.addEventListener('click', () => { choix.textSize = b.dataset.introSize; markSizeIntro(); }));
   $i('#intro-volume').addEventListener('input', () => { $i('#intro-volume-val').textContent = `${$i('#intro-volume').value} %`; });
   $i('#intro-veille').addEventListener('change', () => { $i('#intro-heures').hidden = !$i('#intro-veille').checked; });
   $i('#intro-radio').addEventListener('change', () => { $i('#intro-station-wrap').hidden = !$i('#intro-radio').checked; });
@@ -690,7 +681,6 @@ function showIntroTablette() {
     // Une écriture par réglage : chaque règle n'accepte qu'un champ (avec rev) à la fois.
     const ecrire = (data) => updateDoc(doc(db, 'families', session.fid), { ...data, rev: increment(1) });
     await ecrire({ veille: choix.veille });
-    await ecrire({ textSize: choix.textSize });
     await ecrire({ volume: choix.volume });
     await ecrire({ options: choix.options });
   }
@@ -2639,6 +2629,24 @@ function renderOptions() {
 }
 
 $('opt-radio').addEventListener('change', () => { $('opt-radio-wrap').hidden = !$('opt-radio').checked; });
+
+// Écouter la station choisie ici, sur le téléphone, pour vérifier qu'elle marche.
+let ecouteRadio = null;
+function arreterEcoute() {
+  ecouteRadio?.pause();
+  ecouteRadio = null;
+  $('opt-radio-test').textContent = 'Écouter ici';
+}
+$('opt-radio-test').addEventListener('click', () => {
+  if (ecouteRadio) { arreterEcoute(); return; }
+  const r = RADIOS[Number($('opt-radio-station').value)] || RADIOS[0];
+  ecouteRadio = new Audio(r.url);
+  $('opt-radio-test').textContent = 'Chargement…';
+  ecouteRadio.addEventListener('playing', () => { $('opt-radio-test').textContent = 'Arrêter'; });
+  ecouteRadio.play().catch(() => { arreterEcoute(); notice(`${r.nom} ne répond pas pour le moment.`); });
+});
+$('opt-radio-station').addEventListener('change', () => { if (ecouteRadio) arreterEcoute(); });
+document.querySelectorAll('#options-card .setting-cancel, #form-options').forEach((el) => el.addEventListener(el.tagName === 'FORM' ? 'submit' : 'click', arreterEcoute));
 SETTINGS['options-card'] = {
   fill() {
     const o = optionsActuelles();
@@ -2776,7 +2784,7 @@ function applyFamily() {
   // Un responsable ne quitte pas sa famille (il pourrait ne plus jamais revenir).
   $('btn-leave').hidden = admin;
   $('my-name-value').textContent = session.member.name;
-  $('text-size-card').hidden = !amOwner();
+  $('text-size-card').hidden = true; // plus réglable : le texte débordait sur la tablette
   $('sleep-card').hidden = !amOwner();
   renderSleep();
   $('volume-card').hidden = !amOwner();

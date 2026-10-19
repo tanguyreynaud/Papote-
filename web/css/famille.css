@@ -1114,3 +1114,8 @@ body:not(.on-support) .ps-bouton, body:not(.on-support) .ps-panneau { display: n
 .option-state { color: var(--muted); }
 .option-state.on { color: var(--accent); font-weight: 600; }
 .options-value { gap: 0; margin-top: 8px; }
+
+.station-row { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
+.station-row select { flex: 1; min-width: 0; margin: 0 !important; }
+.station-row .small-btn { flex: none; min-height: 46px; padding: 0 14px; justify-content: center; font-weight: 700; color: var(--accent); }
+.toggle-list .station label { margin: 0; }
