@@ -121,7 +121,8 @@ les fonctions suffit pour que le chat en tienne compte.
 - Caméra : elle ne filme pas en continu. Elle sert aux appels vidéo et, quand un message, une photo ou un rappel arrive, à vérifier que la personne l'a vu.
 - Données : hébergées chez Firebase (Google).
 - Prix : fixe pendant les 12 mois d'engagement. Il peut éventuellement évoluer ensuite, mais c'est très rare.
-- Décès du proche, ou son entrée en maison de retraite (EHPAD), pendant l'engagement : l'abonnement s'arrête sans frais, sur justificatif (acte de décès ou attestation d'entrée) envoyé à contact@mapapote.fr. Le matériel prêté est à renvoyer sous 30 jours avec l'étiquette retour fournie par Papote. En EHPAD, on peut aussi garder Papote (voir Maison de retraite). Demande de contact.
+- Décès du proche pendant l'engagement : l'abonnement s'arrête sans frais, sur justificatif (acte de décès) envoyé à contact@mapapote.fr. Le matériel prêté est à renvoyer sous 30 jours avec l'étiquette retour fournie par Papote. Demande de contact.
+- Entrée du proche en maison de retraite (EHPAD) : Papote le suit, la tablette s'emporte et marche aussi là-bas (voir Maison de retraite). Ce n'est pas un motif d'arrêt de l'engagement.
 - Son : la tablette fait un son quand une photo, une vidéo ou un message arrive.
 - Résiliation pendant les 15 jours d'essai : les 50 € de mise en service sont remboursés.
 - Réseaux sociaux : Papote est sur Facebook, Instagram, TikTok et YouTube sous le nom « mapapote » (ne donne pas de lien).

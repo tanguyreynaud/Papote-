@@ -11,6 +11,7 @@
     <string name="repondre">Répondre</string>
     <string name="refuser">Refuser</string>
     <string name="vous_appelle">%1$s vous appelle</string>
+    <string name="vous_appelle_seul">vous appelle</string>
     <string name="appel_video">Appel Papote</string>
     <string name="appel_manque">Appel manqué de %1$s</string>
     <string name="appel_manque_texte">Touchez pour la rappeler</string>
