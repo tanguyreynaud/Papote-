@@ -60,6 +60,32 @@ final class Http {
         }
     }
 
+    /** Envoi de données binaires (message vocal vers Firebase Storage). */
+    Response upload(String url, String contentType, byte[] bytes, String bearer) throws IOException {
+        HttpsURLConnection c = (HttpsURLConnection) new URL(url).openConnection();
+        c.setConnectTimeout(20_000);
+        c.setReadTimeout(60_000);
+        c.setRequestMethod("POST");
+        c.setRequestProperty("Accept", "application/json");
+        if (bearer != null) c.setRequestProperty("Authorization", "Bearer " + bearer);
+        try {
+            c.setDoOutput(true);
+            c.setRequestProperty("Content-Type", contentType);
+            c.setFixedLengthStreamingMode(bytes.length);
+            OutputStream out = c.getOutputStream();
+            try {
+                out.write(bytes);
+            } finally {
+                out.close();
+            }
+            int code = c.getResponseCode();
+            InputStream in = code >= 400 ? c.getErrorStream() : c.getInputStream();
+            return new Response(code, in == null ? "" : readAll(in));
+        } finally {
+            c.disconnect();
+        }
+    }
+
     private static String readAll(InputStream in) throws IOException {
         try {
             ByteArrayOutputStream out = new ByteArrayOutputStream();

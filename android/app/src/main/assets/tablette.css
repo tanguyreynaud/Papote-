@@ -1648,3 +1648,35 @@ body.night .next-when { color: #a5b4fc; }
 .radio-btn[hidden] { display: none; }
 .radio-btn .icon { width: 6.5vmin; height: 6.5vmin; margin-right: 2.5vmin; }
 .radio-btn.playing { background: #3730a3; color: #fff; border-color: #3730a3; }
+
+/* Répondre par la voix */
+.ln-btn.reply-voice { background: #fff; color: #15803d; border: .5vmin solid #dcfce7; display: inline-flex; align-items: center; gap: 2vmin; }
+.ln-btn.reply-voice .icon { width: 6vmin; height: 6vmin; }
+.ln-btn.reply-voice[hidden] { display: none; }
+.reply-screen {
+  position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 890;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: linear-gradient(160deg, #f0fdf4, #dcfce7); color: #24212f; text-align: center;
+  font-family: 'Atkinson Hyperlegible', Roboto, sans-serif;
+}
+.reply-screen[hidden] { display: none; }
+.reply-mic {
+  width: 30vmin; height: 30vmin; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: #15803d; color: #fff;
+}
+.reply-mic svg { width: 55%; height: 55%; }
+.reply-screen.state-recording .reply-mic { background: #dc2626; animation: reply-pulse 1.2s ease-in-out infinite; }
+@keyframes reply-pulse { 50% { box-shadow: 0 0 0 4vmin rgba(220, 38, 38, .2); } }
+.reply-title { margin: 5vmin 0 1.5vmin; font-family: 'Bricolage Grotesque', 'Atkinson Hyperlegible', sans-serif; font-size: 8vmin; font-weight: 800; }
+.reply-sub { margin: 0; font-size: 6vmin; color: #5f5a6b; font-weight: 700; }
+.reply-actions { display: flex; gap: 5vmin; margin-top: 6vmin; }
+.reply-send, .reply-cancel {
+  min-width: 42vmin; min-height: 15vmin; border-radius: 99vmin;
+  font-family: 'Bricolage Grotesque', 'Atkinson Hyperlegible', sans-serif; font-size: 7vmin; font-weight: 800;
+}
+.reply-send { border: 0; background: #15803d; color: #fff; box-shadow: 0 1.2vmin 3vmin rgba(21, 128, 61, .3); }
+.reply-cancel { border: .5vmin solid #e9e1d4; background: #fff; color: #5f5a6b; }
+#overlay-actions { gap: 2.5vmin; flex-wrap: nowrap; }
+#overlay-actions .ln-btn.listen, #overlay-actions .ln-btn.reply-voice { min-width: 0; padding: 0 4.5vmin; font-size: 5.6vmin; }
+#overlay-actions .ln-btn.ok { min-width: 0; padding: 0 7vmin; }

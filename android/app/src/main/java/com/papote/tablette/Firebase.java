@@ -26,6 +26,25 @@ final class Firebase {
 
     static String database() { return database; }
 
+    /** Bucket Firebase Storage (médias) : lu dans config/base.bucket, sinon celui d'origine. */
+    private static volatile String bucket = "papote-famille.firebasestorage.app";
+
+    static String bucket() { return bucket; }
+
+    static void setBucket(String b) { if (b != null && !b.trim().isEmpty()) bucket = b.trim(); }
+
+    /** Dépose un fichier dans Storage (compte de la tablette) et renvoie son adresse de téléchargement. */
+    String uploadMedia(String path, String contentType, byte[] bytes) throws IOException, JSONException {
+        String url = "https://firebasestorage.googleapis.com/v0/b/" + bucket + "/o?uploadType=media&name="
+                + Uri.encode(path);
+        Http.Response r = http.upload(url, contentType, bytes, token());
+        if (!r.ok()) throw new ApiException(r.code, r.body);
+        String tokens = new JSONObject(r.body).optString("downloadTokens", "");
+        String tok = tokens.split(",")[0];
+        return "https://firebasestorage.googleapis.com/v0/b/" + bucket + "/o/" + Uri.encode(path)
+                + "?alt=media" + (tok.isEmpty() ? "" : "&token=" + tok);
+    }
+
     static void setDatabase(String name) {
         database = name == null || name.trim().isEmpty() ? DEFAULT_DATABASE : name.trim();
     }
@@ -248,11 +267,13 @@ final class Firebase {
      * null si le document est absent ou illisible (on garde la base en cours).
      */
     String targetDatabase() throws IOException, JSONException {
-        String url = FIRESTORE + docs(DEFAULT_DATABASE) + "/config/base?mask.fieldPaths=database";
+        String url = FIRESTORE + docs(DEFAULT_DATABASE) + "/config/base?mask.fieldPaths=database&mask.fieldPaths=bucket";
         Http.Response r = http.request("GET", url, null, null, token());
         if (r.code == 404) return DEFAULT_DATABASE;
         if (!r.ok()) return null;
         JSONObject f = new JSONObject(r.body).optJSONObject("fields");
+        String b = f == null ? null : str(f, "bucket");
+        if (b != null && !b.trim().isEmpty()) bucket = b.trim();
         String db = f == null ? null : str(f, "database");
         return db == null || db.trim().isEmpty() ? DEFAULT_DATABASE : db.trim();
     }

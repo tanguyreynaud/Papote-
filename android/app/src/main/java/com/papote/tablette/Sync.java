@@ -116,6 +116,7 @@ final class Sync {
         this.listener = listener;
         imageDir.mkdirs();
         Firebase.setDatabase(prefs.getString("database", null));
+        Firebase.setBucket(prefs.getString("bucket", null));
         if (prefs.getString("fid", null) != null && !Meteo.done(this.context)) {
             Meteo.save(this.context, LEGACY_CITY, LEGACY_LAT, LEGACY_LON);
         }
@@ -716,6 +717,7 @@ final class Sync {
         lastDatabaseCheck = now;
         try {
             String target = firebase.targetDatabase();
+            prefs.edit().putString("bucket", Firebase.bucket()).apply();
             if (target == null || target.equals(Firebase.database())) return;
             Journal.log(context, "Base Firestore : " + Firebase.database() + " -> " + target);
             prefs.edit().putString("database", target).remove("pairing").remove("pairingExpires").apply();
@@ -818,6 +820,51 @@ final class Sync {
 
     void touched() {
         handler.post(() -> heartbeat(prefs.getString("fid", null), "lastActive"));
+    }
+
+    /**
+     * Réponse vocale de Mamie (option « reponseVocale ») : l'enregistrement va dans Storage, puis un
+     * envoi « voice » apparaît dans le fil de la famille. done(true/false) sur le fil principal.
+     */
+    void sendVoiceReply(byte[] audio, String mime, int duration, String replyTo, java.util.function.Consumer<Boolean> done) {
+        handler.post(() -> {
+            boolean ok = false;
+            String fid = prefs.getString("fid", null);
+            try {
+                if (fid == null) throw new IOException("pas de famille");
+                String id = Firebase.randomString(20);
+                String type = mime == null || mime.isEmpty() ? "audio/webm" : mime.split(";")[0];
+                String path = "families/" + fid + "/media/" + id + ".webm";
+                String url = firebase.uploadMedia(path, type, audio);
+                JSONObject fields = new JSONObject()
+                        .put("type", Firebase.string("voice"))
+                        .put("text", Firebase.string(""))
+                        .put("audioUrl", Firebase.string(url))
+                        .put("storagePath", Firebase.string(path))
+                        .put("duration", new JSONObject().put("integerValue", String.valueOf(Math.max(1, duration))))
+                        .put("mime", Firebase.string(type))
+                        .put("authorUid", Firebase.string(firebase.uid()))
+                        .put("authorName", Firebase.string(prefs.getString("tabletName", "Tablette")))
+                        .put("seenAt", new JSONObject().put("nullValue", JSONObject.NULL))
+                        .put("hearts", new JSONObject().put("integerValue", "0"));
+                if (replyTo != null && !replyTo.isEmpty()) fields.put("replyTo", Firebase.string(replyTo));
+                JSONObject write = new JSONObject()
+                        .put("update", new JSONObject()
+                                .put("name", Firebase.docName("families/" + fid + "/posts/" + id))
+                                .put("fields", fields))
+                        .put("updateTransforms", new JSONArray().put(new JSONObject()
+                                .put("fieldPath", "createdAt").put("setToServerValue", "REQUEST_TIME")))
+                        .put("currentDocument", new JSONObject().put("exists", false));
+                firebase.commit(new JSONArray().put(write));
+                Journal.log(context, "Réponse vocale envoyée (" + duration + " s)");
+                ok = true;
+            } catch (Exception e) {
+                Log.w(TAG, "Réponse vocale", e);
+                Journal.log(context, "Réponse vocale impossible : " + e.getMessage());
+            }
+            final boolean result = ok;
+            new Handler(android.os.Looper.getMainLooper()).post(() -> done.accept(result));
+        });
     }
 
     /** Visage vu par la caméra : members/{uid}.lastSeen, pour l'alerte « pas vue ce matin ». */
