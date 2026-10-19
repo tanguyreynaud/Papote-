@@ -39,6 +39,10 @@ function events() {
       add(toDate(p.createdAt), 'message', `${grand} a répondu : « ${p.text} »`);
       continue;
     }
+    if (p.type === 'voice' && p.audioUrl) {
+      add(toDate(p.createdAt), 'message', `${grand} a répondu par un message vocal`);
+      continue;
+    }
     if (!WHAT[p.type]) continue; // anciens vocaux
     const author = who(p.authorUid, p.authorName);
     const verb = author === 'Vous' ? 'avez' : 'a';

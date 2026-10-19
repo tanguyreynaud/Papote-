@@ -147,7 +147,7 @@ function watchFeed(type, render) {
 const PAGES = {
   photos: () => watchFeed('photo', renderPhotos),
   videos: () => watchFeed('video', renderVideos),
-  messages: () => watchType(['message', 'reply'], 60, renderMessages),
+  messages: () => watchType(['message', 'reply', 'voice'], 60, renderMessages),
   agenda: () => null,
   pair: () => { resetPairing(); return () => { stopPair?.(); stopPair = null; }; },
   settings: () => { renderSettings(); return null; },
@@ -469,24 +469,30 @@ $('viewer-save').addEventListener('click', async () => {
 function renderMessages(posts) {
   const list = $('messages');
   const grand = session.family.name;
-  const items = posts.slice().reverse().map((post) => {
+  // Anciens vocaux sans fichier (avant la refonte) : on ne les montre pas.
+  const shown = posts.filter((p) => p.type !== 'voice' || p.audioUrl);
+  const items = shown.slice().reverse().map((post) => {
     const mine = post.authorUid === session.uid;
+    const vocal = post.type === 'voice';
     const li = document.createElement('li');
-    li.className = `bubble ${mine ? 'mine' : 'theirs'}${post.type === 'reply' ? ' reply' : ''}`;
-    if (!mine && post.type !== 'reply' && faces[post.authorUid]) {
+    li.className = `bubble ${mine ? 'mine' : 'theirs'}${post.type === 'reply' || vocal ? ' reply' : ''}`;
+    if (!mine && post.type !== 'reply' && !vocal && faces[post.authorUid]) {
       li.classList.add('with-face');
       li.append(avatar(faces[post.authorUid]));
     }
     if (!mine) {
       const who = document.createElement('p');
       who.className = 'bubble-who';
-      who.textContent = post.type === 'reply' ? grand : post.authorName;
+      who.textContent = post.type === 'reply' || vocal ? grand : post.authorName;
       li.append(who);
     }
-    const text = document.createElement('p');
-    text.className = 'bubble-text';
-    text.textContent = post.text;
-    li.append(text);
+    if (vocal) li.append(...bulleVocale(post));
+    if (post.text) {
+      const text = document.createElement('p');
+      text.className = 'bubble-text';
+      text.textContent = post.text;
+      li.append(text);
+    }
     const foot = document.createElement('p');
     foot.className = 'bubble-foot';
     let label = timeLabel(toDate(post.createdAt));
@@ -505,8 +511,38 @@ function renderMessages(posts) {
     return li;
   });
   list.replaceChildren(...items);
-  $('messages-empty').hidden = posts.length > 0;
+  $('messages-empty').hidden = shown.length > 0;
   requestAnimationFrame(() => window.scrollTo(0, document.body.scrollHeight));
+}
+
+// Réponse vocale de la tablette : lecteur audio, et la photo à laquelle elle répond.
+function bulleVocale(post) {
+  const parts = [];
+  if (post.replyTo) {
+    const ref = document.createElement('div');
+    ref.className = 'vocal-ref';
+    ref.textContent = 'En réponse à une photo';
+    getDoc(doc(db, 'families', session.fid, 'posts', post.replyTo)).then((snap) => {
+      const p = snap.data();
+      if (!p) return;
+      const quoi = p.type === 'video' ? 'une vidéo' : p.type === 'message' ? 'un message' : 'une photo';
+      ref.textContent = `En réponse à ${quoi} de ${p.authorUid === session.uid ? 'vous' : p.authorName}`;
+      if (p.thumb) {
+        const img = document.createElement('img');
+        img.src = p.thumb;
+        img.alt = '';
+        ref.prepend(img);
+      }
+    }).catch(() => {});
+    parts.push(ref);
+  }
+  const audio = document.createElement('audio');
+  audio.controls = true;
+  audio.preload = 'none';
+  audio.src = post.audioUrl;
+  audio.className = 'vocal-audio';
+  parts.push(audio);
+  return parts;
 }
 
 function updateCount() {
@@ -2278,6 +2314,109 @@ SETTINGS['sleep-card'] = {
   },
 };
 
+// Options de la tablette : families/{fid}.options = { lecture, reponseVocale, radio { active, nom, url } }.
+const RADIOS = [
+  { nom: 'France Inter', url: 'https://icecast.radiofrance.fr/franceinter-midfi.mp3' },
+  { nom: 'franceinfo', url: 'https://icecast.radiofrance.fr/franceinfo-midfi.mp3' },
+  { nom: 'ici chanson française', url: 'https://icecast.radiofrance.fr/fbchansonfrancaise-midfi.mp3' },
+  { nom: 'France Musique', url: 'https://icecast.radiofrance.fr/francemusique-midfi.mp3' },
+  { nom: 'FIP', url: 'https://icecast.radiofrance.fr/fip-midfi.mp3' },
+  { nom: 'RTL', url: 'https://icecast.rtl.fr/rtl-1-44-128' },
+  { nom: 'RTL2', url: 'https://icecast.rtl2.fr/rtl2-1-44-128' },
+  { nom: 'Europe 1', url: 'https://stream.europe1.fr/europe1.mp3' },
+  { nom: 'Nostalgie', url: 'https://streaming.nrjaudio.fm/oug7girb92oc' },
+  { nom: 'Chérie FM', url: 'https://cdnradio.streamakaci.com/cheriefm1.mp3' },
+  { nom: 'RFM', url: 'https://stream.rfm.fr/rfm.mp3' },
+  { nom: 'Radio Classique', url: 'https://radioclassique.ice.infomaniak.ch/radioclassique-high.mp3' },
+  { nom: 'Rire et Chansons', url: 'https://streaming.nrjaudio.fm/ou8o8xgk7oiu' },
+  { nom: 'ici Paris', url: 'https://icecast.radiofrance.fr/fb1071-midfi.mp3', locale: true },
+  { nom: 'ici Alsace', url: 'https://icecast.radiofrance.fr/fbalsace-midfi.mp3', locale: true },
+  { nom: 'ici Armorique', url: 'https://icecast.radiofrance.fr/fbarmorique-midfi.mp3', locale: true },
+  { nom: 'ici Auxerre', url: 'https://icecast.radiofrance.fr/fbauxerre-midfi.mp3', locale: true },
+  { nom: 'ici Azur', url: 'https://icecast.radiofrance.fr/fbazur-midfi.mp3', locale: true },
+  { nom: 'ici Béarn Bigorre', url: 'https://icecast.radiofrance.fr/fbbearn-midfi.mp3', locale: true },
+  { nom: 'ici Belfort-Montbéliard', url: 'https://icecast.radiofrance.fr/fbbelfort-midfi.mp3', locale: true },
+  { nom: 'ici Berry', url: 'https://icecast.radiofrance.fr/fbberry-midfi.mp3', locale: true },
+  { nom: 'ici Besançon', url: 'https://icecast.radiofrance.fr/fbbesancon-midfi.mp3', locale: true },
+  { nom: 'ici Bourgogne', url: 'https://icecast.radiofrance.fr/fbbourgogne-midfi.mp3', locale: true },
+  { nom: 'ici Breizh Izel', url: 'https://icecast.radiofrance.fr/fbbreizizel-midfi.mp3', locale: true },
+  { nom: 'ici Champagne-Ardenne', url: 'https://icecast.radiofrance.fr/fbchampagne-midfi.mp3', locale: true },
+  { nom: 'ici Cotentin', url: 'https://icecast.radiofrance.fr/fbcotentin-midfi.mp3', locale: true },
+  { nom: 'ici Creuse', url: 'https://icecast.radiofrance.fr/fbcreuse-midfi.mp3', locale: true },
+  { nom: 'ici Drôme Ardèche', url: 'https://icecast.radiofrance.fr/fbdromeardeche-midfi.mp3', locale: true },
+  { nom: 'ici Gard Lozère', url: 'https://icecast.radiofrance.fr/fbgardlozere-midfi.mp3', locale: true },
+  { nom: 'ici Gascogne', url: 'https://icecast.radiofrance.fr/fbgascogne-midfi.mp3', locale: true },
+  { nom: 'ici Gironde', url: 'https://icecast.radiofrance.fr/fbgironde-midfi.mp3', locale: true },
+  { nom: 'ici Hérault', url: 'https://icecast.radiofrance.fr/fbherault-midfi.mp3', locale: true },
+  { nom: 'ici Isère', url: 'https://icecast.radiofrance.fr/fbisere-midfi.mp3', locale: true },
+  { nom: 'ici La Rochelle', url: 'https://icecast.radiofrance.fr/fblarochelle-midfi.mp3', locale: true },
+  { nom: 'ici Limousin', url: 'https://icecast.radiofrance.fr/fblimousin-midfi.mp3', locale: true },
+  { nom: 'ici Loire Océan', url: 'https://icecast.radiofrance.fr/fbloireocean-midfi.mp3', locale: true },
+  { nom: 'ici Lorraine Nord', url: 'https://icecast.radiofrance.fr/fblorrainenord-midfi.mp3', locale: true },
+  { nom: 'ici Maine', url: 'https://icecast.radiofrance.fr/fbmaine-midfi.mp3', locale: true },
+  { nom: 'ici Mayenne', url: 'https://icecast.radiofrance.fr/fbmayenne-midfi.mp3', locale: true },
+  { nom: 'ici Nord', url: 'https://icecast.radiofrance.fr/fbnord-midfi.mp3', locale: true },
+  { nom: 'ici Normandie (Caen)', url: 'https://icecast.radiofrance.fr/fbbassenormandie-midfi.mp3', locale: true },
+  { nom: 'ici Normandie (Rouen)', url: 'https://icecast.radiofrance.fr/fbhautenormandie-midfi.mp3', locale: true },
+  { nom: 'ici Orléans', url: 'https://icecast.radiofrance.fr/fborleans-midfi.mp3', locale: true },
+  { nom: 'ici Pays Basque', url: 'https://icecast.radiofrance.fr/fbpaysbasque-midfi.mp3', locale: true },
+  { nom: "ici Pays d'Auvergne", url: 'https://icecast.radiofrance.fr/fbpaysdauvergne-midfi.mp3', locale: true },
+  { nom: 'ici Pays de Savoie', url: 'https://icecast.radiofrance.fr/fbpaysdesavoie-midfi.mp3', locale: true },
+  { nom: 'ici Périgord', url: 'https://icecast.radiofrance.fr/fbperigord-midfi.mp3', locale: true },
+  { nom: 'ici Picardie', url: 'https://icecast.radiofrance.fr/fbpicardie-midfi.mp3', locale: true },
+  { nom: 'ici Poitou', url: 'https://icecast.radiofrance.fr/fbpoitou-midfi.mp3', locale: true },
+  { nom: 'ici Provence', url: 'https://icecast.radiofrance.fr/fbprovence-midfi.mp3', locale: true },
+  { nom: 'ici Roussillon', url: 'https://icecast.radiofrance.fr/fbroussillon-midfi.mp3', locale: true },
+  { nom: 'ici Sud Lorraine', url: 'https://icecast.radiofrance.fr/fbsudlorraine-midfi.mp3', locale: true },
+  { nom: 'ici Toulouse', url: 'https://icecast.radiofrance.fr/fbtoulouse-midfi.mp3', locale: true },
+  { nom: 'ici Touraine', url: 'https://icecast.radiofrance.fr/fbtouraine-midfi.mp3', locale: true },
+  { nom: 'ici Vaucluse', url: 'https://icecast.radiofrance.fr/fbvaucluse-midfi.mp3', locale: true },
+];
+
+(function remplirRadios() {
+  const nat = document.createElement('optgroup');
+  nat.label = 'Nationales';
+  const loc = document.createElement('optgroup');
+  loc.label = 'Locales (ex-France Bleu)';
+  RADIOS.forEach((r, i) => (r.locale ? loc : nat).append(new Option(r.nom, String(i))));
+  $('opt-radio-station').append(nat, loc);
+}());
+
+const optionsActuelles = () => session.family.options || {};
+
+function renderOptions() {
+  const o = optionsActuelles();
+  const lignes = [
+    `Lecture à voix haute : ${o.lecture ? 'oui' : 'non'}`,
+    `Réponse vocale : ${o.reponseVocale ? 'oui' : 'non'}`,
+    `Radio : ${o.radio?.active ? (o.radio.nom || 'oui') : 'non'}`,
+  ];
+  $('options-value').replaceChildren(...lignes.map((t) => Object.assign(document.createElement('span'), { textContent: t })));
+}
+
+$('opt-radio').addEventListener('change', () => { $('opt-radio-wrap').hidden = !$('opt-radio').checked; });
+SETTINGS['options-card'] = {
+  fill() {
+    const o = optionsActuelles();
+    $('opt-lecture').checked = !!o.lecture;
+    $('opt-vocal').checked = !!o.reponseVocale;
+    $('opt-radio').checked = !!o.radio?.active;
+    const i = RADIOS.findIndex((r) => r.url === o.radio?.url);
+    $('opt-radio-station').value = String(i >= 0 ? i : 0);
+    $('opt-radio-wrap').hidden = !$('opt-radio').checked;
+  },
+  async save() {
+    const r = RADIOS[Number($('opt-radio-station').value)] || RADIOS[0];
+    const options = {
+      lecture: $('opt-lecture').checked,
+      reponseVocale: $('opt-vocal').checked,
+      radio: { active: $('opt-radio').checked, nom: r.nom, url: r.url },
+    };
+    await saveFamily({ options }, 'Options envoyées à la tablette');
+    return true;
+  },
+};
+
 // Volume : families/{fid}.volume (0 à 100), appliqué au son des vidéos et des appels.
 const volumeActuel = () => (Number.isInteger(session.family.volume) ? session.family.volume : 80);
 
@@ -2398,6 +2537,8 @@ function applyFamily() {
   renderSleep();
   $('volume-card').hidden = !amOwner();
   renderVolume();
+  $('options-card').hidden = !amOwner();
+  renderOptions();
   $('meteo-card').hidden = !amOwner();
   renderMeteo();
   $('delete-family-info').hidden = !amOwner();
