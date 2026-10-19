@@ -30,7 +30,7 @@ const app = initializeApp({
 
 // App Check : prouve que les requêtes viennent de l'app Papote (et pas d'un script). Clé de site
 // reCAPTCHA Enterprise (publique) créée dans la console Google Cloud ; vide = App Check pas encore actif.
-const RECAPTCHA_SITE_KEY = '';
+const RECAPTCHA_SITE_KEY = '6Lc33fYtAAAAAJSeuhEVo8IK1rs0BwlDS5zN9A7M';
 if (RECAPTCHA_SITE_KEY) {
   try {
     initializeAppCheck(app, { provider: new ReCaptchaEnterpriseProvider(RECAPTCHA_SITE_KEY), isTokenAutoRefreshEnabled: true });
