@@ -286,12 +286,25 @@
 
   // Comme pour le wifi : un bouton « Choisir la ville » et une fenêtre : le code postal, puis la liste
   // de ses communes.
+  // Ville touchée dans la fenêtre : affichée ici avec « Continuer », enregistrée seulement à ce moment-là.
+  var chosenCity = null;
+
   function showMeteo() {
     stepNum = 3;
     art = 'meteo';
-    var box = screen('La météo', 'Tapez le code postal de la tablette, puis choisissez la ville : elle affichera sa météo.');
-    box.appendChild(button('Choisir la ville', 'primary', openCities));
-    box.appendChild(button('Passer cette étape', 'no', function () { closeNetworks(); android().meteoSkip(); }));
+    var c = chosenCity;
+    var box = screen('La météo', c ? '' : 'Tapez le code postal de la tablette, puis choisissez la ville : elle affichera sa météo.');
+    if (c) {
+      box.appendChild(el('p', 'welcome-ok', 'Météo de ' + c.nom + (c.detail ? ' (' + c.detail.replace(/^\d{5} · /, '') + ')' : '')));
+      box.appendChild(button('Continuer', 'primary', function () {
+        chosenCity = null;
+        android().meteoChoose(c.nom, c.lat, c.lon);
+      }));
+      box.appendChild(button('Choisir une autre ville', '', openCities));
+    } else {
+      box.appendChild(button('Choisir la ville', 'primary', openCities));
+      box.appendChild(button('Passer cette étape', 'no', function () { closeNetworks(); android().meteoSkip(); }));
+    }
     // La fenêtre ne s'ouvre que sur « Choisir la ville » : la personne a le temps de lire.
   }
 
@@ -359,7 +372,8 @@
         var b = button('', 'network', function () {
           if (document.activeElement) document.activeElement.blur();
           closeNetworks();
-          android().meteoChoose(c.nom, c.lat, c.lon);
+          chosenCity = c;
+          showMeteo();
         });
         var icon = el('span', 'wifi-icon');
         icon.innerHTML = PIN;
