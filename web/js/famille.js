@@ -1378,6 +1378,12 @@ function showIncoming(call) {
   if (currentCall || callStarting) call = null; // déjà en communication
   if (call && incoming && incoming.id === call.id) return;
   incoming = call;
+  // « Répondre » déjà touché sur la notification ou l'app Android : on décroche directement.
+  if (call && answerPending === call.id) {
+    answerPending = null;
+    answerFromTablet();
+    return;
+  }
   $('incoming').hidden = !call;
   if (!call) { stopRingTone(); return; }
   const caller = call.callerName || session.family.name;
@@ -1436,6 +1442,31 @@ async function answerFromTablet() {
 }
 
 $('incoming-answer').addEventListener('click', answerFromTablet);
+
+// Ouvert par « Répondre » (?appel=<id>) : l'écran d'appel s'affiche tout de suite, avant même
+// l'accueil, et l'appel est pris dès qu'il arrive. S'il ne sonne plus, on le dit.
+let answerPending = null;
+function answerOnArrival(cid) {
+  answerPending = cid;
+  if (incoming && incoming.id === cid) {
+    answerPending = null;
+    answerFromTablet();
+    return;
+  }
+  $('call-video').disabled = true;
+  $('call').classList.add('audio');
+  $('call-name').textContent = '';
+  $('call-face').replaceChildren();
+  $('call').hidden = false;
+  setCallStatus('Connexion…');
+  setTimeout(() => {
+    if (answerPending !== cid) return;
+    answerPending = null;
+    if (currentCall || callStarting) return;
+    setCallStatus("L'appel est terminé");
+    setTimeout(() => { if (!currentCall && !callStarting) leaveCallScreen(); }, 2000);
+  }, 15000);
+}
 
 // Appel audio de Mamie : « Passer en vidéo » allume la caméra, la tablette suit toute seule.
 $('call-video').addEventListener('click', async () => {
@@ -1538,6 +1569,8 @@ async function offerCallBack() {
 navigator.serviceWorker?.addEventListener('message', (e) => {
   const url = e.data && e.data.type === 'appel-ouvert' ? String(e.data.url || '') : '';
   if (url.includes('rappeler=1') && session) offerCallBack();
+  const cid = url && new URL(url, location.origin).searchParams.get('appel');
+  if (cid && session) answerOnArrival(cid);
 });
 
 // Mamie n'a pas répondu : proposer de lui laisser un petit message vidéo à la place.
@@ -3178,6 +3211,7 @@ async function start() {
   const params = new URLSearchParams(location.search);
   sharedPending = params.has('partage');
   rappelerPending = params.has('rappeler');
+  if (params.get('appel')) answerOnArrival(params.get('appel'));
   // Ouvert par l'app Android Papote : ce téléphone sonnera par elle (voir push.js).
   if (params.get('natif')) rememberNativeToken(params.get('natif'));
   // Arrivé par le lien ou le QR code d'invitation : le code est gardé le temps de se connecter.
