@@ -54,6 +54,9 @@ public class Ouverture extends LauncherActivity {
         Uri data = getIntent().getData();
         if (data != null && data.getQueryParameter("appel") != null) {
             Appels.arreter(this, data.getQueryParameter("appel"));
+            // Pas de réglages par-dessus un appel : ils seront proposés au prochain lancement.
+            recupererJeton();
+            return;
         }
         demanderNotifications();
     }
