@@ -1041,52 +1041,6 @@ $('face-remove').addEventListener('click', async () => {
   renderFace();
   try { await saveFace(null); } catch (err) { console.error(err); }
 });
-// Photo de la personne (families/{fid}.photo) : choisie par un responsable, vue lors des appels.
-function renderGrandPhoto() {
-  const photo = session.family.photo || null;
-  $('grand-photo-card').hidden = !amFamilyAdmin();
-  $('grand-photo-img').hidden = !photo;
-  $('grand-photo-empty').hidden = !!photo;
-  $('grand-photo-remove').hidden = !photo;
-  if (photo) $('grand-photo-img').src = photo;
-}
-
-async function squarePhoto(file) {
-  const img = await loadImage(file);
-  const side = Math.min(img.naturalWidth, img.naturalHeight);
-  const canvas = document.createElement('canvas');
-  canvas.width = 320;
-  canvas.height = 320;
-  canvas.getContext('2d').drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, 320, 320);
-  return canvas.toDataURL('image/jpeg', 0.8);
-}
-
-async function onGrandPhotoChosen(e) {
-  const file = e.target.files && e.target.files[0];
-  e.target.value = '';
-  if (!file) return;
-  try {
-    const photo = await squarePhoto(file);
-    session.family = { ...session.family, photo };
-    renderGrandPhoto();
-    await saveFamily({ photo }, 'Photo enregistrée');
-  } catch (err) {
-    console.error(err);
-    notice("La photo n'a pas pu être enregistrée. Vérifiez la connexion.");
-  }
-}
-
-$('grand-photo-camera').addEventListener('click', () => $('in-grand-photo-camera').click());
-$('grand-photo-gallery').addEventListener('click', () => $('in-grand-photo-gallery').click());
-$('in-grand-photo-camera').addEventListener('change', onGrandPhotoChosen);
-$('in-grand-photo-gallery').addEventListener('change', onGrandPhotoChosen);
-$('grand-photo-remove').addEventListener('click', async () => {
-  if (!await askConfirm('Retirer la photo ?')) return;
-  session.family = { ...session.family, photo: null };
-  renderGrandPhoto();
-  try { await saveFamily({ photo: null }, 'Photo retirée'); } catch (err) { console.error(err); }
-});
-
 $('face-nudge').addEventListener('click', () => document.querySelector('.nav-item[data-tab="profile"]').click());
 
 // ---------- Nettoyage : rester dans le quota gratuit de Firebase ----------
@@ -1244,14 +1198,8 @@ function renderCallTile() {
 
 // ---------- Mamie appelle (audio) ----------
 // Photo de la tablette (ou initiale) et durée de l'appel, pour un écran comme un vrai téléphone.
-function grandPhoto() {
-  return session.family.photo || tabletMembers.map((m) => m.face).find(Boolean) || null;
-}
-
 function setCallFace(el, name) {
-  const face = grandPhoto();
-  const backdrop = el.closest('.incoming, .call-audio-panel')?.querySelector('.call-backdrop');
-  if (backdrop) backdrop.style.backgroundImage = face ? `url("${face}")` : '';
+  const face = tabletMembers.map((m) => m.face).find(Boolean);
   el.replaceChildren();
   if (face) {
     const img = document.createElement('img');
@@ -2385,7 +2333,6 @@ function applyFamily() {
   $('message-text').placeholder = `Écrire à ${name}…`;
   $('family-name-card').hidden = !amOwner();
   $('family-name-value').textContent = name;
-  renderGrandPhoto();
   if (allMembers.length) renderMembers(allMembers);
 }
 

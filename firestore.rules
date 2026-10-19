@@ -197,11 +197,6 @@ service cloud.firestore {
             && request.resource.data.veille.active is bool
             && request.resource.data.veille.de is int && request.resource.data.veille.de >= 0 && request.resource.data.veille.de <= 23
             && request.resource.data.veille.a is int && request.resource.data.veille.a >= 0 && request.resource.data.veille.a <= 23)
-          // Photo de la personne (appels de la tablette) : petite image JPEG en data URL, ou null.
-          || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['photo', 'rev'])
-            && isFamilyAdmin(fid)
-            && (request.resource.data.photo == null
-              || (request.resource.data.photo is string && request.resource.data.photo.size() <= 200000)))
           // Ville de la météo choisie par la famille (l'emporte sur celle de la tablette).
           || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['meteoVille', 'rev'])
             && isFamilyAdmin(fid)
