@@ -490,7 +490,7 @@ setInterval(() => {
     hideRing();
     refuseCall(id);
   }
-  if (active) hangup('');
+  if (active) (active.finish ? active.finish('failed', 'ended') : hangup(''));
 }, 2000);
 
 // Au démarrage, la tablette n'est en communication avec personne : un appel resté
@@ -513,7 +513,8 @@ function watchCalls() {
     const now = Date.now();
     const fresh = snap.docs.filter((d) => {
       const data = d.data({ serverTimestamps: 'estimate' });
-      return !data.calleeUid && data.createdAt && now - data.createdAt.toMillis() < FRESH_MS;
+      const mine = auth.currentUser && data.callerUid === auth.currentUser.uid;
+      return !mine && !data.calleeUid && data.createdAt && now - data.createdAt.toMillis() < FRESH_MS;
     });
     // Abonnement suspendu : la tablette est en pause, aucun appel. L'appelant voit « Pas de réponse ».
     if (paused()) {
@@ -620,6 +621,129 @@ function closeView() {
   $('call-local').srcObject = null;
   if (android()) android().inCall(false);
 }
+
+// ---------- Appel de Mamie vers la famille (audio seulement) ----------
+// window.papoteCallFamily({ to, onState }) -> { hangup() } pour tablette.js.
+//   to : uid d'un proche, ou null pour toute la famille (le premier qui décroche a l'appel).
+//   onState(state, info) : 'ringing' { names } | 'connected' { uid, name, face } | 'ended'
+//                          | 'missed' | 'busy' | 'failed'.
+// Le proche qui décroche écrit son uid et son prénom dans answer (seul champ modifiable).
+
+const OUT_RING_MS = 45_000;
+
+async function familyPeople() {
+  const snap = await getDocs(collection(db, 'families', fid, 'members'));
+  return snap.docs
+    .map((d) => ({ uid: d.id, ...d.data() }))
+    .filter((m) => m.role === 'famille' && (m.status === undefined || m.status === 'active'));
+}
+
+window.papoteCallFamily = ({ to = null, onState = () => {} } = {}) => {
+  let done = false;
+  let call = null; // { ref, pc, stream, stops, timer, audio }
+  const emit = (state, info = {}) => {
+    try { onState(state, info); } catch (e) { console.warn('Appel sortant : onState', e); }
+  };
+  const finish = (state, notify, info) => {
+    if (done) return;
+    done = true;
+    if (call) {
+      clearTimeout(call.timer);
+      clearTimeout(call.lostTimer);
+      call.stops.forEach((stop) => stop());
+      if (call.pc) call.pc.close();
+      if (call.stream) call.stream.getTracks().forEach((t) => t.stop());
+      if (call.audio) call.audio.srcObject = null;
+      if (notify && call.ref) updateDoc(call.ref, { state: notify, endedAt: serverTimestamp() }).catch(() => {});
+    }
+    if (active && active.outgoing) active = null;
+    if (android()) android().inCall(false);
+    setTimeout(startPresence, 500);
+    emit(state, info);
+  };
+
+  (async () => {
+    if (paused() || !fid || !auth.currentUser) { finish('failed'); return; }
+    if (active || ringing) { finish('busy'); return; }
+    stopPresence();
+    call = { ref: null, pc: null, stream: null, stops: [], timer: null, lostTimer: null, audio: null };
+    active = { id: null, outgoing: true, finish, stops: call.stops };
+    if (android()) android().inCall(true);
+
+    const people = await familyPeople().catch(() => []);
+    const target = to ? people.find((m) => m.uid === to) : null;
+    let familyName = 'Mamie';
+    try { familyName = (await getDoc(doc(db, 'families', fid))).data().name || familyName; } catch (e) { /* nom par défaut */ }
+
+    call.stream = await navigator.mediaDevices.getUserMedia({ audio: CAMERA.audio, video: false });
+    if (done) { call.stream.getTracks().forEach((t) => t.stop()); return; }
+    const pc = new RTCPeerConnection(await iceServers());
+    call.pc = pc;
+    if (done) { pc.close(); return; }
+    call.stream.getTracks().forEach((t) => pc.addTrack(t, call.stream));
+    call.audio = new Audio();
+    call.audio.autoplay = true;
+    pc.ontrack = (e) => { call.audio.srcObject = e.streams[0]; call.audio.play().catch(() => {}); };
+
+    const ref = doc(collection(db, 'families', fid, 'calls'));
+    call.ref = ref;
+    active.id = ref.id;
+    pc.onicecandidate = (e) => {
+      if (e.candidate) addDoc(collection(ref, 'callerCandidates'), e.candidate.toJSON()).catch(() => {});
+    };
+    pc.onconnectionstatechange = () => {
+      clearTimeout(call.lostTimer);
+      if (pc.connectionState === 'disconnected') call.lostTimer = setTimeout(() => finish('ended', 'ended'), 8000);
+      if (pc.connectionState === 'failed') finish('failed', 'ended');
+    };
+
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    if (done) return;
+    await setDoc(ref, {
+      callerUid: auth.currentUser.uid,
+      callerName: familyName,
+      calleeUid: target ? target.uid : null,
+      calleeName: target ? target.name : null,
+      state: 'ringing',
+      offer: { type: offer.type, sdp: offer.sdp },
+      answer: null,
+      createdAt: serverTimestamp(),
+      endedAt: null,
+    });
+    if (done) { updateDoc(ref, { state: 'ended', endedAt: serverTimestamp() }).catch(() => {}); return; }
+    emit('ringing', { names: (target ? [target] : people).map((m) => m.name) });
+    call.timer = setTimeout(() => finish('missed', 'missed'), OUT_RING_MS);
+
+    call.stops.push(onSnapshot(ref, async (snap) => {
+      const data = snap.data();
+      if (!data || done) return;
+      if (data.answer && !pc.currentRemoteDescription) {
+        clearTimeout(call.timer);
+        try {
+          await pc.setRemoteDescription({ type: data.answer.type, sdp: data.answer.sdp });
+        } catch (e) {
+          finish('failed', 'ended');
+          return;
+        }
+        const who = people.find((m) => m.uid === data.answer.uid) || {};
+        emit('connected', { uid: data.answer.uid || null, name: data.answer.name || who.name || '', face: who.face || null });
+      }
+      if (data.state === 'ended') finish('ended');
+      if (data.state === 'declined' || data.state === 'missed') finish('missed');
+    }));
+    call.stops.push(onSnapshot(collection(ref, 'calleeCandidates'), (snap) => {
+      snap.docChanges().forEach((c) => {
+        if (c.type === 'added') pc.addIceCandidate(c.doc.data()).catch(() => {});
+      });
+    }));
+  })().catch((e) => {
+    console.warn('Appel sortant', e);
+    finish('failed', call && call.ref ? 'ended' : null);
+  });
+
+  return { hangup: () => finish('ended', 'ended') };
+};
 
 // Maintenance : la tablette quitte la famille (commande ADB « leave »).
 window.papoteAppelsLeave = async () => {
