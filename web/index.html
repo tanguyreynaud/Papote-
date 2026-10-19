@@ -343,6 +343,21 @@
           <ul id="members" class="members"></ul>
         </div>
         <h3 class="settings-group owner-only" id="group-tablet">La tablette</h3>
+        <div id="tablet-face-card" class="card" hidden>
+          <h2>Photo de <span class="grand-name"></span></h2>
+          <p class="muted small">Elle s'affiche dans l'app, par exemple quand <span class="grand-name"></span> vous appelle.</p>
+          <div class="face-row">
+            <img id="tface-img" class="avatar avatar-lg" alt="" hidden>
+            <span id="tface-empty" class="avatar avatar-lg avatar-empty"><svg><use href="#i-user"/></svg></span>
+            <div class="face-buttons">
+              <button type="button" class="secondary" id="tface-camera"><svg><use href="#i-camera"/></svg>Prendre une photo</button>
+              <button type="button" class="secondary" id="tface-gallery"><svg><use href="#i-gallery"/></svg>Choisir une photo</button>
+              <button type="button" class="link danger" id="tface-remove" hidden>Retirer la photo</button>
+            </div>
+          </div>
+          <input id="in-tface-camera" type="file" accept="image/*" capture="environment" hidden>
+          <input id="in-tface-gallery" type="file" accept="image/*" hidden>
+        </div>
         <div id="family-name-card" class="card setting" hidden>
           <div class="setting-head"><h2>Prénom de la personne</h2><button type="button" class="link setting-modify">Modifier</button></div>
           <p id="family-name-value" class="setting-value"></p>

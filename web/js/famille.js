@@ -1283,6 +1283,50 @@ async function onFaceChosen(e) {
   }
 }
 
+// Photo de la personne qui a la tablette : écrite sur ses fiches (role 'tablette') par un responsable.
+function renderTabletFace() {
+  const face = tabletMembers.map((m) => m.face).find(Boolean) || null;
+  $('tablet-face-card').hidden = !amFamilyAdmin() || !tabletMembers.length;
+  $('tface-img').hidden = !face;
+  if (face) $('tface-img').src = face;
+  $('tface-empty').hidden = !!face;
+  $('tface-remove').hidden = !face;
+}
+
+async function saveTabletFace(face) {
+  const batch = writeBatch(db);
+  tabletMembers.forEach((m) => batch.update(doc(db, 'families', session.fid, 'members', m.id), { face }));
+  await batch.commit();
+}
+
+async function onTabletFaceChosen(e) {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  try {
+    const img = await loadImage(file);
+    const side = Math.min(img.naturalWidth, img.naturalHeight);
+    const canvas = document.createElement('canvas');
+    canvas.width = 320;
+    canvas.height = 320;
+    canvas.getContext('2d').drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, 320, 320);
+    await saveTabletFace(canvas.toDataURL('image/jpeg', 0.8));
+    toast('Photo enregistrée');
+  } catch (err) {
+    console.error(err);
+    notice("La photo n'a pas pu être enregistrée. Vérifiez la connexion.");
+  }
+}
+
+$('tface-camera').addEventListener('click', () => $('in-tface-camera').click());
+$('tface-gallery').addEventListener('click', () => $('in-tface-gallery').click());
+$('in-tface-camera').addEventListener('change', onTabletFaceChosen);
+$('in-tface-gallery').addEventListener('change', onTabletFaceChosen);
+$('tface-remove').addEventListener('click', async () => {
+  if (!await askConfirm(`Retirer la photo de ${session.family.name} ?`, 'Retirer')) return;
+  try { await saveTabletFace(null); } catch (err) { console.error(err); notice("La photo n'a pas pu être retirée."); }
+});
+
 $('face-camera').addEventListener('click', () => $('in-face-camera').click());
 $('face-gallery').addEventListener('click', () => $('in-face-gallery').click());
 $('in-face-camera').addEventListener('change', onFaceChosen);
@@ -1776,6 +1820,7 @@ function renderMembers(all) {
   $('invite-email-card').classList.toggle('disabled-card', familyFull);
   renderRequests(pending);
   tabletMembers = members.filter((m) => m.role === 'tablette');
+  renderTabletFace();
   renderMeteo();
   renderWifi();
   faces = Object.fromEntries(members.filter((m) => m.face).map((m) => [m.id, m.face]));

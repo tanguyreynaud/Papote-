@@ -315,6 +315,12 @@ service cloud.firestore {
           && request.resource.data.name is string
           && request.resource.data.name.size() > 0
           && request.resource.data.name.size() <= 40;
+        // Photo de la personne qui a la tablette : choisie par un responsable dans l'app.
+        allow update: if isFamilyAdmin(fid)
+          && resource.data.role == 'tablette'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['face'])
+          && (request.resource.data.face == null
+              || (request.resource.data.face is string && request.resource.data.face.size() <= 200000));
         // Quitter la famille : pas pour le propriétaire (personne ne pourrait le faire revenir).
         allow delete: if signedIn() && uid == request.auth.uid
           && get(familyPath(fid)).data.createdBy != request.auth.uid;
