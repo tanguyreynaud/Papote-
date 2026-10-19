@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Papote</string>
+    <string name="url_app">https://app.mapapote.fr/</string>
+    <!-- Lien de confiance avec app.mapapote.fr (le site publie /.well-known/assetlinks.json) :
+         sans lui, Chrome afficherait une barre d'adresse en haut de l'app. -->
+    <string name="asset_statements" translatable="false">[{\"relation\": [\"delegate_permission/common.handle_all_urls\"], \"target\": {\"namespace\": \"web\", \"site\": \"https://app.mapapote.fr\"}}]</string>
+    <string name="canal_appels">Appels de la tablette</string>
+    <string name="canal_appels_texte">Sonnerie quand la tablette vous appelle</string>
+    <string name="canal_infos">Appels manqués et alertes</string>
+    <string name="repondre">Répondre</string>
+    <string name="refuser">Refuser</string>
+    <string name="vous_appelle">%1$s vous appelle</string>
+    <string name="appel_video">Appel Papote</string>
+    <string name="appel_manque">Appel manqué de %1$s</string>
+    <string name="appel_manque_texte">Touchez pour la rappeler</string>
+</resources>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="creme">#FDFAF5</color>
+    <color name="indigo">#4F46E5</color>
+    <color name="texte">#1F1B16</color>
+    <color name="vert">#16A34A</color>
+    <color name="rouge">#DC2626</color>
+</resources>
