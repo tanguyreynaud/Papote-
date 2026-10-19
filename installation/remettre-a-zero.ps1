@@ -12,7 +12,7 @@ $ErrorActionPreference = 'Stop'
 $Package = 'com.papote.tablette'
 $Apk = Join-Path $PSScriptRoot 'Papote.apk'
 # Première version de Papote qui sait se remettre à l'état usine.
-$VersionMini = 65
+$VersionMini = 67
 
 function Say($text, $color = 'Gray') { Write-Host $text -ForegroundColor $color }
 function Fail($text) {
@@ -89,6 +89,13 @@ if ($typed -ne $serie) { Fail 'N° de série différent : rien n''a été fait.'
 #    Un code à usage unique est écrit dans les réglages d'Android (seul le câble peut le faire),
 #    puis envoyé à Papote : il n'efface que si les deux sont identiques.
 Say "`nRemise à l'état usine en cours…"
+# Le droit d'effacer (« wipe-data ») n'est pris en compte qu'à l'activation du mode kiosque :
+# on le désactive puis le réactive pour que la version installée l'obtienne.
+Adb shell am start -n "$Package/.MainActivity" --ez remove_owner true | Out-Null
+Start-Sleep -Seconds 4
+$owner = Adb shell dpm set-device-owner "$Package/.AdminReceiver"
+if ($owner -notmatch 'Success') { Say "Réactivation du mode kiosque : $owner" 'DarkGray' }
+Start-Sleep -Seconds 2
 $jeton = -join ((48..57) + (97..122) | Get-Random -Count 24 | ForEach-Object { [char]$_ })
 Adb logcat -c | Out-Null
 Adb shell settings put global papote_usine $jeton | Out-Null
