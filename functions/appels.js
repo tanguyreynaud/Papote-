@@ -1,10 +1,11 @@
 // Appels de la tablette vers la famille : faire sonner le téléphone du proche, même app fermée.
 //
 //   appelsSonnerie  appel créé par la tablette : notification push « Mamie vous appelle »
-//   appelsManques   l'appel de la tablette s'arrête sans réponse : « Appel manqué de Mamie »
+//   appelsManques   l'appel de la tablette s'arrête sans réponse : « Appel manqué de Mamie » ;
+//                   s'il a été décroché, les autres téléphones arrêtent de sonner (« fin »)
 //
-// Jetons des téléphones : families/{fid}/members/{uid}/private/push = { tokens: [...] }
-// (écrits par web/js/push.js). Messages « data » seulement : web/sw.js les affiche.
+// Jetons des téléphones : families/{fid}/members/{uid}/private/push (voir push.js).
+// Messages « data » seulement : web/sw.js ou l'app Android (telephone/) les affichent.
 
 const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore');
 const { logger } = require('firebase-functions/v2');
@@ -45,20 +46,24 @@ exports.appelsSonnerie = onDocumentCreated({ document: DOC, region: REGION_FIRES
     await attendre(INTERVALLE_MS);
     const cur = await event.data.ref.get();
     if (!cur.exists || cur.get('state') !== 'ringing') return;
-    await envoyer(db, fid, uids, data, 20);
+    await envoyer(db, fid, uids, data, 20, { websSeulement: true });
   }
 });
 
 exports.appelsManques = onDocumentUpdated({ document: DOC, region: REGION_FIRESTORE, database: BASE_FIRESTORE }, async (event) => {
   const avant = event.data.before.data();
   const apres = event.data.after.data();
-  if (!avant || !apres || avant.state !== 'ringing') return;
-  if (!['missed', 'ended', 'declined'].includes(apres.state) || apres.answer) return;
+  if (!avant || !apres || avant.state !== 'ringing' || apres.state === 'ringing') return;
   const db = base();
   const { fid, cid } = event.params;
   const uids = await destinataires(db, fid, apres);
   if (!uids.length) return;
-  await envoyer(db, fid, uids, { type: 'manque', cid, nom: String(apres.callerName || 'Mamie') }, 24 * 3600);
+  if (['missed', 'ended', 'declined'].includes(apres.state) && !apres.answer) {
+    await envoyer(db, fid, uids, { type: 'manque', cid, nom: String(apres.callerName || 'Mamie') }, 24 * 3600);
+  } else {
+    // Quelqu'un a décroché : les autres téléphones (app Android) arrêtent de sonner.
+    await envoyer(db, fid, uids, { type: 'fin', cid }, 60, { natifsSeulement: true });
+  }
 });
 
 // ---------- Relevé des appels qui échouent ----------
