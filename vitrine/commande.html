@@ -5,6 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Votre commande · Papote</title>
 <meta name="robots" content="noindex">
+<script>
+  // Commandes fermées avant le lancement : retour à la liste d'attente, sauf avec ?essai (commande test de Tanguy,
+  // possible tant que Stripe est en clé de test ; voir commandesOuvertes dans functions/index.js).
+  (function () {
+    try {
+      if (/[?&]essai\b/.test(location.search)) sessionStorage.setItem('papote-essai', '1');
+      if (sessionStorage.getItem('papote-essai')) return;
+    } catch (_) {}
+    location.replace('./#lancement');
+  })();
+</script>
 <meta name="theme-color" content="#fdfaf5">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,800&display=swap">

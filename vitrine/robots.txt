@@ -1,0 +1,6 @@
+User-agent: *
+Disallow: /commande.html
+Disallow: /merci.html
+Disallow: /accueil.html
+
+Sitemap: https://mapapote.fr/sitemap.xml

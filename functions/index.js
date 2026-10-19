@@ -51,6 +51,11 @@ setGlobalOptions({ region: 'europe-west1', maxInstances: 5 });
 const STRIPE_SECRET = defineSecret('STRIPE_SECRET');
 const STRIPE_WEBHOOK_SECRET = defineSecret('STRIPE_WEBHOOK_SECRET');
 const SITE_VITRINE = defineString('SITE_VITRINE', { default: 'https://mapapote.fr' });
+// Avant le lancement, le site affiche une liste d'attente au lieu de « Commander ». Les commandes passent
+// quand même tant que Stripe est en clé de test (commande test avec la carte 4242, commande.html?essai) ;
+// avec la clé réelle, il faut COMMANDES_OUVERTES=oui dans .env.
+const COMMANDES_OUVERTES = defineString('COMMANDES_OUVERTES', { default: 'non' });
+const commandesOuvertes = () => COMMANDES_OUVERTES.value() === 'oui' || STRIPE_SECRET.value().startsWith('sk_test_');
 const APPLI_FAMILLE = 'https://app.mapapote.fr/';
 // E-mails : MAIL_SMTP (« hote:port:utilisateur ») et MAIL_EXPEDITEUR dans .env, mot de passe en secret.
 const MAIL_SMTP = defineString('MAIL_SMTP', { default: 'smtp.gmail.com:465:' });
@@ -266,6 +271,10 @@ async function chercherFamille(email) {
 // ---------- Site vitrine ----------
 
 exports.commander = onRequest({ secrets: [STRIPE_SECRET] }, async (req, res) => {
+  if (!commandesOuvertes()) {
+    res.redirect(303, `${SITE_VITRINE.value()}/#lancement`);
+    return;
+  }
   const { formule, tablette } = req.query;
   if (!regles.formuleValide(formule, tablette)) {
     res.redirect(303, `${SITE_VITRINE.value()}/#tarifs`);
@@ -298,6 +307,7 @@ exports.commander = onRequest({ secrets: [STRIPE_SECRET] }, async (req, res) => 
 exports.creerPaiement = onCall({ secrets: [STRIPE_SECRET] }, async (request) => {
   const { uid, email } = compteVerifie(request);
   const { fid, formule, tablette } = request.data || {};
+  if (!commandesOuvertes()) throw new HttpsError('failed-precondition', 'Les commandes ouvrent très bientôt.');
   if (!regles.formuleValide(formule, tablette)) throw new HttpsError('invalid-argument', 'Formule inconnue.');
   const fam = await familleDuResponsable(fid, uid);
   if (fam.abonnement && ['actif', 'impaye', 'offert'].includes(fam.abonnement.statut)) {
@@ -641,6 +651,28 @@ async function noterPanier(sessionId, { email, accord, formule, relais, query })
     ...(snap.exists && snap.get('jeton') ? {} : { jeton: require('node:crypto').randomBytes(16).toString('hex') }),
   }, { merge: true });
 }
+
+// Liste d'attente du lancement (site vitrine) : l'adresse rejoint contacts/ avec l'accord et un jeton de
+// désinscription, source « liste-attente », pour l'e-mail d'ouverture des commandes (onglet Clients).
+exports.listeAttente = onRequest({ cors: [/mapapote\.fr$/, /papote\.web\.app$/], maxInstances: 2 }, async (req, res) => {
+  const d = req.method === 'POST' && req.body && typeof req.body === 'object' ? req.body : {};
+  const email = emailValide(d.email);
+  if (!email || d.accord !== true) {
+    res.status(400).json({ erreur: 'E-mail ou accord manquant.' });
+    return;
+  }
+  const prenom = typeof d.prenom === 'string' ? d.prenom.trim().slice(0, 60) : '';
+  const ref = db.doc(`contacts/${cleContact(email)}`);
+  const snap = await ref.get();
+  await ref.set({
+    email, consentement: true, desinscritLe: FieldValue.delete(),
+    ...(prenom ? { prenom } : {}),
+    ...(snap.exists ? {} : { source: 'liste-attente', creeLe: FieldValue.serverTimestamp() }),
+    listeAttente: true, listeAttenteLe: FieldValue.serverTimestamp(),
+    ...(snap.exists && snap.get('jeton') ? {} : { jeton: require('node:crypto').randomBytes(16).toString('hex') }),
+  }, { merge: true });
+  res.status(204).end();
+});
 
 // Toutes les heures : relances dues (1 h après, lendemain 19 h, une semaine après 19 h),
 // seulement avec l'accord, sans paiement depuis et sans désinscription.
