@@ -36,19 +36,13 @@
         <a href="#clients" data-page="clients">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2 21v-1a6 6 0 0 1 6-6h2a6 6 0 0 1 6 6v1M16 3.5a4 4 0 0 1 0 7M18 14a6 6 0 0 1 4 5.6V21"/></svg>
           Clients</a>
-        <a href="#familles" data-page="familles">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zM10 17h4"/></svg>
-          Familles et tablettes</a>
         <a href="#stock" data-page="stock">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h16v12H4zM2 4h20v4H2zM10 12h4"/></svg>
           Stock<span class="pastille" id="n-stock" hidden></span></a>
-        <a href="#factures" data-page="factures">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h9l5 5v15H6zM14 2v6h6M9 13h8M9 17h8"/></svg>
-          Factures</a>
         <a href="#compta" data-page="compta">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
-          Comptabilité</a>
-        <a href="#outils" data-page="outils">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h3.5v-9H4zm6.25 0h3.5V5h-3.5zM16.5 20H20v-6h-3.5z"/></svg>
+          Argent</a>
+        <a href="#outils" data-page="outils" class="nav-reglages">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.5-.5-.5-2.5z"/></svg>
           Réglages</a>
       </nav>
@@ -84,31 +78,26 @@
 
       <!-- ---------- Accueil ---------- -->
       <section data-panneau="accueil">
-        <div class="stats">
-          <div class="stat"><span id="s-families">–</span><p>familles</p></div>
-          <div class="stat ok"><span id="s-online">–</span><p>tablettes en ligne</p></div>
-          <div class="stat warn"><span id="s-offline">–</span><p>hors ligne</p></div>
-          <div class="stat"><span id="s-idle">–</span><p>pas touchées depuis 24 h</p></div>
+        <div class="ligne-chiffres">
+          <div class="stats compact">
+            <div class="stat"><span id="s-families">–</span><p>familles</p></div>
+            <div class="stat ok"><span id="s-online">–</span><p>en ligne</p></div>
+            <div class="stat warn"><span id="s-offline">–</span><p>hors ligne</p></div>
+            <div class="stat"><span id="s-idle">–</span><p>pas touchées 24 h</p></div>
+          </div>
+          <div class="stats compact" id="kpi-mois"></div>
         </div>
         <div class="card">
           <h2>À faire</h2>
           <ul id="a-faire" class="a-faire"></ul>
         </div>
-        <div class="card">
-          <h2>Ce mois-ci</h2>
-          <div class="stats compact" id="kpi-mois"></div>
+        <div class="raccourcis no-print">
+          <button type="button" class="secondary" id="r-recevoir">Recevoir une tablette</button>
+          <button type="button" class="secondary" id="btn-lire">Déposer une facture</button>
+          <button type="button" class="link small" id="btn-courrier">Relever factures@</button>
         </div>
-        <div class="card">
-          <div class="tete">
-            <h2>Une facture à saisir ?</h2>
-            <div class="actions">
-              <button type="button" class="secondary small-btn" id="btn-courrier">Relever factures@</button>
-              <button type="button" class="primary small-btn" id="btn-lire">Déposer une facture</button>
-            </div>
-          </div>
-          <p class="muted small">Déposez-la ici (ou glissez-la sur la page), ou envoyez-la à <strong>factures@mapapote.fr</strong> : elle est lue et rangée toute seule.</p>
-          <p id="courrier" class="small muted"></p>
-        </div>
+        <p class="muted small">Une facture peut aussi être glissée sur la page ou envoyée à <strong>factures@mapapote.fr</strong> : elle est lue et rangée toute seule.</p>
+        <p id="courrier" class="small muted"></p>
       </section>
 
       <!-- ---------- Commandes ---------- -->
@@ -153,6 +142,7 @@
       <section data-panneau="clients" hidden>
         <div class="onglets no-print" role="tablist">
           <button type="button" data-onglet="liste">Clients</button>
+          <button type="button" data-onglet="familles">Familles et tablettes</button>
           <button type="button" data-onglet="email">E-mail d'information</button>
         </div>
         <div data-onglet="liste">
@@ -175,6 +165,19 @@
             <div class="table"><table id="t-clients" class="cliquable"></table></div>
           </div>
         </div>
+        <div data-onglet="familles">
+        <p id="loading-families" class="muted">Chargement des familles…</p>
+        <div id="familles-liste">
+          <div class="stats" id="kpi-familles"></div>
+          <div class="card">
+            <div class="table"><table id="t-familles" class="cliquable"></table></div>
+          </div>
+        </div>
+        <div id="famille-fiche" hidden>
+          <button type="button" class="link small" id="famille-retour">← Toutes les familles</button>
+          <ul id="families" class="families"></ul>
+        </div>
+        </div>
         <div class="card" data-onglet="email">
           <p class="muted small">Part seulement aux personnes de la liste « Clients » (avec son filtre) qui acceptent les e-mails. {prenom} = le prénom.</p>
           <form id="f-campagne" class="campagne no-print">
@@ -189,21 +192,6 @@
           </form>
           <h3>Derniers envois</h3>
           <ul id="campagnes" class="campagnes small"></ul>
-        </div>
-      </section>
-
-      <!-- ---------- Familles et tablettes ---------- -->
-      <section data-panneau="familles" hidden>
-        <p id="loading-families" class="muted">Chargement des familles…</p>
-        <div id="familles-liste">
-          <div class="stats" id="kpi-familles"></div>
-          <div class="card">
-            <div class="table"><table id="t-familles" class="cliquable"></table></div>
-          </div>
-        </div>
-        <div id="famille-fiche" hidden>
-          <button type="button" class="link small" id="famille-retour">← Toutes les familles</button>
-          <ul id="families" class="families"></ul>
         </div>
       </section>
 
@@ -258,32 +246,15 @@
         </div>
       </section>
 
-      <!-- ---------- Factures ---------- -->
-      <section data-panneau="factures" hidden>
-        <div class="stats" id="kpi-factures"></div>
-        <div class="card">
-          <div class="tete">
-            <select id="filtre-factures" aria-label="Filtrer">
-              <option value="">Toutes</option>
-              <option value="paid">Payées</option>
-              <option value="open">À payer</option>
-              <option value="uncollectible">Irrécouvrables</option>
-              <option value="void">Annulées</option>
-            </select>
-            <button type="button" class="secondary small-btn no-print" id="x-factures">Exporter</button>
-          </div>
-          <div class="table"><table id="t-factures"></table></div>
-        </div>
-      </section>
-
-      <!-- ---------- Comptabilité ---------- -->
+      <!-- ---------- Argent : bilan, factures, dépenses, URSSAF ---------- -->
       <section data-panneau="compta" hidden>
         <h2 class="titre-print" id="bilan-titre">Bilan</h2>
         <div class="onglets no-print" role="tablist">
           <button type="button" data-onglet="bilan">Bilan</button>
-          <button type="button" data-onglet="rentabilite">Rentabilité</button>
-          <button type="button" data-onglet="urssaf">URSSAF et TVA</button>
+          <button type="button" data-onglet="factures">Factures</button>
           <button type="button" data-onglet="depenses">Dépenses</button>
+          <button type="button" data-onglet="urssaf">URSSAF et TVA</button>
+          <button type="button" data-onglet="rentabilite">Rentabilité</button>
           <button type="button" data-onglet="registres">Registres</button>
         </div>
         <div data-onglet="bilan">
@@ -305,6 +276,22 @@
               <figure><figcaption>Abonnements en cours, arrivées et départs</figcaption><div id="g-abonnes"></div></figure>
             </div>
           </div>
+        </div>
+        <div data-onglet="factures">
+        <div class="stats" id="kpi-factures"></div>
+        <div class="card">
+          <div class="tete">
+            <select id="filtre-factures" aria-label="Filtrer">
+              <option value="">Toutes</option>
+              <option value="paid">Payées</option>
+              <option value="open">À payer</option>
+              <option value="uncollectible">Irrécouvrables</option>
+              <option value="void">Annulées</option>
+            </select>
+            <button type="button" class="secondary small-btn no-print" id="x-factures">Exporter</button>
+          </div>
+          <div class="table"><table id="t-factures"></table></div>
+        </div>
         </div>
         <div class="card" data-onglet="rentabilite">
           <p class="muted small">Ce qui reste chaque mois par abonné payant : frais Stripe réels, tablette et accessoires amortis sur leur durée de vie, ligne SIM.</p>
