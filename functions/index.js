@@ -1110,3 +1110,6 @@ exports.compterProches = onDocumentWritten(
 
 // Appels de la tablette vers la famille : sonnerie et appel manqué par notification push.
 Object.assign(exports, require('./appels'));
+
+// Alertes sur le téléphone des responsables : tablette débranchée ou qui ne répond plus.
+exports.alertesTablettes = require('./alertes').alertesTablettes;
