@@ -1,6 +1,7 @@
 package fr.mapapote.famille;
 
 import android.Manifest;
+import android.app.AlertDialog;
 import android.app.NotificationManager;
 import android.content.Context;
 import android.content.Intent;
@@ -11,7 +12,6 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -32,7 +32,6 @@ public class Ouverture extends LauncherActivity {
     private static final String JETON = "jeton";
     private static final String NOTIFS_DEMANDEES = "notifsDemandees";
     private static final String PLEIN_ECRAN_DEMANDE = "pleinEcranDemande";
-    private static final String SANS_PAUSE_DEMANDE = "sansPauseDemande";
     /** Sans réseau, le jeton peut ne jamais arriver : on ouvre quand même l'app. */
     private static final long ATTENTE_JETON_MS = 4000;
 
@@ -97,23 +96,27 @@ public class Ouverture extends LauncherActivity {
     }
 
     // Android 11+ met en pause une app pas ouverte depuis quelques mois : elle ne recevrait plus
-    // les appels. Un proche qui ne décroche jamais serait concerné ; on propose de l'éviter.
+    // les appels. Tant que ce n'est pas réglé, une petite fenêtre propose de l'éviter en un geste.
     private void demanderSansPause() {
-        if (Build.VERSION.SDK_INT >= 30
-                && !getPackageManager().isAutoRevokeWhitelisted()
-                && !prefs(this).getBoolean(SANS_PAUSE_DEMANDE, false)) {
-            prefs(this).edit().putBoolean(SANS_PAUSE_DEMANDE, true).apply();
-            try {
-                startActivity(new Intent(Intent.ACTION_AUTO_REVOKE_PERMISSIONS,
-                        Uri.parse("package:" + getPackageName())));
-                Toast.makeText(this, R.string.sans_pause, Toast.LENGTH_LONG).show();
-                auRetour = this::recupererJeton;
-                return;
-            } catch (Exception e) {
-                // Réglage absent sur ce téléphone.
-            }
+        if (Build.VERSION.SDK_INT < 30 || getPackageManager().isAutoRevokeWhitelisted()) {
+            recupererJeton();
+            return;
         }
-        recupererJeton();
+        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Light_Dialog_Alert)
+                .setTitle(R.string.sans_pause_titre)
+                .setMessage(R.string.sans_pause_texte)
+                .setCancelable(false)
+                .setPositiveButton(R.string.sans_pause_activer, (d, w) -> {
+                    try {
+                        startActivity(new Intent(Intent.ACTION_AUTO_REVOKE_PERMISSIONS,
+                                Uri.parse("package:" + getPackageName())));
+                        auRetour = this::recupererJeton;
+                    } catch (Exception e) {
+                        recupererJeton(); // réglage absent sur ce téléphone
+                    }
+                })
+                .setNegativeButton(R.string.plus_tard, (d, w) -> recupererJeton())
+                .show();
     }
 
     // onRestart et non onResume : la fermeture de la demande d'autorisation relance aussi onResume,

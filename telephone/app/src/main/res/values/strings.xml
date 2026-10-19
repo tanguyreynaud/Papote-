@@ -5,7 +5,10 @@
     <!-- Lien de confiance avec app.mapapote.fr (le site publie /.well-known/assetlinks.json) :
          sans lui, Chrome afficherait une barre d'adresse en haut de l'app. -->
     <string name="asset_statements" translatable="false">[{\"relation\": [\"delegate_permission/common.handle_all_urls\"], \"target\": {\"namespace\": \"web\", \"site\": \"https://app.mapapote.fr\"}}]</string>
-    <string name="sans_pause">Pour ne jamais manquer un appel, désactivez « Suspendre l\'activité si l\'appli n\'est pas utilisée »</string>
+    <string name="sans_pause_titre">Ne manquez aucun appel</string>
+    <string name="sans_pause_texte">Pour que Papote sonne toujours, même si vous ne l\'ouvrez pas pendant longtemps, désactivez « Suspendre l\'activité si l\'appli n\'est pas utilisée » sur l\'écran suivant, puis revenez.</string>
+    <string name="sans_pause_activer">Activer</string>
+    <string name="plus_tard">Plus tard</string>
     <string name="canal_appels">Appels de la tablette</string>
     <string name="canal_appels_texte">Sonnerie quand la tablette vous appelle</string>
     <string name="canal_infos">Appels manqués et alertes</string>
