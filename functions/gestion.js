@@ -551,7 +551,10 @@ exports.gestionDonnees = onCall(async (request) => {
     db().collection('accessoires').get(),
   ]);
   const parFid = new Map(familles.docs.map((f) => [f.id, f.data()]));
+  // Même calcul que la vente sur le site (stock.js) : paiements en cours compris.
+  const aVendre = await require('./stock').nombreDisponibles(db()).catch((e) => { logger.warn('À vendre', e.message); return null; });
   return {
+    aVendre,
     commandes: commandes.docs.map((d) => {
       const c = d.data();
       const famille = c.fid ? parFid.get(c.fid) : null;

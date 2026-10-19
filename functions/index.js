@@ -1,6 +1,7 @@
 // Fonctions serveur de Papote : abonnements et paiements Stripe.
 //
-//   commander          GET  depuis le site vitrine : ouvre la page de paiement Stripe
+//   commander          GET  depuis le site vitrine : ouvre la page de paiement Stripe (si une tablette est disponible)
+//   stockDisponible    GET  depuis le site vitrine : { disponible: true|false } (stock.js)
 //   creerPaiement      appel depuis l'appli famille : paiement pour une famille existante
 //   portailClient      appel depuis l'appli famille : carte bancaire, factures
 //   resilierAbonnement appel depuis l'appli famille : résilie à la fin de l'engagement de 12 mois
@@ -40,6 +41,7 @@ const avis = require('./avis');
 const relances = require('./relances');
 
 const base = require('./base');
+const stock = require('./stock');
 
 // Bucket Europe après la migration (BUCKET_STORAGE dans .env), sinon celui du projet.
 admin.initializeApp(base.BUCKET_STORAGE ? { storageBucket: base.BUCKET_STORAGE } : undefined);
@@ -105,8 +107,10 @@ async function tarifs(formule, tablette) {
 }
 
 // Essai gratuit de 15 jours pour un nouveau client ; pas pour un client déjà abonné une fois.
-async function sessionPaiement({ formule, tablette, fid, email, client, relais, accord }) {
+async function sessionPaiement({ formule, tablette, fid, email, client, relais, accord, reservation }) {
   const metadata = { formule, tablette, ...(relais ? livraison.relaisVersMeta(relais) : {}) };
+  // Tablette mise de côté pendant le paiement (stock.js), libérée au paiement ou à l'expiration de la page.
+  if (reservation && reservation.id) metadata.reservation = reservation.id;
   // Case « nouvelles de Papote par e-mail » cochée sur commande.html : reportée sur la commande.
   if (accord) metadata.accord = '1';
   if (fid) metadata.fid = fid;
@@ -131,6 +135,7 @@ async function sessionPaiement({ formule, tablette, fid, email, client, relais, 
     cancel_url: fid ? APPLI_FAMILLE : `${SITE_VITRINE.value()}/commande.html?formule=${formule}`,
   };
   // Commande du site : livrée au point relais choisi avant le paiement. Depuis l'appli : à l'adresse saisie.
+  if (reservation && reservation.expireA) params.expires_at = reservation.expireA;
   if (!relais) params.shipping_address_collection = { allowed_countries: ['FR', 'BE', 'LU'] };
   // Factures au nom d'une société : numéro de TVA facultatif sur la page de paiement.
   params.tax_id_collection = { enabled: true };
@@ -139,7 +144,21 @@ async function sessionPaiement({ formule, tablette, fid, email, client, relais, 
     // Stripe l'exige avec tax_id_collection pour un client existant.
     params.customer_update = { name: 'auto', address: 'auto' };
   } else if (email) params.customer_email = email;
-  return stripe().checkout.sessions.create(params);
+  try {
+    return await stripe().checkout.sessions.create(params);
+  } catch (e) {
+    if (reservation && reservation.id) await stock.liberer(db, reservation.id).catch(() => null);
+    throw e;
+  }
+}
+
+// Une tablette du stock mise de côté pour ce paiement, ou null s'il n'y en a plus.
+// En clé Stripe de test, une commande d'essai passe même sans stock, sans rien réserver.
+async function reserverTablette() {
+  const resa = await stock.reserver(db);
+  if (resa || !STRIPE_SECRET.value().startsWith('sk_test_')) return resa;
+  logger.info("Stock à 0 : commande d'essai acceptée (clé Stripe de test).");
+  return { id: null, expireA: null };
 }
 
 // Réglages du portail client créés par outils/stripe/installer-stripe.js (metadata papote=1).
@@ -289,7 +308,13 @@ exports.commander = onRequest({ secrets: [STRIPE_SECRET] }, async (req, res) => 
   const email = emailValide(req.query.email);
   const accord = req.query.accord === '1';
   try {
-    const session = await sessionPaiement({ formule, tablette, relais, email, accord });
+    // Plus de tablette disponible : liste d'attente « Être prévenu ».
+    const reservation = await reserverTablette();
+    if (!reservation) {
+      res.redirect(303, `${SITE_VITRINE.value()}/#lancement`);
+      return;
+    }
+    const session = await sessionPaiement({ formule, tablette, relais, email, accord, reservation });
     // Lien d'une relance : le panier d'origine est déjà noté.
     if (email && !req.query.relance) {
       await noterPanier(session.id, { email, accord, formule, relais, query: req.query })
@@ -314,7 +339,9 @@ exports.creerPaiement = onCall({ secrets: [STRIPE_SECRET] }, async (request) => 
     throw new HttpsError('failed-precondition', 'Cette famille a déjà un abonnement.');
   }
   const client = fam.abonnement && fam.abonnement.stripeCustomerId;
-  const session = await sessionPaiement({ formule, tablette, fid, email, client });
+  const reservation = await reserverTablette();
+  if (!reservation) throw stock.ERREUR_COMPLET();
+  const session = await sessionPaiement({ formule, tablette, fid, email, client, reservation });
   return { url: session.url };
 });
 
@@ -550,6 +577,8 @@ exports.stripeWebhook = onRequest(
     try {
       if (event.type === 'checkout.session.completed') {
         await paiementTermine(event.data.object);
+      } else if (event.type === 'checkout.session.expired') {
+        await stock.liberer(db, (event.data.object.metadata || {}).reservation);
       } else if (event.type.startsWith('customer.subscription.')) {
         await abonnementModifie(event.data.object);
       }
@@ -587,6 +616,8 @@ async function paiementTermine(session) {
       creeLe: FieldValue.serverTimestamp(),
     }, { merge: true });
   }
+  // La commande « à préparer » compte désormais à la place de la réservation.
+  await stock.liberer(db, meta.reservation);
   // Case « nouvelles de Papote par e-mail » cochée sur commande.html, lue par l'onglet Clients.
   if (meta.accord === '1') await ref.update({ marketing: true });
   // Panier de cette personne : payé, plus de relance.
@@ -654,6 +685,9 @@ async function noterPanier(sessionId, { email, accord, formule, relais, query })
 
 // Liste d'attente du lancement (site vitrine) : l'adresse rejoint contacts/ avec l'accord et un jeton de
 // désinscription, source « liste-attente », pour l'e-mail d'ouverture des commandes (onglet Clients).
+// Le site affiche « Être prévenu » à la place de « Commander » quand il n'y a plus de tablette.
+exports.stockDisponible = onRequest({ cors: [/mapapote\.fr$/, /papote\.web\.app$/], maxInstances: 2 }, stock.routeDisponible(db, logger));
+
 exports.listeAttente = onRequest({ cors: [/mapapote\.fr$/, /papote\.web\.app$/], maxInstances: 2 }, async (req, res) => {
   const d = req.method === 'POST' && req.body && typeof req.body === 'object' ? req.body : {};
   const email = emailValide(d.email);
