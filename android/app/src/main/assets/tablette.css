@@ -1680,3 +1680,13 @@ body.night .next-when { color: #a5b4fc; }
 #overlay-actions { gap: 2.5vmin; flex-wrap: nowrap; }
 #overlay-actions .ln-btn.listen, #overlay-actions .ln-btn.reply-voice { min-width: 0; padding: 0 4.5vmin; font-size: 5.6vmin; }
 #overlay-actions .ln-btn.ok { min-width: 0; padding: 0 7vmin; }
+
+/* Appel lancé par Mamie, passé en vidéo : bouton Raccrocher en bas, au centre */
+.call-out-hangup {
+  position: absolute; z-index: 2;
+  left: 50%; bottom: 5vmin; transform: translateX(-50%);
+  min-height: 15vmin; padding: 0 9vmin; border-radius: 8vmin;
+  background: #dc2626; color: #fff; font-size: 7vmin; font-weight: bold;
+  box-shadow: 0 1.2vmin 3vmin rgba(0, 0, 0, .3);
+}
+.call-out-hangup[hidden] { display: none; }

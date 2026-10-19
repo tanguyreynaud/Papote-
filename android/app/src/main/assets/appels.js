@@ -689,6 +689,13 @@ window.papoteCallFamily = ({ to = null, onState = () => {} } = {}) => {
       if (call.pc) call.pc.close();
       if (call.stream) call.stream.getTracks().forEach((t) => t.stop());
       if (call.audio) call.audio.srcObject = null;
+      if (call.cam) call.cam.getTracks().forEach((t) => t.stop());
+      if (call.cam || !$('call-out-hangup').hidden) {
+        $('call-out-hangup').hidden = true;
+        $('call-view').hidden = true;
+        $('call-remote').srcObject = null;
+        $('call-local').srcObject = null;
+      }
       if (notify && call.ref) updateDoc(call.ref, { state: notify, endedAt: serverTimestamp() }).catch(() => {});
     }
     if (active && active.outgoing) active = null;
@@ -701,7 +708,7 @@ window.papoteCallFamily = ({ to = null, onState = () => {} } = {}) => {
     if (paused() || !fid || !auth.currentUser) { finish('failed'); return; }
     if (active || ringing) { finish('busy'); return; }
     stopPresence();
-    call = { ref: null, pc: null, stream: null, stops: [], timer: null, lostTimer: null, audio: null };
+    call = { ref: null, pc: null, stream: null, stops: [], timer: null, lostTimer: null, audio: null, video: null, cam: null };
     active = { id: null, outgoing: true, finish, stops: call.stops };
     if (android()) android().inCall(true);
 
@@ -719,9 +726,37 @@ window.papoteCallFamily = ({ to = null, onState = () => {} } = {}) => {
     call.pc = pc;
     if (done) { pc.close(); return; }
     call.stream.getTracks().forEach((t) => pc.addTrack(t, call.stream));
+    // Une voie vidéo prévue dès le départ, vide : le proche peut allumer sa caméra pendant
+    // l'appel sans renégociation, et la tablette répond alors avec la sienne.
+    call.video = pc.addTransceiver('video', { direction: 'sendrecv' });
     call.audio = new Audio();
     call.audio.autoplay = true;
-    pc.ontrack = (e) => { call.audio.srcObject = e.streams[0]; call.audio.play().catch(() => {}); };
+    pc.ontrack = (e) => {
+      if (e.track.kind === 'audio') {
+        call.audio.srcObject = e.streams[0] || new MediaStream([e.track]);
+        call.audio.play().catch(() => {});
+        return;
+      }
+      // Vidéo du proche : elle arrive (« unmute ») quand il allume sa caméra.
+      e.track.onunmute = () => startOutgoingVideo(e.track);
+    };
+    const startOutgoingVideo = async (remoteTrack) => {
+      if (done || call.cam) return;
+      try {
+        call.cam = await navigator.mediaDevices.getUserMedia({ video: CAMERA.video, audio: false });
+      } catch (e) {
+        reportCallIncident('camera-sortant', `${e && e.name}: ${e && e.message}`, call.ref && call.ref.id);
+        call.cam = null;
+      }
+      if (done) { if (call.cam) call.cam.getTracks().forEach((t) => t.stop()); return; }
+      if (call.cam) call.video.sender.replaceTrack(call.cam.getVideoTracks()[0]).catch(() => {});
+      $('call-remote').srcObject = new MediaStream([remoteTrack]);
+      $('call-local').srcObject = call.cam;
+      $('call-wait').hidden = true;
+      $('call-out-hangup').hidden = false;
+      $('call-view').hidden = false;
+      emit('video', {});
+    };
 
     const ref = doc(collection(db, 'families', fid, 'calls'));
     call.ref = ref;
@@ -809,6 +844,7 @@ window.papoteAppelsLeave = async () => {
 };
 
 $('ring-answer').addEventListener('click', answer);
+$('call-out-hangup').addEventListener('click', () => { if (active && active.finish) active.finish('ended', 'ended'); });
 $('call-remote').addEventListener('playing', () => { if (active) $('call-wait').hidden = true; });
 
 // Écoute en direct du marqueur de changement : la tablette se met à jour aussitôt,
