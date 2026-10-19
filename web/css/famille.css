@@ -1030,7 +1030,7 @@ body:not(.on-support) .ps-bouton, body:not(.on-support) .ps-panneau { display: n
   box-sizing: border-box; box-shadow: 0 8px 24px rgba(63, 45, 74, .18); color: #fff;
 }
 .round-btn.answer svg { background: #22c55e; animation: incoming-wiggle 1.2s ease-in-out infinite; }
-.round-btn.later svg { background: #8a7a93; }
+.round-btn.decline svg { background: #dc2626; }
 @keyframes incoming-wiggle { 0%, 60%, 100% { transform: rotate(0); } 70% { transform: rotate(-12deg); } 80% { transform: rotate(12deg); } 90% { transform: rotate(-8deg); } }
 
 .call-audio-panel { display: none; }
