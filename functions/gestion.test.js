@@ -404,3 +404,22 @@ test('avancement des parcours nettoyé', () => {
   assert.deepEqual(a, { etape: 30, faits: { carton: 5 }, fini: null, tablette: 'abc' });
   assert.deepEqual(g.avancementPropre(null), { etape: 0, faits: {}, fini: null });
 });
+
+test('batterie : relevé de la tablette et usure', () => {
+  const b = g.releveBatterie({ battery: { level: 80, charging: true, health: 'bonne', temperature: 31.5, at: 5 }, lastSeen: 4 });
+  assert.deepStrictEqual(b, { niveau: 80, enCharge: true, sante: 'bonne', temperature: 31.5, cycles: null, le: 5, vueLe: 4, enLigneLe: null });
+  assert.strictEqual(g.usureBatterie(b), null);
+  assert.strictEqual(g.usureBatterie(null), null);
+  assert.strictEqual(g.usureBatterie({ sante: 'morte' }), 'batterie morte');
+  assert.strictEqual(g.usureBatterie({ sante: 'bonne', cycles: 650 }), 'batterie usée (650 cycles)');
+  assert.strictEqual(g.usureBatterie({ sante: 'surchauffe', cycles: 120 }), null);
+});
+
+test('à faire : tablette revenue avec une batterie usée', () => {
+  const liste = g.aFaire({
+    commandes: [], depenses: [], automatique: null, maintenant: Date.now(),
+    stock: [{ ref: 'T-004', etat: 'revenue', batterie: { sante: 'panne' } }, { ref: 'T-005', etat: 'chez-client', batterie: { sante: 'panne' } }],
+  });
+  assert.ok(liste.includes('Tablette T-004 revenue : batterie en panne, à retirer du parc'));
+  assert.ok(!liste.some((l) => l.includes('T-005')));
+});
