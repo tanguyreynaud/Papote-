@@ -60,3 +60,29 @@ exports.appelsManques = onDocumentUpdated({ document: DOC, region: REGION_FIREST
   if (!uids.length) return;
   await envoyer(db, fid, uids, { type: 'manque', cid, nom: String(apres.callerName || 'Mamie') }, 24 * 3600);
 });
+
+// ---------- Relevé des appels qui échouent ----------
+// incidentAppel : la tablette ou l'app famille signale un appel raté (raison, détail, appel).
+// Gardé dans incidentsAppels pour le tableau de bord, et dans les journaux des fonctions.
+const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { FieldValue } = require('firebase-admin/firestore');
+
+const texte = (v, max) => String(v == null ? '' : v).slice(0, max);
+
+exports.incidentAppel = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Connexion requise.');
+  const d = request.data || {};
+  const incident = {
+    uid: request.auth.uid,
+    cote: d.cote === 'tablette' ? 'tablette' : 'famille',
+    raison: texte(d.raison, 60) || 'inconnue',
+    detail: texte(d.detail, 300),
+    cid: d.cid ? texte(d.cid, 64) : null,
+    relais: d.relais === true,
+    navigateur: texte(d.navigateur, 200),
+    le: FieldValue.serverTimestamp(),
+  };
+  logger.warn(`Appel raté (${incident.cote}) : ${incident.raison} ${incident.detail}`, { uid: incident.uid, cid: incident.cid, relais: incident.relais });
+  await base().collection('incidentsAppels').add(incident);
+  return { ok: true };
+});
