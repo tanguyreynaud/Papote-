@@ -108,8 +108,12 @@ public class Ouverture extends LauncherActivity {
                 .setCancelable(false)
                 .setPositiveButton(R.string.sans_pause_activer, (d, w) -> {
                     try {
-                        startActivity(new Intent(Intent.ACTION_AUTO_REVOKE_PERMISSIONS,
-                                Uri.parse("package:" + getPackageName())));
+                        // Depuis Android 12, l'interrupteur est sur la page « Infos sur l'appli »,
+                        // plus sur celle des autorisations (comme IntentCompat d'AndroidX).
+                        String action = Build.VERSION.SDK_INT >= 31
+                                ? Settings.ACTION_APPLICATION_DETAILS_SETTINGS
+                                : Intent.ACTION_AUTO_REVOKE_PERMISSIONS;
+                        startActivity(new Intent(action, Uri.parse("package:" + getPackageName())));
                         auRetour = this::recupererJeton;
                     } catch (Exception e) {
                         recupererJeton(); // réglage absent sur ce téléphone
