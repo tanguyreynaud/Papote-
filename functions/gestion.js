@@ -56,9 +56,9 @@ const ESPACE_ADMIN = 'https://app.mapapote.fr/admin.html';
 const { FieldValue, Timestamp } = admin.firestore;
 // Base Firestore et bucket Storage : ceux d'origine (US) jusqu'à la bascule en Europe, où functions/.env
 // reçoit BASE_FIRESTORE=eu et BUCKET_STORAGE=papote-famille-eu (notes/securite-acces.md, section 9).
-const BASE_FIRESTORE = process.env.BASE_FIRESTORE || '(default)';
+const BASE_FIRESTORE = process.env.BASE_FIRESTORE || 'europe';
 const db = () => getFirestore(admin.app(), BASE_FIRESTORE);
-const stockage = () => admin.storage().bucket(process.env.BUCKET_STORAGE || undefined);
+const stockage = () => admin.storage().bucket(process.env.BUCKET_STORAGE || 'papote-famille-eu');
 
 let stripeClient;
 function stripe() {
