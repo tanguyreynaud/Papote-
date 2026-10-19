@@ -208,10 +208,11 @@ export function watchPosts(fid, max, callback) {
   }, (err) => console.error('Lecture des envois impossible', err));
 }
 
-export function watchMembers(fid, callback) {
-  return onSnapshot(collection(db, 'families', fid, 'members'), (snap) => {
-    callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-  });
+/** Membres en temps réel ; fromCache dit si les données viennent du cache (pas encore du serveur). */
+export function watchMembers(fid, callback, onError) {
+  return onSnapshot(collection(db, 'families', fid, 'members'), { includeMetadataChanges: true }, (snap) => {
+    callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })), snap.metadata.fromCache);
+  }, onError);
 }
 
 // Signale aux tablettes qu'il y a du nouveau : elles ne relisent que lorsque ce compteur bouge.

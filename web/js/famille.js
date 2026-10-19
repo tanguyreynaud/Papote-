@@ -2675,6 +2675,31 @@ function ago(ms) {
 
 // Petit indicateur de l'accueil : en ligne (Wi-Fi ou carte SIM), branchée, batterie.
 const EN_LIGNE_MS = 45 * 60_000;
+// Fiches des membres (dont l'état de la tablette) : écoute relancée si elle tombe en erreur
+// ou au retour sur l'app, pour ne jamais afficher un état périmé.
+let membresDuCache = true;
+let relanceMembres = null;
+function abonnerMembres() {
+  stopMembers?.();
+  clearTimeout(relanceMembres);
+  membresDuCache = true;
+  const fid = session.fid;
+  stopMembers = watchMembers(fid, (all, fromCache) => {
+    membresDuCache = fromCache;
+    renderMembers(all);
+    renderActivity();
+  }, (err) => {
+    console.warn('Membres illisibles, nouvelle écoute dans 5 s', err);
+    relanceMembres = setTimeout(() => { if (session?.fid === fid) abonnerMembres(); }, 5000);
+  });
+}
+
+let cacheDepuis = 0;
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { cacheDepuis = Date.now(); return; }
+  if (session && cacheDepuis && Date.now() - cacheDepuis > 60_000) abonnerMembres();
+});
+
 function tabletteEnLigne() {
   const t = targetTablet();
   return !!(t?.lastOnline && Date.now() - toDate(t.lastOnline).getTime() < EN_LIGNE_MS);
@@ -2684,7 +2709,8 @@ function renderTabletChip() {
   const chip = $('tablet-chip');
   const t = targetTablet();
   if (!t?.lastOnline) { chip.hidden = true; return; }
-  const enLigne = tabletteEnLigne();
+  // Tant que le serveur n'a pas confirmé (retour sur l'app), pas de rouge.
+  const enLigne = tabletteEnLigne() || membresDuCache;
   const b = t.battery || {};
   const parSim = !t.wifi?.ssid && !!t.sim;
   const niveau = Number.isFinite(b.level) ? Math.max(0, Math.min(100, b.level)) : null;
@@ -2726,7 +2752,10 @@ function renderActivity() {
   // Batterie : envoyée par la tablette ({ level, charging, unpluggedAt }).
   const battery = tabletMembers.filter((m) => m.battery && m.lastOnline)
     .sort((a, b) => toDate(b.lastOnline) - toDate(a.lastOnline))[0]?.battery;
-  if (now - online > 45 * 60_000) {
+  if (now - online > 45 * 60_000 && membresDuCache) {
+    // Données pas encore confirmées par le serveur (retour sur l'app) : on ne crie pas au loup.
+    el.textContent = "Mise à jour de l'état de la tablette…";
+  } else if (now - online > 45 * 60_000) {
     el.classList.add('warn');
     el.textContent = `La tablette de ${name} ne répond plus depuis ${ago(online).replace('il y a ', '')}. Est-elle branchée et connectée au wifi ?`;
   } else if (battery && battery.charging === false && battery.unpluggedAt) {
@@ -3108,7 +3137,7 @@ async function enterApp() {
   forgetInviteCode();
   applyFamily();
   watchFamily();
-  stopMembers = watchMembers(session.fid, renderMembers);
+  abonnerMembres();
   stopTabletBusy?.();
   stopTabletBusy = watchTabletBusy(session.fid, (busy) => { tabletInCall = busy; renderCallTile(); });
   stopIncoming?.();
