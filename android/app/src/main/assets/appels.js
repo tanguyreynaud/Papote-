@@ -688,7 +688,7 @@ async function familyPeople() {
     .filter((m) => m.role === 'famille' && (m.status === undefined || m.status === 'active'));
 }
 
-window.papoteCallFamily = ({ to = null, onState = () => {} } = {}) => {
+window.papoteCallFamily = ({ to = null, toName = null, onState = () => {} } = {}) => {
   let done = false;
   let call = null; // { ref, pc, stream, stops, timer, audio }
   const emit = (state, info = {}) => {
@@ -711,7 +711,10 @@ window.papoteCallFamily = ({ to = null, onState = () => {} } = {}) => {
         $('call-remote').srcObject = null;
         $('call-local').srcObject = null;
       }
-      if (notify && call.ref) updateDoc(call.ref, { state: notify, endedAt: serverTimestamp() }).catch(() => {});
+      // L'appel est peut-être encore en cours d'écriture : on attend qu'il existe pour le clore.
+      if (notify && call.ref) {
+        (call.ready || Promise.resolve()).then(() => updateDoc(call.ref, { state: notify, endedAt: serverTimestamp() })).catch(() => {});
+      }
     }
     if (active && active.outgoing) active = null;
     if (android()) android().inCall(false);
@@ -727,17 +730,45 @@ window.papoteCallFamily = ({ to = null, onState = () => {} } = {}) => {
     active = { id: null, outgoing: true, finish, stops: call.stops };
     if (android()) android().inCall(true);
 
-    // Le plus court chemin jusqu'à la sonnerie : micro, relais (déjà en mémoire) et la seule
-    // fiche du proche appelé. La liste de la famille (avec les photos, lourde) se lit à côté.
+    // L'appel est écrit TOUT DE SUITE, sans offre : les téléphones sonnent pendant que la tablette
+    // ouvre le micro et prépare la liaison. L'offre suit dans le même document (le proche l'attend
+    // s'il répond très vite).
+    const t0 = performance.now();
+    const ref = doc(collection(db, 'families', fid, 'calls'));
+    call.ref = ref;
+    active.id = ref.id;
+    const familyName = familyNameCache || 'Mamie';
+    call.ready = setDoc(ref, {
+      callerUid: auth.currentUser.uid,
+      callerName: familyName,
+      calleeUid: to || null, // jamais toute la famille par erreur
+      calleeName: toName || null,
+      state: 'ringing',
+      offer: null,
+      answer: null,
+      createdAt: serverTimestamp(),
+      endedAt: null,
+    });
+
+    // En même temps : micro, relais (déjà en mémoire) et la fiche du proche appelé.
+    // La liste de la famille (avec les photos, lourde) se lit à côté.
     const peopleP = familyPeople().catch(() => []);
-    const [stream, ice, target] = await Promise.all([
+    // « Ça sonne » dès que l'appel est écrit (les téléphones sont prévenus à ce moment-là).
+    call.ready.then(() => {
+      if (done) return;
+      emit('ringing', { names: toName ? [toName] : [] });
+      call.timer = setTimeout(() => finish('missed', 'missed'), OUT_RING_MS);
+    }).catch(() => {});
+    const [, stream, ice, target] = await Promise.all([
+      call.ready,
       navigator.mediaDevices.getUserMedia({ audio: CAMERA.audio, video: false }),
       iceServers(),
       to ? getDoc(doc(db, 'families', fid, 'members', to)).then((d) => (d.exists() ? { uid: d.id, ...d.data() } : null)).catch(() => null) : null,
     ]);
-    const familyName = familyNameCache || 'Mamie';
     call.stream = stream;
     if (done) { call.stream.getTracks().forEach((t) => t.stop()); return; }
+    const tEcrit = Math.round(performance.now() - t0);
+    peopleP.then((people) => { if (!done && !call.answered) emit('ringing', { names: (target ? [target] : people).map((m) => m.name) }); });
     const pc = new RTCPeerConnection(ice);
     call.pc = pc;
     if (done) { pc.close(); return; }
@@ -776,9 +807,6 @@ window.papoteCallFamily = ({ to = null, onState = () => {} } = {}) => {
       emit('video', {});
     };
 
-    const ref = doc(collection(db, 'families', fid, 'calls'));
-    call.ref = ref;
-    active.id = ref.id;
     pc.onicecandidate = (e) => {
       if (e.candidate) addDoc(collection(ref, 'callerCandidates'), e.candidate.toJSON()).catch(() => {});
     };
@@ -802,21 +830,9 @@ window.papoteCallFamily = ({ to = null, onState = () => {} } = {}) => {
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
     if (done) return;
-    await setDoc(ref, {
-      callerUid: auth.currentUser.uid,
-      callerName: familyName,
-      calleeUid: to || null, // même si sa fiche n'a pas pu être lue : jamais toute la famille par erreur
-      calleeName: target ? target.name : null,
-      state: 'ringing',
-      offer: { type: offer.type, sdp: offer.sdp },
-      answer: null,
-      createdAt: serverTimestamp(),
-      endedAt: null,
-    });
-    if (done) { updateDoc(ref, { state: 'ended', endedAt: serverTimestamp() }).catch(() => {}); return; }
-    peopleP.then((people) => { if (!done && !answered) emit('ringing', { names: (target ? [target] : people).map((m) => m.name) }); });
-    emit('ringing', { names: target ? [target.name] : [] });
-    call.timer = setTimeout(() => finish('missed', 'missed'), OUT_RING_MS);
+    await updateDoc(ref, { offer: { type: offer.type, sdp: offer.sdp } });
+    const tOffre = Math.round(performance.now() - t0);
+    if (tOffre > 3000) reportCallIncident('depart-lent', `appel-ecrit+micro=${tEcrit}ms offre=${tOffre}ms`, ref.id);
 
     // Les candidats du proche peuvent arriver avant sa réponse : on les garde jusque-là
     // (sinon ils sont refusés et la liaison échoue une fois sur deux).
@@ -827,6 +843,7 @@ window.papoteCallFamily = ({ to = null, onState = () => {} } = {}) => {
       if (!data || done) return;
       if (data.answer && !answered) {
         answered = true;
+        call.answered = true;
         call.answeredAt = performance.now();
         clearTimeout(call.timer);
         try {

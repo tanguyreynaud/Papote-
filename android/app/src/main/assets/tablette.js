@@ -1269,6 +1269,7 @@
     try {
       outCall = window.papoteCallFamily({
         to: uid || null,
+        toName: name || null,
         onState: function (state, info) {
           info = info || {};
           if (state === 'ringing') {
