@@ -11,8 +11,9 @@ import {
 
 const firebaseConfig = {
   apiKey: 'AIzaSyAvoivJR8p-u2VxUWzlyHzTgP20-5ZG_-E',
-  // Domaine déclaré auprès de Google pour la connexion (adresse de retour autorisée).
-  authDomain: 'papote-famille.firebaseapp.com',
+  // Domaine de connexion Google : app.mapapote.fr quand l'app y est ouverte (Google affiche alors
+  // mapapote.fr ; adresse de retour déclarée dans le client OAuth), sinon celui de Firebase.
+  authDomain: location.hostname === 'app.mapapote.fr' ? 'app.mapapote.fr' : 'papote-famille.firebaseapp.com',
   projectId: 'papote-famille',
   storageBucket: 'papote-famille.firebasestorage.app',
   messagingSenderId: '807031084851',

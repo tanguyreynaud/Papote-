@@ -234,12 +234,22 @@ export async function startCall(fid, caller, ui) {
 
   const ringTimer = setTimeout(() => finish('missed', 'missed'), RING_TIMEOUT_MS);
 
+  // Les candidats de la tablette peuvent arriver avant sa réponse : on les garde jusque-là.
+  let answered = false;
+  const early = [];
   stops.push(onSnapshot(callRef, async (snap) => {
     const data = snap.data();
     if (!data) return;
-    if (data.answer && !pc.currentRemoteDescription) {
+    if (data.answer && !answered) {
+      answered = true;
       clearTimeout(ringTimer);
-      await pc.setRemoteDescription(data.answer);
+      try {
+        await pc.setRemoteDescription({ type: data.answer.type, sdp: data.answer.sdp });
+      } catch (e) {
+        finish('failed', 'ended');
+        return;
+      }
+      early.splice(0).forEach((c) => pc.addIceCandidate(c).catch(() => {}));
       ui.onState('accepted');
     }
     if (['ended', 'declined', 'missed'].includes(data.state)) finish(data.state, null);
@@ -247,7 +257,9 @@ export async function startCall(fid, caller, ui) {
 
   stops.push(onSnapshot(collection(callRef, 'calleeCandidates'), (snap) => {
     snap.docChanges().forEach((change) => {
-      if (change.type === 'added') pc.addIceCandidate(change.doc.data()).catch(() => {});
+      if (change.type !== 'added') return;
+      if (pc.remoteDescription) pc.addIceCandidate(change.doc.data()).catch(() => {});
+      else early.push(change.doc.data());
     });
   }));
 
@@ -270,7 +282,7 @@ export async function startCall(fid, caller, ui) {
 // La tablette crée l'appel avec calleeUid = un proche, ou null pour toute la famille.
 // Le premier qui répond l'emporte (transaction) et écrit son uid et son prénom dans answer.
 
-const INCOMING_FRESH_MS = 60_000;
+const INCOMING_FRESH_MS = 60_000; // la tablette sonne 60 s
 
 // En direct : les appels de la tablette qui sonnent pour moi. isTablet(uid) dit si l'appelant
 // est une tablette de la famille (les appels vidéo des proches vers Mamie sont ignorés).

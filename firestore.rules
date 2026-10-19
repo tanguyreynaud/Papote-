@@ -201,6 +201,19 @@ service cloud.firestore {
           || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['meteoVille', 'rev'])
             && isFamilyAdmin(fid)
             && villeMeteoOk(request.resource.data.meteoVille))
+          // Options de la tablette : lecture à voix haute, réponse vocale, radio { active, nom, url }.
+          || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['options', 'rev'])
+            && isFamilyAdmin(fid)
+            && request.resource.data.options is map
+            && request.resource.data.options.keys().hasOnly(['lecture', 'reponseVocale', 'radio'])
+            && (!('lecture' in request.resource.data.options) || request.resource.data.options.lecture is bool)
+            && (!('reponseVocale' in request.resource.data.options) || request.resource.data.options.reponseVocale is bool)
+            && (!('radio' in request.resource.data.options)
+                || (request.resource.data.options.radio is map
+                    && request.resource.data.options.radio.keys().hasOnly(['active', 'nom', 'url'])
+                    && request.resource.data.options.radio.active is bool
+                    && (!('nom' in request.resource.data.options.radio) || (request.resource.data.options.radio.nom is string && request.resource.data.options.radio.nom.size() <= 60))
+                    && (!('url' in request.resource.data.options.radio) || (request.resource.data.options.radio.url is string && request.resource.data.options.radio.url.size() <= 300 && request.resource.data.options.radio.url.matches('https://.*'))))))
           // Volume de la tablette (10 à 100), avec le compteur qui la prévient.
           || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['volume', 'rev'])
             && isFamilyAdmin(fid)
@@ -281,7 +294,9 @@ service cloud.firestore {
           && request.resource.data.status == 'active';
         allow update: if signedIn()
           && uid == request.auth.uid
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'canCall', 'lastActive', 'lastOnline', 'callable', 'face', 'appVersion', 'uid', 'email', 'battery', 'sim', 'meteoVille', 'wifi'])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'canCall', 'lastActive', 'lastOnline', 'callable', 'face', 'appVersion', 'uid', 'email', 'battery', 'sim', 'meteoVille', 'wifi', 'lastSeen'])
+          // lastSeen : dernière fois que la caméra a vu quelqu'un (horodatage serveur).
+          && (!('lastSeen' in request.resource.data) || request.resource.data.lastSeen == null || request.resource.data.lastSeen is timestamp)
           // Wi-Fi auquel la tablette est connectée : { ssid }.
           && (!('wifi' in request.resource.data) || request.resource.data.wifi == null
               || (request.resource.data.wifi is map && request.resource.data.wifi.keys().hasOnly(['ssid'])
@@ -327,7 +342,9 @@ service cloud.firestore {
         // Transfert des anciennes photos et vidéos vers Storage, depuis le tableau de bord.
         allow read, update: if isAdmin();
         allow create: if isMember(fid) && abonnementOk(fid)
-          && request.resource.data.keys().hasOnly(['type', 'text', 'image', 'thumb', 'hasMedia', 'audio', 'duration', 'chunks', 'mime', 'replyTo', 'authorUid', 'authorName', 'createdAt', 'seenAt', 'hearts', 'imageUrl', 'videoUrl', 'storagePath', 'photos'])
+          && request.resource.data.keys().hasOnly(['type', 'text', 'image', 'thumb', 'hasMedia', 'audio', 'duration', 'chunks', 'mime', 'replyTo', 'authorUid', 'authorName', 'createdAt', 'seenAt', 'hearts', 'imageUrl', 'videoUrl', 'storagePath', 'photos', 'audioUrl'])
+          // Réponse vocale de la tablette : adresse du fichier son dans Storage.
+          && (!('audioUrl' in request.resource.data) || (request.resource.data.audioUrl is string && request.resource.data.audioUrl.size() <= 1000))
           // Plusieurs photos dans un envoi : 5 au plus.
           && (!('photos' in request.resource.data) || (request.resource.data.photos is list && request.resource.data.photos.size() <= 5))
           && request.resource.data.authorUid == request.auth.uid

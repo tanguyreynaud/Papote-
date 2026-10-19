@@ -41,7 +41,10 @@ self.addEventListener('push', (event) => {
       tag,
       renotify: true,
       requireInteraction: true,
-      vibrate: [800, 400, 800, 400, 800, 400, 800],
+      // Le plus long qu'Android accepte ; le serveur renvoie l'appel toutes les 12 s tant qu'il
+      // sonne, et renotify refait sonner et vibrer le téléphone à chaque fois.
+      vibrate: [1000, 500, 1000, 500, 1000, 500, 1000, 500, 1000],
+      silent: false,
       icon: 'icons/icon-192.png',
       badge: 'icons/icon-192.png',
       actions: [{ action: 'repondre', title: 'Répondre' }],

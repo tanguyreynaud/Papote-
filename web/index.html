@@ -2,8 +2,9 @@
 <html lang="fr">
 <head>
   <meta charset="utf-8">
-  <!-- L'ancienne adresse renvoie vers la nouvelle (même page, mêmes paramètres). -->
-  <script>if (location.hostname === 'papote-famille.web.app') location.replace('https://app.mapapote.fr' + location.pathname + location.search + location.hash);</script>
+  <!-- L'ancienne adresse renvoie vers la nouvelle (même page, mêmes paramètres), sauf dans l'app
+       installée depuis l'ancienne adresse : elle s'ouvrirait dans une fenêtre de navigateur. -->
+  <script>if (location.hostname === 'papote-famille.web.app' && !matchMedia('(display-mode: standalone)').matches && navigator.standalone !== true) location.replace('https://app.mapapote.fr' + location.pathname + location.search + location.hash);</script>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Papote</title>
   <meta name="theme-color" content="#fdfaf5" media="(prefers-color-scheme: light)">
@@ -361,6 +362,25 @@
               <select id="meteo-commune"></select>
             </label>
             <p id="meteo-error" class="error small" hidden></p>
+            <div class="setting-actions">
+              <button type="button" class="secondary setting-cancel">Annuler</button>
+              <button type="submit" class="primary">Enregistrer</button>
+            </div>
+          </form>
+        </div>
+        <div id="options-card" class="card setting" hidden>
+          <div class="setting-head"><h2>Options de la tablette</h2><button type="button" class="link setting-modify">Modifier</button></div>
+          <div id="options-value" class="setting-value options-value"></div>
+          <form id="form-options" class="setting-edit" hidden>
+            <label class="switch-row"><input type="checkbox" id="opt-lecture"> Lecture à voix haute</label>
+            <p class="muted small option-help">Un bouton « Écouter » sur les messages : la tablette les lit à voix haute.</p>
+            <label class="switch-row"><input type="checkbox" id="opt-vocal"> Réponse vocale</label>
+            <p class="muted small option-help"><span class="grand-name"></span> peut répondre à une photo en parlant ; vous recevez le message vocal dans Messages.</p>
+            <label class="switch-row"><input type="checkbox" id="opt-radio"> Radio</label>
+            <p class="muted small option-help">Un bouton « Radio » à côté de « Appeler » sur la tablette.</p>
+            <label id="opt-radio-wrap">Station
+              <select id="opt-radio-station"></select>
+            </label>
             <div class="setting-actions">
               <button type="button" class="secondary setting-cancel">Annuler</button>
               <button type="submit" class="primary">Enregistrer</button>
