@@ -265,7 +265,10 @@ export async function startCall(fid, caller, ui) {
 
   pc.onconnectionstatechange = () => {
     if (pc.connectionState === 'connected') ui.onState('connected');
-    if (pc.connectionState === 'failed') finish('failed', 'ended');
+    if (pc.connectionState === 'failed') {
+      reportCallIncident('liaison-video', `ice=${pc.iceConnectionState}`, callRef.id);
+      finish('failed', 'ended');
+    }
   };
 
   // Annulé pendant l'écriture de l'appel, ou plus tard : on raccroche pour de bon.
@@ -321,8 +324,18 @@ export async function answerIncoming(fid, callId, me, ui) {
     iceServers(),
   ]);
   const pc = new RTCPeerConnection(ice);
+  let videoTx = null;
   stream.getTracks().forEach((t) => pc.addTrack(t, stream));
-  pc.ontrack = (e) => { ui.audio.srcObject = e.streams[0]; ui.audio.play().catch(() => {}); };
+  pc.ontrack = (e) => {
+    if (e.track.kind === 'audio') {
+      ui.audio.srcObject = e.streams[0] || new MediaStream([e.track]);
+      ui.audio.play().catch(() => {});
+      return;
+    }
+    // Vidéo de la tablette : elle arrive quand Mamie répond à notre caméra.
+    e.track.onunmute = () => ui.onVideo && ui.onVideo(e.track);
+  };
+  let cam = null; // caméra allumée pendant l'appel (« Passer en vidéo »)
   let accepted = false;
   const pending = [];
   pc.onicecandidate = (e) => {
@@ -343,12 +356,17 @@ export async function answerIncoming(fid, callId, me, ui) {
     pc.close();
     stream.getTracks().forEach((t) => t.stop());
     ui.audio.srcObject = null;
+    if (cam) cam.stop();
     if (notify) updateDoc(ref, { state: notify, endedAt: serverTimestamp() }).catch(() => {});
     ui.onEnd(reason);
   };
 
   try {
     await pc.setRemoteDescription(first.offer);
+    // La tablette prévoit une voie vidéo vide : on l'accepte dans les deux sens pour pouvoir
+    // allumer la caméra plus tard sans renégocier.
+    videoTx = pc.getTransceivers().find((t) => t.receiver && t.receiver.track && t.receiver.track.kind === 'video') || null;
+    if (videoTx) videoTx.direction = 'sendrecv';
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
     await runTransaction(db, async (tx) => {
@@ -376,13 +394,55 @@ export async function answerIncoming(fid, callId, me, ui) {
   pc.onconnectionstatechange = () => {
     clearTimeout(lostTimer);
     if (pc.connectionState === 'connected') ui.onState('connected');
-    if (pc.connectionState === 'disconnected') lostTimer = setTimeout(() => finish('failed', 'ended'), 8000);
-    if (pc.connectionState === 'failed') finish('failed', 'ended');
+    if (pc.connectionState === 'disconnected') lostTimer = setTimeout(() => {
+      reportCallIncident('audio-coupe', 'liaison perdue 8 s', callId);
+      finish('failed', 'ended');
+    }, 8000);
+    if (pc.connectionState === 'failed') {
+      reportCallIncident('liaison-audio', `ice=${pc.iceConnectionState}`, callId);
+      finish('failed', 'ended');
+    }
   };
-  return { hangup: () => finish('ended', 'ended') };
+  return {
+    hangup: () => finish('ended', 'ended'),
+    canVideo: () => !!videoTx,
+    // Allume la caméra du téléphone et l'envoie à la tablette ; renvoie l'image envoyée.
+    enableVideo: async () => {
+      if (!videoTx || finished) throw new Error('Vidéo indisponible');
+      if (cam) return cam.stream;
+      const camera = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false,
+      });
+      cam = landscapeStream(camera);
+      await videoTx.sender.replaceTrack(cam.stream.getVideoTracks()[0]);
+      return cam.stream;
+    },
+  };
 }
 
 // Refuser un appel de la tablette : il s'arrête aussitôt pour Mamie (« n'a pas pu répondre »).
 export function declineIncoming(fid, callId) {
   return updateDoc(doc(db, 'families', fid, 'calls', callId), { state: 'declined', endedAt: serverTimestamp() }).catch(() => {});
+}
+
+// ---------- Relevé des appels qui échouent ----------
+// Chaque échec part au serveur (fonction incidentAppel) avec sa raison, pour repérer les pannes
+// avant qu'une famille les signale. Jamais bloquant.
+let incidentFn = null;
+export function reportCallIncident(raison, detail = '', cid = null) {
+  (async () => {
+    if (!incidentFn) {
+      const { getApp } = await import('https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js');
+      const { getFunctions, httpsCallable } = await import('https://www.gstatic.com/firebasejs/12.19.0/firebase-functions.js');
+      incidentFn = httpsCallable(getFunctions(getApp(), 'europe-west1'), 'incidentAppel');
+    }
+    await incidentFn({
+      cote: 'famille',
+      raison: String(raison).slice(0, 60),
+      detail: String(detail || '').slice(0, 300),
+      cid,
+      relais: !!(iceCache && iceCache.value.iceServers.length > STUN.length),
+      navigateur: navigator.userAgent.slice(0, 200),
+    });
+  })().catch(() => {});
 }
