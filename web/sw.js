@@ -57,7 +57,14 @@ self.addEventListener('push', (event) => {
       data: { url: '/' },
     });
   } else {
-    shown = self.registration.showNotification('Papote', { body: data.texte || '', data: { url: '/' } });
+    // Alerte sur la tablette (débranchée, hors ligne…) : { type: 'alerte', titre, texte }.
+    shown = self.registration.showNotification(data.titre || 'Papote', {
+      body: data.texte || '',
+      tag: data.type === 'alerte' ? 'alerte-tablette' : undefined,
+      icon: 'icons/icon-192.png',
+      badge: 'icons/icon-192.png',
+      data: { url: '/' },
+    });
   }
   event.waitUntil(shown);
 });

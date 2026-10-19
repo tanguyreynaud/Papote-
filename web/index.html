@@ -2,6 +2,8 @@
 <html lang="fr">
 <head>
   <meta charset="utf-8">
+  <!-- L'ancienne adresse renvoie vers la nouvelle (même page, mêmes paramètres). -->
+  <script>if (location.hostname === 'papote-famille.web.app') location.replace('https://app.mapapote.fr' + location.pathname + location.search + location.hash);</script>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Papote</title>
   <meta name="theme-color" content="#fdfaf5" media="(prefers-color-scheme: light)">
@@ -231,7 +233,7 @@
       </button>
       <button type="button" id="push-nudge" class="card nudge" hidden>
         <span class="avatar avatar-empty" aria-hidden="true">&#128276;</span>
-        <span><strong>Recevoir les appels de <span class="grand-name"></span></strong><br><span class="muted small">Votre téléphone sonnera même app fermée</span></span>
+        <span><strong>Recevoir les appels de <span class="grand-name"></span></strong><br><span class="muted small">Votre téléphone sonnera même app fermée, et vous serez prévenu si la tablette est débranchée</span></span>
       </button>
       <button type="button" id="btn-install" class="install-fab" hidden><svg><use href="#i-download"/></svg>Installer l'app</button>
       <div class="tiles">
@@ -261,6 +263,7 @@
       <header class="page-head">
         <button type="button" class="icon-btn back" aria-label="Retour"><svg><use href="#i-back"/></svg></button>
         <h1>Photos</h1>
+        <button type="button" id="btn-photos-zip" class="head-action" aria-label="Télécharger toutes les photos"><svg><use href="#i-download"/></svg>Tout télécharger</button>
       </header>
       <ul id="photos" class="gallery"></ul>
       <div id="photos-more" class="feed-more"></div>
@@ -289,6 +292,12 @@
       <ul id="messages" class="chat"></ul>
       <p id="messages-empty" class="empty" hidden>Aucun message pour l'instant.</p>
       <form id="form-message" class="chat-bar">
+        <div id="quick-messages" class="quick-messages" role="group" aria-label="Messages rapides">
+          <button type="button" class="quick-msg">Bonne journée</button>
+          <button type="button" class="quick-msg">Bonne nuit</button>
+          <button type="button" class="quick-msg">Je pense à toi</button>
+          <button type="button" class="quick-msg">Je t'appelle ce soir</button>
+        </div>
         <div class="chat-field">
           <textarea id="message-text" rows="1" maxlength="160" placeholder="Écrire un message…"></textarea>
           <span id="message-count" class="muted small"></span>

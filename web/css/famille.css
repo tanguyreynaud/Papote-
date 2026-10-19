@@ -1051,3 +1051,15 @@ body:not(.on-support) .ps-bouton, body:not(.on-support) .ps-panneau { display: n
 }
 
 .agenda-edit { padding: 0; margin-top: 6px; font-weight: 700; color: var(--accent); }
+
+/* Messages rapides, au-dessus du champ d'écriture. */
+#form-message { flex-wrap: wrap; }
+.quick-messages { flex-basis: 100%; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.quick-messages::-webkit-scrollbar { display: none; }
+.quick-msg { flex: none; padding: 7px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--accent); font: inherit; font-size: 14px; font-weight: 600; white-space: nowrap; }
+#view-messages { padding-bottom: calc(160px + env(safe-area-inset-bottom)); }
+
+/* Bouton d'action à droite d'un en-tête de page (« Tout télécharger »). */
+.head-action { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 999px; background: var(--surface); color: var(--accent); font: inherit; font-size: 14px; font-weight: 700; box-shadow: var(--shadow); }
+.head-action svg { width: 18px; height: 18px; }
+.head-action:disabled { opacity: .7; }

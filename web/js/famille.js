@@ -538,6 +538,80 @@ $('form-message').addEventListener('submit', async (e) => {
   }
 });
 
+// ---------- Télécharger toutes les photos (fichier .zip) ----------
+// Toutes les photos de la famille, pour les garder avant l'effacement au-delà des 200 dernières.
+
+function chargerJSZip() {
+  if (window.JSZip) return Promise.resolve(window.JSZip);
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+    s.onload = () => resolve(window.JSZip);
+    s.onerror = reject;
+    document.head.append(s);
+  });
+}
+
+$('btn-photos-zip').addEventListener('click', async () => {
+  const btn = $('btn-photos-zip');
+  btn.disabled = true;
+  try {
+    const [JSZip, snap] = await Promise.all([
+      chargerJSZip(),
+      getDocs(query(collection(db, 'families', session.fid, 'posts'), where('type', '==', 'photo'))),
+    ]);
+    const posts = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => (toDate(a.createdAt)?.getTime() || 0) - (toDate(b.createdAt)?.getTime() || 0));
+    const sources = [];
+    for (const p of posts) {
+      const quand = toDate(p.createdAt) || new Date();
+      const base = `${quand.toISOString().slice(0, 10)} ${(p.authorName || 'Papote').replace(/[\/:*?"<>|]/g, '')}`;
+      const urls = (p.photos || []).map((x) => x.imageUrl).filter(Boolean);
+      if (!urls.length && p.imageUrl) urls.push(p.imageUrl);
+      if (urls.length) urls.forEach((u, i) => sources.push({ nom: `${base} ${p.id.slice(0, 4)}-${i + 1}.jpg`, url: u }));
+      else sources.push({ nom: `${base} ${p.id.slice(0, 4)}.jpg`, post: p });
+    }
+    if (!sources.length) { notice("Il n'y a encore aucune photo à télécharger."); return; }
+    const zip = new JSZip();
+    let n = 0;
+    for (const src of sources) {
+      n += 1;
+      btn.lastChild.textContent = `${n} / ${sources.length}`;
+      try {
+        const url = src.url || await loadMedia(session.fid, src.post, 'image');
+        if (!url) continue;
+        const blob = await (await fetch(url)).blob();
+        zip.file(src.nom, blob);
+      } catch (err) {
+        console.warn('Photo non récupérée', src.nom, err);
+      }
+    }
+    btn.lastChild.textContent = 'Préparation…';
+    const fichier = await zip.generateAsync({ type: 'blob' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(fichier);
+    a.download = `Photos Papote - ${session.family.name}.zip`;
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 60_000);
+    toast(`${sources.length} photo${sources.length > 1 ? 's' : ''} téléchargée${sources.length > 1 ? 's' : ''}`);
+  } catch (err) {
+    console.error(err);
+    notice("Le téléchargement n'a pas pu se faire. Vérifiez la connexion et réessayez.");
+  } finally {
+    btn.disabled = false;
+    btn.lastChild.textContent = 'Tout télécharger';
+  }
+});
+
+// Messages rapides : un toucher envoie le message tel quel.
+document.querySelectorAll('.quick-msg').forEach((b) => b.addEventListener('click', () => {
+  if ($('btn-message').disabled) return;
+  $('message-text').value = b.textContent;
+  $('form-message').requestSubmit();
+}));
+
 // ---------- Ajouter une photo ou une vidéo ----------
 
 let addMode = null; // 'photo' | 'video'

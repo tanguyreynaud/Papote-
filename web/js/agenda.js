@@ -154,14 +154,14 @@ function syncRepeatFields() {
 
 function setSeg(next) {
   seg = next;
-  document.querySelectorAll('.seg').forEach((b) => b.classList.toggle('active', b.dataset.seg === seg));
+  document.querySelectorAll('#agenda-seg .seg').forEach((b) => b.classList.toggle('active', b.dataset.seg === seg));
   $('rem-fields').hidden = seg !== 'reminder';
   $('bday-fields').hidden = seg !== 'birthday';
   $('btn-reminder').textContent = editing ? 'Enregistrer' : seg === 'reminder' ? 'Ajouter le rappel' : "Ajouter l'anniversaire";
   $('rem-error').hidden = true;
 }
 
-document.querySelectorAll('.seg').forEach((b) => b.addEventListener('click', () => setSeg(b.dataset.seg)));
+document.querySelectorAll('#agenda-seg .seg').forEach((b) => b.addEventListener('click', () => setSeg(b.dataset.seg)));
 
 for (let d = 1; d <= 31; d++) $('bday-day').add(new Option(String(d), String(d)));
 MOIS.forEach((m, i) => $('bday-month').add(new Option(m, String(i + 1))));
