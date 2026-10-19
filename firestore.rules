@@ -210,7 +210,8 @@ service cloud.firestore {
             && (!('reponseVocale' in request.resource.data.options) || request.resource.data.options.reponseVocale is bool)
             && (!('radio' in request.resource.data.options)
                 || (request.resource.data.options.radio is map
-                    && request.resource.data.options.radio.keys().hasOnly(['active', 'nom', 'url'])
+                    && request.resource.data.options.radio.keys().hasOnly(['active', 'nom', 'url', 'volume'])
+                    && (!('volume' in request.resource.data.options.radio) || (request.resource.data.options.radio.volume is int && request.resource.data.options.radio.volume >= 5 && request.resource.data.options.radio.volume <= 100))
                     && request.resource.data.options.radio.active is bool
                     && (!('nom' in request.resource.data.options.radio) || (request.resource.data.options.radio.nom is string && request.resource.data.options.radio.nom.size() <= 60))
                     && (!('url' in request.resource.data.options.radio) || (request.resource.data.options.radio.url is string && request.resource.data.options.radio.url.size() <= 300 && request.resource.data.options.radio.url.matches('https://.*'))))))
