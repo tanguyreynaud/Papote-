@@ -90,6 +90,18 @@ function relancePanier({ etape = 1, nom, formule, lien, desinscription }) {
   ].filter(Boolean), { texte: 'Reprendre ma commande', lien });
 }
 
+// Ouverture des commandes, pour la liste d'attente du site (lancementListeAttente).
+function lancement({ prenom, desinscription }) {
+  return message('Papote est disponible : vous pouvez commander', [
+    bonjour(prenom),
+    'Vous nous aviez demandé de vous prévenir : c\'est le moment, les commandes Papote sont ouvertes.',
+    'La tablette arrive prête à brancher, en point relais près de chez vous ou de chez votre proche. Votre proche n\'a rien à régler : c\'est la famille qui envoie les photos et qui appelle, la tablette décroche toute seule.',
+    '50 € à la commande, puis 20 € par mois après 15 jours d\'essai gratuit. Livraison offerte, tablette prêtée.',
+    'Nous préparons les tablettes par petits lots : les premières commandes partent en premier.',
+    desinscription ? `<span style="font-size:14px;color:#5f5a6b">Vous recevez cet e-mail car vous vous êtes inscrit à la liste d'attente de Papote. <a href="${echapper(desinscription)}" style="color:#5f5a6b">Se désinscrire</a>.</span>` : '',
+  ].filter(Boolean), { texte: 'Commander ma tablette', lien: 'https://mapapote.fr/commande.html' });
+}
+
 function nouvelleCommande({ nom, email, telephone, code, relais, formule }) {
   return message(`Nouvelle commande ${code || ''}`.trim(), [
     `Client : <b>${echapper(nom || '?')}</b>, ${echapper(email || 'sans e-mail')}${telephone ? `, ${echapper(telephone)}` : ''}.`,
@@ -212,7 +224,7 @@ async function envoyer({ smtp, motDePasse, expediteur, a, contenu }) {
 }
 
 module.exports = {
-  colisParti, commandeConfirmee, nouvelleCommande, relancePanier, rappelJumelage,
+  colisParti, commandeConfirmee, nouvelleCommande, relancePanier, lancement, rappelJumelage,
   retourTablette, etiquetteRetour, rappelRestitution, tabletteRecue, commandeAnnulee, annulationAvantEnvoi, retourAPreparer,
   envoyer, echapper, euros,
 };
