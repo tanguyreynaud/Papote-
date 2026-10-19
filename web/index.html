@@ -341,6 +341,21 @@
             </div>
           </form>
         </div>
+        <div id="grand-photo-card" class="card" hidden>
+          <h2>Photo de <span class="grand-name"></span></h2>
+          <p class="muted small">Elle s'affiche quand <span class="grand-name"></span> vous appelle depuis la tablette.</p>
+          <div class="face-row">
+            <img id="grand-photo-img" class="avatar avatar-lg" alt="" hidden>
+            <span id="grand-photo-empty" class="avatar avatar-lg avatar-empty"><svg><use href="#i-user"/></svg></span>
+            <div class="face-buttons">
+              <button type="button" class="secondary" id="grand-photo-camera"><svg><use href="#i-camera"/></svg>Prendre une photo</button>
+              <button type="button" class="secondary" id="grand-photo-gallery"><svg><use href="#i-gallery"/></svg>Choisir une photo</button>
+              <button type="button" class="link danger" id="grand-photo-remove" hidden>Retirer la photo</button>
+            </div>
+          </div>
+          <input id="in-grand-photo-camera" type="file" accept="image/*" capture="environment" hidden>
+          <input id="in-grand-photo-gallery" type="file" accept="image/*" hidden>
+        </div>
         <div id="meteo-card" class="card setting" hidden>
           <div class="setting-head"><h2>Ville de la météo</h2><button type="button" class="link setting-modify">Modifier</button></div>
           <p id="meteo-current" class="setting-value"></p>
@@ -719,6 +734,7 @@
 
   <!-- Mamie appelle (audio) -->
   <div id="incoming" class="incoming" hidden>
+    <div id="incoming-backdrop" class="call-backdrop" aria-hidden="true"></div>
     <p class="incoming-kind">Appel audio Papote</p>
     <div id="incoming-face" class="call-face ringing" aria-hidden="true"></div>
     <p id="incoming-name" class="incoming-name"></p>
@@ -739,6 +755,7 @@
   <div id="call" class="call" hidden>
     <audio id="call-audio" autoplay></audio>
     <div class="call-audio-panel">
+      <div id="call-backdrop" class="call-backdrop" aria-hidden="true"></div>
       <p class="incoming-kind">Appel audio Papote</p>
       <div id="call-face" class="call-face" aria-hidden="true"></div>
       <p id="call-name" class="call-name"></p>
