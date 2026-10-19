@@ -6,69 +6,131 @@
     android:fitsSystemWindows="true"
     android:gravity="center_horizontal"
     android:orientation="vertical"
-    android:padding="32dp">
+    android:paddingStart="32dp"
+    android:paddingTop="56dp"
+    android:paddingEnd="32dp"
+    android:paddingBottom="48dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/appel_video"
+        android:textColor="@color/indigo"
+        android:textSize="18sp" />
 
     <View
         android:layout_width="0dp"
         android:layout_height="0dp"
         android:layout_weight="1" />
 
-    <ImageView
-        android:layout_width="120dp"
-        android:layout_height="120dp"
-        android:contentDescription="@null"
-        android:src="@mipmap/ic_launcher" />
+    <!-- Visage : initiale dans un rond indigo, avec deux halos qui respirent pendant la sonnerie -->
+    <FrameLayout
+        android:layout_width="240dp"
+        android:layout_height="240dp">
+
+        <View
+            android:id="@+id/halo1"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@drawable/rond_halo" />
+
+        <View
+            android:id="@+id/halo2"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@drawable/rond_halo" />
+
+        <TextView
+            android:id="@+id/initiale"
+            android:layout_width="150dp"
+            android:layout_height="150dp"
+            android:layout_gravity="center"
+            android:background="@drawable/rond_indigo"
+            android:gravity="center"
+            android:textColor="#FFFFFF"
+            android:textSize="64sp"
+            android:textStyle="bold" />
+    </FrameLayout>
 
     <TextView
         android:id="@+id/nom"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="32dp"
+        android:layout_marginTop="28dp"
         android:gravity="center"
         android:textColor="@color/texte"
-        android:textSize="34sp"
+        android:textSize="40sp"
         android:textStyle="bold" />
 
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text="@string/appel_video"
-        android:textColor="@color/indigo"
-        android:textSize="20sp" />
+        android:layout_marginTop="4dp"
+        android:text="@string/vous_appelle_seul"
+        android:textColor="@color/texte_doux"
+        android:textSize="22sp" />
 
     <View
         android:layout_width="0dp"
         android:layout_height="0dp"
-        android:layout_weight="2" />
+        android:layout_weight="1" />
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal">
 
-        <Button
+        <LinearLayout
             android:id="@+id/refuser"
             android:layout_width="0dp"
-            android:layout_height="72dp"
-            android:layout_marginEnd="12dp"
+            android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:background="@drawable/bouton_rouge"
-            android:text="@string/refuser"
-            android:textAllCaps="false"
-            android:textColor="#FFFFFF"
-            android:textSize="22sp" />
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:gravity="center_horizontal"
+            android:orientation="vertical">
 
-        <Button
+            <ImageView
+                android:layout_width="84dp"
+                android:layout_height="84dp"
+                android:background="@drawable/rond_rouge"
+                android:contentDescription="@string/refuser"
+                android:padding="22dp"
+                android:src="@drawable/ic_raccrocher" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:text="@string/refuser"
+                android:textColor="@color/texte"
+                android:textSize="20sp" />
+        </LinearLayout>
+
+        <LinearLayout
             android:id="@+id/repondre"
             android:layout_width="0dp"
-            android:layout_height="72dp"
-            android:layout_marginStart="12dp"
+            android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:background="@drawable/bouton_vert"
-            android:text="@string/repondre"
-            android:textAllCaps="false"
-            android:textColor="#FFFFFF"
-            android:textSize="22sp" />
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:gravity="center_horizontal"
+            android:orientation="vertical">
+
+            <ImageView
+                android:id="@+id/repondre_rond"
+                android:layout_width="84dp"
+                android:layout_height="84dp"
+                android:background="@drawable/rond_vert"
+                android:contentDescription="@string/repondre"
+                android:padding="22dp"
+                android:src="@drawable/ic_notif" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:text="@string/repondre"
+                android:textColor="@color/texte"
+                android:textSize="20sp" />
+        </LinearLayout>
     </LinearLayout>
 </LinearLayout>
