@@ -737,11 +737,13 @@ window.papoteCallFamily = ({ to = null, onState = () => {} } = {}) => {
         call.audio.play().catch(() => {});
         return;
       }
-      // Vidéo du proche : elle arrive (« unmute ») quand il allume sa caméra.
-      e.track.onunmute = () => startOutgoingVideo(e.track);
+      // Voie vidéo du proche, gardée de côté. La caméra de Mamie ne s'allume JAMAIS d'elle-même :
+      // seulement quand le proche a appuyé sur « Passer en vidéo » (answer.video, plus bas).
+      call.remoteVideo = e.track;
     };
     const startOutgoingVideo = async (remoteTrack) => {
-      if (done || call.cam) return;
+      if (done || call.cam || call.videoStarting) return;
+      call.videoStarting = true;
       try {
         call.cam = await navigator.mediaDevices.getUserMedia({ video: CAMERA.video, audio: false });
       } catch (e) {
@@ -813,6 +815,10 @@ window.papoteCallFamily = ({ to = null, onState = () => {} } = {}) => {
         early.splice(0).forEach((c) => pc.addIceCandidate(c).catch(() => {}));
         const who = people.find((m) => m.uid === data.answer.uid) || {};
         emit('connected', { uid: data.answer.uid || null, name: data.answer.name || who.name || '', face: who.face || null });
+      }
+      // Le proche a allumé sa caméra (geste volontaire sur son téléphone) : Mamie passe en vidéo.
+      if (answered && data.answer && data.answer.video === true && !call.cam && call.remoteVideo) {
+        startOutgoingVideo(call.remoteVideo);
       }
       if (data.state === 'ended') finish('ended');
       if (data.state === 'declined' || data.state === 'missed') finish('missed');
