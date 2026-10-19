@@ -719,17 +719,31 @@
 
   <!-- Mamie appelle (audio) -->
   <div id="incoming" class="incoming" hidden>
-    <p class="incoming-icon" aria-hidden="true">&#128222;</p>
+    <p class="incoming-kind">Appel audio Papote</p>
+    <div id="incoming-face" class="call-face ringing" aria-hidden="true"></div>
     <p id="incoming-name" class="incoming-name"></p>
+    <p class="incoming-sub">vous appelle</p>
     <div class="incoming-actions">
-      <button type="button" id="incoming-later" class="incoming-later">Plus tard</button>
-      <button type="button" id="incoming-answer" class="incoming-answer">Répondre</button>
+      <button type="button" id="incoming-later" class="round-btn later" aria-label="Plus tard">
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+        <span>Plus tard</span>
+      </button>
+      <button type="button" id="incoming-answer" class="round-btn answer" aria-label="Répondre">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.6a1 1 0 0 1-.25 1z"/></svg>
+        <span>Répondre</span>
+      </button>
     </div>
   </div>
 
   <!-- Appel vidéo en cours (ou audio, classe « audio ») -->
   <div id="call" class="call" hidden>
     <audio id="call-audio" autoplay></audio>
+    <div class="call-audio-panel">
+      <p class="incoming-kind">Appel audio Papote</p>
+      <div id="call-face" class="call-face" aria-hidden="true"></div>
+      <p id="call-name" class="call-name"></p>
+      <p id="call-timer" class="call-timer"></p>
+    </div>
     <video id="call-remote" autoplay playsinline></video>
     <video id="call-local" autoplay playsinline muted></video>
     <p id="call-status" class="call-status"></p>
