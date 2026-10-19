@@ -1059,7 +1059,9 @@
   // qui décroche a l'appel. 'personne' : on choisit qui appeler, avec sa photo.
   // L'appel lui-même : window.papoteCallFamily({ to, onState }) dans appels.js (fil des appels).
 
-  var CALL_MODE = 'famille';
+  var CALL_MODE = 'personne';
+  var PER_PAGE = 4;   // 4 visages à la fois au plus
+  var pickerPage = 0;
   var people = [];
   var callScreen = null;
   var outCall = null;
@@ -1109,10 +1111,14 @@
   function showPicker() {
     ensureCallScreen();
     callScreen.innerHTML = '';
+    callScreen.className = 'call-out picker';
     callScreen.removeAttribute('hidden');
     callScreen.appendChild(el2('h1', 'call-title', 'Qui voulez-vous appeler ?'));
+    if (!people.length) callScreen.appendChild(el2('p', 'call-sub', 'Personne à appeler pour le moment.'));
+    var pages = Math.max(1, Math.ceil(people.length / PER_PAGE));
+    if (pickerPage >= pages) pickerPage = 0;
     var grid = el2('div', 'call-people');
-    var list = people.length ? people : [];
+    var list = people.slice(pickerPage * PER_PAGE, pickerPage * PER_PAGE + PER_PAGE);
     for (var i = 0; i < list.length; i++) {
       (function (p) {
         var b = el2('button', 'call-person');
@@ -1123,14 +1129,28 @@
       })(list[i]);
     }
     callScreen.appendChild(grid);
-    var back = el2('button', 'call-back', 'Retour');
-    on(back, 'click', closeCallScreen);
-    callScreen.appendChild(back);
+    var row = el2('div', 'call-nav');
+    if (pages > 1) {
+      var prev = el2('button', 'call-page', '‹ Précédents');
+      prev.disabled = pickerPage === 0;
+      on(prev, 'click', function () { pickerPage--; showPicker(); });
+      row.appendChild(prev);
+    }
+    var back = el2('button', 'call-back', 'Retour à l’accueil');
+    on(back, 'click', function () { pickerPage = 0; closeCallScreen(); });
+    row.appendChild(back);
+    if (pages > 1) {
+      var next = el2('button', 'call-page', 'Suivants ›');
+      next.disabled = pickerPage >= pages - 1;
+      on(next, 'click', function () { pickerPage++; showPicker(); });
+      row.appendChild(next);
+    }
+    callScreen.appendChild(row);
   }
 
   function onCallButton() {
-    if (CALL_MODE === 'personne' && people.length > 1) showPicker();
-    else if (CALL_MODE === 'personne' && people.length === 1) startCall(people[0].uid, people[0].name);
+    pickerPage = 0;
+    if (CALL_MODE === 'personne') showPicker();
     else startCall(null, '');
   }
 
@@ -1164,11 +1184,17 @@
     var who = name || 'la famille';
     renderCall('starting', 'Appel de ' + who + '…', '', uid, name);
     var finished = false;
-    function finish(title, sub) {
+    // Fin d'appel : message 4 s, puis l'accueil (appel terminé) ou la liste des personnes
+    // (pas de réponse, occupé, échec) pour en appeler une autre.
+    function finish(title, sub, backToList) {
       if (finished) return;
       finished = true;
       renderCall('ended', title, sub, uid, name);
-      setTimeout(closeCallScreen, 4000);
+      setTimeout(function () {
+        outCall = null;
+        if (backToList && CALL_MODE === 'personne') showPicker();
+        else closeCallScreen();
+      }, 4000);
     }
     try {
       outCall = window.papoteCallFamily({
@@ -1182,11 +1208,11 @@
           } else if (state === 'ended') {
             finish('Appel terminé', '');
           } else if (state === 'missed') {
-            finish('Personne n’a répondu', 'Ils verront votre appel et vous rappelleront.');
+            finish(uid ? who + ' n’a pas pu répondre' : 'Personne n’a répondu', 'Un message lui dit que vous avez appelé.', true);
           } else if (state === 'busy') {
-            finish('Occupé', 'Réessayez dans un moment.');
+            finish(uid ? who + ' est déjà en ligne' : 'Occupé', 'Réessayez dans un moment.', true);
           } else if (state === 'failed') {
-            finish('L’appel n’a pas pu partir', 'Vérifiez qu’il y a internet, puis réessayez.');
+            finish('L’appel n’a pas pu partir', 'Vérifiez qu’il y a internet, puis réessayez.', true);
           }
         }
       });

@@ -1591,3 +1591,9 @@ body.night .next-when { color: #a5b4fc; }
 }
 .call-person-name { font-size: 6vmin; font-weight: 700; color: #24212f; }
 .call-back { margin-top: 3vmin; border: 0; background: transparent; color: #5f5a6b; font-size: 5.5vmin; font-weight: 700; }
+.call-out.picker .call-title { margin-top: 0; }
+.call-out.picker .call-people { flex-wrap: nowrap; gap: 3vmin; }
+.call-out.picker .call-person { min-width: 0; width: 34vmin; }
+.call-nav { display: flex; align-items: center; gap: 4vmin; margin-top: 2vmin; }
+.call-page { border: .4vmin solid #e8e6fd; border-radius: 99vmin; background: #fff; color: #3730a3; font-size: 5vmin; font-weight: 700; padding: 2vmin 5vmin; }
+.call-page[disabled] { opacity: .35; }
