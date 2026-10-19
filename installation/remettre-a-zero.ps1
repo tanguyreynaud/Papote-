@@ -85,6 +85,12 @@ Say 'Elle repartira comme sortie du carton. Cette opération ne peut pas être a
 $typed = (Read-Host "`nPour confirmer, tapez le n° de série de la tablette ($serie)").Trim()
 if ($typed -ne $serie) { Fail 'N° de série différent : rien n''a été fait.' }
 
+# Sa clé App Check est retirée (la tablette effacée ne doit plus pouvoir obtenir de jeton).
+$outilCle = Join-Path $PSScriptRoot '..\outils\admin\cle-tablette.js'
+if (Test-Path $outilCle) {
+    try { & node $outilCle --retirer $serie 2>$null | Out-Null } catch { }
+}
+
 # 4. Papote quitte la famille puis demande à Android d'effacer la tablette.
 #    Un code à usage unique est écrit dans les réglages d'Android (seul le câble peut le faire),
 #    puis envoyé à Papote : il n'efface que si les deux sont identiques.

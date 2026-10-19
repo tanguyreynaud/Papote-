@@ -184,6 +184,7 @@ public class MainActivity extends Activity implements Sync.Listener {
         sync.start();
         Updater.cleanup(this);
         handler.postDelayed(updateCheck, 60_000);
+        new Thread(() -> AppCheck.current(getApplicationContext()), "papote-appcheck").start();
     }
 
     /**
@@ -243,6 +244,12 @@ public class MainActivity extends Activity implements Sync.Listener {
                 }, 4000);
             }
             return;
+        }
+        // Clé App Check de la tablette, posée par installer-tablette.ps1 (jamais écrite ailleurs).
+        String appCheckKey = intent.getStringExtra("appCheckKey");
+        if (appCheckKey != null && appCheckKey.matches("[A-Za-z0-9_-]{20,100}")) {
+            AppCheck.saveKey(this, appCheckKey);
+            Journal.log(this, "Clé App Check enregistrée");
         }
         if (intent.getBooleanExtra("remove_owner", false)) {
             setKioskPaused(true);
@@ -484,6 +491,18 @@ public class MainActivity extends Activity implements Sync.Listener {
         @JavascriptInterface
         public void stopSpeaking() {
             handler.post(() -> { if (tts != null) tts.stop(); });
+        }
+
+        /** Jeton App Check pour appels.js : {token, expireTimeMillis}, ou "" sans clé ni jeton. */
+        @JavascriptInterface
+        public boolean hasAppCheckKey() {
+            return AppCheck.hasKey(getApplicationContext());
+        }
+
+        @JavascriptInterface
+        public String appCheckToken() {
+            JSONObject t = AppCheck.current(getApplicationContext());
+            return t == null ? "" : t.toString();
         }
 
         @JavascriptInterface

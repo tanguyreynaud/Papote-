@@ -19,6 +19,26 @@ const app = initializeApp({
   messagingSenderId: '807031084851',
   appId: '1:807031084851:web:b8048e2952cb1e893b1046',
 });
+// App Check : la tablette prouve qu'elle est une vraie tablette Papote (jeton fourni par l'app
+// Android, PapoteAndroid.appCheckToken). Seulement si la tablette a reçu sa clé à l'installation ;
+// sans clé, rien ne change.
+try {
+  if (window.PapoteAndroid && window.PapoteAndroid.hasAppCheckKey && window.PapoteAndroid.hasAppCheckKey()) {
+    const { initializeAppCheck, CustomProvider } = await import('https://www.gstatic.com/firebasejs/12.19.0/firebase-app-check.js');
+    initializeAppCheck(app, {
+      provider: new CustomProvider({
+        getToken: async () => {
+          const t = JSON.parse(window.PapoteAndroid.appCheckToken() || 'null');
+          if (!t || !t.token) throw new Error('pas de jeton App Check');
+          return { token: t.token, expireTimeMillis: t.expireTimeMillis };
+        },
+      }),
+      isTokenAutoRefreshEnabled: true,
+    });
+  }
+} catch (e) {
+  console.warn('App Check', e);
+}
 const auth = getAuth(app);
 // Base Firestore : « (default) » (États-Unis) puis « eu » (Europe) après la migration.
 // C'est l'app Android qui décide (pont firestoreDatabase()), la page suit au chargement.

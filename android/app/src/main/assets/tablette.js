@@ -1148,7 +1148,43 @@
     document.body.appendChild(callScreen);
   }
 
+  // Tonalité « ça sonne » pendant que Mamie appelle (comme un téléphone en France :
+  // 440 Hz, 1,5 s puis 3,5 s de silence), douce, jusqu'à la réponse ou la fin de l'appel.
+  var ringbackCtx = null;
+  var ringbackTimer = null;
+  function startRingback() {
+    if (ringbackTimer) return;
+    try {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      if (!ringbackCtx) ringbackCtx = new AC();
+      if (ringbackCtx.resume) ringbackCtx.resume();
+    } catch (e) { return; }
+    var beep = function () {
+      try {
+        var ctx = ringbackCtx, t = ctx.currentTime;
+        var osc = ctx.createOscillator(), gain = ctx.createGain();
+        osc.frequency.value = 440;
+        gain.gain.setValueAtTime(0, t);
+        gain.gain.linearRampToValueAtTime(0.06, t + 0.03);
+        gain.gain.setValueAtTime(0.06, t + 1.47);
+        gain.gain.linearRampToValueAtTime(0, t + 1.5);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(t);
+        osc.stop(t + 1.55);
+      } catch (e) { }
+    };
+    beep();
+    ringbackTimer = setInterval(beep, 5000);
+  }
+  function stopRingback() {
+    clearInterval(ringbackTimer);
+    ringbackTimer = null;
+  }
+
   function closeCallScreen() {
+    stopRingback();
     if (callScreen) { callScreen.setAttribute('hidden', ''); callScreen.innerHTML = ''; }
     outCall = null;
   }
@@ -1164,6 +1200,7 @@
   function showPicker() {
     ensureCallScreen();
     callScreen.innerHTML = '';
+    stopRingback();
     callScreen.className = 'call-out picker';
     callScreen.removeAttribute('hidden');
     callScreen.appendChild(el2('h1', 'call-title', 'Qui voulez-vous appeler ?'));
@@ -1229,6 +1266,7 @@
     callScreen.innerHTML = '';
     callScreen.removeAttribute('hidden');
     callScreen.className = 'call-out state-' + state;
+    if (state === 'ringing') startRingback(); else stopRingback();
     var face = uid || name || faceUrl ? faceEl(uid, name, 'call-face', faceUrl) : el2('span', 'call-face family', '');
     if (!uid && !name && !faceUrl) face.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M16 11a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm-8 0a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm0 2c-2.3 0-7 1.2-7 3.5V19h14v-2.5C15 14.2 10.3 13 8 13zm8 0c-.3 0-.6 0-1 .1 1.2.8 2 1.9 2 3.4V19h6v-2.5c0-2.3-4.7-3.5-7-3.5z"/></svg>';
     callScreen.appendChild(face);

@@ -570,6 +570,7 @@ final class Sync {
                 (javax.net.ssl.HttpsURLConnection) new java.net.URL(url).openConnection();
         c.setConnectTimeout(20_000);
         c.setReadTimeout(60_000);
+        AppCheck.addHeader(context, c, url);
         File tmp = new File(imageDir, id + ".tmp");
         try {
             if (c.getResponseCode() != 200) throw new IOException("HTTP " + c.getResponseCode());
