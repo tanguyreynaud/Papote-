@@ -19,7 +19,7 @@ import {
   abonnementOk, FORMULES, LIBELLES, ouvrirPortail, payer, rattacherCommande, resilier, annulerResiliation,
   finDeContrat, retracter,
 } from './abonnement.js';
-import { startCall, watchTabletBusy, watchIncomingCalls, answerIncoming, warmUpCalls, declineIncoming } from './appel.js';
+import { startCall, watchTabletBusy, watchIncomingCalls, answerIncoming, warmUpCalls, declineIncoming, reportCallIncident } from './appel.js';
 import { pushSupported, pushAllowed, pushRefused, enablePush, closeCallNotification } from './push.js';
 import { prepareVideo } from './video.js';
 import { startAgenda, stopAgenda } from './agenda.js';
@@ -1268,6 +1268,9 @@ function enterCallScreen() {
 function leaveCallScreen() {
   $('call').hidden = true;
   $('call').classList.remove('audio');
+  $('call-video').disabled = false;
+  $('call-remote').srcObject = null;
+  $('call-local').srcObject = null;
   $('call').classList.remove('force-landscape');
   try { if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); } catch (e) { /* rien */ }
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
@@ -1400,6 +1403,13 @@ async function answerFromTablet() {
     currentCall = await answerIncoming(session.fid, call.id, { uid: session.uid, name: session.member.name }, {
       audio: $('call-audio'),
       onState: () => { setCallStatus(''); startCallTimer(); },
+      // Mamie répond à notre caméra : on passe à l'écran vidéo.
+      onVideo: (track) => {
+        $('call-remote').srcObject = new MediaStream([track]);
+        $('call-remote').play().catch(() => {});
+        $('call').classList.remove('audio');
+        setCallStatus('');
+      },
       onEnd: (reason) => {
         currentCall = null;
         stopCallTimer();
@@ -1410,6 +1420,7 @@ async function answerFromTablet() {
     });
   } catch (err) {
     currentCall = null;
+    if (!err || err.name !== 'TakenError') reportCallIncident('reponse-audio', `${err && err.name}: ${err && err.message}`, call.id);
     setCallStatus(err && err.name === 'TakenError'
       ? 'Un autre proche a déjà répondu.'
       : callErrorMessage(err));
@@ -1421,6 +1432,22 @@ async function answerFromTablet() {
 }
 
 $('incoming-answer').addEventListener('click', answerFromTablet);
+
+// Appel audio de Mamie : « Passer en vidéo » allume la caméra, la tablette suit toute seule.
+$('call-video').addEventListener('click', async () => {
+  if (!currentCall || !currentCall.enableVideo) return;
+  $('call-video').disabled = true;
+  try {
+    $('call-local').srcObject = await currentCall.enableVideo();
+    $('call').classList.remove('audio');
+    if (!$('call-remote').srcObject) setCallStatus(`${session.family.name} va vous voir…`);
+  } catch (err) {
+    console.error(err);
+    reportCallIncident('camera-audio', `${err && err.name}: ${err && err.message}`);
+    $('call-video').disabled = false;
+    notice("La caméra n'a pas pu s'allumer. Vérifiez qu'elle est autorisée pour Papote.");
+  }
+});
 
 // Notifications : sans elles, la tablette ne peut faire sonner le téléphone que si l'app est ouverte.
 async function renderPushNudge() {
@@ -1487,11 +1514,26 @@ $('tile-call').addEventListener('click', async () => {
       return;
     }
     console.error(err);
+    if (!err || err.name !== 'BusyError') reportCallIncident('depart-video', `${err && err.name}: ${err && err.message}`);
     setCallStatus(callErrorMessage(err));
     setTimeout(() => { if (!currentCall) leaveCallScreen(); }, 4000);
   } finally {
     callStarting = false;
   }
+});
+
+// « Rappeler » depuis la notification d'appel manqué : une confirmation (qui sert aussi de geste
+// pour la caméra et le plein écran), puis l'appel vidéo part comme avec la tuile.
+async function offerCallBack() {
+  try { history.replaceState(null, '', location.pathname); } catch (e) { /* rien */ }
+  if (!session || currentCall || callStarting || $('tile-call').disabled) return;
+  if (!await askConfirm(`Rappeler ${session.family.name} en vidéo ?`, 'Appeler')) return;
+  $('tile-call').click();
+}
+// App déjà ouverte : le service worker la prévient au lieu de la rouvrir.
+navigator.serviceWorker?.addEventListener('message', (e) => {
+  const url = e.data && e.data.type === 'appel-ouvert' ? String(e.data.url || '') : '';
+  if (url.includes('rappeler=1') && session) offerCallBack();
 });
 
 // Mamie n'a pas répondu : proposer de lui laisser un petit message vidéo à la place.
@@ -2858,6 +2900,7 @@ let myFamilies = []; // [{ fid, name }]
 let skipInvites = false;
 let stopPending = null;
 let sharedPending = false;
+let rappelerPending = false; // ouvert par « Rappeler » sur une notification d'appel manqué
 
 function rememberInviteCode(code) {
   try { localStorage.setItem(INVITE_CODE_KEY, code); } catch (e) { /* rien */ }
@@ -3083,6 +3126,7 @@ async function enterApp() {
   flushOutbox();
   showGuideOnce(session.family.name);
   if (sharedPending) { sharedPending = false; openShared(); }
+  if (rappelerPending) { rappelerPending = false; offerCallBack(); }
   else if (pairCode()) openPage('pair');
 }
 
@@ -3100,6 +3144,7 @@ function renderAccount() {
 async function start() {
   const params = new URLSearchParams(location.search);
   sharedPending = params.has('partage');
+  rappelerPending = params.has('rappeler');
   // Arrivé par le lien ou le QR code d'invitation : le code est gardé le temps de se connecter.
   if (params.get('code')) rememberInviteCode(params.get('code'));
   // Lien du site après une commande : le code est gardé jusqu'à ce que la famille existe.

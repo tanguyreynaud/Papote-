@@ -52,12 +52,14 @@ self.addEventListener('push', (event) => {
     });
   } else if (data.type === 'manque') {
     shown = self.registration.showNotification(`Appel manqué de ${nom}`, {
-      body: 'Touchez pour ouvrir Papote',
+      body: 'Touchez pour la rappeler',
       tag,
       renotify: false,
       icon: 'icons/icon-192.png',
       badge: 'icons/icon-192.png',
-      data: { url: '/' },
+      actions: [{ action: 'rappeler', title: 'Rappeler' }],
+      // « Rappeler » ne vaut que 24 h ; après, la notification ouvre simplement l'app.
+      data: { url: '/?rappeler=1', rappelJusqua: Date.now() + 24 * 3600_000 },
     });
   } else {
     // Alerte sur la tablette (débranchée, hors ligne…) : { type: 'alerte', titre, texte }.
@@ -74,7 +76,9 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const url = new URL((event.notification.data && event.notification.data.url) || '/', self.location.origin).href;
+  const info = event.notification.data || {};
+  const perime = info.rappelJusqua && Date.now() > info.rappelJusqua;
+  const url = new URL((!perime && info.url) || '/', self.location.origin).href;
   event.waitUntil((async () => {
     const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     const open = wins.find((w) => new URL(w.url).origin === self.location.origin);

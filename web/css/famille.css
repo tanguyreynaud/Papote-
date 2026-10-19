@@ -1071,3 +1071,15 @@ body:not(.on-support) .ps-bouton, body:not(.on-support) .ps-panneau { display: n
 .vocal-ref { display: flex; align-items: center; gap: 8px; margin: 4px 0 6px; font-size: 13px; color: var(--muted); }
 .vocal-ref img { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; }
 .vocal-audio { display: block; width: min(260px, 70vw); height: 40px; margin: 4px 0; }
+
+/* « Passer en vidéo » pendant un appel audio de Mamie, à gauche de Raccrocher */
+.call-video { display: none; }
+.call.audio .call-video {
+  display: grid; place-items: center;
+  position: absolute; left: calc(50% - 132px); bottom: calc(48px + env(safe-area-inset-bottom));
+  width: 72px; height: 72px; padding: 0; border-radius: 50%;
+  background: #6b5878; color: #fff;
+  box-shadow: 0 8px 24px rgba(63, 45, 74, .25);
+}
+.call.audio .call-video svg { width: 34px; height: 34px; }
+.call-video:disabled { opacity: .5; }
