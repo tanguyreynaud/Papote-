@@ -1379,8 +1379,16 @@ final class Sync {
                 JSONObject rf = r == null || r.optJSONObject("mapValue") == null ? null
                         : r.optJSONObject("mapValue").optJSONObject("fields");
                 if (rf != null && bool(rf, "active") && Firebase.str(rf, "url") != null) {
+                    // radio.volume : 0-100, par rapport au volume de la tablette (absent : 40, plus doux).
+                    JSONObject vol = rf.optJSONObject("volume");
+                    int volume = 40;
+                    if (vol != null) {
+                        if (vol.has("integerValue")) volume = vol.optInt("integerValue", 40);
+                        else if (vol.has("doubleValue")) volume = (int) Math.round(vol.optDouble("doubleValue", 40));
+                    }
                     out.put("radio", new JSONObject().put("nom", nz(Firebase.str(rf, "nom")))
-                            .put("url", Firebase.str(rf, "url")));
+                            .put("url", Firebase.str(rf, "url"))
+                            .put("volume", Math.max(5, Math.min(100, volume))));
                 }
             }
         } catch (JSONException e) {

@@ -1300,7 +1300,7 @@
   }
 
   // ---------- Options réglées par la famille : Écouter, Radio ----------
-  // families/{fid}.options = { lecture, reponseVocale, radio: { nom, url } } (lu par Sync.java).
+  // families/{fid}.options = { lecture, reponseVocale, radio: { nom, url, volume } } (lu par Sync.java).
 
   var options = {};
 
@@ -1363,6 +1363,7 @@
       row.appendChild(radioBtn);
     }
     if (!r || !r.url) stopRadio();
+    else if (radioAudio) radioAudio.volume = radioVolume(r);
     show(radioBtn, !!(r && r.url));
     renderRadioBtn();
   }
@@ -1376,16 +1377,25 @@
       '"/></svg><span>' + (on2 ? 'Arrêter' : 'Radio') + '</span>';
   }
 
+  function radioVolume(r) {
+    return Math.max(0.05, Math.min(1, (typeof r.volume === 'number' ? r.volume : 40) / 100));
+  }
+
   function toggleRadio() {
     if (radioAudio) { stopRadio(); return; }
     var r = options.radio;
     if (!r || !r.url) return;
     radioAudio = new Audio(r.url);
+    // Plus doux que le reste par défaut (40 %), réglable par la famille (options.radio.volume).
+    radioAudio.volume = radioVolume(r);
     radioAudio.onerror = function () { stopRadio(); };
     var play = radioAudio.play();
     if (play && play.catch) play.catch(function () { stopRadio(); });
     renderRadioBtn();
   }
+
+  // Écran éteint (veille, bouton marche) : la radio s'arrête.
+  document.addEventListener('visibilitychange', function () { if (document.hidden) stopRadio(); });
 
   function stopRadio() {
     if (radioAudio) {
@@ -1704,6 +1714,7 @@
     var hour = new Date().getHours();
     var night = isNight(hour);
     var should = night && Date.now() > wakeUntil && !somethingToShow();
+    if (should) stopRadio();
     if (should === asleep) return;
     asleep = should;
     sleepScreen.style.display = should ? 'block' : 'none';
