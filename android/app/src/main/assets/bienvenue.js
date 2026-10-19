@@ -299,38 +299,50 @@
     '<path d="M12 22c-4.2-4.9-6.5-8.4-6.5-11.5a6.5 6.5 0 0 1 13 0c0 3.1-2.3 6.6-6.5 11.5z" fill="#4f46e5"/>' +
     '<circle cx="12" cy="10.3" r="2.6" fill="#fff"/></svg>';
 
+  // Code postal tapé sur un pavé de chiffres dessiné ici (le clavier d'Android montre aussi
+  // « - / , . » : inutile et source d'erreurs). À gauche le pavé, à droite les communes.
   function openCities() {
     closeNetworks();
     var veil = el('div', 'welcome-modal top');
     veil.addEventListener('click', function (e) { if (e.target === veil) closeNetworks(); }, false);
-    var sheet = el('div', 'welcome-sheet');
+    var sheet = el('div', 'welcome-sheet cities');
     sheet.appendChild(el('h2', 'welcome-sheet-title', 'Choisir la ville'));
-    var input = el('input', 'welcome-input meteo-input');
-    input.type = 'tel';
-    input.inputMode = 'numeric';
-    input.maxLength = 5;
-    input.placeholder = 'Code postal, ex. : 07310';
-    sheet.appendChild(input);
+    var body = el('div', 'cities-body');
+    var left = el('div', 'cities-pad');
+    var code = el('div', 'cities-code');
+    left.appendChild(code);
+    var pad = el('div', 'digit-pad');
+    var value = '';
     var list = el('div', 'welcome-list');
-    sheet.appendChild(list);
-    scrollbar(list, false);
+    function show() {
+      code.innerHTML = '';
+      for (var i = 0; i < 5; i++) code.appendChild(el('span', 'code-box' + (i < value.length ? ' full' : i === value.length ? ' next' : ''), value.charAt(i)));
+      if (value.length === 5) fillCities(value, list);
+      else { list.innerHTML = ''; list.appendChild(el('p', 'welcome-sub', 'Tapez les 5 chiffres du code postal.')); }
+    }
+    ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', '⌫'].forEach(function (k) {
+      if (!k) { pad.appendChild(el('span', 'digit empty')); return; }
+      var b = button(k, 'digit' + (k === '⌫' ? ' erase' : ''), function () {
+        if (k === '⌫') value = value.slice(0, -1);
+        else if (value.length < 5) value += k;
+        else return;
+        show();
+      });
+      pad.appendChild(b);
+    });
+    left.appendChild(pad);
+    body.appendChild(left);
+    var right = el('div', 'cities-list');
+    right.appendChild(list);
+    body.appendChild(right);
+    sheet.appendChild(body);
     var row = el('div', 'welcome-sheet-actions');
     row.appendChild(button('Fermer', 'no', closeNetworks));
     sheet.appendChild(row);
     veil.appendChild(sheet);
     root.appendChild(veil);
-    // Dès les 5 chiffres tapés, la liste des communes de ce code postal.
-    var last = '';
-    list.appendChild(el('p', 'welcome-sub', 'Tapez les 5 chiffres du code postal.'));
-    input.addEventListener('input', function () {
-      input.value = input.value.replace(/\D/g, '').slice(0, 5);
-      var q = input.value;
-      if (q === last) return;
-      last = q;
-      if (q.length === 5) { input.blur(); fillCities(q, list); }
-      else { list.innerHTML = ''; list.appendChild(el('p', 'welcome-sub', 'Tapez les 5 chiffres du code postal.')); }
-    }, false);
-    setTimeout(function () { input.focus(); }, 300);
+    scrollbar(list, false);
+    show();
   }
 
   function fillCities(query, list) {

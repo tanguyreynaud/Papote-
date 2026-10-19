@@ -314,3 +314,28 @@
 .scroll-thumb { position: absolute; left: 0; right: 0; border-radius: 99vmin; background: #4f46e5; opacity: .75; }
 .welcome-sheet { position: relative; }
 .welcome::-webkit-scrollbar, .welcome-list::-webkit-scrollbar { display: none; }
+
+/* ---------- Code postal : pavé de chiffres maison, communes à droite ---------- */
+.welcome-sheet.cities { max-width: 150vmin; }
+.cities-body { display: flex; gap: 5vmin; flex: 1; min-height: 0; }
+.cities-pad { flex: none; display: flex; flex-direction: column; align-items: center; }
+.cities-code { display: flex; gap: 1.5vmin; margin: 0 0 3vmin; }
+.code-box {
+  width: 9vmin; height: 11vmin;
+  display: flex; align-items: center; justify-content: center;
+  border: .4vmin solid #e9e1d4; border-radius: 2vmin;
+  font-family: 'Bricolage Grotesque', 'Atkinson Hyperlegible', sans-serif;
+  font-size: 7vmin; font-weight: 800; color: #24212f; background: #fff;
+}
+.code-box.next { border-color: #4f46e5; box-shadow: 0 0 0 .8vmin #e8e6fd; }
+.code-box.full { border-color: #a5b4fc; }
+.digit-pad { display: grid; grid-template-columns: repeat(3, 15vmin); gap: 1.6vmin; }
+.welcome-btn.digit {
+  min-height: 0; height: 11vmin; margin: 0; padding: 0;
+  border-radius: 3vmin; font-size: 6vmin; font-weight: 700; background: #f6f5ff; border-color: #e8e6fd;
+}
+.welcome-btn.digit:active { background: #e8e6fd; }
+.welcome-btn.digit.erase { background: #fff; color: #5f5a6b; }
+.digit.empty { display: block; }
+.cities-list { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.cities-list .welcome-list { flex: 1; min-height: 0; max-width: none; margin: 0; overflow-y: auto; gap: 0; }
