@@ -1236,7 +1236,7 @@
       return;
     }
     var who = name || 'la famille';
-    renderCall('starting', 'Appel de ' + who + '…', '', uid, name);
+    renderCall('starting', 'Appel vers ' + who + '…', '', uid, name);
     var finished = false;
     // Fin d'appel : message 4 s, puis l'accueil (appel terminé) ou la liste des personnes
     // (pas de réponse, occupé, échec) pour en appeler une autre.
