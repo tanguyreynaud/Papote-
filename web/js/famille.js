@@ -20,7 +20,7 @@ import {
   finDeContrat, retracter,
 } from './abonnement.js';
 import { startCall, watchTabletBusy, watchIncomingCalls, answerIncoming, warmUpCalls, declineIncoming, reportCallIncident } from './appel.js';
-import { pushSupported, pushAllowed, pushRefused, enablePush, closeCallNotification } from './push.js';
+import { pushSupported, pushAllowed, pushRefused, enablePush, closeCallNotification, rememberNativeToken } from './push.js';
 import { prepareVideo } from './video.js';
 import { startAgenda, stopAgenda } from './agenda.js';
 import {
@@ -3178,6 +3178,8 @@ async function start() {
   const params = new URLSearchParams(location.search);
   sharedPending = params.has('partage');
   rappelerPending = params.has('rappeler');
+  // Ouvert par l'app Android Papote : ce téléphone sonnera par elle (voir push.js).
+  if (params.get('natif')) rememberNativeToken(params.get('natif'));
   // Arrivé par le lien ou le QR code d'invitation : le code est gardé le temps de se connecter.
   if (params.get('code')) rememberInviteCode(params.get('code'));
   // Lien du site après une commande : le code est gardé jusqu'à ce que la famille existe.
