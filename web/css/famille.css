@@ -994,7 +994,7 @@ body:not(.on-support) .ps-bouton, body:not(.on-support) .ps-panneau { display: n
 
 /* Mamie appelle (audio) : sonnerie en plein écran, puis appel sans vidéo, comme un téléphone */
 .incoming, .call.audio {
-  background: #fbf3ea;
+  background: #fdfaf5;
   color: #3f2d4a;
 }
 .incoming {
