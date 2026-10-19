@@ -111,6 +111,10 @@ public class Ouverture extends LauncherActivity {
     private void lancer() {
         if (lance) return;
         lance = true;
+        // L'écran de démarrage attend la fin de l'animation d'ouverture avant de passer la main à
+        // Chrome. Quand la demande d'autorisation s'ouvre par-dessus, Android ne la signale jamais :
+        // l'app restait bloquée sur le logo. On la signale nous-mêmes (sans effet si déjà reçue).
+        onEnterAnimationComplete();
         launchTwa();
     }
 

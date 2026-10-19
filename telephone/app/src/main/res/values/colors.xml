@@ -3,6 +3,7 @@
     <color name="creme">#FDFAF5</color>
     <color name="indigo">#4F46E5</color>
     <color name="texte">#1F1B16</color>
+    <color name="texte_doux">#5B5348</color>
     <color name="vert">#16A34A</color>
     <color name="rouge">#DC2626</color>
 </resources>
