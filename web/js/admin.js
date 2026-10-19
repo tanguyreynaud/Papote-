@@ -3,6 +3,7 @@
 // sont dans gestion.js, sur la même page.
 // Une app Firebase à part (« admin ») : la connexion Google ne touche pas à la famille de ce navigateur.
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
+import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app-check.js';
 import {
   getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
@@ -26,6 +27,17 @@ const app = initializeApp({
   messagingSenderId: '807031084851',
   appId: '1:807031084851:web:b8048e2952cb1e893b1046',
 }, 'admin');
+
+// App Check : prouve que les requêtes viennent de l'app Papote (et pas d'un script). Clé de site
+// reCAPTCHA Enterprise (publique) créée dans la console Google Cloud ; vide = App Check pas encore actif.
+const RECAPTCHA_SITE_KEY = '';
+if (RECAPTCHA_SITE_KEY) {
+  try {
+    initializeAppCheck(app, { provider: new ReCaptchaEnterpriseProvider(RECAPTCHA_SITE_KEY), isTokenAutoRefreshEnabled: true });
+  } catch (e) {
+    console.warn('App Check indisponible', e);
+  }
+}
 const auth = getAuth(app);
 // Base et bucket : ceux d'origine, ou ceux que config/base (dans la base d'origine) désigne après la
 // bascule en Europe ({ database: 'eu', bucket: 'papote-famille-eu' }). Lu une fois, avant tout chargement.
