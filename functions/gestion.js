@@ -270,6 +270,27 @@ function incoherences({ commandes, stock, sims }) {
   ].filter(Boolean);
 }
 
+// Batterie d'une tablette, écrite par la tablette dans families/{fid}/members/{tabletUid}.battery
+// (level, charging, at, health, temperature, cycles à partir d'Android 14), recopiée sur sa fiche du stock.
+function releveBatterie(membre) {
+  const b = (membre && membre.battery) || {};
+  const val = (v) => (v === undefined ? null : v);
+  return {
+    niveau: val(b.level), enCharge: val(b.charging), sante: b.health || null, temperature: val(b.temperature),
+    cycles: val(b.cycles), le: b.at || null, vueLe: (membre && membre.lastSeen) || null, enLigneLe: (membre && membre.lastOnline) || null,
+  };
+}
+
+// Batterie usée : la tablette est à retirer du parc à son retour. Renvoie la raison, ou null.
+const SANTES_HS = { morte: 'batterie morte', panne: 'batterie en panne', surtension: 'batterie en surtension' };
+const CYCLES_USEE = 500;
+function usureBatterie(b) {
+  if (!b) return null;
+  if (SANTES_HS[b.sante]) return SANTES_HS[b.sante];
+  if (typeof b.cycles === 'number' && b.cycles >= CYCLES_USEE) return `batterie usée (${b.cycles} cycles)`;
+  return null;
+}
+
 // Le stock suit les commandes : ce que la nuit corrige quand une étape n'a pas été notée sur la tablette.
 // Renvoie les champs à changer ({ etat, commande }) ou null.
 const ETATS_PARTIS = ['envoyee', 'chez-client', 'en-retour'];
@@ -553,6 +574,8 @@ exports.gestionDonnees = onCall(async (request) => {
   const parFid = new Map(familles.docs.map((f) => [f.id, f.data()]));
   // Même calcul que la vente sur le site (stock.js) : paiements en cours compris.
   const aVendre = await require('./stock').nombreDisponibles(db()).catch((e) => { logger.warn('À vendre', e.message); return null; });
+  // Batterie en direct pour les tablettes jumelées, sinon le dernier relevé gardé sur la fiche.
+  const batteries = await lireBatteries(stock.docs).catch((e) => { logger.warn('Batteries', e.message); return new Map(); });
   return {
     aVendre,
     commandes: commandes.docs.map((d) => {
@@ -581,7 +604,10 @@ exports.gestionDonnees = onCall(async (request) => {
         stripeCustomerId: c.stripeCustomerId || null,
       });
     }),
-    stock: stock.docs.map((d) => aplatir({ id: d.id, ...d.data() })),
+    stock: stock.docs.map((d) => {
+      const batterie = batteries.get(d.id) || d.get('batterie') || null;
+      return aplatir({ id: d.id, ...d.data(), batterie, usure: usureBatterie(batterie) });
+    }),
     depenses: depenses.docs.map((d) => aplatir({ id: d.id, ...d.data() })),
     familles: familles.docs.map((f) => ({
       id: f.id,
@@ -746,7 +772,7 @@ exports.gestionStock = onCall(async (request) => {
       if (champs.etat !== snap.get('etat')) {
         maj.etat = champs.etat;
         // Perdue (volée) ou hors service : plus d'accès aux photos de la famille.
-        if (ETATS_BLOQUES.includes(champs.etat) && await retirerDeLaFamille(snap.data())) maj.fid = null;
+        if (ETATS_BLOQUES.includes(champs.etat) && await retirerDeLaFamille(snap.data(), snap.ref)) maj.fid = null;
         // Remise en stock : la tablette n'appartient plus à la commande (l'historique la garde).
         if (champs.etat === 'en-stock' && !('commande' in champs)) maj.commande = null;
         const commande = maj.commande !== undefined ? maj.commande : snap.get('commande') || null;
@@ -1482,6 +1508,7 @@ async function automatiser(qui) {
   const bilan = { factures: [], avoirs: [], depenses: 0, stock: [], erreurs: [] };
   await synchroniserStock(bilan);
   await rattraperJumelages(bilan);
+  await copierBatteries(bilan).catch((e) => bilan.erreurs.push(`Batteries : ${e.message}`));
   await depensesRecurrentes(maintenant, bilan);
   await facturerPenalites(maintenant - FENETRE, bilan);
   await avoirsRemboursements(maintenant - FENETRE, bilan);
@@ -1734,9 +1761,37 @@ async function rattraperJumelages(bilan) {
   }
 }
 
+// Relevés de batterie des tablettes jumelées : Map(id de la fiche → relevé).
+async function lireBatteries(fiches) {
+  const jumelees = fiches.filter((d) => d.get('fid') && d.get('tabletUid'));
+  if (!jumelees.length) return new Map();
+  const membres = await db().getAll(...jumelees.map((d) => db().doc(`families/${d.get('fid')}/members/${d.get('tabletUid')}`)));
+  return new Map(jumelees.map((d, i) => [d.id, membres[i].exists ? releveBatterie(membres[i].data()) : null])
+    .filter(([, b]) => b && (b.le || b.niveau != null)));
+}
+
+// Chaque nuit : dernier relevé recopié sur la fiche, pour le garder quand la tablette quitte sa famille.
+async function copierBatteries(bilan) {
+  const fiches = (await db().collection('stock').where('fid', '!=', null).get()).docs;
+  const releves = await lireBatteries(fiches);
+  for (const d of fiches) {
+    const b = releves.get(d.id);
+    if (!b || ms(b.le) === ms((d.get('batterie') || {}).le)) continue;
+    await d.ref.update({ batterie: b });
+    const usure = usureBatterie(b);
+    if (usure && !usureBatterie(d.get('batterie'))) bilan.stock.push(`${d.get('ref') || d.get('numero') || d.id} : ${usure}`);
+  }
+}
+
 // Retire une tablette de sa famille (comptes Sync et appels) : elle revient sur l'écran Bienvenue.
-async function retirerDeLaFamille(t) {
+// Le dernier relevé de batterie reste sur la fiche, pour décider de la garder ou non.
+async function retirerDeLaFamille(t, fiche) {
   if (!t.fid) return false;
+  if (fiche && t.tabletUid) {
+    const m = await db().doc(`families/${t.fid}/members/${t.tabletUid}`).get();
+    const b = m.exists ? releveBatterie(m.data()) : null;
+    if (b && (b.le || b.niveau != null)) await fiche.update({ batterie: b }).catch(() => null);
+  }
   await Promise.all([t.tabletUid, t.callsUid].filter(Boolean)
     .map((uid) => db().doc(`families/${t.fid}/members/${uid}`).delete()));
   return true;
@@ -1781,6 +1836,9 @@ function aFaire({ commandes, stock, depenses, automatique, maintenant, sims = []
     && maintenant - ms(c.envoyeeLe) > JOURS(20)).length, 'tablette(s) reçue(s) mais pas jumelée(s) après 20 jours');
   ajouter(actives.filter(retour).length, 'tablette(s) à récupérer');
   ajouter(stock.filter((t) => t.etat === 'revenue').length, 'tablette(s) revenue(s) à vérifier');
+  for (const t of stock.filter((x) => x.etat === 'revenue' && usureBatterie(x.batterie))) {
+    liste.push(`Tablette ${t.ref || t.numero || ''} revenue : ${usureBatterie(t.batterie)}, à retirer du parc`);
+  }
   ajouter(stock.filter((t) => t.etat === 'en-retour' && t.remplaceePour).length, 'tablette(s) remplacée(s) à récupérer chez le client');
   for (const t of stock.filter((x) => x.alerteJumelage)) liste.push(`Tablette ${t.ref || t.numero || ''} ${t.alerteJumelage}`);
   ajouter(actives.filter((c) => c.remboursement && c.remboursement.statut === 'echec').length, 'remboursement(s) échoué(s), à faire depuis Stripe');
@@ -2492,7 +2550,7 @@ exports.gestionParcours = onCall(async (request) => {
 
 exports.regles = {
   ETATS, CATEGORIES, natureMouvement, mensuel, centimes, lien, nomFichier, moisSuivant, lectureVersFormulaire, SCHEMA_FACTURE,
-  lireReglages, simAResilier, stockAJour, incoherences, materielLu, memeAccessoire, coutLigne, alertesSim, accessoiresAPrevoir, champsSim, aFaire, piecesFacture, debutMoisParis, moisPrecedent, csvTexte, livreDesRecettes,
+  lireReglages, simAResilier, stockAJour, releveBatterie, usureBatterie, incoherences, materielLu, memeAccessoire, coutLigne, alertesSim, accessoiresAPrevoir, champsSim, aFaire, piecesFacture, debutMoisParis, moisPrecedent, csvTexte, livreDesRecettes,
   registreDesAchats, corpsDuMail, memeAchat, suiteJumelage, descriptionNonRendu, refusSuppression, fusionnerContacts, emailInformation, cleContact,
   avancementPropre,
 };
