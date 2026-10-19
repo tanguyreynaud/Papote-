@@ -25,15 +25,28 @@ async function destinataires(db, fid, appel) {
     .map((m) => m.id);
 }
 
-exports.appelsSonnerie = onDocumentCreated({ document: DOC, region: REGION_FIRESTORE, database: BASE_FIRESTORE }, async (event) => {
+// Une notification web ne sonne qu'une fois : on la renvoie toutes les 12 s tant que la tablette
+// sonne (même étiquette, « renotify » refait sonner et vibrer), comme une sonnerie qui insiste.
+const REPRISES = 4;
+const INTERVALLE_MS = 12_000;
+const attendre = (ms) => new Promise((r) => setTimeout(r, ms));
+
+exports.appelsSonnerie = onDocumentCreated({ document: DOC, region: REGION_FIRESTORE, database: BASE_FIRESTORE, timeoutSeconds: 90 }, async (event) => {
   const appel = event.data.data();
   if (!appel || appel.state !== 'ringing') return;
   const db = base();
   const { fid, cid } = event.params;
   const uids = await destinataires(db, fid, appel);
   if (!uids.length) return;
-  const n = await envoyer(db, fid, uids, { type: 'appel', cid, nom: String(appel.callerName || 'Mamie') }, 45);
+  const data = { type: 'appel', cid, nom: String(appel.callerName || 'Mamie') };
+  const n = await envoyer(db, fid, uids, data, 45);
   logger.info(`Appel ${cid} : ${n} téléphone(s) prévenu(s)`);
+  for (let i = 0; i < REPRISES; i++) {
+    await attendre(INTERVALLE_MS);
+    const cur = await event.data.ref.get();
+    if (!cur.exists || cur.get('state') !== 'ringing') return;
+    await envoyer(db, fid, uids, data, 20);
+  }
 });
 
 exports.appelsManques = onDocumentUpdated({ document: DOC, region: REGION_FIRESTORE, database: BASE_FIRESTORE }, async (event) => {
