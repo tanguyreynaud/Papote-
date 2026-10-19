@@ -6,14 +6,20 @@
 <title>Votre commande · Papote</title>
 <meta name="robots" content="noindex">
 <script>
-  // Commandes fermées avant le lancement : retour à la liste d'attente, sauf avec ?essai (commande test de Tanguy,
-  // possible tant que Stripe est en clé de test ; voir commandesOuvertes dans functions/index.js).
+  // Commandes fermées (avant le lancement) ou stock vide : retour à la liste d'attente, sauf avec ?essai
+  // (commande test de Tanguy, possible tant que Stripe est en clé de test ; voir commandesOuvertes dans
+  // functions/index.js). COMMANDES_OUVERTES : même valeur que dans accueil.html.
   (function () {
+    var COMMANDES_OUVERTES = false;
     try {
       if (/[?&]essai\b/.test(location.search)) sessionStorage.setItem('papote-essai', '1');
       if (sessionStorage.getItem('papote-essai')) return;
     } catch (_) {}
-    location.replace('./#lancement');
+    if (!COMMANDES_OUVERTES) { location.replace('./#lancement'); return; }
+    fetch('https://europe-west1-papote-famille.cloudfunctions.net/stockDisponible')
+      .then(function (r) { return r.ok ? r.json() : {}; })
+      .then(function (d) { if (d.disponible === false) location.replace('./#lancement'); })
+      .catch(function () {});
   })();
 </script>
 <meta name="theme-color" content="#fdfaf5">

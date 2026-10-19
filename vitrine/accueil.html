@@ -285,7 +285,7 @@ footer a { color: var(--muted); }
       <a href="#tarifs">Tarifs</a>
       <a href="#questions">Questions</a>
       <a class="client" href="https://app.mapapote.fr">Espace client</a>
-      <a class="btn btn-primary" href="#lancement">Être prévenu</a>
+      <a class="btn btn-primary js-commander" href="#lancement">Être prévenu</a>
     </nav>
   </div>
 </header>
@@ -297,7 +297,7 @@ footer a { color: var(--muted); }
         <h1>Toute la famille près de Mamie. <span>Sans qu'elle touche à rien.</span></h1>
         <p class="lead">Photos des petits, mots doux, appels vidéo : tout arrive tout seul sur sa tablette. Pas de bouton à chercher, pas de mot de passe. Elle regarde, elle sourit, elle vous voit.</p>
         <div class="hero-actions">
-          <a class="btn btn-primary" href="#lancement">Être prévenu</a>
+          <a class="btn btn-primary js-commander" href="#lancement">Être prévenu</a>
           <a class="btn btn-ghost" href="#fonctionnement">Comment ça marche</a>
         </div>
         <p class="hero-note">50 € à la commande, puis 20 € par mois après 15 jours d'essai gratuit. Tablette prêtée.</p>
@@ -466,7 +466,7 @@ footer a { color: var(--muted); }
             <span><b>Internet inclus</b><small>Pas besoin de box : la tablette a sa propre connexion.</small></span>
             <span class="option-prix">+10 €<em>par mois</em></span>
           </label>
-          <button class="btn btn-primary offre-btn" type="submit">Être prévenu du lancement</button>
+          <button class="btn btn-primary offre-btn js-commander" type="submit">Être prévenu du lancement</button>
         </div>
       </form>
       <p class="plans-note">Prix par tablette, toute la famille utilise l'appli sans supplément. 15 jours d'essai gratuit, puis engagement de 12 mois ; ensuite, l'abonnement continue de mois en mois et se résilie à tout moment depuis l'appli famille. 50 € sont payés à la commande pour la mise en service ; la tablette est prêtée et nous est rendue en fin d'abonnement. Paiement sécurisé par carte.</p>
@@ -609,6 +609,26 @@ footer a { color: var(--muted); }
   });
 </script>
 <script>
+  // Ouverture des commandes : à passer à true le jour du lancement (avec COMMANDES_OUVERTES=oui dans functions/.env).
+  // Même ouvertes, les boutons restent sur « Être prévenu » quand le stock est vide (stockDisponible, fil gestion).
+  var COMMANDES_OUVERTES = false;
+  var commandesPossibles = false;
+  (function () {
+    if (!COMMANDES_OUVERTES) return;
+    function ouvrir() {
+      commandesPossibles = true;
+      document.querySelectorAll('a.js-commander').forEach(function (a) { a.href = 'commande.html'; a.textContent = 'Commander'; });
+      document.querySelectorAll('button.js-commander').forEach(function (b) { b.textContent = 'Commander'; });
+      var bandeau = document.querySelector('.bandeau');
+      if (bandeau) bandeau.textContent = '🚚 Livraison offerte · ✨ 15 jours d\u2019essai gratuit';
+    }
+    fetch('https://europe-west1-papote-famille.cloudfunctions.net/stockDisponible')
+      .then(function (r) { return r.ok ? r.json() : { disponible: true }; })
+      .then(function (d) { if (d.disponible !== false) ouvrir(); })
+      .catch(ouvrir); // panne : affichage normal, commander revérifie le stock côté serveur
+  })();
+</script>
+<script>
   // Tarifs : abonnement 20 €, 30 € avec internet inclus ; le choix est repris sur la page de commande.
   (function () {
     var offre = document.getElementById('offre');
@@ -619,7 +639,11 @@ footer a { color: var(--muted); }
     offre.addEventListener('change', maj);
     offre.addEventListener('submit', function (e) {
       e.preventDefault();
-      // Commandes fermées avant le lancement : la liste d'attente à la place de commande.html.
+      if (commandesPossibles) {
+        location.href = 'commande.html' + (offre.formule.checked ? '?formule=sim' : '');
+        return;
+      }
+      // Commandes fermées ou stock vide : la liste d'attente à la place de commande.html.
       location.hash = 'lancement';
       document.getElementById('attente-email').focus();
     });
