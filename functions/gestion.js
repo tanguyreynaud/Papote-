@@ -721,8 +721,13 @@ exports.gestionStock = onCall(async (request) => {
     if (!snap.exists) throw new HttpsError('not-found', 'Tablette introuvable.');
     const champs = d.champs || {};
     const maj = { majLe: FieldValue.serverTimestamp() };
-    for (const cle of ['numero', 'modele', 'sim', 'simOperateur', 'notes']) {
+    for (const cle of ['numero', 'modele', 'fournisseur', 'sim', 'simOperateur', 'notes']) {
       if (cle in champs) maj[cle] = texte(champs[cle], cle === 'notes' ? 1000 : 80);
+    }
+    // Vendeur corrigé : la dépense de l'achat suit (même faute de frappe des deux côtés).
+    if (maj.fournisseur && maj.fournisseur !== snap.get('fournisseur') && snap.get('depense')) {
+      const dep = db().doc(`depenses/${snap.get('depense')}`);
+      if ((await dep.get()).exists) await dep.update({ fournisseur: maj.fournisseur, majLe: FieldValue.serverTimestamp() });
     }
     if ('simCout' in champs) maj.simCout = centimes(champs.simCout);
     if ('commande' in champs) {
