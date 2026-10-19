@@ -15,4 +15,12 @@
     <string name="appel_video">Appel Papote</string>
     <string name="appel_manque">Appel manqué de %1$s</string>
     <string name="appel_manque_texte">Touchez pour la rappeler</string>
+    <string name="pause_titre">Ne manquez aucun appel</string>
+    <string name="pause_pourquoi">Si vous n\'ouvrez pas Papote pendant quelques mois, Android peut le mettre en pause, et votre téléphone ne sonnerait plus. Ça se règle une fois pour toutes :</string>
+    <string name="pause_etape1">Touchez « Ouvrir le réglage » ci-dessous.</string>
+    <string name="pause_etape2">Faites défiler la page tout en bas.</string>
+    <string name="pause_etape3">Désactivez l\'interrupteur « Suspendre l\'activité… » (ou « Gérer l\'appli si inutilisée »), puis revenez avec la flèche retour.</string>
+    <string name="pause_ok">Ouvrir le réglage</string>
+    <string name="pause_plus_tard">Plus tard</string>
+    <string name="pause_rappel">Tout en bas : désactivez « Suspendre l\'activité… »</string>
 </resources>
