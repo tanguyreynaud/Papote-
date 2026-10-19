@@ -841,14 +841,17 @@ function afficherStock() {
   const dispo = pretes.length;
   const reservees = pretes.filter((t) => t.commande).length;
   const chez = ['envoyee', 'chez-client', 'en-retour'];
-  $('kpi-stock').replaceChildren(
+  $('kpi-stock').replaceChildren(...[
     stat(String(dispo), 'disponibles', `valeur ${euros(valeur(DISPONIBLES))}${reservees ? ` · dont ${reservees} réservée${reservees > 1 ? 's' : ''}` : ''}`,
       dispo < aEnvoyer ? 'neg' : null),
     stat(String(aEnvoyer), 'commandes à envoyer'),
+    // Calculé par le serveur, comme sur le site : à 0, les boutons Commander deviennent « Être prévenu ».
+    donnees.aVendre == null ? null : stat(String(donnees.aVendre), 'à vendre sur le site',
+      donnees.aVendre ? 'paiements en cours compris' : 'le site propose « Être prévenu »', donnees.aVendre ? null : 'neg'),
     stat(String(compte(chez)), 'chez les clients', `valeur ${euros(valeur(chez))}`),
     stat(String(compte(['revenue', 'a-reparer'])), 'à vérifier ou réparer'),
     stat(String(compte(['perdue', 'hors-service'])), 'perdues ou hors service'),
-  );
+  ].filter(Boolean));
   const manque = aEnvoyer - dispo;
   $('alerte-stock').hidden = manque <= 0;
   $('alerte-stock').textContent = manque > 0
