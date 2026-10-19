@@ -1644,6 +1644,18 @@ $('push-nudge').addEventListener('click', async () => {
     notice(`Les notifications sont bloquées pour Papote. Autorisez-les dans les réglages du téléphone pour que ${session.family.name} puisse vous appeler.`);
   }
 });
+// App Android : tant qu'Android peut la mettre en pause (?pause=1), elle risque de ne plus sonner
+// si on ne l'ouvre pas pendant quelques mois. La carte ouvre le bon réglage par l'app elle-même.
+function renderPauseNudge() {
+  let pausable = false;
+  try { pausable = sessionStorage.getItem('papote.pause') === '1'; } catch (e) { /* rien */ }
+  $('pause-nudge').hidden = !session || !pausable;
+}
+$('pause-nudge').addEventListener('click', () => {
+  try { sessionStorage.removeItem('papote.pause'); } catch (e) { /* rien */ }
+  renderPauseNudge();
+  location.href = 'intent://sans-pause#Intent;scheme=papote;package=fr.mapapote.famille;end';
+});
 // « Plus tard » : la sonnerie s'arrête ici, les autres proches peuvent encore répondre.
 // « Refuser » : l'appel s'arrête tout de suite, la tablette affiche que vous n'avez pas pu répondre.
 $('incoming-decline').addEventListener('click', () => {
@@ -3367,6 +3379,7 @@ async function enterApp() {
   stopIncoming = watchIncomingCalls(session.fid, session.uid,
     (uid) => tabletMembers.some((m) => m.id === uid), (list) => showIncoming(list[list.length - 1] || null));
   renderPushNudge();
+  renderPauseNudge();
   if (pushAllowed()) enablePush(session.fid, session.uid);
   warmUpCalls();
   startAgenda(session, setNotifReminders);
@@ -3401,6 +3414,10 @@ async function start() {
   if (params.get('appel')) answerOnArrival(params.get('appel'));
   // Ouvert par l'app Android Papote : ce téléphone sonnera par elle (voir push.js).
   if (params.get('natif')) rememberNativeToken(params.get('natif'));
+  // Rouvert par l'app Android : ?pause=1 tant que le réglage n'est pas fait (sinon absent).
+  if (params.get('natif') || params.get('pause')) {
+    try { sessionStorage.setItem('papote.pause', params.get('pause') === '1' ? '1' : '0'); } catch (e) { /* rien */ }
+  }
   // Arrivé par le lien ou le QR code d'invitation : le code est gardé le temps de se connecter.
   if (params.get('code')) rememberInviteCode(params.get('code'));
   // Lien du site après une commande : le code est gardé jusqu'à ce que la famille existe.
