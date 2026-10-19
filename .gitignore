@@ -4,6 +4,12 @@ android/build/
 android/app/build/
 android/local.properties
 android/signing.properties
+telephone/.gradle/
+telephone/build/
+telephone/app/build/
+telephone/local.properties
+telephone/signing.properties
+telephone/app/google-services.json
 *.jks
 *.keystore
 
