@@ -727,15 +727,16 @@ window.papoteCallFamily = ({ to = null, onState = () => {} } = {}) => {
     active = { id: null, outgoing: true, finish, stops: call.stops };
     if (android()) android().inCall(true);
 
-    // Tout en même temps : proches, nom de la famille, micro et relais.
-    const [people, familyName, stream, ice] = await Promise.all([
-      familyPeople().catch(() => []),
-      getDoc(doc(db, 'families', fid)).then((d) => (d.data() && d.data().name) || 'Mamie').catch(() => 'Mamie'),
+    // Le plus court chemin jusqu'à la sonnerie : micro, relais (déjà en mémoire) et la seule
+    // fiche du proche appelé. La liste de la famille (avec les photos, lourde) se lit à côté.
+    const peopleP = familyPeople().catch(() => []);
+    const [stream, ice, target] = await Promise.all([
       navigator.mediaDevices.getUserMedia({ audio: CAMERA.audio, video: false }),
       iceServers(),
+      to ? getDoc(doc(db, 'families', fid, 'members', to)).then((d) => (d.exists() ? { uid: d.id, ...d.data() } : null)).catch(() => null) : null,
     ]);
+    const familyName = familyNameCache || 'Mamie';
     call.stream = stream;
-    const target = to ? people.find((m) => m.uid === to) : null;
     if (done) { call.stream.getTracks().forEach((t) => t.stop()); return; }
     const pc = new RTCPeerConnection(ice);
     call.pc = pc;
@@ -804,7 +805,7 @@ window.papoteCallFamily = ({ to = null, onState = () => {} } = {}) => {
     await setDoc(ref, {
       callerUid: auth.currentUser.uid,
       callerName: familyName,
-      calleeUid: target ? target.uid : null,
+      calleeUid: to || null, // même si sa fiche n'a pas pu être lue : jamais toute la famille par erreur
       calleeName: target ? target.name : null,
       state: 'ringing',
       offer: { type: offer.type, sdp: offer.sdp },
@@ -813,7 +814,8 @@ window.papoteCallFamily = ({ to = null, onState = () => {} } = {}) => {
       endedAt: null,
     });
     if (done) { updateDoc(ref, { state: 'ended', endedAt: serverTimestamp() }).catch(() => {}); return; }
-    emit('ringing', { names: (target ? [target] : people).map((m) => m.name) });
+    peopleP.then((people) => { if (!done && !answered) emit('ringing', { names: (target ? [target] : people).map((m) => m.name) }); });
+    emit('ringing', { names: target ? [target.name] : [] });
     call.timer = setTimeout(() => finish('missed', 'missed'), OUT_RING_MS);
 
     // Les candidats du proche peuvent arriver avant sa réponse : on les garde jusque-là
@@ -834,7 +836,9 @@ window.papoteCallFamily = ({ to = null, onState = () => {} } = {}) => {
           return;
         }
         early.splice(0).forEach((c) => pc.addIceCandidate(c).catch(() => {}));
-        const who = people.find((m) => m.uid === data.answer.uid) || {};
+        // La photo du proche si la liste est déjà là (au plus 1,5 s d'attente), sinon son prénom seul.
+        const people = await Promise.race([peopleP, new Promise((r) => setTimeout(() => r([]), 1500))]);
+        const who = people.find((m) => m.uid === data.answer.uid) || (target && target.uid === data.answer.uid ? target : {});
         emit('connected', { uid: data.answer.uid || null, name: data.answer.name || who.name || '', face: who.face || null });
       }
       // Le proche a allumé sa caméra (geste volontaire sur son téléphone) : Mamie passe en vidéo.
@@ -876,9 +880,13 @@ $('call-remote').addEventListener('playing', () => { if (active) $('call-wait').
 
 // Écoute en direct du marqueur de changement : la tablette se met à jour aussitôt,
 // et l'app Android peut espacer ses vérifications (moins de lectures, donc moins de coûts).
+// Nom de la famille (« Mamie »), gardé pour les appels sortants : pas de lecture au moment d'appeler.
+let familyNameCache = '';
+
 function watchFamily() {
   let first = true;
-  onSnapshot(doc(db, 'families', fid), () => {
+  onSnapshot(doc(db, 'families', fid), (snap) => {
+    familyNameCache = (snap.data() && snap.data().name) || familyNameCache;
     if (first) { first = false; return; }
     if (android() && android().changed) android().changed();
   }, (err) => {
