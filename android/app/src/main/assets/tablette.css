@@ -248,7 +248,7 @@ button {
 .call-screen {
   position: fixed;
   top: 0; right: 0; bottom: 0; left: 0;
-  z-index: 30;
+  z-index: 900; /* au-dessus des autres écrans plein écran (réponse, appel sortant…) */
   display: flex;
   align-items: center;
   justify-content: space-around;
