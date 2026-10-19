@@ -9,7 +9,7 @@
     android:paddingStart="32dp"
     android:paddingTop="56dp"
     android:paddingEnd="32dp"
-    android:paddingBottom="180dp">
+    android:paddingBottom="48dp">
 
     <TextView
         android:layout_width="wrap_content"
@@ -133,4 +133,10 @@
                 android:textSize="18sp" />
         </LinearLayout>
     </LinearLayout>
+
+    <!-- Autant de place sous les boutons qu'au-dessus : ils tombent sous le pouce, pas tout en bas. -->
+    <View
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
 </LinearLayout>
