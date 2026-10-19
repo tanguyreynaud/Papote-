@@ -10,8 +10,6 @@ import android.content.SharedPreferences;
 import android.media.AudioAttributes;
 import android.media.RingtoneManager;
 import android.net.Uri;
-import android.os.Build;
-import android.provider.Settings;
 
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.Person;
@@ -41,7 +39,6 @@ final class Appels {
     private static final int ID_APPEL = 1;
     private static final int ID_MANQUE = 2;
     private static final int ID_ALERTE = 3;
-    private static final int ID_CONSEIL = 4;
     /** Au-delà, la tablette a raccroché depuis longtemps (elle abandonne au bout de 45 s). */
     private static final long DUREE_MAX_MS = 60_000;
     private static final String PREFS = "appels";
@@ -63,36 +60,6 @@ final class Appels {
         nm.createNotificationChannel(appels);
         nm.createNotificationChannel(new NotificationChannel(CANAL_INFOS,
                 ctx.getString(R.string.canal_infos), NotificationManager.IMPORTANCE_DEFAULT));
-    }
-
-    /**
-     * Rappel silencieux tant que l'app peut être mise en pause par Android : le toucher ouvre la
-     * page « Infos sur l'appli » (Android 12+, comme IntentCompat d'AndroidX), où se trouve
-     * l'interrupteur. Une fois réglé, il disparaît.
-     */
-    static void conseilSansPause(Context ctx, boolean afficher) {
-        NotificationManager nm = ctx.getSystemService(NotificationManager.class);
-        if (!afficher) {
-            nm.cancel(ID_CONSEIL);
-            return;
-        }
-        String action = Build.VERSION.SDK_INT >= 31
-                ? Settings.ACTION_APPLICATION_DETAILS_SETTINGS
-                : Intent.ACTION_AUTO_REVOKE_PERMISSIONS;
-        PendingIntent reglage = PendingIntent.getActivity(ctx, ID_CONSEIL,
-                new Intent(action, Uri.parse("package:" + ctx.getPackageName())),
-                PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
-        String texte = ctx.getString(R.string.sans_pause_texte);
-        nm.notify(ID_CONSEIL, new NotificationCompat.Builder(ctx, CANAL_INFOS)
-                .setSmallIcon(R.drawable.ic_notif)
-                .setContentTitle(ctx.getString(R.string.sans_pause_titre))
-                .setContentText(ctx.getString(R.string.sans_pause_court))
-                .setStyle(new NotificationCompat.BigTextStyle().bigText(texte))
-                .setSilent(true)
-                .setOnlyAlertOnce(true)
-                .setAutoCancel(true)
-                .setContentIntent(reglage)
-                .build());
     }
 
     /** La tablette appelle : le téléphone sonne (une seule fois par appel, malgré les renvois). */

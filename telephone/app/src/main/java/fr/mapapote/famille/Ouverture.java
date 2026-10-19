@@ -24,7 +24,8 @@ import com.google.firebase.messaging.FirebaseMessaging;
  *
  * Avant, au premier lancement : autorisation des notifications (Android 13+) et de l'écran d'appel
  * plein écran (Android 14+). Puis l'adresse reçoit ?natif=<jeton> : l'app famille range ce jeton
- * avec le compte (web/js/push.js), et le serveur fait sonner ce téléphone par lui.
+ * avec le compte (web/js/push.js), et le serveur fait sonner ce téléphone par lui. Et ?pause=1
+ * tant qu'Android peut mettre l'app en pause (carte « Ne manquez aucun appel »).
  */
 public class Ouverture extends LauncherActivity {
     private static final String PREFS = "ouverture";
@@ -85,20 +86,12 @@ public class Ouverture extends LauncherActivity {
             try {
                 startActivity(new Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT,
                         Uri.parse("package:" + getPackageName())));
-                auRetour = this::demanderSansPause;
+                auRetour = this::recupererJeton;
                 return;
             } catch (Exception e) {
                 // Réglage absent sur ce téléphone : tant pis, le bandeau sonnera quand même.
             }
         }
-        demanderSansPause();
-    }
-
-    // Android 11+ met en pause une app pas ouverte depuis quelques mois : elle ne recevrait plus
-    // les appels. Tant que ce n'est pas réglé, une notification discrète mène au bon réglage.
-    private void demanderSansPause() {
-        Appels.conseilSansPause(this,
-                Build.VERSION.SDK_INT >= 30 && !getPackageManager().isAutoRevokeWhitelisted());
         recupererJeton();
     }
 
@@ -135,10 +128,16 @@ public class Ouverture extends LauncherActivity {
 
     @Override
     protected Uri getLaunchingUrl() {
-        Uri url = super.getLaunchingUrl();
+        Uri.Builder url = super.getLaunchingUrl().buildUpon();
         String jeton = prefs(this).getString(JETON, null);
-        if (jeton == null) return url;
-        return url.buildUpon().appendQueryParameter("natif", jeton).build();
+        if (jeton != null) url.appendQueryParameter("natif", jeton);
+        // Android 11+ met en pause une app pas ouverte depuis quelques mois : elle ne recevrait
+        // plus les appels. Tant que ce n'est pas réglé, l'app famille affiche une carte qui mène
+        // au bon réglage (ReglagePause).
+        if (Build.VERSION.SDK_INT >= 30 && !getPackageManager().isAutoRevokeWhitelisted()) {
+            url.appendQueryParameter("pause", "1");
+        }
+        return url.build();
     }
 
     static void memoriserJeton(Context ctx, String jeton) {

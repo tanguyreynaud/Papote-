@@ -67,6 +67,21 @@
             android:turnScreenOn="true"
             android:taskAffinity="fr.mapapote.famille.appel" />
 
+        <!-- Carte « Ne manquez aucun appel » de l'app famille : ouvre le réglage de mise en pause -->
+        <activity
+            android:name=".ReglagePause"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="papote" android:host="sans-pause" />
+            </intent-filter>
+        </activity>
+
         <!-- Bouton « Refuser » de la notification -->
         <receiver
             android:name=".Refus"
