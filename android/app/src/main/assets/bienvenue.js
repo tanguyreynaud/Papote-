@@ -153,7 +153,7 @@
       box.appendChild(button('Choisir un réseau', 'primary', openNetworks));
     }
     if (repair) box.appendChild(button('Fermer', 'no', closeRepair));
-    if (!connected) openNetworks();
+    // La fenêtre des réseaux ne s'ouvre que sur « Choisir un réseau » : la personne a le temps de lire.
   }
 
   // Icône wifi comme sur Android : un éventail plein jusqu'à la force du signal (0 à 3), cadenas si protégé.
@@ -292,7 +292,7 @@
     var box = screen('La météo', 'Tapez le code postal de la tablette, puis choisissez la ville : elle affichera sa météo.');
     box.appendChild(button('Choisir la ville', 'primary', openCities));
     box.appendChild(button('Passer cette étape', 'no', function () { closeNetworks(); android().meteoSkip(); }));
-    openCities();
+    // La fenêtre ne s'ouvre que sur « Choisir la ville » : la personne a le temps de lire.
   }
 
   var PIN = '<svg viewBox="0 0 24 24" width="100%" height="100%" aria-hidden="true">' +
