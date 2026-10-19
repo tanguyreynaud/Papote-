@@ -27,7 +27,8 @@ async function envoyer(db, fid, uids, data, ttlSecondes, { natifsSeulement = fal
   let n = reussis.filter(Boolean).length;
   // App Android désinstallée ou réinstallée (jeton périmé) : on se rabat sur les navigateurs.
   if (!natifsSeulement) {
-    const echoues = new Set(jetons.map((j) => j.i));
+    // Seulement les proches prévenus par l'app : un proche sans app a déjà eu ses jetons de navigateur.
+    const echoues = new Set(jetons.filter((j) => j.champ === 'natifs').map((j) => j.i));
     jetons.forEach((j, k) => { if (reussis[k]) echoues.delete(j.i); });
     const secours = [...echoues].flatMap((i) => jetonsDe(i, 'tokens'));
     n += (await pousser(secours, data, ttlSecondes)).filter(Boolean).length;
