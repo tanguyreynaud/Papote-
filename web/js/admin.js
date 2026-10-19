@@ -749,8 +749,10 @@ function carteFamille(f) {
     ];
     li.innerHTML = `<div class="family-head"><span class="dot"></span><strong></strong><code></code></div><dl></dl>
       <div class="replace"><button type="button" class="link small members-btn">Gérer les membres</button><div class="members-out" hidden></div></div>
+      <details class="autres"><summary>Autres actions</summary>
       <div class="replace"><button type="button" class="link small replace-btn">Tablette de remplacement</button><p class="replace-out small" hidden></p></div>
-      <div class="replace"><button type="button" class="link small danger delete-btn">Supprimer la famille et toutes ses données</button></div>`;
+      <div class="replace"><button type="button" class="link small danger delete-btn">Supprimer la famille et toutes ses données</button></div>
+      </details>`;
     const delBtn = li.querySelector('.delete-btn');
     if (f.abonnement?.statut === 'offert') delBtn.parentElement.remove();
     else delBtn.addEventListener('click', () => supprimerFamille(f, li, delBtn));
@@ -776,7 +778,7 @@ function carteFamille(f) {
         offreBtn.disabled = false;
       }
     });
-    li.querySelector('dl').after(offre);
+    li.querySelector('details.autres summary').after(offre);
     li.querySelector('.replace-btn').addEventListener('click', () => prepareReplacement(f, li));
     li.querySelector('.members-btn').addEventListener('click', () => toggleMembers(f, li));
     showPending(f, li);
