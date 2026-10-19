@@ -90,11 +90,11 @@
             android:orientation="vertical">
 
             <ImageView
-                android:layout_width="84dp"
-                android:layout_height="84dp"
+                android:layout_width="68dp"
+                android:layout_height="68dp"
                 android:background="@drawable/rond_rouge"
                 android:contentDescription="@string/refuser"
-                android:padding="22dp"
+                android:padding="18dp"
                 android:src="@drawable/ic_raccrocher" />
 
             <TextView
@@ -103,7 +103,7 @@
                 android:layout_marginTop="10dp"
                 android:text="@string/refuser"
                 android:textColor="@color/texte"
-                android:textSize="20sp" />
+                android:textSize="18sp" />
         </LinearLayout>
 
         <LinearLayout
@@ -117,11 +117,11 @@
 
             <ImageView
                 android:id="@+id/repondre_rond"
-                android:layout_width="84dp"
-                android:layout_height="84dp"
+                android:layout_width="68dp"
+                android:layout_height="68dp"
                 android:background="@drawable/rond_vert"
                 android:contentDescription="@string/repondre"
-                android:padding="22dp"
+                android:padding="18dp"
                 android:src="@drawable/ic_notif" />
 
             <TextView
@@ -130,7 +130,7 @@
                 android:layout_marginTop="10dp"
                 android:text="@string/repondre"
                 android:textColor="@color/texte"
-                android:textSize="20sp" />
+                android:textSize="18sp" />
         </LinearLayout>
     </LinearLayout>
 </LinearLayout>
