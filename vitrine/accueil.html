@@ -217,6 +217,20 @@ section { padding-block: clamp(3.5rem, 8vw, 6rem); }
 .faq details p { padding: 0 1.25rem 1.25rem; color: var(--muted); }
 
 /* Contact */
+.compare-cadre { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; }
+.compare { width: 100%; border-collapse: collapse; font-size: 1.05rem; }
+.compare th, .compare td { padding: .85rem 1rem; text-align: center; border-bottom: 1px solid var(--line); }
+.compare tbody tr:last-child th, .compare tbody tr:last-child td { border-bottom: 0; }
+.compare tbody th { text-align: left; font-weight: 400; width: 46%; }
+.compare thead th { font-family: var(--display); font-size: 1rem; color: var(--muted); }
+.compare thead th.moi { color: var(--accent); font-size: 1.15rem; }
+.compare .oui { color: var(--accent); font-weight: 800; font-size: 1.3rem; }
+.compare .non { color: var(--muted); }
+.compare td:nth-child(2) { background: var(--accent-soft); }
+@media (max-width: 560px) { .compare { font-size: .95rem; table-layout: fixed; } .compare tbody th, .compare thead td { width: 44%; } .compare th, .compare td { padding: .7rem .4rem; } .compare tbody th { padding-left: .8rem; } .compare thead th { font-size: .78rem; hyphens: auto; } }
+.histoire { margin: clamp(2.5rem, 5vw, 3.5rem) 0 0; display: grid; gap: .75rem; max-width: 44rem; }
+.histoire blockquote { margin: 0; padding-left: 1.25rem; border-left: 4px solid var(--warm); font: 600 clamp(1.25rem, 2.6vw, 1.6rem)/1.4 var(--display); }
+.histoire figcaption { padding-left: 1.5rem; color: var(--muted); }
 .lancement .wrap { display: grid; gap: 1.5rem; max-width: 50rem; }
 .attente { display: grid; gap: 1rem; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 1.5rem; }
 .attente label { display: grid; gap: .35rem; font-weight: 700; }
@@ -397,6 +411,32 @@ footer a { color: var(--muted); }
   </section>
 
   <!-- AVIS -->
+  <section id="comparatif">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">Pourquoi pas une tablette ordinaire ?</p>
+        <h2>Pensée pour ne rien demander à votre proche</h2>
+      </div>
+      <div class="compare-cadre">
+        <table class="compare">
+          <thead><tr><td></td><th scope="col" class="moi">Papote</th><th scope="col">Tablette classique</th><th scope="col">Smart&shy;phone</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Décroche les appels vidéo toute seule</th><td><span class="oui" aria-label="Oui">✓</span></td><td><span class="non" aria-label="Non">—</span></td><td><span class="non" aria-label="Non">—</span></td></tr>
+            <tr><th scope="row">Aucun mot de passe ni mise à jour à gérer</th><td><span class="oui" aria-label="Oui">✓</span></td><td><span class="non" aria-label="Non">—</span></td><td><span class="non" aria-label="Non">—</span></td></tr>
+            <tr><th scope="row">Les photos de la famille arrivent toutes seules</th><td><span class="oui" aria-label="Oui">✓</span></td><td><span class="non" aria-label="Non">—</span></td><td><span class="non" aria-label="Non">—</span></td></tr>
+            <tr><th scope="row">Réglages faits à distance par la famille</th><td><span class="oui" aria-label="Oui">✓</span></td><td><span class="non" aria-label="Non">—</span></td><td><span class="non" aria-label="Non">—</span></td></tr>
+            <tr><th scope="row">Ni publicité, ni autres applis</th><td><span class="oui" aria-label="Oui">✓</span></td><td><span class="non" aria-label="Non">—</span></td><td><span class="non" aria-label="Non">—</span></td></tr>
+            <tr><th scope="row">Livrée prête à l'emploi, tablette prêtée</th><td><span class="oui" aria-label="Oui">✓</span></td><td><span class="non" aria-label="Non">—</span></td><td><span class="non" aria-label="Non">—</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <figure class="histoire">
+        <blockquote>« J'ai créé Papote pour ma grand-mère de 93 ans. Je voulais qu'elle reçoive les photos de toute la famille et qu'elle nous voie en vidéo, sans avoir à apprendre quoi que ce soit. Les photos arrivent seules, les appels décrochent seuls : elle n'a qu'à regarder. »</blockquote>
+        <figcaption>Tanguy, créateur de Papote, à Lyon</figcaption>
+      </figure>
+    </div>
+  </section>
+
   <section id="tarifs" class="band">
     <div class="wrap">
       <div class="section-head">
