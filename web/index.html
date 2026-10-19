@@ -372,15 +372,14 @@
           <div class="setting-head"><h2>Options de la tablette</h2><button type="button" class="link setting-modify">Modifier</button></div>
           <div id="options-value" class="setting-value options-value"></div>
           <form id="form-options" class="setting-edit" hidden>
-            <label class="switch-row"><input type="checkbox" id="opt-lecture"> Lecture à voix haute</label>
-            <p class="muted small option-help">Un bouton « Écouter » sur les messages : la tablette les lit à voix haute.</p>
-            <label class="switch-row"><input type="checkbox" id="opt-vocal"> Réponse vocale</label>
-            <p class="muted small option-help"><span class="grand-name"></span> peut répondre à une photo en parlant ; vous recevez le message vocal dans Messages.</p>
-            <label class="switch-row"><input type="checkbox" id="opt-radio"> Radio</label>
-            <p class="muted small option-help">Un bouton « Radio » à côté de « Appeler » sur la tablette.</p>
-            <label id="opt-radio-wrap">Station
-              <select id="opt-radio-station"></select>
-            </label>
+            <div class="toggle-list">
+            <label class="toggle-row"><span class="toggle-text"><strong>Lecture à voix haute</strong><span>Un bouton « Écouter » lit les messages</span></span><input type="checkbox" class="toggle" id="opt-lecture"></label>
+            <label class="toggle-row"><span class="toggle-text"><strong>Réponse vocale</strong><span>Répondre à une photo en parlant</span></span><input type="checkbox" class="toggle" id="opt-vocal"></label>
+            <label class="toggle-row"><span class="toggle-text"><strong>Radio</strong><span>Un bouton « Radio » à côté de « Appeler »</span></span><input type="checkbox" class="toggle" id="opt-radio"></label>
+              <label id="opt-radio-wrap" class="station">Station
+                <select id="opt-radio-station"></select>
+              </label>
+            </div>
             <div class="setting-actions">
               <button type="button" class="secondary setting-cancel">Annuler</button>
               <button type="submit" class="primary">Enregistrer</button>

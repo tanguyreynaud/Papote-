@@ -574,6 +574,190 @@ $('form-message').addEventListener('submit', async (e) => {
   }
 });
 
+// ---------- Première installation : régler la tablette pas à pas (propriétaire) ----------
+// Une famille toute neuve (ni météo, ni veille, ni options) : on propose de tout régler d'un coup.
+// Tout reste modifiable ensuite dans Réglages > La tablette.
+const INTRO_KEY = 'papote.introTablette.';
+
+function introAFaire() {
+  const f = session.family;
+  if (!amOwner() || f.meteoVille || f.veille || f.options) return false;
+  try { return localStorage.getItem(INTRO_KEY + session.fid) !== '1'; } catch (e) { return false; }
+}
+
+function introVue() {
+  try { localStorage.setItem(INTRO_KEY + session.fid, '1'); } catch (e) { /* rien */ }
+}
+
+function showIntroTablette() {
+  if (!introAFaire()) return false;
+  const nom = session.family.name;
+  const choix = { meteoVille: null, veille: { active: true, de: 23, a: 7 }, textSize: 'grande', volume: 80,
+    options: { lecture: true, reponseVocale: false, radio: { active: false, nom: RADIOS[0].nom, url: RADIOS[0].url } } };
+  let communesIntro = [];
+  const back = document.createElement('div');
+  back.className = 'guide-back intro-back';
+  back.innerHTML = `<form class="guide intro" role="dialog" aria-modal="true" novalidate>
+      <div class="guide-dots"></div>
+      <div class="intro-step" data-step="0">
+        <span class="guide-icon"><svg><use href="#i-settings"/></svg></span>
+        <h2>Réglons la tablette</h2>
+        <p></p>
+      </div>
+      <div class="intro-step" data-step="1" hidden>
+        <h2>La météo</h2>
+        <p class="muted">Le code postal de la commune où vit <span class="intro-nom"></span>.</p>
+        <input id="intro-cp" inputmode="numeric" maxlength="5" placeholder="Code postal" autocomplete="postal-code">
+        <select id="intro-commune" hidden></select>
+        <p id="intro-meteo-info" class="muted small"></p>
+      </div>
+      <div class="intro-step" data-step="2" hidden>
+        <h2>La nuit</h2>
+        <p class="muted">L'écran s'éteint la nuit ; un toucher le rallume, et un appel le réveille.</p>
+        <div class="toggle-list"><label class="toggle-row"><span class="toggle-text"><strong>Éteindre l'écran la nuit</strong></span><input type="checkbox" class="toggle" id="intro-veille" checked></label></div>
+        <div id="intro-heures" class="sleep-hours">
+          <label>De <select id="intro-de">HOURS</select></label>
+          <label>à <select id="intro-a">HOURS</select></label>
+        </div>
+      </div>
+      <div class="intro-step" data-step="3" hidden>
+        <h2>Lire et entendre</h2>
+        <p class="muted">Taille du texte sur la tablette</p>
+        <div class="segmented" role="radiogroup" aria-label="Taille du texte">
+          <button type="button" class="seg" data-intro-size="normal">Normale</button>
+          <button type="button" class="seg" data-intro-size="grande">Grande</button>
+          <button type="button" class="seg" data-intro-size="tres-grande">Très grande</button>
+        </div>
+        <p class="muted">Volume du son : <strong id="intro-volume-val"></strong></p>
+        <input id="intro-volume" type="range" min="10" max="100" step="5" aria-label="Volume">
+      </div>
+      <div class="intro-step" data-step="4" hidden>
+        <h2>Les options</h2>
+        <div class="toggle-list">
+          <label class="toggle-row"><span class="toggle-text"><strong>Lecture à voix haute</strong><span>Un bouton « Écouter » lit les messages</span></span><input type="checkbox" class="toggle" id="intro-lecture"></label>
+          <label class="toggle-row"><span class="toggle-text"><strong>Réponse vocale</strong><span>Répondre à une photo en parlant</span></span><input type="checkbox" class="toggle" id="intro-vocal"></label>
+          <label class="toggle-row"><span class="toggle-text"><strong>Radio</strong><span>Un bouton « Radio » à côté de « Appeler »</span></span><input type="checkbox" class="toggle" id="intro-radio"></label>
+          <label class="station" id="intro-station-wrap" hidden>Station <select id="intro-station"></select></label>
+        </div>
+      </div>
+      <div class="intro-step" data-step="5" hidden>
+        <span class="guide-icon"><svg><use href="#i-user-plus"/></svg></span>
+        <h2>C'est prêt</h2>
+        <p></p>
+      </div>
+      <p class="error small intro-error" hidden></p>
+      <div class="guide-buttons">
+        <button type="button" class="link intro-prev">Retour</button>
+        <button type="submit" class="primary intro-next"></button>
+      </div>
+    </form>`.replaceAll('HOURS', `<option value="0">0 h</option><option value="1">1 h</option><option value="2">2 h</option><option value="3">3 h</option><option value="4">4 h</option><option value="5">5 h</option><option value="6">6 h</option><option value="7">7 h</option><option value="8">8 h</option><option value="9">9 h</option><option value="10">10 h</option><option value="11">11 h</option><option value="12">12 h</option><option value="13">13 h</option><option value="14">14 h</option><option value="15">15 h</option><option value="16">16 h</option><option value="17">17 h</option><option value="18">18 h</option><option value="19">19 h</option><option value="20">20 h</option><option value="21">21 h</option><option value="22">22 h</option><option value="23">23 h</option>`);
+  const $i = (sel) => back.querySelector(sel);
+  const steps = [...back.querySelectorAll('.intro-step')];
+  $i('.guide-dots').innerHTML = steps.map(() => '<span></span>').join('');
+  $i('[data-step="0"] p').textContent = `Quelques questions pour que la tablette de ${nom} soit prête : météo, nuit, son, options. Une minute, et tout reste modifiable dans Réglages.`;
+  $i('[data-step="5"] p').textContent = `La tablette de ${nom} est réglée. Invitez maintenant la famille pour qu'elle envoie des photos.`;
+  back.querySelectorAll('.intro-nom').forEach((e) => { e.textContent = nom; });
+  $i('#intro-de').value = '23';
+  $i('#intro-a').value = '7';
+  $i('#intro-volume').value = String(choix.volume);
+  $i('#intro-volume-val').textContent = `${choix.volume} %`;
+  $i('#intro-lecture').checked = choix.options.lecture;
+  const nat = document.createElement('optgroup');
+  nat.label = 'Nationales';
+  const loc = document.createElement('optgroup');
+  loc.label = 'Locales (ex-France Bleu)';
+  RADIOS.forEach((r, k) => (r.locale ? loc : nat).append(new Option(r.nom, String(k))));
+  $i('#intro-station').append(nat, loc);
+  const markSizeIntro = () => back.querySelectorAll('[data-intro-size]').forEach((b) => b.classList.toggle('active', b.dataset.introSize === choix.textSize));
+  markSizeIntro();
+  back.querySelectorAll('[data-intro-size]').forEach((b) => b.addEventListener('click', () => { choix.textSize = b.dataset.introSize; markSizeIntro(); }));
+  $i('#intro-volume').addEventListener('input', () => { $i('#intro-volume-val').textContent = `${$i('#intro-volume').value} %`; });
+  $i('#intro-veille').addEventListener('change', () => { $i('#intro-heures').hidden = !$i('#intro-veille').checked; });
+  $i('#intro-radio').addEventListener('change', () => { $i('#intro-station-wrap').hidden = !$i('#intro-radio').checked; });
+  $i('#intro-cp').addEventListener('input', async () => {
+    const cp = $i('#intro-cp').value.replace(/\D/g, '').slice(0, 5);
+    $i('#intro-cp').value = cp;
+    communesIntro = [];
+    $i('#intro-commune').hidden = true;
+    $i('#intro-meteo-info').textContent = '';
+    if (cp.length !== 5) return;
+    try {
+      const r = await fetch(`https://geo.api.gouv.fr/communes?codePostal=${cp}&fields=nom,centre,departement&format=json`);
+      const list = (await r.json()).filter((c) => c.centre?.coordinates);
+      if ($i('#intro-cp').value !== cp) return;
+      communesIntro = list;
+      if (!list.length) { $i('#intro-meteo-info').textContent = 'Aucune commune pour ce code postal.'; return; }
+      $i('#intro-commune').replaceChildren(...list.map((c, k) => new Option([c.nom, cp, c.departement?.nom].filter(Boolean).join(' · '), String(k))));
+      $i('#intro-commune').hidden = false;
+    } catch (err) {
+      $i('#intro-meteo-info').textContent = 'Recherche impossible pour le moment ; vous pourrez la faire dans Réglages.';
+    }
+  });
+
+  let i = 0;
+  const render = () => {
+    steps.forEach((s, k) => { s.hidden = k !== i; });
+    back.querySelectorAll('.guide-dots span').forEach((d, k) => d.classList.toggle('on', k === i));
+    $i('.intro-next').textContent = i === 0 ? 'Commencer' : i === steps.length - 1 ? 'Inviter la famille' : 'Suivant';
+    $i('.intro-prev').textContent = i === 0 ? 'Plus tard' : i === steps.length - 1 ? 'Terminer' : 'Retour';
+    $i('.intro-error').hidden = true;
+  };
+  const close = () => { introVue(); back.remove(); };
+
+  async function enregistrer() {
+    const c = communesIntro[Number($i('#intro-commune').value)];
+    if (c) {
+      const [lon, lat] = c.centre.coordinates;
+      choix.meteoVille = { nom: c.nom.slice(0, 80), lat, lon };
+    }
+    choix.veille = { active: $i('#intro-veille').checked, de: Number($i('#intro-de').value), a: Number($i('#intro-a').value) };
+    choix.volume = Number($i('#intro-volume').value);
+    const r = RADIOS[Number($i('#intro-station').value)] || RADIOS[0];
+    choix.options = {
+      lecture: $i('#intro-lecture').checked,
+      reponseVocale: $i('#intro-vocal').checked,
+      radio: { active: $i('#intro-radio').checked, nom: r.nom, url: r.url },
+    };
+    // Une écriture par réglage : chaque règle n'accepte qu'un champ (avec rev) à la fois.
+    const ecrire = (data) => updateDoc(doc(db, 'families', session.fid), { ...data, rev: increment(1) });
+    if (choix.meteoVille) await ecrire({ meteoVille: choix.meteoVille });
+    await ecrire({ veille: choix.veille });
+    await ecrire({ textSize: choix.textSize });
+    await ecrire({ volume: choix.volume });
+    await ecrire({ options: choix.options });
+  }
+
+  $i('.intro-prev').addEventListener('click', () => {
+    if (i === 0 || i === steps.length - 1) close();
+    else { i--; render(); }
+  });
+  $i('form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (i === 2 && $i('#intro-veille').checked && $i('#intro-de').value === $i('#intro-a').value) {
+      showError($i('.intro-error'), "L'heure de fin doit être différente de l'heure de début.");
+      return;
+    }
+    if (i === steps.length - 2) {
+      $i('.intro-next').disabled = true;
+      try {
+        await enregistrer();
+      } catch (err) {
+        console.error(err);
+        showError($i('.intro-error'), "L'enregistrement a échoué. Vérifiez la connexion et réessayez.");
+        return;
+      } finally {
+        $i('.intro-next').disabled = false;
+      }
+    }
+    if (i === steps.length - 1) { close(); openPage('invite'); return; }
+    i++;
+    render();
+  });
+  render();
+  document.body.append(back);
+  return true;
+}
+
 // ---------- Télécharger toutes les photos (fichier .zip) ----------
 // Toutes les photos de la famille, pour les garder avant l'effacement au-delà des 200 dernières.
 
@@ -2466,11 +2650,21 @@ const optionsActuelles = () => session.family.options || {};
 function renderOptions() {
   const o = optionsActuelles();
   const lignes = [
-    `Lecture à voix haute : ${o.lecture ? 'oui' : 'non'}`,
-    `Réponse vocale : ${o.reponseVocale ? 'oui' : 'non'}`,
-    `Radio : ${o.radio?.active ? (o.radio.nom || 'oui') : 'non'}`,
+    ['Lecture à voix haute', o.lecture ? 'Activée' : 'Désactivée', !!o.lecture],
+    ['Réponse vocale', o.reponseVocale ? 'Activée' : 'Désactivée', !!o.reponseVocale],
+    ['Radio', o.radio?.active ? (o.radio.nom || 'Activée') : 'Désactivée', !!o.radio?.active],
   ];
-  $('options-value').replaceChildren(...lignes.map((t) => Object.assign(document.createElement('span'), { textContent: t })));
+  $('options-value').replaceChildren(...lignes.map(([nom, etat, on]) => {
+    const li = document.createElement('span');
+    li.className = 'option-line';
+    const a = document.createElement('span');
+    a.textContent = nom;
+    const b = document.createElement('span');
+    b.className = `option-state${on ? ' on' : ''}`;
+    b.textContent = etat;
+    li.append(a, b);
+    return li;
+  }));
 }
 
 $('opt-radio').addEventListener('change', () => { $('opt-radio-wrap').hidden = !$('opt-radio').checked; });
@@ -3190,7 +3384,8 @@ async function enterApp() {
   goHome();
   renderOutbox();
   flushOutbox();
-  showGuideOnce(session.family.name);
+  // Famille toute neuve : d'abord régler la tablette ; sinon le petit guide habituel.
+  if (!showIntroTablette()) showGuideOnce(session.family.name);
   if (sharedPending) { sharedPending = false; openShared(); }
   if (rappelerPending) { rappelerPending = false; offerCallBack(); }
   else if (pairCode()) openPage('pair');
