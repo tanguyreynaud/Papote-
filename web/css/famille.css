@@ -1021,7 +1021,7 @@ body:not(.on-support) .ps-bouton, body:not(.on-support) .ps-panneau { display: n
 .incoming-name, .call-name { margin: 24px 0 0; font-size: 34px; font-weight: 700; line-height: 1.1; }
 .incoming-sub { margin: 6px 0 0; font-size: 18px; opacity: .8; }
 /* Remontés vers le tiers bas de l'écran : tout en bas, ils tombaient sous le pouce mal placé. */
-.incoming-actions { margin-top: auto; margin-bottom: 16vh; display: flex; gap: 72px; }
+.incoming-actions { margin-top: auto; margin-bottom: 26vh; display: flex; gap: 72px; }
 .round-btn {
   display: flex; flex-direction: column; align-items: center; gap: 10px;
   background: none; color: #3f2d4a; font-size: 15px; font-weight: 600; padding: 0;
