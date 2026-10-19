@@ -179,6 +179,14 @@
         </div>
         </div>
         <div class="card" data-onglet="email">
+          <h3>E-mail de lancement</h3>
+          <p class="muted small">« Papote est disponible : vous pouvez commander », pour les personnes inscrites sur la liste d'attente du site (avec leur accord, une seule fois chacune).</p>
+          <div class="actions no-print">
+            <button type="button" class="secondary" id="lancement-test">M'envoyer un test</button>
+            <button type="button" class="primary" id="lancement-envoyer">Envoyer à toute la liste d'attente</button>
+          </div>
+          <p id="lancement-msg" class="small" hidden></p>
+          <h3>Autre message</h3>
           <p class="muted small">Part seulement aux personnes de la liste « Clients » (avec son filtre) qui acceptent les e-mails. {prenom} = le prénom.</p>
           <form id="f-campagne" class="campagne no-print">
             <label>Objet <input name="objet" maxlength="150" required></label>
