@@ -19,7 +19,7 @@ import {
   abonnementOk, FORMULES, LIBELLES, ouvrirPortail, payer, rattacherCommande, resilier, annulerResiliation,
   finDeContrat, retracter,
 } from './abonnement.js';
-import { startCall, watchTabletBusy, watchIncomingCalls, answerIncoming, warmUpCalls } from './appel.js';
+import { startCall, watchTabletBusy, watchIncomingCalls, answerIncoming, warmUpCalls, declineIncoming } from './appel.js';
 import { pushSupported, pushAllowed, pushRefused, enablePush, closeCallNotification } from './push.js';
 import { prepareVideo } from './video.js';
 import { startAgenda, stopAgenda } from './agenda.js';
@@ -1399,9 +1399,14 @@ $('push-nudge').addEventListener('click', async () => {
   }
 });
 // « Plus tard » : la sonnerie s'arrête ici, les autres proches peuvent encore répondre.
-$('incoming-later').addEventListener('click', () => {
-  stopRingTone();
-  $('incoming').hidden = true;
+// « Refuser » : l'appel s'arrête tout de suite, la tablette affiche que vous n'avez pas pu répondre.
+$('incoming-decline').addEventListener('click', () => {
+  const call = incoming;
+  showIncoming(null);
+  if (call) {
+    closeCallNotification(call.id);
+    declineIncoming(session.fid, call.id);
+  }
 });
 
 let callAbort = null; // annule un appel encore en train de démarrer

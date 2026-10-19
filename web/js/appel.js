@@ -369,3 +369,8 @@ export async function answerIncoming(fid, callId, me, ui) {
   };
   return { hangup: () => finish('ended', 'ended') };
 }
+
+// Refuser un appel de la tablette : il s'arrête aussitôt pour Mamie (« n'a pas pu répondre »).
+export function declineIncoming(fid, callId) {
+  return updateDoc(doc(db, 'families', fid, 'calls', callId), { state: 'declined', endedAt: serverTimestamp() }).catch(() => {});
+}
