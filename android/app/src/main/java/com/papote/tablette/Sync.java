@@ -1,6 +1,8 @@
 package com.papote.tablette;
 
 import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -656,11 +658,23 @@ final class Sync {
             if (!charging && since == 0) { since = System.currentTimeMillis(); prefs.edit().putLong("unpluggedAt", since).apply(); }
             java.text.SimpleDateFormat iso = new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US);
             iso.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
-            JSONObject battery = new JSONObject().put("mapValue", new JSONObject().put("fields", new JSONObject()
+            JSONObject fields = new JSONObject()
                     .put("level", new JSONObject().put("integerValue", String.valueOf(Math.max(0, Math.min(100, level)))))
                     .put("charging", new JSONObject().put("booleanValue", charging))
                     .put("unpluggedAt", since == 0 ? new JSONObject().put("nullValue", JSONObject.NULL)
-                            : new JSONObject().put("timestampValue", iso.format(new java.util.Date(since))))));
+                            : new JSONObject().put("timestampValue", iso.format(new java.util.Date(since))))
+                    .put("at", new JSONObject().put("timestampValue", iso.format(new java.util.Date())));
+            // Santé de la batterie pour l'espace admin : état, température, cycles (Android 14+).
+            Intent sticky = context.registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+            if (sticky != null) {
+                fields.put("health", Firebase.string(healthName(
+                        sticky.getIntExtra(android.os.BatteryManager.EXTRA_HEALTH, 0))));
+                int t = sticky.getIntExtra(android.os.BatteryManager.EXTRA_TEMPERATURE, Integer.MIN_VALUE);
+                if (t != Integer.MIN_VALUE) fields.put("temperature", new JSONObject().put("doubleValue", t / 10.0));
+                int cycles = sticky.getIntExtra("android.os.extra.CYCLE_COUNT", -1);
+                if (cycles >= 0) fields.put("cycles", new JSONObject().put("integerValue", String.valueOf(cycles)));
+            }
+            JSONObject battery = new JSONObject().put("mapValue", new JSONObject().put("fields", fields));
             JSONObject write = new JSONObject()
                     .put("update", new JSONObject()
                             .put("name", Firebase.docName("families/" + fid + "/members/" + firebase.uid()))
@@ -670,6 +684,18 @@ final class Sync {
             firebase.commit(new JSONArray().put(write));
         } catch (Exception e) {
             Log.w(TAG, "Batterie", e);
+        }
+    }
+
+    private static String healthName(int h) {
+        switch (h) {
+            case android.os.BatteryManager.BATTERY_HEALTH_GOOD: return "bonne";
+            case android.os.BatteryManager.BATTERY_HEALTH_OVERHEAT: return "surchauffe";
+            case android.os.BatteryManager.BATTERY_HEALTH_DEAD: return "morte";
+            case android.os.BatteryManager.BATTERY_HEALTH_OVER_VOLTAGE: return "surtension";
+            case android.os.BatteryManager.BATTERY_HEALTH_COLD: return "froide";
+            case android.os.BatteryManager.BATTERY_HEALTH_UNSPECIFIED_FAILURE: return "panne";
+            default: return "inconnue";
         }
     }
 
