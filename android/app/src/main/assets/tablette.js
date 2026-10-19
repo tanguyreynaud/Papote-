@@ -1070,8 +1070,8 @@
 
   function initialOf(name) { return (name || '?').charAt(0).toUpperCase(); }
 
-  function faceEl(uid, name, cls) {
-    var face = uid && faces[uid];
+  function faceEl(uid, name, cls, url) {
+    var face = url || (uid && faces[uid]);
     var e;
     if (face) {
       e = document.createElement('img');
@@ -1135,13 +1135,13 @@
   }
 
   // Écran d'appel : la personne (ou « la famille »), l'état, et le grand bouton rouge.
-  function renderCall(state, title, sub, uid, name) {
+  function renderCall(state, title, sub, uid, name, faceUrl) {
     ensureCallScreen();
     callScreen.innerHTML = '';
     callScreen.removeAttribute('hidden');
     callScreen.className = 'call-out state-' + state;
-    var face = uid || name ? faceEl(uid, name, 'call-face') : el2('span', 'call-face family', '');
-    if (!uid && !name) face.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M16 11a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm-8 0a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm0 2c-2.3 0-7 1.2-7 3.5V19h14v-2.5C15 14.2 10.3 13 8 13zm8 0c-.3 0-.6 0-1 .1 1.2.8 2 1.9 2 3.4V19h6v-2.5c0-2.3-4.7-3.5-7-3.5z"/></svg>';
+    var face = uid || name || faceUrl ? faceEl(uid, name, 'call-face', faceUrl) : el2('span', 'call-face family', '');
+    if (!uid && !name && !faceUrl) face.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M16 11a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm-8 0a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm0 2c-2.3 0-7 1.2-7 3.5V19h14v-2.5C15 14.2 10.3 13 8 13zm8 0c-.3 0-.6 0-1 .1 1.2.8 2 1.9 2 3.4V19h6v-2.5c0-2.3-4.7-3.5-7-3.5z"/></svg>';
     callScreen.appendChild(face);
     callScreen.appendChild(el2('h1', 'call-title', title));
     if (sub) callScreen.appendChild(el2('p', 'call-sub', sub));
@@ -1178,7 +1178,7 @@
           if (state === 'ringing') {
             renderCall('ringing', 'Ça sonne…', uid ? 'Chez ' + who : (info.names && info.names.length ? 'Chez ' + info.names.join(', ') : 'Chez toute la famille'), uid, name);
           } else if (state === 'connected') {
-            renderCall('connected', 'En ligne avec ' + (info.name || who), 'Parlez normalement, la tablette vous entend.', uid || null, info.name || name);
+            renderCall('connected', 'En ligne avec ' + (info.name || who), 'Parlez normalement, la tablette vous entend.', uid || null, info.name || name, info.face);
           } else if (state === 'ended') {
             finish('Appel terminé', '');
           } else if (state === 'missed') {
