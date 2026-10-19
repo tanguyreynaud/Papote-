@@ -638,7 +638,7 @@ function closeView() {
 //                          | 'missed' | 'busy' | 'failed'.
 // Le proche qui décroche écrit son uid et son prénom dans answer (seul champ modifiable).
 
-const OUT_RING_MS = 45_000;
+const OUT_RING_MS = 60_000; // le temps qu'un téléphone ouvre l'app depuis la notification
 
 async function familyPeople() {
   const snap = await getDocs(collection(db, 'families', fid, 'members'));
@@ -727,10 +727,15 @@ window.papoteCallFamily = ({ to = null, onState = () => {} } = {}) => {
     emit('ringing', { names: (target ? [target] : people).map((m) => m.name) });
     call.timer = setTimeout(() => finish('missed', 'missed'), OUT_RING_MS);
 
+    // Les candidats du proche peuvent arriver avant sa réponse : on les garde jusque-là
+    // (sinon ils sont refusés et la liaison échoue une fois sur deux).
+    let answered = false;
+    const early = [];
     call.stops.push(onSnapshot(ref, async (snap) => {
       const data = snap.data();
       if (!data || done) return;
-      if (data.answer && !pc.currentRemoteDescription) {
+      if (data.answer && !answered) {
+        answered = true;
         clearTimeout(call.timer);
         try {
           await pc.setRemoteDescription({ type: data.answer.type, sdp: data.answer.sdp });
@@ -738,6 +743,7 @@ window.papoteCallFamily = ({ to = null, onState = () => {} } = {}) => {
           finish('failed', 'ended');
           return;
         }
+        early.splice(0).forEach((c) => pc.addIceCandidate(c).catch(() => {}));
         const who = people.find((m) => m.uid === data.answer.uid) || {};
         emit('connected', { uid: data.answer.uid || null, name: data.answer.name || who.name || '', face: who.face || null });
       }
@@ -746,7 +752,9 @@ window.papoteCallFamily = ({ to = null, onState = () => {} } = {}) => {
     }));
     call.stops.push(onSnapshot(collection(ref, 'calleeCandidates'), (snap) => {
       snap.docChanges().forEach((c) => {
-        if (c.type === 'added') pc.addIceCandidate(c.doc.data()).catch(() => {});
+        if (c.type !== 'added') return;
+        if (pc.remoteDescription) pc.addIceCandidate(c.doc.data()).catch(() => {});
+        else early.push(c.doc.data());
       });
     }));
   })().catch((e) => {
