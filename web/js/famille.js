@@ -575,13 +575,14 @@ $('form-message').addEventListener('submit', async (e) => {
 });
 
 // ---------- Première installation : régler la tablette pas à pas (propriétaire) ----------
-// Une famille toute neuve (ni météo, ni veille, ni options) : on propose de tout régler d'un coup.
+// Une famille toute neuve (ni veille, ni options) : on propose de tout régler d'un coup.
+// La ville de la météo est choisie sur la tablette à son installation.
 // Tout reste modifiable ensuite dans Réglages > La tablette.
 const INTRO_KEY = 'papote.introTablette.';
 
 function introAFaire() {
   const f = session.family;
-  if (!amOwner() || f.meteoVille || f.veille || f.options) return false;
+  if (!amOwner() || f.veille || f.options) return false;
   try { return localStorage.getItem(INTRO_KEY + session.fid) !== '1'; } catch (e) { return false; }
 }
 
@@ -592,9 +593,8 @@ function introVue() {
 function showIntroTablette() {
   if (!introAFaire()) return false;
   const nom = session.family.name;
-  const choix = { meteoVille: null, veille: { active: true, de: 23, a: 7 }, textSize: 'grande', volume: 80,
+  const choix = { veille: { active: true, de: 23, a: 7 }, textSize: 'grande', volume: 80,
     options: { lecture: true, reponseVocale: false, radio: { active: false, nom: RADIOS[0].nom, url: RADIOS[0].url } } };
-  let communesIntro = [];
   const back = document.createElement('div');
   back.className = 'guide-back intro-back';
   back.innerHTML = `<form class="guide intro" role="dialog" aria-modal="true" novalidate>
@@ -603,13 +603,6 @@ function showIntroTablette() {
         <span class="guide-icon"><svg><use href="#i-settings"/></svg></span>
         <h2>Réglons la tablette</h2>
         <p></p>
-      </div>
-      <div class="intro-step" data-step="1" hidden>
-        <h2>La météo</h2>
-        <p class="muted">Le code postal de la commune où vit <span class="intro-nom"></span>.</p>
-        <input id="intro-cp" inputmode="numeric" maxlength="5" placeholder="Code postal" autocomplete="postal-code">
-        <select id="intro-commune" hidden></select>
-        <p id="intro-meteo-info" class="muted small"></p>
       </div>
       <div class="intro-step" data-step="2" hidden>
         <h2>La nuit</h2>
@@ -654,7 +647,7 @@ function showIntroTablette() {
   const $i = (sel) => back.querySelector(sel);
   const steps = [...back.querySelectorAll('.intro-step')];
   $i('.guide-dots').innerHTML = steps.map(() => '<span></span>').join('');
-  $i('[data-step="0"] p').textContent = `Quelques questions pour que la tablette de ${nom} soit prête : météo, nuit, son, options. Une minute, et tout reste modifiable dans Réglages.`;
+  $i('[data-step="0"] p').textContent = `Quelques questions pour que la tablette de ${nom} soit prête : nuit, son, options. Une minute, et tout reste modifiable dans Réglages.`;
   $i('[data-step="5"] p').textContent = `La tablette de ${nom} est réglée. Invitez maintenant la famille pour qu'elle envoie des photos.`;
   back.querySelectorAll('.intro-nom').forEach((e) => { e.textContent = nom; });
   $i('#intro-de').value = '23';
@@ -674,25 +667,6 @@ function showIntroTablette() {
   $i('#intro-volume').addEventListener('input', () => { $i('#intro-volume-val').textContent = `${$i('#intro-volume').value} %`; });
   $i('#intro-veille').addEventListener('change', () => { $i('#intro-heures').hidden = !$i('#intro-veille').checked; });
   $i('#intro-radio').addEventListener('change', () => { $i('#intro-station-wrap').hidden = !$i('#intro-radio').checked; });
-  $i('#intro-cp').addEventListener('input', async () => {
-    const cp = $i('#intro-cp').value.replace(/\D/g, '').slice(0, 5);
-    $i('#intro-cp').value = cp;
-    communesIntro = [];
-    $i('#intro-commune').hidden = true;
-    $i('#intro-meteo-info').textContent = '';
-    if (cp.length !== 5) return;
-    try {
-      const r = await fetch(`https://geo.api.gouv.fr/communes?codePostal=${cp}&fields=nom,centre,departement&format=json`);
-      const list = (await r.json()).filter((c) => c.centre?.coordinates);
-      if ($i('#intro-cp').value !== cp) return;
-      communesIntro = list;
-      if (!list.length) { $i('#intro-meteo-info').textContent = 'Aucune commune pour ce code postal.'; return; }
-      $i('#intro-commune').replaceChildren(...list.map((c, k) => new Option([c.nom, cp, c.departement?.nom].filter(Boolean).join(' · '), String(k))));
-      $i('#intro-commune').hidden = false;
-    } catch (err) {
-      $i('#intro-meteo-info').textContent = 'Recherche impossible pour le moment ; vous pourrez la faire dans Réglages.';
-    }
-  });
 
   let i = 0;
   const render = () => {
@@ -705,11 +679,6 @@ function showIntroTablette() {
   const close = () => { introVue(); back.remove(); };
 
   async function enregistrer() {
-    const c = communesIntro[Number($i('#intro-commune').value)];
-    if (c) {
-      const [lon, lat] = c.centre.coordinates;
-      choix.meteoVille = { nom: c.nom.slice(0, 80), lat, lon };
-    }
     choix.veille = { active: $i('#intro-veille').checked, de: Number($i('#intro-de').value), a: Number($i('#intro-a').value) };
     choix.volume = Number($i('#intro-volume').value);
     const r = RADIOS[Number($i('#intro-station').value)] || RADIOS[0];
@@ -720,7 +689,6 @@ function showIntroTablette() {
     };
     // Une écriture par réglage : chaque règle n'accepte qu'un champ (avec rev) à la fois.
     const ecrire = (data) => updateDoc(doc(db, 'families', session.fid), { ...data, rev: increment(1) });
-    if (choix.meteoVille) await ecrire({ meteoVille: choix.meteoVille });
     await ecrire({ veille: choix.veille });
     await ecrire({ textSize: choix.textSize });
     await ecrire({ volume: choix.volume });
@@ -733,7 +701,7 @@ function showIntroTablette() {
   });
   $i('form').addEventListener('submit', async (e) => {
     e.preventDefault();
-    if (i === 2 && $i('#intro-veille').checked && $i('#intro-de').value === $i('#intro-a').value) {
+    if (steps[i].dataset.step === '2' && $i('#intro-veille').checked && $i('#intro-de').value === $i('#intro-a').value) {
       showError($i('.intro-error'), "L'heure de fin doit être différente de l'heure de début.");
       return;
     }
