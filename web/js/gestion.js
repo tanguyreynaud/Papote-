@@ -180,13 +180,13 @@ const TITRES = {
   accueil: 'Accueil',
   commandes: 'Commandes',
   clients: 'Clients',
-  familles: 'Familles et tablettes',
-  stock: 'Stock de tablettes',
-  factures: 'Factures',
-  compta: 'Comptabilité',
-  outils: 'Réglages et maintenance',
+  stock: 'Stock',
+  compta: 'Argent',
+  outils: 'Réglages',
 };
-const AVEC_PERIODE = ['factures', 'compta'];
+// Anciennes pages devenues des onglets (liens déjà notés, favoris) : #familles → #clients/familles.
+const ANCIENNES = { familles: 'clients/familles', factures: 'compta/factures' };
+const AVEC_PERIODE = ['compta'];
 
 let connecte = false; // connexion admin faite (onAuthStateChanged plus bas)
 
@@ -220,6 +220,8 @@ document.querySelectorAll('[data-panneau] .onglets [data-onglet]').forEach((b) =
 });
 
 function afficherPage() {
+  const ancienne = ANCIENNES[location.hash.slice(1).split('/')[0]];
+  if (ancienne) history.replaceState(null, '', `#${ancienne}`);
   const page = pageCourante();
   document.querySelectorAll('.nav a[data-page]').forEach((a) => {
     a.classList.toggle('actif', a.dataset.page === page);
@@ -501,7 +503,7 @@ function afficherAccueil() {
     [aRecuperer, `${pluriel(aRecuperer, 'tablette')} à récupérer`, '#commandes', ''],
     [aVerifier, `${pluriel(aVerifier, 'tablette')} revenue${aVerifier > 1 ? 's' : ''}, à vérifier avant de remettre en stock`, '#stock', ''],
     [aRembourser, `${pluriel(aRembourser, 'remboursement')} échoué${aRembourser > 1 ? 's' : ''}, à faire depuis Stripe`, '#commandes', 'ko'],
-    [impayees, `${pluriel(impayees, 'abonnement')} impayé${impayees > 1 ? 's' : ''}`, '#factures', 'ko'],
+    [impayees, `${pluriel(impayees, 'abonnement')} impayé${impayees > 1 ? 's' : ''}`, '#compta/factures', 'ko'],
     [simsAResilier, `${pluriel(simsAResilier, 'forfait SIM')} à résilier ou suspendre`, '#stock/sim', 'ko'],
     [remplacees, `${pluriel(remplacees, 'tablette')} remplacée${remplacees > 1 ? 's' : ''} à récupérer chez le client`, '#stock', ''],
     [clientsSansSim, `${clientsSansSim} client${clientsSansSim > 1 ? 's' : ''} Internet inclus sans carte SIM notée sur sa tablette`, '#stock/sim', 'ko'],
@@ -1743,7 +1745,7 @@ function rechercher(q) {
   }
   for (const f of donnees.familles) {
     if (trouve(f.nom) && !donnees.commandes.some((c) => c.fid === f.id)) {
-      res.push({ texte: f.nom, detail: 'Famille', ouvrir: () => { location.hash = '#familles'; } });
+      res.push({ texte: f.nom, detail: 'Famille', ouvrir: () => { location.hash = '#clients/familles'; } });
     }
   }
   for (const d of donnees.depenses) {
@@ -2433,6 +2435,7 @@ async function recevoirTablette() {
   signalerChangement();
 }
 $('btn-recevoir').addEventListener('click', recevoirTablette);
+$('r-recevoir').addEventListener('click', recevoirTablette);
 
 // ---------- Réception d'accessoires (routeurs 4G…), pas à pas ----------
 
