@@ -1377,8 +1377,11 @@
       '"/></svg><span>' + (on2 ? 'Arrêter' : 'Radio') + '</span>';
   }
 
+  // Curseur de la famille (options.radio.volume, 5-100, 40 par défaut) vers le volume réel :
+  // courbe douce et plafonnée, car le haut-parleur de la tablette est fort (100 = 25 %, 40 = 6 %, 5 = 2 %).
   function radioVolume(r) {
-    return Math.max(0.05, Math.min(1, (typeof r.volume === 'number' ? r.volume : 40) / 100));
+    var v = Math.max(5, Math.min(100, typeof r.volume === 'number' ? r.volume : 40)) / 100;
+    return 0.02 + 0.23 * v * v;
   }
 
   function toggleRadio() {
@@ -1386,7 +1389,6 @@
     var r = options.radio;
     if (!r || !r.url) return;
     radioAudio = new Audio(r.url);
-    // Plus doux que le reste par défaut (40 %), réglable par la famille (options.radio.volume).
     radioAudio.volume = radioVolume(r);
     radioAudio.onerror = function () { stopRadio(); };
     var play = radioAudio.play();
@@ -1396,6 +1398,23 @@
 
   // Écran éteint (veille, bouton marche) : la radio s'arrête.
   document.addEventListener('visibilitychange', function () { if (document.hidden) stopRadio(); });
+
+  // Appel reçu (sonnerie, puis appel) : la radio se tait, puis reprend une fois l'appel fini.
+  var radioPausedForCall = false;
+  function inCall() {
+    var ids = ['call-ring', 'call-view'];
+    for (var i = 0; i < ids.length; i++) if ($(ids[i]) && isShown(ids[i])) return true;
+    return false;
+  }
+  function checkCallForRadio() {
+    if (inCall()) {
+      if (radioAudio) { stopRadio(); radioPausedForCall = true; }
+    } else if (radioPausedForCall) {
+      radioPausedForCall = false;
+      if (!radioAudio && !asleep && options.radio && options.radio.url) toggleRadio();
+    }
+  }
+  setInterval(checkCallForRadio, 1000);
 
   function stopRadio() {
     if (radioAudio) {
