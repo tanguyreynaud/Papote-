@@ -15,9 +15,12 @@ const CAS = [
   ['Je suis engagé combien de temps ?', 'site', 'engagement (selon le site)'],
   ['Comment je résilie ?', 'appli', 'page Abonnement de l\'appli'],
   ['Que se passe-t-il à la fin de l\'abonnement ?', 'site', 'renvoyer la tablette sous 30 jours'],
-  ['Et si je ne rends pas la tablette ?', 'site', '170 € (Wi-Fi) ou 200 € (internet)'],
+  ['Et si je ne rends pas la tablette ?', 'site', '170 €, 200 € si un routeur 4G a été fourni'],
   ['La livraison est payante ?', 'site', 'offerte'],
   ['Combien de temps pour être livré ?', 'site', '2 à 3 jours ouvrés'],
+  ['Comment je suis mon colis ?', 'site', 'e-mail « Votre tablette est en route », bouton « Suivre mon colis » (Mondial Relay)'],
+  ['Je veux l\'offrir à ma grand-mère, comment faire ?', 'site', 'commande à son nom, point relais près d\'elle, QR code depuis le téléphone, elle n\'a rien à faire'],
+  ['Avec internet inclus, il y a une box à brancher ?', 'site', 'non, la tablette a sa carte SIM ; routeur seulement s\'il est fourni'],
   // Avant le lancement : commandes fermées, liste d'attente
   ['Comment je commande ?', 'site', 'pas encore ouvert, bouton « Être prévenu », pas de contact'],
   ['Je veux commander une tablette pour ma mère tout de suite', 'site', 'liste d\'attente, pas de lien de commande'],
@@ -56,7 +59,7 @@ const CAS = [
   // Dépannage
   ['La tablette ne répond plus', 'appli', 'étapes, PAS de contact'],
   [['La tablette ne répond plus', 'Avez-vous vérifié qu\'elle est branchée et connectée au Wi-Fi ? Sinon, dans Réglages, « Dépanner la tablette », touchez « Redémarrer la tablette ».', 'J\'ai tout essayé, ça ne marche toujours pas'], 'appli', 'contact'],
-  ['On a changé de box internet', 'appli', 'Réglages, Wi-Fi de la tablette'],
+  ['On a changé de box internet', 'appli', 'Réglages, « Changer le Wi-Fi »'],
   ['Le bouton appel vidéo est grisé', 'appli', 'tablette éteinte ou sans internet'],
   ['L\'appel ne marche pas, pas de son', 'appli', 'autoriser micro/caméra'],
   ['La tablette affiche Papote est en pause', 'appli', 'abonnement, carte'],
