@@ -491,6 +491,8 @@ function afficherAccueil() {
   const accessoires = accessoiresAPrevoir().filter((a) => a.manque || a.bas);
   // Achats enregistrés depuis la confirmation de commande : facture à télécharger chez le vendeur (après 5 jours).
   const jumelagesAVoir = donnees.stock.filter((t) => t.alerteJumelage);
+  // Même règle que aFaire (functions/gestion.js) : batterie usée, la tablette revenue ne repart pas.
+  const usees = donnees.stock.filter((t) => t.etat === 'revenue' && t.usure);
   const facturesAttendues = donnees.depenses.filter((d) => d.confirmation && Date.now() - (d.date || 0) > 5 * 864e5);
   const aVerifierMail = donnees.depenses.filter((d) => d.aVerifier).length;
   const erreursMail = donnees.courrier ? (donnees.courrier.erreurs || []).length : 0;
@@ -511,6 +513,7 @@ function afficherAccueil() {
     [simsARegarder, `${simsARegarder} carte${simsARegarder > 1 ? 's' : ''} SIM à regarder (promo, activation, carte bancaire)`, '#stock/sim', 'ko'],
     ...accessoires.map((a) => [1, a.manque ? `${a.nom} : il en manque ${a.manque} pour les envois` : `${a.nom} : stock bas (${a.quantite || 0})`, '#stock/accessoires', a.manque ? 'ko' : '']),
     ...jumelagesAVoir.map((t) => [1, `Tablette ${t.ref || t.numero || ''} ${t.alerteJumelage}`, '#stock', 'ko']),
+    ...usees.map((t) => [1, `Tablette ${t.ref || t.numero || ''} revenue : ${t.usure}, à retirer du parc`, '#stock', 'ko']),
     [facturesAttendues.length, `Facture à télécharger chez le vendeur puis à envoyer à factures@ : ${facturesAttendues
       .map((d) => `${d.fournisseur || d.libelle}${d.numero ? ` (commande ${d.numero})` : ''}`).join(', ')}`, '#compta/depenses', 'ko'],
     [aVerifierMail, `${pluriel(aVerifierMail, 'facture')} reçue${aVerifierMail > 1 ? 's' : ''} par e-mail à vérifier`, '#compta/depenses', ''],
@@ -871,7 +874,8 @@ function afficherStock() {
         onclick: () => ouvrirTablette(t.id),
         cellules: [
           h('div', {}, t.ref ? h('strong', {}, `${t.ref} `) : null, t.numero || h('span', { class: 'muted' }, 'à saisir'),
-            t.alerteJumelage ? h('div', {}, badge(t.alerteJumelage, 'ko')) : null),
+            t.alerteJumelage ? h('div', {}, badge(t.alerteJumelage, 'ko')) : null,
+            t.usure ? h('div', {}, badge(t.usure, 'ko')) : null),
           t.modele || '',
           badge(donnees.etats[t.affiche] || t.affiche, classeEtat(t.affiche)),
           c ? nomCommande(c) : '',
@@ -1123,6 +1127,31 @@ $('x-stock').addEventListener('click', () => {
     }), false);
 });
 
+// Batterie relevée par la tablette (en direct si elle est jumelée, sinon le dernier relevé gardé).
+const SANTES = { bonne: 'bonne', surchauffe: 'surchauffe', morte: 'morte', surtension: 'surtension', froide: 'trop froide', panne: 'en panne', inconnue: 'inconnue' };
+const ilYA = (le) => {
+  const min = Math.round((Date.now() - le) / 60000);
+  return min < 2 ? "à l'instant" : min < 60 ? `il y a ${min} min` : min < 48 * 60 ? `il y a ${Math.round(min / 60)} h` : `le ${jour(le)}`;
+};
+function afficherBatterie(t) {
+  const b = t.batterie;
+  const zone = $('dt-batterie');
+  zone.hidden = !b;
+  if (!b) return;
+  const infos = [
+    b.niveau != null ? `${b.niveau} %${b.enCharge ? ', en charge' : ''}` : null,
+    b.sante ? `santé ${SANTES[b.sante] || b.sante}` : null,
+    b.temperature != null ? `${String(Math.round(b.temperature * 10) / 10).replace('.', ',')} °C` : null,
+    b.cycles != null ? `${b.cycles} cycles` : null,
+  ].filter(Boolean).join(' · ');
+  const vues = [b.le ? `relevé ${ilYA(b.le)}` : null, b.enLigneLe ? `en ligne ${ilYA(b.enLigneLe)}` : null,
+    b.vueLe ? `Mamie vue ${ilYA(b.vueLe)}` : null].filter(Boolean).join(' · ');
+  zone.replaceChildren(
+    h('p', { class: 'small' }, h('strong', {}, 'Batterie '), infos || 'pas encore de relevé', t.usure ? ' ' : null, t.usure ? badge(t.usure, 'ko') : null),
+    vues ? h('p', { class: 'small muted' }, vues) : null,
+  );
+}
+
 // Fiche d'une tablette : modification, pièces jointes, historique.
 let tabletteOuverte = null;
 function ouvrirTablette(id) {
@@ -1150,6 +1179,7 @@ function ouvrirTablette(id) {
     h('button', { type: 'button', class: 'link danger small', onclick: () => retirerPiece('stock', t.id, p) }, 'Retirer'))),
   ...piecesTablette(t).filter((p) => !(t.pieces || []).includes(p)).map((p) => h('li', {}, lienPiece(p), h('span', { class: 'muted small' }, ' (achat)'))));
   if (!$('dt-pieces').children.length) $('dt-pieces').append(h('li', { class: 'muted small' }, 'Aucune.'));
+  afficherBatterie(t);
   $('dt-historique').replaceChildren(...(t.historique || []).filter((x) => x.le).reverse().map((x) => h('li', {},
     `${new Date(x.le).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })} : ${donnees.etats[x.etat] || x.etat}`)));
   $('dt-retirer').hidden = !(t.etat === 'en-stock' && !t.commande && (t.historique || []).length <= 1);
