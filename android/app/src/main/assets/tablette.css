@@ -1600,3 +1600,18 @@ body.night .next-when { color: #a5b4fc; }
 
 /* « Le matin / Le soir » retiré : la place va au bouton « Appeler » */
 #moment { display: none; }
+
+/* Accueil plus compact : heure, date, météo, prochain rappel et « Appeler » tiennent sans être coupés */
+.home-left .clock { font-size: 24vmin; line-height: 1; margin: 0; }
+.home-left .date { font-size: 6.4vmin; margin-top: 1vmin; }
+.home-left .weather { margin-top: 2.5vmin; }
+.home-left .weather-icon { width: 13vmin; height: 13vmin; }
+.home-left .weather-temp { font-size: 10vmin; }
+.home-left .weather-label { font-size: 5vmin; }
+.home-left .weather-label small { font-size: 3.8vmin; }
+.home-left .home-next { margin-top: 2.5vmin; padding: 1.6vmin 4vmin 1.6vmin 1.6vmin; }
+.home-left .next-icon { width: 9vmin; height: 9vmin; }
+.home-left .next-when { font-size: 3.6vmin; }
+.home-left .next-title { font-size: 4.6vmin; }
+.home-left .call-btn { margin-top: 3vmin; min-height: 12.5vmin; font-size: 6.2vmin; }
+.home-left .call-btn .icon { width: 6.5vmin; height: 6.5vmin; }
