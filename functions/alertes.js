@@ -2,6 +2,8 @@
 //
 //   alertesTablettes  toutes les 5 minutes : une notification par épisode (débranchée depuis
 //                     plus de 10 min, ou silencieuse depuis plus de 45 min)
+//   alerteMatin       chaque jour à 12h (Paris) : « {nom} n'a pas été vue ce matin » si la tablette
+//                     ne l'a ni vue (lastSeen, caméra) ni touchée (lastActive) depuis minuit
 //
 // L'épisode est noté sur la fiche de la tablette (alerteType, alerteLe) et remis à zéro quand
 // tout revient, pour ne pas prévenir toutes les 5 minutes. La décision est dans etatAlerte,
@@ -70,4 +72,51 @@ exports.alertesTablettes = onSchedule({ schedule: 'every 5 minutes', timeZone: '
   }
 });
 
+// Jour « AAAA-MM-JJ » à Paris pour un instant donné.
+function jourParis(ms) {
+  return new Intl.DateTimeFormat('fr-CA', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit' })
+    .format(new Date(ms));
+}
+
+// Vrai si la tablette n'a ni vu ni senti la personne aujourd'hui (heure de Paris).
+function pasVueAujourdhui(tablette, maintenant) {
+  const aujourdhui = jourParis(maintenant);
+  return ![tablette.lastSeen, tablette.lastActive]
+    .map(enMillis)
+    .some((ms) => ms && jourParis(ms) === aujourdhui);
+}
+
+exports.alerteMatin = onSchedule({ schedule: 'every day 12:00', timeZone: 'Europe/Paris' }, async () => {
+  const db = base();
+  const maintenant = Date.now();
+  const aujourdhui = jourParis(maintenant);
+  const familles = await db.collection('families').get();
+  for (const fam of familles.docs) {
+    const famille = fam.data();
+    if (!estActif(famille.abonnement)) continue;
+    const membres = await fam.ref.collection('members').get();
+    const tablettes = membres.docs.filter((m) => m.get('role') === 'tablette');
+    // Plusieurs tablettes : il suffit qu'une seule l'ait vue.
+    if (!tablettes.length || tablettes.some((t) => !pasVueAujourdhui(t.data(), maintenant))) continue;
+    // Une seule alerte par jour (notée sur la famille, quelle que soit la tablette).
+    if (famille.alerteMatinLe === aujourdhui) continue;
+    const proches = membres.docs
+      .filter((m) => m.get('role') === 'famille' && m.get('status') !== 'pending')
+      .map((m) => m.id);
+    const nom = famille.name || 'Mamie';
+    try {
+      const n = await envoyer(db, fam.id, proches, {
+        type: 'alerte',
+        titre: `${nom} n'a pas été vue ce matin`,
+        texte: "La tablette ne l'a ni vue ni touchée depuis ce matin. Un petit appel pour prendre des nouvelles ?",
+      }, 6 * 3600);
+      await fam.ref.update({ alerteMatinLe: aujourdhui });
+      logger.info(`Famille ${fam.id} : pas vue ce matin, ${n} téléphone(s)`);
+    } catch (e) {
+      logger.error(`Famille ${fam.id} : alerte du matin non envoyée`, e.message);
+    }
+  }
+});
+
 exports.etatAlerte = etatAlerte;
+exports.pasVueAujourdhui = pasVueAujourdhui;

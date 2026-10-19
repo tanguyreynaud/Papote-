@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const { etatAlerte } = require('./alertes');
+const { etatAlerte, pasVueAujourdhui } = require('./alertes');
 
 const MIN = 60_000;
 const maintenant = Date.parse('2026-10-19T10:00:00Z');
@@ -29,4 +29,27 @@ test('dates Firestore (toMillis) acceptées', () => {
 
 test('tablette jamais vue : pas d’alerte', () => {
   assert.strictEqual(etatAlerte({}, maintenant), null);
+});
+
+// 12h à Paris le 19 octobre 2026 = 10h UTC.
+const midi = Date.parse('2026-10-19T10:00:00Z');
+
+test('vue par la caméra ce matin : pas d’alerte', () => {
+  assert.strictEqual(pasVueAujourdhui({ lastSeen: new Date('2026-10-19T06:30:00Z') }, midi), false);
+});
+
+test('touchée ce matin : pas d’alerte', () => {
+  assert.strictEqual(pasVueAujourdhui({ lastActive: new Date('2026-10-19T08:00:00Z') }, midi), false);
+});
+
+test('vue hier soir seulement : alerte', () => {
+  assert.strictEqual(pasVueAujourdhui({ lastSeen: new Date('2026-10-18T20:00:00Z'), lastActive: new Date('2026-10-18T19:00:00Z') }, midi), true);
+});
+
+test('minuit à Paris compte pour le jour même (22h30 UTC la veille)', () => {
+  assert.strictEqual(pasVueAujourdhui({ lastSeen: new Date('2026-10-18T22:30:00Z') }, midi), false);
+});
+
+test('jamais vue : alerte', () => {
+  assert.strictEqual(pasVueAujourdhui({}, midi), true);
 });
