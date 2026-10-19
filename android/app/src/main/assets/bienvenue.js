@@ -289,7 +289,16 @@
   // Ville touchée dans la fenêtre : affichée ici avec « Continuer », enregistrée seulement à ce moment-là.
   var chosenCity = null;
 
+  // Le détecteur de visage (modèle de 13 Mo) se télécharge dès qu'internet est là, pendant les
+  // étapes météo et famille : il est prêt à l'étape « Placez la tablette », sans attente.
+  function preloadFaceDetector() {
+    try {
+      if (typeof window.papoteFaceDetector === 'function') window.papoteFaceDetector();
+    } catch (e) { }
+  }
+
   function showMeteo() {
+    preloadFaceDetector();
     stepNum = 3;
     art = 'meteo';
     var c = chosenCity;
@@ -392,6 +401,7 @@
   function pretty(code) { return code.slice(0, 4) + '-' + code.slice(4); }
 
   function showPair(s) {
+    preloadFaceDetector();
     stepNum = 4;
     art = ''; // le QR code est l'illustration
     var box = screen('Reliez la tablette à votre famille', '');
@@ -478,8 +488,9 @@
       if (!placing) { stream.getTracks().forEach(function (t) { t.stop(); }); return; }
       placeStream = stream;
       video.srcObject = stream;
-      hint.textContent = 'Tournez la tablette jusqu’à voir votre visage dans le rond.';
+      hint.textContent = 'Préparation de la caméra…';
       if (typeof window.papoteLocateFace === 'function') guide(video, hint);
+      else hint.textContent = 'Tournez la tablette jusqu’à voir votre visage dans le rond.';
     }, function () { hint.textContent = none; });
   }
 
