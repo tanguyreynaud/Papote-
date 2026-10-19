@@ -1619,3 +1619,32 @@ body.night .next-when { color: #a5b4fc; }
 /* Photo de l'accueil : deux couches pour le fondu enchaîné, la légende toujours au-dessus */
 .home-frame #frame-img, .home-frame #frame-img-b { transform-origin: center; will-change: opacity, transform; }
 .home-frame .frame-caption { z-index: 3; }
+
+/* Nuit : l'heure en grand, très sombre (l'écran est aussi au minimum de luminosité) */
+.night-clock {
+  position: absolute;
+  top: 50%; left: 0; right: 0;
+  transform: translateY(-50%);
+  text-align: center;
+  font-family: 'Bricolage Grotesque', 'Atkinson Hyperlegible', sans-serif;
+  font-size: 30vmin;
+  font-weight: 800;
+  color: #4a4560;
+  pointer-events: none;
+}
+
+/* Options : « Écouter » sur les messages et rappels, « Radio » à côté d'« Appeler » */
+.ln-btn.listen { background: #fff; color: #3730a3; border: .5vmin solid #e8e6fd; display: inline-flex; align-items: center; gap: 2vmin; }
+.ln-btn.listen .icon { width: 6vmin; height: 6vmin; }
+.ln-btn.listen[hidden] { display: none; }
+.home-left .home-actions { display: flex; gap: 3vmin; justify-content: center; margin-top: 3vmin; }
+.home-left .home-actions .call-btn { margin: 0; min-width: 0; padding: 0 6vmin; }
+.radio-btn {
+  display: flex; align-items: center;
+  min-height: 12.5vmin; padding: 0 5vmin;
+  border: .5vmin solid #e8e6fd; border-radius: 99vmin; background: #fff; color: #3730a3;
+  font-family: 'Bricolage Grotesque', 'Atkinson Hyperlegible', sans-serif; font-size: 6vmin; font-weight: 800;
+}
+.radio-btn[hidden] { display: none; }
+.radio-btn .icon { width: 6.5vmin; height: 6.5vmin; margin-right: 2.5vmin; }
+.radio-btn.playing { background: #3730a3; color: #fff; border-color: #3730a3; }

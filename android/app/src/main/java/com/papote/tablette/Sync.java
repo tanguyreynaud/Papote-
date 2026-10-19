@@ -280,7 +280,7 @@ final class Sync {
         try {
             // Une seule lecture : le marqueur « rev » ne bouge que si la famille a envoyé ou supprimé
             // quelque chose (ou modifié les rappels). Sinon, rien d'autre à lire.
-            JSONObject family = firebase.get("families/" + fid, "name", "rev", "code", "textSize", "abonnement", "veille", "volume", "meteoVille");
+            JSONObject family = firebase.get("families/" + fid, "name", "rev", "code", "textSize", "abonnement", "veille", "volume", "meteoVille", "options");
             long rev = 0;
             JSONObject ff = family == null ? null : family.optJSONObject("fields");
             if (ff != null) {
@@ -298,6 +298,7 @@ final class Sync {
                 }
                 readVeille(ff);
                 readVolume(ff);
+                readOptions(ff);
                 if (Meteo.applyFamily(context, http, ff) || !meteoReported) {
                     lastWeather = 0; // nouvelle ville : la météo est relue tout de suite
                     reportMeteo(fid);
@@ -819,6 +820,11 @@ final class Sync {
         handler.post(() -> heartbeat(prefs.getString("fid", null), "lastActive"));
     }
 
+    /** Visage vu par la caméra : members/{uid}.lastSeen, pour l'alerte « pas vue ce matin ». */
+    void seen() {
+        handler.post(() -> heartbeat(prefs.getString("fid", null), "lastSeen"));
+    }
+
     /** Réponse toute faite de Mamie, visible dans l'app famille. */
     void reply(final String postId, final String text) {
         handler.post(() -> {
@@ -877,6 +883,7 @@ final class Sync {
                     .put("familyCode", familyCode == null ? "" : familyCode)
                     .put("textSize", textSize == null ? "" : textSize)
                     .put("subscription", subscription)
+                    .put("options", options)
                     .put("veille", new JSONObject().put("active", Veille.active(context))
                             .put("de", Veille.from(context)).put("a", Veille.to(context)))
                     .put("posts", arr);
@@ -1277,6 +1284,44 @@ final class Sync {
         } catch (Exception e) {
             Log.w(TAG, "Envoi du journal", e);
         }
+    }
+
+    /**
+     * Options de la tablette réglées par la famille (families/{fid}.options) :
+     * lecture (bouton « Écouter »), reponseVocale (« Répondre » par la voix),
+     * radio { active, nom, url }. Absentes : tout est désactivé.
+     */
+    private JSONObject options = new JSONObject();
+
+    private void readOptions(JSONObject ff) {
+        JSONObject out = new JSONObject();
+        try {
+            JSONObject v = ff.optJSONObject("options");
+            JSONObject f = v == null || v.optJSONObject("mapValue") == null ? null
+                    : v.optJSONObject("mapValue").optJSONObject("fields");
+            if (f != null) {
+                out.put("lecture", bool(f, "lecture"));
+                out.put("reponseVocale", bool(f, "reponseVocale"));
+                JSONObject r = f.optJSONObject("radio");
+                JSONObject rf = r == null || r.optJSONObject("mapValue") == null ? null
+                        : r.optJSONObject("mapValue").optJSONObject("fields");
+                if (rf != null && bool(rf, "active") && Firebase.str(rf, "url") != null) {
+                    out.put("radio", new JSONObject().put("nom", nz(Firebase.str(rf, "nom")))
+                            .put("url", Firebase.str(rf, "url")));
+                }
+            }
+        } catch (JSONException e) {
+            Log.w(TAG, "Options", e);
+        }
+        if (out.toString().equals(options.toString())) return;
+        options = out;
+        lastPostsJson = null;
+        publishPosts();
+    }
+
+    private static boolean bool(JSONObject fields, String key) {
+        JSONObject v = fields.optJSONObject(key);
+        return v != null && v.optBoolean("booleanValue", false);
     }
 
     /** Volume réglé par la famille (families/{fid}.volume, 0-100) ; absent = volume actuel. */

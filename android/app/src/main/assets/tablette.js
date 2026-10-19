@@ -554,7 +554,9 @@
 
   function nextOverlay() {
     unwatchSeen('overlay');
+    stopSpeaking();
     overlayPost = overlayQueue.shift() || null;
+    if (overlayPost) stopRadio();
     if (!overlayPost) {
       show($('overlay'), false);
       return;
@@ -563,6 +565,7 @@
     // Visage vu : « lu », et une vidéo ou un vocal démarre tout seul.
     var watching = watchSeen('overlay', function () {
       if (overlayPost !== p) return;
+      noteSeen();
       markSeen(p);
       if (p.audio || p.video) listenOverlay();
     }, function closeWhenDone() {
@@ -595,6 +598,7 @@
     $('overlay-text').textContent = text;
     $('overlay-text').className = 'ln-text ' + (mode === 'photo' ? 'size-m' : sizeClass(text));
     show($('overlay-text'), !!text);
+    showListenButtons();
     show($('overlay-from'), false);
     var face = faceOf(p);
     show($('overlay-face'), media && !!face);
@@ -723,6 +727,7 @@
     familyCode = payload.familyCode || '';
     setTextSize(payload.textSize);
     setPaused(payload.subscription);
+    setOptions(payload.options);
     setVeille(payload.veille);
     photos = [];
     for (var j = 0; j < posts.length; j++) {
@@ -894,6 +899,8 @@
     $('reminder-time').textContent = (r.kind === 'rdv' ? 'Rendez-vous à ' : 'À ') + timeLabel(r.time);
     $('reminder-done').textContent = early ? "J'ai compris" : r.kind === 'rdv' ? "J'ai bien noté" : "C'est fait";
     show($('reminder-alert'), true);
+    stopRadio();
+    showListenButtons();
     if (android()) android().alert();
     // Visage vu : la famille voit « vu » ; sans « C'est fait », le rappel se ferme sans dire que c'est fait.
     watchSeen('reminder', function () {
@@ -1221,6 +1228,7 @@
   }
 
   function startCall(uid, name) {
+    stopRadio();
     if (!callApiReady()) {
       renderCall('failed', 'L’appel n’est pas encore disponible', 'Réessayez dans un moment.', uid, name);
       setTimeout(closeCallScreen, 4000);
@@ -1274,7 +1282,136 @@
     document.querySelector('#view-home .home-left').appendChild(b);
   }
 
+  // ---------- Options réglées par la famille : Écouter, Radio ----------
+  // families/{fid}.options = { lecture, reponseVocale, radio: { nom, url } } (lu par Sync.java).
+
+  var options = {};
+
+  function setOptions(o) {
+    options = o || {};
+    showListenButtons();
+    setupRadio();
+  }
+
+  // « Écouter » : la tablette lit le message ou le rappel à voix haute.
+  function listenButton(id, getText, container) {
+    var b = $(id);
+    if (!b) {
+      b = document.createElement('button');
+      b.id = id;
+      b.className = 'ln-btn listen';
+      b.innerHTML = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 10v4h4l5 5V5L7 10H3zm13.5 2A4.5 4.5 0 0 0 14 8v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg><span>Écouter</span>';
+      on(b, 'click', function () {
+        var t = getText();
+        if (t && android() && android().speak) android().speak(t);
+      });
+      container.insertBefore(b, container.firstChild);
+    }
+    return b;
+  }
+
+  function showListenButtons() {
+    var o = listenButton('overlay-listen', function () {
+      var p = overlayPost;
+      if (!p) return '';
+      return (p.authorName ? p.authorName + ' vous écrit : ' : '') + (p.text || '');
+    }, $('overlay-actions'));
+    var mode = overlayPost ? (overlayPost.image ? 'photo' : overlayPost.type || 'message') : '';
+    show(o, !!options.lecture && !!overlayPost && !!overlayPost.text && (mode === 'message' || mode === 'text' || mode === 'photo'));
+    var r = listenButton('reminder-listen', function () {
+      return alerting ? alerting.r.title : '';
+    }, $('reminder-done').parentNode);
+    show(r, !!options.lecture);
+  }
+
+  function stopSpeaking() {
+    if (android() && android().stopSpeaking) android().stopSpeaking();
+  }
+
+  // « Radio » : à côté d'« Appeler », la station choisie par la famille ; le bouton devient « Arrêter ».
+  var radioBtn = null;
+  var radioAudio = null;
+  function setupRadio() {
+    var r = options.radio;
+    if (!radioBtn) {
+      var call = document.querySelector('#view-home .call-btn');
+      if (!call) return;
+      var row = document.createElement('div');
+      row.className = 'home-actions';
+      call.parentNode.insertBefore(row, call);
+      row.appendChild(call);
+      radioBtn = document.createElement('button');
+      radioBtn.className = 'big-btn radio-btn';
+      on(radioBtn, 'click', toggleRadio);
+      row.appendChild(radioBtn);
+    }
+    if (!r || !r.url) stopRadio();
+    show(radioBtn, !!(r && r.url));
+    renderRadioBtn();
+  }
+
+  function renderRadioBtn() {
+    if (!radioBtn) return;
+    var on2 = !!radioAudio;
+    radioBtn.className = 'big-btn radio-btn' + (on2 ? ' playing' : '');
+    radioBtn.innerHTML = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="' +
+      (on2 ? 'M6 6h12v12H6z' : 'M4 9h16a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1zm3 3a3 3 0 1 0 0 6 3 3 0 0 0 0-6zm7 1v1h5v-1zm0 3v1h5v-1zM6 8l10-4 .5 1.2L8.5 8z') +
+      '"/></svg><span>' + (on2 ? 'Arrêter' : 'Radio') + '</span>';
+  }
+
+  function toggleRadio() {
+    if (radioAudio) { stopRadio(); return; }
+    var r = options.radio;
+    if (!r || !r.url) return;
+    radioAudio = new Audio(r.url);
+    radioAudio.onerror = function () { stopRadio(); };
+    var play = radioAudio.play();
+    if (play && play.catch) play.catch(function () { stopRadio(); });
+    renderRadioBtn();
+  }
+
+  function stopRadio() {
+    if (radioAudio) {
+      try { radioAudio.pause(); radioAudio.src = ''; } catch (e) { }
+      radioAudio = null;
+    }
+    renderRadioBtn();
+  }
+
+  // ---------- Présence : « vue aujourd'hui » ----------
+  // Toutes les 15 minutes en journée, la caméra regarde 30 secondes au plus si quelqu'un est devant.
+  // Visage vu : la tablette le note (members/{uid}.lastSeen). Personne de vu ni de toucher le matin :
+  // la famille reçoit une alerte à midi (côté serveur).
+  var PRESENCE_EVERY_MS = 15 * 60000;
+  var PRESENCE_LOOK_MS = 30000;
+  var lastSeenSent = 0;
+
+  function noteSeen() {
+    var now = Date.now();
+    if (now - lastSeenSent < 5 * 60000) return;
+    lastSeenSent = now;
+    if (android() && android().seen) android().seen();
+  }
+
+  function lookForPresence() {
+    if (asleep || typeof window.papoteWatchPresence !== 'function') return;
+    if (callScreen && !callScreen.hasAttribute('hidden')) return;
+    var stop = null;
+    var done = false;
+    function end() {
+      if (done) return;
+      done = true;
+      try { if (typeof stop === 'function') stop(); } catch (e) { }
+    }
+    try {
+      stop = window.papoteWatchPresence(function () { noteSeen(); end(); });
+    } catch (e) { return; }
+    setTimeout(end, PRESENCE_LOOK_MS);
+  }
+
   function setupHomeExtras() {
+    setInterval(lookForPresence, PRESENCE_EVERY_MS);
+    setTimeout(lookForPresence, 60000);
     setupCallButton();
     setInterval(checkConnection, 30000);
     setTimeout(checkConnection, 20000);
@@ -1401,7 +1538,7 @@
     if (should === asleep) return;
     asleep = should;
     sleepScreen.style.display = should ? 'block' : 'none';
-    if (should) showView('view-home');
+    if (should) { showView('view-home'); stopRadio(); }
     if (android() && android().setSleep) android().setSleep(should);
   }
 
@@ -1413,6 +1550,16 @@
   function setupSleep() {
     sleepScreen = document.createElement('div');
     sleepScreen.style.cssText = 'display:none;position:fixed;top:0;right:0;bottom:0;left:0;z-index:1000;background:#000';
+    // Horloge douce la nuit : une grande heure très sombre, pour savoir l'heure au réveil.
+    var nightClock = document.createElement('div');
+    nightClock.className = 'night-clock';
+    sleepScreen.appendChild(nightClock);
+    function tickNight() {
+      var d = new Date();
+      nightClock.textContent = d.getHours() + ':' + pad(d.getMinutes());
+    }
+    tickNight();
+    setInterval(tickNight, 20000);
     document.body.appendChild(sleepScreen);
     // Le toucher qui rallume l'écran ne déclenche rien d'autre.
     on(sleepScreen, 'touchstart', function (e) { e.preventDefault(); e.stopPropagation(); wakeScreen(); });

@@ -378,6 +378,12 @@ public class MainActivity extends Activity implements Sync.Listener {
             sync.touched();
         }
 
+        /** Un visage est vu devant la tablette. */
+        @JavascriptInterface
+        public void seen() {
+            sync.seen();
+        }
+
         @JavascriptInterface
         public void ackReminder(String id, String when) {
             sync.ackReminder(id, when);
@@ -440,6 +446,17 @@ public class MainActivity extends Activity implements Sync.Listener {
 
         /** Branchée sur secteur (chargeur, USB ou sans fil) : sinon la page demande de la brancher. */
         /** Base Firestore à utiliser par la page (appels) : « (default) » ou « eu » après la migration. */
+        /** Lecture à voix haute d'un message (option « lecture »), en français. */
+        @JavascriptInterface
+        public void speak(String text) {
+            handler.post(() -> speakNow(text));
+        }
+
+        @JavascriptInterface
+        public void stopSpeaking() {
+            handler.post(() -> { if (tts != null) tts.stop(); });
+        }
+
         @JavascriptInterface
         public String firestoreDatabase() {
             return Firebase.database();
@@ -619,6 +636,29 @@ public class MainActivity extends Activity implements Sync.Listener {
      * En journée, on le rallume dans la foulée (on ne voit qu'un bref noir).
      * La nuit (23h-7h), on le laisse éteint.
      */
+    // ---------- Lecture à voix haute ----------
+
+    private android.speech.tts.TextToSpeech tts;
+    private boolean ttsReady;
+    private String ttsPending;
+
+    private void speakNow(String text) {
+        if (text == null || text.trim().isEmpty()) return;
+        if (tts == null) {
+            ttsPending = text;
+            tts = new android.speech.tts.TextToSpeech(getApplicationContext(), status -> {
+                ttsReady = status == android.speech.tts.TextToSpeech.SUCCESS;
+                if (!ttsReady) { Journal.log(this, "Lecture à voix haute indisponible"); return; }
+                tts.setLanguage(java.util.Locale.FRANCE);
+                tts.setSpeechRate(0.85f); // un peu plus lent, plus facile à suivre
+                if (ttsPending != null) { speakNow(ttsPending); ttsPending = null; }
+            });
+            return;
+        }
+        if (!ttsReady) { ttsPending = text; return; }
+        tts.speak(text, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "papote");
+    }
+
     /** Chargeur branché ou débranché : la famille est prévenue tout de suite (fiche de la tablette). */
     private final android.content.BroadcastReceiver powerChange = new android.content.BroadcastReceiver() {
         @Override
@@ -843,6 +883,7 @@ public class MainActivity extends Activity implements Sync.Listener {
 
     @Override
     protected void onDestroy() {
+        if (tts != null) { try { tts.shutdown(); } catch (Exception ignored) { } }
         try { unregisterReceiver(screenOff); } catch (Exception ignored) { }
         try { unregisterReceiver(powerChange); } catch (Exception ignored) { }
         callAudio.release();
