@@ -16,6 +16,7 @@ import {
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-functions.js';
 import { refreshSim } from './sim.js';
 import { appeler, donnees, signalerChangement } from './gestion-api.js';
+import { ouvrirParcours } from './parcours.js';
 
 const app = initializeApp({
   apiKey: 'AIzaSyAvoivJR8p-u2VxUWzlyHzTgP20-5ZG_-E',
@@ -26,8 +27,19 @@ const app = initializeApp({
   appId: '1:807031084851:web:b8048e2952cb1e893b1046',
 }, 'admin');
 const auth = getAuth(app);
-const db = getFirestore(app);
-const storage = getStorage(app);
+// Base et bucket : ceux d'origine, ou ceux que config/base (dans la base d'origine) désigne après la
+// bascule en Europe ({ database: 'eu', bucket: 'papote-famille-eu' }). Lu une fois, avant tout chargement.
+let db = getFirestore(app);
+let storage = getStorage(app);
+let baseChoisie = null;
+function choisirBase() {
+  baseChoisie = baseChoisie || getDoc(doc(db, 'config', 'base')).then((snap) => {
+    const c = (snap.exists() && snap.data()) || {};
+    if (typeof c.database === 'string' && c.database && c.database !== '(default)') db = getFirestore(app, c.database);
+    if (typeof c.bucket === 'string' && c.bucket) storage = getStorage(app, `gs://${c.bucket}`);
+  }).catch((err) => console.warn('config/base illisible, base d\'origine gardée', err));
+  return baseChoisie;
+}
 const functions = getFunctions(app, 'europe-west1');
 
 const $ = (id) => document.getElementById(id);
@@ -95,7 +107,7 @@ function orderHead(c) {
   return `${c.nom || c.email} · ${c.formule === 'sim' ? 'carte SIM' : 'Wi-Fi'}, tablette ${c.tablette === 'incluse' ? 'incluse' : 'achetée'}`;
 }
 
-// Tablettes à envoyer : point relais, puis numéro de suivi et « Envoyée » (e-mail au client par le serveur).
+// Tablettes à envoyer : chaque commande se prépare pas à pas (parcours), sans rien oublier.
 async function loadOrders() {
   try {
     const snap = await getDocs(query(collection(db, 'commandes'), where('expedition', '==', 'a-preparer')));
@@ -104,91 +116,20 @@ async function loadOrders() {
     $('orders-empty').hidden = list.length > 0;
     $('orders').replaceChildren(...list.map((c) => {
       const li = document.createElement('li');
-      li.innerHTML = '<strong></strong><span class="muted small"></span><span class="small"></span>'
-        + '<form class="ship"><select class="tablette" aria-label="Tablette du stock"><option value="">Tablette du stock…</option></select>'
-        + '<select class="sim" aria-label="Carte SIM du stock" hidden><option value="">Carte SIM du stock…</option></select>'
-        + '<button type="button" class="secondary small-btn etiquette" title="Créer l\'étiquette Mondial Relay avec Sendcloud">Étiquette</button>'
-        + '<button type="button" class="secondary small-btn annuler-etiquette" title="Annuler l\'étiquette chez Sendcloud pour en refaire une" hidden>Annuler l\'étiquette</button>'
-        + '<input placeholder="N° de suivi Mondial Relay" autocomplete="off" required><button type="submit" class="primary small-btn">Envoyée</button>'
-        + '<span class="muted small kit"></span></form>';
+      li.innerHTML = '<strong></strong><span class="muted small"></span><span class="small adresse"></span>'
+        + '<div class="envoi-suite"><span class="small avancement"></span><button type="button" class="primary small-btn"></button></div>';
       li.querySelector('strong').textContent = orderHead(c);
       li.querySelector('.muted').textContent = `${c.email}${c.telephone ? ` · ${c.telephone}` : ''} · commandé ${ago(toDate(c.creeLe))}${c.fid ? ' · famille créée' : ''}`;
-      li.querySelector('span.small:not(.muted)').textContent = livraisonTexte(c);
-      const form = li.querySelector('form');
-      const choix = form.querySelector('select.tablette');
-      const choixSim = form.querySelector('select.sim');
-      remplirKit(form, c);
-      // Étiquette Sendcloud : remplit le n° de suivi et ouvre le PDF à imprimer.
-      const btnEtiquette = form.querySelector('button.etiquette');
-      const btnAnnuler = form.querySelector('button.annuler-etiquette');
-      if (c.etiquettes?.aller) {
-        form.querySelector('input').value = c.etiquettes.aller.suivi || '';
-        btnEtiquette.textContent = 'Revoir l\'étiquette';
-        btnAnnuler.hidden = false;
-      }
-      // Étiquette annulée (ou à refaire) : annulée chez Sendcloud, le bouton repasse à « Étiquette ».
-      btnAnnuler.addEventListener('click', async () => {
-        if (!confirm('Annuler cette étiquette chez Sendcloud ? Vous pourrez en créer une nouvelle.')) return;
-        btnAnnuler.disabled = true;
-        try {
-          await appeler('gestionAnnulerEtiquette', { commande: c.id, sens: 'aller' });
-          if (form.querySelector('input').value === c.etiquettes.aller.suivi) form.querySelector('input').value = '';
-          delete c.etiquettes.aller;
-          btnEtiquette.textContent = 'Étiquette';
-          btnAnnuler.hidden = true;
-        } catch (err) {
-          alert(`Annulation impossible : ${err.message}`);
-        }
-        btnAnnuler.disabled = false;
-      });
-      btnEtiquette.addEventListener('click', async () => {
-        if (c.etiquettes?.aller?.url) { window.open(c.etiquettes.aller.url, '_blank', 'noopener'); return; }
-        const fenetre = window.open('', '_blank');
-        btnEtiquette.disabled = true;
-        btnEtiquette.textContent = 'Création…';
-        try {
-          const r = await appeler('gestionEtiquette', { commande: c.id, sens: 'aller' });
-          c.etiquettes = { ...(c.etiquettes || {}), aller: r };
-          if (r.suivi) form.querySelector('input').value = r.suivi;
-          if (fenetre) fenetre.location = r.url;
-          btnEtiquette.textContent = 'Revoir l\'étiquette';
-          btnAnnuler.hidden = false;
-        } catch (err) {
-          if (fenetre) fenetre.close();
-          alert(`Étiquette impossible : ${err.message}`);
-          btnEtiquette.textContent = 'Étiquette';
-        }
-        btnEtiquette.disabled = false;
-      });
-      form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const suivi = form.querySelector('input').value.trim();
-        const tablette = choix.value;
-        const sim = choixSim.hidden ? '' : choixSim.value;
-        // Le kit part entier : tablette du stock, et sa carte SIM pour la formule Internet inclus.
-        if (!tablette && !confirm('Aucune tablette du stock n\'est choisie : elle ne sortira pas du stock. Envoyer quand même ?')) return;
-        if (tablette && c.formule === 'sim' && !choix.selectedOptions[0].dataset.sim && !sim
-          && !confirm('Formule Internet inclus, mais aucune carte SIM n\'est choisie. Envoyer quand même ?')) return;
-        form.querySelector('button').disabled = true;
-        try {
-          await httpsCallable(functions, 'tabletteEnvoyee')({ commande: c.id, suivi });
-          if (tablette) {
-            try {
-              if (sim) await appeler('gestionSim', { action: 'modifier', id: sim, champs: { tablette } });
-              await appeler('gestionStock', { action: 'modifier', id: tablette, champs: { etat: 'envoyee', commande: c.id } });
-            } catch (err) {
-              alert(`Colis enregistré, mais le kit n'a pas pu être sorti du stock : ${err.message}`);
-            }
-          }
-          signalerChangement();
-          loadOrders();
-          loadShipped();
-        } catch (err) {
-          console.error(err);
-          alert(err.code?.endsWith('invalid-argument') ? 'Ce numéro de suivi ne semble pas valide.' : "L'enregistrement a échoué.");
-          form.querySelector('button').disabled = false;
-        }
-      });
+      li.querySelector('.adresse').textContent = livraisonTexte(c);
+      const etapes = etapesEnvoi(c, {}).filter((e) => !e.saute || !e.saute({}));
+      const p = c.preparation;
+      const commencee = !!(p && Object.keys(p.faits || {}).length);
+      const n = commencee ? Math.min(Number(p.etape) || 0, etapes.length - 1) : 0;
+      li.querySelector('.avancement').textContent = commencee
+        ? `Étape ${n + 1} sur ${etapes.length} : ${etapes[n].titre}` : `Pas commencée · ${etapes.length} étapes`;
+      const bouton = li.querySelector('button');
+      bouton.textContent = commencee ? 'Reprendre la préparation' : 'Préparer l\'envoi';
+      bouton.addEventListener('click', () => preparerEnvoi(c, bouton));
       return li;
     }));
   } catch (err) {
@@ -197,40 +138,205 @@ async function loadOrders() {
   }
 }
 
-// Le kit d'une commande : tablette du stock, carte SIM libre (formule Internet inclus) et accessoires
-// qui partiront avec (gestion), pour que tout sorte du stock ensemble.
-async function remplirKit(form, c) {
-  const select = form.querySelector('select.tablette');
-  const selectSim = form.querySelector('select.sim');
-  const option = (valeur, texte) => {
-    const o = document.createElement('option');
-    o.value = valeur;
-    o.textContent = texte;
-    return o;
-  };
+const avecTiret = (code) => String(code || '').replace(/^(.{4})(.{4})$/, '$1-$2');
+const simTexte = (l) => (l ? [l.numero || `ICCID …${String(l.iccid || '').slice(-4)}`, l.operateur].filter(Boolean).join(' · ') : '');
+const creer = (tag, attrs = {}, texte = '') => Object.assign(document.createElement(tag), attrs, texte ? { textContent: texte } : {});
+
+// Étapes de l'envoi d'une commande. ctx : { stock, sims, accessoires } (vide pour seulement compter les étapes).
+function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
+  const avecRouteur = c.formule === 'sim';
+  const tablette = (e) => stock.find((t) => t.id === e.tablette);
+  const nom = (e) => { const t = tablette(e); return t ? t.ref || t.numero || t.modele || 'choisie' : ''; };
+  const simDe = (e) => { const t = tablette(e); return sims.find((l) => l.id === (e.sim || (t && t.simId))) || null; };
+  const pour = (formule) => accessoires.filter((a) => a.parEnvoi === formule).map((a) => a.nom);
+  const routeur = () => (pour('sim').length ? pour('sim') : ['Le routeur 4G']);
+  const option = (valeur, texte, choisi) => creer('option', { value: valeur, selected: choisi }, texte);
+  return [
+    {
+      cle: 'tablette',
+      titre: 'Choisir la tablette',
+      texte: 'Prenez une tablette déjà installée : elle a un numéro T-… écrit dessus.',
+      contenu(zone, e, maj) {
+        const dispo = stock.filter((t) => t.commande === c.id || (['en-stock', 'preparee'].includes(t.etat) && !t.commande))
+          .sort((a, b) => !!b.ref - !!a.ref);
+        const choix = creer('select', { ariaLabel: 'Tablette' });
+        choix.append(option('', dispo.length ? 'Choisir la tablette…' : 'Aucune tablette en stock', !e.tablette),
+          ...dispo.map((t) => option(t.id, [t.ref || 'pas encore installée', t.numero, t.modele, t.sim ? `SIM ${t.sim}` : null].filter(Boolean).join(' · '), t.id === e.tablette)));
+        const libres = sims.filter((l) => (!l.tablette || l.id === e.sim) && ['stock', 'active'].includes(l.statut));
+        const choixSim = creer('select', { ariaLabel: 'Carte SIM' });
+        choixSim.append(option('', libres.length ? 'Carte SIM pour le routeur…' : 'Aucune carte SIM libre', !e.sim),
+          ...libres.map((l) => option(l.id, simTexte(l), l.id === e.sim)));
+        const alerte = creer('p', { className: 'small error' });
+        const majChoix = () => {
+          e.tablette = choix.value || null;
+          const t = tablette(e);
+          alerte.textContent = t && !t.ref ? 'Cette tablette n\'est pas encore installée : faites d\'abord sa réception (Stock > Recevoir une tablette).' : '';
+          choixSim.hidden = !avecRouteur || !t || !!t.simId;
+          e.sim = choixSim.hidden ? null : choixSim.value || null;
+          maj();
+        };
+        choix.addEventListener('change', majChoix);
+        choixSim.addEventListener('change', majChoix);
+        zone.append(choix, choixSim, alerte);
+        majChoix();
+      },
+      pret: (e) => !!tablette(e) && !!tablette(e).ref && (!avecRouteur || !!tablette(e).simId || !!e.sim),
+      async valider(e) {
+        // La tablette est réservée pour cette commande (et libère celle choisie avant, s'il y en avait une).
+        const avant = stock.find((t) => t.commande === c.id && t.id !== e.tablette);
+        if (avant) await appeler('gestionStock', { action: 'modifier', id: avant.id, champs: { commande: null } });
+        await appeler('gestionStock', { action: 'modifier', id: e.tablette, champs: { commande: c.id } });
+        for (const t of stock) {
+          if (t.id === e.tablette) t.commande = c.id;
+          else if (t.commande === c.id) t.commande = null;
+        }
+      },
+    },
+    {
+      cle: 'carton',
+      titre: 'La tablette dans le carton',
+      cases: (e) => [
+        `La tablette ${nom(e)} est dans le carton`,
+        'Le chargeur et son câble sont dans le carton',
+        ...pour('tous').map((a) => `${a} : dans le carton`),
+      ],
+    },
+    {
+      cle: 'routeur',
+      titre: 'Le routeur 4G',
+      saute: () => !avecRouteur,
+      cases: (e) => [
+        `La carte SIM ${simTexte(simDe(e))} est glissée dans le routeur`,
+        ...routeur().map((a) => `${a} : dans le carton`),
+      ],
+    },
+    {
+      cle: 'fermer',
+      titre: 'Fermer le colis',
+      texte: 'Dernière vérification. Le carton contient :',
+      contenu(zone, e) {
+        const ul = creer('ul', { className: 'pc-liste' });
+        const contenu = [`La tablette ${nom(e)}`, 'Le chargeur et son câble', ...pour('tous'),
+          ...(avecRouteur ? [...routeur(), `La carte SIM ${simTexte(simDe(e))}, dans le routeur`] : [])];
+        ul.append(...contenu.map((x) => creer('li', {}, x)));
+        zone.append(ul);
+      },
+      cases: ['Rien ne manque', 'Le carton est fermé avec du scotch'],
+    },
+    {
+      cle: 'feutre',
+      titre: 'Le numéro au feutre',
+      texte: 'Écrivez ce numéro au feutre sur le carton : il permet de retrouver la commande si l\'étiquette se décolle.',
+      contenu(zone, e) {
+        zone.append(creer('p', { className: 'pc-gros' }, [avecTiret(c.code), nom(e)].filter(Boolean).join(' · ')));
+      },
+      cases: ['Numéro écrit sur le carton'],
+    },
+    {
+      cle: 'etiquette',
+      titre: 'L\'étiquette',
+      texte: 'Mondial Relay donne un QR code : au relais, montrez-le sur votre téléphone (ou imprimé), ils impriment l\'étiquette et la collent.',
+      contenu(zone, e, maj) {
+        const bouton = creer('button', { type: 'button', className: 'primary' }, 'Créer l\'étiquette');
+        const lien = creer('a', { target: '_blank', rel: 'noopener', className: 'pc-lien' }, 'Ouvrir le QR code');
+        const etat = creer('p', { className: 'small' });
+        const annuler = creer('button', { type: 'button', className: 'link small' }, 'Annuler cette étiquette');
+        const ailleurs = creer('details');
+        ailleurs.append(creer('summary', { className: 'small' }, 'Étiquette faite ailleurs ?'));
+        const suivi = creer('input', { placeholder: 'N° de suivi Mondial Relay', autocomplete: 'off' });
+        ailleurs.append(suivi);
+        const afficher = () => {
+          const a = c.etiquettes && c.etiquettes.aller;
+          bouton.hidden = !!a;
+          lien.hidden = !(a && a.url);
+          if (a && a.url) lien.href = a.url;
+          annuler.hidden = !a;
+          etat.textContent = a ? `Étiquette prête, suivi ${a.suivi || '?'}.` : '';
+          ailleurs.hidden = !!a;
+          e.suivi = (a && a.suivi) || suivi.value.trim() || null;
+          maj();
+        };
+        bouton.addEventListener('click', async () => {
+          const fenetre = window.open('', '_blank');
+          bouton.disabled = true;
+          bouton.textContent = 'Création…';
+          try {
+            const r = await appeler('gestionEtiquette', { commande: c.id, sens: 'aller' });
+            c.etiquettes = { ...(c.etiquettes || {}), aller: r };
+            if (fenetre) fenetre.location = r.url;
+          } catch (err) {
+            if (fenetre) fenetre.close();
+            alert(`Étiquette impossible : ${err.message}`);
+          }
+          bouton.disabled = false;
+          bouton.textContent = 'Créer l\'étiquette';
+          afficher();
+        });
+        annuler.addEventListener('click', async () => {
+          if (!confirm('Annuler cette étiquette chez Sendcloud ? Vous pourrez en créer une nouvelle.')) return;
+          annuler.disabled = true;
+          try {
+            await appeler('gestionAnnulerEtiquette', { commande: c.id, sens: 'aller' });
+            delete c.etiquettes.aller;
+          } catch (err) {
+            alert(`Annulation impossible : ${err.message}`);
+          }
+          annuler.disabled = false;
+          afficher();
+        });
+        suivi.addEventListener('input', afficher);
+        zone.append(bouton, lien, etat, annuler, ailleurs);
+        afficher();
+      },
+      pret: (e) => !!e.suivi,
+    },
+    {
+      cle: 'depot',
+      titre: 'Déposer au relais',
+      texte: 'Déposez le colis dans un point relais Mondial Relay et montrez le QR code. Ensuite seulement, touchez « Colis déposé » : le client reçoit le lien de suivi par e-mail.',
+      cases: ['Le colis est déposé au relais'],
+      bouton: 'Colis déposé',
+      async valider(e) {
+        try {
+          await httpsCallable(functions, 'tabletteEnvoyee')({ commande: c.id, suivi: e.suivi });
+        } catch (err) {
+          throw new Error(err.code?.endsWith('invalid-argument') ? 'Ce numéro de suivi ne semble pas valide.' : 'L\'enregistrement a échoué. Réessayez.');
+        }
+        try {
+          if (e.sim) await appeler('gestionSim', { action: 'modifier', id: e.sim, champs: { tablette: e.tablette } });
+          await appeler('gestionStock', { action: 'modifier', id: e.tablette, champs: { etat: 'envoyee', commande: c.id } });
+        } catch (err) {
+          alert(`Colis enregistré, mais le kit n'a pas pu être sorti du stock : ${err.message}`);
+        }
+      },
+    },
+  ];
+}
+
+async function preparerEnvoi(c, bouton) {
+  bouton.disabled = true;
+  let ctx;
   try {
-    const { stock, sims, accessoires } = await donnees();
-    const dispo = stock.filter((t) => t.commande === c.id || (['en-stock', 'preparee'].includes(t.etat) && !t.commande));
-    for (const t of dispo) {
-      const o = option(t.id, [t.ref, t.numero || (t.ref ? null : 'sans n° de série'), t.modele, t.sim ? `SIM ${t.sim}` : null].filter(Boolean).join(' · '));
-      if (t.sim) o.dataset.sim = t.sim;
-      o.selected = t.commande === c.id;
-      select.append(o);
-    }
-    if (!dispo.length) select.options[0].textContent = 'Stock vide';
-    const libres = (sims || []).filter((l) => !l.tablette && ['stock', 'active'].includes(l.statut));
-    selectSim.append(...libres.map((l) => option(l.id, [l.numero || `ICCID …${String(l.iccid || '').slice(-4)}`, l.operateur].filter(Boolean).join(' · '))));
-    if (!libres.length) selectSim.options[0].textContent = 'Aucune carte SIM libre';
-    // La carte n'est demandée que si la tablette choisie n'en a pas déjà une.
-    const majSim = () => { selectSim.hidden = c.formule !== 'sim' || !!(select.selectedOptions[0] && select.selectedOptions[0].dataset.sim); };
-    select.addEventListener('change', majSim);
-    majSim();
-    const avec = (accessoires || []).filter((a) => a.parEnvoi === 'tous' || (a.parEnvoi && a.parEnvoi === c.formule));
-    form.querySelector('.kit').textContent = avec.length
-      ? `Part aussi : ${avec.map((a) => `${a.nom}${(a.quantite || 0) < 1 ? ' (plus en stock)' : ''}`).join(', ')}` : '';
+    ctx = await donnees(true);
   } catch (err) {
-    select.hidden = true;
+    alert(`Lecture du stock impossible : ${err.message}`);
+    bouton.disabled = false;
+    return;
   }
+  bouton.disabled = false;
+  const etat = { etape: 0, faits: {}, ...(c.preparation || {}) };
+  etat.suivi = etat.suivi || c.etiquettes?.aller?.suivi || null;
+  if (!etat.tablette) etat.tablette = ctx.stock.find((t) => t.commande === c.id)?.id || null;
+  const fini = await ouvrirParcours({
+    titre: `Envoi à ${c.livraison?.destinataire || c.nom || c.email}`,
+    etapes: etapesEnvoi(c, ctx),
+    etat,
+    sauver: (e) => appeler('gestionParcours', { type: 'envoi', commande: c.id, preparation: e }),
+  });
+  c.preparation = etat;
+  signalerChangement();
+  loadOrders();
+  if (fini) loadShipped();
 }
 
 // Envoyées mais pas encore reliées à une famille : suivi du colis, alerte au bout de 20 jours.
@@ -253,6 +359,31 @@ async function loadShipped() {
       const a = li.querySelector('a');
       a.href = lienSuivi(c);
       a.textContent = `Suivre le colis ${c.suivi || ''}`;
+      // Suite de l'envoi : déposé, reçu par le client (à cocher d'après le suivi), mis en route (jumelage, automatique).
+      const recu = c.preparation?.recuLe;
+      const suite = document.createElement('ol');
+      suite.className = 'suite-envoi small';
+      suite.innerHTML = `<li class="fait">Déposé au relais</li><li class="${recu ? 'fait' : 'actuelle'}">Reçu par le client</li><li>Mis en route par le client</li>`;
+      li.append(suite);
+      if (!recu) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'secondary small-btn';
+        b.textContent = 'Le client a reçu le colis';
+        b.addEventListener('click', async () => {
+          b.disabled = true;
+          try {
+            await appeler('gestionParcours', { type: 'recu', commande: c.id });
+            suite.children[1].className = 'fait';
+            suite.children[2].className = 'actuelle';
+            b.remove();
+          } catch (err) {
+            alert(`Enregistrement impossible : ${err.message}`);
+            b.disabled = false;
+          }
+        });
+        li.append(b);
+      } else suite.children[2].className = 'actuelle';
       return li;
     }));
   } catch (err) {
@@ -273,7 +404,11 @@ async function loadReturns() {
       const li = document.createElement('li');
       li.innerHTML = '<strong></strong><span class="muted small"></span><span class="small"></span><span class="small remb"></span>'
         + '<form class="etiquette"><button type="button" class="secondary small-btn sendcloud">Créer avec Sendcloud</button><input type="url" placeholder="ou lien de l\'étiquette de retour" aria-label="Étiquette de retour"><button type="submit" class="secondary small-btn">Envoyer l\'étiquette</button></form>'
-        + '<button type="button" class="secondary small-btn rendue">Tablette rendue</button>';
+        + '<div class="manquants small"><span>Manquant :</span>'
+        + '<label><input type="checkbox" value="tablette"> tablette (160 €)</label>'
+        + '<label><input type="checkbox" value="chargeur"> chargeur et câble (10 €)</label>'
+        + (c.formule === 'sim' ? '<label><input type="checkbox" value="routeur"> routeur (30 €)</label>' : '')
+        + '<button type="button" class="secondary small-btn rendue">Matériel reçu</button></div>';
       li.querySelector('strong').textContent = c.livraison?.nom || c.nom || c.email;
       li.querySelector('.muted').textContent = `${c.email}${c.telephone ? ` · ${c.telephone}` : ''}`;
       li.querySelector('span.small:not(.muted):not(.remb)').textContent = (r.statut === 'echec'
@@ -325,16 +460,25 @@ async function loadReturns() {
       });
       const btn = li.querySelector('button.rendue');
       btn.addEventListener('click', async () => {
-        if (!confirm(`La tablette de ${c.email} est bien revenue ?`)) return;
+        // Ce qui manque dans le colis est prélevé sur la carte du client (tabletteRendue, index.js).
+        const manquants = [...li.querySelectorAll('.manquants input:checked')].map((i) => i.value);
+        const prix = { tablette: 160, chargeur: 10, routeur: 30 };
+        const total = manquants.reduce((s, m) => s + prix[m], 0);
+        if (!confirm(total
+          ? `Prélever ${total} € à ${c.email} pour le matériel manquant (${manquants.join(', ')}) ?`
+          : `Tout le matériel de ${c.email} est bien revenu ?`)) return;
         btn.disabled = true;
         try {
-          await httpsCallable(functions, 'tabletteRendue')({ commande: d.id });
-          // La tablette revient dans le stock, à vérifier avant de repartir.
+          const res = await httpsCallable(functions, 'tabletteRendue')({ commande: d.id, manquants }).then((x) => x.data || {});
+          // Tablette revenue : dans le stock, à vérifier avant de repartir. Tablette manquante : perdue (retirée de la famille).
           const { stock } = await donnees().catch(() => ({ stock: [] }));
           const t = stock.find((x) => x.commande === d.id);
-          if (t) await appeler('gestionStock', { action: 'modifier', id: t.id, champs: { etat: 'revenue' } }).catch(() => null);
+          const etat = manquants.includes('tablette') ? 'perdue' : 'revenue';
+          if (t) await appeler('gestionStock', { action: 'modifier', id: t.id, champs: { etat } }).catch(() => null);
+          if (res.erreur) alert(`Prélèvement refusé : ${res.erreur}. La commande reste dans la liste, à relancer depuis Stripe.`);
           signalerChangement();
-          li.remove();
+          if (!res.erreur) li.remove();
+          else btn.disabled = false;
         } catch (err) {
           console.error(err);
           alert("L'enregistrement a échoué.");
@@ -350,6 +494,7 @@ async function loadReturns() {
 }
 
 async function load() {
+  await choisirBase();
   loadOrders();
   loadShipped();
   loadReturns();
@@ -389,7 +534,7 @@ async function load() {
     refreshSim(families, tablets);
   } catch (err) {
     console.error(err);
-    $('families').innerHTML = '<li class="card error">Lecture impossible. Ce compte a-t-il les droits d\'administrateur ?</li>';
+    $('t-familles').innerHTML = '<tbody><tr><td class="error">Lecture impossible. Ce compte a-t-il les droits d\'administrateur ?</td></tr></tbody>';
   } finally {
     $('loading-families').hidden = true;
   }
@@ -550,25 +695,47 @@ async function removeOldTablets(f, btn) {
   }
 }
 
+// Suppression définitive demandée par le client (à contact@) : le nom retapé confirme. Le serveur refuse
+// la famille offerte (Mamie) et une famille dont l'abonnement est en cours (gestionSupprimerFamille).
+async function supprimerFamille(f, li, btn) {
+  const nom = prompt(`Supprimer DÉFINITIVEMENT la famille « ${f.name} » : messages, photos, vidéos, rappels, anniversaires, membres et journal. Rien ne pourra être récupéré.\n\nPour confirmer, retapez le nom de la famille :`);
+  if (nom == null) return;
+  const simple = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().replace(/\s+/g, ' ').toLowerCase();
+  if (!simple(nom) || simple(nom) !== simple(f.name)) { alert('Le nom ne correspond pas : rien n\'a été supprimé.'); return; }
+  btn.disabled = true;
+  btn.textContent = 'Suppression…';
+  try {
+    await appeler('gestionSupprimerFamille', { fid: f.id, nom });
+    families = families.filter((x) => x.id !== f.id);
+    li.remove();
+    ficheFamille = null;
+    render();
+    alert(`La famille « ${f.name} » et toutes ses données sont supprimées.`);
+  } catch (err) {
+    alert(`Suppression impossible : ${err.message}`);
+    btn.disabled = false;
+    btn.textContent = 'Supprimer la famille et toutes ses données';
+  }
+}
+
 function state(f) {
   if (!f.hasTablet) return { cls: 'none', label: 'Pas de tablette' };
   if (!f.online || Date.now() - f.online.getTime() > OFFLINE_MS) return { cls: 'off', label: `Hors ligne, vue ${ago(f.online)}` };
   return { cls: 'on', label: 'En ligne' };
 }
 
-function render() {
-  const now = Date.now();
-  const withTablet = families.filter((f) => f.hasTablet);
-  const offline = withTablet.filter((f) => state(f).cls === 'off');
-  $('s-families').textContent = families.length;
-  $('s-online').textContent = withTablet.length - offline.length;
-  $('s-offline').textContent = offline.length;
-  $('s-idle').textContent = withTablet.filter((f) => !f.active || now - f.active.getTime() > IDLE_MS).length;
+let vueFamilles = null; // onglet de la liste des familles (off, on, none, toutes)
+let ficheFamille = null; // famille ouverte sur sa page
 
-  // Les tablettes à problème d'abord.
-  const rank = { off: 0, on: 1, none: 2 };
-  const sorted = families.slice().sort((a, b) => rank[state(a).cls] - rank[state(b).cls] || a.name.localeCompare(b.name));
-  $('families').replaceChildren(...sorted.map((f) => {
+function ouvrirFamille(fid) {
+  ficheFamille = fid;
+  render();
+  window.scrollTo(0, 0);
+}
+$('famille-retour').addEventListener('click', () => { ficheFamille = null; render(); });
+
+// Page d'une famille : état de la tablette et toutes les actions.
+function carteFamille(f) {
     const s = state(f);
     const li = document.createElement('li');
     li.className = `family card ${s.cls}`;
@@ -582,7 +749,34 @@ function render() {
     ];
     li.innerHTML = `<div class="family-head"><span class="dot"></span><strong></strong><code></code></div><dl></dl>
       <div class="replace"><button type="button" class="link small members-btn">Gérer les membres</button><div class="members-out" hidden></div></div>
-      <div class="replace"><button type="button" class="link small replace-btn">Tablette de remplacement</button><p class="replace-out small" hidden></p></div>`;
+      <div class="replace"><button type="button" class="link small replace-btn">Tablette de remplacement</button><p class="replace-out small" hidden></p></div>
+      <div class="replace"><button type="button" class="link small danger delete-btn">Supprimer la famille et toutes ses données</button></div>`;
+    const delBtn = li.querySelector('.delete-btn');
+    if (f.abonnement?.statut === 'offert') delBtn.parentElement.remove();
+    else delBtn.addEventListener('click', () => supprimerFamille(f, li, delBtn));
+    // Famille offerte (celle de Tanguy) : jamais en pause, jamais supprimable.
+    const offre = document.createElement('div');
+    offre.className = 'replace';
+    offre.innerHTML = '<span class="small"></span> <button type="button" class="link small"></button>';
+    const offerte = f.abonnement?.statut === 'offert';
+    offre.querySelector('span').textContent = offerte ? 'Famille offerte (protégée).' : `Abonnement : ${f.abonnement?.statut || 'aucun'}.`;
+    const offreBtn = offre.querySelector('button');
+    offreBtn.textContent = offerte ? 'Ne plus offrir' : 'Rendre offerte (protégée)';
+    offreBtn.addEventListener('click', async () => {
+      if (!confirm(offerte
+        ? `« ${f.name} » ne sera plus offerte : sans abonnement, sa tablette se mettra en pause. Continuer ?`
+        : `Rendre « ${f.name} » offerte ? Elle ne sera jamais mise en pause ni supprimable.`)) return;
+      offreBtn.disabled = true;
+      try {
+        await appeler('gestionFamilleOfferte', { fid: f.id, offerte: !offerte });
+        f.abonnement = { ...(f.abonnement || {}), statut: offerte ? 'aucun' : 'offert' };
+        render();
+      } catch (err) {
+        alert(`Impossible : ${err.message}`);
+        offreBtn.disabled = false;
+      }
+    });
+    li.querySelector('dl').after(offre);
     li.querySelector('.replace-btn').addEventListener('click', () => prepareReplacement(f, li));
     li.querySelector('.members-btn').addEventListener('click', () => toggleMembers(f, li));
     showPending(f, li);
@@ -597,7 +791,77 @@ function render() {
       dl.append(dt, dd);
     }
     return li;
-  }));
+}
+
+function render() {
+  const now = Date.now();
+  const withTablet = families.filter((f) => f.hasTablet);
+  const offline = withTablet.filter((f) => state(f).cls === 'off');
+  $('s-families').textContent = families.length;
+  $('s-online').textContent = withTablet.length - offline.length;
+  $('s-offline').textContent = offline.length;
+  $('s-idle').textContent = withTablet.filter((f) => !f.active || now - f.active.getTime() > IDLE_MS).length;
+
+  // Liste par statut (les chiffres servent d'onglets) ; une famille ouverte a sa propre page.
+  const rank = { off: 0, on: 1, none: 2 };
+  const sorted = families.slice().sort((a, b) => rank[state(a).cls] - rank[state(b).cls] || a.name.localeCompare(b.name));
+  const compte = (cls) => families.filter((f) => state(f).cls === cls).length;
+  if (!vueFamilles) vueFamilles = compte('off') ? 'off' : 'toutes';
+  const onglet = (vue, n, texte, classe) => {
+    const el = document.createElement('div');
+    el.className = `stat onglet ${classe || ''}${vue === vueFamilles ? ' actif' : ''}`;
+    el.tabIndex = 0;
+    el.setAttribute('role', 'button');
+    el.setAttribute('aria-pressed', String(vue === vueFamilles));
+    el.innerHTML = '<span></span><p></p>';
+    el.querySelector('span').textContent = n;
+    el.querySelector('p').textContent = texte;
+    const choisir = () => { vueFamilles = vue; render(); };
+    el.addEventListener('click', choisir);
+    el.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choisir(); } });
+    return el;
+  };
+  $('kpi-familles').replaceChildren(
+    onglet('off', compte('off'), 'hors ligne', 'warn'),
+    onglet('on', compte('on'), 'en ligne', 'ok'),
+    onglet('none', compte('none'), 'sans tablette'),
+    onglet('toutes', families.length, 'toutes les familles'),
+  );
+  const ABOS = { offert: 'Offert', actif: 'Actif', impaye: 'Impayé', suspendu: 'Suspendu', resilie: 'Résilié', aucun: 'Aucun' };
+  const table = $('t-familles');
+  const tete = ['Famille', 'Code', 'Tablette', 'Abonnement', 'Membres', 'Envois', 'Dernier envoi', 'Version'];
+  const lignes = sorted.filter((f) => vueFamilles === 'toutes' || state(f).cls === vueFamilles).map((f) => {
+    const tr = document.createElement('tr');
+    tr.tabIndex = 0;
+    const cellules = [f.name, f.code ? `${f.code.slice(0, 4)}-${f.code.slice(4)}` : '', state(f).label,
+      ABOS[f.abonnement?.statut] || 'Aucun', f.people ?? '–', f.posts ?? '–', ago(f.lastPost), f.version || '–'];
+    cellules.forEach((v, n) => {
+      const td = document.createElement('td');
+      if (n === 0) {
+        const dot = document.createElement('span');
+        dot.className = `dot ${state(f).cls}`;
+        td.append(dot, ' ');
+        const b = document.createElement('strong');
+        b.textContent = v;
+        td.append(b);
+      } else td.textContent = v;
+      tr.append(td);
+    });
+    tr.addEventListener('click', () => ouvrirFamille(f.id));
+    tr.addEventListener('keydown', (e) => { if (e.key === 'Enter') ouvrirFamille(f.id); });
+    return tr;
+  });
+  const thead = document.createElement('thead');
+  thead.innerHTML = `<tr>${tete.map((t) => `<th>${t}</th>`).join('')}</tr>`;
+  const tbody = document.createElement('tbody');
+  if (lignes.length) tbody.append(...lignes);
+  else tbody.innerHTML = `<tr><td class="vide" colspan="${tete.length}">Aucune famille ici.</td></tr>`;
+  table.replaceChildren(thead, tbody);
+  const ouverte = families.find((f) => f.id === ficheFamille);
+  $('familles-liste').hidden = !!ouverte;
+  $('famille-fiche').hidden = !ouverte;
+  if (ouverte) $('families').replaceChildren(carteFamille(ouverte));
+  else ficheFamille = null;
   const legacy = families.reduce((n, f) => n + (f.legacy || 0), 0);
   $('migrate-count').textContent = legacy
     ? `${legacy} envoi${legacy > 1 ? 's' : ''} encore dans la base (photos, vidéos et anciens vocaux).`

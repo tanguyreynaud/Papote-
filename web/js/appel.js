@@ -115,15 +115,35 @@ function landscapeStream(camera) {
 
 // Mamie est-elle déjà en communication (ou un autre proche est-il en train de l'appeler) ?
 // Un appel décroché sans fin depuis plus de 2 h est considéré comme oublié (panne).
+const busyQuery = (fid) => query(collection(db, 'families', fid, 'calls'), where('state', 'in', ['ringing', 'accepted']));
+
+function isBusyCall(data) {
+  const at = data.createdAt && data.createdAt.toMillis ? data.createdAt.toMillis() : Date.now();
+  const age = Date.now() - at;
+  return data.state === 'ringing' ? age < 60_000 : age < 2 * 3600_000;
+}
+
 export async function tabletBusy(fid) {
-  const snap = await getDocs(query(collection(db, 'families', fid, 'calls'), where('state', 'in', ['ringing', 'accepted'])));
-  const now = Date.now();
-  return snap.docs.some((d) => {
-    const data = d.data();
-    const at = data.createdAt && data.createdAt.toMillis ? data.createdAt.toMillis() : 0;
-    if (data.state === 'ringing') return now - at < 60_000;
-    return now - at < 2 * 3600_000;
-  });
+  const snap = await getDocs(busyQuery(fid));
+  return snap.docs.some((d) => isBusyCall(d.data({ serverTimestamps: 'estimate' })));
+}
+
+// En direct, pour griser le bouton d'appel tant que la tablette est en communication.
+// onChange(busy) ; renvoie stop().
+export function watchTabletBusy(fid, onChange) {
+  let calls = [];
+  let last = null;
+  const evaluate = () => {
+    const busy = calls.some(isBusyCall);
+    if (busy !== last) { last = busy; onChange(busy); }
+  };
+  const stop = onSnapshot(busyQuery(fid), (snap) => {
+    calls = snap.docs.map((d) => d.data({ serverTimestamps: 'estimate' }));
+    evaluate();
+  }, () => { calls = []; evaluate(); });
+  // Une sonnerie sans réponse cesse de compter au bout d'une minute.
+  const timer = setInterval(evaluate, 10_000);
+  return () => { stop(); clearInterval(timer); };
 }
 
 /**

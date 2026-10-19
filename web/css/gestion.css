@@ -39,11 +39,21 @@
 
 .titre-print { display: none; }
 
+/* Onglets d'une page : un seul bloc affiché à la fois. */
+.onglets { display: flex; gap: 4px; overflow-x: auto; margin: 0 0 14px; border-bottom: 1px solid var(--line); scrollbar-width: none; }
+.onglets button {
+  flex: none; min-height: 0; padding: 10px 14px; border: none; border-bottom: 3px solid transparent; border-radius: 0;
+  background: none; color: var(--muted); font-size: 15px; font-weight: 600; white-space: nowrap; box-shadow: none;
+}
+.onglets button.actif { color: var(--accent); border-bottom-color: var(--accent); }
+.tete > select, .tete > input[type="search"] { width: auto; margin: 0; padding: 8px 12px; font-size: 15px; }
+
 @media print {
   .no-print, .nav, .periode, #btn-refresh { display: none !important; }
   .shell { display: block; }
   .contenu { padding: 0; }
   .titre-print { display: block; }
+  [data-panneau="compta"] [data-onglet][hidden] { display: block !important; }
   .card, .stat { box-shadow: none; border: 1px solid #ccc; break-inside: avoid; }
   body { background: #fff; }
 }
@@ -173,3 +183,72 @@ body.depot-actif::after {
 .remplacement { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 .remplacement select, .remplacement input { flex: 1 1 180px; min-width: 0; margin: 0; padding: 8px 12px; }
 .remplacement p { flex-basis: 100%; margin: 0; }
+
+/* Clients et e-mails d'information */
+.campagne label { display: block; margin: 8px 0; font-size: 14px; }
+.campagne textarea { width: 100%; box-sizing: border-box; font: inherit; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; resize: vertical; }
+.campagne .actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0; }
+.campagnes { padding-left: 18px; }
+.campagnes li { margin: 4px 0; }
+#cherche-clients { min-width: 0; width: 220px; max-width: 100%; }
+
+/* Commandes : les chiffres servent d'onglets */
+.stat.onglet { cursor: pointer; border: 2px solid transparent; }
+.stat.onglet:hover { border-color: var(--line); }
+.stat.onglet.actif { border-color: var(--accent); }
+
+/* ---------- Parcours pas à pas (parcours.js) ---------- */
+
+.parcours { width: min(720px, calc(100vw - 16px)); flex-direction: column; }
+.parcours[open] { display: flex; }
+.pc-etapes { list-style: none; display: flex; gap: 6px; margin: 10px 0 14px; padding: 0; }
+.pc-etapes li { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; color: var(--muted); font-size: 12px; text-align: center; }
+.pc-etapes li span {
+  display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%;
+  border: 2px solid var(--line); background: var(--surface); font-weight: 700; font-size: 13px;
+}
+.pc-etapes li em { font-style: normal; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.pc-etapes li.fait span { background: var(--ok); border-color: var(--ok); color: #fff; }
+.pc-etapes li.actuelle { color: var(--text); font-weight: 600; }
+.pc-etapes li.actuelle span { border-color: var(--accent); color: var(--accent); }
+.pc-corps { overflow-y: auto; min-height: 200px; }
+.pc-numero { margin: 0; }
+.pc-corps h3 { font-size: 24px; margin: 2px 0 8px; }
+.pc-texte { font-size: 17px; margin: 0 0 12px; }
+.pc-contenu { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+.pc-contenu:empty { display: none; }
+.pc-contenu > select, .pc-contenu > input, .pc-champ input { margin: 0; font-size: 17px; }
+.pc-contenu > button { align-self: flex-start; }
+.pc-contenu .grille { gap: 0 14px; }
+.pc-champ { display: flex; flex-direction: column; gap: 6px; font-size: 16px; }
+.pc-cases { display: flex; flex-direction: column; gap: 8px; }
+.pc-case {
+  display: flex; align-items: center; gap: 14px; margin: 0; padding: 14px 16px; border: 2px solid var(--line);
+  border-radius: 14px; font-size: 17px; font-weight: 500; cursor: pointer;
+}
+.pc-case input { width: 26px; height: 26px; margin: 0; flex: none; accent-color: var(--ok); }
+.pc-case:has(input:checked) { border-color: var(--ok); background: var(--bg); }
+.pc-liste { margin: 0; padding-left: 22px; font-size: 16px; line-height: 1.6; }
+.pc-gros { font-size: 34px; font-weight: 800; letter-spacing: .04em; margin: 4px 0; text-align: center; padding: 14px; border: 2px dashed var(--line); border-radius: 14px; }
+.pc-commande { display: flex; gap: 10px; align-items: center; padding: 10px 14px; background: var(--bg); border-radius: 12px; }
+.pc-commande code { flex: 1; font-size: 16px; overflow-x: auto; }
+.pc-lien { font-size: 18px; font-weight: 700; color: var(--accent); }
+.pc-pied { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+.pc-pied .pc-suivant { margin-left: auto; min-width: 180px; font-size: 17px; }
+.pc-pied .pc-suivant:disabled { opacity: .45; cursor: not-allowed; }
+.pc-erreur { margin: 10px 0 0; }
+
+/* Commandes à envoyer : où en est la préparation ; envoyées : la suite (reçue, mise en route). */
+.orders li .envoi-suite { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin-top: 6px; }
+.orders li .envoi-suite .small-btn { margin-top: 0; }
+.suite-envoi { list-style: none; display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 6px 0 0; padding: 0; color: var(--muted); }
+.suite-envoi li::before { content: '○ '; }
+.suite-envoi li.fait { color: var(--ok); }
+.suite-envoi li.fait::before { content: '✓ '; }
+.suite-envoi li.actuelle { color: var(--text); font-weight: 600; }
+@media (max-width: 560px) {
+  .pc-etapes li em { display: none; }
+  .pc-corps h3 { font-size: 21px; }
+  .pc-pied .pc-suivant { min-width: 0; flex: 1; }
+}
+.pc-apres { margin: 14px 0 0; }

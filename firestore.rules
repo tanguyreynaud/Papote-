@@ -57,6 +57,14 @@ service cloud.firestore {
       return get(familyPath(fid)).data.get('nbProches', 0) < 30;
     }
 
+    // Ville de la météo : { nom, lat?, lon? }.
+    function villeMeteoOk(v) {
+      return v is map && v.keys().hasAll(['nom']) && v.keys().hasOnly(['nom', 'lat', 'lon'])
+        && v.nom is string && v.nom.size() > 0 && v.nom.size() <= 80
+        && (!('lat' in v) || (v.lat is number && v.lat >= -90 && v.lat <= 90))
+        && (!('lon' in v) || (v.lon is number && v.lon >= -180 && v.lon <= 180));
+    }
+
     function invitePath(code) {
       return /databases/$(database)/documents/invites/$(code);
     }
@@ -189,11 +197,15 @@ service cloud.firestore {
             && request.resource.data.veille.active is bool
             && request.resource.data.veille.de is int && request.resource.data.veille.de >= 0 && request.resource.data.veille.de <= 23
             && request.resource.data.veille.a is int && request.resource.data.veille.a >= 0 && request.resource.data.veille.a <= 23)
-          // Volume de la tablette (0 à 100), avec le compteur qui la prévient.
+          // Ville de la météo choisie par la famille (l'emporte sur celle de la tablette).
+          || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['meteoVille', 'rev'])
+            && isFamilyAdmin(fid)
+            && villeMeteoOk(request.resource.data.meteoVille))
+          // Volume de la tablette (10 à 100), avec le compteur qui la prévient.
           || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['volume', 'rev'])
             && isFamilyAdmin(fid)
             && request.resource.data.volume is int
-            && request.resource.data.volume >= 0 && request.resource.data.volume <= 100)
+            && request.resource.data.volume >= 10 && request.resource.data.volume <= 100)
           // Taille du texte sur la tablette, avec le compteur qui la prévient.
           || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['textSize', 'rev'])
             && isFamilyAdmin(fid)
@@ -207,8 +219,8 @@ service cloud.firestore {
       allow update: if isAdmin()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['createdBy', 'admins']);
 
-      // Supprimer la famille et toutes ses données (responsable, en dernier).
-      allow delete: if isFamilyAdmin(fid);
+      // Supprimer la famille : par l'administrateur seulement, après échange avec le client.
+      allow delete: if isAdmin();
 
       match /members/{uid} {
         allow read: if isMember(fid);
@@ -265,7 +277,14 @@ service cloud.firestore {
           && request.resource.data.status == 'active';
         allow update: if signedIn()
           && uid == request.auth.uid
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'canCall', 'lastActive', 'lastOnline', 'callable', 'face', 'appVersion', 'uid', 'email', 'battery', 'sim'])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'canCall', 'lastActive', 'lastOnline', 'callable', 'face', 'appVersion', 'uid', 'email', 'battery', 'sim', 'meteoVille', 'wifi'])
+          // Wi-Fi auquel la tablette est connectée : { ssid }.
+          && (!('wifi' in request.resource.data) || request.resource.data.wifi == null
+              || (request.resource.data.wifi is map && request.resource.data.wifi.keys().hasOnly(['ssid'])
+                  && request.resource.data.wifi.ssid is string && request.resource.data.wifi.ssid.size() <= 64))
+          // Ville de la météo utilisée par la tablette, affichée dans l'app.
+          && (!('meteoVille' in request.resource.data) || request.resource.data.meteoVille == null
+              || villeMeteoOk(request.resource.data.meteoVille))
           // uid et e-mail ajoutés aux fiches d'avant, pour retrouver ses familles.
           && request.resource.data.get('uid', request.auth.uid) == request.auth.uid
           && (request.resource.data.get('email', null) == resource.data.get('email', null)
@@ -350,7 +369,10 @@ service cloud.firestore {
       match /reminders/{rid} {
         allow read: if isMember(fid);
         allow create, update: if isMember(fid) && abonnementOk(fid)
-          && request.resource.data.keys().hasOnly(['title', 'kind', 'time', 'repeat', 'date', 'days', 'createdBy', 'createdAt', 'lastAck'])
+          // lastSeen : « AAAA-MM-JJ HH:MM » quand un visage a regardé le rappel sur la tablette.
+          && request.resource.data.keys().hasOnly(['title', 'kind', 'time', 'repeat', 'date', 'days', 'createdBy', 'createdAt', 'lastAck', 'lastSeen'])
+          && (!('lastSeen' in request.resource.data) || request.resource.data.lastSeen == null
+              || (request.resource.data.lastSeen is string && request.resource.data.lastSeen.size() <= 20))
           && request.resource.data.title is string
           && request.resource.data.title.size() > 0
           && request.resource.data.title.size() <= 120
@@ -383,7 +405,7 @@ service cloud.firestore {
         allow read: if isFamilyAdmin(fid) || (signedIn() && resource.data.target == request.auth.uid);
         allow create: if isFamilyAdmin(fid)
           && request.resource.data.keys().hasOnly(['type', 'target', 'createdBy', 'createdAt', 'ssid', 'security', 'password', 'state'])
-          && request.resource.data.type in ['wifi', 'restart', 'status']
+          && request.resource.data.type in ['wifi', 'restart', 'status', 'wifiScan']
           && request.resource.data.target is string
           && request.resource.data.createdBy == request.auth.uid
           && request.resource.data.state == 'pending'
@@ -392,7 +414,9 @@ service cloud.firestore {
               && request.resource.data.security in ['wpa2', 'wpa3', 'open']));
         allow update: if signedIn()
           && resource.data.target == request.auth.uid
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state', 'result', 'doneAt', 'password'])
+          // reseaux : réponse à wifiScan, [{ ssid, security, signal }] (40 au plus).
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state', 'result', 'doneAt', 'password', 'reseaux'])
+          && (!('reseaux' in request.resource.data) || (request.resource.data.reseaux is list && request.resource.data.reseaux.size() <= 40))
           && !('password' in request.resource.data)
           && request.resource.data.state in ['done', 'failed'];
         allow delete: if isFamilyAdmin(fid);

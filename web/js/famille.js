@@ -11,6 +11,7 @@ import {
   loadMembership, createFamily, joinFamily, leaveFamily, watchMembers, currentUser, savedFamilyId, saveFamilyId,
   addPost, deletePost, loadMedia, formatCode, normalizeCode, toDate, CodeInconnuError,
   MAX_VIDEO_CHUNKS, VIDEO_CHUNK,
+  choisirBase, bucketUrl,
 } from './firebase.js';
 import { askConfirm, notice, avantDePartir } from './ui.js';
 import { showGuideOnce } from './guide.js';
@@ -18,7 +19,7 @@ import {
   abonnementOk, FORMULES, LIBELLES, ouvrirPortail, payer, rattacherCommande, resilier, annulerResiliation,
   finDeContrat, retracter,
 } from './abonnement.js';
-import { startCall } from './appel.js';
+import { startCall, watchTabletBusy } from './appel.js';
 import { prepareVideo } from './video.js';
 import { startAgenda, stopAgenda } from './agenda.js';
 import {
@@ -31,10 +32,15 @@ import {
 } from './notifs.js';
 
 const $ = (id) => document.getElementById(id);
+// Adresse publique de l'app pour les liens et QR codes partagés (la version test garde la sienne).
+const APP_URL = /--|localhost/.test(location.hostname) ? location.origin : 'https://app.mapapote.fr';
+// Réglages « Modifier / Enregistrer » : { fill, save } par carte (voir plus bas).
+const SETTINGS = {};
 const MAX_IMAGE_CHARS = 900_000; // un document Firestore est limité à 1 Mo
 
 let session = null; // { fid, family, member, uid }
 let stopMembers = null;
+let stopTabletBusy = null;
 
 const VIEWS = ['view-invite', 'view-profile', 'view-pair', 'loading', 'view-login', 'view-link-email', 'view-invited', 'view-pending', 'view-join', 'view-home', 'view-photos', 'view-videos', 'view-messages', 'view-agenda', 'view-settings', 'view-notifs', 'view-support'];
 
@@ -181,7 +187,7 @@ document.querySelectorAll('.page .back').forEach((btn) => {
 });
 window.addEventListener('popstate', (e) => {
   // Une feuille ou la visionneuse ouverte se ferme d'abord.
-  if (!$('viewer').hidden || !$('sheet-post').hidden || !$('sheet-reminder').hidden) {
+  if (!$('viewer').hidden || !$('sheet-post').hidden || !$('sheet-reminder').hidden || !$('sheet-wifi').hidden) {
     closeSheets();
     closeViewer();
     return;
@@ -603,6 +609,9 @@ function syncAddSheet() {
 function closeSheets() {
   $('sheet-post').hidden = true;
   $('sheet-reminder').hidden = true;
+  $('sheet-wifi').hidden = true;
+  stopScan?.();
+  stopScan = null;
   $('video-preview').removeAttribute('src');
   pendingPhotos = [];
   pendingVideo = null;
@@ -856,11 +865,14 @@ setInterval(flushOutbox, 60_000);
 
 const MAX_VIDEO_SECONDS = 60;
 let storage = null;
-try {
-  storage = getStorage(getApp());
+function ouvrirStorage(bucket) {
+  storage = getStorage(getApp(), bucket);
   // Sans réponse de Storage, on bascule vite sur la base plutôt que de réessayer 10 minutes.
   storage.maxUploadRetryTime = 10_000;
   storage.maxOperationRetryTime = 10_000;
+}
+try {
+  ouvrirStorage(bucketUrl());
 } catch (e) { /* Storage indisponible */ }
 
 async function upload(blob, ext) {
@@ -1057,7 +1069,7 @@ async function pruneOld(type) {
 // ---------- Réglages ----------
 
 function inviteLink() {
-  return `${location.origin}/?code=${formatCode(session.family.code)}`;
+  return `${APP_URL}/?code=${formatCode(session.family.code)}`;
 }
 
 let qrLoading = null;
@@ -1169,6 +1181,18 @@ function callErrorMessage(err) {
   return `L'appel n'a pas pu démarrer. Réessayez dans un instant.${detail}`;
 }
 
+// Bouton d'appel : grisé si la tablette ne sait pas recevoir d'appel, ou si elle est déjà
+// en communication avec un proche (« Déjà en appel »).
+let tabletCanCall = false;
+let tabletInCall = false;
+function renderCallTile() {
+  const tile = $('tile-call');
+  const busy = tabletInCall && !currentCall && !callStarting;
+  tile.disabled = !tabletCanCall || busy;
+  tile.classList.toggle('busy', busy);
+  tile.querySelector('span').textContent = busy ? 'Déjà en appel' : 'Appel vidéo';
+}
+
 let callAbort = null; // annule un appel encore en train de démarrer
 let callStarting = false; // un seul démarrage à la fois, même annulé
 
@@ -1261,6 +1285,8 @@ function renderMembers(all) {
   $('invite-email-card').classList.toggle('disabled-card', familyFull);
   renderRequests(pending);
   tabletMembers = members.filter((m) => m.role === 'tablette');
+  renderMeteo();
+  renderWifi();
   faces = Object.fromEntries(members.filter((m) => m.face).map((m) => [m.id, m.face]));
   myFace = faces[session.uid] || null;
   renderFace();
@@ -1269,7 +1295,8 @@ function renderMembers(all) {
   renderRemote();
   // Le bouton d'appel n'apparaît que si une tablette sait recevoir les appels (Android 5 et plus).
   const canCall = members.some((m) => m.role === 'tablette' && m.canCall);
-  $('tile-call').disabled = !(canCall && !!navigator.mediaDevices);
+  tabletCanCall = canCall && !!navigator.mediaDevices;
+  renderCallTile();
   const list = $('members');
   list.replaceChildren();
   let tabletShown = false;
@@ -1429,7 +1456,7 @@ $('form-invite').addEventListener('submit', async (e) => {
       navigator.share({
         title: 'Papote',
         text: `Je t'invite sur Papote pour envoyer des photos à ${session.family.name}. Connecte-toi avec ${email} :`,
-        url: location.origin,
+        url: APP_URL,
       }).catch(() => {});
     }
   } catch (err) {
@@ -1796,29 +1823,144 @@ $('btn-logs').addEventListener('click', async () => {
 document.querySelectorAll('[data-close]').forEach((btn) => btn.addEventListener('click', () => {
   $(btn.dataset.close).hidden = true;
 }));
-$('btn-wifi').addEventListener('click', () => {
-  $('wifi-box').hidden = !$('wifi-box').hidden;
-  if (!$('wifi-box').hidden) $('wifi-ssid').focus();
-});
 
-$('wifi-security').addEventListener('change', () => {
-  $('wifi-password-wrap').hidden = $('wifi-security').value === 'open';
-});
+// Wi-Fi : une fenêtre comme celle d'un téléphone. La tablette cherche les réseaux (commande
+// wifiScan, réponse reseaux [{ ssid, security, signal 0-4 }]) ; on touche un réseau, on tape
+// le mot de passe s'il en faut un, et « Se connecter » envoie la commande wifi.
+let stopScan = null;
 
-$('form-wifi').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const security = $('wifi-security').value;
-  const password = $('wifi-password').value;
-  if (security !== 'open' && password.length < 8) { showRemote('Le mot de passe Wi-Fi fait au moins 8 caractères.', 'warn'); return; }
-  if (!await askConfirm(`Envoyer le réseau « ${$('wifi-ssid').value.trim()} » à la tablette ? Si le nom ou le mot de passe est faux, elle garde son Wi-Fi actuel.`, 'Envoyer')) return;
-  await sendCommand('wifi', { ssid: $('wifi-ssid').value.trim(), security, ...(security === 'open' ? {} : { password }) });
-  $('wifi-password').value = '';
-});
+function wifiCourant() { return tabletMembers.map((m) => m.wifi?.ssid).find(Boolean) || null; }
+
+function barres(signal) {
+  const n = Math.max(1, Math.min(4, signal || 1));
+  return `<span class="bars" aria-label="Signal ${n} sur 4">${[1, 2, 3, 4].map((i) => `<i class="${i <= n ? 'on' : ''}"></i>`).join('')}</span>`;
+}
+
+function ouvrirWifi() {
+  $('sheet-wifi').hidden = false;
+  history.pushState({ page: 'settings', sheet: true }, '');
+  chercherReseaux();
+}
+$('wifi-modify').addEventListener('click', ouvrirWifi);
+$('wifi-close').addEventListener('click', () => history.back());
+$('sheet-wifi').addEventListener('click', (e) => { if (e.target === $('sheet-wifi')) history.back(); });
+
+async function connecter(r, password) {
+  await sendCommand('wifi', { ssid: r.ssid, security: r.security, ...(r.security === 'open' ? {} : { password }) });
+  toast(`La tablette se connecte à « ${r.ssid} »`);
+  history.back();
+}
+
+function ligneReseau(r, actuel) {
+  const li = document.createElement('li');
+  li.className = 'wifi-item';
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'wifi-choice';
+  b.innerHTML = '<span class="wifi-text"><span class="wifi-name"></span><span class="wifi-state"></span></span><span class="wifi-meta"></span>';
+  b.querySelector('.wifi-name').textContent = r.ssid;
+  b.querySelector('.wifi-state').textContent = actuel ? 'Connectée' : '';
+  b.querySelector('.wifi-meta').innerHTML = (r.security === 'open' ? '' : '<svg><use href="#i-lock"/></svg>') + barres(r.signal);
+  li.append(b);
+  if (actuel) { b.disabled = true; return li; }
+  b.addEventListener('click', () => {
+    const ouvert = li.querySelector('.wifi-join');
+    document.querySelectorAll('.wifi-join').forEach((x) => x.remove());
+    if (ouvert) return;
+    const form = document.createElement('form');
+    form.className = 'wifi-join';
+    form.innerHTML = (r.security === 'open'
+      ? '<p class="muted small">Réseau ouvert, sans mot de passe.</p>'
+      : '<input type="password" autocomplete="off" placeholder="Mot de passe" aria-label="Mot de passe du Wi-Fi" required>')
+      + '<button type="submit" class="primary wide">Se connecter</button><p class="error small" hidden></p>';
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const input = form.querySelector('input');
+      const err = form.querySelector('.error');
+      if (input && input.value.length < 8) { showError(err, 'Le mot de passe Wi-Fi fait au moins 8 caractères.'); return; }
+      form.querySelector('button').disabled = true;
+      try {
+        await connecter(r, input?.value || '');
+      } catch (error) {
+        console.error(error);
+        showError(err, "L'envoi a échoué. Vérifiez la connexion.");
+        form.querySelector('button').disabled = false;
+      }
+    });
+    li.append(form);
+    form.querySelector('input')?.focus();
+  });
+  return li;
+}
+
+async function chercherReseaux() {
+  const tablet = targetTablet();
+  const info = $('wifi-scan-info');
+  $('wifi-list').replaceChildren();
+  $('btn-wifi-scan').hidden = true;
+  if (!tablet) { info.textContent = "Aucune tablette n'est reliée à cette famille."; return; }
+  const cmdRef = doc(collection(db, 'families', session.fid, 'commands'));
+  const batch = writeBatch(db);
+  batch.set(cmdRef, { type: 'wifiScan', target: tablet.id, createdBy: session.uid, createdAt: serverTimestamp(), state: 'pending' });
+  bumpRev(batch, session.fid);
+  try {
+    await batch.commit();
+  } catch (err) {
+    console.error(err);
+    info.textContent = "La demande n'a pas pu être envoyée. Vérifiez la connexion.";
+    $('btn-wifi-scan').hidden = false;
+    return;
+  }
+  info.innerHTML = '<span class="spinner-inline"></span>La tablette cherche les réseaux autour d\'elle…';
+  stopScan?.();
+  const timer = setTimeout(() => {
+    stopScan?.();
+    stopScan = null;
+    info.textContent = "La tablette n'a pas répondu.";
+    $('btn-wifi-scan').hidden = false;
+    deleteDoc(cmdRef).catch(() => {});
+  }, 60_000);
+  stopScan = onSnapshot(cmdRef, (snap) => {
+    const cmd = snap.data();
+    if (!cmd || cmd.state === 'pending') return;
+    clearTimeout(timer);
+    stopScan?.();
+    stopScan = null;
+    deleteDoc(cmdRef).catch(() => {});
+    $('btn-wifi-scan').hidden = false;
+    const vus = new Map();
+    for (const r of cmd.reseaux || []) {
+      if (r?.ssid && (!vus.has(r.ssid) || (r.signal || 0) > (vus.get(r.ssid).signal || 0))) vus.set(r.ssid, r);
+    }
+    const actuel = wifiCourant();
+    const reseaux = [...vus.values()]
+      .map((r) => ({ ...r, security: ['wpa2', 'wpa3', 'open'].includes(r.security) ? r.security : 'wpa2' }))
+      .sort((x, y) => (y.ssid === actuel) - (x.ssid === actuel) || (y.signal || 0) - (x.signal || 0));
+    if (cmd.state !== 'done') { info.textContent = 'La tablette n\'a pas pu chercher les réseaux.'; return; }
+    if (!reseaux.length) { info.textContent = 'Aucun réseau trouvé autour de la tablette.'; return; }
+    info.textContent = 'Réseaux autour de la tablette';
+    $('wifi-list').replaceChildren(...reseaux.map((r) => ligneReseau(r, r.ssid === actuel)));
+  }, (err) => console.warn('Recherche Wi-Fi illisible', err));
+}
+$('btn-wifi-scan').addEventListener('click', chercherReseaux);
+
+// Réseau actuel (la tablette le publie sur sa fiche : wifi = { ssid }). Hors ligne, elle ne
+// recevrait pas le changement : il se fait alors directement sur la tablette.
+function renderWifi() {
+  const enLigne = tabletteEnLigne();
+  $('wifi-modify').hidden = !enLigne;
+  $('wifi-current').textContent = enLigne
+    ? (wifiCourant() || 'Réseau actuel pas encore connu')
+    : 'Tablette hors ligne : changez le Wi-Fi directement sur la tablette, dans ses réglages.';
+}
+
 
 function renderRemote() {
   const admin = amFamilyAdmin();
   const tablet = targetTablet();
   $('remote-card').hidden = !amOwner() || !tablet;
+  $('wifi-card').hidden = !amOwner() || !tablet;
+  renderWifi();
   $('group-tablet').hidden = !amOwner();
   if (tablet) {
     const online = tablet.lastOnline ? toDate(tablet.lastOnline) : null;
@@ -1826,125 +1968,204 @@ function renderRemote() {
   }
 }
 
-// ---------- Mise en veille de la tablette (propriétaire) ----------
-// families/{fid}.veille = { active, de, a } ; par défaut l'écran s'éteint de 23 h à 7 h.
+// ---------- Réglages : chaque valeur s'affiche, « Modifier » ouvre le champ, « Enregistrer » envoie ----------
+
+
+function openSetting(card) {
+  document.querySelectorAll('.setting.editing').forEach((other) => { if (other !== card) closeSetting(other); });
+  SETTINGS[card.id]?.fill?.();
+  card.classList.add('editing');
+  card.querySelector('.setting-edit').hidden = false;
+  card.querySelector('.setting-value').hidden = true;
+  card.querySelector('.setting-modify').hidden = true;
+  card.querySelector('.setting-edit input:not([type=checkbox]), .setting-edit select')?.focus();
+}
+
+function closeSetting(card) {
+  card.classList.remove('editing');
+  card.querySelector('.setting-edit').hidden = true;
+  card.querySelector('.setting-value').hidden = false;
+  card.querySelector('.setting-modify').hidden = false;
+}
+
+document.querySelectorAll('.setting').forEach((card) => {
+  card.querySelector('.setting-modify').addEventListener('click', () => openSetting(card));
+  card.querySelector('.setting-cancel').addEventListener('click', () => closeSetting(card));
+  card.querySelector('.setting-edit').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = card.querySelector('.setting-edit button[type=submit]');
+    btn.disabled = true;
+    try {
+      if (await SETTINGS[card.id].save() !== false) closeSetting(card);
+    } catch (err) {
+      console.error(err);
+      notice("Le réglage n'a pas pu être enregistré. Vérifiez la connexion.");
+    } finally {
+      btn.disabled = false;
+    }
+  });
+});
+
+const saveFamily = (data, message) => updateDoc(doc(db, 'families', session.fid), { ...data, rev: increment(1) })
+  .then(() => toast(message));
+
+// Prénom de la personne (nom de la famille).
+SETTINGS['family-name-card'] = {
+  fill() { $('family-name').value = session.family.name; },
+  async save() {
+    const name = $('family-name').value.trim();
+    if (!name) return false;
+    if (name === session.family.name) return true;
+    await updateDoc(doc(db, 'families', session.fid), { name });
+    toast('Prénom enregistré');
+    return true;
+  },
+};
+
+// Mon prénom (Profil).
+SETTINGS['my-name-card'] = {
+  fill() { $('my-name').value = session.member.name; },
+  async save() {
+    const name = $('my-name').value.trim();
+    if (!name) return false;
+    if (name === session.member.name) return true;
+    await updateDoc(doc(db, 'families', session.fid, 'members', session.uid), { name });
+    session.member.name = name;
+    $('my-name-value').textContent = name;
+    toast('Prénom enregistré');
+    return true;
+  },
+};
+
+// Mise en veille : families/{fid}.veille = { active, de, a } ; par défaut l'écran s'éteint de 23 h à 7 h.
+const veilleActuelle = () => session.family.veille || { active: true, de: 23, a: 7 };
 
 function renderSleep() {
-  const v = session.family.veille || { active: true, de: 23, a: 7 };
-  if (document.activeElement?.closest?.('#sleep-card')) return;
-  $('sleep-on').checked = v.active !== false;
-  $('sleep-from').value = String(v.de ?? 23);
-  $('sleep-to').value = String(v.a ?? 7);
-  $('sleep-hours').hidden = !$('sleep-on').checked;
+  const v = veilleActuelle();
+  $('sleep-value').textContent = v.active === false ? "Jamais : l'écran reste allumé" : `De ${v.de ?? 23} h à ${v.a ?? 7} h`;
 }
 
 $('sleep-on').addEventListener('change', () => { $('sleep-hours').hidden = !$('sleep-on').checked; });
-$('btn-sleep').addEventListener('click', async () => {
-  const veille = { active: $('sleep-on').checked, de: Number($('sleep-from').value), a: Number($('sleep-to').value) };
-  if (veille.active && veille.de === veille.a) { notice("L'heure de fin doit être différente de l'heure de début."); return; }
-  try {
-    await updateDoc(doc(db, 'families', session.fid), { veille, rev: increment(1) });
-    toast('Mise en veille enregistrée');
-  } catch (err) {
-    console.error(err);
-    notice("Le réglage n'a pas pu être enregistré.");
-  }
-});
+SETTINGS['sleep-card'] = {
+  fill() {
+    const v = veilleActuelle();
+    $('sleep-on').checked = v.active !== false;
+    $('sleep-from').value = String(v.de ?? 23);
+    $('sleep-to').value = String(v.a ?? 7);
+    $('sleep-hours').hidden = !$('sleep-on').checked;
+  },
+  async save() {
+    const veille = { active: $('sleep-on').checked, de: Number($('sleep-from').value), a: Number($('sleep-to').value) };
+    if (veille.active && veille.de === veille.a) { notice("L'heure de fin doit être différente de l'heure de début."); return false; }
+    await saveFamily({ veille }, 'Mise en veille enregistrée');
+    return true;
+  },
+};
 
-// ---------- Volume de la tablette ----------
-// families/{fid}.volume (0 à 100), appliqué par la tablette au son des vidéos et des appels.
+// Volume : families/{fid}.volume (0 à 100), appliqué au son des vidéos et des appels.
+const volumeActuel = () => (Number.isInteger(session.family.volume) ? session.family.volume : 80);
 
-function renderVolume() {
-  if (document.activeElement === $('volume')) return;
-  const v = Number.isInteger(session.family.volume) ? session.family.volume : 80;
-  $('volume').value = String(v);
-  $('volume-value').textContent = `${v} %`;
-}
+function renderVolume() { $('volume-text').textContent = `${volumeActuel()} %`; }
 
 $('volume').addEventListener('input', () => { $('volume-value').textContent = `${$('volume').value} %`; });
-$('volume').addEventListener('change', async () => {
-  try {
-    await updateDoc(doc(db, 'families', session.fid), { volume: Number($('volume').value), rev: increment(1) });
-    toast('Volume envoyé à la tablette');
-  } catch (err) {
-    console.error(err);
-    notice("Le volume n'a pas pu être enregistré.");
-  }
-});
+SETTINGS['volume-card'] = {
+  fill() {
+    $('volume').value = String(volumeActuel());
+    $('volume-value').textContent = `${volumeActuel()} %`;
+  },
+  async save() {
+    await saveFamily({ volume: Number($('volume').value) }, 'Volume envoyé à la tablette');
+    return true;
+  },
+};
 
-// ---------- Taille du texte sur la tablette ----------
-
+// Taille du texte sur la tablette.
 const TEXT_SIZES = ['normal', 'grande', 'tres-grande'];
-document.querySelectorAll('[data-size]').forEach((btn) => btn.addEventListener('click', async () => {
-  try {
-    // Le changement de rev prévient la tablette, qui relit la famille.
-    await updateDoc(doc(db, 'families', session.fid), { textSize: btn.dataset.size, rev: increment(1) });
-    toast('Taille du texte changée sur la tablette');
-  } catch (err) {
-    console.error(err);
-    notice("Le réglage n'a pas pu être enregistré.");
-  }
+const TEXT_SIZE_LABELS = { normal: 'Normale', grande: 'Grande', 'tres-grande': 'Très grande' };
+const tailleActuelle = () => (TEXT_SIZES.includes(session.family.textSize) ? session.family.textSize : 'normal');
+let tailleChoisie = 'normal';
+
+function renderTextSize() { $('text-size-value').textContent = TEXT_SIZE_LABELS[tailleActuelle()]; }
+
+function markSize() {
+  document.querySelectorAll('[data-size]').forEach((b) => b.classList.toggle('active', b.dataset.size === tailleChoisie));
+}
+document.querySelectorAll('[data-size]').forEach((btn) => btn.addEventListener('click', () => {
+  tailleChoisie = btn.dataset.size;
+  markSize();
 }));
+SETTINGS['text-size-card'] = {
+  fill() { tailleChoisie = tailleActuelle(); markSize(); },
+  async save() {
+    await saveFamily({ textSize: tailleChoisie }, 'Taille du texte changée sur la tablette');
+    return true;
+  },
+};
 
-function renderTextSize() {
-  const size = TEXT_SIZES.includes(session.family.textSize) ? session.family.textSize : 'normal';
-  document.querySelectorAll('[data-size]').forEach((b) => b.classList.toggle('active', b.dataset.size === size));
+// Ville de la météo : families/{fid}.meteoVille = { nom, lat, lon }, choisie par code postal ;
+// la tablette publie la sienne sur sa fiche membre, celle de la famille l'emporte.
+let communes = [];
+
+function renderMeteo() {
+  const famille = session.family.meteoVille;
+  const tablette = tabletMembers.map((m) => m.meteoVille).find(Boolean);
+  $('meteo-current').textContent = famille?.nom
+    || (tablette?.nom ? `${tablette.nom} (choisie sur la tablette)` : 'Pas encore choisie');
 }
 
-// ---------- Supprimer la famille et toutes ses données (responsable) ----------
-
-async function deleteAllIn(path, each) {
-  const snap = await getDocs(collection(db, ...path));
-  for (const d of snap.docs) {
-    if (each) await each(d);
-    await deleteDoc(d.ref);
-  }
-}
-
-$('btn-delete-family').addEventListener('click', async () => {
-  const name = session.family.name;
-  if (!await askConfirm(`Supprimer la famille de ${name} ? Toutes les photos, vidéos, messages, rappels et membres seront effacés pour tout le monde, et la tablette sera déconnectée. C'est définitif.`, 'Tout supprimer')) return;
-  if (!await askConfirm(`Dernière vérification : effacer définitivement toutes les données de la famille de ${name} ?`, 'Effacer')) return;
-  const { fid, uid } = session;
-  toast('Suppression en cours…');
+async function chercherCommunes() {
+  const cp = $('meteo-cp').value.trim();
+  communes = [];
+  $('meteo-commune-wrap').hidden = true;
+  $('meteo-error').hidden = true;
+  if (!/^\d{5}$/.test(cp)) return;
   try {
-    await deleteAllIn(['families', fid, 'posts'], async (d) => {
-      const post = { id: d.id, ...d.data() };
-      if (post.storagePath && storage) await deleteObject(ref(storage, post.storagePath)).catch(() => {});
-      await deleteAllIn(['families', fid, 'posts', d.id, 'media']);
-    });
-    for (const name2 of ['reminders', 'birthdays', 'invitations']) await deleteAllIn(['families', fid, name2]);
-    await deleteAllIn(['families', fid, 'calls'], async (d) => {
-      await deleteAllIn(['families', fid, 'calls', d.id, 'callerCandidates']);
-      await deleteAllIn(['families', fid, 'calls', d.id, 'calleeCandidates']);
-    });
-    const codes = await getDocs(query(collection(db, 'invites'), where('fid', '==', fid)));
-    for (const d of codes.docs) await deleteDoc(d.ref);
-    const members = await getDocs(collection(db, 'families', fid, 'members'));
-    for (const d of members.docs) if (d.id !== uid) await deleteDoc(d.ref);
-    await deleteDoc(doc(db, 'families', fid));
-    await deleteDoc(doc(db, 'families', fid, 'members', uid));
-    saveFamilyId(null);
-    await notice(`La famille de ${name} et toutes ses données ont été supprimées.`);
-    enterApp();
+    const r = await fetch(`https://geo.api.gouv.fr/communes?codePostal=${cp}&fields=nom,centre,departement&format=json`);
+    communes = (await r.json()).filter((c) => c.centre?.coordinates);
   } catch (err) {
-    console.error(err);
-    notice("La suppression n'a pas pu aller jusqu'au bout. Réessayez avec une bonne connexion.");
+    console.warn('Recherche de commune impossible', err);
+    showError($('meteo-error'), 'La recherche a échoué. Vérifiez la connexion.');
+    return;
   }
+  if ($('meteo-cp').value.trim() !== cp) return;
+  if (!communes.length) { showError($('meteo-error'), 'Aucune commune pour ce code postal.'); return; }
+  $('meteo-commune').replaceChildren(...communes.map((c, i) => new Option([c.nom, cp, c.departement?.nom].filter(Boolean).join(' · '), String(i))));
+  $('meteo-commune-wrap').hidden = false;
+}
+
+$('meteo-cp').addEventListener('input', () => {
+  $('meteo-cp').value = $('meteo-cp').value.replace(/\D/g, '').slice(0, 5);
+  chercherCommunes();
 });
+SETTINGS['meteo-card'] = {
+  fill() {
+    $('meteo-cp').value = '';
+    communes = [];
+    $('meteo-commune-wrap').hidden = true;
+    $('meteo-error').hidden = true;
+  },
+  async save() {
+    const c = communes[Number($('meteo-commune').value)];
+    if (!c) { showError($('meteo-error'), 'Tapez le code postal puis choisissez la commune.'); return false; }
+    const [lon, lat] = c.centre.coordinates;
+    await saveFamily({ meteoVille: { nom: c.nom.slice(0, 80), lat, lon } }, 'Ville envoyée à la tablette');
+    return true;
+  },
+};
 
-$('form-my-name').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const name = $('my-name').value.trim();
-  if (!name || name === session.member.name) return;
-  try {
-    await updateDoc(doc(db, 'families', session.fid, 'members', session.uid), { name });
-    session.member.name = name;
-    toast('Prénom enregistré');
-  } catch (err) {
-    console.error(err);
-    notice("Le prénom n'a pas pu être enregistré.");
-  }
+// ---------- Supprimer la famille et toutes ses données ----------
+
+// Suppression de la famille : sur demande au support, jamais en un bouton (c'est définitif pour tous).
+$('btn-delete-family').addEventListener('click', () => {
+  const sujet = `Suppression des données de la famille de ${session.family.name}`;
+  const corps = `Bonjour,
+
+Je souhaite supprimer la famille de ${session.family.name} et toutes ses données.
+
+---
+Code famille : ${session.family.code || session.fid}
+Prénom : ${session.member.name}`;
+  $('btn-delete-family').href = `mailto:contact@mapapote.fr?subject=${encodeURIComponent(sujet)}&body=${encodeURIComponent(corps)}`;
 });
 
 function applyFamily() {
@@ -1955,13 +2176,15 @@ function applyFamily() {
   $('tile-settings').hidden = !admin;
   // Un responsable ne quitte pas sa famille (il pourrait ne plus jamais revenir).
   $('btn-leave').hidden = admin;
-  if (document.activeElement !== $('my-name')) $('my-name').value = session.member.name;
+  $('my-name-value').textContent = session.member.name;
   $('text-size-card').hidden = !amOwner();
   $('sleep-card').hidden = !amOwner();
   renderSleep();
   $('volume-card').hidden = !amOwner();
   renderVolume();
-  $('btn-delete-family').hidden = !amOwner();
+  $('meteo-card').hidden = !amOwner();
+  renderMeteo();
+  $('delete-family-info').hidden = !amOwner();
   renderTextSize();
   $('invite-email-card').hidden = !admin;
   $('btn-new-code').hidden = !admin || !CHANGE_CODE_READY;
@@ -1972,7 +2195,7 @@ function applyFamily() {
   document.querySelectorAll('.grand-name').forEach((el) => { el.textContent = name; });
   $('message-text').placeholder = `Écrire à ${name}…`;
   $('family-name-card').hidden = !amOwner();
-  if (document.activeElement !== $('family-name')) $('family-name').value = name;
+  $('family-name-value').textContent = name;
   if (allMembers.length) renderMembers(allMembers);
 }
 
@@ -1985,19 +2208,6 @@ function watchFamily() {
     applyFamily();
   }, (err) => console.error('Famille illisible', err));
 }
-
-$('form-family-name').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const name = $('family-name').value.trim();
-  if (!name || name === session.family.name) return;
-  try {
-    await updateDoc(doc(db, 'families', session.fid), { name });
-    toast('Nom enregistré');
-  } catch (err) {
-    console.error(err);
-    notice("Le nom n'a pas pu être enregistré.");
-  }
-});
 
 // ---------- Ajouter à l'écran d'accueil ----------
 
@@ -2064,7 +2274,45 @@ function ago(ms) {
   return `le ${d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })} à ${d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
 }
 
+// Petit indicateur de l'accueil : en ligne (Wi-Fi ou carte SIM), branchée, batterie.
+const EN_LIGNE_MS = 45 * 60_000;
+function tabletteEnLigne() {
+  const t = targetTablet();
+  return !!(t?.lastOnline && Date.now() - toDate(t.lastOnline).getTime() < EN_LIGNE_MS);
+}
+
+function renderTabletChip() {
+  const chip = $('tablet-chip');
+  const t = targetTablet();
+  if (!t?.lastOnline) { chip.hidden = true; return; }
+  const enLigne = tabletteEnLigne();
+  const b = t.battery || {};
+  const parSim = !t.wifi?.ssid && !!t.sim;
+  const niveau = Number.isFinite(b.level) ? Math.max(0, Math.min(100, b.level)) : null;
+  const bas = niveau !== null && niveau < 15 && !b.charging;
+  chip.className = `tablet-chip${enLigne ? '' : ' off'}`;
+  chip.innerHTML = `<span class="chip-part${enLigne ? ' ok' : ' bad'}"><svg><use href="#${parSim ? 'i-signal' : 'i-wifi'}"/></svg></span>`
+    + (b.charging ? '<span class="chip-part ok"><svg><use href="#i-plug"/></svg></span>' : '')
+    + (niveau !== null ? `<span class="chip-part${bas ? ' bad' : ''}"><span class="batt"><span style="width:${niveau}%"></span></span>${niveau} %</span>` : '');
+  chip.hidden = false;
+}
+
+$('tablet-chip').addEventListener('click', () => {
+  const t = targetTablet();
+  if (!t) return;
+  const b = t.battery || {};
+  const lignes = [];
+  if (tabletteEnLigne()) lignes.push(t.wifi?.ssid ? `En ligne par le Wi-Fi « ${t.wifi.ssid} ».` : t.sim ? 'En ligne par la carte SIM.' : 'En ligne.');
+  else lignes.push(`Hors ligne depuis ${ago(toDate(t.lastOnline).getTime()).replace('il y a ', '')}.`);
+  if (b.charging === true) lignes.push('Branchée sur son chargeur.');
+  else if (b.charging === false) lignes.push('Débranchée.');
+  if (Number.isFinite(b.level)) lignes.push(`Batterie : ${b.level} %.`);
+  notice(lignes.join(' '));
+});
+
 function renderActivity() {
+  renderTabletChip();
+  renderWifi();
   const el = $('activity');
   const latest = (field) => Math.max(0, ...tabletMembers.map((m) => (m[field] ? toDate(m[field]).getTime() : 0)));
   const online = latest('lastOnline');
@@ -2076,12 +2324,20 @@ function renderActivity() {
   const hour = new Date().getHours();
   el.hidden = false;
   el.classList.remove('warn');
-  // Batterie : envoyée par la tablette avec son signal « en ligne » ({ level, charging }).
+  // Batterie : envoyée par la tablette ({ level, charging, unpluggedAt }).
   const battery = tabletMembers.filter((m) => m.battery && m.lastOnline)
     .sort((a, b) => toDate(b.lastOnline) - toDate(a.lastOnline))[0]?.battery;
   if (now - online > 45 * 60_000) {
     el.classList.add('warn');
     el.textContent = `La tablette de ${name} ne répond plus depuis ${ago(online).replace('il y a ', '')}. Est-elle branchée et connectée au wifi ?`;
+  } else if (battery && battery.charging === false && battery.unpluggedAt) {
+    // Débranchée (tablette 2.50+) : unpluggedAt est posé dès que le chargeur est retiré.
+    el.classList.add('warn');
+    const depuis = ago(toDate(battery.unpluggedAt).getTime()).replace('il y a ', '');
+    el.textContent = (depuis === "à l'instant"
+      ? `La tablette de ${name} vient d'être débranchée`
+      : `La tablette de ${name} est débranchée depuis ${depuis}`)
+      + `${Number.isFinite(battery.level) ? ` (${battery.level} %)` : ''}. Pensez à rebrancher son chargeur.`;
   } else if (battery && battery.level < 15 && !battery.charging) {
     el.classList.add('warn');
     el.textContent = `Batterie faible sur la tablette de ${name} (${battery.level} %). Pensez à la brancher.`;
@@ -2261,6 +2517,8 @@ function stopSession() {
   stopPage = null;
   stopMembers?.();
   stopMembers = null;
+  stopTabletBusy?.();
+  stopTabletBusy = null;
   stopFamily?.();
   stopFamily = null;
   stopInvitations?.();
@@ -2350,6 +2608,8 @@ function showLogin(legacy) {
 function showJoin(canGoBack) {
   $('join-account').textContent = `Connecté avec ${myEmail()}`;
   $('btn-join-back').hidden = !canGoBack;
+  // Venu de sa famille : « Retour » en haut à droite, pas de déconnexion ici.
+  $('join-logout').hidden = canGoBack;
   const code = inviteCode();
   if (code) $('join-code').value = formatCode(normalizeCode(code));
   show('view-join');
@@ -2416,6 +2676,9 @@ async function enterApp() {
   show('loading');
   authUser = await currentUser();
   if (!isRealAccount(authUser)) { showLogin(!!savedFamilyId()); return; }
+  // Bascule en Europe : la bonne base et le bon bucket avant toute lecture.
+  await choisirBase();
+  if (bucketUrl()) ouvrirStorage(bucketUrl());
   try {
     const saved = savedFamilyId();
     if (saved) await tagLegacyMember(saved);
@@ -2443,6 +2706,8 @@ async function enterApp() {
   applyFamily();
   watchFamily();
   stopMembers = watchMembers(session.fid, renderMembers);
+  stopTabletBusy?.();
+  stopTabletBusy = watchTabletBusy(session.fid, (busy) => { tabletInCall = busy; renderCallTile(); });
   startAgenda(session, setNotifReminders);
   startNotifs(session);
   renderInstallCard();
@@ -2507,3 +2772,34 @@ if ('serviceWorker' in navigator) {
 }
 
 start();
+
+// ---------- Barres de défilement visibles ----------
+// Le téléphone cache sa barre : on en dessine une (rail clair, curseur indigo) sur les listes
+// qui peuvent dépasser, comme sur la tablette.
+function barreDefilement(el) {
+  const wrap = document.createElement('div');
+  wrap.className = `defil${el.classList.contains('sheet-body') ? ' defil-sheet' : ''}`;
+  el.parentNode.insertBefore(wrap, el);
+  wrap.append(el);
+  el.classList.add('defil-zone');
+  const rail = document.createElement('div');
+  rail.className = 'defil-rail';
+  rail.innerHTML = '<span></span>';
+  wrap.append(rail);
+  const pouce = rail.firstChild;
+  const maj = () => {
+    const { scrollHeight: h, clientHeight: c, scrollTop: t } = el;
+    rail.hidden = h <= c + 2;
+    if (rail.hidden) return;
+    const H = rail.clientHeight;
+    const ph = Math.max(28, (H * c) / h);
+    pouce.style.height = `${ph}px`;
+    pouce.style.transform = `translateY(${((H - ph) * t) / (h - c)}px)`;
+  };
+  el.addEventListener('scroll', maj, { passive: true });
+  new ResizeObserver(maj).observe(el);
+  new MutationObserver(maj).observe(el, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden'] });
+  maj();
+}
+['wifi-list', 'logs', 'form-post', 'form-reminder'].forEach((id) => barreDefilement($(id)));
+barreDefilement(document.querySelector('#sheet-wifi .sheet-body'));

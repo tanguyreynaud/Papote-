@@ -8,6 +8,7 @@ import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/
 import {
   appeler, donnees as lireDonnees, signalerChangement, messageErreur,
 } from './gestion-api.js';
+import { ouvrirParcours, fermerParcours } from './parcours.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -170,21 +171,53 @@ function erreur(e) {
 
 // ---------- Navigation ----------
 
+const memoire = {
+  lire: (k, defaut) => { try { return localStorage.getItem(k) || defaut; } catch (e) { return defaut; } },
+  ecrire: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* navigation privée */ } },
+};
+
 const TITRES = {
   accueil: 'Accueil',
   commandes: 'Commandes',
+  clients: 'Clients',
   familles: 'Familles et tablettes',
   stock: 'Stock de tablettes',
   factures: 'Factures',
   compta: 'Comptabilité',
-  outils: 'Maintenance',
+  outils: 'Réglages et maintenance',
 };
 const AVEC_PERIODE = ['factures', 'compta'];
 
+let connecte = false; // connexion admin faite (onAuthStateChanged plus bas)
+
 function pageCourante() {
-  const p = location.hash.slice(1);
+  const p = location.hash.slice(1).split('/')[0];
   return TITRES[p] ? p : 'accueil';
 }
+
+// Onglets d'une page (#compta/urssaf) : un seul bloc affiché à la fois, le dernier choisi est retenu.
+function choisirOnglet(page, nom) {
+  const panneau = document.querySelector(`[data-panneau="${page}"]`);
+  const boutons = [...panneau.querySelectorAll('.onglets [data-onglet]')];
+  if (!boutons.length) return;
+  const noms = boutons.map((b) => b.dataset.onglet);
+  if (!noms.includes(nom)) nom = memoire.lire(`papote-onglet-${page}`, noms[0]);
+  if (!noms.includes(nom)) nom = noms[0];
+  memoire.ecrire(`papote-onglet-${page}`, nom);
+  for (const b of boutons) {
+    b.classList.toggle('actif', b.dataset.onglet === nom);
+    b.setAttribute('aria-selected', String(b.dataset.onglet === nom));
+  }
+  panneau.querySelectorAll('[data-onglet]:not(button)').forEach((el) => { el.hidden = el.dataset.onglet !== nom; });
+}
+document.querySelectorAll('[data-panneau] .onglets [data-onglet]').forEach((b) => {
+  b.setAttribute('role', 'tab');
+  b.addEventListener('click', () => {
+    const page = b.closest('[data-panneau]').dataset.panneau;
+    history.replaceState(null, '', `#${page}/${b.dataset.onglet}`);
+    choisirOnglet(page, b.dataset.onglet);
+  });
+});
 
 function afficherPage() {
   const page = pageCourante();
@@ -195,10 +228,12 @@ function afficherPage() {
   });
   document.querySelectorAll('[data-panneau]').forEach((p) => { p.hidden = p.dataset.panneau !== page; });
   $('titre-page').textContent = TITRES[page];
+  choisirOnglet(page, location.hash.slice(1).split('/')[1]);
   document.title = `Papote · ${TITRES[page]}`;
   $('periode').hidden = !AVEC_PERIODE.includes(page);
   $('p-etat').hidden = !AVEC_PERIODE.includes(page);
   window.scrollTo(0, 0);
+  if (page === 'clients' && connecte) chargerClients();
 }
 window.addEventListener('hashchange', afficherPage);
 afficherPage();
@@ -206,7 +241,9 @@ afficherPage();
 // ---------- Chargement ----------
 
 onAuthStateChanged(getAuth(getApp('admin')), (user) => {
+  connecte = !!user;
   if (!user) return;
+  if (pageCourante() === 'clients') chargerClients();
   chargerDonnees();
   chargerMois();
   changerPeriode();
@@ -395,7 +432,7 @@ const ABONNEMENTS = {
   canceled: 'résilié', active: 'actif', trialing: 'en essai', past_due: 'impayé',
 };
 const RETOURS = {
-  attendue: 'Retour attendu', echec: 'Non rendue, prélèvement refusé', rendue: 'Tablette rendue', facturee: 'Non rendue, 120 € prélevés',
+  attendue: 'Retour attendu', echec: 'Non rendue, prélèvement refusé', rendue: 'Tablette rendue', facturee: 'Matériel non rendu, prélevé',
 };
 const REMBOURSEMENTS = {
   'en-cours': 'en cours de remboursement', 'au-retour': 'remboursés au retour', fait: 'remboursés', echec: 'à rembourser depuis Stripe',
@@ -465,19 +502,19 @@ function afficherAccueil() {
     [aVerifier, `${pluriel(aVerifier, 'tablette')} revenue${aVerifier > 1 ? 's' : ''}, à vérifier avant de remettre en stock`, '#stock', ''],
     [aRembourser, `${pluriel(aRembourser, 'remboursement')} échoué${aRembourser > 1 ? 's' : ''}, à faire depuis Stripe`, '#commandes', 'ko'],
     [impayees, `${pluriel(impayees, 'abonnement')} impayé${impayees > 1 ? 's' : ''}`, '#factures', 'ko'],
-    [simsAResilier, `${pluriel(simsAResilier, 'forfait SIM')} à résilier ou suspendre`, '#stock', 'ko'],
+    [simsAResilier, `${pluriel(simsAResilier, 'forfait SIM')} à résilier ou suspendre`, '#stock/sim', 'ko'],
     [remplacees, `${pluriel(remplacees, 'tablette')} remplacée${remplacees > 1 ? 's' : ''} à récupérer chez le client`, '#stock', ''],
-    [clientsSansSim, `${clientsSansSim} client${clientsSansSim > 1 ? 's' : ''} Internet inclus sans carte SIM notée sur sa tablette`, '#stock', 'ko'],
-    [simsSansTablette, `${simsSansTablette} ligne${simsSansTablette > 1 ? 's SIM actives reliées' : ' SIM active reliée'} à aucune tablette`, '#stock', 'ko'],
-    [simsARegarder, `${simsARegarder} carte${simsARegarder > 1 ? 's' : ''} SIM à regarder (promo, activation, carte bancaire)`, '#stock', 'ko'],
-    ...accessoires.map((a) => [1, a.manque ? `${a.nom} : il en manque ${a.manque} pour les envois` : `${a.nom} : stock bas (${a.quantite || 0})`, '#stock', a.manque ? 'ko' : '']),
+    [clientsSansSim, `${clientsSansSim} client${clientsSansSim > 1 ? 's' : ''} Internet inclus sans carte SIM notée sur sa tablette`, '#stock/sim', 'ko'],
+    [simsSansTablette, `${simsSansTablette} ligne${simsSansTablette > 1 ? 's SIM actives reliées' : ' SIM active reliée'} à aucune tablette`, '#stock/sim', 'ko'],
+    [simsARegarder, `${simsARegarder} carte${simsARegarder > 1 ? 's' : ''} SIM à regarder (promo, activation, carte bancaire)`, '#stock/sim', 'ko'],
+    ...accessoires.map((a) => [1, a.manque ? `${a.nom} : il en manque ${a.manque} pour les envois` : `${a.nom} : stock bas (${a.quantite || 0})`, '#stock/accessoires', a.manque ? 'ko' : '']),
     ...jumelagesAVoir.map((t) => [1, `Tablette ${t.ref || t.numero || ''} ${t.alerteJumelage}`, '#stock', 'ko']),
     [facturesAttendues.length, `Facture à télécharger chez le vendeur puis à envoyer à factures@ : ${facturesAttendues
-      .map((d) => `${d.fournisseur || d.libelle}${d.numero ? ` (commande ${d.numero})` : ''}`).join(', ')}`, '#compta', 'ko'],
-    [aVerifierMail, `${pluriel(aVerifierMail, 'facture')} reçue${aVerifierMail > 1 ? 's' : ''} par e-mail à vérifier`, '#compta', ''],
-    [erreursMail, `${pluriel(erreursMail, 'problème')} au dernier relevé de factures@mapapote.fr (détail plus bas)`, '#accueil', 'ko'],
-    [tva && tva.alerte ? 1 : 0, tva ? tva.alerte : '', '#accueil', 'ko'],
-    [problemes, `${pluriel(problemes, 'problème')} lors du dernier passage automatique (détail plus bas)`, '#accueil', 'ko'],
+      .map((d) => `${d.fournisseur || d.libelle}${d.numero ? ` (commande ${d.numero})` : ''}`).join(', ')}`, '#compta/depenses', 'ko'],
+    [aVerifierMail, `${pluriel(aVerifierMail, 'facture')} reçue${aVerifierMail > 1 ? 's' : ''} par e-mail à vérifier`, '#compta/depenses', ''],
+    [erreursMail, `${pluriel(erreursMail, 'problème')} au dernier relevé de factures@mapapote.fr (détail en bas de page)`, '#accueil', 'ko'],
+    [tva && tva.alerte ? 1 : 0, tva ? tva.alerte : '', '#compta/urssaf', 'ko'],
+    [problemes, `${pluriel(problemes, 'problème')} lors du dernier passage automatique`, '#outils/automatique', 'ko'],
   ].filter(([n]) => n > 0);
   $('a-faire').replaceChildren(...(taches.length
     ? taches.map(([, texte, lien, classe]) => h('li', {}, h('a', { href: lien, class: classe }, texte, h('span', { 'aria-hidden': 'true' }, '›'))))
@@ -512,17 +549,39 @@ function afficherAccueil() {
 
 // ---------- Commandes ----------
 
+let vueCommandes = null; // liste affichée dans Commandes (a-envoyer, en-route, retour, toutes)
+
 function afficherCommandes() {
   const toutes = donnees.commandes.slice().sort((a, b) => (b.creeLe || 0) - (a.creeLe || 0));
   const parEtat = {};
   for (const c of toutes) parEtat[etatCommande(c)] = (parEtat[etatCommande(c)] || 0) + 1;
+  // Les chiffres servent d'onglets : chaque statut montre sa liste, « au total » et « en service » le tableau.
+  if (!vueCommandes) vueCommandes = parEtat['a-envoyer'] ? 'a-envoyer' : parEtat.retour ? 'retour' : parEtat['en-route'] ? 'en-route' : 'toutes';
+  const onglet = (vue, valeur, texte, classe, filtre = '') => {
+    const el = stat(String(valeur), texte, null, classe);
+    const actif = vue === vueCommandes && (vue !== 'toutes' || $('filtre-commandes').value === filtre);
+    el.classList.add('onglet');
+    el.classList.toggle('actif', actif);
+    el.tabIndex = 0;
+    el.setAttribute('role', 'button');
+    el.setAttribute('aria-pressed', String(actif));
+    const choisir = () => {
+      vueCommandes = vue;
+      if (vue === 'toutes') $('filtre-commandes').value = filtre;
+      afficherCommandes();
+    };
+    el.addEventListener('click', choisir);
+    el.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choisir(); } });
+    return el;
+  };
   $('kpi-commandes').replaceChildren(
-    stat(String(toutes.length), 'commandes au total'),
-    stat(String(parEtat['a-envoyer'] || 0), 'à envoyer'),
-    stat(String(parEtat['en-route'] || 0), 'en route'),
-    stat(String(parEtat.active || 0), 'en service'),
-    stat(String(parEtat.retour || 0), 'à récupérer', null, parEtat.retour ? 'neg' : null),
+    onglet('a-envoyer', parEtat['a-envoyer'] || 0, 'à envoyer'),
+    onglet('en-route', parEtat['en-route'] || 0, 'en route'),
+    onglet('retour', parEtat.retour || 0, 'à récupérer', parEtat.retour ? 'neg' : null),
+    onglet('toutes', parEtat.active || 0, 'en service', null, 'active'),
+    onglet('toutes', toutes.length, 'commandes au total'),
   );
+  document.querySelectorAll('[data-panneau="commandes"] [data-vue]').forEach((c) => { c.hidden = c.dataset.vue !== vueCommandes; });
   const filtre = $('filtre-commandes').value;
   const tablettes = new Map(donnees.stock.filter((t) => t.commande).map((t) => [t.commande, t]));
   remplirTable($('t-commandes'), [
@@ -1219,7 +1278,7 @@ function afficherBilan() {
 
 const NATURES = {
   abonnement: 'Abonnement Papote',
-  'tablette-non-rendue': 'Tablette non rendue',
+  'tablette-non-rendue': 'Matériel non rendu',
   remboursement: 'Remboursement',
   litige: 'Contestation bancaire',
   virement: 'Virement vers la banque',
@@ -1701,7 +1760,7 @@ function voirDepense(d) {
   $('p-choix').value = 'perso';
   $('p-du').value = new Date(debut.getFullYear(), debut.getMonth(), 1).toLocaleDateString('sv-SE');
   $('p-au').value = new Date(debut.getFullYear(), debut.getMonth() + 1, 0).toLocaleDateString('sv-SE');
-  location.hash = '#compta';
+  location.hash = '#compta/depenses';
   changerPeriode();
 }
 
@@ -1809,10 +1868,6 @@ function afficherGraphiques() {
 
 // ---------- Déclarations URSSAF ----------
 
-const memoire = {
-  lire: (k, defaut) => { try { return localStorage.getItem(k) || defaut; } catch (e) { return defaut; } },
-  ecrire: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* navigation privée */ } },
-};
 $('u-rythme').value = memoire.lire('papote-urssaf-rythme', 'mois');
 
 function afficherUrssaf() {
@@ -1945,7 +2000,7 @@ function afficherTva(t) {
     h('p', { class: 'small' }, `${euros(t.ca)} encaissés depuis le 1er janvier, soit ${pct} % du seuil de ${euros(t.seuil)}. `,
       `À ce rythme : environ ${euros(t.projection)} fin décembre.`),
     ...(t.alerte ? [h('p', { class: 'small error' }, t.alerte)] : []),
-    h('p', { class: 'muted small' }, 'Tant que vous restez sous le seuil, vos factures sont sans TVA (art. 293 B du CGI). Seuil réglable dans Comptabilité.'),
+    h('p', { class: 'muted small' }, 'Tant que vous restez sous le seuil, vos factures sont sans TVA (art. 293 B du CGI). Seuil réglable dans Réglages, Calculs.'),
   );
 }
 
@@ -1969,15 +2024,19 @@ function afficherRentabilite() {
     const frais = Math.round(prix * tauxFrais);
     const urssaf = Math.round((prix * r.tauxUrssaf) / 100);
     const sim = cle === 'sim' ? forfait : 0;
-    const marge = prix - frais - urssaf - tablette - sim;
-    return { nom, n: abos.length, prix, frais, urssaf, sim, marge };
+    // Matériel : tablette, plus les accessoires de chaque envoi (clé 4G, chargeur…), amortis sur la même durée.
+    const accessoires = (donnees.accessoires || []).filter((a) => a.parEnvoi === 'tous' || a.parEnvoi === cle)
+      .reduce((s, a) => s + (a.prixAchat || 0), 0);
+    const materiel = tablette + Math.round(accessoires / Math.max(1, r.vieTablette));
+    const marge = prix - frais - urssaf - materiel - sim;
+    return { nom, n: abos.length, prix, frais, urssaf, materiel, sim, marge };
   });
   const signe = (c) => h('span', { class: c < 0 ? 'neg' : null }, euros(c));
   remplirTable($('t-rentabilite'), [
     { titre: 'Formule' }, { titre: 'Abonnés', n: 1 }, { titre: 'Prix', n: 1 }, { titre: 'Frais Stripe', n: 1 },
-    { titre: 'URSSAF', n: 1 }, { titre: 'Tablette', n: 1 }, { titre: 'Forfait SIM', n: 1 }, { titre: 'Reste / abonné', n: 1 },
+    { titre: 'URSSAF', n: 1 }, { titre: 'Matériel', n: 1 }, { titre: 'Forfait SIM', n: 1 }, { titre: 'Reste / abonné', n: 1 },
     { titre: 'Reste / mois', n: 1 },
-  ], lignes.map((l) => [l.nom, String(l.n), euros(l.prix), euros(l.frais), euros(l.urssaf), euros(tablette),
+  ], lignes.map((l) => [l.nom, String(l.n), euros(l.prix), euros(l.frais), euros(l.urssaf), euros(l.materiel),
     l.sim ? euros(l.sim) : '', signe(l.marge), signe(l.marge * l.n)]), {
     total: ['Total', String(lignes.reduce((s, l) => s + l.n, 0)), '', '', '', '', '', '',
       signe(lignes.reduce((s, l) => s + l.marge * l.n, 0))],
@@ -2126,3 +2185,328 @@ async function cloturer(cle) {
   }
 }
 $('btn-cloturer').addEventListener('click', () => cloturer());
+
+// ---------- Clients et e-mails d'information ----------
+// gestionClients fusionne commandes et paniers abandonnés par e-mail ; l'envoi ne part qu'aux personnes
+// qui ont accepté (vérifié aussi par le serveur), avec un lien de désinscription.
+
+let clients = null;
+const TYPES_CLIENT = { client: 'Abonné', ancien: 'Ancien client', panier: 'Panier abandonné', contact: 'Contact', chat: 'Contact du chat' };
+const STATUTS_CLIENT = {
+  actif: 'actif', offert: 'offert', impaye: 'impayé', suspendu: 'suspendu', resilie: 'résilié', aucun: 'sans abonnement', annulee: 'annulée',
+};
+
+async function chargerClients() {
+  try {
+    clients = await appeler('gestionClients');
+    afficherClients();
+  } catch (e) {
+    erreur(e);
+  }
+}
+
+function clientsAffiches() {
+  if (!clients) return [];
+  const filtre = $('filtre-clients').value;
+  const q = $('cherche-clients').value.trim().toLowerCase();
+  return clients.contacts.filter((c) => {
+    if (filtre === 'accord' ? !(c.consentement && !c.desinscrit) : filtre && c.type !== filtre) return false;
+    return !q || [c.nom, c.email, c.telephone].some((v) => v && v.toLowerCase().includes(q));
+  });
+}
+
+function accordTexte(c) {
+  if (c.desinscrit) return badge('Désinscrit', 'ko');
+  return c.consentement ? badge('Oui', 'ok') : h('span', { class: 'muted' }, 'Non');
+}
+
+function afficherClients() {
+  if (!clients) return;
+  const tous = clients.contacts;
+  const compte = (f) => tous.filter(f).length;
+  $('kpi-clients').replaceChildren(
+    stat(String(compte((c) => c.type === 'client')), 'abonnés'),
+    stat(String(compte((c) => c.type === 'ancien')), 'anciens clients'),
+    stat(String(compte((c) => c.type === 'panier')), 'paniers abandonnés'),
+    stat(String(compte((c) => c.type === 'chat')), 'contacts du chat'),
+    stat(String(compte((c) => c.consentement && !c.desinscrit)), 'acceptent les e-mails', `${compte((c) => c.desinscrit)} désinscrits`),
+  );
+  const liste = clientsAffiches();
+  remplirTable($('t-clients'), [
+    { titre: 'Nom' }, { titre: 'E-mail' }, { titre: 'Téléphone' }, { titre: 'Situation' }, { titre: 'Depuis' }, { titre: 'E-mails' },
+  ], liste.map((c) => ({
+    cellules: [
+      c.nom || '', c.email, c.telephone || '',
+      [TYPES_CLIENT[c.type] || '', c.statut && c.type !== 'panier' ? ` (${STATUTS_CLIENT[c.statut] || c.statut})` : '', c.formule ? ` · ${c.formule === 'sim' ? 'internet' : 'Wi-Fi'}` : ''].join(''),
+      jour(c.depuis), accordTexte(c),
+    ],
+    onclick: () => changerAccord(c),
+  })), { vide: 'Personne pour ce filtre.' });
+  const cible = liste.filter((c) => c.consentement && !c.desinscrit).length;
+  $('campagne-cible').textContent = cible
+    ? `Destinataires : ${pluriel(cible, 'personne')} de la liste affichée (${pluriel(liste.length - cible, 'autre')} sans accord, ignorée${liste.length - cible > 1 ? 's' : ''}).`
+    : 'Personne dans la liste affichée n\'a accepté les e-mails d\'information.';
+  $('campagne-envoyer').disabled = !cible;
+  $('campagnes').replaceChildren(...(clients.campagnes.length
+    ? clients.campagnes.map((k) => h('li', {}, h('strong', {}, k.objet), ` · ${jour(k.le)} · ${pluriel(k.envoyes || 0, 'envoi')}`,
+      k.erreurs && k.erreurs.length ? h('span', { class: 'error' }, ` · ${pluriel(k.erreurs.length, 'échec')}`) : null))
+    : [h('li', { class: 'muted' }, 'Aucun envoi pour l\'instant.')]));
+}
+
+async function changerAccord(c) {
+  const accepte = c.consentement && !c.desinscrit;
+  const question = accepte
+    ? `Retirer l'accord de ${c.nom || c.email} ? Il ou elle ne recevra plus les e-mails d'information.`
+    : `${c.nom || c.email} a accepté de recevoir les e-mails d'information de Papote (de vive voix ou par écrit) ?${c.desinscrit ? ' Attention : cette personne s\'était désinscrite.' : ''}`;
+  if (!confirm(question)) return;
+  try {
+    await appeler('gestionConsentement', { email: c.email, consentement: !accepte });
+    await chargerClients();
+  } catch (e) {
+    erreur(e);
+  }
+}
+
+$('filtre-clients').addEventListener('change', afficherClients);
+$('cherche-clients').addEventListener('input', afficherClients);
+$('x-clients').addEventListener('click', () => {
+  csv('clients', ['Nom', 'E-mail', 'Téléphone', 'Situation', 'Statut', 'Formule', 'Depuis', 'Accepte les e-mails'],
+    clientsAffiches().map((c) => [c.nom, c.email, c.telephone, TYPES_CLIENT[c.type] || '', STATUTS_CLIENT[c.statut] || c.statut || '', c.formule || '',
+      jour(c.depuis), c.desinscrit ? 'désinscrit' : c.consentement ? 'oui' : 'non']), false);
+});
+
+async function envoyerCampagne(test) {
+  const form = $('f-campagne');
+  const msg = form.querySelector('.f-msg');
+  const objet = form.objet.value.trim();
+  const message = form.message.value.trim();
+  if (!objet || !message) { form.reportValidity(); return; }
+  const emails = clientsAffiches().filter((c) => c.consentement && !c.desinscrit).map((c) => c.email);
+  if (!test && !confirm(`Envoyer « ${objet} » à ${pluriel(emails.length, 'personne')} ? Pensez à vous envoyer un essai d'abord.`)) return;
+  const boutons = form.querySelectorAll('button');
+  boutons.forEach((b) => { b.disabled = true; });
+  msg.hidden = false;
+  msg.className = 'f-msg small';
+  msg.textContent = test ? 'Envoi de l\'essai…' : `Envoi à ${pluriel(emails.length, 'personne')}…`;
+  try {
+    const r = await appeler('gestionCampagne', { objet, message, emails, test });
+    msg.textContent = test ? `Essai envoyé à ${r.a}.` : `${pluriel(r.envoyes, 'e-mail')} envoyé${r.envoyes > 1 ? 's' : ''}.${r.erreurs && r.erreurs.length ? ` Échecs : ${r.erreurs.join(' ; ')}` : ''}`;
+    if (!test) { form.reset(); await chargerClients(); }
+  } catch (e) {
+    msg.className = 'f-msg small error';
+    msg.textContent = messageErreur(e);
+  }
+  boutons.forEach((b) => { b.disabled = false; });
+  if (clients) afficherClients();
+}
+
+$('campagne-test').addEventListener('click', () => envoyerCampagne(true));
+$('f-campagne').addEventListener('submit', (e) => { e.preventDefault(); envoyerCampagne(false); });
+
+
+// ---------- Réception d'une tablette, pas à pas ----------
+// Vérifier, noter le n° de série, préparer, installer Papote (qui donne le numéro T-…), vérifier, ranger.
+
+const libelleTablette = (t) => [t.ref, t.numero, t.modele, t.fournisseur, t.acheteeLe ? `achetée le ${jour(t.acheteeLe)}` : null]
+  .filter(Boolean).join(' · ') || 'Tablette sans nom';
+
+function etapesReceptionTablette() {
+  const fiche = (e) => donnees.stock.find((t) => t.id === e.id);
+  return [
+    {
+      cle: 'reception',
+      titre: 'Réception',
+      texte: 'Ouvrez le carton du vendeur. Quel achat est-ce ?',
+      contenu(zone, e, maj) {
+        const achats = donnees.stock.filter((t) => t.id === e.id || (t.etat === 'en-stock' && !t.ref && !t.commande))
+          .sort((a, b) => (a.acheteeLe || 0) - (b.acheteeLe || 0));
+        if (e.id === undefined) e.id = achats.length ? achats[0].id : null;
+        const choix = h('select', { 'aria-label': 'Achat' },
+          ...achats.map((t) => h('option', { value: t.id, selected: t.id === e.id }, libelleTablette(t))),
+          h('option', { value: '', selected: !e.id }, 'Pas dans la liste (facture pas encore enregistrée)'));
+        const abimee = h('button', { type: 'button', class: 'link small danger' }, 'La tablette est abîmée');
+        choix.addEventListener('change', () => { e.id = choix.value || null; maj(); });
+        abimee.addEventListener('click', async () => {
+          if (!e.id) { alert('Enregistrez d\'abord sa facture (Ajouter un achat), puis notez-la « À réparer ».'); return; }
+          if (!confirm('Noter cette tablette « À réparer » ? Contactez ensuite le vendeur pour l\'échanger.')) return;
+          await appeler('gestionStock', { action: 'modifier', id: e.id, champs: { etat: 'a-reparer' } });
+          signalerChangement();
+          fermerParcours();
+        });
+        e.id = choix.value || null;
+        zone.append(choix, abimee);
+      },
+      cases: ['L\'écran n\'est ni rayé ni fissuré', 'La coque n\'est pas abîmée', 'Le chargeur et le câble sont dans la boîte'],
+    },
+    {
+      cle: 'donnees',
+      titre: 'Les informations',
+      texte: 'Notez le numéro de série (sur la boîte, ou dans Paramètres > À propos de la tablette).',
+      contenu(zone, e, maj) {
+        const t = fiche(e) || {};
+        e.numero = e.numero || t.numero || '';
+        e.modele = e.modele || t.modele || '';
+        const form = h('form', { class: 'grille', onsubmit: (ev) => ev.preventDefault() },
+          h('label', {}, 'N° de série ', h('span', { class: 'avec-bouton' }, h('input', { name: 'numero', value: e.numero, autocomplete: 'off' }),
+            'BarcodeDetector' in window ? h('button', { type: 'button', class: 'secondary small-btn', onclick: () => scanner(form, 'numero') }, 'Scanner') : null)),
+          h('label', {}, 'Modèle ', h('input', { name: 'modele', value: e.modele, placeholder: 'ex. M107' })));
+        const lire = () => { e.numero = form.numero.value.trim(); e.modele = form.modele.value.trim(); maj(); };
+        form.addEventListener('input', lire);
+        $('d-scan').addEventListener('close', lire);
+        zone.append(form);
+      },
+      pret: (e) => !!e.numero,
+      async valider(e) {
+        if (e.id) await appeler('gestionStock', { action: 'modifier', id: e.id, champs: { numero: e.numero, modele: e.modele } });
+      },
+    },
+    {
+      cle: 'preparer',
+      titre: 'Préparer la tablette',
+      texte: 'Allumez la tablette et faites la configuration de départ.',
+      cases: [
+        'Configuration passée SANS ajouter de compte Google ni Samsung',
+        'Paramètres > À propos > « Numéro de build » : touché 7 fois',
+        'Paramètres > Options pour les développeurs > « Débogage USB » : activé',
+      ],
+    },
+    {
+      cle: 'installation',
+      titre: 'Installer Papote',
+      texte: 'Branchez la tablette au PC en USB. Dans PowerShell, dans le dossier Papote, lancez :',
+      contenu(zone, e, maj) {
+        const commande = '.\\installation\\installer-tablette.bat';
+        const copier = h('button', { type: 'button', class: 'secondary small-btn' }, 'Copier');
+        copier.addEventListener('click', () => navigator.clipboard.writeText(commande).then(() => { copier.textContent = 'Copié'; }).catch(() => null));
+        const ref = h('input', { placeholder: 'T-012', value: e.ref || '', autocomplete: 'off', 'aria-label': 'Numéro donné par l\'installation' });
+        ref.addEventListener('input', () => { e.ref = ref.value.trim(); maj(); });
+        zone.append(
+          h('div', { class: 'pc-commande' }, h('code', {}, commande), copier),
+          h('ol', { class: 'pc-liste' },
+            h('li', {}, 'Sur la tablette, acceptez « Autoriser le débogage USB » (cochez « Toujours »).'),
+            h('li', {}, 'Quand le script demande un code, appuyez sur Entrée sans rien taper.'),
+            h('li', {}, 'À la fin, il affiche « Écrivez T-0… sur le carton ». Tapez ce numéro ici :')),
+          ref);
+      },
+      pret: (e) => /^T-?\d{1,5}$/i.test(e.ref || ''),
+      async valider(e) {
+        const r = await appeler('gestionParcours', { type: 'lier', id: e.id || null, ref: e.ref });
+        const sansFiche = !e.id;
+        e.id = r.id;
+        e.ref = r.ref;
+        if (sansFiche && e.numero) await appeler('gestionStock', { action: 'modifier', id: e.id, champs: { numero: e.numero, modele: e.modele } });
+      },
+    },
+    {
+      cle: 'verification',
+      titre: 'Vérifier la tablette',
+      texte: 'Bientôt ici : une vérification guidée de toutes les fonctions (appel vidéo, photos, son). Pour l\'instant :',
+      cases: ['La tablette affiche l\'écran « Bienvenue » de Papote'],
+    },
+    {
+      cle: 'rangement',
+      titre: 'Ranger la tablette',
+      texte: 'Écrivez ce numéro au feutre au dos de la tablette (sur un autocollant) et sur sa boîte :',
+      contenu(zone, e) { zone.append(h('p', { class: 'pc-gros' }, e.ref || '')); },
+      cases: ['Numéro écrit au dos de la tablette', 'Numéro écrit sur la boîte', 'Tablette rangée dans sa boîte avec son chargeur'],
+      bouton: 'Terminer',
+    },
+  ];
+}
+
+async function recevoirTablette() {
+  if (!donnees) return;
+  const enCours = donnees.stock.find((t) => t.reception && !t.reception.fini);
+  const etat = enCours && confirm(`Reprendre la réception de ${libelleTablette(enCours)} ?`)
+    ? { ...enCours.reception, id: enCours.id, ref: enCours.ref || '', numero: enCours.numero || '', modele: enCours.modele || '' }
+    : { etape: 0, faits: {} };
+  await ouvrirParcours({
+    titre: 'Recevoir une tablette',
+    etapes: etapesReceptionTablette(),
+    etat,
+    sauver: (e) => (e.id ? appeler('gestionParcours', { type: 'reception', id: e.id, reception: e }) : null),
+  });
+  signalerChangement();
+}
+$('btn-recevoir').addEventListener('click', recevoirTablette);
+
+// ---------- Réception d'accessoires (routeurs 4G…), pas à pas ----------
+
+const estRouteur = (a) => /routeur|4g|modem|cl[ée]/i.test((a && a.nom) || '');
+
+function etapesReceptionAccessoire() {
+  const acc = (e) => donnees.accessoires.find((a) => a.id === e.id);
+  return [
+    {
+      cle: 'choix',
+      titre: 'Ce qui est arrivé',
+      contenu(zone, e, maj) {
+        const liste = donnees.accessoires.slice().sort((a, b) => estRouteur(b) - estRouteur(a) || a.nom.localeCompare(b.nom, 'fr'));
+        if (!liste.length) {
+          zone.append(h('p', { class: 'error small' }, 'Aucun accessoire : créez-le d\'abord (Ajouter un accessoire).'));
+          return;
+        }
+        e.id = e.id || liste[0].id;
+        const form = h('form', { class: 'grille', onsubmit: (ev) => ev.preventDefault() },
+          h('label', {}, 'Accessoire ', h('select', { name: 'acc' }, ...liste.map((a) => h('option', { value: a.id, selected: a.id === e.id }, a.nom)))),
+          h('label', {}, 'Quantité reçue ', h('input', { name: 'quantite', inputmode: 'numeric', value: e.quantite || '' })),
+          h('label', {}, 'Montant payé (€) ', h('input', { name: 'montant', inputmode: 'decimal', placeholder: 'facultatif', value: e.montant || '' })),
+          h('label', {}, 'Vendeur ', h('input', { name: 'fournisseur', placeholder: 'facultatif', value: e.fournisseur || '' })));
+        const lire = () => {
+          e.id = form.acc.value;
+          e.quantite = form.quantite.value.trim();
+          e.montant = form.montant.value.trim();
+          e.fournisseur = form.fournisseur.value.trim();
+          maj();
+        };
+        form.addEventListener('input', lire);
+        form.addEventListener('change', lire);
+        zone.append(form);
+      },
+      pret: (e) => !!acc(e) && /^\d+$/.test(e.quantite || '') && Number(e.quantite) > 0,
+      valider(e) { e.bons = String(e.quantite); },
+    },
+    {
+      cle: 'test',
+      titre: 'Tester',
+      texte: (e) => (estRouteur(acc(e)) ? 'Testez chaque routeur, un par un :' : 'Vérifiez chaque article :'),
+      cases: (e) => (estRouteur(acc(e)) ? [
+        'Carte SIM de test glissée dans le routeur',
+        'Routeur branché sur une prise USB : le voyant s\'allume',
+        'Après une minute, son Wi-Fi apparaît sur le téléphone (nom et mot de passe sous le capot)',
+        'Téléphone connecté à ce Wi-Fi : une page internet s\'ouvre',
+        'Carte SIM de test retirée',
+      ] : ['Complet et en bon état']),
+      apres: true,
+      contenu(zone, e, maj) {
+        const bons = h('input', { inputmode: 'numeric', value: e.bons || e.quantite, 'aria-label': 'Combien fonctionnent' });
+        bons.addEventListener('input', () => { e.bons = bons.value.trim(); maj(); });
+        zone.append(h('label', { class: 'pc-champ' }, `Combien fonctionnent, sur ${e.quantite} ?`, bons));
+      },
+      pret: (e) => /^\d+$/.test(e.bons || '') && Number(e.bons) <= Number(e.quantite),
+    },
+    {
+      cle: 'stock',
+      titre: 'Ranger',
+      texte: (e) => {
+        const ko = Number(e.quantite) - Number(e.bons);
+        return `${e.bons} ${acc(e) ? acc(e).nom : ''} ajouté${Number(e.bons) > 1 ? 's' : ''} au stock.${ko ? ` Mettez de côté ${ko === 1 ? 'celui qui ne marche pas' : `les ${ko} qui ne marchent pas`} : à renvoyer au vendeur.` : ''}`;
+      },
+      cases: ['Rangés avec le stock'],
+      bouton: 'Ajouter au stock',
+      async valider(e) {
+        if (Number(e.bons) > 0) {
+          await appeler('gestionAccessoire', {
+            action: 'entree', id: e.id, quantite: Number(e.bons), montant: enCentimes(e.montant) || null, fournisseur: e.fournisseur || null,
+          });
+        }
+      },
+    },
+  ];
+}
+
+$('btn-recevoir-accessoire').addEventListener('click', async () => {
+  if (!donnees) return;
+  await ouvrirParcours({ titre: 'Recevoir une livraison', etapes: etapesReceptionAccessoire(), etat: { etape: 0, faits: {} } });
+  signalerChangement();
+});

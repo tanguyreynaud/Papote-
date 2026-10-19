@@ -11,7 +11,7 @@
   "related_applications": [
     {
       "platform": "webapp",
-      "url": "https://papote-famille.web.app/manifest.webmanifest"
+      "url": "/manifest.webmanifest"
     }
   ],
   "icons": [

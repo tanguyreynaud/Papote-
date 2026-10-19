@@ -79,6 +79,12 @@ function renderReminders() {
       ack.className = 'seen small';
       ack.textContent = `${session.family.name} a confirmé aujourd'hui à ${r.lastAck.slice(11)} ✓`;
       body.append(ack);
+    } else if (r.lastSeen && r.lastSeen.startsWith(todayKey())) {
+      // La tablette a vu un visage devant le rappel, sans qu'il soit encore confirmé.
+      const seen = document.createElement('p');
+      seen.className = 'muted small';
+      seen.textContent = `${session.family.name} a vu le rappel à ${r.lastSeen.slice(11)}`;
+      body.append(seen);
     }
     li.append(deleteButton('Supprimer ce rappel', async () => {
       if (await askConfirm(`Supprimer le rappel « ${r.title} » ?`)) await remove('reminders', r.id);
