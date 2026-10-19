@@ -1113,3 +1113,4 @@ Object.assign(exports, require('./appels'));
 
 // Alertes sur le téléphone des responsables : tablette débranchée ou qui ne répond plus.
 exports.alertesTablettes = require('./alertes').alertesTablettes;
+exports.alerteMatin = require('./alertes').alerteMatin;
