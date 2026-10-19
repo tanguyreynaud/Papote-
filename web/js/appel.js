@@ -318,8 +318,12 @@ export async function answerIncoming(fid, callId, me, ui) {
   const t0 = performance.now();
   const temps = {};
   const taken = () => { const e = new Error('Un autre proche a déjà répondu'); e.name = 'TakenError'; return e; };
-  const first = (await getDoc(ref)).data();
+  let first = (await getDoc(ref)).data();
   if (!first || first.state !== 'ringing') throw taken();
+  // La tablette écrit l'appel avant d'avoir préparé la liaison (pour faire sonner plus tôt) :
+  // si on répond très vite, on attend son offre quelques secondes.
+  if (!first.offer) first = await attendreOffre(ref);
+  if (!first || first.state !== 'ringing' || !first.offer) throw taken();
 
   const [stream, ice] = await Promise.all([
     navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true }, video: false }),
@@ -478,4 +482,20 @@ async function cheminChoisi(pc) {
   } catch (e) {
     return 'inconnu';
   }
+}
+
+// Attend que l'appel de la tablette contienne son offre (au plus 15 s).
+function attendreOffre(ref) {
+  return new Promise((resolve) => {
+    let stop = () => {};
+    const timer = setTimeout(() => { stop(); resolve(null); }, 15_000);
+    stop = onSnapshot(ref, (snap) => {
+      const data = snap.data();
+      if (!data || data.offer || data.state !== 'ringing') {
+        clearTimeout(timer);
+        stop();
+        resolve(data || null);
+      }
+    }, () => { clearTimeout(timer); resolve(null); });
+  });
 }

@@ -84,6 +84,40 @@ async function loadIceServers() {
   }
   return { iceServers: STUN };
 }
+// Relevé des appels qui échouent (fonction serveur incidentAppel), pour repérer les pannes.
+let incidentFn = null;
+function reportCallIncident(raison, detail = '', cid = null) {
+  (async () => {
+    if (!incidentFn) {
+      const { getFunctions, httpsCallable } = await import('https://www.gstatic.com/firebasejs/12.19.0/firebase-functions.js');
+      incidentFn = httpsCallable(getFunctions(app, 'europe-west1'), 'incidentAppel');
+    }
+    await incidentFn({
+      cote: 'tablette',
+      raison: String(raison).slice(0, 60),
+      detail: String(detail || '').slice(0, 300),
+      cid,
+      relais: !!(iceCache && iceCache.value.iceServers.length > STUN.length),
+      navigateur: navigator.userAgent.slice(0, 200),
+    });
+  })().catch(() => {});
+}
+
+// Chemin de la liaison : « host » (même réseau), « srflx » (direct par internet) ou « relay ».
+async function cheminChoisi(pc) {
+  try {
+    const stats = await pc.getStats();
+    let pair = null;
+    stats.forEach((r) => { if (r.type === 'candidate-pair' && r.state === 'succeeded' && (r.nominated || r.selected)) pair = r; });
+    if (!pair) return 'inconnu';
+    const local = stats.get(pair.localCandidateId) || {};
+    const distant = stats.get(pair.remoteCandidateId) || {};
+    return `${local.candidateType || '?'}/${local.protocol || '?'}-${distant.candidateType || '?'}`;
+  } catch (e) {
+    return 'inconnu';
+  }
+}
+
 const FRESH_MS = 60_000; // un appel plus ancien n'est plus considéré comme en train de sonner
 const FID_KEY = 'papote.appels.fid';
 
@@ -565,6 +599,7 @@ async function answer() {
     if (!stream) stream = await navigator.mediaDevices.getUserMedia(CAMERA);
   } catch (e) {
     console.error(e);
+    reportCallIncident('camera', `${e && e.name}: ${e && e.message}`, id);
     setStatus('La caméra ne répond pas.');
     updateDoc(callRef, { state: 'ended', endedAt: serverTimestamp() }).catch(() => {});
     setTimeout(closeView, 3000);
@@ -588,8 +623,14 @@ async function answer() {
   pc.onconnectionstatechange = () => {
     clearTimeout(lostTimer);
     if (pc.connectionState === 'connected') $('call-status').textContent = '';
-    if (pc.connectionState === 'disconnected') lostTimer = setTimeout(() => hangup('La connexion a été perdue.'), 8000);
-    if (pc.connectionState === 'failed') hangup('La connexion a été perdue.');
+    if (pc.connectionState === 'disconnected') lostTimer = setTimeout(() => {
+      reportCallIncident('video-coupee', 'liaison perdue 8 s', id);
+      hangup('La connexion a été perdue.');
+    }, 8000);
+    if (pc.connectionState === 'failed') {
+      reportCallIncident('liaison-video', `ice=${pc.iceConnectionState}`, id);
+      hangup('La connexion a été perdue.');
+    }
   };
 
   await pc.setRemoteDescription(data.offer);
@@ -647,7 +688,7 @@ async function familyPeople() {
     .filter((m) => m.role === 'famille' && (m.status === undefined || m.status === 'active'));
 }
 
-window.papoteCallFamily = ({ to = null, onState = () => {} } = {}) => {
+window.papoteCallFamily = ({ to = null, toName = null, onState = () => {} } = {}) => {
   let done = false;
   let call = null; // { ref, pc, stream, stops, timer, audio }
   const emit = (state, info = {}) => {
@@ -663,7 +704,17 @@ window.papoteCallFamily = ({ to = null, onState = () => {} } = {}) => {
       if (call.pc) call.pc.close();
       if (call.stream) call.stream.getTracks().forEach((t) => t.stop());
       if (call.audio) call.audio.srcObject = null;
-      if (notify && call.ref) updateDoc(call.ref, { state: notify, endedAt: serverTimestamp() }).catch(() => {});
+      if (call.cam) call.cam.getTracks().forEach((t) => t.stop());
+      if (call.cam || !$('call-out-hangup').hidden) {
+        $('call-out-hangup').hidden = true;
+        $('call-view').hidden = true;
+        $('call-remote').srcObject = null;
+        $('call-local').srcObject = null;
+      }
+      // L'appel est peut-être encore en cours d'écriture : on attend qu'il existe pour le clore.
+      if (notify && call.ref) {
+        (call.ready || Promise.resolve()).then(() => updateDoc(call.ref, { state: notify, endedAt: serverTimestamp() })).catch(() => {});
+      }
     }
     if (active && active.outgoing) active = null;
     if (android()) android().inCall(false);
@@ -675,57 +726,113 @@ window.papoteCallFamily = ({ to = null, onState = () => {} } = {}) => {
     if (paused() || !fid || !auth.currentUser) { finish('failed'); return; }
     if (active || ringing) { finish('busy'); return; }
     stopPresence();
-    call = { ref: null, pc: null, stream: null, stops: [], timer: null, lostTimer: null, audio: null };
+    call = { ref: null, pc: null, stream: null, stops: [], timer: null, lostTimer: null, audio: null, video: null, cam: null };
     active = { id: null, outgoing: true, finish, stops: call.stops };
     if (android()) android().inCall(true);
 
-    // Tout en même temps : proches, nom de la famille, micro et relais.
-    const [people, familyName, stream, ice] = await Promise.all([
-      familyPeople().catch(() => []),
-      getDoc(doc(db, 'families', fid)).then((d) => (d.data() && d.data().name) || 'Mamie').catch(() => 'Mamie'),
+    // L'appel est écrit TOUT DE SUITE, sans offre : les téléphones sonnent pendant que la tablette
+    // ouvre le micro et prépare la liaison. L'offre suit dans le même document (le proche l'attend
+    // s'il répond très vite).
+    const t0 = performance.now();
+    const ref = doc(collection(db, 'families', fid, 'calls'));
+    call.ref = ref;
+    active.id = ref.id;
+    const familyName = familyNameCache || 'Mamie';
+    call.ready = setDoc(ref, {
+      callerUid: auth.currentUser.uid,
+      callerName: familyName,
+      calleeUid: to || null, // jamais toute la famille par erreur
+      calleeName: toName || null,
+      state: 'ringing',
+      offer: null,
+      answer: null,
+      createdAt: serverTimestamp(),
+      endedAt: null,
+    });
+
+    // En même temps : micro, relais (déjà en mémoire) et la fiche du proche appelé.
+    // La liste de la famille (avec les photos, lourde) se lit à côté.
+    const peopleP = familyPeople().catch(() => []);
+    // « Ça sonne » dès que l'appel est écrit (les téléphones sont prévenus à ce moment-là).
+    call.ready.then(() => {
+      if (done) return;
+      emit('ringing', { names: toName ? [toName] : [] });
+      call.timer = setTimeout(() => finish('missed', 'missed'), OUT_RING_MS);
+    }).catch(() => {});
+    const [, stream, ice, target] = await Promise.all([
+      call.ready,
       navigator.mediaDevices.getUserMedia({ audio: CAMERA.audio, video: false }),
       iceServers(),
+      to ? getDoc(doc(db, 'families', fid, 'members', to)).then((d) => (d.exists() ? { uid: d.id, ...d.data() } : null)).catch(() => null) : null,
     ]);
     call.stream = stream;
-    const target = to ? people.find((m) => m.uid === to) : null;
     if (done) { call.stream.getTracks().forEach((t) => t.stop()); return; }
+    const tEcrit = Math.round(performance.now() - t0);
+    peopleP.then((people) => { if (!done && !call.answered) emit('ringing', { names: (target ? [target] : people).map((m) => m.name) }); });
     const pc = new RTCPeerConnection(ice);
     call.pc = pc;
     if (done) { pc.close(); return; }
     call.stream.getTracks().forEach((t) => pc.addTrack(t, call.stream));
+    // Une voie vidéo prévue dès le départ, vide : le proche peut allumer sa caméra pendant
+    // l'appel sans renégociation, et la tablette répond alors avec la sienne.
+    call.video = pc.addTransceiver('video', { direction: 'sendrecv' });
     call.audio = new Audio();
     call.audio.autoplay = true;
-    pc.ontrack = (e) => { call.audio.srcObject = e.streams[0]; call.audio.play().catch(() => {}); };
+    pc.ontrack = (e) => {
+      if (e.track.kind === 'audio') {
+        call.audio.srcObject = e.streams[0] || new MediaStream([e.track]);
+        call.audio.play().catch(() => {});
+        return;
+      }
+      // Voie vidéo du proche, gardée de côté. La caméra de Mamie ne s'allume JAMAIS d'elle-même :
+      // seulement quand le proche a appuyé sur « Passer en vidéo » (answer.video, plus bas).
+      call.remoteVideo = e.track;
+    };
+    const startOutgoingVideo = async (remoteTrack) => {
+      if (done || call.cam || call.videoStarting) return;
+      call.videoStarting = true;
+      try {
+        call.cam = await navigator.mediaDevices.getUserMedia({ video: CAMERA.video, audio: false });
+      } catch (e) {
+        reportCallIncident('camera-sortant', `${e && e.name}: ${e && e.message}`, call.ref && call.ref.id);
+        call.cam = null;
+      }
+      if (done) { if (call.cam) call.cam.getTracks().forEach((t) => t.stop()); return; }
+      if (call.cam) call.video.sender.replaceTrack(call.cam.getVideoTracks()[0]).catch(() => {});
+      $('call-remote').srcObject = new MediaStream([remoteTrack]);
+      $('call-local').srcObject = call.cam;
+      $('call-wait').hidden = true;
+      $('call-out-hangup').hidden = false;
+      $('call-view').hidden = false;
+      emit('video', {});
+    };
 
-    const ref = doc(collection(db, 'families', fid, 'calls'));
-    call.ref = ref;
-    active.id = ref.id;
     pc.onicecandidate = (e) => {
       if (e.candidate) addDoc(collection(ref, 'callerCandidates'), e.candidate.toJSON()).catch(() => {});
     };
     pc.onconnectionstatechange = () => {
       clearTimeout(call.lostTimer);
-      if (pc.connectionState === 'disconnected') call.lostTimer = setTimeout(() => finish('ended', 'ended'), 8000);
-      if (pc.connectionState === 'failed') finish('failed', 'ended');
+      // Mise en relation lente (de la réponse du proche à la liaison) : détail et chemin notés.
+      if (pc.connectionState === 'connected' && call.answeredAt) {
+        const ms = Math.round(performance.now() - call.answeredAt);
+        if (ms > 3000) cheminChoisi(pc).then((chemin) => reportCallIncident('lent', `liaison=${ms}ms chemin=${chemin}`, ref.id));
+      }
+      if (pc.connectionState === 'disconnected') call.lostTimer = setTimeout(() => {
+        reportCallIncident('audio-coupe', 'liaison perdue 8 s', ref.id);
+        finish('ended', 'ended');
+      }, 8000);
+      if (pc.connectionState === 'failed') {
+        reportCallIncident('liaison-audio', `ice=${pc.iceConnectionState}`, ref.id);
+        finish('failed', 'ended');
+      }
     };
 
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
     if (done) return;
-    await setDoc(ref, {
-      callerUid: auth.currentUser.uid,
-      callerName: familyName,
-      calleeUid: target ? target.uid : null,
-      calleeName: target ? target.name : null,
-      state: 'ringing',
-      offer: { type: offer.type, sdp: offer.sdp },
-      answer: null,
-      createdAt: serverTimestamp(),
-      endedAt: null,
-    });
-    if (done) { updateDoc(ref, { state: 'ended', endedAt: serverTimestamp() }).catch(() => {}); return; }
-    emit('ringing', { names: (target ? [target] : people).map((m) => m.name) });
-    call.timer = setTimeout(() => finish('missed', 'missed'), OUT_RING_MS);
+    await updateDoc(ref, { offer: { type: offer.type, sdp: offer.sdp } });
+    const tOffre = Math.round(performance.now() - t0);
+    if (tOffre > 3000) reportCallIncident('depart-lent', `appel-ecrit+micro=${tEcrit}ms offre=${tOffre}ms`, ref.id);
 
     // Les candidats du proche peuvent arriver avant sa réponse : on les garde jusque-là
     // (sinon ils sont refusés et la liaison échoue une fois sur deux).
@@ -736,6 +843,8 @@ window.papoteCallFamily = ({ to = null, onState = () => {} } = {}) => {
       if (!data || done) return;
       if (data.answer && !answered) {
         answered = true;
+        call.answered = true;
+        call.answeredAt = performance.now();
         clearTimeout(call.timer);
         try {
           await pc.setRemoteDescription({ type: data.answer.type, sdp: data.answer.sdp });
@@ -744,8 +853,14 @@ window.papoteCallFamily = ({ to = null, onState = () => {} } = {}) => {
           return;
         }
         early.splice(0).forEach((c) => pc.addIceCandidate(c).catch(() => {}));
-        const who = people.find((m) => m.uid === data.answer.uid) || {};
+        // La photo du proche si la liste est déjà là (au plus 1,5 s d'attente), sinon son prénom seul.
+        const people = await Promise.race([peopleP, new Promise((r) => setTimeout(() => r([]), 1500))]);
+        const who = people.find((m) => m.uid === data.answer.uid) || (target && target.uid === data.answer.uid ? target : {});
         emit('connected', { uid: data.answer.uid || null, name: data.answer.name || who.name || '', face: who.face || null });
+      }
+      // Le proche a allumé sa caméra (geste volontaire sur son téléphone) : Mamie passe en vidéo.
+      if (answered && data.answer && data.answer.video === true && !call.cam && call.remoteVideo) {
+        startOutgoingVideo(call.remoteVideo);
       }
       if (data.state === 'ended') finish('ended');
       if (data.state === 'declined' || data.state === 'missed') finish('missed');
@@ -759,6 +874,7 @@ window.papoteCallFamily = ({ to = null, onState = () => {} } = {}) => {
     }));
   })().catch((e) => {
     console.warn('Appel sortant', e);
+    reportCallIncident('depart-audio', `${e && e.name}: ${e && e.message}`, call && call.ref ? call.ref.id : null);
     finish('failed', call && call.ref ? 'ended' : null);
   });
 
@@ -776,13 +892,18 @@ window.papoteAppelsLeave = async () => {
 };
 
 $('ring-answer').addEventListener('click', answer);
+$('call-out-hangup').addEventListener('click', () => { if (active && active.finish) active.finish('ended', 'ended'); });
 $('call-remote').addEventListener('playing', () => { if (active) $('call-wait').hidden = true; });
 
 // Écoute en direct du marqueur de changement : la tablette se met à jour aussitôt,
 // et l'app Android peut espacer ses vérifications (moins de lectures, donc moins de coûts).
+// Nom de la famille (« Mamie »), gardé pour les appels sortants : pas de lecture au moment d'appeler.
+let familyNameCache = '';
+
 function watchFamily() {
   let first = true;
-  onSnapshot(doc(db, 'families', fid), () => {
+  onSnapshot(doc(db, 'families', fid), (snap) => {
+    familyNameCache = (snap.data() && snap.data().name) || familyNameCache;
     if (first) { first = false; return; }
     if (android() && android().changed) android().changed();
   }, (err) => {
