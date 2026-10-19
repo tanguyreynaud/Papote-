@@ -15,6 +15,8 @@ let stops = [];
 let reminders = [];
 let birthdays = [];
 let seg = 'reminder';
+// Élément en cours de modification : { coll: 'reminders' | 'birthdays', id }, sinon null (ajout).
+let editing = null;
 
 function todayKey() {
   const d = new Date();
@@ -47,6 +49,16 @@ async function remove(kind, id) {
   batch.delete(doc(db, 'families', session.fid, kind, id));
   bumpRev(batch, session.fid);
   await batch.commit();
+}
+
+function editButton(label, onClick) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'link small agenda-edit';
+  b.textContent = 'Modifier';
+  b.setAttribute('aria-label', label);
+  b.addEventListener('click', onClick);
+  return b;
 }
 
 function item(kindClass, kindLabel, titleText, whenText) {
@@ -86,6 +98,7 @@ function renderReminders() {
       seen.textContent = `${session.family.name} a vu le rappel à ${r.lastSeen.slice(11)}`;
       body.append(seen);
     }
+    body.append(editButton(`Modifier le rappel « ${r.title} »`, () => openEdit('reminders', r)));
     li.append(deleteButton('Supprimer ce rappel', async () => {
       if (await askConfirm(`Supprimer le rappel « ${r.title} » ?`)) await remove('reminders', r.id);
     }));
@@ -116,6 +129,7 @@ function renderBirthdays() {
     s.className = b.days === 0 ? 'seen small' : 'muted small';
     s.textContent = soon;
     body.append(s);
+    body.append(editButton(`Modifier l'anniversaire de ${b.name}`, () => openEdit('birthdays', b)));
     li.append(deleteButton("Supprimer l'anniversaire", async () => {
       if (await askConfirm(`Supprimer l'anniversaire de ${b.name} ?`)) await remove('birthdays', b.id);
     }));
@@ -143,7 +157,7 @@ function setSeg(next) {
   document.querySelectorAll('.seg').forEach((b) => b.classList.toggle('active', b.dataset.seg === seg));
   $('rem-fields').hidden = seg !== 'reminder';
   $('bday-fields').hidden = seg !== 'birthday';
-  $('btn-reminder').textContent = seg === 'reminder' ? 'Ajouter le rappel' : "Ajouter l'anniversaire";
+  $('btn-reminder').textContent = editing ? 'Enregistrer' : seg === 'reminder' ? 'Ajouter le rappel' : "Ajouter l'anniversaire";
   $('rem-error').hidden = true;
 }
 
@@ -154,14 +168,62 @@ MOIS.forEach((m, i) => $('bday-month').add(new Option(m, String(i + 1))));
 
 $('rem-repeat').addEventListener('change', syncRepeatFields);
 
-$('add-reminder').addEventListener('click', () => {
-  setSeg('reminder');
+function openSheet() {
   $('sheet-reminder').hidden = false;
   history.pushState({ page: 'agenda', sheet: true }, '');
+}
+
+$('add-reminder').addEventListener('click', () => {
+  editing = null;
+  $('reminder-title').textContent = "Ajouter à l'agenda";
+  $('agenda-seg').hidden = false;
+  $('rem-title').value = '';
+  $('bday-name').value = '';
+  $('bday-year').value = '';
+  $('rem-days').querySelectorAll('input').forEach((i) => { i.checked = false; });
+  setSeg('reminder');
+  openSheet();
   $('rem-title').focus();
 });
+
+// Modifier un rappel ou un anniversaire : même fenêtre, remplie, sans changer de type.
+function openEdit(coll, data) {
+  editing = { coll, id: data.id };
+  $('agenda-seg').hidden = true;
+  if (coll === 'reminders') {
+    $('reminder-title').textContent = 'Modifier le rappel';
+    $('rem-title').value = data.title || '';
+    const kind = document.querySelector(`input[name="rem-kind"][value="${data.kind || 'autre'}"]`);
+    if (kind) kind.checked = true;
+    $('rem-repeat').value = data.repeat || 'daily';
+    $('rem-date').min = '';
+    $('rem-date').value = data.date || todayKey();
+    $('rem-days').querySelectorAll('input').forEach((i) => { i.checked = (data.days || []).includes(Number(i.value)); });
+    $('rem-time').value = data.time || '09:00';
+    syncRepeatFields();
+    setSeg('reminder');
+  } else {
+    $('reminder-title').textContent = "Modifier l'anniversaire";
+    $('bday-name').value = data.name || '';
+    $('bday-day').value = String(data.day || 1);
+    $('bday-month').value = String(data.month || 1);
+    $('bday-year').value = data.year ? String(data.year) : '';
+    setSeg('birthday');
+  }
+  openSheet();
+}
 $('reminder-close').addEventListener('click', () => history.back());
 $('sheet-reminder').addEventListener('click', (e) => { if (e.target === $('sheet-reminder')) history.back(); });
+
+// Petit message en bas de l'écran (même style que l'app).
+function toastAgenda(text) {
+  const t = document.getElementById('toast');
+  if (!t) return;
+  t.textContent = text;
+  t.hidden = false;
+  clearTimeout(toastAgenda.timer);
+  toastAgenda.timer = setTimeout(() => { t.hidden = true; }, 2500);
+}
 
 function fail(message) {
   $('rem-error').textContent = message;
@@ -210,9 +272,17 @@ $('form-reminder').addEventListener('submit', async (e) => {
   $('btn-reminder').disabled = true;
   try {
     const batch = writeBatch(db);
-    batch.set(doc(collection(db, 'families', session.fid, seg === 'reminder' ? 'reminders' : 'birthdays')), data);
+    if (editing) {
+      // Modification : on garde l'auteur, la date de création et la confirmation du jour.
+      const { createdBy, createdAt, lastAck, ...changes } = data;
+      batch.update(doc(db, 'families', session.fid, editing.coll, editing.id), changes);
+    } else {
+      batch.set(doc(collection(db, 'families', session.fid, seg === 'reminder' ? 'reminders' : 'birthdays')), data);
+    }
     bumpRev(batch, session.fid);
     await batch.commit();
+    if (editing) toastAgenda(editing.coll === 'reminders' ? 'Rappel modifié' : 'Anniversaire modifié');
+    editing = null;
     $('rem-title').value = '';
     $('bday-name').value = '';
     $('bday-year').value = '';
