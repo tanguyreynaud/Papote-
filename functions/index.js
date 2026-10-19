@@ -22,6 +22,7 @@
 //   commandeModifiee   commande modifiée : e-mail d'envoi, de retour, d'étiquette ; remboursement au retour
 //   rappelsJumelage    chaque jour : rappel au client dont la tablette n'est pas jumelée (J+5, J+12)
 //   coupeCircuit       avis du budget Google Cloud : e-mail à 30 € et 100 €, facturation coupée à 150 € (budget.js)
+//   jetonAppCheck      POST depuis la tablette : jeton App Check contre sa clé d'installation (appcheck.js)
 //   quota*             plafonds de stockage par famille appliqués par le serveur (quota.js)
 //   gestion*           page de gestion admin : stock, commandes, factures, comptabilité (gestion.js)
 //
@@ -1149,6 +1150,8 @@ Object.assign(exports, require('./appels'));
 
 // Protections contre une facture qui s'emballe : coupe-circuit à 150 € et plafonds de stockage.
 exports.coupeCircuit = require('./budget').coupeCircuit;
+// Jeton App Check des tablettes (clé posée à l'installation).
+exports.jetonAppCheck = require('./appcheck').jetonAppCheck;
 Object.assign(exports, (({ quotaFichier, quotaFichierEfface, quotaEnvois }) => ({ quotaFichier, quotaFichierEfface, quotaEnvois }))(require('./quota')));
 
 // Alertes sur le téléphone des responsables : tablette débranchée ou qui ne répond plus.
