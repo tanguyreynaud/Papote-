@@ -991,3 +991,23 @@ body:not(.on-support) .ps-bouton, body:not(.on-support) .ps-panneau { display: n
 .defil-sheet > .defil-rail { top: 28px; bottom: 16px; right: 6px; }
 .defil-rail span { display: block; width: 100%; border-radius: 3px; background: var(--accent); }
 #sheet-wifi .wifi-list { max-height: 55vh; overflow-y: auto; }
+
+/* Mamie appelle (audio) : sonnerie en plein écran, puis appel sans vidéo */
+.incoming {
+  position: fixed; inset: 0; z-index: 40;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 24px;
+  padding: 24px; text-align: center;
+  background: linear-gradient(160deg, #14532d, #166534 55%, #15803d);
+  color: #fff;
+}
+.incoming[hidden] { display: none; }
+.incoming-icon { margin: 0; font-size: 64px; animation: incoming-pulse 1.2s ease-in-out infinite; }
+.incoming-name { margin: 0; font-size: 28px; font-weight: 700; }
+.incoming-actions { display: flex; gap: 16px; }
+.incoming-actions button { min-width: 130px; padding: 16px 20px; border-radius: 999px; font-size: 18px; font-weight: 700; }
+.incoming-later { background: rgba(255, 255, 255, .18); color: #fff; }
+.incoming-answer { background: #fff; color: #166534; }
+@keyframes incoming-pulse { 50% { transform: scale(1.15); } }
+.call.audio { background: linear-gradient(160deg, #14532d, #166534 55%, #15803d); }
+.call.audio video { display: none; }
+.call.audio .call-status { top: 38%; }

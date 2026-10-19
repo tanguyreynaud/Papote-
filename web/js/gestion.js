@@ -2346,18 +2346,22 @@ function etapesReceptionTablette() {
         const t = fiche(e) || {};
         e.numero = e.numero || t.numero || '';
         e.modele = e.modele || t.modele || '';
+        e.fournisseur = e.fournisseur || t.fournisseur || '';
         const form = h('form', { class: 'grille', onsubmit: (ev) => ev.preventDefault() },
           h('label', {}, 'N° de série ', h('span', { class: 'avec-bouton' }, h('input', { name: 'numero', value: e.numero, autocomplete: 'off' }),
             'BarcodeDetector' in window ? h('button', { type: 'button', class: 'secondary small-btn', onclick: () => scanner(form, 'numero') }, 'Scanner') : null)),
-          h('label', {}, 'Modèle ', h('input', { name: 'modele', value: e.modele, placeholder: 'ex. M107' })));
-        const lire = () => { e.numero = form.numero.value.trim(); e.modele = form.modele.value.trim(); maj(); };
+          h('label', {}, 'Modèle ', h('input', { name: 'modele', value: e.modele, placeholder: 'ex. M107' })),
+          h('label', {}, 'Vendeur ', h('input', { name: 'fournisseur', value: e.fournisseur, placeholder: 'ex. Cdiscount' })));
+        const lire = () => {
+          e.numero = form.numero.value.trim(); e.modele = form.modele.value.trim(); e.fournisseur = form.fournisseur.value.trim(); maj();
+        };
         form.addEventListener('input', lire);
         $('d-scan').addEventListener('close', lire);
         zone.append(form);
       },
       pret: (e) => !!e.numero,
       async valider(e) {
-        if (e.id) await appeler('gestionStock', { action: 'modifier', id: e.id, champs: { numero: e.numero, modele: e.modele } });
+        if (e.id) await appeler('gestionStock', { action: 'modifier', id: e.id, champs: { numero: e.numero, modele: e.modele, ...(e.fournisseur ? { fournisseur: e.fournisseur } : {}) } });
       },
     },
     {

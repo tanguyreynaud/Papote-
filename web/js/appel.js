@@ -3,7 +3,7 @@
 import {
   db, auth, doc, getDoc, collection, setDoc, addDoc, updateDoc, onSnapshot, serverTimestamp,
 } from './firebase.js';
-import { query, where, getDocs } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
+import { query, where, getDocs, runTransaction } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
 
 // Sans relais TURN, la vidéo ne passe pas entre deux réseaux différents (4G, box…).
 // Le relais est décrit dans Firestore (config/turn), pas dans le code, qui est public :
@@ -250,3 +250,106 @@ export async function startCall(fid, caller, ui) {
   return { hangup: () => finish('ended', 'ended') };
 }
 
+
+// ---------- Mamie appelle la famille (audio seulement) ----------
+// La tablette crée l'appel avec calleeUid = un proche, ou null pour toute la famille.
+// Le premier qui répond l'emporte (transaction) et écrit son uid et son prénom dans answer.
+
+const INCOMING_FRESH_MS = 60_000;
+
+// En direct : les appels de la tablette qui sonnent pour moi. isTablet(uid) dit si l'appelant
+// est une tablette de la famille (les appels vidéo des proches vers Mamie sont ignorés).
+export function watchIncomingCalls(fid, uid, isTablet, onChange) {
+  let calls = [];
+  let last = '';
+  const evaluate = () => {
+    const now = Date.now();
+    const list = calls.filter((c) => c.callerUid !== uid && isTablet(c.callerUid)
+      && (!c.calleeUid || c.calleeUid === uid)
+      && c.createdAt && now - c.createdAt.toMillis() < INCOMING_FRESH_MS);
+    const key = list.map((c) => c.id).join(',');
+    if (key !== last) { last = key; onChange(list); }
+  };
+  const stop = onSnapshot(query(collection(db, 'families', fid, 'calls'), where('state', '==', 'ringing')), (snap) => {
+    calls = snap.docs.map((d) => ({ id: d.id, ...d.data({ serverTimestamps: 'estimate' }) }));
+    evaluate();
+  }, () => { calls = []; evaluate(); });
+  const timer = setInterval(evaluate, 5000);
+  return () => { stop(); clearInterval(timer); };
+}
+
+/**
+ * Répond à un appel de la tablette. ui.audio : élément <audio> ; ui.onState('connected') ;
+ * ui.onEnd(reason) : 'ended' | 'failed'. Lève une erreur nommée TakenError si un autre
+ * proche a répondu avant. Renvoie { hangup() }.
+ */
+export async function answerIncoming(fid, callId, me, ui) {
+  const ref = doc(db, 'families', fid, 'calls', callId);
+  const taken = () => { const e = new Error('Un autre proche a déjà répondu'); e.name = 'TakenError'; return e; };
+  const first = (await getDoc(ref)).data();
+  if (!first || first.state !== 'ringing') throw taken();
+
+  const stream = await navigator.mediaDevices.getUserMedia({
+    audio: { echoCancellation: true, noiseSuppression: true }, video: false,
+  });
+  const pc = new RTCPeerConnection(await iceServers());
+  stream.getTracks().forEach((t) => pc.addTrack(t, stream));
+  pc.ontrack = (e) => { ui.audio.srcObject = e.streams[0]; ui.audio.play().catch(() => {}); };
+  let accepted = false;
+  const pending = [];
+  pc.onicecandidate = (e) => {
+    if (!e.candidate) return;
+    const c = e.candidate.toJSON();
+    if (accepted) addDoc(collection(ref, 'calleeCandidates'), c).catch(() => {});
+    else pending.push(c);
+  };
+
+  const stops = [];
+  let finished = false;
+  let lostTimer = null;
+  const finish = (reason, notify) => {
+    if (finished) return;
+    finished = true;
+    clearTimeout(lostTimer);
+    stops.forEach((stop) => stop());
+    pc.close();
+    stream.getTracks().forEach((t) => t.stop());
+    ui.audio.srcObject = null;
+    if (notify) updateDoc(ref, { state: notify, endedAt: serverTimestamp() }).catch(() => {});
+    ui.onEnd(reason);
+  };
+
+  try {
+    await pc.setRemoteDescription(first.offer);
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    await runTransaction(db, async (tx) => {
+      const cur = await tx.get(ref);
+      if (!cur.exists() || cur.data().state !== 'ringing') throw taken();
+      tx.update(ref, { state: 'accepted', answer: { type: answer.type, sdp: answer.sdp, uid: me.uid, name: me.name } });
+    });
+  } catch (e) {
+    pc.close();
+    stream.getTracks().forEach((t) => t.stop());
+    throw e;
+  }
+  accepted = true;
+  pending.forEach((c) => addDoc(collection(ref, 'calleeCandidates'), c).catch(() => {}));
+
+  stops.push(onSnapshot(collection(ref, 'callerCandidates'), (snap) => {
+    snap.docChanges().forEach((c) => {
+      if (c.type === 'added') pc.addIceCandidate(c.doc.data()).catch(() => {});
+    });
+  }));
+  stops.push(onSnapshot(ref, (snap) => {
+    const state = snap.data() && snap.data().state;
+    if (['ended', 'missed', 'declined'].includes(state)) finish('ended', null);
+  }));
+  pc.onconnectionstatechange = () => {
+    clearTimeout(lostTimer);
+    if (pc.connectionState === 'connected') ui.onState('connected');
+    if (pc.connectionState === 'disconnected') lostTimer = setTimeout(() => finish('failed', 'ended'), 8000);
+    if (pc.connectionState === 'failed') finish('failed', 'ended');
+  };
+  return { hangup: () => finish('ended', 'ended') };
+}

@@ -229,6 +229,10 @@
         <span class="avatar avatar-empty"><svg><use href="#i-user"/></svg></span>
         <span><strong>Ajoutez votre photo</strong><br><span class="muted small">Pour que <span class="grand-name"></span> vous reconnaisse</span></span>
       </button>
+      <button type="button" id="push-nudge" class="card nudge" hidden>
+        <span class="avatar avatar-empty" aria-hidden="true">&#128276;</span>
+        <span><strong>Recevoir les appels de <span class="grand-name"></span></strong><br><span class="muted small">Votre téléphone sonnera même app fermée</span></span>
+      </button>
       <button type="button" id="btn-install" class="install-fab" hidden><svg><use href="#i-download"/></svg>Installer l'app</button>
       <div class="tiles">
         <button type="button" class="tile t-call" id="tile-call">
@@ -713,8 +717,19 @@
     </div>
   </div>
 
-  <!-- Appel vidéo en cours -->
+  <!-- Mamie appelle (audio) -->
+  <div id="incoming" class="incoming" hidden>
+    <p class="incoming-icon" aria-hidden="true">&#128222;</p>
+    <p id="incoming-name" class="incoming-name"></p>
+    <div class="incoming-actions">
+      <button type="button" id="incoming-later" class="incoming-later">Plus tard</button>
+      <button type="button" id="incoming-answer" class="incoming-answer">Répondre</button>
+    </div>
+  </div>
+
+  <!-- Appel vidéo en cours (ou audio, classe « audio ») -->
   <div id="call" class="call" hidden>
+    <audio id="call-audio" autoplay></audio>
     <video id="call-remote" autoplay playsinline></video>
     <video id="call-local" autoplay playsinline muted></video>
     <p id="call-status" class="call-status"></p>

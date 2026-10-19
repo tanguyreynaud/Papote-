@@ -19,7 +19,8 @@ import {
   abonnementOk, FORMULES, LIBELLES, ouvrirPortail, payer, rattacherCommande, resilier, annulerResiliation,
   finDeContrat, retracter,
 } from './abonnement.js';
-import { startCall, watchTabletBusy } from './appel.js';
+import { startCall, watchTabletBusy, watchIncomingCalls, answerIncoming } from './appel.js';
+import { pushSupported, pushAllowed, pushRefused, enablePush, closeCallNotification } from './push.js';
 import { prepareVideo } from './video.js';
 import { startAgenda, stopAgenda } from './agenda.js';
 import {
@@ -41,6 +42,7 @@ const MAX_IMAGE_CHARS = 900_000; // un document Firestore est limité à 1 Mo
 let session = null; // { fid, family, member, uid }
 let stopMembers = null;
 let stopTabletBusy = null;
+let stopIncoming = null;
 
 const VIEWS = ['view-invite', 'view-profile', 'view-pair', 'loading', 'view-login', 'view-link-email', 'view-invited', 'view-pending', 'view-join', 'view-home', 'view-photos', 'view-videos', 'view-messages', 'view-agenda', 'view-settings', 'view-notifs', 'view-support'];
 
@@ -1155,6 +1157,7 @@ function enterCallScreen() {
 
 function leaveCallScreen() {
   $('call').hidden = true;
+  $('call').classList.remove('audio');
   $('call').classList.remove('force-landscape');
   try { if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); } catch (e) { /* rien */ }
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
@@ -1192,6 +1195,103 @@ function renderCallTile() {
   tile.classList.toggle('busy', busy);
   tile.querySelector('span').textContent = busy ? 'Déjà en appel' : 'Appel vidéo';
 }
+
+// ---------- Mamie appelle (audio) ----------
+// Une sonnerie en plein écran tant que l'appel sonne pour moi ; « Répondre » ouvre un appel
+// audio. Si un autre proche répond avant, la sonnerie s'arrête toute seule.
+let incoming = null;   // appel qui sonne (données de la tablette)
+let ringTone = null;   // { ctx, timer }
+
+function startRingTone() {
+  if (ringTone) return;
+  let ctx = null;
+  try { ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { /* pas de son */ }
+  const beep = () => {
+    try { navigator.vibrate?.([600, 300, 600]); } catch (e) { /* pas de vibreur */ }
+    if (!ctx) return;
+    [0, 0.45].forEach((at) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.frequency.value = 880;
+      gain.gain.value = 0.25;
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(ctx.currentTime + at);
+      osc.stop(ctx.currentTime + at + 0.3);
+    });
+  };
+  beep();
+  ringTone = { ctx, timer: setInterval(beep, 2000) };
+}
+
+function stopRingTone() {
+  if (!ringTone) return;
+  clearInterval(ringTone.timer);
+  try { navigator.vibrate?.(0); } catch (e) { /* rien */ }
+  ringTone.ctx?.close().catch(() => {});
+  ringTone = null;
+}
+
+function showIncoming(call) {
+  if (currentCall || callStarting) call = null; // déjà en communication
+  if (call && incoming && incoming.id === call.id) return;
+  incoming = call;
+  $('incoming').hidden = !call;
+  if (!call) { stopRingTone(); return; }
+  $('incoming-name').textContent = `${call.callerName || session.family.name} vous appelle`;
+  startRingTone();
+}
+
+async function answerFromTablet() {
+  const call = incoming;
+  if (!call) return;
+  showIncoming(null);
+  closeCallNotification(call.id);
+  callStarting = true;
+  $('call').classList.add('audio');
+  $('call').hidden = false;
+  setCallStatus('Connexion…');
+  try {
+    currentCall = await answerIncoming(session.fid, call.id, { uid: session.uid, name: session.member.name }, {
+      audio: $('call-audio'),
+      onState: () => setCallStatus(`En ligne avec ${call.callerName || session.family.name}`),
+      onEnd: (reason) => {
+        currentCall = null;
+        setCallStatus(reason === 'failed' ? 'La connexion a été perdue' : 'Appel terminé');
+        renderCallTile();
+        setTimeout(() => { if (!currentCall) leaveCallScreen(); }, 2000);
+      },
+    });
+  } catch (err) {
+    currentCall = null;
+    setCallStatus(err && err.name === 'TakenError'
+      ? 'Un autre proche a déjà répondu.'
+      : callErrorMessage(err));
+    setTimeout(() => { if (!currentCall) leaveCallScreen(); }, 3000);
+  } finally {
+    callStarting = false;
+    renderCallTile();
+  }
+}
+
+$('incoming-answer').addEventListener('click', answerFromTablet);
+
+// Notifications : sans elles, la tablette ne peut faire sonner le téléphone que si l'app est ouverte.
+async function renderPushNudge() {
+  const card = $('push-nudge');
+  card.hidden = !session || pushAllowed() || pushRefused() || !await pushSupported();
+}
+$('push-nudge').addEventListener('click', async () => {
+  const ok = await enablePush(session.fid, session.uid);
+  renderPushNudge();
+  if (!ok && pushRefused()) {
+    notice(`Les notifications sont bloquées pour Papote. Autorisez-les dans les réglages du téléphone pour que ${session.family.name} puisse vous appeler.`);
+  }
+});
+// « Plus tard » : la sonnerie s'arrête ici, les autres proches peuvent encore répondre.
+$('incoming-later').addEventListener('click', () => {
+  stopRingTone();
+  $('incoming').hidden = true;
+});
 
 let callAbort = null; // annule un appel encore en train de démarrer
 let callStarting = false; // un seul démarrage à la fois, même annulé
@@ -2519,6 +2619,9 @@ function stopSession() {
   stopMembers = null;
   stopTabletBusy?.();
   stopTabletBusy = null;
+  stopIncoming?.();
+  stopIncoming = null;
+  showIncoming(null);
   stopFamily?.();
   stopFamily = null;
   stopInvitations?.();
@@ -2708,6 +2811,11 @@ async function enterApp() {
   stopMembers = watchMembers(session.fid, renderMembers);
   stopTabletBusy?.();
   stopTabletBusy = watchTabletBusy(session.fid, (busy) => { tabletInCall = busy; renderCallTile(); });
+  stopIncoming?.();
+  stopIncoming = watchIncomingCalls(session.fid, session.uid,
+    (uid) => tabletMembers.some((m) => m.id === uid), (list) => showIncoming(list[list.length - 1] || null));
+  renderPushNudge();
+  if (pushAllowed()) enablePush(session.fid, session.uid);
   startAgenda(session, setNotifReminders);
   startNotifs(session);
   renderInstallCard();

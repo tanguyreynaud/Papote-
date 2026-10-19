@@ -24,3 +24,55 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(receiveShare(event.request));
   }
 });
+
+// Notifications push (voir js/push.js et la fonction serveur appelsPush) :
+//   { type: 'appel', cid, nom }  la tablette appelle : notification qui sonne, « Répondre »
+//   { type: 'manque', cid, nom } personne n'a répondu : la sonnerie devient « Appel manqué »
+self.addEventListener('push', (event) => {
+  let data = {};
+  try { data = (event.data && event.data.json()) || {}; } catch (e) { /* message illisible */ }
+  data = data.data || data;
+  const nom = data.nom || 'Mamie';
+  const tag = `appel-${data.cid || ''}`;
+  let shown;
+  if (data.type === 'appel') {
+    shown = self.registration.showNotification(`${nom} vous appelle`, {
+      body: 'Touchez pour répondre',
+      tag,
+      renotify: true,
+      requireInteraction: true,
+      vibrate: [800, 400, 800, 400, 800, 400, 800],
+      icon: 'icons/icon-192.png',
+      badge: 'icons/icon-192.png',
+      actions: [{ action: 'repondre', title: 'Répondre' }],
+      data: { url: `/?appel=${encodeURIComponent(data.cid || '')}` },
+    });
+  } else if (data.type === 'manque') {
+    shown = self.registration.showNotification(`Appel manqué de ${nom}`, {
+      body: 'Touchez pour ouvrir Papote',
+      tag,
+      renotify: false,
+      icon: 'icons/icon-192.png',
+      badge: 'icons/icon-192.png',
+      data: { url: '/' },
+    });
+  } else {
+    shown = self.registration.showNotification('Papote', { body: data.texte || '', data: { url: '/' } });
+  }
+  event.waitUntil(shown);
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = new URL((event.notification.data && event.notification.data.url) || '/', self.location.origin).href;
+  event.waitUntil((async () => {
+    const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const open = wins.find((w) => new URL(w.url).origin === self.location.origin);
+    if (open) {
+      await open.focus();
+      open.postMessage({ type: 'appel-ouvert', url });
+      return;
+    }
+    await self.clients.openWindow(url);
+  })());
+});

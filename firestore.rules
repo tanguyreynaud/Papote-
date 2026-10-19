@@ -223,6 +223,10 @@ service cloud.firestore {
       allow delete: if isAdmin();
 
       match /members/{uid} {
+        // Jeton de notification du téléphone (appels de la tablette) : visible de soi seul.
+        match /private/{name} {
+          allow read, write: if signedIn() && uid == request.auth.uid;
+        }
         allow read: if isMember(fid);
         // Un membre en attente ne voit que sa propre fiche.
         allow get: if signedIn() && uid == request.auth.uid;

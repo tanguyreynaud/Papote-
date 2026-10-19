@@ -632,3 +632,6 @@ exports.rappelsJumelage = onSchedule(
     }
   });
 exports.supportChat = require('./support').supportChat;
+
+// Appels de la tablette vers la famille : sonnerie et appel manqué par notification push.
+Object.assign(exports, require('./appels'));
