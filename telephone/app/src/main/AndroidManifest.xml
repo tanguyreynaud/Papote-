@@ -72,7 +72,6 @@
             android:name=".ReglagePause"
             android:exported="true"
             android:excludeFromRecents="true"
-            android:noHistory="true"
             android:theme="@android:style/Theme.DeviceDefault.Light.NoActionBar">
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />

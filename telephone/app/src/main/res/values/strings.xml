@@ -17,10 +17,15 @@
     <string name="appel_manque_texte">Touchez pour la rappeler</string>
     <string name="pause_titre">Ne manquez aucun appel</string>
     <string name="pause_pourquoi">Si vous n\'ouvrez pas Papote pendant quelques mois, Android peut le mettre en pause, et votre téléphone ne sonnerait plus. Ça se règle une fois pour toutes :</string>
-    <string name="pause_etape1">Touchez « Ouvrir le réglage » ci-dessous.</string>
-    <string name="pause_etape2">Faites défiler la page tout en bas.</string>
-    <string name="pause_etape3">Désactivez l\'interrupteur « Suspendre l\'activité… » (ou « Gérer l\'appli si inutilisée »), puis revenez avec la flèche retour.</string>
-    <string name="pause_ok">Ouvrir le réglage</string>
+    <string name="pause_etape1">Descendez tout en bas de la page.</string>
+    <string name="pause_etape2">Trouvez « Applis inutilisées ».</string>
+    <string name="pause_etape3">Désactivez l\'interrupteur « Suspendre l\'activité de l\'appli si elle est inutilisée ».</string>
+    <string name="pause_etape4">Revenez avec la flèche retour.</string>
+    <string name="pause_ok">OK, j\'y vais</string>
+    <string name="pause_bulle_titre">1. Descendez tout en bas</string>
+    <string name="pause_bulle_texte">2. Désactivez « Suspendre l\'activité… »</string>
+    <string name="pause_bulle_detail">1. Descendez tout en bas de la page.\n\n2. Trouvez « Applis inutilisées ».\n\n3. Désactivez l\'interrupteur « Suspendre l\'activité… ».\n\n4. Revenez avec la flèche retour.</string>
+    <string name="pause_fait">C\'est bon ✓ Papote sonnera toujours.</string>
+    <string name="canal_aide">Aide aux réglages</string>
     <string name="pause_plus_tard">Plus tard</string>
-    <string name="pause_rappel">Tout en bas : désactivez « Suspendre l\'activité… »</string>
 </resources>
