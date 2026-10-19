@@ -9,12 +9,13 @@ const admin = require('firebase-admin');
 
 // Envoie `data` à tous les téléphones des membres `uids`. Renvoie le nombre de téléphones atteints.
 // `natifsSeulement` : messages que seule l'app Android comprend (« fin » d'un appel).
-async function envoyer(db, fid, uids, data, ttlSecondes, { natifsSeulement = false } = {}) {
+// `websSeulement` : renvois de la sonnerie, inutiles à l'app Android qui sonne déjà en boucle.
+async function envoyer(db, fid, uids, data, ttlSecondes, { natifsSeulement = false, websSeulement = false } = {}) {
   const refs = uids.map((uid) => db.doc(`families/${fid}/members/${uid}/private/push`));
   const docs = refs.length ? await db.getAll(...refs) : [];
   const jetons = [];
   docs.forEach((d, i) => {
-    const champs = natifsSeulement ? ['natifs'] : ['tokens', 'natifs'];
+    const champs = natifsSeulement ? ['natifs'] : websSeulement ? ['tokens'] : ['tokens', 'natifs'];
     champs.forEach((champ) => (d.get(champ) || []).forEach((t) => jetons.push({ t, ref: refs[i], champ })));
   });
   if (!jetons.length) return 0;

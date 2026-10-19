@@ -46,7 +46,7 @@ exports.appelsSonnerie = onDocumentCreated({ document: DOC, region: REGION_FIRES
     await attendre(INTERVALLE_MS);
     const cur = await event.data.ref.get();
     if (!cur.exists || cur.get('state') !== 'ringing') return;
-    await envoyer(db, fid, uids, data, 20);
+    await envoyer(db, fid, uids, data, 20, { websSeulement: true });
   }
 });
 
