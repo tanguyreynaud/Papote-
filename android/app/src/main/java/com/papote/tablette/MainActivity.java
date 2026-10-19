@@ -207,11 +207,19 @@ public class MainActivity extends Activity implements Sync.Listener {
     private void handleIntent(Intent intent) {
         if (intent == null) return;
         // Remise à l'état usine (installation/remettre-a-zero.ps1), pour rendre la tablette au fournisseur.
-        // Le script envoie le n° de série de la tablette : une commande pour une autre tablette ne fait rien.
+        // Le script écrit un code dans les réglages d'Android (settings global papote_usine, possible
+        // seulement par câble) et envoie le même code : rien d'autre ne peut déclencher l'effacement.
+        // (Ancienne façon, gardée : le n° de série, mais Android ne le donne pas toujours à l'appli.)
         String usine = intent.getStringExtra("usine");
         if (usine != null) {
+            String jeton = Settings.Global.getString(getContentResolver(), "papote_usine");
             String serie = Sync.serialNumber();
-            if (isDeviceOwner() && serie != null && serie.equals(usine)) {
+            boolean autorise = usine.length() >= 8 && (usine.equals(jeton) || usine.equals(serie));
+            if (!isDeviceOwner()) {
+                Journal.log(this, "Remise à l'état usine refusée : Papote n'est pas en mode kiosque");
+            } else if (!autorise) {
+                Journal.log(this, "Remise à l'état usine refusée : code différent (n° de série lu : " + serie + ")");
+            } else {
                 Journal.log(this, "Remise à l'état usine demandée");
                 try {
                     if (sync != null) sync.leave();
@@ -219,12 +227,11 @@ public class MainActivity extends Activity implements Sync.Listener {
                 handler.postDelayed(() -> {
                     try {
                         dpm().wipeData(0);
-                    } catch (Exception e) {
+                    } catch (Throwable e) {
+                        Journal.log(this, "Remise à l'état usine impossible : " + e);
                         Log.w(TAG, "Remise à l'état usine", e);
                     }
                 }, 4000);
-            } else {
-                Log.w(TAG, "Remise à l'état usine refusée (n° de série ou mode kiosque)");
             }
             return;
         }

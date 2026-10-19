@@ -12,7 +12,7 @@ $ErrorActionPreference = 'Stop'
 $Package = 'com.papote.tablette'
 $Apk = Join-Path $PSScriptRoot 'Papote.apk'
 # Première version de Papote qui sait se remettre à l'état usine.
-$VersionMini = 61
+$VersionMini = 65
 
 function Say($text, $color = 'Gray') { Write-Host $text -ForegroundColor $color }
 function Fail($text) {
@@ -85,13 +85,21 @@ Say 'Elle repartira comme sortie du carton. Cette opération ne peut pas être a
 $typed = (Read-Host "`nPour confirmer, tapez le n° de série de la tablette ($serie)").Trim()
 if ($typed -ne $serie) { Fail 'N° de série différent : rien n''a été fait.' }
 
-# 4. Papote quitte la famille puis demande à Android d'effacer la tablette
+# 4. Papote quitte la famille puis demande à Android d'effacer la tablette.
+#    Un code à usage unique est écrit dans les réglages d'Android (seul le câble peut le faire),
+#    puis envoyé à Papote : il n'efface que si les deux sont identiques.
 Say "`nRemise à l'état usine en cours…"
-Adb shell am start -n "$Package/.MainActivity" --es usine $serie | Out-Null
+$jeton = -join ((48..57) + (97..122) | Get-Random -Count 24 | ForEach-Object { [char]$_ })
+Adb logcat -c | Out-Null
+Adb shell settings put global papote_usine $jeton | Out-Null
+Adb shell am start -n "$Package/.MainActivity" --es usine $jeton | Out-Null
 Start-Sleep -Seconds 15
 $still = Adb get-state
 if ($still -match 'device') {
-    Say "La tablette n'a pas encore redémarré. Si rien ne se passe dans la minute, faites-le à la main :" 'Yellow'
+    Adb shell settings delete global papote_usine | Out-Null
+    $journal = (Adb logcat -d -s PapoteJournal) -split "`n" | Where-Object { $_ -match 'usine' }
+    if ($journal) { Say "`nJournal de la tablette :" 'Yellow'; $journal | ForEach-Object { Say "  $_" 'Yellow' } }
+    Say "`nLa tablette n'a pas redémarré. Faites-le à la main :" 'Yellow'
     Say 'Paramètres > Système > Réinitialiser > Effacer toutes les données.' 'Yellow'
 } else {
     Say 'La tablette s''efface et redémarre. Vous pouvez la débrancher quand elle affiche l''écran de bienvenue d''Android.' 'Green'
