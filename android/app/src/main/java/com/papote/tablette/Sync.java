@@ -1154,15 +1154,9 @@ final class Sync {
         if (now - lastWeather < WEATHER_MS) return;
         try {
             if (!Meteo.hasCity(context)) return; // pas encore de ville : pas de météo
-            String url = "https://api.open-meteo.com/v1/forecast?latitude=" + Meteo.lat(context)
-                    + "&longitude=" + Meteo.lon(context)
-                    + "&current=temperature_2m,weather_code,is_day"
-                    + "&daily=weather_code,temperature_2m_max,temperature_2m_min"
-                    + "&timezone=Europe%2FParis&forecast_days=2";
-            Http.Response r = http.request("GET", url, null, null, null);
-            if (!r.ok()) return;
+            JSONObject weather = Meteo.forecast(http, Meteo.lat(context), Meteo.lon(context));
             lastWeather = now;
-            listener.onWeather(new JSONObject(r.body));
+            listener.onWeather(weather);
         } catch (Exception e) {
             Log.w(TAG, "Météo", e);
         }

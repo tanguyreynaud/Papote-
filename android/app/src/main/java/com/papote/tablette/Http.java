@@ -38,6 +38,8 @@ final class Http {
         c.setReadTimeout(30_000);
         c.setRequestMethod(method);
         c.setRequestProperty("Accept", "application/json");
+        // MET Norway (météo) refuse les appels sans nom d'application ni contact.
+        c.setRequestProperty("User-Agent", "Papote (+https://mapapote.fr)");
         if (bearer != null) c.setRequestProperty("Authorization", "Bearer " + bearer);
         try {
             if (body != null) {
