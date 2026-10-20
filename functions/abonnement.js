@@ -14,22 +14,25 @@ const DELAI_GRACE_JOURS = 7;
 // Un mois d'essai, sans engagement (Tanguy, 2026-10-20).
 const ESSAI_JOURS = 30;
 // Tablette incluse : à rendre dans les 30 jours après la fin de l'abonnement, sinon facturée
-// (Tanguy, 2026-10-14) : tablette 160 €, chargeur et câble 10 €, routeur 4G 30 € avec l'option internet.
+// (Tanguy, 2026-10-14) : tablette 160 €, chargeur et câble 10 €, routeur 4G 30 € seulement s'il était dans le colis
+// (Tanguy, 2026-10-20 : la tablette 4G a sa propre SIM, le routeur n'est pas toujours fourni).
 const RESTITUTION_JOURS = 30;
 // Prix de chaque élément prêté, en centimes : un élément manquant au retour est facturé seul.
 const PRIX_MATERIEL = { tablette: 16000, chargeur: 1000, routeur: 3000 };
 const NOMS_MATERIEL = { tablette: 'tablette', chargeur: 'chargeur et câble', routeur: 'routeur 4G' };
-const materielPrete = (formule) => (formule === 'sim' ? ['tablette', 'chargeur', 'routeur'] : ['tablette', 'chargeur']);
-// Montant des éléments manquants (seulement ceux prêtés avec cette formule).
-function montantManquants(formule, manquants) {
-  const pretes = materielPrete(formule);
+// commande : { routeurFourni } (noté à la préparation du colis, voir gestionParcours).
+const materielPrete = (commande) => (commande && commande.routeurFourni === true
+  ? ['tablette', 'chargeur', 'routeur'] : ['tablette', 'chargeur']);
+// Montant des éléments manquants (seulement ceux prêtés avec cette commande).
+function montantManquants(commande, manquants) {
+  const pretes = materielPrete(commande);
   return [...new Set(manquants || [])].filter((m) => pretes.includes(m))
     .reduce((total, m) => total + PRIX_MATERIEL[m], 0);
 }
-// Rien de rendu : tout le matériel prêté (170 € en Wi-Fi, 200 € avec l'option internet).
-const penaliteRestitution = (formule) => montantManquants(formule, materielPrete(formule));
-const PENALITE_NON_RESTITUTION = penaliteRestitution('wifi');
-const PENALITE_NON_RESTITUTION_SIM = penaliteRestitution('sim');
+// Rien de rendu : tout le matériel prêté (170 €, 200 € avec un routeur 4G dans le colis).
+const penaliteRestitution = (commande) => montantManquants(commande, materielPrete(commande));
+const PENALITE_NON_RESTITUTION = penaliteRestitution({});
+const PENALITE_NON_RESTITUTION_SIM = penaliteRestitution({ routeurFourni: true });
 
 const STATUTS_OK = ['offert', 'actif', 'impaye'];
 

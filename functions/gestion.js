@@ -823,6 +823,8 @@ async function sortirAccessoires(commandeId) {
   for (const a of accessoires.docs) {
     const envoi = a.get('parEnvoi');
     if (!envoi || (envoi !== 'tous' && envoi !== formule)) continue;
+    // Accessoires « Internet inclus » (routeur 4G) : pas sortis quand la préparation dit « sans routeur ».
+    if (envoi === 'sim' && commande.get('routeurFourni') === false) continue;
     await a.ref.update({ quantite: FieldValue.increment(-1), majLe: FieldValue.serverTimestamp() });
     sortis.push(a.get('nom'));
   }
@@ -2535,7 +2537,12 @@ exports.gestionParcours = onCall(async (request) => {
     const ref = db().doc(`commandes/${texte(d.commande, 100) || '-'}`);
     if (!(await ref.get()).exists) throw new HttpsError('not-found', 'Commande introuvable.');
     if (d.type === 'recu') await ref.update({ 'preparation.recuLe': Date.now(), 'preparation.recuPar': qui });
-    else await ref.update({ preparation: { ...avancementPropre(d.preparation, ['tablette', 'sim', 'suivi']), majLe: Date.now(), par: qui } });
+    else {
+      const preparation = avancementPropre(d.preparation, ['tablette', 'sim', 'suivi', 'routeur']);
+      // Routeur 4G dans le colis ou non : seul un routeur fourni est facturé s'il n'est pas rendu.
+      const routeur = preparation.routeur === 'oui' ? { routeurFourni: true } : preparation.routeur === 'non' ? { routeurFourni: false } : {};
+      await ref.update({ preparation: { ...preparation, majLe: Date.now(), par: qui }, ...routeur });
+    }
     return { ok: true };
   }
   if (d.type === 'reception') {
