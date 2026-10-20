@@ -31,4 +31,9 @@
     <string name="hors_ligne_titre">Pas de connexion internet</string>
     <string name="hors_ligne_texte">Vérifiez le Wi-Fi ou les données mobiles. Papote s\'ouvrira tout seul dès que la connexion reviendra.</string>
     <string name="reessayer">Réessayer</string>
+    <string name="canal_appel_en_cours">Appel en cours</string>
+    <string name="appel_avec">Appel avec %1$s</string>
+    <string name="appel_connexion">Connexion…</string>
+    <string name="appel_audio_en_cours">Appel en cours</string>
+    <string name="appel_video_en_cours">Appel vidéo en cours</string>
 </resources>

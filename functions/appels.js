@@ -3,6 +3,7 @@
 //   appelsSonnerie  appel créé par la tablette : notification push « Mamie vous appelle »
 //   appelsManques   l'appel de la tablette s'arrête sans réponse : « Appel manqué de Mamie » ;
 //                   s'il a été décroché, les autres téléphones arrêtent de sonner (« fin »)
+//   jetonAppelNatif connexion de l'écran d'appel de l'app Android (voir envoyerConnexions)
 //   refuserAppel    « Refuser » sur l'app Android (pas connectée à Firebase) : l'appel s'arrête pour
 //                   la tablette, prouvé par le jeton d'appel reçu avec la sonnerie
 //
@@ -13,6 +14,7 @@ const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/
 const { logger } = require('firebase-functions/v2');
 const { onCall, onRequest, HttpsError } = require('firebase-functions/v2/https');
 const { FieldValue } = require('firebase-admin/firestore');
+const { getAuth } = require('firebase-admin/auth');
 
 const { BASE_FIRESTORE, REGION_FIRESTORE, db: base } = require('./base');
 const { envoyer } = require('./push');
@@ -49,12 +51,33 @@ exports.appelsSonnerie = onDocumentCreated({ document: DOC, region: REGION_FIRES
   const data = { type: 'appel', cid, fid, jeton, nom: String(appel.callerName || 'Mamie') };
   const n = await envoyer(db, fid, uids, data, 45);
   logger.info(`Appel ${cid} : ${n} téléphone(s) prévenu(s)`);
+  await envoyerConnexions(db, fid, cid, uids);
   for (let i = 0; i < REPRISES; i++) {
     await attendre(INTERVALLE_MS);
     const cur = await event.data.ref.get();
     if (!cur.exists || cur.get('state') !== 'ringing') return;
     await envoyer(db, fid, uids, data, 20, { websSeulement: true });
   }
+});
+
+// L'app Android passe l'appel dans son propre écran (micro gardé en arrière-plan, comme un vrai
+// appel) : elle s'y connecte au compte du proche avec ce jeton de connexion Firebase, envoyé juste
+// après la sonnerie pour ne pas la retarder. Valable une heure, seulement vers ses téléphones.
+async function envoyerConnexions(db, fid, cid, uids) {
+  await Promise.all(uids.map(async (uid) => {
+    try {
+      const connexion = await getAuth().createCustomToken(uid);
+      await envoyer(db, fid, [uid], { type: 'connexion', cid, connexion }, 45, { natifsSeulement: true });
+    } catch (e) {
+      logger.warn(`Appel ${cid} : jeton de connexion impossible pour ${uid}`, e.message);
+    }
+  }));
+}
+
+// Même jeton, pour un appel lancé depuis l'app Android (bouton Appel vidéo de l'app famille).
+exports.jetonAppelNatif = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Connexion requise.');
+  return { connexion: await getAuth().createCustomToken(request.auth.uid) };
 });
 
 exports.appelsManques = onDocumentUpdated({ document: DOC, region: REGION_FIRESTORE, database: BASE_FIRESTORE }, async (event) => {
