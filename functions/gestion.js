@@ -2264,70 +2264,79 @@ async function releverFactures() {
   const { ImapFlow } = require('imapflow');
   const { simpleParser } = require('mailparser');
   const [hote, port, utilisateur] = FACTURES_IMAP.value().split(':');
-  const bilan = { le: Date.now(), rangees: [], ignorees: [], erreurs: [] };
+  const bilan = { le: Date.now(), boite: utilisateur || null, rangees: [], ignorees: [], erreurs: [] };
   const client = new ImapFlow({
     host: hote, port: Number(port) || 993, secure: true, logger: false,
     auth: { user: utilisateur, pass: FACTURES_MOT_DE_PASSE.value() },
   });
   try {
     await client.connect();
-    const verrou = await client.getMailboxLock('INBOX');
-    try {
-      const adresse = FACTURES_ADRESSE.value();
-      // E-mails des 4 derniers jours pas encore traités, lus ou non : un e-mail ouvert entre-temps dans la
-      // messagerie (marqué « lu ») doit quand même être rangé. Les déjà traités sont notés par leur Message-ID.
-      const vusRef = db().doc('gestion/courrierVus');
-      const vus = new Set((await vusRef.get()).get('ids') || []);
-      const uids = await client.search({ since: new Date(Date.now() - 4 * 86400000), or: [{ to: adresse }, { cc: adresse }] }, { uid: true }) || [];
-      const traites = [];
-      let lus = 0;
-      for (const uid of uids) {
-        if (lus >= 20) break;
-        const entete = await client.fetchOne(String(uid), { envelope: true }, { uid: true });
-        const cle = String((entete && entete.envelope && entete.envelope.messageId) || `uid-${uid}`).slice(0, 200);
-        if (vus.has(cle)) continue;
-        lus += 1;
-        const { content } = await client.download(String(uid), undefined, { uid: true });
-        const mailLu = await simpleParser(content);
-        const de = (mailLu.from && mailLu.from.text) || 'expéditeur inconnu';
-        const sujet = mailLu.subject || '(sans objet)';
-        const pieces = piecesFacture(mailLu.attachments);
-        // Le texte de l'e-mail (confirmation de commande) passe après les pièces jointes : lu seulement si
-        // aucune pièce n'est une facture (images de produits d'un e-mail transféré, par exemple).
-        const corps = corpsDuMail(mailLu);
-        if (!pieces.length && !corps) bilan.ignorees.push(`« ${sujet} » (${de}) : aucune facture en pièce jointe`);
-        let reessayer = false;
-        let trouvee = false;
-        for (const piece of [...pieces, ...(corps ? [corps] : [])]) {
-          if (piece === corps && trouvee) break;
-          try {
-            const r = await lireDocument(piece.content.toString('base64'), piece.contentType);
-            if (!r.facture) {
-              bilan.ignorees.push(`${piece.filename || 'pièce'} (« ${sujet} ») : pas une facture`);
-              continue;
+    const adresse = FACTURES_ADRESSE.value();
+    // E-mails des 4 derniers jours pas encore traités, lus ou non : un e-mail ouvert entre-temps dans la
+    // messagerie (marqué « lu ») doit quand même être rangé. Les déjà traités sont notés par leur Message-ID.
+    const vusRef = db().doc('gestion/courrierVus');
+    const vus = new Set((await vusRef.get()).get('ids') || []);
+    const traites = [];
+    let lus = 0;
+    // Boîte de réception, puis courrier indésirable : un e-mail transféré peut y être classé par OVH.
+    const dossiers = ['INBOX', ...(await client.list()).filter((b) => b.specialUse === '\\Junk').map((b) => b.path)];
+    const depuis = new Date(Date.now() - 4 * 86400000);
+    for (const dossier of dossiers) {
+      const verrou = await client.getMailboxLock(dossier);
+      try {
+        const tous = await client.search({ since: depuis }, { uid: true }) || [];
+        const uids = await client.search({ since: depuis, or: [{ to: adresse }, { cc: adresse }] }, { uid: true }) || [];
+        bilan.recus = (bilan.recus || 0) + tous.length;
+        bilan.pourFactures = (bilan.pourFactures || 0) + uids.length;
+        for (const uid of uids) {
+          if (lus >= 20) break;
+          const entete = await client.fetchOne(String(uid), { envelope: true }, { uid: true });
+          const cle = String((entete && entete.envelope && entete.envelope.messageId) || `uid-${uid}`).slice(0, 200);
+          if (vus.has(cle)) continue;
+          lus += 1;
+          const { content } = await client.download(String(uid), undefined, { uid: true });
+          const mailLu = await simpleParser(content);
+          const de = (mailLu.from && mailLu.from.text) || 'expéditeur inconnu';
+          const sujet = mailLu.subject || '(sans objet)';
+          const pieces = piecesFacture(mailLu.attachments);
+          // Le texte de l'e-mail (confirmation de commande) passe après les pièces jointes : lu seulement si
+          // aucune pièce n'est une facture (images de produits d'un e-mail transféré, par exemple).
+          const corps = corpsDuMail(mailLu);
+          if (!pieces.length && !corps) bilan.ignorees.push(`« ${sujet} » (${de}) : aucune facture en pièce jointe`);
+          let reessayer = false;
+          let trouvee = false;
+          for (const piece of [...pieces, ...(corps ? [corps] : [])]) {
+            if (piece === corps && trouvee) break;
+            try {
+              const r = await lireDocument(piece.content.toString('base64'), piece.contentType);
+              if (!r.facture) {
+                bilan.ignorees.push(`${piece.filename || 'pièce'} (« ${sujet} ») : pas une facture`);
+                continue;
+              }
+              trouvee = true;
+              const rangee = await rangerFacture(r, piece, `e-mail de ${de}`.slice(0, 200));
+              if (typeof rangee === 'string') bilan.ignorees.push(`${piece.filename || 'pièce'} : ${rangee}`);
+              else {
+                const plus = rangee && rangee.rattachee ? ' (facture ajoutée à la confirmation de commande)'
+                  : rangee && rangee.materiel && rangee.materiel.length ? ` (+ ${rangee.materiel.join(', ')})` : '';
+                bilan.rangees.push(`${r.fournisseur || de} : ${r.libelle || sujet}${plus}`);
+              }
+            } catch (e) {
+              bilan.erreurs.push(`${piece.filename || 'pièce'} (« ${sujet} ») : ${e.message}`);
+              // Lecture indisponible : l'e-mail reste non lu et sera repris à l'heure suivante.
+              if (e.code === 'unavailable') reessayer = true;
             }
-            trouvee = true;
-            const rangee = await rangerFacture(r, piece, `e-mail de ${de}`.slice(0, 200));
-            if (typeof rangee === 'string') bilan.ignorees.push(`${piece.filename || 'pièce'} : ${rangee}`);
-            else {
-              const plus = rangee && rangee.rattachee ? ' (facture ajoutée à la confirmation de commande)'
-                : rangee && rangee.materiel && rangee.materiel.length ? ` (+ ${rangee.materiel.join(', ')})` : '';
-              bilan.rangees.push(`${r.fournisseur || de} : ${r.libelle || sujet}${plus}`);
-            }
-          } catch (e) {
-            bilan.erreurs.push(`${piece.filename || 'pièce'} (« ${sujet} ») : ${e.message}`);
-            // Lecture indisponible : l'e-mail reste non lu et sera repris à l'heure suivante.
-            if (e.code === 'unavailable') reessayer = true;
           }
+          if (reessayer) continue;
+          traites.push(cle);
+          vus.add(cle);
+          await client.messageFlagsAdd(String(uid), ['\\Seen'], { uid: true });
         }
-        if (reessayer) continue;
-        traites.push(cle);
-        await client.messageFlagsAdd(String(uid), ['\\Seen'], { uid: true });
+      } finally {
+        verrou.release();
       }
-      if (traites.length) await vusRef.set({ ids: [...vus, ...traites].slice(-500) });
-    } finally {
-      verrou.release();
     }
+    if (traites.length) await vusRef.set({ ids: [...vus].slice(-500) });
     await client.logout();
   } catch (e) {
     bilan.erreurs.push(`Boîte ${utilisateur} : ${e.authenticationFailed ? 'mot de passe refusé' : e.message}`);
