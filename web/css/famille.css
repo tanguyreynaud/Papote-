@@ -1141,5 +1141,5 @@ body:not(.on-support) .ps-bouton, body:not(.on-support) .ps-panneau { display: n
 .join-no { color: var(--danger); }
 
 /* Appels manqués en rouge dans les notifications */
-.notif.missed .notif-body p:first-child { color: #dc2626; font-weight: 600; }
-.notif.missed .notif-icon { color: #dc2626; background: #fee2e2; }
+.notif.missed .notif-body p:first-child { color: var(--danger); font-weight: 600; }
+.notif.missed .notif-icon { color: var(--danger); background: color-mix(in srgb, var(--danger) 14%, var(--surface)); }
