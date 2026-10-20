@@ -56,6 +56,10 @@ h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-u
 .point .btn { min-height: 2.75rem; padding: .5rem 1.25rem; }
 .lien { background: none; border: 0; padding: 0; font: inherit; color: var(--accent); text-decoration: underline; cursor: pointer; justify-self: start; }
 .btn.payer { justify-self: stretch; font-size: 1.15rem; }
+.question { border: 0; padding: 0; margin: 0; display: grid; gap: .6rem; }
+.question legend { font-weight: 700; margin-bottom: .6rem; }
+.etapes { border: 2px solid var(--accent); border-radius: 16px; padding: 1rem 1.2rem; margin: 1.5rem 0 1rem; display: grid; gap: .5rem; }
+.etapes p { margin: 0; }
 .opt { display: flex; gap: .6rem; align-items: center; font-size: 1.05rem; cursor: pointer; }
 .opt .muted { white-space: nowrap; margin-left: auto; }
 .opt input { width: 1.3rem; height: 1.3rem; accent-color: var(--accent); }
@@ -85,7 +89,7 @@ h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-u
 </style>
 </head>
 <body>
-<p class="bandeau">🚚 Livraison offerte · ✨ 15 jours d'essai gratuit</p>
+<p class="bandeau">🚚 Livraison offerte · ✨ 1 mois d'essai gratuit</p>
 <main>
   <div class="haut">
     <a class="top" href="./"><img src="icon.svg" alt="">Papote</a>
@@ -97,14 +101,18 @@ h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-u
   </div>
 
   <form class="recap" id="recap">
-    <div class="recap-total"><b id="total">20 € par mois</b><span class="muted">après 15 jours d'essai gratuit</span></div>
-    <p class="mes"><b>+ 50 € aujourd'hui</b>, une seule fois, pour la mise en service de la tablette</p>
+    <div class="recap-total"><b id="total">20 € par mois</b><span class="muted">après 1 mois d'essai gratuit</span></div>
+    <p class="mes"><b>+ 60 € aujourd'hui</b>, une seule fois, pour la mise en service de la tablette</p>
     <ul class="inclus">
       <li>Tablette prêtée, configurée et prête à l'emploi</li>
       <li>Appli famille pour tous vos proches</li>
       <li>Livraison offerte en point relais</li>
     </ul>
-    <label class="opt"><input type="checkbox" name="net"> Internet inclus <span class="muted">+10 €/mois</span></label>
+    <fieldset class="question">
+      <legend>Y a-t-il internet (une box Wi-Fi) chez votre proche ?</legend>
+      <label class="opt"><input type="radio" name="internet" value="oui" checked> Oui, la tablette utilise son Wi-Fi <span class="muted">20 €/mois</span></label>
+      <label class="opt"><input type="radio" name="internet" value="non"> Non, ou je ne sais pas : internet est inclus <span class="muted">30 €/mois</span></label>
+    </fieldset>
   </form>
 
   <h2>Où livrer la tablette ?</h2>
@@ -142,14 +150,20 @@ h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-u
     <span>J'accepte de recevoir les nouvelles de Papote par e-mail, et un rappel si je ne termine pas ma commande (désinscription en un clic).</span>
   </label>
 
+  <div class="etapes">
+    <p><b>Pendant l'essai</b> : 1 mois gratuit. Si vous arrêtez, les 60 € vous sont remboursés.</p>
+    <p><b>À la fin du mois</b> : l'abonnement démarre tout seul, vous n'avez rien à faire.</p>
+    <p><b>À la résiliation</b> : en quelques clics depuis l'appli, effective à la fin du mois payé.</p>
+    <p class="muted">Aucun montant prélevé aujourd'hui, sauf les 60 € de mise en service.</p>
+  </div>
   <a class="btn payer" id="payer" href="#" aria-disabled="true">Choisissez un point relais</a>
   <ul class="rassure">
-    <li>🔒 Paiement sécurisé par Stripe : carte, Google Pay, Apple Pay ou Link</li>
-    <li>📅 Le premier mois n'est prélevé qu'après les 15 jours d'essai gratuit</li>
+    <li>🔒 Paiement par prélèvement SEPA, sur la page sécurisée de Stripe : munissez-vous d'un IBAN</li>
+    <li>📅 Le premier mois n'est prélevé qu'après le mois d'essai gratuit</li>
     <li>↩️ 14 jours après réception pour changer d'avis : la tablette nous revient et vos frais de service vous sont remboursés</li>
     <li>💬 Une question ? <a href="mailto:contact@mapapote.fr">contact@mapapote.fr</a></li>
   </ul>
-  <p class="muted petit">Après l'essai, l'abonnement est conclu pour 12 mois, puis continue de mois en mois. La tablette reste la nôtre et nous est rendue en fin d'abonnement. En payant, vous acceptez les <a href="cgv.html">conditions générales de vente</a>.</p>
+  <p class="muted petit">Sans engagement : l'abonnement se résilie à tout moment. La tablette reste la nôtre et nous est rendue en fin d'abonnement. En payant, vous acceptez les <a href="cgv.html">conditions générales de vente</a>.</p>
 </main>
 
 <script>
@@ -168,12 +182,13 @@ h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-u
   var COMMANDER = 'https://europe-west1-papote-famille.cloudfunctions.net/commander';
   var q = new URLSearchParams(location.search);
   var recap = document.getElementById('recap');
-  recap.net.checked = q.get('formule') === 'sim';
+  var sansInternet = function () { return recap.internet.value === 'non'; };
+  recap.internet.value = q.get('formule') === 'sim' ? 'non' : 'oui';
   var relais = null;
 
-  // Prix : abonnement 20 €, ou 30 € avec internet inclus ; 50 € de mise en service à la commande.
+  // Prix : abonnement 20 €, ou 30 € avec internet inclus ; 60 € de mise en service à la commande.
   function maj() {
-    document.getElementById('total').textContent = (recap.net.checked ? 30 : 20) + ' € par mois';
+    document.getElementById('total').textContent = (sansInternet() ? 30 : 20) + ' € par mois';
     if (relais) lienPaiement();
   }
   recap.addEventListener('change', maj);
@@ -197,13 +212,13 @@ h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-u
     }
     var params = new URLSearchParams({
       rdest: nom, email: mel, accord: accord.checked ? '1' : '0',
-      formule: recap.net.checked ? 'sim' : 'wifi', tablette: 'incluse',
+      formule: sansInternet() ? 'sim' : 'wifi', tablette: 'incluse',
       relais: String(relais.id), rnom: relais.name, radr: relais.adresse,
       rcp: relais.postal_code, rville: relais.city, rpays: (relais.country || 'FR').toUpperCase()
     });
     payer.href = COMMANDER + '?' + params.toString();
     payer.setAttribute('aria-disabled', 'false');
-    payer.textContent = 'Payer 50 € et commander';
+    payer.textContent = 'Payer 60 € et commander';
   }
 
   // Point relais renvoyé par le sélecteur Sendcloud.

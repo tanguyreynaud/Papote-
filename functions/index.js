@@ -3,8 +3,8 @@
 //   commander          GET  depuis le site vitrine : ouvre la page de paiement Stripe (si une tablette est disponible)
 //   stockDisponible    GET  depuis le site vitrine : { disponible: true|false } (stock.js)
 //   creerPaiement      appel depuis l'appli famille : paiement pour une famille existante
-//   portailClient      appel depuis l'appli famille : carte bancaire, factures
-//   resilierAbonnement appel depuis l'appli famille : résilie à la fin de l'engagement de 12 mois
+//   portailClient      appel depuis l'appli famille : compte bancaire, factures
+//   resilierAbonnement appel depuis l'appli famille : résilie à la fin du mois payé (sans engagement)
 //   annulerResiliation appel depuis l'appli famille : garde l'abonnement
 //   rattacherCommande  appel depuis l'appli famille : relie une commande du site à la famille
 //                      (par l'e-mail du compte, ou par le code de commande XXXX-XXXX)
@@ -92,11 +92,6 @@ function finDePeriodeMs(abo) {
   return fin ? fin * 1000 : null;
 }
 
-// Engagement de 12 mois à partir de la fin de l'essai (ou du début de l'abonnement).
-function finEngagementMs(abo) {
-  return regles.finEngagement((abo.trial_end || abo.start_date) * 1000);
-}
-
 async function tarifs(formule, tablette) {
   const cles = [regles.TARIFS[formule][tablette]];
   if (tablette === 'achetee') cles.push(regles.TARIF_TABLETTE);
@@ -109,7 +104,7 @@ async function tarifs(formule, tablette) {
   return cles.map((cle) => ({ price: parCle[cle], quantity: 1 }));
 }
 
-// Essai gratuit de 15 jours pour un nouveau client ; pas pour un client déjà abonné une fois.
+// Essai gratuit d'un mois pour un nouveau client ; pas pour un client déjà abonné une fois.
 async function sessionPaiement({ formule, tablette, fid, email, client, relais, accord, reservation }) {
   const metadata = { formule, tablette, ...(relais ? livraison.relaisVersMeta(relais) : {}) };
   // Tablette mise de côté pendant le paiement (stock.js), libérée au paiement ou à l'expiration de la page.
@@ -126,8 +121,8 @@ async function sessionPaiement({ formule, tablette, fid, email, client, relais, 
     mode: 'subscription',
     line_items: await tarifs(formule, tablette),
     locale: 'fr',
-    // Carte bancaire (Google Pay et Apple Pay compris) et Link, choisi par Tanguy le 2026-10-13. Pas de code promo.
-    payment_method_types: ['card', 'link'],
+    // Prélèvement SEPA seulement (Tanguy, 2026-10-20). Pas de code promo.
+    payment_method_types: ['sepa_debit'],
     billing_address_collection: 'auto',
     phone_number_collection: { enabled: true },
     metadata,
@@ -230,7 +225,6 @@ async function appliquer(fid, abonnementId) {
         graceJusqua: versTimestamp(graceJusqua),
         finPeriode: versTimestamp(finDePeriodeMs(abo)),
         essaiJusqua: versTimestamp(abo.status === 'trialing' && abo.trial_end ? abo.trial_end * 1000 : null),
-        engagementJusqua: versTimestamp(finEngagementMs(abo)),
         resiliationLe: versTimestamp(abo.cancel_at ? abo.cancel_at * 1000
           : (abo.cancel_at_period_end ? finDePeriodeMs(abo) : null)),
         stripeCustomerId: abo.customer,
@@ -254,7 +248,7 @@ async function attendreRestitution(abo) {
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     // Rien à rendre si la tablette n'est jamais partie.
-    if (snap.exists && (snap.get('restitution') || ['a-preparer', 'annulee'].includes(snap.get('expedition')))) return;
+    if (snap.exists && (snap.get('restitution') || ['a-preparer', 'paiement-en-attente', 'annulee'].includes(snap.get('expedition')))) return;
     const fin = (abo.ended_at || abo.canceled_at || Math.floor(Date.now() / 1000)) * 1000;
     tx.set(ref, {
       restitution: { statut: 'attendue', avant: versTimestamp(regles.limiteRestitution(fin)) },
@@ -362,8 +356,8 @@ exports.portailClient = onCall({ secrets: [STRIPE_SECRET] }, async (request) => 
   return { url: session.url };
 });
 
-// Résiliation en ligne : l'abonnement s'arrête à la fin de l'engagement, ou à la fin du mois
-// déjà payé si l'engagement est terminé. Pendant l'essai gratuit : arrêt à la fin de l'essai.
+// Résiliation en ligne, sans engagement : l'abonnement s'arrête à la fin du mois déjà payé.
+// Pendant l'essai gratuit : arrêt à la fin de l'essai.
 exports.resilierAbonnement = onCall({ secrets: [STRIPE_SECRET] }, async (request) => {
   const { fid } = request.data || {};
   const fam = await familleGeree(fid, request);
@@ -373,7 +367,7 @@ exports.resilierAbonnement = onCall({ secrets: [STRIPE_SECRET] }, async (request
   const maintenant = Date.now();
   const le = abo.status === 'trialing' && abo.trial_end
     ? abo.trial_end * 1000
-    : regles.dateResiliation(finEngagementMs(abo), finDePeriodeMs(abo), maintenant);
+    : regles.dateResiliation(finDePeriodeMs(abo), maintenant);
   await stripe().subscriptions.update(id, {
     cancel_at: Math.ceil(le / 1000),
     proration_behavior: 'none',
@@ -394,7 +388,7 @@ exports.annulerResiliation = onCall({ secrets: [STRIPE_SECRET] }, async (request
 
 // ---------- Rétractation et fin de contrat ----------
 
-// Factures payées de l'abonnement (mise en service de 50 €, mois déjà prélevés).
+// Factures payées de l'abonnement (mise en service de 60 €, mois déjà prélevés).
 async function facturesPayees(abonnementId) {
   const { data } = await stripe().invoices.list({ subscription: abonnementId, status: 'paid', limit: 100 });
   return data.filter((f) => f.amount_paid > 0 && f.payment_intent);
@@ -578,8 +572,10 @@ exports.stripeWebhook = onRequest(
     }
 
     try {
-      if (event.type === 'checkout.session.completed') {
+      if (event.type === 'checkout.session.completed' || event.type === 'checkout.session.async_payment_succeeded') {
         await paiementTermine(event.data.object);
+      } else if (event.type === 'checkout.session.async_payment_failed') {
+        await paiementSepaRefuse(event.data.object);
       } else if (event.type === 'checkout.session.expired') {
         await stock.liberer(db, (event.data.object.metadata || {}).reservation);
       } else if (event.type.startsWith('customer.subscription.')) {
@@ -593,8 +589,12 @@ exports.stripeWebhook = onRequest(
     }
   });
 
+// Prélèvement SEPA : la page de paiement se termine avant que la banque confirme (quelques jours).
+// La commande attend en « paiement-en-attente » (tablette déjà comptée dans le stock), puis passe
+// « a-preparer » avec async_payment_succeeded ; les e-mails de confirmation partent à ce moment.
 async function paiementTermine(session) {
   if (!session.subscription) return;
+  const paye = session.payment_status !== 'unpaid';
   const details = session.customer_details || {};
   const adresse = (session.collected_information && session.collected_information.shipping_details)
     || session.shipping_details || null;
@@ -613,7 +613,7 @@ async function paiementTermine(session) {
       livraison: livraison.relaisDepuisMeta(meta)
         || (adresse ? { nom: adresse.name || null, adresse: adresse.address || null } : null),
       // Tablette à préparer et envoyer par Tanguy (« envoyee » une fois partie).
-      expedition: 'a-preparer',
+      expedition: paye ? 'a-preparer' : 'paiement-en-attente',
       stripeCustomerId: session.customer,
       fid: (existante.exists && existante.get('fid')) || null,
       creeLe: FieldValue.serverTimestamp(),
@@ -630,9 +630,25 @@ async function paiementTermine(session) {
   await stripe().customers.update(session.customer, {
     invoice_settings: { custom_fields: [{ name: 'Code de commande Papote', value: code }] },
   });
+  if (!paye) return;
+  if (existante.exists && existante.get('expedition') === 'paiement-en-attente') await ref.update({ expedition: 'a-preparer' });
   const fid = meta.fid || (existante.exists && existante.get('fid')) || await chercherFamille(email);
   if (fid) await appliquer(fid, session.subscription);
   await confirmerCommande(ref, email, code);
+}
+
+// Prélèvement SEPA refusé par la banque : commande annulée, abonnement arrêté, Papote prévenu.
+async function paiementSepaRefuse(session) {
+  if (!session.subscription) return;
+  const ref = db.doc(`commandes/${session.subscription}`);
+  const snap = await ref.get();
+  if (!snap.exists || snap.get('expedition') !== 'paiement-en-attente') return;
+  await ref.update({ expedition: 'annulee', annulation: 'sepa-refuse', annuleeLe: FieldValue.serverTimestamp() });
+  await stripe().subscriptions.cancel(session.subscription).catch((e) => logger.warn('Annulation SEPA', e.message));
+  const envois = [envoyerMail(EMAIL_PAPOTE, mail.sepaRefuse({ nom: snap.get('nom'), email: snap.get('email'), papote: true }))];
+  if (snap.get('email')) envois.push(envoyerMail(snap.get('email'), mail.sepaRefuse({ nom: snap.get('nom') })));
+  (await Promise.allSettled(envois)).filter((r) => r.status === 'rejected')
+    .forEach((r) => logger.error(`E-mail SEPA refusé non envoyé (${ref.id})`, r.reason));
 }
 
 // E-mails « commande confirmée » au client et « nouvelle commande » à Papote, une seule fois
@@ -843,7 +859,7 @@ exports.finDeGrace = onSchedule(
     }
   });
 
-// Tablette incluse non rendue dans les 30 jours : 170 € (200 € avec l'option internet) prélevés sur la carte de l'abonnement.
+// Tablette incluse non rendue dans les 30 jours : 170 € (200 € si un routeur 4G était dans le colis) prélevés sur la carte de l'abonnement.
 exports.restitutions = onSchedule(
   { schedule: 'every day 09:00', timeZone: 'Europe/Paris', secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE] },
   async () => {
@@ -855,7 +871,7 @@ exports.restitutions = onSchedule(
         try {
           await envoyerMail(snap.get('email'), mail.rappelRestitution({
             nom: snap.get('nom'), avant: r.avant.toMillis(), lien: r.etiquette || null,
-            montant: regles.penaliteRestitution(snap.get('formule')),
+            montant: regles.penaliteRestitution(snap.data()),
           }));
           await snap.ref.update({ 'restitution.rappelLe': FieldValue.serverTimestamp() });
         } catch (e) {
@@ -864,14 +880,14 @@ exports.restitutions = onSchedule(
       }
       if (!regles.restitutionEchue(snap.get('restitution'), maintenant)) continue;
       try {
-        const paiement = await preleverMateriel(snap.id, regles.penaliteRestitution(snap.get('formule')),
+        const paiement = await preleverMateriel(snap.id, regles.penaliteRestitution(snap.data()),
           'Papote : matériel non rendu', `restitution-${snap.id}`);
         await snap.ref.update({
           'restitution.statut': 'facturee',
           'restitution.paiement': paiement.id,
           'restitution.majLe': FieldValue.serverTimestamp(),
         });
-        logger.info(`Commande ${snap.id} : tablette non rendue, ${mail.euros(regles.penaliteRestitution(snap.get('formule')))} prélevés.`);
+        logger.info(`Commande ${snap.id} : tablette non rendue, ${mail.euros(regles.penaliteRestitution(snap.data()))} prélevés.`);
       } catch (e) {
         // Carte expirée ou refusée : à relancer à la main, depuis le tableau de bord Stripe.
         await snap.ref.update({
@@ -890,7 +906,7 @@ async function preleverMateriel(abonnement, montant, description, cle) {
   const abo = await stripe().subscriptions.retrieve(abonnement, { expand: ['customer'] });
   const moyen = abo.default_payment_method
     || (abo.customer.invoice_settings && abo.customer.invoice_settings.default_payment_method);
-  if (!moyen) throw new Error('Aucune carte enregistrée');
+  if (!moyen) throw new Error('Aucun moyen de paiement enregistré');
   return stripe().paymentIntents.create({
     amount: montant,
     currency: 'eur',
@@ -927,9 +943,8 @@ exports.tabletteRendue = onCall({ secrets: [STRIPE_SECRET] }, async (request) =>
   if (snap.get('restitution.statut') === 'facturee') {
     throw new HttpsError('failed-precondition', 'Le matériel non rendu a déjà été prélevé : remboursez depuis Stripe si besoin.');
   }
-  const formule = snap.get('formule');
-  const liste = [...new Set(manquants || [])].filter((m) => regles.materielPrete(formule).includes(m));
-  const montant = regles.montantManquants(formule, liste);
+  const liste = [...new Set(manquants || [])].filter((m) => regles.materielPrete(snap.data()).includes(m));
+  const montant = regles.montantManquants(snap.data(), liste);
   const restitution = { statut: 'rendue', majLe: FieldValue.serverTimestamp() };
   if (montant > 0) {
     restitution.manquants = liste;
@@ -1056,7 +1071,7 @@ async function suiviRetour(event, rAvant, r, c) {
       nom: c.nom, email: c.email, telephone: c.telephone, code: c.code ? regles.afficherCode(c.code) : null,
       relais: c.livraison, avant: avantMs, retractation,
     }))];
-    if (c.email) envois.push(envoyerMail(c.email, mail.retourTablette({ nom: c.nom, avant: avantMs, retractation, montant: regles.penaliteRestitution(c.formule) })));
+    if (c.email) envois.push(envoyerMail(c.email, mail.retourTablette({ nom: c.nom, avant: avantMs, retractation, montant: regles.penaliteRestitution(c) })));
     (await Promise.allSettled(envois)).filter((x) => x.status === 'rejected')
       .forEach((x) => logger.error(`Commande ${id} : e-mail de retour non parti`, x.reason));
   }

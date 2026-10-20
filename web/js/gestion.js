@@ -418,11 +418,14 @@ function etatCommande(c) {
   if (r === 'attendue' || r === 'echec') return 'retour';
   if (r === 'rendue' || r === 'facturee' || ['resilie', 'canceled'].includes(c.abonnement)) return 'terminee';
   if (c.expedition === 'a-preparer') return 'a-envoyer';
+  // Prélèvement SEPA pas encore confirmé par la banque : ne pas envoyer.
+  if (c.expedition === 'paiement-en-attente') return 'paiement';
   if (c.expedition === 'envoyee' && !c.fid) return 'en-route';
   return 'active';
 }
 const ETATS_COMMANDE = {
   'a-envoyer': ['À envoyer', 'info'],
+  paiement: ['Paiement en attente (SEPA), ne pas envoyer', ''],
   'en-route': ['En route', 'info'],
   active: ['En service', 'ok'],
   retour: ['Tablette à récupérer', 'ko'],
@@ -579,13 +582,14 @@ function afficherCommandes() {
     el.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choisir(); } });
     return el;
   };
-  $('kpi-commandes').replaceChildren(
+  $('kpi-commandes').replaceChildren(...[
     onglet('a-envoyer', parEtat['a-envoyer'] || 0, 'à envoyer'),
+    parEtat.paiement ? onglet('toutes', parEtat.paiement, 'paiement en attente', null, 'paiement') : null,
     onglet('en-route', parEtat['en-route'] || 0, 'en route'),
     onglet('retour', parEtat.retour || 0, 'à récupérer', parEtat.retour ? 'neg' : null),
     onglet('toutes', parEtat.active || 0, 'en service', null, 'active'),
     onglet('toutes', toutes.length, 'commandes au total'),
-  );
+  ].filter(Boolean));
   document.querySelectorAll('[data-panneau="commandes"] [data-vue]').forEach((c) => { c.hidden = c.dataset.vue !== vueCommandes; });
   const filtre = $('filtre-commandes').value;
   const tablettes = new Map(donnees.stock.filter((t) => t.commande).map((t) => [t.commande, t]));

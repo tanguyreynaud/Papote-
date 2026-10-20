@@ -29,3 +29,10 @@ test('un paiement en cours prend une tablette, plus après expiration', () => {
 test('jamais en dessous de zéro', () => {
   assert.strictEqual(compter({ commandes: [{ id: 'a', expedition: 'a-preparer' }] }), 0);
 });
+
+test('une commande SEPA en attente de la banque garde sa tablette', () => {
+  assert.strictEqual(compter({
+    stock: [{ etat: 'en-stock' }, { etat: 'en-stock' }],
+    commandes: [{ id: 'a', expedition: 'paiement-en-attente' }, { id: 'b', expedition: 'annulee' }],
+  }), 1);
+});
