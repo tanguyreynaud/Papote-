@@ -437,6 +437,10 @@ test('achat enregistré après l\'installation : complète les fiches sans factu
   assert.deepStrictEqual(g.fichesARattacher(sans, [], 1), ['a']);
   assert.deepStrictEqual(g.fichesARattacher(sans, ['X', '', 'Y'], 3), ['a', 'b', null]);
   assert.deepStrictEqual(g.fichesARattacher([], ['X'], 2), [null, null]);
+  // Tablette déjà envoyée à un client : seulement par son n° de série.
+  const partie = [{ id: 'c', creeLe: 1, etat: 'envoyee', commande: 'cmd', numero: 'S1' }];
+  assert.deepStrictEqual(g.fichesARattacher(partie, [], 1), [null]);
+  assert.deepStrictEqual(g.fichesARattacher(partie, ['s1'], 1), ['c']);
 });
 
 test('tablette reçue sans facture depuis 5 jours', () => {

@@ -1227,6 +1227,7 @@ function ouvrirTablette(id) {
   $('dt-historique').replaceChildren(...(t.historique || []).filter((x) => x.le).reverse().map((x) => h('li', {},
     `${new Date(x.le).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })} : ${donnees.etats[x.etat] || x.etat}`)));
   $('dt-retirer').hidden = !(t.etat === 'en-stock' && !t.commande && (t.historique || []).length <= 1);
+  $('dt-detacher').hidden = !t.depense;
   f.querySelector('.f-msg').hidden = true;
   $('d-tablette').showModal();
 }
@@ -1268,6 +1269,14 @@ $('dt-retirer').addEventListener('click', async () => {
   if (!confirm('Retirer cette tablette du stock (erreur de saisie) ?')) return;
   await enregistrer($('f-tablette'), async () => {
     await appeler('gestionStock', { action: 'supprimer', id: tabletteOuverte });
+    $('d-tablette').close();
+  });
+});
+
+$('dt-detacher').addEventListener('click', async () => {
+  if (!confirm('Retirer l\'achat de cette fiche ? Il passera sur une nouvelle tablette en stock.')) return;
+  await enregistrer($('f-tablette'), async () => {
+    await appeler('gestionStock', { action: 'detacherAchat', id: tabletteOuverte });
     $('d-tablette').close();
   });
 });
