@@ -199,6 +199,17 @@ function annulationAvantEnvoi({ nom, email, code }) {
   ]);
 }
 
+// Invitation d'un proche par e-mail, depuis l'appli famille (inviterParEmail).
+function invitation({ prenom, tablette, lien, email }) {
+  const qui = prenom ? echapper(prenom) : 'Un proche';
+  return message(`${prenom || 'Un proche'} vous invite sur Papote`, [
+    'Bonjour,',
+    `${qui} vous invite à rejoindre la famille sur Papote, pour envoyer des photos et des messages à <b>${echapper(tablette || 'votre proche')}</b> et l'appeler en vidéo.`,
+    `Touchez le bouton ci-dessous, puis connectez-vous avec cette adresse e-mail (<b>${echapper(email)}</b>) pour rejoindre la famille.`,
+    'Rien à installer : l\'appli s\'ouvre dans le navigateur de votre téléphone.',
+  ], { texte: 'Rejoindre la famille', lien });
+}
+
 // Prélèvement SEPA de la commande refusé par la banque : commande annulée (papote : message pour Papote).
 function sepaRefuse({ nom, email, papote }) {
   if (papote) {
@@ -239,7 +250,7 @@ async function envoyer({ smtp, motDePasse, expediteur, a, contenu }) {
 }
 
 module.exports = {
-  colisParti, commandeConfirmee, nouvelleCommande, relancePanier, lancement, sepaRefuse, rappelJumelage,
+  colisParti, commandeConfirmee, nouvelleCommande, relancePanier, lancement, sepaRefuse, invitation, rappelJumelage,
   retourTablette, etiquetteRetour, rappelRestitution, tabletteRecue, commandeAnnulee, annulationAvantEnvoi, retourAPreparer,
   envoyer, echapper, euros,
 };
