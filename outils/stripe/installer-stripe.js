@@ -47,7 +47,7 @@ const PRODUITS = [
   {
     nom: 'Mise en service Papote',
     description: 'Tablette prêtée, configurée et livrée en point relais.',
-    tarifs: [{ cle: 'papote_mise_en_service', montant: 5000, nom: 'Mise en service', unique: true }],
+    tarifs: [{ cle: 'papote_mise_en_service', montant: 6000, nom: 'Mise en service', unique: true }],
   },
   {
     nom: 'Tablette Papote',
