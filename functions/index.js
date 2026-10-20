@@ -3,7 +3,7 @@
 //   commander          GET  depuis le site vitrine : ouvre la page de paiement Stripe (si une tablette est disponible)
 //   stockDisponible    GET  depuis le site vitrine : { disponible: true|false } (stock.js)
 //   creerPaiement      appel depuis l'appli famille : paiement pour une famille existante
-//   portailClient      appel depuis l'appli famille : carte bancaire, factures
+//   portailClient      appel depuis l'appli famille : compte bancaire, factures
 //   resilierAbonnement appel depuis l'appli famille : résilie à la fin du mois payé (sans engagement)
 //   annulerResiliation appel depuis l'appli famille : garde l'abonnement
 //   rattacherCommande  appel depuis l'appli famille : relie une commande du site à la famille
@@ -121,8 +121,8 @@ async function sessionPaiement({ formule, tablette, fid, email, client, relais, 
     mode: 'subscription',
     line_items: await tarifs(formule, tablette),
     locale: 'fr',
-    // Carte bancaire (Google Pay et Apple Pay compris), Link et prélèvement SEPA (Tanguy, 2026-10-20). Pas de code promo.
-    payment_method_types: ['card', 'link', 'sepa_debit'],
+    // Prélèvement SEPA seulement (Tanguy, 2026-10-20). Pas de code promo.
+    payment_method_types: ['sepa_debit'],
     billing_address_collection: 'auto',
     phone_number_collection: { enabled: true },
     metadata,
@@ -906,7 +906,7 @@ async function preleverMateriel(abonnement, montant, description, cle) {
   const abo = await stripe().subscriptions.retrieve(abonnement, { expand: ['customer'] });
   const moyen = abo.default_payment_method
     || (abo.customer.invoice_settings && abo.customer.invoice_settings.default_payment_method);
-  if (!moyen) throw new Error('Aucune carte enregistrée');
+  if (!moyen) throw new Error('Aucun moyen de paiement enregistré');
   return stripe().paymentIntents.create({
     amount: montant,
     currency: 'eur',

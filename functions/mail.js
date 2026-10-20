@@ -151,8 +151,8 @@ function retourTablette({ nom, avant, retractation, montant }) {
     'Nous vous envoyons par e-mail, sous deux jours ouvrés, une étiquette de retour prépayée : vous n\'avez rien à payer.',
     `${COMMENT_RENDRE} Date limite : <b>${dateEnClair(avant)}</b>.`,
     retractation != null && retractation > 0
-      ? `Dès que la tablette nous parvient, nous vous remboursons <b>${euros(retractation)}</b> sur votre carte.`
-      : `Sans retour à cette date, ${euros(montant)} seront prélevés sur votre carte. Chaque élément manquant est facturé : tablette 160 €, chargeur et câble 10 €, routeur 4G 30 €.`,
+      ? `Dès que la tablette nous parvient, nous vous remboursons <b>${euros(retractation)}</b> sur votre compte.`
+      : `Sans retour à cette date, ${euros(montant)} seront prélevés sur votre compte. Chaque élément manquant est facturé : tablette 160 €, chargeur et câble 10 €, routeur 4G 30 €.`,
   ]);
 }
 
@@ -167,7 +167,7 @@ function etiquetteRetour({ nom, lien, avant }) {
 function rappelRestitution({ nom, avant, lien, montant }) {
   return message('Pensez à nous rendre la tablette Papote', [
     bonjour(nom),
-    `Nous n'avons pas encore reçu la tablette. Déposez-la dans un point relais Mondial Relay avant le <b>${dateEnClair(avant)}</b> : sans retour à cette date, ${euros(montant)} seront prélevés sur votre carte.`,
+    `Nous n'avons pas encore reçu la tablette. Déposez-la dans un point relais Mondial Relay avant le <b>${dateEnClair(avant)}</b> : sans retour à cette date, ${euros(montant)} seront prélevés sur votre compte.`,
     lien ? 'Votre étiquette prépayée est disponible avec le bouton ci-dessous.' : 'Vous n\'avez pas reçu l\'étiquette de retour ? Répondez à cet e-mail : nous vous la renvoyons.',
     'Si vous avez déjà déposé le colis, ne tenez pas compte de ce message.',
   ], lien ? { texte: 'Imprimer l\'étiquette', lien } : undefined);
@@ -210,7 +210,7 @@ function sepaRefuse({ nom, email, papote }) {
   return message('Votre paiement Papote n\'a pas abouti', [
     bonjour(nom),
     'Votre banque a refusé le prélèvement SEPA de votre commande Papote. La commande est donc annulée et rien ne vous a été prélevé.',
-    'Vous pouvez recommander quand vous voulez, par carte ou avec un autre compte. Une question ? Répondez simplement à cet e-mail.',
+    'Vous pouvez recommander quand vous voulez, avec un autre compte bancaire. Une question ? Répondez simplement à cet e-mail.',
   ], { texte: 'Commander à nouveau', lien: 'https://mapapote.fr/commande.html' });
 }
 
