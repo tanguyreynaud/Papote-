@@ -3008,12 +3008,33 @@ function abonnerMembres() {
   const fid = session.fid;
   stopMembers = watchMembers(fid, (all, fromCache) => {
     membresDuCache = fromCache;
+    // Retiré de la famille par un responsable : on quitte tout de suite, sans attendre un rechargement.
+    if (!fromCache && !all.some((m) => m.id === session.uid)) { quitterFamilleRetire(fid); return; }
     renderMembers(all);
     renderActivity();
-  }, (err) => {
+  }, async (err) => {
+    // Plus le droit de lire : on vérifie si l'on fait encore partie de la famille.
+    if (err?.code === 'permission-denied') {
+      try {
+        const moi = await getDoc(doc(db, 'families', fid, 'members', session.uid));
+        if (!moi.exists()) { quitterFamilleRetire(fid); return; }
+      } catch (e) { quitterFamilleRetire(fid); return; }
+    }
     console.warn('Membres illisibles, nouvelle écoute dans 5 s', err);
     relanceMembres = setTimeout(() => { if (session?.fid === fid) abonnerMembres(); }, 5000);
   });
+}
+
+let quitteEnCours = false;
+async function quitterFamilleRetire(fid) {
+  if (quitteEnCours || session?.fid !== fid) return;
+  quitteEnCours = true;
+  const nom = session.family?.name || '';
+  stopSession();
+  if (savedFamilyId() === fid) saveFamilyId(null);
+  await notice(`Vous ne faites plus partie de la famille${nom ? ` de ${nom}` : ''}. Un responsable vous a retiré.`);
+  quitteEnCours = false;
+  enterApp();
 }
 
 let cacheDepuis = 0;
