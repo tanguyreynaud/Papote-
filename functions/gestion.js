@@ -643,16 +643,19 @@ exports.gestionDonnees = onCall(async (request) => {
 
 // Fiches créées à l'installation avant que la facture soit enregistrée (sans prix ni date d'achat) : un achat
 // enregistré ensuite les complète au lieu d'ajouter des fiches en double, ce qui gonflerait le stock à vendre.
-// Même n° de série d'abord, puis la plus ancienne. Renvoie, pour chaque tablette de l'achat, l'id à compléter ou null.
+// Même n° de série d'abord, puis la plus ancienne encore au stock : une tablette déjà partie chez un client (ou liée
+// à une commande) n'est complétée que par son n° de série. Renvoie, pour chaque tablette, l'id à compléter ou null.
+const ETATS_A_RATTACHER = ['en-stock', 'preparee'];
 function fichesARattacher(sansAchat, numeros, quantite) {
   const restantes = sansAchat.slice().sort((a, b) => (a.creeLe || 0) - (b.creeLe || 0));
+  const libre = (t) => !t.commande && (!t.etat || ETATS_A_RATTACHER.includes(t.etat));
   const prendre = (i) => (i < 0 ? null : restantes.splice(i, 1)[0].id);
   const serie = (n) => String(n || '').replace(/\s/g, '').toUpperCase();
   const choix = Array.from({ length: quantite }, (_, i) => {
     const n = serie(numeros[i]);
     return n ? prendre(restantes.findIndex((t) => serie(t.numero) === n || serie(t.serieAndroid) === n)) : undefined;
   });
-  return choix.map((id) => (id === undefined || id === null ? (restantes.length ? prendre(0) : null) : id));
+  return choix.map((id) => (id === undefined || id === null ? prendre(restantes.findIndex(libre)) : id));
 }
 
 // Achat de tablettes : N fiches de stock et la dépense correspondante (sauf depense: false).
@@ -688,7 +691,7 @@ async function ajouterAchat(d, qui) {
   const sansAchat = (await db().collection('stock').where('acheteeLe', '==', null).get()).docs
     .filter((x) => x.get('prixAchat') == null && !x.get('depense'))
     .map((x) => ({ id: x.id, numero: x.get('numero'), serieAndroid: x.get('serieAndroid'), modele: x.get('modele'),
-      creeLe: ms(x.get('creeLe')) || 0 }));
+      etat: x.get('etat'), commande: x.get('commande') || null, creeLe: ms(x.get('creeLe')) || 0 }));
   const rattachees = fichesARattacher(sansAchat, numeros, quantite);
   for (let i = 0; i < quantite; i++) {
     if (rattachees[i]) {
@@ -782,10 +785,44 @@ exports.gestionStock = onCall(async (request) => {
   const d = request.data || {};
   const qui = request.auth.token.email || request.auth.uid;
 
+  // Tablette reçue avant sa facture (« Pas dans la liste » à la réception) : fiche sans achat, que l'installation
+  // reprend et que la facture complétera (fichesARattacher).
+  if (d.action === 'recue') {
+    const ref = await db().collection('stock').add({
+      numero: texte(d.numero, 80) || null, modele: texte(d.modele) || null, fournisseur: texte(d.fournisseur) || null,
+      prixAchat: null, acheteeLe: null, etat: 'en-stock', commande: null, sim: null,
+      notes: 'Reçue avant sa facture : transférez la facture du vendeur à factures@mapapote.fr.',
+      historique: [{ le: Date.now(), etat: 'en-stock', par: qui }],
+      creeLe: FieldValue.serverTimestamp(), majLe: FieldValue.serverTimestamp(),
+    });
+    return { ok: true, id: ref.id };
+  }
+
   if (d.action === 'ajouter') {
     const r = await ajouterAchat(d, qui);
     r.materiel = await entrerMateriel(materielLu(d.materiel, true), { depense: r.depense, numeroFacture: d.numeroFacture }, qui);
     return r;
+  }
+
+  // Achat rattaché à la mauvaise fiche : la fiche redevient « sans facture » et l'achat part sur une fiche neuve en stock.
+  if (d.action === 'detacherAchat') {
+    if (typeof d.id !== 'string' || !d.id) throw new HttpsError('invalid-argument', 'Tablette manquante.');
+    const ref = db().doc(`stock/${d.id}`);
+    const snap = await ref.get();
+    if (!snap.exists || !snap.get('depense')) throw new HttpsError('failed-precondition', 'Cette tablette n\'a pas d\'achat rattaché.');
+    const dep = await db().doc(`depenses/${snap.get('depense')}`).get();
+    const modele = dep.exists ? String(dep.get('libelle') || '').replace(/^\d+ tablettes? ?/, '') || null : null;
+    const neuve = db().collection('stock').doc();
+    const batch = db().batch();
+    batch.set(neuve, {
+      numero: null, modele, fournisseur: snap.get('fournisseur') || null, prixAchat: snap.get('prixAchat'),
+      acheteeLe: snap.get('acheteeLe'), etat: 'en-stock', commande: null, sim: null, notes: null, depense: snap.get('depense'),
+      historique: [{ le: Date.now(), etat: 'en-stock', par: qui }],
+      creeLe: FieldValue.serverTimestamp(), majLe: FieldValue.serverTimestamp(),
+    });
+    batch.update(ref, { prixAchat: null, acheteeLe: null, depense: null, majLe: FieldValue.serverTimestamp() });
+    await batch.commit();
+    return { ok: true, id: neuve.id };
   }
 
   if (d.action === 'modifier') {
@@ -1556,6 +1593,41 @@ async function synchroniserStock(bilan) {
   }
 }
 
+// Fin de contrat : l'étiquette de retour part toute seule (aucun justificatif demandé au client). Seulement
+// avec la vraie clé Stripe : en mode test, les commandes d'essai ne doivent pas coûter d'étiquettes.
+async function etiquettesRetour(bilan) {
+  if (!STRIPE_SECRET.value().startsWith('sk_live_')) return;
+  const attendues = await db().collection('commandes').where('restitution.statut', '==', 'attendue').get();
+  for (const snap of attendues.docs) {
+    const c = snap.data();
+    if (c.restitution.etiquette || (c.etiquettes && c.etiquettes.retour) || c.expedition !== 'envoyee') continue;
+    try {
+      await creerEtiquette(snap.id, 'retour', 'automatique');
+      bilan.etiquettes = (bilan.etiquettes || []).concat(c.nom || c.email || snap.id);
+    } catch (e) {
+      bilan.erreurs.push(`Étiquette de retour de ${c.nom || c.email || snap.id} : ${e.message} (à créer depuis Commandes)`);
+    }
+  }
+}
+
+// « Le client a reçu le colis » d'après le suivi Sendcloud. Une commande déjà jumelée a quitté la liste
+// des colis en route : rien à cocher.
+async function colisLivres(bilan) {
+  const enRoute = await db().collection('commandes').where('expedition', '==', 'envoyee').where('fid', '==', null).get();
+  const aSuivre = enRoute.docs.filter((d) => !d.get('preparation.recuLe') && d.get('etiquettes.aller.colis'));
+  if (!aSuivre.length) return;
+  const api = sendcloud.client(SENDCLOUD_API.value());
+  for (const snap of aSuivre) {
+    try {
+      if (!(await api.livre(snap.get('etiquettes.aller.colis')))) continue;
+      await snap.ref.update({ 'preparation.recuLe': Date.now(), 'preparation.recuPar': 'suivi Mondial Relay' });
+      bilan.livres = (bilan.livres || []).concat(snap.get('nom') || snap.get('email') || snap.id);
+    } catch (e) {
+      bilan.erreurs.push(`Suivi du colis de ${snap.get('nom') || snap.id} : ${e.message}`);
+    }
+  }
+}
+
 async function automatiser(qui) {
   const maintenant = Date.now();
   const bilan = { factures: [], avoirs: [], depenses: 0, stock: [], erreurs: [] };
@@ -1565,16 +1637,18 @@ async function automatiser(qui) {
   await depensesRecurrentes(maintenant, bilan);
   await facturerPenalites(maintenant - FENETRE, bilan);
   await avoirsRemboursements(maintenant - FENETRE, bilan);
+  await etiquettesRetour(bilan).catch((e) => bilan.erreurs.push(`Étiquettes de retour : ${e.message}`));
+  await colisLivres(bilan).catch((e) => bilan.erreurs.push(`Suivi des colis : ${e.message}`));
   await db().doc('gestion/automatique').set({ ...bilan, le: maintenant, par: qui });
   if (bilan.erreurs.length) logger.warn('Automatismes de gestion', bilan.erreurs);
   return bilan;
 }
 
 exports.gestionAutomatique = onSchedule(
-  { schedule: 'every day 04:00', timeZone: 'Europe/Paris', secrets: [STRIPE_SECRET], timeoutSeconds: 300 },
+  { schedule: 'every day 04:00', timeZone: 'Europe/Paris', secrets: [STRIPE_SECRET, SENDCLOUD_API, MAIL_MOT_DE_PASSE], timeoutSeconds: 300 },
   () => automatiser('automatique'));
 
-exports.gestionAutomatiser = onCall({ secrets: [STRIPE_SECRET], timeoutSeconds: 300 }, async (request) => {
+exports.gestionAutomatiser = onCall({ secrets: [STRIPE_SECRET, SENDCLOUD_API, MAIL_MOT_DE_PASSE], timeoutSeconds: 300 }, async (request) => {
   verifierAdmin(request);
   return automatiser(request.auth.token.email || request.auth.uid);
 });
@@ -1624,16 +1698,9 @@ async function rangerEtiquette(commande, sens, colis, pdf) {
   return `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(chemin)}?alt=media&token=${jeton}`;
 }
 
-// { commande, sens: 'aller' | 'retour' } : crée l'étiquette Mondial Relay chez Sendcloud.
-// Aller : renvoie le n° de suivi pour le formulaire d'envoi. Retour : le client la reçoit par e-mail.
-exports.gestionEtiquette = onCall({ secrets: [SENDCLOUD_API, MAIL_MOT_DE_PASSE], timeoutSeconds: 120 }, async (request) => {
-  verifierAdmin(request);
-  const qui = request.auth.token.email || request.auth.uid;
-  const d = request.data || {};
-  if (typeof d.commande !== 'string' || !d.commande || !['aller', 'retour'].includes(d.sens)) {
-    throw new HttpsError('invalid-argument', 'Commande ou sens manquant.');
-  }
-  const ref = db().doc(`commandes/${d.commande}`);
+// Crée l'étiquette Mondial Relay chez Sendcloud. Erreur à montrer telle quelle : HttpsError ; panne Sendcloud : Error.
+async function creerEtiquette(commande, sens, qui) {
+  const ref = db().doc(`commandes/${commande}`);
   const [snap, reglagesSnap] = await Promise.all([ref.get(), db().doc('gestion/reglages').get()]);
   if (!snap.exists) throw new HttpsError('not-found', 'Commande introuvable.');
   const c = snap.data();
@@ -1643,38 +1710,50 @@ exports.gestionEtiquette = onCall({ secrets: [SENDCLOUD_API, MAIL_MOT_DE_PASSE],
   const cl = sendcloud.adresseClient(c);
   if (!cl) throw new HttpsError('failed-precondition', "Cette commande n'a pas d'adresse ni de point relais utilisable.");
   const poids = Math.max(0.1, (reglages.poidsColis || 1500) / 1000);
-  const reference = c.code ? String(c.code) : d.commande.slice(-12);
+  const reference = c.code ? String(c.code) : commande.slice(-12);
   let api;
   try {
     api = sendcloud.client(SENDCLOUD_API.value());
   } catch (e) {
     throw new HttpsError('failed-precondition', e.message);
   }
+  if (sens === 'aller') {
+    const r = await api.envoi({ de: papote, vers: cl.adresse, pointRelais: cl.pointRelais, poids, reference });
+    const url = await rangerEtiquette(commande, 'aller', r.colis, r.pdf);
+    await ref.update({ 'etiquettes.aller': { colis: r.colis, suivi: r.suivi, url, le: Date.now(), par: qui } });
+    return { ok: true, suivi: r.suivi, url };
+  }
+  const r = await api.retour({ de: cl.adresse, vers: papote, poids, reference });
+  const url = await rangerEtiquette(commande, 'retour', r.colis, r.pdf);
+  const maj = { 'etiquettes.retour': { colis: r.colis, url, le: Date.now(), par: qui } };
+  const attendue = c.restitution && ['attendue', 'echec'].includes(c.restitution.statut);
+  if (attendue) {
+    // Fin de contrat : l'e-mail au client part avec commandeModifiee, comme une étiquette collée à la main.
+    maj['restitution.etiquette'] = url;
+    maj['restitution.etiquetteLe'] = FieldValue.serverTimestamp();
+  }
+  await ref.update(maj);
+  if (!attendue && c.email) {
+    // Remplacement d'un élément du kit : l'étiquette part tout de suite.
+    await mail.envoyer({
+      smtp: MAIL_SMTP.value(), expediteur: MAIL_EXPEDITEUR.value(), motDePasse: MAIL_MOT_DE_PASSE.value(),
+      a: c.email, contenu: mail.etiquetteRetour({ nom: c.nom, lien: url, avant: null }),
+    });
+  }
+  return { ok: true, url, envoyee: !!c.email };
+}
+
+// { commande, sens: 'aller' | 'retour' } : crée l'étiquette Mondial Relay chez Sendcloud.
+// Aller : renvoie le n° de suivi pour le formulaire d'envoi. Retour : le client la reçoit par e-mail.
+exports.gestionEtiquette = onCall({ secrets: [SENDCLOUD_API, MAIL_MOT_DE_PASSE], timeoutSeconds: 120 }, async (request) => {
+  verifierAdmin(request);
+  const qui = request.auth.token.email || request.auth.uid;
+  const d = request.data || {};
+  if (typeof d.commande !== 'string' || !d.commande || !['aller', 'retour'].includes(d.sens)) {
+    throw new HttpsError('invalid-argument', 'Commande ou sens manquant.');
+  }
   try {
-    if (d.sens === 'aller') {
-      const r = await api.envoi({ de: papote, vers: cl.adresse, pointRelais: cl.pointRelais, poids, reference });
-      const url = await rangerEtiquette(d.commande, 'aller', r.colis, r.pdf);
-      await ref.update({ 'etiquettes.aller': { colis: r.colis, suivi: r.suivi, url, le: Date.now(), par: qui } });
-      return { ok: true, suivi: r.suivi, url };
-    }
-    const r = await api.retour({ de: cl.adresse, vers: papote, poids, reference });
-    const url = await rangerEtiquette(d.commande, 'retour', r.colis, r.pdf);
-    const maj = { 'etiquettes.retour': { colis: r.colis, url, le: Date.now(), par: qui } };
-    const attendue = c.restitution && ['attendue', 'echec'].includes(c.restitution.statut);
-    if (attendue) {
-      // Fin de contrat : l'e-mail au client part avec commandeModifiee, comme une étiquette collée à la main.
-      maj['restitution.etiquette'] = url;
-      maj['restitution.etiquetteLe'] = FieldValue.serverTimestamp();
-    }
-    await ref.update(maj);
-    if (!attendue && c.email) {
-      // Remplacement d'un élément du kit : l'étiquette part tout de suite.
-      await mail.envoyer({
-        smtp: MAIL_SMTP.value(), expediteur: MAIL_EXPEDITEUR.value(), motDePasse: MAIL_MOT_DE_PASSE.value(),
-        a: c.email, contenu: mail.etiquetteRetour({ nom: c.nom, lien: url, avant: null }),
-      });
-    }
-    return { ok: true, url, envoyee: !!c.email };
+    return await creerEtiquette(d.commande, d.sens, qui);
   } catch (e) {
     if (e instanceof HttpsError) throw e;
     logger.error('Étiquette Sendcloud', e);
@@ -1873,6 +1952,11 @@ async function argentDepuis(depuis) {
 }
 
 // Ce qui attend l'administrateur, à partir des données Firestore (même logique que l'accueil de la page).
+// Tablette reçue avant sa facture (fiche sans prix ni achat, créée à la réception ou à l'installation) depuis
+// plus de 5 jours : la facture est à envoyer à factures@, l'achat complétera cette fiche (fichesARattacher).
+const sansFacture = (t, maintenant) => t.prixAchat == null && !t.acheteeLe && !t.depense
+  && !['perdue', 'hors-service'].includes(t.etat) && (ms(t.creeLe) || ms(t.preparee) || maintenant) < maintenant - JOURS(5);
+
 function aFaire({ commandes, stock, depenses, automatique, maintenant, sims = [], accessoires = [] }) {
   const liste = [];
   // texte : « tablette(s) reçue(s) » → singulier ou pluriel selon n.
@@ -1908,6 +1992,8 @@ function aFaire({ commandes, stock, depenses, automatique, maintenant, sims = []
       .map((d) => `${d.fournisseur || d.libelle}${d.numero ? ` (commande ${d.numero})` : ''}`).join(', ')}`);
   }
   ajouter(depenses.filter((d) => d.aVerifier).length, 'facture(s) reçue(s) par e-mail à vérifier');
+  ajouter(stock.filter((t) => sansFacture(t, maintenant)).length,
+    'tablette(s) reçue(s) sans facture depuis 5 jours : transférez la facture du vendeur à factures@mapapote.fr');
   ajouter(sims.filter((l) => alertesSim(l, maintenant).length).length, 'carte(s) SIM à regarder (promo, activation, carte bancaire)');
   liste.push(...incoherences({ commandes: actives, stock, sims }));
   for (const a of accessoiresAPrevoir(accessoires, actives.filter((c) => c.expedition === 'a-preparer' && !retour(c)))) {
@@ -2202,61 +2288,91 @@ async function releverFactures() {
   const { ImapFlow } = require('imapflow');
   const { simpleParser } = require('mailparser');
   const [hote, port, utilisateur] = FACTURES_IMAP.value().split(':');
-  const bilan = { le: Date.now(), rangees: [], ignorees: [], erreurs: [] };
+  const bilan = { le: Date.now(), boite: utilisateur || null, rangees: [], ignorees: [], erreurs: [] };
   const client = new ImapFlow({
     host: hote, port: Number(port) || 993, secure: true, logger: false,
     auth: { user: utilisateur, pass: FACTURES_MOT_DE_PASSE.value() },
   });
   try {
     await client.connect();
-    const verrou = await client.getMailboxLock('INBOX');
-    try {
-      const adresse = FACTURES_ADRESSE.value();
-      const uids = await client.search({ seen: false, or: [{ to: adresse }, { cc: adresse }] }, { uid: true }) || [];
-      for (const uid of uids.slice(0, 20)) {
-        const { content } = await client.download(String(uid), undefined, { uid: true });
-        const mailLu = await simpleParser(content);
-        const de = (mailLu.from && mailLu.from.text) || 'expéditeur inconnu';
-        const sujet = mailLu.subject || '(sans objet)';
-        const pieces = piecesFacture(mailLu.attachments);
-        if (!pieces.length) {
+    const adresse = FACTURES_ADRESSE.value();
+    // E-mails des 4 derniers jours pas encore traités, lus ou non : un e-mail ouvert entre-temps dans la
+    // messagerie (marqué « lu ») doit quand même être rangé. Les déjà traités sont notés par leur Message-ID.
+    const vusRef = db().doc('gestion/courrierVus');
+    const vus = new Set((await vusRef.get()).get('ids') || []);
+    const traites = [];
+    let lus = 0;
+    // Boîte de réception, puis courrier indésirable : un e-mail transféré peut y être classé par OVH.
+    const dossiers = ['INBOX', ...(await client.list()).filter((b) => b.specialUse === '\\Junk').map((b) => b.path)];
+    const depuis = new Date(Date.now() - 4 * 86400000);
+    for (const dossier of dossiers) {
+      const verrou = await client.getMailboxLock(dossier);
+      try {
+        const tous = await client.search({ since: depuis }, { uid: true }) || [];
+        const uids = await client.search({ since: depuis, or: [{ to: adresse }, { cc: adresse }] }, { uid: true }) || [];
+        bilan.recus = (bilan.recus || 0) + tous.length;
+        bilan.pourFactures = (bilan.pourFactures || 0) + uids.length;
+        for (const uid of uids) {
+          if (lus >= 20) break;
+          const entete = await client.fetchOne(String(uid), { envelope: true }, { uid: true });
+          const cle = String((entete && entete.envelope && entete.envelope.messageId) || `uid-${uid}`).slice(0, 200);
+          if (vus.has(cle)) continue;
+          lus += 1;
+          const { content } = await client.download(String(uid), undefined, { uid: true });
+          const mailLu = await simpleParser(content);
+          const de = (mailLu.from && mailLu.from.text) || 'expéditeur inconnu';
+          const sujet = mailLu.subject || '(sans objet)';
+          const pieces = piecesFacture(mailLu.attachments);
+          // Le texte de l'e-mail (confirmation de commande) passe après les pièces jointes : lu seulement si
+          // aucune pièce n'est une facture (images de produits d'un e-mail transféré, par exemple).
           const corps = corpsDuMail(mailLu);
-          if (corps) pieces.push(corps);
-          else bilan.ignorees.push(`« ${sujet} » (${de}) : aucune facture en pièce jointe`);
-        }
-        let reessayer = false;
-        for (const piece of pieces) {
-          try {
-            const r = await lireDocument(piece.content.toString('base64'), piece.contentType);
-            if (!r.facture) {
-              bilan.ignorees.push(`${piece.filename || 'pièce'} (« ${sujet} ») : pas une facture`);
-              continue;
+          if (!pieces.length && !corps) bilan.ignorees.push(`« ${sujet} » (${de}) : aucune facture en pièce jointe`);
+          let reessayer = false;
+          let trouvee = false;
+          for (const piece of [...pieces, ...(corps ? [corps] : [])]) {
+            if (piece === corps && trouvee) break;
+            try {
+              const r = await lireDocument(piece.content.toString('base64'), piece.contentType);
+              if (!r.facture) {
+                bilan.ignorees.push(`${piece.filename || 'pièce'} (« ${sujet} ») : pas une facture`);
+                continue;
+              }
+              trouvee = true;
+              const rangee = await rangerFacture(r, piece, `e-mail de ${de}`.slice(0, 200));
+              if (typeof rangee === 'string') bilan.ignorees.push(`${piece.filename || 'pièce'} : ${rangee}`);
+              else {
+                const plus = rangee && rangee.rattachee ? ' (facture ajoutée à la confirmation de commande)'
+                  : rangee && rangee.materiel && rangee.materiel.length ? ` (+ ${rangee.materiel.join(', ')})` : '';
+                bilan.rangees.push(`${r.fournisseur || de} : ${r.libelle || sujet}${plus}`);
+              }
+            } catch (e) {
+              bilan.erreurs.push(`${piece.filename || 'pièce'} (« ${sujet} ») : ${e.message}`);
+              // Lecture indisponible : l'e-mail reste non lu et sera repris à l'heure suivante.
+              if (e.code === 'unavailable') reessayer = true;
             }
-            const rangee = await rangerFacture(r, piece, `e-mail de ${de}`.slice(0, 200));
-            if (typeof rangee === 'string') bilan.ignorees.push(`${piece.filename || 'pièce'} : ${rangee}`);
-            else {
-              const plus = rangee && rangee.rattachee ? ' (facture ajoutée à la confirmation de commande)'
-                : rangee && rangee.materiel && rangee.materiel.length ? ` (+ ${rangee.materiel.join(', ')})` : '';
-              bilan.rangees.push(`${r.fournisseur || de} : ${r.libelle || sujet}${plus}`);
-            }
-          } catch (e) {
-            bilan.erreurs.push(`${piece.filename || 'pièce'} (« ${sujet} ») : ${e.message}`);
-            // Lecture indisponible : l'e-mail reste non lu et sera repris à l'heure suivante.
-            if (e.code === 'unavailable') reessayer = true;
           }
+          if (reessayer) continue;
+          traites.push(cle);
+          vus.add(cle);
+          await client.messageFlagsAdd(String(uid), ['\\Seen'], { uid: true });
         }
-        if (reessayer) continue;
-        await client.messageFlagsAdd(String(uid), ['\\Seen'], { uid: true });
+      } finally {
+        verrou.release();
       }
-    } finally {
-      verrou.release();
     }
+    if (traites.length) await vusRef.set({ ids: [...vus].slice(-500) });
     await client.logout();
   } catch (e) {
     bilan.erreurs.push(`Boîte ${utilisateur} : ${e.authenticationFailed ? 'mot de passe refusé' : e.message}`);
     client.close();
   }
-  await db().doc('gestion/courrier').set(bilan);
+  // Relevé sans rien de nouveau : le résultat du dernier e-mail traité reste affiché (sinon il disparaît
+  // au relevé suivant, une heure après).
+  const vide = !bilan.rangees.length && !bilan.ignorees.length && !bilan.erreurs.length;
+  const avant = vide ? (await db().doc('gestion/courrier').get()).data() : null;
+  const precedent = avant && (avant.rangees.length || avant.ignorees.length || avant.erreurs.length)
+    ? { le: avant.le, rangees: avant.rangees, ignorees: avant.ignorees, erreurs: avant.erreurs } : avant && avant.precedent;
+  await db().doc('gestion/courrier').set({ ...bilan, ...(precedent ? { precedent } : {}) });
   if (bilan.erreurs.length) logger.warn('Factures reçues par e-mail', bilan.erreurs);
   return bilan;
 }
@@ -2610,7 +2726,7 @@ exports.gestionParcours = onCall(async (request) => {
 
 exports.regles = {
   ETATS, CATEGORIES, natureMouvement, mensuel, centimes, lien, nomFichier, moisSuivant, lectureVersFormulaire, SCHEMA_FACTURE,
-  lireReglages, simAResilier, fichesARattacher, stockAJour, releveBatterie, usureBatterie, incoherences, materielLu, memeAccessoire, coutLigne, alertesSim, accessoiresAPrevoir, champsSim, aFaire, piecesFacture, debutMoisParis, moisPrecedent, csvTexte, livreDesRecettes,
+  lireReglages, simAResilier, fichesARattacher, sansFacture, stockAJour, releveBatterie, usureBatterie, incoherences, materielLu, memeAccessoire, coutLigne, alertesSim, accessoiresAPrevoir, champsSim, aFaire, piecesFacture, debutMoisParis, moisPrecedent, csvTexte, livreDesRecettes,
   registreDesAchats, corpsDuMail, memeAchat, suiteJumelage, descriptionNonRendu, refusSuppression, fusionnerContacts, emailInformation, cleContact,
   avancementPropre,
 };

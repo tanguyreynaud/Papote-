@@ -437,4 +437,24 @@ test('achat enregistré après l\'installation : complète les fiches sans factu
   assert.deepStrictEqual(g.fichesARattacher(sans, [], 1), ['a']);
   assert.deepStrictEqual(g.fichesARattacher(sans, ['X', '', 'Y'], 3), ['a', 'b', null]);
   assert.deepStrictEqual(g.fichesARattacher([], ['X'], 2), [null, null]);
+  // Tablette déjà envoyée à un client : seulement par son n° de série.
+  const partie = [{ id: 'c', creeLe: 1, etat: 'envoyee', commande: 'cmd', numero: 'S1' }];
+  assert.deepStrictEqual(g.fichesARattacher(partie, [], 1), [null]);
+  assert.deepStrictEqual(g.fichesARattacher(partie, ['s1'], 1), ['c']);
+});
+
+test('tablette reçue sans facture depuis 5 jours', () => {
+  const maintenant = Date.UTC(2026, 9, 20);
+  const vieille = maintenant - 6 * 86400000;
+  assert.strictEqual(g.sansFacture({ etat: 'en-stock', prixAchat: null, creeLe: vieille }, maintenant), true);
+  assert.strictEqual(g.sansFacture({ etat: 'preparee', prixAchat: null, preparee: maintenant - 86400000 }, maintenant), false);
+  assert.strictEqual(g.sansFacture({ etat: 'en-stock', prixAchat: 8000, creeLe: vieille }, maintenant), false);
+  assert.strictEqual(g.sansFacture({ etat: 'perdue', prixAchat: null, creeLe: vieille }, maintenant), false);
+});
+
+test('colis livré d\'après Sendcloud', () => {
+  const { colisLivre } = require('./sendcloud');
+  assert.strictEqual(colisLivre({ parcel: { status: { id: 11, message: 'Delivered' } } }), true);
+  assert.strictEqual(colisLivre({ parcel: { status: { id: 12, message: 'Awaiting customer pickup' } } }), false);
+  assert.strictEqual(colisLivre(null), false);
 });

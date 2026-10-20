@@ -508,6 +508,9 @@ function afficherAccueil() {
   const usees = donnees.stock.filter((t) => t.etat === 'revenue' && t.usure);
   const facturesAttendues = donnees.depenses.filter((d) => d.confirmation && Date.now() - (d.date || 0) > 5 * 864e5);
   const aVerifierMail = donnees.depenses.filter((d) => d.aVerifier).length;
+  // Même règle que sansFacture (functions/gestion.js).
+  const sansFacture = donnees.stock.filter((t) => t.prixAchat == null && !t.acheteeLe && !t.depense
+    && !['perdue', 'hors-service'].includes(t.etat) && (t.creeLe || t.preparee || Date.now()) < Date.now() - 5 * 864e5).length;
   const erreursMail = donnees.courrier ? (donnees.courrier.erreurs || []).length : 0;
   const tva = franchiseTva();
 
@@ -529,6 +532,7 @@ function afficherAccueil() {
     ...usees.map((t) => [1, `Tablette ${t.ref || t.numero || ''} revenue : ${t.usure}, à retirer du parc`, '#stock', 'ko']),
     [facturesAttendues.length, `Facture à télécharger chez le vendeur puis à envoyer à factures@ : ${facturesAttendues
       .map((d) => `${d.fournisseur || d.libelle}${d.numero ? ` (commande ${d.numero})` : ''}`).join(', ')}`, '#compta/depenses', 'ko'],
+    [sansFacture, `${pluriel(sansFacture, 'tablette')} reçue${sansFacture > 1 ? 's' : ''} sans facture depuis 5 jours : transférez la facture du vendeur à factures@mapapote.fr`, '#stock', 'ko'],
     [aVerifierMail, `${pluriel(aVerifierMail, 'facture')} reçue${aVerifierMail > 1 ? 's' : ''} par e-mail à vérifier`, '#compta/depenses', ''],
     [erreursMail, `${pluriel(erreursMail, 'problème')} au dernier relevé de factures@mapapote.fr (détail en bas de page)`, '#accueil', 'ko'],
     [tva && tva.alerte ? 1 : 0, tva ? tva.alerte : '', '#compta/urssaf', 'ko'],
@@ -810,13 +814,32 @@ function formulaireRemplacement(c, t) {
     e.preventDefault();
     if (!nouveau.value) return;
     bouton.disabled = true;
+    // Ouverte avant toute attente, sinon le navigateur la bloque : elle recevra l'étiquette d'envoi.
+    const fenetre = window.open('', '_blank');
     try {
       await appeler('gestionStock', { action: 'remplacer', commande: c.id, element: choix.value, nouveau: nouveau.value, motif: motif.value });
+      // Étiquettes faites tout de suite : l'aller pour le colis de remplacement, le retour (envoyé au client par
+      // e-mail) pour la tablette remplacée.
+      msg.className = 'small muted';
+      msg.textContent = 'Remplacement noté. Création des étiquettes chez Sendcloud…';
+      const sens = choix.value === 'tablette' ? ['aller', 'retour'] : ['aller'];
+      const faites = [];
+      for (const s of sens) {
+        try {
+          const r = await appeler('gestionEtiquette', { commande: c.id, sens: s });
+          faites.push([s, r.url]);
+        } catch (err) {
+          alert(`Étiquette ${s === 'aller' ? 'd\'envoi' : 'de retour'} impossible : ${messageErreur(err)}. Faites-la depuis la commande.`);
+        }
+      }
+      const aller = faites.find(([s]) => s === 'aller');
+      if (fenetre) { if (aller) fenetre.location = aller[1]; else fenetre.close(); }
       donnees = await lireDonnees(true);
       afficherTout();
       signalerChangement();
       ouvrirCommande(donnees.commandes.find((x) => x.id === c.id) || c);
     } catch (err) {
+      if (fenetre) fenetre.close();
       msg.className = 'small error';
       msg.textContent = messageErreur(err);
       bouton.disabled = false;
@@ -1204,6 +1227,7 @@ function ouvrirTablette(id) {
   $('dt-historique').replaceChildren(...(t.historique || []).filter((x) => x.le).reverse().map((x) => h('li', {},
     `${new Date(x.le).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })} : ${donnees.etats[x.etat] || x.etat}`)));
   $('dt-retirer').hidden = !(t.etat === 'en-stock' && !t.commande && (t.historique || []).length <= 1);
+  $('dt-detacher').hidden = !t.depense;
   f.querySelector('.f-msg').hidden = true;
   $('d-tablette').showModal();
 }
@@ -1245,6 +1269,14 @@ $('dt-retirer').addEventListener('click', async () => {
   if (!confirm('Retirer cette tablette du stock (erreur de saisie) ?')) return;
   await enregistrer($('f-tablette'), async () => {
     await appeler('gestionStock', { action: 'supprimer', id: tabletteOuverte });
+    $('d-tablette').close();
+  });
+});
+
+$('dt-detacher').addEventListener('click', async () => {
+  if (!confirm('Retirer l\'achat de cette fiche ? Il passera sur une nouvelle tablette en stock.')) return;
+  await enregistrer($('f-tablette'), async () => {
+    await appeler('gestionStock', { action: 'detacherAchat', id: tabletteOuverte });
     $('d-tablette').close();
   });
 });
@@ -1744,6 +1776,8 @@ function afficherAutomatique() {
     a.avoirs.length ? `${pluriel(a.avoirs.length, 'avoir')} (${a.avoirs.join(', ')})` : null,
     a.depenses ? `${pluriel(a.depenses, 'dépense mensuelle')} ajoutée${a.depenses > 1 ? 's' : ''}` : null,
     (a.stock || []).length ? `stock mis à jour (${a.stock.join(', ')})` : null,
+    (a.etiquettes || []).length ? `étiquette de retour envoyée à ${a.etiquettes.join(', ')}` : null,
+    (a.livres || []).length ? `colis reçu par ${a.livres.join(', ')}` : null,
   ].filter(Boolean);
   $('automatique').replaceChildren(
     `Dernier passage le ${quand} : ${fait.length ? fait.join(', ') : 'rien à faire'}.`,
@@ -2197,9 +2231,14 @@ function afficherCourrier() {
   }
   const quand = new Date(c.le).toLocaleString('fr-FR', { dateStyle: 'long', timeStyle: 'short' });
   $('courrier').replaceChildren(
-    `Dernier relevé le ${quand} : ${c.rangees.length ? `${pluriel(c.rangees.length, 'facture')} rangée${c.rangees.length > 1 ? 's' : ''} (${c.rangees.join(' ; ')})` : 'aucune nouvelle facture'}.`,
+    `Dernier relevé le ${quand} : ${c.rangees.length ? `${pluriel(c.rangees.length, 'facture')} rangée${c.rangees.length > 1 ? 's' : ''} (${c.rangees.join(' ; ')})` : 'aucune nouvelle facture'}`,
+    c.recus != null ? ` (boîte ${c.boite || ''} : ${pluriel(c.recus, 'e-mail')} reçu${c.recus > 1 ? 's' : ''} ces 4 jours, dont ${c.pourFactures || 0} adressé${c.pourFactures > 1 ? 's' : ''} à factures@).` : '.',
     ...c.ignorees.map((x) => h('span', {}, h('br'), `Ignoré : ${x}`)),
     ...c.erreurs.map((x) => h('span', { class: 'error' }, h('br'), x)),
+    ...(c.precedent ? [h('br'), `Dernier e-mail traité le ${new Date(c.precedent.le).toLocaleString('fr-FR', { dateStyle: 'long', timeStyle: 'short' })} : `,
+      c.precedent.rangees.length ? `rangé (${c.precedent.rangees.join(' ; ')})` : 'rien de rangé',
+      ...c.precedent.ignorees.map((x) => h('span', {}, h('br'), `Ignoré : ${x}`)),
+      ...c.precedent.erreurs.map((x) => h('span', { class: 'error' }, h('br'), x))] : []),
   );
 }
 
@@ -2466,6 +2505,8 @@ function etapesReceptionTablette() {
       pret: (e) => !!e.numero,
       async valider(e) {
         if (e.id) await appeler('gestionStock', { action: 'modifier', id: e.id, champs: { numero: e.numero, modele: e.modele, ...(e.fournisseur ? { fournisseur: e.fournisseur } : {}) } });
+        // Facture pas encore là : une fiche sans achat, que l'installation reprendra et que la facture complétera.
+        else e.id = (await appeler('gestionStock', { action: 'recue', numero: e.numero, modele: e.modele, fournisseur: e.fournisseur })).id;
       },
     },
     {
@@ -2488,13 +2529,29 @@ function etapesReceptionTablette() {
         copier.addEventListener('click', () => navigator.clipboard.writeText(commande).then(() => { copier.textContent = 'Copié'; }).catch(() => null));
         const ref = h('input', { placeholder: 'T-012', value: e.ref || '', autocomplete: 'off', 'aria-label': 'Numéro donné par l\'installation' });
         ref.addEventListener('input', () => { e.ref = ref.value.trim(); maj(); });
+        // L'installation note le T-0… sur la fiche de cette réception (preparer-tablette.js) : il s'affiche tout seul.
+        const attente = h('p', { class: 'small muted' }, 'En attente de la fin de l\'installation…');
+        const chercher = async () => {
+          if (!zone.isConnected || /^T-\d+$/.test(e.ref || '')) return;
+          const t = e.id && (await lireDonnees(true).catch(() => null))?.stock.find((x) => x.id === e.id);
+          if (t && t.ref) {
+            e.ref = t.ref;
+            ref.value = t.ref;
+            attente.textContent = `Installation terminée : ${t.ref}.`;
+            maj();
+            return;
+          }
+          setTimeout(chercher, 6000);
+        };
+        if (e.id) setTimeout(chercher, 6000);
+        else attente.hidden = true;
         zone.append(
           h('div', { class: 'pc-commande' }, h('code', {}, commande), copier),
           h('ol', { class: 'pc-liste' },
             h('li', {}, 'Sur la tablette, acceptez « Autoriser le débogage USB » (cochez « Toujours »).'),
             h('li', {}, 'Quand le script demande un code, appuyez sur Entrée sans rien taper.'),
-            h('li', {}, 'À la fin, il affiche « Écrivez T-0… sur le carton ». Tapez ce numéro ici :')),
-          ref);
+            h('li', {}, 'À la fin, il affiche « Écrivez T-0… sur le carton ». Le numéro arrive ici tout seul (sinon, tapez-le) :')),
+          ref, attente);
       },
       pret: (e) => /^T-?\d{1,5}$/i.test(e.ref || ''),
       async valider(e) {
