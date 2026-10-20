@@ -115,7 +115,7 @@
         <p class="muted">Un responsable de la famille doit accepter votre arrivée. Cette page s'ouvrira toute seule dès qu'il l'aura fait.</p>
         <span class="spinner pending-spin"></span>
       </div>
-      <button type="button" class="link wide" data-action="other-family">Rejoindre une autre famille ou ajouter une tablette</button>
+      <button type="button" class="link wide" data-action="other-family">Rejoindre une autre famille ou installer une tablette</button>
       <button type="button" class="link wide" data-action="logout">Se déconnecter</button>
     </section>
 
@@ -123,7 +123,7 @@
     <section id="view-pair" class="page" hidden>
       <header class="page-head">
         <button type="button" class="icon-btn" id="pair-back" aria-label="Retour"><svg><use href="#i-back"/></svg></button>
-        <h1>Ajouter ma tablette</h1>
+        <h1>Installer la tablette</h1>
       </header>
       <div class="page-pad">
         <form id="form-pair-code" class="card">
@@ -171,13 +171,13 @@
       </div>
       <p id="join-account" class="muted small"></p>
       <div class="card">
-        <h2>Vous avez reçu une tablette Papote ?</h2>
-        <p class="muted">Allumez-la : elle affiche un QR code. Scannez-le avec l'appareil photo de ce téléphone, ou tapez le code affiché.</p>
-        <button type="button" id="btn-join-pair" class="primary wide">J'ai le code de la tablette</button>
+        <h2>Vous installez la tablette chez votre proche</h2>
+        <p class="muted">Pour la personne qui a commandé Papote. Allumez la tablette : elle affiche un QR code. Scannez-le avec l'appareil photo de ce téléphone, ou tapez le code affiché. La famille se crée à ce moment-là.</p>
+        <button type="button" id="btn-join-pair" class="primary wide">Installer la tablette</button>
       </div>
       <div class="card">
-        <h2>Rejoindre la famille</h2>
-        <p class="muted">Entrez le code famille qu'on vous a envoyé. Un responsable de la famille acceptera votre arrivée. Le plus simple : demandez-lui de vous inviter avec votre adresse e-mail.</p>
+        <h2>Vous êtes invité dans une famille</h2>
+        <p class="muted">Pour les proches. Entrez le code famille qu'on vous a envoyé ; un responsable acceptera votre arrivée. Le plus simple : demandez-lui de vous inviter avec votre adresse e-mail.</p>
         <form id="form-join">
           <label>Code famille
             <input id="join-code" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABCD-1234" required>
@@ -586,7 +586,7 @@
         <div class="card">
           <h2>Mon compte</h2>
           <p id="account-email" class="muted"></p>
-          <button type="button" class="primary wide" data-action="other-family">Rejoindre une autre famille ou ajouter une tablette</button>
+          <button type="button" class="primary wide" data-action="other-family">Rejoindre une autre famille ou installer une tablette</button>
           <button type="button" class="link wide" data-action="logout">Se déconnecter</button>
         </div>
         <button id="btn-leave" class="link danger wide">Quitter cette famille</button>
