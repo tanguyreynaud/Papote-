@@ -73,7 +73,10 @@ Les clés et mots de passe sont lus dans le presse-papiers puis effacés : jamai
    d'après son n° de série) et affiche son numéro, par exemple « >>> Écrivez T-012 sur le carton. ».
    Écrivez-le sur le carton. Au jumelage chez le client, la tablette envoie ce n° de série et sa
    commande est reliée à la famille. Sans la clé, cette étape est simplement sautée.
-6. L'installation crée aussi la clé App Check de la tablette (`outils/admin/cle-tablette.js --serie`)
+6. L'installation refuse une tablette hors critères : Android réel sous 13 (le niveau système compte, pas
+   le numéro affiché, souvent maquillé) ou puce sans 4G récente (SC7731E, SC9863A…). `-Essai` l'installe
+   quand même pour un test, sans la noter dans le stock.
+7. L'installation crée aussi la clé App Check de la tablette (`outils/admin/cle-tablette.js --serie`)
    et la lui envoie : la tablette prouve ainsi à Firebase qu'elle est une vraie tablette Papote.
    La clé n'est écrite nulle part sur le PC. La remise à zéro la retire (`--retirer`).
    Sans l'outil, la tablette marche quand même : rien n'est encore exigé côté Firebase.

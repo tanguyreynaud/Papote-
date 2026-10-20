@@ -6,6 +6,7 @@
 # Tablettes Android 9 et plus.
 #   -Wifi "Nom du réseau" -MotDePasse "..." pour connecter la tablette au wifi au passage.
 #   -Ville "Lyon" pour la ville de la météo (sinon le client la choisit sur l'écran Bienvenue).
+#   Refuse une tablette hors critères (vrai Android 13+, puce 4G récente) ; -Essai pour un simple test.
 param(
     [string]$Code,
     [string]$Serial,
@@ -17,6 +18,8 @@ param(
     [string]$Canal,
     # Ville de la météo ; la famille peut la changer ensuite depuis son appli
     [string]$Ville,
+    # -Essai : installe quand même une tablette hors critères (tests seulement, jamais pour un client)
+    [switch]$Essai,
     [switch]$Oui
 )
 
@@ -86,6 +89,21 @@ $android = Adb shell getprop ro.build.version.release
 $sdk = [int](Adb shell getprop ro.build.version.sdk)
 Say "Appareil détecté : $model (Android $android)" 'Green'
 if ($sdk -lt 28) { Fail "Papote demande une tablette Android 9 ou plus récente (celle-ci : Android $android)." }
+
+# Critères des tablettes vendues : vrai Android 13 ou plus (le niveau système ne se maquille pas,
+# contrairement au numéro affiché) et une puce 4G récente. Hors critères : refusée, sauf -Essai.
+$puce = (Adb shell getprop ro.board.platform).Trim().ToLower()
+$niveaux = @{ 28 = '9'; 29 = '10'; 30 = '11'; 31 = '12'; 32 = '12L'; 33 = '13'; 34 = '14'; 35 = '15'; 36 = '16' }
+$vrai = if ($niveaux.ContainsKey($sdk)) { $niveaux[$sdk] } else { "niveau $sdk" }
+$refus = @()
+if ($sdk -lt 33) { $refus += "Android trop ancien : affiche $android, en réalité Android $vrai (il faut 13 ou plus)." }
+if ($puce -match 'sc7731|sc9832|sc7730|mt6580') { $refus += "Puce $puce : 3G seulement, pas de 4G." }
+elseif ($puce -match 'sc9863|sp9863') { $refus += "Puce $puce : ancienne et lente pour la visio (prendre une Unisoc T606 ou plus récente)." }
+if ($refus.Count) {
+    foreach ($r in $refus) { Say $r 'Yellow' }
+    if (-not $Essai) { Fail 'Tablette hors critères : installation refusée (ajoutez -Essai pour un simple test).' }
+    Say 'Installation d''essai (-Essai) : cette tablette ne doit pas être envoyée à un client.' 'Yellow'
+}
 # Garde-fou : ne jamais installer le mode kiosque sur un téléphone branché par erreur.
 if (-not $Oui) {
     $answer = Read-Host "Installer Papote sur cet appareil ? (O/N)"
@@ -211,7 +229,9 @@ if (Test-Path $outilCle) {
 # 9. Stock : la tablette est notée comme préparée (n° de série), avec son numéro à écrire sur le carton.
 #    Seulement sur le PC qui a la clé d'administration ; un échec n'empêche pas l'installation.
 $cleAdmin = Join-Path $env:USERPROFILE '.papote\cle-admin-firebase.json'
-if (Test-Path $cleAdmin) {
+if ($refus.Count) {
+    Say "`nTablette d'essai : elle n'est pas notée dans le stock." 'DarkGray'
+} elseif (Test-Path $cleAdmin) {
     $serie = (Adb shell getprop ro.serialno).Trim()
     $modele = (Adb shell getprop ro.product.model).Trim()
     $outil = Join-Path $PSScriptRoot '..\outils\gestion\preparer-tablette.js'
