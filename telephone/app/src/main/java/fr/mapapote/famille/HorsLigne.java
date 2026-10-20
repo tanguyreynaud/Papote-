@@ -16,17 +16,23 @@ public class HorsLigne extends Activity {
     private ConnectivityManager reseau;
     private boolean relance;
 
+    // On attend un réseau « validé » (qui atteint vraiment internet), pas seulement un Wi-Fi
+    // connecté : sinon l'app repartirait aussitôt vers une page qui ne se charge pas.
     private final ConnectivityManager.NetworkCallback retour = new ConnectivityManager.NetworkCallback() {
         @Override
-        public void onAvailable(Network n) {
-            runOnUiThread(HorsLigne.this::relancer);
+        public void onCapabilitiesChanged(Network n, NetworkCapabilities c) {
+            if (internet(c)) runOnUiThread(HorsLigne.this::relancer);
         }
     };
 
     static boolean connecte(Context ctx) {
         ConnectivityManager cm = ctx.getSystemService(ConnectivityManager.class);
-        NetworkCapabilities c = cm.getNetworkCapabilities(cm.getActiveNetwork());
-        return c != null && c.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET);
+        return internet(cm.getNetworkCapabilities(cm.getActiveNetwork()));
+    }
+
+    private static boolean internet(NetworkCapabilities c) {
+        return c != null && c.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                && c.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED);
     }
 
     @Override

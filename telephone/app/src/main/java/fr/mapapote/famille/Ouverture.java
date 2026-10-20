@@ -15,6 +15,8 @@ import android.provider.Settings;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import androidx.browser.customtabs.CustomTabsCallback;
+
 import com.google.androidbrowserhelper.trusted.LauncherActivity;
 import com.google.firebase.messaging.FirebaseMessaging;
 
@@ -130,6 +132,27 @@ public class Ouverture extends LauncherActivity {
             return;
         }
         launchTwa();
+    }
+
+    /**
+     * Si la page ne se charge pas (réseau coupé entre-temps, Wi-Fi sans internet), Chrome le signale
+     * ici et la bibliothèque TWA fait planter l'app exprès : on ouvre plutôt l'écran HorsLigne.
+     */
+    @Override
+    protected CustomTabsCallback getCustomTabsCallback() {
+        return new CustomTabsCallback() {
+            @Override
+            public Bundle extraCallbackWithResult(@NonNull String callbackName, @Nullable Bundle args) {
+                if (!"quality_enforcement.crash".equals(callbackName)) return null;
+                runOnUiThread(() -> {
+                    startActivity(new Intent(Ouverture.this, HorsLigne.class).setData(getIntent().getData()));
+                    finish();
+                });
+                Bundle ok = new Bundle();
+                ok.putBoolean("success", true);
+                return ok;
+            }
+        };
     }
 
     @Override
