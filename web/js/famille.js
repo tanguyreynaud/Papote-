@@ -17,7 +17,7 @@ import { askConfirm, notice, avantDePartir, chooseAction } from './ui.js';
 import { showGuideOnce } from './guide.js';
 import {
   abonnementOk, FORMULES, LIBELLES, ouvrirPortail, payer, rattacherCommande, resilier, annulerResiliation,
-  finDeContrat, retracter,
+  finDeContrat, retracter, inviterParEmail,
 } from './abonnement.js';
 import { startCall, watchTabletBusy, watchIncomingCalls, answerIncoming, warmUpCalls, declineIncoming, reportCallIncident } from './appel.js';
 import { pushSupported, pushAllowed, pushRefused, enablePush, closeCallNotification, rememberNativeToken, inNativeApp } from './push.js';
@@ -1367,7 +1367,7 @@ async function pruneOld(type) {
 // ---------- Réglages ----------
 
 function inviteLink() {
-  return `${APP_URL}/?code=${formatCode(session.family.code)}`;
+  return `${APP_URL}/?code=${formatCode(session.family.code)}&pour=${encodeURIComponent(session.family.name)}`;
 }
 
 let qrLoading = null;
@@ -2018,18 +2018,30 @@ $('form-invite').addEventListener('submit', async (e) => {
   if (familyFull) { notice('La famille est complète : 30 proches au maximum.'); return; }
   try {
     await inviteByEmail(session.fid, session.family, email, session.member.name);
+  } catch (err) {
+    console.error(err);
+    notice("L'invitation n'a pas pu être enregistrée.");
+    return;
+  }
+  // Un vrai e-mail part de Papote ; si l'envoi n'est pas possible, on partage le lien soi-même.
+  try {
+    await inviterParEmail(session.fid, email);
+    $('invite-email').value = '';
+    toast(`Invitation envoyée à ${email}`);
+  } catch (err) {
+    console.warn('E-mail d\'invitation non envoyé', err);
+    const code = err.code || '';
+    if (code.endsWith('invalid-argument')) { notice("Cette adresse e-mail ne semble pas correcte."); return; }
+    if (code.endsWith('resource-exhausted')) { notice("Trop d'invitations aujourd'hui. Réessayez demain."); return; }
     $('invite-email').value = '';
     toast(`Invitation prête : ${email} peut se connecter à Papote`);
     if (navigator.share) {
       navigator.share({
         title: 'Papote',
         text: `Je t'invite sur Papote pour envoyer des photos à ${session.family.name}. Connecte-toi avec ${email} :`,
-        url: APP_URL,
+        url: inviteLink(),
       }).catch(() => {});
     }
-  } catch (err) {
-    console.error(err);
-    notice("L'invitation n'a pas pu être enregistrée.");
   }
 });
 
@@ -3274,14 +3286,20 @@ let stopPending = null;
 let sharedPending = false;
 let rappelerPending = false; // ouvert par « Rappeler » sur une notification d'appel manqué
 
-function rememberInviteCode(code) {
-  try { localStorage.setItem(INVITE_CODE_KEY, code); } catch (e) { /* rien */ }
+function rememberInviteCode(code, pour) {
+  try {
+    localStorage.setItem(INVITE_CODE_KEY, code);
+    if (pour) localStorage.setItem(`${INVITE_CODE_KEY}.pour`, pour.slice(0, 40));
+  } catch (e) { /* rien */ }
+}
+function invitePour() {
+  try { return localStorage.getItem(`${INVITE_CODE_KEY}.pour`); } catch (e) { return null; }
 }
 function inviteCode() {
   try { return localStorage.getItem(INVITE_CODE_KEY); } catch (e) { return null; }
 }
 function forgetInviteCode() {
-  try { localStorage.removeItem(INVITE_CODE_KEY); } catch (e) { /* rien */ }
+  try { localStorage.removeItem(INVITE_CODE_KEY); localStorage.removeItem(`${INVITE_CODE_KEY}.pour`); } catch (e) { /* rien */ }
 }
 
 function stopSession() {
@@ -3386,7 +3404,17 @@ function showJoin(canGoBack) {
   // Venu de sa famille : « Retour » en haut à droite, pas de déconnexion ici.
   $('join-logout').hidden = canGoBack;
   const code = inviteCode();
+  const pour = code ? invitePour() : null;
   if (code) $('join-code').value = formatCode(normalizeCode(code));
+  // Lien d'invitation d'un proche : seulement le prénom à donner, pas l'installation de la tablette.
+  $('join-pair-card').hidden = !!code;
+  $('join-code-wrap').hidden = !!code;
+  $('join-title').textContent = code
+    ? (pour ? `Rejoindre la famille de ${pour}` : 'Rejoindre la famille')
+    : 'Vous êtes invité dans une famille';
+  $('join-help').textContent = code
+    ? 'Donnez votre prénom : un responsable de la famille acceptera votre arrivée.'
+    : "Pour les proches. Entrez le code famille qu'on vous a envoyé ; un responsable acceptera votre arrivée. Le plus simple : demandez-lui de vous inviter avec votre adresse e-mail.";
   show('view-join');
   if (code) $('join-name').focus();
 }
@@ -3527,7 +3555,7 @@ async function start() {
     try { sessionStorage.setItem('papote.pause', params.get('pause') === '1' ? '1' : '0'); } catch (e) { /* rien */ }
   }
   // Arrivé par le lien ou le QR code d'invitation : le code est gardé le temps de se connecter.
-  if (params.get('code')) rememberInviteCode(params.get('code'));
+  if (params.get('code')) rememberInviteCode(params.get('code'), params.get('pour'));
   // Lien du site après une commande : le code est gardé jusqu'à ce que la famille existe.
   if (params.get('commande')) {
     try { localStorage.setItem('papote.codeCommande', params.get('commande')); } catch (e) { /* rien */ }

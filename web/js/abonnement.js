@@ -60,6 +60,11 @@ export function retracter(fid) {
   return call('retracter', { fid });
 }
 
+/** Invitation d'un proche : un vrai e-mail part de Papote (fonction inviterParEmail). */
+export function inviterParEmail(fid, email) {
+  return call('inviterParEmail', { fid, email });
+}
+
 export function annulerResiliation(fid) {
   return call('annulerResiliation', { fid });
 }

@@ -170,16 +170,16 @@
         <button type="button" id="btn-join-back" class="back-pill" hidden><svg><use href="#i-back"/></svg>Retour</button>
       </div>
       <p id="join-account" class="muted small"></p>
-      <div class="card">
+      <div id="join-pair-card" class="card">
         <h2>Vous installez la tablette chez votre proche</h2>
         <p class="muted">Pour la personne qui a commandé Papote. Allumez la tablette : elle affiche un QR code. Scannez-le avec l'appareil photo de ce téléphone, ou tapez le code affiché. La famille se crée à ce moment-là.</p>
         <button type="button" id="btn-join-pair" class="primary wide">Installer la tablette</button>
       </div>
       <div class="card">
-        <h2>Vous êtes invité dans une famille</h2>
-        <p class="muted">Pour les proches. Entrez le code famille qu'on vous a envoyé ; un responsable acceptera votre arrivée. Le plus simple : demandez-lui de vous inviter avec votre adresse e-mail.</p>
+        <h2 id="join-title">Vous êtes invité dans une famille</h2>
+        <p id="join-help" class="muted">Pour les proches. Entrez le code famille qu'on vous a envoyé ; un responsable acceptera votre arrivée. Le plus simple : demandez-lui de vous inviter avec votre adresse e-mail.</p>
         <form id="form-join">
-          <label>Code famille
+          <label id="join-code-wrap">Code famille
             <input id="join-code" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABCD-1234" required>
           </label>
           <label>Votre prénom
