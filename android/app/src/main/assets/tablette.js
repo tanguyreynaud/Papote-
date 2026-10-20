@@ -9,7 +9,6 @@
   var IDLE_MS = 90000;   // retour à l'accueil après 1 min 30 sans toucher l'écran
   var FRAME_MS = 12000;  // changement de photo sur l'accueil
   var SLIDE_MS = 10000;  // défilement tout seul du diaporama
-  var CALM_MS = 4000;    // les flèches s'effacent après 4 s sans toucher l'écran
 
   var JOURS = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
   var MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août',
@@ -360,12 +359,10 @@
     wakeArrows();
   }
 
-  // Mode cadre photo : sans toucher l'écran, les flèches s'effacent ; elles reviennent au toucher.
-  var calmTimer = null;
+  // Diaporama : flèches et bouton Accueil toujours visibles.
   function wakeArrows() {
     $('view-photos').className = 'view photos';
-    clearTimeout(calmTimer);
-    calmTimer = setTimeout(function () { $('view-photos').className = 'view photos calm'; }, CALM_MS);
+    // Flèches et bouton Accueil toujours affichés (demande de Tanguy) : plus de mode « calme ».
   }
 
   function renderPhoto() {
@@ -395,8 +392,9 @@
     var caption = p.text && partLabel ? p.text + ' · ' + partLabel : (p.text || partLabel);
     $('photo-text').textContent = caption;
     show($('photo-text'), !!caption);
-    if (photoIndex >= photos.length - 1) $('photo-prev').setAttribute('disabled', ''); else $('photo-prev').removeAttribute('disabled');
-    if (photoIndex === 0) $('photo-next').setAttribute('disabled', ''); else $('photo-next').removeAttribute('disabled');
+    // En boucle : les flèches marchent toujours (sauf s'il n'y a qu'une photo).
+    if (photos.length < 2) { $('photo-prev').setAttribute('disabled', ''); $('photo-next').setAttribute('disabled', ''); }
+    else { $('photo-prev').removeAttribute('disabled'); $('photo-next').removeAttribute('disabled'); }
     markSeen(p);
     restartSlides();
     // Arrivée à l'avant-dernière photo chargée : on en demande 5 de plus.
@@ -422,8 +420,9 @@
   }
 
   // La plus récente est à l'index 0 : « suivante » va vers les plus récentes.
-  function olderPhoto() { if (photoIndex < photos.length - 1) { photoIndex++; renderPhoto(); } }
-  function newerPhoto() { if (photoIndex > 0) { photoIndex--; renderPhoto(); } }
+  // Diaporama en boucle : après la plus ancienne, on revient à la plus récente, et inversement.
+  function olderPhoto() { if (photos.length > 1) { photoIndex = (photoIndex + 1) % photos.length; renderPhoto(); } }
+  function newerPhoto() { if (photos.length > 1) { photoIndex = (photoIndex - 1 + photos.length) % photos.length; renderPhoto(); } }
 
   // ---------- Vu ----------
 
