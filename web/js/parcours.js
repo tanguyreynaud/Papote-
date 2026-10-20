@@ -80,7 +80,7 @@ export function ouvrirParcours({ titre, etapes, etat, sauver, fin }) {
 
   function majBouton() {
     const e = visibles()[i];
-    const coche = [...corps.querySelectorAll('.pc-case input')].every((c) => c.checked);
+    const coche = [...corps.querySelectorAll('.pc-case input[type=checkbox]')].every((c) => c.checked);
     suivant.disabled = !coche || (e.pret ? !e.pret(etat) : false);
   }
 

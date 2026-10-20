@@ -115,10 +115,13 @@ test('rappel de restitution : une fois, dans les 7 derniers jours', () => {
 });
 
 test('matériel non rendu : prix par élément, plafonné au matériel prêté', () => {
-  assert.strictEqual(a.penaliteRestitution('wifi'), 17000);
-  assert.strictEqual(a.penaliteRestitution('sim'), 20000);
-  assert.strictEqual(a.montantManquants('wifi', ['chargeur']), 1000);
-  assert.strictEqual(a.montantManquants('wifi', ['routeur', 'chargeur', 'chargeur']), 1000);
-  assert.strictEqual(a.montantManquants('sim', ['routeur']), 3000);
-  assert.strictEqual(a.montantManquants('sim', []), 0);
+  assert.strictEqual(a.penaliteRestitution({ formule: 'wifi' }), 17000);
+  // Internet inclus : le routeur n'est facturé que s'il était dans le colis.
+  assert.strictEqual(a.penaliteRestitution({ formule: 'sim' }), 17000);
+  assert.strictEqual(a.penaliteRestitution({ formule: 'sim', routeurFourni: true }), 20000);
+  assert.strictEqual(a.montantManquants({ formule: 'wifi' }, ['chargeur']), 1000);
+  assert.strictEqual(a.montantManquants({ formule: 'sim' }, ['routeur', 'chargeur', 'chargeur']), 1000);
+  assert.strictEqual(a.montantManquants({ formule: 'sim', routeurFourni: true }, ['routeur']), 3000);
+  assert.strictEqual(a.montantManquants({ routeurFourni: true }, []), 0);
+  assert.strictEqual(a.PENALITE_NON_RESTITUTION_SIM, 20000);
 });

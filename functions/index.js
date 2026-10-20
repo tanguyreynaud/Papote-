@@ -859,7 +859,7 @@ exports.finDeGrace = onSchedule(
     }
   });
 
-// Tablette incluse non rendue dans les 30 jours : 170 € (200 € avec l'option internet) prélevés sur la carte de l'abonnement.
+// Tablette incluse non rendue dans les 30 jours : 170 € (200 € si un routeur 4G était dans le colis) prélevés sur la carte de l'abonnement.
 exports.restitutions = onSchedule(
   { schedule: 'every day 09:00', timeZone: 'Europe/Paris', secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE] },
   async () => {
@@ -871,7 +871,7 @@ exports.restitutions = onSchedule(
         try {
           await envoyerMail(snap.get('email'), mail.rappelRestitution({
             nom: snap.get('nom'), avant: r.avant.toMillis(), lien: r.etiquette || null,
-            montant: regles.penaliteRestitution(snap.get('formule')),
+            montant: regles.penaliteRestitution(snap.data()),
           }));
           await snap.ref.update({ 'restitution.rappelLe': FieldValue.serverTimestamp() });
         } catch (e) {
@@ -880,14 +880,14 @@ exports.restitutions = onSchedule(
       }
       if (!regles.restitutionEchue(snap.get('restitution'), maintenant)) continue;
       try {
-        const paiement = await preleverMateriel(snap.id, regles.penaliteRestitution(snap.get('formule')),
+        const paiement = await preleverMateriel(snap.id, regles.penaliteRestitution(snap.data()),
           'Papote : matériel non rendu', `restitution-${snap.id}`);
         await snap.ref.update({
           'restitution.statut': 'facturee',
           'restitution.paiement': paiement.id,
           'restitution.majLe': FieldValue.serverTimestamp(),
         });
-        logger.info(`Commande ${snap.id} : tablette non rendue, ${mail.euros(regles.penaliteRestitution(snap.get('formule')))} prélevés.`);
+        logger.info(`Commande ${snap.id} : tablette non rendue, ${mail.euros(regles.penaliteRestitution(snap.data()))} prélevés.`);
       } catch (e) {
         // Carte expirée ou refusée : à relancer à la main, depuis le tableau de bord Stripe.
         await snap.ref.update({
@@ -943,9 +943,8 @@ exports.tabletteRendue = onCall({ secrets: [STRIPE_SECRET] }, async (request) =>
   if (snap.get('restitution.statut') === 'facturee') {
     throw new HttpsError('failed-precondition', 'Le matériel non rendu a déjà été prélevé : remboursez depuis Stripe si besoin.');
   }
-  const formule = snap.get('formule');
-  const liste = [...new Set(manquants || [])].filter((m) => regles.materielPrete(formule).includes(m));
-  const montant = regles.montantManquants(formule, liste);
+  const liste = [...new Set(manquants || [])].filter((m) => regles.materielPrete(snap.data()).includes(m));
+  const montant = regles.montantManquants(snap.data(), liste);
   const restitution = { statut: 'rendue', majLe: FieldValue.serverTimestamp() };
   if (montant > 0) {
     restitution.manquants = liste;
@@ -1072,7 +1071,7 @@ async function suiviRetour(event, rAvant, r, c) {
       nom: c.nom, email: c.email, telephone: c.telephone, code: c.code ? regles.afficherCode(c.code) : null,
       relais: c.livraison, avant: avantMs, retractation,
     }))];
-    if (c.email) envois.push(envoyerMail(c.email, mail.retourTablette({ nom: c.nom, avant: avantMs, retractation, montant: regles.penaliteRestitution(c.formule) })));
+    if (c.email) envois.push(envoyerMail(c.email, mail.retourTablette({ nom: c.nom, avant: avantMs, retractation, montant: regles.penaliteRestitution(c) })));
     (await Promise.allSettled(envois)).filter((x) => x.status === 'rejected')
       .forEach((x) => logger.error(`Commande ${id} : e-mail de retour non parti`, x.reason));
   }
