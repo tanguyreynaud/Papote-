@@ -618,6 +618,16 @@ async function closeStaleCalls() {
   }
 }
 
+// Nouvelle version de Papote annoncée par le script de publication (config/version) : la tablette
+// va la chercher tout de suite (l'app Android compare et installe). Rien ne se passe sinon.
+let versionSeen = false;
+function watchVersion() {
+  onSnapshot(doc(db, 'config', 'version'), () => {
+    if (!versionSeen) { versionSeen = true; return; } // premier état : déjà vérifié au démarrage
+    if (android() && android().checkUpdate) android().checkUpdate();
+  }, () => {});
+}
+
 function watchCalls() {
   const q = query(collection(db, 'families', fid, 'calls'), where('state', '==', 'ringing'));
   onSnapshot(q, (snap) => {
@@ -994,6 +1004,7 @@ async function start() {
   }
   closeStaleCalls();
   watchCalls();
+  watchVersion();
   iceServers().catch(() => {}); // relais prêt avant le premier appel
   // Détection du visage chargée à l'avance (puis gardée en cache) pour décrocher sans attendre.
   setTimeout(faceDetector, 20_000);

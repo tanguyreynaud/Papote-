@@ -188,8 +188,9 @@ public class MainActivity extends Activity implements Sync.Listener {
     }
 
     /**
-     * Toutes les heures : une nouvelle version de Papote est-elle publiée ? (un correctif urgent
-     * doit arriver vite). En cas d'échec (wifi pas encore prêt au démarrage…), nouvel essai 10 min après.
+     * Une nouvelle version de Papote est-elle publiée ? Au démarrage, dès que la publication est
+     * annoncée (config/version, écouté par la page : pont checkUpdate), et une fois par jour en secours.
+     * En cas d'échec (wifi pas encore prêt au démarrage…), nouvel essai 10 min après.
      */
     private final Runnable updateCheck = new Runnable() {
         @Override
@@ -197,12 +198,12 @@ public class MainActivity extends Activity implements Sync.Listener {
             handler.removeCallbacks(this);
             if (!isDeviceOwner()) {
                 Journal.log(MainActivity.this, "Mise à jour : Papote n'est pas propriétaire de l'appareil");
-                handler.postDelayed(this, 3600_000L);
+                handler.postDelayed(this, 24 * 3600_000L);
                 return;
             }
             new Thread(() -> {
                 boolean ok = Updater.check(getApplicationContext());
-                handler.postDelayed(this, ok ? 3600_000L : 10 * 60_000L);
+                handler.postDelayed(this, ok ? 24 * 3600_000L : 10 * 60_000L);
             }, "papote-maj").start();
         }
     };
@@ -494,6 +495,15 @@ public class MainActivity extends Activity implements Sync.Listener {
         }
 
         /** Jeton App Check pour appels.js : {token, expireTimeMillis}, ou "" sans clé ni jeton. */
+        /** Nouvelle version annoncée (config/version) : vérification tout de suite. */
+        @JavascriptInterface
+        public void checkUpdate() {
+            handler.post(() -> {
+                handler.removeCallbacks(updateCheck);
+                handler.postDelayed(updateCheck, 5_000 + (long) (Math.random() * 60_000));
+            });
+        }
+
         @JavascriptInterface
         public boolean hasAppCheckKey() {
             return AppCheck.hasKey(getApplicationContext());

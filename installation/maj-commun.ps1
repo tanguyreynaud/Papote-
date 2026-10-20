@@ -51,4 +51,14 @@ function Publish-Feeds($feeds) {
     }
     firebase deploy --only hosting --config "$root\maj\firebase.json" --project papote-famille
     if ($LASTEXITCODE) { throw "Échec de la publication" }
+    # Les tablettes sont prévenues tout de suite (config/version, écouté en direct) au lieu d'attendre
+    # leur vérification du jour. Sans la clé d'administration, elles la trouveront quand même.
+    $outil = Join-Path $root 'outils\admin\annoncer-version.js'
+    $cleAdmin = Join-Path $env:USERPROFILE '.papote\cle-admin-firebase.json'
+    if ((Test-Path $outil) -and (Test-Path $cleAdmin)) {
+        $old = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try { & node $outil --stable $feeds.stable.versionCode --test $feeds.test.versionCode 2>&1 | ForEach-Object { Write-Host "$_" } }
+        finally { $ErrorActionPreference = $old }
+    }
 }
