@@ -4,7 +4,7 @@
 //   stockDisponible    GET  depuis le site vitrine : { disponible: true|false } (stock.js)
 //   creerPaiement      appel depuis l'appli famille : paiement pour une famille existante
 //   portailClient      appel depuis l'appli famille : carte bancaire, factures
-//   resilierAbonnement appel depuis l'appli famille : résilie à la fin de l'engagement de 12 mois
+//   resilierAbonnement appel depuis l'appli famille : résilie à la fin du mois payé (sans engagement)
 //   annulerResiliation appel depuis l'appli famille : garde l'abonnement
 //   rattacherCommande  appel depuis l'appli famille : relie une commande du site à la famille
 //                      (par l'e-mail du compte, ou par le code de commande XXXX-XXXX)
@@ -92,11 +92,6 @@ function finDePeriodeMs(abo) {
   return fin ? fin * 1000 : null;
 }
 
-// Engagement de 12 mois à partir de la fin de l'essai (ou du début de l'abonnement).
-function finEngagementMs(abo) {
-  return regles.finEngagement((abo.trial_end || abo.start_date) * 1000);
-}
-
 async function tarifs(formule, tablette) {
   const cles = [regles.TARIFS[formule][tablette]];
   if (tablette === 'achetee') cles.push(regles.TARIF_TABLETTE);
@@ -109,7 +104,7 @@ async function tarifs(formule, tablette) {
   return cles.map((cle) => ({ price: parCle[cle], quantity: 1 }));
 }
 
-// Essai gratuit de 15 jours pour un nouveau client ; pas pour un client déjà abonné une fois.
+// Essai gratuit d'un mois pour un nouveau client ; pas pour un client déjà abonné une fois.
 async function sessionPaiement({ formule, tablette, fid, email, client, relais, accord, reservation }) {
   const metadata = { formule, tablette, ...(relais ? livraison.relaisVersMeta(relais) : {}) };
   // Tablette mise de côté pendant le paiement (stock.js), libérée au paiement ou à l'expiration de la page.
@@ -230,7 +225,6 @@ async function appliquer(fid, abonnementId) {
         graceJusqua: versTimestamp(graceJusqua),
         finPeriode: versTimestamp(finDePeriodeMs(abo)),
         essaiJusqua: versTimestamp(abo.status === 'trialing' && abo.trial_end ? abo.trial_end * 1000 : null),
-        engagementJusqua: versTimestamp(finEngagementMs(abo)),
         resiliationLe: versTimestamp(abo.cancel_at ? abo.cancel_at * 1000
           : (abo.cancel_at_period_end ? finDePeriodeMs(abo) : null)),
         stripeCustomerId: abo.customer,
@@ -362,8 +356,8 @@ exports.portailClient = onCall({ secrets: [STRIPE_SECRET] }, async (request) => 
   return { url: session.url };
 });
 
-// Résiliation en ligne : l'abonnement s'arrête à la fin de l'engagement, ou à la fin du mois
-// déjà payé si l'engagement est terminé. Pendant l'essai gratuit : arrêt à la fin de l'essai.
+// Résiliation en ligne, sans engagement : l'abonnement s'arrête à la fin du mois déjà payé.
+// Pendant l'essai gratuit : arrêt à la fin de l'essai.
 exports.resilierAbonnement = onCall({ secrets: [STRIPE_SECRET] }, async (request) => {
   const { fid } = request.data || {};
   const fam = await familleGeree(fid, request);
@@ -373,7 +367,7 @@ exports.resilierAbonnement = onCall({ secrets: [STRIPE_SECRET] }, async (request
   const maintenant = Date.now();
   const le = abo.status === 'trialing' && abo.trial_end
     ? abo.trial_end * 1000
-    : regles.dateResiliation(finEngagementMs(abo), finDePeriodeMs(abo), maintenant);
+    : regles.dateResiliation(finDePeriodeMs(abo), maintenant);
   await stripe().subscriptions.update(id, {
     cancel_at: Math.ceil(le / 1000),
     proration_behavior: 'none',
@@ -394,7 +388,7 @@ exports.annulerResiliation = onCall({ secrets: [STRIPE_SECRET] }, async (request
 
 // ---------- Rétractation et fin de contrat ----------
 
-// Factures payées de l'abonnement (mise en service de 50 €, mois déjà prélevés).
+// Factures payées de l'abonnement (mise en service de 60 €, mois déjà prélevés).
 async function facturesPayees(abonnementId) {
   const { data } = await stripe().invoices.list({ subscription: abonnementId, status: 'paid', limit: 100 });
   return data.filter((f) => f.amount_paid > 0 && f.payment_intent);

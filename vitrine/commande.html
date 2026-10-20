@@ -85,7 +85,7 @@ h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-u
 </style>
 </head>
 <body>
-<p class="bandeau">🚚 Livraison offerte · ✨ 15 jours d'essai gratuit</p>
+<p class="bandeau">🚚 Livraison offerte · ✨ 1 mois d'essai gratuit</p>
 <main>
   <div class="haut">
     <a class="top" href="./"><img src="icon.svg" alt="">Papote</a>
@@ -97,8 +97,8 @@ h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-u
   </div>
 
   <form class="recap" id="recap">
-    <div class="recap-total"><b id="total">20 € par mois</b><span class="muted">après 15 jours d'essai gratuit</span></div>
-    <p class="mes"><b>+ 50 € aujourd'hui</b>, une seule fois, pour la mise en service de la tablette</p>
+    <div class="recap-total"><b id="total">20 € par mois</b><span class="muted">après 1 mois d'essai gratuit</span></div>
+    <p class="mes"><b>+ 60 € aujourd'hui</b>, une seule fois, pour la mise en service de la tablette</p>
     <ul class="inclus">
       <li>Tablette prêtée, configurée et prête à l'emploi</li>
       <li>Appli famille pour tous vos proches</li>
@@ -145,11 +145,11 @@ h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-u
   <a class="btn payer" id="payer" href="#" aria-disabled="true">Choisissez un point relais</a>
   <ul class="rassure">
     <li>🔒 Paiement sécurisé par Stripe : carte, Google Pay, Apple Pay ou Link</li>
-    <li>📅 Le premier mois n'est prélevé qu'après les 15 jours d'essai gratuit</li>
+    <li>📅 Le premier mois n'est prélevé qu'après le mois d'essai gratuit</li>
     <li>↩️ 14 jours après réception pour changer d'avis : la tablette nous revient et vos frais de service vous sont remboursés</li>
     <li>💬 Une question ? <a href="mailto:contact@mapapote.fr">contact@mapapote.fr</a></li>
   </ul>
-  <p class="muted petit">Après l'essai, l'abonnement est conclu pour 12 mois, puis continue de mois en mois. La tablette reste la nôtre et nous est rendue en fin d'abonnement. En payant, vous acceptez les <a href="cgv.html">conditions générales de vente</a>.</p>
+  <p class="muted petit">Sans engagement : l'abonnement se résilie à tout moment. La tablette reste la nôtre et nous est rendue en fin d'abonnement. En payant, vous acceptez les <a href="cgv.html">conditions générales de vente</a>.</p>
 </main>
 
 <script>
@@ -171,7 +171,7 @@ h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-u
   recap.net.checked = q.get('formule') === 'sim';
   var relais = null;
 
-  // Prix : abonnement 20 €, ou 30 € avec internet inclus ; 50 € de mise en service à la commande.
+  // Prix : abonnement 20 €, ou 30 € avec internet inclus ; 60 € de mise en service à la commande.
   function maj() {
     document.getElementById('total').textContent = (recap.net.checked ? 30 : 20) + ' € par mois';
     if (relais) lienPaiement();
@@ -203,7 +203,7 @@ h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-u
     });
     payer.href = COMMANDER + '?' + params.toString();
     payer.setAttribute('aria-disabled', 'false');
-    payer.textContent = 'Payer 50 € et commander';
+    payer.textContent = 'Payer 60 € et commander';
   }
 
   // Point relais renvoyé par le sélecteur Sendcloud.

@@ -61,16 +61,14 @@ test('formules', () => {
   assert.strictEqual(a.formuleValide('4g', 'incluse'), false);
 });
 
-test('engagement de 12 mois', () => {
-  assert.strictEqual(a.finEngagement(Date.UTC(2026, 9, 23, 10)), Date.UTC(2027, 9, 23, 10));
-  assert.strictEqual(a.finEngagement(Date.UTC(2028, 1, 29)), Date.UTC(2029, 1, 28));
+test('résiliation sans engagement : à la fin du mois payé', () => {
+  const periode = T0 + 10 * JOUR;
+  assert.strictEqual(a.dateResiliation(periode, T0), periode);
+  assert.strictEqual(a.dateResiliation(null, T0), T0);
 });
 
-test('résiliation : pas avant la fin de l\'engagement, ni avant la fin du mois payé', () => {
-  const engagement = T0 + 200 * JOUR;
-  const periode = T0 + 10 * JOUR;
-  assert.strictEqual(a.dateResiliation(engagement, periode, T0), engagement);
-  assert.strictEqual(a.dateResiliation(T0 - JOUR, periode, T0), periode);
+test('essai gratuit d\'un mois', () => {
+  assert.strictEqual(a.ESSAI_JOURS, 30);
 });
 
 test('tablette incluse non rendue : pénalité après 30 jours', () => {
