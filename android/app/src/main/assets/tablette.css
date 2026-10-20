@@ -1649,6 +1649,8 @@ body.night .next-when { color: #a5b4fc; }
 }
 .radio-btn[hidden] { display: none; }
 .radio-btn .icon { width: 6.5vmin; height: 6.5vmin; margin-right: 2.5vmin; }
+/* « Arrêter » est plus large que « Radio » : les icônes ne doivent pas rétrécir. */
+.home-actions .big-btn .icon { flex-shrink: 0; }
 .radio-btn.playing { background: #3730a3; color: #fff; border-color: #3730a3; }
 
 /* Répondre par la voix */

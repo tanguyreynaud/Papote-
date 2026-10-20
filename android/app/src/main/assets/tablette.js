@@ -1413,12 +1413,12 @@
       '"/></svg><span>' + (on2 ? 'Arrêter' : 'Radio') + '</span>';
   }
 
-  // Curseur de la famille (options.radio.volume, 5-100, 40 par défaut) vers le volume réel :
-  // courbe douce, car le haut-parleur de la tablette est fort : précise en bas, forte en haut
-  // (100 = 70 %, 70 = 25 %, 40 = 6 %, 5 = 2 %).
-  function radioVolume(r) {
-    var v = Math.max(5, Math.min(100, typeof r.volume === 'number' ? r.volume : 40)) / 100;
-    return 0.02 + 0.68 * v * v * v;
+  // Même niveau que le reste de la tablette (vocaux, vidéos), réglé par le volume de la famille
+  // et le haut-parleur (décision de Tanguy). Les radios sont mixées plus fort qu'un vocal
+  // enregistré au téléphone : on les baisse d'autant (environ -6 dB) pour que tout sonne pareil.
+  var RADIO_GAIN = 0.5;
+  function radioVolume() {
+    return RADIO_GAIN;
   }
 
   function toggleRadio() {
