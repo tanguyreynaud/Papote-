@@ -33,7 +33,8 @@ function events() {
   const grand = session.family.name;
   const list = [];
   // mine : ce que vous avez fait vous-même ne compte pas comme nouveau.
-  const add = (date, icon, text, mine = false) => { if (date) list.push({ date, icon, text, mine }); };
+  // missed : appel manqué, affiché en rouge.
+  const add = (date, icon, text, mine = false, missed = false) => { if (date) list.push({ date, icon, text, mine, missed }); };
   for (const p of posts) {
     if (p.type === 'reply') {
       add(toDate(p.createdAt), 'message', `${grand} a répondu : « ${p.text} »`);
@@ -60,16 +61,18 @@ function events() {
   for (const c of calls) {
     const fromTablet = !!c.calleeUid;
     const date = toDate(c.endedAt) || toDate(c.createdAt);
+    // Un appel sans réponse (personne n'a décroché, ou refusé) est un appel manqué.
+    const manque = !c.answer && ['missed', 'declined', 'ended'].includes(c.state);
     if (fromTablet) {
+      if (c.state === 'ringing') continue;
       const to = who(c.calleeUid, c.calleeName);
-      add(date, 'call', c.state === 'missed' || c.state === 'ringing'
-        ? `Appel manqué de ${grand}${to === 'Vous' ? '' : ` pour ${to}`}`
-        : `${grand} a appelé ${to === 'Vous' ? 'vous' : to}`);
+      if (manque) add(date, 'call', `Appel manqué de ${grand}${to === 'Vous' ? '' : ` pour ${to}`}`, false, true);
+      else add(date, 'call', `${grand} a appelé ${to === 'Vous' ? 'vous' : to}`);
     } else {
       const from = who(c.callerUid, c.callerName);
       const verb = from === 'Vous' ? 'avez' : 'a';
-      if (c.state === 'missed') add(date, 'call', `${grand} n'a pas répondu à l'appel de ${from === 'Vous' ? 'vous' : from}`);
-      else if (c.state === 'declined') add(date, 'call', `${grand} a refusé l'appel de ${from === 'Vous' ? 'vous' : from}`);
+      if (c.state === 'missed') add(date, 'call', `${grand} n'a pas répondu à l'appel de ${from === 'Vous' ? 'vous' : from}`, false, true);
+      else if (c.state === 'declined') add(date, 'call', `${grand} a refusé l'appel de ${from === 'Vous' ? 'vous' : from}`, false, true);
       else if (c.state !== 'ringing') add(date, 'call', `${from} ${verb} appelé ${grand}`, from === 'Vous');
     }
   }
@@ -106,7 +109,7 @@ function render() {
   $('notifs-empty').hidden = list.length > 0;
   $('notifs').replaceChildren(...list.map((e) => {
     const li = document.createElement('li');
-    li.className = `notif n-${e.icon}${isFresh(e) ? ' fresh' : ''}`;
+    li.className = `notif n-${e.icon}${isFresh(e) ? ' fresh' : ''}${e.missed ? ' missed' : ''}`;
     li.innerHTML = `<span class="notif-icon"><svg><use href="#i-${{
       photo: 'photo', video: 'video', message: 'message', seen: 'eye', call: 'call', member: 'user', agenda: 'agenda',
     }[e.icon]}"/></svg></span>`;
