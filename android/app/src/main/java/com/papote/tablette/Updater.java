@@ -31,6 +31,8 @@ final class Updater {
     /** Tablettes de test (installées avec -Canal test) : elles reçoivent les nouvelles versions en premier. */
     private static final String FEED_TEST = "https://papote-maj.web.app/version-test.json";
 
+    private static int echecs;
+
     private Updater() { }
 
     /** À appeler hors du fil principal, seulement en mode kiosque. false : échec, à réessayer bientôt. */
@@ -40,6 +42,7 @@ final class Updater {
             JSONObject feed = new JSONObject(new String(download(test ? FEED_TEST : FEED), "UTF-8"));
             int latest = feed.getInt("versionCode");
             long current = currentVersion(context);
+            echecs = 0;
             if (latest <= current) return true;
             Log.i(TAG, "Mise à jour " + current + " -> " + latest);
             Journal.log(context, "Mise à jour " + current + " -> " + latest);
@@ -54,7 +57,10 @@ final class Updater {
             return true;
         } catch (Exception e) {
             Log.w(TAG, "Vérification des mises à jour", e);
-            Journal.log(context, "Mise à jour impossible : " + e);
+            // Coupure passagère (wifi, DNS) : nouvel essai 10 min après, sans rien noter.
+            // Le journal ne le signale qu'au bout de 3 échecs d'affilée (30 min).
+            echecs++;
+            if (echecs == 3) Journal.log(context, "Mise à jour impossible depuis 30 min : " + e);
             return false;
         }
     }
