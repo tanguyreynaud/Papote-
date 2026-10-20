@@ -1414,10 +1414,11 @@
   }
 
   // Curseur de la famille (options.radio.volume, 5-100, 40 par défaut) vers le volume réel :
-  // courbe douce et plafonnée, car le haut-parleur de la tablette est fort (100 = 25 %, 40 = 6 %, 5 = 2 %).
+  // courbe douce, car le haut-parleur de la tablette est fort : précise en bas, forte en haut
+  // (100 = 70 %, 70 = 25 %, 40 = 6 %, 5 = 2 %).
   function radioVolume(r) {
     var v = Math.max(5, Math.min(100, typeof r.volume === 'number' ? r.volume : 40)) / 100;
-    return 0.02 + 0.23 * v * v;
+    return 0.02 + 0.68 * v * v * v;
   }
 
   function toggleRadio() {
