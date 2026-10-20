@@ -641,6 +641,20 @@ exports.gestionDonnees = onCall(async (request) => {
 
 // ---------- Stock ----------
 
+// Fiches créées à l'installation avant que la facture soit enregistrée (sans prix ni date d'achat) : un achat
+// enregistré ensuite les complète au lieu d'ajouter des fiches en double, ce qui gonflerait le stock à vendre.
+// Même n° de série d'abord, puis la plus ancienne. Renvoie, pour chaque tablette de l'achat, l'id à compléter ou null.
+function fichesARattacher(sansAchat, numeros, quantite) {
+  const restantes = sansAchat.slice().sort((a, b) => (a.creeLe || 0) - (b.creeLe || 0));
+  const prendre = (i) => (i < 0 ? null : restantes.splice(i, 1)[0].id);
+  const serie = (n) => String(n || '').replace(/\s/g, '').toUpperCase();
+  const choix = Array.from({ length: quantite }, (_, i) => {
+    const n = serie(numeros[i]);
+    return n ? prendre(restantes.findIndex((t) => serie(t.numero) === n || serie(t.serieAndroid) === n)) : undefined;
+  });
+  return choix.map((id) => (id === undefined || id === null ? (restantes.length ? prendre(0) : null) : id));
+}
+
 // Achat de tablettes : N fiches de stock et la dépense correspondante (sauf depense: false).
 async function ajouterAchat(d, qui) {
   const quantite = Number(d.quantite);
@@ -671,7 +685,26 @@ async function ajouterAchat(d, qui) {
       creePar: qui,
     });
   }
+  const sansAchat = (await db().collection('stock').where('acheteeLe', '==', null).get()).docs
+    .filter((x) => x.get('prixAchat') == null && !x.get('depense'))
+    .map((x) => ({ id: x.id, numero: x.get('numero'), serieAndroid: x.get('serieAndroid'), modele: x.get('modele'),
+      creeLe: ms(x.get('creeLe')) || 0 }));
+  const rattachees = fichesARattacher(sansAchat, numeros, quantite);
   for (let i = 0; i < quantite; i++) {
+    if (rattachees[i]) {
+      const t = sansAchat.find((x) => x.id === rattachees[i]);
+      batch.update(db().doc(`stock/${t.id}`), {
+        ...(t.numero ? {} : { numero: numeros[i] || null }),
+        ...(t.modele ? {} : { modele: texte(d.modele) }),
+        fournisseur: texte(d.fournisseur),
+        prixAchat: prix,
+        acheteeLe: Timestamp.fromMillis(achat),
+        depense: depenseId,
+        notes: null,
+        majLe: FieldValue.serverTimestamp(),
+      });
+      continue;
+    }
     batch.set(db().collection('stock').doc(), {
       numero: numeros[i] || null,
       modele: texte(d.modele),
@@ -688,7 +721,8 @@ async function ajouterAchat(d, qui) {
     });
   }
   await batch.commit();
-  return { ok: true, ajoutees: quantite, depense: depenseId };
+  const completees = rattachees.filter(Boolean).length;
+  return { ok: true, ajoutees: quantite - completees, completees, depense: depenseId };
 }
 
 // Remplacement d'un élément du kit chez un client : la tablette, la carte SIM ou un accessoire.
@@ -2572,7 +2606,7 @@ exports.gestionParcours = onCall(async (request) => {
 
 exports.regles = {
   ETATS, CATEGORIES, natureMouvement, mensuel, centimes, lien, nomFichier, moisSuivant, lectureVersFormulaire, SCHEMA_FACTURE,
-  lireReglages, simAResilier, stockAJour, releveBatterie, usureBatterie, incoherences, materielLu, memeAccessoire, coutLigne, alertesSim, accessoiresAPrevoir, champsSim, aFaire, piecesFacture, debutMoisParis, moisPrecedent, csvTexte, livreDesRecettes,
+  lireReglages, simAResilier, fichesARattacher, stockAJour, releveBatterie, usureBatterie, incoherences, materielLu, memeAccessoire, coutLigne, alertesSim, accessoiresAPrevoir, champsSim, aFaire, piecesFacture, debutMoisParis, moisPrecedent, csvTexte, livreDesRecettes,
   registreDesAchats, corpsDuMail, memeAchat, suiteJumelage, descriptionNonRendu, refusSuppression, fusionnerContacts, emailInformation, cleContact,
   avancementPropre,
 };
