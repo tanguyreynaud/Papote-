@@ -242,9 +242,17 @@ afficherPage();
 
 // ---------- Chargement ----------
 
+// L'écran d'ouverture s'efface en fondu dès les premières données (ou sans connexion).
+function fermerChargement() {
+  const e = $('chargement');
+  if (e.hidden || e.classList.contains('parti')) return;
+  e.classList.add('parti');
+  setTimeout(() => { e.hidden = true; }, 300);
+}
+
 onAuthStateChanged(getAuth(getApp('admin')), (user) => {
   connecte = !!user;
-  if (!user) return;
+  if (!user) { fermerChargement(); return; }
   if (pageCourante() === 'clients') chargerClients();
   chargerDonnees();
   chargerMois();
@@ -266,6 +274,8 @@ async function chargerDonnees() {
   } catch (e) {
     erreur(e);
   }
+  // Premier chargement terminé (ou en erreur) : l'indicateur d'ouverture disparaît.
+  fermerChargement();
 }
 
 async function chargerMois() {
@@ -509,7 +519,7 @@ function afficherAccueil() {
     [aVerifier, `${pluriel(aVerifier, 'tablette')} revenue${aVerifier > 1 ? 's' : ''}, à vérifier avant de remettre en stock`, '#stock', ''],
     [aRembourser, `${pluriel(aRembourser, 'remboursement')} échoué${aRembourser > 1 ? 's' : ''}, à faire depuis Stripe`, '#commandes', 'ko'],
     [impayees, `${pluriel(impayees, 'abonnement')} impayé${impayees > 1 ? 's' : ''}`, '#compta/factures', 'ko'],
-    [simsAResilier, `${pluriel(simsAResilier, 'forfait SIM')} à résilier ou suspendre`, '#stock/sim', 'ko'],
+    [simsAResilier, `${pluriel(simsAResilier, 'forfait SIM')} payé${simsAResilier > 1 ? 's' : ''} depuis 30 jours pour une tablette sans client : à résilier ou suspendre`, '#stock/sim', 'ko'],
     [remplacees, `${pluriel(remplacees, 'tablette')} remplacée${remplacees > 1 ? 's' : ''} à récupérer chez le client`, '#stock', ''],
     [clientsSansSim, `${clientsSansSim} client${clientsSansSim > 1 ? 's' : ''} Internet inclus sans carte SIM notée sur sa tablette`, '#stock/sim', 'ko'],
     [simsSansTablette, `${simsSansTablette} ligne${simsSansTablette > 1 ? 's SIM actives reliées' : ' SIM active reliée'} à aucune tablette`, '#stock/sim', 'ko'],
@@ -898,15 +908,21 @@ $('filtre-stock').addEventListener('change', afficherStock);
 const ETATS_SANS_CLIENT = ['en-stock', 'revenue', 'a-reparer', 'perdue', 'hors-service'];
 const coutSim = (t) => (t.simCout != null ? t.simCout : donnees.reglages.forfaitSim);
 
-// Même règle que simAResilier (functions/gestion.js) : ligne payée, tablette plus chez un client.
+// Même règle que simAResilier (functions/gestion.js) : ligne active (payée), tablette sans client depuis 30 jours.
+// Une carte pas encore activée ne coûte rien : pas d'alerte.
 function lignesSim() {
   if (!donnees) return [];
   const parId = new Map(donnees.commandes.map((c) => [c.id, c]));
+  const lignes = new Map(donnees.sims.map((l) => [l.id, l]));
   return donnees.stock.filter((t) => t.sim).map((t) => {
     const c = parId.get(t.commande);
+    const ligne = lignes.get(t.simId);
     const finie = c && ((c.restitution && ['rendue', 'facturee'].includes(c.restitution.statut))
       || ['resilie', 'canceled'].includes(c.abonnement));
-    return { t, c, aResilier: ETATS_SANS_CLIENT.includes(t.etat) || !!finie };
+    const depuis = Math.max(0, ...(t.historique || []).map((x) => x.le || 0));
+    const aResilier = (!ligne || ligne.statut === 'active') && (ETATS_SANS_CLIENT.includes(t.etat) || !!finie)
+      && (!depuis || Date.now() - depuis > 30 * 864e5);
+    return { t, c, aResilier };
   });
 }
 
@@ -1052,10 +1068,10 @@ function accessoiresAPrevoir() {
 
 function afficherAccessoires() {
   remplirTable($('t-accessoires'), [
-    { titre: 'Accessoire' }, { titre: 'En stock', n: 1 }, { titre: 'Part avec' }, { titre: 'Prix unitaire', n: 1 }, { titre: '' },
+    { titre: 'Accessoire' }, { titre: 'En stock', n: 1 }, { titre: 'Part avec' }, { titre: 'Au retour' }, { titre: 'Prix unitaire', n: 1 }, { titre: '' },
   ], accessoiresAPrevoir().sort((a, b) => a.nom.localeCompare(b.nom, 'fr')).map((a) => ({
     onclick: () => ouvrirAccessoire(a.id),
-    cellules: [a.nom, String(a.quantite || 0), donnees.envoisAccessoire[a.parEnvoi || ''], euros(a.prixAchat),
+    cellules: [a.nom, String(a.quantite || 0), donnees.envoisAccessoire[a.parEnvoi || ''], a.retour ? 'Revient' : 'Consommé', euros(a.prixAchat),
       a.manque ? badge(`il en manque ${a.manque} pour les envois`, 'ko') : a.bas ? badge('stock bas', 'ko') : ''],
   })), { vide: 'Aucun accessoire.' });
 }
@@ -1075,6 +1091,7 @@ function ouvrirAccessoire(id) {
   f.quantite.value = a.quantite || 0;
   f.seuil.value = a.seuil != null ? a.seuil : '';
   f.prixAchat.value = enEuros(a.prixAchat);
+  f.retour.checked = a.retour === true;
   f.note.value = a.note || '';
   $('dx-supprimer').hidden = !id;
   $('f-livraison').hidden = !id;
@@ -1093,7 +1110,7 @@ $('f-accessoire').addEventListener('submit', async (e) => {
   const prixAchat = enCentimes(f.prixAchat.value);
   if (quantite == null || Number.isNaN(quantite) || Number.isNaN(seuil)) return message(f, 'Quantité illisible : un nombre entier.');
   if (Number.isNaN(prixAchat)) return message(f, 'Prix illisible (ex. 9,90).');
-  const champs = { nom: f.nom.value, parEnvoi: f.parEnvoi.value, quantite, seuil, prixAchat, note: f.note.value };
+  const champs = { nom: f.nom.value, parEnvoi: f.parEnvoi.value, quantite, seuil, prixAchat, retour: f.retour.checked, note: f.note.value };
   await enregistrer(f, async () => {
     await appeler('gestionAccessoire', accessoireOuvert ? { action: 'modifier', id: accessoireOuvert, champs } : { action: 'ajouter', champs });
     $('d-accessoire').close();
@@ -2045,47 +2062,68 @@ function afficherTva(t) {
 
 // ---------- Rentabilité par formule ----------
 
+// Un abonné rapporte chaque mois (prix − Stripe − URSSAF − forfait SIM) et coûte au départ : la tablette et ce qui
+// revient avec elle (achetés une fois, réutilisés), ce qui est consommé à chaque envoi (carton, papier, fiche), le port
+// aller et retour, moins la mise en service. Les accessoires « en option » (enceinte) ne sont pas comptés.
 function afficherRentabilite() {
   const r = donnees.reglages;
-  // Frais Stripe réels de la période (part du montant encaissé), sinon tarif carte européenne.
+  // Frais Stripe réels de la période (part du montant encaissé), sinon prélèvement SEPA (~1 %).
   const paiements = stripe.mouvements.filter((m) => ENCAISSEMENTS.includes(m.nature));
   const encaisse = paiements.reduce((s, m) => s + m.montant, 0);
-  const tauxFrais = encaisse ? paiements.reduce((s, m) => s + m.frais, 0) / encaisse : 0.03;
+  const tauxFrais = encaisse ? paiements.reduce((s, m) => s + m.frais, 0) / encaisse : 0.01;
   const prixTablettes = donnees.stock.map((t) => t.prixAchat).filter((p) => p > 0);
-  const tablette = Math.round((prixTablettes.length ? prixTablettes.reduce((s, p) => s + p, 0) / prixTablettes.length : 10000)
-    / Math.max(1, r.vieTablette));
+  const tablette = prixTablettes.length ? Math.round(prixTablettes.reduce((s, p) => s + p, 0) / prixTablettes.length) : 8000;
   const enService = lignesSim().filter((l) => !l.aResilier);
   const forfait = enService.length ? Math.round(enService.reduce((s, l) => s + coutSim(l.t), 0) / enService.length) : r.forfaitSim;
   const payants = stripe.abonnements.filter((a) => ['active', 'past_due'].includes(a.statut));
+  const somme = (liste) => liste.reduce((s, a) => s + (a.prixAchat || 0), 0);
+  const charges = (montant) => Math.round(montant * tauxFrais) + Math.round((montant * r.tauxUrssaf) / 100);
   const lignes = Object.entries(FORMULES).map(([cle, nom]) => {
     const abos = payants.filter((a) => a.formule === cle);
     const prix = abos.length ? Math.round(abos.reduce((s, a) => s + a.mensuel, 0) / abos.length) : (cle === 'sim' ? 3000 : 2000);
-    const frais = Math.round(prix * tauxFrais);
-    const urssaf = Math.round((prix * r.tauxUrssaf) / 100);
     const sim = cle === 'sim' ? forfait : 0;
-    // Matériel : tablette, plus les accessoires de chaque envoi (clé 4G, chargeur…), amortis sur la même durée.
-    const accessoires = (donnees.accessoires || []).filter((a) => a.parEnvoi === 'tous' || a.parEnvoi === cle)
-      .reduce((s, a) => s + (a.prixAchat || 0), 0);
-    const materiel = tablette + Math.round(accessoires / Math.max(1, r.vieTablette));
-    const marge = prix - frais - urssaf - materiel - sim;
-    return { nom, n: abos.length, prix, frais, urssaf, materiel, sim, marge };
+    const parMois = prix - charges(prix) - sim;
+    const colis = (donnees.accessoires || []).filter((a) => a.parEnvoi === 'tous' || a.parEnvoi === cle);
+    const materiel = tablette + somme(colis.filter((a) => a.retour));
+    const envoi = somme(colis.filter((a) => !a.retour)) + r.fraisEnvoi + r.fraisRetour;
+    const depart = materiel + envoi - (r.miseEnService - charges(r.miseEnService));
+    const mois = parMois > 0 ? Math.max(0, Math.ceil(depart / parMois)) : null;
+    // Une fois amorti : le matériel réparti sur sa durée de vie, un client par tablette sur cette durée.
+    const amorti = parMois - Math.round(Math.max(0, depart) / Math.max(1, r.vieTablette));
+    return { nom, n: abos.length, prix, charges: charges(prix) + sim, parMois, depart, mois, amorti };
   });
   const signe = (c) => h('span', { class: c < 0 ? 'neg' : null }, euros(c));
   remplirTable($('t-rentabilite'), [
-    { titre: 'Formule' }, { titre: 'Abonnés', n: 1 }, { titre: 'Prix', n: 1 }, { titre: 'Frais Stripe', n: 1 },
-    { titre: 'URSSAF', n: 1 }, { titre: 'Matériel', n: 1 }, { titre: 'Forfait SIM', n: 1 }, { titre: 'Reste / abonné', n: 1 },
-    { titre: 'Reste / mois', n: 1 },
-  ], lignes.map((l) => [l.nom, String(l.n), euros(l.prix), euros(l.frais), euros(l.urssaf), euros(l.materiel),
-    l.sim ? euros(l.sim) : '', signe(l.marge), signe(l.marge * l.n)]), {
+    { titre: 'Formule' }, { titre: 'Abonnés', n: 1 }, { titre: 'Prix', n: 1 }, { titre: 'Stripe, URSSAF, SIM', n: 1 },
+    { titre: 'Reste / mois', n: 1 }, { titre: 'Coût de départ', n: 1 },
+    { titre: 'Remboursé en', n: 1 }, { titre: 'Reste amorti / mois', n: 1 }, { titre: 'Total / mois', n: 1 },
+  ], lignes.map((l) => [l.nom, String(l.n), euros(l.prix), euros(l.charges), signe(l.parMois), signe(l.depart), l.mois == null ? 'jamais' : `${l.mois} mois`, signe(l.amorti), signe(l.amorti * l.n)]), {
     total: ['Total', String(lignes.reduce((s, l) => s + l.n, 0)), '', '', '', '', '', '',
-      signe(lignes.reduce((s, l) => s + l.marge * l.n, 0))],
+      signe(lignes.reduce((s, l) => s + l.amorti * l.n, 0))],
   });
+  const accessoires = (donnees.accessoires || []).filter((a) => a.parEnvoi);
+  const ligne = (nom, prix, note) => h('li', null, `${nom} : ${euros(prix)}`, note ? h('span', { class: 'muted' }, ` (${note})`) : null);
+  $('rentabilite-colis').replaceChildren(
+    h('ul', { class: 'small' },
+      ligne('Tablette', tablette, prixTablettes.length ? 'prix moyen du stock, revient au retour' : 'prix par défaut, aucun prix dans le stock'),
+      ...accessoires.map((a) => ligne(a.nom, a.prixAchat || 0, [
+        a.parEnvoi === 'option' ? 'en option, non compté' : a.parEnvoi === 'tous' ? null : donnees.envoisAccessoire[a.parEnvoi],
+        a.parEnvoi === 'option' ? null : a.retour ? 'revient au retour' : 'consommé',
+      ].filter(Boolean).join(', '))),
+      ligne('Envoi', r.fraisEnvoi), ligne('Retour', r.fraisRetour), ligne('Mise en service (en moins)', r.miseEnService)),
+    h('p', { class: 'muted small' }, accessoires.length
+      ? 'Modifier le contenu : Stock, Accessoires. Chaque envoi sort ces articles du stock et prévient quand il en manque.'
+      : 'Aucun article de colis : ajoutez-les dans Stock, Accessoires (carton, housse, chargeur, câble, papier, fiche…), « Part avec : Chaque envoi ».'),
+  );
   const f = $('f-reglages');
   if (!f.contains(document.activeElement)) {
     f.seuilTva.value = enEuros(r.seuilTva);
     f.tauxUrssaf.value = String(r.tauxUrssaf).replace('.', ',');
     f.forfaitSim.value = enEuros(r.forfaitSim);
     f.vieTablette.value = r.vieTablette;
+    f.miseEnService.value = enEuros(r.miseEnService);
+    f.fraisEnvoi.value = enEuros(r.fraisEnvoi);
+    f.fraisRetour.value = enEuros(r.fraisRetour);
   }
 }
 
@@ -2098,6 +2136,9 @@ $('f-reglages').addEventListener('submit', async (e) => {
     tauxUrssaf: nombre(f.tauxUrssaf.value),
     forfaitSim: enCentimes(f.forfaitSim.value),
     vieTablette: nombre(f.vieTablette.value),
+    miseEnService: enCentimes(f.miseEnService.value),
+    fraisEnvoi: enCentimes(f.fraisEnvoi.value),
+    fraisRetour: enCentimes(f.fraisRetour.value),
   };
   if (Object.values(valeurs).some((v) => v == null || !Number.isFinite(v) || v < 0) || !valeurs.vieTablette) {
     return message(f, 'Une valeur est illisible.');
