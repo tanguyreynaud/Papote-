@@ -258,7 +258,7 @@ exports.supportChat = onRequest(
         model: MODELE,
         // La réflexion de l'IA compte dans max_tokens : assez de marge pour ne jamais couper une réponse.
         max_tokens: 4000,
-        output_config: { effort: 'medium' },
+        output_config: { effort: 'low' },
         system: [
           { type: 'text', text: CONSIGNES },
           { type: 'text', text: `${CONNAISSANCES}\n\n# Contenu du site Papote\n\n${texte}`, cache_control: { type: 'ephemeral' } },
