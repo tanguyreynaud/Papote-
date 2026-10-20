@@ -182,6 +182,43 @@ async function familleDuResponsable(fid, uid) {
   return fam;
 }
 
+// Invitation d'un proche par e-mail depuis l'appli famille : un vrai e-mail part, avec le lien du code
+// famille. Réservé aux membres actifs ; 20 envois par jour et par famille (limites/invitations-{fid}).
+const INVITATIONS_PAR_JOUR = 20;
+exports.inviterParEmail = onCall({ secrets: [MAIL_MOT_DE_PASSE], maxInstances: 2 }, async (request) => {
+  const { uid } = compteVerifie(request);
+  const { fid } = request.data || {};
+  const email = emailValide(request.data && request.data.email);
+  if (typeof fid !== 'string' || !fid) throw new HttpsError('invalid-argument', 'Famille manquante.');
+  if (!email) throw new HttpsError('invalid-argument', 'Adresse e-mail invalide.');
+  const [famille, membre] = await Promise.all([
+    db.doc(`families/${fid}`).get(), db.doc(`families/${fid}/members/${uid}`).get(),
+  ]);
+  if (!famille.exists) throw new HttpsError('not-found', 'Famille introuvable.');
+  const fam = famille.data();
+  const responsable = fam.createdBy === uid || (fam.admins || []).includes(uid);
+  if (!responsable && !(membre.exists && (membre.get('status') || 'active') === 'active')) {
+    throw new HttpsError('permission-denied', 'Réservé aux membres de la famille.');
+  }
+  if (!fam.code) throw new HttpsError('failed-precondition', 'Cette famille n\'a pas de code.');
+  const jour = new Date().toISOString().slice(0, 10);
+  const limite = db.doc(`limites/invitations-${fid}`);
+  await db.runTransaction(async (tx) => {
+    const s = await tx.get(limite);
+    const n = s.exists && s.get('jour') === jour ? s.get('n') : 0;
+    if (n >= INVITATIONS_PAR_JOUR) {
+      throw new HttpsError('resource-exhausted', 'Trop d\'invitations aujourd\'hui. Réessayez demain.');
+    }
+    tx.set(limite, { jour, n: n + 1 });
+  });
+  const code = String(fam.code).toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const lien = `${APPLI_FAMILLE}?code=${code.length === 8 ? regles.afficherCode(code) : code}`;
+  await envoyerMail(email, mail.invitation({
+    prenom: (membre.exists && membre.get('name')) || null, tablette: fam.name, lien, email,
+  }));
+  return { ok: true };
+});
+
 // Résiliation et annulation : les responsables de la famille, ou l'administrateur de Papote (badge admin).
 async function familleGeree(fid, request) {
   const { uid } = compteVerifie(request);
