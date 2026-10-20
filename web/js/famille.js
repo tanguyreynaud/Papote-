@@ -3169,7 +3169,7 @@ $('form-pair-code').addEventListener('submit', async (e) => {
   try {
     const snap = await getDoc(doc(db, 'pairings', code));
     const data = snap.data();
-    if (!data) return fail('Ce code ne correspond à aucune tablette. Vérifiez-le sur l\'écran de la tablette.');
+    if (!data) return fail("Aucune tablette allumée n'affiche ce code. Vérifiez les 8 caractères sur l'écran de la tablette : elle doit être allumée et connectée à Internet.");
     if (toDate(data.expiresAt) < new Date()) return fail('Ce code a expiré. La tablette en affichera un nouveau.');
     if (data.status !== 'waiting') return fail('Cette tablette est déjà en cours d\'installation.');
     adminFamilies = await loadAdminFamilies();
