@@ -42,7 +42,7 @@ les fonctions suffit pour que le chat en tienne compte.
 - Le soir l'écran s'assombrit ; la nuit il s'éteint (horaires réglables dans Réglages, « Écran éteint la nuit »). Un toucher le rallume, un appel ou un rappel le réveille.
 - Les mises à jour se font toutes seules.
 - Le bouton marche/arrêt ne l'éteint pas (pour éviter les fausses manœuvres) ; un appui d'environ 10 secondes la redémarre.
-- Taille du texte réglable dans Réglages (Normale, Grande, Très grande).
+- Taille du texte de la tablette : dans l'appli famille, Réglages (Normale, Grande, Très grande). La tablette elle-même n'a aucun menu de réglage : tout se règle depuis l'appli, à distance.
 - Volume : dans Réglages, « Volume du son » (son des vidéos et des appels sur la tablette), réglable par un responsable de la famille.
 - Pas de lecture à voix haute des messages.
 
