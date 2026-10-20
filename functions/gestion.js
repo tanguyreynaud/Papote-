@@ -2274,26 +2274,39 @@ async function releverFactures() {
     const verrou = await client.getMailboxLock('INBOX');
     try {
       const adresse = FACTURES_ADRESSE.value();
-      const uids = await client.search({ seen: false, or: [{ to: adresse }, { cc: adresse }] }, { uid: true }) || [];
-      for (const uid of uids.slice(0, 20)) {
+      // E-mails des 4 derniers jours pas encore traités, lus ou non : un e-mail ouvert entre-temps dans la
+      // messagerie (marqué « lu ») doit quand même être rangé. Les déjà traités sont notés par leur Message-ID.
+      const vusRef = db().doc('gestion/courrierVus');
+      const vus = new Set((await vusRef.get()).get('ids') || []);
+      const uids = await client.search({ since: new Date(Date.now() - 4 * 86400000), or: [{ to: adresse }, { cc: adresse }] }, { uid: true }) || [];
+      const traites = [];
+      let lus = 0;
+      for (const uid of uids) {
+        if (lus >= 20) break;
+        const entete = await client.fetchOne(String(uid), { envelope: true }, { uid: true });
+        const cle = String((entete && entete.envelope && entete.envelope.messageId) || `uid-${uid}`).slice(0, 200);
+        if (vus.has(cle)) continue;
+        lus += 1;
         const { content } = await client.download(String(uid), undefined, { uid: true });
         const mailLu = await simpleParser(content);
         const de = (mailLu.from && mailLu.from.text) || 'expéditeur inconnu';
         const sujet = mailLu.subject || '(sans objet)';
         const pieces = piecesFacture(mailLu.attachments);
-        if (!pieces.length) {
-          const corps = corpsDuMail(mailLu);
-          if (corps) pieces.push(corps);
-          else bilan.ignorees.push(`« ${sujet} » (${de}) : aucune facture en pièce jointe`);
-        }
+        // Le texte de l'e-mail (confirmation de commande) passe après les pièces jointes : lu seulement si
+        // aucune pièce n'est une facture (images de produits d'un e-mail transféré, par exemple).
+        const corps = corpsDuMail(mailLu);
+        if (!pieces.length && !corps) bilan.ignorees.push(`« ${sujet} » (${de}) : aucune facture en pièce jointe`);
         let reessayer = false;
-        for (const piece of pieces) {
+        let trouvee = false;
+        for (const piece of [...pieces, ...(corps ? [corps] : [])]) {
+          if (piece === corps && trouvee) break;
           try {
             const r = await lireDocument(piece.content.toString('base64'), piece.contentType);
             if (!r.facture) {
               bilan.ignorees.push(`${piece.filename || 'pièce'} (« ${sujet} ») : pas une facture`);
               continue;
             }
+            trouvee = true;
             const rangee = await rangerFacture(r, piece, `e-mail de ${de}`.slice(0, 200));
             if (typeof rangee === 'string') bilan.ignorees.push(`${piece.filename || 'pièce'} : ${rangee}`);
             else {
@@ -2308,8 +2321,10 @@ async function releverFactures() {
           }
         }
         if (reessayer) continue;
+        traites.push(cle);
         await client.messageFlagsAdd(String(uid), ['\\Seen'], { uid: true });
       }
+      if (traites.length) await vusRef.set({ ids: [...vus, ...traites].slice(-500) });
     } finally {
       verrou.release();
     }
@@ -2318,7 +2333,13 @@ async function releverFactures() {
     bilan.erreurs.push(`Boîte ${utilisateur} : ${e.authenticationFailed ? 'mot de passe refusé' : e.message}`);
     client.close();
   }
-  await db().doc('gestion/courrier').set(bilan);
+  // Relevé sans rien de nouveau : le résultat du dernier e-mail traité reste affiché (sinon il disparaît
+  // au relevé suivant, une heure après).
+  const vide = !bilan.rangees.length && !bilan.ignorees.length && !bilan.erreurs.length;
+  const avant = vide ? (await db().doc('gestion/courrier').get()).data() : null;
+  const precedent = avant && (avant.rangees.length || avant.ignorees.length || avant.erreurs.length)
+    ? { le: avant.le, rangees: avant.rangees, ignorees: avant.ignorees, erreurs: avant.erreurs } : avant && avant.precedent;
+  await db().doc('gestion/courrier').set({ ...bilan, ...(precedent ? { precedent } : {}) });
   if (bilan.erreurs.length) logger.warn('Factures reçues par e-mail', bilan.erreurs);
   return bilan;
 }

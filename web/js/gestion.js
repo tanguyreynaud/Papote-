@@ -2225,6 +2225,10 @@ function afficherCourrier() {
     `Dernier relevé le ${quand} : ${c.rangees.length ? `${pluriel(c.rangees.length, 'facture')} rangée${c.rangees.length > 1 ? 's' : ''} (${c.rangees.join(' ; ')})` : 'aucune nouvelle facture'}.`,
     ...c.ignorees.map((x) => h('span', {}, h('br'), `Ignoré : ${x}`)),
     ...c.erreurs.map((x) => h('span', { class: 'error' }, h('br'), x)),
+    ...(c.precedent ? [h('br'), `Dernier e-mail traité le ${new Date(c.precedent.le).toLocaleString('fr-FR', { dateStyle: 'long', timeStyle: 'short' })} : `,
+      c.precedent.rangees.length ? `rangé (${c.precedent.rangees.join(' ; ')})` : 'rien de rangé',
+      ...c.precedent.ignorees.map((x) => h('span', {}, h('br'), `Ignoré : ${x}`)),
+      ...c.precedent.erreurs.map((x) => h('span', { class: 'error' }, h('br'), x))] : []),
   );
 }
 
