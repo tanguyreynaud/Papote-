@@ -50,14 +50,14 @@ les fonctions suffit pour que le chat en tienne compte.
 - La tablette ne répond plus : vérifier qu'elle est branchée et connectée au Wi-Fi ; puis dans Réglages, « Dépanner la tablette » : « Redémarrer la tablette ». Sinon, appui d'environ 10 secondes sur le bouton marche.
 - Nouvelle box ou nouveau mot de passe Wi-Fi : Réglages, « Changer le Wi-Fi », entrer le nom du réseau et le mot de passe puis « Envoyer à la tablette ». Si c'est faux, elle garde son Wi-Fi actuel. Cela ne marche que si la tablette est encore connectée. Si le mot de passe de la box a déjà été changé et que la tablette n'a plus internet, l'appli ne peut plus lui envoyer le Wi-Fi : redémarrer ne suffit pas, il faut l'aide du support (demande de contact).
 - L'appel vidéo ne marche pas : autoriser la caméra et le micro quand le téléphone le demande (sinon dans les réglages du navigateur). Le bouton « Appel vidéo » reste grisé tant que la tablette ne peut pas recevoir d'appel (éteinte ou sans internet).
-- La tablette affiche « Papote est en pause » : l'abonnement est suspendu (paiement non réglé ou abonnement terminé). Mettre à jour la carte dans l'appli famille, onglet Profil, « Gérer le paiement et les factures » ; tout repart dès le paiement.
+- La tablette affiche « Papote est en pause » : l'abonnement est suspendu (paiement non réglé ou abonnement terminé). Régulariser ou changer de compte bancaire dans l'appli famille, onglet Profil, « Gérer le paiement et les factures » ; tout repart dès le paiement.
 
 ## Abonnement
-- L'abonnement se gère dans l'appli famille, onglet Profil : « Gérer le paiement et les factures » (changer de carte, factures) et « Résilier l'abonnement ». Seul le propriétaire de la famille, celui qui paie, peut le faire.
-- On peut payer avec la carte ou le compte de n'importe qui, par exemple celui du parent lui-même. Paiement au mois seulement, pas à l'année.
+- L'abonnement se gère dans l'appli famille, onglet Profil : « Gérer le paiement et les factures » (changer de compte bancaire, factures) et « Résilier l'abonnement ». Seul le propriétaire de la famille, celui qui paie, peut le faire.
+- On peut payer avec le compte bancaire de n'importe qui, par exemple celui du parent lui-même. Paiement au mois seulement, pas à l'année.
 - Hospitalisation du proche : jusqu'à 2 mois d'abonnement remboursés par an, sur certificat d'hospitalisation envoyé à contact@mapapote.fr. Aucune pause de l'abonnement pour d'autres raisons (vacances, absence…).
 - Fin d'abonnement : l'appli (Profil, Abonnement) donne une étiquette de retour à imprimer, payée par Papote. Tout le matériel est à renvoyer sous 30 jours : la tablette et son support, le chargeur et son câble, et le routeur 4G s'il a été fourni dans le colis.
-- Le paiement passe par Stripe, une page sécurisée. Papote ne voit jamais le numéro de carte.
+- Le paiement passe par Stripe, une page sécurisée. Papote ne voit jamais les coordonnées bancaires complètes.
 
 ## Questions fréquentes (réponses validées par Papote)
 - Acheter la tablette : non, elle n'est jamais vendue ; elle est prêtée pendant l'abonnement et rendue à la fin.
@@ -81,7 +81,7 @@ les fonctions suffit pour que le chat en tienne compte.
 - Offrir Papote : commandez à votre nom et choisissez un point relais près de chez le proche, ou près de chez vous si vous la lui apportez. La tablette arrive prête : on la branche, puis vous la reliez à la famille depuis votre téléphone en scannant le QR code qu'elle affiche. Le proche n'a rien à régler ni à apprendre, et c'est vous qui gérez l'abonnement. Un autre proche peut aussi payer.
 - Livraison hors France, Belgique et Luxembourg (Suisse, DOM-TOM…) : pas pour le moment.
 - Changer de formule : passer à l'option internet inclus ou revenir au Wi-Fi de la maison est possible ; nous disons alors s'il faut envoyer ou renvoyer du matériel. Dans les deux cas : demande de contact.
-- Paiement : par carte bancaire (Google Pay, Apple Pay et Link compris) ou par prélèvement SEPA, sur la page sécurisée Stripe. Pas de chèque, de virement ni d'espèces. Avec le prélèvement SEPA, la tablette part une fois le prélèvement confirmé par la banque (quelques jours) ; les factures sont dans l'appli, onglet Profil, « Gérer le paiement et les factures ».
+- Paiement : uniquement par prélèvement SEPA, avec l'IBAN d'un compte en France, en Belgique ou au Luxembourg, saisi sur la page sécurisée Stripe (mandat signé en ligne). Pas de carte bancaire, ni Google Pay, Apple Pay ou Link, ni chèque, virement ou espèces. L'abonnement est prélevé chaque mois. La tablette part dès que la banque a confirmé le premier prélèvement (quelques jours) ; s'il est refusé, la commande est annulée ; les factures sont dans l'appli, onglet Profil, « Gérer le paiement et les factures ».
 - Tablette arrivée abîmée (écran fissuré, colis endommagé) : ce n'est pas de votre faute et ce n'est pas une rétractation. Prenez des photos et faites une demande de contact : l'équipe s'en occupe.
 - Panne (tablette qui ne marche plus sans avoir été cassée) : réparée gratuitement. Nous envoyons une étiquette de retour ; comptez le temps de nous l'envoyer, environ 5 jours ouvrés de réparation, puis environ 5 jours ouvrés pour la recevoir de nouveau. Demande de contact pour lancer le retour.
 - Après une résiliation, les photos sont gardées 12 mois puis supprimées. Gardez toujours vos originaux sur votre téléphone.
@@ -90,7 +90,7 @@ les fonctions suffit pour que le chat en tienne compte.
 - Appli depuis l'étranger : oui, partout, tant que la connexion internet est bonne.
 - Déménagement du proche : il garde la même tablette et le même abonnement. Pensez à envoyer le nouveau Wi-Fi (Réglages, « Changer le Wi-Fi ») avant que la tablette perde l'ancien. Pas possible dans un autre pays.
 - Le proche ne veut pas parler : il n'est jamais obligé, il peut simplement ne pas répondre.
-- Changer de carte de paiement : onglet Profil, « Gérer le paiement et les factures ». Pour qu'une autre personne reprenne l'abonnement à son nom : demande de contact.
+- Changer de compte bancaire (IBAN) : onglet Profil, « Gérer le paiement et les factures ». Pour qu'une autre personne reprenne l'abonnement à son nom : demande de contact.
 - La société s'appelle Papote.
 - Ville de la météo fausse : un responsable de la famille la change dans l'appli, Réglages, « Ville de la météo ». Si la tablette garde l'ancienne ville : demande de contact.
 - Message vocal, ou photo programmée pour une date : non, ni l'un ni l'autre.
