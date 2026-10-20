@@ -12,6 +12,12 @@
   <link rel="stylesheet" href="css/gestion.css">
 </head>
 <body class="admin-body">
+  <div id="chargement" class="chargement" role="status">
+    <img src="icons/icon.svg" alt="" class="chargement-logo">
+    <p class="chargement-nom">Papote</p>
+    <span class="roue" aria-hidden="true"></span>
+    <span class="sr-only">Chargement…</span>
+  </div>
   <section id="signin" class="signin card" hidden>
     <img src="icons/icon.svg" alt="" class="admin-logo">
     <h1>Administration Papote</h1>
@@ -75,7 +81,6 @@
       </header>
       <p id="p-etat" class="muted small etat-periode" hidden></p>
       <p id="erreur" class="bandeau-erreur" hidden></p>
-      <p id="chargement" class="chargement" role="status"><span class="roue" aria-hidden="true"></span>Chargement…</p>
 
       <!-- ---------- Accueil ---------- -->
       <section data-panneau="accueil">
