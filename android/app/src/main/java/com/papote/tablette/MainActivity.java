@@ -60,6 +60,9 @@ public class MainActivity extends Activity implements Sync.Listener {
     private SharedPreferences prefs;
     private Sync sync;
     private CallAudio callAudio;
+    /** Luminosité le soir (0 à 1) ; vrai pendant les heures du soir. */
+    private static final float EVENING_BRIGHTNESS = 0.3f;
+    private boolean dimmed;
     private VoicePlayer voicePlayer;
     private VideoView videoView;
     private Wifi wifi;
@@ -362,8 +365,21 @@ public class MainActivity extends Activity implements Sync.Listener {
             Journal.log(MainActivity.this, asleep ? "Veille de nuit : écran noir" : "Fin de la veille de nuit");
             handler.post(() -> {
                 WindowManager.LayoutParams lp = getWindow().getAttributes();
-                float brightness = asleep ? 0.01f : WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
+                float brightness = asleep ? 0.01f
+                        : dimmed ? EVENING_BRIGHTNESS : WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
                 lp.screenBrightness = brightness;
+                getWindow().setAttributes(lp);
+            });
+        }
+
+        /** Le soir (couleurs du soir) : écran moins lumineux ; le reste du temps, réglage normal. */
+        @JavascriptInterface
+        public void setDim(boolean on) {
+            handler.post(() -> {
+                dimmed = on;
+                WindowManager.LayoutParams lp = getWindow().getAttributes();
+                if (lp.screenBrightness >= 0 && lp.screenBrightness < 0.05f) return; // veille de nuit en cours
+                lp.screenBrightness = on ? EVENING_BRIGHTNESS : WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
                 getWindow().setAttributes(lp);
             });
         }

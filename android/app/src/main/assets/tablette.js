@@ -74,6 +74,8 @@
 
   // ---------- Horloge, date, mode nuit ----------
 
+  var dimmed = null;
+
   function tick() {
     var now = new Date();
     var time = now.getHours() + ':' + pad(now.getMinutes());
@@ -89,8 +91,14 @@
         : hour >= 12 && hour < 18 ? "L'après-midi"
           : hour >= 18 && hour < 22 ? 'Le soir' : 'La nuit';
     }
-    document.body.className = (isEvening(hour) ? 'night' : '') +
+    var evening = isEvening(hour);
+    document.body.className = (evening ? 'night' : '') +
       (playing && playing.post.video ? ' video-playing' : '');
+    // Le soir, l'écran garde son fond noir mais éclaire moins.
+    if (evening !== dimmed) {
+      dimmed = evening;
+      if (android() && android().setDim) android().setDim(evening);
+    }
   }
 
   function whenLabel(ms) {
