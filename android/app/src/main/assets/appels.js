@@ -273,15 +273,46 @@ const CAMERA = {
 
 // Vidéo envoyée par la tablette plafonnée (~300 kbit/s, 20 images/s) : environ 350 Mo par heure
 // de visio au total au lieu de ~550, soit ~14 h par mois avec 5 Go. À appeler après la négociation.
+// Sur la carte SIM (pas de Wi-Fi), mode « économie » : Mamie est filmée en 360p à ~150 kbit/s
+// (elle bouge peu), et la vidéo du proche, celle qu'elle regarde, est demandée à ~450 kbit/s.
+// Environ 300 Mo par heure de visio au lieu de ~1 Go. Sur Wi-Fi, rien ne compte : bonne qualité.
 const VIDEO_MAX_BITRATE = 300_000;
+const SIM_SEND_BITRATE = 150_000;
+const SIM_RECEIVE_KBPS = 450;
+function onSimData() {
+  try {
+    const s = JSON.parse(android().wifiStatus());
+    return !s.wifi && !!s.mobile;
+  } catch (e) {
+    return false;
+  }
+}
+// Débit vidéo que la tablette accepte de recevoir (b=AS, respecté par le téléphone du proche).
+function limitReceive(sdp) {
+  if (!onSimData()) return sdp;
+  // Ligne « b=AS » juste après la ligne « c= » de la section vidéo.
+  const lines = sdp.split('\r\n');
+  let inVideo = false;
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].startsWith('m=')) inVideo = lines[i].startsWith('m=video');
+    else if (inVideo && lines[i].startsWith('b=AS:')) return sdp; // déjà limité
+    else if (inVideo && lines[i].startsWith('c=')) {
+      lines.splice(i + 1, 0, `b=AS:${SIM_RECEIVE_KBPS}`);
+      return lines.join('\r\n');
+    }
+  }
+  return sdp;
+}
 function capVideo(pc) {
   try {
+    const sim = onSimData();
     pc.getSenders().forEach((s) => {
       if (!s.track || s.track.kind !== 'video' || !s.getParameters) return;
       const p = s.getParameters();
       if (!p.encodings || !p.encodings.length) p.encodings = [{}];
-      p.encodings[0].maxBitrate = VIDEO_MAX_BITRATE;
-      p.encodings[0].maxFramerate = 20;
+      p.encodings[0].maxBitrate = sim ? SIM_SEND_BITRATE : VIDEO_MAX_BITRATE;
+      p.encodings[0].maxFramerate = sim ? 15 : 20;
+      if (sim) p.encodings[0].scaleResolutionDownBy = 1.33; // 640x480 -> environ 480x360
       s.setParameters(p).catch(() => {});
     });
   } catch (e) { /* navigateur trop ancien : pas de plafond */ }
@@ -674,7 +705,7 @@ async function answer() {
   const reply = await pc.createAnswer();
   await pc.setLocalDescription(reply);
   capVideo(pc);
-  await updateDoc(callRef, { answer: { type: reply.type, sdp: reply.sdp }, state: 'accepted' });
+  await updateDoc(callRef, { answer: { type: reply.type, sdp: limitReceive(reply.sdp) }, state: 'accepted' });
 
   active.stops.push(onSnapshot(collection(callRef, 'callerCandidates'), (snap) => {
     snap.docChanges().forEach((c) => {
@@ -868,7 +899,7 @@ window.papoteCallFamily = ({ to = null, toName = null, onState = () => {} } = {}
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
     if (done) return;
-    await updateDoc(ref, { offer: { type: offer.type, sdp: offer.sdp } });
+    await updateDoc(ref, { offer: { type: offer.type, sdp: limitReceive(offer.sdp) } });
     const tOffre = Math.round(performance.now() - t0);
     if (tOffre > 3000) reportCallIncident('depart-lent', `appel-ecrit+micro=${tEcrit}ms offre=${tOffre}ms`, ref.id);
 
