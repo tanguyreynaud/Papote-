@@ -2,6 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- Sonnerie d'appel : notification (Android 13+) qui s'ouvre en plein écran, même verrouillé -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
@@ -66,6 +67,12 @@
             android:showWhenLocked="true"
             android:turnScreenOn="true"
             android:taskAffinity="fr.mapapote.famille.appel" />
+
+        <!-- Pas de réseau au lancement : Papote s'ouvre tout seul dès que la connexion revient -->
+        <activity
+            android:name=".HorsLigne"
+            android:exported="false"
+            android:theme="@android:style/Theme.DeviceDefault.Light.NoActionBar" />
 
         <!-- Carte « Ne manquez aucun appel » de l'app famille : ouvre le réglage de mise en pause -->
         <activity

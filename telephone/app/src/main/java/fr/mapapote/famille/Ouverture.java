@@ -123,6 +123,12 @@ public class Ouverture extends LauncherActivity {
         // Chrome. Quand la demande d'autorisation s'ouvre par-dessus, Android ne la signale jamais :
         // l'app restait bloquée sur le logo. On la signale nous-mêmes (sans effet si déjà reçue).
         onEnterAnimationComplete();
+        // Sans réseau, Chrome n'afficherait qu'une page d'erreur : écran Papote qui attend le réseau.
+        if (!HorsLigne.connecte(this)) {
+            startActivity(new Intent(this, HorsLigne.class).setData(getIntent().getData()));
+            finish();
+            return;
+        }
         launchTwa();
     }
 

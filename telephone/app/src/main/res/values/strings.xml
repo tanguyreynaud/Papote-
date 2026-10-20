@@ -28,4 +28,7 @@
     <string name="pause_fait">C\'est bon ✓ Papote sonnera toujours.</string>
     <string name="canal_aide">Aide aux réglages</string>
     <string name="pause_plus_tard">Plus tard</string>
+    <string name="hors_ligne_titre">Pas de connexion internet</string>
+    <string name="hors_ligne_texte">Vérifiez le Wi-Fi ou les données mobiles. Papote s\'ouvrira tout seul dès que la connexion reviendra.</string>
+    <string name="reessayer">Réessayer</string>
 </resources>
