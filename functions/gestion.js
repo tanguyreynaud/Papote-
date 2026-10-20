@@ -782,6 +782,19 @@ exports.gestionStock = onCall(async (request) => {
   const d = request.data || {};
   const qui = request.auth.token.email || request.auth.uid;
 
+  // Tablette reçue avant sa facture (« Pas dans la liste » à la réception) : fiche sans achat, que l'installation
+  // reprend et que la facture complétera (fichesARattacher).
+  if (d.action === 'recue') {
+    const ref = await db().collection('stock').add({
+      numero: texte(d.numero, 80) || null, modele: texte(d.modele) || null, fournisseur: texte(d.fournisseur) || null,
+      prixAchat: null, acheteeLe: null, etat: 'en-stock', commande: null, sim: null,
+      notes: 'Reçue avant sa facture : transférez la facture du vendeur à factures@mapapote.fr.',
+      historique: [{ le: Date.now(), etat: 'en-stock', par: qui }],
+      creeLe: FieldValue.serverTimestamp(), majLe: FieldValue.serverTimestamp(),
+    });
+    return { ok: true, id: ref.id };
+  }
+
   if (d.action === 'ajouter') {
     const r = await ajouterAchat(d, qui);
     r.materiel = await entrerMateriel(materielLu(d.materiel, true), { depense: r.depense, numeroFacture: d.numeroFacture }, qui);
@@ -1556,6 +1569,41 @@ async function synchroniserStock(bilan) {
   }
 }
 
+// Fin de contrat : l'étiquette de retour part toute seule (aucun justificatif demandé au client). Seulement
+// avec la vraie clé Stripe : en mode test, les commandes d'essai ne doivent pas coûter d'étiquettes.
+async function etiquettesRetour(bilan) {
+  if (!STRIPE_SECRET.value().startsWith('sk_live_')) return;
+  const attendues = await db().collection('commandes').where('restitution.statut', '==', 'attendue').get();
+  for (const snap of attendues.docs) {
+    const c = snap.data();
+    if (c.restitution.etiquette || (c.etiquettes && c.etiquettes.retour) || c.expedition !== 'envoyee') continue;
+    try {
+      await creerEtiquette(snap.id, 'retour', 'automatique');
+      bilan.etiquettes = (bilan.etiquettes || []).concat(c.nom || c.email || snap.id);
+    } catch (e) {
+      bilan.erreurs.push(`Étiquette de retour de ${c.nom || c.email || snap.id} : ${e.message} (à créer depuis Commandes)`);
+    }
+  }
+}
+
+// « Le client a reçu le colis » d'après le suivi Sendcloud. Une commande déjà jumelée a quitté la liste
+// des colis en route : rien à cocher.
+async function colisLivres(bilan) {
+  const enRoute = await db().collection('commandes').where('expedition', '==', 'envoyee').where('fid', '==', null).get();
+  const aSuivre = enRoute.docs.filter((d) => !d.get('preparation.recuLe') && d.get('etiquettes.aller.colis'));
+  if (!aSuivre.length) return;
+  const api = sendcloud.client(SENDCLOUD_API.value());
+  for (const snap of aSuivre) {
+    try {
+      if (!(await api.livre(snap.get('etiquettes.aller.colis')))) continue;
+      await snap.ref.update({ 'preparation.recuLe': Date.now(), 'preparation.recuPar': 'suivi Mondial Relay' });
+      bilan.livres = (bilan.livres || []).concat(snap.get('nom') || snap.get('email') || snap.id);
+    } catch (e) {
+      bilan.erreurs.push(`Suivi du colis de ${snap.get('nom') || snap.id} : ${e.message}`);
+    }
+  }
+}
+
 async function automatiser(qui) {
   const maintenant = Date.now();
   const bilan = { factures: [], avoirs: [], depenses: 0, stock: [], erreurs: [] };
@@ -1565,16 +1613,18 @@ async function automatiser(qui) {
   await depensesRecurrentes(maintenant, bilan);
   await facturerPenalites(maintenant - FENETRE, bilan);
   await avoirsRemboursements(maintenant - FENETRE, bilan);
+  await etiquettesRetour(bilan).catch((e) => bilan.erreurs.push(`Étiquettes de retour : ${e.message}`));
+  await colisLivres(bilan).catch((e) => bilan.erreurs.push(`Suivi des colis : ${e.message}`));
   await db().doc('gestion/automatique').set({ ...bilan, le: maintenant, par: qui });
   if (bilan.erreurs.length) logger.warn('Automatismes de gestion', bilan.erreurs);
   return bilan;
 }
 
 exports.gestionAutomatique = onSchedule(
-  { schedule: 'every day 04:00', timeZone: 'Europe/Paris', secrets: [STRIPE_SECRET], timeoutSeconds: 300 },
+  { schedule: 'every day 04:00', timeZone: 'Europe/Paris', secrets: [STRIPE_SECRET, SENDCLOUD_API, MAIL_MOT_DE_PASSE], timeoutSeconds: 300 },
   () => automatiser('automatique'));
 
-exports.gestionAutomatiser = onCall({ secrets: [STRIPE_SECRET], timeoutSeconds: 300 }, async (request) => {
+exports.gestionAutomatiser = onCall({ secrets: [STRIPE_SECRET, SENDCLOUD_API, MAIL_MOT_DE_PASSE], timeoutSeconds: 300 }, async (request) => {
   verifierAdmin(request);
   return automatiser(request.auth.token.email || request.auth.uid);
 });
@@ -1624,16 +1674,9 @@ async function rangerEtiquette(commande, sens, colis, pdf) {
   return `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(chemin)}?alt=media&token=${jeton}`;
 }
 
-// { commande, sens: 'aller' | 'retour' } : crée l'étiquette Mondial Relay chez Sendcloud.
-// Aller : renvoie le n° de suivi pour le formulaire d'envoi. Retour : le client la reçoit par e-mail.
-exports.gestionEtiquette = onCall({ secrets: [SENDCLOUD_API, MAIL_MOT_DE_PASSE], timeoutSeconds: 120 }, async (request) => {
-  verifierAdmin(request);
-  const qui = request.auth.token.email || request.auth.uid;
-  const d = request.data || {};
-  if (typeof d.commande !== 'string' || !d.commande || !['aller', 'retour'].includes(d.sens)) {
-    throw new HttpsError('invalid-argument', 'Commande ou sens manquant.');
-  }
-  const ref = db().doc(`commandes/${d.commande}`);
+// Crée l'étiquette Mondial Relay chez Sendcloud. Erreur à montrer telle quelle : HttpsError ; panne Sendcloud : Error.
+async function creerEtiquette(commande, sens, qui) {
+  const ref = db().doc(`commandes/${commande}`);
   const [snap, reglagesSnap] = await Promise.all([ref.get(), db().doc('gestion/reglages').get()]);
   if (!snap.exists) throw new HttpsError('not-found', 'Commande introuvable.');
   const c = snap.data();
@@ -1643,38 +1686,50 @@ exports.gestionEtiquette = onCall({ secrets: [SENDCLOUD_API, MAIL_MOT_DE_PASSE],
   const cl = sendcloud.adresseClient(c);
   if (!cl) throw new HttpsError('failed-precondition', "Cette commande n'a pas d'adresse ni de point relais utilisable.");
   const poids = Math.max(0.1, (reglages.poidsColis || 1500) / 1000);
-  const reference = c.code ? String(c.code) : d.commande.slice(-12);
+  const reference = c.code ? String(c.code) : commande.slice(-12);
   let api;
   try {
     api = sendcloud.client(SENDCLOUD_API.value());
   } catch (e) {
     throw new HttpsError('failed-precondition', e.message);
   }
+  if (sens === 'aller') {
+    const r = await api.envoi({ de: papote, vers: cl.adresse, pointRelais: cl.pointRelais, poids, reference });
+    const url = await rangerEtiquette(commande, 'aller', r.colis, r.pdf);
+    await ref.update({ 'etiquettes.aller': { colis: r.colis, suivi: r.suivi, url, le: Date.now(), par: qui } });
+    return { ok: true, suivi: r.suivi, url };
+  }
+  const r = await api.retour({ de: cl.adresse, vers: papote, poids, reference });
+  const url = await rangerEtiquette(commande, 'retour', r.colis, r.pdf);
+  const maj = { 'etiquettes.retour': { colis: r.colis, url, le: Date.now(), par: qui } };
+  const attendue = c.restitution && ['attendue', 'echec'].includes(c.restitution.statut);
+  if (attendue) {
+    // Fin de contrat : l'e-mail au client part avec commandeModifiee, comme une étiquette collée à la main.
+    maj['restitution.etiquette'] = url;
+    maj['restitution.etiquetteLe'] = FieldValue.serverTimestamp();
+  }
+  await ref.update(maj);
+  if (!attendue && c.email) {
+    // Remplacement d'un élément du kit : l'étiquette part tout de suite.
+    await mail.envoyer({
+      smtp: MAIL_SMTP.value(), expediteur: MAIL_EXPEDITEUR.value(), motDePasse: MAIL_MOT_DE_PASSE.value(),
+      a: c.email, contenu: mail.etiquetteRetour({ nom: c.nom, lien: url, avant: null }),
+    });
+  }
+  return { ok: true, url, envoyee: !!c.email };
+}
+
+// { commande, sens: 'aller' | 'retour' } : crée l'étiquette Mondial Relay chez Sendcloud.
+// Aller : renvoie le n° de suivi pour le formulaire d'envoi. Retour : le client la reçoit par e-mail.
+exports.gestionEtiquette = onCall({ secrets: [SENDCLOUD_API, MAIL_MOT_DE_PASSE], timeoutSeconds: 120 }, async (request) => {
+  verifierAdmin(request);
+  const qui = request.auth.token.email || request.auth.uid;
+  const d = request.data || {};
+  if (typeof d.commande !== 'string' || !d.commande || !['aller', 'retour'].includes(d.sens)) {
+    throw new HttpsError('invalid-argument', 'Commande ou sens manquant.');
+  }
   try {
-    if (d.sens === 'aller') {
-      const r = await api.envoi({ de: papote, vers: cl.adresse, pointRelais: cl.pointRelais, poids, reference });
-      const url = await rangerEtiquette(d.commande, 'aller', r.colis, r.pdf);
-      await ref.update({ 'etiquettes.aller': { colis: r.colis, suivi: r.suivi, url, le: Date.now(), par: qui } });
-      return { ok: true, suivi: r.suivi, url };
-    }
-    const r = await api.retour({ de: cl.adresse, vers: papote, poids, reference });
-    const url = await rangerEtiquette(d.commande, 'retour', r.colis, r.pdf);
-    const maj = { 'etiquettes.retour': { colis: r.colis, url, le: Date.now(), par: qui } };
-    const attendue = c.restitution && ['attendue', 'echec'].includes(c.restitution.statut);
-    if (attendue) {
-      // Fin de contrat : l'e-mail au client part avec commandeModifiee, comme une étiquette collée à la main.
-      maj['restitution.etiquette'] = url;
-      maj['restitution.etiquetteLe'] = FieldValue.serverTimestamp();
-    }
-    await ref.update(maj);
-    if (!attendue && c.email) {
-      // Remplacement d'un élément du kit : l'étiquette part tout de suite.
-      await mail.envoyer({
-        smtp: MAIL_SMTP.value(), expediteur: MAIL_EXPEDITEUR.value(), motDePasse: MAIL_MOT_DE_PASSE.value(),
-        a: c.email, contenu: mail.etiquetteRetour({ nom: c.nom, lien: url, avant: null }),
-      });
-    }
-    return { ok: true, url, envoyee: !!c.email };
+    return await creerEtiquette(d.commande, d.sens, qui);
   } catch (e) {
     if (e instanceof HttpsError) throw e;
     logger.error('Étiquette Sendcloud', e);
@@ -1873,6 +1928,11 @@ async function argentDepuis(depuis) {
 }
 
 // Ce qui attend l'administrateur, à partir des données Firestore (même logique que l'accueil de la page).
+// Tablette reçue avant sa facture (fiche sans prix ni achat, créée à la réception ou à l'installation) depuis
+// plus de 5 jours : la facture est à envoyer à factures@, l'achat complétera cette fiche (fichesARattacher).
+const sansFacture = (t, maintenant) => t.prixAchat == null && !t.acheteeLe && !t.depense
+  && !['perdue', 'hors-service'].includes(t.etat) && (ms(t.creeLe) || ms(t.preparee) || maintenant) < maintenant - JOURS(5);
+
 function aFaire({ commandes, stock, depenses, automatique, maintenant, sims = [], accessoires = [] }) {
   const liste = [];
   // texte : « tablette(s) reçue(s) » → singulier ou pluriel selon n.
@@ -1908,6 +1968,8 @@ function aFaire({ commandes, stock, depenses, automatique, maintenant, sims = []
       .map((d) => `${d.fournisseur || d.libelle}${d.numero ? ` (commande ${d.numero})` : ''}`).join(', ')}`);
   }
   ajouter(depenses.filter((d) => d.aVerifier).length, 'facture(s) reçue(s) par e-mail à vérifier');
+  ajouter(stock.filter((t) => sansFacture(t, maintenant)).length,
+    'tablette(s) reçue(s) sans facture depuis 5 jours : transférez la facture du vendeur à factures@mapapote.fr');
   ajouter(sims.filter((l) => alertesSim(l, maintenant).length).length, 'carte(s) SIM à regarder (promo, activation, carte bancaire)');
   liste.push(...incoherences({ commandes: actives, stock, sims }));
   for (const a of accessoiresAPrevoir(accessoires, actives.filter((c) => c.expedition === 'a-preparer' && !retour(c)))) {
@@ -2610,7 +2672,7 @@ exports.gestionParcours = onCall(async (request) => {
 
 exports.regles = {
   ETATS, CATEGORIES, natureMouvement, mensuel, centimes, lien, nomFichier, moisSuivant, lectureVersFormulaire, SCHEMA_FACTURE,
-  lireReglages, simAResilier, fichesARattacher, stockAJour, releveBatterie, usureBatterie, incoherences, materielLu, memeAccessoire, coutLigne, alertesSim, accessoiresAPrevoir, champsSim, aFaire, piecesFacture, debutMoisParis, moisPrecedent, csvTexte, livreDesRecettes,
+  lireReglages, simAResilier, fichesARattacher, sansFacture, stockAJour, releveBatterie, usureBatterie, incoherences, materielLu, memeAccessoire, coutLigne, alertesSim, accessoiresAPrevoir, champsSim, aFaire, piecesFacture, debutMoisParis, moisPrecedent, csvTexte, livreDesRecettes,
   registreDesAchats, corpsDuMail, memeAchat, suiteJumelage, descriptionNonRendu, refusSuppression, fusionnerContacts, emailInformation, cleContact,
   avancementPropre,
 };
