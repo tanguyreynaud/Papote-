@@ -242,9 +242,17 @@ afficherPage();
 
 // ---------- Chargement ----------
 
+// L'écran d'ouverture s'efface en fondu dès les premières données (ou sans connexion).
+function fermerChargement() {
+  const e = $('chargement');
+  if (e.hidden || e.classList.contains('parti')) return;
+  e.classList.add('parti');
+  setTimeout(() => { e.hidden = true; }, 300);
+}
+
 onAuthStateChanged(getAuth(getApp('admin')), (user) => {
   connecte = !!user;
-  if (!user) { $('chargement').hidden = true; return; }
+  if (!user) { fermerChargement(); return; }
   if (pageCourante() === 'clients') chargerClients();
   chargerDonnees();
   chargerMois();
@@ -267,7 +275,7 @@ async function chargerDonnees() {
     erreur(e);
   }
   // Premier chargement terminé (ou en erreur) : l'indicateur d'ouverture disparaît.
-  $('chargement').hidden = true;
+  fermerChargement();
 }
 
 async function chargerMois() {
