@@ -27,7 +27,8 @@ const CAS = [
   ['C\'est disponible quand ?', 'site', 'très bientôt, pas de date, liste d\'attente'],
   ['Je peux précommander ?', 'site', 'non, liste d\'attente'],
   ['Vous livrez en Suisse ?', 'site', 'pas pour le moment'],
-  ['Je peux payer par chèque ?', 'site', 'non : carte, Google Pay, Apple Pay, Link ou prélèvement SEPA'],
+  ['Je peux payer par carte bancaire ?', 'site', 'non, prélèvement SEPA uniquement'],
+  ['Je peux payer par chèque ?', 'site', 'non, prélèvement SEPA uniquement (IBAN France, Belgique, Luxembourg)'],
   ['Je peux l\'offrir à ma grand-mère pour Noël ?', 'site', 'oui'],
   ['Y a-t-il une réduction d\'impôts ?', 'site', 'pas pour le moment'],
   ['Si un paiement échoue ?', 'site', '7 jours puis pause'],
@@ -62,7 +63,7 @@ const CAS = [
   ['On a changé de box internet', 'appli', 'Réglages, « Changer le Wi-Fi »'],
   ['Le bouton appel vidéo est grisé', 'appli', 'tablette éteinte ou sans internet'],
   ['L\'appel ne marche pas, pas de son', 'appli', 'autoriser micro/caméra'],
-  ['La tablette affiche Papote est en pause', 'appli', 'abonnement, carte'],
+  ['La tablette affiche Papote est en pause', 'appli', 'abonnement, régulariser ou changer de compte'],
   ['Comment je jumelle la tablette que j\'ai reçue ?', 'appli', 'QR code ou code à 8 caractères'],
   // Passage de main
   ['Où en est ma commande PAP-1234 ?', 'site', 'contact'],
