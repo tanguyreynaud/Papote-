@@ -129,6 +129,34 @@ final class Sync {
     void start() {
         handler.removeCallbacks(loop);
         handler.post(loop);
+        watchNetwork();
+    }
+
+    /**
+     * Android prévient dès qu'internet revient (réseau « validé ») : la synchronisation repart
+     * aussitôt et « Pas de connexion » disparaît, sans attendre le prochain tour.
+     */
+    private boolean watchingNetwork;
+
+    private void watchNetwork() {
+        if (watchingNetwork || android.os.Build.VERSION.SDK_INT < 24) return;
+        try {
+            android.net.ConnectivityManager cm =
+                    (android.net.ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+            cm.registerDefaultNetworkCallback(new android.net.ConnectivityManager.NetworkCallback() {
+                @Override
+                public void onCapabilitiesChanged(android.net.Network network, android.net.NetworkCapabilities caps) {
+                    if (caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+                            && "offline".equals(lastState)) {
+                        handler.removeCallbacks(loop);
+                        handler.post(loop);
+                    }
+                }
+            });
+            watchingNetwork = true;
+        } catch (Exception e) {
+            Log.w(TAG, "Surveillance du réseau", e);
+        }
     }
 
     /** Nouveau code tablette donné par ADB : on oublie la famille actuelle. */
@@ -182,10 +210,11 @@ final class Sync {
             } catch (Exception e) {
                 Log.w(TAG, "Synchronisation", e);
             }
-            // Pendant l'appairage, on regarde souvent si quelqu'un a tapé le code. Hors ligne, on
-            // réessaie toutes les 20 s même en direct : « Pas de connexion » disparaît dès le retour d'internet.
+            // Pendant l'appairage, on regarde souvent si quelqu'un a tapé le code. Hors ligne, Android
+            // prévient du retour d'internet (watchNetwork) ; un essai par minute reste en secours.
             boolean offline = "offline".equals(lastState);
-            handler.postDelayed(this, pairingActive() ? 4_000 : realtime && !offline ? REALTIME_POLL_MS : POLL_MS);
+            handler.postDelayed(this, pairingActive() ? 4_000
+                    : realtime ? (offline ? 60_000 : REALTIME_POLL_MS) : POLL_MS);
         }
     };
 
