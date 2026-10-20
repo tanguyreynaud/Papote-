@@ -27,6 +27,10 @@
 .badge.ko { color: var(--danger); border-color: currentColor; }
 .badge.info { color: var(--accent); border-color: currentColor; }
 
+.chargement { display: flex; align-items: center; gap: 12px; padding: 14px 16px; color: var(--muted); font-weight: 600; }
+.chargement[hidden] { display: none; }
+.chargement .roue { width: 22px; height: 22px; border: 3px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: tourner 0.8s linear infinite; flex: none; }
+@keyframes tourner { to { transform: rotate(360deg); } }
 .bandeau-erreur { padding: 12px 16px; border-radius: 14px; border-left: 5px solid var(--danger); background: var(--surface); font-weight: 600; color: var(--danger); box-shadow: var(--shadow); }
 
 .grille { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0 14px; align-items: end; }
