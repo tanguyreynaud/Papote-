@@ -56,7 +56,7 @@ les fonctions suffit pour que le chat en tienne compte.
 - L'abonnement se gère dans l'appli famille, onglet Profil : « Gérer le paiement et les factures » (changer de compte bancaire, factures) et « Résilier l'abonnement ». Seul le propriétaire de la famille, celui qui paie, peut le faire.
 - On peut payer avec le compte bancaire de n'importe qui, par exemple celui du parent lui-même. Paiement au mois seulement, pas à l'année.
 - Hospitalisation du proche : jusqu'à 2 mois d'abonnement remboursés par an, sur certificat d'hospitalisation envoyé à contact@mapapote.fr. Aucune pause de l'abonnement pour d'autres raisons (vacances, absence…).
-- Fin d'abonnement : l'appli (Profil, Abonnement) donne une étiquette de retour à imprimer, payée par Papote. Tout le matériel est à renvoyer sous 30 jours : la tablette et son support, le chargeur et son câble, et le routeur 4G s'il a été fourni dans le colis.
+- Fin d'abonnement : l'appli (Profil, Abonnement) donne une étiquette de retour à imprimer, payée par Papote. Tout le matériel est à renvoyer sous 30 jours : la tablette et son socle, le chargeur et son câble, et l'enceinte.
 - Le paiement passe par Stripe, une page sécurisée. Papote ne voit jamais les coordonnées bancaires complètes.
 
 ## Questions fréquentes (réponses validées par Papote)
@@ -68,10 +68,10 @@ les fonctions suffit pour que le chat en tienne compte.
 - Deux tablettes dans la même famille (par exemple deux grands-parents à deux endroits) : c'est possible, avec deux abonnements.
 - Maison de retraite (EHPAD) : ça marche avec le Wi-Fi de l'établissement s'il ne demande pas de page de connexion ; sinon, prendre l'option internet inclus (connexion 4G fournie).
 - Box 4G ou partage de connexion d'un téléphone : ça marche, c'est un Wi-Fi comme un autre.
-- Option internet inclus : la tablette 4G a sa propre carte SIM et se connecte toute seule au réseau mobile. En principe il n'y a pas de routeur ; si un petit routeur 4G est fourni dans le colis, il se branche sur une prise et fait le Wi-Fi de la tablette. Dans tous les cas, rien à configurer.
+- Option internet inclus : la tablette 4G a sa propre carte SIM et se connecte toute seule au réseau mobile. Il n'y a pas de routeur ni de box à brancher, rien à configurer.
 - Opérateur de la carte SIM : il n'est pas fixe ; on choisit celui qui couvre le mieux le domicile du client.
 - Autres usages (Internet, jeux, YouTube) : non, la tablette est réservée à Papote pour rester simple et sans risque.
-- Tablette perdue ou volée : il n'y a pas de garantie pour cela. Il faut nous le signaler pour suspendre le contrat. La tablette est prêtée : la perte ou le vol est facturé 170 € (200 € si un routeur 4G a été fourni). Pour en recevoir une nouvelle : demande de contact. Pour le signaler : demande de contact.
+- Tablette perdue ou volée : il n'y a pas de garantie pour cela. Il faut nous le signaler pour suspendre le contrat. La tablette est prêtée : la perte ou le vol est facturé comme un matériel non rendu (tablette 130 € (ou son prix d'achat s'il était plus élevé), chargeur et câble 10 €, enceinte 10 €). Pour en recevoir une nouvelle : demande de contact. Pour le signaler : demande de contact.
 - Nombre de proches dans la famille : jusqu'à 30.
 - Enfants : ils peuvent envoyer des photos, il n'y a pas d'âge minimum.
 - Le proche âgé ne peut pas répondre ni envoyer de photo : la tablette ne fait que recevoir, il n'a rien à manipuler. Il peut seulement confirmer un rappel.
@@ -100,7 +100,7 @@ les fonctions suffit pour que le chat en tienne compte.
 - Chargeur cassé : s'il est prouvé que le problème vient du chargeur, nous en envoyons un autre (c'est très rare). Demande de contact.
 - Conditions générales de vente : sur https://mapapote.fr/cgv.html
 - Avis clients : si le site n'en affiche pas encore, dire que Papote vient d'être lancé et n'a pas encore d'avis publiés, et que le plus simple pour se faire une idée est l'essai : un mois offert, et les 60 € de mise en service sont remboursés si on résilie pendant l'essai. Ne pas proposer de rappel.
-- Matériel non rendu : rien rendu = 170 € (tablette 160 €, chargeur et câble 10 €), ou 200 € si un routeur 4G a été fourni (30 € en plus). Colis incomplet : seuls les éléments manquants sont prélevés, à ces prix, 200 € au plus. Le routeur n'est facturé que s'il était dans le colis. Aucune caution n'est prélevée d'avance.
+- Matériel non rendu : seuls les éléments manquants sont prélevés : tablette 130 € (ou son prix d'achat s'il était plus élevé), chargeur et câble 10 €, enceinte 10 €, soit 150 € en général si rien n'est rendu. Le socle n'est jamais facturé. Il n'y a pas de routeur. Aucune caution n'est prélevée d'avance.
 - Aide fiscale (services à la personne) : pas pour le moment.
 - Chaleur : la tablette devient tiède à force de rester allumée, c'est normal. Évitez simplement le plein soleil et la proximité d'un radiateur.
 - Connexion internet nécessaire : une box classique suffit (ADSL, fibre ou 4G) ; il faut juste que le Wi-Fi capte bien là où la tablette est posée.
@@ -116,7 +116,7 @@ les fonctions suffit pour que le chat en tienne compte.
 - Résilier : en quelques clics dans l'appli, onglet Profil, partie Abonnement, « Résilier l'abonnement » (jamais dans Réglages : ne dites pas « Réglages, Abonnement »), ou par simple e-mail à contact@mapapote.fr. Jamais besoin de lettre recommandée.
 - Codes promo : il n'y en a pas pour le moment.
 - « Peur de la casser » : rassurer (rien à manipuler, le bouton marche/arrêt ne l'éteint pas), puis dire franchement que la casse accidentelle n'est pas couverte, mais que l'usure normale n'est jamais facturée et qu'aucune caution n'est prélevée d'avance.
-- Casse : la tablette est faite pour qu'on n'ait rien à manipuler, mais la casse accidentelle n'est pas couverte. Aucune caution n'est prélevée d'avance : on ne facture un élément que s'il n'est pas rendu ou s'il est rendu cassé, c'est-à-dire seulement dans ces cas : écran fissuré, brisé ou qui n'affiche plus correctement après un choc ; coque fendue, tordue ou enfoncée ; traces de liquide à l'intérieur ; prise de charge arrachée, ou chargeur et câble coupés ou écrasés. Prix : tablette 160 €, chargeur et câble 10 €, routeur 4G (s'il a été fourni) 30 €, 200 € au plus. Les photos sont envoyées par e-mail avant tout prélèvement, et on peut contester par e-mail sous 14 jours. L'usure normale n'est jamais facturée (rayures légères, traces, batterie qui tient moins longtemps). En cas de casse : demande de contact.
+- Casse : la tablette est faite pour qu'on n'ait rien à manipuler, mais la casse accidentelle n'est pas couverte. Aucune caution n'est prélevée d'avance : on ne facture un élément que s'il n'est pas rendu ou s'il est rendu cassé, c'est-à-dire seulement dans ces cas : écran fissuré, brisé ou qui n'affiche plus correctement après un choc ; coque fendue, tordue ou enfoncée ; traces de liquide à l'intérieur ; prise de charge arrachée, ou chargeur et câble coupés ou écrasés. Prix : tablette 130 € (ou son prix d'achat s'il était plus élevé), chargeur et câble 10 €, enceinte 10 € ; le socle n'est jamais facturé. Les photos sont envoyées par e-mail avant tout prélèvement, et on peut contester par e-mail sous 14 jours. L'usure normale n'est jamais facturée (rayures légères, traces, batterie qui tient moins longtemps). En cas de casse : demande de contact.
 - Eau : la tablette n'est pas étanche, à éviter dans une salle de bain.
 - Caméra : elle ne filme pas en continu. Elle sert aux appels vidéo et, quand un message, une photo ou un rappel arrive, à vérifier que la personne l'a vu.
 - Données : hébergées chez Firebase (Google).
