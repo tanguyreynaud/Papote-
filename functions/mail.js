@@ -59,7 +59,7 @@ function commandeConfirmee({ nom, code, relais, formule }) {
     relais && relais.transporteur
       ? `Livraison offerte au point relais <b>${relaisEnTexte(relais)}</b>${relais.destinataire ? `, à retirer par <b>${echapper(relais.destinataire)}</b>` : ''}.`
       : 'Livraison offerte à l\'adresse indiquée.',
-    `Votre abonnement : ${formule === 'sim' ? '30 € par mois, internet inclus' : '20 € par mois'}, après vos 15 jours d'essai gratuit. La tablette est prêtée et configurée.`,
+    `Votre abonnement : ${formule === 'sim' ? '30 € par mois, internet inclus' : '20 € par mois'}, après votre mois d'essai gratuit, sans engagement. La tablette est prêtée et configurée.`,
     code ? `Votre code de commande : <b>${echapper(code)}</b>.` : '',
   ].filter(Boolean));
 }
@@ -71,15 +71,15 @@ function relancePanier({ etape = 1, nom, formule, lien, desinscription }) {
   const textes = {
     1: ['Votre commande Papote vous attend', [
       'Vous avez commencé une commande Papote sans la terminer. Elle est gardée de côté : vous pouvez la reprendre en un clic, avec le même point relais.',
-      `Pour rappel : livraison offerte, 15 jours d'essai gratuit, puis ${prix}. La tablette est prêtée et déjà configurée.`,
+      `Pour rappel : livraison offerte, 1 mois d'essai gratuit, puis ${prix}, sans engagement. La tablette est prêtée et déjà configurée.`,
     ]],
     2: ['Une question avant de vous décider ?', [
       'Vous avez regardé Papote hier. Si quelque chose vous fait hésiter, répondez simplement à cet e-mail : nous vous répondons personnellement.',
-      'La tablette arrive prête à brancher, votre proche n\'a rien à manipuler, et vous avez 15 jours d\'essai gratuit pour voir si ça lui plaît.',
+      'La tablette arrive prête à brancher, votre proche n\'a rien à manipuler, et vous avez un mois d\'essai gratuit pour voir si ça lui plaît.',
     ]],
     3: ['Dernier rappel pour votre commande Papote', [
       'Votre commande Papote est toujours prête. C\'est notre dernier rappel : nous ne vous écrirons plus à ce sujet.',
-      `Livraison offerte, 15 jours d'essai gratuit, puis ${prix}, sans rien à installer pour votre proche.`,
+      `Livraison offerte, 1 mois d'essai gratuit, puis ${prix} sans engagement, sans rien à installer pour votre proche.`,
     ]],
   };
   const [titre, corps] = textes[etape] || textes[1];
@@ -88,6 +88,18 @@ function relancePanier({ etape = 1, nom, formule, lien, desinscription }) {
     ...corps,
     desinscription ? `<span style="font-size:14px;color:#5f5a6b">Vous recevez cet e-mail car vous avez accepté les nouvelles de Papote. <a href="${echapper(desinscription)}" style="color:#5f5a6b">Se désinscrire</a>.</span>` : '',
   ].filter(Boolean), { texte: 'Reprendre ma commande', lien });
+}
+
+// Ouverture des commandes, pour la liste d'attente du site (lancementListeAttente).
+function lancement({ prenom, desinscription }) {
+  return message('Papote est disponible : vous pouvez commander', [
+    bonjour(prenom),
+    'Vous nous aviez demandé de vous prévenir : c\'est le moment, les commandes Papote sont ouvertes.',
+    'La tablette arrive prête à brancher, en point relais près de chez vous ou de chez votre proche. Votre proche n\'a rien à régler : c\'est la famille qui envoie les photos et qui appelle, la tablette décroche toute seule.',
+    '60 € à la commande, puis 20 € par mois après un mois d\'essai gratuit, sans engagement. Livraison offerte, tablette prêtée.',
+    'Nous préparons les tablettes par petits lots : les premières commandes partent en premier.',
+    desinscription ? `<span style="font-size:14px;color:#5f5a6b">Vous recevez cet e-mail car vous vous êtes inscrit à la liste d'attente de Papote. <a href="${echapper(desinscription)}" style="color:#5f5a6b">Se désinscrire</a>.</span>` : '',
+  ].filter(Boolean), { texte: 'Commander ma tablette', lien: 'https://mapapote.fr/commande.html' });
 }
 
 function nouvelleCommande({ nom, email, telephone, code, relais, formule }) {
@@ -110,7 +122,7 @@ function rappelJumelage({ nom, numero, code }) {
       : 'Votre tablette Papote n\'est toujours pas reliée à votre famille. Si quelque chose bloque, répondez à cet e-mail : nous vous aidons.',
     '1. Branchez la tablette et donnez-lui un nom.<br>2. Ouvrez l\'appli Papote sur votre téléphone, avec la même adresse e-mail que pour la commande.<br>3. Scannez le QR code affiché sur la tablette.',
     code ? `Avec une autre adresse e-mail, touchez « J'ai déjà payé sur le site » et tapez votre code de commande : <b>${echapper(code)}</b>.` : '',
-    'Rappel : vos 15 jours d\'essai gratuit ont commencé à la commande.',
+    'Rappel : votre mois d\'essai gratuit a commencé à la commande.',
   ].filter(Boolean), { texte: 'Ouvrir l\'appli Papote', lien: lienAppli(code) });
 }
 
@@ -139,8 +151,8 @@ function retourTablette({ nom, avant, retractation, montant }) {
     'Nous vous envoyons par e-mail, sous deux jours ouvrés, une étiquette de retour prépayée : vous n\'avez rien à payer.',
     `${COMMENT_RENDRE} Date limite : <b>${dateEnClair(avant)}</b>.`,
     retractation != null && retractation > 0
-      ? `Dès que la tablette nous parvient, nous vous remboursons <b>${euros(retractation)}</b> sur votre carte.`
-      : `Sans retour à cette date, ${euros(montant)} seront prélevés sur votre carte. Chaque élément manquant est facturé : tablette 160 €, chargeur et câble 10 €, routeur 4G 30 €.`,
+      ? `Dès que la tablette nous parvient, nous vous remboursons <b>${euros(retractation)}</b> sur votre compte.`
+      : `Sans retour à cette date, ${euros(montant)} seront prélevés sur votre compte. Chaque élément manquant est facturé : tablette 160 €, chargeur et câble 10 €, routeur 4G 30 €.`,
   ]);
 }
 
@@ -155,7 +167,7 @@ function etiquetteRetour({ nom, lien, avant }) {
 function rappelRestitution({ nom, avant, lien, montant }) {
   return message('Pensez à nous rendre la tablette Papote', [
     bonjour(nom),
-    `Nous n'avons pas encore reçu la tablette. Déposez-la dans un point relais Mondial Relay avant le <b>${dateEnClair(avant)}</b> : sans retour à cette date, ${euros(montant)} seront prélevés sur votre carte.`,
+    `Nous n'avons pas encore reçu la tablette. Déposez-la dans un point relais Mondial Relay avant le <b>${dateEnClair(avant)}</b> : sans retour à cette date, ${euros(montant)} seront prélevés sur votre compte.`,
     lien ? 'Votre étiquette prépayée est disponible avec le bouton ci-dessous.' : 'Vous n\'avez pas reçu l\'étiquette de retour ? Répondez à cet e-mail : nous vous la renvoyons.',
     'Si vous avez déjà déposé le colis, ne tenez pas compte de ce message.',
   ], lien ? { texte: 'Imprimer l\'étiquette', lien } : undefined);
@@ -187,6 +199,42 @@ function annulationAvantEnvoi({ nom, email, code }) {
   ]);
 }
 
+// Invitation d'un proche par e-mail, depuis l'appli famille (inviterParEmail).
+function invitation({ prenom, tablette, lien, email }) {
+  const qui = prenom ? echapper(prenom) : 'Un proche';
+  return message(`${prenom || 'Un proche'} vous invite sur Papote`, [
+    'Bonjour,',
+    `${qui} vous invite à rejoindre la famille sur Papote, pour envoyer des photos et des messages à <b>${echapper(tablette || 'votre proche')}</b> et l'appeler en vidéo.`,
+    `Touchez le bouton ci-dessous, puis connectez-vous avec cette adresse e-mail (<b>${echapper(email)}</b>) pour rejoindre la famille.`,
+    'Rien à installer : l\'appli s\'ouvre dans le navigateur de votre téléphone.',
+  ], { texte: 'Rejoindre la famille', lien });
+}
+
+// Demande pour rejoindre la famille, envoyée aux responsables (nouveauMembre).
+function demandeRejoindre({ prenom, email, famille }) {
+  const qui = `${echapper(prenom || 'Quelqu\'un')}${email ? ` (${echapper(email)})` : ''}`;
+  return message(`${prenom || 'Quelqu\'un'} veut rejoindre la famille`, [
+    'Bonjour,',
+    `${qui} veut rejoindre la famille de <b>${echapper(famille || 'votre proche')}</b> sur Papote.`,
+    'Ouvrez l\'appli pour accepter ou refuser. Tant que vous n\'avez pas accepté, cette personne ne peut rien envoyer à la tablette.',
+  ], { texte: 'Ouvrir l\'appli Papote', lien: 'https://app.mapapote.fr' });
+}
+
+// Prélèvement SEPA de la commande refusé par la banque : commande annulée (papote : message pour Papote).
+function sepaRefuse({ nom, email, papote }) {
+  if (papote) {
+    return message('Commande annulée : prélèvement SEPA refusé', [
+      `Client : <b>${echapper(nom || '?')}</b>, ${echapper(email || 'sans e-mail')}.`,
+      'La banque a refusé le prélèvement de la mise en service. La commande et l\'abonnement sont annulés : ne pas envoyer la tablette.',
+    ]);
+  }
+  return message('Votre paiement Papote n\'a pas abouti', [
+    bonjour(nom),
+    'Votre banque a refusé le prélèvement SEPA de votre commande Papote. La commande est donc annulée et rien ne vous a été prélevé.',
+    'Vous pouvez recommander quand vous voulez, avec un autre compte bancaire. Une question ? Répondez simplement à cet e-mail.',
+  ], { texte: 'Commander à nouveau', lien: 'https://mapapote.fr/commande.html' });
+}
+
 // Prévient Papote qu'une étiquette de retour est à créer.
 function retourAPreparer({ nom, email, telephone, code, relais, avant, retractation }) {
   return message(`Retour à préparer ${code || ''}`.trim(), [
@@ -212,7 +260,7 @@ async function envoyer({ smtp, motDePasse, expediteur, a, contenu }) {
 }
 
 module.exports = {
-  colisParti, commandeConfirmee, nouvelleCommande, relancePanier, rappelJumelage,
+  colisParti, commandeConfirmee, nouvelleCommande, relancePanier, lancement, sepaRefuse, invitation, demandeRejoindre, rappelJumelage,
   retourTablette, etiquetteRetour, rappelRestitution, tabletteRecue, commandeAnnulee, annulationAvantEnvoi, retourAPreparer,
   envoyer, echapper, euros,
 };

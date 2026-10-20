@@ -173,6 +173,9 @@ const REGLAGES = {
   forfaitSim: 700, // coût mensuel d'un forfait SIM quand la ligne n'a pas son propre coût
   vieTablette: 24, // durée de vie d'une tablette, en mois
   poidsColis: 1500, // poids d'un colis tablette, en grammes (étiquettes Sendcloud)
+  miseEnService: 6000, // payée une fois par chaque nouveau client
+  fraisEnvoi: 799, // colis aller (Mondial Relay)
+  fraisRetour: 800, // colis retour en fin d'abonnement
 };
 // Adresse de Papote pour les étiquettes : départ des colis et arrivée des retours.
 const CHAMPS_EXPEDITEUR = ['nom', 'adresse', 'cp', 'ville', 'telephone', 'email'];
@@ -188,13 +191,20 @@ function lireReglages(donnees) {
   return r;
 }
 
-// Une ligne SIM payée alors que la tablette n'est plus chez un client : forfait à résilier ou suspendre.
+// Une ligne SIM payée alors que la tablette n'est plus chez un client depuis 30 jours : forfait à résilier ou
+// suspendre. Une carte pas encore activée (ligne « stock ») ne coûte rien : pas d'alerte (Tanguy, 2026-10-20).
 const ETATS_SANS_CLIENT = ['en-stock', 'revenue', 'a-reparer', 'perdue', 'hors-service'];
-function simAResilier(tablette, commande) {
-  if (!tablette.sim) return false;
-  if (ETATS_SANS_CLIENT.includes(tablette.etat)) return true;
-  return !!(commande && ((commande.restitution && ['rendue', 'facturee'].includes(commande.restitution.statut))
-    || ['resilie', 'canceled'].includes(commande.abonnement)));
+const DELAI_SIM_SANS_CLIENT = 30 * 86400000;
+function simAResilier(tablette, commande, ligne, maintenant = Date.now()) {
+  if (!tablette.sim && !tablette.simId) return false;
+  if (ligne && ligne.statut !== 'active') return false;
+  const sansClient = ETATS_SANS_CLIENT.includes(tablette.etat)
+    || !!(commande && ((commande.restitution && ['rendue', 'facturee'].includes(commande.restitution.statut))
+      || ['resilie', 'canceled'].includes(commande.abonnement)));
+  if (!sansClient) return false;
+  // Depuis le dernier changement d'état de la tablette (son historique).
+  const depuis = Math.max(0, ...(tablette.historique || []).map((x) => ms(x.le) || 0));
+  return !depuis || maintenant - depuis > DELAI_SIM_SANS_CLIENT;
 }
 
 // Cartes SIM (registre sims/{id}) et accessoires (accessoires/{id}).
@@ -205,7 +215,8 @@ const STATUTS_SIM = {
   resiliee: 'Résiliée',
 };
 // Avec quels envois part un accessoire (clé 4G, prise…) : sorti du stock à chaque tablette envoyée.
-const ENVOIS_ACCESSOIRE = { '': 'Aucun envoi', tous: 'Chaque envoi', sim: 'Envois Internet inclus', wifi: 'Envois Wi-Fi' };
+// « option » : envoyé à la demande (enceinte), jamais sorti du stock automatiquement ni compté dans la rentabilité.
+const ENVOIS_ACCESSOIRE = { '': 'Aucun envoi', tous: 'Chaque envoi', sim: 'Envois Internet inclus', wifi: 'Envois Wi-Fi', option: 'En option (à la demande)' };
 
 // Prix payé ce mois-ci pour une ligne (centimes) : le prix après la promo quand elle est finie.
 function coutLigne(l, maintenant) {
@@ -823,6 +834,8 @@ async function sortirAccessoires(commandeId) {
   for (const a of accessoires.docs) {
     const envoi = a.get('parEnvoi');
     if (!envoi || (envoi !== 'tous' && envoi !== formule)) continue;
+    // Accessoires « Internet inclus » (routeur 4G) : pas sortis quand la préparation dit « sans routeur ».
+    if (envoi === 'sim' && commande.get('routeurFourni') === false) continue;
     await a.ref.update({ quantite: FieldValue.increment(-1), majLe: FieldValue.serverTimestamp() });
     sortis.push(a.get('nom'));
   }
@@ -959,6 +972,8 @@ function champsAccessoire(c) {
   if ('quantite' in c) champs.quantite = Number.isInteger(c.quantite) && Math.abs(c.quantite) <= 10000 ? c.quantite : 0;
   if ('seuil' in c) champs.seuil = Number.isInteger(c.seuil) && c.seuil >= 0 ? c.seuil : null;
   if ('prixAchat' in c) champs.prixAchat = centimes(c.prixAchat);
+  // Revient avec la tablette et repart chez le client suivant (chargeur, housse), sinon consommé à chaque envoi.
+  if ('retour' in c) champs.retour = c.retour === true;
   if ('note' in c) champs.note = texte(c.note, 1000);
   return champs;
 }
@@ -1843,7 +1858,9 @@ function aFaire({ commandes, stock, depenses, automatique, maintenant, sims = []
   for (const t of stock.filter((x) => x.alerteJumelage)) liste.push(`Tablette ${t.ref || t.numero || ''} ${t.alerteJumelage}`);
   ajouter(actives.filter((c) => c.remboursement && c.remboursement.statut === 'echec').length, 'remboursement(s) échoué(s), à faire depuis Stripe');
   const parId = new Map(commandes.map((c) => [c.id, c]));
-  ajouter(stock.filter((t) => simAResilier(t, parId.get(t.commande))).length, 'forfait(s) SIM à résilier ou suspendre');
+  const lignes = new Map(sims.map((l) => [l.id, l]));
+  ajouter(stock.filter((t) => simAResilier(t, parId.get(t.commande), lignes.get(t.simId), maintenant)).length,
+    'forfait(s) SIM payé(s) depuis 30 jours pour une tablette sans client : à résilier ou suspendre');
   ajouter(depenses.filter((d) => ms(d.date) > maintenant - JOURS(90) && !(d.pieces || []).length && !d.justificatif).length,
     'dépense(s) des 3 derniers mois sans justificatif');
   // Achat enregistré depuis la confirmation de commande : la facture est à télécharger chez le vendeur.
@@ -1891,7 +1908,7 @@ async function recapitulatif() {
     commandes,
     stock: stockSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
     depenses: depensesSnap.docs.map((d) => d.data()),
-    sims: simsSnap.docs.map((d) => d.data()),
+    sims: simsSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
     accessoires: accessoiresSnap.docs.map((d) => d.data()),
     automatique: automatique.data(),
     maintenant,
@@ -2535,7 +2552,12 @@ exports.gestionParcours = onCall(async (request) => {
     const ref = db().doc(`commandes/${texte(d.commande, 100) || '-'}`);
     if (!(await ref.get()).exists) throw new HttpsError('not-found', 'Commande introuvable.');
     if (d.type === 'recu') await ref.update({ 'preparation.recuLe': Date.now(), 'preparation.recuPar': qui });
-    else await ref.update({ preparation: { ...avancementPropre(d.preparation, ['tablette', 'sim', 'suivi']), majLe: Date.now(), par: qui } });
+    else {
+      const preparation = avancementPropre(d.preparation, ['tablette', 'sim', 'suivi', 'routeur']);
+      // Routeur 4G dans le colis ou non : seul un routeur fourni est facturé s'il n'est pas rendu.
+      const routeur = preparation.routeur === 'oui' ? { routeurFourni: true } : preparation.routeur === 'non' ? { routeurFourni: false } : {};
+      await ref.update({ preparation: { ...preparation, majLe: Date.now(), par: qui }, ...routeur });
+    }
     return { ok: true };
   }
   if (d.type === 'reception') {

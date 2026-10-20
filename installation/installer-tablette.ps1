@@ -181,7 +181,27 @@ if ($Code) {
     Say "`nLa tablette affiche « Bienvenue » : le client lui donnera un nom, choisira son wifi et la reliera à sa famille." 'Cyan'
 }
 
-# 8. Stock : la tablette est notée comme préparée (n° de série), avec son numéro à écrire sur le carton.
+# 8. Clé App Check de la tablette (preuve pour Firebase que c'est une vraie tablette Papote).
+#    Créée par outils\admin\cle-tablette.js, envoyée à la tablette, jamais écrite dans un fichier ni affichée.
+#    Sans l'outil ou sans la clé d'administration, la tablette marche quand même (rien n'est encore exigé).
+$outilCle = Join-Path $PSScriptRoot '..\outils\admin\cle-tablette.js'
+if (Test-Path $outilCle) {
+    $serieCle = (Adb shell getprop ro.serialno).Trim()
+    try {
+        $ligne = (& node $outilCle --serie $serieCle 2>$null | Where-Object { $_ -match '^CLE=' } | Select-Object -First 1)
+        if ($ligne -and $ligne -match '^CLE=([A-Za-z0-9_-]{20,100})$') {
+            Adb shell am start -n "$Package/.MainActivity" --es appCheckKey $Matches[1] | Out-Null
+            $Matches = $null
+            Say 'Clé App Check posée sur la tablette.' 'Green'
+        } else {
+            Say 'Clé App Check : pas pu la créer (la tablette marche quand même).' 'Yellow'
+        }
+    } catch {
+        Say "Clé App Check : pas pu la créer ($($_.Exception.Message))." 'Yellow'
+    }
+}
+
+# 9. Stock : la tablette est notée comme préparée (n° de série), avec son numéro à écrire sur le carton.
 #    Seulement sur le PC qui a la clé d'administration ; un échec n'empêche pas l'installation.
 $cleAdmin = Join-Path $env:USERPROFILE '.papote\cle-admin-firebase.json'
 if (Test-Path $cleAdmin) {

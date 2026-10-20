@@ -129,6 +129,34 @@ final class Sync {
     void start() {
         handler.removeCallbacks(loop);
         handler.post(loop);
+        watchNetwork();
+    }
+
+    /**
+     * Android prévient dès qu'internet revient (réseau « validé ») : la synchronisation repart
+     * aussitôt et « Pas de connexion » disparaît, sans attendre le prochain tour.
+     */
+    private boolean watchingNetwork;
+
+    private void watchNetwork() {
+        if (watchingNetwork || android.os.Build.VERSION.SDK_INT < 24) return;
+        try {
+            android.net.ConnectivityManager cm =
+                    (android.net.ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+            cm.registerDefaultNetworkCallback(new android.net.ConnectivityManager.NetworkCallback() {
+                @Override
+                public void onCapabilitiesChanged(android.net.Network network, android.net.NetworkCapabilities caps) {
+                    if (caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+                            && "offline".equals(lastState)) {
+                        handler.removeCallbacks(loop);
+                        handler.post(loop);
+                    }
+                }
+            });
+            watchingNetwork = true;
+        } catch (Exception e) {
+            Log.w(TAG, "Surveillance du réseau", e);
+        }
     }
 
     /** Nouveau code tablette donné par ADB : on oublie la famille actuelle. */
@@ -182,8 +210,11 @@ final class Sync {
             } catch (Exception e) {
                 Log.w(TAG, "Synchronisation", e);
             }
-            // Pendant l'appairage, on regarde souvent si quelqu'un a tapé le code.
-            handler.postDelayed(this, pairingActive() ? 4_000 : realtime ? REALTIME_POLL_MS : POLL_MS);
+            // Pendant l'appairage, on regarde souvent si quelqu'un a tapé le code. Hors ligne, Android
+            // prévient du retour d'internet (watchNetwork) ; un essai par minute reste en secours.
+            boolean offline = "offline".equals(lastState);
+            handler.postDelayed(this, pairingActive() ? 4_000
+                    : realtime ? (offline ? 60_000 : REALTIME_POLL_MS) : POLL_MS);
         }
     };
 
@@ -570,6 +601,7 @@ final class Sync {
                 (javax.net.ssl.HttpsURLConnection) new java.net.URL(url).openConnection();
         c.setConnectTimeout(20_000);
         c.setReadTimeout(60_000);
+        AppCheck.addHeader(context, c, url);
         File tmp = new File(imageDir, id + ".tmp");
         try {
             if (c.getResponseCode() != 200) throw new IOException("HTTP " + c.getResponseCode());
@@ -1154,15 +1186,9 @@ final class Sync {
         if (now - lastWeather < WEATHER_MS) return;
         try {
             if (!Meteo.hasCity(context)) return; // pas encore de ville : pas de météo
-            String url = "https://api.open-meteo.com/v1/forecast?latitude=" + Meteo.lat(context)
-                    + "&longitude=" + Meteo.lon(context)
-                    + "&current=temperature_2m,weather_code,is_day"
-                    + "&daily=weather_code,temperature_2m_max,temperature_2m_min"
-                    + "&timezone=Europe%2FParis&forecast_days=2";
-            Http.Response r = http.request("GET", url, null, null, null);
-            if (!r.ok()) return;
+            JSONObject weather = Meteo.forecast(http, Meteo.lat(context), Meteo.lon(context));
             lastWeather = now;
-            listener.onWeather(new JSONObject(r.body));
+            listener.onWeather(weather);
         } catch (Exception e) {
             Log.w(TAG, "Météo", e);
         }
@@ -1379,8 +1405,16 @@ final class Sync {
                 JSONObject rf = r == null || r.optJSONObject("mapValue") == null ? null
                         : r.optJSONObject("mapValue").optJSONObject("fields");
                 if (rf != null && bool(rf, "active") && Firebase.str(rf, "url") != null) {
+                    // radio.volume : 0-100, par rapport au volume de la tablette (absent : 40, plus doux).
+                    JSONObject vol = rf.optJSONObject("volume");
+                    int volume = 40;
+                    if (vol != null) {
+                        if (vol.has("integerValue")) volume = vol.optInt("integerValue", 40);
+                        else if (vol.has("doubleValue")) volume = (int) Math.round(vol.optDouble("doubleValue", 40));
+                    }
                     out.put("radio", new JSONObject().put("nom", nz(Firebase.str(rf, "nom")))
-                            .put("url", Firebase.str(rf, "url")));
+                            .put("url", Firebase.str(rf, "url"))
+                            .put("volume", Math.max(5, Math.min(100, volume))));
                 }
             }
         } catch (JSONException e) {

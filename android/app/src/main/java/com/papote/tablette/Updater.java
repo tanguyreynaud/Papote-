@@ -31,27 +31,37 @@ final class Updater {
     /** Tablettes de test (installées avec -Canal test) : elles reçoivent les nouvelles versions en premier. */
     private static final String FEED_TEST = "https://papote-maj.web.app/version-test.json";
 
+    private static int echecs;
+
     private Updater() { }
 
-    /** À appeler hors du fil principal, seulement en mode kiosque. */
-    static void check(Context context) {
+    /** À appeler hors du fil principal, seulement en mode kiosque. false : échec, à réessayer bientôt. */
+    static boolean check(Context context) {
         try {
             boolean test = "test".equals(context.getSharedPreferences("papote", Context.MODE_PRIVATE).getString("canal", ""));
             JSONObject feed = new JSONObject(new String(download(test ? FEED_TEST : FEED), "UTF-8"));
             int latest = feed.getInt("versionCode");
             long current = currentVersion(context);
-            if (latest <= current) return;
+            echecs = 0;
+            if (latest <= current) return true;
             Log.i(TAG, "Mise à jour " + current + " -> " + latest);
             Journal.log(context, "Mise à jour " + current + " -> " + latest);
             // L'APK est rangé sur GitHub (Firebase gratuit refuse les APK), la version sur Firebase.
             byte[] apk = download(feed.getString("url"));
             if (!sha256(apk).equalsIgnoreCase(feed.getString("sha256"))) {
                 Log.w(TAG, "Mise à jour ignorée : empreinte incorrecte");
-                return;
+                Journal.log(context, "Mise à jour ignorée : empreinte incorrecte");
+                return false;
             }
             install(context, apk);
+            return true;
         } catch (Exception e) {
             Log.w(TAG, "Vérification des mises à jour", e);
+            // Coupure passagère (wifi, DNS) : nouvel essai 10 min après, sans rien noter.
+            // Le journal ne le signale qu'au bout de 3 échecs d'affilée (30 min).
+            echecs++;
+            if (echecs == 3) Journal.log(context, "Mise à jour impossible depuis 30 min : " + e);
+            return false;
         }
     }
 
@@ -76,7 +86,7 @@ final class Updater {
             }
             int flags = PendingIntent.FLAG_UPDATE_CURRENT;
             if (Build.VERSION.SDK_INT >= 31) flags |= PendingIntent.FLAG_MUTABLE;
-            Intent done = new Intent("com.papote.tablette.MISE_A_JOUR").setPackage(context.getPackageName());
+            Intent done = new Intent("com.papote.tablette.MISE_A_JOUR").setClass(context, UpdateResult.class);
             PendingIntent pi = PendingIntent.getBroadcast(context, id, done, flags);
             session.commit(pi.getIntentSender());
         } finally {

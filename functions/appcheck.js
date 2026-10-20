@@ -1,0 +1,46 @@
+// App Check pour les tablettes : pas de Play Store, donc pas de Play Integrity. Chaque tablette reçoit
+// à l'installation une clé secrète (outils\admin\cle-tablette.bat, appelé par installer-tablette.ps1) ;
+// seule son empreinte SHA-256 est gardée dans clesTablettes/{empreinte}, illisible côté client.
+//
+//   jetonAppCheck  POST { cle } -> { token, expireTimeMillis } : jeton App Check valable 1 h,
+//                  envoyé ensuite par la tablette dans l'en-tête X-Firebase-AppCheck (et par appels.js)
+//
+// Une tablette perdue ou volée : supprimer sa clé (cle-tablette.bat --retirer SERIE), plus de jeton.
+
+const { onRequest } = require('firebase-functions/v2/https');
+const { logger } = require('firebase-functions/v2');
+const admin = require('firebase-admin');
+const crypto = require('node:crypto');
+const { db: base } = require('./base');
+
+// Appli web Firebase de Papote (même identifiant que l'app famille et appels.js).
+const APP_ID = '1:807031084851:web:b8048e2952cb1e893b1046';
+const DUREE_MS = 60 * 60_000;
+const JOUR_MS = 86_400_000;
+
+const empreinte = (cle) => crypto.createHash('sha256').update(cle).digest('hex');
+
+// Une clé : 43 caractères base64url (32 octets aléatoires).
+const cleValide = (cle) => typeof cle === 'string' && /^[A-Za-z0-9_-]{43}$/.test(cle);
+
+const jetonAppCheck = onRequest({ maxInstances: 2, cors: true }, async (req, res) => {
+  if (req.method !== 'POST') return res.status(405).send('POST seulement');
+  const cle = req.body && req.body.cle;
+  if (!cleValide(cle)) return res.status(400).json({ erreur: 'clé absente' });
+
+  const fiche = base().doc(`clesTablettes/${empreinte(cle)}`);
+  const snap = await fiche.get();
+  if (!snap.exists) {
+    logger.warn('App Check : clé de tablette inconnue');
+    return res.status(403).json({ erreur: 'clé inconnue' });
+  }
+  const { token, ttlMillis } = await admin.appCheck().createToken(APP_ID, { ttlMillis: DUREE_MS });
+  // Dernière utilisation, au plus une écriture par jour.
+  const vue = snap.get('vueLe');
+  if (!vue || Date.now() - vue.toMillis() > JOUR_MS) {
+    await fiche.update({ vueLe: admin.firestore.Timestamp.now() }).catch(() => {});
+  }
+  res.json({ token, expireTimeMillis: Date.now() + ttlMillis });
+});
+
+module.exports = { jetonAppCheck, empreinte, cleValide, APP_ID };

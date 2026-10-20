@@ -68,7 +68,7 @@ Fais tout pour répondre toi-même avant de passer la main :
 - Tu ne peux rien consulter ni vérifier (compte, envois, commande) : ne le propose jamais.
 - Si quelqu'un colle un mot de passe ou demande un numéro de téléphone, réponds simplement, sans passer la main.
 Écris une seule version de ta réponse, sans brouillon ni répétition.
-Seulement quand tu es sûr de ne pas pouvoir aider, termine ta réponse par ${MARQUE_CONTACT} sur une ligne seule. C'est le cas quand : l'information n'est vraiment ni dans le guide ni sur le site ; la demande touche un compte, une commande, un colis, un remboursement ou un paiement précis ; les étapes de dépannage ont été essayées sans succès ; la personne demande à parler à quelqu'un ou est mécontente. Dans ce cas, dis toujours en une phrase que quelqu'un de l'équipe pourra la recontacter si elle laisse ses coordonnées (ne dis jamais que sa demande est déjà transmise) et qu'elle peut laisser son téléphone et son e-mail juste en dessous. N'écris jamais ${MARQUE_CONTACT} dans les autres cas, ni quand ta réponse répond déjà complètement à la question (par exemple « carte bancaire uniquement »).`;
+Seulement quand tu es sûr de ne pas pouvoir aider, termine ta réponse par ${MARQUE_CONTACT} sur une ligne seule. C'est le cas quand : l'information n'est vraiment ni dans le guide ni sur le site ; la demande touche un compte, une commande, un colis, un remboursement ou un paiement précis ; les étapes de dépannage ont été essayées sans succès ; la personne demande à parler à quelqu'un ou est mécontente. Dans ce cas, dis toujours en une phrase que quelqu'un de l'équipe pourra la recontacter si elle laisse ses coordonnées (ne dis jamais que sa demande est déjà transmise) et qu'elle peut laisser son téléphone et son e-mail juste en dessous. N'écris jamais ${MARQUE_CONTACT} dans les autres cas, ni quand ta réponse répond déjà complètement à la question (par exemple « prélèvement SEPA uniquement »).`;
 
 let client;
 let site = { texte: '', lu: 0 };
@@ -258,7 +258,7 @@ exports.supportChat = onRequest(
         model: MODELE,
         // La réflexion de l'IA compte dans max_tokens : assez de marge pour ne jamais couper une réponse.
         max_tokens: 4000,
-        output_config: { effort: 'medium' },
+        output_config: { effort: 'low' },
         system: [
           { type: 'text', text: CONSIGNES },
           { type: 'text', text: `${CONNAISSANCES}\n\n# Contenu du site Papote\n\n${texte}`, cache_control: { type: 'ephemeral' } },

@@ -11,6 +11,8 @@ const { HttpsError } = require('firebase-functions/v2/https');
 const { FieldValue, Timestamp } = require('firebase-admin/firestore');
 
 const ETATS_LIBRES = ['en-stock', 'preparee'];
+// Commandes qui attendent une tablette : à préparer, ou payées par SEPA en attente de la banque.
+const A_SERVIR = ['a-preparer', 'paiement-en-attente'];
 // Page de paiement Stripe : 30 minutes (le minimum accepté par Stripe), la réservation 2 minutes de plus.
 const DUREE_PAIEMENT_MS = 30 * 60 * 1000;
 const MARGE_MS = 2 * 60 * 1000;
@@ -21,7 +23,7 @@ const ms = (v) => (v == null ? null : typeof v === 'number' ? v : v.toMillis ? v
 function tablettesDisponibles({ stock, commandes, reservations, maintenant }) {
   const libres = stock.filter((t) => ETATS_LIBRES.includes(t.etat) && !t.commande).length;
   const reliees = new Set(stock.map((t) => t.commande).filter(Boolean));
-  const enAttente = commandes.filter((c) => c.expedition === 'a-preparer' && !reliees.has(c.id)).length;
+  const enAttente = commandes.filter((c) => A_SERVIR.includes(c.expedition) && !reliees.has(c.id)).length;
   const enPaiement = reservations.filter((r) => (ms(r.expireLe) || 0) > maintenant).length;
   return Math.max(0, libres - enAttente - enPaiement);
 }
@@ -30,7 +32,7 @@ function tablettesDisponibles({ stock, commandes, reservations, maintenant }) {
 async function lireEtCompter(db, lire, maintenant) {
   const [stock, commandes, reservations] = await Promise.all([
     lire(db.collection('stock').where('etat', 'in', ETATS_LIBRES)),
-    lire(db.collection('commandes').where('expedition', '==', 'a-preparer')),
+    lire(db.collection('commandes').where('expedition', 'in', A_SERVIR)),
     lire(db.collection('reservations').where('expireLe', '>', Timestamp.fromMillis(maintenant))),
   ]);
   // Les fiches reliées à une commande à préparer sont dans les états libres : elles suffisent pour « reliees ».

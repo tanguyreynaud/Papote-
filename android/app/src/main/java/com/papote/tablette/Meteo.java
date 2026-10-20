@@ -89,44 +89,133 @@ final class Meteo {
 
     /**
      * Communes qui portent ce nom (France d'abord) : [{nom, detail, lat, lon}], au plus 6.
-     * Un code postal à 5 chiffres donne toutes ses communes. Service gratuit d'Open-Meteo pour les noms.
+     * Un code postal à 5 chiffres donne toutes ses communes. Service gratuit de l'État (geo.api.gouv.fr).
      */
     static JSONArray search(Http http, String query) {
         JSONArray out = new JSONArray();
         if (query == null || query.trim().length() < 2) return out;
         if (query.trim().matches("\\d{5}")) return searchPostcode(http, query.trim());
         try {
-            String url = "https://geocoding-api.open-meteo.com/v1/search?count=10&language=fr&format=json&name="
+            String url = "https://geo.api.gouv.fr/communes?fields=nom,centre,departement&boost=population&limit=6&format=json&nom="
                     + URLEncoder.encode(query.trim(), "UTF-8");
             Http.Response r = http.request("GET", url, null, null, null);
             if (!r.ok()) return out;
-            JSONArray results = new JSONObject(r.body).optJSONArray("results");
-            if (results == null) return out;
-            JSONArray fr = new JSONArray();
-            JSONArray other = new JSONArray();
-            for (int i = 0; i < results.length(); i++) {
-                JSONObject g = results.getJSONObject(i);
-                String detail = join(g.optString("admin2", ""), g.optString("admin1", ""));
-                if (!"FR".equals(g.optString("country_code"))) detail = join(detail, g.optString("country", ""));
-                JSONObject item = new JSONObject()
-                        .put("nom", g.optString("name"))
-                        .put("detail", detail)
-                        .put("lat", g.optDouble("latitude"))
-                        .put("lon", g.optDouble("longitude"));
-                ("FR".equals(g.optString("country_code")) ? fr : other).put(item);
+            JSONArray communes = new JSONArray(r.body);
+            for (int i = 0; i < communes.length() && out.length() < 6; i++) {
+                JSONObject c = communes.getJSONObject(i);
+                JSONArray xy = c.optJSONObject("centre") == null ? null
+                        : c.getJSONObject("centre").optJSONArray("coordinates");
+                if (xy == null || xy.length() < 2) continue;
+                JSONObject dep = c.optJSONObject("departement");
+                out.put(new JSONObject()
+                        .put("nom", c.optString("nom"))
+                        .put("detail", dep == null ? "" : dep.optString("nom"))
+                        .put("lat", xy.getDouble(1))
+                        .put("lon", xy.getDouble(0)));
             }
-            for (int i = 0; i < fr.length() && out.length() < 6; i++) out.put(fr.get(i));
-            for (int i = 0; i < other.length() && out.length() < 6; i++) out.put(other.get(i));
         } catch (Exception e) {
             Log.w(TAG, "Recherche de la ville", e);
         }
         return out;
     }
 
-    private static String join(String a, String b) {
-        if (a == null || a.isEmpty()) return b == null ? "" : b;
-        if (b == null || b.isEmpty() || b.equals(a)) return a;
-        return a + ", " + b;
+    /**
+     * Prévisions de MET Norway (institut météo norvégien : gratuit, usage commercial permis,
+     * sans compte, licence CC BY 4.0), remises au format attendu par la page :
+     * {current:{temperature_2m, weather_code, is_day}, daily:{weather_code[], temperature_2m_max[], temperature_2m_min[]}}
+     * avec les codes météo WMO (0 soleil, 3 couvert, 61 pluie…). Aujourd'hui puis demain.
+     */
+    static JSONObject forecast(Http http, double lat, double lon) throws Exception {
+        String url = String.format(java.util.Locale.US,
+                "https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=%.4f&lon=%.4f", lat, lon);
+        Http.Response r = http.request("GET", url, null, null, null);
+        if (!r.ok()) throw new java.io.IOException("Météo HTTP " + r.code);
+        JSONArray series = new JSONObject(r.body).getJSONObject("properties").getJSONArray("timeseries");
+        if (series.length() == 0) throw new java.io.IOException("Météo vide");
+
+        java.util.TimeZone paris = java.util.TimeZone.getTimeZone("Europe/Paris");
+        java.text.SimpleDateFormat iso = new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US);
+        iso.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+        java.util.Calendar cal = java.util.Calendar.getInstance(paris);
+        int today = cal.get(java.util.Calendar.DAY_OF_YEAR);
+        cal.add(java.util.Calendar.DAY_OF_YEAR, 1);
+        int tomorrow = cal.get(java.util.Calendar.DAY_OF_YEAR);
+
+        double[] max = {-999, -999};
+        double[] min = {999, 999};
+        String[] noon = {null, null};
+        int[] noonGap = {99, 99};
+        for (int i = 0; i < series.length(); i++) {
+            JSONObject s = series.getJSONObject(i);
+            java.util.Calendar t = java.util.Calendar.getInstance(paris);
+            t.setTime(iso.parse(s.getString("time")));
+            int doy = t.get(java.util.Calendar.DAY_OF_YEAR);
+            int d = doy == today ? 0 : doy == tomorrow ? 1 : -1;
+            if (d < 0) continue;
+            JSONObject data = s.getJSONObject("data");
+            double temp = data.getJSONObject("instant").getJSONObject("details").optDouble("air_temperature", Double.NaN);
+            if (!Double.isNaN(temp)) { max[d] = Math.max(max[d], temp); min[d] = Math.min(min[d], temp); }
+            // Le temps de la journée : celui annoncé vers midi.
+            String sym = symbol(data, "next_6_hours");
+            if (sym == null) sym = symbol(data, "next_1_hours");
+            int gap = Math.abs(t.get(java.util.Calendar.HOUR_OF_DAY) - 12);
+            if (sym != null && gap < noonGap[d]) { noonGap[d] = gap; noon[d] = sym; }
+        }
+
+        JSONObject first = series.getJSONObject(0).getJSONObject("data");
+        String nowSym = symbol(first, "next_1_hours");
+        if (nowSym == null) nowSym = symbol(first, "next_6_hours");
+        double nowTemp = first.getJSONObject("instant").getJSONObject("details").optDouble("air_temperature", 0);
+        if (max[0] < -900) { max[0] = nowTemp; min[0] = nowTemp; }
+        if (max[1] < -900) { max[1] = max[0]; min[1] = min[0]; }
+        if (noon[0] == null) noon[0] = nowSym;
+        if (noon[1] == null) noon[1] = noon[0];
+        int hour = java.util.Calendar.getInstance(paris).get(java.util.Calendar.HOUR_OF_DAY);
+        boolean isDay = nowSym != null ? !nowSym.endsWith("_night") : hour >= 7 && hour < 20;
+
+        return new JSONObject()
+                .put("current", new JSONObject()
+                        .put("temperature_2m", nowTemp)
+                        .put("weather_code", wmo(nowSym))
+                        .put("is_day", isDay ? 1 : 0))
+                .put("daily", new JSONObject()
+                        .put("weather_code", new JSONArray().put(wmo(noon[0])).put(wmo(noon[1])))
+                        .put("temperature_2m_max", new JSONArray().put(max[0]).put(max[1]))
+                        .put("temperature_2m_min", new JSONArray().put(min[0]).put(min[1])));
+    }
+
+    private static String symbol(JSONObject data, String period) {
+        JSONObject p = data.optJSONObject(period);
+        JSONObject s = p == null ? null : p.optJSONObject("summary");
+        return s == null ? null : s.optString("symbol_code", null);
+    }
+
+    /** Symbole MET Norway (« partlycloudy_day », « lightrainshowers_night »…) vers code WMO. */
+    static int wmo(String symbol) {
+        if (symbol == null) return 3;
+        String s = symbol.replaceAll("_(day|night|polartwilight)$", "");
+        if (s.contains("thunder")) return 95;
+        switch (s) {
+            case "clearsky": return 0;
+            case "fair": return 1;
+            case "partlycloudy": return 2;
+            case "cloudy": return 3;
+            case "fog": return 45;
+            case "lightrain": return 61;
+            case "rain": return 63;
+            case "heavyrain": return 65;
+            case "lightrainshowers": return 80;
+            case "rainshowers": return 81;
+            case "heavyrainshowers": return 82;
+            case "lightsnow": return 71;
+            case "snow": return 73;
+            case "heavysnow": return 75;
+            case "lightsnowshowers": return 85;
+            case "snowshowers": case "heavysnowshowers": return 86;
+            default:
+                if (s.contains("sleet")) return 68; // pluie et neige mêlées
+                return 3;
+        }
     }
 
     /**

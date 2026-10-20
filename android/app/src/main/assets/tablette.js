@@ -9,7 +9,6 @@
   var IDLE_MS = 90000;   // retour à l'accueil après 1 min 30 sans toucher l'écran
   var FRAME_MS = 12000;  // changement de photo sur l'accueil
   var SLIDE_MS = 10000;  // défilement tout seul du diaporama
-  var CALM_MS = 4000;    // les flèches s'effacent après 4 s sans toucher l'écran
 
   var JOURS = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
   var MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août',
@@ -139,6 +138,7 @@
     pauseScreen.style.display = paused ? 'flex' : 'none';
     if (paused) {
       overlayQueue = [];
+      shownInOverlay = {}; // ils reviendront à la fin de la pause
       if (overlayPost) { overlayPost = null; show($('overlay'), false); }
       showView('view-home');
     }
@@ -183,7 +183,7 @@
     3: ['cloudy', 'Couvert'], 45: ['fog', 'Brouillard'], 48: ['fog', 'Brouillard givrant'],
     51: ['rain', 'Bruine'], 53: ['rain', 'Bruine'], 55: ['rain', 'Forte bruine'], 56: ['rain', 'Bruine verglaçante'],
     57: ['rain', 'Bruine verglaçante'], 61: ['rain', 'Petite pluie'], 63: ['rain', 'Pluie'], 65: ['rain', 'Forte pluie'],
-    66: ['rain', 'Pluie verglaçante'], 67: ['rain', 'Pluie verglaçante'], 71: ['snow', 'Un peu de neige'],
+    66: ['rain', 'Pluie verglaçante'], 67: ['rain', 'Pluie verglaçante'], 68: ['snow', 'Pluie et neige'], 71: ['snow', 'Un peu de neige'],
     73: ['snow', 'Neige'], 75: ['snow', 'Forte neige'], 77: ['snow', 'Neige'], 80: ['rain', 'Averses'],
     81: ['rain', 'Averses'], 82: ['storm', 'Fortes averses'], 85: ['snow', 'Averses de neige'],
     86: ['snow', 'Averses de neige'], 95: ['storm', 'Orage'], 96: ['storm', 'Orage'], 99: ['storm', 'Orage']
@@ -359,12 +359,10 @@
     wakeArrows();
   }
 
-  // Mode cadre photo : sans toucher l'écran, les flèches s'effacent ; elles reviennent au toucher.
-  var calmTimer = null;
+  // Diaporama : flèches et bouton Accueil toujours visibles.
   function wakeArrows() {
     $('view-photos').className = 'view photos';
-    clearTimeout(calmTimer);
-    calmTimer = setTimeout(function () { $('view-photos').className = 'view photos calm'; }, CALM_MS);
+    // Flèches et bouton Accueil toujours affichés (demande de Tanguy) : plus de mode « calme ».
   }
 
   function renderPhoto() {
@@ -394,8 +392,9 @@
     var caption = p.text && partLabel ? p.text + ' · ' + partLabel : (p.text || partLabel);
     $('photo-text').textContent = caption;
     show($('photo-text'), !!caption);
-    if (photoIndex >= photos.length - 1) $('photo-prev').setAttribute('disabled', ''); else $('photo-prev').removeAttribute('disabled');
-    if (photoIndex === 0) $('photo-next').setAttribute('disabled', ''); else $('photo-next').removeAttribute('disabled');
+    // En boucle : les flèches marchent toujours (sauf s'il n'y a qu'une photo).
+    if (photos.length < 2) { $('photo-prev').setAttribute('disabled', ''); $('photo-next').setAttribute('disabled', ''); }
+    else { $('photo-prev').removeAttribute('disabled'); $('photo-next').removeAttribute('disabled'); }
     markSeen(p);
     restartSlides();
     // Arrivée à l'avant-dernière photo chargée : on en demande 5 de plus.
@@ -421,8 +420,9 @@
   }
 
   // La plus récente est à l'index 0 : « suivante » va vers les plus récentes.
-  function olderPhoto() { if (photoIndex < photos.length - 1) { photoIndex++; renderPhoto(); } }
-  function newerPhoto() { if (photoIndex > 0) { photoIndex--; renderPhoto(); } }
+  // Diaporama en boucle : après la plus ancienne, on revient à la plus récente, et inversement.
+  function olderPhoto() { if (photos.length > 1) { photoIndex = (photoIndex + 1) % photos.length; renderPhoto(); } }
+  function newerPhoto() { if (photos.length > 1) { photoIndex = (photoIndex - 1 + photos.length) % photos.length; renderPhoto(); } }
 
   // ---------- Vu ----------
 
@@ -478,24 +478,16 @@
 
   function queueUnseen() {
     if (window.papotePaused) return; // en pause : rien ne s'affiche ni n'est marqué « vu »
-    var newestPhoto = null;
+    // Chaque envoi attend son tour, du plus ancien au plus récent : une nouvelle photo ne
+    // remplace jamais celle qui est affichée tant que Mamie ne l'a pas vue (OK ou visage vu).
     for (var i = posts.length - 1; i >= 0; i--) {
       var p = posts[i];
       // Une photo ou un vocal n'est montré que lorsqu'il est téléchargé.
       if (p.seen || shownInOverlay[p.id] || (p.type === 'photo' && !p.image) || (p.type === 'voice' && !p.audio) || (p.type === 'video' && !p.video)) continue;
       shownInOverlay[p.id] = true;
-      if (p.image) newestPhoto = p; else overlayQueue.push(p);
+      overlayQueue.push(p);
     }
-    // Une nouvelle photo remplace tout de suite ce qui est affiché, et reste en grand
-    // jusqu'à ce que Mamie réponde (OK), qu'une autre photo arrive ou qu'on l'appelle.
-    if (newestPhoto) {
-      if (overlayPost) markSeen(overlayPost);
-      overlayQueue.unshift(newestPhoto);
-      stopAudio();
-      nextOverlay();
-      return;
-    }
-    if (!overlayPost) nextOverlay();
+    if (!overlayPost && !inCall()) nextOverlay();
   }
 
   // ---------- Visage vu : « lu », lecture, puis fermeture au bout de 2 minutes ----------
@@ -538,14 +530,19 @@
     try { if (typeof w.stop === 'function') w.stop(); } catch (e) { }
   }
 
-  // Un appel arrive : on ferme la photo ou le message affiché.
+  // Un appel arrive : la photo ou le message affiché s'efface, sans être compté comme vu ;
+  // il revient en tête de file à la fin de l'appel, avec ceux qui attendaient.
   function closeOverlayForCall() {
     if (!overlayPost) return;
-    markSeen(overlayPost);
     stopAudio();
-    overlayQueue = [];
-    nextOverlay();
+    overlayQueue.unshift(overlayPost);
+    unwatchSeen('overlay');
+    overlayPost = null;
+    show($('overlay'), false);
   }
+  setInterval(function () {
+    if (!overlayPost && overlayQueue.length && !inCall()) nextOverlay();
+  }, 2000);
 
   function setOverlayActions(visible, withReplay) {
     show($('overlay-actions'), visible);
@@ -1148,7 +1145,43 @@
     document.body.appendChild(callScreen);
   }
 
+  // Tonalité « ça sonne » pendant que Mamie appelle (comme un téléphone en France :
+  // 440 Hz, 1,5 s puis 3,5 s de silence), douce, jusqu'à la réponse ou la fin de l'appel.
+  var ringbackCtx = null;
+  var ringbackTimer = null;
+  function startRingback() {
+    if (ringbackTimer) return;
+    try {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      if (!ringbackCtx) ringbackCtx = new AC();
+      if (ringbackCtx.resume) ringbackCtx.resume();
+    } catch (e) { return; }
+    var beep = function () {
+      try {
+        var ctx = ringbackCtx, t = ctx.currentTime;
+        var osc = ctx.createOscillator(), gain = ctx.createGain();
+        osc.frequency.value = 440;
+        gain.gain.setValueAtTime(0, t);
+        gain.gain.linearRampToValueAtTime(0.06, t + 0.03);
+        gain.gain.setValueAtTime(0.06, t + 1.47);
+        gain.gain.linearRampToValueAtTime(0, t + 1.5);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(t);
+        osc.stop(t + 1.55);
+      } catch (e) { }
+    };
+    beep();
+    ringbackTimer = setInterval(beep, 5000);
+  }
+  function stopRingback() {
+    clearInterval(ringbackTimer);
+    ringbackTimer = null;
+  }
+
   function closeCallScreen() {
+    stopRingback();
     if (callScreen) { callScreen.setAttribute('hidden', ''); callScreen.innerHTML = ''; }
     outCall = null;
   }
@@ -1164,6 +1197,7 @@
   function showPicker() {
     ensureCallScreen();
     callScreen.innerHTML = '';
+    stopRingback();
     callScreen.className = 'call-out picker';
     callScreen.removeAttribute('hidden');
     callScreen.appendChild(el2('h1', 'call-title', 'Qui voulez-vous appeler ?'));
@@ -1229,6 +1263,7 @@
     callScreen.innerHTML = '';
     callScreen.removeAttribute('hidden');
     callScreen.className = 'call-out state-' + state;
+    if (state === 'ringing') startRingback(); else stopRingback();
     var face = uid || name || faceUrl ? faceEl(uid, name, 'call-face', faceUrl) : el2('span', 'call-face family', '');
     if (!uid && !name && !faceUrl) face.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M16 11a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm-8 0a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm0 2c-2.3 0-7 1.2-7 3.5V19h14v-2.5C15 14.2 10.3 13 8 13zm8 0c-.3 0-.6 0-1 .1 1.2.8 2 1.9 2 3.4V19h6v-2.5c0-2.3-4.7-3.5-7-3.5z"/></svg>';
     callScreen.appendChild(face);
@@ -1269,6 +1304,7 @@
     try {
       outCall = window.papoteCallFamily({
         to: uid || null,
+        toName: name || null,
         onState: function (state, info) {
           info = info || {};
           if (state === 'ringing') {
@@ -1300,7 +1336,7 @@
   }
 
   // ---------- Options réglées par la famille : Écouter, Radio ----------
-  // families/{fid}.options = { lecture, reponseVocale, radio: { nom, url } } (lu par Sync.java).
+  // families/{fid}.options = { lecture, reponseVocale, radio: { nom, url, volume } } (lu par Sync.java).
 
   var options = {};
 
@@ -1363,6 +1399,7 @@
       row.appendChild(radioBtn);
     }
     if (!r || !r.url) stopRadio();
+    else if (radioAudio) radioAudio.volume = radioVolume(r);
     show(radioBtn, !!(r && r.url));
     renderRadioBtn();
   }
@@ -1376,16 +1413,45 @@
       '"/></svg><span>' + (on2 ? 'Arrêter' : 'Radio') + '</span>';
   }
 
+  // Même niveau que le reste de la tablette (vocaux, vidéos), réglé par le volume de la famille
+  // et le haut-parleur (décision de Tanguy). Les radios sont mixées plus fort qu'un vocal
+  // enregistré au téléphone : on les baisse d'autant (environ -6 dB) pour que tout sonne pareil.
+  var RADIO_GAIN = 0.5;
+  function radioVolume() {
+    return RADIO_GAIN;
+  }
+
   function toggleRadio() {
     if (radioAudio) { stopRadio(); return; }
     var r = options.radio;
     if (!r || !r.url) return;
     radioAudio = new Audio(r.url);
+    radioAudio.volume = radioVolume(r);
     radioAudio.onerror = function () { stopRadio(); };
     var play = radioAudio.play();
     if (play && play.catch) play.catch(function () { stopRadio(); });
     renderRadioBtn();
   }
+
+  // Écran éteint (veille, bouton marche) : la radio s'arrête.
+  document.addEventListener('visibilitychange', function () { if (document.hidden) stopRadio(); });
+
+  // Appel reçu (sonnerie, puis appel) : la radio se tait, puis reprend une fois l'appel fini.
+  var radioPausedForCall = false;
+  function inCall() {
+    var ids = ['call-ring', 'call-view'];
+    for (var i = 0; i < ids.length; i++) if ($(ids[i]) && isShown(ids[i])) return true;
+    return false;
+  }
+  function checkCallForRadio() {
+    if (inCall()) {
+      if (radioAudio) { stopRadio(); radioPausedForCall = true; }
+    } else if (radioPausedForCall) {
+      radioPausedForCall = false;
+      if (!radioAudio && !asleep && options.radio && options.radio.url) toggleRadio();
+    }
+  }
+  setInterval(checkCallForRadio, 1000);
 
   function stopRadio() {
     if (radioAudio) {
@@ -1704,6 +1770,7 @@
     var hour = new Date().getHours();
     var night = isNight(hour);
     var should = night && Date.now() > wakeUntil && !somethingToShow();
+    if (should) stopRadio();
     if (should === asleep) return;
     asleep = should;
     sleepScreen.style.display = should ? 'block' : 'none';

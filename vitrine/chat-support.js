@@ -36,6 +36,10 @@
     '.ps-ia{align-self:flex-start;background:var(--ps-carte);border:1px solid var(--ps-ligne)}' +
     '.ps-moi{align-self:flex-end;background:var(--ps-indigo);color:#fff}' +
     '.ps-attente{color:var(--ps-gris);font-style:italic}' +
+    '.ps-points span{animation:ps-point 1.2s infinite both}' +
+    '.ps-points span:nth-child(2){animation-delay:.2s}.ps-points span:nth-child(3){animation-delay:.4s}' +
+    '@keyframes ps-point{0%,80%,100%{opacity:.2}40%{opacity:1}}' +
+    '@media (prefers-reduced-motion:reduce){.ps-points span{animation:none}}' +
     '.ps-idees{display:flex;flex-wrap:wrap;gap:.4rem}' +
     '.ps-idees button{border:1px solid var(--ps-indigo);background:var(--ps-doux);color:var(--ps-indigo-fonce);border-radius:999px;padding:.45rem .8rem;font:inherit;font-size:.95rem;cursor:pointer}' +
     '.ps-saisie{display:flex;gap:.5rem;padding:.75rem;background:var(--ps-carte);border-top:1px solid var(--ps-ligne)}' +
@@ -327,7 +331,12 @@
       ajouter('user', question);
       zone.value = '';
       envoyer.disabled = true;
-      var attente = ajouter('assistant', 'Je cherche…', 'ps-attente');
+      // « Papote écrit… » avec des points qui clignotent : la réponse prend quelques secondes.
+      var attente = ajouter('assistant', 'Papote écrit', 'ps-attente');
+      var points = el('span', 'ps-points');
+      points.setAttribute('aria-hidden', 'true');
+      for (var i = 0; i < 3; i++) points.appendChild(el('span', '', '.'));
+      attente.appendChild(points);
       fetch(API, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

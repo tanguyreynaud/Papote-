@@ -20,6 +20,8 @@ const URL_WEBHOOK = `https://europe-west1-${PROJET}.cloudfunctions.net/stripeWeb
 const EVENEMENTS = [
   'checkout.session.completed',
   'checkout.session.expired',
+  'checkout.session.async_payment_succeeded',
+  'checkout.session.async_payment_failed',
   'customer.subscription.created',
   'customer.subscription.updated',
   'customer.subscription.deleted',
@@ -47,7 +49,7 @@ const PRODUITS = [
   {
     nom: 'Mise en service Papote',
     description: 'Tablette prêtée, configurée et livrée en point relais.',
-    tarifs: [{ cle: 'papote_mise_en_service', montant: 5000, nom: 'Mise en service', unique: true }],
+    tarifs: [{ cle: 'papote_mise_en_service', montant: 6000, nom: 'Mise en service', unique: true }],
   },
   {
     nom: 'Tablette Papote',

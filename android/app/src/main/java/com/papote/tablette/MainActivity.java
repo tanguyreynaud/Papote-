@@ -184,16 +184,26 @@ public class MainActivity extends Activity implements Sync.Listener {
         sync.start();
         Updater.cleanup(this);
         handler.postDelayed(updateCheck, 60_000);
+        new Thread(() -> AppCheck.current(getApplicationContext()), "papote-appcheck").start();
     }
 
-    /** Toutes les 6 heures : une nouvelle version de Papote est-elle publiée ? */
+    /**
+     * Toutes les heures : une nouvelle version de Papote est-elle publiée ? (un correctif urgent
+     * doit arriver vite). En cas d'échec (wifi pas encore prêt au démarrage…), nouvel essai 10 min après.
+     */
     private final Runnable updateCheck = new Runnable() {
         @Override
         public void run() {
-            if (isDeviceOwner()) {
-                new Thread(() -> Updater.check(getApplicationContext()), "papote-maj").start();
+            handler.removeCallbacks(this);
+            if (!isDeviceOwner()) {
+                Journal.log(MainActivity.this, "Mise à jour : Papote n'est pas propriétaire de l'appareil");
+                handler.postDelayed(this, 3600_000L);
+                return;
             }
-            handler.postDelayed(this, 6 * 3600_000L);
+            new Thread(() -> {
+                boolean ok = Updater.check(getApplicationContext());
+                handler.postDelayed(this, ok ? 3600_000L : 10 * 60_000L);
+            }, "papote-maj").start();
         }
     };
 
@@ -234,6 +244,12 @@ public class MainActivity extends Activity implements Sync.Listener {
                 }, 4000);
             }
             return;
+        }
+        // Clé App Check de la tablette, posée par installer-tablette.ps1 (jamais écrite ailleurs).
+        String appCheckKey = intent.getStringExtra("appCheckKey");
+        if (appCheckKey != null && appCheckKey.matches("[A-Za-z0-9_-]{20,100}")) {
+            AppCheck.saveKey(this, appCheckKey);
+            Journal.log(this, "Clé App Check enregistrée");
         }
         if (intent.getBooleanExtra("remove_owner", false)) {
             setKioskPaused(true);
@@ -475,6 +491,18 @@ public class MainActivity extends Activity implements Sync.Listener {
         @JavascriptInterface
         public void stopSpeaking() {
             handler.post(() -> { if (tts != null) tts.stop(); });
+        }
+
+        /** Jeton App Check pour appels.js : {token, expireTimeMillis}, ou "" sans clé ni jeton. */
+        @JavascriptInterface
+        public boolean hasAppCheckKey() {
+            return AppCheck.hasKey(getApplicationContext());
+        }
+
+        @JavascriptInterface
+        public String appCheckToken() {
+            JSONObject t = AppCheck.current(getApplicationContext());
+            return t == null ? "" : t.toString();
         }
 
         @JavascriptInterface
