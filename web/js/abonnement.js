@@ -65,6 +65,11 @@ export function inviterParEmail(fid, email) {
   return call('inviterParEmail', { fid, email });
 }
 
+/** Jeton de connexion pour l'écran d'appel de l'app Android (valable 1 h). */
+export function jetonAppelNatif() {
+  return call('jetonAppelNatif', {});
+}
+
 export function annulerResiliation(fid) {
   return call('annulerResiliation', { fid });
 }

@@ -17,14 +17,14 @@ import { askConfirm, notice, avantDePartir, chooseAction } from './ui.js';
 import { showGuideOnce } from './guide.js';
 import {
   abonnementOk, FORMULES, LIBELLES, ouvrirPortail, payer, rattacherCommande, resilier, annulerResiliation,
-  finDeContrat, retracter, inviterParEmail,
+  finDeContrat, retracter, inviterParEmail, jetonAppelNatif,
 } from './abonnement.js';
 import { startCall, watchTabletBusy, watchIncomingCalls, answerIncoming, warmUpCalls, declineIncoming, reportCallIncident } from './appel.js';
 import { pushSupported, pushAllowed, pushRefused, enablePush, closeCallNotification, rememberNativeToken, inNativeApp } from './push.js';
 import { prepareVideo } from './video.js';
 import { startAgenda, stopAgenda } from './agenda.js';
 import {
-  isRealAccount, myEmail, signInGoogle, finishRedirect, sendEmailLink, isEmailLink, completeEmailLink, logOut,
+  isRealAccount, myEmail, connexionParJeton, signInGoogle, finishRedirect, sendEmailLink, isEmailLink, completeEmailLink, logOut,
   myMemberships, familyName, tagLegacyMember, myInvitations, acceptInvitation,
   inviteByEmail, cancelInvitation, acceptMember, changeFamilyCode,
 } from './compte.js';
@@ -1433,6 +1433,37 @@ const END_MESSAGES = {
   failed: 'La connexion vidéo a échoué',
 };
 
+// ---------- Appel dans l'app Android : notification d'appel en cours, micro en arrière-plan ----------
+// Dans l'écran d'appel natif (WebView, window.PapoteNatif), on tient l'app au courant. Dans la TWA
+// (app Android, hors appel), on lui passe la main pour décrocher ou appeler.
+const pont = () => window.PapoteNatif || null;
+function natifEtat(etat, nom, video) {
+  try { pont()?.etat(etat, nom || session?.family?.name || '', !!video); } catch (e) { /* rien */ }
+}
+function natifFin() {
+  try { pont()?.fin(); } catch (e) { /* rien */ }
+}
+window.papoteRaccrocher = () => {
+  const enCours = !!currentCall;
+  hangupCall();
+  if (!enCours) { leaveCallScreen(); }
+};
+
+let jetonNatif = null;
+async function rafraichirJetonNatif() {
+  if (!inNativeApp() || pont() || !session) return;
+  try { jetonNatif = (await jetonAppelNatif()).connexion || null; } catch (e) { console.warn('Jeton d\'appel natif indisponible', e); }
+}
+setInterval(rafraichirJetonNatif, 50 * 60_000);
+
+/** TWA : ouvre l'écran d'appel de l'app sur ce chemin. Renvoie false s'il faut rester dans la page. */
+function passerAuNatif(chemin) {
+  if (!inNativeApp() || pont() || !jetonNatif) return false;
+  location.href = `intent://appel?u=${encodeURIComponent(chemin)}&connexion=${encodeURIComponent(jetonNatif)}`
+    + '#Intent;scheme=papote;package=fr.mapapote.famille;end';
+  return true;
+}
+
 function setCallStatus(text) {
   $('call-status').textContent = text;
   $('call-status').hidden = !text;
@@ -1462,6 +1493,7 @@ function leaveCallScreen() {
   $('call').classList.remove('force-landscape');
   try { if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); } catch (e) { /* rien */ }
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  natifFin();
 }
 
 // Caméra et micro déjà autorisés ? Sinon, la demande d'autorisation passe avant le plein écran,
@@ -1600,10 +1632,11 @@ async function answerFromTablet() {
   setCallFace($('call-face'), caller);
   $('call').hidden = false;
   setCallStatus('Connexion…');
+  natifEtat('connexion', caller, false);
   try {
     currentCall = await answerIncoming(session.fid, call.id, { uid: session.uid, name: session.member.name }, {
       audio: $('call-audio'),
-      onState: () => { setCallStatus(''); startCallTimer(); },
+      onState: () => { setCallStatus(''); startCallTimer(); natifEtat('en_cours', caller, !!$('call-local').srcObject); },
       // Mamie répond à notre caméra : on passe à l'écran vidéo.
       onVideo: (track) => {
         $('call-remote').srcObject = new MediaStream([track]);
@@ -1632,7 +1665,11 @@ async function answerFromTablet() {
   }
 }
 
-$('incoming-answer').addEventListener('click', answerFromTablet);
+$('incoming-answer').addEventListener('click', () => {
+  // App Android : l'écran d'appel natif décroche (notification d'appel, micro en arrière-plan).
+  if (incoming && passerAuNatif(`/?appel=${incoming.id}`)) { stopRingTone(); $('incoming').hidden = true; return; }
+  answerFromTablet();
+});
 
 // Ouvert par « Répondre » (?appel=<id>) : l'écran d'appel s'affiche tout de suite, avant même
 // l'accueil, et l'appel est pris dès qu'il arrive. S'il ne sonne plus, on le dit.
@@ -1669,6 +1706,7 @@ $('call-video').addEventListener('click', async () => {
   try {
     $('call-local').srcObject = await currentCall.enableVideo();
     $('call').classList.remove('audio');
+    natifEtat('en_cours', $('call-name').textContent, true);
     if (!$('call-remote').srcObject) setCallStatus(`${session.family.name} va vous voir…`);
   } catch (err) {
     console.error(err);
@@ -1723,6 +1761,7 @@ let callStarting = false; // un seul démarrage à la fois, même annulé
 $('tile-call').addEventListener('click', async () => {
   if (currentCall || callStarting) return;
   if (paused()) return;
+  if (passerAuNatif('/?appeler=video')) return;
   callStarting = true;
   const abort = new AbortController();
   callAbort = abort;
@@ -1739,6 +1778,7 @@ $('tile-call').addEventListener('click', async () => {
       onState: (state) => {
         if (!allowed && state === 'ringing') enterCallScreen();
         setCallStatus(CALL_MESSAGES[state]());
+        natifEtat(state === 'ringing' ? 'sonne' : state === 'connected' ? 'en_cours' : 'connexion', session.family.name, true);
       },
       onEnd: (reason) => {
         currentCall = null;
@@ -3529,6 +3569,8 @@ async function enterApp() {
   // Famille toute neuve : d'abord régler la tablette ; sinon le petit guide habituel.
   if (!showIntroTablette()) showGuideOnce(session.family.name);
   if (sharedPending) { sharedPending = false; openShared(); }
+  rafraichirJetonNatif();
+  if (appelerPending) { appelerPending = false; $('tile-call').click(); }
   if (rappelerPending) { rappelerPending = false; offerCallBack(); }
   else if (pairCode()) openPage('pair');
 }
@@ -3544,8 +3586,18 @@ function renderAccount() {
   $('account-email').textContent = `Connecté avec ${myEmail()}`;
 }
 
+let appelerPending = false; // ouvert par l'app Android pour appeler la tablette en vidéo
+
 async function start() {
+  // Écran d'appel de l'app Android : #connexion=<jeton> pour être connecté sans écran de connexion.
+  const hash = new URLSearchParams(location.hash.slice(1));
+  if (hash.get('connexion')) {
+    const jeton = hash.get('connexion');
+    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* rien */ }
+    try { await connexionParJeton(jeton); } catch (err) { console.warn('Connexion par jeton impossible', err); }
+  }
   const params = new URLSearchParams(location.search);
+  appelerPending = params.get('appeler') === 'video';
   sharedPending = params.has('partage');
   rappelerPending = params.has('rappeler');
   if (params.get('appel')) answerOnArrival(params.get('appel'));
