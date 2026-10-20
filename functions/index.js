@@ -212,7 +212,8 @@ exports.inviterParEmail = onCall({ secrets: [MAIL_MOT_DE_PASSE], maxInstances: 2
     tx.set(limite, { jour, n: n + 1 });
   });
   const code = String(fam.code).toUpperCase().replace(/[^A-Z0-9]/g, '');
-  const lien = `${APPLI_FAMILLE}?code=${code.length === 8 ? regles.afficherCode(code) : code}`;
+  const lien = `${APPLI_FAMILLE}?code=${code.length === 8 ? regles.afficherCode(code) : code}`
+    + (fam.name ? `&pour=${encodeURIComponent(fam.name)}` : '');
   await envoyerMail(email, mail.invitation({
     prenom: (membre.exists && membre.get('name')) || null, tablette: fam.name, lien, email,
   }));
