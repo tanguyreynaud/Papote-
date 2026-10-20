@@ -121,8 +121,8 @@ async function sessionPaiement({ formule, tablette, fid, email, client, relais, 
     mode: 'subscription',
     line_items: await tarifs(formule, tablette),
     locale: 'fr',
-    // Carte bancaire (Google Pay et Apple Pay compris) et Link, choisi par Tanguy le 2026-10-13. Pas de code promo.
-    payment_method_types: ['card', 'link'],
+    // Carte bancaire (Google Pay et Apple Pay compris), Link et prélèvement SEPA (Tanguy, 2026-10-20). Pas de code promo.
+    payment_method_types: ['card', 'link', 'sepa_debit'],
     billing_address_collection: 'auto',
     phone_number_collection: { enabled: true },
     metadata,
@@ -248,7 +248,7 @@ async function attendreRestitution(abo) {
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     // Rien à rendre si la tablette n'est jamais partie.
-    if (snap.exists && (snap.get('restitution') || ['a-preparer', 'annulee'].includes(snap.get('expedition')))) return;
+    if (snap.exists && (snap.get('restitution') || ['a-preparer', 'paiement-en-attente', 'annulee'].includes(snap.get('expedition')))) return;
     const fin = (abo.ended_at || abo.canceled_at || Math.floor(Date.now() / 1000)) * 1000;
     tx.set(ref, {
       restitution: { statut: 'attendue', avant: versTimestamp(regles.limiteRestitution(fin)) },
@@ -572,8 +572,10 @@ exports.stripeWebhook = onRequest(
     }
 
     try {
-      if (event.type === 'checkout.session.completed') {
+      if (event.type === 'checkout.session.completed' || event.type === 'checkout.session.async_payment_succeeded') {
         await paiementTermine(event.data.object);
+      } else if (event.type === 'checkout.session.async_payment_failed') {
+        await paiementSepaRefuse(event.data.object);
       } else if (event.type === 'checkout.session.expired') {
         await stock.liberer(db, (event.data.object.metadata || {}).reservation);
       } else if (event.type.startsWith('customer.subscription.')) {
@@ -587,8 +589,12 @@ exports.stripeWebhook = onRequest(
     }
   });
 
+// Prélèvement SEPA : la page de paiement se termine avant que la banque confirme (quelques jours).
+// La commande attend en « paiement-en-attente » (tablette déjà comptée dans le stock), puis passe
+// « a-preparer » avec async_payment_succeeded ; les e-mails de confirmation partent à ce moment.
 async function paiementTermine(session) {
   if (!session.subscription) return;
+  const paye = session.payment_status !== 'unpaid';
   const details = session.customer_details || {};
   const adresse = (session.collected_information && session.collected_information.shipping_details)
     || session.shipping_details || null;
@@ -607,7 +613,7 @@ async function paiementTermine(session) {
       livraison: livraison.relaisDepuisMeta(meta)
         || (adresse ? { nom: adresse.name || null, adresse: adresse.address || null } : null),
       // Tablette à préparer et envoyer par Tanguy (« envoyee » une fois partie).
-      expedition: 'a-preparer',
+      expedition: paye ? 'a-preparer' : 'paiement-en-attente',
       stripeCustomerId: session.customer,
       fid: (existante.exists && existante.get('fid')) || null,
       creeLe: FieldValue.serverTimestamp(),
@@ -624,9 +630,25 @@ async function paiementTermine(session) {
   await stripe().customers.update(session.customer, {
     invoice_settings: { custom_fields: [{ name: 'Code de commande Papote', value: code }] },
   });
+  if (!paye) return;
+  if (existante.exists && existante.get('expedition') === 'paiement-en-attente') await ref.update({ expedition: 'a-preparer' });
   const fid = meta.fid || (existante.exists && existante.get('fid')) || await chercherFamille(email);
   if (fid) await appliquer(fid, session.subscription);
   await confirmerCommande(ref, email, code);
+}
+
+// Prélèvement SEPA refusé par la banque : commande annulée, abonnement arrêté, Papote prévenu.
+async function paiementSepaRefuse(session) {
+  if (!session.subscription) return;
+  const ref = db.doc(`commandes/${session.subscription}`);
+  const snap = await ref.get();
+  if (!snap.exists || snap.get('expedition') !== 'paiement-en-attente') return;
+  await ref.update({ expedition: 'annulee', annulation: 'sepa-refuse', annuleeLe: FieldValue.serverTimestamp() });
+  await stripe().subscriptions.cancel(session.subscription).catch((e) => logger.warn('Annulation SEPA', e.message));
+  const envois = [envoyerMail(EMAIL_PAPOTE, mail.sepaRefuse({ nom: snap.get('nom'), email: snap.get('email'), papote: true }))];
+  if (snap.get('email')) envois.push(envoyerMail(snap.get('email'), mail.sepaRefuse({ nom: snap.get('nom') })));
+  (await Promise.allSettled(envois)).filter((r) => r.status === 'rejected')
+    .forEach((r) => logger.error(`E-mail SEPA refusé non envoyé (${ref.id})`, r.reason));
 }
 
 // E-mails « commande confirmée » au client et « nouvelle commande » à Papote, une seule fois

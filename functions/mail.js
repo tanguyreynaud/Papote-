@@ -199,6 +199,21 @@ function annulationAvantEnvoi({ nom, email, code }) {
   ]);
 }
 
+// Prélèvement SEPA de la commande refusé par la banque : commande annulée (papote : message pour Papote).
+function sepaRefuse({ nom, email, papote }) {
+  if (papote) {
+    return message('Commande annulée : prélèvement SEPA refusé', [
+      `Client : <b>${echapper(nom || '?')}</b>, ${echapper(email || 'sans e-mail')}.`,
+      'La banque a refusé le prélèvement de la mise en service. La commande et l\'abonnement sont annulés : ne pas envoyer la tablette.',
+    ]);
+  }
+  return message('Votre paiement Papote n\'a pas abouti', [
+    bonjour(nom),
+    'Votre banque a refusé le prélèvement SEPA de votre commande Papote. La commande est donc annulée et rien ne vous a été prélevé.',
+    'Vous pouvez recommander quand vous voulez, par carte ou avec un autre compte. Une question ? Répondez simplement à cet e-mail.',
+  ], { texte: 'Commander à nouveau', lien: 'https://mapapote.fr/commande.html' });
+}
+
 // Prévient Papote qu'une étiquette de retour est à créer.
 function retourAPreparer({ nom, email, telephone, code, relais, avant, retractation }) {
   return message(`Retour à préparer ${code || ''}`.trim(), [
@@ -224,7 +239,7 @@ async function envoyer({ smtp, motDePasse, expediteur, a, contenu }) {
 }
 
 module.exports = {
-  colisParti, commandeConfirmee, nouvelleCommande, relancePanier, lancement, rappelJumelage,
+  colisParti, commandeConfirmee, nouvelleCommande, relancePanier, lancement, sepaRefuse, rappelJumelage,
   retourTablette, etiquetteRetour, rappelRestitution, tabletteRecue, commandeAnnulee, annulationAvantEnvoi, retourAPreparer,
   envoyer, echapper, euros,
 };
