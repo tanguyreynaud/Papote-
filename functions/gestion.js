@@ -173,6 +173,9 @@ const REGLAGES = {
   forfaitSim: 700, // coût mensuel d'un forfait SIM quand la ligne n'a pas son propre coût
   vieTablette: 24, // durée de vie d'une tablette, en mois
   poidsColis: 1500, // poids d'un colis tablette, en grammes (étiquettes Sendcloud)
+  miseEnService: 6000, // payée une fois par chaque nouveau client
+  fraisEnvoi: 799, // colis aller (Mondial Relay)
+  fraisRetour: 800, // colis retour en fin d'abonnement
 };
 // Adresse de Papote pour les étiquettes : départ des colis et arrivée des retours.
 const CHAMPS_EXPEDITEUR = ['nom', 'adresse', 'cp', 'ville', 'telephone', 'email'];
@@ -212,7 +215,8 @@ const STATUTS_SIM = {
   resiliee: 'Résiliée',
 };
 // Avec quels envois part un accessoire (clé 4G, prise…) : sorti du stock à chaque tablette envoyée.
-const ENVOIS_ACCESSOIRE = { '': 'Aucun envoi', tous: 'Chaque envoi', sim: 'Envois Internet inclus', wifi: 'Envois Wi-Fi' };
+// « option » : envoyé à la demande (enceinte), jamais sorti du stock automatiquement ni compté dans la rentabilité.
+const ENVOIS_ACCESSOIRE = { '': 'Aucun envoi', tous: 'Chaque envoi', sim: 'Envois Internet inclus', wifi: 'Envois Wi-Fi', option: 'En option (à la demande)' };
 
 // Prix payé ce mois-ci pour une ligne (centimes) : le prix après la promo quand elle est finie.
 function coutLigne(l, maintenant) {
@@ -968,6 +972,8 @@ function champsAccessoire(c) {
   if ('quantite' in c) champs.quantite = Number.isInteger(c.quantite) && Math.abs(c.quantite) <= 10000 ? c.quantite : 0;
   if ('seuil' in c) champs.seuil = Number.isInteger(c.seuil) && c.seuil >= 0 ? c.seuil : null;
   if ('prixAchat' in c) champs.prixAchat = centimes(c.prixAchat);
+  // Revient avec la tablette et repart chez le client suivant (chargeur, housse), sinon consommé à chaque envoi.
+  if ('retour' in c) champs.retour = c.retour === true;
   if ('note' in c) champs.note = texte(c.note, 1000);
   return champs;
 }

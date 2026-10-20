@@ -309,8 +309,10 @@
         </div>
         </div>
         <div class="card" data-onglet="rentabilite">
-          <p class="muted small">Ce qui reste chaque mois par abonné payant : frais Stripe réels, tablette et accessoires amortis sur leur durée de vie, ligne SIM.</p>
+          <p class="muted small">Par abonné : ce qui reste chaque mois après frais Stripe, URSSAF et forfait SIM ; ce que coûte un nouveau client au départ (matériel, colis, envoi et retour, moins la mise en service) ; et en combien de mois il est remboursé.</p>
           <div class="table"><table id="t-rentabilite"></table></div>
+          <h3>Contenu du colis</h3>
+          <div id="rentabilite-colis"></div>
         </div>
         <div data-onglet="urssaf">
           <div class="card">
@@ -400,6 +402,9 @@
             <label>Taux URSSAF (%) <input name="tauxUrssaf" inputmode="decimal"></label>
             <label>Forfait SIM par défaut (€/mois) <input name="forfaitSim" inputmode="decimal"></label>
             <label>Durée de vie d'une tablette (mois) <input name="vieTablette" inputmode="numeric"></label>
+            <label>Mise en service (€) <input name="miseEnService" inputmode="decimal"></label>
+            <label>Envoi d'un colis (€) <input name="fraisEnvoi" inputmode="decimal"></label>
+            <label>Retour d'un colis (€) <input name="fraisRetour" inputmode="decimal"></label>
             <button type="submit" class="secondary">Enregistrer les réglages</button>
             <p class="f-msg small" hidden></p>
           </form>
@@ -520,6 +525,7 @@
       <label>En stock <input name="quantite" inputmode="numeric" required></label>
       <label>Alerte sous (quantité) <input name="seuil" inputmode="numeric" placeholder="facultatif"></label>
       <label>Prix unitaire (€) <input name="prixAchat" inputmode="decimal"></label>
+      <label class="case large"><input type="checkbox" name="retour"> Revient avec la tablette et repart chez le client suivant (chargeur, housse…). Sinon : consommé à chaque envoi (carton, papier, fiche).</label>
       <label class="large">Note <textarea name="note" rows="2"></textarea></label>
       <div class="large boutons">
         <button type="submit" class="primary">Enregistrer</button>
