@@ -84,7 +84,9 @@ $('form-join').addEventListener('submit', async (e) => {
   button.disabled = true;
   showError($('join-error'), '');
   try {
-    await joinFamily($('join-code').value, $('join-name').value.trim());
+    const fidRejoint = await joinFamily($('join-code').value, $('join-name').value.trim());
+    // Invité aussi par e-mail : l'invitation est remplie, on l'efface.
+    if (myEmail()) deleteDoc(doc(db, 'families', fidRejoint, 'invitations', myEmail())).catch(() => {});
     forgetInviteCode();
     await enterApp();
   } catch (err) {
@@ -1995,7 +1997,16 @@ function watchInvitations() {
   stopInvitations = null;
   if (!amFamilyAdmin()) return;
   stopInvitations = onSnapshot(collection(db, 'families', session.fid, 'invitations'), (snap) => {
-    $('invitations-sent').replaceChildren(...snap.docs.map((d) => {
+    // Une personne invitée qui est déjà dans la famille (arrivée par le code, par exemple) :
+    // son invitation n'a plus lieu d'être, on l'efface.
+    const deja = new Set(allMembers.map((m) => (m.email || '').toLowerCase()).filter(Boolean));
+    const restantes = snap.docs.filter((d) => {
+      const email = (d.data().email || '').toLowerCase();
+      if (!deja.has(email)) return true;
+      cancelInvitation(session.fid, email).catch((err) => console.warn('Invitation non effacée', err));
+      return false;
+    });
+    $('invitations-sent').replaceChildren(...restantes.map((d) => {
       const inv = d.data();
       const li = document.createElement('li');
       const name = document.createElement('span');
