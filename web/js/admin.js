@@ -115,6 +115,8 @@ async function loadOrders() {
       .sort((a, b) => (toDate(a.creeLe)?.getTime() || 0) - (toDate(b.creeLe)?.getTime() || 0));
     $('orders-empty').hidden = list.length > 0;
     $('orders').replaceChildren(...list.map((c) => {
+      // Mêmes prix que le serveur (abonnement.js, PRIX_MATERIEL) et les conditions de vente.
+      const prix = { tablette: 130, chargeur: 10, enceinte: 10 };
       const li = document.createElement('li');
       li.innerHTML = '<strong></strong><span class="muted small"></span><span class="small adresse"></span>'
         + '<div class="envoi-suite"><span class="small avancement"></span><button type="button" class="primary small-btn"></button></div>';
@@ -144,14 +146,14 @@ const creer = (tag, attrs = {}, texte = '') => Object.assign(document.createElem
 
 // Étapes de l'envoi d'une commande. ctx : { stock, sims, accessoires } (vide pour seulement compter les étapes).
 function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
-  // Internet inclus : la tablette a sa carte SIM ; un routeur 4G part seulement si on le choisit (e.routeur = 'oui').
+  // Internet inclus : la carte SIM est dans la tablette. L'enceinte part seulement si on le choisit (e.enceinte = 'oui').
   const internet = c.formule === 'sim';
-  const avecRouteur = (e) => internet && e.routeur === 'oui';
+  const avecEnceinte = (e) => e.enceinte === 'oui';
   const tablette = (e) => stock.find((t) => t.id === e.tablette);
   const nom = (e) => { const t = tablette(e); return t ? t.ref || t.numero || t.modele || 'choisie' : ''; };
   const simDe = (e) => { const t = tablette(e); return sims.find((l) => l.id === (e.sim || (t && t.simId))) || null; };
   const pour = (formule) => accessoires.filter((a) => a.parEnvoi === formule).map((a) => a.nom);
-  const routeur = () => (pour('sim').length ? pour('sim') : ['Le routeur 4G']);
+  const enceinte = () => accessoires.find((a) => a.parEnvoi === 'option' && /enceinte|haut-parleur/i.test(a.nom))?.nom || 'L\'enceinte';
   const option = (valeur, texte, choisi) => creer('option', { value: valeur, selected: choisi }, texte);
   return [
     {
@@ -204,30 +206,20 @@ function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
       ],
     },
     {
-      cle: 'routeur-choix',
-      titre: 'Routeur 4G ?',
-      texte: 'Un routeur 4G part-il dans ce colis ? Il ne sera facturé au client (30 €) que s\'il n\'est pas rendu et qu\'il était dans le colis.',
-      saute: () => !internet,
+      cle: 'enceinte-choix',
+      titre: 'Enceinte ?',
+      texte: 'L\'enceinte part-elle dans ce colis ? Elle ne sera facturée au client (10 €) que si elle était dans le colis et ne revient pas.',
       contenu(zone, e, maj) {
         const choix = (valeur, texte) => {
-          const r = creer('input', { type: 'radio', name: 'routeur', value: valeur, checked: e.routeur === valeur });
-          r.addEventListener('change', () => { e.routeur = valeur; maj(); });
+          const r = creer('input', { type: 'radio', name: 'enceinte', value: valeur, checked: e.enceinte === valeur });
+          r.addEventListener('change', () => { e.enceinte = valeur; maj(); });
           const l = creer('label', { className: 'pc-case' });
           l.append(r, ` ${texte}`);
           return l;
         };
-        zone.append(choix('non', 'Non : la carte SIM est dans la tablette'), choix('oui', 'Oui : un routeur 4G part avec la tablette'));
+        zone.append(choix('non', 'Non, pas d\'enceinte'), choix('oui', 'Oui : l\'enceinte est dans le carton'));
       },
-      pret: (e) => e.routeur === 'oui' || e.routeur === 'non',
-    },
-    {
-      cle: 'routeur',
-      titre: 'Le routeur 4G',
-      saute: (e) => !avecRouteur(e),
-      cases: (e) => [
-        `La carte SIM ${simTexte(simDe(e))} est glissée dans le routeur`,
-        ...routeur().map((a) => `${a} : dans le carton`),
-      ],
+      pret: (e) => e.enceinte === 'oui' || e.enceinte === 'non',
     },
     {
       cle: 'fermer',
@@ -236,8 +228,8 @@ function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
       contenu(zone, e) {
         const ul = creer('ul', { className: 'pc-liste' });
         const contenu = [`La tablette ${nom(e)}`, 'Le chargeur et son câble', ...pour('tous'),
-          ...(avecRouteur(e) ? [...routeur(), `La carte SIM ${simTexte(simDe(e))}, dans le routeur`]
-            : internet ? [`La carte SIM ${simTexte(simDe(e))}, dans la tablette`] : [])];
+          ...(avecEnceinte(e) ? [enceinte()] : []),
+          ...(internet ? [`La carte SIM ${simTexte(simDe(e))}, dans la tablette`] : [])];
         ul.append(...contenu.map((x) => creer('li', {}, x)));
         zone.append(ul);
       },
@@ -425,9 +417,9 @@ async function loadReturns() {
       li.innerHTML = '<strong></strong><span class="muted small"></span><span class="small"></span><span class="small remb"></span>'
         + '<form class="etiquette"><button type="button" class="secondary small-btn sendcloud">Créer avec Sendcloud</button><input type="url" placeholder="ou lien de l\'étiquette de retour" aria-label="Étiquette de retour"><button type="submit" class="secondary small-btn">Envoyer l\'étiquette</button></form>'
         + '<div class="manquants small"><span>Manquant :</span>'
-        + '<label><input type="checkbox" value="tablette"> tablette (160 €)</label>'
+        + `<label><input type="checkbox" value="tablette"> tablette (${prix.tablette} €)</label>`
         + '<label><input type="checkbox" value="chargeur"> chargeur et câble (10 €)</label>'
-        + (c.routeurFourni === true ? '<label><input type="checkbox" value="routeur"> routeur (30 €)</label>' : '')
+        + (c.enceinteFournie === true ? '<label><input type="checkbox" value="enceinte"> enceinte (10 €)</label>' : '')
         + '<button type="button" class="secondary small-btn rendue">Matériel reçu</button></div>';
       li.querySelector('strong').textContent = c.livraison?.nom || c.nom || c.email;
       li.querySelector('.muted').textContent = `${c.email}${c.telephone ? ` · ${c.telephone}` : ''}`;
@@ -482,7 +474,6 @@ async function loadReturns() {
       btn.addEventListener('click', async () => {
         // Ce qui manque dans le colis est prélevé sur la carte du client (tabletteRendue, index.js).
         const manquants = [...li.querySelectorAll('.manquants input:checked')].map((i) => i.value);
-        const prix = { tablette: 160, chargeur: 10, routeur: 30 };
         const total = manquants.reduce((s, m) => s + prix[m], 0);
         if (!confirm(total
           ? `Prélever ${total} € à ${c.email} pour le matériel manquant (${manquants.join(', ')}) ?`
