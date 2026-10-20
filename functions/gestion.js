@@ -16,7 +16,7 @@
 //                   (« à vérifier ») ; gestionCourrierMaintenant : tout de suite
 //   gestionCloture  le 1er du mois à 5 h : livre des recettes et registre des achats du mois écoulé, figés
 //                   (gestion/archives), rangés dans Storage et envoyés par e-mail ; gestionCloturer : tout de suite
-//   gestionAutomatique  chaque nuit : factures du matériel non rendu (170 € ou 200 €), avoirs des
+//   gestionAutomatique  chaque nuit : factures du matériel non rendu (montant prélevé), avoirs des
 //                       remboursements, dépenses mensuelles récurrentes, états du stock suivant les
 //                       commandes (gestionAutomatiser : tout de suite)
 //
@@ -867,9 +867,13 @@ async function sortirAccessoires(commandeId) {
   const sortis = [];
   for (const a of accessoires.docs) {
     const envoi = a.get('parEnvoi');
+    // Enceinte (accessoire « en option ») : sortie seulement quand la préparation dit qu'elle part dans le colis.
+    if (envoi === 'option' && commande.get('enceinteFournie') === true && /enceinte|haut-parleur/i.test(a.get('nom') || '')) {
+      await a.ref.update({ quantite: FieldValue.increment(-1), majLe: FieldValue.serverTimestamp() });
+      sortis.push(a.get('nom'));
+      continue;
+    }
     if (!envoi || (envoi !== 'tous' && envoi !== formule)) continue;
-    // Accessoires « Internet inclus » (routeur 4G) : pas sortis quand la préparation dit « sans routeur ».
-    if (envoi === 'sim' && commande.get('routeurFourni') === false) continue;
     await a.ref.update({ quantite: FieldValue.increment(-1), majLe: FieldValue.serverTimestamp() });
     sortis.push(a.get('nom'));
   }
@@ -1410,7 +1414,7 @@ exports.gestionLireFacture = onCall(
 const JOUR = 24 * 60 * 60 * 1000;
 const FENETRE = 40 * JOUR; // ce qui s'est passé depuis 40 jours est revu chaque nuit
 
-// Matériel non rendu : le prélèvement (restitutions, index.js ; 170 € en Wi-Fi, 200 € avec internet) n'a pas de facture.
+// Matériel non rendu : le prélèvement (restitutions ou tabletteRendue, index.js) n'a pas de facture.
 // On en fait une, marquée payée hors Stripe, pour que chaque encaissement ait sa facture.
 // Ligne de facture : le détail (« tablette, routeur ») vient de la description du prélèvement quand il y est.
 function descriptionNonRendu(c) {
@@ -2587,10 +2591,10 @@ exports.gestionParcours = onCall(async (request) => {
     if (!(await ref.get()).exists) throw new HttpsError('not-found', 'Commande introuvable.');
     if (d.type === 'recu') await ref.update({ 'preparation.recuLe': Date.now(), 'preparation.recuPar': qui });
     else {
-      const preparation = avancementPropre(d.preparation, ['tablette', 'sim', 'suivi', 'routeur']);
-      // Routeur 4G dans le colis ou non : seul un routeur fourni est facturé s'il n'est pas rendu.
-      const routeur = preparation.routeur === 'oui' ? { routeurFourni: true } : preparation.routeur === 'non' ? { routeurFourni: false } : {};
-      await ref.update({ preparation: { ...preparation, majLe: Date.now(), par: qui }, ...routeur });
+      const preparation = avancementPropre(d.preparation, ['tablette', 'sim', 'suivi', 'enceinte']);
+      // Enceinte dans le colis ou non : facturée seulement si elle était fournie et ne revient pas.
+      const enceinte = preparation.enceinte === 'oui' ? { enceinteFournie: true } : preparation.enceinte === 'non' ? { enceinteFournie: false } : {};
+      await ref.update({ preparation: { ...preparation, majLe: Date.now(), par: qui }, ...enceinte });
     }
     return { ok: true };
   }
