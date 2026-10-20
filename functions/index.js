@@ -45,6 +45,7 @@ const relances = require('./relances');
 
 const base = require('./base');
 const stock = require('./stock');
+const push = require('./push');
 
 // Bucket Europe après la migration (BUCKET_STORAGE dans .env), sinon celui du projet.
 admin.initializeApp(base.BUCKET_STORAGE ? { storageBucket: base.BUCKET_STORAGE } : undefined);
@@ -1033,10 +1034,14 @@ exports.nouvelleFamille = onDocumentCreated({ document: 'families/{fid}', databa
 });
 
 exports.nouveauMembre = onDocumentCreated(
-  { document: 'families/{fid}/members/{uid}', database: BASE_FIRESTORE, region: REGION_FIRESTORE, secrets: [STRIPE_SECRET] },
+  { document: 'families/{fid}/members/{uid}', database: BASE_FIRESTORE, region: REGION_FIRESTORE, secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE] },
   async (event) => {
     const membre = event.data.data();
     const { fid, uid } = event.params;
+    if (membre.status === 'pending') {
+      await prevenirDemande(fid, uid, membre);
+      return;
+    }
     if (membre.role !== 'famille' || !membre.email) return;
     const fam = await db.doc(`families/${fid}`).get();
     if (!fam.exists || fam.get('createdBy') !== uid) return;
@@ -1045,6 +1050,34 @@ exports.nouveauMembre = onDocumentCreated(
     if (commandes.empty) return;
     await appliquer(fid, commandes.docs[0].id);
   });
+
+// Quelqu'un demande à rejoindre la famille (fiche « pending ») : les responsables (createdBy + admins)
+// reçoivent une notification et un e-mail, une seule fois (limites/demande-{fid}-{uid}, créé une fois).
+// Notification : { type: 'demande' } pour l'app web (sw.js) ; l'app Android ne connaît que « alerte ».
+async function prevenirDemande(fid, uid, membre) {
+  try {
+    await db.doc(`limites/demande-${fid}-${uid}`).create({ le: FieldValue.serverTimestamp() });
+  } catch (e) {
+    if (e.code === 6) return; // déjà prévenu (événement renvoyé)
+    throw e;
+  }
+  const fam = await db.doc(`families/${fid}`).get();
+  if (!fam.exists) return;
+  const responsables = [...new Set([fam.get('createdBy'), ...(fam.get('admins') || [])])].filter((r) => r && r !== uid);
+  if (!responsables.length) return;
+  const prenom = membre.name || 'Quelqu\'un';
+  const titre = `${prenom} veut rejoindre la famille`;
+  const texte = 'Touchez pour accepter ou refuser';
+  const envois = [
+    push.envoyer(db, fid, responsables, { type: 'demande', titre, texte, fid }, 86400, { websSeulement: true }),
+    push.envoyer(db, fid, responsables, { type: 'alerte', titre, texte }, 86400, { natifsSeulement: true }),
+  ];
+  const comptes = await Promise.all(responsables.map((r) => admin.auth().getUser(r).catch(() => null)));
+  const contenu = mail.demandeRejoindre({ prenom: membre.name, email: membre.email, famille: fam.get('name') });
+  comptes.filter((c) => c && c.email).forEach((c) => envois.push(envoyerMail(c.email, contenu)));
+  (await Promise.allSettled(envois)).filter((r) => r.status === 'rejected')
+    .forEach((r) => logger.error(`Demande ${fid}/${uid} : prévenir les responsables`, r.reason));
+}
 
 // ---------- Envoi de la tablette ----------
 
