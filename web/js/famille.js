@@ -2953,7 +2953,17 @@ async function renderInstallCard() {
   } catch (e) { /* non pris en charge */ }
 }
 
+// App Android famille sur le Play Store : à remplir une fois validée. Tant que c'est vide,
+// tout le monde (Android, iPhone, ordinateur) installe l'app web.
+const PLAY_STORE_URL = '';
+const isAndroid = () => /android/i.test(navigator.userAgent);
+
 $('btn-install').addEventListener('click', async () => {
+  if (PLAY_STORE_URL && isAndroid() && !inNativeApp()) {
+    const code = session?.family?.code ? `&referrer=${encodeURIComponent(`code=${session.family.code}`)}` : '';
+    location.href = PLAY_STORE_URL + code;
+    return;
+  }
   if (installPrompt) {
     installPrompt.prompt();
     const { outcome } = await installPrompt.userChoice;
