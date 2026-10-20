@@ -15,8 +15,6 @@ final class CallAudio {
     private final Context context;
     private MediaPlayer ringer;
     private PowerManager.WakeLock wakeLock;
-    private int previousMode = AudioManager.MODE_NORMAL;
-    private boolean previousSpeaker;
 
     CallAudio(Context context) {
         this.context = context.getApplicationContext();
@@ -62,13 +60,14 @@ final class CallAudio {
     void inCall(boolean on) {
         AudioManager am = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
         if (on) {
-            previousMode = am.getMode();
-            previousSpeaker = am.isSpeakerphoneOn();
             am.setMode(AudioManager.MODE_IN_COMMUNICATION);
             am.setSpeakerphoneOn(true);
         } else {
-            am.setMode(previousMode);
-            am.setSpeakerphoneOn(previousSpeaker);
+            // Toujours le mode normal à la fin : le navigateur passe parfois en « communication »
+            // avant nous, et reprendre « le mode d'avant » laissait la tablette coincée en appel
+            // (son des vidéos et de la radio faussé jusqu'au redémarrage).
+            am.setMode(AudioManager.MODE_NORMAL);
+            am.setSpeakerphoneOn(false);
         }
     }
 

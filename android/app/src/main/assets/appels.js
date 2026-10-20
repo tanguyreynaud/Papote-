@@ -266,9 +266,26 @@ async function joinFamily() {
 const CAMERA = {
   // 4:3 comme le capteur (1600x1200) : sur la tablette UNISOC, le 16:9 est découpé sur un bord
   // et rate la personne assise en face.
-  video: { facingMode: 'user', width: { ideal: 960 }, height: { ideal: 720 }, aspectRatio: { ideal: 4 / 3 } },
+  // 640x480 suffit pour voir Mamie sur un téléphone et ménage la carte SIM (avec capVideo).
+  video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 }, aspectRatio: { ideal: 4 / 3 }, frameRate: { ideal: 20, max: 24 } },
   audio: { echoCancellation: true, noiseSuppression: true },
 };
+
+// Vidéo envoyée par la tablette plafonnée (~300 kbit/s, 20 images/s) : environ 350 Mo par heure
+// de visio au total au lieu de ~550, soit ~14 h par mois avec 5 Go. À appeler après la négociation.
+const VIDEO_MAX_BITRATE = 300_000;
+function capVideo(pc) {
+  try {
+    pc.getSenders().forEach((s) => {
+      if (!s.track || s.track.kind !== 'video' || !s.getParameters) return;
+      const p = s.getParameters();
+      if (!p.encodings || !p.encodings.length) p.encodings = [{}];
+      p.encodings[0].maxBitrate = VIDEO_MAX_BITRATE;
+      p.encodings[0].maxFramerate = 20;
+      s.setParameters(p).catch(() => {});
+    });
+  } catch (e) { /* navigateur trop ancien : pas de plafond */ }
+}
 
 function showRing(id, data) {
   ringing = { id, data };
@@ -642,7 +659,7 @@ async function answer() {
   let lostTimer = null;
   pc.onconnectionstatechange = () => {
     clearTimeout(lostTimer);
-    if (pc.connectionState === 'connected') $('call-status').textContent = '';
+    if (pc.connectionState === 'connected') { $('call-status').textContent = ''; capVideo(pc); }
     if (pc.connectionState === 'disconnected') lostTimer = setTimeout(() => {
       reportCallIncident('video-coupee', 'liaison perdue 8 s', id);
       hangup('La connexion a été perdue.');
@@ -656,6 +673,7 @@ async function answer() {
   await pc.setRemoteDescription(data.offer);
   const reply = await pc.createAnswer();
   await pc.setLocalDescription(reply);
+  capVideo(pc);
   await updateDoc(callRef, { answer: { type: reply.type, sdp: reply.sdp }, state: 'accepted' });
 
   active.stops.push(onSnapshot(collection(callRef, 'callerCandidates'), (snap) => {
@@ -818,7 +836,7 @@ window.papoteCallFamily = ({ to = null, toName = null, onState = () => {} } = {}
         call.cam = null;
       }
       if (done) { if (call.cam) call.cam.getTracks().forEach((t) => t.stop()); return; }
-      if (call.cam) call.video.sender.replaceTrack(call.cam.getVideoTracks()[0]).catch(() => {});
+      if (call.cam) call.video.sender.replaceTrack(call.cam.getVideoTracks()[0]).then(() => capVideo(call.pc)).catch(() => {});
       $('call-remote').srcObject = new MediaStream([remoteTrack]);
       $('call-local').srcObject = call.cam;
       $('call-wait').hidden = true;

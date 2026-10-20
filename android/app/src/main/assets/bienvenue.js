@@ -519,7 +519,11 @@
       }
       var cx = f.x + f.width / 2;
       var cy = f.y + f.height / 2;
-      if (Math.max(Math.abs(cx - 0.5), Math.abs(cy - 0.5)) < 0.15) {
+      // Assez au centre, sans exiger la perfection : un quart de l'image de marge sur les côtés,
+      // un peu plus en hauteur (le visage est souvent dans le haut). Une fois bien placé, on
+      // tolère un petit écart pour que le vert ne clignote pas au moindre mouvement.
+      var marge = good > 0 ? 0.08 : 0;
+      if (Math.abs(cx - 0.5) < 0.25 + marge && Math.abs(cy - 0.5) < 0.3 + marge) {
         good++;
         view.className = 'place-view ok';
         hint.textContent = good > 2 ? 'C’est parfait : la tablette est bien placée.' : 'Presque… ne bougez plus.';
