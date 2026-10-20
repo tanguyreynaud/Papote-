@@ -61,7 +61,7 @@ public class MainActivity extends Activity implements Sync.Listener {
     private Sync sync;
     private CallAudio callAudio;
     /** Luminosité le soir (0 à 1) ; vrai pendant les heures du soir. */
-    private static final float EVENING_BRIGHTNESS = 0.3f;
+    private static final float EVENING_BRIGHTNESS = 0.55f;
     private boolean dimmed;
     private VoicePlayer voicePlayer;
     private VideoView videoView;
