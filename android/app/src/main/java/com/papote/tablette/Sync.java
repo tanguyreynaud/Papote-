@@ -182,8 +182,10 @@ final class Sync {
             } catch (Exception e) {
                 Log.w(TAG, "Synchronisation", e);
             }
-            // Pendant l'appairage, on regarde souvent si quelqu'un a tapé le code.
-            handler.postDelayed(this, pairingActive() ? 4_000 : realtime ? REALTIME_POLL_MS : POLL_MS);
+            // Pendant l'appairage, on regarde souvent si quelqu'un a tapé le code. Hors ligne, on
+            // réessaie toutes les 20 s même en direct : « Pas de connexion » disparaît dès le retour d'internet.
+            boolean offline = "offline".equals(lastState);
+            handler.postDelayed(this, pairingActive() ? 4_000 : realtime && !offline ? REALTIME_POLL_MS : POLL_MS);
         }
     };
 
