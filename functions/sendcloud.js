@@ -78,6 +78,12 @@ function erreurLisible(corps) {
   return t || corps.message || JSON.stringify(corps).slice(0, 300);
 }
 
+// Réponse de GET /api/v2/parcels/{id} : livré quand le statut est 11 (« Delivered »).
+function colisLivre(corps) {
+  const st = corps && corps.parcel && corps.parcel.status;
+  return !!st && (st.id === 11 || /^delivered$/i.test(String(st.message || '')));
+}
+
 function client(cles) {
   const [publique, secrete] = String(cles || '').trim().split(':');
   if (!publique || !secrete) throw new Error('Clés Sendcloud absentes : lancez outils\\gestion\\installer-sendcloud.bat.');
@@ -139,6 +145,13 @@ function client(cles) {
   }
 
   return {
+    // Colis remis au destinataire (retiré au point relais) ? Statut 11 « Delivered » de Sendcloud.
+    async livre(colis) {
+      const r = await fetch(`${API.replace('/v3', '/v2')}/parcels/${colis}`, { headers: { Authorization: auth, Accept: 'application/json' } });
+      if (r.status === 401 || r.status === 403) throw new Error('Sendcloud refuse les clés : relancez installer-sendcloud.bat.');
+      if (!r.ok) throw new Error(`Sendcloud : colis ${colis} illisible (${r.status})`);
+      return colisLivre(await r.json().catch(() => null));
+    },
     // Annule un colis (étiquette non utilisée, remboursée par Sendcloud). Déjà annulé ou supprimé : rien à faire.
     async annuler(colis) {
       const r = await fetch(`${API.replace('/v3', '/v2')}/parcels/${colis}/cancel`, {
@@ -187,4 +200,4 @@ function client(cles) {
   };
 }
 
-module.exports = { adresseClient, adressePapote, choisirOption, optionsPossibles, erreurLisible, client };
+module.exports = { adresseClient, adressePapote, choisirOption, optionsPossibles, erreurLisible, colisLivre, client };

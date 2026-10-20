@@ -1,6 +1,7 @@
 // Note une tablette préparée dans le stock de l'espace admin, d'après son n° de série Android.
 //   node preparer-tablette.js --serie <ro.serialno> [--modele "M107"]
-// Appelé par installation\installer-tablette.ps1 à la fin de l'installation. Prend la plus ancienne
+// Appelé par installation\installer-tablette.ps1 à la fin de l'installation. Prend la tablette dont la réception
+// est ouverte dans l'admin (« Recevoir une tablette »), sinon celle du même n° de série, sinon la plus ancienne
 // tablette « en stock » pas encore préparée (entrée par une facture), ou en crée une, puis affiche
 // son petit numéro (T-012) à écrire sur le carton. Au jumelage chez le client, la tablette est reconnue
 // par ce n° de série et sa commande est reliée à la famille (functions/gestion.js, gestionJumelage).
@@ -58,15 +59,29 @@ async function prochaineRef() {
   if (typeof base === 'string' && base && base !== '(default)') db = getFirestore(admin.app(), base);
   const deja = await db.collection('stock').where('serieAndroid', '==', serie).limit(1).get();
   if (!deja.empty) {
-    const t = deja.docs[0].data();
-    console.log(`Tablette déjà notée dans le stock : ${t.ref || deja.docs[0].id} (${t.etat}).`);
+    const d = deja.docs[0];
+    const t = d.data();
+    // Tablette revenue d'un client (ou remplacée) et réinstallée : de nouveau prête à partir.
+    if (['revenue', 'en-retour'].includes(t.etat)) {
+      await d.ref.update({
+        etat: 'preparee', preparee: Date.now(), commande: null, fid: null, remplaceePour: FieldValue.delete(),
+        historique: FieldValue.arrayUnion({ le: Date.now(), etat: 'preparee', par: 'installation' }),
+        majLe: FieldValue.serverTimestamp(),
+      });
+      console.log(`Tablette ${t.ref || d.id} réinstallée : de nouveau « Préparée », prête à partir.`);
+    } else {
+      console.log(`Tablette déjà notée dans le stock : ${t.ref || d.id} (${t.etat}).`);
+    }
     console.log(`>>> Écrivez ${t.ref} sur le carton.`);
     return;
   }
   const ref = await prochaineRef();
+  const serieTapee = (d) => String(d.get('numero') || '').replace(/\s/g, '').toUpperCase() === serie.replace(/\s/g, '').toUpperCase();
+  const enReception = (d) => !!d.get('reception') && !d.get('reception.fini');
   const libres = (await db.collection('stock').where('etat', '==', 'en-stock').get()).docs
     .filter((d) => !d.get('serieAndroid') && !d.get('commande'))
-    .sort((a, b) => (a.get('acheteeLe')?.toMillis() || 0) - (b.get('acheteeLe')?.toMillis() || 0));
+    .sort((a, b) => enReception(b) - enReception(a) || serieTapee(b) - serieTapee(a)
+      || (a.get('acheteeLe')?.toMillis() || 0) - (b.get('acheteeLe')?.toMillis() || 0));
   const historique = FieldValue.arrayUnion({ le: Date.now(), etat: 'preparee', par: 'installation' });
   if (libres.length) {
     const d = libres[0];

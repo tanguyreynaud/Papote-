@@ -197,6 +197,40 @@ function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
       },
     },
     {
+      cle: 'sim',
+      titre: 'Activer la carte SIM',
+      texte: 'Activez la ligne chez l\'opérateur si ce n\'est pas fait, puis notez-la :',
+      saute: () => !internet,
+      contenu(zone, e, maj) {
+        const l = simDe(e) || {};
+        e.simNumero = e.simNumero ?? (l.numero || '');
+        e.simActivation = e.simActivation || (l.activation ? new Date(l.activation) : new Date()).toISOString().slice(0, 10);
+        e.simPrix = e.simPrix ?? (l.prix != null ? String(l.prix / 100).replace('.', ',') : '');
+        const champ = (libelle, cle, attrs = {}) => {
+          const input = creer('input', { value: e[cle], ...attrs });
+          input.addEventListener('input', () => { e[cle] = input.value.trim(); maj(); });
+          const lab = creer('label', { className: 'pc-champ' }, `${libelle} `);
+          lab.append(input);
+          return lab;
+        };
+        zone.append(creer('p', { className: 'small muted' }, simTexte(l) || 'Carte SIM'),
+          champ('Numéro de la ligne', 'simNumero', { inputMode: 'tel', placeholder: '06…' }),
+          champ('Activée le', 'simActivation', { type: 'date' }),
+          champ('Prix par mois (€)', 'simPrix', { inputMode: 'decimal', placeholder: 'ex. 2,99' }));
+      },
+      cases: ['Code PIN de la carte retiré (sinon la tablette reste sans internet au démarrage)'],
+      pret: (e) => /^[\d +.]{6,}$/.test(e.simNumero || '') && /^\d{4}-\d{2}-\d{2}$/.test(e.simActivation || '')
+        && /^\d+([.,]\d{1,2})?$/.test(e.simPrix || ''),
+      async valider(e) {
+        const l = simDe(e);
+        if (!l) return;
+        await appeler('gestionSim', { action: 'modifier', id: l.id, champs: {
+          statut: 'active', numero: e.simNumero, activation: Date.parse(`${e.simActivation}T12:00:00`),
+          prix: Math.round(Number(e.simPrix.replace(',', '.')) * 100), tablette: e.tablette,
+        } });
+      },
+    },
+    {
       cle: 'carton',
       titre: 'La tablette dans le carton',
       cases: (e) => [
