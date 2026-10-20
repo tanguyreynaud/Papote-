@@ -105,7 +105,7 @@ function lancement({ prenom, desinscription }) {
 function nouvelleCommande({ nom, email, telephone, code, relais, formule }) {
   return message(`Nouvelle commande ${code || ''}`.trim(), [
     `Client : <b>${echapper(nom || '?')}</b>, ${echapper(email || 'sans e-mail')}${telephone ? `, ${echapper(telephone)}` : ''}.`,
-    `Formule : ${formule === 'sim' ? '30 € par mois, internet inclus (routeur 4G)' : '20 € par mois (wifi)'}.`,
+    `Formule : ${formule === 'sim' ? '30 € par mois, internet inclus (carte SIM dans la tablette)' : '20 € par mois (wifi)'}.`,
     relais && relais.transporteur
       ? `Point relais : <b>${relaisEnTexte(relais)}</b> (n° ${echapper(relais.id)}). Retrait par : <b>${echapper(relais.destinataire || nom || '?')}</b>.`
       : `Livraison : ${relaisEnTexte(relais) || 'adresse non trouvée, voir Stripe'}.`,
@@ -138,7 +138,7 @@ function euros(centimes) {
 }
 
 const bonjour = (nom) => `Bonjour${nom ? ` ${echapper(nom)}` : ''},`;
-const COMMENT_RENDRE = 'Mettez la tablette, son support, son chargeur et son câble (et le routeur 4G si vous avez l\'option internet) dans un carton, collez l\'étiquette dessus et déposez le colis dans n\'importe quel point relais Mondial Relay. Inutile de l\'effacer : nous nous en chargeons.';
+const COMMENT_RENDRE = 'Mettez la tablette, son support, son chargeur et son câble (et l\'enceinte si vous l\'avez reçue) dans un carton, collez l\'étiquette dessus et déposez le colis dans n\'importe quel point relais Mondial Relay. Inutile de l\'effacer : nous nous en chargeons.';
 
 // Abonnement terminé ou commande annulée après l'envoi : la tablette prêtée est attendue.
 // retractation : montant remboursé au retour (centimes), sinon null.
@@ -152,7 +152,7 @@ function retourTablette({ nom, avant, retractation, montant }) {
     `${COMMENT_RENDRE} Date limite : <b>${dateEnClair(avant)}</b>.`,
     retractation != null && retractation > 0
       ? `Dès que la tablette nous parvient, nous vous remboursons <b>${euros(retractation)}</b> sur votre compte.`
-      : `Sans retour à cette date, ${euros(montant)} seront prélevés sur votre compte. Chaque élément manquant est facturé : tablette 160 €, chargeur et câble 10 €, routeur 4G 30 €.`,
+      : `Sans retour à cette date, ${euros(montant)} seront prélevés sur votre compte. Chaque élément manquant est facturé : tablette 130 €, chargeur et câble 10 €, enceinte 10 € si elle était dans le colis.`,
   ]);
 }
 

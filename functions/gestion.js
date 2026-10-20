@@ -16,7 +16,7 @@
 //                   (« à vérifier ») ; gestionCourrierMaintenant : tout de suite
 //   gestionCloture  le 1er du mois à 5 h : livre des recettes et registre des achats du mois écoulé, figés
 //                   (gestion/archives), rangés dans Storage et envoyés par e-mail ; gestionCloturer : tout de suite
-//   gestionAutomatique  chaque nuit : factures du matériel non rendu (170 € ou 200 €), avoirs des
+//   gestionAutomatique  chaque nuit : factures du matériel non rendu (montant prélevé), avoirs des
 //                       remboursements, dépenses mensuelles récurrentes, états du stock suivant les
 //                       commandes (gestionAutomatiser : tout de suite)
 //
@@ -641,6 +641,20 @@ exports.gestionDonnees = onCall(async (request) => {
 
 // ---------- Stock ----------
 
+// Fiches créées à l'installation avant que la facture soit enregistrée (sans prix ni date d'achat) : un achat
+// enregistré ensuite les complète au lieu d'ajouter des fiches en double, ce qui gonflerait le stock à vendre.
+// Même n° de série d'abord, puis la plus ancienne. Renvoie, pour chaque tablette de l'achat, l'id à compléter ou null.
+function fichesARattacher(sansAchat, numeros, quantite) {
+  const restantes = sansAchat.slice().sort((a, b) => (a.creeLe || 0) - (b.creeLe || 0));
+  const prendre = (i) => (i < 0 ? null : restantes.splice(i, 1)[0].id);
+  const serie = (n) => String(n || '').replace(/\s/g, '').toUpperCase();
+  const choix = Array.from({ length: quantite }, (_, i) => {
+    const n = serie(numeros[i]);
+    return n ? prendre(restantes.findIndex((t) => serie(t.numero) === n || serie(t.serieAndroid) === n)) : undefined;
+  });
+  return choix.map((id) => (id === undefined || id === null ? (restantes.length ? prendre(0) : null) : id));
+}
+
 // Achat de tablettes : N fiches de stock et la dépense correspondante (sauf depense: false).
 async function ajouterAchat(d, qui) {
   const quantite = Number(d.quantite);
@@ -671,7 +685,26 @@ async function ajouterAchat(d, qui) {
       creePar: qui,
     });
   }
+  const sansAchat = (await db().collection('stock').where('acheteeLe', '==', null).get()).docs
+    .filter((x) => x.get('prixAchat') == null && !x.get('depense'))
+    .map((x) => ({ id: x.id, numero: x.get('numero'), serieAndroid: x.get('serieAndroid'), modele: x.get('modele'),
+      creeLe: ms(x.get('creeLe')) || 0 }));
+  const rattachees = fichesARattacher(sansAchat, numeros, quantite);
   for (let i = 0; i < quantite; i++) {
+    if (rattachees[i]) {
+      const t = sansAchat.find((x) => x.id === rattachees[i]);
+      batch.update(db().doc(`stock/${t.id}`), {
+        ...(t.numero ? {} : { numero: numeros[i] || null }),
+        ...(t.modele ? {} : { modele: texte(d.modele) }),
+        fournisseur: texte(d.fournisseur),
+        prixAchat: prix,
+        acheteeLe: Timestamp.fromMillis(achat),
+        depense: depenseId,
+        notes: null,
+        majLe: FieldValue.serverTimestamp(),
+      });
+      continue;
+    }
     batch.set(db().collection('stock').doc(), {
       numero: numeros[i] || null,
       modele: texte(d.modele),
@@ -688,7 +721,8 @@ async function ajouterAchat(d, qui) {
     });
   }
   await batch.commit();
-  return { ok: true, ajoutees: quantite, depense: depenseId };
+  const completees = rattachees.filter(Boolean).length;
+  return { ok: true, ajoutees: quantite - completees, completees, depense: depenseId };
 }
 
 // Remplacement d'un élément du kit chez un client : la tablette, la carte SIM ou un accessoire.
@@ -833,9 +867,13 @@ async function sortirAccessoires(commandeId) {
   const sortis = [];
   for (const a of accessoires.docs) {
     const envoi = a.get('parEnvoi');
+    // Enceinte (accessoire « en option ») : sortie seulement quand la préparation dit qu'elle part dans le colis.
+    if (envoi === 'option' && commande.get('enceinteFournie') === true && /enceinte|haut-parleur/i.test(a.get('nom') || '')) {
+      await a.ref.update({ quantite: FieldValue.increment(-1), majLe: FieldValue.serverTimestamp() });
+      sortis.push(a.get('nom'));
+      continue;
+    }
     if (!envoi || (envoi !== 'tous' && envoi !== formule)) continue;
-    // Accessoires « Internet inclus » (routeur 4G) : pas sortis quand la préparation dit « sans routeur ».
-    if (envoi === 'sim' && commande.get('routeurFourni') === false) continue;
     await a.ref.update({ quantite: FieldValue.increment(-1), majLe: FieldValue.serverTimestamp() });
     sortis.push(a.get('nom'));
   }
@@ -1376,7 +1414,7 @@ exports.gestionLireFacture = onCall(
 const JOUR = 24 * 60 * 60 * 1000;
 const FENETRE = 40 * JOUR; // ce qui s'est passé depuis 40 jours est revu chaque nuit
 
-// Matériel non rendu : le prélèvement (restitutions, index.js ; 170 € en Wi-Fi, 200 € avec internet) n'a pas de facture.
+// Matériel non rendu : le prélèvement (restitutions ou tabletteRendue, index.js) n'a pas de facture.
 // On en fait une, marquée payée hors Stripe, pour que chaque encaissement ait sa facture.
 // Ligne de facture : le détail (« tablette, routeur ») vient de la description du prélèvement quand il y est.
 function descriptionNonRendu(c) {
@@ -2553,10 +2591,10 @@ exports.gestionParcours = onCall(async (request) => {
     if (!(await ref.get()).exists) throw new HttpsError('not-found', 'Commande introuvable.');
     if (d.type === 'recu') await ref.update({ 'preparation.recuLe': Date.now(), 'preparation.recuPar': qui });
     else {
-      const preparation = avancementPropre(d.preparation, ['tablette', 'sim', 'suivi', 'routeur']);
-      // Routeur 4G dans le colis ou non : seul un routeur fourni est facturé s'il n'est pas rendu.
-      const routeur = preparation.routeur === 'oui' ? { routeurFourni: true } : preparation.routeur === 'non' ? { routeurFourni: false } : {};
-      await ref.update({ preparation: { ...preparation, majLe: Date.now(), par: qui }, ...routeur });
+      const preparation = avancementPropre(d.preparation, ['tablette', 'sim', 'suivi', 'enceinte']);
+      // Enceinte dans le colis ou non : facturée seulement si elle était fournie et ne revient pas.
+      const enceinte = preparation.enceinte === 'oui' ? { enceinteFournie: true } : preparation.enceinte === 'non' ? { enceinteFournie: false } : {};
+      await ref.update({ preparation: { ...preparation, majLe: Date.now(), par: qui }, ...enceinte });
     }
     return { ok: true };
   }
@@ -2572,7 +2610,7 @@ exports.gestionParcours = onCall(async (request) => {
 
 exports.regles = {
   ETATS, CATEGORIES, natureMouvement, mensuel, centimes, lien, nomFichier, moisSuivant, lectureVersFormulaire, SCHEMA_FACTURE,
-  lireReglages, simAResilier, stockAJour, releveBatterie, usureBatterie, incoherences, materielLu, memeAccessoire, coutLigne, alertesSim, accessoiresAPrevoir, champsSim, aFaire, piecesFacture, debutMoisParis, moisPrecedent, csvTexte, livreDesRecettes,
+  lireReglages, simAResilier, fichesARattacher, stockAJour, releveBatterie, usureBatterie, incoherences, materielLu, memeAccessoire, coutLigne, alertesSim, accessoiresAPrevoir, champsSim, aFaire, piecesFacture, debutMoisParis, moisPrecedent, csvTexte, livreDesRecettes,
   registreDesAchats, corpsDuMail, memeAchat, suiteJumelage, descriptionNonRendu, refusSuppression, fusionnerContacts, emailInformation, cleContact,
   avancementPropre,
 };

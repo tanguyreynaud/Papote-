@@ -430,3 +430,11 @@ test('à faire : tablette revenue avec une batterie usée', () => {
   assert.ok(liste.includes('Tablette T-004 revenue : batterie en panne, à retirer du parc'));
   assert.ok(!liste.some((l) => l.includes('T-005')));
 });
+
+test('achat enregistré après l\'installation : complète les fiches sans facture', () => {
+  const sans = [{ id: 'b', creeLe: 2, serieAndroid: 'AK26 0612' }, { id: 'a', creeLe: 1 }];
+  assert.deepStrictEqual(g.fichesARattacher(sans, ['ak260612'], 1), ['b']);
+  assert.deepStrictEqual(g.fichesARattacher(sans, [], 1), ['a']);
+  assert.deepStrictEqual(g.fichesARattacher(sans, ['X', '', 'Y'], 3), ['a', 'b', null]);
+  assert.deepStrictEqual(g.fichesARattacher([], ['X'], 2), [null, null]);
+});

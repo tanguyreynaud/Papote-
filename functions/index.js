@@ -898,7 +898,7 @@ exports.finDeGrace = onSchedule(
     }
   });
 
-// Tablette incluse non rendue dans les 30 jours : 170 € (200 € si un routeur 4G était dans le colis) prélevés sur la carte de l'abonnement.
+// Tablette incluse non rendue dans les 30 jours : le matériel prêté (abonnement.js, penaliteRestitution) prélevé sur le compte de l'abonnement.
 exports.restitutions = onSchedule(
   { schedule: 'every day 09:00', timeZone: 'Europe/Paris', secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE] },
   async () => {
@@ -967,8 +967,8 @@ function verifierAdmin(request) {
   if (!estAdmin) throw new HttpsError('permission-denied', 'Réservé à l\'administrateur.');
 }
 
-// manquants (facultatif) : éléments absents du colis retour, parmi 'tablette', 'chargeur', 'routeur'.
-// Chacun est prélevé à son prix (tablette 160 €, chargeur et câble 10 €, routeur 30 €).
+// manquants (facultatif) : éléments absents du colis retour, parmi 'tablette', 'chargeur', 'enceinte'.
+// Chacun est prélevé à son prix (tablette 130 €, chargeur et câble 10 €, enceinte 10 €).
 exports.tabletteRendue = onCall({ secrets: [STRIPE_SECRET] }, async (request) => {
   verifierAdmin(request);
   const { commande, manquants } = request.data || {};
