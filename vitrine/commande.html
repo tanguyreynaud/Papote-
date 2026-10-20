@@ -58,6 +58,8 @@ h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-u
 .btn.payer { justify-self: stretch; font-size: 1.15rem; }
 .question { border: 0; padding: 0; margin: 0; display: grid; gap: .6rem; }
 .question legend { font-weight: 700; margin-bottom: .6rem; }
+.etapes { border: 2px solid var(--accent); border-radius: 16px; padding: 1rem 1.2rem; margin: 1.5rem 0 1rem; display: grid; gap: .5rem; }
+.etapes p { margin: 0; }
 .opt { display: flex; gap: .6rem; align-items: center; font-size: 1.05rem; cursor: pointer; }
 .opt .muted { white-space: nowrap; margin-left: auto; }
 .opt input { width: 1.3rem; height: 1.3rem; accent-color: var(--accent); }
@@ -148,6 +150,12 @@ h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-u
     <span>J'accepte de recevoir les nouvelles de Papote par e-mail, et un rappel si je ne termine pas ma commande (désinscription en un clic).</span>
   </label>
 
+  <div class="etapes">
+    <p><b>Pendant l'essai</b> : 1 mois gratuit. Si vous arrêtez, les 60 € vous sont remboursés.</p>
+    <p><b>À la fin du mois</b> : l'abonnement démarre tout seul, vous n'avez rien à faire.</p>
+    <p><b>À la résiliation</b> : en quelques clics depuis l'appli, effective à la fin du mois payé.</p>
+    <p class="muted">Aucun montant prélevé aujourd'hui, sauf les 60 € de mise en service.</p>
+  </div>
   <a class="btn payer" id="payer" href="#" aria-disabled="true">Choisissez un point relais</a>
   <ul class="rassure">
     <li>🔒 Paiement sécurisé par Stripe : carte, Google Pay, Apple Pay, Link ou prélèvement SEPA</li>
