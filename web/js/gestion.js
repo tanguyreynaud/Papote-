@@ -244,7 +244,7 @@ afficherPage();
 
 onAuthStateChanged(getAuth(getApp('admin')), (user) => {
   connecte = !!user;
-  if (!user) return;
+  if (!user) { $('chargement').hidden = true; return; }
   if (pageCourante() === 'clients') chargerClients();
   chargerDonnees();
   chargerMois();
@@ -266,6 +266,8 @@ async function chargerDonnees() {
   } catch (e) {
     erreur(e);
   }
+  // Premier chargement terminé (ou en erreur) : l'indicateur d'ouverture disparaît.
+  $('chargement').hidden = true;
 }
 
 async function chargerMois() {
@@ -509,7 +511,7 @@ function afficherAccueil() {
     [aVerifier, `${pluriel(aVerifier, 'tablette')} revenue${aVerifier > 1 ? 's' : ''}, à vérifier avant de remettre en stock`, '#stock', ''],
     [aRembourser, `${pluriel(aRembourser, 'remboursement')} échoué${aRembourser > 1 ? 's' : ''}, à faire depuis Stripe`, '#commandes', 'ko'],
     [impayees, `${pluriel(impayees, 'abonnement')} impayé${impayees > 1 ? 's' : ''}`, '#compta/factures', 'ko'],
-    [simsAResilier, `${pluriel(simsAResilier, 'forfait SIM')} à résilier ou suspendre`, '#stock/sim', 'ko'],
+    [simsAResilier, `${pluriel(simsAResilier, 'forfait SIM')} payé${simsAResilier > 1 ? 's' : ''} depuis 30 jours pour une tablette sans client : à résilier ou suspendre`, '#stock/sim', 'ko'],
     [remplacees, `${pluriel(remplacees, 'tablette')} remplacée${remplacees > 1 ? 's' : ''} à récupérer chez le client`, '#stock', ''],
     [clientsSansSim, `${clientsSansSim} client${clientsSansSim > 1 ? 's' : ''} Internet inclus sans carte SIM notée sur sa tablette`, '#stock/sim', 'ko'],
     [simsSansTablette, `${simsSansTablette} ligne${simsSansTablette > 1 ? 's SIM actives reliées' : ' SIM active reliée'} à aucune tablette`, '#stock/sim', 'ko'],
@@ -898,15 +900,21 @@ $('filtre-stock').addEventListener('change', afficherStock);
 const ETATS_SANS_CLIENT = ['en-stock', 'revenue', 'a-reparer', 'perdue', 'hors-service'];
 const coutSim = (t) => (t.simCout != null ? t.simCout : donnees.reglages.forfaitSim);
 
-// Même règle que simAResilier (functions/gestion.js) : ligne payée, tablette plus chez un client.
+// Même règle que simAResilier (functions/gestion.js) : ligne active (payée), tablette sans client depuis 30 jours.
+// Une carte pas encore activée ne coûte rien : pas d'alerte.
 function lignesSim() {
   if (!donnees) return [];
   const parId = new Map(donnees.commandes.map((c) => [c.id, c]));
+  const lignes = new Map(donnees.sims.map((l) => [l.id, l]));
   return donnees.stock.filter((t) => t.sim).map((t) => {
     const c = parId.get(t.commande);
+    const ligne = lignes.get(t.simId);
     const finie = c && ((c.restitution && ['rendue', 'facturee'].includes(c.restitution.statut))
       || ['resilie', 'canceled'].includes(c.abonnement));
-    return { t, c, aResilier: ETATS_SANS_CLIENT.includes(t.etat) || !!finie };
+    const depuis = Math.max(0, ...(t.historique || []).map((x) => x.le || 0));
+    const aResilier = (!ligne || ligne.statut === 'active') && (ETATS_SANS_CLIENT.includes(t.etat) || !!finie)
+      && (!depuis || Date.now() - depuis > 30 * 864e5);
+    return { t, c, aResilier };
   });
 }
 

@@ -188,13 +188,20 @@ function lireReglages(donnees) {
   return r;
 }
 
-// Une ligne SIM payée alors que la tablette n'est plus chez un client : forfait à résilier ou suspendre.
+// Une ligne SIM payée alors que la tablette n'est plus chez un client depuis 30 jours : forfait à résilier ou
+// suspendre. Une carte pas encore activée (ligne « stock ») ne coûte rien : pas d'alerte (Tanguy, 2026-10-20).
 const ETATS_SANS_CLIENT = ['en-stock', 'revenue', 'a-reparer', 'perdue', 'hors-service'];
-function simAResilier(tablette, commande) {
-  if (!tablette.sim) return false;
-  if (ETATS_SANS_CLIENT.includes(tablette.etat)) return true;
-  return !!(commande && ((commande.restitution && ['rendue', 'facturee'].includes(commande.restitution.statut))
-    || ['resilie', 'canceled'].includes(commande.abonnement)));
+const DELAI_SIM_SANS_CLIENT = 30 * 86400000;
+function simAResilier(tablette, commande, ligne, maintenant = Date.now()) {
+  if (!tablette.sim && !tablette.simId) return false;
+  if (ligne && ligne.statut !== 'active') return false;
+  const sansClient = ETATS_SANS_CLIENT.includes(tablette.etat)
+    || !!(commande && ((commande.restitution && ['rendue', 'facturee'].includes(commande.restitution.statut))
+      || ['resilie', 'canceled'].includes(commande.abonnement)));
+  if (!sansClient) return false;
+  // Depuis le dernier changement d'état de la tablette (son historique).
+  const depuis = Math.max(0, ...(tablette.historique || []).map((x) => ms(x.le) || 0));
+  return !depuis || maintenant - depuis > DELAI_SIM_SANS_CLIENT;
 }
 
 // Cartes SIM (registre sims/{id}) et accessoires (accessoires/{id}).
@@ -1845,7 +1852,9 @@ function aFaire({ commandes, stock, depenses, automatique, maintenant, sims = []
   for (const t of stock.filter((x) => x.alerteJumelage)) liste.push(`Tablette ${t.ref || t.numero || ''} ${t.alerteJumelage}`);
   ajouter(actives.filter((c) => c.remboursement && c.remboursement.statut === 'echec').length, 'remboursement(s) échoué(s), à faire depuis Stripe');
   const parId = new Map(commandes.map((c) => [c.id, c]));
-  ajouter(stock.filter((t) => simAResilier(t, parId.get(t.commande))).length, 'forfait(s) SIM à résilier ou suspendre');
+  const lignes = new Map(sims.map((l) => [l.id, l]));
+  ajouter(stock.filter((t) => simAResilier(t, parId.get(t.commande), lignes.get(t.simId), maintenant)).length,
+    'forfait(s) SIM payé(s) depuis 30 jours pour une tablette sans client : à résilier ou suspendre');
   ajouter(depenses.filter((d) => ms(d.date) > maintenant - JOURS(90) && !(d.pieces || []).length && !d.justificatif).length,
     'dépense(s) des 3 derniers mois sans justificatif');
   // Achat enregistré depuis la confirmation de commande : la facture est à télécharger chez le vendeur.
@@ -1893,7 +1902,7 @@ async function recapitulatif() {
     commandes,
     stock: stockSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
     depenses: depensesSnap.docs.map((d) => d.data()),
-    sims: simsSnap.docs.map((d) => d.data()),
+    sims: simsSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
     accessoires: accessoiresSnap.docs.map((d) => d.data()),
     automatique: automatique.data(),
     maintenant,

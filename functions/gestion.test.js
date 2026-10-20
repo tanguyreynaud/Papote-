@@ -88,11 +88,18 @@ test('réglages de la gestion', () => {
 });
 
 test('forfait SIM à résilier', () => {
+  const J = 864e5, now = Date.UTC(2026, 9, 20);
+  const ilYA = (jours) => [{ le: now - jours * J }];
   assert.strictEqual(g.simAResilier({ sim: null, etat: 'en-stock' }), false);
   assert.strictEqual(g.simAResilier({ sim: '0612', etat: 'en-stock' }), true);
   assert.strictEqual(g.simAResilier({ sim: '0612', etat: 'envoyee' }, { abonnement: 'actif' }), false);
   assert.strictEqual(g.simAResilier({ sim: '0612', etat: 'envoyee' }, { abonnement: 'resilie' }), true);
   assert.strictEqual(g.simAResilier({ sim: '0612', etat: 'en-retour' }, { restitution: { statut: 'rendue' } }), true);
+  // Carte pas encore activée : elle ne coûte rien, pas d'alerte.
+  assert.strictEqual(g.simAResilier({ simId: 's', etat: 'en-stock', historique: ilYA(90) }, null, { statut: 'stock' }, now), false);
+  // Ligne active : alerte seulement après 30 jours sans client.
+  assert.strictEqual(g.simAResilier({ simId: 's', etat: 'en-stock', historique: ilYA(10) }, null, { statut: 'active' }, now), false);
+  assert.strictEqual(g.simAResilier({ simId: 's', etat: 'en-stock', historique: ilYA(31) }, null, { statut: 'active' }, now), true);
 });
 
 test('liste à faire du récapitulatif', () => {
@@ -114,7 +121,7 @@ test('liste à faire du récapitulatif', () => {
     '1 tablette manquante en stock pour les envoyer',
     '1 tablette reçue mais pas jumelée après 20 jours',
     '1 tablette revenue à vérifier',
-    '1 forfait SIM à résilier ou suspendre',
+    '1 forfait SIM payé depuis 30 jours pour une tablette sans client : à résilier ou suspendre',
     '1 dépense des 3 derniers mois sans justificatif',
   ]);
 });
