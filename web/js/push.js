@@ -43,14 +43,16 @@ export function pushRefused() {
 
 // À appeler après un appui (le navigateur exige un geste pour demander l'autorisation),
 // ou au lancement quand l'autorisation est déjà donnée. Renvoie vrai si le téléphone sonnera.
-export async function enablePush(fid, uid) {
+// onGranted : appelé dès que l'autorisation est donnée, avant l'enregistrement du jeton (plus lent).
+export async function enablePush(fid, uid, onGranted) {
   if (!fid || !uid) return false;
-  if (nativeToken()) return enableNativePush(fid, uid);
+  if (nativeToken()) { onGranted?.(); return enableNativePush(fid, uid); }
   if (!await pushSupported()) return false;
   if (Notification.permission === 'default') {
     if (await Notification.requestPermission() !== 'granted') return false;
   }
   if (Notification.permission !== 'granted') return false;
+  onGranted?.();
   try {
     const registration = await navigator.serviceWorker.register('sw.js');
     const token = await getToken(getMessaging(getApp()), { serviceWorkerRegistration: registration });

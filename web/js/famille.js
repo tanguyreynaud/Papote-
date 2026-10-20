@@ -1682,7 +1682,11 @@ async function renderPushNudge() {
   card.hidden = !session || pushAllowed() || pushRefused() || !await pushSupported();
 }
 $('push-nudge').addEventListener('click', async () => {
-  const ok = await enablePush(session.fid, session.uid);
+  // La carte disparaît dès l'autorisation donnée ; le jeton s'enregistre ensuite en arrière-plan.
+  const ok = await enablePush(session.fid, session.uid, () => {
+    $('push-nudge').hidden = true;
+    toast(`Notifications activées : ${session.family.name} pourra vous appeler`);
+  });
   renderPushNudge();
   if (!ok && pushRefused()) {
     notice(`Les notifications sont bloquées pour Papote. Autorisez-les dans les réglages du téléphone pour que ${session.family.name} puisse vous appeler.`);
