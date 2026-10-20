@@ -13,7 +13,7 @@ import {
   MAX_VIDEO_CHUNKS, VIDEO_CHUNK,
   choisirBase, bucketUrl,
 } from './firebase.js';
-import { askConfirm, notice, avantDePartir } from './ui.js';
+import { askConfirm, notice, avantDePartir, chooseAction } from './ui.js';
 import { showGuideOnce } from './guide.js';
 import {
   abonnementOk, FORMULES, LIBELLES, ouvrirPortail, payer, rattacherCommande, resilier, annulerResiliation,
@@ -1865,23 +1865,27 @@ function renderMembers(all) {
       }
       // Les responsables gèrent les autres membres (le créateur reste toujours responsable).
       if (amFamilyAdmin() && m.id !== session.uid) {
-        const menu = document.createElement('div');
-        menu.className = 'member-actions';
-        if (!isCreator) {
-          const toggle = document.createElement('button');
-          toggle.type = 'button';
-          toggle.className = 'link small';
-          toggle.textContent = isAdmin ? 'Retirer responsable' : 'Rendre responsable';
-          toggle.addEventListener('click', () => setFamilyAdmin(m.id, !isAdmin));
-          menu.append(toggle);
-        }
-        const remove = document.createElement('button');
-        remove.type = 'button';
-        remove.className = 'link danger small';
-        remove.textContent = 'Retirer';
-        remove.addEventListener('click', () => removeMember(m));
-        menu.append(remove);
-        li.append(menu);
+        // Un bouton « ⋮ » ouvre les actions possibles, chacune confirmée avant d'agir.
+        const more = document.createElement('button');
+        more.type = 'button';
+        more.className = 'icon-btn member-more';
+        more.setAttribute('aria-label', `Actions pour ${m.name}`);
+        more.textContent = '⋮';
+        more.addEventListener('click', async () => {
+          const options = [];
+          if (!isCreator) options.push({ label: isAdmin ? 'Retirer le rôle de responsable' : 'Rendre responsable', value: 'admin' });
+          options.push({ label: 'Retirer de la famille', value: 'remove', danger: true });
+          const choix = await chooseAction(m.name, options);
+          if (choix === 'admin') {
+            const msg = isAdmin
+              ? `Retirer le rôle de responsable à ${m.name} ? Cette personne ne pourra plus accepter de membres ni changer les réglages.`
+              : `Rendre ${m.name} responsable ? Cette personne pourra accepter des membres et changer les réglages de la tablette.`;
+            if (await askConfirm(msg, isAdmin ? 'Retirer le rôle' : 'Rendre responsable')) setFamilyAdmin(m.id, !isAdmin);
+          } else if (choix === 'remove') {
+            removeMember(m);
+          }
+        });
+        li.append(more);
       }
     }
     list.append(li);

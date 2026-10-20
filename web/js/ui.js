@@ -9,6 +9,7 @@ function dialog(message, buttons, extra = null) {
     box.setAttribute('role', 'alertdialog');
     const text = document.createElement('p');
     text.textContent = message;
+    text.hidden = !message;
     const row = document.createElement('div');
     row.className = extra?.stack ? 'dialog-buttons stack' : 'dialog-buttons';
     const close = (value) => {
@@ -75,6 +76,14 @@ export function avantDePartir({ intro, perdu, suite }) {
     { label: 'Garder Papote', value: false, cls: 'primary' },
     { label: 'Résilier quand même', value: true, cls: 'secondary' },
   ], { title: 'Avant de partir', list: perdu, after: suite, stack: true });
+}
+
+/** Menu d'actions (bouton « ⋯ ») : renvoie la valeur choisie, ou false si annulé. */
+export function chooseAction(title, options) {
+  return dialog('', [
+    ...options.map((o) => ({ label: o.label, value: o.value, cls: o.danger ? 'secondary action-danger' : 'secondary' })),
+    { label: 'Annuler', value: false, cls: 'link' },
+  ], { title, stack: true });
 }
 
 export function notice(message) {

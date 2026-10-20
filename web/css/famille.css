@@ -1143,3 +1143,9 @@ body:not(.on-support) .ps-bouton, body:not(.on-support) .ps-panneau { display: n
 /* Appels manqués en rouge dans les notifications */
 .notif.missed .notif-body p:first-child { color: var(--danger); font-weight: 600; }
 .notif.missed .notif-icon { color: var(--danger); background: color-mix(in srgb, var(--danger) 14%, var(--surface)); }
+
+/* Membres : bouton « ⋮ » et menu d'actions. */
+.member-more { margin-left: auto; width: 44px; height: 44px; font-size: 26px; line-height: 1; color: var(--muted); border-radius: 50%; }
+.member-more:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); color: var(--accent); }
+.dialog-buttons.stack .secondary { justify-content: center; min-height: 50px; font-weight: 700; }
+.action-danger { color: var(--danger) !important; }
