@@ -643,16 +643,19 @@ exports.gestionDonnees = onCall(async (request) => {
 
 // Fiches créées à l'installation avant que la facture soit enregistrée (sans prix ni date d'achat) : un achat
 // enregistré ensuite les complète au lieu d'ajouter des fiches en double, ce qui gonflerait le stock à vendre.
-// Même n° de série d'abord, puis la plus ancienne. Renvoie, pour chaque tablette de l'achat, l'id à compléter ou null.
+// Même n° de série d'abord, puis la plus ancienne encore au stock : une tablette déjà partie chez un client (ou liée
+// à une commande) n'est complétée que par son n° de série. Renvoie, pour chaque tablette, l'id à compléter ou null.
+const ETATS_A_RATTACHER = ['en-stock', 'preparee'];
 function fichesARattacher(sansAchat, numeros, quantite) {
   const restantes = sansAchat.slice().sort((a, b) => (a.creeLe || 0) - (b.creeLe || 0));
+  const libre = (t) => !t.commande && (!t.etat || ETATS_A_RATTACHER.includes(t.etat));
   const prendre = (i) => (i < 0 ? null : restantes.splice(i, 1)[0].id);
   const serie = (n) => String(n || '').replace(/\s/g, '').toUpperCase();
   const choix = Array.from({ length: quantite }, (_, i) => {
     const n = serie(numeros[i]);
     return n ? prendre(restantes.findIndex((t) => serie(t.numero) === n || serie(t.serieAndroid) === n)) : undefined;
   });
-  return choix.map((id) => (id === undefined || id === null ? (restantes.length ? prendre(0) : null) : id));
+  return choix.map((id) => (id === undefined || id === null ? prendre(restantes.findIndex(libre)) : id));
 }
 
 // Achat de tablettes : N fiches de stock et la dépense correspondante (sauf depense: false).
@@ -688,7 +691,7 @@ async function ajouterAchat(d, qui) {
   const sansAchat = (await db().collection('stock').where('acheteeLe', '==', null).get()).docs
     .filter((x) => x.get('prixAchat') == null && !x.get('depense'))
     .map((x) => ({ id: x.id, numero: x.get('numero'), serieAndroid: x.get('serieAndroid'), modele: x.get('modele'),
-      creeLe: ms(x.get('creeLe')) || 0 }));
+      etat: x.get('etat'), commande: x.get('commande') || null, creeLe: ms(x.get('creeLe')) || 0 }));
   const rattachees = fichesARattacher(sansAchat, numeros, quantite);
   for (let i = 0; i < quantite; i++) {
     if (rattachees[i]) {
@@ -799,6 +802,27 @@ exports.gestionStock = onCall(async (request) => {
     const r = await ajouterAchat(d, qui);
     r.materiel = await entrerMateriel(materielLu(d.materiel, true), { depense: r.depense, numeroFacture: d.numeroFacture }, qui);
     return r;
+  }
+
+  // Achat rattaché à la mauvaise fiche : la fiche redevient « sans facture » et l'achat part sur une fiche neuve en stock.
+  if (d.action === 'detacherAchat') {
+    if (typeof d.id !== 'string' || !d.id) throw new HttpsError('invalid-argument', 'Tablette manquante.');
+    const ref = db().doc(`stock/${d.id}`);
+    const snap = await ref.get();
+    if (!snap.exists || !snap.get('depense')) throw new HttpsError('failed-precondition', 'Cette tablette n\'a pas d\'achat rattaché.');
+    const dep = await db().doc(`depenses/${snap.get('depense')}`).get();
+    const modele = dep.exists ? String(dep.get('libelle') || '').replace(/^\d+ tablettes? ?/, '') || null : null;
+    const neuve = db().collection('stock').doc();
+    const batch = db().batch();
+    batch.set(neuve, {
+      numero: null, modele, fournisseur: snap.get('fournisseur') || null, prixAchat: snap.get('prixAchat'),
+      acheteeLe: snap.get('acheteeLe'), etat: 'en-stock', commande: null, sim: null, notes: null, depense: snap.get('depense'),
+      historique: [{ le: Date.now(), etat: 'en-stock', par: qui }],
+      creeLe: FieldValue.serverTimestamp(), majLe: FieldValue.serverTimestamp(),
+    });
+    batch.update(ref, { prixAchat: null, acheteeLe: null, depense: null, majLe: FieldValue.serverTimestamp() });
+    await batch.commit();
+    return { ok: true, id: neuve.id };
   }
 
   if (d.action === 'modifier') {
