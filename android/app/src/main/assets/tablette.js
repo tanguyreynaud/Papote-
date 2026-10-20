@@ -139,6 +139,7 @@
     pauseScreen.style.display = paused ? 'flex' : 'none';
     if (paused) {
       overlayQueue = [];
+      shownInOverlay = {}; // ils reviendront à la fin de la pause
       if (overlayPost) { overlayPost = null; show($('overlay'), false); }
       showView('view-home');
     }
@@ -478,24 +479,16 @@
 
   function queueUnseen() {
     if (window.papotePaused) return; // en pause : rien ne s'affiche ni n'est marqué « vu »
-    var newestPhoto = null;
+    // Chaque envoi attend son tour, du plus ancien au plus récent : une nouvelle photo ne
+    // remplace jamais celle qui est affichée tant que Mamie ne l'a pas vue (OK ou visage vu).
     for (var i = posts.length - 1; i >= 0; i--) {
       var p = posts[i];
       // Une photo ou un vocal n'est montré que lorsqu'il est téléchargé.
       if (p.seen || shownInOverlay[p.id] || (p.type === 'photo' && !p.image) || (p.type === 'voice' && !p.audio) || (p.type === 'video' && !p.video)) continue;
       shownInOverlay[p.id] = true;
-      if (p.image) newestPhoto = p; else overlayQueue.push(p);
+      overlayQueue.push(p);
     }
-    // Une nouvelle photo remplace tout de suite ce qui est affiché, et reste en grand
-    // jusqu'à ce que Mamie réponde (OK), qu'une autre photo arrive ou qu'on l'appelle.
-    if (newestPhoto) {
-      if (overlayPost) markSeen(overlayPost);
-      overlayQueue.unshift(newestPhoto);
-      stopAudio();
-      nextOverlay();
-      return;
-    }
-    if (!overlayPost) nextOverlay();
+    if (!overlayPost && !inCall()) nextOverlay();
   }
 
   // ---------- Visage vu : « lu », lecture, puis fermeture au bout de 2 minutes ----------
@@ -538,14 +531,19 @@
     try { if (typeof w.stop === 'function') w.stop(); } catch (e) { }
   }
 
-  // Un appel arrive : on ferme la photo ou le message affiché.
+  // Un appel arrive : la photo ou le message affiché s'efface, sans être compté comme vu ;
+  // il revient en tête de file à la fin de l'appel, avec ceux qui attendaient.
   function closeOverlayForCall() {
     if (!overlayPost) return;
-    markSeen(overlayPost);
     stopAudio();
-    overlayQueue = [];
-    nextOverlay();
+    overlayQueue.unshift(overlayPost);
+    unwatchSeen('overlay');
+    overlayPost = null;
+    show($('overlay'), false);
   }
+  setInterval(function () {
+    if (!overlayPost && overlayQueue.length && !inCall()) nextOverlay();
+  }, 2000);
 
   function setOverlayActions(visible, withReplay) {
     show($('overlay-actions'), visible);
