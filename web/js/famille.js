@@ -1923,40 +1923,64 @@ function renderRequests(pending) {
   $('requests-card').hidden = !admin || !pending.length;
   $('pending-banner').hidden = !admin || !pending.length;
   if (!admin) return;
-  $('pending-banner').textContent = pending.length === 1
-    ? `${pending[0].name} veut rejoindre la famille`
-    : `${pending.length} personnes veulent rejoindre la famille`;
-  $('requests').replaceChildren(...pending.map((m) => {
-    const li = document.createElement('li');
-    const name = document.createElement('span');
-    name.className = 'member-name';
-    name.textContent = m.email ? `${m.name} (${m.email})` : m.name;
-    const actions = document.createElement('div');
-    actions.className = 'member-actions';
-    const ok = document.createElement('button');
-    ok.type = 'button';
-    ok.className = 'primary small-btn';
-    ok.textContent = 'Accepter';
-    ok.disabled = familyFull;
-    ok.addEventListener('click', async () => {
-      if (familyFull) { notice('La famille est complète : 30 proches au maximum.'); return; }
-      try { await acceptMember(session.fid, m.id); toast(`${m.name} a rejoint la famille`); } catch (err) { console.error(err); notice("L'acceptation a échoué."); }
-    });
-    const no = document.createElement('button');
-    no.type = 'button';
-    no.className = 'link danger small';
-    no.textContent = 'Refuser';
-    no.addEventListener('click', async () => {
-      if (!await askConfirm(`Refuser la demande de ${m.name} ?`)) return;
-      try { await deleteDoc(doc(db, 'families', session.fid, 'members', m.id)); } catch (err) { console.error(err); }
-    });
-    actions.append(ok, no);
-    li.append(name, actions);
-    return li;
-  }));
+  // Accueil : une carte par demande, bien en vue, avec Refuser / Accepter. Même chose dans Réglages.
+  $('pending-banner').replaceChildren(...pending.map(requestCard));
+  $('requests').replaceChildren(...pending.map(requestCard));
 }
 
-$('pending-banner').addEventListener('click', () => openPage('settings'));
+function requestCard(m) {
+  const card = document.createElement('article');
+  card.className = 'join-card';
+  const head = document.createElement('div');
+  head.className = 'join-head';
+  const av = document.createElement('span');
+  av.className = 'avatar join-avatar';
+  if (m.face) {
+    const img = document.createElement('img');
+    img.src = m.face;
+    img.alt = '';
+    av.append(img);
+  } else {
+    av.textContent = (m.name || '?').trim().charAt(0).toUpperCase();
+  }
+  const txt = document.createElement('div');
+  txt.className = 'join-text';
+  const who = document.createElement('strong');
+  who.textContent = m.name;
+  const what = document.createElement('span');
+  what.textContent = 'veut rejoindre la famille';
+  txt.append(who, what);
+  if (m.email) {
+    const mail = document.createElement('span');
+    mail.className = 'join-mail';
+    mail.textContent = m.email;
+    txt.append(mail);
+  }
+  head.append(av, txt);
+  const actions = document.createElement('div');
+  actions.className = 'join-actions';
+  const no = document.createElement('button');
+  no.type = 'button';
+  no.className = 'secondary join-no';
+  no.textContent = 'Refuser';
+  no.addEventListener('click', async () => {
+    if (!await askConfirm(`Refuser la demande de ${m.name} ?`, 'Refuser')) return;
+    try { await deleteDoc(doc(db, 'families', session.fid, 'members', m.id)); toast('Demande refusée'); } catch (err) { console.error(err); notice("Le refus n'a pas pu être enregistré."); }
+  });
+  const ok = document.createElement('button');
+  ok.type = 'button';
+  ok.className = 'primary join-ok';
+  ok.textContent = 'Accepter';
+  ok.disabled = familyFull;
+  ok.addEventListener('click', async () => {
+    if (familyFull) { notice('La famille est complète : 30 proches au maximum.'); return; }
+    ok.disabled = true;
+    try { await acceptMember(session.fid, m.id); toast(`${m.name} a rejoint la famille`); } catch (err) { console.error(err); notice("L'acceptation a échoué."); ok.disabled = false; }
+  });
+  actions.append(no, ok);
+  card.append(head, actions);
+  return card;
+}
 
 function watchInvitations() {
   stopInvitations?.();

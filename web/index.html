@@ -214,7 +214,7 @@
         <button type="button" id="tablet-chip" class="tablet-chip" aria-label="État de la tablette" hidden></button>
         <select id="family-switch" class="family-switch" aria-label="Changer de famille" hidden></select>
       </header>
-      <button type="button" id="pending-banner" class="pending-banner" hidden></button>
+      <section id="pending-banner" class="join-requests" aria-label="Demandes pour rejoindre la famille" hidden></section>
       <div id="abo-banner" class="abo-banner" hidden>
         <p id="abo-banner-text"></p>
         <button type="button" id="abo-banner-btn" class="primary small-btn" hidden>Régler</button>
@@ -335,7 +335,7 @@
         <h3 class="settings-group">La famille</h3>
         <div id="requests-card" class="card" hidden>
           <h2>Demandes pour rejoindre</h2>
-          <ul id="requests" class="members"></ul>
+          <div id="requests" class="join-list"></div>
           <p id="family-full" class="error small" hidden>La famille est complète : 30 proches au maximum. Retirez quelqu'un pour en accepter un autre.</p>
         </div>
         <div class="card">
