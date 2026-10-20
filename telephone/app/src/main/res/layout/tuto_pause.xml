@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Tuto montré avant d'ouvrir le réglage « Suspendre l'activité… » (ReglagePause) -->
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/creme"
+    android:fillViewport="true"
+    android:fitsSystemWindows="true">
+
+<LinearLayout
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingStart="28dp"
+    android:paddingTop="56dp"
+    android:paddingEnd="28dp"
+    android:paddingBottom="40dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/pause_titre"
+        android:textColor="@color/texte"
+        android:textSize="28sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:text="@string/pause_pourquoi"
+        android:textColor="@color/texte_doux"
+        android:textSize="17sp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="28dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="@drawable/rond_indigo"
+            android:gravity="center"
+            android:text="1"
+            android:textColor="#FFFFFF"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:layout_weight="1"
+            android:text="@string/pause_etape1"
+            android:textColor="@color/texte"
+            android:textSize="19sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="28dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="@drawable/rond_indigo"
+            android:gravity="center"
+            android:text="2"
+            android:textColor="#FFFFFF"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:layout_weight="1"
+            android:text="@string/pause_etape2"
+            android:textColor="@color/texte"
+            android:textSize="19sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="28dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="@drawable/rond_indigo"
+            android:gravity="center"
+            android:text="3"
+            android:textColor="#FFFFFF"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:layout_weight="1"
+            android:text="@string/pause_etape3"
+            android:textColor="@color/texte"
+            android:textSize="19sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="28dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="@drawable/rond_indigo"
+            android:gravity="center"
+            android:text="4"
+            android:textColor="#FFFFFF"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:layout_weight="1"
+            android:text="@string/pause_etape4"
+            android:textColor="@color/texte"
+            android:textSize="19sp" />
+    </LinearLayout>
+
+    <View
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:minHeight="40dp" />
+
+    <Button
+        android:id="@+id/ouvrir"
+        android:layout_width="match_parent"
+        android:layout_height="64dp"
+        android:background="@drawable/bouton_indigo"
+        android:stateListAnimator="@null"
+        android:text="@string/pause_ok"
+        android:textAllCaps="false"
+        android:textColor="#FFFFFF"
+        android:textSize="19sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/plus_tard"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:layout_marginTop="8dp"
+        android:gravity="center"
+        android:text="@string/pause_plus_tard"
+        android:textColor="@color/texte_doux"
+        android:textSize="17sp" />
+</LinearLayout>
+</ScrollView>

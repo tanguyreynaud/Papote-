@@ -15,6 +15,8 @@ import android.provider.Settings;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import androidx.browser.customtabs.CustomTabsCallback;
+
 import com.google.androidbrowserhelper.trusted.LauncherActivity;
 import com.google.firebase.messaging.FirebaseMessaging;
 
@@ -24,7 +26,8 @@ import com.google.firebase.messaging.FirebaseMessaging;
  *
  * Avant, au premier lancement : autorisation des notifications (Android 13+) et de l'écran d'appel
  * plein écran (Android 14+). Puis l'adresse reçoit ?natif=<jeton> : l'app famille range ce jeton
- * avec le compte (web/js/push.js), et le serveur fait sonner ce téléphone par lui.
+ * avec le compte (web/js/push.js), et le serveur fait sonner ce téléphone par lui. Et ?pause=1
+ * tant qu'Android peut mettre l'app en pause (carte « Ne manquez aucun appel »).
  */
 public class Ouverture extends LauncherActivity {
     private static final String PREFS = "ouverture";
@@ -35,7 +38,8 @@ public class Ouverture extends LauncherActivity {
     private static final long ATTENTE_JETON_MS = 4000;
 
     private boolean lance;
-    private boolean attendReglage;
+    /** Étape suivante, au retour d'un écran de réglages ouvert par l'app. */
+    private Runnable auRetour;
 
     @Override
     protected boolean shouldLaunchImmediately() {
@@ -51,6 +55,9 @@ public class Ouverture extends LauncherActivity {
         Uri data = getIntent().getData();
         if (data != null && data.getQueryParameter("appel") != null) {
             Appels.arreter(this, data.getQueryParameter("appel"));
+            // Pas de réglages par-dessus un appel : ils seront proposés au prochain lancement.
+            recupererJeton();
+            return;
         }
         demanderNotifications();
     }
@@ -81,7 +88,7 @@ public class Ouverture extends LauncherActivity {
             try {
                 startActivity(new Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT,
                         Uri.parse("package:" + getPackageName())));
-                attendReglage = true;
+                auRetour = this::recupererJeton;
                 return;
             } catch (Exception e) {
                 // Réglage absent sur ce téléphone : tant pis, le bandeau sonnera quand même.
@@ -90,12 +97,15 @@ public class Ouverture extends LauncherActivity {
         recupererJeton();
     }
 
+    // onRestart et non onResume : la fermeture de la demande d'autorisation relance aussi onResume,
+    // alors que l'écran de réglages tout juste ouvert n'a pas encore été vu.
     @Override
-    protected void onResume() {
-        super.onResume();
-        if (attendReglage) {
-            attendReglage = false;
-            recupererJeton();
+    protected void onRestart() {
+        super.onRestart();
+        if (auRetour != null && !isFinishing()) {
+            Runnable suite = auRetour;
+            auRetour = null;
+            suite.run();
         }
     }
 
@@ -115,15 +125,48 @@ public class Ouverture extends LauncherActivity {
         // Chrome. Quand la demande d'autorisation s'ouvre par-dessus, Android ne la signale jamais :
         // l'app restait bloquée sur le logo. On la signale nous-mêmes (sans effet si déjà reçue).
         onEnterAnimationComplete();
+        // Sans réseau, Chrome n'afficherait qu'une page d'erreur : écran Papote qui attend le réseau.
+        if (!HorsLigne.connecte(this)) {
+            startActivity(new Intent(this, HorsLigne.class).setData(getIntent().getData()));
+            finish();
+            return;
+        }
         launchTwa();
+    }
+
+    /**
+     * Si la page ne se charge pas (réseau coupé entre-temps, Wi-Fi sans internet), Chrome le signale
+     * ici et la bibliothèque TWA fait planter l'app exprès : on ouvre plutôt l'écran HorsLigne.
+     */
+    @Override
+    protected CustomTabsCallback getCustomTabsCallback() {
+        return new CustomTabsCallback() {
+            @Override
+            public Bundle extraCallbackWithResult(@NonNull String callbackName, @Nullable Bundle args) {
+                if (!"quality_enforcement.crash".equals(callbackName)) return null;
+                runOnUiThread(() -> {
+                    startActivity(new Intent(Ouverture.this, HorsLigne.class).setData(getIntent().getData()));
+                    finish();
+                });
+                Bundle ok = new Bundle();
+                ok.putBoolean("success", true);
+                return ok;
+            }
+        };
     }
 
     @Override
     protected Uri getLaunchingUrl() {
-        Uri url = super.getLaunchingUrl();
+        Uri.Builder url = super.getLaunchingUrl().buildUpon();
         String jeton = prefs(this).getString(JETON, null);
-        if (jeton == null) return url;
-        return url.buildUpon().appendQueryParameter("natif", jeton).build();
+        if (jeton != null) url.appendQueryParameter("natif", jeton);
+        // Android 11+ met en pause une app pas ouverte depuis quelques mois : elle ne recevrait
+        // plus les appels. Tant que ce n'est pas réglé, l'app famille affiche une carte qui mène
+        // au bon réglage (ReglagePause).
+        if (Build.VERSION.SDK_INT >= 30 && !getPackageManager().isAutoRevokeWhitelisted()) {
+            url.appendQueryParameter("pause", "1");
+        }
+        return url.build();
     }
 
     static void memoriserJeton(Context ctx, String jeton) {
