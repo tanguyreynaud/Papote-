@@ -88,7 +88,9 @@ if ($typed -ne $serie) { Fail 'N° de série différent : rien n''a été fait.'
 # Sa clé App Check est retirée (la tablette effacée ne doit plus pouvoir obtenir de jeton).
 $outilCle = Join-Path $PSScriptRoot '..\outils\admin\cle-tablette.js'
 if (Test-Path $outilCle) {
-    try { & node $outilCle --retirer $serie 2>$null | Out-Null } catch { }
+    $oldPref = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try { & node $outilCle --retirer $serie 2>$null | Out-Null } catch { } finally { $ErrorActionPreference = $oldPref }
 }
 
 # 4. Papote quitte la famille puis demande à Android d'effacer la tablette.

@@ -187,10 +187,15 @@ if ($Code) {
 $outilCle = Join-Path $PSScriptRoot '..\outils\admin\cle-tablette.js'
 if (Test-Path $outilCle) {
     $serieCle = (Adb shell getprop ro.serialno).Trim()
+    # Les messages de l'outil passent par stderr : avec 'Stop', PowerShell 5 les prendrait pour une erreur.
+    $oldPref = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
     try {
         $ligne = (& node $outilCle --serie $serieCle 2>$null | Where-Object { $_ -match '^CLE=' } | Select-Object -First 1)
         if ($ligne -and $ligne -match '^CLE=([A-Za-z0-9_-]{20,100})$') {
-            Adb shell am start -n "$Package/.MainActivity" --es appCheckKey $Matches[1] | Out-Null
+            # Commande passée par l'entrée standard : certaines tablettes notent dans leur journal
+            # système les commandes « adb shell … » reçues en arguments (la clé y apparaîtrait).
+            "am start -n $Package/.MainActivity --es appCheckKey $($Matches[1])`nexit`n" | & $script:AdbExe shell 2>$null | Out-Null
             $Matches = $null
             Say 'Clé App Check posée sur la tablette.' 'Green'
         } else {
@@ -198,6 +203,8 @@ if (Test-Path $outilCle) {
         }
     } catch {
         Say "Clé App Check : pas pu la créer ($($_.Exception.Message))." 'Yellow'
+    } finally {
+        $ErrorActionPreference = $oldPref
     }
 }
 

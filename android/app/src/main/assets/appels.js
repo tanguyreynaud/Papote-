@@ -3,6 +3,7 @@
 // La tablette a ici sa propre identité Firebase (SDK web, en temps réel) ; le reste de l'écran
 // passe par l'app Android (Sync.java).
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
+import { initializeAppCheck, CustomProvider } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app-check.js';
 import {
   getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
@@ -21,10 +22,9 @@ const app = initializeApp({
 });
 // App Check : la tablette prouve qu'elle est une vraie tablette Papote (jeton fourni par l'app
 // Android, PapoteAndroid.appCheckToken). Seulement si la tablette a reçu sa clé à l'installation ;
-// sans clé, rien ne change.
+// sans clé, rien ne change. (Pas de « await » au premier niveau : les WebView d'avant 89 refusent tout le fichier.)
 try {
   if (window.PapoteAndroid && window.PapoteAndroid.hasAppCheckKey && window.PapoteAndroid.hasAppCheckKey()) {
-    const { initializeAppCheck, CustomProvider } = await import('https://www.gstatic.com/firebasejs/12.19.0/firebase-app-check.js');
     initializeAppCheck(app, {
       provider: new CustomProvider({
         getToken: async () => {
