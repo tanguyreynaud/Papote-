@@ -2222,7 +2222,8 @@ function afficherCourrier() {
   }
   const quand = new Date(c.le).toLocaleString('fr-FR', { dateStyle: 'long', timeStyle: 'short' });
   $('courrier').replaceChildren(
-    `Dernier relevé le ${quand} : ${c.rangees.length ? `${pluriel(c.rangees.length, 'facture')} rangée${c.rangees.length > 1 ? 's' : ''} (${c.rangees.join(' ; ')})` : 'aucune nouvelle facture'}.`,
+    `Dernier relevé le ${quand} : ${c.rangees.length ? `${pluriel(c.rangees.length, 'facture')} rangée${c.rangees.length > 1 ? 's' : ''} (${c.rangees.join(' ; ')})` : 'aucune nouvelle facture'}`,
+    c.recus != null ? ` (boîte ${c.boite || ''} : ${pluriel(c.recus, 'e-mail')} reçu${c.recus > 1 ? 's' : ''} ces 4 jours, dont ${c.pourFactures || 0} adressé${c.pourFactures > 1 ? 's' : ''} à factures@).` : '.',
     ...c.ignorees.map((x) => h('span', {}, h('br'), `Ignoré : ${x}`)),
     ...c.erreurs.map((x) => h('span', { class: 'error' }, h('br'), x)),
     ...(c.precedent ? [h('br'), `Dernier e-mail traité le ${new Date(c.precedent.le).toLocaleString('fr-FR', { dateStyle: 'long', timeStyle: 'short' })} : `,
