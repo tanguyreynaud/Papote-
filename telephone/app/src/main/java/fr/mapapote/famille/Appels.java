@@ -10,12 +10,19 @@ import android.content.SharedPreferences;
 import android.media.AudioAttributes;
 import android.media.RingtoneManager;
 import android.net.Uri;
+import android.util.Log;
 
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.Person;
 
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
 import java.util.Set;
+
+import org.json.JSONObject;
 
 /**
  * Sonnerie des appels de la tablette, comme un vrai appel de téléphone : notification d'appel
@@ -43,6 +50,9 @@ final class Appels {
     private static final long DUREE_MAX_MS = 60_000;
     private static final String PREFS = "appels";
     private static final String TRAITES = "traites";
+    private static final String REFUSES = "refuses";
+    /** Fonction serveur refuserAppel (functions/appels.js). */
+    private static final String URL_REFUS = "https://europe-west1-papote-famille.cloudfunctions.net/refuserAppel";
 
     static void creerCanaux(Context ctx) {
         NotificationManager nm = ctx.getSystemService(NotificationManager.class);
@@ -63,8 +73,10 @@ final class Appels {
     }
 
     /** La tablette appelle : le téléphone sonne (une seule fois par appel, malgré les renvois). */
-    static void sonner(Context ctx, String cid, String nom) {
+    static void sonner(Context ctx, String cid, String nom, String fid, String jeton) {
         if (dejaTraite(ctx, cid)) return;
+        // Gardés pour « Refuser » : le serveur arrête l'appel pour la tablette sur ce jeton.
+        if (fid != null && jeton != null) prefs(ctx).edit().putString("refus." + cid, fid + "/" + jeton).apply();
         creerCanaux(ctx);
         Person appelant = new Person.Builder().setName(nom).setImportant(true).build();
         PendingIntent ecran = PendingIntent.getActivity(ctx, code(cid, 0),
@@ -103,9 +115,54 @@ final class Appels {
         ctx.sendBroadcast(new Intent(ACTION_FIN).setPackage(ctx.getPackageName()).putExtra(EXTRA_CID, cid));
     }
 
+    /**
+     * « Refuser » : silence ici, et la tablette arrête de sonner tout de suite (« n'a pas pu
+     * répondre »), comme le bouton Refuser de l'app famille. Appel réseau en arrière-plan.
+     */
+    static void refuser(Context ctx, String cid, Runnable fini) {
+        arreter(ctx, cid);
+        if (cid == null) {
+            if (fini != null) fini.run();
+            return;
+        }
+        marquer(ctx, REFUSES, cid);
+        String cle = prefs(ctx).getString("refus." + cid, null);
+        prefs(ctx).edit().remove("refus." + cid).apply();
+        if (cle == null || cle.indexOf('/') < 0) {
+            if (fini != null) fini.run();
+            return;
+        }
+        String fid = cle.substring(0, cle.indexOf('/'));
+        String jeton = cle.substring(cle.indexOf('/') + 1);
+        new Thread(() -> {
+            try {
+                HttpURLConnection c = (HttpURLConnection) new URL(URL_REFUS).openConnection();
+                c.setRequestMethod("POST");
+                c.setConnectTimeout(8000);
+                c.setReadTimeout(8000);
+                c.setDoOutput(true);
+                c.setRequestProperty("Content-Type", "application/json");
+                byte[] corps = new JSONObject().put("fid", fid).put("cid", cid).put("jeton", jeton)
+                        .toString().getBytes(StandardCharsets.UTF_8);
+                try (OutputStream o = c.getOutputStream()) {
+                    o.write(corps);
+                }
+                int code = c.getResponseCode();
+                if (code >= 300) Log.w("Papote", "Refus de l'appel " + cid + " : réponse " + code);
+                c.disconnect();
+            } catch (Exception e) {
+                Log.w("Papote", "Refus de l'appel " + cid + " impossible", e);
+            } finally {
+                if (fini != null) fini.run();
+            }
+        }).start();
+    }
+
     /** Personne n'a répondu : « Appel manqué », qui rappelle la tablette (pendant 24 h). */
     static void manque(Context ctx, String cid, String nom) {
         arreter(ctx, cid);
+        // Refusé ici : pas d'« Appel manqué » pour soi-même.
+        if (contient(ctx, REFUSES, cid)) return;
         creerCanaux(ctx);
         Notification n = new NotificationCompat.Builder(ctx, CANAL_INFOS)
                 .setSmallIcon(R.drawable.ic_notif)
@@ -158,15 +215,23 @@ final class Appels {
     }
 
     // Appels déjà décrochés, refusés ou finis : les renvois du serveur ne doivent pas les refaire sonner.
-    private static synchronized boolean dejaTraite(Context ctx, String cid) {
-        return prefs(ctx).getStringSet(TRAITES, new HashSet<>()).contains(cid);
+    private static boolean dejaTraite(Context ctx, String cid) {
+        return contient(ctx, TRAITES, cid);
     }
 
-    private static synchronized void marquerTraite(Context ctx, String cid) {
-        Set<String> traites = new HashSet<>(prefs(ctx).getStringSet(TRAITES, new HashSet<>()));
-        if (traites.size() > 50) traites.clear();
-        traites.add(cid);
-        prefs(ctx).edit().putStringSet(TRAITES, traites).apply();
+    private static void marquerTraite(Context ctx, String cid) {
+        marquer(ctx, TRAITES, cid);
+    }
+
+    private static synchronized boolean contient(Context ctx, String liste, String cid) {
+        return prefs(ctx).getStringSet(liste, new HashSet<>()).contains(cid);
+    }
+
+    private static synchronized void marquer(Context ctx, String liste, String cid) {
+        Set<String> ids = new HashSet<>(prefs(ctx).getStringSet(liste, new HashSet<>()));
+        if (ids.size() > 50) ids.clear();
+        ids.add(cid);
+        prefs(ctx).edit().putStringSet(liste, ids).apply();
     }
 
     private static SharedPreferences prefs(Context ctx) {
