@@ -55,7 +55,7 @@ les fonctions suffit pour que le chat en tienne compte.
 ## Abonnement
 - L'abonnement se gère dans l'appli famille, onglet Profil : « Gérer le paiement et les factures » (changer de carte, factures) et « Résilier l'abonnement ». Seul le propriétaire de la famille, celui qui paie, peut le faire.
 - On peut payer avec la carte ou le compte de n'importe qui, par exemple celui du parent lui-même. Paiement au mois seulement, pas à l'année.
-- Pas de suspension possible (hospitalisation, vacances).
+- Hospitalisation du proche : jusqu'à 2 mois d'abonnement remboursés par an, sur certificat d'hospitalisation envoyé à contact@mapapote.fr. Aucune pause de l'abonnement pour d'autres raisons (vacances, absence…).
 - Fin d'abonnement : l'appli (Profil, Abonnement) donne une étiquette de retour à imprimer, payée par Papote. Tout le matériel est à renvoyer sous 30 jours : la tablette et son support, le chargeur et son câble, et le routeur 4G s'il a été fourni dans le colis.
 - Le paiement passe par Stripe, une page sécurisée. Papote ne voit jamais le numéro de carte.
 
@@ -71,7 +71,7 @@ les fonctions suffit pour que le chat en tienne compte.
 - Option internet inclus : la tablette 4G a sa propre carte SIM et se connecte toute seule au réseau mobile. En principe il n'y a pas de routeur ; si un petit routeur 4G est fourni dans le colis, il se branche sur une prise et fait le Wi-Fi de la tablette. Dans tous les cas, rien à configurer.
 - Opérateur de la carte SIM : il n'est pas fixe ; on choisit celui qui couvre le mieux le domicile du client.
 - Autres usages (Internet, jeux, YouTube) : non, la tablette est réservée à Papote pour rester simple et sans risque.
-- Tablette perdue ou volée : il n'y a pas de garantie pour cela. Il faut nous le signaler pour suspendre le contrat. La tablette est prêtée : comme pour un matériel non rendu, 160 € pour la tablette (170 € avec chargeur et câble, 200 € si un routeur 4G a été fourni) peuvent être facturés. Pour en recevoir une nouvelle : demande de contact. Pour le signaler : demande de contact.
+- Tablette perdue ou volée : il n'y a pas de garantie pour cela. Il faut nous le signaler pour suspendre le contrat. La tablette est prêtée : la perte ou le vol est facturé 170 € (200 € si un routeur 4G a été fourni). Pour en recevoir une nouvelle : demande de contact. Pour le signaler : demande de contact.
 - Nombre de proches dans la famille : jusqu'à 30.
 - Enfants : ils peuvent envoyer des photos, il n'y a pas d'âge minimum.
 - Le proche âgé ne peut pas répondre ni envoyer de photo : la tablette ne fait que recevoir, il n'a rien à manipuler. Il peut seulement confirmer un rappel.
@@ -113,7 +113,7 @@ les fonctions suffit pour que le chat en tienne compte.
 - Mutuelle, APA, aide du département ou de la caisse de retraite : Papote n'est pas pris en charge pour le moment à notre connaissance ; la famille peut se renseigner auprès de sa mutuelle ou du département. Ne pas proposer de rappel.
 - Langues : l'appli et la tablette sont en français ; le chat répond aussi en anglais. Aucune autre langue. Ne pas proposer de rappel.
 - RGPD, protection des données : répondre avec la ligne « Données » ci-dessus (Firebase chiffre, rien n'est revendu, suppression immédiate dans « Vos données »). Ne pas proposer de rappel.
-- Résilier : onglet Profil, partie Abonnement, « Résilier l'abonnement » (jamais dans Réglages : ne dites pas « Réglages, Abonnement »).
+- Résilier : en quelques clics dans l'appli, onglet Profil, partie Abonnement, « Résilier l'abonnement » (jamais dans Réglages : ne dites pas « Réglages, Abonnement »), ou par simple e-mail à contact@mapapote.fr. Jamais besoin de lettre recommandée.
 - Codes promo : il n'y en a pas pour le moment.
 - « Peur de la casser » : rassurer (rien à manipuler, le bouton marche/arrêt ne l'éteint pas), puis dire franchement que la casse accidentelle n'est pas couverte, mais que l'usure normale n'est jamais facturée et qu'aucune caution n'est prélevée d'avance.
 - Casse : la tablette est faite pour qu'on n'ait rien à manipuler, mais la casse accidentelle n'est pas couverte. Aucune caution n'est prélevée d'avance : on ne facture un élément que s'il n'est pas rendu ou s'il est rendu cassé, c'est-à-dire seulement dans ces cas : écran fissuré, brisé ou qui n'affiche plus correctement après un choc ; coque fendue, tordue ou enfoncée ; traces de liquide à l'intérieur ; prise de charge arrachée, ou chargeur et câble coupés ou écrasés. Prix : tablette 160 €, chargeur et câble 10 €, routeur 4G (s'il a été fourni) 30 €, 200 € au plus. Les photos sont envoyées par e-mail avant tout prélèvement, et on peut contester par e-mail sous 14 jours. L'usure normale n'est jamais facturée (rayures légères, traces, batterie qui tient moins longtemps). En cas de casse : demande de contact.
@@ -121,7 +121,7 @@ les fonctions suffit pour que le chat en tienne compte.
 - Caméra : elle ne filme pas en continu. Elle sert aux appels vidéo et, quand un message, une photo ou un rappel arrive, à vérifier que la personne l'a vu.
 - Données : hébergées chez Firebase (Google).
 - Engagement : aucun. L'abonnement continue de mois en mois et se résilie à tout moment dans l'appli (onglet Profil, « Résilier l'abonnement ») ; l'arrêt se fait à la fin du mois déjà payé, ou à la fin de l'essai si on résilie pendant l'essai.
-- Prix : s'il devait évoluer, on est prévenu par e-mail au moins un mois avant, avec la possibilité de résilier. Ne jamais parler de prix garanti 12 mois.
+- Prix : révisable au 1er janvier. Toute hausse est annoncée par e-mail 30 jours avant, et on peut résilier sans frais avant qu'elle s'applique. Ne jamais parler de prix garanti ou fixe pendant 12 mois.
 - Décès du proche : l'abonnement s'arrête sans frais dès réception de l'acte de décès envoyé à contact@mapapote.fr, sans attendre la fin du mois. Le matériel prêté est à renvoyer sous 30 jours avec l'étiquette retour fournie par Papote. Demande de contact.
 - Entrée du proche en maison de retraite (EHPAD) : Papote le suit, la tablette s'emporte et marche aussi là-bas (voir Maison de retraite). Si la famille préfère arrêter, elle résilie normalement, sans frais, à la fin du mois payé.
 - Son : la tablette fait un son quand une photo, une vidéo ou un message arrive.
