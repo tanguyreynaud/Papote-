@@ -4,7 +4,6 @@ import {
   GoogleAuthProvider, EmailAuthProvider, signInWithPopup, linkWithPopup, signInWithCredential,
   signInWithRedirect, linkWithRedirect, getRedirectResult,
   linkWithCredential, sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink, signOut,
-  signInWithCustomToken,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
 import {
   collectionGroup, query, where, getDocs,
@@ -23,18 +22,6 @@ export function myEmail() {
 }
 
 // ---------- Connexion ----------
-
-/** Écran d'appel de l'app Android : connexion avec le jeton qu'elle passe (#connexion=…). */
-export async function connexionParJeton(jeton) {
-  let uid = null;
-  try {
-    const part = jeton.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-    uid = JSON.parse(atob(part)).uid || null;
-  } catch (e) { /* jeton illisible : on tente quand même */ }
-  await auth.authStateReady();
-  if (auth.currentUser && uid && auth.currentUser.uid === uid) return auth.currentUser;
-  return (await signInWithCustomToken(auth, jeton)).user;
-}
 
 export async function signInGoogle() {
   const provider = new GoogleAuthProvider();
