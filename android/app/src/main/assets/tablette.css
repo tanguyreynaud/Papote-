@@ -336,13 +336,14 @@ button {
 
 /* ---------- Nuit (21 h – 7 h) : couleurs sombres ---------- */
 
-body.night { background: #0f0c0a; color: #e9dfd7; }
+/* Le soir : bleu nuit doux, dans les tons de l'horloge de veille (pas un noir dur). */
+body.night { background: #1a1828; color: #e6e3f0; }
 body.night .date, body.night .offline, body.night .frame-empty, body.night .message-head,
-body.night .empty, body.night .setup-detail { color: #a8998d; }
-body.night .home-frame { background: #1c1714; }
-body.night .message { background: #1c1714; }
-body.night .message.unseen { background: #2a1d14; }
-body.night .big-btn.home-btn { background: #1c1714; }
+body.night .empty, body.night .setup-detail { color: #9d97b5; }
+body.night .home-frame { background: #252238; }
+body.night .message { background: #252238; }
+body.night .message.unseen { background: #2f2a4a; }
+body.night .big-btn.home-btn { background: #252238; }
 body.night .big-btn.photos { background: #1e40af; }
 body.night .big-btn.messages { background: #312e81; }
 
@@ -500,7 +501,7 @@ body.video-playing .overlay { visibility: hidden; }
 .weather-temp { font-size: 11vmin; font-weight: bold; margin-right: 3vmin; }
 .weather-label { font-size: 5.5vmin; font-weight: bold; color: #57534e; line-height: 1.2; }
 .weather-label small { display: block; font-size: 4.2vmin; font-weight: normal; color: #78716c; }
-body.night .weather-label { color: #a8998d; }
+body.night .weather-label { color: #9d97b5; }
 
 .home-buttons .big-btn { font-size: 7.5vmin; min-height: 20vmin; }
 
@@ -919,7 +920,7 @@ body.night .moment { color: #a5b4fc; }
   image-rendering: pixelated;
 }
 .invite p { margin: 0; font-size: 4.6vmin; font-weight: bold; color: #57534e; line-height: 1.25; }
-body.night .invite p { color: #a8998d; }
+body.night .invite p { color: #9d97b5; }
 
 /* ---------- Rendez-vous dans moins d'une heure, à la place de la photo ---------- */
 
@@ -1084,10 +1085,11 @@ html, body {
 .pause-text { color: #5f5a6b; font-family: 'Atkinson Hyperlegible', Roboto, sans-serif; }
 
 /* Le soir et la nuit : mêmes polices, couleurs sombres (inchangées pour ménager les yeux) */
-body.night { background: #0f0c0a; color: #e9dfd7; }
-body.night .clock { color: #f3ede6; }
-body.night .date, body.night .weather-label { color: #a8998d; }
-body.night .home-frame { background: #1c1714; }
+/* Le soir : bleu nuit doux, dans les tons de l'horloge de veille (pas un noir dur). */
+body.night { background: #1a1828; color: #e6e3f0; }
+body.night .clock { color: #f0eef8; }
+body.night .date, body.night .weather-label { color: #9d97b5; }
+body.night .home-frame { background: #252238; }
 body.night .bday-banner { background: #3b1a0c; color: #fdba74; }
 /* Bricolage est plus haute que l'ancienne police : l'heure un peu plus petite pour que tout tienne */
 .clock { font-size: 29vmin; line-height: 1.02; }
@@ -1188,9 +1190,9 @@ html .bday-banner { font-size: calc(4.8vmin * var(--ts, 1)); }
   box-shadow: 0 1vmin 2.5vmin rgba(79, 70, 229, .3);
 }
 .wifi-card-btn:active { transform: scale(.97); }
-body.night .wifi-card { background: #1c1714; }
-body.night .wifi-card-title { color: #e9dfd7; }
-body.night .wifi-card-text { color: #a8998d; }
+body.night .wifi-card { background: #252238; }
+body.night .wifi-card-title { color: #e6e3f0; }
+body.night .wifi-card-text { color: #9d97b5; }
 .home-frame .wifi-card .wifi-card-art {
   position: static;
   display: block;
@@ -1696,4 +1698,4 @@ body.night .next-when { color: #a5b4fc; }
 .call-out-hangup[hidden] { display: none; }
 
 /* Le soir, le bouton Radio ne doit pas éblouir. */
-body.night .radio-btn:not(.playing) { background: #1c1714; color: #c7c2f0; border-color: #2e2620; }
+body.night .radio-btn:not(.playing) { background: #252238; color: #c7c2f0; border-color: #3a3556; }
