@@ -22,6 +22,27 @@ async function iceServers() {
 }
 
 // À l'ouverture de l'app et dès qu'un appel sonne : le relais est prêt avant « Répondre ».
+// Débit de la vidéo envoyée à la tablette : 500 kbit/s et 20 images/s au plus (la tablette envoie
+// 300 kbit/s). À appliquer après setLocalDescription, à la connexion et après replaceTrack.
+const VIDEO_MAX_BITRATE = 500_000;
+async function limiterVideo(pc) {
+  for (const sender of pc.getSenders()) {
+    if (!sender.track || sender.track.kind !== 'video') continue;
+    try {
+      const params = sender.getParameters();
+      if (!params.encodings || !params.encodings.length) params.encodings = [{}];
+      params.encodings[0].maxBitrate = VIDEO_MAX_BITRATE;
+      params.encodings[0].maxFramerate = 20;
+      await sender.setParameters(params);
+    } catch (e) { /* navigateur sans réglage de débit : on garde le comportement par défaut */ }
+  }
+}
+function limiterALaConnexion(pc) {
+  pc.addEventListener('connectionstatechange', () => {
+    if (pc.connectionState === 'connected') limiterVideo(pc);
+  });
+}
+
 export function warmUpCalls() {
   iceServers().catch(() => {});
 }
@@ -73,8 +94,9 @@ function landscapeStream(camera) {
   video.srcObject = camera;
   video.play().catch(() => {});
   const canvas = document.createElement('canvas');
-  canvas.width = 1280;
-  canvas.height = 720;
+  // 960x540 suffit pour l'écran de la tablette (1280x800) et réduit la consommation de données.
+  canvas.width = 960;
+  canvas.height = 540;
   const ctx = canvas.getContext('2d');
   let running = true;
   const next = () => {
@@ -116,7 +138,7 @@ function landscapeStream(camera) {
     next();
   };
   next();
-  const out = canvas.captureStream(30);
+  const out = canvas.captureStream(20);
   camera.getAudioTracks().forEach((t) => out.addTrack(t));
   return {
     stream: out,
@@ -183,7 +205,7 @@ export async function startCall(fid, caller, ui) {
   }
   if (cancelled()) throw abortError();
   const camera = await navigator.mediaDevices.getUserMedia({
-    video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+    video: { facingMode: 'user', width: { ideal: 960 }, height: { ideal: 540 }, frameRate: { ideal: 20, max: 24 } },
     audio: { echoCancellation: true, noiseSuppression: true },
   });
   const sent = landscapeStream(camera);
@@ -205,8 +227,10 @@ export async function startCall(fid, caller, ui) {
     if (e.candidate) addDoc(collection(callRef, 'callerCandidates'), e.candidate.toJSON()).catch(() => {});
   };
 
+  limiterALaConnexion(pc);
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
+  limiterVideo(pc);
   if (cancelled()) { pc.close(); sent.stop(); throw abortError(); }
   await setDoc(callRef, {
     callerUid: caller.uid,
@@ -332,6 +356,7 @@ export async function answerIncoming(fid, callId, me, ui) {
   temps.microRelais = Math.round(performance.now() - t0);
   const pc = new RTCPeerConnection(ice);
   let videoTx = null;
+  limiterALaConnexion(pc);
   stream.getTracks().forEach((t) => pc.addTrack(t, stream));
   pc.ontrack = (e) => {
     if (e.track.kind === 'audio') {
@@ -379,6 +404,7 @@ export async function answerIncoming(fid, callId, me, ui) {
     if (videoTx) videoTx.direction = 'sendrecv';
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
+    limiterVideo(pc);
     await runTransaction(db, async (tx) => {
       const cur = await tx.get(ref);
       if (!cur.exists() || cur.data().state !== 'ringing') throw taken();
@@ -430,10 +456,11 @@ export async function answerIncoming(fid, callId, me, ui) {
       if (!videoTx || finished) throw new Error('Vidéo indisponible');
       if (cam) return cam.stream;
       const camera = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false,
+        video: { facingMode: 'user', width: { ideal: 960 }, height: { ideal: 540 }, frameRate: { ideal: 20, max: 24 } }, audio: false,
       });
       cam = landscapeStream(camera);
       await videoTx.sender.replaceTrack(cam.stream.getVideoTracks()[0]);
+      limiterVideo(pc);
       // Signal explicite pour la tablette : elle n'allume sa caméra qu'à ce moment-là.
       updateDoc(ref, { 'answer.video': true }).catch(() => {});
       if (remoteVideo && !remoteVideo.muted && ui.onVideo) ui.onVideo(remoteVideo);
