@@ -3,12 +3,16 @@
 //   appelsSonnerie  appel créé par la tablette : notification push « Mamie vous appelle »
 //   appelsManques   l'appel de la tablette s'arrête sans réponse : « Appel manqué de Mamie » ;
 //                   s'il a été décroché, les autres téléphones arrêtent de sonner (« fin »)
+//   refuserAppel    « Refuser » sur l'app Android (pas connectée à Firebase) : l'appel s'arrête pour
+//                   la tablette, prouvé par le jeton d'appel reçu avec la sonnerie
 //
 // Jetons des téléphones : families/{fid}/members/{uid}/private/push (voir push.js).
 // Messages « data » seulement : web/sw.js ou l'app Android (telephone/) les affichent.
 
 const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore');
 const { logger } = require('firebase-functions/v2');
+const { onCall, onRequest, HttpsError } = require('firebase-functions/v2/https');
+const { FieldValue } = require('firebase-admin/firestore');
 
 const { BASE_FIRESTORE, REGION_FIRESTORE, db: base } = require('./base');
 const { envoyer } = require('./push');
@@ -39,7 +43,10 @@ exports.appelsSonnerie = onDocumentCreated({ document: DOC, region: REGION_FIRES
   const { fid, cid } = event.params;
   const uids = await destinataires(db, fid, appel);
   if (!uids.length) return;
-  const data = { type: 'appel', cid, nom: String(appel.callerName || 'Mamie') };
+  // Jeton d'appel : seul un téléphone qui a reçu la sonnerie peut refuser sans se connecter.
+  const jeton = require('node:crypto').randomBytes(16).toString('hex');
+  await event.data.ref.collection('prive').doc('refus').set({ jeton });
+  const data = { type: 'appel', cid, fid, jeton, nom: String(appel.callerName || 'Mamie') };
   const n = await envoyer(db, fid, uids, data, 45);
   logger.info(`Appel ${cid} : ${n} téléphone(s) prévenu(s)`);
   for (let i = 0; i < REPRISES; i++) {
@@ -66,11 +73,35 @@ exports.appelsManques = onDocumentUpdated({ document: DOC, region: REGION_FIREST
   }
 });
 
+// POST { fid, cid, jeton } depuis l'app Android : même effet que « Refuser » dans l'app famille
+// (declineIncoming) : la tablette affiche aussitôt que personne n'a pu répondre.
+const ID = /^[A-Za-z0-9_-]{1,64}$/;
+
+exports.refuserAppel = onRequest({ maxInstances: 2 }, async (req, res) => {
+  const { fid, cid, jeton } = req.body || {};
+  if (req.method !== 'POST' || !ID.test(String(fid)) || !ID.test(String(cid)) || typeof jeton !== 'string') {
+    res.status(400).send('');
+    return;
+  }
+  const db = base();
+  const ref = db.doc(`families/${fid}/calls/${cid}`);
+  const refus = await ref.collection('prive').doc('refus').get();
+  if (!refus.exists || refus.get('jeton') !== jeton) {
+    res.status(403).send('');
+    return;
+  }
+  await db.runTransaction(async (t) => {
+    const appel = await t.get(ref);
+    if (appel.exists && appel.get('state') === 'ringing') {
+      t.update(ref, { state: 'declined', endedAt: FieldValue.serverTimestamp() });
+    }
+  });
+  res.status(204).send('');
+});
+
 // ---------- Relevé des appels qui échouent ----------
 // incidentAppel : la tablette ou l'app famille signale un appel raté (raison, détail, appel).
 // Gardé dans incidentsAppels pour le tableau de bord, et dans les journaux des fonctions.
-const { onCall, HttpsError } = require('firebase-functions/v2/https');
-const { FieldValue } = require('firebase-admin/firestore');
 
 const texte = (v, max) => String(v == null ? '' : v).slice(0, max);
 

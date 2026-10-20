@@ -43,7 +43,7 @@ public class EcranAppel extends Activity {
                 ContextCompat.RECEIVER_NOT_EXPORTED);
         findViewById(R.id.repondre).setOnClickListener(v -> repondre());
         findViewById(R.id.refuser).setOnClickListener(v -> {
-            Appels.arreter(this, cid);
+            Appels.refuser(getApplicationContext(), cid, null);
             finish();
         });
         montrer(getIntent());
