@@ -2728,7 +2728,7 @@ function renderOptions() {
   const lignes = [
     ['Lecture à voix haute', o.lecture ? 'Activée' : 'Désactivée', !!o.lecture],
     ['Réponse vocale', o.reponseVocale ? 'Activée' : 'Désactivée', !!o.reponseVocale],
-    ['Radio', o.radio?.active ? `${o.radio.nom || 'Activée'} · ${Number.isInteger(o.radio.volume) ? o.radio.volume : 40} %` : 'Désactivée', !!o.radio?.active],
+    ['Radio', o.radio?.active ? (o.radio.nom || 'Activée') : 'Désactivée', !!o.radio?.active],
   ];
   $('options-value').replaceChildren(...lignes.map(([nom, etat, on]) => {
     const li = document.createElement('span');
@@ -2745,12 +2745,6 @@ function renderOptions() {
 
 $('opt-radio').addEventListener('change', () => { $('opt-radio-wrap').hidden = !$('opt-radio').checked; });
 
-// Volume de la radio (5 à 100 %, relatif au volume de la tablette ; 40 % par défaut).
-$('opt-radio-volume').addEventListener('input', () => {
-  $('opt-radio-volume-val').textContent = `${$('opt-radio-volume').value} %`;
-  if (ecouteRadio) ecouteRadio.volume = Number($('opt-radio-volume').value) / 100;
-});
-
 // Écouter la station choisie ici, sur le téléphone, pour vérifier qu'elle marche.
 let ecouteRadio = null;
 function arreterEcoute() {
@@ -2762,7 +2756,6 @@ $('opt-radio-test').addEventListener('click', () => {
   if (ecouteRadio) { arreterEcoute(); return; }
   const r = RADIOS[Number($('opt-radio-station').value)] || RADIOS[0];
   ecouteRadio = new Audio(r.url);
-  ecouteRadio.volume = Number($('opt-radio-volume').value) / 100;
   $('opt-radio-test').textContent = 'Chargement…';
   ecouteRadio.addEventListener('playing', () => { $('opt-radio-test').textContent = 'Arrêter'; });
   ecouteRadio.play().catch(() => { arreterEcoute(); notice(`${r.nom} ne répond pas pour le moment.`); });
@@ -2778,16 +2771,13 @@ SETTINGS['options-card'] = {
     const i = RADIOS.findIndex((r) => r.url === o.radio?.url);
     $('opt-radio-station').value = String(i >= 0 ? i : 0);
     $('opt-radio-wrap').hidden = !$('opt-radio').checked;
-    const vol = Number.isInteger(o.radio?.volume) ? o.radio.volume : 40;
-    $('opt-radio-volume').value = String(vol);
-    $('opt-radio-volume-val').textContent = `${vol} %`;
   },
   async save() {
     const r = RADIOS[Number($('opt-radio-station').value)] || RADIOS[0];
     const options = {
       lecture: $('opt-lecture').checked,
       reponseVocale: $('opt-vocal').checked,
-      radio: { active: $('opt-radio').checked, nom: r.nom, url: r.url, volume: Number($('opt-radio-volume').value) },
+      radio: { active: $('opt-radio').checked, nom: r.nom, url: r.url },
     };
     await saveFamily({ options }, 'Options envoyées à la tablette');
     return true;
