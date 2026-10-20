@@ -3,7 +3,6 @@
 // sont dans gestion.js, sur la même page.
 // Une app Firebase à part (« admin ») : la connexion Google ne touche pas à la famille de ce navigateur.
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
-import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app-check.js';
 import {
   getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
@@ -27,17 +26,6 @@ const app = initializeApp({
   messagingSenderId: '807031084851',
   appId: '1:807031084851:web:b8048e2952cb1e893b1046',
 }, 'admin');
-
-// App Check : prouve que les requêtes viennent de l'app Papote (et pas d'un script). Clé de site
-// reCAPTCHA Enterprise (publique) créée dans la console Google Cloud ; vide = App Check pas encore actif.
-const RECAPTCHA_SITE_KEY = '6Lc33fYtAAAAAJSeuhEVo8IK1rs0BwlDS5zN9A7M';
-if (RECAPTCHA_SITE_KEY) {
-  try {
-    initializeAppCheck(app, { provider: new ReCaptchaEnterpriseProvider(RECAPTCHA_SITE_KEY), isTokenAutoRefreshEnabled: true });
-  } catch (e) {
-    console.warn('App Check indisponible', e);
-  }
-}
 const auth = getAuth(app);
 // Base et bucket : ceux d'origine, ou ceux que config/base (dans la base d'origine) désigne après la
 // bascule en Europe ({ database: 'eu', bucket: 'papote-famille-eu' }). Lu une fois, avant tout chargement.
@@ -156,7 +144,9 @@ const creer = (tag, attrs = {}, texte = '') => Object.assign(document.createElem
 
 // Étapes de l'envoi d'une commande. ctx : { stock, sims, accessoires } (vide pour seulement compter les étapes).
 function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
-  const avecRouteur = c.formule === 'sim';
+  // Internet inclus : la tablette a sa carte SIM ; un routeur 4G part seulement si on le choisit (e.routeur = 'oui').
+  const internet = c.formule === 'sim';
+  const avecRouteur = (e) => internet && e.routeur === 'oui';
   const tablette = (e) => stock.find((t) => t.id === e.tablette);
   const nom = (e) => { const t = tablette(e); return t ? t.ref || t.numero || t.modele || 'choisie' : ''; };
   const simDe = (e) => { const t = tablette(e); return sims.find((l) => l.id === (e.sim || (t && t.simId))) || null; };
@@ -176,14 +166,14 @@ function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
           ...dispo.map((t) => option(t.id, [t.ref || 'pas encore installée', t.numero, t.modele, t.sim ? `SIM ${t.sim}` : null].filter(Boolean).join(' · '), t.id === e.tablette)));
         const libres = sims.filter((l) => (!l.tablette || l.id === e.sim) && ['stock', 'active'].includes(l.statut));
         const choixSim = creer('select', { ariaLabel: 'Carte SIM' });
-        choixSim.append(option('', libres.length ? 'Carte SIM pour le routeur…' : 'Aucune carte SIM libre', !e.sim),
+        choixSim.append(option('', libres.length ? 'Carte SIM…' : 'Aucune carte SIM libre', !e.sim),
           ...libres.map((l) => option(l.id, simTexte(l), l.id === e.sim)));
         const alerte = creer('p', { className: 'small error' });
         const majChoix = () => {
           e.tablette = choix.value || null;
           const t = tablette(e);
           alerte.textContent = t && !t.ref ? 'Cette tablette n\'est pas encore installée : faites d\'abord sa réception (Stock > Recevoir une tablette).' : '';
-          choixSim.hidden = !avecRouteur || !t || !!t.simId;
+          choixSim.hidden = !internet || !t || !!t.simId;
           e.sim = choixSim.hidden ? null : choixSim.value || null;
           maj();
         };
@@ -192,7 +182,7 @@ function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
         zone.append(choix, choixSim, alerte);
         majChoix();
       },
-      pret: (e) => !!tablette(e) && !!tablette(e).ref && (!avecRouteur || !!tablette(e).simId || !!e.sim),
+      pret: (e) => !!tablette(e) && !!tablette(e).ref && (!internet || !!tablette(e).simId || !!e.sim),
       async valider(e) {
         // La tablette est réservée pour cette commande (et libère celle choisie avant, s'il y en avait une).
         const avant = stock.find((t) => t.commande === c.id && t.id !== e.tablette);
@@ -214,9 +204,26 @@ function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
       ],
     },
     {
+      cle: 'routeur-choix',
+      titre: 'Routeur 4G ?',
+      texte: 'Un routeur 4G part-il dans ce colis ? Il ne sera facturé au client (30 €) que s\'il n\'est pas rendu et qu\'il était dans le colis.',
+      saute: () => !internet,
+      contenu(zone, e, maj) {
+        const choix = (valeur, texte) => {
+          const r = creer('input', { type: 'radio', name: 'routeur', value: valeur, checked: e.routeur === valeur });
+          r.addEventListener('change', () => { e.routeur = valeur; maj(); });
+          const l = creer('label', { className: 'pc-case' });
+          l.append(r, ` ${texte}`);
+          return l;
+        };
+        zone.append(choix('non', 'Non : la carte SIM est dans la tablette'), choix('oui', 'Oui : un routeur 4G part avec la tablette'));
+      },
+      pret: (e) => e.routeur === 'oui' || e.routeur === 'non',
+    },
+    {
       cle: 'routeur',
       titre: 'Le routeur 4G',
-      saute: () => !avecRouteur,
+      saute: (e) => !avecRouteur(e),
       cases: (e) => [
         `La carte SIM ${simTexte(simDe(e))} est glissée dans le routeur`,
         ...routeur().map((a) => `${a} : dans le carton`),
@@ -229,7 +236,8 @@ function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
       contenu(zone, e) {
         const ul = creer('ul', { className: 'pc-liste' });
         const contenu = [`La tablette ${nom(e)}`, 'Le chargeur et son câble', ...pour('tous'),
-          ...(avecRouteur ? [...routeur(), `La carte SIM ${simTexte(simDe(e))}, dans le routeur`] : [])];
+          ...(avecRouteur(e) ? [...routeur(), `La carte SIM ${simTexte(simDe(e))}, dans le routeur`]
+            : internet ? [`La carte SIM ${simTexte(simDe(e))}, dans la tablette`] : [])];
         ul.append(...contenu.map((x) => creer('li', {}, x)));
         zone.append(ul);
       },
@@ -419,7 +427,7 @@ async function loadReturns() {
         + '<div class="manquants small"><span>Manquant :</span>'
         + '<label><input type="checkbox" value="tablette"> tablette (160 €)</label>'
         + '<label><input type="checkbox" value="chargeur"> chargeur et câble (10 €)</label>'
-        + (c.formule === 'sim' ? '<label><input type="checkbox" value="routeur"> routeur (30 €)</label>' : '')
+        + (c.routeurFourni === true ? '<label><input type="checkbox" value="routeur"> routeur (30 €)</label>' : '')
         + '<button type="button" class="secondary small-btn rendue">Matériel reçu</button></div>';
       li.querySelector('strong').textContent = c.livraison?.nom || c.nom || c.email;
       li.querySelector('.muted').textContent = `${c.email}${c.telephone ? ` · ${c.telephone}` : ''}`;
