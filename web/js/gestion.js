@@ -3,6 +3,7 @@
 // gestion* (functions/gestion.js) : l'argent vient de Stripe, le stock et les dépenses de Firestore.
 // Les factures déposées sont lues automatiquement (gestionLireFacture) pour préremplir les fiches.
 // La connexion et les sections familles, envois et maintenance sont dans admin.js.
+import { demander, saisir, prevenir } from './dialogue.js';
 import { getApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
 import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
 import {
@@ -73,6 +74,16 @@ function remplirTable(table, colonnes, lignes, { total, vide = 'Rien sur cette p
 
 function stat(valeur, texte, detail, classe) {
   return h('div', { class: 'stat' }, h('span', { class: classe }, valeur), h('p', {}, texte), detail ? h('small', {}, detail) : null);
+}
+
+// Un chiffre qui ouvre la liste correspondante.
+function cliquable(el, faire) {
+  el.classList.add('onglet');
+  el.tabIndex = 0;
+  el.setAttribute('role', 'button');
+  el.addEventListener('click', faire);
+  el.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); faire(); } });
+  return el;
 }
 
 const badge = (texte, classe) => h('span', { class: `badge ${classe || ''}` }, texte);
@@ -146,7 +157,7 @@ async function ouvrirPiece(piece) {
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
   } catch (e) {
     if (fenetre) fenetre.close();
-    alert(messageErreur(e));
+    prevenir(messageErreur(e));
   }
 }
 
@@ -579,12 +590,22 @@ function afficherAccueil() {
     const mois = { debut: new Date(n.getFullYear(), n.getMonth(), 1).getTime(), fin: new Date(n.getFullYear(), n.getMonth() + 1, 1).getTime() };
     const t = totaux(stripeMois.mouvements, depensesDe(mois));
     const enCours = stripeMois.abonnements.filter((a) => ['active', 'trialing', 'past_due'].includes(a.statut));
+    // Chaque chiffre du mois ouvre sa page, réglée sur « Ce mois-ci ».
+    const argent = (onglet) => () => {
+      if ($('p-choix').value !== 'mois') { $('p-choix').value = 'mois'; changerPeriode(); }
+      location.hash = `#compta/${onglet}`;
+    };
     $('kpi-mois').replaceChildren(
-      stat(euros(t.encaisse), 'encaissé'),
-      stat(euros(t.depenses), 'dépensé'),
-      stat(euros(t.resultat), 'résultat', null, t.resultat < 0 ? 'neg' : null),
-      stat(String(cmd.filter((c) => dans(mois, c.creeLe)).length), 'nouvelles commandes'),
-      stat(String(enCours.length), 'abonnements en cours'),
+      cliquable(stat(euros(t.encaisse), 'encaissé'), argent('factures')),
+      cliquable(stat(euros(t.depenses), 'dépensé'), argent('depenses')),
+      cliquable(stat(euros(t.resultat), 'résultat', null, t.resultat < 0 ? 'neg' : null), argent('bilan')),
+      cliquable(stat(String(cmd.filter((c) => dans(mois, c.creeLe)).length), 'nouvelles commandes'), () => {
+        vueCommandes = 'toutes';
+        $('filtre-commandes').value = '';
+        location.hash = '#commandes';
+        afficherCommandes();
+      }),
+      cliquable(stat(String(enCours.length), 'abonnements en cours'), argent('bilan')),
     );
   }
 }
@@ -831,14 +852,14 @@ function actionExpliquee(texte, libelle, faire, danger = false) {
 }
 
 async function annulerCommande(c) {
-  if (!confirm(`Annuler la commande ${codeCommande(c.code)} de ${c.nom || c.email || 'ce client'} ?${c.offerte ? '' : ' Tout ce qui a été payé sera remboursé.'}`)) throw 'non';
+  if (!await demander(`Annuler la commande ${codeCommande(c.code)} de ${c.nom || c.email || 'ce client'} ?${c.offerte ? '' : ' Tout ce qui a été payé sera remboursé.'}`, { oui: 'Annuler la commande', non: 'Garder la commande', danger: true })) throw 'non';
   const r = await appeler('gestionAnnulerCommande', { commande: c.id });
   return [`Commande annulée.`, r.rembourse ? `${euros(r.rembourse)} remboursés.` : null,
     r.mailEnvoye ? 'Le client a reçu un e-mail.' : null].filter(Boolean).join(' ');
 }
 
 async function arreterAbonnement(c) {
-  if (!confirm(`Arrêter l'abonnement de ${c.nom || c.email || 'ce client'} ? Il prendra fin à la fin du mois déjà payé.`)) throw 'non';
+  if (!await demander(`Arrêter l'abonnement de ${c.nom || c.email || 'ce client'} ? Il prendra fin à la fin du mois déjà payé.`, { oui: 'Arrêter l\'abonnement', non: 'Garder', danger: true })) throw 'non';
   const r = await appeler('resilierAbonnement', { fid: c.fid });
   return `Abonnement arrêté : il prend fin le ${jour(r.le)}.`;
 }
@@ -856,7 +877,7 @@ function boutonEtiquetteRetour(c) {
   const msg = h('p', { class: 'small muted', hidden: true });
   const bouton = h('button', { type: 'button', class: 'secondary small-btn' }, 'Étiquette de retour au client');
   bouton.addEventListener('click', async () => {
-    if (!confirm(`Créer une étiquette de retour Mondial Relay et l'envoyer à ${c.email || 'ce client'} ?`)) return;
+    if (!await demander(`Créer une étiquette de retour Mondial Relay et l'envoyer à ${c.email || 'ce client'} ?`, { oui: 'Créer et envoyer' })) return;
     const fenetre = window.open('', '_blank');
     bouton.disabled = true;
     msg.hidden = false;
@@ -882,7 +903,7 @@ function boutonRenvoyerCode(c) {
   const msg = h('p', { class: 'small muted', hidden: true });
   const bouton = h('button', { type: 'button', class: 'secondary small-btn' }, 'Renvoyer le code au client');
   bouton.addEventListener('click', async () => {
-    const email = prompt('Adresse e-mail où envoyer le code de commande :', c.email || '');
+    const email = await saisir('Adresse e-mail où envoyer le code de commande :', c.email || '');
     if (email == null) return;
     bouton.disabled = true;
     msg.hidden = false;
@@ -959,7 +980,7 @@ function formulaireRemplacement(c, t) {
           const r = await appeler('gestionEtiquette', { commande: c.id, sens: s });
           faites.push([s, r.url]);
         } catch (err) {
-          alert(`Étiquette ${s === 'aller' ? 'd\'envoi' : 'de retour'} impossible : ${messageErreur(err)}. Faites-la depuis la commande.`);
+          prevenir(`Étiquette ${s === 'aller' ? 'd\'envoi' : 'de retour'} impossible : ${messageErreur(err)}. Faites-la depuis la commande.`);
         }
       }
       const aller = faites.find(([s]) => s === 'aller');
@@ -1200,7 +1221,7 @@ $('f-sim').addEventListener('submit', async (e) => {
 });
 
 $('ds-supprimer').addEventListener('click', async () => {
-  if (!confirm('Supprimer cette carte du registre (erreur de saisie) ? Pour une ligne arrêtée, choisissez plutôt « Résiliée ».')) return;
+  if (!await demander('Supprimer cette carte du registre (erreur de saisie) ? Pour une ligne arrêtée, choisissez plutôt « Résiliée ».', { oui: 'Supprimer', danger: true })) return;
   await enregistrer($('f-sim'), async () => {
     await appeler('gestionSim', { action: 'supprimer', id: simOuverte });
     $('d-sim').close();
@@ -1284,7 +1305,7 @@ $('f-livraison').addEventListener('submit', async (e) => {
 });
 
 $('dx-supprimer').addEventListener('click', async () => {
-  if (!confirm('Supprimer cet accessoire ?')) return;
+  if (!await demander('Supprimer cet accessoire ?', { oui: 'Supprimer', danger: true })) return;
   await enregistrer($('f-accessoire'), async () => {
     await appeler('gestionAccessoire', { action: 'supprimer', id: accessoireOuvert });
     $('d-accessoire').close();
@@ -1412,7 +1433,7 @@ function afficherAchatTablette(t) {
 }
 
 async function detacherAchat() {
-  if (!confirm('Déplacer cet achat (prix, date, facture) sur une nouvelle tablette « En stock » ?')) return;
+  if (!await demander('Déplacer cet achat (prix, date, facture) sur une nouvelle tablette « En stock » ?', { oui: 'Déplacer l\'achat' })) return;
   await enregistrer($('f-tablette'), async () => {
     const r = await appeler('gestionStock', { action: 'detacherAchat', id: tabletteOuverte });
     $('f-tablette').dataset.charge = '';
@@ -1454,7 +1475,7 @@ $('dt-fichier').addEventListener('change', async (e) => {
 });
 
 $('dt-retirer').addEventListener('click', async () => {
-  if (!confirm('Supprimer cette fiche du stock ? À faire seulement si la tablette n\'existe pas.')) return;
+  if (!await demander('Supprimer cette fiche du stock ? À faire seulement si la tablette n\'existe pas.', { oui: 'Supprimer la fiche', danger: true })) return;
   const ok = await enregistrer($('f-tablette'), async () => {
     await appeler('gestionStock', { action: 'supprimer', id: tabletteOuverte });
   });
@@ -1462,14 +1483,14 @@ $('dt-retirer').addEventListener('click', async () => {
 });
 
 async function retirerPiece(collection, id, piece) {
-  if (!confirm(`Retirer « ${piece.nom} » ?`)) return;
+  if (!await demander(`Retirer « ${piece.nom} » ?`, { oui: 'Retirer', danger: true })) return;
   try {
     await appeler('gestionPiece', { action: 'retirer', collection, id, chemin: piece.chemin });
     donnees = await lireDonnees(true);
     afficherTout();
     if (collection === 'stock') afficherFiche();
   } catch (e) {
-    alert(messageErreur(e));
+    prevenir(messageErreur(e));
   }
 }
 
@@ -1571,7 +1592,7 @@ choixFichier.addEventListener('change', async () => {
     donnees = await lireDonnees(true);
     afficherTout();
   } catch (e) {
-    alert(messageErreur(e));
+    prevenir(messageErreur(e));
   }
 });
 
@@ -1663,27 +1684,27 @@ async function verifierDepense(d) {
     await appeler('gestionDepense', { action: 'verifier', id: d.id });
     signalerChangement();
   } catch (e) {
-    alert(messageErreur(e));
+    prevenir(messageErreur(e));
   }
 }
 
 async function arreterDepense(d) {
-  if (!confirm(`Ne plus ajouter « ${d.libelle} » chaque mois ? Les dépenses déjà inscrites restent.`)) return;
+  if (!await demander(`Ne plus ajouter « ${d.libelle} » chaque mois ? Les dépenses déjà inscrites restent.`, { oui: 'Arrêter' })) return;
   try {
     await appeler('gestionDepense', { action: 'arreter', id: d.id });
     signalerChangement();
   } catch (e) {
-    alert(messageErreur(e));
+    prevenir(messageErreur(e));
   }
 }
 
 async function supprimerDepense(d) {
-  if (!confirm(`Supprimer la dépense « ${d.libelle} » (${euros(d.montant)}) et ses justificatifs ?`)) return;
+  if (!await demander(`Supprimer la dépense « ${d.libelle} » (${euros(d.montant)}) et ses justificatifs ?`, { oui: 'Supprimer', danger: true })) return;
   try {
     await appeler('gestionDepense', { action: 'supprimer', id: d.id });
     signalerChangement();
   } catch (e) {
-    alert(messageErreur(e));
+    prevenir(messageErreur(e));
   }
 }
 
@@ -2422,9 +2443,9 @@ $('btn-recap').addEventListener('click', async () => {
   b.disabled = true;
   try {
     const r = await appeler('gestionRecapMaintenant');
-    alert(`Récap envoyé à contact@mapapote.fr (${pluriel(r.aFaire, 'point')} à faire).`);
+    prevenir(`Récap envoyé à contact@mapapote.fr (${pluriel(r.aFaire, 'point')} à faire).`);
   } catch (e) {
-    alert(messageErreur(e));
+    prevenir(messageErreur(e));
   } finally {
     b.disabled = false;
   }
@@ -2679,7 +2700,7 @@ async function changerAccord(c) {
   const question = accepte
     ? `Retirer l'accord de ${c.nom || c.email} ? Il ou elle ne recevra plus les e-mails d'information.`
     : `${c.nom || c.email} a accepté de recevoir les e-mails d'information de Papote (de vive voix ou par écrit) ?${c.desinscrit ? ' Attention : cette personne s\'était désinscrite.' : ''}`;
-  if (!confirm(question)) return;
+  if (!await demander(question, { oui: accepte ? 'Retirer l\'accord' : 'Oui, il ou elle a accepté' })) return;
   try {
     await appeler('gestionConsentement', { email: c.email, consentement: !accepte });
     clientAffiche = null;
@@ -2704,7 +2725,7 @@ async function envoyerCampagne(test) {
   const message = form.message.value.trim();
   if (!objet || !message) { form.reportValidity(); return; }
   const emails = clientsAffiches().filter((c) => c.consentement && !c.desinscrit).map((c) => c.email);
-  if (!test && !confirm(`Envoyer « ${objet} » à ${pluriel(emails.length, 'personne')} ? Pensez à vous envoyer un essai d'abord.`)) return;
+  if (!test && !await demander(`Envoyer « ${objet} » à ${pluriel(emails.length, 'personne')} ? Pensez à vous envoyer un essai d'abord.`, { oui: 'Envoyer' })) return;
   const boutons = form.querySelectorAll('button');
   boutons.forEach((b) => { b.disabled = true; });
   msg.hidden = false;
@@ -2726,7 +2747,7 @@ $('campagne-test').addEventListener('click', () => envoyerCampagne(true));
 
 // E-mail d'ouverture des commandes à la liste d'attente (lancementListeAttente, functions/index.js).
 async function envoyerLancement(test) {
-  if (!test && !confirm("Envoyer l'e-mail « Papote est disponible : vous pouvez commander » à toute la liste d'attente ?\n\n"
+  if (!test && !await demander("Envoyer l'e-mail « Papote est disponible : vous pouvez commander » à toute la liste d'attente ?\n\n"
     + "Chaque personne ne le reçoit qu'une fois. Pensez à vous envoyer un test d'abord.")) return;
   const msg = $('lancement-msg');
   const boutons = [$('lancement-test'), $('lancement-envoyer')];
@@ -2773,8 +2794,8 @@ function etapesReceptionTablette() {
         const abimee = h('button', { type: 'button', class: 'link small danger' }, 'La tablette est abîmée');
         choix.addEventListener('change', () => { e.id = choix.value || null; maj(); });
         abimee.addEventListener('click', async () => {
-          if (!e.id) { alert('Enregistrez d\'abord sa facture (Ajouter un achat), puis notez-la « À réparer ».'); return; }
-          if (!confirm('Noter cette tablette « À réparer » ? Contactez ensuite le vendeur pour l\'échanger.')) return;
+          if (!e.id) { prevenir('Enregistrez d\'abord sa facture (Ajouter un achat), puis notez-la « À réparer ».'); return; }
+          if (!await demander('Noter cette tablette « À réparer » ? Contactez ensuite le vendeur pour l\'échanger.', { oui: 'À réparer' })) return;
           await appeler('gestionStock', { action: 'modifier', id: e.id, champs: { etat: 'a-reparer' } });
           signalerChangement();
           fermerParcours();
@@ -2885,7 +2906,7 @@ function etapesReceptionTablette() {
 async function recevoirTablette() {
   if (!donnees) return;
   const enCours = donnees.stock.find((t) => t.reception && !t.reception.fini);
-  const etat = enCours && confirm(`Reprendre la réception de ${libelleTablette(enCours)} ?`)
+  const etat = enCours && await demander(`Reprendre la réception de ${libelleTablette(enCours)} ?`)
     ? { ...enCours.reception, id: enCours.id, ref: enCours.ref || '', numero: enCours.numero || '', modele: enCours.modele || '' }
     : { etape: 0, faits: {} };
   await ouvrirParcours({
