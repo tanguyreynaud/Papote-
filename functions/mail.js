@@ -47,21 +47,21 @@ function colisParti({ nom, suivi, lien, relais, code }) {
     `Bonjour${nom ? ` ${echapper(nom)}` : ''},`,
     `Votre tablette vient de partir. Vous recevrez un message de Mondial Relay dès qu'elle sera disponible${relais ? ` au point relais <b>${relaisEnTexte(relais)}</b>` : ' au point relais choisi'}.`,
     `Numéro de suivi : <b>${echapper(suivi)}</b>.`,
-    `À son arrivée : branchez la tablette, donnez-lui un nom, puis <a href="${echapper(lienAppli(code))}" style="color:#4f46e5">ouvrez l'appli Papote</a> sur votre téléphone avec la même adresse e-mail que pour la commande, et scannez le QR code affiché sur la tablette.`,
-    code ? `Si vous utilisez une autre adresse e-mail, votre code de commande est <b>${echapper(code)}</b>.` : '',
+    `À son arrivée : branchez la tablette et allumez-la, puis <a href="${echapper(lienAppli(code))}" style="color:#4f46e5">ouvrez l'appli Papote</a> sur votre téléphone et scannez le code affiché sur la tablette. L'appli vous guide ensuite pas à pas.`,
   ].filter(Boolean), { texte: 'Suivre mon colis', lien });
 }
 
 function commandeConfirmee({ nom, code, relais, formule }) {
-  return message('Votre commande Papote est confirmée', [
+  return message('Merci pour votre commande Papote', [
     `Bonjour${nom ? ` ${echapper(nom)}` : ''},`,
-    'Merci pour votre commande ! Nous préparons votre tablette à la main et vous prévenons par e-mail dès qu\'elle part.',
+    `Merci pour votre commande !${code ? ` Son numéro : <b>${echapper(code)}</b>.` : ''}`,
+    'Nous préparons votre tablette à la main sous 2 à 3 jours ouvrés (jusqu\'à 10 jours ouvrés en précommande), puis Mondial Relay la livre en 3 à 5 jours ouvrés. Nous vous prévenons par e-mail dès qu\'elle part.',
     relais && relais.transporteur
       ? `Livraison offerte au point relais <b>${relaisEnTexte(relais)}</b>${relais.destinataire ? `, à retirer par <b>${echapper(relais.destinataire)}</b>` : ''}.`
       : 'Livraison offerte à l\'adresse indiquée.',
+    '<b>En attendant, installez l\'appli Papote sur votre téléphone</b> avec le bouton ci-dessous. Vous n\'avez pas encore de code, c\'est normal : il s\'affichera sur l\'écran de la tablette quand vous l\'allumerez. Vous le scannerez avec votre téléphone, et l\'appli vous guidera.',
     `Votre abonnement : ${formule === 'sim' ? '30 € par mois, internet inclus' : '20 € par mois'}, après votre mois d'essai gratuit, sans engagement. La tablette est prêtée et configurée.`,
-    code ? `Votre code de commande : <b>${echapper(code)}</b>.` : '',
-  ].filter(Boolean));
+  ].filter(Boolean), { texte: 'Installer l\'appli Papote', lien: APPLI });
 }
 
 // Prévient Papote qu'une tablette est à préparer.
@@ -120,8 +120,7 @@ function rappelJumelage({ nom, numero, code }) {
     numero === 1
       ? 'Votre tablette Papote devrait être arrivée au point relais, mais elle n\'est pas encore reliée à votre famille. Cela prend deux minutes :'
       : 'Votre tablette Papote n\'est toujours pas reliée à votre famille. Si quelque chose bloque, répondez à cet e-mail : nous vous aidons.',
-    '1. Branchez la tablette et donnez-lui un nom.<br>2. Ouvrez l\'appli Papote sur votre téléphone, avec la même adresse e-mail que pour la commande.<br>3. Scannez le QR code affiché sur la tablette.',
-    code ? `Avec une autre adresse e-mail, touchez « J'ai déjà payé sur le site » et tapez votre code de commande : <b>${echapper(code)}</b>.` : '',
+    '1. Branchez la tablette et allumez-la.<br>2. Ouvrez l\'appli Papote sur votre téléphone.<br>3. Scannez le code affiché sur la tablette : l\'appli vous guide ensuite.',
     'Rappel : votre mois d\'essai gratuit a commencé à la commande.',
   ].filter(Boolean), { texte: 'Ouvrir l\'appli Papote', lien: lienAppli(code) });
 }

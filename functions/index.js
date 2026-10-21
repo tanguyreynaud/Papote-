@@ -20,6 +20,9 @@
 //   nouveauMembre      créateur d'une famille : rattache sa commande faite sur le site
 //   tabletteEnvoyee    appel depuis le tableau de bord admin : colis parti, numéro de suivi Mondial Relay
 //   commandeModifiee   commande modifiée : e-mail d'envoi, de retour, d'étiquette ; remboursement au retour
+//   reserverTablette   appel depuis l'appli famille : le premier proche scanne la tablette (installation.js)
+//   nommerFamille      appel depuis l'appli famille : « Comment l'appelez-vous ? » crée la famille (installation.js)
+//   finirInstallation  appel depuis l'appli famille : fin de l'installation, invitations (installation.js)
 //   rappelsJumelage    chaque jour : rappel au client dont la tablette n'est pas jumelée (J+5, J+12)
 //   coupeCircuit       avis du budget Google Cloud : e-mail à 30 € et 100 €, facturation coupée à 150 € (budget.js)
 //   jetonAppCheck      POST depuis la tablette : jeton App Check contre sa clé d'installation (appcheck.js)
@@ -1044,7 +1047,11 @@ exports.nouveauMembre = onDocumentCreated(
     }
     if (membre.role !== 'famille' || !membre.email) return;
     const fam = await db.doc(`families/${fid}`).get();
-    if (!fam.exists || fam.get('createdBy') !== uid) return;
+    if (!fam.exists) return;
+    if (fam.get('createdBy') !== uid) {
+      await prevenirArrivee(fid, uid, membre, fam);
+      return;
+    }
     const commandes = await db.collection('commandes')
       .where('email', '==', membre.email.toLowerCase()).where('fid', '==', null).limit(1).get();
     if (commandes.empty) return;
@@ -1077,6 +1084,20 @@ async function prevenirDemande(fid, uid, membre) {
   comptes.filter((c) => c && c.email).forEach((c) => envois.push(envoyerMail(c.email, contenu)));
   (await Promise.allSettled(envois)).filter((r) => r.status === 'rejected')
     .forEach((r) => logger.error(`Demande ${fid}/${uid} : prévenir les responsables`, r.reason));
+}
+
+// Un proche invité par e-mail est entré directement : les responsables reçoivent une notification.
+async function prevenirArrivee(fid, uid, membre, fam) {
+  const responsables = [...new Set([fam.get('createdBy'), ...(fam.get('admins') || [])])].filter((r) => r && r !== uid);
+  if (!responsables.length) return;
+  const titre = `${membre.name || 'Un proche'} a rejoint la famille`;
+  const texte = 'Invitation acceptée : rien à faire de votre côté.';
+  const envois = [
+    push.envoyer(db, fid, responsables, { type: 'arrivee', titre, texte, fid }, 86400, { websSeulement: true }),
+    push.envoyer(db, fid, responsables, { type: 'alerte', titre, texte }, 86400, { natifsSeulement: true }),
+  ];
+  (await Promise.allSettled(envois)).filter((r) => r.status === 'rejected')
+    .forEach((r) => logger.error(`Arrivée ${fid}/${uid} : prévenir les responsables`, r.reason));
 }
 
 // ---------- Envoi de la tablette ----------
@@ -1245,6 +1266,14 @@ exports.gestionAnnulerCommande = gestion.gestionAnnulerCommande;
 exports.gestionParcours = gestion.gestionParcours;
 exports.gestionRenvoyerCode = gestion.gestionRenvoyerCode;
 exports.gestionJumelage = gestion.gestionJumelage;
+
+// Installation d'une nouvelle tablette depuis le téléphone du premier proche (installation.js).
+const installation = require('./installation').brancher({
+  db, compteVerifie, envoyerMail, mail, appli: APPLI_FAMILLE, logger,
+});
+exports.reserverTablette = onCall({ maxInstances: 2 }, installation.reserverTablette);
+exports.nommerFamille = onCall({ maxInstances: 2 }, installation.nommerFamille);
+exports.finirInstallation = onCall({ secrets: [MAIL_MOT_DE_PASSE], maxInstances: 2 }, installation.finirInstallation);
 
 // Nombre de proches d'une famille (membres « famille » qui ont rejoint), lu par les règles
 // Firestore pour refuser un 31e proche. Recalculé à chaque arrivée, départ ou changement de membre.
