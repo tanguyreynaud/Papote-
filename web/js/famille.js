@@ -3072,6 +3072,7 @@ function watchFamily() {
     if (!snap.exists()) return;
     session.family = { ...session.family, ...snap.data() };
     applyFamily();
+    repriseParUnAutre();
   }, (err) => console.error('Famille illisible', err));
 }
 
@@ -3526,16 +3527,29 @@ $('setup-back').addEventListener('click', () => { forgetPairCode(); enterApp(); 
 function watchSetupPairing(code) {
   stopSetupPairing?.();
   stopSetupPairing = onSnapshot(doc(db, 'pairings', code), (snap) => {
-    const st = snap.data()?.status;
-    if (st === 'reserved' || st === 'confirmed') return;
+    const p = snap.data();
+    const st = p?.status;
+    const repris = p?.claimedBy && p.claimedBy !== authUser?.uid;
+    if ((st === 'reserved' || st === 'confirmed') && !repris) return;
     stopSetupPairing?.();
     stopSetupPairing = null;
     if (session) return;
     setup.code = null;
     $('setup-code-input').value = '';
-    showError($('setup-code-error'), 'La tablette a recommencé l\'installation. Scannez le nouveau code affiché sur son écran.');
+    showError($('setup-code-error'), repris
+      ? `${p.claimedName || 'Un autre proche'} a repris l'installation de la tablette.`
+      : 'La tablette a recommencé l\'installation. Scannez le nouveau code affiché sur son écran.');
     setupStep('setup-code');
   }, () => {});
+}
+
+// Installation reprise par un autre proche (30 minutes après le scan) : ce téléphone quitte ses écrans.
+function repriseParUnAutre() {
+  if ($('view-setup').hidden || !['setup-photo', 'setup-son', 'setup-options'].includes(setup.step)) return;
+  if (installationEnCours()) return;
+  setup = { code: null, step: null };
+  goHome();
+  notice('Un autre proche a repris l\'installation de la tablette. Vous restez dans la famille.');
 }
 
 const SETUP_ERREURS = {
@@ -3572,7 +3586,7 @@ $('setup-code').addEventListener('submit', async (e) => {
   forgetPairCode();
   if (r.etat === 'occupe') {
     setupCheck('Installation déjà en cours',
-      `Cette tablette est déjà en cours d'installation par ${r.par || 'un proche'} : vous recevrez une invitation par e-mail dès qu'elle aura fini.`, true);
+      `Cette tablette est déjà en cours d'installation par ${r.par || 'un proche'} : vous recevrez une invitation par e-mail dès qu'elle aura fini. Si ce n'est pas fini dans 30 minutes, scannez à nouveau pour reprendre l'installation.`, true);
     return;
   }
   if (r.etat !== 'reserve') {
