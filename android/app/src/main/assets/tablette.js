@@ -1899,6 +1899,9 @@
     onVoiceEnded: voiceEnded,
     onSpeech: onSpeech,
     onLeave: function () { if (window.papoteAppelsLeave) window.papoteAppelsLeave(); },
+    // Famille supprimée ou installation annulée : le compte des appels oublie l'ancienne famille et
+    // attendra le prochain jumelage (sa fiche a déjà disparu avec la famille).
+    onFamilyLost: function () { if (window.papoteAppelsForget) window.papoteAppelsForget(); },
     closeOverlayForCall: closeOverlayForCall,
     goHome: function () { showView('view-home'); }
   };

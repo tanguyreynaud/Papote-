@@ -40,6 +40,8 @@ final class Sync {
         void onFamily(JSONObject payload);
         /** Volume réglé depuis l'app famille (0-100), -1 si aucun réglage. */
         default void onVolume(int volume) { }
+        /** La tablette n'est plus dans sa famille : la page oublie la famille des appels. */
+        default void onFamilyLost() { }
         /** La base Firestore a changé (migration) : la page doit se recharger pour la suivre. */
         default void onDatabaseChanged(String database) { }
     }
@@ -355,7 +357,19 @@ final class Sync {
             // On n'oublie la famille que si la fiche de la tablette a vraiment disparu (famille
             // supprimée ou tablette retirée), jamais parce que le code famille a changé.
             if ((e.code == 403 || e.code == 404) && !stillMember(fid)) {
-                prefs.edit().remove("fid").apply();
+                // Famille supprimée (par l'admin) ou installation annulée sur le téléphone : la tablette
+                // revient d'elle-même sur l'écran du code, avec un nouveau code (l'ancien jumelage ne sert plus).
+                Journal.log(context, "Plus dans la famille : retour à l'écran du code");
+                prefs.edit().remove("fid").remove("pairing").remove("pairingExpires")
+                        .remove("installEnCours").remove("installPar").apply();
+                posts.clear();
+                subscription = "";
+                lastPostsJson = null;
+                lastStatusJson = null;
+                lastRev = Long.MIN_VALUE;
+                listener.onFamilyLost();
+                poke();
+                return;
             }
             status("offline", null);
             return;

@@ -625,6 +625,7 @@ public class MainActivity extends Activity implements Sync.Listener {
     @Override public void onReminders(JSONObject payload) { callPage("onReminders", payload); }
     @Override public void onFamily(JSONObject payload) { callPage("onFamily", payload); }
     @Override public void onVolume(int volume) { handler.post(this::setVolumes); }
+    @Override public void onFamilyLost() { callPage("onFamilyLost", new JSONObject()); }
 
     /** Migration de la base : la page (appels compris) repart sur la nouvelle base. */
     @Override public void onDatabaseChanged(String database) {

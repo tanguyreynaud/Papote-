@@ -973,6 +973,17 @@ window.papoteAppelsLeave = async () => {
   fid = null;
 };
 
+// La tablette n'est plus dans sa famille (supprimée, ou installation annulée) : on oublie la famille et
+// on se remet en attente du prochain jumelage (start réessaie toutes les minutes tant qu'il n'y en a pas).
+let forgetting = false;
+window.papoteAppelsForget = () => {
+  try { localStorage.removeItem(FID_KEY); } catch (e) { /* pas de stockage */ }
+  if (!fid || forgetting) return;
+  fid = null;
+  forgetting = true;
+  setTimeout(() => { forgetting = false; start(); }, 5_000);
+};
+
 $('ring-answer').addEventListener('click', answer);
 $('call-out-hangup').addEventListener('click', () => { if (active && active.finish) active.finish('ended', 'ended'); });
 $('call-remote').addEventListener('playing', () => { if (active) $('call-wait').hidden = true; });
@@ -991,6 +1002,8 @@ function watchFamily() {
   }, (err) => {
     console.error('Écoute de la famille', err);
     if (android() && android().realtime) android().realtime(false);
+    // Souvent la famille vient d'être supprimée : la tablette vérifie tout de suite.
+    if (android() && android().changed) android().changed();
   });
   if (android() && android().realtime) android().realtime(true);
 }
