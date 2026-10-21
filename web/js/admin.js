@@ -585,6 +585,7 @@ async function load() {
         hasTablet: list.length > 0,
         online: latest('lastOnline'),
         active: latest('lastActive'),
+        installee: latest('joinedAt'),
         version: list.map((t) => t.appVersion).filter(Boolean).sort().pop() || null,
       };
     }));
@@ -774,7 +775,13 @@ function state(f) {
 }
 
 let vueFamilles = null; // onglet de la liste des familles (off, on, idle, none, toutes)
-const pasTouchee = (f) => f.hasTablet && (!f.active || Date.now() - f.active.getTime() > IDLE_MS);
+// Pas touchée depuis 24 h : compté depuis le dernier toucher, ou depuis l'installation (ou la création
+// de la famille) si personne ne l'a encore touchée ; une tablette installée aujourd'hui n'y est donc pas.
+const pasTouchee = (f) => {
+  if (!f.hasTablet) return false;
+  const depuis = f.active || f.installee || toDate(f.createdAt);
+  return !!depuis && Date.now() - depuis.getTime() > IDLE_MS;
+};
 const dansVue = (f) => vueFamilles === 'toutes' || (vueFamilles === 'idle' ? pasTouchee(f) : state(f).cls === vueFamilles);
 
 // Chiffres de l'accueil : chacun ouvre la liste des familles correspondante.
@@ -826,6 +833,8 @@ function carteFamille(f) {
     ['Proches', f.people ?? '–'],
     ['Photos et messages', f.posts ?? '–'],
     ['Dernier envoi', ago(f.lastPost)],
+    ['Créée', toDate(f.createdAt) ? toDate(f.createdAt).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '–'],
+    ['Identifiant', f.id],
   ]) dl.append(el('dt', null, k), el('dd', null, v));
   tete.append(titre, dl);
 
