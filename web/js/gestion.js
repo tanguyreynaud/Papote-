@@ -782,6 +782,7 @@ async function remplirCommande(id) {
       ligne('Carte SIM', simDuKit(t)),
       ligne('Accessoires', t && (t.accessoires || []).length ? t.accessoires.join(', ') : null),
       ligne('Retour', c.restitution ? `${RETOURS[c.restitution.statut] || c.restitution.statut}${c.restitution.avant && c.restitution.statut === 'attendue' ? ` avant le ${jour(c.restitution.avant)}` : ''}` : null),
+      ligne('Suivi du retour', suiviRetourDe(c)),
       ligne('Étiquettes', etiquettesDe(c)),
       ligne('Remboursement', c.remboursement ? `${euros(c.remboursement.montant)} ${REMBOURSEMENTS[c.remboursement.statut] || c.remboursement.statut}` : null))),
     actions.length ? h('div', { class: 'card' }, h('h2', {}, 'Actions possibles'), ...actions) : null,
@@ -860,6 +861,18 @@ async function arreterAbonnement(c) {
   if (!await demander(`Arrêter l'abonnement de ${c.nom || c.email || 'ce client'} ?\n\nComme si le client résiliait lui-même dans l'appli : l'abonnement prend fin à la fin du mois en cours, prélevé à l'arrêt.`, { oui: 'Arrêter l\'abonnement', non: 'Garder', danger: true })) throw 'non';
   const r = await appeler('resilierAbonnement', { fid: c.fid });
   return `Abonnement arrêté : il prend fin le ${jour(r.le)}.`;
+}
+
+// Colis de retour : n° de suivi (lien Mondial Relay) et où il en est, mis à jour chaque nuit.
+const ETAPES_COLIS = { 'Delivered': 'arrivé chez Papote', 'Awaiting customer pickup': 'au point relais', 'En route to sorting center': 'en route',
+  'Being sorted': 'au centre de tri', 'Driver en route': 'en livraison', 'Ready to send': 'étiquette créée, pas encore déposé',
+  'Announced': 'étiquette créée, pas encore déposé' };
+function suiviRetourDe(c) {
+  const r = c.etiquettes && c.etiquettes.retour;
+  if (!r || !r.colis) return null;
+  const etape = r.livre ? 'arrivé chez Papote' : r.etape ? (ETAPES_COLIS[r.etape] || r.etape) : 'étiquette créée, pas encore déposé';
+  const numero = r.lienSuivi ? h('a', { href: r.lienSuivi, target: '_blank', rel: 'noopener' }, r.suivi || 'Suivre le colis') : (r.suivi || null);
+  return [badge(etape, r.livre ? 'ok' : 'info'), numero ? ' ' : null, numero];
 }
 
 // Étiquettes Sendcloud de la commande, en liens PDF.

@@ -1194,6 +1194,19 @@ async function mailEnvoi(event, avant, apres) {
   }
 }
 
+// « X a résilié son abonnement » à Papote, avec le suivi du colis de retour s'il existe déjà.
+async function avisResiliation(id, c, retractation) {
+  const retour = (c.etiquettes && c.etiquettes.retour) || {};
+  try {
+    await envoyerMail(EMAIL_PAPOTE, mail.resiliation({
+      nom: c.nom, email: c.email, code: c.code ? regles.afficherCode(c.code) : null, commande: id, retractation,
+      suivi: retour.suivi || null, lienSuivi: retour.lienSuivi || null,
+    }));
+  } catch (e) {
+    logger.error(`Commande ${id} : avis de résiliation non parti`, e.message);
+  }
+}
+
 async function suiviRetour(event, rAvant, r, c) {
   const ref = event.data.after.ref;
   const id = event.params.id;
@@ -1204,14 +1217,10 @@ async function suiviRetour(event, rAvant, r, c) {
   // (plus bas). En mode test, aucune étiquette n'est créée : le mode d'emploi part seul, tout de suite.
   if (r.statut === 'attendue' && rAvant.statut !== 'attendue' && !r.mailLe) {
     await ref.update({ 'restitution.mailLe': FieldValue.serverTimestamp() });
-    try {
-      await envoyerMail(EMAIL_PAPOTE, mail.resiliation({
-        nom: c.nom, email: c.email, code: c.code ? regles.afficherCode(c.code) : null, commande: id, retractation,
-      }));
-    } catch (e) {
-      logger.error(`Commande ${id} : avis de résiliation non parti`, e.message);
-    }
     const etiquetteAutomatique = STRIPE_SECRET.value().startsWith('sk_live_') && c.expedition === 'envoyee';
+    // L'avis à Papote part avec le suivi du colis de retour quand l'étiquette sera créée (plus bas) ;
+    // sans étiquette automatique (mode test), il part tout de suite, sans suivi.
+    if (!etiquetteAutomatique) await avisResiliation(id, c, retractation);
     if (c.email && !r.etiquette && !etiquetteAutomatique) {
       try {
         await envoyerMail(c.email, mail.retourTablette({ nom: c.nom, avant: r.avant.toMillis(), retractation, montant: regles.penaliteRestitution(c) }));
@@ -1219,6 +1228,12 @@ async function suiviRetour(event, rAvant, r, c) {
         logger.error(`Commande ${id} : e-mail de retour non parti`, e.message);
       }
     }
+  }
+
+  const finDeContrat = ['attendue', 'echec'].includes(r.statut);
+  if (r.etiquette && r.etiquette !== rAvant.etiquette && finDeContrat && !r.avisLe) {
+    await ref.update({ 'restitution.avisLe': FieldValue.serverTimestamp() });
+    await avisResiliation(id, c, retractation);
   }
 
   if (r.etiquette && r.etiquette !== rAvant.etiquette && c.email) {
