@@ -623,7 +623,7 @@ function showIntroTablette() {
       <div class="intro-step" data-step="4" hidden>
         <h2>Les options</h2>
         <div class="toggle-list">
-          <label class="toggle-row"><span class="toggle-text"><strong>Lecture à voix haute</strong><span>Un bouton « Écouter » lit les messages</span></span><input type="checkbox" class="toggle" id="intro-lecture"></label>
+          <label class="toggle-row"><span class="toggle-text"><strong>Lecture à voix haute</strong><span>Lit les messages et rappels à voix haute quand elle est devant la tablette, avec un bouton « Écouter »</span></span><input type="checkbox" class="toggle" id="intro-lecture"></label>
           <label class="toggle-row"><span class="toggle-text"><strong>Réponse vocale</strong><span>Répondre à une photo en parlant</span></span><input type="checkbox" class="toggle" id="intro-vocal"></label>
           <label class="toggle-row"><span class="toggle-text"><strong>Radio</strong><span>Un bouton « Radio » à côté de « Appeler »</span></span><input type="checkbox" class="toggle" id="intro-radio"></label>
           <label class="station" id="intro-station-wrap" hidden>Station <select id="intro-station"></select></label>
@@ -676,6 +676,7 @@ function showIntroTablette() {
     choix.volume = Number($i('#intro-volume').value);
     const r = RADIOS[Number($i('#intro-station').value)] || RADIOS[0];
     choix.options = {
+      ...(session.family.options || {}),
       lecture: $i('#intro-lecture').checked,
       reponseVocale: $i('#intro-vocal').checked,
       radio: { active: $i('#intro-radio').checked, nom: r.nom, url: r.url },
@@ -2726,7 +2727,7 @@ const optionsActuelles = () => session.family.options || {};
 function renderOptions() {
   const o = optionsActuelles();
   const lignes = [
-    ['Lecture à voix haute', o.lecture ? 'Activée' : 'Désactivée', !!o.lecture],
+    ['Lecture à voix haute', o.lecture !== false ? 'Activée' : 'Désactivée', o.lecture !== false],
     ['Réponse vocale', o.reponseVocale ? 'Activée' : 'Désactivée', !!o.reponseVocale],
     ['Météo sur l\'accueil', o.meteo !== false ? 'Affichée' : 'Enlevée', o.meteo !== false],
     ['Prochain rappel sur l\'accueil', o.rappelsAccueil !== false ? 'Affiché' : 'Enlevé', o.rappelsAccueil !== false],
@@ -2768,7 +2769,7 @@ document.querySelectorAll('#options-card .setting-cancel, #form-options').forEac
 SETTINGS['options-card'] = {
   fill() {
     const o = optionsActuelles();
-    $('opt-lecture').checked = !!o.lecture;
+    $('opt-lecture').checked = o.lecture !== false;
     $('opt-vocal').checked = !!o.reponseVocale;
     $('opt-sos').checked = !!o.sos;
     $('opt-meteo').checked = o.meteo !== false;
