@@ -78,7 +78,7 @@ async function villeAvecCoordonnees(ville, cp, chercher = fetch) {
   const simple = (t) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z]/g, '');
   try {
     const r = await chercher(`https://geo.api.gouv.fr/communes?codePostal=${cp}&fields=nom,centre&format=json`,
-      { signal: AbortSignal.timeout(4000) });
+      { signal: AbortSignal.timeout(2500) });
     const communes = (await r.json()).filter((c) => c.centre && c.centre.coordinates);
     const c = communes.find((x) => simple(x.nom) === simple(ville.nom)) || (communes.length === 1 ? communes[0] : null);
     if (!c) return ville;
@@ -138,6 +138,8 @@ function brancher(deps) {
 
   async function nommerFamille(request) {
     const { uid, email } = compteVerifie(request);
+    // Appel à vide pendant que le proche tape le nom : le serveur est démarré pour le vrai appel.
+    if (request.data && request.data.reveil) return { ok: true };
     const code = normaliserCode(request.data && request.data.code);
     const nom = texteCourt(request.data && request.data.nom);
     if (!code) throw new HttpsError('invalid-argument', 'Code de tablette manquant.');
