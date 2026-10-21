@@ -183,7 +183,11 @@ const TITRES = {
   stock: 'Stock',
   compta: 'Argent',
   outils: 'Réglages',
+  tablette: 'Tablette',
+  commande: 'Commande',
 };
+// Pages d'une fiche (#tablette/id, #commande/id) : le menu garde sa section allumée.
+const PARENTS = { tablette: 'stock', commande: 'commandes' };
 // Anciennes pages devenues des onglets (liens déjà notés, favoris) : #familles → #clients/familles.
 const ANCIENNES = { familles: 'clients/familles', factures: 'compta/factures' };
 const AVEC_PERIODE = ['compta'];
@@ -223,10 +227,11 @@ function afficherPage() {
   const ancienne = ANCIENNES[location.hash.slice(1).split('/')[0]];
   if (ancienne) history.replaceState(null, '', `#${ancienne}`);
   const page = pageCourante();
+  const menu = PARENTS[page] || page;
   document.querySelectorAll('.nav a[data-page]').forEach((a) => {
-    a.classList.toggle('actif', a.dataset.page === page);
+    a.classList.toggle('actif', a.dataset.page === menu);
     // Sur téléphone, le menu défile : garder la section choisie visible.
-    if (a.dataset.page === page) a.scrollIntoView({ block: 'nearest', inline: 'center' });
+    if (a.dataset.page === menu) a.scrollIntoView({ block: 'nearest', inline: 'center' });
   });
   document.querySelectorAll('[data-panneau]').forEach((p) => { p.hidden = p.dataset.panneau !== page; });
   $('titre-page').textContent = TITRES[page];
@@ -236,6 +241,15 @@ function afficherPage() {
   $('p-etat').hidden = !AVEC_PERIODE.includes(page);
   window.scrollTo(0, 0);
   if (page === 'clients' && connecte) chargerClients();
+  afficherFiche();
+}
+
+// Fiche ouverte dans l'adresse (#tablette/id ou #commande/id), redessinée à chaque nouvelle lecture des données.
+function afficherFiche() {
+  const [page, id] = location.hash.slice(1).split('/');
+  if (!donnees || !id) return;
+  if (page === 'tablette') remplirTablette(decodeURIComponent(id));
+  if (page === 'commande') remplirCommande(decodeURIComponent(id));
 }
 window.addEventListener('hashchange', afficherPage);
 afficherPage();
@@ -301,6 +315,8 @@ function afficherTout() {
     afficherAccessoires();
     afficherCommandes();
     afficherExpediteur();
+    afficherAchats();
+    afficherFiche();
   }
   if (donnees && stripe) {
     afficherBilan();
@@ -685,14 +701,35 @@ const STATUTS_FACTURE = {
 };
 
 // Fiche d'une commande : client, livraison, tablette, factures et paiements Stripe.
-async function ouvrirCommande(c) {
+function ouvrirCommande(c) {
+  location.hash = `#commande/${encodeURIComponent(c.id)}`;
+}
+
+// Page d'une commande : ce qu'il faut savoir, puis les actions possibles, chacune expliquée.
+let commandeAffichee = null;
+async function remplirCommande(id) {
+  const c = donnees.commandes.find((x) => x.id === id);
+  if (!c) {
+    $('dc-corps').replaceChildren(h('div', { class: 'card' }, h('p', {}, 'Commande introuvable.')));
+    return;
+  }
+  // Même commande déjà affichée : garder les factures déjà lues et ce qui est en cours de saisie.
+  if (commandeAffichee === c.id && $('dc-corps').children.length) return;
+  commandeAffichee = c.id;
   const t = donnees.stock.find((x) => x.commande === c.id);
   const [texte, classe] = ETATS_COMMANDE[etatCommande(c)];
-  $('dc-titre').textContent = `Commande ${codeCommande(c.code)}`;
+  document.title = `Papote · Commande ${codeCommande(c.code)}`;
   const ligne = (k, v) => (v ? [h('dt', {}, k), h('dd', {}, v)] : []);
   const factures = h('div', {}, h('p', { class: 'muted small' }, 'Lecture des factures…'));
-  $('dc-corps').replaceChildren(
-    h('dl', { class: 'fiche' },
+  const actions = [
+    ...(t ? [formulaireRemplacement(c, t)] : []),
+    ...(t || c.envoyeeLe ? [boutonEtiquetteRetour(c)] : []),
+    ...(c.code && !c.fid && c.expedition !== 'annulee' ? [boutonRenvoyerCode(c)] : []),
+  ];
+  $('dc-corps').replaceChildren(...[
+    h('div', { class: 'card' },
+      h('h2', {}, `Commande ${codeCommande(c.code)}`, c.offerte ? ' (offerte)' : ''),
+      h('dl', { class: 'fiche' },
       ligne('État', badge(texte, classe)),
       ligne('Commandée le', jour(c.creeLe)),
       ligne('Client', [c.nom, c.email, c.telephone].filter(Boolean).join(' · ')),
@@ -706,16 +743,16 @@ async function ouvrirCommande(c) {
       ligne('Accessoires', t && (t.accessoires || []).length ? t.accessoires.join(', ') : null),
       ligne('Retour', c.restitution ? `${RETOURS[c.restitution.statut] || c.restitution.statut}${c.restitution.avant && c.restitution.statut === 'attendue' ? ` avant le ${jour(c.restitution.avant)}` : ''}` : null),
       ligne('Étiquettes', etiquettesDe(c)),
-      ligne('Remboursement', c.remboursement ? `${euros(c.remboursement.montant)} ${REMBOURSEMENTS[c.remboursement.statut] || c.remboursement.statut}` : null)),
-    ...(t ? [formulaireRemplacement(c, t)] : []),
-    ...(t || c.envoyeeLe ? [boutonEtiquetteRetour(c)] : []),
-    ...(c.code && !c.fid && c.expedition !== 'annulee' ? [boutonRenvoyerCode(c)] : []),
-    h('h3', {}, 'Parcours'),
-    h('ul', { class: 'historique small' }, parcoursCommande(c).map(([le, texte]) => h('li', {}, le ? `${jour(le)} : ${texte}` : texte))),
-    h('h3', {}, 'Factures et paiements'),
-    factures,
-  );
-  $('d-commande').showModal();
+      ligne('Remboursement', c.remboursement ? `${euros(c.remboursement.montant)} ${REMBOURSEMENTS[c.remboursement.statut] || c.remboursement.statut}` : null))),
+    actions.length ? h('div', { class: 'card' }, h('h2', {}, 'Actions possibles'), ...actions) : null,
+    h('div', { class: 'card' }, h('h2', {}, 'Parcours'),
+      h('ul', { class: 'historique small' }, parcoursCommande(c).map(([le, texte]) => h('li', {}, le ? `${jour(le)} : ${texte}` : texte)))),
+    h('div', { class: 'card' }, h('h2', {}, 'Factures et paiements du client'), factures),
+  ].filter(Boolean));
+  if (c.offerte) {
+    factures.replaceChildren(h('p', { class: 'muted small' }, 'Commande offerte : aucun paiement.'));
+    return;
+  }
   try {
     const r = await appeler('gestionCommande', { commande: c.id });
     const table = h('table');
@@ -865,7 +902,8 @@ function formulaireRemplacement(c, t) {
       donnees = await lireDonnees(true);
       afficherTout();
       signalerChangement();
-      ouvrirCommande(donnees.commandes.find((x) => x.id === c.id) || c);
+      commandeAffichee = null;
+      afficherFiche();
     } catch (err) {
       if (fenetre) fenetre.close();
       msg.className = 'small error';
@@ -1224,14 +1262,37 @@ function afficherBatterie(t) {
   );
 }
 
-// Fiche d'une tablette : modification, pièces jointes, historique.
+// Page d'une tablette : informations, achat, documents, historique.
 let tabletteOuverte = null;
 function ouvrirTablette(id) {
+  location.hash = `#tablette/${encodeURIComponent(id)}`;
+}
+function remplirTablette(id) {
   const t = donnees.stock.find((x) => x.id === id);
-  if (!t) return;
-  tabletteOuverte = t.id;
+  if (!t) {
+    $('dt-titre').textContent = 'Tablette introuvable';
+    $('dt-resume').textContent = 'Elle a peut-être été supprimée.';
+    return;
+  }
+  // Même tablette déjà affichée : ne pas effacer ce qui est en cours de saisie.
   const f = $('f-tablette');
-  $('dt-titre').textContent = `Tablette ${t.numero || t.modele || ''}`.trim();
+  const memeFiche = tabletteOuverte === t.id && f.dataset.charge === t.id;
+  tabletteOuverte = t.id;
+  f.dataset.charge = t.id;
+  const nom = [t.ref, t.numero || t.modele].filter(Boolean).join(' · ') || 'sans nom';
+  $('dt-titre').textContent = `Tablette ${nom}`;
+  document.title = `Papote · Tablette ${t.ref || ''}`.trim();
+  const c = t.commande && donnees.commandes.find((x) => x.id === t.commande);
+  $('dt-resume').replaceChildren(badge(donnees.etats[etatTablette(t)] || t.etat, ''), ' ',
+    c ? h('a', { href: `#commande/${encodeURIComponent(c.id)}` }, `Commande ${nomCommande(c)}`) : h('span', { class: 'muted' }, 'Pas de commande'));
+  afficherAchatTablette(t);
+  afficherDocumentsTablette(t);
+  afficherBatterie(t);
+  $('dt-historique').replaceChildren(...(t.historique || []).filter((x) => x.le).reverse().map((x) => h('li', {},
+    `${new Date(x.le).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })} : ${donnees.etats[x.etat] || x.etat}`)));
+  if (!$('dt-historique').children.length) $('dt-historique').append(h('li', {}, 'Rien de noté pour l\'instant.'));
+  $('dt-zone-retirer').hidden = !(t.etat === 'en-stock' && !t.commande && (t.historique || []).length <= 1);
+  if (memeFiche) return;
   f.numero.value = t.numero || '';
   f.modele.value = t.modele || '';
   // Carte SIM : une ligne du registre libre, ou l'ancienne saisie sur la fiche (gardée telle quelle).
@@ -1247,17 +1308,52 @@ function ouvrirTablette(id) {
     ...donnees.commandes.filter((c) => c.id === t.commande || (!prises.has(c.id) && c.expedition !== 'annulee'))
       .sort((a, b) => (b.creeLe || 0) - (a.creeLe || 0))
       .map((c) => h('option', { value: c.id, selected: c.id === t.commande }, nomCommande(c))));
-  $('dt-pieces').replaceChildren(...(t.pieces || []).map((p) => h('li', {}, lienPiece(p),
-    h('button', { type: 'button', class: 'link danger small', onclick: () => retirerPiece('stock', t.id, p) }, 'Retirer'))),
-  ...piecesTablette(t).filter((p) => !(t.pieces || []).includes(p)).map((p) => h('li', {}, lienPiece(p), h('span', { class: 'muted small' }, ' (achat)'))));
-  if (!$('dt-pieces').children.length) $('dt-pieces').append(h('li', { class: 'muted small' }, 'Aucune.'));
-  afficherBatterie(t);
-  $('dt-historique').replaceChildren(...(t.historique || []).filter((x) => x.le).reverse().map((x) => h('li', {},
-    `${new Date(x.le).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })} : ${donnees.etats[x.etat] || x.etat}`)));
-  $('dt-retirer').hidden = !(t.etat === 'en-stock' && !t.commande && (t.historique || []).length <= 1);
-  $('dt-detacher').hidden = !t.depense;
   f.querySelector('.f-msg').hidden = true;
-  $('d-tablette').showModal();
+}
+
+// Documents propres à la tablette (la facture d'achat est montrée avec l'achat).
+function afficherDocumentsTablette(t) {
+  $('dt-pieces').replaceChildren(...(t.pieces || []).map((p) => h('li', {}, lienPiece(p), ' ',
+    h('button', { type: 'button', class: 'link danger small no-print', onclick: () => retirerPiece('stock', t.id, p) }, 'Retirer ce document'))));
+  if (!$('dt-pieces').children.length) $('dt-pieces').append(h('li', { class: 'muted small' }, 'Aucun document.'));
+}
+
+// Achat de la tablette : vendeur, prix, justificatif (facture ou simple confirmation de commande).
+function afficherAchatTablette(t) {
+  const achat = t.depense && donnees.depenses.find((d) => d.id === t.depense);
+  const zone = $('dt-achat');
+  if (!t.depense) {
+    zone.replaceChildren(
+      h('p', {}, 'Aucun achat rattaché : le prix et la facture de cette tablette sont inconnus.'),
+      h('p', { class: 'muted small' }, 'Transférez la facture du vendeur à factures@mapapote.fr, ou ajoutez l\'achat dans Stock > Achats : il complétera cette fiche si le n° de série correspond, ou si c\'est la plus ancienne tablette en stock sans achat.'));
+    return;
+  }
+  const ligne = (k, v) => (v ? [h('dt', {}, k), h('dd', {}, v)] : []);
+  const pieces = (achat && achat.pieces) || [];
+  zone.replaceChildren(
+    h('dl', { class: 'fiche' },
+      ligne('Vendeur', t.fournisseur || (achat && achat.fournisseur)),
+      ligne('Achetée le', jour(t.acheteeLe)),
+      ligne('Prix', t.prixAchat != null ? euros(t.prixAchat) : null),
+      ligne('N° de commande', achat && achat.numero),
+      ligne('Justificatif', achat && achat.confirmation
+        ? h('span', {}, badge('Facture pas encore reçue', 'info'), ' ', h('span', { class: 'muted small' }, 'seule la confirmation de commande est arrivée'))
+        : badge('Facture reçue', 'ok')),
+      ligne('Fichiers', pieces.length ? h('div', { class: 'pieces-liste' }, pieces.map(lienPiece)) : null)),
+    achat && achat.confirmation ? h('p', { class: 'muted small' }, 'Quand la vraie facture arrivera, transférez-la à factures@mapapote.fr : elle s\'ajoutera ici toute seule.') : null,
+    h('details', { class: 'no-print' },
+      h('summary', { class: 'small' }, 'Cet achat ne correspond pas à cette tablette ?'),
+      h('p', { class: 'small' }, 'Le prix, la date et la facture ci-dessus quittent cette fiche et passent sur une nouvelle tablette « En stock » (celle qui arrivera). Rien n\'est supprimé : la dépense reste dans l\'Argent.'),
+      h('button', { type: 'button', class: 'secondary small-btn', onclick: detacherAchat }, 'Déplacer cet achat sur une nouvelle tablette')));
+}
+
+async function detacherAchat() {
+  if (!confirm('Déplacer cet achat (prix, date, facture) sur une nouvelle tablette « En stock » ?')) return;
+  await enregistrer($('f-tablette'), async () => {
+    const r = await appeler('gestionStock', { action: 'detacherAchat', id: tabletteOuverte });
+    $('f-tablette').dataset.charge = '';
+    if (r && r.id) ouvrirTablette(r.id);
+  });
 }
 
 $('f-tablette').addEventListener('submit', async (e) => {
@@ -1276,13 +1372,14 @@ $('f-tablette').addEventListener('submit', async (e) => {
         ...(simId === '' && t.sim && !t.simId ? { sim: null, simOperateur: null, simCout: null } : {}),
       },
     });
+    f.dataset.charge = '';
     if (simId && simId !== 'ancienne' && simId !== t.simId) {
       await appeler('gestionSim', { action: 'modifier', id: simId, champs: { tablette: tabletteOuverte } });
     } else if (!simId && t.simId) {
       await appeler('gestionSim', { action: 'modifier', id: t.simId, champs: { tablette: null } });
     }
-    $('d-tablette').close();
   });
+  message(f, 'Modifications enregistrées.', false);
 });
 
 $('dt-fichier').addEventListener('change', async (e) => {
@@ -1290,23 +1387,14 @@ $('dt-fichier').addEventListener('change', async (e) => {
   e.target.value = '';
   if (!fichiers.length) return;
   await enregistrer($('f-tablette'), () => envoyerPieces('stock', tabletteOuverte, fichiers), 'Envoi…');
-  ouvrirTablette(tabletteOuverte);
 });
 
 $('dt-retirer').addEventListener('click', async () => {
-  if (!confirm('Retirer cette tablette du stock (erreur de saisie) ?')) return;
-  await enregistrer($('f-tablette'), async () => {
+  if (!confirm('Supprimer cette fiche du stock ? À faire seulement si la tablette n\'existe pas.')) return;
+  const ok = await enregistrer($('f-tablette'), async () => {
     await appeler('gestionStock', { action: 'supprimer', id: tabletteOuverte });
-    $('d-tablette').close();
   });
-});
-
-$('dt-detacher').addEventListener('click', async () => {
-  if (!confirm('Retirer l\'achat de cette fiche ? Il passera sur une nouvelle tablette en stock.')) return;
-  await enregistrer($('f-tablette'), async () => {
-    await appeler('gestionStock', { action: 'detacherAchat', id: tabletteOuverte });
-    $('d-tablette').close();
-  });
+  if (ok) location.hash = '#stock/tablettes';
 });
 
 async function retirerPiece(collection, id, piece) {
@@ -1315,7 +1403,7 @@ async function retirerPiece(collection, id, piece) {
     await appeler('gestionPiece', { action: 'retirer', collection, id, chemin: piece.chemin });
     donnees = await lireDonnees(true);
     afficherTout();
-    if (collection === 'stock') ouvrirTablette(id);
+    if (collection === 'stock') afficherFiche();
   } catch (e) {
     alert(messageErreur(e));
   }
@@ -1466,6 +1554,25 @@ function afficherCompta() {
     { vide: 'Aucun virement sur cette période.' });
 }
 
+// Stock > Achats : les commandes passées chez les vendeurs (tablettes et matériel), séparées des tablettes.
+function afficherAchats() {
+  const achats = donnees.depenses.filter((d) => ['tablettes', 'materiel'].includes(d.categorie) || (d.materiel || []).length)
+    .sort((a, b) => (b.date || 0) - (a.date || 0));
+  remplirTable($('t-achats-vendeurs'), [
+    { titre: 'Date' }, { titre: 'Vendeur' }, { titre: 'Ce qui a été acheté' }, { titre: 'N° de commande' },
+    { titre: 'Montant', n: 1 }, { titre: 'Facture' }, { titre: 'Tablettes' },
+  ], achats.map((d) => {
+    const tablettes = donnees.stock.filter((t) => t.depense === d.id);
+    return [
+      jour(d.date), d.fournisseur || '', d.libelle || '', d.numero || '', euros(d.montant),
+      h('div', {}, d.confirmation ? badge('pas encore reçue', 'info') : badge('reçue', 'ok'),
+        ...((d.pieces || []).map((p) => h('div', {}, lienPiece(p))))),
+      h('div', {}, ...tablettes.map((t) => h('div', {}, h('a', { href: `#tablette/${encodeURIComponent(t.id)}` },
+        t.ref || t.numero || 'tablette')))),
+    ];
+  }), { vide: 'Aucun achat enregistré.' });
+}
+
 function libelleDepense(d) {
   return h('div', {}, d.libelle,
     d.numero ? h('span', { class: 'muted' }, ` · n° ${d.numero}`) : null,
@@ -1473,9 +1580,18 @@ function libelleDepense(d) {
       h('button', { type: 'button', class: 'link small no-print', onclick: () => arreterDepense(d) }, 'Arrêter')) : null,
     d.depuis ? h('div', { class: 'muted small' }, 'ajoutée automatiquement') : null,
     (d.materiel || []).length ? h('div', { class: 'muted small' }, `Entré au stock : ${d.materiel.join(', ')}`) : null,
-    d.confirmation ? h('div', { class: 'muted small' }, 'Confirmation de commande : la facture sera ajoutée si elle arrive sur factures@') : null,
-    d.aVerifier ? h('div', {}, badge('à vérifier', 'ko'), ' ', h('span', { class: 'muted small' }, d.source || 'reçue par e-mail'), ' ',
-      h('button', { type: 'button', class: 'link small no-print', onclick: () => verifierDepense(d) }, 'C\'est bon')) : null);
+    d.confirmation ? h('div', { class: 'muted small' }, 'Facture pas encore reçue (seule la confirmation de commande est arrivée)') : null,
+    d.aVerifier ? h('div', { class: 'a-verifier' },
+      h('p', { class: 'small' }, badge('à vérifier', 'ko'), ' ', sourceDepense(d),
+        ' : vérifiez le montant, la date et le vendeur, puis validez.'),
+      h('button', { type: 'button', class: 'secondary small-btn no-print', onclick: () => verifierDepense(d) }, 'Valider cette dépense')) : null);
+}
+
+// « e-mail de "Tanguy Reynaud" <adresse> » → « Lue dans l'e-mail de Tanguy Reynaud ».
+function sourceDepense(d) {
+  const s = String(d.source || '');
+  const qui = (s.match(/^e-mail de\s+"?([^"<]+?)"?\s*(<|$)/) || [])[1];
+  return qui ? `Lue dans l'e-mail de ${qui.trim()}` : (s || 'Reçue par e-mail');
 }
 
 async function verifierDepense(d) {
@@ -1562,6 +1678,7 @@ function ouvrirFormulaire(id) {
   f.querySelector('.f-msg').hidden = true;
   $(id).showModal();
 }
+$('btn-achat-2').addEventListener('click', () => $('btn-achat').click());
 $('btn-achat').addEventListener('click', () => ouvrirFormulaire('d-achat'));
 $('btn-depense').addEventListener('click', () => ouvrirFormulaire('d-depense'));
 
