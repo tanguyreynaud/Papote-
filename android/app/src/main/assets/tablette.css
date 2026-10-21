@@ -1714,5 +1714,5 @@ body.night .home-left .sos-btn { background: #2a1f2c; color: #f4a7b4; border-col
   min-width: 42vmin; min-height: 15vmin; border-radius: 99vmin;
   font-family: 'Bricolage Grotesque', 'Atkinson Hyperlegible', sans-serif; font-size: 7vmin; font-weight: 800;
 }
-.sos-yes { border: 0; background: #15803d; color: #fff; box-shadow: 0 1.2vmin 3vmin rgba(21, 128, 61, .3); }
+.sos-yes { padding: 0 8vmin; border: 0; background: #15803d; color: #fff; box-shadow: 0 1.2vmin 3vmin rgba(21, 128, 61, .3); }
 .sos-no { border: .5vmin solid #e9e1d4; background: #fff; color: #5f5a6b; }
