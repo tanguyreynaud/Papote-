@@ -596,7 +596,7 @@ function showIntroTablette() {
   if (!introAFaire()) return false;
   const nom = session.family.name;
   const choix = { veille: { active: true, de: 23, a: 7 }, volume: 80,
-    options: { lecture: true, reponseVocale: false, radio: { active: false, nom: RADIOS[0].nom, url: RADIOS[0].url } } };
+    options: { lecture: true, reponseVocale: false, sos: false, radio: { active: false, nom: RADIOS[0].nom, url: RADIOS[0].url } } };
   const back = document.createElement('div');
   back.className = 'guide-back intro-back';
   back.innerHTML = `<form class="guide intro" role="dialog" aria-modal="true" novalidate>
@@ -2728,6 +2728,7 @@ function renderOptions() {
   const lignes = [
     ['Lecture à voix haute', o.lecture ? 'Activée' : 'Désactivée', !!o.lecture],
     ['Réponse vocale', o.reponseVocale ? 'Activée' : 'Désactivée', !!o.reponseVocale],
+    ['SOS famille', o.sos ? 'Activé' : 'Désactivé', !!o.sos],
     ['Radio', o.radio?.active ? (o.radio.nom || 'Activée') : 'Désactivée', !!o.radio?.active],
   ];
   $('options-value').replaceChildren(...lignes.map(([nom, etat, on]) => {
@@ -2767,6 +2768,7 @@ SETTINGS['options-card'] = {
     const o = optionsActuelles();
     $('opt-lecture').checked = !!o.lecture;
     $('opt-vocal').checked = !!o.reponseVocale;
+    $('opt-sos').checked = !!o.sos;
     $('opt-radio').checked = !!o.radio?.active;
     const i = RADIOS.findIndex((r) => r.url === o.radio?.url);
     $('opt-radio-station').value = String(i >= 0 ? i : 0);
@@ -2774,10 +2776,13 @@ SETTINGS['options-card'] = {
   },
   async save() {
     const r = RADIOS[Number($('opt-radio-station').value)] || RADIOS[0];
+    const o = optionsActuelles();
     const options = {
+      ...o,
       lecture: $('opt-lecture').checked,
       reponseVocale: $('opt-vocal').checked,
-      radio: { active: $('opt-radio').checked, nom: r.nom, url: r.url },
+      sos: $('opt-sos').checked,
+      radio: { ...(o.radio || {}), active: $('opt-radio').checked, nom: r.nom, url: r.url },
     };
     await saveFamily({ options }, 'Options envoyées à la tablette');
     return true;
