@@ -488,7 +488,9 @@ public class MainActivity extends Activity implements Sync.Listener {
 
         @JavascriptInterface
         public void stopSpeaking() {
-            handler.post(() -> { if (tts != null) tts.stop(); });
+            // Seulement une vraie lecture : la page arrête la voix à chaque nouvel écran, ce qui
+            // coupait aussi le préchargement (et la voix se chargeait au premier « Écouter »).
+            handler.post(() -> { ttsPending = null; if (tts != null && lectureEnCours) tts.stop(); });
         }
 
         /** Jeton App Check pour appels.js : {token, expireTimeMillis}, ou "" sans clé ni jeton. */
@@ -697,6 +699,7 @@ public class MainActivity extends Activity implements Sync.Listener {
     private boolean ttsReady;
     private boolean ttsFailed;
     private String ttsPending;
+    private volatile boolean lectureEnCours;
 
     /**
      * Moteur de voix préparé dès le démarrage : la première lecture part tout de suite (sinon plusieurs
@@ -731,9 +734,9 @@ public class MainActivity extends Activity implements Sync.Listener {
             tts.setSpeechRate(0.85f); // un peu plus lent, plus facile à suivre
             tts.setOnUtteranceProgressListener(new android.speech.tts.UtteranceProgressListener() {
                 @Override public void onStart(String id) { if (!"prechauffage".equals(id)) speechState("speaking"); }
-                @Override public void onDone(String id) { if (!"prechauffage".equals(id)) speechState("done"); }
-                @Override public void onError(String id) { if (!"prechauffage".equals(id)) speechState("done"); }
-                @Override public void onStop(String id, boolean interrupted) { if (!"prechauffage".equals(id)) speechState("done"); }
+                @Override public void onDone(String id) { if (!"prechauffage".equals(id)) { lectureEnCours = false; speechState("done"); } }
+                @Override public void onError(String id) { if (!"prechauffage".equals(id)) { lectureEnCours = false; speechState("done"); } }
+                @Override public void onStop(String id, boolean interrupted) { if (!"prechauffage".equals(id)) { lectureEnCours = false; speechState("done"); } }
             });
             if (ttsPending != null) { String t = ttsPending; ttsPending = null; speakNow(t); }
             else {
@@ -757,6 +760,7 @@ public class MainActivity extends Activity implements Sync.Listener {
         if (text == null || text.trim().isEmpty()) return;
         if (ttsFailed) { speechState("done"); return; }
         if (tts == null || !ttsReady) { ttsPending = text; prepareTts(); return; }
+        lectureEnCours = true;
         tts.speak(text, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "papote");
     }
 
