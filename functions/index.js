@@ -23,6 +23,7 @@
 //   reserverTablette   appel depuis l'appli famille : le premier proche scanne la tablette (installation.js)
 //   nommerFamille      appel depuis l'appli famille : « Comment l'appelez-vous ? » crée la famille (installation.js)
 //   finirInstallation  appel depuis l'appli famille : fin de l'installation, invitations (installation.js)
+//   annulerInstallation appel depuis l'appli famille : « Annuler l'installation » efface la famille (installation.js)
 //   rappelsJumelage    chaque jour : rappel au client dont la tablette n'est pas jumelée (J+5, J+12)
 //   coupeCircuit       avis du budget Google Cloud : e-mail à 30 € et 100 €, facturation coupée à 150 € (budget.js)
 //   jetonAppCheck      POST depuis la tablette : jeton App Check contre sa clé d'installation (appcheck.js)
@@ -1338,11 +1339,12 @@ exports.gestionJumelage = gestion.gestionJumelage;
 
 // Installation d'une nouvelle tablette depuis le téléphone du premier proche (installation.js).
 const installation = require('./installation').brancher({
-  db, compteVerifie, envoyerMail, mail, appli: APPLI_FAMILLE, logger,
+  db, compteVerifie, envoyerMail, mail, appli: APPLI_FAMILLE, logger, stockage: () => admin.storage().bucket(base.BUCKET_STORAGE),
 });
 exports.reserverTablette = onCall({ maxInstances: 2 }, installation.reserverTablette);
 exports.nommerFamille = onCall({ maxInstances: 2 }, installation.nommerFamille);
 exports.finirInstallation = onCall({ secrets: [MAIL_MOT_DE_PASSE], maxInstances: 2 }, installation.finirInstallation);
+exports.annulerInstallation = onCall({ timeoutSeconds: 300, memory: '512MiB', maxInstances: 2 }, installation.annulerInstallation);
 
 // Nombre de proches d'une famille (membres « famille » qui ont rejoint), lu par les règles
 // Firestore pour refuser un 31e proche. Recalculé à chaque arrivée, départ ou changement de membre.
