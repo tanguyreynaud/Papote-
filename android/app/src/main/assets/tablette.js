@@ -1348,18 +1348,25 @@
   // Un seul appui : « J'appelle toute la famille… », et l'appel part de lui-même au bout de
   // 5 secondes ; « Annuler » rattrape un appui par erreur. Toute la famille sonne en même temps,
   // le premier qui décroche a l'appel. Personne ne répond : un 2e essai, puis la famille reçoit
-  // « Mamie a appuyé sur SOS » (serveur).
+  // « Mamie a appuyé sur SOS » (serveur). Bouton affiché seulement si la famille l'a activé (options.sos).
   var SOS_DELAY_S = 5;
   var sosTimer = null;
 
   function setupSosButton() {
     var b = el2('button', 'big-btn sos-btn');
+    b.id = 'sos-btn';
+    b.setAttribute('hidden', '');
     b.innerHTML = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54z"/></svg>' +
       '<span>SOS famille</span>';
     on(b, 'click', showSosCountdown);
     // En haut, au milieu : loin d'« Appeler », et pas sous les doigts qui attrapent la tablette par le bord.
     var left = document.querySelector('#view-home .home-left');
     left.insertBefore(b, left.firstChild);
+  }
+
+  function showSosButton() {
+    var b = $('sos-btn');
+    if (b) show(b, !!options.sos);
   }
 
   function showSosCountdown() {
@@ -1443,6 +1450,7 @@
     options = o || {};
     showListenButtons();
     setupRadio();
+    showSosButton();
   }
 
   // « Écouter » : la tablette lit le message ou le rappel à voix haute.
