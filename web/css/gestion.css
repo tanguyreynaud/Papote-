@@ -299,3 +299,11 @@ details summary { cursor: pointer; margin-top: 12px; }
 .liste-liens li { padding: 6px 0; border-bottom: 1px solid var(--line, #eee); }
 .liste-liens li:last-child { border-bottom: 0; }
 .liste-liens a, [data-panneau="client"] .fiche a { color: var(--accent); font-weight: 600; }
+
+/* Actions de la page commande : une explication, puis son bouton. */
+#dc-corps .action { padding: 14px 0; border-top: 1px solid #ece7dd; }
+#dc-corps .action:first-of-type { border-top: 0; padding-top: 4px; }
+#dc-corps .action > p { margin: 0 0 10px; }
+#dc-corps .action > p + p { margin: 10px 0 0; }
+.annonce { margin: 0 0 14px; padding: 12px 16px; border-radius: 12px; background: #eef0fd; color: #3730a3; font-weight: 600; }
+#dc-corps .action .remplacement { margin-top: 0; }
