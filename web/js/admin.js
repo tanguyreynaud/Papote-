@@ -104,6 +104,15 @@ function livraisonTexte(c) {
 
 const lienSuivi = (c) => `https://www.mondialrelay.fr/suivi-de-colis/?numeroExpedition=${encodeURIComponent(c.suivi || '')}&codePostal=${encodeURIComponent(c.livraison?.cp || '')}`;
 
+// Titre d'une commande dans les listes : un lien vers sa page.
+function titreCommande(li, id, texte) {
+  const a = document.createElement('a');
+  a.className = 'titre-commande';
+  a.href = `#commande/${encodeURIComponent(id)}`;
+  a.textContent = texte;
+  li.querySelector('strong').replaceChildren(a);
+}
+
 function orderHead(c) {
   return `${c.nom || c.email} · ${c.formule === 'sim' ? 'carte SIM' : 'Wi-Fi'}, tablette ${c.tablette === 'incluse' ? 'incluse' : 'achetée'}`;
 }
@@ -121,7 +130,7 @@ async function loadOrders() {
       const li = document.createElement('li');
       li.innerHTML = '<strong></strong><span class="muted small"></span><span class="small adresse"></span>'
         + '<div class="envoi-suite"><span class="small avancement"></span><button type="button" class="primary small-btn"></button></div>';
-      li.querySelector('strong').textContent = orderHead(c);
+      titreCommande(li, c.id, orderHead(c));
       li.querySelector('.muted').textContent = `${c.email}${c.telephone ? ` · ${c.telephone}` : ''} · commandé ${ago(toDate(c.creeLe))}${c.fid ? ' · famille créée' : ''}`;
       li.querySelector('.adresse').textContent = livraisonTexte(c);
       const etapes = etapesEnvoi(c, {}).filter((e) => !e.saute || !e.saute({}));
@@ -401,7 +410,7 @@ async function loadShipped() {
       const li = document.createElement('li');
       if (c.alerteJumelage) li.classList.add('alert');
       li.innerHTML = '<strong></strong><span class="muted small"></span><span class="small"></span><a target="_blank" rel="noopener" class="small"></a>';
-      li.querySelector('strong').textContent = orderHead(c);
+      titreCommande(li, c.id, orderHead(c));
       const infos = [c.email, `envoyée ${ago(toDate(c.envoyeeLe))}`, `${c.rappels || 0} rappel(s) envoyé(s)`];
       if (c.alerteJumelage) infos.push('pas jumelée après 20 jours : appeler le client');
       li.querySelector('.muted').textContent = infos.join(' · ');
@@ -459,7 +468,7 @@ async function loadReturns() {
         + '<label><input type="checkbox" value="chargeur"> chargeur et câble (10 €)</label>'
         + (c.enceinteFournie === true ? '<label><input type="checkbox" value="enceinte"> enceinte (10 €)</label>' : '')
         + '<button type="button" class="secondary small-btn rendue">Matériel reçu</button></div>';
-      li.querySelector('strong').textContent = c.livraison?.nom || c.nom || c.email;
+      titreCommande(li, d.id, c.livraison?.nom || c.nom || c.email);
       li.querySelector('.muted').textContent = `${c.email}${c.telephone ? ` · ${c.telephone}` : ''}`;
       li.querySelector('span.small:not(.muted):not(.remb)').textContent = (r.statut === 'echec'
         ? `Prélèvement échoué${r.erreur ? ` (${r.erreur})` : ''} : à relancer depuis Stripe.`
