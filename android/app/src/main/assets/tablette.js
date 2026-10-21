@@ -15,7 +15,8 @@
     'septembre', 'octobre', 'novembre', 'décembre'];
 
   var posts = [];
-  var photos = [];
+  var photos = [];       // photos seules : le cadre de l'accueil
+  var slides = [];       // diaporama : les photos et les vidéos, dans l'ordre des envois
   var photoIndex = 0;
   var frameIndex = 0;
   var overlayQueue = [];
@@ -359,9 +360,10 @@
 
   // ---------- Photos ----------
 
+  // index : celui de la photo du cadre de l'accueil (liste « photos », sans les vidéos).
   function openPhotos(index) {
-    if (!photos.length) return;
-    photoIndex = Math.max(0, Math.min(index, photos.length - 1));
+    if (!slides.length) return;
+    photoIndex = Math.max(0, slides.indexOf(photos[index]));
     renderPhoto();
     showView('view-photos');
     wakeArrows();
@@ -374,8 +376,9 @@
   }
 
   function renderPhoto() {
-    var p = photos[photoIndex];
+    var p = slides[photoIndex];
     if (!p) return;
+    stopSlideVideo();
     // Fondu : deux calques qui alternent. L'ancienne photo reste telle quelle dessous
     // pendant que la nouvelle apparaît par-dessus.
     var opening = !isShown('view-photos');
@@ -387,27 +390,36 @@
     next.className = 'slide instant';
     next.style.opacity = '0';
     next.offsetWidth; // applique l'opacité 0 sans transition
-    next.className = 'slide';
-    setPicture(next.querySelector('img'), p.image);
+    next.className = 'slide' + (p.image ? '' : ' slide-video');
     var token = ++fadeToken;
-    tinyCopy(p.image, function (bg) {
-      if (token !== fadeToken) return;
-      next.querySelector('.photo-bg').style.backgroundImage = bg;
+    if (p.image) {
+      setPicture(next.querySelector('img'), p.image);
+      tinyCopy(p.image, function (bg) {
+        if (token !== fadeToken) return;
+        next.querySelector('.photo-bg').style.backgroundImage = bg;
+        next.style.opacity = '1';
+      });
+    } else {
+      // Vidéo déjà reçue : un écran sombre avec « Revoir », et elle se lance d'elle-même.
+      setPicture(next.querySelector('img'), BLANK);
+      next.querySelector('.photo-bg').style.backgroundImage = 'none';
       next.style.opacity = '1';
-    });
+      setTimeout(function () { if (token === fadeToken && isShown('view-photos')) playSlideVideo(p); }, 1200);
+    }
+    showReplay(next, !p.image, p);
     signWithFace($('photo-who'), p, p.authorName + ', ' + dayLabel(p.createdAt));
     var partLabel = p.parts > 1 ? 'Photo ' + p.part + ' sur ' + p.parts : '';
     var caption = p.text && partLabel ? p.text + ' · ' + partLabel : (p.text || partLabel);
     $('photo-text').textContent = caption;
     show($('photo-text'), !!caption);
     // En boucle : les flèches marchent toujours (sauf s'il n'y a qu'une photo).
-    if (photos.length < 2) { $('photo-prev').setAttribute('disabled', ''); $('photo-next').setAttribute('disabled', ''); }
+    if (slides.length < 2) { $('photo-prev').setAttribute('disabled', ''); $('photo-next').setAttribute('disabled', ''); }
     else { $('photo-prev').removeAttribute('disabled'); $('photo-next').removeAttribute('disabled'); }
     markSeen(p);
     restartSlides();
     // Arrivée à l'avant-dernière photo chargée : on en demande 5 de plus.
-    if (photoIndex >= photos.length - 2 && android() && android().morePhotos && askedMoreAt !== photos.length) {
-      askedMoreAt = photos.length;
+    if (photoIndex >= slides.length - 2 && android() && android().morePhotos && askedMoreAt !== slides.length) {
+      askedMoreAt = slides.length;
       android().morePhotos();
     }
   }
@@ -421,16 +433,50 @@
   function restartSlides() {
     clearTimeout(slideTimer);
     slideTimer = setTimeout(function () {
-      if (!isShown('view-photos') || photos.length < 2) return;
-      photoIndex = (photoIndex + 1) % photos.length;
+      if (!isShown('view-photos') || slides.length < 2) return;
+      if (slides[photoIndex] && !slides[photoIndex].image) return; // la vidéo passe au suivant à sa fin
+      photoIndex = (photoIndex + 1) % slides.length;
       renderPhoto();
     }, SLIDE_MS);
   }
 
+  // ---------- Vidéos dans le diaporama ----------
+  // Les vidéos déjà reçues reviennent dans le diaporama (pas dans le cadre de l'accueil) et se
+  // lancent toutes seules ; à la fin, le diaporama reprend. Toucher la vidéo l'arrête.
+  function showReplay(slide, visible, p) {
+    var b = slide.querySelector('.slide-replay');
+    if (!b) {
+      b = document.createElement('button');
+      b.className = 'slide-replay';
+      b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 5v14l11-7z"/></svg><span>Revoir la vidéo</span>';
+      slide.appendChild(b);
+      on(b, 'click', function () { var cur = slides[photoIndex]; if (cur && !cur.image) playSlideVideo(cur); });
+    }
+    show(b, visible);
+  }
+
+  function playSlideVideo(p) {
+    if (playing || inCall()) return;
+    clearTimeout(slideTimer);
+    playVoice(p, function () {
+      resetIdle();
+      if (!isShown('view-photos') || slides[photoIndex] !== p) return;
+      // Fin de la vidéo : on attend un peu sur « Revoir », puis le diaporama continue.
+      slideTimer = setTimeout(function () {
+        if (!isShown('view-photos') || slides[photoIndex] !== p || playing) return;
+        if (slides.length > 1) { photoIndex = (photoIndex + 1) % slides.length; renderPhoto(); }
+      }, SLIDE_MS);
+    });
+  }
+
+  function stopSlideVideo() {
+    if (playing && !overlayPost) stopAudio();
+  }
+
   // La plus récente est à l'index 0 : « suivante » va vers les plus récentes.
   // Diaporama en boucle : après la plus ancienne, on revient à la plus récente, et inversement.
-  function olderPhoto() { if (photos.length > 1) { photoIndex = (photoIndex + 1) % photos.length; renderPhoto(); } }
-  function newerPhoto() { if (photos.length > 1) { photoIndex = (photoIndex - 1 + photos.length) % photos.length; renderPhoto(); } }
+  function olderPhoto() { if (slides.length > 1) { photoIndex = (photoIndex + 1) % slides.length; renderPhoto(); } }
+  function newerPhoto() { if (slides.length > 1) { photoIndex = (photoIndex - 1 + slides.length) % slides.length; renderPhoto(); } }
 
   // ---------- Vu ----------
 
@@ -736,20 +782,25 @@
     setOptions(payload.options);
     setVeille(payload.veille);
     photos = [];
+    slides = [];
     for (var j = 0; j < posts.length; j++) {
       if (seenBefore[posts[j].id]) posts[j].seen = true;
+      // Vidéo : dans le diaporama seulement, une fois vue (la première fois, elle arrive en grand).
+      if (posts[j].video && !posts[j].image && posts[j].seen) { slides.push(posts[j]); continue; }
       if (!posts[j].image) continue;
       // Envoi de plusieurs photos : chacune a sa place dans la galerie, avec le même mot.
       var extra = posts[j].images || [];
       posts[j].part = 1;
       posts[j].parts = extra.length + 1;
       photos.push(posts[j]);
+      slides.push(posts[j]);
       for (var k = 0; k < extra.length; k++) {
         var copy = {};
         for (var key in posts[j]) if (posts[j].hasOwnProperty(key)) copy[key] = posts[j][key];
         copy.image = extra[k];
         copy.part = k + 2;
         photos.push(copy);
+        slides.push(copy);
       }
     }
     if (isShown('view-setup')) showView('view-home');
@@ -757,9 +808,11 @@
     renderFrame();
     renderBadges();
     if (isShown('view-photos')) {
-      if (photos.length) {
-        photoIndex = Math.min(photoIndex, photos.length - 1);
-        renderPhoto();
+      if (slides.length) {
+        // Pas de nouveau rendu si la même chose est affichée : une vidéo en cours continue.
+        var current = slides[photoIndex];
+        photoIndex = Math.min(photoIndex, slides.length - 1);
+        if (!playing || !current || slides[photoIndex].id !== current.id) renderPhoto();
       } else {
         showView('view-home');
       }

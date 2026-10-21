@@ -1714,3 +1714,17 @@ body.night .home-left .sos-btn { background: #2a1f2c; color: #f4a7b4; border-col
   border: .5vmin solid #e9e1d4; background: #fff; color: #5f5a6b; box-shadow: 0 1vmin 3vmin rgba(36, 33, 47, .1);
   font-family: 'Bricolage Grotesque', 'Atkinson Hyperlegible', sans-serif; font-size: 7.5vmin; font-weight: 800;
 }
+
+/* Diaporama : une vidéo déjà reçue, fond sombre et « Revoir la vidéo » au milieu */
+.slide.slide-video { background: #1c1a26; }
+.slide-replay {
+  position: absolute; top: 50%; left: 50%; z-index: 2;
+  -webkit-transform: translate(-50%, -50%); transform: translate(-50%, -50%);
+  display: flex; align-items: center; gap: 3vmin;
+  min-height: 16vmin; padding: 0 8vmin; border: 0; border-radius: 99vmin;
+  background: #fff; color: #3730a3; box-shadow: 0 1.2vmin 3vmin rgba(0, 0, 0, .35);
+  font-family: 'Bricolage Grotesque', 'Atkinson Hyperlegible', sans-serif; font-size: 7vmin; font-weight: 800;
+}
+.slide-replay svg { width: 8vmin; height: 8vmin; flex-shrink: 0; }
+.slide-replay[hidden] { display: none; }
+.photos .night-veil { pointer-events: none; } /* « Revoir la vidéo » reste touchable le soir */
