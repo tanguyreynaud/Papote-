@@ -86,3 +86,8 @@ export function nommerFamille(code, nom, reveil = false) {
 export function finirInstallation(fid) {
   return call('finirInstallation', { fid });
 }
+
+// { code } avant le nom (réservation rendue), { fid } après (famille effacée).
+export function annulerInstallation(data) {
+  return call('annulerInstallation', data);
+}

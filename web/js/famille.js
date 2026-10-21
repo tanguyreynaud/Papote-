@@ -18,6 +18,7 @@ import { showGuideOnce } from './guide.js';
 import {
   abonnementOk, FORMULES, LIBELLES, ouvrirPortail, payer, rattacherCommande, resilier, annulerResiliation,
   finDeContrat, retracter, inviterParEmail, reserverTablette, nommerFamille, finirInstallation,
+  annulerInstallation,
 } from './abonnement.js';
 import { startCall, watchTabletBusy, watchIncomingCalls, answerIncoming, warmUpCalls, declineIncoming, reportCallIncident } from './appel.js';
 import { pushSupported, pushAllowed, pushRefused, enablePush, closeCallNotification, rememberNativeToken, inNativeApp } from './push.js';
@@ -44,7 +45,7 @@ let stopMembers = null;
 let stopTabletBusy = null;
 let stopIncoming = null;
 
-const VIEWS = ['view-invite', 'view-profile', 'view-pair', 'view-setup', 'loading', 'view-login', 'view-link-email', 'view-invited', 'view-pending', 'view-join', 'view-home', 'view-photos', 'view-videos', 'view-messages', 'view-agenda', 'view-settings', 'view-notifs', 'view-support'];
+const VIEWS = ['view-sans-abo', 'view-invite', 'view-profile', 'view-pair', 'view-setup', 'loading', 'view-login', 'view-link-email', 'view-invited', 'view-pending', 'view-join', 'view-home', 'view-photos', 'view-videos', 'view-messages', 'view-agenda', 'view-settings', 'view-notifs', 'view-support'];
 
 function show(view) {
   for (const id of VIEWS) $(id).hidden = id !== view;
@@ -170,7 +171,20 @@ function goHome() {
   page = null;
   closeSheets();
   closeViewer();
-  if (session) show('view-home');
+  if (!session) return;
+  // Sans abonnement, rien n'est utilisable : une page claire à la place de l'accueil.
+  if (sansAbonnement()) { renderSansAbo(); show('view-sans-abo'); } else show('view-home');
+}
+
+function sansAbonnement() {
+  return session?.family?.abonnement?.statut === 'aucun' && !installationEnCours();
+}
+
+function renderSansAbo() {
+  const admin = amOwner();
+  document.querySelectorAll('.sans-abo-nom').forEach((e) => { e.textContent = session.family.name; });
+  document.querySelectorAll('.sans-abo-admin').forEach((e) => { e.hidden = !admin; });
+  $('sans-abo-membre').hidden = admin;
 }
 
 // Barre du bas : on change d'onglet sans empiler l'historique.
@@ -2246,6 +2260,28 @@ $('abo-formules').replaceChildren(...FORMULES.map((f) => {
   b.addEventListener('click', () => withAboError(() => payer(session.fid, f.formule, f.tablette)));
   return b;
 }));
+// Les mêmes formules sur la page « Il manque l'abonnement ».
+$('sans-abo-formules').replaceChildren(...FORMULES.map((f) => {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'abo-formule';
+  b.innerHTML = '<strong></strong><span></span>';
+  b.querySelector('strong').textContent = f.titre;
+  b.querySelector('span').textContent = f.prix;
+  b.addEventListener('click', async () => {
+    $('sans-abo-error').hidden = true;
+    b.disabled = true;
+    try {
+      await payer(session.fid, f.formule, f.tablette);
+    } catch (err) {
+      console.error(err);
+      showError($('sans-abo-error'), "L'opération n'a pas pu aboutir. Réessayez dans un instant.");
+    } finally {
+      b.disabled = false;
+    }
+  });
+  return b;
+}));
 
 // Code de commande arrivé par le lien du site : prérempli, et relié tout seul si la famille l'attend.
 let autoLinkTried = false;
@@ -2387,7 +2423,8 @@ function renderAbonnement() {
   }
   // Sans abonnement en cours : le propriétaire peut relier une commande déjà payée sur le site.
   const sansAbo = ['aucun', 'resilie', 'suspendu'].includes(statut) && admin;
-  if (statut === 'aucun' && admin) text = 'La tablette attend son abonnement.';
+  // Fin d'installation sans commande reliée : dire quoi faire, pas seulement « en attente ».
+  if (statut === 'aucun' && admin) text = "Aucune commande n'est reliée à cette tablette. Vous l'avez commandée sur le site ? Entrez le code de commande ci-dessous. Sinon, choisissez un abonnement dans Profil.";
   $('abo-banner').hidden = !text;
   $('abo-banner-text').textContent = text;
   $('abo-banner-btn').hidden = !admin || statut === 'aucun';
@@ -2399,6 +2436,9 @@ function renderAbonnement() {
     try { localStorage.removeItem(ABO_OK_KEY); } catch (e) { /* rien */ }
     notice('Abonnement activé. Merci !');
   }
+  // Commande reliée ou abonnement perdu pendant qu'on regarde : on passe à la bonne page.
+  const surAccueil = !$('view-home').hidden, surSansAbo = !$('view-sans-abo').hidden;
+  if ((surAccueil || surSansAbo) && surSansAbo !== sansAbonnement()) goHome();
 }
 
 // ---------- Tablette à distance (responsables) ----------

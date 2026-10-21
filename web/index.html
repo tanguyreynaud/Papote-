@@ -251,8 +251,36 @@
         <p id="setup-fin-error" class="error" hidden></p>
       </div>
 
+      <button type="button" class="link wide" id="setup-cancel" hidden>Annuler l'installation</button>
+      <p id="setup-cancel-error" class="error" hidden></p>
       <button type="button" class="link wide" id="setup-back" hidden>Retour à l'accueil</button>
       <button type="button" class="link wide" id="setup-logout" data-action="logout">Se déconnecter</button>
+    </section>
+
+    <!-- Famille sans abonnement (tablette installée sans commande reliée) : à la place de l'accueil -->
+    <section id="view-sans-abo" class="page-pad" hidden>
+      <h1 class="brand">Papote</h1>
+      <div class="card">
+        <h2>Il manque l'abonnement de la tablette</h2>
+        <p class="muted">La tablette de <span class="sans-abo-nom"></span> est installée, mais aucune commande n'y est reliée. Dès que l'abonnement est choisi, la tablette et l'appli démarrent toutes seules.</p>
+      </div>
+      <div class="card sans-abo-admin">
+        <h2>Vous avez déjà commandé ?</h2>
+        <p class="muted small">Entrez le code de commande (dans l'e-mail de confirmation ou sur la facture), ou laissez vide pour chercher avec votre adresse e-mail.</p>
+        <form class="order-link" data-order-form>
+          <input class="order-code" placeholder="ABCD-EFGH" aria-label="Code de commande" autocapitalize="characters" autocomplete="off" spellcheck="false">
+          <button type="submit" class="primary small-btn">Relier</button>
+        </form>
+      </div>
+      <div class="card sans-abo-admin">
+        <h2>Choisir un abonnement</h2>
+        <p class="muted small">60 € de mise en service, puis chaque mois est payé une fois écoulé, sans engagement. Paiement par prélèvement SEPA, sur la page sécurisée de Stripe.</p>
+        <div id="sans-abo-formules" class="abo-formules"></div>
+        <p id="sans-abo-error" class="error" hidden></p>
+      </div>
+      <p id="sans-abo-membre" class="card muted" hidden>Un responsable de la famille doit choisir l'abonnement. Tout démarrera automatiquement, vous n'avez rien à faire.</p>
+      <button type="button" class="link wide" data-action="other-family">Rejoindre une autre famille ou installer une tablette</button>
+      <button type="button" class="link wide" data-action="logout">Se déconnecter</button>
     </section>
 
     <!-- Pas encore dans une famille -->
