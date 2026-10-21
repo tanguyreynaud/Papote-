@@ -1700,10 +1700,10 @@ body.night .next-when { color: #a5b4fc; }
 /* Le soir, le bouton Radio ne doit pas éblouir. */
 body.night .radio-btn:not(.playing) { background: #252238; color: #c7c2f0; border-color: #3a3556; }
 
-/* SOS famille : sous « Appeler », rouge doux (pas alarmant), puis une seule question Oui / Non */
+/* SOS famille : en haut au milieu, rouge doux (pas alarmant), puis une seule question Oui / Non */
 .home-left .sos-btn {
   display: flex; align-items: center; align-self: center;
-  margin: 2vmin auto 0; min-height: 10.5vmin; padding: 0 6vmin;
+  margin: 0 auto 2vmin; min-height: 10.5vmin; padding: 0 6vmin;
   border: .5vmin solid #fbcfd4; border-radius: 99vmin; background: #fff1f2; color: #be123c;
   font-family: 'Bricolage Grotesque', 'Atkinson Hyperlegible', sans-serif; font-size: 5.6vmin; font-weight: 800;
 }
