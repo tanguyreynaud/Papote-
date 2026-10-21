@@ -185,9 +185,10 @@ const TITRES = {
   outils: 'Réglages',
   tablette: 'Tablette',
   commande: 'Commande',
+  client: 'Client',
 };
 // Pages d'une fiche (#tablette/id, #commande/id) : le menu garde sa section allumée.
-const PARENTS = { tablette: 'stock', commande: 'commandes' };
+const PARENTS = { tablette: 'stock', commande: 'commandes', client: 'clients' };
 // Anciennes pages devenues des onglets (liens déjà notés, favoris) : #familles → #clients/familles.
 const ANCIENNES = { familles: 'clients/familles', factures: 'compta/factures' };
 const AVEC_PERIODE = ['compta'];
@@ -240,16 +241,18 @@ function afficherPage() {
   $('periode').hidden = !AVEC_PERIODE.includes(page);
   $('p-etat').hidden = !AVEC_PERIODE.includes(page);
   window.scrollTo(0, 0);
-  if (page === 'clients' && connecte) chargerClients();
+  if ((page === 'clients' || page === 'client') && connecte) chargerClients();
   afficherFiche();
 }
 
 // Fiche ouverte dans l'adresse (#tablette/id ou #commande/id), redessinée à chaque nouvelle lecture des données.
 function afficherFiche() {
-  const [page, id] = location.hash.slice(1).split('/');
+  const [page, id, sous] = location.hash.slice(1).split('/');
   if (!donnees || !id) return;
+  if (page === 'clients' && id === 'familles' && sous) remplirLiensFamille(decodeURIComponent(sous));
   if (page === 'tablette') remplirTablette(decodeURIComponent(id));
   if (page === 'commande') remplirCommande(decodeURIComponent(id));
+  if (page === 'client') remplirClient(decodeURIComponent(id));
 }
 window.addEventListener('hashchange', afficherPage);
 afficherPage();
@@ -714,14 +717,20 @@ async function remplirCommande(id) {
     return;
   }
   // Même commande déjà affichée : garder les factures déjà lues et ce qui est en cours de saisie.
-  if (commandeAffichee === c.id && $('dc-corps').children.length) return;
-  commandeAffichee = c.id;
+  const cle = JSON.stringify([c.id, etatCommande(c), c.preparation, c.fid, c.etiquettes]);
+  if (commandeAffichee === cle && $('dc-corps').children.length) return;
+  commandeAffichee = cle;
   const t = donnees.stock.find((x) => x.commande === c.id);
   const [texte, classe] = ETATS_COMMANDE[etatCommande(c)];
   document.title = `Papote · Commande ${codeCommande(c.code)}`;
   const ligne = (k, v) => (v ? [h('dt', {}, k), h('dd', {}, v)] : []);
   const factures = h('div', {}, h('p', { class: 'muted small' }, 'Lecture des factures…'));
   const actions = [
+    ...(c.expedition === 'a-preparer' ? [h('div', { class: 'action' },
+      h('p', { class: 'small' }, 'Préparer le colis étape par étape : tablette, carte SIM, accessoires, étiquette Mondial Relay.'),
+      h('button', { type: 'button', class: 'primary small-btn', onclick: (e) => document.dispatchEvent(
+        new CustomEvent('papote:preparer-envoi', { detail: { commande: c, bouton: e.currentTarget } })) },
+      c.preparation && Object.keys(c.preparation.faits || {}).length ? 'Reprendre la préparation' : 'Préparer l\'envoi'))] : []),
     ...(t ? [formulaireRemplacement(c, t)] : []),
     ...(t || c.envoyeeLe ? [boutonEtiquetteRetour(c)] : []),
     ...(c.code && !c.fid && c.expedition !== 'annulee' ? [boutonRenvoyerCode(c)] : []),
@@ -771,7 +780,8 @@ async function remplirCommande(id) {
           p.rembourse ? euros(p.rembourse) : '', p.recu ? h('a', { href: p.recu, target: '_blank', rel: 'noopener' }, 'Reçu') : '']));
     }
     const paye = r.paiements.filter((p) => p.statut === 'succeeded').reduce((s, p) => s + p.montant - (p.rembourse || 0), 0);
-    factures.replaceChildren(h('p', { class: 'small' }, `Payé au total : ${euros(paye)}`),
+    factures.replaceChildren(r.erreur ? h('p', { class: 'muted small' }, r.erreur) : null,
+      h('p', { class: 'small' }, `Payé au total : ${euros(paye)}`),
       h('div', { class: 'table' }, table), ...(autres.length ? [h('div', { class: 'table' }, table2)] : []));
   } catch (e) {
     factures.replaceChildren(h('p', { class: 'error small' }, messageErreur(e)));
@@ -2504,7 +2514,7 @@ function afficherClients() {
       [TYPES_CLIENT[c.type] || '', c.statut && c.type !== 'panier' ? ` (${STATUTS_CLIENT[c.statut] || c.statut})` : '', c.formule ? ` · ${c.formule === 'sim' ? 'internet' : 'Wi-Fi'}` : ''].join(''),
       jour(c.depuis), accordTexte(c),
     ],
-    onclick: () => changerAccord(c),
+    onclick: () => { location.hash = `#client/${encodeURIComponent(c.email)}`; },
   })), { vide: 'Personne pour ce filtre.' });
   const cible = liste.filter((c) => c.consentement && !c.desinscrit).length;
   $('campagne-cible').textContent = cible
@@ -2515,6 +2525,99 @@ function afficherClients() {
     ? clients.campagnes.map((k) => h('li', {}, h('strong', {}, k.objet), ` · ${jour(k.le)} · ${pluriel(k.envoyes || 0, 'envoi')}`,
       k.erreurs && k.erreurs.length ? h('span', { class: 'error' }, ` · ${pluriel(k.erreurs.length, 'échec')}`) : null))
     : [h('li', { class: 'muted' }, 'Aucun envoi pour l\'instant.')]));
+  afficherFiche();
+}
+
+// Page d'une famille (admin.js) : qui l'a commandée, sa commande et sa tablette.
+function remplirLiensFamille(fid) {
+  const commandes = donnees.commandes.filter((c) => c.fid === fid);
+  const tablettes = donnees.stock.filter((t) => t.fid === fid || commandes.some((c) => c.id === t.commande));
+  const lien = (href, texte) => h('a', { href }, texte);
+  $('famille-liens').replaceChildren(
+    h('h2', {}, 'Client, commande et tablette'),
+    h('ul', { class: 'liste-liens' },
+      ...commandes.map((c) => h('li', {},
+        c.email ? lien(`#client/${encodeURIComponent(c.email.toLowerCase())}`, c.nom || c.email) : (c.nom || 'Client'), ' · ',
+        lien(`#commande/${encodeURIComponent(c.id)}`, `Commande ${codeCommande(c.code)}`), c.offerte ? ' (offerte)' : '')),
+      ...tablettes.map((t) => h('li', {}, lien(`#tablette/${encodeURIComponent(t.id)}`,
+        `Tablette ${[t.ref, t.numero || t.modele].filter(Boolean).join(' · ')}`), ` · ${donnees.etats[etatTablette(t)] || t.etat}`)),
+      ...(commandes.length || tablettes.length ? [] : [h('li', { class: 'muted small' }, 'Aucune commande ni tablette rattachée à cette famille.')])));
+}
+
+// Page d'un client : coordonnées, accord e-mails, commandes, famille, tablette et paiements.
+let clientAffiche = null;
+async function remplirClient(email) {
+  const zone = $('dcl-corps');
+  const c = clients && clients.contacts.find((x) => x.email === email);
+  if (!clients) {
+    zone.replaceChildren(h('div', { class: 'card' }, h('p', { class: 'muted' }, 'Chargement…')));
+    return;
+  }
+  if (!c) {
+    zone.replaceChildren(h('div', { class: 'card' }, h('p', {}, 'Client introuvable.')));
+    return;
+  }
+  const commandes = donnees.commandes.filter((x) => (x.email || '').toLowerCase() === email)
+    .sort((a, b) => (b.creeLe || 0) - (a.creeLe || 0));
+  const cle = JSON.stringify([c, commandes.map((x) => [x.id, etatCommande(x), x.fid, x.abonnement])]);
+  // Mêmes informations déjà affichées : garder les paiements déjà lus.
+  if (clientAffiche === cle && zone.children.length) return;
+  clientAffiche = cle;
+  document.title = `Papote · ${c.nom || c.email}`;
+  const ligne = (k, v) => (v ? [h('dt', {}, k), h('dd', {}, v)] : []);
+  const accepte = c.consentement && !c.desinscrit;
+  const familles = commandes.filter((x) => x.fid);
+  const tablettes = commandes.map((x) => donnees.stock.find((t) => t.commande === x.id)).filter(Boolean);
+  const paiements = h('div', {}, h('p', { class: 'muted small' }, commandes.length ? 'Lecture des paiements…' : 'Aucune commande, donc aucun paiement.'));
+  zone.replaceChildren(
+    h('div', { class: 'card' },
+      h('h2', {}, c.nom || c.email),
+      h('dl', { class: 'fiche' },
+        ligne('Situation', [TYPES_CLIENT[c.type] || '', c.statut && c.type !== 'panier' ? ` (${STATUTS_CLIENT[c.statut] || c.statut})` : ''].join('')),
+        ligne('E-mail', h('a', { href: `mailto:${c.email}` }, c.email)),
+        ligne('Téléphone', c.telephone ? h('a', { href: `tel:${c.telephone.replace(/\s/g, '')}` }, c.telephone) : null),
+        ligne('Formule', c.formule ? (c.formule === 'sim' ? 'Internet inclus (carte SIM)' : 'Wi-Fi de la maison') : null),
+        ligne('Client depuis', jour(c.depuis)),
+        ligne('E-mails d\'information', accordTexte(c))),
+      h('button', { type: 'button', class: 'secondary small-btn no-print', onclick: () => changerAccord(c) },
+        accepte ? 'Ne plus lui envoyer d\'e-mails d\'information' : 'Noter son accord pour les e-mails d\'information')),
+    h('div', { class: 'card' }, h('h2', {}, 'Commandes'),
+      commandes.length ? h('ul', { class: 'liste-liens' }, commandes.map((x) => {
+        const [texte, classe] = ETATS_COMMANDE[etatCommande(x)];
+        return h('li', {}, h('a', { href: `#commande/${encodeURIComponent(x.id)}` }, `Commande ${codeCommande(x.code)}`),
+          ` · ${jour(x.creeLe)} · ${formuleTexte(x)} `, badge(texte, classe));
+      })) : h('p', { class: 'muted small' }, c.type === 'panier' ? 'Panier abandonné : pas de commande.' : 'Aucune commande.')),
+    h('div', { class: 'card' }, h('h2', {}, familles.length > 1 ? 'Familles' : 'Famille'),
+      familles.length ? h('ul', { class: 'liste-liens' }, familles.map((x) => h('li', {},
+        h('a', { href: `#clients/familles/${encodeURIComponent(x.fid)}` }, x.famille || 'Famille sans nom'),
+        x.abonnement ? ` · abonnement ${ABONNEMENTS[x.abonnement] || x.abonnement}` : ''))) :
+        h('p', { class: 'muted small' }, commandes.length ? 'Pas encore de famille : la tablette n\'a pas été jumelée.' : 'Aucune famille.')),
+    h('div', { class: 'card' }, h('h2', {}, tablettes.length > 1 ? 'Tablettes' : 'Tablette'),
+      tablettes.length ? h('ul', { class: 'liste-liens' }, tablettes.map((t) => h('li', {},
+        h('a', { href: `#tablette/${encodeURIComponent(t.id)}` }, [t.ref, t.numero || t.modele].filter(Boolean).join(' · ') || 'tablette'),
+        ` · ${donnees.etats[etatTablette(t)] || t.etat}`))) :
+        h('p', { class: 'muted small' }, 'Aucune tablette rattachée.')),
+    h('div', { class: 'card' }, h('h2', {}, 'Paiements'), paiements),
+  );
+  const payantes = commandes.filter((x) => !x.offerte);
+  if (!payantes.length) {
+    if (commandes.length) paiements.replaceChildren(h('p', { class: 'muted small' }, 'Commande offerte : aucun paiement.'));
+    return;
+  }
+  try {
+    const lus = await Promise.all(payantes.map((x) => appeler('gestionCommande', { commande: x.id })));
+    const lignes = lus.flatMap((r) => r.paiements).sort((a, b) => b.le - a.le);
+    const table = h('table');
+    remplirTable(table, [{ titre: 'Date' }, { titre: 'Paiement' }, { titre: 'Montant', n: 1 }, { titre: 'Remboursé', n: 1 }, { titre: 'Statut' }, { titre: '' }],
+      lignes.map((p) => [jour(p.le), p.description || (p.facture ? 'Abonnement' : 'Paiement'), euros(p.montant),
+        p.rembourse ? euros(p.rembourse) : '', p.statut === 'succeeded' ? badge('payé', 'ok') : badge(p.statut, 'ko'),
+        p.recu ? h('a', { href: p.recu, target: '_blank', rel: 'noopener' }, 'Reçu') : '']),
+      { vide: 'Aucun paiement pour l\'instant.' });
+    const total = lignes.filter((p) => p.statut === 'succeeded').reduce((s, p) => s + p.montant - (p.rembourse || 0), 0);
+    paiements.replaceChildren(h('p', { class: 'small' }, `Payé au total : ${euros(total)}`), h('div', { class: 'table' }, table));
+  } catch (e) {
+    paiements.replaceChildren(h('p', { class: 'error small' }, messageErreur(e)));
+  }
 }
 
 async function changerAccord(c) {
@@ -2525,6 +2628,7 @@ async function changerAccord(c) {
   if (!confirm(question)) return;
   try {
     await appeler('gestionConsentement', { email: c.email, consentement: !accepte });
+    clientAffiche = null;
     await chargerClients();
   } catch (e) {
     erreur(e);
