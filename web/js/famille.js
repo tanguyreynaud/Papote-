@@ -3498,6 +3498,7 @@ $('setup-code').addEventListener('submit', async (e) => {
   // Famille déjà créée avec ce compte (installation reprise) : on y entre.
   if (r.fid) { saveFamilyId(r.fid); enterApp(); return; }
   watchSetupPairing(code);
+  reveillerNommer();
   $('setup-nom-error').hidden = true;
   setupStep('setup-nom');
   $('setup-nom-input').focus();
@@ -3508,8 +3509,8 @@ $('setup-nom').addEventListener('submit', async (e) => {
   const nom = $('setup-nom-input').value.trim();
   $('setup-nom-error').hidden = true;
   if (!nom) { showError($('setup-nom-error'), 'Indiquez comment vous l\'appelez, par exemple « Mamie Emma ».'); return; }
-  const btn = e.target.querySelector('button[type=submit]');
-  btn.disabled = true;
+  // Tout de suite un écran d'attente : la création prend quelques secondes.
+  setupCheck(`Création de la famille de ${nom}…`, 'Un instant, nous préparons la tablette.');
   try {
     const { fid } = await nommerFamille(setup.code, nom);
     stopSetupPairing?.();
@@ -3518,13 +3519,18 @@ $('setup-nom').addEventListener('submit', async (e) => {
     await enterApp();
   } catch (err) {
     console.error(err);
+    setupStep('setup-nom');
     showError($('setup-nom-error'), err.code?.endsWith('failed-precondition')
       ? 'Cette tablette n\'est plus réservée pour vous. Scannez à nouveau son code.'
       : 'L\'enregistrement a échoué. Vérifiez la connexion internet et réessayez.');
-  } finally {
-    btn.disabled = false;
   }
 });
+
+// Le serveur dort quand personne ne l'a appelé depuis un moment : on le réveille pendant que
+// le proche tape le nom, pour que « Continuer » réponde vite.
+function reveillerNommer() {
+  nommerFamille(null, null, true).catch(() => {});
+}
 
 async function setupEtape(etape) {
   await updateDoc(doc(db, 'families', session.fid), { 'installation.etape': etape });
@@ -3908,6 +3914,7 @@ async function enterApp() {
       if (resa) {
         setup.code = resa;
         watchSetupPairing(resa);
+        reveillerNommer();
         setupStep('setup-nom');
       } else if (pending) showPending(pending.fid);
       else showJoin(false);

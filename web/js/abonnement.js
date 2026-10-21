@@ -11,6 +11,8 @@ export const OK_STATUTS = ['offert', 'actif', 'impaye'];
 /** Envois, agenda et appels possibles ? (champ absent = famille d'avant les abonnements). */
 export function abonnementOk(family) {
   const abo = family?.abonnement;
+  // Installation en cours : rien n'est bloqué (la commande est reliée juste après).
+  if (family?.installation && family.installation.etape !== 'fini') return true;
   return !abo || OK_STATUTS.includes(abo.statut);
 }
 
@@ -75,8 +77,9 @@ export function reserverTablette(code, prenom) {
   return call('reserverTablette', { code, prenom });
 }
 
-export function nommerFamille(code, nom) {
-  return call('nommerFamille', { code, nom });
+// reveil : appel à vide qui démarre le serveur avant le vrai appel.
+export function nommerFamille(code, nom, reveil = false) {
+  return call('nommerFamille', reveil ? { reveil: true } : { code, nom });
 }
 
 export function finirInstallation(fid) {

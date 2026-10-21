@@ -48,9 +48,13 @@ service cloud.firestore {
 
     // Abonnement (écrit par le serveur seulement) : champ absent ou statut offert, actif ou impayé
     // = tout fonctionne ; suspendu, résilié ou aucun = envois, agenda et appels bloqués.
+    // Pendant l'installation d'une nouvelle tablette, tout fonctionne : la commande est reliée
+    // à la famille juste après sa création (functions/gestion.js, gestionJumelage).
     function abonnementOk(fid) {
-      let abo = get(familyPath(fid)).data.get('abonnement', null);
-      return abo == null || abo.get('statut', '') in ['offert', 'actif', 'impaye'];
+      let fam = get(familyPath(fid)).data;
+      let abo = fam.get('abonnement', null);
+      return abo == null || abo.get('statut', '') in ['offert', 'actif', 'impaye']
+        || fam.get('installation', {}).get('etape', 'fini') != 'fini';
     }
 
     // 30 proches au plus par famille (la tablette ne compte pas). nbProches est tenu à jour
