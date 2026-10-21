@@ -767,7 +767,6 @@
       $('setup-detail').textContent = status.message || '';
       if (!hasData) showView('view-setup');
     } else {
-      show($('offline'), status.state === 'offline' && hasData);
       if (isShown('view-setup')) showView('view-home');
     }
   }
@@ -1143,7 +1142,9 @@
 
   // Plus d'internet depuis une minute (et pas de carte SIM qui prend le relais) : à la place de la
   // photo de l'accueil, une carte « Pas d'internet » avec un grand bouton pour régler le wifi.
-  // Elle reste tant que la tablette n'est pas reconnectée.
+  // Elle reste tant que la tablette n'est pas reconnectée. Tablette à carte SIM (sans wifi) : le
+  // réseau mobile ne répond plus (pas de réseau, forfait épuisé) ; le texte le dit, sans bouton wifi.
+  // C'est la seule indication : pas de phrase en plus sous l'heure.
   var offlineSince = 0;
   var wifiCard = null;
   var wifiAutoOpened = false;
@@ -1167,7 +1168,7 @@
       wifiCard.className = 'wifi-card';
       wifiCard.innerHTML = '<img class="wifi-card-art" src="bienvenue/wifi.svg" alt="">' +
         '<p class="wifi-card-title">Pas d’internet</p>' +
-        '<p class="wifi-card-text">La tablette n’est plus connectée au wifi.</p>' +
+        '<p class="wifi-card-text"></p>' +
         '<button class="wifi-card-btn">Régler le wifi</button>';
       // Toucher la carte n'ouvre pas la galerie photo (le cadre en dessous) ; le bouton ouvre le wifi.
       on(wifiCard, 'click', function (e) {
@@ -1175,6 +1176,13 @@
         if (e.target.tagName === 'BUTTON' && window.PapoteBienvenue) window.PapoteBienvenue.openWifi();
       });
       $('home-frame').appendChild(wifiCard);
+    }
+    if (showIt) {
+      var simOnly = st.sim && !st.wifi;
+      wifiCard.querySelector('.wifi-card-text').textContent = simOnly
+        ? 'Le réseau mobile ne répond pas pour le moment. La tablette réessaie toute seule.'
+        : 'La tablette n’est plus connectée au wifi.';
+      show(wifiCard.querySelector('.wifi-card-btn'), !simOnly);
     }
     show(wifiCard, !!showIt);
   }
