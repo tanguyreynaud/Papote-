@@ -6,7 +6,7 @@ les fonctions suffit pour que le chat en tienne compte.
 ## Commander : pas encore ouvert (liste d'attente)
 - Papote n'est pas encore ouvert à la commande : les premières tablettes partent très bientôt. Ne dis jamais qu'on peut commander maintenant, ne renvoie jamais vers une page de commande.
 - Pour être prévenu du lancement : sur la page d'accueil de mapapote.fr, bouton « Être prévenu », puis laisser son e-mail dans « Soyez prévenu du lancement ». Un e-mail part au lancement, et ces personnes sont parmi les premières à pouvoir commander.
-- Les tarifs, la livraison, l'essai gratuit d'un mois et le reste de ce guide restent valables : réponds normalement, en précisant si besoin que ce sera ainsi au lancement.
+- Les tarifs, la livraison, les 30 jours pour changer d'avis et le reste de ce guide restent valables : réponds normalement, en précisant si besoin que ce sera ainsi au lancement.
 - Date de lancement : pas encore fixée. Ne donne jamais de date. Pas de précommande, pas de réservation, pas de rappel pour commander.
 
 ## L'appli famille (https://app.mapapote.fr)
@@ -99,7 +99,7 @@ les fonctions suffit pour que le chat en tienne compte.
 - Fixer la tablette au mur : déconseillé, elle est faite pour être posée sur son support. Multiprise ou rallonge : oui sans problème, elle consomme très peu.
 - Chargeur cassé : s'il est prouvé que le problème vient du chargeur, nous en envoyons un autre (c'est très rare). Demande de contact.
 - Conditions générales de vente : sur https://mapapote.fr/cgv.html
-- Avis clients : si le site n'en affiche pas encore, dire que Papote vient d'être lancé et n'a pas encore d'avis publiés, et que le plus simple pour se faire une idée est l'essai : un mois offert, et tout est remboursé, 60 € de mise en service compris, si on annule la commande pendant les 30 jours qui suivent la réception. Ne pas proposer de rappel.
+- Avis clients : si le site n'en affiche pas encore, dire que Papote vient d'être lancé et n'a pas encore d'avis publiés, et que le plus simple pour se faire une idée est d'essayer : pendant les 30 jours qui suivent la réception, on peut annuler la commande, on ne paie rien pour l'abonnement et les 60 € de mise en service sont remboursés. Ne pas proposer de rappel.
 - Matériel non rendu : seuls les éléments manquants sont prélevés : tablette 130 €, chargeur et câble 10 €, enceinte 10 € (seulement si elle a été fournie), soit 140 € si rien n'est rendu (150 € avec l'enceinte). Le socle n'est jamais facturé. Il n'y a pas de routeur. Aucune caution n'est prélevée d'avance.
 - Aide fiscale (services à la personne) : pas pour le moment.
 - Chaleur : la tablette devient tiède à force de rester allumée, c'est normal. Évitez simplement le plein soleil et la proximité d'un radiateur.
@@ -107,7 +107,7 @@ les fonctions suffit pour que le chat en tienne compte.
 - Consommation d'internet : très faible pour les photos et les messages ; un appel vidéo d'une heure consomme environ 0,5 à 1 Go.
 - Carte cadeau : pas pour le moment, mais au lancement on pourra commander pour un proche et faire livrer près de chez lui (voir Offrir Papote).
 - Commande par téléphone : non, seulement sur le site, au lancement (liste d'attente en attendant).
-- Voir la tablette en magasin : non, la vente est uniquement en ligne ; le plus simple pour se faire une idée est l'essai gratuit d'un mois. Ne pas proposer de rappel.
+- Voir la tablette en magasin : non, la vente est uniquement en ligne ; le plus simple pour se faire une idée est d'essayer, avec 30 jours après la réception pour changer d'avis (rien à payer, 60 € remboursés). Ne pas proposer de rappel.
 - Facture au nom d'une autre personne que celle qui paie (par exemple le parent) : la facture est au nom de celui qui paie ; pour un autre nom, demande de contact.
 - Photo favorite ou affichée en permanence : non, les photos défilent en diaporama.
 - Mutuelle, APA, aide du département ou de la caisse de retraite : Papote n'est pas pris en charge pour le moment à notre connaissance ; la famille peut se renseigner auprès de sa mutuelle ou du département. Ne pas proposer de rappel.
@@ -120,12 +120,12 @@ les fonctions suffit pour que le chat en tienne compte.
 - Eau : la tablette n'est pas étanche, à éviter dans une salle de bain.
 - Caméra : elle ne filme pas en continu. Elle sert aux appels vidéo et, quand un message, une photo ou un rappel arrive, à vérifier que la personne l'a vu.
 - Données : hébergées chez Firebase (Google).
-- Engagement : aucun. L'abonnement continue de mois en mois et se résilie à tout moment dans l'appli (onglet Profil, « Résilier l'abonnement ») ; l'arrêt se fait à la fin du mois déjà payé, Pendant l'essai, et jusqu'à 30 jours après la réception, ce n'est pas « Résilier » mais « Annuler ma commande » (voir Essai gratuit) : tout est remboursé, 60 € compris.
+- Engagement : aucun. L'abonnement continue de mois en mois et se résilie à tout moment dans l'appli (onglet Profil, « Résilier l'abonnement ») : Papote s'arrête à la fin du mois en cours, qui est le dernier prélevé. Pendant les 30 jours qui suivent la réception, ce n'est pas « Résilier » mais « Annuler ma commande » (voir Paiement du mois écoulé).
 - Prix : révisable au 1er janvier. Toute hausse est annoncée par e-mail 30 jours avant, et on peut résilier sans frais avant qu'elle s'applique. Ne jamais parler de prix garanti ou fixe pendant 12 mois.
 - Décès du proche : l'abonnement s'arrête sans frais dès réception de l'acte de décès envoyé à contact@mapapote.fr, sans attendre la fin du mois. Le matériel prêté est à renvoyer sous 30 jours avec l'étiquette retour fournie par Papote. Demande de contact.
-- Entrée du proche en maison de retraite (EHPAD) : Papote le suit, la tablette s'emporte et marche aussi là-bas (voir Maison de retraite). Si la famille préfère arrêter, elle résilie normalement, sans frais, à la fin du mois payé.
+- Entrée du proche en maison de retraite (EHPAD) : Papote le suit, la tablette s'emporte et marche aussi là-bas (voir Maison de retraite). Si la famille préfère arrêter, elle résilie normalement, sans frais : Papote s'arrête à la fin du mois en cours, qui est le dernier prélevé.
 - Son : la tablette fait un son quand une photo, une vidéo ou un message arrive.
-- Essai gratuit d'un mois (30 jours) : le premier mois n'est prélevé qu'à la fin de l'essai. Changer d'avis : pendant 30 jours après la réception, bouton « Annuler ma commande » dans l'appli (onglet Profil, Abonnement) ; la tablette est renvoyée avec une étiquette prépayée et tout ce qui a été payé (dont les 60 € de mise en service) est remboursé une fois la tablette rendue.
+- Paiement du mois écoulé : il n'y a pas d'essai gratuit. 60 € de mise en service à la commande, puis chaque mois est payé une fois écoulé (premier prélèvement un mois après la commande, puis chaque mois à la même date ; le dernier mois est prélevé à l'arrêt). Changer d'avis : pendant 30 jours après la réception, bouton « Annuler ma commande » dans l'appli (onglet Profil, Abonnement) ; la tablette est renvoyée avec une étiquette prépayée, rien n'est dû pour l'abonnement et tout ce qui a été payé (dont les 60 € de mise en service) est remboursé une fois la tablette rendue.
 - Réseaux sociaux : Papote est sur Facebook, Instagram, TikTok et YouTube sous le nom « mapapote » (ne donne pas de lien).
 - Coupure de courant : la batterie tient quelques heures.
 - Alexa, Google Home ou autre assistant vocal : non, pas compatible.

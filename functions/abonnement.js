@@ -11,8 +11,9 @@
 
 const JOUR = 24 * 60 * 60 * 1000;
 const DELAI_GRACE_JOURS = 7;
-// Un mois d'essai, sans engagement (Tanguy, 2026-10-20).
-const ESSAI_JOURS = 30;
+// Sans engagement, chaque mois payé une fois écoulé (Tanguy, 2026-10-21) : pas de prélèvement le premier
+// mois (« trial » Stripe), puis un par mois ; le dernier mois est prélevé à l'arrêt (index.js).
+const PREMIER_MOIS_JOURS = 30;
 // Tablette incluse : à rendre dans les 30 jours après la fin de l'abonnement, sinon facturée
 // (Tanguy, 2026-10-20, comme les conditions de vente) : tablette 130 €, chargeur et câble 10 €,
 // enceinte 10 € seulement si elle était dans le colis. Plus de routeur 4G ; le socle n'est pas facturé.
@@ -106,7 +107,7 @@ function limiteRestitution(finMs) {
 }
 
 // « Annuler ma commande » : 30 jours après la réception de la tablette (CGV : le délai légal
-// de 14 jours est porté à 30, ce qui couvre l'essai d'un mois et le remboursement des 60 €).
+// de 14 jours est porté à 30 : rien à payer pour l'abonnement et les 60 € remboursés).
 // Réception estimée à l'envoi + 3 jours (Mondial Relay) ; avant l'envoi, toujours possible.
 // Au plus tôt, 30 jours après la commande.
 const RETRACTATION_JOURS = 30;
@@ -170,7 +171,7 @@ function peutModifier(actuel) {
 
 module.exports = {
   DELAI_GRACE_JOURS,
-  ESSAI_JOURS,
+  PREMIER_MOIS_JOURS,
   RESTITUTION_JOURS,
   PENALITE_NON_RESTITUTION,
   penaliteRestitution,

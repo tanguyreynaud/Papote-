@@ -4,7 +4,7 @@
 //   stockDisponible    GET  depuis le site vitrine : { disponible: true|false } (stock.js)
 //   creerPaiement      appel depuis l'appli famille : paiement pour une famille existante
 //   portailClient      appel depuis l'appli famille : compte bancaire, factures
-//   resilierAbonnement appel depuis l'appli famille : résilie à la fin du mois payé (sans engagement)
+//   resilierAbonnement appel depuis l'appli famille : résilie à la fin du mois en cours, prélevé à l'arrêt
 //   annulerResiliation appel depuis l'appli famille : garde l'abonnement
 //   rattacherCommande  appel depuis l'appli famille : relie une commande du site à la famille
 //                      (par l'e-mail du compte, ou par le code de commande XXXX-XXXX)
@@ -108,7 +108,9 @@ async function tarifs(formule, tablette) {
   return cles.map((cle) => ({ price: parCle[cle], quantity: 1 }));
 }
 
-// Essai gratuit d'un mois pour un nouveau client ; pas pour un client déjà abonné une fois.
+// Paiement du mois écoulé (Tanguy, 2026-10-21) : rien n'est prélevé le premier mois (« trial » Stripe),
+// puis un prélèvement par mois ; le mois en cours est prélevé à l'arrêt (prelevementDernierMois).
+// Chaque mois utilisé est donc payé une fois, à terme échu.
 async function sessionPaiement({ formule, tablette, fid, email, client, relais, accord, reservation }) {
   const metadata = { formule, tablette, ...(relais ? livraison.relaisVersMeta(relais) : {}) };
   // Tablette mise de côté pendant le paiement (stock.js), libérée au paiement ou à l'expiration de la page.
@@ -116,11 +118,11 @@ async function sessionPaiement({ formule, tablette, fid, email, client, relais, 
   // Case « nouvelles de Papote par e-mail » cochée sur commande.html : reportée sur la commande.
   if (accord) metadata.accord = '1';
   if (fid) metadata.fid = fid;
-  const subscriptionData = { metadata };
-  if (!client) {
-    subscriptionData.trial_period_days = regles.ESSAI_JOURS;
-    subscriptionData.trial_settings = { end_behavior: { missing_payment_method: 'cancel' } };
-  }
+  const subscriptionData = {
+    metadata,
+    trial_period_days: regles.PREMIER_MOIS_JOURS,
+    trial_settings: { end_behavior: { missing_payment_method: 'cancel' } },
+  };
   const params = {
     mode: 'subscription',
     line_items: await tarifs(formule, tablette),
@@ -398,8 +400,8 @@ exports.portailClient = onCall({ secrets: [STRIPE_SECRET] }, async (request) => 
   return { url: session.url };
 });
 
-// Résiliation en ligne, sans engagement : l'abonnement s'arrête à la fin du mois déjà payé.
-// Pendant l'essai gratuit : arrêt à la fin de l'essai.
+// Résiliation en ligne, sans engagement : l'abonnement s'arrête à la fin du mois en cours,
+// qui est prélevé à l'arrêt (prelevementDernierMois).
 exports.resilierAbonnement = onCall({ secrets: [STRIPE_SECRET] }, async (request) => {
   const { fid } = request.data || {};
   const fam = await familleGeree(fid, request);
@@ -834,6 +836,47 @@ async function abonnementModifie(abo) {
   const fid = (abo.metadata && abo.metadata.fid) || (commande.exists && commande.get('fid'));
   if (fid) await appliquer(fid, abo.id);
   else if (commande.exists) await commande.ref.update({ statutStripe: abo.status });
+  await prelevementDernierMois(abo);
+}
+
+// Paiement du mois écoulé : l'abonnement Stripe est prélevé d'avance après un premier mois sans
+// prélèvement, donc le dernier mois utilisé (celui qui vient de finir) reste dû à l'arrêt.
+// Seulement pour une résiliation (pas une commande annulée dans les 30 jours, ni un impayé).
+// Une seule fois par commande (dernierMois noté dans commandes/{id}).
+async function prelevementDernierMois(abo) {
+  if (abo.status !== 'canceled') return;
+  if (!(abo.cancellation_details && abo.cancellation_details.reason === 'cancellation_requested')) return;
+  const item = ((abo.items && abo.items.data) || []).find((i) => i.price && i.price.recurring);
+  if (!item || !item.price.unit_amount) return;
+  const montant = item.price.unit_amount * (item.quantity || 1);
+  const ref = db.doc(`commandes/${abo.id}`);
+  const aPrelever = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const c = snap.exists ? snap.data() : {};
+    if (c.dernierMois || c.retractation || c.offerte || ['a-preparer', 'paiement-en-attente', 'annulee'].includes(c.expedition)) return false;
+    tx.set(ref, { dernierMois: { statut: 'en-cours', montant, le: FieldValue.serverTimestamp() } }, { merge: true });
+    return true;
+  });
+  if (!aPrelever) return;
+  try {
+    const client = typeof abo.customer === 'string' ? abo.customer : abo.customer.id;
+    const moyen = abo.default_payment_method
+      && (typeof abo.default_payment_method === 'string' ? abo.default_payment_method : abo.default_payment_method.id);
+    await stripe().invoiceItems.create({
+      customer: client, amount: montant, currency: item.price.currency,
+      description: 'Dernier mois d\'abonnement Papote (mois écoulé)', metadata: { commande: abo.id },
+    }, { idempotencyKey: `dernier-mois-ligne-${abo.id}` });
+    const facture = await stripe().invoices.create({
+      customer: client, collection_method: 'charge_automatically', pending_invoice_items_behavior: 'include',
+      ...(moyen ? { default_payment_method: moyen } : {}), metadata: { commande: abo.id, dernierMois: '1' },
+    }, { idempotencyKey: `dernier-mois-facture-${abo.id}` });
+    await stripe().invoices.finalizeInvoice(facture.id);
+    await stripe().invoices.pay(facture.id).catch((e) => logger.warn(`Commande ${abo.id} : dernier mois en attente`, e.message));
+    await ref.update({ 'dernierMois.statut': 'fait', 'dernierMois.facture': facture.id });
+  } catch (e) {
+    logger.error(`Commande ${abo.id} : dernier mois non prélevé`, e.message);
+    await ref.update({ 'dernierMois.statut': 'echec', 'dernierMois.erreur': e.message });
+  }
 }
 
 // ---------- Page d'accueil du site vitrine, avec les avis (functions/avis.js) ----------
