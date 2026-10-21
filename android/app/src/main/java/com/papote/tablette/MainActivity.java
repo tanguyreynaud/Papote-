@@ -765,15 +765,10 @@ public class MainActivity extends Activity implements Sync.Listener {
                     if (!"fr".equals(v.getLocale().getLanguage()) || !"FR".equals(v.getLocale().getCountry())
                             || v.isNetworkConnectionRequired()
                             || v.getFeatures().contains(android.speech.tts.TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED)) continue;
-                    // cfe : la voix que le moteur charge de toute façon à la connexion (6 s sur la
-                    // Vucatimes) ; en prendre une autre en ajoutait une seconde, d'où ~20 s au démarrage.
-                    if (choisie == null || v.getName().contains("cfe")) choisie = v;
+                    // vlf : la voix française par défaut du moteur. Au démarrage, le moteur charge d'abord
+                    // son modèle commun (cfe, ~6 s sur la Vucatimes), puis la voix (~5 s) : ~12 s en tout.
+                    if (choisie == null || v.getName().contains("vlf")) choisie = v;
                 }
-                StringBuilder noms = new StringBuilder();
-                for (android.speech.tts.Voice v : tts.getVoices()) {
-                    if ("fr".equals(v.getLocale().getLanguage())) noms.append(v.getName()).append(v.isNetworkConnectionRequired() ? "(réseau) " : " ");
-                }
-                Log.i(TAG, "Voix françaises : " + noms + "| par défaut : " + (tts.getDefaultVoice() == null ? "?" : tts.getDefaultVoice().getName()));
                 if (choisie != null) { tts.setVoice(choisie); Journal.log(this, "Voix : " + choisie.getName()); }
             } catch (Exception e) {
                 Log.w(TAG, "Voix française", e);
