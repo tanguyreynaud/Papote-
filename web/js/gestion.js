@@ -252,7 +252,8 @@ function afficherPage() {
   $('periode').hidden = !AVEC_PERIODE.includes(page);
   $('p-etat').hidden = !AVEC_PERIODE.includes(page);
   window.scrollTo(0, 0);
-  if ((page === 'clients' || page === 'client') && connecte) chargerClients();
+  // Clients déjà lus : affichés tout de suite, relus en fond s'ils datent de plus d'une minute.
+  if ((page === 'clients' || page === 'client') && connecte && (!clients || Date.now() - clientsLus > 60_000)) chargerClients();
   afficherFiche();
 }
 
@@ -281,7 +282,8 @@ function fermerChargement() {
 onAuthStateChanged(getAuth(getApp('admin')), (user) => {
   connecte = !!user;
   if (!user) { fermerChargement(); return; }
-  if (pageCourante() === 'clients') chargerClients();
+  // Lus dès la connexion, pour que la page Clients s'ouvre sans attendre.
+  chargerClients();
   chargerDonnees();
   chargerMois();
   changerPeriode();
@@ -2564,13 +2566,28 @@ const STATUTS_CLIENT = {
   actif: 'actif', offert: 'offert', impaye: 'impayé', suspendu: 'suspendu', resilie: 'résilié', aucun: 'sans abonnement', installation: 'installation en cours', annulee: 'annulée',
 };
 
+// Rond de chargement au milieu de la zone, tant que les données ne sont pas arrivées.
+function attente(texte = 'Chargement…') {
+  return h('div', { class: 'attente', role: 'status' }, h('span', { class: 'roue' }), h('p', {}, texte));
+}
+
+let clientsLus = 0;
+let clientsEnCours = null;
 async function chargerClients() {
-  try {
-    clients = await appeler('gestionClients');
-    afficherClients();
-  } catch (e) {
-    erreur(e);
-  }
+  if (clientsEnCours) return clientsEnCours;
+  if (!clients) $('kpi-clients').replaceChildren(attente('Chargement des clients…'));
+  clientsEnCours = (async () => {
+    try {
+      clients = await appeler('gestionClients');
+      clientsLus = Date.now();
+      afficherClients();
+    } catch (e) {
+      erreur(e);
+    } finally {
+      clientsEnCours = null;
+    }
+  })();
+  return clientsEnCours;
 }
 
 function clientsAffiches() {
@@ -2647,7 +2664,7 @@ async function remplirClient(email) {
   const zone = $('dcl-corps');
   const c = clients && clients.contacts.find((x) => x.email === email);
   if (!clients) {
-    zone.replaceChildren(h('div', { class: 'card' }, h('p', { class: 'muted' }, 'Chargement…')));
+    zone.replaceChildren(attente('Chargement du client…'));
     return;
   }
   if (!c) {

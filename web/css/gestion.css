@@ -400,3 +400,9 @@ td a:hover { text-decoration: underline; }
 .frise li:last-child { padding-bottom: 0; }
 .frise-date { color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
 .frise-texte { padding-left: 10px; }
+
+/* Rond de chargement au milieu de la zone, en attendant les données. */
+.attente { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; min-height: 180px; width: 100%; grid-column: 1 / -1; color: var(--muted); }
+.attente[hidden] { display: none; }
+.attente p { margin: 0; font-size: 15px; }
+.attente .roue { width: 32px; height: 32px; border: 3px solid rgba(79, 70, 229, 0.18); border-top-color: #4f46e5; border-radius: 50%; animation: tourner 0.8s linear infinite; }

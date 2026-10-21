@@ -55,6 +55,8 @@
       <div class="nav-pied">
         <p id="who" class="muted small"></p>
         <button type="button" id="btn-signout" class="link small">Se déconnecter</button>
+        <!-- Version de l'admin : à changer à chaque mise à jour, pour voir que la bonne est en ligne. -->
+        <p class="muted small version-admin">Version du 21/10 à 16 h 30</p>
       </div>
     </aside>
 
@@ -174,7 +176,7 @@
           </div>
         </div>
         <div data-onglet="familles">
-        <p id="loading-families" class="muted">Chargement des familles…</p>
+        <div id="loading-families" class="attente" role="status"><span class="roue"></span><p>Chargement des familles…</p></div>
         <div id="familles-liste">
           <div class="stats" id="kpi-familles"></div>
           <div class="card">
