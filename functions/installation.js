@@ -71,6 +71,24 @@ function villeDuRelais(commande) {
   return { nom };
 }
 
+// Coordonnées de la commune du point relais (geo.api.gouv.fr, par code postal), pour une météo juste
+// même quand plusieurs communes portent le même nom. Sans réponse : le nom seul (la tablette cherche).
+async function villeAvecCoordonnees(ville, cp, chercher = fetch) {
+  if (!ville || !/^\d{5}$/.test(String(cp || ''))) return ville;
+  const simple = (t) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z]/g, '');
+  try {
+    const r = await chercher(`https://geo.api.gouv.fr/communes?codePostal=${cp}&fields=nom,centre&format=json`,
+      { signal: AbortSignal.timeout(4000) });
+    const communes = (await r.json()).filter((c) => c.centre && c.centre.coordinates);
+    const c = communes.find((x) => simple(x.nom) === simple(ville.nom)) || (communes.length === 1 ? communes[0] : null);
+    if (!c) return ville;
+    const [lon, lat] = c.centre.coordinates;
+    return { nom: c.nom.slice(0, 80), lat, lon };
+  } catch (e) {
+    return ville;
+  }
+}
+
 function codeAuHasard() {
   const bytes = require('node:crypto').randomBytes(8);
   return Array.from(bytes, (b) => CODE_ALPHABET[b % CODE_ALPHABET.length]).join('');
@@ -129,10 +147,11 @@ function brancher(deps) {
     if (!avant || avant.claimedBy !== uid || !['reserved', 'confirmed'].includes(avant.status)) {
       throw new HttpsError('failed-precondition', "Cette tablette n'est plus réservée pour vous. Scannez à nouveau son code.");
     }
-    const ville = villeDuRelais(await commandeDeLaTablette(avant).catch((e) => {
+    const commande = await commandeDeLaTablette(avant).catch((e) => {
       logger.warn(`Installation ${code} : commande illisible`, e.message);
       return null;
-    }));
+    });
+    const ville = await villeAvecCoordonnees(villeDuRelais(commande), commande && commande.livraison && commande.livraison.cp);
     return db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       const p = snap.data();
@@ -203,5 +222,5 @@ function brancher(deps) {
 
 module.exports = {
   brancher,
-  regles: { decisionScan, villeDuRelais, normaliserCode, OPTIONS_PAR_DEFAUT, ETAPES },
+  regles: { decisionScan, villeDuRelais, villeAvecCoordonnees, normaliserCode, OPTIONS_PAR_DEFAUT, ETAPES },
 };

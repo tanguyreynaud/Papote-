@@ -29,3 +29,15 @@ test('code saisi', () => {
   assert.strictEqual(r.normaliserCode('abcd-2345'), 'ABCD2345');
   assert.strictEqual(r.normaliserCode('abc'), null);
 });
+
+test('coordonnées de la ville du point relais', async () => {
+  const reponse = (communes) => async () => ({ json: async () => communes });
+  const deux = [{ nom: 'Lyon', centre: { coordinates: [4.85, 45.76] } }, { nom: 'Villeurbanne', centre: { coordinates: [4.88, 45.77] } }];
+  assert.deepStrictEqual(await r.villeAvecCoordonnees({ nom: 'Lyon' }, '69006', reponse(deux)), { nom: 'Lyon', lat: 45.76, lon: 4.85 });
+  assert.deepStrictEqual(await r.villeAvecCoordonnees({ nom: 'Saint-Martin-De-Valamas' }, '07310',
+    reponse([{ nom: 'Saint-Martin-de-Valamas', centre: { coordinates: [4.37, 44.94] } }])), { nom: 'Saint-Martin-de-Valamas', lat: 44.94, lon: 4.37 });
+  assert.deepStrictEqual(await r.villeAvecCoordonnees({ nom: 'Ailleurs' }, '69006', reponse(deux)), { nom: 'Ailleurs' });
+  assert.deepStrictEqual(await r.villeAvecCoordonnees({ nom: 'Lyon' }, '69006', async () => { throw new Error('réseau'); }), { nom: 'Lyon' });
+  assert.deepStrictEqual(await r.villeAvecCoordonnees({ nom: 'Lyon' }, null), { nom: 'Lyon' });
+  assert.strictEqual(await r.villeAvecCoordonnees(null, '69006'), null);
+});
