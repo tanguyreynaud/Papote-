@@ -1,6 +1,7 @@
-// Tablettes disponibles à la vente : les commandes suivent le stock réel, plus PRECOMMANDES commandes d'avance
-// (Tanguy, 2026-10-21 : « jusqu'à nombre de commandes = stock + 10 », donc 10 commandes même avec 0 en stock).
-// Au-delà du stock, la commande est une précommande : le site annonce un délai de préparation plus long.
+// Délai annoncé selon le stock réel (Tanguy, 2026-10-21) : les commandes ne ferment jamais.
+//   en stock                       : préparée sous 2 à 3 jours ouvrés ;
+//   au-delà, jusqu'à stock + 10    : précommande, préparée sous 7 à 10 jours ouvrés (PRECOMMANDES) ;
+//   au-delà de stock + 10          : attente longue, expédition sous 3 à 4 semaines.
 //
 // Disponibles = fiches du stock libres (en stock ou préparées, sans commande)
 //             - commandes payées pas encore reliées à une fiche
@@ -56,22 +57,28 @@ async function nombreDisponibles(db) {
   return placesDisponibles(await lireEtCompter(db, (q) => q.get(), Date.now()));
 }
 
-// Met une tablette de côté pour un paiement. Renvoie { id, expireA (secondes Stripe) } ou null si plus rien.
+// Délai d'une nouvelle commande d'après le solde du stock : 'stock', 'precommande' ou 'long'.
+function delai(n) {
+  if (n >= 1) return 'stock';
+  return placesDisponibles(n) > 0 ? 'precommande' : 'long';
+}
+
+// Met une tablette de côté pour un paiement (toujours : les commandes ne ferment plus).
+// Renvoie { id, expireA (secondes Stripe), delai }.
 // Le document gestion/stock est lu et écrit à chaque réservation : deux paiements simultanés passent
 // l'un après l'autre et ne peuvent pas prendre la même dernière tablette.
 async function reserver(db) {
   const maintenant = Date.now();
   const verrou = db.doc('gestion/stock');
   const ref = db.collection('reservations').doc();
-  const ok = await db.runTransaction(async (tx) => {
+  const d = await db.runTransaction(async (tx) => {
     await tx.get(verrou);
-    const dispo = placesDisponibles(await lireEtCompter(db, (q) => tx.get(q), maintenant));
-    if (dispo < 1) return false;
+    const n = await lireEtCompter(db, (q) => tx.get(q), maintenant);
     tx.set(ref, { creeLe: FieldValue.serverTimestamp(), expireLe: Timestamp.fromMillis(maintenant + DUREE_PAIEMENT_MS + MARGE_MS) });
     tx.set(verrou, { derniereReservation: FieldValue.serverTimestamp() }, { merge: true });
-    return true;
+    return delai(n);
   });
-  return ok ? { id: ref.id, expireA: Math.floor((maintenant + DUREE_PAIEMENT_MS) / 1000) } : null;
+  return { id: ref.id, expireA: Math.floor((maintenant + DUREE_PAIEMENT_MS) / 1000), delai: d };
 }
 
 // Paiement réussi, page expirée ou ouverture du paiement ratée : la tablette n'est plus mise de côté.
@@ -80,14 +87,16 @@ async function liberer(db, id) {
   await db.doc(`reservations/${id}`).delete();
 }
 
-// Lecture publique pour le site : { disponible, precommande } (vrai/faux), rien d'autre (pas de nombre).
-// precommande : plus de tablette en stock, la commande attendra l'achat d'une tablette (délai plus long).
+// Lecture publique pour le site : { disponible, precommande, attenteLongue } (vrai/faux), pas de nombre.
+// disponible : toujours vrai (les commandes ne ferment plus) ; precommande : plus de tablette en stock,
+// préparée sous 7 à 10 jours ouvrés ; attenteLongue : au-delà de stock + 10, expédition sous 3 à 4 semaines.
 function routeDisponible(db, logger) {
   return async (req, res) => {
     try {
       const n = await lireEtCompter(db, (q) => q.get(), Date.now());
       res.set('Cache-Control', 'public, max-age=60');
-      res.json({ disponible: placesDisponibles(n) > 0, precommande: n < 1 });
+      const d = delai(n);
+      res.json({ disponible: true, precommande: d === 'precommande', attenteLongue: d === 'long' });
     } catch (e) {
       logger.error('stockDisponible', e);
       res.status(500).json({ erreur: 'indisponible' });
@@ -98,4 +107,4 @@ function routeDisponible(db, logger) {
 const ERREUR_COMPLET = () => new HttpsError('resource-exhausted',
   "Toutes nos tablettes sont réservées pour le moment. Inscrivez-vous sur mapapote.fr pour être prévenu dès qu'il y en a.");
 
-module.exports = { tablettesDisponibles, placesDisponibles, PRECOMMANDES, nombreDisponibles, reserver, liberer, routeDisponible, ERREUR_COMPLET, DUREE_PAIEMENT_MS };
+module.exports = { tablettesDisponibles, placesDisponibles, delai, PRECOMMANDES, nombreDisponibles, reserver, liberer, routeDisponible, ERREUR_COMPLET, DUREE_PAIEMENT_MS };

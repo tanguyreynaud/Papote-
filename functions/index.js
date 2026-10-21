@@ -108,19 +108,22 @@ async function tarifs(formule, tablette) {
   return cles.map((cle) => ({ price: parCle[cle], quantity: 1 }));
 }
 
-// Paiement du mois écoulé (Tanguy, 2026-10-21) : rien n'est prélevé le premier mois (« trial » Stripe),
+// Paiement du mois écoulé (Tanguy, 2026-10-21) : rien n'est prélevé tant que la tablette n'est pas arrivée
+// (« trial » Stripe), ni pendant les 30 jours pour changer d'avis qui suivent la réception (debutApresReception),
 // puis un prélèvement par mois ; le mois en cours est prélevé à l'arrêt (prelevementDernierMois).
 // Chaque mois utilisé est donc payé une fois, à terme échu.
 async function sessionPaiement({ formule, tablette, fid, email, client, relais, accord, reservation }) {
   const metadata = { formule, tablette, ...(relais ? livraison.relaisVersMeta(relais) : {}) };
   // Tablette mise de côté pendant le paiement (stock.js), libérée au paiement ou à l'expiration de la page.
   if (reservation && reservation.id) metadata.reservation = reservation.id;
+  // Délai annoncé au client (stock.js) : stock, precommande ou long.
+  if (reservation && reservation.delai) metadata.delai = reservation.delai;
   // Case « nouvelles de Papote par e-mail » cochée sur commande.html : reportée sur la commande.
   if (accord) metadata.accord = '1';
   if (fid) metadata.fid = fid;
   const subscriptionData = {
     metadata,
-    trial_period_days: regles.PREMIER_MOIS_JOURS,
+    trial_period_days: regles.ATTENTE_ENVOI_JOURS,
     trial_settings: { end_behavior: { missing_payment_method: 'cancel' } },
   };
   const params = {
@@ -350,11 +353,8 @@ exports.commander = onRequest({ secrets: [STRIPE_SECRET] }, async (req, res) => 
   const accord = req.query.accord === '1';
   try {
     // Plus de tablette disponible : liste d'attente « Être prévenu ».
+    // Toujours une réservation : les commandes ne ferment plus, seul le délai annoncé change (stock.js).
     const reservation = await reserverTablette();
-    if (!reservation) {
-      res.redirect(303, `${SITE_VITRINE.value()}/#lancement`);
-      return;
-    }
     const session = await sessionPaiement({ formule, tablette, relais, email, accord, reservation });
     // Lien d'une relance : le panier d'origine est déjà noté.
     if (email && !req.query.relance) {
@@ -658,6 +658,7 @@ async function paiementTermine(session) {
         || (adresse ? { nom: adresse.name || null, adresse: adresse.address || null } : null),
       // Tablette à préparer et envoyer par Tanguy (« envoyee » une fois partie).
       expedition: paye ? 'a-preparer' : 'paiement-en-attente',
+      delai: meta.delai || null,
       stripeCustomerId: session.customer,
       fid: (existante.exists && existante.get('fid')) || null,
       creeLe: FieldValue.serverTimestamp(),
@@ -707,7 +708,7 @@ async function confirmerCommande(ref, email, code) {
   });
   if (!premier) return;
   await compterEtape('paye').catch((e) => logger.warn('Statistiques', e.message));
-  const infos = { nom: premier.nom, code, relais: premier.livraison, formule: premier.formule };
+  const infos = { nom: premier.nom, code, relais: premier.livraison, formule: premier.formule, delai: premier.delai };
   const envois = [envoyerMail(EMAIL_PAPOTE, mail.nouvelleCommande({ ...infos, email, telephone: premier.telephone }))];
   if (email) envois.push(envoyerMail(email, mail.commandeConfirmee(infos)));
   const resultats = await Promise.allSettled(envois);
@@ -1174,8 +1175,23 @@ exports.commandeModifiee = onDocumentUpdated(
     const avant = event.data.before.data();
     const apres = event.data.after.data();
     await mailEnvoi(event, avant, apres);
+    await debutApresReception(event, avant, apres);
     await suiviRetour(event, avant.restitution || {}, apres.restitution || {}, apres);
   });
+
+// Tablette partie : le premier mois commence à la réception (envoi + 3 jours). Le premier prélèvement tombe
+// à la fin des 30 jours pour changer d'avis (même date que limiteRetractation), pas avant.
+async function debutApresReception(event, avant, apres) {
+  if (avant.envoyeeLe || !apres.envoyeeLe || !apres.stripeCustomerId) return;
+  const fin = regles.limiteRetractation(apres.creeLe && apres.creeLe.toMillis(), apres.envoyeeLe.toMillis());
+  try {
+    const abo = await stripe().subscriptions.retrieve(event.params.id);
+    if (abo.status !== 'trialing') return;
+    await stripe().subscriptions.update(event.params.id, { trial_end: Math.ceil(fin / 1000), proration_behavior: 'none' });
+  } catch (e) {
+    logger.error(`Commande ${event.params.id} : début de l'abonnement non recalé`, e.message);
+  }
+}
 
 async function mailEnvoi(event, avant, apres) {
   if (apres.expedition !== 'envoyee' || !apres.suivi || !apres.email) return;
