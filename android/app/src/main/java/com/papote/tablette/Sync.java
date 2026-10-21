@@ -1394,6 +1394,7 @@ final class Sync {
      * Options de la tablette réglées par la famille (families/{fid}.options) :
      * lecture (bouton « Écouter »), reponseVocale (« Répondre » par la voix),
      * radio { active, nom, url }, sos (bouton « SOS famille »). Absentes : tout est désactivé.
+     * Sauf meteo et rappelsAccueil (la météo et le prochain rappel sur l'accueil) : affichés sauf si false.
      */
     private JSONObject options = new JSONObject();
 
@@ -1407,6 +1408,8 @@ final class Sync {
                 out.put("lecture", bool(f, "lecture"));
                 out.put("reponseVocale", bool(f, "reponseVocale"));
                 out.put("sos", bool(f, "sos"));
+                out.put("meteo", !f.has("meteo") || bool(f, "meteo"));
+                out.put("rappelsAccueil", !f.has("rappelsAccueil") || bool(f, "rappelsAccueil"));
                 JSONObject r = f.optJSONObject("radio");
                 JSONObject rf = r == null || r.optJSONObject("mapValue") == null ? null
                         : r.optJSONObject("mapValue").optJSONObject("fields");

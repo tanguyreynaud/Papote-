@@ -207,6 +207,7 @@
     return '<svg viewBox="0 0 80 80">' + body + '</svg>';
   }
 
+  var weatherReady = false;
   function onWeather(data) {
     try {
       var now = WEATHER[data.current.weather_code] || ['cloudy', ''];
@@ -221,7 +222,8 @@
       var small = document.createElement('small');
       small.textContent = 'Demain : ' + tomorrow[1].toLowerCase() + ', ' + Math.round(data.daily.temperature_2m_max[1]) + '°';
       $('weather-label').appendChild(small);
-      show($('weather'), true);
+      weatherReady = true;
+      show($('weather'), options.meteo !== false);
     } catch (e) { /* données incomplètes : on garde l'affichage précédent */ }
   }
 
@@ -927,7 +929,7 @@
       next = items[i];
       break;
     }
-    show(el, !!next);
+    show(el, !!next && options.rappelsAccueil !== false);
     if (!next) return;
     el.querySelector('.next-icon').innerHTML = kindIcon(next.kind);
     el.querySelector('.next-when').textContent = (next.kind === 'rdv' ? 'Rendez-vous à ' : 'Tout à l\'heure, à ') + timeLabel(next.time);
@@ -1539,6 +1541,9 @@
     showListenButtons();
     setupRadio();
     showSosButton();
+    // Météo et prochain rappel de l'accueil : affichés sauf si la famille les a enlevés.
+    if (weatherReady) show($('weather'), options.meteo !== false);
+    checkReminders();
   }
 
   // « Écouter » : la tablette lit le message ou le rappel à voix haute.
