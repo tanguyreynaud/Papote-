@@ -3624,7 +3624,9 @@ function fillOptions() {
   $('setup-opt-meteo').checked = o.meteo !== false;
   $('setup-opt-radio').checked = !!o.radio?.active;
   const ville = session.family.meteoVille?.nom;
-  $('setup-opt-meteo-ville').textContent = ville ? `À ${ville}, la ville du point relais (modifiable dans Réglages)` : 'La ville se règle dans Réglages';
+  $('setup-opt-meteo-ville').textContent = ville
+    ? `L'accueil affiche le temps qu'il fait à ${ville}, la ville du point relais. Vous pourrez la changer dans Réglages.`
+    : 'L\'accueil affiche le temps qu\'il fait. La ville se choisit dans Réglages.';
 }
 
 $('setup-fin').addEventListener('click', async () => {

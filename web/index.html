@@ -239,13 +239,13 @@
 
       <div id="setup-options" class="card setup-step" hidden>
         <h2>Les options de la tablette</h2>
-        <p class="muted">Tout est déjà réglé. Vous pouvez changer maintenant, ou plus tard dans Réglages.</p>
+        <p class="muted">Voici ce que fera la tablette. Tout est déjà réglé : touchez un interrupteur pour changer. Vous pourrez aussi changer plus tard dans Réglages.</p>
         <div class="toggle-list">
-          <label class="toggle-row"><span class="toggle-text"><strong>SOS famille</strong><span>Un bouton en haut de la tablette : un appui, l'appel part après 5 secondes, avec « Annuler »</span></span><input type="checkbox" class="toggle" id="setup-opt-sos"></label>
-          <label class="toggle-row"><span class="toggle-text"><strong>Lecture à voix haute</strong><span>Les messages sont lus une fois quand <span class="setup-qui"></span> est devant la tablette, avec « Écouter » pour réécouter</span></span><input type="checkbox" class="toggle" id="setup-opt-lecture"></label>
-          <label class="toggle-row"><span class="toggle-text"><strong>Prochain rappel sur l'accueil</strong><span>Un repère de la journée</span></span><input type="checkbox" class="toggle" id="setup-opt-rappels"></label>
-          <label class="toggle-row"><span class="toggle-text"><strong>Météo sur l'accueil</strong><span id="setup-opt-meteo-ville">La ville se règle dans Réglages</span></span><input type="checkbox" class="toggle" id="setup-opt-meteo"></label>
-          <label class="toggle-row"><span class="toggle-text"><strong>Radio</strong><span>Un bouton « Radio » à côté de « Appeler », à activer plus tard si elle aime</span></span><input type="checkbox" class="toggle" id="setup-opt-radio"></label>
+          <label class="toggle-row"><span class="toggle-text"><strong>Bouton SOS</strong><span><span class="setup-qui"></span> appuie sur «&nbsp;SOS&nbsp;» en haut de l'écran : 5 secondes plus tard, les téléphones de la famille sonnent. Elle peut annuler pendant ces 5 secondes.</span></span><input type="checkbox" class="toggle" id="setup-opt-sos"></label>
+          <label class="toggle-row"><span class="toggle-text"><strong>Lire les messages à voix haute</strong><span>Quand un message arrive, la tablette le lit dès qu'elle voit <span class="setup-qui"></span> devant l'écran. Le bouton «&nbsp;Écouter&nbsp;» permet de le réentendre.</span></span><input type="checkbox" class="toggle" id="setup-opt-lecture"></label>
+          <label class="toggle-row"><span class="toggle-text"><strong>Prochain rappel</strong><span>L'accueil affiche le prochain rappel de la journée : un médicament, un rendez-vous…</span></span><input type="checkbox" class="toggle" id="setup-opt-rappels"></label>
+          <label class="toggle-row"><span class="toggle-text"><strong>Météo</strong><span id="setup-opt-meteo-ville">L'accueil affiche le temps qu'il fait. La ville se choisit dans Réglages.</span></span><input type="checkbox" class="toggle" id="setup-opt-meteo"></label>
+          <label class="toggle-row"><span class="toggle-text"><strong>Radio</strong><span>Un bouton «&nbsp;Radio&nbsp;» pour écouter sa station. Éteint au départ, pour garder un écran simple.</span></span><input type="checkbox" class="toggle" id="setup-opt-radio"></label>
         </div>
         <button type="button" class="primary wide" id="setup-fin">C'est parfait</button>
         <p id="setup-fin-error" class="error" hidden></p>
@@ -501,11 +501,11 @@
           <div id="options-value" class="setting-value options-value"></div>
           <form id="form-options" class="setting-edit" hidden>
             <div class="toggle-list">
-            <label class="toggle-row"><span class="toggle-text"><strong>Lecture à voix haute</strong><span>Lit les messages et rappels à voix haute quand elle est devant la tablette, avec un bouton « Écouter »</span></span><input type="checkbox" class="toggle" id="opt-lecture"></label>
+            <label class="toggle-row"><span class="toggle-text"><strong>Lecture à voix haute</strong><span>Lit les messages et rappels à voix haute quand elle est devant la tablette, avec un bouton «&nbsp;Écouter&nbsp;»</span></span><input type="checkbox" class="toggle" id="opt-lecture"></label>
             <label class="toggle-row"><span class="toggle-text"><strong>Météo sur l'accueil</strong><span>Le temps du jour sur l'écran de la tablette</span></span><input type="checkbox" class="toggle" id="opt-meteo"></label>
             <label class="toggle-row"><span class="toggle-text"><strong>Prochain rappel sur l'accueil</strong><span>Le prochain rappel de la journée sur l'écran de la tablette</span></span><input type="checkbox" class="toggle" id="opt-rappels-accueil"></label>
             <label class="toggle-row"><span class="toggle-text"><strong>SOS famille</strong><span>Un bouton « SOS famille » en haut de la tablette : un appui, et toute la famille sonne</span></span><input type="checkbox" class="toggle" id="opt-sos"></label>
-            <label class="toggle-row"><span class="toggle-text"><strong>Radio</strong><span>Un bouton « Radio » à côté de « Appeler »</span></span><input type="checkbox" class="toggle" id="opt-radio"></label>
+            <label class="toggle-row"><span class="toggle-text"><strong>Radio</strong><span>Un bouton «&nbsp;Radio&nbsp;» à côté de « Appeler »</span></span><input type="checkbox" class="toggle" id="opt-radio"></label>
               <div id="opt-radio-wrap" class="station">
                 <label for="opt-radio-station">Station</label>
                 <div class="station-row">
