@@ -613,6 +613,7 @@ exports.gestionDonnees = onCall(async (request) => {
         etiquettes: c.etiquettes || null,
         preparation: c.preparation || null,
         stripeCustomerId: c.stripeCustomerId || null,
+        offerte: c.offerte === true,
       });
     }),
     stock: stock.docs.map((d) => {
@@ -1274,6 +1275,8 @@ exports.gestionCommande = onCall({ secrets: [STRIPE_SECRET] }, async (request) =
   if (typeof commande !== 'string' || !commande) throw new HttpsError('invalid-argument', 'Commande manquante.');
   const snap = await db().doc(`commandes/${commande}`).get();
   if (!snap.exists) throw new HttpsError('not-found', 'Commande introuvable.');
+  // Commande offerte : ni facture ni paiement.
+  if (snap.get('offerte')) return { factures: [], paiements: [] };
   const client = snap.get('stripeCustomerId');
   const [factures, paiements] = await Promise.all([
     tout(stripe().invoices.list({ subscription: commande, limit: 100 })),
@@ -2605,6 +2608,56 @@ exports.gestionFamilleOfferte = onCall(async (request) => {
     'abonnement.par': request.auth.token.email || request.auth.uid,
   });
   return { ok: true };
+});
+
+// Commande offerte (les mamies de Tanguy) : une vraie commande, sans Stripe, avec son code de commande.
+// La famille choisie passe « offerte » (jamais en pause) ; la tablette choisie est rattachée à la commande.
+// { nom, email?, telephone?, formule: 'wifi'|'sim', fid?, tablette?, dejaInstallee? }
+exports.gestionCommandeOfferte = onCall(async (request) => {
+  verifierAdmin(request);
+  const d = request.data || {};
+  const nom = texte(d.nom, 100);
+  if (!nom) throw new HttpsError('invalid-argument', 'Nom manquant.');
+  const formule = d.formule === 'sim' ? 'sim' : 'wifi';
+  const fid = typeof d.fid === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(d.fid) ? d.fid : null;
+  const famille = fid ? await db().doc(`families/${fid}`).get() : null;
+  if (fid && !famille.exists) throw new HttpsError('not-found', 'Famille introuvable.');
+  if (famille && ['actif', 'impaye', 'suspendu'].includes(famille.get('abonnement.statut'))) {
+    throw new HttpsError('failed-precondition', "Cette famille a un abonnement payant en cours : résiliez-le d'abord dans Stripe.");
+  }
+  const tablette = typeof d.tablette === 'string' && d.tablette ? await db().doc(`stock/${d.tablette}`).get() : null;
+  if (tablette && (!tablette.exists || tablette.get('commande'))) {
+    throw new HttpsError('failed-precondition', 'Cette tablette est déjà rattachée à une commande.');
+  }
+  const installee = d.dejaInstallee === true;
+  const qui = request.auth.token.email || request.auth.uid;
+  const ref = db().collection('commandes').doc(`offerte-${db().collection('commandes').doc().id}`);
+  await db().runTransaction(async (tx) => {
+    let code;
+    do {
+      code = require('./abonnement').nouveauCode();
+    } while (!(await tx.get(db().collection('commandes').where('code', '==', code).limit(1))).empty);
+    tx.set(ref, {
+      offerte: true, code, nom, email: emailPropre(d.email) || null, telephone: texte(d.telephone, 30), formule,
+      tablette: 'incluse', livraison: null, expedition: installee ? 'envoyee' : 'a-preparer', fid,
+      ...(installee ? { envoyeeLe: FieldValue.serverTimestamp() } : {}),
+      creeLe: FieldValue.serverTimestamp(), creePar: qui,
+    });
+    if (fid) {
+      tx.update(famille.ref, {
+        'abonnement.statut': 'offert', 'abonnement.formule': formule,
+        'abonnement.majLe': FieldValue.serverTimestamp(), 'abonnement.par': qui,
+      });
+    }
+    if (tablette) {
+      const etat = installee ? 'chez-client' : tablette.get('etat');
+      tx.update(tablette.ref, {
+        commande: ref.id, etat, majLe: FieldValue.serverTimestamp(),
+        historique: FieldValue.arrayUnion({ le: Date.now(), etat, par: qui, commande: ref.id }),
+      });
+    }
+  });
+  return { ok: true, id: ref.id };
 });
 
 // ---------- Suppression d'une famille (demande du client à contact@) ----------

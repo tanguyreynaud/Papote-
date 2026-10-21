@@ -138,6 +138,7 @@
                 <option value="terminee">Terminées</option>
                 <option value="annulee">Annulées</option>
               </select>
+              <button type="button" class="secondary small-btn" id="b-offerte">Commande offerte</button>
               <button type="button" class="secondary small-btn" id="x-commandes">Exporter</button>
             </div>
           </div>
@@ -488,6 +489,22 @@
         <button type="button" class="link danger" id="dt-retirer" hidden>Retirer (erreur de saisie)</button>
         <button type="button" class="link" id="dt-detacher" hidden>Cet achat n'est pas cette tablette</button>
       </div>
+      <p class="f-msg small" hidden></p>
+    </form>
+  </dialog>
+
+  <dialog id="d-offerte" class="fenetre">
+    <div class="fenetre-tete"><h2>Commande offerte</h2><button type="button" class="fermer" aria-label="Fermer">✕</button></div>
+    <form id="f-offerte" class="grille">
+      <p class="large small muted">Pour la famille : une commande sans paiement, avec son code, et un abonnement offert (jamais en pause).</p>
+      <label>Nom <input name="nom" required placeholder="ex. Mamie Emma"></label>
+      <label>Formule <select name="formule"><option value="wifi">Internet chez elle (Wi-Fi)</option><option value="sim">Internet inclus (carte SIM)</option></select></label>
+      <label>E-mail (facultatif) <input type="email" name="email"></label>
+      <label>Téléphone (facultatif) <input name="telephone" inputmode="tel"></label>
+      <label>Famille <select name="fid"></select></label>
+      <label>Tablette <select name="tablette"></select></label>
+      <label class="large"><input type="checkbox" name="installee"> La tablette est déjà chez elle</label>
+      <div class="large boutons"><button type="submit" class="primary">Créer la commande</button></div>
       <p class="f-msg small" hidden></p>
     </form>
   </dialog>
