@@ -359,6 +359,9 @@ function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
   ];
 }
 
+// Bouton « Préparer l'envoi » de la page d'une commande (gestion.js).
+document.addEventListener('papote:preparer-envoi', (e) => preparerEnvoi(e.detail.commande, e.detail.bouton));
+
 async function preparerEnvoi(c, bouton) {
   bouton.disabled = true;
   let ctx;
@@ -753,7 +756,7 @@ async function supprimerFamille(f, li, btn) {
     await appeler('gestionSupprimerFamille', { fid: f.id, nom });
     families = families.filter((x) => x.id !== f.id);
     li.remove();
-    ficheFamille = null;
+    location.hash = '#clients/familles';
     render();
     alert(`La famille « ${f.name} » et toutes ses données sont supprimées.`);
   } catch (err) {
@@ -772,12 +775,21 @@ function state(f) {
 let vueFamilles = null; // onglet de la liste des familles (off, on, none, toutes)
 let ficheFamille = null; // famille ouverte sur sa page
 
+// La famille ouverte est dans l'adresse (#clients/familles/fid) : lien direct depuis la page d'un client.
+function familleDeLAdresse() {
+  const [page, onglet, fid] = location.hash.slice(1).split('/');
+  return page === 'clients' && onglet === 'familles' && fid ? decodeURIComponent(fid) : null;
+}
 function ouvrirFamille(fid) {
-  ficheFamille = fid;
+  location.hash = `#clients/familles/${encodeURIComponent(fid)}`;
+}
+$('famille-retour').addEventListener('click', () => { location.hash = '#clients/familles'; });
+window.addEventListener('hashchange', () => {
+  if (familleDeLAdresse() === ficheFamille) return;
+  ficheFamille = familleDeLAdresse();
   render();
   window.scrollTo(0, 0);
-}
-$('famille-retour').addEventListener('click', () => { ficheFamille = null; render(); });
+});
 
 // Page d'une famille : état de la tablette et toutes les actions.
 function carteFamille(f) {
@@ -904,11 +916,13 @@ function render() {
   if (lignes.length) tbody.append(...lignes);
   else tbody.innerHTML = `<tr><td class="vide" colspan="${tete.length}">Aucune famille ici.</td></tr>`;
   table.replaceChildren(thead, tbody);
+  ficheFamille = familleDeLAdresse();
   const ouverte = families.find((f) => f.id === ficheFamille);
   $('familles-liste').hidden = !!ouverte;
   $('famille-fiche').hidden = !ouverte;
+  // Famille ouverte : une page à elle, sans les onglets de la liste.
+  document.querySelector('[data-panneau="clients"] .onglets').hidden = !!ouverte;
   if (ouverte) $('families').replaceChildren(carteFamille(ouverte));
-  else ficheFamille = null;
   const legacy = families.reduce((n, f) => n + (f.legacy || 0), 0);
   $('migrate-count').textContent = legacy
     ? `${legacy} envoi${legacy > 1 ? 's' : ''} encore dans la base (photos, vidéos et anciens vocaux).`

@@ -295,3 +295,7 @@ body.depot-actif::after {
 button.danger { color: var(--danger); border-color: currentColor; }
 details summary { cursor: pointer; margin-top: 12px; }
 #dt-resume a { color: var(--accent); font-weight: 600; }
+.liste-liens { list-style: none; margin: 0; padding: 0; }
+.liste-liens li { padding: 6px 0; border-bottom: 1px solid var(--line, #eee); }
+.liste-liens li:last-child { border-bottom: 0; }
+.liste-liens a, [data-panneau="client"] .fiche a { color: var(--accent); font-weight: 600; }
