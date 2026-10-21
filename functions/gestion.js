@@ -70,6 +70,7 @@ function stripe() {
 
 // Vie d'une tablette du parc.
 const ETATS = {
+  commandee: 'Commandée, pas encore reçue',
   'en-stock': 'En stock',
   preparee: 'Préparée',
   envoyee: 'Envoyée',
@@ -193,7 +194,7 @@ function lireReglages(donnees) {
 
 // Une ligne SIM payée alors que la tablette n'est plus chez un client depuis 30 jours : forfait à résilier ou
 // suspendre. Une carte pas encore activée (ligne « stock ») ne coûte rien : pas d'alerte (Tanguy, 2026-10-20).
-const ETATS_SANS_CLIENT = ['en-stock', 'revenue', 'a-reparer', 'perdue', 'hors-service'];
+const ETATS_SANS_CLIENT = ['commandee', 'en-stock', 'revenue', 'a-reparer', 'perdue', 'hors-service'];
 const DELAI_SIM_SANS_CLIENT = 30 * 86400000;
 function simAResilier(tablette, commande, ligne, maintenant = Date.now()) {
   if (!tablette.sim && !tablette.simId) return false;
@@ -647,7 +648,7 @@ exports.gestionDonnees = onCall(async (request) => {
 // enregistré ensuite les complète au lieu d'ajouter des fiches en double, ce qui gonflerait le stock à vendre.
 // Même n° de série d'abord, puis la plus ancienne encore au stock : une tablette déjà partie chez un client (ou liée
 // à une commande) n'est complétée que par son n° de série. Renvoie, pour chaque tablette, l'id à compléter ou null.
-const ETATS_A_RATTACHER = ['en-stock', 'preparee'];
+const ETATS_A_RATTACHER = ['commandee', 'en-stock', 'preparee'];
 function fichesARattacher(sansAchat, numeros, quantite) {
   const restantes = sansAchat.slice().sort((a, b) => (a.creeLe || 0) - (b.creeLe || 0));
   const libre = (t) => !t.commande && (!t.etat || ETATS_A_RATTACHER.includes(t.etat));
@@ -2832,8 +2833,12 @@ exports.gestionParcours = onCall(async (request) => {
   }
   if (d.type === 'reception') {
     const ref = db().doc(`stock/${texte(d.id, 100) || '-'}`);
-    if (!(await ref.get()).exists) throw new HttpsError('not-found', 'Tablette introuvable.');
-    await ref.update({ reception: { ...avancementPropre(d.reception), majLe: Date.now(), par: qui } });
+    const snap = await ref.get();
+    if (!snap.exists) throw new HttpsError('not-found', 'Tablette introuvable.');
+    // Une tablette commandée qu'on ouvre est arrivée : elle passe « En stock ».
+    const arrivee = snap.get('etat') === 'commandee'
+      ? { etat: 'en-stock', historique: FieldValue.arrayUnion({ le: Date.now(), etat: 'en-stock', par: qui, motif: 'reçue' }) } : {};
+    await ref.update({ reception: { ...avancementPropre(d.reception), majLe: Date.now(), par: qui }, ...arrivee });
     return { ok: true };
   }
   if (d.type === 'lier') return lierInstallation(texte(d.id, 100), d.ref, qui);
