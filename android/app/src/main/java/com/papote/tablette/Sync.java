@@ -361,7 +361,7 @@ final class Sync {
                 // revient d'elle-même sur l'écran du code, avec un nouveau code (l'ancien jumelage ne sert plus).
                 Journal.log(context, "Plus dans la famille : retour à l'écran du code");
                 prefs.edit().remove("fid").remove("pairing").remove("pairingExpires")
-                        .remove("installEnCours").remove("installPar").apply();
+                        .remove("installEnCours").remove("installPar").remove("installDepuis").apply();
                 posts.clear();
                 subscription = "";
                 lastPostsJson = null;
@@ -877,7 +877,7 @@ final class Sync {
             firebase.forgetAll();
             posts.clear();
             subscription = "";
-            prefs.edit().remove("installEnCours").remove("installPar").remove("bienvenueVue").apply();
+            prefs.edit().remove("installEnCours").remove("installPar").remove("installDepuis").remove("bienvenueVue").apply();
             lastPostsJson = null;
             lastStatusJson = null;
             lastRev = Long.MIN_VALUE;
@@ -1453,13 +1453,26 @@ final class Sync {
     private JSONObject installScreen() throws JSONException {
         String code = prefs.getString("pairing", null);
         JSONObject s = new JSONObject().put("step", "pair").put("name", "Tablette")
-                .put("claimedName", prefs.getString("installPar", "")).put("joined", true);
+                .put("claimedName", prefs.getString("installPar", "")).put("joined", true)
+                .put("reprendre", reprisePossible());
         if (code != null) s.put("code", code);
         return s;
     }
 
+    /**
+     * Installation pas finie 30 min après le scan : un autre proche peut la reprendre en scannant le
+     * même code, sans rien effacer (règle du serveur, 21/10). L'écran le dit sous le code.
+     */
+    private static final long REPRISE_MS = 30 * 60_000;
+
+    private boolean reprisePossible() {
+        long depuis = prefs.getLong("installDepuis", 0);
+        return depuis > 0 && System.currentTimeMillis() - depuis > REPRISE_MS;
+    }
+
     private void finInstallation() {
-        prefs.edit().remove("installEnCours").remove("installPar").remove("pairing").remove("pairingExpires").apply();
+        prefs.edit().remove("installEnCours").remove("installPar").remove("installDepuis")
+                .remove("pairing").remove("pairingExpires").apply();
         Journal.log(context, "Installation terminée");
         lastStatusJson = null; // l'écran passe tout de suite à l'accueil
     }
@@ -1625,13 +1638,18 @@ final class Sync {
             welcome(new JSONObject().put("step", "pair").put("name", name).put("code", code)
                     .put("expires", prefs.getLong("pairingExpires", 0)));
         } else if ("reserved".equals(state)) {
+            long reservedAt = Firebase.timestamp(f, "reservedAt");
+            if (reservedAt > 0) prefs.edit().putLong("installDepuis", reservedAt).apply();
             welcome(new JSONObject().put("step", "pair").put("name", name).put("code", code)
-                    .put("claimedName", nz(Firebase.str(f, "claimedName"))).put("restart", true));
+                    .put("claimedName", nz(Firebase.str(f, "claimedName"))).put("restart", true)
+                    .put("reprendre", reprisePossible()));
         } else if ("confirmed".equals(state) && Firebase.str(f, "fid") != null) {
             String famille = nz(Firebase.str(f, "familyName"));
             if (joinFamily(code, Firebase.str(f, "fid"), famille.isEmpty() ? name : famille)) {
+                long reservedAt = Firebase.timestamp(f, "reservedAt");
                 prefs.edit().putBoolean("installEnCours", true)
-                        .putString("installPar", nz(Firebase.str(f, "claimedName"))).apply();
+                        .putString("installPar", nz(Firebase.str(f, "claimedName")))
+                        .putLong("installDepuis", reservedAt > 0 ? reservedAt : System.currentTimeMillis()).apply();
                 Journal.log(context, "Tablette reliée à « " + famille + " »");
                 welcome(installScreen());
                 poke();

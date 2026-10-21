@@ -450,6 +450,8 @@
       busy.appendChild(el('span', 'boot-spin welcome-busy-spin', ''));
       busy.appendChild(document.createTextNode((s.claimedName || 'Votre proche') + ' termine l’installation sur son téléphone…'));
       box.appendChild(busy);
+      // 30 min après le scan sans fin d'installation : un autre proche peut reprendre avec ce code.
+      if (s.reprendre) box.appendChild(el('p', 'welcome-sub welcome-reprise', 'Pas fini ? Un autre proche peut reprendre en scannant ce code.'));
     }
     if (s.restart) {
       // Touché deux fois : un appui par erreur n'annule pas l'installation en cours.
@@ -622,7 +624,7 @@
       if (placing) return; // la tablette est reliée : on finit le placement avant tout le reste
       ensureRoot();
       root.removeAttribute('hidden');
-      var key = s.step + '|' + (s.code || '') + '|' + (s.error || '') + '|' + (s.claimedName || '') + '|' + (s.familyName || '') + '|' + (s.restart ? 1 : 0) + '|' + (s.joined ? 1 : 0);
+      var key = s.step + '|' + (s.code || '') + '|' + (s.error || '') + '|' + (s.claimedName || '') + '|' + (s.familyName || '') + '|' + (s.restart ? 1 : 0) + '|' + (s.joined ? 1 : 0) + '|' + (s.reprendre ? 1 : 0);
       if (key === current) return; // déjà affiché (et la saisie en cours n'est pas effacée)
       current = key;
       clearInterval(wifiTimer);
