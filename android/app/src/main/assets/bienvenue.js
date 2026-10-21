@@ -116,7 +116,7 @@
   function showStart() {
     stepNum = 1;
     art = 'nom';
-    var box = screen('Bienvenue sur Papote', 'Cette tablette va recevoir les photos et les messages de la famille. Il y a seulement trois étapes.');
+    var box = screen('Bienvenue sur Papote', 'Cette tablette va recevoir les photos et les messages de la famille.');
     var go = button('Commencer', 'primary', function () {
       go.disabled = true;
       go.textContent = 'Un instant…';
