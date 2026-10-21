@@ -453,7 +453,8 @@ const REMBOURSEMENTS = {
   'en-cours': 'en cours de remboursement', 'au-retour': 'remboursés au retour', fait: 'remboursés', echec: 'à rembourser depuis Stripe',
 };
 const FORMULES = { wifi: 'Wi-Fi', sim: 'Internet inclus' };
-const formuleTexte = (c) => [FORMULES[c.formule] || c.formule, c.tablette === 'achetee' ? 'tablette achetée' : null]
+const formuleTexte = (c) => [FORMULES[c.formule] || c.formule, c.tablette === 'achetee' ? 'tablette achetée' : null,
+  c.offerte ? 'offerte' : null]
   .filter(Boolean).join(', ');
 const nomCommande = (c) => [codeCommande(c.code), c.nom || c.email].filter(Boolean).join(' · ') || c.id;
 
@@ -628,6 +629,33 @@ function afficherCommandes() {
   }), { vide: 'Aucune commande.' });
 }
 $('filtre-commandes').addEventListener('change', afficherCommandes);
+
+// Commande offerte (les mamies) : sans paiement, avec sa famille et sa tablette.
+$('b-offerte').addEventListener('click', () => {
+  const f = $('f-offerte');
+  f.reset();
+  f.fid.replaceChildren(h('option', { value: '' }, 'Pas encore de famille'),
+    ...donnees.familles.filter((x) => !['actif', 'impaye', 'suspendu'].includes(x.statut))
+      .filter((x) => !donnees.commandes.some((c) => c.fid === x.id && c.expedition !== 'annulee'))
+      .map((x) => h('option', { value: x.id }, x.nom || x.id)));
+  f.tablette.replaceChildren(h('option', { value: '' }, 'Plus tard'),
+    ...donnees.stock.filter((t) => !t.commande && !['perdue', 'hors-service'].includes(t.etat))
+      .map((t) => h('option', { value: t.id }, [t.ref, t.numero, t.modele].filter(Boolean).join(' · '))));
+  f.querySelector('.f-msg').hidden = true;
+  $('d-offerte').showModal();
+});
+
+$('f-offerte').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const f = e.target;
+  await enregistrer(f, async () => {
+    await appeler('gestionCommandeOfferte', {
+      nom: f.nom.value, email: f.email.value, telephone: f.telephone.value, formule: f.formule.value,
+      fid: f.fid.value || null, tablette: f.tablette.value || null, dejaInstallee: f.installee.checked,
+    });
+    $('d-offerte').close();
+  });
+});
 
 $('x-commandes').addEventListener('click', () => {
   const tablettes = new Map(donnees.stock.filter((t) => t.commande).map((t) => [t.commande, t]));
