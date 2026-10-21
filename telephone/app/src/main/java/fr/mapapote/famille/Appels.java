@@ -158,6 +158,17 @@ final class Appels {
         }).start();
     }
 
+    /** Jeton de connexion de l'écran d'appel pour cet appel (functions/appels.js, envoyerConnexions). */
+    static void memoriserConnexion(Context ctx, String cid, String connexion) {
+        prefs(ctx).edit().putString("connexion." + cid, connexion).apply();
+    }
+
+    static String connexion(Context ctx, String cid) {
+        String c = prefs(ctx).getString("connexion." + cid, null);
+        prefs(ctx).edit().remove("connexion." + cid).apply();
+        return c;
+    }
+
     /** Personne n'a répondu : « Appel manqué », qui rappelle la tablette (pendant 24 h). */
     static void manque(Context ctx, String cid, String nom) {
         arreter(ctx, cid);
