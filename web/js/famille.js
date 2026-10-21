@@ -1720,11 +1720,16 @@ $('incoming-decline').addEventListener('click', () => {
 
 let callAbort = null; // annule un appel encore en train de démarrer
 let callStarting = false; // un seul démarrage à la fois, même annulé
+let appelConfirme = false; // « Rappeler » a déjà demandé confirmation
 
 $('tile-call').addEventListener('click', async () => {
   if (currentCall || callStarting) return;
   if (paused()) return;
   callStarting = true;
+  // Pas d'appel par erreur : on confirme avant de faire sonner la tablette.
+  const dejaConfirme = appelConfirme;
+  appelConfirme = false;
+  if (!dejaConfirme && !await askConfirm(`Appeler ${session.family.name} en vidéo ?`, 'Appeler')) { callStarting = false; return; }
   const abort = new AbortController();
   callAbort = abort;
   const allowed = await cameraAllowed();
@@ -1774,6 +1779,7 @@ async function offerCallBack() {
   try { history.replaceState(null, '', location.pathname); } catch (e) { /* rien */ }
   if (!session || currentCall || callStarting || $('tile-call').disabled) return;
   if (!await askConfirm(`Rappeler ${session.family.name} en vidéo ?`, 'Appeler')) return;
+  appelConfirme = true;
   $('tile-call').click();
 }
 // App déjà ouverte : le service worker la prévient au lieu de la rouvrir.
