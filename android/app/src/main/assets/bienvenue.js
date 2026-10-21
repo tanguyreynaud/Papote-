@@ -414,7 +414,7 @@
 
   // ---------- 4. Code et QR code ----------
 
-  function pretty(code) { return code.slice(0, 4) + ' ' + code.slice(4); }
+  function pretty(code) { return code.slice(0, 4) + '-' + code.slice(4); }
 
   function showPair(s) {
     preloadFaceDetector();
