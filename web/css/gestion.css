@@ -284,3 +284,14 @@ body.depot-actif::after {
   .pc-pied .pc-suivant { min-width: 0; flex: 1; }
 }
 .pc-apres { margin: 14px 0 0; }
+
+/* Pages d'une tablette et d'une commande (au lieu de fenêtres) */
+.retour { display: inline-block; font-weight: 600; color: var(--accent, #4f46e5); text-decoration: none; padding: 4px 0; }
+.retour:hover { text-decoration: underline; }
+[data-panneau="tablette"] .card + .card, [data-panneau="commande"] .card + .card { margin-top: 16px; }
+[data-panneau="tablette"] h2, [data-panneau="commande"] h2 { margin: 0 0 8px; }
+.a-verifier { margin-top: 6px; }
+.a-verifier p { margin: 0 0 6px; }
+button.danger { color: var(--danger); border-color: currentColor; }
+details summary { cursor: pointer; margin-top: 12px; }
+#dt-resume a { color: var(--accent); font-weight: 600; }
