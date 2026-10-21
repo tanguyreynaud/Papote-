@@ -420,7 +420,7 @@
     preloadFaceDetector();
     stepNum = 3;
     art = ''; // le QR code est l'illustration
-    var box = screen('Prenez votre téléphone', '');
+    var box = screen('Connectez votre téléphone', '');
     if (s.error) {
       box.appendChild(el('p', 'welcome-error', s.error));
       return;
@@ -436,8 +436,9 @@
       scan.appendChild(img);
     }
     row.appendChild(scan);
+    row.appendChild(el('span', 'pair-or', 'ou'));
     var type = el('div', 'pair-card');
-    type.appendChild(el('p', 'pair-card-title', 'Ou tapez l’adresse'));
+    type.appendChild(el('p', 'pair-card-title', 'Tapez l’adresse'));
     type.appendChild(el('p', 'pair-site', 'app.mapapote.fr'));
     type.appendChild(el('p', 'pair-card-hint', 'dans le téléphone, puis ce code :'));
     type.appendChild(el('p', 'welcome-code', pretty(s.code)));
