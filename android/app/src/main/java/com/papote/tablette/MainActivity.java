@@ -720,7 +720,7 @@ public class MainActivity extends Activity implements Sync.Listener {
 
     /**
      * Moteur de voix préparé dès le démarrage : la première lecture part tout de suite (sinon plusieurs
-     * secondes d'attente). Voix française installée sur la tablette de préférence (pas d'attente du réseau).
+     * secondes d'attente). Voix française par défaut du moteur : en choisir une autre en charge une seconde.
      * La page est tenue au courant : « speaking » au début, « done » à la fin (bouton « Écouter »).
      */
     private void prepareTts() {
@@ -734,26 +734,21 @@ public class MainActivity extends Activity implements Sync.Listener {
                 return;
             }
             tts.setLanguage(java.util.Locale.FRANCE);
-            try {
-                for (android.speech.tts.Voice v : tts.getVoices()) {
-                    if ("fr".equals(v.getLocale().getLanguage()) && "FR".equals(v.getLocale().getCountry())
-                            && !v.isNetworkConnectionRequired() && !v.getFeatures().contains(
-                            android.speech.tts.TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED)) {
-                        tts.setVoice(v);
-                        break;
-                    }
-                }
-            } catch (Exception e) {
-                Log.w(TAG, "Voix française", e);
-            }
             tts.setSpeechRate(0.85f); // un peu plus lent, plus facile à suivre
             tts.setOnUtteranceProgressListener(new android.speech.tts.UtteranceProgressListener() {
-                @Override public void onStart(String id) { speechState("speaking"); }
-                @Override public void onDone(String id) { speechState("done"); }
-                @Override public void onError(String id) { speechState("done"); }
-                @Override public void onStop(String id, boolean interrupted) { speechState("done"); }
+                @Override public void onStart(String id) { if (!"prechauffage".equals(id)) speechState("speaking"); }
+                @Override public void onDone(String id) { if (!"prechauffage".equals(id)) speechState("done"); }
+                @Override public void onError(String id) { if (!"prechauffage".equals(id)) speechState("done"); }
+                @Override public void onStop(String id, boolean interrupted) { if (!"prechauffage".equals(id)) speechState("done"); }
             });
             if (ttsPending != null) { String t = ttsPending; ttsPending = null; speakNow(t); }
+            else {
+                // Le moteur ne charge sa voix (≈ 10 s sur la Vucatimes) qu'à la première phrase :
+                // une phrase muette au démarrage la charge d'avance, « Écouter » parle aussitôt.
+                android.os.Bundle muet = new android.os.Bundle();
+                muet.putFloat(android.speech.tts.TextToSpeech.Engine.KEY_PARAM_VOLUME, 0f);
+                tts.speak("Bonjour", android.speech.tts.TextToSpeech.QUEUE_ADD, muet, "prechauffage");
+            }
         });
     }
 
