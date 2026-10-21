@@ -3,7 +3,7 @@
 // gestion* (functions/gestion.js) : l'argent vient de Stripe, le stock et les dépenses de Firestore.
 // Les factures déposées sont lues automatiquement (gestionLireFacture) pour préremplir les fiches.
 // La connexion et les sections familles, envois et maintenance sont dans admin.js.
-import { demander, saisir, prevenir } from './dialogue.js';
+import { demander, saisir, prevenir, menuPoints } from './dialogue.js';
 import { getApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
 import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
 import {
@@ -1609,9 +1609,12 @@ function afficherCompta() {
   ], deps.map((d) => [jour(d.date), d.fournisseur || '', libelleDepense(d), donnees.categories[d.categorie] || d.categorie,
     euros(d.montant), euros(d.tva),
     h('div', { class: 'pieces-liste' }, (d.pieces || []).map(lienPiece),
-      d.justificatif ? h('a', { href: d.justificatif, target: '_blank', rel: 'noopener' }, 'Lien') : null,
-      h('button', { type: 'button', class: 'link small no-print', onclick: () => { fichierDepense = d.id; choixFichier.click(); } }, '+ Joindre')),
-    h('button', { type: 'button', class: 'link danger small no-print', onclick: () => supprimerDepense(d) }, 'Supprimer')]),
+      d.justificatif ? h('a', { href: d.justificatif, target: '_blank', rel: 'noopener' }, 'Lien') : null),
+    h('div', { class: 'no-print' }, menuPoints([
+      { libelle: 'Joindre un justificatif', faire: () => { fichierDepense = d.id; choixFichier.click(); } },
+      d.recurrence ? { libelle: 'Ne plus l\'ajouter chaque mois', faire: () => arreterDepense(d) } : null,
+      { libelle: 'Supprimer la dépense', danger: true, faire: () => supprimerDepense(d) },
+    ], `Actions pour « ${d.libelle} »`))]),
   {
     total: deps.length ? ['Total', '', '', '', euros(deps.reduce((s, d) => s + d.montant, 0)),
       euros(deps.reduce((s, d) => s + (d.tva || 0), 0)), '', ''] : null,
@@ -1666,8 +1669,7 @@ function afficherAchats() {
 function libelleDepense(d) {
   return h('div', {}, d.libelle,
     d.numero ? h('span', { class: 'muted' }, ` · n° ${d.numero}`) : null,
-    d.recurrence ? h('div', {}, badge('chaque mois', 'info'), ' ',
-      h('button', { type: 'button', class: 'link small no-print', onclick: () => arreterDepense(d) }, 'Arrêter')) : null,
+    d.recurrence ? h('div', {}, badge('chaque mois', 'info')) : null,
     d.depuis ? h('div', { class: 'muted small' }, 'ajoutée automatiquement') : null,
     (d.materiel || []).length ? h('div', { class: 'muted small' }, `Entré au stock : ${d.materiel.join(', ')}`) : null,
     d.confirmation ? h('div', { class: 'muted small' }, 'Facture pas encore reçue (seule la confirmation de commande est arrivée)') : null,
@@ -2612,15 +2614,18 @@ function afficherClients() {
 function remplirLiensFamille(fid) {
   const commandes = donnees.commandes.filter((c) => c.fid === fid);
   const tablettes = donnees.stock.filter((t) => t.fid === fid || commandes.some((c) => c.id === t.commande));
-  const lien = (href, texte) => h('a', { href }, texte);
+  // Une ligne entière par page à ouvrir : le client, sa commande, la tablette.
+  const ligneLien = (quoi, href, texte, detail) => h('li', {}, h('span', { class: 'll-quoi' }, quoi),
+    h('a', { href }, texte), detail ? h('span', { class: 'muted small' }, detail) : null);
   $('famille-liens').replaceChildren(
     h('h2', {}, 'Client, commande et tablette'),
     h('ul', { class: 'liste-liens' },
-      ...commandes.map((c) => h('li', {},
-        c.email ? lien(`#client/${encodeURIComponent(c.email.toLowerCase())}`, c.nom || c.email) : (c.nom || 'Client'), ' · ',
-        lien(`#commande/${encodeURIComponent(c.id)}`, `Commande ${codeCommande(c.code)}`), c.offerte ? ' (offerte)' : '')),
-      ...tablettes.map((t) => h('li', {}, lien(`#tablette/${encodeURIComponent(t.id)}`,
-        `Tablette ${[t.ref, t.numero || t.modele].filter(Boolean).join(' · ')}`), ` · ${donnees.etats[etatTablette(t)] || t.etat}`)),
+      ...commandes.flatMap((c) => [
+        c.email ? ligneLien('Client', `#client/${encodeURIComponent(c.email.toLowerCase())}`, c.nom || c.email, c.nom ? c.email : '') : null,
+        ligneLien('Commande', `#commande/${encodeURIComponent(c.id)}`, `Commande ${codeCommande(c.code)}`, c.offerte ? 'offerte' : ''),
+      ].filter(Boolean)),
+      ...tablettes.map((t) => ligneLien('Tablette', `#tablette/${encodeURIComponent(t.id)}`,
+        [t.ref, t.numero || t.modele].filter(Boolean).join(' · ') || 'Tablette', donnees.etats[etatTablette(t)] || t.etat)),
       ...(commandes.length || tablettes.length ? [] : [h('li', { class: 'muted small' }, 'Aucune commande ni tablette rattachée à cette famille.')])));
 }
 
