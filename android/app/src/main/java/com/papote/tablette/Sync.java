@@ -314,7 +314,7 @@ final class Sync {
         try {
             // Une seule lecture : le marqueur « rev » ne bouge que si la famille a envoyé ou supprimé
             // quelque chose (ou modifié les rappels). Sinon, rien d'autre à lire.
-            JSONObject family = firebase.get("families/" + fid, "name", "rev", "code", "textSize", "abonnement", "veille", "volume", "meteoVille", "options");
+            JSONObject family = firebase.get("families/" + fid, "name", "rev", "code", "textSize", "abonnement", "veille", "volume", "volumeSonnerie", "meteoVille", "options", "installation");
             long rev = 0;
             JSONObject ff = family == null ? null : family.optJSONObject("fields");
             if (ff != null) {
@@ -333,6 +333,7 @@ final class Sync {
                 readVeille(ff);
                 readVolume(ff);
                 readOptions(ff);
+                readInstallation(ff);
                 if (Meteo.applyFamily(context, http, ff) || !meteoReported) {
                     lastWeather = 0; // nouvelle ville : la météo est relue tout de suite
                     reportMeteo(fid);
@@ -362,6 +363,8 @@ final class Sync {
             status("offline", null);
             return;
         }
+        // Nouvelle tablette : « On prépare votre tablette… » jusqu'au premier envoi de la famille.
+        if (result.length() > 0 && prefs.getBoolean("installEnCours", false)) finInstallation();
         status("ok", null);
 
         Set<String> seenIds = new HashSet<>();
@@ -1404,6 +1407,31 @@ final class Sync {
         listener.onVolume(volume);
     }
 
+    /**
+     * Installation par le téléphone du proche (parcours du 21/10) : la tablette quitte « On prépare
+     * votre tablette… » à la première photo, ou quand le proche a touché « C'est parfait »
+     * (installation.etape == 'fini'), même sans photo. Volume de la sonnerie choisi au test du son.
+     */
+    private void readInstallation(JSONObject ff) {
+        if (prefs.getBoolean("installEnCours", false)) {
+            JSONObject in = ff.optJSONObject("installation");
+            JSONObject inf = in == null || in.optJSONObject("mapValue") == null ? null
+                    : in.optJSONObject("mapValue").optJSONObject("fields");
+            if (inf != null && "fini".equals(Firebase.str(inf, "etape"))) finInstallation();
+        }
+        int sonnerie = ff.has("volumeSonnerie") ? (int) Math.max(10, Math.min(100, Firebase.integer(ff, "volumeSonnerie"))) : 100;
+        if (sonnerie != prefs.getInt("volumeSonnerie", 100)) {
+            prefs.edit().putInt("volumeSonnerie", sonnerie).apply();
+            listener.onVolume(prefs.getInt("volume", -1));
+        }
+    }
+
+    private void finInstallation() {
+        prefs.edit().remove("installEnCours").apply();
+        Journal.log(context, "Installation terminée");
+        lastStatusJson = null; // l'écran passe tout de suite à l'accueil
+    }
+
     /** Heures de veille réglées par la famille ({active, de, a}) ; absent = 23h-7h. */
     private void readVeille(JSONObject ff) {
         JSONObject v = ff.optJSONObject("veille");
@@ -1537,40 +1565,89 @@ final class Sync {
         return s == null || s.isEmpty() || android.os.Build.UNKNOWN.equals(s) ? null : s;
     }
 
+    /**
+     * Écrans de la tablette avant la famille (parcours du 21/10) : Bienvenue, Internet (sauté avec une
+     * carte SIM), puis le code à scanner. Le nom et la météo se règlent sur le téléphone du proche.
+     *   waiting    code affiché (QR + code), renouvelé toutes les 15 min tant que personne ne l'a pris
+     *   reserved   « On prépare votre tablette… », « Julie s'en occupe », « Recommencer » (pas d'expiration)
+     *   confirmed  la famille est créée : la tablette y entre sans rien demander
+     *   claimed    ancien parcours (tablette de remplacement) : « C'est bien vous ? »
+     */
     private void pairingStep() throws IOException, JSONException {
-        String name = prefs.getString("tabletName", null);
-        if (name == null || name.isEmpty()) { welcome(new JSONObject().put("step", "name")); return; }
-        if (!prefs.getBoolean("wifiDone", false)) { welcome(new JSONObject().put("step", "wifi").put("name", name)); return; }
-        if (!Meteo.done(context) && prefs.getString("meteoAChercher", null) == null) {
-            welcome(new JSONObject().put("step", "meteo").put("name", name));
-            return;
-        }
+        boolean ancienne = prefs.getString("tabletName", null) != null; // installation commencée avant le 21/10
+        if (!ancienne && !prefs.getBoolean("bienvenueVue", false)) { welcome(new JSONObject().put("step", "start")); return; }
+        if (!prefs.getBoolean("wifiDone", false)) { welcome(new JSONObject().put("step", "wifi")); return; }
+        String name = prefs.getString("tabletName", "Tablette");
         firebase.token();
         firebase.ensureCallsAccount();
         String code = prefs.getString("pairing", null);
-        long expires = prefs.getLong("pairingExpires", 0);
-        if (code == null || System.currentTimeMillis() > expires) {
+        JSONObject f = null;
+        if (code != null) {
+            JSONObject doc = firebase.get("pairings/" + code);
+            f = doc == null ? null : doc.optJSONObject("fields");
+        }
+        String state = f == null ? "gone" : Firebase.str(f, "status");
+        // Un code que personne n'a pris expire ; un code réservé, jamais.
+        if ("waiting".equals(state) && System.currentTimeMillis() > prefs.getLong("pairingExpires", 0)) state = "gone";
+        if ("waiting".equals(state)) {
+            welcome(new JSONObject().put("step", "pair").put("name", name).put("code", code)
+                    .put("expires", prefs.getLong("pairingExpires", 0)));
+        } else if ("reserved".equals(state)) {
+            welcome(new JSONObject().put("step", "prepare").put("code", code)
+                    .put("claimedName", nz(Firebase.str(f, "claimedName"))).put("restart", true));
+        } else if ("confirmed".equals(state) && Firebase.str(f, "fid") != null) {
+            String famille = nz(Firebase.str(f, "familyName"));
+            if (joinFamily(code, Firebase.str(f, "fid"), famille.isEmpty() ? name : famille)) {
+                prefs.edit().putBoolean("installEnCours", true).apply();
+                Journal.log(context, "Tablette reliée à « " + nz(Firebase.str(f, "familyName")) + " »");
+                welcome(new JSONObject().put("step", "prepare").put("familyName", nz(Firebase.str(f, "familyName"))));
+                poke();
+            }
+        } else if ("claimed".equals(state)) {
+            welcome(new JSONObject().put("step", "confirm").put("name", name).put("code", code)
+                    .put("claimedName", nz(Firebase.str(f, "claimedName")))
+                    .put("familyName", nz(Firebase.str(f, "familyName"))));
+        } else {
+            // Annulé, refusé, expiré ou disparu : un nouveau code tout de suite.
+            prefs.edit().remove("pairing").remove("pairingExpires").apply();
             code = newPairing(name);
             if (code == null) {
                 welcome(new JSONObject().put("step", "pair").put("name", name)
                         .put("error", "Impossible de créer le code. Vérifiez la connexion internet."));
-                return;
+            } else {
+                welcome(new JSONObject().put("step", "pair").put("name", name).put("code", code)
+                        .put("expires", prefs.getLong("pairingExpires", 0)));
             }
         }
-        JSONObject doc = firebase.get("pairings/" + code);
-        JSONObject f = doc == null ? null : doc.optJSONObject("fields");
-        String state = f == null ? "gone" : Firebase.str(f, "status");
-        if ("claimed".equals(state)) {
-            welcome(new JSONObject().put("step", "confirm").put("name", name).put("code", code)
-                    .put("claimedName", nz(Firebase.str(f, "claimedName")))
-                    .put("familyName", nz(Firebase.str(f, "familyName"))));
-        } else if ("waiting".equals(state)) {
-            welcome(new JSONObject().put("step", "pair").put("name", name).put("code", code)
-                    .put("expires", prefs.getLong("pairingExpires", 0)));
-        } else {
-            // Refusé, expiré ou disparu : un nouveau code au prochain tour.
+    }
+
+    /** « Commencer » sur l'écran Bienvenue. */
+    void welcomeSeen() {
+        handler.post(() -> {
+            prefs.edit().putBoolean("bienvenueVue", true).apply();
+            poke();
+        });
+    }
+
+    /** « Recommencer avec un autre téléphone » : la réservation est annulée, un nouveau code s'affiche. */
+    void cancelPairing() {
+        handler.post(() -> {
+            String code = prefs.getString("pairing", null);
+            if (code == null) return;
+            try {
+                JSONObject update = new JSONObject()
+                        .put("update", new JSONObject()
+                                .put("name", Firebase.docName("pairings/" + code))
+                                .put("fields", new JSONObject().put("status", Firebase.string("cancelled"))))
+                        .put("updateMask", new JSONObject().put("fieldPaths", new JSONArray().put("status")));
+                firebase.commit(new JSONArray().put(update));
+                Journal.log(context, "Installation recommencée avec un autre téléphone");
+            } catch (Exception e) {
+                Log.w(TAG, "Annulation de la réservation", e);
+            }
             prefs.edit().remove("pairing").remove("pairingExpires").apply();
-        }
+            poke();
+        });
     }
 
     private String newPairing(String name) {
@@ -1607,6 +1684,38 @@ final class Sync {
         }
     }
 
+    /** La tablette entre dans la famille (sa fiche membre, avec le code de jumelage comme preuve). */
+    private boolean joinFamily(String code, String fid, String memberName) {
+        try {
+            JSONObject fields = new JSONObject()
+                    .put("name", Firebase.string(memberName))
+                    .put("role", Firebase.string("tablette"))
+                    .put("pairing", Firebase.string(code))
+                    .put("canCall", new JSONObject().put("booleanValue", true));
+            JSONObject member = new JSONObject()
+                    .put("update", new JSONObject()
+                            .put("name", Firebase.docName("families/" + fid + "/members/" + firebase.uid()))
+                            .put("fields", fields))
+                    .put("updateTransforms", new JSONArray().put(new JSONObject()
+                            .put("fieldPath", "joinedAt").put("setToServerValue", "REQUEST_TIME")))
+                    .put("currentDocument", new JSONObject().put("exists", false));
+            firebase.commit(new JSONArray().put(member));
+            prefs.edit().putString("fid", fid).apply();
+            return true;
+        } catch (Firebase.ApiException e) {
+            // Fiche déjà écrite (réponse perdue la fois d'avant) : la tablette est bien dans la famille.
+            if (e.code == 409) {
+                prefs.edit().putString("fid", fid).apply();
+                return true;
+            }
+            Log.w(TAG, "Entrée dans la famille", e);
+            return false;
+        } catch (Exception e) {
+            Log.w(TAG, "Entrée dans la famille", e);
+            return false;
+        }
+    }
+
     /** Réponse sur la tablette : « C'est bien vous ? » Oui / Non. */
     void confirmPairing(boolean yes) {
         handler.post(() -> {
@@ -1628,22 +1737,10 @@ final class Sync {
                     poke();
                     return;
                 }
-                JSONObject fields = new JSONObject()
-                        .put("name", Firebase.string(prefs.getString("tabletName", "Tablette")))
-                        .put("role", Firebase.string("tablette"))
-                        .put("pairing", Firebase.string(code))
-                        .put("canCall", new JSONObject().put("booleanValue", true));
-                JSONObject member = new JSONObject()
-                        .put("update", new JSONObject()
-                                .put("name", Firebase.docName("families/" + fid + "/members/" + firebase.uid()))
-                                .put("fields", fields))
-                        .put("updateTransforms", new JSONArray().put(new JSONObject()
-                                .put("fieldPath", "joinedAt").put("setToServerValue", "REQUEST_TIME")))
-                        .put("currentDocument", new JSONObject().put("exists", false));
-                firebase.commit(new JSONArray().put(member));
-                prefs.edit().putString("fid", fid).apply();
-                status("ok", null);
-                poke();
+                if (joinFamily(code, fid, prefs.getString("tabletName", "Tablette"))) {
+                    status("ok", null);
+                    poke();
+                }
             } catch (Exception e) {
                 Log.w(TAG, "Confirmation de l'appairage", e);
             }
@@ -1653,6 +1750,13 @@ final class Sync {
     private String lastState = "";
 
     private void status(String state, String message) {
+        if ("ok".equals(state) && prefs.getBoolean("installEnCours", false)) {
+            // Famille rejointe, mais le proche finit les réglages : on garde « On prépare… ».
+            try {
+                welcome(new JSONObject().put("step", "prepare").put("familyName", familyName == null ? "" : familyName));
+            } catch (JSONException ignored) { }
+            return;
+        }
         if (!state.equals(lastState)) {
             Journal.log(context, "Synchronisation : " + state + (message == null ? "" : " (" + message + ")"));
             lastState = state;

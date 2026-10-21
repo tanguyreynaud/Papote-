@@ -1,7 +1,9 @@
 /*
- * Écran « Bienvenue » : première installation chez le client, sans PC.
- * 1. le nom de la tablette, 2. le wifi (sauté si la carte SIM donne internet),
- * 3. le QR code et le code à taper dans l'app famille, 4. « C'est bien vous ? » Oui / Non.
+ * Écran « Bienvenue » : première installation chez le client, sans PC (parcours du 21/10).
+ * 1. Bienvenue, 2. le wifi (sauté si la carte SIM donne internet), 3. le QR code et le code à taper
+ * dans l'app famille, puis « On prépare votre tablette… » pendant que le proche règle tout sur son
+ * téléphone (nom, photo, son, options). Le nom et la météo ne se demandent plus sur la tablette.
+ * Ancien parcours gardé pour une tablette de remplacement : « C'est bien vous ? » Oui / Non.
  * Les étapes viennent d'Android (Sync.java, état « welcome »).
  */
 (function () {
@@ -62,9 +64,9 @@
     return update;
   }
 
-  // Étape en cours (1 nom, 2 wifi, 3 météo, 4 famille, 5 placement), affichée en haut ; 0 = pas d'étapes
-  // (wifi plus tard).
-  var STEPS = 5;
+  // Étape en cours (1 bienvenue, 2 internet, 3 téléphone), affichée en haut ; 0 = pas d'étapes
+  // (wifi plus tard, préparation, ancien parcours).
+  var STEPS = 3;
   var stepNum = 0;
 
   // Illustration de l'étape (bienvenue/<nom>.svg), dans le panneau de gauche ; vide = pas de panneau.
@@ -109,7 +111,21 @@
     return b;
   }
 
-  // ---------- 1. Nom de la tablette ----------
+  // ---------- 1. Bienvenue ----------
+
+  function showStart() {
+    stepNum = 1;
+    art = 'nom';
+    var box = screen('Bienvenue sur Papote', 'Cette tablette va recevoir les photos et les messages de la famille. Il y a seulement trois étapes.');
+    var go = button('Commencer', 'primary', function () {
+      go.disabled = true;
+      go.textContent = 'Un instant…';
+      android().welcomeSeen();
+    });
+    box.appendChild(go);
+  }
+
+  // ---------- Ancien parcours : nom de la tablette ----------
 
   function showName() {
     stepNum = 1;
@@ -138,7 +154,7 @@
   }
 
   function showWifi() {
-    stepNum = 2;
+    stepNum = repair ? 0 : 2;
     art = 'wifi';
     var st = wifiState();
     // Carte SIM avec internet : pas besoin de wifi.
@@ -402,9 +418,9 @@
 
   function showPair(s) {
     preloadFaceDetector();
-    stepNum = 4;
+    stepNum = 3;
     art = ''; // le QR code est l'illustration
-    var box = screen('Reliez la tablette à votre famille', '');
+    var box = screen('Connectez votre téléphone', '');
     if (s.error) {
       box.appendChild(el('p', 'welcome-error', s.error));
       return;
@@ -417,19 +433,47 @@
       row.appendChild(img);
     }
     var steps = el('div', 'welcome-steps');
-    steps.appendChild(el('p', 'welcome-step', 'Avec votre téléphone, scannez ce QR code.'));
+    steps.appendChild(el('p', 'welcome-step', 'Avec l’appareil photo de votre téléphone, scannez ce QR code.'));
     steps.appendChild(el('p', 'welcome-or', 'ou'));
-    steps.appendChild(el('p', 'welcome-step', 'Ouvrez app.mapapote.fr, touchez « Ajouter ma tablette » et tapez :'));
+    steps.appendChild(el('p', 'welcome-step', 'Ouvrez app.mapapote.fr et tapez ce code :'));
     steps.appendChild(el('p', 'welcome-code', pretty(s.code)));
     steps.appendChild(el('p', 'welcome-sub', 'Le code change toutes les 15 minutes.'));
     row.appendChild(steps);
     box.appendChild(row);
   }
 
-  // ---------- 4. Confirmation ----------
+  // ---------- Préparation : le proche règle tout sur son téléphone ----------
+  // Réservée (claimedName) : un petit « Recommencer avec un autre téléphone », à toucher deux fois
+  // (un appui par erreur n'annule pas l'installation en cours). Famille rejointe : plus de bouton,
+  // l'écran reste jusqu'à la première photo ou la fin des réglages (Sync.java).
+
+  function showPrepare(s) {
+    stepNum = 0;
+    art = '';
+    var sub = s.claimedName ? s.claimedName + ' s’en occupe sur son téléphone.' : 'Encore quelques instants.';
+    var box = screen('On prépare votre tablette…', sub);
+    box.className += ' welcome-prepare';
+    box.appendChild(el('span', 'boot-spin welcome-spin', ''));
+    if (s.restart) {
+      var again = button('Recommencer avec un autre téléphone', 'no small', function () {
+        if (!again.armed) {
+          again.armed = true;
+          again.textContent = 'Touchez encore pour recommencer';
+          setTimeout(function () { again.armed = false; again.textContent = 'Recommencer avec un autre téléphone'; }, 5000);
+          return;
+        }
+        again.disabled = true;
+        again.textContent = 'Un instant…';
+        android().cancelPairing();
+      });
+      box.appendChild(again);
+    }
+  }
+
+  // ---------- Ancien parcours : confirmation ----------
 
   function showConfirm(s) {
-    stepNum = 4;
+    stepNum = 0;
     art = 'confirmer';
     var who = s.claimedName || 'Quelqu\'un';
     var fam = s.familyName ? ' à la famille de ' + s.familyName : '';
@@ -455,7 +499,7 @@
   function showPlacement() {
     placing = true;
     current = 'place';
-    stepNum = 5;
+    stepNum = 0;
     art = '';
     var box = screen('Placez la tablette', 'Asseyez-vous là où la personne s’installe d’habitude, puis tournez doucement la tablette.');
     // L'image de la caméra prend la place de l'illustration, à gauche.
@@ -552,11 +596,13 @@
       if (placing) return; // la tablette est reliée : on finit le placement avant tout le reste
       ensureRoot();
       root.removeAttribute('hidden');
-      var key = s.step + '|' + (s.code || '') + '|' + (s.error || '') + '|' + (s.claimedName || '');
+      var key = s.step + '|' + (s.code || '') + '|' + (s.error || '') + '|' + (s.claimedName || '') + '|' + (s.familyName || '') + '|' + (s.restart ? 1 : 0);
       if (key === current) return; // déjà affiché (et la saisie en cours n'est pas effacée)
       current = key;
       clearInterval(wifiTimer);
-      if (s.step === 'name') showName();
+      if (s.step === 'start') showStart();
+      else if (s.step === 'prepare') showPrepare(s);
+      else if (s.step === 'name') showName();
       else if (s.step === 'wifi') showWifi();
       else if (s.step === 'meteo') showMeteo();
       else if (s.step === 'pair') showPair(s);

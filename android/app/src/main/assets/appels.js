@@ -192,7 +192,8 @@ function waitPairing(pairing) {
       const data = snap.data();
       if (!data) { done(null); return; }
       if (data.status === 'confirmed' && data.fid) { done(data); return; }
-      if (!['waiting', 'claimed'].includes(data.status)) done(null);
+      // reserved : le proche règle la tablette sur son téléphone (parcours du 21/10), on attend.
+      if (!['waiting', 'claimed', 'reserved'].includes(data.status)) done(null);
     }, (err) => {
       console.warn('Appels : jumelage illisible', err && err.code);
       done(null);
@@ -1011,6 +1012,28 @@ async function start() {
   // Détection du visage chargée à l'avance (puis gardée en cache) pour décrocher sans attendre.
   setTimeout(faceDetector, 20_000);
   watchFamily();
+  watchCommands();
+}
+
+// ---------- Test du son à l'installation ----------
+// Le téléphone du proche écrit families/{fid}/commands/{id} { type: 'son', quoi: 'sonnerie' | 'voix',
+// volume, parle?, target: ce compte, state: 'pending' } : la tablette joue tout de suite (Android,
+// testSon), puis écrit state 'done'. Une commande de plus de 2 minutes est seulement marquée faite.
+function watchCommands() {
+  const u = auth.currentUser;
+  if (!u || !fid) return;
+  const q = query(collection(db, 'families', fid, 'commands'), where('target', '==', u.uid), where('state', '==', 'pending'));
+  onSnapshot(q, (snap) => {
+    snap.docChanges().forEach((c) => {
+      if (c.type !== 'added') return;
+      const d = c.doc.data();
+      const recent = !d.createdAt || !d.createdAt.toMillis || Date.now() - d.createdAt.toMillis() < 120_000;
+      if (d.type === 'son' && recent && !ringing && !active && android() && android().testSon) {
+        android().testSon(d.quoi === 'sonnerie' ? 'sonnerie' : 'voix', Number(d.volume) || 80, typeof d.parle === 'string' ? d.parle : '');
+      }
+      updateDoc(c.doc.ref, { state: 'done' }).catch((e) => console.warn('Test du son : état', e && e.code));
+    });
+  }, (err) => console.warn('Test du son : écoute impossible', err && err.code));
 }
 
 // Sur une tablette faite pour être tenue debout, la caméra se retrouve sur le côté une fois

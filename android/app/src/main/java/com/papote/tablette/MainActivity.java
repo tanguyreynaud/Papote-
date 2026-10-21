@@ -547,6 +547,27 @@ public class MainActivity extends Activity implements Sync.Listener {
             sync.confirmPairing(yes);
         }
 
+        /** « Commencer » sur le premier écran de la tablette neuve. */
+        @JavascriptInterface
+        public void welcomeSeen() {
+            sync.welcomeSeen();
+        }
+
+        /** « Recommencer avec un autre téléphone » pendant que le proche installe. */
+        @JavascriptInterface
+        public void cancelPairing() {
+            sync.cancelPairing();
+        }
+
+        /**
+         * Test du son demandé par le téléphone du proche (commande « son », lue par appels.js) :
+         * « sonnerie » = 3 s de la sonnerie d'appel, « voix » = une phrase, au volume demandé (10-100).
+         */
+        @JavascriptInterface
+        public void testSon(String quoi, int volume, String texte) {
+            handler.post(() -> playSoundTest(quoi, volume, texte));
+        }
+
         /** Code d'appairage en cours (pour l'inscription du compte des appels), ou null. */
         @JavascriptInterface
         public String getPairing() {
@@ -664,7 +685,7 @@ public class MainActivity extends Activity implements Sync.Listener {
         // Appels vidéo un peu moins forts : au maximum, le micro reprend le haut-parleur (écho).
         int call = family < 0 ? 72 : Math.round(family * 72f / 85f);
         int[][] levels = {
-                {AudioManager.STREAM_MUSIC, media}, {AudioManager.STREAM_RING, 100},
+                {AudioManager.STREAM_MUSIC, media}, {AudioManager.STREAM_RING, prefs.getInt("volumeSonnerie", 100)},
                 {AudioManager.STREAM_NOTIFICATION, 90}, {AudioManager.STREAM_VOICE_CALL, Math.min(100, call)},
                 {AudioManager.STREAM_ALARM, 100},
         };
@@ -693,6 +714,25 @@ public class MainActivity extends Activity implements Sync.Listener {
      * En journée, on le rallume dans la foulée (on ne voit qu'un bref noir).
      * La nuit (23h-7h), on le laisse éteint.
      */
+    // ---------- Test du son à l'installation ----------
+
+    private void playSoundTest(String quoi, int volume, String texte) {
+        AudioManager am = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        int v = Math.max(10, Math.min(100, volume));
+        try {
+            if ("sonnerie".equals(quoi)) {
+                am.setStreamVolume(AudioManager.STREAM_RING, am.getStreamMaxVolume(AudioManager.STREAM_RING) * v / 100, 0);
+                callAudio.ring(true);
+                handler.postDelayed(() -> callAudio.ring(false), 3000);
+            } else {
+                am.setStreamVolume(AudioManager.STREAM_MUSIC, am.getStreamMaxVolume(AudioManager.STREAM_MUSIC) * v / 100, 0);
+                speakNow(texte == null || texte.trim().isEmpty() ? "Bonjour, vous m'entendez bien ?" : texte);
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "Test du son", e);
+        }
+    }
+
     // ---------- Lecture à voix haute ----------
 
     private android.speech.tts.TextToSpeech tts;

@@ -339,3 +339,8 @@
 .digit.empty { display: block; }
 .cities-list { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .cities-list .welcome-list { flex: 1; min-height: 0; max-width: none; margin: 0; overflow-y: auto; gap: 0; }
+
+/* « On prépare votre tablette… » : le proche finit les réglages sur son téléphone */
+.welcome-prepare { text-align: center; }
+.welcome-spin { display: block; margin: 4vmin auto 3vmin; }
+.welcome-btn.small { min-height: 9vmin; font-size: 3.8vmin; }
