@@ -886,6 +886,21 @@
     var now = new Date();
     var nowMin = now.getHours() * 60 + now.getMinutes();
     var key = dateKey(now);
+    // Pendant un appel : pas de rappel par-dessus, ni de son. Il revient à la fin de l'appel.
+    if (inCall()) {
+      if (alerting && !alerting.hidden) {
+        unwatchSeen('reminder');
+        show($('reminder-alert'), false);
+        alerting.hidden = true;
+      }
+      return;
+    }
+    if (alerting && alerting.hidden) {
+      var waiting = alerting;
+      alerting = null;
+      if (!isDone(waiting.r, waiting.key)) openReminder(waiting.r, waiting.key, nowMin, waiting.early && nowMin < minutesOf(waiting.r.time));
+      return;
+    }
     var items = [];
     for (var i = 0; i < reminders.length; i++) if (happensOn(reminders[i], now)) items.push(reminders[i]);
     items.sort(function (a, b) { return minutesOf(a.time) - minutesOf(b.time); });
@@ -893,7 +908,7 @@
 
     if (alerting) {
       var late = nowMin - minutesOf(alerting.r.time);
-      if (isDone(alerting.r, alerting.key) || late > REMINDER_WINDOW_MIN) {
+      if (isDone(alerting.r, alerting.key) || late > REMINDER_WINDOW_MIN + callMinutesSince(alerting.key, minutesOf(alerting.r.time))) {
         closeReminder();
       } else if (alerting.early && late >= 0) {
         openReminder(alerting.r, key, nowMin, false); // l'annonce devient « C'est l'heure ! »
@@ -910,7 +925,7 @@
       var r = items[j];
       var delta = minutesOf(r.time) - nowMin;
       if (isDone(r, key)) continue;
-      if (delta <= 0 && -delta <= REMINDER_WINDOW_MIN) { openReminder(r, key, nowMin, false); return; }
+      if (delta <= 0 && -delta <= REMINDER_WINDOW_MIN + callMinutesSince(key, minutesOf(r.time))) { openReminder(r, key, nowMin, false); return; }
       if (delta > 0 && delta <= earlyMin(r) && !announced[r.id + '|' + key]) { openReminder(r, key, nowMin, true); return; }
     }
   }
@@ -1568,9 +1583,39 @@
   function inCall() {
     var ids = ['call-ring', 'call-view'];
     for (var i = 0; i < ids.length; i++) if ($(ids[i]) && isShown(ids[i])) return true;
-    return false;
+    // Appel lancé par Mamie (« Ça sonne… », « En ligne avec… »), pas le choix de la personne.
+    return !!callScreen && !callScreen.hasAttribute('hidden') && /state-(starting|ringing|connected)/.test(callScreen.className);
   }
+
+  // Périodes d'appel du jour, en minutes : un rappel qui tombe pendant un appel attend la fin,
+  // et reste affiché d'autant plus longtemps (voir checkReminders).
+  var callSpans = [];      // { day, from, to }
+  var callSince = null;    // minute du début de l'appel en cours
+  function nowMinutes() { var d = new Date(); return d.getHours() * 60 + d.getMinutes(); }
+  function trackCallSpans() {
+    var busy = inCall();
+    if (busy && callSince === null) callSince = nowMinutes();
+    if (!busy && callSince !== null) {
+      callSpans.push({ day: dateKey(new Date()), from: callSince, to: nowMinutes() });
+      callSince = null;
+      setTimeout(checkReminders, 1500); // le rappel en attente s'affiche dès la fin de l'appel
+    }
+  }
+  // Minutes d'appel tombées dans la fenêtre d'affichage d'un rappel (heure, puis 1 h + ces minutes).
+  function callMinutesSince(day, start) {
+    var extra = 0;
+    var spans = callSpans.concat(callSince === null ? [] : [{ day: dateKey(new Date()), from: callSince, to: nowMinutes() }]);
+    for (var i = 0; i < spans.length; i++) {
+      var sp = spans[i];
+      if (sp.day !== day) continue;
+      var end = start + REMINDER_WINDOW_MIN + extra;
+      extra += Math.max(0, Math.min(sp.to, end) - Math.max(sp.from, start));
+    }
+    return extra;
+  }
+
   function checkCallForRadio() {
+    trackCallSpans();
     if (inCall()) {
       if (radioAudio) { stopRadio(); radioPausedForCall = true; }
     } else if (radioPausedForCall) {
