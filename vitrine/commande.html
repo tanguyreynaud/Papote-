@@ -18,7 +18,14 @@
     if (!COMMANDES_OUVERTES) { location.replace('./#lancement'); return; }
     fetch('https://europe-west1-papote-famille.cloudfunctions.net/stockDisponible')
       .then(function (r) { return r.ok ? r.json() : {}; })
-      .then(function (d) { if (d.disponible === false) location.replace('./#lancement'); })
+      .then(function (d) {
+        if (d.disponible === false) { location.replace('./#lancement'); return; }
+        // Stock vide mais commandes encore possibles : délai de préparation plus long (stock.js).
+        if (d.precommande) {
+          var montrer = function () { var p = document.getElementById('precommande'); if (p) p.hidden = false; };
+          if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', montrer); else montrer();
+        }
+      })
       .catch(function () {});
   })();
 </script>
@@ -60,6 +67,8 @@ h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-u
 .question legend { font-weight: 700; margin-bottom: .6rem; }
 .etapes { border: 2px solid var(--accent); border-radius: 16px; padding: 1rem 1.2rem; margin: 1.5rem 0 1rem; display: grid; gap: .5rem; }
 .etapes p { margin: 0; }
+.precommande { margin: 0; padding: .6rem .9rem; border-radius: 12px; background: var(--warm-soft); font-size: 1rem; }
+.precommande[hidden] { display: none; }
 .opt { display: flex; gap: .6rem; align-items: center; font-size: 1.05rem; cursor: pointer; }
 .opt .muted { white-space: nowrap; margin-left: auto; }
 .opt input { width: 1.3rem; height: 1.3rem; accent-color: var(--accent); }
@@ -108,6 +117,7 @@ h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-u
       <li>Appli famille pour tous vos proches</li>
       <li>Livraison offerte en point relais</li>
     </ul>
+    <p class="precommande" id="precommande" hidden>En précommande : votre tablette est préparée sous 7 à 10 jours ouvrés, puis livrée par Mondial Relay sous 3 à 5 jours ouvrés.</p>
     <fieldset class="question">
       <legend>Y a-t-il internet (une box Wi-Fi) chez votre proche ?</legend>
       <label class="opt"><input type="radio" name="internet" value="oui" checked> Oui, la tablette utilise son Wi-Fi <span class="muted">20 €/mois</span></label>
