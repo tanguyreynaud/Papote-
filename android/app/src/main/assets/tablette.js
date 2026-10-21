@@ -696,7 +696,6 @@
     $('overlay-text').className = 'ln-text ' + (mode === 'photo' ? 'size-m' : sizeClass(text));
     show($('overlay-text'), !!text);
     showListenButtons();
-    showReplyButton();
     show($('overlay-from'), false);
     var face = faceOf(p);
     show($('overlay-face'), media && !!face);
@@ -1585,7 +1584,7 @@
   }
 
   // ---------- Options réglées par la famille : Écouter, Radio ----------
-  // families/{fid}.options = { lecture, reponseVocale, radio: { nom, url, volume } } (lu par Sync.java).
+  // families/{fid}.options = { lecture, radio: { nom, url, volume }, sos, meteo, rappelsAccueil } (lu par Sync.java).
 
   var options = {};
 
@@ -1818,154 +1817,6 @@
     setTimeout(end, PRESENCE_LOOK_MS);
   }
 
-  // ---------- Répondre par la voix (option « reponseVocale ») ----------
-  // « Répondre » sur un envoi : la tablette enregistre (60 s au plus), puis l'envoi vocal part dans
-  // le fil de la famille (Sync.sendVoiceReply : Storage puis families/{fid}/posts).
-
-  var REPLY_MAX_S = 60;
-  var replyScreen = null;
-  var recorder = null;
-  var recStream = null;
-  var recChunks = [];
-  var recStart = 0;
-  var recTimer = null;
-  var replyFor = null;
-
-  function replyButton() {
-    var b = $('overlay-reply');
-    if (!b) {
-      b = document.createElement('button');
-      b.id = 'overlay-reply';
-      b.className = 'ln-btn reply-voice';
-      b.innerHTML = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.9V22h2v-3.1A7 7 0 0 0 19 12z"/></svg><span>Répondre</span>';
-      on(b, 'click', function () { if (overlayPost) openReply(overlayPost); });
-      var actions = $('overlay-actions');
-      actions.insertBefore(b, actions.firstChild);
-    }
-    return b;
-  }
-
-  function showReplyButton() {
-    var b = replyButton();
-    show(b, !!options.reponseVocale && !!overlayPost && !!overlayPost.authorName);
-  }
-
-  function ensureReplyScreen() {
-    if (replyScreen) return;
-    replyScreen = document.createElement('div');
-    replyScreen.className = 'reply-screen';
-    replyScreen.setAttribute('hidden', '');
-    document.body.appendChild(replyScreen);
-  }
-
-  function renderReply(state, text, sub) {
-    ensureReplyScreen();
-    replyScreen.innerHTML = '';
-    replyScreen.className = 'reply-screen state-' + state;
-    replyScreen.removeAttribute('hidden');
-    var mic = document.createElement('div');
-    mic.className = 'reply-mic';
-    mic.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.9V22h2v-3.1A7 7 0 0 0 19 12z"/></svg>';
-    replyScreen.appendChild(mic);
-    var t = document.createElement('h1');
-    t.className = 'reply-title';
-    t.textContent = text;
-    replyScreen.appendChild(t);
-    if (sub) {
-      var p = document.createElement('p');
-      p.className = 'reply-sub';
-      p.textContent = sub;
-      replyScreen.appendChild(p);
-    }
-    var row = document.createElement('div');
-    row.className = 'reply-actions';
-    if (state === 'recording') {
-      var send = document.createElement('button');
-      send.className = 'reply-send';
-      send.textContent = 'Envoyer';
-      on(send, 'click', function () { stopRecording(true); });
-      var cancel = document.createElement('button');
-      cancel.className = 'reply-cancel';
-      cancel.textContent = 'Annuler';
-      on(cancel, 'click', function () { stopRecording(false); closeReply(); });
-      row.appendChild(cancel);
-      row.appendChild(send);
-    }
-    replyScreen.appendChild(row);
-  }
-
-  function closeReply() {
-    clearInterval(recTimer);
-    if (replyScreen) { replyScreen.setAttribute('hidden', ''); replyScreen.innerHTML = ''; }
-  }
-
-  function openReply(p) {
-    replyFor = p;
-    stopSpeaking();
-    stopAudio();
-    stopRadio();
-    var to = p.authorName || 'la famille';
-    renderReply('starting', 'Un instant…', '');
-    if (!navigator.mediaDevices || !window.MediaRecorder) {
-      renderReply('error', 'Le micro n’est pas disponible', '');
-      setTimeout(closeReply, 3000);
-      return;
-    }
-    navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }).then(function (stream) {
-      recStream = stream;
-      recChunks = [];
-      var type = MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm';
-      recorder = new MediaRecorder(stream, { mimeType: type });
-      recorder.ondataavailable = function (e) { if (e.data && e.data.size) recChunks.push(e.data); };
-      recorder.start();
-      recStart = Date.now();
-      renderReply('recording', 'Parlez, ' + to + ' vous écoutera', '0 s');
-      clearInterval(recTimer);
-      recTimer = setInterval(function () {
-        var s = Math.round((Date.now() - recStart) / 1000);
-        var sub = replyScreen.querySelector('.reply-sub');
-        if (sub) sub.textContent = s + ' s';
-        if (s >= REPLY_MAX_S) stopRecording(true);
-      }, 500);
-    }, function () {
-      renderReply('error', 'Le micro n’est pas disponible', '');
-      setTimeout(closeReply, 3000);
-    });
-  }
-
-  function stopRecording(send) {
-    clearInterval(recTimer);
-    var r = recorder;
-    recorder = null;
-    if (!r) return;
-    var duration = Math.max(1, Math.round((Date.now() - recStart) / 1000));
-    r.onstop = function () {
-      if (recStream) recStream.getTracks().forEach(function (t) { t.stop(); });
-      recStream = null;
-      if (!send) return;
-      var blob = new Blob(recChunks, { type: r.mimeType || 'audio/webm' });
-      if (duration < 1 || !blob.size) { closeReply(); return; }
-      renderReply('sending', 'Envoi en cours…', '');
-      var reader = new FileReader();
-      reader.onload = function () {
-        var b64 = String(reader.result).split(',')[1] || '';
-        if (android() && android().sendVoiceReply) {
-          android().sendVoiceReply(b64, blob.type, duration, replyFor ? replyFor.id : '');
-        } else {
-          onVoiceSent({ ok: false });
-        }
-      };
-      reader.readAsDataURL(blob);
-    };
-    try { r.stop(); } catch (e) { closeReply(); }
-  }
-
-  function onVoiceSent(res) {
-    if (res && res.ok) renderReply('sent', 'C’est envoyé !', (replyFor && replyFor.authorName ? replyFor.authorName + ' va l’écouter.' : ''));
-    else renderReply('error', 'L’envoi n’a pas marché', 'Réessayez dans un moment.');
-    setTimeout(closeReply, 3500);
-  }
-
   function setupHomeExtras() {
     setInterval(lookForPresence, PRESENCE_EVERY_MS);
     setTimeout(lookForPresence, 60000);
@@ -2044,7 +1895,6 @@
     onWeather: onWeather,
     onReminders: onReminders,
     onFamily: onFamily,
-    onVoiceSent: function (res) { onVoiceSent(res); },
     onVoiceEnded: voiceEnded,
     onSpeech: onSpeech,
     onLeave: function () { if (window.papoteAppelsLeave) window.papoteAppelsLeave(); },

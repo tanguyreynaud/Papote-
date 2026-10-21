@@ -880,51 +880,6 @@ final class Sync {
         handler.post(() -> heartbeat(prefs.getString("fid", null), "lastActive"));
     }
 
-    /**
-     * Réponse vocale de Mamie (option « reponseVocale ») : l'enregistrement va dans Storage, puis un
-     * envoi « voice » apparaît dans le fil de la famille. done(true/false) sur le fil principal.
-     */
-    void sendVoiceReply(byte[] audio, String mime, int duration, String replyTo, java.util.function.Consumer<Boolean> done) {
-        handler.post(() -> {
-            boolean ok = false;
-            String fid = prefs.getString("fid", null);
-            try {
-                if (fid == null) throw new IOException("pas de famille");
-                String id = Firebase.randomString(20);
-                String type = mime == null || mime.isEmpty() ? "audio/webm" : mime.split(";")[0];
-                String path = "families/" + fid + "/media/" + id + ".webm";
-                String url = firebase.uploadMedia(path, type, audio);
-                JSONObject fields = new JSONObject()
-                        .put("type", Firebase.string("voice"))
-                        .put("text", Firebase.string(""))
-                        .put("audioUrl", Firebase.string(url))
-                        .put("storagePath", Firebase.string(path))
-                        .put("duration", new JSONObject().put("integerValue", String.valueOf(Math.max(1, duration))))
-                        .put("mime", Firebase.string(type))
-                        .put("authorUid", Firebase.string(firebase.uid()))
-                        .put("authorName", Firebase.string(prefs.getString("tabletName", "Tablette")))
-                        .put("seenAt", new JSONObject().put("nullValue", JSONObject.NULL))
-                        .put("hearts", new JSONObject().put("integerValue", "0"));
-                if (replyTo != null && !replyTo.isEmpty()) fields.put("replyTo", Firebase.string(replyTo));
-                JSONObject write = new JSONObject()
-                        .put("update", new JSONObject()
-                                .put("name", Firebase.docName("families/" + fid + "/posts/" + id))
-                                .put("fields", fields))
-                        .put("updateTransforms", new JSONArray().put(new JSONObject()
-                                .put("fieldPath", "createdAt").put("setToServerValue", "REQUEST_TIME")))
-                        .put("currentDocument", new JSONObject().put("exists", false));
-                firebase.commit(new JSONArray().put(write));
-                Journal.log(context, "Réponse vocale envoyée (" + duration + " s)");
-                ok = true;
-            } catch (Exception e) {
-                Log.w(TAG, "Réponse vocale", e);
-                Journal.log(context, "Réponse vocale impossible : " + e.getMessage());
-            }
-            final boolean result = ok;
-            new Handler(android.os.Looper.getMainLooper()).post(() -> done.accept(result));
-        });
-    }
-
     /** Visage vu par la caméra : members/{uid}.lastSeen, pour l'alerte « pas vue ce matin ». */
     void seen() {
         handler.post(() -> heartbeat(prefs.getString("fid", null), "lastSeen"));
@@ -1392,7 +1347,7 @@ final class Sync {
 
     /**
      * Options de la tablette réglées par la famille (families/{fid}.options) :
-     * lecture (bouton « Écouter »), reponseVocale (« Répondre » par la voix),
+     * lecture (bouton « Écouter »),
      * radio { active, nom, url }, sos (bouton « SOS famille »). Absentes : tout est désactivé.
      * Sauf lecture, meteo et rappelsAccueil (voix haute, météo et prochain rappel de l'accueil) : actifs sauf si false.
      */
@@ -1407,7 +1362,6 @@ final class Sync {
             if (f != null) {
                 // Lecture à voix haute : activée sauf si la famille l'a enlevée (choix de Tanguy).
                 out.put("lecture", !f.has("lecture") || bool(f, "lecture"));
-                out.put("reponseVocale", bool(f, "reponseVocale"));
                 out.put("sos", bool(f, "sos"));
                 out.put("meteo", !f.has("meteo") || bool(f, "meteo"));
                 out.put("rappelsAccueil", !f.has("rappelsAccueil") || bool(f, "rappelsAccueil"));

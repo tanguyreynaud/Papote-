@@ -412,26 +412,6 @@ public class MainActivity extends Activity implements Sync.Listener {
             sync.touched();
         }
 
-        /** Réponse vocale enregistrée par la page (base64) : envoyée à la famille, puis onVoiceSent({ok}). */
-        @JavascriptInterface
-        public void sendVoiceReply(String base64, String mime, int duration, String replyTo) {
-            byte[] audio;
-            try {
-                audio = android.util.Base64.decode(base64, android.util.Base64.DEFAULT);
-            } catch (Exception e) {
-                audio = null;
-            }
-            if (audio == null || audio.length == 0) {
-                callPage("onVoiceSent", new JSONObject());
-                return;
-            }
-            sync.sendVoiceReply(audio, mime, duration, replyTo, ok -> {
-                try {
-                    callPage("onVoiceSent", new JSONObject().put("ok", ok));
-                } catch (Exception ignored) { }
-            });
-        }
-
         /** Un visage est vu devant la tablette. */
         @JavascriptInterface
         public void seen() {
