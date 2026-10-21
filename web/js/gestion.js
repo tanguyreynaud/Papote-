@@ -246,9 +246,12 @@ function afficherPage() {
     if (a.dataset.page === menu) a.scrollIntoView({ block: 'nearest', inline: 'center' });
   });
   document.querySelectorAll('[data-panneau]').forEach((p) => { p.hidden = p.dataset.panneau !== page; });
-  $('titre-page').textContent = TITRES[page];
+  // Page d'une famille (#clients/familles/fid) : titre « Famille », pas « Clients ».
+  const [, onglet, fiche] = location.hash.slice(1).split('/');
+  const titre = page === 'clients' && onglet === 'familles' && fiche ? 'Famille' : TITRES[page];
+  $('titre-page').textContent = titre;
   choisirOnglet(page, location.hash.slice(1).split('/')[1]);
-  document.title = `Papote · ${TITRES[page]}`;
+  document.title = `Papote · ${titre}`;
   $('periode').hidden = !AVEC_PERIODE.includes(page);
   $('p-etat').hidden = !AVEC_PERIODE.includes(page);
   window.scrollTo(0, 0);
@@ -749,28 +752,20 @@ async function remplirCommande(id) {
   const ligne = (k, v) => (v ? [h('dt', {}, k), h('dd', {}, v)] : []);
   const factures = h('div', {}, h('p', { class: 'muted small' }, 'Lecture des factures…'));
   const partie = !['a-preparer', 'paiement-en-attente', 'annulee'].includes(c.expedition);
-  const expliquee = (texte, el) => h('div', { class: 'action' }, h('p', { class: 'small' }, texte), el);
-  const actions = [
-    ...(c.expedition === 'a-preparer' ? [h('div', { class: 'action' },
-      h('p', { class: 'small' }, 'Préparer le colis étape par étape : tablette, carte SIM, accessoires, étiquette Mondial Relay.'),
-      h('button', { type: 'button', class: 'primary small-btn', onclick: (e) => document.dispatchEvent(
-        new CustomEvent('papote:preparer-envoi', { detail: { commande: c, bouton: e.currentTarget } })) },
-      c.preparation && Object.keys(c.preparation.faits || {}).length ? 'Reprendre la préparation' : 'Préparer l\'envoi'))] : []),
-    ...(t && partie ? [expliquee('Un élément du kit est cassé ou perdu : choisissez-le, puis ce qui le remplace.',
-      formulaireRemplacement(c, t))] : []),
-    ...(partie && (t || c.envoyeeLe) ? [expliquee('Le client doit renvoyer quelque chose : il reçoit par e-mail une étiquette Mondial Relay gratuite.',
-      boutonEtiquetteRetour(c))] : []),
-    ...(c.fid && !c.offerte && c.resiliationLe && ['actif', 'impaye', 'suspendu', 'active', 'trialing', 'past_due'].includes(c.abonnement)
-      ? [h('div', { class: 'action' }, h('p', { class: 'small' }, `Abonnement arrêté : il prend fin le ${jour(c.resiliationLe)}.`))] : []),
-    ...(c.code && !c.fid && c.expedition !== 'annulee' ? [expliquee('Le client a perdu son code de commande : il en a besoin pour relier la tablette à l\'appli famille.',
-      boutonRenvoyerCode(c))] : []),
-  ];
+  // Remplacement d'un élément du kit : ouvert depuis le ⋮, sous l'en-tête.
+  const zoneRemplacement = h('div', { class: 'zone-remplacement', hidden: true },
+    t && partie ? formulaireRemplacement(c, t) : null);
+  const etape = prochaineEtape(c, t);
   const annonce = annonceCommande;
   annonceCommande = null;
   $('dc-corps').replaceChildren(...[
     annonce ? h('p', { class: 'annonce', role: 'status' }, annonce) : null,
     h('div', { class: 'card' },
-      h('div', { class: 'tete-fiche' }, h('h2', {}, `Commande ${codeCommande(c.code)}`, c.offerte ? ' (offerte)' : ''), menuCommande(c)),
+      h('div', { class: 'tete-fiche' }, h('h2', {}, `Commande ${codeCommande(c.code)}`, c.offerte ? ' (offerte)' : ''),
+        h('div', { class: 'tete-actions' },
+          partie && (t || c.envoyeeLe) && !['annulee', 'terminee'].includes(etatCommande(c)) ? boutonEtiquetteRetour(c) : null,
+          menuCommande(c, t && partie && ['active', 'en-route'].includes(etatCommande(c)) ? zoneRemplacement : null))),
+      zoneRemplacement,
       h('dl', { class: 'fiche' },
       ligne('État', badge(texte, classe)),
       ligne('Commandée le', jour(c.creeLe)),
@@ -787,13 +782,13 @@ async function remplirCommande(id) {
       ligne('Suivi du retour', suiviRetourDe(c)),
       ligne('Étiquettes', etiquettesDe(c)),
       ligne('Remboursement', c.remboursement ? `${euros(c.remboursement.montant)} ${REMBOURSEMENTS[c.remboursement.statut] || c.remboursement.statut}` : null))),
-    actions.length ? h('div', { class: 'card' }, h('h2', {}, 'Actions possibles'), ...actions) : null,
     h('div', { class: 'card' }, h('h2', {}, 'Parcours'),
-      // Frise : la date à gauche (vide pour une étape sans date), l'étape à droite.
-      h('ol', { class: 'frise' }, parcoursCommande(c).map(([le, texte, date]) => {
+      // Frise : la date à gauche (vide pour une étape sans date), l'étape à droite ; la prochaine étape en dernier.
+      h('ol', { class: 'frise' }, ...parcoursCommande(c).map(([le, texte, date]) => {
         const quand = Number.isFinite(le) ? le : date;
         return h('li', {}, h('span', { class: 'frise-date' }, quand ? jour(quand) : ''), h('span', { class: 'frise-texte' }, texte));
-      }))),
+      }), etape ? h('li', { class: 'frise-suite' }, h('span', { class: 'frise-date' }, 'À venir'),
+        h('span', { class: 'frise-texte' }, h('strong', {}, 'Prochaine étape : '), etape[0], etape[1] ? h('span', { class: 'frise-action' }, etape[1]) : null)) : null)),
     h('div', { class: 'card' }, h('h2', {}, 'Factures et paiements du client'), factures),
   ].filter(Boolean));
   if (c.offerte) {
@@ -827,7 +822,7 @@ async function remplirCommande(id) {
 }
 
 // Actions rares ou définitives de la commande, rangées dans le ⋮ ; chacune s'explique dans sa confirmation.
-function menuCommande(c) {
+function menuCommande(c, zoneRemplacement) {
   const lancer = async (faire) => {
     try {
       annonceCommande = await faire();
@@ -844,6 +839,10 @@ function menuCommande(c) {
       ? { libelle: 'Annuler la commande', danger: true, faire: () => lancer(() => annulerCommande(c)) } : null,
     c.fid && !c.offerte && !c.resiliationLe && ['actif', 'impaye', 'suspendu', 'active', 'trialing', 'past_due'].includes(c.abonnement)
       ? { libelle: 'Arrêter l\'abonnement', danger: true, faire: () => lancer(() => arreterAbonnement(c)) } : null,
+    zoneRemplacement ? { libelle: 'Remplacer un élément du kit (cassé ou perdu)…', faire: () => {
+      zoneRemplacement.hidden = false;
+      zoneRemplacement.querySelector('select').focus();
+    } } : null,
   ].filter(Boolean);
   return items.length ? menuPoints(items, `Actions pour la commande ${codeCommande(c.code)}`) : null;
 }
@@ -908,7 +907,7 @@ function boutonEtiquetteRetour(c) {
       bouton.disabled = false;
     }
   });
-  return h('div', { class: 'remplacement no-print' }, bouton, msg);
+  return h('div', { class: 'bouton-message no-print' }, bouton, msg);
 }
 
 // Client qui a perdu son code de commande (pour relier la tablette avec une autre adresse e-mail).
@@ -955,7 +954,7 @@ function formulaireRemplacement(c, t) {
   const libres = {
     tablette: () => donnees.stock.filter((x) => DISPONIBLES.includes(x.etat) && !x.commande)
       .map((x) => [x.id, [x.ref, x.numero || (x.ref ? null : 'sans n° de série'), x.modele].filter(Boolean).join(' · ')]),
-    sim: () => donnees.sims.filter((l) => !l.tablette && ['stock', 'active'].includes(l.statut))
+    sim: () => donnees.sims.filter((l) => !l.tablette && ['stock', 'active'].includes(l.statut) && (l.numero || l.iccid))
       .map((l) => [l.id, [l.numero || `ICCID ${fin4(l.iccid)}`, l.operateur].filter(Boolean).join(' · ')]),
     accessoire: () => donnees.accessoires.map((a) => [a.id, `${a.nom} (${a.quantite || 0} en stock)`]),
   };
@@ -1012,10 +1011,37 @@ function formulaireRemplacement(c, t) {
   return form;
 }
 
-// Grandes étapes d'une commande, de la commande au retour de la tablette.
+// Ce qu'il reste à faire sur la commande, d'après son état : [texte, bouton éventuel], ou null si rien.
+function prochaineEtape(c, t) {
+  const nom = t ? [t.ref, t.modele || t.numero].filter(Boolean).join(' ') : '';
+  const r = c.etiquettes && c.etiquettes.retour;
+  switch (etatCommande(c)) {
+    case 'annulee': return null;
+    case 'paiement': return ['attendre que la banque confirme le prélèvement SEPA. Ne rien envoyer avant.'];
+    case 'a-envoyer': {
+      if (t && t.etat === 'commandee') return [`attendre la tablette ${nom}, commandée chez le fournisseur et pas encore reçue. Ensuite : préparer l'envoi.`];
+      const preparer = h('button', { type: 'button', class: 'primary small-btn', onclick: (e) => document.dispatchEvent(
+        new CustomEvent('papote:preparer-envoi', { detail: { commande: c, bouton: e.currentTarget } })) },
+      c.preparation && Object.keys(c.preparation.faits || {}).length ? 'Reprendre la préparation' : 'Préparer l\'envoi');
+      return [t ? 'préparer le colis : tablette, carte SIM, accessoires, étiquette Mondial Relay.'
+        : 'choisir une tablette du stock pendant la préparation du colis.', preparer];
+    }
+    case 'en-route': return ['attendre que la famille relie la tablette avec son code de commande.', c.code ? boutonRenvoyerCode(c) : null];
+    case 'active':
+      if (c.resiliationLe) return [`l'abonnement s'arrête le ${jour(c.resiliationLe)}. Le client recevra alors l'étiquette pour rendre la tablette.`];
+      if (t && !t.jumeleeLe && c.envoyeeLe) return ['attendre que la tablette soit reliée à la famille.', c.code ? boutonRenvoyerCode(c) : null];
+      return ['rien à faire, la tablette est chez le client.'];
+    case 'retour':
+      if (c.restitution.statut === 'echec') return ['la tablette n\'a pas été rendue et le prélèvement a échoué : contacter le client.'];
+      return [r && r.colis ? 'attendre le colis de retour (suivi ci-dessus).' : 'envoyer au client l\'étiquette de retour (bouton en haut).'];
+    default: return null;
+  }
+}
+
+// Grandes étapes d'une commande, de la commande au retour de la tablette (seulement ce qui s'est passé).
 function parcoursCommande(c) {
   // La commande ouvre toujours le parcours, même créée dans la même seconde que la réservation.
-  const etapes = [[-Infinity, c.offerte ? 'Commande offerte créée' : 'Commande passée', c.creeLe]];
+  const etapes = [[-Infinity, c.offerte ? `Commande offerte créée${c.famille ? ` pour la famille ${c.famille}` : ''}` : 'Commande passée', c.creeLe]];
   if (c.envoyeeLe) etapes.push([c.envoyeeLe, `Tablette envoyée${c.suivi ? ` (suivi ${c.suivi})` : ''}`]);
   for (const t of donnees.stock) {
     for (const x of t.historique || []) {
@@ -1025,12 +1051,20 @@ function parcoursCommande(c) {
         etapes.push([x.le, `Remplacement : ${quoi}${x.etat === 'en-retour' ? ' à récupérer' : ' envoyée'}${x.motif ? ` (${x.motif})` : ''}`]);
       } else if (x.etat !== 'envoyee') {
         const nom = [t.ref, t.modele || t.numero].filter(Boolean).join(' ');
-        etapes.push([x.le, ['commandee', 'en-stock', 'preparee'].includes(x.etat) && x.commande
-          ? `Tablette ${nom} attribuée à cette commande` : `Tablette ${nom} : ${(donnees.etats[x.etat] || x.etat).toLowerCase()}`]);
+        const texte = {
+          commandee: `Tablette ${nom} réservée pour cette commande (commandée chez le fournisseur, pas encore reçue)`,
+          'en-stock': `Tablette ${nom} mise de côté pour cette commande`,
+          preparee: `Tablette ${nom} préparée`,
+          'chez-client': `Tablette ${nom} chez le client`,
+        }[x.etat] || `Tablette ${nom} : ${(donnees.etats[x.etat] || x.etat).toLowerCase()}`;
+        etapes.push([x.le, texte]);
       }
     }
+    // Jumelage réel : la tablette s'est reliée à la famille (pas seulement la famille choisie à la commande).
+    if (t.commande === c.id && t.jumeleeLe) etapes.push([t.jumeleeLe, `Tablette reliée à la famille ${c.famille || ''}`.trim()]);
   }
-  if (c.fid) etapes.push([null, `Jumelée avec la famille ${c.famille || ''}`.trim()]);
+  if (c.resiliationLe) etapes.push([null, `Abonnement arrêté, fin le ${jour(c.resiliationLe)}`]);
+  if (c.expedition === 'annulee') etapes.push([null, 'Commande annulée']);
   // La date du retour est une date limite, pas celle d'un événement : à la suite, dans le texte.
   if (c.restitution) etapes.push([null, `${RETOURS[c.restitution.statut] || c.restitution.statut}${c.restitution.avant && c.restitution.statut === 'attendue' ? `, à rendre avant le ${jour(c.restitution.avant)}` : ''}`]);
   if (c.remboursement) etapes.push([null, `${euros(c.remboursement.montant)} ${REMBOURSEMENTS[c.remboursement.statut] || c.remboursement.statut}`]);
@@ -1374,7 +1408,7 @@ function remplirTablette(id) {
   const t = donnees.stock.find((x) => x.id === id);
   if (!t) {
     $('dt-titre').textContent = 'Tablette introuvable';
-    $('dt-resume').textContent = 'Elle a peut-être été supprimée.';
+    $('dt-infos').replaceChildren(h('dd', {}, 'Elle a peut-être été supprimée.'));
     return;
   }
   // Même tablette déjà affichée : ne pas effacer ce qui est en cours de saisie.
@@ -1386,9 +1420,16 @@ function remplirTablette(id) {
   $('dt-titre').textContent = `Tablette ${nom}`;
   document.title = `Papote · Tablette ${t.ref || ''}`.trim();
   const c = t.commande && donnees.commandes.find((x) => x.id === t.commande);
-  $('dt-resume').replaceChildren(badge(donnees.etats[etatTablette(t)] || t.etat, ''), ' ',
-    ...(c ? ['Pour le client : ', h('a', { href: `#commande/${encodeURIComponent(c.id)}` }, nomCommande(c))]
-      : [h('span', { class: 'muted' }, 'Pas encore attribuée à un client')]));
+  // Lecture seule ; « Modifier » ouvre le formulaire à la place.
+  const ligne = (k, v) => (v ? [h('dt', {}, k), h('dd', {}, v)] : []);
+  $('dt-infos').replaceChildren(
+    ...ligne('Où est-elle ?', badge(donnees.etats[etatTablette(t)] || t.etat, '')),
+    ...ligne('Client', c ? h('a', { href: `#commande/${encodeURIComponent(c.id)}` }, nomCommande(c)) : h('span', { class: 'muted' }, 'pas encore attribuée')),
+    ...ligne('N° de série', t.numero || h('span', { class: 'muted' }, 'pas encore noté')),
+    ...ligne('Modèle', t.modele),
+    ...ligne('Carte SIM', simDuKit(t)),
+    ...ligne('Accessoires', (t.accessoires || []).join(', ')),
+    ...ligne('Notes', t.notes));
   afficherAchatTablette(t);
   afficherDocumentsTablette(t);
   afficherBatterie(t);
@@ -1402,7 +1443,8 @@ function remplirTablette(id) {
   // Carte SIM : une ligne du registre libre, ou l'ancienne saisie sur la fiche (gardée telle quelle).
   f.simId.replaceChildren(h('option', { value: '' }, 'Aucune'),
     t.sim && !t.simId ? h('option', { value: 'ancienne', selected: true }, `${t.sim} (ancienne saisie)`) : null,
-    ...donnees.sims.filter((l) => l.id === t.simId || (!l.tablette && l.statut !== 'resiliee'))
+    // Une carte sans numéro ni ICCID ne peut pas aller dans une tablette (refusé aussi par le serveur).
+    ...donnees.sims.filter((l) => l.id === t.simId || (!l.tablette && l.statut !== 'resiliee' && (l.numero || l.iccid)))
       .map((l) => h('option', { value: l.id, selected: l.id === t.simId },
         [l.numero || `ICCID ${fin4(l.iccid)}`, l.operateur, donnees.statutsSim[l.statut]].filter(Boolean).join(' · '))));
   f.notes.value = t.notes || '';
@@ -1451,9 +1493,17 @@ function afficherAchatTablette(t) {
       h('button', { type: 'button', class: 'secondary small-btn', onclick: detacherAchat }, 'Déplacer cet achat sur une nouvelle tablette')));
 }
 
+// Actions de la page tablette hors formulaire : l'erreur s'affiche même si le formulaire est replié.
+async function enregistrerTablette(action, attente) {
+  const f = $('f-tablette');
+  const ok = await enregistrer(f, action, attente);
+  if (!ok && f.hidden) prevenir(f.querySelector('.f-msg').textContent);
+  return ok;
+}
+
 async function detacherAchat() {
   if (!await demander('Déplacer cet achat (prix, date, facture) sur une nouvelle tablette « En stock » ?', { oui: 'Déplacer l\'achat' })) return;
-  await enregistrer($('f-tablette'), async () => {
+  await enregistrerTablette(async () => {
     const r = await appeler('gestionStock', { action: 'detacherAchat', id: tabletteOuverte });
     $('f-tablette').dataset.charge = '';
     if (r && r.id) ouvrirTablette(r.id);
@@ -1465,7 +1515,7 @@ $('f-tablette').addEventListener('submit', async (e) => {
   const f = e.target;
   const t = donnees.stock.find((x) => x.id === tabletteOuverte);
   const simId = f.simId.value;
-  await enregistrer(f, async () => {
+  const ok = await enregistrer(f, async () => {
     await appeler('gestionStock', {
       action: 'modifier',
       id: tabletteOuverte,
@@ -1483,19 +1533,31 @@ $('f-tablette').addEventListener('submit', async (e) => {
       await appeler('gestionSim', { action: 'modifier', id: t.simId, champs: { tablette: null } });
     }
   });
-  message(f, 'Modifications enregistrées.', false);
+  if (ok) f.hidden = true;
+});
+
+$('dt-modifier').addEventListener('click', () => {
+  const f = $('f-tablette');
+  f.hidden = !f.hidden;
+  if (!f.hidden) f.numero.focus();
+});
+$('dt-annuler').addEventListener('click', () => {
+  const f = $('f-tablette');
+  f.hidden = true;
+  f.dataset.charge = '';
+  remplirTablette(tabletteOuverte);
 });
 
 $('dt-fichier').addEventListener('change', async (e) => {
   const fichiers = [...e.target.files];
   e.target.value = '';
   if (!fichiers.length) return;
-  await enregistrer($('f-tablette'), () => envoyerPieces('stock', tabletteOuverte, fichiers), 'Envoi…');
+  await enregistrerTablette(() => envoyerPieces('stock', tabletteOuverte, fichiers), 'Envoi…');
 });
 
 $('dt-retirer').addEventListener('click', async () => {
   if (!await demander('Supprimer cette fiche du stock ? À faire seulement si la tablette n\'existe pas.', { oui: 'Supprimer la fiche', danger: true })) return;
-  const ok = await enregistrer($('f-tablette'), async () => {
+  const ok = await enregistrerTablette(async () => {
     await appeler('gestionStock', { action: 'supprimer', id: tabletteOuverte });
   });
   if (ok) location.hash = '#stock/tablettes';
@@ -2640,22 +2702,37 @@ function afficherClients() {
 }
 
 // Page d'une famille (admin.js) : qui l'a commandée, sa commande et sa tablette.
+// Une ligne par commande (avec son client et sa tablette) ; les commandes finies ou annulées repliées en dessous.
 function remplirLiensFamille(fid) {
-  const commandes = donnees.commandes.filter((c) => c.fid === fid);
+  const commandes = donnees.commandes.filter((c) => c.fid === fid).sort((a, b) => (b.creeLe || 0) - (a.creeLe || 0));
   const tablettes = donnees.stock.filter((t) => t.fid === fid || commandes.some((c) => c.id === t.commande));
-  // Une ligne entière par page à ouvrir : le client, sa commande, la tablette.
   const ligneLien = (quoi, href, texte, detail) => h('li', {}, h('span', { class: 'll-quoi' }, quoi),
     h('a', { href }, texte), detail ? h('span', { class: 'muted small' }, detail) : null);
-  $('famille-liens').replaceChildren(
-    h('h2', {}, 'Client, commande et tablette'),
-    h('ul', { class: 'liste-liens' },
-      ...commandes.flatMap((c) => [
-        c.email ? ligneLien('Client', `#client/${encodeURIComponent(c.email.toLowerCase())}`, c.nom || c.email, c.nom ? c.email : '') : null,
-        ligneLien('Commande', `#commande/${encodeURIComponent(c.id)}`, `Commande ${codeCommande(c.code)}`, c.offerte ? 'offerte' : ''),
-      ].filter(Boolean)),
-      ...tablettes.map((t) => ligneLien('Tablette', `#tablette/${encodeURIComponent(t.id)}`,
-        [t.ref, t.numero || t.modele].filter(Boolean).join(' · ') || 'Tablette', donnees.etats[etatTablette(t)] || t.etat)),
-      ...(commandes.length || tablettes.length ? [] : [h('li', { class: 'muted small' }, 'Aucune commande ni tablette rattachée à cette famille.')])));
+  const nomTablette = (t) => [t.ref, t.numero || t.modele].filter(Boolean).join(' · ') || 'Tablette';
+  const blocCommande = (c) => {
+    const t = tablettes.find((x) => x.commande === c.id);
+    const [etat] = ETATS_COMMANDE[etatCommande(c)];
+    return [
+      ligneLien('Commande', `#commande/${encodeURIComponent(c.id)}`, `Commande ${codeCommande(c.code)}`,
+        [c.offerte ? 'offerte' : null, etat.toLowerCase(), jour(c.creeLe)].filter(Boolean).join(' · ')),
+      c.email ? ligneLien('Client', `#client/${encodeURIComponent(c.email.toLowerCase())}`, c.nom || c.email, c.nom ? c.email : '') : null,
+      t ? ligneLien('Tablette', `#tablette/${encodeURIComponent(t.id)}`, nomTablette(t), donnees.etats[etatTablette(t)] || t.etat) : null,
+    ].filter(Boolean);
+  };
+  const finie = (c) => ['terminee', 'annulee'].includes(etatCommande(c));
+  const enCours = commandes.filter((c) => !finie(c));
+  const finies = commandes.filter(finie);
+  // Tablette de la famille sans commande rattachée (jumelée à la main, ancienne fiche).
+  const seules = tablettes.filter((t) => !commandes.some((c) => c.id === t.commande));
+  $('famille-liens').replaceChildren(...[
+    h('h2', {}, 'Commande, client et tablette'),
+    ...enCours.map((c) => h('ul', { class: 'liste-liens groupe-commande' }, ...blocCommande(c))),
+    seules.length ? h('ul', { class: 'liste-liens groupe-commande' }, ...seules.map((t) => ligneLien('Tablette', `#tablette/${encodeURIComponent(t.id)}`,
+      nomTablette(t), donnees.etats[etatTablette(t)] || t.etat))) : null,
+    finies.length ? h('details', { class: 'anciennes' }, h('summary', {}, `${pluriel(finies.length, 'commande')} terminée${finies.length > 1 ? 's' : ''} ou annulée${finies.length > 1 ? 's' : ''}`),
+      ...finies.map((c) => h('ul', { class: 'liste-liens groupe-commande' }, ...blocCommande(c)))) : null,
+    commandes.length || tablettes.length ? null : h('p', { class: 'muted small' }, 'Aucune commande ni tablette rattachée à cette famille.'),
+  ].filter(Boolean));
 }
 
 // Page d'un client : coordonnées, accord e-mails, commandes, famille, tablette et paiements.

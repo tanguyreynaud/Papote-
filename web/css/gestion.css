@@ -409,3 +409,31 @@ td a:hover { text-decoration: underline; }
 
 /* Interrupteur (accord aux e-mails d'information) : le bouton puis son texte, sur une ligne. */
 label.interrupteur, .fiche label.interrupteur { display: inline-flex; flex-direction: row; align-items: center; gap: 12px; margin: 0; cursor: pointer; font-weight: 600; font-size: 15px; }
+
+/* Libellés en gras, réponses normales (fiches commande, tablette, client, famille). */
+.fiche dt, .family dt { color: var(--text); font-weight: 700; }
+.fiche dd, .family dd { color: var(--text); font-weight: 400; }
+/* Bloc entièrement cliquable : le nom n'est jamais souligné. */
+.liste-liens a, .liste-liens a:hover, .liste-liens li:hover a, tr[tabindex] a, tr[tabindex] a:hover { text-decoration: none !important; }
+/* En-tête d'une fiche : bouton principal visible, puis le ⋮. */
+.tete-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.bouton-message { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.bouton-message p { margin: 0; max-width: 260px; text-align: right; }
+.zone-remplacement { margin-top: 14px; padding-top: 4px; border-top: 1px solid var(--line); }
+/* Prochaine étape au bout du parcours : point creux, texte et son bouton. */
+.frise li.frise-suite::before { background: var(--card, #fff); border: 2px solid var(--accent); width: 8px; height: 8px; }
+.frise-suite .frise-date { color: var(--accent); font-weight: 700; }
+.frise-action { display: block; margin-top: 10px; }
+.frise-action .bouton-message { align-items: flex-start; }
+.frise-action .bouton-message p { text-align: left; }
+/* Page d'une famille : un groupe par commande, les anciennes repliées. */
+.groupe-commande + .groupe-commande, .anciennes { margin-top: 16px; }
+.anciennes summary { cursor: pointer; color: var(--muted); font-weight: 600; margin-bottom: 10px; }
+/* Fiche tablette : formulaire ouvert par « Modifier ». */
+.form-modif { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
+.form-modif .boutons { display: flex; gap: 8px; }
+@media (max-width: 640px) {
+  .tete-fiche { flex-wrap: wrap; }
+  .tete-actions { width: 100%; justify-content: flex-start; }
+  .bouton-message { align-items: flex-start; }
+}

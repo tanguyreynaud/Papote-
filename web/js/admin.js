@@ -837,8 +837,11 @@ function carteFamille(f) {
   const s = state(f);
   const tete = el('li', `family card ${s.cls}`);
   const titre = el('div', 'family-head');
-  titre.append(el('span', 'dot'), el('h2', null, f.name), el('code', null, f.code ? `${f.code.slice(0, 4)}-${f.code.slice(4)}` : ''),
-    menuFamille(f, tete));
+  // Le ⋮ dépend des commandes de la famille (retour en cours) : posé dès qu'elles sont lues.
+  const place = el('span');
+  titre.append(el('span', 'dot'), el('h2', null, f.name), el('code', null, f.code ? `${f.code.slice(0, 4)}-${f.code.slice(4)}` : ''), place);
+  donnees().then((d) => d.commandes || []).catch(() => [])
+    .then((commandes) => place.replaceWith(menuFamille(f, tete, commandes.filter((c) => c.fid === f.id))));
   const dl = el('dl');
   for (const [k, v] of [
     ['État', s.label],
@@ -863,16 +866,23 @@ function carteFamille(f) {
   return [tete, membres];
 }
 
-// Actions sur la famille, rangées dans le ⋮ à côté de son nom ; chacune s'explique dans sa confirmation.
-function menuFamille(f, tete) {
-  // Famille offerte (les mamies) : jamais en pause, jamais supprimable.
-  const offerte = f.abonnement?.statut === 'offert';
-  return menuPoints([
-    { libelle: 'Préparer une tablette de remplacement', faire: () => prepareReplacement(f, $('famille-actions')) },
-    { libelle: offerte ? 'Ne plus offrir le service' : 'Offrir le service (jamais en pause)', faire: async (b) => {
+// Actions sur la famille, rangées dans le ⋮ à côté de son nom, selon où elle en est ; chacune s'explique dans sa
+// confirmation. Résiliée : seulement le retour de la tablette, puis la suppression une fois tout rendu.
+function menuFamille(f, tete, commandes) {
+  const statut = f.abonnement?.statut || 'aucun';
+  const offerte = statut === 'offert';
+  const enService = ['actif', 'impaye', 'suspendu', 'offert'].includes(statut);
+  const aRendre = commandes.find((c) => c.restitution && ['attendue', 'echec'].includes(c.restitution.statut) && c.expedition !== 'annulee');
+  const enCours = commandes.find((c) => !['annulee'].includes(c.expedition) && !c.restitution && ['actif', 'impaye', 'suspendu', 'active', 'trialing', 'past_due'].includes(c.abonnement));
+  const items = [
+    aRendre ? { libelle: 'Voir le retour de la tablette', faire: () => { location.hash = `#commande/${encodeURIComponent(aRendre.id)}`; } } : null,
+    enService && f.hasTablet ? { libelle: 'Préparer une tablette de remplacement', faire: () => prepareReplacement(f, $('famille-actions')) } : null,
+    // Offrir : seulement une famille sans abonnement (jamais pour une famille qui paie ou qui a résilié).
+    offerte || statut === 'aucun' ? { libelle: offerte ? 'Ne plus offrir le service' : 'Offrir le service', faire: async (b) => {
       if (!await demander(offerte
-        ? `« ${f.name} » ne sera plus offerte : sans abonnement, sa tablette se mettra en pause. Continuer ?`
-        : `Rendre « ${f.name} » offerte ? Pour un proche à qui vous offrez le service : la tablette ne sera jamais mise en pause, et la famille ne pourra pas être supprimée.`)) return;
+        ? `Ne plus offrir le service à « ${f.name} » ? Sans abonnement, sa tablette se mettra en pause.`
+        : `Offrir le service à « ${f.name} » ?\n\nLa famille ne paiera rien et sa tablette ne sera jamais mise en pause. Une famille offerte ne peut pas être supprimée.`,
+      { oui: offerte ? 'Ne plus offrir' : 'Offrir le service' })) return;
       b.disabled = true;
       try {
         await appeler('gestionFamilleOfferte', { fid: f.id, offerte: !offerte });
@@ -882,9 +892,12 @@ function menuFamille(f, tete) {
         prevenir(`Impossible : ${err.message}`);
         b.disabled = false;
       }
-    } },
-    offerte ? null : { libelle: 'Supprimer la famille et ses données', danger: true, faire: (b) => supprimerFamille(f, tete, b) },
-  ], `Actions pour la famille ${f.name}`);
+    } } : null,
+    // Supprimer : ni offerte, ni abonnement en cours, ni tablette encore à rendre.
+    offerte || aRendre || enCours || ['actif', 'impaye', 'suspendu'].includes(statut) ? null
+      : { libelle: 'Supprimer la famille et ses données', danger: true, faire: (b) => supprimerFamille(f, tete, b) },
+  ].filter(Boolean);
+  return items.length ? menuPoints(items, `Actions pour la famille ${f.name}`) : el('span');
 }
 
 // Résultat d'une action (code de remplacement) sous les membres.
