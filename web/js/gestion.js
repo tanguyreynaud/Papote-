@@ -473,7 +473,7 @@ const ETATS_COMMANDE = {
   annulee: ['Annulée', ''],
 };
 const ABONNEMENTS = {
-  offert: 'offert', actif: 'actif', impaye: 'impayé', suspendu: 'suspendu', resilie: 'résilié', aucun: 'sans abonnement',
+  offert: 'offert', actif: 'actif', impaye: 'impayé', suspendu: 'suspendu', resilie: 'résilié', aucun: 'sans abonnement', installation: 'installation en cours',
   canceled: 'résilié', active: 'actif', trialing: 'premier mois', past_due: 'impayé',
 };
 const RETOURS = {
@@ -2547,7 +2547,7 @@ $('btn-cloturer').addEventListener('click', () => cloturer());
 let clients = null;
 const TYPES_CLIENT = { client: 'Abonné', ancien: 'Ancien client', panier: 'Panier abandonné', contact: 'Contact', chat: 'Contact du chat' };
 const STATUTS_CLIENT = {
-  actif: 'actif', offert: 'offert', impaye: 'impayé', suspendu: 'suspendu', resilie: 'résilié', aucun: 'sans abonnement', annulee: 'annulée',
+  actif: 'actif', offert: 'offert', impaye: 'impayé', suspendu: 'suspendu', resilie: 'résilié', aucun: 'sans abonnement', installation: 'installation en cours', annulee: 'annulée',
 };
 
 async function chargerClients() {

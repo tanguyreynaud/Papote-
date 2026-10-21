@@ -24,6 +24,7 @@ export const FORMULES = [
 
 export const LIBELLES = {
   offert: 'Offert',
+  installation: 'Installation en cours',
   actif: 'Actif',
   impaye: 'Paiement en retard',
   suspendu: 'En pause : paiement non réglé',
