@@ -414,43 +414,42 @@
 
   // ---------- 4. Code et QR code ----------
 
-  function pretty(code) { return code.slice(0, 4) + '-' + code.slice(4); }
+  function pretty(code) { return code.slice(0, 4) + ' ' + code.slice(4); }
 
   function showPair(s) {
     preloadFaceDetector();
     stepNum = 3;
     art = ''; // le QR code est l'illustration
-    var box = screen('Connectez votre téléphone', '');
+    var box = screen('Prenez votre téléphone', '');
     if (s.error) {
       box.appendChild(el('p', 'welcome-error', s.error));
       return;
     }
+    // Deux façons à égalité, côte à côte (demande de Tanguy, 21/10) : le QR code, ou le site + le code.
     var row = el('div', 'welcome-pair');
+    var scan = el('div', 'pair-card');
+    scan.appendChild(el('p', 'pair-card-title', 'Scannez le QR code'));
     var qr = android().qrCode ? android().qrCode('https://app.mapapote.fr/?tablette=' + s.code) : '';
     if (qr) {
       var img = el('img', 'welcome-qr');
       img.src = qr;
-      row.appendChild(img);
+      scan.appendChild(img);
     }
-    var steps = el('div', 'welcome-steps');
-    steps.appendChild(el('p', 'welcome-step', 'Avec l’appareil photo de votre téléphone, scannez ce QR code.'));
-    // Sans QR code : l'adresse du site en grand, bien visible (demande de Tanguy, 21/10), puis le code.
-    var link = el('p', 'welcome-link', 'ou tapez ');
-    link.appendChild(el('strong', '', 'app.mapapote.fr'));
-    link.appendChild(document.createTextNode(' dans votre téléphone, puis ce code :'));
-    steps.appendChild(link);
-    steps.appendChild(el('p', 'welcome-code', pretty(s.code)));
+    row.appendChild(scan);
+    var type = el('div', 'pair-card');
+    type.appendChild(el('p', 'pair-card-title', 'Ou tapez l’adresse'));
+    type.appendChild(el('p', 'pair-site', 'app.mapapote.fr'));
+    type.appendChild(el('p', 'pair-card-hint', 'dans le téléphone, puis ce code :'));
+    type.appendChild(el('p', 'welcome-code', pretty(s.code)));
+    row.appendChild(type);
+    box.appendChild(row);
     if (s.claimedName || s.joined) {
       // Le proche a scanné : l'écran ne change pas (demande de Tanguy), une ligne dit qu'il s'en occupe.
       var busy = el('p', 'welcome-busy', '');
       busy.appendChild(el('span', 'boot-spin welcome-busy-spin', ''));
       busy.appendChild(document.createTextNode((s.claimedName || 'Votre proche') + ' termine l’installation sur son téléphone…'));
-      steps.appendChild(busy);
-    } else {
-      steps.appendChild(el('p', 'welcome-sub', 'Le code change toutes les 15 minutes.'));
+      box.appendChild(busy);
     }
-    row.appendChild(steps);
-    box.appendChild(row);
     if (s.restart) {
       // Touché deux fois : un appui par erreur n'annule pas l'installation en cours.
       var again = button('Recommencer avec un autre téléphone', 'no small', function () {

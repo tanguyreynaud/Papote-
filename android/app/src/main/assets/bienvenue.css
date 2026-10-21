@@ -352,3 +352,15 @@
 /* Sans QR code : l'adresse du site en grand */
 .welcome-link { margin: 3vmin 0 0; font-size: 4.8vmin; line-height: 1.3; font-weight: 600; color: var(--w-text); }
 .welcome-link strong { color: var(--w-accent); font-size: 5.6vmin; white-space: nowrap; }
+
+/* Écran du code : deux cartes à égalité, « Scannez le QR code » et « Tapez dans le téléphone » */
+.welcome-pair { align-items: stretch; gap: 4vmin; text-align: center; }
+.pair-card { flex: 1; min-width: 0; max-width: 64vmin; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 3vmin 4vmin; border: .4vmin solid var(--w-line); border-radius: 4vmin; background: #fff; }
+.pair-card-title { margin: 0 0 2vmin; font-size: 5.4vmin; font-weight: 700; color: var(--w-text); }
+.pair-card-hint { margin: 2vmin 0 0; font-size: 4vmin; color: var(--w-muted); }
+.pair-card .welcome-qr { width: 36vmin; height: 36vmin; border: 0; padding: 0; }
+.pair-site { margin: 4vmin 0 0; font-size: 7vmin; font-weight: 700; color: var(--w-accent); white-space: nowrap; }
+.pair-card .welcome-code { margin: 2vmin 0 0; padding: 1.5vmin 3vmin; font-size: 7vmin; white-space: nowrap; }
+.pair-or { align-self: center; font-size: 4vmin; font-weight: 700; color: var(--w-muted); text-transform: uppercase; letter-spacing: .3vmin; }
+.welcome-box > .welcome-busy { justify-content: center; margin-top: 3vmin; }
