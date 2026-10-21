@@ -764,6 +764,9 @@ async function remplacer(d, qui) {
     if (!sim.exists || sim.get('tablette') || sim.get('statut') === 'resiliee') {
       throw new HttpsError('failed-precondition', 'Choisissez une carte SIM libre.');
     }
+    if (!sim.get('numero') && !sim.get('iccid')) {
+      throw new HttpsError('failed-precondition', "Notez d'abord le numéro ou l'ICCID de cette carte SIM.");
+    }
     const ancienne = kit.get('simId');
     if (ancienne) await enregistrerSim(ancienne, { statut: 'suspendue', tablette: null }, qui);
     await enregistrerSim(sim.id, { tablette: kit.id, statut: 'active', activation: sim.get('activation') || Date.now() }, qui);
@@ -1004,6 +1007,11 @@ async function enregistrerSim(id, c, qui) {
   let tablette = 'tablette' in c ? texte(c.tablette, 100) : avant.tablette || null;
   if (ligne.statut === 'resiliee') tablette = null;
   if (tablette) {
+    // Une carte sans numéro ni ICCID ne se retrouverait plus : pas de tablette tant qu'elle n'est pas identifiée
+    // (une carte déjà dans une tablette peut toujours passer dans sa remplaçante).
+    if (!ligne.numero && !ligne.iccid && !avant.tablette) {
+      throw new HttpsError('failed-precondition', "Notez d'abord le numéro ou l'ICCID de cette carte SIM : une carte sans identifiant ne peut pas aller dans une tablette.");
+    }
     const t = await db().doc(`stock/${tablette}`).get();
     if (!t.exists) throw new HttpsError('not-found', 'Tablette introuvable.');
     const autre = t.get('simId');
