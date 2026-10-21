@@ -21,6 +21,8 @@ const ENTREE_TABLETTE_MS = 20 * 60 * 1000;
 // Proches gardés en attente d'invitation pendant une installation.
 const ATTENTE_MAX = 10;
 const ETAPES = ['photo', 'son', 'options', 'fini'];
+// Installation pas finie 30 minutes après le scan : le prochain proche qui scanne la reprend (Tanguy, 21/10).
+const REPRISE_MS = 30 * 60 * 1000;
 
 // Options montrées déjà réglées dans le récapitulatif (document du parcours, 21/10).
 const OPTIONS_PAR_DEFAUT = Object.freeze({
@@ -42,9 +44,9 @@ function texteCourt(v, max = 40) {
 }
 
 // Que faire quand un compte scanne le code d'une tablette (pure, testée).
-// p : pairing (ou null) ; uid : le compte qui scanne ; maintenant : ms.
-// → { etat: 'reserver' | 'reprendre' | 'occupe' | 'inconnu' | 'expire', par?, fid? }
-function decisionScan(p, uid, maintenant) {
+// p : pairing (ou null) ; uid : le compte qui scanne ; maintenant : ms ; finie : installation de la famille finie.
+// → { etat: 'reserver' | 'reprendre' | 'reprise' | 'occupe' | 'inconnu' | 'expire', par?, fid? }
+function decisionScan(p, uid, maintenant, finie = false) {
   if (!p) return { etat: 'inconnu' };
   const moi = p.claimedBy === uid;
   if (p.status === 'waiting') {
@@ -52,6 +54,8 @@ function decisionScan(p, uid, maintenant) {
   }
   if (p.status === 'reserved' || p.status === 'confirmed') {
     if (moi) return { etat: 'reprendre', fid: p.fid || null };
+    const depuis = ms(p.reservedAt);
+    if (!finie && depuis != null && maintenant - depuis >= REPRISE_MS) return { etat: 'reprise', fid: p.fid || null };
     return { etat: 'occupe', par: p.claimedName || null };
   }
   // claimed (ancien parcours), cancelled, refused : la tablette affichera un nouveau code.
@@ -108,7 +112,26 @@ function brancher(deps) {
     return db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       const p = snap.exists ? snap.data() : null;
-      const d = decisionScan(p, uid, Date.now());
+      const famRef = p && p.fid ? db.doc(`families/${p.fid}`) : null;
+      const fam = famRef ? (await tx.get(famRef)).data() : null;
+      const finie = !!(famRef && (!fam || !fam.installation || fam.installation.etape === 'fini'));
+      const d = decisionScan(p, uid, Date.now(), finie);
+      if (d.etat === 'reprise') {
+        // Le premier proche s'est arrêté en route : ce compte reprend, rien n'est effacé.
+        tx.update(ref, {
+          claimedBy: uid, claimedName: prenom, claimedEmail: email, reservedAt: FieldValue.serverTimestamp(),
+          attente: (p.attente || []).filter((a) => a.uid !== uid),
+        });
+        if (famRef) {
+          tx.update(famRef, { createdBy: uid, rev: FieldValue.increment(1) });
+          tx.set(famRef.collection('members').doc(uid), {
+            name: prenom, role: 'famille', code: fam.code || null, joinedAt: FieldValue.serverTimestamp(),
+            uid, email, status: 'active', canCall: true,
+          }, { merge: true });
+        }
+        logger.info(`Installation ${code} reprise par ${uid} (avant : ${p.claimedBy})`);
+        return { etat: 'reserve', fid: d.fid };
+      }
       if (d.etat === 'reserver') {
         tx.update(ref, {
           status: 'reserved', claimedBy: uid, claimedName: prenom, claimedEmail: email,
@@ -294,5 +317,5 @@ function refusAnnulation(fam, uid) {
 
 module.exports = {
   brancher,
-  regles: { decisionScan, refusAnnulation, villeDuRelais, villeAvecCoordonnees, normaliserCode, OPTIONS_PAR_DEFAUT, ETAPES },
+  regles: { decisionScan, refusAnnulation, REPRISE_MS, villeDuRelais, villeAvecCoordonnees, normaliserCode, OPTIONS_PAR_DEFAUT, ETAPES },
 };
