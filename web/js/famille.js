@@ -149,7 +149,7 @@ function watchFeed(type, render) {
 const PAGES = {
   photos: () => watchFeed('photo', renderPhotos),
   videos: () => watchFeed('video', renderVideos),
-  messages: () => watchType(['message', 'reply', 'voice'], 60, renderMessages),
+  messages: () => watchType(['message', 'reply'], 60, renderMessages),
   agenda: () => null,
   pair: () => { resetPairing(); return () => { stopPair?.(); stopPair = null; }; },
   settings: () => { renderSettings(); return null; },
@@ -471,24 +471,22 @@ $('viewer-save').addEventListener('click', async () => {
 function renderMessages(posts) {
   const list = $('messages');
   const grand = session.family.name;
-  // Anciens vocaux sans fichier (avant la refonte) : on ne les montre pas.
-  const shown = posts.filter((p) => p.type !== 'voice' || p.audioUrl);
+  // Les messages vocaux n'existent plus : les anciens ne sont pas montrés.
+  const shown = posts.filter((p) => p.type !== 'voice');
   const items = shown.slice().reverse().map((post) => {
     const mine = post.authorUid === session.uid;
-    const vocal = post.type === 'voice';
     const li = document.createElement('li');
-    li.className = `bubble ${mine ? 'mine' : 'theirs'}${post.type === 'reply' || vocal ? ' reply' : ''}`;
-    if (!mine && post.type !== 'reply' && !vocal && faces[post.authorUid]) {
+    li.className = `bubble ${mine ? 'mine' : 'theirs'}${post.type === 'reply' ? ' reply' : ''}`;
+    if (!mine && post.type !== 'reply' && faces[post.authorUid]) {
       li.classList.add('with-face');
       li.append(avatar(faces[post.authorUid]));
     }
     if (!mine) {
       const who = document.createElement('p');
       who.className = 'bubble-who';
-      who.textContent = post.type === 'reply' || vocal ? grand : post.authorName;
+      who.textContent = post.type === 'reply' ? grand : post.authorName;
       li.append(who);
     }
-    if (vocal) li.append(...bulleVocale(post));
     if (post.text) {
       const text = document.createElement('p');
       text.className = 'bubble-text';
@@ -515,36 +513,6 @@ function renderMessages(posts) {
   list.replaceChildren(...items);
   $('messages-empty').hidden = shown.length > 0;
   requestAnimationFrame(() => window.scrollTo(0, document.body.scrollHeight));
-}
-
-// Réponse vocale de la tablette : lecteur audio, et la photo à laquelle elle répond.
-function bulleVocale(post) {
-  const parts = [];
-  if (post.replyTo) {
-    const ref = document.createElement('div');
-    ref.className = 'vocal-ref';
-    ref.textContent = 'En réponse à une photo';
-    getDoc(doc(db, 'families', session.fid, 'posts', post.replyTo)).then((snap) => {
-      const p = snap.data();
-      if (!p) return;
-      const quoi = p.type === 'video' ? 'une vidéo' : p.type === 'message' ? 'un message' : 'une photo';
-      ref.textContent = `En réponse à ${quoi} de ${p.authorUid === session.uid ? 'vous' : p.authorName}`;
-      if (p.thumb) {
-        const img = document.createElement('img');
-        img.src = p.thumb;
-        img.alt = '';
-        ref.prepend(img);
-      }
-    }).catch(() => {});
-    parts.push(ref);
-  }
-  const audio = document.createElement('audio');
-  audio.controls = true;
-  audio.preload = 'none';
-  audio.src = post.audioUrl;
-  audio.className = 'vocal-audio';
-  parts.push(audio);
-  return parts;
 }
 
 function updateCount() {
@@ -596,7 +564,7 @@ function showIntroTablette() {
   if (!introAFaire()) return false;
   const nom = session.family.name;
   const choix = { veille: { active: true, de: 23, a: 7 }, volume: 80,
-    options: { lecture: true, reponseVocale: false, sos: true, radio: { active: false, nom: RADIOS[0].nom, url: RADIOS[0].url } } };
+    options: { lecture: true, sos: true, radio: { active: false, nom: RADIOS[0].nom, url: RADIOS[0].url } } };
   const back = document.createElement('div');
   back.className = 'guide-back intro-back';
   back.innerHTML = `<form class="guide intro" role="dialog" aria-modal="true" novalidate>
@@ -624,7 +592,6 @@ function showIntroTablette() {
         <h2>Les options</h2>
         <div class="toggle-list">
           <label class="toggle-row"><span class="toggle-text"><strong>Lecture à voix haute</strong><span>Lit les messages et rappels à voix haute quand elle est devant la tablette, avec un bouton « Écouter »</span></span><input type="checkbox" class="toggle" id="intro-lecture"></label>
-          <label class="toggle-row"><span class="toggle-text"><strong>Réponse vocale</strong><span>Répondre à une photo en parlant</span></span><input type="checkbox" class="toggle" id="intro-vocal"></label>
           <label class="toggle-row"><span class="toggle-text"><strong>SOS famille</strong><span>Un bouton « SOS famille » en haut de la tablette : un appui, et toute la famille sonne</span></span><input type="checkbox" class="toggle" id="intro-sos"></label>
           <label class="toggle-row"><span class="toggle-text"><strong>Radio</strong><span>Un bouton « Radio » à côté de « Appeler »</span></span><input type="checkbox" class="toggle" id="intro-radio"></label>
           <label class="station" id="intro-station-wrap" hidden>Station <select id="intro-station"></select></label>
@@ -678,9 +645,8 @@ function showIntroTablette() {
     choix.volume = Number($i('#intro-volume').value);
     const r = RADIOS[Number($i('#intro-station').value)] || RADIOS[0];
     choix.options = {
-      ...(session.family.options || {}),
+      ...sansVocal(session.family.options),
       lecture: $i('#intro-lecture').checked,
-      reponseVocale: $i('#intro-vocal').checked,
       sos: $i('#intro-sos').checked,
       radio: { active: $i('#intro-radio').checked, nom: r.nom, url: r.url },
     };
@@ -2735,7 +2701,7 @@ SETTINGS['sleep-card'] = {
   },
 };
 
-// Options de la tablette : families/{fid}.options = { lecture, reponseVocale, radio { active, nom, url } }.
+// Options de la tablette : families/{fid}.options = { lecture, sos, meteo, rappelsAccueil, radio { active, nom, url } }.
 const RADIOS = [
   { nom: 'France Inter', url: 'https://icecast.radiofrance.fr/franceinter-midfi.mp3' },
   { nom: 'franceinfo', url: 'https://icecast.radiofrance.fr/franceinfo-midfi.mp3' },
@@ -2804,12 +2770,16 @@ const RADIOS = [
 }());
 
 const optionsActuelles = () => session.family.options || {};
+// Ancienne option des messages vocaux (supprimés) : plus jamais réécrite.
+function sansVocal(options) {
+  const { reponseVocale, ...reste } = options || {};
+  return reste;
+}
 
 function renderOptions() {
   const o = optionsActuelles();
   const lignes = [
     ['Lecture à voix haute', o.lecture !== false ? 'Activée' : 'Désactivée', o.lecture !== false],
-    ['Réponse vocale', o.reponseVocale ? 'Activée' : 'Désactivée', !!o.reponseVocale],
     ['Météo sur l\'accueil', o.meteo !== false ? 'Affichée' : 'Enlevée', o.meteo !== false],
     ['Prochain rappel sur l\'accueil', o.rappelsAccueil !== false ? 'Affiché' : 'Enlevé', o.rappelsAccueil !== false],
     ['SOS famille', o.sos ? 'Activé' : 'Désactivé', !!o.sos],
@@ -2851,7 +2821,6 @@ SETTINGS['options-card'] = {
   fill() {
     const o = optionsActuelles();
     $('opt-lecture').checked = o.lecture !== false;
-    $('opt-vocal').checked = !!o.reponseVocale;
     $('opt-sos').checked = !!o.sos;
     $('opt-meteo').checked = o.meteo !== false;
     $('opt-rappels-accueil').checked = o.rappelsAccueil !== false;
@@ -2864,9 +2833,8 @@ SETTINGS['options-card'] = {
     const r = RADIOS[Number($('opt-radio-station').value)] || RADIOS[0];
     const o = optionsActuelles();
     const options = {
-      ...o,
+      ...sansVocal(o),
       lecture: $('opt-lecture').checked,
-      reponseVocale: $('opt-vocal').checked,
       sos: $('opt-sos').checked,
       meteo: $('opt-meteo').checked,
       rappelsAccueil: $('opt-rappels-accueil').checked,

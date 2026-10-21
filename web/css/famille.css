@@ -1071,10 +1071,6 @@ body:not(.on-support) .ps-bouton, body:not(.on-support) .ps-panneau { display: n
 /* Options de la tablette. */
 .options-value { display: flex; flex-direction: column; gap: 2px; }
 .option-help { margin: -4px 0 10px 32px; }
-/* Réponse vocale de Mamie dans Messages. */
-.vocal-ref { display: flex; align-items: center; gap: 8px; margin: 4px 0 6px; font-size: 15px; color: var(--muted); }
-.vocal-ref img { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; }
-.vocal-audio { display: block; width: min(260px, 70vw); height: 40px; margin: 4px 0; }
 
 /* « Passer en vidéo » pendant un appel audio de Mamie, à gauche de Raccrocher */
 .call-video { display: none; }
