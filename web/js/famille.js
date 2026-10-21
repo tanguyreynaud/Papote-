@@ -3485,12 +3485,8 @@ $('btn-skip-invites').addEventListener('click', () => { skipInvites = true; ente
 // Plusieurs familles : le nom en haut de l'accueil ouvre la liste, dans la page.
 $('family-switch').addEventListener('click', async () => {
   const autres = myFamilies.filter((f) => f.fid !== session?.fid);
-  const choix = await chooseAction('Changer de famille', [
-    ...autres.map((f) => ({ label: `Famille de ${f.name}`, value: f.fid })),
-    { label: 'Rejoindre une autre famille', value: '+' },
-  ]);
+  const choix = await chooseAction('Changer de famille', autres.map((f) => ({ label: `Famille de ${f.name}`, value: f.fid })));
   if (!choix) return;
-  if (choix === '+') { showJoin(true); return; }
   saveFamilyId(choix);
   enterApp();
 });

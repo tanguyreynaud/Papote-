@@ -138,7 +138,7 @@ button:disabled { opacity: .45; cursor: default; }
 
 .center { text-align: center; }
 .muted { color: var(--muted); }
-.small { font-size: 14px; }
+.small { font-size: 15px; }
 .error { color: var(--danger); font-weight: 600; }
 .seen { color: var(--ok); font-weight: 600; margin: 2px 0 0; }
 /* ---------- Écran de démarrage ---------- */
@@ -303,14 +303,14 @@ button:disabled { opacity: .45; cursor: default; }
   border-radius: 6px;
   background: rgba(0, 0, 0, .6);
   color: #fff;
-  font-size: 13px;
+  font-size: 15px;
 }
 .shot-meta { display: flex; align-items: center; gap: 10px; padding: 10px 6px 12px 16px; }
 .shot-info { flex: 1; min-width: 0; }
 .shot-info p { margin: 0; }
 .shot-caption { font-size: 17px; margin-bottom: 2px !important; overflow-wrap: anywhere; }
-.shot-meta .muted { font-size: 13px; }
-.shot-meta .seen { font-size: 13px; }
+.shot-meta .muted { font-size: 15px; }
+.shot-meta .seen { font-size: 15px; }
 
 /* ---------- Messages : conversation ---------- */
 
@@ -326,10 +326,10 @@ button:disabled { opacity: .45; cursor: default; }
 .bubble.mine { align-self: flex-end; background: var(--accent); color: var(--accent-text); border-bottom-right-radius: 6px; cursor: pointer; }
 .bubble.theirs { align-self: flex-start; border-bottom-left-radius: 6px; }
 .bubble.reply { border: 2px solid var(--ok); }
-.bubble-who { font-size: 13px; font-weight: 700; color: var(--muted); }
+.bubble-who { font-size: 15px; font-weight: 700; color: var(--muted); }
 .reply .bubble-who { color: var(--ok); }
 .bubble-text { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 17px; }
-.bubble-foot { font-size: 12px; opacity: .75; margin-top: 2px !important; text-align: right; }
+.bubble-foot { font-size: 14px; opacity: .75; margin-top: 2px !important; text-align: right; }
 
 .chat-bar {
   position: fixed;
@@ -379,7 +379,7 @@ button:disabled { opacity: .45; cursor: default; }
 }
 .reminder-body { flex: 1; min-width: 0; }
 .reminder-body p { margin: 0; }
-.reminder-kind { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--c-agenda); }
+.reminder-kind { font-size: 15px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--c-agenda); }
 .k-medicament { color: var(--c-video); }
 .k-rdv { color: var(--c-photo); }
 .reminder-title { font-size: 18px; font-weight: 600; }
@@ -579,7 +579,7 @@ button:disabled { opacity: .45; cursor: default; }
   gap: 2px;
   padding: 6px 4px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 13.5px;
   font-weight: 600;
 }
 .nav-item svg { width: 26px; height: 26px; }
@@ -588,15 +588,15 @@ button:disabled { opacity: .45; cursor: default; }
 .nav-badge {
   position: absolute;
   top: -4px; right: -10px;
-  min-width: 18px;
-  height: 18px;
+  min-width: 20px;
+  height: 20px;
   padding: 0 5px;
-  border-radius: 9px;
+  border-radius: 10px;
   background: var(--danger);
   color: #fff;
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 700;
-  line-height: 18px;
+  line-height: 20px;
   text-align: center;
 }
 
@@ -729,13 +729,13 @@ button:disabled { opacity: .45; cursor: default; }
 .inline-field button { min-height: 0; }
 .members li { flex-wrap: wrap; }
 .member-name { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.badge { font-size: 12px; font-weight: 700; color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); padding: 2px 8px; border-radius: 999px; }
+.badge { font-size: 14px; font-weight: 700; color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); padding: 2px 8px; border-radius: 999px; }
 .member-actions { display: flex; gap: 14px; width: 100%; padding-left: 52px; }
 .member-actions .link { padding: 2px 0; }
 
 .outbox { margin: 0 0 16px; padding: 12px 14px; border-radius: 14px; background: color-mix(in srgb, var(--c-agenda) 14%, var(--surface)); font-size: 15px; font-weight: 600; }
 
-.read-badge { flex: none; font-size: 13px; font-weight: 700; padding: 3px 10px; border-radius: 999px; }
+.read-badge { flex: none; font-size: 15px; font-weight: 700; padding: 3px 10px; border-radius: 999px; }
 .read-badge.read { color: var(--ok); background: color-mix(in srgb, var(--ok) 14%, transparent); }
 .read-badge.unread { color: var(--muted); background: var(--bg); border: 1px solid var(--line); }
 
@@ -800,7 +800,7 @@ button:disabled { opacity: .45; cursor: default; }
 .shot-strip::-webkit-scrollbar { display: none; }
 .shot-strip .shot-frame { flex: 0 0 100%; scroll-snap-align: center; }
 .shot-strip img { max-height: 75vh; object-fit: contain; }
-.shot-count { position: absolute; right: 10px; top: 10px; padding: 3px 10px; border-radius: 999px; background: rgba(0, 0, 0, .6); color: #fff; font-size: 13px; font-weight: 700; }
+.shot-count { position: absolute; right: 10px; top: 10px; padding: 3px 10px; border-radius: 999px; background: rgba(0, 0, 0, .6); color: #fff; font-size: 15px; font-weight: 700; }
 
 /* ---------- Abonnement ---------- */
 
@@ -972,7 +972,7 @@ body:not(.on-support) .ps-bouton, body:not(.on-support) .ps-panneau { display: n
 #sheet-wifi .wifi-choice { border: 0; border-radius: 0; background: transparent; min-height: 56px; }
 #sheet-wifi .wifi-choice:disabled { opacity: 1; }
 .wifi-text { display: flex; flex-direction: column; min-width: 0; }
-.wifi-state { font-size: 13px; color: var(--ok); font-weight: 600; }
+.wifi-state { font-size: 15px; color: var(--ok); font-weight: 600; }
 .wifi-state:empty { display: none; }
 .wifi-meta { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); }
 .wifi-meta svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2; }
@@ -1072,7 +1072,7 @@ body:not(.on-support) .ps-bouton, body:not(.on-support) .ps-panneau { display: n
 .options-value { display: flex; flex-direction: column; gap: 2px; }
 .option-help { margin: -4px 0 10px 32px; }
 /* Réponse vocale de Mamie dans Messages. */
-.vocal-ref { display: flex; align-items: center; gap: 8px; margin: 4px 0 6px; font-size: 13px; color: var(--muted); }
+.vocal-ref { display: flex; align-items: center; gap: 8px; margin: 4px 0 6px; font-size: 15px; color: var(--muted); }
 .vocal-ref img { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; }
 .vocal-audio { display: block; width: min(260px, 70vw); height: 40px; margin: 4px 0; }
 
@@ -1138,7 +1138,7 @@ body:not(.on-support) .ps-bouton, body:not(.on-support) .ps-panneau { display: n
 .join-text { display: flex; flex-direction: column; min-width: 0; }
 .join-text strong { font-size: 19px; line-height: 1.2; }
 .join-text span { color: var(--muted); font-size: 15px; }
-.join-text .join-mail { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.join-text .join-mail { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .join-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
 .join-actions button { min-height: 50px; justify-content: center; font-size: 16px; font-weight: 700; border-radius: 14px; }
 .join-no { color: var(--danger); }
