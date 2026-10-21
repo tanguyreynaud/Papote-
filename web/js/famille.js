@@ -2728,6 +2728,8 @@ function renderOptions() {
   const lignes = [
     ['Lecture à voix haute', o.lecture ? 'Activée' : 'Désactivée', !!o.lecture],
     ['Réponse vocale', o.reponseVocale ? 'Activée' : 'Désactivée', !!o.reponseVocale],
+    ['Météo sur l\'accueil', o.meteo !== false ? 'Affichée' : 'Enlevée', o.meteo !== false],
+    ['Prochain rappel sur l\'accueil', o.rappelsAccueil !== false ? 'Affiché' : 'Enlevé', o.rappelsAccueil !== false],
     ['SOS famille', o.sos ? 'Activé' : 'Désactivé', !!o.sos],
     ['Radio', o.radio?.active ? (o.radio.nom || 'Activée') : 'Désactivée', !!o.radio?.active],
   ];
@@ -2769,6 +2771,8 @@ SETTINGS['options-card'] = {
     $('opt-lecture').checked = !!o.lecture;
     $('opt-vocal').checked = !!o.reponseVocale;
     $('opt-sos').checked = !!o.sos;
+    $('opt-meteo').checked = o.meteo !== false;
+    $('opt-rappels-accueil').checked = o.rappelsAccueil !== false;
     $('opt-radio').checked = !!o.radio?.active;
     const i = RADIOS.findIndex((r) => r.url === o.radio?.url);
     $('opt-radio-station').value = String(i >= 0 ? i : 0);
@@ -2782,6 +2786,8 @@ SETTINGS['options-card'] = {
       lecture: $('opt-lecture').checked,
       reponseVocale: $('opt-vocal').checked,
       sos: $('opt-sos').checked,
+      meteo: $('opt-meteo').checked,
+      rappelsAccueil: $('opt-rappels-accueil').checked,
       radio: { ...(o.radio || {}), active: $('opt-radio').checked, nom: r.nom, url: r.url },
     };
     await saveFamily({ options }, 'Options envoyées à la tablette');
