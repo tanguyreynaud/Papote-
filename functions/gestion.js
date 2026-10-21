@@ -608,6 +608,7 @@ exports.gestionDonnees = onCall(async (request) => {
         fid: c.fid || null,
         famille: famille ? famille.name || null : null,
         abonnement: famille && famille.abonnement ? famille.abonnement.statut || null : (c.statutStripe || null),
+        resiliationLe: famille && famille.abonnement ? famille.abonnement.resiliationLe || null : null,
         restitution: c.restitution ? { statut: c.restitution.statut || null, avant: c.restitution.avant || null } : null,
         remboursement: c.remboursement || null,
         etiquettes: c.etiquettes || null,
@@ -1815,6 +1816,60 @@ exports.gestionRenvoyerCode = onCall({ secrets: [MAIL_MOT_DE_PASSE] }, async (re
   });
   await snap.ref.update({ codeRenvoye: FieldValue.arrayUnion({ a, le: Date.now() }) });
   return { ok: true, a };
+});
+
+// Annulation d'une commande pas encore partie : abonnement Stripe arrêté, tout ce qui a été payé remboursé,
+// tablette mise de côté rendue au stock, e-mail au client. Rejouable sans double remboursement.
+exports.gestionAnnulerCommande = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE] }, async (request) => {
+  verifierAdmin(request);
+  const id = texte((request.data || {}).commande, 100);
+  if (!id) throw new HttpsError('invalid-argument', 'Commande manquante.');
+  const ref = db().doc(`commandes/${id}`);
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Commande introuvable.');
+  const c = snap.data();
+  if (!['a-preparer', 'paiement-en-attente'].includes(c.expedition)) {
+    throw new HttpsError('failed-precondition', c.expedition === 'annulee' ? 'Cette commande est déjà annulée.'
+      : 'La tablette est déjà partie : arrêtez plutôt l\'abonnement, le client renverra la tablette.');
+  }
+  let rembourse = 0;
+  if (!c.offerte && id.startsWith('sub_')) {
+    const abo = await stripe().subscriptions.retrieve(id).catch(() => null);
+    if (abo && abo.status !== 'canceled') await stripe().subscriptions.cancel(id, { prorate: false, invoice_now: false });
+    const payees = await tout(stripe().invoices.list({ subscription: id, status: 'paid', limit: 100 }));
+    for (const f of payees.filter((x) => x.amount_paid > 0 && x.payment_intent)) {
+      const pi = typeof f.payment_intent === 'string' ? f.payment_intent : f.payment_intent.id;
+      const r = await stripe().refunds.create({ payment_intent: pi, reason: 'requested_by_customer', metadata: { commande: id } },
+        { idempotencyKey: `annulation-${f.id}` });
+      rembourse += r.amount;
+    }
+  }
+  const qui = request.auth.token.email || request.auth.uid;
+  await ref.update({
+    expedition: 'annulee', annulation: 'admin', annuleeLe: FieldValue.serverTimestamp(), annuleePar: qui,
+    ...(rembourse ? { remboursement: { statut: 'fait', montant: rembourse, le: FieldValue.serverTimestamp() } } : {}),
+  });
+  // Tablette mise de côté pour cette commande : de nouveau libre.
+  const tablettes = await db().collection('stock').where('commande', '==', id).get();
+  for (const t of tablettes.docs.filter((x) => ['en-stock', 'preparee'].includes(x.get('etat')))) {
+    await t.ref.update({
+      commande: null, majLe: FieldValue.serverTimestamp(),
+      historique: FieldValue.arrayUnion({ le: Date.now(), etat: t.get('etat'), par: qui, commande: null, motif: 'commande annulée' }),
+    });
+  }
+  let mailEnvoye = false;
+  if (c.email && !c.offerte) {
+    try {
+      await mail.envoyer({
+        smtp: MAIL_SMTP.value(), expediteur: MAIL_EXPEDITEUR.value(), motDePasse: MAIL_MOT_DE_PASSE.value(),
+        a: c.email, contenu: mail.commandeAnnulee({ nom: c.nom, rembourse }),
+      });
+      mailEnvoye = true;
+    } catch (e) {
+      logger.error(`Commande ${id} : e-mail d'annulation non parti`, e.message);
+    }
+  }
+  return { ok: true, rembourse, mailEnvoye };
 });
 
 // ---------- Identité des tablettes : préparation et jumelage ----------
