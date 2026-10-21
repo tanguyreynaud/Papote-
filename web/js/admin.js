@@ -1010,7 +1010,7 @@ async function migratePost(fid, snap) {
     ext = (post.mime || '').includes('mp4') ? 'mp4' : 'webm';
     field = 'videoUrl';
   } else {
-    return 'ignoré (vocal)';
+    return 'ignoré';
   }
   const path = `families/${fid}/media/${snap.id}.${ext}`;
   const fileRef = ref(storage, path);
