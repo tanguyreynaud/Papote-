@@ -765,7 +765,9 @@ public class MainActivity extends Activity implements Sync.Listener {
                     if (!"fr".equals(v.getLocale().getLanguage()) || !"FR".equals(v.getLocale().getCountry())
                             || v.isNetworkConnectionRequired()
                             || v.getFeatures().contains(android.speech.tts.TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED)) continue;
-                    if (choisie == null || v.getName().contains("vlf")) choisie = v; // vlf : la voix par défaut
+                    // cfe : la voix que le moteur charge de toute façon à la connexion (6 s sur la
+                    // Vucatimes) ; en prendre une autre en ajoutait une seconde, d'où ~20 s au démarrage.
+                    if (choisie == null || v.getName().contains("cfe")) choisie = v;
                 }
                 if (choisie != null) { tts.setVoice(choisie); Journal.log(this, "Voix : " + choisie.getName()); }
             } catch (Exception e) {
