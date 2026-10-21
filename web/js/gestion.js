@@ -792,7 +792,7 @@ async function remplirCommande(id) {
       ligne('Remboursement', c.remboursement ? `${euros(c.remboursement.montant)} ${REMBOURSEMENTS[c.remboursement.statut] || c.remboursement.statut}` : null))),
     actions.length ? h('div', { class: 'card' }, h('h2', {}, 'Actions possibles'), ...actions) : null,
     h('div', { class: 'card' }, h('h2', {}, 'Parcours'),
-      h('ul', { class: 'historique small' }, parcoursCommande(c).map(([le, texte]) => h('li', {}, le ? `${jour(le)} : ${texte}` : texte)))),
+      h('ul', { class: 'historique small' }, parcoursCommande(c).map(([le, texte]) => h('li', {}, Number.isFinite(le) ? `${jour(le)} : ${texte}` : texte)))),
     h('div', { class: 'card' }, h('h2', {}, 'Factures et paiements du client'), factures),
   ].filter(Boolean));
   if (c.offerte) {
@@ -1001,7 +1001,8 @@ function formulaireRemplacement(c, t) {
 
 // Grandes étapes d'une commande, de la commande au retour de la tablette.
 function parcoursCommande(c) {
-  const etapes = [[c.creeLe, 'commande passée']];
+  // La commande ouvre toujours le parcours, même créée dans la même seconde que la réservation.
+  const etapes = [[-Infinity, c.offerte ? `commande offerte créée le ${jour(c.creeLe)}` : `commande passée le ${jour(c.creeLe)}`]];
   if (c.envoyeeLe) etapes.push([c.envoyeeLe, `tablette envoyée${c.suivi ? ` (suivi ${c.suivi})` : ''}`]);
   for (const t of donnees.stock) {
     for (const x of t.historique || []) {
@@ -1010,7 +1011,9 @@ function parcoursCommande(c) {
         const quoi = x.sim ? `carte SIM ${x.sim}` : x.accessoires ? x.accessoires.join(', ') : `tablette ${t.numero || t.modele || ''}`;
         etapes.push([x.le, `remplacement : ${quoi}${x.etat === 'en-retour' ? ' à récupérer' : ' envoyée'}${x.motif ? ` (${x.motif})` : ''}`]);
       } else if (x.etat !== 'envoyee') {
-        etapes.push([x.le, `tablette ${t.numero || t.modele || ''} : ${(donnees.etats[x.etat] || x.etat).toLowerCase()}`]);
+        const nom = [t.ref, t.modele || t.numero].filter(Boolean).join(' ');
+        etapes.push([x.le, ['commandee', 'en-stock', 'preparee'].includes(x.etat) && x.commande
+          ? `tablette ${nom} attribuée à cette commande` : `tablette ${nom} : ${(donnees.etats[x.etat] || x.etat).toLowerCase()}`]);
       }
     }
   }
@@ -1370,7 +1373,8 @@ function remplirTablette(id) {
   document.title = `Papote · Tablette ${t.ref || ''}`.trim();
   const c = t.commande && donnees.commandes.find((x) => x.id === t.commande);
   $('dt-resume').replaceChildren(badge(donnees.etats[etatTablette(t)] || t.etat, ''), ' ',
-    c ? h('a', { href: `#commande/${encodeURIComponent(c.id)}` }, `Commande ${nomCommande(c)}`) : h('span', { class: 'muted' }, 'Pas de commande'));
+    ...(c ? ['Pour le client : ', h('a', { href: `#commande/${encodeURIComponent(c.id)}` }, nomCommande(c))]
+      : [h('span', { class: 'muted' }, 'Pas encore attribuée à un client')]));
   afficherAchatTablette(t);
   afficherDocumentsTablette(t);
   afficherBatterie(t);

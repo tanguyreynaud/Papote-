@@ -326,3 +326,6 @@ details summary { cursor: pointer; margin-top: 12px; }
 .dialogue-papote .actions { justify-content: flex-end; }
 .dialogue-papote button.primary.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
 #famille-fiche .families > li { margin: 0; }
+.titre-commande { color: var(--accent); text-decoration: none; }
+.titre-commande:hover { text-decoration: underline; }
+.titre-commande::after { content: ' ›'; }
