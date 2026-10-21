@@ -577,6 +577,12 @@
           <div class="remote-buttons">
             <button type="button" class="primary" data-cmd="status">Obtenir l'état</button>
             <button type="button" class="secondary" data-cmd="restart">Redémarrer la tablette</button>
+            <button type="button" class="secondary" id="btn-logs" hidden>Obtenir le journal</button>
+          </div>
+          <div id="logs-box" class="remote-panel" hidden>
+            <button type="button" class="icon-btn panel-close" data-close="logs-box" aria-label="Fermer"><svg><use href="#i-close"/></svg></button>
+            <p id="logs-info" class="muted small"></p>
+            <pre id="logs" class="logs"></pre>
           </div>
           <div id="remote-result-box" class="remote-panel" hidden>
             <button type="button" class="icon-btn panel-close" data-close="remote-result-box" aria-label="Fermer"><svg><use href="#i-close"/></svg></button>

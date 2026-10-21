@@ -2443,6 +2443,25 @@ document.querySelectorAll('[data-cmd]').forEach((btn) => btn.addEventListener('c
   sendCommand(btn.dataset.cmd);
 }));
 
+// Journal de la tablette : ses dernières lignes d'erreur, envoyées au plus toutes les heures
+// (et juste après une demande d'état).
+$('btn-logs').addEventListener('click', async () => {
+  if (!$('logs-box').hidden) { $('logs-box').hidden = true; return; }
+  $('logs-box').hidden = false;
+  $('logs-info').textContent = 'Chargement…';
+  $('logs').textContent = '';
+  try {
+    const snap = await getDocs(collection(db, 'families', session.fid, 'logs'));
+    const latest = snap.docs.map((d) => d.data())
+      .sort((a, b) => (toDate(b.updatedAt)?.getTime() || 0) - (toDate(a.updatedAt)?.getTime() || 0))[0];
+    if (!latest) { $('logs-info').textContent = "La tablette n'a encore envoyé aucun journal."; return; }
+    $('logs-info').textContent = `Envoyé ${ago(toDate(latest.updatedAt).getTime())}${latest.version ? ` · version ${latest.version}` : ''}. Touchez « Obtenir l'état » pour en recevoir un tout neuf.`;
+    $('logs').textContent = latest.lines || '(vide)';
+  } catch (err) {
+    console.error(err);
+    $('logs-info').textContent = "Le journal n'a pas pu être lu.";
+  }
+});
 
 // Chaque encadré (état, journal, Wi-Fi) se ferme par sa croix.
 document.querySelectorAll('[data-close]').forEach((btn) => btn.addEventListener('click', () => {
@@ -2580,6 +2599,16 @@ function renderWifi() {
 }
 
 
+// Journal de la tablette : lignes techniques, pour l'équipe Papote seulement (compte admin).
+let siteAdmin = { uid: null, oui: false };
+async function renderLogsButton() {
+  if (authUser && siteAdmin.uid !== authUser.uid) {
+    let oui = false;
+    try { oui = !!(await authUser.getIdTokenResult()).claims?.admin; } catch (e) { /* rien */ }
+    siteAdmin = { uid: authUser.uid, oui };
+  }
+  $('btn-logs').hidden = !authUser || siteAdmin.uid !== authUser.uid || !siteAdmin.oui;
+}
 
 function renderRemote() {
   const admin = amFamilyAdmin();
@@ -2588,6 +2617,7 @@ function renderRemote() {
   $('wifi-card').hidden = !amOwner() || !tablet;
   renderWifi();
   $('group-tablet').hidden = !amOwner();
+  renderLogsButton();
   if (tablet) {
     const online = tablet.lastOnline ? toDate(tablet.lastOnline) : null;
     $('remote-tablet').textContent = online ? `Tablette vue en ligne ${ago(online.getTime())}.` : 'Tablette reliée.';
@@ -3999,5 +4029,5 @@ function barreDefilement(el) {
   new MutationObserver(maj).observe(el, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden'] });
   maj();
 }
-['wifi-list', 'form-post', 'form-reminder'].forEach((id) => barreDefilement($(id)));
+['wifi-list', 'logs', 'form-post', 'form-reminder'].forEach((id) => barreDefilement($(id)));
 barreDefilement(document.querySelector('#sheet-wifi .sheet-body'));
