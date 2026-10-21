@@ -754,6 +754,8 @@ function closeView() {
 // ---------- Appel de Mamie vers la famille (audio seulement) ----------
 // window.papoteCallFamily({ to, onState }) -> { hangup() } pour tablette.js.
 //   to : uid d'un proche, ou null pour toute la famille (le premier qui décroche a l'appel).
+//   sos : 1 ou 2 (2e essai) pour le bouton SOS : toute la famille, marqué dans calleeName
+//         ('SOS', 'SOS 2') pour que le serveur affiche « SOS » et prévienne si personne ne répond.
 //   onState(state, info) : 'ringing' { names } | 'connected' { uid, name, face } | 'ended'
 //                          | 'missed' | 'busy' | 'failed'.
 // Le proche qui décroche écrit son uid et son prénom dans answer (seul champ modifiable).
@@ -767,7 +769,7 @@ async function familyPeople() {
     .filter((m) => m.role === 'famille' && (m.status === undefined || m.status === 'active'));
 }
 
-window.papoteCallFamily = ({ to = null, toName = null, onState = () => {} } = {}) => {
+window.papoteCallFamily = ({ to = null, toName = null, sos = 0, onState = () => {} } = {}) => {
   let done = false;
   let call = null; // { ref, pc, stream, stops, timer, audio }
   const emit = (state, info = {}) => {
@@ -820,8 +822,8 @@ window.papoteCallFamily = ({ to = null, toName = null, onState = () => {} } = {}
     call.ready = setDoc(ref, {
       callerUid: auth.currentUser.uid,
       callerName: familyName,
-      calleeUid: to || null, // jamais toute la famille par erreur
-      calleeName: toName || null,
+      calleeUid: sos ? null : to || null, // jamais toute la famille par erreur
+      calleeName: sos ? (sos === 2 ? 'SOS 2' : 'SOS') : toName || null,
       state: 'ringing',
       offer: null,
       answer: null,

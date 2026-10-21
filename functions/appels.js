@@ -3,6 +3,8 @@
 //   appelsSonnerie  appel créé par la tablette : notification push « Mamie vous appelle »
 //   appelsManques   l'appel de la tablette s'arrête sans réponse : « Appel manqué de Mamie » ;
 //                   s'il a été décroché, les autres téléphones arrêtent de sonner (« fin »)
+//                   SOS (bouton « SOS famille ») : « SOS : Mamie vous appelle » ; sans réponse au
+//                   2e essai, « Mamie a appuyé sur SOS » à toute la famille
 //   refuserAppel    « Refuser » sur l'app Android (pas connectée à Firebase) : l'appel s'arrête pour
 //                   la tablette, prouvé par le jeton d'appel reçu avec la sonnerie
 //
@@ -30,6 +32,14 @@ async function destinataires(db, fid, appel) {
     .map((m) => m.id);
 }
 
+// Bouton SOS de la tablette : toute la famille, calleeName 'SOS' (1er essai) ou 'SOS 2' (2e essai).
+// Pas de champ à part : les règles Firestore des appels restent les mêmes.
+function essaiSos(appel) {
+  if (appel.calleeUid) return 0;
+  if (appel.calleeName === 'SOS') return 1;
+  return appel.calleeName === 'SOS 2' ? 2 : 0;
+}
+
 // Une notification web ne sonne qu'une fois : on la renvoie toutes les 12 s tant que la tablette
 // sonne (même étiquette, « renotify » refait sonner et vibrer), comme une sonnerie qui insiste.
 const REPRISES = 4;
@@ -46,7 +56,8 @@ exports.appelsSonnerie = onDocumentCreated({ document: DOC, region: REGION_FIRES
   // Jeton d'appel : seul un téléphone qui a reçu la sonnerie peut refuser sans se connecter.
   const jeton = require('node:crypto').randomBytes(16).toString('hex');
   await event.data.ref.collection('prive').doc('refus').set({ jeton });
-  const data = { type: 'appel', cid, fid, jeton, nom: String(appel.callerName || 'Mamie') };
+  const nom = String(appel.callerName || 'Mamie');
+  const data = { type: 'appel', cid, fid, jeton, nom: essaiSos(appel) ? `SOS : ${nom}` : nom };
   const n = await envoyer(db, fid, uids, data, 45);
   logger.info(`Appel ${cid} : ${n} téléphone(s) prévenu(s)`);
   for (let i = 0; i < REPRISES; i++) {
@@ -65,8 +76,16 @@ exports.appelsManques = onDocumentUpdated({ document: DOC, region: REGION_FIREST
   const { fid, cid } = event.params;
   const uids = await destinataires(db, fid, apres);
   if (!uids.length) return;
-  if (['missed', 'ended', 'declined'].includes(apres.state) && !apres.answer) {
-    await envoyer(db, fid, uids, { type: 'manque', cid, nom: String(apres.callerName || 'Mamie') }, 24 * 3600);
+  const sos = essaiSos(apres);
+  const nom = String(apres.callerName || 'Mamie');
+  if (sos && ['missed', 'declined'].includes(apres.state) && !apres.answer) {
+    // 1er essai sans réponse : la tablette rappelle tout de suite, rien à dire. Au 2e, l'alerte.
+    if (sos === 2) {
+      await envoyer(db, fid, uids, { type: 'alerte', titre: `${nom} a appuyé sur SOS`, texte: "Personne n'a pu répondre. Rappelez dès que possible." }, 24 * 3600);
+      logger.warn(`SOS ${cid} : personne n'a répondu, famille alertée`);
+    }
+  } else if (['missed', 'ended', 'declined'].includes(apres.state) && !apres.answer) {
+    await envoyer(db, fid, uids, { type: 'manque', cid, nom }, 24 * 3600);
   } else {
     // Quelqu'un a décroché : les autres téléphones (app Android) arrêtent de sonner.
     await envoyer(db, fid, uids, { type: 'fin', cid }, 60, { natifsSeulement: true });
