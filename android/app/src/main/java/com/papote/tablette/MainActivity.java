@@ -720,7 +720,7 @@ public class MainActivity extends Activity implements Sync.Listener {
 
     /**
      * Moteur de voix préparé dès le démarrage : la première lecture part tout de suite (sinon plusieurs
-     * secondes d'attente). Voix française par défaut du moteur : en choisir une autre en charge une seconde.
+     * secondes d'attente). Une seule voix française installée, nommée, pour le préchargement et la lecture.
      * La page est tenue au courant : « speaking » au début, « done » à la fin (bouton « Écouter »).
      */
     private void prepareTts() {
@@ -734,6 +734,20 @@ public class MainActivity extends Activity implements Sync.Listener {
                 return;
             }
             tts.setLanguage(java.util.Locale.FRANCE);
+            // Une voix nommée, toujours la même : sinon le moteur Google en prend une pour le
+            // préchargement et une autre pour la lecture, qui se charge encore au premier « Écouter ».
+            try {
+                android.speech.tts.Voice choisie = null;
+                for (android.speech.tts.Voice v : tts.getVoices()) {
+                    if (!"fr".equals(v.getLocale().getLanguage()) || !"FR".equals(v.getLocale().getCountry())
+                            || v.isNetworkConnectionRequired()
+                            || v.getFeatures().contains(android.speech.tts.TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED)) continue;
+                    if (choisie == null || v.getName().contains("vlf")) choisie = v; // vlf : la voix par défaut
+                }
+                if (choisie != null) { tts.setVoice(choisie); Journal.log(this, "Voix : " + choisie.getName()); }
+            } catch (Exception e) {
+                Log.w(TAG, "Voix française", e);
+            }
             tts.setSpeechRate(0.85f); // un peu plus lent, plus facile à suivre
             tts.setOnUtteranceProgressListener(new android.speech.tts.UtteranceProgressListener() {
                 @Override public void onStart(String id) { if (!"prechauffage".equals(id)) speechState("speaking"); }
