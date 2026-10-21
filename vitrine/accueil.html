@@ -279,7 +279,7 @@ footer a { color: var(--muted); }
   </defs>
 </svg>
 
-<p class="bandeau">🚀 Lancement très bientôt · 🚚 Livraison offerte · ✨ 1 mois d'essai gratuit</p>
+<p class="bandeau">🚀 Lancement très bientôt · 🚚 Livraison offerte · ✨ 30 jours pour changer d'avis</p>
 <header class="top">
   <div class="wrap">
     <a class="brand" href="#"><img src="icon.svg" alt="">Papote</a>
@@ -303,7 +303,7 @@ footer a { color: var(--muted); }
           <a class="btn btn-primary js-commander" href="#lancement">Être prévenu</a>
           <a class="btn btn-ghost" href="#fonctionnement">Comment ça marche</a>
         </div>
-        <p class="hero-note">60 € à la commande, puis 20 € par mois après 1 mois d'essai gratuit. Sans engagement, tablette prêtée.</p>
+        <p class="hero-note">60 € à la commande, puis 20 € par mois, payés une fois le mois écoulé. Sans engagement, tablette prêtée.</p>
         <p class="precommande js-precommande" hidden>En précommande : votre tablette est préparée sous 7 à 10 jours ouvrés, puis livrée par Mondial Relay sous 3 à 5 jours ouvrés.</p>
       </div>
 
@@ -473,7 +473,7 @@ footer a { color: var(--muted); }
           <button class="btn btn-primary offre-btn js-commander" type="submit">Être prévenu du lancement</button>
         </div>
       </form>
-      <p class="plans-note">Prix par tablette, toute la famille utilise l'appli sans supplément. 1 mois d'essai gratuit, puis sans engagement : l'abonnement se résilie à tout moment depuis l'appli famille. 60 € sont payés à la commande pour la mise en service ; la tablette est prêtée et nous est rendue en fin d'abonnement. Paiement sécurisé par prélèvement SEPA.</p>
+      <p class="plans-note">Prix par tablette, toute la famille utilise l'appli sans supplément. 60 € sont payés à la commande pour la mise en service ; ensuite, chaque mois est payé une fois écoulé. Sans engagement : l'abonnement se résilie à tout moment depuis l'appli famille. 30 jours après la réception pour changer d'avis : rien à payer et les 60 € remboursés. La tablette est prêtée et nous est rendue en fin d'abonnement. Paiement sécurisé par prélèvement SEPA.</p>
       <p class="precommande js-precommande" hidden>En précommande : votre tablette est préparée sous 7 à 10 jours ouvrés, puis livrée par Mondial Relay sous 3 à 5 jours ouvrés.</p>
     </div>
   </section>
@@ -546,12 +546,12 @@ footer a { color: var(--muted); }
           <p>Par prélèvement SEPA : il suffit de l'IBAN d'un compte en France, en Belgique ou au Luxembourg, saisi sur une page de paiement sécurisée (Stripe). L'abonnement est prélevé chaque mois. La tablette part dès que la banque a confirmé le premier prélèvement (quelques jours). Depuis l'appli famille, onglet Profil (« Gérer le paiement et les factures »), vous retrouvez vos factures et changez de compte.</p>
         </details>
         <details>
-          <summary>Y a-t-il un essai gratuit ?</summary>
-          <p>Oui : le premier mois d'abonnement est offert. Votre IBAN est enregistré à la commande, mais le premier mois n'est prélevé qu'à la fin de l'essai. Pour arrêter pendant l'essai, et jusqu'à 30 jours après la réception de la tablette, le bouton « Annuler ma commande » de l'appli suffit : vous nous renvoyez la tablette et tout ce que vous avez payé vous est remboursé, 60 € de mise en service compris.</p>
+          <summary>Et si ça ne lui plaît pas ?</summary>
+          <p>Vous avez 30 jours après la réception de la tablette pour changer d'avis : le bouton « Annuler ma commande » de l'appli suffit. Vous nous renvoyez la tablette avec l'étiquette offerte, vous ne payez rien pour l'abonnement et les 60 € de mise en service vous sont remboursés.</p>
         </details>
         <details>
           <summary>Suis-je engagé ? Comment résilier ?</summary>
-          <p>Non, Papote est sans engagement. Un responsable de la famille résilie en ligne, à tout moment, depuis l'appli (onglet Profil, « Résilier l'abonnement ») : l'abonnement s'arrête à la fin du mois déjà payé. Pas de lettre recommandée : quelques clics suffisent. En cas d'hospitalisation de votre proche, nous remboursons jusqu'à 2 mois d'abonnement par an, sur certificat.</p>
+          <p>Non, Papote est sans engagement. Un responsable de la famille résilie en ligne, à tout moment, depuis l'appli (onglet Profil, « Résilier l'abonnement ») : l'abonnement s'arrête à la fin du mois en cours, qui est le dernier prélevé. Pas de lettre recommandée : quelques clics suffisent. En cas d'hospitalisation de votre proche, nous remboursons jusqu'à 2 mois d'abonnement par an, sur certificat.</p>
         </details>
         <details>
           <summary>Que se passe-t-il à la fin de l'abonnement ?</summary>
@@ -629,7 +629,7 @@ footer a { color: var(--muted); }
       document.querySelectorAll('a.js-commander').forEach(function (a) { a.href = 'commande.html'; a.textContent = 'Commander'; });
       document.querySelectorAll('button.js-commander').forEach(function (b) { b.textContent = 'Commander'; });
       var bandeau = document.querySelector('.bandeau');
-      if (bandeau) bandeau.textContent = '🚚 Livraison offerte · ✨ 1 mois d\u2019essai gratuit';
+      if (bandeau) bandeau.textContent = '🚚 Livraison offerte · ✨ 30 jours pour changer d\u2019avis';
     }
     fetch('https://europe-west1-papote-famille.cloudfunctions.net/stockDisponible')
       .then(function (r) { return r.ok ? r.json() : { disponible: true }; })
