@@ -344,3 +344,7 @@
 .welcome-prepare { text-align: center; }
 .welcome-spin { display: block; margin: 4vmin auto 3vmin; }
 .welcome-btn.small { min-height: 9vmin; font-size: 3.8vmin; }
+
+/* Le proche a scanné : la même page du code, avec une ligne « Julie termine l'installation… » */
+.welcome-busy { display: flex; align-items: center; gap: 2.5vmin; margin: 2vmin 0 0; font-size: 4.2vmin; font-weight: 600; color: var(--w-accent); }
+.welcome-busy-spin { flex-shrink: 0; width: 5vmin; height: 5vmin; border-width: .8vmin; }

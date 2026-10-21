@@ -437,9 +437,32 @@
     steps.appendChild(el('p', 'welcome-or', 'ou'));
     steps.appendChild(el('p', 'welcome-step', 'Ouvrez app.mapapote.fr et tapez ce code :'));
     steps.appendChild(el('p', 'welcome-code', pretty(s.code)));
-    steps.appendChild(el('p', 'welcome-sub', 'Le code change toutes les 15 minutes.'));
+    if (s.claimedName || s.joined) {
+      // Le proche a scanné : l'écran ne change pas (demande de Tanguy), une ligne dit qu'il s'en occupe.
+      var busy = el('p', 'welcome-busy', '');
+      busy.appendChild(el('span', 'boot-spin welcome-busy-spin', ''));
+      busy.appendChild(document.createTextNode((s.claimedName || 'Votre proche') + ' termine l’installation sur son téléphone…'));
+      steps.appendChild(busy);
+    } else {
+      steps.appendChild(el('p', 'welcome-sub', 'Le code change toutes les 15 minutes.'));
+    }
     row.appendChild(steps);
     box.appendChild(row);
+    if (s.restart) {
+      // Touché deux fois : un appui par erreur n'annule pas l'installation en cours.
+      var again = button('Recommencer avec un autre téléphone', 'no small', function () {
+        if (!again.armed) {
+          again.armed = true;
+          again.textContent = 'Touchez encore pour recommencer';
+          setTimeout(function () { again.armed = false; again.textContent = 'Recommencer avec un autre téléphone'; }, 5000);
+          return;
+        }
+        again.disabled = true;
+        again.textContent = 'Un instant…';
+        android().cancelPairing();
+      });
+      box.appendChild(again);
+    }
   }
 
   // ---------- Préparation : le proche règle tout sur son téléphone ----------
@@ -596,7 +619,7 @@
       if (placing) return; // la tablette est reliée : on finit le placement avant tout le reste
       ensureRoot();
       root.removeAttribute('hidden');
-      var key = s.step + '|' + (s.code || '') + '|' + (s.error || '') + '|' + (s.claimedName || '') + '|' + (s.familyName || '') + '|' + (s.restart ? 1 : 0);
+      var key = s.step + '|' + (s.code || '') + '|' + (s.error || '') + '|' + (s.claimedName || '') + '|' + (s.familyName || '') + '|' + (s.restart ? 1 : 0) + '|' + (s.joined ? 1 : 0);
       if (key === current) return; // déjà affiché (et la saisie en cours n'est pas effacée)
       current = key;
       clearInterval(wifiTimer);

@@ -364,7 +364,11 @@ final class Sync {
             return;
         }
         // Nouvelle tablette : « On prépare votre tablette… » jusqu'au premier envoi de la famille.
-        if (result.length() > 0 && prefs.getBoolean("installEnCours", false)) finInstallation();
+        if (prefs.getBoolean("installEnCours", false)) {
+            for (int i = 0; i < result.length(); i++) {
+                if (result.getJSONObject(i).optJSONObject("document") != null) { finInstallation(); break; }
+            }
+        }
         status("ok", null);
 
         Set<String> seenIds = new HashSet<>();
@@ -1429,8 +1433,17 @@ final class Sync {
         }
     }
 
+    /** Pendant que le proche finit sur son téléphone : le même écran du code, sans « Recommencer ». */
+    private JSONObject installScreen() throws JSONException {
+        String code = prefs.getString("pairing", null);
+        JSONObject s = new JSONObject().put("step", "pair").put("name", "Tablette")
+                .put("claimedName", prefs.getString("installPar", "")).put("joined", true);
+        if (code != null) s.put("code", code);
+        return s;
+    }
+
     private void finInstallation() {
-        prefs.edit().remove("installEnCours").apply();
+        prefs.edit().remove("installEnCours").remove("installPar").remove("pairing").remove("pairingExpires").apply();
         Journal.log(context, "Installation terminée");
         lastStatusJson = null; // l'écran passe tout de suite à l'accueil
     }
@@ -1596,14 +1609,15 @@ final class Sync {
             welcome(new JSONObject().put("step", "pair").put("name", name).put("code", code)
                     .put("expires", prefs.getLong("pairingExpires", 0)));
         } else if ("reserved".equals(state)) {
-            welcome(new JSONObject().put("step", "prepare").put("code", code)
+            welcome(new JSONObject().put("step", "pair").put("name", name).put("code", code)
                     .put("claimedName", nz(Firebase.str(f, "claimedName"))).put("restart", true));
         } else if ("confirmed".equals(state) && Firebase.str(f, "fid") != null) {
             String famille = nz(Firebase.str(f, "familyName"));
             if (joinFamily(code, Firebase.str(f, "fid"), famille.isEmpty() ? name : famille)) {
-                prefs.edit().putBoolean("installEnCours", true).apply();
-                Journal.log(context, "Tablette reliée à « " + nz(Firebase.str(f, "familyName")) + " »");
-                welcome(new JSONObject().put("step", "prepare").put("familyName", nz(Firebase.str(f, "familyName"))));
+                prefs.edit().putBoolean("installEnCours", true)
+                        .putString("installPar", nz(Firebase.str(f, "claimedName"))).apply();
+                Journal.log(context, "Tablette reliée à « " + famille + " »");
+                welcome(installScreen());
                 poke();
             }
         } else if ("claimed".equals(state)) {
@@ -1756,7 +1770,7 @@ final class Sync {
         if ("ok".equals(state) && prefs.getBoolean("installEnCours", false)) {
             // Famille rejointe, mais le proche finit les réglages : on garde « On prépare… ».
             try {
-                welcome(new JSONObject().put("step", "prepare").put("familyName", familyName == null ? "" : familyName));
+                welcome(installScreen());
             } catch (JSONException ignored) { }
             return;
         }
