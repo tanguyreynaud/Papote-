@@ -117,6 +117,9 @@ function orderHead(c) {
   return `${c.nom || c.email} · ${c.formule === 'sim' ? 'carte SIM' : 'Wi-Fi'}, tablette ${c.tablette === 'incluse' ? 'incluse' : 'achetée'}`;
 }
 
+// Matériel non rendu : mêmes prix que le serveur (abonnement.js, PRIX_MATERIEL) et les conditions de vente.
+const prix = { tablette: 130, chargeur: 10, enceinte: 10 };
+
 // Tablettes à envoyer : chaque commande se prépare pas à pas (parcours), sans rien oublier.
 async function loadOrders() {
   try {
@@ -125,8 +128,6 @@ async function loadOrders() {
       .sort((a, b) => (toDate(a.creeLe)?.getTime() || 0) - (toDate(b.creeLe)?.getTime() || 0));
     $('orders-empty').hidden = list.length > 0;
     $('orders').replaceChildren(...list.map((c) => {
-      // Mêmes prix que le serveur (abonnement.js, PRIX_MATERIEL) et les conditions de vente.
-      const prix = { tablette: 130, chargeur: 10, enceinte: 10 };
       const li = document.createElement('li');
       li.innerHTML = '<strong></strong><span class="muted small"></span><span class="small adresse"></span>'
         + '<div class="envoi-suite"><span class="small avancement"></span><button type="button" class="primary small-btn"></button></div>';

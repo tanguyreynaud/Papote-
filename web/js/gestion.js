@@ -758,14 +758,8 @@ async function remplirCommande(id) {
       formulaireRemplacement(c, t))] : []),
     ...(partie && (t || c.envoyeeLe) ? [expliquee('Le client doit renvoyer quelque chose : il reçoit par e-mail une étiquette Mondial Relay gratuite.',
       boutonEtiquetteRetour(c))] : []),
-    ...(['a-preparer', 'paiement-en-attente'].includes(c.expedition) ? [actionExpliquee(
-      c.offerte ? 'La tablette n\'est pas encore partie : la commande est annulée et la tablette mise de côté revient au stock.'
-        : 'La tablette n\'est pas encore partie : l\'abonnement s\'arrête, tout ce qui a été payé est remboursé, la tablette mise de côté revient au stock et le client reçoit un e-mail.',
-      'Annuler la commande', () => annulerCommande(c), true)] : []),
-    ...(c.fid && !c.offerte && ['actif', 'impaye', 'suspendu', 'active', 'trialing', 'past_due'].includes(c.abonnement) ? [c.resiliationLe
-      ? h('div', { class: 'action' }, h('p', { class: 'small' }, `Abonnement arrêté : il prend fin le ${jour(c.resiliationLe)}.`))
-      : actionExpliquee('Comme si le client résiliait lui-même dans l\'appli : l\'abonnement prend fin à la fin du mois en cours, prélevé à l\'arrêt.',
-        'Arrêter l\'abonnement', () => arreterAbonnement(c), true)] : []),
+    ...(c.fid && !c.offerte && c.resiliationLe && ['actif', 'impaye', 'suspendu', 'active', 'trialing', 'past_due'].includes(c.abonnement)
+      ? [h('div', { class: 'action' }, h('p', { class: 'small' }, `Abonnement arrêté : il prend fin le ${jour(c.resiliationLe)}.`))] : []),
     ...(c.code && !c.fid && c.expedition !== 'annulee' ? [expliquee('Le client a perdu son code de commande : il en a besoin pour relier la tablette à l\'appli famille.',
       boutonRenvoyerCode(c))] : []),
   ];
@@ -774,7 +768,7 @@ async function remplirCommande(id) {
   $('dc-corps').replaceChildren(...[
     annonce ? h('p', { class: 'annonce', role: 'status' }, annonce) : null,
     h('div', { class: 'card' },
-      h('h2', {}, `Commande ${codeCommande(c.code)}`, c.offerte ? ' (offerte)' : ''),
+      h('div', { class: 'tete-fiche' }, h('h2', {}, `Commande ${codeCommande(c.code)}`, c.offerte ? ' (offerte)' : ''), menuCommande(c)),
       h('dl', { class: 'fiche' },
       ligne('État', badge(texte, classe)),
       ligne('Commandée le', jour(c.creeLe)),
@@ -825,16 +819,9 @@ async function remplirCommande(id) {
   }
 }
 
-// Une action de la page commande : ce qu'elle fait, puis son bouton.
-let annonceCommande = null; // Résultat de la dernière action, affiché en haut de la page commande rechargée.
-function actionExpliquee(texte, libelle, faire, danger = false) {
-  const msg = h('p', { class: 'small', hidden: true });
-  const bouton = h('button', { type: 'button', class: `secondary small-btn${danger ? ' danger' : ''}` }, libelle);
-  bouton.addEventListener('click', async () => {
-    bouton.disabled = true;
-    msg.hidden = false;
-    msg.className = 'small muted';
-    msg.textContent = 'En cours…';
+// Actions rares ou définitives de la commande, rangées dans le ⋮ ; chacune s'explique dans sa confirmation.
+function menuCommande(c) {
+  const lancer = async (faire) => {
     try {
       annonceCommande = await faire();
       commandeAffichee = null;
@@ -842,24 +829,31 @@ function actionExpliquee(texte, libelle, faire, danger = false) {
       afficherTout();
       signalerChangement();
     } catch (e) {
-      if (e === 'non') { msg.hidden = true; bouton.disabled = false; return; }
-      msg.className = 'small error';
-      msg.textContent = messageErreur(e);
-      bouton.disabled = false;
+      if (e !== 'non') prevenir(messageErreur(e));
     }
-  });
-  return h('div', { class: 'action' }, h('p', { class: 'small' }, texte), bouton, msg);
+  };
+  const items = [
+    ['a-preparer', 'paiement-en-attente'].includes(c.expedition)
+      ? { libelle: 'Annuler la commande', danger: true, faire: () => lancer(() => annulerCommande(c)) } : null,
+    c.fid && !c.offerte && !c.resiliationLe && ['actif', 'impaye', 'suspendu', 'active', 'trialing', 'past_due'].includes(c.abonnement)
+      ? { libelle: 'Arrêter l\'abonnement', danger: true, faire: () => lancer(() => arreterAbonnement(c)) } : null,
+  ].filter(Boolean);
+  return items.length ? menuPoints(items, `Actions pour la commande ${codeCommande(c.code)}`) : null;
 }
 
+let annonceCommande = null; // Résultat de la dernière action, affiché en haut de la page commande rechargée.
+
 async function annulerCommande(c) {
-  if (!await demander(`Annuler la commande ${codeCommande(c.code)} de ${c.nom || c.email || 'ce client'} ?${c.offerte ? '' : ' Tout ce qui a été payé sera remboursé.'}`, { oui: 'Annuler la commande', non: 'Garder la commande', danger: true })) throw 'non';
+  if (!await demander(`Annuler la commande ${codeCommande(c.code)} de ${c.nom || c.email || 'ce client'} ?\n\n${c.offerte
+    ? 'La tablette n\'est pas encore partie : la commande est annulée et la tablette mise de côté revient au stock.'
+    : 'La tablette n\'est pas encore partie : l\'abonnement s\'arrête, tout ce qui a été payé est remboursé, la tablette mise de côté revient au stock et le client reçoit un e-mail.'}`, { oui: 'Annuler la commande', non: 'Garder la commande', danger: true })) throw 'non';
   const r = await appeler('gestionAnnulerCommande', { commande: c.id });
   return [`Commande annulée.`, r.rembourse ? `${euros(r.rembourse)} remboursés.` : null,
     r.mailEnvoye ? 'Le client a reçu un e-mail.' : null].filter(Boolean).join(' ');
 }
 
 async function arreterAbonnement(c) {
-  if (!await demander(`Arrêter l'abonnement de ${c.nom || c.email || 'ce client'} ? Il prendra fin à la fin du mois en cours, prélevé à l\'arrêt.`, { oui: 'Arrêter l\'abonnement', non: 'Garder', danger: true })) throw 'non';
+  if (!await demander(`Arrêter l'abonnement de ${c.nom || c.email || 'ce client'} ?\n\nComme si le client résiliait lui-même dans l'appli : l'abonnement prend fin à la fin du mois en cours, prélevé à l'arrêt.`, { oui: 'Arrêter l\'abonnement', non: 'Garder', danger: true })) throw 'non';
   const r = await appeler('resilierAbonnement', { fid: c.fid });
   return `Abonnement arrêté : il prend fin le ${jour(r.le)}.`;
 }
@@ -2663,9 +2657,11 @@ async function remplirClient(email) {
         ligne('Téléphone', c.telephone ? h('a', { href: `tel:${c.telephone.replace(/\s/g, '')}` }, c.telephone) : null),
         ligne('Formule', c.formule ? (c.formule === 'sim' ? 'Internet inclus (carte SIM)' : 'Wi-Fi de la maison') : null),
         ligne('Client depuis', jour(c.depuis)),
-        ligne('E-mails d\'information', accordTexte(c))),
-      h('button', { type: 'button', class: 'secondary small-btn no-print', onclick: () => changerAccord(c) },
-        accepte ? 'Ne plus lui envoyer d\'e-mails d\'information' : 'Noter son accord pour les e-mails d\'information')),
+        // Interrupteur : il ne bascule qu'après la confirmation (changerAccord relit la liste).
+        ligne('E-mails d\'information', h('label', { class: 'interrupteur' },
+          h('input', { type: 'checkbox', class: 'toggle', checked: accepte, 'aria-label': 'Reçoit les e-mails d\'information',
+            onchange: (e) => { e.target.checked = accepte; changerAccord(c); } }),
+          h('span', {}, accepte ? 'Oui, il ou elle a donné son accord' : c.desinscrit ? 'Non, désinscrit' : 'Non'))))),
     h('div', { class: 'card' }, h('h2', {}, 'Commandes'),
       commandes.length ? h('ul', { class: 'liste-liens' }, commandes.map((x) => {
         const [texte, classe] = ETATS_COMMANDE[etatCommande(x)];
@@ -3010,3 +3006,18 @@ $('btn-recevoir-accessoire').addEventListener('click', async () => {
   await ouvrirParcours({ titre: 'Recevoir une livraison', etapes: etapesReceptionAccessoire(), etat: { etape: 0, faits: {} } });
   signalerChangement();
 });
+
+// « ← Retour » : revient à la page d'avant, comme le bouton retour du téléphone. Sans page d'avant
+// dans l'admin (lien ouvert directement), il mène à la liste parente (son lien ou son bouton).
+const pilePages = [location.hash];
+window.addEventListener('hashchange', () => {
+  if (pilePages.length > 1 && pilePages[pilePages.length - 2] === location.hash) pilePages.pop();
+  else pilePages.push(location.hash);
+});
+document.addEventListener('click', (e) => {
+  const r = e.target.closest('.retour');
+  if (!r || pilePages.length < 2) return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  history.back();
+}, true);
