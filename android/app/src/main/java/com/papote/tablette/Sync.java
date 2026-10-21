@@ -1441,6 +1441,7 @@ final class Sync {
             JSONObject inf = in == null || in.optJSONObject("mapValue") == null ? null
                     : in.optJSONObject("mapValue").optJSONObject("fields");
             if (inf != null && "fini".equals(Firebase.str(inf, "etape"))) finInstallation();
+            else relireReprise();
         }
         int sonnerie = ff.has("volumeSonnerie") ? (int) Math.max(10, Math.min(100, Firebase.integer(ff, "volumeSonnerie"))) : 100;
         if (sonnerie != prefs.getInt("volumeSonnerie", 100)) {
@@ -1468,6 +1469,25 @@ final class Sync {
     private boolean reprisePossible() {
         long depuis = prefs.getLong("installDepuis", 0);
         return depuis > 0 && System.currentTimeMillis() - depuis > REPRISE_MS;
+    }
+
+    /** Un autre proche a peut-être repris l'installation : l'écran montre son prénom à lui. */
+    private void relireReprise() {
+        String code = prefs.getString("pairing", null);
+        if (code == null) return;
+        try {
+            JSONObject doc = firebase.get("pairings/" + code);
+            JSONObject f = doc == null ? null : doc.optJSONObject("fields");
+            if (f == null) return;
+            String par = nz(Firebase.str(f, "claimedName"));
+            long depuis = Firebase.timestamp(f, "reservedAt");
+            SharedPreferences.Editor e = prefs.edit();
+            if (!par.isEmpty()) e.putString("installPar", par);
+            if (depuis > 0) e.putLong("installDepuis", depuis);
+            e.apply();
+        } catch (Exception e) {
+            Log.w(TAG, "Reprise de l'installation", e);
+        }
     }
 
     private void finInstallation() {
