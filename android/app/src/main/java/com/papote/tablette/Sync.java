@@ -653,7 +653,10 @@ final class Sync {
     private void heartbeat(String fid, String field) {
         long now = System.currentTimeMillis();
         Long last = lastHeartbeat.get(field);
-        if (fid == null || (last != null && now - last < HEARTBEAT_MS)) return;
+        // « En ligne » toutes les 10 min ; « vue » et « touchée » à la minute près, pour que la famille
+        // voie tout de suite que Mamie a regardé (écritures rares : seulement quand elle est là).
+        long every = "lastOnline".equals(field) ? HEARTBEAT_MS : 60_000;
+        if (fid == null || (last != null && now - last < every)) return;
         try {
             JSONObject write = new JSONObject()
                     .put("update", new JSONObject()

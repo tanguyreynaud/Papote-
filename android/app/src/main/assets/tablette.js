@@ -1793,7 +1793,7 @@
 
   function noteSeen() {
     var now = Date.now();
-    if (now - lastSeenSent < 5 * 60000) return;
+    if (now - lastSeenSent < 60000) return;
     lastSeenSent = now;
     if (android() && android().seen) android().seen();
   }
