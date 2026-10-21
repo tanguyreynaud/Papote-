@@ -1040,6 +1040,7 @@ function afficherStock() {
     donnees.aVendre == null ? null : stat(String(donnees.aVendre), 'à vendre sur le site',
       donnees.aVendre ? 'stock + 10 précommandes, paiements en cours compris' : 'le site propose « Être prévenu »', donnees.aVendre ? null : 'neg'),
     stat(String(compte(chez)), 'chez les clients', `valeur ${euros(valeur(chez))}`),
+    compte(['commandee']) ? stat(String(compte(['commandee'])), 'commandées, pas encore reçues', `valeur ${euros(valeur(['commandee']))}`) : null,
     stat(String(compte(['revenue', 'a-reparer'])), 'à vérifier ou réparer'),
     stat(String(compte(['perdue', 'hors-service'])), 'perdues ou hors service'),
   ].filter(Boolean));
@@ -1079,7 +1080,7 @@ $('filtre-stock').addEventListener('change', afficherStock);
 
 // ---------- Lignes SIM ----------
 
-const ETATS_SANS_CLIENT = ['en-stock', 'revenue', 'a-reparer', 'perdue', 'hors-service'];
+const ETATS_SANS_CLIENT = ['commandee', 'en-stock', 'revenue', 'a-reparer', 'perdue', 'hors-service'];
 const coutSim = (t) => (t.simCout != null ? t.simCout : donnees.reglages.forfaitSim);
 
 // Même règle que simAResilier (functions/gestion.js) : ligne active (payée), tablette sans client depuis 30 jours.
@@ -2785,7 +2786,7 @@ function etapesReceptionTablette() {
       titre: 'Réception',
       texte: 'Ouvrez le carton du vendeur. Quel achat est-ce ?',
       contenu(zone, e, maj) {
-        const achats = donnees.stock.filter((t) => t.id === e.id || (t.etat === 'en-stock' && !t.ref && !t.commande))
+        const achats = donnees.stock.filter((t) => t.id === e.id || (['commandee', 'en-stock'].includes(t.etat) && !t.ref && !t.commande))
           .sort((a, b) => (a.acheteeLe || 0) - (b.acheteeLe || 0));
         if (e.id === undefined) e.id = achats.length ? achats[0].id : null;
         const choix = h('select', { 'aria-label': 'Achat' },
