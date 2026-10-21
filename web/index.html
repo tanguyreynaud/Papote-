@@ -261,24 +261,33 @@
     <section id="view-sans-abo" class="page-pad" hidden>
       <h1 class="brand">Papote</h1>
       <div class="card">
-        <h2>Il manque l'abonnement de la tablette</h2>
-        <p class="muted">La tablette de <span class="sans-abo-nom"></span> est installée, mais aucune commande n'y est reliée. Dès que l'abonnement est choisi, la tablette et l'appli démarrent toutes seules.</p>
+        <h2>Papote n'est pas encore activé</h2>
+        <p class="muted">Pour démarrer la tablette de <span class="sans-abo-nom"></span>, il faut un abonnement.</p>
+        <p id="sans-abo-membre" class="muted" hidden>Un responsable de la famille va s'en occuper : tout démarrera tout seul.</p>
+        <div class="sans-abo-admin sans-abo-choix">
+          <button type="button" class="primary wide" id="sans-abo-deja">J'ai déjà un abonnement</button>
+          <button type="button" class="primary wide" id="sans-abo-prendre">Prendre un abonnement</button>
+        </div>
       </div>
-      <div class="card sans-abo-admin">
-        <h2>Vous avez déjà commandé ?</h2>
+      <div class="card" id="sans-abo-panel-deja" hidden>
+        <h2>Retrouver mon abonnement</h2>
         <p class="muted small">Entrez le code de commande (dans l'e-mail de confirmation ou sur la facture), ou laissez vide pour chercher avec votre adresse e-mail.</p>
         <form class="order-link" data-order-form>
           <input class="order-code" placeholder="ABCD-EFGH" aria-label="Code de commande" autocapitalize="characters" autocomplete="off" spellcheck="false">
           <button type="submit" class="primary small-btn">Relier</button>
         </form>
       </div>
-      <div class="card sans-abo-admin">
-        <h2>Choisir un abonnement</h2>
+      <div class="card" id="sans-abo-panel-prendre" hidden>
+        <h2>Prendre un abonnement</h2>
         <p class="muted small">60 € de mise en service, puis chaque mois est payé une fois écoulé, sans engagement. Paiement par prélèvement SEPA, sur la page sécurisée de Stripe.</p>
         <div id="sans-abo-formules" class="abo-formules"></div>
         <p id="sans-abo-error" class="error" hidden></p>
       </div>
-      <p id="sans-abo-membre" class="card muted" hidden>Un responsable de la famille doit choisir l'abonnement. Tout démarrera automatiquement, vous n'avez rien à faire.</p>
+      <div class="card">
+        <h2>Une question ?</h2>
+        <p class="muted small">L'assistant Papote vous répond tout de suite.</p>
+        <button type="button" class="primary wide" id="sans-abo-aide">Poser une question</button>
+      </div>
       <button type="button" class="link wide" data-action="other-family">Rejoindre une autre famille ou installer une tablette</button>
       <button type="button" class="link wide" data-action="logout">Se déconnecter</button>
     </section>

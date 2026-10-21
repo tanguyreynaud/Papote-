@@ -187,6 +187,16 @@ function renderSansAbo() {
   $('sans-abo-membre').hidden = admin;
 }
 
+// Deux choix, un seul volet ouvert à la fois.
+for (const quoi of ['deja', 'prendre']) {
+  $(`sans-abo-${quoi}`).addEventListener('click', () => {
+    $('sans-abo-panel-deja').hidden = quoi !== 'deja';
+    $('sans-abo-panel-prendre').hidden = quoi !== 'prendre';
+    $(`sans-abo-panel-${quoi}`).scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+}
+$('sans-abo-aide').addEventListener('click', () => document.querySelector('.nav-item[data-tab="support"]').click());
+
 // Barre du bas : on change d'onglet sans empiler l'historique.
 document.querySelectorAll('.nav-item').forEach((btn) => {
   btn.addEventListener('click', () => {
