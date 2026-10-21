@@ -243,6 +243,15 @@ function sepaRefuse({ nom, email, papote }) {
   ], { texte: 'Commander à nouveau', lien: 'https://mapapote.fr/commande.html' });
 }
 
+// Prévient Papote d'une résiliation (ou d'une commande annulée après l'envoi) : la page de la commande en lien.
+function resiliation({ nom, email, code, commande, retractation }) {
+  const qui = nom || email || 'Un client';
+  return message(`${qui} a ${retractation != null ? 'annulé sa commande' : 'résilié son abonnement'}${code ? ` (commande ${code})` : ''}`, [
+    `<b>${echapper(qui)}</b>${email && nom ? ` (${echapper(email)})` : ''} a ${retractation != null ? 'annulé sa commande après l\'envoi' : 'résilié son abonnement'}.`,
+    'Le client reçoit par e-mail le mode d\'emploi du retour et l\'étiquette (créée automatiquement) : rien à faire pour l\'instant.',
+  ], { texte: 'Ouvrir la commande', lien: `https://app.mapapote.fr/admin.html#commande/${encodeURIComponent(commande)}` });
+}
+
 // smtp : « hote:port:utilisateur » (MAIL_SMTP), expediteur : adresse affichée (MAIL_EXPEDITEUR).
 let transport;
 async function envoyer({ smtp, motDePasse, expediteur, a, contenu }) {
@@ -259,6 +268,6 @@ async function envoyer({ smtp, motDePasse, expediteur, a, contenu }) {
 
 module.exports = {
   colisParti, commandeConfirmee, nouvelleCommande, relancePanier, lancement, sepaRefuse, invitation, demandeRejoindre, rappelJumelage,
-  retourTablette, etiquetteRetour, rappelRestitution, tabletteRecue, commandeAnnulee, annulationAvantEnvoi,
+  retourTablette, etiquetteRetour, rappelRestitution, tabletteRecue, commandeAnnulee, annulationAvantEnvoi, resiliation,
   envoyer, echapper, euros,
 };

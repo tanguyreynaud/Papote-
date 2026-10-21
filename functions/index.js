@@ -1204,6 +1204,13 @@ async function suiviRetour(event, rAvant, r, c) {
   // (plus bas). En mode test, aucune étiquette n'est créée : le mode d'emploi part seul, tout de suite.
   if (r.statut === 'attendue' && rAvant.statut !== 'attendue' && !r.mailLe) {
     await ref.update({ 'restitution.mailLe': FieldValue.serverTimestamp() });
+    try {
+      await envoyerMail(EMAIL_PAPOTE, mail.resiliation({
+        nom: c.nom, email: c.email, code: c.code ? regles.afficherCode(c.code) : null, commande: id, retractation,
+      }));
+    } catch (e) {
+      logger.error(`Commande ${id} : avis de résiliation non parti`, e.message);
+    }
     const etiquetteAutomatique = STRIPE_SECRET.value().startsWith('sk_live_') && c.expedition === 'envoyee';
     if (c.email && !r.etiquette && !etiquetteAutomatique) {
       try {

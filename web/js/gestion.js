@@ -786,7 +786,11 @@ async function remplirCommande(id) {
       ligne('Remboursement', c.remboursement ? `${euros(c.remboursement.montant)} ${REMBOURSEMENTS[c.remboursement.statut] || c.remboursement.statut}` : null))),
     actions.length ? h('div', { class: 'card' }, h('h2', {}, 'Actions possibles'), ...actions) : null,
     h('div', { class: 'card' }, h('h2', {}, 'Parcours'),
-      h('ul', { class: 'historique small' }, parcoursCommande(c).map(([le, texte]) => h('li', {}, Number.isFinite(le) ? `${jour(le)} : ${texte}` : texte)))),
+      // Frise : la date à gauche (vide pour une étape sans date), l'étape à droite.
+      h('ol', { class: 'frise' }, parcoursCommande(c).map(([le, texte, date]) => {
+        const quand = Number.isFinite(le) ? le : date;
+        return h('li', {}, h('span', { class: 'frise-date' }, quand ? jour(quand) : ''), h('span', { class: 'frise-texte' }, texte));
+      }))),
     h('div', { class: 'card' }, h('h2', {}, 'Factures et paiements du client'), factures),
   ].filter(Boolean));
   if (c.offerte) {
@@ -996,23 +1000,24 @@ function formulaireRemplacement(c, t) {
 // Grandes étapes d'une commande, de la commande au retour de la tablette.
 function parcoursCommande(c) {
   // La commande ouvre toujours le parcours, même créée dans la même seconde que la réservation.
-  const etapes = [[-Infinity, c.offerte ? `commande offerte créée le ${jour(c.creeLe)}` : `commande passée le ${jour(c.creeLe)}`]];
-  if (c.envoyeeLe) etapes.push([c.envoyeeLe, `tablette envoyée${c.suivi ? ` (suivi ${c.suivi})` : ''}`]);
+  const etapes = [[-Infinity, c.offerte ? 'Commande offerte créée' : 'Commande passée', c.creeLe]];
+  if (c.envoyeeLe) etapes.push([c.envoyeeLe, `Tablette envoyée${c.suivi ? ` (suivi ${c.suivi})` : ''}`]);
   for (const t of donnees.stock) {
     for (const x of t.historique || []) {
       if (!x.le || x.commande !== c.id) continue;
       if (x.remplacement || x.sim) {
         const quoi = x.sim ? `carte SIM ${x.sim}` : x.accessoires ? x.accessoires.join(', ') : `tablette ${t.numero || t.modele || ''}`;
-        etapes.push([x.le, `remplacement : ${quoi}${x.etat === 'en-retour' ? ' à récupérer' : ' envoyée'}${x.motif ? ` (${x.motif})` : ''}`]);
+        etapes.push([x.le, `Remplacement : ${quoi}${x.etat === 'en-retour' ? ' à récupérer' : ' envoyée'}${x.motif ? ` (${x.motif})` : ''}`]);
       } else if (x.etat !== 'envoyee') {
         const nom = [t.ref, t.modele || t.numero].filter(Boolean).join(' ');
         etapes.push([x.le, ['commandee', 'en-stock', 'preparee'].includes(x.etat) && x.commande
-          ? `tablette ${nom} attribuée à cette commande` : `tablette ${nom} : ${(donnees.etats[x.etat] || x.etat).toLowerCase()}`]);
+          ? `Tablette ${nom} attribuée à cette commande` : `Tablette ${nom} : ${(donnees.etats[x.etat] || x.etat).toLowerCase()}`]);
       }
     }
   }
-  if (c.fid) etapes.push([null, `jumelée avec la famille ${c.famille || ''}`.trim()]);
-  if (c.restitution) etapes.push([c.restitution.avant, RETOURS[c.restitution.statut] || c.restitution.statut]);
+  if (c.fid) etapes.push([null, `Jumelée avec la famille ${c.famille || ''}`.trim()]);
+  // La date du retour est une date limite, pas celle d'un événement : à la suite, dans le texte.
+  if (c.restitution) etapes.push([null, `${RETOURS[c.restitution.statut] || c.restitution.statut}${c.restitution.avant && c.restitution.statut === 'attendue' ? `, à rendre avant le ${jour(c.restitution.avant)}` : ''}`]);
   if (c.remboursement) etapes.push([null, `${euros(c.remboursement.montant)} ${REMBOURSEMENTS[c.remboursement.statut] || c.remboursement.statut}`]);
   // Étapes sans date (jumelage, remboursement) à la suite des autres.
   return etapes.filter(([, texte]) => texte).sort((a, b) => (a[0] || Infinity) - (b[0] || Infinity));
