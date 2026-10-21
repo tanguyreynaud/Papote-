@@ -56,7 +56,7 @@ les fonctions suffit pour que le chat en tienne compte.
 - L'abonnement se gère dans l'appli famille, onglet Profil : « Gérer le paiement et les factures » (changer de compte bancaire, factures) et « Résilier l'abonnement ». Seul le propriétaire de la famille, celui qui paie, peut le faire.
 - On peut payer avec le compte bancaire de n'importe qui, par exemple celui du parent lui-même. Paiement au mois seulement, pas à l'année.
 - Hospitalisation du proche : jusqu'à 2 mois d'abonnement remboursés par an, sur certificat d'hospitalisation envoyé à contact@mapapote.fr. Aucune pause de l'abonnement pour d'autres raisons (vacances, absence…).
-- Fin d'abonnement : l'appli (Profil, Abonnement) donne une étiquette de retour à imprimer, payée par Papote. Tout le matériel est à renvoyer sous 30 jours : la tablette et son socle, le chargeur et son câble, et l'enceinte.
+- Fin d'abonnement : l'appli (Profil, Abonnement) donne une étiquette de retour à imprimer, payée par Papote. Tout le matériel est à renvoyer sous 30 jours : la tablette et son socle, le chargeur et son câble, et l'enceinte si elle a été fournie. Le retour est offert.
 - Le paiement passe par Stripe, une page sécurisée. Papote ne voit jamais les coordonnées bancaires complètes.
 
 ## Questions fréquentes (réponses validées par Papote)
@@ -71,7 +71,7 @@ les fonctions suffit pour que le chat en tienne compte.
 - Option internet inclus : la tablette 4G a sa propre carte SIM et se connecte toute seule au réseau mobile. Il n'y a pas de routeur ni de box à brancher, rien à configurer.
 - Opérateur de la carte SIM : il n'est pas fixe ; on choisit celui qui couvre le mieux le domicile du client.
 - Autres usages (Internet, jeux, YouTube) : non, la tablette est réservée à Papote pour rester simple et sans risque.
-- Tablette perdue ou volée : il n'y a pas de garantie pour cela. Il faut nous le signaler pour suspendre le contrat. La tablette est prêtée : la perte ou le vol est facturé comme un matériel non rendu (tablette 130 € (ou son prix d'achat s'il était plus élevé), chargeur et câble 10 €, enceinte 10 €). Pour en recevoir une nouvelle : demande de contact. Pour le signaler : demande de contact.
+- Tablette perdue ou volée : il n'y a pas de garantie pour cela. Il faut nous le signaler pour suspendre le contrat. La tablette est prêtée : la perte ou le vol est facturé comme un matériel non rendu (tablette 130 €, chargeur et câble 10 €, enceinte 10 € si elle a été fournie, soit 140 € ou 150 €). Pour en recevoir une nouvelle : demande de contact. Pour le signaler : demande de contact.
 - Nombre de proches dans la famille : jusqu'à 30.
 - Enfants : ils peuvent envoyer des photos, il n'y a pas d'âge minimum.
 - Le proche âgé ne peut pas répondre ni envoyer de photo : la tablette ne fait que recevoir, il n'a rien à manipuler. Il peut seulement confirmer un rappel.
@@ -99,8 +99,8 @@ les fonctions suffit pour que le chat en tienne compte.
 - Fixer la tablette au mur : déconseillé, elle est faite pour être posée sur son support. Multiprise ou rallonge : oui sans problème, elle consomme très peu.
 - Chargeur cassé : s'il est prouvé que le problème vient du chargeur, nous en envoyons un autre (c'est très rare). Demande de contact.
 - Conditions générales de vente : sur https://mapapote.fr/cgv.html
-- Avis clients : si le site n'en affiche pas encore, dire que Papote vient d'être lancé et n'a pas encore d'avis publiés, et que le plus simple pour se faire une idée est l'essai : un mois offert, et les 60 € de mise en service sont remboursés si on résilie pendant l'essai. Ne pas proposer de rappel.
-- Matériel non rendu : seuls les éléments manquants sont prélevés : tablette 130 € (ou son prix d'achat s'il était plus élevé), chargeur et câble 10 €, enceinte 10 €, soit 150 € en général si rien n'est rendu. Le socle n'est jamais facturé. Il n'y a pas de routeur. Aucune caution n'est prélevée d'avance.
+- Avis clients : si le site n'en affiche pas encore, dire que Papote vient d'être lancé et n'a pas encore d'avis publiés, et que le plus simple pour se faire une idée est l'essai : un mois offert, et tout est remboursé, 60 € de mise en service compris, si on annule la commande pendant les 30 jours qui suivent la réception. Ne pas proposer de rappel.
+- Matériel non rendu : seuls les éléments manquants sont prélevés : tablette 130 €, chargeur et câble 10 €, enceinte 10 € (seulement si elle a été fournie), soit 140 € si rien n'est rendu (150 € avec l'enceinte). Le socle n'est jamais facturé. Il n'y a pas de routeur. Aucune caution n'est prélevée d'avance.
 - Aide fiscale (services à la personne) : pas pour le moment.
 - Chaleur : la tablette devient tiède à force de rester allumée, c'est normal. Évitez simplement le plein soleil et la proximité d'un radiateur.
 - Connexion internet nécessaire : une box classique suffit (ADSL, fibre ou 4G) ; il faut juste que le Wi-Fi capte bien là où la tablette est posée.
@@ -120,7 +120,7 @@ les fonctions suffit pour que le chat en tienne compte.
 - Eau : la tablette n'est pas étanche, à éviter dans une salle de bain.
 - Caméra : elle ne filme pas en continu. Elle sert aux appels vidéo et, quand un message, une photo ou un rappel arrive, à vérifier que la personne l'a vu.
 - Données : hébergées chez Firebase (Google).
-- Engagement : aucun. L'abonnement continue de mois en mois et se résilie à tout moment dans l'appli (onglet Profil, « Résilier l'abonnement ») ; l'arrêt se fait à la fin du mois déjà payé, ou à la fin de l'essai si on résilie pendant l'essai.
+- Engagement : aucun. L'abonnement continue de mois en mois et se résilie à tout moment dans l'appli (onglet Profil, « Résilier l'abonnement ») ; l'arrêt se fait à la fin du mois déjà payé, Pendant l'essai, et jusqu'à 30 jours après la réception, ce n'est pas « Résilier » mais « Annuler ma commande » (voir Essai gratuit) : tout est remboursé, 60 € compris.
 - Prix : révisable au 1er janvier. Toute hausse est annoncée par e-mail 30 jours avant, et on peut résilier sans frais avant qu'elle s'applique. Ne jamais parler de prix garanti ou fixe pendant 12 mois.
 - Décès du proche : l'abonnement s'arrête sans frais dès réception de l'acte de décès envoyé à contact@mapapote.fr, sans attendre la fin du mois. Le matériel prêté est à renvoyer sous 30 jours avec l'étiquette retour fournie par Papote. Demande de contact.
 - Entrée du proche en maison de retraite (EHPAD) : Papote le suit, la tablette s'emporte et marche aussi là-bas (voir Maison de retraite). Si la famille préfère arrêter, elle résilie normalement, sans frais, à la fin du mois payé.
