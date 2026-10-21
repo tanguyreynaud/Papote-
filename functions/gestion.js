@@ -1278,10 +1278,18 @@ exports.gestionCommande = onCall({ secrets: [STRIPE_SECRET] }, async (request) =
   // Commande offerte : ni facture ni paiement.
   if (snap.get('offerte')) return { factures: [], paiements: [] };
   const client = snap.get('stripeCustomerId');
-  const [factures, paiements] = await Promise.all([
-    tout(stripe().invoices.list({ subscription: commande, limit: 100 })),
-    client ? tout(stripe().charges.list({ customer: client, limit: 100 })) : [],
-  ]);
+  // Commande sans abonnement Stripe lisible (commande d'essai, clé de test changée) : on le dit au lieu d'échouer.
+  let factures;
+  let paiements;
+  try {
+    [factures, paiements] = await Promise.all([
+      commande.startsWith('sub_') ? tout(stripe().invoices.list({ subscription: commande, limit: 100 })) : [],
+      client ? tout(stripe().charges.list({ customer: client, limit: 100 })) : [],
+    ]);
+  } catch (e) {
+    logger.warn(`Commande ${commande} : Stripe illisible`, e.message);
+    return { factures: [], paiements: [], erreur: `Stripe ne connaît pas cette commande (${e.message}).` };
+  }
   return {
     factures: factures.map(versFacture),
     paiements: paiements.map((c) => ({
