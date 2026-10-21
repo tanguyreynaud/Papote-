@@ -172,6 +172,9 @@ function brancher(deps) {
       tx.set(famille, {
         name: nom, code: invite, createdBy: uid, createdAt: FieldValue.serverTimestamp(),
         options: OPTIONS_PAR_DEFAUT, volumeSonnerie: VOLUME_SONNERIE, rev: 1,
+        // Ni l'app ni la tablette ne se mettent « en pause » pendant l'installation ; la commande
+        // reliée au jumelage (gestionJumelage) remplace ce statut, sinon « aucun » à la fin.
+        abonnement: { statut: 'installation', majLe: FieldValue.serverTimestamp() },
         ...(ville ? { meteoVille: ville } : {}),
         installation: { etape: 'photo', pairing: code, debut: FieldValue.serverTimestamp() },
       });
@@ -199,7 +202,13 @@ function brancher(deps) {
       throw new HttpsError('permission-denied', 'Réservé aux responsables de la famille.');
     }
     if (fam.installation && fam.installation.etape === 'fini') return { ok: true };
-    await ref.update({ 'installation.etape': 'fini', 'installation.fin': FieldValue.serverTimestamp() });
+    const maj = { 'installation.etape': 'fini', 'installation.fin': FieldValue.serverTimestamp() };
+    // Aucune commande reliée pendant l'installation (tablette hors commande) : abonnement à régler.
+    if (fam.abonnement && fam.abonnement.statut === 'installation') {
+      maj.abonnement = { statut: 'aucun', majLe: FieldValue.serverTimestamp() };
+      maj.rev = FieldValue.increment(1);
+    }
+    await ref.update(maj);
     const code = fam.installation && fam.installation.pairing;
     const p = code ? (await db.doc(`pairings/${code}`).get()).data() : null;
     const attente = ((p && p.attente) || []).filter((a) => a.email && a.uid !== uid);

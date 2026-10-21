@@ -2754,6 +2754,9 @@ exports.gestionSupprimerFamille = onCall({ timeoutSeconds: 540, memory: '512MiB'
   // Fichiers d'abord : si la base échoue ensuite, un nouvel essai finit le travail.
   await stockage().deleteFiles({ prefix: `families/${fid}/`, force: true });
   await db().recursiveDelete(ref);
+  // Jumelages de cette famille : sans eux, le rattrapage de nuit ne relie plus la tablette à une famille disparue.
+  const jumelages = await db().collection('pairings').where('fid', '==', fid).get();
+  await Promise.all(jumelages.docs.map((d) => d.ref.delete()));
   const commandes = await db().collection('commandes').where('fid', '==', fid).get();
   await Promise.all(commandes.docs.map((d) => d.ref.update({ familleSupprimeeLe: Date.now() })));
   await db().collection('suppressions').add({
