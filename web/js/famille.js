@@ -2189,9 +2189,9 @@ $('abo-banner-btn').addEventListener('click', () => {
     requestAnimationFrame(() => $('abo-card').scrollIntoView({ behavior: 'smooth', block: 'start' }));
   }
 });
-// Date d'arrêt annoncée avant de résilier : fin d'engagement, sinon fin de la période payée.
+// Date d'arrêt annoncée avant de résilier (sans engagement) : fin de l'essai, sinon fin du mois déjà payé.
 function dateArret(abo) {
-  const fin = [abo.engagementJusqua, abo.finPeriode].map((t) => (t ? toDate(t) : null)).filter(Boolean)
+  const fin = [abo.essaiJusqua, abo.finPeriode].map((t) => (t ? toDate(t) : null)).filter(Boolean)
     .sort((a, b) => b - a)[0];
   return fin ? fin.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : null;
 }
@@ -2201,8 +2201,8 @@ $('btn-resilier').addEventListener('click', async () => {
   const nom = session.family.name;
   // Une seule étape avant la résiliation (la loi veut une résiliation en ligne simple).
   const suite = [quand
-    ? `Votre abonnement s'arrêtera le ${quand} (fin de l'engagement ou du mois payé).`
-    : "Votre abonnement s'arrêtera à la fin de la période payée."];
+    ? `Papote s'arrêtera le ${quand}, à la fin du mois déjà payé. Rien d'autre ne sera prélevé.`
+    : "Papote s'arrêtera à la fin du mois déjà payé. Rien d'autre ne sera prélevé."];
   if (session.family.abonnement?.tablette !== 'achetee') suite.push('La tablette sera à nous renvoyer, l\'étiquette est offerte.');
   const partir = await avantDePartir({
     intro: `En résiliant, ${nom} perdra :`,
@@ -2216,7 +2216,7 @@ $('btn-resilier').addEventListener('click', async () => {
   if (!partir) { toast('Merci de rester avec Papote'); return; }
   withAboError(async () => {
     const { le } = await resilier(session.fid);
-    notice(`Résiliation enregistrée. Papote fonctionnera jusqu'au ${dateLongue(le) || quand || 'terme de la période payée'}.`);
+    notice(`Résiliation enregistrée. Papote s'arrêtera le ${dateLongue(le) || quand || 'dernier jour du mois payé'}.`);
   });
 });
 
@@ -2282,8 +2282,8 @@ async function renderFinDeContrat(abo) {
   $('retract-info').hidden = !r;
   if (r) {
     $('retract-info').textContent = r.jusqua
-      ? `Vous pouvez annuler la commande et être remboursé jusqu'au ${jourMois(r.jusqua)}. Ensuite, vous pourrez résilier à tout moment.`
-      : 'Vous pouvez annuler la commande et être remboursé. Ensuite, vous pourrez résilier à tout moment.';
+      ? `Annulation possible jusqu'au ${jourMois(r.jusqua)} : la tablette nous revient et tout ce que vous avez payé est remboursé, 60 € de mise en service compris. Ensuite, vous pourrez résilier à tout moment, sans frais.`
+      : 'La tablette n\'est pas encore partie : en annulant, tout ce que vous avez payé est remboursé tout de suite, 60 € de mise en service compris.';
   }
   const rest = finInfo?.restitution;
   const remb = finInfo?.remboursement;
@@ -2317,7 +2317,7 @@ $('btn-retracter').addEventListener('click', async () => {
   const r = finInfo?.retractation;
   if (!r) return;
   const quand = r.jusqua === null || r.jusqua === undefined ? 'tout de suite' : 'dès que la tablette nous revient';
-  const montant = r.montant ? ` Vous serez remboursé de ${euros(r.montant)} ${quand}.` : '';
+  const montant = r.montant ? ` Tout ce que vous avez payé (${euros(r.montant)}) vous est remboursé ${quand}.` : '';
   if (!await askConfirm(`Annuler votre commande ? Votre abonnement s'arrête tout de suite.${montant}`, 'Annuler ma commande')) return;
   withAboError(async () => {
     const res = await retracter(session.fid);
@@ -2352,10 +2352,10 @@ function renderAbonnement() {
     const details = [];
     if (abo.formule) details.push(`${abo.formule === 'sim' ? 'Internet inclus, 30 € par mois' : 'Avec le Wi-Fi de la maison, 20 € par mois'}, ${abo.tablette === 'achetee' ? 'tablette achetée' : 'tablette prêtée'}`);
     const futur = (t) => t && toDate(t) > new Date();
-    if (futur(abo.essaiJusqua)) details.push(`Essai gratuit jusqu'au ${dateLongue(abo.essaiJusqua)}`);
-    if (futur(abo.engagementJusqua)) details.push(`Engagement jusqu'au ${dateLongue(abo.engagementJusqua)}`);
-    if (abo.resiliationLe) details.push(`Résiliation prévue le ${dateLongue(abo.resiliationLe)}`);
-    else if (abo.finPeriode && statut === 'actif' && !futur(abo.essaiJusqua)) details.push(`Prochaine échéance le ${dateLongue(abo.finPeriode)}`);
+    // Une seule phrase par date (sans engagement : plus de date d'engagement).
+    if (abo.resiliationLe) details.push(`Résilié : Papote s'arrête le ${dateLongue(abo.resiliationLe)}`);
+    else if (futur(abo.essaiJusqua)) details.push(`Mois d'essai gratuit jusqu'au ${dateLongue(abo.essaiJusqua)}, premier prélèvement ce jour-là`);
+    else if (abo.finPeriode && statut === 'actif') details.push(`Prochain prélèvement le ${dateLongue(abo.finPeriode)}`);
     $('abo-details').textContent = details.join(' · ');
     const enCours = ['actif', 'impaye'].includes(statut);
     $('btn-portail').hidden = !admin || !abo.stripeCustomerId || statut === 'offert';

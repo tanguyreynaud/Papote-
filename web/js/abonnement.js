@@ -14,7 +14,7 @@ export function abonnementOk(family) {
   return !abo || OK_STATUTS.includes(abo.statut);
 }
 
-// La tablette est toujours prêtée : 50 € de mise en service à la commande, puis l'abonnement.
+// La tablette est toujours prêtée : 60 € de mise en service à la commande, puis l'abonnement.
 export const FORMULES = [
   { formule: 'wifi', tablette: 'incluse', titre: 'Avec le Wi-Fi de la maison', prix: '20 € par mois' },
   { formule: 'sim', tablette: 'incluse', titre: 'Internet inclus', prix: '30 € par mois, sans box ni Wi-Fi' },
@@ -45,7 +45,7 @@ export function rattacherCommande(fid, code) {
   return call('rattacherCommande', clean ? { fid, code: clean } : { fid });
 }
 
-/** Résilier : l'abonnement s'arrête à la date renvoyée ({ le }), après l'engagement. */
+/** Résilier (sans engagement) : l'abonnement s'arrête à la date renvoyée ({ le }), fin du mois payé ou de l'essai. */
 export function resilier(fid) {
   return call('resilierAbonnement', { fid });
 }
@@ -55,7 +55,7 @@ export function finDeContrat(fid) {
   return call('finDeContrat', { fid });
 }
 
-/** Annuler la commande (rétractation) : l'abonnement s'arrête tout de suite. */
+/** Annuler la commande (30 jours après la réception) : l'abonnement s'arrête tout de suite, tout est remboursé. */
 export function retracter(fid) {
   return call('retracter', { fid });
 }
