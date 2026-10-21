@@ -725,17 +725,33 @@ async function remplirCommande(id) {
   document.title = `Papote · Commande ${codeCommande(c.code)}`;
   const ligne = (k, v) => (v ? [h('dt', {}, k), h('dd', {}, v)] : []);
   const factures = h('div', {}, h('p', { class: 'muted small' }, 'Lecture des factures…'));
+  const partie = !['a-preparer', 'paiement-en-attente', 'annulee'].includes(c.expedition);
+  const expliquee = (texte, el) => h('div', { class: 'action' }, h('p', { class: 'small' }, texte), el);
   const actions = [
     ...(c.expedition === 'a-preparer' ? [h('div', { class: 'action' },
       h('p', { class: 'small' }, 'Préparer le colis étape par étape : tablette, carte SIM, accessoires, étiquette Mondial Relay.'),
       h('button', { type: 'button', class: 'primary small-btn', onclick: (e) => document.dispatchEvent(
         new CustomEvent('papote:preparer-envoi', { detail: { commande: c, bouton: e.currentTarget } })) },
       c.preparation && Object.keys(c.preparation.faits || {}).length ? 'Reprendre la préparation' : 'Préparer l\'envoi'))] : []),
-    ...(t ? [formulaireRemplacement(c, t)] : []),
-    ...(t || c.envoyeeLe ? [boutonEtiquetteRetour(c)] : []),
-    ...(c.code && !c.fid && c.expedition !== 'annulee' ? [boutonRenvoyerCode(c)] : []),
+    ...(t && partie ? [expliquee('Un élément du kit est cassé ou perdu : choisissez-le, puis ce qui le remplace.',
+      formulaireRemplacement(c, t))] : []),
+    ...(partie && (t || c.envoyeeLe) ? [expliquee('Le client doit renvoyer quelque chose : il reçoit par e-mail une étiquette Mondial Relay gratuite.',
+      boutonEtiquetteRetour(c))] : []),
+    ...(['a-preparer', 'paiement-en-attente'].includes(c.expedition) ? [actionExpliquee(
+      c.offerte ? 'La tablette n\'est pas encore partie : la commande est annulée et la tablette mise de côté revient au stock.'
+        : 'La tablette n\'est pas encore partie : l\'abonnement s\'arrête, tout ce qui a été payé est remboursé, la tablette mise de côté revient au stock et le client reçoit un e-mail.',
+      'Annuler la commande', () => annulerCommande(c), true)] : []),
+    ...(c.fid && !c.offerte && ['actif', 'impaye', 'suspendu', 'active', 'trialing', 'past_due'].includes(c.abonnement) ? [c.resiliationLe
+      ? h('div', { class: 'action' }, h('p', { class: 'small' }, `Abonnement arrêté : il prend fin le ${jour(c.resiliationLe)}.`))
+      : actionExpliquee('Comme si le client résiliait lui-même dans l\'appli : l\'abonnement prend fin à la fin du mois déjà payé (ou de l\'essai).',
+        'Arrêter l\'abonnement', () => arreterAbonnement(c), true)] : []),
+    ...(c.code && !c.fid && c.expedition !== 'annulee' ? [expliquee('Le client a perdu son code de commande : il en a besoin pour relier la tablette à l\'appli famille.',
+      boutonRenvoyerCode(c))] : []),
   ];
+  const annonce = annonceCommande;
+  annonceCommande = null;
   $('dc-corps').replaceChildren(...[
+    annonce ? h('p', { class: 'annonce', role: 'status' }, annonce) : null,
     h('div', { class: 'card' },
       h('h2', {}, `Commande ${codeCommande(c.code)}`, c.offerte ? ' (offerte)' : ''),
       h('dl', { class: 'fiche' },
@@ -780,12 +796,51 @@ async function remplirCommande(id) {
           p.rembourse ? euros(p.rembourse) : '', p.recu ? h('a', { href: p.recu, target: '_blank', rel: 'noopener' }, 'Reçu') : '']));
     }
     const paye = r.paiements.filter((p) => p.statut === 'succeeded').reduce((s, p) => s + p.montant - (p.rembourse || 0), 0);
-    factures.replaceChildren(r.erreur ? h('p', { class: 'muted small' }, r.erreur) : null,
+    factures.replaceChildren(...[r.erreur ? h('p', { class: 'muted small' }, r.erreur) : null,
       h('p', { class: 'small' }, `Payé au total : ${euros(paye)}`),
-      h('div', { class: 'table' }, table), ...(autres.length ? [h('div', { class: 'table' }, table2)] : []));
+      h('div', { class: 'table' }, table), autres.length ? h('div', { class: 'table' }, table2) : null].filter(Boolean));
   } catch (e) {
     factures.replaceChildren(h('p', { class: 'error small' }, messageErreur(e)));
   }
+}
+
+// Une action de la page commande : ce qu'elle fait, puis son bouton.
+let annonceCommande = null; // Résultat de la dernière action, affiché en haut de la page commande rechargée.
+function actionExpliquee(texte, libelle, faire, danger = false) {
+  const msg = h('p', { class: 'small', hidden: true });
+  const bouton = h('button', { type: 'button', class: `secondary small-btn${danger ? ' danger' : ''}` }, libelle);
+  bouton.addEventListener('click', async () => {
+    bouton.disabled = true;
+    msg.hidden = false;
+    msg.className = 'small muted';
+    msg.textContent = 'En cours…';
+    try {
+      annonceCommande = await faire();
+      commandeAffichee = null;
+      donnees = await lireDonnees(true);
+      afficherTout();
+      signalerChangement();
+    } catch (e) {
+      if (e === 'non') { msg.hidden = true; bouton.disabled = false; return; }
+      msg.className = 'small error';
+      msg.textContent = messageErreur(e);
+      bouton.disabled = false;
+    }
+  });
+  return h('div', { class: 'action' }, h('p', { class: 'small' }, texte), bouton, msg);
+}
+
+async function annulerCommande(c) {
+  if (!confirm(`Annuler la commande ${codeCommande(c.code)} de ${c.nom || c.email || 'ce client'} ?${c.offerte ? '' : ' Tout ce qui a été payé sera remboursé.'}`)) throw 'non';
+  const r = await appeler('gestionAnnulerCommande', { commande: c.id });
+  return [`Commande annulée.`, r.rembourse ? `${euros(r.rembourse)} remboursés.` : null,
+    r.mailEnvoye ? 'Le client a reçu un e-mail.' : null].filter(Boolean).join(' ');
+}
+
+async function arreterAbonnement(c) {
+  if (!confirm(`Arrêter l'abonnement de ${c.nom || c.email || 'ce client'} ? Il prendra fin à la fin du mois déjà payé.`)) throw 'non';
+  const r = await appeler('resilierAbonnement', { fid: c.fid });
+  return `Abonnement arrêté : il prend fin le ${jour(r.le)}.`;
 }
 
 // Étiquettes Sendcloud de la commande, en liens PDF.
@@ -911,7 +966,6 @@ function formulaireRemplacement(c, t) {
       if (fenetre) { if (aller) fenetre.location = aller[1]; else fenetre.close(); }
       donnees = await lireDonnees(true);
       afficherTout();
-      signalerChangement();
       commandeAffichee = null;
       afficherFiche();
     } catch (err) {
