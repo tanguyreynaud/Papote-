@@ -45,7 +45,7 @@ export function rattacherCommande(fid, code) {
   return call('rattacherCommande', clean ? { fid, code: clean } : { fid });
 }
 
-/** Résilier (sans engagement) : l'abonnement s'arrête à la date renvoyée ({ le }), fin du mois payé ou de l'essai. */
+/** Résilier (sans engagement) : l'abonnement s'arrête à la date renvoyée ({ le }), fin du mois en cours, prélevé à l'arrêt. */
 export function resilier(fid) {
   return call('resilierAbonnement', { fid });
 }

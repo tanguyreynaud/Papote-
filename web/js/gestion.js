@@ -474,7 +474,7 @@ const ETATS_COMMANDE = {
 };
 const ABONNEMENTS = {
   offert: 'offert', actif: 'actif', impaye: 'impayé', suspendu: 'suspendu', resilie: 'résilié', aucun: 'sans abonnement',
-  canceled: 'résilié', active: 'actif', trialing: 'en essai', past_due: 'impayé',
+  canceled: 'résilié', active: 'actif', trialing: 'premier mois', past_due: 'impayé',
 };
 const RETOURS = {
   attendue: 'Retour attendu', echec: 'Non rendue, prélèvement refusé', rendue: 'Tablette rendue', facturee: 'Matériel non rendu, prélevé',
@@ -764,7 +764,7 @@ async function remplirCommande(id) {
       'Annuler la commande', () => annulerCommande(c), true)] : []),
     ...(c.fid && !c.offerte && ['actif', 'impaye', 'suspendu', 'active', 'trialing', 'past_due'].includes(c.abonnement) ? [c.resiliationLe
       ? h('div', { class: 'action' }, h('p', { class: 'small' }, `Abonnement arrêté : il prend fin le ${jour(c.resiliationLe)}.`))
-      : actionExpliquee('Comme si le client résiliait lui-même dans l\'appli : l\'abonnement prend fin à la fin du mois déjà payé (ou de l\'essai).',
+      : actionExpliquee('Comme si le client résiliait lui-même dans l\'appli : l\'abonnement prend fin à la fin du mois en cours, prélevé à l\'arrêt.',
         'Arrêter l\'abonnement', () => arreterAbonnement(c), true)] : []),
     ...(c.code && !c.fid && c.expedition !== 'annulee' ? [expliquee('Le client a perdu son code de commande : il en a besoin pour relier la tablette à l\'appli famille.',
       boutonRenvoyerCode(c))] : []),
@@ -859,7 +859,7 @@ async function annulerCommande(c) {
 }
 
 async function arreterAbonnement(c) {
-  if (!await demander(`Arrêter l'abonnement de ${c.nom || c.email || 'ce client'} ? Il prendra fin à la fin du mois déjà payé.`, { oui: 'Arrêter l\'abonnement', non: 'Garder', danger: true })) throw 'non';
+  if (!await demander(`Arrêter l'abonnement de ${c.nom || c.email || 'ce client'} ? Il prendra fin à la fin du mois en cours, prélevé à l\'arrêt.`, { oui: 'Arrêter l\'abonnement', non: 'Garder', danger: true })) throw 'non';
   const r = await appeler('resilierAbonnement', { fid: c.fid });
   return `Abonnement arrêté : il prend fin le ${jour(r.le)}.`;
 }
@@ -1556,7 +1556,7 @@ function afficherBilan() {
   const commandes = donnees.commandes.filter((c) => dansPeriode(c.creeLe));
   $('kpi-activite').replaceChildren(
     stat(String(enCours.length), 'abonnements en cours',
-      `${enCours.filter((a) => a.statut === 'trialing').length} en essai · ${enCours.filter((a) => a.statut === 'past_due').length} impayé(s)`),
+      `${enCours.filter((a) => a.statut === 'trialing').length} au premier mois · ${enCours.filter((a) => a.statut === 'past_due').length} impayé(s)`),
     stat(euros(mrr), 'revenu mensuel', 'abonnements payants'),
     stat(String(commandes.length), 'commandes', `${commandes.filter((c) => c.formule === 'sim').length} avec internet inclus`),
     stat(String(abos.filter((a) => dansPeriode(a.finLe)).length), 'abonnements terminés'),
