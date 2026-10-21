@@ -301,9 +301,28 @@ details summary { cursor: pointer; margin-top: 12px; }
 .liste-liens a, [data-panneau="client"] .fiche a { color: var(--accent); font-weight: 600; }
 
 /* Actions de la page commande : une explication, puis son bouton. */
-#dc-corps .action { padding: 14px 0; border-top: 1px solid #ece7dd; }
-#dc-corps .action:first-of-type { border-top: 0; padding-top: 4px; }
-#dc-corps .action > p { margin: 0 0 10px; }
+#dc-corps .action, #famille-actions .action { padding: 14px 0; border-top: 1px solid #ece7dd; }
+#dc-corps .action:first-of-type, #famille-actions .action:first-of-type { border-top: 0; padding-top: 4px; }
+#dc-corps .action > p, #famille-actions .action > p { margin: 0 0 10px; }
 #dc-corps .action > p + p { margin: 10px 0 0; }
+#famille-actions .replace-out:not([hidden]) { margin-top: 10px; }
 .annonce { margin: 0 0 14px; padding: 12px 16px; border-radius: 12px; background: #eef0fd; color: #3730a3; font-weight: 600; }
 #dc-corps .action .remplacement { margin-top: 0; }
+
+/* Page famille : mêmes cartes que les pages commande et client. */
+#famille-fiche .families { display: grid; grid-template-columns: 1fr; gap: 16px; max-width: none; margin-bottom: 16px; }
+#famille-fiche .family-head h2 { margin: 0; flex: 1; font-size: 22px; }
+#famille-fiche .family dl { font-size: 15px; gap: 6px 16px; }
+#famille-fiche #famille-liens { margin-bottom: 16px; }
+
+/* Boutons côte à côte : même hauteur et même taille de texte. */
+.actions > button.primary, .actions > button.secondary { font-size: 15px; padding: 10px 18px; min-height: 44px; }
+
+/* Questions dans la page (dialogue.js) : remplacent les fenêtres grises du navigateur. */
+.dialogue-papote { border: 0; border-radius: 20px; padding: 24px; max-width: 440px; width: calc(100% - 32px); background: var(--surface); color: var(--text); box-shadow: 0 20px 60px rgba(30, 27, 75, .25); }
+.dialogue-papote::backdrop { background: rgba(30, 27, 75, .35); }
+.dialogue-papote p { margin: 0 0 18px; font-size: 16px; line-height: 1.45; white-space: pre-line; }
+.dialogue-papote input { width: 100%; box-sizing: border-box; margin: 0 0 18px; }
+.dialogue-papote .actions { justify-content: flex-end; }
+.dialogue-papote button.primary.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+#famille-fiche .families > li { margin: 0; }
