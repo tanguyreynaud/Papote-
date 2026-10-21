@@ -862,6 +862,8 @@ final class Sync {
             Meteo.forget(context);
             firebase.forgetAll();
             posts.clear();
+            subscription = "";
+            prefs.edit().remove("installEnCours").remove("installPar").remove("bienvenueVue").apply();
             lastPostsJson = null;
             lastStatusJson = null;
             lastRev = Long.MIN_VALUE;

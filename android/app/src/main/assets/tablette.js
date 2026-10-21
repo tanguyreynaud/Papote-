@@ -802,7 +802,8 @@
     hideBoot();
     // Première installation chez le client : nom, wifi, puis appairage (bienvenue.js).
     if (window.PapoteBienvenue) {
-      if (status.state === 'welcome') { window.PapoteBienvenue.show(status); return; }
+      // Pas encore de famille (ou remise sur Bienvenue) : pas d'écran « en pause » d'une famille d'avant.
+      if (status.state === 'welcome') { setPaused(''); window.PapoteBienvenue.show(status); return; }
       window.PapoteBienvenue.hide();
     }
     if (status.state === 'setup') {
