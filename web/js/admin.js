@@ -454,9 +454,23 @@ async function loadShipped() {
 // Tablettes incluses à rendre après la fin d'un abonnement (restitution écrite par le serveur).
 async function loadReturns() {
   try {
-    const snap = await getDocs(query(collection(db, 'commandes'), where('restitution.statut', 'in', ['attendue', 'echec'])));
-    $('returns-empty').hidden = !snap.empty;
-    $('returns').replaceChildren(...snap.docs.map((d) => {
+    // Même règle que le compteur de l'accueil (etatCommande, gestion.js) : retour attendu ou échoué,
+    // commande non annulée. Une commande comptée par le serveur mais absente de la requête est lue directement.
+    const aRendre = (c) => c && c.restitution && ['attendue', 'echec'].includes(c.restitution.statut) && c.expedition !== 'annulee';
+    const trouvees = new Map();
+    try {
+      const snap = await getDocs(query(collection(db, 'commandes'), where('restitution.statut', 'in', ['attendue', 'echec'])));
+      for (const d of snap.docs) if (aRendre(d.data())) trouvees.set(d.id, d);
+    } catch (err) { console.warn('Restitutions illisibles', err); }
+    const serveur = await donnees().then((x) => x.commandes || []).catch(() => []);
+    for (const c of serveur.filter(aRendre)) {
+      if (trouvees.has(c.id)) continue;
+      const d = await getDoc(doc(db, 'commandes', c.id)).catch(() => null);
+      if (d && d.exists()) trouvees.set(c.id, d);
+    }
+    const docs = [...trouvees.values()];
+    $('returns-empty').hidden = docs.length > 0;
+    $('returns').replaceChildren(...docs.map((d) => {
       const c = d.data();
       const r = c.restitution || {};
       const avant = toDate(r.avant);
