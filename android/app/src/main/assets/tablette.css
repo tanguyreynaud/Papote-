@@ -1715,19 +1715,9 @@ body.night .home-left .sos-btn { background: #2a1f2c; color: #f4a7b4; border-col
   font-family: 'Bricolage Grotesque', 'Atkinson Hyperlegible', sans-serif; font-size: 7.5vmin; font-weight: 800;
 }
 
-/* Diaporama : une vidéo déjà reçue, fond sombre et « Revoir la vidéo » au milieu */
-.slide.slide-video { background: #1c1a26; }
-.slide-replay {
-  position: absolute; top: 50%; left: 50%; z-index: 2;
-  -webkit-transform: translate(-50%, -50%); transform: translate(-50%, -50%);
-  display: flex; align-items: center; gap: 3vmin;
-  min-height: 16vmin; padding: 0 8vmin; border: 0; border-radius: 99vmin;
-  background: #fff; color: #3730a3; box-shadow: 0 1.2vmin 3vmin rgba(0, 0, 0, .35);
-  font-family: 'Bricolage Grotesque', 'Atkinson Hyperlegible', sans-serif; font-size: 7vmin; font-weight: 800;
-}
-.slide-replay svg { width: 8vmin; height: 8vmin; flex-shrink: 0; }
-.slide-replay[hidden] { display: none; }
-.photos .night-veil { pointer-events: none; } /* « Revoir la vidéo » reste touchable le soir */
+/* Diaporama : une vidéo déjà reçue, jouée dans la page sur l'image floutée de la vidéo */
+.slide-vid { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; background: transparent; z-index: 1; }
+.photos .night-veil { pointer-events: none; } /* le voile du soir ne bloque pas les touchers */
 
 /* « Écouter » : « Un instant… » pendant que la voix se prépare, puis « Arrêter » qui pulse */
 .ln-btn.listen.loading { opacity: .75; }

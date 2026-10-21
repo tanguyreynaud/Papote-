@@ -61,6 +61,7 @@
   function showView(view) {
     var ids = ['view-home', 'view-photos', 'view-setup'];
     for (var i = 0; i < ids.length; i++) show($(ids[i]), ids[i] === view);
+    if (view !== 'view-photos') stopSlideVideo();
     resetIdle();
   }
 
@@ -402,13 +403,12 @@
         next.style.opacity = '1';
       });
     } else {
-      // Vidéo déjà reçue : un écran sombre avec « Revoir », et elle se lance d'elle-même.
+      // Vidéo déjà reçue : elle se lance toute seule dans le diaporama, flèches et Accueil gardés.
       setPicture(next.querySelector('img'), BLANK);
       next.querySelector('.photo-bg').style.backgroundImage = 'none';
       next.style.opacity = '1';
-      setTimeout(function () { if (token === fadeToken && isShown('view-photos')) playSlideVideo(p); }, 1200);
+      playSlideVideo(next, p, token);
     }
-    showReplay(next, !p.image, p);
     signWithFace($('photo-who'), p, p.authorName + ', ' + dayLabel(p.createdAt));
     var partLabel = p.parts > 1 ? 'Photo ' + p.part + ' sur ' + p.parts : '';
     var caption = p.text && partLabel ? p.text + ' · ' + partLabel : (p.text || partLabel);
@@ -443,36 +443,58 @@
   }
 
   // ---------- Vidéos dans le diaporama ----------
-  // Les vidéos déjà reçues reviennent dans le diaporama (pas dans le cadre de l'accueil) et se
-  // lancent toutes seules ; à la fin, le diaporama reprend. Toucher la vidéo l'arrête.
-  function showReplay(slide, visible, p) {
-    var b = slide.querySelector('.slide-replay');
-    if (!b) {
-      b = document.createElement('button');
-      b.className = 'slide-replay';
-      b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 5v14l11-7z"/></svg><span>Revoir la vidéo</span>';
-      slide.appendChild(b);
-      on(b, 'click', function () { var cur = slides[photoIndex]; if (cur && !cur.image) playSlideVideo(cur); });
+  // Les vidéos déjà reçues reviennent dans le diaporama (pas dans le cadre de l'accueil) : jouées dans
+  // la page, sous les flèches et le bouton Accueil, qui restent utilisables. À la fin, la suivante.
+  // Fond : l'image de la vidéo floutée, comme pour les photos (pas un écran noir).
+  function slideVideo(slide) {
+    var v = slide.querySelector('video');
+    if (!v) {
+      v = document.createElement('video');
+      v.className = 'slide-vid';
+      v.setAttribute('playsinline', '');
+      v.setAttribute('preload', 'auto');
+      slide.insertBefore(v, slide.querySelector('img'));
     }
-    show(b, visible);
+    return v;
   }
 
-  function playSlideVideo(p) {
-    if (playing || inCall()) return;
-    clearTimeout(slideTimer);
-    playVoice(p, function () {
+  function playSlideVideo(slide, p, token) {
+    var v = slideVideo(slide);
+    var bgDone = false;
+    var next = function () {
+      if (token !== fadeToken || !isShown('view-photos')) return;
       resetIdle();
-      if (!isShown('view-photos') || slides[photoIndex] !== p) return;
-      // Fin de la vidéo : on attend un peu sur « Revoir », puis le diaporama continue.
-      slideTimer = setTimeout(function () {
-        if (!isShown('view-photos') || slides[photoIndex] !== p || playing) return;
-        if (slides.length > 1) { photoIndex = (photoIndex + 1) % slides.length; renderPhoto(); }
-      }, SLIDE_MS);
-    });
+      if (slides.length > 1) { photoIndex = (photoIndex + 1) % slides.length; renderPhoto(); }
+      else { v.currentTime = 0; v.play().catch(function () { }); }
+    };
+    v.onended = next;
+    v.onerror = function () { slideTimer = setTimeout(next, SLIDE_MS); }; // vidéo illisible : on passe
+    v.onloadeddata = function () {
+      if (bgDone || token !== fadeToken) return;
+      bgDone = true;
+      try {
+        var c = document.createElement('canvas');
+        c.width = 24;
+        c.height = Math.max(1, Math.round(24 * v.videoHeight / (v.videoWidth || 1)));
+        c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+        slide.querySelector('.photo-bg').style.backgroundImage = 'url("' + c.toDataURL('image/jpeg', 0.8) + '")';
+      } catch (e) { }
+    };
+    v.setAttribute('src', p.video);
+    v.style.display = '';
+    stopRadio();
+    v.play().catch(function () { v.onerror(); });
   }
 
+  // Une autre photo, l'accueil ou un appel : la vidéo du diaporama s'arrête.
   function stopSlideVideo() {
-    if (playing && !overlayPost) stopAudio();
+    var vs = document.querySelectorAll('#view-photos video.slide-vid');
+    for (var i = 0; i < vs.length; i++) {
+      vs[i].onended = vs[i].onerror = vs[i].onloadeddata = null;
+      try { vs[i].pause(); } catch (e) { }
+      vs[i].removeAttribute('src');
+      vs[i].style.display = 'none';
+    }
   }
 
   // La plus récente est à l'index 0 : « suivante » va vers les plus récentes.
@@ -814,7 +836,7 @@
         // Pas de nouveau rendu si la même chose est affichée : une vidéo en cours continue.
         var current = slides[photoIndex];
         photoIndex = Math.min(photoIndex, slides.length - 1);
-        if (!playing || !current || slides[photoIndex].id !== current.id) renderPhoto();
+        if (!current || current.image || slides[photoIndex].id !== current.id) renderPhoto();
       } else {
         showView('view-home');
       }
@@ -1722,6 +1744,7 @@
 
   function checkCallForRadio() {
     trackCallSpans();
+    if (inCall()) stopSlideVideo();
     if (inCall()) {
       if (radioAudio) { stopRadio(); radioPausedForCall = true; }
     } else if (radioPausedForCall) {
