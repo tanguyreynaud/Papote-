@@ -1199,22 +1199,26 @@ async function suiviRetour(event, rAvant, r, c) {
   const id = event.params.id;
   const retractation = c.remboursement && c.remboursement.statut === 'au-retour' ? c.remboursement.montant : null;
 
+  // Tablette attendue : le client reçoit UN seul e-mail, le mode d'emploi avec l'étiquette à coller. Avec la
+  // vraie clé Stripe, l'étiquette est créée la nuit suivante (gestionAutomatique) et cet e-mail part avec elle
+  // (plus bas). En mode test, aucune étiquette n'est créée : le mode d'emploi part seul, tout de suite.
   if (r.statut === 'attendue' && rAvant.statut !== 'attendue' && !r.mailLe) {
     await ref.update({ 'restitution.mailLe': FieldValue.serverTimestamp() });
-    const avantMs = r.avant.toMillis();
-    const envois = [envoyerMail(EMAIL_PAPOTE, mail.retourAPreparer({
-      nom: c.nom, email: c.email, telephone: c.telephone, code: c.code ? regles.afficherCode(c.code) : null,
-      relais: c.livraison, avant: avantMs, retractation,
-    }))];
-    if (c.email) envois.push(envoyerMail(c.email, mail.retourTablette({ nom: c.nom, avant: avantMs, retractation, montant: regles.penaliteRestitution(c) })));
-    (await Promise.allSettled(envois)).filter((x) => x.status === 'rejected')
-      .forEach((x) => logger.error(`Commande ${id} : e-mail de retour non parti`, x.reason));
+    const etiquetteAutomatique = STRIPE_SECRET.value().startsWith('sk_live_') && c.expedition === 'envoyee';
+    if (c.email && !r.etiquette && !etiquetteAutomatique) {
+      try {
+        await envoyerMail(c.email, mail.retourTablette({ nom: c.nom, avant: r.avant.toMillis(), retractation, montant: regles.penaliteRestitution(c) }));
+      } catch (e) {
+        logger.error(`Commande ${id} : e-mail de retour non parti`, e.message);
+      }
+    }
   }
 
   if (r.etiquette && r.etiquette !== rAvant.etiquette && c.email) {
     try {
       await envoyerMail(c.email, mail.etiquetteRetour({
         nom: c.nom, lien: r.etiquette, avant: r.avant ? r.avant.toMillis() : null,
+        fin: ['attendue', 'echec'].includes(r.statut), retractation, montant: regles.penaliteRestitution(c),
       }));
     } catch (e) {
       logger.error(`Commande ${id} : étiquette de retour non envoyée`, e.message);

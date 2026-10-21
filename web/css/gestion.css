@@ -286,8 +286,6 @@ body.depot-actif::after {
 .pc-apres { margin: 14px 0 0; }
 
 /* Pages d'une tablette et d'une commande (au lieu de fenêtres) */
-.retour { display: inline-block; font-weight: 600; color: var(--accent, #4f46e5); text-decoration: none; padding: 4px 0; }
-.retour:hover { text-decoration: underline; }
 [data-panneau="tablette"] .card + .card, [data-panneau="commande"] .card + .card { margin-top: 16px; }
 [data-panneau="tablette"] h2, [data-panneau="commande"] h2 { margin: 0 0 8px; }
 .a-verifier { margin-top: 6px; }
@@ -370,3 +368,26 @@ details summary { cursor: pointer; margin-top: 12px; }
 /* Liens dans les tableaux (PDF, reçu, justificatif) : couleur Papote, sans soulignement. */
 td a { color: var(--accent); font-weight: 600; text-decoration: none; }
 td a:hover { text-decoration: underline; }
+
+/* « Retour » : un bouton net, la flèche ‹ devant, le même sur toutes les pages. */
+.retour, button.retour {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 40px; margin: 0 0 4px; padding: 0 16px 0 10px;
+  border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--text);
+  font: inherit; font-size: 15px; font-weight: 700; text-decoration: none; cursor: pointer;
+}
+.retour::before { content: '‹'; font-size: 24px; line-height: 1; margin-top: -3px; color: var(--accent); }
+.retour:hover { border-color: var(--accent); color: var(--accent); text-decoration: none; }
+
+/* Titre de fiche avec son ⋮ à droite. */
+.tete-fiche { display: flex; align-items: center; gap: 10px; }
+.tete-fiche h2 { flex: 1; margin: 0; }
+
+/* Liens dans les pages : indigo, sans soulignement (souligné au survol seulement). */
+[data-panneau] a:not(.retour):not(.stat) { color: var(--accent); font-weight: 600; text-decoration: none; }
+[data-panneau] a:not(.retour):not(.stat):hover { text-decoration: underline; }
+.fiche .link:hover { text-decoration: underline; }
+
+/* Tableaux plus aérés ; une ligne cliquable le montre avec › au bout. */
+.table td, .table th { padding-top: 12px; padding-bottom: 12px; }
+.table tbody tr[tabindex] td:last-child { position: relative; padding-right: 30px; }
+.table tbody tr[tabindex] td:last-child::after { content: '›'; position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: var(--accent); font-size: 20px; font-weight: 700; }
