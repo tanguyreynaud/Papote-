@@ -86,10 +86,10 @@
       <section data-panneau="accueil">
         <div class="ligne-chiffres">
           <div class="stats compact">
-            <div class="stat"><span id="s-families">–</span><p>familles</p></div>
-            <div class="stat ok"><span id="s-online">–</span><p>en ligne</p></div>
-            <div class="stat warn"><span id="s-offline">–</span><p>hors ligne</p></div>
-            <div class="stat"><span id="s-idle">–</span><p>pas touchées 24 h</p></div>
+            <div class="stat onglet" data-vue="toutes"><span id="s-families">–</span><p>familles</p></div>
+            <div class="stat onglet ok" data-vue="on"><span id="s-online">–</span><p>en ligne</p></div>
+            <div class="stat onglet warn" data-vue="off"><span id="s-offline">–</span><p>hors ligne</p></div>
+            <div class="stat onglet" data-vue="idle"><span id="s-idle">–</span><p>pas touchées 24 h</p></div>
           </div>
           <div class="stats compact" id="kpi-mois"></div>
         </div>
@@ -185,6 +185,7 @@
           <button type="button" class="link retour" id="famille-retour">← Toutes les familles</button>
           <ul id="families" class="families"></ul>
           <div class="card" id="famille-liens"></div>
+          <div id="famille-actions"></div>
         </div>
         </div>
         <div class="card" data-onglet="email">
