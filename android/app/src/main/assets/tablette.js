@@ -1345,49 +1345,49 @@
   }
 
   // ---------- SOS famille ----------
-  // Un appui, puis « Oui » : toute la famille sonne en même temps, le premier qui décroche a l'appel.
-  // Personne ne répond : un 2e essai, puis la famille reçoit « Mamie a appuyé sur SOS » (serveur).
-  // La question « Appeler toute la famille ? » évite les appuis par erreur ; sans réponse, elle
-  // se referme d'elle-même.
-  var SOS_CONFIRM_MS = 20000;
+  // Un seul appui : « J'appelle toute la famille… », et l'appel part de lui-même au bout de
+  // 5 secondes ; « Annuler » rattrape un appui par erreur. Toute la famille sonne en même temps,
+  // le premier qui décroche a l'appel. Personne ne répond : un 2e essai, puis la famille reçoit
+  // « Mamie a appuyé sur SOS » (serveur).
+  var SOS_DELAY_S = 5;
   var sosTimer = null;
 
   function setupSosButton() {
     var b = el2('button', 'big-btn sos-btn');
     b.innerHTML = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54z"/></svg>' +
       '<span>SOS famille</span>';
-    on(b, 'click', showSosConfirm);
+    on(b, 'click', showSosCountdown);
     // En haut, au milieu : loin d'« Appeler », et pas sous les doigts qui attrapent la tablette par le bord.
     var left = document.querySelector('#view-home .home-left');
     left.insertBefore(b, left.firstChild);
   }
 
-  function sosConfirmOpen() {
-    return !!callScreen && !callScreen.hasAttribute('hidden') && /\bsos-confirm\b/.test(callScreen.className);
-  }
-
-  function showSosConfirm() {
+  function showSosCountdown() {
     stopRadio();
     ensureCallScreen();
     callScreen.innerHTML = '';
     stopRingback();
-    callScreen.className = 'call-out sos-confirm';
+    callScreen.className = 'call-out sos-countdown';
     callScreen.removeAttribute('hidden');
     var face = el2('span', 'call-face family', '');
     face.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M16 11a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm-8 0a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm0 2c-2.3 0-7 1.2-7 3.5V19h14v-2.5C15 14.2 10.3 13 8 13zm8 0c-.3 0-.6 0-1 .1 1.2.8 2 1.9 2 3.4V19h6v-2.5c0-2.3-4.7-3.5-7-3.5z"/></svg>';
     callScreen.appendChild(face);
-    callScreen.appendChild(el2('h1', 'call-title', 'Appeler toute la famille ?'));
-    callScreen.appendChild(el2('p', 'call-sub', 'Tout le monde va sonner en même temps.'));
-    var row = el2('div', 'sos-actions');
-    var yes = el2('button', 'sos-yes', 'Oui, appeler');
-    on(yes, 'click', function () { clearTimeout(sosTimer); startSos(1); });
-    var no = el2('button', 'sos-no', 'Non');
-    on(no, 'click', function () { clearTimeout(sosTimer); closeCallScreen(); });
-    row.appendChild(yes);
-    row.appendChild(no);
-    callScreen.appendChild(row);
-    clearTimeout(sosTimer);
-    sosTimer = setTimeout(function () { if (sosConfirmOpen()) closeCallScreen(); }, SOS_CONFIRM_MS);
+    callScreen.appendChild(el2('h1', 'call-title', 'J’appelle toute la famille…'));
+    var sub = el2('p', 'call-sub', '');
+    callScreen.appendChild(sub);
+    var cancel = el2('button', 'sos-cancel', 'Annuler');
+    on(cancel, 'click', function () { clearInterval(sosTimer); closeCallScreen(); });
+    callScreen.appendChild(cancel);
+    var left = SOS_DELAY_S;
+    var show = function () { sub.textContent = 'L’appel part dans ' + left + (left > 1 ? ' secondes' : ' seconde'); };
+    show();
+    clearInterval(sosTimer);
+    sosTimer = setInterval(function () {
+      left--;
+      if (left > 0) { show(); return; }
+      clearInterval(sosTimer);
+      if (/sos-countdown/.test(callScreen.className) && !callScreen.hasAttribute('hidden')) startSos(1);
+    }, 1000);
   }
 
   function startSos(attempt) {
@@ -1402,7 +1402,8 @@
       if (finished) return;
       finished = true;
       renderCall('ended', title, sub);
-      setTimeout(function () { outCall = null; closeCallScreen(); }, ms || 4000);
+      // Pas si un nouveau SOS a été lancé entre-temps : on fermerait son décompte.
+      setTimeout(function () { if (/state-ended/.test(callScreen.className)) { outCall = null; closeCallScreen(); } }, ms || 4000);
     }
     try {
       outCall = window.papoteCallFamily({
