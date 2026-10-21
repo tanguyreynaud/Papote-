@@ -212,7 +212,7 @@
         <h1 class="brand">Papote</h1>
         <p id="family-title" class="muted"></p>
         <button type="button" id="tablet-chip" class="tablet-chip" aria-label="État de la tablette" hidden></button>
-        <select id="family-switch" class="family-switch" aria-label="Changer de famille" hidden></select>
+        <button type="button" id="family-switch" class="family-switch" aria-label="Changer de famille" hidden></button>
       </header>
       <section id="pending-banner" class="join-requests" aria-label="Demandes pour rejoindre la famille" hidden></section>
       <div id="abo-banner" class="abo-banner" hidden>
@@ -342,6 +342,22 @@
           <h2>Membres</h2>
           <ul id="members" class="members"></ul>
         </div>
+        <div id="tablet-owner-note" class="card" hidden>
+          <h2>Réglages de la tablette</h2>
+          <p class="muted" id="tablet-owner-text"></p>
+        </div>
+        <h3 class="settings-group">Ce téléphone</h3>
+        <div class="card">
+          <h2>Notifications</h2>
+          <p class="muted small">Pour que votre téléphone sonne quand <span class="grand-name"></span> vous appelle, même app fermée.</p>
+          <p id="phone-push-text" class="setting-value"></p>
+          <button type="button" id="phone-push-btn" class="primary wide" hidden>Activer les notifications</button>
+          <div id="phone-pause" hidden>
+            <h2 class="phone-sub">Batterie</h2>
+            <p id="phone-pause-text" class="muted small"></p>
+            <button type="button" id="phone-pause-btn" class="secondary wide">Ouvrir le réglage de la batterie</button>
+          </div>
+        </div>
         <h3 class="settings-group owner-only" id="group-tablet">La tablette</h3>
         <div id="tablet-face-card" class="card" hidden>
           <h2>Photo de <span class="grand-name"></span></h2>
@@ -468,8 +484,8 @@
           <p id="remote-tablet" class="muted small"></p>
           <div class="remote-buttons">
             <button type="button" class="primary" data-cmd="status">Obtenir l'état</button>
-            <button type="button" class="primary" data-cmd="restart">Redémarrer la tablette</button>
-            <button type="button" class="primary" id="btn-logs">Obtenir le journal</button>
+            <button type="button" class="secondary" data-cmd="restart">Redémarrer la tablette</button>
+            <button type="button" class="secondary" id="btn-logs" hidden>Obtenir le journal</button>
           </div>
           <div id="logs-box" class="remote-panel" hidden>
             <button type="button" class="icon-btn panel-close" data-close="logs-box" aria-label="Fermer"><svg><use href="#i-close"/></svg></button>
@@ -574,7 +590,7 @@
             <p id="retour-info" class="muted small" hidden></p>
           </div>
           <div id="abo-choices" hidden>
-            <p class="muted small">La tablette est prêtée et reste à Papote. 50 € de mise en service à la commande, puis l'abonnement choisi. Le paiement se fait sur la page sécurisée de Stripe.</p>
+            <p class="muted small">La tablette est prêtée et reste à Papote. 60 € de mise en service à la commande, puis l'abonnement choisi. Le paiement se fait sur la page sécurisée de Stripe.</p>
             <div id="abo-formules" class="abo-formules"></div>
             <p class="muted small">Déjà payé sur le site ? Entrez le code de commande, ou laissez vide pour chercher avec votre adresse e-mail.</p>
             <form class="order-link" data-order-form>
@@ -612,15 +628,15 @@
             <summary>Installer l'app sur mon téléphone</summary>
             <p><strong>iPhone</strong> : ouvrez le lien dans Safari, touchez le bouton Partager (le carré avec une flèche) puis « Sur l'écran d'accueil ».</p>
             <p><strong>Android</strong> : dans Chrome, menu ⋮ en haut à droite puis « Ajouter à l'écran d'accueil » ou « Installer l'application ».</p>
-            <p>Au premier lancement de l'app installée, entrez à nouveau le code famille.</p>
+            <p>Au premier lancement de l'app installée, reconnectez-vous comme la première fois (avec Google ou votre adresse e-mail).</p>
           </details>
           <details>
             <summary>Inviter quelqu'un de la famille</summary>
-            <p>Dans Réglages, touchez « Partager le lien » et envoyez-le par SMS ou par e-mail. La personne n'a qu'à l'ouvrir et donner son prénom.</p>
+            <p>Sur l'accueil, touchez « Inviter » en haut. Un responsable peut inviter avec l'adresse e-mail de la personne ; sinon, touchez « Partager le lien » et envoyez-le par SMS ou par e-mail. La personne n'a qu'à l'ouvrir et donner son prénom.</p>
           </details>
           <details>
             <summary>La tablette ne répond plus</summary>
-            <p>Vérifiez que la tablette est branchée et connectée au wifi. Si le problème continue, éteignez-la puis rallumez-la.</p>
+            <p>Vérifiez que la tablette est branchée. Avec le Wi-Fi de la maison, vérifiez que la box est allumée ; avec la formule internet incluse, vérifiez que la petite carte SIM est bien en place dans la tablette. Si le problème continue, un responsable peut la redémarrer depuis Réglages > Dépanner la tablette, ou vous pouvez l'éteindre puis la rallumer.</p>
           </details>
           <details>
             <summary>L'appel vidéo ne fonctionne pas</summary>
@@ -629,11 +645,11 @@
           </details>
           <details>
             <summary>Supprimer une photo, une vidéo ou un message</summary>
-            <p>Touchez la corbeille sous la photo ou la vidéo, ou touchez votre message. Il disparaît aussi de la tablette. On ne peut supprimer que ses propres envois.</p>
+            <p>Touchez la petite corbeille sous la photo, la vidéo ou le message. Il disparaît aussi de la tablette. On ne peut supprimer que ses propres envois ; un responsable peut supprimer tous les envois.</p>
           </details>
           <details>
             <summary>Les anciennes photos disparaissent</summary>
-            <p>Pour que Papote reste gratuit, l'app garde les 200 dernières photos et les 40 dernières vidéos. Au-delà, les plus anciennes s'effacent toutes seules. Gardez vos originaux sur votre téléphone.</p>
+            <p>Pour garder de la place, l'app garde les 200 dernières photos et les 40 dernières vidéos. Au-delà, les plus anciennes s'effacent toutes seules. Gardez vos originaux sur votre téléphone.</p>
           </details>
           <details>
             <summary>Ce que voit la tablette</summary>

@@ -596,7 +596,7 @@ function showIntroTablette() {
   if (!introAFaire()) return false;
   const nom = session.family.name;
   const choix = { veille: { active: true, de: 23, a: 7 }, volume: 80,
-    options: { lecture: true, reponseVocale: false, sos: false, radio: { active: false, nom: RADIOS[0].nom, url: RADIOS[0].url } } };
+    options: { lecture: true, reponseVocale: false, sos: true, radio: { active: false, nom: RADIOS[0].nom, url: RADIOS[0].url } } };
   const back = document.createElement('div');
   back.className = 'guide-back intro-back';
   back.innerHTML = `<form class="guide intro" role="dialog" aria-modal="true" novalidate>
@@ -625,6 +625,7 @@ function showIntroTablette() {
         <div class="toggle-list">
           <label class="toggle-row"><span class="toggle-text"><strong>Lecture à voix haute</strong><span>Lit les messages et rappels à voix haute quand elle est devant la tablette, avec un bouton « Écouter »</span></span><input type="checkbox" class="toggle" id="intro-lecture"></label>
           <label class="toggle-row"><span class="toggle-text"><strong>Réponse vocale</strong><span>Répondre à une photo en parlant</span></span><input type="checkbox" class="toggle" id="intro-vocal"></label>
+          <label class="toggle-row"><span class="toggle-text"><strong>SOS famille</strong><span>Un bouton « SOS famille » en haut de la tablette : un appui, et toute la famille sonne</span></span><input type="checkbox" class="toggle" id="intro-sos"></label>
           <label class="toggle-row"><span class="toggle-text"><strong>Radio</strong><span>Un bouton « Radio » à côté de « Appeler »</span></span><input type="checkbox" class="toggle" id="intro-radio"></label>
           <label class="station" id="intro-station-wrap" hidden>Station <select id="intro-station"></select></label>
         </div>
@@ -651,6 +652,7 @@ function showIntroTablette() {
   $i('#intro-volume').value = String(choix.volume);
   $i('#intro-volume-val').textContent = `${choix.volume} %`;
   $i('#intro-lecture').checked = choix.options.lecture;
+  $i('#intro-sos').checked = choix.options.sos;
   const nat = document.createElement('optgroup');
   nat.label = 'Nationales';
   const loc = document.createElement('optgroup');
@@ -679,6 +681,7 @@ function showIntroTablette() {
       ...(session.family.options || {}),
       lecture: $i('#intro-lecture').checked,
       reponseVocale: $i('#intro-vocal').checked,
+      sos: $i('#intro-sos').checked,
       radio: { active: $i('#intro-radio').checked, nom: r.nom, url: r.url },
     };
     // Une écriture par réglage : chaque règle n'accepte qu'un champ (avec rev) à la fois.
@@ -689,6 +692,11 @@ function showIntroTablette() {
   }
 
   $i('.intro-prev').addEventListener('click', () => {
+    // « Plus tard » : SOS famille est quand même activé, comme à l'installation complète.
+    if (i === 0 && !session.family.options) {
+      updateDoc(doc(db, 'families', session.fid), { options: { sos: true }, rev: increment(1) })
+        .catch((err) => console.warn('SOS non activé', err));
+    }
     if (i === 0 || i === steps.length - 1) close();
     else { i--; render(); }
   });
@@ -1385,7 +1393,36 @@ function loadQr() {
   return qrLoading;
 }
 
+// Réglages > Ce téléphone : notifications, et batterie dans l'app Android.
+async function renderPhoneCard() {
+  if (!session) return;
+  const nom = session.family.name;
+  const btn = $('phone-push-btn');
+  btn.hidden = true;
+  if (pushAllowed()) $('phone-push-text').textContent = `Activées : votre téléphone sonnera quand ${nom} appelle.`;
+  else if (pushRefused()) $('phone-push-text').textContent = 'Bloquées : autorisez les notifications pour Papote dans les réglages du téléphone.';
+  else if (!await pushSupported()) {
+    $('phone-push-text').textContent = isIos()
+      ? "Ajoutez d'abord Papote à l'écran d'accueil (voir Support), puis rouvrez cette page."
+      : 'Ce navigateur ne sait pas recevoir les notifications. Ouvrez Papote dans Chrome.';
+  } else {
+    $('phone-push-text').textContent = 'Pas encore activées.';
+    btn.hidden = false;
+  }
+  // L'app Android dit (?pause=1 ou 0) si Android peut encore la mettre en pause.
+  let pause = null;
+  try { pause = sessionStorage.getItem('papote.pause'); } catch (e) { /* rien */ }
+  $('phone-pause').hidden = !inNativeApp();
+  $('phone-pause-text').textContent = pause === '0'
+    ? 'Réglé : Android ne mettra pas Papote en pause.'
+    : "Pour qu'Android ne mette pas Papote en pause (le téléphone ne sonnerait plus), touchez le bouton, puis tout en bas, désactivez « Suspendre l'activité… ».";
+  $('phone-pause-btn').hidden = pause === '0';
+}
+$('phone-push-btn').addEventListener('click', () => $('push-nudge').click());
+$('phone-pause-btn').addEventListener('click', () => $('pause-nudge').click());
+
 async function renderSettings() {
+  renderPhoneCard();
   $('settings-code').textContent = formatCode(session.family.code);
   // QR code du lien d'invitation : l'appareil photo du téléphone ouvre l'app avec le code déjà rempli.
   try {
@@ -1481,9 +1518,9 @@ function callErrorMessage(err) {
   if (err && err.name === 'NotAllowedError') return "La caméra ou le micro est refusé. Autorisez-les dans les réglages du navigateur, puis réessayez.";
   if (err && (err.name === 'NotReadableError' || err.name === 'AbortError')) return 'La caméra est déjà utilisée par une autre application.';
   if (err && err.name === 'NotFoundError') return "Aucune caméra ou aucun micro n'a été trouvé.";
-  // Le détail aide à comprendre une panne signalée par la famille.
-  const detail = err ? ` (${err.name || 'Erreur'} : ${String(err.message || err).slice(0, 80)})` : '';
-  return `L'appel n'a pas pu démarrer. Réessayez dans un instant.${detail}`;
+  // Le détail reste dans la console : il ne dit rien à la famille.
+  if (err) console.warn('Appel non démarré', err);
+  return "L'appel n'a pas pu démarrer. Vérifiez la connexion internet, puis réessayez dans un instant.";
 }
 
 // Bouton d'appel : grisé si la tablette ne sait pas recevoir d'appel, ou si elle est déjà
@@ -1691,6 +1728,7 @@ $('push-nudge').addEventListener('click', async () => {
     toast(`Notifications activées : ${session.family.name} pourra vous appeler`);
   });
   renderPushNudge();
+  renderPhoneCard();
   if (!ok && pushRefused()) {
     notice(`Les notifications sont bloquées pour Papote. Autorisez-les dans les réglages du téléphone pour que ${session.family.name} puisse vous appeler.`);
   }
@@ -1822,8 +1860,19 @@ let allMembers = [];
 const MAX_PROCHES = 30;
 let familyFull = false;
 
+// Réglages d'un proche qui n'a pas installé la tablette : dire qui peut la régler.
+function renderTabletOwnerNote() {
+  if (!session) return;
+  const owner = allMembers.find((m) => m.id === session.family.createdBy);
+  $('tablet-owner-note').hidden = amOwner();
+  $('tablet-owner-text').textContent = owner?.name
+    ? `La nuit, le son, les options et le Wi-Fi de la tablette se règlent depuis le téléphone de ${owner.name}, qui l'a installée. Demandez-lui si besoin.`
+    : "La nuit, le son, les options et le Wi-Fi de la tablette se règlent depuis le téléphone de la personne qui l'a installée.";
+}
+
 function renderMembers(all) {
   allMembers = all;
+  renderTabletOwnerNote();
   // Les demandes en attente sont à part : seuls les responsables les voient et les acceptent.
   const pending = all.filter((m) => m.status === 'pending');
   const members = all.filter((m) => m.status !== 'pending');
@@ -2104,7 +2153,7 @@ const dateLongue = (ts) => (ts ? toDate(ts).toLocaleDateString('fr-FR', { day: '
 function paused() {
   if (abonnementOk(session?.family)) return false;
   notice(amOwner()
-    ? "Papote est en pause : l'abonnement de la famille doit être réglé. Allez dans Réglages > Abonnement."
+    ? "Papote est en pause : l'abonnement de la famille doit être réglé. Touchez Profil en bas de l'écran, puis Abonnement."
     : "Papote est en pause : l'abonnement de la famille doit être réglé par un responsable de la famille.");
   return true;
 }
@@ -2151,7 +2200,11 @@ document.querySelectorAll('[data-order-form]').forEach((form) => form.addEventLi
 
 $('abo-banner-btn').addEventListener('click', () => {
   if (session.family.abonnement?.statut === 'impaye') withAboError(() => ouvrirPortail(session.fid));
-  else openPage('settings');
+  else {
+    // L'abonnement est dans Profil.
+    document.querySelector('.nav-item[data-tab="profile"]').click();
+    requestAnimationFrame(() => $('abo-card').scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  }
 });
 // Date d'arrêt annoncée avant de résilier : fin d'engagement, sinon fin de la période payée.
 function dateArret(abo) {
@@ -2223,6 +2276,7 @@ async function useOrderCodeFromSite(statut, owner) {
 
 let finCle = null;
 let finInfo = null;
+let resilierPossible = false; // calculé par renderAbonnement
 const euros = (centimes) => `${(centimes / 100).toLocaleString('fr-FR', { minimumFractionDigits: centimes % 100 ? 2 : 0 })} €`;
 const jourMois = (ms) => new Date(ms).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
 
@@ -2237,10 +2291,17 @@ async function renderFinDeContrat(abo) {
     try { finInfo = await finDeContrat(session.fid); } catch (err) { console.warn('Fin de contrat illisible', err); finInfo = null; }
     if (cle !== finCle) return;
   }
+  // Tant que la commande peut être annulée (et remboursée), c'est le seul bouton proposé :
+  // il arrête aussi l'abonnement. Ensuite, il ne reste que « Résilier l'abonnement ».
   const r = finInfo?.retractation;
   $('btn-retracter').hidden = !r;
-  $('retract-info').hidden = !r?.jusqua;
-  if (r?.jusqua) $('retract-info').textContent = `Annulation possible jusqu'au ${jourMois(r.jusqua)}.`;
+  $('btn-resilier').hidden = !resilierPossible || !!r;
+  $('retract-info').hidden = !r;
+  if (r) {
+    $('retract-info').textContent = r.jusqua
+      ? `Vous pouvez annuler la commande et être remboursé jusqu'au ${jourMois(r.jusqua)}. Ensuite, vous pourrez résilier à tout moment.`
+      : 'Vous pouvez annuler la commande et être remboursé. Ensuite, vous pourrez résilier à tout moment.';
+  }
   const rest = finInfo?.restitution;
   const remb = finInfo?.remboursement;
   const box = $('retour-box');
@@ -2298,6 +2359,7 @@ function renderAbonnement() {
     $('abo-status').textContent = 'Formule d\u2019origine, sans abonnement payant';
     $('abo-status').className = 'abo-status s-offert';
     $('abo-details').textContent = 'Rien à régler pour cette famille.';
+    resilierPossible = false;
     for (const id of ['btn-portail', 'btn-resilier', 'btn-garder']) $(id).hidden = true;
     $('abo-choices').hidden = true;
   }
@@ -2314,7 +2376,8 @@ function renderAbonnement() {
     $('abo-details').textContent = details.join(' · ');
     const enCours = ['actif', 'impaye'].includes(statut);
     $('btn-portail').hidden = !admin || !abo.stripeCustomerId || statut === 'offert';
-    $('btn-resilier').hidden = !admin || !enCours || !!abo.resiliationLe || !abo.stripeSubscriptionId;
+    resilierPossible = admin && enCours && !abo.resiliationLe && !!abo.stripeSubscriptionId;
+    $('btn-resilier').hidden = !resilierPossible || !!finInfo?.retractation;
     $('btn-garder').hidden = !admin || !enCours || !abo.resiliationLe;
     $('abo-choices').hidden = !admin || !['aucun', 'resilie', 'suspendu'].includes(statut);
   }
@@ -2409,7 +2472,7 @@ $('btn-logs').addEventListener('click', async () => {
     const latest = snap.docs.map((d) => d.data())
       .sort((a, b) => (toDate(b.updatedAt)?.getTime() || 0) - (toDate(a.updatedAt)?.getTime() || 0))[0];
     if (!latest) { $('logs-info').textContent = "La tablette n'a encore envoyé aucun journal."; return; }
-    $('logs-info').textContent = `Envoyé ${ago(toDate(latest.updatedAt).getTime())}${latest.version ? ` · version ${latest.version}` : ''}. Touchez « État » pour en recevoir un tout neuf.`;
+    $('logs-info').textContent = `Envoyé ${ago(toDate(latest.updatedAt).getTime())}${latest.version ? ` · version ${latest.version}` : ''}. Touchez « Obtenir l'état » pour en recevoir un tout neuf.`;
     $('logs').textContent = latest.lines || '(vide)';
   } catch (err) {
     console.error(err);
@@ -2553,6 +2616,17 @@ function renderWifi() {
 }
 
 
+// Journal de la tablette : lignes techniques, pour l'équipe Papote seulement (compte admin).
+let siteAdmin = { uid: null, oui: false };
+async function renderLogsButton() {
+  if (authUser && siteAdmin.uid !== authUser.uid) {
+    let oui = false;
+    try { oui = !!(await authUser.getIdTokenResult()).claims?.admin; } catch (e) { /* rien */ }
+    siteAdmin = { uid: authUser.uid, oui };
+  }
+  $('btn-logs').hidden = !authUser || siteAdmin.uid !== authUser.uid || !siteAdmin.oui;
+}
+
 function renderRemote() {
   const admin = amFamilyAdmin();
   const tablet = targetTablet();
@@ -2560,6 +2634,7 @@ function renderRemote() {
   $('wifi-card').hidden = !amOwner() || !tablet;
   renderWifi();
   $('group-tablet').hidden = !amOwner();
+  renderLogsButton();
   if (tablet) {
     const online = tablet.lastOnline ? toDate(tablet.lastOnline) : null;
     $('remote-tablet').textContent = online ? `Tablette vue en ligne ${ago(online.getTime())}.` : 'Tablette reliée.';
@@ -2912,8 +2987,10 @@ function applyFamily() {
   renderAbonnement();
   renderRemote();
   const admin = amFamilyAdmin();
-  // Réglages : responsables seulement (Profil est pour tout le monde).
-  $('tile-settings').hidden = !admin;
+  // Réglages : pour tout le monde ; seuls les responsables y voient la famille à gérer,
+  // et seul le propriétaire les réglages de la tablette.
+  $('tile-settings').hidden = false;
+  renderTabletOwnerNote();
   // Un responsable ne quitte pas sa famille (il pourrait ne plus jamais revenir).
   $('btn-leave').hidden = admin;
   $('my-name-value').textContent = session.member.name;
@@ -3405,8 +3482,16 @@ document.querySelectorAll('[data-action=other-family]').forEach((btn) => btn.add
 $('btn-join-back').addEventListener('click', () => enterApp());
 $('btn-skip-invites').addEventListener('click', () => { skipInvites = true; enterApp(); });
 
-$('family-switch').addEventListener('change', () => {
-  saveFamilyId($('family-switch').value);
+// Plusieurs familles : le nom en haut de l'accueil ouvre la liste, dans la page.
+$('family-switch').addEventListener('click', async () => {
+  const autres = myFamilies.filter((f) => f.fid !== session?.fid);
+  const choix = await chooseAction('Changer de famille', [
+    ...autres.map((f) => ({ label: `Famille de ${f.name}`, value: f.fid })),
+    { label: 'Rejoindre une autre famille', value: '+' },
+  ]);
+  if (!choix) return;
+  if (choix === '+') { showJoin(true); return; }
+  saveFamilyId(choix);
   enterApp();
 });
 
@@ -3552,9 +3637,10 @@ async function enterApp() {
 }
 
 function renderFamilySwitch(current) {
-  const select = $('family-switch');
-  select.replaceChildren(...myFamilies.map((f) => new Option(`Famille de ${f.name}`, f.fid, false, f.fid === current)));
-  select.hidden = myFamilies.length < 2;
+  const btn = $('family-switch');
+  const actuelle = myFamilies.find((f) => f.fid === current);
+  btn.textContent = `Pour ${actuelle?.name || ''}`;
+  btn.hidden = myFamilies.length < 2;
   $('family-title').hidden = myFamilies.length >= 2;
 }
 

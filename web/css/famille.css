@@ -753,7 +753,8 @@ button:disabled { opacity: .45; cursor: default; }
 
 /* ---------- Plusieurs familles, demandes ---------- */
 
-.family-switch { width: auto; max-width: 100%; margin-top: 6px; padding: 8px 12px; font-weight: 600; background: var(--surface); }
+.family-switch { width: auto; max-width: 100%; margin-top: 6px; padding: 8px 14px; gap: 6px; border-radius: 999px; font-size: 16px; font-weight: 600; color: var(--text); background: var(--surface); box-shadow: var(--shadow); }
+.family-switch::after { content: "▾"; color: var(--accent); }
 .pending-banner {
   width: 100%;
   margin: 0 0 16px;
@@ -1152,3 +1153,6 @@ body:not(.on-support) .ps-bouton, body:not(.on-support) .ps-panneau { display: n
 .dialog-buttons.stack .secondary { justify-content: center; min-height: 50px; font-weight: 700; }
 .action-danger { color: var(--danger) !important; }
 .agenda-edit + .agenda-edit { margin-left: 18px; }
+
+/* Réglages > Ce téléphone */
+.phone-sub { margin-top: 18px; }
