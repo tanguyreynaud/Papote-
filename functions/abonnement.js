@@ -105,10 +105,11 @@ function limiteRestitution(finMs) {
   return finMs + RESTITUTION_JOURS * JOUR;
 }
 
-// Rétractation (Code de la consommation) : 14 jours après la réception de la tablette.
+// « Annuler ma commande » : 30 jours après la réception de la tablette (CGV : le délai légal
+// de 14 jours est porté à 30, ce qui couvre l'essai d'un mois et le remboursement des 60 €).
 // Réception estimée à l'envoi + 3 jours (Mondial Relay) ; avant l'envoi, toujours possible.
-// Au plus tôt, 14 jours après la commande.
-const RETRACTATION_JOURS = 14;
+// Au plus tôt, 30 jours après la commande.
+const RETRACTATION_JOURS = 30;
 const ACHEMINEMENT_JOURS = 3;
 // Rappel avant de prélever le montant d'une tablette non rendue.
 const RAPPEL_RESTITUTION_JOURS = 7;
