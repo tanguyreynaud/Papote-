@@ -1565,12 +1565,39 @@
       b.className = 'ln-btn listen';
       b.innerHTML = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 10v4h4l5 5V5L7 10H3zm13.5 2A4.5 4.5 0 0 0 14 8v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg><span>Écouter</span>';
       on(b, 'click', function () {
-        var t = getText();
-        if (t && android() && android().speak) android().speak(t);
+        if (speech !== 'idle') { stopSpeaking(); return; }
+        sayAloud(getText());
       });
       container.insertBefore(b, container.firstChild);
     }
     return b;
+  }
+
+  // « Écouter » montre ce qui se passe : « Un instant… » pendant que la voix se prépare, puis
+  // « Arrêter » qui pulse pendant la lecture (Android prévient : onSpeech), et retour à « Écouter ».
+  var speech = 'idle';   // idle | loading | speaking
+  var speechTimer = null;
+  function setSpeech(state) {
+    speech = state;
+    clearTimeout(speechTimer);
+    // Sans nouvelles d'Android (moteur de voix bloqué), le bouton ne reste pas coincé.
+    if (state !== 'idle') speechTimer = setTimeout(function () { setSpeech('idle'); }, state === 'loading' ? 10000 : 120000);
+    var label = state === 'loading' ? 'Un instant…' : state === 'speaking' ? 'Arrêter' : 'Écouter';
+    var list = document.querySelectorAll('.ln-btn.listen');
+    for (var i = 0; i < list.length; i++) {
+      list[i].className = 'ln-btn listen' + (state === 'idle' ? '' : ' ' + state);
+      list[i].querySelector('span').textContent = label;
+    }
+  }
+  function sayAloud(text) {
+    if (!text || !android() || !android().speak) return;
+    setSpeech('loading');
+    android().speak(text);
+  }
+  function onSpeech(data) {
+    var st = data && data.state;
+    if (st === 'speaking') setSpeech('speaking');
+    else if (st === 'done') setSpeech('idle');
   }
 
   function showListenButtons() {
@@ -1594,11 +1621,12 @@
   function speakOnce(id, text) {
     if (!options.lecture || !text || spoken[id]) return;
     spoken[id] = true;
-    if (android() && android().speak) android().speak(text);
+    sayAloud(text);
   }
 
   function stopSpeaking() {
     if (android() && android().stopSpeaking) android().stopSpeaking();
+    setSpeech('idle');
   }
 
   // « Radio » : à côté d'« Appeler », la station choisie par la famille ; le bouton devient « Arrêter ».
@@ -1973,6 +2001,7 @@
     onFamily: onFamily,
     onVoiceSent: function (res) { onVoiceSent(res); },
     onVoiceEnded: voiceEnded,
+    onSpeech: onSpeech,
     onLeave: function () { if (window.papoteAppelsLeave) window.papoteAppelsLeave(); },
     closeOverlayForCall: closeOverlayForCall,
     goHome: function () { showView('view-home'); }

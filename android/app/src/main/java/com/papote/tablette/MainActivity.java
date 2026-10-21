@@ -173,6 +173,7 @@ public class MainActivity extends Activity implements Sync.Listener {
         }
 
         sync = new Sync(this, prefs, this);
+        prepareTts();
         wifi = new Wifi(this, admin());
         smsAlert = new SmsAlert(this, prefs, wifi);
         handleIntent(getIntent());
@@ -714,22 +715,58 @@ public class MainActivity extends Activity implements Sync.Listener {
 
     private android.speech.tts.TextToSpeech tts;
     private boolean ttsReady;
+    private boolean ttsFailed;
     private String ttsPending;
+
+    /**
+     * Moteur de voix préparé dès le démarrage : la première lecture part tout de suite (sinon plusieurs
+     * secondes d'attente). Voix française installée sur la tablette de préférence (pas d'attente du réseau).
+     * La page est tenue au courant : « speaking » au début, « done » à la fin (bouton « Écouter »).
+     */
+    private void prepareTts() {
+        if (tts != null) return;
+        tts = new android.speech.tts.TextToSpeech(getApplicationContext(), status -> {
+            ttsReady = status == android.speech.tts.TextToSpeech.SUCCESS;
+            if (!ttsReady) {
+                ttsFailed = true;
+                Journal.log(this, "Lecture à voix haute indisponible");
+                if (ttsPending != null) { ttsPending = null; speechState("done"); }
+                return;
+            }
+            tts.setLanguage(java.util.Locale.FRANCE);
+            try {
+                for (android.speech.tts.Voice v : tts.getVoices()) {
+                    if ("fr".equals(v.getLocale().getLanguage()) && "FR".equals(v.getLocale().getCountry())
+                            && !v.isNetworkConnectionRequired() && !v.getFeatures().contains(
+                            android.speech.tts.TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED)) {
+                        tts.setVoice(v);
+                        break;
+                    }
+                }
+            } catch (Exception e) {
+                Log.w(TAG, "Voix française", e);
+            }
+            tts.setSpeechRate(0.85f); // un peu plus lent, plus facile à suivre
+            tts.setOnUtteranceProgressListener(new android.speech.tts.UtteranceProgressListener() {
+                @Override public void onStart(String id) { speechState("speaking"); }
+                @Override public void onDone(String id) { speechState("done"); }
+                @Override public void onError(String id) { speechState("done"); }
+                @Override public void onStop(String id, boolean interrupted) { speechState("done"); }
+            });
+            if (ttsPending != null) { String t = ttsPending; ttsPending = null; speakNow(t); }
+        });
+    }
+
+    private void speechState(String state) {
+        try {
+            callPage("onSpeech", new JSONObject().put("state", state));
+        } catch (Exception ignored) { }
+    }
 
     private void speakNow(String text) {
         if (text == null || text.trim().isEmpty()) return;
-        if (tts == null) {
-            ttsPending = text;
-            tts = new android.speech.tts.TextToSpeech(getApplicationContext(), status -> {
-                ttsReady = status == android.speech.tts.TextToSpeech.SUCCESS;
-                if (!ttsReady) { Journal.log(this, "Lecture à voix haute indisponible"); return; }
-                tts.setLanguage(java.util.Locale.FRANCE);
-                tts.setSpeechRate(0.85f); // un peu plus lent, plus facile à suivre
-                if (ttsPending != null) { speakNow(ttsPending); ttsPending = null; }
-            });
-            return;
-        }
-        if (!ttsReady) { ttsPending = text; return; }
+        if (ttsFailed) { speechState("done"); return; }
+        if (tts == null || !ttsReady) { ttsPending = text; prepareTts(); return; }
         tts.speak(text, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "papote");
     }
 

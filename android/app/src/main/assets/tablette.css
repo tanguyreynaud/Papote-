@@ -1728,3 +1728,8 @@ body.night .home-left .sos-btn { background: #2a1f2c; color: #f4a7b4; border-col
 .slide-replay svg { width: 8vmin; height: 8vmin; flex-shrink: 0; }
 .slide-replay[hidden] { display: none; }
 .photos .night-veil { pointer-events: none; } /* « Revoir la vidéo » reste touchable le soir */
+
+/* « Écouter » : « Un instant… » pendant que la voix se prépare, puis « Arrêter » qui pulse */
+.ln-btn.listen.loading { opacity: .75; }
+.ln-btn.listen.speaking { background: #3730a3; color: #fff; border-color: #3730a3; animation: listen-pulse 1.4s ease-in-out infinite; }
+@keyframes listen-pulse { 50% { box-shadow: 0 0 0 2.4vmin rgba(55, 48, 163, .18); } }
