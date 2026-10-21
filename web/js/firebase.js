@@ -7,7 +7,7 @@ import {
 import {
   initializeFirestore, persistentLocalCache, persistentSingleTabManager,
   doc, getDoc, setDoc, updateDoc, deleteDoc, collection, query, orderBy, limit,
-  onSnapshot, addDoc, serverTimestamp, writeBatch, increment,
+  onSnapshot, addDoc, serverTimestamp, writeBatch, increment, deleteField,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
 
 const firebaseConfig = {
@@ -83,7 +83,7 @@ export async function choisirBase() {
 // Pour les appels vidéo (appel.js).
 export {
   doc, getDoc, collection, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, writeBatch,
-  increment,
+  increment, deleteField,
 };
 
 const FID_KEY = 'papote.fid';

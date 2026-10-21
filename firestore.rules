@@ -399,7 +399,14 @@ service cloud.firestore {
         allow read: if isMember(fid);
         allow create, update: if isMember(fid) && abonnementOk(fid)
           // lastSeen : « AAAA-MM-JJ HH:MM » quand un visage a regardé le rappel sur la tablette.
-          && request.resource.data.keys().hasOnly(['title', 'kind', 'time', 'repeat', 'date', 'days', 'createdBy', 'createdAt', 'lastAck', 'lastSeen'])
+          && request.resource.data.keys().hasOnly(['title', 'kind', 'time', 'repeat', 'date', 'days', 'createdBy', 'createdAt', 'lastAck', 'lastSeen', 'avanceMin', 'finLe', 'enPauseJusquau'])
+          // avanceMin : minutes d'annonce avant l'heure (absent = 15) ; finLe et enPauseJusquau : « AAAA-MM-JJ », jour compris.
+          && (!('avanceMin' in request.resource.data) || request.resource.data.avanceMin == null
+              || (request.resource.data.avanceMin is int && request.resource.data.avanceMin >= 0 && request.resource.data.avanceMin <= 240))
+          && (!('finLe' in request.resource.data) || request.resource.data.finLe == null
+              || (request.resource.data.finLe is string && request.resource.data.finLe.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')))
+          && (!('enPauseJusquau' in request.resource.data) || request.resource.data.enPauseJusquau == null
+              || (request.resource.data.enPauseJusquau is string && request.resource.data.enPauseJusquau.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')))
           && (!('lastSeen' in request.resource.data) || request.resource.data.lastSeen == null
               || (request.resource.data.lastSeen is string && request.resource.data.lastSeen.size() <= 20))
           && request.resource.data.title is string

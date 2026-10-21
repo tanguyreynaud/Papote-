@@ -1,9 +1,9 @@
 // Agenda côté famille : rappels (créer, lister, supprimer, voir quand Mamie a confirmé)
 // et anniversaires de la famille, que la tablette rappelle le jour J.
 import {
-  db, doc, collection, onSnapshot, serverTimestamp, writeBatch, bumpRev,
+  db, doc, collection, onSnapshot, serverTimestamp, writeBatch, bumpRev, deleteField,
 } from './firebase.js';
-import { askConfirm, notice } from './ui.js';
+import { askConfirm, notice, chooseAction } from './ui.js';
 
 const $ = (id) => document.getElementById(id);
 const JOURS_COURTS = ['dim', 'lun', 'mar', 'mer', 'jeu', 'ven', 'sam'];
@@ -32,6 +32,45 @@ function describe(r) {
   const date = r.date ? new Date(`${r.date}T00:00`) : null;
   const label = date ? date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) : '';
   return `Le ${label} à ${r.time}`;
+}
+
+const POUR_TOUJOURS = '9999-12-31';
+const dateCourte = (j) => new Date(`${j}T00:00`).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' });
+const enPause = (r) => !!r.enPauseJusquau && r.enPauseJusquau >= todayKey();
+const avanceTexte = (m) => (m === 0 ? 'à l\'heure seulement' : m >= 60 ? `${m / 60} h avant` : `${m} min avant`);
+
+// Complément sous l'heure : annonce, date de fin, pause.
+function details(r) {
+  const avance = Number.isInteger(r.avanceMin) ? r.avanceMin : 15;
+  return [
+    `Prévenue ${avanceTexte(avance)}`,
+    r.repeat !== 'once' && r.finLe ? (r.finLe < todayKey() ? `terminé le ${dateCourte(r.finLe)}` : `jusqu'au ${dateCourte(r.finLe)}`) : null,
+  ].filter(Boolean).join(' · ');
+}
+
+// Mettre en pause sans supprimer : la tablette n'affiche plus le rappel jusqu'à la date choisie (comprise).
+async function changerPause(r, valeur) {
+  const batch = writeBatch(db);
+  batch.update(doc(db, 'families', session.fid, 'reminders', r.id), { enPauseJusquau: valeur });
+  bumpRev(batch, session.fid);
+  await batch.commit();
+}
+async function pause(r) {
+  if (enPause(r)) {
+    await changerPause(r, deleteField());
+    toastAgenda('Rappel repris');
+    return;
+  }
+  const jour = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return d.toLocaleDateString('sv-SE'); };
+  const choix = await chooseAction(`Mettre « ${r.title} » en pause`, [
+    { label: 'Aujourd\'hui seulement', value: jour(0) },
+    { label: 'Pendant une semaine', value: jour(6) },
+    { label: 'Pendant un mois', value: jour(29) },
+    { label: 'Jusqu\'à ce que je le reprenne', value: POUR_TOUJOURS },
+  ]);
+  if (!choix) return;
+  await changerPause(r, choix);
+  toastAgenda('Rappel en pause');
 }
 
 function deleteButton(label, onConfirm) {
@@ -86,6 +125,17 @@ function renderReminders() {
   reminders.sort((a, b) => a.time.localeCompare(b.time));
   for (const r of reminders) {
     const { li, body } = item(`k-${r.kind || 'autre'}`, KINDS[r.kind] || 'Autre', r.title, describe(r));
+    const plus = document.createElement('p');
+    plus.className = 'muted small';
+    plus.textContent = details(r);
+    body.append(plus);
+    if (enPause(r)) {
+      li.classList.add('en-pause');
+      const p = document.createElement('p');
+      p.className = 'small pause-note';
+      p.textContent = r.enPauseJusquau === POUR_TOUJOURS ? 'En pause' : `En pause jusqu'au ${dateCourte(r.enPauseJusquau)} inclus`;
+      body.append(p);
+    }
     if (r.lastAck && r.lastAck.startsWith(todayKey())) {
       const ack = document.createElement('p');
       ack.className = 'seen small';
@@ -99,6 +149,12 @@ function renderReminders() {
       body.append(seen);
     }
     body.append(editButton(`Modifier le rappel « ${r.title} »`, () => openEdit('reminders', r)));
+    const bPause = document.createElement('button');
+    bPause.type = 'button';
+    bPause.className = 'link small agenda-edit';
+    bPause.textContent = enPause(r) ? 'Reprendre' : 'Mettre en pause';
+    bPause.addEventListener('click', () => pause(r).catch((err) => { console.error(err); notice('La modification a échoué. Vérifiez la connexion.'); }));
+    body.append(bPause);
     li.append(deleteButton('Supprimer ce rappel', async () => {
       if (await askConfirm(`Supprimer le rappel « ${r.title} » ?`)) await remove('reminders', r.id);
     }));
@@ -150,6 +206,7 @@ function syncRepeatFields() {
   const repeat = $('rem-repeat').value;
   $('rem-date-wrap').hidden = repeat !== 'once';
   $('rem-days').hidden = repeat !== 'weekly';
+  $('rem-fin-wrap').hidden = repeat === 'once';
 }
 
 function setSeg(next) {
@@ -181,6 +238,9 @@ $('add-reminder').addEventListener('click', () => {
   $('bday-name').value = '';
   $('bday-year').value = '';
   $('rem-days').querySelectorAll('input').forEach((i) => { i.checked = false; });
+  $('rem-avance').value = '15';
+  $('rem-fin').value = '';
+  $('rem-fin').min = todayKey();
   setSeg('reminder');
   openSheet();
   $('rem-title').focus();
@@ -200,6 +260,8 @@ function openEdit(coll, data) {
     $('rem-date').value = data.date || todayKey();
     $('rem-days').querySelectorAll('input').forEach((i) => { i.checked = (data.days || []).includes(Number(i.value)); });
     $('rem-time').value = data.time || '09:00';
+    $('rem-avance').value = String(Number.isInteger(data.avanceMin) ? data.avanceMin : 15);
+    $('rem-fin').value = data.finLe || '';
     syncRepeatFields();
     setSeg('reminder');
   } else {
@@ -237,6 +299,8 @@ function reminderData() {
   if (repeat === 'weekly' && !days.length) return fail('Choisissez au moins un jour.');
   if (repeat === 'once' && !$('rem-date').value) return fail('Choisissez une date.');
   if (!$('rem-time').value) return fail('Choisissez une heure.');
+  const finLe = repeat === 'once' ? null : $('rem-fin').value || null;
+  if (finLe && finLe < todayKey()) return fail('La date de fin est déjà passée.');
   return {
     title: $('rem-title').value.trim(),
     kind: document.querySelector('input[name="rem-kind"]:checked').value,
@@ -244,6 +308,8 @@ function reminderData() {
     repeat,
     date: repeat === 'once' ? $('rem-date').value : null,
     days: repeat === 'weekly' ? days : [],
+    avanceMin: Number($('rem-avance').value),
+    finLe,
     createdBy: session.member.name,
     createdAt: serverTimestamp(),
     lastAck: null,
@@ -303,7 +369,7 @@ export function startAgenda(current, onChange) {
   stopAgenda();
   stops.push(onSnapshot(collection(db, 'families', session.fid, 'reminders'), (snap) => {
     const all = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-    // Rappels « une seule fois » dont le jour est passé : effacés automatiquement.
+    // Rappels « une seule fois » dont le jour est passé : effacés automatiquement (un rappel arrivé à sa date de fin est gardé).
     const today = todayKey();
     const past = all.filter((r) => r.repeat === 'once' && r.date && r.date < today);
     if (past.length) {

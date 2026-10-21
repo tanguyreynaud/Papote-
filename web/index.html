@@ -749,6 +749,19 @@
       <label>Heure
         <input id="rem-time" type="time" value="09:00">
       </label>
+      <label>Prévenir avant
+        <select id="rem-avance">
+          <option value="0">Seulement à l'heure</option>
+          <option value="5">5 minutes avant</option>
+          <option value="15" selected>15 minutes avant</option>
+          <option value="30">30 minutes avant</option>
+          <option value="60">1 heure avant</option>
+          <option value="120">2 heures avant</option>
+        </select>
+      </label>
+      <label id="rem-fin-wrap">Jusqu'au (facultatif)
+        <input id="rem-fin" type="date">
+      </label>
       </div>
       <button type="submit" class="primary wide" id="btn-reminder">Ajouter le rappel</button>
       <p id="rem-error" class="error" hidden></p>

@@ -384,6 +384,8 @@ button:disabled { opacity: .45; cursor: default; }
 .k-rdv { color: var(--c-photo); }
 .reminder-title { font-size: 18px; font-weight: 600; }
 .reminder-when { margin-top: 2px !important; }
+.reminder.en-pause .reminder-title, .reminder.en-pause .reminder-when { opacity: .55; }
+.reminder .pause-note { color: var(--accent); font-weight: 600; margin-top: 4px !important; }
 
 .choice, .days { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
 .choice label, .days label {
@@ -1149,3 +1151,4 @@ body:not(.on-support) .ps-bouton, body:not(.on-support) .ps-panneau { display: n
 .member-more:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); color: var(--accent); }
 .dialog-buttons.stack .secondary { justify-content: center; min-height: 50px; font-weight: 700; }
 .action-danger { color: var(--danger) !important; }
+.agenda-edit + .agenda-edit { margin-left: 18px; }
