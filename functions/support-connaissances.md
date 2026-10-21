@@ -125,7 +125,7 @@ les fonctions suffit pour que le chat en tienne compte.
 - Décès du proche : l'abonnement s'arrête sans frais dès réception de l'acte de décès envoyé à contact@mapapote.fr, sans attendre la fin du mois. Le matériel prêté est à renvoyer sous 30 jours avec l'étiquette retour fournie par Papote. Demande de contact.
 - Entrée du proche en maison de retraite (EHPAD) : Papote le suit, la tablette s'emporte et marche aussi là-bas (voir Maison de retraite). Si la famille préfère arrêter, elle résilie normalement, sans frais, à la fin du mois payé.
 - Son : la tablette fait un son quand une photo, une vidéo ou un message arrive.
-- Essai gratuit d'un mois (30 jours) : le premier mois n'est prélevé qu'à la fin de l'essai. Résiliation pendant l'essai : rien d'autre n'est prélevé et les 60 € de mise en service sont remboursés, une fois la tablette rendue.
+- Essai gratuit d'un mois (30 jours) : le premier mois n'est prélevé qu'à la fin de l'essai. Changer d'avis : pendant 30 jours après la réception, bouton « Annuler ma commande » dans l'appli (onglet Profil, Abonnement) ; la tablette est renvoyée avec une étiquette prépayée et tout ce qui a été payé (dont les 60 € de mise en service) est remboursé une fois la tablette rendue.
 - Réseaux sociaux : Papote est sur Facebook, Instagram, TikTok et YouTube sous le nom « mapapote » (ne donne pas de lien).
 - Coupure de courant : la batterie tient quelques heures.
 - Alexa, Google Home ou autre assistant vocal : non, pas compatible.

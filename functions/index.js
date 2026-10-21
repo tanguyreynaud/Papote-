@@ -11,7 +11,7 @@
 //   codeCommande       GET depuis merci.html : code de commande à noter après le paiement
 //   stripeWebhook      Stripe prévient ici de chaque paiement ou changement d'abonnement
 //   finDeGrace         chaque heure : suspend les familles dont le délai de grâce est dépassé
-//   retracter          appel depuis l'appli famille : annule la commande (14 jours), remboursée au retour
+//   retracter          appel depuis l'appli famille : annule la commande (30 jours), remboursée au retour
 //   finDeContrat       appel depuis l'appli famille : rétractation possible, retour attendu, remboursement
 //   restitutions       chaque jour : rappel 7 jours avant, puis 170 € ou 200 € si la tablette n'est pas rendue à temps
 //   tabletteRendue     appel depuis le tableau de bord admin : la tablette incluse est revenue
@@ -460,7 +460,7 @@ async function commandeDeLaFamille(fid, request) {
   return { id, ref, snap };
 }
 
-// Annulation dans les 14 jours : l'abonnement s'arrête tout de suite. Tablette pas encore partie :
+// Annulation dans les 30 jours : l'abonnement s'arrête tout de suite. Tablette pas encore partie :
 // remboursement immédiat. Déjà partie : remboursement dès son retour (voir commandeModifiee).
 exports.retracter = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE] }, async (request) => {
   const { fid } = request.data || {};
@@ -470,7 +470,7 @@ exports.retracter = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE] }, asyn
   const partie = await db.runTransaction(async (tx) => {
     const c = (await tx.get(ref)).data();
     if (!regles.retractationPossible(c, maintenant)) {
-      throw new HttpsError('failed-precondition', 'Le délai de 14 jours pour annuler la commande est dépassé.');
+      throw new HttpsError('failed-precondition', 'Le délai de 30 jours pour annuler la commande est dépassé.');
     }
     const envoyee = c.expedition !== 'a-preparer';
     tx.update(ref, envoyee ? {
