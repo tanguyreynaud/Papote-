@@ -434,8 +434,11 @@
     }
     var steps = el('div', 'welcome-steps');
     steps.appendChild(el('p', 'welcome-step', 'Avec l’appareil photo de votre téléphone, scannez ce QR code.'));
-    steps.appendChild(el('p', 'welcome-or', 'ou'));
-    steps.appendChild(el('p', 'welcome-step', 'Ouvrez app.mapapote.fr et tapez ce code :'));
+    // Sans QR code : l'adresse du site en grand, bien visible (demande de Tanguy, 21/10), puis le code.
+    var link = el('p', 'welcome-link', 'ou tapez ');
+    link.appendChild(el('strong', '', 'app.mapapote.fr'));
+    link.appendChild(document.createTextNode(' dans votre téléphone, puis ce code :'));
+    steps.appendChild(link);
     steps.appendChild(el('p', 'welcome-code', pretty(s.code)));
     if (s.claimedName || s.joined) {
       // Le proche a scanné : l'écran ne change pas (demande de Tanguy), une ligne dit qu'il s'en occupe.
