@@ -915,7 +915,7 @@ function afficherStock() {
     stat(String(aEnvoyer), 'commandes à envoyer'),
     // Calculé par le serveur, comme sur le site : à 0, les boutons Commander deviennent « Être prévenu ».
     donnees.aVendre == null ? null : stat(String(donnees.aVendre), 'à vendre sur le site',
-      donnees.aVendre ? 'paiements en cours compris' : 'le site propose « Être prévenu »', donnees.aVendre ? null : 'neg'),
+      donnees.aVendre ? 'stock + 10 précommandes, paiements en cours compris' : 'le site propose « Être prévenu »', donnees.aVendre ? null : 'neg'),
     stat(String(compte(chez)), 'chez les clients', `valeur ${euros(valeur(chez))}`),
     stat(String(compte(['revenue', 'a-reparer'])), 'à vérifier ou réparer'),
     stat(String(compte(['perdue', 'hors-service'])), 'perdues ou hors service'),
