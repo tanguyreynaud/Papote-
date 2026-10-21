@@ -1359,33 +1359,43 @@ function loadQr() {
   return qrLoading;
 }
 
-// Réglages > Ce téléphone : notifications, et batterie dans l'app Android.
+// Réglages > Ce téléphone : deux interrupteurs, notifications et (app Android) arrière-plan.
+// Le site ne peut pas couper ces réglages d'Android : un interrupteur allumé le reste.
 async function renderPhoneCard() {
   if (!session) return;
   const nom = session.family.name;
-  const btn = $('phone-push-btn');
-  btn.hidden = true;
-  if (pushAllowed()) $('phone-push-text').textContent = `Activées : votre téléphone sonnera quand ${nom} appelle.`;
-  else if (pushRefused()) $('phone-push-text').textContent = 'Bloquées : autorisez les notifications pour Papote dans les réglages du téléphone.';
-  else if (!await pushSupported()) {
+  const push = $('phone-push');
+  push.checked = pushAllowed();
+  push.disabled = false;
+  if (pushAllowed()) $('phone-push-text').textContent = `Votre téléphone sonne quand ${nom} appelle, même app fermée.`;
+  else if (pushRefused()) {
+    $('phone-push-text').textContent = 'Bloquées : autorisez les notifications pour Papote dans les réglages du téléphone.';
+    push.disabled = true;
+  } else if (!await pushSupported()) {
     $('phone-push-text').textContent = isIos()
       ? "Ajoutez d'abord Papote à l'écran d'accueil (voir Support), puis rouvrez cette page."
       : 'Ce navigateur ne sait pas recevoir les notifications. Ouvrez Papote dans Chrome.';
-  } else {
-    $('phone-push-text').textContent = 'Pas encore activées.';
-    btn.hidden = false;
-  }
+    push.disabled = true;
+  } else $('phone-push-text').textContent = `Pour que votre téléphone sonne quand ${nom} appelle, même app fermée.`;
   // L'app Android dit (?pause=1 ou 0) si Android peut encore la mettre en pause.
   let pause = null;
   try { pause = sessionStorage.getItem('papote.pause'); } catch (e) { /* rien */ }
   $('phone-pause').hidden = !inNativeApp();
+  $('phone-pause-toggle').checked = pause === '0';
   $('phone-pause-text').textContent = pause === '0'
-    ? 'Réglé : Android ne mettra pas Papote en pause.'
-    : "Pour qu'Android ne mette pas Papote en pause (le téléphone ne sonnerait plus), touchez le bouton, puis tout en bas, désactivez « Suspendre l'activité… ».";
-  $('phone-pause-btn').hidden = pause === '0';
+    ? "Android ne met jamais Papote en pause : le téléphone sonne toujours."
+    : "Pour qu'Android ne mette jamais Papote en pause, sinon le téléphone ne sonnerait plus.";
 }
-$('phone-push-btn').addEventListener('click', () => $('push-nudge').click());
-$('phone-pause-btn').addEventListener('click', () => $('pause-nudge').click());
+$('phone-push').addEventListener('change', (e) => {
+  e.target.checked = pushAllowed();
+  if (!pushAllowed()) $('push-nudge').click();
+});
+$('phone-pause-toggle').addEventListener('change', (e) => {
+  let pause = null;
+  try { pause = sessionStorage.getItem('papote.pause'); } catch (err) { /* rien */ }
+  e.target.checked = pause === '0';
+  if (pause !== '0') $('pause-nudge').click();
+});
 
 async function renderSettings() {
   renderPhoneCard();

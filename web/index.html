@@ -441,14 +441,9 @@
         </div>
         <h3 class="settings-group">Ce téléphone</h3>
         <div class="card">
-          <h2>Notifications</h2>
-          <p class="muted small">Pour que votre téléphone sonne quand <span class="grand-name"></span> vous appelle, même app fermée.</p>
-          <p id="phone-push-text" class="setting-value"></p>
-          <button type="button" id="phone-push-btn" class="primary wide" hidden>Activer les notifications</button>
-          <div id="phone-pause" hidden>
-            <h2 class="phone-sub">Batterie</h2>
-            <p id="phone-pause-text" class="muted small"></p>
-            <button type="button" id="phone-pause-btn" class="secondary wide">Ouvrir le réglage de la batterie</button>
+          <div class="toggle-list">
+            <label class="toggle-row"><span class="toggle-text"><strong>Notifications</strong><span id="phone-push-text"></span></span><input type="checkbox" class="toggle" id="phone-push"></label>
+            <label class="toggle-row" id="phone-pause" hidden><span class="toggle-text"><strong>Arrière-plan</strong><span id="phone-pause-text"></span></span><input type="checkbox" class="toggle" id="phone-pause-toggle"></label>
           </div>
         </div>
         <h3 class="settings-group owner-only" id="group-tablet">La tablette</h3>

@@ -1153,7 +1153,7 @@ body:not(.on-support) .ps-bouton, body:not(.on-support) .ps-panneau { display: n
 .agenda-edit + .agenda-edit { margin-left: 18px; }
 
 /* Réglages > Ce téléphone */
-.phone-sub { margin-top: 18px; }
+.toggle:disabled { opacity: .45; cursor: default; }
 
 /* ---------- Installation d'une nouvelle tablette (view-setup) ---------- */
 .setup-dots { margin: 4px 0 14px; }
