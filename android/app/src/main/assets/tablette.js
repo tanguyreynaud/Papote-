@@ -621,6 +621,7 @@
       noteSeen();
       markSeen(p);
       if (p.audio || p.video) listenOverlay();
+      else speakOnce(p.id, overlayText(p)); // lu une fois tout seul ; « Écouter » pour réécouter
     }, function closeWhenDone() {
       if (overlayPost !== p) return;
       // On ne coupe pas une vidéo ou un vocal en cours : on attend la fin.
@@ -1003,6 +1004,7 @@
       if (!alerting || alerting.r !== r) return;
       var now = new Date();
       if (android() && android().seenReminder) android().seenReminder(r.id, dateKey(now) + ' ' + pad(now.getHours()) + ':' + pad(now.getMinutes()));
+      speakOnce('rappel|' + r.id + '|' + key + (alerting.early ? '|avant' : ''), r.title);
     }, function () {
       if (!alerting) return;
       var id = alerting.r.id + '|' + alerting.key;
@@ -1564,17 +1566,27 @@
   }
 
   function showListenButtons() {
-    var o = listenButton('overlay-listen', function () {
-      var p = overlayPost;
-      if (!p) return '';
-      return (p.authorName ? p.authorName + ' vous écrit : ' : '') + (p.text || '');
-    }, $('overlay-actions'));
+    var o = listenButton('overlay-listen', function () { return overlayText(overlayPost); }, $('overlay-actions'));
     var mode = overlayPost ? (overlayPost.image ? 'photo' : overlayPost.type || 'message') : '';
     show(o, !!options.lecture && !!overlayPost && !!overlayPost.text && (mode === 'message' || mode === 'text' || mode === 'photo'));
     var r = listenButton('reminder-listen', function () {
       return alerting ? alerting.r.title : '';
     }, $('reminder-done').parentNode);
     show(r, !!options.lecture);
+  }
+
+  function overlayText(p) {
+    if (!p || !p.text) return '';
+    return (p.authorName ? p.authorName + ' vous écrit : ' : '') + p.text;
+  }
+
+  // Lecture à voix haute toute seule, une seule fois par message ou rappel, quand la caméra voit
+  // Mamie devant l'écran (si la famille n'a pas enlevé la lecture). Le bouton « Écouter » reste.
+  var spoken = {};
+  function speakOnce(id, text) {
+    if (!options.lecture || !text || spoken[id]) return;
+    spoken[id] = true;
+    if (android() && android().speak) android().speak(text);
   }
 
   function stopSpeaking() {
