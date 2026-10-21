@@ -391,3 +391,12 @@ td a:hover { text-decoration: underline; }
 .table td, .table th { padding-top: 12px; padding-bottom: 12px; }
 .table tbody tr[tabindex] td:last-child { position: relative; padding-right: 30px; }
 .table tbody tr[tabindex] td:last-child::after { content: '›'; position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: var(--accent); font-size: 20px; font-weight: 700; }
+
+/* Parcours d'une commande : une frise, la date à gauche, un point sur le fil, l'étape à droite. */
+.frise { list-style: none; margin: 4px 0 0; padding: 0; }
+.frise li { position: relative; display: grid; grid-template-columns: 96px 1fr; gap: 0 22px; padding: 0 0 16px; font-size: 15px; }
+.frise li::before { content: ''; position: absolute; left: 105px; top: 6px; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); }
+.frise li:not(:last-child)::after { content: ''; position: absolute; left: 109px; top: 18px; bottom: -2px; width: 2px; background: var(--line); }
+.frise li:last-child { padding-bottom: 0; }
+.frise-date { color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
+.frise-texte { padding-left: 10px; }
