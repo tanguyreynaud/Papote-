@@ -743,11 +743,11 @@ public class MainActivity extends Activity implements Sync.Listener {
             });
             if (ttsPending != null) { String t = ttsPending; ttsPending = null; speakNow(t); }
             else {
-                // Le moteur ne charge sa voix (≈ 10 s sur la Vucatimes) qu'à la première phrase :
-                // une phrase muette au démarrage la charge d'avance, « Écouter » parle aussitôt.
-                android.os.Bundle muet = new android.os.Bundle();
-                muet.putFloat(android.speech.tts.TextToSpeech.Engine.KEY_PARAM_VOLUME, 0f);
-                tts.speak("Bonjour", android.speech.tts.TextToSpeech.QUEUE_ADD, muet, "prechauffage");
+                // Le moteur ne charge sa voix (6 à 10 s sur la Vucatimes) qu'à la première phrase dite.
+                // Une phrase écrite dans un fichier, avec la même voix, la charge d'avance sans bruit
+                // (une phrase à volume 0 ne suffit pas : le moteur ne la prononce pas).
+                tts.synthesizeToFile("Bonjour", null,
+                        new java.io.File(getCacheDir(), "voix.wav"), "prechauffage");
             }
         });
     }
