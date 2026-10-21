@@ -244,11 +244,13 @@ function sepaRefuse({ nom, email, papote }) {
 }
 
 // Prévient Papote d'une résiliation (ou d'une commande annulée après l'envoi) : la page de la commande en lien.
-function resiliation({ nom, email, code, commande, retractation }) {
+function resiliation({ nom, email, code, commande, retractation, suivi, lienSuivi }) {
   const qui = nom || email || 'Un client';
   return message(`${qui} a ${retractation != null ? 'annulé sa commande' : 'résilié son abonnement'}${code ? ` (commande ${code})` : ''}`, [
     `<b>${echapper(qui)}</b>${email && nom ? ` (${echapper(email)})` : ''} a ${retractation != null ? 'annulé sa commande après l\'envoi' : 'résilié son abonnement'}.`,
-    'Le client reçoit par e-mail le mode d\'emploi du retour et l\'étiquette (créée automatiquement) : rien à faire pour l\'instant.',
+    lienSuivi
+      ? `Le client a reçu le mode d'emploi et l'étiquette de retour. Suivi du colis de retour : <a href="${echapper(lienSuivi)}">${echapper(suivi || 'suivre le colis')}</a> (aussi sur la page de la commande).`
+      : 'Le client reçoit par e-mail le mode d\'emploi du retour. Le suivi du colis apparaîtra sur la page de la commande.',
   ], { texte: 'Ouvrir la commande', lien: `https://app.mapapote.fr/admin.html#commande/${encodeURIComponent(commande)}` });
 }
 
