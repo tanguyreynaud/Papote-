@@ -3440,8 +3440,36 @@ function setupStep(step) {
   // Se déconnecter seulement avant la réservation : ensuite, l'installation est à finir.
   $('setup-logout').hidden = step !== 'setup-code' || myFamilies.length > 0;
   $('setup-back').hidden = step !== 'setup-code' || !myFamilies.length;
+  // Après le scan, on peut toujours tout annuler (accord de Tanguy) : rien ne reste bloqué.
+  $('setup-cancel').hidden = !['setup-nom', 'setup-photo', 'setup-son', 'setup-options'].includes(step);
+  $('setup-cancel-error').hidden = true;
   show('view-setup');
 }
+
+$('setup-cancel').addEventListener('click', async () => {
+  const famille = installationEnCours();
+  const texte = famille
+    ? `Annuler l'installation ? La famille « ${session.family.name} » et ce qui a été envoyé seront effacés. La tablette affichera de nouveau son code pour recommencer.`
+    : 'Annuler l\'installation ? La tablette affichera de nouveau son code pour recommencer.';
+  if (!await askConfirm(texte, 'Annuler l\'installation')) return;
+  const btn = $('setup-cancel');
+  btn.disabled = true;
+  try {
+    await annulerInstallation(famille ? { fid: session.fid } : { code: setup.code });
+    if (famille && savedFamilyId() === session.fid) saveFamilyId(null);
+    stopSetupPairing?.();
+    stopSetupPairing = null;
+    setup = { code: null, step: null };
+    forgetPairCode();
+    await enterApp();
+  } catch (err) {
+    console.error(err);
+    showError($('setup-cancel-error'), (err.code || '').endsWith('failed-precondition') && err.message
+      ? err.message : 'L\'annulation a échoué. Vérifiez la connexion internet et réessayez.');
+  } finally {
+    btn.disabled = false;
+  }
+});
 
 // Une famille dont j'ai commencé l'installation et que je n'ai pas finie.
 function installationEnCours() {
