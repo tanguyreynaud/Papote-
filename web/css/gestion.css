@@ -406,3 +406,6 @@ td a:hover { text-decoration: underline; }
 .attente[hidden] { display: none; }
 .attente p { margin: 0; font-size: 15px; }
 .attente .roue { width: 32px; height: 32px; border: 3px solid rgba(79, 70, 229, 0.18); border-top-color: #4f46e5; border-radius: 50%; animation: tourner 0.8s linear infinite; }
+
+/* Interrupteur (accord aux e-mails d'information) : le bouton puis son texte, sur une ligne. */
+label.interrupteur, .fiche label.interrupteur { display: inline-flex; flex-direction: row; align-items: center; gap: 12px; margin: 0; cursor: pointer; font-weight: 600; font-size: 15px; }
