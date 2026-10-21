@@ -1152,3 +1152,17 @@ body:not(.on-support) .ps-bouton, body:not(.on-support) .ps-panneau { display: n
 
 /* Réglages > Ce téléphone */
 .phone-sub { margin-top: 18px; }
+
+/* ---------- Installation d'une nouvelle tablette (view-setup) ---------- */
+.setup-dots { margin: 4px 0 14px; }
+.setup-step label:not(.toggle-row) { display: block; margin-top: 14px; }
+.setup-step .primary.wide { margin-top: 16px; }
+.setup-note { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; font-size: 15px; color: var(--text); margin: 12px 0 0; }
+.setup-preview { display: block; width: 100%; height: auto; margin-top: 14px; }
+#setup-photo-extra input { width: 100%; margin-top: 14px; }
+#setup-pickers { margin-top: 14px; }
+.setup-slider { border-top: 1px solid var(--line); padding-top: 14px; margin-top: 14px; }
+.setup-slider p { margin: 0 0 8px; }
+.setup-slider input[type=range] { width: 100%; accent-color: var(--accent); }
+.setup-essai { width: 100%; min-height: 54px; margin-top: 10px; flex-direction: row; justify-content: center; font-size: 17px; }
+#setup-options .toggle-list { margin-top: 14px; }

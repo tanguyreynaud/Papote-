@@ -3,7 +3,9 @@ rules_version = '2';
 // Modèle :
 //   invites/{code}                  -> { fid, createdBy, kind? }  code famille à 8 caractères ;
 //                                      kind 'tablette' : code d'installation d'une tablette
-//   families/{fid}                  -> { name, code, createdBy, createdAt, admins? }
+//   families/{fid}                  -> { name, code, createdBy, createdAt, admins?, installation? }
+//                                      installation { etape: photo|son|options|fini, pairing } : famille créée
+//                                      par le serveur au scan d'une nouvelle tablette (functions/installation.js)
 //   families/{fid}/members/{uid}    -> { name, role, code, joinedAt, uid?, email?, status? }
 //                                      status 'pending' : arrivé avec le code, en attente d'un responsable ;
 //                                      absent ou 'active' : membre (les fiches d'avant n'ont pas de status)
@@ -132,6 +134,16 @@ service cloud.firestore {
         && resource.data.status == 'claimed'
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
         && request.resource.data.status in ['confirmed', 'refused'];
+      // Nouveau parcours (21/10) : le serveur réserve la tablette au premier qui scanne ('reserved'),
+      // puis crée la famille ('confirmed'). La tablette peut annuler une réservation
+      // (« Recommencer avec un autre téléphone ») : il faut être devant elle, cela suffit comme preuve.
+      allow update: if signedIn()
+        && request.auth.uid == resource.data.tabletUid
+        && resource.data.status == 'reserved'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+        && request.resource.data.status == 'cancelled';
+      // Le proche retrouve l'installation qu'il a commencée (requête where claimedBy == uid).
+      allow list: if signedIn() && resource.data.get('claimedBy', '') == request.auth.uid;
       allow delete: if signedIn()
         && (request.auth.uid == resource.data.tabletUid || request.time > resource.data.expiresAt);
     }
@@ -218,11 +230,20 @@ service cloud.firestore {
                     && request.resource.data.options.radio.active is bool
                     && (!('nom' in request.resource.data.options.radio) || (request.resource.data.options.radio.nom is string && request.resource.data.options.radio.nom.size() <= 60))
                     && (!('url' in request.resource.data.options.radio) || (request.resource.data.options.radio.url is string && request.resource.data.options.radio.url.size() <= 300 && request.resource.data.options.radio.url.matches('https://.*'))))))
-          // Volume de la tablette (10 à 100), avec le compteur qui la prévient.
-          || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['volume', 'rev'])
+          // Volume de la tablette (10 à 100) et de sa sonnerie d'appel, avec le compteur qui la prévient.
+          || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['volume', 'volumeSonnerie', 'rev'])
             && isFamilyAdmin(fid)
-            && request.resource.data.volume is int
-            && request.resource.data.volume >= 10 && request.resource.data.volume <= 100)
+            && (!('volume' in request.resource.data)
+                || (request.resource.data.volume is int && request.resource.data.volume >= 10 && request.resource.data.volume <= 100))
+            && (!('volumeSonnerie' in request.resource.data)
+                || (request.resource.data.volumeSonnerie is int && request.resource.data.volumeSonnerie >= 10 && request.resource.data.volumeSonnerie <= 100)))
+          // Étape du parcours d'installation (la fin, « fini », est écrite par le serveur).
+          || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['installation'])
+            && isFamilyAdmin(fid)
+            && resource.data.get('installation', null) != null
+            && resource.data.installation.etape != 'fini'
+            && request.resource.data.installation.diff(resource.data.installation).affectedKeys().hasOnly(['etape'])
+            && request.resource.data.installation.etape in ['photo', 'son', 'options'])
           // Taille du texte sur la tablette, avec le compteur qui la prévient.
           || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['textSize', 'rev'])
             && isFamilyAdmin(fid)
@@ -442,8 +463,13 @@ service cloud.firestore {
       match /commands/{cid} {
         allow read: if isFamilyAdmin(fid) || (signedIn() && resource.data.target == request.auth.uid);
         allow create: if isFamilyAdmin(fid)
-          && request.resource.data.keys().hasOnly(['type', 'target', 'createdBy', 'createdAt', 'ssid', 'security', 'password', 'state'])
-          && request.resource.data.type in ['wifi', 'restart', 'status', 'wifiScan']
+          && request.resource.data.keys().hasOnly(['type', 'target', 'createdBy', 'createdAt', 'ssid', 'security', 'password', 'state', 'quoi', 'volume', 'parle'])
+          && request.resource.data.type in ['wifi', 'restart', 'status', 'wifiScan', 'son']
+          // Test du son à l'installation : la tablette sonne ou parle à ce volume.
+          && (request.resource.data.type != 'son'
+            || (request.resource.data.quoi in ['sonnerie', 'voix']
+              && request.resource.data.volume is int && request.resource.data.volume >= 10 && request.resource.data.volume <= 100
+              && (!('parle' in request.resource.data) || (request.resource.data.parle is string && request.resource.data.parle.size() <= 200))))
           && request.resource.data.target is string
           && request.resource.data.createdBy == request.auth.uid
           && request.resource.data.state == 'pending'

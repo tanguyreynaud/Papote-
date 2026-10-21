@@ -68,3 +68,17 @@ export function inviterParEmail(fid, email) {
 export function annulerResiliation(fid) {
   return call('annulerResiliation', { fid });
 }
+
+// Installation d'une nouvelle tablette (functions/installation.js).
+// reserverTablette → { etat: 'reserve' | 'occupe' | 'inconnu' | 'expire', par?, fid? }
+export function reserverTablette(code, prenom) {
+  return call('reserverTablette', { code, prenom });
+}
+
+export function nommerFamille(code, nom) {
+  return call('nommerFamille', { code, nom });
+}
+
+export function finirInstallation(fid) {
+  return call('finirInstallation', { fid });
+}

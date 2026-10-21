@@ -7,7 +7,7 @@ import {
   getStorage, ref, uploadBytes, getDownloadURL, deleteObject,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-storage.js';
 import {
-  db, doc, getDoc, updateDoc, deleteDoc, collection, onSnapshot, writeBatch, serverTimestamp, bumpRev, increment,
+  db, doc, getDoc, setDoc, updateDoc, deleteDoc, collection, onSnapshot, writeBatch, serverTimestamp, bumpRev, increment,
   loadMembership, createFamily, joinFamily, leaveFamily, watchMembers, currentUser, savedFamilyId, saveFamilyId,
   addPost, deletePost, loadMedia, formatCode, normalizeCode, toDate, CodeInconnuError,
   MAX_VIDEO_CHUNKS, VIDEO_CHUNK,
@@ -17,7 +17,7 @@ import { askConfirm, notice, avantDePartir, chooseAction } from './ui.js';
 import { showGuideOnce } from './guide.js';
 import {
   abonnementOk, FORMULES, LIBELLES, ouvrirPortail, payer, rattacherCommande, resilier, annulerResiliation,
-  finDeContrat, retracter, inviterParEmail,
+  finDeContrat, retracter, inviterParEmail, reserverTablette, nommerFamille, finirInstallation,
 } from './abonnement.js';
 import { startCall, watchTabletBusy, watchIncomingCalls, answerIncoming, warmUpCalls, declineIncoming, reportCallIncident } from './appel.js';
 import { pushSupported, pushAllowed, pushRefused, enablePush, closeCallNotification, rememberNativeToken, inNativeApp } from './push.js';
@@ -44,7 +44,7 @@ let stopMembers = null;
 let stopTabletBusy = null;
 let stopIncoming = null;
 
-const VIEWS = ['view-invite', 'view-profile', 'view-pair', 'loading', 'view-login', 'view-link-email', 'view-invited', 'view-pending', 'view-join', 'view-home', 'view-photos', 'view-videos', 'view-messages', 'view-agenda', 'view-settings', 'view-notifs', 'view-support'];
+const VIEWS = ['view-invite', 'view-profile', 'view-pair', 'view-setup', 'loading', 'view-login', 'view-link-email', 'view-invited', 'view-pending', 'view-join', 'view-home', 'view-photos', 'view-videos', 'view-messages', 'view-agenda', 'view-settings', 'view-notifs', 'view-support'];
 
 function show(view) {
   for (const id of VIEWS) $(id).hidden = id !== view;
@@ -1848,6 +1848,7 @@ function renderMembers(all) {
   $('invite-email-card').classList.toggle('disabled-card', familyFull);
   renderRequests(pending);
   tabletMembers = members.filter((m) => m.role === 'tablette');
+  if (!$('view-setup').hidden) renderSetupTablet();
   renderTabletFace();
   renderMeteo();
   renderWifi();
@@ -3248,12 +3249,7 @@ async function loadAdminFamilies() {
   return list;
 }
 
-// Sans famille : la page de jumelage s'ouvre hors de toute famille (pas de session).
-function openPairingWithoutFamily() {
-  resetPairing();
-  show('view-pair');
-}
-$('btn-join-pair').addEventListener('click', openPairingWithoutFamily);
+$('btn-join-pair').addEventListener('click', () => showSetupScan(null));
 $('pair-back').addEventListener('click', () => { if (page === 'pair') history.back(); else showJoin(myFamilies.length > 0); });
 // Retour : dans la famille qui vient d'être reliée (ou créée), sinon à l'accueil.
 $('btn-pair-home').addEventListener('click', () => enterApp());
@@ -3339,6 +3335,323 @@ $('form-pair-claim').addEventListener('submit', async (e) => {
       : 'La tablette a refusé. Si ce n\'était pas une erreur, recommencez avec le nouveau code affiché.';
     pairStep('pair-done');
   }, (err) => console.warn('Jumelage illisible', err));
+});
+
+
+// ---------- Installation d'une nouvelle tablette (parcours du 21/10) ----------
+// Obligatoire pour le premier proche, avant l'accueil : scan + vérification, nom, photo, son, options.
+// Avant la famille : la réservation (pairings/{code}, claimedBy) ; après : families/{fid}.installation.etape.
+// Fermer l'app ne perd rien : on reprend à l'étape notée sur le serveur.
+
+const SETUP_STEPS = ['setup-code', 'setup-check', 'setup-nom', 'setup-photo', 'setup-son', 'setup-options'];
+const SETUP_DOT = { 'setup-code': 0, 'setup-check': 0, 'setup-nom': 1, 'setup-photo': 2, 'setup-son': 3, 'setup-options': 4 };
+const PRENOM_KEY = 'papote.prenom';
+let setup = { code: null, step: null }; // code de la tablette réservée
+let stopSetupPairing = null;
+let setupPhoto = null;
+
+function rememberPrenom(p) { try { localStorage.setItem(PRENOM_KEY, p); } catch (e) { /* rien */ } }
+function savedPrenom() { try { return localStorage.getItem(PRENOM_KEY) || ''; } catch (e) { return ''; } }
+
+function setupStep(step) {
+  setup.step = step;
+  for (const id of SETUP_STEPS) $(id).hidden = id !== step;
+  document.querySelectorAll('#setup-dots span').forEach((d, k) => d.classList.toggle('on', k === SETUP_DOT[step]));
+  const qui = session?.family?.name || '';
+  document.querySelectorAll('.setup-qui').forEach((e) => { e.textContent = qui || 'votre proche'; });
+  // Se déconnecter seulement avant la réservation : ensuite, l'installation est à finir.
+  $('setup-logout').hidden = step !== 'setup-code' || myFamilies.length > 0;
+  $('setup-back').hidden = step !== 'setup-code' || !myFamilies.length;
+  show('view-setup');
+}
+
+// Une famille dont j'ai commencé l'installation et que je n'ai pas finie.
+function installationEnCours() {
+  const inst = session?.family?.installation;
+  return !!inst && inst.etape !== 'fini' && amOwner();
+}
+
+const SETUP_ETAPES = { photo: 'setup-photo', son: 'setup-son', options: 'setup-options' };
+
+function showSetupFamily() {
+  const etape = session.family.installation.etape;
+  setup.code = session.family.installation.pairing || null;
+  stopSetupPairing?.();
+  stopSetupPairing = null;
+  if (etape === 'son') fillSon();
+  if (etape === 'options') fillOptions();
+  setupStep(SETUP_ETAPES[etape] || 'setup-photo');
+  renderSetupTablet();
+}
+
+// Sans famille : le scan, avec le code du QR code s'il y en a un, ou la réservation déjà faite.
+async function showSetupScan(code) {
+  stopSession();
+  $('setup-prenom').value = savedPrenom() || defaultName();
+  $('setup-code-input').value = code ? formatCode(normalizeCode(code)) : '';
+  $('setup-code-error').hidden = true;
+  setupStep('setup-code');
+  if (code && $('setup-prenom').value) $('setup-code').requestSubmit();
+}
+
+// Réservation déjà faite par ce compte (app fermée après le scan, ou autre téléphone) : on la reprend.
+async function maReservation() {
+  try {
+    const snap = await getDocs(query(collection(db, 'pairings'), where('claimedBy', '==', authUser.uid)));
+    const resa = snap.docs.find((d) => d.data().status === 'reserved');
+    return resa ? resa.id : null;
+  } catch (err) {
+    console.warn('Réservation illisible', err);
+    return null;
+  }
+}
+
+function setupCheck(title, text, back) {
+  $('setup-check-title').textContent = title;
+  $('setup-check-text').textContent = text;
+  $('setup-check-spin').hidden = !!back;
+  $('setup-check-back').hidden = !back;
+  setupStep('setup-check');
+}
+$('setup-check-back').addEventListener('click', () => setupStep('setup-code'));
+$('setup-back').addEventListener('click', () => { forgetPairCode(); enterApp(); });
+
+// La tablette a touché « Recommencer avec un autre téléphone » : retour au scan.
+function watchSetupPairing(code) {
+  stopSetupPairing?.();
+  stopSetupPairing = onSnapshot(doc(db, 'pairings', code), (snap) => {
+    const st = snap.data()?.status;
+    if (st === 'reserved' || st === 'confirmed') return;
+    stopSetupPairing?.();
+    stopSetupPairing = null;
+    if (session) return;
+    setup.code = null;
+    $('setup-code-input').value = '';
+    showError($('setup-code-error'), 'La tablette a recommencé l\'installation. Scannez le nouveau code affiché sur son écran.');
+    setupStep('setup-code');
+  }, () => {});
+}
+
+const SETUP_ERREURS = {
+  inconnu: "Aucune tablette allumée n'affiche ce code. Vérifiez les 8 caractères sur l'écran de la tablette : elle doit être allumée et connectée à internet.",
+  expire: 'Ce code a expiré. Scannez le nouveau code affiché sur la tablette.',
+};
+
+$('setup-code').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const prenom = $('setup-prenom').value.trim();
+  const code = normalizeCode($('setup-code-input').value);
+  $('setup-code-error').hidden = true;
+  if (!prenom) { showError($('setup-code-error'), 'Indiquez votre prénom : la famille le verra.'); return; }
+  if (code.length !== 8) { showError($('setup-code-error'), 'Le code affiché sur la tablette a 8 caractères.'); return; }
+  rememberPrenom(prenom);
+  setupCheck('Vérification de la tablette…', 'Un instant, nous vérifions le code.');
+  let r;
+  try {
+    r = await reserverTablette(code, prenom);
+  } catch (err) {
+    console.error(err);
+    showError($('setup-code-error'), 'La vérification a échoué. Vérifiez la connexion internet et réessayez.');
+    setupStep('setup-code');
+    return;
+  }
+  forgetPairCode();
+  if (r.etat === 'occupe') {
+    setupCheck('Installation déjà en cours',
+      `Cette tablette est déjà en cours d'installation par ${r.par || 'un proche'} : vous recevrez une invitation par e-mail dès qu'elle aura fini.`, true);
+    return;
+  }
+  if (r.etat !== 'reserve') {
+    showError($('setup-code-error'), SETUP_ERREURS[r.etat] || SETUP_ERREURS.inconnu);
+    setupStep('setup-code');
+    return;
+  }
+  setup.code = code;
+  // Famille déjà créée avec ce compte (installation reprise) : on y entre.
+  if (r.fid) { saveFamilyId(r.fid); enterApp(); return; }
+  watchSetupPairing(code);
+  $('setup-nom-error').hidden = true;
+  setupStep('setup-nom');
+  $('setup-nom-input').focus();
+});
+
+$('setup-nom').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const nom = $('setup-nom-input').value.trim();
+  $('setup-nom-error').hidden = true;
+  if (!nom) { showError($('setup-nom-error'), 'Indiquez comment vous l\'appelez, par exemple « Mamie Emma ».'); return; }
+  const btn = e.target.querySelector('button[type=submit]');
+  btn.disabled = true;
+  try {
+    const { fid } = await nommerFamille(setup.code, nom);
+    stopSetupPairing?.();
+    stopSetupPairing = null;
+    saveFamilyId(fid);
+    await enterApp();
+  } catch (err) {
+    console.error(err);
+    showError($('setup-nom-error'), err.code?.endsWith('failed-precondition')
+      ? 'Cette tablette n\'est plus réservée pour vous. Scannez à nouveau son code.'
+      : 'L\'enregistrement a échoué. Vérifiez la connexion internet et réessayez.');
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+async function setupEtape(etape) {
+  await updateDoc(doc(db, 'families', session.fid), { 'installation.etape': etape });
+}
+
+// Photo : la tablette passe à l'accueil dès qu'elle la reçoit.
+function renderSetupTablet() {
+  if (!$('setup-tablet-wait')) return;
+  $('setup-tablet-wait').hidden = tabletMembers.length > 0;
+}
+$('setup-pick-camera').addEventListener('click', () => $('setup-in-camera').click());
+$('setup-pick-gallery').addEventListener('click', () => $('setup-in-gallery').click());
+$('setup-photo-other').addEventListener('click', () => $('setup-in-gallery').click());
+['setup-in-camera', 'setup-in-gallery'].forEach((id) => $(id).addEventListener('change', async (e) => {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  $('setup-photo-error').hidden = true;
+  try {
+    setupPhoto = await compressPhoto(file);
+  } catch (err) {
+    console.error(err);
+    showError($('setup-photo-error'), 'Cette photo n\'a pas pu être lue. Essayez-en une autre.');
+    return;
+  }
+  $('setup-photo-preview').src = setupPhoto.thumb;
+  $('setup-photo-preview').hidden = false;
+  $('setup-pickers').hidden = true;
+  $('setup-photo-extra').hidden = false;
+}));
+$('setup-photo-send').addEventListener('click', async () => {
+  if (!setupPhoto) return;
+  const btn = $('setup-photo-send');
+  btn.disabled = true;
+  btn.textContent = 'Envoi…';
+  $('setup-photo-error').hidden = true;
+  try {
+    await sendPhoto(setupPhoto, $('setup-photo-text').value.trim(), { authorUid: session.uid, authorName: session.member.name });
+    await setupEtape('son');
+    setupPhoto = null;
+    fillSon();
+    setupStep('setup-son');
+  } catch (err) {
+    console.error(err);
+    showError($('setup-photo-error'), 'L\'envoi a échoué. Vérifiez la connexion internet et réessayez.');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Envoyer sur la tablette';
+  }
+});
+
+// Son : la tablette sonne ou parle au volume choisi (commande « son » écoutée en direct par la tablette).
+function fillSon() {
+  const f = session.family;
+  $('setup-sonnerie').value = String(Number.isInteger(f.volumeSonnerie) ? f.volumeSonnerie : 100);
+  $('setup-voix').value = String(Number.isInteger(f.volume) ? f.volume : 80);
+  syncSon();
+  $('setup-son-status').hidden = true;
+}
+function syncSon() {
+  $('setup-sonnerie-val').textContent = `${$('setup-sonnerie').value} %`;
+  $('setup-voix-val').textContent = `${$('setup-voix').value} %`;
+}
+
+// Compte « appels » de la tablette (celui qui écoute les commandes de son), lu sur la réservation.
+let setupCallsUid = null;
+async function tabletteAppels() {
+  if (setupCallsUid) return setupCallsUid;
+  try {
+    const p = setup.code ? (await getDoc(doc(db, 'pairings', setup.code))).data() : null;
+    setupCallsUid = p?.callsUid || null;
+  } catch (e) { /* lecture impossible */ }
+  return setupCallsUid || targetTablet()?.id || null;
+}
+
+async function essaiSon(quoi) {
+  const target = await tabletteAppels();
+  const status = (t) => { $('setup-son-status').textContent = t; $('setup-son-status').hidden = !t; };
+  if (!target || !tabletMembers.length) { status('La tablette se prépare encore. Réessayez dans quelques secondes.'); return; }
+  const volume = Number($(quoi === 'sonnerie' ? 'setup-sonnerie' : 'setup-voix').value);
+  const data = {
+    type: 'son', quoi, volume, target, createdBy: session.uid, createdAt: serverTimestamp(), state: 'pending',
+  };
+  if (quoi === 'voix') data.parle = `Bonjour ${session.family.name}, c'est ${session.member.name}. Vous m'entendez bien ?`.slice(0, 200);
+  try {
+    await setDoc(doc(collection(db, 'families', session.fid, 'commands')), data);
+    status(quoi === 'sonnerie' ? `La tablette sonne à ${volume} %.` : `La tablette parle à ${volume} %.`);
+  } catch (err) {
+    console.error(err);
+    status('La tablette n\'a pas pu être prévenue. Vérifiez la connexion internet.');
+  }
+}
+$('setup-sonnerie').addEventListener('input', syncSon);
+$('setup-voix').addEventListener('input', syncSon);
+// Barre lâchée : on refait l'essai tout de suite, au nouveau volume.
+$('setup-sonnerie').addEventListener('change', () => essaiSon('sonnerie'));
+$('setup-voix').addEventListener('change', () => essaiSon('voix'));
+document.querySelectorAll('.setup-essai').forEach((b) => b.addEventListener('click', () => essaiSon(b.dataset.essai)));
+
+$('setup-son-ok').addEventListener('click', async () => {
+  const btn = $('setup-son-ok');
+  btn.disabled = true;
+  $('setup-son-error').hidden = true;
+  try {
+    await updateDoc(doc(db, 'families', session.fid), {
+      volume: Number($('setup-voix').value), volumeSonnerie: Number($('setup-sonnerie').value), rev: increment(1),
+    });
+    await setupEtape('options');
+    fillOptions();
+    setupStep('setup-options');
+  } catch (err) {
+    console.error(err);
+    showError($('setup-son-error'), 'L\'enregistrement a échoué. Vérifiez la connexion internet et réessayez.');
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// Options : réglées par le serveur à la création de la famille, modifiables ici.
+function fillOptions() {
+  const o = session.family.options || {};
+  $('setup-opt-sos').checked = !!o.sos;
+  $('setup-opt-lecture').checked = o.lecture !== false;
+  $('setup-opt-rappels').checked = o.rappelsAccueil !== false;
+  $('setup-opt-meteo').checked = o.meteo !== false;
+  $('setup-opt-radio').checked = !!o.radio?.active;
+  const ville = session.family.meteoVille?.nom;
+  $('setup-opt-meteo-ville').textContent = ville ? `À ${ville}, la ville du point relais (modifiable dans Réglages)` : 'La ville se règle dans Réglages';
+}
+
+$('setup-fin').addEventListener('click', async () => {
+  const btn = $('setup-fin');
+  btn.disabled = true;
+  $('setup-fin-error').hidden = true;
+  const o = session.family.options || {};
+  const r = o.radio?.url ? o.radio : { nom: RADIOS[0].nom, url: RADIOS[0].url };
+  const options = {
+    ...o,
+    sos: $('setup-opt-sos').checked,
+    lecture: $('setup-opt-lecture').checked,
+    rappelsAccueil: $('setup-opt-rappels').checked,
+    meteo: $('setup-opt-meteo').checked,
+    radio: { ...r, active: $('setup-opt-radio').checked },
+  };
+  try {
+    await updateDoc(doc(db, 'families', session.fid), { options, rev: increment(1) });
+    await finirInstallation(session.fid);
+    session.family.installation = { ...session.family.installation, etape: 'fini' };
+    await enterApp();
+  } catch (err) {
+    console.error(err);
+    showError($('setup-fin-error'), 'L\'enregistrement a échoué. Vérifiez la connexion internet et réessayez.');
+  } finally {
+    btn.disabled = false;
+  }
 });
 
 // ---------- Connexion et choix de la famille ----------
@@ -3559,8 +3872,14 @@ async function enterApp() {
     const active = memberships.filter((m) => m.status !== 'pending');
     if (!active.length) {
       const pending = memberships.find((m) => m.status === 'pending');
-      if (pairCode()) openPairingWithoutFamily();
-      else if (pending) showPending(pending.fid);
+      if (pairCode()) { showSetupScan(pairCode()); return; }
+      // Tablette réservée par ce compte, famille pas encore nommée : on reprend au nom.
+      const resa = await maReservation();
+      if (resa) {
+        setup.code = resa;
+        watchSetupPairing(resa);
+        setupStep('setup-nom');
+      } else if (pending) showPending(pending.fid);
       else showJoin(false);
       return;
     }
@@ -3590,6 +3909,8 @@ async function enterApp() {
   startNotifs(session);
   renderInstallCard();
   renderAccount();
+  // Installation pas finie : ses écrans d'abord, l'accueil ensuite.
+  if (installationEnCours()) { showSetupFamily(); return; }
   goHome();
   renderOutbox();
   flushOutbox();
@@ -3597,7 +3918,7 @@ async function enterApp() {
   if (!showIntroTablette()) showGuideOnce(session.family.name);
   if (sharedPending) { sharedPending = false; openShared(); }
   if (rappelerPending) { rappelerPending = false; offerCallBack(); }
-  else if (pairCode()) openPage('pair');
+  else if (pairCode()) showSetupScan(pairCode());
 }
 
 function renderFamilySwitch(current) {
