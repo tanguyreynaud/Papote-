@@ -1065,7 +1065,12 @@ final class Sync {
                         .put("repeat", nz(Firebase.str(f, "repeat")))
                         .put("date", nz(Firebase.str(f, "date")))
                         .put("days", days)
-                        .put("lastAck", nz(Firebase.str(f, "lastAck"))));
+                        .put("lastAck", nz(Firebase.str(f, "lastAck")))
+                        // Réglés par la famille, facultatifs : annonce avant l'heure (minutes, absent = 15),
+                        // dernier jour d'un rappel qui se répète, pause jusqu'à un jour inclus.
+                        .put("avanceMin", f.has("avanceMin") ? f.getJSONObject("avanceMin").optInt("integerValue", 15) : 15)
+                        .put("finLe", nz(Firebase.str(f, "finLe")))
+                        .put("enPauseJusquau", nz(Firebase.str(f, "enPauseJusquau"))));
             }
             lastReminders = now;
             JSONObject payload = new JSONObject().put("reminders", out);

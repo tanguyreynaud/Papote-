@@ -770,7 +770,7 @@
   // ---------- Rappels : en grand un peu avant, puis à l'heure ----------
 
   var reminders = [];
-  var EARLY_MIN = 15;            // annonce « Dans 15 minutes »
+  var EARLY_MIN = 15;            // annonce « Dans 15 minutes » (sauf avanceMin réglé par la famille)
   var REMINDER_WINDOW_MIN = 60;  // un rappel manqué reste affiché pendant 1 heure
   var RESOUND_MIN = 5;           // le son est rejoué toutes les 5 minutes tant que ce n'est pas fait
   var alerting = null;           // { r, key, early, lastSound }
@@ -786,10 +786,20 @@
     return Number(parts[0]) * 60 + Number(parts[1]);
   }
 
+  // Avance de l'annonce choisie par la famille (0 : rien avant l'heure), 4 h au plus.
+  function earlyMin(r) {
+    var m = typeof r.avanceMin === 'number' ? r.avanceMin : EARLY_MIN;
+    return Math.max(0, Math.min(240, m));
+  }
+
   function happensOn(r, d) {
+    var key = dateKey(d);
+    // Dates « AAAA-MM-JJ » : la comparaison de textes suit l'ordre des jours.
+    if (r.finLe && key > r.finLe) return false;          // rappel terminé
+    if (r.enPauseJusquau && key <= r.enPauseJusquau) return false; // en pause
     if (r.repeat === 'daily') return true;
     if (r.repeat === 'weekly') return r.days.indexOf(d.getDay()) >= 0;
-    return r.date === dateKey(d);
+    return r.date === key;
   }
 
   function isDone(r, key) {
@@ -798,6 +808,13 @@
 
   function kindIcon(kind) {
     return ICONS[kind === 'medicament' ? 'pill' : kind === 'rdv' ? 'doctor' : 'pin'];
+  }
+
+  // « 5 minutes », « 1 heure », « 1 h 30 » : l'attente avant un rappel annoncé en avance.
+  function inLabel(min) {
+    if (min < 60) return min + ' minute' + (min > 1 ? 's' : '');
+    var h = Math.floor(min / 60), m = min % 60;
+    return m ? h + ' h ' + pad(m) : h + ' heure' + (h > 1 ? 's' : '');
   }
 
   function timeLabel(time) {
@@ -880,7 +897,10 @@
         closeReminder();
       } else if (alerting.early && late >= 0) {
         openReminder(alerting.r, key, nowMin, false); // l'annonce devient « C'est l'heure ! »
-      } else if (!alerting.early && nowMin - alerting.lastSound >= RESOUND_MIN) {
+      } else if (alerting.early) {
+        // Annonce longtemps à l'avance (avanceMin) : le « Dans… » suit l'heure.
+        $('reminder-when').textContent = 'Dans ' + inLabel(-late);
+      } else if (nowMin - alerting.lastSound >= RESOUND_MIN) {
         alerting.lastSound = nowMin;
         if (android()) android().alert();
       }
@@ -891,14 +911,14 @@
       var delta = minutesOf(r.time) - nowMin;
       if (isDone(r, key)) continue;
       if (delta <= 0 && -delta <= REMINDER_WINDOW_MIN) { openReminder(r, key, nowMin, false); return; }
-      if (delta > 0 && delta <= EARLY_MIN && !announced[r.id + '|' + key]) { openReminder(r, key, nowMin, true); return; }
+      if (delta > 0 && delta <= earlyMin(r) && !announced[r.id + '|' + key]) { openReminder(r, key, nowMin, true); return; }
     }
   }
 
   function openReminder(r, key, nowMin, early) {
     alerting = { r: r, key: key, early: early, lastSound: nowMin };
     var delta = minutesOf(r.time) - nowMin;
-    $('reminder-when').textContent = early ? 'Dans ' + delta + ' minute' + (delta > 1 ? 's' : '') : "C'est l'heure !";
+    $('reminder-when').textContent = early ? 'Dans ' + inLabel(delta) : "C'est l'heure !";
     $('reminder-icon').innerHTML = '<span class="icon">' + kindIcon(r.kind) + '</span>';
     $('reminder-title').textContent = r.title;
     $('reminder-title').className = 'ln-text ' + sizeClass(r.title);
