@@ -196,7 +196,7 @@ body.depot-actif::after {
 .legende i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
 .actions label { display: flex; align-items: center; gap: 6px; margin: 0; font-weight: 400; }
 .actions label input { width: 70px; margin: 0; padding: 8px 10px; }
-.fiche .link { padding: 0; min-height: 0; color: var(--accent); text-decoration: underline; }
+.fiche .link { padding: 0; min-height: 0; color: var(--accent); font-weight: 700; text-decoration: none; }
 .graphique rect, .graphique circle { stroke: none; }
 .graphique .g-axe { font-weight: 400; }
 
@@ -295,10 +295,6 @@ body.depot-actif::after {
 button.danger { color: var(--danger); border-color: currentColor; }
 details summary { cursor: pointer; margin-top: 12px; }
 #dt-resume a { color: var(--accent); font-weight: 600; }
-.liste-liens { list-style: none; margin: 0; padding: 0; }
-.liste-liens li { padding: 6px 0; border-bottom: 1px solid var(--line, #eee); }
-.liste-liens li:last-child { border-bottom: 0; }
-.liste-liens a, [data-panneau="client"] .fiche a { color: var(--accent); font-weight: 600; }
 
 /* Actions de la page commande : une explication, puis son bouton. */
 #dc-corps .action, #famille-actions .action { padding: 14px 0; border-top: 1px solid #ece7dd; }
@@ -329,3 +325,48 @@ details summary { cursor: pointer; margin-top: 12px; }
 .titre-commande { color: var(--accent); text-decoration: none; }
 .titre-commande:hover { text-decoration: underline; }
 .titre-commande::after { content: ' ›'; }
+
+/* Menu « ⋮ » des actions d'une ligne (dialogue.js, menuPoints). */
+.menu-points { display: inline-flex; flex: none; }
+.menu-points-bouton {
+  width: 40px; height: 40px; min-height: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--text);
+  font-size: 22px; font-weight: 700; line-height: 1; cursor: pointer;
+}
+.menu-points-bouton:hover, .menu-points-bouton[aria-expanded="true"] { border-color: var(--accent); color: var(--accent); }
+.menu-points-liste {
+  position: fixed; z-index: 60; min-width: 250px; max-width: calc(100vw - 16px); padding: 6px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 14px 40px rgba(30, 27, 75, .18);
+}
+.menu-points-item {
+  display: block; width: 100%; min-height: 44px; padding: 10px 12px; border: 0; border-radius: 10px; background: none;
+  color: var(--text); font: inherit; font-size: 15px; font-weight: 600; text-align: left; cursor: pointer;
+}
+.menu-points-item:hover, .menu-points-item:focus-visible { background: var(--bg); outline: none; }
+.menu-points-item.danger { color: var(--danger); }
+
+/* Liens vers une autre page (client, commande, famille, tablette) : une ligne entière à toucher. */
+.liste-liens { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.liste-liens li, .liste-liens li:last-child {
+  position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px;
+  padding: 12px 40px 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); font-size: 15px;
+}
+.liste-liens li.muted { border-style: dashed; padding-right: 14px; }
+.liste-liens li:has(a):hover { border-color: var(--accent); background: #f5f4ff; }
+.liste-liens li:has(a)::after { content: '›'; position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: var(--accent); font-size: 24px; font-weight: 700; }
+.liste-liens a { color: var(--accent); font-weight: 700; text-decoration: none; }
+.liste-liens a::before { content: ''; position: absolute; inset: 0; border-radius: 12px; }
+.liste-liens .ll-quoi { color: var(--muted); font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; width: 100%; }
+.fiche .link, [data-panneau="client"] .fiche a { color: var(--accent); font-weight: 700; text-decoration: none; }
+.fiche .link:hover, [data-panneau="client"] .fiche a:hover { text-decoration: underline; }
+
+/* Page d'une famille : le ⋮ à droite du nom ; les proches, une ligne chacun avec leur ⋮. */
+#famille-fiche .family-head { gap: 10px; }
+.membre-ligne { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); margin: 0; }
+.membre-ligne:last-child { border-bottom: 0; }
+.membre-ligne .membre-nom { flex: 1; min-width: 0; font-size: 15px; }
+.membre-ligne .membre-nom small { display: block; color: var(--muted); font-size: 13px; }
+.membre-ligne .small-btn { flex: none; }
+/* Liens dans les tableaux (PDF, reçu, justificatif) : couleur Papote, sans soulignement. */
+td a { color: var(--accent); font-weight: 600; text-decoration: none; }
+td a:hover { text-decoration: underline; }
