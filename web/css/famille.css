@@ -753,7 +753,7 @@ button:disabled { opacity: .45; cursor: default; }
 
 /* ---------- Plusieurs familles, demandes ---------- */
 
-.family-switch { width: auto; max-width: 100%; margin-top: 6px; padding: 8px 14px; gap: 6px; border-radius: 999px; font-size: 16px; font-weight: 600; color: var(--text); background: var(--surface); box-shadow: var(--shadow); }
+.family-switch { width: auto; max-width: 100%; margin-top: 8px; padding: 12px 20px; gap: 8px; border-radius: 999px; font-size: 19px; font-weight: 600; color: var(--text); background: var(--surface); box-shadow: var(--shadow); }
 .family-switch::after { content: "▾"; color: var(--accent); }
 .pending-banner {
   width: 100%;
