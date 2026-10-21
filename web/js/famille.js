@@ -3543,6 +3543,14 @@ const SETUP_ERREURS = {
   expire: 'Ce code a expiré. Scannez le nouveau code affiché sur la tablette.',
 };
 
+// Le tiret se met tout seul pendant la frappe (ABCD-1234), comme sur la tablette.
+for (const input of [$('setup-code-input'), ...document.querySelectorAll('.order-code')]) {
+  input.addEventListener('input', () => {
+    const c = normalizeCode(input.value).slice(0, 8);
+    input.value = c.length > 4 ? `${c.slice(0, 4)}-${c.slice(4)}` : c;
+  });
+}
+
 $('setup-code').addEventListener('submit', async (e) => {
   e.preventDefault();
   const prenom = $('setup-prenom').value.trim();
