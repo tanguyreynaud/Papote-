@@ -96,7 +96,7 @@ function codeAuHasard() {
 
 // deps : { db, compteVerifie, envoyerMail, mail, appli, logger }
 function brancher(deps) {
-  const { db, compteVerifie, envoyerMail, mail, appli, logger } = deps;
+  const { db, compteVerifie, envoyerMail, mail, appli, logger, stockage } = deps;
 
   async function reserverTablette(request) {
     const { uid, email } = compteVerifie(request);
@@ -228,10 +228,71 @@ function brancher(deps) {
     return { ok: true };
   }
 
-  return { reserverTablette, nommerFamille, finirInstallation };
+  // « Annuler l'installation » (le premier proche, avant « C'est parfait ») : tout ce qui a été fait part,
+  // et la tablette peut être réinstallée avec un autre téléphone ou un autre nom.
+  // Avant le nom ({ code }) : la réservation est rendue. Après ({ fid }) : la famille est effacée,
+  // sauf si un abonnement payant y est déjà relié (on ne touche jamais à Stripe ici).
+  async function annulerInstallation(request) {
+    const { uid } = compteVerifie(request);
+    const data = request.data || {};
+    const code = normaliserCode(data.code);
+    if (!data.fid && code) {
+      const ref = db.doc(`pairings/${code}`);
+      await db.runTransaction(async (tx) => {
+        const p = (await tx.get(ref)).data();
+        if (!p || p.claimedBy !== uid || p.status !== 'reserved') return;
+        tx.update(ref, {
+          status: 'waiting', claimedBy: FieldValue.delete(), claimedName: FieldValue.delete(),
+          claimedEmail: FieldValue.delete(), reservedAt: FieldValue.delete(), attente: FieldValue.delete(),
+          expiresAt: Timestamp.fromMillis(Date.now() + ENTREE_TABLETTE_MS),
+        });
+      });
+      return { ok: true };
+    }
+    const fid = data.fid;
+    if (typeof fid !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(fid)) throw new HttpsError('invalid-argument', 'Famille manquante.');
+    const ref = db.doc(`families/${fid}`);
+    const fam = (await ref.get()).data();
+    if (!fam) return { ok: true };
+    const refus = refusAnnulation(fam, uid);
+    if (refus) throw new HttpsError('failed-precondition', refus);
+    // Fichiers d'abord : si la base échoue ensuite, un nouvel essai finit le travail.
+    if (stockage) await stockage().deleteFiles({ prefix: `families/${fid}/`, force: true });
+    await db.recursiveDelete(ref);
+    if (fam.code) await db.doc(`invites/${fam.code}`).delete().catch(() => null);
+    const [jumelages, commandes, fiches] = await Promise.all([
+      db.collection('pairings').where('fid', '==', fid).get(),
+      db.collection('commandes').where('fid', '==', fid).get(),
+      db.collection('stock').where('fid', '==', fid).get(),
+    ]);
+    await Promise.all([
+      ...jumelages.docs.map((d) => d.ref.delete()),
+      // La commande et la tablette se relieront à la famille de la prochaine installation.
+      ...commandes.docs.map((d) => d.ref.update({ fid: FieldValue.delete() })),
+      ...fiches.docs.map((d) => d.ref.update({ fid: FieldValue.delete(), jumeleeLe: FieldValue.delete() })),
+    ]);
+    await db.collection('suppressions').add({
+      fid, nom: fam.name || null, membres: 1, le: Date.now(), par: uid, motif: 'installation annulée',
+    });
+    logger.info(`Installation de ${fid} annulée par ${uid}`);
+    return { ok: true };
+  }
+
+  return { reserverTablette, nommerFamille, finirInstallation, annulerInstallation };
+}
+
+// Raison de refuser « Annuler l'installation », ou null (pure, testée).
+function refusAnnulation(fam, uid) {
+  if (fam.createdBy !== uid) return "Seule la personne qui installe la tablette peut annuler l'installation.";
+  if (!fam.installation || fam.installation.etape === 'fini') return "L'installation est déjà finie.";
+  const abo = fam.abonnement || {};
+  if (abo.stripeSubscriptionId || !['installation', 'aucun'].includes(abo.statut || 'aucun')) {
+    return "Votre commande est déjà reliée à cette famille : écrivez-nous à contact@mapapote.fr pour recommencer l'installation.";
+  }
+  return null;
 }
 
 module.exports = {
   brancher,
-  regles: { decisionScan, villeDuRelais, villeAvecCoordonnees, normaliserCode, OPTIONS_PAR_DEFAUT, ETAPES },
+  regles: { decisionScan, refusAnnulation, villeDuRelais, villeAvecCoordonnees, normaliserCode, OPTIONS_PAR_DEFAUT, ETAPES },
 };

@@ -41,3 +41,13 @@ test('coordonnées de la ville du point relais', async () => {
   assert.deepStrictEqual(await r.villeAvecCoordonnees({ nom: 'Lyon' }, null), { nom: 'Lyon' });
   assert.strictEqual(await r.villeAvecCoordonnees(null, '69006'), null);
 });
+
+test('Annuler l\'installation : seulement le premier proche, avant la fin, sans abonnement payant', () => {
+  const fam = { createdBy: 'u1', installation: { etape: 'son' }, abonnement: { statut: 'installation' } };
+  assert.equal(r.refusAnnulation(fam, 'u1'), null);
+  assert.equal(r.refusAnnulation({ ...fam, abonnement: { statut: 'aucun' } }, 'u1'), null);
+  assert.match(r.refusAnnulation(fam, 'u2'), /Seule la personne/);
+  assert.match(r.refusAnnulation({ ...fam, installation: { etape: 'fini' } }, 'u1'), /déjà finie/);
+  assert.match(r.refusAnnulation({ ...fam, abonnement: { statut: 'actif', stripeSubscriptionId: 'sub_1' } }, 'u1'), /contact@/);
+  assert.match(r.refusAnnulation({ ...fam, abonnement: { statut: 'offert' } }, 'u1'), /contact@/);
+});
