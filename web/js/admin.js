@@ -117,6 +117,9 @@ function orderHead(c) {
   return `${c.nom || c.email} · ${c.formule === 'sim' ? 'carte SIM' : 'Wi-Fi'}, tablette ${c.tablette === 'incluse' ? 'incluse' : 'achetée'}`;
 }
 
+// Matériel non rendu : mêmes prix que le serveur (abonnement.js, PRIX_MATERIEL) et les conditions de vente.
+const prix = { tablette: 130, chargeur: 10, enceinte: 10 };
+
 // Tablettes à envoyer : chaque commande se prépare pas à pas (parcours), sans rien oublier.
 async function loadOrders() {
   try {
@@ -125,8 +128,6 @@ async function loadOrders() {
       .sort((a, b) => (toDate(a.creeLe)?.getTime() || 0) - (toDate(b.creeLe)?.getTime() || 0));
     $('orders-empty').hidden = list.length > 0;
     $('orders').replaceChildren(...list.map((c) => {
-      // Mêmes prix que le serveur (abonnement.js, PRIX_MATERIEL) et les conditions de vente.
-      const prix = { tablette: 130, chargeur: 10, enceinte: 10 };
       const li = document.createElement('li');
       li.innerHTML = '<strong></strong><span class="muted small"></span><span class="small adresse"></span>'
         + '<div class="envoi-suite"><span class="small avancement"></span><button type="button" class="primary small-btn"></button></div>';
@@ -454,9 +455,23 @@ async function loadShipped() {
 // Tablettes incluses à rendre après la fin d'un abonnement (restitution écrite par le serveur).
 async function loadReturns() {
   try {
-    const snap = await getDocs(query(collection(db, 'commandes'), where('restitution.statut', 'in', ['attendue', 'echec'])));
-    $('returns-empty').hidden = !snap.empty;
-    $('returns').replaceChildren(...snap.docs.map((d) => {
+    // Même règle que le compteur de l'accueil (etatCommande, gestion.js) : retour attendu ou échoué,
+    // commande non annulée. Une commande comptée par le serveur mais absente de la requête est lue directement.
+    const aRendre = (c) => c && c.restitution && ['attendue', 'echec'].includes(c.restitution.statut) && c.expedition !== 'annulee';
+    const trouvees = new Map();
+    try {
+      const snap = await getDocs(query(collection(db, 'commandes'), where('restitution.statut', 'in', ['attendue', 'echec'])));
+      for (const d of snap.docs) if (aRendre(d.data())) trouvees.set(d.id, d);
+    } catch (err) { console.warn('Restitutions illisibles', err); }
+    const serveur = await donnees().then((x) => x.commandes || []).catch(() => []);
+    for (const c of serveur.filter(aRendre)) {
+      if (trouvees.has(c.id)) continue;
+      const d = await getDoc(doc(db, 'commandes', c.id)).catch(() => null);
+      if (d && d.exists()) trouvees.set(c.id, d);
+    }
+    const docs = [...trouvees.values()];
+    $('returns-empty').hidden = docs.length > 0;
+    $('returns').replaceChildren(...docs.map((d) => {
       const c = d.data();
       const r = c.restitution || {};
       const avant = toDate(r.avant);
@@ -585,6 +600,7 @@ async function load() {
         hasTablet: list.length > 0,
         online: latest('lastOnline'),
         active: latest('lastActive'),
+        installee: latest('joinedAt'),
         version: list.map((t) => t.appVersion).filter(Boolean).sort().pop() || null,
       };
     }));
@@ -774,7 +790,13 @@ function state(f) {
 }
 
 let vueFamilles = null; // onglet de la liste des familles (off, on, idle, none, toutes)
-const pasTouchee = (f) => f.hasTablet && (!f.active || Date.now() - f.active.getTime() > IDLE_MS);
+// Pas touchée depuis 24 h : compté depuis le dernier toucher, ou depuis l'installation (ou la création
+// de la famille) si personne ne l'a encore touchée ; une tablette installée aujourd'hui n'y est donc pas.
+const pasTouchee = (f) => {
+  if (!f.hasTablet) return false;
+  const depuis = f.active || f.installee || toDate(f.createdAt);
+  return !!depuis && Date.now() - depuis.getTime() > IDLE_MS;
+};
 const dansVue = (f) => vueFamilles === 'toutes' || (vueFamilles === 'idle' ? pasTouchee(f) : state(f).cls === vueFamilles);
 
 // Chiffres de l'accueil : chacun ouvre la liste des familles correspondante.
@@ -826,6 +848,8 @@ function carteFamille(f) {
     ['Proches', f.people ?? '–'],
     ['Photos et messages', f.posts ?? '–'],
     ['Dernier envoi', ago(f.lastPost)],
+    ['Créée', toDate(f.createdAt) ? toDate(f.createdAt).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '–'],
+    ['Identifiant', f.id],
   ]) dl.append(el('dt', null, k), el('dd', null, v));
   tete.append(titre, dl);
 
