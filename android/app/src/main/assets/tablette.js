@@ -9,6 +9,7 @@
   var IDLE_MS = 90000;   // retour à l'accueil après 1 min 30 sans toucher l'écran
   var FRAME_MS = 12000;  // changement de photo sur l'accueil
   var SLIDE_MS = 10000;  // défilement tout seul du diaporama
+  var CALM_MS = 4000;    // les flèches et « Accueil » s'effacent après 4 s sans toucher l'écran
 
   var JOURS = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
   var MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août',
@@ -372,10 +373,13 @@
     wakeArrows();
   }
 
-  // Diaporama : flèches et bouton Accueil toujours visibles.
+  // Mode cadre photo : sans toucher l'écran, les flèches et « Accueil » s'effacent au bout de
+  // 4 s (demande de Tanguy, 21/10) ; ils reviennent au premier toucher.
+  var calmTimer = null;
   function wakeArrows() {
     $('view-photos').className = 'view photos';
-    // Flèches et bouton Accueil toujours affichés (demande de Tanguy) : plus de mode « calme ».
+    clearTimeout(calmTimer);
+    calmTimer = setTimeout(function () { $('view-photos').className = 'view photos calm'; }, CALM_MS);
   }
 
   function renderPhoto() {
@@ -404,11 +408,12 @@
       });
     } else {
       // Vidéo déjà reçue : elle se lance toute seule dans le diaporama, flèches et Accueil gardés.
+      // Elle n'apparaît (en fondu) qu'à sa première image : pas d'écran noir pendant le chargement.
       setPicture(next.querySelector('img'), BLANK);
       next.querySelector('.photo-bg').style.backgroundImage = 'none';
-      next.style.opacity = '1';
       playSlideVideo(next, p, token);
     }
+    preloadNext();
     signWithFace($('photo-who'), p, p.authorName + ', ' + dayLabel(p.createdAt));
     var partLabel = p.parts > 1 ? 'Photo ' + p.part + ' sur ' + p.parts : '';
     var caption = p.text && partLabel ? p.text + ' · ' + partLabel : (p.text || partLabel);
@@ -468,7 +473,11 @@
       else { v.currentTime = 0; v.play().catch(function () { }); }
     };
     v.onended = next;
-    v.onerror = function () { slideTimer = setTimeout(next, SLIDE_MS); }; // vidéo illisible : on passe
+    var shown = false;
+    var reveal = function () { if (!shown && token === fadeToken) { shown = true; slide.style.opacity = '1'; } };
+    v.onplaying = reveal;
+    setTimeout(reveal, 3000); // au pire, au bout de 3 s
+    v.onerror = function () { reveal(); slideTimer = setTimeout(next, SLIDE_MS); }; // vidéo illisible : on passe
     v.onloadeddata = function () {
       if (bgDone || token !== fadeToken) return;
       bgDone = true;
@@ -486,11 +495,22 @@
     v.play().catch(function () { v.onerror(); });
   }
 
+  // La photo suivante est décodée d'avance (et son fond flou préparé) : pas d'à-coup au passage.
+  var preloaded = {};
+  function preloadNext() {
+    var n = slides[(photoIndex + 1) % slides.length];
+    if (!n || !n.image || preloaded[n.image]) return;
+    preloaded[n.image] = true;
+    var img = new Image();
+    img.src = n.image;
+    tinyCopy(n.image, function () { });
+  }
+
   // Une autre photo, l'accueil ou un appel : la vidéo du diaporama s'arrête.
   function stopSlideVideo() {
     var vs = document.querySelectorAll('#view-photos video.slide-vid');
     for (var i = 0; i < vs.length; i++) {
-      vs[i].onended = vs[i].onerror = vs[i].onloadeddata = null;
+      vs[i].onended = vs[i].onerror = vs[i].onloadeddata = vs[i].onplaying = null;
       try { vs[i].pause(); } catch (e) { }
       vs[i].removeAttribute('src');
       vs[i].style.display = 'none';
@@ -580,13 +600,14 @@
 
   function watchSeen(slot, onSeen, close) {
     unwatchSeen(slot);
-    if (typeof window.papoteWatchPresence !== 'function') return false;
+    if (typeof window.papoteWatchPresence !== 'function') { console.warn('Caméra : pas de détection de visage'); return false; }
     var w = { stop: null, timer: null };
     watchers[slot] = w;
     try {
       w.stop = window.papoteWatchPresence(function () {
         if (watchers[slot] !== w || w.timer) return;
-        try { onSeen(); } catch (e) { }
+        console.warn('Visage vu (' + slot + ')');
+        try { onSeen(); } catch (e) { console.warn('Visage vu : ' + e); }
         w.timer = setTimeout(function () {
           if (watchers[slot] !== w) return;
           unwatchSeen(slot);
@@ -1641,6 +1662,7 @@
   // Mamie devant l'écran (si la famille n'a pas enlevé la lecture). Le bouton « Écouter » reste.
   var spoken = {};
   function speakOnce(id, text) {
+    console.warn('Lecture auto : visage vu (' + (options.lecture ? 'lecture activée' : 'lecture désactivée') + (text ? '' : ', rien à lire') + ')');
     if (!options.lecture || !text || spoken[id]) return;
     spoken[id] = true;
     sayAloud(text);
