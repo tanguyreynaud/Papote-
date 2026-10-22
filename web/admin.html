@@ -56,7 +56,7 @@
         <p id="who" class="muted small"></p>
         <button type="button" id="btn-signout" class="link small">Se déconnecter</button>
         <!-- Version de l'admin : à changer à chaque mise à jour, pour voir que la bonne est en ligne. -->
-        <p class="muted small version-admin">Version du 22/10 à 14 h 15</p>
+        <p class="muted small version-admin">Version du 22/10 à 14 h 30</p>
       </div>
     </aside>
 
@@ -236,12 +236,6 @@
             <p class="muted small" id="sim-resume"></p>
             <div class="table"><table id="t-sim"></table></div>
           </div>
-          <section class="card sim">
-            <h2>Vues par les tablettes</h2>
-            <p id="sim-count" class="muted small"></p>
-            <ul id="sim-lines" class="sim-lines"></ul>
-            <p id="sim-empty" class="muted small" hidden>Aucune tablette avec SIM pour l'instant.</p>
-          </section>
         </div>
         <div class="card" data-onglet="accessoires">
           <div class="tete">
@@ -563,8 +557,8 @@
       <label>Expiration de la carte <input type="month" name="cbExp"></label>
       <label class="large">Note <textarea name="note" rows="2"></textarea></label>
       <div class="large boutons">
-        <button type="submit" class="primary">Enregistrer</button>
-        <button type="button" class="link danger" id="ds-supprimer" hidden>Supprimer (erreur de saisie)</button>
+        <button type="submit" class="primary small-btn">Enregistrer</button>
+        <button type="button" class="secondary small-btn" id="ds-annuler">Annuler</button>
       </div>
       <p class="f-msg small" hidden></p>
     </form>

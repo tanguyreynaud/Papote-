@@ -10,6 +10,7 @@ import {
   appeler, donnees as lireDonnees, signalerChangement, messageErreur,
 } from './gestion-api.js';
 import { ouvrirParcours, fermerParcours } from './parcours.js';
+import { simVue, go as enGo } from './sim.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -1386,7 +1387,8 @@ $('filtre-sim').addEventListener('change', afficherSim);
 
 let simOuverte = null;
 const dateChamp = (ms) => (ms ? new Date(ms).toLocaleDateString('sv-SE') : '');
-// Carte existante : sa page ; nouvelle carte : le formulaire.
+// Carte existante : sa page ; nouvelle carte : la page « nouvelle », directement en saisie.
+let simEdition = null; // id de la carte dont le formulaire est ouvert dans la page, ou 'nouvelle'
 function ouvrirSim(id) {
   if (id) location.hash = `#sim/${encodeURIComponent(id)}`;
   else modifierSim(null);
@@ -1395,6 +1397,15 @@ function ouvrirSim(id) {
 // Page d'une carte SIM : ce qu'on sait d'elle en lecture, la tablette et le client où elle est.
 function remplirPageSim(id) {
   const zone = $('dsi-corps');
+  // Saisie en cours dans la page : ne pas l'effacer à la relecture des données.
+  if (simEdition === id && zone.contains($('f-sim'))) return;
+  if (id === 'nouvelle') {
+    if (simEdition !== 'nouvelle') { modifierSim(null); return; }
+    document.title = 'Papote · Nouvelle carte SIM';
+    zone.replaceChildren(h('div', { class: 'card' }, h('h2', {}, 'Nouvelle carte SIM'), $('f-sim')));
+    $('f-sim').operateur.focus();
+    return;
+  }
   const l = donnees.sims.find((x) => x.id === id);
   if (!l) {
     zone.replaceChildren(h('div', { class: 'card' }, h('p', {}, 'Carte SIM introuvable (supprimée ?).')));
@@ -1406,12 +1417,21 @@ function remplirPageSim(id) {
   const c = t && t.commande && donnees.commandes.find((x) => x.id === t.commande);
   const ligne = (k, v) => (v ? [h('dt', {}, k), h('dd', {}, v)] : []);
   const cout = coutLigne(l);
-  const alertes = alertesSim(l);
+  // Ce que la tablette remonte de sa carte (réseau, data), seulement s'il y a quelque chose.
+  const vue = c && c.fid ? simVue(c.fid) : null;
+  const alertes = [...alertesSim(l), ...(vue ? vue.alertes : [])];
+  const tete = h('div', { class: 'tete-fiche' }, h('h2', {}, titre),
+    h('div', { class: 'tete-actions no-print' }, simEdition === id ? null : menuPoints([
+      { libelle: 'Modifier les informations', faire: () => modifierSim(l.id) },
+      { libelle: 'Supprimer (erreur de saisie)', danger: true, faire: () => supprimerSim(l.id) },
+    ], `Actions pour ${titre}`)));
+  if (simEdition === id) {
+    zone.replaceChildren(h('div', { class: 'card' }, tete, $('f-sim')));
+    $('f-sim').operateur.focus();
+    return;
+  }
   zone.replaceChildren(h('div', { class: 'card' },
-    h('div', { class: 'tete-fiche' }, h('h2', {}, titre),
-      h('div', { class: 'tete-actions no-print' }, menuPoints([
-        { libelle: 'Modifier les informations', faire: () => modifierSim(l.id) },
-      ], `Actions pour ${titre}`))),
+    tete,
     alertes.length ? h('p', { class: 'small' }, ...alertes.map((a) => badge(a, 'ko'))) : null,
     h('dl', { class: 'fiche' },
       ...ligne('Statut', badge(donnees.statutsSim[l.statut] || l.statut, STATUT_CLASSE[l.statut])),
@@ -1429,7 +1449,27 @@ function remplirPageSim(id) {
       ...ligne('À activer avant', l.statut === 'stock' ? jour(l.activerAvant) : null),
       ...ligne('Identifiant client', l.client),
       ...ligne('Carte bancaire', l.cb || l.cbExp ? [l.cb ? `…${l.cb}` : null, l.cbExp ? `expire ${l.cbExp}` : null].filter(Boolean).join(', ') : null),
-      ...ligne('Note', l.note))));
+      ...ligne('Note', l.note))),
+    vue ? h('div', { class: 'card' }, h('h2', {}, 'Ce que dit la tablette'),
+      h('dl', { class: 'fiche' },
+        ...ligne('Réseau', vue.sim.reseau ? `${vue.sim.reseau}${vue.sim.signal >= 0 ? `, signal ${vue.sim.signal}/4` : ''}` : null),
+        ...ligne('Data du mois', enGo(vue.sim.dataMoisMo)),
+        ...ligne('Carte vue le', vue.vuLe ? vue.vuLe.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : null),
+        ...ligne('Tablette en ligne le', vue.vue ? vue.vue.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : null),
+        ...ligne('ICCID lu', vue.sim.iccid && l.iccid && !String(vue.sim.iccid).endsWith(String(l.iccid).replace(/\D/g, '').slice(-6))
+          ? h('span', { class: 'error' }, `…${String(vue.sim.iccid).slice(-6)} : ce n'est pas cette carte`) : null))) : null);
+}
+
+async function supprimerSim(id) {
+  if (!await demander('Supprimer cette carte du registre (erreur de saisie) ? Pour une ligne arrêtée, mettez plutôt le statut « Résiliée ».', { oui: 'Supprimer', danger: true })) return;
+  try {
+    await appeler('gestionSim', { action: 'supprimer', id });
+    donnees = await lireDonnees(true);
+    location.hash = '#stock/sim';
+    afficherTout();
+  } catch (e) {
+    prevenir(messageErreur(e));
+  }
 }
 
 function modifierSim(id) {
@@ -1450,10 +1490,20 @@ function modifierSim(id) {
   f.prix.value = enEuros(l.prix);
   f.prixApres.value = enEuros(l.prixApres);
   for (const k of ['finPromo', 'activation', 'activerAvant']) f.elements[k].value = dateChamp(l[k]);
-  $('ds-supprimer').hidden = !id;
   f.querySelector('.f-msg').hidden = true;
-  $('d-sim').showModal();
+  // Le formulaire s'ouvre dans la page de la carte (plus de fenêtre par-dessus).
+  simEdition = id || 'nouvelle';
+  const cible = `#sim/${encodeURIComponent(simEdition)}`;
+  if (location.hash !== cible) location.hash = cible;
+  else remplirPageSim(simEdition);
 }
+$('ds-annuler').addEventListener('click', () => {
+  const id = simEdition;
+  simEdition = null;
+  $('d-sim').append($('f-sim'));
+  if (id === 'nouvelle') location.hash = '#stock/sim';
+  else remplirPageSim(id);
+});
 $('btn-sim').addEventListener('click', () => ouvrirSim(null));
 
 $('f-sim').addEventListener('submit', async (e) => {
@@ -1472,17 +1522,11 @@ $('f-sim').addEventListener('submit', async (e) => {
     note: f.note.value,
   };
   await enregistrer(f, async () => {
-    await appeler('gestionSim', simOuverte ? { action: 'modifier', id: simOuverte, champs } : { action: 'ajouter', champs });
-    $('d-sim').close();
-  });
-});
-
-$('ds-supprimer').addEventListener('click', async () => {
-  if (!await demander('Supprimer cette carte du registre (erreur de saisie) ? Pour une ligne arrêtée, choisissez plutôt « Résiliée ».', { oui: 'Supprimer', danger: true })) return;
-  await enregistrer($('f-sim'), async () => {
-    await appeler('gestionSim', { action: 'supprimer', id: simOuverte });
-    $('d-sim').close();
-    if (location.hash.startsWith('#sim/')) location.hash = '#stock/sim';
+    const r = await appeler('gestionSim', simOuverte ? { action: 'modifier', id: simOuverte, champs } : { action: 'ajouter', champs });
+    // Saisie terminée : le formulaire retourne à sa place, la page montre la carte enregistrée.
+    simEdition = null;
+    $('d-sim').append(f);
+    if (!simOuverte && r && r.id) location.hash = `#sim/${encodeURIComponent(r.id)}`;
   });
 });
 
