@@ -2699,11 +2699,19 @@ exports.gestionFamilleOfferte = onCall(async (request) => {
     throw new HttpsError('failed-precondition', "Cette famille a un abonnement payant en cours : résiliez-le d'abord dans Stripe.");
   }
   if (!offerte && statut !== 'offert') return { ok: true };
+  const qui = request.auth.token.email || request.auth.uid;
+  // Fin du service offert : la commande offerte se clôt, le matériel est noté récupéré ou à récupérer.
+  const { offertes, parties } = offertesOuvertes(offerte ? [] : (await db().collection('commandes').where('fid', '==', fid).get()).docs);
+  const { recupere } = request.data || {};
+  if (parties.length && typeof recupere !== 'boolean') {
+    throw new HttpsError('failed-precondition', "Dites d'abord si la tablette et les accessoires de la commande offerte sont récupérés.");
+  }
   await ref.update({
     'abonnement.statut': offerte ? 'offert' : 'aucun',
     'abonnement.majLe': FieldValue.serverTimestamp(),
-    'abonnement.par': request.auth.token.email || request.auth.uid,
+    'abonnement.par': qui,
   });
+  await closOffertes(offertes, recupere === true, qui);
   return { ok: true };
 });
 
@@ -2785,8 +2793,7 @@ exports.gestionSupprimerFamille = onCall({ timeoutSeconds: 540, memory: '512MiB'
   if (refus) throw new HttpsError('failed-precondition', refus);
   const commandes = await db().collection('commandes').where('fid', '==', fid).get();
   // Commande offerte partie chez le proche : l'admin dit si la tablette et ses accessoires sont récupérés.
-  const offertes = commandes.docs.filter((d) => d.get('offerte') && d.get('expedition') !== 'annulee' && !d.get('restitution'));
-  const parties = offertes.filter((d) => !['a-preparer', 'paiement-en-attente'].includes(d.get('expedition')));
+  const { offertes, parties } = offertesOuvertes(commandes.docs);
   const { recupere } = request.data || {};
   if (parties.length && typeof recupere !== 'boolean') {
     throw new HttpsError('failed-precondition', 'Dites d\'abord si la tablette et les accessoires de la commande offerte sont récupérés.');
@@ -2807,7 +2814,13 @@ exports.gestionSupprimerFamille = onCall({ timeoutSeconds: 540, memory: '512MiB'
   return { ok: true, membres: membres.size };
 });
 
-// Commandes offertes d'une famille supprimée. Pas encore partie : annulée, sa tablette revient au stock.
+// Commandes offertes encore ouvertes (ni annulées ni closes), et celles dont la tablette est partie chez le proche.
+function offertesOuvertes(docs) {
+  const offertes = docs.filter((d) => d.get('offerte') && d.get('expedition') !== 'annulee' && !d.get('restitution'));
+  return { offertes, parties: offertes.filter((d) => !['a-preparer', 'paiement-en-attente'].includes(d.get('expedition'))) };
+}
+
+// Commandes offertes d'une famille qui n'est plus offerte, ou supprimée. Pas encore partie : annulée, sa tablette revient au stock.
 // Partie : matériel rendu (la tablette passe « revenue », à vérifier) ou encore à récupérer chez le proche.
 async function closOffertes(offertes, recupere, qui) {
   for (const d of offertes) {
