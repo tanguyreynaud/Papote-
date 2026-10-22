@@ -2268,6 +2268,9 @@ function remplirPageDepense(id) {
   $('titre-page').textContent = achat ? 'Achat' : 'Dépense';
   document.title = `Papote · ${titre}`;
   const ligne = (k, v) => (v ? [h('dt', {}, k), h('dd', {}, v)] : []);
+  if (saisieEnCours(zone)) return;
+  const modif = (libelle, affiche, champ, opts = {}) => ligneModifiable(libelle, affiche, { ...opts,
+    enregistrer: (v) => modifierDepense(d, { [champ]: v }) });
   const tablettes = donnees.stock.filter((t) => t.depense === d.id);
   const sims = donnees.sims.filter((l) => l.depense === d.id);
   const pieces = [...(d.pieces || []).map(lienPiece),
@@ -2283,13 +2286,22 @@ function remplirPageDepense(id) {
         ], `Actions pour « ${d.libelle} »`)))),
       d.aVerifier ? h('p', { class: 'small a-verifier' }, badge('à vérifier', 'ko'), ' ', sourceDepense(d), ' : vérifiez le montant, la date et le vendeur, puis validez.') : null,
       h('dl', { class: 'fiche' },
-        ligne('Date', jour(d.date)),
-        ligne('Vendeur', d.fournisseur),
-        ligne(achat ? 'Ce qui a été acheté' : 'Libellé', d.libelle),
-        ligne('N° de commande', d.numero),
-        ligne('Catégorie', donnees.categories[d.categorie] || d.categorie),
-        ligne('Montant TTC', euros(d.montant)),
-        ligne('dont TVA', d.tva != null ? euros(d.tva) : null),
+        // Chaque information se corrige avec son crayon (facture mal lue, faute de frappe).
+        ...modif('Date', jour(d.date), 'date', { valeur: dateChamp(d.date), type: 'date', convertir: (v) => {
+          if (!v) throw new Error('Date manquante.');
+          return dateSaisie(v);
+        } }),
+        ...modif('Vendeur', d.fournisseur, 'fournisseur', { valeur: d.fournisseur || '' }),
+        ...modif(achat ? 'Ce qui a été acheté' : 'Libellé', d.libelle, 'libelle', { valeur: d.libelle || '' }),
+        ...modif('N° de commande', d.numero, 'numero', { valeur: d.numero || '', vide: 'aucun' }),
+        ...modif('Catégorie', donnees.categories[d.categorie] || d.categorie, 'categorie', { valeur: d.categorie, options: Object.entries(donnees.categories) }),
+        ...modif('Montant TTC', euros(d.montant), 'montant', { valeur: enEuros(d.montant), mode: 'decimal', suffixe: '€', convertir: (v) => {
+          const c = convertirEuros(v);
+          if (!c) throw new Error('Montant manquant.');
+          return c;
+        } }),
+        ...modif('dont TVA', d.tva != null ? euros(d.tva) : null, 'tva', { valeur: enEuros(d.tva), mode: 'decimal', suffixe: '€', vide: 'aucune',
+          convertir: (v) => (String(v).trim() ? convertirEuros(v) : null) }),
         ligne('Facture', d.confirmation
           ? h('span', {}, badge('pas encore reçue', 'info'), ' ', h('span', { class: 'muted small' }, 'seule la confirmation de commande est arrivée : transférez la facture à factures@mapapote.fr'))
           : pieces.length ? badge('reçue', 'ok') : h('span', { class: 'muted' }, 'aucun justificatif')),
@@ -2335,6 +2347,29 @@ async function verifierDepense(d) {
     signalerChangement();
   } catch (e) {
     prevenir(messageErreur(e));
+  }
+}
+
+async function modifierDepense(d, champs) {
+  try {
+    const r = await appeler('gestionDepense', { action: 'modifier', id: d.id, champs });
+    donnees = await lireDonnees(true);
+    afficherTout();
+    signalerChangement();
+    annoncer('Dépense corrigée');
+    // Mois déjà clôturé : ses livres envoyés ne contiennent pas la correction.
+    for (const m of (r && r.moisClos) || []) {
+      const [a, n] = m.split('-').map(Number);
+      const nom = new Date(a, n - 1, 15).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+      if (await demander(`${nom[0].toUpperCase()}${nom.slice(1)} est déjà clôturé : le livre des achats envoyé ne contient pas cette correction. Refaire la clôture de ${nom} (nouveaux fichiers envoyés par e-mail) ?`, { oui: 'Refaire la clôture', non: 'Plus tard' })) {
+        await patienter('Clôture en cours…', () => appeler('gestionCloturer', { mois: m }));
+        annoncer(`Clôture de ${nom} refaite`);
+      }
+    }
+    return true;
+  } catch (e) {
+    prevenir(messageErreur(e));
+    return false;
   }
 }
 
