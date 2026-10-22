@@ -879,6 +879,8 @@ exports.gestionStock = onCall(async (request) => {
       if ((await dep.get()).exists) await dep.update({ fournisseur: maj.fournisseur, majLe: FieldValue.serverTimestamp() });
     }
     if ('simCout' in champs) maj.simCout = centimes(champs.simCout);
+    // Achat chez le vendeur (Tanguy, 2026-10-22 : chaque tablette, carte SIM ou accessoire a son achat).
+    if ('depense' in champs) maj.depense = await depenseExistante(champs.depense);
     if ('commande' in champs) {
       const commande = texte(champs.commande, 100);
       if (commande && !(await db().doc(`commandes/${commande}`).get()).exists) {
@@ -1019,7 +1021,16 @@ function champsSim(c) {
   if ('go' in c) champs.go = Number.isFinite(c.go) && c.go >= 0 ? c.go : null;
   for (const cle of ['prix', 'prixApres']) if (cle in c) champs[cle] = centimes(c[cle]);
   for (const cle of ['finPromo', 'activation', 'activerAvant']) if (cle in c) champs[cle] = dateOuNull(c[cle]);
+  // Achat de la carte (dépense), vérifié par enregistrerSim.
+  if ('depense' in c) champs.depense = texte(c.depense, 100) || null;
   return champs;
+}
+
+// Identifiant d'une dépense existante, ou null (lien retiré).
+async function depenseExistante(id) {
+  const v = texte(id, 100) || null;
+  if (v && !(await db().doc(`depenses/${v}`).get()).exists) throw new HttpsError('not-found', 'Achat introuvable.');
+  return v;
 }
 
 // Ce que la fiche de la tablette garde de sa ligne (utilisé par l'envoi, la rentabilité et les alertes).
@@ -1039,6 +1050,7 @@ async function enregistrerSim(id, c, qui) {
   const avant = id ? (await ref.get()).data() : {};
   if (!avant) throw new HttpsError('not-found', 'Ligne introuvable.');
   const champs = champsSim(c);
+  if ('depense' in champs) champs.depense = await depenseExistante(champs.depense);
   if (!id && !champs.statut) champs.statut = 'stock';
   const ligne = { ...avant, ...champs };
   // Tablette : une seule ligne par tablette ; une ligne résiliée n'est plus sur aucune tablette.
@@ -1099,6 +1111,10 @@ function champsAccessoire(c) {
   // Revient avec la tablette et repart chez le client suivant (chargeur, housse), sinon consommé à chaque envoi.
   if ('retour' in c) champs.retour = c.retour === true;
   if ('note' in c) champs.note = texte(c.note, 1000);
+  // Achats de cet accessoire (une dépense par livraison), vérifiés par gestionAccessoire.
+  if ('depenses' in c) {
+    champs.depenses = [...new Set((Array.isArray(c.depenses) ? c.depenses : []).map((x) => texte(x, 100)).filter(Boolean))].slice(-50);
+  }
   return champs;
 }
 
@@ -1120,6 +1136,7 @@ exports.gestionAccessoire = onCall(async (request) => {
   if (d.action === 'modifier') {
     const champs = champsAccessoire(d.champs || {});
     if ('nom' in champs && !champs.nom) throw new HttpsError('invalid-argument', 'Nom manquant.');
+    for (const x of champs.depenses || []) await depenseExistante(x);
     await ref.update({ ...champs, majLe: FieldValue.serverTimestamp() });
     return { ok: true };
   }
@@ -1134,9 +1151,10 @@ exports.gestionAccessoire = onCall(async (request) => {
       majLe: FieldValue.serverTimestamp(),
     });
     if (montant) {
-      await ajouterDepense({
+      const dep = await ajouterDepense({
         date: Date.now(), categorie: 'materiel', fournisseur: d.fournisseur, libelle: `${n} × ${snap.get('nom')}`, montant,
       }, qui);
+      await ref.update({ depenses: FieldValue.arrayUnion(dep.id) });
     }
     return { ok: true };
   }
