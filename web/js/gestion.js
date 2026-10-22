@@ -596,7 +596,7 @@ function afficherAccueil() {
     [aEnvoyer, pluriel(aEnvoyer, 'tablette') + ' à envoyer', '#commandes', manque ? 'ko' : ''],
     [manque, `Il manque ${pluriel(manque, 'tablette')} en stock pour les envoyer`, '#stock', 'ko'],
     ...cmd.filter((c) => etatCommande(c) === 'en-route' && c.envoyeeLe && Date.now() - c.envoyeeLe > 20 * 864e5)
-      .map((c) => [1, `${c.nom || c.email || 'Client'} : tablette reçue mais pas jumelée après 20 jours, appeler le client`, versCommande(c), 'ko']),
+      .map((c) => [1, `Tablette pas jumelée après 20 jours : ${c.nom || c.email || 'client'}, l'appeler`, versCommande(c), 'ko']),
     ...cmd.filter((c) => etatCommande(c) === 'retour').map((c) => {
       const t = tabletteDe(c);
       return [1, `${t ? nomT(t) : 'Tablette'} à récupérer chez ${c.nom || c.email || 'le client'}`, t ? versTablette(t) : versCommande(c), ''];
@@ -604,7 +604,7 @@ function afficherAccueil() {
     ...donnees.stock.filter((t) => t.etat === 'revenue' && !t.usure)
       .map((t) => [1, `${nomT(t)} revenue, à vérifier avant de remettre en stock`, versTablette(t), '']),
     ...cmd.filter((c) => c.remboursement && c.remboursement.statut === 'echec')
-      .map((c) => [1, `Remboursement de ${c.nom || c.email || 'un client'} échoué, à faire depuis Stripe`, versCommande(c), 'ko']),
+      .map((c) => [1, `Remboursement échoué : ${c.nom || c.email || 'un client'}, à faire depuis Stripe`, versCommande(c), 'ko']),
     [impayees, `${pluriel(impayees, 'abonnement')} impayé${impayees > 1 ? 's' : ''}`, '#compta/factures', 'ko'],
     [simsAResilier, `${pluriel(simsAResilier, 'forfait SIM')} payé${simsAResilier > 1 ? 's' : ''} depuis 30 jours pour une tablette sans client : à résilier ou suspendre`, '#stock/sim', 'ko'],
     ...donnees.stock.filter((t) => t.etat === 'en-retour' && t.remplaceePour)
@@ -616,17 +616,30 @@ function afficherAccueil() {
     ...jumelagesAVoir.map((t) => [1, `${nomT(t)} ${t.alerteJumelage}`, versTablette(t), 'ko']),
     ...usees.map((t) => [1, `${nomT(t)} revenue : ${t.usure}, à retirer du parc`, versTablette(t), 'ko']),
     // Une ligne par achat, qui ouvre la page de cet achat.
-    ...facturesAttendues.map((d) => [1, `Facture à télécharger chez ${d.fournisseur || 'le vendeur'} puis à envoyer à factures@ : ${d.libelle || 'achat'}${d.numero ? ` (commande ${d.numero})` : ''}`,
+    ...facturesAttendues.map((d) => [1, `Facture ${d.fournisseur || 'du vendeur'} à télécharger : ${d.libelle || 'achat'}${d.numero ? `, commande ${d.numero}` : ''}. La télécharger chez le vendeur puis l'envoyer à factures@`,
       `#depense/${encodeURIComponent(d.id)}`, 'ko']),
     [sansFacture, `${pluriel(sansFacture, 'tablette')} reçue${sansFacture > 1 ? 's' : ''} sans facture depuis 5 jours : transférez la facture du vendeur à factures@mapapote.fr`, '#stock', 'ko'],
-    ...aVerifierMail.map((d) => [1, `Facture reçue par e-mail à vérifier : ${[d.fournisseur, d.libelle].filter(Boolean).join(', ')} (${euros(d.montant)})`,
+    ...aVerifierMail.map((d) => [1, `Facture ${d.fournisseur || ''} à vérifier : ${[d.libelle, euros(d.montant)].filter(Boolean).join(', ')}, reçue par e-mail`.replace('  ', ' '),
       `#depense/${encodeURIComponent(d.id)}`, '']),
     [erreursMail, `${pluriel(erreursMail, 'problème')} au dernier relevé de factures@mapapote.fr (détail en bas de page)`, '#accueil', 'ko'],
     [tva && tva.alerte ? 1 : 0, tva ? tva.alerte : '', '#compta/urssaf', 'ko'],
     [problemes, `${pluriel(problemes, 'problème')} lors du dernier passage automatique`, '#outils/automatique', 'ko'],
   ].filter(([n]) => n > 0);
+  // Rangé par sujet ; chaque ligne : un titre court, le détail en dessous, une pastille si c'est urgent.
+  const groupe = (lien) => (/^#(commande|client)/.test(lien) ? 'Commandes et clients'
+    : /^#(tablette|stock|sim)/.test(lien) ? 'Stock' : /^#(depense|compta)/.test(lien) ? 'Argent' : 'Fonctionnement');
+  const groupes = new Map(['Commandes et clients', 'Stock', 'Argent', 'Fonctionnement'].map((g) => [g, []]));
+  for (const [, texte, lien, classe] of taches) {
+    const i = texte.indexOf(' : ');
+    const [titre, detail] = i > 0 ? [texte.slice(0, i), texte.slice(i + 3)] : [texte, null];
+    groupes.get(groupe(lien)).push(h('li', {}, h('a', { href: lien, class: classe === 'ko' ? 'urgent' : '' },
+      h('span', { class: 'pastille-tache', 'aria-hidden': 'true' }),
+      h('span', { class: 'tache' }, h('span', { class: 'tache-titre' }, titre.charAt(0).toUpperCase() + titre.slice(1)),
+        detail ? h('span', { class: 'tache-detail' }, detail.charAt(0).toUpperCase() + detail.slice(1)) : null),
+      h('span', { class: 'fleche', 'aria-hidden': 'true' }, '›'))));
+  }
   $('a-faire').replaceChildren(...(taches.length
-    ? taches.map(([, texte, lien, classe]) => h('li', {}, h('a', { href: lien, class: classe }, texte, h('span', { 'aria-hidden': 'true' }, '›'))))
+    ? [...groupes].filter(([, l]) => l.length).map(([g, l]) => h('li', { class: 'groupe-taches' }, h('h3', {}, g), h('ul', {}, l)))
     : [h('li', { class: 'muted' }, 'Rien à faire pour le moment.')]));
 
   const pastille = (id, n) => {
@@ -645,23 +658,30 @@ function afficherAccueil() {
     const n = new Date();
     const mois = { debut: new Date(n.getFullYear(), n.getMonth(), 1).getTime(), fin: new Date(n.getFullYear(), n.getMonth() + 1, 1).getTime() };
     const t = totaux(stripeMois.mouvements, depensesDe(mois));
-    const enCours = stripeMois.abonnements.filter((a) => ['active', 'trialing', 'past_due'].includes(a.statut));
+    const annee = { debut: new Date(n.getFullYear(), 0, 1).getTime(), fin: new Date(n.getFullYear() + 1, 0, 1).getTime() };
+    const tAnnee = totaux(stripeAnnee.mouvements, depensesDe(annee));
+    // Abonnés : d'après l'état des familles écrit par le serveur (les offertes à part).
+    const payants = donnees.familles.filter((f) => ['actif', 'impaye', 'suspendu'].includes(f.statut)).length;
+    const offerts = donnees.familles.filter((f) => f.statut === 'offert').length;
     // Chaque chiffre du mois ouvre sa page, réglée sur « Ce mois-ci ».
     const argent = (onglet) => () => {
       if ($('p-choix').value !== 'mois') { $('p-choix').value = 'mois'; changerPeriode(); }
       location.hash = `#compta/${onglet}`;
     };
+    const anneeEntiere = () => {
+      if ($('p-choix').value !== 'annee') { $('p-choix').value = 'annee'; changerPeriode(); }
+      location.hash = '#compta/bilan';
+    };
     $('kpi-mois').replaceChildren(
-      cliquable(stat(euros(t.encaisse), 'encaissé'), argent('factures')),
-      cliquable(stat(euros(t.depenses), 'dépensé'), argent('depenses')),
-      cliquable(stat(euros(t.resultat), 'résultat', null, t.resultat < 0 ? 'neg' : null), argent('bilan')),
-      cliquable(stat(String(cmd.filter((c) => dans(mois, c.creeLe)).length), 'nouvelles commandes'), () => {
+      cliquable(stat(String(payants), payants > 1 ? 'abonnés' : 'abonné', offerts ? `+ ${offerts} offert${offerts > 1 ? 's' : ''}` : null), () => { location.hash = '#clients/familles'; }),
+      cliquable(stat(String(cmd.filter((c) => dans(mois, c.creeLe)).length), 'nouvelles commandes ce mois'), () => {
         vueCommandes = 'toutes';
         $('filtre-commandes').value = '';
         location.hash = '#commandes';
         afficherCommandes();
       }),
-      cliquable(stat(String(enCours.length), 'abonnements en cours'), argent('bilan')),
+      cliquable(stat(euros(t.resultat), 'résultat ce mois', `${euros(t.encaisse)} encaissés, ${euros(t.depenses)} dépensés`, t.resultat < 0 ? 'neg' : null), argent('bilan')),
+      cliquable(stat(euros(tAnnee.resultat), `résultat depuis janvier ${n.getFullYear()}`, null, tAnnee.resultat < 0 ? 'neg' : null), anneeEntiere),
     );
   }
 }
@@ -3353,7 +3373,6 @@ async function recevoirTablette() {
   signalerChangement();
 }
 $('btn-recevoir').addEventListener('click', recevoirTablette);
-$('r-recevoir').addEventListener('click', recevoirTablette);
 
 // ---------- Réception d'accessoires (routeurs 4G…), pas à pas ----------
 

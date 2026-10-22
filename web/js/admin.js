@@ -866,10 +866,6 @@ function render() {
   const now = Date.now();
   const withTablet = families.filter((f) => f.hasTablet);
   const offline = withTablet.filter((f) => state(f).cls === 'off');
-  $('s-families').textContent = families.length;
-  $('s-online').textContent = withTablet.length - offline.length;
-  $('s-offline').textContent = offline.length;
-  $('s-idle').textContent = withTablet.filter(pasTouchee).length;
 
   // Liste par statut (les chiffres servent d'onglets) ; une famille ouverte a sa propre page.
   const rank = { off: 0, on: 1, none: 2 };

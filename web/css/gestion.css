@@ -94,13 +94,20 @@ details.autres[open] > summary { color: var(--text); }
 
 .stats.compact { margin: 8px 0 0; }
 .stats.compact .stat { box-shadow: none; background: var(--bg); }
-.a-faire { list-style: none; margin: 8px 0 0; padding: 0; }
-.a-faire li { border-bottom: 1px solid var(--line); }
-.a-faire li:last-child { border-bottom: none; }
+.a-faire, .a-faire ul { list-style: none; margin: 0; padding: 0; }
+.a-faire .groupe-taches + .groupe-taches { margin-top: 14px; }
+.a-faire h3 { margin: 8px 0 2px; font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.a-faire ul li { border-bottom: 1px solid var(--line); }
+.a-faire ul li:last-child { border-bottom: none; }
 .a-faire li.muted { padding: 10px 0; }
-.a-faire a { display: flex; justify-content: space-between; gap: 12px; padding: 12px 0; color: var(--text); text-decoration: none; font-weight: 600; }
-.a-faire a.ko { color: var(--danger); }
-.a-faire a span { color: var(--muted); font-size: 20px; line-height: 1; }
+.a-faire a { display: flex; align-items: center; gap: 12px; padding: 10px 6px; margin: 0 -6px; border-radius: 10px; color: var(--text); text-decoration: none; }
+.a-faire a:hover { background: rgba(79, 70, 229, .05); }
+.a-faire .pastille-tache { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--line); }
+.a-faire a.urgent .pastille-tache { background: var(--danger); }
+.a-faire .tache { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.a-faire .tache-titre { font-weight: 600; }
+.a-faire .tache-detail { font-size: 13px; color: var(--muted); }
+.a-faire .fleche { color: var(--accent, #4f46e5); font-size: 20px; line-height: 1; }
 
 /* ---------- Tableaux cliquables, pièces jointes ---------- */
 
@@ -437,3 +444,4 @@ label.interrupteur, .fiche label.interrupteur { display: inline-flex; flex-direc
   .tete-actions { width: 100%; justify-content: flex-start; }
   .bouton-message { align-items: flex-start; }
 }
+.a-faire a .tache-titre { color: var(--text); }

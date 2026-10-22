@@ -56,7 +56,7 @@
         <p id="who" class="muted small"></p>
         <button type="button" id="btn-signout" class="link small">Se déconnecter</button>
         <!-- Version de l'admin : à changer à chaque mise à jour, pour voir que la bonne est en ligne. -->
-        <p class="muted small version-admin">Version du 22/10 à 12 h 30</p>
+        <p class="muted small version-admin">Version du 22/10 à 13 h</p>
       </div>
     </aside>
 
@@ -87,25 +87,12 @@
       <!-- ---------- Accueil ---------- -->
       <section data-panneau="accueil">
         <div class="ligne-chiffres">
-          <div class="stats compact">
-            <div class="stat onglet" data-vue="toutes"><span id="s-families">–</span><p>familles</p></div>
-            <div class="stat onglet ok" data-vue="on"><span id="s-online">–</span><p>en ligne</p></div>
-            <div class="stat onglet warn" data-vue="off"><span id="s-offline">–</span><p>hors ligne</p></div>
-            <div class="stat onglet" data-vue="idle"><span id="s-idle">–</span><p>pas touchées 24 h</p></div>
-          </div>
           <div class="stats compact" id="kpi-mois"></div>
         </div>
         <div class="card">
           <h2>À faire</h2>
           <ul id="a-faire" class="a-faire"></ul>
         </div>
-        <div class="raccourcis no-print">
-          <button type="button" class="secondary" id="r-recevoir">Recevoir une tablette</button>
-          <button type="button" class="secondary" id="btn-lire">Déposer une facture</button>
-          <button type="button" class="link small" id="btn-courrier">Relever factures@</button>
-        </div>
-        <p class="muted small">Une facture peut aussi être glissée sur la page ou envoyée à <strong>factures@mapapote.fr</strong> : elle est lue et rangée toute seule.</p>
-        <p id="courrier" class="small muted"></p>
       </section>
 
       <!-- ---------- Commandes ---------- -->
@@ -350,10 +337,16 @@
         <div class="card" data-onglet="depenses">
           <div class="tete">
             <span></span>
-            <button type="button" class="primary small-btn no-print" id="btn-depense">Ajouter une dépense</button>
+            <div class="actions no-print">
+              <button type="button" class="link small" id="btn-courrier">Relever factures@</button>
+              <button type="button" class="secondary small-btn" id="btn-lire">Déposer une facture</button>
+              <button type="button" class="primary small-btn" id="btn-depense">Ajouter une dépense</button>
+            </div>
           </div>
           <div class="table"><table id="t-achats"></table></div>
           <div class="table"><table id="t-categories"></table></div>
+          <p class="muted small">Une facture peut aussi être glissée sur la page ou envoyée à <strong>factures@mapapote.fr</strong> : elle est lue et rangée toute seule.</p>
+          <p id="courrier" class="small muted"></p>
         </div>
         <div data-onglet="registres">
           <div class="card">
