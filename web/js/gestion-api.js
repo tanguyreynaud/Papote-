@@ -4,9 +4,24 @@ import { getApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-functions.js';
 
 let fonctions;
+// Fine barre de chargement en haut de la page tant qu'un appel au serveur est en cours.
+let enCours = 0;
+let barre = null;
+function chargement(delta) {
+  enCours = Math.max(0, enCours + delta);
+  if (!barre) {
+    barre = document.createElement('div');
+    barre.className = 'barre-chargement';
+    barre.setAttribute('aria-hidden', 'true');
+    document.body.append(barre);
+  }
+  barre.classList.toggle('active', enCours > 0);
+}
 export function appeler(nom, data) {
   if (!fonctions) fonctions = getFunctions(getApp('admin'), 'europe-west1');
-  return httpsCallable(fonctions, nom, { timeout: 130_000 })(data).then((r) => r.data);
+  chargement(1);
+  return httpsCallable(fonctions, nom, { timeout: 130_000 })(data).then((r) => r.data)
+    .finally(() => chargement(-1));
 }
 
 // Commandes, stock et dépenses : un seul appel partagé, relu après chaque changement.

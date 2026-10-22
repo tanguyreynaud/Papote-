@@ -2,7 +2,7 @@
 // transfert des anciennes photos et vidéos vers Storage. Le stock, les factures et la comptabilité
 // sont dans gestion.js, sur la même page.
 // Une app Firebase à part (« admin ») : la connexion Google ne touche pas à la famille de ce navigateur.
-import { demander, saisir, prevenir, menuPoints } from './dialogue.js';
+import { demander, saisir, prevenir, menuPoints, patienter, annoncer, boutonCharge } from './dialogue.js';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
 import {
   getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut,
@@ -314,7 +314,7 @@ function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
         bouton.addEventListener('click', async () => {
           const fenetre = window.open('', '_blank');
           bouton.disabled = true;
-          bouton.textContent = 'Création…';
+          boutonCharge(bouton, true);
           try {
             const r = await appeler('gestionEtiquette', { commande: c.id, sens: 'aller' });
             c.etiquettes = { ...(c.etiquettes || {}), aller: r };
@@ -324,14 +324,14 @@ function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
             prevenir(`Étiquette impossible : ${err.message}`);
           }
           bouton.disabled = false;
-          bouton.textContent = 'Créer l\'étiquette';
+          boutonCharge(bouton, false);
           afficher();
         });
         annuler.addEventListener('click', async () => {
           if (!await demander('Annuler cette étiquette chez Sendcloud ? Vous pourrez en créer une nouvelle.', { oui: 'Annuler l\'étiquette', non: 'Garder', danger: true })) return;
           annuler.disabled = true;
           try {
-            await appeler('gestionAnnulerEtiquette', { commande: c.id, sens: 'aller' });
+            await patienter('Annulation de l\'étiquette…', () => appeler('gestionAnnulerEtiquette', { commande: c.id, sens: 'aller' }));
             delete c.etiquettes.aller;
           } catch (err) {
             prevenir(`Annulation impossible : ${err.message}`);
@@ -430,6 +430,7 @@ async function loadShipped() {
         b.textContent = 'Le client a reçu le colis';
         b.addEventListener('click', async () => {
           b.disabled = true;
+          boutonCharge(b, true);
           try {
             await appeler('gestionParcours', { type: 'recu', commande: c.id });
             suite.children[1].className = 'fait';
@@ -438,6 +439,7 @@ async function loadShipped() {
           } catch (err) {
             prevenir(`Enregistrement impossible : ${err.message}`);
             b.disabled = false;
+            boutonCharge(b, false);
           }
         });
         li.append(b);
@@ -505,6 +507,12 @@ async function loadReturns() {
     $('returns-empty').hidden = false;
   }
 }
+
+// Une action de la gestion a changé des commandes (commande offerte, tablette envoyée…) : les listes
+// « à envoyer », « en route » et « à récupérer » se relisent sans actualiser la page.
+const relireListes = () => { loadOrders(); loadShipped(); loadReturns(); };
+document.addEventListener('papote:maj', relireListes);
+document.addEventListener('papote:listes', relireListes);
 
 async function load() {
   await choisirBase();
@@ -719,10 +727,8 @@ async function supprimerFamille(f, li, btn, commandes = []) {
   const simple = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().replace(/\s+/g, ' ').toLowerCase();
   if (!simple(nom) || simple(nom) !== simple(f.name)) { prevenir('Le nom ne correspond pas : rien n\'a été supprimé.'); return; }
   btn.disabled = true;
-  const attente = el('p', 'muted small', 'Suppression en cours…');
-  li.append(attente);
   try {
-    await appeler('gestionSupprimerFamille', { fid: f.id, nom, ...(partie ? { recupere } : {}) });
+    await patienter('Suppression de la famille…', () => appeler('gestionSupprimerFamille', { fid: f.id, nom, ...(partie ? { recupere } : {}) }));
     families = families.filter((x) => x.id !== f.id);
     signalerChangement();
     li.remove();
@@ -730,7 +736,6 @@ async function supprimerFamille(f, li, btn, commandes = []) {
     render();
     prevenir(`La famille « ${f.name} » et toutes ses données sont supprimées.`);
   } catch (err) {
-    attente.remove();
     prevenir(`Suppression impossible : ${err.message}`);
     btn.disabled = false;
   }
@@ -840,10 +845,12 @@ function menuFamille(f, tete, commandes) {
       const { partie, recupere } = offerte ? await questionMateriel(commandes) : {};
       b.disabled = true;
       try {
-        await appeler('gestionFamilleOfferte', { fid: f.id, offerte: !offerte, ...(partie ? { recupere } : {}) });
+        await patienter(offerte ? 'Arrêt du service offert…' : 'Mise en place du service offert…',
+          () => appeler('gestionFamilleOfferte', { fid: f.id, offerte: !offerte, ...(partie ? { recupere } : {}) }));
         f.abonnement = { ...(f.abonnement || {}), statut: offerte ? 'aucun' : 'offert' };
         signalerChangement();
         render();
+        annoncer(offerte ? 'Service plus offert' : 'Service offert');
       } catch (err) {
         prevenir(`Impossible : ${err.message}`);
         b.disabled = false;

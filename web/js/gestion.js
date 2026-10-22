@@ -3,7 +3,7 @@
 // gestion* (functions/gestion.js) : l'argent vient de Stripe, le stock et les dépenses de Firestore.
 // Les factures déposées sont lues automatiquement (gestionLireFacture) pour préremplir les fiches.
 // La connexion et les sections familles, envois et maintenance sont dans admin.js.
-import { demander, saisir, prevenir, menuPoints } from './dialogue.js';
+import { demander, saisir, prevenir, menuPoints, annoncer, boutonCharge, patienter } from './dialogue.js';
 import { getApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
 import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
 import {
@@ -916,7 +916,7 @@ function menuCommande(c, zoneRemplacement, etiquette) {
     try {
       annonceCommande = await faire();
       commandeAffichee = null;
-      donnees = await lireDonnees(true);
+      donnees = await patienter('Mise à jour de la page…', () => lireDonnees(true));
       afficherTout();
       signalerChangement();
     } catch (e) {
@@ -934,7 +934,7 @@ function menuCommande(c, zoneRemplacement, etiquette) {
     } } : null,
     etiquette ? { libelle: 'Créer l\'étiquette de retour', faire: () => lancer(async () => {
       if (!await demander(`Créer une étiquette de retour Mondial Relay et l'envoyer à ${c.email || 'ce client'} ?`, { oui: 'Créer et envoyer' })) throw 'non';
-      const r = await appeler('gestionEtiquette', { commande: c.id, sens: 'retour' });
+      const r = await patienter('Création de l\'étiquette de retour…', () => appeler('gestionEtiquette', { commande: c.id, sens: 'retour' }));
       return r.envoyee ? 'Étiquette de retour créée et envoyée au client.' : 'Étiquette de retour créée (pas d\'e-mail client connu).';
     }) } : null,
   ].filter(Boolean);
@@ -947,14 +947,14 @@ async function annulerCommande(c) {
   if (!await demander(`Annuler la commande ${codeCommande(c.code)} de ${c.nom || c.email || 'ce client'} ?\n\n${c.offerte
     ? 'La tablette n\'est pas encore partie : la commande est annulée et la tablette mise de côté revient au stock.'
     : 'La tablette n\'est pas encore partie : l\'abonnement s\'arrête, tout ce qui a été payé est remboursé, la tablette mise de côté revient au stock et le client reçoit un e-mail.'}`, { oui: 'Annuler la commande', non: 'Garder la commande', danger: true })) throw 'non';
-  const r = await appeler('gestionAnnulerCommande', { commande: c.id });
+  const r = await patienter('Annulation de la commande…', () => appeler('gestionAnnulerCommande', { commande: c.id }));
   return [`Commande annulée.`, r.rembourse ? `${euros(r.rembourse)} remboursés.` : null,
     r.mailEnvoye ? 'Le client a reçu un e-mail.' : null].filter(Boolean).join(' ');
 }
 
 async function arreterAbonnement(c) {
   if (!await demander(`Arrêter l'abonnement de ${c.nom || c.email || 'ce client'} ?\n\nComme si le client résiliait lui-même dans l'appli : l'abonnement prend fin à la fin du mois en cours, prélevé à l'arrêt.`, { oui: 'Arrêter l\'abonnement', non: 'Garder', danger: true })) throw 'non';
-  const r = await appeler('resilierAbonnement', { fid: c.fid });
+  const r = await patienter('Arrêt de l\'abonnement…', () => appeler('resilierAbonnement', { fid: c.fid }));
   return `Abonnement arrêté : il prend fin le ${jour(r.le)}.`;
 }
 
@@ -998,12 +998,15 @@ function zoneMaterielRecu(c, t) {
     valider.disabled = true;
     msg.hidden = true;
     try {
-      const r = await appeler('tabletteRendue', { commande: c.id, manquants });
-      if (t) await appeler('gestionStock', { action: 'modifier', id: t.id, champs: { etat: manquants.includes('tablette') ? 'perdue' : 'revenue' } }).catch(() => null);
+      const r = await patienter('Enregistrement du retour…', async () => {
+        const res = await appeler('tabletteRendue', { commande: c.id, manquants });
+        if (t) await appeler('gestionStock', { action: 'modifier', id: t.id, champs: { etat: manquants.includes('tablette') ? 'perdue' : 'revenue' } }).catch(() => null);
+        donnees = await lireDonnees(true);
+        return res;
+      });
       annonceCommande = r && r.erreur ? `Prélèvement refusé : ${r.erreur}. À relancer depuis Stripe.`
         : `Retour enregistré.${t && !manquants.includes('tablette') ? ' La tablette est à vérifier avant de repartir.' : ''}`;
       commandeAffichee = null;
-      donnees = await lireDonnees(true);
       afficherTout();
       signalerChangement();
     } catch (e) {
@@ -1027,12 +1030,15 @@ function boutonEtiquetteRetour(c) {
     bouton.disabled = true;
     msg.hidden = false;
     msg.className = 'small muted';
-    msg.textContent = 'Création chez Sendcloud…';
+    msg.textContent = '';
     try {
-      const r = await appeler('gestionEtiquette', { commande: c.id, sens: 'retour' });
+      const r = await patienter('Création de l\'étiquette de retour…', async () => {
+        const res = await appeler('gestionEtiquette', { commande: c.id, sens: 'retour' });
+        donnees = await lireDonnees(true);
+        return res;
+      });
       if (fenetre) fenetre.location = r.url;
       msg.textContent = r.envoyee ? 'Étiquette créée et envoyée au client.' : 'Étiquette créée (pas d\'e-mail client connu).';
-      donnees = await lireDonnees(true);
     } catch (err) {
       if (fenetre) fenetre.close();
       msg.className = 'small error';
@@ -1054,7 +1060,7 @@ function boutonRenvoyerCode(c) {
     msg.hidden = false;
     msg.className = 'small muted';
     try {
-      const r = await appeler('gestionRenvoyerCode', { commande: c.id, email });
+      const r = await patienter('Envoi du code…', () => appeler('gestionRenvoyerCode', { commande: c.id, email }));
       msg.textContent = `Code envoyé à ${r.a}.`;
     } catch (err) {
       msg.className = 'small error';
@@ -1113,7 +1119,7 @@ function formulaireRemplacement(c, t) {
     // Ouverte avant toute attente, sinon le navigateur la bloque : elle recevra l'étiquette d'envoi.
     const fenetre = window.open('', '_blank');
     try {
-      await appeler('gestionStock', { action: 'remplacer', commande: c.id, element: choix.value, nouveau: nouveau.value, motif: motif.value });
+      await patienter('Remplacement en cours…', () => appeler('gestionStock', { action: 'remplacer', commande: c.id, element: choix.value, nouveau: nouveau.value, motif: motif.value }));
       // Étiquettes faites tout de suite : l'aller pour le colis de remplacement, le retour (envoyé au client par
       // e-mail) pour la tablette remplacée.
       msg.className = 'small muted';
@@ -1122,7 +1128,7 @@ function formulaireRemplacement(c, t) {
       const faites = [];
       for (const s of sens) {
         try {
-          const r = await appeler('gestionEtiquette', { commande: c.id, sens: s });
+          const r = await patienter('Création des étiquettes…', () => appeler('gestionEtiquette', { commande: c.id, sens: s }));
           faites.push([s, r.url]);
         } catch (err) {
           prevenir(`Étiquette ${s === 'aller' ? 'd\'envoi' : 'de retour'} impossible : ${messageErreur(err)}. Faites-la depuis la commande.`);
@@ -1130,7 +1136,7 @@ function formulaireRemplacement(c, t) {
       }
       const aller = faites.find(([s]) => s === 'aller');
       if (fenetre) { if (aller) fenetre.location = aller[1]; else fenetre.close(); }
-      donnees = await lireDonnees(true);
+      donnees = await patienter('Mise à jour de la page…', () => lireDonnees(true));
       afficherTout();
       commandeAffichee = null;
       afficherFiche();
@@ -1424,7 +1430,7 @@ function remplirPageSim(id) {
   // Actions selon l'état de la ligne ; chaque information se modifie seule avec son crayon.
   const changer = (champs, question, fait) => async () => {
     if (question && !await demander(question, { oui: 'Confirmer' })) return;
-    await modifierChampsSim(l.id, champs, fait);
+    await modifierChampsSim(l.id, champs, fait, 'Enregistrement…');
   };
   const actions = [
     l.statut === 'stock' ? { libelle: 'Activer la ligne', faire: changer({ statut: 'active', ...(l.activation ? {} : { activation: Date.now() }) }, 'La ligne est activée chez l\'opérateur ? Elle passe « Active » (date d\'activation : aujourd\'hui).') } : null,
@@ -1481,12 +1487,16 @@ function convertirEuros(v) {
   return c;
 }
 
-async function modifierChampsSim(id, champs, fait) {
-  try {
+// attente : texte de la carte « en cours » pour une action du ⋮ (un crayon a déjà sa roue dans son bouton).
+async function modifierChampsSim(id, champs, fait, attente) {
+  const travail = async () => {
     await appeler('gestionSim', { action: 'modifier', id, champs });
     donnees = await lireDonnees(true);
+  };
+  try {
+    await (attente ? patienter(attente, travail) : travail());
     afficherTout();
-    if (fait) prevenir(fait);
+    annoncer(fait || 'Enregistré');
     return true;
   } catch (e) {
     prevenir(messageErreur(e));
@@ -1518,9 +1528,10 @@ function ligneModifiable(libelle, affiche, opts) {
       let v;
       try { v = opts.convertir ? opts.convertir(champ.value) : champ.value; } catch (e) { prevenir(e.message); return; }
       ok.disabled = true;
+      boutonCharge(ok, true);
       // Envoi en cours : la page peut se redessiner (saisieEnCours ne la bloque plus).
       zoneSaisie.dataset.envoi = '1';
-      if (!await opts.enregistrer(v)) { ok.disabled = false; delete zoneSaisie.dataset.envoi; }
+      if (!await opts.enregistrer(v)) { ok.disabled = false; boutonCharge(ok, false); delete zoneSaisie.dataset.envoi; }
     };
     ok.addEventListener('click', valider);
     champ.addEventListener('keydown', (e) => {
@@ -1538,8 +1549,11 @@ function ligneModifiable(libelle, affiche, opts) {
 async function supprimerSim(id) {
   if (!await demander('Supprimer cette carte du registre (erreur de saisie) ? Pour une ligne arrêtée, mettez plutôt le statut « Résiliée ».', { oui: 'Supprimer', danger: true })) return;
   try {
-    await appeler('gestionSim', { action: 'supprimer', id });
-    donnees = await lireDonnees(true);
+    await patienter('Suppression de la carte…', async () => {
+      await appeler('gestionSim', { action: 'supprimer', id });
+      donnees = await lireDonnees(true);
+    });
+    annoncer('Carte supprimée');
     location.hash = '#stock/sim';
     afficherTout();
   } catch (e) {
@@ -1860,7 +1874,7 @@ async function ajouterFichierTablette(t) {
   if (!fichiers.length) return;
   // La facture d'achat va avec l'achat (dépense) quand il existe : elle y sert aussi pour la comptabilité.
   const [collection, id] = genre === 'facture' && t.depense ? ['depenses', t.depense] : ['stock', t.id];
-  await enregistrerTablette(() => envoyerPieces(collection, id, fichiers, genre), 'Envoi…');
+  await enregistrerTablette(() => envoyerPieces(collection, id, fichiers, genre), fichiers.length > 1 ? 'Fichiers ajoutés' : 'Fichier ajouté', fichiers.length > 1 ? 'Envoi des fichiers…' : 'Envoi du fichier…');
 }
 
 // Documents propres à la tablette (la facture d'achat est montrée avec l'achat).
@@ -1892,9 +1906,10 @@ function ligneAchatTablette(t) {
 }
 
 // Actions de la page tablette hors formulaire : l'erreur s'affiche même si le formulaire est replié.
-async function enregistrerTablette(action, attente) {
+// texte : carte « … en cours » pour les actions du ⋮ et de la frise (un crayon a déjà sa roue dans son bouton).
+async function enregistrerTablette(action, annonce, texte) {
   const f = $('f-tablette');
-  const ok = await enregistrer(f, action, attente);
+  const ok = texte ? await patienter(texte, () => enregistrer(f, action, annonce)) : await enregistrer(f, action, annonce);
   if (!ok && f.hidden) prevenir(f.querySelector('.f-msg').textContent);
   return ok;
 }
@@ -1905,7 +1920,7 @@ async function detacherAchat() {
     const r = await appeler('gestionStock', { action: 'detacherAchat', id: tabletteOuverte });
     $('f-tablette').dataset.charge = '';
     if (r && r.id) ouvrirTablette(r.id);
-  });
+  }, 'Achat détaché', 'Détachement de l\'achat…');
 }
 
 $('f-tablette').addEventListener('submit', async (e) => {
@@ -1938,7 +1953,7 @@ $('f-tablette').addEventListener('submit', async (e) => {
 function actionsTablette(t, c) {
   const changer = (etat, question, champs = {}) => async () => {
     if (question && !await demander(question, { oui: 'Confirmer' })) return;
-    await enregistrerTablette(() => appeler('gestionStock', { action: 'modifier', id: t.id, champs: { etat, ...champs } }));
+    await enregistrerTablette(() => appeler('gestionStock', { action: 'modifier', id: t.id, champs: { etat, ...champs } }), 'Tablette mise à jour', 'Changement d\'état…');
   };
   const nom = t.ref || t.numero || 'cette tablette';
   const retour = c && c.restitution && ['attendue', 'echec', 'a-recuperer'].includes(c.restitution.statut);
@@ -1981,15 +1996,18 @@ async function supprimerFicheTablette() {
   if (!await demander('Supprimer cette fiche du stock ? À faire seulement si la tablette n\'existe pas.', { oui: 'Supprimer la fiche', danger: true })) return;
   const ok = await enregistrerTablette(async () => {
     await appeler('gestionStock', { action: 'supprimer', id: tabletteOuverte });
-  });
+  }, 'Fiche supprimée', 'Suppression de la fiche…');
   if (ok) location.hash = '#stock/tablettes';
 }
 
 async function retirerPiece(collection, id, piece) {
   if (!await demander(`Retirer « ${piece.nom} » ?`, { oui: 'Retirer', danger: true })) return;
   try {
-    await appeler('gestionPiece', { action: 'retirer', collection, id, chemin: piece.chemin });
-    donnees = await lireDonnees(true);
+    await patienter('Retrait du fichier…', async () => {
+      await appeler('gestionPiece', { action: 'retirer', collection, id, chemin: piece.chemin });
+      donnees = await lireDonnees(true);
+    });
+    annoncer('Fichier retiré');
     afficherTout();
     if (collection === 'stock') afficherFiche();
   } catch (e) {
@@ -2248,7 +2266,7 @@ function sourceDepense(d) {
 
 async function verifierDepense(d) {
   try {
-    await appeler('gestionDepense', { action: 'verifier', id: d.id });
+    await patienter('Enregistrement…', () => appeler('gestionDepense', { action: 'verifier', id: d.id }));
     signalerChangement();
   } catch (e) {
     prevenir(messageErreur(e));
@@ -2258,7 +2276,7 @@ async function verifierDepense(d) {
 async function arreterDepense(d) {
   if (!await demander(`Ne plus ajouter « ${d.libelle} » chaque mois ? Les dépenses déjà inscrites restent.`, { oui: 'Arrêter' })) return;
   try {
-    await appeler('gestionDepense', { action: 'arreter', id: d.id });
+    await patienter('Enregistrement…', () => appeler('gestionDepense', { action: 'arreter', id: d.id }));
     signalerChangement();
   } catch (e) {
     prevenir(messageErreur(e));
@@ -2268,7 +2286,7 @@ async function arreterDepense(d) {
 async function supprimerDepense(d) {
   if (!await demander(`Supprimer la dépense « ${d.libelle} » (${euros(d.montant)}) et ses justificatifs ?`, { oui: 'Supprimer', danger: true })) return;
   try {
-    await appeler('gestionDepense', { action: 'supprimer', id: d.id });
+    await patienter('Suppression de la dépense…', () => appeler('gestionDepense', { action: 'supprimer', id: d.id }));
     signalerChangement();
     return true;
   } catch (e) {
@@ -2350,15 +2368,19 @@ function message(form, texte, ok) {
 }
 
 // Action d'un formulaire : bouton désactivé pendant l'envoi, message d'erreur lisible, relecture des données.
-async function enregistrer(form, action, attente = 'Enregistrement…') {
+// Pendant l'envoi : une roue dans le bouton qui valide ; à la fin, « Enregistré ✓ » en bas de l'écran.
+async function enregistrer(form, action, annonce = 'Enregistré') {
   const boutons = form.querySelectorAll('button');
+  const valider = form.querySelector('button[type="submit"]') || form.querySelector('button.primary');
   boutons.forEach((b) => { b.disabled = true; });
-  message(form, attente, true);
+  boutonCharge(valider, true);
+  form.querySelector('.f-msg').hidden = true;
   try {
     await action();
-    form.querySelector('.f-msg').hidden = true;
     donnees = await lireDonnees(true);
     afficherTout();
+    annoncer(typeof annonce === 'string' && !annonce.endsWith('…') ? annonce : 'Enregistré');
+    document.dispatchEvent(new CustomEvent('papote:listes'));
     return true;
   } catch (e) {
     console.error(e);
@@ -2366,6 +2388,7 @@ async function enregistrer(form, action, attente = 'Enregistrement…') {
     return false;
   } finally {
     boutons.forEach((b) => { b.disabled = false; });
+    boutonCharge(valider, false);
   }
 }
 
@@ -2978,7 +3001,7 @@ $('f-reglages').addEventListener('submit', async (e) => {
     return message(f, 'Une valeur est illisible.');
   }
   if (await enregistrer(f, () => appeler('gestionReglages', valeurs))) {
-    message(f, 'Réglages enregistrés.', true);
+    annoncer('Réglages enregistrés');
     afficherAccueil();
   }
 });
@@ -3002,7 +3025,7 @@ $('f-expediteur').addEventListener('submit', async (e) => {
   if (await enregistrer(f, () => appeler('gestionReglages', { expediteur, poidsColis }))) {
     donnees.reglages.expediteur = expediteur;
     donnees.reglages.poidsColis = poidsColis;
-    message(f, 'Adresse enregistrée.', true);
+    annoncer('Adresse enregistrée');
   }
 });
 

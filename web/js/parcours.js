@@ -5,6 +5,7 @@
 // L'avancement est rendu à sauver(etat) après chaque étape : on peut fermer et reprendre plus tard.
 
 import { messageErreur } from './gestion-api.js';
+import { boutonCharge } from './dialogue.js';
 
 const el = (tag, attrs = {}, ...enfants) => {
   const e = document.createElement(tag);
@@ -80,6 +81,7 @@ export function ouvrirParcours({ titre, etapes, etat, sauver, fin }) {
 
   function majBouton() {
     const e = visibles()[i];
+    boutonCharge(suivant, false);
     const coche = [...corps.querySelectorAll('.pc-case input[type=checkbox]')].every((c) => c.checked);
     suivant.disabled = !coche || (e.pret ? !e.pret(etat) : false);
   }
@@ -89,8 +91,7 @@ export function ouvrirParcours({ titre, etapes, etat, sauver, fin }) {
     const liste = visibles();
     const e = liste[i];
     suivant.disabled = true;
-    const texteBouton = suivant.textContent;
-    suivant.textContent = 'Un instant…';
+    boutonCharge(suivant, true);
     try {
       if (e.valider) await e.valider(etat);
       etat.faits[e.cle] = Date.now();
@@ -110,7 +111,6 @@ export function ouvrirParcours({ titre, etapes, etat, sauver, fin }) {
       console.error(err);
       erreur.textContent = messageErreur(err);
       erreur.hidden = false;
-      suivant.textContent = texteBouton;
       majBouton();
     }
   };

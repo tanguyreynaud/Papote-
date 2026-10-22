@@ -48,6 +48,29 @@ export const saisir = (texte, valeur = '', { oui = 'Valider' } = {}) => boite({ 
 // Une information : un seul bouton.
 export const prevenir = (texte) => boite({ texte, oui: 'D\'accord' });
 
+// Petite confirmation en bas de l'écran (« Enregistré ✓ ») qui disparaît toute seule.
+let bulle = null;
+let minuterie = null;
+export function annoncer(texte = 'Enregistré') {
+  if (!bulle) {
+    bulle = document.createElement('div');
+    bulle.className = 'bulle-annonce';
+    bulle.setAttribute('role', 'status');
+    document.body.append(bulle);
+  }
+  bulle.textContent = `${texte} ✓`;
+  bulle.classList.add('visible');
+  clearTimeout(minuterie);
+  minuterie = setTimeout(() => bulle.classList.remove('visible'), 2200);
+}
+
+// Bouton en cours d'envoi : une petite roue à la place du texte (la taille du bouton ne bouge pas).
+export function boutonCharge(bouton, actif) {
+  if (!bouton) return;
+  bouton.classList.toggle('charge', actif);
+  bouton.toggleAttribute('aria-busy', actif);
+}
+
 // Menu « ⋮ » : les actions d'une ligne rangées derrière un seul bouton, chacune garde sa confirmation.
 // La liste est placée en position fixe, pour ne pas être coupée par un tableau qui défile.
 let menuOuvert = null;
@@ -105,4 +128,33 @@ export function menuPoints(actions, titre = 'Plus d\'actions') {
   });
   boite.append(bouton, liste);
   return boite;
+}
+
+// Action en cours (annulation, étiquette, changement d'état…) : une carte avec une roue par-dessus la page
+// jusqu'au résultat, pour ne pas cliquer ailleurs entre-temps. Deux attentes qui se suivent gardent la même
+// carte (le texte change) au lieu de clignoter.
+let attente = null;
+let enAttente = 0;
+let fermeture = null;
+export async function patienter(texte, travail) {
+  clearTimeout(fermeture);
+  if (!attente) {
+    attente = document.createElement('dialog');
+    attente.className = 'dialogue-papote attente-papote';
+    attente.setAttribute('aria-live', 'polite');
+    attente.append(document.createElement('span'), document.createElement('p'));
+    attente.firstChild.className = 'roue-attente';
+    // Échap ne ferme pas la carte : l'action continue côté serveur.
+    attente.addEventListener('cancel', (e) => e.preventDefault());
+    document.body.append(attente);
+  }
+  attente.lastChild.textContent = texte;
+  if (!attente.open) attente.showModal();
+  enAttente += 1;
+  try {
+    return await (typeof travail === 'function' ? travail() : travail);
+  } finally {
+    enAttente -= 1;
+    if (!enAttente) fermeture = setTimeout(() => { if (!enAttente && attente.open) attente.close(); }, 120);
+  }
 }
