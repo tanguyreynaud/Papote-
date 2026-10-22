@@ -117,8 +117,6 @@ function orderHead(c) {
   return `${c.nom || c.email} · ${c.formule === 'sim' ? 'carte SIM' : 'Wi-Fi'}, tablette ${c.tablette === 'incluse' ? 'incluse' : 'achetée'}`;
 }
 
-// Matériel non rendu : mêmes prix que le serveur (abonnement.js, PRIX_MATERIEL) et les conditions de vente.
-const prix = { tablette: 130, chargeur: 10, enceinte: 10 };
 
 // Tablettes à envoyer : chaque commande se prépare pas à pas (parcours), sans rien oublier.
 async function loadOrders() {
@@ -476,19 +474,21 @@ async function loadReturns() {
       const r = c.restitution || {};
       const avant = toDate(r.avant);
       const li = document.createElement('li');
-      li.innerHTML = '<strong></strong><span class="muted small"></span><span class="small"></span><span class="small remb"></span>'
-        + '<form class="etiquette"><button type="button" class="secondary small-btn sendcloud">Créer avec Sendcloud</button><input type="url" placeholder="ou lien de l\'étiquette de retour" aria-label="Étiquette de retour"><button type="submit" class="secondary small-btn">Envoyer l\'étiquette</button></form>'
-        + '<div class="manquants small"><span>Manquant :</span>'
-        + `<label><input type="checkbox" value="tablette"> tablette (${prix.tablette} €)</label>`
-        + '<label><input type="checkbox" value="chargeur"> chargeur et câble (10 €)</label>'
-        + (c.enceinteFournie === true ? '<label><input type="checkbox" value="enceinte"> enceinte (10 €)</label>' : '')
-        + '<button type="button" class="secondary small-btn rendue">Matériel reçu</button></div>';
+      li.innerHTML = '<strong></strong><span class="muted small"></span><span class="small"></span><span class="small etiq"></span><span class="small remb"></span>';
       titreCommande(li, d.id, c.livraison?.nom || c.nom || c.email);
-      li.querySelector('.muted').textContent = `${c.email}${c.telephone ? ` · ${c.telephone}` : ''}`;
-      li.querySelector('span.small:not(.muted):not(.remb)').textContent = (r.statut === 'echec'
+      // Information seulement : le retour se coche et l'étiquette se refait sur la page de la commande.
+      li.classList.add('cliquable');
+      li.addEventListener('click', (e) => { if (!e.target.closest('a')) location.hash = `#commande/${encodeURIComponent(d.id)}`; });
+      li.querySelector('.muted').textContent = `${c.email || ''}${c.telephone ? ` · ${c.telephone}` : ''}`;
+      li.querySelector('span.small:not(.muted):not(.remb):not(.etiq)').textContent = (r.statut === 'echec'
         ? `Prélèvement échoué${r.erreur ? ` (${r.erreur})` : ''} : à relancer depuis Stripe.`
-        : `À rendre avant le ${avant ? avant.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' }) : '?'}.`)
+        : r.statut === 'a-recuperer' ? 'Matériel offert à récupérer.'
+          : `À rendre avant le ${avant ? avant.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' }) : '?'}.`)
         + (r.motif === 'retractation' ? ' Rétractation.' : '');
+      const e = c.etiquettes && c.etiquettes.retour;
+      li.querySelector('.etiq').textContent = r.statut === 'a-recuperer' ? ''
+        : e ? `Étiquette envoyée au client${e.livre ? ', colis arrivé' : e.etape ? '' : ', colis pas encore déposé'}.`
+          : r.etiquette ? 'Étiquette envoyée au client.' : 'Étiquette de retour : créée automatiquement la nuit suivante.';
       const remb = c.remboursement;
       const rembEl = li.querySelector('.remb');
       if (remb) {
@@ -498,66 +498,6 @@ async function loadReturns() {
           : `Remboursement ${montant} : ${remb.statut === 'au-retour' ? 'au retour de la tablette' : remb.statut}.`;
         rembEl.classList.toggle('error', remb.statut === 'echec');
       }
-      const form = li.querySelector('.etiquette');
-      const input = form.querySelector('input');
-      if (r.etiquette) input.value = r.etiquette;
-      // Sendcloud crée l'étiquette et le serveur l'envoie au client.
-      const btnSendcloud = form.querySelector('button.sendcloud');
-      btnSendcloud.addEventListener('click', async () => {
-        if (r.etiquette && !await demander('Une étiquette a déjà été envoyée. En créer une nouvelle ?', { oui: 'En créer une nouvelle' })) return;
-        btnSendcloud.disabled = true;
-        btnSendcloud.textContent = 'Création…';
-        try {
-          const res = await appeler('gestionEtiquette', { commande: d.id, sens: 'retour' });
-          input.value = res.url;
-          btnSendcloud.textContent = 'Étiquette envoyée au client';
-        } catch (err) {
-          prevenir(`Étiquette impossible : ${err.message}`);
-          btnSendcloud.textContent = 'Créer avec Sendcloud';
-          btnSendcloud.disabled = false;
-        }
-      });
-      form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const lien = input.value.trim();
-        if (!/^https:\/\//.test(lien)) { prevenir('Collez le lien https de l\'étiquette prépayée.'); return; }
-        const sb = form.querySelector('button');
-        sb.disabled = true;
-        try {
-          await httpsCallable(functions, 'etiquetteRetour')({ commande: d.id, lien });
-          sb.textContent = 'Étiquette envoyée au client';
-        } catch (err) {
-          console.error(err);
-          prevenir("L'étiquette n'a pas pu être envoyée.");
-          sb.disabled = false;
-        }
-      });
-      const btn = li.querySelector('button.rendue');
-      btn.addEventListener('click', async () => {
-        // Ce qui manque dans le colis est prélevé sur la carte du client (tabletteRendue, index.js).
-        const manquants = [...li.querySelectorAll('.manquants input:checked')].map((i) => i.value);
-        const total = manquants.reduce((s, m) => s + prix[m], 0);
-        if (!await demander(total
-          ? `Prélever ${total} € à ${c.email} pour le matériel manquant (${manquants.join(', ')}) ?`
-          : `Tout le matériel de ${c.email} est bien revenu ?`)) return;
-        btn.disabled = true;
-        try {
-          const res = await httpsCallable(functions, 'tabletteRendue')({ commande: d.id, manquants }).then((x) => x.data || {});
-          // Tablette revenue : dans le stock, à vérifier avant de repartir. Tablette manquante : perdue (retirée de la famille).
-          const { stock } = await donnees().catch(() => ({ stock: [] }));
-          const t = stock.find((x) => x.commande === d.id);
-          const etat = manquants.includes('tablette') ? 'perdue' : 'revenue';
-          if (t) await appeler('gestionStock', { action: 'modifier', id: t.id, champs: { etat } }).catch(() => null);
-          if (res.erreur) prevenir(`Prélèvement refusé : ${res.erreur}. La commande reste dans la liste, à relancer depuis Stripe.`);
-          signalerChangement();
-          if (!res.erreur) li.remove();
-          else btn.disabled = false;
-        } catch (err) {
-          console.error(err);
-          prevenir("L'enregistrement a échoué.");
-          btn.disabled = false;
-        }
-      });
       return li;
     }));
   } catch (err) {

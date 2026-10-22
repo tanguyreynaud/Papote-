@@ -144,3 +144,9 @@
 .dot.off { background: var(--danger); }
 #famille-retour { margin-bottom: 12px; }
 
+.orders li.cliquable { cursor: pointer; }
+.orders li.cliquable:hover { background: var(--fond-survol, rgba(79, 70, 229, .05)); }
+.kpi-suite { margin: -8px 0 16px; }
+.zone-remplacement label.case { display: flex; align-items: center; gap: 8px; font-weight: 400; margin: 4px 0; }
+.zone-remplacement label.case input { width: auto; margin: 0; }
+.choix-genre { flex-wrap: wrap; }

@@ -56,7 +56,7 @@
         <p id="who" class="muted small"></p>
         <button type="button" id="btn-signout" class="link small">Se déconnecter</button>
         <!-- Version de l'admin : à changer à chaque mise à jour, pour voir que la bonne est en ligne. -->
-        <p class="muted small version-admin">Version du 22/10 à 12 h</p>
+        <p class="muted small version-admin">Version du 22/10 à 12 h 30</p>
       </div>
     </aside>
 
@@ -226,6 +226,7 @@
         </div>
         <div data-onglet="tablettes">
           <div class="stats" id="kpi-stock"></div>
+          <p class="small kpi-suite" id="kpi-stock-suite"></p>
           <div class="card">
             <div class="tete">
               <select id="filtre-stock" aria-label="Filtrer"><option value="">Toutes</option></select>
@@ -451,14 +452,12 @@
         </div>
         <div class="card" id="dt-batterie" hidden></div>
         <div class="card">
-          <h2>Achat chez le vendeur (Cdiscount…)</h2>
+          <h2>Informations d'achat</h2>
           <div id="dt-achat"></div>
         </div>
         <div class="card">
           <h2>Documents de la tablette</h2>
-          <p class="muted small">Photos, bon de garantie… (la facture d'achat est dans « Achat » au-dessus).</p>
           <ul class="pieces" id="dt-pieces"></ul>
-          <label class="small no-print">Ajouter un document (PDF ou photo) <input type="file" id="dt-fichier" accept="application/pdf,image/*" multiple></label>
         </div>
         <div class="card">
           <h2>Historique</h2>
