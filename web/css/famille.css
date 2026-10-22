@@ -1168,3 +1168,6 @@ body:not(.on-support) .ps-bouton, body:not(.on-support) .ps-panneau { display: n
 .setup-slider input[type=range] { width: 100%; accent-color: var(--accent); }
 .setup-essai { width: 100%; min-height: 54px; margin-top: 10px; flex-direction: row; justify-content: center; font-size: 17px; }
 #setup-options .toggle-list { margin-top: 14px; }
+
+/* Aucun lien souligné, dans l'appli comme dans l'admin (demande de Tanguy, 22/10). */
+a { text-decoration: none; }

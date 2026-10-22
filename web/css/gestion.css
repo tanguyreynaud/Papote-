@@ -49,12 +49,12 @@
 .titre-print { display: none; }
 
 /* Onglets d'une page : un seul bloc affiché à la fois. */
-.onglets { display: flex; gap: 4px; overflow-x: auto; margin: 0 0 14px; border-bottom: 1px solid var(--line); scrollbar-width: none; }
+.onglets { display: flex; gap: 6px; overflow-x: auto; margin: 0 0 14px; scrollbar-width: none; }
 .onglets button {
-  flex: none; min-height: 0; padding: 10px 14px; border: none; border-bottom: 3px solid transparent; border-radius: 0;
+  flex: none; min-height: 0; padding: 8px 14px; border: none; border-radius: 999px;
   background: none; color: var(--muted); font-size: 15px; font-weight: 600; white-space: nowrap; box-shadow: none;
 }
-.onglets button.actif { color: var(--accent); border-bottom-color: var(--accent); }
+.onglets button.actif { color: var(--accent); background: #eef0ff; }
 .tete > select, .tete > input[type="search"] { width: auto; margin: 0; padding: 8px 12px; font-size: 15px; }
 
 @media print {
@@ -328,7 +328,7 @@ details summary { cursor: pointer; margin-top: 12px; }
 .dialogue-papote button.primary.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
 #famille-fiche .families > li { margin: 0; }
 .titre-commande { color: var(--accent); text-decoration: none; }
-.titre-commande:hover { text-decoration: underline; }
+.titre-commande:hover { color: var(--accent); }
 .titre-commande::after { content: ' ›'; }
 
 /* Menu « ⋮ » des actions d'une ligne (dialogue.js, menuPoints). */
@@ -363,7 +363,7 @@ details summary { cursor: pointer; margin-top: 12px; }
 .liste-liens a::before { content: ''; position: absolute; inset: 0; border-radius: 12px; }
 .liste-liens .ll-quoi { color: var(--muted); font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; width: 100%; }
 .fiche .link, [data-panneau="client"] .fiche a { color: var(--accent); font-weight: 700; text-decoration: none; }
-.fiche .link:hover, [data-panneau="client"] .fiche a:hover { text-decoration: underline; }
+.fiche .link:hover, [data-panneau="client"] .fiche a:hover { opacity: .75; }
 
 /* Page d'une famille : le ⋮ à droite du nom ; les proches, une ligne chacun avec leur ⋮. */
 #famille-fiche .family-head { gap: 10px; }
@@ -374,7 +374,7 @@ details summary { cursor: pointer; margin-top: 12px; }
 .membre-ligne .small-btn { flex: none; }
 /* Liens dans les tableaux (PDF, reçu, justificatif) : couleur Papote, sans soulignement. */
 td a { color: var(--accent); font-weight: 600; text-decoration: none; }
-td a:hover { text-decoration: underline; }
+td a:hover { opacity: .75; }
 
 /* « Retour » : un bouton net, la flèche ‹ devant, le même sur toutes les pages. */
 .retour, button.retour {
@@ -391,8 +391,7 @@ td a:hover { text-decoration: underline; }
 
 /* Liens dans les pages : indigo, sans soulignement (souligné au survol seulement). */
 [data-panneau] a:not(.retour):not(.stat) { color: var(--accent); font-weight: 600; text-decoration: none; }
-[data-panneau] a:not(.retour):not(.stat):hover { text-decoration: underline; }
-.fiche .link:hover { text-decoration: underline; }
+[data-panneau] a:not(.retour):not(.stat):hover { opacity: .75; }
 
 /* Tableaux plus aérés ; une ligne cliquable le montre avec › au bout. */
 .table td, .table th { padding-top: 12px; padding-bottom: 12px; }
@@ -445,3 +444,6 @@ label.interrupteur, .fiche label.interrupteur { display: inline-flex; flex-direc
   .bouton-message { align-items: flex-start; }
 }
 .a-faire a .tache-titre { color: var(--text); }
+
+/* Aucun soulignement dans l'admin (demande de Tanguy, 22/10). */
+a, .link, button.link { text-decoration: none; }
