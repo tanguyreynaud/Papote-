@@ -39,7 +39,8 @@ const sendcloud = require('./sendcloud');
 const STRIPE_SECRET = defineSecret('STRIPE_SECRET');
 // Même clé que le chat de support (outils/support/installer-support.bat), jamais dans le dépôt.
 const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
-const MODELE_LECTURE = 'claude-opus-5-5';
+// Sonnet : recopier montant, date et vendeur d'une facture est simple, et chaque fiche reste « à vérifier ».
+const MODELE_LECTURE = 'claude-sonnet-5-5';
 // E-mails : mêmes réglages que le reste des fonctions (index.js).
 const MAIL_SMTP = defineString('MAIL_SMTP', { default: 'smtp.gmail.com:465:' });
 const MAIL_EXPEDITEUR = defineString('MAIL_EXPEDITEUR', { default: '' });
