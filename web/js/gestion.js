@@ -585,6 +585,7 @@ function afficherAccueil() {
   const manque = Math.max(0, aEnvoyer - dispo);
   const aVerifier = donnees.stock.filter((t) => t.etat === 'revenue').length;
   const impayees = stripeMois ? stripeMois.abonnements.filter((a) => a.statut === 'past_due').length : 0;
+  const familleImpayees = donnees.familles.filter((f) => f.statut === 'impaye');
   const problemes = donnees.automatique ? (donnees.automatique.erreurs || []).length : 0;
   const simsAResilier = lignesSim().filter((l) => l.aResilier).length;
   const simsARegarder = donnees.sims.filter((l) => alertesSim(l).length).length;
@@ -612,11 +613,12 @@ function afficherAccueil() {
   const versTablette = (t) => `#tablette/${encodeURIComponent(t.id)}`;
   const versCommande = (c) => `#commande/${encodeURIComponent(c.id)}`;
   const taches = [
-    [aEnvoyer, pluriel(aEnvoyer, 'tablette') + ' à envoyer', '#commandes', manque ? 'ko' : ''],
+    // Une seule : la ligne ouvre directement la commande.
+    [aEnvoyer, pluriel(aEnvoyer, 'tablette') + ' à envoyer', aEnvoyer === 1 ? versCommande(cmd.find((c) => etatCommande(c) === 'a-envoyer')) : '#commandes', manque ? 'ko' : ''],
     [manque, `Il manque ${pluriel(manque, 'tablette')} en stock pour les envoyer`, '#stock', 'ko'],
     ...cmd.filter((c) => etatCommande(c) === 'en-route' && c.envoyeeLe && Date.now() - c.envoyeeLe > 20 * 864e5)
       .map((c) => [1, `Tablette pas jumelée après 20 jours : ${c.nom || c.email || 'client'}, l'appeler`, versCommande(c), 'ko']),
-    ...cmd.filter((c) => etatCommande(c) === 'retour').map((c) => {
+    ...cmd.filter((c) => etatCommande(c) === 'retour' && c.restitution.statut !== 'echec').map((c) => {
       const t = tabletteDe(c);
       return [1, `${t ? nomT(t) : 'Tablette'} à récupérer chez ${c.nom || c.email || 'le client'}`, t ? versTablette(t) : versCommande(c), ''];
     }),
@@ -624,7 +626,19 @@ function afficherAccueil() {
       .map((t) => [1, `${nomT(t)} revenue, à vérifier avant de remettre en stock`, versTablette(t), '']),
     ...cmd.filter((c) => c.remboursement && c.remboursement.statut === 'echec')
       .map((c) => [1, `Remboursement échoué : ${c.nom || c.email || 'un client'}, à faire depuis Stripe`, versCommande(c), 'ko']),
-    [impayees, `${pluriel(impayees, 'abonnement')} impayé${impayees > 1 ? 's' : ''}`, '#compta/factures', 'ko'],
+    // Une ligne par famille impayée ou en pause, qui ouvre sa page (Stripe en secours si la famille manque).
+    ...(familleImpayees.length ? familleImpayees.map((f) => [1, `Abonnement impayé : famille ${f.nom || 'sans nom'}`, `#clients/familles/${encodeURIComponent(f.id)}`, 'ko'])
+      : [[impayees, `${pluriel(impayees, 'abonnement')} impayé${impayees > 1 ? 's' : ''}`, '#compta/factures', 'ko']]),
+    ...donnees.familles.filter((f) => f.statut === 'suspendu')
+      .map((f) => [1, `Tablette en pause (abonnement non réglé) : famille ${f.nom || 'sans nom'}`, `#clients/familles/${encodeURIComponent(f.id)}`, 'ko']),
+    ...cmd.filter((c) => c.expedition === 'paiement-en-attente' && c.creeLe && Date.now() - c.creeLe > 7 * 864e5)
+      .map((c) => [1, `Prélèvement SEPA sans réponse de la banque depuis 7 jours : ${c.nom || c.email || 'client'}, regarder dans Stripe`, versCommande(c), 'ko']),
+    ...cmd.filter((c) => c.dernierMois && c.dernierMois.statut === 'echec')
+      .map((c) => [1, `Dernier mois refusé par la banque : ${c.nom || c.email || 'client'}, le contacter`, versCommande(c), 'ko']),
+    ...cmd.filter((c) => c.restitution && c.restitution.statut === 'echec')
+      .map((c) => [1, `Prélèvement du matériel refusé : ${c.nom || c.email || 'client'}, le contacter`, versCommande(c), 'ko']),
+    ...cmd.filter((c) => (c.contestations || []).some((x) => Date.now() - x.le < 60 * 864e5))
+      .map((c) => [1, `Prélèvement contesté à la banque : ${c.nom || c.email || 'client'}, voir le litige dans Stripe`, versCommande(c), 'ko']),
     [simsAResilier, `${pluriel(simsAResilier, 'forfait SIM')} payé${simsAResilier > 1 ? 's' : ''} depuis 30 jours pour une tablette sans client : à résilier ou suspendre`, '#stock/sim', 'ko'],
     ...donnees.stock.filter((t) => t.etat === 'en-retour' && t.remplaceePour)
       .map((t) => [1, `${nomT(t)} remplacée, à récupérer chez le client`, versTablette(t), '']),
@@ -883,7 +897,13 @@ async function remplirCommande(id) {
       ligne('Retour', c.restitution ? `${RETOURS[c.restitution.statut] || c.restitution.statut}${c.restitution.avant && c.restitution.statut === 'attendue' ? ` avant le ${jour(c.restitution.avant)}` : ''}` : null),
       ligne('Suivi du retour', suiviRetourDe(c)),
       ligne('Étiquettes', etiquettesDe(c)),
-      ligne('Remboursement', c.remboursement ? `${euros(c.remboursement.montant)} ${REMBOURSEMENTS[c.remboursement.statut] || c.remboursement.statut}` : null))),
+      ligne('Remboursement', c.remboursement ? `${euros(c.remboursement.montant)} ${REMBOURSEMENTS[c.remboursement.statut] || c.remboursement.statut}` : null),
+      ligne('Reçue le', c.preparation && c.preparation.recuLe ? `${jour(c.preparation.recuLe)}${c.preparation.recuPar ? ` (${c.preparation.recuPar})` : ''}` : null),
+      ligne('Annulation possible', c.fid && annulableApresEnvoi(c) ? `jusqu'au ${jour(limiteAnnulation(c))}` : null),
+      ligne('Pause', c.pause && c.pause.jusqua > Date.now() ? `prélèvements en pause jusqu'au ${jour(c.pause.jusqua)} (hospitalisation)` : null),
+      ligne('Dernier mois', c.dernierMois ? `${euros(c.dernierMois.montant)} ${DERNIER_MOIS[c.dernierMois.statut] || c.dernierMois.statut}${c.dernierMois.erreur ? ` : ${c.dernierMois.erreur}` : ''}` : null),
+      ligne('Prélèvement refusé', c.restitution && c.restitution.statut === 'echec' ? `matériel non rendu${c.restitutionErreur ? ` : ${c.restitutionErreur}` : ''}` : null),
+      ligne('Contesté', (c.contestations || []).length ? c.contestations.map((x) => `${euros(x.montant)} le ${jour(x.le)}`).join(', ') : null))),
     h('div', { class: 'card' }, h('h2', {}, 'Parcours'),
       // Frise : la date à gauche (vide pour une étape sans date), l'étape à droite ; la prochaine étape en dernier.
       h('ol', { class: 'frise' }, ...parcoursCommande(c).map(([le, texte, date]) => {
@@ -944,11 +964,19 @@ function menuCommande(c, zoneRemplacement, etiquette) {
       if (e !== 'non') prevenir(messageErreur(e));
     }
   };
+  const enCours = c.fid && !c.offerte && !c.resiliationLe && ['actif', 'impaye', 'suspendu', 'active', 'trialing', 'past_due'].includes(c.abonnement);
+  // Pendant les 30 jours après la réception : « Annuler la commande » (rien à payer, tout remboursé au
+  // retour) ; ensuite seulement « Arrêter l'abonnement » (fin du mois, dernier mois prélevé).
+  const annulable = enCours && annulableApresEnvoi(c);
+  const enPause = c.pause && c.pause.jusqua > Date.now();
   const items = [
     ['a-preparer', 'paiement-en-attente'].includes(c.expedition)
       ? { libelle: 'Annuler la commande', danger: true, faire: () => lancer(() => annulerCommande(c)) } : null,
-    c.fid && !c.offerte && !c.resiliationLe && ['actif', 'impaye', 'suspendu', 'active', 'trialing', 'past_due'].includes(c.abonnement)
+    annulable ? { libelle: 'Annuler la commande (30 jours)', danger: true, faire: () => lancer(() => annulerApresEnvoi(c)) } : null,
+    enCours && !annulable
       ? { libelle: 'Arrêter l\'abonnement', danger: true, faire: () => lancer(() => arreterAbonnement(c)) } : null,
+    enCours && !annulable && !enPause ? { libelle: 'Pause hospitalisation…', faire: () => lancer(() => pauseHospitalisation(c)) } : null,
+    enPause ? { libelle: 'Reprendre les prélèvements', faire: () => lancer(() => reprendrePrelevements(c)) } : null,
     zoneRemplacement ? { libelle: 'Remplacer un élément du kit (cassé ou perdu)…', faire: () => {
       zoneRemplacement.hidden = false;
       zoneRemplacement.querySelector('select').focus();
@@ -972,6 +1000,48 @@ async function annulerCommande(c) {
   return [`Commande annulée.`, r.stripeIntrouvable ? 'Stripe ne connaissait pas son abonnement (commande de test ?) : rien à rembourser, pas d\'e-mail au client.' : null,
     r.rembourse ? `${euros(r.rembourse)} remboursés.` : null,
     r.mailEnvoye ? 'Le client a reçu un e-mail.' : null].filter(Boolean).join(' ');
+}
+
+// Date limite pour « Annuler la commande » une fois la tablette partie : 30 jours après la réception
+// (la vraie si on la connaît, sinon envoi + 3 jours). Même règle que limiteRetractation (functions/abonnement.js).
+function limiteAnnulation(c) {
+  const recue = c.preparation && c.preparation.recuLe;
+  const reception = recue || (c.envoyeeLe ? c.envoyeeLe + 3 * 864e5 : 0);
+  return Math.max(c.creeLe || 0, reception) + 30 * 864e5;
+}
+const annulableApresEnvoi = (c) => c.expedition === 'envoyee' && !c.retractation && !c.restitution && Date.now() <= limiteAnnulation(c);
+
+async function annulerApresEnvoi(c) {
+  if (!await demander(`Annuler la commande ${codeCommande(c.code)} de ${c.nom || c.email || 'ce client'} ?\n\nLa tablette est chez le client depuis moins de 30 jours (jusqu'au ${jour(limiteAnnulation(c))}) : l'abonnement s'arrête tout de suite, rien n'est prélevé, et tout ce qui a été payé (60 € compris) est remboursé dès que la tablette revient. Le client reçoit l'étiquette de retour par e-mail.`,
+    { oui: 'Annuler la commande', non: 'Garder la commande', danger: true })) throw 'non';
+  const r = await patienter('Annulation de la commande…', () => appeler('retracter', { fid: c.fid }));
+  return `Commande annulée. ${euros(r.montant)} seront remboursés au retour de la tablette.`;
+}
+
+// « 15/12/2026 » ou « 15/12 » → millisecondes (midi), ou null.
+function dateReprise(t) {
+  const m = String(t || '').trim().match(/^(\d{1,2})[/. -](\d{1,2})(?:[/. -](\d{2,4}))?$/);
+  if (!m) return null;
+  const n = new Date();
+  let annee = m[3] ? Number(m[3].length === 2 ? `20${m[3]}` : m[3]) : n.getFullYear();
+  let d = new Date(annee, Number(m[2]) - 1, Number(m[1]), 12);
+  if (!m[3] && d < n) d = new Date(++annee, Number(m[2]) - 1, Number(m[1]), 12);
+  return d.getDate() === Number(m[1]) ? d.getTime() : null;
+}
+
+async function pauseHospitalisation(c) {
+  const saisie = await saisir(`Pause pour hospitalisation de ${c.famille || c.nom || 'ce client'} (justificatif reçu).\n\nRien ne sera prélevé jusqu'à la date de reprise ; la tablette continue de marcher. Date de reprise des prélèvements (JJ/MM/AAAA) :`, '', { oui: 'Mettre en pause' });
+  if (saisie == null || saisie === false) throw 'non';
+  const jusqua = dateReprise(saisie);
+  if (!jusqua) throw new Error('Date illisible : écrivez par exemple 15/12/2026.');
+  await patienter('Mise en pause des prélèvements…', () => appeler('pauseHospitalisation', { commande: c.id, jusqua }));
+  return `Prélèvements en pause jusqu'au ${jour(jusqua)}.`;
+}
+
+async function reprendrePrelevements(c) {
+  if (!await demander(`Reprendre les prélèvements de ${c.famille || c.nom || 'ce client'} dès maintenant ?`, { oui: 'Reprendre' })) throw 'non';
+  await patienter('Reprise des prélèvements…', () => appeler('pauseHospitalisation', { commande: c.id, jusqua: null }));
+  return 'Prélèvements repris.';
 }
 
 async function arreterAbonnement(c) {
@@ -1171,6 +1241,8 @@ function formulaireRemplacement(c, t) {
   });
   return form;
 }
+
+const DERNIER_MOIS = { 'en-cours': 'en cours de prélèvement', 'en-attente': 'prélevé, en attente de la banque', fait: 'prélevé', echec: 'refusé par la banque' };
 
 // Ce qu'il reste à faire sur la commande, d'après son état : [texte, bouton éventuel], ou null si rien.
 function prochaineEtape(c, t) {
