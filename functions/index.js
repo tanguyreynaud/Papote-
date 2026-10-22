@@ -1342,7 +1342,7 @@ const installation = require('./installation').brancher({
   db, compteVerifie, envoyerMail, mail, appli: APPLI_FAMILLE, logger, stockage: () => admin.storage().bucket(base.BUCKET_STORAGE),
 });
 exports.reserverTablette = onCall({ maxInstances: 2 }, installation.reserverTablette);
-exports.nommerFamille = onCall({ maxInstances: 2 }, installation.nommerFamille);
+exports.nommerFamille = onCall({ secrets: [MAIL_MOT_DE_PASSE], maxInstances: 2 }, installation.nommerFamille);
 exports.finirInstallation = onCall({ secrets: [MAIL_MOT_DE_PASSE], maxInstances: 2 }, installation.finirInstallation);
 exports.annulerInstallation = onCall({ timeoutSeconds: 300, memory: '512MiB', maxInstances: 2 }, installation.annulerInstallation);
 
