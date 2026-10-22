@@ -198,9 +198,10 @@ const TITRES = {
   commande: 'Commande',
   client: 'Client',
   depense: 'Dépense',
+  sim: 'Carte SIM',
 };
 // Pages d'une fiche (#tablette/id, #commande/id) : le menu garde sa section allumée.
-const PARENTS = { tablette: 'stock', commande: 'commandes', client: 'clients', depense: 'compta' };
+const PARENTS = { tablette: 'stock', commande: 'commandes', client: 'clients', depense: 'compta', sim: 'stock' };
 // Anciennes pages devenues des onglets (liens déjà notés, favoris) : #familles → #clients/familles.
 const ANCIENNES = { familles: 'clients/familles', factures: 'compta/factures' };
 const AVEC_PERIODE = ['compta'];
@@ -270,6 +271,7 @@ function afficherFiche() {
   if (page === 'commande') remplirCommande(decodeURIComponent(id));
   if (page === 'client') remplirClient(decodeURIComponent(id));
   if (page === 'depense') remplirPageDepense(decodeURIComponent(id));
+  if (page === 'sim') remplirPageSim(decodeURIComponent(id));
 }
 window.addEventListener('hashchange', afficherPage);
 afficherPage();
@@ -1237,7 +1239,53 @@ $('filtre-sim').addEventListener('change', afficherSim);
 
 let simOuverte = null;
 const dateChamp = (ms) => (ms ? new Date(ms).toLocaleDateString('sv-SE') : '');
+// Carte existante : sa page ; nouvelle carte : le formulaire.
 function ouvrirSim(id) {
+  if (id) location.hash = `#sim/${encodeURIComponent(id)}`;
+  else modifierSim(null);
+}
+
+// Page d'une carte SIM : ce qu'on sait d'elle en lecture, la tablette et le client où elle est.
+function remplirPageSim(id) {
+  const zone = $('dsi-corps');
+  const l = donnees.sims.find((x) => x.id === id);
+  if (!l) {
+    zone.replaceChildren(h('div', { class: 'card' }, h('p', {}, 'Carte SIM introuvable (supprimée ?).')));
+    return;
+  }
+  const titre = `Carte SIM ${l.numero || fin4(l.iccid) || ''}`.trim();
+  document.title = `Papote · ${titre}`;
+  const t = l.tablette && donnees.stock.find((x) => x.id === l.tablette);
+  const c = t && t.commande && donnees.commandes.find((x) => x.id === t.commande);
+  const ligne = (k, v) => (v ? [h('dt', {}, k), h('dd', {}, v)] : []);
+  const cout = coutLigne(l);
+  const alertes = alertesSim(l);
+  zone.replaceChildren(h('div', { class: 'card' },
+    h('div', { class: 'tete-fiche' }, h('h2', {}, titre),
+      h('div', { class: 'tete-actions no-print' }, menuPoints([
+        { libelle: 'Modifier les informations', faire: () => modifierSim(l.id) },
+      ], `Actions pour ${titre}`))),
+    alertes.length ? h('p', { class: 'small' }, ...alertes.map((a) => badge(a, 'ko'))) : null,
+    h('dl', { class: 'fiche' },
+      ...ligne('Statut', badge(donnees.statutsSim[l.statut] || l.statut, STATUT_CLASSE[l.statut])),
+      ...ligne('Opérateur', l.operateur),
+      ...ligne('Numéro de ligne', l.numero),
+      ...ligne('ICCID', l.iccid),
+      ...ligne('Tablette', t ? h('a', { href: `#tablette/${encodeURIComponent(t.id)}` }, [t.ref, t.numero || t.modele].filter(Boolean).join(' · ') || 'tablette')
+        : h('span', { class: 'muted' }, 'dans aucune tablette')),
+      ...ligne('Commande', c ? h('a', { href: `#commande/${encodeURIComponent(c.id)}` }, `Commande ${codeCommande(c.code)}`) : null),
+      ...ligne('Client', c && c.email ? h('a', { href: `#client/${encodeURIComponent(c.email.toLowerCase())}` }, c.nom || c.email) : null),
+      ...ligne('Forfait', l.go != null ? `${l.go} Go par mois` : null),
+      ...ligne('Prix par mois', cout != null ? euros(cout) : null),
+      ...ligne('Promo', l.finPromo ? `jusqu'au ${jour(l.finPromo)}${l.prixApres != null ? `, puis ${euros(l.prixApres)}` : ''}` : null),
+      ...ligne('Activée le', jour(l.activation)),
+      ...ligne('À activer avant', l.statut === 'stock' ? jour(l.activerAvant) : null),
+      ...ligne('Identifiant client', l.client),
+      ...ligne('Carte bancaire', l.cb || l.cbExp ? [l.cb ? `…${l.cb}` : null, l.cbExp ? `expire ${l.cbExp}` : null].filter(Boolean).join(', ') : null),
+      ...ligne('Note', l.note))));
+}
+
+function modifierSim(id) {
   const l = id ? donnees.sims.find((x) => x.id === id) : { statut: 'stock' };
   if (!l) return;
   simOuverte = id || null;
@@ -1287,6 +1335,7 @@ $('ds-supprimer').addEventListener('click', async () => {
   await enregistrer($('f-sim'), async () => {
     await appeler('gestionSim', { action: 'supprimer', id: simOuverte });
     $('d-sim').close();
+    if (location.hash.startsWith('#sim/')) location.hash = '#stock/sim';
   });
 });
 
@@ -1434,7 +1483,9 @@ function remplirTablette(id) {
   const ligne = (k, v) => (v ? [h('dt', {}, k), h('dd', {}, v)] : []);
   $('dt-infos').replaceChildren(
     ...ligne('Où est-elle ?', badge(donnees.etats[etatTablette(t)] || t.etat, '')),
-    ...ligne('Client', c ? h('a', { href: `#commande/${encodeURIComponent(c.id)}` }, nomCommande(c)) : h('span', { class: 'muted' }, 'pas encore attribuée')),
+    ...ligne('Commande', c ? h('a', { href: `#commande/${encodeURIComponent(c.id)}` }, `Commande ${codeCommande(c.code)}${c.offerte ? ' (offerte)' : ''}`) : h('span', { class: 'muted' }, 'pas encore attribuée')),
+    ...ligne('Client', c && c.email ? h('a', { href: `#client/${encodeURIComponent(c.email.toLowerCase())}` }, c.nom || c.email) : c ? c.nom : null),
+    ...ligne('Achat', t.depense ? h('a', { href: `#depense/${encodeURIComponent(t.depense)}` }, [t.fournisseur, t.acheteeLe ? `le ${jour(t.acheteeLe)}` : null].filter(Boolean).join(' ') || 'voir l\'achat') : null),
     ...ligne('N° de série', t.numero || h('span', { class: 'muted' }, 'pas encore noté')),
     ...ligne('Modèle', t.modele),
     ...ligne('Carte SIM', simDuKit(t)),
@@ -1446,7 +1497,7 @@ function remplirTablette(id) {
   $('dt-historique').replaceChildren(...(t.historique || []).filter((x) => x.le).reverse().map((x) => h('li', {},
     `${new Date(x.le).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })} : ${donnees.etats[x.etat] || x.etat}`)));
   if (!$('dt-historique').children.length) $('dt-historique').append(h('li', {}, 'Rien de noté pour l\'instant.'));
-  $('dt-zone-retirer').hidden = !(t.etat === 'en-stock' && !t.commande && (t.historique || []).length <= 1);
+  $('dt-actions').replaceChildren(...actionsTablette(t, c));
   if (memeFiche) return;
   f.numero.value = t.numero || '';
   f.modele.value = t.modele || '';
@@ -1546,11 +1597,40 @@ $('f-tablette').addEventListener('submit', async (e) => {
   if (ok) f.hidden = true;
 });
 
-$('dt-modifier').addEventListener('click', () => {
-  const f = $('f-tablette');
-  f.hidden = !f.hidden;
-  if (!f.hidden) f.numero.focus();
-});
+// Actions de la tablette selon où elle en est : l'étape suivante en bouton, le reste dans le ⋮.
+function actionsTablette(t, c) {
+  const changer = (etat, question, champs = {}) => async () => {
+    if (question && !await demander(question, { oui: 'Confirmer' })) return;
+    await enregistrerTablette(() => appeler('gestionStock', { action: 'modifier', id: t.id, champs: { etat, ...champs } }));
+  };
+  const nom = t.ref || t.numero || 'cette tablette';
+  const retour = c && c.restitution && ['attendue', 'echec', 'a-recuperer'].includes(c.restitution.statut);
+  let principal = null;
+  if (t.etat === 'commandee') {
+    principal = ['Tablette reçue', changer('en-stock', `${nom} est arrivée ? Elle passe « En stock ». Pensez ensuite à la recevoir (installation) depuis Stock.`)];
+  } else if (['en-stock', 'preparee'].includes(t.etat) && c && c.expedition === 'a-preparer') {
+    principal = ['Préparer l\'envoi', (e) => document.dispatchEvent(new CustomEvent('papote:preparer-envoi', { detail: { commande: c, bouton: e.currentTarget } }))];
+  } else if (['envoyee', 'chez-client', 'en-retour'].includes(t.etat) && retour) {
+    // Le colis se coche dans « Tablettes à récupérer » (ce qui manque y est prélevé au client).
+    principal = ['Tablette revenue', () => { vueCommandes = 'retour'; location.hash = '#commandes'; afficherCommandes(); }];
+  } else if (t.etat === 'revenue') {
+    principal = ['Vérifiée, remettre en stock', changer('en-stock', `${nom} est vérifiée et prête à repartir ? Elle redevient libre dans le stock.`, { commande: null })];
+  } else if (t.etat === 'a-reparer') {
+    principal = ['Réparée, remettre en stock', changer('en-stock', `${nom} est réparée ? Elle redevient libre dans le stock.`, { commande: null })];
+  }
+  const jamaisServi = t.etat === 'en-stock' && !t.commande && (t.historique || []).length <= 1;
+  const menu = menuPoints([
+    { libelle: 'Modifier les informations', faire: () => { const f = $('f-tablette'); f.hidden = false; f.numero.focus(); } },
+    !['a-reparer', 'perdue', 'hors-service', 'commandee'].includes(t.etat)
+      ? { libelle: 'Mettre à réparer', faire: changer('a-reparer', `Mettre ${nom} à réparer ? Elle ne repart plus tant qu'elle n'est pas réparée.`) } : null,
+    !['perdue', 'hors-service', 'commandee'].includes(t.etat)
+      ? { libelle: 'Déclarer hors service', danger: true, faire: changer('hors-service', `${nom} est hors service ? Elle sort du parc et ne pourra plus être jumelée.`) } : null,
+    !['perdue', 'commandee'].includes(t.etat)
+      ? { libelle: 'Déclarer perdue', danger: true, faire: changer('perdue', `${nom} est perdue ? Elle sort du parc et ne pourra plus être jumelée.`) } : null,
+    jamaisServi ? { libelle: 'Supprimer la fiche (créée par erreur)', danger: true, faire: supprimerFicheTablette } : null,
+  ], `Actions pour ${nom}`);
+  return [principal ? h('button', { type: 'button', class: 'primary small-btn', onclick: principal[1] }, principal[0]) : null, menu].filter(Boolean);
+}
 $('dt-annuler').addEventListener('click', () => {
   const f = $('f-tablette');
   f.hidden = true;
@@ -1565,13 +1645,13 @@ $('dt-fichier').addEventListener('change', async (e) => {
   await enregistrerTablette(() => envoyerPieces('stock', tabletteOuverte, fichiers), 'Envoi…');
 });
 
-$('dt-retirer').addEventListener('click', async () => {
+async function supprimerFicheTablette() {
   if (!await demander('Supprimer cette fiche du stock ? À faire seulement si la tablette n\'existe pas.', { oui: 'Supprimer la fiche', danger: true })) return;
   const ok = await enregistrerTablette(async () => {
     await appeler('gestionStock', { action: 'supprimer', id: tabletteOuverte });
   });
   if (ok) location.hash = '#stock/tablettes';
-});
+}
 
 async function retirerPiece(collection, id, piece) {
   if (!await demander(`Retirer « ${piece.nom} » ?`, { oui: 'Retirer', danger: true })) return;

@@ -56,7 +56,7 @@
         <p id="who" class="muted small"></p>
         <button type="button" id="btn-signout" class="link small">Se déconnecter</button>
         <!-- Version de l'admin : à changer à chaque mise à jour, pour voir que la bonne est en ligne. -->
-        <p class="muted small version-admin">Version du 22/10 à 11 h 30</p>
+        <p class="muted small version-admin">Version du 22/10 à 12 h</p>
       </div>
     </aside>
 
@@ -436,7 +436,7 @@
       <section data-panneau="tablette" hidden>
         <p class="no-print"><a href="#stock/tablettes" class="retour">Retour</a></p>
         <div class="card">
-          <div class="tete-fiche"><h2 id="dt-titre">Tablette</h2><button type="button" class="secondary small-btn no-print" id="dt-modifier">Modifier</button></div>
+          <div class="tete-fiche"><h2 id="dt-titre">Tablette</h2><div class="tete-actions no-print" id="dt-actions"></div></div>
           <dl class="fiche" id="dt-infos"></dl>
           <form id="f-tablette" class="grille form-modif" hidden>
             <label>N° de série <span class="avec-bouton"><input name="numero"><button type="button" class="secondary small-btn scanner" data-cible="numero" hidden>Scanner</button></span></label>
@@ -464,11 +464,6 @@
           <h2>Historique</h2>
           <ul class="historique small muted" id="dt-historique"></ul>
         </div>
-        <div class="card no-print" id="dt-zone-retirer" hidden>
-          <h2>Fiche créée par erreur ?</h2>
-          <p class="muted small">Si cette tablette n'existe pas (saisie en double, faute de frappe), supprimez la fiche. Possible seulement tant qu'elle n'a jamais servi.</p>
-          <button type="button" class="secondary danger" id="dt-retirer">Supprimer cette fiche</button>
-        </div>
       </section>
 
       <!-- ---------- Page d'un client (#client/e-mail) ---------- -->
@@ -478,6 +473,12 @@
       </section>
 
       <!-- ---------- Page d'une commande (#commande/id) ---------- -->
+      <!-- ---------- Page d'une carte SIM (#sim/id) ---------- -->
+      <section data-panneau="sim" hidden>
+        <p class="no-print"><a href="#stock/sim" class="retour">Retour</a></p>
+        <div id="dsi-corps"></div>
+      </section>
+
       <!-- ---------- Page d'une dépense ou d'un achat fournisseur (#depense/id) ---------- -->
       <section data-panneau="depense" hidden>
         <p class="no-print"><a href="#compta/depenses" class="retour">Retour</a></p>
