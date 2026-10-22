@@ -761,15 +761,19 @@ async function removeOldTablets(f, btn) {
 
 // Suppression définitive demandée par le client (à contact@) : le nom retapé confirme. Le serveur refuse
 // la famille offerte (Mamie) et une famille dont l'abonnement est en cours (gestionSupprimerFamille).
-async function supprimerFamille(f, li, btn, commandes = []) {
-  // Commande offerte partie chez le proche : savoir si on a repris la tablette et ses accessoires.
+// Commande offerte partie chez le proche et pas encore close : a-t-on repris la tablette et ses accessoires ?
+async function questionMateriel(commandes) {
   const partie = commandes.find((c) => c.offerte && c.expedition !== 'annulee' && !c.restitution
     && !['a-preparer', 'paiement-en-attente'].includes(c.expedition));
-  let recupere;
-  if (partie) {
-    recupere = await demander(`La tablette et les accessoires de la commande offerte ${partie.code ? `${partie.code.slice(0, 4)}-${partie.code.slice(4)} ` : ''}sont-ils récupérés ?\n\nOui : la tablette revient au stock, à vérifier. Pas encore : la commande reste notée « matériel à récupérer ».`,
-      { oui: 'Oui, récupérés', non: 'Pas encore' });
-  }
+  if (!partie) return {};
+  const recupere = await demander(`La tablette et les accessoires de la commande offerte ${partie.code ? `${partie.code.slice(0, 4)}-${partie.code.slice(4)} ` : ''}sont-ils déjà récupérés ?\n\nOui : la tablette revient au stock, à vérifier. Pas encore : la commande reste notée « matériel à récupérer ».`,
+    { oui: 'Oui, récupérés', non: 'Pas encore' });
+  return { partie, recupere };
+}
+
+async function supprimerFamille(f, li, btn, commandes = []) {
+  // Matériel pas encore noté (service offert jamais arrêté) : la question est posée ici.
+  const { partie, recupere } = await questionMateriel(commandes);
   const nom = await saisir(`Supprimer DÉFINITIVEMENT la famille « ${f.name} » : messages, photos, vidéos, rappels, anniversaires, membres et journal. Rien ne pourra être récupéré.\n\nPour confirmer, retapez le nom de la famille :`);
   if (nom == null) return;
   const simple = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().replace(/\s+/g, ' ').toLowerCase();
@@ -780,6 +784,7 @@ async function supprimerFamille(f, li, btn, commandes = []) {
   try {
     await appeler('gestionSupprimerFamille', { fid: f.id, nom, ...(partie ? { recupere } : {}) });
     families = families.filter((x) => x.id !== f.id);
+    signalerChangement();
     li.remove();
     location.hash = '#clients/familles';
     render();
@@ -888,13 +893,15 @@ function menuFamille(f, tete, commandes) {
     // Offrir : seulement une famille sans abonnement (jamais pour une famille qui paie ou qui a résilié).
     offerte || statut === 'aucun' ? { libelle: offerte ? 'Ne plus offrir le service' : 'Offrir le service', faire: async (b) => {
       if (!await demander(offerte
-        ? `Ne plus offrir le service à « ${f.name} » ? Sans abonnement, sa tablette se mettra en pause.`
+        ? `Ne plus offrir le service à « ${f.name} » ?\n\nSa tablette se mettra en pause et la commande offerte se termine : la tablette et ses accessoires sont à récupérer. Les photos et messages restent (pour tout effacer : « Supprimer la famille »).`
         : `Offrir le service à « ${f.name} » ?\n\nLa famille ne paiera rien et sa tablette ne sera jamais mise en pause.`,
       { oui: offerte ? 'Ne plus offrir' : 'Offrir le service' })) return;
+      const { partie, recupere } = offerte ? await questionMateriel(commandes) : {};
       b.disabled = true;
       try {
-        await appeler('gestionFamilleOfferte', { fid: f.id, offerte: !offerte });
+        await appeler('gestionFamilleOfferte', { fid: f.id, offerte: !offerte, ...(partie ? { recupere } : {}) });
         f.abonnement = { ...(f.abonnement || {}), statut: offerte ? 'aucun' : 'offert' };
+        signalerChangement();
         render();
       } catch (err) {
         prevenir(`Impossible : ${err.message}`);
