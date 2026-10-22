@@ -59,7 +59,7 @@
         <p id="who" class="muted small"></p>
         <button type="button" id="btn-signout" class="link small">Se déconnecter</button>
         <!-- Version de l'admin : à changer à chaque mise à jour, pour voir que la bonne est en ligne. -->
-        <p class="muted small version-admin">Version du 22/10 à 18 h 45</p>
+        <p class="muted small version-admin">Version du 22/10 à 19 h 30</p>
       </div>
     </aside>
 
@@ -441,6 +441,12 @@
       <section data-panneau="sim" hidden>
         <p class="no-print"><a href="#stock/sim" class="retour">Retour</a></p>
         <div id="dsi-corps"></div>
+      </section>
+
+      <!-- ---------- Ajout (#nouveau/achat, #nouveau/depense, #nouveau/offerte) : le formulaire dans la page ---------- -->
+      <section data-panneau="nouveau" hidden>
+        <p class="no-print"><a href="#accueil" class="retour" id="nv-retour">Retour</a></p>
+        <div class="card"><h2 id="nv-titre"></h2><div id="nv-corps"></div></div>
       </section>
 
       <!-- ---------- Page d'un accessoire (#accessoire/id ; #accessoire/nouveau pour en ajouter un) ---------- -->

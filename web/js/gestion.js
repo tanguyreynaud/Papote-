@@ -231,9 +231,10 @@ const TITRES = {
   depense: 'Dépense',
   sim: 'Carte SIM',
   accessoire: 'Accessoire',
+  nouveau: 'Ajouter',
 };
 // Pages d'une fiche (#tablette/id, #commande/id) : le menu garde sa section allumée.
-const PARENTS = { tablette: 'stock', commande: 'commandes', client: 'clients', depense: 'compta', sim: 'stock', accessoire: 'stock' };
+const PARENTS = { tablette: 'stock', commande: 'commandes', client: 'clients', depense: 'compta', sim: 'stock', accessoire: 'stock', nouveau: 'compta' };
 // Anciennes pages devenues des onglets (liens déjà notés, favoris) : #familles → #clients/familles.
 const ANCIENNES = { familles: 'clients/familles', factures: 'compta/factures' };
 const AVEC_PERIODE = ['compta'];
@@ -303,6 +304,7 @@ function afficherFiche() {
   if (page === 'depense') remplirPageDepense(decodeURIComponent(id));
   if (page === 'sim') remplirPageSim(decodeURIComponent(id));
   if (page === 'accessoire') remplirPageAccessoire(decodeURIComponent(id));
+  if (page === 'nouveau') remplirNouveau(id);
 }
 window.addEventListener('hashchange', afficherPage);
 
@@ -814,7 +816,7 @@ function afficherCommandes() {
 $('filtre-commandes').addEventListener('change', afficherCommandes);
 
 // Commande offerte (les mamies) : sans paiement, avec sa famille et sa tablette.
-$('b-offerte').addEventListener('click', () => {
+function preparerOfferte() {
   const f = $('f-offerte');
   f.reset();
   f.fid.replaceChildren(h('option', { value: '' }, 'Pas encore de famille'),
@@ -825,7 +827,10 @@ $('b-offerte').addEventListener('click', () => {
     ...donnees.stock.filter((t) => !t.commande && !['perdue', 'hors-service'].includes(t.etat))
       .map((t) => h('option', { value: t.id }, [t.ref, t.numero, t.modele].filter(Boolean).join(' · '))));
   f.querySelector('.f-msg').hidden = true;
-  $('d-offerte').showModal();
+}
+$('b-offerte').addEventListener('click', () => {
+  preparerOfferte();
+  allerNouveau('offerte');
 });
 
 $('f-offerte').addEventListener('submit', async (e) => {
@@ -836,7 +841,7 @@ $('f-offerte').addEventListener('submit', async (e) => {
       nom: f.nom.value, email: f.email.value, telephone: f.telephone.value, formule: f.formule.value,
       fid: f.fid.value || null, tablette: f.tablette.value || null, dejaInstallee: f.installee.checked,
     });
-    $('d-offerte').close();
+    fermerNouveau();
   });
 });
 
@@ -2599,14 +2604,63 @@ function preparerFormulaires() {
     .map(([k, v]) => h('option', { value: k, selected: k === 'autre' }, v)));
 }
 
-function ouvrirFormulaire(id) {
-  const f = $(id).querySelector('form');
+// Ajouts (achat de tablettes, dépense, commande offerte) : le formulaire s'affiche dans sa page
+// (#nouveau/…), plus dans une fenêtre par-dessus ; « Retour » ou l'enregistrement ramènent d'où l'on venait.
+const NOUVEAUX = {
+  achat: { form: 'f-stock', titre: 'Ajouter un achat de tablettes', menu: 'compta' },
+  depense: { form: 'f-depense', titre: 'Ajouter une dépense', menu: 'compta' },
+  offerte: { form: 'f-offerte', titre: 'Commande offerte', menu: 'commandes' },
+};
+const CLE_NOUVEAU = { 'd-achat': 'achat', 'd-depense': 'depense', 'd-offerte': 'offerte' };
+let retourNouveau = null;
+const nouveauOuvert = () => (location.hash.match(/^#nouveau\/(\w+)/) || [])[1] || null;
+function allerNouveau(cle) {
+  if (!nouveauOuvert()) retourNouveau = location.hash || '#accueil';
+  $(NOUVEAUX[cle].form).dataset.pret = '1';
+  if (location.hash !== `#nouveau/${cle}`) location.hash = `#nouveau/${cle}`;
+  else remplirNouveau(cle);
+}
+function remplirNouveau(cle) {
+  const n = NOUVEAUX[cle];
+  if (!n) { location.hash = '#accueil'; return; }
+  const f = $(n.form);
+  // Données relues pendant la saisie : rien ne bouge.
+  if ($('nv-corps').contains(f) && !f.dataset.pret) return;
+  // Page ouverte directement (lien, rechargement) : formulaire remis à zéro.
+  if (!f.dataset.pret) {
+    if (cle === 'offerte') preparerOfferte(); else viderFormulaire(f);
+  }
+  delete f.dataset.pret;
+  $('titre-page').textContent = n.titre;
+  document.title = `Papote · ${n.titre}`;
+  $('nv-titre').textContent = n.titre;
+  $('nv-retour').href = retourNouveau || `#${n.menu}`;
+  document.querySelectorAll('.nav a[data-page]').forEach((a) => a.classList.toggle('actif', a.dataset.page === n.menu));
+  // Le formulaire d'un autre ajout retourne à sa place cachée.
+  for (const x of [...$('nv-corps').children]) if (x !== f) document.getElementById(Object.keys(CLE_NOUVEAU).find((d) => NOUVEAUX[CLE_NOUVEAU[d]].form === x.id)).append(x);
+  if (!$('nv-corps').contains(f)) $('nv-corps').append(f);
+  (f.querySelector('input:not([type="file"]):not([type="date"]), select') || f).focus();
+}
+// Page quittée : le formulaire retourne à sa place cachée (la prochaine ouverture repart de zéro).
+window.addEventListener('hashchange', () => {
+  if (nouveauOuvert()) return;
+  for (const x of [...$('nv-corps').children]) document.getElementById(Object.keys(CLE_NOUVEAU).find((d) => NOUVEAUX[CLE_NOUVEAU[d]].form === x.id)).append(x);
+});
+function fermerNouveau() {
+  const cle = nouveauOuvert();
+  location.hash = retourNouveau || (cle ? `#${NOUVEAUX[cle].menu}` : '#accueil');
+  retourNouveau = null;
+}
+function viderFormulaire(f) {
   f.reset();
   materielLu.delete(f);
   const aujourdhui = new Date().toLocaleDateString('sv-SE');
   f.querySelectorAll('input[type="date"]').forEach((i) => { i.value = aujourdhui; });
   f.querySelector('.f-msg').hidden = true;
-  $(id).showModal();
+}
+function ouvrirFormulaire(id) {
+  viderFormulaire($(id).querySelector('form') || $(NOUVEAUX[CLE_NOUVEAU[id]].form));
+  allerNouveau(CLE_NOUVEAU[id]);
 }
 $('btn-achat-2').addEventListener('click', () => $('btn-achat').click());
 $('btn-achat').addEventListener('click', () => ouvrirFormulaire('d-achat'));
@@ -2668,7 +2722,7 @@ $('f-stock').addEventListener('submit', async (e) => {
     if (fichiers.length && r.depense) await envoyerPieces('depenses', r.depense, fichiers);
   });
   if (ok) {
-    $('d-achat').close();
+    fermerNouveau();
     signalerChangement();
   }
 });
@@ -2689,7 +2743,7 @@ $('f-depense').addEventListener('submit', async (e) => {
     if (fichiers.length) await envoyerPieces('depenses', r.id, fichiers);
   });
   if (ok) {
-    $('d-depense').close();
+    fermerNouveau();
     signalerChangement();
   }
 });
@@ -2796,7 +2850,6 @@ async function deposer(fichier) {
   mettreFichier(fd, fichier);
   const r = await preremplir(fd, fichier);
   if (r && r.tablettes) {
-    $('d-depense').close();
     ouvrirFormulaire('d-achat');
     const fa = $('f-stock');
     mettreFichier(fa, fichier);
@@ -2824,9 +2877,9 @@ document.addEventListener('drop', (e) => {
   e.preventDefault();
   const fichier = e.dataTransfer.files[0];
   if (!fichier) return;
-  const ouvert = ['d-achat', 'd-depense'].find((id) => $(id).open);
+  const ouvert = ['achat', 'depense'].includes(nouveauOuvert()) ? nouveauOuvert() : null;
   if (ouvert) {
-    const f = $(ouvert).querySelector('form');
+    const f = $(NOUVEAUX[ouvert].form);
     mettreFichier(f, fichier);
     preremplir(f, fichier);
   } else {
