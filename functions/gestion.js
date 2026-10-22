@@ -869,6 +869,8 @@ exports.gestionStock = onCall(async (request) => {
         throw new HttpsError('not-found', 'Commande introuvable.');
       }
       maj.commande = commande;
+      // Tablette jumelée avant d'être rattachée à sa commande : l'alerte n'a plus lieu d'être.
+      if (commande && snap.get('alerteJumelage') === ALERTE_SANS_COMMANDE) maj.alerteJumelage = null;
     }
     let sortis = [];
     if ('etat' in champs) {
@@ -2019,9 +2021,10 @@ const ETATS_BLOQUES = ['perdue', 'hors-service'];
 
 // Que faire quand une tablette du stock est jumelée à une famille (pure, testée).
 // t : fiche stock ; commande : sa commande (ou null) ; fid : famille qui vient de la jumeler.
+const ALERTE_SANS_COMMANDE = 'jumelée sans commande';
 function suiteJumelage(t, commande, fid) {
   if (ETATS_BLOQUES.includes(t.etat)) return { refuser: true };
-  if (!t.commande || !commande) return { alerte: 'jumelée sans commande' };
+  if (!t.commande || !commande) return { alerte: ALERTE_SANS_COMMANDE };
   if (!commande.fid) return { relier: true };
   if (commande.fid !== fid) return { alerte: 'jumelée à une autre famille que celle de sa commande' };
   return {};
@@ -2179,7 +2182,7 @@ function aFaire({ commandes, stock, depenses, automatique, maintenant, sims = []
     liste.push(`Tablette ${t.ref || t.numero || ''} revenue : ${usureBatterie(t.batterie)}, à retirer du parc`);
   }
   ajouter(stock.filter((t) => t.etat === 'en-retour' && t.remplaceePour).length, 'tablette(s) remplacée(s) à récupérer chez le client');
-  for (const t of stock.filter((x) => x.alerteJumelage)) liste.push(`Tablette ${t.ref || t.numero || ''} ${t.alerteJumelage}`);
+  for (const t of stock.filter((x) => x.alerteJumelage && !(x.alerteJumelage === ALERTE_SANS_COMMANDE && x.commande))) liste.push(`Tablette ${t.ref || t.numero || ''} ${t.alerteJumelage}`);
   ajouter(actives.filter((c) => c.remboursement && c.remboursement.statut === 'echec').length, 'remboursement(s) échoué(s), à faire depuis Stripe');
   const parId = new Map(commandes.map((c) => [c.id, c]));
   const lignes = new Map(sims.map((l) => [l.id, l]));
