@@ -1749,19 +1749,16 @@ function remplirTablette(id) {
   const changerTablette = (champs) => enregistrerTablette(() => appeler('gestionStock', { action: 'modifier', id: t.id, champs }));
   const modif = (libelle, affiche, champ, opts = {}) => ligneModifiable(libelle, affiche, { ...opts,
     enregistrer: (v) => changerTablette({ [champ]: v }) });
-  const prises = new Set(donnees.stock.filter((x) => x.id !== t.id).map((x) => x.commande).filter(Boolean));
-  const commandesPossibles = donnees.commandes.filter((x) => x.id === t.commande || (!prises.has(x.id) && x.expedition !== 'annulee'))
-    .sort((a, b) => (b.creeLe || 0) - (a.creeLe || 0));
   // Carte SIM : une ligne du registre libre (avec numéro ou ICCID), ou l'ancienne saisie gardée telle quelle.
   const simsPossibles = donnees.sims.filter((l) => l.id === t.simId || (!l.tablette && l.statut !== 'resiliee' && (l.numero || l.iccid)));
+  const actions = actionsTablette(t, c);
   const infos = $('dt-infos');
   if (!(infos.dataset.id === t.id && saisieEnCours(infos))) {
     infos.dataset.id = t.id;
     infos.replaceChildren(
-      ...ligne('Où est-elle ?', badge(donnees.etats[etatTablette(t)] || t.etat, '')),
-      ...modif('Commande', c ? h('a', { href: `#commande/${encodeURIComponent(c.id)}` }, `Commande ${codeCommande(c.code)}${c.offerte ? ' (offerte)' : ''}`) : null, 'commande', {
-        vide: 'pas encore attribuée', valeur: t.commande || '', convertir: (v) => v || null,
-        options: [['', 'Aucune'], ...commandesPossibles.map((x) => [x.id, nomCommande(x)])] }),
+      ...ligne('Où est-elle ?', friseTablette(t, actions.bouton)),
+      // Attribuée à une commande par « Préparer l'envoi » (SIM, accessoires, étiquette), pas à la main.
+      ...ligne('Commande', c ? h('a', { href: `#commande/${encodeURIComponent(c.id)}` }, `Commande ${codeCommande(c.code)}${c.offerte ? ' (offerte)' : ''}`) : h('span', { class: 'muted' }, 'pas encore attribuée')),
       ...ligne('Client', c && c.email ? h('a', { href: `#client/${encodeURIComponent(c.email.toLowerCase())}` }, c.nom || c.email) : c ? c.nom : null),
       ...ligne('Achat', ligneAchatTablette(t)),
       ...modif('N° de série', t.numero, 'numero', { valeur: t.numero, vide: 'pas encore noté' }),
@@ -1785,8 +1782,25 @@ function remplirTablette(id) {
   $('dt-historique').replaceChildren(...historiqueLisible(t).reverse().map(([le, texte]) => h('li', {},
     h('span', { class: 'quand' }, new Date(le).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })), ' ', texte)));
   if (!$('dt-historique').children.length) $('dt-historique').append(h('li', {}, 'Rien de noté pour l\'instant.'));
-  $('dt-actions').replaceChildren(...actionsTablette(t, c));
+  $('dt-actions').replaceChildren(actions.menu);
   f.querySelector('.f-msg').hidden = true;
+}
+
+// Où en est la tablette : les étapes de son parcours habituel, l'étape actuelle en couleur.
+// Hors de ce parcours (retour, réparation, perdue…), son état seul.
+const PARCOURS_TABLETTE = [['commandee', 'Commandée'], ['en-stock', 'En stock'], ['preparee', 'Préparée'], ['envoyee', 'Envoyée'], ['chez-client', 'Chez le client']];
+// bouton : l'action qui fait passer à l'étape suivante, placée juste après l'étape actuelle.
+function friseTablette(t, bouton) {
+  const etat = etatTablette(t);
+  const i = PARCOURS_TABLETTE.findIndex(([k]) => k === etat);
+  if (i < 0) {
+    return h('div', { class: 'frise-tablette' },
+      badge(donnees.etats[etat] || etat, ['perdue', 'hors-service', 'a-reparer'].includes(etat) ? 'ko' : 'info'), bouton);
+  }
+  return h('ol', { class: 'frise-tablette' }, ...PARCOURS_TABLETTE.flatMap(([, texte], j) => [
+    j ? h('li', { class: 'sep', 'aria-hidden': 'true' }, '›') : null,
+    h('li', { class: j < i ? 'fait' : j === i ? 'actuelle' : '', 'aria-current': j === i ? 'step' : null }, texte),
+    j === i && bouton ? h('li', { class: 'frise-action' }, bouton) : null]));
 }
 
 // Changements d'état permis, en miroir de SUITES dans functions/gestion.js.
@@ -1930,7 +1944,8 @@ function actionsTablette(t, c) {
   const retour = c && c.restitution && ['attendue', 'echec', 'a-recuperer'].includes(c.restitution.statut);
   let principal = null;
   if (t.etat === 'commandee') {
-    principal = ['Tablette reçue', changer('en-stock', `${nom} est arrivée ? Elle passe « En stock ». Pensez ensuite à la recevoir (installation) depuis Stock.`)];
+    // La vraie réception : vérification du carton, n° de série, installation ; elle passe « En stock » au passage.
+    principal = ['Le colis est arrivé', () => recevoirTablette(t.id)];
   } else if (['en-stock', 'preparee'].includes(t.etat) && c && c.expedition === 'a-preparer') {
     principal = ['Préparer l\'envoi', (e) => document.dispatchEvent(new CustomEvent('papote:preparer-envoi', { detail: { commande: c, bouton: e.currentTarget } }))];
   } else if (['envoyee', 'chez-client', 'en-retour'].includes(t.etat) && retour) {
@@ -1952,7 +1967,8 @@ function actionsTablette(t, c) {
     peut('perdue') ? { libelle: 'Déclarer perdue', danger: true, faire: changer('perdue', `${nom} est perdue ? Elle sort du parc et ne pourra plus être jumelée.`) } : null,
     jamaisServi ? { libelle: 'Supprimer la fiche (créée par erreur)', danger: true, faire: supprimerFicheTablette } : null,
   ], `Actions pour ${nom}`);
-  return [principal ? h('button', { type: 'button', class: 'primary small-btn', onclick: principal[1] }, principal[0]) : null, menu].filter(Boolean);
+  // L'étape suivante se place dans la frise « Où est-elle ? », le reste dans le ⋮ en haut.
+  return { bouton: principal ? h('button', { type: 'button', class: 'primary small-btn no-print', onclick: principal[1] }, principal[0], ' ›') : null, menu };
 }
 $('dt-annuler').addEventListener('click', () => {
   const f = $('f-tablette');
@@ -3492,12 +3508,15 @@ function etapesReceptionTablette() {
   ];
 }
 
-async function recevoirTablette() {
+// id : la tablette commandée dont on fait la réception (depuis sa page) ; sinon on la choisit dans le parcours.
+async function recevoirTablette(id) {
   if (!donnees) return;
-  const enCours = donnees.stock.find((t) => t.reception && !t.reception.fini);
-  const etat = enCours && await demander(`Reprendre la réception de ${libelleTablette(enCours)} ?`)
+  const pour = typeof id === 'string' ? id : null;
+  const enCours = donnees.stock.find((t) => t.reception && !t.reception.fini && (!pour || t.id === pour));
+  const reprendre = enCours && (pour || await demander(`Reprendre la réception de ${libelleTablette(enCours)} ?`));
+  const etat = reprendre
     ? { ...enCours.reception, id: enCours.id, ref: enCours.ref || '', numero: enCours.numero || '', modele: enCours.modele || '' }
-    : { etape: 0, faits: {} };
+    : { etape: 0, faits: {}, ...(pour ? { id: pour } : {}) };
   await ouvrirParcours({
     titre: 'Recevoir une tablette',
     etapes: etapesReceptionTablette(),

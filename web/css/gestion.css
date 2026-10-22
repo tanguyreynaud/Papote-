@@ -455,3 +455,13 @@ a, .link, button.link { text-decoration: none; }
 .crayon:hover, .crayon:focus-visible { opacity: 1; color: var(--accent); background: #eef0ff; }
 .saisie-champ { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; width: 100%; }
 .saisie-champ input, .saisie-champ select, .saisie-champ textarea { flex: 1 1 200px; width: auto; margin: 0; padding: 6px 10px; font-size: 15px; }
+
+/* Parcours d'une tablette (page tablette) : étapes passées, actuelle, à venir. */
+.frise-tablette { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; list-style: none; margin: 0; padding: 0; font-size: 14px; }
+.frise-tablette li { color: var(--muted); }
+.frise-tablette li.sep { color: #c9c2b5; }
+.frise-tablette li.fait { color: var(--accent); }
+.frise-tablette li.actuelle { color: #fff; background: var(--accent); border-radius: 999px; padding: 2px 10px; font-weight: 600; }
+.frise-tablette { row-gap: 8px; }
+.frise-tablette .frise-action .small-btn { margin: 0 2px 0 6px; padding: 4px 12px; min-height: 0; font-size: 13px; }
+div.frise-tablette { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }

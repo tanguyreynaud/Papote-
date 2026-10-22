@@ -792,12 +792,13 @@ function carteFamille(f) {
   const titre = el('div', 'family-head');
   // Le ⋮ dépend des commandes de la famille (retour en cours) : posé dès qu'elles sont lues.
   const place = el('span');
-  titre.append(el('span', 'dot'), el('h2', null, f.name), el('code', null, f.code ? `${f.code.slice(0, 4)}-${f.code.slice(4)}` : ''), place);
+  titre.append(el('span', 'dot'), el('h2', null, f.name), place);
   donnees().then((d) => d.commandes || []).catch(() => [])
     .then((commandes) => place.replaceWith(menuFamille(f, tete, commandes.filter((c) => c.fid === f.id))));
   const dl = el('dl');
   for (const [k, v] of [
     ['État', s.label],
+    ['Code de la famille', f.code ? `${f.code.slice(0, 4)}-${f.code.slice(4)}` : '–'],
     ['Tablette utilisée', ago(f.active)],
     ['Version', f.version || '–'],
     ['Abonnement', ABONNEMENT_FAMILLE[f.abonnement?.statut] || 'Aucun'],
