@@ -1763,7 +1763,7 @@ function remplirTablette(id) {
         vide: 'pas encore attribuée', valeur: t.commande || '', convertir: (v) => v || null,
         options: [['', 'Aucune'], ...commandesPossibles.map((x) => [x.id, nomCommande(x)])] }),
       ...ligne('Client', c && c.email ? h('a', { href: `#client/${encodeURIComponent(c.email.toLowerCase())}` }, c.nom || c.email) : c ? c.nom : null),
-      ...ligne('Achat', t.depense ? h('a', { href: `#depense/${encodeURIComponent(t.depense)}` }, [t.fournisseur, t.acheteeLe ? `le ${jour(t.acheteeLe)}` : null].filter(Boolean).join(' ') || 'voir l\'achat') : null),
+      ...ligne('Achat', ligneAchatTablette(t)),
       ...modif('N° de série', t.numero, 'numero', { valeur: t.numero, vide: 'pas encore noté' }),
       ...modif('Modèle', t.modele, 'modele', { valeur: t.modele }),
       ...ligneModifiable('Carte SIM', simDuKit(t), {
@@ -1780,7 +1780,6 @@ function remplirTablette(id) {
       ...ligne('Accessoires', (t.accessoires || []).join(', ')),
       ...modif('Notes', t.notes, 'notes', { valeur: t.notes, long: true, vide: 'aucune' }));
   }
-  afficherAchatTablette(t);
   afficherDocumentsTablette(t);
   afficherBatterie(t);
   $('dt-historique').replaceChildren(...historiqueLisible(t).reverse().map(([le, texte]) => h('li', {},
@@ -1864,28 +1863,18 @@ function afficherDocumentsTablette(t) {
   if (!$('dt-pieces').children.length) $('dt-pieces').append(h('li', { class: 'muted small' }, 'Aucun document pour l\'instant.'));
 }
 
-// Achat de la tablette : vendeur, prix, justificatif (facture ou simple confirmation de commande).
-function afficherAchatTablette(t) {
-  const achat = t.depense && donnees.depenses.find((d) => d.id === t.depense);
-  const zone = $('dt-achat');
+// Achat de la tablette, en une ligne de la fiche : vendeur, prix, date, et si la facture manque encore.
+// Le détail est sur la page de l'achat.
+function ligneAchatTablette(t) {
   if (!t.depense) {
-    zone.replaceChildren(
-      h('p', {}, 'Aucun achat rattaché : le prix et la facture de cette tablette sont inconnus.'),
-      h('p', { class: 'muted small' }, 'Transférez la facture du vendeur à factures@mapapote.fr, ou ajoutez l\'achat dans Stock > Achats : il complétera cette fiche si le n° de série correspond, ou si c\'est la plus ancienne tablette en stock sans achat.'));
-    return;
+    return h('span', { class: 'muted' }, 'inconnu : transférez la facture du vendeur à factures@mapapote.fr');
   }
-  const ligne = (k, v) => (v ? [h('dt', {}, k), h('dd', {}, v)] : []);
-  zone.replaceChildren(
-    h('dl', { class: 'fiche' },
-      ligne('Vendeur', t.fournisseur || (achat && achat.fournisseur)),
-      ligne('Achetée le', jour(t.acheteeLe)),
-      ligne('Prix', t.prixAchat != null ? euros(t.prixAchat) : null),
-      ligne('N° de commande', achat && achat.numero),
-      ligne('Justificatif', achat && achat.confirmation
-        ? h('span', {}, badge('Facture pas encore reçue', 'info'), ' ', h('span', { class: 'muted small' }, 'seule la confirmation de commande est arrivée'))
-        : badge('Facture reçue', 'ok')),
-      null),
-    achat && achat.confirmation ? h('p', { class: 'muted small' }, 'Quand la vraie facture arrivera, transférez-la à factures@mapapote.fr : elle s\'ajoutera toute seule aux documents.') : null);
+  const achat = donnees.depenses.find((d) => d.id === t.depense);
+  return h('span', {},
+    h('a', { href: `#depense/${encodeURIComponent(t.depense)}` },
+      [t.fournisseur || (achat && achat.fournisseur), t.prixAchat != null ? euros(t.prixAchat) : null, t.acheteeLe ? `le ${jour(t.acheteeLe)}` : null]
+        .filter(Boolean).join(', ') || 'voir l\'achat'),
+    achat && achat.confirmation ? [' ', badge('facture pas encore reçue', 'info')] : null);
 }
 
 // Actions de la page tablette hors formulaire : l'erreur s'affiche même si le formulaire est replié.
