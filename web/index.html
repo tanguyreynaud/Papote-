@@ -960,7 +960,63 @@
     <button id="call-hangup" class="call-hangup">Raccrocher</button>
   </div>
 
-  <script type="module" src="js/famille.js"></script>
+  <!-- Pas de connexion : à l'ouverture, écran calme qui se relance tout seul au retour du réseau ;
+       pendant l'utilisation, simple bandeau en haut. -->
+  <div id="hors-ligne" class="hors-ligne" role="status" hidden>
+    <img class="splash-mark" src="icons/icon.svg" alt="">
+    <h1>Pas de connexion internet</h1>
+    <p>Votre téléphone n'est pas relié à internet pour le moment. Papote s'ouvrira toute seule dès que la connexion reviendra.</p>
+    <p class="hors-ligne-aide">Vérifiez le Wi-Fi ou les données mobiles.</p>
+    <p class="hors-ligne-verif">On vérifie la connexion <span class="splash-dots"><span></span><span></span><span></span></span></p>
+    <button type="button" id="hors-ligne-reessayer" class="primary">Réessayer</button>
+  </div>
+  <p id="hors-ligne-bandeau" class="hors-ligne-bandeau" role="status" hidden>Pas de connexion pour le moment. Papote reprend toute seule dès son retour.</p>
+  <script>
+    (() => {
+      const ecran = document.getElementById('hors-ligne');
+      const bandeau = document.getElementById('hors-ligne-bandeau');
+      let minuterie = 0;
+      // navigator.onLine se trompe parfois (Wi-Fi sans internet) : on demande un petit fichier.
+      async function connecte() {
+        if (!navigator.onLine) return false;
+        const stop = new AbortController();
+        const delai = setTimeout(() => stop.abort(), 6000);
+        try {
+          const rep = await fetch(`manifest.webmanifest?verif=${Date.now()}`, { cache: 'no-store', signal: stop.signal });
+          return rep.ok;
+        } catch (e) { return false; } finally { clearTimeout(delai); }
+      }
+      // Si l'app ne démarre pas alors que le réseau répond, on ne relance pas en boucle :
+      // trois essais automatiques, ensuite seulement avec le bouton.
+      const essais = () => { try { return +sessionStorage.getItem('papote.reessais') || 0; } catch (e) { return 0; } };
+      async function verifier(auto) {
+        if (auto === true && essais() >= 3) return;
+        if (!(await connecte())) return;
+        try { sessionStorage.setItem('papote.reessais', auto === true ? essais() + 1 : 0); } catch (e) { /* rien */ }
+        location.reload();
+      }
+      function ouvrir() {
+        if (!ecran.hidden) return;
+        bandeau.hidden = true;
+        ecran.hidden = false;
+        clearInterval(minuterie);
+        minuterie = setInterval(() => verifier(true), 5000);
+      }
+      window.papoteHorsLigne = ouvrir;
+      document.getElementById('hors-ligne-reessayer').addEventListener('click', verifier);
+      addEventListener('online', () => { if (!ecran.hidden) verifier(true); else bandeau.hidden = true; });
+      addEventListener('offline', () => { if (ecran.hidden) bandeau.hidden = false; });
+      // Enregistré ici et pas dans famille.js : même si les scripts n'arrivent pas, la copie de l'app se fait.
+      if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+      if (!navigator.onLine) ouvrir();
+      // Toujours sur l'écran de chargement après 8 s : souvent un réseau qui ne répond pas.
+      setTimeout(async () => {
+        if (document.getElementById('loading').hidden) { try { sessionStorage.removeItem('papote.reessais'); } catch (e) { /* rien */ } return; }
+        if (!(await connecte())) ouvrir();
+      }, 8000);
+    })();
+  </script>
+  <script type="module" src="js/famille.js" onerror="window.papoteHorsLigne && papoteHorsLigne()"></script>
   <!-- Chat d'aide (servi par le site mapapote.fr), au-dessus de la barre du bas -->
   <script src="https://mapapote.fr/chat-support.js" data-bas="96" defer></script>
 </body>
