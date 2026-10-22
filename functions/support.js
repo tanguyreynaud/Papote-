@@ -35,8 +35,8 @@ const MAIL_MOT_DE_PASSE = defineSecret('MAIL_MOT_DE_PASSE');
 
 const MODELE = 'claude-haiku-5-5';
 const EMAIL_SUPPORT = 'contact@mapapote.fr';
-// 300 pendant la phase de test (demande de Tanguy, 2026-10-12) ; remettre à 30 avant l'ouverture au public.
-const QUOTA_VISITEUR = 1000;
+// 30 questions par appareil et par jour (remis à 30 par Tanguy le 2026-10-22, après la phase de test).
+const QUOTA_VISITEUR = 30;
 const QUOTA_TOTAL = 2000;
 const QUOTA_RAPPELS = 3;
 const QUOTA_INSCRIPTIONS = 5;
