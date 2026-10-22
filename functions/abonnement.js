@@ -152,6 +152,20 @@ function restitutionEchue(restitution, maintenant) {
   return limite != null && limite <= maintenant;
 }
 
+// Ancienne commande d'un client qui recommande (même IBAN, e-mail, téléphone ou adresse) : raisons d'en faire
+// un mauvais payeur (Tanguy, 2026-10-22 : « grosse signalisation » avant d'envoyer une 2e tablette).
+// commande : commandes/{id} ; statutFamille : families/{fid}.abonnement.statut ou null.
+function raisonsMauvaisPayeur(commande, statutFamille) {
+  const c = commande || {};
+  const r = [];
+  if ((c.contestations || []).length) r.push('prélèvement contesté à la banque');
+  if (c.dernierMois && c.dernierMois.statut === 'echec') r.push('dernier mois impayé');
+  if (c.restitution && c.restitution.statut === 'echec') r.push('matériel non rendu et non payé');
+  else if (c.restitution && c.restitution.statut === 'facturee') r.push('matériel jamais rendu');
+  if (['impaye', 'suspendu'].includes(statutFamille)) r.push('abonnement impayé');
+  return r;
+}
+
 // Code de commande à 8 caractères (sans 0, O, 1, I, L), affiché XXXX-XXXX : il relie une commande
 // à la famille quand le client ne se connecte pas avec l'adresse e-mail du paiement.
 const ALPHABET_CODE = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -193,6 +207,7 @@ module.exports = {
   restitutionEchue,
   RETRACTATION_JOURS,
   receptionDe,
+  raisonsMauvaisPayeur,
   limiteRetractation,
   retractationPossible,
   rappelRestitutionDu,
