@@ -1207,13 +1207,15 @@ function parcoursCommande(c) {
 
 // ---------- Stock ----------
 
-// Regroupements du filtre de la liste des tablettes (les chiffres du haut).
+// Regroupements du filtre de la liste des tablettes (les chiffres du haut) : [libellé, états, condition].
 const GROUPES_STOCK = {
-  'g:disponibles': ['Disponibles', DISPONIBLES],
+  'g:disponibles': ['En stock, libres', DISPONIBLES, (t) => !t.commande],
+  'g:reservees': ['Réservées pour un envoi', DISPONIBLES, (t) => !!t.commande],
   'g:chez': ['Chez les clients', ['envoyee', 'chez-client', 'en-retour']],
   'g:verifier': ['À vérifier ou réparer', ['revenue', 'a-reparer']],
   'g:sorties': ['Perdues ou hors service', ['perdue', 'hors-service']],
 };
+const dansGroupe = (g, t) => g[1].includes(t.affiche) && (!g[2] || g[2](t));
 
 function afficherStock() {
   const stock = donnees.stock.map((t) => ({ ...t, affiche: etatTablette(t) }));
@@ -1224,20 +1226,23 @@ function afficherStock() {
   const dispo = pretes.length;
   const reservees = pretes.filter((t) => t.commande).length;
   const chez = GROUPES_STOCK['g:chez'][1];
-  // Chaque chiffre filtre la liste des tablettes juste en dessous (ou ouvre les commandes à envoyer).
+  // Chaque chiffre filtre la liste des tablettes juste en dessous.
   const filtrer = (valeur) => () => {
     $('filtre-stock').value = valeur;
     afficherStock();
     $('t-stock').scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
-  const versEnvois = () => { vueCommandes = 'a-envoyer'; location.hash = '#commandes'; };
-  const libres = dispo - reservees;
-  const valeurLibres = pretes.filter((t) => !t.commande).reduce((s, t) => s + (t.prixAchat || 0), 0);
+  const libresListe = stock.filter((t) => dansGroupe(GROUPES_STOCK['g:disponibles'], t));
+  const libres = libresListe.length;
+  const valeurLibres = libresListe.reduce((s, t) => s + (t.prixAchat || 0), 0);
+  const reserveesTout = stock.filter((t) => dansGroupe(GROUPES_STOCK['g:reservees'], t)).length;
   const manqueTablettes = Math.max(0, aEnvoyer - dispo);
   // Trois chiffres, chacun ouvre ses tablettes ; le reste en petite ligne, seulement s'il y en a.
   $('kpi-stock').replaceChildren(
-    cliquable(stat(String(libres), 'en stock, libres', valeurLibres ? `valeur ${euros(valeurLibres)}` : null, libres ? null : 'neg'), filtrer('g:disponibles')),
-    cliquable(stat(String(aEnvoyer), 'à envoyer', manqueTablettes ? `il manque ${pluriel(manqueTablettes, 'tablette')}` : null, manqueTablettes ? 'neg' : null), versEnvois),
+    cliquable(stat(String(libres), 'en stock, libres',
+      manqueTablettes ? `il manque ${pluriel(manqueTablettes, 'tablette')} pour les commandes` : valeurLibres ? `valeur ${euros(valeurLibres)}` : null,
+      manqueTablettes ? 'neg' : null), filtrer('g:disponibles')),
+    cliquable(stat(String(reserveesTout), 'réservées pour un envoi'), filtrer('g:reservees')),
     cliquable(stat(String(compte(chez)), 'chez les clients', valeur(chez) ? `valeur ${euros(valeur(chez))}` : null), filtrer('g:chez')));
   const lien = (n, texte, filtre) => (n ? h('button', { type: 'button', class: 'link', onclick: filtrer(filtre) }, `${n} ${texte}`) : null);
   const suite = [
@@ -1260,7 +1265,7 @@ function afficherStock() {
   remplirTable($('t-stock'), [
     { titre: 'N° de série' }, { titre: 'Modèle' }, { titre: 'État' }, { titre: 'Commande' }, { titre: 'SIM' },
     { titre: 'Pièces' }, { titre: 'Prix', n: 1 }, { titre: 'Achetée le' },
-  ], stock.filter((t) => !filtre || (GROUPES_STOCK[filtre] ? GROUPES_STOCK[filtre][1].includes(t.affiche) : t.affiche === filtre))
+  ], stock.filter((t) => !filtre || (GROUPES_STOCK[filtre] ? dansGroupe(GROUPES_STOCK[filtre], t) : t.affiche === filtre))
     .sort((a, b) => (b.acheteeLe || 0) - (a.acheteeLe || 0))
     .map((t) => {
       const c = parId.get(t.commande);
