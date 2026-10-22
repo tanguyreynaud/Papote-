@@ -447,3 +447,11 @@ label.interrupteur, .fiche label.interrupteur { display: inline-flex; flex-direc
 
 /* Aucun soulignement dans l'admin (demande de Tanguy, 22/10). */
 a, .link, button.link { text-decoration: none; }
+
+/* Champ modifiable seul : un petit crayon à côté de la valeur (pages carte SIM, tablette). */
+.fiche dd.modifiable { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-height: 28px; }
+.crayon { min-height: 0; width: 28px; height: 28px; padding: 0; border: none; border-radius: 8px; background: none;
+  color: var(--muted); font-size: 15px; line-height: 1; box-shadow: none; opacity: .55; cursor: pointer; }
+.crayon:hover, .crayon:focus-visible { opacity: 1; color: var(--accent); background: #eef0ff; }
+.saisie-champ { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; width: 100%; }
+.saisie-champ input, .saisie-champ select, .saisie-champ textarea { flex: 1 1 200px; width: auto; margin: 0; padding: 6px 10px; font-size: 15px; }
