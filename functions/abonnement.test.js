@@ -100,6 +100,15 @@ test('rétractation : 30 jours après la réception estimée (envoi + 3 jours)',
   assert.strictEqual(a.retractationPossible(c, T0 + 35 * JOUR + 1), false);
 });
 
+test('rétractation : 30 jours après la vraie réception quand elle est connue', () => {
+  const c = { expedition: 'envoyee', creeLe: T0, envoyeeLe: T0 + 2 * JOUR, preparation: { recuLe: T0 + 9 * JOUR } };
+  assert.strictEqual(a.limiteRetractation(T0, T0 + 2 * JOUR, T0 + 9 * JOUR), T0 + 39 * JOUR);
+  assert.strictEqual(a.receptionDe(c), T0 + 9 * JOUR);
+  assert.strictEqual(a.retractationPossible(c, T0 + 39 * JOUR), true);
+  assert.strictEqual(a.retractationPossible(c, T0 + 39 * JOUR + 1), false);
+  assert.strictEqual(a.receptionDe({ expedition: 'envoyee' }), null);
+});
+
 test('rétractation : une seule fois', () => {
   assert.strictEqual(a.retractationPossible({ expedition: 'a-preparer', retractation: { le: T0 } }, T0), false);
   assert.strictEqual(a.retractationPossible(null, T0), false);

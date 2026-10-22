@@ -110,16 +110,22 @@ function limiteRestitution(finMs) {
 
 // « Annuler ma commande » : 30 jours après la réception de la tablette (CGV : le délai légal
 // de 14 jours est porté à 30 : rien à payer pour l'abonnement et les 60 € remboursés).
-// Réception estimée à l'envoi + 3 jours (Mondial Relay) ; avant l'envoi, toujours possible.
-// Au plus tôt, 30 jours après la commande.
+// Réception : la vraie date quand on la connaît (colis « livré » au suivi Mondial Relay, tablette reliée à
+// la famille, ou cochée dans l'admin : preparation.recuLe), sinon estimée à l'envoi + 3 jours.
+// Avant l'envoi, toujours possible. Au plus tôt, 30 jours après la commande.
 const RETRACTATION_JOURS = 30;
 const ACHEMINEMENT_JOURS = 3;
 // Rappel avant de prélever le montant d'une tablette non rendue.
 const RAPPEL_RESTITUTION_JOURS = 7;
 
-function limiteRetractation(creeMs, envoyeeMs) {
-  const depart = Math.max(creeMs || 0, envoyeeMs != null ? envoyeeMs + ACHEMINEMENT_JOURS * JOUR : 0);
-  return depart + RETRACTATION_JOURS * JOUR;
+function limiteRetractation(creeMs, envoyeeMs, recueMs) {
+  const reception = recueMs != null ? recueMs : (envoyeeMs != null ? envoyeeMs + ACHEMINEMENT_JOURS * JOUR : 0);
+  return Math.max(creeMs || 0, reception) + RETRACTATION_JOURS * JOUR;
+}
+
+// Date de réception connue d'une commande (millisecondes), sinon null.
+function receptionDe(commande) {
+  return enMillis(commande && commande.preparation && commande.preparation.recuLe);
 }
 
 // La commande peut-elle encore être annulée et remboursée ?
@@ -127,7 +133,7 @@ function limiteRetractation(creeMs, envoyeeMs) {
 function retractationPossible(commande, maintenant) {
   if (!commande || commande.retractation) return false;
   if (commande.expedition === 'a-preparer') return true;
-  return maintenant <= limiteRetractation(enMillis(commande.creeLe), enMillis(commande.envoyeeLe));
+  return maintenant <= limiteRetractation(enMillis(commande.creeLe), enMillis(commande.envoyeeLe), receptionDe(commande));
 }
 
 // Rappel « dernière semaine pour rendre la tablette » : une seule fois, 7 jours avant la limite.
@@ -184,6 +190,7 @@ module.exports = {
   limiteRestitution,
   restitutionEchue,
   RETRACTATION_JOURS,
+  receptionDe,
   limiteRetractation,
   retractationPossible,
   rappelRestitutionDu,

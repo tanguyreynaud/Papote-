@@ -431,6 +431,41 @@ exports.annulerResiliation = onCall({ secrets: [STRIPE_SECRET] }, async (request
   return { ok: true };
 });
 
+// Hospitalisation du proche (Tanguy, 2026-10-22) : sur justificatif, l'admin met les prélèvements en pause
+// jusqu'à une date (rien n'est prélevé pour les mois de pause, la tablette continue de marcher), ou les
+// reprend plus tôt. Un décès, lui, est une résiliation comme une autre.
+const PAUSE_MAX_JOURS = 186;
+exports.pauseHospitalisation = onCall({ secrets: [STRIPE_SECRET] }, async (request) => {
+  verifierAdmin(request);
+  const { commande, jusqua } = request.data || {};
+  if (typeof commande !== 'string' || !/^[A-Za-z0-9_]{5,80}$/.test(commande)) throw new HttpsError('invalid-argument', 'Commande manquante.');
+  const ref = db.doc(`commandes/${commande}`);
+  if (!(await ref.get()).exists) throw new HttpsError('not-found', 'Commande introuvable.');
+  let abo;
+  try {
+    abo = await stripe().subscriptions.retrieve(commande);
+  } catch (e) {
+    throw new HttpsError('failed-precondition', 'Stripe ne connaît pas cet abonnement (commande de test ?).');
+  }
+  if (jusqua == null) {
+    await stripe().subscriptions.update(commande, { pause_collection: '' });
+    await ref.update({ pause: FieldValue.delete() });
+    return { ok: true, reprise: true };
+  }
+  const fin = Number(jusqua);
+  if (!Number.isFinite(fin) || fin <= Date.now() || fin > Date.now() + PAUSE_MAX_JOURS * 24 * 3600e3) {
+    throw new HttpsError('invalid-argument', 'Choisissez une date de reprise dans les 6 prochains mois.');
+  }
+  if (!['active', 'past_due'].includes(abo.status)) {
+    throw new HttpsError('failed-precondition', 'Pause possible seulement pour un abonnement en cours (pas pendant les 30 premiers jours).');
+  }
+  await stripe().subscriptions.update(commande, {
+    pause_collection: { behavior: 'void', resumes_at: Math.ceil(fin / 1000) },
+  });
+  await ref.update({ pause: { motif: 'hospitalisation', jusqua: Timestamp.fromMillis(fin), le: FieldValue.serverTimestamp() } });
+  return { ok: true, jusqua: fin };
+});
+
 // ---------- Rétractation et fin de contrat ----------
 
 // Factures payées de l'abonnement (mise en service de 60 €, mois déjà prélevés).
@@ -522,7 +557,7 @@ exports.finDeContrat = onCall({ secrets: [STRIPE_SECRET] }, async (request) => {
   const r = c.restitution;
   return {
     retractation: possible ? {
-      jusqua: c.expedition === 'a-preparer' ? null : regles.limiteRetractation(ms(c.creeLe), ms(c.envoyeeLe)),
+      jusqua: c.expedition === 'a-preparer' ? null : regles.limiteRetractation(ms(c.creeLe), ms(c.envoyeeLe), regles.receptionDe(c)),
       montant: await montantPaye(id),
     } : null,
     restitution: r ? { statut: r.statut, avant: ms(r.avant), etiquette: r.etiquette || null } : null,
@@ -625,6 +660,10 @@ exports.stripeWebhook = onRequest(
         await stock.liberer(db, (event.data.object.metadata || {}).reservation);
       } else if (event.type.startsWith('customer.subscription.')) {
         await abonnementModifie(event.data.object);
+      } else if (['invoice.paid', 'invoice.payment_failed', 'payment_intent.payment_failed'].includes(event.type)) {
+        await paiementAPart(event.type, event.data.object);
+      } else if (event.type === 'charge.dispute.created') {
+        await contestation(event.data.object);
       }
       res.json({ recu: true });
     } catch (e) {
@@ -695,6 +734,68 @@ async function paiementSepaRefuse(session) {
   if (snap.get('email')) envois.push(envoyerMail(snap.get('email'), mail.sepaRefuse({ nom: snap.get('nom') })));
   (await Promise.allSettled(envois)).filter((r) => r.status === 'rejected')
     .forEach((r) => logger.error(`E-mail SEPA refusé non envoyé (${ref.id})`, r.reason));
+}
+
+// Prélèvements faits hors de l'abonnement : le dernier mois (facture « dernierMois ») et le matériel non
+// rendu (paiement « non rendu »). En SEPA, la banque peut refuser quelques jours après : l'admin le voit
+// dans « À faire » (dernierMois.statut ou restitution.statut « echec »).
+async function paiementAPart(type, objet) {
+  const meta = objet.metadata || {};
+  if (!meta.commande || !/^[A-Za-z0-9_]{5,80}$/.test(meta.commande)) return;
+  const ref = db.doc(`commandes/${meta.commande}`);
+  const snap = await ref.get();
+  if (!snap.exists) return;
+  if (type.startsWith('invoice.') && meta.dernierMois === '1') {
+    const echec = type === 'invoice.payment_failed';
+    await ref.update({
+      'dernierMois.statut': echec ? 'echec' : 'fait',
+      'dernierMois.erreur': echec ? erreurPaiement(objet.last_finalization_error || null) || 'Prélèvement refusé par la banque' : FieldValue.delete(),
+    });
+    if (echec) await prevenirPapote(`Dernier mois non prélevé : ${snap.get('nom') || snap.get('email') || snap.id}`, snap);
+  } else if (type === 'payment_intent.payment_failed' && /non rendu/.test(objet.description || '')) {
+    if (!snap.get('restitution')) return;
+    await ref.update({
+      'restitution.statut': 'echec',
+      'restitution.erreur': erreurPaiement(objet.last_payment_error) || 'Prélèvement refusé par la banque',
+      'restitution.majLe': FieldValue.serverTimestamp(),
+    });
+    await prevenirPapote(`Prélèvement du matériel refusé : ${snap.get('nom') || snap.get('email') || snap.id}`, snap);
+  }
+}
+
+const erreurPaiement = (e) => (e && (e.message || e.code)) || null;
+
+// Prélèvement contesté par le client auprès de sa banque (SEPA : 8 semaines sans motif, 13 mois sinon).
+async function contestation(litige) {
+  let commande = null;
+  try {
+    const pi = litige.payment_intent && await stripe().paymentIntents.retrieve(
+      typeof litige.payment_intent === 'string' ? litige.payment_intent : litige.payment_intent.id, { expand: ['invoice'] });
+    commande = (pi && pi.metadata && pi.metadata.commande)
+      || (pi && pi.invoice && typeof pi.invoice === 'object' && (pi.invoice.subscription || (pi.invoice.metadata || {}).commande)) || null;
+  } catch (e) {
+    logger.warn('Contestation : paiement illisible', e.message);
+  }
+  if (typeof commande === 'object' && commande) commande = commande.id;
+  const ref = commande ? db.doc(`commandes/${commande}`) : null;
+  const snap = ref ? await ref.get() : null;
+  if (snap && snap.exists) {
+    await ref.update({ contestations: FieldValue.arrayUnion({
+      id: litige.id, montant: litige.amount, motif: litige.reason || null, le: Date.now(),
+    }) });
+  }
+  await prevenirPapote(`Prélèvement contesté (${mail.euros(litige.amount)}) : ${snap && snap.exists ? snap.get('nom') || snap.get('email') || snap.id : 'commande inconnue'}`,
+    snap && snap.exists ? snap : null, 'Le client a contesté un prélèvement auprès de sa banque. L\'argent est repris par la banque : voir la commande dans l\'admin et le litige dans Stripe.');
+}
+
+async function prevenirPapote(titre, snap, detail) {
+  try {
+    await envoyerMail(EMAIL_PAPOTE, mail.alerteAdmin({
+      titre, detail: detail || 'Voir la commande dans l\'admin (À faire).', commande: snap ? snap.id : null,
+    }));
+  } catch (e) {
+    logger.error(`Alerte non envoyée : ${titre}`, e.message);
+  }
 }
 
 // E-mails « commande confirmée » au client et « nouvelle commande » à Papote, une seule fois
@@ -873,8 +974,10 @@ async function prelevementDernierMois(abo) {
       ...(moyen ? { default_payment_method: moyen } : {}), metadata: { commande: abo.id, dernierMois: '1' },
     }, { idempotencyKey: `dernier-mois-facture-${abo.id}` });
     await stripe().invoices.finalizeInvoice(facture.id);
-    await stripe().invoices.pay(facture.id).catch((e) => logger.warn(`Commande ${abo.id} : dernier mois en attente`, e.message));
-    await ref.update({ 'dernierMois.statut': 'fait', 'dernierMois.facture': facture.id });
+    // Prélèvement SEPA : la banque confirme (ou refuse) quelques jours plus tard, voir paiementAPart.
+    const payee = await stripe().invoices.pay(facture.id)
+      .catch((e) => { logger.warn(`Commande ${abo.id} : dernier mois en attente`, e.message); return null; });
+    await ref.update({ 'dernierMois.statut': payee && payee.status === 'paid' ? 'fait' : 'en-attente', 'dernierMois.facture': facture.id });
   } catch (e) {
     logger.error(`Commande ${abo.id} : dernier mois non prélevé`, e.message);
     await ref.update({ 'dernierMois.statut': 'echec', 'dernierMois.erreur': e.message });
@@ -1180,11 +1283,15 @@ exports.commandeModifiee = onDocumentUpdated(
     await suiviRetour(event, avant.restitution || {}, apres.restitution || {}, apres);
   });
 
-// Tablette partie : le premier mois commence à la réception (envoi + 3 jours). Le premier prélèvement tombe
-// à la fin des 30 jours pour changer d'avis (même date que limiteRetractation), pas avant.
+// Tablette partie : le premier mois commence à la réception (estimée à l'envoi + 3 jours, puis recalée sur
+// la vraie date dès qu'on la connaît : preparation.recuLe). Le premier prélèvement tombe à la fin des
+// 30 jours pour changer d'avis (même date que limiteRetractation), pas avant.
 async function debutApresReception(event, avant, apres) {
-  if (avant.envoyeeLe || !apres.envoyeeLe || !apres.stripeCustomerId) return;
-  const fin = regles.limiteRetractation(apres.creeLe && apres.creeLe.toMillis(), apres.envoyeeLe.toMillis());
+  if (!apres.envoyeeLe || !apres.stripeCustomerId) return;
+  const recue = regles.receptionDe(apres);
+  if (avant.envoyeeLe && (recue == null || recue === regles.receptionDe(avant))) return;
+  const fin = regles.limiteRetractation(apres.creeLe && apres.creeLe.toMillis(), apres.envoyeeLe.toMillis(), recue);
+  if (fin <= Date.now() + 60 * 60 * 1000) return;
   try {
     const abo = await stripe().subscriptions.retrieve(event.params.id);
     if (abo.status !== 'trialing') return;
