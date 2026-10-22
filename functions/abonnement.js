@@ -47,8 +47,10 @@ const TARIF_TABLETTE = 'papote_tablette';
 // Tablette prêtée (incluse) : 60 € une fois à la commande, puis l'abonnement.
 const TARIF_MISE_EN_SERVICE = 'papote_mise_en_service';
 
+// La tablette n'est plus vendue (Tanguy, 2026-10-22) : seule la tablette prêtée (« incluse ») se commande.
+// Les tarifs « achetee » restent dans TARIFS pour lire les anciennes commandes de test.
 function formuleValide(formule, tablette) {
-  return Boolean(TARIFS[formule] && TARIFS[formule][tablette]);
+  return tablette === 'incluse' && Boolean(TARIFS[formule] && TARIFS[formule][tablette]);
 }
 
 // La tablette fonctionne et la famille peut envoyer.
