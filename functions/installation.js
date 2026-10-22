@@ -21,6 +21,8 @@ const ENTREE_TABLETTE_MS = 20 * 60 * 1000;
 // Proches gardés en attente d'invitation pendant une installation.
 const ATTENTE_MAX = 10;
 const ETAPES = ['photo', 'son', 'options', 'fini'];
+// Installation pas finie 30 minutes après le scan : le prochain proche qui scanne la reprend (Tanguy, 21/10).
+const REPRISE_MS = 30 * 60 * 1000;
 
 // Options montrées déjà réglées dans le récapitulatif (document du parcours, 21/10).
 const OPTIONS_PAR_DEFAUT = Object.freeze({
@@ -42,9 +44,9 @@ function texteCourt(v, max = 40) {
 }
 
 // Que faire quand un compte scanne le code d'une tablette (pure, testée).
-// p : pairing (ou null) ; uid : le compte qui scanne ; maintenant : ms.
-// → { etat: 'reserver' | 'reprendre' | 'occupe' | 'inconnu' | 'expire', par?, fid? }
-function decisionScan(p, uid, maintenant) {
+// p : pairing (ou null) ; uid : le compte qui scanne ; maintenant : ms ; finie : installation de la famille finie.
+// → { etat: 'reserver' | 'reprendre' | 'reprise' | 'occupe' | 'inconnu' | 'expire', par?, fid? }
+function decisionScan(p, uid, maintenant, finie = false) {
   if (!p) return { etat: 'inconnu' };
   const moi = p.claimedBy === uid;
   if (p.status === 'waiting') {
@@ -52,6 +54,8 @@ function decisionScan(p, uid, maintenant) {
   }
   if (p.status === 'reserved' || p.status === 'confirmed') {
     if (moi) return { etat: 'reprendre', fid: p.fid || null };
+    const depuis = ms(p.reservedAt);
+    if (!finie && depuis != null && maintenant - depuis >= REPRISE_MS) return { etat: 'reprise', fid: p.fid || null };
     return { etat: 'occupe', par: p.claimedName || null };
   }
   // claimed (ancien parcours), cancelled, refused : la tablette affichera un nouveau code.
@@ -78,7 +82,7 @@ async function villeAvecCoordonnees(ville, cp, chercher = fetch) {
   const simple = (t) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z]/g, '');
   try {
     const r = await chercher(`https://geo.api.gouv.fr/communes?codePostal=${cp}&fields=nom,centre&format=json`,
-      { signal: AbortSignal.timeout(4000) });
+      { signal: AbortSignal.timeout(2500) });
     const communes = (await r.json()).filter((c) => c.centre && c.centre.coordinates);
     const c = communes.find((x) => simple(x.nom) === simple(ville.nom)) || (communes.length === 1 ? communes[0] : null);
     if (!c) return ville;
@@ -96,7 +100,7 @@ function codeAuHasard() {
 
 // deps : { db, compteVerifie, envoyerMail, mail, appli, logger }
 function brancher(deps) {
-  const { db, compteVerifie, envoyerMail, mail, appli, logger } = deps;
+  const { db, compteVerifie, envoyerMail, mail, appli, logger, stockage } = deps;
 
   async function reserverTablette(request) {
     const { uid, email } = compteVerifie(request);
@@ -108,7 +112,26 @@ function brancher(deps) {
     return db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       const p = snap.exists ? snap.data() : null;
-      const d = decisionScan(p, uid, Date.now());
+      const famRef = p && p.fid ? db.doc(`families/${p.fid}`) : null;
+      const fam = famRef ? (await tx.get(famRef)).data() : null;
+      const finie = !!(famRef && (!fam || !fam.installation || fam.installation.etape === 'fini'));
+      const d = decisionScan(p, uid, Date.now(), finie);
+      if (d.etat === 'reprise') {
+        // Le premier proche s'est arrêté en route : ce compte reprend, rien n'est effacé.
+        tx.update(ref, {
+          claimedBy: uid, claimedName: prenom, claimedEmail: email, reservedAt: FieldValue.serverTimestamp(),
+          attente: (p.attente || []).filter((a) => a.uid !== uid),
+        });
+        if (famRef) {
+          tx.update(famRef, { createdBy: uid, rev: FieldValue.increment(1) });
+          tx.set(famRef.collection('members').doc(uid), {
+            name: prenom, role: 'famille', code: fam.code || null, joinedAt: FieldValue.serverTimestamp(),
+            uid, email, status: 'active', canCall: true,
+          }, { merge: true });
+        }
+        logger.info(`Installation ${code} reprise par ${uid} (avant : ${p.claimedBy})`);
+        return { etat: 'reserve', fid: d.fid };
+      }
       if (d.etat === 'reserver') {
         tx.update(ref, {
           status: 'reserved', claimedBy: uid, claimedName: prenom, claimedEmail: email,
@@ -138,6 +161,8 @@ function brancher(deps) {
 
   async function nommerFamille(request) {
     const { uid, email } = compteVerifie(request);
+    // Appel à vide pendant que le proche tape le nom : le serveur est démarré pour le vrai appel.
+    if (request.data && request.data.reveil) return { ok: true };
     const code = normaliserCode(request.data && request.data.code);
     const nom = texteCourt(request.data && request.data.nom);
     if (!code) throw new HttpsError('invalid-argument', 'Code de tablette manquant.');
@@ -152,7 +177,7 @@ function brancher(deps) {
       return null;
     });
     const ville = await villeAvecCoordonnees(villeDuRelais(commande), commande && commande.livraison && commande.livraison.cp);
-    return db.runTransaction(async (tx) => {
+    const r = await db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       const p = snap.data();
       if (!p || p.claimedBy !== uid || !['reserved', 'confirmed'].includes(p.status)) {
@@ -170,6 +195,9 @@ function brancher(deps) {
       tx.set(famille, {
         name: nom, code: invite, createdBy: uid, createdAt: FieldValue.serverTimestamp(),
         options: OPTIONS_PAR_DEFAUT, volumeSonnerie: VOLUME_SONNERIE, rev: 1,
+        // Ni l'app ni la tablette ne se mettent « en pause » pendant l'installation ; la commande
+        // reliée au jumelage (gestionJumelage) remplace ce statut, sinon « aucun » à la fin.
+        abonnement: { statut: 'installation', majLe: FieldValue.serverTimestamp() },
         ...(ville ? { meteoVille: ville } : {}),
         installation: { etape: 'photo', pairing: code, debut: FieldValue.serverTimestamp() },
       });
@@ -182,8 +210,33 @@ function brancher(deps) {
         status: 'confirmed', fid: famille.id, familyName: nom,
         expiresAt: Timestamp.fromMillis(Date.now() + ENTREE_TABLETTE_MS),
       });
-      return { fid: famille.id };
+      return { fid: famille.id, invite, nouvelle: true };
     });
+    // Le nom donné, la famille est validée (Tanguy, 22/10) : les proches en attente sont invités tout de suite.
+    if (r.nouvelle) {
+      await inviterAttente(r.fid, { name: nom, code: r.invite, installation: { pairing: code } }, uid)
+        .catch((e) => logger.error(`Installation ${r.fid} : invitations`, e));
+    }
+    return { fid: r.fid };
+  }
+
+  // Proches qui ont scanné pendant l'installation : invités par e-mail (entrée directe, rien à accepter).
+  async function inviterAttente(fid, fam, uid) {
+    const code = fam.installation && fam.installation.pairing;
+    const p = code ? (await db.doc(`pairings/${code}`).get()).data() : null;
+    const attente = ((p && p.attente) || []).filter((a) => a.email && a.uid !== uid);
+    if (!attente.length) return;
+    const lien = `${appli}?code=${String(fam.code).replace(/^(.{4})(.{4})$/, '$1-$2')}&pour=${encodeURIComponent(fam.name)}`;
+    const envois = attente.map(async (a) => {
+      const email = a.email.toLowerCase();
+      await db.doc(`families/${fid}/invitations/${email}`).set({
+        email, fid, familyName: fam.name, invitedBy: p.claimedName || null, createdAt: FieldValue.serverTimestamp(),
+      });
+      await envoyerMail(email, mail.invitation({ prenom: p.claimedName, tablette: fam.name, lien, email }));
+    });
+    (await Promise.allSettled(envois)).filter((r) => r.status === 'rejected')
+      .forEach((r) => logger.error(`Installation ${fid} : invitation non envoyée`, r.reason));
+    await db.doc(`pairings/${code}`).update({ attente: FieldValue.delete() }).catch(() => null);
   }
 
   async function finirInstallation(request) {
@@ -197,30 +250,82 @@ function brancher(deps) {
       throw new HttpsError('permission-denied', 'Réservé aux responsables de la famille.');
     }
     if (fam.installation && fam.installation.etape === 'fini') return { ok: true };
-    await ref.update({ 'installation.etape': 'fini', 'installation.fin': FieldValue.serverTimestamp() });
-    const code = fam.installation && fam.installation.pairing;
-    const p = code ? (await db.doc(`pairings/${code}`).get()).data() : null;
-    const attente = ((p && p.attente) || []).filter((a) => a.email && a.uid !== uid);
-    if (!attente.length) return { ok: true };
-    const lien = `${appli}?code=${String(fam.code).replace(/^(.{4})(.{4})$/, '$1-$2')}&pour=${encodeURIComponent(fam.name)}`;
-    const envois = attente.map(async (a) => {
-      const email = a.email.toLowerCase();
-      // L'invitation par e-mail fait entrer directement : le responsable n'a rien à accepter.
-      await db.doc(`families/${fid}/invitations/${email}`).set({
-        email, fid, familyName: fam.name, invitedBy: p.claimedName || null, createdAt: FieldValue.serverTimestamp(),
-      });
-      await envoyerMail(email, mail.invitation({ prenom: p.claimedName, tablette: fam.name, lien, email }));
-    });
-    (await Promise.allSettled(envois)).filter((r) => r.status === 'rejected')
-      .forEach((r) => logger.error(`Installation ${fid} : invitation non envoyée`, r.reason));
-    await db.doc(`pairings/${code}`).update({ attente: FieldValue.delete() }).catch(() => null);
+    const maj = { 'installation.etape': 'fini', 'installation.fin': FieldValue.serverTimestamp() };
+    // Aucune commande reliée pendant l'installation (tablette hors commande) : abonnement à régler.
+    if (fam.abonnement && fam.abonnement.statut === 'installation') {
+      maj.abonnement = { statut: 'aucun', majLe: FieldValue.serverTimestamp() };
+      maj.rev = FieldValue.increment(1);
+    }
+    await ref.update(maj);
+    await inviterAttente(fid, fam, uid);
     return { ok: true };
   }
 
-  return { reserverTablette, nommerFamille, finirInstallation };
+  // « Annuler l'installation » (le premier proche, avant « C'est parfait ») : tout ce qui a été fait part,
+  // et la tablette peut être réinstallée avec un autre téléphone ou un autre nom.
+  // Avant le nom ({ code }) : la réservation est rendue. Après ({ fid }) : la famille est effacée,
+  // sauf si un abonnement payant y est déjà relié (on ne touche jamais à Stripe ici).
+  async function annulerInstallation(request) {
+    const { uid } = compteVerifie(request);
+    const data = request.data || {};
+    const code = normaliserCode(data.code);
+    if (!data.fid && code) {
+      const ref = db.doc(`pairings/${code}`);
+      await db.runTransaction(async (tx) => {
+        const p = (await tx.get(ref)).data();
+        if (!p || p.claimedBy !== uid || p.status !== 'reserved') return;
+        tx.update(ref, {
+          status: 'waiting', claimedBy: FieldValue.delete(), claimedName: FieldValue.delete(),
+          claimedEmail: FieldValue.delete(), reservedAt: FieldValue.delete(), attente: FieldValue.delete(),
+          expiresAt: Timestamp.fromMillis(Date.now() + ENTREE_TABLETTE_MS),
+        });
+      });
+      return { ok: true };
+    }
+    const fid = data.fid;
+    if (typeof fid !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(fid)) throw new HttpsError('invalid-argument', 'Famille manquante.');
+    const ref = db.doc(`families/${fid}`);
+    const fam = (await ref.get()).data();
+    if (!fam) return { ok: true };
+    const refus = refusAnnulation(fam, uid);
+    if (refus) throw new HttpsError('failed-precondition', refus);
+    // Fichiers d'abord : si la base échoue ensuite, un nouvel essai finit le travail.
+    if (stockage) await stockage().deleteFiles({ prefix: `families/${fid}/`, force: true });
+    await db.recursiveDelete(ref);
+    if (fam.code) await db.doc(`invites/${fam.code}`).delete().catch(() => null);
+    const [jumelages, commandes, fiches] = await Promise.all([
+      db.collection('pairings').where('fid', '==', fid).get(),
+      db.collection('commandes').where('fid', '==', fid).get(),
+      db.collection('stock').where('fid', '==', fid).get(),
+    ]);
+    await Promise.all([
+      ...jumelages.docs.map((d) => d.ref.delete()),
+      // La commande et la tablette se relieront à la famille de la prochaine installation.
+      ...commandes.docs.map((d) => d.ref.update({ fid: FieldValue.delete() })),
+      ...fiches.docs.map((d) => d.ref.update({ fid: FieldValue.delete(), jumeleeLe: FieldValue.delete() })),
+    ]);
+    await db.collection('suppressions').add({
+      fid, nom: fam.name || null, membres: 1, le: Date.now(), par: uid, motif: 'installation annulée',
+    });
+    logger.info(`Installation de ${fid} annulée par ${uid}`);
+    return { ok: true };
+  }
+
+  return { reserverTablette, nommerFamille, finirInstallation, annulerInstallation };
+}
+
+// Raison de refuser « Annuler l'installation », ou null (pure, testée).
+function refusAnnulation(fam, uid) {
+  if (fam.createdBy !== uid) return "Seule la personne qui installe la tablette peut annuler l'installation.";
+  if (!fam.installation || fam.installation.etape === 'fini') return "L'installation est déjà finie.";
+  const abo = fam.abonnement || {};
+  if (abo.stripeSubscriptionId || !['installation', 'aucun'].includes(abo.statut || 'aucun')) {
+    return "Votre commande est déjà reliée à cette famille : écrivez-nous à contact@mapapote.fr pour recommencer l'installation.";
+  }
+  return null;
 }
 
 module.exports = {
   brancher,
-  regles: { decisionScan, villeDuRelais, villeAvecCoordonnees, normaliserCode, OPTIONS_PAR_DEFAUT, ETAPES },
+  regles: { decisionScan, refusAnnulation, REPRISE_MS, villeDuRelais, villeAvecCoordonnees, normaliserCode, OPTIONS_PAR_DEFAUT, ETAPES },
 };

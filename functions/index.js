@@ -23,6 +23,7 @@
 //   reserverTablette   appel depuis l'appli famille : le premier proche scanne la tablette (installation.js)
 //   nommerFamille      appel depuis l'appli famille : « Comment l'appelez-vous ? » crée la famille (installation.js)
 //   finirInstallation  appel depuis l'appli famille : fin de l'installation, invitations (installation.js)
+//   annulerInstallation appel depuis l'appli famille : « Annuler l'installation » efface la famille (installation.js)
 //   rappelsJumelage    chaque jour : rappel au client dont la tablette n'est pas jumelée (J+5, J+12)
 //   coupeCircuit       avis du budget Google Cloud : e-mail à 30 € et 100 €, facturation coupée à 150 € (budget.js)
 //   jetonAppCheck      POST depuis la tablette : jeton App Check contre sa clé d'installation (appcheck.js)
@@ -1210,27 +1211,53 @@ async function mailEnvoi(event, avant, apres) {
   }
 }
 
+// « X a résilié son abonnement » à Papote, avec le suivi du colis de retour s'il existe déjà.
+async function avisResiliation(id, c, retractation) {
+  const retour = (c.etiquettes && c.etiquettes.retour) || {};
+  try {
+    await envoyerMail(EMAIL_PAPOTE, mail.resiliation({
+      nom: c.nom, email: c.email, code: c.code ? regles.afficherCode(c.code) : null, commande: id, retractation,
+      suivi: retour.suivi || null, lienSuivi: retour.lienSuivi || null,
+    }));
+  } catch (e) {
+    logger.error(`Commande ${id} : avis de résiliation non parti`, e.message);
+  }
+}
+
 async function suiviRetour(event, rAvant, r, c) {
   const ref = event.data.after.ref;
   const id = event.params.id;
   const retractation = c.remboursement && c.remboursement.statut === 'au-retour' ? c.remboursement.montant : null;
 
+  // Tablette attendue : le client reçoit UN seul e-mail, le mode d'emploi avec l'étiquette à coller. Avec la
+  // vraie clé Stripe, l'étiquette est créée la nuit suivante (gestionAutomatique) et cet e-mail part avec elle
+  // (plus bas). En mode test, aucune étiquette n'est créée : le mode d'emploi part seul, tout de suite.
   if (r.statut === 'attendue' && rAvant.statut !== 'attendue' && !r.mailLe) {
     await ref.update({ 'restitution.mailLe': FieldValue.serverTimestamp() });
-    const avantMs = r.avant.toMillis();
-    const envois = [envoyerMail(EMAIL_PAPOTE, mail.retourAPreparer({
-      nom: c.nom, email: c.email, telephone: c.telephone, code: c.code ? regles.afficherCode(c.code) : null,
-      relais: c.livraison, avant: avantMs, retractation,
-    }))];
-    if (c.email) envois.push(envoyerMail(c.email, mail.retourTablette({ nom: c.nom, avant: avantMs, retractation, montant: regles.penaliteRestitution(c) })));
-    (await Promise.allSettled(envois)).filter((x) => x.status === 'rejected')
-      .forEach((x) => logger.error(`Commande ${id} : e-mail de retour non parti`, x.reason));
+    const etiquetteAutomatique = STRIPE_SECRET.value().startsWith('sk_live_') && c.expedition === 'envoyee';
+    // L'avis à Papote part avec le suivi du colis de retour quand l'étiquette sera créée (plus bas) ;
+    // sans étiquette automatique (mode test), il part tout de suite, sans suivi.
+    if (!etiquetteAutomatique) await avisResiliation(id, c, retractation);
+    if (c.email && !r.etiquette && !etiquetteAutomatique) {
+      try {
+        await envoyerMail(c.email, mail.retourTablette({ nom: c.nom, avant: r.avant.toMillis(), retractation, montant: regles.penaliteRestitution(c) }));
+      } catch (e) {
+        logger.error(`Commande ${id} : e-mail de retour non parti`, e.message);
+      }
+    }
+  }
+
+  const finDeContrat = ['attendue', 'echec'].includes(r.statut);
+  if (r.etiquette && r.etiquette !== rAvant.etiquette && finDeContrat && !r.avisLe) {
+    await ref.update({ 'restitution.avisLe': FieldValue.serverTimestamp() });
+    await avisResiliation(id, c, retractation);
   }
 
   if (r.etiquette && r.etiquette !== rAvant.etiquette && c.email) {
     try {
       await envoyerMail(c.email, mail.etiquetteRetour({
         nom: c.nom, lien: r.etiquette, avant: r.avant ? r.avant.toMillis() : null,
+        fin: ['attendue', 'echec'].includes(r.statut), retractation, montant: regles.penaliteRestitution(c),
       }));
     } catch (e) {
       logger.error(`Commande ${id} : étiquette de retour non envoyée`, e.message);
@@ -1328,11 +1355,12 @@ exports.gestionJumelage = gestion.gestionJumelage;
 
 // Installation d'une nouvelle tablette depuis le téléphone du premier proche (installation.js).
 const installation = require('./installation').brancher({
-  db, compteVerifie, envoyerMail, mail, appli: APPLI_FAMILLE, logger,
+  db, compteVerifie, envoyerMail, mail, appli: APPLI_FAMILLE, logger, stockage: () => admin.storage().bucket(base.BUCKET_STORAGE),
 });
 exports.reserverTablette = onCall({ maxInstances: 2 }, installation.reserverTablette);
-exports.nommerFamille = onCall({ maxInstances: 2 }, installation.nommerFamille);
+exports.nommerFamille = onCall({ secrets: [MAIL_MOT_DE_PASSE], maxInstances: 2 }, installation.nommerFamille);
 exports.finirInstallation = onCall({ secrets: [MAIL_MOT_DE_PASSE], maxInstances: 2 }, installation.finirInstallation);
+exports.annulerInstallation = onCall({ timeoutSeconds: 300, memory: '512MiB', maxInstances: 2 }, installation.annulerInstallation);
 
 // Nombre de proches d'une famille (membres « famille » qui ont rejoint), lu par les règles
 // Firestore pour refuser un 31e proche. Recalculé à chaque arrivée, départ ou changement de membre.

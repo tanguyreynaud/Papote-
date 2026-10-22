@@ -163,12 +163,21 @@ function retourTablette({ nom, avant, retractation, montant }) {
   ]);
 }
 
-function etiquetteRetour({ nom, lien, avant }) {
-  return message('Votre étiquette de retour Papote', [
+// fin : abonnement terminé ou commande annulée (le seul e-mail de retour, avec le mode d'emploi) ;
+// sinon remplacement d'un élément du kit.
+function etiquetteRetour({ nom, lien, avant, fin, retractation, montant }) {
+  return message(fin ? 'Comment nous rendre la tablette Papote' : 'Votre étiquette de retour Papote', [
     bonjour(nom),
-    'Voici l\'étiquette prépayée pour nous renvoyer la tablette. Imprimez-la avec le bouton ci-dessous (un point relais peut aussi l\'imprimer pour vous si vous montrez cet e-mail).',
+    fin ? (retractation != null
+      ? 'Votre commande est bien annulée. Il reste à nous renvoyer la tablette.'
+      : 'Votre abonnement Papote est terminé. Merci de nous avoir fait confiance ! La tablette est prêtée : il reste à nous la renvoyer.') : '',
+    'Voici l\'étiquette prépayée pour nous renvoyer la tablette : vous n\'avez rien à payer. Imprimez-la avec le bouton ci-dessous (un point relais peut aussi l\'imprimer pour vous si vous montrez cet e-mail).',
     `${COMMENT_RENDRE}${avant ? ` Date limite : <b>${dateEnClair(avant)}</b>.` : ''}`,
-  ], { texte: 'Imprimer l\'étiquette', lien });
+    fin && retractation != null && retractation > 0
+      ? `Dès que la tablette nous parvient, nous vous remboursons <b>${euros(retractation)}</b> sur votre compte.` : '',
+    fin && (retractation == null || retractation <= 0) && montant
+      ? `Sans retour à cette date, ${euros(montant)} seront prélevés sur votre compte. Chaque élément manquant est facturé : tablette 130 €, chargeur et câble 10 €, enceinte 10 € si elle était dans le colis.` : '',
+  ].filter(Boolean), { texte: 'Imprimer l\'étiquette', lien });
 }
 
 function rappelRestitution({ nom, avant, lien, montant }) {
@@ -242,14 +251,15 @@ function sepaRefuse({ nom, email, papote }) {
   ], { texte: 'Commander à nouveau', lien: 'https://mapapote.fr/commande.html' });
 }
 
-// Prévient Papote qu'une étiquette de retour est à créer.
-function retourAPreparer({ nom, email, telephone, code, relais, avant, retractation }) {
-  return message(`Retour à préparer ${code || ''}`.trim(), [
-    `Client : <b>${echapper(nom || '?')}</b>, ${echapper(email || 'sans e-mail')}${telephone ? `, ${echapper(telephone)}` : ''}.`,
-    retractation != null ? `Rétractation : ${euros(retractation)} à rembourser au retour (automatique).` : 'Fin d\'abonnement.',
-    relais && relais.transporteur ? `Point relais d'origine : ${relaisEnTexte(relais)}.` : '',
-    `Tablette attendue avant le ${dateEnClair(avant)}. Créez l'étiquette de retour prépayée, puis collez son lien dans le tableau de bord (« Étiquette de retour »).`,
-  ].filter(Boolean));
+// Prévient Papote d'une résiliation (ou d'une commande annulée après l'envoi) : la page de la commande en lien.
+function resiliation({ nom, email, code, commande, retractation, suivi, lienSuivi }) {
+  const qui = nom || email || 'Un client';
+  return message(`${qui} a ${retractation != null ? 'annulé sa commande' : 'résilié son abonnement'}${code ? ` (commande ${code})` : ''}`, [
+    `<b>${echapper(qui)}</b>${email && nom ? ` (${echapper(email)})` : ''} a ${retractation != null ? 'annulé sa commande après l\'envoi' : 'résilié son abonnement'}.`,
+    lienSuivi
+      ? `Le client a reçu le mode d'emploi et l'étiquette de retour. Suivi du colis de retour : <a href="${echapper(lienSuivi)}">${echapper(suivi || 'suivre le colis')}</a> (aussi sur la page de la commande).`
+      : 'Le client reçoit par e-mail le mode d\'emploi du retour. Le suivi du colis apparaîtra sur la page de la commande.',
+  ], { texte: 'Ouvrir la commande', lien: `https://app.mapapote.fr/admin.html#commande/${encodeURIComponent(commande)}` });
 }
 
 // smtp : « hote:port:utilisateur » (MAIL_SMTP), expediteur : adresse affichée (MAIL_EXPEDITEUR).
@@ -268,6 +278,6 @@ async function envoyer({ smtp, motDePasse, expediteur, a, contenu }) {
 
 module.exports = {
   colisParti, commandeConfirmee, nouvelleCommande, relancePanier, lancement, sepaRefuse, invitation, demandeRejoindre, rappelJumelage,
-  retourTablette, etiquetteRetour, rappelRestitution, tabletteRecue, commandeAnnulee, annulationAvantEnvoi, retourAPreparer,
+  retourTablette, etiquetteRetour, rappelRestitution, tabletteRecue, commandeAnnulee, annulationAvantEnvoi, resiliation,
   envoyer, echapper, euros,
 };

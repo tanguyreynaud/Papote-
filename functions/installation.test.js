@@ -41,3 +41,25 @@ test('coordonnées de la ville du point relais', async () => {
   assert.deepStrictEqual(await r.villeAvecCoordonnees({ nom: 'Lyon' }, null), { nom: 'Lyon' });
   assert.strictEqual(await r.villeAvecCoordonnees(null, '69006'), null);
 });
+
+test('Annuler l\'installation : seulement le premier proche, avant la fin, sans abonnement payant', () => {
+  const fam = { createdBy: 'u1', installation: { etape: 'son' }, abonnement: { statut: 'installation' } };
+  assert.equal(r.refusAnnulation(fam, 'u1'), null);
+  assert.equal(r.refusAnnulation({ ...fam, abonnement: { statut: 'aucun' } }, 'u1'), null);
+  assert.match(r.refusAnnulation(fam, 'u2'), /Seule la personne/);
+  assert.match(r.refusAnnulation({ ...fam, installation: { etape: 'fini' } }, 'u1'), /déjà finie/);
+  assert.match(r.refusAnnulation({ ...fam, abonnement: { statut: 'actif', stripeSubscriptionId: 'sub_1' } }, 'u1'), /contact@/);
+  assert.match(r.refusAnnulation({ ...fam, abonnement: { statut: 'offert' } }, 'u1'), /contact@/);
+});
+
+test('installation pas finie 30 minutes après le scan : un autre proche la reprend', () => {
+  const t = 10_000_000;
+  const p = { status: 'reserved', claimedBy: 'a', claimedName: 'Julie', reservedAt: t - r.REPRISE_MS + 1 };
+  assert.deepStrictEqual(r.decisionScan(p, 'b', t), { etat: 'occupe', par: 'Julie' });
+  assert.deepStrictEqual(r.decisionScan({ ...p, reservedAt: t - r.REPRISE_MS }, 'b', t), { etat: 'reprise', fid: null });
+  const conf = { ...p, status: 'confirmed', fid: 'F1', reservedAt: t - r.REPRISE_MS * 3 };
+  assert.deepStrictEqual(r.decisionScan(conf, 'b', t), { etat: 'reprise', fid: 'F1' });
+  // Finie : plus personne ne reprend ; le premier proche reprend toujours chez lui.
+  assert.deepStrictEqual(r.decisionScan(conf, 'b', t, true), { etat: 'occupe', par: 'Julie' });
+  assert.deepStrictEqual(r.decisionScan(conf, 'a', t), { etat: 'reprendre', fid: 'F1' });
+});

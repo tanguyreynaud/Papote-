@@ -764,6 +764,9 @@ async function remplacer(d, qui) {
     if (!sim.exists || sim.get('tablette') || sim.get('statut') === 'resiliee') {
       throw new HttpsError('failed-precondition', 'Choisissez une carte SIM libre.');
     }
+    if (!sim.get('numero') && !sim.get('iccid')) {
+      throw new HttpsError('failed-precondition', "Notez d'abord le numéro ou l'ICCID de cette carte SIM.");
+    }
     const ancienne = kit.get('simId');
     if (ancienne) await enregistrerSim(ancienne, { statut: 'suspendue', tablette: null }, qui);
     await enregistrerSim(sim.id, { tablette: kit.id, statut: 'active', activation: sim.get('activation') || Date.now() }, qui);
@@ -1004,6 +1007,11 @@ async function enregistrerSim(id, c, qui) {
   let tablette = 'tablette' in c ? texte(c.tablette, 100) : avant.tablette || null;
   if (ligne.statut === 'resiliee') tablette = null;
   if (tablette) {
+    // Une carte sans numéro ni ICCID ne se retrouverait plus : pas de tablette tant qu'elle n'est pas identifiée
+    // (une carte déjà dans une tablette peut toujours passer dans sa remplaçante).
+    if (!ligne.numero && !ligne.iccid && !avant.tablette) {
+      throw new HttpsError('failed-precondition', "Notez d'abord le numéro ou l'ICCID de cette carte SIM : une carte sans identifiant ne peut pas aller dans une tablette.");
+    }
     const t = await db().doc(`stock/${tablette}`).get();
     if (!t.exists) throw new HttpsError('not-found', 'Tablette introuvable.');
     const autre = t.get('simId');
@@ -1625,6 +1633,27 @@ async function etiquettesRetour(bilan) {
 
 // « Le client a reçu le colis » d'après le suivi Sendcloud. Une commande déjà jumelée a quitté la liste
 // des colis en route : rien à cocher.
+// Colis de retour en cours : n° de suivi, lien et étape (« déposé au point relais »…) mis à jour chaque nuit.
+async function retoursEnCours(bilan) {
+  const attendues = await db().collection('commandes').where('restitution.statut', '==', 'attendue').get();
+  const aSuivre = attendues.docs.filter((d) => d.get('etiquettes.retour.colis'));
+  if (!aSuivre.length) return;
+  const api = sendcloud.client(SENDCLOUD_API.value());
+  for (const snap of aSuivre) {
+    try {
+      const s = await api.suivi(snap.get('etiquettes.retour.colis'));
+      await snap.ref.update({
+        'etiquettes.retour.suivi': s.suivi || snap.get('etiquettes.retour.suivi') || null,
+        'etiquettes.retour.lienSuivi': s.lien || snap.get('etiquettes.retour.lienSuivi') || null,
+        'etiquettes.retour.etape': s.etape || null,
+        'etiquettes.retour.livre': s.livre,
+      });
+    } catch (e) {
+      bilan.erreurs.push(`Suivi du retour de ${snap.get('nom') || snap.id} : ${e.message}`);
+    }
+  }
+}
+
 async function colisLivres(bilan) {
   const enRoute = await db().collection('commandes').where('expedition', '==', 'envoyee').where('fid', '==', null).get();
   const aSuivre = enRoute.docs.filter((d) => !d.get('preparation.recuLe') && d.get('etiquettes.aller.colis'));
@@ -1652,6 +1681,7 @@ async function automatiser(qui) {
   await avoirsRemboursements(maintenant - FENETRE, bilan);
   await etiquettesRetour(bilan).catch((e) => bilan.erreurs.push(`Étiquettes de retour : ${e.message}`));
   await colisLivres(bilan).catch((e) => bilan.erreurs.push(`Suivi des colis : ${e.message}`));
+  await retoursEnCours(bilan).catch((e) => bilan.erreurs.push(`Suivi des retours : ${e.message}`));
   await db().doc('gestion/automatique').set({ ...bilan, le: maintenant, par: qui });
   if (bilan.erreurs.length) logger.warn('Automatismes de gestion', bilan.erreurs);
   return bilan;
@@ -1738,7 +1768,10 @@ async function creerEtiquette(commande, sens, qui) {
   }
   const r = await api.retour({ de: cl.adresse, vers: papote, poids, reference });
   const url = await rangerEtiquette(commande, 'retour', r.colis, r.pdf);
-  const maj = { 'etiquettes.retour': { colis: r.colis, url, le: Date.now(), par: qui } };
+  // N° et lien de suivi du retour, pour le suivre depuis l'admin et l'avis de résiliation.
+  const suivi = await api.suivi(r.colis).catch(() => ({}));
+  const maj = { 'etiquettes.retour': { colis: r.colis, url, le: Date.now(), par: qui,
+    suivi: suivi.suivi || null, lienSuivi: suivi.lien || null, etape: suivi.etape || null } };
   const attendue = c.restitution && ['attendue', 'echec'].includes(c.restitution.statut);
   if (attendue) {
     // Fin de contrat : l'e-mail au client part avec commandeModifiee, comme une étiquette collée à la main.
@@ -2754,6 +2787,9 @@ exports.gestionSupprimerFamille = onCall({ timeoutSeconds: 540, memory: '512MiB'
   // Fichiers d'abord : si la base échoue ensuite, un nouvel essai finit le travail.
   await stockage().deleteFiles({ prefix: `families/${fid}/`, force: true });
   await db().recursiveDelete(ref);
+  // Jumelages de cette famille : sans eux, le rattrapage de nuit ne relie plus la tablette à une famille disparue.
+  const jumelages = await db().collection('pairings').where('fid', '==', fid).get();
+  await Promise.all(jumelages.docs.map((d) => d.ref.delete()));
   const commandes = await db().collection('commandes').where('fid', '==', fid).get();
   await Promise.all(commandes.docs.map((d) => d.ref.update({ familleSupprimeeLe: Date.now() })));
   await db().collection('suppressions').add({

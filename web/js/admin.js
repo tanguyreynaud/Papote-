@@ -2,7 +2,7 @@
 // transfert des anciennes photos et vidéos vers Storage. Le stock, les factures et la comptabilité
 // sont dans gestion.js, sur la même page.
 // Une app Firebase à part (« admin ») : la connexion Google ne touche pas à la famille de ce navigateur.
-import { demander, saisir, prevenir } from './dialogue.js';
+import { demander, saisir, prevenir, menuPoints } from './dialogue.js';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
 import {
   getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut,
@@ -117,6 +117,9 @@ function orderHead(c) {
   return `${c.nom || c.email} · ${c.formule === 'sim' ? 'carte SIM' : 'Wi-Fi'}, tablette ${c.tablette === 'incluse' ? 'incluse' : 'achetée'}`;
 }
 
+// Matériel non rendu : mêmes prix que le serveur (abonnement.js, PRIX_MATERIEL) et les conditions de vente.
+const prix = { tablette: 130, chargeur: 10, enceinte: 10 };
+
 // Tablettes à envoyer : chaque commande se prépare pas à pas (parcours), sans rien oublier.
 async function loadOrders() {
   try {
@@ -125,8 +128,6 @@ async function loadOrders() {
       .sort((a, b) => (toDate(a.creeLe)?.getTime() || 0) - (toDate(b.creeLe)?.getTime() || 0));
     $('orders-empty').hidden = list.length > 0;
     $('orders').replaceChildren(...list.map((c) => {
-      // Mêmes prix que le serveur (abonnement.js, PRIX_MATERIEL) et les conditions de vente.
-      const prix = { tablette: 130, chargeur: 10, enceinte: 10 };
       const li = document.createElement('li');
       li.innerHTML = '<strong></strong><span class="muted small"></span><span class="small adresse"></span>'
         + '<div class="envoi-suite"><span class="small avancement"></span><button type="button" class="primary small-btn"></button></div>';
@@ -454,9 +455,23 @@ async function loadShipped() {
 // Tablettes incluses à rendre après la fin d'un abonnement (restitution écrite par le serveur).
 async function loadReturns() {
   try {
-    const snap = await getDocs(query(collection(db, 'commandes'), where('restitution.statut', 'in', ['attendue', 'echec'])));
-    $('returns-empty').hidden = !snap.empty;
-    $('returns').replaceChildren(...snap.docs.map((d) => {
+    // Même règle que le compteur de l'accueil (etatCommande, gestion.js) : retour attendu ou échoué,
+    // commande non annulée. Une commande comptée par le serveur mais absente de la requête est lue directement.
+    const aRendre = (c) => c && c.restitution && ['attendue', 'echec'].includes(c.restitution.statut) && c.expedition !== 'annulee';
+    const trouvees = new Map();
+    try {
+      const snap = await getDocs(query(collection(db, 'commandes'), where('restitution.statut', 'in', ['attendue', 'echec'])));
+      for (const d of snap.docs) if (aRendre(d.data())) trouvees.set(d.id, d);
+    } catch (err) { console.warn('Restitutions illisibles', err); }
+    const serveur = await donnees().then((x) => x.commandes || []).catch(() => []);
+    for (const c of serveur.filter(aRendre)) {
+      if (trouvees.has(c.id)) continue;
+      const d = await getDoc(doc(db, 'commandes', c.id)).catch(() => null);
+      if (d && d.exists()) trouvees.set(c.id, d);
+    }
+    const docs = [...trouvees.values()];
+    $('returns-empty').hidden = docs.length > 0;
+    $('returns').replaceChildren(...docs.map((d) => {
       const c = d.data();
       const r = c.restitution || {};
       const avant = toDate(r.avant);
@@ -585,6 +600,7 @@ async function load() {
         hasTablet: list.length > 0,
         online: latest('lastOnline'),
         active: latest('lastActive'),
+        installee: latest('joinedAt'),
         version: list.map((t) => t.appVersion).filter(Boolean).sort().pop() || null,
       };
     }));
@@ -610,30 +626,25 @@ async function showPending(f, li) {
   box.className = 'replace';
   for (const d of snap.docs) {
     const m = d.data();
-    const row = document.createElement('p');
-    row.className = 'small pending-row';
-    row.textContent = `En attente : ${m.name}${m.email ? ` (${m.email})` : ''} `;
-    const ok = document.createElement('button');
+    const row = el('div', 'membre-ligne');
+    const nom = el('span', 'membre-nom', m.name);
+    nom.append(el('small', null, `Veut rejoindre la famille${m.email ? ` · ${m.email}` : ''}`));
+    const ok = el('button', 'secondary small-btn', 'Accepter');
     ok.type = 'button';
-    ok.className = 'link small';
-    ok.textContent = 'Accepter';
-    const owner = document.createElement('button');
-    owner.type = 'button';
-    owner.className = 'link small';
-    owner.textContent = 'Accepter comme propriétaire';
     const accept = async (asOwner) => {
       try {
         await updateDoc(d.ref, { status: 'active' });
         if (asOwner) await updateDoc(doc(db, 'families', f.id), { createdBy: d.id });
-        row.textContent = asOwner ? `${m.name} est maintenant propriétaire.` : `${m.name} a été accepté.`;
+        row.replaceChildren(el('span', 'membre-nom', asOwner ? `${m.name} est maintenant propriétaire.` : `${m.name} a été accepté.`));
       } catch (err) {
         console.error(err);
         prevenir("L'opération a échoué.");
       }
     };
-    ok.addEventListener('click', () => accept(false));
-    owner.addEventListener('click', async () => { if (await demander(`Faire de ${m.name} le propriétaire de la famille de ${f.name} ?`)) accept(true); });
-    row.append(ok, ' · ', owner);
+    ok.addEventListener('click', async () => { if (await demander(`Accepter ${m.name} dans la famille de ${f.name} ?`, { oui: 'Accepter' })) accept(false); });
+    row.append(nom, ok, menuPoints([
+      { libelle: 'Accepter comme propriétaire', faire: async () => { if (await demander(`Accepter ${m.name} et en faire le propriétaire de la famille de ${f.name} ?`)) accept(true); } },
+    ], `Actions pour ${m.name}`));
     box.append(row);
   }
   li.append(box);
@@ -664,41 +675,36 @@ async function toggleMembers(f, li) {
   const act = async (fn) => {
     try { await fn(); rerender(); } catch (err) { console.error(err); prevenir("L'opération a échoué."); }
   };
-  const button = (label, onClick, danger) => {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = `link small${danger ? ' danger' : ''}`;
-    b.textContent = label;
-    b.addEventListener('click', onClick);
-    return b;
-  };
   const famRef = doc(db, 'families', f.id);
   const rows = snap.docs.filter((d) => d.data().status !== 'pending').map((d) => {
     const m = d.data();
     const isOwner = data.createdBy === d.id;
     const isResp = isOwner || admins.has(d.id);
-    const row = document.createElement('p');
-    row.className = 'small pending-row';
-    row.textContent = `${m.name}${m.email ? ` (${m.email})` : ''}${isOwner ? ' · propriétaire' : isResp ? ' · responsable' : ''} `;
+    const row = el('div', 'membre-ligne');
+    const nom = el('span', 'membre-nom', m.name);
+    nom.append(el('small', null, [isOwner ? 'Propriétaire' : isResp ? 'Responsable' : 'Proche', m.email].filter(Boolean).join(' · ')));
+    row.append(nom);
     if (isOwner) return row;
-    const parts = [
-      button(isResp ? 'Retirer responsable' : 'Rendre responsable', () => act(() => {
-        const next = new Set(admins);
-        if (isResp) next.delete(d.id); else next.add(d.id);
-        return updateDoc(famRef, { admins: [...next] });
-      })),
-      button('Faire propriétaire', async () => {
+    row.append(menuPoints([
+      { libelle: isResp ? 'Ne plus le rendre responsable' : 'Rendre responsable', faire: async () => {
+        if (!await demander(isResp ? `${m.name} ne sera plus responsable de la famille de ${f.name}.` : `Rendre ${m.name} responsable de la famille de ${f.name} ?`)) return;
+        act(() => {
+          const next = new Set(admins);
+          if (isResp) next.delete(d.id); else next.add(d.id);
+          return updateDoc(famRef, { admins: [...next] });
+        });
+      } },
+      { libelle: 'Faire propriétaire', faire: async () => {
         if (await demander(`Faire de ${m.name} le propriétaire de la famille de ${f.name} ?`)) act(() => updateDoc(famRef, { createdBy: d.id }));
-      }),
-      button('Retirer', async () => {
+      } },
+      { libelle: 'Retirer de la famille', danger: true, faire: async () => {
         if (!await demander(`Retirer ${m.name} de la famille de ${f.name} ?`, { oui: 'Retirer', danger: true })) return;
         act(async () => {
           if (admins.has(d.id)) { const next = new Set(admins); next.delete(d.id); await updateDoc(famRef, { admins: [...next] }); }
           await deleteDoc(d.ref);
         });
-      }, true),
-    ];
-    parts.forEach((p, i) => row.append(...(i ? [' · ', p] : [p])));
+      } },
+    ], `Actions pour ${m.name}`));
     return row;
   });
   out.replaceChildren(...(rows.length ? rows : [Object.assign(document.createElement('p'), { className: 'small muted', textContent: 'Aucun proche.' })]));
@@ -709,7 +715,7 @@ async function toggleMembers(f, li) {
 const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 async function prepareReplacement(f, li) {
   const out = li.querySelector('.replace-out');
-  if (!await demander(`Préparer une tablette de remplacement pour la famille de ${f.name} ?`, { oui: 'Préparer' })) return;
+  if (!await demander(`Tablette cassée ou perdue : un code permet d'installer une nouvelle tablette directement dans la famille de ${f.name}, sans rien refaire.\n\nPréparer ce code ?`, { oui: 'Préparer' })) return;
   const bytes = crypto.getRandomValues(new Uint8Array(8));
   const code = Array.from(bytes, (b) => CODE_ALPHABET[b % CODE_ALPHABET.length]).join('');
   try {
@@ -723,10 +729,10 @@ async function prepareReplacement(f, li) {
   out.hidden = false;
   out.innerHTML = '';
   const p1 = document.createElement('p');
-  p1.textContent = `Installez la nouvelle tablette avec : installer-tablette.ps1 -Code ${shown}`;
+  p1.textContent = `Tablette de remplacement : installez-la avec installer-tablette.ps1 -Code ${shown}`;
   const btn = document.createElement('button');
   btn.type = 'button';
-  btn.className = 'link danger small';
+  btn.className = 'secondary small-btn danger';
   btn.textContent = "Retirer l'ancienne tablette de la famille";
   btn.addEventListener('click', () => removeOldTablets(f, btn));
   out.append(p1, btn);
@@ -761,7 +767,8 @@ async function supprimerFamille(f, li, btn) {
   const simple = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().replace(/\s+/g, ' ').toLowerCase();
   if (!simple(nom) || simple(nom) !== simple(f.name)) { prevenir('Le nom ne correspond pas : rien n\'a été supprimé.'); return; }
   btn.disabled = true;
-  btn.textContent = 'Suppression…';
+  const attente = el('p', 'muted small', 'Suppression en cours…');
+  li.append(attente);
   try {
     await appeler('gestionSupprimerFamille', { fid: f.id, nom });
     families = families.filter((x) => x.id !== f.id);
@@ -770,9 +777,9 @@ async function supprimerFamille(f, li, btn) {
     render();
     prevenir(`La famille « ${f.name} » et toutes ses données sont supprimées.`);
   } catch (err) {
+    attente.remove();
     prevenir(`Suppression impossible : ${err.message}`);
     btn.disabled = false;
-    btn.textContent = 'Supprimer la famille et toutes ses données';
   }
 }
 
@@ -783,7 +790,13 @@ function state(f) {
 }
 
 let vueFamilles = null; // onglet de la liste des familles (off, on, idle, none, toutes)
-const pasTouchee = (f) => f.hasTablet && (!f.active || Date.now() - f.active.getTime() > IDLE_MS);
+// Pas touchée depuis 24 h : compté depuis le dernier toucher, ou depuis l'installation (ou la création
+// de la famille) si personne ne l'a encore touchée ; une tablette installée aujourd'hui n'y est donc pas.
+const pasTouchee = (f) => {
+  if (!f.hasTablet) return false;
+  const depuis = f.active || f.installee || toDate(f.createdAt);
+  return !!depuis && Date.now() - depuis.getTime() > IDLE_MS;
+};
 const dansVue = (f) => vueFamilles === 'toutes' || (vueFamilles === 'idle' ? pasTouchee(f) : state(f).cls === vueFamilles);
 
 // Chiffres de l'accueil : chacun ouvre la liste des familles correspondante.
@@ -824,7 +837,8 @@ function carteFamille(f) {
   const s = state(f);
   const tete = el('li', `family card ${s.cls}`);
   const titre = el('div', 'family-head');
-  titre.append(el('span', 'dot'), el('h2', null, f.name), el('code', null, f.code ? `${f.code.slice(0, 4)}-${f.code.slice(4)}` : ''));
+  titre.append(el('span', 'dot'), el('h2', null, f.name), el('code', null, f.code ? `${f.code.slice(0, 4)}-${f.code.slice(4)}` : ''),
+    menuFamille(f, tete));
   const dl = el('dl');
   for (const [k, v] of [
     ['État', s.label],
@@ -834,6 +848,8 @@ function carteFamille(f) {
     ['Proches', f.people ?? '–'],
     ['Photos et messages', f.posts ?? '–'],
     ['Dernier envoi', ago(f.lastPost)],
+    ['Créée', toDate(f.createdAt) ? toDate(f.createdAt).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '–'],
+    ['Identifiant', f.id],
   ]) dl.append(el('dt', null, k), el('dd', null, v));
   tete.append(titre, dl);
 
@@ -847,43 +863,34 @@ function carteFamille(f) {
   return [tete, membres];
 }
 
-function actionsFamille(f) {
-  const carte = el('div', 'card');
-  carte.append(el('h2', null, 'Actions possibles'));
-  const action = (texte, libelle, faire, danger) => {
-    const bloc = el('div', 'action');
-    const b = el('button', `secondary small-btn${danger ? ' danger' : ''}`, libelle);
-    b.type = 'button';
-    b.addEventListener('click', () => faire(b));
-    bloc.append(el('p', 'small', texte), b);
-    carte.append(bloc);
-    return bloc;
-  };
-  const remplacement = action('La tablette est cassée ou perdue : un code permet d\'installer une nouvelle tablette directement dans cette famille, sans rien refaire.',
-    'Préparer une tablette de remplacement', () => prepareReplacement(f, carte));
-  remplacement.append(Object.assign(el('div', 'replace-out small'), { hidden: true }));
+// Actions sur la famille, rangées dans le ⋮ à côté de son nom ; chacune s'explique dans sa confirmation.
+function menuFamille(f, tete) {
   // Famille offerte (les mamies) : jamais en pause, jamais supprimable.
   const offerte = f.abonnement?.statut === 'offert';
-  action(offerte ? 'Famille offerte : elle n\'est jamais mise en pause ni supprimable. Sans abonnement, sa tablette se mettrait en pause.'
-    : 'Pour un proche à qui vous offrez le service : la tablette ne sera jamais mise en pause, et la famille ne pourra pas être supprimée.',
-  offerte ? 'Ne plus offrir' : 'Rendre offerte', async (b) => {
-    if (!await demander(offerte
-      ? `« ${f.name} » ne sera plus offerte : sans abonnement, sa tablette se mettra en pause. Continuer ?`
-      : `Rendre « ${f.name} » offerte ? Elle ne sera jamais mise en pause ni supprimable.`)) return;
-    b.disabled = true;
-    try {
-      await appeler('gestionFamilleOfferte', { fid: f.id, offerte: !offerte });
-      f.abonnement = { ...(f.abonnement || {}), statut: offerte ? 'aucun' : 'offert' };
-      render();
-    } catch (err) {
-      prevenir(`Impossible : ${err.message}`);
-      b.disabled = false;
-    }
-  });
-  if (!offerte) {
-    action('Seulement si le client le demande : messages, photos, vidéos, rappels et membres sont effacés pour toujours.',
-      'Supprimer la famille et toutes ses données', (b) => supprimerFamille(f, carte, b), true);
-  }
+  return menuPoints([
+    { libelle: 'Préparer une tablette de remplacement', faire: () => prepareReplacement(f, $('famille-actions')) },
+    { libelle: offerte ? 'Ne plus offrir le service' : 'Offrir le service (jamais en pause)', faire: async (b) => {
+      if (!await demander(offerte
+        ? `« ${f.name} » ne sera plus offerte : sans abonnement, sa tablette se mettra en pause. Continuer ?`
+        : `Rendre « ${f.name} » offerte ? Pour un proche à qui vous offrez le service : la tablette ne sera jamais mise en pause, et la famille ne pourra pas être supprimée.`)) return;
+      b.disabled = true;
+      try {
+        await appeler('gestionFamilleOfferte', { fid: f.id, offerte: !offerte });
+        f.abonnement = { ...(f.abonnement || {}), statut: offerte ? 'aucun' : 'offert' };
+        render();
+      } catch (err) {
+        prevenir(`Impossible : ${err.message}`);
+        b.disabled = false;
+      }
+    } },
+    offerte ? null : { libelle: 'Supprimer la famille et ses données', danger: true, faire: (b) => supprimerFamille(f, tete, b) },
+  ], `Actions pour la famille ${f.name}`);
+}
+
+// Résultat d'une action (code de remplacement) sous les membres.
+function actionsFamille() {
+  const carte = el('div', 'card replace-out small');
+  carte.hidden = true;
   return carte;
 }
 
@@ -961,7 +968,7 @@ function render() {
   if (ouverte && $('famille-fiche').dataset.fid !== ouverte.id + JSON.stringify(ouverte.abonnement || null)) {
     $('famille-fiche').dataset.fid = ouverte.id + JSON.stringify(ouverte.abonnement || null);
     $('families').replaceChildren(...carteFamille(ouverte));
-    $('famille-actions').replaceChildren(actionsFamille(ouverte));
+    $('famille-actions').replaceChildren(actionsFamille());
   }
   if (!ouverte) delete $('famille-fiche').dataset.fid;
   const legacy = families.reduce((n, f) => n + (f.legacy || 0), 0);
@@ -1010,7 +1017,7 @@ async function migratePost(fid, snap) {
     ext = (post.mime || '').includes('mp4') ? 'mp4' : 'webm';
     field = 'videoUrl';
   } else {
-    return 'ignoré (vocal)';
+    return 'ignoré';
   }
   const path = `families/${fid}/media/${snap.id}.${ext}`;
   const fileRef = ref(storage, path);

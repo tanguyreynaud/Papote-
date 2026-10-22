@@ -458,3 +458,10 @@ test('colis livré d\'après Sendcloud', () => {
   assert.strictEqual(colisLivre({ parcel: { status: { id: 12, message: 'Awaiting customer pickup' } } }), false);
   assert.strictEqual(colisLivre(null), false);
 });
+
+test('suiviColis : n° et lien de suivi, étape, livré', () => {
+  const { suiviColis } = require('./sendcloud');
+  assert.deepStrictEqual(suiviColis({ parcel: { tracking_number: 'MR1', tracking_url: 'https://t/MR1', status: { id: 12, message: 'Awaiting customer pickup' } } }),
+    { suivi: 'MR1', lien: 'https://t/MR1', etape: 'Awaiting customer pickup', livre: false });
+  assert.deepStrictEqual(suiviColis(null), { suivi: null, lien: null, etape: null, livre: false });
+});

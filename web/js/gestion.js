@@ -3,7 +3,7 @@
 // gestion* (functions/gestion.js) : l'argent vient de Stripe, le stock et les dépenses de Firestore.
 // Les factures déposées sont lues automatiquement (gestionLireFacture) pour préremplir les fiches.
 // La connexion et les sections familles, envois et maintenance sont dans admin.js.
-import { demander, saisir, prevenir } from './dialogue.js';
+import { demander, saisir, prevenir, menuPoints } from './dialogue.js';
 import { getApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
 import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
 import {
@@ -473,8 +473,8 @@ const ETATS_COMMANDE = {
   annulee: ['Annulée', ''],
 };
 const ABONNEMENTS = {
-  offert: 'offert', actif: 'actif', impaye: 'impayé', suspendu: 'suspendu', resilie: 'résilié', aucun: 'sans abonnement',
-  canceled: 'résilié', active: 'actif', trialing: 'en essai', past_due: 'impayé',
+  offert: 'offert', actif: 'actif', impaye: 'impayé', suspendu: 'suspendu', resilie: 'résilié', aucun: 'sans abonnement', installation: 'installation en cours',
+  canceled: 'résilié', active: 'actif', trialing: 'premier mois', past_due: 'impayé',
 };
 const RETOURS = {
   attendue: 'Retour attendu', echec: 'Non rendue, prélèvement refusé', rendue: 'Tablette rendue', facturee: 'Matériel non rendu, prélevé',
@@ -758,14 +758,8 @@ async function remplirCommande(id) {
       formulaireRemplacement(c, t))] : []),
     ...(partie && (t || c.envoyeeLe) ? [expliquee('Le client doit renvoyer quelque chose : il reçoit par e-mail une étiquette Mondial Relay gratuite.',
       boutonEtiquetteRetour(c))] : []),
-    ...(['a-preparer', 'paiement-en-attente'].includes(c.expedition) ? [actionExpliquee(
-      c.offerte ? 'La tablette n\'est pas encore partie : la commande est annulée et la tablette mise de côté revient au stock.'
-        : 'La tablette n\'est pas encore partie : l\'abonnement s\'arrête, tout ce qui a été payé est remboursé, la tablette mise de côté revient au stock et le client reçoit un e-mail.',
-      'Annuler la commande', () => annulerCommande(c), true)] : []),
-    ...(c.fid && !c.offerte && ['actif', 'impaye', 'suspendu', 'active', 'trialing', 'past_due'].includes(c.abonnement) ? [c.resiliationLe
-      ? h('div', { class: 'action' }, h('p', { class: 'small' }, `Abonnement arrêté : il prend fin le ${jour(c.resiliationLe)}.`))
-      : actionExpliquee('Comme si le client résiliait lui-même dans l\'appli : l\'abonnement prend fin à la fin du mois déjà payé (ou de l\'essai).',
-        'Arrêter l\'abonnement', () => arreterAbonnement(c), true)] : []),
+    ...(c.fid && !c.offerte && c.resiliationLe && ['actif', 'impaye', 'suspendu', 'active', 'trialing', 'past_due'].includes(c.abonnement)
+      ? [h('div', { class: 'action' }, h('p', { class: 'small' }, `Abonnement arrêté : il prend fin le ${jour(c.resiliationLe)}.`))] : []),
     ...(c.code && !c.fid && c.expedition !== 'annulee' ? [expliquee('Le client a perdu son code de commande : il en a besoin pour relier la tablette à l\'appli famille.',
       boutonRenvoyerCode(c))] : []),
   ];
@@ -774,7 +768,7 @@ async function remplirCommande(id) {
   $('dc-corps').replaceChildren(...[
     annonce ? h('p', { class: 'annonce', role: 'status' }, annonce) : null,
     h('div', { class: 'card' },
-      h('h2', {}, `Commande ${codeCommande(c.code)}`, c.offerte ? ' (offerte)' : ''),
+      h('div', { class: 'tete-fiche' }, h('h2', {}, `Commande ${codeCommande(c.code)}`, c.offerte ? ' (offerte)' : ''), menuCommande(c)),
       h('dl', { class: 'fiche' },
       ligne('État', badge(texte, classe)),
       ligne('Commandée le', jour(c.creeLe)),
@@ -788,11 +782,16 @@ async function remplirCommande(id) {
       ligne('Carte SIM', simDuKit(t)),
       ligne('Accessoires', t && (t.accessoires || []).length ? t.accessoires.join(', ') : null),
       ligne('Retour', c.restitution ? `${RETOURS[c.restitution.statut] || c.restitution.statut}${c.restitution.avant && c.restitution.statut === 'attendue' ? ` avant le ${jour(c.restitution.avant)}` : ''}` : null),
+      ligne('Suivi du retour', suiviRetourDe(c)),
       ligne('Étiquettes', etiquettesDe(c)),
       ligne('Remboursement', c.remboursement ? `${euros(c.remboursement.montant)} ${REMBOURSEMENTS[c.remboursement.statut] || c.remboursement.statut}` : null))),
     actions.length ? h('div', { class: 'card' }, h('h2', {}, 'Actions possibles'), ...actions) : null,
     h('div', { class: 'card' }, h('h2', {}, 'Parcours'),
-      h('ul', { class: 'historique small' }, parcoursCommande(c).map(([le, texte]) => h('li', {}, Number.isFinite(le) ? `${jour(le)} : ${texte}` : texte)))),
+      // Frise : la date à gauche (vide pour une étape sans date), l'étape à droite.
+      h('ol', { class: 'frise' }, parcoursCommande(c).map(([le, texte, date]) => {
+        const quand = Number.isFinite(le) ? le : date;
+        return h('li', {}, h('span', { class: 'frise-date' }, quand ? jour(quand) : ''), h('span', { class: 'frise-texte' }, texte));
+      }))),
     h('div', { class: 'card' }, h('h2', {}, 'Factures et paiements du client'), factures),
   ].filter(Boolean));
   if (c.offerte) {
@@ -825,16 +824,9 @@ async function remplirCommande(id) {
   }
 }
 
-// Une action de la page commande : ce qu'elle fait, puis son bouton.
-let annonceCommande = null; // Résultat de la dernière action, affiché en haut de la page commande rechargée.
-function actionExpliquee(texte, libelle, faire, danger = false) {
-  const msg = h('p', { class: 'small', hidden: true });
-  const bouton = h('button', { type: 'button', class: `secondary small-btn${danger ? ' danger' : ''}` }, libelle);
-  bouton.addEventListener('click', async () => {
-    bouton.disabled = true;
-    msg.hidden = false;
-    msg.className = 'small muted';
-    msg.textContent = 'En cours…';
+// Actions rares ou définitives de la commande, rangées dans le ⋮ ; chacune s'explique dans sa confirmation.
+function menuCommande(c) {
+  const lancer = async (faire) => {
     try {
       annonceCommande = await faire();
       commandeAffichee = null;
@@ -842,26 +834,45 @@ function actionExpliquee(texte, libelle, faire, danger = false) {
       afficherTout();
       signalerChangement();
     } catch (e) {
-      if (e === 'non') { msg.hidden = true; bouton.disabled = false; return; }
-      msg.className = 'small error';
-      msg.textContent = messageErreur(e);
-      bouton.disabled = false;
+      if (e !== 'non') prevenir(messageErreur(e));
     }
-  });
-  return h('div', { class: 'action' }, h('p', { class: 'small' }, texte), bouton, msg);
+  };
+  const items = [
+    ['a-preparer', 'paiement-en-attente'].includes(c.expedition)
+      ? { libelle: 'Annuler la commande', danger: true, faire: () => lancer(() => annulerCommande(c)) } : null,
+    c.fid && !c.offerte && !c.resiliationLe && ['actif', 'impaye', 'suspendu', 'active', 'trialing', 'past_due'].includes(c.abonnement)
+      ? { libelle: 'Arrêter l\'abonnement', danger: true, faire: () => lancer(() => arreterAbonnement(c)) } : null,
+  ].filter(Boolean);
+  return items.length ? menuPoints(items, `Actions pour la commande ${codeCommande(c.code)}`) : null;
 }
 
+let annonceCommande = null; // Résultat de la dernière action, affiché en haut de la page commande rechargée.
+
 async function annulerCommande(c) {
-  if (!await demander(`Annuler la commande ${codeCommande(c.code)} de ${c.nom || c.email || 'ce client'} ?${c.offerte ? '' : ' Tout ce qui a été payé sera remboursé.'}`, { oui: 'Annuler la commande', non: 'Garder la commande', danger: true })) throw 'non';
+  if (!await demander(`Annuler la commande ${codeCommande(c.code)} de ${c.nom || c.email || 'ce client'} ?\n\n${c.offerte
+    ? 'La tablette n\'est pas encore partie : la commande est annulée et la tablette mise de côté revient au stock.'
+    : 'La tablette n\'est pas encore partie : l\'abonnement s\'arrête, tout ce qui a été payé est remboursé, la tablette mise de côté revient au stock et le client reçoit un e-mail.'}`, { oui: 'Annuler la commande', non: 'Garder la commande', danger: true })) throw 'non';
   const r = await appeler('gestionAnnulerCommande', { commande: c.id });
   return [`Commande annulée.`, r.rembourse ? `${euros(r.rembourse)} remboursés.` : null,
     r.mailEnvoye ? 'Le client a reçu un e-mail.' : null].filter(Boolean).join(' ');
 }
 
 async function arreterAbonnement(c) {
-  if (!await demander(`Arrêter l'abonnement de ${c.nom || c.email || 'ce client'} ? Il prendra fin à la fin du mois déjà payé.`, { oui: 'Arrêter l\'abonnement', non: 'Garder', danger: true })) throw 'non';
+  if (!await demander(`Arrêter l'abonnement de ${c.nom || c.email || 'ce client'} ?\n\nComme si le client résiliait lui-même dans l'appli : l'abonnement prend fin à la fin du mois en cours, prélevé à l'arrêt.`, { oui: 'Arrêter l\'abonnement', non: 'Garder', danger: true })) throw 'non';
   const r = await appeler('resilierAbonnement', { fid: c.fid });
   return `Abonnement arrêté : il prend fin le ${jour(r.le)}.`;
+}
+
+// Colis de retour : n° de suivi (lien Mondial Relay) et où il en est, mis à jour chaque nuit.
+const ETAPES_COLIS = { 'Delivered': 'arrivé chez Papote', 'Awaiting customer pickup': 'au point relais', 'En route to sorting center': 'en route',
+  'Being sorted': 'au centre de tri', 'Driver en route': 'en livraison', 'Ready to send': 'étiquette créée, pas encore déposé',
+  'Announced': 'étiquette créée, pas encore déposé' };
+function suiviRetourDe(c) {
+  const r = c.etiquettes && c.etiquettes.retour;
+  if (!r || !r.colis) return null;
+  const etape = r.livre ? 'arrivé chez Papote' : r.etape ? (ETAPES_COLIS[r.etape] || r.etape) : 'étiquette créée, pas encore déposé';
+  const numero = r.lienSuivi ? h('a', { href: r.lienSuivi, target: '_blank', rel: 'noopener' }, r.suivi || 'Suivre le colis') : (r.suivi || null);
+  return [badge(etape, r.livre ? 'ok' : 'info'), numero ? ' ' : null, numero];
 }
 
 // Étiquettes Sendcloud de la commande, en liens PDF.
@@ -1002,23 +1013,24 @@ function formulaireRemplacement(c, t) {
 // Grandes étapes d'une commande, de la commande au retour de la tablette.
 function parcoursCommande(c) {
   // La commande ouvre toujours le parcours, même créée dans la même seconde que la réservation.
-  const etapes = [[-Infinity, c.offerte ? `commande offerte créée le ${jour(c.creeLe)}` : `commande passée le ${jour(c.creeLe)}`]];
-  if (c.envoyeeLe) etapes.push([c.envoyeeLe, `tablette envoyée${c.suivi ? ` (suivi ${c.suivi})` : ''}`]);
+  const etapes = [[-Infinity, c.offerte ? 'Commande offerte créée' : 'Commande passée', c.creeLe]];
+  if (c.envoyeeLe) etapes.push([c.envoyeeLe, `Tablette envoyée${c.suivi ? ` (suivi ${c.suivi})` : ''}`]);
   for (const t of donnees.stock) {
     for (const x of t.historique || []) {
       if (!x.le || x.commande !== c.id) continue;
       if (x.remplacement || x.sim) {
         const quoi = x.sim ? `carte SIM ${x.sim}` : x.accessoires ? x.accessoires.join(', ') : `tablette ${t.numero || t.modele || ''}`;
-        etapes.push([x.le, `remplacement : ${quoi}${x.etat === 'en-retour' ? ' à récupérer' : ' envoyée'}${x.motif ? ` (${x.motif})` : ''}`]);
+        etapes.push([x.le, `Remplacement : ${quoi}${x.etat === 'en-retour' ? ' à récupérer' : ' envoyée'}${x.motif ? ` (${x.motif})` : ''}`]);
       } else if (x.etat !== 'envoyee') {
         const nom = [t.ref, t.modele || t.numero].filter(Boolean).join(' ');
         etapes.push([x.le, ['commandee', 'en-stock', 'preparee'].includes(x.etat) && x.commande
-          ? `tablette ${nom} attribuée à cette commande` : `tablette ${nom} : ${(donnees.etats[x.etat] || x.etat).toLowerCase()}`]);
+          ? `Tablette ${nom} attribuée à cette commande` : `Tablette ${nom} : ${(donnees.etats[x.etat] || x.etat).toLowerCase()}`]);
       }
     }
   }
-  if (c.fid) etapes.push([null, `jumelée avec la famille ${c.famille || ''}`.trim()]);
-  if (c.restitution) etapes.push([c.restitution.avant, RETOURS[c.restitution.statut] || c.restitution.statut]);
+  if (c.fid) etapes.push([null, `Jumelée avec la famille ${c.famille || ''}`.trim()]);
+  // La date du retour est une date limite, pas celle d'un événement : à la suite, dans le texte.
+  if (c.restitution) etapes.push([null, `${RETOURS[c.restitution.statut] || c.restitution.statut}${c.restitution.avant && c.restitution.statut === 'attendue' ? `, à rendre avant le ${jour(c.restitution.avant)}` : ''}`]);
   if (c.remboursement) etapes.push([null, `${euros(c.remboursement.montant)} ${REMBOURSEMENTS[c.remboursement.statut] || c.remboursement.statut}`]);
   // Étapes sans date (jumelage, remboursement) à la suite des autres.
   return etapes.filter(([, texte]) => texte).sort((a, b) => (a[0] || Infinity) - (b[0] || Infinity));
@@ -1556,7 +1568,7 @@ function afficherBilan() {
   const commandes = donnees.commandes.filter((c) => dansPeriode(c.creeLe));
   $('kpi-activite').replaceChildren(
     stat(String(enCours.length), 'abonnements en cours',
-      `${enCours.filter((a) => a.statut === 'trialing').length} en essai · ${enCours.filter((a) => a.statut === 'past_due').length} impayé(s)`),
+      `${enCours.filter((a) => a.statut === 'trialing').length} au premier mois · ${enCours.filter((a) => a.statut === 'past_due').length} impayé(s)`),
     stat(euros(mrr), 'revenu mensuel', 'abonnements payants'),
     stat(String(commandes.length), 'commandes', `${commandes.filter((c) => c.formule === 'sim').length} avec internet inclus`),
     stat(String(abos.filter((a) => dansPeriode(a.finLe)).length), 'abonnements terminés'),
@@ -1609,9 +1621,12 @@ function afficherCompta() {
   ], deps.map((d) => [jour(d.date), d.fournisseur || '', libelleDepense(d), donnees.categories[d.categorie] || d.categorie,
     euros(d.montant), euros(d.tva),
     h('div', { class: 'pieces-liste' }, (d.pieces || []).map(lienPiece),
-      d.justificatif ? h('a', { href: d.justificatif, target: '_blank', rel: 'noopener' }, 'Lien') : null,
-      h('button', { type: 'button', class: 'link small no-print', onclick: () => { fichierDepense = d.id; choixFichier.click(); } }, '+ Joindre')),
-    h('button', { type: 'button', class: 'link danger small no-print', onclick: () => supprimerDepense(d) }, 'Supprimer')]),
+      d.justificatif ? h('a', { href: d.justificatif, target: '_blank', rel: 'noopener' }, 'Lien') : null),
+    h('div', { class: 'no-print' }, menuPoints([
+      { libelle: 'Joindre un justificatif', faire: () => { fichierDepense = d.id; choixFichier.click(); } },
+      d.recurrence ? { libelle: 'Ne plus l\'ajouter chaque mois', faire: () => arreterDepense(d) } : null,
+      { libelle: 'Supprimer la dépense', danger: true, faire: () => supprimerDepense(d) },
+    ], `Actions pour « ${d.libelle} »`))]),
   {
     total: deps.length ? ['Total', '', '', '', euros(deps.reduce((s, d) => s + d.montant, 0)),
       euros(deps.reduce((s, d) => s + (d.tva || 0), 0)), '', ''] : null,
@@ -1666,8 +1681,7 @@ function afficherAchats() {
 function libelleDepense(d) {
   return h('div', {}, d.libelle,
     d.numero ? h('span', { class: 'muted' }, ` · n° ${d.numero}`) : null,
-    d.recurrence ? h('div', {}, badge('chaque mois', 'info'), ' ',
-      h('button', { type: 'button', class: 'link small no-print', onclick: () => arreterDepense(d) }, 'Arrêter')) : null,
+    d.recurrence ? h('div', {}, badge('chaque mois', 'info')) : null,
     d.depuis ? h('div', { class: 'muted small' }, 'ajoutée automatiquement') : null,
     (d.materiel || []).length ? h('div', { class: 'muted small' }, `Entré au stock : ${d.materiel.join(', ')}`) : null,
     d.confirmation ? h('div', { class: 'muted small' }, 'Facture pas encore reçue (seule la confirmation de commande est arrivée)') : null,
@@ -2547,7 +2561,7 @@ $('btn-cloturer').addEventListener('click', () => cloturer());
 let clients = null;
 const TYPES_CLIENT = { client: 'Abonné', ancien: 'Ancien client', panier: 'Panier abandonné', contact: 'Contact', chat: 'Contact du chat' };
 const STATUTS_CLIENT = {
-  actif: 'actif', offert: 'offert', impaye: 'impayé', suspendu: 'suspendu', resilie: 'résilié', aucun: 'sans abonnement', annulee: 'annulée',
+  actif: 'actif', offert: 'offert', impaye: 'impayé', suspendu: 'suspendu', resilie: 'résilié', aucun: 'sans abonnement', installation: 'installation en cours', annulee: 'annulée',
 };
 
 async function chargerClients() {
@@ -2612,15 +2626,18 @@ function afficherClients() {
 function remplirLiensFamille(fid) {
   const commandes = donnees.commandes.filter((c) => c.fid === fid);
   const tablettes = donnees.stock.filter((t) => t.fid === fid || commandes.some((c) => c.id === t.commande));
-  const lien = (href, texte) => h('a', { href }, texte);
+  // Une ligne entière par page à ouvrir : le client, sa commande, la tablette.
+  const ligneLien = (quoi, href, texte, detail) => h('li', {}, h('span', { class: 'll-quoi' }, quoi),
+    h('a', { href }, texte), detail ? h('span', { class: 'muted small' }, detail) : null);
   $('famille-liens').replaceChildren(
     h('h2', {}, 'Client, commande et tablette'),
     h('ul', { class: 'liste-liens' },
-      ...commandes.map((c) => h('li', {},
-        c.email ? lien(`#client/${encodeURIComponent(c.email.toLowerCase())}`, c.nom || c.email) : (c.nom || 'Client'), ' · ',
-        lien(`#commande/${encodeURIComponent(c.id)}`, `Commande ${codeCommande(c.code)}`), c.offerte ? ' (offerte)' : '')),
-      ...tablettes.map((t) => h('li', {}, lien(`#tablette/${encodeURIComponent(t.id)}`,
-        `Tablette ${[t.ref, t.numero || t.modele].filter(Boolean).join(' · ')}`), ` · ${donnees.etats[etatTablette(t)] || t.etat}`)),
+      ...commandes.flatMap((c) => [
+        c.email ? ligneLien('Client', `#client/${encodeURIComponent(c.email.toLowerCase())}`, c.nom || c.email, c.nom ? c.email : '') : null,
+        ligneLien('Commande', `#commande/${encodeURIComponent(c.id)}`, `Commande ${codeCommande(c.code)}`, c.offerte ? 'offerte' : ''),
+      ].filter(Boolean)),
+      ...tablettes.map((t) => ligneLien('Tablette', `#tablette/${encodeURIComponent(t.id)}`,
+        [t.ref, t.numero || t.modele].filter(Boolean).join(' · ') || 'Tablette', donnees.etats[etatTablette(t)] || t.etat)),
       ...(commandes.length || tablettes.length ? [] : [h('li', { class: 'muted small' }, 'Aucune commande ni tablette rattachée à cette famille.')])));
 }
 
@@ -2658,9 +2675,11 @@ async function remplirClient(email) {
         ligne('Téléphone', c.telephone ? h('a', { href: `tel:${c.telephone.replace(/\s/g, '')}` }, c.telephone) : null),
         ligne('Formule', c.formule ? (c.formule === 'sim' ? 'Internet inclus (carte SIM)' : 'Wi-Fi de la maison') : null),
         ligne('Client depuis', jour(c.depuis)),
-        ligne('E-mails d\'information', accordTexte(c))),
-      h('button', { type: 'button', class: 'secondary small-btn no-print', onclick: () => changerAccord(c) },
-        accepte ? 'Ne plus lui envoyer d\'e-mails d\'information' : 'Noter son accord pour les e-mails d\'information')),
+        // Interrupteur : il ne bascule qu'après la confirmation (changerAccord relit la liste).
+        ligne('E-mails d\'information', h('label', { class: 'interrupteur' },
+          h('input', { type: 'checkbox', class: 'toggle', checked: accepte, 'aria-label': 'Reçoit les e-mails d\'information',
+            onchange: (e) => { e.target.checked = accepte; changerAccord(c); } }),
+          h('span', {}, accepte ? 'Oui, il ou elle a donné son accord' : c.desinscrit ? 'Non, désinscrit' : 'Non'))))),
     h('div', { class: 'card' }, h('h2', {}, 'Commandes'),
       commandes.length ? h('ul', { class: 'liste-liens' }, commandes.map((x) => {
         const [texte, classe] = ETATS_COMMANDE[etatCommande(x)];
@@ -3005,3 +3024,18 @@ $('btn-recevoir-accessoire').addEventListener('click', async () => {
   await ouvrirParcours({ titre: 'Recevoir une livraison', etapes: etapesReceptionAccessoire(), etat: { etape: 0, faits: {} } });
   signalerChangement();
 });
+
+// « ← Retour » : revient à la page d'avant, comme le bouton retour du téléphone. Sans page d'avant
+// dans l'admin (lien ouvert directement), il mène à la liste parente (son lien ou son bouton).
+const pilePages = [location.hash];
+window.addEventListener('hashchange', () => {
+  if (pilePages.length > 1 && pilePages[pilePages.length - 2] === location.hash) pilePages.pop();
+  else pilePages.push(location.hash);
+});
+document.addEventListener('click', (e) => {
+  const r = e.target.closest('.retour');
+  if (!r || pilePages.length < 2) return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  history.back();
+}, true);
