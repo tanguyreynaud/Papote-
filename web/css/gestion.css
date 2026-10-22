@@ -100,6 +100,8 @@ details.autres[open] > summary { color: var(--text); }
 .a-faire ul li { border-bottom: 1px solid var(--line); }
 .a-faire ul li:last-child { border-bottom: none; }
 .a-faire li.muted { padding: 10px 0; }
+.a-faire li.ligne-tache { display: flex; align-items: center; gap: 4px; }
+.a-faire li.ligne-tache > a { flex: 1; min-width: 0; }
 .a-faire a { display: flex; align-items: center; gap: 12px; padding: 10px 6px; margin: 0 -6px; border-radius: 10px; color: var(--text); text-decoration: none; }
 .a-faire a:hover { background: rgba(79, 70, 229, .05); }
 .a-faire .pastille-tache { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--line); }

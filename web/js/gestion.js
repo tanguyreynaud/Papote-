@@ -612,7 +612,7 @@ function afficherAccueil() {
   const nomT = (t) => `Tablette ${t.ref || t.numero || t.modele || ''}`.trim();
   const versTablette = (t) => `#tablette/${encodeURIComponent(t.id)}`;
   const versCommande = (c) => `#commande/${encodeURIComponent(c.id)}`;
-  const taches = [
+  let taches = [
     // Une seule : la ligne ouvre directement la commande.
     [aEnvoyer, pluriel(aEnvoyer, 'tablette') + ' à envoyer', aEnvoyer === 1 ? versCommande(cmd.find((c) => etatCommande(c) === 'a-envoyer')) : '#commandes', manque ? 'ko' : ''],
     [manque, `Il manque ${pluriel(manque, 'tablette')} en stock pour les envoyer`, '#stock', 'ko'],
@@ -658,22 +658,42 @@ function afficherAccueil() {
     [tva && tva.alerte ? 1 : 0, tva ? tva.alerte : '', '#compta/urssaf', 'ko'],
     [problemes, `${pluriel(problemes, 'problème')} lors du dernier passage automatique`, '#outils/automatique', 'ko'],
   ].filter(([n]) => n > 0);
+  // Lignes masquées 7 jours par l'admin (gestionReglages, masquer) : elles reviennent seules si rien n'est réglé.
+  const cleTache = ([, texte, lien]) => `${lien}|${texte}`;
+  const masquees = new Set(((donnees.reglages && donnees.reglages.masquees) || []).filter((m) => m.jusqua > Date.now()).map((m) => m.cle));
+  const nMasquees = taches.filter((t) => masquees.has(cleTache(t))).length;
+  const masquer = async (cle, jours) => {
+    try {
+      const r = await patienter(jours ? 'Ligne masquée pour 7 jours…' : 'Lignes réaffichées…',
+        () => appeler('gestionReglages', { masquer: jours ? { cle, jours } : { tout: true, jours: 0 } }));
+      donnees.reglages.masquees = r.masquees || [];
+      afficherAccueil();
+      annoncer(jours ? 'Masquée 7 jours' : 'Tout est réaffiché');
+    } catch (e) {
+      prevenir(messageErreur(e));
+    }
+  };
+  taches = taches.filter((t) => !masquees.has(cleTache(t)));
   // Rangé par sujet ; chaque ligne : un titre court, le détail en dessous, une pastille si c'est urgent.
   const groupe = (lien) => (/^#(commande|client)/.test(lien) ? 'Commandes et clients'
     : /^#(tablette|stock|sim)/.test(lien) ? 'Stock' : /^#(depense|compta)/.test(lien) ? 'Comptabilité' : 'Fonctionnement');
   const groupes = new Map(['Commandes et clients', 'Stock', 'Comptabilité', 'Fonctionnement'].map((g) => [g, []]));
-  for (const [, texte, lien, classe] of taches) {
+  for (const tache of taches) {
+    const [, texte, lien, classe] = tache;
     const i = texte.indexOf(' : ');
     const [titre, detail] = i > 0 ? [texte.slice(0, i), texte.slice(i + 3)] : [texte, null];
-    groupes.get(groupe(lien)).push(h('li', {}, h('a', { href: lien, class: classe === 'ko' ? 'urgent' : '' },
+    groupes.get(groupe(lien)).push(h('li', { class: 'ligne-tache' }, h('a', { href: lien, class: classe === 'ko' ? 'urgent' : '' },
       h('span', { class: 'pastille-tache', 'aria-hidden': 'true' }),
       h('span', { class: 'tache' }, h('span', { class: 'tache-titre' }, titre.charAt(0).toUpperCase() + titre.slice(1)),
         detail ? h('span', { class: 'tache-detail' }, detail.charAt(0).toUpperCase() + detail.slice(1)) : null),
-      h('span', { class: 'fleche', 'aria-hidden': 'true' }, '›'))));
+      h('span', { class: 'fleche', 'aria-hidden': 'true' }, '›')),
+    menuPoints([{ libelle: 'Masquer 7 jours', faire: () => masquer(cleTache(tache), 7) }], 'Actions pour cette ligne')));
   }
   $('a-faire').replaceChildren(...(taches.length
     ? [...groupes].filter(([, l]) => l.length).map(([g, l]) => h('li', { class: 'groupe-taches' }, h('h3', {}, g), h('ul', {}, l)))
-    : [h('li', { class: 'muted' }, 'Rien à faire pour le moment.')]));
+    : [h('li', { class: 'muted' }, 'Rien à faire pour le moment.')]),
+  ...(nMasquees ? [h('li', { class: 'muted small masquees' }, `${pluriel(nMasquees, 'ligne')} masquée${nMasquees > 1 ? 's' : ''} pour 7 jours · `,
+    h('button', { type: 'button', class: 'link', onclick: () => masquer(null, 0) }, 'Tout réafficher'))] : []));
 
   const pastille = (id, n) => {
     $(id).hidden = !n;
