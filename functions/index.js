@@ -713,11 +713,62 @@ async function paiementTermine(session) {
   await stripe().customers.update(session.customer, {
     invoice_settings: { custom_fields: [{ name: 'Code de commande Papote', value: code }] },
   });
+  await verifierDoublon(ref, session, email).catch((e) => logger.warn(`Commande ${ref.id} : doublon non vérifié`, e.message));
   if (!paye) return;
   if (existante.exists && existante.get('expedition') === 'paiement-en-attente') await ref.update({ expedition: 'a-preparer' });
   const fid = meta.fid || (existante.exists && existante.get('fid')) || await chercherFamille(email);
   if (fid) await appliquer(fid, session.subscription);
   await confirmerCommande(ref, email, code);
+}
+
+// Client qui recommande : même IBAN (empreinte Stripe), e-mail, téléphone ou adresse qu'une autre commande.
+// commandes/{id}.alerteDoublon = { commandes: [{ id, code, nom }], mauvaisPayeur, raisons } ; l'admin le montre
+// avant l'envoi (Tanguy, 2026-10-22), et un mauvais payeur déclenche aussi un e-mail à Papote. Rien n'est bloqué.
+const normaliser = (t) => String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+async function verifierDoublon(ref, session, email) {
+  if ((await ref.get()).get('alerteDoublon')) return;
+  const details = session.customer_details || {};
+  const abo = await stripe().subscriptions.retrieve(session.subscription, { expand: ['default_payment_method'] });
+  const pm = abo.default_payment_method && typeof abo.default_payment_method === 'object' ? abo.default_payment_method : null;
+  const a = details.address || {};
+  const empreinte = {
+    iban: (pm && pm.sepa_debit && pm.sepa_debit.fingerprint) || null,
+    ibanFin: (pm && pm.sepa_debit && pm.sepa_debit.last4) || null,
+    telephone: details.phone ? normaliser(details.phone).slice(-9) : null,
+    adresse: a.line1 && a.postal_code ? `${normaliser(a.line1)}|${normaliser(a.postal_code)}` : null,
+  };
+  await ref.update({ empreinte });
+  const requetes = [
+    empreinte.iban && db.collection('commandes').where('empreinte.iban', '==', empreinte.iban).get(),
+    email && db.collection('commandes').where('email', '==', email).get(),
+    empreinte.telephone && db.collection('commandes').where('empreinte.telephone', '==', empreinte.telephone).get(),
+    empreinte.adresse && db.collection('commandes').where('empreinte.adresse', '==', empreinte.adresse).get(),
+  ].filter(Boolean);
+  const autres = new Map();
+  for (const r of await Promise.all(requetes)) {
+    for (const d of r.docs) {
+      const c = d.data();
+      // Une commande annulée avant l'envoi ne compte pas.
+      if (d.id !== ref.id && !(c.expedition === 'annulee' && !c.envoyeeLe) && !c.offerte) autres.set(d.id, c);
+    }
+  }
+  if (!autres.size) return;
+  const raisons = new Set();
+  for (const c of autres.values()) {
+    const fam = c.fid ? await db.doc(`families/${c.fid}`).get() : null;
+    regles.raisonsMauvaisPayeur(c, fam && fam.exists ? fam.get('abonnement.statut') : null).forEach((x) => raisons.add(x));
+  }
+  const alerte = {
+    commandes: [...autres].map(([id, c]) => ({ id, code: c.code ? regles.afficherCode(c.code) : null, nom: c.nom || c.email || null })),
+    mauvaisPayeur: raisons.size > 0,
+    raisons: [...raisons],
+  };
+  await ref.update({ alerteDoublon: alerte });
+  if (alerte.mauvaisPayeur) {
+    const snap = await ref.get();
+    await prevenirPapote(`Ne pas envoyer : ${snap.get('nom') || email || 'un client'} a déjà été mauvais payeur`, snap,
+      `Nouvelle commande d'un client déjà connu (${alerte.raisons.join(', ')}). Vérifiez avant d'envoyer la tablette.`);
+  }
 }
 
 // Prélèvement SEPA refusé par la banque : commande annulée, abonnement arrêté, Papote prévenu.

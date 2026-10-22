@@ -110,6 +110,14 @@ test('rétractation : 30 jours après la vraie réception quand elle est connue'
   assert.strictEqual(a.receptionDe({ expedition: 'envoyee' }), null);
 });
 
+test('mauvais payeur : contestation, impayés, matériel', () => {
+  assert.deepStrictEqual(a.raisonsMauvaisPayeur({ expedition: 'envoyee' }, 'actif'), []);
+  assert.deepStrictEqual(a.raisonsMauvaisPayeur({ contestations: [{ montant: 2000 }] }, null), ['prélèvement contesté à la banque']);
+  assert.deepStrictEqual(a.raisonsMauvaisPayeur({ restitution: { statut: 'facturee' }, dernierMois: { statut: 'echec' } }, 'suspendu'),
+    ['dernier mois impayé', 'matériel jamais rendu', 'abonnement impayé']);
+  assert.deepStrictEqual(a.raisonsMauvaisPayeur(null, null), []);
+});
+
 test('rétractation : une seule fois', () => {
   assert.strictEqual(a.retractationPossible({ expedition: 'a-preparer', retractation: { le: T0 } }, T0), false);
   assert.strictEqual(a.retractationPossible(null, T0), false);

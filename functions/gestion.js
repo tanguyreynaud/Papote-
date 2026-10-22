@@ -643,6 +643,7 @@ exports.gestionDonnees = onCall(async (request) => {
         dernierMois: c.dernierMois || null,
         contestations: c.contestations || null,
         pause: c.pause || null,
+        alerteDoublon: c.alerteDoublon || null,
         etiquettes: c.etiquettes || null,
         preparation: c.preparation || null,
         stripeCustomerId: c.stripeCustomerId || null,
