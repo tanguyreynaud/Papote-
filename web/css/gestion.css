@@ -490,6 +490,22 @@ a, .link, button.link { text-decoration: none; }
 .frise-tablette { row-gap: 8px; }
 .frise-tablette .frise-action .small-btn { margin: 0 2px 0 6px; padding: 4px 12px; min-height: 0; font-size: 13px; }
 div.frise-tablette { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+/* « Où est-elle ? » : ronds reliés par un trait, l'étape actuelle mise en avant, l'action en dessous */
+.etapes-tablette { width: 100%; padding: 6px 0 2px; }
+.stepper { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); list-style: none; margin: 0; padding: 0; }
+.stepper li { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; font-size: 13px; line-height: 1.25; color: var(--muted); }
+.stepper li::before { content: ''; position: absolute; top: 13px; right: 50%; width: 100%; height: 3px; background: #e7e1d6; }
+.stepper li:first-child::before { display: none; }
+.stepper li.fait::before, .stepper li.actuelle::before { background: var(--accent); }
+.stepper .rond { position: relative; z-index: 1; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; border: 3px solid #e7e1d6; background: #fff; font-size: 13px; font-weight: 700; color: var(--muted); box-sizing: border-box; }
+.stepper li.fait { color: var(--text); }
+.stepper li.fait .rond { background: var(--accent); border-color: var(--accent); color: #fff; }
+.stepper li.actuelle { color: var(--accent); font-weight: 700; }
+.stepper li.actuelle .rond { border-color: var(--accent); color: var(--accent); box-shadow: 0 0 0 4px rgba(79, 70, 229, .15); }
+.stepper .libelle { padding: 0 1px; }
+@media (max-width: 560px) { .stepper li { font-size: 11px; letter-spacing: -.01em; } }
+.etape-action { margin-top: 12px; }
+.etape-action .small-btn { margin: 0; }
 
 /* Chargement : fine barre en haut de la page pendant un appel au serveur. */
 .barre-chargement { position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 1000; pointer-events: none; overflow: hidden; opacity: 0; transition: opacity .2s; }

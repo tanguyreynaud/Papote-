@@ -1395,7 +1395,7 @@ function afficherStock() {
   const parId = new Map(donnees.commandes.map((c) => [c.id, c]));
   $('stock-vide').hidden = stock.length > 0;
   remplirTable($('t-stock'), [
-    { titre: 'N° de série' }, { titre: 'Modèle' }, { titre: 'État' }, { titre: 'Commande' }, { titre: 'SIM' },
+    { titre: 'N° de série' }, { titre: 'Modèle' }, { titre: 'État' }, { titre: 'Achat' }, { titre: 'Client' }, { titre: 'SIM' },
     { titre: 'Pièces' }, { titre: 'Prix', n: 1 }, { titre: 'Achetée le' },
   ], stock.filter((t) => !filtre || (GROUPES_STOCK[filtre] ? dansGroupe(GROUPES_STOCK[filtre], t) : t.affiche === filtre))
     .sort((a, b) => (b.acheteeLe || 0) - (a.acheteeLe || 0))
@@ -1409,6 +1409,7 @@ function afficherStock() {
             t.usure ? h('div', {}, badge(t.usure, 'ko')) : null),
           t.modele || '',
           badge(donnees.etats[t.affiche] || t.affiche, classeEtat(t.affiche)),
+          celluleAchat(t),
           c ? nomCommande(c) : '',
           t.sim || '',
           h('div', { class: 'pieces-liste' }, piecesTablette(t).map(lienPiece)),
@@ -1995,10 +1996,12 @@ function friseTablette(t, bouton) {
     return h('div', { class: 'frise-tablette' },
       badge(donnees.etats[etat] || etat, ['perdue', 'hors-service', 'a-reparer'].includes(etat) ? 'ko' : 'info'), bouton);
   }
-  return h('ol', { class: 'frise-tablette' }, ...PARCOURS_TABLETTE.flatMap(([, texte], j) => [
-    j ? h('li', { class: 'sep', 'aria-hidden': 'true' }, '›') : null,
-    h('li', { class: j < i ? 'fait' : j === i ? 'actuelle' : '', 'aria-current': j === i ? 'step' : null }, texte),
-    j === i && bouton ? h('li', { class: 'frise-action' }, bouton) : null]));
+  // Étapes en ronds reliés (✓ pour les étapes passées), l'action suivante en dessous.
+  return h('div', { class: 'etapes-tablette' },
+    h('ol', { class: 'stepper' }, ...PARCOURS_TABLETTE.map(([, texte], j) => h('li', {
+      class: j < i ? 'fait' : j === i ? 'actuelle' : null, 'aria-current': j === i ? 'step' : null,
+    }, h('span', { class: 'rond', 'aria-hidden': 'true' }, j < i ? '✓' : String(j + 1)), h('span', { class: 'libelle' }, texte)))),
+    bouton ? h('div', { class: 'etape-action' }, bouton) : null);
 }
 
 // Changements d'état permis, en miroir de SUITES dans functions/gestion.js.
@@ -2073,6 +2076,16 @@ function afficherDocumentsTablette(t) {
     h('span', { class: 'muted' }, `${genre(p, deLAchat)} : `), lienPiece(p),
     h('button', { type: 'button', class: 'crayon no-print', title: `Retirer « ${p.nom} »`, 'aria-label': `Retirer « ${p.nom} »`, onclick: () => retirerPiece(collection, id, p) }, '✕'))));
   if (!$('dt-pieces').children.length) $('dt-pieces').append(h('li', { class: 'muted small' }, 'Aucun document pour l\'instant.'));
+}
+
+// Colonne « Achat » de la liste du stock : la commande chez le vendeur (Tanguy, 2026-10-22 : chaque tablette
+// doit en avoir une), en rouge si elle manque. Le lien ouvre l'achat, pas la tablette.
+function celluleAchat(t) {
+  if (!t.depense) return badge('aucun achat lié', 'ko');
+  const achat = donnees.depenses.find((d) => d.id === t.depense);
+  const texte = [t.fournisseur || (achat && achat.fournisseur), achat && achat.numero ? `n° ${achat.numero}` : null]
+    .filter(Boolean).join(' ') || 'voir l\'achat';
+  return h('a', { href: `#depense/${encodeURIComponent(t.depense)}`, onclick: (e) => e.stopPropagation() }, texte);
 }
 
 // Achat de la tablette, en une ligne de la fiche : vendeur, prix, date, et si la facture manque encore.
