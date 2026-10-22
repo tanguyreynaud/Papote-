@@ -19,7 +19,7 @@ les fonctions suffit pour que le chat en tienne compte.
 - Photos : jusqu'à 5 photos par envoi, avec une légende courte (30 caractères). Vidéos : 1 minute au maximum.
 - Supprimer un envoi : toucher la corbeille sous la photo ou la vidéo, ou toucher son message. Il disparaît aussi de la tablette. On ne peut supprimer que ses propres envois.
 - L'appli garde les 200 dernières photos et les 40 dernières vidéos ; au-delà, les plus anciennes s'effacent toutes seules. Il faut garder ses originaux sur son téléphone.
-- Agenda : rappels (rendez-vous, médicament…) une fois, tous les jours ou certains jours, et anniversaires (la tablette le rappelle le jour J, avec l'âge si on donne l'année).
+- Agenda : rappels (rendez-vous, médicament…) une fois, tous les jours ou certains jours, et anniversaires (la tablette le rappelle le jour J, avec l'âge si on donne l'année). Pour chaque rappel on règle quand il s'affiche (de l'heure exacte jusqu'à 4 heures avant, 15 minutes avant par défaut), une date de fin, et on peut le mettre en pause jusqu'à une date. Si la personne est en appel, le rappel attend la fin de l'appel.
 - La page Notifications indique quand un envoi ou un rappel a été vu ou confirmé sur la tablette.
 - Données : dans Profil, « Vos données » montre ce qui est conservé. Le propriétaire de la famille peut y « Supprimer la famille et toutes ses données » : photos, vidéos et messages sont effacés tout de suite. Les données sont chez Google Firebase, qui les chiffre sur ses serveurs. Les photos ne sont ni revendues ni utilisées pour de la publicité.
 - Profil : ajouter sa photo pour que le proche reconnaisse qui envoie ou appelle.
@@ -32,19 +32,25 @@ les fonctions suffit pour que le chat en tienne compte.
 
 ## Recevoir et jumeler la tablette
 - La tablette arrive en point relais, déjà configurée. On choisit le point relais à la commande, où l'on veut (près de chez soi ou près du proche) : pas besoin de passer la main pour cela. Suivi du colis : quand il part, l'e-mail « Votre tablette est en route » donne le numéro de suivi et un bouton « Suivre mon colis » qui ouvre le suivi Mondial Relay. Il n'y a pas de page de suivi sur le site ni dans l'appli.
-- À l'allumage, elle affiche un écran de bienvenue avec un QR code et un code à 8 caractères. On le scanne avec l'appareil photo du téléphone (ou on tape le code dans l'appli famille, « J'ai le code de la tablette »), puis on confirme sur la tablette.
+- À l'allumage, elle affiche un écran de bienvenue, demande le Wi-Fi de la maison (sauf avec l'option internet inclus), puis montre un QR code et un code à 8 caractères (ABCD-1234). On scanne le QR code avec l'appareil photo du téléphone, ou on va sur app.mapapote.fr et on tape le code.
+- Ensuite, tout se fait sur le téléphone, en quelques minutes : le nom affiché sur la tablette (par exemple « Mamie Emma »), au moins une photo, un essai du son, puis les options (SOS famille, lecture à voix haute, météo, prochain rappel, radio). Les proches invités rejoignent ensuite la famille avec le lien ou le code.
 - Se connecter à l'appli avec l'adresse e-mail utilisée pour le paiement : la commande se rattache toute seule à la famille.
 - Avec la formule Wi-Fi, l'écran de bienvenue demande le Wi-Fi de la maison.
 
 ## La tablette au quotidien
 - Elle reste allumée : heure, date, météo et photos en diaporama. Les nouveaux envois s'affichent en grand tout seuls.
-- Appel vidéo : seule la famille appelle, depuis la tuile « Appel vidéo ». La tablette décroche toute seule quand la personne regarde l'écran. La personne âgée ne peut pas appeler elle-même et n'a aucun bouton à toucher.
+- Appel vidéo : la famille appelle depuis la tuile « Appel vidéo ». La tablette décroche toute seule quand la personne regarde l'écran : elle n'a rien à toucher.
+- La personne âgée peut aussi appeler : bouton « Appeler » sur l'accueil, elle touche la photo du proche voulu, et le téléphone de ce proche sonne dans l'appli famille (appel audio, sans image). Sans réponse au bout de 45 secondes, le proche reçoit « Appel manqué ».
+- Bouton « SOS famille » (option, activée au départ) : en haut de la tablette. Un appui, 5 secondes pour annuler, puis toute la famille sonne en même temps ; le premier qui décroche prend l'appel. Si personne ne répond, la tablette réessaie, puis la famille reçoit une alerte. Ce n'est pas un service d'urgence : en cas d'urgence, appeler le 15 ou le 112.
+- Alertes à la famille : les responsables reçoivent une notification sur leur téléphone si la tablette est débranchée depuis plus de 10 minutes, ou si elle ne répond plus depuis 45 minutes (éteinte ou sans internet).
 - Le soir l'écran s'assombrit ; la nuit il s'éteint (horaires réglables dans Réglages, « Écran éteint la nuit »). Un toucher le rallume, un appel ou un rappel le réveille.
 - Les mises à jour se font toutes seules.
 - Le bouton marche/arrêt ne l'éteint pas (pour éviter les fausses manœuvres) ; un appui d'environ 10 secondes la redémarre.
 - Taille du texte de la tablette : dans l'appli famille, Réglages (Normale, Grande, Très grande). La tablette elle-même n'a aucun menu de réglage : tout se règle depuis l'appli, à distance.
 - Volume : dans Réglages, « Volume du son » (son des vidéos et des appels sur la tablette), réglable par un responsable de la famille.
-- Pas de lecture à voix haute des messages.
+- Lecture à voix haute (option, activée au départ) : la tablette lit les messages et les rappels une fois, quand elle voit la personne devant l'écran ; un bouton « Écouter » permet de les réentendre.
+- Autres options, réglées par un responsable dans l'appli (Réglages) : météo sur l'accueil, prochain rappel sur l'accueil, et « Radio » (un bouton pour écouter la station choisie dans l'appli ; éteinte au départ pour garder un écran simple).
+- Les vidéos déjà vues repassent ensuite dans le diaporama, avec les photos.
 
 ## Dépannage
 - La tablette ne répond plus : vérifier qu'elle est branchée et connectée au Wi-Fi ; puis dans Réglages, « Dépanner la tablette » : « Redémarrer la tablette ». Sinon, appui d'environ 10 secondes sur le bouton marche.
@@ -75,7 +81,7 @@ les fonctions suffit pour que le chat en tienne compte.
 - Tablette perdue ou volée : il n'y a pas de garantie pour cela. Il faut nous le signaler pour suspendre le contrat. La tablette est prêtée : la perte ou le vol est facturé comme un matériel non rendu (tablette 130 €, chargeur et câble 10 €, enceinte 10 € si elle a été fournie, soit 140 € ou 150 €). Pour en recevoir une nouvelle : demande de contact. Pour le signaler : demande de contact.
 - Nombre de proches dans la famille : jusqu'à 30.
 - Enfants : ils peuvent envoyer des photos, il n'y a pas d'âge minimum.
-- Le proche âgé ne peut pas répondre ni envoyer de photo : la tablette ne fait que recevoir, il n'a rien à manipuler. Il peut seulement confirmer un rappel.
+- Le proche âgé ne peut pas envoyer de photo ni de message écrit, et il n'y a aucun message vocal. Il peut appeler un proche (bouton « Appeler », appel audio), appeler toute la famille (bouton « SOS famille ») et confirmer un rappel.
 - Appels vidéo à plusieurs en même temps : pas encore prévu.
 - Appli sur ordinateur ou vieux téléphone : elle marche dans le navigateur d'un ordinateur ou d'un téléphone récent (iPhone ou Android).
 - Délai de livraison : Tanguy prépare et vérifie chaque tablette lui-même, une par une, à Lyon (c'est la raison des délais, pas un envoi depuis l'étranger). En stock : préparée sous 2 à 3 jours ouvrés. En précommande (plus de tablette en stock) : 7 à 10 jours ouvrés. Quand les commandes affluent (au-delà de 10 précommandes) : expédition sous 3 à 4 semaines ; les commandes restent ouvertes. Puis Mondial Relay livre en 3 à 5 jours ouvrés. Le délai est affiché sur le site avant de payer. On peut annuler à tout moment avant l'envoi : les 60 € sont remboursés tout de suite.
