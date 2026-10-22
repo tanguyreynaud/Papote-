@@ -457,7 +457,7 @@ async function loadReturns() {
   try {
     // Même règle que le compteur de l'accueil (etatCommande, gestion.js) : retour attendu ou échoué,
     // commande non annulée. Une commande comptée par le serveur mais absente de la requête est lue directement.
-    const aRendre = (c) => c && c.restitution && ['attendue', 'echec'].includes(c.restitution.statut) && c.expedition !== 'annulee';
+    const aRendre = (c) => c && c.restitution && ['attendue', 'echec', 'a-recuperer'].includes(c.restitution.statut) && c.expedition !== 'annulee';
     const trouvees = new Map();
     try {
       const snap = await getDocs(query(collection(db, 'commandes'), where('restitution.statut', 'in', ['attendue', 'echec'])));
@@ -761,7 +761,15 @@ async function removeOldTablets(f, btn) {
 
 // Suppression définitive demandée par le client (à contact@) : le nom retapé confirme. Le serveur refuse
 // la famille offerte (Mamie) et une famille dont l'abonnement est en cours (gestionSupprimerFamille).
-async function supprimerFamille(f, li, btn) {
+async function supprimerFamille(f, li, btn, commandes = []) {
+  // Commande offerte partie chez le proche : savoir si on a repris la tablette et ses accessoires.
+  const partie = commandes.find((c) => c.offerte && c.expedition !== 'annulee' && !c.restitution
+    && !['a-preparer', 'paiement-en-attente'].includes(c.expedition));
+  let recupere;
+  if (partie) {
+    recupere = await demander(`La tablette et les accessoires de la commande offerte ${partie.code ? `${partie.code.slice(0, 4)}-${partie.code.slice(4)} ` : ''}sont-ils récupérés ?\n\nOui : la tablette revient au stock, à vérifier. Pas encore : la commande reste notée « matériel à récupérer ».`,
+      { oui: 'Oui, récupérés', non: 'Pas encore' });
+  }
   const nom = await saisir(`Supprimer DÉFINITIVEMENT la famille « ${f.name} » : messages, photos, vidéos, rappels, anniversaires, membres et journal. Rien ne pourra être récupéré.\n\nPour confirmer, retapez le nom de la famille :`);
   if (nom == null) return;
   const simple = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().replace(/\s+/g, ' ').toLowerCase();
@@ -770,7 +778,7 @@ async function supprimerFamille(f, li, btn) {
   const attente = el('p', 'muted small', 'Suppression en cours…');
   li.append(attente);
   try {
-    await appeler('gestionSupprimerFamille', { fid: f.id, nom });
+    await appeler('gestionSupprimerFamille', { fid: f.id, nom, ...(partie ? { recupere } : {}) });
     families = families.filter((x) => x.id !== f.id);
     li.remove();
     location.hash = '#clients/familles';
@@ -881,7 +889,7 @@ function menuFamille(f, tete, commandes) {
     offerte || statut === 'aucun' ? { libelle: offerte ? 'Ne plus offrir le service' : 'Offrir le service', faire: async (b) => {
       if (!await demander(offerte
         ? `Ne plus offrir le service à « ${f.name} » ? Sans abonnement, sa tablette se mettra en pause.`
-        : `Offrir le service à « ${f.name} » ?\n\nLa famille ne paiera rien et sa tablette ne sera jamais mise en pause. Une famille offerte ne peut pas être supprimée.`,
+        : `Offrir le service à « ${f.name} » ?\n\nLa famille ne paiera rien et sa tablette ne sera jamais mise en pause.`,
       { oui: offerte ? 'Ne plus offrir' : 'Offrir le service' })) return;
       b.disabled = true;
       try {
@@ -893,9 +901,9 @@ function menuFamille(f, tete, commandes) {
         b.disabled = false;
       }
     } } : null,
-    // Supprimer : ni offerte, ni abonnement en cours, ni tablette encore à rendre.
-    offerte || aRendre || enCours || ['actif', 'impaye', 'suspendu'].includes(statut) ? null
-      : { libelle: 'Supprimer la famille et ses données', danger: true, faire: (b) => supprimerFamille(f, tete, b) },
+    // Supprimer : ni abonnement payant en cours, ni tablette encore à rendre (une famille offerte aussi).
+    aRendre || enCours || ['actif', 'impaye', 'suspendu'].includes(statut) ? null
+      : { libelle: 'Supprimer la famille et ses données', danger: true, faire: (b) => supprimerFamille(f, tete, b, commandes) },
   ].filter(Boolean);
   return items.length ? menuPoints(items, `Actions pour la famille ${f.name}`) : el('span');
 }

@@ -461,6 +461,11 @@ function etatCommande(c) {
   if (c.expedition === 'annulee') return 'annulee';
   const r = c.restitution && c.restitution.statut;
   if (r === 'attendue' || r === 'echec') return 'retour';
+  // Commande offerte d'une famille supprimée : finie dès que sa tablette n'est plus chez le proche.
+  if (r === 'a-recuperer') {
+    const t = donnees && donnees.stock.find((x) => x.commande === c.id);
+    return t && !['envoyee', 'chez-client', 'en-retour'].includes(t.etat) ? 'terminee' : 'retour';
+  }
   if (r === 'rendue' || r === 'facturee' || ['resilie', 'canceled'].includes(c.abonnement)) return 'terminee';
   if (c.expedition === 'a-preparer') return 'a-envoyer';
   // Prélèvement SEPA pas encore confirmé par la banque : ne pas envoyer.
@@ -482,7 +487,7 @@ const ABONNEMENTS = {
   canceled: 'résilié', active: 'actif', trialing: 'premier mois', past_due: 'impayé',
 };
 const RETOURS = {
-  attendue: 'Retour attendu', echec: 'Non rendue, prélèvement refusé', rendue: 'Tablette rendue', facturee: 'Matériel non rendu, prélevé',
+  attendue: 'Retour attendu', 'a-recuperer': 'Matériel offert encore à récupérer', echec: 'Non rendue, prélèvement refusé', rendue: 'Tablette rendue', facturee: 'Matériel non rendu, prélevé',
 };
 const REMBOURSEMENTS = {
   'en-cours': 'en cours de remboursement', 'au-retour': 'remboursés au retour', fait: 'remboursés', echec: 'à rembourser depuis Stripe',
@@ -1032,6 +1037,7 @@ function prochaineEtape(c, t) {
       if (t && !t.jumeleeLe && c.envoyeeLe) return ['attendre que la tablette soit reliée à la famille.', c.code ? boutonRenvoyerCode(c) : null];
       return ['rien à faire, la tablette est chez le client.'];
     case 'retour':
+      if (c.restitution.statut === 'a-recuperer') return ['reprendre la tablette et ses accessoires chez le proche, puis, sur la page de la tablette, « Modifier » et choisir « Revenue, à vérifier ».'];
       if (c.restitution.statut === 'echec') return ['la tablette n\'a pas été rendue et le prélèvement a échoué : contacter le client.'];
       return [r && r.colis ? 'attendre le colis de retour (suivi ci-dessus).' : 'envoyer au client l\'étiquette de retour (bouton en haut).'];
     default: return null;
