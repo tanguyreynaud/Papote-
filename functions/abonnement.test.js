@@ -57,7 +57,8 @@ test('une famille offerte ne change jamais', () => {
 
 test('formules', () => {
   assert.strictEqual(a.formuleValide('wifi', 'incluse'), true);
-  assert.strictEqual(a.formuleValide('sim', 'achetee'), true);
+  assert.strictEqual(a.formuleValide('sim', 'incluse'), true);
+  assert.strictEqual(a.formuleValide('sim', 'achetee'), false);
   assert.strictEqual(a.formuleValide('4g', 'incluse'), false);
 });
 

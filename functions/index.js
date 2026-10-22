@@ -98,9 +98,7 @@ function finDePeriodeMs(abo) {
 }
 
 async function tarifs(formule, tablette) {
-  const cles = [regles.TARIFS[formule][tablette]];
-  if (tablette === 'achetee') cles.push(regles.TARIF_TABLETTE);
-  if (tablette === 'incluse') cles.push(regles.TARIF_MISE_EN_SERVICE);
+  const cles = [regles.TARIFS[formule][tablette], regles.TARIF_MISE_EN_SERVICE];
   const { data } = await stripe().prices.list({ lookup_keys: cles, active: true });
   const parCle = Object.fromEntries(data.map((p) => [p.lookup_key, p.id]));
   for (const cle of cles) {

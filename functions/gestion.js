@@ -206,7 +206,16 @@ function lireReglages(donnees) {
   }
   const e = (donnees && donnees.expediteur) || {};
   r.expediteur = Object.fromEntries(CHAMPS_EXPEDITEUR.map((k) => [k, typeof e[k] === 'string' ? e[k] : '']));
+  r.masquees = masqueesActives(donnees && donnees.masquees);
   return r;
+}
+
+// Lignes « À faire » masquées par l'admin (Tanguy, 2026-10-22) : [{ cle, jusqua (ms) }], encore en cours.
+// Une ligne masquée revient seule après la date si le problème n'est pas réglé.
+const MASQUER_JOURS = 7;
+function masqueesActives(liste, maintenant = Date.now()) {
+  return (Array.isArray(liste) ? liste : [])
+    .filter((m) => m && typeof m.cle === 'string' && typeof m.jusqua === 'number' && m.jusqua > maintenant);
 }
 
 // Une ligne SIM payée alors que la tablette n'est plus chez un client depuis 30 jours : forfait à résilier ou
@@ -1789,6 +1798,17 @@ exports.gestionReglages = onCall(async (request) => {
     const v = Number(d[k]);
     if (!Number.isFinite(v) || v < 0 || v > 1e9) throw new HttpsError('invalid-argument', `Valeur invalide : ${k}.`);
     maj[k] = v;
+  }
+  // { masquer: { cle, jours } } : masque une ligne « À faire » (jours 0 : la réaffiche) ; { masquer: { tout: true, jours: 0 } } : tout réafficher.
+  if (d.masquer && typeof d.masquer === 'object') {
+    const { cle, jours, tout } = d.masquer;
+    if (!tout && (typeof cle !== 'string' || !cle || cle.length > 300)) throw new HttpsError('invalid-argument', 'Ligne à masquer invalide.');
+    const n = jours == null ? MASQUER_JOURS : Number(jours);
+    if (!Number.isFinite(n) || n < 0 || n > 30) throw new HttpsError('invalid-argument', 'Durée invalide.');
+    const actuelles = tout ? [] : masqueesActives((await db().doc('gestion/reglages').get()).get('masquees')).filter((m) => m.cle !== cle);
+    if (!tout && n > 0) actuelles.push({ cle, jusqua: Date.now() + n * 864e5 });
+    await db().doc('gestion/reglages').set({ masquees: actuelles.slice(-200) }, { merge: true });
+    return { ok: true, masquees: actuelles };
   }
   if (d.expediteur && typeof d.expediteur === 'object') {
     for (const k of CHAMPS_EXPEDITEUR) {
