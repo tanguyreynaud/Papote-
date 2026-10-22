@@ -2100,6 +2100,7 @@ function remplirPageDepense(id) {
   document.title = `Papote · ${titre}`;
   const ligne = (k, v) => (v ? [h('dt', {}, k), h('dd', {}, v)] : []);
   const tablettes = donnees.stock.filter((t) => t.depense === d.id);
+  const sims = donnees.sims.filter((l) => l.depense === d.id);
   const pieces = [...(d.pieces || []).map(lienPiece),
     d.justificatif ? h('a', { href: d.justificatif, target: '_blank', rel: 'noopener' }, 'Lien') : null].filter(Boolean);
   const valider = d.aVerifier ? h('button', { type: 'button', class: 'primary small-btn no-print', onclick: () => verifierDepense(d) }, 'Valider') : null;
@@ -2126,7 +2127,12 @@ function remplirPageDepense(id) {
         ligne('Justificatifs', pieces.length ? h('div', { class: 'pieces-liste' }, pieces) : null),
         ligne('Chaque mois', d.recurrence ? 'oui, ajoutée automatiquement chaque mois' : null),
         ligne('Entré au stock', (d.materiel || []).length ? d.materiel.join(', ') : null))),
-    achat ? h('div', { class: 'card' }, h('h2', {}, tablettes.length > 1 ? 'Tablettes de cet achat' : 'Tablette de cet achat'),
+    // Ce que l'achat a fait entrer : les tablettes (achat de tablettes) ou les cartes SIM, chacune vers sa page.
+    sims.length ? h('div', { class: 'card' }, h('h2', {}, sims.length > 1 ? `Les ${sims.length} cartes SIM de cet achat` : 'La carte SIM de cet achat'),
+      h('ul', { class: 'liste-liens' }, ...sims.map((l) => h('li', {}, h('span', { class: 'll-quoi' }, 'Carte SIM'),
+        h('a', { href: `#sim/${encodeURIComponent(l.id)}` }, l.numero || (l.iccid ? `ICCID ${fin4(l.iccid)}` : 'numéro à saisir')),
+        h('span', { class: 'muted small' }, donnees.statutsSim[l.statut] || l.statut))))) : null,
+    achat && (d.categorie === 'tablettes' || tablettes.length) ? h('div', { class: 'card' }, h('h2', {}, tablettes.length > 1 ? 'Tablettes de cet achat' : 'Tablette de cet achat'),
       tablettes.length ? h('ul', { class: 'liste-liens' }, ...tablettes.map((t) => h('li', {}, h('span', { class: 'll-quoi' }, 'Tablette'),
         h('a', { href: `#tablette/${encodeURIComponent(t.id)}` }, [t.ref, t.numero || t.modele].filter(Boolean).join(' · ') || 'Tablette'),
         h('span', { class: 'muted small' }, donnees.etats[etatTablette(t)] || t.etat))))
