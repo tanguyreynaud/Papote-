@@ -31,8 +31,11 @@
       <div class="nav-marque">
         <img src="icons/icon.svg" alt="" class="admin-logo">
         <strong>Papote</strong>
+        <button type="button" class="nav-menu" id="nav-menu" aria-label="Menu" aria-expanded="false" aria-controls="nav-liens">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg><span class="pastille" id="n-menu" hidden></span>
+        </button>
       </div>
-      <nav aria-label="Sections">
+      <nav aria-label="Sections" id="nav-liens">
         <a href="#accueil" data-page="accueil">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>
           Accueil<span class="pastille" id="n-accueil" hidden></span></a>
@@ -56,7 +59,7 @@
         <p id="who" class="muted small"></p>
         <button type="button" id="btn-signout" class="link small">Se déconnecter</button>
         <!-- Version de l'admin : à changer à chaque mise à jour, pour voir que la bonne est en ligne. -->
-        <p class="muted small version-admin">Version du 22/10 à 18 h</p>
+        <p class="muted small version-admin">Version du 22/10 à 18 h 30</p>
       </div>
     </aside>
 
@@ -79,7 +82,6 @@
           <label id="p-du-l" hidden>du <input type="date" id="p-du"></label>
           <label id="p-au-l" hidden>au <input type="date" id="p-au"></label>
         </div>
-        <button type="button" id="btn-refresh" class="secondary small-btn no-print" hidden>Actualiser</button>
       </header>
       <p id="p-etat" class="muted small etat-periode" hidden></p>
       <p id="erreur" class="bandeau-erreur" hidden></p>
@@ -98,9 +100,11 @@
       <!-- ---------- Commandes ---------- -->
       <section data-panneau="commandes" hidden>
         <div class="stats" id="kpi-commandes"></div>
-        <p class="no-print"><button type="button" class="secondary small-btn" id="b-offerte">Commande offerte</button></p>
         <div class="card" data-vue="a-envoyer">
-          <h2>Tablettes à envoyer</h2>
+          <div class="tete">
+            <h2>Tablettes à envoyer</h2>
+            <button type="button" class="secondary small-btn no-print" id="b-offerte">+ Commande offerte</button>
+          </div>
           <ul id="orders" class="orders"></ul>
           <p id="orders-empty" class="muted small" hidden>Aucune commande en attente.</p>
         </div>
@@ -332,14 +336,12 @@
           <div class="tete">
             <span></span>
             <div class="actions no-print">
-              <button type="button" class="link small" id="btn-courrier">Relever factures@</button>
-              <button type="button" class="secondary small-btn" id="btn-lire">Déposer une facture</button>
               <button type="button" class="primary small-btn" id="btn-depense">Ajouter une dépense</button>
             </div>
           </div>
           <div class="table"><table id="t-achats"></table></div>
           <div class="table"><table id="t-categories"></table></div>
-          <p class="muted small">Une facture peut aussi être glissée sur la page ou envoyée à <strong>factures@mapapote.fr</strong> : elle est lue et rangée toute seule.</p>
+          <p class="muted small">Une facture envoyée à <strong>factures@mapapote.fr</strong> est lue et rangée toute seule (boîte relevée chaque heure). Dans « Ajouter une dépense », le justificatif choisi remplit la fiche tout seul ; on peut aussi glisser un fichier sur la page.</p>
           <p id="courrier" class="small muted"></p>
         </div>
         <div data-onglet="registres">

@@ -276,8 +276,6 @@ function afficherPage() {
   const menu = PARENTS[page] || page;
   document.querySelectorAll('.nav a[data-page]').forEach((a) => {
     a.classList.toggle('actif', a.dataset.page === menu);
-    // Sur téléphone, le menu défile : garder la section choisie visible.
-    if (a.dataset.page === menu) a.scrollIntoView({ block: 'nearest', inline: 'center' });
   });
   document.querySelectorAll('[data-panneau]').forEach((p) => { p.hidden = p.dataset.panneau !== page; });
   // Page d'une famille (#clients/familles/fid) : titre « Famille », pas « Clients ».
@@ -307,6 +305,15 @@ function afficherFiche() {
   if (page === 'accessoire') remplirPageAccessoire(decodeURIComponent(id));
 }
 window.addEventListener('hashchange', afficherPage);
+
+// Téléphone : menu ☰ qui se déplie sous la barre du haut, refermé dès qu'on choisit une page.
+function ouvrirMenu(ouvert) {
+  document.querySelector('.nav').classList.toggle('ouvert', ouvert);
+  $('nav-menu').setAttribute('aria-expanded', String(ouvert));
+}
+$('nav-menu').addEventListener('click', () => ouvrirMenu(!document.querySelector('.nav').classList.contains('ouvert')));
+window.addEventListener('hashchange', () => ouvrirMenu(false));
+document.addEventListener('click', (e) => { if (!e.target.closest('.nav')) ouvrirMenu(false); });
 afficherPage();
 
 // ---------- Chargement ----------
@@ -557,6 +564,8 @@ function piecesTablette(t) {
 }
 
 const DISPONIBLES = ['en-stock', 'preparee'];
+// Alerte notée au jumelage, sauf « sans commande » quand la tablette a été rattachée depuis.
+const alerteJumelage = (t) => (t.alerteJumelage === 'jumelée sans commande' && t.commande ? null : t.alerteJumelage || null);
 // Tablettes du stock qui peuvent partir : libres, ou déjà réservées à une commande pas encore envoyée.
 function tablettesPretes() {
   const aEnvoyer = new Set(donnees.commandes.filter((c) => etatCommande(c) === 'a-envoyer').map((c) => c.id));
@@ -586,7 +595,7 @@ function afficherAccueil() {
   const simsSansTablette = donnees.sims.filter((l) => l.statut === 'active' && !l.tablette).length;
   const accessoires = accessoiresAPrevoir().filter((a) => a.manque || a.bas);
   // Achats enregistrés depuis la confirmation de commande : facture à télécharger chez le vendeur (après 5 jours).
-  const jumelagesAVoir = donnees.stock.filter((t) => t.alerteJumelage);
+  const jumelagesAVoir = donnees.stock.filter(alerteJumelage);
   // Même règle que aFaire (functions/gestion.js) : batterie usée, la tablette revenue ne repart pas.
   const usees = donnees.stock.filter((t) => t.etat === 'revenue' && t.usure);
   const facturesAttendues = donnees.depenses.filter((d) => d.confirmation && Date.now() - (d.date || 0) > 5 * 864e5);
@@ -623,7 +632,7 @@ function afficherAccueil() {
     [simsSansTablette, `${simsSansTablette} ligne${simsSansTablette > 1 ? 's SIM actives reliées' : ' SIM active reliée'} à aucune tablette`, '#stock/sim', 'ko'],
     [simsARegarder, `${simsARegarder} carte${simsARegarder > 1 ? 's' : ''} SIM à regarder (promo, activation, carte bancaire)`, '#stock/sim', 'ko'],
     ...accessoires.map((a) => [1, a.manque ? `${a.nom} : il en manque ${a.manque} pour les envois` : `${a.nom} : stock bas (${a.quantite || 0})`, '#stock/accessoires', a.manque ? 'ko' : '']),
-    ...jumelagesAVoir.map((t) => [1, `${nomT(t)} ${t.alerteJumelage}`, versTablette(t), 'ko']),
+    ...jumelagesAVoir.map((t) => [1, `${nomT(t)} ${alerteJumelage(t)}`, versTablette(t), 'ko']),
     ...usees.map((t) => [1, `${nomT(t)} revenue : ${t.usure}, à retirer du parc`, versTablette(t), 'ko']),
     // Une ligne par achat, qui ouvre la page de cet achat.
     ...facturesAttendues.map((d) => [1, `Facture ${d.fournisseur || 'du vendeur'} à télécharger : ${d.libelle || 'achat'}${d.numero ? `, commande ${d.numero}` : ''}. La télécharger chez le vendeur puis l'envoyer à factures@`,
@@ -657,6 +666,7 @@ function afficherAccueil() {
     $(id).textContent = n || '';
   };
   pastille('n-accueil', taches.length);
+  pastille('n-menu', taches.length);
   pastille('n-commandes', aEnvoyer + aRecuperer);
   pastille('n-stock', manque + aVerifier + simsAResilier + simsARegarder + accessoires.length + remplacees + clientsSansSim + simsSansTablette);
   afficherAutomatique();
@@ -1292,7 +1302,7 @@ function afficherStock() {
         onclick: () => ouvrirTablette(t.id),
         cellules: [
           h('div', {}, t.ref ? h('strong', {}, `${t.ref} `) : null, t.numero || h('span', { class: 'muted' }, 'à saisir'),
-            t.alerteJumelage ? h('div', {}, badge(t.alerteJumelage, 'ko')) : null,
+            alerteJumelage(t) ? h('div', {}, badge(alerteJumelage(t), 'ko')) : null,
             t.usure ? h('div', {}, badge(t.usure, 'ko')) : null),
           t.modele || '',
           badge(donnees.etats[t.affiche] || t.affiche, classeEtat(t.affiche)),
@@ -1524,18 +1534,23 @@ const saisieEnCours = (zone) => !!zone.querySelector('.saisie-champ:not([data-en
 // suffixe, aide, vide (texte si rien), convertir (saisie → valeur envoyée), enregistrer(valeur) → promesse.
 function ligneModifiable(libelle, affiche, opts) {
   const dd = h('dd', { class: 'modifiable' });
+  const dt = h('dt', { class: 'modifiable' }, libelle);
   const lecture = () => {
-    dd.replaceChildren(affiche || h('span', { class: 'muted' }, opts.vide || 'à compléter'),
+    dd.classList.remove('en-saisie');
+    dt.classList.remove('en-saisie');
+    dd.replaceChildren(h('span', { class: 'valeur' }, affiche || h('span', { class: 'muted' }, opts.vide || 'à compléter')),
       h('button', { type: 'button', class: 'crayon no-print', title: `Modifier : ${libelle}`, 'aria-label': `Modifier : ${libelle}`, onclick: saisie }, '✎'));
   };
+  // Toute la ligne s'ouvre au clic (sauf un lien dedans, qui garde son rôle).
+  dd.addEventListener('click', (e) => { if (!dd.classList.contains('en-saisie') && !e.target.closest('a, button')) saisie(); });
   const saisie = () => {
     const champ = opts.options
       ? h('select', {}, ...opts.options.map(([v, t]) => h('option', { value: v, selected: v === (opts.valeur || '') }, t)))
       : opts.long ? h('textarea', { rows: 3 }) : h('input', { type: opts.type || 'text', inputmode: opts.mode || null, placeholder: opts.aide || null });
     if (!opts.options) champ.value = opts.valeur == null ? '' : String(opts.valeur);
     champ.setAttribute('aria-label', libelle);
-    const ok = h('button', { type: 'button', class: 'primary small-btn' }, 'Enregistrer');
-    const non = h('button', { type: 'button', class: 'secondary small-btn', onclick: lecture }, 'Annuler');
+    const ok = h('button', { type: 'button', class: 'rond ok', title: 'Enregistrer (Entrée)', 'aria-label': 'Enregistrer' }, '✓');
+    const non = h('button', { type: 'button', class: 'rond non', title: 'Annuler (Échap)', 'aria-label': 'Annuler', onclick: lecture }, '✕');
     const valider = async () => {
       let v;
       try { v = opts.convertir ? opts.convertir(champ.value) : champ.value; } catch (e) { prevenir(e.message); return; }
@@ -1551,11 +1566,14 @@ function ligneModifiable(libelle, affiche, opts) {
       if (e.key === 'Enter' && !opts.long) { e.preventDefault(); valider(); }
     });
     const zoneSaisie = h('div', { class: 'saisie-champ' }, champ, opts.suffixe ? h('span', { class: 'muted' }, opts.suffixe) : null, ok, non);
+    dd.classList.add('en-saisie');
+    dt.classList.add('en-saisie');
     dd.replaceChildren(zoneSaisie);
     champ.focus();
+    if (champ.select && !opts.options) champ.select();
   };
   lecture();
-  return [h('dt', {}, libelle), dd];
+  return [dt, dd];
 }
 
 async function supprimerSim(id) {
@@ -2648,14 +2666,6 @@ async function deposer(fichier) {
   }
 }
 
-const choixLecture = h('input', { type: 'file', accept: 'application/pdf,image/*', hidden: true });
-document.body.append(choixLecture);
-choixLecture.addEventListener('change', () => {
-  const fichier = choixLecture.files[0];
-  choixLecture.value = '';
-  if (fichier) deposer(fichier);
-});
-$('btn-lire').addEventListener('click', () => choixLecture.click());
 
 // Glisser-déposer un fichier n'importe où sur la page.
 const avecFichiers = (e) => [...(e.dataTransfer && e.dataTransfer.types) || []].includes('Files');
@@ -3168,20 +3178,6 @@ function afficherCourrier() {
       ...c.precedent.erreurs.map((x) => h('span', { class: 'error' }, h('br'), x))] : []),
   );
 }
-
-$('btn-courrier').addEventListener('click', async () => {
-  const b = $('btn-courrier');
-  b.disabled = true;
-  $('courrier').textContent = 'Relevé de la boîte factures@…';
-  try {
-    await appeler('gestionCourrierMaintenant');
-    signalerChangement();
-  } catch (e) {
-    $('courrier').replaceChildren(h('span', { class: 'error' }, messageErreur(e)));
-  } finally {
-    b.disabled = false;
-  }
-});
 
 // ---------- Livres comptables archivés (clôture du mois) ----------
 

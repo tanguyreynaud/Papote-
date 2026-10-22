@@ -75,15 +75,20 @@ $('btn-signin').addEventListener('click', async () => {
 });
 
 $('btn-signout').addEventListener('click', () => signOut(auth));
-$('btn-refresh').addEventListener('click', () => {
-  load();
-  signalerChangement();
+// Plus de bouton « Actualiser » : les données se relisent après chaque action, et quand on revient sur l'onglet
+// après plus d'une minute ailleurs (commande arrivée entre-temps).
+let quitteLe = 0;
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { quitteLe = Date.now(); return; }
+  if (auth.currentUser && quitteLe && Date.now() - quitteLe > 60_000) {
+    load();
+    signalerChangement();
+  }
 });
 
 onAuthStateChanged(auth, (user) => {
   $('signin').hidden = !!user;
   $('dashboard').hidden = !user;
-  $('btn-refresh').hidden = !user;
   $('who').textContent = user ? user.email : '';
   if (user) load();
 });

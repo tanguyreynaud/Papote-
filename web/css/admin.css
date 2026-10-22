@@ -46,18 +46,30 @@
 .contenu-tete .periode label { display: flex; align-items: center; gap: 6px; margin: 0; font-weight: 400; font-size: 15px; }
 .etat-periode { margin: -8px 0 14px; }
 
+/* Bouton menu (☰) : seulement sur téléphone. */
+.nav-menu { display: none; }
+
 @media (max-width: 860px) {
   .shell { display: block; background: var(--bg); }
+  /* Téléphone : une barre en haut (logo + ☰), le menu se déplie dessous. */
   .nav {
     background: var(--surface);
-    position: sticky; top: 0; z-index: 5; height: auto; flex-direction: row; align-items: center;
-    padding: calc(8px + env(safe-area-inset-top)) 8px 8px; border-right: none; border-bottom: 1px solid var(--line);
-    overflow-x: auto; scrollbar-width: none;
+    position: sticky; top: 0; z-index: 20; height: auto; gap: 0;
+    padding: calc(8px + env(safe-area-inset-top)) 12px 8px; border-right: none; border-bottom: 1px solid var(--line);
   }
-  .nav-marque, .nav-pied { display: none; }
-  .nav nav { flex-direction: row; }
-  .nav nav a { white-space: nowrap; padding: 8px 12px; font-size: 14px; }
-  .nav nav a svg { display: none; }
+  .nav-marque { padding: 0; }
+  .nav-marque .admin-logo { width: 32px; height: 32px; }
+  .nav-marque strong { font-size: 20px; }
+  .nav-menu {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px; margin-left: auto; position: relative;
+    width: 44px; height: 44px; min-height: 0; padding: 0; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); box-shadow: none;
+  }
+  .nav-menu svg { width: 22px; height: 22px; stroke: var(--text); stroke-width: 2; stroke-linecap: round; fill: none; }
+  .nav-menu .pastille { position: absolute; top: -6px; right: -6px; margin: 0; }
+  .nav nav, .nav-pied { display: none; }
+  .nav.ouvert nav { display: flex; padding-top: 10px; }
+  .nav.ouvert .nav-pied { display: block; padding: 12px 12px 4px; border-top: 1px solid var(--line); margin-top: 8px; }
+  .nav nav a { padding: 12px; font-size: 16px; }
   .contenu { padding: 16px 16px 40px; }
   .contenu-tete h1 { font-size: 24px; }
 }

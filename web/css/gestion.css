@@ -439,8 +439,8 @@ label.interrupteur, .fiche label.interrupteur { display: inline-flex; flex-direc
 .form-modif { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
 .form-modif .boutons { display: flex; gap: 8px; }
 @media (max-width: 640px) {
-  .tete-fiche { flex-wrap: wrap; }
-  .tete-actions { width: 100%; justify-content: flex-start; }
+  /* Le ⋮ reste sur la ligne du titre (le titre passe à la ligne s'il est long). */
+  .tete-fiche h2 { min-width: 0; overflow-wrap: anywhere; }
   .bouton-message { align-items: flex-start; }
 }
 .a-faire a .tache-titre { color: var(--text); }
@@ -448,13 +448,33 @@ label.interrupteur, .fiche label.interrupteur { display: inline-flex; flex-direc
 /* Aucun soulignement dans l'admin (demande de Tanguy, 22/10). */
 a, .link, button.link { text-decoration: none; }
 
-/* Champ modifiable seul : un petit crayon à côté de la valeur (pages carte SIM, tablette). */
-.fiche dd.modifiable { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-height: 28px; }
-.crayon { min-height: 0; width: 28px; height: 28px; padding: 0; border: none; border-radius: 8px; background: none;
-  color: var(--muted); font-size: 15px; line-height: 1; box-shadow: none; opacity: .55; cursor: pointer; }
-.crayon:hover, .crayon:focus-visible { opacity: 1; color: var(--accent); background: #eef0ff; }
-.saisie-champ { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; width: 100%; }
-.saisie-champ input, .saisie-champ select, .saisie-champ textarea { flex: 1 1 200px; width: auto; margin: 0; padding: 6px 10px; font-size: 15px; }
+/* Champ modifiable seul (pages carte SIM, tablette, accessoire, dépense, réglages) : chaque ligne a la même
+   hauteur, le crayon est aligné à droite, toute la ligne s'ouvre au clic ; en saisie, la ligne se teinte et
+   garde sa place, avec deux petits boutons ronds ✓ et ✕. */
+.fiche dt.modifiable, .fiche dd.modifiable { padding: 6px 0; border-bottom: 1px solid #f0ebe2; display: flex; align-items: center; min-height: 32px; }
+.fiche dt.modifiable + dd.modifiable { gap: 8px; }
+.fiche dd.modifiable { cursor: pointer; border-radius: 0; }
+.fiche dd.modifiable .valeur { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.fiche dd.modifiable:hover:not(.en-saisie) .crayon { opacity: 1; color: var(--accent); }
+.fiche dd.modifiable:hover:not(.en-saisie) .valeur { color: var(--accent); }
+.fiche dd.en-saisie, .fiche dt.en-saisie { background: #f3f2ff; cursor: default; }
+.fiche dt.en-saisie { border-radius: 10px 0 0 10px; padding-left: 8px; margin-left: -8px; }
+.fiche dd.en-saisie { border-radius: 0 10px 10px 0; padding-right: 8px; margin-right: -8px; }
+.crayon { min-height: 0; width: 28px; height: 28px; flex: none; padding: 0; border: none; border-radius: 8px; background: none;
+  color: var(--muted); font-size: 15px; line-height: 1; box-shadow: none; opacity: .45; cursor: pointer; }
+.crayon:focus-visible { opacity: 1; color: var(--accent); background: #eef0ff; }
+.saisie-champ { display: flex; align-items: center; gap: 6px; width: 100%; }
+.saisie-champ input, .saisie-champ select, .saisie-champ textarea { flex: 1 1 auto; min-width: 0; width: auto; margin: 0; padding: 5px 10px; font-size: 15px; min-height: 0; height: 34px; background: #fff; }
+.saisie-champ textarea { height: auto; }
+.saisie-champ button.rond { flex: none; width: 34px; height: 34px; min-height: 0; padding: 0; border-radius: 50%; font-size: 16px; line-height: 1; box-shadow: none; }
+.saisie-champ button.rond.ok { background: var(--accent); color: #fff; border: none; }
+.saisie-champ button.rond.non { background: #fff; color: var(--muted); border: 1px solid var(--line); }
+@media (max-width: 640px) {
+  .fiche dt.modifiable { border-bottom: none; padding-bottom: 0; min-height: 0; }
+  .fiche dt.en-saisie, .fiche dd.en-saisie { margin: 0; border-radius: 10px; }
+  .fiche dt.en-saisie { border-radius: 10px 10px 0 0; padding: 6px 8px 0; }
+  .fiche dd.en-saisie { border-radius: 0 0 10px 10px; padding: 6px 8px; }
+}
 
 /* Parcours d'une tablette (page tablette) : étapes passées, actuelle, à venir. */
 .frise-tablette { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; list-style: none; margin: 0; padding: 0; font-size: 14px; }
