@@ -1277,7 +1277,8 @@ async function suiviRetour(event, rAvant, r, c) {
         return;
       }
     }
-    if (!c.email) return;
+    // Commande offerte (famille supprimée, matériel repris par Papote) : pas d'e-mail au proche.
+    if (!c.email || c.offerte) return;
     try {
       await envoyerMail(c.email, mail.tabletteRecue({ nom: c.nom, rembourse }));
     } catch (e) {
