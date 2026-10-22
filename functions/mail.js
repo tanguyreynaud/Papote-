@@ -262,6 +262,12 @@ function resiliation({ nom, email, code, commande, retractation, suivi, lienSuiv
   ], { texte: 'Ouvrir la commande', lien: `https://app.mapapote.fr/admin.html#commande/${encodeURIComponent(commande)}` });
 }
 
+// Alerte à Papote (prélèvement refusé ou contesté…), avec le lien vers la commande dans l'admin.
+function alerteAdmin({ titre, detail, commande }) {
+  return message(titre, [echapper(detail)], commande
+    ? { texte: 'Ouvrir la commande', lien: `https://app.mapapote.fr/admin.html#commande/${encodeURIComponent(commande)}` } : null);
+}
+
 // smtp : « hote:port:utilisateur » (MAIL_SMTP), expediteur : adresse affichée (MAIL_EXPEDITEUR).
 let transport;
 async function envoyer({ smtp, motDePasse, expediteur, a, contenu }) {
@@ -278,6 +284,6 @@ async function envoyer({ smtp, motDePasse, expediteur, a, contenu }) {
 
 module.exports = {
   colisParti, commandeConfirmee, nouvelleCommande, relancePanier, lancement, sepaRefuse, invitation, demandeRejoindre, rappelJumelage,
-  retourTablette, etiquetteRetour, rappelRestitution, tabletteRecue, commandeAnnulee, annulationAvantEnvoi, resiliation,
+  retourTablette, etiquetteRetour, rappelRestitution, tabletteRecue, commandeAnnulee, annulationAvantEnvoi, resiliation, alerteAdmin,
   envoyer, echapper, euros,
 };

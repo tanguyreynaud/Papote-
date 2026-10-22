@@ -629,6 +629,11 @@ exports.gestionDonnees = onCall(async (request) => {
         resiliationLe: famille && famille.abonnement ? famille.abonnement.resiliationLe || null : null,
         restitution: c.restitution ? { statut: c.restitution.statut || null, avant: c.restitution.avant || null } : null,
         remboursement: c.remboursement || null,
+        restitutionErreur: c.restitution && c.restitution.erreur ? c.restitution.erreur : null,
+        retractation: c.retractation || null,
+        dernierMois: c.dernierMois || null,
+        contestations: c.contestations || null,
+        pause: c.pause || null,
         etiquettes: c.etiquettes || null,
         preparation: c.preparation || null,
         stripeCustomerId: c.stripeCustomerId || null,
@@ -1728,9 +1733,12 @@ async function retoursEnCours(bilan) {
   }
 }
 
+// La date notée (preparation.recuLe) est aussi la date de réception qui fait partir les 30 jours pour changer
+// d'avis et le premier prélèvement (abonnement.js, receptionDe) : on suit aussi les commandes déjà reliées.
 async function colisLivres(bilan) {
-  const enRoute = await db().collection('commandes').where('expedition', '==', 'envoyee').where('fid', '==', null).get();
-  const aSuivre = enRoute.docs.filter((d) => !d.get('preparation.recuLe') && d.get('etiquettes.aller.colis'));
+  const enRoute = await db().collection('commandes').where('expedition', '==', 'envoyee').get();
+  const recent = (d) => { const e = d.get('envoyeeLe'); return !e || !e.toMillis || Date.now() - e.toMillis() < 60 * 864e5; };
+  const aSuivre = enRoute.docs.filter((d) => !d.get('preparation.recuLe') && d.get('etiquettes.aller.colis') && recent(d));
   if (!aSuivre.length) return;
   const api = sendcloud.client(SENDCLOUD_API.value());
   for (const snap of aSuivre) {
@@ -2072,6 +2080,10 @@ async function appliquerJumelage(p, pairingRef) {
   };
   if (t.etat === 'envoyee') maj.etat = 'chez-client';
   await fiche.ref.update(maj);
+  // Tablette reliée : elle est forcément reçue (si le suivi du colis ne l'a pas déjà noté).
+  if (t.commande && commande && commande.envoyeeLe && !(commande.preparation && commande.preparation.recuLe)) {
+    await db().doc(`commandes/${t.commande}`).update({ 'preparation.recuLe': Date.now(), 'preparation.recuPar': 'tablette reliée' });
+  }
   if (suite.relier && vitrine.appliquer) {
     await vitrine.appliquer(p.fid, t.commande);
     logger.info(`Commande ${t.commande} reliée à la famille ${p.fid} par la tablette ${t.ref || fiche.id}.`);

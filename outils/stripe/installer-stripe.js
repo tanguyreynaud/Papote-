@@ -27,6 +27,11 @@ const EVENEMENTS = [
   'customer.subscription.deleted',
   'customer.subscription.paused',
   'customer.subscription.resumed',
+  // Prélèvements hors abonnement (dernier mois, matériel non rendu) refusés, et contestations SEPA.
+  'invoice.paid',
+  'invoice.payment_failed',
+  'payment_intent.payment_failed',
+  'charge.dispute.created',
 ];
 
 const PRODUITS = [
