@@ -158,3 +158,67 @@ export async function patienter(texte, travail) {
     if (!enAttente) fermeture = setTimeout(() => { if (!enAttente && attente.open) attente.close(); }, 120);
   }
 }
+
+// Petit constructeur d'élément pour ligneModifiable.
+function h(tag, attrs = {}, ...enfants) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v == null || v === false) continue;
+    if (k === 'class') el.className = v;
+    else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
+    else if (k in el && typeof v !== 'string') el[k] = v;
+    else el.setAttribute(k, v === true ? '' : v);
+  }
+  for (const e of enfants.flat()) {
+    if (e == null || e === false) continue;
+    el.append(e instanceof Node ? e : document.createTextNode(String(e)));
+  }
+  return el;
+}
+
+// Une ligne de fiche avec un petit crayon : ce seul champ passe en saisie, Entrée enregistre, Échap annule.
+// opts : valeur (texte du champ), type, mode (clavier), options [[valeur, libellé]], long (zone de texte),
+// suffixe, aide, vide (texte si rien), convertir (saisie → valeur envoyée), enregistrer(valeur) → promesse.
+export function ligneModifiable(libelle, affiche, opts) {
+  const dd = h('dd', { class: 'modifiable' });
+  const dt = h('dt', { class: 'modifiable' }, libelle);
+  const lecture = () => {
+    dd.classList.remove('en-saisie');
+    dt.classList.remove('en-saisie');
+    dd.replaceChildren(h('span', { class: 'valeur' }, affiche || h('span', { class: 'muted' }, opts.vide || 'à compléter')),
+      h('button', { type: 'button', class: 'crayon no-print', title: `Modifier : ${libelle}`, 'aria-label': `Modifier : ${libelle}`, onclick: saisie }, '✎'));
+  };
+  // Toute la ligne s'ouvre au clic (sauf un lien dedans, qui garde son rôle).
+  dd.addEventListener('click', (e) => { if (!dd.classList.contains('en-saisie') && !e.target.closest('a, button')) saisie(); });
+  const saisie = () => {
+    const champ = opts.options
+      ? h('select', {}, ...opts.options.map(([v, t]) => h('option', { value: v, selected: v === (opts.valeur || '') }, t)))
+      : opts.long ? h('textarea', { rows: 3 }) : h('input', { type: opts.type || 'text', inputmode: opts.mode || null, placeholder: opts.aide || null });
+    if (!opts.options) champ.value = opts.valeur == null ? '' : String(opts.valeur);
+    champ.setAttribute('aria-label', libelle);
+    const ok = h('button', { type: 'button', class: 'rond ok', title: 'Enregistrer (Entrée)', 'aria-label': 'Enregistrer' }, '✓');
+    const non = h('button', { type: 'button', class: 'rond non', title: 'Annuler (Échap)', 'aria-label': 'Annuler', onclick: lecture }, '✕');
+    const valider = async () => {
+      let v;
+      try { v = opts.convertir ? opts.convertir(champ.value) : champ.value; } catch (e) { prevenir(e.message); return; }
+      ok.disabled = true;
+      boutonCharge(ok, true);
+      // Envoi en cours : la page peut se redessiner (saisieEnCours ne la bloque plus).
+      zoneSaisie.dataset.envoi = '1';
+      if (!await opts.enregistrer(v)) { ok.disabled = false; boutonCharge(ok, false); delete zoneSaisie.dataset.envoi; }
+    };
+    ok.addEventListener('click', valider);
+    champ.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); lecture(); }
+      if (e.key === 'Enter' && !opts.long) { e.preventDefault(); valider(); }
+    });
+    const zoneSaisie = h('div', { class: 'saisie-champ' }, champ, opts.suffixe ? h('span', { class: 'muted' }, opts.suffixe) : null, ok, non);
+    dd.classList.add('en-saisie');
+    dt.classList.add('en-saisie');
+    dd.replaceChildren(zoneSaisie);
+    champ.focus();
+    if (champ.select && !opts.options) champ.select();
+  };
+  lecture();
+  return [dt, dd];
+}

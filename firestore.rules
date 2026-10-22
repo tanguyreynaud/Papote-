@@ -260,6 +260,12 @@ service cloud.firestore {
       // L'administrateur désigne le propriétaire d'une famille (secours depuis le tableau de bord).
       allow update: if isAdmin()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['createdBy', 'admins']);
+      // L'administrateur corrige le nom de la famille (page famille du tableau de bord).
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 40;
 
       // Supprimer la famille : par l'administrateur seulement, après échange avec le client.
       allow delete: if isAdmin();

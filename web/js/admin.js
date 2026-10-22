@@ -2,7 +2,7 @@
 // transfert des anciennes photos et vidéos vers Storage. Le stock, les factures et la comptabilité
 // sont dans gestion.js, sur la même page.
 // Une app Firebase à part (« admin ») : la connexion Google ne touche pas à la famille de ce navigateur.
-import { demander, saisir, prevenir, menuPoints, patienter, annoncer, boutonCharge } from './dialogue.js';
+import { demander, saisir, prevenir, menuPoints, patienter, annoncer, boutonCharge, ligneModifiable } from './dialogue.js';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
 import {
   getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut,
@@ -805,7 +805,23 @@ function carteFamille(f) {
   titre.append(el('span', 'dot'), el('h2', null, f.name), place);
   donnees().then((d) => d.commandes || []).catch(() => [])
     .then((commandes) => place.replaceWith(menuFamille(f, tete, commandes.filter((c) => c.fid === f.id))));
-  const dl = el('dl');
+  const dl = el('dl', 'fiche');
+  // Le nom se corrige au crayon, comme sur les pages tablette et carte SIM.
+  dl.append(...ligneModifiable('Nom', f.name, { valeur: f.name, enregistrer: async (v) => {
+    const nom = v.trim();
+    if (!nom || nom.length > 40) { prevenir('Le nom doit faire entre 1 et 40 caractères.'); return false; }
+    try {
+      if (nom !== f.name) await patienter('Changement du nom…', () => updateDoc(doc(db, 'families', f.id), { name: nom }));
+      f.name = nom;
+      delete $('famille-fiche').dataset.fid;
+      render();
+      annoncer('Nom changé');
+      return true;
+    } catch (err) {
+      prevenir(`Impossible : ${err.message}`);
+      return false;
+    }
+  } }));
   for (const [k, v] of [
     ['État', s.label],
     ['Code de la famille', f.code ? `${f.code.slice(0, 4)}-${f.code.slice(4)}` : '–'],

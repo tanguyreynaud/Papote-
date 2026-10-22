@@ -553,3 +553,28 @@ button.secondary.charge::after, button.link.charge::after { border-color: rgba(7
   .fiche { grid-template-columns: minmax(0, 1fr); }
   .saisie-champ input, .saisie-champ select, .saisie-champ textarea { flex-basis: 0; }
 }
+
+/* Stock sur téléphone : chaque ligne devient une carte (titre de colonne à gauche, valeur à droite). */
+@media (max-width: 640px) {
+  [data-panneau="stock"] .table { overflow: visible; }
+  [data-panneau="stock"] .table table, [data-panneau="stock"] .table tbody { display: block; }
+  [data-panneau="stock"] .table thead { display: none; }
+  [data-panneau="stock"] .table tbody tr { display: block; position: relative; background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 10px 14px; margin-bottom: 12px; }
+  [data-panneau="stock"] .table tbody td { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 5px 0; border: none; text-align: right; white-space: normal; }
+  [data-panneau="stock"] .table tbody td::before { content: attr(data-titre); color: var(--muted); font-weight: 600; text-align: left; flex: none; }
+  [data-panneau="stock"] .table tbody td:empty, [data-panneau="stock"] .table tbody td:has(> .pieces-liste:empty) { display: none; }
+  [data-panneau="stock"] .table tbody td:first-child { display: block; text-align: left; font-size: 16px; padding: 2px 30px 8px 0; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
+  [data-panneau="stock"] .table tbody td:first-child::before { content: none; }
+  [data-panneau="stock"] .table tbody tr[tabindex] td:last-child { position: static; padding-right: 0; }
+  [data-panneau="stock"] .table tbody tr[tabindex] td:last-child::after { content: none; }
+  [data-panneau="stock"] .table tbody tr[tabindex]::after { content: '›'; position: absolute; right: 14px; top: 10px; color: var(--accent); font-size: 22px; font-weight: 700; }
+  [data-panneau="stock"] .table tbody tr[tabindex]:hover td { background: none; }
+  [data-panneau="stock"] .table tbody td.vide { display: block; text-align: center; }
+  [data-panneau="stock"] .table tbody td.vide::before { content: none; }
+  [data-panneau="stock"] .table tr.total { background: none; border: none; padding: 4px 0; }
+  [data-panneau="stock"] .table .pieces-liste { justify-content: flex-end; }
+}
+
+/* Page famille : mêmes lignes que les autres fiches (une colonne sur téléphone, le champ en pleine largeur). */
+#famille-fiche .family dl.fiche { grid-template-columns: max-content minmax(0, 1fr); }
+@media (max-width: 640px) { #famille-fiche .family dl.fiche { grid-template-columns: minmax(0, 1fr); gap: 0; } #famille-fiche .family dl.fiche dd:not(.modifiable) { margin-bottom: 8px; } }
