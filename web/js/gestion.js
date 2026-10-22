@@ -200,6 +200,8 @@ let donnees = null; // gestionDonnees
 let stripe = null; // gestionStripe pour la période choisie
 let stripeMois = null; // le mois en cours (accueil), tiré de stripeAnnee
 let stripeAnnee = null; // gestionStripe pour l'année civile en cours (franchise de TVA)
+let stripeTotal = null; // gestionStripe depuis le début de Papote (résultat total de l'accueil)
+const DEBUT_PAPOTE = new Date(2026, 0, 1).getTime();
 let periode = null; // { debut, fin } en millisecondes, fin exclue
 
 function erreur(e) {
@@ -352,6 +354,10 @@ async function chargerMois() {
     });
     const debutMois = new Date(n.getFullYear(), n.getMonth(), 1).getTime();
     stripeMois = { ...stripeAnnee, mouvements: stripeAnnee.mouvements.filter((m) => m.le >= debutMois) };
+    afficherAccueil();
+    // Les années précédentes ne sont lues qu'à partir de 2027 : avant, l'année en cours est le total.
+    stripeTotal = n.getFullYear() > new Date(DEBUT_PAPOTE).getFullYear()
+      ? await appeler('gestionStripe', { debut: DEBUT_PAPOTE, fin: new Date(n.getFullYear() + 1, 0, 1).getTime() }) : stripeAnnee;
     afficherAccueil();
   } catch (e) {
     console.warn('Stripe (mois en cours)', e);
@@ -658,8 +664,7 @@ function afficherAccueil() {
     const n = new Date();
     const mois = { debut: new Date(n.getFullYear(), n.getMonth(), 1).getTime(), fin: new Date(n.getFullYear(), n.getMonth() + 1, 1).getTime() };
     const t = totaux(stripeMois.mouvements, depensesDe(mois));
-    const annee = { debut: new Date(n.getFullYear(), 0, 1).getTime(), fin: new Date(n.getFullYear() + 1, 0, 1).getTime() };
-    const tAnnee = totaux(stripeAnnee.mouvements, depensesDe(annee));
+    const tTotal = stripeTotal ? totaux(stripeTotal.mouvements, donnees.depenses) : null;
     // Abonnés : d'après l'état des familles écrit par le serveur (les offertes à part).
     const payants = donnees.familles.filter((f) => ['actif', 'impaye', 'suspendu'].includes(f.statut)).length;
     const offerts = donnees.familles.filter((f) => f.statut === 'offert').length;
@@ -668,8 +673,12 @@ function afficherAccueil() {
       if ($('p-choix').value !== 'mois') { $('p-choix').value = 'mois'; changerPeriode(); }
       location.hash = `#compta/${onglet}`;
     };
-    const anneeEntiere = () => {
-      if ($('p-choix').value !== 'annee') { $('p-choix').value = 'annee'; changerPeriode(); }
+    // Bilan sur toute la vie de Papote (période « Autre » depuis le début).
+    const depuisLeDebut = () => {
+      $('p-choix').value = 'perso';
+      $('p-du').value = new Date(DEBUT_PAPOTE).toLocaleDateString('sv-SE');
+      $('p-au').value = n.toLocaleDateString('sv-SE');
+      changerPeriode();
       location.hash = '#compta/bilan';
     };
     $('kpi-mois').replaceChildren(
@@ -681,7 +690,7 @@ function afficherAccueil() {
         afficherCommandes();
       }),
       cliquable(stat(euros(t.resultat), 'résultat ce mois', `${euros(t.encaisse)} encaissés, ${euros(t.depenses)} dépensés`, t.resultat < 0 ? 'neg' : null), argent('bilan')),
-      cliquable(stat(euros(tAnnee.resultat), `résultat depuis janvier ${n.getFullYear()}`, null, tAnnee.resultat < 0 ? 'neg' : null), anneeEntiere),
+      tTotal ? cliquable(stat(euros(tTotal.resultat), 'résultat total', 'depuis le début de Papote', tTotal.resultat < 0 ? 'neg' : null), depuisLeDebut) : null,
     );
   }
 }
