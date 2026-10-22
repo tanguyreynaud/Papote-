@@ -47,7 +47,7 @@
           Stock<span class="pastille" id="n-stock" hidden></span></a>
         <a href="#compta" data-page="compta">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h3.5v-9H4zm6.25 0h3.5V5h-3.5zM16.5 20H20v-6h-3.5z"/></svg>
-          Argent</a>
+          Comptabilité</a>
         <a href="#outils" data-page="outils" class="nav-reglages">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.5-.5-.5-2.5z"/></svg>
           Réglages</a>
@@ -56,7 +56,7 @@
         <p id="who" class="muted small"></p>
         <button type="button" id="btn-signout" class="link small">Se déconnecter</button>
         <!-- Version de l'admin : à changer à chaque mise à jour, pour voir que la bonne est en ligne. -->
-        <p class="muted small version-admin">Version du 22/10 à 16 h 30</p>
+        <p class="muted small version-admin">Version du 22/10 à 17 h</p>
       </div>
     </aside>
 
@@ -258,7 +258,7 @@
         </div>
       </section>
 
-      <!-- ---------- Argent : bilan, factures, dépenses, URSSAF ---------- -->
+      <!-- ---------- Comptabilité : bilan, factures, dépenses, URSSAF ---------- -->
       <section data-panneau="compta" hidden>
         <h2 class="titre-print" id="bilan-titre">Bilan</h2>
         <div class="onglets no-print" role="tablist">
@@ -386,31 +386,11 @@
         <div class="card" data-onglet="expedition">
           <h2>Étiquettes Sendcloud</h2>
           <p class="muted small">Adresse de départ des colis et d'arrivée des retours.</p>
-          <form id="f-expediteur" class="grille no-print">
-            <label>Nom <input name="nom" autocomplete="organization"></label>
-            <label>Adresse <input name="adresse" autocomplete="street-address"></label>
-            <label>Code postal <input name="cp" inputmode="numeric" autocomplete="postal-code"></label>
-            <label>Ville <input name="ville" autocomplete="address-level2"></label>
-            <label>Téléphone <input name="telephone" type="tel" autocomplete="tel"></label>
-            <label>E-mail <input name="email" type="email" autocomplete="email"></label>
-            <label>Poids d'un colis (g) <input name="poidsColis" inputmode="numeric"></label>
-            <button type="submit" class="secondary">Enregistrer l'adresse</button>
-            <p class="f-msg small" hidden></p>
-          </form>
+          <dl class="fiche" id="reglages-expediteur"></dl>
         </div>
         <div class="card" data-onglet="calculs">
           <h2>Calculs de la comptabilité</h2>
-          <form id="f-reglages" class="grille no-print">
-            <label>Seuil de franchise de TVA (€) <input name="seuilTva" inputmode="decimal"></label>
-            <label>Taux URSSAF (%) <input name="tauxUrssaf" inputmode="decimal"></label>
-            <label>Forfait SIM par défaut (€/mois) <input name="forfaitSim" inputmode="decimal"></label>
-            <label>Durée de vie d'une tablette (mois) <input name="vieTablette" inputmode="numeric"></label>
-            <label>Mise en service (€) <input name="miseEnService" inputmode="decimal"></label>
-            <label>Envoi d'un colis (€) <input name="fraisEnvoi" inputmode="decimal"></label>
-            <label>Retour d'un colis (€) <input name="fraisRetour" inputmode="decimal"></label>
-            <button type="submit" class="secondary">Enregistrer les réglages</button>
-            <p class="f-msg small" hidden></p>
-          </form>
+          <dl class="fiche" id="reglages-calculs"></dl>
         </div>
         <div class="card migrate" data-onglet="maintenance">
           <h2>Anciennes photos et vidéos</h2>
@@ -459,6 +439,12 @@
       <section data-panneau="sim" hidden>
         <p class="no-print"><a href="#stock/sim" class="retour">Retour</a></p>
         <div id="dsi-corps"></div>
+      </section>
+
+      <!-- ---------- Page d'un accessoire (#accessoire/id ; #accessoire/nouveau pour en ajouter un) ---------- -->
+      <section data-panneau="accessoire" hidden>
+        <p class="no-print"><a href="#stock/accessoires" class="retour">Retour</a></p>
+        <div id="dx-corps"></div>
       </section>
 
       <!-- ---------- Page d'une dépense ou d'un achat fournisseur (#depense/id) ---------- -->
@@ -560,8 +546,8 @@
     </form>
   </dialog>
 
-  <dialog id="d-accessoire" class="fenetre">
-    <div class="fenetre-tete"><h2 id="dx-titre">Accessoire</h2><button type="button" class="fermer" aria-label="Fermer">✕</button></div>
+  <!-- Formulaire d'un nouvel accessoire : rangé ici, affiché dans la page #accessoire/nouveau. -->
+  <div id="d-accessoire" hidden>
     <form id="f-accessoire" class="grille">
       <label>Nom <input name="nom" required placeholder="ex. Clé 4G USB"></label>
       <label>Part avec <select name="parEnvoi"></select></label>
@@ -572,19 +558,11 @@
       <label class="large">Note <textarea name="note" rows="2"></textarea></label>
       <div class="large boutons">
         <button type="submit" class="primary">Enregistrer</button>
-        <button type="button" class="link danger" id="dx-supprimer" hidden>Supprimer</button>
+        <button type="button" class="secondary" id="dx-annuler">Annuler</button>
       </div>
       <p class="f-msg small" hidden></p>
     </form>
-    <form id="f-livraison" class="grille" hidden>
-      <p class="large small"><strong>Livraison reçue</strong> : ajoute la quantité au stock, et la dépense si le montant est rempli.</p>
-      <label>Quantité reçue <input name="quantite" inputmode="numeric" required></label>
-      <label>Montant payé (€) <input name="montant" inputmode="decimal" placeholder="facultatif"></label>
-      <label>Fournisseur <input name="fournisseur" placeholder="facultatif"></label>
-      <div class="large boutons"><button type="submit" class="secondary">Ajouter au stock</button></div>
-      <p class="f-msg small" hidden></p>
-    </form>
-  </dialog>
+  </div>
 
   <dialog id="d-scan" class="fenetre">
     <div class="fenetre-tete"><h2>Scanner un code-barres</h2><button type="button" class="fermer" aria-label="Fermer">✕</button></div>

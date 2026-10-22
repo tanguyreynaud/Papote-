@@ -223,16 +223,17 @@ const TITRES = {
   commandes: 'Commandes',
   clients: 'Clients',
   stock: 'Stock',
-  compta: 'Argent',
+  compta: 'Comptabilité',
   outils: 'Réglages',
   tablette: 'Tablette',
   commande: 'Commande',
   client: 'Client',
   depense: 'Dépense',
   sim: 'Carte SIM',
+  accessoire: 'Accessoire',
 };
 // Pages d'une fiche (#tablette/id, #commande/id) : le menu garde sa section allumée.
-const PARENTS = { tablette: 'stock', commande: 'commandes', client: 'clients', depense: 'compta', sim: 'stock' };
+const PARENTS = { tablette: 'stock', commande: 'commandes', client: 'clients', depense: 'compta', sim: 'stock', accessoire: 'stock' };
 // Anciennes pages devenues des onglets (liens déjà notés, favoris) : #familles → #clients/familles.
 const ANCIENNES = { familles: 'clients/familles', factures: 'compta/factures' };
 const AVEC_PERIODE = ['compta'];
@@ -303,6 +304,7 @@ function afficherFiche() {
   if (page === 'client') remplirClient(decodeURIComponent(id));
   if (page === 'depense') remplirPageDepense(decodeURIComponent(id));
   if (page === 'sim') remplirPageSim(decodeURIComponent(id));
+  if (page === 'accessoire') remplirPageAccessoire(decodeURIComponent(id));
 }
 window.addEventListener('hashchange', afficherPage);
 afficherPage();
@@ -373,6 +375,7 @@ function afficherTout() {
     afficherAccessoires();
     afficherCommandes();
     afficherExpediteur();
+    afficherReglagesCalculs();
     afficherAchats();
     afficherFiche();
   }
@@ -634,8 +637,8 @@ function afficherAccueil() {
   ].filter(([n]) => n > 0);
   // Rangé par sujet ; chaque ligne : un titre court, le détail en dessous, une pastille si c'est urgent.
   const groupe = (lien) => (/^#(commande|client)/.test(lien) ? 'Commandes et clients'
-    : /^#(tablette|stock|sim)/.test(lien) ? 'Stock' : /^#(depense|compta)/.test(lien) ? 'Argent' : 'Fonctionnement');
-  const groupes = new Map(['Commandes et clients', 'Stock', 'Argent', 'Fonctionnement'].map((g) => [g, []]));
+    : /^#(tablette|stock|sim)/.test(lien) ? 'Stock' : /^#(depense|compta)/.test(lien) ? 'Comptabilité' : 'Fonctionnement');
+  const groupes = new Map(['Commandes et clients', 'Stock', 'Comptabilité', 'Fonctionnement'].map((g) => [g, []]));
   for (const [, texte, lien, classe] of taches) {
     const i = texte.indexOf(' : ');
     const [titre, detail] = i > 0 ? [texte.slice(0, i), texte.slice(i + 3)] : [texte, null];
@@ -902,9 +905,17 @@ async function remplirCommande(id) {
           p.rembourse ? euros(p.rembourse) : '', p.recu ? h('a', { href: p.recu, target: '_blank', rel: 'noopener' }, 'Reçu') : '']));
     }
     const paye = r.paiements.filter((p) => p.statut === 'succeeded').reduce((s, p) => s + p.montant - (p.rembourse || 0), 0);
+    // Abonnement introuvable chez Stripe : en général une commande de test, ou un abonnement effacé de Stripe.
+    const inconnue = r.erreur && /No such/i.test(r.erreur);
+    if (inconnue || (!r.factures.length && !r.paiements.length)) {
+      factures.replaceChildren(h('p', { class: 'muted small' }, inconnue
+        ? 'Stripe ne retrouve pas l\'abonnement de cette commande (commande de test, ou abonnement effacé dans Stripe) : aucun paiement à afficher.'
+        : r.erreur || 'Aucun paiement pour l\'instant.'));
+      return;
+    }
     factures.replaceChildren(...[r.erreur ? h('p', { class: 'muted small' }, r.erreur) : null,
       h('p', { class: 'small' }, `Payé au total : ${euros(paye)}`),
-      h('div', { class: 'table' }, table), autres.length ? h('div', { class: 'table' }, table2) : null].filter(Boolean));
+      r.factures.length ? h('div', { class: 'table' }, table) : null, autres.length ? h('div', { class: 'table' }, table2) : null].filter(Boolean));
   } catch (e) {
     factures.replaceChildren(h('p', { class: 'error small' }, messageErreur(e)));
   }
@@ -1641,31 +1652,102 @@ function afficherAccessoires() {
   })), { vide: 'Aucun accessoire.' });
 }
 
-let accessoireOuvert = null;
+// Page d'un accessoire : chaque information se modifie avec son crayon ; la livraison reçue et la suppression
+// sont dans le ⋮. #accessoire/nouveau : le formulaire de saisie dans la page.
 function ouvrirAccessoire(id) {
-  const a = id ? donnees.accessoires.find((x) => x.id === id) : { quantite: 0, parEnvoi: '' };
-  if (!a) return;
-  accessoireOuvert = id || null;
-  const f = $('f-accessoire');
-  f.reset();
-  $('f-livraison').reset();
-  $('dx-titre').textContent = id ? a.nom : 'Nouvel accessoire';
-  f.parEnvoi.replaceChildren(...Object.entries(donnees.envoisAccessoire)
-    .map(([k, v]) => h('option', { value: k, selected: k === (a.parEnvoi || '') }, v)));
-  f.nom.value = a.nom || '';
-  f.quantite.value = a.quantite || 0;
-  f.seuil.value = a.seuil != null ? a.seuil : '';
-  f.prixAchat.value = enEuros(a.prixAchat);
-  f.retour.checked = a.retour === true;
-  f.note.value = a.note || '';
-  $('dx-supprimer').hidden = !id;
-  $('f-livraison').hidden = !id;
-  document.querySelectorAll('#d-accessoire .f-msg').forEach((p) => { p.hidden = true; });
-  $('d-accessoire').showModal();
+  location.hash = `#accessoire/${encodeURIComponent(id || 'nouveau')}`;
 }
 $('btn-accessoire').addEventListener('click', () => ouvrirAccessoire(null));
 
 const entier = (v) => (String(v).trim() === '' ? null : /^-?\d+$/.test(String(v).trim()) ? Number(v) : NaN);
+
+function remplirPageAccessoire(id) {
+  const zone = $('dx-corps');
+  if (id === 'nouveau') {
+    $('titre-page').textContent = 'Nouvel accessoire';
+    const f = $('f-accessoire');
+    if (zone.contains(f)) return;
+    f.reset();
+    f.parEnvoi.replaceChildren(...Object.entries(donnees.envoisAccessoire).map(([k, v]) => h('option', { value: k }, v)));
+    f.quantite.value = 0;
+    f.querySelector('.f-msg').hidden = true;
+    zone.replaceChildren(h('div', { class: 'card' }, h('h2', {}, 'Nouvel accessoire'), f));
+    f.nom.focus();
+    return;
+  }
+  $('d-accessoire').append($('f-accessoire'));
+  const a = accessoiresAPrevoir().find((x) => x.id === id);
+  if (!a) {
+    zone.replaceChildren(h('div', { class: 'card' }, h('p', {}, 'Accessoire introuvable (supprimé ?).')));
+    return;
+  }
+  if (saisieEnCours(zone)) return;
+  document.title = `Papote · ${a.nom}`;
+  const changer = (champs, fait) => sauverAccessoire({ action: 'modifier', id: a.id, champs }, fait);
+  const modif = (libelle, affiche, champ, opts = {}) => ligneModifiable(libelle, affiche, { ...opts, enregistrer: (v) => changer({ [champ]: v }) });
+  const nombre = (v, vide) => {
+    const n = entier(v);
+    if (Number.isNaN(n) || (n == null && !vide) || n < 0) throw new Error('Un nombre entier, s\'il vous plaît.');
+    return n;
+  };
+  // Livraison reçue : ajoute au stock, et la dépense si le montant est rempli.
+  const livraison = h('form', { class: 'zone-remplacement no-print', hidden: true },
+    h('p', {}, h('strong', {}, 'Livraison reçue. '), 'La quantité s\'ajoute au stock, et la dépense aussi si le montant est rempli.'),
+    h('div', { class: 'grille' },
+      h('label', {}, 'Quantité reçue ', h('input', { name: 'quantite', inputmode: 'numeric', required: true })),
+      h('label', {}, 'Montant payé (€) ', h('input', { name: 'montant', inputmode: 'decimal', placeholder: 'facultatif' })),
+      h('label', {}, 'Fournisseur ', h('input', { name: 'fournisseur', placeholder: 'facultatif' }))),
+    h('div', { class: 'boutons' }, h('button', { type: 'submit', class: 'primary small-btn' }, 'Ajouter au stock'),
+      h('button', { type: 'button', class: 'secondary small-btn', onclick: () => { livraison.hidden = true; } }, 'Annuler')),
+    h('p', { class: 'f-msg small', hidden: true }));
+  livraison.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const quantite = entier(livraison.quantite.value);
+    const montant = enCentimes(livraison.montant.value);
+    if (!quantite || quantite < 1 || Number.isNaN(quantite)) return message(livraison, 'Quantité illisible : un nombre entier.');
+    if (Number.isNaN(montant)) return message(livraison, 'Montant illisible (ex. 39,90).');
+    await enregistrer(livraison, () => appeler('gestionAccessoire', { action: 'entree', id: a.id, quantite, montant, fournisseur: livraison.fournisseur.value }), 'Ajouté au stock');
+  });
+  const menu = menuPoints([
+    { libelle: 'Livraison reçue…', faire: () => { livraison.hidden = false; livraison.quantite.focus(); } },
+    { libelle: 'Supprimer l\'accessoire', danger: true, faire: async () => {
+      if (!await demander(`Supprimer « ${a.nom} » de la liste des accessoires ?`, { oui: 'Supprimer', danger: true })) return;
+      if (await sauverAccessoire({ action: 'supprimer', id: a.id }, 'Accessoire supprimé', 'Suppression de l\'accessoire…')) location.hash = '#stock/accessoires';
+    } },
+  ], `Actions pour ${a.nom}`);
+  zone.replaceChildren(h('div', { class: 'card' },
+    h('div', { class: 'tete-fiche' }, h('h2', {}, a.nom), h('div', { class: 'tete-actions no-print' }, menu)),
+    a.manque ? h('p', { class: 'small' }, badge(`il en manque ${a.manque} pour les envois`, 'ko')) : a.bas ? h('p', { class: 'small' }, badge('stock bas', 'ko')) : null,
+    h('dl', { class: 'fiche' },
+      ...modif('Nom', a.nom, 'nom', { valeur: a.nom }),
+      ...modif('En stock', String(a.quantite || 0), 'quantite', { valeur: a.quantite || 0, mode: 'numeric', convertir: (v) => nombre(v) }),
+      ...(a.besoin ? [h('dt', {}, 'Pour les envois'), h('dd', {}, `${a.besoin} à prévoir pour les commandes à envoyer`)] : []),
+      ...modif('Alerte sous', a.seuil != null ? String(a.seuil) : null, 'seuil', { valeur: a.seuil ?? '', mode: 'numeric', vide: 'pas d\'alerte', convertir: (v) => nombre(v, true) }),
+      ...modif('Prix unitaire', a.prixAchat != null ? euros(a.prixAchat) : null, 'prixAchat', { valeur: enEuros(a.prixAchat), mode: 'decimal', suffixe: '€', convertir: convertirEuros }),
+      ...modif('Part avec', donnees.envoisAccessoire[a.parEnvoi || ''], 'parEnvoi', { valeur: a.parEnvoi || '', options: Object.entries(donnees.envoisAccessoire) }),
+      ...modif('Au retour', a.retour ? 'Revient et repart chez le client suivant' : 'Consommé à chaque envoi', 'retour', {
+        valeur: a.retour ? 'oui' : '', options: [['oui', 'Revient et repart chez le client suivant'], ['', 'Consommé à chaque envoi']], convertir: (v) => v === 'oui' }),
+      ...modif('Note', a.note || null, 'note', { valeur: a.note || '', long: true, vide: 'aucune' })),
+    livraison));
+}
+
+async function sauverAccessoire(donneesAppel, fait = 'Enregistré', attente) {
+  const travail = async () => {
+    await appeler('gestionAccessoire', donneesAppel);
+    donnees = await lireDonnees(true);
+  };
+  try {
+    await (attente ? patienter(attente, travail) : travail());
+    afficherTout();
+    annoncer(fait);
+    return true;
+  } catch (e) {
+    prevenir(messageErreur(e));
+    return false;
+  }
+}
+
+$('dx-annuler').addEventListener('click', () => { location.hash = '#stock/accessoires'; });
 
 $('f-accessoire').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -1676,31 +1758,14 @@ $('f-accessoire').addEventListener('submit', async (e) => {
   if (quantite == null || Number.isNaN(quantite) || Number.isNaN(seuil)) return message(f, 'Quantité illisible : un nombre entier.');
   if (Number.isNaN(prixAchat)) return message(f, 'Prix illisible (ex. 9,90).');
   const champs = { nom: f.nom.value, parEnvoi: f.parEnvoi.value, quantite, seuil, prixAchat, retour: f.retour.checked, note: f.note.value };
-  await enregistrer(f, async () => {
-    await appeler('gestionAccessoire', accessoireOuvert ? { action: 'modifier', id: accessoireOuvert, champs } : { action: 'ajouter', champs });
-    $('d-accessoire').close();
-  });
-});
-
-$('f-livraison').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const f = e.target;
-  const quantite = entier(f.quantite.value);
-  const montant = enCentimes(f.montant.value);
-  if (!quantite || quantite < 1 || Number.isNaN(quantite)) return message(f, 'Quantité illisible : un nombre entier.');
-  if (Number.isNaN(montant)) return message(f, 'Montant illisible (ex. 39,90).');
-  await enregistrer(f, async () => {
-    await appeler('gestionAccessoire', { action: 'entree', id: accessoireOuvert, quantite, montant, fournisseur: f.fournisseur.value });
-    $('d-accessoire').close();
-  });
-});
-
-$('dx-supprimer').addEventListener('click', async () => {
-  if (!await demander('Supprimer cet accessoire ?', { oui: 'Supprimer', danger: true })) return;
-  await enregistrer($('f-accessoire'), async () => {
-    await appeler('gestionAccessoire', { action: 'supprimer', id: accessoireOuvert });
-    $('d-accessoire').close();
-  });
+  let nouveau = null;
+  const ok = await enregistrer(f, async () => {
+    nouveau = await appeler('gestionAccessoire', { action: 'ajouter', champs });
+  }, 'Accessoire ajouté');
+  if (ok) {
+    $('d-accessoire').append(f);
+    location.hash = nouveau && nouveau.id ? `#accessoire/${encodeURIComponent(nouveau.id)}` : '#stock/accessoires';
+  }
 });
 
 $('x-stock').addEventListener('click', () => {
@@ -1915,7 +1980,7 @@ async function enregistrerTablette(action, annonce, texte) {
 }
 
 async function detacherAchat() {
-  if (!await demander('Cet achat a été rattaché à la mauvaise tablette ? Le prix, la date et la facture quittent cette fiche et passent sur une nouvelle tablette « En stock » (celle qui arrivera). Rien n\'est supprimé : la dépense reste dans l\'Argent.', { oui: 'Détacher l\'achat' })) return;
+  if (!await demander('Cet achat a été rattaché à la mauvaise tablette ? Le prix, la date et la facture quittent cette fiche et passent sur une nouvelle tablette « En stock » (celle qui arrivera). Rien n\'est supprimé : la dépense reste dans la comptabilité.', { oui: 'Détacher l\'achat' })) return;
   await enregistrerTablette(async () => {
     const r = await appeler('gestionStock', { action: 'detacherAchat', id: tabletteOuverte });
     $('f-tablette').dataset.charge = '';
@@ -2972,62 +3037,68 @@ function afficherRentabilite() {
       ? 'Modifier le contenu : Stock, Accessoires. Chaque envoi sort ces articles du stock et prévient quand il en manque.'
       : 'Aucun article de colis : ajoutez-les dans Stock, Accessoires (carton, housse, chargeur, câble, papier, fiche…), « Part avec : Chaque envoi ».'),
   );
-  const f = $('f-reglages');
-  if (!f.contains(document.activeElement)) {
-    f.seuilTva.value = enEuros(r.seuilTva);
-    f.tauxUrssaf.value = String(r.tauxUrssaf).replace('.', ',');
-    f.forfaitSim.value = enEuros(r.forfaitSim);
-    f.vieTablette.value = r.vieTablette;
-    f.miseEnService.value = enEuros(r.miseEnService);
-    f.fraisEnvoi.value = enEuros(r.fraisEnvoi);
-    f.fraisRetour.value = enEuros(r.fraisRetour);
+  afficherReglagesCalculs();
+}
+
+// Un réglage modifié seul (crayon) : seuls les champs envoyés changent côté serveur.
+async function sauverReglages(valeurs, fait = 'Réglage enregistré') {
+  try {
+    await appeler('gestionReglages', valeurs);
+    donnees = await lireDonnees(true);
+    afficherTout();
+    annoncer(fait);
+    return true;
+  } catch (e) {
+    prevenir(messageErreur(e));
+    return false;
   }
 }
 
-$('f-reglages').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const f = e.target;
-  const nombre = (v) => Number(String(v).replace(/\s|€|%/g, '').replace(',', '.'));
-  const valeurs = {
-    seuilTva: enCentimes(f.seuilTva.value),
-    tauxUrssaf: nombre(f.tauxUrssaf.value),
-    forfaitSim: enCentimes(f.forfaitSim.value),
-    vieTablette: nombre(f.vieTablette.value),
-    miseEnService: enCentimes(f.miseEnService.value),
-    fraisEnvoi: enCentimes(f.fraisEnvoi.value),
-    fraisRetour: enCentimes(f.fraisRetour.value),
-  };
-  if (Object.values(valeurs).some((v) => v == null || !Number.isFinite(v) || v < 0) || !valeurs.vieTablette) {
-    return message(f, 'Une valeur est illisible.');
-  }
-  if (await enregistrer(f, () => appeler('gestionReglages', valeurs))) {
-    annoncer('Réglages enregistrés');
-    afficherAccueil();
-  }
-});
+function nombreSaisi(v, { centimes = false, entier = false, min = 0, max = 1e9 } = {}) {
+  const n = Number(String(v).replace(/\s|€|%|g/g, '').replace(',', '.'));
+  if (String(v).trim() === '' || !Number.isFinite(n) || n < min || n > max || (entier && !Number.isInteger(n))) throw new Error('Valeur illisible.');
+  return centimes ? Math.round(n * 100) : n;
+}
+
+function afficherReglagesCalculs() {
+  const zone = $('reglages-calculs');
+  if (saisieEnCours(zone)) return;
+  const r = donnees.reglages;
+  const reglage = (libelle, cle, affiche, valeur, opts = {}) => ligneModifiable(libelle, affiche, {
+    valeur, mode: 'decimal', ...opts, convertir: (v) => nombreSaisi(v, opts.nombre), enregistrer: (v) => sauverReglages({ [cle]: v }),
+  });
+  zone.replaceChildren(
+    ...reglage('Seuil de franchise de TVA', 'seuilTva', euros(r.seuilTva), enEuros(r.seuilTva), { suffixe: '€', nombre: { centimes: true } }),
+    ...reglage('Taux URSSAF', 'tauxUrssaf', `${String(r.tauxUrssaf).replace('.', ',')} %`, String(r.tauxUrssaf).replace('.', ','), { suffixe: '%', nombre: { max: 100 } }),
+    ...reglage('Forfait SIM par défaut', 'forfaitSim', `${euros(r.forfaitSim)} par mois`, enEuros(r.forfaitSim), { suffixe: '€ par mois', nombre: { centimes: true } }),
+    ...reglage('Durée de vie d\'une tablette', 'vieTablette', `${r.vieTablette} mois`, r.vieTablette, { mode: 'numeric', suffixe: 'mois', nombre: { entier: true, min: 1 } }),
+    ...reglage('Mise en service', 'miseEnService', euros(r.miseEnService), enEuros(r.miseEnService), { suffixe: '€', nombre: { centimes: true } }),
+    ...reglage('Envoi d\'un colis', 'fraisEnvoi', euros(r.fraisEnvoi), enEuros(r.fraisEnvoi), { suffixe: '€', nombre: { centimes: true } }),
+    ...reglage('Retour d\'un colis', 'fraisRetour', euros(r.fraisRetour), enEuros(r.fraisRetour), { suffixe: '€', nombre: { centimes: true } }),
+  );
+}
 
 // ---------- Adresse des étiquettes Sendcloud ----------
 
+const CHAMPS_EXPEDITEUR = [['nom', 'Nom'], ['adresse', 'Adresse'], ['cp', 'Code postal', 'numeric'], ['ville', 'Ville'],
+  ['telephone', 'Téléphone', 'tel'], ['email', 'E-mail', 'email']];
 function afficherExpediteur() {
-  const f = $('f-expediteur');
-  if (f.contains(document.activeElement)) return;
+  const zone = $('reglages-expediteur');
+  if (saisieEnCours(zone)) return;
   const e = donnees.reglages.expediteur || {};
-  for (const k of ['nom', 'adresse', 'cp', 'ville', 'telephone', 'email']) f[k].value = e[k] || '';
-  f.poidsColis.value = donnees.reglages.poidsColis;
+  zone.replaceChildren(
+    ...CHAMPS_EXPEDITEUR.flatMap(([k, libelle, mode]) => ligneModifiable(libelle, e[k] || null, {
+      valeur: e[k] || '', mode: mode || null, type: mode === 'email' ? 'email' : null,
+      // Le serveur reçoit toujours l'adresse entière : les autres lignes restent telles quelles.
+      enregistrer: (v) => sauverReglages({ expediteur: { ...Object.fromEntries(CHAMPS_EXPEDITEUR.map(([c]) => [c, e[c] || ''])), [k]: v.trim() } }, 'Adresse enregistrée'),
+    })),
+    ...ligneModifiable('Poids d\'un colis', `${donnees.reglages.poidsColis} g`, {
+      valeur: donnees.reglages.poidsColis, mode: 'numeric', suffixe: 'g',
+      convertir: (v) => nombreSaisi(v, { entier: true, min: 100, max: 30000 }),
+      enregistrer: (v) => sauverReglages({ poidsColis: v }),
+    }),
+  );
 }
-
-$('f-expediteur').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const f = e.target;
-  const expediteur = Object.fromEntries(['nom', 'adresse', 'cp', 'ville', 'telephone', 'email'].map((k) => [k, f[k].value.trim()]));
-  const poidsColis = Number(f.poidsColis.value.replace(/\s|g/g, ''));
-  if (!Number.isFinite(poidsColis) || poidsColis < 100 || poidsColis > 30000) return message(f, 'Poids illisible (en grammes, ex. 1500).');
-  if (await enregistrer(f, () => appeler('gestionReglages', { expediteur, poidsColis }))) {
-    donnees.reglages.expediteur = expediteur;
-    donnees.reglages.poidsColis = poidsColis;
-    annoncer('Adresse enregistrée');
-  }
-});
 
 // ---------- Récap du lundi ----------
 
