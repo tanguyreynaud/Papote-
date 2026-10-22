@@ -177,7 +177,7 @@ function brancher(deps) {
       return null;
     });
     const ville = await villeAvecCoordonnees(villeDuRelais(commande), commande && commande.livraison && commande.livraison.cp);
-    return db.runTransaction(async (tx) => {
+    const r = await db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       const p = snap.data();
       if (!p || p.claimedBy !== uid || !['reserved', 'confirmed'].includes(p.status)) {
@@ -210,8 +210,33 @@ function brancher(deps) {
         status: 'confirmed', fid: famille.id, familyName: nom,
         expiresAt: Timestamp.fromMillis(Date.now() + ENTREE_TABLETTE_MS),
       });
-      return { fid: famille.id };
+      return { fid: famille.id, invite, nouvelle: true };
     });
+    // Le nom donné, la famille est validée (Tanguy, 22/10) : les proches en attente sont invités tout de suite.
+    if (r.nouvelle) {
+      await inviterAttente(r.fid, { name: nom, code: r.invite, installation: { pairing: code } }, uid)
+        .catch((e) => logger.error(`Installation ${r.fid} : invitations`, e));
+    }
+    return { fid: r.fid };
+  }
+
+  // Proches qui ont scanné pendant l'installation : invités par e-mail (entrée directe, rien à accepter).
+  async function inviterAttente(fid, fam, uid) {
+    const code = fam.installation && fam.installation.pairing;
+    const p = code ? (await db.doc(`pairings/${code}`).get()).data() : null;
+    const attente = ((p && p.attente) || []).filter((a) => a.email && a.uid !== uid);
+    if (!attente.length) return;
+    const lien = `${appli}?code=${String(fam.code).replace(/^(.{4})(.{4})$/, '$1-$2')}&pour=${encodeURIComponent(fam.name)}`;
+    const envois = attente.map(async (a) => {
+      const email = a.email.toLowerCase();
+      await db.doc(`families/${fid}/invitations/${email}`).set({
+        email, fid, familyName: fam.name, invitedBy: p.claimedName || null, createdAt: FieldValue.serverTimestamp(),
+      });
+      await envoyerMail(email, mail.invitation({ prenom: p.claimedName, tablette: fam.name, lien, email }));
+    });
+    (await Promise.allSettled(envois)).filter((r) => r.status === 'rejected')
+      .forEach((r) => logger.error(`Installation ${fid} : invitation non envoyée`, r.reason));
+    await db.doc(`pairings/${code}`).update({ attente: FieldValue.delete() }).catch(() => null);
   }
 
   async function finirInstallation(request) {
@@ -232,22 +257,7 @@ function brancher(deps) {
       maj.rev = FieldValue.increment(1);
     }
     await ref.update(maj);
-    const code = fam.installation && fam.installation.pairing;
-    const p = code ? (await db.doc(`pairings/${code}`).get()).data() : null;
-    const attente = ((p && p.attente) || []).filter((a) => a.email && a.uid !== uid);
-    if (!attente.length) return { ok: true };
-    const lien = `${appli}?code=${String(fam.code).replace(/^(.{4})(.{4})$/, '$1-$2')}&pour=${encodeURIComponent(fam.name)}`;
-    const envois = attente.map(async (a) => {
-      const email = a.email.toLowerCase();
-      // L'invitation par e-mail fait entrer directement : le responsable n'a rien à accepter.
-      await db.doc(`families/${fid}/invitations/${email}`).set({
-        email, fid, familyName: fam.name, invitedBy: p.claimedName || null, createdAt: FieldValue.serverTimestamp(),
-      });
-      await envoyerMail(email, mail.invitation({ prenom: p.claimedName, tablette: fam.name, lien, email }));
-    });
-    (await Promise.allSettled(envois)).filter((r) => r.status === 'rejected')
-      .forEach((r) => logger.error(`Installation ${fid} : invitation non envoyée`, r.reason));
-    await db.doc(`pairings/${code}`).update({ attente: FieldValue.delete() }).catch(() => null);
+    await inviterAttente(fid, fam, uid);
     return { ok: true };
   }
 
