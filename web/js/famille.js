@@ -4046,8 +4046,14 @@ async function enterApp() {
   startNotifs(session);
   renderInstallCard();
   renderAccount();
-  // Installation pas finie : ses écrans d'abord, l'accueil ensuite.
-  if (installationEnCours()) { showSetupFamily(); return; }
+  // Installation en cours sur cet écran (nom tout juste donné, reprise) : on continue ses étapes.
+  if (installationEnCours() && setup.step) { showSetupFamily(); return; }
+  // Appli relancée en route (accord de Tanguy, 22/10) : pas de retour en boucle, l'accueil ;
+  // l'installation est close et le reste se règle dans Réglages.
+  if (installationEnCours()) {
+    session.family.installation = { ...session.family.installation, etape: 'fini' };
+    finirInstallation(session.fid).catch((err) => console.warn('Fin d\'installation', err));
+  }
   goHome();
   renderOutbox();
   flushOutbox();
