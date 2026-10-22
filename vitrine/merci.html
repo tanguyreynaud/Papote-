@@ -33,6 +33,9 @@ button.btn { justify-self: start; font: inherit; font-weight: 700; border: 2px s
   .recap { border: 0; padding: 0; }
 }
 a.btn { justify-self: start; display: inline-flex; align-items: center; min-height: 3.25rem; padding: .75rem 1.5rem; border-radius: 999px; background: var(--accent); color: var(--accent-text); font-weight: 700; text-decoration: none; }
+/* Pas de soulignement des liens (Tanguy, 2026-10-22) : ils restent repérables par leur couleur et le gras. */
+a { text-decoration: none; }
+main a:not([class]), footer a:not([class]), .rassure a { font-weight: 700; }
 </style>
 </head>
 <body>
