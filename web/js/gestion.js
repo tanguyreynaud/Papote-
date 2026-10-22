@@ -604,6 +604,8 @@ function afficherAccueil() {
   // Même règle que sansFacture (functions/gestion.js).
   const sansFacture = donnees.stock.filter((t) => t.prixAchat == null && !t.acheteeLe && !t.depense
     && !['perdue', 'hors-service'].includes(t.etat) && (t.creeLe || t.preparee || Date.now()) < Date.now() - 5 * 864e5).length;
+  const simsSansAchat = donnees.sims.filter((l) => !l.depense && l.statut !== 'resiliee').length;
+  const accessoiresSansAchat = donnees.accessoires.filter((x) => !(x.depenses || []).length && (x.quantite || 0) > 0).length;
   const erreursMail = donnees.courrier ? (donnees.courrier.erreurs || []).length : 0;
   const tva = franchiseTva();
 
@@ -656,6 +658,9 @@ function afficherAccueil() {
     // Une ligne par achat, qui ouvre la page de cet achat.
     ...facturesAttendues.map((d) => [1, `Facture ${d.fournisseur || 'du vendeur'} à télécharger : ${d.libelle || 'achat'}${d.numero ? `, commande ${d.numero}` : ''}. La télécharger chez le vendeur puis l'envoyer à factures@`,
       `#depense/${encodeURIComponent(d.id)}`, 'ko']),
+    // Chaque carte SIM et chaque accessoire doit avoir son achat (Tanguy, 2026-10-22).
+    [simsSansAchat, `${pluriel(simsSansAchat, 'carte SIM')} sans achat lié : ouvrir la carte et choisir son achat`, '#stock/sim', ''],
+    [accessoiresSansAchat, `${pluriel(accessoiresSansAchat, 'accessoire')} sans achat lié : ouvrir l'accessoire et ajouter son achat`, '#stock/accessoires', ''],
     [sansFacture, `${pluriel(sansFacture, 'tablette')} reçue${sansFacture > 1 ? 's' : ''} sans facture depuis 5 jours : transférez la facture du vendeur à factures@mapapote.fr`, '#stock', 'ko'],
     ...aVerifierMail.map((d) => [1, `Facture ${d.fournisseur || ''} à vérifier : ${[d.libelle, euros(d.montant)].filter(Boolean).join(', ')}, reçue par e-mail`.replace('  ', ' '),
       `#depense/${encodeURIComponent(d.id)}`, '']),
@@ -1499,18 +1504,18 @@ function afficherSim() {
   $('sim-resume').textContent = `${n} ligne${n > 1 ? 's actives' : ' active'}, ${euros(total)} par mois · `
     + `${pluriel(donnees.sims.filter((l) => l.statut === 'stock').length, 'carte')} en stock`;
   remplirTable($('t-sim'), [
-    { titre: 'Statut' }, { titre: 'Opérateur' }, { titre: 'Numéro' }, { titre: 'ICCID' }, { titre: 'Tablette' },
+    { titre: 'Statut' }, { titre: 'Opérateur' }, { titre: 'Numéro' }, { titre: 'ICCID' }, { titre: 'Achat' }, { titre: 'Tablette' },
     { titre: 'Client' }, { titre: 'Par mois', n: 1 }, { titre: 'À regarder' },
   ], [
     ...lignes.map(({ l, t, c, alertes }) => ({
       onclick: () => ouvrirSim(l.id),
       cellules: [badge(donnees.statutsSim[l.statut] || l.statut, STATUT_CLASSE[l.statut]), l.operateur || '', l.numero || '',
-        fin4(l.iccid), t ? t.numero || t.modele || '' : '', c ? nomCommande(c) : '', euros(coutLigne(l)),
+        fin4(l.iccid), lienAchat(l.depense), t ? t.numero || t.modele || '' : '', c ? nomCommande(c) : '', euros(coutLigne(l)),
         h('span', { class: 'alertes' }, alertes.map((x) => badge(x, 'ko')))],
     })),
     ...anciennes.map((t) => ({
       onclick: () => ouvrirTablette(t.id),
-      cellules: [badge('Active', 'ok'), t.simOperateur || '', t.sim, h('span', { class: 'muted' }, 'à compléter'),
+      cellules: [badge('Active', 'ok'), t.simOperateur || '', t.sim, h('span', { class: 'muted' }, 'à compléter'), '',
         t.numero || t.modele || '', '', euros(coutSim(t)), aResilier.has(t.id) ? badge('à résilier ou suspendre', 'ko') : ''],
     })),
   ], { vide: 'Aucune carte SIM enregistrée.' });
@@ -1585,6 +1590,7 @@ function remplirPageSim(id) {
           convertir: (v) => v || null }),
       ...ligne('Commande', c ? h('a', { href: `#commande/${encodeURIComponent(c.id)}` }, `Commande ${codeCommande(c.code)}`) : null),
       ...ligne('Client', c && c.email ? h('a', { href: `#client/${encodeURIComponent(c.email.toLowerCase())}` }, c.nom || c.email) : null),
+      ...modif('Achat', lienAchat(l.depense), 'depense', { valeur: l.depense || '', options: optionsAchats(), convertir: (v) => v || null }),
       ...modif('Forfait', l.go != null ? `${l.go} Go par mois` : null, 'go', { valeur: l.go != null ? String(l.go) : '', mode: 'decimal', suffixe: 'Go',
         convertir: (v) => { if (!v.trim()) return null; const n = Number(v.replace(',', '.')); if (!Number.isFinite(n)) throw new Error('Un nombre de Go.'); return n; } }),
       ...modif('Prix par mois', l.prix != null ? euros(l.prix) : null, 'prix', { valeur: enEuros(l.prix), mode: 'decimal', suffixe: '€', convertir: convertirEuros }),
@@ -1767,10 +1773,11 @@ function accessoiresAPrevoir() {
 
 function afficherAccessoires() {
   remplirTable($('t-accessoires'), [
-    { titre: 'Accessoire' }, { titre: 'En stock', n: 1 }, { titre: 'Part avec' }, { titre: 'Au retour' }, { titre: 'Prix unitaire', n: 1 }, { titre: '' },
+    { titre: 'Accessoire' }, { titre: 'En stock', n: 1 }, { titre: 'Part avec' }, { titre: 'Au retour' }, { titre: 'Prix unitaire', n: 1 }, { titre: 'Achat' }, { titre: '' },
   ], accessoiresAPrevoir().sort((a, b) => a.nom.localeCompare(b.nom, 'fr')).map((a) => ({
     onclick: () => ouvrirAccessoire(a.id),
     cellules: [a.nom, String(a.quantite || 0), donnees.envoisAccessoire[a.parEnvoi || ''], a.retour ? 'Revient' : 'Consommé', euros(a.prixAchat),
+      lienAchat((a.depenses || []).slice(-1)[0]),
       a.manque ? badge(`il en manque ${a.manque} pour les envois`, 'ko') : a.bas ? badge('stock bas', 'ko') : ''],
   })), { vide: 'Aucun accessoire.' });
 }
@@ -1844,6 +1851,9 @@ function remplirPageAccessoire(id) {
       ...(a.besoin ? [h('dt', {}, 'Pour les envois'), h('dd', {}, `${a.besoin} à prévoir pour les commandes à envoyer`)] : []),
       ...modif('Alerte sous', a.seuil != null ? String(a.seuil) : null, 'seuil', { valeur: a.seuil ?? '', mode: 'numeric', vide: 'pas d\'alerte', convertir: (v) => nombre(v, true) }),
       ...modif('Prix unitaire', a.prixAchat != null ? euros(a.prixAchat) : null, 'prixAchat', { valeur: enEuros(a.prixAchat), mode: 'decimal', suffixe: '€', convertir: convertirEuros }),
+      // Une dépense par livraison : la liste s'allonge (« Ajouter un achat »), une livraison saisie avec son montant s'y ajoute seule.
+      ...modif('Achats', (a.depenses || []).length ? h('span', {}, ...a.depenses.flatMap((x, i) => [i ? ', ' : null, lienAchat(x)])) : badge('aucun achat lié', 'ko'),
+        'depenses', { valeur: '', options: optionsAchats('Choisir l\'achat à ajouter'), convertir: (v) => (v ? [...(a.depenses || []), v] : (a.depenses || [])) }),
       ...modif('Part avec', donnees.envoisAccessoire[a.parEnvoi || ''], 'parEnvoi', { valeur: a.parEnvoi || '', options: Object.entries(donnees.envoisAccessoire) }),
       ...modif('Au retour', a.retour ? 'Revient et repart chez le client suivant' : 'Consommé à chaque envoi', 'retour', {
         valeur: a.retour ? 'oui' : '', options: [['oui', 'Revient et repart chez le client suivant'], ['', 'Consommé à chaque envoi']], convertir: (v) => v === 'oui' }),
@@ -1959,7 +1969,8 @@ function remplirTablette(id) {
       // Attribuée à une commande par « Préparer l'envoi » (SIM, accessoires, étiquette), pas à la main.
       ...ligne('Commande', c ? h('a', { href: `#commande/${encodeURIComponent(c.id)}` }, `Commande ${codeCommande(c.code)}${c.offerte ? ' (offerte)' : ''}`) : h('span', { class: 'muted' }, 'pas encore attribuée')),
       ...ligne('Client', c && c.email ? h('a', { href: `#client/${encodeURIComponent(c.email.toLowerCase())}` }, c.nom || c.email) : c ? c.nom : null),
-      ...ligne('Achat', ligneAchatTablette(t)),
+      ...modif('Achat', t.depense ? ligneAchatTablette(t) : badge('aucun achat lié', 'ko'), 'depense', {
+        valeur: t.depense || '', options: optionsAchats(), convertir: (v) => v || null }),
       ...modif('N° de série', t.numero, 'numero', { valeur: t.numero, vide: 'pas encore noté' }),
       ...modif('Modèle', t.modele, 'modele', { valeur: t.modele }),
       ...ligneModifiable('Carte SIM', simDuKit(t), {
@@ -2086,6 +2097,20 @@ function celluleAchat(t) {
   const texte = [t.fournisseur || (achat && achat.fournisseur), achat && achat.numero ? `n° ${achat.numero}` : null]
     .filter(Boolean).join(' ') || 'voir l\'achat';
   return h('a', { href: `#depense/${encodeURIComponent(t.depense)}`, onclick: (e) => e.stopPropagation() }, texte);
+}
+
+// Achats possibles pour un lien (les plus récents d'abord) : [id, libellé] pour une liste déroulante.
+function optionsAchats(premier = 'Aucun achat lié') {
+  return [['', premier], ...[...donnees.depenses].sort((a, b) => (b.date || 0) - (a.date || 0)).slice(0, 150)
+    .map((d) => [d.id, [jour(d.date), [d.fournisseur, d.numero ? `n° ${d.numero}` : null].filter(Boolean).join(' '), d.libelle, euros(d.montant)]
+      .filter(Boolean).join(' · ')])];
+}
+// Lien vers un achat (vendeur et n° de commande), ou le badge rouge s'il n'y en a pas.
+function lienAchat(id) {
+  if (!id) return badge('aucun achat lié', 'ko');
+  const d = donnees.depenses.find((x) => x.id === id);
+  return h('a', { href: `#depense/${encodeURIComponent(id)}`, onclick: (e) => e.stopPropagation() },
+    (d && ([d.fournisseur, d.numero ? `n° ${d.numero}` : null].filter(Boolean).join(' ') || d.libelle)) || 'voir l\'achat');
 }
 
 // Achat de la tablette, en une ligne de la fiche : vendeur, prix, date, et si la facture manque encore.
