@@ -1963,13 +1963,21 @@ exports.gestionAnnulerCommande = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_P
       : 'La tablette est déjà partie : arrêtez plutôt l\'abonnement, le client renverra la tablette.');
   }
   let rembourse = 0;
+  // Abonnement inconnu de Stripe (commande de test, abonnement effacé) : rien à arrêter ni à rembourser,
+  // la commande s'annule quand même, sans e-mail au client.
+  let stripeIntrouvable = false;
   if (!c.offerte && id.startsWith('sub_')) {
     try {
       rembourse = await arreterEtRembourser(id);
     } catch (e) {
+      if (e.code === 'resource_missing' || /No such subscription/i.test(e.message || '')) {
+        stripeIntrouvable = true;
+        logger.warn(`Commande ${id} : abonnement introuvable chez Stripe, annulée sans remboursement`);
+      } else {
       // Erreur Stripe : un message lisible plutôt que « le serveur ne répond pas » ; rien n'est encore noté annulé.
       logger.error(`Commande ${id} : annulation Stripe impossible`, e.message);
       throw new HttpsError('aborted', `Stripe a refusé l'annulation : ${e.message}`);
+      }
     }
   }
   const qui = request.auth.token.email || request.auth.uid;
@@ -1986,7 +1994,7 @@ exports.gestionAnnulerCommande = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_P
     });
   }
   let mailEnvoye = false;
-  if (c.email && !c.offerte) {
+  if (c.email && !c.offerte && !stripeIntrouvable) {
     try {
       await mail.envoyer({
         smtp: MAIL_SMTP.value(), expediteur: MAIL_EXPEDITEUR.value(), motDePasse: MAIL_MOT_DE_PASSE.value(),
@@ -1997,7 +2005,7 @@ exports.gestionAnnulerCommande = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_P
       logger.error(`Commande ${id} : e-mail d'annulation non parti`, e.message);
     }
   }
-  return { ok: true, rembourse, mailEnvoye };
+  return { ok: true, rembourse, mailEnvoye, stripeIntrouvable };
 });
 
 // ---------- Identité des tablettes : préparation et jumelage ----------
