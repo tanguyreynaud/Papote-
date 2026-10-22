@@ -613,6 +613,11 @@ function afficherAccueil() {
   const versTablette = (t) => `#tablette/${encodeURIComponent(t.id)}`;
   const versCommande = (c) => `#commande/${encodeURIComponent(c.id)}`;
   let taches = [
+    // Client qui recommande (même IBAN, e-mail, téléphone ou adresse), avant l'envoi : gros signal s'il a déjà mal payé.
+    ...cmd.filter((c) => c.alerteDoublon && ['a-preparer', 'paiement-en-attente'].includes(c.expedition))
+      .map((c) => (c.alerteDoublon.mauvaisPayeur
+        ? [1, `⚠ Ne pas envoyer avant vérification : ${c.nom || c.email || 'client'} a déjà été mauvais payeur (${c.alerteDoublon.raisons.join(', ')})`, versCommande(c), 'ko']
+        : [1, `2e commande du même client : ${c.nom || c.email || 'client'}, vérifier avant d'envoyer`, versCommande(c), ''])),
     // Une seule : la ligne ouvre directement la commande.
     [aEnvoyer, pluriel(aEnvoyer, 'tablette') + ' à envoyer', aEnvoyer === 1 ? versCommande(cmd.find((c) => etatCommande(c) === 'a-envoyer')) : '#commandes', manque ? 'ko' : ''],
     [manque, `Il manque ${pluriel(manque, 'tablette')} en stock pour les envoyer`, '#stock', 'ko'],
@@ -890,8 +895,14 @@ async function remplirCommande(id) {
   const sansEtiquette = !(c.etiquettes && c.etiquettes.retour) && !(c.restitution && c.restitution.etiquette);
   const annonce = annonceCommande;
   annonceCommande = null;
+  const doublon = c.alerteDoublon;
   $('dc-corps').replaceChildren(...[
     annonce ? h('p', { class: 'annonce', role: 'status' }, annonce) : null,
+    doublon ? h('div', { class: `alerte-doublon${doublon.mauvaisPayeur ? ' grave' : ''}`, role: 'alert' },
+      h('strong', {}, doublon.mauvaisPayeur ? '⚠ Client déjà mauvais payeur : ne pas envoyer avant vérification' : 'Ce client a déjà commandé'),
+      doublon.mauvaisPayeur ? h('p', {}, `Sur une commande précédente : ${doublon.raisons.join(', ')}.`) : null,
+      h('p', {}, 'Même IBAN, e-mail, téléphone ou adresse que : ',
+        ...doublon.commandes.flatMap((x, i) => [i ? ', ' : null, h('a', { href: `#commande/${encodeURIComponent(x.id)}` }, [x.code, x.nom].filter(Boolean).join(' · ') || 'commande')]))) : null,
     h('div', { class: 'card' },
       h('div', { class: 'tete-fiche' }, h('h2', {}, `Commande ${codeCommande(c.code)}`, c.offerte ? ' (offerte)' : ''),
         h('div', { class: 'tete-actions' },

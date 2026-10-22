@@ -309,6 +309,9 @@ details summary { cursor: pointer; margin-top: 12px; }
 #dc-corps .action > p, #famille-actions .action > p { margin: 0 0 10px; }
 #dc-corps .action > p + p { margin: 10px 0 0; }
 #famille-actions .replace-out:not([hidden]) { margin-top: 10px; }
+.alerte-doublon { margin: 0 0 14px; padding: 12px 16px; border-radius: 12px; background: #eef0fd; color: #3730a3; }
+.alerte-doublon p { margin: 6px 0 0; }
+.alerte-doublon.grave { background: #fdecec; color: #8a1c1c; border: 2px solid var(--danger); font-size: 17px; }
 .annonce { margin: 0 0 14px; padding: 12px 16px; border-radius: 12px; background: #eef0fd; color: #3730a3; font-weight: 600; }
 #dc-corps .action .remplacement { margin-top: 0; }
 
