@@ -1328,11 +1328,14 @@ function nomFichier(nom) {
   return t || 'piece';
 }
 
-async function enregistrerPiece(collection, id, nomBrut, type, contenu) {
+// Genre d'un document choisi à l'ajout (page tablette) : photo, bon de garantie, facture, autre.
+const GENRES_PIECE = ['photo', 'garantie', 'facture', 'autre'];
+
+async function enregistrerPiece(collection, id, nomBrut, type, contenu, genre) {
   const nom = texte(nomBrut, 120) || 'piece';
   const chemin = `gestion/${collection}/${id}/${Date.now()}-${nomFichier(nom)}`;
   await stockage().file(chemin).save(contenu, { contentType: type, resumable: false });
-  const piece = { nom, chemin, type, taille: contenu.length, le: Date.now() };
+  const piece = { nom, chemin, type, taille: contenu.length, le: Date.now(), ...(GENRES_PIECE.includes(genre) ? { genre } : {}) };
   await db().doc(`${collection}/${id}`).update({ pieces: FieldValue.arrayUnion(piece) });
   return piece;
 }
@@ -1365,7 +1368,7 @@ exports.gestionPiece = onCall({ memory: '512MiB' }, async (request) => {
     const contenu = Buffer.from(String(d.contenu || ''), 'base64');
     if (!contenu.length) throw new HttpsError('invalid-argument', 'Fichier vide.');
     if (contenu.length > MAX_PIECE) throw new HttpsError('invalid-argument', 'Fichier trop lourd (6 Mo au plus).');
-    const piece = await enregistrerPiece(d.collection, d.id, d.nom, d.type, contenu);
+    const piece = await enregistrerPiece(d.collection, d.id, d.nom, d.type, contenu, d.genre);
     // Facture jointe à la main sur un achat venu d'une confirmation de commande : plus de rappel.
     if (snap.get('confirmation')) await ref.update({ confirmation: false });
     return { ok: true, piece };
