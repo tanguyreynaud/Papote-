@@ -67,8 +67,8 @@ test('résiliation sans engagement : à la fin du mois payé', () => {
   assert.strictEqual(a.dateResiliation(null, T0), T0);
 });
 
-test('premier mois sans prélèvement (payé une fois écoulé)', () => {
-  assert.strictEqual(a.PREMIER_MOIS_JOURS, 30);
+test('rien prélevé avant la réception (payé une fois écoulé)', () => {
+  assert.ok(a.ATTENTE_ENVOI_JOURS >= 60);
 });
 
 test('tablette incluse non rendue : pénalité après 30 jours', () => {

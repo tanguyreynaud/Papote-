@@ -18,6 +18,7 @@ const CAS = [
   ['Et si je ne rends pas la tablette ?', 'site', '140 € (150 € avec enceinte) : tablette 130 €, chargeur 10 €, enceinte 10 €, socle gratuit'],
   ['La livraison est payante ?', 'site', 'offerte'],
   ['Combien de temps pour être livré ?', 'site', '2 à 3 jours ouvrés'],
+  ['Pourquoi 3 à 4 semaines ?', 'site', 'Tanguy prépare chaque tablette lui-même, à Lyon ; commandes ouvertes, annulable avant l\'envoi'],
   ['Comment je suis mon colis ?', 'site', 'e-mail « Votre tablette est en route », bouton « Suivre mon colis » (Mondial Relay)'],
   ['Je veux l\'offrir à ma grand-mère, comment faire ?', 'site', 'commande à son nom, point relais près d\'elle, QR code depuis le téléphone, elle n\'a rien à faire'],
   ['Avec internet inclus, il y a une box à brancher ?', 'site', 'non, la tablette a sa carte SIM, pas de routeur'],

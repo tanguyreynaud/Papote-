@@ -6,7 +6,7 @@
 <title>Votre commande · Papote</title>
 <meta name="robots" content="noindex">
 <script>
-  // Commandes fermées (avant le lancement) ou stock vide : retour à la liste d'attente, sauf avec ?essai
+  // Commandes fermées (avant le lancement) : retour à la liste d'attente, sauf avec ?essai
   // (commande test de Tanguy, possible tant que Stripe est en clé de test ; voir commandesOuvertes dans
   // functions/index.js). COMMANDES_OUVERTES : même valeur que dans accueil.html.
   (function () {
@@ -21,8 +21,10 @@
       .then(function (d) {
         if (d.disponible === false) { location.replace('./#lancement'); return; }
         // Stock vide mais commandes encore possibles : délai de préparation plus long (stock.js).
-        if (d.precommande) {
-          var montrer = function () { var p = document.getElementById('precommande'); if (p) p.hidden = false; };
+        // Au-delà de stock + 10 : attente longue (3 à 4 semaines), la commande reste possible.
+        var bloc = d.attenteLongue ? 'attente-longue' : d.precommande ? 'precommande' : null;
+        if (bloc) {
+          var montrer = function () { var p = document.getElementById(bloc); if (p) p.hidden = false; };
           if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', montrer); else montrer();
         }
       })
@@ -117,7 +119,8 @@ h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-u
       <li>Appli famille pour tous vos proches</li>
       <li>Livraison offerte en point relais</li>
     </ul>
-    <p class="precommande" id="precommande" hidden>En précommande : votre tablette est préparée sous 7 à 10 jours ouvrés, puis livrée par Mondial Relay sous 3 à 5 jours ouvrés.</p>
+    <p class="precommande" id="precommande" hidden>Je prépare et vérifie chaque tablette moi-même, une par une. En ce moment, la vôtre est prête sous 7 à 10 jours ouvrés, puis Mondial Relay la livre en 3 à 5 jours ouvrés.</p>
+    <p class="precommande" id="attente-longue" hidden>Beaucoup de commandes en ce moment : je prépare et vérifie chaque tablette moi-même, une par une, à Lyon. La vôtre part sous 3 à 4 semaines, puis Mondial Relay la livre en 3 à 5 jours ouvrés. Rien de plus n'est prélevé avant la réception, et vous pouvez annuler à tout moment avant l'envoi : les 60 € vous sont remboursés tout de suite.</p>
     <fieldset class="question">
       <legend>Y a-t-il internet (une box Wi-Fi) chez votre proche ?</legend>
       <label class="opt"><input type="radio" name="internet" value="oui" checked> Oui, la tablette utilise son Wi-Fi <span class="muted">20 €/mois</span></label>
@@ -162,14 +165,14 @@ h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-u
 
   <div class="etapes">
     <p><b>Aujourd'hui</b> : seuls les 60 € de mise en service sont prélevés.</p>
-    <p><b>Chaque mois</b> : l'abonnement est prélevé une fois le mois écoulé, vous n'avez rien à faire.</p>
+    <p><b>Chaque mois</b> : l'abonnement commence à la réception et chaque mois est prélevé une fois écoulé, vous n'avez rien à faire.</p>
     <p><b>30 jours pour changer d'avis</b> après la réception : « Annuler ma commande » dans l'appli, rien à payer et les 60 € remboursés.</p>
     <p><b>À la résiliation</b> : en quelques clics depuis l'appli. Papote s'arrête à la fin du mois en cours, qui est le dernier prélevé.</p>
   </div>
   <a class="btn payer" id="payer" href="#" aria-disabled="true">Choisissez un point relais</a>
   <ul class="rassure">
     <li>🔒 Paiement par prélèvement SEPA, sur la page sécurisée de Stripe : munissez-vous d'un IBAN</li>
-    <li>📅 Chaque mois est payé une fois écoulé : le premier prélèvement a lieu un mois après la commande</li>
+    <li>📅 Chaque mois est payé une fois écoulé : le premier mois commence à la réception et il est prélevé 30 jours plus tard</li>
     <li>↩️ 30 jours après réception pour changer d'avis : la tablette nous revient, rien à payer et les 60 € remboursés</li>
     <li>💬 Une question ? <a href="mailto:contact@mapapote.fr">contact@mapapote.fr</a></li>
   </ul>

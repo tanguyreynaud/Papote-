@@ -51,16 +51,23 @@ function colisParti({ nom, suivi, lien, relais, code }) {
   ].filter(Boolean), { texte: 'Suivre mon colis', lien });
 }
 
-function commandeConfirmee({ nom, code, relais, formule }) {
+// delai : 'stock', 'precommande' ou 'long' (functions/stock.js), noté à la commande.
+const DELAIS = {
+  stock: 'Je prépare et vérifie votre tablette moi-même sous 2 à 3 jours ouvrés',
+  precommande: 'Je prépare et vérifie chaque tablette moi-même, une par une : la vôtre sera prête sous 7 à 10 jours ouvrés',
+  long: 'Beaucoup de commandes en ce moment : je prépare et vérifie chaque tablette moi-même, une par une, à Lyon. La vôtre part sous 3 à 4 semaines',
+};
+
+function commandeConfirmee({ nom, code, relais, formule, delai }) {
   return message('Merci pour votre commande Papote', [
     `Bonjour${nom ? ` ${echapper(nom)}` : ''},`,
     `Merci pour votre commande !${code ? ` Son numéro : <b>${echapper(code)}</b>.` : ''}`,
-    'Nous préparons votre tablette à la main sous 2 à 3 jours ouvrés (jusqu\'à 10 jours ouvrés en précommande), puis Mondial Relay la livre en 3 à 5 jours ouvrés. Nous vous prévenons par e-mail dès qu\'elle part.',
+    `${DELAIS[delai] || DELAIS.stock}, puis Mondial Relay la livre en 3 à 5 jours ouvrés. Vous êtes prévenu par e-mail dès qu'elle part, et vous pouvez annuler à tout moment avant : les 60 € vous sont remboursés tout de suite.`,
     relais && relais.transporteur
       ? `Livraison offerte au point relais <b>${relaisEnTexte(relais)}</b>${relais.destinataire ? `, à retirer par <b>${echapper(relais.destinataire)}</b>` : ''}.`
       : 'Livraison offerte à l\'adresse indiquée.',
     '<b>En attendant, installez l\'appli Papote sur votre téléphone</b> avec le bouton ci-dessous. Vous n\'avez pas encore de code, c\'est normal : il s\'affichera sur l\'écran de la tablette quand vous l\'allumerez. Vous le scannerez avec votre téléphone, et l\'appli vous guidera.',
-    `Votre abonnement : ${formule === 'sim' ? '30 € par mois, internet inclus' : '20 € par mois'}, payés une fois chaque mois écoulé, sans engagement. Vous avez 30 jours après la réception pour changer d'avis : rien à payer et les 60 € remboursés. La tablette est prêtée et configurée.`,
+    `Votre abonnement : ${formule === 'sim' ? '30 € par mois, internet inclus' : '20 € par mois'}, payés une fois chaque mois écoulé à partir de la réception, sans engagement. Vous avez 30 jours après la réception pour changer d'avis : rien à payer et les 60 € remboursés. La tablette est prêtée et configurée.`,
   ].filter(Boolean), { texte: 'Installer l\'appli Papote', lien: APPLI });
 }
 
@@ -102,13 +109,14 @@ function lancement({ prenom, desinscription }) {
   ].filter(Boolean), { texte: 'Commander ma tablette', lien: 'https://mapapote.fr/commande.html' });
 }
 
-function nouvelleCommande({ nom, email, telephone, code, relais, formule }) {
+function nouvelleCommande({ nom, email, telephone, code, relais, formule, delai }) {
   return message(`Nouvelle commande ${code || ''}`.trim(), [
     `Client : <b>${echapper(nom || '?')}</b>, ${echapper(email || 'sans e-mail')}${telephone ? `, ${echapper(telephone)}` : ''}.`,
     `Formule : ${formule === 'sim' ? '30 € par mois, internet inclus (carte SIM dans la tablette)' : '20 € par mois (wifi)'}.`,
     relais && relais.transporteur
       ? `Point relais : <b>${relaisEnTexte(relais)}</b> (n° ${echapper(relais.id)}). Retrait par : <b>${echapper(relais.destinataire || nom || '?')}</b>.`
       : `Livraison : ${relaisEnTexte(relais) || 'adresse non trouvée, voir Stripe'}.`,
+    `Délai annoncé : ${{ stock: 'en stock, 2 à 3 jours ouvrés', precommande: 'précommande, 7 à 10 jours ouvrés', long: 'attente longue, 3 à 4 semaines' }[delai] || 'en stock, 2 à 3 jours ouvrés'}.`,
     'Tablette à préparer, puis à marquer « envoyée » dans le tableau de bord.',
   ]);
 }

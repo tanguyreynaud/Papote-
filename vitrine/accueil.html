@@ -304,7 +304,8 @@ footer a { color: var(--muted); }
           <a class="btn btn-ghost" href="#fonctionnement">Comment ça marche</a>
         </div>
         <p class="hero-note">60 € à la commande, puis 20 € par mois, payés une fois le mois écoulé. Sans engagement, tablette prêtée.</p>
-        <p class="precommande js-precommande" hidden>En précommande : votre tablette est préparée sous 7 à 10 jours ouvrés, puis livrée par Mondial Relay sous 3 à 5 jours ouvrés.</p>
+        <p class="precommande js-precommande" hidden>Je prépare et vérifie chaque tablette moi-même, une par une. En ce moment, la vôtre est prête sous 7 à 10 jours ouvrés, puis Mondial Relay la livre en 3 à 5 jours ouvrés.</p>
+        <p class="precommande js-attente-longue" hidden>Beaucoup de commandes en ce moment : je prépare et vérifie chaque tablette moi-même, une par une, à Lyon. La vôtre part sous 3 à 4 semaines, puis Mondial Relay la livre en 3 à 5 jours ouvrés. Rien de plus n'est prélevé avant la réception, et vous pouvez annuler à tout moment avant l'envoi : les 60 € vous sont remboursés tout de suite.</p>
       </div>
 
       <figure class="hero-photo">
@@ -473,8 +474,9 @@ footer a { color: var(--muted); }
           <button class="btn btn-primary offre-btn js-commander" type="submit">Être prévenu du lancement</button>
         </div>
       </form>
-      <p class="plans-note">Prix par tablette, toute la famille utilise l'appli sans supplément. 60 € sont payés à la commande pour la mise en service ; ensuite, chaque mois est payé une fois écoulé. Sans engagement : l'abonnement se résilie à tout moment depuis l'appli famille. 30 jours après la réception pour changer d'avis : rien à payer et les 60 € remboursés. La tablette est prêtée et nous est rendue en fin d'abonnement. Paiement sécurisé par prélèvement SEPA.</p>
-      <p class="precommande js-precommande" hidden>En précommande : votre tablette est préparée sous 7 à 10 jours ouvrés, puis livrée par Mondial Relay sous 3 à 5 jours ouvrés.</p>
+      <p class="plans-note">Prix par tablette, toute la famille utilise l'appli sans supplément. 60 € sont payés à la commande pour la mise en service ; ensuite, l'abonnement commence à la réception et chaque mois est payé une fois écoulé. Sans engagement : l'abonnement se résilie à tout moment depuis l'appli famille. 30 jours après la réception pour changer d'avis : rien à payer et les 60 € remboursés. La tablette est prêtée et nous est rendue en fin d'abonnement. Paiement sécurisé par prélèvement SEPA.</p>
+      <p class="precommande js-precommande" hidden>Je prépare et vérifie chaque tablette moi-même, une par une. En ce moment, la vôtre est prête sous 7 à 10 jours ouvrés, puis Mondial Relay la livre en 3 à 5 jours ouvrés.</p>
+        <p class="precommande js-attente-longue" hidden>Beaucoup de commandes en ce moment : je prépare et vérifie chaque tablette moi-même, une par une, à Lyon. La vôtre part sous 3 à 4 semaines, puis Mondial Relay la livre en 3 à 5 jours ouvrés. Rien de plus n'est prélevé avant la réception, et vous pouvez annuler à tout moment avant l'envoi : les 60 € vous sont remboursés tout de suite.</p>
     </div>
   </section>
 
@@ -519,7 +521,7 @@ footer a { color: var(--muted); }
         </details>
         <details>
           <summary>Comment la tablette est-elle livrée ?</summary>
-          <p>Gratuitement, en point relais Mondial Relay, en France, en Belgique ou au Luxembourg : vous choisissez le point qui vous arrange au moment de commander, près de chez vous ou de chez votre proche. Votre commande est préparée sous 2 à 3 jours ouvrés, puis livrée par Mondial Relay sous 3 à 5 jours ouvrés. Dès que la tablette part, vous recevez un e-mail avec le lien de suivi, puis un message de Mondial Relay quand elle vous attend.</p>
+          <p>Gratuitement, en point relais Mondial Relay, en France, en Belgique ou au Luxembourg : vous choisissez le point qui vous arrange au moment de commander, près de chez vous ou de chez votre proche. Je prépare et vérifie chaque tablette moi-même : votre commande est prête sous 2 à 3 jours ouvrés quand la tablette est en stock (jusqu'à 10 jours ouvrés sinon, et 3 à 4 semaines quand les commandes affluent), puis Mondial Relay la livre en 3 à 5 jours ouvrés. Le délai est affiché avant de payer. Dès que la tablette part, vous recevez un e-mail avec le lien de suivi, puis un message de Mondial Relay quand elle vous attend.</p>
         </details>
         <details>
           <summary>Je veux l'offrir, comment faire ?</summary>
@@ -619,7 +621,7 @@ footer a { color: var(--muted); }
 </script>
 <script>
   // Ouverture des commandes : à passer à true le jour du lancement (avec COMMANDES_OUVERTES=oui dans functions/.env).
-  // Même ouvertes, les boutons restent sur « Être prévenu » quand le stock est vide (stockDisponible, fil gestion).
+  // Une fois ouvertes, elles ne ferment plus : seul le délai annoncé change (stockDisponible, functions/stock.js).
   var COMMANDES_OUVERTES = false;
   var commandesPossibles = false;
   (function () {
@@ -638,6 +640,8 @@ footer a { color: var(--muted); }
         ouvrir();
         // Stock vide mais commandes encore possibles : délai de préparation plus long (stock.js).
         if (d.precommande) document.querySelectorAll('.js-precommande').forEach(function (p) { p.hidden = false; });
+        // Au-delà de stock + 10 : commandes toujours ouvertes, expédition sous 3 à 4 semaines.
+        if (d.attenteLongue) document.querySelectorAll('.js-attente-longue').forEach(function (p) { p.hidden = false; });
       })
       .catch(ouvrir); // panne : affichage normal, commander revérifie le stock côté serveur
   })();
