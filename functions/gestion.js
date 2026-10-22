@@ -1852,6 +1852,31 @@ exports.gestionRenvoyerCode = onCall({ secrets: [MAIL_MOT_DE_PASSE] }, async (re
   return { ok: true, a };
 });
 
+// Abonnement Stripe arrêté (s'il tourne encore) et chaque facture payée remboursée de ce qui reste à rendre.
+// Rejouable : une facture déjà remboursée (ici ou à la main dans Stripe) est sautée.
+async function arreterEtRembourser(id) {
+  const abo = await stripe().subscriptions.retrieve(id).catch(() => null);
+  // Un abonnement fini (annulé, ou jamais payé : incomplete_expired) ne s'annule plus.
+  if (abo && !['canceled', 'incomplete_expired'].includes(abo.status)) {
+    await stripe().subscriptions.cancel(id, { prorate: false, invoice_now: false });
+  }
+  let rembourse = 0;
+  const payees = await tout(stripe().invoices.list({ subscription: id, status: 'paid', limit: 100 }));
+  for (const f of payees.filter((x) => x.amount_paid > 0 && x.payment_intent)) {
+    const pi = await stripe().paymentIntents.retrieve(typeof f.payment_intent === 'string' ? f.payment_intent : f.payment_intent.id,
+      { expand: ['latest_charge'] });
+    const charge = pi.latest_charge && typeof pi.latest_charge === 'object' ? pi.latest_charge : null;
+    // Paiement SEPA pas encore abouti, ou déjà remboursé : rien à rembourser.
+    if (pi.status !== 'succeeded' || !charge) continue;
+    const reste = charge.amount - (charge.amount_refunded || 0);
+    if (reste <= 0) continue;
+    const r = await stripe().refunds.create({ payment_intent: pi.id, amount: reste, reason: 'requested_by_customer', metadata: { commande: id } },
+      { idempotencyKey: `annulation-${f.id}-${reste}` });
+    rembourse += r.amount;
+  }
+  return rembourse;
+}
+
 // Annulation d'une commande pas encore partie : abonnement Stripe arrêté, tout ce qui a été payé remboursé,
 // tablette mise de côté rendue au stock, e-mail au client. Rejouable sans double remboursement.
 exports.gestionAnnulerCommande = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE] }, async (request) => {
@@ -1868,14 +1893,12 @@ exports.gestionAnnulerCommande = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_P
   }
   let rembourse = 0;
   if (!c.offerte && id.startsWith('sub_')) {
-    const abo = await stripe().subscriptions.retrieve(id).catch(() => null);
-    if (abo && abo.status !== 'canceled') await stripe().subscriptions.cancel(id, { prorate: false, invoice_now: false });
-    const payees = await tout(stripe().invoices.list({ subscription: id, status: 'paid', limit: 100 }));
-    for (const f of payees.filter((x) => x.amount_paid > 0 && x.payment_intent)) {
-      const pi = typeof f.payment_intent === 'string' ? f.payment_intent : f.payment_intent.id;
-      const r = await stripe().refunds.create({ payment_intent: pi, reason: 'requested_by_customer', metadata: { commande: id } },
-        { idempotencyKey: `annulation-${f.id}` });
-      rembourse += r.amount;
+    try {
+      rembourse = await arreterEtRembourser(id);
+    } catch (e) {
+      // Erreur Stripe : un message lisible plutôt que « le serveur ne répond pas » ; rien n'est encore noté annulé.
+      logger.error(`Commande ${id} : annulation Stripe impossible`, e.message);
+      throw new HttpsError('aborted', `Stripe a refusé l'annulation : ${e.message}`);
     }
   }
   const qui = request.auth.token.email || request.auth.uid;
