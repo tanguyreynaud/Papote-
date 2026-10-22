@@ -1161,6 +1161,41 @@ async function ajouterDepense(d, qui) {
   return { ok: true, id: ref.id };
 }
 
+// Champs modifiables d'une dépense, vérifiés comme à la création.
+function champsDepense(c) {
+  const maj = {};
+  if ('libelle' in c) {
+    maj.libelle = texte(c.libelle);
+    if (!maj.libelle) throw new HttpsError('invalid-argument', 'Libellé manquant.');
+  }
+  if ('fournisseur' in c) maj.fournisseur = texte(c.fournisseur);
+  if ('numero' in c) maj.numero = texte(c.numero, 80);
+  if ('montant' in c) {
+    maj.montant = centimes(c.montant);
+    if (!maj.montant) throw new HttpsError('invalid-argument', 'Montant invalide (en centimes).');
+  }
+  if ('tva' in c) {
+    maj.tva = c.tva == null || c.tva === '' ? null : centimes(c.tva);
+    if (c.tva != null && c.tva !== '' && maj.tva == null) throw new HttpsError('invalid-argument', 'TVA invalide (en centimes).');
+  }
+  if ('categorie' in c) {
+    if (!CATEGORIES[c.categorie]) throw new HttpsError('invalid-argument', 'Catégorie inconnue.');
+    maj.categorie = c.categorie;
+  }
+  if ('date' in c) {
+    const t = Number(c.date);
+    if (!Number.isFinite(t) || t < Date.UTC(2020, 0, 1) || t > Date.now() + 366 * 86400000) throw new HttpsError('invalid-argument', 'Date invalide.');
+    maj.date = Timestamp.fromMillis(t);
+  }
+  return maj;
+}
+
+// « AAAA-MM » du mois (à Paris) d'un instant.
+function moisDeParis(t) {
+  const d = new Date(t + decalageParis(t));
+  return cleMois(d.getUTCFullYear(), d.getUTCMonth() + 1);
+}
+
 exports.gestionDepense = onCall(async (request) => {
   verifierAdmin(request);
   const d = request.data || {};
@@ -1176,6 +1211,19 @@ exports.gestionDepense = onCall(async (request) => {
     if (!(await ref.get()).exists) throw new HttpsError('not-found', 'Dépense introuvable.');
     await ref.update({ aVerifier: false });
     return { ok: true };
+  }
+  // Correction d'une dépense (facture mal lue, faute de frappe) : seuls les champs envoyés changent.
+  if (d.action === 'modifier') {
+    const ref = db().doc(`depenses/${d.id || '-'}`);
+    const snap = await ref.get();
+    if (!snap.exists) throw new HttpsError('not-found', 'Dépense introuvable.');
+    const maj = champsDepense(d.champs || {});
+    if (!Object.keys(maj).length) throw new HttpsError('invalid-argument', 'Rien à modifier.');
+    await ref.update({ ...maj, majLe: FieldValue.serverTimestamp(), majPar: request.auth.token.email || request.auth.uid });
+    // Mois déjà clôturé (livres envoyés) : la page propose de le refaire.
+    const clos = (await db().doc('gestion/archives').get()).get('mois') || {};
+    const moisTouches = [ms(snap.get('date')), maj.date ? maj.date.toMillis() : null].filter(Boolean).map(moisDeParis);
+    return { ok: true, moisClos: [...new Set(moisTouches)].filter((m) => clos[m]) };
   }
   if (d.action === 'arreter') {
     const ref = db().doc(`depenses/${d.id || '-'}`);
