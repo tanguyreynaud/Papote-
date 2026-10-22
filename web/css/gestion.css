@@ -499,3 +499,8 @@ button.secondary.charge::after, button.link.charge::after { border-color: rgba(7
 /* Badge sans couleur d'état (Annulée, Terminée…) : gris neutre, pas le bleu de l'app famille. */
 .badge:not(.ok):not(.ko):not(.info) { color: var(--muted); background: var(--bg); font-weight: 600; }
 @media (prefers-reduced-motion: reduce) { .roue-attente { animation-duration: 2.5s; } }
+
+/* Listes de commandes (à envoyer, à récupérer) : chaque commande dans son propre bloc, bien séparé. */
+.orders li { padding: 14px 16px; margin-bottom: 10px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); gap: 4px; }
+.orders li:last-child { border-bottom: 1px solid var(--line); margin-bottom: 0; }
+.orders li.alert { border-left: 4px solid var(--danger); padding-left: 14px; }

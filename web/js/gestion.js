@@ -959,7 +959,8 @@ async function annulerCommande(c) {
     ? 'La tablette n\'est pas encore partie : la commande est annulée et la tablette mise de côté revient au stock.'
     : 'La tablette n\'est pas encore partie : l\'abonnement s\'arrête, tout ce qui a été payé est remboursé, la tablette mise de côté revient au stock et le client reçoit un e-mail.'}`, { oui: 'Annuler la commande', non: 'Garder la commande', danger: true })) throw 'non';
   const r = await patienter('Annulation de la commande…', () => appeler('gestionAnnulerCommande', { commande: c.id }));
-  return [`Commande annulée.`, r.rembourse ? `${euros(r.rembourse)} remboursés.` : null,
+  return [`Commande annulée.`, r.stripeIntrouvable ? 'Stripe ne connaissait pas son abonnement (commande de test ?) : rien à rembourser, pas d\'e-mail au client.' : null,
+    r.rembourse ? `${euros(r.rembourse)} remboursés.` : null,
     r.mailEnvoye ? 'Le client a reçu un e-mail.' : null].filter(Boolean).join(' ');
 }
 
@@ -1690,23 +1691,20 @@ function remplirPageAccessoire(id) {
     if (Number.isNaN(n) || (n == null && !vide) || n < 0) throw new Error('Un nombre entier, s\'il vous plaît.');
     return n;
   };
-  // Livraison reçue : ajoute au stock, et la dépense si le montant est rempli.
+  // Livraison reçue : seulement la quantité. La facture arrive par factures@ (ou « Déposer une facture ») et
+  // fait la dépense ; le prix unitaire se corrige avec son crayon.
   const livraison = h('form', { class: 'zone-remplacement no-print', hidden: true },
-    h('p', {}, h('strong', {}, 'Livraison reçue. '), 'La quantité s\'ajoute au stock, et la dépense aussi si le montant est rempli.'),
+    h('p', {}, h('strong', {}, 'Livraison reçue. '), 'Combien en avez-vous reçu ? La quantité s\'ajoute au stock.'),
     h('div', { class: 'grille' },
-      h('label', {}, 'Quantité reçue ', h('input', { name: 'quantite', inputmode: 'numeric', required: true })),
-      h('label', {}, 'Montant payé (€) ', h('input', { name: 'montant', inputmode: 'decimal', placeholder: 'facultatif' })),
-      h('label', {}, 'Fournisseur ', h('input', { name: 'fournisseur', placeholder: 'facultatif' }))),
+      h('label', {}, 'Quantité reçue ', h('input', { name: 'quantite', inputmode: 'numeric', required: true }))),
     h('div', { class: 'boutons' }, h('button', { type: 'submit', class: 'primary small-btn' }, 'Ajouter au stock'),
       h('button', { type: 'button', class: 'secondary small-btn', onclick: () => { livraison.hidden = true; } }, 'Annuler')),
     h('p', { class: 'f-msg small', hidden: true }));
   livraison.addEventListener('submit', async (e) => {
     e.preventDefault();
     const quantite = entier(livraison.quantite.value);
-    const montant = enCentimes(livraison.montant.value);
     if (!quantite || quantite < 1 || Number.isNaN(quantite)) return message(livraison, 'Quantité illisible : un nombre entier.');
-    if (Number.isNaN(montant)) return message(livraison, 'Montant illisible (ex. 39,90).');
-    await enregistrer(livraison, () => appeler('gestionAccessoire', { action: 'entree', id: a.id, quantite, montant, fournisseur: livraison.fournisseur.value }), 'Ajouté au stock');
+    await enregistrer(livraison, () => appeler('gestionAccessoire', { action: 'entree', id: a.id, quantite }), `+${quantite} au stock`);
   });
   const menu = menuPoints([
     { libelle: 'Livraison reçue…', faire: () => { livraison.hidden = false; livraison.quantite.focus(); } },
