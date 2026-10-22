@@ -197,9 +197,10 @@ const TITRES = {
   tablette: 'Tablette',
   commande: 'Commande',
   client: 'Client',
+  depense: 'Dépense',
 };
 // Pages d'une fiche (#tablette/id, #commande/id) : le menu garde sa section allumée.
-const PARENTS = { tablette: 'stock', commande: 'commandes', client: 'clients' };
+const PARENTS = { tablette: 'stock', commande: 'commandes', client: 'clients', depense: 'compta' };
 // Anciennes pages devenues des onglets (liens déjà notés, favoris) : #familles → #clients/familles.
 const ANCIENNES = { familles: 'clients/familles', factures: 'compta/factures' };
 const AVEC_PERIODE = ['compta'];
@@ -268,6 +269,7 @@ function afficherFiche() {
   if (page === 'tablette') remplirTablette(decodeURIComponent(id));
   if (page === 'commande') remplirCommande(decodeURIComponent(id));
   if (page === 'client') remplirClient(decodeURIComponent(id));
+  if (page === 'depense') remplirPageDepense(decodeURIComponent(id));
 }
 window.addEventListener('hashchange', afficherPage);
 afficherPage();
@@ -548,7 +550,7 @@ function afficherAccueil() {
   // Même règle que aFaire (functions/gestion.js) : batterie usée, la tablette revenue ne repart pas.
   const usees = donnees.stock.filter((t) => t.etat === 'revenue' && t.usure);
   const facturesAttendues = donnees.depenses.filter((d) => d.confirmation && Date.now() - (d.date || 0) > 5 * 864e5);
-  const aVerifierMail = donnees.depenses.filter((d) => d.aVerifier).length;
+  const aVerifierMail = donnees.depenses.filter((d) => d.aVerifier);
   // Même règle que sansFacture (functions/gestion.js).
   const sansFacture = donnees.stock.filter((t) => t.prixAchat == null && !t.acheteeLe && !t.depense
     && !['perdue', 'hors-service'].includes(t.etat) && (t.creeLe || t.preparee || Date.now()) < Date.now() - 5 * 864e5).length;
@@ -571,10 +573,12 @@ function afficherAccueil() {
     ...accessoires.map((a) => [1, a.manque ? `${a.nom} : il en manque ${a.manque} pour les envois` : `${a.nom} : stock bas (${a.quantite || 0})`, '#stock/accessoires', a.manque ? 'ko' : '']),
     ...jumelagesAVoir.map((t) => [1, `Tablette ${t.ref || t.numero || ''} ${t.alerteJumelage}`, '#stock', 'ko']),
     ...usees.map((t) => [1, `Tablette ${t.ref || t.numero || ''} revenue : ${t.usure}, à retirer du parc`, '#stock', 'ko']),
-    [facturesAttendues.length, `Facture à télécharger chez le vendeur puis à envoyer à factures@ : ${facturesAttendues
-      .map((d) => `${d.fournisseur || d.libelle}${d.numero ? ` (commande ${d.numero})` : ''}`).join(', ')}`, '#compta/depenses', 'ko'],
+    // Une ligne par achat, qui ouvre la page de cet achat.
+    ...facturesAttendues.map((d) => [1, `Facture à télécharger chez ${d.fournisseur || 'le vendeur'} puis à envoyer à factures@ : ${d.libelle || 'achat'}${d.numero ? ` (commande ${d.numero})` : ''}`,
+      `#depense/${encodeURIComponent(d.id)}`, 'ko']),
     [sansFacture, `${pluriel(sansFacture, 'tablette')} reçue${sansFacture > 1 ? 's' : ''} sans facture depuis 5 jours : transférez la facture du vendeur à factures@mapapote.fr`, '#stock', 'ko'],
-    [aVerifierMail, `${pluriel(aVerifierMail, 'facture')} reçue${aVerifierMail > 1 ? 's' : ''} par e-mail à vérifier`, '#compta/depenses', ''],
+    ...aVerifierMail.map((d) => [1, `Facture reçue par e-mail à vérifier : ${[d.fournisseur, d.libelle].filter(Boolean).join(', ')} (${euros(d.montant)})`,
+      `#depense/${encodeURIComponent(d.id)}`, '']),
     [erreursMail, `${pluriel(erreursMail, 'problème')} au dernier relevé de factures@mapapote.fr (détail en bas de page)`, '#accueil', 'ko'],
     [tva && tva.alerte ? 1 : 0, tva ? tva.alerte : '', '#compta/urssaf', 'ko'],
     [problemes, `${pluriel(problemes, 'problème')} lors du dernier passage automatique`, '#outils/automatique', 'ko'],
@@ -1688,7 +1692,7 @@ function afficherCompta() {
   remplirTable($('t-achats'), [
     { titre: 'Date' }, { titre: 'Fournisseur' }, { titre: 'Libellé' }, { titre: 'Catégorie' }, { titre: 'TTC', n: 1 },
     { titre: 'dont TVA', n: 1 }, { titre: 'Justificatifs' }, { titre: '' },
-  ], deps.map((d) => [jour(d.date), d.fournisseur || '', libelleDepense(d), donnees.categories[d.categorie] || d.categorie,
+  ], deps.map((d) => ({ onclick: ouvrirDepense(d), cellules: [jour(d.date), d.fournisseur || '', libelleDepense(d), donnees.categories[d.categorie] || d.categorie,
     euros(d.montant), euros(d.tva),
     h('div', { class: 'pieces-liste' }, (d.pieces || []).map(lienPiece),
       d.justificatif ? h('a', { href: d.justificatif, target: '_blank', rel: 'noopener' }, 'Lien') : null),
@@ -1696,7 +1700,7 @@ function afficherCompta() {
       { libelle: 'Joindre un justificatif', faire: () => { fichierDepense = d.id; choixFichier.click(); } },
       d.recurrence ? { libelle: 'Ne plus l\'ajouter chaque mois', faire: () => arreterDepense(d) } : null,
       { libelle: 'Supprimer la dépense', danger: true, faire: () => supprimerDepense(d) },
-    ], `Actions pour « ${d.libelle} »`))]),
+    ], `Actions pour « ${d.libelle} »`))] })),
   {
     total: deps.length ? ['Total', '', '', '', euros(deps.reduce((s, d) => s + d.montant, 0)),
       euros(deps.reduce((s, d) => s + (d.tva || 0), 0)), '', ''] : null,
@@ -1738,14 +1742,70 @@ function afficherAchats() {
     { titre: 'Montant', n: 1 }, { titre: 'Facture' }, { titre: 'Tablettes' },
   ], achats.map((d) => {
     const tablettes = donnees.stock.filter((t) => t.depense === d.id);
-    return [
+    return { onclick: ouvrirDepense(d), cellules: [
       jour(d.date), d.fournisseur || '', d.libelle || '', d.numero || '', euros(d.montant),
       h('div', {}, d.confirmation ? badge('pas encore reçue', 'info') : badge('reçue', 'ok'),
         ...((d.pieces || []).map((p) => h('div', {}, lienPiece(p))))),
       h('div', {}, ...tablettes.map((t) => h('div', {}, h('a', { href: `#tablette/${encodeURIComponent(t.id)}` },
         t.ref || t.numero || 'tablette')))),
-    ];
+    ] };
   }), { vide: 'Aucun achat enregistré.' });
+}
+
+// Ligne de tableau → page de la dépense (sauf un clic sur un lien, un bouton ou le ⋮ de la ligne).
+const ouvrirDepense = (d) => (e) => {
+  if (e && e.target && e.target.closest && e.target.closest('a, button, input, .menu-points')) return;
+  location.hash = `#depense/${encodeURIComponent(d.id)}`;
+};
+
+const ACHATS = ['tablettes', 'materiel'];
+
+// Page d'une dépense : pour un achat chez un vendeur, sa commande (n°, facture, tablettes reçues).
+function remplirPageDepense(id) {
+  const zone = $('dd-corps');
+  const d = donnees.depenses.find((x) => x.id === id);
+  if (!d) {
+    zone.replaceChildren(h('div', { class: 'card' }, h('p', {}, 'Dépense introuvable (supprimée ?).')));
+    return;
+  }
+  const achat = ACHATS.includes(d.categorie) || (d.materiel || []).length;
+  const titre = achat ? `Achat chez ${d.fournisseur || 'le vendeur'}` : d.libelle || 'Dépense';
+  $('titre-page').textContent = achat ? 'Achat' : 'Dépense';
+  document.title = `Papote · ${titre}`;
+  const ligne = (k, v) => (v ? [h('dt', {}, k), h('dd', {}, v)] : []);
+  const tablettes = donnees.stock.filter((t) => t.depense === d.id);
+  const pieces = [...(d.pieces || []).map(lienPiece),
+    d.justificatif ? h('a', { href: d.justificatif, target: '_blank', rel: 'noopener' }, 'Lien') : null].filter(Boolean);
+  const valider = d.aVerifier ? h('button', { type: 'button', class: 'primary small-btn no-print', onclick: () => verifierDepense(d) }, 'Valider') : null;
+  zone.replaceChildren(...[
+    h('div', { class: 'card' },
+      h('div', { class: 'tete-fiche' }, h('h2', {}, titre),
+        h('div', { class: 'tete-actions' }, valider, h('div', { class: 'no-print' }, menuPoints([
+          { libelle: 'Joindre un justificatif', faire: () => { fichierDepense = d.id; choixFichier.click(); } },
+          d.recurrence ? { libelle: 'Ne plus l\'ajouter chaque mois', faire: () => arreterDepense(d) } : null,
+          { libelle: 'Supprimer la dépense', danger: true, faire: async () => { if (await supprimerDepense(d)) location.hash = '#compta/depenses'; } },
+        ], `Actions pour « ${d.libelle} »`)))),
+      d.aVerifier ? h('p', { class: 'small a-verifier' }, badge('à vérifier', 'ko'), ' ', sourceDepense(d), ' : vérifiez le montant, la date et le vendeur, puis validez.') : null,
+      h('dl', { class: 'fiche' },
+        ligne('Date', jour(d.date)),
+        ligne('Vendeur', d.fournisseur),
+        ligne(achat ? 'Ce qui a été acheté' : 'Libellé', d.libelle),
+        ligne('N° de commande', d.numero),
+        ligne('Catégorie', donnees.categories[d.categorie] || d.categorie),
+        ligne('Montant TTC', euros(d.montant)),
+        ligne('dont TVA', d.tva != null ? euros(d.tva) : null),
+        ligne('Facture', d.confirmation
+          ? h('span', {}, badge('pas encore reçue', 'info'), ' ', h('span', { class: 'muted small' }, 'seule la confirmation de commande est arrivée : transférez la facture à factures@mapapote.fr'))
+          : pieces.length ? badge('reçue', 'ok') : h('span', { class: 'muted' }, 'aucun justificatif')),
+        ligne('Justificatifs', pieces.length ? h('div', { class: 'pieces-liste' }, pieces) : null),
+        ligne('Chaque mois', d.recurrence ? 'oui, ajoutée automatiquement chaque mois' : null),
+        ligne('Entré au stock', (d.materiel || []).length ? d.materiel.join(', ') : null))),
+    achat ? h('div', { class: 'card' }, h('h2', {}, tablettes.length > 1 ? 'Tablettes de cet achat' : 'Tablette de cet achat'),
+      tablettes.length ? h('ul', { class: 'liste-liens' }, ...tablettes.map((t) => h('li', {}, h('span', { class: 'll-quoi' }, 'Tablette'),
+        h('a', { href: `#tablette/${encodeURIComponent(t.id)}` }, [t.ref, t.numero || t.modele].filter(Boolean).join(' · ') || 'Tablette'),
+        h('span', { class: 'muted small' }, donnees.etats[etatTablette(t)] || t.etat))))
+        : h('p', { class: 'muted small' }, 'Aucune tablette rattachée à cet achat.')) : null,
+  ].filter(Boolean));
 }
 
 function libelleDepense(d) {
@@ -1792,8 +1852,10 @@ async function supprimerDepense(d) {
   try {
     await appeler('gestionDepense', { action: 'supprimer', id: d.id });
     signalerChangement();
+    return true;
   } catch (e) {
     prevenir(messageErreur(e));
+    return false;
   }
 }
 

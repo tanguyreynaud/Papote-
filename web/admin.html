@@ -56,7 +56,7 @@
         <p id="who" class="muted small"></p>
         <button type="button" id="btn-signout" class="link small">Se déconnecter</button>
         <!-- Version de l'admin : à changer à chaque mise à jour, pour voir que la bonne est en ligne. -->
-        <p class="muted small version-admin">Version du 22/10 à 11 h</p>
+        <p class="muted small version-admin">Version du 22/10 à 11 h 30</p>
       </div>
     </aside>
 
@@ -478,6 +478,12 @@
       </section>
 
       <!-- ---------- Page d'une commande (#commande/id) ---------- -->
+      <!-- ---------- Page d'une dépense ou d'un achat fournisseur (#depense/id) ---------- -->
+      <section data-panneau="depense" hidden>
+        <p class="no-print"><a href="#compta/depenses" class="retour">Retour</a></p>
+        <div id="dd-corps"></div>
+      </section>
+
       <section data-panneau="commande" hidden>
         <p class="no-print"><a href="#commandes" class="retour">Retour</a></p>
         <div id="dc-corps"></div>
