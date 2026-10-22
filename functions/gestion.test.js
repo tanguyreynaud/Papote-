@@ -465,3 +465,12 @@ test('suiviColis : n° et lien de suivi, étape, livré', () => {
     { suivi: 'MR1', lien: 'https://t/MR1', etape: 'Awaiting customer pickup', livre: false });
   assert.deepStrictEqual(suiviColis(null), { suivi: null, lien: null, etape: null, livre: false });
 });
+
+test('transitionPermise : la vie logique d\'une tablette, sans retour en arrière', () => {
+  assert.equal(g.transitionPermise('commandee', 'en-stock'), true);
+  assert.equal(g.transitionPermise('en-stock', 'commandee'), false);
+  assert.equal(g.transitionPermise('revenue', 'en-stock'), true);
+  assert.equal(g.transitionPermise('chez-client', 'en-stock'), false);
+  assert.equal(g.transitionPermise('hors-service', 'en-stock'), false);
+  assert.equal(g.transitionPermise('en-stock', 'en-stock'), true);
+});

@@ -68,6 +68,22 @@ function stripe() {
 
 // ---------- Règles, sans dépendance (testées par gestion.test.js) ----------
 
+// Changements d'état permis à la main (page tablette) : la vie logique d'une tablette, sans retour en arrière.
+// Les étapes automatiques (préparation, jumelage, retour, remplacement) écrivent directement.
+const SUITES = {
+  commandee: ['en-stock'],
+  'en-stock': ['preparee', 'envoyee', 'a-reparer', 'hors-service', 'perdue'],
+  preparee: ['en-stock', 'envoyee', 'a-reparer', 'hors-service', 'perdue'],
+  envoyee: ['chez-client', 'en-retour', 'revenue', 'perdue'],
+  'chez-client': ['en-retour', 'revenue', 'perdue', 'hors-service'],
+  'en-retour': ['revenue', 'perdue'],
+  revenue: ['en-stock', 'a-reparer', 'hors-service', 'perdue'],
+  'a-reparer': ['en-stock', 'hors-service', 'perdue'],
+  perdue: ['revenue'],
+  'hors-service': [],
+};
+const transitionPermise = (de, vers) => de === vers || !de || (SUITES[de] || []).includes(vers);
+
 // Vie d'une tablette du parc.
 const ETATS = {
   commandee: 'Commandée, pas encore reçue',
@@ -857,12 +873,16 @@ exports.gestionStock = onCall(async (request) => {
     let sortis = [];
     if ('etat' in champs) {
       if (!ETATS[champs.etat]) throw new HttpsError('invalid-argument', 'État inconnu.');
+      if (!transitionPermise(snap.get('etat'), champs.etat)) {
+        throw new HttpsError('failed-precondition', `Une tablette « ${ETATS[snap.get('etat')] || snap.get('etat')} » ne peut pas passer « ${ETATS[champs.etat]} ».`);
+      }
       if (champs.etat !== snap.get('etat')) {
         maj.etat = champs.etat;
         // Perdue (volée) ou hors service : plus d'accès aux photos de la famille.
         if (ETATS_BLOQUES.includes(champs.etat) && await retirerDeLaFamille(snap.data(), snap.ref)) maj.fid = null;
         // Remise en stock : la tablette n'appartient plus à la commande (l'historique la garde).
-        if (champs.etat === 'en-stock' && !('commande' in champs)) maj.commande = null;
+        // (Sauf à la réception d'une tablette commandée : elle reste réservée à sa commande.)
+        if (champs.etat === 'en-stock' && !('commande' in champs) && snap.get('etat') !== 'commandee') maj.commande = null;
         const commande = maj.commande !== undefined ? maj.commande : snap.get('commande') || null;
         // Départ du colis : les accessoires qui partent avec cette formule sortent du stock.
         if (champs.etat === 'envoyee' && commande) {
@@ -1328,11 +1348,14 @@ function nomFichier(nom) {
   return t || 'piece';
 }
 
-async function enregistrerPiece(collection, id, nomBrut, type, contenu) {
+// Genre d'un document choisi à l'ajout (page tablette) : photo, bon de garantie, facture, autre.
+const GENRES_PIECE = ['photo', 'garantie', 'facture', 'autre'];
+
+async function enregistrerPiece(collection, id, nomBrut, type, contenu, genre) {
   const nom = texte(nomBrut, 120) || 'piece';
   const chemin = `gestion/${collection}/${id}/${Date.now()}-${nomFichier(nom)}`;
   await stockage().file(chemin).save(contenu, { contentType: type, resumable: false });
-  const piece = { nom, chemin, type, taille: contenu.length, le: Date.now() };
+  const piece = { nom, chemin, type, taille: contenu.length, le: Date.now(), ...(GENRES_PIECE.includes(genre) ? { genre } : {}) };
   await db().doc(`${collection}/${id}`).update({ pieces: FieldValue.arrayUnion(piece) });
   return piece;
 }
@@ -1365,7 +1388,7 @@ exports.gestionPiece = onCall({ memory: '512MiB' }, async (request) => {
     const contenu = Buffer.from(String(d.contenu || ''), 'base64');
     if (!contenu.length) throw new HttpsError('invalid-argument', 'Fichier vide.');
     if (contenu.length > MAX_PIECE) throw new HttpsError('invalid-argument', 'Fichier trop lourd (6 Mo au plus).');
-    const piece = await enregistrerPiece(d.collection, d.id, d.nom, d.type, contenu);
+    const piece = await enregistrerPiece(d.collection, d.id, d.nom, d.type, contenu, d.genre);
     // Facture jointe à la main sur un achat venu d'une confirmation de commande : plus de rappel.
     if (snap.get('confirmation')) await ref.update({ confirmation: false });
     return { ok: true, piece };
@@ -2951,7 +2974,7 @@ exports.gestionParcours = onCall(async (request) => {
 
 exports.regles = {
   ETATS, CATEGORIES, natureMouvement, mensuel, centimes, lien, nomFichier, moisSuivant, lectureVersFormulaire, SCHEMA_FACTURE,
-  lireReglages, simAResilier, fichesARattacher, sansFacture, stockAJour, releveBatterie, usureBatterie, incoherences, materielLu, memeAccessoire, coutLigne, alertesSim, accessoiresAPrevoir, champsSim, aFaire, piecesFacture, debutMoisParis, moisPrecedent, csvTexte, livreDesRecettes,
+  lireReglages, transitionPermise, SUITES, simAResilier, fichesARattacher, sansFacture, stockAJour, releveBatterie, usureBatterie, incoherences, materielLu, memeAccessoire, coutLigne, alertesSim, accessoiresAPrevoir, champsSim, aFaire, piecesFacture, debutMoisParis, moisPrecedent, csvTexte, livreDesRecettes,
   registreDesAchats, corpsDuMail, memeAchat, suiteJumelage, descriptionNonRendu, refusSuppression, fusionnerContacts, emailInformation, cleContact,
   avancementPropre,
 };
