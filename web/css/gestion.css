@@ -524,3 +524,11 @@ button.secondary.charge::after, button.link.charge::after { border-color: rgba(7
 .orders li { padding: 14px 16px; margin-bottom: 10px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); gap: 4px; }
 .orders li:last-child { border-bottom: 1px solid var(--line); margin-bottom: 0; }
 .orders li.alert { border-left: 4px solid var(--danger); padding-left: 14px; }
+
+/* Téléphone : le champ en saisie ne doit jamais élargir la fiche (il rétrécit avec l'écran). */
+.fiche { grid-template-columns: max-content minmax(0, 1fr); }
+.fiche dd { min-width: 0; }
+@media (max-width: 640px) {
+  .fiche { grid-template-columns: minmax(0, 1fr); }
+  .saisie-champ input, .saisie-champ select, .saisie-champ textarea { flex-basis: 0; }
+}
