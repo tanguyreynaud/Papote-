@@ -2760,7 +2760,8 @@ exports.gestionCommandeOfferte = onCall(async (request) => {
 // ---------- Suppression d'une famille (demande du client à contact@) ----------
 // Les responsables ne peuvent plus supprimer leur famille dans l'appli : l'admin le fait ici, en retapant le nom.
 // Tout part : la fiche et ses sous-collections (posts, reminders, birthdays, invitations, calls, invites,
-// members, logs, commands…) et les photos et vidéos de Storage (families/{fid}/). Famille offerte (Mamie) refusée.
+// members, logs, commands…) et les photos et vidéos de Storage (families/{fid}/). Famille offerte : sa commande offerte
+// est close (annulée si la tablette n'est pas partie, sinon matériel noté récupéré ou encore à récupérer).
 
 const STATUTS_A_RESILIER = ['actif', 'impaye', 'suspendu'];
 const nomCompare = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().replace(/\s+/g, ' ').toLowerCase();
@@ -2768,7 +2769,6 @@ const nomCompare = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '
 // Raison de refuser la suppression, ou null.
 function refusSuppression(famille, nomTape) {
   const statut = famille.abonnement && famille.abonnement.statut;
-  if (statut === 'offert') return 'Famille offerte (celle de Mamie) : suppression interdite.';
   if (STATUTS_A_RESILIER.includes(statut)) return "L'abonnement de cette famille est en cours : résiliez-le d'abord, sinon le client continuerait à payer.";
   if (!nomCompare(nomTape) || nomCompare(nomTape) !== nomCompare(famille.name)) return 'Le nom retapé ne correspond pas au nom de la famille.';
   return null;
@@ -2783,6 +2783,14 @@ exports.gestionSupprimerFamille = onCall({ timeoutSeconds: 540, memory: '512MiB'
   if (!snap.exists) throw new HttpsError('not-found', 'Famille introuvable (déjà supprimée ?).');
   const refus = refusSuppression(snap.data(), nom);
   if (refus) throw new HttpsError('failed-precondition', refus);
+  const commandes = await db().collection('commandes').where('fid', '==', fid).get();
+  // Commande offerte partie chez le proche : l'admin dit si la tablette et ses accessoires sont récupérés.
+  const offertes = commandes.docs.filter((d) => d.get('offerte') && d.get('expedition') !== 'annulee' && !d.get('restitution'));
+  const parties = offertes.filter((d) => !['a-preparer', 'paiement-en-attente'].includes(d.get('expedition')));
+  const { recupere } = request.data || {};
+  if (parties.length && typeof recupere !== 'boolean') {
+    throw new HttpsError('failed-precondition', 'Dites d\'abord si la tablette et les accessoires de la commande offerte sont récupérés.');
+  }
   const membres = await ref.collection('members').get();
   // Fichiers d'abord : si la base échoue ensuite, un nouvel essai finit le travail.
   await stockage().deleteFiles({ prefix: `families/${fid}/`, force: true });
@@ -2790,14 +2798,38 @@ exports.gestionSupprimerFamille = onCall({ timeoutSeconds: 540, memory: '512MiB'
   // Jumelages de cette famille : sans eux, le rattrapage de nuit ne relie plus la tablette à une famille disparue.
   const jumelages = await db().collection('pairings').where('fid', '==', fid).get();
   await Promise.all(jumelages.docs.map((d) => d.ref.delete()));
-  const commandes = await db().collection('commandes').where('fid', '==', fid).get();
   await Promise.all(commandes.docs.map((d) => d.ref.update({ familleSupprimeeLe: Date.now() })));
+  await closOffertes(offertes, recupere === true, request.auth.token.email || request.auth.uid);
   await db().collection('suppressions').add({
     fid, nom: snap.get('name') || null, membres: membres.size, le: Date.now(), par: request.auth.token.email || request.auth.uid,
   });
   logger.info(`Famille ${fid} supprimée par ${request.auth.token.email}`);
   return { ok: true, membres: membres.size };
 });
+
+// Commandes offertes d'une famille supprimée. Pas encore partie : annulée, sa tablette revient au stock.
+// Partie : matériel rendu (la tablette passe « revenue », à vérifier) ou encore à récupérer chez le proche.
+async function closOffertes(offertes, recupere, qui) {
+  for (const d of offertes) {
+    const pasPartie = ['a-preparer', 'paiement-en-attente'].includes(d.get('expedition'));
+    const tablettes = await db().collection('stock').where('commande', '==', d.id).get();
+    if (pasPartie) {
+      await d.ref.update({ expedition: 'annulee', annuleeLe: Date.now(), abonnement: 'resilie' });
+      await Promise.all(tablettes.docs.map((t) => t.ref.update({
+        commande: null, majLe: FieldValue.serverTimestamp(),
+        historique: FieldValue.arrayUnion({ le: Date.now(), etat: t.get('etat'), par: qui, motif: 'commande offerte annulée' }),
+      })));
+      continue;
+    }
+    await d.ref.update({ abonnement: 'resilie', restitution: { statut: recupere ? 'rendue' : 'a-recuperer', le: Date.now() } });
+    if (recupere) {
+      await Promise.all(tablettes.docs.filter((t) => ETATS_PARTIS.includes(t.get('etat'))).map((t) => t.ref.update({
+        etat: 'revenue', majLe: FieldValue.serverTimestamp(),
+        historique: FieldValue.arrayUnion({ le: Date.now(), etat: 'revenue', par: qui, commande: d.id }),
+      })));
+    }
+  }
+}
 
 // ---------- Parcours pas à pas (envoi d'une commande, réception d'une tablette) ----------
 // L'avancement est gardé sur la commande (preparation) ou la fiche tablette (reception) : on reprend où on s'était arrêté.
