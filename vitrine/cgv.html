@@ -24,6 +24,9 @@ p, ul { margin: 0 0 .8rem; }
 li { margin-bottom: .3rem; }
 a { color: var(--accent-strong); }
 .muted { color: var(--muted); }
+/* Pas de soulignement des liens (Tanguy, 2026-10-22) : ils restent repérables par leur couleur et le gras. */
+a { text-decoration: none; }
+main a:not([class]), footer a:not([class]), .rassure a { font-weight: 700; }
 </style>
 </head>
 <body>
