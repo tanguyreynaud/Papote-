@@ -3489,7 +3489,7 @@ function savedPrenom() { try { return localStorage.getItem(PRENOM_KEY) || ''; } 
 // Je suis une femme / un homme : demandé avec le prénom (installation, rejoindre une famille),
 // gardé sur ce téléphone puis écrit dans members/{uid}.genre dès que la famille est ouverte.
 const GENRE_KEY = 'papote.genre';
-const GENRE_MANQUANT = 'Touchez « Je suis une femme » ou « Je suis un homme » : la tablette choisit la voix qui lira vos messages.';
+const GENRE_MANQUANT = 'Indiquez si vous êtes une femme ou un homme : la tablette choisit la voix qui lira vos messages.';
 function savedGenre() { try { return localStorage.getItem(GENRE_KEY) || ''; } catch (e) { return ''; } }
 function rememberGenre(g) { try { localStorage.setItem(GENRE_KEY, g); } catch (e) { /* rien */ } }
 function genreDe(form) { return form.querySelector('.genre-btn[aria-checked="true"]')?.dataset.genre || ''; }
@@ -4032,9 +4032,9 @@ function showInvitations(invitations) {
     const card = document.createElement('form');
     card.className = 'card';
     card.innerHTML = '<h2></h2><p class="muted"></p><label>Votre prénom<input maxlength="40" required></label>'
-      + '<div class="genre-choix" role="radiogroup" aria-label="Vous êtes">'
-      + '<button type="button" class="genre-btn" role="radio" aria-checked="false" data-genre="femme">Je suis une femme</button>'
-      + '<button type="button" class="genre-btn" role="radio" aria-checked="false" data-genre="homme">Je suis un homme</button></div>'
+      + '<div class="genre-choix" role="radiogroup" aria-label="Vous êtes"><span class="genre-titre">Vous êtes</span>'
+      + '<button type="button" class="genre-btn" role="radio" aria-checked="false" data-genre="femme">Une femme</button>'
+      + '<button type="button" class="genre-btn" role="radio" aria-checked="false" data-genre="homme">Un homme</button></div>'
       + '<button type="submit" class="primary wide">Rejoindre la famille</button><p class="error" hidden></p>';
     marquerGenre(card, savedGenre());
     card.querySelector('h2').textContent = `Famille de ${inv.familyName}`;

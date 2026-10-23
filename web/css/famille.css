@@ -1212,7 +1212,8 @@ a { text-decoration: none; }
 /* Compteur de la légende (60 caractères au plus). */
 .legende-compte { text-align: right; margin: 4px 2px 0; }
 
-/* Je suis une femme / un homme : deux boutons de même taille, celui choisi en indigo. */
-.genre-choix { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0 4px; }
-.genre-btn { min-height: 52px; padding: 10px 8px; border: 2px solid var(--line); border-radius: 14px; background: var(--card, #fff); color: inherit; font: inherit; font-weight: 600; }
-.genre-btn[aria-checked="true"] { border-color: var(--accent); background: var(--accent); color: var(--accent-text); }
+/* Vous êtes : une femme / un homme, petit sélecteur sur une ligne, le choix en indigo. */
+.genre-choix { display: flex; align-items: center; gap: 8px; margin: 8px 0 4px; }
+.genre-titre { font-weight: 600; margin-right: auto; white-space: nowrap; }
+.genre-btn { flex: 0 0 auto; width: 7em; padding: 7px 0; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: inherit; font: inherit; font-size: 15px; }
+.genre-btn[aria-checked="true"] { border-color: var(--accent); background: var(--accent); color: var(--accent-text); font-weight: 600; }
