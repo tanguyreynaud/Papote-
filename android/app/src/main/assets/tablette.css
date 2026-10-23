@@ -1658,6 +1658,14 @@ body.night .next-when { color: #a5b4fc; }
 #overlay-actions { gap: 2.5vmin; flex-wrap: nowrap; }
 #overlay-actions .ln-btn.listen { min-width: 0; padding: 0 4.5vmin; font-size: 5.6vmin; }
 #overlay-actions .ln-btn.ok { min-width: 0; padding: 0 7vmin; }
+/* Photo en hauteur : les boutons restent dans la carte de gauche (46 %), côte à côte, sans déborder
+   sur la photo ni s'écraser (Blackview Tab 60 Pro, 23/10). */
+.overlay.mode-photo:not(.wide) .ln-bar { width: 46%; box-sizing: border-box; padding: 0 4vmin 5vmin; }
+.overlay.mode-photo:not(.wide) #overlay-actions { width: 100%; gap: 3vmin; }
+.overlay.mode-photo:not(.wide) #overlay-actions .ln-btn { -webkit-flex: 1 1 0; flex: 1 1 0; margin: 0; padding: 0 2vmin;
+  min-height: 15vmin; justify-content: center; white-space: nowrap; }
+.overlay.mode-photo:not(.wide) #overlay-actions .ln-btn.listen { font-size: 5.6vmin; }
+.overlay.mode-photo:not(.wide) #overlay-actions .ln-btn[hidden] { display: none; }
 
 /* Appel lancé par Mamie, passé en vidéo : bouton Raccrocher en bas, au centre */
 .call-out-hangup {
