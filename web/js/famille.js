@@ -84,6 +84,7 @@ $('form-join').addEventListener('submit', async (e) => {
   const button = e.target.querySelector('button[type=submit]');
   button.disabled = true;
   showError($('join-error'), '');
+  if (!genreDe($('form-join'))) { showError($('join-error'), GENRE_MANQUANT); button.disabled = false; return; }
   try {
     const fidRejoint = await joinFamily($('join-code').value, $('join-name').value.trim());
     // Invité aussi par e-mail : l'invitation est remplie, on l'efface.
@@ -3485,6 +3486,32 @@ let setupPhoto = null;
 function rememberPrenom(p) { try { localStorage.setItem(PRENOM_KEY, p); } catch (e) { /* rien */ } }
 function savedPrenom() { try { return localStorage.getItem(PRENOM_KEY) || ''; } catch (e) { return ''; } }
 
+// Je suis une femme / un homme : demandé avec le prénom (installation, rejoindre une famille),
+// gardé sur ce téléphone puis écrit dans members/{uid}.genre dès que la famille est ouverte.
+const GENRE_KEY = 'papote.genre';
+const GENRE_MANQUANT = 'Touchez « Je suis une femme » ou « Je suis un homme » : la tablette choisit la voix qui lira vos messages.';
+function savedGenre() { try { return localStorage.getItem(GENRE_KEY) || ''; } catch (e) { return ''; } }
+function rememberGenre(g) { try { localStorage.setItem(GENRE_KEY, g); } catch (e) { /* rien */ } }
+function genreDe(form) { return form.querySelector('.genre-btn[aria-checked="true"]')?.dataset.genre || ''; }
+function marquerGenre(form, g) {
+  form.querySelectorAll('.genre-btn').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.genre === g)));
+}
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('.genre-btn');
+  if (!b) return;
+  marquerGenre(b.closest('.genre-choix'), b.dataset.genre);
+  rememberGenre(b.dataset.genre);
+});
+document.querySelectorAll('.genre-choix').forEach((g) => marquerGenre(g, savedGenre()));
+// Famille ouverte : le genre choisi sur ce téléphone rejoint ma fiche si elle n'en a pas.
+function appliquerGenre() {
+  const g = savedGenre();
+  if (!session?.member || session.member.genre || !['femme', 'homme'].includes(g)) return;
+  session.member.genre = g;
+  updateDoc(doc(db, 'families', session.fid, 'members', session.uid), { genre: g })
+    .catch((err) => console.warn('Genre non enregistré', err));
+}
+
 function setupStep(step) {
   setup.step = step;
   for (const id of SETUP_STEPS) $(id).hidden = id !== step;
@@ -3551,7 +3578,8 @@ async function showSetupScan(code) {
   $('setup-code-input').value = code ? formatCode(normalizeCode(code)) : '';
   $('setup-code-error').hidden = true;
   setupStep('setup-code');
-  if (code && $('setup-prenom').value) $('setup-code').requestSubmit();
+  marquerGenre($('setup-code'), savedGenre());
+  if (code && $('setup-prenom').value && savedGenre()) $('setup-code').requestSubmit();
 }
 
 // Réservation déjà faite par ce compte (app fermée après le scan, ou autre téléphone) : on la reprend.
@@ -3624,6 +3652,7 @@ $('setup-code').addEventListener('submit', async (e) => {
   const code = normalizeCode($('setup-code-input').value);
   $('setup-code-error').hidden = true;
   if (!prenom) { showError($('setup-code-error'), 'Indiquez votre prénom : la famille le verra.'); return; }
+  if (!genreDe($('setup-code'))) { showError($('setup-code-error'), GENRE_MANQUANT); return; }
   if (code.length !== 8) { showError($('setup-code-error'), 'Le code affiché sur la tablette a 8 caractères.'); return; }
   rememberPrenom(prenom);
   setupCheck('Vérification de la tablette…', 'Un instant, nous vérifions le code.');
@@ -4003,14 +4032,19 @@ function showInvitations(invitations) {
     const card = document.createElement('form');
     card.className = 'card';
     card.innerHTML = '<h2></h2><p class="muted"></p><label>Votre prénom<input maxlength="40" required></label>'
+      + '<div class="genre-choix" role="radiogroup" aria-label="Vous êtes">'
+      + '<button type="button" class="genre-btn" role="radio" aria-checked="false" data-genre="femme">Je suis une femme</button>'
+      + '<button type="button" class="genre-btn" role="radio" aria-checked="false" data-genre="homme">Je suis un homme</button></div>'
       + '<button type="submit" class="primary wide">Rejoindre la famille</button><p class="error" hidden></p>';
+    marquerGenre(card, savedGenre());
     card.querySelector('h2').textContent = `Famille de ${inv.familyName}`;
     card.querySelector('p.muted').textContent = `${inv.invitedBy || 'Un responsable'} vous invite à rejoindre la famille.`;
     const input = card.querySelector('input');
     input.value = defaultName();
     card.addEventListener('submit', async (e) => {
       e.preventDefault();
-      card.querySelector('button').disabled = true;
+      if (!genreDe(card)) { showError(card.querySelector('.error'), GENRE_MANQUANT); return; }
+      card.querySelector('button[type=submit]').disabled = true;
       try {
         await acceptInvitation(inv, input.value.trim());
         saveFamilyId(inv.fid);
@@ -4020,7 +4054,7 @@ function showInvitations(invitations) {
         const p = card.querySelector('.error');
         p.textContent = "Impossible de rejoindre pour le moment. L'invitation a peut-être été annulée.";
         p.hidden = false;
-        card.querySelector('button').disabled = false;
+        card.querySelector('button[type=submit]').disabled = false;
       }
     });
     return card;
@@ -4099,6 +4133,7 @@ async function enterApp() {
   startNotifs(session);
   renderInstallCard();
   renderAccount();
+  appliquerGenre();
   // Installation en cours sur cet écran (nom tout juste donné, reprise) : on continue ses étapes.
   if (installationEnCours() && setup.step) { showSetupFamily(); return; }
   // Appli relancée en route (accord de Tanguy, 22/10) : pas de retour en boucle, l'accueil ;
