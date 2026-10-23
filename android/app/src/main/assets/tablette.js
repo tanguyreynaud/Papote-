@@ -663,6 +663,7 @@
       return;
     }
     var p = overlayPost;
+    noteVoix(overlayText(p), p.voice);
     // Visage vu : « lu », et une vidéo ou un vocal démarre tout seul.
     var watching = watchSeen('overlay', function () {
       if (overlayPost !== p) return;
@@ -1098,6 +1099,7 @@
     $('reminder-done').textContent = early ? "J'ai compris" : r.kind === 'rdv' ? "J'ai bien noté" : "C'est fait";
     show($('reminder-alert'), true);
     stopRadio();
+    noteVoix(r.title, r.voice);
     showListenButtons();
     if (android()) android().alert();
     // Visage vu : la famille voit « vu » ; sans « C'est fait », le rappel se ferme sans dire que c'est fait.
@@ -1693,17 +1695,26 @@
   }
   // Phrase fixe (mot par défaut d'une photo) : jouée depuis son fichier MP3, voix Google « Kore »
   // enregistrée une fois (outils/voix/generer-voix-google.js). Tout le reste : la voix d'Android.
+  // Voix Google d'un message ou d'un rappel (functions/voix.js), retrouvée par le texte affiché.
+  var voixDuTexte = {};
+  function noteVoix(text, url) { if (text && url) voixDuTexte[text] = url; }
   var motAudio = null;
   function sayAloud(text) {
     if (!text) return;
     var i = MOTS.indexOf(text);
-    if (i >= 0) {
+    var url = i >= 0 ? 'voix/mots/mot-' + i + '.mp3' : voixDuTexte[text];
+    if (url) {
       if (motAudio) motAudio.pause();
-      motAudio = new Audio('voix/mots/mot-' + i + '.mp3');
-      motAudio.onended = motAudio.onerror = function () { setSpeech('idle'); };
+      motAudio = new Audio(url);
+      var parAndroid = function () { // son injoignable (hors ligne) : la voix d'Android lit le texte
+        setSpeech('idle');
+        if (i < 0 && android() && android().speak) { setSpeech('loading'); android().speak(text); }
+      };
+      motAudio.onended = function () { setSpeech('idle'); };
+      motAudio.onerror = parAndroid;
       setSpeech('speaking');
       var pr = motAudio.play();
-      if (pr && pr.catch) pr.catch(function () { setSpeech('idle'); });
+      if (pr && pr.catch) pr.catch(parAndroid);
       return;
     }
     if (!android() || !android().speak) return;

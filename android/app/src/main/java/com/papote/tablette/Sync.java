@@ -73,6 +73,9 @@ final class Sync {
         String imagePath;
         String audioPath;
         String videoPath;
+        /** Voix Google du texte (functions/voix.js) : adresse en ligne, puis fichier local. */
+        String voiceUrl;
+        String voicePath;
         /** Envoi de plusieurs photos : adresses et fichiers des photos 2 à 5. */
         List<String> extraUrls = new ArrayList<>();
         List<String> extraPaths = new ArrayList<>();
@@ -399,6 +402,8 @@ final class Sync {
                 p.audioPath = old.audioPath;
                 p.videoPath = old.videoPath;
                 p.extraPaths = old.extraPaths;
+                if (p.voiceUrl == null) p.voiceUrl = old.voiceUrl;
+                if (p.voiceUrl != null && p.voiceUrl.equals(old.voiceUrl)) p.voicePath = old.voicePath;
             } else if (loadedOnce && p.seenAt == 0 && !"reply".equals(p.type)) {
                 newArrival = true;
             }
@@ -421,6 +426,7 @@ final class Sync {
         loadedOnce = true;
         downloadMedia(fid);
         downloadVideos(fid);
+        downloadVoices(fid);
         publishPosts();
         heartbeat(fid, "lastOnline");
         if (newArrival && !paused()) listener.onNewArrival();
@@ -428,7 +434,7 @@ final class Sync {
 
     private JSONObject postsQuery(boolean full) throws JSONException {
         JSONArray fields = new JSONArray();
-        for (String f : new String[]{"type", "text", "authorName", "authorUid", "createdAt", "seenAt", "hearts", "duration", "chunks", "mime", "imageUrl", "videoUrl", "photos"}) {
+        for (String f : new String[]{"type", "text", "authorName", "authorUid", "createdAt", "seenAt", "hearts", "duration", "chunks", "mime", "imageUrl", "videoUrl", "photos", "voix"}) {
             fields.put(new JSONObject().put("fieldPath", f));
         }
         JSONObject q = new JSONObject()
@@ -496,7 +502,45 @@ final class Sync {
         p.duration = Firebase.integer(f, "duration");
         p.chunks = Firebase.integer(f, "chunks");
         p.mime = Firebase.str(f, "mime");
+        p.voiceUrl = voixUrl(f);
         return p;
+    }
+
+    /** Adresse du son « voix » d'un document (map { url, texte, nom }), ou null. */
+    private static String voixUrl(JSONObject f) {
+        JSONObject v = f.optJSONObject("voix");
+        JSONObject vf = v == null || v.optJSONObject("mapValue") == null ? null : v.optJSONObject("mapValue").optJSONObject("fields");
+        return vf == null ? null : Firebase.str(vf, "url");
+    }
+
+    /**
+     * Voix Google des textes (functions/voix.js) : le son arrive quelques secondes après l'envoi, donc
+     * un envoi récent sans voix est relu (champ « voix » seul), puis le fichier est gardé sur la tablette.
+     * Sans voix, la page lit le texte avec la voix d'Android.
+     */
+    private void downloadVoices(String fid) {
+        long now = System.currentTimeMillis();
+        int relus = 0;
+        for (Post p : posts.values()) {
+            if (p.text == null || p.text.trim().isEmpty() || "reply".equals(p.type)) continue;
+            if (p.voiceUrl == null && relus < 5 && now - p.createdAt < 10 * 60_000L) {
+                relus++;
+                try {
+                    JSONObject doc = firebase.get("families/" + fid + "/posts/" + p.id, "voix");
+                    if (doc != null && doc.optJSONObject("fields") != null) p.voiceUrl = voixUrl(doc.getJSONObject("fields"));
+                } catch (Exception e) {
+                    Log.w(TAG, "Voix " + p.id, e);
+                }
+            }
+            if (p.voiceUrl == null || p.voicePath != null) continue;
+            try {
+                File file = new File(imageDir, p.id + "_voix.mp3");
+                if (!file.exists()) file = downloadToFile(p.voiceUrl, p.id + "_voix", "mp3");
+                p.voicePath = LocalContent.mediaUrl(file.getName());
+            } catch (Exception e) {
+                Log.w(TAG, "Voix " + p.id, e);
+            }
+        }
     }
 
     /** Télécharge les photos et les messages vocaux en fichiers locaux. */
@@ -977,6 +1021,7 @@ final class Sync {
                         .put("images", new JSONArray(p.extraPaths))
                         .put("audio", p.audioPath == null ? JSONObject.NULL : p.audioPath)
                         .put("video", p.videoPath == null ? JSONObject.NULL : p.videoPath)
+                        .put("voice", p.voicePath == null ? JSONObject.NULL : p.voicePath)
                         .put("duration", p.duration));
             }
             JSONObject payload = new JSONObject().put("familyName", familyName == null ? "" : familyName)
@@ -1065,7 +1110,9 @@ final class Sync {
                         // dernier jour d'un rappel qui se répète, pause jusqu'à un jour inclus.
                         .put("avanceMin", f.has("avanceMin") ? f.getJSONObject("avanceMin").optInt("integerValue", 15) : 15)
                         .put("finLe", nz(Firebase.str(f, "finLe")))
-                        .put("enPauseJusquau", nz(Firebase.str(f, "enPauseJusquau"))));
+                        .put("enPauseJusquau", nz(Firebase.str(f, "enPauseJusquau")))
+                        // Voix Google du titre (functions/voix.js), jouée en ligne ; sinon voix d'Android.
+                        .put("voice", nz(voixUrl(f))));
             }
             lastReminders = now;
             JSONObject payload = new JSONObject().put("reminders", out);
