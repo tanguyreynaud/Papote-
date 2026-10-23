@@ -21,6 +21,10 @@ import androidx.core.app.NotificationCompat;
  * Android interdit d'afficher une fenêtre par-dessus ses réglages : les étapes y restent visibles
  * grâce à une notification qui s'affiche en haut de l'écran. Au retour, c'est réglé (« C'est bon »)
  * ou le tuto reste là pour réessayer.
+ *
+ * Ouvert depuis Réglages > Ce téléphone (papote://sans-pause?depuis=reglages) : une fois réglé,
+ * l'app famille est rouverte sur Réglages avec ?pause=0, pour que l'interrupteur passe tout de
+ * suite sur activé.
  */
 public class ReglagePause extends Activity {
     private static final String CANAL_AIDE = "aide";
@@ -82,9 +86,18 @@ public class ReglagePause extends Activity {
         getSystemService(NotificationManager.class).cancel(ID_AIDE);
         if (reglee()) {
             Toast.makeText(this, R.string.pause_fait, Toast.LENGTH_LONG).show();
+            prevenirAppFamille();
             finish();
         }
         // Sinon le tuto reste affiché : on peut réessayer ou choisir « Plus tard ».
+    }
+
+    // La page ne connaît le réglage que par l'adresse qu'Ouverture lui donne (ici ?pause=0).
+    private void prevenirAppFamille() {
+        Uri lien = getIntent().getData();
+        if (lien == null || !"reglages".equals(lien.getQueryParameter("depuis"))) return;
+        startActivity(new Intent(this, Ouverture.class)
+                .setData(Uri.parse(getString(R.string.url_app) + "?reglages=1&pause=0")));
     }
 
     private boolean reglee() {
