@@ -53,8 +53,10 @@ if not os.path.exists(piper):
 for cle, texte in PHRASES.items():
     wav = os.path.join(modeles, cle + '.wav')
     # length_scale > 1 : un peu plus lent, plus facile à suivre pour une personne âgée.
+    # PYTHONUTF8 : sous Windows, piper lit sinon le texte en cp1252 et prononce mal les accents.
     subprocess.run([piper, '-m', modele, '-f', wav, '--length-scale', '1.1', '--sentence-silence', '0.3'],
-                   input=texte.encode('utf-8'), check=True, capture_output=True)
+                   input=texte.encode('utf-8'), check=True, capture_output=True,
+                   env={**os.environ, 'PYTHONUTF8': '1', 'PYTHONIOENCODING': 'utf-8'})
     son, frequence = sf.read(wav)
     sf.write(os.path.join(sortie, cle + '.mp3'), son, frequence, format='MP3')
     os.remove(wav)
