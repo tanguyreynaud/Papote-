@@ -1732,7 +1732,7 @@ html .overlay.papier .ln-text, html .overlay.papier.wide .ln-text {
 html .overlay.papier .ln-sign, html .overlay.papier.wide .ln-sign {
   display: block; margin: 2.5vmin 0 0; text-align: right;
   font-family: 'Alegreya Sans', 'Atkinson Hyperlegible', sans-serif;
-  font-size: calc(5.4vmin * var(--ts, 1)); font-weight: 500; color: #6366f1;
+  font-size: calc(5.4vmin * var(--ts, 1)); font-weight: 600; color: #5b5794; /* indigo grisé, plus doux que le texte */
 }
 .overlay.papier .ln-media, .overlay.papier.wide .ln-media {
   position: relative; -webkit-flex: none; flex: none; min-height: 0; height: auto;
