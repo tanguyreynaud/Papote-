@@ -846,11 +846,19 @@ function openAdd(kind) {
   $('pick-camera-label').textContent = kind === 'photo' ? 'Prendre une photo' : 'Filmer';
   $('pick-gallery-label').textContent = kind === 'photo' ? 'Choisir dans la galerie' : 'Choisir une vidéo';
   $('post-text').value = '';
+  compterLegende();
   setStatus('');
   syncAddSheet();
   $('sheet-post').hidden = false;
   history.pushState({ page, sheet: true }, '');
 }
+
+// Légende : 50 caractères au plus (la tablette l'affiche sur une ligne sous la photo).
+const LEGENDE_MAX = 50;
+function compterLegende() {
+  $('post-text-compte').textContent = `${$('post-text').value.length} / ${LEGENDE_MAX}`;
+}
+$('post-text').addEventListener('input', compterLegende);
 
 // Avant le choix : les deux boutons ; après : l'aperçu, la légende et « Envoyer ».
 function syncAddSheet() {
@@ -1000,7 +1008,8 @@ async function openShared() {
     if (!video && !photos.length) return;
     openPage(video ? 'videos' : 'photos');
     openAdd(video ? 'video' : 'photo');
-    if (text) $('post-text').value = text.slice(0, 30);
+    if (text) $('post-text').value = text.slice(0, 50);
+    compterLegende();
     if (video) await addVideoFile(video);
     else await addPhotoFiles(photos);
   } catch (err) {

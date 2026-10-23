@@ -1208,3 +1208,6 @@ body:not(.on-support) .ps-bouton, body:not(.on-support) .ps-panneau { display: n
 
 /* Aucun lien souligné, dans l'appli comme dans l'admin (demande de Tanguy, 22/10). */
 a { text-decoration: none; }
+
+/* Compteur de la légende (50 caractères au plus). */
+.legende-compte { text-align: right; margin: 4px 2px 0; }
