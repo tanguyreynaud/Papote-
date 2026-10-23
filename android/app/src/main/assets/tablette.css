@@ -1696,28 +1696,55 @@ body.night .home-left .sos-btn { background: #2a1f2c; color: #f4a7b4; border-col
 .ln-btn.listen.speaking { background: #3730a3; color: #fff; border-color: #3730a3; animation: listen-pulse 1.4s ease-in-out infinite; }
 @keyframes listen-pulse { 50% { box-shadow: 0 0 0 2.4vmin rgba(55, 48, 163, .18); } }
 
-/* ---------- Photo en hauteur (demande de Tanguy, 23/10) ----------
-   La photo prend tout l'écran (en entier, sur son fond flou) ; le mot et les boutons flottent
-   par-dessus, en bas à gauche, au lieu d'une carte qui la pousse à droite. */
-.overlay.mode-photo:not(.wide) .ln-main { position: relative; }
-.overlay.mode-photo:not(.wide) .ln-media {
-  position: absolute; top: 0; right: 0; bottom: 0; left: 0; width: auto;
+/* ---------- Photo reçue, façon Linote (demande de Tanguy, 23/10) ----------
+   La photo en grand, en entier, sur toute la largeur ; dessous, le bandeau prune de Linote :
+   la personne et sa légende en petit à gauche (une ligne chacune), Écouter et OK à droite. */
+.overlay.mode-photo .ln-main, .overlay.mode-photo.wide .ln-main {
+  display: -webkit-flex; display: flex; -webkit-flex-direction: column; flex-direction: column;
+  position: absolute; top: 0; right: 0; bottom: 0; left: 0;
 }
-.overlay.mode-photo:not(.wide) .ln-wood {
-  position: absolute; left: 0; bottom: 26vmin; z-index: 2;
-  width: auto; max-width: 44%; padding: 0 0 0 5vmin;
-  background: none !important;
+.overlay.mode-photo .ln-media, .overlay.mode-photo.wide .ln-media {
+  position: relative; -webkit-flex: 1; flex: 1; width: 100%; min-height: 0; height: auto;
 }
-.overlay.mode-photo:not(.wide) .ln-wood::before { display: none; }
-.overlay.mode-photo:not(.wide) .ln-note {
-  padding: 3vmin 4vmin; border-radius: 3vmin;
-  background: rgba(253, 250, 245, .94);
-  box-shadow: 0 1.5vmin 4vmin rgba(0, 0, 0, .3);
-  -webkit-transform: none; transform: none; animation: none;
+.overlay.mode-photo .ln-wood, .overlay.mode-photo.wide .ln-wood {
+  -webkit-order: 2; order: 2; position: relative; -webkit-flex: none; flex: none;
+  width: 100%; height: 17vmin; min-height: 0; max-height: none; box-sizing: border-box;
+  padding: 0 62vmin 0 4vmin; display: -webkit-flex; display: flex; -webkit-align-items: center; align-items: center;
+  background: #5e4b63 !important; box-shadow: none;
 }
-.overlay.mode-photo:not(.wide) .ln-bar { z-index: 3; padding: 0 0 5vmin 5vmin; }
-.overlay.mode-photo:not(.wide) #overlay-actions { gap: 3vmin; }
-.overlay.mode-photo:not(.wide) #overlay-actions .ln-btn { margin: 0; min-height: 15vmin; }
+.overlay.mode-photo .ln-wood::before, .overlay.mode-photo.wide .ln-wood::before { display: none; }
+.overlay.mode-photo .ln-note, .overlay.mode-photo.wide .ln-note {
+  display: -webkit-flex; display: flex; -webkit-flex-direction: column-reverse; flex-direction: column-reverse;
+  -webkit-justify-content: center; justify-content: center; -webkit-align-items: stretch; align-items: stretch; gap: 0;
+  width: 100%; min-width: 0; max-width: none; max-height: none; padding: 0; margin: 0; overflow: hidden;
+  background: none; box-shadow: none; border-radius: 0; -webkit-transform: none; transform: none; animation: none;
+}
+.overlay.mode-photo .ln-head, .overlay.mode-photo.wide .ln-head { margin: .8vmin 0 0; }
+.overlay.mode-photo .head-face, .overlay.mode-photo.wide .head-face { display: none; }
+.overlay.mode-photo .head-who, .overlay.mode-photo.wide .head-who {
+  display: block; max-width: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.overlay.mode-photo .head-name, .overlay.mode-photo.wide .head-name { display: inline; font-size: 3.8vmin; color: #fff; }
+.overlay.mode-photo .head-name::before, .overlay.mode-photo.wide .head-name::before { content: '— '; }
+.overlay.mode-photo .head-when, .overlay.mode-photo.wide .head-when { display: inline; margin-left: 1.5vmin; font-size: 3.4vmin; color: #e4d9ea; }
+html .overlay.mode-photo .ln-text, html .overlay.mode-photo.wide .ln-text {
+  margin: 0; font-family: 'Alegreya Sans', 'Atkinson Hyperlegible', sans-serif;
+  font-size: calc(4.4vmin * var(--ts, 1)); font-weight: 700; line-height: 1.12; color: #fff;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; white-space: normal; overflow: hidden;
+  width: 100%; max-width: 100%; min-width: 0; -webkit-flex: none; flex: none; text-align: left;
+}
+.overlay.mode-photo .ln-bar, .overlay.mode-photo.wide .ln-bar {
+  position: absolute; left: auto; right: 0; bottom: 0; z-index: 3; width: auto;
+  height: 17vmin; padding: 0 2.5vmin 0 0; box-sizing: border-box;
+  display: -webkit-flex; display: flex; -webkit-align-items: center; align-items: center; background: none;
+}
+.overlay.mode-photo #overlay-actions, .overlay.mode-photo.wide #overlay-actions { gap: 2.5vmin; width: auto; }
+.overlay.mode-photo #overlay-actions .ln-btn, .overlay.mode-photo.wide #overlay-actions .ln-btn {
+  -webkit-flex: none; flex: none; margin: 0; min-height: 12.5vmin; padding: 0 4vmin; font-size: 5vmin;
+  border-radius: 3vmin; box-shadow: none;
+}
+.overlay.mode-photo #overlay-actions .ln-btn.ok, .overlay.mode-photo.wide #overlay-actions .ln-btn.ok { background: #16a34a; min-width: 22vmin; }
+
 /* Diaporama : « Tanguy, aujourd'hui » et la légende collés à droite (demande de Tanguy, 23/10). */
 .photos .photo-caption { text-align: right; }
 .photos .photo-who { -webkit-justify-content: flex-end; justify-content: flex-end; }
