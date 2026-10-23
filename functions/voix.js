@@ -2,7 +2,8 @@
 // lu par une voix Google naturelle, créée UNE fois ici puis rejouée par la tablette autant qu'il faut.
 //   Kore (femme, ou genre non renseigné) / Orus (homme), selon members/{auteur}.genre.
 //   Fichier rangé par son contenu (voix + texte) dans le dossier de la famille (families/{fid}/voix/), effacé
-//   avec elle : un rappel quotidien ou un même message ne se paie qu'une fois.
+//   avec elle : un rappel quotidien ou un même message ne se paie qu'une fois. Les annonces de prénom vont
+//   dans voix-annonces/, communes à toutes les familles (lues par l'adresse à jeton, jamais listées).
 //   Résultat écrit sur le document : voix = { url, texte, nom } ; la tablette le télécharge, sinon voix d'Android.
 // Coût : Chirp 3 HD, 1 million de caractères gratuits par mois puis 30 $ le million (~0,09 $ par tablette
 // et par mois à 50 messages de 60 caractères au-delà de la part gratuite).
@@ -17,9 +18,10 @@ function nomVoix(genre) {
   return genre === 'homme' ? VOIX.homme : VOIX.femme;
 }
 
+// fid absent : dossier commun voix-annonces/ (annonces « Prénom vous écrit : », partagées entre familles).
 function cheminFichier(fid, nom, texte) {
   const h = crypto.createHash('sha1').update(nom + '|' + texte).digest('hex');
-  return `families/${fid}/voix/${h}.mp3`;
+  return fid ? `families/${fid}/voix/${h}.mp3` : `voix-annonces/${h}.mp3`;
 }
 
 async function synthetiser(nom, texte) {
@@ -71,7 +73,8 @@ function texteDe(data, champ) {
 }
 
 // Annonce dite avant le message (« Julie vous écrit : »), fichier à part : créée une seule fois par
-// proche et par voix, puis réutilisée pour tous ses messages (demande de Tanguy, 23/10 : chaque gain compte).
+// prénom et par voix dans un dossier commun, puis réutilisée pour tous les messages et par toutes les
+// familles qui ont le même prénom (demande de Tanguy, 23/10 : chaque gain compte).
 function texteAnnonce(prenom) {
   const p = typeof prenom === 'string' ? prenom.trim().slice(0, 40) : '';
   return p ? `${p} vous écrit :` : '';
@@ -95,7 +98,7 @@ async function voixDocument(db, ref, data, champ, auteurUid, prenomAnnonce) {
   const v = await fichierVoix(fid, texte, genre);
   const voix = { url: v.url, texte, nom: v.nom };
   if (annonce) {
-    voix.annonce = (await fichierVoix(fid, annonce, genre)).url;
+    voix.annonce = (await fichierVoix(null, annonce, genre)).url;
     voix.annonceTexte = annonce;
   }
   await ref.update({ voix });
