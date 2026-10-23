@@ -360,7 +360,7 @@ final class Sync {
                 // Famille supprimée (par l'admin) ou installation annulée sur le téléphone : la tablette
                 // revient d'elle-même sur l'écran du code, avec un nouveau code (l'ancien jumelage ne sert plus).
                 Journal.log(context, "Plus dans la famille : retour à l'écran du code");
-                prefs.edit().remove("fid").remove("pairing").remove("pairingExpires")
+                prefs.edit().remove("fid").remove("pairing").remove("pairingExpires").remove("pairingFait")
                         .remove("installEnCours").remove("installPar").remove("installDepuis").apply();
                 posts.clear();
                 subscription = "";
@@ -871,7 +871,7 @@ final class Sync {
     void resetToWelcome() {
         handler.post(() -> {
             Journal.log(context, "Remise sur l'écran Bienvenue");
-            prefs.edit().remove("fid").remove("code").remove("pairing").remove("pairingExpires")
+            prefs.edit().remove("fid").remove("code").remove("pairing").remove("pairingExpires").remove("pairingFait")
                     .remove("tabletName").remove("wifiDone").apply();
             Meteo.forget(context);
             firebase.forgetAll();
@@ -1491,8 +1491,13 @@ final class Sync {
     }
 
     private void finInstallation() {
-        prefs.edit().remove("installEnCours").remove("installPar").remove("installDepuis")
-                .remove("pairing").remove("pairingExpires").apply();
+        // Le code reste connu du compte des appels (pairingFait) : s'il n'a pas encore rejoint la famille
+        // (il attendait un ancien code), il peut encore le faire avec celui-ci (règles : 1 h après expiration).
+        String code = prefs.getString("pairing", null);
+        SharedPreferences.Editor e = prefs.edit().remove("installEnCours").remove("installPar").remove("installDepuis")
+                .remove("pairing").remove("pairingExpires");
+        if (code != null) e.putString("pairingFait", code);
+        e.apply();
         Journal.log(context, "Installation terminée");
         lastStatusJson = null; // l'écran passe tout de suite à l'accueil
     }
@@ -1604,7 +1609,8 @@ final class Sync {
     }
 
     String pairingCode() {
-        return prefs.getString("pairing", null);
+        String code = prefs.getString("pairing", null);
+        return code != null ? code : prefs.getString("pairingFait", null);
     }
 
     private void welcome(JSONObject s) {

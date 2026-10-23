@@ -187,7 +187,14 @@ async function signIn() {
 function waitPairing(pairing) {
   return new Promise((resolve) => {
     let stop = () => {};
-    const done = (value) => { stop(); resolve(value); };
+    // La tablette a changé de code (renouvelé, recommencé) : on abandonne celui-ci, start() reprend avec
+    // le nouveau. Sinon le compte des appels attendait un ancien code et ne rejoignait jamais la famille
+    // (pas d'appels, ni d'essai du son à l'installation : Tab 60 Pro, 23/10).
+    const watch = setInterval(() => {
+      const now = android() && android().getPairing ? (android().getPairing() || '') : '';
+      if (now !== pairing) done(null);
+    }, 10_000);
+    const done = (value) => { clearInterval(watch); stop(); resolve(value); };
     stop = onSnapshot(doc(db, 'pairings', pairing), (snap) => {
       const data = snap.data();
       if (!data) { done(null); return; }
