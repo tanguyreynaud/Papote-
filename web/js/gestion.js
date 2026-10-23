@@ -1414,7 +1414,7 @@ function afficherStock() {
       return {
         onclick: () => ouvrirTablette(t.id),
         cellules: [
-          h('div', {}, t.ref ? h('strong', {}, `${t.ref} `) : null, t.numero || h('span', { class: 'muted' }, 'à saisir'),
+          h('div', {}, t.ref ? h('strong', {}, `${t.ref} `) : null, t.numero || t.serieAndroid || h('span', { class: 'muted' }, 'à saisir'),
             alerteJumelage(t) ? h('div', {}, badge(alerteJumelage(t), 'ko')) : null,
             t.usure ? h('div', {}, badge(t.usure, 'ko')) : null),
           t.modele || '',
@@ -1927,9 +1927,20 @@ function remplirTablette(id) {
       // Attribuée à une commande par « Préparer l'envoi » (SIM, accessoires, étiquette), pas à la main.
       ...ligne('Commande', c ? h('a', { href: `#commande/${encodeURIComponent(c.id)}` }, `Commande ${codeCommande(c.code)}${c.offerte ? ' (offerte)' : ''}`) : h('span', { class: 'muted' }, 'pas encore attribuée')),
       ...ligne('Client', c && c.email ? h('a', { href: `#client/${encodeURIComponent(c.email.toLowerCase())}` }, c.nom || c.email) : c ? c.nom : null),
-      ...modif('Achat', t.depense ? ligneAchatTablette(t) : badge('aucun achat lié', 'ko'), 'depense', {
-        valeur: t.depense || '', options: optionsAchats(), convertir: (v) => v || null }),
-      ...modif('N° de série', t.numero, 'numero', { valeur: t.numero, vide: 'pas encore noté' }),
+      ...(fichesAchetees(t).length
+        // Fiche créée à l'installation faute d'achat « En stock » : on choisit la tablette achetée qu'elle est
+        // vraiment (la fiche de l'achat prend le T-0… et le n° de série, celle-ci disparaît).
+        ? ligneModifiable('Achat', badge('aucun achat lié', 'ko'), {
+          valeur: '', options: [['', 'Choisir la tablette achetée…'], ...fichesAchetees(t).map((x) => [x.id, libelleAchetee(x)])],
+          enregistrer: (v) => (v ? enregistrerTablette(async () => {
+            await appeler('gestionParcours', { type: 'lier', id: v, ref: t.ref });
+            $('f-tablette').dataset.charge = '';
+            ouvrirTablette(v);
+          }, `${t.ref} rattachée à son achat`, 'Rattachement à l\'achat…') : Promise.resolve(false)),
+        })
+        : modif('Achat', t.depense ? ligneAchatTablette(t) : badge('aucun achat lié', 'ko'), 'depense', {
+          valeur: t.depense || '', options: optionsAchats(), convertir: (v) => v || null })),
+      ...modif('N° de série', t.numero || t.serieAndroid, 'numero', { valeur: t.numero || t.serieAndroid, vide: 'pas encore noté' }),
       ...modif('Modèle', t.modele, 'modele', { valeur: t.modele }),
       ...ligneModifiable('Carte SIM', simDuKit(t), {
         vide: 'aucune', valeur: t.simId || (t.sim ? 'ancienne' : ''),
@@ -2058,6 +2069,16 @@ function celluleAchat(t) {
 }
 
 // Achats possibles pour un lien (les plus récents d'abord) : [id, libellé] pour une liste déroulante.
+// Tablette créée par l'installation sans achat (T-0… sans prix) : les fiches d'achat encore libres
+// (« Commandée » ou « En stock », pas installées, sans commande) qu'elle peut être.
+function fichesAchetees(t) {
+  if (!t.ref || t.depense || t.prixAchat != null || t.acheteeLe || t.commande) return [];
+  return donnees.stock.filter((x) => x.id !== t.id && ['commandee', 'en-stock'].includes(x.etat) && !x.ref && !x.serieAndroid
+    && !x.commande && (x.depense || x.prixAchat != null || x.acheteeLe));
+}
+const libelleAchetee = (x) => [x.modele || 'Tablette', x.fournisseur, x.acheteeLe ? `achetée le ${jour(x.acheteeLe)}` : null,
+  donnees.etats[x.etat] || x.etat, x.numero ? `n° ${x.numero}` : null].filter(Boolean).join(' · ');
+
 function optionsAchats(premier = 'Aucun achat lié') {
   return [['', premier], ...[...donnees.depenses].sort((a, b) => (b.date || 0) - (a.date || 0)).slice(0, 150)
     .map((d) => [d.id, [jour(d.date), [d.fournisseur, d.numero ? `n° ${d.numero}` : null].filter(Boolean).join(' '), d.libelle, euros(d.montant)]
