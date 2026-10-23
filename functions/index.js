@@ -734,6 +734,8 @@ async function verifierDoublon(ref, session, email) {
   const empreinte = {
     iban: (pm && pm.sepa_debit && pm.sepa_debit.fingerprint) || null,
     ibanFin: (pm && pm.sepa_debit && pm.sepa_debit.last4) || null,
+    // Nom du titulaire du compte, affiché dans l'admin à côté de celui qui commande (souvent un proche).
+    titulaire: (pm && pm.billing_details && pm.billing_details.name) || null,
     telephone: details.phone ? normaliser(details.phone).slice(-9) : null,
     adresse: a.line1 && a.postal_code ? `${normaliser(a.line1)}|${normaliser(a.postal_code)}` : null,
   };
