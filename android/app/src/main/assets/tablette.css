@@ -1816,7 +1816,7 @@ html .overlay.papier.seul .ln-text.msg-court { font-size: calc(16vmin * var(--ts
 html .overlay.papier.seul .ln-text.msg-moyen { font-size: calc(12.5vmin * var(--ts, 1)); }
 html .overlay.papier.seul .ln-text.msg-long { font-size: calc(11.5vmin * var(--ts, 1)); } /* jusqu à 5 lignes */
 html .overlay.papier.seul .ln-sign { font-size: calc(6.5vmin * var(--ts, 1)); }
-html .overlay.papier.seul .ln-sign .sign-quand { margin-left: 2.5vmin; font-size: .62em; font-weight: 500; color: #8a87ad; }
+html .overlay.papier.seul .ln-sign .sign-quand { margin-left: 2.5vmin; font-size: .8em; font-weight: 600; color: #6b6899; }
 /* Message : lignes pleines (pas équilibrées), pour garder le texte le plus gros possible. */
 html .overlay.papier.seul .ln-text { text-wrap: wrap; line-height: 1.24; } /* aéré, pas un bloc compact */
 /* Le message garde son fond crème (pas le bois ni le fond coloré des anciens écrans). */
