@@ -1249,10 +1249,16 @@ exports.nouveauMembre = onDocumentCreated(
       await prevenirArrivee(fid, uid, membre, fam);
       return;
     }
+    // Secours seulement : la commande se relie normalement par la tablette (n° de série du jumelage,
+    // gestion.js appliquerJumelage), car celui qui installe n'est pas forcément celui qui a payé. L'e-mail ne
+    // sert que s'il désigne une seule commande pas encore reliée et dont aucune tablette installée n'est connue.
     const commandes = await db.collection('commandes')
-      .where('email', '==', membre.email.toLowerCase()).where('fid', '==', null).limit(1).get();
-    if (commandes.empty) return;
-    await appliquer(fid, commandes.docs[0].id);
+      .where('email', '==', membre.email.toLowerCase()).where('fid', '==', null).limit(2).get();
+    if (commandes.size !== 1) return;
+    const id = commandes.docs[0].id;
+    const tablettes = await db.collection('stock').where('commande', '==', id).get();
+    if (tablettes.docs.some((t) => t.get('serieAndroid'))) return;
+    await appliquer(fid, id);
   });
 
 // Quelqu'un demande à rejoindre la famille (fiche « pending ») : les responsables (createdBy + admins)
