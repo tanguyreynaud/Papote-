@@ -1691,8 +1691,22 @@
       list[i].querySelector('span').textContent = label;
     }
   }
+  // Phrase fixe (mot par défaut d'une photo) : jouée depuis son fichier MP3, voix Google « Kore »
+  // enregistrée une fois (outils/voix/generer-voix-google.js). Tout le reste : la voix d'Android.
+  var motAudio = null;
   function sayAloud(text) {
-    if (!text || !android() || !android().speak) return;
+    if (!text) return;
+    var i = MOTS.indexOf(text);
+    if (i >= 0) {
+      if (motAudio) motAudio.pause();
+      motAudio = new Audio('voix/mots/mot-' + i + '.mp3');
+      motAudio.onended = motAudio.onerror = function () { setSpeech('idle'); };
+      setSpeech('speaking');
+      var pr = motAudio.play();
+      if (pr && pr.catch) pr.catch(function () { setSpeech('idle'); });
+      return;
+    }
+    if (!android() || !android().speak) return;
     setSpeech('loading');
     android().speak(text);
   }
@@ -1714,8 +1728,9 @@
 
   function overlayText(p) {
     if (!p) return '';
-    // Photo sans légende : on lit le texte affiché par défaut.
-    var t = p.image ? (legende(p.text) || motParDefaut(p)) : p.text;
+    // Photo sans légende : le mot par défaut seul, lu par la belle voix enregistrée (voix/mots).
+    if (p.image && !legende(p.text)) return motParDefaut(p);
+    var t = p.image ? legende(p.text) : p.text;
     if (!t) return '';
     return (p.authorName ? p.authorName + ' vous écrit : ' : '') + t;
   }
@@ -1731,6 +1746,7 @@
   }
 
   function stopSpeaking() {
+    if (motAudio) { motAudio.pause(); motAudio = null; }
     if (android() && android().stopSpeaking) android().stopSpeaking();
     setSpeech('idle');
   }
