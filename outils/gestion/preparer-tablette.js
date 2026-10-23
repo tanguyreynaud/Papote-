@@ -2,7 +2,7 @@
 //   node preparer-tablette.js --serie <ro.serialno> [--modele "M107"]
 // Appelé par installation\installer-tablette.ps1 à la fin de l'installation. Prend la tablette dont la réception
 // est ouverte dans l'admin (« Recevoir une tablette »), sinon celle du même n° de série, sinon la plus ancienne
-// tablette « en stock » pas encore préparée (entrée par une facture), ou en crée une, puis affiche
+// tablette « en stock » pas encore préparée, puis une « commandée » (notée reçue au passage), ou en crée une, puis affiche
 // son petit numéro (T-012) à écrire sur le carton. Au jumelage chez le client, la tablette est reconnue
 // par ce n° de série et sa commande est reliée à la famille (functions/gestion.js, gestionJumelage).
 // Clé d'administration : %USERPROFILE%\.papote\cle-admin-firebase.json (jamais dans le dépôt).
@@ -78,21 +78,30 @@ async function prochaineRef() {
   const ref = await prochaineRef();
   const serieTapee = (d) => String(d.get('numero') || '').replace(/\s/g, '').toUpperCase() === serie.replace(/\s/g, '').toUpperCase();
   const enReception = (d) => !!d.get('reception') && !d.get('reception.fini');
-  const libres = (await db.collection('stock').where('etat', '==', 'en-stock').get()).docs
+  // Une tablette achetée mais pas encore notée « reçue » (« Commandée ») compte aussi : l'installer prouve
+  // qu'elle est arrivée. Celles déjà « En stock » passent d'abord.
+  const commandee = (d) => d.get('etat') === 'commandee';
+  const libres = (await db.collection('stock').where('etat', 'in', ['en-stock', 'commandee']).get()).docs
     .filter((d) => !d.get('serieAndroid') && !d.get('commande'))
-    .sort((a, b) => enReception(b) - enReception(a) || serieTapee(b) - serieTapee(a)
+    .sort((a, b) => enReception(b) - enReception(a) || serieTapee(b) - serieTapee(a) || commandee(a) - commandee(b)
       || (a.get('acheteeLe')?.toMillis() || 0) - (b.get('acheteeLe')?.toMillis() || 0));
-  const historique = FieldValue.arrayUnion({ le: Date.now(), etat: 'preparee', par: 'installation' });
+  const maintenant = Date.now();
+  const historique = FieldValue.arrayUnion({ le: maintenant, etat: 'preparee', par: 'installation' });
   if (libres.length) {
     const d = libres[0];
     await d.ref.update({
-      ref, serieAndroid: serie, etat: 'preparee', preparee: Date.now(), historique,
+      ref, serieAndroid: serie, etat: 'preparee', preparee: maintenant,
+      historique: commandee(d)
+        ? FieldValue.arrayUnion({ le: maintenant - 1, etat: 'en-stock', par: 'installation', motif: 'reçue' }, { le: maintenant, etat: 'preparee', par: 'installation' })
+        : historique,
+      // Le n° de série lu par l'installation sert de n° de série s'il n'a pas été tapé à la réception.
+      ...(d.get('numero') ? {} : { numero: serie }),
       ...(modele && !d.get('modele') ? { modele } : {}), majLe: FieldValue.serverTimestamp(),
     });
     console.log(`Tablette ${ref} : fiche de l'achat ${d.get('fournisseur') || ''} du ${d.get('acheteeLe')?.toDate().toLocaleDateString('fr-FR') || '?'}.`);
   } else {
     await db.collection('stock').add({
-      ref, serieAndroid: serie, numero: null, modele: modele || null, etat: 'preparee', commande: null,
+      ref, serieAndroid: serie, numero: serie, modele: modele || null, etat: 'preparee', commande: null,
       prixAchat: null, acheteeLe: null, preparee: Date.now(),
       notes: 'Créée à l\'installation : aucun achat en stock à rattacher (ajoutez la facture).',
       historique: [{ le: Date.now(), etat: 'preparee', par: 'installation' }],
