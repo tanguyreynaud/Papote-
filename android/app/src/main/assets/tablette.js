@@ -718,6 +718,13 @@
     showListenButtons();
     // Photo : signée sous la légende (« — Julie »), comme un mot écrit à la main.
     $('overlay-from').textContent = papier ? '— ' + (p.authorName || '') : '';
+    // Message : quand il est arrivé, discret, à côté du prénom (« aujourd'hui à 15h40 »).
+    if (mode === 'message' && p.createdAt) {
+      var quand = document.createElement('span');
+      quand.className = 'sign-quand';
+      quand.textContent = sentLabel(p.createdAt);
+      $('overlay-from').appendChild(quand);
+    }
     show($('overlay-from'), papier);
     var face = faceOf(p);
     show($('overlay-face'), media && !!face);
