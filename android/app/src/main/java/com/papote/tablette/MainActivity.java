@@ -750,6 +750,7 @@ public class MainActivity extends Activity implements Sync.Listener {
     // ---------- Lecture à voix haute ----------
 
     private android.speech.tts.TextToSpeech tts;
+    private static boolean prechauffeFait;
     private boolean ttsReady;
     private boolean ttsFailed;
     private String ttsPending;
@@ -796,13 +797,17 @@ public class MainActivity extends Activity implements Sync.Listener {
                 @Override public void onStop(String id, boolean interrupted) { if (!"prechauffage".equals(id)) { lectureEnCours = false; speechState("done"); } }
             });
             if (ttsPending != null) { String t = ttsPending; ttsPending = null; ttsPendingGuide = false; speakNow(t); }
-            else {
+            else if (!prechauffeFait) {
+                // Une seule fois par démarrage de l'app : l'écran peut être recréé (langue, mise à jour)
+                // et le « bonjour » tout bas s'entendait deux fois (Tab 60 Pro, 23/10).
+                prechauffeFait = true;
                 // Le moteur ne charge sa voix (6 à 10 s sur la Vucatimes) qu'à la première phrase dite.
                 // Une phrase dite tout bas, par le même chemin que la lecture, la charge d'avance
                 // (à volume 0 ou écrite dans un fichier, le moteur charge une autre voix).
                 android.os.Bundle bas = new android.os.Bundle();
                 bas.putFloat(android.speech.tts.TextToSpeech.Engine.KEY_PARAM_VOLUME, 0.001f); // inaudible, mais prononcée (0,01 s'entendait sur la Tab 60 Pro)
-                tts.speak("Bonjour", android.speech.tts.TextToSpeech.QUEUE_ADD, bas, "prechauffage");
+                // Une simple ponctuation : la voix se charge sans qu'aucun mot soit prononcé.
+                tts.speak("…", android.speech.tts.TextToSpeech.QUEUE_ADD, bas, "prechauffage");
             }
         });
     }
