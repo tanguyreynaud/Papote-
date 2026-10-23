@@ -58,7 +58,15 @@ const DELAIS = {
   long: 'Beaucoup de commandes en ce moment : je prépare et vérifie chaque tablette moi-même, une par une, à Lyon. La vôtre part sous 3 à 4 semaines',
 };
 
-function commandeConfirmee({ nom, code, relais, formule, delai }) {
+function commandeConfirmee({ nom, code, relais, formule, delai, dejaInstallee }) {
+  // Abonnement pris dans l'appli, tablette déjà installée : ni envoi ni installation à annoncer.
+  if (dejaInstallee) {
+    return message('Merci pour votre abonnement Papote', [
+      `Bonjour${nom ? ` ${echapper(nom)}` : ''},`,
+      `Merci, votre abonnement Papote est pris !${code ? ` Son numéro : <b>${echapper(code)}</b>.` : ''} La tablette fonctionne déjà, il n'y a rien d'autre à faire.`,
+      `Votre abonnement : ${formule === 'sim' ? '30 € par mois, internet inclus' : '20 € par mois'}, payés une fois chaque mois écoulé, sans engagement. Le premier mois est prélevé dans 30 jours. D'ici là, vous pouvez changer d'avis : rien à payer et les 60 € remboursés.`,
+    ], { texte: 'Ouvrir l\'appli Papote', lien: APPLI });
+  }
   return message('Merci pour votre commande Papote', [
     `Bonjour${nom ? ` ${echapper(nom)}` : ''},`,
     `Merci pour votre commande !${code ? ` Son numéro : <b>${echapper(code)}</b>.` : ''}`,
@@ -109,10 +117,16 @@ function lancement({ prenom, desinscription }) {
   ].filter(Boolean), { texte: 'Commander ma tablette', lien: 'https://mapapote.fr/commande.html' });
 }
 
-function nouvelleCommande({ nom, email, telephone, code, relais, formule, delai }) {
+function nouvelleCommande({ nom, email, telephone, code, relais, formule, delai, dejaInstallee }) {
+  const client = `Client : <b>${echapper(nom || '?')}</b>, ${echapper(email || 'sans e-mail')}${telephone ? `, ${echapper(telephone)}` : ''}.`;
+  const offre = `Formule : ${formule === 'sim' ? '30 € par mois, internet inclus (carte SIM dans la tablette)' : '20 € par mois (wifi)'}.`;
+  if (dejaInstallee) {
+    return message(`Nouvel abonnement ${code || ''}`.trim(), [client, offre,
+      'Pris dans l\'appli, tablette déjà installée chez le proche : rien à envoyer. Premier prélèvement dans 30 jours.']);
+  }
   return message(`Nouvelle commande ${code || ''}`.trim(), [
-    `Client : <b>${echapper(nom || '?')}</b>, ${echapper(email || 'sans e-mail')}${telephone ? `, ${echapper(telephone)}` : ''}.`,
-    `Formule : ${formule === 'sim' ? '30 € par mois, internet inclus (carte SIM dans la tablette)' : '20 € par mois (wifi)'}.`,
+    client,
+    offre,
     relais && relais.transporteur
       ? `Point relais : <b>${relaisEnTexte(relais)}</b> (n° ${echapper(relais.id)}). Retrait par : <b>${echapper(relais.destinataire || nom || '?')}</b>.`
       : `Livraison : ${relaisEnTexte(relais) || 'adresse non trouvée, voir Stripe'}.`,

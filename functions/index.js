@@ -111,8 +111,9 @@ async function tarifs(formule, tablette) {
 // (« trial » Stripe), ni pendant les 30 jours pour changer d'avis qui suivent la réception (debutApresReception),
 // puis un prélèvement par mois ; le mois en cours est prélevé à l'arrêt (prelevementDernierMois).
 // Chaque mois utilisé est donc payé une fois, à terme échu.
-async function sessionPaiement({ formule, tablette, fid, email, client, relais, accord, reservation }) {
+async function sessionPaiement({ formule, tablette, fid, email, client, relais, accord, reservation, dejaInstallee }) {
   const metadata = { formule, tablette, ...(relais ? livraison.relaisVersMeta(relais) : {}) };
+  if (dejaInstallee) metadata.dejaInstallee = '1';
   // Tablette mise de côté pendant le paiement (stock.js), libérée au paiement ou à l'expiration de la page.
   if (reservation && reservation.id) metadata.reservation = reservation.id;
   // Délai annoncé au client (stock.js) : stock, precommande ou long.
@@ -122,7 +123,7 @@ async function sessionPaiement({ formule, tablette, fid, email, client, relais, 
   if (fid) metadata.fid = fid;
   const subscriptionData = {
     metadata,
-    trial_period_days: regles.ATTENTE_ENVOI_JOURS,
+    trial_period_days: dejaInstallee ? regles.RETRACTATION_JOURS : regles.ATTENTE_ENVOI_JOURS,
     trial_settings: { end_behavior: { missing_payment_method: 'cancel' } },
   };
   const params = {
@@ -142,7 +143,7 @@ async function sessionPaiement({ formule, tablette, fid, email, client, relais, 
   };
   // Commande du site : livrée au point relais choisi avant le paiement. Depuis l'appli : à l'adresse saisie.
   if (reservation && reservation.expireA) params.expires_at = reservation.expireA;
-  if (!relais) params.shipping_address_collection = { allowed_countries: ['FR', 'BE', 'LU'] };
+  if (!relais && !dejaInstallee) params.shipping_address_collection = { allowed_countries: ['FR', 'BE', 'LU'] };
   // Factures au nom d'une société : numéro de TVA facultatif sur la page de paiement.
   params.tax_id_collection = { enabled: true };
   if (client) {
@@ -156,6 +157,19 @@ async function sessionPaiement({ formule, tablette, fid, email, client, relais, 
     if (reservation && reservation.id) await stock.liberer(db, reservation.id).catch(() => null);
     throw e;
   }
+}
+
+// La famille a-t-elle déjà sa tablette (jumelage confirmé) ?
+async function tabletteInstallee(fid) {
+  const jumelages = await db.collection('pairings').where('fid', '==', fid).get();
+  return jumelages.docs.some((d) => d.get('status') === 'confirmed');
+}
+
+// La tablette du stock jumelée à cette famille (« jumelée sans commande ») prend la nouvelle commande.
+async function relierTabletteInstallee(fid, commande) {
+  const fiches = await db.collection('stock').where('fid', '==', fid).get();
+  await Promise.all(fiches.docs.filter((d) => !d.get('commande'))
+    .map((d) => d.ref.update({ commande, etat: 'chez-client' })));
 }
 
 // Une tablette du stock mise de côté pour ce paiement, ou null s'il n'y en a plus.
@@ -379,6 +393,12 @@ exports.creerPaiement = onCall({ secrets: [STRIPE_SECRET] }, async (request) => 
     throw new HttpsError('failed-precondition', 'Cette famille a déjà un abonnement.');
   }
   const client = fam.abonnement && fam.abonnement.stripeCustomerId;
+  // Tablette déjà installée chez le proche (la famille naît au jumelage) : rien à envoyer, le premier
+  // mois court dès aujourd'hui et le premier prélèvement tombe 30 jours plus tard.
+  if (await tabletteInstallee(fid)) {
+    const session = await sessionPaiement({ formule, tablette, fid, email, client, dejaInstallee: true });
+    return { url: session.url };
+  }
   const reservation = await reserverTablette();
   if (!reservation) throw stock.ERREUR_COMPLET();
   const session = await sessionPaiement({ formule, tablette, fid, email, client, reservation });
@@ -696,6 +716,11 @@ async function paiementTermine(session) {
         || (adresse ? { nom: adresse.name || null, adresse: adresse.address || null } : null),
       // Tablette à préparer et envoyer par Tanguy (« envoyee » une fois partie).
       expedition: paye ? 'a-preparer' : 'paiement-en-attente',
+      // Abonnement pris dans l'appli avec la tablette déjà chez le proche : rien à envoyer, reçue aujourd'hui.
+      ...(meta.dejaInstallee === '1' ? {
+        expedition: 'envoyee', envoyeeLe: FieldValue.serverTimestamp(),
+        preparation: { recuLe: Date.now(), recuPar: 'déjà installée' },
+      } : {}),
       delai: meta.delai || null,
       stripeCustomerId: session.customer,
       fid: (existante.exists && existante.get('fid')) || null,
@@ -715,9 +740,10 @@ async function paiementTermine(session) {
   });
   await verifierDoublon(ref, session, email).catch((e) => logger.warn(`Commande ${ref.id} : doublon non vérifié`, e.message));
   if (!paye) return;
-  if (existante.exists && existante.get('expedition') === 'paiement-en-attente') await ref.update({ expedition: 'a-preparer' });
+  if (existante.exists && existante.get('expedition') === 'paiement-en-attente' && meta.dejaInstallee !== '1') await ref.update({ expedition: 'a-preparer' });
   const fid = meta.fid || (existante.exists && existante.get('fid')) || await chercherFamille(email);
   if (fid) await appliquer(fid, session.subscription);
+  if (fid && meta.dejaInstallee === '1') await relierTabletteInstallee(fid, session.subscription);
   await confirmerCommande(ref, email, code);
 }
 
@@ -861,7 +887,8 @@ async function confirmerCommande(ref, email, code) {
   });
   if (!premier) return;
   await compterEtape('paye').catch((e) => logger.warn('Statistiques', e.message));
-  const infos = { nom: premier.nom, code, relais: premier.livraison, formule: premier.formule, delai: premier.delai };
+  const infos = { nom: premier.nom, code, relais: premier.livraison, formule: premier.formule, delai: premier.delai,
+    dejaInstallee: !!(premier.preparation && premier.preparation.recuPar === 'déjà installée') };
   const envois = [envoyerMail(EMAIL_PAPOTE, mail.nouvelleCommande({ ...infos, email, telephone: premier.telephone }))];
   if (email) envois.push(envoyerMail(email, mail.commandeConfirmee(infos)));
   const resultats = await Promise.allSettled(envois);
