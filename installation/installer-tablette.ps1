@@ -120,11 +120,46 @@ if (-not $Code -and -not $Oui) {
 $Code = ($Code.ToUpper() -replace '[^A-Z0-9]', '')
 if ($Code -and $Code.Length -ne 8) { Fail "Le code tablette doit contenir 8 caractères (reçu : « $Code »)." }
 
-# 3. Installation de l'app (-g : caméra et micro accordés d'office pour les appels)
-Say "`nInstallation de l'app…"
-$res = Adb install -r -g $Apk
-if ($res -notmatch 'Success') { Fail "L'installation a échoué :`n$res" }
-Say 'App installée.' 'Green'
+# 3. Installation de la dernière version publiée (-g : caméra et micro accordés d'office pour les appels).
+#    Les fichiers APK du dossier peuvent dater : la version en ligne du canal est téléchargée et
+#    vérifiée (empreinte). Sans internet, l'APK du dossier sert, avec un avertissement.
+$feedName = if ($Canal -eq 'test') { 'version-test.json' } else { 'version.json' }
+$feed = $null
+try { $feed = Invoke-RestMethod -Uri "https://papote-maj.web.app/$feedName" -Headers @{ 'Cache-Control' = 'no-cache' } -TimeoutSec 20 } catch {}
+$attendu = 0
+if ($feed -and $feed.url -and $feed.sha256) {
+    $telecharge = Join-Path $env:TEMP "Papote-$($feed.versionCode).apk"
+    try {
+        if (-not (Test-Path $telecharge) -or (Get-FileHash $telecharge -Algorithm SHA256).Hash.ToLower() -ne $feed.sha256) {
+            Say "Téléchargement de la dernière version ($($feed.versionName))…"
+            Invoke-WebRequest -UseBasicParsing $feed.url -OutFile $telecharge -TimeoutSec 300
+        }
+        if ((Get-FileHash $telecharge -Algorithm SHA256).Hash.ToLower() -ne $feed.sha256) { throw 'empreinte différente' }
+        $Apk = $telecharge
+        $attendu = [int]$feed.versionCode
+    } catch {
+        Say "Dernière version pas téléchargée ($($_.Exception.Message)) : APK du dossier utilisé." 'Yellow'
+    }
+} else {
+    Say 'Pas d''internet : APK du dossier utilisé, peut-être pas le plus récent.' 'Yellow'
+}
+if ($Canal -eq 'test' -and -not $attendu) { $Apk = Join-Path $PSScriptRoot 'Papote-test.apk' }
+
+function Installed-VersionCode {
+    $m = [regex]::Match((Adb shell dumpsys package $Package), 'versionCode=(\d+)')
+    if ($m.Success) { return [int]$m.Groups[1].Value } else { return 0 }
+}
+$avant = Installed-VersionCode
+if ($attendu -and $avant -ge $attendu) {
+    # Déjà à jour (ou plus récente) : Android refuserait de revenir en arrière, et rien n'est effacé.
+    Say "App déjà installée en version à jour ($avant)." 'Green'
+} else {
+    Say "`nInstallation de l'app…"
+    $res = Adb install -r -g $Apk
+    if ($res -notmatch 'Success') { Fail "L'installation a échoué :`n$res" }
+    if ($attendu -and (Installed-VersionCode) -ne $attendu) { Fail "Version installée inattendue ($(Installed-VersionCode) au lieu de $attendu)." }
+    Say "App installée$(if ($attendu) { " (version $($feed.versionName))" })." 'Green'
+}
 
 # 4. Réglages : date et heure automatiques (indispensable pour les connexions sécurisées),
 #    écran allumé tant que la tablette est branchée
