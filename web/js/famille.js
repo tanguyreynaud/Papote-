@@ -2260,38 +2260,52 @@ $('btn-garder').addEventListener('click', () => withAboError(async () => {
 }));
 
 
-$('abo-formules').replaceChildren(...FORMULES.map((f) => {
-  const b = document.createElement('button');
-  b.type = 'button';
-  b.className = 'abo-formule';
-  b.innerHTML = '<strong></strong><span></span>';
-  b.querySelector('strong').textContent = f.titre;
-  b.querySelector('span').textContent = f.prix;
-  b.addEventListener('click', () => withAboError(() => payer(session.fid, f.formule, f.tablette)));
-  return b;
-}));
-// Les mêmes formules sur la page « Il manque l'abonnement ».
-$('sans-abo-formules').replaceChildren(...FORMULES.map((f) => {
-  const b = document.createElement('button');
-  b.type = 'button';
-  b.className = 'abo-formule';
-  b.innerHTML = '<strong></strong><span></span>';
-  b.querySelector('strong').textContent = f.titre;
-  b.querySelector('span').textContent = f.prix;
-  b.addEventListener('click', async () => {
-    $('sans-abo-error').hidden = true;
-    b.disabled = true;
-    try {
-      await payer(session.fid, f.formule, f.tablette);
-    } catch (err) {
-      console.error(err);
-      showError($('sans-abo-error'), "L'opération n'a pas pu aboutir. Réessayez dans un instant.");
-    } finally {
-      b.disabled = false;
-    }
+// Boutons des formules. La page Stripe met quelques secondes à s'ouvrir : le bouton choisi
+// tourne tout de suite et les autres attendent, pour qu'on ne clique pas deux fois.
+function boutonsFormules(liste, erreur) {
+  const boutons = FORMULES.map((f) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'abo-formule';
+    const remettre = () => {
+      const titre = document.createElement('strong');
+      titre.textContent = f.titre;
+      const prix = document.createElement('span');
+      prix.textContent = f.prix;
+      b.replaceChildren(titre, prix);
+      b.classList.remove('en-cours');
+    };
+    remettre();
+    b.remettre = remettre;
+    b.addEventListener('click', async () => {
+      if (b.disabled) return;
+      erreur.hidden = true;
+      boutons.forEach((x) => { x.disabled = true; });
+      const titre = document.createElement('strong');
+      titre.append(Object.assign(document.createElement('span'), { className: 'spinner-inline' }), 'Ouverture du paiement…');
+      const prix = document.createElement('span');
+      prix.textContent = f.titre;
+      b.replaceChildren(titre, prix);
+      b.classList.add('en-cours');
+      try {
+        await payer(session.fid, f.formule, f.tablette);
+        // Sinon le bouton garde « Ouverture du paiement… » jusqu'à la page Stripe.
+      } catch (err) {
+        console.error(err);
+        showError(erreur, "L'opération n'a pas pu aboutir. Réessayez dans un instant.");
+        boutons.forEach((x) => { x.disabled = false; x.remettre(); });
+      }
+    });
+    return b;
   });
-  return b;
-}));
+  liste.replaceChildren(...boutons);
+  return boutons;
+}
+const boutonsAbo = [...boutonsFormules($('abo-formules'), $('abo-error')), ...boutonsFormules($('sans-abo-formules'), $('sans-abo-error'))];
+// Retour arrière depuis Stripe (page gardée en cache) : les boutons redeviennent normaux.
+window.addEventListener('pageshow', (e) => {
+  if (e.persisted) boutonsAbo.forEach((b) => { b.disabled = false; b.remettre(); });
+});
 
 // Code de commande arrivé par le lien du site : prérempli, et relié tout seul si la famille l'attend.
 let autoLinkTried = false;
