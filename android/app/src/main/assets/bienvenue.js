@@ -145,6 +145,19 @@
     return b;
   }
 
+  // « Retour » : l'écran d'installation précédent (Sync.welcomeBack), pour avancer sans stress.
+  // En haut, à côté du logo : toujours visible, même quand l'écran défile.
+  function addBack(box, toStart) {
+    var b = el('button', 'welcome-back', '‹ Retour');
+    b.addEventListener('click', function () {
+      b.disabled = true;
+      android().welcomeBack(toStart);
+    }, false);
+    var head = box.querySelector('.welcome-head');
+    head.classList.add('has-back');
+    head.insertBefore(b, head.querySelector('.welcome-dots') || head.querySelector('.welcome-listen'));
+  }
+
   // ---------- 1. Bienvenue ----------
 
   function showStart() {
@@ -206,6 +219,7 @@
       box.appendChild(button('Choisir un réseau', 'primary', openNetworks));
     }
     if (repair) box.appendChild(button('Fermer', 'no', closeRepair));
+    else addBack(box, false);
     // La fenêtre des réseaux ne s'ouvre que sur « Choisir un réseau » : la personne a le temps de lire.
   }
 
@@ -491,6 +505,10 @@
       box.appendChild(busy);
       // 30 min après le scan sans fin d'installation : un autre proche peut reprendre avec ce code.
       if (s.reprendre) box.appendChild(el('p', 'welcome-sub welcome-reprise', 'Pas fini ? Un autre proche peut reprendre en scannant ce code.'));
+    }
+    if (!s.restart && !s.claimedName && !s.joined) {
+      var st = wifiState();
+      addBack(box, !!(st.mobile && st.internet && !st.wifi));
     }
     if (s.restart) {
       // Touché deux fois : un appui par erreur n'annule pas l'installation en cours.

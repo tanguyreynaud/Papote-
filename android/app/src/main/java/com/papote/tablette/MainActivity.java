@@ -554,6 +554,12 @@ public class MainActivity extends Activity implements Sync.Listener {
             sync.confirmPairing(yes);
         }
 
+        /** « Retour » : écran d'installation précédent. */
+        @JavascriptInterface
+        public void welcomeBack(boolean toStart) {
+            sync.welcomeBack(toStart);
+        }
+
         /** « Commencer » sur le premier écran de la tablette neuve. */
         @JavascriptInterface
         public void welcomeSeen() {

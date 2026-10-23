@@ -11,6 +11,7 @@ Les autres listes (commandes, stock, app famille) viendront à côté de celle-c
 - 👤 Appui long sur marche/arrêt : aucun menu, pas de barre du haut, pas de bureau du fabricant
 - 👤 Gestes et boutons de navigation sans effet (accueil, récents, retour)
 - 👤 Haut-parleur : voix du guide (🔊), sonnerie, radio, vidéo audibles à 2 m
+- 👤 Prise jack : brancher un casque ou une enceinte, le son y passe ; débrancher, le haut-parleur reprend
 - 👤 Micro : rien (mousse, coque, support) ne le couvre ; pendant l'appel test, le son coupe si on bouche son trou
 - 👤 Appel vidéo de 5 min : pas d'écho chez le proche, Mamie entend bien
 - 👤 Caméra : Mamie cadrée assise à 50 cm, réponse automatique quand elle est vue

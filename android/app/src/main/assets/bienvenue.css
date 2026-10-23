@@ -65,6 +65,11 @@
 .welcome-listen { margin-left: auto; width: 9vmin; height: 9vmin; padding: 1.8vmin; border: 0; border-radius: 50%;
   background: #eef0ff; color: var(--w-accent); flex: none; }
 .welcome-dots ~ .welcome-listen { margin-left: 2.5vmin; }
+.welcome-back { margin-left: 3vmin; min-height: 8vmin; padding: 0 3vmin; border: .3vmin solid var(--w-line); border-radius: 5vmin;
+  background: #fff; color: var(--w-text); font: inherit; font-size: 3.6vmin; font-weight: 700; flex: none; }
+.welcome-back[disabled] { opacity: .6; }
+/* Place du bouton Retour : le logo seul suffit (sinon le haut-parleur sort de l'écran). */
+.has-back .welcome-brand { display: none; }
 .welcome-listen:active { background: #dfe3ff; }
 
 .welcome-title { margin: 0 0 1.5vmin; font-size: 6.8vmin; font-weight: 700; line-height: 1.15; letter-spacing: -.1vmin; }

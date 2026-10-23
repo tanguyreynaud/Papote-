@@ -1692,6 +1692,20 @@ final class Sync {
         }
     }
 
+    /**
+     * « Retour » sur les écrans d'installation : du code au wifi, du wifi à Bienvenue (demande de Tanguy :
+     * pouvoir revenir en arrière sans stress). Pas pendant qu'un proche installe (code réservé).
+     */
+    void welcomeBack(boolean toStart) {
+        handler.post(() -> {
+            // toStart : wifi sauté (carte SIM), le code revient directement à Bienvenue.
+            if (toStart) prefs.edit().remove("wifiDone").remove("bienvenueVue").apply();
+            else if (prefs.getBoolean("wifiDone", false)) prefs.edit().remove("wifiDone").apply();
+            else prefs.edit().remove("bienvenueVue").apply();
+            poke();
+        });
+    }
+
     /** « Commencer » sur l'écran Bienvenue. */
     void welcomeSeen() {
         handler.post(() -> {
