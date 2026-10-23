@@ -685,8 +685,12 @@
     // Photo en paysage : elle prend toute la largeur, le mot passe dessous en bandeau.
     if (mode === 'photo') {
       var probe = new Image();
+      $('overlay').style.removeProperty('--photo-ratio');
       probe.onload = function () {
-        if (overlayPost === p && probe.naturalWidth > probe.naturalHeight * 1.1) {
+        if (overlayPost !== p || !probe.naturalHeight) return;
+        // En hauteur : la place de la photo suit ses proportions (photo entière, sans fond flou).
+        $('overlay').style.setProperty('--photo-ratio', String(probe.naturalWidth / probe.naturalHeight));
+        if (probe.naturalWidth > probe.naturalHeight * 1.1) {
           $('overlay').className = 'overlay ln mode-photo papier wide';
         }
       };
@@ -695,7 +699,7 @@
     // Message ou photo : en haut, qui l'envoie (visage, prénom, quand) ; dessous, son mot ou sa légende.
     // Vocal ou vidéo : le visage au-dessus de « Une vidéo de … ».
     var text = mode === 'message' ? p.text
-      : mode === 'photo' ? legende(p.text)
+      : mode === 'photo' ? (legende(p.text) || 'Je pense fort à toi')
         : mode === 'voice' ? 'Un message vocal de ' + p.authorName
           : legende(p.text) || 'Une petite vidéo pour toi';
     fillHead(media ? null : p);
@@ -1692,7 +1696,7 @@
   function showListenButtons() {
     var o = listenButton('overlay-listen', function () { return overlayText(overlayPost); }, $('overlay-actions'));
     var mode = overlayPost ? (overlayPost.image ? 'photo' : overlayPost.type || 'message') : '';
-    show(o, !!options.lecture && !!overlayPost && !!overlayPost.text && (mode === 'message' || mode === 'text' || mode === 'photo'));
+    show(o, !!options.lecture && !!overlayText(overlayPost) && (mode === 'message' || mode === 'text' || mode === 'photo'));
     var r = listenButton('reminder-listen', function () {
       return alerting ? alerting.r.title : '';
     }, $('reminder-done').parentNode);
@@ -1700,8 +1704,11 @@
   }
 
   function overlayText(p) {
-    if (!p || !p.text) return '';
-    return (p.authorName ? p.authorName + ' vous écrit : ' : '') + p.text;
+    if (!p) return '';
+    // Photo sans légende : on lit le texte affiché par défaut.
+    var t = p.image ? (legende(p.text) || 'Je pense fort à toi') : p.text;
+    if (!t) return '';
+    return (p.authorName ? p.authorName + ' vous écrit : ' : '') + t;
   }
 
   // Lecture à voix haute toute seule, une seule fois par message ou rappel, quand la caméra voit

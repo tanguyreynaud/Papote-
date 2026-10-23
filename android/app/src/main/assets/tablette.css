@@ -1699,32 +1699,32 @@ body.night .home-left .sos-btn { background: #2a1f2c; color: #f4a7b4; border-col
 /* ---------- Photo reçue (modèle de Tanguy, 23/10) ----------
    À gauche, un grand mot blanc : la légende en gros, centrée, signée « — Julie », et dessous le
    haut-parleur et OK. À droite, la photo en entier sur son fond flou. En bas, sur toute la largeur,
-   un bandeau prune : « Il est 14h24, vendredi 23 octobre ». Même écran en hauteur et en largeur,
+   plus de bandeau (indigo et crème, demande de Tanguy). Même écran en hauteur et en largeur,
    et pour une vidéo (classe papier) : sa première image à droite, « Voir la vidéo » dans le mot. */
 .overlay.papier .ln-main, .overlay.papier.wide .ln-main {
   display: -webkit-flex; display: flex; -webkit-flex-direction: row; flex-direction: row;
-  position: absolute; top: 0; right: 0; bottom: 10vmin; left: 0;
+  position: absolute; top: 0; right: 0; bottom: 0; left: 0;
 }
 .overlay.papier .ln-wood, .overlay.papier.wide .ln-wood {
   -webkit-order: 0; order: 0; position: relative; -webkit-flex: none; flex: none;
-  width: 42%; height: auto; min-height: 0; max-height: none; box-sizing: border-box;
-  padding: 3vmin 0 3vmin 3vmin; display: -webkit-flex; display: flex;
+  -webkit-flex: 1; flex: 1; width: auto; height: auto; min-height: 0; max-height: none; box-sizing: border-box;
+  padding: 3vmin; display: -webkit-flex; display: flex;
   -webkit-align-items: stretch; align-items: stretch; -webkit-justify-content: center; justify-content: center;
-  background: #efe7dc !important; box-shadow: none;
+  background: #f6efe4 !important; box-shadow: none;
 }
 .overlay.papier .ln-wood::before, .overlay.papier.wide .ln-wood::before { display: none; }
 .overlay.papier .ln-note, .overlay.papier.wide .ln-note {
   display: -webkit-flex; display: flex; -webkit-flex-direction: column; flex-direction: column;
   -webkit-justify-content: center; justify-content: center; -webkit-align-items: stretch; align-items: stretch;
   width: 100%; min-width: 0; max-width: none; max-height: none; box-sizing: border-box;
-  padding: 5vmin 5vmin 24vmin; margin: 0; overflow: hidden; gap: 0;
-  background: #fffdf9; border-radius: .6vmin; box-shadow: 0 1vmin 3vmin rgba(60, 40, 70, .18);
+  padding: 6vmin 6vmin 26vmin; margin: 0; overflow: hidden; gap: 0;
+  background: #fdfaf5; border-radius: 3vmin; box-shadow: 0 1vmin 3vmin rgba(49, 46, 129, .12);
   -webkit-transform: none; transform: none; animation: none;
 }
 .overlay.papier .ln-head, .overlay.papier.wide .ln-head { display: none; }
 html .overlay.papier .ln-text, html .overlay.papier.wide .ln-text {
   margin: 0; font-family: 'Alegreya Sans', 'Atkinson Hyperlegible', sans-serif;
-  font-size: calc(7.6vmin * var(--ts, 1)); font-weight: 700; line-height: 1.12; color: #5a4566;
+  font-size: calc(7.6vmin * var(--ts, 1)); font-weight: 700; line-height: 1.12; color: #312e81;
   display: block; white-space: normal; overflow: hidden; text-overflow: clip; -webkit-line-clamp: none;
   width: 100%; max-width: 100%; min-width: 0; -webkit-flex: none; flex: none; text-align: left;
   overflow-wrap: break-word;
@@ -1732,26 +1732,34 @@ html .overlay.papier .ln-text, html .overlay.papier.wide .ln-text {
 html .overlay.papier .ln-sign, html .overlay.papier.wide .ln-sign {
   display: block; margin: 2.5vmin 0 0; text-align: right;
   font-family: 'Alegreya Sans', 'Atkinson Hyperlegible', sans-serif;
-  font-size: calc(5.4vmin * var(--ts, 1)); font-weight: 500; color: #8a7495;
+  font-size: calc(5.4vmin * var(--ts, 1)); font-weight: 500; color: #6366f1;
 }
 .overlay.papier .ln-media, .overlay.papier.wide .ln-media {
-  position: relative; -webkit-flex: 1; flex: 1; width: auto; min-height: 0; height: auto;
+  position: relative; -webkit-flex: none; flex: none; min-height: 0; height: auto;
+  /* En hauteur : largeur selon les proportions de la photo (entière, rien de coupé), 60 % au plus. */
+  width: calc(100vh * var(--photo-ratio, .75)); max-width: 60%;
 }
+.overlay.papier.wide .ln-media { width: 58%; max-width: none; }
+.overlay.papier.wide #overlay-actions { width: calc(42vw - 6vmin); }
+/* La photo remplit sa place, sans fond flou : en largeur elle est un peu zoomée (bords coupés). */
+.overlay.papier .ln-media-bg { display: none !important; }
+.overlay.papier .ln-media img { -webkit-background-size: cover; background-size: cover; background-position: center; }
 /* Bandeau bas : l'heure au centre, sur toute la largeur. */
+
 .overlay.papier .ln-bar, .overlay.papier.wide .ln-bar {
-  position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; width: auto;
-  height: 10vmin; padding: 0; box-sizing: border-box;
+  position: absolute; left: 0; right: auto; bottom: 0; z-index: 3; width: 0; overflow: visible;
+  height: 0; padding: 0; box-sizing: border-box;
   display: -webkit-flex; display: flex; -webkit-align-items: center; align-items: center;
-  -webkit-justify-content: center; justify-content: center; background: #5e4b63;
+  -webkit-justify-content: center; justify-content: center; background: none;
 }
 .overlay-clock { display: none; }
 .overlay.papier .overlay-clock {
-  display: block; margin: 0; color: #fff; font-family: 'Alegreya Sans', 'Atkinson Hyperlegible', sans-serif;
+  display: none; margin: 0; color: #fff; font-family: 'Alegreya Sans', 'Atkinson Hyperlegible', sans-serif;
   font-size: 4.6vmin; font-weight: 500; white-space: nowrap;
 }
 /* Haut-parleur et OK : dans le mot, en bas, au-dessus du bandeau. */
 .overlay.papier #overlay-actions, .overlay.papier.wide #overlay-actions {
-  position: absolute; left: 3vmin; bottom: 15vmin; width: calc(42% - 3vmin);
+  position: fixed; left: 3vmin; bottom: 8vmin; width: calc(100vw - min(100vh * var(--photo-ratio, .75), 60vw) - 6vmin);
   -webkit-justify-content: center; justify-content: center; -webkit-align-items: center; align-items: center; gap: 4vmin;
 }
 .overlay.papier #overlay-actions .ln-btn, .overlay.papier.wide #overlay-actions .ln-btn {
@@ -1768,7 +1776,7 @@ html .overlay.papier .ln-sign, html .overlay.papier.wide .ln-sign {
 
 /* Vidéo : « Voir la vidéo » à la place des boutons tant qu'elle n'a pas été vue. */
 .overlay.papier .ln-playzone {
-  position: absolute; left: 3vmin; right: 0; bottom: 5vmin; z-index: 3; width: auto; margin: 0;
+  position: absolute; left: 3vmin; right: 0; bottom: 8vmin; z-index: 3; width: auto; margin: 0;
   display: -webkit-flex; display: flex; -webkit-justify-content: center; justify-content: center;
 }
 .overlay.papier .ln-playzone[hidden] { display: none; }
@@ -1783,8 +1791,7 @@ html .overlay.papier .ln-sign, html .overlay.papier.wide .ln-sign {
 .overlay.papier .ln-play .label { position: static; color: #fff; font-size: inherit; }
 .overlay.papier .overlay-face { display: none; }
 .overlay.papier .ln-note { -webkit-flex: 1; flex: 1; -webkit-align-self: stretch; align-self: stretch; height: auto; }
-.overlay.papier .ln-media-bg { display: block; }
-.overlay.papier .ln-media { background: #24212f; }
+.overlay.papier .ln-media { background: #f6efe4; }
 
 /* Diaporama : « Tanguy, aujourd'hui » et la légende collés à droite (demande de Tanguy, 23/10). */
 .photos .photo-caption { text-align: right; }
