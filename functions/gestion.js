@@ -3034,10 +3034,14 @@ async function lierInstallation(id, numero, qui) {
   if (snap.get('ref') && snap.get('ref') !== ref) throw new HttpsError('failed-precondition', `Cette tablette est déjà ${snap.get('ref')}.`);
   const t = trouvee.data();
   if (t.commande) throw new HttpsError('failed-precondition', `${ref} est déjà réservée pour une commande.`);
+  const maintenant = Date.now();
+  // Tablette achetée pas encore notée « reçue » : l'installation prouve qu'elle est arrivée.
+  const recue = snap.get('etat') === 'commandee' ? [{ le: maintenant - 1, etat: 'en-stock', par: qui, motif: 'reçue' }] : [];
   await fiche.update({
-    ref, serieAndroid: t.serieAndroid || null, preparee: t.preparee || Date.now(), etat: 'preparee',
+    ref, serieAndroid: t.serieAndroid || null, preparee: t.preparee || maintenant, etat: 'preparee',
     ...(t.modele && !snap.get('modele') ? { modele: t.modele } : {}),
-    historique: FieldValue.arrayUnion({ le: Date.now(), etat: 'preparee', par: qui }),
+    ...(!snap.get('numero') && (t.numero || t.serieAndroid) ? { numero: t.numero || t.serieAndroid } : {}),
+    historique: FieldValue.arrayUnion(...recue, { le: maintenant, etat: 'preparee', par: qui }),
     majLe: FieldValue.serverTimestamp(),
   });
   // Fiche créée par l'installation faute d'achat en stock : elle n'a plus de raison d'être.
