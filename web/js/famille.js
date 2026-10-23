@@ -4035,7 +4035,7 @@ function showInvitations(invitations) {
     const card = document.createElement('form');
     card.className = 'card';
     card.innerHTML = '<h2></h2><p class="muted"></p><label>Votre prénom<input maxlength="40" required></label>'
-      + '<div class="genre-choix" role="radiogroup" aria-label="Vous êtes"><span class="genre-titre">Vous êtes</span>'
+      + '<p class="genre-titre">Vous êtes</p><div class="genre-choix" role="radiogroup" aria-label="Vous êtes">'
       + '<button type="button" class="genre-btn" role="radio" aria-checked="false" data-genre="femme">Une femme</button>'
       + '<button type="button" class="genre-btn" role="radio" aria-checked="false" data-genre="homme">Un homme</button></div>'
       + '<button type="submit" class="primary wide">Rejoindre la famille</button><p class="error" hidden></p>';
