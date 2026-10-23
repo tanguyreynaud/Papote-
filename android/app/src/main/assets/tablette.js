@@ -1737,16 +1737,19 @@
   var annonceDuTexte = {}; // « Julie vous écrit : », jouée juste avant (fichier à part, gardé)
   function noteVoix(text, url, annonce) {
     if (text && url) voixDuTexte[text] = url;
-    if (text && url && annonce) annonceDuTexte[text] = annonce;
+    if (text && annonce) annonceDuTexte[text] = annonce;
   }
   var motAudio = null;
   function sayAloud(text) {
     if (!text) return;
-    var i = MOTS.indexOf(text);
-    var url = i >= 0 ? 'voix/mots/mot-' + i + '.mp3' : voixDuTexte[text];
+    // Photo sans mot : « Julie vous écrit : Gros bisous ! ». Le mot a sa voix enregistrée (dans la voix
+    // du proche si le serveur l'a faite, sinon celle de la tablette), l'annonce vient du serveur.
+    var sep = text.indexOf(' vous écrit : ');
+    var i = MOTS.indexOf(sep >= 0 ? text.slice(sep + 14) : text);
+    var url = voixDuTexte[text] || (i >= 0 ? 'voix/mots/mot-' + i + '.mp3' : null);
     if (url) {
       if (motAudio) motAudio.pause();
-      var annonce = i < 0 ? annonceDuTexte[text] : null;
+      var annonce = annonceDuTexte[text] || null;
       motAudio = new Audio(annonce || url);
       if (annonce) {
         var suite = motAudio;
@@ -1760,7 +1763,7 @@
       }
       var parAndroid = function () { // son injoignable (hors ligne) : la voix d'Android lit le texte
         setSpeech('idle');
-        if (i < 0 && android() && android().speak) { setSpeech('loading'); android().speak(text); }
+        if (android() && android().speak) { setSpeech('loading'); android().speak(text); }
       };
       if (!annonce) motAudio.onended = function () { setSpeech('idle'); };
       motAudio.onerror = parAndroid;
@@ -1791,9 +1794,8 @@
 
   function overlayText(p) {
     if (!p) return '';
-    // Photo sans légende : le mot par défaut seul, lu par la belle voix enregistrée (voix/mots).
-    if (p.image && !legende(p.text)) return motParDefaut(p);
-    var t = p.image ? legende(p.text) : p.text;
+    // Photo sans légende : annoncée comme les autres, puis le mot par défaut affiché (voix enregistrée).
+    var t = p.image ? (legende(p.text) || motParDefaut(p)) : p.text;
     if (!t) return '';
     return (p.authorName ? p.authorName + ' vous écrit : ' : '') + t;
   }
