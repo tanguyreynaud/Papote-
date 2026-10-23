@@ -33,13 +33,16 @@ button.btn { justify-self: start; font: inherit; font-weight: 700; border: 2px s
   .recap { border: 0; padding: 0; }
 }
 a.btn { justify-self: start; display: inline-flex; align-items: center; min-height: 3.25rem; padding: .75rem 1.5rem; border-radius: 999px; background: var(--accent); color: var(--accent-text); font-weight: 700; text-decoration: none; }
+/* Pas de soulignement des liens (Tanguy, 2026-10-22) : ils restent repérables par leur couleur et le gras. */
+a { text-decoration: none; }
+main a:not([class]), footer a:not([class]), .rassure a { font-weight: 700; }
 </style>
 </head>
 <body>
 <main>
   <img src="icon.svg" alt="">
   <h1>Merci, votre commande est enregistrée.</h1>
-  <p class="ecran">Dès que votre banque a confirmé le prélèvement des 60 € (quelques jours), vous recevez un e-mail de confirmation et nous préparons la tablette. Votre mois d'essai gratuit commence aujourd'hui : le premier mois sera prélevé à sa fin.</p>
+  <p class="ecran">Dès que votre banque a confirmé le prélèvement des 60 € (quelques jours), vous recevez un e-mail de confirmation et nous préparons la tablette. L'abonnement commence à la réception de la tablette et chaque mois est payé une fois écoulé : le premier prélèvement a lieu 30 jours après la réception.</p>
   <div class="code" id="code" hidden>
     <span>Votre code de commande</span>
     <strong id="code-valeur"></strong>
@@ -67,7 +70,8 @@ a.btn { justify-self: start; display: inline-flex; align-items: center; min-heig
       ['Date', d.date ? new Date(d.date * 1000).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : ''],
       ['Client', [d.nom, d.email].filter(Boolean).join(' · ')],
       ['Abonnement', d.formule === 'sim' ? '30 € par mois, internet inclus' : '20 € par mois'],
-      ['Essai', '1 mois gratuit, puis sans engagement'],
+      ['Paiement', 'Chaque mois une fois écoulé, sans engagement'],
+      ['Changer d\'avis', '30 jours après la réception : rien à payer, 60 € remboursés'],
       ['Payé aujourd\'hui', typeof d.payeCentimes === 'number' ? (d.payeCentimes / 100).toLocaleString('fr-FR') + ' € (mise en service)' : ''],
       ['Tablette', 'Prêtée, à rendre en fin d\'abonnement'],
       ['Livraison', r ? 'Offerte, point relais ' + [r.nom, r.adresse, [r.cp, r.ville].filter(Boolean).join(' ')].filter(Boolean).join(', ') : 'Offerte'],

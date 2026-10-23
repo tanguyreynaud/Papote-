@@ -104,6 +104,8 @@ section { padding-block: clamp(3.5rem, 8vw, 6rem); }
 .hero-text h1 span { color: var(--warm); }
 .hero-actions { display: flex; flex-wrap: wrap; gap: .75rem; }
 .hero-note { font-size: 1rem; color: var(--muted); }
+.precommande { margin: .75rem 0 0; padding: .6rem .9rem; border-radius: 12px; background: var(--accent-soft, #e8e6fd); font-size: 1rem; }
+.precommande[hidden] { display: none; }
 .hero-photo { position: relative; margin: 0; min-width: 0; }
 picture { display: contents; }
 .hero-photo img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 45% 30%; background: var(--band); }
@@ -251,6 +253,9 @@ picture { display: contents; }
 footer { padding-block: 2.5rem; color: var(--muted); font-size: .95rem; }
 footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 1rem; }
 footer a { color: var(--muted); }
+/* Pas de soulignement des liens (Tanguy, 2026-10-22) : ils restent repérables par leur couleur et le gras. */
+a { text-decoration: none; }
+main a:not([class]), footer a:not([class]), .rassure a { font-weight: 700; }
 </style>
 </head>
 <body>
@@ -277,7 +282,7 @@ footer a { color: var(--muted); }
   </defs>
 </svg>
 
-<p class="bandeau">🚀 Lancement très bientôt · 🚚 Livraison offerte · ✨ 1 mois d'essai gratuit</p>
+<p class="bandeau">🚀 Lancement très bientôt · 🚚 Livraison offerte · ✨ 30 jours pour changer d'avis</p>
 <header class="top">
   <div class="wrap">
     <a class="brand" href="#"><img src="icon.svg" alt="">Papote</a>
@@ -301,7 +306,9 @@ footer a { color: var(--muted); }
           <a class="btn btn-primary js-commander" href="#lancement">Être prévenu</a>
           <a class="btn btn-ghost" href="#fonctionnement">Comment ça marche</a>
         </div>
-        <p class="hero-note">60 € à la commande, puis 20 € par mois après 1 mois d'essai gratuit. Sans engagement, tablette prêtée.</p>
+        <p class="hero-note">60 € à la commande, puis 20 € par mois, payés une fois le mois écoulé. Sans engagement, tablette prêtée.</p>
+        <p class="precommande js-precommande" hidden>Je prépare et vérifie chaque tablette moi-même, une par une. En ce moment, la vôtre est prête sous 7 à 10 jours ouvrés, puis Mondial Relay la livre en 3 à 5 jours ouvrés.</p>
+        <p class="precommande js-attente-longue" hidden>Beaucoup de commandes en ce moment : je prépare et vérifie chaque tablette moi-même, une par une, à Lyon. La vôtre part sous 3 à 4 semaines, puis Mondial Relay la livre en 3 à 5 jours ouvrés. Rien de plus n'est prélevé avant la réception, et vous pouvez annuler à tout moment avant l'envoi : les 60 € vous sont remboursés tout de suite.</p>
       </div>
 
       <figure class="hero-photo">
@@ -432,7 +439,7 @@ footer a { color: var(--muted); }
         </table>
       </div>
       <figure class="histoire">
-        <blockquote>« J'ai créé Papote pour ma grand-mère de 93 ans. Je voulais qu'elle reçoive les photos de toute la famille et qu'elle nous voie en vidéo, sans avoir à apprendre quoi que ce soit. Les photos arrivent seules, les appels décrochent seuls : elle n'a qu'à regarder. »</blockquote>
+        <blockquote>« J'ai créé Papote pour ma grand-mère de 93 ans. Je voulais qu'elle reçoive les photos de toute la famille et qu'elle nous voie en vidéo, sans avoir à apprendre quoi que ce soit. Mais ce qui existait coûtait autour de 50 € par mois, ou 350 € pour une tablette qui n'était pas pensée pour elle. Alors j'ai fait plus simple et moins cher : les photos arrivent seules, les appels décrochent seuls, elle n'a qu'à regarder. »</blockquote>
         <figcaption>Tanguy, créateur de Papote, à Lyon</figcaption>
       </figure>
     </div>
@@ -470,7 +477,9 @@ footer a { color: var(--muted); }
           <button class="btn btn-primary offre-btn js-commander" type="submit">Être prévenu du lancement</button>
         </div>
       </form>
-      <p class="plans-note">Prix par tablette, toute la famille utilise l'appli sans supplément. 1 mois d'essai gratuit, puis sans engagement : l'abonnement se résilie à tout moment depuis l'appli famille. 60 € sont payés à la commande pour la mise en service ; la tablette est prêtée et nous est rendue en fin d'abonnement. Paiement sécurisé par prélèvement SEPA.</p>
+      <p class="plans-note">Prix par tablette, toute la famille utilise l'appli sans supplément. 60 € sont payés à la commande pour la mise en service ; ensuite, l'abonnement commence à la réception et chaque mois est payé une fois écoulé. Sans engagement : l'abonnement se résilie à tout moment depuis l'appli famille. 30 jours après la réception pour changer d'avis : rien à payer et les 60 € remboursés. La tablette est prêtée et nous est rendue en fin d'abonnement. Paiement sécurisé par prélèvement SEPA.</p>
+      <p class="precommande js-precommande" hidden>Je prépare et vérifie chaque tablette moi-même, une par une. En ce moment, la vôtre est prête sous 7 à 10 jours ouvrés, puis Mondial Relay la livre en 3 à 5 jours ouvrés.</p>
+        <p class="precommande js-attente-longue" hidden>Beaucoup de commandes en ce moment : je prépare et vérifie chaque tablette moi-même, une par une, à Lyon. La vôtre part sous 3 à 4 semaines, puis Mondial Relay la livre en 3 à 5 jours ouvrés. Rien de plus n'est prélevé avant la réception, et vous pouvez annuler à tout moment avant l'envoi : les 60 € vous sont remboursés tout de suite.</p>
     </div>
   </section>
 
@@ -515,7 +524,7 @@ footer a { color: var(--muted); }
         </details>
         <details>
           <summary>Comment la tablette est-elle livrée ?</summary>
-          <p>Gratuitement, en point relais Mondial Relay, en France, en Belgique ou au Luxembourg : vous choisissez le point qui vous arrange au moment de commander, près de chez vous ou de chez votre proche. Votre commande est préparée sous 2 à 3 jours ouvrés, puis livrée par Mondial Relay sous 3 à 5 jours ouvrés. Dès que la tablette part, vous recevez un e-mail avec le lien de suivi, puis un message de Mondial Relay quand elle vous attend.</p>
+          <p>Gratuitement, en point relais Mondial Relay, en France, en Belgique ou au Luxembourg : vous choisissez le point qui vous arrange au moment de commander, près de chez vous ou de chez votre proche. Je prépare et vérifie chaque tablette moi-même : votre commande est prête sous 2 à 3 jours ouvrés quand la tablette est en stock (jusqu'à 10 jours ouvrés sinon, et 3 à 4 semaines quand les commandes affluent), puis Mondial Relay la livre en 3 à 5 jours ouvrés. Le délai est affiché avant de payer. Dès que la tablette part, vous recevez un e-mail avec le lien de suivi, puis un message de Mondial Relay quand elle vous attend.</p>
         </details>
         <details>
           <summary>Je veux l'offrir, comment faire ?</summary>
@@ -542,20 +551,20 @@ footer a { color: var(--muted); }
           <p>Par prélèvement SEPA : il suffit de l'IBAN d'un compte en France, en Belgique ou au Luxembourg, saisi sur une page de paiement sécurisée (Stripe). L'abonnement est prélevé chaque mois. La tablette part dès que la banque a confirmé le premier prélèvement (quelques jours). Depuis l'appli famille, onglet Profil (« Gérer le paiement et les factures »), vous retrouvez vos factures et changez de compte.</p>
         </details>
         <details>
-          <summary>Y a-t-il un essai gratuit ?</summary>
-          <p>Oui : le premier mois d'abonnement est offert. Votre IBAN est enregistré à la commande, mais le premier mois n'est prélevé qu'à la fin de l'essai. Vous pouvez résilier pendant l'essai sans rien payer pour l'abonnement.</p>
+          <summary>Et si ça ne lui plaît pas ?</summary>
+          <p>Vous avez 30 jours après la réception de la tablette pour changer d'avis : le bouton « Annuler ma commande » de l'appli suffit. Vous nous renvoyez la tablette avec l'étiquette offerte, vous ne payez rien pour l'abonnement et les 60 € de mise en service vous sont remboursés.</p>
         </details>
         <details>
           <summary>Suis-je engagé ? Comment résilier ?</summary>
-          <p>Non, Papote est sans engagement. Un responsable de la famille résilie en ligne, à tout moment, depuis l'appli (onglet Profil, « Résilier l'abonnement ») : l'abonnement s'arrête à la fin du mois déjà payé. Pas de lettre recommandée : quelques clics suffisent. En cas d'hospitalisation de votre proche, nous remboursons jusqu'à 2 mois d'abonnement par an, sur certificat.</p>
+          <p>Non, Papote est sans engagement. Un responsable de la famille résilie en ligne, à tout moment, depuis l'appli (onglet Profil, « Résilier l'abonnement ») : l'abonnement s'arrête à la fin du mois en cours, qui est le dernier prélevé. Pas de lettre recommandée : quelques clics suffisent. En cas d'hospitalisation de votre proche, les prélèvements peuvent être mis en pause sur justificatif.</p>
         </details>
         <details>
           <summary>Que se passe-t-il à la fin de l'abonnement ?</summary>
-          <p>La tablette est prêtée : vous nous la renvoyez dans les 30 jours qui suivent la fin de l'abonnement, avec son support, son chargeur et son câble (et l'enceinte si elle a été fournie). Tout élément non rendu est facturé : tablette 130 €, chargeur et câble 10 €, enceinte 10 €. Le support est offert.</p>
+          <p>La tablette est prêtée : vous nous la renvoyez dans les 30 jours qui suivent la fin de l'abonnement, avec son support, son chargeur et son câble (et l'enceinte si elle a été fournie). Tout élément non rendu est facturé : tablette 130 €, chargeur et câble 10 €, enceinte 10 € (si elle a été fournie), soit 140 € ou 150 € si rien ne revient. Le support n'est jamais facturé et le retour est offert.</p>
         </details>
         <details>
           <summary>Quelles garanties sur la tablette ?</summary>
-          <p>Vous disposez de 14 jours après la réception pour changer d'avis : vous nous renvoyez la tablette et vos frais de service vous sont remboursés. La tablette reste la nôtre : si elle tombe en panne, nous la remplaçons, et elle nous est rendue en fin d'abonnement. L'usure normale n'est jamais facturée. La casse (écran brisé, liquide renversé) n'est pas couverte : l'élément cassé est alors facturé à son prix (tablette 130 €), sans caution demandée d'avance. Une perte ou un vol est facturé 140 € (150 € si une enceinte a été fournie).</p>
+          <p>Vous disposez de 30 jours après la réception pour changer d'avis : vous nous renvoyez la tablette et tout ce que vous avez payé vous est remboursé. La tablette reste la nôtre : si elle tombe en panne, nous la remplaçons, et elle nous est rendue en fin d'abonnement. L'usure normale n'est jamais facturée. La casse (écran brisé, liquide renversé) n'est pas couverte : l'élément cassé est alors facturé à son prix (tablette 130 €), sans caution demandée d'avance. Une perte ou un vol est facturé 140 € (150 € si une enceinte a été fournie).</p>
         </details>
         <details>
           <summary>Et si un paiement échoue ?</summary>
@@ -615,7 +624,7 @@ footer a { color: var(--muted); }
 </script>
 <script>
   // Ouverture des commandes : à passer à true le jour du lancement (avec COMMANDES_OUVERTES=oui dans functions/.env).
-  // Même ouvertes, les boutons restent sur « Être prévenu » quand le stock est vide (stockDisponible, fil gestion).
+  // Une fois ouvertes, elles ne ferment plus : seul le délai annoncé change (stockDisponible, functions/stock.js).
   var COMMANDES_OUVERTES = false;
   var commandesPossibles = false;
   (function () {
@@ -625,11 +634,18 @@ footer a { color: var(--muted); }
       document.querySelectorAll('a.js-commander').forEach(function (a) { a.href = 'commande.html'; a.textContent = 'Commander'; });
       document.querySelectorAll('button.js-commander').forEach(function (b) { b.textContent = 'Commander'; });
       var bandeau = document.querySelector('.bandeau');
-      if (bandeau) bandeau.textContent = '🚚 Livraison offerte · ✨ 1 mois d\u2019essai gratuit';
+      if (bandeau) bandeau.textContent = '🚚 Livraison offerte · ✨ 30 jours pour changer d\u2019avis';
     }
     fetch('https://europe-west1-papote-famille.cloudfunctions.net/stockDisponible')
       .then(function (r) { return r.ok ? r.json() : { disponible: true }; })
-      .then(function (d) { if (d.disponible !== false) ouvrir(); })
+      .then(function (d) {
+        if (d.disponible === false) return;
+        ouvrir();
+        // Stock vide mais commandes encore possibles : délai de préparation plus long (stock.js).
+        if (d.precommande) document.querySelectorAll('.js-precommande').forEach(function (p) { p.hidden = false; });
+        // Au-delà de stock + 10 : commandes toujours ouvertes, expédition sous 3 à 4 semaines.
+        if (d.attenteLongue) document.querySelectorAll('.js-attente-longue').forEach(function (p) { p.hidden = false; });
+      })
       .catch(ouvrir); // panne : affichage normal, commander revérifie le stock côté serveur
   })();
 </script>

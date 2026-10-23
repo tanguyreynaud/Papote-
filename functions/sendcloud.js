@@ -84,6 +84,17 @@ function colisLivre(corps) {
   return !!st && (st.id === 11 || /^delivered$/i.test(String(st.message || '')));
 }
 
+// Suivi d'un colis (réponse de GET /v2/parcels/{id}) : n° et lien de suivi, étape en clair, livré ou non.
+function suiviColis(corps) {
+  const p = (corps && corps.parcel) || {};
+  return {
+    suivi: p.tracking_number || null,
+    lien: p.tracking_url || null,
+    etape: (p.status && p.status.message) || null,
+    livre: colisLivre(corps),
+  };
+}
+
 function client(cles) {
   const [publique, secrete] = String(cles || '').trim().split(':');
   if (!publique || !secrete) throw new Error('Clés Sendcloud absentes : lancez outils\\gestion\\installer-sendcloud.bat.');
@@ -147,10 +158,14 @@ function client(cles) {
   return {
     // Colis remis au destinataire (retiré au point relais) ? Statut 11 « Delivered » de Sendcloud.
     async livre(colis) {
+      return (await this.suivi(colis)).livre;
+    },
+    // Où en est le colis : { suivi, lien, etape, livre } (voir suiviColis).
+    async suivi(colis) {
       const r = await fetch(`${API.replace('/v3', '/v2')}/parcels/${colis}`, { headers: { Authorization: auth, Accept: 'application/json' } });
       if (r.status === 401 || r.status === 403) throw new Error('Sendcloud refuse les clés : relancez installer-sendcloud.bat.');
       if (!r.ok) throw new Error(`Sendcloud : colis ${colis} illisible (${r.status})`);
-      return colisLivre(await r.json().catch(() => null));
+      return suiviColis(await r.json().catch(() => null));
     },
     // Annule un colis (étiquette non utilisée, remboursée par Sendcloud). Déjà annulé ou supprimé : rien à faire.
     async annuler(colis) {
@@ -200,4 +215,4 @@ function client(cles) {
   };
 }
 
-module.exports = { adresseClient, adressePapote, choisirOption, optionsPossibles, erreurLisible, colisLivre, client };
+module.exports = { adresseClient, adressePapote, choisirOption, optionsPossibles, erreurLisible, colisLivre, suiviColis, client };

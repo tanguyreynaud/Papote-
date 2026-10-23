@@ -3,6 +3,7 @@
 // gestion* (functions/gestion.js) : l'argent vient de Stripe, le stock et les dépenses de Firestore.
 // Les factures déposées sont lues automatiquement (gestionLireFacture) pour préremplir les fiches.
 // La connexion et les sections familles, envois et maintenance sont dans admin.js.
+import { demander, saisir, prevenir, menuPoints } from './dialogue.js';
 import { getApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
 import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
 import {
@@ -73,6 +74,16 @@ function remplirTable(table, colonnes, lignes, { total, vide = 'Rien sur cette p
 
 function stat(valeur, texte, detail, classe) {
   return h('div', { class: 'stat' }, h('span', { class: classe }, valeur), h('p', {}, texte), detail ? h('small', {}, detail) : null);
+}
+
+// Un chiffre qui ouvre la liste correspondante.
+function cliquable(el, faire) {
+  el.classList.add('onglet');
+  el.tabIndex = 0;
+  el.setAttribute('role', 'button');
+  el.addEventListener('click', faire);
+  el.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); faire(); } });
+  return el;
 }
 
 const badge = (texte, classe) => h('span', { class: `badge ${classe || ''}` }, texte);
@@ -146,7 +157,7 @@ async function ouvrirPiece(piece) {
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
   } catch (e) {
     if (fenetre) fenetre.close();
-    alert(messageErreur(e));
+    prevenir(messageErreur(e));
   }
 }
 
@@ -183,7 +194,12 @@ const TITRES = {
   stock: 'Stock',
   compta: 'Argent',
   outils: 'Réglages',
+  tablette: 'Tablette',
+  commande: 'Commande',
+  client: 'Client',
 };
+// Pages d'une fiche (#tablette/id, #commande/id) : le menu garde sa section allumée.
+const PARENTS = { tablette: 'stock', commande: 'commandes', client: 'clients' };
 // Anciennes pages devenues des onglets (liens déjà notés, favoris) : #familles → #clients/familles.
 const ANCIENNES = { familles: 'clients/familles', factures: 'compta/factures' };
 const AVEC_PERIODE = ['compta'];
@@ -223,10 +239,11 @@ function afficherPage() {
   const ancienne = ANCIENNES[location.hash.slice(1).split('/')[0]];
   if (ancienne) history.replaceState(null, '', `#${ancienne}`);
   const page = pageCourante();
+  const menu = PARENTS[page] || page;
   document.querySelectorAll('.nav a[data-page]').forEach((a) => {
-    a.classList.toggle('actif', a.dataset.page === page);
+    a.classList.toggle('actif', a.dataset.page === menu);
     // Sur téléphone, le menu défile : garder la section choisie visible.
-    if (a.dataset.page === page) a.scrollIntoView({ block: 'nearest', inline: 'center' });
+    if (a.dataset.page === menu) a.scrollIntoView({ block: 'nearest', inline: 'center' });
   });
   document.querySelectorAll('[data-panneau]').forEach((p) => { p.hidden = p.dataset.panneau !== page; });
   $('titre-page').textContent = TITRES[page];
@@ -235,7 +252,18 @@ function afficherPage() {
   $('periode').hidden = !AVEC_PERIODE.includes(page);
   $('p-etat').hidden = !AVEC_PERIODE.includes(page);
   window.scrollTo(0, 0);
-  if (page === 'clients' && connecte) chargerClients();
+  if ((page === 'clients' || page === 'client') && connecte) chargerClients();
+  afficherFiche();
+}
+
+// Fiche ouverte dans l'adresse (#tablette/id ou #commande/id), redessinée à chaque nouvelle lecture des données.
+function afficherFiche() {
+  const [page, id, sous] = location.hash.slice(1).split('/');
+  if (!donnees || !id) return;
+  if (page === 'clients' && id === 'familles' && sous) remplirLiensFamille(decodeURIComponent(sous));
+  if (page === 'tablette') remplirTablette(decodeURIComponent(id));
+  if (page === 'commande') remplirCommande(decodeURIComponent(id));
+  if (page === 'client') remplirClient(decodeURIComponent(id));
 }
 window.addEventListener('hashchange', afficherPage);
 afficherPage();
@@ -301,6 +329,8 @@ function afficherTout() {
     afficherAccessoires();
     afficherCommandes();
     afficherExpediteur();
+    afficherAchats();
+    afficherFiche();
   }
   if (donnees && stripe) {
     afficherBilan();
@@ -443,8 +473,8 @@ const ETATS_COMMANDE = {
   annulee: ['Annulée', ''],
 };
 const ABONNEMENTS = {
-  offert: 'offert', actif: 'actif', impaye: 'impayé', suspendu: 'suspendu', resilie: 'résilié', aucun: 'sans abonnement',
-  canceled: 'résilié', active: 'actif', trialing: 'en essai', past_due: 'impayé',
+  offert: 'offert', actif: 'actif', impaye: 'impayé', suspendu: 'suspendu', resilie: 'résilié', aucun: 'sans abonnement', installation: 'installation en cours',
+  canceled: 'résilié', active: 'actif', trialing: 'premier mois', past_due: 'impayé',
 };
 const RETOURS = {
   attendue: 'Retour attendu', echec: 'Non rendue, prélèvement refusé', rendue: 'Tablette rendue', facturee: 'Matériel non rendu, prélevé',
@@ -453,7 +483,8 @@ const REMBOURSEMENTS = {
   'en-cours': 'en cours de remboursement', 'au-retour': 'remboursés au retour', fait: 'remboursés', echec: 'à rembourser depuis Stripe',
 };
 const FORMULES = { wifi: 'Wi-Fi', sim: 'Internet inclus' };
-const formuleTexte = (c) => [FORMULES[c.formule] || c.formule, c.tablette === 'achetee' ? 'tablette achetée' : null]
+const formuleTexte = (c) => [FORMULES[c.formule] || c.formule, c.tablette === 'achetee' ? 'tablette achetée' : null,
+  c.offerte ? 'offerte' : null]
   .filter(Boolean).join(', ');
 const nomCommande = (c) => [codeCommande(c.code), c.nom || c.email].filter(Boolean).join(' · ') || c.id;
 
@@ -559,12 +590,22 @@ function afficherAccueil() {
     const mois = { debut: new Date(n.getFullYear(), n.getMonth(), 1).getTime(), fin: new Date(n.getFullYear(), n.getMonth() + 1, 1).getTime() };
     const t = totaux(stripeMois.mouvements, depensesDe(mois));
     const enCours = stripeMois.abonnements.filter((a) => ['active', 'trialing', 'past_due'].includes(a.statut));
+    // Chaque chiffre du mois ouvre sa page, réglée sur « Ce mois-ci ».
+    const argent = (onglet) => () => {
+      if ($('p-choix').value !== 'mois') { $('p-choix').value = 'mois'; changerPeriode(); }
+      location.hash = `#compta/${onglet}`;
+    };
     $('kpi-mois').replaceChildren(
-      stat(euros(t.encaisse), 'encaissé'),
-      stat(euros(t.depenses), 'dépensé'),
-      stat(euros(t.resultat), 'résultat', null, t.resultat < 0 ? 'neg' : null),
-      stat(String(cmd.filter((c) => dans(mois, c.creeLe)).length), 'nouvelles commandes'),
-      stat(String(enCours.length), 'abonnements en cours'),
+      cliquable(stat(euros(t.encaisse), 'encaissé'), argent('factures')),
+      cliquable(stat(euros(t.depenses), 'dépensé'), argent('depenses')),
+      cliquable(stat(euros(t.resultat), 'résultat', null, t.resultat < 0 ? 'neg' : null), argent('bilan')),
+      cliquable(stat(String(cmd.filter((c) => dans(mois, c.creeLe)).length), 'nouvelles commandes'), () => {
+        vueCommandes = 'toutes';
+        $('filtre-commandes').value = '';
+        location.hash = '#commandes';
+        afficherCommandes();
+      }),
+      cliquable(stat(String(enCours.length), 'abonnements en cours'), argent('bilan')),
     );
   }
 }
@@ -629,6 +670,33 @@ function afficherCommandes() {
 }
 $('filtre-commandes').addEventListener('change', afficherCommandes);
 
+// Commande offerte (les mamies) : sans paiement, avec sa famille et sa tablette.
+$('b-offerte').addEventListener('click', () => {
+  const f = $('f-offerte');
+  f.reset();
+  f.fid.replaceChildren(h('option', { value: '' }, 'Pas encore de famille'),
+    ...donnees.familles.filter((x) => !['actif', 'impaye', 'suspendu'].includes(x.statut))
+      .filter((x) => !donnees.commandes.some((c) => c.fid === x.id && c.expedition !== 'annulee'))
+      .map((x) => h('option', { value: x.id }, x.nom || x.id)));
+  f.tablette.replaceChildren(h('option', { value: '' }, 'Plus tard'),
+    ...donnees.stock.filter((t) => !t.commande && !['perdue', 'hors-service'].includes(t.etat))
+      .map((t) => h('option', { value: t.id }, [t.ref, t.numero, t.modele].filter(Boolean).join(' · '))));
+  f.querySelector('.f-msg').hidden = true;
+  $('d-offerte').showModal();
+});
+
+$('f-offerte').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const f = e.target;
+  await enregistrer(f, async () => {
+    await appeler('gestionCommandeOfferte', {
+      nom: f.nom.value, email: f.email.value, telephone: f.telephone.value, formule: f.formule.value,
+      fid: f.fid.value || null, tablette: f.tablette.value || null, dejaInstallee: f.installee.checked,
+    });
+    $('d-offerte').close();
+  });
+});
+
 $('x-commandes').addEventListener('click', () => {
   const tablettes = new Map(donnees.stock.filter((t) => t.commande).map((t) => [t.commande, t]));
   csv('commandes', ['Date', 'Code', 'Nom', 'E-mail', 'Téléphone', 'Formule', 'État', 'N° de suivi', 'Envoyée le',
@@ -657,14 +725,51 @@ const STATUTS_FACTURE = {
 };
 
 // Fiche d'une commande : client, livraison, tablette, factures et paiements Stripe.
-async function ouvrirCommande(c) {
+function ouvrirCommande(c) {
+  location.hash = `#commande/${encodeURIComponent(c.id)}`;
+}
+
+// Page d'une commande : ce qu'il faut savoir, puis les actions possibles, chacune expliquée.
+let commandeAffichee = null;
+async function remplirCommande(id) {
+  const c = donnees.commandes.find((x) => x.id === id);
+  if (!c) {
+    $('dc-corps').replaceChildren(h('div', { class: 'card' }, h('p', {}, 'Commande introuvable.')));
+    return;
+  }
+  // Même commande déjà affichée : garder les factures déjà lues et ce qui est en cours de saisie.
+  const cle = JSON.stringify([c.id, etatCommande(c), c.preparation, c.fid, c.etiquettes]);
+  if (commandeAffichee === cle && $('dc-corps').children.length) return;
+  commandeAffichee = cle;
   const t = donnees.stock.find((x) => x.commande === c.id);
   const [texte, classe] = ETATS_COMMANDE[etatCommande(c)];
-  $('dc-titre').textContent = `Commande ${codeCommande(c.code)}`;
+  document.title = `Papote · Commande ${codeCommande(c.code)}`;
   const ligne = (k, v) => (v ? [h('dt', {}, k), h('dd', {}, v)] : []);
   const factures = h('div', {}, h('p', { class: 'muted small' }, 'Lecture des factures…'));
-  $('dc-corps').replaceChildren(
-    h('dl', { class: 'fiche' },
+  const partie = !['a-preparer', 'paiement-en-attente', 'annulee'].includes(c.expedition);
+  const expliquee = (texte, el) => h('div', { class: 'action' }, h('p', { class: 'small' }, texte), el);
+  const actions = [
+    ...(c.expedition === 'a-preparer' ? [h('div', { class: 'action' },
+      h('p', { class: 'small' }, 'Préparer le colis étape par étape : tablette, carte SIM, accessoires, étiquette Mondial Relay.'),
+      h('button', { type: 'button', class: 'primary small-btn', onclick: (e) => document.dispatchEvent(
+        new CustomEvent('papote:preparer-envoi', { detail: { commande: c, bouton: e.currentTarget } })) },
+      c.preparation && Object.keys(c.preparation.faits || {}).length ? 'Reprendre la préparation' : 'Préparer l\'envoi'))] : []),
+    ...(t && partie ? [expliquee('Un élément du kit est cassé ou perdu : choisissez-le, puis ce qui le remplace.',
+      formulaireRemplacement(c, t))] : []),
+    ...(partie && (t || c.envoyeeLe) ? [expliquee('Le client doit renvoyer quelque chose : il reçoit par e-mail une étiquette Mondial Relay gratuite.',
+      boutonEtiquetteRetour(c))] : []),
+    ...(c.fid && !c.offerte && c.resiliationLe && ['actif', 'impaye', 'suspendu', 'active', 'trialing', 'past_due'].includes(c.abonnement)
+      ? [h('div', { class: 'action' }, h('p', { class: 'small' }, `Abonnement arrêté : il prend fin le ${jour(c.resiliationLe)}.`))] : []),
+    ...(c.code && !c.fid && c.expedition !== 'annulee' ? [expliquee('Le client a perdu son code de commande : il en a besoin pour relier la tablette à l\'appli famille.',
+      boutonRenvoyerCode(c))] : []),
+  ];
+  const annonce = annonceCommande;
+  annonceCommande = null;
+  $('dc-corps').replaceChildren(...[
+    annonce ? h('p', { class: 'annonce', role: 'status' }, annonce) : null,
+    h('div', { class: 'card' },
+      h('div', { class: 'tete-fiche' }, h('h2', {}, `Commande ${codeCommande(c.code)}`, c.offerte ? ' (offerte)' : ''), menuCommande(c)),
+      h('dl', { class: 'fiche' },
       ligne('État', badge(texte, classe)),
       ligne('Commandée le', jour(c.creeLe)),
       ligne('Client', [c.nom, c.email, c.telephone].filter(Boolean).join(' · ')),
@@ -677,17 +782,22 @@ async function ouvrirCommande(c) {
       ligne('Carte SIM', simDuKit(t)),
       ligne('Accessoires', t && (t.accessoires || []).length ? t.accessoires.join(', ') : null),
       ligne('Retour', c.restitution ? `${RETOURS[c.restitution.statut] || c.restitution.statut}${c.restitution.avant && c.restitution.statut === 'attendue' ? ` avant le ${jour(c.restitution.avant)}` : ''}` : null),
+      ligne('Suivi du retour', suiviRetourDe(c)),
       ligne('Étiquettes', etiquettesDe(c)),
-      ligne('Remboursement', c.remboursement ? `${euros(c.remboursement.montant)} ${REMBOURSEMENTS[c.remboursement.statut] || c.remboursement.statut}` : null)),
-    ...(t ? [formulaireRemplacement(c, t)] : []),
-    ...(t || c.envoyeeLe ? [boutonEtiquetteRetour(c)] : []),
-    ...(c.code && !c.fid && c.expedition !== 'annulee' ? [boutonRenvoyerCode(c)] : []),
-    h('h3', {}, 'Parcours'),
-    h('ul', { class: 'historique small' }, parcoursCommande(c).map(([le, texte]) => h('li', {}, le ? `${jour(le)} : ${texte}` : texte))),
-    h('h3', {}, 'Factures et paiements'),
-    factures,
-  );
-  $('d-commande').showModal();
+      ligne('Remboursement', c.remboursement ? `${euros(c.remboursement.montant)} ${REMBOURSEMENTS[c.remboursement.statut] || c.remboursement.statut}` : null))),
+    actions.length ? h('div', { class: 'card' }, h('h2', {}, 'Actions possibles'), ...actions) : null,
+    h('div', { class: 'card' }, h('h2', {}, 'Parcours'),
+      // Frise : la date à gauche (vide pour une étape sans date), l'étape à droite.
+      h('ol', { class: 'frise' }, parcoursCommande(c).map(([le, texte, date]) => {
+        const quand = Number.isFinite(le) ? le : date;
+        return h('li', {}, h('span', { class: 'frise-date' }, quand ? jour(quand) : ''), h('span', { class: 'frise-texte' }, texte));
+      }))),
+    h('div', { class: 'card' }, h('h2', {}, 'Factures et paiements du client'), factures),
+  ].filter(Boolean));
+  if (c.offerte) {
+    factures.replaceChildren(h('p', { class: 'muted small' }, 'Commande offerte : aucun paiement.'));
+    return;
+  }
   try {
     const r = await appeler('gestionCommande', { commande: c.id });
     const table = h('table');
@@ -706,11 +816,63 @@ async function ouvrirCommande(c) {
           p.rembourse ? euros(p.rembourse) : '', p.recu ? h('a', { href: p.recu, target: '_blank', rel: 'noopener' }, 'Reçu') : '']));
     }
     const paye = r.paiements.filter((p) => p.statut === 'succeeded').reduce((s, p) => s + p.montant - (p.rembourse || 0), 0);
-    factures.replaceChildren(h('p', { class: 'small' }, `Payé au total : ${euros(paye)}`),
-      h('div', { class: 'table' }, table), ...(autres.length ? [h('div', { class: 'table' }, table2)] : []));
+    factures.replaceChildren(...[r.erreur ? h('p', { class: 'muted small' }, r.erreur) : null,
+      h('p', { class: 'small' }, `Payé au total : ${euros(paye)}`),
+      h('div', { class: 'table' }, table), autres.length ? h('div', { class: 'table' }, table2) : null].filter(Boolean));
   } catch (e) {
     factures.replaceChildren(h('p', { class: 'error small' }, messageErreur(e)));
   }
+}
+
+// Actions rares ou définitives de la commande, rangées dans le ⋮ ; chacune s'explique dans sa confirmation.
+function menuCommande(c) {
+  const lancer = async (faire) => {
+    try {
+      annonceCommande = await faire();
+      commandeAffichee = null;
+      donnees = await lireDonnees(true);
+      afficherTout();
+      signalerChangement();
+    } catch (e) {
+      if (e !== 'non') prevenir(messageErreur(e));
+    }
+  };
+  const items = [
+    ['a-preparer', 'paiement-en-attente'].includes(c.expedition)
+      ? { libelle: 'Annuler la commande', danger: true, faire: () => lancer(() => annulerCommande(c)) } : null,
+    c.fid && !c.offerte && !c.resiliationLe && ['actif', 'impaye', 'suspendu', 'active', 'trialing', 'past_due'].includes(c.abonnement)
+      ? { libelle: 'Arrêter l\'abonnement', danger: true, faire: () => lancer(() => arreterAbonnement(c)) } : null,
+  ].filter(Boolean);
+  return items.length ? menuPoints(items, `Actions pour la commande ${codeCommande(c.code)}`) : null;
+}
+
+let annonceCommande = null; // Résultat de la dernière action, affiché en haut de la page commande rechargée.
+
+async function annulerCommande(c) {
+  if (!await demander(`Annuler la commande ${codeCommande(c.code)} de ${c.nom || c.email || 'ce client'} ?\n\n${c.offerte
+    ? 'La tablette n\'est pas encore partie : la commande est annulée et la tablette mise de côté revient au stock.'
+    : 'La tablette n\'est pas encore partie : l\'abonnement s\'arrête, tout ce qui a été payé est remboursé, la tablette mise de côté revient au stock et le client reçoit un e-mail.'}`, { oui: 'Annuler la commande', non: 'Garder la commande', danger: true })) throw 'non';
+  const r = await appeler('gestionAnnulerCommande', { commande: c.id });
+  return [`Commande annulée.`, r.rembourse ? `${euros(r.rembourse)} remboursés.` : null,
+    r.mailEnvoye ? 'Le client a reçu un e-mail.' : null].filter(Boolean).join(' ');
+}
+
+async function arreterAbonnement(c) {
+  if (!await demander(`Arrêter l'abonnement de ${c.nom || c.email || 'ce client'} ?\n\nComme si le client résiliait lui-même dans l'appli : l'abonnement prend fin à la fin du mois en cours, prélevé à l'arrêt.`, { oui: 'Arrêter l\'abonnement', non: 'Garder', danger: true })) throw 'non';
+  const r = await appeler('resilierAbonnement', { fid: c.fid });
+  return `Abonnement arrêté : il prend fin le ${jour(r.le)}.`;
+}
+
+// Colis de retour : n° de suivi (lien Mondial Relay) et où il en est, mis à jour chaque nuit.
+const ETAPES_COLIS = { 'Delivered': 'arrivé chez Papote', 'Awaiting customer pickup': 'au point relais', 'En route to sorting center': 'en route',
+  'Being sorted': 'au centre de tri', 'Driver en route': 'en livraison', 'Ready to send': 'étiquette créée, pas encore déposé',
+  'Announced': 'étiquette créée, pas encore déposé' };
+function suiviRetourDe(c) {
+  const r = c.etiquettes && c.etiquettes.retour;
+  if (!r || !r.colis) return null;
+  const etape = r.livre ? 'arrivé chez Papote' : r.etape ? (ETAPES_COLIS[r.etape] || r.etape) : 'étiquette créée, pas encore déposé';
+  const numero = r.lienSuivi ? h('a', { href: r.lienSuivi, target: '_blank', rel: 'noopener' }, r.suivi || 'Suivre le colis') : (r.suivi || null);
+  return [badge(etape, r.livre ? 'ok' : 'info'), numero ? ' ' : null, numero];
 }
 
 // Étiquettes Sendcloud de la commande, en liens PDF.
@@ -726,7 +888,7 @@ function boutonEtiquetteRetour(c) {
   const msg = h('p', { class: 'small muted', hidden: true });
   const bouton = h('button', { type: 'button', class: 'secondary small-btn' }, 'Étiquette de retour au client');
   bouton.addEventListener('click', async () => {
-    if (!confirm(`Créer une étiquette de retour Mondial Relay et l'envoyer à ${c.email || 'ce client'} ?`)) return;
+    if (!await demander(`Créer une étiquette de retour Mondial Relay et l'envoyer à ${c.email || 'ce client'} ?`, { oui: 'Créer et envoyer' })) return;
     const fenetre = window.open('', '_blank');
     bouton.disabled = true;
     msg.hidden = false;
@@ -752,7 +914,7 @@ function boutonRenvoyerCode(c) {
   const msg = h('p', { class: 'small muted', hidden: true });
   const bouton = h('button', { type: 'button', class: 'secondary small-btn' }, 'Renvoyer le code au client');
   bouton.addEventListener('click', async () => {
-    const email = prompt('Adresse e-mail où envoyer le code de commande :', c.email || '');
+    const email = await saisir('Adresse e-mail où envoyer le code de commande :', c.email || '');
     if (email == null) return;
     bouton.disabled = true;
     msg.hidden = false;
@@ -829,15 +991,15 @@ function formulaireRemplacement(c, t) {
           const r = await appeler('gestionEtiquette', { commande: c.id, sens: s });
           faites.push([s, r.url]);
         } catch (err) {
-          alert(`Étiquette ${s === 'aller' ? 'd\'envoi' : 'de retour'} impossible : ${messageErreur(err)}. Faites-la depuis la commande.`);
+          prevenir(`Étiquette ${s === 'aller' ? 'd\'envoi' : 'de retour'} impossible : ${messageErreur(err)}. Faites-la depuis la commande.`);
         }
       }
       const aller = faites.find(([s]) => s === 'aller');
       if (fenetre) { if (aller) fenetre.location = aller[1]; else fenetre.close(); }
       donnees = await lireDonnees(true);
       afficherTout();
-      signalerChangement();
-      ouvrirCommande(donnees.commandes.find((x) => x.id === c.id) || c);
+      commandeAffichee = null;
+      afficherFiche();
     } catch (err) {
       if (fenetre) fenetre.close();
       msg.className = 'small error';
@@ -850,21 +1012,25 @@ function formulaireRemplacement(c, t) {
 
 // Grandes étapes d'une commande, de la commande au retour de la tablette.
 function parcoursCommande(c) {
-  const etapes = [[c.creeLe, 'commande passée']];
-  if (c.envoyeeLe) etapes.push([c.envoyeeLe, `tablette envoyée${c.suivi ? ` (suivi ${c.suivi})` : ''}`]);
+  // La commande ouvre toujours le parcours, même créée dans la même seconde que la réservation.
+  const etapes = [[-Infinity, c.offerte ? 'Commande offerte créée' : 'Commande passée', c.creeLe]];
+  if (c.envoyeeLe) etapes.push([c.envoyeeLe, `Tablette envoyée${c.suivi ? ` (suivi ${c.suivi})` : ''}`]);
   for (const t of donnees.stock) {
     for (const x of t.historique || []) {
       if (!x.le || x.commande !== c.id) continue;
       if (x.remplacement || x.sim) {
         const quoi = x.sim ? `carte SIM ${x.sim}` : x.accessoires ? x.accessoires.join(', ') : `tablette ${t.numero || t.modele || ''}`;
-        etapes.push([x.le, `remplacement : ${quoi}${x.etat === 'en-retour' ? ' à récupérer' : ' envoyée'}${x.motif ? ` (${x.motif})` : ''}`]);
+        etapes.push([x.le, `Remplacement : ${quoi}${x.etat === 'en-retour' ? ' à récupérer' : ' envoyée'}${x.motif ? ` (${x.motif})` : ''}`]);
       } else if (x.etat !== 'envoyee') {
-        etapes.push([x.le, `tablette ${t.numero || t.modele || ''} : ${(donnees.etats[x.etat] || x.etat).toLowerCase()}`]);
+        const nom = [t.ref, t.modele || t.numero].filter(Boolean).join(' ');
+        etapes.push([x.le, ['commandee', 'en-stock', 'preparee'].includes(x.etat) && x.commande
+          ? `Tablette ${nom} attribuée à cette commande` : `Tablette ${nom} : ${(donnees.etats[x.etat] || x.etat).toLowerCase()}`]);
       }
     }
   }
-  if (c.fid) etapes.push([null, `jumelée avec la famille ${c.famille || ''}`.trim()]);
-  if (c.restitution) etapes.push([c.restitution.avant, RETOURS[c.restitution.statut] || c.restitution.statut]);
+  if (c.fid) etapes.push([null, `Jumelée avec la famille ${c.famille || ''}`.trim()]);
+  // La date du retour est une date limite, pas celle d'un événement : à la suite, dans le texte.
+  if (c.restitution) etapes.push([null, `${RETOURS[c.restitution.statut] || c.restitution.statut}${c.restitution.avant && c.restitution.statut === 'attendue' ? `, à rendre avant le ${jour(c.restitution.avant)}` : ''}`]);
   if (c.remboursement) etapes.push([null, `${euros(c.remboursement.montant)} ${REMBOURSEMENTS[c.remboursement.statut] || c.remboursement.statut}`]);
   // Étapes sans date (jumelage, remboursement) à la suite des autres.
   return etapes.filter(([, texte]) => texte).sort((a, b) => (a[0] || Infinity) - (b[0] || Infinity));
@@ -887,8 +1053,9 @@ function afficherStock() {
     stat(String(aEnvoyer), 'commandes à envoyer'),
     // Calculé par le serveur, comme sur le site : à 0, les boutons Commander deviennent « Être prévenu ».
     donnees.aVendre == null ? null : stat(String(donnees.aVendre), 'à vendre sur le site',
-      donnees.aVendre ? 'paiements en cours compris' : 'le site propose « Être prévenu »', donnees.aVendre ? null : 'neg'),
+      donnees.aVendre ? 'stock + 10 précommandes, paiements en cours compris' : 'le site propose « Être prévenu »', donnees.aVendre ? null : 'neg'),
     stat(String(compte(chez)), 'chez les clients', `valeur ${euros(valeur(chez))}`),
+    compte(['commandee']) ? stat(String(compte(['commandee'])), 'commandées, pas encore reçues', `valeur ${euros(valeur(['commandee']))}`) : null,
     stat(String(compte(['revenue', 'a-reparer'])), 'à vérifier ou réparer'),
     stat(String(compte(['perdue', 'hors-service'])), 'perdues ou hors service'),
   ].filter(Boolean));
@@ -928,7 +1095,7 @@ $('filtre-stock').addEventListener('change', afficherStock);
 
 // ---------- Lignes SIM ----------
 
-const ETATS_SANS_CLIENT = ['en-stock', 'revenue', 'a-reparer', 'perdue', 'hors-service'];
+const ETATS_SANS_CLIENT = ['commandee', 'en-stock', 'revenue', 'a-reparer', 'perdue', 'hors-service'];
 const coutSim = (t) => (t.simCout != null ? t.simCout : donnees.reglages.forfaitSim);
 
 // Même règle que simAResilier (functions/gestion.js) : ligne active (payée), tablette sans client depuis 30 jours.
@@ -1070,7 +1237,7 @@ $('f-sim').addEventListener('submit', async (e) => {
 });
 
 $('ds-supprimer').addEventListener('click', async () => {
-  if (!confirm('Supprimer cette carte du registre (erreur de saisie) ? Pour une ligne arrêtée, choisissez plutôt « Résiliée ».')) return;
+  if (!await demander('Supprimer cette carte du registre (erreur de saisie) ? Pour une ligne arrêtée, choisissez plutôt « Résiliée ».', { oui: 'Supprimer', danger: true })) return;
   await enregistrer($('f-sim'), async () => {
     await appeler('gestionSim', { action: 'supprimer', id: simOuverte });
     $('d-sim').close();
@@ -1154,7 +1321,7 @@ $('f-livraison').addEventListener('submit', async (e) => {
 });
 
 $('dx-supprimer').addEventListener('click', async () => {
-  if (!confirm('Supprimer cet accessoire ?')) return;
+  if (!await demander('Supprimer cet accessoire ?', { oui: 'Supprimer', danger: true })) return;
   await enregistrer($('f-accessoire'), async () => {
     await appeler('gestionAccessoire', { action: 'supprimer', id: accessoireOuvert });
     $('d-accessoire').close();
@@ -1196,14 +1363,38 @@ function afficherBatterie(t) {
   );
 }
 
-// Fiche d'une tablette : modification, pièces jointes, historique.
+// Page d'une tablette : informations, achat, documents, historique.
 let tabletteOuverte = null;
 function ouvrirTablette(id) {
+  location.hash = `#tablette/${encodeURIComponent(id)}`;
+}
+function remplirTablette(id) {
   const t = donnees.stock.find((x) => x.id === id);
-  if (!t) return;
-  tabletteOuverte = t.id;
+  if (!t) {
+    $('dt-titre').textContent = 'Tablette introuvable';
+    $('dt-resume').textContent = 'Elle a peut-être été supprimée.';
+    return;
+  }
+  // Même tablette déjà affichée : ne pas effacer ce qui est en cours de saisie.
   const f = $('f-tablette');
-  $('dt-titre').textContent = `Tablette ${t.numero || t.modele || ''}`.trim();
+  const memeFiche = tabletteOuverte === t.id && f.dataset.charge === t.id;
+  tabletteOuverte = t.id;
+  f.dataset.charge = t.id;
+  const nom = [t.ref, t.numero || t.modele].filter(Boolean).join(' · ') || 'sans nom';
+  $('dt-titre').textContent = `Tablette ${nom}`;
+  document.title = `Papote · Tablette ${t.ref || ''}`.trim();
+  const c = t.commande && donnees.commandes.find((x) => x.id === t.commande);
+  $('dt-resume').replaceChildren(badge(donnees.etats[etatTablette(t)] || t.etat, ''), ' ',
+    ...(c ? ['Pour le client : ', h('a', { href: `#commande/${encodeURIComponent(c.id)}` }, nomCommande(c))]
+      : [h('span', { class: 'muted' }, 'Pas encore attribuée à un client')]));
+  afficherAchatTablette(t);
+  afficherDocumentsTablette(t);
+  afficherBatterie(t);
+  $('dt-historique').replaceChildren(...(t.historique || []).filter((x) => x.le).reverse().map((x) => h('li', {},
+    `${new Date(x.le).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })} : ${donnees.etats[x.etat] || x.etat}`)));
+  if (!$('dt-historique').children.length) $('dt-historique').append(h('li', {}, 'Rien de noté pour l\'instant.'));
+  $('dt-zone-retirer').hidden = !(t.etat === 'en-stock' && !t.commande && (t.historique || []).length <= 1);
+  if (memeFiche) return;
   f.numero.value = t.numero || '';
   f.modele.value = t.modele || '';
   // Carte SIM : une ligne du registre libre, ou l'ancienne saisie sur la fiche (gardée telle quelle).
@@ -1219,17 +1410,52 @@ function ouvrirTablette(id) {
     ...donnees.commandes.filter((c) => c.id === t.commande || (!prises.has(c.id) && c.expedition !== 'annulee'))
       .sort((a, b) => (b.creeLe || 0) - (a.creeLe || 0))
       .map((c) => h('option', { value: c.id, selected: c.id === t.commande }, nomCommande(c))));
-  $('dt-pieces').replaceChildren(...(t.pieces || []).map((p) => h('li', {}, lienPiece(p),
-    h('button', { type: 'button', class: 'link danger small', onclick: () => retirerPiece('stock', t.id, p) }, 'Retirer'))),
-  ...piecesTablette(t).filter((p) => !(t.pieces || []).includes(p)).map((p) => h('li', {}, lienPiece(p), h('span', { class: 'muted small' }, ' (achat)'))));
-  if (!$('dt-pieces').children.length) $('dt-pieces').append(h('li', { class: 'muted small' }, 'Aucune.'));
-  afficherBatterie(t);
-  $('dt-historique').replaceChildren(...(t.historique || []).filter((x) => x.le).reverse().map((x) => h('li', {},
-    `${new Date(x.le).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })} : ${donnees.etats[x.etat] || x.etat}`)));
-  $('dt-retirer').hidden = !(t.etat === 'en-stock' && !t.commande && (t.historique || []).length <= 1);
-  $('dt-detacher').hidden = !t.depense;
   f.querySelector('.f-msg').hidden = true;
-  $('d-tablette').showModal();
+}
+
+// Documents propres à la tablette (la facture d'achat est montrée avec l'achat).
+function afficherDocumentsTablette(t) {
+  $('dt-pieces').replaceChildren(...(t.pieces || []).map((p) => h('li', {}, lienPiece(p), ' ',
+    h('button', { type: 'button', class: 'link danger small no-print', onclick: () => retirerPiece('stock', t.id, p) }, 'Retirer ce document'))));
+  if (!$('dt-pieces').children.length) $('dt-pieces').append(h('li', { class: 'muted small' }, 'Aucun document.'));
+}
+
+// Achat de la tablette : vendeur, prix, justificatif (facture ou simple confirmation de commande).
+function afficherAchatTablette(t) {
+  const achat = t.depense && donnees.depenses.find((d) => d.id === t.depense);
+  const zone = $('dt-achat');
+  if (!t.depense) {
+    zone.replaceChildren(
+      h('p', {}, 'Aucun achat rattaché : le prix et la facture de cette tablette sont inconnus.'),
+      h('p', { class: 'muted small' }, 'Transférez la facture du vendeur à factures@mapapote.fr, ou ajoutez l\'achat dans Stock > Achats : il complétera cette fiche si le n° de série correspond, ou si c\'est la plus ancienne tablette en stock sans achat.'));
+    return;
+  }
+  const ligne = (k, v) => (v ? [h('dt', {}, k), h('dd', {}, v)] : []);
+  const pieces = (achat && achat.pieces) || [];
+  zone.replaceChildren(
+    h('dl', { class: 'fiche' },
+      ligne('Vendeur', t.fournisseur || (achat && achat.fournisseur)),
+      ligne('Achetée le', jour(t.acheteeLe)),
+      ligne('Prix', t.prixAchat != null ? euros(t.prixAchat) : null),
+      ligne('N° de commande', achat && achat.numero),
+      ligne('Justificatif', achat && achat.confirmation
+        ? h('span', {}, badge('Facture pas encore reçue', 'info'), ' ', h('span', { class: 'muted small' }, 'seule la confirmation de commande est arrivée'))
+        : badge('Facture reçue', 'ok')),
+      ligne('Fichiers', pieces.length ? h('div', { class: 'pieces-liste' }, pieces.map(lienPiece)) : null)),
+    achat && achat.confirmation ? h('p', { class: 'muted small' }, 'Quand la vraie facture arrivera, transférez-la à factures@mapapote.fr : elle s\'ajoutera ici toute seule.') : null,
+    h('details', { class: 'no-print' },
+      h('summary', { class: 'small' }, 'Cet achat ne correspond pas à cette tablette ?'),
+      h('p', { class: 'small' }, 'Le prix, la date et la facture ci-dessus quittent cette fiche et passent sur une nouvelle tablette « En stock » (celle qui arrivera). Rien n\'est supprimé : la dépense reste dans l\'Argent.'),
+      h('button', { type: 'button', class: 'secondary small-btn', onclick: detacherAchat }, 'Déplacer cet achat sur une nouvelle tablette')));
+}
+
+async function detacherAchat() {
+  if (!await demander('Déplacer cet achat (prix, date, facture) sur une nouvelle tablette « En stock » ?', { oui: 'Déplacer l\'achat' })) return;
+  await enregistrer($('f-tablette'), async () => {
+    const r = await appeler('gestionStock', { action: 'detacherAchat', id: tabletteOuverte });
+    $('f-tablette').dataset.charge = '';
+    if (r && r.id) ouvrirTablette(r.id);
+  });
 }
 
 $('f-tablette').addEventListener('submit', async (e) => {
@@ -1248,13 +1474,14 @@ $('f-tablette').addEventListener('submit', async (e) => {
         ...(simId === '' && t.sim && !t.simId ? { sim: null, simOperateur: null, simCout: null } : {}),
       },
     });
+    f.dataset.charge = '';
     if (simId && simId !== 'ancienne' && simId !== t.simId) {
       await appeler('gestionSim', { action: 'modifier', id: simId, champs: { tablette: tabletteOuverte } });
     } else if (!simId && t.simId) {
       await appeler('gestionSim', { action: 'modifier', id: t.simId, champs: { tablette: null } });
     }
-    $('d-tablette').close();
   });
+  message(f, 'Modifications enregistrées.', false);
 });
 
 $('dt-fichier').addEventListener('change', async (e) => {
@@ -1262,34 +1489,25 @@ $('dt-fichier').addEventListener('change', async (e) => {
   e.target.value = '';
   if (!fichiers.length) return;
   await enregistrer($('f-tablette'), () => envoyerPieces('stock', tabletteOuverte, fichiers), 'Envoi…');
-  ouvrirTablette(tabletteOuverte);
 });
 
 $('dt-retirer').addEventListener('click', async () => {
-  if (!confirm('Retirer cette tablette du stock (erreur de saisie) ?')) return;
-  await enregistrer($('f-tablette'), async () => {
+  if (!await demander('Supprimer cette fiche du stock ? À faire seulement si la tablette n\'existe pas.', { oui: 'Supprimer la fiche', danger: true })) return;
+  const ok = await enregistrer($('f-tablette'), async () => {
     await appeler('gestionStock', { action: 'supprimer', id: tabletteOuverte });
-    $('d-tablette').close();
   });
-});
-
-$('dt-detacher').addEventListener('click', async () => {
-  if (!confirm('Retirer l\'achat de cette fiche ? Il passera sur une nouvelle tablette en stock.')) return;
-  await enregistrer($('f-tablette'), async () => {
-    await appeler('gestionStock', { action: 'detacherAchat', id: tabletteOuverte });
-    $('d-tablette').close();
-  });
+  if (ok) location.hash = '#stock/tablettes';
 });
 
 async function retirerPiece(collection, id, piece) {
-  if (!confirm(`Retirer « ${piece.nom} » ?`)) return;
+  if (!await demander(`Retirer « ${piece.nom} » ?`, { oui: 'Retirer', danger: true })) return;
   try {
     await appeler('gestionPiece', { action: 'retirer', collection, id, chemin: piece.chemin });
     donnees = await lireDonnees(true);
     afficherTout();
-    if (collection === 'stock') ouvrirTablette(id);
+    if (collection === 'stock') afficherFiche();
   } catch (e) {
-    alert(messageErreur(e));
+    prevenir(messageErreur(e));
   }
 }
 
@@ -1350,7 +1568,7 @@ function afficherBilan() {
   const commandes = donnees.commandes.filter((c) => dansPeriode(c.creeLe));
   $('kpi-activite').replaceChildren(
     stat(String(enCours.length), 'abonnements en cours',
-      `${enCours.filter((a) => a.statut === 'trialing').length} en essai · ${enCours.filter((a) => a.statut === 'past_due').length} impayé(s)`),
+      `${enCours.filter((a) => a.statut === 'trialing').length} au premier mois · ${enCours.filter((a) => a.statut === 'past_due').length} impayé(s)`),
     stat(euros(mrr), 'revenu mensuel', 'abonnements payants'),
     stat(String(commandes.length), 'commandes', `${commandes.filter((c) => c.formule === 'sim').length} avec internet inclus`),
     stat(String(abos.filter((a) => dansPeriode(a.finLe)).length), 'abonnements terminés'),
@@ -1391,7 +1609,7 @@ choixFichier.addEventListener('change', async () => {
     donnees = await lireDonnees(true);
     afficherTout();
   } catch (e) {
-    alert(messageErreur(e));
+    prevenir(messageErreur(e));
   }
 });
 
@@ -1403,9 +1621,12 @@ function afficherCompta() {
   ], deps.map((d) => [jour(d.date), d.fournisseur || '', libelleDepense(d), donnees.categories[d.categorie] || d.categorie,
     euros(d.montant), euros(d.tva),
     h('div', { class: 'pieces-liste' }, (d.pieces || []).map(lienPiece),
-      d.justificatif ? h('a', { href: d.justificatif, target: '_blank', rel: 'noopener' }, 'Lien') : null,
-      h('button', { type: 'button', class: 'link small no-print', onclick: () => { fichierDepense = d.id; choixFichier.click(); } }, '+ Joindre')),
-    h('button', { type: 'button', class: 'link danger small no-print', onclick: () => supprimerDepense(d) }, 'Supprimer')]),
+      d.justificatif ? h('a', { href: d.justificatif, target: '_blank', rel: 'noopener' }, 'Lien') : null),
+    h('div', { class: 'no-print' }, menuPoints([
+      { libelle: 'Joindre un justificatif', faire: () => { fichierDepense = d.id; choixFichier.click(); } },
+      d.recurrence ? { libelle: 'Ne plus l\'ajouter chaque mois', faire: () => arreterDepense(d) } : null,
+      { libelle: 'Supprimer la dépense', danger: true, faire: () => supprimerDepense(d) },
+    ], `Actions pour « ${d.libelle} »`))]),
   {
     total: deps.length ? ['Total', '', '', '', euros(deps.reduce((s, d) => s + d.montant, 0)),
       euros(deps.reduce((s, d) => s + (d.tva || 0), 0)), '', ''] : null,
@@ -1438,16 +1659,43 @@ function afficherCompta() {
     { vide: 'Aucun virement sur cette période.' });
 }
 
+// Stock > Achats : les commandes passées chez les vendeurs (tablettes et matériel), séparées des tablettes.
+function afficherAchats() {
+  const achats = donnees.depenses.filter((d) => ['tablettes', 'materiel'].includes(d.categorie) || (d.materiel || []).length)
+    .sort((a, b) => (b.date || 0) - (a.date || 0));
+  remplirTable($('t-achats-vendeurs'), [
+    { titre: 'Date' }, { titre: 'Vendeur' }, { titre: 'Ce qui a été acheté' }, { titre: 'N° de commande' },
+    { titre: 'Montant', n: 1 }, { titre: 'Facture' }, { titre: 'Tablettes' },
+  ], achats.map((d) => {
+    const tablettes = donnees.stock.filter((t) => t.depense === d.id);
+    return [
+      jour(d.date), d.fournisseur || '', d.libelle || '', d.numero || '', euros(d.montant),
+      h('div', {}, d.confirmation ? badge('pas encore reçue', 'info') : badge('reçue', 'ok'),
+        ...((d.pieces || []).map((p) => h('div', {}, lienPiece(p))))),
+      h('div', {}, ...tablettes.map((t) => h('div', {}, h('a', { href: `#tablette/${encodeURIComponent(t.id)}` },
+        t.ref || t.numero || 'tablette')))),
+    ];
+  }), { vide: 'Aucun achat enregistré.' });
+}
+
 function libelleDepense(d) {
   return h('div', {}, d.libelle,
     d.numero ? h('span', { class: 'muted' }, ` · n° ${d.numero}`) : null,
-    d.recurrence ? h('div', {}, badge('chaque mois', 'info'), ' ',
-      h('button', { type: 'button', class: 'link small no-print', onclick: () => arreterDepense(d) }, 'Arrêter')) : null,
+    d.recurrence ? h('div', {}, badge('chaque mois', 'info')) : null,
     d.depuis ? h('div', { class: 'muted small' }, 'ajoutée automatiquement') : null,
     (d.materiel || []).length ? h('div', { class: 'muted small' }, `Entré au stock : ${d.materiel.join(', ')}`) : null,
-    d.confirmation ? h('div', { class: 'muted small' }, 'Confirmation de commande : la facture sera ajoutée si elle arrive sur factures@') : null,
-    d.aVerifier ? h('div', {}, badge('à vérifier', 'ko'), ' ', h('span', { class: 'muted small' }, d.source || 'reçue par e-mail'), ' ',
-      h('button', { type: 'button', class: 'link small no-print', onclick: () => verifierDepense(d) }, 'C\'est bon')) : null);
+    d.confirmation ? h('div', { class: 'muted small' }, 'Facture pas encore reçue (seule la confirmation de commande est arrivée)') : null,
+    d.aVerifier ? h('div', { class: 'a-verifier' },
+      h('p', { class: 'small' }, badge('à vérifier', 'ko'), ' ', sourceDepense(d),
+        ' : vérifiez le montant, la date et le vendeur, puis validez.'),
+      h('button', { type: 'button', class: 'secondary small-btn no-print', onclick: () => verifierDepense(d) }, 'Valider cette dépense')) : null);
+}
+
+// « e-mail de "Tanguy Reynaud" <adresse> » → « Lue dans l'e-mail de Tanguy Reynaud ».
+function sourceDepense(d) {
+  const s = String(d.source || '');
+  const qui = (s.match(/^e-mail de\s+"?([^"<]+?)"?\s*(<|$)/) || [])[1];
+  return qui ? `Lue dans l'e-mail de ${qui.trim()}` : (s || 'Reçue par e-mail');
 }
 
 async function verifierDepense(d) {
@@ -1455,27 +1703,27 @@ async function verifierDepense(d) {
     await appeler('gestionDepense', { action: 'verifier', id: d.id });
     signalerChangement();
   } catch (e) {
-    alert(messageErreur(e));
+    prevenir(messageErreur(e));
   }
 }
 
 async function arreterDepense(d) {
-  if (!confirm(`Ne plus ajouter « ${d.libelle} » chaque mois ? Les dépenses déjà inscrites restent.`)) return;
+  if (!await demander(`Ne plus ajouter « ${d.libelle} » chaque mois ? Les dépenses déjà inscrites restent.`, { oui: 'Arrêter' })) return;
   try {
     await appeler('gestionDepense', { action: 'arreter', id: d.id });
     signalerChangement();
   } catch (e) {
-    alert(messageErreur(e));
+    prevenir(messageErreur(e));
   }
 }
 
 async function supprimerDepense(d) {
-  if (!confirm(`Supprimer la dépense « ${d.libelle} » (${euros(d.montant)}) et ses justificatifs ?`)) return;
+  if (!await demander(`Supprimer la dépense « ${d.libelle} » (${euros(d.montant)}) et ses justificatifs ?`, { oui: 'Supprimer', danger: true })) return;
   try {
     await appeler('gestionDepense', { action: 'supprimer', id: d.id });
     signalerChangement();
   } catch (e) {
-    alert(messageErreur(e));
+    prevenir(messageErreur(e));
   }
 }
 
@@ -1534,6 +1782,7 @@ function ouvrirFormulaire(id) {
   f.querySelector('.f-msg').hidden = true;
   $(id).showModal();
 }
+$('btn-achat-2').addEventListener('click', () => $('btn-achat').click());
 $('btn-achat').addEventListener('click', () => ouvrirFormulaire('d-achat'));
 $('btn-depense').addEventListener('click', () => ouvrirFormulaire('d-depense'));
 
@@ -2213,9 +2462,9 @@ $('btn-recap').addEventListener('click', async () => {
   b.disabled = true;
   try {
     const r = await appeler('gestionRecapMaintenant');
-    alert(`Récap envoyé à contact@mapapote.fr (${pluriel(r.aFaire, 'point')} à faire).`);
+    prevenir(`Récap envoyé à contact@mapapote.fr (${pluriel(r.aFaire, 'point')} à faire).`);
   } catch (e) {
-    alert(messageErreur(e));
+    prevenir(messageErreur(e));
   } finally {
     b.disabled = false;
   }
@@ -2312,7 +2561,7 @@ $('btn-cloturer').addEventListener('click', () => cloturer());
 let clients = null;
 const TYPES_CLIENT = { client: 'Abonné', ancien: 'Ancien client', panier: 'Panier abandonné', contact: 'Contact', chat: 'Contact du chat' };
 const STATUTS_CLIENT = {
-  actif: 'actif', offert: 'offert', impaye: 'impayé', suspendu: 'suspendu', resilie: 'résilié', aucun: 'sans abonnement', annulee: 'annulée',
+  actif: 'actif', offert: 'offert', impaye: 'impayé', suspendu: 'suspendu', resilie: 'résilié', aucun: 'sans abonnement', installation: 'installation en cours', annulee: 'annulée',
 };
 
 async function chargerClients() {
@@ -2359,7 +2608,7 @@ function afficherClients() {
       [TYPES_CLIENT[c.type] || '', c.statut && c.type !== 'panier' ? ` (${STATUTS_CLIENT[c.statut] || c.statut})` : '', c.formule ? ` · ${c.formule === 'sim' ? 'internet' : 'Wi-Fi'}` : ''].join(''),
       jour(c.depuis), accordTexte(c),
     ],
-    onclick: () => changerAccord(c),
+    onclick: () => { location.hash = `#client/${encodeURIComponent(c.email)}`; },
   })), { vide: 'Personne pour ce filtre.' });
   const cible = liste.filter((c) => c.consentement && !c.desinscrit).length;
   $('campagne-cible').textContent = cible
@@ -2370,6 +2619,104 @@ function afficherClients() {
     ? clients.campagnes.map((k) => h('li', {}, h('strong', {}, k.objet), ` · ${jour(k.le)} · ${pluriel(k.envoyes || 0, 'envoi')}`,
       k.erreurs && k.erreurs.length ? h('span', { class: 'error' }, ` · ${pluriel(k.erreurs.length, 'échec')}`) : null))
     : [h('li', { class: 'muted' }, 'Aucun envoi pour l\'instant.')]));
+  afficherFiche();
+}
+
+// Page d'une famille (admin.js) : qui l'a commandée, sa commande et sa tablette.
+function remplirLiensFamille(fid) {
+  const commandes = donnees.commandes.filter((c) => c.fid === fid);
+  const tablettes = donnees.stock.filter((t) => t.fid === fid || commandes.some((c) => c.id === t.commande));
+  // Une ligne entière par page à ouvrir : le client, sa commande, la tablette.
+  const ligneLien = (quoi, href, texte, detail) => h('li', {}, h('span', { class: 'll-quoi' }, quoi),
+    h('a', { href }, texte), detail ? h('span', { class: 'muted small' }, detail) : null);
+  $('famille-liens').replaceChildren(
+    h('h2', {}, 'Client, commande et tablette'),
+    h('ul', { class: 'liste-liens' },
+      ...commandes.flatMap((c) => [
+        c.email ? ligneLien('Client', `#client/${encodeURIComponent(c.email.toLowerCase())}`, c.nom || c.email, c.nom ? c.email : '') : null,
+        ligneLien('Commande', `#commande/${encodeURIComponent(c.id)}`, `Commande ${codeCommande(c.code)}`, c.offerte ? 'offerte' : ''),
+      ].filter(Boolean)),
+      ...tablettes.map((t) => ligneLien('Tablette', `#tablette/${encodeURIComponent(t.id)}`,
+        [t.ref, t.numero || t.modele].filter(Boolean).join(' · ') || 'Tablette', donnees.etats[etatTablette(t)] || t.etat)),
+      ...(commandes.length || tablettes.length ? [] : [h('li', { class: 'muted small' }, 'Aucune commande ni tablette rattachée à cette famille.')])));
+}
+
+// Page d'un client : coordonnées, accord e-mails, commandes, famille, tablette et paiements.
+let clientAffiche = null;
+async function remplirClient(email) {
+  const zone = $('dcl-corps');
+  const c = clients && clients.contacts.find((x) => x.email === email);
+  if (!clients) {
+    zone.replaceChildren(h('div', { class: 'card' }, h('p', { class: 'muted' }, 'Chargement…')));
+    return;
+  }
+  if (!c) {
+    zone.replaceChildren(h('div', { class: 'card' }, h('p', {}, 'Client introuvable.')));
+    return;
+  }
+  const commandes = donnees.commandes.filter((x) => (x.email || '').toLowerCase() === email)
+    .sort((a, b) => (b.creeLe || 0) - (a.creeLe || 0));
+  const cle = JSON.stringify([c, commandes.map((x) => [x.id, etatCommande(x), x.fid, x.abonnement])]);
+  // Mêmes informations déjà affichées : garder les paiements déjà lus.
+  if (clientAffiche === cle && zone.children.length) return;
+  clientAffiche = cle;
+  document.title = `Papote · ${c.nom || c.email}`;
+  const ligne = (k, v) => (v ? [h('dt', {}, k), h('dd', {}, v)] : []);
+  const accepte = c.consentement && !c.desinscrit;
+  const familles = commandes.filter((x) => x.fid);
+  const tablettes = commandes.map((x) => donnees.stock.find((t) => t.commande === x.id)).filter(Boolean);
+  const paiements = h('div', {}, h('p', { class: 'muted small' }, commandes.length ? 'Lecture des paiements…' : 'Aucune commande, donc aucun paiement.'));
+  zone.replaceChildren(
+    h('div', { class: 'card' },
+      h('h2', {}, c.nom || c.email),
+      h('dl', { class: 'fiche' },
+        ligne('Situation', [TYPES_CLIENT[c.type] || '', c.statut && c.type !== 'panier' ? ` (${STATUTS_CLIENT[c.statut] || c.statut})` : ''].join('')),
+        ligne('E-mail', h('a', { href: `mailto:${c.email}` }, c.email)),
+        ligne('Téléphone', c.telephone ? h('a', { href: `tel:${c.telephone.replace(/\s/g, '')}` }, c.telephone) : null),
+        ligne('Formule', c.formule ? (c.formule === 'sim' ? 'Internet inclus (carte SIM)' : 'Wi-Fi de la maison') : null),
+        ligne('Client depuis', jour(c.depuis)),
+        // Interrupteur : il ne bascule qu'après la confirmation (changerAccord relit la liste).
+        ligne('E-mails d\'information', h('label', { class: 'interrupteur' },
+          h('input', { type: 'checkbox', class: 'toggle', checked: accepte, 'aria-label': 'Reçoit les e-mails d\'information',
+            onchange: (e) => { e.target.checked = accepte; changerAccord(c); } }),
+          h('span', {}, accepte ? 'Oui, il ou elle a donné son accord' : c.desinscrit ? 'Non, désinscrit' : 'Non'))))),
+    h('div', { class: 'card' }, h('h2', {}, 'Commandes'),
+      commandes.length ? h('ul', { class: 'liste-liens' }, commandes.map((x) => {
+        const [texte, classe] = ETATS_COMMANDE[etatCommande(x)];
+        return h('li', {}, h('a', { href: `#commande/${encodeURIComponent(x.id)}` }, `Commande ${codeCommande(x.code)}`),
+          ` · ${jour(x.creeLe)} · ${formuleTexte(x)} `, badge(texte, classe));
+      })) : h('p', { class: 'muted small' }, c.type === 'panier' ? 'Panier abandonné : pas de commande.' : 'Aucune commande.')),
+    h('div', { class: 'card' }, h('h2', {}, familles.length > 1 ? 'Familles' : 'Famille'),
+      familles.length ? h('ul', { class: 'liste-liens' }, familles.map((x) => h('li', {},
+        h('a', { href: `#clients/familles/${encodeURIComponent(x.fid)}` }, x.famille || 'Famille sans nom'),
+        x.abonnement ? ` · abonnement ${ABONNEMENTS[x.abonnement] || x.abonnement}` : ''))) :
+        h('p', { class: 'muted small' }, commandes.length ? 'Pas encore de famille : la tablette n\'a pas été jumelée.' : 'Aucune famille.')),
+    h('div', { class: 'card' }, h('h2', {}, tablettes.length > 1 ? 'Tablettes' : 'Tablette'),
+      tablettes.length ? h('ul', { class: 'liste-liens' }, tablettes.map((t) => h('li', {},
+        h('a', { href: `#tablette/${encodeURIComponent(t.id)}` }, [t.ref, t.numero || t.modele].filter(Boolean).join(' · ') || 'tablette'),
+        ` · ${donnees.etats[etatTablette(t)] || t.etat}`))) :
+        h('p', { class: 'muted small' }, 'Aucune tablette rattachée.')),
+    h('div', { class: 'card' }, h('h2', {}, 'Paiements'), paiements),
+  );
+  const payantes = commandes.filter((x) => !x.offerte);
+  if (!payantes.length) {
+    if (commandes.length) paiements.replaceChildren(h('p', { class: 'muted small' }, 'Commande offerte : aucun paiement.'));
+    return;
+  }
+  try {
+    const lus = await Promise.all(payantes.map((x) => appeler('gestionCommande', { commande: x.id })));
+    const lignes = lus.flatMap((r) => r.paiements).sort((a, b) => b.le - a.le);
+    const table = h('table');
+    remplirTable(table, [{ titre: 'Date' }, { titre: 'Paiement' }, { titre: 'Montant', n: 1 }, { titre: 'Remboursé', n: 1 }, { titre: 'Statut' }, { titre: '' }],
+      lignes.map((p) => [jour(p.le), p.description || (p.facture ? 'Abonnement' : 'Paiement'), euros(p.montant),
+        p.rembourse ? euros(p.rembourse) : '', p.statut === 'succeeded' ? badge('payé', 'ok') : badge(p.statut, 'ko'),
+        p.recu ? h('a', { href: p.recu, target: '_blank', rel: 'noopener' }, 'Reçu') : '']),
+      { vide: 'Aucun paiement pour l\'instant.' });
+    const total = lignes.filter((p) => p.statut === 'succeeded').reduce((s, p) => s + p.montant - (p.rembourse || 0), 0);
+    paiements.replaceChildren(h('p', { class: 'small' }, `Payé au total : ${euros(total)}`), h('div', { class: 'table' }, table));
+  } catch (e) {
+    paiements.replaceChildren(h('p', { class: 'error small' }, messageErreur(e)));
+  }
 }
 
 async function changerAccord(c) {
@@ -2377,9 +2724,10 @@ async function changerAccord(c) {
   const question = accepte
     ? `Retirer l'accord de ${c.nom || c.email} ? Il ou elle ne recevra plus les e-mails d'information.`
     : `${c.nom || c.email} a accepté de recevoir les e-mails d'information de Papote (de vive voix ou par écrit) ?${c.desinscrit ? ' Attention : cette personne s\'était désinscrite.' : ''}`;
-  if (!confirm(question)) return;
+  if (!await demander(question, { oui: accepte ? 'Retirer l\'accord' : 'Oui, il ou elle a accepté' })) return;
   try {
     await appeler('gestionConsentement', { email: c.email, consentement: !accepte });
+    clientAffiche = null;
     await chargerClients();
   } catch (e) {
     erreur(e);
@@ -2401,7 +2749,7 @@ async function envoyerCampagne(test) {
   const message = form.message.value.trim();
   if (!objet || !message) { form.reportValidity(); return; }
   const emails = clientsAffiches().filter((c) => c.consentement && !c.desinscrit).map((c) => c.email);
-  if (!test && !confirm(`Envoyer « ${objet} » à ${pluriel(emails.length, 'personne')} ? Pensez à vous envoyer un essai d'abord.`)) return;
+  if (!test && !await demander(`Envoyer « ${objet} » à ${pluriel(emails.length, 'personne')} ? Pensez à vous envoyer un essai d'abord.`, { oui: 'Envoyer' })) return;
   const boutons = form.querySelectorAll('button');
   boutons.forEach((b) => { b.disabled = true; });
   msg.hidden = false;
@@ -2423,7 +2771,7 @@ $('campagne-test').addEventListener('click', () => envoyerCampagne(true));
 
 // E-mail d'ouverture des commandes à la liste d'attente (lancementListeAttente, functions/index.js).
 async function envoyerLancement(test) {
-  if (!test && !confirm("Envoyer l'e-mail « Papote est disponible : vous pouvez commander » à toute la liste d'attente ?\n\n"
+  if (!test && !await demander("Envoyer l'e-mail « Papote est disponible : vous pouvez commander » à toute la liste d'attente ?\n\n"
     + "Chaque personne ne le reçoit qu'une fois. Pensez à vous envoyer un test d'abord.")) return;
   const msg = $('lancement-msg');
   const boutons = [$('lancement-test'), $('lancement-envoyer')];
@@ -2461,7 +2809,7 @@ function etapesReceptionTablette() {
       titre: 'Réception',
       texte: 'Ouvrez le carton du vendeur. Quel achat est-ce ?',
       contenu(zone, e, maj) {
-        const achats = donnees.stock.filter((t) => t.id === e.id || (t.etat === 'en-stock' && !t.ref && !t.commande))
+        const achats = donnees.stock.filter((t) => t.id === e.id || (['commandee', 'en-stock'].includes(t.etat) && !t.ref && !t.commande))
           .sort((a, b) => (a.acheteeLe || 0) - (b.acheteeLe || 0));
         if (e.id === undefined) e.id = achats.length ? achats[0].id : null;
         const choix = h('select', { 'aria-label': 'Achat' },
@@ -2470,8 +2818,8 @@ function etapesReceptionTablette() {
         const abimee = h('button', { type: 'button', class: 'link small danger' }, 'La tablette est abîmée');
         choix.addEventListener('change', () => { e.id = choix.value || null; maj(); });
         abimee.addEventListener('click', async () => {
-          if (!e.id) { alert('Enregistrez d\'abord sa facture (Ajouter un achat), puis notez-la « À réparer ».'); return; }
-          if (!confirm('Noter cette tablette « À réparer » ? Contactez ensuite le vendeur pour l\'échanger.')) return;
+          if (!e.id) { prevenir('Enregistrez d\'abord sa facture (Ajouter un achat), puis notez-la « À réparer ».'); return; }
+          if (!await demander('Noter cette tablette « À réparer » ? Contactez ensuite le vendeur pour l\'échanger.', { oui: 'À réparer' })) return;
           await appeler('gestionStock', { action: 'modifier', id: e.id, champs: { etat: 'a-reparer' } });
           signalerChangement();
           fermerParcours();
@@ -2582,7 +2930,7 @@ function etapesReceptionTablette() {
 async function recevoirTablette() {
   if (!donnees) return;
   const enCours = donnees.stock.find((t) => t.reception && !t.reception.fini);
-  const etat = enCours && confirm(`Reprendre la réception de ${libelleTablette(enCours)} ?`)
+  const etat = enCours && await demander(`Reprendre la réception de ${libelleTablette(enCours)} ?`)
     ? { ...enCours.reception, id: enCours.id, ref: enCours.ref || '', numero: enCours.numero || '', modele: enCours.modele || '' }
     : { etape: 0, faits: {} };
   await ouvrirParcours({
@@ -2676,3 +3024,18 @@ $('btn-recevoir-accessoire').addEventListener('click', async () => {
   await ouvrirParcours({ titre: 'Recevoir une livraison', etapes: etapesReceptionAccessoire(), etat: { etape: 0, faits: {} } });
   signalerChangement();
 });
+
+// « ← Retour » : revient à la page d'avant, comme le bouton retour du téléphone. Sans page d'avant
+// dans l'admin (lien ouvert directement), il mène à la liste parente (son lien ou son bouton).
+const pilePages = [location.hash];
+window.addEventListener('hashchange', () => {
+  if (pilePages.length > 1 && pilePages[pilePages.length - 2] === location.hash) pilePages.pop();
+  else pilePages.push(location.hash);
+});
+document.addEventListener('click', (e) => {
+  const r = e.target.closest('.retour');
+  if (!r || pilePages.length < 2) return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  history.back();
+}, true);

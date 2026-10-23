@@ -4,14 +4,14 @@
 //   stockDisponible    GET  depuis le site vitrine : { disponible: true|false } (stock.js)
 //   creerPaiement      appel depuis l'appli famille : paiement pour une famille existante
 //   portailClient      appel depuis l'appli famille : compte bancaire, factures
-//   resilierAbonnement appel depuis l'appli famille : résilie à la fin du mois payé (sans engagement)
+//   resilierAbonnement appel depuis l'appli famille : résilie à la fin du mois en cours, prélevé à l'arrêt
 //   annulerResiliation appel depuis l'appli famille : garde l'abonnement
 //   rattacherCommande  appel depuis l'appli famille : relie une commande du site à la famille
 //                      (par l'e-mail du compte, ou par le code de commande XXXX-XXXX)
 //   codeCommande       GET depuis merci.html : code de commande à noter après le paiement
 //   stripeWebhook      Stripe prévient ici de chaque paiement ou changement d'abonnement
 //   finDeGrace         chaque heure : suspend les familles dont le délai de grâce est dépassé
-//   retracter          appel depuis l'appli famille : annule la commande (14 jours), remboursée au retour
+//   retracter          appel depuis l'appli famille : annule la commande (30 jours), remboursée au retour
 //   finDeContrat       appel depuis l'appli famille : rétractation possible, retour attendu, remboursement
 //   restitutions       chaque jour : rappel 7 jours avant, puis 170 € ou 200 € si la tablette n'est pas rendue à temps
 //   tabletteRendue     appel depuis le tableau de bord admin : la tablette incluse est revenue
@@ -20,6 +20,10 @@
 //   nouveauMembre      créateur d'une famille : rattache sa commande faite sur le site
 //   tabletteEnvoyee    appel depuis le tableau de bord admin : colis parti, numéro de suivi Mondial Relay
 //   commandeModifiee   commande modifiée : e-mail d'envoi, de retour, d'étiquette ; remboursement au retour
+//   reserverTablette   appel depuis l'appli famille : le premier proche scanne la tablette (installation.js)
+//   nommerFamille      appel depuis l'appli famille : « Comment l'appelez-vous ? » crée la famille (installation.js)
+//   finirInstallation  appel depuis l'appli famille : fin de l'installation, invitations (installation.js)
+//   annulerInstallation appel depuis l'appli famille : « Annuler l'installation » efface la famille (installation.js)
 //   rappelsJumelage    chaque jour : rappel au client dont la tablette n'est pas jumelée (J+5, J+12)
 //   coupeCircuit       avis du budget Google Cloud : e-mail à 30 € et 100 €, facturation coupée à 150 € (budget.js)
 //   jetonAppCheck      POST depuis la tablette : jeton App Check contre sa clé d'installation (appcheck.js)
@@ -94,9 +98,7 @@ function finDePeriodeMs(abo) {
 }
 
 async function tarifs(formule, tablette) {
-  const cles = [regles.TARIFS[formule][tablette]];
-  if (tablette === 'achetee') cles.push(regles.TARIF_TABLETTE);
-  if (tablette === 'incluse') cles.push(regles.TARIF_MISE_EN_SERVICE);
+  const cles = [regles.TARIFS[formule][tablette], regles.TARIF_MISE_EN_SERVICE];
   const { data } = await stripe().prices.list({ lookup_keys: cles, active: true });
   const parCle = Object.fromEntries(data.map((p) => [p.lookup_key, p.id]));
   for (const cle of cles) {
@@ -105,19 +107,24 @@ async function tarifs(formule, tablette) {
   return cles.map((cle) => ({ price: parCle[cle], quantity: 1 }));
 }
 
-// Essai gratuit d'un mois pour un nouveau client ; pas pour un client déjà abonné une fois.
+// Paiement du mois écoulé (Tanguy, 2026-10-21) : rien n'est prélevé tant que la tablette n'est pas arrivée
+// (« trial » Stripe), ni pendant les 30 jours pour changer d'avis qui suivent la réception (debutApresReception),
+// puis un prélèvement par mois ; le mois en cours est prélevé à l'arrêt (prelevementDernierMois).
+// Chaque mois utilisé est donc payé une fois, à terme échu.
 async function sessionPaiement({ formule, tablette, fid, email, client, relais, accord, reservation }) {
   const metadata = { formule, tablette, ...(relais ? livraison.relaisVersMeta(relais) : {}) };
   // Tablette mise de côté pendant le paiement (stock.js), libérée au paiement ou à l'expiration de la page.
   if (reservation && reservation.id) metadata.reservation = reservation.id;
+  // Délai annoncé au client (stock.js) : stock, precommande ou long.
+  if (reservation && reservation.delai) metadata.delai = reservation.delai;
   // Case « nouvelles de Papote par e-mail » cochée sur commande.html : reportée sur la commande.
   if (accord) metadata.accord = '1';
   if (fid) metadata.fid = fid;
-  const subscriptionData = { metadata };
-  if (!client) {
-    subscriptionData.trial_period_days = regles.ESSAI_JOURS;
-    subscriptionData.trial_settings = { end_behavior: { missing_payment_method: 'cancel' } };
-  }
+  const subscriptionData = {
+    metadata,
+    trial_period_days: regles.ATTENTE_ENVOI_JOURS,
+    trial_settings: { end_behavior: { missing_payment_method: 'cancel' } },
+  };
   const params = {
     mode: 'subscription',
     line_items: await tarifs(formule, tablette),
@@ -345,11 +352,8 @@ exports.commander = onRequest({ secrets: [STRIPE_SECRET] }, async (req, res) => 
   const accord = req.query.accord === '1';
   try {
     // Plus de tablette disponible : liste d'attente « Être prévenu ».
+    // Toujours une réservation : les commandes ne ferment plus, seul le délai annoncé change (stock.js).
     const reservation = await reserverTablette();
-    if (!reservation) {
-      res.redirect(303, `${SITE_VITRINE.value()}/#lancement`);
-      return;
-    }
     const session = await sessionPaiement({ formule, tablette, relais, email, accord, reservation });
     // Lien d'une relance : le panier d'origine est déjà noté.
     if (email && !req.query.relance) {
@@ -395,8 +399,8 @@ exports.portailClient = onCall({ secrets: [STRIPE_SECRET] }, async (request) => 
   return { url: session.url };
 });
 
-// Résiliation en ligne, sans engagement : l'abonnement s'arrête à la fin du mois déjà payé.
-// Pendant l'essai gratuit : arrêt à la fin de l'essai.
+// Résiliation en ligne, sans engagement : l'abonnement s'arrête à la fin du mois en cours,
+// qui est prélevé à l'arrêt (prelevementDernierMois).
 exports.resilierAbonnement = onCall({ secrets: [STRIPE_SECRET] }, async (request) => {
   const { fid } = request.data || {};
   const fam = await familleGeree(fid, request);
@@ -423,6 +427,41 @@ exports.annulerResiliation = onCall({ secrets: [STRIPE_SECRET] }, async (request
   await stripe().subscriptions.update(id, { cancel_at: '' });
   await appliquer(fid, id);
   return { ok: true };
+});
+
+// Hospitalisation du proche (Tanguy, 2026-10-22) : sur justificatif, l'admin met les prélèvements en pause
+// jusqu'à une date (rien n'est prélevé pour les mois de pause, la tablette continue de marcher), ou les
+// reprend plus tôt. Un décès, lui, est une résiliation comme une autre.
+const PAUSE_MAX_JOURS = 186;
+exports.pauseHospitalisation = onCall({ secrets: [STRIPE_SECRET] }, async (request) => {
+  verifierAdmin(request);
+  const { commande, jusqua } = request.data || {};
+  if (typeof commande !== 'string' || !/^[A-Za-z0-9_]{5,80}$/.test(commande)) throw new HttpsError('invalid-argument', 'Commande manquante.');
+  const ref = db.doc(`commandes/${commande}`);
+  if (!(await ref.get()).exists) throw new HttpsError('not-found', 'Commande introuvable.');
+  let abo;
+  try {
+    abo = await stripe().subscriptions.retrieve(commande);
+  } catch (e) {
+    throw new HttpsError('failed-precondition', 'Stripe ne connaît pas cet abonnement (commande de test ?).');
+  }
+  if (jusqua == null) {
+    await stripe().subscriptions.update(commande, { pause_collection: '' });
+    await ref.update({ pause: FieldValue.delete() });
+    return { ok: true, reprise: true };
+  }
+  const fin = Number(jusqua);
+  if (!Number.isFinite(fin) || fin <= Date.now() || fin > Date.now() + PAUSE_MAX_JOURS * 24 * 3600e3) {
+    throw new HttpsError('invalid-argument', 'Choisissez une date de reprise dans les 6 prochains mois.');
+  }
+  if (!['active', 'past_due'].includes(abo.status)) {
+    throw new HttpsError('failed-precondition', 'Pause possible seulement pour un abonnement en cours (pas pendant les 30 premiers jours).');
+  }
+  await stripe().subscriptions.update(commande, {
+    pause_collection: { behavior: 'void', resumes_at: Math.ceil(fin / 1000) },
+  });
+  await ref.update({ pause: { motif: 'hospitalisation', jusqua: Timestamp.fromMillis(fin), le: FieldValue.serverTimestamp() } });
+  return { ok: true, jusqua: fin };
 });
 
 // ---------- Rétractation et fin de contrat ----------
@@ -460,7 +499,7 @@ async function commandeDeLaFamille(fid, request) {
   return { id, ref, snap };
 }
 
-// Annulation dans les 14 jours : l'abonnement s'arrête tout de suite. Tablette pas encore partie :
+// Annulation dans les 30 jours : l'abonnement s'arrête tout de suite. Tablette pas encore partie :
 // remboursement immédiat. Déjà partie : remboursement dès son retour (voir commandeModifiee).
 exports.retracter = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE] }, async (request) => {
   const { fid } = request.data || {};
@@ -470,7 +509,7 @@ exports.retracter = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE] }, asyn
   const partie = await db.runTransaction(async (tx) => {
     const c = (await tx.get(ref)).data();
     if (!regles.retractationPossible(c, maintenant)) {
-      throw new HttpsError('failed-precondition', 'Le délai de 14 jours pour annuler la commande est dépassé.');
+      throw new HttpsError('failed-precondition', 'Le délai de 30 jours pour annuler la commande est dépassé.');
     }
     const envoyee = c.expedition !== 'a-preparer';
     tx.update(ref, envoyee ? {
@@ -516,7 +555,7 @@ exports.finDeContrat = onCall({ secrets: [STRIPE_SECRET] }, async (request) => {
   const r = c.restitution;
   return {
     retractation: possible ? {
-      jusqua: c.expedition === 'a-preparer' ? null : regles.limiteRetractation(ms(c.creeLe), ms(c.envoyeeLe)),
+      jusqua: c.expedition === 'a-preparer' ? null : regles.limiteRetractation(ms(c.creeLe), ms(c.envoyeeLe), regles.receptionDe(c)),
       montant: await montantPaye(id),
     } : null,
     restitution: r ? { statut: r.statut, avant: ms(r.avant), etiquette: r.etiquette || null } : null,
@@ -619,6 +658,10 @@ exports.stripeWebhook = onRequest(
         await stock.liberer(db, (event.data.object.metadata || {}).reservation);
       } else if (event.type.startsWith('customer.subscription.')) {
         await abonnementModifie(event.data.object);
+      } else if (['invoice.paid', 'invoice.payment_failed', 'payment_intent.payment_failed'].includes(event.type)) {
+        await paiementAPart(event.type, event.data.object);
+      } else if (event.type === 'charge.dispute.created') {
+        await contestation(event.data.object);
       }
       res.json({ recu: true });
     } catch (e) {
@@ -653,6 +696,7 @@ async function paiementTermine(session) {
         || (adresse ? { nom: adresse.name || null, adresse: adresse.address || null } : null),
       // Tablette à préparer et envoyer par Tanguy (« envoyee » une fois partie).
       expedition: paye ? 'a-preparer' : 'paiement-en-attente',
+      delai: meta.delai || null,
       stripeCustomerId: session.customer,
       fid: (existante.exists && existante.get('fid')) || null,
       creeLe: FieldValue.serverTimestamp(),
@@ -669,11 +713,62 @@ async function paiementTermine(session) {
   await stripe().customers.update(session.customer, {
     invoice_settings: { custom_fields: [{ name: 'Code de commande Papote', value: code }] },
   });
+  await verifierDoublon(ref, session, email).catch((e) => logger.warn(`Commande ${ref.id} : doublon non vérifié`, e.message));
   if (!paye) return;
   if (existante.exists && existante.get('expedition') === 'paiement-en-attente') await ref.update({ expedition: 'a-preparer' });
   const fid = meta.fid || (existante.exists && existante.get('fid')) || await chercherFamille(email);
   if (fid) await appliquer(fid, session.subscription);
   await confirmerCommande(ref, email, code);
+}
+
+// Client qui recommande : même IBAN (empreinte Stripe), e-mail, téléphone ou adresse qu'une autre commande.
+// commandes/{id}.alerteDoublon = { commandes: [{ id, code, nom }], mauvaisPayeur, raisons } ; l'admin le montre
+// avant l'envoi (Tanguy, 2026-10-22), et un mauvais payeur déclenche aussi un e-mail à Papote. Rien n'est bloqué.
+const normaliser = (t) => String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+async function verifierDoublon(ref, session, email) {
+  if ((await ref.get()).get('alerteDoublon')) return;
+  const details = session.customer_details || {};
+  const abo = await stripe().subscriptions.retrieve(session.subscription, { expand: ['default_payment_method'] });
+  const pm = abo.default_payment_method && typeof abo.default_payment_method === 'object' ? abo.default_payment_method : null;
+  const a = details.address || {};
+  const empreinte = {
+    iban: (pm && pm.sepa_debit && pm.sepa_debit.fingerprint) || null,
+    ibanFin: (pm && pm.sepa_debit && pm.sepa_debit.last4) || null,
+    telephone: details.phone ? normaliser(details.phone).slice(-9) : null,
+    adresse: a.line1 && a.postal_code ? `${normaliser(a.line1)}|${normaliser(a.postal_code)}` : null,
+  };
+  await ref.update({ empreinte });
+  const requetes = [
+    empreinte.iban && db.collection('commandes').where('empreinte.iban', '==', empreinte.iban).get(),
+    email && db.collection('commandes').where('email', '==', email).get(),
+    empreinte.telephone && db.collection('commandes').where('empreinte.telephone', '==', empreinte.telephone).get(),
+    empreinte.adresse && db.collection('commandes').where('empreinte.adresse', '==', empreinte.adresse).get(),
+  ].filter(Boolean);
+  const autres = new Map();
+  for (const r of await Promise.all(requetes)) {
+    for (const d of r.docs) {
+      const c = d.data();
+      // Une commande annulée avant l'envoi ne compte pas.
+      if (d.id !== ref.id && !(c.expedition === 'annulee' && !c.envoyeeLe) && !c.offerte) autres.set(d.id, c);
+    }
+  }
+  if (!autres.size) return;
+  const raisons = new Set();
+  for (const c of autres.values()) {
+    const fam = c.fid ? await db.doc(`families/${c.fid}`).get() : null;
+    regles.raisonsMauvaisPayeur(c, fam && fam.exists ? fam.get('abonnement.statut') : null).forEach((x) => raisons.add(x));
+  }
+  const alerte = {
+    commandes: [...autres].map(([id, c]) => ({ id, code: c.code ? regles.afficherCode(c.code) : null, nom: c.nom || c.email || null })),
+    mauvaisPayeur: raisons.size > 0,
+    raisons: [...raisons],
+  };
+  await ref.update({ alerteDoublon: alerte });
+  if (alerte.mauvaisPayeur) {
+    const snap = await ref.get();
+    await prevenirPapote(`Ne pas envoyer : ${snap.get('nom') || email || 'un client'} a déjà été mauvais payeur`, snap,
+      `Nouvelle commande d'un client déjà connu (${alerte.raisons.join(', ')}). Vérifiez avant d'envoyer la tablette.`);
+  }
 }
 
 // Prélèvement SEPA refusé par la banque : commande annulée, abonnement arrêté, Papote prévenu.
@@ -690,6 +785,68 @@ async function paiementSepaRefuse(session) {
     .forEach((r) => logger.error(`E-mail SEPA refusé non envoyé (${ref.id})`, r.reason));
 }
 
+// Prélèvements faits hors de l'abonnement : le dernier mois (facture « dernierMois ») et le matériel non
+// rendu (paiement « non rendu »). En SEPA, la banque peut refuser quelques jours après : l'admin le voit
+// dans « À faire » (dernierMois.statut ou restitution.statut « echec »).
+async function paiementAPart(type, objet) {
+  const meta = objet.metadata || {};
+  if (!meta.commande || !/^[A-Za-z0-9_]{5,80}$/.test(meta.commande)) return;
+  const ref = db.doc(`commandes/${meta.commande}`);
+  const snap = await ref.get();
+  if (!snap.exists) return;
+  if (type.startsWith('invoice.') && meta.dernierMois === '1') {
+    const echec = type === 'invoice.payment_failed';
+    await ref.update({
+      'dernierMois.statut': echec ? 'echec' : 'fait',
+      'dernierMois.erreur': echec ? erreurPaiement(objet.last_finalization_error || null) || 'Prélèvement refusé par la banque' : FieldValue.delete(),
+    });
+    if (echec) await prevenirPapote(`Dernier mois non prélevé : ${snap.get('nom') || snap.get('email') || snap.id}`, snap);
+  } else if (type === 'payment_intent.payment_failed' && /non rendu/.test(objet.description || '')) {
+    if (!snap.get('restitution')) return;
+    await ref.update({
+      'restitution.statut': 'echec',
+      'restitution.erreur': erreurPaiement(objet.last_payment_error) || 'Prélèvement refusé par la banque',
+      'restitution.majLe': FieldValue.serverTimestamp(),
+    });
+    await prevenirPapote(`Prélèvement du matériel refusé : ${snap.get('nom') || snap.get('email') || snap.id}`, snap);
+  }
+}
+
+const erreurPaiement = (e) => (e && (e.message || e.code)) || null;
+
+// Prélèvement contesté par le client auprès de sa banque (SEPA : 8 semaines sans motif, 13 mois sinon).
+async function contestation(litige) {
+  let commande = null;
+  try {
+    const pi = litige.payment_intent && await stripe().paymentIntents.retrieve(
+      typeof litige.payment_intent === 'string' ? litige.payment_intent : litige.payment_intent.id, { expand: ['invoice'] });
+    commande = (pi && pi.metadata && pi.metadata.commande)
+      || (pi && pi.invoice && typeof pi.invoice === 'object' && (pi.invoice.subscription || (pi.invoice.metadata || {}).commande)) || null;
+  } catch (e) {
+    logger.warn('Contestation : paiement illisible', e.message);
+  }
+  if (typeof commande === 'object' && commande) commande = commande.id;
+  const ref = commande ? db.doc(`commandes/${commande}`) : null;
+  const snap = ref ? await ref.get() : null;
+  if (snap && snap.exists) {
+    await ref.update({ contestations: FieldValue.arrayUnion({
+      id: litige.id, montant: litige.amount, motif: litige.reason || null, le: Date.now(),
+    }) });
+  }
+  await prevenirPapote(`Prélèvement contesté (${mail.euros(litige.amount)}) : ${snap && snap.exists ? snap.get('nom') || snap.get('email') || snap.id : 'commande inconnue'}`,
+    snap && snap.exists ? snap : null, 'Le client a contesté un prélèvement auprès de sa banque. L\'argent est repris par la banque : voir la commande dans l\'admin et le litige dans Stripe.');
+}
+
+async function prevenirPapote(titre, snap, detail) {
+  try {
+    await envoyerMail(EMAIL_PAPOTE, mail.alerteAdmin({
+      titre, detail: detail || 'Voir la commande dans l\'admin (À faire).', commande: snap ? snap.id : null,
+    }));
+  } catch (e) {
+    logger.error(`Alerte non envoyée : ${titre}`, e.message);
+  }
+}
+
 // E-mails « commande confirmée » au client et « nouvelle commande » à Papote, une seule fois
 // (Stripe peut renvoyer le même événement). Un échec d'envoi ne fait pas échouer le paiement.
 const EMAIL_PAPOTE = 'contact@mapapote.fr';
@@ -702,7 +859,7 @@ async function confirmerCommande(ref, email, code) {
   });
   if (!premier) return;
   await compterEtape('paye').catch((e) => logger.warn('Statistiques', e.message));
-  const infos = { nom: premier.nom, code, relais: premier.livraison, formule: premier.formule };
+  const infos = { nom: premier.nom, code, relais: premier.livraison, formule: premier.formule, delai: premier.delai };
   const envois = [envoyerMail(EMAIL_PAPOTE, mail.nouvelleCommande({ ...infos, email, telephone: premier.telephone }))];
   if (email) envois.push(envoyerMail(email, mail.commandeConfirmee(infos)));
   const resultats = await Promise.allSettled(envois);
@@ -831,6 +988,49 @@ async function abonnementModifie(abo) {
   const fid = (abo.metadata && abo.metadata.fid) || (commande.exists && commande.get('fid'));
   if (fid) await appliquer(fid, abo.id);
   else if (commande.exists) await commande.ref.update({ statutStripe: abo.status });
+  await prelevementDernierMois(abo);
+}
+
+// Paiement du mois écoulé : l'abonnement Stripe est prélevé d'avance après un premier mois sans
+// prélèvement, donc le dernier mois utilisé (celui qui vient de finir) reste dû à l'arrêt.
+// Seulement pour une résiliation (pas une commande annulée dans les 30 jours, ni un impayé).
+// Une seule fois par commande (dernierMois noté dans commandes/{id}).
+async function prelevementDernierMois(abo) {
+  if (abo.status !== 'canceled') return;
+  if (!(abo.cancellation_details && abo.cancellation_details.reason === 'cancellation_requested')) return;
+  const item = ((abo.items && abo.items.data) || []).find((i) => i.price && i.price.recurring);
+  if (!item || !item.price.unit_amount) return;
+  const montant = item.price.unit_amount * (item.quantity || 1);
+  const ref = db.doc(`commandes/${abo.id}`);
+  const aPrelever = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const c = snap.exists ? snap.data() : {};
+    if (c.dernierMois || c.retractation || c.offerte || ['a-preparer', 'paiement-en-attente', 'annulee'].includes(c.expedition)) return false;
+    tx.set(ref, { dernierMois: { statut: 'en-cours', montant, le: FieldValue.serverTimestamp() } }, { merge: true });
+    return true;
+  });
+  if (!aPrelever) return;
+  try {
+    const client = typeof abo.customer === 'string' ? abo.customer : abo.customer.id;
+    const moyen = abo.default_payment_method
+      && (typeof abo.default_payment_method === 'string' ? abo.default_payment_method : abo.default_payment_method.id);
+    await stripe().invoiceItems.create({
+      customer: client, amount: montant, currency: item.price.currency,
+      description: 'Dernier mois d\'abonnement Papote (mois écoulé)', metadata: { commande: abo.id },
+    }, { idempotencyKey: `dernier-mois-ligne-${abo.id}` });
+    const facture = await stripe().invoices.create({
+      customer: client, collection_method: 'charge_automatically', pending_invoice_items_behavior: 'include',
+      ...(moyen ? { default_payment_method: moyen } : {}), metadata: { commande: abo.id, dernierMois: '1' },
+    }, { idempotencyKey: `dernier-mois-facture-${abo.id}` });
+    await stripe().invoices.finalizeInvoice(facture.id);
+    // Prélèvement SEPA : la banque confirme (ou refuse) quelques jours plus tard, voir paiementAPart.
+    const payee = await stripe().invoices.pay(facture.id)
+      .catch((e) => { logger.warn(`Commande ${abo.id} : dernier mois en attente`, e.message); return null; });
+    await ref.update({ 'dernierMois.statut': payee && payee.status === 'paid' ? 'fait' : 'en-attente', 'dernierMois.facture': facture.id });
+  } catch (e) {
+    logger.error(`Commande ${abo.id} : dernier mois non prélevé`, e.message);
+    await ref.update({ 'dernierMois.statut': 'echec', 'dernierMois.erreur': e.message });
+  }
 }
 
 // ---------- Page d'accueil du site vitrine, avec les avis (functions/avis.js) ----------
@@ -1044,7 +1244,11 @@ exports.nouveauMembre = onDocumentCreated(
     }
     if (membre.role !== 'famille' || !membre.email) return;
     const fam = await db.doc(`families/${fid}`).get();
-    if (!fam.exists || fam.get('createdBy') !== uid) return;
+    if (!fam.exists) return;
+    if (fam.get('createdBy') !== uid) {
+      await prevenirArrivee(fid, uid, membre, fam);
+      return;
+    }
     const commandes = await db.collection('commandes')
       .where('email', '==', membre.email.toLowerCase()).where('fid', '==', null).limit(1).get();
     if (commandes.empty) return;
@@ -1079,6 +1283,20 @@ async function prevenirDemande(fid, uid, membre) {
     .forEach((r) => logger.error(`Demande ${fid}/${uid} : prévenir les responsables`, r.reason));
 }
 
+// Un proche invité par e-mail est entré directement : les responsables reçoivent une notification.
+async function prevenirArrivee(fid, uid, membre, fam) {
+  const responsables = [...new Set([fam.get('createdBy'), ...(fam.get('admins') || [])])].filter((r) => r && r !== uid);
+  if (!responsables.length) return;
+  const titre = `${membre.name || 'Un proche'} a rejoint la famille`;
+  const texte = 'Invitation acceptée : rien à faire de votre côté.';
+  const envois = [
+    push.envoyer(db, fid, responsables, { type: 'arrivee', titre, texte, fid }, 86400, { websSeulement: true }),
+    push.envoyer(db, fid, responsables, { type: 'alerte', titre, texte }, 86400, { natifsSeulement: true }),
+  ];
+  (await Promise.allSettled(envois)).filter((r) => r.status === 'rejected')
+    .forEach((r) => logger.error(`Arrivée ${fid}/${uid} : prévenir les responsables`, r.reason));
+}
+
 // ---------- Envoi de la tablette ----------
 
 // Le tableau de bord admin note le départ du colis : { commande, suivi } (numéro Mondial Relay).
@@ -1110,8 +1328,27 @@ exports.commandeModifiee = onDocumentUpdated(
     const avant = event.data.before.data();
     const apres = event.data.after.data();
     await mailEnvoi(event, avant, apres);
+    await debutApresReception(event, avant, apres);
     await suiviRetour(event, avant.restitution || {}, apres.restitution || {}, apres);
   });
+
+// Tablette partie : le premier mois commence à la réception (estimée à l'envoi + 3 jours, puis recalée sur
+// la vraie date dès qu'on la connaît : preparation.recuLe). Le premier prélèvement tombe à la fin des
+// 30 jours pour changer d'avis (même date que limiteRetractation), pas avant.
+async function debutApresReception(event, avant, apres) {
+  if (!apres.envoyeeLe || !apres.stripeCustomerId) return;
+  const recue = regles.receptionDe(apres);
+  if (avant.envoyeeLe && (recue == null || recue === regles.receptionDe(avant))) return;
+  const fin = regles.limiteRetractation(apres.creeLe && apres.creeLe.toMillis(), apres.envoyeeLe.toMillis(), recue);
+  if (fin <= Date.now() + 60 * 60 * 1000) return;
+  try {
+    const abo = await stripe().subscriptions.retrieve(event.params.id);
+    if (abo.status !== 'trialing') return;
+    await stripe().subscriptions.update(event.params.id, { trial_end: Math.ceil(fin / 1000), proration_behavior: 'none' });
+  } catch (e) {
+    logger.error(`Commande ${event.params.id} : début de l'abonnement non recalé`, e.message);
+  }
+}
 
 async function mailEnvoi(event, avant, apres) {
   if (apres.expedition !== 'envoyee' || !apres.suivi || !apres.email) return;
@@ -1130,27 +1367,53 @@ async function mailEnvoi(event, avant, apres) {
   }
 }
 
+// « X a résilié son abonnement » à Papote, avec le suivi du colis de retour s'il existe déjà.
+async function avisResiliation(id, c, retractation) {
+  const retour = (c.etiquettes && c.etiquettes.retour) || {};
+  try {
+    await envoyerMail(EMAIL_PAPOTE, mail.resiliation({
+      nom: c.nom, email: c.email, code: c.code ? regles.afficherCode(c.code) : null, commande: id, retractation,
+      suivi: retour.suivi || null, lienSuivi: retour.lienSuivi || null,
+    }));
+  } catch (e) {
+    logger.error(`Commande ${id} : avis de résiliation non parti`, e.message);
+  }
+}
+
 async function suiviRetour(event, rAvant, r, c) {
   const ref = event.data.after.ref;
   const id = event.params.id;
   const retractation = c.remboursement && c.remboursement.statut === 'au-retour' ? c.remboursement.montant : null;
 
+  // Tablette attendue : le client reçoit UN seul e-mail, le mode d'emploi avec l'étiquette à coller. Avec la
+  // vraie clé Stripe, l'étiquette est créée la nuit suivante (gestionAutomatique) et cet e-mail part avec elle
+  // (plus bas). En mode test, aucune étiquette n'est créée : le mode d'emploi part seul, tout de suite.
   if (r.statut === 'attendue' && rAvant.statut !== 'attendue' && !r.mailLe) {
     await ref.update({ 'restitution.mailLe': FieldValue.serverTimestamp() });
-    const avantMs = r.avant.toMillis();
-    const envois = [envoyerMail(EMAIL_PAPOTE, mail.retourAPreparer({
-      nom: c.nom, email: c.email, telephone: c.telephone, code: c.code ? regles.afficherCode(c.code) : null,
-      relais: c.livraison, avant: avantMs, retractation,
-    }))];
-    if (c.email) envois.push(envoyerMail(c.email, mail.retourTablette({ nom: c.nom, avant: avantMs, retractation, montant: regles.penaliteRestitution(c) })));
-    (await Promise.allSettled(envois)).filter((x) => x.status === 'rejected')
-      .forEach((x) => logger.error(`Commande ${id} : e-mail de retour non parti`, x.reason));
+    const etiquetteAutomatique = STRIPE_SECRET.value().startsWith('sk_live_') && c.expedition === 'envoyee';
+    // L'avis à Papote part avec le suivi du colis de retour quand l'étiquette sera créée (plus bas) ;
+    // sans étiquette automatique (mode test), il part tout de suite, sans suivi.
+    if (!etiquetteAutomatique) await avisResiliation(id, c, retractation);
+    if (c.email && !r.etiquette && !etiquetteAutomatique) {
+      try {
+        await envoyerMail(c.email, mail.retourTablette({ nom: c.nom, avant: r.avant.toMillis(), retractation, montant: regles.penaliteRestitution(c) }));
+      } catch (e) {
+        logger.error(`Commande ${id} : e-mail de retour non parti`, e.message);
+      }
+    }
+  }
+
+  const finDeContrat = ['attendue', 'echec'].includes(r.statut);
+  if (r.etiquette && r.etiquette !== rAvant.etiquette && finDeContrat && !r.avisLe) {
+    await ref.update({ 'restitution.avisLe': FieldValue.serverTimestamp() });
+    await avisResiliation(id, c, retractation);
   }
 
   if (r.etiquette && r.etiquette !== rAvant.etiquette && c.email) {
     try {
       await envoyerMail(c.email, mail.etiquetteRetour({
         nom: c.nom, lien: r.etiquette, avant: r.avant ? r.avant.toMillis() : null,
+        fin: ['attendue', 'echec'].includes(r.statut), retractation, montant: regles.penaliteRestitution(c),
       }));
     } catch (e) {
       logger.error(`Commande ${id} : étiquette de retour non envoyée`, e.message);
@@ -1170,7 +1433,8 @@ async function suiviRetour(event, rAvant, r, c) {
         return;
       }
     }
-    if (!c.email) return;
+    // Commande offerte (famille supprimée, matériel repris par Papote) : pas d'e-mail au proche.
+    if (!c.email || c.offerte) return;
     try {
       await envoyerMail(c.email, mail.tabletteRecue({ nom: c.nom, rembourse }));
     } catch (e) {
@@ -1240,9 +1504,20 @@ exports.gestionCampagne = gestion.gestionCampagne;
 exports.desinscription = gestion.desinscription;
 exports.gestionSupprimerFamille = gestion.gestionSupprimerFamille;
 exports.gestionFamilleOfferte = gestion.gestionFamilleOfferte;
+exports.gestionCommandeOfferte = gestion.gestionCommandeOfferte;
+exports.gestionAnnulerCommande = gestion.gestionAnnulerCommande;
 exports.gestionParcours = gestion.gestionParcours;
 exports.gestionRenvoyerCode = gestion.gestionRenvoyerCode;
 exports.gestionJumelage = gestion.gestionJumelage;
+
+// Installation d'une nouvelle tablette depuis le téléphone du premier proche (installation.js).
+const installation = require('./installation').brancher({
+  db, compteVerifie, envoyerMail, mail, appli: APPLI_FAMILLE, logger, stockage: () => admin.storage().bucket(base.BUCKET_STORAGE),
+});
+exports.reserverTablette = onCall({ maxInstances: 2 }, installation.reserverTablette);
+exports.nommerFamille = onCall({ secrets: [MAIL_MOT_DE_PASSE], maxInstances: 2 }, installation.nommerFamille);
+exports.finirInstallation = onCall({ secrets: [MAIL_MOT_DE_PASSE], maxInstances: 2 }, installation.finirInstallation);
+exports.annulerInstallation = onCall({ timeoutSeconds: 300, memory: '512MiB', maxInstances: 2 }, installation.annulerInstallation);
 
 // Nombre de proches d'une famille (membres « famille » qui ont rejoint), lu par les règles
 // Firestore pour refuser un 31e proche. Recalculé à chaque arrivée, départ ou changement de membre.

@@ -11,8 +11,11 @@
 
 const JOUR = 24 * 60 * 60 * 1000;
 const DELAI_GRACE_JOURS = 7;
-// Un mois d'essai, sans engagement (Tanguy, 2026-10-20).
-const ESSAI_JOURS = 30;
+// Sans engagement, chaque mois payé une fois écoulé (Tanguy, 2026-10-21) : pas de prélèvement avant la
+// réception (« trial » Stripe d'ATTENTE_ENVOI_JOURS au paiement), puis, à l'envoi, fin du « trial » recalée
+// sur la fin des 30 jours pour changer d'avis (limiteRetractation) ; le dernier mois est prélevé à l'arrêt.
+// 90 jours couvrent l'attente la plus longue (3 à 4 semaines) ; une tablette jamais envoyée ne coûte rien.
+const ATTENTE_ENVOI_JOURS = 90;
 // Tablette incluse : à rendre dans les 30 jours après la fin de l'abonnement, sinon facturée
 // (Tanguy, 2026-10-20, comme les conditions de vente) : tablette 130 €, chargeur et câble 10 €,
 // enceinte 10 € seulement si elle était dans le colis. Plus de routeur 4G ; le socle n'est pas facturé.
@@ -44,8 +47,10 @@ const TARIF_TABLETTE = 'papote_tablette';
 // Tablette prêtée (incluse) : 60 € une fois à la commande, puis l'abonnement.
 const TARIF_MISE_EN_SERVICE = 'papote_mise_en_service';
 
+// La tablette n'est plus vendue (Tanguy, 2026-10-22) : seule la tablette prêtée (« incluse ») se commande.
+// Les tarifs « achetee » restent dans TARIFS pour lire les anciennes commandes de test.
 function formuleValide(formule, tablette) {
-  return Boolean(TARIFS[formule] && TARIFS[formule][tablette]);
+  return tablette === 'incluse' && Boolean(TARIFS[formule] && TARIFS[formule][tablette]);
 }
 
 // La tablette fonctionne et la famille peut envoyer.
@@ -105,17 +110,24 @@ function limiteRestitution(finMs) {
   return finMs + RESTITUTION_JOURS * JOUR;
 }
 
-// Rétractation (Code de la consommation) : 14 jours après la réception de la tablette.
-// Réception estimée à l'envoi + 3 jours (Mondial Relay) ; avant l'envoi, toujours possible.
-// Au plus tôt, 14 jours après la commande.
-const RETRACTATION_JOURS = 14;
+// « Annuler ma commande » : 30 jours après la réception de la tablette (CGV : le délai légal
+// de 14 jours est porté à 30 : rien à payer pour l'abonnement et les 60 € remboursés).
+// Réception : la vraie date quand on la connaît (colis « livré » au suivi Mondial Relay, tablette reliée à
+// la famille, ou cochée dans l'admin : preparation.recuLe), sinon estimée à l'envoi + 3 jours.
+// Avant l'envoi, toujours possible. Au plus tôt, 30 jours après la commande.
+const RETRACTATION_JOURS = 30;
 const ACHEMINEMENT_JOURS = 3;
 // Rappel avant de prélever le montant d'une tablette non rendue.
 const RAPPEL_RESTITUTION_JOURS = 7;
 
-function limiteRetractation(creeMs, envoyeeMs) {
-  const depart = Math.max(creeMs || 0, envoyeeMs != null ? envoyeeMs + ACHEMINEMENT_JOURS * JOUR : 0);
-  return depart + RETRACTATION_JOURS * JOUR;
+function limiteRetractation(creeMs, envoyeeMs, recueMs) {
+  const reception = recueMs != null ? recueMs : (envoyeeMs != null ? envoyeeMs + ACHEMINEMENT_JOURS * JOUR : 0);
+  return Math.max(creeMs || 0, reception) + RETRACTATION_JOURS * JOUR;
+}
+
+// Date de réception connue d'une commande (millisecondes), sinon null.
+function receptionDe(commande) {
+  return enMillis(commande && commande.preparation && commande.preparation.recuLe);
 }
 
 // La commande peut-elle encore être annulée et remboursée ?
@@ -123,7 +135,7 @@ function limiteRetractation(creeMs, envoyeeMs) {
 function retractationPossible(commande, maintenant) {
   if (!commande || commande.retractation) return false;
   if (commande.expedition === 'a-preparer') return true;
-  return maintenant <= limiteRetractation(enMillis(commande.creeLe), enMillis(commande.envoyeeLe));
+  return maintenant <= limiteRetractation(enMillis(commande.creeLe), enMillis(commande.envoyeeLe), receptionDe(commande));
 }
 
 // Rappel « dernière semaine pour rendre la tablette » : une seule fois, 7 jours avant la limite.
@@ -138,6 +150,20 @@ function restitutionEchue(restitution, maintenant) {
   if (!restitution || restitution.statut !== 'attendue') return false;
   const limite = enMillis(restitution.avant);
   return limite != null && limite <= maintenant;
+}
+
+// Ancienne commande d'un client qui recommande (même IBAN, e-mail, téléphone ou adresse) : raisons d'en faire
+// un mauvais payeur (Tanguy, 2026-10-22 : « grosse signalisation » avant d'envoyer une 2e tablette).
+// commande : commandes/{id} ; statutFamille : families/{fid}.abonnement.statut ou null.
+function raisonsMauvaisPayeur(commande, statutFamille) {
+  const c = commande || {};
+  const r = [];
+  if ((c.contestations || []).length) r.push('prélèvement contesté à la banque');
+  if (c.dernierMois && c.dernierMois.statut === 'echec') r.push('dernier mois impayé');
+  if (c.restitution && c.restitution.statut === 'echec') r.push('matériel non rendu et non payé');
+  else if (c.restitution && c.restitution.statut === 'facturee') r.push('matériel jamais rendu');
+  if (['impaye', 'suspendu'].includes(statutFamille)) r.push('abonnement impayé');
+  return r;
 }
 
 // Code de commande à 8 caractères (sans 0, O, 1, I, L), affiché XXXX-XXXX : il relie une commande
@@ -169,7 +195,7 @@ function peutModifier(actuel) {
 
 module.exports = {
   DELAI_GRACE_JOURS,
-  ESSAI_JOURS,
+  ATTENTE_ENVOI_JOURS,
   RESTITUTION_JOURS,
   PENALITE_NON_RESTITUTION,
   penaliteRestitution,
@@ -180,6 +206,8 @@ module.exports = {
   limiteRestitution,
   restitutionEchue,
   RETRACTATION_JOURS,
+  receptionDe,
+  raisonsMauvaisPayeur,
   limiteRetractation,
   retractationPossible,
   rappelRestitutionDu,

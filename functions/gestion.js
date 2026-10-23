@@ -39,7 +39,8 @@ const sendcloud = require('./sendcloud');
 const STRIPE_SECRET = defineSecret('STRIPE_SECRET');
 // Même clé que le chat de support (outils/support/installer-support.bat), jamais dans le dépôt.
 const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
-const MODELE_LECTURE = 'claude-opus-5-5';
+// Sonnet : recopier montant, date et vendeur d'une facture est simple, et chaque fiche reste « à vérifier ».
+const MODELE_LECTURE = 'claude-sonnet-5-5';
 // E-mails : mêmes réglages que le reste des fonctions (index.js).
 const MAIL_SMTP = defineString('MAIL_SMTP', { default: 'smtp.gmail.com:465:' });
 const MAIL_EXPEDITEUR = defineString('MAIL_EXPEDITEUR', { default: '' });
@@ -68,8 +69,25 @@ function stripe() {
 
 // ---------- Règles, sans dépendance (testées par gestion.test.js) ----------
 
+// Changements d'état permis à la main (page tablette) : la vie logique d'une tablette, sans retour en arrière.
+// Les étapes automatiques (préparation, jumelage, retour, remplacement) écrivent directement.
+const SUITES = {
+  commandee: ['en-stock'],
+  'en-stock': ['preparee', 'envoyee', 'a-reparer', 'hors-service', 'perdue'],
+  preparee: ['en-stock', 'envoyee', 'a-reparer', 'hors-service', 'perdue'],
+  envoyee: ['chez-client', 'en-retour', 'revenue', 'perdue'],
+  'chez-client': ['en-retour', 'revenue', 'perdue', 'hors-service'],
+  'en-retour': ['revenue', 'perdue'],
+  revenue: ['en-stock', 'a-reparer', 'hors-service', 'perdue'],
+  'a-reparer': ['en-stock', 'hors-service', 'perdue'],
+  perdue: ['revenue'],
+  'hors-service': [],
+};
+const transitionPermise = (de, vers) => de === vers || !de || (SUITES[de] || []).includes(vers);
+
 // Vie d'une tablette du parc.
 const ETATS = {
+  commandee: 'Commandée, pas encore reçue',
   'en-stock': 'En stock',
   preparee: 'Préparée',
   envoyee: 'Envoyée',
@@ -188,12 +206,21 @@ function lireReglages(donnees) {
   }
   const e = (donnees && donnees.expediteur) || {};
   r.expediteur = Object.fromEntries(CHAMPS_EXPEDITEUR.map((k) => [k, typeof e[k] === 'string' ? e[k] : '']));
+  r.masquees = masqueesActives(donnees && donnees.masquees);
   return r;
+}
+
+// Lignes « À faire » masquées par l'admin (Tanguy, 2026-10-22) : [{ cle, jusqua (ms) }], encore en cours.
+// Une ligne masquée revient seule après la date si le problème n'est pas réglé.
+const MASQUER_JOURS = 7;
+function masqueesActives(liste, maintenant = Date.now()) {
+  return (Array.isArray(liste) ? liste : [])
+    .filter((m) => m && typeof m.cle === 'string' && typeof m.jusqua === 'number' && m.jusqua > maintenant);
 }
 
 // Une ligne SIM payée alors que la tablette n'est plus chez un client depuis 30 jours : forfait à résilier ou
 // suspendre. Une carte pas encore activée (ligne « stock ») ne coûte rien : pas d'alerte (Tanguy, 2026-10-20).
-const ETATS_SANS_CLIENT = ['en-stock', 'revenue', 'a-reparer', 'perdue', 'hors-service'];
+const ETATS_SANS_CLIENT = ['commandee', 'en-stock', 'revenue', 'a-reparer', 'perdue', 'hors-service'];
 const DELAI_SIM_SANS_CLIENT = 30 * 86400000;
 function simAResilier(tablette, commande, ligne, maintenant = Date.now()) {
   if (!tablette.sim && !tablette.simId) return false;
@@ -608,11 +635,19 @@ exports.gestionDonnees = onCall(async (request) => {
         fid: c.fid || null,
         famille: famille ? famille.name || null : null,
         abonnement: famille && famille.abonnement ? famille.abonnement.statut || null : (c.statutStripe || null),
+        resiliationLe: famille && famille.abonnement ? famille.abonnement.resiliationLe || null : null,
         restitution: c.restitution ? { statut: c.restitution.statut || null, avant: c.restitution.avant || null } : null,
         remboursement: c.remboursement || null,
+        restitutionErreur: c.restitution && c.restitution.erreur ? c.restitution.erreur : null,
+        retractation: c.retractation || null,
+        dernierMois: c.dernierMois || null,
+        contestations: c.contestations || null,
+        pause: c.pause || null,
+        alerteDoublon: c.alerteDoublon || null,
         etiquettes: c.etiquettes || null,
         preparation: c.preparation || null,
         stripeCustomerId: c.stripeCustomerId || null,
+        offerte: c.offerte === true,
       });
     }),
     stock: stock.docs.map((d) => {
@@ -645,7 +680,7 @@ exports.gestionDonnees = onCall(async (request) => {
 // enregistré ensuite les complète au lieu d'ajouter des fiches en double, ce qui gonflerait le stock à vendre.
 // Même n° de série d'abord, puis la plus ancienne encore au stock : une tablette déjà partie chez un client (ou liée
 // à une commande) n'est complétée que par son n° de série. Renvoie, pour chaque tablette, l'id à compléter ou null.
-const ETATS_A_RATTACHER = ['en-stock', 'preparee'];
+const ETATS_A_RATTACHER = ['commandee', 'en-stock', 'preparee'];
 function fichesARattacher(sansAchat, numeros, quantite) {
   const restantes = sansAchat.slice().sort((a, b) => (a.creeLe || 0) - (b.creeLe || 0));
   const libre = (t) => !t.commande && (!t.etat || ETATS_A_RATTACHER.includes(t.etat));
@@ -761,6 +796,9 @@ async function remplacer(d, qui) {
     if (!sim.exists || sim.get('tablette') || sim.get('statut') === 'resiliee') {
       throw new HttpsError('failed-precondition', 'Choisissez une carte SIM libre.');
     }
+    if (!sim.get('numero') && !sim.get('iccid')) {
+      throw new HttpsError('failed-precondition', "Notez d'abord le numéro ou l'ICCID de cette carte SIM.");
+    }
     const ancienne = kit.get('simId');
     if (ancienne) await enregistrerSim(ancienne, { statut: 'suspendue', tablette: null }, qui);
     await enregistrerSim(sim.id, { tablette: kit.id, statut: 'active', activation: sim.get('activation') || Date.now() }, qui);
@@ -841,22 +879,30 @@ exports.gestionStock = onCall(async (request) => {
       if ((await dep.get()).exists) await dep.update({ fournisseur: maj.fournisseur, majLe: FieldValue.serverTimestamp() });
     }
     if ('simCout' in champs) maj.simCout = centimes(champs.simCout);
+    // Achat chez le vendeur (Tanguy, 2026-10-22 : chaque tablette, carte SIM ou accessoire a son achat).
+    if ('depense' in champs) maj.depense = await depenseExistante(champs.depense);
     if ('commande' in champs) {
       const commande = texte(champs.commande, 100);
       if (commande && !(await db().doc(`commandes/${commande}`).get()).exists) {
         throw new HttpsError('not-found', 'Commande introuvable.');
       }
       maj.commande = commande;
+      // Tablette jumelée avant d'être rattachée à sa commande : l'alerte n'a plus lieu d'être.
+      if (commande && snap.get('alerteJumelage') === ALERTE_SANS_COMMANDE) maj.alerteJumelage = null;
     }
     let sortis = [];
     if ('etat' in champs) {
       if (!ETATS[champs.etat]) throw new HttpsError('invalid-argument', 'État inconnu.');
+      if (!transitionPermise(snap.get('etat'), champs.etat)) {
+        throw new HttpsError('failed-precondition', `Une tablette « ${ETATS[snap.get('etat')] || snap.get('etat')} » ne peut pas passer « ${ETATS[champs.etat]} ».`);
+      }
       if (champs.etat !== snap.get('etat')) {
         maj.etat = champs.etat;
         // Perdue (volée) ou hors service : plus d'accès aux photos de la famille.
         if (ETATS_BLOQUES.includes(champs.etat) && await retirerDeLaFamille(snap.data(), snap.ref)) maj.fid = null;
         // Remise en stock : la tablette n'appartient plus à la commande (l'historique la garde).
-        if (champs.etat === 'en-stock' && !('commande' in champs)) maj.commande = null;
+        // (Sauf à la réception d'une tablette commandée : elle reste réservée à sa commande.)
+        if (champs.etat === 'en-stock' && !('commande' in champs) && snap.get('etat') !== 'commandee') maj.commande = null;
         const commande = maj.commande !== undefined ? maj.commande : snap.get('commande') || null;
         // Départ du colis : les accessoires qui partent avec cette formule sortent du stock.
         if (champs.etat === 'envoyee' && commande) {
@@ -975,7 +1021,16 @@ function champsSim(c) {
   if ('go' in c) champs.go = Number.isFinite(c.go) && c.go >= 0 ? c.go : null;
   for (const cle of ['prix', 'prixApres']) if (cle in c) champs[cle] = centimes(c[cle]);
   for (const cle of ['finPromo', 'activation', 'activerAvant']) if (cle in c) champs[cle] = dateOuNull(c[cle]);
+  // Achat de la carte (dépense), vérifié par enregistrerSim.
+  if ('depense' in c) champs.depense = texte(c.depense, 100) || null;
   return champs;
+}
+
+// Identifiant d'une dépense existante, ou null (lien retiré).
+async function depenseExistante(id) {
+  const v = texte(id, 100) || null;
+  if (v && !(await db().doc(`depenses/${v}`).get()).exists) throw new HttpsError('not-found', 'Achat introuvable.');
+  return v;
 }
 
 // Ce que la fiche de la tablette garde de sa ligne (utilisé par l'envoi, la rentabilité et les alertes).
@@ -995,12 +1050,18 @@ async function enregistrerSim(id, c, qui) {
   const avant = id ? (await ref.get()).data() : {};
   if (!avant) throw new HttpsError('not-found', 'Ligne introuvable.');
   const champs = champsSim(c);
+  if ('depense' in champs) champs.depense = await depenseExistante(champs.depense);
   if (!id && !champs.statut) champs.statut = 'stock';
   const ligne = { ...avant, ...champs };
   // Tablette : une seule ligne par tablette ; une ligne résiliée n'est plus sur aucune tablette.
   let tablette = 'tablette' in c ? texte(c.tablette, 100) : avant.tablette || null;
   if (ligne.statut === 'resiliee') tablette = null;
   if (tablette) {
+    // Une carte sans numéro ni ICCID ne se retrouverait plus : pas de tablette tant qu'elle n'est pas identifiée
+    // (une carte déjà dans une tablette peut toujours passer dans sa remplaçante).
+    if (!ligne.numero && !ligne.iccid && !avant.tablette) {
+      throw new HttpsError('failed-precondition', "Notez d'abord le numéro ou l'ICCID de cette carte SIM : une carte sans identifiant ne peut pas aller dans une tablette.");
+    }
     const t = await db().doc(`stock/${tablette}`).get();
     if (!t.exists) throw new HttpsError('not-found', 'Tablette introuvable.');
     const autre = t.get('simId');
@@ -1050,6 +1111,10 @@ function champsAccessoire(c) {
   // Revient avec la tablette et repart chez le client suivant (chargeur, housse), sinon consommé à chaque envoi.
   if ('retour' in c) champs.retour = c.retour === true;
   if ('note' in c) champs.note = texte(c.note, 1000);
+  // Achats de cet accessoire (une dépense par livraison), vérifiés par gestionAccessoire.
+  if ('depenses' in c) {
+    champs.depenses = [...new Set((Array.isArray(c.depenses) ? c.depenses : []).map((x) => texte(x, 100)).filter(Boolean))].slice(-50);
+  }
   return champs;
 }
 
@@ -1071,6 +1136,7 @@ exports.gestionAccessoire = onCall(async (request) => {
   if (d.action === 'modifier') {
     const champs = champsAccessoire(d.champs || {});
     if ('nom' in champs && !champs.nom) throw new HttpsError('invalid-argument', 'Nom manquant.');
+    for (const x of champs.depenses || []) await depenseExistante(x);
     await ref.update({ ...champs, majLe: FieldValue.serverTimestamp() });
     return { ok: true };
   }
@@ -1085,9 +1151,10 @@ exports.gestionAccessoire = onCall(async (request) => {
       majLe: FieldValue.serverTimestamp(),
     });
     if (montant) {
-      await ajouterDepense({
+      const dep = await ajouterDepense({
         date: Date.now(), categorie: 'materiel', fournisseur: d.fournisseur, libelle: `${n} × ${snap.get('nom')}`, montant,
       }, qui);
+      await ref.update({ depenses: FieldValue.arrayUnion(dep.id) });
     }
     return { ok: true };
   }
@@ -1130,6 +1197,41 @@ async function ajouterDepense(d, qui) {
   return { ok: true, id: ref.id };
 }
 
+// Champs modifiables d'une dépense, vérifiés comme à la création.
+function champsDepense(c) {
+  const maj = {};
+  if ('libelle' in c) {
+    maj.libelle = texte(c.libelle);
+    if (!maj.libelle) throw new HttpsError('invalid-argument', 'Libellé manquant.');
+  }
+  if ('fournisseur' in c) maj.fournisseur = texte(c.fournisseur);
+  if ('numero' in c) maj.numero = texte(c.numero, 80);
+  if ('montant' in c) {
+    maj.montant = centimes(c.montant);
+    if (!maj.montant) throw new HttpsError('invalid-argument', 'Montant invalide (en centimes).');
+  }
+  if ('tva' in c) {
+    maj.tva = c.tva == null || c.tva === '' ? null : centimes(c.tva);
+    if (c.tva != null && c.tva !== '' && maj.tva == null) throw new HttpsError('invalid-argument', 'TVA invalide (en centimes).');
+  }
+  if ('categorie' in c) {
+    if (!CATEGORIES[c.categorie]) throw new HttpsError('invalid-argument', 'Catégorie inconnue.');
+    maj.categorie = c.categorie;
+  }
+  if ('date' in c) {
+    const t = Number(c.date);
+    if (!Number.isFinite(t) || t < Date.UTC(2020, 0, 1) || t > Date.now() + 366 * 86400000) throw new HttpsError('invalid-argument', 'Date invalide.');
+    maj.date = Timestamp.fromMillis(t);
+  }
+  return maj;
+}
+
+// « AAAA-MM » du mois (à Paris) d'un instant.
+function moisDeParis(t) {
+  const d = new Date(t + decalageParis(t));
+  return cleMois(d.getUTCFullYear(), d.getUTCMonth() + 1);
+}
+
 exports.gestionDepense = onCall(async (request) => {
   verifierAdmin(request);
   const d = request.data || {};
@@ -1145,6 +1247,19 @@ exports.gestionDepense = onCall(async (request) => {
     if (!(await ref.get()).exists) throw new HttpsError('not-found', 'Dépense introuvable.');
     await ref.update({ aVerifier: false });
     return { ok: true };
+  }
+  // Correction d'une dépense (facture mal lue, faute de frappe) : seuls les champs envoyés changent.
+  if (d.action === 'modifier') {
+    const ref = db().doc(`depenses/${d.id || '-'}`);
+    const snap = await ref.get();
+    if (!snap.exists) throw new HttpsError('not-found', 'Dépense introuvable.');
+    const maj = champsDepense(d.champs || {});
+    if (!Object.keys(maj).length) throw new HttpsError('invalid-argument', 'Rien à modifier.');
+    await ref.update({ ...maj, majLe: FieldValue.serverTimestamp(), majPar: request.auth.token.email || request.auth.uid });
+    // Mois déjà clôturé (livres envoyés) : la page propose de le refaire.
+    const clos = (await db().doc('gestion/archives').get()).get('mois') || {};
+    const moisTouches = [ms(snap.get('date')), maj.date ? maj.date.toMillis() : null].filter(Boolean).map(moisDeParis);
+    return { ok: true, moisClos: [...new Set(moisTouches)].filter((m) => clos[m]) };
   }
   if (d.action === 'arreter') {
     const ref = db().doc(`depenses/${d.id || '-'}`);
@@ -1274,11 +1389,21 @@ exports.gestionCommande = onCall({ secrets: [STRIPE_SECRET] }, async (request) =
   if (typeof commande !== 'string' || !commande) throw new HttpsError('invalid-argument', 'Commande manquante.');
   const snap = await db().doc(`commandes/${commande}`).get();
   if (!snap.exists) throw new HttpsError('not-found', 'Commande introuvable.');
+  // Commande offerte : ni facture ni paiement.
+  if (snap.get('offerte')) return { factures: [], paiements: [] };
   const client = snap.get('stripeCustomerId');
-  const [factures, paiements] = await Promise.all([
-    tout(stripe().invoices.list({ subscription: commande, limit: 100 })),
-    client ? tout(stripe().charges.list({ customer: client, limit: 100 })) : [],
-  ]);
+  // Commande sans abonnement Stripe lisible (commande d'essai, clé de test changée) : on le dit au lieu d'échouer.
+  let factures;
+  let paiements;
+  try {
+    [factures, paiements] = await Promise.all([
+      commande.startsWith('sub_') ? tout(stripe().invoices.list({ subscription: commande, limit: 100 })) : [],
+      client ? tout(stripe().charges.list({ customer: client, limit: 100 })) : [],
+    ]);
+  } catch (e) {
+    logger.warn(`Commande ${commande} : Stripe illisible`, e.message);
+    return { factures: [], paiements: [], erreur: `Stripe ne connaît pas cette commande (${e.message}).` };
+  }
   return {
     factures: factures.map(versFacture),
     paiements: paiements.map((c) => ({
@@ -1307,11 +1432,14 @@ function nomFichier(nom) {
   return t || 'piece';
 }
 
-async function enregistrerPiece(collection, id, nomBrut, type, contenu) {
+// Genre d'un document choisi à l'ajout (page tablette) : photo, bon de garantie, facture, autre.
+const GENRES_PIECE = ['photo', 'garantie', 'facture', 'autre'];
+
+async function enregistrerPiece(collection, id, nomBrut, type, contenu, genre) {
   const nom = texte(nomBrut, 120) || 'piece';
   const chemin = `gestion/${collection}/${id}/${Date.now()}-${nomFichier(nom)}`;
   await stockage().file(chemin).save(contenu, { contentType: type, resumable: false });
-  const piece = { nom, chemin, type, taille: contenu.length, le: Date.now() };
+  const piece = { nom, chemin, type, taille: contenu.length, le: Date.now(), ...(GENRES_PIECE.includes(genre) ? { genre } : {}) };
   await db().doc(`${collection}/${id}`).update({ pieces: FieldValue.arrayUnion(piece) });
   return piece;
 }
@@ -1344,7 +1472,7 @@ exports.gestionPiece = onCall({ memory: '512MiB' }, async (request) => {
     const contenu = Buffer.from(String(d.contenu || ''), 'base64');
     if (!contenu.length) throw new HttpsError('invalid-argument', 'Fichier vide.');
     if (contenu.length > MAX_PIECE) throw new HttpsError('invalid-argument', 'Fichier trop lourd (6 Mo au plus).');
-    const piece = await enregistrerPiece(d.collection, d.id, d.nom, d.type, contenu);
+    const piece = await enregistrerPiece(d.collection, d.id, d.nom, d.type, contenu, d.genre);
     // Facture jointe à la main sur un achat venu d'une confirmation de commande : plus de rappel.
     if (snap.get('confirmation')) await ref.update({ confirmation: false });
     return { ok: true, piece };
@@ -1612,9 +1740,33 @@ async function etiquettesRetour(bilan) {
 
 // « Le client a reçu le colis » d'après le suivi Sendcloud. Une commande déjà jumelée a quitté la liste
 // des colis en route : rien à cocher.
+// Colis de retour en cours : n° de suivi, lien et étape (« déposé au point relais »…) mis à jour chaque nuit.
+async function retoursEnCours(bilan) {
+  const attendues = await db().collection('commandes').where('restitution.statut', '==', 'attendue').get();
+  const aSuivre = attendues.docs.filter((d) => d.get('etiquettes.retour.colis'));
+  if (!aSuivre.length) return;
+  const api = sendcloud.client(SENDCLOUD_API.value());
+  for (const snap of aSuivre) {
+    try {
+      const s = await api.suivi(snap.get('etiquettes.retour.colis'));
+      await snap.ref.update({
+        'etiquettes.retour.suivi': s.suivi || snap.get('etiquettes.retour.suivi') || null,
+        'etiquettes.retour.lienSuivi': s.lien || snap.get('etiquettes.retour.lienSuivi') || null,
+        'etiquettes.retour.etape': s.etape || null,
+        'etiquettes.retour.livre': s.livre,
+      });
+    } catch (e) {
+      bilan.erreurs.push(`Suivi du retour de ${snap.get('nom') || snap.id} : ${e.message}`);
+    }
+  }
+}
+
+// La date notée (preparation.recuLe) est aussi la date de réception qui fait partir les 30 jours pour changer
+// d'avis et le premier prélèvement (abonnement.js, receptionDe) : on suit aussi les commandes déjà reliées.
 async function colisLivres(bilan) {
-  const enRoute = await db().collection('commandes').where('expedition', '==', 'envoyee').where('fid', '==', null).get();
-  const aSuivre = enRoute.docs.filter((d) => !d.get('preparation.recuLe') && d.get('etiquettes.aller.colis'));
+  const enRoute = await db().collection('commandes').where('expedition', '==', 'envoyee').get();
+  const recent = (d) => { const e = d.get('envoyeeLe'); return !e || !e.toMillis || Date.now() - e.toMillis() < 60 * 864e5; };
+  const aSuivre = enRoute.docs.filter((d) => !d.get('preparation.recuLe') && d.get('etiquettes.aller.colis') && recent(d));
   if (!aSuivre.length) return;
   const api = sendcloud.client(SENDCLOUD_API.value());
   for (const snap of aSuivre) {
@@ -1639,6 +1791,7 @@ async function automatiser(qui) {
   await avoirsRemboursements(maintenant - FENETRE, bilan);
   await etiquettesRetour(bilan).catch((e) => bilan.erreurs.push(`Étiquettes de retour : ${e.message}`));
   await colisLivres(bilan).catch((e) => bilan.erreurs.push(`Suivi des colis : ${e.message}`));
+  await retoursEnCours(bilan).catch((e) => bilan.erreurs.push(`Suivi des retours : ${e.message}`));
   await db().doc('gestion/automatique').set({ ...bilan, le: maintenant, par: qui });
   if (bilan.erreurs.length) logger.warn('Automatismes de gestion', bilan.erreurs);
   return bilan;
@@ -1664,6 +1817,17 @@ exports.gestionReglages = onCall(async (request) => {
     const v = Number(d[k]);
     if (!Number.isFinite(v) || v < 0 || v > 1e9) throw new HttpsError('invalid-argument', `Valeur invalide : ${k}.`);
     maj[k] = v;
+  }
+  // { masquer: { cle, jours } } : masque une ligne « À faire » (jours 0 : la réaffiche) ; { masquer: { tout: true, jours: 0 } } : tout réafficher.
+  if (d.masquer && typeof d.masquer === 'object') {
+    const { cle, jours, tout } = d.masquer;
+    if (!tout && (typeof cle !== 'string' || !cle || cle.length > 300)) throw new HttpsError('invalid-argument', 'Ligne à masquer invalide.');
+    const n = jours == null ? MASQUER_JOURS : Number(jours);
+    if (!Number.isFinite(n) || n < 0 || n > 30) throw new HttpsError('invalid-argument', 'Durée invalide.');
+    const actuelles = tout ? [] : masqueesActives((await db().doc('gestion/reglages').get()).get('masquees')).filter((m) => m.cle !== cle);
+    if (!tout && n > 0) actuelles.push({ cle, jusqua: Date.now() + n * 864e5 });
+    await db().doc('gestion/reglages').set({ masquees: actuelles.slice(-200) }, { merge: true });
+    return { ok: true, masquees: actuelles };
   }
   if (d.expediteur && typeof d.expediteur === 'object') {
     for (const k of CHAMPS_EXPEDITEUR) {
@@ -1725,7 +1889,10 @@ async function creerEtiquette(commande, sens, qui) {
   }
   const r = await api.retour({ de: cl.adresse, vers: papote, poids, reference });
   const url = await rangerEtiquette(commande, 'retour', r.colis, r.pdf);
-  const maj = { 'etiquettes.retour': { colis: r.colis, url, le: Date.now(), par: qui } };
+  // N° et lien de suivi du retour, pour le suivre depuis l'admin et l'avis de résiliation.
+  const suivi = await api.suivi(r.colis).catch(() => ({}));
+  const maj = { 'etiquettes.retour': { colis: r.colis, url, le: Date.now(), par: qui,
+    suivi: suivi.suivi || null, lienSuivi: suivi.lien || null, etape: suivi.etape || null } };
   const attendue = c.restitution && ['attendue', 'echec'].includes(c.restitution.statut);
   if (attendue) {
     // Fin de contrat : l'e-mail au client part avec commandeModifiee, comme une étiquette collée à la main.
@@ -1806,6 +1973,91 @@ exports.gestionRenvoyerCode = onCall({ secrets: [MAIL_MOT_DE_PASSE] }, async (re
   return { ok: true, a };
 });
 
+// Abonnement Stripe arrêté (s'il tourne encore) et chaque facture payée remboursée de ce qui reste à rendre.
+// Rejouable : une facture déjà remboursée (ici ou à la main dans Stripe) est sautée.
+async function arreterEtRembourser(id) {
+  const abo = await stripe().subscriptions.retrieve(id).catch(() => null);
+  // Un abonnement fini (annulé, ou jamais payé : incomplete_expired) ne s'annule plus.
+  if (abo && !['canceled', 'incomplete_expired'].includes(abo.status)) {
+    await stripe().subscriptions.cancel(id, { prorate: false, invoice_now: false });
+  }
+  let rembourse = 0;
+  const payees = await tout(stripe().invoices.list({ subscription: id, status: 'paid', limit: 100 }));
+  for (const f of payees.filter((x) => x.amount_paid > 0 && x.payment_intent)) {
+    const pi = await stripe().paymentIntents.retrieve(typeof f.payment_intent === 'string' ? f.payment_intent : f.payment_intent.id,
+      { expand: ['latest_charge'] });
+    const charge = pi.latest_charge && typeof pi.latest_charge === 'object' ? pi.latest_charge : null;
+    // Paiement SEPA pas encore abouti, ou déjà remboursé : rien à rembourser.
+    if (pi.status !== 'succeeded' || !charge) continue;
+    const reste = charge.amount - (charge.amount_refunded || 0);
+    if (reste <= 0) continue;
+    const r = await stripe().refunds.create({ payment_intent: pi.id, amount: reste, reason: 'requested_by_customer', metadata: { commande: id } },
+      { idempotencyKey: `annulation-${f.id}-${reste}` });
+    rembourse += r.amount;
+  }
+  return rembourse;
+}
+
+// Annulation d'une commande pas encore partie : abonnement Stripe arrêté, tout ce qui a été payé remboursé,
+// tablette mise de côté rendue au stock, e-mail au client. Rejouable sans double remboursement.
+exports.gestionAnnulerCommande = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE] }, async (request) => {
+  verifierAdmin(request);
+  const id = texte((request.data || {}).commande, 100);
+  if (!id) throw new HttpsError('invalid-argument', 'Commande manquante.');
+  const ref = db().doc(`commandes/${id}`);
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Commande introuvable.');
+  const c = snap.data();
+  if (!['a-preparer', 'paiement-en-attente'].includes(c.expedition)) {
+    throw new HttpsError('failed-precondition', c.expedition === 'annulee' ? 'Cette commande est déjà annulée.'
+      : 'La tablette est déjà partie : arrêtez plutôt l\'abonnement, le client renverra la tablette.');
+  }
+  let rembourse = 0;
+  // Abonnement inconnu de Stripe (commande de test, abonnement effacé) : rien à arrêter ni à rembourser,
+  // la commande s'annule quand même, sans e-mail au client.
+  let stripeIntrouvable = false;
+  if (!c.offerte && id.startsWith('sub_')) {
+    try {
+      rembourse = await arreterEtRembourser(id);
+    } catch (e) {
+      if (e.code === 'resource_missing' || /No such subscription/i.test(e.message || '')) {
+        stripeIntrouvable = true;
+        logger.warn(`Commande ${id} : abonnement introuvable chez Stripe, annulée sans remboursement`);
+      } else {
+      // Erreur Stripe : un message lisible plutôt que « le serveur ne répond pas » ; rien n'est encore noté annulé.
+      logger.error(`Commande ${id} : annulation Stripe impossible`, e.message);
+      throw new HttpsError('aborted', `Stripe a refusé l'annulation : ${e.message}`);
+      }
+    }
+  }
+  const qui = request.auth.token.email || request.auth.uid;
+  await ref.update({
+    expedition: 'annulee', annulation: 'admin', annuleeLe: FieldValue.serverTimestamp(), annuleePar: qui,
+    ...(rembourse ? { remboursement: { statut: 'fait', montant: rembourse, le: FieldValue.serverTimestamp() } } : {}),
+  });
+  // Tablette mise de côté pour cette commande : de nouveau libre.
+  const tablettes = await db().collection('stock').where('commande', '==', id).get();
+  for (const t of tablettes.docs.filter((x) => ['en-stock', 'preparee'].includes(x.get('etat')))) {
+    await t.ref.update({
+      commande: null, majLe: FieldValue.serverTimestamp(),
+      historique: FieldValue.arrayUnion({ le: Date.now(), etat: t.get('etat'), par: qui, commande: null, motif: 'commande annulée' }),
+    });
+  }
+  let mailEnvoye = false;
+  if (c.email && !c.offerte && !stripeIntrouvable) {
+    try {
+      await mail.envoyer({
+        smtp: MAIL_SMTP.value(), expediteur: MAIL_EXPEDITEUR.value(), motDePasse: MAIL_MOT_DE_PASSE.value(),
+        a: c.email, contenu: mail.commandeAnnulee({ nom: c.nom, rembourse }),
+      });
+      mailEnvoye = true;
+    } catch (e) {
+      logger.error(`Commande ${id} : e-mail d'annulation non parti`, e.message);
+    }
+  }
+  return { ok: true, rembourse, mailEnvoye, stripeIntrouvable };
+});
+
 // ---------- Identité des tablettes : préparation et jumelage ----------
 
 // Fonctions de index.js (abonnements) dont le jumelage a besoin, branchées au chargement.
@@ -1817,9 +2069,10 @@ const ETATS_BLOQUES = ['perdue', 'hors-service'];
 
 // Que faire quand une tablette du stock est jumelée à une famille (pure, testée).
 // t : fiche stock ; commande : sa commande (ou null) ; fid : famille qui vient de la jumeler.
+const ALERTE_SANS_COMMANDE = 'jumelée sans commande';
 function suiteJumelage(t, commande, fid) {
   if (ETATS_BLOQUES.includes(t.etat)) return { refuser: true };
-  if (!t.commande || !commande) return { alerte: 'jumelée sans commande' };
+  if (!t.commande || !commande) return { alerte: ALERTE_SANS_COMMANDE };
   if (!commande.fid) return { relier: true };
   if (commande.fid !== fid) return { alerte: 'jumelée à une autre famille que celle de sa commande' };
   return {};
@@ -1866,6 +2119,10 @@ async function appliquerJumelage(p, pairingRef) {
   };
   if (t.etat === 'envoyee') maj.etat = 'chez-client';
   await fiche.ref.update(maj);
+  // Tablette reliée : elle est forcément reçue (si le suivi du colis ne l'a pas déjà noté).
+  if (t.commande && commande && commande.envoyeeLe && !(commande.preparation && commande.preparation.recuLe)) {
+    await db().doc(`commandes/${t.commande}`).update({ 'preparation.recuLe': Date.now(), 'preparation.recuPar': 'tablette reliée' });
+  }
   if (suite.relier && vitrine.appliquer) {
     await vitrine.appliquer(p.fid, t.commande);
     logger.info(`Commande ${t.commande} reliée à la famille ${p.fid} par la tablette ${t.ref || fiche.id}.`);
@@ -1977,7 +2234,7 @@ function aFaire({ commandes, stock, depenses, automatique, maintenant, sims = []
     liste.push(`Tablette ${t.ref || t.numero || ''} revenue : ${usureBatterie(t.batterie)}, à retirer du parc`);
   }
   ajouter(stock.filter((t) => t.etat === 'en-retour' && t.remplaceePour).length, 'tablette(s) remplacée(s) à récupérer chez le client');
-  for (const t of stock.filter((x) => x.alerteJumelage)) liste.push(`Tablette ${t.ref || t.numero || ''} ${t.alerteJumelage}`);
+  for (const t of stock.filter((x) => x.alerteJumelage && !(x.alerteJumelage === ALERTE_SANS_COMMANDE && x.commande))) liste.push(`Tablette ${t.ref || t.numero || ''} ${t.alerteJumelage}`);
   ajouter(actives.filter((c) => c.remboursement && c.remboursement.statut === 'echec').length, 'remboursement(s) échoué(s), à faire depuis Stripe');
   const parId = new Map(commandes.map((c) => [c.id, c]));
   const lignes = new Map(sims.map((l) => [l.id, l]));
@@ -2599,18 +2856,77 @@ exports.gestionFamilleOfferte = onCall(async (request) => {
     throw new HttpsError('failed-precondition', "Cette famille a un abonnement payant en cours : résiliez-le d'abord dans Stripe.");
   }
   if (!offerte && statut !== 'offert') return { ok: true };
+  const qui = request.auth.token.email || request.auth.uid;
+  // Fin du service offert : la commande offerte se clôt, le matériel est noté récupéré ou à récupérer.
+  const { offertes, parties } = offertesOuvertes(offerte ? [] : (await db().collection('commandes').where('fid', '==', fid).get()).docs);
+  const { recupere } = request.data || {};
+  if (parties.length && typeof recupere !== 'boolean') {
+    throw new HttpsError('failed-precondition', "Dites d'abord si la tablette et les accessoires de la commande offerte sont récupérés.");
+  }
   await ref.update({
     'abonnement.statut': offerte ? 'offert' : 'aucun',
     'abonnement.majLe': FieldValue.serverTimestamp(),
-    'abonnement.par': request.auth.token.email || request.auth.uid,
+    'abonnement.par': qui,
   });
+  await closOffertes(offertes, recupere === true, qui);
   return { ok: true };
+});
+
+// Commande offerte (les mamies de Tanguy) : une vraie commande, sans Stripe, avec son code de commande.
+// La famille choisie passe « offerte » (jamais en pause) ; la tablette choisie est rattachée à la commande.
+// { nom, email?, telephone?, formule: 'wifi'|'sim', fid?, tablette?, dejaInstallee? }
+exports.gestionCommandeOfferte = onCall(async (request) => {
+  verifierAdmin(request);
+  const d = request.data || {};
+  const nom = texte(d.nom, 100);
+  if (!nom) throw new HttpsError('invalid-argument', 'Nom manquant.');
+  const formule = d.formule === 'sim' ? 'sim' : 'wifi';
+  const fid = typeof d.fid === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(d.fid) ? d.fid : null;
+  const famille = fid ? await db().doc(`families/${fid}`).get() : null;
+  if (fid && !famille.exists) throw new HttpsError('not-found', 'Famille introuvable.');
+  if (famille && ['actif', 'impaye', 'suspendu'].includes(famille.get('abonnement.statut'))) {
+    throw new HttpsError('failed-precondition', "Cette famille a un abonnement payant en cours : résiliez-le d'abord dans Stripe.");
+  }
+  const tablette = typeof d.tablette === 'string' && d.tablette ? await db().doc(`stock/${d.tablette}`).get() : null;
+  if (tablette && (!tablette.exists || tablette.get('commande'))) {
+    throw new HttpsError('failed-precondition', 'Cette tablette est déjà rattachée à une commande.');
+  }
+  const installee = d.dejaInstallee === true;
+  const qui = request.auth.token.email || request.auth.uid;
+  const ref = db().collection('commandes').doc(`offerte-${db().collection('commandes').doc().id}`);
+  await db().runTransaction(async (tx) => {
+    let code;
+    do {
+      code = require('./abonnement').nouveauCode();
+    } while (!(await tx.get(db().collection('commandes').where('code', '==', code).limit(1))).empty);
+    tx.set(ref, {
+      offerte: true, code, nom, email: emailPropre(d.email) || null, telephone: texte(d.telephone, 30), formule,
+      tablette: 'incluse', livraison: null, expedition: installee ? 'envoyee' : 'a-preparer', fid,
+      ...(installee ? { envoyeeLe: FieldValue.serverTimestamp() } : {}),
+      creeLe: FieldValue.serverTimestamp(), creePar: qui,
+    });
+    if (fid) {
+      tx.update(famille.ref, {
+        'abonnement.statut': 'offert', 'abonnement.formule': formule,
+        'abonnement.majLe': FieldValue.serverTimestamp(), 'abonnement.par': qui,
+      });
+    }
+    if (tablette) {
+      const etat = installee ? 'chez-client' : tablette.get('etat');
+      tx.update(tablette.ref, {
+        commande: ref.id, etat, majLe: FieldValue.serverTimestamp(),
+        historique: FieldValue.arrayUnion({ le: Date.now(), etat, par: qui, commande: ref.id }),
+      });
+    }
+  });
+  return { ok: true, id: ref.id };
 });
 
 // ---------- Suppression d'une famille (demande du client à contact@) ----------
 // Les responsables ne peuvent plus supprimer leur famille dans l'appli : l'admin le fait ici, en retapant le nom.
 // Tout part : la fiche et ses sous-collections (posts, reminders, birthdays, invitations, calls, invites,
-// members, logs, commands…) et les photos et vidéos de Storage (families/{fid}/). Famille offerte (Mamie) refusée.
+// members, logs, commands…) et les photos et vidéos de Storage (families/{fid}/). Famille offerte : sa commande offerte
+// est close (annulée si la tablette n'est pas partie, sinon matériel noté récupéré ou encore à récupérer).
 
 const STATUTS_A_RESILIER = ['actif', 'impaye', 'suspendu'];
 const nomCompare = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().replace(/\s+/g, ' ').toLowerCase();
@@ -2618,7 +2934,6 @@ const nomCompare = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '
 // Raison de refuser la suppression, ou null.
 function refusSuppression(famille, nomTape) {
   const statut = famille.abonnement && famille.abonnement.statut;
-  if (statut === 'offert') return 'Famille offerte (celle de Mamie) : suppression interdite.';
   if (STATUTS_A_RESILIER.includes(statut)) return "L'abonnement de cette famille est en cours : résiliez-le d'abord, sinon le client continuerait à payer.";
   if (!nomCompare(nomTape) || nomCompare(nomTape) !== nomCompare(famille.name)) return 'Le nom retapé ne correspond pas au nom de la famille.';
   return null;
@@ -2633,18 +2948,58 @@ exports.gestionSupprimerFamille = onCall({ timeoutSeconds: 540, memory: '512MiB'
   if (!snap.exists) throw new HttpsError('not-found', 'Famille introuvable (déjà supprimée ?).');
   const refus = refusSuppression(snap.data(), nom);
   if (refus) throw new HttpsError('failed-precondition', refus);
+  const commandes = await db().collection('commandes').where('fid', '==', fid).get();
+  // Commande offerte partie chez le proche : l'admin dit si la tablette et ses accessoires sont récupérés.
+  const { offertes, parties } = offertesOuvertes(commandes.docs);
+  const { recupere } = request.data || {};
+  if (parties.length && typeof recupere !== 'boolean') {
+    throw new HttpsError('failed-precondition', 'Dites d\'abord si la tablette et les accessoires de la commande offerte sont récupérés.');
+  }
   const membres = await ref.collection('members').get();
   // Fichiers d'abord : si la base échoue ensuite, un nouvel essai finit le travail.
   await stockage().deleteFiles({ prefix: `families/${fid}/`, force: true });
   await db().recursiveDelete(ref);
-  const commandes = await db().collection('commandes').where('fid', '==', fid).get();
+  // Jumelages de cette famille : sans eux, le rattrapage de nuit ne relie plus la tablette à une famille disparue.
+  const jumelages = await db().collection('pairings').where('fid', '==', fid).get();
+  await Promise.all(jumelages.docs.map((d) => d.ref.delete()));
   await Promise.all(commandes.docs.map((d) => d.ref.update({ familleSupprimeeLe: Date.now() })));
+  await closOffertes(offertes, recupere === true, request.auth.token.email || request.auth.uid);
   await db().collection('suppressions').add({
     fid, nom: snap.get('name') || null, membres: membres.size, le: Date.now(), par: request.auth.token.email || request.auth.uid,
   });
   logger.info(`Famille ${fid} supprimée par ${request.auth.token.email}`);
   return { ok: true, membres: membres.size };
 });
+
+// Commandes offertes encore ouvertes (ni annulées ni closes), et celles dont la tablette est partie chez le proche.
+function offertesOuvertes(docs) {
+  const offertes = docs.filter((d) => d.get('offerte') && d.get('expedition') !== 'annulee' && !d.get('restitution'));
+  return { offertes, parties: offertes.filter((d) => !['a-preparer', 'paiement-en-attente'].includes(d.get('expedition'))) };
+}
+
+// Commandes offertes d'une famille qui n'est plus offerte, ou supprimée. Pas encore partie : annulée, sa tablette revient au stock.
+// Partie : matériel rendu (la tablette passe « revenue », à vérifier) ou encore à récupérer chez le proche.
+async function closOffertes(offertes, recupere, qui) {
+  for (const d of offertes) {
+    const pasPartie = ['a-preparer', 'paiement-en-attente'].includes(d.get('expedition'));
+    const tablettes = await db().collection('stock').where('commande', '==', d.id).get();
+    if (pasPartie) {
+      await d.ref.update({ expedition: 'annulee', annuleeLe: Date.now(), abonnement: 'resilie' });
+      await Promise.all(tablettes.docs.map((t) => t.ref.update({
+        commande: null, majLe: FieldValue.serverTimestamp(),
+        historique: FieldValue.arrayUnion({ le: Date.now(), etat: t.get('etat'), par: qui, motif: 'commande offerte annulée' }),
+      })));
+      continue;
+    }
+    await d.ref.update({ abonnement: 'resilie', restitution: { statut: recupere ? 'rendue' : 'a-recuperer', le: Date.now() } });
+    if (recupere) {
+      await Promise.all(tablettes.docs.filter((t) => ETATS_PARTIS.includes(t.get('etat'))).map((t) => t.ref.update({
+        etat: 'revenue', majLe: FieldValue.serverTimestamp(),
+        historique: FieldValue.arrayUnion({ le: Date.now(), etat: 'revenue', par: qui, commande: d.id }),
+      })));
+    }
+  }
+}
 
 // ---------- Parcours pas à pas (envoi d'une commande, réception d'une tablette) ----------
 // L'avancement est gardé sur la commande (preparation) ou la fiche tablette (reception) : on reprend où on s'était arrêté.
@@ -2679,10 +3034,14 @@ async function lierInstallation(id, numero, qui) {
   if (snap.get('ref') && snap.get('ref') !== ref) throw new HttpsError('failed-precondition', `Cette tablette est déjà ${snap.get('ref')}.`);
   const t = trouvee.data();
   if (t.commande) throw new HttpsError('failed-precondition', `${ref} est déjà réservée pour une commande.`);
+  const maintenant = Date.now();
+  // Tablette achetée pas encore notée « reçue » : l'installation prouve qu'elle est arrivée.
+  const recue = snap.get('etat') === 'commandee' ? [{ le: maintenant - 1, etat: 'en-stock', par: qui, motif: 'reçue' }] : [];
   await fiche.update({
-    ref, serieAndroid: t.serieAndroid || null, preparee: t.preparee || Date.now(), etat: 'preparee',
+    ref, serieAndroid: t.serieAndroid || null, preparee: t.preparee || maintenant, etat: 'preparee',
     ...(t.modele && !snap.get('modele') ? { modele: t.modele } : {}),
-    historique: FieldValue.arrayUnion({ le: Date.now(), etat: 'preparee', par: qui }),
+    ...(!snap.get('numero') && (t.numero || t.serieAndroid) ? { numero: t.numero || t.serieAndroid } : {}),
+    historique: FieldValue.arrayUnion(...recue, { le: maintenant, etat: 'preparee', par: qui }),
     majLe: FieldValue.serverTimestamp(),
   });
   // Fiche créée par l'installation faute d'achat en stock : elle n'a plus de raison d'être.
@@ -2716,8 +3075,12 @@ exports.gestionParcours = onCall(async (request) => {
   }
   if (d.type === 'reception') {
     const ref = db().doc(`stock/${texte(d.id, 100) || '-'}`);
-    if (!(await ref.get()).exists) throw new HttpsError('not-found', 'Tablette introuvable.');
-    await ref.update({ reception: { ...avancementPropre(d.reception), majLe: Date.now(), par: qui } });
+    const snap = await ref.get();
+    if (!snap.exists) throw new HttpsError('not-found', 'Tablette introuvable.');
+    // Une tablette commandée qu'on ouvre est arrivée : elle passe « En stock ».
+    const arrivee = snap.get('etat') === 'commandee'
+      ? { etat: 'en-stock', historique: FieldValue.arrayUnion({ le: Date.now(), etat: 'en-stock', par: qui, motif: 'reçue' }) } : {};
+    await ref.update({ reception: { ...avancementPropre(d.reception), majLe: Date.now(), par: qui }, ...arrivee });
     return { ok: true };
   }
   if (d.type === 'lier') return lierInstallation(texte(d.id, 100), d.ref, qui);
@@ -2726,7 +3089,7 @@ exports.gestionParcours = onCall(async (request) => {
 
 exports.regles = {
   ETATS, CATEGORIES, natureMouvement, mensuel, centimes, lien, nomFichier, moisSuivant, lectureVersFormulaire, SCHEMA_FACTURE,
-  lireReglages, simAResilier, fichesARattacher, sansFacture, stockAJour, releveBatterie, usureBatterie, incoherences, materielLu, memeAccessoire, coutLigne, alertesSim, accessoiresAPrevoir, champsSim, aFaire, piecesFacture, debutMoisParis, moisPrecedent, csvTexte, livreDesRecettes,
+  lireReglages, transitionPermise, SUITES, simAResilier, fichesARattacher, sansFacture, stockAJour, releveBatterie, usureBatterie, incoherences, materielLu, memeAccessoire, coutLigne, alertesSim, accessoiresAPrevoir, champsSim, aFaire, piecesFacture, debutMoisParis, moisPrecedent, csvTexte, livreDesRecettes,
   registreDesAchats, corpsDuMail, memeAchat, suiteJumelage, descriptionNonRendu, refusSuppression, fusionnerContacts, emailInformation, cleContact,
   avancementPropre,
 };

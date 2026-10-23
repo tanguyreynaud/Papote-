@@ -399,7 +399,7 @@ test('matériel non rendu : nature du prélèvement et ligne de facture', () => 
 });
 
 test('suppression de famille : Mamie protégée, abonnement en cours refusé, nom à retaper', () => {
-  assert.match(g.refusSuppression({ name: 'Mamie', abonnement: { statut: 'offert' } }, 'Mamie'), /offerte/);
+  assert.equal(g.refusSuppression({ name: 'Mamie', abonnement: { statut: 'offert' } }, 'Mamie'), null);
   assert.match(g.refusSuppression({ name: 'Durand', abonnement: { statut: 'actif' } }, 'Durand'), /résiliez/);
   assert.match(g.refusSuppression({ name: 'Durand', abonnement: { statut: 'resilie' } }, 'Dupont'), /ne correspond pas/);
   assert.match(g.refusSuppression({ name: 'Durand' }, ''), /ne correspond pas/);
@@ -457,4 +457,20 @@ test('colis livré d\'après Sendcloud', () => {
   assert.strictEqual(colisLivre({ parcel: { status: { id: 11, message: 'Delivered' } } }), true);
   assert.strictEqual(colisLivre({ parcel: { status: { id: 12, message: 'Awaiting customer pickup' } } }), false);
   assert.strictEqual(colisLivre(null), false);
+});
+
+test('suiviColis : n° et lien de suivi, étape, livré', () => {
+  const { suiviColis } = require('./sendcloud');
+  assert.deepStrictEqual(suiviColis({ parcel: { tracking_number: 'MR1', tracking_url: 'https://t/MR1', status: { id: 12, message: 'Awaiting customer pickup' } } }),
+    { suivi: 'MR1', lien: 'https://t/MR1', etape: 'Awaiting customer pickup', livre: false });
+  assert.deepStrictEqual(suiviColis(null), { suivi: null, lien: null, etape: null, livre: false });
+});
+
+test('transitionPermise : la vie logique d\'une tablette, sans retour en arrière', () => {
+  assert.equal(g.transitionPermise('commandee', 'en-stock'), true);
+  assert.equal(g.transitionPermise('en-stock', 'commandee'), false);
+  assert.equal(g.transitionPermise('revenue', 'en-stock'), true);
+  assert.equal(g.transitionPermise('chez-client', 'en-stock'), false);
+  assert.equal(g.transitionPermise('hors-service', 'en-stock'), false);
+  assert.equal(g.transitionPermise('en-stock', 'en-stock'), true);
 });

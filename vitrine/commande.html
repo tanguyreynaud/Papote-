@@ -6,7 +6,7 @@
 <title>Votre commande · Papote</title>
 <meta name="robots" content="noindex">
 <script>
-  // Commandes fermées (avant le lancement) ou stock vide : retour à la liste d'attente, sauf avec ?essai
+  // Commandes fermées (avant le lancement) : retour à la liste d'attente, sauf avec ?essai
   // (commande test de Tanguy, possible tant que Stripe est en clé de test ; voir commandesOuvertes dans
   // functions/index.js). COMMANDES_OUVERTES : même valeur que dans accueil.html.
   (function () {
@@ -18,7 +18,16 @@
     if (!COMMANDES_OUVERTES) { location.replace('./#lancement'); return; }
     fetch('https://europe-west1-papote-famille.cloudfunctions.net/stockDisponible')
       .then(function (r) { return r.ok ? r.json() : {}; })
-      .then(function (d) { if (d.disponible === false) location.replace('./#lancement'); })
+      .then(function (d) {
+        if (d.disponible === false) { location.replace('./#lancement'); return; }
+        // Stock vide mais commandes encore possibles : délai de préparation plus long (stock.js).
+        // Au-delà de stock + 10 : attente longue (3 à 4 semaines), la commande reste possible.
+        var bloc = d.attenteLongue ? 'attente-longue' : d.precommande ? 'precommande' : null;
+        if (bloc) {
+          var montrer = function () { var p = document.getElementById(bloc); if (p) p.hidden = false; };
+          if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', montrer); else montrer();
+        }
+      })
       .catch(function () {});
   })();
 </script>
@@ -54,12 +63,14 @@ h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-u
 .point { display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: center; justify-content: space-between; padding: .9rem 1.1rem; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; }
 .point div { display: grid; }
 .point .btn { min-height: 2.75rem; padding: .5rem 1.25rem; }
-.lien { background: none; border: 0; padding: 0; font: inherit; color: var(--accent); text-decoration: underline; cursor: pointer; justify-self: start; }
+.lien { background: none; border: 0; padding: 0; font: inherit; color: var(--accent-strong); font-weight: 700; text-decoration: none; cursor: pointer; justify-self: start; }
 .btn.payer { justify-self: stretch; font-size: 1.15rem; }
 .question { border: 0; padding: 0; margin: 0; display: grid; gap: .6rem; }
 .question legend { font-weight: 700; margin-bottom: .6rem; }
 .etapes { border: 2px solid var(--accent); border-radius: 16px; padding: 1rem 1.2rem; margin: 1.5rem 0 1rem; display: grid; gap: .5rem; }
 .etapes p { margin: 0; }
+.precommande { margin: 0; padding: .6rem .9rem; border-radius: 12px; background: var(--warm-soft); font-size: 1rem; }
+.precommande[hidden] { display: none; }
 .opt { display: flex; gap: .6rem; align-items: center; font-size: 1.05rem; cursor: pointer; }
 .opt .muted { white-space: nowrap; margin-left: auto; }
 .opt input { width: 1.3rem; height: 1.3rem; accent-color: var(--accent); }
@@ -86,10 +97,13 @@ h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-u
 .btn:hover { background: var(--accent-strong); }
 .btn[aria-disabled="true"] { background: #c9c6d8; pointer-events: none; }
 .erreur { color: #b91c1c; }
+/* Pas de soulignement des liens (Tanguy, 2026-10-22) : ils restent repérables par leur couleur et le gras. */
+a { text-decoration: none; }
+main a:not([class]), footer a:not([class]), .rassure a { font-weight: 700; }
 </style>
 </head>
 <body>
-<p class="bandeau">🚚 Livraison offerte · ✨ 1 mois d'essai gratuit</p>
+<p class="bandeau">🚚 Livraison offerte · ✨ 30 jours pour changer d'avis</p>
 <main>
   <div class="haut">
     <a class="top" href="./"><img src="icon.svg" alt="">Papote</a>
@@ -101,13 +115,15 @@ h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-u
   </div>
 
   <form class="recap" id="recap">
-    <div class="recap-total"><b id="total">20 € par mois</b><span class="muted">après 1 mois d'essai gratuit</span></div>
+    <div class="recap-total"><b id="total">20 € par mois</b><span class="muted">payés une fois le mois écoulé</span></div>
     <p class="mes"><b>+ 60 € aujourd'hui</b>, une seule fois, pour la mise en service de la tablette</p>
     <ul class="inclus">
       <li>Tablette prêtée, configurée et prête à l'emploi</li>
       <li>Appli famille pour tous vos proches</li>
       <li>Livraison offerte en point relais</li>
     </ul>
+    <p class="precommande" id="precommande" hidden>Je prépare et vérifie chaque tablette moi-même, une par une. En ce moment, la vôtre est prête sous 7 à 10 jours ouvrés, puis Mondial Relay la livre en 3 à 5 jours ouvrés.</p>
+    <p class="precommande" id="attente-longue" hidden>Beaucoup de commandes en ce moment : je prépare et vérifie chaque tablette moi-même, une par une, à Lyon. La vôtre part sous 3 à 4 semaines, puis Mondial Relay la livre en 3 à 5 jours ouvrés. Rien de plus n'est prélevé avant la réception, et vous pouvez annuler à tout moment avant l'envoi : les 60 € vous sont remboursés tout de suite.</p>
     <fieldset class="question">
       <legend>Y a-t-il internet (une box Wi-Fi) chez votre proche ?</legend>
       <label class="opt"><input type="radio" name="internet" value="oui" checked> Oui, la tablette utilise son Wi-Fi <span class="muted">20 €/mois</span></label>
@@ -151,16 +167,16 @@ h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-u
   </label>
 
   <div class="etapes">
-    <p><b>Pendant l'essai</b> : 1 mois gratuit. Si vous arrêtez, les 60 € vous sont remboursés.</p>
-    <p><b>À la fin du mois</b> : l'abonnement démarre tout seul, vous n'avez rien à faire.</p>
-    <p><b>À la résiliation</b> : en quelques clics depuis l'appli, effective à la fin du mois payé.</p>
-    <p class="muted">Aucun montant prélevé aujourd'hui, sauf les 60 € de mise en service.</p>
+    <p><b>Aujourd'hui</b> : seuls les 60 € de mise en service sont prélevés.</p>
+    <p><b>Chaque mois</b> : l'abonnement commence à la réception et chaque mois est prélevé une fois écoulé, vous n'avez rien à faire.</p>
+    <p><b>30 jours pour changer d'avis</b> après la réception : « Annuler ma commande » dans l'appli, rien à payer et les 60 € remboursés.</p>
+    <p><b>À la résiliation</b> : en quelques clics depuis l'appli. Papote s'arrête à la fin du mois en cours, qui est le dernier prélevé.</p>
   </div>
   <a class="btn payer" id="payer" href="#" aria-disabled="true">Choisissez un point relais</a>
   <ul class="rassure">
     <li>🔒 Paiement par prélèvement SEPA, sur la page sécurisée de Stripe : munissez-vous d'un IBAN</li>
-    <li>📅 Le premier mois n'est prélevé qu'après le mois d'essai gratuit</li>
-    <li>↩️ 14 jours après réception pour changer d'avis : la tablette nous revient et vos frais de service vous sont remboursés</li>
+    <li>📅 Chaque mois est payé une fois écoulé : le premier mois commence à la réception et il est prélevé 30 jours plus tard</li>
+    <li>↩️ 30 jours après réception pour changer d'avis : la tablette nous revient, rien à payer et les 60 € remboursés</li>
     <li>💬 Une question ? <a href="mailto:contact@mapapote.fr">contact@mapapote.fr</a></li>
   </ul>
   <p class="muted petit">Sans engagement : l'abonnement se résilie à tout moment. La tablette reste la nôtre et nous est rendue en fin d'abonnement. En payant, vous acceptez les <a href="cgv.html">conditions générales de vente</a>.</p>

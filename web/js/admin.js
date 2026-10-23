@@ -2,6 +2,7 @@
 // transfert des anciennes photos et vidéos vers Storage. Le stock, les factures et la comptabilité
 // sont dans gestion.js, sur la même page.
 // Une app Firebase à part (« admin ») : la connexion Google ne touche pas à la famille de ce navigateur.
+import { demander, saisir, prevenir, menuPoints } from './dialogue.js';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
 import {
   getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut,
@@ -103,9 +104,21 @@ function livraisonTexte(c) {
 
 const lienSuivi = (c) => `https://www.mondialrelay.fr/suivi-de-colis/?numeroExpedition=${encodeURIComponent(c.suivi || '')}&codePostal=${encodeURIComponent(c.livraison?.cp || '')}`;
 
+// Titre d'une commande dans les listes : un lien vers sa page.
+function titreCommande(li, id, texte) {
+  const a = document.createElement('a');
+  a.className = 'titre-commande';
+  a.href = `#commande/${encodeURIComponent(id)}`;
+  a.textContent = texte;
+  li.querySelector('strong').replaceChildren(a);
+}
+
 function orderHead(c) {
   return `${c.nom || c.email} · ${c.formule === 'sim' ? 'carte SIM' : 'Wi-Fi'}, tablette ${c.tablette === 'incluse' ? 'incluse' : 'achetée'}`;
 }
+
+// Matériel non rendu : mêmes prix que le serveur (abonnement.js, PRIX_MATERIEL) et les conditions de vente.
+const prix = { tablette: 130, chargeur: 10, enceinte: 10 };
 
 // Tablettes à envoyer : chaque commande se prépare pas à pas (parcours), sans rien oublier.
 async function loadOrders() {
@@ -115,12 +128,10 @@ async function loadOrders() {
       .sort((a, b) => (toDate(a.creeLe)?.getTime() || 0) - (toDate(b.creeLe)?.getTime() || 0));
     $('orders-empty').hidden = list.length > 0;
     $('orders').replaceChildren(...list.map((c) => {
-      // Mêmes prix que le serveur (abonnement.js, PRIX_MATERIEL) et les conditions de vente.
-      const prix = { tablette: 130, chargeur: 10, enceinte: 10 };
       const li = document.createElement('li');
       li.innerHTML = '<strong></strong><span class="muted small"></span><span class="small adresse"></span>'
         + '<div class="envoi-suite"><span class="small avancement"></span><button type="button" class="primary small-btn"></button></div>';
-      li.querySelector('strong').textContent = orderHead(c);
+      titreCommande(li, c.id, orderHead(c));
       li.querySelector('.muted').textContent = `${c.email}${c.telephone ? ` · ${c.telephone}` : ''} · commandé ${ago(toDate(c.creeLe))}${c.fid ? ' · famille créée' : ''}`;
       li.querySelector('.adresse').textContent = livraisonTexte(c);
       const etapes = etapesEnvoi(c, {}).filter((e) => !e.saute || !e.saute({}));
@@ -312,20 +323,20 @@ function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
             if (fenetre) fenetre.location = r.url;
           } catch (err) {
             if (fenetre) fenetre.close();
-            alert(`Étiquette impossible : ${err.message}`);
+            prevenir(`Étiquette impossible : ${err.message}`);
           }
           bouton.disabled = false;
           bouton.textContent = 'Créer l\'étiquette';
           afficher();
         });
         annuler.addEventListener('click', async () => {
-          if (!confirm('Annuler cette étiquette chez Sendcloud ? Vous pourrez en créer une nouvelle.')) return;
+          if (!await demander('Annuler cette étiquette chez Sendcloud ? Vous pourrez en créer une nouvelle.', { oui: 'Annuler l\'étiquette', non: 'Garder', danger: true })) return;
           annuler.disabled = true;
           try {
             await appeler('gestionAnnulerEtiquette', { commande: c.id, sens: 'aller' });
             delete c.etiquettes.aller;
           } catch (err) {
-            alert(`Annulation impossible : ${err.message}`);
+            prevenir(`Annulation impossible : ${err.message}`);
           }
           annuler.disabled = false;
           afficher();
@@ -352,12 +363,15 @@ function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
           if (e.sim) await appeler('gestionSim', { action: 'modifier', id: e.sim, champs: { tablette: e.tablette } });
           await appeler('gestionStock', { action: 'modifier', id: e.tablette, champs: { etat: 'envoyee', commande: c.id } });
         } catch (err) {
-          alert(`Colis enregistré, mais le kit n'a pas pu être sorti du stock : ${err.message}`);
+          prevenir(`Colis enregistré, mais le kit n'a pas pu être sorti du stock : ${err.message}`);
         }
       },
     },
   ];
 }
+
+// Bouton « Préparer l'envoi » de la page d'une commande (gestion.js).
+document.addEventListener('papote:preparer-envoi', (e) => preparerEnvoi(e.detail.commande, e.detail.bouton));
 
 async function preparerEnvoi(c, bouton) {
   bouton.disabled = true;
@@ -365,7 +379,7 @@ async function preparerEnvoi(c, bouton) {
   try {
     ctx = await donnees(true);
   } catch (err) {
-    alert(`Lecture du stock impossible : ${err.message}`);
+    prevenir(`Lecture du stock impossible : ${err.message}`);
     bouton.disabled = false;
     return;
   }
@@ -397,7 +411,7 @@ async function loadShipped() {
       const li = document.createElement('li');
       if (c.alerteJumelage) li.classList.add('alert');
       li.innerHTML = '<strong></strong><span class="muted small"></span><span class="small"></span><a target="_blank" rel="noopener" class="small"></a>';
-      li.querySelector('strong').textContent = orderHead(c);
+      titreCommande(li, c.id, orderHead(c));
       const infos = [c.email, `envoyée ${ago(toDate(c.envoyeeLe))}`, `${c.rappels || 0} rappel(s) envoyé(s)`];
       if (c.alerteJumelage) infos.push('pas jumelée après 20 jours : appeler le client');
       li.querySelector('.muted').textContent = infos.join(' · ');
@@ -424,7 +438,7 @@ async function loadShipped() {
             suite.children[2].className = 'actuelle';
             b.remove();
           } catch (err) {
-            alert(`Enregistrement impossible : ${err.message}`);
+            prevenir(`Enregistrement impossible : ${err.message}`);
             b.disabled = false;
           }
         });
@@ -441,9 +455,23 @@ async function loadShipped() {
 // Tablettes incluses à rendre après la fin d'un abonnement (restitution écrite par le serveur).
 async function loadReturns() {
   try {
-    const snap = await getDocs(query(collection(db, 'commandes'), where('restitution.statut', 'in', ['attendue', 'echec'])));
-    $('returns-empty').hidden = !snap.empty;
-    $('returns').replaceChildren(...snap.docs.map((d) => {
+    // Même règle que le compteur de l'accueil (etatCommande, gestion.js) : retour attendu ou échoué,
+    // commande non annulée. Une commande comptée par le serveur mais absente de la requête est lue directement.
+    const aRendre = (c) => c && c.restitution && ['attendue', 'echec'].includes(c.restitution.statut) && c.expedition !== 'annulee';
+    const trouvees = new Map();
+    try {
+      const snap = await getDocs(query(collection(db, 'commandes'), where('restitution.statut', 'in', ['attendue', 'echec'])));
+      for (const d of snap.docs) if (aRendre(d.data())) trouvees.set(d.id, d);
+    } catch (err) { console.warn('Restitutions illisibles', err); }
+    const serveur = await donnees().then((x) => x.commandes || []).catch(() => []);
+    for (const c of serveur.filter(aRendre)) {
+      if (trouvees.has(c.id)) continue;
+      const d = await getDoc(doc(db, 'commandes', c.id)).catch(() => null);
+      if (d && d.exists()) trouvees.set(c.id, d);
+    }
+    const docs = [...trouvees.values()];
+    $('returns-empty').hidden = docs.length > 0;
+    $('returns').replaceChildren(...docs.map((d) => {
       const c = d.data();
       const r = c.restitution || {};
       const avant = toDate(r.avant);
@@ -455,7 +483,7 @@ async function loadReturns() {
         + '<label><input type="checkbox" value="chargeur"> chargeur et câble (10 €)</label>'
         + (c.enceinteFournie === true ? '<label><input type="checkbox" value="enceinte"> enceinte (10 €)</label>' : '')
         + '<button type="button" class="secondary small-btn rendue">Matériel reçu</button></div>';
-      li.querySelector('strong').textContent = c.livraison?.nom || c.nom || c.email;
+      titreCommande(li, d.id, c.livraison?.nom || c.nom || c.email);
       li.querySelector('.muted').textContent = `${c.email}${c.telephone ? ` · ${c.telephone}` : ''}`;
       li.querySelector('span.small:not(.muted):not(.remb)').textContent = (r.statut === 'echec'
         ? `Prélèvement échoué${r.erreur ? ` (${r.erreur})` : ''} : à relancer depuis Stripe.`
@@ -476,7 +504,7 @@ async function loadReturns() {
       // Sendcloud crée l'étiquette et le serveur l'envoie au client.
       const btnSendcloud = form.querySelector('button.sendcloud');
       btnSendcloud.addEventListener('click', async () => {
-        if (r.etiquette && !confirm('Une étiquette a déjà été envoyée. En créer une nouvelle ?')) return;
+        if (r.etiquette && !await demander('Une étiquette a déjà été envoyée. En créer une nouvelle ?', { oui: 'En créer une nouvelle' })) return;
         btnSendcloud.disabled = true;
         btnSendcloud.textContent = 'Création…';
         try {
@@ -484,7 +512,7 @@ async function loadReturns() {
           input.value = res.url;
           btnSendcloud.textContent = 'Étiquette envoyée au client';
         } catch (err) {
-          alert(`Étiquette impossible : ${err.message}`);
+          prevenir(`Étiquette impossible : ${err.message}`);
           btnSendcloud.textContent = 'Créer avec Sendcloud';
           btnSendcloud.disabled = false;
         }
@@ -492,7 +520,7 @@ async function loadReturns() {
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const lien = input.value.trim();
-        if (!/^https:\/\//.test(lien)) { alert('Collez le lien https de l\'étiquette prépayée.'); return; }
+        if (!/^https:\/\//.test(lien)) { prevenir('Collez le lien https de l\'étiquette prépayée.'); return; }
         const sb = form.querySelector('button');
         sb.disabled = true;
         try {
@@ -500,7 +528,7 @@ async function loadReturns() {
           sb.textContent = 'Étiquette envoyée au client';
         } catch (err) {
           console.error(err);
-          alert("L'étiquette n'a pas pu être envoyée.");
+          prevenir("L'étiquette n'a pas pu être envoyée.");
           sb.disabled = false;
         }
       });
@@ -509,7 +537,7 @@ async function loadReturns() {
         // Ce qui manque dans le colis est prélevé sur la carte du client (tabletteRendue, index.js).
         const manquants = [...li.querySelectorAll('.manquants input:checked')].map((i) => i.value);
         const total = manquants.reduce((s, m) => s + prix[m], 0);
-        if (!confirm(total
+        if (!await demander(total
           ? `Prélever ${total} € à ${c.email} pour le matériel manquant (${manquants.join(', ')}) ?`
           : `Tout le matériel de ${c.email} est bien revenu ?`)) return;
         btn.disabled = true;
@@ -520,13 +548,13 @@ async function loadReturns() {
           const t = stock.find((x) => x.commande === d.id);
           const etat = manquants.includes('tablette') ? 'perdue' : 'revenue';
           if (t) await appeler('gestionStock', { action: 'modifier', id: t.id, champs: { etat } }).catch(() => null);
-          if (res.erreur) alert(`Prélèvement refusé : ${res.erreur}. La commande reste dans la liste, à relancer depuis Stripe.`);
+          if (res.erreur) prevenir(`Prélèvement refusé : ${res.erreur}. La commande reste dans la liste, à relancer depuis Stripe.`);
           signalerChangement();
           if (!res.erreur) li.remove();
           else btn.disabled = false;
         } catch (err) {
           console.error(err);
-          alert("L'enregistrement a échoué.");
+          prevenir("L'enregistrement a échoué.");
           btn.disabled = false;
         }
       });
@@ -572,6 +600,7 @@ async function load() {
         hasTablet: list.length > 0,
         online: latest('lastOnline'),
         active: latest('lastActive'),
+        installee: latest('joinedAt'),
         version: list.map((t) => t.appVersion).filter(Boolean).sort().pop() || null,
       };
     }));
@@ -597,30 +626,25 @@ async function showPending(f, li) {
   box.className = 'replace';
   for (const d of snap.docs) {
     const m = d.data();
-    const row = document.createElement('p');
-    row.className = 'small pending-row';
-    row.textContent = `En attente : ${m.name}${m.email ? ` (${m.email})` : ''} `;
-    const ok = document.createElement('button');
+    const row = el('div', 'membre-ligne');
+    const nom = el('span', 'membre-nom', m.name);
+    nom.append(el('small', null, `Veut rejoindre la famille${m.email ? ` · ${m.email}` : ''}`));
+    const ok = el('button', 'secondary small-btn', 'Accepter');
     ok.type = 'button';
-    ok.className = 'link small';
-    ok.textContent = 'Accepter';
-    const owner = document.createElement('button');
-    owner.type = 'button';
-    owner.className = 'link small';
-    owner.textContent = 'Accepter comme propriétaire';
     const accept = async (asOwner) => {
       try {
         await updateDoc(d.ref, { status: 'active' });
         if (asOwner) await updateDoc(doc(db, 'families', f.id), { createdBy: d.id });
-        row.textContent = asOwner ? `${m.name} est maintenant propriétaire.` : `${m.name} a été accepté.`;
+        row.replaceChildren(el('span', 'membre-nom', asOwner ? `${m.name} est maintenant propriétaire.` : `${m.name} a été accepté.`));
       } catch (err) {
         console.error(err);
-        alert("L'opération a échoué.");
+        prevenir("L'opération a échoué.");
       }
     };
-    ok.addEventListener('click', () => accept(false));
-    owner.addEventListener('click', () => { if (confirm(`Faire de ${m.name} le propriétaire de la famille de ${f.name} ?`)) accept(true); });
-    row.append(ok, ' · ', owner);
+    ok.addEventListener('click', async () => { if (await demander(`Accepter ${m.name} dans la famille de ${f.name} ?`, { oui: 'Accepter' })) accept(false); });
+    row.append(nom, ok, menuPoints([
+      { libelle: 'Accepter comme propriétaire', faire: async () => { if (await demander(`Accepter ${m.name} et en faire le propriétaire de la famille de ${f.name} ?`)) accept(true); } },
+    ], `Actions pour ${m.name}`));
     box.append(row);
   }
   li.append(box);
@@ -649,43 +673,38 @@ async function toggleMembers(f, li) {
   const admins = new Set(data.admins || []);
   const rerender = () => { out.hidden = true; toggleMembers(f, li); };
   const act = async (fn) => {
-    try { await fn(); rerender(); } catch (err) { console.error(err); alert("L'opération a échoué."); }
-  };
-  const button = (label, onClick, danger) => {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = `link small${danger ? ' danger' : ''}`;
-    b.textContent = label;
-    b.addEventListener('click', onClick);
-    return b;
+    try { await fn(); rerender(); } catch (err) { console.error(err); prevenir("L'opération a échoué."); }
   };
   const famRef = doc(db, 'families', f.id);
   const rows = snap.docs.filter((d) => d.data().status !== 'pending').map((d) => {
     const m = d.data();
     const isOwner = data.createdBy === d.id;
     const isResp = isOwner || admins.has(d.id);
-    const row = document.createElement('p');
-    row.className = 'small pending-row';
-    row.textContent = `${m.name}${m.email ? ` (${m.email})` : ''}${isOwner ? ' · propriétaire' : isResp ? ' · responsable' : ''} `;
+    const row = el('div', 'membre-ligne');
+    const nom = el('span', 'membre-nom', m.name);
+    nom.append(el('small', null, [isOwner ? 'Propriétaire' : isResp ? 'Responsable' : 'Proche', m.email].filter(Boolean).join(' · ')));
+    row.append(nom);
     if (isOwner) return row;
-    const parts = [
-      button(isResp ? 'Retirer responsable' : 'Rendre responsable', () => act(() => {
-        const next = new Set(admins);
-        if (isResp) next.delete(d.id); else next.add(d.id);
-        return updateDoc(famRef, { admins: [...next] });
-      })),
-      button('Faire propriétaire', () => {
-        if (confirm(`Faire de ${m.name} le propriétaire de la famille de ${f.name} ?`)) act(() => updateDoc(famRef, { createdBy: d.id }));
-      }),
-      button('Retirer', () => {
-        if (!confirm(`Retirer ${m.name} de la famille de ${f.name} ?`)) return;
+    row.append(menuPoints([
+      { libelle: isResp ? 'Ne plus le rendre responsable' : 'Rendre responsable', faire: async () => {
+        if (!await demander(isResp ? `${m.name} ne sera plus responsable de la famille de ${f.name}.` : `Rendre ${m.name} responsable de la famille de ${f.name} ?`)) return;
+        act(() => {
+          const next = new Set(admins);
+          if (isResp) next.delete(d.id); else next.add(d.id);
+          return updateDoc(famRef, { admins: [...next] });
+        });
+      } },
+      { libelle: 'Faire propriétaire', faire: async () => {
+        if (await demander(`Faire de ${m.name} le propriétaire de la famille de ${f.name} ?`)) act(() => updateDoc(famRef, { createdBy: d.id }));
+      } },
+      { libelle: 'Retirer de la famille', danger: true, faire: async () => {
+        if (!await demander(`Retirer ${m.name} de la famille de ${f.name} ?`, { oui: 'Retirer', danger: true })) return;
         act(async () => {
           if (admins.has(d.id)) { const next = new Set(admins); next.delete(d.id); await updateDoc(famRef, { admins: [...next] }); }
           await deleteDoc(d.ref);
         });
-      }, true),
-    ];
-    parts.forEach((p, i) => row.append(...(i ? [' · ', p] : [p])));
+      } },
+    ], `Actions pour ${m.name}`));
     return row;
   });
   out.replaceChildren(...(rows.length ? rows : [Object.assign(document.createElement('p'), { className: 'small muted', textContent: 'Aucun proche.' })]));
@@ -696,24 +715,24 @@ async function toggleMembers(f, li) {
 const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 async function prepareReplacement(f, li) {
   const out = li.querySelector('.replace-out');
-  if (!confirm(`Préparer une tablette de remplacement pour la famille de ${f.name} ?`)) return;
+  if (!await demander(`Tablette cassée ou perdue : un code permet d'installer une nouvelle tablette directement dans la famille de ${f.name}, sans rien refaire.\n\nPréparer ce code ?`, { oui: 'Préparer' })) return;
   const bytes = crypto.getRandomValues(new Uint8Array(8));
   const code = Array.from(bytes, (b) => CODE_ALPHABET[b % CODE_ALPHABET.length]).join('');
   try {
     await setDoc(doc(db, 'invites', code), { fid: f.id, createdBy: auth.currentUser.uid, kind: 'tablette' });
   } catch (err) {
     console.error(err);
-    alert("Le code n'a pas pu être créé.");
+    prevenir("Le code n'a pas pu être créé.");
     return;
   }
   const shown = `${code.slice(0, 4)}-${code.slice(4)}`;
   out.hidden = false;
   out.innerHTML = '';
   const p1 = document.createElement('p');
-  p1.textContent = `Installez la nouvelle tablette avec : installer-tablette.ps1 -Code ${shown}`;
+  p1.textContent = `Tablette de remplacement : installez-la avec installer-tablette.ps1 -Code ${shown}`;
   const btn = document.createElement('button');
   btn.type = 'button';
-  btn.className = 'link danger small';
+  btn.className = 'secondary small-btn danger';
   btn.textContent = "Retirer l'ancienne tablette de la famille";
   btn.addEventListener('click', () => removeOldTablets(f, btn));
   out.append(p1, btn);
@@ -727,15 +746,15 @@ async function removeOldTablets(f, btn) {
   // On garde les fiches de la tablette la plus récente (ses deux comptes, inscrits à la même installation).
   const newest = toDate(list[0]?.joinedAt)?.getTime() || 0;
   const old = list.filter((t) => newest - (toDate(t.joinedAt)?.getTime() || 0) > 10 * 60_000);
-  if (!old.length) { alert("Aucune ancienne tablette à retirer : installez d'abord la nouvelle."); return; }
-  if (!confirm(`Retirer ${old.length} fiche(s) d'ancienne tablette de la famille de ${f.name} ?`)) return;
+  if (!old.length) { prevenir("Aucune ancienne tablette à retirer : installez d'abord la nouvelle."); return; }
+  if (!await demander(`Retirer ${old.length} fiche(s) d'ancienne tablette de la famille de ${f.name} ?`)) return;
   btn.disabled = true;
   try {
     for (const t of old) await deleteDoc(t.ref);
     btn.textContent = 'Ancienne tablette retirée';
   } catch (err) {
     console.error(err);
-    alert('Le retrait a échoué.');
+    prevenir('Le retrait a échoué.');
     btn.disabled = false;
   }
 }
@@ -743,23 +762,24 @@ async function removeOldTablets(f, btn) {
 // Suppression définitive demandée par le client (à contact@) : le nom retapé confirme. Le serveur refuse
 // la famille offerte (Mamie) et une famille dont l'abonnement est en cours (gestionSupprimerFamille).
 async function supprimerFamille(f, li, btn) {
-  const nom = prompt(`Supprimer DÉFINITIVEMENT la famille « ${f.name} » : messages, photos, vidéos, rappels, anniversaires, membres et journal. Rien ne pourra être récupéré.\n\nPour confirmer, retapez le nom de la famille :`);
+  const nom = await saisir(`Supprimer DÉFINITIVEMENT la famille « ${f.name} » : messages, photos, vidéos, rappels, anniversaires, membres et journal. Rien ne pourra être récupéré.\n\nPour confirmer, retapez le nom de la famille :`);
   if (nom == null) return;
   const simple = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().replace(/\s+/g, ' ').toLowerCase();
-  if (!simple(nom) || simple(nom) !== simple(f.name)) { alert('Le nom ne correspond pas : rien n\'a été supprimé.'); return; }
+  if (!simple(nom) || simple(nom) !== simple(f.name)) { prevenir('Le nom ne correspond pas : rien n\'a été supprimé.'); return; }
   btn.disabled = true;
-  btn.textContent = 'Suppression…';
+  const attente = el('p', 'muted small', 'Suppression en cours…');
+  li.append(attente);
   try {
     await appeler('gestionSupprimerFamille', { fid: f.id, nom });
     families = families.filter((x) => x.id !== f.id);
     li.remove();
-    ficheFamille = null;
+    location.hash = '#clients/familles';
     render();
-    alert(`La famille « ${f.name} » et toutes ses données sont supprimées.`);
+    prevenir(`La famille « ${f.name} » et toutes ses données sont supprimées.`);
   } catch (err) {
-    alert(`Suppression impossible : ${err.message}`);
+    attente.remove();
+    prevenir(`Suppression impossible : ${err.message}`);
     btn.disabled = false;
-    btn.textContent = 'Supprimer la famille et toutes ses données';
   }
 }
 
@@ -769,75 +789,109 @@ function state(f) {
   return { cls: 'on', label: 'En ligne' };
 }
 
-let vueFamilles = null; // onglet de la liste des familles (off, on, none, toutes)
+let vueFamilles = null; // onglet de la liste des familles (off, on, idle, none, toutes)
+// Pas touchée depuis 24 h : compté depuis le dernier toucher, ou depuis l'installation (ou la création
+// de la famille) si personne ne l'a encore touchée ; une tablette installée aujourd'hui n'y est donc pas.
+const pasTouchee = (f) => {
+  if (!f.hasTablet) return false;
+  const depuis = f.active || f.installee || toDate(f.createdAt);
+  return !!depuis && Date.now() - depuis.getTime() > IDLE_MS;
+};
+const dansVue = (f) => vueFamilles === 'toutes' || (vueFamilles === 'idle' ? pasTouchee(f) : state(f).cls === vueFamilles);
+
+// Chiffres de l'accueil : chacun ouvre la liste des familles correspondante.
+document.querySelectorAll('[data-panneau="accueil"] .stat[data-vue]').forEach((el) => {
+  el.tabIndex = 0;
+  el.setAttribute('role', 'button');
+  const choisir = () => { vueFamilles = el.dataset.vue; location.hash = '#clients/familles'; render(); };
+  el.addEventListener('click', choisir);
+  el.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choisir(); } });
+});
 let ficheFamille = null; // famille ouverte sur sa page
 
+// La famille ouverte est dans l'adresse (#clients/familles/fid) : lien direct depuis la page d'un client.
+function familleDeLAdresse() {
+  const [page, onglet, fid] = location.hash.slice(1).split('/');
+  return page === 'clients' && onglet === 'familles' && fid ? decodeURIComponent(fid) : null;
+}
 function ouvrirFamille(fid) {
-  ficheFamille = fid;
+  location.hash = `#clients/familles/${encodeURIComponent(fid)}`;
+}
+$('famille-retour').addEventListener('click', () => { location.hash = '#clients/familles'; });
+window.addEventListener('hashchange', () => {
+  if (familleDeLAdresse() === ficheFamille) return;
+  ficheFamille = familleDeLAdresse();
   render();
   window.scrollTo(0, 0);
-}
-$('famille-retour').addEventListener('click', () => { ficheFamille = null; render(); });
+});
 
-// Page d'une famille : état de la tablette et toutes les actions.
+// Page d'une famille : ses informations, ses membres, puis ce qu'on peut faire, chaque action expliquée.
+const ABONNEMENT_FAMILLE = { offert: 'Offert', actif: 'Actif', impaye: 'Impayé', suspendu: 'Suspendu', resilie: 'Résilié', aucun: 'Aucun' };
+function el(tag, classe, texte) {
+  const e = document.createElement(tag);
+  if (classe) e.className = classe;
+  if (texte != null) e.textContent = texte;
+  return e;
+}
 function carteFamille(f) {
-    const s = state(f);
-    const li = document.createElement('li');
-    li.className = `family card ${s.cls}`;
-    const rows = [
-      ['Statut', s.label],
-      ['Utilisée', ago(f.active)],
-      ['Version', f.version || '–'],
-      ['Membres', f.people ?? '–'],
-      ['Envois', f.posts ?? '–'],
-      ['Dernier envoi', ago(f.lastPost)],
-    ];
-    li.innerHTML = `<div class="family-head"><span class="dot"></span><strong></strong><code></code></div><dl></dl>
-      <div class="replace"><button type="button" class="link small members-btn">Gérer les membres</button><div class="members-out" hidden></div></div>
-      <details class="autres"><summary>Autres actions</summary>
-      <div class="replace"><button type="button" class="link small replace-btn">Tablette de remplacement</button><p class="replace-out small" hidden></p></div>
-      <div class="replace"><button type="button" class="link small danger delete-btn">Supprimer la famille et toutes ses données</button></div>
-      </details>`;
-    const delBtn = li.querySelector('.delete-btn');
-    if (f.abonnement?.statut === 'offert') delBtn.parentElement.remove();
-    else delBtn.addEventListener('click', () => supprimerFamille(f, li, delBtn));
-    // Famille offerte (celle de Tanguy) : jamais en pause, jamais supprimable.
-    const offre = document.createElement('div');
-    offre.className = 'replace';
-    offre.innerHTML = '<span class="small"></span> <button type="button" class="link small"></button>';
-    const offerte = f.abonnement?.statut === 'offert';
-    offre.querySelector('span').textContent = offerte ? 'Famille offerte (protégée).' : `Abonnement : ${f.abonnement?.statut || 'aucun'}.`;
-    const offreBtn = offre.querySelector('button');
-    offreBtn.textContent = offerte ? 'Ne plus offrir' : 'Rendre offerte (protégée)';
-    offreBtn.addEventListener('click', async () => {
-      if (!confirm(offerte
+  const s = state(f);
+  const tete = el('li', `family card ${s.cls}`);
+  const titre = el('div', 'family-head');
+  titre.append(el('span', 'dot'), el('h2', null, f.name), el('code', null, f.code ? `${f.code.slice(0, 4)}-${f.code.slice(4)}` : ''),
+    menuFamille(f, tete));
+  const dl = el('dl');
+  for (const [k, v] of [
+    ['État', s.label],
+    ['Tablette utilisée', ago(f.active)],
+    ['Version', f.version || '–'],
+    ['Abonnement', ABONNEMENT_FAMILLE[f.abonnement?.statut] || 'Aucun'],
+    ['Proches', f.people ?? '–'],
+    ['Photos et messages', f.posts ?? '–'],
+    ['Dernier envoi', ago(f.lastPost)],
+    ['Créée', toDate(f.createdAt) ? toDate(f.createdAt).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '–'],
+    ['Identifiant', f.id],
+  ]) dl.append(el('dt', null, k), el('dd', null, v));
+  tete.append(titre, dl);
+
+  // Membres affichés d'office, avec les demandes « veut rejoindre » en tête.
+  const membres = el('li', 'card');
+  const sortie = el('div', 'members-out');
+  sortie.hidden = true;
+  membres.append(el('h2', null, 'Membres'), sortie);
+  showPending(f, membres);
+  toggleMembers(f, membres);
+  return [tete, membres];
+}
+
+// Actions sur la famille, rangées dans le ⋮ à côté de son nom ; chacune s'explique dans sa confirmation.
+function menuFamille(f, tete) {
+  // Famille offerte (les mamies) : jamais en pause, jamais supprimable.
+  const offerte = f.abonnement?.statut === 'offert';
+  return menuPoints([
+    { libelle: 'Préparer une tablette de remplacement', faire: () => prepareReplacement(f, $('famille-actions')) },
+    { libelle: offerte ? 'Ne plus offrir le service' : 'Offrir le service (jamais en pause)', faire: async (b) => {
+      if (!await demander(offerte
         ? `« ${f.name} » ne sera plus offerte : sans abonnement, sa tablette se mettra en pause. Continuer ?`
-        : `Rendre « ${f.name} » offerte ? Elle ne sera jamais mise en pause ni supprimable.`)) return;
-      offreBtn.disabled = true;
+        : `Rendre « ${f.name} » offerte ? Pour un proche à qui vous offrez le service : la tablette ne sera jamais mise en pause, et la famille ne pourra pas être supprimée.`)) return;
+      b.disabled = true;
       try {
         await appeler('gestionFamilleOfferte', { fid: f.id, offerte: !offerte });
         f.abonnement = { ...(f.abonnement || {}), statut: offerte ? 'aucun' : 'offert' };
         render();
       } catch (err) {
-        alert(`Impossible : ${err.message}`);
-        offreBtn.disabled = false;
+        prevenir(`Impossible : ${err.message}`);
+        b.disabled = false;
       }
-    });
-    li.querySelector('details.autres summary').after(offre);
-    li.querySelector('.replace-btn').addEventListener('click', () => prepareReplacement(f, li));
-    li.querySelector('.members-btn').addEventListener('click', () => toggleMembers(f, li));
-    showPending(f, li);
-    li.querySelector('strong').textContent = f.name;
-    li.querySelector('code').textContent = f.code ? `${f.code.slice(0, 4)}-${f.code.slice(4)}` : '';
-    const dl = li.querySelector('dl');
-    for (const [k, v] of rows) {
-      const dt = document.createElement('dt');
-      dt.textContent = k;
-      const dd = document.createElement('dd');
-      dd.textContent = v;
-      dl.append(dt, dd);
-    }
-    return li;
+    } },
+    offerte ? null : { libelle: 'Supprimer la famille et ses données', danger: true, faire: (b) => supprimerFamille(f, tete, b) },
+  ], `Actions pour la famille ${f.name}`);
+}
+
+// Résultat d'une action (code de remplacement) sous les membres.
+function actionsFamille() {
+  const carte = el('div', 'card replace-out small');
+  carte.hidden = true;
+  return carte;
 }
 
 function render() {
@@ -847,7 +901,7 @@ function render() {
   $('s-families').textContent = families.length;
   $('s-online').textContent = withTablet.length - offline.length;
   $('s-offline').textContent = offline.length;
-  $('s-idle').textContent = withTablet.filter((f) => !f.active || now - f.active.getTime() > IDLE_MS).length;
+  $('s-idle').textContent = withTablet.filter(pasTouchee).length;
 
   // Liste par statut (les chiffres servent d'onglets) ; une famille ouverte a sa propre page.
   const rank = { off: 0, on: 1, none: 2 };
@@ -871,13 +925,14 @@ function render() {
   $('kpi-familles').replaceChildren(
     onglet('off', compte('off'), 'hors ligne', 'warn'),
     onglet('on', compte('on'), 'en ligne', 'ok'),
+    ...(vueFamilles === 'idle' || families.some(pasTouchee) ? [onglet('idle', families.filter(pasTouchee).length, 'pas touchées 24 h')] : []),
     onglet('none', compte('none'), 'sans tablette'),
     onglet('toutes', families.length, 'toutes les familles'),
   );
   const ABOS = { offert: 'Offert', actif: 'Actif', impaye: 'Impayé', suspendu: 'Suspendu', resilie: 'Résilié', aucun: 'Aucun' };
   const table = $('t-familles');
   const tete = ['Famille', 'Code', 'Tablette', 'Abonnement', 'Membres', 'Envois', 'Dernier envoi', 'Version'];
-  const lignes = sorted.filter((f) => vueFamilles === 'toutes' || state(f).cls === vueFamilles).map((f) => {
+  const lignes = sorted.filter(dansVue).map((f) => {
     const tr = document.createElement('tr');
     tr.tabIndex = 0;
     const cellules = [f.name, f.code ? `${f.code.slice(0, 4)}-${f.code.slice(4)}` : '', state(f).label,
@@ -904,11 +959,18 @@ function render() {
   if (lignes.length) tbody.append(...lignes);
   else tbody.innerHTML = `<tr><td class="vide" colspan="${tete.length}">Aucune famille ici.</td></tr>`;
   table.replaceChildren(thead, tbody);
+  ficheFamille = familleDeLAdresse();
   const ouverte = families.find((f) => f.id === ficheFamille);
   $('familles-liste').hidden = !!ouverte;
   $('famille-fiche').hidden = !ouverte;
-  if (ouverte) $('families').replaceChildren(carteFamille(ouverte));
-  else ficheFamille = null;
+  // Famille ouverte : une page à elle, sans les onglets de la liste.
+  document.querySelector('[data-panneau="clients"] .onglets').hidden = !!ouverte;
+  if (ouverte && $('famille-fiche').dataset.fid !== ouverte.id + JSON.stringify(ouverte.abonnement || null)) {
+    $('famille-fiche').dataset.fid = ouverte.id + JSON.stringify(ouverte.abonnement || null);
+    $('families').replaceChildren(...carteFamille(ouverte));
+    $('famille-actions').replaceChildren(actionsFamille());
+  }
+  if (!ouverte) delete $('famille-fiche').dataset.fid;
   const legacy = families.reduce((n, f) => n + (f.legacy || 0), 0);
   $('migrate-count').textContent = legacy
     ? `${legacy} envoi${legacy > 1 ? 's' : ''} encore dans la base (photos, vidéos et anciens vocaux).`
@@ -955,7 +1017,7 @@ async function migratePost(fid, snap) {
     ext = (post.mime || '').includes('mp4') ? 'mp4' : 'webm';
     field = 'videoUrl';
   } else {
-    return 'ignoré (vocal)';
+    return 'ignoré';
   }
   const path = `families/${fid}/media/${snap.id}.${ext}`;
   const fileRef = ref(storage, path);
@@ -970,7 +1032,7 @@ async function migratePost(fid, snap) {
 }
 
 $('btn-migrate').addEventListener('click', async () => {
-  if (!confirm('Transférer toutes les anciennes photos et vidéos vers Storage ?')) return;
+  if (!await demander('Transférer toutes les anciennes photos et vidéos vers Storage ?', { oui: 'Transférer' })) return;
   $('btn-migrate').disabled = true;
   $('migrate-log').textContent = '';
   let done = 0;

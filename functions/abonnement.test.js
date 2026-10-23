@@ -57,7 +57,8 @@ test('une famille offerte ne change jamais', () => {
 
 test('formules', () => {
   assert.strictEqual(a.formuleValide('wifi', 'incluse'), true);
-  assert.strictEqual(a.formuleValide('sim', 'achetee'), true);
+  assert.strictEqual(a.formuleValide('sim', 'incluse'), true);
+  assert.strictEqual(a.formuleValide('sim', 'achetee'), false);
   assert.strictEqual(a.formuleValide('4g', 'incluse'), false);
 });
 
@@ -67,8 +68,8 @@ test('résiliation sans engagement : à la fin du mois payé', () => {
   assert.strictEqual(a.dateResiliation(null, T0), T0);
 });
 
-test('essai gratuit d\'un mois', () => {
-  assert.strictEqual(a.ESSAI_JOURS, 30);
+test('rien prélevé avant la réception (payé une fois écoulé)', () => {
+  assert.ok(a.ATTENTE_ENVOI_JOURS >= 60);
 });
 
 test('tablette incluse non rendue : pénalité après 30 jours', () => {
@@ -93,11 +94,28 @@ test('rétractation : toujours possible avant l\'envoi', () => {
   assert.strictEqual(a.retractationPossible({ expedition: 'a-preparer', creeLe: T0 - 60 * JOUR }, T0), true);
 });
 
-test('rétractation : 14 jours après la réception estimée (envoi + 3 jours)', () => {
+test('rétractation : 30 jours après la réception estimée (envoi + 3 jours)', () => {
   const c = { expedition: 'envoyee', creeLe: T0, envoyeeLe: T0 + 2 * JOUR };
-  assert.strictEqual(a.limiteRetractation(T0, T0 + 2 * JOUR), T0 + 19 * JOUR);
-  assert.strictEqual(a.retractationPossible(c, T0 + 19 * JOUR), true);
-  assert.strictEqual(a.retractationPossible(c, T0 + 19 * JOUR + 1), false);
+  assert.strictEqual(a.limiteRetractation(T0, T0 + 2 * JOUR), T0 + 35 * JOUR);
+  assert.strictEqual(a.retractationPossible(c, T0 + 35 * JOUR), true);
+  assert.strictEqual(a.retractationPossible(c, T0 + 35 * JOUR + 1), false);
+});
+
+test('rétractation : 30 jours après la vraie réception quand elle est connue', () => {
+  const c = { expedition: 'envoyee', creeLe: T0, envoyeeLe: T0 + 2 * JOUR, preparation: { recuLe: T0 + 9 * JOUR } };
+  assert.strictEqual(a.limiteRetractation(T0, T0 + 2 * JOUR, T0 + 9 * JOUR), T0 + 39 * JOUR);
+  assert.strictEqual(a.receptionDe(c), T0 + 9 * JOUR);
+  assert.strictEqual(a.retractationPossible(c, T0 + 39 * JOUR), true);
+  assert.strictEqual(a.retractationPossible(c, T0 + 39 * JOUR + 1), false);
+  assert.strictEqual(a.receptionDe({ expedition: 'envoyee' }), null);
+});
+
+test('mauvais payeur : contestation, impayés, matériel', () => {
+  assert.deepStrictEqual(a.raisonsMauvaisPayeur({ expedition: 'envoyee' }, 'actif'), []);
+  assert.deepStrictEqual(a.raisonsMauvaisPayeur({ contestations: [{ montant: 2000 }] }, null), ['prélèvement contesté à la banque']);
+  assert.deepStrictEqual(a.raisonsMauvaisPayeur({ restitution: { statut: 'facturee' }, dernierMois: { statut: 'echec' } }, 'suspendu'),
+    ['dernier mois impayé', 'matériel jamais rendu', 'abonnement impayé']);
+  assert.deepStrictEqual(a.raisonsMauvaisPayeur(null, null), []);
 });
 
 test('rétractation : une seule fois', () => {
