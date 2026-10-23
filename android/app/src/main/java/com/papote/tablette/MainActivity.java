@@ -483,14 +483,21 @@ public class MainActivity extends Activity implements Sync.Listener {
         /** Lecture à voix haute d'un message (option « lecture »), en français. */
         @JavascriptInterface
         public void speak(String text) {
-            handler.post(() -> speakNow(text));
+            handler.post(() -> { ttsPendingGuide = false; speakNow(text); });
+        }
+
+        /** Phrase du guide d'installation : dite même si le moteur de voix finit de démarrer. */
+        @JavascriptInterface
+        public void speakGuide(String text) {
+            handler.post(() -> { ttsPendingGuide = true; speakNow(text); });
         }
 
         @JavascriptInterface
         public void stopSpeaking() {
             // Seulement une vraie lecture : la page arrête la voix à chaque nouvel écran, ce qui
             // coupait aussi le préchargement (et la voix se chargeait au premier « Écouter »).
-            handler.post(() -> { ttsPending = null; if (tts != null && lectureEnCours) tts.stop(); });
+            // La phrase du guide d'installation en attente du moteur (démarrage) n'est pas annulée.
+            handler.post(() -> { if (!ttsPendingGuide) ttsPending = null; if (tts != null && lectureEnCours) tts.stop(); });
         }
 
         /** Jeton App Check pour appels.js : {token, expireTimeMillis}, ou "" sans clé ni jeton. */
@@ -740,6 +747,7 @@ public class MainActivity extends Activity implements Sync.Listener {
     private boolean ttsReady;
     private boolean ttsFailed;
     private String ttsPending;
+    private boolean ttsPendingGuide;
     private volatile boolean lectureEnCours;
 
     /**
@@ -781,7 +789,7 @@ public class MainActivity extends Activity implements Sync.Listener {
                 @Override public void onError(String id) { if (!"prechauffage".equals(id)) { lectureEnCours = false; speechState("done"); } }
                 @Override public void onStop(String id, boolean interrupted) { if (!"prechauffage".equals(id)) { lectureEnCours = false; speechState("done"); } }
             });
-            if (ttsPending != null) { String t = ttsPending; ttsPending = null; speakNow(t); }
+            if (ttsPending != null) { String t = ttsPending; ttsPending = null; ttsPendingGuide = false; speakNow(t); }
             else {
                 // Le moteur ne charge sa voix (6 à 10 s sur la Vucatimes) qu'à la première phrase dite.
                 // Une phrase dite tout bas, par le même chemin que la lecture, la charge d'avance
@@ -803,6 +811,7 @@ public class MainActivity extends Activity implements Sync.Listener {
         if (text == null || text.trim().isEmpty()) return;
         if (ttsFailed) { speechState("done"); return; }
         if (tts == null || !ttsReady) { ttsPending = text; prepareTts(); return; }
+        ttsPendingGuide = false;
         lectureEnCours = true;
         tts.speak(text, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "papote");
     }
