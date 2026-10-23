@@ -135,8 +135,9 @@ async function quotaOk(ip, champ = 'n') {
     t.set(refJour, { [champ]: nJ, expire: new Date(Date.now() + 7 * 86400e3) }, { merge: true });
     return true;
   }).catch((e) => {
-    logger.warn('Compteur de questions indisponible, question acceptée', e.message);
-    return true;
+    // Refus plutôt qu'accord : sinon une panne du compteur ouvre le chat (et les e-mails) sans limite.
+    logger.warn('Compteur de questions indisponible, question refusée', e.message);
+    return false;
   });
 }
 
