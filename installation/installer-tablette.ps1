@@ -251,6 +251,34 @@ if ($refus.Count) {
     }
 }
 
+# 10. Contrôle final, comme chez le client : la tablette redémarre et doit revenir seule sur Papote,
+#     verrouillée, en moins d'une minute. Sinon elle ne part pas (la Blackview Tab 60 Pro restait
+#     1 à 2 min sur son bureau, et le kiosque passait pour actif alors qu'il ne l'était pas).
+Say "`nContrôle final : redémarrage de la tablette…"
+$problemes = @()
+if ((Adb shell dpm list-owners) -notmatch "$([regex]::Escape($Package)).*DeviceOwner") { $problemes += 'mode kiosque absent' }
+Adb reboot | Out-Null
+Start-Sleep -Seconds 5
+Adb wait-for-device | Out-Null
+$debut = Get-Date
+$limite = $debut.AddMinutes(4)
+$ok = $false
+while ((Get-Date) -lt $limite) {
+    Start-Sleep -Seconds 2
+    if ((Adb shell getprop sys.boot_completed) -ne '1') { $debut = Get-Date; continue }
+    $etat = Adb shell dumpsys activity activities
+    if ($etat -match "topResumedActivity=\S+ \S+ $([regex]::Escape($Package))/" -and $etat -match 'mLockTaskModeState=LOCKED') { $ok = $true; break }
+    if (((Get-Date) - $debut).TotalSeconds -gt 60) { break }
+}
+if (-not $ok) { $problemes += 'Papote ne revient pas seule et verrouillée après un redémarrage' }
+if ($problemes.Count) {
+    Say "`n!!! NE PAS ENVOYER CETTE TABLETTE : $($problemes -join ' ; ')." 'Red'
+    Say 'Lancez diagnostic.bat et prévenez Claude.' 'Red'
+    if (-not $Oui) { Read-Host "`nAppuyez sur Entrée pour fermer" }
+    exit 1
+}
+Say ("Redémarrage contrôlé : Papote revient seule, verrouillée, en {0:N0} s." -f ((Get-Date) - $debut).TotalSeconds) 'Green'
+
 Say "`n=== Terminé ! La tablette affiche Papote. ===" 'Cyan'
 Say 'Vous pouvez débrancher le câble USB (laissez la tablette sur son chargeur).'
 if (-not $Oui) { Read-Host "`nAppuyez sur Entrée pour fermer" }
