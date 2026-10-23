@@ -1430,7 +1430,7 @@ $('phone-pause-toggle').addEventListener('change', (e) => {
   let pause = null;
   try { pause = sessionStorage.getItem('papote.pause'); } catch (err) { /* rien */ }
   e.target.checked = pause === '0';
-  if (pause !== '0') $('pause-nudge').click();
+  if (pause !== '0') ouvrirReglagePause('reglages');
 });
 
 async function renderSettings() {
@@ -1752,11 +1752,13 @@ function renderPauseNudge() {
   try { pausable = sessionStorage.getItem('papote.pause') === '1'; } catch (e) { /* rien */ }
   $('pause-nudge').hidden = !session || !pausable;
 }
-$('pause-nudge').addEventListener('click', () => {
+// depuis=reglages : une fois réglé, l'app rouvre Réglages avec ?pause=0 (interrupteur activé).
+function ouvrirReglagePause(depuis) {
   try { sessionStorage.removeItem('papote.pause'); } catch (e) { /* rien */ }
   renderPauseNudge();
-  location.href = 'intent://sans-pause#Intent;scheme=papote;package=fr.mapapote.famille;end';
-});
+  location.href = `intent://sans-pause?depuis=${depuis}#Intent;scheme=papote;package=fr.mapapote.famille;end`;
+}
+$('pause-nudge').addEventListener('click', () => ouvrirReglagePause('accueil'));
 // « Plus tard » : la sonnerie s'arrête ici, les autres proches peuvent encore répondre.
 // « Refuser » : l'appel s'arrête tout de suite, la tablette affiche que vous n'avez pas pu répondre.
 $('incoming-decline').addEventListener('click', () => {
@@ -3880,6 +3882,7 @@ let skipInvites = false;
 let stopPending = null;
 let sharedPending = false;
 let rappelerPending = false; // ouvert par « Rappeler » sur une notification d'appel manqué
+let reglagesPending = false; // rouvert par l'app Android après le réglage de mise en pause
 
 function rememberInviteCode(code, pour) {
   try {
@@ -4149,6 +4152,7 @@ async function enterApp() {
   if (!showIntroTablette()) showGuideOnce(session.family.name);
   if (sharedPending) { sharedPending = false; openShared(); }
   if (rappelerPending) { rappelerPending = false; offerCallBack(); }
+  else if (reglagesPending) { reglagesPending = false; openPage('settings'); }
   else if (pairCode()) showSetupScan(pairCode());
 }
 
@@ -4168,6 +4172,7 @@ async function start() {
   const params = new URLSearchParams(location.search);
   sharedPending = params.has('partage');
   rappelerPending = params.has('rappeler');
+  reglagesPending = params.has('reglages');
   if (params.get('appel')) answerOnArrival(params.get('appel'));
   // Ouvert par l'app Android Papote : ce téléphone sonnera par elle (voir push.js).
   if (params.get('natif')) rememberNativeToken(params.get('natif'));
