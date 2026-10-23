@@ -2755,6 +2755,26 @@ SETTINGS['my-name-card'] = {
   },
 };
 
+// Je suis une femme / un homme (Profil) : members/{uid}.genre, pour la voix qui lit mes messages sur la tablette.
+const GENRES = { femme: 'Une femme', homme: 'Un homme' };
+const renderGenre = () => { $('my-genre-value').textContent = GENRES[session.member.genre] || 'Non précisé'; };
+
+SETTINGS['my-genre-card'] = {
+  fill() {
+    document.querySelectorAll('input[name="my-genre"]').forEach((r) => { r.checked = r.value === session.member.genre; });
+  },
+  async save() {
+    const genre = document.querySelector('input[name="my-genre"]:checked')?.value;
+    if (!genre) return false;
+    if (genre === session.member.genre) return true;
+    await updateDoc(doc(db, 'families', session.fid, 'members', session.uid), { genre });
+    session.member.genre = genre;
+    renderGenre();
+    toast('Enregistré');
+    return true;
+  },
+};
+
 // Mise en veille : families/{fid}.veille = { active, de, a } ; par défaut l'écran s'éteint de 23 h à 7 h.
 const veilleActuelle = () => session.family.veille || { active: true, de: 23, a: 7 };
 
@@ -3041,6 +3061,7 @@ function applyFamily() {
   // Un responsable ne quitte pas sa famille (il pourrait ne plus jamais revenir).
   $('btn-leave').hidden = admin;
   $('my-name-value').textContent = session.member.name;
+  renderGenre();
   $('text-size-card').hidden = true; // plus réglable : le texte débordait sur la tablette
   $('sleep-card').hidden = !amOwner();
   renderSleep();

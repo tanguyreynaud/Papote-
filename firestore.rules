@@ -6,7 +6,7 @@ rules_version = '2';
 //   families/{fid}                  -> { name, code, createdBy, createdAt, admins?, installation? }
 //                                      installation { etape: photo|son|options|fini, pairing } : famille créée
 //                                      par le serveur au scan d'une nouvelle tablette (functions/installation.js)
-//   families/{fid}/members/{uid}    -> { name, role, code, joinedAt, uid?, email?, status? }
+//   families/{fid}/members/{uid}    -> { name, role, code, joinedAt, uid?, email?, status?, genre? ('femme' | 'homme') }
 //                                      status 'pending' : arrivé avec le code, en attente d'un responsable ;
 //                                      absent ou 'active' : membre (les fiches d'avant n'ont pas de status)
 //   families/{fid}/invitations/{email} -> { email, fid, familyName, invitedBy, createdAt }
@@ -329,7 +329,9 @@ service cloud.firestore {
           && request.resource.data.status == 'active';
         allow update: if signedIn()
           && uid == request.auth.uid
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'canCall', 'lastActive', 'lastOnline', 'callable', 'face', 'appVersion', 'uid', 'email', 'battery', 'sim', 'meteoVille', 'wifi', 'lastSeen'])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'canCall', 'lastActive', 'lastOnline', 'callable', 'face', 'appVersion', 'uid', 'email', 'battery', 'sim', 'meteoVille', 'wifi', 'lastSeen', 'genre'])
+          // Je suis une femme / un homme : voix qui lit mes messages sur la tablette.
+          && (!('genre' in request.resource.data) || request.resource.data.genre in ['femme', 'homme'])
           // lastSeen : dernière fois que la caméra a vu quelqu'un (horodatage serveur).
           && (!('lastSeen' in request.resource.data) || request.resource.data.lastSeen == null || request.resource.data.lastSeen is timestamp)
           // Wi-Fi auquel la tablette est connectée : { ssid }.
