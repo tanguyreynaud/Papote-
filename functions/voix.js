@@ -67,8 +67,16 @@ function texteDe(data, champ) {
   return t.slice(0, MAX);
 }
 
+// Annonce dite avant le message (« Julie vous écrit : »), fichier à part : créée une seule fois par
+// proche et par voix, puis réutilisée pour tous ses messages (demande de Tanguy, 23/10 : chaque gain compte).
+function texteAnnonce(prenom) {
+  const p = typeof prenom === 'string' ? prenom.trim().slice(0, 40) : '';
+  return p ? `${p} vous écrit :` : '';
+}
+
 // Ajoute (ou met à jour) data.voix sur le document si le texte a changé. db : base Firestore.
-async function voixDocument(db, ref, data, champ, auteurUid) {
+// annonce : prénom à annoncer avant le texte (messages et légendes), rien pour un rappel.
+async function voixDocument(db, ref, data, champ, auteurUid, prenomAnnonce) {
   const texte = texteDe(data, champ);
   if (!texte) return null;
   let genre = '';
@@ -77,10 +85,17 @@ async function voixDocument(db, ref, data, champ, auteurUid) {
     genre = (m.exists && m.get('genre')) || '';
   }
   const nom = nomVoix(genre);
-  if (data.voix && data.voix.texte === texte && data.voix.nom === nom) return null; // déjà fait
+  const annonce = texteAnnonce(prenomAnnonce);
+  if (data.voix && data.voix.texte === texte && data.voix.nom === nom
+    && (data.voix.annonceTexte || '') === annonce) return null; // déjà fait
   const v = await fichierVoix(texte, genre);
-  await ref.update({ voix: { url: v.url, texte, nom: v.nom } });
+  const voix = { url: v.url, texte, nom: v.nom };
+  if (annonce) {
+    voix.annonce = (await fichierVoix(annonce, genre)).url;
+    voix.annonceTexte = annonce;
+  }
+  await ref.update({ voix });
   return v;
 }
 
-module.exports = { nomVoix, cheminFichier, texteDe, voixDocument, fichierVoix, VOIX, MAX };
+module.exports = { nomVoix, cheminFichier, texteDe, texteAnnonce, voixDocument, fichierVoix, VOIX, MAX };

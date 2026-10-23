@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const { nomVoix, cheminFichier, texteDe, VOIX, MAX } = require('./voix');
+const { nomVoix, cheminFichier, texteDe, texteAnnonce, VOIX, MAX } = require('./voix');
 
 test('voix selon le genre du proche : Orus pour un homme, Kore sinon', () => {
   assert.strictEqual(nomVoix('homme'), VOIX.homme);
@@ -22,4 +22,12 @@ test('texte lu : nettoyé, vide si absent, coupé à la longueur maximale', () =
   assert.strictEqual(texteDe({}, 'text'), '');
   assert.strictEqual(texteDe({ text: 42 }, 'text'), '');
   assert.strictEqual(texteDe({ title: 'x'.repeat(500) }, 'title').length, MAX);
+});
+
+test('annonce « Prénom vous écrit : » : même texte pour tous les messages d’un proche (un seul fichier)', () => {
+  assert.strictEqual(texteAnnonce('Julie'), 'Julie vous écrit :');
+  assert.strictEqual(texteAnnonce('  Julie '), 'Julie vous écrit :');
+  assert.strictEqual(texteAnnonce(''), '');
+  assert.strictEqual(texteAnnonce(undefined), '');
+  assert.strictEqual(cheminFichier(VOIX.femme, texteAnnonce('Julie')), cheminFichier(VOIX.femme, texteAnnonce('Julie')));
 });

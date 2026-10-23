@@ -76,6 +76,9 @@ final class Sync {
         /** Voix Google du texte (functions/voix.js) : adresse en ligne, puis fichier local. */
         String voiceUrl;
         String voicePath;
+        /** Annonce « Julie vous écrit : » (même voix), jouée avant le texte. */
+        String announceUrl;
+        String announcePath;
         /** Envoi de plusieurs photos : adresses et fichiers des photos 2 à 5. */
         List<String> extraUrls = new ArrayList<>();
         List<String> extraPaths = new ArrayList<>();
@@ -404,6 +407,8 @@ final class Sync {
                 p.extraPaths = old.extraPaths;
                 if (p.voiceUrl == null) p.voiceUrl = old.voiceUrl;
                 if (p.voiceUrl != null && p.voiceUrl.equals(old.voiceUrl)) p.voicePath = old.voicePath;
+                if (p.announceUrl == null) p.announceUrl = old.announceUrl;
+                if (p.announceUrl != null && p.announceUrl.equals(old.announceUrl)) p.announcePath = old.announcePath;
             } else if (loadedOnce && p.seenAt == 0 && !"reply".equals(p.type)) {
                 newArrival = true;
             }
@@ -503,14 +508,19 @@ final class Sync {
         p.chunks = Firebase.integer(f, "chunks");
         p.mime = Firebase.str(f, "mime");
         p.voiceUrl = voixUrl(f);
+        p.announceUrl = voixChamp(f, "annonce");
         return p;
     }
 
     /** Adresse du son « voix » d'un document (map { url, texte, nom }), ou null. */
     private static String voixUrl(JSONObject f) {
+        return voixChamp(f, "url");
+    }
+
+    private static String voixChamp(JSONObject f, String champ) {
         JSONObject v = f.optJSONObject("voix");
         JSONObject vf = v == null || v.optJSONObject("mapValue") == null ? null : v.optJSONObject("mapValue").optJSONObject("fields");
-        return vf == null ? null : Firebase.str(vf, "url");
+        return vf == null ? null : Firebase.str(vf, champ);
     }
 
     /**
@@ -527,9 +537,21 @@ final class Sync {
                 relus++;
                 try {
                     JSONObject doc = firebase.get("families/" + fid + "/posts/" + p.id, "voix");
-                    if (doc != null && doc.optJSONObject("fields") != null) p.voiceUrl = voixUrl(doc.getJSONObject("fields"));
+                    if (doc != null && doc.optJSONObject("fields") != null) {
+                        p.voiceUrl = voixUrl(doc.getJSONObject("fields"));
+                        p.announceUrl = voixChamp(doc.getJSONObject("fields"), "annonce");
+                    }
                 } catch (Exception e) {
                     Log.w(TAG, "Voix " + p.id, e);
+                }
+            }
+            if (p.announceUrl != null && p.announcePath == null) {
+                try {
+                    File file = new File(imageDir, p.id + "_annonce.mp3");
+                    if (!file.exists()) file = downloadToFile(p.announceUrl, p.id + "_annonce", "mp3");
+                    p.announcePath = LocalContent.mediaUrl(file.getName());
+                } catch (Exception e) {
+                    Log.w(TAG, "Annonce " + p.id, e);
                 }
             }
             if (p.voiceUrl == null || p.voicePath != null) continue;
@@ -1022,6 +1044,7 @@ final class Sync {
                         .put("audio", p.audioPath == null ? JSONObject.NULL : p.audioPath)
                         .put("video", p.videoPath == null ? JSONObject.NULL : p.videoPath)
                         .put("voice", p.voicePath == null ? JSONObject.NULL : p.voicePath)
+                        .put("announce", p.announcePath == null ? JSONObject.NULL : p.announcePath)
                         .put("duration", p.duration));
             }
             JSONObject payload = new JSONObject().put("familyName", familyName == null ? "" : familyName)

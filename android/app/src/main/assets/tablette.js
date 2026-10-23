@@ -663,7 +663,7 @@
       return;
     }
     var p = overlayPost;
-    noteVoix(overlayText(p), p.voice);
+    noteVoix(overlayText(p), p.voice, p.announce);
     // Visage vu : « lu », et une vidéo ou un vocal démarre tout seul.
     var watching = watchSeen('overlay', function () {
       if (overlayPost !== p) return;
@@ -1718,7 +1718,11 @@
   // enregistrée une fois (outils/voix/generer-voix-google.js). Tout le reste : la voix d'Android.
   // Voix Google d'un message ou d'un rappel (functions/voix.js), retrouvée par le texte affiché.
   var voixDuTexte = {};
-  function noteVoix(text, url) { if (text && url) voixDuTexte[text] = url; }
+  var annonceDuTexte = {}; // « Julie vous écrit : », jouée juste avant (fichier à part, gardé)
+  function noteVoix(text, url, annonce) {
+    if (text && url) voixDuTexte[text] = url;
+    if (text && url && annonce) annonceDuTexte[text] = annonce;
+  }
   var motAudio = null;
   function sayAloud(text) {
     if (!text) return;
@@ -1726,12 +1730,23 @@
     var url = i >= 0 ? 'voix/mots/mot-' + i + '.mp3' : voixDuTexte[text];
     if (url) {
       if (motAudio) motAudio.pause();
-      motAudio = new Audio(url);
+      var annonce = i < 0 ? annonceDuTexte[text] : null;
+      motAudio = new Audio(annonce || url);
+      if (annonce) {
+        var suite = motAudio;
+        suite.onended = function () {
+          if (motAudio !== suite) return;
+          motAudio = new Audio(url);
+          motAudio.onended = function () { setSpeech('idle'); };
+          motAudio.onerror = function () { setSpeech('idle'); };
+          motAudio.play();
+        };
+      }
       var parAndroid = function () { // son injoignable (hors ligne) : la voix d'Android lit le texte
         setSpeech('idle');
         if (i < 0 && android() && android().speak) { setSpeech('loading'); android().speak(text); }
       };
-      motAudio.onended = function () { setSpeech('idle'); };
+      if (!annonce) motAudio.onended = function () { setSpeech('idle'); };
       motAudio.onerror = parAndroid;
       setSpeech('speaking');
       var pr = motAudio.play();

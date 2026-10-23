@@ -1592,7 +1592,7 @@ exports.voixEnvoi = onDocumentWritten(
     const data = apres.data();
     if (data.type === 'reply') return; // réponse écrite depuis la tablette : rien à lui lire
     try {
-      await voix.voixDocument(db, apres.ref, data, 'text', data.authorUid);
+      await voix.voixDocument(db, apres.ref, data, 'text', data.authorUid, data.authorName);
     } catch (e) {
       logger.warn('Voix de l\'envoi', event.params, e.message); // la tablette lira avec sa propre voix
     }
