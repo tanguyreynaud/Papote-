@@ -694,6 +694,9 @@
         if (probe.naturalWidth > probe.naturalHeight * 1.1) {
           $('overlay').className = 'overlay ln mode-photo papier wide';
         }
+        // La carte change de largeur avec la photo : le texte est réajusté.
+        $('overlay-text').style.fontSize = '';
+        setTimeout(function () { ajusterTexte($('overlay-text')); }, 0);
       };
       probe.src = p.image;
     }
@@ -704,9 +707,12 @@
         : mode === 'voice' ? 'Un message vocal de ' + p.authorName
           : legende(p.text) || 'Une petite vidéo pour toi';
     fillHead(media ? null : p);
-    $('overlay-text').textContent = text;
+    // Photo : pas de petit mot seul en bout de ligne (« Je » / « t’embrasse »), il reste avec le suivant.
+    $('overlay-text').textContent = mode === 'photo' ? text.replace(/(^|\s)(\S{1,2})\s/g, '$1$2 ') : text;
     $('overlay-text').className = 'ln-text ' + (mode === 'photo' ? 'size-m' + (text.length > 40 ? ' long' : '') : sizeClass(text));
     show($('overlay-text'), !!text);
+    $('overlay-text').style.fontSize = '';
+    if (mode === 'photo' || mode === 'video') setTimeout(function () { ajusterTexte($('overlay-text')); }, 0);
     showListenButtons();
     // Photo : signée sous la légende (« — Julie »), comme un mot écrit à la main.
     $('overlay-from').textContent = papier ? '— ' + (p.authorName || '') : '';
@@ -762,6 +768,17 @@
     var cut = t.slice(0, 59);
     var sp = cut.lastIndexOf(' ');
     return (sp > 40 ? cut.slice(0, sp) : cut).replace(/[\s,;:.]+$/, '') + '…';
+  }
+
+  // Mot d'une photo : jamais un mot coupé en deux. Si le plus long mot (ou « Je t’embrasse », collés)
+  // dépasse la carte, le texte rapetisse juste assez pour tenir.
+  function ajusterTexte(el) {
+    if (!el || el.hidden || !el.clientWidth) return;
+    var taille = parseFloat(getComputedStyle(el).fontSize);
+    for (var i = 0; i < 12 && el.scrollWidth > el.clientWidth + 1; i++) {
+      taille *= 0.92;
+      el.style.fontSize = taille + 'px';
+    }
   }
 
   function fillHead(p) {

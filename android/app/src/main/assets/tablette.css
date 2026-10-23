@@ -1727,7 +1727,7 @@ html .overlay.papier .ln-text, html .overlay.papier.wide .ln-text {
   font-size: calc(9vmin * var(--ts, 1)); font-weight: 700; line-height: 1.1; color: #312e81;
   display: block; white-space: normal; overflow: hidden; text-overflow: clip; -webkit-line-clamp: none;
   width: 100%; max-width: 100%; min-width: 0; -webkit-flex: none; flex: none; text-align: left;
-  overflow-wrap: break-word;
+  overflow-wrap: normal; /* jamais un mot coupé : le texte rapetisse (ajusterTexte) */
 }
 html .overlay.papier .ln-sign, html .overlay.papier.wide .ln-sign {
   display: block; margin: 2.5vmin 0 0; text-align: right;
@@ -1742,6 +1742,8 @@ html .overlay.papier .ln-sign, html .overlay.papier.wide .ln-sign {
 .overlay.papier.wide .ln-media { width: 64%; max-width: none; } /* plus large : la photo est moins coupée */
 html .overlay.papier.wide #overlay-actions { width: calc(36vw - 6vmin); }
 html .overlay.papier.wide .ln-text { font-size: calc(8vmin * var(--ts, 1)); }
+/* Lignes équilibrées (pas un mot seul sur la dernière ligne quand c'est évitable). */
+html .overlay.papier .ln-text, html .overlay.papier.wide .ln-text.long { text-wrap: balance; overflow-wrap: normal; word-break: normal; }
 /* Légende longue en largeur : un peu plus petite, pour qu'aucun mot ne soit coupé en deux. */
 html .overlay.papier.wide .ln-text.long { font-size: calc(7vmin * var(--ts, 1)); overflow-wrap: normal; }
 .overlay.papier.wide #overlay-actions { gap: 3vmin; }
