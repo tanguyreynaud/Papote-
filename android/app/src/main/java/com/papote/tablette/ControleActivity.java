@@ -201,6 +201,19 @@ public class ControleActivity extends Activity {
                         if (info.facing == android.hardware.Camera.CameraInfo.CAMERA_FACING_FRONT) { front = i; break; }
                     }
                     camera = android.hardware.Camera.open(front >= 0 ? front : 0);
+                    // Image aux bonnes proportions (sinon étirée sur tout l'écran : « je suis écrasé »).
+                    android.hardware.Camera.Parameters p = camera.getParameters();
+                    android.hardware.Camera.Size best = p.getPreferredPreviewSizeForVideo();
+                    if (best == null) best = p.getPreviewSize();
+                    p.setPreviewSize(best.width, best.height);
+                    camera.setParameters(p);
+                    final float ratio = (float) best.width / best.height;
+                    view.post(() -> {
+                        int w = root.getWidth(), hh = root.getHeight();
+                        int vw = w, vh = Math.round(w / ratio);
+                        if (vh > hh) { vh = hh; vw = Math.round(hh * ratio); }
+                        view.setLayoutParams(new FrameLayout.LayoutParams(vw, vh, Gravity.CENTER));
+                    });
                     camera.setPreviewDisplay(h);
                     camera.startPreview();
                     result("camera", front >= 0 ? "avant" : "arriere");

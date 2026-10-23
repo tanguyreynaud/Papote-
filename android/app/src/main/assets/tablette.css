@@ -1658,14 +1658,6 @@ body.night .next-when { color: #a5b4fc; }
 #overlay-actions { gap: 2.5vmin; flex-wrap: nowrap; }
 #overlay-actions .ln-btn.listen { min-width: 0; padding: 0 4.5vmin; font-size: 5.6vmin; }
 #overlay-actions .ln-btn.ok { min-width: 0; padding: 0 7vmin; }
-/* Photo en hauteur : les boutons restent dans la carte de gauche (46 %), côte à côte, sans déborder
-   sur la photo ni s'écraser (Blackview Tab 60 Pro, 23/10). */
-.overlay.mode-photo:not(.wide) .ln-bar { width: 46%; box-sizing: border-box; padding: 0 4vmin 5vmin; }
-.overlay.mode-photo:not(.wide) #overlay-actions { width: 100%; gap: 3vmin; }
-.overlay.mode-photo:not(.wide) #overlay-actions .ln-btn { -webkit-flex: 1 1 0; flex: 1 1 0; margin: 0; padding: 0 2vmin;
-  min-height: 15vmin; justify-content: center; white-space: nowrap; }
-.overlay.mode-photo:not(.wide) #overlay-actions .ln-btn.listen { font-size: 5.6vmin; }
-.overlay.mode-photo:not(.wide) #overlay-actions .ln-btn[hidden] { display: none; }
 
 /* Appel lancé par Mamie, passé en vidéo : bouton Raccrocher en bas, au centre */
 .call-out-hangup {
@@ -1703,3 +1695,29 @@ body.night .home-left .sos-btn { background: #2a1f2c; color: #f4a7b4; border-col
 .ln-btn.listen.loading { opacity: .75; }
 .ln-btn.listen.speaking { background: #3730a3; color: #fff; border-color: #3730a3; animation: listen-pulse 1.4s ease-in-out infinite; }
 @keyframes listen-pulse { 50% { box-shadow: 0 0 0 2.4vmin rgba(55, 48, 163, .18); } }
+
+/* ---------- Photo en hauteur (demande de Tanguy, 23/10) ----------
+   La photo prend tout l'écran (en entier, sur son fond flou) ; le mot et les boutons flottent
+   par-dessus, en bas à gauche, au lieu d'une carte qui la pousse à droite. */
+.overlay.mode-photo:not(.wide) .ln-main { position: relative; }
+.overlay.mode-photo:not(.wide) .ln-media {
+  position: absolute; top: 0; right: 0; bottom: 0; left: 0; width: auto;
+}
+.overlay.mode-photo:not(.wide) .ln-wood {
+  position: absolute; left: 0; bottom: 26vmin; z-index: 2;
+  width: auto; max-width: 44%; padding: 0 0 0 5vmin;
+  background: none !important;
+}
+.overlay.mode-photo:not(.wide) .ln-wood::before { display: none; }
+.overlay.mode-photo:not(.wide) .ln-note {
+  padding: 3vmin 4vmin; border-radius: 3vmin;
+  background: rgba(253, 250, 245, .94);
+  box-shadow: 0 1.5vmin 4vmin rgba(0, 0, 0, .3);
+  -webkit-transform: none; transform: none; animation: none;
+}
+.overlay.mode-photo:not(.wide) .ln-bar { z-index: 3; padding: 0 0 5vmin 5vmin; }
+.overlay.mode-photo:not(.wide) #overlay-actions { gap: 3vmin; }
+.overlay.mode-photo:not(.wide) #overlay-actions .ln-btn { margin: 0; min-height: 15vmin; }
+/* Diaporama : « Tanguy, aujourd'hui » et la légende collés à droite (demande de Tanguy, 23/10). */
+.photos .photo-caption { text-align: right; }
+.photos .photo-who { -webkit-justify-content: flex-end; justify-content: flex-end; }
