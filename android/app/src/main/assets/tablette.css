@@ -1724,7 +1724,7 @@ body.night .home-left .sos-btn { background: #2a1f2c; color: #f4a7b4; border-col
 .overlay.papier .ln-head, .overlay.papier.wide .ln-head { display: none; }
 html .overlay.papier .ln-text, html .overlay.papier.wide .ln-text {
   margin: 0; font-family: 'Alegreya Sans', 'Atkinson Hyperlegible', sans-serif;
-  font-size: calc(7.6vmin * var(--ts, 1)); font-weight: 700; line-height: 1.12; color: #312e81;
+  font-size: calc(9vmin * var(--ts, 1)); font-weight: 700; line-height: 1.1; color: #312e81;
   display: block; white-space: normal; overflow: hidden; text-overflow: clip; -webkit-line-clamp: none;
   width: 100%; max-width: 100%; min-width: 0; -webkit-flex: none; flex: none; text-align: left;
   overflow-wrap: break-word;

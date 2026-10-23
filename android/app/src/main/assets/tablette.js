@@ -699,7 +699,7 @@
     // Message ou photo : en haut, qui l'envoie (visage, prénom, quand) ; dessous, son mot ou sa légende.
     // Vocal ou vidéo : le visage au-dessus de « Une vidéo de … ».
     var text = mode === 'message' ? p.text
-      : mode === 'photo' ? (legende(p.text) || 'Je pense fort à toi')
+      : mode === 'photo' ? (legende(p.text) || motParDefaut(p))
         : mode === 'voice' ? 'Un message vocal de ' + p.authorName
           : legende(p.text) || 'Une petite vidéo pour toi';
     fillHead(media ? null : p);
@@ -746,6 +746,15 @@
 
   // Légende d'une photo : 50 caractères au plus (limite de l'app famille) ; les anciens envois plus
   // longs sont coupés au dernier mot, avec « … ».
+  // Photo sans légende : un petit mot choisi parmi plusieurs (toujours le même pour un envoi donné).
+  var MOTS = ['Je pense fort à toi', 'Un petit coucou !', 'Gros bisous !', 'Une pensée pour toi',
+    'Je t’embrasse fort', 'Plein de bisous !', 'Bonne journée !'];
+  function motParDefaut(p) {
+    var id = (p && p.id) || '', h = 0;
+    for (var i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) % 9973;
+    return MOTS[h % MOTS.length];
+  }
+
   function legende(t) {
     t = (t || '').trim();
     if (t.length <= 50) return t;
@@ -1706,7 +1715,7 @@
   function overlayText(p) {
     if (!p) return '';
     // Photo sans légende : on lit le texte affiché par défaut.
-    var t = p.image ? (legende(p.text) || 'Je pense fort à toi') : p.text;
+    var t = p.image ? (legende(p.text) || motParDefaut(p)) : p.text;
     if (!t) return '';
     return (p.authorName ? p.authorName + ' vous écrit : ' : '') + t;
   }
