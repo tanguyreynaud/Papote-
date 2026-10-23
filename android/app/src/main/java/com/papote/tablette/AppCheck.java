@@ -52,10 +52,28 @@ final class AppCheck {
     /** Adresses qui reçoivent l'en-tête X-Firebase-AppCheck (pas l'authentification ni la fonction du jeton). */
     static boolean concerne(String url) {
         if (url == null || url.startsWith(URL_JETON)) return false;
-        return url.startsWith("https://firestore.googleapis.com/")
-                || url.startsWith("https://firebasestorage.googleapis.com/")
-                || url.contains(".cloudfunctions.net/")
-                || url.contains(".run.app/");
+        // Hôte comparé exactement (audit du 23/10) : une adresse piégée dans un envoi, du genre
+        // https://pirate.example/x.run.app/photo.jpg, ne doit pas recevoir le jeton.
+        String host;
+        try {
+            URL u = new URL(url);
+            if (!"https".equals(u.getProtocol())) return false;
+            host = u.getHost().toLowerCase(java.util.Locale.ROOT);
+        } catch (Exception e) {
+            return false;
+        }
+        return host.equals("firestore.googleapis.com")
+                || host.equals("firebasestorage.googleapis.com")
+                || host.endsWith(".cloudfunctions.net")
+                || host.endsWith(".run.app");
+    }
+
+    /** Jeton d'identité Firebase du compte de la tablette (Sync), envoyé à jetonAppCheck. */
+    interface IdToken { String get() throws Exception; }
+    private static IdToken idToken;
+
+    static void setIdToken(IdToken source) {
+        idToken = source;
     }
 
     /** Jeton en cours, ou null (pas de clé, service injoignable). Fait un appel réseau si besoin : hors fil principal. */
@@ -71,6 +89,16 @@ final class AppCheck {
             h.setRequestMethod("POST");
             h.setDoOutput(true);
             h.setRequestProperty("Content-Type", "application/json");
+            // Prouve le compte de la tablette : le serveur relie la clé à ce compte (liaison tablette →
+            // commande par n° de série, PR #213). Sans compte encore, la requête part sans.
+            if (idToken != null) {
+                try {
+                    String id = idToken.get();
+                    if (id != null) h.setRequestProperty("Authorization", "Bearer " + id);
+                } catch (Exception e) {
+                    Log.w(TAG, "Jeton d'identité pour App Check", e);
+                }
+            }
             byte[] body = new JSONObject().put("cle", k).toString().getBytes("UTF-8");
             h.setFixedLengthStreamingMode(body.length);
             try {

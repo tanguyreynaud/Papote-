@@ -92,7 +92,7 @@ public class MainActivity extends Activity implements Sync.Listener {
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
-        s.setAllowFileAccess(true);
+        s.setAllowFileAccess(false); // tout passe par appassets.androidplatform.net (audit du 23/10)
         s.setMediaPlaybackRequiresUserGesture(false);
         s.setTextZoom(100);
         s.setSupportZoom(false);

@@ -115,6 +115,7 @@ final class Sync {
         this.context = context.getApplicationContext();
         this.prefs = prefs;
         this.firebase = new Firebase(context, prefs);
+        AppCheck.setIdToken(firebase::token);
         this.http = new Http(context);
         this.imageDir = new File(context.getFilesDir(), "photos");
         this.listener = listener;
@@ -617,7 +618,15 @@ final class Sync {
     }
 
     /** Télécharge une adresse https dans photos/{id}.{ext}, sans tout garder en mémoire. */
+    private static final long MAX_PHOTO = 20L << 20, MAX_VIDEO = 200L << 20;
+
     private File downloadToFile(String url, String id, String ext) throws Exception {
+        // Seulement le stockage Firebase (audit du 23/10) : pas d'adresse quelconque glissée dans un envoi.
+        java.net.URL u = new java.net.URL(url);
+        if (!"https".equals(u.getProtocol()) || !"firebasestorage.googleapis.com".equalsIgnoreCase(u.getHost())) {
+            throw new IOException("Adresse refusée : " + u.getHost());
+        }
+        long max = "jpg".equals(ext) ? MAX_PHOTO : MAX_VIDEO;
         javax.net.ssl.HttpsURLConnection c =
                 (javax.net.ssl.HttpsURLConnection) new java.net.URL(url).openConnection();
         c.setConnectTimeout(20_000);
@@ -631,7 +640,12 @@ final class Sync {
             try {
                 byte[] buf = new byte[64 * 1024];
                 int n;
-                while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+                long total = 0;
+                while ((n = in.read(buf)) > 0) {
+                    total += n;
+                    if (total > max) throw new IOException("Fichier trop gros (" + id + ")");
+                    out.write(buf, 0, n);
+                }
             } finally {
                 out.close();
                 in.close();
