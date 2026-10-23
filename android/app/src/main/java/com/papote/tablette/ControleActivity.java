@@ -203,8 +203,11 @@ public class ControleActivity extends Activity {
                     camera = android.hardware.Camera.open(front >= 0 ? front : 0);
                     // Image aux bonnes proportions (sinon étirée sur tout l'écran : « je suis écrasé »).
                     android.hardware.Camera.Parameters p = camera.getParameters();
-                    android.hardware.Camera.Size best = p.getPreferredPreviewSizeForVideo();
-                    if (best == null) best = p.getPreviewSize();
+                    // La plus grande taille : tout le champ du capteur (une taille 16/9 le recadre, effet zoom).
+                    android.hardware.Camera.Size best = p.getPreviewSize();
+                    for (android.hardware.Camera.Size z : p.getSupportedPreviewSizes()) {
+                        if ((long) z.width * z.height > (long) best.width * best.height) best = z;
+                    }
                     p.setPreviewSize(best.width, best.height);
                     camera.setParameters(p);
                     final float ratio = (float) best.width / best.height;
