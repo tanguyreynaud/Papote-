@@ -4,20 +4,18 @@ Une tablette ne part chez un client que si **tout** est coché. 🤖 = vérifié
 `installer-tablette.ps1` (il s'arrête en rouge sinon) ; 👤 = à faire à la main.
 Les autres listes (commandes, stock, app famille) viendront à côté de celle-ci.
 
-## A. Nouveau modèle de tablette (une fois par modèle)
+## A. Matériel, sur chaque tablette (le fabricant peut en avoir raté une)
 
-- 👤 Android 13 ou plus en vrai, puce 4G récente (T606 ou mieux) 🤖
-- 👤 3 redémarrages de suite : Papote revient seule, verrouillée, en moins de 10 s (`logcat -b events`, `wm_create_activity`)
-- 👤 Débrancher le chargeur, attendre l'extinction batterie vide, rebrancher : Papote revient seule
-- 👤 Bouton marche/arrêt : pas de menu « Éteindre / Redémarrer », pas de barre du haut, pas de retour au bureau du fabricant
+- 🤖 Android 13 ou plus en vrai, puce 4G récente (T606 ou mieux)
+- 🤖 Redémarrage : Papote revient seule, verrouillée (couvre aussi la batterie vide)
+- 👤 Appui long sur marche/arrêt : aucun menu, pas de barre du haut, pas de bureau du fabricant
 - 👤 Gestes et boutons de navigation sans effet (accueil, récents, retour)
-- 👤 Haut-parleur : voix « Écouter », sonnerie, radio, vidéo du diaporama audibles à 2 m
-- 👤 Micro : où est-il ? Rien (mousse, coque, support) ne doit le couvrir
-- 👤 Appel vidéo de 5 min : pas d'écho chez le proche, Mamie entend bien (volume appel 72 %)
+- 👤 Haut-parleur : voix du guide (🔊), sonnerie, radio, vidéo audibles à 2 m
+- 👤 Micro : rien (mousse, coque, support) ne le couvre ; pendant l'appel test, le son coupe si on bouche son trou
+- 👤 Appel vidéo de 5 min : pas d'écho chez le proche, Mamie entend bien
 - 👤 Caméra : Mamie cadrée assise à 50 cm, réponse automatique quand elle est vue
-- 👤 Pas de « Bonjour » de préchauffage audible au démarrage
-- 👤 Nuit : bleu nuit, écran moins lumineux, radio coupée ; matin : retour normal
-- 👤 Noter ses particularités dans la mémoire du projet
+- 👤 Écran tactile : toucher les quatre coins et le centre, tout répond
+- 👤 Nouveau modèle seulement : noter ses particularités dans la mémoire du projet
 
 ## B. Chaque tablette, à l'installation (script)
 
@@ -46,5 +44,5 @@ Les autres listes (commandes, stock, app famille) viendront à côté de celle-c
 ## D. Chaque nouvelle version, sur les tablettes de test avant tout le monde
 
 - 👤 Publier avec `publier-mise-a-jour.ps1 -Test`, vérifier que T-002 et T-003 se mettent à jour seules
-- 👤 Refaire A (redémarrages, son, appel) et C (envoi, appel) sur une tablette de test
+- 👤 Refaire A et C sur une tablette de test
 - 👤 Seulement ensuite : `promouvoir-mise-a-jour.ps1`
