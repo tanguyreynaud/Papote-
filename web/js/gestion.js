@@ -927,6 +927,8 @@ async function remplirCommande(id) {
       ligne('État', badge(texte, classe)),
       ligne('Commandée le', jour(c.creeLe)),
       ligne('Client', [c.nom, c.email, c.telephone].filter(Boolean).join(' · ')),
+      // Souvent un proche (compte joint, gendre…) : à regarder avant l'envoi, sans rien bloquer.
+      ligne('Titulaire de l\'IBAN', c.titulaire),
       ligne('Formule', formuleTexte(c)),
       ligne('Livraison', livraisonTexte(c)),
       ligne('Suivi', c.suivi ? `${c.suivi}${c.envoyeeLe ? `, envoyée le ${jour(c.envoyeeLe)}` : ''}` : null),
