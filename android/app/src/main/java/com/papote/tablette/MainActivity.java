@@ -622,7 +622,8 @@ public class MainActivity extends Activity implements Sync.Listener {
             endVideo();
             return;
         }
-        // Rien derrière la vidéo : la page est masquée, le fond reste noir.
+        // Rien derrière la vidéo : la page est masquée, la vidéo est posée sur le fond crème des écrans.
+        ((View) videoView.getParent()).setBackgroundColor(0xFFF6EFE4);
         web.setVisibility(View.INVISIBLE);
         videoView.setVisibility(View.VISIBLE);
         videoView.setVideoPath(file.getAbsolutePath());

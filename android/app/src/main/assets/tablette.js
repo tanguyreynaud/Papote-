@@ -709,7 +709,8 @@
           : legende(p.text) || 'Une petite vidéo pour toi';
     fillHead(media ? null : p);
     // Photo : pas de petit mot seul en bout de ligne (« Je » / « t’embrasse »), il reste avec le suivant.
-    $('overlay-text').textContent = papier ? text.replace(/(^|\s)(\S{1,2})\s/g, '$1$2 ') : text;
+    // Ponctuation française (« ! », « ? », « : ») jamais seule en début de ligne.
+    $('overlay-text').textContent = papier ? text.replace(/(^|\s)(\S{1,2})\s/g, '$1$2 ').replace(/\s+([!?:;»])/g, ' $1') : text;
     $('overlay-text').className = 'ln-text ' + (mode === 'photo' ? 'size-m' + (text.length > 40 ? ' long' : '')
       : mode === 'message' ? 'msg-' + (text.length <= 60 ? 'court' : text.length <= 110 ? 'moyen' : 'long') : sizeClass(text));
     show($('overlay-text'), !!text);
@@ -731,6 +732,7 @@
     if (media && face) $('overlay-face').setAttribute('src', face);
     // Photo : à droite, sur toute la hauteur.
     show($('ln-media'), papier && mode !== 'message');
+    show($('overlay-media-play'), mode === 'video');
     if (mode === 'video') videoPoster(p);
     if (mode === 'photo') {
       setPicture($('overlay-img'), p.image);
@@ -739,7 +741,7 @@
     }
     show($('ln-playzone'), media);
     $('overlay-play').className = 'ln-play';
-    $('overlay-play').querySelector('.label').textContent = mode === 'video' ? 'Voir la vidéo' : 'Écouter';
+    $('overlay-play').querySelector('.label').textContent = mode === 'video' ? 'Regarder' : 'Écouter';
     $('overlay-replay').querySelector('.label').textContent = mode === 'video' ? 'Revoir' : 'Réécouter';
     // Vocal ou vidéo : d'abord seulement « Écouter » / « Regarder » ; le reste vient une fois fini.
     setOverlayActions(!media, false);
@@ -824,6 +826,7 @@
 
   // Première image de la vidéo, à droite du mot (et en fond flou), avant qu'elle soit lancée.
   function videoPoster(p) {
+    $('overlay').style.removeProperty('--photo-ratio');
     $('overlay-img').setAttribute('data-url', '');
     $('overlay-img').setAttribute('src', BLANK);
     $('overlay-img').style.backgroundImage = 'none';
@@ -840,6 +843,11 @@
         c.height = v.videoHeight;
         c.getContext('2d').drawImage(v, 0, 0);
         var url = c.toDataURL('image/jpeg', 0.85);
+        // Même place que pour une photo : en hauteur selon ses proportions, en largeur plus large et zoomée.
+        $('overlay').style.setProperty('--photo-ratio', String(v.videoWidth / v.videoHeight));
+        if (v.videoWidth > v.videoHeight * 1.1) $('overlay').className = 'overlay ln mode-video papier wide';
+        $('overlay-text').style.fontSize = '';
+        setTimeout(function () { ajusterTexte($('overlay-text')); }, 0);
         setPicture($('overlay-img'), url);
         $('overlay-img-bg').style.backgroundImage = 'url("' + url + '")';
       } catch (e) { /* pas d'image : le fond reste uni */ }
@@ -1989,6 +1997,7 @@
     head.className = 'ln-head';
     $('overlay-text').parentNode.insertBefore(head, $('overlay-text'));
     $('overlay-play').insertAdjacentHTML('afterbegin', '<span class="play-icon">' + ICONS.play + '</span>');
+    $('overlay-media-play').innerHTML = ICONS.play;
 
     face.id = 'overlay-face';
     face.className = 'overlay-face';
@@ -2144,6 +2153,11 @@
       if (overlayPost && (overlayPost.audio || overlayPost.video) && isShown('ln-playzone')) listenOverlay();
     });
     on($('overlay-replay'), 'click', replayOverlay);
+    // Vidéo : toucher son image la lance aussi (ou la relance).
+    on($('overlay-media-play'), 'click', function () {
+      if (playing) return;
+      if (isShown('ln-playzone')) listenOverlay(); else replayOverlay();
+    });
     on($('player'), 'ended', voiceEnded);
     on($('photo-prev'), 'click', olderPhoto);
     on($('photo-next'), 'click', newerPhoto);

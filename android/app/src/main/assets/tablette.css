@@ -1825,3 +1825,18 @@ html .overlay.mode-message.papier .ln-wood { background: #f6efe4 !important; }
 /* Diaporama : « Tanguy, aujourd'hui » et la légende collés à droite (demande de Tanguy, 23/10). */
 .photos .photo-caption { text-align: right; }
 .photos .photo-who { -webkit-justify-content: flex-end; justify-content: flex-end; }
+
+/* ---------- Vidéo (même carte que la photo, 23/10) ----------
+   Sa première image à droite, à ses proportions comme une photo, avec un grand ▶ au milieu. */
+.media-play { display: none; }
+html .overlay.papier .media-play {
+  position: absolute; z-index: 2; top: 50%; left: calc(50% - 1.5vmin); width: 22vmin; height: 22vmin;
+  margin: -11vmin 0 0 -11vmin; padding: 0; border: 0; border-radius: 50%;
+  display: -webkit-flex; display: flex; -webkit-align-items: center; align-items: center;
+  -webkit-justify-content: center; justify-content: center;
+  background: rgba(253, 250, 245, .92); color: #4f46e5; box-shadow: 0 1vmin 4vmin rgba(49, 46, 129, .35);
+}
+html .overlay.papier .media-play[hidden] { display: none; }
+html .overlay.papier .media-play svg { width: 11vmin; height: 11vmin; margin-left: 1.5vmin; }
+html .overlay.papier .ln-play { white-space: nowrap; }
+html .overlay.papier.wide .ln-play { padding: 0 5vmin; font-size: 5.6vmin; }
