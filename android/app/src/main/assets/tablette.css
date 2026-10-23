@@ -1742,6 +1742,8 @@ html .overlay.papier .ln-sign, html .overlay.papier.wide .ln-sign {
 .overlay.papier.wide .ln-media { width: 64%; max-width: none; } /* plus large : la photo est moins coupée */
 html .overlay.papier.wide #overlay-actions { width: calc(36vw - 6vmin); }
 html .overlay.papier.wide .ln-text { font-size: calc(8vmin * var(--ts, 1)); }
+/* Légende longue en largeur : un peu plus petite, pour qu'aucun mot ne soit coupé en deux. */
+html .overlay.papier.wide .ln-text.long { font-size: calc(7vmin * var(--ts, 1)); overflow-wrap: normal; }
 .overlay.papier.wide #overlay-actions { gap: 3vmin; }
 .overlay.papier.wide #overlay-actions .ln-btn:not(.listen) { padding: 0 6.5vmin; }
 /* La photo remplit sa place, sans fond flou : en largeur elle est un peu zoomée (bords coupés). */

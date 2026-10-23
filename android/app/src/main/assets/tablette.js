@@ -704,7 +704,7 @@
           : legende(p.text) || 'Une petite vidéo pour toi';
     fillHead(media ? null : p);
     $('overlay-text').textContent = text;
-    $('overlay-text').className = 'ln-text ' + (mode === 'photo' ? 'size-m' : sizeClass(text));
+    $('overlay-text').className = 'ln-text ' + (mode === 'photo' ? 'size-m' + (text.length > 40 ? ' long' : '') : sizeClass(text));
     show($('overlay-text'), !!text);
     showListenButtons();
     // Photo : signée sous la légende (« — Julie »), comme un mot écrit à la main.
