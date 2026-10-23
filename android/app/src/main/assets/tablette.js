@@ -102,7 +102,7 @@
     }
     var evening = isEvening(hour);
     document.body.className = (evening ? 'night' : '') +
-      (playing && playing.post.video ? ' video-playing' : '');
+      (playing && playing.post.video && !playing.cadre ? ' video-playing' : '');
     // Le soir, l'écran garde son fond noir mais éclaire moins.
     if (evening !== dimmed) {
       dimmed = evening;
@@ -549,8 +549,24 @@
     stopAudio();
     playing = { post: p, onEnd: onEnd };
     if (p.video) {
-      document.body.className += ' video-playing';
-      if (android() && android().playVideo) android().playVideo(p.video);
+      var a = android();
+      var ratio = parseFloat($('overlay').style.getPropertyValue('--photo-ratio')) || 0;
+      if (a && a.playVideoAt && ratio) {
+        if (ratio < 1) {
+          // En hauteur : elle joue dans son cadre, le mot reste à côté.
+          var r = $('overlay-img').getBoundingClientRect();
+          playing.cadre = true; // la page reste visible
+          a.playVideoAt(p.video, r.left, r.top, r.width, r.height, false);
+        } else {
+          // En largeur : toute la hauteur de l'écran, centrée (les côtés qui dépassent sont coupés).
+          var hh = window.innerHeight, ww = hh * ratio;
+          document.body.className += ' video-playing';
+          a.playVideoAt(p.video, (window.innerWidth - ww) / 2, 0, ww, hh, true);
+        }
+      } else if (a && a.playVideo) {
+        document.body.className += ' video-playing';
+        a.playVideo(p.video);
+      }
     } else if (android() && android().playVoice) {
       android().playVoice(p.audio);
     } else {

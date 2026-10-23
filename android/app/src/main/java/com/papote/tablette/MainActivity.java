@@ -328,6 +328,12 @@ public class MainActivity extends Activity implements Sync.Listener {
             handler.post(() -> startVideo(url));
         }
 
+        /** Vidéo posée à un endroit de la page (x, y, largeur, hauteur en px CSS) ; plein : la page est masquée. */
+        @JavascriptInterface
+        public void playVideoAt(String url, float x, float y, float w, float h, boolean plein) {
+            handler.post(() -> startVideo(url, new float[]{x, y, w, h}, plein));
+        }
+
         @JavascriptInterface
         public void stopVideo() {
             handler.post(() -> {
@@ -615,6 +621,10 @@ public class MainActivity extends Activity implements Sync.Listener {
     @Override public void onWeather(JSONObject weather) { callPage("onWeather", weather); }
 
     private void startVideo(String url) {
+        startVideo(url, null, true);
+    }
+
+    private void startVideo(String url, float[] place, boolean plein) {
         String name = Uri.parse(url).getLastPathSegment();
         if (name == null || name.contains("..")) return;
         java.io.File file = new java.io.File(new java.io.File(getFilesDir(), "photos"), name);
@@ -622,9 +632,23 @@ public class MainActivity extends Activity implements Sync.Listener {
             endVideo();
             return;
         }
-        // Rien derrière la vidéo : la page est masquée, la vidéo est posée sur le fond crème des écrans.
+        FrameLayout.LayoutParams lp;
+        if (place != null && place[2] > 0 && place[3] > 0) {
+            // Vidéo en hauteur : dans son cadre, à côté du mot. En largeur : toute la hauteur de l'écran,
+            // les côtés qui dépassent sont coupés (la page donne la place exacte).
+            float d = getResources().getDisplayMetrics().density;
+            lp = new FrameLayout.LayoutParams(Math.round(place[2] * d), Math.round(place[3] * d));
+            lp.gravity = Gravity.TOP | Gravity.LEFT;
+            lp.leftMargin = Math.round(place[0] * d);
+            lp.topMargin = Math.round(place[1] * d);
+        } else {
+            lp = new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT);
+            lp.gravity = Gravity.CENTER;
+        }
+        videoView.setLayoutParams(lp);
+        // Plein écran : rien derrière la vidéo, la page est masquée, fond crème des écrans.
         ((View) videoView.getParent()).setBackgroundColor(0xFFF6EFE4);
-        web.setVisibility(View.INVISIBLE);
+        if (plein) web.setVisibility(View.INVISIBLE);
         videoView.setVisibility(View.VISIBLE);
         videoView.setVideoPath(file.getAbsolutePath());
         videoView.start();
