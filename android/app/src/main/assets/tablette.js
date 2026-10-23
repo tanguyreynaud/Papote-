@@ -679,13 +679,15 @@
     });
     var mode = p.image ? 'photo' : p.type === 'voice' ? 'voice' : p.type === 'video' ? 'video' : 'message';
     var media = mode === 'voice' || mode === 'video';
-    $('overlay').className = 'overlay ln mode-' + mode;
+    // Photo et vidéo : le grand mot signé à gauche, l'image à droite (classe papier).
+    var papier = mode === 'photo' || mode === 'video';
+    $('overlay').className = 'overlay ln mode-' + mode + (papier ? ' papier' : '');
     // Photo en paysage : elle prend toute la largeur, le mot passe dessous en bandeau.
     if (mode === 'photo') {
       var probe = new Image();
       probe.onload = function () {
         if (overlayPost === p && probe.naturalWidth > probe.naturalHeight * 1.1) {
-          $('overlay').className = 'overlay ln mode-photo wide';
+          $('overlay').className = 'overlay ln mode-photo papier wide';
         }
       };
       probe.src = p.image;
@@ -695,20 +697,21 @@
     var text = mode === 'message' ? p.text
       : mode === 'photo' ? legende(p.text)
         : mode === 'voice' ? 'Un message vocal de ' + p.authorName
-          : 'Une vidéo de ' + p.authorName + (p.text ? ' : ' + p.text : '');
+          : legende(p.text) || 'Une petite vidéo pour toi';
     fillHead(media ? null : p);
     $('overlay-text').textContent = text;
     $('overlay-text').className = 'ln-text ' + (mode === 'photo' ? 'size-m' : sizeClass(text));
     show($('overlay-text'), !!text);
     showListenButtons();
     // Photo : signée sous la légende (« — Julie »), comme un mot écrit à la main.
-    $('overlay-from').textContent = mode === 'photo' ? '— ' + (p.authorName || '') : '';
-    show($('overlay-from'), mode === 'photo');
+    $('overlay-from').textContent = papier ? '— ' + (p.authorName || '') : '';
+    show($('overlay-from'), papier);
     var face = faceOf(p);
     show($('overlay-face'), media && !!face);
     if (media && face) $('overlay-face').setAttribute('src', face);
     // Photo : à droite, sur toute la hauteur.
-    show($('ln-media'), mode === 'photo');
+    show($('ln-media'), papier);
+    if (mode === 'video') videoPoster(p);
     if (mode === 'photo') {
       setPicture($('overlay-img'), p.image);
       $('overlay-img-bg').style.backgroundImage = 'none';
@@ -716,7 +719,7 @@
     }
     show($('ln-playzone'), media);
     $('overlay-play').className = 'ln-play';
-    $('overlay-play').querySelector('.label').textContent = mode === 'video' ? 'Regarder' : 'Écouter';
+    $('overlay-play').querySelector('.label').textContent = mode === 'video' ? 'Voir la vidéo' : 'Écouter';
     $('overlay-replay').querySelector('.label').textContent = mode === 'video' ? 'Revoir' : 'Réécouter';
     // Vocal ou vidéo : d'abord seulement « Écouter » / « Regarder » ; le reste vient une fois fini.
     setOverlayActions(!media, false);
@@ -775,6 +778,32 @@
     who.appendChild(name);
     who.appendChild(when);
     head.appendChild(who);
+  }
+
+  // Première image de la vidéo, à droite du mot (et en fond flou), avant qu'elle soit lancée.
+  function videoPoster(p) {
+    $('overlay-img').setAttribute('data-url', '');
+    $('overlay-img').setAttribute('src', BLANK);
+    $('overlay-img').style.backgroundImage = 'none';
+    $('overlay-img-bg').style.backgroundImage = 'none';
+    var v = document.createElement('video');
+    v.muted = true;
+    v.preload = 'auto';
+    v.addEventListener('loadeddata', function () { try { v.currentTime = Math.min(0.5, (v.duration || 1) / 2); } catch (e) { /* tant pis */ } });
+    v.addEventListener('seeked', function () {
+      if (overlayPost !== p || !v.videoWidth) return;
+      try {
+        var c = document.createElement('canvas');
+        c.width = v.videoWidth;
+        c.height = v.videoHeight;
+        c.getContext('2d').drawImage(v, 0, 0);
+        var url = c.toDataURL('image/jpeg', 0.85);
+        setPicture($('overlay-img'), url);
+        $('overlay-img-bg').style.backgroundImage = 'url("' + url + '")';
+      } catch (e) { /* pas d'image : le fond reste uni */ }
+      v.removeAttribute('src');
+    });
+    v.src = p.video;
   }
 
   function listenOverlay() {
