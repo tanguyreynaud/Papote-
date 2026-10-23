@@ -87,6 +87,11 @@
     var day = JOURS[now.getDay()];
     $('date').textContent = day.charAt(0).toUpperCase() + day.slice(1) + ' ' + now.getDate() +
       (now.getDate() === 1 ? 'er' : '') + ' ' + MOIS[now.getMonth()];
+    // Bandeau bas d'une photo reçue : « Il est 14h24, vendredi 23 octobre ».
+    if ($('overlay-clock')) {
+      $('overlay-clock').textContent = 'Il est ' + now.getHours() + 'h' + pad(now.getMinutes()) + ', ' + day + ' ' +
+        now.getDate() + (now.getDate() === 1 ? 'er' : '') + ' ' + MOIS[now.getMonth()];
+    }
     var hour = now.getHours();
     // Le moment de la journée, un repère de plus sous la date.
     if ($('moment')) {
@@ -688,7 +693,7 @@
     // Message ou photo : en haut, qui l'envoie (visage, prénom, quand) ; dessous, son mot ou sa légende.
     // Vocal ou vidéo : le visage au-dessus de « Une vidéo de … ».
     var text = mode === 'message' ? p.text
-      : mode === 'photo' ? (p.text || '')
+      : mode === 'photo' ? legende(p.text)
         : mode === 'voice' ? 'Un message vocal de ' + p.authorName
           : 'Une vidéo de ' + p.authorName + (p.text ? ' : ' + p.text : '');
     fillHead(media ? null : p);
@@ -696,7 +701,9 @@
     $('overlay-text').className = 'ln-text ' + (mode === 'photo' ? 'size-m' : sizeClass(text));
     show($('overlay-text'), !!text);
     showListenButtons();
-    show($('overlay-from'), false);
+    // Photo : signée sous la légende (« — Julie »), comme un mot écrit à la main.
+    $('overlay-from').textContent = mode === 'photo' ? '— ' + (p.authorName || '') : '';
+    show($('overlay-from'), mode === 'photo');
     var face = faceOf(p);
     show($('overlay-face'), media && !!face);
     if (media && face) $('overlay-face').setAttribute('src', face);
@@ -728,6 +735,16 @@
     var d = new Date(ms);
     var day = dayLabel(ms);
     return day === "aujourd'hui" || day === 'hier' ? day + ' à ' + d.getHours() + 'h' + pad(d.getMinutes()) : day;
+  }
+
+  // Légende d'une photo : 50 caractères au plus (limite de l'app famille) ; les anciens envois plus
+  // longs sont coupés au dernier mot, avec « … ».
+  function legende(t) {
+    t = (t || '').trim();
+    if (t.length <= 50) return t;
+    var cut = t.slice(0, 49);
+    var sp = cut.lastIndexOf(' ');
+    return (sp > 30 ? cut.slice(0, sp) : cut).replace(/[\s,;:.]+$/, '') + '…';
   }
 
   function fillHead(p) {
