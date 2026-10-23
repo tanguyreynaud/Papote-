@@ -1840,3 +1840,12 @@ html .overlay.papier .media-play[hidden] { display: none; }
 html .overlay.papier .media-play svg { width: 11vmin; height: 11vmin; margin-left: 1.5vmin; }
 html .overlay.papier .ln-play { white-space: nowrap; }
 html .overlay.papier.wide .ln-play { padding: 0 5vmin; font-size: 5.6vmin; }
+.ln-btn.replay > .icon { display: none; }
+html .overlay.papier #overlay-actions .ln-btn.replay {
+  width: 14vmin; min-width: 0; height: 14vmin; padding: 0; border-radius: 50%;
+  display: -webkit-flex; display: flex; -webkit-align-items: center; align-items: center; -webkit-justify-content: center; justify-content: center;
+}
+html .overlay.papier #overlay-actions .ln-btn.replay[hidden] { display: none; }
+html .overlay.papier #overlay-actions .ln-btn.replay .label { display: none; }
+html .overlay.papier #overlay-actions .ln-btn.replay > .icon { display: block; -webkit-flex: none; flex: none; width: 8vmin; min-width: 8vmin; height: 8vmin; }
+html .overlay.papier #overlay-actions .ln-btn.replay > .icon svg { width: 100%; height: 100%; }

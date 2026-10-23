@@ -49,6 +49,7 @@
     doctor: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M10 3h4v7h7v4h-7v7h-4v-7H3v-4h7V3z"/></svg>',
     pin: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a7 7 0 0 1 7 7c0 5-7 13-7 13S5 14 5 9a7 7 0 0 1 7-7zm0 4a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg>',
     play: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M7 4v16l13-8z"/></svg>',
+    replay: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 5V1L7 6l5 5V7a6 6 0 1 1-6 6H4a8 8 0 1 0 8-8z"/></svg>',
     heart: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 21s-7.5-4.6-9.6-9C.9 8.8 2.6 5 6.3 4.6 8.6 4.4 10.4 5.6 12 7.6c1.6-2 3.4-3.2 5.7-3 3.7.4 5.4 4.2 3.9 7.4C19.5 16.4 12 21 12 21z"/></svg>'
   };
 
@@ -1998,6 +1999,8 @@
     $('overlay-text').parentNode.insertBefore(head, $('overlay-text'));
     $('overlay-play').insertAdjacentHTML('afterbegin', '<span class="play-icon">' + ICONS.play + '</span>');
     $('overlay-media-play').innerHTML = ICONS.play;
+    // Revoir : un rond avec une flèche (comme le haut-parleur), le texte ne tient pas à côté de OK en largeur.
+    $('overlay-replay').insertAdjacentHTML('afterbegin', '<span class="icon">' + ICONS.replay + '</span>');
 
     face.id = 'overlay-face';
     face.className = 'overlay-face';
