@@ -1226,4 +1226,6 @@ a { text-decoration: none; }
 .moi-visage-texte { display: flex; flex-direction: column; gap: 2px; }
 .moi-visage-texte strong { color: var(--accent); }
 .moi-visage-texte span { color: var(--muted); font-size: 14px; }
-.moi-visage + input + .primary { margin-top: 20px; }
+.moi-date { display: grid; grid-template-columns: 1fr 1.6fr 1.3fr; gap: 8px; }
+.moi-date select { margin-top: 0; }
+#form-moi .primary { margin-top: 20px; }

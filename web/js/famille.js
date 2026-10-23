@@ -3498,6 +3498,9 @@ const GENRE_MANQUANT = 'Indiquez si vous êtes une femme ou un homme : la tablet
 const VISAGE_KEY = 'papote.visage';
 function savedVisage() { try { return localStorage.getItem(VISAGE_KEY) || ''; } catch (e) { return ''; } }
 function rememberVisage(v) { try { localStorage.setItem(VISAGE_KEY, v); } catch (e) { /* rien */ } }
+const ANNIV_KEY = 'papote.anniversaire'; // { day, month, year? }
+function savedAnniv() { try { return JSON.parse(localStorage.getItem(ANNIV_KEY) || 'null'); } catch (e) { return null; } }
+function rememberAnniv(a) { try { localStorage.setItem(ANNIV_KEY, JSON.stringify(a)); } catch (e) { /* rien */ } }
 function savedGenre() { try { return localStorage.getItem(GENRE_KEY) || ''; } catch (e) { return ''; } }
 function rememberGenre(g) { try { localStorage.setItem(GENRE_KEY, g); } catch (e) { /* rien */ } }
 function genreDe(form) { return form.querySelector('.genre-btn[aria-checked="true"]')?.dataset.genre || ''; }
@@ -3519,13 +3522,18 @@ function connaitMoi(memberships) {
   if (!savedGenre() && genre) rememberGenre(genre);
   const visage = memberships.map((m) => m.member?.face).find(Boolean);
   if (!savedVisage() && visage) rememberVisage(visage);
-  return !!savedPrenom() && !!savedGenre() && !!savedVisage();
+  return !!savedPrenom() && !!savedGenre() && !!savedVisage() && !!savedAnniv();
 }
 function showMoi() {
   $('moi-prenom').value = savedPrenom() || defaultName();
   marquerGenre($('form-moi'), savedGenre());
   montrerVisage(savedVisage());
+  const a = savedAnniv();
+  $('moi-jour').value = a ? String(a.day) : '';
+  $('moi-mois').value = a ? String(a.month) : '';
+  $('moi-annee').value = a?.year ? String(a.year) : '';
   $('moi-error').hidden = true;
+  moiComplet();
   show('view-moi');
 }
 $('form-moi').addEventListener('submit', (e) => {
@@ -3534,10 +3542,36 @@ $('form-moi').addEventListener('submit', (e) => {
   if (!prenom) { showError($('moi-error'), 'Indiquez votre prénom : la famille le verra.'); return; }
   if (!genreDe($('form-moi'))) { showError($('moi-error'), GENRE_MANQUANT); return; }
   if (!savedVisage()) { showError($('moi-error'), 'Ajoutez une photo de vous : votre proche vous reconnaîtra sur la tablette.'); return; }
+  if (!$('moi-jour').value || !$('moi-mois').value) { showError($('moi-error'), 'Indiquez le jour et le mois de votre anniversaire.'); return; }
+  rememberAnniv({
+    day: Number($('moi-jour').value), month: Number($('moi-mois').value),
+    ...($('moi-annee').value ? { year: Number($('moi-annee').value) } : {}),
+  });
   rememberPrenom(prenom);
   rememberGenre(genreDe($('form-moi')));
   enterApp();
 });
+
+// Listes du jour, du mois et de l'année (facultative).
+(() => {
+  const opt = (v, t) => Object.assign(document.createElement('option'), { value: String(v), textContent: t });
+  for (let j = 1; j <= 31; j++) $('moi-jour').append(opt(j, String(j)));
+  ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre']
+    .forEach((m, k) => $('moi-mois').append(opt(k + 1, m)));
+  const an = new Date().getFullYear();
+  for (let y = an - 10; y >= an - 100; y--) $('moi-annee').append(opt(y, String(y)));
+})();
+
+// « Continuer » reste grisé tant qu'il manque le prénom, le genre, la photo ou l'anniversaire.
+function moiComplet() {
+  $('form-moi').querySelector('button[type=submit]').disabled = !($('moi-prenom').value.trim()
+    && genreDe($('form-moi')) && savedVisage() && $('moi-jour').value && $('moi-mois').value);
+}
+for (const id of ['moi-prenom', 'moi-jour', 'moi-mois']) {
+  $(id).addEventListener('input', moiComplet);
+  $(id).addEventListener('change', moiComplet);
+}
+$('form-moi').addEventListener('click', (e) => { if (e.target.closest('.genre-btn')) requestAnimationFrame(moiComplet); });
 
 function montrerVisage(v) {
   $('moi-photo').hidden = !v;
@@ -3556,11 +3590,31 @@ $('moi-in').addEventListener('change', async (e) => {
     rememberVisage(v);
     montrerVisage(v);
     $('moi-error').hidden = true;
+    moiComplet();
   } catch (err) {
     console.error(err);
     showError($('moi-error'), 'Cette photo ne peut pas être lue. Essayez-en une autre.');
   }
 });
+
+// Mon anniversaire donné à l'inscription : ajouté une fois à l'agenda de chaque famille (id = mon compte).
+async function ajouterMonAnniversaire() {
+  const a = savedAnniv();
+  if (!session?.fid || !a?.day || !a?.month) return;
+  const ref = doc(db, 'families', session.fid, 'birthdays', `membre-${session.uid}`);
+  try {
+    if ((await getDoc(ref)).exists()) return;
+    const batch = writeBatch(db);
+    batch.set(ref, {
+      name: (session.member?.name || savedPrenom()).slice(0, 40), day: a.day, month: a.month,
+      ...(a.year ? { year: a.year } : {}), createdBy: session.uid, createdAt: serverTimestamp(),
+    });
+    bumpRev(batch, session.fid); // la tablette recharge l'agenda
+    await batch.commit();
+  } catch (err) {
+    console.warn('Anniversaire non ajouté', err);
+  }
+}
 
 // Famille ouverte : le genre choisi sur ce téléphone rejoint ma fiche si elle n'en a pas.
 function appliquerGenre() {
@@ -3570,6 +3624,7 @@ function appliquerGenre() {
     session.member.face = v;
     saveFace(v).catch((err) => console.warn('Photo non enregistrée', err));
   }
+  ajouterMonAnniversaire();
   const g = savedGenre();
   if (!session?.member || session.member.genre || !['femme', 'homme'].includes(g)) return;
   session.member.genre = g;

@@ -106,7 +106,7 @@
       <h1 class="brand">Papote</h1>
       <form id="form-moi" class="card" novalidate>
         <h2>Faisons connaissance</h2>
-        <p class="muted">Votre famille verra ce prénom sur la tablette.</p>
+        <p class="muted">Une seule fois, pour que votre famille vous reconnaisse.</p>
         <label>Votre prénom
           <input id="moi-prenom" autocomplete="given-name" maxlength="40" placeholder="Julie" required>
         </label>
@@ -117,6 +117,13 @@
           <span class="moi-visage-texte"><strong id="moi-visage-titre">Ajouter ma photo</strong><span>Pour que votre proche vous reconnaisse sur la tablette</span></span>
         </button>
         <input id="moi-in" type="file" accept="image/*" hidden>
+        <p class="genre-titre">Votre anniversaire</p>
+        <div class="moi-date">
+          <select id="moi-jour" aria-label="Jour"><option value="">Jour</option></select>
+          <select id="moi-mois" aria-label="Mois"><option value="">Mois</option></select>
+          <select id="moi-annee" aria-label="Année (facultatif)"><option value="">Année</option></select>
+        </div>
+        <p class="muted small">Il s'ajoute à l'agenda : la famille sera prévenue le jour venu. L'année est facultative.</p>
         <button type="submit" class="primary wide">Continuer</button>
         <p id="moi-error" class="error" hidden></p>
       </form>
