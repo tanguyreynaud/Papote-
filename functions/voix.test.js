@@ -31,3 +31,10 @@ test('annonce « Prénom vous écrit : » : même texte pour tous les messages d
   assert.strictEqual(texteAnnonce(undefined), '');
   assert.strictEqual(cheminFichier('f1', VOIX.femme, texteAnnonce('Julie')), cheminFichier('f1', VOIX.femme, texteAnnonce('Julie')));
 });
+
+test('annonce de prénom : dossier commun, le même fichier pour deux familles', () => {
+  const a = cheminFichier(null, VOIX.femme, texteAnnonce('Julie'));
+  assert.ok(a.startsWith('voix-annonces/'));
+  assert.ok(!a.includes('families/'));
+  assert.notStrictEqual(a, cheminFichier(null, VOIX.homme, texteAnnonce('Julie')));
+});
