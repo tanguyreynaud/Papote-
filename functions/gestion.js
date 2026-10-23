@@ -2081,7 +2081,22 @@ function suiteJumelage(t, commande, fid) {
 async function ficheDeLaTablette(p) {
   const par = async (champ, valeur) => (valeur
     ? (await db().collection('stock').where(champ, '==', valeur).limit(1).get()).docs[0] || null : null);
-  return (await par('tabletUid', p.tabletUid)) || par('serieAndroid', p.serie);
+  const connue = await par('tabletUid', p.tabletUid);
+  if (connue || !p.serie) return connue;
+  // Le n° de série est écrit par la tablette elle-même dans pairings/ : n'importe quel compte pourrait
+  // y mettre celui d'une tablette livrée et récupérer la commande. On ne le croit que si la clé
+  // App Check posée à l'installation de CE n° de série est reliée au même compte (jetonAppCheck).
+  if (!(await serieProuvee(p.serie, p.tabletUid))) {
+    logger.warn(`Jumelage : n° de série ${p.serie} non prouvé pour le compte ${p.tabletUid || '?'}, ignoré.`);
+    return null;
+  }
+  return par('serieAndroid', p.serie);
+}
+
+async function serieProuvee(serie, tabletUid) {
+  if (!tabletUid) return false;
+  const cles = await db().collection('clesTablettes').where('serie', '==', serie).get();
+  return cles.docs.some((d) => d.get('tabletUid') === tabletUid);
 }
 
 // Jumelage (pairings/{code}, écrit par la tablette et l'appli famille) : la tablette est reconnue par

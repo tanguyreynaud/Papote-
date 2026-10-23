@@ -2,7 +2,8 @@
 // à l'installation une clé secrète (outils\admin\cle-tablette.bat, appelé par installer-tablette.ps1) ;
 // seule son empreinte SHA-256 est gardée dans clesTablettes/{empreinte}, illisible côté client.
 //
-//   jetonAppCheck  POST { cle } -> { token, expireTimeMillis } : jeton App Check valable 1 h,
+//   jetonAppCheck  POST { cle } -> { token, expireTimeMillis } : jeton App Check valable 1 h ;
+//                  avec « Authorization: Bearer <jeton d'identité> », la clé est reliée au compte de la tablette,
 //                  envoyé ensuite par la tablette dans l'en-tête X-Firebase-AppCheck (et par appels.js)
 //
 // Une tablette perdue ou volée : supprimer sa clé (cle-tablette.bat --retirer SERIE), plus de jeton.
@@ -23,6 +24,16 @@ const empreinte = (cle) => crypto.createHash('sha256').update(cle).digest('hex')
 // Une clé : 43 caractères base64url (32 octets aléatoires).
 const cleValide = (cle) => typeof cle === 'string' && /^[A-Za-z0-9_-]{43}$/.test(cle);
 
+async function uidDuJeton(entete) {
+  const m = /^Bearer (.+)$/.exec(entete || '');
+  if (!m) return null;
+  try {
+    return (await admin.auth().verifyIdToken(m[1])).uid;
+  } catch (e) {
+    return null;
+  }
+}
+
 const jetonAppCheck = onRequest({ maxInstances: 2, cors: true }, async (req, res) => {
   if (req.method !== 'POST') return res.status(405).send('POST seulement');
   const cle = req.body && req.body.cle;
@@ -35,11 +46,16 @@ const jetonAppCheck = onRequest({ maxInstances: 2, cors: true }, async (req, res
     return res.status(403).json({ erreur: 'clé inconnue' });
   }
   const { token, ttlMillis } = await admin.appCheck().createToken(APP_ID, { ttlMillis: DUREE_MS });
+  const maj = {};
+  // Compte Firebase de la tablette (Authorization: Bearer <jeton d'identité>) : la clé, posée à
+  // l'installation avec le n° de série, prouve alors que ce compte est bien cette tablette
+  // (gestionJumelage ne croit le n° de série d'un jumelage que sur cette preuve).
+  const uid = await uidDuJeton(req.get('Authorization'));
+  if (uid && snap.get('tabletUid') !== uid) maj.tabletUid = uid;
   // Dernière utilisation, au plus une écriture par jour.
   const vue = snap.get('vueLe');
-  if (!vue || Date.now() - vue.toMillis() > JOUR_MS) {
-    await fiche.update({ vueLe: admin.firestore.Timestamp.now() }).catch(() => {});
-  }
+  if (!vue || Date.now() - vue.toMillis() > JOUR_MS) maj.vueLe = admin.firestore.Timestamp.now();
+  if (Object.keys(maj).length) await fiche.update(maj).catch(() => {});
   res.json({ token, expireTimeMillis: Date.now() + ttlMillis });
 });
 

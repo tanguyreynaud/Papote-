@@ -1159,11 +1159,10 @@ async function preleverMateriel(abonnement, montant, description, cle) {
 }
 
 // Le tableau de bord admin marque la tablette incluse comme revenue.
-// Même règle que isAdmin() des règles Firestore : badge admin, ou l'adresse de Tanguy le temps du badge.
+// Même règle que isAdmin() des règles Firestore et que gestion.js : le badge admin seulement.
 function verifierAdmin(request) {
   const token = request.auth && request.auth.token;
-  const estAdmin = token && (token.admin === true
-    || (token.email === 'tanguyreynaud22@gmail.com' && token.email_verified === true));
+  const estAdmin = token && token.admin === true;
   if (!estAdmin) throw new HttpsError('permission-denied', 'Réservé à l\'administrateur.');
 }
 
