@@ -144,8 +144,10 @@ if ($Wifi) {
 
 # 5. Mode kiosque (propriétaire de l'appareil) : la tablette reste sur Papote
 #    et les mises à jour s'installent toutes seules.
-$owner = Adb shell dumpsys device_policy
-if ($owner -match "Device Owner[\s\S]*?$([regex]::Escape($Package))") {
+# dpm list-owners : dumpsys device_policy cite le paquet ailleurs (« Device Owner Type: -1 » suivi
+# d'une liste d'applis) et faisait croire au kiosque actif sur une tablette neuve.
+$owner = Adb shell dpm list-owners
+if ($owner -match "$([regex]::Escape($Package)).*DeviceOwner") {
     Say 'Mode kiosque déjà actif.' 'Green'
 } else {
     $res = Adb shell dpm set-device-owner "$Package/.AdminReceiver"

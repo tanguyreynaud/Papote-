@@ -91,8 +91,13 @@
 
         <receiver
             android:name=".BootReceiver"
+            android:directBootAware="true"
             android:exported="true">
+            <!-- LOCKED_BOOT_COMPLETED arrive tout de suite (10 destinataires) ; BOOT_COMPLETED, servi à
+                 plus de 120 applis, arrivait 1 à 2 min après le démarrage sur la Blackview Tab 60 Pro,
+                 qui affichait son propre bureau en attendant. -->
             <intent-filter>
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>

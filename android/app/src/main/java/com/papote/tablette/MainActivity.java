@@ -787,7 +787,7 @@ public class MainActivity extends Activity implements Sync.Listener {
                 // Une phrase dite tout bas, par le même chemin que la lecture, la charge d'avance
                 // (à volume 0 ou écrite dans un fichier, le moteur charge une autre voix).
                 android.os.Bundle bas = new android.os.Bundle();
-                bas.putFloat(android.speech.tts.TextToSpeech.Engine.KEY_PARAM_VOLUME, 0.01f); // inaudible, mais prononcée
+                bas.putFloat(android.speech.tts.TextToSpeech.Engine.KEY_PARAM_VOLUME, 0.001f); // inaudible, mais prononcée (0,01 s'entendait sur la Tab 60 Pro)
                 tts.speak("Bonjour", android.speech.tts.TextToSpeech.QUEUE_ADD, bas, "prechauffage");
             }
         });
@@ -901,6 +901,7 @@ public class MainActivity extends Activity implements Sync.Listener {
             home.addCategory(Intent.CATEGORY_DEFAULT);
             dpm.addPersistentPreferredActivity(admin, home,
                     new ComponentName(getPackageName(), MainActivity.class.getName()));
+            hideOtherLaunchers(dpm, admin);
             dpm.setKeyguardDisabled(admin, true);
             dpm.setStatusBarDisabled(admin, true);
             // Luminosité automatique en journée, si la tablette a un capteur de lumière.
@@ -916,10 +917,38 @@ public class MainActivity extends Activity implements Sync.Listener {
         }
     }
 
+    /**
+     * Les autres écrans d'accueil sont masqués : la Blackview Tab 60 Pro démarre sur son propre bureau
+     * malgré l'accueil imposé et bloque le lancement de Papote au démarrage (1 à 2 min de bureau).
+     * Masqué ne veut pas dire effacé : retirer-papote les remet (removeDeviceOwner).
+     */
+    private void hideOtherLaunchers(DevicePolicyManager dpm, ComponentName admin) {
+        Intent home = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME);
+        java.util.Set<String> hidden = new java.util.HashSet<>(prefs.getStringSet("launchersMasques", new java.util.HashSet<>()));
+        for (android.content.pm.ResolveInfo ri : getPackageManager().queryIntentActivities(home, PackageManager.MATCH_ALL)) {
+            String pkg = ri.activityInfo.packageName;
+            // com.android.settings sert d'accueil de secours à Android : on n'y touche pas.
+            if (pkg.equals(getPackageName()) || pkg.equals("com.android.settings")) continue;
+            try {
+                if (dpm.setApplicationHidden(admin, pkg, true)) {
+                    hidden.add(pkg);
+                    Journal.log(this, "Écran d'accueil masqué : " + pkg);
+                }
+            } catch (Exception e) {
+                Log.w(TAG, "Masquage de " + pkg, e);
+            }
+        }
+        prefs.edit().putStringSet("launchersMasques", hidden).apply();
+    }
+
     private void removeDeviceOwner() {
         if (!isDeviceOwner()) return;
         DevicePolicyManager dpm = dpm();
         ComponentName admin = admin();
+        for (String pkg : prefs.getStringSet("launchersMasques", new java.util.HashSet<>())) {
+            try { dpm.setApplicationHidden(admin, pkg, false); } catch (Exception e) { Log.w(TAG, "Démasquage de " + pkg, e); }
+        }
+        prefs.edit().remove("launchersMasques").apply();
         try {
             dpm.clearPackagePersistentPreferredActivities(admin, getPackageName());
             for (String r : RESTRICTIONS) dpm.clearUserRestriction(admin, r);
@@ -934,7 +963,10 @@ public class MainActivity extends Activity implements Sync.Listener {
     }
 
     private void enterKiosk() {
-        if (kioskPaused() || !isDeviceOwner() || !dpm().isLockTaskPermitted(getPackageName())) return;
+        if (kioskPaused() || !isDeviceOwner()) return;
+        // Propriétaire de l'appareil devenu pendant que l'app tournait : le kiosque n'était pas configuré.
+        if (!dpm().isLockTaskPermitted(getPackageName())) setupDeviceOwner();
+        if (!dpm().isLockTaskPermitted(getPackageName())) return;
         ActivityManager am = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
         if (am.getLockTaskModeState() == ActivityManager.LOCK_TASK_MODE_NONE) {
             try { startLockTask(); } catch (Exception e) { Log.w(TAG, "startLockTask", e); }
