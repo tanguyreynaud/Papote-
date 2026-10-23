@@ -706,7 +706,7 @@
     var text = mode === 'message' ? p.text
       : mode === 'photo' ? (legende(p.text) || motParDefaut(p))
         : mode === 'voice' ? 'Un message vocal de ' + p.authorName
-          : legende(p.text) || 'Une petite vidéo pour toi';
+          : legende(p.text) || motParDefaut(p); // sans légende : un des mots par défaut, comme une photo
     fillHead(media ? null : p);
     // Photo : pas de petit mot seul en bout de ligne (« Je » / « t’embrasse »), il reste avec le suivant.
     // Ponctuation française (« ! », « ? », « : ») jamais seule en début de ligne.
