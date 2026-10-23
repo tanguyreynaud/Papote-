@@ -853,8 +853,8 @@ function openAdd(kind) {
   history.pushState({ page, sheet: true }, '');
 }
 
-// Légende : 50 caractères au plus (la tablette l'affiche sur une ligne sous la photo).
-const LEGENDE_MAX = 50;
+// Légende : 60 caractères au plus (5 lignes à côté de la photo sur la tablette).
+const LEGENDE_MAX = 60;
 function compterLegende() {
   $('post-text-compte').textContent = `${$('post-text').value.length} / ${LEGENDE_MAX}`;
 }
@@ -1008,7 +1008,7 @@ async function openShared() {
     if (!video && !photos.length) return;
     openPage(video ? 'videos' : 'photos');
     openAdd(video ? 'video' : 'photo');
-    if (text) $('post-text').value = text.slice(0, 50);
+    if (text) $('post-text').value = text.slice(0, LEGENDE_MAX);
     compterLegende();
     if (video) await addVideoFile(video);
     else await addPhotoFiles(photos);

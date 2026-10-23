@@ -398,8 +398,8 @@ service cloud.firestore {
           && (!('audio' in request.resource.data) || request.resource.data.audio == null || request.resource.data.audio is string)
           && request.resource.data.text is string
           && request.resource.data.text.size() <= 2000
-          // Légende d'une photo ou d'une vidéo : 50 caractères au plus.
-          && (!(request.resource.data.type in ['photo', 'video']) || request.resource.data.text.size() <= 50)
+          // Légende d'une photo ou d'une vidéo : 60 caractères au plus (5 lignes sur la tablette).
+          && (!(request.resource.data.type in ['photo', 'video']) || request.resource.data.text.size() <= 60)
           && (request.resource.data.image == null || request.resource.data.image is string)
           && request.resource.data.seenAt == null
           && request.resource.data.hearts == 0;
