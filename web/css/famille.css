@@ -1218,14 +1218,16 @@ a { text-decoration: none; }
 .genre-btn { padding: 10px 0; border: 0; border-radius: 10px; background: transparent; color: var(--muted); font: inherit; }
 .genre-btn[aria-checked="true"] { background: var(--card, #fff); color: var(--accent); font-weight: 600; box-shadow: 0 1px 3px rgba(0, 0, 0, .12); }
 .genre-choix + .primary { margin-top: 20px; }
-/* Ma photo à l'inscription : une tuile, la photo carrée (ni déformée ni arrondie) à gauche. */
-.moi-visage { display: flex; align-items: center; gap: 14px; width: 100%; padding: 10px; text-align: left; background: var(--bg); border: 1px solid var(--line); border-radius: 14px; color: inherit; font: inherit; }
-.moi-cadre { flex: 0 0 72px; height: 72px; display: grid; place-items: center; border: 1.5px dashed var(--line); overflow: hidden; }
-.moi-cadre img { width: 100%; height: 100%; object-fit: cover; }
-.moi-cadre svg { width: 28px; height: 28px; color: var(--accent); }
-.moi-visage-texte { display: flex; flex-direction: column; gap: 2px; }
-.moi-visage-texte strong { color: var(--accent); }
-.moi-visage-texte span { color: var(--muted); font-size: 14px; }
+/* Ma photo à l'inscription : un petit rond (souhait de Tanguy), centré, avec un badge appareil photo. */
+.moi-visage { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; margin: 18px 0 4px; padding: 0; background: none; border: 0; color: inherit; font: inherit; }
+.moi-rond { position: relative; width: 96px; height: 96px; border-radius: 50%; display: grid; place-items: center; background: color-mix(in srgb, var(--accent) 8%, transparent); border: 2px dashed color-mix(in srgb, var(--accent) 45%, transparent); }
+.moi-rond img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+.moi-rond > svg[hidden], .moi-rond img[hidden] { display: none; }
+.moi-rond > svg { width: 40px; height: 40px; color: color-mix(in srgb, var(--accent) 60%, transparent); }
+.moi-rond:has(img:not([hidden])) { border-style: solid; border-color: var(--accent); }
+.moi-badge { position: absolute; right: -2px; bottom: -2px; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: var(--accent-text); border: 3px solid var(--card, #fff); }
+.moi-badge svg { width: 16px; height: 16px; }
+#moi-visage-titre { color: var(--accent); margin-top: 6px; }
 .moi-date { display: grid; grid-template-columns: 1fr 1.6fr 1.3fr; gap: 8px; }
 .moi-date select { margin-top: 0; }
 #form-moi .primary { margin-top: 20px; }

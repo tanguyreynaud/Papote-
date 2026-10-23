@@ -3522,7 +3522,7 @@ function connaitMoi(memberships) {
   if (!savedGenre() && genre) rememberGenre(genre);
   const visage = memberships.map((m) => m.member?.face).find(Boolean);
   if (!savedVisage() && visage) rememberVisage(visage);
-  return !!savedPrenom() && !!savedGenre() && !!savedVisage() && !!savedAnniv();
+  return !!savedPrenom() && !!savedGenre() && !!savedVisage() && !!savedAnniv()?.year;
 }
 function showMoi() {
   $('moi-prenom').value = savedPrenom() || defaultName();
@@ -3542,17 +3542,17 @@ $('form-moi').addEventListener('submit', (e) => {
   if (!prenom) { showError($('moi-error'), 'Indiquez votre prénom : la famille le verra.'); return; }
   if (!genreDe($('form-moi'))) { showError($('moi-error'), GENRE_MANQUANT); return; }
   if (!savedVisage()) { showError($('moi-error'), 'Ajoutez une photo de vous : votre proche vous reconnaîtra sur la tablette.'); return; }
-  if (!$('moi-jour').value || !$('moi-mois').value) { showError($('moi-error'), 'Indiquez le jour et le mois de votre anniversaire.'); return; }
-  rememberAnniv({
-    day: Number($('moi-jour').value), month: Number($('moi-mois').value),
-    ...($('moi-annee').value ? { year: Number($('moi-annee').value) } : {}),
-  });
+  if (!$('moi-jour').value || !$('moi-mois').value || !$('moi-annee').value) {
+    showError($('moi-error'), 'Indiquez votre date de naissance : jour, mois et année.');
+    return;
+  }
+  rememberAnniv({ day: Number($('moi-jour').value), month: Number($('moi-mois').value), year: Number($('moi-annee').value) });
   rememberPrenom(prenom);
   rememberGenre(genreDe($('form-moi')));
   enterApp();
 });
 
-// Listes du jour, du mois et de l'année (facultative).
+// Listes du jour, du mois et de l'année (l'âge s'affiche sur la tablette).
 (() => {
   const opt = (v, t) => Object.assign(document.createElement('option'), { value: String(v), textContent: t });
   for (let j = 1; j <= 31; j++) $('moi-jour').append(opt(j, String(j)));
@@ -3565,9 +3565,9 @@ $('form-moi').addEventListener('submit', (e) => {
 // « Continuer » reste grisé tant qu'il manque le prénom, le genre, la photo ou l'anniversaire.
 function moiComplet() {
   $('form-moi').querySelector('button[type=submit]').disabled = !($('moi-prenom').value.trim()
-    && genreDe($('form-moi')) && savedVisage() && $('moi-jour').value && $('moi-mois').value);
+    && genreDe($('form-moi')) && savedVisage() && $('moi-jour').value && $('moi-mois').value && $('moi-annee').value);
 }
-for (const id of ['moi-prenom', 'moi-jour', 'moi-mois']) {
+for (const id of ['moi-prenom', 'moi-jour', 'moi-mois', 'moi-annee']) {
   $(id).addEventListener('input', moiComplet);
   $(id).addEventListener('change', moiComplet);
 }
@@ -3575,9 +3575,8 @@ $('form-moi').addEventListener('click', (e) => { if (e.target.closest('.genre-bt
 
 function montrerVisage(v) {
   $('moi-photo').hidden = !v;
-  $('moi-photo-vide').hidden = !!v;
+  $('moi-photo-vide').toggleAttribute('hidden', !!v); // SVG : pas de propriété hidden
   if (v) $('moi-photo').src = v;
-  $('moi-visage-titre').textContent = v ? 'Changer ma photo' : 'Ajouter ma photo';
 }
 // Un seul bouton : le téléphone propose lui-même l'appareil photo ou la galerie.
 $('moi-visage').addEventListener('click', () => $('moi-in').click());
