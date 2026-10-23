@@ -744,7 +744,7 @@
     return day === "aujourd'hui" || day === 'hier' ? day + ' à ' + d.getHours() + 'h' + pad(d.getMinutes()) : day;
   }
 
-  // Légende d'une photo : 50 caractères au plus (limite de l'app famille) ; les anciens envois plus
+  // Légende d'une photo : 60 caractères au plus (limite de l'app famille) ; les anciens envois plus
   // longs sont coupés au dernier mot, avec « … ».
   // Photo sans légende : un petit mot choisi parmi plusieurs (toujours le même pour un envoi donné).
   var MOTS = ['Je pense fort à toi', 'Un petit coucou !', 'Gros bisous !', 'Une pensée pour toi',
@@ -757,10 +757,10 @@
 
   function legende(t) {
     t = (t || '').trim();
-    if (t.length <= 50) return t;
-    var cut = t.slice(0, 49);
+    if (t.length <= 60) return t;
+    var cut = t.slice(0, 59);
     var sp = cut.lastIndexOf(' ');
-    return (sp > 30 ? cut.slice(0, sp) : cut).replace(/[\s,;:.]+$/, '') + '…';
+    return (sp > 40 ? cut.slice(0, sp) : cut).replace(/[\s,;:.]+$/, '') + '…';
   }
 
   function fillHead(p) {
