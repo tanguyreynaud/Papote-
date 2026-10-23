@@ -3514,7 +3514,7 @@ document.addEventListener('click', (e) => {
   rememberGenre(b.dataset.genre);
 });
 document.querySelectorAll('.genre-choix').forEach((g) => marquerGenre(g, savedGenre()));
-// « Faisons connaissance » : une fois, juste après l'inscription (ou repris d'une famille déjà rejointe).
+// « Vos informations » : une fois, juste après l'inscription (ou repris d'une famille déjà rejointe).
 function connaitMoi(memberships) {
   const fiche = memberships.map((m) => m.member).find((m) => m && m.role !== 'tablette' && m.name);
   if (!savedPrenom() && fiche) rememberPrenom(fiche.name);
