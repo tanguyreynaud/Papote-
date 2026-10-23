@@ -20,6 +20,8 @@ param(
     [string]$Ville,
     # -Essai : installe quand même une tablette hors critères (tests seulement, jamais pour un client)
     [switch]$Essai,
+    # -SansControle : pas de contrôle atelier (son, micro, caméra, écran) ; jamais pour une tablette vendue
+    [switch]$SansControle,
     [switch]$Oui
 )
 
@@ -303,6 +305,15 @@ if ($refus.Count) {
     }
 }
 
+# 9 bis. Contrôle atelier du matériel (controle-atelier.ps1) : questions O/N, donc pas avec -Oui.
+$controleOk = $true
+if ($SansControle -or $Oui) {
+    Say "`nContrôle atelier non fait$(if ($Oui) { ' (-Oui)' }) : à faire avant l'envoi (controle-atelier.ps1)." 'Yellow'
+} else {
+    & (Join-Path $PSScriptRoot 'controle-atelier.ps1')
+    $controleOk = $LASTEXITCODE -eq 0
+}
+
 # 10. Contrôle final, comme chez le client : la tablette redémarre et doit revenir seule sur Papote,
 #     verrouillée, en moins d'une minute. Sinon elle ne part pas (la Blackview Tab 60 Pro restait
 #     1 à 2 min sur son bureau, et le kiosque passait pour actif alors qu'il ne l'était pas).
@@ -323,6 +334,7 @@ while ((Get-Date) -lt $limite) {
     if (((Get-Date) - $debut).TotalSeconds -gt 60) { break }
 }
 if (-not $ok) { $problemes += 'Papote ne revient pas seule et verrouillée après un redémarrage' }
+if (-not $controleOk) { $problemes += 'contrôle atelier échoué' }
 if ($problemes.Count) {
     Say "`n!!! NE PAS ENVOYER CETTE TABLETTE : $($problemes -join ' ; ')." 'Red'
     Say 'Lancez diagnostic.bat et prévenez Claude.' 'Red'

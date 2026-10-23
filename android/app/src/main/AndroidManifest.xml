@@ -63,6 +63,16 @@
             </intent-filter>
         </activity>
 
+        <!-- Contrôle atelier, lancé par installer-tablette.ps1 (adb) ; DUMP : réservé à adb. -->
+        <activity
+            android:name=".ControleActivity"
+            android:exported="true"
+            android:permission="android.permission.DUMP"
+            android:launchMode="singleTask"
+            android:screenOrientation="sensorLandscape"
+            android:lockTaskMode="if_whitelisted"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden" />
+
         <receiver
             android:name=".AdminReceiver"
             android:exported="true"
