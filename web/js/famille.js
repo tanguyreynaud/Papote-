@@ -3525,7 +3525,7 @@ function connaitMoi(memberships) {
   return !!savedPrenom() && !!savedGenre() && !!savedVisage() && !!savedAnniv()?.year;
 }
 function showMoi() {
-  $('moi-prenom').value = savedPrenom() || defaultName();
+  $('moi-prenom').value = (savedPrenom() || defaultName()).replace(HORS_PRENOM, '').trim();
   marquerGenre($('form-moi'), savedGenre());
   montrerVisage(savedVisage());
   const a = savedAnniv();
@@ -3539,7 +3539,7 @@ function showMoi() {
 $('form-moi').addEventListener('submit', (e) => {
   e.preventDefault();
   const prenom = $('moi-prenom').value.trim();
-  if (!prenom) { showError($('moi-error'), 'Indiquez votre prénom : la famille le verra.'); return; }
+  if (!/\p{L}/u.test(prenom)) { showError($('moi-error'), 'Indiquez votre prénom : la famille le verra.'); return; }
   if (!genreDe($('form-moi'))) { showError($('moi-error'), GENRE_MANQUANT); return; }
   if (!savedVisage()) { showError($('moi-error'), 'Ajoutez une photo de vous : votre proche vous reconnaîtra sur la tablette.'); return; }
   if (!$('moi-jour').value || !$('moi-mois').value || !$('moi-annee').value) {
@@ -3567,6 +3567,17 @@ function moiComplet() {
   $('form-moi').querySelector('button[type=submit]').disabled = !($('moi-prenom').value.trim()
     && genreDe($('form-moi')) && savedVisage() && $('moi-jour').value && $('moi-mois').value && $('moi-annee').value);
 }
+// Prénom : seulement des lettres (accents compris), espace, tiret et apostrophe.
+const HORS_PRENOM = /[^\p{L}\p{M} '’-]/gu;
+document.addEventListener('input', (e) => {
+  const el = e.target;
+  if (el.autocomplete !== 'given-name') return;
+  const propre = el.value.replace(HORS_PRENOM, '');
+  if (propre === el.value) return;
+  const pos = el.value.slice(0, el.selectionStart).replace(HORS_PRENOM, '').length;
+  el.value = propre;
+  el.setSelectionRange(pos, pos);
+}, true);
 for (const id of ['moi-prenom', 'moi-jour', 'moi-mois', 'moi-annee']) {
   $(id).addEventListener('input', moiComplet);
   $(id).addEventListener('change', moiComplet);
