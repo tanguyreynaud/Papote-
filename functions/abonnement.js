@@ -170,7 +170,10 @@ function raisonsMauvaisPayeur(commande, statutFamille) {
 // à la famille quand le client ne se connecte pas avec l'adresse e-mail du paiement.
 const ALPHABET_CODE = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 
-function nouveauCode(aleatoire = Math.random) {
+// Hasard cryptographique : le code sert de preuve d'achat (rattacherCommande).
+const hasardSur = () => require('node:crypto').randomInt(0, 2 ** 32) / 2 ** 32;
+
+function nouveauCode(aleatoire = hasardSur) {
   let code = '';
   for (let i = 0; i < 8; i++) code += ALPHABET_CODE[Math.floor(aleatoire() * ALPHABET_CODE.length)];
   return code;
