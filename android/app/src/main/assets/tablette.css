@@ -1737,13 +1737,16 @@ html .overlay.papier .ln-sign, html .overlay.papier.wide .ln-sign {
 .overlay.papier .ln-media, .overlay.papier.wide .ln-media {
   position: relative; -webkit-flex: none; flex: none; min-height: 0; height: auto;
   /* En hauteur : largeur selon les proportions de la photo (entière, rien de coupé), 60 % au plus. */
-  width: calc(100vh * var(--photo-ratio, .75)); max-width: 60%;
+  width: calc((100vh - 6vmin) * var(--photo-ratio, .75) + 3vmin); max-width: 60%;
 }
 .overlay.papier.wide .ln-media { width: 58%; max-width: none; }
 .overlay.papier.wide #overlay-actions { width: calc(42vw - 6vmin); }
 /* La photo remplit sa place, sans fond flou : en largeur elle est un peu zoomée (bords coupés). */
 .overlay.papier .ln-media-bg { display: none !important; }
 .overlay.papier .ln-media img { -webkit-background-size: cover; background-size: cover; background-position: center; }
+/* Cadre crème autour de la photo, de la même largeur que la marge du mot : deux cartes côte à côte. */
+html .overlay.papier .ln-media img { top: 3vmin; left: 0; width: calc(100% - 3vmin); height: calc(100% - 6vmin);
+  box-shadow: 0 1vmin 3vmin rgba(49, 46, 129, .12); }
 /* Bandeau bas : l'heure au centre, sur toute la largeur. */
 
 .overlay.papier .ln-bar, .overlay.papier.wide .ln-bar {
@@ -1759,7 +1762,7 @@ html .overlay.papier .ln-sign, html .overlay.papier.wide .ln-sign {
 }
 /* Haut-parleur et OK : dans le mot, en bas, au-dessus du bandeau. */
 .overlay.papier #overlay-actions, .overlay.papier.wide #overlay-actions {
-  position: fixed; left: 3vmin; bottom: 8vmin; width: calc(100vw - min(100vh * var(--photo-ratio, .75), 60vw) - 6vmin);
+  position: fixed; left: 3vmin; bottom: 8vmin; width: calc(100vw - min((100vh - 6vmin) * var(--photo-ratio, .75) + 3vmin, 60vw) - 6vmin);
   -webkit-justify-content: center; justify-content: center; -webkit-align-items: center; align-items: center; gap: 4vmin;
 }
 .overlay.papier #overlay-actions .ln-btn, .overlay.papier.wide #overlay-actions .ln-btn {
@@ -1791,7 +1794,7 @@ html .overlay.papier .ln-sign, html .overlay.papier.wide .ln-sign {
 .overlay.papier .ln-play .label { position: static; color: #fff; font-size: inherit; }
 .overlay.papier .overlay-face { display: none; }
 .overlay.papier .ln-note { -webkit-flex: 1; flex: 1; -webkit-align-self: stretch; align-self: stretch; height: auto; }
-.overlay.papier .ln-media { background: #f6efe4; }
+html .overlay.papier .ln-media, html .overlay.papier.wide .ln-media { background: #f6efe4; }
 
 /* Diaporama : « Tanguy, aujourd'hui » et la légende collés à droite (demande de Tanguy, 23/10). */
 .photos .photo-caption { text-align: right; }
