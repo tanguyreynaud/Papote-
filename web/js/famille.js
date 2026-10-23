@@ -462,7 +462,9 @@ $('viewer-save').addEventListener('click', async () => {
     } catch (err) {
       // Storage refuse la lecture depuis la page (réglage CORS absent) : on ouvre le fichier,
       // un appui long permet alors de l'enregistrer.
-      window.open(src, '_blank');
+      // Jamais autre chose qu'une adresse https (un envoi modifié pourrait contenir « javascript: »).
+      if (!/^https:\/\//i.test(String(src))) return;
+      window.open(src, '_blank', 'noopener');
       toast("Appuyez longuement sur la photo pour l'enregistrer");
       return;
     }
