@@ -3541,26 +3541,26 @@ $('form-moi').addEventListener('submit', (e) => {
 
 function montrerVisage(v) {
   $('moi-photo').hidden = !v;
+  $('moi-photo-vide').hidden = !!v;
   if (v) $('moi-photo').src = v;
+  $('moi-visage-titre').textContent = v ? 'Changer ma photo' : 'Ajouter ma photo';
 }
-$('moi-camera').addEventListener('click', () => $('moi-in-camera').click());
-$('moi-gallery').addEventListener('click', () => $('moi-in-gallery').click());
-for (const id of ['moi-in-camera', 'moi-in-gallery']) {
-  $(id).addEventListener('change', async (e) => {
-    const file = e.target.files && e.target.files[0];
-    e.target.value = '';
-    if (!file) return;
-    try {
-      const v = await visageCarre(file);
-      rememberVisage(v);
-      montrerVisage(v);
-      $('moi-error').hidden = true;
-    } catch (err) {
-      console.error(err);
-      showError($('moi-error'), 'Cette photo ne peut pas être lue. Essayez-en une autre.');
-    }
-  });
-}
+// Un seul bouton : le téléphone propose lui-même l'appareil photo ou la galerie.
+$('moi-visage').addEventListener('click', () => $('moi-in').click());
+$('moi-in').addEventListener('change', async (e) => {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  try {
+    const v = await visageCarre(file);
+    rememberVisage(v);
+    montrerVisage(v);
+    $('moi-error').hidden = true;
+  } catch (err) {
+    console.error(err);
+    showError($('moi-error'), 'Cette photo ne peut pas être lue. Essayez-en une autre.');
+  }
+});
 
 // Famille ouverte : le genre choisi sur ce téléphone rejoint ma fiche si elle n'en a pas.
 function appliquerGenre() {

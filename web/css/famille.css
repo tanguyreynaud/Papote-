@@ -1218,6 +1218,12 @@ a { text-decoration: none; }
 .genre-btn { padding: 10px 0; border: 0; border-radius: 10px; background: transparent; color: var(--muted); font: inherit; }
 .genre-btn[aria-checked="true"] { background: var(--card, #fff); color: var(--accent); font-weight: 600; box-shadow: 0 1px 3px rgba(0, 0, 0, .12); }
 .genre-choix + .primary { margin-top: 20px; }
-/* Ma photo à l'inscription : carrée, ni déformée ni arrondie. */
-.moi-photo { display: block; width: 140px; height: 140px; object-fit: cover; margin: 0 auto 12px; }
-.pickers + input + input + .primary { margin-top: 20px; }
+/* Ma photo à l'inscription : une tuile, la photo carrée (ni déformée ni arrondie) à gauche. */
+.moi-visage { display: flex; align-items: center; gap: 14px; width: 100%; padding: 10px; text-align: left; background: var(--bg); border: 1px solid var(--line); border-radius: 14px; color: inherit; font: inherit; }
+.moi-cadre { flex: 0 0 72px; height: 72px; display: grid; place-items: center; border: 1.5px dashed var(--line); overflow: hidden; }
+.moi-cadre img { width: 100%; height: 100%; object-fit: cover; }
+.moi-cadre svg { width: 28px; height: 28px; color: var(--accent); }
+.moi-visage-texte { display: flex; flex-direction: column; gap: 2px; }
+.moi-visage-texte strong { color: var(--accent); }
+.moi-visage-texte span { color: var(--muted); font-size: 14px; }
+.moi-visage + input + .primary { margin-top: 20px; }
