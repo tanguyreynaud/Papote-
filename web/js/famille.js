@@ -45,7 +45,7 @@ let stopMembers = null;
 let stopTabletBusy = null;
 let stopIncoming = null;
 
-const VIEWS = ['view-sans-abo', 'view-invite', 'view-profile', 'view-pair', 'view-setup', 'loading', 'view-login', 'view-link-email', 'view-invited', 'view-pending', 'view-join', 'view-home', 'view-photos', 'view-videos', 'view-messages', 'view-agenda', 'view-settings', 'view-notifs', 'view-support'];
+const VIEWS = ['view-moi', 'view-sans-abo', 'view-invite', 'view-profile', 'view-pair', 'view-setup', 'loading', 'view-login', 'view-link-email', 'view-invited', 'view-pending', 'view-join', 'view-home', 'view-photos', 'view-videos', 'view-messages', 'view-agenda', 'view-settings', 'view-notifs', 'view-support'];
 
 function show(view) {
   for (const id of VIEWS) $(id).hidden = id !== view;
@@ -84,9 +84,8 @@ $('form-join').addEventListener('submit', async (e) => {
   const button = e.target.querySelector('button[type=submit]');
   button.disabled = true;
   showError($('join-error'), '');
-  if (!genreDe($('form-join'))) { showError($('join-error'), GENRE_MANQUANT); button.disabled = false; return; }
   try {
-    const fidRejoint = await joinFamily($('join-code').value, $('join-name').value.trim());
+    const fidRejoint = await joinFamily($('join-code').value, savedPrenom());
     // Invité aussi par e-mail : l'invitation est remplie, on l'efface.
     if (myEmail()) deleteDoc(doc(db, 'families', fidRejoint, 'invitations', myEmail())).catch(() => {});
     forgetInviteCode();
@@ -3505,6 +3504,30 @@ document.addEventListener('click', (e) => {
   rememberGenre(b.dataset.genre);
 });
 document.querySelectorAll('.genre-choix').forEach((g) => marquerGenre(g, savedGenre()));
+// « Faisons connaissance » : une fois, juste après l'inscription (ou repris d'une famille déjà rejointe).
+function connaitMoi(memberships) {
+  const fiche = memberships.map((m) => m.member).find((m) => m && m.role !== 'tablette' && m.name);
+  if (!savedPrenom() && fiche) rememberPrenom(fiche.name);
+  const genre = memberships.map((m) => m.member?.genre).find((g) => ['femme', 'homme'].includes(g));
+  if (!savedGenre() && genre) rememberGenre(genre);
+  return !!savedPrenom() && !!savedGenre();
+}
+function showMoi() {
+  $('moi-prenom').value = savedPrenom() || defaultName();
+  marquerGenre($('form-moi'), savedGenre());
+  $('moi-error').hidden = true;
+  show('view-moi');
+}
+$('form-moi').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const prenom = $('moi-prenom').value.trim();
+  if (!prenom) { showError($('moi-error'), 'Indiquez votre prénom : la famille le verra.'); return; }
+  if (!genreDe($('form-moi'))) { showError($('moi-error'), GENRE_MANQUANT); return; }
+  rememberPrenom(prenom);
+  rememberGenre(genreDe($('form-moi')));
+  enterApp();
+});
+
 // Famille ouverte : le genre choisi sur ce téléphone rejoint ma fiche si elle n'en a pas.
 function appliquerGenre() {
   const g = savedGenre();
@@ -3576,12 +3599,11 @@ function showSetupFamily() {
 // Sans famille : le scan, avec le code du QR code s'il y en a un, ou la réservation déjà faite.
 async function showSetupScan(code) {
   stopSession();
-  $('setup-prenom').value = savedPrenom() || defaultName();
   $('setup-code-input').value = code ? formatCode(normalizeCode(code)) : '';
   $('setup-code-error').hidden = true;
   setupStep('setup-code');
-  marquerGenre($('setup-code'), savedGenre());
-  if (code && $('setup-prenom').value && savedGenre()) $('setup-code').requestSubmit();
+  // Venu par le QR code : le code est déjà là, on vérifie tout de suite.
+  if (code) $('setup-code').requestSubmit();
 }
 
 // Réservation déjà faite par ce compte (app fermée après le scan, ou autre téléphone) : on la reprend.
@@ -3650,13 +3672,10 @@ for (const input of [$('setup-code-input'), ...document.querySelectorAll('.order
 
 $('setup-code').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const prenom = $('setup-prenom').value.trim();
+  const prenom = savedPrenom();
   const code = normalizeCode($('setup-code-input').value);
   $('setup-code-error').hidden = true;
-  if (!prenom) { showError($('setup-code-error'), 'Indiquez votre prénom : la famille le verra.'); return; }
-  if (!genreDe($('setup-code'))) { showError($('setup-code-error'), GENRE_MANQUANT); return; }
   if (code.length !== 8) { showError($('setup-code-error'), 'Le code affiché sur la tablette a 8 caractères.'); return; }
-  rememberPrenom(prenom);
   setupCheck('Vérification de la tablette…', 'Un instant, nous vérifions le code.');
   let r;
   try {
@@ -4015,10 +4034,9 @@ function showJoin(canGoBack) {
     ? (pour ? `Rejoindre la famille de ${pour}` : 'Rejoindre la famille')
     : 'Vous êtes invité dans une famille';
   $('join-help').textContent = code
-    ? 'Donnez votre prénom : un responsable de la famille acceptera votre arrivée.'
+    ? 'Touchez « Rejoindre » : un responsable de la famille acceptera votre arrivée.'
     : "Pour les proches. Entrez le code famille qu'on vous a envoyé ; un responsable acceptera votre arrivée. Le plus simple : demandez-lui de vous inviter avec votre adresse e-mail.";
   show('view-join');
-  if (code) $('join-name').focus();
 }
 
 function defaultName() {
@@ -4034,22 +4052,15 @@ function showInvitations(invitations) {
   box.replaceChildren(...invitations.map((inv) => {
     const card = document.createElement('form');
     card.className = 'card';
-    card.innerHTML = '<h2></h2><p class="muted"></p><label>Votre prénom<input maxlength="40" required></label>'
-      + '<p class="genre-titre">Vous êtes</p><div class="genre-choix" role="radiogroup" aria-label="Vous êtes">'
-      + '<button type="button" class="genre-btn" role="radio" aria-checked="false" data-genre="femme">Une femme</button>'
-      + '<button type="button" class="genre-btn" role="radio" aria-checked="false" data-genre="homme">Un homme</button></div>'
+    card.innerHTML = '<h2></h2><p class="muted"></p>'
       + '<button type="submit" class="primary wide">Rejoindre la famille</button><p class="error" hidden></p>';
-    marquerGenre(card, savedGenre());
     card.querySelector('h2').textContent = `Famille de ${inv.familyName}`;
     card.querySelector('p.muted').textContent = `${inv.invitedBy || 'Un responsable'} vous invite à rejoindre la famille.`;
-    const input = card.querySelector('input');
-    input.value = defaultName();
     card.addEventListener('submit', async (e) => {
       e.preventDefault();
-      if (!genreDe(card)) { showError(card.querySelector('.error'), GENRE_MANQUANT); return; }
       card.querySelector('button[type=submit]').disabled = true;
       try {
-        await acceptInvitation(inv, input.value.trim());
+        await acceptInvitation(inv, savedPrenom());
         saveFamilyId(inv.fid);
         await enterApp();
       } catch (err) {
@@ -4093,6 +4104,7 @@ async function enterApp() {
     const saved = savedFamilyId();
     if (saved) await tagLegacyMember(saved);
     const memberships = await myMemberships();
+    if (!connaitMoi(memberships)) { showMoi(); return; }
     const invitations = (await myInvitations()).filter((inv) => !memberships.some((m) => m.fid === inv.fid));
     if (invitations.length && !skipInvites) { showInvitations(invitations); return; }
     const active = memberships.filter((m) => m.status !== 'pending');

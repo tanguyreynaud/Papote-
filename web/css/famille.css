@@ -1217,3 +1217,4 @@ a { text-decoration: none; }
 .genre-choix { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; background: var(--bg); border: 1px solid var(--line); border-radius: 14px; }
 .genre-btn { padding: 10px 0; border: 0; border-radius: 10px; background: transparent; color: var(--muted); font: inherit; }
 .genre-btn[aria-checked="true"] { background: var(--card, #fff); color: var(--accent); font-weight: 600; box-shadow: 0 1px 3px rgba(0, 0, 0, .12); }
+.genre-choix + .primary { margin-top: 20px; }
