@@ -105,7 +105,7 @@
         '<path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/>' +
         '<path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
       listen.addEventListener('click', function () {
-        if (lastGuide) { try { android().speak(lastGuide); } catch (e) {} }
+        if (lastGuide) playGuide(lastGuide);
       }, false);
       head.appendChild(listen);
     }
@@ -119,11 +119,24 @@
 
   // Voix du guide (demande de Tanguy) : une phrase courte à l'arrivée sur chaque écran, une seule
   // fois par écran (pas de répétition quand l'écran se redessine). Uniquement pendant l'installation.
-  var lastGuide = '';
-  function sayGuide(text) {
-    if (repair || text === lastGuide) return;
-    lastGuide = text;
-    try { (android().speakGuide ? android().speakGuide(text) : android().speak(text)); } catch (e) {}
+  // Les phrases sont des fichiers MP3 (voix naturelle, outils/voix/generer-voix-guide.py) : pas besoin
+  // du moteur de voix d'Android, pas encore prêt au démarrage. Sans fichier, la voix d'Android lit le texte.
+  var lastGuide = null;
+  var guideAudio = null;
+  function playGuide(g) {
+    if (guideAudio) guideAudio.pause();
+    guideAudio = new Audio('bienvenue/voix/' + g.id + '.mp3');
+    var fallback = function () {
+      try { (android().speakGuide ? android().speakGuide(g.text) : android().speak(g.text)); } catch (e) {}
+    };
+    guideAudio.onerror = fallback;
+    var p = guideAudio.play();
+    if (p && p.catch) p.catch(fallback);
+  }
+  function sayGuide(id, text) {
+    if (repair || (lastGuide && lastGuide.id === id)) return;
+    lastGuide = { id: id, text: text };
+    playGuide(lastGuide);
   }
 
   function button(text, cls, onClick) {
@@ -138,7 +151,7 @@
     stepNum = 1;
     art = 'nom';
     var box = screen('Bienvenue sur Papote', 'Cette tablette va recevoir les photos et les messages de la famille.');
-    sayGuide('Bonjour, et bienvenue sur Papote ! Appuyez sur Commencer.');
+    sayGuide('accueil', 'Bonjour, et bienvenue sur Papote ! Appuyez sur Commencer.');
     var go = button('Commencer', 'primary', function () {
       go.disabled = true;
       go.textContent = 'Un instant…';
@@ -183,7 +196,8 @@
     if (!repair && st.mobile && st.internet && !st.wifi) { finishWifi(); return; }
     var connected = st.wifi && st.internet;
     var box = screen('Connexion à internet', connected ? '' : 'Choisissez le wifi de votre box.');
-    sayGuide(connected ? 'La tablette est connectée à internet. Appuyez sur Continuer.' : 'Choisissez le wifi de votre box.');
+    if (connected) sayGuide('wifi-ok', 'La tablette est connectée à internet. Appuyez sur Continuer.');
+    else sayGuide('wifi-choisir', 'Choisissez le wifi de votre box.');
     if (connected) {
       box.appendChild(el('p', 'welcome-ok', 'Connectée à « ' + st.wifi + ' »'));
       box.appendChild(button('Continuer', 'primary', finishWifi));
@@ -263,7 +277,7 @@
     chosen = net;
     if (!net.secure) { connect(''); return; }
     var box = screen('« ' + net.ssid + ' »', 'Tapez le mot de passe du wifi. Il est souvent écrit sous la box.');
-    sayGuide('Tapez le mot de passe du wifi. Il est souvent écrit sous la box.');
+    sayGuide('wifi-mdp', 'Tapez le mot de passe du wifi. Il est souvent écrit sous la box.');
     var input = el('input', 'welcome-input');
     input.type = 'text';
     input.autocomplete = 'off';
@@ -445,7 +459,7 @@
     stepNum = 3;
     art = ''; // le QR code est l'illustration
     var box = screen('Connectez votre téléphone', '');
-    if (!s.error) sayGuide('Dernière étape : avec votre téléphone, scannez le code affiché à l\'écran.');
+    if (!s.error) sayGuide('code', 'Dernière étape : avec votre téléphone, scannez le code affiché à l\'écran.');
     if (s.error) {
       box.appendChild(el('p', 'welcome-error', s.error));
       return;
@@ -531,7 +545,7 @@
     var who = s.claimedName || 'Quelqu\'un';
     var fam = s.familyName ? ' à la famille de ' + s.familyName : '';
     var box = screen(who + ' veut relier cette tablette' + fam + '.', 'C\'est bien vous ?');
-    sayGuide(who + ' veut relier cette tablette. C\'est bien vous ?');
+    sayGuide('confirmer', 'Quelqu\'un veut relier cette tablette. C\'est bien vous ?');
     var row = el('div', 'welcome-actions');
     row.appendChild(button('Non', 'no', function () { android().confirmPairing(false); }));
     row.appendChild(button('Oui', 'primary', function () {
@@ -556,7 +570,7 @@
     stepNum = 0;
     art = '';
     var box = screen('Placez la tablette', 'Asseyez-vous là où la personne s’installe d’habitude, puis tournez doucement la tablette.');
-    sayGuide('Asseyez-vous là où la personne s’installe d’habitude, puis tournez doucement la tablette.');
+    sayGuide('placer', 'Asseyez-vous là où la personne s’installe d’habitude, puis tournez doucement la tablette.');
     // L'image de la caméra prend la place de l'illustration, à gauche.
     var card = box.parentNode;
     card.className = 'welcome-card with-art';
@@ -666,6 +680,7 @@
     openWifi: openRepair,
     hide: function () {
       if (repair || placing) return; // le réglage du wifi ou le placement en cours reste affiché
+      if (guideAudio) guideAudio.pause();
       if (!root) return;
       root.setAttribute('hidden', '');
       current = '';
