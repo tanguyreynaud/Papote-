@@ -1737,15 +1737,13 @@ html .overlay.papier .ln-sign, html .overlay.papier.wide .ln-sign {
 .overlay.papier .ln-media, .overlay.papier.wide .ln-media {
   position: relative; -webkit-flex: none; flex: none; min-height: 0; height: auto;
   /* En hauteur : largeur selon les proportions de la photo (entière, rien de coupé), 60 % au plus. */
-  width: 58%; max-width: none;
+  width: calc((100vh - 6vmin) * var(--photo-ratio, .75) + 3vmin); max-width: 60%;
 }
 .overlay.papier.wide .ln-media { width: 58%; max-width: none; }
 .overlay.papier.wide #overlay-actions { width: calc(42vw - 6vmin); }
 /* La photo remplit sa place, sans fond flou : en largeur elle est un peu zoomée (bords coupés). */
 .overlay.papier .ln-media-bg { display: none !important; }
-/* Même mise en page pour toutes les photos (mot 42 %, photo 58 %) : la photo est zoomée pour remplir
-   son cadre ; un peu plus haut que le centre, pour garder les visages en portrait. */
-.overlay.papier .ln-media img { -webkit-background-size: cover; background-size: cover; background-position: 50% 35%; }
+.overlay.papier .ln-media img { -webkit-background-size: cover; background-size: cover; background-position: center; }
 /* Cadre crème autour de la photo, de la même largeur que la marge du mot : deux cartes côte à côte. */
 html .overlay.papier .ln-media img { top: 3vmin; left: 0; width: calc(100% - 3vmin); height: calc(100% - 6vmin);
   box-shadow: 0 1vmin 3vmin rgba(49, 46, 129, .12); }
@@ -1764,7 +1762,7 @@ html .overlay.papier .ln-media img { top: 3vmin; left: 0; width: calc(100% - 3vm
 }
 /* Haut-parleur et OK : dans le mot, en bas, au-dessus du bandeau. */
 .overlay.papier #overlay-actions, .overlay.papier.wide #overlay-actions {
-  position: fixed; left: 3vmin; bottom: 8vmin; width: calc(42vw - 6vmin);
+  position: fixed; left: 3vmin; bottom: 8vmin; width: calc(100vw - min((100vh - 6vmin) * var(--photo-ratio, .75) + 3vmin, 60vw) - 6vmin);
   -webkit-justify-content: center; justify-content: center; -webkit-align-items: center; align-items: center; gap: 4vmin;
 }
 .overlay.papier #overlay-actions .ln-btn, .overlay.papier.wide #overlay-actions .ln-btn {
