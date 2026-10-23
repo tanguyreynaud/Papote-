@@ -2225,6 +2225,10 @@ $('abo-banner-btn').addEventListener('click', () => {
     requestAnimationFrame(() => $('abo-card').scrollIntoView({ behavior: 'smooth', block: 'start' }));
   }
 });
+// Essai de plus de 31 jours : la tablette n'est pas encore partie (le premier mois sera recalé à la réception).
+function enAttenteEnvoi(abo) {
+  return !!(abo && abo.essaiJusqua && toDate(abo.essaiJusqua) - Date.now() > 31 * 24 * 3600 * 1000);
+}
 // Date d'arrêt annoncée avant de résilier (sans engagement) : fin du mois en cours, prélevé à l'arrêt.
 function dateArret(abo) {
   const fin = [abo.essaiJusqua, abo.finPeriode].map((t) => (t ? toDate(t) : null)).filter(Boolean)
@@ -2427,7 +2431,10 @@ function renderAbonnement() {
     // Une seule phrase par date (sans engagement : plus de date d'engagement).
     if (abo.resiliationLe) details.push(`Résilié : Papote s'arrête le ${dateLongue(abo.resiliationLe)}`);
     // Chaque mois est payé une fois écoulé : le premier prélèvement tombe à la fin du premier mois.
-    else if (statut === 'actif' && (futur(abo.essaiJusqua) || abo.finPeriode)) {
+    else if (statut === 'actif' && enAttenteEnvoi(abo)) {
+      // Avant l'envoi, l'essai Stripe court 90 jours par sécurité : la vraie date n'est connue qu'à la réception.
+      details.push('Premier prélèvement 30 jours après la réception de la tablette, pour le mois écoulé');
+    } else if (statut === 'actif' && (futur(abo.essaiJusqua) || abo.finPeriode)) {
       details.push(`Prochain prélèvement le ${dateLongue(futur(abo.essaiJusqua) ? abo.essaiJusqua : abo.finPeriode)}, pour le mois écoulé`);
     }
     $('abo-details').textContent = details.join(' · ');
