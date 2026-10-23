@@ -1273,19 +1273,23 @@ async function saveFace(face) {
   await updateDoc(doc(db, 'families', session.fid, 'members', session.uid), { face });
 }
 
+// Carré de 320 px pris au centre, sans déformer le visage (JPEG en data URL).
+async function visageCarre(file) {
+  const img = await loadImage(file);
+  const side = Math.min(img.naturalWidth, img.naturalHeight);
+  const canvas = document.createElement('canvas');
+  canvas.width = 320;
+  canvas.height = 320;
+  canvas.getContext('2d').drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, 320, 320);
+  return canvas.toDataURL('image/jpeg', 0.8);
+}
+
 async function onFaceChosen(e) {
   const file = e.target.files && e.target.files[0];
   e.target.value = '';
   if (!file) return;
   try {
-    const img = await loadImage(file);
-    const side = Math.min(img.naturalWidth, img.naturalHeight);
-    const canvas = document.createElement('canvas');
-    canvas.width = 320;
-    canvas.height = 320;
-    // Carré pris au centre, sans déformer le visage.
-    canvas.getContext('2d').drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, 320, 320);
-    myFace = canvas.toDataURL('image/jpeg', 0.8);
+    myFace = await visageCarre(file);
     renderFace();
     await saveFace(myFace);
     toast('Photo enregistrée');
@@ -3491,6 +3495,9 @@ function savedPrenom() { try { return localStorage.getItem(PRENOM_KEY) || ''; } 
 // gardé sur ce téléphone puis écrit dans members/{uid}.genre dès que la famille est ouverte.
 const GENRE_KEY = 'papote.genre';
 const GENRE_MANQUANT = 'Indiquez si vous êtes une femme ou un homme : la tablette choisit la voix qui lira vos messages.';
+const VISAGE_KEY = 'papote.visage';
+function savedVisage() { try { return localStorage.getItem(VISAGE_KEY) || ''; } catch (e) { return ''; } }
+function rememberVisage(v) { try { localStorage.setItem(VISAGE_KEY, v); } catch (e) { /* rien */ } }
 function savedGenre() { try { return localStorage.getItem(GENRE_KEY) || ''; } catch (e) { return ''; } }
 function rememberGenre(g) { try { localStorage.setItem(GENRE_KEY, g); } catch (e) { /* rien */ } }
 function genreDe(form) { return form.querySelector('.genre-btn[aria-checked="true"]')?.dataset.genre || ''; }
@@ -3510,11 +3517,14 @@ function connaitMoi(memberships) {
   if (!savedPrenom() && fiche) rememberPrenom(fiche.name);
   const genre = memberships.map((m) => m.member?.genre).find((g) => ['femme', 'homme'].includes(g));
   if (!savedGenre() && genre) rememberGenre(genre);
-  return !!savedPrenom() && !!savedGenre();
+  const visage = memberships.map((m) => m.member?.face).find(Boolean);
+  if (!savedVisage() && visage) rememberVisage(visage);
+  return !!savedPrenom() && !!savedGenre() && !!savedVisage();
 }
 function showMoi() {
   $('moi-prenom').value = savedPrenom() || defaultName();
   marquerGenre($('form-moi'), savedGenre());
+  montrerVisage(savedVisage());
   $('moi-error').hidden = true;
   show('view-moi');
 }
@@ -3523,13 +3533,43 @@ $('form-moi').addEventListener('submit', (e) => {
   const prenom = $('moi-prenom').value.trim();
   if (!prenom) { showError($('moi-error'), 'Indiquez votre prénom : la famille le verra.'); return; }
   if (!genreDe($('form-moi'))) { showError($('moi-error'), GENRE_MANQUANT); return; }
+  if (!savedVisage()) { showError($('moi-error'), 'Ajoutez une photo de vous : votre proche vous reconnaîtra sur la tablette.'); return; }
   rememberPrenom(prenom);
   rememberGenre(genreDe($('form-moi')));
   enterApp();
 });
 
+function montrerVisage(v) {
+  $('moi-photo').hidden = !v;
+  if (v) $('moi-photo').src = v;
+}
+$('moi-camera').addEventListener('click', () => $('moi-in-camera').click());
+$('moi-gallery').addEventListener('click', () => $('moi-in-gallery').click());
+for (const id of ['moi-in-camera', 'moi-in-gallery']) {
+  $(id).addEventListener('change', async (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      const v = await visageCarre(file);
+      rememberVisage(v);
+      montrerVisage(v);
+      $('moi-error').hidden = true;
+    } catch (err) {
+      console.error(err);
+      showError($('moi-error'), 'Cette photo ne peut pas être lue. Essayez-en une autre.');
+    }
+  });
+}
+
 // Famille ouverte : le genre choisi sur ce téléphone rejoint ma fiche si elle n'en a pas.
 function appliquerGenre() {
+  // Photo choisie à l'inscription : elle rejoint ma fiche si je n'en ai pas.
+  const v = savedVisage();
+  if (session?.member && !session.member.face && v) {
+    session.member.face = v;
+    saveFace(v).catch((err) => console.warn('Photo non enregistrée', err));
+  }
   const g = savedGenre();
   if (!session?.member || session.member.genre || !['femme', 'homme'].includes(g)) return;
   session.member.genre = g;

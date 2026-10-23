@@ -1218,3 +1218,6 @@ a { text-decoration: none; }
 .genre-btn { padding: 10px 0; border: 0; border-radius: 10px; background: transparent; color: var(--muted); font: inherit; }
 .genre-btn[aria-checked="true"] { background: var(--card, #fff); color: var(--accent); font-weight: 600; box-shadow: 0 1px 3px rgba(0, 0, 0, .12); }
 .genre-choix + .primary { margin-top: 20px; }
+/* Ma photo à l'inscription : carrée, ni déformée ni arrondie. */
+.moi-photo { display: block; width: 140px; height: 140px; object-fit: cover; margin: 0 auto 12px; }
+.pickers + input + input + .primary { margin-top: 20px; }
