@@ -1,8 +1,8 @@
-// Préparation d'une vidéo avant envoi : réduite (640 px, 30 s au plus par défaut) et réencodée dans le
+// Préparation d'une vidéo avant envoi : réduite (960 px, 30 s au plus par défaut) et réencodée dans le
 // navigateur, pour qu'elle soit légère et lisible par la tablette.
 
 const MAX_SECONDS = 30;
-const MAX_SIDE = 640;
+const MAX_SIDE = 960;
 
 function pickMime() {
   // MP4 (H.264) d'abord : lu partout, tablettes récentes et iPhone ; WebM si le navigateur ne sait pas.
@@ -62,7 +62,7 @@ export async function prepareVideo(file, onProgress, maxSeconds = MAX_SECONDS) {
   const mimeType = pickMime();
   const recorder = new MediaRecorder(stream, {
     ...(mimeType ? { mimeType } : {}),
-    videoBitsPerSecond: 900_000,
+    videoBitsPerSecond: 1_400_000,
     audioBitsPerSecond: 64_000,
   });
   const parts = [];

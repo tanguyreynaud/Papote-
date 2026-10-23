@@ -237,7 +237,7 @@ export function bumpRev(batch, fid) {
  * réelle sont dans posts/{id}/media/{image|audio} et ne sont téléchargés qu'à la demande.
  */
 export const VIDEO_CHUNK = 700_000; // morceaux de base64 (un document Firestore fait 1 Mo au plus)
-export const MAX_VIDEO_CHUNKS = 10;
+export const MAX_VIDEO_CHUNKS = 14; // 9,8 Mo au plus : sous la limite de 10 Mo d’une écriture groupée (repli si Storage est indisponible)
 
 export async function addPost(fid, {
   type, text, image, thumb, audio, duration, video, mime, authorUid, authorName,
