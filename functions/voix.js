@@ -70,22 +70,36 @@ function texteDe(data, champ) {
   return t.slice(0, MAX);
 }
 
+// Annonce dite avant le message (« Julie vous écrit : »), fichier à part : créée une seule fois par
+// proche et par voix, puis réutilisée pour tous ses messages (demande de Tanguy, 23/10 : chaque gain compte).
+function texteAnnonce(prenom) {
+  const p = typeof prenom === 'string' ? prenom.trim().slice(0, 40) : '';
+  return p ? `${p} vous écrit :` : '';
+}
+
 // Ajoute (ou met à jour) data.voix sur le document si le texte a changé. db : base Firestore.
-async function voixDocument(db, ref, data, champ, auteurUid) {
+// annonce : prénom à annoncer avant le texte (messages et légendes), rien pour un rappel.
+async function voixDocument(db, ref, data, champ, auteurUid, prenomAnnonce) {
   const texte = texteDe(data, champ);
   if (!texte) return null;
+  const annonce = texteAnnonce(prenomAnnonce);
   // Déjà lu (et chaque écriture de la fonction ou de la tablette « vu », « bisou » redéclenche) : rien à faire,
   // sans même relire la fiche de l'auteur.
-  if (data.voix && data.voix.texte === texte) return null;
+  if (data.voix && data.voix.texte === texte && (data.voix.annonceTexte || '') === annonce) return null;
   let genre = '';
   if (auteurUid) {
     const m = await db.doc(`${ref.parent.parent.path}/members/${auteurUid}`).get();
     genre = (m.exists && m.get('genre')) || '';
   }
-  const nom = nomVoix(genre);
-  const v = await fichierVoix(ref.parent.parent.id, texte, genre);
-  await ref.update({ voix: { url: v.url, texte, nom: v.nom } });
+  const fid = ref.parent.parent.id;
+  const v = await fichierVoix(fid, texte, genre);
+  const voix = { url: v.url, texte, nom: v.nom };
+  if (annonce) {
+    voix.annonce = (await fichierVoix(fid, annonce, genre)).url;
+    voix.annonceTexte = annonce;
+  }
+  await ref.update({ voix });
   return v;
 }
 
-module.exports = { nomVoix, cheminFichier, texteDe, voixDocument, fichierVoix, VOIX, MAX };
+module.exports = { nomVoix, cheminFichier, texteDe, texteAnnonce, voixDocument, fichierVoix, VOIX, MAX };
