@@ -680,9 +680,10 @@
     });
     var mode = p.image ? 'photo' : p.type === 'voice' ? 'voice' : p.type === 'video' ? 'video' : 'message';
     var media = mode === 'voice' || mode === 'video';
-    // Photo et vidéo : le grand mot signé à gauche, l'image à droite (classe papier).
-    var papier = mode === 'photo' || mode === 'video';
-    $('overlay').className = 'overlay ln mode-' + mode + (papier ? ' papier' : '');
+    // Photo, vidéo et message : le grand mot signé à gauche, l'image à droite (classe papier).
+    // Message : le mot seul sur toute la largeur, signé du prénom (pas de photo de profil : jugée moche).
+    var papier = mode === 'photo' || mode === 'video' || mode === 'message';
+    $('overlay').className = 'overlay ln mode-' + mode + (papier ? ' papier' : '') + (mode === 'message' ? ' seul' : '');
     // Photo en paysage : elle prend toute la largeur, le mot passe dessous en bandeau.
     if (mode === 'photo') {
       var probe = new Image();
@@ -708,11 +709,12 @@
           : legende(p.text) || 'Une petite vidéo pour toi';
     fillHead(media ? null : p);
     // Photo : pas de petit mot seul en bout de ligne (« Je » / « t’embrasse »), il reste avec le suivant.
-    $('overlay-text').textContent = mode === 'photo' ? text.replace(/(^|\s)(\S{1,2})\s/g, '$1$2 ') : text;
-    $('overlay-text').className = 'ln-text ' + (mode === 'photo' ? 'size-m' + (text.length > 40 ? ' long' : '') : sizeClass(text));
+    $('overlay-text').textContent = papier ? text.replace(/(^|\s)(\S{1,2})\s/g, '$1$2 ') : text;
+    $('overlay-text').className = 'ln-text ' + (mode === 'photo' ? 'size-m' + (text.length > 40 ? ' long' : '')
+      : mode === 'message' ? 'msg-' + (text.length <= 60 ? 'court' : text.length <= 110 ? 'moyen' : 'long') : sizeClass(text));
     show($('overlay-text'), !!text);
     $('overlay-text').style.fontSize = '';
-    if (mode === 'photo' || mode === 'video') setTimeout(function () { ajusterTexte($('overlay-text')); }, 0);
+    if (papier) setTimeout(function () { ajusterTexte($('overlay-text')); }, 0);
     showListenButtons();
     // Photo : signée sous la légende (« — Julie »), comme un mot écrit à la main.
     $('overlay-from').textContent = papier ? '— ' + (p.authorName || '') : '';
@@ -721,7 +723,7 @@
     show($('overlay-face'), media && !!face);
     if (media && face) $('overlay-face').setAttribute('src', face);
     // Photo : à droite, sur toute la hauteur.
-    show($('ln-media'), papier);
+    show($('ln-media'), papier && mode !== 'message');
     if (mode === 'video') videoPoster(p);
     if (mode === 'photo') {
       setPicture($('overlay-img'), p.image);
@@ -775,7 +777,9 @@
   function ajusterTexte(el) {
     if (!el || el.hidden || !el.clientWidth) return;
     var taille = parseFloat(getComputedStyle(el).fontSize);
-    for (var i = 0; i < 12 && el.scrollWidth > el.clientWidth + 1; i++) {
+    var carte = el.parentNode;
+    // Trop large (un mot) ou trop haut (message long) pour la carte : on rapetisse.
+    for (var i = 0; i < 14 && (el.scrollWidth > el.clientWidth + 1 || carte.scrollHeight > carte.clientHeight + 1); i++) {
       taille *= 0.92;
       el.style.fontSize = taille + 'px';
     }

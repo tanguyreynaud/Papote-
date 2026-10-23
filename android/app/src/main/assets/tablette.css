@@ -1803,6 +1803,22 @@ html .overlay.papier .ln-media img { top: 3vmin; left: 0; width: calc(100% - 3vm
 .overlay.papier .ln-note { -webkit-flex: 1; flex: 1; -webkit-align-self: stretch; align-self: stretch; height: auto; }
 html .overlay.papier .ln-media, html .overlay.papier.wide .ln-media { background: #f6efe4; }
 
+/* ---------- Message (même carte que la photo, 23/10) ----------
+   Le mot seul, sur toute la largeur (classe seul), signé « — Prénom » (sans photo de profil).
+   Jusqu'à 160 caractères, ajustés pour tenir. */
+html .overlay.papier.seul .ln-media { display: none; }
+html .overlay.papier.seul #overlay-actions { width: calc(100vw - 6vmin); }
+html .overlay.papier.seul .ln-note { padding-left: 12vmin; padding-right: 12vmin; }
+html .overlay.papier .ln-text.msg-court { font-size: calc(9vmin * var(--ts, 1)); }
+html .overlay.papier .ln-text.msg-moyen { font-size: calc(7.6vmin * var(--ts, 1)); }
+html .overlay.papier .ln-text.msg-long { font-size: calc(6.4vmin * var(--ts, 1)); }
+html .overlay.papier.seul .ln-text.msg-court { font-size: calc(13vmin * var(--ts, 1)); }
+html .overlay.papier.seul .ln-text.msg-moyen { font-size: calc(10.5vmin * var(--ts, 1)); }
+html .overlay.papier.seul .ln-text.msg-long { font-size: calc(9vmin * var(--ts, 1)); }
+html .overlay.papier.seul .ln-sign { font-size: calc(6.5vmin * var(--ts, 1)); }
+/* Le message garde son fond crème (pas le bois ni le fond coloré des anciens écrans). */
+html .overlay.mode-message.papier .ln-wood { background: #f6efe4 !important; }
+
 /* Diaporama : « Tanguy, aujourd'hui » et la légende collés à droite (demande de Tanguy, 23/10). */
 .photos .photo-caption { text-align: right; }
 .photos .photo-who { -webkit-justify-content: flex-end; justify-content: flex-end; }
