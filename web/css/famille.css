@@ -1219,7 +1219,7 @@ a { text-decoration: none; }
 .genre-btn[aria-checked="true"] { background: var(--card, #fff); color: var(--accent); font-weight: 600; box-shadow: 0 1px 3px rgba(0, 0, 0, .12); }
 .genre-choix + .primary { margin-top: 20px; }
 /* Ma photo à l'inscription : un petit rond (souhait de Tanguy), centré, avec un badge appareil photo. */
-.moi-visage { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; margin: 18px 0 4px; padding: 0; background: none; border: 0; color: inherit; font: inherit; }
+.moi-visage { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; margin: 4px 0; padding: 0; background: none; border: 0; color: inherit; font: inherit; }
 .moi-rond { position: relative; width: 96px; height: 96px; border-radius: 50%; display: grid; place-items: center; background: color-mix(in srgb, var(--accent) 8%, transparent); border: 2px dashed color-mix(in srgb, var(--accent) 45%, transparent); }
 .moi-rond img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
 .moi-rond > svg[hidden], .moi-rond img[hidden] { display: none; }

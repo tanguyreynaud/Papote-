@@ -111,7 +111,8 @@
           <input id="moi-prenom" autocomplete="given-name" maxlength="40" placeholder="Julie" required>
         </label>
         <p class="genre-titre">Vous êtes</p><div class="genre-choix" role="radiogroup" aria-label="Vous êtes"><button type="button" class="genre-btn" role="radio" aria-checked="false" data-genre="femme">Une femme</button><button type="button" class="genre-btn" role="radio" aria-checked="false" data-genre="homme">Un homme</button></div>
-                <button type="button" class="moi-visage" id="moi-visage" aria-label="Ajouter ma photo">
+                <p class="genre-titre">Votre photo</p>
+        <button type="button" class="moi-visage" id="moi-visage" aria-label="Ajouter ma photo">
           <span class="moi-rond"><img id="moi-photo" alt="" hidden><svg id="moi-photo-vide"><use href="#i-user"/></svg><span class="moi-badge"><svg><use href="#i-camera"/></svg></span></span>
           <strong id="moi-visage-titre">Ajouter ma photo</strong>
           <span class="muted small">Pour que votre proche vous reconnaisse</span>
@@ -123,7 +124,7 @@
           <select id="moi-mois" aria-label="Mois"><option value="">Mois</option></select>
           <select id="moi-annee" aria-label="Année"><option value="">Année</option></select>
         </div>
-        <p class="muted small">Pour que votre proche pense à votre anniversaire : la tablette le lui rappellera le jour venu, avec votre âge.</p>
+        <p class="muted small">Pour que votre proche pense à votre anniversaire.</p>
         <button type="submit" class="primary wide">Continuer</button>
         <p id="moi-error" class="error" hidden></p>
       </form>
