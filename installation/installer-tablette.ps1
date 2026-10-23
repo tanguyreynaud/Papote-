@@ -274,7 +274,24 @@ if ($refus.Count) {
     $outil = Join-Path $PSScriptRoot '..\outils\gestion\preparer-tablette.js'
     try {
         $sortie = (& node $outil --serie $serie --modele $modele 2>&1 | ForEach-Object { "$_" }) -join "`n"
-        if ($LASTEXITCODE) { Say "`nStock : la tablette n'a pas pu être notée ($sortie)" 'Yellow' }
+        if ($LASTEXITCODE -eq 3) {
+            # Plusieurs achats possibles : laquelle est la boîte en main (pour savoir quoi renvoyer en cas de souci).
+            $choix = @($sortie -split "`n" | Where-Object { $_ -match "^CHOIX`t" } | ForEach-Object { $p = $_ -split "`t"; [pscustomobject]@{ Id = $p[1]; Libelle = $p[2] } })
+            $achat = $null
+            if ($Oui -or -not $choix.Count) {
+                Say "`nStock : plusieurs achats possibles, tablette non notée (relancez sans -Oui pour choisir)." 'Yellow'
+            } else {
+                Say "`nPlusieurs commandes de ce modèle attendent leur installation :" 'Cyan'
+                for ($i = 0; $i -lt $choix.Count; $i++) { Say ("  {0}) {1}" -f ($i + 1), $choix[$i].Libelle) }
+                while (-not $achat) {
+                    $n = Read-Host 'Quelle commande correspond à la boîte que vous avez en main ? (numéro)'
+                    if ($n -match '^\d+$' -and [int]$n -ge 1 -and [int]$n -le $choix.Count) { $achat = $choix[[int]$n - 1].Id }
+                }
+                $sortie = (& node $outil --serie $serie --modele $modele --achat $achat 2>&1 | ForEach-Object { "$_" }) -join "`n"
+            }
+        }
+        if ($LASTEXITCODE -eq 3) { }  # pas de choix fait : déjà signalé
+        elseif ($LASTEXITCODE) { Say "`nStock : la tablette n'a pas pu être notée ($sortie)" 'Yellow' }
         else {
             Say ''
             foreach ($ligne in ($sortie -split "`n")) {
