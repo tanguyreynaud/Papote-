@@ -644,6 +644,7 @@ exports.gestionDonnees = onCall(async (request) => {
         contestations: c.contestations || null,
         pause: c.pause || null,
         alerteDoublon: c.alerteDoublon || null,
+        titulaire: (c.empreinte && c.empreinte.titulaire) || null,
         etiquettes: c.etiquettes || null,
         preparation: c.preparation || null,
         stripeCustomerId: c.stripeCustomerId || null,
