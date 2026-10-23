@@ -681,6 +681,21 @@
             </div>
           </form>
         </div>
+        <div id="my-genre-card" class="card setting">
+          <div class="setting-head"><h2>Je suis</h2><button type="button" class="link setting-modify">Modifier</button></div>
+          <p id="my-genre-value" class="setting-value"></p>
+          <form id="form-my-genre" class="setting-edit" hidden>
+            <div class="choice" role="radiogroup" aria-label="Je suis">
+              <label><input type="radio" name="my-genre" value="femme"> Une femme</label>
+              <label><input type="radio" name="my-genre" value="homme"> Un homme</label>
+            </div>
+            <p class="muted small">La tablette lit vos messages avec une voix de femme ou d'homme.</p>
+            <div class="setting-actions">
+              <button type="button" class="secondary setting-cancel">Annuler</button>
+              <button type="submit" class="primary">Enregistrer</button>
+            </div>
+          </form>
+        </div>
         <div class="card">
           <h2>Apparence</h2>
           <div class="segmented" role="radiogroup" aria-label="Apparence">
