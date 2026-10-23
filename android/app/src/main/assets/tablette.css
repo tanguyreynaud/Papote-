@@ -1808,16 +1808,16 @@ html .overlay.papier .ln-media, html .overlay.papier.wide .ln-media { background
    Jusqu'à 160 caractères, ajustés pour tenir. */
 html .overlay.papier.seul .ln-media { display: none; }
 html .overlay.papier.seul #overlay-actions { width: calc(100vw - 6vmin); }
-html .overlay.papier.seul .ln-note { padding: 3vmin 7vmin 21vmin; }
+html .overlay.papier.seul .ln-note { padding: 4vmin 9vmin 21vmin; }
 html .overlay.papier .ln-text.msg-court { font-size: calc(9vmin * var(--ts, 1)); }
 html .overlay.papier .ln-text.msg-moyen { font-size: calc(7.6vmin * var(--ts, 1)); }
 html .overlay.papier .ln-text.msg-long { font-size: calc(6.4vmin * var(--ts, 1)); }
-html .overlay.papier.seul .ln-text.msg-court { font-size: calc(13vmin * var(--ts, 1)); }
+html .overlay.papier.seul .ln-text.msg-court { font-size: calc(16vmin * var(--ts, 1)); }
 html .overlay.papier.seul .ln-text.msg-moyen { font-size: calc(12.5vmin * var(--ts, 1)); }
 html .overlay.papier.seul .ln-text.msg-long { font-size: calc(11.5vmin * var(--ts, 1)); } /* jusqu à 5 lignes */
 html .overlay.papier.seul .ln-sign { font-size: calc(6.5vmin * var(--ts, 1)); }
 /* Message : lignes pleines (pas équilibrées), pour garder le texte le plus gros possible. */
-html .overlay.papier.seul .ln-text { text-wrap: wrap; }
+html .overlay.papier.seul .ln-text { text-wrap: wrap; line-height: 1.24; } /* aéré, pas un bloc compact */
 /* Le message garde son fond crème (pas le bois ni le fond coloré des anciens écrans). */
 html .overlay.mode-message.papier .ln-wood { background: #f6efe4 !important; }
 
