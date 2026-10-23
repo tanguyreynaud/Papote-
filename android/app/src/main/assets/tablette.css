@@ -1739,8 +1739,11 @@ html .overlay.papier .ln-sign, html .overlay.papier.wide .ln-sign {
   /* En hauteur : largeur selon les proportions de la photo (entière, rien de coupé), 60 % au plus. */
   width: calc((100vh - 6vmin) * var(--photo-ratio, .75) + 3vmin); max-width: 60%;
 }
-.overlay.papier.wide .ln-media { width: 58%; max-width: none; }
-.overlay.papier.wide #overlay-actions { width: calc(42vw - 6vmin); }
+.overlay.papier.wide .ln-media { width: 64%; max-width: none; } /* plus large : la photo est moins coupée */
+html .overlay.papier.wide #overlay-actions { width: calc(36vw - 6vmin); }
+html .overlay.papier.wide .ln-text { font-size: calc(8vmin * var(--ts, 1)); }
+.overlay.papier.wide #overlay-actions { gap: 3vmin; }
+.overlay.papier.wide #overlay-actions .ln-btn:not(.listen) { padding: 0 6.5vmin; }
 /* La photo remplit sa place, sans fond flou : en largeur elle est un peu zoomée (bords coupés). */
 .overlay.papier .ln-media-bg { display: none !important; }
 .overlay.papier .ln-media img { -webkit-background-size: cover; background-size: cover; background-position: center; }
