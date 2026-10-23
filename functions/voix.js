@@ -80,10 +80,24 @@ function texteAnnonce(prenom) {
   return p ? `${p} vous écrit :` : '';
 }
 
+// Photo sans légende : la tablette affiche un petit mot choisi par l'id de l'envoi (motParDefaut de
+// android/app/src/main/assets/tablette.js, à garder identique). Lu ici avec la voix du proche ; les 7 mots × 2
+// voix sont rangés dans voix-annonces/, communs à toutes les familles (créés une seule fois).
+const MOTS = ['Je pense fort à toi', 'Un petit coucou !', 'Gros bisous !', 'Une pensée pour toi',
+  'Je t’embrasse fort', 'Plein de bisous !', 'Bonne journée !'];
+function motParDefaut(id) {
+  const s = String(id || '');
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 9973;
+  return MOTS[h % MOTS.length];
+}
+
 // Ajoute (ou met à jour) data.voix sur le document si le texte a changé. db : base Firestore.
 // annonce : prénom à annoncer avant le texte (messages et légendes), rien pour un rappel.
 async function voixDocument(db, ref, data, champ, auteurUid, prenomAnnonce) {
-  const texte = texteDe(data, champ);
+  let texte = texteDe(data, champ);
+  const motFixe = !texte && data.type === 'photo';
+  if (motFixe) texte = motParDefaut(ref.id);
   if (!texte) return null;
   const annonce = texteAnnonce(prenomAnnonce);
   // Déjà lu (et chaque écriture de la fonction ou de la tablette « vu », « bisou » redéclenche) : rien à faire,
@@ -95,7 +109,7 @@ async function voixDocument(db, ref, data, champ, auteurUid, prenomAnnonce) {
     genre = (m.exists && m.get('genre')) || '';
   }
   const fid = ref.parent.parent.id;
-  const v = await fichierVoix(fid, texte, genre);
+  const v = await fichierVoix(motFixe ? null : fid, texte, genre);
   const voix = { url: v.url, texte, nom: v.nom };
   if (annonce) {
     voix.annonce = (await fichierVoix(null, annonce, genre)).url;
@@ -105,4 +119,4 @@ async function voixDocument(db, ref, data, champ, auteurUid, prenomAnnonce) {
   return v;
 }
 
-module.exports = { nomVoix, cheminFichier, texteDe, texteAnnonce, voixDocument, fichierVoix, VOIX, MAX };
+module.exports = { nomVoix, motParDefaut, MOTS, cheminFichier, texteDe, texteAnnonce, voixDocument, fichierVoix, VOIX, MAX };
