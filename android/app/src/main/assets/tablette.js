@@ -1191,6 +1191,8 @@
     $('reminder-time').textContent = (r.kind === 'rdv' ? 'Rendez-vous à ' : 'À ') + timeLabel(r.time);
     $('reminder-done').textContent = early ? "J'ai compris" : r.kind === 'rdv' ? "J'ai bien noté" : "C'est fait";
     show($('reminder-alert'), true);
+    // La nuit, le rappel sonne quand même, doucement : l'écran se rallume le temps du rappel.
+    if (asleep && android() && android().setSleep) { reveilRappel = true; android().setSleep(false); }
     stopRadio();
     noteVoix(r.title, r.voice);
     showListenButtons();
@@ -1215,7 +1217,10 @@
     unwatchSeen('reminder');
     alerting = null;
     show($('reminder-alert'), false);
+    // Rappel de nuit fini : l'écran repart dans le noir.
+    if (reveilRappel) { reveilRappel = false; if (asleep && android() && android().setSleep) android().setSleep(true); }
   }
+  var reveilRappel = false;
 
   function confirmReminder() {
     if (!alerting) return;

@@ -934,34 +934,69 @@ final class Sync {
         // voie tout de suite que Mamie a regardé (écritures rares : seulement quand elle est là).
         long every = "lastOnline".equals(field) ? HEARTBEAT_MS : 60_000;
         if (fid == null || (last != null && now - last < every)) return;
+        boolean enLigne = "lastOnline".equals(field);
         try {
-            JSONObject write = new JSONObject()
-                    .put("update", new JSONObject()
-                            .put("name", Firebase.docName("families/" + fid + "/members/" + firebase.uid()))
-                            // La version de l'appli, pour le tableau de bord de la famille.
-                            .put("fields", new JSONObject().put("appVersion",
-                                    new JSONObject().put("stringValue", appVersion()))))
-                    .put("updateMask", new JSONObject().put("fieldPaths", new JSONArray().put("appVersion")))
-                    .put("updateTransforms", new JSONArray().put(new JSONObject()
-                            .put("fieldPath", field).put("setToServerValue", "REQUEST_TIME")))
-                    .put("currentDocument", new JSONObject().put("exists", true));
-            firebase.commit(new JSONArray().put(write));
+            // La version de l'appli, pour le tableau de bord de la famille ; toutes les 10 min, avec la
+            // batterie et la carte SIM dans la MÊME écriture : une seule notification de changement pour
+            // les téléphones de la famille au lieu de trois (26/10).
+            JSONObject fields = new JSONObject().put("appVersion", new JSONObject().put("stringValue", appVersion()));
+            JSONArray mask = new JSONArray().put("appVersion");
+            if (enLigne) {
+                JSONObject battery = batteryValue();
+                if (battery != null) { fields.put("battery", battery); mask.put("battery"); }
+                JSONObject sim = simValue();
+                if (sim != null) { fields.put("sim", sim); mask.put("sim"); }
+            }
+            firebase.commit(new JSONArray().put(memberWrite(fid, fields, mask, field)));
             lastHeartbeat.put(field, now);
+        } catch (Firebase.ApiException e) {
+            // Refusé (règles qui n'acceptent pas encore un champ) : au moins « en ligne » passe.
+            Log.w(TAG, "Veille " + field, e);
+            try {
+                firebase.commit(new JSONArray().put(memberWrite(fid,
+                        new JSONObject().put("appVersion", new JSONObject().put("stringValue", appVersion())),
+                        new JSONArray().put("appVersion"), field)));
+                lastHeartbeat.put(field, now);
+            } catch (Exception e2) {
+                Log.w(TAG, "Veille " + field, e2);
+            }
         } catch (Exception e) {
             Log.w(TAG, "Veille " + field, e);
         }
-        if ("lastOnline".equals(field)) {
-            reportBattery(fid);
-            reportSim(fid);
-            uploadJournal(fid, false);
+        if (enLigne) uploadJournal(fid, false);
+    }
+
+    private JSONObject memberWrite(String fid, JSONObject fields, JSONArray mask, String horodatage) throws JSONException {
+        JSONObject write = new JSONObject()
+                .put("update", new JSONObject()
+                        .put("name", Firebase.docName("families/" + fid + "/members/" + firebase.uid()))
+                        .put("fields", fields))
+                .put("updateMask", new JSONObject().put("fieldPaths", mask))
+                .put("currentDocument", new JSONObject().put("exists", true));
+        if (horodatage != null) {
+            write.put("updateTransforms", new JSONArray().put(new JSONObject()
+                    .put("fieldPath", horodatage).put("setToServerValue", "REQUEST_TIME")));
         }
+        return write;
     }
 
     /**
      * Batterie et chargeur, pour que la famille soit prévenue si la tablette est débranchée.
-     * Écrit à part : si les règles Firestore ne l'acceptent pas encore, le signal « en ligne » passe quand même.
+     * Écrite seule quand le chargeur est branché ou débranché ; sinon avec « en ligne » (heartbeat).
      */
     private void reportBattery(String fid) {
+        try {
+            JSONObject battery = batteryValue();
+            if (battery == null) return;
+            firebase.commit(new JSONArray().put(memberWrite(fid, new JSONObject().put("battery", battery),
+                    new JSONArray().put("battery"), null)));
+        } catch (Exception e) {
+            Log.w(TAG, "Batterie", e);
+        }
+    }
+
+    /** Batterie et chargeur (champ « battery » de la fiche), ou null si illisible. */
+    private JSONObject batteryValue() {
         try {
             android.os.BatteryManager bm =
                     (android.os.BatteryManager) context.getSystemService(Context.BATTERY_SERVICE);
@@ -989,16 +1024,10 @@ final class Sync {
                 int cycles = sticky.getIntExtra("android.os.extra.CYCLE_COUNT", -1);
                 if (cycles >= 0) fields.put("cycles", new JSONObject().put("integerValue", String.valueOf(cycles)));
             }
-            JSONObject battery = new JSONObject().put("mapValue", new JSONObject().put("fields", fields));
-            JSONObject write = new JSONObject()
-                    .put("update", new JSONObject()
-                            .put("name", Firebase.docName("families/" + fid + "/members/" + firebase.uid()))
-                            .put("fields", new JSONObject().put("battery", battery)))
-                    .put("updateMask", new JSONObject().put("fieldPaths", new JSONArray().put("battery")))
-                    .put("currentDocument", new JSONObject().put("exists", true));
-            firebase.commit(new JSONArray().put(write));
+            return new JSONObject().put("mapValue", new JSONObject().put("fields", fields));
         } catch (Exception e) {
             Log.w(TAG, "Batterie", e);
+            return null;
         }
     }
 
@@ -1633,7 +1662,7 @@ final class Sync {
     }
 
     /** Carte SIM (page « Forfaits SIM ») : sim = {iccid, operateur, reseau, signal, dataMoisMo, vuLe}, ou null. */
-    private void reportSim(String fid) {
+    private JSONObject simValue() {
         try {
             JSONObject info = SimInfo.read(context);
             JSONObject value;
@@ -1651,15 +1680,10 @@ final class Sync {
                         .put("vuLe", new JSONObject().put("timestampValue", isoNow()));
                 value = new JSONObject().put("mapValue", new JSONObject().put("fields", fields));
             }
-            JSONObject write = new JSONObject()
-                    .put("update", new JSONObject()
-                            .put("name", Firebase.docName("families/" + fid + "/members/" + firebase.uid()))
-                            .put("fields", new JSONObject().put("sim", value)))
-                    .put("updateMask", new JSONObject().put("fieldPaths", new JSONArray().put("sim")))
-                    .put("currentDocument", new JSONObject().put("exists", true));
-            firebase.commit(new JSONArray().put(write));
+            return value;
         } catch (Exception e) {
             Log.w(TAG, "Carte SIM", e);
+            return null;
         }
     }
 

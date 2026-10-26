@@ -453,7 +453,9 @@ public class MainActivity extends Activity implements Sync.Listener {
         /** Son de notification et écran allumé (rappel à l'heure). */
         @JavascriptInterface
         public void alert() {
-            onNewArrival();
+            // La nuit, un rappel sonne quand même, plus doucement (Tanguy, 26/10) ; un envoi, lui, attend le matin.
+            if (Veille.isNight(MainActivity.this)) handler.post(() -> sonner(0.35f));
+            else onNewArrival();
         }
 
         /** Visage vu : le carillon (joué 5 fois) s'arrête tout de suite. */
@@ -710,7 +712,12 @@ public class MainActivity extends Activity implements Sync.Listener {
         // Pendant la veille (23h-7h sauf réglage de la famille), pas de sonnerie ni d'écran
         // allumé : l'envoi attend le matin.
         if (Veille.isNight(this)) return;
-        handler.post(() -> {
+        handler.post(() -> sonner(1f));
+    }
+
+    /** Écran allumé et carillon de Papote, à ce volume (1 = volume des médias réglé par la famille). */
+    private void sonner(float volume) {
+        {
             // Pendant un appel : ni carillon (la famille l'entendrait dans l'appel) ni réveil, l'envoi
             // s'affiche à la fin de l'appel.
             if (callAudio.busy()) return;
@@ -733,6 +740,7 @@ public class MainActivity extends Activity implements Sync.Listener {
                     stopCarillon(); // deux envois de suite : un seul carillon à la fois
                     carillon = mp;
                     mp.setOnCompletionListener(m -> { if (carillon == m) carillon = null; m.release(); });
+                    mp.setVolume(volume, volume);
                     mp.start();
                 } else {
                     Ringtone r = RingtoneManager.getRingtone(this, RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION));
@@ -741,7 +749,7 @@ public class MainActivity extends Activity implements Sync.Listener {
             } catch (Exception e) {
                 Log.w(TAG, "Son d'arrivée", e);
             }
-        });
+        }
     }
 
     private void stopCarillon() {
