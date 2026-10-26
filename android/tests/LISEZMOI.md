@@ -7,7 +7,7 @@ Deux familles d'essais, à lancer depuis le dossier du dépôt.
 ```
 npm install -g playwright
 npx playwright install chromium
-node --test android/tests/
+node --test "android/tests/*.test.js"
 ```
 
 26 scénarios : file des envois, voix, nuit, rappels, SOS, anniversaire, pause, wifi, appels
