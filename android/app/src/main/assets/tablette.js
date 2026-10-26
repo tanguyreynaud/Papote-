@@ -1086,7 +1086,8 @@
       var r = reminders[i];
       if (r.kind !== 'rdv' || !happensOn(r, now) || isDone(r, key)) continue;
       var delta = minutesOf(r.time) - nowMin;
-      if (delta >= 0 && delta <= 60 && (!next || delta < next.delta)) next = { r: r, delta: delta };
+      // Rendez-vous seulement, dans la demi-heure (Tanguy, 26/10 : une heure sans photos, c'était trop).
+      if (delta >= 0 && delta <= 30 && (!next || delta < next.delta)) next = { r: r, delta: delta };
     }
     return next;
   }
@@ -1980,8 +1981,13 @@
     radioAudio.onerror = function () { stopRadio(); };
     var play = radioAudio.play();
     if (play && play.catch) play.catch(function () { stopRadio(); });
+    // Oubliée allumée : elle s'arrête toute seule au bout de 2 heures.
+    clearTimeout(radioTimer);
+    radioTimer = setTimeout(stopRadio, RADIO_MAX_MS);
     renderRadioBtn();
   }
+  var RADIO_MAX_MS = 2 * 3600000;
+  var radioTimer = null;
 
   // Écran éteint (veille, bouton marche) : la radio s'arrête.
   document.addEventListener('visibilitychange', function () { if (document.hidden) stopRadio(); });
@@ -2035,6 +2041,7 @@
   setInterval(checkCallForRadio, 1000);
 
   function stopRadio() {
+    clearTimeout(radioTimer);
     if (radioAudio) {
       try { radioAudio.pause(); radioAudio.src = ''; } catch (e) { }
       radioAudio = null;

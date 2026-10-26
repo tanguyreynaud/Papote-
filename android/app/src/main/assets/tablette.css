@@ -1989,3 +1989,16 @@ html .overlay.bday .ln-btn.bday-call[hidden] { display: none; }
 /* Anniversaire : le gâteau dans la carte, au-dessus du texte (plus de petit dessin isolé en dessous). */
 html .overlay.bday .ln-wood { background-image: none !important; }
 html .overlay.bday .bday-gateau { display: block; width: 16vmin; height: 16vmin; margin: 0 auto 2vmin; }
+/* Avec la radio, deux boutons côte à côte dans la colonne plus étroite : un peu plus petits pour tenir. */
+html .home-left .home-actions { gap: 2.5vmin; -webkit-justify-content: center; justify-content: center; }
+html .home-left .home-actions .big-btn { -webkit-flex: none; flex: none; min-width: 0; padding: 0 4.5vmin; font-size: 5.8vmin; white-space: nowrap; }
+html .home-left .home-actions .big-btn .icon { width: 5.5vmin; height: 5.5vmin; margin-right: 2vmin; }
+/* La radio en rond (icône seule, ou carré « arrêter » pendant l'écoute) à côté d'« Appeler » : les deux
+   tiennent dans la colonne de gauche même avec le bandeau d'anniversaire. */
+html .home-left .home-actions .radio-btn {
+  width: 13vmin; height: 13vmin; min-height: 0; padding: 0 !important; border-radius: 50%;
+  display: -webkit-flex; display: flex; -webkit-align-items: center; align-items: center; -webkit-justify-content: center; justify-content: center;
+}
+html .home-left .home-actions .radio-btn span { display: none; }
+html .home-left .home-actions .radio-btn .icon { width: 6.5vmin; height: 6.5vmin; margin: 0 !important; }
+html .home-left .home-actions .radio-btn[hidden] { display: none; }
