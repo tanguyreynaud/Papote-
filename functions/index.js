@@ -1621,11 +1621,15 @@ exports.voixEnvoi = onDocumentWritten(
     const apres = event.data && event.data.after;
     if (!apres || !apres.exists) return;
     const data = apres.data();
-    if (data.type === 'reply') return; // réponse écrite depuis la tablette : rien à lui lire
+    const chemin = apres.ref.path;
+    if (data.type === 'reply') { console.log(`Voix ${chemin} : réponse de la tablette, rien à lire`); return; }
     try {
-      await voix.voixDocument(db, apres.ref, data, 'text', data.authorUid, data.authorName);
+      const fait = await voix.voixDocument(db, apres.ref, data, 'text', data.authorUid, data.authorName);
+      // Journal en texte simple (lisible avec « firebase functions:log »), sauf les relectures sans changement.
+      if (fait !== 'déjà lu') console.log(`Voix ${chemin} (${data.type || '?'}) : ${fait}`);
     } catch (e) {
-      logger.warn('Voix de l\'envoi', event.params, e.message); // la tablette lira avec sa propre voix
+      // La tablette lira avec sa propre voix.
+      console.error(`Voix ${chemin} : ÉCHEC ${e && e.message ? e.message : e}`);
     }
   });
 exports.voixRappel = onDocumentWritten(
@@ -1635,8 +1639,9 @@ exports.voixRappel = onDocumentWritten(
     if (!apres || !apres.exists) return;
     try {
       // Rappels : l'auteur n'est noté que par son prénom, voix Kore.
-      await voix.voixDocument(db, apres.ref, apres.data(), 'title', null);
+      const fait = await voix.voixDocument(db, apres.ref, apres.data(), 'title', null);
+      if (fait !== 'déjà lu') console.log(`Voix ${apres.ref.path} : ${fait}`);
     } catch (e) {
-      logger.warn('Voix du rappel', event.params, e.message);
+      console.error(`Voix ${apres.ref.path} : ÉCHEC ${e && e.message ? e.message : e}`);
     }
   });
