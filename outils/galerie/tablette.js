@@ -241,6 +241,10 @@ const SCENES = [
   { groupe: 'Appels', titre: 'Qui voulez-vous appeler ?', faire: async (t) => {
     await accueil(t, photosVues()); await t.cliquer('.call-btn.big-btn'); await t.attendre(400);
   } },
+  { groupe: 'Appels', titre: 'Qui voulez-vous appeler ? (page suivante)', faire: async (t) => {
+    await accueil(t, photosVues()); await t.cliquer('.call-btn.big-btn'); await t.attendre(300);
+    await t.page.locator('.call-arrow.right, .call-page:has-text("Suivants")').first().click(); await t.attendre(400);
+  } },
   { groupe: 'Appels', titre: 'Qui appeler : une seule personne', faire: async (t) => {
     await accueil(t, photosVues(), { people: PROCHES.slice(0, 1) }); await t.cliquer('.call-btn.big-btn'); await t.attendre(400);
   } },
