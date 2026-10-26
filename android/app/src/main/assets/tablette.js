@@ -220,8 +220,10 @@
     try {
       var now = WEATHER[data.current.weather_code] || ['cloudy', ''];
       var isDay = data.current.is_day;
-      var label = now[1];
-      if (!isDay && data.current.weather_code === 0) label = 'Ciel dégagé';
+      // Un seul mot à côté de la température : il tient dans la colonne de l'accueil (Tanguy, 26/10).
+      var COURT = { clear: 'Soleil', partly: 'Éclaircies', cloudy: 'Couvert', fog: 'Brouillard', rain: 'Pluie', snow: 'Neige', storm: 'Orage' };
+      var label = COURT[now[0]] || now[1];
+      if (!isDay && now[0] === 'clear') label = 'Dégagé';
       $('weather-icon').innerHTML = weatherSvg(now[0], isDay);
       $('weather-temp').textContent = Math.round(data.current.temperature_2m) + '°';
       var tomorrow = WEATHER[data.daily.weather_code[1]] || ['cloudy', ''];
@@ -232,10 +234,22 @@
       $('weather-label').appendChild(small);
       weatherReady = true;
       show($('weather'), options.meteo !== false);
+      ajusterMeteo();
     } catch (e) { /* données incomplètes : on garde l'affichage précédent */ }
   }
 
   // ---------- Accueil : cadre photo et compteurs ----------
+
+  // « Nuageux », « Ensoleillé »… à côté de la température seulement si la ligne tient dans la colonne
+  // (Tanguy, 26/10) ; sinon l'icône et la température seules.
+  function ajusterMeteo() {
+    var w = $('weather'), l = $('weather-label');
+    if (!w || !l) return;
+    l.style.display = '';
+    var col = w.parentNode;
+    if (w.scrollWidth > w.clientWidth + 1 || (col && col.scrollWidth > col.clientWidth + 1)) l.style.display = 'none';
+  }
+  on(window, 'resize', ajusterMeteo);
 
   function renderFrame() {
     // Un rendez-vous dans moins d'une heure passe avant les photos.
@@ -1450,7 +1464,7 @@
   // L'appel lui-même : window.papoteCallFamily({ to, onState }) dans appels.js (fil des appels).
 
   var CALL_MODE = 'personne';
-  var PER_PAGE = 4;   // 4 visages à la fois au plus
+  var PER_PAGE = 3;   // 3 visages à la fois, en grand (Tanguy, 26/10)
   var pickerPage = 0;
   var people = [];
   var callScreen = null;

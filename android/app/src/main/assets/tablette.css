@@ -1947,7 +1947,8 @@ html .call-wait, html .call-ring:has(.caller-face[hidden]) { justify-items: cent
    Photos plus grandes (colonne de gauche plus étroite), « SOS » court, météo réduite à l'icône et la
    température, plus de pastille du prochain rappel (il s'affiche en grand le moment venu). */
 html .home-frame { width: 56%; }
-html .home-left .weather-label { display: none; }
+html .home-left .weather-label { white-space: nowrap; }
+html .home-left .weather-label small { display: none; }
 html .home-left .weather { -webkit-justify-content: center; justify-content: center; }
 html #home-next { display: none !important; }
 html .home-left .sos-btn { padding-left: 6vmin; padding-right: 6vmin; }
@@ -2002,3 +2003,10 @@ html .home-left .home-actions .radio-btn {
 html .home-left .home-actions .radio-btn span { display: none; }
 html .home-left .home-actions .radio-btn .icon { width: 6.5vmin; height: 6.5vmin; margin: 0 !important; }
 html .home-left .home-actions .radio-btn[hidden] { display: none; }
+/* Qui voulez-vous appeler ? : 3 personnes par page, en grand. */
+html .call-out.picker .call-strip .call-person { width: 40vmin; padding: 3vmin; }
+html .call-out.picker .call-strip .call-person-face { width: 34vmin; height: 34vmin; font-size: 16vmin; }
+html .call-out.picker .call-strip .call-person-name { font-size: 8vmin; }
+html .call-out.picker .call-title { font-size: 9vmin; margin-bottom: 1vmin; }
+html .home-left .weather-icon, html .home-left .weather-temp { -webkit-flex: none; flex: none; }
+html .home-left .weather-label { font-size: calc(4.6vmin * var(--ts, 1)); }
