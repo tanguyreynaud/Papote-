@@ -236,6 +236,21 @@ async function familleInstallee(t, { email, prenom, nom = 'Mamie Emma', genre = 
   return { fid, tab };
 }
 
+/** Un proche rejoint la famille avec le code famille ; la responsable (t déjà sur l'accueil) accepte. */
+async function rejoindre(responsable, fid, t, { email, prenom, genre = 'homme' }) {
+  const { code } = await lire(`families/${fid}`);
+  await inscrire(t, email, prenom, { genre, suite: `?code=${code}` });
+  await attendreVue(t, 'view-join');
+  await t.page.click('#form-join button[type=submit]');
+  await attendreVue(t, 'view-pending');
+  await responsable.page.locator('#pending-banner .join-card', { hasText: prenom }).locator('.join-ok').click();
+  await attendreVue(t, 'view-home');
+  await fermerAccueil(t);
+  const membre = await attendreBase(async () => (await liste(`families/${fid}/members`)).find((m) => m.email === email), 'membre');
+  t.uid = membre.id;
+  return membre.id;
+}
+
 /** Dernier e-mail reçu (simulé) par cette adresse : { sujet, texte }. */
 function dernierMail(email) {
   const m = s.boite.filter((x) => x.a === email);
@@ -281,6 +296,6 @@ async function attendreBase(fn, message, delai = 15_000) {
 
 module.exports = {
   vue, attendreVue, visible, repondre, texteFenetre, photo, video,
-  ouvrir, seConnecter, remplirMoi, inscrire, tabletteAllumee, installer, fermerAccueil, familleInstallee, dernierMail, toast,
+  ouvrir, seConnecter, remplirMoi, inscrire, tabletteAllumee, installer, fermerAccueil, familleInstallee, rejoindre, dernierMail, toast,
   ouvrirTuile, retourAccueil, lire, liste, attendreBase, codesEmail,
 };

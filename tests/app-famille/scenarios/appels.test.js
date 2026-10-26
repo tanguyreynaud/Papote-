@@ -1,0 +1,132 @@
+// Appels : vidéo du téléphone vers la tablette (vraie liaison WebRTC avec une tablette simulée),
+// appel de Mamie vers un proche ou toute la famille (audio, puis vidéo), refus, tablette occupée.
+
+const test = require('node:test');
+const assert = require('node:assert');
+const banc = require('../banc');
+const g = require('../gestes');
+const tablette = require('../tablette');
+
+const { s } = banc;
+
+banc.brancher();
+
+const appelsDe = async (fid, uid) => (await g.liste(`families/${fid}/calls`)).filter((c) => c.callerUid === uid);
+
+async function lancerAppel(t) {
+  await t.page.locator('#tile-call:not([disabled])').waitFor();
+  await t.page.click('#tile-call');
+  assert.match(await g.texteFenetre(t), /Appeler Mamie Emma en vidéo/);
+  await g.repondre(t, 'Appeler');
+  await t.page.locator('#call').waitFor({ state: 'visible' });
+}
+
+test('Appel vidéo vers la tablette : ça sonne, la tablette décroche, image reçue, on raccroche', async () => {
+  const julie = await banc.telephone('Julie');
+  const { fid, tab } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
+  const uid = (await g.liste(`families/${fid}/members`)).find((m) => m.email === 'julie@exemple.fr').id;
+  const mamie = await tablette.ouvrir(fid, tab);
+
+  await lancerAppel(julie);
+  await julie.page.locator('#call-status', { hasText: 'Ça sonne chez Mamie Emma' }).waitFor();
+  const [appel] = await g.attendreBase(async () => { const l = await appelsDe(fid, uid); return l.length && l; }, 'appel écrit');
+  assert.strictEqual(appel.state, 'ringing');
+  assert.strictEqual(appel.callerName, 'Julie');
+  assert.strictEqual(appel.offer.type, 'offer');
+
+  await tablette.decrocher(mamie, appel.id);
+  // Liaison établie : plus de message, l'image de Mamie s'affiche.
+  await julie.page.locator('#call-status').waitFor({ state: 'hidden' });
+  await julie.page.waitForFunction(() => {
+    const v = document.getElementById('call-remote');
+    return v.srcObject && v.readyState >= 2 && v.videoWidth > 0;
+  }, null, { timeout: 15_000 });
+  assert.deepStrictEqual((await tablette.pistes(mamie)).sort(), ['audio', 'video'], 'la tablette reçoit le son et l\'image');
+
+  await julie.page.click('#call-hangup');
+  await g.attendreBase(async () => (await tablette.ref(mamie, appel.id).get()).data().state === 'ended', 'appel terminé');
+  await julie.page.locator('#call').waitFor({ state: 'hidden', timeout: 10_000 });
+  await mamie.arreterRelais();
+});
+
+test('Appel refusé par la tablette : proposition de laisser un message vidéo ; raccrocher pendant la sonnerie', async () => {
+  const julie = await banc.telephone('Julie');
+  const { fid } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
+  const uid = (await g.liste(`families/${fid}/members`)).find((m) => m.email === 'julie@exemple.fr').id;
+
+  await lancerAppel(julie);
+  const [appel] = await g.attendreBase(async () => { const l = await appelsDe(fid, uid); return l.length && l; }, 'appel écrit');
+  await s.db.doc(`families/${fid}/calls/${appel.id}`).update({ state: 'declined', endedAt: s.FieldValue.serverTimestamp() });
+  await julie.page.locator('#call-status', { hasText: 'L\'appel a été refusé' }).waitFor();
+  assert.match(await g.texteFenetre(julie), /Mamie Emma n'a pas répondu\. Lui laisser un message vidéo/);
+  await g.repondre(julie, 'Annuler');
+  await g.attendreVue(julie, 'view-home');
+
+  // Raccrocher pendant que ça sonne : l'appel s'arrête aussi chez Mamie.
+  await lancerAppel(julie);
+  await julie.page.locator('#call-status', { hasText: 'Ça sonne' }).waitFor();
+  await julie.page.click('#call-hangup');
+  await g.attendreBase(async () => (await appelsDe(fid, uid)).filter((c) => c.state === 'ended').length === 1, 'appel annulé');
+  await julie.page.locator('#call').waitFor({ state: 'hidden', timeout: 10_000 });
+});
+
+test('Mamie appelle Julie : sonnerie, réponse audio, passage en vidéo, Mamie raccroche', async () => {
+  const julie = await banc.telephone('Julie');
+  const { fid, tab } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
+  const uid = (await g.liste(`families/${fid}/members`)).find((m) => m.email === 'julie@exemple.fr').id;
+  const mamie = await tablette.ouvrir(fid, tab);
+
+  const cid = await tablette.appeler(mamie, { vers: uid });
+  await julie.page.locator('#incoming').waitFor({ state: 'visible' });
+  assert.strictEqual(await julie.page.locator('#incoming-name').innerText(), 'Mamie Emma');
+  await julie.page.click('#incoming-answer');
+  const reponse = await tablette.prendreReponse(mamie, cid);
+  assert.deepStrictEqual([reponse.uid, reponse.name], [uid, 'Julie']);
+  await julie.page.locator('#incoming').waitFor({ state: 'hidden' });
+  await julie.page.locator('#call-timer', { hasText: /0:0\d/ }).waitFor();
+  assert.strictEqual(await julie.page.locator('#call-name').innerText(), 'Mamie Emma');
+
+  // « Passer en vidéo » : la caméra s'allume, la tablette est prévenue.
+  await julie.page.click('#call-video');
+  await g.attendreBase(async () => (await tablette.ref(mamie, cid).get()).data().answer.video === true, 'vidéo signalée');
+  await julie.page.waitForFunction(() => document.getElementById('call-local').srcObject);
+
+  await tablette.raccrocher(mamie, cid);
+  await julie.page.locator('#call-status', { hasText: 'Appel terminé' }).waitFor();
+  await julie.page.locator('#call').waitFor({ state: 'hidden', timeout: 10_000 });
+});
+
+test('Mamie appelle toute la famille : Paul répond, la sonnerie s\'arrête chez Julie, tablette occupée', async () => {
+  const julie = await banc.telephone('Julie');
+  const { fid, tab } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
+  const paul = await banc.telephone('Paul');
+  await g.rejoindre(julie, fid, paul, { email: 'paul@exemple.fr', prenom: 'Paul' });
+  const mamie = await tablette.ouvrir(fid, tab);
+
+  const cid = await tablette.appeler(mamie);
+  await julie.page.locator('#incoming').waitFor({ state: 'visible' });
+  await paul.page.locator('#incoming').waitFor({ state: 'visible' });
+  await paul.page.click('#incoming-answer');
+  await tablette.prendreReponse(mamie, cid);
+  await julie.page.locator('#incoming').waitFor({ state: 'hidden' });
+  // Pendant l'appel, Julie voit que la tablette est occupée.
+  await julie.page.locator('#tile-call', { hasText: 'Déjà en appel' }).waitFor();
+  assert.strictEqual(await julie.page.locator('#tile-call').isDisabled(), true);
+
+  await paul.page.click('#call-hangup');
+  await g.attendreBase(async () => (await tablette.ref(mamie, cid).get()).data().state === 'ended', 'appel terminé');
+  await julie.page.locator('#tile-call', { hasText: 'Appel vidéo' }).waitFor();
+  await mamie.arreterRelais();
+});
+
+test('Refuser l\'appel de Mamie : il s\'arrête pour la tablette', async () => {
+  const julie = await banc.telephone('Julie');
+  const { fid, tab } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
+  const mamie = await tablette.ouvrir(fid, tab);
+  const cid = await tablette.appeler(mamie);
+  await julie.page.locator('#incoming').waitFor({ state: 'visible' });
+  await julie.page.click('#incoming-decline');
+  await julie.page.locator('#incoming').waitFor({ state: 'hidden' });
+  await g.attendreBase(async () => (await tablette.ref(mamie, cid).get()).data().state === 'declined', 'appel refusé');
+  await mamie.arreterRelais();
+});

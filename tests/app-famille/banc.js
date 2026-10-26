@@ -174,6 +174,12 @@ function demarrerServeur() {
       appelOnCall(appel[1], req, res).catch((e) => { s.erreurs.push(String(e)); res.writeHead(500); res.end(); });
       return;
     }
+    // Page vide (même origine que l'app) : la tablette simulée y fait ses appels WebRTC.
+    if (url.pathname === '/__vide.html') {
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      res.end('<!doctype html><meta charset="utf-8"><title>Tablette simulée</title><audio id="son" autoplay></audio>');
+      return;
+    }
     let fichier = decodeURIComponent(url.pathname);
     if (fichier.endsWith('/')) fichier += 'index.html';
     const complet = path.join(WEB, path.normalize(fichier));
