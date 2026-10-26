@@ -615,7 +615,7 @@
     // Pas une file sans fin (absente quelques jours) : les 5 plus récents seulement, les autres
     // restent dans le diaporama (Tanguy, 26/10), vidéos comprises.
     while (overlayQueue.length > MAX_FILE) passes[overlayQueue.shift().id] = true;
-    if (!overlayPost && !inCall()) nextOverlay();
+    if (!overlayPost && !inCall() && !asleep) nextOverlay();
   }
 
   // ---------- Visage vu : « lu », lecture, puis fermeture au bout de 2 minutes ----------
@@ -672,7 +672,7 @@
     show($('overlay'), false);
   }
   setInterval(function () {
-    if (!overlayPost && overlayQueue.length && !inCall()) nextOverlay();
+    if (!overlayPost && overlayQueue.length && !inCall() && !asleep) nextOverlay();
   }, 2000);
 
   function setOverlayActions(visible, withReplay) {
@@ -683,6 +683,9 @@
   function nextOverlay() {
     unwatchSeen('overlay');
     stopSpeaking();
+    // La nuit, écran en veille : l'envoi attend le réveil ou un toucher (pas de caméra allumée
+    // sous l'écran noir, ni de lecture à voix haute, ni de « vu » pour un envoi pas montré).
+    if (asleep) { overlayPost = null; show($('overlay'), false); return; }
     overlayPost = overlayQueue.shift() || null;
     if (overlayPost) stopRadio();
     if (!overlayPost) {
@@ -2156,6 +2159,9 @@
     asleep = should;
     sleepScreen.style.display = should ? 'block' : 'none';
     if (should) { showView('view-home'); stopRadio(); }
+    // Envoi affiché au moment de la veille : il attend, sans être compté comme vu (comme pour un appel).
+    if (should) closeOverlayForCall();
+    else if (!overlayPost && overlayQueue.length && !inCall()) nextOverlay();
     if (android() && android().setSleep) android().setSleep(should);
   }
 
