@@ -280,7 +280,7 @@ test('« Annuler l\'installation » : famille effacée, la tablette se réinstal
   await s.calme();
   assert.strictEqual(await s.lire(`families/${fid}`), undefined);
   assert.strictEqual(await s.lire(`pairings/${t.code}`), undefined);
-  assert.strictEqual((await s.lire(`stock/${t.fiche}`)).fid, undefined);
+  assert.strictEqual((await s.lire(`stock/${t.fiche}`)).fid, null);
   assert.ok(s.fichiersEffaces.includes(`families/${fid}/`), 'photos effacées');
 
   await a.afficherCode(t);
