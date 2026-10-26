@@ -29,7 +29,7 @@ ol { margin: 0; padding-left: 1.3rem; display: grid; gap: .5rem; }
 button.btn { justify-self: start; font: inherit; font-weight: 700; border: 2px solid var(--accent); background: transparent; color: var(--accent); min-height: 3.25rem; padding: .7rem 1.4rem; border-radius: 999px; cursor: pointer; }
 @media print {
   body { background: #fff; display: block; padding: 0; }
-  .ecran, .code, #imprimer, .ps-bouton, .ps-panneau { display: none !important; }
+  .ecran, .code, #imprimer, a.btn, .ps-bouton, .ps-panneau { display: none !important; }
   .recap { border: 0; padding: 0; }
 }
 a.btn { justify-self: start; display: inline-flex; align-items: center; min-height: 3.25rem; padding: .75rem 1.5rem; border-radius: 999px; background: var(--accent); color: var(--accent-text); font-weight: 700; text-decoration: none; }
@@ -42,7 +42,7 @@ main a:not([class]), footer a:not([class]), .rassure a { font-weight: 700; }
 <main>
   <img src="icon.svg" alt="">
   <h1>Merci, votre commande est enregistrée.</h1>
-  <p class="ecran">Dès que votre banque a confirmé le prélèvement des 60 € (quelques jours), vous recevez un e-mail de confirmation et nous préparons la tablette. L'abonnement commence à la réception de la tablette et chaque mois est payé une fois écoulé : le premier prélèvement a lieu 30 jours après la réception.</p>
+  <p class="ecran" id="maintenant">Vous recevez un e-mail de confirmation dès que le paiement des 60 € est confirmé : tout de suite par carte, sous quelques jours par prélèvement SEPA. Nous préparons alors la tablette. L'abonnement commence à sa réception et chaque mois est payé une fois écoulé : le premier prélèvement a lieu 30 jours après la réception.</p>
   <div class="code" id="code" hidden>
     <span>Votre code de commande</span>
     <strong id="code-valeur"></strong>
@@ -60,6 +60,8 @@ main a:not([class]), footer a:not([class]), .rassure a { font-weight: 700; }
     <li>Ouvrez l'appli Papote sur votre téléphone, connectez-vous avec la même adresse e-mail que pour le paiement, et scannez le QR code affiché sur la tablette. Votre famille est créée et l'abonnement s'y rattache tout seul.</li>
     <li>Invitez vos proches depuis l'appli.</li>
   </ol>
+  <p class="ecran">Vous avez votre téléphone en main ? Installez l'appli dès maintenant, vous serez prêt à l'arrivée de la tablette.</p>
+  <a class="btn" href="https://app.mapapote.fr">Ouvrir l'appli Papote</a>
 </main>
 <script>
   // Récapitulatif imprimable (« Enregistrer en PDF » dans la fenêtre d'impression).

@@ -129,8 +129,9 @@ async function sessionPaiement({ formule, tablette, fid, email, client, relais, 
     mode: 'subscription',
     line_items: await tarifs(formule, tablette),
     locale: 'fr',
-    // Prélèvement SEPA seulement (Tanguy, 2026-10-20). Pas de code promo.
-    payment_method_types: ['sepa_debit'],
+    // Carte (avec Apple Pay et Google Pay) en premier, prélèvement SEPA ensuite (Tanguy, 2026-10-26 : la carte
+    // se tape en 20 secondes sur un téléphone, l'IBAN rarement sous la main). Pas de code promo.
+    payment_method_types: ['card', 'sepa_debit'],
     billing_address_collection: 'auto',
     phone_number_collection: { enabled: true },
     metadata,
@@ -143,11 +144,10 @@ async function sessionPaiement({ formule, tablette, fid, email, client, relais, 
   // Commande du site : livrée au point relais choisi avant le paiement. Depuis l'appli : à l'adresse saisie.
   if (reservation && reservation.expireA) params.expires_at = reservation.expireA;
   if (!relais && !dejaInstallee) params.shipping_address_collection = { allowed_countries: ['FR', 'BE', 'LU'] };
-  // Factures au nom d'une société : numéro de TVA facultatif sur la page de paiement.
-  params.tax_id_collection = { enabled: true };
+  // Plus de numéro de TVA sur la page de paiement (Tanguy, 2026-10-26) : un champ de moins, l'admin peut
+  // compléter une facture à la main. Le téléphone reste demandé : il sert au suivi du colis et au doublon.
   if (client) {
     params.customer = client;
-    // Stripe l'exige avec tax_id_collection pour un client existant.
     params.customer_update = { name: 'auto', address: 'auto' };
   } else if (email) params.customer_email = email;
   try {
@@ -812,7 +812,7 @@ async function paiementApresAnnulation(ref, snap) {
     `La banque a confirmé le prélèvement SEPA d'une commande déjà annulée : ${detail}. Aucune tablette à envoyer.`);
 }
 
-// Client qui recommande : même IBAN (empreinte Stripe), e-mail, téléphone ou adresse qu'une autre commande.
+// Client qui recommande : même IBAN ou même carte (empreinte Stripe), e-mail, téléphone ou adresse qu'une autre commande.
 // commandes/{id}.alerteDoublon = { commandes: [{ id, code, nom }], mauvaisPayeur, raisons } ; l'admin le montre
 // avant l'envoi (Tanguy, 2026-10-22), et un mauvais payeur déclenche aussi un e-mail à Papote. Rien n'est bloqué.
 const normaliser = (t) => String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
@@ -825,6 +825,9 @@ async function verifierDoublon(ref, session, email) {
   const empreinte = {
     iban: (pm && pm.sepa_debit && pm.sepa_debit.fingerprint) || null,
     ibanFin: (pm && pm.sepa_debit && pm.sepa_debit.last4) || null,
+    // Même carte bancaire qu'une autre commande (empreinte Stripe, pas le numéro).
+    carte: (pm && pm.card && pm.card.fingerprint) || null,
+    carteFin: (pm && pm.card && pm.card.last4) || null,
     // Nom du titulaire du compte, affiché dans l'admin à côté de celui qui commande (souvent un proche).
     titulaire: (pm && pm.billing_details && pm.billing_details.name) || null,
     telephone: details.phone ? normaliser(details.phone).slice(-9) : null,
@@ -833,6 +836,7 @@ async function verifierDoublon(ref, session, email) {
   await ref.update({ empreinte });
   const requetes = [
     empreinte.iban && db.collection('commandes').where('empreinte.iban', '==', empreinte.iban).get(),
+    empreinte.carte && db.collection('commandes').where('empreinte.carte', '==', empreinte.carte).get(),
     email && db.collection('commandes').where('email', '==', email).get(),
     empreinte.telephone && db.collection('commandes').where('empreinte.telephone', '==', empreinte.telephone).get(),
     empreinte.adresse && db.collection('commandes').where('empreinte.adresse', '==', empreinte.adresse).get(),

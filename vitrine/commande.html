@@ -6,20 +6,16 @@
 <title>Votre commande · Papote</title>
 <meta name="robots" content="noindex">
 <script>
-  // Commandes fermées (avant le lancement) : retour à la liste d'attente, sauf avec ?essai
-  // (commande test de Tanguy, possible tant que Stripe est en clé de test ; voir commandesOuvertes dans
-  // functions/index.js). COMMANDES_OUVERTES : même valeur que dans accueil.html.
+  // Commandes ouvertes (26/10) : plus de liste d'attente. ?essai = commande test de Tanguy (voir
+  // commandesOuvertes dans functions/index.js).
   (function () {
-    var COMMANDES_OUVERTES = false;
     try {
       if (/[?&]essai\b/.test(location.search)) sessionStorage.setItem('papote-essai', '1');
       if (sessionStorage.getItem('papote-essai')) return;
     } catch (_) {}
-    if (!COMMANDES_OUVERTES) { location.replace('./#lancement'); return; }
     fetch('https://europe-west1-papote-famille.cloudfunctions.net/stockDisponible')
       .then(function (r) { return r.ok ? r.json() : {}; })
       .then(function (d) {
-        if (d.disponible === false) { location.replace('./#lancement'); return; }
         // Stock vide mais commandes encore possibles : délai de préparation plus long (stock.js).
         // Au-delà de stock + 10 : attente longue (3 à 4 semaines), la commande reste possible.
         var bloc = d.attenteLongue ? 'attente-longue' : d.precommande ? 'precommande' : null;
@@ -35,152 +31,171 @@
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,800&display=swap">
 <style>
-/* Commande en une page : option internet, point relais Mondial Relay, puis paiement Stripe. */
-:root { --bg: #fdfaf5; --surface: #ffffff; --text: #24212f; --muted: #5f5a6b; --line: #e9e1d4; --accent: #4f46e5; --accent-strong: #3730a3; --accent-text: #ffffff; --warm: #4338ca; --warm-soft: #e8e6fd; color-scheme: light; }
+/* Commande en trois étapes (26/10, mobile d'abord) : internet chez le proche, point relais, qui retire le colis.
+   Le prix et le bouton Payer restent dans une barre fixée en bas de l'écran. */
+:root { --bg: #fdfaf5; --surface: #ffffff; --text: #24212f; --muted: #5f5a6b; --line: #e9e1d4; --accent: #4f46e5; --accent-strong: #3730a3; --accent-text: #ffffff; --accent-soft: #e8e6fd; --warm-soft: #e8e6fd; color-scheme: light; }
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--text); font: 400 1.125rem/1.6 "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif; }
-main { max-width: 48rem; margin: 0 auto; padding: 24px 20px 7rem; display: grid; gap: 1.5rem; }
-.top { display: flex; align-items: center; gap: .6rem; font: 800 1.4rem/1 "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif; color: var(--text); text-decoration: none; }
-.top img { width: 2rem; height: 2rem; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 400 1.05rem/1.5 "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif; }
+main { max-width: 40rem; margin: 0 auto; padding: 1rem max(16px, env(safe-area-inset-right)) 8rem max(16px, env(safe-area-inset-left)); display: grid; gap: 1.1rem; }
 .haut { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
-.retour { display: inline-flex; align-items: center; min-height: 2.75rem; padding: .5rem 1.1rem; border: 2px solid var(--accent); border-radius: 999px; color: var(--accent-strong); font-weight: 700; text-decoration: none; }
-.retour:hover { background: #e8e6fd; }
-h1 { margin: 0; font: 800 clamp(1.9rem, 5vw, 2.6rem)/1.1 "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif; text-wrap: balance; }
+.top { display: inline-flex; align-items: center; gap: .5rem; font: 800 1.3rem "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif; color: var(--text); text-decoration: none; }
+.top img { width: 2rem; height: 2rem; }
+.retour { color: var(--accent-strong); font-weight: 700; text-decoration: none; min-height: 2.75rem; display: inline-flex; align-items: center; }
+h1 { margin: 0; font: 800 clamp(1.7rem, 6vw, 2.4rem)/1.1 "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif; text-wrap: balance; }
+h2 { margin: 0; display: flex; align-items: center; gap: .6rem; font: 800 1.15rem/1.2 "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif; }
 p { margin: 0; }
-.muted { color: var(--muted); }
-.eyebrow { font-size: .85rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--warm); }
-.recap { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 1rem 1.25rem; display: flex; flex-wrap: wrap; justify-content: space-between; gap: .5rem 1rem; align-items: baseline; }
-.recap { display: grid; justify-content: stretch; }
-.recap-total { display: flex; flex-wrap: wrap; gap: .25rem 1rem; align-items: baseline; }
-.recap-total b { font-size: 1.3rem; }
-.mes { margin: 0; padding: .5rem .8rem; border-radius: 10px; background: #e8e6fd; color: var(--accent-strong); }
-.mes b { font-size: 1.15rem; }
-.inclus { margin: 0; padding-left: 1.2rem; color: var(--muted); font-size: 1rem; }
-h2 { margin: 0; font: 800 1.3rem/1.2 "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif; }
-.bandeau { margin: 0; padding: .5rem .75rem; background: var(--accent); color: var(--accent-text); text-align: center; font-weight: 700; font-size: .92rem; }
-.points { display: grid; gap: .6rem; }
-.points[hidden] { display: none; }
-.point { display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: center; justify-content: space-between; padding: .9rem 1.1rem; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; }
-.point div { display: grid; }
-.point .btn { min-height: 2.75rem; padding: .5rem 1.25rem; }
-.lien { background: none; border: 0; padding: 0; font: inherit; color: var(--accent-strong); font-weight: 700; text-decoration: none; cursor: pointer; justify-self: start; }
-.btn.payer { justify-self: stretch; font-size: 1.15rem; }
-.question { border: 0; padding: 0; margin: 0; display: grid; gap: .6rem; }
-.question legend { font-weight: 700; margin-bottom: .6rem; }
-.etapes { border: 2px solid var(--accent); border-radius: 16px; padding: 1rem 1.2rem; margin: 1.5rem 0 1rem; display: grid; gap: .5rem; }
-.etapes p { margin: 0; }
-.precommande { margin: 0; padding: .6rem .9rem; border-radius: 12px; background: var(--warm-soft); font-size: 1rem; }
-.precommande[hidden] { display: none; }
-.opt { display: flex; gap: .6rem; align-items: center; font-size: 1.05rem; cursor: pointer; }
-.opt .muted { white-space: nowrap; margin-left: auto; }
-.opt input { width: 1.3rem; height: 1.3rem; accent-color: var(--accent); }
-.cherche { display: flex; flex-wrap: wrap; gap: .75rem; align-items: end; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 1rem 1.25rem; }
-.cherche label { display: grid; gap: .25rem; font-size: 1rem; color: var(--muted); }
-.cherche input, .cherche select { font: inherit; color: var(--text); min-height: 3rem; padding: .5rem .75rem; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); }
-.cherche input { width: 8rem; }
-.cherche #ville-texte { width: 12rem; }
+.sous, .muted { color: var(--muted); }
+.etape { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 1rem 1.1rem; display: grid; gap: .75rem; scroll-margin-top: 1rem; }
+.etape .n { display: inline-grid; place-items: center; width: 1.75rem; height: 1.75rem; border-radius: 50%; background: var(--accent); color: #fff; font-size: .95rem; flex: none; }
+.etape .ok { margin-left: auto; color: var(--accent-strong); font-size: 1rem; font-weight: 700; }
+.etape .ok[hidden] { display: none; }
+.opt { display: flex; gap: .6rem; align-items: center; padding: .75rem .9rem; border: 2px solid var(--line); border-radius: 14px; cursor: pointer; }
+.opt:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.opt input { width: 1.3rem; height: 1.3rem; accent-color: var(--accent); margin: 0; flex: none; }
+.opt > span { display: grid; min-width: 0; }
+.opt small { color: var(--muted); }
+.opt .prix { margin-left: auto; font-weight: 700; white-space: nowrap; }
+.cherche { display: flex; gap: .6rem; }
+.cherche input, .cherche select { font: inherit; color: var(--text); min-height: 3.25rem; padding: .5rem .9rem; border: 2px solid var(--line); border-radius: 14px; background: var(--bg); min-width: 0; }
+.cherche #cp { flex: 1 1 7rem; }
+.cherche #autour { font: 700 1rem inherit; min-height: 3.25rem; padding: 0 1rem; border: 2px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--text); white-space: nowrap; cursor: pointer; }
+.cherche #autour:disabled { color: var(--muted); }
 .cherche [hidden] { display: none; }
-.rassure { margin: 0; padding: 0; list-style: none; display: grid; gap: .45rem; font-size: 1rem; }
-.rassure a { color: var(--accent-strong); }
-.petit { font-size: .95rem; }
-.qui { display: grid; gap: .4rem; font-weight: 700; }
-.qui[hidden], .accord[hidden] { display: none; }
-.accord { display: flex; gap: .6rem; align-items: flex-start; font-size: 1rem; color: var(--muted); cursor: pointer; }
-.accord input { width: 1.3rem; height: 1.3rem; margin-top: .2rem; flex: none; accent-color: var(--accent); }
-.qui input { font: inherit; font-weight: 400; color: var(--text); min-height: 3rem; padding: .5rem .75rem; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
-.qui .muted { font-weight: 400; font-size: 1rem; }
-.btn.btn-ghost { background: transparent; color: var(--text); border: 2px solid var(--line); }
-.btn.btn-ghost:hover { background: transparent; border-color: var(--accent); }
-.choisi { display: grid; gap: .25rem; padding: 1rem 1.25rem; border: 2px solid var(--accent); border-radius: 16px; background: var(--surface); }
+.pays-ville { display: flex; flex-wrap: wrap; gap: .6rem; }
+.pays-ville label { display: grid; gap: .25rem; font-size: .95rem; color: var(--muted); flex: 1 1 10rem; }
+.pays-ville[hidden], .pays-ville label[hidden] { display: none; }
+.lien { background: none; border: 0; padding: 0; font: inherit; color: var(--accent-strong); font-weight: 700; text-decoration: none; cursor: pointer; text-align: left; }
+.lien[hidden] { display: none; }
+.petit { font-size: .92rem; color: var(--muted); }
+.points { display: grid; gap: .5rem; }
+.points[hidden] { display: none; }
+.point { display: flex; align-items: center; gap: .75rem; padding: .75rem .9rem; border: 2px solid var(--line); border-radius: 14px; background: var(--surface); font: inherit; color: var(--text); text-align: left; cursor: pointer; width: 100%; }
+.point.on { border-color: var(--accent); background: var(--accent-soft); }
+.point div { display: grid; flex: 1; min-width: 0; }
+.point b { font-size: 1rem; }
+.point span { color: var(--muted); font-size: .92rem; }
+.point .coche { width: 1.6rem; height: 1.6rem; border-radius: 50%; border: 2px solid var(--line); display: grid; place-items: center; flex: none; font-size: .9rem; }
+.point.on .coche { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
+.choisi { display: grid; gap: .25rem; padding: .9rem 1rem; border: 2px solid var(--accent); border-radius: 14px; background: var(--accent-soft); }
 .choisi[hidden] { display: none; }
-.btn { display: inline-flex; align-items: center; justify-content: center; min-height: 3.25rem; padding: .75rem 1.5rem; border-radius: 999px; background: var(--accent); color: var(--accent-text); font: 700 1.05rem/1.2 inherit; text-decoration: none; border: 0; cursor: pointer; justify-self: start; }
-.btn:hover { background: var(--accent-strong); }
-.btn[aria-disabled="true"] { background: #c9c6d8; pointer-events: none; }
+.champ { display: grid; gap: .3rem; font-weight: 700; }
+.champ input { font: inherit; font-weight: 400; color: var(--text); min-height: 3.25rem; padding: .5rem .9rem; border: 2px solid var(--line); border-radius: 14px; background: var(--bg); min-width: 0; }
+.champ input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.champ small { color: var(--muted); font-weight: 400; }
+.accord { display: flex; gap: .6rem; align-items: flex-start; color: var(--muted); font-size: .95rem; cursor: pointer; }
+.accord input { width: 1.3rem; height: 1.3rem; margin-top: .15rem; flex: none; accent-color: var(--accent); }
+.resume { display: grid; gap: .45rem; }
+.resume p { display: flex; justify-content: space-between; gap: 1rem; }
+.resume p b { white-space: nowrap; }
+.resume .total { border-top: 2px solid var(--line); padding-top: .5rem; font-size: 1.15rem; }
+.resume .petit, .resume .precommande, .resume .reprise { display: block; }
+.ensuite summary { font-weight: 700; color: var(--accent-strong); cursor: pointer; min-height: 2.5rem; display: flex; align-items: center; }
+.ensuite p { margin-top: .4rem; color: var(--muted); font-size: .98rem; display: block; }
+.precommande { margin: 0; padding: .6rem .9rem; border-radius: 12px; background: var(--warm-soft); font-size: 1rem; }
+.precommande[hidden], .reprise[hidden], .erreur[hidden], #recherche[hidden] { display: none; }
+.reprise { padding: .6rem .9rem; border-radius: 12px; background: var(--accent-soft); color: var(--accent-strong); font-weight: 700; }
 .erreur { color: #b91c1c; }
+.barre { position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; background: rgba(253, 250, 245, .96); border-top: 1px solid var(--line); padding: .7rem max(16px, env(safe-area-inset-right)) calc(.7rem + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+.barre-in { max-width: 40rem; margin: 0 auto; display: flex; align-items: center; gap: .9rem; }
+.barre-in div { display: grid; line-height: 1.2; min-width: 0; }
+.barre-in b { font-size: 1.1rem; }
+.barre-in small { color: var(--muted); }
+.barre .manque { margin: .4rem auto 0; max-width: 40rem; font-size: .9rem; color: var(--accent-strong); font-weight: 700; }
+.barre .manque[hidden] { display: none; }
+.btn { margin-left: auto; display: inline-flex; align-items: center; justify-content: center; min-height: 3.25rem; padding: .75rem 1.4rem; border-radius: 999px; background: var(--accent); color: var(--accent-text); font: 700 1.05rem/1.2 inherit; text-decoration: none; border: 0; cursor: pointer; white-space: nowrap; flex: none; }
+.btn:hover { background: var(--accent-strong); }
+.btn[aria-disabled="true"] { background: #c9c6d8; }
 /* Pas de soulignement des liens (Tanguy, 2026-10-22) : ils restent repérables par leur couleur et le gras. */
 a { text-decoration: none; }
-main a:not([class]), footer a:not([class]), .rassure a { font-weight: 700; }
+main a:not([class]) { color: var(--accent-strong); font-weight: 700; }
+/* Bulle du chat : au-dessus de la barre de paiement. */
+body .ps-bouton { bottom: 6.5rem; }
+@media (max-width: 760px) { body .ps-bouton span { display: none; } body .ps-bouton { padding: .95rem; } }
 </style>
 </head>
 <body>
-<p class="bandeau">🚚 Livraison offerte · ✨ 30 jours pour changer d'avis</p>
 <main>
   <div class="haut">
     <a class="top" href="./"><img src="icon.svg" alt="">Papote</a>
     <a class="retour" href="./">← Retour</a>
   </div>
   <div>
-    <p class="eyebrow">Votre commande</p>
-    <h1>Papote pour votre proche</h1>
+    <h1>Votre commande</h1>
+    <p class="sous">Trois étapes, deux minutes. Livraison offerte, 30 jours pour changer d'avis.</p>
   </div>
+  <p class="reprise" id="reprise" hidden>Votre commande vous attend : tout est déjà rempli, il ne reste que le paiement.</p>
 
-  <form class="recap" id="recap">
-    <div class="recap-total"><b id="total">20 € par mois</b><span class="muted">payés une fois le mois écoulé</span></div>
-    <p class="mes"><b>+ 60 € aujourd'hui</b>, une seule fois, pour la mise en service de la tablette</p>
-    <ul class="inclus">
-      <li>Tablette prêtée, configurée et prête à l'emploi</li>
-      <li>Appli famille pour tous vos proches</li>
-      <li>Livraison offerte en point relais</li>
-    </ul>
+  <form class="etape" id="recap">
+    <h2><span class="n">1</span>Y a-t-il internet chez votre proche ?<span class="ok" id="ok1" hidden>✓</span></h2>
+    <label class="opt"><input type="radio" name="internet" value="oui" checked><span>Oui, une box Wi-Fi<small>La tablette utilise son Wi-Fi</small></span><span class="prix">20 €/mois</span></label>
+    <label class="opt"><input type="radio" name="internet" value="non"><span>Non, ou je ne sais pas<small>Internet inclus, rien à régler</small></span><span class="prix">30 €/mois</span></label>
+  </form>
+
+  <section class="etape" id="etape-relais">
+    <h2><span class="n">2</span>Où retirer le colis ?<span class="ok" id="ok2" hidden>✓</span></h2>
+    <form class="cherche" id="cherche">
+      <input id="cp" inputmode="numeric" autocomplete="postal-code" required maxlength="10" placeholder="Code postal" aria-label="Code postal">
+      <button type="button" id="autour">📍 Autour de moi</button>
+    </form>
+    <div class="pays-ville" id="pays-ville" hidden>
+      <label id="pays-champ">Pays<select id="pays"><option value="fr">France</option><option value="be">Belgique</option><option value="lu">Luxembourg</option></select></label>
+      <label id="ville-champ" hidden>Ville<select id="ville"></select></label>
+      <label id="ville-libre" hidden>Ville<input id="ville-texte" autocomplete="address-level2" maxlength="60"></label>
+    </div>
+    <p class="petit">Points relais Mondial Relay les plus proches, près de chez vous ou de chez votre proche. <button class="lien" type="button" id="autre-pays">Belgique ou Luxembourg ?</button></p>
+    <p class="erreur" id="erreur-position" hidden>Impossible de trouver votre position. Tapez votre code postal.</p>
+    <p class="muted" id="recherche" hidden>Recherche des points relais…</p>
+    <div class="points" id="points" hidden></div>
+    <div class="choisi" id="choisi" hidden>
+      <span class="muted">Point relais choisi</span>
+      <b id="choisi-nom"></b>
+      <span id="choisi-adresse"></span>
+    </div>
+    <button class="lien" type="button" id="voir-carte" hidden>Voir plus de points relais, ou sur une carte</button>
+    <p class="erreur" id="erreur-carte" hidden>La carte des points relais ne s'affiche pas. Rechargez la page, ou écrivez-nous à contact@mapapote.fr.</p>
+  </section>
+
+  <section class="etape" id="etape-qui">
+    <h2><span class="n">3</span>Qui retire le colis ?<span class="ok" id="ok3" hidden>✓</span></h2>
+    <label class="champ" id="qui">Prénom et nom
+      <input id="destinataire" autocomplete="name" maxlength="80" placeholder="Prénom et nom">
+      <small>Comme sur la pièce d'identité présentée au point relais.</small>
+    </label>
+    <label class="champ" id="qui-mail">Votre e-mail
+      <input id="email" type="email" autocomplete="email" inputmode="email" maxlength="120" placeholder="vous@exemple.fr">
+      <small>Confirmation de commande et suivi du colis. Votre téléphone sera demandé sur la page de paiement, pour le suivi du colis.</small>
+    </label>
+    <label class="accord" id="qui-accord">
+      <input type="checkbox" id="accord">
+      <span>Recevoir les nouvelles de Papote par e-mail, et un rappel si je ne termine pas ma commande (désinscription en un clic).</span>
+    </label>
+  </section>
+
+  <section class="etape resume">
+    <p><span>Aujourd'hui, mise en service</span><b>60 €</b></p>
+    <p><span>Chaque mois, à partir de la réception, payé une fois écoulé</span><b id="mensuel">20 €</b></p>
+    <p><span>Tablette prêtée, livraison, appli famille</span><b>inclus</b></p>
+    <p class="total"><span>À payer maintenant</span><b>60 €</b></p>
     <p class="precommande" id="precommande" hidden>Je prépare et vérifie chaque tablette moi-même, une par une. En ce moment, la vôtre est prête sous 7 à 10 jours ouvrés, puis Mondial Relay la livre en 3 à 5 jours ouvrés.</p>
     <p class="precommande" id="attente-longue" hidden>Beaucoup de commandes en ce moment : je prépare et vérifie chaque tablette moi-même, une par une, à Lyon. La vôtre part sous 3 à 4 semaines, puis Mondial Relay la livre en 3 à 5 jours ouvrés. Rien de plus n'est prélevé avant la réception, et vous pouvez annuler à tout moment avant l'envoi : les 60 € vous sont remboursés tout de suite.</p>
-    <fieldset class="question">
-      <legend>Y a-t-il internet (une box Wi-Fi) chez votre proche ?</legend>
-      <label class="opt"><input type="radio" name="internet" value="oui" checked> Oui, la tablette utilise son Wi-Fi <span class="muted">20 €/mois</span></label>
-      <label class="opt"><input type="radio" name="internet" value="non"> Non, ou je ne sais pas : internet est inclus <span class="muted">30 €/mois</span></label>
-    </fieldset>
-  </form>
-
-  <h2>Où livrer la tablette ?</h2>
-  <p class="muted">Dans un point relais Mondial Relay près de chez vous ou de chez votre proche, en France, en Belgique ou au Luxembourg.</p>
-  <form class="cherche" id="cherche">
-    <label>Code postal<input id="cp" inputmode="numeric" autocomplete="postal-code" required maxlength="10"></label>
-    <label id="ville-champ" hidden>Ville<select id="ville"></select></label>
-    <label id="ville-libre" hidden>Ville<input id="ville-texte" autocomplete="address-level2" maxlength="60"></label>
-    <label>Pays<select id="pays"><option value="fr">France</option><option value="be">Belgique</option><option value="lu">Luxembourg</option></select></label>
-    <button class="btn btn-ghost" type="submit">Voir les points relais</button>
-    <button class="btn btn-ghost" type="button" id="autour">📍 Autour de moi</button>
-  </form>
-  <p class="erreur" id="erreur-position" hidden>Impossible de trouver votre position. Tapez votre code postal.</p>
-  <p class="muted" id="recherche" hidden>Recherche des points relais…</p>
-  <div class="points" id="points" hidden></div>
-  <button class="lien" type="button" id="voir-carte" hidden>Voir les points relais sur une carte</button>
-  <p class="erreur" id="erreur-carte" hidden>La carte des points relais ne s'affiche pas. Rechargez la page, ou écrivez-nous à contact@mapapote.fr.</p>
-
-  <div class="choisi" id="choisi" hidden>
-    <span class="muted">Point relais choisi</span>
-    <b id="choisi-nom"></b>
-    <span id="choisi-adresse"></span>
-  </div>
-
-  <label class="qui" id="qui" hidden>Votre nom complet
-    <input id="destinataire" autocomplete="name" maxlength="80" placeholder="Prénom et nom">
-    <span class="muted">Le nom doit correspondre à une pièce d'identité : il figure sur le colis.</span>
-  </label>
-  <label class="qui" id="qui-mail" hidden>Votre e-mail
-    <input id="email" type="email" autocomplete="email" inputmode="email" maxlength="120" placeholder="vous@exemple.fr">
-    <span class="muted">Pour la confirmation de commande et le suivi du colis.</span>
-  </label>
-  <label class="accord" id="qui-accord" hidden>
-    <input type="checkbox" id="accord">
-    <span>J'accepte de recevoir les nouvelles de Papote par e-mail, et un rappel si je ne termine pas ma commande (désinscription en un clic).</span>
-  </label>
-
-  <div class="etapes">
-    <p><b>Aujourd'hui</b> : seuls les 60 € de mise en service sont prélevés.</p>
-    <p><b>Chaque mois</b> : l'abonnement commence à la réception et chaque mois est prélevé une fois écoulé, vous n'avez rien à faire.</p>
-    <p><b>30 jours pour changer d'avis</b> après la réception : « Annuler ma commande » dans l'appli, rien à payer et les 60 € remboursés.</p>
-    <p><b>À la résiliation</b> : en quelques clics depuis l'appli. Papote s'arrête à la fin du mois en cours, qui est le dernier prélevé.</p>
-  </div>
-  <a class="btn payer" id="payer" href="#" aria-disabled="true">Choisissez un point relais</a>
-  <ul class="rassure">
-    <li>🔒 Paiement par prélèvement SEPA, sur la page sécurisée de Stripe : munissez-vous d'un IBAN</li>
-    <li>📅 Chaque mois est payé une fois écoulé : le premier mois commence à la réception et il est prélevé 30 jours plus tard</li>
-    <li>↩️ 30 jours après réception pour changer d'avis : la tablette nous revient, rien à payer et les 60 € remboursés</li>
-    <li>💬 Une question ? <a href="mailto:contact@mapapote.fr">contact@mapapote.fr</a></li>
-  </ul>
-  <p class="muted petit">Sans engagement : l'abonnement se résilie à tout moment. La tablette reste la nôtre et nous est rendue en fin d'abonnement. En payant, vous acceptez les <a href="cgv.html">conditions générales de vente</a>.</p>
+    <details class="ensuite">
+      <summary>Et ensuite ?</summary>
+      <p>Le premier prélèvement mensuel a lieu 30 jours après la réception. Sans engagement : vous résiliez quand vous voulez depuis l'appli, le mois en cours est le dernier payé.</p>
+      <p>30 jours après la réception pour changer d'avis : « Annuler ma commande » dans l'appli, la tablette nous revient, rien à payer et les 60 € remboursés.</p>
+      <p>La tablette reste la nôtre et nous est rendue en fin d'abonnement. Une question ? <a href="mailto:contact@mapapote.fr">contact@mapapote.fr</a></p>
+    </details>
+    <p class="petit">Paiement par carte bancaire (Apple Pay, Google Pay) ou prélèvement SEPA, sur la page sécurisée de Stripe. En payant, vous acceptez les <a href="cgv.html">conditions générales de vente</a>.</p>
+  </section>
 </main>
+
+<div class="barre">
+  <div class="barre-in">
+    <div><b>60 € aujourd'hui</b><small id="barre-mensuel">puis 20 € par mois, sans engagement</small></div>
+    <a class="btn" id="payer" href="#" aria-disabled="true">Payer 60 €</a>
+  </div>
+  <p class="manque" id="manque" hidden></p>
+</div>
 
 <script>
   // Statistiques sans cookie : une seule fois par visite et par étape (outils/admin/statistiques.bat).
@@ -202,30 +217,45 @@ main a:not([class]), footer a:not([class]), .rassure a { font-weight: 700; }
   recap.internet.value = q.get('formule') === 'sim' ? 'non' : 'oui';
   var relais = null;
 
-  // Prix : abonnement 20 €, ou 30 € avec internet inclus ; 60 € de mise en service à la commande.
-  function maj() {
-    document.getElementById('total').textContent = (sansInternet() ? 30 : 20) + ' € par mois';
-    if (relais) lienPaiement();
-  }
-  recap.addEventListener('change', maj);
-
   var payer = document.getElementById('payer');
-
+  var manque = document.getElementById('manque');
   var destinataire = document.getElementById('destinataire');
   var champEmail = document.getElementById('email');
   var accord = document.getElementById('accord');
-  // Payer : point relais choisi ET prénom + nom de la personne qui retire le colis.
+  var ok = [1, 2, 3].map(function (i) { return document.getElementById('ok' + i); });
+
+  // Prix : abonnement 20 €, ou 30 € avec internet inclus ; 60 € de mise en service à la commande.
+  function maj() {
+    var mensuel = (sansInternet() ? 30 : 20) + ' €';
+    document.getElementById('mensuel').textContent = mensuel;
+    document.getElementById('barre-mensuel').textContent = 'puis ' + mensuel + ' par mois, sans engagement';
+    ok[0].hidden = false;
+    lienPaiement();
+    retenir();
+  }
+  recap.addEventListener('change', maj);
+
+  // Payer : point relais choisi ET prénom + nom de la personne qui retire le colis ET e-mail.
+  // La barre reste visible : quand il manque quelque chose, elle le dit, et le bouton y mène.
+  var cible = null;
   function lienPaiement() {
     var nom = destinataire.value.trim().replace(/\s+/g, ' ');
     var mel = champEmail.value.trim();
     var melOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mel);
-    if (!relais || nom.split(' ').length < 2 || !melOk) {
+    var nomOk = nom.split(' ').length >= 2;
+    ok[1].hidden = !relais;
+    ok[2].hidden = !(nomOk && melOk);
+    if (!relais || !nomOk || !melOk) {
       payer.removeAttribute('href');
       payer.setAttribute('aria-disabled', 'true');
-      payer.textContent = !relais ? 'Choisissez un point relais'
-        : nom.split(' ').length < 2 ? 'Indiquez votre nom complet' : 'Indiquez votre e-mail';
+      manque.textContent = !relais ? 'Il reste à choisir un point relais (étape 2).'
+        : !nomOk ? 'Il reste à indiquer votre prénom et votre nom (étape 3).' : 'Il reste à indiquer votre e-mail (étape 3).';
+      manque.hidden = !(nom || mel || relais);
+      cible = !relais ? document.getElementById('etape-relais') : !nomOk ? destinataire : champEmail;
       return;
     }
+    manque.hidden = true;
+    cible = null;
     var params = new URLSearchParams({
       rdest: nom, email: mel, accord: accord.checked ? '1' : '0',
       formule: sansInternet() ? 'sim' : 'wifi', tablette: 'incluse',
@@ -234,35 +264,59 @@ main a:not([class]), footer a:not([class]), .rassure a { font-weight: 700; }
     });
     payer.href = COMMANDER + '?' + params.toString();
     payer.setAttribute('aria-disabled', 'false');
-    payer.textContent = 'Payer 60 € et commander';
   }
+  payer.addEventListener('click', function (e) {
+    if (payer.getAttribute('aria-disabled') === 'false') { compter('paiement'); return; }
+    e.preventDefault();
+    manque.hidden = false;
+    if (!cible) return;
+    cible.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (cible.focus && cible.tagName === 'INPUT') cible.focus({ preventScroll: true });
+  });
 
-  // Point relais renvoyé par le sélecteur Sendcloud.
+  // Point relais renvoyé par la liste ou par le sélecteur Sendcloud.
+  var liste = document.getElementById('points');
   function choisir(p) {
     if (!p || !p.id) return;
     compter('relais');
     relais = p;
     relais.adresse = [p.street, p.house_number].filter(Boolean).join(' ').trim();
+    var dansListe = false;
+    liste.querySelectorAll('.point').forEach(function (el) {
+      var on = el.dataset.id === String(p.id);
+      el.classList.toggle('on', on);
+      el.querySelector('.coche').textContent = on ? '✓' : '';
+      if (on) dansListe = true;
+    });
+    // Point choisi sur la carte, absent de la liste : montré dans son propre cadre.
     document.getElementById('choisi-nom').textContent = p.name;
     document.getElementById('choisi-adresse').textContent = relais.adresse + ', ' + p.postal_code + ' ' + p.city;
-    document.getElementById('choisi').hidden = false;
-    document.getElementById('qui').hidden = false;
-    document.getElementById('qui-mail').hidden = false;
-    document.getElementById('qui-accord').hidden = false;
+    document.getElementById('choisi').hidden = dansListe;
     lienPaiement();
-    var cible = payer.getAttribute('aria-disabled') === 'false' ? payer : destinataire;
-    cible.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    if (cible === destinataire) destinataire.focus({ preventScroll: true });
+    retenir();
+    var nom = destinataire.value.trim();
+    if (!nom) {
+      destinataire.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      destinataire.focus({ preventScroll: true });
+    } else if (payer.getAttribute('aria-disabled') === 'true') {
+      (champEmail.value.trim() ? destinataire : champEmail).focus();
+    }
   }
 
   // La carte Sendcloud est lourde à afficher : on montre d'abord une simple liste des points relais
   // les plus proches (même service, même clé publique). La carte reste là en secours.
   var cp = document.getElementById('cp');
   var pays = document.getElementById('pays');
-  var liste = document.getElementById('points');
   var attente = document.getElementById('recherche');
   var voirCarte = document.getElementById('voir-carte');
   var derniere = '';
+
+  // Belgique ou Luxembourg : le pays et la ville ne sont montrés qu'à la demande.
+  var paysVille = document.getElementById('pays-ville');
+  document.getElementById('autre-pays').addEventListener('click', function () {
+    paysVille.hidden = false;
+    pays.focus();
+  });
 
   // Un code postal peut couvrir plusieurs villes : la ville choisie précise la recherche.
   var villeChamp = document.getElementById('ville-champ');
@@ -284,6 +338,7 @@ main a:not([class]), footer a:not([class]), .rassure a { font-weight: 700; }
     if (pays.value !== 'fr') {
       villeChamp.hidden = true;
       villeLibre.hidden = false;
+      paysVille.hidden = false;
       return Promise.resolve();
     }
     return fetch('https://geo.api.gouv.fr/communes?codePostal=' + encodeURIComponent(code) + '&fields=nom')
@@ -298,11 +353,14 @@ main a:not([class]), footer a:not([class]), .rassure a { font-weight: 700; }
         var trouve = choix && noms.filter(function (n) { return n.toLowerCase() === choix.toLowerCase(); })[0];
         if (trouve) ville.value = trouve;
         villeLibre.hidden = true;
-        villeChamp.hidden = false;
+        // Plusieurs villes : le choix est montré ; une seule : rien à demander.
+        villeChamp.hidden = noms.length < 2;
+        if (!villeChamp.hidden) paysVille.hidden = false;
       })
       .catch(function () {
         villeChamp.hidden = true;
         villeLibre.hidden = false;
+        paysVille.hidden = false;
         if (choix) villeTexte.value = choix;
       });
   }
@@ -326,7 +384,7 @@ main a:not([class]), footer a:not([class]), .rassure a { font-weight: 700; }
         var points = (Array.isArray(d) ? d : (d && d.results) || []).filter(function (p) { return p && p.id; });
         if (!points.length) throw new Error('aucun point');
         points.sort(function (x, y) { return (x.distance || 0) - (y.distance || 0); });
-        afficher(points.slice(0, 6));
+        afficher(points.slice(0, 4));
       })
       .catch(function (err) {
         console.warn('Liste des points relais indisponible, carte à la place :', err);
@@ -339,27 +397,28 @@ main a:not([class]), footer a:not([class]), .rassure a { font-weight: 700; }
   function afficher(points) {
     liste.textContent = '';
     points.forEach(function (p) {
-      var ligne = document.createElement('div');
-      ligne.className = 'point';
+      var ligne = document.createElement('button');
+      ligne.type = 'button';
+      ligne.className = 'point' + (relais && String(relais.id) === String(p.id) ? ' on' : '');
+      ligne.dataset.id = String(p.id);
       var texte = document.createElement('div');
       var nom = document.createElement('b');
       nom.textContent = p.name;
       var adr = document.createElement('span');
-      adr.className = 'muted';
       adr.textContent = [p.street, p.house_number].filter(Boolean).join(' ') + ', ' + p.postal_code + ' ' + p.city
         + (p.distance ? ' · ' + (p.distance < 1000 ? p.distance + ' m' : (p.distance / 1000).toFixed(1).replace('.', ',') + ' km') : '');
       texte.append(nom, adr);
-      var btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'btn';
-      btn.textContent = 'Choisir';
-      btn.addEventListener('click', function () { choisir(p); });
-      ligne.append(texte, btn);
+      var coche = document.createElement('span');
+      coche.className = 'coche';
+      coche.textContent = ligne.classList.contains('on') ? '✓' : '';
+      ligne.append(texte, coche);
+      ligne.addEventListener('click', function () { choisir(p); });
       liste.append(ligne);
     });
     attente.hidden = true;
     liste.hidden = false;
     voirCarte.hidden = false;
+    if (relais) document.getElementById('choisi').hidden = !!liste.querySelector('.point.on');
   }
 
   // Le script de la carte n'est chargé qu'au besoin : la page s'ouvre plus vite.
@@ -445,7 +504,7 @@ main a:not([class]), footer a:not([class]), .rassure a { font-weight: 700; }
     erreur.hidden = true;
     if (!navigator.geolocation) { erreur.hidden = false; return; }
     var texte = autour.textContent;
-    autour.textContent = 'Recherche de votre position…';
+    autour.textContent = 'Recherche…';
     autour.disabled = true;
     function fin(ok) {
       autour.textContent = texte;
@@ -471,10 +530,41 @@ main a:not([class]), footer a:not([class]), .rassure a { font-weight: 700; }
     }, function () { fin(false); }, { maximumAge: 600000 });
   });
 
-  destinataire.addEventListener('input', lienPaiement);
-  champEmail.addEventListener('input', lienPaiement);
-  accord.addEventListener('change', lienPaiement);
-  payer.addEventListener('click', function () { if (payer.getAttribute('aria-disabled') === 'false') compter('paiement'); });
+  // Retour depuis la page de paiement (bouton Retour, page fermée) : ce qui était rempli est gardé
+  // dans le navigateur pendant une heure et remis en place, il ne reste que le paiement.
+  var CLE = 'papote-commande';
+  function retenir() {
+    try {
+      sessionStorage.setItem(CLE, JSON.stringify({
+        t: Date.now(), internet: recap.internet.value, cp: cp.value, pays: pays.value,
+        relais: relais, nom: destinataire.value, email: champEmail.value, accord: accord.checked
+      }));
+    } catch (_) {}
+  }
+  function reprendre() {
+    var d = null;
+    try { d = JSON.parse(sessionStorage.getItem(CLE) || 'null'); } catch (_) {}
+    if (!d || !d.t || Date.now() - d.t > 3600000) return;
+    if (!q.get('formule') && d.internet) recap.internet.value = d.internet;
+    if (d.cp) cp.value = d.cp;
+    if (d.pays) pays.value = d.pays;
+    destinataire.value = d.nom || '';
+    champEmail.value = d.email || '';
+    accord.checked = !!d.accord;
+    if (d.relais && d.relais.id) {
+      relais = d.relais;
+      document.getElementById('choisi-nom').textContent = relais.name;
+      document.getElementById('choisi-adresse').textContent = relais.adresse + ', ' + relais.postal_code + ' ' + relais.city;
+      document.getElementById('choisi').hidden = false;
+      voirCarte.hidden = false;
+      if (d.nom && d.email) document.getElementById('reprise').hidden = false;
+    }
+  }
+  reprendre();
+
+  destinataire.addEventListener('input', function () { lienPaiement(); retenir(); });
+  champEmail.addEventListener('input', function () { lienPaiement(); retenir(); });
+  accord.addEventListener('change', function () { lienPaiement(); retenir(); });
   compter('commande');
   maj();
 })();
