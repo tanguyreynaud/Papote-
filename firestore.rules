@@ -293,7 +293,9 @@ service cloud.firestore {
               && !('pairing' in request.resource.data)
               && get(invitePath(request.resource.data.code)).data.get('kind', '') == 'tablette'
               && get(invitePath(request.resource.data.code)).data.fid == fid)
-            // … ou par jumelage confirmé sur la tablette (ses deux comptes, dans l'heure qui suit).
+            // … ou par jumelage confirmé sur la tablette (ses deux comptes). Dans les 24 h qui suivent, et
+            // non plus l'heure : une tablette dont le wifi tombe juste après le nom de la famille ne
+            // pouvait plus entrer (elle réessaie toutes les 4 s, refusée à chaque fois).
             || (request.resource.data.role == 'tablette'
               && !('status' in request.resource.data)
               && !('code' in request.resource.data)
@@ -302,7 +304,7 @@ service cloud.firestore {
               && request.auth.uid in [
                 get(/databases/$(database)/documents/pairings/$(request.resource.data.pairing)).data.tabletUid,
                 get(/databases/$(database)/documents/pairings/$(request.resource.data.pairing)).data.callsUid]
-              && request.time < get(/databases/$(database)/documents/pairings/$(request.resource.data.pairing)).data.expiresAt + duration.value(1, 'h'))
+              && request.time < get(/databases/$(database)/documents/pairings/$(request.resource.data.pairing)).data.expiresAt + duration.value(24, 'h'))
             // … ou compte des appels de la tablette qui revient (réinstallation, compte recréé), sans limite de
             // temps : seulement si le compte principal de ce jumelage est toujours membre avec ce même jumelage.
             || (request.resource.data.role == 'tablette'

@@ -98,6 +98,26 @@ test('la tablette entre dans la famille par son jumelage confirmé, un autre com
   await assertFails(setDoc(doc(tablette('pirate'), `families/${FID}/members/pirate`), membre));
 });
 
+test('la tablette entre encore quelques heures après la confirmation (wifi tombé pendant l\'installation)', async () => {
+  await famille();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await deleteDoc(doc(db, `families/${FID}/members/tab`));
+    // Code confirmé il y a 5 h (expiresAt = confirmation + 20 min) : la tablette n'a pas pu écrire sa fiche.
+    await updateDoc(doc(db, `pairings/${PAIRING}`), { expiresAt: Timestamp.fromMillis(Date.now() - 5 * 3600 * 1000) });
+  });
+  const membre = { name: 'Tablette', role: 'tablette', pairing: PAIRING, canCall: true, joinedAt: serverTimestamp() };
+  await assertSucceeds(setDoc(doc(tablette('tab'), `families/${FID}/members/tab`), membre));
+  // Deux jours plus tard, plus d'entrée pour le compte principal (ni pour un autre compte).
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await deleteDoc(doc(db, `families/${FID}/members/tab`));
+    await updateDoc(doc(db, `pairings/${PAIRING}`), { expiresAt: Timestamp.fromMillis(Date.now() - 48 * 3600 * 1000) });
+  });
+  await assertFails(setDoc(doc(tablette('tab'), `families/${FID}/members/tab`), membre));
+  await assertFails(setDoc(doc(tablette('pirate'), `families/${FID}/members/pirate`), membre));
+});
+
 test('compte des appels de la tablette : revient après l\'expiration du jumelage tant que la tablette est membre', async () => {
   await famille();
   // Jumelage expiré depuis longtemps (réinstallations), la tablette principale est toujours membre.
