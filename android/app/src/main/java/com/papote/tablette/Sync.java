@@ -433,6 +433,11 @@ final class Sync {
         downloadVideos(fid);
         downloadVoices(fid);
         publishPosts();
+        if (attendUneVoix()) {
+            relecturesVoix = 0;
+            handler.removeCallbacks(relireVoix);
+            handler.postDelayed(relireVoix, 3_000);
+        }
         heartbeat(fid, "lastOnline");
         if (newArrival && !paused()) listener.onNewArrival();
     }
@@ -528,11 +533,46 @@ final class Sync {
      * un envoi récent sans voix est relu (champ « voix » seul), puis le fichier est gardé sur la tablette.
      * Sans voix, la page lit le texte avec la voix d'Android.
      */
+    /** Envoi qui reçoit une voix du serveur : un texte, ou une photo (sans mot : le mot par défaut). */
+    private static boolean aUneVoix(Post p) {
+        if ("reply".equals(p.type) || "video".equals(p.type) || "voice".equals(p.type)) return false;
+        return "photo".equals(p.type) || (p.text != null && !p.text.trim().isEmpty());
+    }
+
+    /**
+     * La voix est créée par le serveur une ou deux secondes après l'envoi, sans changer le marqueur
+     * « rev » : rien ne relance la lecture avant 10 min. On la relit donc toutes les 3 s pendant
+     * 45 s après l'arrivée d'un envoi qui l'attend (Tanguy, 26/10 : voix de secours sans le prénom).
+     */
+    private int relecturesVoix;
+    private final Runnable relireVoix = new Runnable() {
+        @Override
+        public void run() {
+            try {
+                String fid = familyId();
+                if (fid == null) return;
+                downloadVoices(fid);
+                publishPosts();
+                if (attendUneVoix() && ++relecturesVoix < 15) handler.postDelayed(this, 3_000);
+            } catch (Exception e) {
+                Log.w(TAG, "Relecture des voix", e);
+            }
+        }
+    };
+
+    private boolean attendUneVoix() {
+        long now = System.currentTimeMillis();
+        for (Post p : posts.values()) {
+            if (aUneVoix(p) && p.voiceUrl == null && now - p.createdAt < 3 * 60_000L) return true;
+        }
+        return false;
+    }
+
     private void downloadVoices(String fid) {
         long now = System.currentTimeMillis();
         int relus = 0;
         for (Post p : posts.values()) {
-            if (p.text == null || p.text.trim().isEmpty() || "reply".equals(p.type)) continue;
+            if (!aUneVoix(p)) continue;
             if (p.voiceUrl == null && relus < 5 && now - p.createdAt < 10 * 60_000L) {
                 relus++;
                 try {
