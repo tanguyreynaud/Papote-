@@ -80,7 +80,7 @@ section { padding-block: clamp(3rem, 7vw, 5rem); }
 .top nav .btn:hover { color: var(--accent-text); }
 @media (max-width: 760px) { .top nav a:not(.btn) { display: none; } }
 /* En-tête */
-.hero { padding-block: clamp(2rem, 5vw, 4rem) 0; }
+.hero { padding-block: clamp(2rem, 5vw, 4rem) clamp(2.5rem, 6vw, 4.5rem); }
 .hero .wrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: clamp(2rem, 5vw, 4rem); align-items: center; }
 @media (max-width: 900px) { .hero .wrap { grid-template-columns: minmax(0, 1fr); } }
 .hero-text { display: grid; gap: 1.25rem; }
@@ -163,15 +163,6 @@ section { padding-block: clamp(3rem, 7vw, 5rem); }
 .option-prix { font: 800 1.25rem/1.1 var(--display); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .offre-btn { justify-self: stretch; margin-top: .5rem; }
 .plans-note { margin-top: 1.25rem; color: var(--muted); font-size: 1rem; max-width: 46rem; }
-/* Liste d'attente : l'e-mail et le bouton sur une ligne. */
-.lancement .wrap { display: grid; gap: 1.25rem; max-width: 46rem; }
-.attente { display: grid; gap: .9rem; }
-.attente .ligne { display: flex; gap: .6rem; flex-wrap: wrap; }
-.attente input[type="email"] { flex: 1 1 14rem; min-width: 0; font: inherit; color: var(--text); min-height: 3.25rem; padding: .5rem 1rem; border: 2px solid var(--line); border-radius: 999px; background: var(--surface); }
-.attente .accord { display: flex; gap: .6rem; align-items: flex-start; color: var(--muted); font-size: .98rem; cursor: pointer; }
-.attente .accord input { width: 1.3rem; height: 1.3rem; margin-top: .2rem; flex: none; accent-color: var(--accent); }
-.attente-msg { margin: 0; font-weight: 700; }
-.attente [hidden] { display: none; }
 /* FAQ : huit questions visibles, les autres sur demande. */
 .faq { display: grid; gap: .6rem; max-width: 48rem; }
 .faq details { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
@@ -215,7 +206,7 @@ footer a { color: var(--muted); }
       <a href="#tarifs">Tarifs</a>
       <a href="#questions">Questions</a>
       <a href="https://app.mapapote.fr">Espace client</a>
-      <a class="btn btn-primary js-commander" href="#lancement">Être prévenu</a>
+      <a class="btn btn-primary js-commander" href="commande.html">Commander</a>
     </nav>
   </div>
 </header>
@@ -228,7 +219,7 @@ footer a { color: var(--muted); }
         <p class="lead">Les photos des petits, les mots doux et les appels vidéo arrivent tout seuls sur sa tablette. Elle regarde, elle sourit, elle vous voit.</p>
         <p class="prix-ligne"><b>20 €</b> par mois<span>Sans engagement · tablette prêtée · livraison offerte</span></p>
         <div class="hero-actions">
-          <a class="btn btn-primary js-commander" href="#lancement">Être prévenu du lancement</a>
+          <a class="btn btn-primary js-commander" href="commande.html">Commander</a>
           <a class="btn btn-ghost" href="#fonctionnement">Comment ça marche</a>
         </div>
         <p class="rassure"><span class="coche">30 jours pour changer d'avis</span><span class="coche">Préparée et vérifiée à Lyon</span></p>
@@ -364,7 +355,7 @@ footer a { color: var(--muted); }
         <p class="eyebrow">Tarifs</p>
         <h2>Un seul abonnement, tablette comprise.</h2>
       </div>
-      <form class="offre" id="offre" action="#lancement">
+      <form class="offre" id="offre" action="commande.html">
         <div class="offre-base">
           <div class="price"><strong id="offre-prix">20 €</strong><span>par mois, sans engagement</span></div>
           <p class="mes"><b>+ 60 €</b> une seule fois à la commande, pour la mise en service.</p>
@@ -387,7 +378,7 @@ footer a { color: var(--muted); }
             <span><b>Pas de box, ou je ne sais pas</b><small>Internet inclus : la tablette a sa propre connexion 4G, rien à régler.</small></span>
             <span class="option-prix">30 €</span>
           </label>
-          <button class="btn btn-primary offre-btn js-commander" type="submit">Être prévenu du lancement</button>
+          <button class="btn btn-primary offre-btn js-commander" type="submit">Commander</button>
         </div>
       </form>
       <p class="plans-note">Prix par tablette. L'abonnement commence à la réception et chaque mois est payé une fois écoulé, par prélèvement SEPA. Résiliation à tout moment depuis l'appli : le mois en cours est le dernier payé.</p>
@@ -396,23 +387,6 @@ footer a { color: var(--muted); }
     </div>
   </section>
 
-  <section id="lancement" class="lancement">
-    <div class="wrap">
-      <div class="section-head" style="margin-bottom:0">
-        <p class="eyebrow">Bientôt disponible</p>
-        <h2>Soyez prévenu du lancement</h2>
-        <p class="lead">Les premières tablettes partent très bientôt. Laissez votre e-mail : vous serez parmi les premiers à pouvoir commander.</p>
-      </div>
-      <form class="attente" id="attente">
-        <div class="ligne">
-          <input name="email" id="attente-email" type="email" autocomplete="email" required maxlength="120" placeholder="votre@e-mail.fr" aria-label="Votre e-mail">
-          <button class="btn btn-primary" type="submit">Me prévenir</button>
-        </div>
-        <label class="accord"><input type="checkbox" name="accord" required><span>J'accepte de recevoir un e-mail au lancement de Papote, puis ses nouvelles. Désinscription en un clic.</span></label>
-        <p class="attente-msg" id="attente-msg" role="status" hidden></p>
-      </form>
-    </div>
-  </section>
 
   <section id="questions">
     <div class="wrap">
@@ -514,28 +488,19 @@ footer a { color: var(--muted); }
   });
 </script>
 <script>
-  // Ouverture des commandes : à passer à true le jour du lancement (avec COMMANDES_OUVERTES=oui dans functions/.env).
-  // Une fois ouvertes, elles ne ferment plus : seul le délai annoncé change (stockDisponible, functions/stock.js).
-  var COMMANDES_OUVERTES = false;
-  var commandesPossibles = false;
+  // Commandes ouvertes (26/10) : plus de liste d'attente. Elles ne ferment plus : seul le délai annoncé
+  // change (stockDisponible, functions/stock.js).
+  var commandesPossibles = true;
   (function () {
-    if (!COMMANDES_OUVERTES) return;
-    function ouvrir() {
-      commandesPossibles = true;
-      document.querySelectorAll('a.js-commander').forEach(function (a) { a.href = 'commande.html'; a.textContent = 'Commander'; });
-      document.querySelectorAll('button.js-commander').forEach(function (b) { b.textContent = 'Commander'; });
-    }
     fetch('https://europe-west1-papote-famille.cloudfunctions.net/stockDisponible')
-      .then(function (r) { return r.ok ? r.json() : { disponible: true }; })
+      .then(function (r) { return r.ok ? r.json() : {}; })
       .then(function (d) {
-        if (d.disponible === false) return;
-        ouvrir();
         // Stock vide mais commandes encore possibles : délai de préparation plus long (stock.js).
         if (d.precommande) document.querySelectorAll('.js-precommande').forEach(function (p) { p.hidden = false; });
         // Au-delà de stock + 10 : commandes toujours ouvertes, expédition sous 3 à 4 semaines.
         if (d.attenteLongue) document.querySelectorAll('.js-attente-longue').forEach(function (p) { p.hidden = false; });
       })
-      .catch(ouvrir); // panne : affichage normal, commander revérifie le stock côté serveur
+      .catch(function () {}); // panne : affichage normal, commander revérifie le stock côté serveur
   })();
 </script>
 <script>
@@ -548,13 +513,7 @@ footer a { color: var(--muted); }
     offre.addEventListener('change', maj);
     offre.addEventListener('submit', function (e) {
       e.preventDefault();
-      if (commandesPossibles) {
-        location.href = 'commande.html' + (sim() ? '?formule=sim' : '');
-        return;
-      }
-      // Commandes fermées ou stock vide : la liste d'attente à la place de commande.html.
-      location.hash = 'lancement';
-      document.getElementById('attente-email').focus();
+      location.href = 'commande.html' + (sim() ? '?formule=sim' : '');
     });
     maj();
   })();
@@ -569,34 +528,6 @@ footer a { color: var(--muted); }
   }
 </script>
 <script>compter('accueil');</script>
-<script>
-  // Liste d'attente du lancement : l'adresse rejoint contacts/ (source « liste-attente »), lue par l'onglet Clients.
-  (function () {
-    var form = document.getElementById('attente');
-    var msg = document.getElementById('attente-msg');
-    form.addEventListener('submit', function (e) {
-      e.preventDefault();
-      var bouton = form.querySelector('button');
-      bouton.disabled = true;
-      msg.hidden = true;
-      fetch('https://europe-west1-papote-famille.cloudfunctions.net/listeAttente', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prenom: '', email: form.email.value, accord: form.accord.checked }),
-      }).then(function (r) {
-        if (!r.ok) throw new Error(r.status);
-        form.querySelector('.ligne').hidden = true;
-        form.querySelector('.accord').hidden = true;
-        msg.textContent = 'C’est noté, merci ! Vous recevrez un e-mail dès que les commandes ouvrent.';
-        msg.hidden = false;
-      }).catch(function () {
-        bouton.disabled = false;
-        msg.textContent = 'L’inscription n’a pas abouti. Vérifiez votre e-mail et réessayez.';
-        msg.hidden = false;
-      });
-    });
-  })();
-</script>
 <script src="chat-support.js" defer></script>
 </body>
 </html>
