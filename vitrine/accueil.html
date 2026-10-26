@@ -101,22 +101,7 @@ section { padding-block: clamp(3rem, 7vw, 5rem); }
 .stand { height: 1.3rem; width: 36%; margin-top: -.1rem; background: linear-gradient(#e2d8c8, #c8bba7); border-radius: 0 0 10px 10px; }
 .meuble { position: relative; z-index: 0; height: clamp(2.5rem, 6vw, 3.5rem); margin: 0 -1% 0; border-top: 10px solid var(--bois); box-shadow: inset 0 6px 0 var(--bois-fonce); border-radius: 4px 4px 0 0; }
 .scene figcaption { color: var(--muted); font-size: .95rem; text-align: center; padding: .9rem 1rem 1.1rem; }
-.screen { aspect-ratio: 16 / 10; background: #fdfaf5; color: var(--text); display: grid; grid-template-columns: 44% 56%; overflow: hidden; border-radius: 8px; font-size: clamp(.45rem, .9vw, .66rem); }
-@media (max-width: 900px) { .screen { font-size: clamp(.45rem, 1.9vw, .72rem); } }
-.screen-left { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: .25em; padding: 3% 4%; text-align: center; min-width: 0; }
-.sos { font-weight: 800; color: #b4233b; border: 1.5px solid #f1c3cb; background: #fff; border-radius: 999px; padding: .15em .9em; }
-.clock { font: 800 3.8em/1 var(--display); letter-spacing: -.03em; margin-top: .1em; font-variant-numeric: tabular-nums; }
-.date { font-size: 1.35em; font-weight: 700; color: var(--muted); }
-.weather { display: flex; align-items: center; gap: .45em; margin-top: .2em; text-align: left; }
-.weather b { font: 800 1.8em/1 var(--display); }
-.weather small { display: block; font-size: .85em; color: var(--muted); }
-.rappel { margin-top: .5em; background: var(--accent-soft); border-radius: 999px; padding: .35em 1em; font-size: .9em; text-align: left; }
-.rappel b { display: block; color: var(--accent-strong); font-size: .8em; }
-.appeler { margin-top: .6em; background: #1f7a3a; color: #fff; font: 800 1.35em/1 var(--display); padding: .55em 1.6em; border-radius: 999px; }
-.screen-photo { position: relative; }
-.screen-photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 20%; }
-.screen-photo .qui { position: absolute; left: 4%; bottom: 4%; color: #fff; font-weight: 800; font-size: 1.1em; text-shadow: 0 1px 6px rgba(0, 0, 0, .6); display: flex; align-items: center; gap: .4em; }
-.screen-photo .qui i { width: 1.6em; height: 1.6em; border-radius: 50%; background: var(--accent); display: inline-grid; place-items: center; font-style: normal; font-size: .9em; }
+.screen { display: block; width: 100%; height: auto; border-radius: 8px; }
 /* Ce que vous payez : trois moments, dans l'ordre du temps. */
 .payer { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
 @media (max-width: 760px) { .payer { grid-template-columns: minmax(0, 1fr); } }
@@ -134,36 +119,11 @@ section { padding-block: clamp(3rem, 7vw, 5rem); }
 .step p { color: var(--muted); }
 .step { grid-template-rows: auto auto auto minmax(0, 1fr); }
 .step .visuel { margin: .5rem 0 0; background: var(--band); border-radius: 18px; padding: 1.25rem 1rem; display: grid; place-items: center; min-height: 19rem; overflow: hidden; }
-/* Téléphone dessiné */
-.tel { width: 10.5rem; aspect-ratio: 9 / 17; background: var(--device); border-radius: 1.6rem; padding: .38rem; box-shadow: 0 16px 30px -16px rgba(36, 33, 47, .55); }
-.tel-ecran { position: relative; height: 100%; background: var(--bg); border-radius: 1.25rem; overflow: hidden; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; font-size: .62rem; line-height: 1.3; }
-.tel-bas { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--line); background: var(--surface); padding: .35rem 0 .5rem; font-size: .85em; color: var(--muted); text-align: center; }
-.tel-bas b { color: var(--accent-strong); }
-.tel-haut { display: flex; justify-content: space-between; align-items: center; padding: .9rem .7rem .4rem; font-weight: 800; font-family: var(--display); font-size: 1.1em; }
-.tel-haut small { font: 700 .8em var(--body); color: var(--accent-strong); }
-.tel-corps { padding: 0 .6rem .6rem; display: grid; gap: .45rem; align-content: start; }
-.tel-corps .apercu { aspect-ratio: 4 / 3; border-radius: .6rem; overflow: hidden; background: var(--line); }
-.tel-corps .apercu img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 25%; display: block; }
-.tel-corps .champ { border: 1.5px solid var(--line); background: var(--surface); border-radius: .5rem; padding: .35rem .5rem; color: var(--text); }
-.tel-corps .champ small { display: block; color: var(--muted); font-size: .85em; }
-.tel-corps .bouton { background: var(--accent); color: #fff; font-weight: 700; text-align: center; border-radius: 999px; padding: .45rem; }
-.tel-corps .bouton.gris { background: var(--surface); color: var(--text); border: 1.5px solid var(--line); }
-/* Téléphone en appel vidéo */
-.tel-video { background: #1b1a22; display: block; }
-.tel-video img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 60% 20%; }
-.tel-video .moi { position: absolute; top: .9rem; right: .5rem; width: 2.4rem; height: 3.2rem; border-radius: .4rem; background: var(--accent-soft); border: 2px solid #fff; display: grid; place-items: center; color: var(--accent-strong); font-weight: 800; }
-.tel-video .nom { position: absolute; left: .6rem; top: 1rem; color: #fff; font-weight: 800; font-family: var(--display); font-size: 1.3em; text-shadow: 0 1px 6px rgba(0, 0, 0, .6); }
-.tel-video .nom small { display: block; font: 400 .75em var(--body); opacity: .9; }
-.tel-video .raccrocher { position: absolute; left: 50%; bottom: .9rem; transform: translateX(-50%); width: 2.4rem; height: 2.4rem; border-radius: 50%; background: #d63b3b; display: grid; place-items: center; }
-.tel-video .raccrocher svg { width: 1.3rem; height: 1.3rem; color: #fff; }
-/* Tablette qui reçoit un envoi (écran « Nouvel envoi » réel : le mot à gauche, la photo à droite). */
+/* Vrais écrans de l'appli et de la tablette (captures de outils/galerie avec de vraies photos), dans un cadre. */
+.tel { width: 10.5rem; background: var(--device); border-radius: 1.6rem; padding: .38rem; box-shadow: 0 16px 30px -16px rgba(36, 33, 47, .55); }
+.tel img { display: block; width: 100%; height: auto; border-radius: 1.25rem; }
 .tab { width: 100%; max-width: 22rem; background: var(--device); border-radius: 12px; padding: 5px; box-shadow: 0 16px 30px -16px rgba(36, 33, 47, .55); }
-.tab-ecran { aspect-ratio: 16 / 10; border-radius: 6px; overflow: hidden; background: var(--bg); display: grid; grid-template-columns: 42% 58%; font-size: .66rem; }
-.tab-mot { padding: 7% 6%; display: flex; flex-direction: column; justify-content: space-between; gap: .4rem; }
-.tab-mot p { font: 700 1.55em/1.25 var(--display); color: var(--accent-strong); }
-.tab-mot .de { font-size: 1em; color: var(--muted); }
-.tab-mot .ok { justify-self: start; background: var(--accent); color: #fff; font-weight: 800; border-radius: 999px; padding: .35em 1.4em; font-size: 1.2em; align-self: flex-start; }
-.tab-photo img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 20%; display: block; }
+.tab img { display: block; width: 100%; height: auto; border-radius: 6px; }
 /* Pour elle, pour vous */
 .split { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(2rem, 5vw, 4rem); }
 @media (max-width: 860px) { .split { grid-template-columns: minmax(0, 1fr); } }
@@ -286,27 +246,14 @@ footer a { color: var(--muted); }
             <path d="M25 112h50v10H25z" fill="#b88b66"/>
           </svg>
           <div class="appareil">
-            <div class="tablet" role="img" aria-label="La tablette Papote sur son support : l'heure, la date, la météo, le prochain rappel, le bouton Appeler et la dernière photo reçue">
-              <div class="screen" aria-hidden="true">
-                <div class="screen-left">
-                  <span class="sos">♥ SOS famille</span>
-                  <div class="clock" id="demo-clock">10:30</div>
-                  <div class="date" id="demo-date">Lundi 26 octobre</div>
-                  <div class="weather"><b>14°</b><span>Plutôt ensoleillé<small>Demain : petite pluie, 13°</small></span></div>
-                  <div class="rappel"><b>Tout à l'heure, à 12h00</b>Prendre le cachet du midi</div>
-                  <div class="appeler">📞 Appeler</div>
-                </div>
-                <div class="screen-photo">
-                  <picture><source type="image/webp" srcset="bebe.webp"><img src="bebe.jpg" alt="" width="900" height="1350" fetchpriority="high"></picture>
-                  <span class="qui"><i>J</i>Julie, aujourd'hui</span>
-                </div>
-              </div>
+            <div class="tablet" role="img" aria-label="La tablette Papote sur son support : l'heure, la date, la météo, le bouton Appeler et la dernière photo reçue">
+              <picture><source type="image/webp" srcset="ecran-accueil.webp"><img class="screen" src="ecran-accueil.jpg" alt="" width="1200" height="750" fetchpriority="high"></picture>
             </div>
             <div class="stand"></div>
           </div>
         </div>
         <div class="meuble"></div>
-        <figcaption>L'écran d'accueil, tel qu'elle le voit : l'heure, la météo, le prochain rappel et la dernière photo reçue.</figcaption>
+        <figcaption>L'écran d'accueil, tel qu'elle le voit : l'heure, la date, la météo et la dernière photo reçue.</figcaption>
       </figure>
     </div>
 
@@ -349,42 +296,17 @@ footer a { color: var(--muted); }
         <div class="step">
           <h3>Vous envoyez une photo</h3>
           <p>Depuis l'appli Papote sur votre téléphone, Android ou iPhone, sans rien installer depuis un magasin d'applis.</p>
-          <figure class="visuel" aria-label="L'appli famille : une photo, une légende, le bouton Envoyer">
-            <div class="tel"><div class="tel-ecran">
-              <div class="tel-haut">Papote<small>Pour Mamie</small></div>
-              <div class="tel-corps">
-                <div class="apercu"><picture><source type="image/webp" srcset="bebe.webp"><img src="bebe.jpg" alt="" loading="lazy"></picture></div>
-                <div class="champ">Emma a dit « Mamie » pour la première fois !<small>Légende</small></div>
-                <div class="bouton">Envoyer à Mamie</div>
-              </div>
-              <div class="tel-bas"><b>Accueil</b><span>Photos</span><span>Appels</span><span>Profil</span></div>
-            </div></div>
-          </figure>
+          <figure class="visuel"><div class="tel"><picture><source type="image/webp" srcset="ecran-envoi.webp"><img src="ecran-envoi.jpg" alt="L'appli famille : deux photos choisies, une légende, le bouton Envoyer" width="600" height="1298" loading="lazy"></picture></div></figure>
         </div>
         <div class="step">
           <h3>Elle apparaît en grand sur la tablette</h3>
           <p>Avec votre prénom et votre mot. Le reste du temps, la tablette fait défiler les photos de la famille comme un cadre.</p>
-          <figure class="visuel" aria-label="La tablette affiche la photo et le mot reçus, avec un bouton OK">
-            <div class="tab"><div class="tab-ecran">
-              <div class="tab-mot">
-                <div><p>Emma a dit « Mamie » pour la première fois !</p><span class="de">— Julie, à l'instant</span></div>
-                <span class="ok">OK</span>
-              </div>
-              <div class="tab-photo"><picture><source type="image/webp" srcset="bebe.webp"><img src="bebe.jpg" alt="" loading="lazy"></picture></div>
-            </div></div>
-          </figure>
+          <figure class="visuel"><div class="tab"><picture><source type="image/webp" srcset="ecran-reception.webp"><img src="ecran-reception.jpg" alt="La tablette affiche la photo et le mot reçus, avec un bouton OK" width="1000" height="625" loading="lazy"></picture></div></figure>
         </div>
         <div class="step">
           <h3>Vous l'appelez en vidéo</h3>
-          <p>Elle n'a rien à faire : dès qu'elle se met face à l'écran, la tablette décroche. Et elle peut vous appeler en touchant votre photo.</p>
-          <figure class="visuel" aria-label="Un appel vidéo avec Mamie sur votre téléphone">
-            <div class="tel"><div class="tel-ecran tel-video">
-              <picture><source type="image/webp" srcset="mamie.webp"><img src="mamie.jpg" alt="" loading="lazy"></picture>
-              <span class="nom">Mamie<small>02:14</small></span>
-              <span class="moi">J</span>
-              <span class="raccrocher"><svg><use href="#i-raccrocher"/></svg></span>
-            </div></div>
-          </figure>
+          <p>La tablette sonne et décroche toute seule dès qu'elle se met face à l'écran. Et elle peut vous appeler en touchant votre photo.</p>
+          <figure class="visuel"><div class="tab"><picture><source type="image/webp" srcset="ecran-appel.webp"><img src="ecran-appel.jpg" alt="La tablette : Julie vous appelle, bouton Décrocher" width="1000" height="625" loading="lazy"></picture></div></figure>
         </div>
       </div>
     </div>
@@ -587,19 +509,6 @@ footer a { color: var(--muted); }
   </div>
 </footer>
 <script>
-  // Heure et date réelles sur la tablette dessinée.
-  (function () {
-    var clock = document.getElementById('demo-clock');
-    var date = document.getElementById('demo-date');
-    function tick() {
-      var now = new Date();
-      clock.textContent = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-      var d = now.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
-      date.textContent = d.charAt(0).toUpperCase() + d.slice(1);
-    }
-    tick();
-    setInterval(tick, 20000);
-  })();
   // FAQ : les autres questions sur demande.
   document.getElementById('faq-plus').addEventListener('click', function () {
     document.getElementById('faq').classList.add('ouverte');
