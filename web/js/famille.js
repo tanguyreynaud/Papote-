@@ -2765,7 +2765,7 @@ document.querySelectorAll('.setting').forEach((card) => {
 const saveFamily = (data, message) => updateDoc(doc(db, 'families', session.fid), { ...data, rev: increment(1) })
   .then(() => toast(message));
 
-// Prénom de la personne (nom de la famille).
+// Nom de la tablette (nom de la famille).
 SETTINGS['family-name-card'] = {
   fill() { $('family-name').value = session.family.name; },
   async save() {
@@ -2773,7 +2773,7 @@ SETTINGS['family-name-card'] = {
     if (!name) return false;
     if (name === session.family.name) return true;
     await updateDoc(doc(db, 'families', session.fid), { name });
-    toast('Prénom enregistré');
+    toast('Nom enregistré');
     return true;
   },
 };
