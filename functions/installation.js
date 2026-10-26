@@ -246,7 +246,9 @@ function brancher(deps) {
     const ref = db.doc(`families/${fid}`);
     const fam = (await ref.get()).data();
     if (!fam) throw new HttpsError('not-found', 'Famille introuvable.');
-    if (fam.createdBy !== uid && !(fam.admins || []).includes(uid)) {
+    const membre = await ref.collection('members').doc(uid).get();
+    const actif = membre.exists && (membre.get('status') || 'active') !== 'pending';
+    if ((fam.createdBy !== uid && !(fam.admins || []).includes(uid)) || !actif) {
       throw new HttpsError('permission-denied', 'Réservé aux responsables de la famille.');
     }
     if (fam.installation && fam.installation.etape === 'fini') return { ok: true };

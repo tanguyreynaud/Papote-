@@ -196,13 +196,20 @@ async function configurationPortail() {
   return portail;
 }
 
-// Responsable de la famille : créateur ou désigné dans admins.
+// Membre actif de la famille (fiche présente, pas en attente) : même règle que isMember() des règles Firestore.
+async function membreActif(fid, uid) {
+  const membre = await db.doc(`families/${fid}/members/${uid}`).get();
+  return membre.exists && (membre.get('status') || 'active') !== 'pending';
+}
+
+// Responsable de la famille : créateur ou désigné dans admins, et toujours membre (un ancien responsable
+// parti de la famille peut rester dans admins : il ne doit plus toucher à l'abonnement).
 async function familleDuResponsable(fid, uid) {
   if (typeof fid !== 'string' || !fid) throw new HttpsError('invalid-argument', 'Famille manquante.');
   const snap = await db.doc(`families/${fid}`).get();
   if (!snap.exists) throw new HttpsError('not-found', 'Famille introuvable.');
   const fam = snap.data();
-  if (fam.createdBy !== uid && !(fam.admins || []).includes(uid)) {
+  if ((fam.createdBy !== uid && !(fam.admins || []).includes(uid)) || !(await membreActif(fid, uid))) {
     throw new HttpsError('permission-denied', 'Réservé aux responsables de la famille.');
   }
   return fam;
@@ -222,20 +229,22 @@ exports.inviterParEmail = onCall({ secrets: [MAIL_MOT_DE_PASSE], maxInstances: 2
   ]);
   if (!famille.exists) throw new HttpsError('not-found', 'Famille introuvable.');
   const fam = famille.data();
-  const responsable = fam.createdBy === uid || (fam.admins || []).includes(uid);
-  if (!responsable && !(membre.exists && (membre.get('status') || 'active') === 'active')) {
+  // Membre actif seulement, responsable compris (un ancien responsable parti de la famille n'invite plus).
+  if (!(membre.exists && (membre.get('status') || 'active') === 'active')) {
     throw new HttpsError('permission-denied', 'Réservé aux membres de la famille.');
   }
   if (!fam.code) throw new HttpsError('failed-precondition', 'Cette famille n\'a pas de code.');
-  const jour = new Date().toISOString().slice(0, 10);
-  const limite = db.doc(`limites/invitations-${fid}`);
+  const jour = new Date(Date.now()).toISOString().slice(0, 10);
+  // Deux plafonds : par famille, et par compte (créer des familles à la chaîne ne permet pas d'envoyer
+  // des e-mails Papote sans limite).
+  const limites = [db.doc(`limites/invitations-${fid}`), db.doc(`limites/invitations-compte-${uid}`)];
   await db.runTransaction(async (tx) => {
-    const s = await tx.get(limite);
-    const n = s.exists && s.get('jour') === jour ? s.get('n') : 0;
-    if (n >= INVITATIONS_PAR_JOUR) {
+    const snaps = await Promise.all(limites.map((l) => tx.get(l)));
+    const nombres = snaps.map((s) => (s.exists && s.get('jour') === jour ? s.get('n') : 0));
+    if (nombres.some((n) => n >= INVITATIONS_PAR_JOUR)) {
       throw new HttpsError('resource-exhausted', 'Trop d\'invitations aujourd\'hui. Réessayez demain.');
     }
-    tx.set(limite, { jour, n: n + 1 });
+    limites.forEach((l, i) => tx.set(l, { jour, n: nombres[i] + 1 }));
   });
   const code = String(fam.code).toUpperCase().replace(/[^A-Z0-9]/g, '');
   const lien = `${APPLI_FAMILLE}?code=${code.length === 8 ? regles.afficherCode(code) : code}`

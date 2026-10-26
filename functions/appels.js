@@ -124,9 +124,21 @@ exports.refuserAppel = onRequest({ maxInstances: 2 }, async (req, res) => {
 
 const texte = (v, max) => String(v == null ? '' : v).slice(0, max);
 
+// Plafond par compte et par jour : les comptes anonymes se créent librement, ce relevé ne doit pas
+// pouvoir remplir la base. Au-delà, l'incident n'est plus que dans les journaux.
+const INCIDENTS_PAR_JOUR = 50;
+
 exports.incidentAppel = onCall(async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Connexion requise.');
   const d = request.data || {};
+  const jour = new Date(Date.now()).toISOString().slice(0, 10);
+  const limite = base().doc(`limites/incidents-${request.auth.uid}`);
+  const n = await base().runTransaction(async (t) => {
+    const s = await t.get(limite);
+    const deja = s.exists && s.get('jour') === jour ? s.get('n') : 0;
+    if (deja < INCIDENTS_PAR_JOUR) t.set(limite, { jour, n: deja + 1 });
+    return deja;
+  });
   const incident = {
     uid: request.auth.uid,
     cote: d.cote === 'tablette' ? 'tablette' : 'famille',
@@ -138,6 +150,7 @@ exports.incidentAppel = onCall(async (request) => {
     le: FieldValue.serverTimestamp(),
   };
   logger.warn(`Appel raté (${incident.cote}) : ${incident.raison} ${incident.detail}`, { uid: incident.uid, cid: incident.cid, relais: incident.relais });
+  if (n >= INCIDENTS_PAR_JOUR) return { ok: true };
   await base().collection('incidentsAppels').add(incident);
   return { ok: true };
 });
