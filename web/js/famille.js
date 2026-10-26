@@ -1419,7 +1419,11 @@ async function renderPhoneCard() {
   // L'app Android dit (?pause=1 ou 0) si Android peut encore la mettre en pause.
   let pause = null;
   try { pause = sessionStorage.getItem('papote.pause'); } catch (e) { /* rien */ }
-  $('phone-pause').hidden = !inNativeApp();
+  // Seulement dans l'app Android elle-même : Chrome partage le jeton natif avec elle, et le lien
+  // papote:// y ouvrirait le Play Store.
+  let ouvertParApp = false;
+  try { ouvertParApp = sessionStorage.getItem('papote.app') === '1'; } catch (e) { /* rien */ }
+  $('phone-pause').hidden = !ouvertParApp;
   $('phone-pause-toggle').checked = pause === '0';
   $('phone-pause-text').textContent = pause === '0'
     ? "Android ne met jamais Papote en pause : le téléphone sonne toujours."
@@ -4295,6 +4299,7 @@ async function start() {
   if (params.get('natif')) rememberNativeToken(params.get('natif'));
   // Rouvert par l'app Android : ?pause=1 tant que le réglage n'est pas fait (sinon absent).
   if (params.get('natif') || params.get('pause')) {
+    try { sessionStorage.setItem('papote.app', '1'); } catch (e) { /* rien */ }
     try { sessionStorage.setItem('papote.pause', params.get('pause') === '1' ? '1' : '0'); } catch (e) { /* rien */ }
   }
   // Arrivé par le lien ou le QR code d'invitation : le code est gardé le temps de se connecter.
