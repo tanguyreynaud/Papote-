@@ -22,7 +22,6 @@ const admin = require('firebase-admin');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
-const Anthropic = require('@anthropic-ai/sdk');
 const mail = require('./mail');
 // Base Firestore réglée dans .env (BASE_FIRESTORE), comme index.js et gestion.js.
 const { db: base } = require('./base');
@@ -253,7 +252,7 @@ exports.supportChat = onRequest(
     }
 
     try {
-      if (!client) client = new Anthropic({ apiKey: ANTHROPIC_API_KEY.value() });
+      if (!client) client = new (require('@anthropic-ai/sdk'))({ apiKey: ANTHROPIC_API_KEY.value() });
       const texte = await texteDuSite();
       const reponse = await client.messages.create({
         model: MODELE,

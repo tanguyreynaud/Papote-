@@ -40,7 +40,6 @@ const { onDocumentCreated, onDocumentUpdated, onDocumentWritten } = require('fir
 const { setGlobalOptions, logger } = require('firebase-functions/v2');
 const { defineSecret, defineString } = require('firebase-functions/params');
 const admin = require('firebase-admin');
-const Stripe = require('stripe');
 const regles = require('./abonnement');
 const livraison = require('./livraison');
 const mail = require('./mail');
@@ -81,7 +80,7 @@ function envoyerMail(a, contenu) {
 
 let stripeClient;
 function stripe() {
-  if (!stripeClient) stripeClient = new Stripe(STRIPE_SECRET.value());
+  if (!stripeClient) stripeClient = new (require('stripe'))(STRIPE_SECRET.value());
   return stripeClient;
 }
 

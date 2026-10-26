@@ -2,8 +2,6 @@
 // Gmail au départ (mot de passe d'application) ; Brevo plus tard en changeant MAIL_SMTP dans .env.
 // Mot de passe dans Secret Manager (MAIL_MOT_DE_PASSE), jamais dans le dépôt.
 
-const nodemailer = require('nodemailer');
-
 const APPLI = 'https://app.mapapote.fr';
 // Lien vers l'appli qui garde le code de commande : la famille créée s'y rattache toute seule.
 const lienAppli = (code) => (code ? `${APPLI}/?commande=${encodeURIComponent(code)}` : APPLI);
@@ -288,7 +286,7 @@ async function envoyer({ smtp, motDePasse, expediteur, a, contenu }) {
   if (!motDePasse || !expediteur) throw new Error('E-mails non configurés (MAIL_EXPEDITEUR, MAIL_MOT_DE_PASSE).');
   if (!transport) {
     const [hote, port, utilisateur] = smtp.split(':');
-    transport = nodemailer.createTransport({
+    transport = require('nodemailer').createTransport({
       host: hote, port: Number(port), secure: Number(port) === 465,
       auth: { user: utilisateur || expediteur, pass: motDePasse },
     });
