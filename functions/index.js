@@ -1554,10 +1554,13 @@ exports.finirInstallation = onCall({ secrets: [MAIL_MOT_DE_PASSE], maxInstances:
 exports.annulerInstallation = onCall({ timeoutSeconds: 300, memory: '512MiB', maxInstances: 2 }, installation.annulerInstallation);
 
 // Nombre de proches d'une famille (membres « famille » qui ont rejoint), lu par les règles
-// Firestore pour refuser un 31e proche. Recalculé à chaque arrivée, départ ou changement de membre.
+// Firestore pour refuser un 31e proche. Recalculé seulement quand un proche arrive, part ou est accepté :
+// pas aux battements de la tablette (2 à 3 écritures toutes les 10 min), qui relisaient toute la famille.
+const estProche = (snap) => Boolean(snap && snap.exists && snap.get('role') === 'famille' && snap.get('status') !== 'pending');
 exports.compterProches = onDocumentWritten(
   { document: 'families/{fid}/members/{uid}', database: BASE_FIRESTORE, region: REGION_FIRESTORE },
   async (event) => {
+    if (estProche(event.data && event.data.before) === estProche(event.data && event.data.after)) return;
     const famille = db.doc(`families/${event.params.fid}`);
     const membres = await famille.collection('members').where('role', '==', 'famille').get();
     const nbProches = membres.docs.filter((d) => d.get('status') !== 'pending').length;
