@@ -217,7 +217,8 @@ async function joinByPairing(u, pairing) {
   let member = null;
   try { member = await getDoc(memberRef); } catch (e) { /* pas encore membre */ }
   if (!member || !member.exists()) {
-    // Les règles n'acceptent cette fiche que dans l'heure qui suit l'expiration du code.
+    // Règles : dans l'heure qui suit l'expiration du code, ou plus tard si la fiche de la tablette porte
+    // ce même jumelage (compte des appels en retard, 26/10).
     await setDoc(memberRef, {
       name: (data.name || 'Tablette').slice(0, 40), role: 'tablette', pairing, joinedAt: serverTimestamp(), canCall: true,
     });

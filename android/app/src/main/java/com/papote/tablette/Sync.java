@@ -429,6 +429,7 @@ final class Sync {
             }
         }
         loadedOnce = true;
+        recupererJumelage(fid);
         downloadMedia(fid);
         downloadVideos(fid);
         downloadVoices(fid);
@@ -1729,6 +1730,29 @@ final class Sync {
             firebase.commit(new JSONArray().put(write));
         } catch (Exception e) {
             Log.w(TAG, "Ville de la météo sur la fiche", e);
+        }
+    }
+
+    /**
+     * Code de jumelage gardé pour toujours (pairingFait) : le compte des appels s'en sert pour entrer
+     * dans la famille, même longtemps après (règles du 26/10). Perdu (installation interrompue, comme
+     * T-003 le 26/10 : plus d'appels) : on le relit sur la fiche de la tablette, une fois par démarrage.
+     */
+    private boolean jumelageVerifie;
+    private void recupererJumelage(String fid) {
+        if (jumelageVerifie || pairingCode() != null) return;
+        jumelageVerifie = true;
+        try {
+            JSONObject doc = firebase.get("families/" + fid + "/members/" + firebase.uid(), "pairing");
+            JSONObject f = doc == null ? null : doc.optJSONObject("fields");
+            String code = f == null ? null : Firebase.str(f, "pairing");
+            if (code != null && !code.isEmpty()) {
+                prefs.edit().putString("pairingFait", code).apply();
+                Journal.log(context, "Code de jumelage retrouvé pour le compte des appels");
+            }
+        } catch (Exception e) {
+            jumelageVerifie = false;
+            Log.w(TAG, "Code de jumelage", e);
         }
     }
 
