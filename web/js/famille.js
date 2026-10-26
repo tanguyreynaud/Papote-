@@ -13,7 +13,7 @@ import {
   MAX_VIDEO_CHUNKS, VIDEO_CHUNK,
   choisirBase, bucketUrl,
 } from './firebase.js';
-import { askConfirm, notice, avantDePartir, chooseAction } from './ui.js';
+import { askConfirm, confirmerAvecCroix, notice, avantDePartir, chooseAction } from './ui.js';
 import { showGuideOnce } from './guide.js';
 import {
   abonnementOk, FORMULES, LIBELLES, ouvrirPortail, payer, rattacherCommande, resilier, annulerResiliation,
@@ -3740,7 +3740,7 @@ $('setup-cancel').addEventListener('click', async () => {
   const texte = famille
     ? `Annuler l'installation ? La famille « ${session.family.name} » et ce qui a été envoyé seront effacés. La tablette affichera de nouveau son code pour recommencer.`
     : 'Annuler l\'installation ? La tablette affichera de nouveau son code pour recommencer.';
-  if (!await askConfirm(texte, 'Annuler l\'installation')) return;
+  if (!await confirmerAvecCroix(texte, 'Annuler l\'installation')) return;
   const btn = $('setup-cancel');
   btn.disabled = true;
   try {

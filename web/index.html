@@ -77,6 +77,8 @@
     <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor"/></symbol>
   </svg>
 
+  <!-- En haut de la page, dans le flux : il pousse l'en-tête « Papote » au lieu de le recouvrir. -->
+  <p id="hors-ligne-bandeau" class="hors-ligne-bandeau" role="status" hidden>Pas de connexion pour le moment. Papote reprend toute seule dès son retour.</p>
   <main>
     <div id="loading" class="splash" role="status" aria-label="Chargement">
       <img class="splash-mark" src="icons/icon.svg" alt="">
@@ -1042,7 +1044,6 @@
     <p class="hors-ligne-verif">On vérifie la connexion <span class="splash-dots"><span></span><span></span><span></span></span></p>
     <button type="button" id="hors-ligne-reessayer" class="primary">Réessayer</button>
   </div>
-  <p id="hors-ligne-bandeau" class="hors-ligne-bandeau" role="status" hidden>Pas de connexion pour le moment. Papote reprend toute seule dès son retour.</p>
   <script>
     (() => {
       const ecran = document.getElementById('hors-ligne');
