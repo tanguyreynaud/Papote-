@@ -13,7 +13,7 @@
 <meta property="og:locale" content="fr_FR">
 <meta property="og:url" content="https://mapapote.fr/">
 <meta property="og:title" content="Papote · Toute la famille près de Mamie, sans qu'elle touche à rien">
-<meta property="og:description" content="Photos, vidéos, messages et appels vidéo arrivent tout seuls sur une tablette simple, prêtée et prête à l'emploi.">
+<meta property="og:description" content="Photos, vidéos, messages et appels vidéo arrivent tout seuls sur une tablette simple, prêtée et prête à l'emploi. 20 € par mois, sans engagement.">
 <meta property="og:image" content="https://mapapote.fr/mamie.jpg">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
@@ -21,7 +21,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&display=swap">
 <style>
-/* Mise en page : une colonne de lecture large, des sections pleine largeur alternées, la tablette en vedette dans l'en-tête. */
+/* Mise en page pensée pour le téléphone d'abord : titre, prix et bouton dans le premier écran, puis la tablette, puis « ce que vous payez ». Les illustrations (tablette, téléphone) sont dessinées en HTML pour rester fidèles aux vrais écrans. */
 :root {
   --bg: #fdfaf5;
   --surface: #ffffff;
@@ -33,256 +33,220 @@
   --accent-strong: #3730a3;
   --accent-text: #ffffff;
   --accent-soft: #e8e6fd;
-  --warm: #4338ca;
-  --warm-soft: #e8e6fd;
-  --ok: #15803d;
-  --device: #f1eee9;
-  --screen: #ffffff;
-  --screen-text: #24212f;
+  --device: #1b1a22;
+  --bois: #d9c8ad;
+  --bois-fonce: #c4ad8c;
+  --feuille: #8fae8b;
+  --feuille-fonce: #6f8f6b;
   --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
   --body: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
   color-scheme: light;
 }
-
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font: 400 1.125rem/1.6 var(--body);
-  -webkit-font-smoothing: antialiased;
-}
+body { margin: 0; background: var(--bg); color: var(--text); font: 400 1.125rem/1.6 var(--body); -webkit-font-smoothing: antialiased; }
 img, svg { max-width: 100%; }
-a { color: var(--accent-strong); }
-a:focus-visible, button:focus-visible, summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+a { color: var(--accent-strong); text-decoration: none; }
+main a:not([class]), footer a:not([class]) { font-weight: 700; }
+a:focus-visible, button:focus-visible, summary:focus-visible, input:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
 h1, h2, h3 { font-family: var(--display); font-weight: 800; line-height: 1.1; text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
-h1 { font-size: clamp(2.3rem, 6vw, 3.9rem); }
-h2 { font-size: clamp(1.8rem, 4vw, 2.6rem); }
-h3 { font-size: 1.3rem; font-weight: 600; }
+h1 { font-size: clamp(2.2rem, 6vw, 3.6rem); }
+h2 { font-size: clamp(1.7rem, 4vw, 2.4rem); }
+h3 { font-size: 1.25rem; font-weight: 600; }
 p { margin: 0; }
-
-.wrap { width: 100%; max-width: 72rem; margin-inline: auto; padding-inline: 20px; }
-section { padding-block: clamp(3.5rem, 8vw, 6rem); }
+.wrap { width: 100%; max-width: 68rem; margin-inline: auto; padding-inline: 20px; }
+section { padding-block: clamp(3rem, 7vw, 5rem); }
 .band { background: var(--band); }
-.eyebrow { font-size: .85rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--warm); }
-.lead { font-size: 1.25rem; color: var(--muted); max-width: 38rem; }
-.section-head { display: grid; gap: .75rem; margin-bottom: 2.5rem; max-width: 42rem; }
-
+.eyebrow { font-size: .85rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--accent-strong); }
+.lead { font-size: 1.2rem; color: var(--muted); max-width: 36rem; }
+.section-head { display: grid; gap: .75rem; margin-bottom: 2rem; max-width: 42rem; }
+.coche::before { content: "✓ "; color: var(--accent); font-weight: 800; }
 /* Boutons */
-.btn {
-  display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
-  min-height: 3.25rem; padding: .75rem 1.5rem;
-  font: 700 1.05rem/1.2 var(--body); text-decoration: none;
-  border-radius: 999px; border: 2px solid transparent; cursor: pointer;
-  transition: background-color .15s, color .15s, border-color .15s;
-}
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; min-height: 3.25rem; padding: .75rem 1.5rem; font: 700 1.05rem/1.2 var(--body); border-radius: 999px; border: 2px solid transparent; cursor: pointer; transition: background-color .15s, color .15s, border-color .15s; }
 .btn-primary { background: var(--accent); color: var(--accent-text); }
 .btn-primary:hover { background: var(--accent-strong); }
 .btn-ghost { background: transparent; color: var(--text); border-color: var(--line); }
 .btn-ghost:hover { border-color: var(--accent); }
-
-/* Barre du haut */
-.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 10; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
-.top .wrap { display: flex; align-items: center; justify-content: space-between; gap: 1rem; min-height: 4rem; }
-.brand { display: flex; align-items: center; gap: .6rem; font: 800 1.45rem/1 var(--display); color: var(--text); text-decoration: none; }
-.brand img { width: 2rem; height: 2rem; }
-.top nav { display: flex; align-items: center; gap: 1.5rem; }
-.top nav a { color: var(--muted); text-decoration: none; font-weight: 700; font-size: 1rem; }
+/* Barre du haut : le nom reste lisible sur téléphone, un seul bouton. */
+.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 10; background: color-mix(in srgb, var(--bg) 90%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+.top .wrap { display: flex; align-items: center; justify-content: space-between; gap: 1rem; min-height: 3.75rem; }
+.brand { display: flex; align-items: center; gap: .55rem; font: 800 1.4rem/1 var(--display); color: var(--text); }
+.brand img { width: 1.9rem; height: 1.9rem; }
+.top nav { display: flex; align-items: center; gap: 1.4rem; }
+.top nav a { color: var(--muted); font-weight: 700; font-size: 1rem; }
 .top nav a:hover { color: var(--text); }
-.top nav a.client { white-space: nowrap; display: inline-flex; align-items: center; min-height: 2.6rem; padding: .5rem 1.1rem; border: 2px solid var(--accent); border-radius: 999px; color: var(--accent-strong); font-size: .95rem; }
-.top nav a.client:hover { background: var(--accent-soft); color: var(--accent-strong); }
-@media (max-width: 440px) { .top nav { gap: .5rem; } .top nav a.client, .top nav .btn { padding: .45rem .8rem; font-size: .9rem; } .brand { font-size: 0; gap: 0; } .brand img { width: 2.2rem; height: 2.2rem; } }
 .top nav .btn { min-height: 2.6rem; padding: .5rem 1.1rem; font-size: .95rem; color: var(--accent-text); }
 .top nav .btn:hover { color: var(--accent-text); }
-@media (max-width: 760px) { .top nav a:not(.btn):not(.client) { display: none; } }
-
+@media (max-width: 760px) { .top nav a:not(.btn) { display: none; } }
 /* En-tête */
-.hero { padding: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); min-height: min(calc(100vh - 4rem), 52rem); }
-.hero-text { display: grid; gap: 1.5rem; align-content: center; min-width: 0; padding: clamp(2.5rem, 6vw, 5rem) clamp(1.5rem, 4vw, 4rem) clamp(2.5rem, 6vw, 5rem) max(20px, calc((100vw - 72rem) / 2 + 20px)); }
-.hero-text h1 span { color: var(--warm); }
-.hero-actions { display: flex; flex-wrap: wrap; gap: .75rem; }
-.hero-note { font-size: 1rem; color: var(--muted); }
-.precommande { margin: .75rem 0 0; padding: .6rem .9rem; border-radius: 12px; background: var(--accent-soft, #e8e6fd); font-size: 1rem; }
+.hero { padding-block: clamp(2rem, 5vw, 4rem) 0; }
+.hero .wrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: clamp(2rem, 5vw, 4rem); align-items: center; }
+@media (max-width: 900px) { .hero .wrap { grid-template-columns: minmax(0, 1fr); } }
+.hero-text { display: grid; gap: 1.25rem; }
+.hero-text h1 span { color: var(--accent); }
+.hero-actions { display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; }
+.prix-ligne { display: flex; flex-wrap: wrap; gap: .3rem .5rem; align-items: baseline; font-weight: 700; font-size: 1.05rem; }
+.prix-ligne b { font: 800 1.6rem/1 var(--display); color: var(--accent-strong); }
+.prix-ligne span { flex-basis: 100%; color: var(--muted); font-weight: 400; }
+.rassure { display: flex; flex-wrap: wrap; gap: .4rem 1.25rem; color: var(--muted); font-size: .98rem; }
+.precommande { margin: 0; padding: .6rem .9rem; border-radius: 12px; background: var(--accent-soft); font-size: 1rem; }
 .precommande[hidden] { display: none; }
-.hero-photo { position: relative; margin: 0; min-width: 0; }
-picture { display: contents; }
-.hero-photo img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 45% 30%; background: var(--band); }
-@media (max-width: 900px) {
-  .hero { grid-template-columns: minmax(0, 1fr); min-height: 0; }
-  .hero-photo { order: -1; }
-  .hero-photo img { height: auto; aspect-ratio: 4 / 3; }
-  .hero-text { padding: 2rem 20px 3rem; }
-}
-.hero-card { position: absolute; left: 1.5rem; top: 1.5rem; max-width: 19rem; background: var(--surface); border-radius: 16px; padding: .9rem 1.1rem; box-shadow: 0 18px 40px -18px rgba(36, 33, 47, .45); display: grid; grid-template-columns: 2.4rem minmax(0, 1fr); gap: .75rem; align-items: center; font-size: 1rem; line-height: 1.35; }
-.hero-card .ic { width: 2.4rem; height: 2.4rem; border-radius: 50%; background: var(--warm-soft); color: var(--warm); display: grid; place-items: center; }
-.hero-card .ic svg { width: 1.2rem; height: 1.2rem; }
-.hero-card small { display: block; color: var(--muted); font-size: .9rem; }
-@media (max-width: 900px) { .hero-card { left: 1rem; top: 1rem; right: auto; max-width: 16rem; font-size: .92rem; padding: .7rem .9rem; } }
-.hero-photo figcaption.credit { font-size: .8rem; color: var(--muted); margin-top: .5rem; text-align: right; }
-
-/* Pourquoi */
-.why { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(1.5rem, 3vw, 2.5rem); }
-@media (max-width: 860px) { .why { grid-template-columns: minmax(0, 1fr); } }
-.why div { display: grid; gap: .6rem; align-content: start; }
-.why .ic { width: 3rem; height: 3rem; border-radius: 50%; background: var(--warm-soft); color: var(--warm); display: grid; place-items: center; }
-.why .ic svg { width: 1.5rem; height: 1.5rem; }
-.why p { color: var(--muted); }
-.quote { margin: clamp(2.5rem, 5vw, 3.5rem) 0 0; padding-left: 1.25rem; border-left: 4px solid var(--warm); font: 600 clamp(1.4rem, 3vw, 1.9rem)/1.3 var(--display); max-width: 44rem; }
-.quote span { display: block; margin-top: .6rem; font: 400 1.05rem/1.5 var(--body); color: var(--muted); }
-.show { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: clamp(2rem, 5vw, 4rem); align-items: center; margin-bottom: clamp(2.5rem, 5vw, 3.5rem); }
-@media (max-width: 900px) { .show { grid-template-columns: minmax(0, 1fr); } }
-
-/* Tablette dessinée : reprend l'écran d'accueil réel (heure, date, météo, photo). */
-.tablet { background: var(--device); padding: clamp(10px, 2vw, 16px); border-radius: clamp(18px, 3vw, 28px); border: 1px solid var(--line); box-shadow: 0 30px 60px -24px rgba(36, 33, 47, .3); max-width: 100%; }
-.screen { aspect-ratio: 16 / 10; background: var(--screen); color: var(--screen-text); display: grid; grid-template-columns: 38% 62%; overflow: hidden; border-radius: 6px; }
-.screen-left { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: .3em; padding: 4%; font-size: clamp(.6rem, 1.6vw, 1rem); text-align: center; }
-.clock { font: 800 4em/1 var(--display); font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
-.date { font-size: 1.25em; }
-.weather { display: flex; align-items: center; gap: .4em; font-size: 1.15em; margin-top: .4em; opacity: .9; }
-.weather svg { width: 1.6em; height: 1.6em; }
-.screen-photo { position: relative; min-width: 0; }
-.screen-photo img { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 22%; }
-.caption { position: absolute; left: 0; right: 0; bottom: 0; padding: 4% 5%; background: linear-gradient(transparent, rgba(0, 0, 0, .72)); color: #fff; font-size: clamp(.6rem, 1.5vw, .95rem); line-height: 1.3; }
-.caption b { display: block; font-size: .85em; opacity: .85; font-weight: 400; }
-
-/* Étapes */
+/* Scène : la tablette sur son support, posée sur un meuble, une plante à côté. */
+.scene { position: relative; margin: 0; padding: clamp(1.25rem, 3vw, 2rem) clamp(.75rem, 3vw, 1.5rem) 0; border-radius: 28px; background: var(--band); display: grid; grid-template-columns: minmax(0, 1fr); overflow: hidden; }
+.scene-rang { position: relative; z-index: 1; display: flex; align-items: flex-end; gap: 2%; }
+.plante { flex: 0 0 15%; max-width: 6rem; margin-bottom: -.2rem; }
+.appareil { flex: 1 1 auto; min-width: 0; display: grid; justify-items: center; }
+.tablet { width: 100%; background: var(--device); padding: clamp(6px, 1vw, 10px); border-radius: clamp(12px, 2vw, 18px); box-shadow: 0 24px 40px -20px rgba(36, 33, 47, .5); }
+.stand { height: 1.3rem; width: 36%; margin-top: -.1rem; background: linear-gradient(#e2d8c8, #c8bba7); border-radius: 0 0 10px 10px; }
+.meuble { position: relative; z-index: 0; height: clamp(2.5rem, 6vw, 3.5rem); margin: 0 -1% 0; border-top: 10px solid var(--bois); box-shadow: inset 0 6px 0 var(--bois-fonce); border-radius: 4px 4px 0 0; }
+.scene figcaption { color: var(--muted); font-size: .95rem; text-align: center; padding: .9rem 1rem 1.1rem; }
+.screen { aspect-ratio: 16 / 10; background: #fdfaf5; color: var(--text); display: grid; grid-template-columns: 44% 56%; overflow: hidden; border-radius: 8px; font-size: clamp(.45rem, .9vw, .66rem); }
+@media (max-width: 900px) { .screen { font-size: clamp(.45rem, 1.9vw, .72rem); } }
+.screen-left { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: .25em; padding: 3% 4%; text-align: center; min-width: 0; }
+.sos { font-weight: 800; color: #b4233b; border: 1.5px solid #f1c3cb; background: #fff; border-radius: 999px; padding: .15em .9em; }
+.clock { font: 800 3.8em/1 var(--display); letter-spacing: -.03em; margin-top: .1em; font-variant-numeric: tabular-nums; }
+.date { font-size: 1.35em; font-weight: 700; color: var(--muted); }
+.weather { display: flex; align-items: center; gap: .45em; margin-top: .2em; text-align: left; }
+.weather b { font: 800 1.8em/1 var(--display); }
+.weather small { display: block; font-size: .85em; color: var(--muted); }
+.rappel { margin-top: .5em; background: var(--accent-soft); border-radius: 999px; padding: .35em 1em; font-size: .9em; text-align: left; }
+.rappel b { display: block; color: var(--accent-strong); font-size: .8em; }
+.appeler { margin-top: .6em; background: #1f7a3a; color: #fff; font: 800 1.35em/1 var(--display); padding: .55em 1.6em; border-radius: 999px; }
+.screen-photo { position: relative; }
+.screen-photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 20%; }
+.screen-photo .qui { position: absolute; left: 4%; bottom: 4%; color: #fff; font-weight: 800; font-size: 1.1em; text-shadow: 0 1px 6px rgba(0, 0, 0, .6); display: flex; align-items: center; gap: .4em; }
+.screen-photo .qui i { width: 1.6em; height: 1.6em; border-radius: 50%; background: var(--accent); display: inline-grid; place-items: center; font-style: normal; font-size: .9em; }
+/* Ce que vous payez : trois moments, dans l'ordre du temps. */
+.payer { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+@media (max-width: 760px) { .payer { grid-template-columns: minmax(0, 1fr); } }
+.moment { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 1.25rem 1.4rem; display: grid; gap: .3rem; align-content: start; }
+.moment .quand { font-size: .85rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--accent-strong); }
+.moment .combien { font: 800 2.2rem/1 var(--display); font-variant-numeric: tabular-nums; }
+.moment .combien small { font: 400 1rem/1.2 var(--body); color: var(--muted); }
+.moment p { color: var(--muted); font-size: 1rem; }
+.payer-note { margin-top: 1.25rem; color: var(--muted); font-size: 1rem; }
+/* Comment ça marche : trois étapes, chacune avec son écran dessiné. */
 .steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.5rem; counter-reset: step; }
-.step { display: grid; gap: .6rem; align-content: start; padding-top: 1.25rem; border-top: 3px solid var(--accent); }
-.step::before { counter-increment: step; content: "Étape " counter(step); font-size: .85rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--accent-strong); }
-.step p { color: var(--muted); }
 @media (max-width: 760px) { .steps { grid-template-columns: minmax(0, 1fr); } }
-
-/* Deux publics */
+.step { display: grid; gap: .6rem; align-content: start; }
+.step::before { counter-increment: step; content: counter(step); width: 2.4rem; height: 2.4rem; border-radius: 50%; background: var(--accent); color: #fff; display: grid; place-items: center; font: 800 1.2rem/1 var(--display); }
+.step p { color: var(--muted); }
+.step { grid-template-rows: auto auto auto minmax(0, 1fr); }
+.step .visuel { margin: .5rem 0 0; background: var(--band); border-radius: 18px; padding: 1.25rem 1rem; display: grid; place-items: center; min-height: 19rem; overflow: hidden; }
+/* Téléphone dessiné */
+.tel { width: 10.5rem; aspect-ratio: 9 / 17; background: var(--device); border-radius: 1.6rem; padding: .38rem; box-shadow: 0 16px 30px -16px rgba(36, 33, 47, .55); }
+.tel-ecran { position: relative; height: 100%; background: var(--bg); border-radius: 1.25rem; overflow: hidden; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; font-size: .62rem; line-height: 1.3; }
+.tel-bas { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--line); background: var(--surface); padding: .35rem 0 .5rem; font-size: .85em; color: var(--muted); text-align: center; }
+.tel-bas b { color: var(--accent-strong); }
+.tel-haut { display: flex; justify-content: space-between; align-items: center; padding: .9rem .7rem .4rem; font-weight: 800; font-family: var(--display); font-size: 1.1em; }
+.tel-haut small { font: 700 .8em var(--body); color: var(--accent-strong); }
+.tel-corps { padding: 0 .6rem .6rem; display: grid; gap: .45rem; align-content: start; }
+.tel-corps .apercu { aspect-ratio: 4 / 3; border-radius: .6rem; overflow: hidden; background: var(--line); }
+.tel-corps .apercu img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 25%; display: block; }
+.tel-corps .champ { border: 1.5px solid var(--line); background: var(--surface); border-radius: .5rem; padding: .35rem .5rem; color: var(--text); }
+.tel-corps .champ small { display: block; color: var(--muted); font-size: .85em; }
+.tel-corps .bouton { background: var(--accent); color: #fff; font-weight: 700; text-align: center; border-radius: 999px; padding: .45rem; }
+.tel-corps .bouton.gris { background: var(--surface); color: var(--text); border: 1.5px solid var(--line); }
+/* Téléphone en appel vidéo */
+.tel-video { background: #1b1a22; display: block; }
+.tel-video img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 60% 20%; }
+.tel-video .moi { position: absolute; top: .9rem; right: .5rem; width: 2.4rem; height: 3.2rem; border-radius: .4rem; background: var(--accent-soft); border: 2px solid #fff; display: grid; place-items: center; color: var(--accent-strong); font-weight: 800; }
+.tel-video .nom { position: absolute; left: .6rem; top: 1rem; color: #fff; font-weight: 800; font-family: var(--display); font-size: 1.3em; text-shadow: 0 1px 6px rgba(0, 0, 0, .6); }
+.tel-video .nom small { display: block; font: 400 .75em var(--body); opacity: .9; }
+.tel-video .raccrocher { position: absolute; left: 50%; bottom: .9rem; transform: translateX(-50%); width: 2.4rem; height: 2.4rem; border-radius: 50%; background: #d63b3b; display: grid; place-items: center; }
+.tel-video .raccrocher svg { width: 1.3rem; height: 1.3rem; color: #fff; }
+/* Tablette qui reçoit un envoi (écran « Nouvel envoi » réel : le mot à gauche, la photo à droite). */
+.tab { width: 100%; max-width: 22rem; background: var(--device); border-radius: 12px; padding: 5px; box-shadow: 0 16px 30px -16px rgba(36, 33, 47, .55); }
+.tab-ecran { aspect-ratio: 16 / 10; border-radius: 6px; overflow: hidden; background: var(--bg); display: grid; grid-template-columns: 42% 58%; font-size: .66rem; }
+.tab-mot { padding: 7% 6%; display: flex; flex-direction: column; justify-content: space-between; gap: .4rem; }
+.tab-mot p { font: 700 1.55em/1.25 var(--display); color: var(--accent-strong); }
+.tab-mot .de { font-size: 1em; color: var(--muted); }
+.tab-mot .ok { justify-self: start; background: var(--accent); color: #fff; font-weight: 800; border-radius: 999px; padding: .35em 1.4em; font-size: 1.2em; align-self: flex-start; }
+.tab-photo img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 20%; display: block; }
+/* Pour elle, pour vous */
 .split { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(2rem, 5vw, 4rem); }
 @media (max-width: 860px) { .split { grid-template-columns: minmax(0, 1fr); } }
-.side { display: grid; gap: 1.25rem; align-content: start; min-width: 0; }
-.side h2 { font-size: clamp(1.6rem, 3.4vw, 2.2rem); }
-.feats { list-style: none; margin: 0; padding: 0; display: grid; gap: 1rem; }
-.feats li { display: grid; grid-template-columns: 2.5rem minmax(0, 1fr); gap: .9rem; align-items: start; }
-.feats .ic { width: 2.5rem; height: 2.5rem; border-radius: 12px; background: var(--accent-soft); color: var(--accent-strong); display: grid; place-items: center; }
-.feats .ic svg { width: 1.35rem; height: 1.35rem; }
+.side { display: grid; gap: 1.1rem; align-content: start; min-width: 0; }
+.side h2 { font-size: clamp(1.5rem, 3.2vw, 2rem); }
+.feats { list-style: none; margin: 0; padding: 0; display: grid; gap: .9rem; }
+.feats li { display: grid; grid-template-columns: 2.4rem minmax(0, 1fr); gap: .8rem; align-items: start; }
+.feats .ic { width: 2.4rem; height: 2.4rem; border-radius: 12px; background: var(--accent-soft); color: var(--accent-strong); display: grid; place-items: center; }
+.feats .ic svg { width: 1.3rem; height: 1.3rem; }
 .feats b { display: block; }
-.feats span { color: var(--muted); font-size: 1.02rem; }
-
+.feats span { color: var(--muted); font-size: 1rem; }
+/* Qui est derrière Papote */
+.qui-carte { display: grid; grid-template-columns: 9rem minmax(0, 1fr); gap: 1.75rem; align-items: start; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: clamp(1.5rem, 3vw, 2.25rem); }
+@media (max-width: 640px) { .qui-carte { grid-template-columns: minmax(0, 1fr); } }
+.portrait { width: 9rem; height: 9rem; border-radius: 50%; object-fit: cover; background: var(--accent-soft); color: var(--accent-strong); display: grid; place-items: center; text-align: center; font-size: .85rem; line-height: 1.25; padding: 1rem; }
+.qui-texte { display: grid; gap: .9rem; }
+.qui-texte blockquote { margin: 0; font: 600 clamp(1.15rem, 2.2vw, 1.4rem)/1.4 var(--display); }
+.faits { list-style: none; margin: 0; padding: 0; display: grid; gap: .4rem; color: var(--muted); font-size: 1rem; }
 /* Tarifs */
-.plans { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.5rem; }
-@media (max-width: 760px) { .plans { grid-template-columns: minmax(0, 1fr); } }
-.plan { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: clamp(1.5rem, 3vw, 2.25rem); display: grid; gap: 1.25rem; align-content: start; }
-.plan.featured { border: 2px solid var(--accent); }
-.plan-head { display: grid; gap: .35rem; }
-.plan-head p { color: var(--muted); }
-.tag { justify-self: start; font-size: .8rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; background: var(--accent-soft); color: var(--accent-strong); padding: .25rem .7rem; border-radius: 999px; }
-.price { display: flex; align-items: baseline; gap: .4rem; font-family: var(--display); }
-.price strong { font-size: clamp(3rem, 7vw, 4rem); font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
-.price span { font-family: var(--body); color: var(--muted); font-size: 1.05rem; }
-.plan-head .mes { margin: .4rem 0 0; display: inline-block; padding: .35rem .8rem; border-radius: 10px; background: var(--accent-soft); color: var(--accent-strong); font-size: 1.05rem; }
-.plan-head .mes b { font-size: 1.2rem; }
-.choices { display: grid; gap: 0; border-top: 1px solid var(--line); }
-.choice { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .25rem 1rem; padding-block: .9rem; border-bottom: 1px solid var(--line); align-items: baseline; }
-.choice b { font-size: 1.02rem; }
-.choice small { grid-column: 1; color: var(--muted); font-size: .95rem; }
-.choice .amount { grid-row: 1 / span 2; grid-column: 2; font: 800 1.35rem/1.1 var(--display); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.choice-btn { grid-column: 1 / -1; min-height: 2.75rem; margin-top: .5rem; }
-.choice .amount em { display: block; font: 400 .85rem/1.2 var(--body); color: var(--muted); font-style: normal; }
-.included { list-style: none; padding: 0; margin: 0; display: grid; gap: .5rem; }
-.included li { display: grid; grid-template-columns: 1.4rem minmax(0, 1fr); gap: .6rem; font-size: 1.02rem; }
-.included svg { width: 1.2rem; height: 1.2rem; color: var(--ok); margin-top: .2rem; }
 .offre { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(1.5rem, 3vw, 2.5rem); background: var(--surface); border: 2px solid var(--accent); border-radius: 20px; padding: clamp(1.5rem, 3vw, 2.25rem); }
 @media (max-width: 760px) { .offre { grid-template-columns: minmax(0, 1fr); } }
-.offre-base { display: grid; gap: 1.25rem; align-content: start; }
+.offre-base { display: grid; gap: 1rem; align-content: start; }
+.price { display: flex; align-items: baseline; flex-wrap: wrap; gap: .4rem; font-family: var(--display); }
+.price strong { font-size: clamp(3rem, 7vw, 4rem); font-weight: 800; line-height: 1; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.price span { font-family: var(--body); color: var(--muted); font-size: 1.05rem; }
+.mes { color: var(--muted); font-size: 1rem; }
+.mes b { color: var(--text); }
+.included { list-style: none; padding: 0; margin: 0; display: grid; gap: .45rem; }
+.included li { font-size: 1.02rem; }
 .offre-options { display: grid; gap: .75rem; align-content: start; }
-.option { display: grid; grid-template-columns: 1.6rem minmax(0, 1fr) auto; gap: .25rem .9rem; align-items: start; padding: 1rem 1.1rem; border: 2px solid var(--line); border-radius: 16px; cursor: pointer; }
+.offre-options h3 { font-size: 1.05rem; color: var(--muted); font-weight: 700; }
+.option { display: grid; grid-template-columns: 1.6rem minmax(0, 1fr) auto; gap: .2rem .8rem; align-items: start; padding: .9rem 1rem; border: 2px solid var(--line); border-radius: 16px; cursor: pointer; }
 .option:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
 .option input { width: 1.4rem; height: 1.4rem; margin: .15rem 0 0; accent-color: var(--accent); }
 .option b { display: block; font-size: 1.05rem; }
 .option small { display: block; color: var(--muted); font-size: .95rem; }
-.option-prix { font: 800 1.25rem/1.1 var(--display); text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.option-prix em { display: block; font: 400 .85rem/1.2 var(--body); color: var(--muted); font-style: normal; }
+.option-prix { font: 800 1.25rem/1.1 var(--display); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .offre-btn { justify-self: stretch; margin-top: .5rem; }
-.bandeau { margin: 0; padding: .5rem .75rem; background: var(--accent); color: var(--accent-text); text-align: center; font-weight: 700; font-size: .92rem; }
-.plans-note { margin-top: 1.5rem; color: var(--muted); font-size: 1rem; max-width: 46rem; }
-
-/* FAQ */
-.avis-liste { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); gap: 1.25rem; }
-.avis-carte { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 1.5rem; display: grid; gap: .75rem; align-content: start; }
-.avis-carte blockquote { margin: 0; font-size: 1.1rem; }
-.avis-carte figcaption { display: grid; color: var(--muted); font-size: 1rem; }
-.avis-carte figcaption b { color: var(--text); }
-.avis-note { color: var(--accent); letter-spacing: .1em; font-size: 1.1rem; }
-.faq { display: grid; gap: .75rem; max-width: 50rem; }
-.faq details { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
-.faq summary { cursor: pointer; list-style: none; padding: 1.1rem 1.25rem; font-weight: 700; font-size: 1.1rem; display: flex; justify-content: space-between; gap: 1rem; align-items: center; }
-.faq summary::-webkit-details-marker { display: none; }
-.faq summary::after { content: "+"; font: 600 1.6rem/1 var(--display); color: var(--accent); flex: none; transition: transform .2s; }
-.faq details[open] summary::after { transform: rotate(45deg); }
-.faq details p { padding: 0 1.25rem 1.25rem; color: var(--muted); }
-
-/* Contact */
-.compare-cadre { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; }
-.compare { width: 100%; border-collapse: collapse; font-size: 1.05rem; }
-.compare th, .compare td { padding: .85rem 1rem; text-align: center; border-bottom: 1px solid var(--line); }
-.compare tbody tr:last-child th, .compare tbody tr:last-child td { border-bottom: 0; }
-.compare tbody th { text-align: left; font-weight: 400; width: 46%; }
-.compare thead th { font-family: var(--display); font-size: 1rem; color: var(--muted); }
-.compare thead th.moi { color: var(--accent); font-size: 1.15rem; }
-.compare .oui { color: var(--accent); font-weight: 800; font-size: 1.3rem; }
-.compare .non { color: var(--muted); }
-.compare td:nth-child(2) { background: var(--accent-soft); }
-@media (max-width: 560px) { .compare { font-size: .95rem; table-layout: fixed; } .compare tbody th, .compare thead td { width: 44%; } .compare th, .compare td { padding: .7rem .4rem; } .compare tbody th { padding-left: .8rem; } .compare thead th { font-size: .78rem; hyphens: auto; } }
-.histoire { margin: clamp(2.5rem, 5vw, 3.5rem) 0 0; display: grid; gap: .75rem; max-width: 44rem; }
-.histoire blockquote { margin: 0; padding-left: 1.25rem; border-left: 4px solid var(--warm); font: 600 clamp(1.25rem, 2.6vw, 1.6rem)/1.4 var(--display); }
-.histoire figcaption { padding-left: 1.5rem; color: var(--muted); }
-.lancement .wrap { display: grid; gap: 1.5rem; max-width: 50rem; }
-.attente { display: grid; gap: 1rem; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 1.5rem; }
-.attente label { display: grid; gap: .35rem; font-weight: 700; }
-.attente input[name="prenom"], .attente input[type="email"] { font: inherit; font-weight: 400; color: var(--text); min-height: 3rem; padding: .5rem .75rem; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); }
-.attente .muted { font-weight: 400; color: var(--muted); }
-.attente .attente-accord { display: flex; gap: .6rem; align-items: flex-start; font-weight: 400; color: var(--muted); cursor: pointer; }
-.attente-accord input { width: 1.3rem; height: 1.3rem; margin-top: .2rem; flex: none; accent-color: var(--accent); }
+.plans-note { margin-top: 1.25rem; color: var(--muted); font-size: 1rem; max-width: 46rem; }
+/* Liste d'attente : l'e-mail et le bouton sur une ligne. */
+.lancement .wrap { display: grid; gap: 1.25rem; max-width: 46rem; }
+.attente { display: grid; gap: .9rem; }
+.attente .ligne { display: flex; gap: .6rem; flex-wrap: wrap; }
+.attente input[type="email"] { flex: 1 1 14rem; min-width: 0; font: inherit; color: var(--text); min-height: 3.25rem; padding: .5rem 1rem; border: 2px solid var(--line); border-radius: 999px; background: var(--surface); }
+.attente .accord { display: flex; gap: .6rem; align-items: flex-start; color: var(--muted); font-size: .98rem; cursor: pointer; }
+.attente .accord input { width: 1.3rem; height: 1.3rem; margin-top: .2rem; flex: none; accent-color: var(--accent); }
 .attente-msg { margin: 0; font-weight: 700; }
 .attente [hidden] { display: none; }
-.contact { background: var(--accent); color: var(--accent-text); }
-.contact .wrap { display: grid; gap: 1.5rem; justify-items: start; max-width: 50rem; }
-.contact p { font-size: 1.2rem; opacity: .92; max-width: 38rem; }
-.contact .btn-primary { background: var(--accent-text); color: var(--accent); }
-.contact .btn-primary:hover { background: var(--accent-text); color: var(--accent-strong); }
-.mail { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; font-size: 1rem; }
-
-footer { padding-block: 2.5rem; color: var(--muted); font-size: .95rem; }
-footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 1rem; }
+/* FAQ : huit questions visibles, les autres sur demande. */
+.faq { display: grid; gap: .6rem; max-width: 48rem; }
+.faq details { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
+.faq summary { cursor: pointer; list-style: none; padding: 1rem 1.2rem; font-weight: 700; font-size: 1.08rem; display: flex; justify-content: space-between; gap: 1rem; align-items: center; }
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::after { content: "+"; font: 600 1.6rem/1 var(--display); color: var(--accent); flex: none; }
+.faq details[open] summary::after { content: "–"; }
+.faq details p { padding: 0 1.2rem 1.2rem; color: var(--muted); }
+.faq-plus { background: none; border: 0; color: var(--accent-strong); font: 700 1.05rem var(--body); cursor: pointer; padding: .5rem 0; text-align: left; }
+.faq .suite { display: contents; }
+.faq:not(.ouverte) .suite { display: none; }
+.faq.ouverte .faq-plus { display: none; }
+/* Pied */
+footer { padding-block: 2.5rem; color: var(--muted); font-size: .95rem; border-top: 1px solid var(--line); }
+footer .wrap { display: grid; gap: .6rem; }
+footer .liens { display: flex; flex-wrap: wrap; gap: .5rem 1.25rem; }
 footer a { color: var(--muted); }
-/* Pas de soulignement des liens (Tanguy, 2026-10-22) : ils restent repérables par leur couleur et le gras. */
-a { text-decoration: none; }
-main a:not([class]), footer a:not([class]), .rassure a { font-weight: 700; }
+/* Bulle du chat (chat-support.js) : sur téléphone, un simple rond pour ne pas recouvrir le texte. */
+@media (max-width: 760px) { body .ps-bouton span { display: none; } body .ps-bouton { padding: .95rem; } }
 </style>
 </head>
 <body>
-
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <defs>
     <symbol id="i-photo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="m21 16-5-5-8 8"/></symbol>
-    <symbol id="i-video" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6" width="13" height="12" rx="2"/><path d="m15.5 10.5 6-3.5v10l-6-3.5"/></symbol>
     <symbol id="i-call" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="9" r="4"/><path d="M4.5 20c1.2-3.5 4-5 7.5-5s6.3 1.5 7.5 5"/><path d="M18 3.5a6 6 0 0 1 2 4.5M6 3.5A6 6 0 0 0 4 8"/></symbol>
-    <symbol id="i-message" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H9l-5 4z"/></symbol>
     <symbol id="i-agenda" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/></symbol>
     <symbol id="i-hand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21a8 8 0 1 1 0-16 8 8 0 0 1 0 16z"/><path d="M9 13.5c.8 1 1.8 1.5 3 1.5s2.2-.5 3-1.5M9.5 10h.01M14.5 10h.01"/></symbol>
     <symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></symbol>
     <symbol id="i-text" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19 9 6l5 13M5.8 15h6.4M15 19l3-8 3 8M15.8 17h4.4"/></symbol>
-    <symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/></symbol>
-    <symbol id="i-signal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19v-3M10 19v-6M15 19V9M20 19V5"/></symbol>
-    <symbol id="i-phone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6.5" y="2.5" width="11" height="19" rx="2.5"/><path d="M11 18.5h2"/></symbol>
     <symbol id="i-sliders" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></symbol>
     <symbol id="i-bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></symbol>
-    <symbol id="i-people" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3 19.5c.8-3 3.2-4.5 6-4.5s5.2 1.5 6 4.5"/><circle cx="17" cy="9" r="2.5"/><path d="M17 14.5c2 0 3.5 1.2 4 3.5"/></symbol>
-    <symbol id="i-heart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7.5-4.6-7.5-10A4.3 4.3 0 0 1 12 7.4 4.3 4.3 0 0 1 19.5 10c0 5.4-7.5 10-7.5 10z"/></symbol>
-    <symbol id="i-chat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h11v8H8l-4 3z"/><path d="M15 9h5v8l-3-2.5h-6V13"/></symbol>
-    <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+    <symbol id="i-raccrocher" viewBox="0 0 24 24" fill="currentColor"><path d="M12 9c-3.5 0-6.6 1-9 2.8-.6.5-.8 1.3-.4 2l1.2 2c.4.6 1.1.8 1.8.5l2.6-1.2c.5-.2.8-.8.8-1.3v-1.6c1-.3 2-.5 3-.5s2 .2 3 .5v1.6c0 .5.3 1.1.8 1.3l2.6 1.2c.7.3 1.4.1 1.8-.5l1.2-2c.4-.7.2-1.5-.4-2C18.6 10 15.5 9 12 9z"/></symbol>
   </defs>
 </svg>
-
-<p class="bandeau">🚀 Lancement très bientôt · 🚚 Livraison offerte · ✨ 30 jours pour changer d'avis</p>
 <header class="top">
   <div class="wrap">
     <a class="brand" href="#"><img src="icon.svg" alt="">Papote</a>
@@ -290,101 +254,137 @@ main a:not([class]), footer a:not([class]), .rassure a { font-weight: 700; }
       <a href="#fonctionnement">Comment ça marche</a>
       <a href="#tarifs">Tarifs</a>
       <a href="#questions">Questions</a>
-      <a class="client" href="https://app.mapapote.fr">Espace client</a>
+      <a href="https://app.mapapote.fr">Espace client</a>
       <a class="btn btn-primary js-commander" href="#lancement">Être prévenu</a>
     </nav>
   </div>
 </header>
-
 <main>
   <section class="hero">
+    <div class="wrap">
       <div class="hero-text">
         <p class="eyebrow">Zéro clic pour Mamie</p>
         <h1>Toute la famille près de Mamie. <span>Sans qu'elle touche à rien.</span></h1>
-        <p class="lead">Photos des petits, mots doux, appels vidéo : tout arrive tout seul sur sa tablette. Pas de bouton à chercher, pas de mot de passe. Elle regarde, elle sourit, elle vous voit.</p>
+        <p class="lead">Les photos des petits, les mots doux et les appels vidéo arrivent tout seuls sur sa tablette. Elle regarde, elle sourit, elle vous voit.</p>
+        <p class="prix-ligne"><b>20 €</b> par mois<span>Sans engagement · tablette prêtée · livraison offerte</span></p>
         <div class="hero-actions">
-          <a class="btn btn-primary js-commander" href="#lancement">Être prévenu</a>
+          <a class="btn btn-primary js-commander" href="#lancement">Être prévenu du lancement</a>
           <a class="btn btn-ghost" href="#fonctionnement">Comment ça marche</a>
         </div>
-        <p class="hero-note">60 € à la commande, puis 20 € par mois, payés une fois le mois écoulé. Sans engagement, tablette prêtée.</p>
+        <p class="rassure"><span class="coche">30 jours pour changer d'avis</span><span class="coche">Préparée et vérifiée à Lyon</span></p>
         <p class="precommande js-precommande" hidden>Je prépare et vérifie chaque tablette moi-même, une par une. En ce moment, la vôtre est prête sous 7 à 10 jours ouvrés, puis Mondial Relay la livre en 3 à 5 jours ouvrés.</p>
         <p class="precommande js-attente-longue" hidden>Beaucoup de commandes en ce moment : je prépare et vérifie chaque tablette moi-même, une par une, à Lyon. La vôtre part sous 3 à 4 semaines, puis Mondial Relay la livre en 3 à 5 jours ouvrés. Rien de plus n'est prélevé avant la réception, et vous pouvez annuler à tout moment avant l'envoi : les 60 € vous sont remboursés tout de suite.</p>
       </div>
-
-      <figure class="hero-photo">
-        <picture><source type="image/webp" srcset="mamie.webp"><img src="mamie.jpg" alt="Une grand-mère sourit en regardant sa tablette" width="1365" height="768" fetchpriority="high"></picture>
-        <div class="hero-card" aria-hidden="true">
-          <span class="ic"><svg><use href="#i-heart"/></svg></span>
-          <p>Nouvelle photo de Julie<small>il y a 2 minutes</small></p>
+      <figure class="scene">
+        <div class="scene-rang">
+          <svg class="plante" viewBox="0 0 100 150" aria-hidden="true">
+            <path d="M50 120C30 115 18 95 22 70c15 2 28 18 28 50z" fill="var(--feuille)"/>
+            <path d="M50 120c20-5 32-25 28-50-15 2-28 18-28 50z" fill="var(--feuille-fonce)"/>
+            <path d="M50 122c-2-30 4-55 18-72 4 20-2 48-18 72z" fill="var(--feuille)"/>
+            <path d="M50 122c2-30-4-55-18-72-4 20 2 48 18 72z" fill="var(--feuille-fonce)"/>
+            <path d="M28 118h44l-5 30H33z" fill="#c9a27e"/>
+            <path d="M25 112h50v10H25z" fill="#b88b66"/>
+          </svg>
+          <div class="appareil">
+            <div class="tablet" role="img" aria-label="La tablette Papote sur son support : l'heure, la date, la météo, le prochain rappel, le bouton Appeler et la dernière photo reçue">
+              <div class="screen" aria-hidden="true">
+                <div class="screen-left">
+                  <span class="sos">♥ SOS famille</span>
+                  <div class="clock" id="demo-clock">10:30</div>
+                  <div class="date" id="demo-date">Lundi 26 octobre</div>
+                  <div class="weather"><b>14°</b><span>Plutôt ensoleillé<small>Demain : petite pluie, 13°</small></span></div>
+                  <div class="rappel"><b>Tout à l'heure, à 12h00</b>Prendre le cachet du midi</div>
+                  <div class="appeler">📞 Appeler</div>
+                </div>
+                <div class="screen-photo">
+                  <picture><source type="image/webp" srcset="bebe.webp"><img src="bebe.jpg" alt="" width="900" height="1350" fetchpriority="high"></picture>
+                  <span class="qui"><i>J</i>Julie, aujourd'hui</span>
+                </div>
+              </div>
+            </div>
+            <div class="stand"></div>
+          </div>
         </div>
+        <div class="meuble"></div>
+        <figcaption>L'écran d'accueil, tel qu'elle le voit : l'heure, la météo, le prochain rappel et la dernière photo reçue.</figcaption>
       </figure>
+    </div>
+
   </section>
 
-  <section class="band">
+  <section class="band" id="payer">
     <div class="wrap">
       <div class="section-head">
-        <p class="eyebrow">Pourquoi Papote</p>
-        <h2>Le lien avec ceux qu'on aime, c'est ce qui fait le plus de bien.</h2>
-        <p class="lead">Avec l'âge, les journées peuvent devenir longues et silencieuses. Papote remet la famille au cœur de son quotidien.</p>
+        <p class="eyebrow">Ce que vous payez</p>
+        <h2>Trois moments, rien de caché.</h2>
       </div>
-      <div class="why">
-        <div>
-          <span class="ic"><svg><use href="#i-heart"/></svg></span>
-          <h3>Moins seule, chaque jour</h3>
-          <p>Un visage, une voix, une photo qui arrive : elle sent que la famille pense à elle, même quand personne ne peut passer.</p>
+      <div class="payer">
+        <div class="moment">
+          <span class="quand">À la commande</span>
+          <span class="combien">60 € <small>une seule fois</small></span>
+          <p>La mise en service : la tablette arrive prête, reliée à votre famille, avec la livraison offerte.</p>
         </div>
-        <div>
-          <span class="ic"><svg><use href="#i-photo"/></svg></span>
-          <h3>Des moments partagés</h3>
-          <p>Les premiers pas, le gâteau d'anniversaire, les vacances à la mer : elle les vit avec vous, le jour même, et pas trois mois plus tard.</p>
+        <div class="moment">
+          <span class="quand">À la réception</span>
+          <span class="combien">0 €</span>
+          <p>Vous avez 30 jours pour changer d'avis : vous renvoyez la tablette avec l'étiquette offerte et les 60 € vous sont remboursés.</p>
         </div>
-        <div>
-          <span class="ic"><svg><use href="#i-chat"/></svg></span>
-          <h3>Des choses à se raconter</h3>
-          <p>Au prochain appel, elle a mille questions sur ce qu'elle a vu. Les conversations repartent toutes seules.</p>
+        <div class="moment">
+          <span class="quand">Chaque fin de mois</span>
+          <span class="combien">20 € <small>ou 30 € avec internet inclus</small></span>
+          <p>Payés une fois le mois écoulé, par prélèvement. Sans engagement : vous arrêtez quand vous voulez depuis l'appli.</p>
         </div>
       </div>
-      <p class="quote">« Rien ne vaut le sourire de ses petits-enfants. »<span>Des nouvelles de la famille, tous les jours.</span></p>
+      <p class="payer-note">La tablette est prêtée pendant tout l'abonnement et nous revient à la fin. Pas de caution.</p>
     </div>
   </section>
 
   <section id="fonctionnement">
     <div class="wrap">
-      <div class="show">
-        <div class="section-head" style="margin-bottom:0">
-          <p class="eyebrow">Comment ça marche</p>
-          <h2>Toute la famille partage, votre proche regarde.</h2>
-          <p class="lead">Sur la tablette, un seul écran : l'heure, la date, la météo et les dernières nouvelles de la famille.</p>
-        </div>
-        <figure class="tablet" style="margin:0" aria-label="L'écran d'accueil de la tablette Papote : l'heure, la date, la météo et la dernière photo reçue">
-        <div class="screen">
-          <div class="screen-left">
-            <div class="clock" id="demo-clock">10:24</div>
-            <div class="date" id="demo-date">jeudi 8 octobre</div>
-            <div class="weather">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="9" cy="9" r="3.2"/><path d="M9 2.5v1.5M3.5 9H2M4.5 4.5l1 1M13.5 4.5l-1 1"/><path d="M8 19h10a3.5 3.5 0 0 0 0-7 5 5 0 0 0-9.6 1.2A3 3 0 0 0 8 19z" fill="var(--screen)"/></svg>
-              17° Nuageux
-            </div>
-          </div>
-          <div class="screen-photo">
-            <picture><source type="image/webp" srcset="bebe.webp"><img src="bebe.jpg" alt="" width="900" height="1350" loading="lazy"></picture>
-            <p class="caption"><b>Julie · il y a 5 minutes</b>Emma a dit « Mamie » pour la première fois !</p>
-          </div>
-        </div>
-        </figure>
+      <div class="section-head">
+        <p class="eyebrow">Comment ça marche</p>
+        <h2>Vous partagez depuis votre téléphone, elle regarde.</h2>
       </div>
       <div class="steps">
         <div class="step">
-          <h3>Vous envoyez depuis votre téléphone</h3>
-          <p>Une photo de vacances, une vidéo des petits, un mot doux ou un rappel de rendez-vous. Rien à installer depuis un magasin d'applis : l'appli Papote s'ouvre dans le navigateur.</p>
+          <h3>Vous envoyez une photo</h3>
+          <p>Depuis l'appli Papote sur votre téléphone, Android ou iPhone, sans rien installer depuis un magasin d'applis.</p>
+          <figure class="visuel" aria-label="L'appli famille : une photo, une légende, le bouton Envoyer">
+            <div class="tel"><div class="tel-ecran">
+              <div class="tel-haut">Papote<small>Pour Mamie</small></div>
+              <div class="tel-corps">
+                <div class="apercu"><picture><source type="image/webp" srcset="bebe.webp"><img src="bebe.jpg" alt="" loading="lazy"></picture></div>
+                <div class="champ">Emma a dit « Mamie » pour la première fois !<small>Légende</small></div>
+                <div class="bouton">Envoyer à Mamie</div>
+              </div>
+              <div class="tel-bas"><b>Accueil</b><span>Photos</span><span>Appels</span><span>Profil</span></div>
+            </div></div>
+          </figure>
         </div>
         <div class="step">
-          <h3>La tablette l'affiche aussitôt</h3>
-          <p>Le nouvel envoi apparaît en grand, avec le prénom de celui qui l'a envoyé. Le reste du temps, la tablette fait défiler vos photos comme un cadre.</p>
+          <h3>Elle apparaît en grand sur la tablette</h3>
+          <p>Avec votre prénom et votre mot. Le reste du temps, la tablette fait défiler les photos de la famille comme un cadre.</p>
+          <figure class="visuel" aria-label="La tablette affiche la photo et le mot reçus, avec un bouton OK">
+            <div class="tab"><div class="tab-ecran">
+              <div class="tab-mot">
+                <div><p>Emma a dit « Mamie » pour la première fois !</p><span class="de">— Julie, à l'instant</span></div>
+                <span class="ok">OK</span>
+              </div>
+              <div class="tab-photo"><picture><source type="image/webp" srcset="bebe.webp"><img src="bebe.jpg" alt="" loading="lazy"></picture></div>
+            </div></div>
+          </figure>
         </div>
         <div class="step">
-          <h3>Vous appelez en vidéo</h3>
-          <p>Pas de bouton à trouver : dès que votre proche se met face à l'écran, la tablette décroche. Vous vous voyez, vous papotez.</p>
+          <h3>Vous l'appelez en vidéo</h3>
+          <p>Elle n'a rien à faire : dès qu'elle se met face à l'écran, la tablette décroche. Et elle peut vous appeler en touchant votre photo.</p>
+          <figure class="visuel" aria-label="Un appel vidéo avec Mamie sur votre téléphone">
+            <div class="tel"><div class="tel-ecran tel-video">
+              <picture><source type="image/webp" srcset="mamie.webp"><img src="mamie.jpg" alt="" loading="lazy"></picture>
+              <span class="nom">Mamie<small>02:14</small></span>
+              <span class="moi">J</span>
+              <span class="raccrocher"><svg><use href="#i-raccrocher"/></svg></span>
+            </div></div>
+          </figure>
         </div>
       </div>
     </div>
@@ -396,53 +396,44 @@ main a:not([class]), footer a:not([class]), .rassure a { font-weight: 700; }
         <p class="eyebrow">Pour votre proche</p>
         <h2>Une tablette qui ne se dérègle pas</h2>
         <ul class="feats">
-          <li><span class="ic"><svg><use href="#i-hand"/></svg></span><p><b>Aucun geste à apprendre</b><span>Elle décroche seule les appels vidéo quand elle voit un visage. Pas de code, pas de mot de passe.</span></p></li>
-          <li><span class="ic"><svg><use href="#i-call"/></svg></span><p><b>Elle peut vous appeler</b><span>Elle touche la photo d'un proche et son téléphone sonne. En option, un bouton fait sonner toute la famille à la fois.</span></p></li>
-          <li><span class="ic"><svg><use href="#i-lock"/></svg></span><p><b>Rien d'autre que Papote</b><span>Pas de publicité, pas d'autres applis, pas de réglage qu'on change par erreur.</span></p></li>
-          <li><span class="ic"><svg><use href="#i-text"/></svg></span><p><b>Lisible de loin</b><span>Grande horloge, date, météo du jour, en gros caractères. Les messages peuvent aussi lui être lus à voix haute.</span></p></li>
-          <li><span class="ic"><svg><use href="#i-moon"/></svg></span><p><b>Elle dort la nuit</b><span>L'écran se met en veille de 23 h à 7 h et s'assombrit en soirée. La luminosité suit celle de la pièce.</span></p></li>
-          <li><span class="ic"><svg><use href="#i-signal"/></svg></span><p><b>Avec ou sans box internet</b><span>En wifi, ou avec l'option internet inclus quand il n'y a pas de box.</span></p></li>
+          <li><span class="ic"><svg><use href="#i-hand"/></svg></span><p><b>Aucun geste à apprendre</b><span>Pas de code, pas de mot de passe, pas de mise à jour à faire. Rien d'autre que Papote, sans publicité.</span></p></li>
+          <li><span class="ic"><svg><use href="#i-call"/></svg></span><p><b>Elle peut vous appeler</b><span>Elle touche votre photo et votre téléphone sonne. En option, un bouton SOS fait sonner toute la famille.</span></p></li>
+          <li><span class="ic"><svg><use href="#i-text"/></svg></span><p><b>Lisible de loin</b><span>Grande horloge, date et météo en gros caractères. Les messages peuvent lui être lus à voix haute.</span></p></li>
+          <li><span class="ic"><svg><use href="#i-moon"/></svg></span><p><b>Elle dort la nuit</b><span>L'écran s'assombrit le soir et se met en veille de 23 h à 7 h. La luminosité suit celle de la pièce.</span></p></li>
         </ul>
       </div>
       <div class="side">
         <p class="eyebrow">Pour la famille</p>
         <h2>Une appli sur chaque téléphone</h2>
         <ul class="feats">
-          <li><span class="ic"><svg><use href="#i-photo"/></svg></span><p><b>Photos et vidéos</b><span>Jusqu'à cinq photos à la fois avec une légende, ou une vidéo filmée sur le moment.</span></p></li>
-          <li><span class="ic"><svg><use href="#i-call"/></svg></span><p><b>Appels vidéo</b><span>Elle n'a pas répondu ? Laissez-lui un message vidéo qu'elle verra en passant.</span></p></li>
-          <li><span class="ic"><svg><use href="#i-agenda"/></svg></span><p><b>Messages et agenda</b><span>Un mot qui reste affiché, un rappel avant le passage de l'infirmière ou un anniversaire.</span></p></li>
-          <li><span class="ic"><svg><use href="#i-sliders"/></svg></span><p><b>Réglages à distance</b><span>Wi-Fi, volume, ville de la météo, radio : vous changez tout depuis votre téléphone, sans vous déplacer.</span></p></li>
-          <li><span class="ic"><svg><use href="#i-bell"/></svg></span><p><b>Vous êtes prévenu</b><span>Tablette débranchée ou qui ne répond plus, pas vue de la matinée : l'appli vous le signale.</span></p></li>
-          <li><span class="ic"><svg><use href="#i-people"/></svg></span><p><b>Toute la famille, sur invitation</b><span>Enfants, petits-enfants, voisins : un responsable valide chaque nouvelle personne.</span></p></li>
+          <li><span class="ic"><svg><use href="#i-photo"/></svg></span><p><b>Photos, vidéos, messages</b><span>Jusqu'à cinq photos à la fois avec une légende, ou une vidéo filmée sur le moment.</span></p></li>
+          <li><span class="ic"><svg><use href="#i-agenda"/></svg></span><p><b>Agenda et rappels</b><span>Un rappel avant le passage de l'infirmière, un anniversaire : la tablette le lui montre au bon moment.</span></p></li>
+          <li><span class="ic"><svg><use href="#i-sliders"/></svg></span><p><b>Réglages à distance</b><span>Wi-Fi, volume, ville de la météo : vous changez tout depuis votre téléphone, sans vous déplacer.</span></p></li>
+          <li><span class="ic"><svg><use href="#i-bell"/></svg></span><p><b>Vous êtes prévenu</b><span>Tablette débranchée, qui ne répond plus ou pas vue de la matinée : l'appli vous le signale. Chaque nouveau proche est validé par un responsable.</span></p></li>
         </ul>
       </div>
     </div>
   </section>
 
-  <!-- AVIS -->
-  <section id="comparatif">
+  <section id="qui">
     <div class="wrap">
       <div class="section-head">
-        <p class="eyebrow">Pourquoi pas une tablette ordinaire ?</p>
-        <h2>Pensée pour ne rien demander à votre proche</h2>
+        <p class="eyebrow">Qui est derrière Papote</p>
+        <h2>Une personne, pas une plateforme.</h2>
       </div>
-      <div class="compare-cadre">
-        <table class="compare">
-          <thead><tr><td></td><th scope="col" class="moi">Papote</th><th scope="col">Tablette classique</th><th scope="col">Smart&shy;phone</th></tr></thead>
-          <tbody>
-            <tr><th scope="row">Décroche les appels vidéo toute seule</th><td><span class="oui" aria-label="Oui">✓</span></td><td><span class="non" aria-label="Non">—</span></td><td><span class="non" aria-label="Non">—</span></td></tr>
-            <tr><th scope="row">Aucun mot de passe ni mise à jour à gérer</th><td><span class="oui" aria-label="Oui">✓</span></td><td><span class="non" aria-label="Non">—</span></td><td><span class="non" aria-label="Non">—</span></td></tr>
-            <tr><th scope="row">Les photos de la famille arrivent toutes seules</th><td><span class="oui" aria-label="Oui">✓</span></td><td><span class="non" aria-label="Non">—</span></td><td><span class="non" aria-label="Non">—</span></td></tr>
-            <tr><th scope="row">Réglages faits à distance par la famille</th><td><span class="oui" aria-label="Oui">✓</span></td><td><span class="non" aria-label="Non">—</span></td><td><span class="non" aria-label="Non">—</span></td></tr>
-            <tr><th scope="row">Ni publicité, ni autres applis</th><td><span class="oui" aria-label="Oui">✓</span></td><td><span class="non" aria-label="Non">—</span></td><td><span class="non" aria-label="Non">—</span></td></tr>
-            <tr><th scope="row">Livrée prête à l'emploi, tablette prêtée</th><td><span class="oui" aria-label="Oui">✓</span></td><td><span class="non" aria-label="Non">—</span></td><td><span class="non" aria-label="Non">—</span></td></tr>
-          </tbody>
-        </table>
+      <div class="qui-carte">
+        <!-- Photo de Tanguy à ajouter (vitrine/tanguy.jpg, carrée, 600 px) : remplacer ce rond par <img class="portrait" src="tanguy.jpg" alt="Tanguy Reynaud" width="600" height="600" loading="lazy"> -->
+        <div class="portrait" aria-hidden="true">Tanguy</div>
+        <div class="qui-texte">
+          <blockquote>« J'ai créé Papote pour ma grand-mère de 93 ans. Ce qui existait coûtait autour de 50 € par mois, ou 350 € pour une tablette qui n'était pas pensée pour elle. Alors j'ai fait plus simple et moins cher. »</blockquote>
+          <p><b>Tanguy Reynaud</b>, fondateur de Papote, à Lyon</p>
+          <ul class="faits">
+            <li class="coche">Je prépare et vérifie chaque tablette moi-même, une par une.</li>
+            <li class="coche">Je réponds moi-même aux e-mails, à <a href="mailto:contact@mapapote.fr">contact@mapapote.fr</a>.</li>
+            <li class="coche">Entreprise déclarée en France, conditions de vente claires, sans caution ni engagement.</li>
+          </ul>
+        </div>
       </div>
-      <figure class="histoire">
-        <blockquote>« J'ai créé Papote pour ma grand-mère de 93 ans. Je voulais qu'elle reçoive les photos de toute la famille et qu'elle nous voie en vidéo, sans avoir à apprendre quoi que ce soit. Mais ce qui existait coûtait autour de 50 € par mois, ou 350 € pour une tablette qui n'était pas pensée pour elle. Alors j'ai fait plus simple et moins cher : les photos arrivent seules, les appels décrochent seuls, elle n'a qu'à regarder. »</blockquote>
-        <figcaption>Tanguy, créateur de Papote, à Lyon</figcaption>
-      </figure>
     </div>
   </section>
 
@@ -451,54 +442,52 @@ main a:not([class]), footer a:not([class]), .rassure a { font-weight: 700; }
       <div class="section-head">
         <p class="eyebrow">Tarifs</p>
         <h2>Un seul abonnement, tablette comprise.</h2>
-        <p class="lead">La tablette est prêtée pendant toute la durée de l'abonnement. Chaque mois est payé une fois écoulé.</p>
       </div>
-
       <form class="offre" id="offre" action="#lancement">
         <div class="offre-base">
-          <div class="plan-head">
-            <span class="tag">Abonnement Papote</span>
-            <div class="price"><strong id="offre-prix">20 €</strong><span>par mois</span></div>
-            <p class="mes"><b>+ 60 €</b> une seule fois à la commande (mise en service)</p>
-            <p>Tablette prêtée et incluse.</p>
-          </div>
+          <div class="price"><strong id="offre-prix">20 €</strong><span>par mois, sans engagement</span></div>
+          <p class="mes"><b>+ 60 €</b> une seule fois à la commande, pour la mise en service.</p>
           <ul class="included">
-            <li><svg><use href="#i-check"/></svg>Tablette livrée configurée et prête à l'emploi, livraison offerte</li>
-            <li><svg><use href="#i-check"/></svg>Appli famille pour tous vos proches</li>
-            <li><svg><use href="#i-check"/></svg>Photos, vidéos, messages, agenda, appels vidéo</li>
-            <li><svg><use href="#i-check"/></svg>Mises à jour automatiques</li>
+            <li class="coche">Tablette prêtée, livrée prête à l'emploi, livraison offerte</li>
+            <li class="coche">Appli famille pour tous vos proches, sans supplément</li>
+            <li class="coche">Photos, vidéos, messages, agenda, appels vidéo</li>
+            <li class="coche">30 jours pour changer d'avis, les 60 € remboursés</li>
           </ul>
         </div>
         <div class="offre-options">
+          <h3>Chez votre proche, il y a :</h3>
           <label class="option">
-            <input type="checkbox" name="formule" value="sim">
-            <span><b>Internet inclus</b><small>Pas besoin de box : la tablette a sa propre connexion.</small></span>
-            <span class="option-prix">+10 €<em>par mois</em></span>
+            <input type="radio" name="formule" value="wifi" checked>
+            <span><b>Une box internet (Wi-Fi)</b><small>La tablette s'y connecte : vous nous donnez le mot de passe à la commande.</small></span>
+            <span class="option-prix">20 €</span>
+          </label>
+          <label class="option">
+            <input type="radio" name="formule" value="sim">
+            <span><b>Pas de box, ou je ne sais pas</b><small>Internet inclus : la tablette a sa propre connexion 4G, rien à régler.</small></span>
+            <span class="option-prix">30 €</span>
           </label>
           <button class="btn btn-primary offre-btn js-commander" type="submit">Être prévenu du lancement</button>
         </div>
       </form>
-      <p class="plans-note">Prix par tablette, toute la famille utilise l'appli sans supplément. 60 € sont payés à la commande pour la mise en service ; ensuite, l'abonnement commence à la réception et chaque mois est payé une fois écoulé. Sans engagement : l'abonnement se résilie à tout moment depuis l'appli famille. 30 jours après la réception pour changer d'avis : rien à payer et les 60 € remboursés. La tablette est prêtée et nous est rendue en fin d'abonnement. Paiement sécurisé par prélèvement SEPA.</p>
+      <p class="plans-note">Prix par tablette. L'abonnement commence à la réception et chaque mois est payé une fois écoulé, par prélèvement SEPA. Résiliation à tout moment depuis l'appli : le mois en cours est le dernier payé.</p>
       <p class="precommande js-precommande" hidden>Je prépare et vérifie chaque tablette moi-même, une par une. En ce moment, la vôtre est prête sous 7 à 10 jours ouvrés, puis Mondial Relay la livre en 3 à 5 jours ouvrés.</p>
-        <p class="precommande js-attente-longue" hidden>Beaucoup de commandes en ce moment : je prépare et vérifie chaque tablette moi-même, une par une, à Lyon. La vôtre part sous 3 à 4 semaines, puis Mondial Relay la livre en 3 à 5 jours ouvrés. Rien de plus n'est prélevé avant la réception, et vous pouvez annuler à tout moment avant l'envoi : les 60 € vous sont remboursés tout de suite.</p>
+      <p class="precommande js-attente-longue" hidden>Beaucoup de commandes en ce moment : je prépare et vérifie chaque tablette moi-même, une par une, à Lyon. La vôtre part sous 3 à 4 semaines, puis Mondial Relay la livre en 3 à 5 jours ouvrés. Rien de plus n'est prélevé avant la réception, et vous pouvez annuler à tout moment avant l'envoi : les 60 € vous sont remboursés tout de suite.</p>
     </div>
   </section>
 
   <section id="lancement" class="lancement">
     <div class="wrap">
-      <div class="section-head">
+      <div class="section-head" style="margin-bottom:0">
         <p class="eyebrow">Bientôt disponible</p>
         <h2>Soyez prévenu du lancement</h2>
         <p class="lead">Les premières tablettes partent très bientôt. Laissez votre e-mail : vous serez parmi les premiers à pouvoir commander.</p>
       </div>
       <form class="attente" id="attente">
-        <label>Votre prénom <span class="muted">(facultatif)</span>
-          <input name="prenom" autocomplete="given-name" maxlength="60"></label>
-        <label>Votre e-mail
-          <input name="email" id="attente-email" type="email" autocomplete="email" required maxlength="120"></label>
-        <label class="attente-accord"><input type="checkbox" name="accord" required>
-          <span>J'accepte de recevoir un e-mail au lancement de Papote, puis ses nouvelles (désinscription en un clic).</span></label>
-        <button class="btn btn-primary" type="submit">Me prévenir</button>
+        <div class="ligne">
+          <input name="email" id="attente-email" type="email" autocomplete="email" required maxlength="120" placeholder="votre@e-mail.fr" aria-label="Votre e-mail">
+          <button class="btn btn-primary" type="submit">Me prévenir</button>
+        </div>
+        <label class="accord"><input type="checkbox" name="accord" required><span>J'accepte de recevoir un e-mail au lancement de Papote, puis ses nouvelles. Désinscription en un clic.</span></label>
         <p class="attente-msg" id="attente-msg" role="status" hidden></p>
       </form>
     </div>
@@ -510,97 +499,93 @@ main a:not([class]), footer a:not([class]), .rassure a { font-weight: 700; }
         <p class="eyebrow">Questions fréquentes</p>
         <h2>Ce qu'on nous demande souvent</h2>
       </div>
-      <div class="faq">
+      <div class="faq" id="faq">
         <details>
-          <summary>Mon proche n'a jamais utilisé de tablette. Est-ce un problème ?</summary>
+          <summary>Mon proche n'a jamais utilisé de tablette. Est-ce un problème&nbsp;?</summary>
           <p>Non, c'est pour ça que Papote existe. La tablette n'a qu'un écran d'accueil : l'heure, la date, la météo et vos photos. Les envois s'affichent seuls, les appels vidéo décrochent seuls. Pour voir les anciennes photos, il suffit de toucher l'écran.</p>
         </details>
         <details>
-          <summary>Comment se passe l'installation ?</summary>
+          <summary>Comment se passe l'installation&nbsp;?</summary>
           <p>La tablette arrive prête. Vous la branchez, vous la connectez au wifi si besoin, puis vous scannez le QR code affiché à l'écran avec votre téléphone, ou vous tapez un code court sur app.mapapote.fr. Votre famille est créée à ce moment-là : vous choisissez le nom affiché, vous envoyez une première photo, vous essayez le son et vous vérifiez les options. Il ne reste qu'à inviter vos proches. C'est fait en quelques minutes.</p>
         </details>
         <details>
-          <summary>Mon proche peut-il appeler la famille ?</summary>
-          <p>Oui. Sur l'accueil, le bouton « Appeler » montre les photos de la famille : elle touche celle du proche voulu et son téléphone sonne (appel audio). En option, le bouton « SOS famille » fait sonner tout le monde à la fois, avec 5 secondes pour annuler en cas d'appui par erreur. Ce n'est pas un service d'urgence : pour une urgence, c'est le 15 ou le 112. Et quand c'est la famille qui appelle en vidéo, la tablette décroche toute seule.</p>
-        </details>
-        <details>
-          <summary>Comment la tablette est-elle livrée ?</summary>
-          <p>Gratuitement, en point relais Mondial Relay, en France, en Belgique ou au Luxembourg : vous choisissez le point qui vous arrange au moment de commander, près de chez vous ou de chez votre proche. Je prépare et vérifie chaque tablette moi-même : votre commande est prête sous 2 à 3 jours ouvrés quand la tablette est en stock (jusqu'à 10 jours ouvrés sinon, et 3 à 4 semaines quand les commandes affluent), puis Mondial Relay la livre en 3 à 5 jours ouvrés. Le délai est affiché avant de payer. Dès que la tablette part, vous recevez un e-mail avec le lien de suivi, puis un message de Mondial Relay quand elle vous attend.</p>
-        </details>
-        <details>
-          <summary>Je veux l'offrir, comment faire ?</summary>
-          <p>Commandez à votre nom et choisissez un point relais près de chez votre proche, ou près de chez vous si vous la lui apportez. La tablette arrive prête : on la branche, puis vous la reliez à la famille depuis votre téléphone en scannant le QR code qu'elle affiche. Votre proche n'a rien à régler ni à apprendre, et c'est vous qui gérez l'abonnement.</p>
-        </details>
-        <details>
-          <summary>Faut-il une box internet chez mon proche ?</summary>
+          <summary>Faut-il une box internet chez mon proche&nbsp;?</summary>
           <p>Non. Sans box, prenez l'option internet inclus : nous fournissons la connexion 4G avec sa carte SIM, prête à l'emploi. Rien à configurer.</p>
         </details>
         <details>
-          <summary>Qui peut envoyer des photos ?</summary>
-          <p>Les personnes de la famille que vous invitez. Chaque nouvelle personne est validée par un responsable de la famille avant de pouvoir envoyer quoi que ce soit. Personne d'autre ne peut écrire à la tablette.</p>
+          <summary>Je veux l'offrir, comment faire&nbsp;?</summary>
+          <p>Commandez à votre nom et choisissez un point relais près de chez votre proche, ou près de chez vous si vous la lui apportez. La tablette arrive prête : on la branche, puis vous la reliez à la famille depuis votre téléphone en scannant le QR code qu'elle affiche. Votre proche n'a rien à régler ni à apprendre, et c'est vous qui gérez l'abonnement.</p>
         </details>
         <details>
-          <summary>Faut-il installer une application sur mon téléphone ?</summary>
-          <p>Il suffit d'ouvrir le lien Papote dans le navigateur, sur Android comme sur iPhone. Vous pouvez ensuite l'ajouter à l'écran d'accueil comme une appli, sans passer par un magasin d'applications.</p>
-        </details>
-        <details>
-          <summary>La tablette reste-t-elle allumée tout le temps ?</summary>
-          <p>Elle reste branchée et affiche vos photos toute la journée. La nuit, de 23 h à 7 h, l'écran se met en veille, et il s'assombrit en soirée pour ne pas éblouir.</p>
-        </details>
-        <details>
-          <summary>Comment se passe le paiement ?</summary>
-          <p>Par prélèvement SEPA : il suffit de l'IBAN d'un compte en France, en Belgique ou au Luxembourg, saisi sur une page de paiement sécurisée (Stripe). L'abonnement est prélevé chaque mois. La tablette part dès que la banque a confirmé le premier prélèvement (quelques jours). Depuis l'appli famille, onglet Profil (« Gérer le paiement et les factures »), vous retrouvez vos factures et changez de compte.</p>
-        </details>
-        <details>
-          <summary>Et si ça ne lui plaît pas ?</summary>
+          <summary>Et si ça ne lui plaît pas&nbsp;?</summary>
           <p>Vous avez 30 jours après la réception de la tablette pour changer d'avis : le bouton « Annuler ma commande » de l'appli suffit. Vous nous renvoyez la tablette avec l'étiquette offerte, vous ne payez rien pour l'abonnement et les 60 € de mise en service vous sont remboursés.</p>
         </details>
         <details>
-          <summary>Suis-je engagé ? Comment résilier ?</summary>
+          <summary>Suis-je engagé&nbsp;? Comment résilier&nbsp;?</summary>
           <p>Non, Papote est sans engagement. La personne qui a installé la tablette résilie en ligne, à tout moment, depuis l'appli (onglet Profil, « Résilier l'abonnement ») : l'abonnement s'arrête à la fin du mois en cours, qui est le dernier prélevé, sans calcul au prorata. Pas de lettre recommandée : quelques clics suffisent. En cas d'hospitalisation de votre proche, les prélèvements peuvent être mis en pause sur justificatif.</p>
         </details>
         <details>
-          <summary>Que se passe-t-il à la fin de l'abonnement ?</summary>
-          <p>La tablette est prêtée : vous nous la renvoyez dans les 30 jours qui suivent la fin de l'abonnement, avec son support, son chargeur et son câble (et l'enceinte si elle a été fournie). Tout élément non rendu est facturé : tablette 130 €, chargeur et câble 10 €, enceinte 10 € (si elle a été fournie), soit 140 € ou 150 € si rien ne revient. Le support n'est jamais facturé et le retour est offert.</p>
+          <summary>Comment se passe le paiement&nbsp;?</summary>
+          <p>Par prélèvement SEPA : il suffit de l'IBAN d'un compte en France, en Belgique ou au Luxembourg, saisi sur une page de paiement sécurisée (Stripe). L'abonnement est prélevé chaque mois. La tablette part dès que la banque a confirmé le premier prélèvement (quelques jours). Depuis l'appli famille, onglet Profil (« Gérer le paiement et les factures »), vous retrouvez vos factures et changez de compte.</p>
         </details>
         <details>
-          <summary>Quelles garanties sur la tablette ?</summary>
-          <p>Vous disposez de 30 jours après la réception pour changer d'avis : vous nous renvoyez la tablette et tout ce que vous avez payé vous est remboursé. La tablette reste la nôtre : si elle tombe en panne, nous la remplaçons, et elle nous est rendue en fin d'abonnement. L'usure normale n'est jamais facturée. La casse (écran brisé, liquide renversé) n'est pas couverte : l'élément cassé est alors facturé à son prix (tablette 130 €), sans caution demandée d'avance. Une perte ou un vol est facturé 140 € (150 € si une enceinte a été fournie).</p>
-        </details>
-        <details>
-          <summary>Et si un paiement échoue ?</summary>
-          <p>Vous êtes prévenu par e-mail et tout continue de fonctionner pendant 7 jours. Sans règlement, la tablette se met en pause. Elle repart toute seule dès que le paiement passe.</p>
-        </details>
-        <details>
-          <summary>Que deviennent nos photos et nos données ?</summary>
+          <summary>Que deviennent nos photos et nos données&nbsp;?</summary>
           <p>Elles servent uniquement à les afficher sur la tablette de votre famille. Elles ne sont ni revendues ni utilisées pour de la publicité. La page « Vos données » de l'appli montre ce qui est conservé, et chacun peut supprimer ses envois à tout moment. Pour effacer toute la famille, il suffit de nous écrire.</p>
         </details>
-        <details>
-          <summary>Qui contacter en cas de souci ?</summary>
-          <p>Écrivez-nous depuis l'appli (onglet Support), posez votre question au chat de ce site, ou écrivez à contact@mapapote.fr. La plupart des réglages se changent à distance, sans vous déplacer chez votre proche.</p>
-        </details>
+        <button class="faq-plus" type="button" id="faq-plus">Voir toutes les questions →</button>
+        <div class="suite">
+          <details>
+            <summary>Mon proche peut-il appeler la famille&nbsp;?</summary>
+            <p>Oui. Sur l'accueil, le bouton « Appeler » montre les photos de la famille : elle touche celle du proche voulu et son téléphone sonne (appel audio). En option, le bouton « SOS famille » fait sonner tout le monde à la fois, avec 5 secondes pour annuler en cas d'appui par erreur. Ce n'est pas un service d'urgence : pour une urgence, c'est le 15 ou le 112. Et quand c'est la famille qui appelle en vidéo, la tablette décroche toute seule.</p>
+          </details>
+          <details>
+            <summary>Comment la tablette est-elle livrée&nbsp;?</summary>
+            <p>Gratuitement, en point relais Mondial Relay, en France, en Belgique ou au Luxembourg : vous choisissez le point qui vous arrange au moment de commander, près de chez vous ou de chez votre proche. Je prépare et vérifie chaque tablette moi-même : votre commande est prête sous 2 à 3 jours ouvrés quand la tablette est en stock (jusqu'à 10 jours ouvrés sinon, et 3 à 4 semaines quand les commandes affluent), puis Mondial Relay la livre en 3 à 5 jours ouvrés. Le délai est affiché avant de payer. Dès que la tablette part, vous recevez un e-mail avec le lien de suivi, puis un message de Mondial Relay quand elle vous attend.</p>
+          </details>
+          <details>
+            <summary>Qui peut envoyer des photos&nbsp;?</summary>
+            <p>Les personnes de la famille que vous invitez. Chaque nouvelle personne est validée par un responsable de la famille avant de pouvoir envoyer quoi que ce soit. Personne d'autre ne peut écrire à la tablette.</p>
+          </details>
+          <details>
+            <summary>Faut-il installer une application sur mon téléphone&nbsp;?</summary>
+            <p>Il suffit d'ouvrir le lien Papote dans le navigateur, sur Android comme sur iPhone. Vous pouvez ensuite l'ajouter à l'écran d'accueil comme une appli, sans passer par un magasin d'applications.</p>
+          </details>
+          <details>
+            <summary>La tablette reste-t-elle allumée tout le temps&nbsp;?</summary>
+            <p>Elle reste branchée et affiche vos photos toute la journée. La nuit, de 23 h à 7 h, l'écran se met en veille, et il s'assombrit en soirée pour ne pas éblouir.</p>
+          </details>
+          <details>
+            <summary>Que se passe-t-il à la fin de l'abonnement&nbsp;?</summary>
+            <p>La tablette est prêtée : vous nous la renvoyez dans les 30 jours qui suivent la fin de l'abonnement, avec son support, son chargeur et son câble (et l'enceinte si elle a été fournie). Tout élément non rendu est facturé : tablette 130 €, chargeur et câble 10 €, enceinte 10 € (si elle a été fournie), soit 140 € ou 150 € si rien ne revient. Le support n'est jamais facturé et le retour est offert.</p>
+          </details>
+          <details>
+            <summary>Quelles garanties sur la tablette&nbsp;?</summary>
+            <p>Vous disposez de 30 jours après la réception pour changer d'avis : vous nous renvoyez la tablette et tout ce que vous avez payé vous est remboursé. La tablette reste la nôtre : si elle tombe en panne, nous la remplaçons, et elle nous est rendue en fin d'abonnement. L'usure normale n'est jamais facturée. La casse (écran brisé, liquide renversé) n'est pas couverte : l'élément cassé est alors facturé à son prix (tablette 130 €), sans caution demandée d'avance. Une perte ou un vol est facturé 140 € (150 € si une enceinte a été fournie).</p>
+          </details>
+          <details>
+            <summary>Et si un paiement échoue&nbsp;?</summary>
+            <p>Vous êtes prévenu par e-mail et tout continue de fonctionner pendant 7 jours. Sans règlement, la tablette se met en pause. Elle repart toute seule dès que le paiement passe.</p>
+          </details>
+          <details>
+            <summary>Qui contacter en cas de souci&nbsp;?</summary>
+            <p>Écrivez-nous depuis l'appli (onglet Support), posez votre question au chat de ce site, ou écrivez à contact@mapapote.fr. La plupart des réglages se changent à distance, sans vous déplacer chez votre proche.</p>
+          </details>
+        </div>
       </div>
     </div>
   </section>
-
-  <section id="contact" class="contact">
-    <div class="wrap">
-      <h2>Une question avant de commander ?</h2>
-      <p>Posez-la à notre assistant : il connaît Papote par cœur et vous répond tout de suite, à toute heure. Il vous aide aussi à choisir la bonne formule selon la connexion internet de votre proche.</p>
-      <a class="btn btn-primary" id="cta-chat" href="mailto:contact@mapapote.fr?subject=Une%20question%20sur%20Papote">Poser ma question</a>
-    </div>
-  </section>
 </main>
-
 <footer>
   <div class="wrap">
+    <p><b>Papote</b> · Tanguy Reynaud, Lyon · <a href="mailto:contact@mapapote.fr">contact@mapapote.fr</a></p>
+    <div class="liens">
+      <a href="cgv.html">Conditions de vente</a>
+      <a href="mentions.html">Mentions légales et confidentialité</a>
+      <a href="https://app.mapapote.fr">Déjà client ? Ouvrir l'appli famille</a>
+    </div>
     <span>© 2026 Papote</span>
-    <a href="cgv.html">Conditions de vente</a>
-    <a href="mentions.html">Mentions légales et confidentialité</a>
-    <a href="https://app.mapapote.fr">Déjà client ? Ouvrir l'appli famille</a>
   </div>
 </footer>
-
 <script>
   // Heure et date réelles sur la tablette dessinée.
   (function () {
@@ -609,18 +594,15 @@ main a:not([class]), footer a:not([class]), .rassure a { font-weight: 700; }
     function tick() {
       var now = new Date();
       clock.textContent = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-      date.textContent = now.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+      var d = now.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+      date.textContent = d.charAt(0).toUpperCase() + d.slice(1);
     }
     tick();
     setInterval(tick, 20000);
   })();
-
-  // « Poser ma question » ouvre le chat d'aide (vitrine/chat-support.js) ; sans lui, l'e-mail.
-  document.getElementById('cta-chat').addEventListener('click', function (e) {
-    var bulle = document.querySelector('.ps-bouton');
-    if (!bulle) return;
-    e.preventDefault();
-    bulle.click();
+  // FAQ : les autres questions sur demande.
+  document.getElementById('faq-plus').addEventListener('click', function () {
+    document.getElementById('faq').classList.add('ouverte');
   });
 </script>
 <script>
@@ -634,8 +616,6 @@ main a:not([class]), footer a:not([class]), .rassure a { font-weight: 700; }
       commandesPossibles = true;
       document.querySelectorAll('a.js-commander').forEach(function (a) { a.href = 'commande.html'; a.textContent = 'Commander'; });
       document.querySelectorAll('button.js-commander').forEach(function (b) { b.textContent = 'Commander'; });
-      var bandeau = document.querySelector('.bandeau');
-      if (bandeau) bandeau.textContent = '🚚 Livraison offerte · ✨ 30 jours pour changer d\u2019avis';
     }
     fetch('https://europe-west1-papote-famille.cloudfunctions.net/stockDisponible')
       .then(function (r) { return r.ok ? r.json() : { disponible: true }; })
@@ -655,14 +635,13 @@ main a:not([class]), footer a:not([class]), .rassure a { font-weight: 700; }
   (function () {
     var offre = document.getElementById('offre');
     if (!offre) return;
-    function maj() {
-      document.getElementById('offre-prix').textContent = (offre.formule.checked ? 30 : 20) + ' €';
-    }
+    function sim() { return offre.formule.value === 'sim'; }
+    function maj() { document.getElementById('offre-prix').textContent = (sim() ? 30 : 20) + ' €'; }
     offre.addEventListener('change', maj);
     offre.addEventListener('submit', function (e) {
       e.preventDefault();
       if (commandesPossibles) {
-        location.href = 'commande.html' + (offre.formule.checked ? '?formule=sim' : '');
+        location.href = 'commande.html' + (sim() ? '?formule=sim' : '');
         return;
       }
       // Commandes fermées ou stock vide : la liste d'attente à la place de commande.html.
@@ -695,16 +674,16 @@ main a:not([class]), footer a:not([class]), .rassure a { font-weight: 700; }
       fetch('https://europe-west1-papote-famille.cloudfunctions.net/listeAttente', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prenom: form.prenom.value, email: form.email.value, accord: form.accord.checked }),
+        body: JSON.stringify({ prenom: '', email: form.email.value, accord: form.accord.checked }),
       }).then(function (r) {
         if (!r.ok) throw new Error(r.status);
-        form.querySelectorAll('label').forEach(function (l) { l.hidden = true; });
-        bouton.hidden = true;
-        msg.textContent = 'C\u2019est noté, merci ! Vous recevrez un e-mail dès que les commandes ouvrent.';
+        form.querySelector('.ligne').hidden = true;
+        form.querySelector('.accord').hidden = true;
+        msg.textContent = 'C’est noté, merci ! Vous recevrez un e-mail dès que les commandes ouvrent.';
         msg.hidden = false;
       }).catch(function () {
         bouton.disabled = false;
-        msg.textContent = 'L\u2019inscription n\u2019a pas abouti. Vérifiez votre e-mail et réessayez.';
+        msg.textContent = 'L’inscription n’a pas abouti. Vérifiez votre e-mail et réessayez.';
         msg.hidden = false;
       });
     });
