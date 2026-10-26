@@ -93,16 +93,17 @@ function motParDefaut(id) {
 }
 
 // Ajoute (ou met à jour) data.voix sur le document si le texte a changé. db : base Firestore.
+// Renvoie ce qui a été fait, en clair, pour le journal (« rien à lire », « déjà lu », « voix créée … »).
 // annonce : prénom à annoncer avant le texte (messages et légendes), rien pour un rappel.
 async function voixDocument(db, ref, data, champ, auteurUid, prenomAnnonce) {
   let texte = texteDe(data, champ);
   const motFixe = !texte && data.type === 'photo';
   if (motFixe) texte = motParDefaut(ref.id);
-  if (!texte) return null;
+  if (!texte) return 'rien à lire';
   const annonce = texteAnnonce(prenomAnnonce);
   // Déjà lu (et chaque écriture de la fonction ou de la tablette « vu », « bisou » redéclenche) : rien à faire,
   // sans même relire la fiche de l'auteur.
-  if (data.voix && data.voix.texte === texte && (data.voix.annonceTexte || '') === annonce) return null;
+  if (data.voix && data.voix.texte === texte && (data.voix.annonceTexte || '') === annonce) return 'déjà lu';
   let genre = '';
   if (auteurUid) {
     const m = await db.doc(`${ref.parent.parent.path}/members/${auteurUid}`).get();
@@ -116,7 +117,7 @@ async function voixDocument(db, ref, data, champ, auteurUid, prenomAnnonce) {
     voix.annonceTexte = annonce;
   }
   await ref.update({ voix });
-  return v;
+  return `voix créée (${v.nom}${annonce ? ', avec annonce' : ''})`;
 }
 
 module.exports = { nomVoix, motParDefaut, MOTS, cheminFichier, texteDe, texteAnnonce, voixDocument, fichierVoix, VOIX, MAX };
