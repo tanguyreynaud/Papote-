@@ -138,9 +138,13 @@ export async function loadMembership() {
   const user = await currentUser();
   if (!fid || !user) return null;
   try {
-    const memberSnap = await getDoc(doc(db, 'families', fid, 'members', user.uid));
-    if (!memberSnap.exists() || memberSnap.data().status === 'pending') return null;
-    const familySnap = await getDoc(doc(db, 'families', fid));
+    // Les deux fiches lues en même temps. Sans fiche membre, la lecture de la famille est refusée : même
+    // résultat qu'avant (pas de session).
+    const [memberSnap, familySnap] = await Promise.all([
+      getDoc(doc(db, 'families', fid, 'members', user.uid)),
+      getDoc(doc(db, 'families', fid)).catch(() => null),
+    ]);
+    if (!memberSnap.exists() || memberSnap.data().status === 'pending' || !familySnap) return null;
     return {
       fid,
       family: familySnap.data(),

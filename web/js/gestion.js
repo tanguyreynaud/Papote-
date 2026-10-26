@@ -7,7 +7,7 @@ import { demander, saisir, prevenir, menuPoints, annoncer, boutonCharge, patient
 import { getApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
 import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
 import {
-  appeler, donnees as lireDonnees, signalerChangement, messageErreur,
+  appeler, donnees as lireDonnees, signalerChangement, messageErreur, reveiller,
 } from './gestion-api.js';
 import { ouvrirParcours, fermerParcours } from './parcours.js';
 import { simVue, go as enGo } from './sim.js';
@@ -331,6 +331,7 @@ function fermerChargement() {
 onAuthStateChanged(getAuth(getApp('admin')), (user) => {
   connecte = !!user;
   if (!user) { fermerChargement(); return; }
+  reveiller();
   // Lus dès la connexion, pour que la page Clients s'ouvre sans attendre.
   chargerClients();
   chargerDonnees();
@@ -360,10 +361,7 @@ async function chargerDonnees() {
 async function chargerMois() {
   const n = new Date();
   try {
-    stripeAnnee = await appeler('gestionStripe', {
-      debut: new Date(n.getFullYear(), 0, 1).getTime(),
-      fin: new Date(n.getFullYear() + 1, 0, 1).getTime(),
-    });
+    stripeAnnee = await lireStripeAnnee(true);
     const debutMois = new Date(n.getFullYear(), n.getMonth(), 1).getTime();
     stripeMois = { ...stripeAnnee, mouvements: stripeAnnee.mouvements.filter((m) => m.le >= debutMois) };
     afficherAccueil();
@@ -433,6 +431,33 @@ function etiquettePeriode() {
 const dans = (p, ms) => ms != null && ms >= p.debut && ms < p.fin;
 const dansPeriode = (ms) => dans(periode, ms);
 
+// Stripe est lu une seule fois pour l'année en cours, partagé par l'accueil et le bilan : une période qui tient dans
+// l'année (ce mois-ci, ce trimestre, cette année…) en est tirée sans nouvel appel, avec le même filtre par date
+// que le serveur. Avant, l'ouverture et chaque modification relisaient deux fois la même année dans Stripe.
+let anneeStripe = null;
+function bornesAnnee() {
+  const a = new Date().getFullYear();
+  return { debut: new Date(a, 0, 1).getTime(), fin: new Date(a + 1, 0, 1).getTime() };
+}
+function lireStripeAnnee(relire = false) {
+  const b = bornesAnnee();
+  if (relire || !anneeStripe || anneeStripe.debut !== b.debut) {
+    const promesse = appeler('gestionStripe', b);
+    anneeStripe = { debut: b.debut, promesse };
+    promesse.catch(() => { if (anneeStripe && anneeStripe.promesse === promesse) anneeStripe = null; });
+  }
+  return anneeStripe.promesse;
+}
+function lireStripe(p) {
+  const b = bornesAnnee();
+  if (p.debut < b.debut || p.fin > b.fin) return appeler('gestionStripe', p);
+  return lireStripeAnnee().then((a) => ({
+    ...a,
+    factures: a.factures.filter((f) => dans(p, f.le)),
+    mouvements: a.mouvements.filter((m) => dans(p, m.le)),
+  }));
+}
+
 let demande = 0;
 async function changerPeriode() {
   const perso = $('p-choix').value === 'perso';
@@ -448,7 +473,7 @@ async function changerPeriode() {
   $('p-etat').textContent = 'Lecture de Stripe…';
   const n = ++demande;
   try {
-    const r = await appeler('gestionStripe', periode);
+    const r = await lireStripe(periode);
     if (n !== demande) return;
     stripe = r;
     $('p-etat').textContent = `Du ${jour(periode.debut)} au ${jour(periode.fin - 1)}`;

@@ -197,10 +197,8 @@ button:disabled { opacity: .45; cursor: default; }
 .hors-ligne-verif { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 15px; }
 .hors-ligne .primary { min-width: 200px; margin-top: 8px; }
 .hors-ligne-bandeau {
-  position: fixed;
+  position: sticky;
   top: 0;
-  left: 0;
-  right: 0;
   z-index: 999;
   margin: 0;
   padding: calc(10px + env(safe-area-inset-top)) 16px 10px;
@@ -211,8 +209,6 @@ button:disabled { opacity: .45; cursor: default; }
   box-shadow: var(--shadow);
   pointer-events: none;
 }
-/* Hauteur du bandeau « Pas de connexion » (0 sans lui) : la page et les en-têtes passent dessous. */
-body { padding-top: var(--bandeau, 0px); }
 
 .install-card p { margin: 0 0 8px; }
 .install-help { margin-top: 12px; }
@@ -280,7 +276,7 @@ body { padding-top: var(--bandeau, 0px); }
 
 .page-head {
   position: sticky;
-  top: var(--bandeau, 0px);
+  top: var(--bandeau, 0px); /* hauteur du bandeau « Pas de connexion » : l'en-tête reste visible dessous */
   z-index: 5;
   display: flex;
   align-items: center;
@@ -574,7 +570,7 @@ body { padding-top: var(--bandeau, 0px); }
 #call-remote { position: absolute; inset: 0; width: 100%; height: 100%; }
 #call-local {
   position: absolute;
-  right: 16px;
+  right: calc(16px + env(safe-area-inset-right));
   top: calc(16px + env(safe-area-inset-top));
   width: 28vw;
   max-width: 180px;
@@ -585,6 +581,10 @@ body { padding-top: var(--bandeau, 0px); }
 }
 @media (orientation: landscape) {
   #call-local { width: 22vw; max-width: 240px; }
+}
+/* Écran d'appel tourné (téléphone tenu debout) : la droite de l'appel est le bas du téléphone. */
+@media (orientation: portrait) {
+  .call.force-landscape #call-local { right: calc(16px + env(safe-area-inset-bottom)); top: 16px; }
 }
 .call-status {
   position: absolute;
@@ -841,6 +841,10 @@ body { padding-top: var(--bandeau, 0px); }
   animation: rise .18s ease-out;
 }
 .dialog p { margin: 0 0 18px; font-size: 17px; line-height: 1.45; }
+.dialog { position: relative; }
+.dialog.avec-croix > p:first-of-type, .dialog.avec-croix > .dialog-title { padding-right: 36px; }
+.dialog-croix { position: absolute; top: 8px; right: 8px; color: var(--muted); }
+.dialog-croix svg { width: 22px; height: 22px; }
 .dialog-buttons { display: flex; gap: 10px; }
 .dialog-buttons button { flex: 1; min-height: 48px; justify-content: center; }
 .danger-btn { background: var(--danger); color: #fff; }
@@ -915,6 +919,8 @@ h1, h2, h3, .brand, .tile, .splash-name { font-family: var(--display); letter-sp
     inset: auto;
     top: 0; left: 100vw;
     width: 100vh; height: 100vw;
+    /* iPhone dans Safari : 100vh passe sous la barre d'outils ; dvh = la hauteur vraiment visible. */
+    width: 100dvh;
     transform-origin: top left;
     transform: rotate(90deg);
   }
@@ -937,6 +943,8 @@ h1, h2, h3, .brand, .tile, .splash-name { font-family: var(--display); letter-sp
   white-space: nowrap;
 }
 .install-fab svg { width: 22px; height: 22px; }
+/* Bouton « Installer l'app » affiché : la page garde de la place en bas pour qu'il ne recouvre jamais les tuiles. */
+#view-home:has(#btn-install:not([hidden])) { padding-bottom: calc(180px + env(safe-area-inset-bottom)); }
 
 .switch-row { display: flex; align-items: center; gap: 10px; font-weight: 600; }
 .switch-row input { width: 22px; height: 22px; margin: 0; accent-color: var(--accent); }

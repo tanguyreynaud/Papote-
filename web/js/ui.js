@@ -26,6 +26,17 @@ function dialog(message, buttons, extra = null) {
       row.append(b);
     }
     back.addEventListener('click', (e) => { if (e.target === back) close(false); });
+    // Croix en haut à droite : ferme sans rien faire (à la place d'un bouton « Annuler »).
+    if (extra?.croix) {
+      box.classList.add('avec-croix');
+      const x = document.createElement('button');
+      x.type = 'button';
+      x.className = 'icon-btn dialog-croix';
+      x.setAttribute('aria-label', 'Fermer');
+      x.innerHTML = '<svg><use href="#i-close"/></svg>';
+      x.addEventListener('click', () => close(false));
+      box.append(x);
+    }
     if (extra?.title) {
       const h = document.createElement('h2');
       h.className = 'dialog-title';
@@ -68,6 +79,11 @@ export function askConfirm(message, okLabel = actionLabel(message)) {
     { label: 'Annuler', value: false, cls: 'secondary' },
     { label: okLabel, value: true, cls: danger ? 'primary danger-btn' : 'primary' },
   ]);
+}
+
+/** Confirmation avec une croix pour fermer et un seul bouton d'action. */
+export function confirmerAvecCroix(message, okLabel) {
+  return dialog(message, [{ label: okLabel, value: true, cls: 'primary' }], { croix: true });
 }
 
 /** Étape « Avant de partir » avant une résiliation : garder (principal) ou résilier quand même. */

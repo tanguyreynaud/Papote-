@@ -20,6 +20,26 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&display=swap">
   <link rel="stylesheet" href="css/famille.css">
+  <!-- Modules de l'app demandés tous d'un coup : sans cette liste, le navigateur ne découvre chaque fichier
+       qu'après avoir lu celui qui l'importe (un aller-retour réseau de plus à chaque niveau). -->
+  <link rel="modulepreload" href="js/famille.js">
+  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js">
+  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js">
+  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.19.0/firebase-storage.js">
+  <link rel="modulepreload" href="js/firebase.js">
+  <link rel="modulepreload" href="js/ui.js">
+  <link rel="modulepreload" href="js/guide.js">
+  <link rel="modulepreload" href="js/abonnement.js">
+  <link rel="modulepreload" href="js/appel.js">
+  <link rel="modulepreload" href="js/push.js">
+  <link rel="modulepreload" href="js/video.js">
+  <link rel="modulepreload" href="js/agenda.js">
+  <link rel="modulepreload" href="js/compte.js">
+  <link rel="modulepreload" href="js/notifs.js">
+  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-check.js">
+  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js">
+  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.19.0/firebase-functions.js">
+  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.19.0/firebase-messaging.js">
   <script>
     // Thème choisi dans Réglages, appliqué avant l'affichage pour éviter un flash.
     try { const t = localStorage.getItem('papote.theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) { /* rien */ }
@@ -57,6 +77,8 @@
     <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor"/></symbol>
   </svg>
 
+  <!-- En haut de la page, dans le flux : il pousse l'en-tête « Papote » au lieu de le recouvrir. -->
+  <p id="hors-ligne-bandeau" class="hors-ligne-bandeau" role="status" hidden>Pas de connexion pour le moment. Papote reprend toute seule dès son retour.</p>
   <main>
     <div id="loading" class="splash" role="status" aria-label="Chargement">
       <img class="splash-mark" src="icons/icon.svg" alt="">
@@ -82,6 +104,14 @@
           <button type="submit" class="primary wide" id="btn-email">Recevoir le lien</button>
         </form>
         <p id="email-sent" class="seen small" hidden></p>
+        <!-- App installée sur iPhone : le lien de l'e-mail s'ouvrirait dans Safari, pas ici. On le colle. -->
+        <form id="form-paste-link" hidden>
+          <p class="small">Sur iPhone, le lien s'ouvre dans Safari et pas dans l'app. Dans l'e-mail, <strong>appuyez longtemps</strong> sur le lien, touchez « Copier le lien », revenez ici et collez-le :</p>
+          <label>Lien reçu par e-mail
+            <input id="paste-link" type="url" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://app.mapapote.fr/…" required>
+          </label>
+          <button type="submit" class="primary wide">Se connecter</button>
+        </form>
         <p id="login-error" class="error" hidden></p>
       </div>
     </section>
@@ -97,6 +127,11 @@
         </label>
         <button type="submit" class="primary wide">Se connecter</button>
         <p id="link-error" class="error" hidden></p>
+        <!-- iPhone : lien demandé depuis l'app de l'écran d'accueil, ouvert ici dans Safari. -->
+        <div id="link-ios" hidden>
+          <p class="small muted">Vous l'avez demandé depuis l'app Papote de l'écran d'accueil ? Copiez ce lien, puis ouvrez l'app et collez-le.</p>
+          <button type="button" id="btn-copy-link" class="secondary wide">Copier le lien pour l'app</button>
+        </div>
       </form>
     </section>
 
@@ -386,7 +421,7 @@
       </button>
       <button type="button" id="push-nudge" class="card nudge" hidden>
         <span class="avatar avatar-empty" aria-hidden="true">&#128276;</span>
-        <span><strong>Recevoir les appels de <span class="grand-name"></span></strong><br><span class="muted small">Votre téléphone sonnera même app fermée, et vous serez prévenu si la tablette est débranchée</span></span>
+        <span><strong>Recevoir les appels de <span class="grand-name"></span></strong><br><span class="muted small" id="push-nudge-text">Votre téléphone sonnera même app fermée, et vous serez prévenu si la tablette est débranchée</span></span>
       </button>
       <button type="button" id="pause-nudge" class="card nudge" hidden>
         <span class="avatar avatar-empty" aria-hidden="true">&#128241;</span>
@@ -857,7 +892,8 @@
         <button type="button" class="picker" id="pick-camera"><svg><use href="#i-camera"/></svg><span id="pick-camera-label"></span></button>
         <button type="button" class="picker" id="pick-gallery"><svg><use href="#i-gallery"/></svg><span id="pick-gallery-label"></span></button>
       </div>
-      <p class="muted small" id="video-hint" hidden>1 minute au maximum.</p>
+      <p class="muted small" id="video-hint" hidden>1 minute au maximum. Restez sur cet écran pendant la préparation de la vidéo.</p>
+      <button type="button" id="video-go" class="primary wide" hidden>Touchez ici pour préparer la vidéo</button>
       <video id="video-preview" class="video-preview" controls playsinline hidden></video>
       <div id="previews" class="previews"></div>
       <div id="post-extra" hidden>
@@ -1011,13 +1047,12 @@
     <p class="hors-ligne-verif">On vérifie la connexion <span class="splash-dots"><span></span><span></span><span></span></span></p>
     <button type="button" id="hors-ligne-reessayer" class="primary">Réessayer</button>
   </div>
-  <p id="hors-ligne-bandeau" class="hors-ligne-bandeau" role="status" hidden>Pas de connexion pour le moment. Papote reprend toute seule dès son retour.</p>
   <script>
     (() => {
       const ecran = document.getElementById('hors-ligne');
       const bandeau = document.getElementById('hors-ligne-bandeau');
       let minuterie = 0;
-      // Le bandeau pousse la page vers le bas : il ne doit pas cacher le bouton Retour des pages.
+      // Les en-têtes des pages restent sous le bandeau : il ne doit pas cacher le bouton Retour.
       function montrerBandeau(oui) {
         bandeau.hidden = !oui;
         document.documentElement.style.setProperty('--bandeau', oui ? `${bandeau.offsetHeight}px` : '0px');

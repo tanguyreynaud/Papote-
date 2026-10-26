@@ -68,16 +68,24 @@ export async function sendEmailLink(email) {
   try { localStorage.setItem(EMAIL_KEY, email); } catch (e) { /* stockage indisponible */ }
 }
 
-export const isEmailLink = () => isSignInWithEmailLink(auth, location.href);
+/** Adresse à qui un lien de connexion a été envoyé depuis ce téléphone (lien pas encore utilisé). */
+export function pendingEmail() {
+  try { return localStorage.getItem(EMAIL_KEY) || ''; } catch (e) { return ''; }
+}
 
-/** Termine la connexion par lien e-mail. Sans adresse mémorisée, il faut la redemander. */
-export async function completeEmailLink(emailTyped) {
+export const isEmailLink = (lien = location.href) => isSignInWithEmailLink(auth, lien);
+
+/**
+ * Termine la connexion par lien e-mail. Sans adresse mémorisée, il faut la redemander.
+ * lien : l'adresse de la page (lien touché), ou le lien collé dans l'app installée sur iPhone.
+ */
+export async function completeEmailLink(emailTyped, lien = location.href) {
   let email = emailTyped;
   if (!email) {
     try { email = localStorage.getItem(EMAIL_KEY); } catch (e) { /* rien */ }
   }
   if (!email) return null;
-  const href = location.href;
+  const href = lien;
   const user = auth.currentUser;
   let result;
   if (user && user.isAnonymous) {
@@ -89,7 +97,7 @@ export async function completeEmailLink(emailTyped) {
   }
   if (!result) result = (await signInWithEmailLink(auth, email, href)).user;
   try { localStorage.removeItem(EMAIL_KEY); } catch (e) { /* rien */ }
-  history.replaceState(null, '', location.pathname);
+  if (href === location.href) history.replaceState(null, '', location.pathname);
   return result;
 }
 
@@ -118,18 +126,21 @@ export async function familyName(fid) {
   }
 }
 
-/** Les fiches d'avant n'ont ni uid ni e-mail : on les ajoute pour retrouver la famille partout. */
+/** Les fiches d'avant n'ont ni uid ni e-mail : on les ajoute pour retrouver la famille partout.
+ *  Vrai si la fiche vient d'être complétée (la liste de mes familles est alors à relire). */
 export async function tagLegacyMember(fid) {
   const user = auth.currentUser;
   const ref = doc(db, 'families', fid, 'members', user.uid);
   try {
     const snap = await getDoc(ref);
-    if (!snap.exists()) return;
+    if (!snap.exists()) return false;
     const data = snap.data();
-    if (data.uid === user.uid && data.email === myEmail()) return;
+    if (data.uid === user.uid && data.email === myEmail()) return false;
     await updateDoc(ref, { uid: user.uid, email: myEmail() });
+    return true;
   } catch (err) {
     console.warn('Fiche membre non complétée', err);
+    return false;
   }
 }
 

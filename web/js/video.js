@@ -22,13 +22,52 @@ function waitFor(el, event) {
   });
 }
 
+// iPhone (Safari) : une vidéo avec du son et le Web Audio ne démarrent que pendant un toucher.
+// unlockVideo() est appelé au toucher de « Filmer » ou « Choisir une vidéo » : la vidéo et le son
+// débloqués pendant ce geste servent ensuite à prepareVideo, une fois le fichier choisi.
+let pret = null;
+export function unlockVideo() {
+  try {
+    pret?.ctx.close().catch(() => {});
+    const video = document.createElement('video');
+    video.playsInline = true;
+    video.load();
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    ctx.resume().catch(() => {});
+    pret = { video, ctx };
+  } catch (e) {
+    pret = null;
+  }
+}
+
+// Lance la lecture avec le son. Si le téléphone la bloque (pas de toucher récent), on demande un
+// toucher à l'utilisateur : demanderToucher(lancer) doit appeler lancer() pendant ce toucher.
+async function lire(video, ctx, demanderToucher) {
+  try {
+    await video.play();
+    if (ctx.state !== 'running') await Promise.race([ctx.resume(), new Promise((r) => setTimeout(r, 500))]);
+    if (ctx.state === 'running') return;
+    video.pause();
+    video.currentTime = 0;
+  } catch (err) {
+    if (err?.name !== 'NotAllowedError') throw err;
+  }
+  if (!demanderToucher) throw new Error('Lecture de la vidéo bloquée');
+  await demanderToucher(() => {
+    ctx.resume().catch(() => {});
+    return video.play();
+  });
+}
+
 /**
  * Renvoie { blob, mime, thumb, duration }. onProgress(secondes traitées, durée totale).
  * Le traitement se fait en temps réel : une vidéo de 20 s prend environ 20 s.
  */
-export async function prepareVideo(file, onProgress, maxSeconds = MAX_SECONDS) {
+export async function prepareVideo(file, onProgress, maxSeconds = MAX_SECONDS, demanderToucher = null) {
   const url = URL.createObjectURL(file);
-  const video = document.createElement('video');
+  const debloque = pret && pret.ctx.state !== 'closed' ? pret : null;
+  pret = null;
+  const video = debloque?.video || document.createElement('video');
   video.playsInline = true;
   video.preload = 'auto';
   video.src = url;
@@ -53,7 +92,7 @@ export async function prepareVideo(file, onProgress, maxSeconds = MAX_SECONDS) {
 
   // Image (canvas) + son (Web Audio, sans passer par le haut-parleur) -> enregistreur.
   const stream = canvas.captureStream(25);
-  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const audioCtx = debloque?.ctx || new (window.AudioContext || window.webkitAudioContext)();
   const source = audioCtx.createMediaElementSource(video);
   const dest = audioCtx.createMediaStreamDestination();
   source.connect(dest);
@@ -85,8 +124,8 @@ export async function prepareVideo(file, onProgress, maxSeconds = MAX_SECONDS) {
     if (document.hidden) setTimeout(draw, 40); else requestAnimationFrame(draw);
   };
 
+  await lire(video, audioCtx, demanderToucher);
   recorder.start(500);
-  await video.play();
   draw();
   await stopped;
 
