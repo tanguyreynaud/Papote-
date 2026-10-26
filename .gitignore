@@ -30,3 +30,6 @@ maj/public/
 # Outils
 outils/*/node_modules/
 outils/*/package-lock.json
+
+# Galerie des écrans (outils/galerie/galerie.bat)
+outils/galerie/sortie/
