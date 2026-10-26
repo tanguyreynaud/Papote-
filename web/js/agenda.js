@@ -226,6 +226,7 @@ MOIS.forEach((m, i) => $('bday-month').add(new Option(m, String(i + 1))));
 $('rem-repeat').addEventListener('change', syncRepeatFields);
 
 function openSheet() {
+  cacherDoublon();
   $('sheet-reminder').hidden = false;
   history.pushState({ page: 'agenda', sheet: true }, '');
 }
@@ -316,6 +317,46 @@ function reminderData() {
   };
 }
 
+// Doublons d'anniversaire : même prénom (sans accents ni majuscules) ou même jour et même mois, y compris
+// les anniversaires ajoutés tout seuls depuis le profil d'un proche (membre-<uid>) et ceux d'un autre proche.
+// Prévenu une fois dans la fenêtre ; un second appui sur le bouton enregistre quand même.
+const sansAccents = (t) => (t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+let doublonVu = '';
+function quand(b) {
+  return `${b.day === 1 ? '1er' : b.day} ${MOIS[b.month - 1]}`;
+}
+function origine(b) {
+  if (String(b.id).startsWith('membre-')) return 'ajouté tout seul avec son profil';
+  return b.createdBy ? `ajouté par ${b.createdBy}` : '';
+}
+function doublons({ name, day, month }) {
+  const n = sansAccents(name);
+  return birthdays.filter((b) => !(editing && editing.coll === 'birthdays' && editing.id === b.id)
+    && (sansAccents(b.name) === n || (b.day === day && b.month === month)));
+}
+function cacherDoublon() {
+  doublonVu = '';
+  $('bday-doublon').hidden = true;
+  if (seg === 'birthday') $('btn-reminder').textContent = editing ? 'Enregistrer' : "Ajouter l'anniversaire";
+}
+['bday-name', 'bday-day', 'bday-month'].forEach((id) => $(id).addEventListener('input', cacherDoublon));
+// Renvoie true s'il faut s'arrêter pour montrer l'avertissement.
+function prevenirDoublon(data) {
+  const cle = `${sansAccents(data.name)}|${data.day}|${data.month}`;
+  if (doublonVu === cle) return false;
+  const deja = doublons(data);
+  if (!deja.length) return false;
+  doublonVu = cle;
+  const lignes = deja.map((b) => {
+    const o = origine(b);
+    return `${b.name}, le ${quand(b)}${o ? ` (${o})` : ''}`;
+  });
+  $('bday-doublon').textContent = `Déjà dans l'agenda : ${lignes.join(' ; ')}. Vérifiez que ce n'est pas le même, sinon touchez de nouveau le bouton.`;
+  $('bday-doublon').hidden = false;
+  $('btn-reminder').textContent = editing ? 'Enregistrer quand même' : 'Ajouter quand même';
+  return true;
+}
+
 function birthdayData() {
   const name = $('bday-name').value.trim();
   const day = Number($('bday-day').value);
@@ -335,6 +376,7 @@ $('form-reminder').addEventListener('submit', async (e) => {
   $('rem-error').hidden = true;
   const data = seg === 'reminder' ? reminderData() : birthdayData();
   if (!data) return;
+  if (seg === 'birthday' && prevenirDoublon(data)) return;
   $('btn-reminder').disabled = true;
   try {
     const batch = writeBatch(db);

@@ -1256,3 +1256,6 @@ a { text-decoration: none; }
 .moi-date { display: grid; grid-template-columns: 1.2fr 1.5fr 1.3fr; gap: 8px; }
 .moi-date select { margin-top: 0; padding-left: 12px; padding-right: 8px; }
 #form-moi .primary { margin-top: 20px; }
+
+/* Anniversaire peut-être déjà dans l'agenda : prévenu dans la fenêtre, sans fenêtre grise. */
+.doublon { margin: 10px 0 0; padding: 12px 14px; font-size: 15px; line-height: 1.4; background: color-mix(in srgb, var(--accent) 10%, var(--surface)); border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
