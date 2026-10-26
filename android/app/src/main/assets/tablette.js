@@ -1315,15 +1315,16 @@
     if (!today.length) { show(el, false); return; }
     var names = [];
     for (var i = 0; i < today.length; i++) names.push(deName(today[i].name));
-    var age = today.length === 1 ? ageLabel(today[0]).replace(" aujourd'hui", '') : '';
-    $('bday-banner-text').textContent = "Aujourd'hui, c'est l'anniversaire " + names.join(' et ') + ' !' +
-      (age ? ' ' + age.charAt(0).toUpperCase() + age.slice(1) + '.' : '');
+    // Court (Tanguy, 26/10) : le grand écran l'a déjà annoncé le matin.
+    $('bday-banner-text').textContent = 'Anniversaire ' + names.join(' et ');
     show(el, true);
   }
 
   function checkBirthdays() {
     renderBirthdayBanner();
     if (isShown('bday-alert') || asleep) return;
+    // Le grand écran d'anniversaire attend 9 h (pas au réveil de la tablette, à 7 h).
+    if (new Date().getHours() < 9) return;
     if (isShown('overlay') || isShown('reminder-alert') || isShown('call-ring') || isShown('call-view')) return;
     var today = todaysBirthdays();
     for (var i = 0; i < today.length; i++) {
@@ -2102,6 +2103,7 @@
     alert.className = 'overlay ln bday';
     alert.setAttribute('hidden', '');
     alert.innerHTML = '<div class="ln-main"><div class="ln-wood"><div class="ln-note">' +
+      '<img class="bday-gateau" src="bg/gateau.svg" alt="">' +
       '<p id="bday-text" class="ln-text size-l"></p><p id="bday-age" class="ln-sign"></p>' +
       '</div></div></div><div class="ln-bar"><div class="ln-actions">' +
       '<button id="bday-call" class="ln-btn bday-call" hidden></button>' +

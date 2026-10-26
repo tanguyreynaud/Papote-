@@ -1986,3 +1986,6 @@ html .overlay.bday .ln-actions { -webkit-justify-content: center; justify-conten
 html .home-frame:has(.frame-rdv:not([hidden])) #frame-img, html .home-frame:has(.frame-rdv:not([hidden])) #frame-img-b { visibility: hidden; }
 html .overlay.bday .ln-btn.bday-call { background: #15803d; color: #fff; margin-right: 4vmin; padding: 0 7vmin; }
 html .overlay.bday .ln-btn.bday-call[hidden] { display: none; }
+/* Anniversaire : le gâteau dans la carte, au-dessus du texte (plus de petit dessin isolé en dessous). */
+html .overlay.bday .ln-wood { background-image: none !important; }
+html .overlay.bday .bday-gateau { display: block; width: 16vmin; height: 16vmin; margin: 0 auto 2vmin; }
