@@ -30,9 +30,6 @@ const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { logger } = require('firebase-functions/v2');
 const { defineSecret, defineString } = require('firebase-functions/params');
 const admin = require('firebase-admin');
-const { getFirestore } = require('firebase-admin/firestore');
-const Stripe = require('stripe');
-const Anthropic = require('@anthropic-ai/sdk');
 const mail = require('./mail');
 const sendcloud = require('./sendcloud');
 
@@ -58,12 +55,12 @@ const { FieldValue, Timestamp } = admin.firestore;
 // Base Firestore et bucket Storage : ceux d'origine (US) jusqu'à la bascule en Europe, où functions/.env
 // reçoit BASE_FIRESTORE=eu et BUCKET_STORAGE=papote-famille-eu (notes/securite-acces.md, section 9).
 const BASE_FIRESTORE = process.env.BASE_FIRESTORE || 'europe';
-const db = () => getFirestore(admin.app(), BASE_FIRESTORE);
+const { db } = require('./base');
 const stockage = () => admin.storage().bucket(process.env.BUCKET_STORAGE || 'papote-famille-eu');
 
 let stripeClient;
 function stripe() {
-  if (!stripeClient) stripeClient = new Stripe(STRIPE_SECRET.value());
+  if (!stripeClient) stripeClient = new (require('stripe'))(STRIPE_SECRET.value());
   return stripeClient;
 }
 
@@ -574,6 +571,10 @@ function verifierAdmin(request) {
   if (!token || token.admin !== true) throw new HttpsError('permission-denied', 'Réservé à l\'administrateur.');
 }
 
+// La page admin réveille à l'ouverture les fonctions qu'elle appelle pour enregistrer ({ action: 'reveil' }) :
+// chacune démarre une fois en avance au lieu de faire attendre la première modification. Rien n'est lu ni écrit.
+const reveil = (request) => Boolean(request.data && request.data.action === 'reveil');
+
 function ms(valeur) {
   if (valeur == null) return null;
   if (typeof valeur.toMillis === 'function') return valeur.toMillis();
@@ -597,9 +598,12 @@ function effacerPieces(pieces) {
 
 exports.gestionDonnees = onCall(async (request) => {
   verifierAdmin(request);
-  const [commandes, stock, depenses, familles, automatique, reglages, courrier, archives, sims, accessoires] = await Promise.all([
+  // Tout est lu en même temps : « à vendre » et les batteries (qui attendent seulement le stock) ne font plus
+  // deux allers-retours de plus vers la base après les autres lectures.
+  const lectureStock = db().collection('stock').get();
+  const [commandes, stock, depenses, familles, automatique, reglages, courrier, archives, sims, accessoires, aVendre, batteries] = await Promise.all([
     db().collection('commandes').get(),
-    db().collection('stock').get(),
+    lectureStock,
     db().collection('depenses').get(),
     db().collection('families').select('name', 'abonnement').get(),
     db().doc('gestion/automatique').get(),
@@ -608,12 +612,12 @@ exports.gestionDonnees = onCall(async (request) => {
     db().doc('gestion/archives').get(),
     db().collection('sims').get(),
     db().collection('accessoires').get(),
+    // Même calcul que la vente sur le site (stock.js) : paiements en cours compris.
+    require('./stock').nombreDisponibles(db()).catch((e) => { logger.warn('À vendre', e.message); return null; }),
+    // Batterie en direct pour les tablettes jumelées, sinon le dernier relevé gardé sur la fiche.
+    lectureStock.then((s) => lireBatteries(s.docs)).catch((e) => { logger.warn('Batteries', e.message); return new Map(); }),
   ]);
   const parFid = new Map(familles.docs.map((f) => [f.id, f.data()]));
-  // Même calcul que la vente sur le site (stock.js) : paiements en cours compris.
-  const aVendre = await require('./stock').nombreDisponibles(db()).catch((e) => { logger.warn('À vendre', e.message); return null; });
-  // Batterie en direct pour les tablettes jumelées, sinon le dernier relevé gardé sur la fiche.
-  const batteries = await lireBatteries(stock.docs).catch((e) => { logger.warn('Batteries', e.message); return new Map(); });
   return {
     aVendre,
     commandes: commandes.docs.map((d) => {
@@ -821,6 +825,7 @@ async function remplacer(d, qui) {
 
 exports.gestionStock = onCall(async (request) => {
   verifierAdmin(request);
+  if (reveil(request)) return { ok: true };
   const d = request.data || {};
   const qui = request.auth.token.email || request.auth.uid;
 
@@ -1084,6 +1089,7 @@ async function enregistrerSim(id, c, qui) {
 
 exports.gestionSim = onCall(async (request) => {
   verifierAdmin(request);
+  if (reveil(request)) return { ok: true };
   const d = request.data || {};
   const qui = request.auth.token.email || request.auth.uid;
 
@@ -1121,6 +1127,7 @@ function champsAccessoire(c) {
 
 exports.gestionAccessoire = onCall(async (request) => {
   verifierAdmin(request);
+  if (reveil(request)) return { ok: true };
   const d = request.data || {};
   const qui = request.auth.token.email || request.auth.uid;
 
@@ -1235,6 +1242,7 @@ function moisDeParis(t) {
 
 exports.gestionDepense = onCall(async (request) => {
   verifierAdmin(request);
+  if (reveil(request)) return { ok: true };
   const d = request.data || {};
   if (d.action === 'ajouter') {
     const qui = request.auth.token.email || request.auth.uid;
@@ -1386,6 +1394,7 @@ exports.gestionStripe = onCall({ secrets: [STRIPE_SECRET], timeoutSeconds: 120 }
 // Factures (créées par Stripe à chaque paiement de l'abonnement) et autres paiements d'une commande.
 exports.gestionCommande = onCall({ secrets: [STRIPE_SECRET] }, async (request) => {
   verifierAdmin(request);
+  if (reveil(request)) return { ok: true };
   const { commande } = request.data || {};
   if (typeof commande !== 'string' || !commande) throw new HttpsError('invalid-argument', 'Commande manquante.');
   const snap = await db().doc(`commandes/${commande}`).get();
@@ -1447,6 +1456,7 @@ async function enregistrerPiece(collection, id, nomBrut, type, contenu, genre) {
 
 exports.gestionPiece = onCall({ memory: '512MiB' }, async (request) => {
   verifierAdmin(request);
+  if (reveil(request)) return { ok: true };
   const d = request.data || {};
   const bucket = stockage();
 
@@ -1539,6 +1549,7 @@ async function lireDocument(contenu, type) {
       : { type: 'image', source: { type: 'base64', media_type: type, data: contenu } };
   let reponse;
   try {
+    const Anthropic = require('@anthropic-ai/sdk');
     const client = new Anthropic({ apiKey: ANTHROPIC_API_KEY.value() });
     reponse = await client.beta.messages.create({
       model: MODELE_LECTURE,
@@ -3075,6 +3086,7 @@ async function lierInstallation(id, numero, qui) {
 // | { type: 'lier', id, ref }
 exports.gestionParcours = onCall(async (request) => {
   verifierAdmin(request);
+  if (reveil(request)) return { ok: true };
   const d = request.data || {};
   const qui = request.auth.token.email || request.auth.uid;
   if (d.type === 'envoi' || d.type === 'recu') {

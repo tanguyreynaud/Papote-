@@ -45,11 +45,13 @@ function message(type, nom) {
 exports.alertesTablettes = onSchedule({ schedule: 'every 5 minutes', timeZone: 'Europe/Paris' }, async () => {
   const db = base();
   const maintenant = Date.now();
-  const familles = await db.collection('families').get();
-  for (const fam of familles.docs) {
+  // Seulement les champs utiles des familles, et toutes les familles en même temps (et non l'une après l'autre) :
+  // la tâche, lancée 288 fois par jour, finit plus vite et coûte moins de temps de calcul.
+  const familles = await db.collection('families').select('abonnement', 'name', 'createdBy', 'admins').get();
+  await Promise.all(familles.docs.map(async (fam) => {
     const famille = fam.data();
     // Abonnement suspendu : la tablette est en pause, pas d'alerte.
-    if (!estActif(famille.abonnement)) continue;
+    if (!estActif(famille.abonnement)) return;
     const tablettes = await fam.ref.collection('members').where('role', '==', 'tablette').get();
     for (const t of tablettes.docs) {
       const tablette = t.data();
@@ -69,7 +71,7 @@ exports.alertesTablettes = onSchedule({ schedule: 'every 5 minutes', timeZone: '
         logger.error(`Famille ${fam.id}, tablette ${t.id} : alerte non envoyée`, e.message);
       }
     }
-  }
+  }));
 });
 
 // Jour « AAAA-MM-JJ » à Paris pour un instant donné.
