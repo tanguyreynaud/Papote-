@@ -1,0 +1,35 @@
+# Règles Firestore (firestore.rules) vérifiées sur l'émulateur à chaque changement (gratuit, rien en ligne) :
+# 31e proche refusé, envois bloqués sans abonnement, jumelage de la tablette, commandes jamais écrites par l'appli…
+name: Règles Firestore
+
+on:
+  push:
+    paths: ['firestore.rules', 'tests/regles/**', '.github/workflows/regles.yml']
+  pull_request:
+    paths: ['firestore.rules', 'tests/regles/**', '.github/workflows/regles.yml']
+  workflow_dispatch:
+
+jobs:
+  regles:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: tests/regles
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tests/regles/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: emulateurs-firebase-14
+      - run: npm ci
+      - run: npm test
