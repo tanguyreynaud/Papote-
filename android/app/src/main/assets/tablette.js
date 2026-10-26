@@ -599,6 +599,8 @@
 
   // ---------- Écran d'un nouvel envoi : photo, message, vocal ou vidéo ----------
 
+  var MAX_FILE = 5;
+  var passes = {}; // envois sautés (file trop longue) : directement dans le diaporama
   function queueUnseen() {
     if (window.papotePaused) return; // en pause : rien ne s'affiche ni n'est marqué « vu »
     // Chaque envoi attend son tour, du plus ancien au plus récent : une nouvelle photo ne
@@ -610,6 +612,9 @@
       shownInOverlay[p.id] = true;
       overlayQueue.push(p);
     }
+    // Pas une file sans fin (absente quelques jours) : les 5 plus récents seulement, les autres
+    // restent dans le diaporama (Tanguy, 26/10), vidéos comprises.
+    while (overlayQueue.length > MAX_FILE) passes[overlayQueue.shift().id] = true;
     if (!overlayPost && !inCall()) nextOverlay();
   }
 
@@ -700,9 +705,12 @@
           if (overlayPost === p) speakOnce(p.id, overlayText(p)); // lu une fois tout seul ; « Écouter » pour réécouter
         });
       });
-    }, function () {
-      // Rien : l'envoi reste affiché jusqu'à ce qu'elle touche OK (Tanguy, 26/10 : il passait au
-      // suivant tout seul au bout de 2 minutes, avant qu'elle ait fini de regarder).
+    }, function closeWhenDone() {
+      if (overlayPost !== p) return;
+      // On ne coupe pas une vidéo ou un vocal en cours : on attend la fin.
+      if (playing && playing.post === p) { setTimeout(closeWhenDone, 10000); return; }
+      markSeen(p);
+      nextOverlay();
     });
     var mode = p.image ? 'photo' : p.type === 'voice' ? 'voice' : p.type === 'video' ? 'video' : 'message';
     var media = mode === 'voice' || mode === 'video';
@@ -955,7 +963,7 @@
       // La voix d'un envoi arrive souvent après lui : on la note dès qu'elle est là.
       noteVoix(overlayText(posts[j]), posts[j].voice, posts[j].announce);
       // Vidéo : dans le diaporama seulement, une fois vue (la première fois, elle arrive en grand).
-      if (posts[j].video && !posts[j].image && posts[j].seen) { slides.push(posts[j]); continue; }
+      if (posts[j].video && !posts[j].image && (posts[j].seen || passes[posts[j].id])) { slides.push(posts[j]); continue; }
       if (!posts[j].image) continue;
       // Envoi de plusieurs photos : chacune a sa place dans la galerie, avec le même mot.
       var extra = posts[j].images || [];
