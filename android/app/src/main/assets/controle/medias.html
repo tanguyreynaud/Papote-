@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Contrôle des médias</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #fdfaf5; color: #24212f; font: 26px/1.3 sans-serif; overflow: hidden; }
+    #titre { position: absolute; top: 16px; left: 0; right: 0; text-align: center; font-weight: 700; z-index: 2; }
+    img, video { position: absolute; top: 70px; left: 0; width: 100%; height: calc(100% - 70px); object-fit: contain; }
+  </style>
+</head>
+<body>
+  <p id="titre">Contrôle : photo, voix, vidéo</p>
+  <img id="photo" alt="" hidden>
+  <video id="video" playsinline hidden></video>
+  <script>
+    // Auto-test de la tablette (ControleActivity, étape « medias ») : les mêmes chemins que l'écran de
+    // Papote (photo dans la page, voix enregistrée en MP3, vidéo dans la page) et internet jusqu'à Firebase.
+    // Chaque résultat part vers controle.txt par ControleJs.resultat ; rien n'est envoyé à la famille.
+    'use strict';
+    var titre = document.getElementById('titre');
+    function noter(etape, valeur) { try { window.ControleJs.resultat(etape, valeur); } catch (e) { /* hors tablette */ } }
+    function avecDelai(promesse, ms) {
+      return Promise.race([promesse, new Promise(function (_, non) { setTimeout(function () { non(new Error('trop long')); }, ms); })]);
+    }
+
+    function photo() {
+      titre.textContent = 'Photo d’essai';
+      var img = document.getElementById('photo');
+      return avecDelai(new Promise(function (oui, non) {
+        img.onload = function () { img.hidden = false; setTimeout(function () { oui('ok ' + img.naturalWidth + 'x' + img.naturalHeight); }, 1200); };
+        img.onerror = function () { non(new Error('image illisible')); };
+        img.src = 'photo-essai.jpg';
+      }), 6000);
+    }
+
+    // Une voix enregistrée, lue comme les messages (new Audio, voir sayAloud dans tablette.js).
+    function voix() {
+      titre.textContent = 'Voix enregistrée';
+      return avecDelai(new Promise(function (oui, non) {
+        var a = new Audio('/voix/mots/mot-0.mp3');
+        a.onended = function () { oui('ok ' + a.duration.toFixed(1) + ' s'); };
+        a.onerror = function () { non(new Error('son illisible')); };
+        var p = a.play();
+        if (p && p.catch) p.catch(non);
+      }), 12000);
+    }
+
+    function video() {
+      titre.textContent = 'Vidéo d’essai';
+      document.getElementById('photo').hidden = true;
+      var v = document.getElementById('video');
+      v.hidden = false;
+      return avecDelai(new Promise(function (oui, non) {
+        v.onended = function () { oui(v.videoWidth ? 'ok ' + v.videoWidth + 'x' + v.videoHeight : 'sans image'); };
+        v.onerror = function () { non(new Error('vidéo illisible')); };
+        v.src = 'video-essai.mp4';
+        var p = v.play();
+        if (p && p.catch) p.catch(non);
+      }), 12000);
+    }
+
+    // Internet jusqu'aux serveurs de Papote (no-cors : seule compte la réponse, pas son contenu).
+    var SERVEURS = {
+      firestore: 'https://firestore.googleapis.com/',
+      stockage: 'https://firebasestorage.googleapis.com/',
+      'mises-a-jour': 'https://papote-maj.web.app/version.json'
+    };
+    function reseau() {
+      return Promise.all(Object.keys(SERVEURS).map(function (nom) {
+        return avecDelai(fetch(SERVEURS[nom], { mode: 'no-cors', cache: 'no-store' }), 10000)
+          .then(function () { return null; }, function () { return nom; });
+      })).then(function (ko) {
+        ko = ko.filter(Boolean);
+        if (ko.length) throw new Error('injoignable : ' + ko.join(', '));
+        return 'ok';
+      });
+    }
+
+    function etape(nom, fn) {
+      return fn().then(function (v) { noter(nom, v); }, function (e) { noter(nom, 'erreur ' + e.message); });
+    }
+
+    var net = etape('reseau', reseau);
+    etape('photo', photo)
+      .then(function () { return etape('voix-mp3', voix); })
+      .then(function () { return etape('video-page', video); })
+      .then(function () { return net; })
+      .then(function () { titre.textContent = 'Terminé'; noter('medias', 'fini'); });
+  </script>
+</body>
+</html>

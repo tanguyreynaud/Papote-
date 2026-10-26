@@ -30,3 +30,6 @@ maj/public/
 # Outils
 outils/*/node_modules/
 outils/*/package-lock.json
+
+# Captures du passage des écrans (installation/passage-ecrans.ps1)
+installation/ecrans-*/

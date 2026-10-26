@@ -309,10 +309,14 @@ if ($refus.Count) {
     }
 }
 
-# 9 bis. Contrôle atelier du matériel (controle-atelier.ps1) : questions O/N, donc pas avec -Oui.
+# 9 bis. Contrôle atelier du matériel (controle-atelier.ps1) : questions O/N ; avec -Oui, la version
+#        rapide sans question (photo, voix, vidéo, son et micro, caméra, internet : ~40 s).
 $controleOk = $true
-if ($SansControle -or $Oui) {
-    Say "`nContrôle atelier non fait$(if ($Oui) { ' (-Oui)' }) : à faire avant l'envoi (controle-atelier.ps1)." 'Yellow'
+if ($SansControle) {
+    Say "`nContrôle atelier non fait : à faire avant l'envoi (controle-atelier.ps1)." 'Yellow'
+} elseif ($Oui) {
+    & (Join-Path $PSScriptRoot 'controle-atelier.ps1') -Rapide
+    $controleOk = $LASTEXITCODE -eq 0
 } else {
     & (Join-Path $PSScriptRoot 'controle-atelier.ps1')
     $controleOk = $LASTEXITCODE -eq 0

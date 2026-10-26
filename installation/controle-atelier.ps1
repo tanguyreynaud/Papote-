@@ -1,11 +1,17 @@
 ﻿# Contrôle atelier : vérifie le matériel d'une tablette avant la mise en carton, sans famille ni commande.
 # Lancé par installer-tablette.ps1 (ou seul : powershell -ExecutionPolicy Bypass -File controle-atelier.ps1 [-Serial X]).
-# Son, prise jack, micro, caméra, écran tactile (questions O/N), puis wifi et kiosque en automatique.
+# Son, prise jack, micro, caméra, écran tactile (questions O/N), puis en automatique : version à jour,
+# photo, voix et vidéo comme dans Papote, voix d'Android, internet jusqu'à Firebase, wifi et kiosque.
+#   -Rapide : sans aucune question (~40 s) ; le micro s'écoute parler à la place des essais à l'oreille.
+# À la fin, la tablette affiche « Tout est prêt ✓ » ou ce qui ne va pas (un toucher rend la main à Papote).
+# Rien n'est écrit dans une famille : photo, voix et vidéo d'essai sont dans l'app.
 # Code de sortie 0 si tout est bon, 1 sinon (« NE PAS ENVOYER »). Résumé dans $env:TEMP\controle-<série>.txt.
 param(
     [string]$Serial,
     # Volume des essais de son (%), plus bas si quelqu'un dort à côté
-    [int]$Volume = 70
+    [int]$Volume = 70,
+    # Sans question (installation avec -Oui, ou simple vérification) : tout est mesuré par la tablette
+    [switch]$Rapide
 )
 
 $ErrorActionPreference = 'Stop'
@@ -44,11 +50,32 @@ function Oui($question) {
         if ($r -match '^[nN]') { return $false }
     }
 }
+# Lit une ligne déjà écrite (sans attendre).
+function Lu($nom) {
+    $m = [regex]::Match((Adb shell cat $Fichier), "(?m)^$nom=(.*)$")
+    if ($m.Success) { return $m.Groups[1].Value.Trim() } else { return $null }
+}
+function Note($titre, $valeur, $ok) {
+    $bilan[$titre] = [bool]$ok
+    if (-not $ok) { Say "  $titre : $(if ($valeur) { $valeur } else { 'pas de réponse' })" 'Yellow' }
+}
 function Casque { return (Adb shell dumpsys audio) -match 'Devices: [^\n]*(headset|headphone)\(' }
 
 $bilan = [ordered]@{}
-Say "`n=== Contrôle atelier ===" 'Cyan'
+Say "`n=== Contrôle atelier$(if ($Rapide) { ' rapide (sans question)' }) ===" 'Cyan'
 Adb shell rm -f $Fichier | Out-Null
+
+# 0. Version : au moins celle publiée pour toutes les tablettes (une tablette de test peut être devant).
+$installee = [regex]::Match((Adb shell dumpsys package $Package), 'versionCode=(\d+)')
+$code = if ($installee.Success) { [int]$installee.Groups[1].Value } else { 0 }
+$publiee = $null
+try { $publiee = Invoke-RestMethod -Uri 'https://papote-maj.web.app/version.json' -Headers @{ 'Cache-Control' = 'no-cache' } -TimeoutSec 15 } catch {}
+if ($publiee -and $publiee.versionCode) {
+    Note "Version à jour ($code)" "installée $code, publiée $($publiee.versionCode) ($($publiee.versionName))" ($code -ge [int]$publiee.versionCode)
+} else {
+    Say "Version installée : $code (version publiée pas lue : pas d'internet sur le PC)." 'Yellow'
+}
+if (-not $Rapide) {
 
 # 1. Haut-parleur (casque débranché)
 if (Casque) {
@@ -103,7 +130,36 @@ Say "`n5. Écran tactile : touchez les 9 cases, elles deviennent vertes."
 Etape ecran
 $bilan['Écran tactile'] = (Resultat 'ecran' 120) -eq 'ok'
 if (-not $bilan['Écran tactile']) { Say 'Toutes les cases n''ont pas répondu.' 'Yellow' }
-Etape fin
+}
+
+# Automatique : photo, voix enregistrée et vidéo dans la page (comme les envois de la famille),
+# internet jusqu'aux serveurs, puis le lecteur vidéo et la voix d'Android.
+Say "`nPhoto, voix et vidéo d'essai (automatique)…"
+Etape medias
+$null = Resultat 'medias' 45
+Note 'Photo affichée' (Lu 'photo') ((Lu 'photo') -match '^ok')
+Note 'Voix enregistrée' (Lu 'voix-mp3') ((Lu 'voix-mp3') -match '^ok')
+Note 'Vidéo dans la page' (Lu 'video-page') ((Lu 'video-page') -match '^ok')
+Note 'Internet jusqu''à Firebase' (Lu 'reseau') ((Lu 'reseau') -eq 'ok')
+Etape video
+$v = Resultat 'video' 15
+Note 'Lecteur vidéo' $v ($v -match '^ok')
+Etape voix
+$v = Resultat 'voix' 30
+Note 'Voix de la tablette' $v ($v -eq 'ok')
+if ($Rapide) {
+    # Le micro doit entendre la tablette dire « Bonjour, et bienvenue sur Papote » (casque débranché).
+    Etape boucle
+    $v = Resultat 'boucle' 15
+    $calme = if ($v -match 'calme (\d+)') { [int]$Matches[1] } else { 0 }
+    $son = if ($v -match 'son (\d+)') { [int]$Matches[1] } else { 0 }
+    Say "Son entendu par le micro : $son (pièce : $calme)." 'DarkGray'
+    Note 'Haut-parleur et micro' $v (($son -ge 1500) -and ($son -gt 2 * $calme))
+    Etape camera
+    $cam = Resultat 'camera' 15
+    $img = Resultat 'camera-image' 10
+    Note 'Caméra de face' "$cam $img" (($cam -eq 'avant') -and ($img -match '^ok'))
+}
 
 # 6. Automatique : wifi avec internet, kiosque
 $net = Adb shell dumpsys connectivity
@@ -118,6 +174,9 @@ foreach ($k in $bilan.Keys) {
     Say ("  {0} {1}" -f $(if ($v) { 'OK ' } else { 'KO ' }), $k) $(if ($v) { 'Green' } else { 'Red' })
     $lignes += "$k=$(if ($v) { 'ok' } else { 'ko' })"
 }
+# Le même bilan sur l'écran de la tablette (base64 : accents et espaces passent tels quels par adb).
+$b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($lignes -join "`n"))
+Adb shell am start -n $Activite --es etape bilan --es b64 $b64 | Out-Null
 $serie = (Adb shell getprop ro.serialno).Trim()
 $lignes | Set-Content -Encoding utf8 (Join-Path $env:TEMP "controle-$serie.txt")
 if ($bilan.Values -contains $false) {

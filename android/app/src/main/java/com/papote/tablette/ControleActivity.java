@@ -10,6 +10,7 @@ import android.media.AudioRecord;
 import android.media.AudioTrack;
 import android.media.MediaPlayer;
 import android.media.MediaRecorder;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -19,19 +20,36 @@ import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
 import android.view.WindowManager;
+import android.webkit.JavascriptInterface;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 import android.widget.GridLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.VideoView;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.FileWriter;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 
 /**
  * Contrôle atelier (installer-tablette.ps1, avant la mise en carton) : le matériel est vérifié sans
  * famille ni appairage. Le script lance une étape à la fois :
  *   adb shell am start -n com.papote.tablette/.ControleActivity --es etape son|micro|camera|ecran|fin [--ei volume 70]
  * et lit le résultat dans Android/data/com.papote.tablette/files/controle.txt (« etape=ok|ko|... »).
+ * Auto-test sans question (controle-atelier.ps1 -Rapide) : medias (photo, voix et vidéo dans la page,
+ * internet jusqu'à Firebase), video (lecteur d'Android, comme les vidéos reçues), voix (voix d'Android),
+ * boucle (le micro entend le haut-parleur), puis bilan (« Tout est prêt » ou ce qui ne va pas).
+ * Passage des écrans (passage-ecrans.ps1) : galerie --ei n N ouvre le vrai écran de la tablette avec
+ * une fausse famille (assets/controle/ecrans.js), internet coupé : rien ne part vers Firebase.
  * Réservée à adb : l'activité demande la permission DUMP (shell l'a, une appli ordinaire non).
  */
 public class ControleActivity extends Activity {
@@ -40,6 +58,9 @@ public class ControleActivity extends Activity {
     private FrameLayout root;
     private android.hardware.Camera camera;
     private MediaPlayer player;
+    private WebView web;
+    private VideoView video;
+    private android.speech.tts.TextToSpeech tts;
     private volatile boolean stop;
     private int volume = 70;
 
@@ -71,6 +92,12 @@ public class ControleActivity extends Activity {
             case "micro": micro(); break;
             case "camera": camera(); break;
             case "ecran": ecran(); break;
+            case "medias": page(LocalContent.ORIGIN + "/controle/medias.html", false); break;
+            case "galerie": page(LocalContent.PAGE + "?controle=" + getIntent().getIntExtra("n", 1), true); break;
+            case "video": video(); break;
+            case "voix": voix(); break;
+            case "boucle": boucle(); break;
+            case "bilan": bilan(getIntent().getStringExtra("b64")); break;
             default: finish(); break; // « fin » : retour à Papote
         }
     }
@@ -218,6 +245,8 @@ public class ControleActivity extends Activity {
                         view.setLayoutParams(new FrameLayout.LayoutParams(vw, vh, Gravity.CENTER));
                     });
                     camera.setPreviewDisplay(h);
+                    // Une vraie image reçue du capteur (une caméra en panne s'ouvre parfois sans rien donner).
+                    camera.setOneShotPreviewCallback((data, c) -> result("camera-image", "ok " + data.length));
                     camera.startPreview();
                     result("camera", front >= 0 ? "avant" : "arriere");
                 } catch (Exception e) {
@@ -271,10 +300,176 @@ public class ControleActivity extends Activity {
         root.addView(grid, new FrameLayout.LayoutParams(-1, -1));
     }
 
+    // ---------- Pages dans une WebView sans pont vers l'app : rien ne peut écrire dans la famille ----------
+
+    /** Ce que les pages de contrôle (assets/controle) peuvent faire : noter un résultat, rien d'autre. */
+    private final class Pont {
+        @JavascriptInterface public void resultat(String etape, String valeur) { result(etape, valeur); }
+    }
+
+    private void page(String url, boolean galerie) {
+        if (!galerie) media(volume); // passage des écrans : le volume de la tablette ne change pas
+        web = new WebView(this);
+        web.setBackgroundColor(Color.parseColor("#FDFAF5"));
+        WebSettings s = web.getSettings();
+        s.setJavaScriptEnabled(true);
+        s.setDomStorageEnabled(true);
+        s.setAllowFileAccess(false);
+        s.setMediaPlaybackRequiresUserGesture(false);
+        s.setTextZoom(100);
+        web.addJavascriptInterface(new Pont(), "ControleJs");
+        web.setWebViewClient(new WebViewClient() {
+            @Override public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest r) { return true; }
+            @Override public WebResourceResponse shouldInterceptRequest(WebView v, WebResourceRequest r) {
+                return intercept(r.getUrl(), galerie);
+            }
+        });
+        web.setWebChromeClient(new android.webkit.WebChromeClient() {
+            @Override public boolean onConsoleMessage(android.webkit.ConsoleMessage m) {
+                Log.i(TAG, m.message() + " @" + m.sourceId() + ":" + m.lineNumber());
+                return true;
+            }
+        });
+        root.addView(web, new FrameLayout.LayoutParams(-1, -1));
+        web.loadUrl(url);
+    }
+
+    private WebResourceResponse intercept(Uri url, boolean galerie) {
+        boolean local = url != null && LocalContent.HOST.equals(url.getHost());
+        if (!galerie) return local ? LocalContent.intercept(this, url) : null;
+        // Passage des écrans : internet coupé (pas de Firebase), appels.js remplacé par la fausse famille.
+        if (!local) return vide("text/plain");
+        String path = url.getPath() == null ? "" : url.getPath();
+        if (path.equals("/appels.js")) return vide("text/javascript");
+        if (!path.equals("/tablette.html")) return LocalContent.intercept(this, url);
+        try (InputStream in = getAssets().open("tablette.html")) {
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            byte[] buf = new byte[8192];
+            for (int n; (n = in.read(buf)) > 0; ) out.write(buf, 0, n);
+            String html = out.toString("UTF-8").replaceFirst("<head>", "<head><script src=\"controle/ecrans.js\"></script>");
+            return new WebResourceResponse("text/html", "utf-8", new ByteArrayInputStream(html.getBytes(StandardCharsets.UTF_8)));
+        } catch (Exception e) {
+            Log.w(TAG, "Page de la tablette", e);
+            return vide("text/html");
+        }
+    }
+
+    private static WebResourceResponse vide(String mime) {
+        return new WebResourceResponse(mime, "utf-8", new ByteArrayInputStream(new byte[0]));
+    }
+
+    // ---------- Vidéo par le lecteur d'Android (celui des vidéos reçues) ----------
+
+    private void video() {
+        message("Contrôle de la vidéo", "");
+        media(volume);
+        File f = new File(getCacheDir(), "video-essai.mp4");
+        try (InputStream in = getAssets().open("controle/video-essai.mp4"); FileOutputStream out = new FileOutputStream(f)) {
+            byte[] buf = new byte[8192];
+            for (int n; (n = in.read(buf)) > 0; ) out.write(buf, 0, n);
+        } catch (Exception e) {
+            result("video", "erreur " + e.getMessage());
+            return;
+        }
+        video = new VideoView(this);
+        root.addView(video, new FrameLayout.LayoutParams(-1, -1, Gravity.CENTER));
+        final int[] taille = {0, 0};
+        video.setOnPreparedListener(mp -> { taille[0] = mp.getVideoWidth(); taille[1] = mp.getVideoHeight(); });
+        video.setOnCompletionListener(mp -> result("video", taille[0] > 0 ? "ok " + taille[0] + "x" + taille[1] : "sans image"));
+        video.setOnErrorListener((mp, what, extra) -> { result("video", "erreur " + what + "/" + extra); return true; });
+        video.setVideoPath(f.getAbsolutePath());
+        video.start();
+    }
+
+    // ---------- Voix d'Android (lit les messages quand la voix enregistrée manque) ----------
+
+    private void voix() {
+        message("Contrôle de la voix", "La tablette lit une phrase avec sa propre voix.");
+        media(volume);
+        tts = new android.speech.tts.TextToSpeech(getApplicationContext(), status -> {
+            if (status != android.speech.tts.TextToSpeech.SUCCESS) { result("voix", "erreur moteur"); return; }
+            int langue = tts.setLanguage(java.util.Locale.FRANCE);
+            if (langue < 0) { result("voix", "pas de voix française"); return; }
+            tts.setOnUtteranceProgressListener(new android.speech.tts.UtteranceProgressListener() {
+                @Override public void onStart(String id) { }
+                @Override public void onDone(String id) { result("voix", "ok"); }
+                @Override public void onError(String id) { result("voix", "erreur lecture"); }
+            });
+            tts.speak("Bonjour, ceci est un essai de la voix de la tablette.", android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "essai");
+        });
+    }
+
+    // ---------- Haut-parleur et micro sans personne : le micro doit entendre la tablette parler ----------
+
+    private void boucle() {
+        message("Contrôle du son et du micro", "La tablette s'écoute parler.");
+        media(volume);
+        new Thread(() -> {
+            int rate = 16000;
+            int min = AudioRecord.getMinBufferSize(rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
+            short[] buf = new short[2048];
+            int calme = 0, son = 0;
+            AudioRecord rec = null;
+            MediaPlayer mp = null;
+            try {
+                rec = new AudioRecord(MediaRecorder.AudioSource.MIC, rate, AudioFormat.CHANNEL_IN_MONO,
+                        AudioFormat.ENCODING_PCM_16BIT, Math.max(min, 4096));
+                rec.startRecording();
+                // 1 s de silence (bruit de la pièce), puis la phrase d'accueil jouée et écoutée.
+                long fin = System.currentTimeMillis() + 1000;
+                while (System.currentTimeMillis() < fin && !stop) calme = Math.max(calme, crete(rec, buf));
+                mp = new MediaPlayer();
+                android.content.res.AssetFileDescriptor fd = getAssets().openFd("bienvenue/voix/accueil.mp3");
+                mp.setDataSource(fd.getFileDescriptor(), fd.getStartOffset(), fd.getLength());
+                fd.close();
+                mp.prepare();
+                mp.start();
+                fin = System.currentTimeMillis() + Math.min(6000, Math.max(1500, mp.getDuration()));
+                while (System.currentTimeMillis() < fin && !stop) son = Math.max(son, crete(rec, buf));
+            } catch (Exception e) {
+                Log.w(TAG, "Boucle", e);
+                result("boucle", "erreur " + e.getMessage());
+                return;
+            } finally {
+                if (rec != null) { try { rec.stop(); } catch (Exception ignored) { } rec.release(); }
+                if (mp != null) { try { mp.release(); } catch (Exception ignored) { } }
+            }
+            if (!stop) result("boucle", "calme " + calme + " son " + son);
+        }, "papote-controle-boucle").start();
+    }
+
+    private static int crete(AudioRecord rec, short[] buf) {
+        int n = rec.read(buf, 0, buf.length), peak = 0;
+        for (int i = 0; i < n; i++) peak = Math.max(peak, Math.abs((int) buf[i]));
+        return peak;
+    }
+
+    // ---------- Bilan affiché sur la tablette (lignes « Nom=ok|ko », en base64 pour adb) ----------
+
+    private void bilan(String b64) {
+        String texte = "";
+        try { texte = new String(android.util.Base64.decode(b64 == null ? "" : b64, android.util.Base64.DEFAULT), StandardCharsets.UTF_8); }
+        catch (Exception ignored) { }
+        StringBuilder ko = new StringBuilder();
+        for (String ligne : texte.split("\n")) {
+            int i = ligne.lastIndexOf('=');
+            if (i > 0 && !"ok".equals(ligne.substring(i + 1).trim())) ko.append("• ").append(ligne.substring(0, i)).append('\n');
+        }
+        TextView sub = message(ko.length() == 0 ? "Tout est prêt ✓" : "À vérifier",
+                ko.length() == 0 ? "La tablette peut partir." : ko.toString().trim());
+        if (ko.length() > 0) sub.setTextColor(Color.parseColor("#B42318"));
+        sub.setGravity(ko.length() == 0 ? Gravity.CENTER : Gravity.START);
+        root.setOnClickListener(v -> finish()); // un toucher rend la main à Papote
+    }
+
     private void cleanup() {
         stop = true;
         releaseCamera();
         if (player != null) { try { player.release(); } catch (Exception ignored) { } player = null; }
+        if (web != null) { root.removeView(web); web.destroy(); web = null; }
+        if (video != null) { video.stopPlayback(); video = null; }
+        if (tts != null) { tts.shutdown(); tts = null; }
+        root.setOnClickListener(null);
     }
 
     @Override
