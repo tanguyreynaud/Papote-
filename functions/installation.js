@@ -300,9 +300,10 @@ function brancher(deps) {
     ]);
     await Promise.all([
       ...jumelages.docs.map((d) => d.ref.delete()),
-      // La commande et la tablette se relieront à la famille de la prochaine installation.
-      ...commandes.docs.map((d) => d.ref.update({ fid: FieldValue.delete() })),
-      ...fiches.docs.map((d) => d.ref.update({ fid: FieldValue.delete(), jumeleeLe: FieldValue.delete() })),
+      // La commande et la tablette se relieront à la famille de la prochaine installation. fid à null, pas
+      // effacé : les recherches des commandes pas encore reliées (where fid == null) doivent la retrouver.
+      ...commandes.docs.map((d) => d.ref.update({ fid: null })),
+      ...fiches.docs.map((d) => d.ref.update({ fid: null, jumeleeLe: FieldValue.delete() })),
     ]);
     await db.collection('suppressions').add({
       fid, nom: fam.name || null, membres: 1, le: Date.now(), par: uid, motif: 'installation annulée',

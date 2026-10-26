@@ -94,6 +94,24 @@ test('rétractation : toujours possible avant l\'envoi', () => {
   assert.strictEqual(a.retractationPossible({ expedition: 'a-preparer', creeLe: T0 - 60 * JOUR }, T0), true);
 });
 
+test('rétractation : paiement SEPA en attente = tablette pas partie, rien à rendre', () => {
+  const c = { expedition: 'paiement-en-attente', creeLe: T0 - 60 * JOUR };
+  assert.strictEqual(a.materielParti(c), false);
+  assert.strictEqual(a.retractationPossible(c, T0), true);
+});
+
+test('rétractation : commande déjà annulée, plus rien à annuler', () => {
+  assert.strictEqual(a.retractationPossible({ expedition: 'annulee', creeLe: T0 }, T0 + JOUR), false);
+});
+
+test('matériel parti : seulement une fois la tablette envoyée', () => {
+  assert.strictEqual(a.materielParti({ expedition: 'a-preparer' }), false);
+  assert.strictEqual(a.materielParti({ expedition: 'annulee' }), false);
+  assert.strictEqual(a.materielParti({ expedition: 'annulee', envoyeeLe: T0 }), true);
+  assert.strictEqual(a.materielParti({ expedition: 'envoyee' }), true);
+  assert.strictEqual(a.materielParti(null), false);
+});
+
 test('rétractation : 30 jours après la réception estimée (envoi + 3 jours)', () => {
   const c = { expedition: 'envoyee', creeLe: T0, envoyeeLe: T0 + 2 * JOUR };
   assert.strictEqual(a.limiteRetractation(T0, T0 + 2 * JOUR), T0 + 35 * JOUR);
