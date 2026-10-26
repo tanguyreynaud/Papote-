@@ -1334,6 +1334,7 @@
     var now = Date.now();
     if (st.internet) offlineSince = 0;
     else if (!offlineSince) offlineSince = now;
+    if (st.internet && appelsKo) rechargerPourLesAppels();
     var showIt = offlineSince && now - offlineSince > 60000 && !st.mobile;
     // Tablette qui démarre sans internet ni données de la famille (par exemple une tablette de
     // remplacement arrivée chez le client) : l'écran du wifi s'ouvre tout de suite, une fois.
@@ -1364,6 +1365,17 @@
       show(wifiCard.querySelector('.wifi-card-btn'), !simOnly);
     }
     show(wifiCard, !!showIt);
+  }
+
+  // Une fois toutes les 30 minutes au plus : si internet ne laisse pas passer Firebase, pas de rechargements en boucle.
+  var appelsKo = false;
+  function rechargerPourLesAppels() {
+    var avant = 0;
+    try { avant = Number(window.sessionStorage.getItem('papote.rechargeAppels')) || 0; } catch (e) { }
+    if (Date.now() - avant < 30 * 60000 || inCall() || overlayPost || isShown('reminder-alert')) return;
+    try { window.sessionStorage.setItem('papote.rechargeAppels', String(Date.now())); } catch (e) { return; }
+    if (window.PapoteAndroid && window.PapoteAndroid.logError) window.PapoteAndroid.logError('Appels absents au démarrage : page rechargée');
+    window.location.reload();
   }
 
   // Débranchée depuis une minute : un bandeau sur l'accueil demande de rebrancher le chargeur.
@@ -2265,6 +2277,9 @@
       var calls = document.createElement('script');
       calls.type = 'module';
       calls.src = 'appels.js';
+      // Sans internet au démarrage (box plus lente que la tablette après une coupure de courant),
+      // les appels ne se chargent pas (Firebase vient d'internet) : la page se recharge au retour d'internet.
+      calls.onerror = function () { appelsKo = true; console.warn('Appels : chargement impossible'); };
       document.body.appendChild(calls);
     }
   }
