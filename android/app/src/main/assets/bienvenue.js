@@ -336,15 +336,24 @@
   function closeRepair() {
     repair = false;
     clearInterval(wifiTimer);
+    clearInterval(repairWatch);
     if (root) root.setAttribute('hidden', '');
     current = '';
   }
+
+  // Internet revenu tout seul (la box redémarrait plus lentement que la tablette, après une coupure de
+  // courant) : l'écran du wifi se referme, Mamie n'a rien à toucher.
+  var repairWatch = null;
 
   function openRepair() {
     ensureRoot();
     repair = true;
     current = 'repair';
     root.removeAttribute('hidden');
+    clearInterval(repairWatch);
+    repairWatch = setInterval(function () {
+      if (repair && wifiState().internet) closeRepair();
+    }, 5000);
     // Pas de code : le bouton n'apparaît que lorsqu'internet est déjà coupé, il n'y a rien à casser.
     showWifi();
   }
