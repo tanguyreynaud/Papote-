@@ -165,11 +165,15 @@ async function tabletteInstallee(fid) {
   return jumelages.docs.some((d) => d.get('status') === 'confirmed');
 }
 
-// La tablette du stock jumelée à cette famille (« jumelée sans commande ») prend la nouvelle commande.
+// La tablette du stock jumelée à cette famille (« jumelée sans commande ») prend la nouvelle commande,
+// et l'alerte de l'admin n'a plus lieu d'être.
 async function relierTabletteInstallee(fid, commande) {
   const fiches = await db.collection('stock').where('fid', '==', fid).get();
   await Promise.all(fiches.docs.filter((d) => !d.get('commande'))
-    .map((d) => d.ref.update({ commande, etat: 'chez-client' })));
+    .map((d) => d.ref.update({
+      commande, etat: 'chez-client',
+      ...(d.get('alerteJumelage') === 'jumelée sans commande' ? { alerteJumelage: null } : {}),
+    })));
 }
 
 // Une tablette du stock mise de côté pour ce paiement, ou null s'il n'y en a plus.
@@ -266,6 +270,8 @@ function compteVerifie(request) {
 // Applique l'abonnement Stripe à la famille. Relit toujours l'abonnement chez Stripe,
 // pour ne jamais appliquer un événement ancien arrivé en retard.
 async function appliquer(fid, abonnementId) {
+  const commande = await db.doc(`commandes/${abonnementId}`).get();
+  if (commande.exists && commande.get('offerte')) return appliquerOfferte(fid, commande);
   const abo = await stripe().subscriptions.retrieve(abonnementId);
   const ref = db.doc(`families/${fid}`);
   await db.runTransaction(async (tx) => {
@@ -299,6 +305,27 @@ async function appliquer(fid, abonnementId) {
   if (abo.metadata.fid !== fid) {
     await stripe().subscriptions.update(abo.id, { metadata: { ...abo.metadata, fid } });
   }
+}
+
+// Commande offerte (gestionCommandeOfferte, les mamies) reliée à sa famille, par la tablette ou par son code :
+// pas d'abonnement Stripe, la famille passe « offerte » (jamais en pause). Un abonnement payant en cours l'emporte.
+async function appliquerOfferte(fid, commande) {
+  const ref = db.doc(`families/${fid}`);
+  const reliee = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) return false;
+    if (['actif', 'impaye', 'suspendu'].includes(snap.get('abonnement.statut'))) {
+      logger.warn(`Famille ${fid} : abonnement payant en cours, commande offerte ${commande.id} pas reliée.`);
+      return false;
+    }
+    tx.update(ref, {
+      'abonnement.statut': 'offert', 'abonnement.formule': commande.get('formule') || null,
+      'abonnement.majLe': FieldValue.serverTimestamp(), 'abonnement.par': 'commande offerte',
+      rev: FieldValue.increment(1),
+    });
+    return true;
+  });
+  if (reliee) await commande.ref.update({ fid });
 }
 
 // Fin d'un abonnement avec tablette incluse : la tablette est attendue sous 30 jours.
@@ -548,6 +575,13 @@ exports.retracter = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE] }, asyn
   await appliquer(fid, id);
   if (partie) return { ok: true, remboursement: 'au-retour', montant };
 
+  // Tablette déjà choisie pour cette commande dans l'admin (« Préparer l'envoi ») : de nouveau libre,
+  // comme pour une annulation faite par l'admin (gestionAnnulerCommande).
+  const tablettes = await db.collection('stock').where('commande', '==', id).get();
+  await Promise.all(tablettes.docs.filter((t) => ['en-stock', 'preparee'].includes(t.get('etat'))).map((t) => t.ref.update({
+    commande: null, majLe: FieldValue.serverTimestamp(),
+    historique: FieldValue.arrayUnion({ le: maintenant, etat: t.get('etat'), par: 'client', commande: null, motif: 'commande annulée par le client' }),
+  })));
   const c = (await ref.get()).data();
   try {
     const rembourse = await rembourser(id);
