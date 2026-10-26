@@ -6,7 +6,10 @@ const test = require('node:test');
 const fs = require('node:fs');
 const path = require('node:path');
 const { initializeTestEnvironment, assertFails, assertSucceeds } = require('@firebase/rules-unit-testing');
-const { doc, setDoc, updateDoc, getDoc, serverTimestamp, Timestamp } = require('firebase/firestore');
+const { doc, setDoc, updateDoc, getDoc, serverTimestamp, Timestamp, setLogLevel } = require('firebase/firestore');
+
+// Les refus attendus (assertFails) ne sont pas des erreurs : pas de journal.
+setLogLevel('silent');
 
 const FID = 'famille-emma';
 const CODE = 'ABCD2345';
