@@ -365,8 +365,9 @@ service cloud.firestore {
         // L'administrateur retire un proche (secours), jamais le propriétaire.
         allow delete: if isAdmin() && resource.data.role == 'famille'
           && get(familyPath(fid)).data.createdBy != uid;
-        // Un responsable peut retirer ou refuser un membre (la tablette seulement en supprimant la famille).
-        allow delete: if isFamilyAdmin(fid);
+        // Un responsable peut retirer ou refuser un membre (la tablette seulement en supprimant la famille),
+        // jamais le propriétaire de la famille : il reste toujours responsable.
+        allow delete: if isFamilyAdmin(fid) && uid != get(familyPath(fid)).data.createdBy;
       }
 
       // Invitations par e-mail : créées par un responsable, effacées par lui ou par l'invité qui a rejoint.

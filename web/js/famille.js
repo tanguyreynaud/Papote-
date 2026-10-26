@@ -1947,8 +1947,9 @@ function renderMembers(all) {
         badge.textContent = 'Responsable';
         name.append(badge);
       }
-      // Les responsables gèrent les autres membres (le créateur reste toujours responsable).
-      if (amFamilyAdmin() && m.id !== session.uid) {
+      // Les responsables gèrent les autres membres. Le créateur reste toujours responsable et ne peut
+      // pas être retiré (règles Firestore) : pas de « ⋮ » pour lui.
+      if (amFamilyAdmin() && m.id !== session.uid && !isCreator) {
         // Un bouton « ⋮ » ouvre les actions possibles, chacune confirmée avant d'agir.
         const more = document.createElement('button');
         more.type = 'button';
@@ -1957,7 +1958,7 @@ function renderMembers(all) {
         more.textContent = '⋮';
         more.addEventListener('click', async () => {
           const options = [];
-          if (!isCreator) options.push({ label: isAdmin ? 'Retirer le rôle de responsable' : 'Rendre responsable', value: 'admin' });
+          options.push({ label: isAdmin ? 'Retirer le rôle de responsable' : 'Rendre responsable', value: 'admin' });
           options.push({ label: 'Retirer de la famille', value: 'remove', danger: true });
           const choix = await chooseAction(m.name, options);
           if (choix === 'admin') {
