@@ -110,7 +110,11 @@ final class Firebase {
                 prefs.edit().putBoolean("accountConverted", true).apply();
                 return idToken;
             }
-            if (r.code != 400) throw new ApiException(r.code, r.body);
+            // Refus passager (trop d'essais, compte suspendu un moment) : on garde ce compte. En créer un
+            // autre changerait l'identité de la tablette, qui sortirait de sa famille pour de bon.
+            if (r.code != 400 || r.body.contains("TOO_MANY_ATTEMPTS") || r.body.contains("USER_DISABLED")) {
+                throw new ApiException(r.code, r.body);
+            }
         }
         // Première installation : le compte est créé directement avec e-mail et mot de passe.
         email = "tablette-" + randomString(20).toLowerCase() + ACCOUNT_DOMAIN;
