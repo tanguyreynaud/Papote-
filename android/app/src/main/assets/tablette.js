@@ -425,6 +425,13 @@
     var token = ++fadeToken;
     if (p.image) {
       setPicture(next.querySelector('img'), p.image);
+      // En largeur : la photo remplit l'écran ; en hauteur : un peu agrandie (Tanguy, 26/10).
+      var sens = new Image();
+      sens.onload = function () {
+        if (token !== fadeToken || !sens.naturalWidth) return;
+        next.className = 'slide ' + (sens.naturalHeight > sens.naturalWidth ? 'portrait' : 'paysage');
+      };
+      sens.src = p.image;
       tinyCopy(p.image, function (bg) {
         if (token !== fadeToken) return;
         next.querySelector('.photo-bg').style.backgroundImage = bg;
@@ -500,6 +507,8 @@
     var shown = false;
     var reveal = function () { if (!shown && token === fadeToken) { shown = true; slide.style.opacity = '1'; } };
     v.onplaying = reveal;
+    // Vidéo en hauteur : un peu agrandie, comme les photos en hauteur.
+    v.addEventListener('loadedmetadata', function () { v.classList.toggle('portrait', v.videoHeight > v.videoWidth); });
     setTimeout(reveal, 3000); // au pire, au bout de 3 s
     v.onerror = function () { reveal(); slideTimer = setTimeout(next, SLIDE_MS); }; // vidéo illisible : on passe
     v.onloadeddata = function () {
