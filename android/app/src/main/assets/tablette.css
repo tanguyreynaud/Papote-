@@ -1942,3 +1942,45 @@ html #call-local { border: 1vmin solid #fdfaf5; border-radius: 1.5vmin; box-shad
 html .call-out-hangup { font-family: 'Alegreya Sans', sans-serif; font-weight: 800; border: 0; }
 /* Carte seule (connexion, sonnerie sans caméra) : tout au milieu */
 html .call-wait, html .call-ring:has(.caller-face[hidden]) { justify-items: center; text-align: center; }
+
+/* ---------- Accueil (choix de Tanguy, 26/10) ----------
+   Photos plus grandes (colonne de gauche plus étroite), « SOS » court, météo réduite à l'icône et la
+   température, plus de pastille du prochain rappel (il s'affiche en grand le moment venu). */
+html .home-frame { width: 56%; }
+html .home-left .weather-label { display: none; }
+html .home-left .weather { -webkit-justify-content: center; justify-content: center; }
+html #home-next { display: none !important; }
+html .home-left .sos-btn { padding-left: 6vmin; padding-right: 6vmin; }
+/* T18 : bandeau d'anniversaire plus compact, « Appeler » reste dans l'écran. */
+html .home-left .bday-banner { margin-top: 2.5vmin; padding: 1.8vmin 3vmin; font-size: calc(4.4vmin * var(--ts, 1)); }
+html .home-left .bday-banner .bday-cake { -webkit-flex: none; flex: none; }
+/* T21 : débranchée = petite étiquette en haut à droite, sur la photo ; SOS reste visible. */
+html .power-banner {
+  left: auto; right: 3vmin; top: 3vmin; gap: 2vmin; padding: 1.6vmin 3.5vmin;
+  font-family: 'Alegreya Sans', 'Atkinson Hyperlegible', sans-serif; font-size: 4.2vmin;
+  background: rgba(253, 250, 245, .95); color: #b42318; box-shadow: 0 1vmin 3vmin rgba(36, 33, 47, .25);
+}
+html .power-banner .power-plug { width: 5vmin; height: 5vmin; -webkit-flex: none; flex: none; }
+/* T17 : rendez-vous dans l'heure, en carte crème comme les photos et les messages. */
+html .frame-rdv {
+  top: 3vmin; right: 3vmin; bottom: 3vmin; left: 3vmin; padding: 5vmin; border-radius: 3vmin;
+  background: #fdfaf5; color: #312e81; box-shadow: 0 1vmin 3vmin rgba(49, 46, 129, .12);
+  font-family: 'Alegreya Sans', 'Atkinson Hyperlegible', sans-serif;
+}
+html .home-frame:has(.frame-rdv:not([hidden])) { background: #f6efe4; }
+html .frame-rdv .rdv-icon { width: 16vmin; height: 16vmin; padding: 3.5vmin; box-sizing: border-box; border-radius: 50%; background: #4f46e5; color: #fff; }
+html .frame-rdv .rdv-when { margin-top: 4vmin; font-family: inherit; font-size: calc(6vmin * var(--ts, 1)); font-weight: 600; color: #5b5794; }
+html .frame-rdv .rdv-title { margin-top: 1.5vmin; font-family: inherit; font-size: calc(10vmin * var(--ts, 1)); font-weight: 700; line-height: 1.05; color: #312e81; }
+html .frame-rdv .rdv-in { margin-top: 4vmin; padding: 2vmin 6vmin; font-family: inherit; font-size: calc(6vmin * var(--ts, 1)); font-weight: 800; background: #4f46e5; color: #fff; }
+/* T30 : légende longue (jusqu'à 100 caractères) en entier, un peu plus petite. */
+html .overlay.papier .ln-text.tres-long, html .overlay.papier.wide .ln-text.tres-long { font-size: calc(6.2vmin * var(--ts, 1)); }
+/* T37 : anniversaire en plein écran, crème et indigo, OK centré sous le gâteau. */
+html .overlay.bday .ln-wood { background-color: #f6efe4 !important; background-image: url(bg/anniversaire.svg);
+  -webkit-background-size: auto 36%; background-size: auto 36%; background-position: center 66%; }
+html .overlay.bday .ln-note { background: #fdfaf5; box-shadow: 0 1vmin 3vmin rgba(49, 46, 129, .12); }
+html .overlay.bday .ln-text { font-family: 'Alegreya Sans', 'Atkinson Hyperlegible', sans-serif; color: #312e81; }
+html .overlay.bday .ln-sign { font-family: 'Alegreya Sans', 'Atkinson Hyperlegible', sans-serif; }
+html .overlay.bday .ln-bar { left: 0; right: 0; padding-left: 0; padding-right: 0; -webkit-justify-content: center; justify-content: center; }
+html .overlay.bday .ln-actions { -webkit-justify-content: center; justify-content: center; width: 100%; }
+/* T17 : le rendez-vous cache la photo (pas de bords de photo autour de la carte). */
+html .home-frame:has(.frame-rdv:not([hidden])) #frame-img, html .home-frame:has(.frame-rdv:not([hidden])) #frame-img-b { visibility: hidden; }

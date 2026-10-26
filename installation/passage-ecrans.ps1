@@ -30,7 +30,8 @@ if ($devices.Count -eq 0) { Say 'Aucune tablette branchée (ou débogage USB non
 if ($devices.Count -gt 1 -and -not $Serial) { Say 'Plusieurs appareils branchés : utilisez -Serial.' 'Red'; exit 1 }
 $serie = (Adb shell getprop ro.serialno).Trim()
 $version = if ((Adb shell dumpsys package $Package) -match 'versionName=([^\s]+)') { $Matches[1] } else { '?' }
-if ((Adb shell dumpsys package $Package) -notmatch 'ControleActivity') { Say "Papote $version n'a pas encore l'écran d'essai : installez une version plus récente." 'Red'; exit 1 }
+# (dumpsys ne liste pas une activité sans filtre d'intention : on demande à Android de la trouver.)
+if ((Adb shell cmd package resolve-activity --brief -n $Activite) -notmatch 'ControleActivity\s*$') { Say "Papote $version n'a pas encore l'écran d'essai : installez une version plus récente." 'Red'; exit 1 }
 
 $sortie = Join-Path $PSScriptRoot "ecrans-$serie"
 if (Test-Path $sortie) { Remove-Item -Recurse -Force $sortie }

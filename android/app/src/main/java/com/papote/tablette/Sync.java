@@ -392,7 +392,7 @@ final class Sync {
         }
         JSONObject invite = firebase.get("invites/" + code);
         if (invite == null) {
-            status("setup", "Le code tablette « " + code + " » est inconnu.");
+            status("setup", "Le code tablette « " + codeLisible(code) + " » est inconnu.");
             return null;
         }
         JSONObject inviteFields = invite.getJSONObject("fields");
@@ -1977,6 +1977,12 @@ final class Sync {
             jumelageVerifie = false;
             Log.w(TAG, "Code de jumelage", e);
         }
+    }
+
+    /** Code écrit comme partout ailleurs : avec un tiret après 4 caractères (K7PM-2Q). */
+    static String codeLisible(String code) {
+        if (code == null || code.length() <= 4 || code.indexOf('-') >= 0) return code;
+        return code.substring(0, 4) + "-" + code.substring(4);
     }
 
     String pairingCode() {

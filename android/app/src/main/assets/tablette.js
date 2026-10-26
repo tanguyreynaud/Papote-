@@ -241,7 +241,8 @@
     // Un rendez-vous dans moins d'une heure passe avant les photos.
     var rdv = upcomingRdv();
     showRdv(rdv);
-    if (rdv) return;
+    // Rendez-vous en grand : pas de « Julie, aujourd'hui » de la photo en dessous (T17).
+    if (rdv) { show($('frame-caption'), false); return; }
     var has = photos.length > 0;
     // Au démarrage, avant que la tablette ait relu ses envois : rien (pas le QR « Envoyez une photo »
     // une seconde, juste avant que la photo arrive).
@@ -748,7 +749,7 @@
     // Photo : pas de petit mot seul en bout de ligne (« Je » / « t’embrasse »), il reste avec le suivant.
     // Ponctuation française (« ! », « ? », « : ») jamais seule en début de ligne.
     $('overlay-text').textContent = papier ? text.replace(/(^|\s)(\S{1,2})\s/g, '$1$2 ').replace(/\s+([!?:;»])/g, ' $1') : text;
-    $('overlay-text').className = 'ln-text ' + (mode === 'photo' ? 'size-m' + (text.length > 40 ? ' long' : '')
+    $('overlay-text').className = 'ln-text ' + (mode === 'photo' ? 'size-m' + (text.length > 40 ? ' long' : '') + (text.length > 65 ? ' tres-long' : '')
       : mode === 'message' ? 'msg-' + (text.length <= 60 ? 'court' : text.length <= 110 ? 'moyen' : 'long') : sizeClass(text));
     show($('overlay-text'), !!text);
     $('overlay-text').style.fontSize = '';
@@ -812,10 +813,11 @@
 
   function legende(t) {
     t = (t || '').trim();
-    if (t.length <= 60) return t;
-    var cut = t.slice(0, 59);
+    // Jusqu'à 100 caractères en entier (le texte rapetisse pour tenir, Tanguy 26/10 : T30) ; au-delà, coupé.
+    if (t.length <= 100) return t;
+    var cut = t.slice(0, 99);
     var sp = cut.lastIndexOf(' ');
-    return (sp > 40 ? cut.slice(0, sp) : cut).replace(/[\s,;:.]+$/, '') + '…';
+    return (sp > 70 ? cut.slice(0, sp) : cut).replace(/[\s,;:.]+$/, '') + '…';
   }
 
   // Mot d'une photo : jamais un mot coupé en deux. Si le plus long mot (ou « Je t’embrasse », collés)
@@ -1314,7 +1316,7 @@
     var names = [];
     for (var i = 0; i < today.length; i++) names.push(deName(today[i].name));
     var age = today.length === 1 ? ageLabel(today[0]).replace(" aujourd'hui", '') : '';
-    $('bday-banner-text').textContent = "Aujourd'hui, c'est l'anniversaire " + names.join(' et ') + ' !' +
+    $('bday-banner-text').textContent = "Aujourd'hui, c'est l'anniversaire " + names.join(' et ') + ' !' +
       (age ? ' ' + age.charAt(0).toUpperCase() + age.slice(1) + '.' : '');
     show(el, true);
   }
@@ -1422,7 +1424,7 @@
       powerBanner.innerHTML = '<svg class="power-plug" viewBox="0 0 24 24" aria-hidden="true">' +
         '<path d="M9 2v5M15 2v5M6 7h12v4a6 6 0 0 1-12 0zM12 17v5" fill="none" stroke="currentColor" ' +
         'stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
-        '<span>La tablette n’est pas branchée : rebranchez son chargeur.</span>';
+        '<span>Tablette débranchée</span>';
       $('view-home').appendChild(powerBanner);
     }
     show(powerBanner, !!showIt);
@@ -1676,7 +1678,7 @@
     b.id = 'sos-btn';
     b.setAttribute('hidden', '');
     b.innerHTML = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54z"/></svg>' +
-      '<span>SOS famille</span>';
+      '<span>SOS</span>';
     on(b, 'click', showSosCountdown);
     // En haut, au milieu : loin d'« Appeler », et pas sous les doigts qui attrapent la tablette par le bord.
     var left = document.querySelector('#view-home .home-left');
@@ -1698,7 +1700,7 @@
     var face = el2('span', 'call-face family', '');
     face.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M16 11a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm-8 0a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm0 2c-2.3 0-7 1.2-7 3.5V19h14v-2.5C15 14.2 10.3 13 8 13zm8 0c-.3 0-.6 0-1 .1 1.2.8 2 1.9 2 3.4V19h6v-2.5c0-2.3-4.7-3.5-7-3.5z"/></svg>';
     callScreen.appendChild(face);
-    callScreen.appendChild(el2('h1', 'call-title', 'J’appelle toute la famille…'));
+    callScreen.appendChild(el2('h1', 'call-title', 'On appelle toute la famille…'));
     var sub = el2('p', 'call-sub', '');
     callScreen.appendChild(sub);
     var cancel = el2('button', 'sos-cancel', 'Annuler');

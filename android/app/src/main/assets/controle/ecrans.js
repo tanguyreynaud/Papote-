@@ -215,7 +215,7 @@
     ['Démarrage et installation', 'Un proche termine sur son téléphone', function () { return t.statut({ state: 'welcome', step: 'pair', code: 'K7PM2Q', claimedName: 'Julie', reprendre: true }).then(function () { return attendre(1600); }); }],
     ['Démarrage et installation', 'On prépare votre tablette', function () { return t.statut({ state: 'welcome', step: 'prepare', claimedName: 'Julie' }).then(function () { return attendre(1600); }); }],
     ['Démarrage et installation', 'Tablette de remplacement : c’est bien vous ?', function () { return t.statut({ state: 'welcome', step: 'confirm', claimedName: 'Julie', familyName: 'Mamie Jeanne' }).then(function () { return attendre(1600); }); }],
-    ['Démarrage et installation', 'Tablette pas encore reliée', function () { return t.statut({ state: 'setup', message: 'Code tablette : K7PM2Q' }).then(function () { return attendre(1600); }); }],
+    ['Démarrage et installation', 'Tablette pas encore reliée', function () { return t.statut({ state: 'setup', message: 'Code tablette : K7PM-2Q' }).then(function () { return attendre(1600); }); }],
 
     ['Accueil', 'Accueil sans aucune photo', function () { return accueil([]); }],
     ['Accueil', 'Accueil avec photos, météo et prochain rappel', function () { return accueil(photosVues(), { rappels: [RAPPEL_MEDOC] }); }],
