@@ -1333,10 +1333,22 @@
       $('bday-age').textContent = ageLabel(b);
       show($('bday-age'), !!ageLabel(b));
       $('bday-alert').setAttribute('data-id', b.id);
+      var uid = proche(b);
+      if (uid) $('bday-call').textContent = 'Appeler ' + b.name;
+      show($('bday-call'), !!uid);
       bdayQueue = [b];
       show($('bday-alert'), true);
       return;
     }
+  }
+
+  // Uid du proche dont c'est l'anniversaire, s'il fait partie de la famille et peut être appelé.
+  function proche(b) {
+    var id = String((b && b.id) || '');
+    if (id.indexOf('membre-') !== 0) return null;
+    var uid = id.slice(7);
+    for (var i = 0; i < people.length; i++) if (people[i].uid === uid) return uid;
+    return null;
   }
 
   function closeBirthday() {
@@ -2092,9 +2104,18 @@
     alert.innerHTML = '<div class="ln-main"><div class="ln-wood"><div class="ln-note">' +
       '<p id="bday-text" class="ln-text size-l"></p><p id="bday-age" class="ln-sign"></p>' +
       '</div></div></div><div class="ln-bar"><div class="ln-actions">' +
+      '<button id="bday-call" class="ln-btn bday-call" hidden></button>' +
       '<button id="bday-ok" class="ln-btn ok">OK</button></div></div>';
     document.body.appendChild(alert);
     on($('bday-ok'), 'click', closeBirthday);
+    // Anniversaire d'un proche de l'app (créé tout seul depuis sa date de naissance : membre-<uid>) :
+    // « Appeler Léo » à côté de OK.
+    on($('bday-call'), 'click', function () {
+      var b = bdayQueue[0];
+      var uid = b && proche(b);
+      closeBirthday();
+      if (uid) startCall(uid, b.name);
+    });
 
     var face = document.createElement('img');
     var head = document.createElement('div');

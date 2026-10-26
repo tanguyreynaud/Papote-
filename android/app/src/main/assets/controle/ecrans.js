@@ -296,7 +296,8 @@
     ['Appels', 'SOS : personne n’a répondu, famille prévenue', function () {
       return sos().then(function () { return t.avancer(6000); })
         .then(function () { return t.appel('missed'); }).then(function () { return t.appel('missed'); }).then(function () { return attendre(300); });
-    }]
+    }],
+    ['Rappels', 'Anniversaire d’un proche de l’app (bouton Appeler)', function () { return accueil(photosVues(), { birthdays: [{ id: 'membre-u-julie', name: 'Julie', day: 26, month: 10, year: 1988 }] }).then(function () { return attendre(400); }); }]
   ];
 
   function pret(texte) {

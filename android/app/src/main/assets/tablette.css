@@ -1976,7 +1976,7 @@ html .frame-rdv .rdv-in { margin-top: 4vmin; padding: 2vmin 6vmin; font-family: 
 html .overlay.papier .ln-text.tres-long, html .overlay.papier.wide .ln-text.tres-long { font-size: calc(6.2vmin * var(--ts, 1)); }
 /* T37 : anniversaire en plein écran, crème et indigo, OK centré sous le gâteau. */
 html .overlay.bday .ln-wood { background-color: #f6efe4 !important; background-image: url(bg/anniversaire.svg);
-  -webkit-background-size: auto 36%; background-size: auto 36%; background-position: center 66%; }
+  -webkit-background-size: auto 21%; background-size: auto 21%; background-position: center 64%; }
 html .overlay.bday .ln-note { background: #fdfaf5; box-shadow: 0 1vmin 3vmin rgba(49, 46, 129, .12); }
 html .overlay.bday .ln-text { font-family: 'Alegreya Sans', 'Atkinson Hyperlegible', sans-serif; color: #312e81; }
 html .overlay.bday .ln-sign { font-family: 'Alegreya Sans', 'Atkinson Hyperlegible', sans-serif; }
@@ -1984,3 +1984,5 @@ html .overlay.bday .ln-bar { left: 0; right: 0; padding-left: 0; padding-right: 
 html .overlay.bday .ln-actions { -webkit-justify-content: center; justify-content: center; width: 100%; }
 /* T17 : le rendez-vous cache la photo (pas de bords de photo autour de la carte). */
 html .home-frame:has(.frame-rdv:not([hidden])) #frame-img, html .home-frame:has(.frame-rdv:not([hidden])) #frame-img-b { visibility: hidden; }
+html .overlay.bday .ln-btn.bday-call { background: #15803d; color: #fff; margin-right: 4vmin; padding: 0 7vmin; }
+html .overlay.bday .ln-btn.bday-call[hidden] { display: none; }
