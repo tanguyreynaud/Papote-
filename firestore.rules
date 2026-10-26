@@ -88,9 +88,11 @@ service cloud.firestore {
       allow read: if signedIn() && resource.data.get('uid', '') == request.auth.uid;
     }
 
-    // Mes invitations : celles adressées à mon adresse e-mail vérifiée.
+    // Mes invitations : celles adressées à mon adresse e-mail vérifiée. La liste (requête de l'app
+    // sur le champ email) se vérifie sur le champ : l'identifiant du document n'est pas connu d'avance.
     match /{path=**}/invitations/{email} {
-      allow read: if isRealAccount() && email == myEmail();
+      allow get: if isRealAccount() && email == myEmail();
+      allow list: if isRealAccount() && resource.data.email == myEmail();
     }
 
     // Responsables de la famille : le créateur, plus ceux qu'il a désignés (champ admins).

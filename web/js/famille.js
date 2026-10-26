@@ -3148,7 +3148,11 @@ function watchFamily() {
     session.family = { ...session.family, ...snap.data() };
     applyFamily();
     repriseParUnAutre();
-  }, (err) => console.error('Famille illisible', err));
+  }, (err) => {
+    // Retiré de la famille : la lecture est refusée, l'écoute des membres s'occupe de la sortie.
+    if (err?.code === 'permission-denied') console.warn('Famille illisible', err);
+    else console.error('Famille illisible', err);
+  });
 }
 
 // ---------- Ajouter à l'écran d'accueil ----------
@@ -3772,7 +3776,9 @@ function watchSetupPairing(code) {
 // Installation reprise par un autre proche (30 minutes après le scan) : ce téléphone quitte ses écrans.
 function repriseParUnAutre() {
   if ($('view-setup').hidden || !['setup-photo', 'setup-son', 'setup-options'].includes(setup.step)) return;
-  if (installationEnCours()) return;
+  // Installation finie (« C'est parfait » sur ce téléphone : le serveur note « fini » juste avant la
+  // réponse) ou toujours à moi : rien à dire. Seule une reprise change le propriétaire de la famille.
+  if (installationEnCours() || amOwner()) return;
   setup = { code: null, step: null };
   goHome();
   notice('Un autre proche a repris l\'installation de la tablette. Vous restez dans la famille.');
