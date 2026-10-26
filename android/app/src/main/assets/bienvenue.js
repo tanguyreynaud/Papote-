@@ -498,11 +498,8 @@
     row.appendChild(type);
     box.appendChild(row);
     if (s.claimedName || s.joined) {
-      // Le proche a scanné : l'écran ne change pas (demande de Tanguy), une ligne dit qu'il s'en occupe.
-      var busy = el('p', 'welcome-busy', '');
-      busy.appendChild(el('span', 'boot-spin welcome-busy-spin', ''));
-      busy.appendChild(document.createTextNode((s.claimedName || 'Votre proche') + ' termine l’installation sur son téléphone…'));
-      box.appendChild(busy);
+      // Le proche a scanné : l'écran ne change pas (demande de Tanguy). Plus de ligne « … termine
+      // l'installation » : elle dépassait du bas de l'écran (Tanguy, 26/10).
       // 30 min après le scan sans fin d'installation : un autre proche peut reprendre avec ce code.
       if (s.reprendre) box.appendChild(el('p', 'welcome-sub welcome-reprise', 'Pas fini ? Un autre proche peut reprendre en scannant ce code.'));
     }
