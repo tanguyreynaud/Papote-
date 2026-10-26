@@ -65,7 +65,15 @@ final class Journal {
     }
 
     /** Une erreur qui ferait planter l'appli est notée avant qu'Android ne la relance. */
+    private static boolean crashesCaught;
+
     static void catchCrashes(Context context) {
+        // Une seule fois par démarrage de l'appli : l'écran peut être refait (page arrêtée, langue),
+        // et chaque nouvelle prise notait le plantage une fois de plus.
+        synchronized (LOCK) {
+            if (crashesCaught) return;
+            crashesCaught = true;
+        }
         final Context app = context.getApplicationContext();
         final Thread.UncaughtExceptionHandler previous = Thread.getDefaultUncaughtExceptionHandler();
         Thread.setDefaultUncaughtExceptionHandler((thread, error) -> {
