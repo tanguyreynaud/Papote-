@@ -1055,7 +1055,7 @@ exports.lancementListeAttente = onCall({ secrets: [MAIL_MOT_DE_PASSE], timeoutSe
   if (request.data && request.data.test === true) {
     const email = request.auth.token.email;
     if (!email) throw new HttpsError('failed-precondition', 'Compte sans e-mail.');
-    await envoyerMail(email, mail.lancement({ prenom: 'Tanguy', desinscription: `${URL_DESINSCRIPTION}?c=test&j=test` }));
+    await envoyerMail(email, mail.lancement({ prenom: 'Tanguy', desinscription: `${URL_DESINSCRIPTION}?test=1` }));
     return { envoyes: 1, test: true };
   }
   const contacts = await db.collection('contacts').where('listeAttente', '==', true).get();
