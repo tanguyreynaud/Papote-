@@ -243,6 +243,9 @@
     showRdv(rdv);
     if (rdv) return;
     var has = photos.length > 0;
+    // Au démarrage, avant que la tablette ait relu ses envois : rien (pas le QR « Envoyez une photo »
+    // une seconde, juste avant que la photo arrive).
+    if (!hasData) { show($('frame-img'), false); show($('frame-caption'), false); show($('frame-empty'), false); return; }
     show($('frame-img'), has);
     if (frameBack) show(frameBack, has);
     show($('frame-caption'), has);
