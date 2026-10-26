@@ -301,6 +301,16 @@ service cloud.firestore {
                 get(/databases/$(database)/documents/pairings/$(request.resource.data.pairing)).data.tabletUid,
                 get(/databases/$(database)/documents/pairings/$(request.resource.data.pairing)).data.callsUid]
               && request.time < get(/databases/$(database)/documents/pairings/$(request.resource.data.pairing)).data.expiresAt + duration.value(1, 'h'))
+            // … ou compte des appels de la tablette qui revient (réinstallation, compte recréé), sans limite de
+            // temps : seulement si le compte principal de ce jumelage est toujours membre avec ce même jumelage.
+            || (request.resource.data.role == 'tablette'
+              && !('status' in request.resource.data)
+              && !('code' in request.resource.data)
+              && get(/databases/$(database)/documents/pairings/$(request.resource.data.pairing)).data.status == 'confirmed'
+              && get(/databases/$(database)/documents/pairings/$(request.resource.data.pairing)).data.fid == fid
+              && request.auth.uid == get(/databases/$(database)/documents/pairings/$(request.resource.data.pairing)).data.callsUid
+              && exists(/databases/$(database)/documents/families/$(fid)/members/$(get(/databases/$(database)/documents/pairings/$(request.resource.data.pairing)).data.tabletUid))
+              && get(/databases/$(database)/documents/families/$(fid)/members/$(get(/databases/$(database)/documents/pairings/$(request.resource.data.pairing)).data.tabletUid)).data.get('pairing', '') == request.resource.data.pairing)
             // Famille : compte Google ou e-mail, avec son uid et son adresse.
             || (request.resource.data.role == 'famille'
               && familleAPlace(fid)

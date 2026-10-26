@@ -6,7 +6,7 @@ const test = require('node:test');
 const fs = require('node:fs');
 const path = require('node:path');
 const { initializeTestEnvironment, assertFails, assertSucceeds } = require('@firebase/rules-unit-testing');
-const { doc, setDoc, updateDoc, getDoc, serverTimestamp, Timestamp, setLogLevel } = require('firebase/firestore');
+const { doc, setDoc, updateDoc, deleteDoc, getDoc, serverTimestamp, Timestamp, setLogLevel } = require('firebase/firestore');
 
 // Les refus attendus (assertFails) ne sont pas des erreurs : pas de journal.
 setLogLevel('silent');
@@ -96,6 +96,25 @@ test('la tablette entre dans la famille par son jumelage confirmé, un autre com
   const membre = { name: 'Tablette', role: 'tablette', pairing: PAIRING, canCall: true, joinedAt: serverTimestamp() };
   await assertSucceeds(setDoc(doc(tablette('tab-appels'), `families/${FID}/members/tab-appels`), membre));
   await assertFails(setDoc(doc(tablette('pirate'), `families/${FID}/members/pirate`), membre));
+});
+
+test('compte des appels de la tablette : revient après l\'expiration du jumelage tant que la tablette est membre', async () => {
+  await famille();
+  // Jumelage expiré depuis longtemps (réinstallations), la tablette principale est toujours membre.
+  await env.withSecurityRulesDisabled((ctx) => updateDoc(doc(ctx.firestore(), `pairings/${PAIRING}`), {
+    expiresAt: Timestamp.fromMillis(Date.now() - 48 * 3600 * 1000),
+  }));
+  const membre = { name: 'Tablette', role: 'tablette', pairing: PAIRING, canCall: true, joinedAt: serverTimestamp() };
+  await assertSucceeds(setDoc(doc(tablette('tab-appels'), `families/${FID}/members/tab-appels`), membre));
+  // Pas le compte principal hors délai, ni un autre compte.
+  await assertFails(setDoc(doc(tablette('pirate'), `families/${FID}/members/pirate`), membre));
+  // Tablette principale retirée de la famille : plus d'entrée possible.
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, `families/${FID}/members/tab`), { name: 'Tablette', role: 'tablette', pairing: 'AUTRE1234' });
+    await deleteDoc(doc(db, `families/${FID}/members/tab-appels`));
+  });
+  await assertFails(setDoc(doc(tablette('tab-appels'), `families/${FID}/members/tab-appels`), membre));
 });
 
 test('la tablette crée son code ; seul le serveur réserve et confirme', async () => {
