@@ -3079,10 +3079,15 @@ exports.gestionParcours = onCall(async (request) => {
   const qui = request.auth.token.email || request.auth.uid;
   if (d.type === 'envoi' || d.type === 'recu') {
     const ref = db().doc(`commandes/${texte(d.commande, 100) || '-'}`);
-    if (!(await ref.get()).exists) throw new HttpsError('not-found', 'Commande introuvable.');
+    const snap = await ref.get();
+    if (!snap.exists) throw new HttpsError('not-found', 'Commande introuvable.');
     if (d.type === 'recu') await ref.update({ 'preparation.recuLe': Date.now(), 'preparation.recuPar': qui });
     else {
       const preparation = avancementPropre(d.preparation, ['tablette', 'sim', 'suivi', 'enceinte']);
+      // Date de réception déjà notée (suivi du colis, jumelage, « Le client a reçu le colis ») : gardée, car elle
+      // fait partir les 30 jours pour changer d'avis et le premier prélèvement.
+      const avant = snap.get('preparation') || {};
+      if (avant.recuLe != null) Object.assign(preparation, { recuLe: avant.recuLe, recuPar: avant.recuPar || null });
       // Enceinte dans le colis ou non : facturée seulement si elle était fournie et ne revient pas.
       const enceinte = preparation.enceinte === 'oui' ? { enceinteFournie: true } : preparation.enceinte === 'non' ? { enceinteFournie: false } : {};
       await ref.update({ preparation: { ...preparation, majLe: Date.now(), par: qui }, ...enceinte });
