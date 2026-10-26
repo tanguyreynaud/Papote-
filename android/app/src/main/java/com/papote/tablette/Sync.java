@@ -145,14 +145,14 @@ final class Sync {
      * Android prévient dès qu'internet revient (réseau « validé ») : la synchronisation repart
      * aussitôt et « Pas de connexion » disparaît, sans attendre le prochain tour.
      */
-    private boolean watchingNetwork;
+    private android.net.ConnectivityManager.NetworkCallback networkCallback;
 
     private void watchNetwork() {
-        if (watchingNetwork || android.os.Build.VERSION.SDK_INT < 24) return;
+        if (networkCallback != null || android.os.Build.VERSION.SDK_INT < 24) return;
         try {
             android.net.ConnectivityManager cm =
                     (android.net.ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
-            cm.registerDefaultNetworkCallback(new android.net.ConnectivityManager.NetworkCallback() {
+            networkCallback = new android.net.ConnectivityManager.NetworkCallback() {
                 @Override
                 public void onCapabilitiesChanged(android.net.Network network, android.net.NetworkCapabilities caps) {
                     if (caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED)
@@ -161,9 +161,10 @@ final class Sync {
                         handler.post(loop);
                     }
                 }
-            });
-            watchingNetwork = true;
+            };
+            cm.registerDefaultNetworkCallback(networkCallback);
         } catch (Exception e) {
+            networkCallback = null;
             Log.w(TAG, "Surveillance du réseau", e);
         }
     }
@@ -176,6 +177,7 @@ final class Sync {
             firebase.forgetAnonymous();
             prefs.edit().remove("fid").apply();
             posts.clear();
+            dropCache();
             lastFullRefresh = 0;
             lastRev = Long.MIN_VALUE;
             lastPostsJson = null;
@@ -191,18 +193,142 @@ final class Sync {
             if (lastStatusJson != null) {
                 try { listener.onStatus(new JSONObject(lastStatusJson)); } catch (JSONException ignored) { }
             }
+            restoreCache();
             lastPostsJson = null;
-            publishPosts();
+            if (loadedOnce || !posts.isEmpty()) publishPosts(); // jamais une liste vide avant la 1re lecture
+            // Rappels, visages et proches connus : renvoyés tout de suite (sinon rien pendant 10 min
+            // après un rechargement de la page), puis relus au prochain tour.
+            try {
+                if (lastRemindersJson != null) listener.onReminders(new JSONObject(lastRemindersJson));
+                if (lastFamilyJson != null) listener.onFamily(new JSONObject(lastFamilyJson));
+            } catch (JSONException ignored) { }
+            lastReminders = 0;
+            lastFamilyExtras = 0;
             lastWeather = 0;
             refreshWeather();
-            lastRemindersJson = null;
-            lastReminders = 0;
-            lastFamilyJson = null;
-            lastFamilyExtras = 0;
         });
     }
 
+    // ---------- Copie sur la tablette (redémarrage sans internet) ----------
+
+    /**
+     * Les derniers envois, rappels et proches sont gardés dans un fichier : une tablette redémarrée
+     * sans internet affiche quand même ses photos et sonne pour ses rappels.
+     */
+    private File cacheFile() {
+        return new File(context.getFilesDir(), "dernier-etat.json");
+    }
+
+    private boolean cacheRestored;
+
+    private void restoreCache() {
+        if (cacheRestored) return;
+        cacheRestored = true;
+        String fid = prefs.getString("fid", null);
+        File f = cacheFile();
+        if (fid == null || !f.exists() || loadedOnce) return;
+        try {
+            JSONObject c = new JSONObject(new String(java.nio.file.Files.readAllBytes(f.toPath()), "UTF-8"));
+            if (!fid.equals(c.optString("fid"))) { dropCache(); return; }
+            if (familyName == null) familyName = c.optString("familyName", null);
+            if (familyCode == null) familyCode = c.optString("familyCode", null);
+            if (textSize == null) textSize = c.optString("textSize", null);
+            if (subscription.isEmpty()) subscription = c.optString("subscription", "");
+            if (options.length() == 0 && c.optJSONObject("options") != null) options = c.getJSONObject("options");
+            JSONArray arr = c.optJSONArray("posts");
+            if (posts.isEmpty() && arr != null) {
+                for (int i = 0; i < arr.length(); i++) {
+                    Post p = postFromCache(arr.getJSONObject(i));
+                    posts.put(p.id, p);
+                }
+            }
+            if (lastRemindersJson == null && c.optJSONObject("reminders") != null) lastRemindersJson = c.getJSONObject("reminders").toString();
+            if (lastFamilyJson == null && c.optJSONObject("family") != null) lastFamilyJson = c.getJSONObject("family").toString();
+        } catch (Exception e) {
+            Log.w(TAG, "Copie sur la tablette illisible", e);
+            dropCache();
+        }
+    }
+
+    private void saveCache() {
+        String fid = prefs.getString("fid", null);
+        if (fid == null) return;
+        try {
+            JSONArray arr = new JSONArray();
+            for (Post p : posts.values()) arr.put(postToCache(p));
+            JSONObject c = new JSONObject().put("fid", fid)
+                    .put("familyName", familyName).put("familyCode", familyCode).put("textSize", textSize)
+                    .put("subscription", subscription).put("options", options).put("posts", arr);
+            if (lastRemindersJson != null) c.put("reminders", new JSONObject(lastRemindersJson));
+            if (lastFamilyJson != null) c.put("family", new JSONObject(lastFamilyJson));
+            File tmp = new File(context.getFilesDir(), "dernier-etat.json.tmp");
+            java.nio.file.Files.write(tmp.toPath(), c.toString().getBytes("UTF-8"));
+            if (!tmp.renameTo(cacheFile())) tmp.delete();
+        } catch (Exception e) {
+            Log.w(TAG, "Copie sur la tablette", e);
+        }
+    }
+
+    private void dropCache() {
+        cacheFile().delete();
+        lastRemindersJson = null;
+        lastFamilyJson = null;
+    }
+
+    private static JSONObject postToCache(Post p) throws JSONException {
+        return new JSONObject().put("id", p.id).put("type", p.type).put("text", p.text)
+                .put("authorName", p.authorName).put("authorUid", p.authorUid)
+                .put("imageUrl", p.imageUrl).put("videoUrl", p.videoUrl)
+                .put("createdAtRaw", p.createdAtRaw).put("createdAt", p.createdAt)
+                .put("seenAt", p.seenAt).put("hearts", p.hearts)
+                .put("imagePath", p.imagePath).put("audioPath", p.audioPath).put("videoPath", p.videoPath)
+                .put("voiceUrl", p.voiceUrl).put("voicePath", p.voicePath)
+                .put("announceUrl", p.announceUrl).put("announcePath", p.announcePath)
+                .put("extraUrls", new JSONArray(p.extraUrls)).put("extraPaths", new JSONArray(p.extraPaths))
+                .put("duration", p.duration).put("chunks", p.chunks).put("mime", p.mime);
+    }
+
+    private static Post postFromCache(JSONObject o) {
+        Post p = new Post();
+        p.id = o.optString("id");
+        p.type = o.optString("type", null);
+        p.text = o.optString("text", null);
+        p.authorName = o.optString("authorName", null);
+        p.authorUid = o.optString("authorUid", null);
+        p.imageUrl = o.optString("imageUrl", null);
+        p.videoUrl = o.optString("videoUrl", null);
+        p.createdAtRaw = o.optString("createdAtRaw", null);
+        p.createdAt = o.optLong("createdAt");
+        p.seenAt = o.optLong("seenAt");
+        p.hearts = o.optLong("hearts");
+        p.imagePath = o.optString("imagePath", null);
+        p.audioPath = o.optString("audioPath", null);
+        p.videoPath = o.optString("videoPath", null);
+        p.voiceUrl = o.optString("voiceUrl", null);
+        p.voicePath = o.optString("voicePath", null);
+        p.announceUrl = o.optString("announceUrl", null);
+        p.announcePath = o.optString("announcePath", null);
+        JSONArray eu = o.optJSONArray("extraUrls");
+        JSONArray ep = o.optJSONArray("extraPaths");
+        for (int i = 0; eu != null && i < eu.length(); i++) p.extraUrls.add(eu.optString(i));
+        for (int i = 0; ep != null && i < ep.length(); i++) p.extraPaths.add(ep.optString(i));
+        p.duration = o.optLong("duration");
+        p.chunks = o.optLong("chunks");
+        p.mime = o.optString("mime", null);
+        return p;
+    }
+
     void stop() {
+        // L'écran peut être refait (page arrêtée) : sans ceci, chaque ancienne synchronisation restait
+        // prévenue par Android et relançait un fil arrêté.
+        android.net.ConnectivityManager.NetworkCallback cb = networkCallback;
+        networkCallback = null;
+        if (cb != null) {
+            try {
+                ((android.net.ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE))
+                        .unregisterNetworkCallback(cb);
+            } catch (Exception ignored) { }
+        }
         thread.quit();
     }
 
@@ -210,6 +336,14 @@ final class Sync {
         @Override
         public void run() {
             try {
+                if (!cacheRestored) {
+                    restoreCache();
+                    if (!posts.isEmpty()) publishPosts();
+                    try {
+                        if (lastRemindersJson != null) listener.onReminders(new JSONObject(lastRemindersJson));
+                        if (lastFamilyJson != null) listener.onFamily(new JSONObject(lastFamilyJson));
+                    } catch (JSONException ignored) { }
+                }
                 checkDatabase();
                 refreshWeather();
                 reportWifi();
@@ -370,6 +504,7 @@ final class Sync {
                 prefs.edit().remove("fid").remove("pairing").remove("pairingExpires").remove("pairingFait")
                         .remove("installEnCours").remove("installPar").remove("installDepuis").apply();
                 posts.clear();
+                dropCache();
                 subscription = "";
                 lastPostsJson = null;
                 lastStatusJson = null;
@@ -979,6 +1114,7 @@ final class Sync {
             }
             prefs.edit().remove("fid").remove("code").apply();
             posts.clear();
+            dropCache();
             lastPostsJson = null;
             status("setup", "Tablette retirée de la famille.");
         });
@@ -997,6 +1133,7 @@ final class Sync {
             Meteo.forget(context);
             firebase.forgetAll();
             posts.clear();
+            dropCache();
             subscription = "";
             prefs.edit().remove("installEnCours").remove("installPar").remove("installDepuis").remove("bienvenueVue").apply();
             lastPostsJson = null;
@@ -1100,6 +1237,7 @@ final class Sync {
             if (json.equals(lastPostsJson)) return;
             lastPostsJson = json;
             listener.onPosts(payload);
+            saveCache();
         } catch (JSONException e) {
             Log.w(TAG, "publishPosts", e);
         }
@@ -1184,6 +1322,7 @@ final class Sync {
             if (json.equals(lastRemindersJson)) return;
             lastRemindersJson = json;
             listener.onReminders(payload);
+            saveCache();
         } catch (Exception e) {
             Log.w(TAG, "Rappels", e);
         }
@@ -1241,6 +1380,7 @@ final class Sync {
             if (json.equals(lastFamilyJson)) return;
             lastFamilyJson = json;
             listener.onFamily(payload);
+            saveCache();
         } catch (JSONException e) {
             Log.w(TAG, "Famille", e);
         }
