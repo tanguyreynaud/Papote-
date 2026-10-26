@@ -1,6 +1,6 @@
 # Galerie des écrans
 
-Une seule page avec **tous les écrans** de la tablette (paysage et portrait) et de l'app famille
+Une seule page avec **tous les écrans** de la tablette (en paysage, elle est bloquée ainsi) et de l'app famille
 (téléphone), chacun avec un numéro : « T12 » pour la tablette, « F7 » pour l'app famille. Pour
 donner un avis, il suffit de citer le numéro.
 

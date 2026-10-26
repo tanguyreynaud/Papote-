@@ -85,7 +85,7 @@ h4 { font-size:16px; }
 .erreur { margin:8px 0 0; color:var(--erreur); font-size:13px; }
 .captures { display:flex; gap:10px; align-items:flex-start; margin-top:10px; }
 figure { margin:0; min-width:0; }
-figure.paysage { flex:1.6; } figure.portrait { flex:1; } figure.telephone { flex:1; max-width:220px; }
+figure.paysage { flex:1; } figure.portrait { flex:1; } figure.telephone { flex:1; max-width:220px; }
 figcaption { font-size:12px; color:var(--doux); text-align:center; margin-top:2px; }
 .zoom { display:block; width:100%; padding:0; border:1px solid var(--ligne); border-radius:6px; overflow:hidden; background:#000; cursor:zoom-in; }
 .zoom img { display:block; width:100%; height:auto; }
@@ -102,9 +102,6 @@ body.seul-paysage figure.paysage, body.seul-portrait figure.portrait { flex:1; m
 <div class="haut">
   <h1>Galerie des écrans</h1>
   <nav class="chips">${sommaire}</nav>
-  <div class="bascule" role="group" aria-label="Orientation de la tablette">
-    <button data-vue="" aria-pressed="true">Les deux</button><button data-vue="seul-paysage" aria-pressed="false">Paysage</button><button data-vue="seul-portrait" aria-pressed="false">Portrait</button>
-  </div>
 </div>
 <main>
 <p class="intro">Faite le ${esc(quand)}, avec de fausses données (aucune vraie famille). Pour donner un avis, citez le numéro : « T12 : le bouton est trop petit ». Touchez une capture pour l'agrandir.</p>

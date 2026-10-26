@@ -4,10 +4,8 @@
 
 const { fausseImage, fauxVisage, fauxQr } = require('./commun');
 
-const TAILLES = [
-  { nom: 'paysage', width: 1280, height: 800 },
-  { nom: 'portrait', width: 800, height: 1280 },
-];
+// La tablette est bloquée en paysage (sensorLandscape dans AndroidManifest.xml) : pas de portrait.
+const TAILLES = [{ nom: 'paysage', width: 1280, height: 800 }];
 
 // Toutes les scènes se passent le lundi 26 octobre 2026 (heure de Paris), sauf indication.
 const JOUR = '2026-10-26';
