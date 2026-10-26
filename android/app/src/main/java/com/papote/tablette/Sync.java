@@ -271,6 +271,7 @@ final class Sync {
 
     private void dropCache() {
         cacheFile().delete();
+        prefs.edit().remove("ecrituresEnAttente").apply(); // écritures pour l'ancienne famille
         lastRemindersJson = null;
         lastFamilyJson = null;
     }
@@ -486,6 +487,7 @@ final class Sync {
             }
             if (rev == lastRev && now - lastFullRefresh < FULL_REFRESH_MS) {
                 status("ok", null);
+                flushPending();
                 heartbeat(fid, "lastOnline");
                 return;
             }
@@ -526,6 +528,7 @@ final class Sync {
             }
         }
         status("ok", null);
+        flushPending();
 
         Set<String> seenIds = new HashSet<>();
         boolean newArrival = false;
@@ -1193,7 +1196,7 @@ final class Sync {
                         .put("updateTransforms", new JSONArray().put(new JSONObject()
                                 .put("fieldPath", "createdAt").put("setToServerValue", "REQUEST_TIME")))
                         .put("currentDocument", new JSONObject().put("exists", false));
-                firebase.commit(new JSONArray().put(write));
+                commitOrKeep(write);
                 if (postId != null && !postId.isEmpty()) markSeen(postId, false);
             } catch (Exception e) {
                 Log.w(TAG, "Réponse", e);
@@ -1249,11 +1252,13 @@ final class Sync {
         handler.post(() -> {
             Post p = posts.get(id);
             String fid = prefs.getString("fid", null);
-            if (p == null || fid == null) return;
-            if (p.seenAt > 0 && !heart) return;
-            p.seenAt = System.currentTimeMillis();
-            if (heart) p.hearts++;
-            publishPosts();
+            if (fid == null) return;
+            if (p != null) {
+                if (p.seenAt > 0 && !heart) return;
+                p.seenAt = System.currentTimeMillis();
+                if (heart) p.hearts++;
+                publishPosts();
+            }
             try {
                 JSONArray transforms = new JSONArray().put(new JSONObject()
                         .put("fieldPath", "seenAt").put("setToServerValue", "REQUEST_TIME"));
@@ -1268,11 +1273,65 @@ final class Sync {
                         .put("updateMask", new JSONObject().put("fieldPaths", new JSONArray()))
                         .put("updateTransforms", transforms)
                         .put("currentDocument", new JSONObject().put("exists", true));
-                firebase.commit(new JSONArray().put(write));
+                commitOrKeep(write);
             } catch (Exception e) {
                 Log.w(TAG, "markSeen " + id, e);
             }
         });
+    }
+
+    // ---------- Écritures en attente (wifi coupé) ----------
+
+    /**
+     * « Vu », cœur, réponse, rappel fait ou regardé : sans internet, l'écriture est gardée (même après
+     * un redémarrage) et renvoyée dès que la synchronisation repasse, au lieu d'être perdue
+     * (la famille croyait que Mamie n'avait rien vu ni pris son médicament).
+     */
+    private static final int MAX_PENDING = 100;
+
+    private void commitOrKeep(JSONObject write) throws JSONException {
+        try {
+            firebase.commit(new JSONArray().put(write));
+        } catch (IOException e) {
+            if (!retryable(e)) { Log.w(TAG, "Écriture refusée", e); return; }
+            JSONArray pending = pending();
+            if (pending.length() >= MAX_PENDING) pending.remove(0);
+            pending.put(write);
+            prefs.edit().putString("ecrituresEnAttente", pending.toString()).apply();
+        }
+    }
+
+    /** Hors ligne, serveur occupé ou trop de demandes : on réessaiera. Refus net (envoi supprimé…) : non. */
+    static boolean retryable(IOException e) {
+        if (!(e instanceof Firebase.ApiException)) return true;
+        int code = ((Firebase.ApiException) e).code;
+        return code == 401 || code == 408 || code == 429 || code >= 500;
+    }
+
+    private JSONArray pending() {
+        try {
+            return new JSONArray(prefs.getString("ecrituresEnAttente", "[]"));
+        } catch (JSONException e) {
+            return new JSONArray();
+        }
+    }
+
+    private void flushPending() {
+        JSONArray pending = pending();
+        if (pending.length() == 0) return;
+        JSONArray rest = new JSONArray();
+        for (int i = 0; i < pending.length(); i++) {
+            JSONObject write = pending.optJSONObject(i);
+            if (write == null) continue;
+            if (rest.length() > 0) { rest.put(write); continue; } // un échec réseau : on garde la suite
+            try {
+                firebase.commit(new JSONArray().put(write));
+            } catch (IOException e) {
+                if (retryable(e)) rest.put(write);
+            } catch (JSONException ignored) { }
+        }
+        prefs.edit().putString("ecrituresEnAttente", rest.toString()).apply();
+        if (rest.length() < pending.length()) lastReminders = 0; // « c'est fait » relu par l'écran
     }
 
     // ---------- Rappels ----------
@@ -1402,7 +1461,7 @@ final class Sync {
                                 .put("fields", new JSONObject().put("lastAck", Firebase.string(when))))
                         .put("updateMask", new JSONObject().put("fieldPaths", new JSONArray().put("lastAck")))
                         .put("currentDocument", new JSONObject().put("exists", true));
-                firebase.commit(new JSONArray().put(write));
+                commitOrKeep(write);
                 lastReminders = 0; // relire pour que la famille et l'écran soient à jour
             } catch (Exception e) {
                 Log.w(TAG, "ackReminder " + id, e);
@@ -1422,7 +1481,7 @@ final class Sync {
                                 .put("fields", new JSONObject().put("lastSeen", Firebase.string(when))))
                         .put("updateMask", new JSONObject().put("fieldPaths", new JSONArray().put("lastSeen")))
                         .put("currentDocument", new JSONObject().put("exists", true));
-                firebase.commit(new JSONArray().put(write));
+                commitOrKeep(write);
             } catch (Exception e) {
                 Log.w(TAG, "seenReminder " + id, e);
             }

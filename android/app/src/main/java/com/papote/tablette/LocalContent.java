@@ -28,7 +28,7 @@ final class LocalContent {
     static WebResourceResponse intercept(Context context, Uri url) {
         if (url == null || !HOST.equals(url.getHost())) return null;
         String path = url.getPath();
-        if (path == null || path.contains("..")) return null;
+        if (path == null || path.contains("..")) return missing();
         try {
             if (path.startsWith("/photos/")) {
                 File f = new File(new File(context.getFilesDir(), "photos"), path.substring("/photos/".length()));
@@ -37,8 +37,15 @@ final class LocalContent {
             String asset = path.startsWith("/") ? path.substring(1) : path;
             return new WebResourceResponse(mime(asset), "utf-8", context.getAssets().open(asset));
         } catch (IOException e) {
-            return null;
+            // Fichier absent (photo effacée, envoi supprimé) : réponse « introuvable » tout de suite,
+            // sinon la tablette cherche cette adresse sur internet et la page attend pour rien.
+            return missing();
         }
+    }
+
+    private static WebResourceResponse missing() {
+        return new WebResourceResponse("text/plain", "utf-8", 404, "Introuvable", null,
+                new java.io.ByteArrayInputStream(new byte[0]));
     }
 
     private static String mime(String name) {
