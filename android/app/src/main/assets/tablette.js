@@ -1007,8 +1007,26 @@
   var REMINDER_WINDOW_MIN = 60;  // un rappel manqué reste affiché pendant 1 heure
   var RESOUND_MIN = 5;           // le son est rejoué toutes les 5 minutes tant que ce n'est pas fait
   var alerting = null;           // { r, key, early, lastSound }
-  var handled = {};              // rappels confirmés : id|date -> true
-  var announced = {};            // annonces « bientôt » déjà vues : id|date -> true
+  // Rappels confirmés (handled) et annonces « bientôt » déjà vues (announced) : id|date -> true.
+  // Gardés dans la page (localStorage) : après un rechargement, un rappel déjà fermé ne revient pas.
+  var handled = loadMarks('papote.rappelsFaits');
+  var announced = loadMarks('papote.rappelsAnnonces');
+
+  function loadMarks(name) {
+    try { return JSON.parse(localStorage.getItem(name)) || {}; } catch (e) { return {}; }
+  }
+
+  function saveMarks() {
+    // Seuls les jours récents servent : les plus anciens sont oubliés.
+    var limit = dateKey(new Date(Date.now() - 2 * 86400000));
+    [handled, announced].forEach(function (m) {
+      Object.keys(m).forEach(function (k) { if (k.split('|').pop() < limit) delete m[k]; });
+    });
+    try {
+      localStorage.setItem('papote.rappelsFaits', JSON.stringify(handled));
+      localStorage.setItem('papote.rappelsAnnonces', JSON.stringify(announced));
+    } catch (e) { /* sans stockage : comme avant */ }
+  }
 
   function dateKey(d) {
     return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
@@ -1187,6 +1205,7 @@
       if (!alerting) return;
       var id = alerting.r.id + '|' + alerting.key;
       if (alerting.early) announced[id] = true; else handled[id] = true;
+      saveMarks();
       closeReminder();
       setTimeout(checkReminders, 500);
     });
@@ -1208,6 +1227,7 @@
       handled[id] = true;
       if (android()) android().ackReminder(alerting.r.id, dateKey(now) + ' ' + pad(now.getHours()) + ':' + pad(now.getMinutes()));
     }
+    saveMarks();
     closeReminder();
     setTimeout(checkReminders, 500);
   }
