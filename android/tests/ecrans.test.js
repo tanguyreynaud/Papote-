@@ -302,3 +302,23 @@ test('appels indisponibles au démarrage (pas d\'internet) : la page se recharge
     assert.strictEqual(await b.page.evaluate(() => window.__marque), 2, 'pas de nouveau rechargement avant 30 min');
   } finally { await b.fermer(); }
 });
+
+test('rappel fermé puis page rechargée : il ne revient pas (le lastAck n\'est pas encore relu)', async () => {
+  const b = await ouvrir('2026-10-26T10:30:00');
+  const rappel = { reminders: [{ id: 'r9', title: 'Cachet', kind: 'medicament', time: '10:30', repeat: 'daily', date: '', days: [], lastAck: '', avanceMin: 0, finLe: '', enPauseJusquau: '', voice: '' }] };
+  try {
+    await b.android('onPosts', lot([]));
+    await b.android('onReminders', rappel);
+    await b.avancer(31000);
+    assert.ok(await b.visible('#reminder-alert'));
+    await b.toucher('#reminder-done');
+    await b.avancer(1000);
+    await b.page.reload();
+    await b.avancer(100);
+    await b.android('onPosts', lot([]));
+    await b.android('onReminders', rappel); // Android renvoie les rappels connus, sans le « fait » pas encore relu
+    await b.avancer(31000);
+    assert.ok(!(await b.visible('#reminder-alert')), 'pas une deuxième fois');
+    await sansErreur(b);
+  } finally { await b.fermer(); }
+});
