@@ -1273,15 +1273,32 @@ async function saveFace(face) {
   await updateDoc(doc(db, 'families', session.fid, 'members', session.uid), { face });
 }
 
-// Carré de 320 px pris au centre, sans déformer le visage (JPEG en data URL).
+// Carré de 640 px pris au centre, sans déformer le visage (JPEG en data URL) : net en grand sur l'écran
+// d'appel de la tablette. Qualité baissée si besoin pour rester sous 190 000 caractères (règle : 200 000),
+// soit ~80 Ko par fiche en pratique (photos de test), lue une fois puis gardée par l’écouteur.
+const VISAGE_COTE = 640;
+const VISAGE_MAX = 190000;
 async function visageCarre(file) {
   const img = await loadImage(file);
   const side = Math.min(img.naturalWidth, img.naturalHeight);
+  const cote = Math.min(VISAGE_COTE, side);
   const canvas = document.createElement('canvas');
-  canvas.width = 320;
-  canvas.height = 320;
-  canvas.getContext('2d').drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, 320, 320);
-  return canvas.toDataURL('image/jpeg', 0.8);
+  canvas.width = cote;
+  canvas.height = cote;
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, cote, cote);
+  let url = '';
+  for (const q of [0.85, 0.75, 0.65, 0.5]) {
+    url = canvas.toDataURL('image/jpeg', q);
+    if (url.length <= VISAGE_MAX) return url;
+  }
+  // Photo très chargée : on repasse en 320 px, toujours sous la limite.
+  const petit = document.createElement('canvas');
+  petit.width = 320;
+  petit.height = 320;
+  petit.getContext('2d').drawImage(canvas, 0, 0, 320, 320);
+  return petit.toDataURL('image/jpeg', 0.8);
 }
 
 async function onFaceChosen(e) {
@@ -1320,13 +1337,7 @@ async function onTabletFaceChosen(e) {
   e.target.value = '';
   if (!file) return;
   try {
-    const img = await loadImage(file);
-    const side = Math.min(img.naturalWidth, img.naturalHeight);
-    const canvas = document.createElement('canvas');
-    canvas.width = 320;
-    canvas.height = 320;
-    canvas.getContext('2d').drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, 320, 320);
-    await saveTabletFace(canvas.toDataURL('image/jpeg', 0.8));
+    await saveTabletFace(await visageCarre(file));
     toast('Photo enregistrée');
   } catch (err) {
     console.error(err);
