@@ -130,11 +130,20 @@ function receptionDe(commande) {
   return enMillis(commande && commande.preparation && commande.preparation.recuLe);
 }
 
+// La tablette est-elle partie chez le client ? Pas tant que la commande est à préparer ou que la banque
+// n'a pas encore confirmé le prélèvement SEPA (« paiement-en-attente ») : rien à rendre dans ce cas.
+const AVANT_ENVOI = ['a-preparer', 'paiement-en-attente'];
+function materielParti(commande) {
+  if (!commande) return false;
+  if (commande.envoyeeLe || commande.expedition === 'envoyee') return true;
+  return !AVANT_ENVOI.includes(commande.expedition) && commande.expedition !== 'annulee';
+}
+
 // La commande peut-elle encore être annulée et remboursée ?
 // commande : commandes/{id} (expedition, creeLe, envoyeeLe, retractation).
 function retractationPossible(commande, maintenant) {
-  if (!commande || commande.retractation) return false;
-  if (commande.expedition === 'a-preparer') return true;
+  if (!commande || commande.retractation || commande.expedition === 'annulee') return false;
+  if (!materielParti(commande)) return true;
   return maintenant <= limiteRetractation(enMillis(commande.creeLe), enMillis(commande.envoyeeLe), receptionDe(commande));
 }
 
@@ -210,6 +219,7 @@ module.exports = {
   restitutionEchue,
   RETRACTATION_JOURS,
   receptionDe,
+  materielParti,
   raisonsMauvaisPayeur,
   limiteRetractation,
   retractationPossible,

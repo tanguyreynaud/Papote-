@@ -531,7 +531,8 @@ exports.retracter = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE] }, asyn
     if (!regles.retractationPossible(c, maintenant)) {
       throw new HttpsError('failed-precondition', 'Le délai de 30 jours pour annuler la commande est dépassé.');
     }
-    const envoyee = c.expedition !== 'a-preparer';
+    // Paiement SEPA pas encore confirmé : la tablette n'est pas partie non plus, rien à rendre.
+    const envoyee = regles.materielParti(c);
     tx.update(ref, envoyee ? {
       retractation: { le: Timestamp.fromMillis(maintenant), montant },
       remboursement: { statut: 'au-retour', montant },
@@ -740,11 +741,33 @@ async function paiementTermine(session) {
   });
   await verifierDoublon(ref, session, email).catch((e) => logger.warn(`Commande ${ref.id} : doublon non vérifié`, e.message));
   if (!paye) return;
+  // Commande annulée pendant que la banque confirmait le prélèvement SEPA : remboursée, pas confirmée.
+  if (existante.exists && existante.get('expedition') === 'annulee') {
+    await paiementApresAnnulation(ref, existante);
+    return;
+  }
   if (existante.exists && existante.get('expedition') === 'paiement-en-attente' && meta.dejaInstallee !== '1') await ref.update({ expedition: 'a-preparer' });
   const fid = meta.fid || (existante.exists && existante.get('fid')) || await chercherFamille(email);
   if (fid) await appliquer(fid, session.subscription);
   if (fid && meta.dejaInstallee === '1') await relierTabletteInstallee(fid, session.subscription);
   await confirmerCommande(ref, email, code);
+}
+
+// Le prélèvement SEPA d'une commande annulée entre-temps (client ou admin) a fini par passer : l'argent
+// est rendu tout de suite (rejouable sans double remboursement) et Papote est prévenu.
+async function paiementApresAnnulation(ref, snap) {
+  let detail;
+  try {
+    const rembourse = await rembourser(ref.id);
+    await ref.update({ remboursement: { statut: 'fait', montant: rembourse, le: FieldValue.serverTimestamp() } });
+    detail = `${mail.euros(rembourse)} remboursés automatiquement`;
+  } catch (e) {
+    logger.error(`Commande ${ref.id} : remboursement après annulation refusé`, e.message);
+    await ref.update({ 'remboursement.statut': 'echec', 'remboursement.erreur': e.message });
+    detail = 'le remboursement automatique a échoué : à faire à la main dans Stripe';
+  }
+  await prevenirPapote(`Paiement reçu pour une commande annulée : ${snap.get('nom') || snap.get('email') || ref.id}`, snap,
+    `La banque a confirmé le prélèvement SEPA d'une commande déjà annulée : ${detail}. Aucune tablette à envoyer.`);
 }
 
 // Client qui recommande : même IBAN (empreinte Stripe), e-mail, téléphone ou adresse qu'une autre commande.
@@ -1147,6 +1170,11 @@ exports.restitutions = onSchedule(
         }
       }
       if (!regles.restitutionEchue(snap.get('restitution'), maintenant)) continue;
+      // Jamais de prélèvement pour une tablette qui n'est pas partie (commande annulée avant l'envoi).
+      if (!regles.materielParti(snap.data())) {
+        logger.warn(`Commande ${snap.id} : retour attendu mais tablette jamais envoyée, rien prélevé.`);
+        continue;
+      }
       try {
         const paiement = await preleverMateriel(snap.id, regles.penaliteRestitution(snap.data()),
           'Papote : matériel non rendu', `restitution-${snap.id}`);
