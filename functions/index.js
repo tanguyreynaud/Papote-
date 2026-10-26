@@ -13,7 +13,7 @@
 //   finDeGrace         chaque heure : suspend les familles dont le délai de grâce est dépassé
 //   retracter          appel depuis l'appli famille : annule la commande (30 jours), remboursée au retour
 //   finDeContrat       appel depuis l'appli famille : rétractation possible, retour attendu, remboursement
-//   restitutions       chaque jour : rappel 7 jours avant, puis 170 € ou 200 € si la tablette n'est pas rendue à temps
+//   restitutions       chaque jour : rappel 7 jours avant, puis 140 € ou 150 € (abonnement.js) si le matériel n'est pas rendu à temps
 //   tabletteRendue     appel depuis le tableau de bord admin : la tablette incluse est revenue
 //   etiquetteRetour    appel depuis le tableau de bord admin : lien de l'étiquette de retour prépayée
 //   nouvelleFamille    famille créée : sans commande, statut « aucun »
