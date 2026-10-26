@@ -28,6 +28,7 @@ Outils `node` : depuis le dossier du projet, `node <chemin>`.
 
 | Script | À quoi il sert | Commande |
 | --- | --- | --- |
+| **Vérifier avant de publier** | Lance tous les tests sur les versions exactes qui vont partir (fonctions de `main`, règles et app famille de dlattc, tablette de cmnwxy, galerie des écrans) et s'arrête net au premier échec ; affiche les SHA à publier | `.\outils\verifier.bat` (ou `fonctions`, `site`, `tablette`) |
 | Installer une tablette | Installe Papote, le mode kiosque et les réglages ; note la tablette dans le stock | `.\installation\installer-tablette.bat` |
 | Diagnostic | Vérifie une tablette branchée et dit ce qui ne va pas | `.\installation\diagnostic.bat` |
 | Retirer Papote | Enlève Papote et le mode kiosque, réactive les applis (sans tout effacer) | `.\installation\retirer-papote.bat` |
