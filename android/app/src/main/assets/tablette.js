@@ -1534,25 +1534,28 @@
         grid.appendChild(b);
       })(list[i]);
     }
-    callScreen.appendChild(grid);
+    // Plus de 4 personnes : une grande flèche de chaque côté des visages (demande de Tanguy, 26/10).
+    // Au bout de la liste, la flèche est cachée mais garde sa place : les visages ne bougent pas.
+    var strip = el2('div', 'call-strip');
+    if (pages > 1) strip.appendChild(pageArrow('left', pickerPage === 0, -1));
+    strip.appendChild(grid);
+    if (pages > 1) strip.appendChild(pageArrow('right', pickerPage >= pages - 1, 1));
+    callScreen.appendChild(strip);
     var row = el2('div', 'call-nav');
-    if (pages > 1) {
-      var prev = el2('button', 'call-page', '‹ Précédents');
-      prev.disabled = pickerPage === 0;
-      on(prev, 'click', function () { pickerPage--; showPicker(); });
-      row.appendChild(prev);
-    }
     var back = el2('button', 'call-back', 'Retour à l’accueil');
     on(back, 'click', function () { pickerPage = 0; closeCallScreen(); });
     row.appendChild(back);
-    if (pages > 1) {
-      var next = el2('button', 'call-page', 'Suivants ›');
-      next.disabled = pickerPage >= pages - 1;
-      on(next, 'click', function () { pickerPage++; showPicker(); });
-      row.appendChild(next);
-    }
     callScreen.appendChild(row);
     armPickerIdle();
+  }
+
+  function pageArrow(side, off, step) {
+    var b = el2('button', 'call-arrow ' + side);
+    b.setAttribute('aria-label', step < 0 ? 'Personnes précédentes' : 'Personnes suivantes');
+    b.innerHTML = '<svg viewBox="0 0 24 24"><path d="' + (step < 0 ? 'M15 4 7 12l8 8' : 'M9 4l8 8-8 8') + '"/></svg>';
+    b.disabled = off;
+    on(b, 'click', function () { pickerPage += step; showPicker(); });
+    return b;
   }
 
   // Liste « Qui voulez-vous appeler ? » : retour à l'accueil après 1 minute sans toucher l'écran.
