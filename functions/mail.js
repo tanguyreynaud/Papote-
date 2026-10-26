@@ -12,29 +12,37 @@ function echapper(t) {
   return String(t == null ? '' : t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 }
 
+// Espaces insécables avant : ; ! ? € % » et après « (le texte seul, pas les balises) :
+// « 20 € » ou « limite : 25 novembre » ne se coupent plus en fin de ligne.
+const insecables = (h) => h.split(/(<[^>]*>)/).map((m) => (m.startsWith('<') ? m
+  : m.replace(/ ([:;!?€%»])/g, '&nbsp;$1').replace(/« /g, '«&nbsp;'))).join('');
+
 // Mise en page commune, aux couleurs du site.
-function page(titre, paragraphes, bouton) {
-  const corps = paragraphes.map((p) => `<p style="margin:0 0 16px">${p}</p>`).join('');
+// options.pied : petite ligne sous le bouton (désinscription) ; options.interne : e-mail pour Papote, sans « Une question ? ».
+function page(titre, paragraphes, bouton, options = {}) {
+  const corps = paragraphes.map((p) => `<p style="margin:0 0 16px">${insecables(p)}</p>`).join('');
   const btn = bouton
     ? `<p style="margin:24px 0"><a href="${echapper(bouton.lien)}" style="display:inline-block;background:#4f46e5;color:#ffffff;text-decoration:none;font-weight:bold;padding:14px 24px;border-radius:999px">${echapper(bouton.texte)}</a></p>`
     : '';
+  const question = options.interne ? '' : '<p style="margin:32px 0 0;font-size:14px;color:#5f5a6b">Une question&nbsp;? Répondez simplement à cet e-mail.</p>';
+  const pied = options.pied ? `<p style="margin:24px 0 0;font-size:13px;color:#5f5a6b">${options.pied}</p>` : '';
   return `<!doctype html><html lang="fr"><body style="margin:0;background:#fdfaf5;color:#24212f;font:17px/1.6 Arial,sans-serif">
 <div style="max-width:560px;margin:0 auto;padding:32px 20px">
 <p style="margin:0 0 24px;font-weight:bold;font-size:20px;color:#4f46e5">Papote</p>
-<h1 style="margin:0 0 20px;font-size:26px;line-height:1.2">${echapper(titre)}</h1>
-${corps}${btn}
-<p style="margin:32px 0 0;font-size:14px;color:#5f5a6b">Une question ? Répondez simplement à cet e-mail.</p>
+<h1 style="margin:0 0 20px;font-size:26px;line-height:1.2">${insecables(echapper(titre))}</h1>
+${corps}${btn}${question}${pied}
 </div></body></html>`;
 }
 
-function texteBrut(titre, paragraphes, bouton) {
+function texteBrut(titre, paragraphes, bouton, options = {}) {
   const sansBalises = (h) => h.replace(/<br>/g, '\n').replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"');
   return [titre, '', ...paragraphes.map(sansBalises), bouton ? `${bouton.texte} : ${bouton.lien}` : '', '',
-    'Une question ? Répondez simplement à cet e-mail.'].join('\n');
+    ...(options.interne ? [] : ['Une question ? Répondez simplement à cet e-mail.']),
+    ...(options.pied ? ['', sansBalises(options.pied)] : [])].join('\n');
 }
 
-function message(titre, paragraphes, bouton) {
-  return { subject: titre, html: page(titre, paragraphes, bouton), text: texteBrut(titre, paragraphes, bouton) };
+function message(titre, paragraphes, bouton, options) {
+  return { subject: titre, html: page(titre, paragraphes, bouton, options), text: texteBrut(titre, paragraphes, bouton, options) };
 }
 
 function relaisEnTexte(r) {
@@ -101,8 +109,9 @@ function relancePanier({ etape = 1, nom, formule, lien, desinscription }) {
   return message(titre, [
     bonjour(nom),
     ...corps,
-    desinscription ? `<span style="font-size:14px;color:#5f5a6b">Vous recevez cet e-mail car vous avez accepté les nouvelles de Papote. <a href="${echapper(desinscription)}" style="color:#5f5a6b">Se désinscrire</a>.</span>` : '',
-  ].filter(Boolean), { texte: 'Reprendre ma commande', lien });
+  ].filter(Boolean), { texte: 'Reprendre ma commande', lien }, {
+    pied: desinscription ? `Vous recevez cet e-mail car vous avez accepté les nouvelles de Papote. <a href="${echapper(desinscription)}" style="color:#5f5a6b">Se désinscrire</a>.` : '',
+  });
 }
 
 // Ouverture des commandes, pour la liste d'attente du site (lancementListeAttente).
@@ -113,8 +122,9 @@ function lancement({ prenom, desinscription }) {
     'La tablette arrive prête à brancher, en point relais près de chez vous ou de chez votre proche. Votre proche n\'a rien à régler : c\'est la famille qui envoie les photos et qui appelle, la tablette décroche toute seule.',
     '60 € à la commande, puis 20 € par mois payés une fois le mois écoulé, sans engagement. 30 jours pour changer d\'avis, livraison offerte, tablette prêtée.',
     'Nous préparons les tablettes par petits lots : les premières commandes partent en premier.',
-    desinscription ? `<span style="font-size:14px;color:#5f5a6b">Vous recevez cet e-mail car vous vous êtes inscrit à la liste d'attente de Papote. <a href="${echapper(desinscription)}" style="color:#5f5a6b">Se désinscrire</a>.</span>` : '',
-  ].filter(Boolean), { texte: 'Commander ma tablette', lien: 'https://mapapote.fr/commande.html' });
+  ].filter(Boolean), { texte: 'Commander ma tablette', lien: 'https://mapapote.fr/commande.html' }, {
+    pied: desinscription ? `Vous recevez cet e-mail car vous vous êtes inscrit à la liste d'attente de Papote. <a href="${echapper(desinscription)}" style="color:#5f5a6b">Se désinscrire</a>.` : '',
+  });
 }
 
 function nouvelleCommande({ nom, email, telephone, code, relais, formule, delai, dejaInstallee }) {
@@ -122,7 +132,7 @@ function nouvelleCommande({ nom, email, telephone, code, relais, formule, delai,
   const offre = `Formule : ${formule === 'sim' ? '30 € par mois, internet inclus (carte SIM dans la tablette)' : '20 € par mois (wifi)'}.`;
   if (dejaInstallee) {
     return message(`Nouvel abonnement ${code || ''}`.trim(), [client, offre,
-      'Pris dans l\'appli, tablette déjà installée chez le proche : rien à envoyer. Premier prélèvement dans 30 jours.']);
+      'Pris dans l\'appli, tablette déjà installée chez le proche : rien à envoyer. Premier prélèvement dans 30 jours.'], null, { interne: true });
   }
   return message(`Nouvelle commande ${code || ''}`.trim(), [
     client,
@@ -132,7 +142,7 @@ function nouvelleCommande({ nom, email, telephone, code, relais, formule, delai,
       : `Livraison : ${relaisEnTexte(relais) || 'adresse non trouvée, voir Stripe'}.`,
     `Délai annoncé : ${{ stock: 'en stock, 2 à 3 jours ouvrés', precommande: 'précommande, 7 à 10 jours ouvrés', long: 'attente longue, 3 à 4 semaines' }[delai] || 'en stock, 2 à 3 jours ouvrés'}.`,
     'Tablette à préparer, puis à marquer « envoyée » dans le tableau de bord.',
-  ]);
+  ], null, { interne: true });
 }
 
 function rappelJumelage({ nom, numero, code }) {
@@ -226,7 +236,7 @@ function annulationAvantEnvoi({ nom, email, code }) {
   return message(`Commande annulée ${code || ''}`.trim(), [
     `Client : <b>${echapper(nom || '?')}</b>, ${echapper(email || 'sans e-mail')}.`,
     'Le client a annulé sa commande avant l\'envoi et a été remboursé automatiquement. Ne pas envoyer la tablette.',
-  ]);
+  ], null, { interne: true });
 }
 
 // Invitation d'un proche par e-mail, depuis l'appli famille (inviterParEmail).
@@ -256,12 +266,12 @@ function sepaRefuse({ nom, email, papote }) {
     return message('Commande annulée : prélèvement SEPA refusé', [
       `Client : <b>${echapper(nom || '?')}</b>, ${echapper(email || 'sans e-mail')}.`,
       'La banque a refusé le prélèvement de la mise en service. La commande et l\'abonnement sont annulés : ne pas envoyer la tablette.',
-    ]);
+    ], null, { interne: true });
   }
   return message('Votre paiement Papote n\'a pas abouti', [
     bonjour(nom),
     'Votre banque a refusé le prélèvement SEPA de votre commande Papote. La commande est donc annulée et rien ne vous a été prélevé.',
-    'Vous pouvez recommander quand vous voulez, avec un autre compte bancaire. Une question ? Répondez simplement à cet e-mail.',
+    'Vous pouvez recommander quand vous voulez, avec un autre compte bancaire.',
   ], { texte: 'Commander à nouveau', lien: 'https://mapapote.fr/commande.html' });
 }
 
@@ -273,13 +283,13 @@ function resiliation({ nom, email, code, commande, retractation, suivi, lienSuiv
     lienSuivi
       ? `Le client a reçu le mode d'emploi et l'étiquette de retour. Suivi du colis de retour : <a href="${echapper(lienSuivi)}">${echapper(suivi || 'suivre le colis')}</a> (aussi sur la page de la commande).`
       : 'Le client reçoit par e-mail le mode d\'emploi du retour. Le suivi du colis apparaîtra sur la page de la commande.',
-  ], { texte: 'Ouvrir la commande', lien: `https://app.mapapote.fr/admin.html#commande/${encodeURIComponent(commande)}` });
+  ], { texte: 'Ouvrir la commande', lien: `https://app.mapapote.fr/admin.html#commande/${encodeURIComponent(commande)}` }, { interne: true });
 }
 
 // Alerte à Papote (prélèvement refusé ou contesté…), avec le lien vers la commande dans l'admin.
 function alerteAdmin({ titre, detail, commande }) {
   return message(titre, [echapper(detail)], commande
-    ? { texte: 'Ouvrir la commande', lien: `https://app.mapapote.fr/admin.html#commande/${encodeURIComponent(commande)}` } : null);
+    ? { texte: 'Ouvrir la commande', lien: `https://app.mapapote.fr/admin.html#commande/${encodeURIComponent(commande)}` } : null, { interne: true });
 }
 
 // smtp : « hote:port:utilisateur » (MAIL_SMTP), expediteur : adresse affichée (MAIL_EXPEDITEUR).
