@@ -882,7 +882,7 @@
     playVoice(p, function () {
       if (overlayPost !== p) return;
       show($('ln-playzone'), false);
-      setOverlayActions(true, true);
+      setOverlayActions(true, !p.video); // vidéo : pas de « Revoir », toucher l'image la relance
     });
   }
 

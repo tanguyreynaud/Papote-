@@ -16,6 +16,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URL;
 import java.security.MessageDigest;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.net.ssl.HttpsURLConnection;
 
@@ -32,11 +33,22 @@ final class Updater {
     private static final String FEED_TEST = "https://papote-maj.web.app/version-test.json";
 
     private static int echecs;
+    /** Une seule vérification à la fois (une annonce peut arriver pendant un téléchargement). */
+    private static final AtomicBoolean enCours = new AtomicBoolean(false);
 
     private Updater() { }
 
     /** À appeler hors du fil principal, seulement en mode kiosque. false : échec, à réessayer bientôt. */
     static boolean check(Context context) {
+        if (!enCours.compareAndSet(false, true)) return true;
+        try {
+            return verifier(context);
+        } finally {
+            enCours.set(false);
+        }
+    }
+
+    private static boolean verifier(Context context) {
         try {
             boolean test = "test".equals(context.getSharedPreferences("papote", Context.MODE_PRIVATE).getString("canal", ""));
             JSONObject feed = new JSONObject(new String(download(test ? FEED_TEST : FEED), "UTF-8"));
@@ -51,7 +63,9 @@ final class Updater {
             if (!sha256(apk).equalsIgnoreCase(feed.getString("sha256"))) {
                 Log.w(TAG, "Mise à jour ignorée : empreinte incorrecte");
                 Journal.log(context, "Mise à jour ignorée : empreinte incorrecte");
-                return false;
+                // Pas de nouvel essai dans 10 min : ce serait l'APK entier retéléchargé sans fin (forfait SIM).
+                // Réessai à la prochaine vérification normale ou à la prochaine annonce de version.
+                return true;
             }
             install(context, apk);
             return true;
