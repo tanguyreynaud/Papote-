@@ -19,10 +19,11 @@ test('commande, envoi, installation par un autre proche, envois, appel, annulati
   const stock = await s.requete('stockDisponible');
   assert.deepStrictEqual(stock.json, { disponible: true, precommande: false, attenteLongue: false });
 
-  // 2. Paul commande sur le site et paie (SEPA).
+  // 2. Paul commande sur le site et paie (carte en premier, SEPA en second, pas de TVA : 26/10).
   const session = await a.commanderSurLeSite({ email: paul.email });
   const params = s.stripe.etat.sessions.get(session).params;
-  assert.deepStrictEqual(params.payment_method_types, ['sepa_debit']);
+  assert.deepStrictEqual(params.payment_method_types, ['card', 'sepa_debit']);
+  assert.strictEqual(params.tax_id_collection, undefined, 'plus de numéro de TVA sur la page de paiement');
   assert.strictEqual(params.subscription_data.trial_period_days, 90, 'rien prélevé avant la réception');
   assert.strictEqual(params.subscription_data.metadata.delai, 'stock');
   assert.ok(params.expires_at, 'la page de paiement expire (tablette mise de côté)');
