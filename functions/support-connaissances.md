@@ -15,13 +15,14 @@ les fonctions suffit pour que le chat en tienne compte.
   Android : dans Chrome, menu ⋮ en haut à droite puis « Installer l'application » ou « Ajouter à l'écran d'accueil ».
 - Connexion avec Google ou avec une adresse e-mail (un lien de connexion est envoyé par e-mail). Il n'y a pas de mot de passe Papote à créer ni à changer.
 - L'accueil a six tuiles : Appel vidéo, Photos, Vidéos, Messages, Agenda, Réglages. En bas de l'écran : Accueil, Notifications, Support et Profil.
-- Profil : sa photo, « Mon prénom » (changer son prénom), « Vos données », l'abonnement, « Rejoindre une autre famille » (on peut être dans plusieurs familles et passer de l'une à l'autre en haut de l'accueil) et « Quitter cette famille ».
-- Photos : jusqu'à 5 photos par envoi, avec une légende courte (30 caractères). Vidéos : 1 minute au maximum.
+- Juste après l'inscription, l'écran « Vos informations » demande une fois le prénom, « Je suis : une femme / un homme » (la tablette lit vos messages avec une voix de femme ou d'homme), une petite photo et la date de naissance complète (votre anniversaire s'ajoute à l'agenda de la famille).
+- Profil : sa photo, « Mon prénom » (changer son prénom), « Je suis » (voix de femme ou d'homme pour lire vos messages), « Vos données », l'abonnement, « Rejoindre une autre famille » (on peut être dans plusieurs familles et passer de l'une à l'autre en haut de l'accueil) et « Quitter cette famille ».
+- Photos : jusqu'à 5 photos par envoi, avec une légende courte (60 caractères). Vidéos : 1 minute au maximum.
 - Supprimer un envoi : toucher la corbeille sous la photo ou la vidéo, ou toucher son message. Il disparaît aussi de la tablette. On ne peut supprimer que ses propres envois.
 - L'appli garde les 200 dernières photos et les 40 dernières vidéos ; au-delà, les plus anciennes s'effacent toutes seules. Il faut garder ses originaux sur son téléphone.
 - Agenda : rappels (rendez-vous, médicament…) une fois, tous les jours ou certains jours, et anniversaires (la tablette le rappelle le jour J, avec l'âge si on donne l'année). Pour chaque rappel on règle quand il s'affiche (de l'heure exacte jusqu'à 4 heures avant, 15 minutes avant par défaut), une date de fin, et on peut le mettre en pause jusqu'à une date. Si la personne est en appel, le rappel attend la fin de l'appel.
 - La page Notifications indique quand un envoi ou un rappel a été vu ou confirmé sur la tablette.
-- Données : dans Profil, « Vos données » montre ce qui est conservé. Le propriétaire de la famille peut y « Supprimer la famille et toutes ses données » : photos, vidéos et messages sont effacés tout de suite. Les données sont chez Google Firebase, qui les chiffre sur ses serveurs. Les photos ne sont ni revendues ni utilisées pour de la publicité.
+- Données : dans Profil, « Vos données » montre ce qui est conservé. Pour effacer la famille et toutes ses données, il faut écrire à contact@mapapote.fr : on en parle ensemble avant, car c'est définitif pour toute la famille (il n'y a pas de bouton pour le faire d'un coup). Chacun peut supprimer ses propres envois à tout moment. Les données sont chez Google Firebase, qui les chiffre sur ses serveurs. Les photos ne sont ni revendues ni utilisées pour de la publicité.
 - Profil : ajouter sa photo pour que le proche reconnaisse qui envoie ou appelle.
 
 ## Inviter la famille
@@ -29,27 +30,28 @@ les fonctions suffit pour que le chat en tienne compte.
 - Ou « Partager le lien » / QR code avec le code famille : la personne ouvre le lien, donne son prénom, et un responsable de la famille accepte son arrivée (Réglages, « Demandes pour rejoindre »).
 
 - Membres : dans Réglages, « Membres », un responsable peut retirer quelqu'un de la famille ou rendre un autre membre responsable. Il peut y avoir plusieurs responsables ; celui qui a créé la famille le reste toujours.
+- Propriétaire de la famille : c'est la personne qui a installé la tablette (celle qui a scanné son QR code). Elle seule règle la tablette (nuit, son, options, météo, Wi-Fi, nom affiché, dépannage) et gère l'abonnement (paiement, factures, résiliation, annulation de la commande). Les autres membres voient l'état de l'abonnement et peuvent lui demander.
 
 ## Recevoir et jumeler la tablette
 - La tablette arrive en point relais, déjà configurée. On choisit le point relais à la commande, où l'on veut (près de chez soi ou près du proche) : pas besoin de passer la main pour cela. Suivi du colis : quand il part, l'e-mail « Votre tablette est en route » donne le numéro de suivi et un bouton « Suivre mon colis » qui ouvre le suivi Mondial Relay. Il n'y a pas de page de suivi sur le site ni dans l'appli.
 - À l'allumage, elle affiche un écran de bienvenue, demande le Wi-Fi de la maison (sauf avec l'option internet inclus), puis montre un QR code et un code à 8 caractères (ABCD-1234). On scanne le QR code avec l'appareil photo du téléphone, ou on va sur app.mapapote.fr et on tape le code.
-- Ensuite, tout se fait sur le téléphone, en quelques minutes : le nom affiché sur la tablette (par exemple « Mamie Emma »), au moins une photo, un essai du son, puis les options (SOS famille, lecture à voix haute, météo, prochain rappel, radio). Les proches invités rejoignent ensuite la famille avec le lien ou le code.
-- Se connecter à l'appli avec l'adresse e-mail utilisée pour le paiement : la commande se rattache toute seule à la famille.
-- Avec la formule Wi-Fi, l'écran de bienvenue demande le Wi-Fi de la maison.
+- Ensuite, tout se fait sur le téléphone, en quelques minutes : le nom affiché sur la tablette (par exemple « Mamie Emma »), au moins une photo, un essai du son, puis les options (au départ : SOS famille, lecture à voix haute, météo et prochain rappel activés ; radio éteinte). Pendant ce temps, la tablette affiche « On prépare votre tablette… » jusqu'à la première photo. Les proches invités rejoignent ensuite la famille avec le lien ou le code. La personne qui scanne devient propriétaire de la famille.
+- Si l'installation est laissée en plan plus de 30 minutes, le prochain proche qui scanne le QR code la reprend là où elle en était. Le bouton « Annuler l'installation » efface une installation en cours (pas une famille déjà payée).
+- Se connecter à l'appli avec l'adresse e-mail utilisée pour le paiement : la commande se rattache toute seule à la famille. Sinon, Profil, Abonnement : entrer le code de commande (il est sur la page de confirmation et la facture).
 
 ## La tablette au quotidien
 - Elle reste allumée : heure, date, météo et photos en diaporama. Les nouveaux envois s'affichent en grand tout seuls.
 - Appel vidéo : la famille appelle depuis la tuile « Appel vidéo ». La tablette décroche toute seule quand la personne regarde l'écran : elle n'a rien à toucher.
 - La personne âgée peut aussi appeler : bouton « Appeler » sur l'accueil, elle touche la photo du proche voulu, et le téléphone de ce proche sonne dans l'appli famille (appel audio, sans image). Sans réponse au bout de 45 secondes, le proche reçoit « Appel manqué ».
 - Bouton « SOS famille » (option, activée au départ) : en haut de la tablette. Un appui, 5 secondes pour annuler, puis toute la famille sonne en même temps ; le premier qui décroche prend l'appel. Si personne ne répond, la tablette réessaie, puis la famille reçoit une alerte. Ce n'est pas un service d'urgence : en cas d'urgence, appeler le 15 ou le 112.
-- Alertes à la famille : les responsables reçoivent une notification sur leur téléphone si la tablette est débranchée depuis plus de 10 minutes, ou si elle ne répond plus depuis 45 minutes (éteinte ou sans internet).
-- Le soir l'écran s'assombrit ; la nuit il s'éteint (horaires réglables dans Réglages, « Écran éteint la nuit »). Un toucher le rallume, un appel ou un rappel le réveille.
+- Alertes à la famille : les responsables reçoivent une notification sur leur téléphone si la tablette est débranchée depuis plus de 10 minutes, ou si elle ne répond plus depuis 45 minutes (éteinte ou sans internet). À midi, si la tablette n'a ni vu ni senti la personne depuis le matin, la famille reçoit « X n'a pas été vue ce matin », pour penser à l'appeler.
+- Le soir l'écran s'assombrit ; la nuit il s'éteint (de 23 h à 7 h au départ, réglable dans Réglages, « Écran éteint la nuit »). Un toucher le rallume, un appel ou un rappel le réveille.
 - Les mises à jour se font toutes seules.
 - Le bouton marche/arrêt ne l'éteint pas (pour éviter les fausses manœuvres) ; un appui d'environ 10 secondes la redémarre.
-- Taille du texte de la tablette : dans l'appli famille, Réglages (Normale, Grande, Très grande). La tablette elle-même n'a aucun menu de réglage : tout se règle depuis l'appli, à distance.
-- Volume : dans Réglages, « Volume du son » (son des vidéos et des appels sur la tablette), réglable par un responsable de la famille.
-- Lecture à voix haute (option, activée au départ) : la tablette lit les messages et les rappels une fois, quand elle voit la personne devant l'écran ; un bouton « Écouter » permet de les réentendre.
-- Autres options, réglées par un responsable dans l'appli (Réglages) : météo sur l'accueil, prochain rappel sur l'accueil, et « Radio » (un bouton pour écouter la station choisie dans l'appli ; éteinte au départ pour garder un écran simple).
+- Taille du texte : elle n'est pas réglable, le texte de la tablette est déjà écrit en grand. La tablette elle-même n'a aucun menu de réglage : tout se règle depuis l'appli, à distance, par la personne qui a installé la tablette.
+- Volume : dans Réglages, « Volume du son » (son des vidéos et des appels sur la tablette), réglé par la personne qui a installé la tablette.
+- Lecture à voix haute (option, activée au départ) : la tablette lit les messages et les rappels une fois, quand elle voit la personne devant l'écran, avec une voix naturelle de femme ou d'homme selon le profil de celui qui écrit (« Je suis », dans Profil). Elle annonce d'abord qui écrit. Un bouton « Écouter » permet de réentendre. Il n'y a aucun message vocal enregistré : c'est la tablette qui lit le texte.
+- Autres options, réglées dans l'appli (Réglages) par la personne qui a installé la tablette : météo sur l'accueil, prochain rappel sur l'accueil, et « Radio » (un bouton pour écouter la station choisie dans l'appli ; éteinte au départ pour garder un écran simple).
 - Les vidéos déjà vues repassent ensuite dans le diaporama, avec les photos.
 
 ## Dépannage
@@ -59,10 +61,10 @@ les fonctions suffit pour que le chat en tienne compte.
 - La tablette affiche « Papote est en pause » : l'abonnement est suspendu (paiement non réglé ou abonnement terminé). Régulariser ou changer de compte bancaire dans l'appli famille, onglet Profil, « Gérer le paiement et les factures » ; tout repart dès le paiement.
 
 ## Abonnement
-- L'abonnement se gère dans l'appli famille, onglet Profil : « Gérer le paiement et les factures » (changer de compte bancaire, factures) et « Résilier l'abonnement ». Seul un responsable de la famille peut le faire.
+- L'abonnement se gère dans l'appli famille, onglet Profil : « Gérer le paiement et les factures » (changer de compte bancaire, factures) et « Résilier l'abonnement ». Seul le propriétaire de la famille (la personne qui a installé la tablette) voit ces boutons ; les autres membres voient l'état de l'abonnement.
 - On peut payer avec le compte bancaire de n'importe qui, par exemple celui du parent lui-même. Paiement au mois seulement, pas à l'année.
 - Hospitalisation du proche : sur justificatif d'hospitalisation envoyé à contact@mapapote.fr, les prélèvements sont mis en pause jusqu'à la date de retour prévue (rien n'est prélevé pour ces mois-là, la tablette reste prête). Aucune pause pour d'autres raisons (vacances, absence…). On peut aussi simplement résilier, sans engagement.
-- Prélèvement refusé par la banque : tout continue de marcher pendant 7 jours ; un bandeau prévient le responsable dans l'appli. Sans règlement, la tablette se met en pause (« Papote est en pause ») et tout repart dès le paiement (Profil, « Gérer le paiement et les factures »).
+- Prélèvement refusé par la banque : tout continue de marcher pendant 7 jours ; un bandeau prévient le propriétaire de la famille dans l'appli. Sans règlement, la tablette se met en pause (« Papote est en pause ») et tout repart dès le paiement (Profil, « Gérer le paiement et les factures »).
 - Fin d'abonnement : l'appli (Profil, Abonnement) donne une étiquette de retour à imprimer, payée par Papote. Tout le matériel est à renvoyer sous 30 jours : la tablette et son socle, le chargeur et son câble, et l'enceinte si elle a été fournie. Le retour est offert.
 - Le paiement passe par Stripe, une page sécurisée. Papote ne voit jamais les coordonnées bancaires complètes.
 
@@ -99,7 +101,7 @@ les fonctions suffit pour que le chat en tienne compte.
 - Le proche ne veut pas parler : il n'est jamais obligé, il peut simplement ne pas répondre.
 - Changer de compte bancaire (IBAN) : onglet Profil, « Gérer le paiement et les factures ». Pour qu'une autre personne reprenne l'abonnement à son nom : demande de contact.
 - La société s'appelle Papote.
-- Ville de la météo fausse : un responsable de la famille la change dans l'appli, Réglages, « Ville de la météo ». Si la tablette garde l'ancienne ville : demande de contact.
+- Ville de la météo fausse : la personne qui a installé la tablette la change dans l'appli, Réglages, « Ville de la météo ». Si la tablette garde l'ancienne ville : demande de contact.
 - Message vocal, ou photo programmée pour une date : non, ni l'un ni l'autre.
 - Plus accès à son adresse e-mail : si vous vous connectiez avec Google, utilisez ce compte Google. Sinon, demandez à un responsable de la famille de vous inviter avec votre nouvelle adresse (Réglages, « Inviter par e-mail »), connectez-vous avec elle, puis le responsable retire l'ancien profil (Réglages, « Membres »). Si vous étiez le seul responsable : demande de contact.
 - Décroché automatique : la tablette décroche dès qu'elle voit un visage, quel qu'il soit (aide-soignante, voisin…).
@@ -127,9 +129,9 @@ les fonctions suffit pour que le chat en tienne compte.
 - Eau : la tablette n'est pas étanche, à éviter dans une salle de bain.
 - Caméra : elle ne filme pas en continu. Elle sert aux appels vidéo et, quand un message, une photo ou un rappel arrive, à vérifier que la personne l'a vu.
 - Données : hébergées chez Firebase (Google).
-- Engagement : aucun. L'abonnement continue de mois en mois et se résilie à tout moment dans l'appli (onglet Profil, « Résilier l'abonnement ») : Papote s'arrête à la fin du mois en cours, qui est le dernier prélevé. Pendant les 30 jours qui suivent la réception, ce n'est pas « Résilier » mais « Annuler ma commande » (voir Paiement du mois écoulé).
+- Engagement : aucun. L'abonnement continue de mois en mois et se résilie à tout moment dans l'appli (onglet Profil, « Résilier l'abonnement ») : Papote s'arrête à la fin du mois en cours, qui est le dernier prélevé. Rien n'est calculé au prorata ni remboursé : le mois commencé est payé en entier, et les mois déjà payés ne sont pas remboursés. Pendant les 30 jours qui suivent la réception, ce n'est pas « Résilier » mais « Annuler ma commande » (voir Paiement du mois écoulé).
 - Prix : révisable au 1er janvier. Toute hausse est annoncée par e-mail 30 jours avant, et on peut résilier sans frais avant qu'elle s'applique. Ne jamais parler de prix garanti ou fixe pendant 12 mois.
-- Décès du proche : toutes nos condoléances. Il suffit de résilier comme d'habitude (onglet Profil, « Résilier l'abonnement », ou par simple e-mail à contact@mapapote.fr) : il n'y a pas d'engagement, Papote s'arrête à la fin du mois en cours, qui est le dernier prélevé. Le matériel prêté est à renvoyer sous 30 jours avec l'étiquette retour fournie par Papote.
+- Décès du proche : toutes nos condoléances. Il suffit de résilier comme d'habitude (onglet Profil, « Résilier l'abonnement », ou par simple e-mail à contact@mapapote.fr) : il n'y a pas d'engagement, Papote s'arrête à la fin du mois en cours, qui est le dernier prélevé (rien au prorata, comme pour toute résiliation). Le matériel prêté est à renvoyer sous 30 jours avec l'étiquette retour fournie par Papote.
 - Entrée du proche en maison de retraite (EHPAD) : Papote le suit, la tablette s'emporte et marche aussi là-bas (voir Maison de retraite). Si la famille préfère arrêter, elle résilie normalement, sans frais : Papote s'arrête à la fin du mois en cours, qui est le dernier prélevé.
 - Son : la tablette fait un son quand une photo, une vidéo ou un message arrive.
 - Paiement du mois écoulé : il n'y a pas d'essai gratuit. 60 € de mise en service à la commande, puis l'abonnement commence à la réception de la tablette et chaque mois est payé une fois écoulé (premier prélèvement 30 jours après la réception, puis chaque mois à la même date ; le dernier mois est prélevé à l'arrêt ; rien n'est prélevé pour l'abonnement avant la réception). Changer d'avis : pendant 30 jours après la réception, bouton « Annuler ma commande » dans l'appli (onglet Profil, Abonnement) ; la tablette est renvoyée avec une étiquette prépayée, rien n'est dû pour l'abonnement et tout ce qui a été payé (dont les 60 € de mise en service) est remboursé une fois la tablette rendue.
