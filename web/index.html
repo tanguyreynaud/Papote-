@@ -102,6 +102,14 @@
           <button type="submit" class="primary wide" id="btn-email">Recevoir le lien</button>
         </form>
         <p id="email-sent" class="seen small" hidden></p>
+        <!-- App installée sur iPhone : le lien de l'e-mail s'ouvrirait dans Safari, pas ici. On le colle. -->
+        <form id="form-paste-link" hidden>
+          <p class="small">Sur iPhone, le lien s'ouvre dans Safari et pas dans l'app. Dans l'e-mail, <strong>appuyez longtemps</strong> sur le lien, touchez « Copier le lien », revenez ici et collez-le :</p>
+          <label>Lien reçu par e-mail
+            <input id="paste-link" type="url" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://app.mapapote.fr/…" required>
+          </label>
+          <button type="submit" class="primary wide">Se connecter</button>
+        </form>
         <p id="login-error" class="error" hidden></p>
       </div>
     </section>
@@ -117,6 +125,11 @@
         </label>
         <button type="submit" class="primary wide">Se connecter</button>
         <p id="link-error" class="error" hidden></p>
+        <!-- iPhone : lien demandé depuis l'app de l'écran d'accueil, ouvert ici dans Safari. -->
+        <div id="link-ios" hidden>
+          <p class="small muted">Vous l'avez demandé depuis l'app Papote de l'écran d'accueil ? Copiez ce lien, puis ouvrez l'app et collez-le.</p>
+          <button type="button" id="btn-copy-link" class="secondary wide">Copier le lien pour l'app</button>
+        </div>
       </form>
     </section>
 
@@ -406,7 +419,7 @@
       </button>
       <button type="button" id="push-nudge" class="card nudge" hidden>
         <span class="avatar avatar-empty" aria-hidden="true">&#128276;</span>
-        <span><strong>Recevoir les appels de <span class="grand-name"></span></strong><br><span class="muted small">Votre téléphone sonnera même app fermée, et vous serez prévenu si la tablette est débranchée</span></span>
+        <span><strong>Recevoir les appels de <span class="grand-name"></span></strong><br><span class="muted small" id="push-nudge-text">Votre téléphone sonnera même app fermée, et vous serez prévenu si la tablette est débranchée</span></span>
       </button>
       <button type="button" id="pause-nudge" class="card nudge" hidden>
         <span class="avatar avatar-empty" aria-hidden="true">&#128241;</span>
@@ -874,7 +887,8 @@
         <button type="button" class="picker" id="pick-camera"><svg><use href="#i-camera"/></svg><span id="pick-camera-label"></span></button>
         <button type="button" class="picker" id="pick-gallery"><svg><use href="#i-gallery"/></svg><span id="pick-gallery-label"></span></button>
       </div>
-      <p class="muted small" id="video-hint" hidden>1 minute au maximum.</p>
+      <p class="muted small" id="video-hint" hidden>1 minute au maximum. Restez sur cet écran pendant la préparation de la vidéo.</p>
+      <button type="button" id="video-go" class="primary wide" hidden>Touchez ici pour préparer la vidéo</button>
       <video id="video-preview" class="video-preview" controls playsinline hidden></video>
       <div id="previews" class="previews"></div>
       <div id="post-extra" hidden>

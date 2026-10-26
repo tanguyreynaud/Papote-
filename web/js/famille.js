@@ -22,10 +22,10 @@ import {
 } from './abonnement.js';
 import { startCall, watchTabletBusy, watchIncomingCalls, answerIncoming, warmUpCalls, declineIncoming, reportCallIncident } from './appel.js';
 import { pushSupported, pushAllowed, pushRefused, enablePush, closeCallNotification, rememberNativeToken, inNativeApp } from './push.js';
-import { prepareVideo } from './video.js';
+import { prepareVideo, unlockVideo } from './video.js';
 import { startAgenda, stopAgenda } from './agenda.js';
 import {
-  isRealAccount, myEmail, signInGoogle, finishRedirect, sendEmailLink, isEmailLink, completeEmailLink, logOut,
+  isRealAccount, myEmail, signInGoogle, finishRedirect, sendEmailLink, isEmailLink, completeEmailLink, pendingEmail, logOut,
   myMemberships, familyName, tagLegacyMember, myInvitations, acceptInvitation,
   inviteByEmail, cancelInvitation, acceptMember, changeFamilyCode,
 } from './compte.js';
@@ -873,6 +873,7 @@ function syncAddSheet() {
 
 function closeSheets() {
   $('sheet-post').hidden = true;
+  $('video-go').hidden = true;
   $('sheet-reminder').hidden = true;
   $('sheet-wifi').hidden = true;
   stopScan?.();
@@ -888,8 +889,28 @@ document.querySelectorAll('.fab[data-add]').forEach((fab) => {
 $('post-close').addEventListener('click', () => history.back());
 $('sheet-post').addEventListener('click', (e) => { if (e.target === $('sheet-post')) history.back(); });
 
-$('pick-camera').addEventListener('click', () => $(addMode === 'photo' ? 'in-photo-camera' : 'in-video-camera').click());
-$('pick-gallery').addEventListener('click', () => $(addMode === 'photo' ? 'in-photo-gallery' : 'in-video-gallery').click());
+$('pick-camera').addEventListener('click', () => {
+  if (addMode === 'video') unlockVideo();
+  $(addMode === 'photo' ? 'in-photo-camera' : 'in-video-camera').click();
+});
+$('pick-gallery').addEventListener('click', () => {
+  if (addMode === 'video') unlockVideo();
+  $(addMode === 'photo' ? 'in-photo-gallery' : 'in-video-gallery').click();
+});
+
+// iPhone : si le téléphone bloque la lecture de la vidéo (son), un toucher la relance.
+function demanderToucherVideo(lancer) {
+  return new Promise((resolve, reject) => {
+    const btn = $('video-go');
+    setStatus('');
+    btn.hidden = false;
+    btn.onclick = () => {
+      btn.hidden = true;
+      btn.onclick = null;
+      lancer().then(resolve, reject);
+    };
+  });
+}
 
 function renderPreviews() {
   const box = $('previews');
@@ -970,7 +991,7 @@ async function addVideoFile(file) {
   try {
     const result = await prepareVideo(file, (done, total) => {
       setStatus(`Préparation de la vidéo… ${Math.round(done)} / ${Math.round(total)} s`);
-    }, MAX_VIDEO_SECONDS);
+    }, MAX_VIDEO_SECONDS, demanderToucherVideo);
     pendingVideo = { blob: result.blob, mime: result.mime, thumb: result.thumb, duration: result.duration };
     $('video-preview').src = URL.createObjectURL(result.blob);
     setStatus('');
@@ -1417,13 +1438,17 @@ async function renderPhoneCard() {
   const push = $('phone-push');
   push.checked = pushAllowed();
   push.disabled = false;
-  if (pushAllowed()) $('phone-push-text').textContent = `Votre téléphone sonne quand ${nom} appelle, même app fermée.`;
+  if (pushAllowed()) {
+    $('phone-push-text').textContent = isIos()
+      ? `Une notification vous prévient quand ${nom} appelle, même app fermée (un seul son, laissez le mode silencieux coupé).`
+      : `Votre téléphone sonne quand ${nom} appelle, même app fermée.`;
+  }
   else if (pushRefused()) {
     $('phone-push-text').textContent = 'Bloquées : autorisez les notifications pour Papote dans les réglages du téléphone.';
     push.disabled = true;
   } else if (!await pushSupported()) {
     $('phone-push-text').textContent = isIos()
-      ? "Ajoutez d'abord Papote à l'écran d'accueil (voir Support), puis rouvrez cette page."
+      ? "Sur iPhone, les notifications ne marchent que dans l'app ajoutée à l'écran d'accueil (iOS 16.4 ou plus récent) : voir Support."
       : 'Ce navigateur ne sait pas recevoir les notifications. Ouvrez Papote dans Chrome.';
     push.disabled = true;
   } else $('phone-push-text').textContent = `Pour que votre téléphone sonne quand ${nom} appelle, même app fermée.`;
@@ -1521,6 +1546,25 @@ function enterCallScreen() {
     .catch(() => {});
 }
 
+// Pendant un appel, l'écran reste allumé : sinon le téléphone se verrouille au bout de 30 s, et
+// sur iPhone, l'app mise en veille coupe l'appel. Le verrou tombe tout seul si l'app passe derrière.
+let verrouEcran = null;
+async function garderEcranAllume() {
+  const allume = !$('call').hidden;
+  if (verrouEcran?.released) verrouEcran = null;
+  try {
+    if (allume && !verrouEcran && navigator.wakeLock && document.visibilityState === 'visible') {
+      verrouEcran = await navigator.wakeLock.request('screen');
+    } else if (!allume && verrouEcran) {
+      const v = verrouEcran;
+      verrouEcran = null;
+      await v.release();
+    }
+  } catch (e) { verrouEcran = null; }
+}
+new MutationObserver(garderEcranAllume).observe($('call'), { attributes: true, attributeFilter: ['hidden'] });
+document.addEventListener('visibilitychange', garderEcranAllume);
+
 function leaveCallScreen() {
   $('call').hidden = true;
   $('call').classList.remove('audio');
@@ -1601,10 +1645,26 @@ function stopCallTimer() {
 let incoming = null;   // appel qui sonne (données de la tablette)
 let ringTone = null;   // { ctx, timer }
 
+// iPhone : un son (Web Audio) ne peut démarrer qu'après un toucher dans la page. Le son est donc
+// débloqué au premier toucher dans l'app, puis remis en veille ; la sonnerie le réveille ensuite.
+let sonCtx = null;
+function sonPartage() {
+  try {
+    sonCtx = sonCtx && sonCtx.state !== 'closed' ? sonCtx : new (window.AudioContext || window.webkitAudioContext)();
+  } catch (e) { sonCtx = null; }
+  return sonCtx;
+}
+function debloquerSon() {
+  const ctx = sonPartage();
+  if (!ctx || ringTone) return;
+  ctx.resume().then(() => { if (!ringTone) ctx.suspend(); }).catch(() => {});
+}
+document.addEventListener('pointerdown', () => { if (isIos()) debloquerSon(); }, { capture: true, passive: true });
+
 function startRingTone() {
   if (ringTone) return;
-  let ctx = null;
-  try { ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { /* pas de son */ }
+  const ctx = sonPartage();
+  ctx?.resume().catch(() => {});
   const beep = () => {
     try { navigator.vibrate?.([600, 300, 600]); } catch (e) { /* pas de vibreur */ }
     if (!ctx) return;
@@ -1626,7 +1686,7 @@ function stopRingTone() {
   if (!ringTone) return;
   clearInterval(ringTone.timer);
   try { navigator.vibrate?.(0); } catch (e) { /* rien */ }
-  ringTone.ctx?.close().catch(() => {});
+  ringTone.ctx?.suspend().catch(() => {});
   ringTone = null;
 }
 
@@ -1750,6 +1810,8 @@ $('call-video').addEventListener('click', async () => {
 async function renderPushNudge() {
   const card = $('push-nudge');
   card.hidden = !session || pushAllowed() || pushRefused() || !await pushSupported();
+  // iPhone : une notification avec un seul son, pas une sonnerie qui dure comme sur Android.
+  if (isIos()) $('push-nudge-text').textContent = 'Une notification vous prévient même app fermée, et si la tablette est débranchée';
 }
 $('push-nudge').addEventListener('click', async () => {
   // La carte disparaît dès l'autorisation donnée ; le jeton s'enregistre ensuite en arrière-plan.
@@ -4087,13 +4149,47 @@ $('form-email').addEventListener('submit', async (e) => {
   $('btn-email').disabled = true;
   try {
     await sendEmailLink(email);
-    $('email-sent').textContent = `Lien envoyé à ${email}. Ouvrez l'e-mail sur ce téléphone et touchez le lien (pensez aux courriers indésirables).`;
+    // App installée sur iPhone : elle ne s'ouvre pas par un lien, on y colle donc le lien reçu.
+    const coller = isIos() && launchedFromHomeScreen();
+    $('email-sent').textContent = coller
+      ? `Lien envoyé à ${email} (pensez aux courriers indésirables).`
+      : `Lien envoyé à ${email}. Ouvrez l'e-mail sur ce téléphone et touchez le lien (pensez aux courriers indésirables).`;
     $('email-sent').hidden = false;
+    $('form-paste-link').hidden = !coller;
   } catch (err) {
     console.error(err);
     showLoginError("L'e-mail n'a pas pu être envoyé. Vérifiez l'adresse.");
   } finally {
     $('btn-email').disabled = false;
+  }
+});
+
+$('form-paste-link').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  showLoginError('');
+  const lien = $('paste-link').value.trim();
+  if (!isEmailLink(lien)) {
+    showLoginError("Ce n'est pas le lien de connexion. Dans l'e-mail, appuyez longtemps sur le lien et touchez « Copier le lien ».");
+    return;
+  }
+  try {
+    const user = await completeEmailLink($('login-email').value.trim(), lien);
+    if (!user) { showLoginError("Retapez votre adresse e-mail en haut, puis collez à nouveau le lien."); return; }
+    $('form-paste-link').hidden = true;
+    $('paste-link').value = '';
+    await enterApp();
+  } catch (err) {
+    console.error(err);
+    showLoginError('Ce lien ne fonctionne plus. Demandez-en un nouveau.');
+  }
+});
+
+$('btn-copy-link').addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText(location.href);
+    notice("Lien copié. Ouvrez Papote depuis l'écran d'accueil, touchez « Recevoir le lien » si besoin, puis collez-le.");
+  } catch (e) {
+    notice("Touchez la barre d'adresse en haut, copiez l'adresse, puis collez-la dans l'app Papote.");
   }
 });
 
@@ -4136,6 +4232,10 @@ $('family-switch').addEventListener('click', async () => {
 function showLogin(legacy) {
   $('login-legacy').hidden = !legacy;
   $('email-sent').hidden = true;
+  // iPhone, app installée, rouverte après être allée chercher le lien dans l'e-mail : on peut le coller.
+  const attendu = isIos() && launchedFromHomeScreen() ? pendingEmail() : '';
+  $('form-paste-link').hidden = !attendu;
+  if (attendu) $('login-email').value = attendu;
   showLoginError('');
   show('view-login');
 }
@@ -4342,7 +4442,11 @@ async function start() {
   if (isEmailLink()) {
     try {
       const user = await completeEmailLink();
-      if (!user) { show('view-link-email'); return; }
+      if (!user) {
+        $('link-ios').hidden = !isIos() || launchedFromHomeScreen();
+        show('view-link-email');
+        return;
+      }
     } catch (err) {
       console.error(err);
       history.replaceState(null, '', location.pathname);
