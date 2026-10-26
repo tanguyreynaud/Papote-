@@ -509,8 +509,6 @@
     if (s.claimedName || s.joined) {
       // Le proche a scanné : l'écran ne change pas (demande de Tanguy). Plus de ligne « … termine
       // l'installation » : elle dépassait du bas de l'écran (Tanguy, 26/10).
-      // 30 min après le scan sans fin d'installation : un autre proche peut reprendre avec ce code.
-      if (s.reprendre) box.appendChild(el('p', 'welcome-sub welcome-reprise', 'Pas fini ? Un autre proche peut reprendre en scannant ce code.'));
     }
     if (!s.restart && !s.claimedName && !s.joined) {
       var st = wifiState();

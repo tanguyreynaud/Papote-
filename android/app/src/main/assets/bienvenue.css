@@ -373,4 +373,3 @@
 .pair-card .welcome-code { margin: 2vmin 0 0; padding: 1.5vmin 3vmin; font-size: 7vmin; white-space: nowrap; }
 .pair-or { align-self: center; font-size: 4vmin; font-weight: 700; color: var(--w-muted); text-transform: uppercase; letter-spacing: .3vmin; }
 .welcome-box > .welcome-busy { justify-content: center; margin-top: 3vmin; }
-.welcome-reprise { margin: 1.5vmin 0 0; text-align: center; font-size: 4vmin; }
