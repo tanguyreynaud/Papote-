@@ -125,6 +125,20 @@ public class MainActivity extends Activity implements Sync.Listener {
             public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
                 return LocalContent.intercept(MainActivity.this, request.getUrl());
             }
+
+            // Le moteur de la page s'est arrêté (manque de mémoire sur une petite tablette) : sans ceci,
+            // Android ferme Papote. On note l'incident et on refait l'écran (la page repart, état renvoyé).
+            @Override
+            public boolean onRenderProcessGone(WebView view, android.webkit.RenderProcessGoneDetail detail) {
+                Journal.log(MainActivity.this, "Page arrêtée par Android (" + (detail.didCrash() ? "plantage" : "mémoire") + ") : écran refait");
+                if (view == web) {
+                    if (web.getParent() != null) ((android.view.ViewGroup) web.getParent()).removeView(web);
+                    web.destroy();
+                    web = null;
+                }
+                handler.post(MainActivity.this::recreate);
+                return true;
+            }
         });
         web.setWebChromeClient(new WebChromeClient() {
             // Messages et erreurs de la page dans logcat (adb logcat -s PapoteJS).
@@ -341,7 +355,7 @@ public class MainActivity extends Activity implements Sync.Listener {
             handler.post(() -> {
                 videoView.stopPlayback();
                 videoView.setVisibility(View.GONE);
-                web.setVisibility(View.VISIBLE);
+                if (web != null) web.setVisibility(View.VISIBLE);
             });
         }
 
@@ -445,13 +459,7 @@ public class MainActivity extends Activity implements Sync.Listener {
         /** Visage vu : le carillon (joué 5 fois) s'arrête tout de suite. */
         @JavascriptInterface
         public void carillonStop() {
-            handler.post(() -> {
-                android.media.MediaPlayer mp = carillon;
-                carillon = null;
-                if (mp == null) return;
-                try { mp.stop(); } catch (IllegalStateException e) { /* déjà fini */ }
-                mp.release();
-            });
+            handler.post(MainActivity.this::stopCarillon);
         }
 
         /** Le carillon d'arrivée sonne-t-il encore ? La page attend la fin avant de parler. */
@@ -673,7 +681,7 @@ public class MainActivity extends Activity implements Sync.Listener {
         videoView.setLayoutParams(lp);
         // Plein écran : rien derrière la vidéo, la page est masquée, fond crème des écrans.
         ((View) videoView.getParent()).setBackgroundColor(0xFFF6EFE4);
-        if (plein) web.setVisibility(View.INVISIBLE);
+        if (plein && web != null) web.setVisibility(View.INVISIBLE);
         videoView.setVisibility(View.VISIBLE);
         videoView.setVideoPath(file.getAbsolutePath());
         videoView.start();
@@ -703,6 +711,9 @@ public class MainActivity extends Activity implements Sync.Listener {
         // allumé : l'envoi attend le matin.
         if (Veille.isNight(this)) return;
         handler.post(() -> {
+            // Pendant un appel : ni carillon (la famille l'entendrait dans l'appel) ni réveil, l'envoi
+            // s'affiche à la fin de l'appel.
+            if (callAudio.busy()) return;
             try {
                 PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
                 PowerManager.WakeLock wl = pm.newWakeLock(PowerManager.SCREEN_BRIGHT_WAKE_LOCK
@@ -719,6 +730,7 @@ public class MainActivity extends Activity implements Sync.Listener {
                                 .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
                                 .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION).build(), 0);
                 if (mp != null) {
+                    stopCarillon(); // deux envois de suite : un seul carillon à la fois
                     carillon = mp;
                     mp.setOnCompletionListener(m -> { if (carillon == m) carillon = null; m.release(); });
                     mp.start();
@@ -730,6 +742,14 @@ public class MainActivity extends Activity implements Sync.Listener {
                 Log.w(TAG, "Son d'arrivée", e);
             }
         });
+    }
+
+    private void stopCarillon() {
+        android.media.MediaPlayer mp = carillon;
+        carillon = null;
+        if (mp == null) return;
+        try { mp.stop(); } catch (IllegalStateException e) { /* déjà fini */ }
+        mp.release();
     }
 
     // ---------- Mode kiosque ----------
@@ -1129,7 +1149,7 @@ public class MainActivity extends Activity implements Sync.Listener {
     @Override
     protected void onResume() {
         super.onResume();
-        web.onResume();
+        if (web != null) web.onResume();
         handler.removeCallbacks(rehideBars);
         handler.post(rehideBars);
         enterKiosk();
@@ -1137,7 +1157,7 @@ public class MainActivity extends Activity implements Sync.Listener {
 
     @Override
     protected void onPause() {
-        web.onPause();
+        if (web != null) web.onPause();
         handler.removeCallbacks(rehideBars);
         super.onPause();
     }
@@ -1149,9 +1169,10 @@ public class MainActivity extends Activity implements Sync.Listener {
         try { unregisterReceiver(powerChange); } catch (Exception ignored) { }
         callAudio.release();
         voicePlayer.stop();
+        stopCarillon();
         sync.stop();
         handler.removeCallbacksAndMessages(null);
-        web.destroy();
+        if (web != null) web.destroy();
         web = null;
         super.onDestroy();
     }

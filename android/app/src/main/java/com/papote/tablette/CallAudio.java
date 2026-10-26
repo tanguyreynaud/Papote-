@@ -15,6 +15,13 @@ final class CallAudio {
     private final Context context;
     private MediaPlayer ringer;
     private PowerManager.WakeLock wakeLock;
+    private boolean inCall;
+    private boolean ringing;
+
+    /** Sonnerie ou appel en cours (fil principal). */
+    boolean busy() {
+        return inCall || ringing;
+    }
 
     CallAudio(Context context) {
         this.context = context.getApplicationContext();
@@ -23,6 +30,7 @@ final class CallAudio {
     @SuppressWarnings("deprecation")
     void ring(boolean on) {
         stopRinging();
+        ringing = on; // même si la sonnerie du téléphone ne se lance pas
         if (!on) return;
         try {
             PowerManager pm = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
@@ -58,6 +66,7 @@ final class CallAudio {
 
     /** Pendant l'appel : mode communication (annulation d'écho) et haut-parleur. */
     void inCall(boolean on) {
+        inCall = on;
         AudioManager am = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
         if (on) {
             am.setMode(AudioManager.MODE_IN_COMMUNICATION);
