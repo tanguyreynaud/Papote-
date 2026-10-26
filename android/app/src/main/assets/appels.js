@@ -327,8 +327,18 @@ function capVideo(pc) {
   } catch (e) { /* navigateur trop ancien : pas de plafond */ }
 }
 
+// Appelant disparu pendant la sonnerie (téléphone éteint, plus de réseau) : son appel reste « ringing »
+// et rien ne viendrait arrêter la sonnerie. Elle s'arrête une minute après le début de l'appel.
+const RING_MAX_MS = FRESH_MS;
+
 function showRing(id, data) {
-  ringing = { id, data };
+  const created = data.createdAt && data.createdAt.toMillis ? data.createdAt.toMillis() : Date.now();
+  const timer = setTimeout(() => {
+    if (!ringing || ringing.id !== id) return;
+    hideRing();
+    refuseCall(id);
+  }, Math.max(5_000, RING_MAX_MS - (Date.now() - created)));
+  ringing = { id, data, timer };
   if (window.Papote && window.Papote.closeOverlayForCall) window.Papote.closeOverlayForCall();
   $('ring-name').textContent = data.callerName;
   $('call-ring').hidden = false;
@@ -354,6 +364,7 @@ async function showCallerFace(callId, uid) {
 
 // `keepStream` : la caméra déjà ouverte sert pour l'appel qu'on vient de décrocher.
 function hideRing(keepStream) {
+  if (ringing) clearTimeout(ringing.timer);
   ringing = null;
   $('call-ring').hidden = true;
   if (android()) android().ring(false);
@@ -637,9 +648,13 @@ function watchVersion() {
   }, () => {});
 }
 
+// Écoute arrêtée par une erreur (droits refusés un moment, jeton App Check absent) : sans nouvelle
+// écoute, plus aucun appel ne sonnait jusqu'au redémarrage. On réessaie 30 s après.
+let stopCalls = null;
 function watchCalls() {
+  if (stopCalls) stopCalls();
   const q = query(collection(db, 'families', fid, 'calls'), where('state', '==', 'ringing'));
-  onSnapshot(q, (snap) => {
+  stopCalls = onSnapshot(q, (snap) => {
     const now = Date.now();
     const fresh = snap.docs.filter((d) => {
       const data = d.data({ serverTimestamps: 'estimate' });
@@ -658,9 +673,13 @@ function watchCalls() {
     if (current) fresh.filter((d) => d.id !== current).forEach((d) => refuseCall(d.id));
     if (!ringing && !active && fresh.length) {
       const latest = fresh[fresh.length - 1];
-      showRing(latest.id, latest.data());
+      showRing(latest.id, latest.data({ serverTimestamps: 'estimate' }));
     }
-  }, (err) => console.error('Écoute des appels', err));
+  }, (err) => {
+    console.error('Écoute des appels', err);
+    stopCalls = null;
+    setTimeout(() => { if (fid && !stopCalls) watchCalls(); }, 30_000);
+  });
 }
 
 // ---------- Appel ----------
@@ -693,7 +712,24 @@ async function answer() {
     return;
   }
   $('call-local').srcObject = stream;
+  try {
+    await connectAnswer(id, data, callRef, stream);
+  } catch (e) {
+    // Offre illisible, réseau coupé au moment de répondre… : on ne reste pas sur « Connexion… »
+    // avec la caméra allumée et la tablette en mode appel.
+    console.error('Appel : réponse impossible', e);
+    reportCallIncident('reponse', `${e && e.name}: ${e && e.message}`, id);
+    if (active && active.id === id) hangup('L’appel n’a pas pu se faire.');
+    else {
+      stream.getTracks().forEach((t) => t.stop());
+      updateDoc(callRef, { state: 'ended', endedAt: serverTimestamp() }).catch(() => {});
+      setStatus('L’appel n’a pas pu se faire.');
+      setTimeout(closeView, 3000);
+    }
+  }
+}
 
+async function connectAnswer(id, data, callRef, stream) {
   const pc = new RTCPeerConnection(await iceServers());
   active = { id, pc, stream, stops: [] };
   stream.getTracks().forEach((t) => pc.addTrack(t, stream));
