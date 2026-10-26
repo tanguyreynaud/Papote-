@@ -125,6 +125,18 @@ if ($Quoi -in @('tout', 'site')) {
     if (-not (Test-Path (Join-Path $regles 'package.json'))) { Echec "tests des règles absents de $($s.Ref)" }
     Modules $regles 'règles'
     Etape 'Tests des règles Firestore (émulateur)' $regles 'npm test'
+    # Tests de bout en bout de l'app famille (tests/app-famille, fil « Tester l'app famille
+    # automatiquement ») : vraies pages + fonctions de main sur les émulateurs ; sautés s'ils manquent.
+    $appFamille = Join-Path $s.Dir 'tests\app-famille'
+    if (Test-Path (Join-Path $appFamille 'package.json')) {
+        if (Test-Path (Join-Path $appFamille 'package-lock.json')) { Modules $appFamille 'app famille' }
+        elseif (-not (Test-Path (Join-Path $appFamille 'node_modules'))) {
+            Etape "Installation des modules (app famille, une seule fois)" $appFamille 'npm install --no-audit --no-fund'
+        }
+        Etape "App famille de bout en bout (émulateurs, quelques minutes)" $appFamille 'npm test'
+    } else {
+        Say "Tests de bout en bout de l'app famille : pas encore dans $($s.Ref), étape sautée." 'Yellow'
+    }
     if (Test-Path (Join-Path $s.Dir 'outils\web\verifier.mjs')) {
         Etape "Contrôle de l'app famille (syntaxe, imports, éléments)" $s.Dir 'node outils\web\verifier.mjs'
     }
