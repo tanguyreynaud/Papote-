@@ -7,7 +7,8 @@
     "node": "22"
   },
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "parcours": "npx --yes firebase-tools@14 emulators:exec --only firestore,auth --project demo-papote --config parcours/firebase.json \"node --test --test-concurrency=1 --test-timeout=120000 --test-reporter=spec parcours/*.parcours.js\""
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.133.0",

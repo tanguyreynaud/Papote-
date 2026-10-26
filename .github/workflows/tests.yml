@@ -1,0 +1,39 @@
+# Tests des fonctions serveur, à chaque changement de functions/ (gratuit, rien ne part en ligne) :
+#   unitaires  règles pures (npm test)
+#   parcours   parcours client complet sur les émulateurs Firebase, Stripe et e-mails simulés (npm run parcours)
+name: Tests
+
+on:
+  push:
+    paths: ['functions/**', '.github/workflows/tests.yml']
+  pull_request:
+    paths: ['functions/**', '.github/workflows/tests.yml']
+  workflow_dispatch:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: functions
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: emulateurs-firebase-14
+      - run: npm ci
+      - name: Tests unitaires
+        run: npm test
+      - name: Parcours client (émulateurs)
+        run: npm run parcours

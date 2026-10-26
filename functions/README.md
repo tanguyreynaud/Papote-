@@ -14,6 +14,9 @@ Abonnements et paiements Stripe. Plan complet et état des familles : `abonnemen
 
 `npm test` : règles de passage entre statuts (actif, impayé, suspendu...).
 
+`npm run parcours` : parcours client complet (commande, envoi, installation, envois, appel, annulation, cas limites)
+sur les émulateurs Firebase, Stripe simulé. Lancé aussi par GitHub à chaque changement : voir `parcours/README.md`.
+
 ## Livraison en point relais et e-mails
 
 - Le site fait choisir un point relais Mondial Relay avant le paiement (`vitrine/commande.html`, sélecteur Sendcloud : clé publique de l'intégration « Papote » dans SENDCLOUD_CLE). `livraison.id` est l'identifiant Sendcloud du point relais, à utiliser pour créer l'étiquette dans Sendcloud.

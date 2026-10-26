@@ -3,7 +3,7 @@
     {
       "source": "functions",
       "codebase": "default",
-      "ignore": ["node_modules", "*.test.js", ".env.local"]
+      "ignore": ["node_modules", "*.test.js", ".env.local", "parcours"]
     }
   ]
 }
