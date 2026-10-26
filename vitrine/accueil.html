@@ -138,7 +138,7 @@ section { padding-block: clamp(3rem, 7vw, 5rem); }
 /* Qui est derrière Papote */
 .qui-carte { display: grid; grid-template-columns: 9rem minmax(0, 1fr); gap: 1.75rem; align-items: start; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: clamp(1.5rem, 3vw, 2.25rem); }
 @media (max-width: 640px) { .qui-carte { grid-template-columns: minmax(0, 1fr); } }
-.portrait { width: 9rem; height: 9rem; border-radius: 50%; object-fit: cover; background: var(--accent-soft); color: var(--accent-strong); display: grid; place-items: center; text-align: center; font-size: .85rem; line-height: 1.25; padding: 1rem; }
+.portrait { width: 9rem; height: 9rem; border-radius: 14px; object-fit: cover; display: block; box-shadow: 0 6px 18px rgba(31, 27, 22, .14); }
 .qui-texte { display: grid; gap: .9rem; }
 .qui-texte blockquote { margin: 0; font: 600 clamp(1.15rem, 2.2vw, 1.4rem)/1.4 var(--display); }
 .faits { list-style: none; margin: 0; padding: 0; display: grid; gap: .4rem; color: var(--muted); font-size: 1rem; }
@@ -344,8 +344,7 @@ footer a { color: var(--muted); }
         <h2>Une personne, pas une plateforme.</h2>
       </div>
       <div class="qui-carte">
-        <!-- Photo de Tanguy à ajouter (vitrine/tanguy.jpg, carrée, 600 px) : remplacer ce rond par <img class="portrait" src="tanguy.jpg" alt="Tanguy Reynaud" width="600" height="600" loading="lazy"> -->
-        <div class="portrait" aria-hidden="true">Tanguy</div>
+        <picture><source srcset="tanguy.webp" type="image/webp"><img class="portrait" src="tanguy.jpg" alt="Tanguy Reynaud" width="600" height="600"></picture>
         <div class="qui-texte">
           <blockquote>« J'ai créé Papote pour ma grand-mère de 93 ans. Ce qui existait coûtait autour de 50 € par mois, ou 350 € pour une tablette qui n'était pas pensée pour elle. Alors j'ai fait plus simple et moins cher. »</blockquote>
           <p><b>Tanguy Reynaud</b>, fondateur de Papote, à Lyon</p>
