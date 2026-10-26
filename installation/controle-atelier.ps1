@@ -149,12 +149,19 @@ $v = Resultat 'voix' 30
 Note 'Voix de la tablette' $v ($v -eq 'ok')
 if ($Rapide) {
     # Le micro doit entendre la tablette dire « Bonjour, et bienvenue sur Papote » (casque débranché).
-    Etape boucle
-    $v = Resultat 'boucle' 15
-    $calme = if ($v -match 'calme (\d+)') { [int]$Matches[1] } else { 0 }
-    $son = if ($v -match 'son (\d+)') { [int]$Matches[1] } else { 0 }
-    Say "Son entendu par le micro : $son (pièce : $calme)." 'DarkGray'
-    Note 'Haut-parleur et micro' $v (($son -ge 1500) -and ($son -gt 2 * $calme))
+    # Seuils mesurés sur la Tab 60 Pro à 50 % (26/10) : voix entendue entre 3 200 et 7 300, pièce
+    # entre 10 et 4 700 selon le bruit. Un bruit passager (quelqu'un parle) : un second essai.
+    $ok = $false
+    foreach ($essai in 1..2) {
+        Etape boucle
+        $v = Resultat 'boucle' 15
+        $calme = if ($v -match 'calme (\d+)') { [int]$Matches[1] } else { 0 }
+        $son = if ($v -match 'son (\d+)') { [int]$Matches[1] } else { 0 }
+        Say "Son entendu par le micro : $son (pièce : $calme)." 'DarkGray'
+        $ok = ($son -ge 1500) -and ($son -gt 1.4 * $calme)
+        if ($ok) { break }
+    }
+    Note 'Haut-parleur et micro' $v $ok
     Etape camera
     $cam = Resultat 'camera' 15
     $img = Resultat 'camera-image' 10
