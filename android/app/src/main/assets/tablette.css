@@ -1850,3 +1850,86 @@ html .overlay.papier #overlay-actions .ln-btn.replay .label { display: none; }
 html .overlay.papier #overlay-actions .ln-btn.replay > .icon { display: block; -webkit-flex: none; flex: none; width: 8vmin; min-width: 8vmin; height: 8vmin; }
 html .overlay.papier #overlay-actions .ln-btn.replay > .icon svg { width: 100%; height: 100%; }
 html .overlay.papier .ln-play.playing .play-icon { display: none; }
+
+/* ---------- Appels (même style que photos et messages, 26/10) ----------
+   Fond crème, à gauche une carte crème avec qui et quoi en indigo et le grand bouton, à droite
+   une image dans un cadre : la photo de la personne appelée, ou Mamie qui se voit pour décrocher. */
+html .call-out, html .call-screen {
+  background: #f6efe4; color: #312e81; font-family: 'Alegreya Sans', 'Atkinson Hyperlegible', sans-serif;
+}
+html .call-out:not(.picker), html .call-ring, html .call-wait {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: 1fr auto auto auto 1fr auto;
+  column-gap: 3vmin; padding: 3vmin; box-sizing: border-box; text-align: center; justify-items: center;
+}
+html .call-out:not(.picker)::before, html .call-ring::before, html .call-wait::before {
+  content: ''; grid-column: 1; grid-row: 1 / -1; align-self: stretch; justify-self: stretch;
+  background: #fdfaf5; border-radius: 3vmin; box-shadow: 0 1vmin 3vmin rgba(49, 46, 129, .12);
+}
+/* Le texte dans la carte */
+html .call-out:not(.picker) .call-title, html .call-ring .call-title, html .call-wait .call-title {
+  grid-column: 1; grid-row: 3; z-index: 1; margin: 0 6vmin; font-family: 'Alegreya Sans', sans-serif;
+  font-size: calc(11vmin * var(--ts, 1)); font-weight: 700; line-height: 1.05; color: #312e81; overflow-wrap: normal;
+}
+html .call-out:not(.picker) .call-sub, html .call-ring .call-sub, html .call-wait .call-sub {
+  grid-column: 1; grid-row: 4; z-index: 1; margin: 2vmin 6vmin 0; font-size: calc(6vmin * var(--ts, 1));
+  font-weight: 600; color: #5b5794;
+}
+/* Le grand bouton en bas de la carte */
+html .call-out .call-hangup, html .call-ring .call-btn.answer {
+  grid-column: 1; grid-row: 6; z-index: 1; justify-self: center; margin: 0 0 8vmin;
+  min-width: 0; min-height: 15vmin; padding: 0 10vmin; border: 0; border-radius: 99vmin;
+  font-family: 'Alegreya Sans', sans-serif; font-size: 7.5vmin; font-weight: 800; color: #fff;
+}
+html .call-out .call-hangup { background: #dc2626; box-shadow: 0 1vmin 2.5vmin rgba(220, 38, 38, .3); }
+html .call-ring .call-btn.answer { background: #16a34a; box-shadow: 0 1vmin 2.5vmin rgba(22, 163, 74, .35); }
+/* L'image à droite : grande, coins carrés, comme une photo reçue */
+html .call-out:not(.picker) .call-face {
+  grid-column: 2; grid-row: 1 / -1; align-self: stretch; width: calc(100vh - 6vmin); max-width: 48vw; height: auto;
+  border: 0; border-radius: 0; box-shadow: 0 1vmin 3vmin rgba(49, 46, 129, .12); font-family: 'Alegreya Sans', sans-serif;
+  font-size: 40vmin; background: #e8e4f5; color: #4f46e5;
+}
+html .call-out:not(.picker) .call-face svg { width: 50%; height: 50%; }
+html .state-ringing .call-face, html .state-starting .call-face { animation: none; }
+html .call-out.state-connected .call-face { box-shadow: 0 0 0 1.2vmin #16a34a, 0 1vmin 3vmin rgba(49, 46, 129, .12); }
+/* Sans image (appel de toute la famille, compte à rebours SOS) : la carte seule, toute la largeur */
+html .call-out.sos-countdown { display: grid; grid-template-columns: minmax(0, 1fr); }
+html .call-out.sos-countdown .call-face { display: none; }
+html .call-out.sos-countdown .sos-cancel { grid-column: 1; grid-row: 6; z-index: 1; justify-self: center; margin: 0 0 8vmin; }
+html .call-out .call-title + .call-sub:empty { display: none; }
+
+/* Appel qui arrive : le même écran que quand Mamie appelle, la photo de la personne en grand à droite.
+   Mamie ne se voit pas (ça la perturbait, Tanguy 26/10) : la caméra regarde quand même, en tout petit
+   et invisible, pour décrocher quand elle regarde l'écran ; le cadre passe au vert quand son visage est vu. */
+html .call-ring .call-side, html .call-wait .call-side { display: contents; }
+html .call-ring .caller-face {
+  grid-column: 2; grid-row: 1 / -1; align-self: stretch; width: calc(100vh - 6vmin); max-width: 48vw; height: 100%; margin: 0;
+  border: 0; border-radius: 0; object-fit: cover; box-shadow: 0 1vmin 3vmin rgba(49, 46, 129, .12);
+}
+html .call-ring:has(.ring-face.seen) .caller-face { box-shadow: 0 0 0 1.2vmin #16a34a; }
+html .call-wait .caller-face {
+  grid-column: 1; grid-row: 2; z-index: 1; margin: 0 6vmin 3vmin; width: 22vmin; height: 22vmin; border: 0; box-shadow: none;
+}
+html .call-ring .ring-face {
+  position: fixed; left: 0; top: 0; width: 4px; height: 4px; margin: 0; border: 0; opacity: 0; pointer-events: none; animation: none;
+}
+html .call-ring .call-hint {
+  grid-column: 1; grid-row: 5; z-index: 1; align-self: end; margin: 0 6vmin 4vmin; padding: 0; background: none;
+  color: #5b5794; font-size: 4.6vmin; font-weight: 600;
+}
+html .call-ring .call-hint[hidden] { display: none; }
+html .call-ring:has(.caller-face[hidden]), html .call-wait { grid-template-columns: minmax(0, 1fr); }
+html .call-wait { position: absolute; top: 0; right: 0; bottom: 0; left: 0; }
+
+/* Qui voulez-vous appeler ? : les visages sur des cartes crème, coins doux */
+html .call-out.picker .call-title { font-family: 'Alegreya Sans', sans-serif; font-size: 10vmin; font-weight: 700; color: #312e81; }
+html .call-out.picker .call-person { background: #fdfaf5; border-radius: 3vmin; box-shadow: 0 1vmin 3vmin rgba(49, 46, 129, .12); padding: 3vmin; }
+html .call-out.picker .call-person-face { width: 28vmin; height: 28vmin; border-radius: 2vmin; background: #4f46e5; }
+html .call-out.picker .call-person-name { font-family: 'Alegreya Sans', sans-serif; font-size: 7vmin; color: #312e81; }
+html .call-out.picker .call-back, html .call-out.picker .call-page { font-family: 'Alegreya Sans', sans-serif; color: #5b5794; }
+html .call-out.picker .call-back { margin-top: 4vmin; padding: 2vmin 7vmin; border-radius: 99vmin; background: #fdfaf5; box-shadow: 0 1vmin 2.5vmin rgba(49, 46, 129, .12); }
+
+/* Appel vidéo en cours : Mamie en petit, cadre crème */
+html #call-local { border: 1vmin solid #fdfaf5; border-radius: 1.5vmin; box-shadow: 0 1vmin 3vmin rgba(0, 0, 0, .3); }
+html .call-out-hangup { font-family: 'Alegreya Sans', sans-serif; font-weight: 800; border: 0; }
+/* Carte seule (connexion, sonnerie sans caméra) : tout au milieu */
+html .call-wait, html .call-ring:has(.caller-face[hidden]) { justify-items: center; text-align: center; }

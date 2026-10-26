@@ -65,6 +65,8 @@ public class MainActivity extends Activity implements Sync.Listener {
     private boolean dimmed;
     private VoicePlayer voicePlayer;
     private VideoView videoView;
+    /** Carillon d'arrivée en cours (null quand il a fini). */
+    private volatile android.media.MediaPlayer carillon;
     private Wifi wifi;
     private SmsAlert smsAlert;
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -440,6 +442,17 @@ public class MainActivity extends Activity implements Sync.Listener {
             onNewArrival();
         }
 
+        /** Le carillon d'arrivée sonne-t-il encore ? La page attend la fin avant de parler. */
+        @JavascriptInterface
+        public boolean carillonEnCours() {
+            android.media.MediaPlayer mp = carillon;
+            try {
+                return mp != null && mp.isPlaying();
+            } catch (IllegalStateException e) {
+                return false;
+            }
+        }
+
         @JavascriptInterface
         public String getCode() {
             return prefs.getString("code", null);
@@ -686,12 +699,23 @@ public class MainActivity extends Activity implements Sync.Listener {
             } catch (Exception e) {
                 Log.w(TAG, "Réveil de l'écran", e);
             }
+            // Carillon « ding-dong » de Papote (res/raw/arrivee.wav), au volume des médias réglé par la
+            // famille : le petit son de notification de la tablette s'entendait à peine (Tanguy, 26/10).
             try {
-                Uri sound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
-                Ringtone r = RingtoneManager.getRingtone(this, sound);
-                if (r != null) r.play();
+                android.media.MediaPlayer mp = android.media.MediaPlayer.create(this, R.raw.arrivee,
+                        new android.media.AudioAttributes.Builder()
+                                .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                                .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION).build(), 0);
+                if (mp != null) {
+                    carillon = mp;
+                    mp.setOnCompletionListener(m -> { if (carillon == m) carillon = null; m.release(); });
+                    mp.start();
+                } else {
+                    Ringtone r = RingtoneManager.getRingtone(this, RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION));
+                    if (r != null) r.play();
+                }
             } catch (Exception e) {
-                Log.w(TAG, "Son de notification", e);
+                Log.w(TAG, "Son d'arrivée", e);
             }
         });
     }

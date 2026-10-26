@@ -686,14 +686,18 @@
       if (overlayPost !== p) return;
       noteSeen();
       markSeen(p);
-      if (p.audio || p.video) listenOverlay();
-      else speakOnce(p.id, overlayText(p)); // lu une fois tout seul ; « Écouter » pour réécouter
-    }, function closeWhenDone() {
-      if (overlayPost !== p) return;
-      // On ne coupe pas une vidéo ou un vocal en cours : on attend la fin.
-      if (playing && playing.post === p) { setTimeout(closeWhenDone, 10000); return; }
-      markSeen(p);
-      nextOverlay();
+      // Après le carillon d'arrivée (sinon les deux sons se mélangent), et pour un envoi tout juste
+      // arrivé, après sa voix (le serveur la crée une seconde ou deux après la photo).
+      apresCarillon(function () {
+        if (overlayPost !== p) return;
+        if (p.audio || p.video) { listenOverlay(); return; }
+        attendreVoix(p, function () {
+          if (overlayPost === p) speakOnce(p.id, overlayText(p)); // lu une fois tout seul ; « Écouter » pour réécouter
+        });
+      });
+    }, function () {
+      // Rien : l'envoi reste affiché jusqu'à ce qu'elle touche OK (Tanguy, 26/10 : il passait au
+      // suivant tout seul au bout de 2 minutes, avant qu'elle ait fini de regarder).
     });
     var mode = p.image ? 'photo' : p.type === 'voice' ? 'voice' : p.type === 'video' ? 'video' : 'message';
     var media = mode === 'voice' || mode === 'video';
@@ -943,6 +947,8 @@
     slides = [];
     for (var j = 0; j < posts.length; j++) {
       if (seenBefore[posts[j].id]) posts[j].seen = true;
+      // La voix d'un envoi arrive souvent après lui : on la note dès qu'elle est là.
+      noteVoix(overlayText(posts[j]), posts[j].voice, posts[j].announce);
       // Vidéo : dans le diaporama seulement, une fois vue (la première fois, elle arrive en grand).
       if (posts[j].video && !posts[j].image && posts[j].seen) { slides.push(posts[j]); continue; }
       if (!posts[j].image) continue;
@@ -1751,6 +1757,28 @@
   // Voix Google d'un message ou d'un rappel (functions/voix.js), retrouvée par le texte affiché.
   var voixDuTexte = {};
   var annonceDuTexte = {}; // « Julie vous écrit : », jouée juste avant (fichier à part, gardé)
+  // Le carillon d'arrivée (Android) est-il en train de sonner ? On attend qu'il finisse, 8 s au plus.
+  function apresCarillon(fn, depuis) {
+    depuis = depuis || Date.now();
+    var a = android();
+    var sonne = false;
+    try { sonne = !!(a && a.carillonEnCours && a.carillonEnCours()); } catch (e) { }
+    if (sonne && Date.now() - depuis < 8000) { setTimeout(function () { apresCarillon(fn, depuis); }, 250); return; }
+    fn();
+  }
+
+  // Envoi de moins de 2 minutes sans sa voix : on l'attend jusqu'à 10 s (elle arrive avec onPosts).
+  function attendreVoix(p, fn, depuis) {
+    depuis = depuis || Date.now();
+    var t = overlayText(p);
+    var recent = p.createdAt && Date.now() - p.createdAt < 120000;
+    if (!voixDuTexte[t] && recent && Date.now() - depuis < 10000) {
+      setTimeout(function () { attendreVoix(p, fn, depuis); }, 400);
+      return;
+    }
+    fn();
+  }
+
   function noteVoix(text, url, annonce) {
     if (text && url) voixDuTexte[text] = url;
     if (text && annonce) annonceDuTexte[text] = annonce;
