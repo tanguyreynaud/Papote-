@@ -557,6 +557,10 @@ $('form-message').addEventListener('submit', async (e) => {
   if (paused()) return;
   $('btn-message').disabled = true;
   const item = { kind: 'message', text, author: { authorUid: session.uid, authorName: session.member.name } };
+  // Le message s'affiche tout de suite dans la conversation : on vide le champ sans attendre le serveur
+  // (réseau lent : sinon le texte reste écrit et donne envie de le renvoyer).
+  $('message-text').value = '';
+  updateCount();
   try {
     if (!navigator.onLine) throw new Error('hors ligne');
     await sendItem(item);
@@ -564,8 +568,6 @@ $('form-message').addEventListener('submit', async (e) => {
     console.warn('Message mis en attente', err);
     await queue(item);
   } finally {
-    $('message-text').value = '';
-    updateCount();
     $('btn-message').disabled = false;
   }
 });
@@ -787,8 +789,11 @@ $('btn-photos-zip').addEventListener('click', async () => {
 });
 
 // Messages rapides : un toucher envoie le message tel quel.
+// Un message rapide part même si le précédent est encore en route (il était perdu sans rien dire) ;
+// un double appui sur le même bouton n'en envoie qu'un.
 document.querySelectorAll('.quick-msg').forEach((b) => b.addEventListener('click', () => {
-  if ($('btn-message').disabled) return;
+  if (Date.now() - (b.dernier || 0) < 2000) return;
+  b.dernier = Date.now();
   $('message-text').value = b.textContent;
   $('form-message').requestSubmit();
 }));

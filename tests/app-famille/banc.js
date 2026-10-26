@@ -235,6 +235,12 @@ async function routerInternet(context) {
     if (/fonts\.(googleapis|gstatic)\.com/.test(url)) {
       return route.fulfill({ status: 200, headers: { 'content-type': 'text/css', 'access-control-allow-origin': '*' }, body: '' });
     }
+    if (url === 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js') {
+      return route.fulfill({
+        status: 200, headers: { 'content-type': 'text/javascript', 'access-control-allow-origin': '*' },
+        body: fs.readFileSync(path.join(__dirname, 'node_modules', 'jszip', 'dist', 'jszip.min.js'), 'utf8'),
+      });
+    }
     if (url.startsWith('https://geo.api.gouv.fr/')) {
       return route.fulfill({
         status: 200, headers: { 'content-type': 'application/json', 'access-control-allow-origin': '*' },

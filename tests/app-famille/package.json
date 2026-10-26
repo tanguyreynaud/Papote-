@@ -8,6 +8,7 @@
   },
   "devDependencies": {
     "firebase": "12.19.0",
+    "jszip": "3.10.1",
     "playwright": "1.63.0"
   }
 }
