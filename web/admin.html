@@ -8,6 +8,19 @@
   <meta name="robots" content="noindex">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="css/famille.css">
+  <!-- Modules de l'administration demandés tous d'un coup : sans cette liste, le navigateur ne découvre chaque fichier
+       qu'après avoir lu celui qui l'importe (un aller-retour réseau de plus à chaque niveau). -->
+  <link rel="modulepreload" href="js/admin.js">
+  <link rel="modulepreload" href="js/gestion.js">
+  <link rel="modulepreload" href="js/dialogue.js">
+  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js">
+  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js">
+  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js">
+  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.19.0/firebase-storage.js">
+  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.19.0/firebase-functions.js">
+  <link rel="modulepreload" href="js/sim.js">
+  <link rel="modulepreload" href="js/gestion-api.js">
+  <link rel="modulepreload" href="js/parcours.js">
   <link rel="stylesheet" href="css/admin.css">
   <link rel="stylesheet" href="css/gestion.css">
 </head>

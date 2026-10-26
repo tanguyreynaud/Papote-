@@ -20,6 +20,26 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&display=swap">
   <link rel="stylesheet" href="css/famille.css">
+  <!-- Modules de l'app demandés tous d'un coup : sans cette liste, le navigateur ne découvre chaque fichier
+       qu'après avoir lu celui qui l'importe (un aller-retour réseau de plus à chaque niveau). -->
+  <link rel="modulepreload" href="js/famille.js">
+  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js">
+  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js">
+  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.19.0/firebase-storage.js">
+  <link rel="modulepreload" href="js/firebase.js">
+  <link rel="modulepreload" href="js/ui.js">
+  <link rel="modulepreload" href="js/guide.js">
+  <link rel="modulepreload" href="js/abonnement.js">
+  <link rel="modulepreload" href="js/appel.js">
+  <link rel="modulepreload" href="js/push.js">
+  <link rel="modulepreload" href="js/video.js">
+  <link rel="modulepreload" href="js/agenda.js">
+  <link rel="modulepreload" href="js/compte.js">
+  <link rel="modulepreload" href="js/notifs.js">
+  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-check.js">
+  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js">
+  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.19.0/firebase-functions.js">
+  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.19.0/firebase-messaging.js">
   <script>
     // Thème choisi dans Réglages, appliqué avant l'affichage pour éviter un flash.
     try { const t = localStorage.getItem('papote.theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) { /* rien */ }

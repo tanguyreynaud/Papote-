@@ -118,18 +118,21 @@ export async function familyName(fid) {
   }
 }
 
-/** Les fiches d'avant n'ont ni uid ni e-mail : on les ajoute pour retrouver la famille partout. */
+/** Les fiches d'avant n'ont ni uid ni e-mail : on les ajoute pour retrouver la famille partout.
+ *  Vrai si la fiche vient d'être complétée (la liste de mes familles est alors à relire). */
 export async function tagLegacyMember(fid) {
   const user = auth.currentUser;
   const ref = doc(db, 'families', fid, 'members', user.uid);
   try {
     const snap = await getDoc(ref);
-    if (!snap.exists()) return;
+    if (!snap.exists()) return false;
     const data = snap.data();
-    if (data.uid === user.uid && data.email === myEmail()) return;
+    if (data.uid === user.uid && data.email === myEmail()) return false;
     await updateDoc(ref, { uid: user.uid, email: myEmail() });
+    return true;
   } catch (err) {
     console.warn('Fiche membre non complétée', err);
+    return false;
   }
 }
 

@@ -24,6 +24,22 @@ export function appeler(nom, data) {
     .finally(() => chargement(-1));
 }
 
+// Fonctions qui enregistrent les modifications : chacune démarre à froid (2 à 4 s) quand elle n'a pas servi depuis
+// un quart d'heure. Réveillées en avance à l'ouverture de la page puis toutes les 10 min tant qu'elle est affichée,
+// la première modification n'attend plus ce démarrage. { action: 'reveil' } ne lit ni n'écrit rien (gestion.js).
+const A_REVEILLER = ['gestionStock', 'gestionSim', 'gestionAccessoire', 'gestionDepense', 'gestionParcours', 'gestionPiece', 'gestionCommande'];
+let reveilLance = false;
+export function reveiller() {
+  if (!fonctions) fonctions = getFunctions(getApp('admin'), 'europe-west1');
+  const reveil = () => {
+    if (document.hidden) return;
+    for (const nom of A_REVEILLER) httpsCallable(fonctions, nom)({ action: 'reveil' }).catch(() => null);
+  };
+  reveil();
+  if (!reveilLance) setInterval(reveil, 10 * 60_000);
+  reveilLance = true;
+}
+
 // Commandes, stock et dépenses : un seul appel partagé, relu après chaque changement.
 let cache = null;
 export function donnees(relire = false) {

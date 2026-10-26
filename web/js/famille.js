@@ -4221,12 +4221,20 @@ async function enterApp() {
   // Bascule en Europe : la bonne base et le bon bucket avant toute lecture.
   await choisirBase();
   if (bucketUrl()) ouvrirStorage(bucketUrl());
+  // Lectures de l'ouverture faites en même temps plutôt que l'une après l'autre : deux allers-retours vers la
+  // base au lieu de six avant d'afficher la famille.
+  let lectureSession = null;
   try {
     const saved = savedFamilyId();
-    if (saved) await tagLegacyMember(saved);
-    const memberships = await myMemberships();
+    const [completee, lues, invitationsLues] = await Promise.all([
+      saved ? tagLegacyMember(saved) : false,
+      myMemberships(),
+      myInvitations(),
+    ]);
+    // Fiche d'avant tout juste complétée (uid ajouté) : elle n'était pas encore dans la liste.
+    const memberships = completee ? await myMemberships() : lues;
     if (!connaitMoi(memberships)) { showMoi(); return; }
-    const invitations = (await myInvitations()).filter((inv) => !memberships.some((m) => m.fid === inv.fid));
+    const invitations = invitationsLues.filter((inv) => !memberships.some((m) => m.fid === inv.fid));
     if (invitations.length && !skipInvites) { showInvitations(invitations); return; }
     const active = memberships.filter((m) => m.status !== 'pending');
     if (!active.length) {
@@ -4245,12 +4253,13 @@ async function enterApp() {
     }
     const chosen = active.find((m) => m.fid === saved) || active[0];
     saveFamilyId(chosen.fid);
+    lectureSession = loadMembership();
     myFamilies = await Promise.all(active.map(async (m) => ({ fid: m.fid, name: await familyName(m.fid) || 'Famille' })));
     renderFamilySwitch(chosen.fid);
   } catch (err) {
     console.error('Familles illisibles', err);
   }
-  session = await loadMembership();
+  session = await (lectureSession || loadMembership());
   if (!session) { showJoin(false); return; }
   forgetInviteCode();
   applyFamily();
