@@ -629,6 +629,8 @@
       w.stop = window.papoteWatchPresence(function () {
         if (watchers[slot] !== w || w.timer) return;
         console.warn('Visage vu (' + slot + ')');
+        // Elle est là : le carillon d'arrivée s'arrête.
+        try { if (android() && android().carillonStop) android().carillonStop(); } catch (e) { }
         try { onSeen(); } catch (e) { console.warn('Visage vu : ' + e); }
         w.timer = setTimeout(function () {
           if (watchers[slot] !== w) return;

@@ -442,6 +442,18 @@ public class MainActivity extends Activity implements Sync.Listener {
             onNewArrival();
         }
 
+        /** Visage vu : le carillon (joué 5 fois) s'arrête tout de suite. */
+        @JavascriptInterface
+        public void carillonStop() {
+            handler.post(() -> {
+                android.media.MediaPlayer mp = carillon;
+                carillon = null;
+                if (mp == null) return;
+                try { mp.stop(); } catch (IllegalStateException e) { /* déjà fini */ }
+                mp.release();
+            });
+        }
+
         /** Le carillon d'arrivée sonne-t-il encore ? La page attend la fin avant de parler. */
         @JavascriptInterface
         public boolean carillonEnCours() {
