@@ -180,6 +180,13 @@ function sansAbonnement() {
   return session?.family?.abonnement?.statut === 'aucun' && !installationEnCours();
 }
 
+// Famille toute neuve : d'abord régler la tablette ; sinon le petit guide habituel.
+// Pas tant que la tablette attend son abonnement : le guide parlerait de choses encore impossibles.
+function accueilPremiereFois() {
+  if (sansAbonnement() || document.querySelector('.guide-back')) return;
+  if (!showIntroTablette()) showGuideOnce(session.family.name);
+}
+
 function renderSansAbo() {
   const admin = amOwner();
   document.querySelectorAll('.sans-abo-nom').forEach((e) => { e.textContent = session.family.name; });
@@ -1102,8 +1109,11 @@ async function queue(item) {
 async function renderOutbox() {
   let count = 0;
   try { count = await outbox('readonly', (store) => store.count()); } catch (e) { /* stockage indisponible */ }
-  $('outbox').hidden = !count;
-  $('outbox').textContent = count > 1 ? `${count} envois en attente de réseau…` : '1 envoi en attente de réseau…';
+  // Sur l'accueil et sur les pages d'envoi : un message envoyé sans réseau ne doit pas sembler perdu.
+  document.querySelectorAll('.outbox').forEach((e) => {
+    e.hidden = !count;
+    e.textContent = count > 1 ? `${count} envois en attente de réseau…` : '1 envoi en attente de réseau…';
+  });
 }
 
 let flushing = false;
@@ -2507,7 +2517,10 @@ function renderAbonnement() {
   }
   // Commande reliée ou abonnement perdu pendant qu'on regarde : on passe à la bonne page.
   const surAccueil = !$('view-home').hidden, surSansAbo = !$('view-sans-abo').hidden;
-  if ((surAccueil || surSansAbo) && surSansAbo !== sansAbonnement()) goHome();
+  if ((surAccueil || surSansAbo) && surSansAbo !== sansAbonnement()) {
+    goHome();
+    if (surSansAbo) accueilPremiereFois();
+  }
 }
 
 // ---------- Tablette à distance (responsables) ----------
@@ -4292,8 +4305,7 @@ async function enterApp() {
   goHome();
   renderOutbox();
   flushOutbox();
-  // Famille toute neuve : d'abord régler la tablette ; sinon le petit guide habituel.
-  if (!showIntroTablette()) showGuideOnce(session.family.name);
+  accueilPremiereFois();
   if (sharedPending) { sharedPending = false; openShared(); }
   if (rappelerPending) { rappelerPending = false; offerCallBack(); }
   else if (reglagesPending) { reglagesPending = false; openPage('settings'); }

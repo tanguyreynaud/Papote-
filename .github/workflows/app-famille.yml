@@ -1,0 +1,46 @@
+# App famille (web/) testée de bout en bout dans un vrai navigateur (Chromium sans écran), sur les émulateurs
+# Firebase avec les fonctions de main : installation, proches, envois, agenda, appels, réglages, abonnement,
+# hors ligne. Gratuit, rien en ligne. Mode d'emploi : tests/app-famille/README.md.
+name: App famille
+
+on:
+  push:
+    paths: ['web/**', 'firestore.rules', 'storage-eu.rules', 'tests/app-famille/**', '.github/workflows/app-famille.yml']
+  pull_request:
+    paths: ['web/**', 'firestore.rules', 'storage-eu.rules', 'tests/app-famille/**', '.github/workflows/app-famille.yml']
+  workflow_dispatch:
+
+jobs:
+  app-famille:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: tests/app-famille
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tests/app-famille/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: emulateurs-firebase-14
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm test
+      - name: Captures en cas d'échec
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: captures-app-famille
+          path: tests/app-famille/captures/
+          if-no-files-found: ignore

@@ -209,7 +209,10 @@ button:disabled { opacity: .45; cursor: default; }
   font-size: 15px;
   text-align: center;
   box-shadow: var(--shadow);
+  pointer-events: none;
 }
+/* Hauteur du bandeau « Pas de connexion » (0 sans lui) : la page et les en-têtes passent dessous. */
+body { padding-top: var(--bandeau, 0px); }
 
 .install-card p { margin: 0 0 8px; }
 .install-help { margin-top: 12px; }
@@ -277,7 +280,7 @@ button:disabled { opacity: .45; cursor: default; }
 
 .page-head {
   position: sticky;
-  top: 0;
+  top: var(--bandeau, 0px);
   z-index: 5;
   display: flex;
   align-items: center;

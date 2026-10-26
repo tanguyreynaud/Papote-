@@ -333,8 +333,15 @@ function brancher() {
     appels.length = 0;
     pannes.clear();
   });
-  test.afterEach(async () => {
+  test.afterEach(async (ctx) => {
     const erreursPages = telephones.flatMap((t) => t.erreurs);
+    // Dernier écran de chaque téléphone, dans captures/ : pour comprendre un échec sans relancer.
+    const dossier = path.join(__dirname, 'captures', (ctx?.name || 'test').replace(/[^\p{L}\p{N} -]+/gu, '_').slice(0, 80));
+    for (const t of telephones) {
+      if (t.page.isClosed()) continue;
+      await fs.promises.mkdir(dossier, { recursive: true });
+      await t.page.screenshot({ path: path.join(dossier, `${t.nom}.png`) }).catch(() => {});
+    }
     for (const t of telephones.splice(0)) await t.context.close().catch(() => {});
     await s.calme();
     assert.deepStrictEqual(erreursPages, [], 'erreurs dans l\'app');

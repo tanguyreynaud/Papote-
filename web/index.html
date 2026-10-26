@@ -422,6 +422,7 @@
         <h1>Photos</h1>
         <button type="button" id="btn-photos-zip" class="head-action" aria-label="Télécharger toutes les photos"><svg><use href="#i-download"/></svg>Tout télécharger</button>
       </header>
+      <p class="outbox" hidden></p>
       <ul id="photos" class="gallery"></ul>
       <div id="photos-more" class="feed-more"></div>
       <p id="photos-empty" class="empty" hidden>Aucune photo pour l'instant.<br>Touchez + pour en envoyer une.</p>
@@ -434,6 +435,7 @@
         <button type="button" class="icon-btn back" aria-label="Retour"><svg><use href="#i-back"/></svg></button>
         <h1>Vidéos</h1>
       </header>
+      <p class="outbox" hidden></p>
       <ul id="videos" class="gallery"></ul>
       <div id="videos-more" class="feed-more"></div>
       <p id="videos-empty" class="empty" hidden>Aucune vidéo pour l'instant.<br>Touchez + pour en envoyer une.</p>
@@ -446,6 +448,7 @@
         <button type="button" class="icon-btn back" aria-label="Retour"><svg><use href="#i-back"/></svg></button>
         <h1>Messages</h1>
       </header>
+      <p class="outbox" hidden></p>
       <ul id="messages" class="chat"></ul>
       <p id="messages-empty" class="empty" hidden>Aucun message pour l'instant.</p>
       <form id="form-message" class="chat-bar">
@@ -1014,6 +1017,11 @@
       const ecran = document.getElementById('hors-ligne');
       const bandeau = document.getElementById('hors-ligne-bandeau');
       let minuterie = 0;
+      // Le bandeau pousse la page vers le bas : il ne doit pas cacher le bouton Retour des pages.
+      function montrerBandeau(oui) {
+        bandeau.hidden = !oui;
+        document.documentElement.style.setProperty('--bandeau', oui ? `${bandeau.offsetHeight}px` : '0px');
+      }
       // navigator.onLine se trompe parfois (Wi-Fi sans internet) : on demande un petit fichier.
       async function connecte() {
         if (!navigator.onLine) return false;
@@ -1035,15 +1043,15 @@
       }
       function ouvrir() {
         if (!ecran.hidden) return;
-        bandeau.hidden = true;
+        montrerBandeau(false);
         ecran.hidden = false;
         clearInterval(minuterie);
         minuterie = setInterval(() => verifier(true), 5000);
       }
       window.papoteHorsLigne = ouvrir;
       document.getElementById('hors-ligne-reessayer').addEventListener('click', verifier);
-      addEventListener('online', () => { if (!ecran.hidden) verifier(true); else bandeau.hidden = true; });
-      addEventListener('offline', () => { if (ecran.hidden) bandeau.hidden = false; });
+      addEventListener('online', () => { if (!ecran.hidden) verifier(true); else montrerBandeau(false); });
+      addEventListener('offline', () => { if (ecran.hidden) montrerBandeau(true); });
       // Enregistré ici et pas dans famille.js : même si les scripts n'arrivent pas, la copie de l'app se fait.
       if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
       if (!navigator.onLine) ouvrir();

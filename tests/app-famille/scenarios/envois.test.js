@@ -139,7 +139,8 @@ test('Messages : écrit, message rapide, vu par la tablette, réponse de Mamie, 
   assert.strictEqual(await julie.page.inputValue('#message-text'), '');
   await julie.page.click('.quick-msg:has-text("Bonne nuit")');
   await julie.page.locator('#messages li.bubble.mine', { hasText: 'Bonne nuit' }).waitFor();
-  const messages = await postsDe(fid, 'message');
+  // La bulle s'affiche avant l'accord du serveur : on attend qu'il ait bien les deux.
+  const messages = await g.attendreBase(async () => { const l = await postsDe(fid, 'message'); return l.length === 2 && l; }, '2 messages');
   assert.deepStrictEqual(messages.map((m) => m.text).sort(), ['Bisous de Lyon, à dimanche !', 'Bonne nuit']);
 
   // Le compteur n'apparaît qu'à 40 caractères de la limite (160).
