@@ -936,8 +936,12 @@ h1, h2, h3, .brand, .tile, .splash-name { font-family: var(--display); letter-sp
 .site-link { display: flex; justify-content: center; text-decoration: none; margin-top: 16px; border-radius: 14px; padding: 13px 18px; font-weight: 600; }
 
 /* Bouton flottant « Installer l'app » (disparaît une fois l'app installée) */
-/* Sous les tuiles, dans la page : il ne recouvre jamais une tuile. */
+/* Flottant (Tanguy : il faut que les gens installent l'app) mais collant : quand tout tient à l'écran, il se pose
+   sous les tuiles ; sinon il flotte au-dessus de la barre du bas, et la marge sous la grille laisse tout lire en faisant défiler. */
 .install-fab {
+  position: sticky;
+  bottom: calc(88px + env(safe-area-inset-bottom));
+  z-index: 7;
   display: flex;
   width: fit-content;
   margin: 22px auto 0;
