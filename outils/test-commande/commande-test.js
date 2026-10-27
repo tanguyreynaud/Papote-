@@ -33,7 +33,6 @@ const CAPTURES = path.join(__dirname, 'captures');
 const args = process.argv.slice(2);
 const options = new Set(args.filter((a) => a.startsWith('--')));
 const choisis = args.filter((a) => !a.startsWith('--'));
-const debut = Date.now();
 const horodatage = new Date().toISOString().slice(5, 16).replace(/[-:T]/g, '');
 
 const bilan = [];
