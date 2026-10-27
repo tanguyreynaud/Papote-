@@ -420,6 +420,11 @@ test('batterie : relevé de la tablette et usure', () => {
   assert.strictEqual(g.usureBatterie({ sante: 'morte' }), 'batterie morte');
   assert.strictEqual(g.usureBatterie({ sante: 'bonne', cycles: 650 }), 'batterie usée (650 cycles)');
   assert.strictEqual(g.usureBatterie({ sante: 'surchauffe', cycles: 120 }), null);
+  // Compteur aberrant ignoré : plus de 1 500 cycles, ou plus de 2 par jour depuis l'achat.
+  assert.strictEqual(g.usureBatterie({ sante: 'bonne', cycles: 2235 }), null);
+  const maintenant = Date.parse('2026-10-27T12:00:00Z');
+  assert.strictEqual(g.usureBatterie({ cycles: 650 }, maintenant - 10 * 864e5, maintenant), null);
+  assert.strictEqual(g.usureBatterie({ cycles: 650 }, maintenant - 400 * 864e5, maintenant), 'batterie usée (650 cycles)');
 });
 
 test('à faire : tablette revenue avec une batterie usée', () => {
@@ -517,4 +522,18 @@ test('colis renvoyé à l\'expéditeur d\'après l\'étape Sendcloud', () => {
   assert.strictEqual(sendcloud.retourExpediteur('Retour à l\'expéditeur'), true);
   assert.strictEqual(sendcloud.retourExpediteur('Delivered'), false);
   assert.strictEqual(sendcloud.retourExpediteur(null), false);
+});
+
+test('Stripe en mode test : seuls les essais encore en base sont comptés', () => {
+  const factures = [{ id: 'in_1', abonnement: 'sub_garde' }, { id: 'in_2', abonnement: 'sub_efface' }, { id: 'in_3', abonnement: null }];
+  const mouvements = [{ id: 'm1', facture: 'in_1' }, { id: 'm2', facture: 'in_2' }, { id: 'm3', facture: null }];
+  const abonnements = [{ id: 'sub_garde' }, { id: 'sub_efface' }];
+  const commandes = new Set(['sub_garde']);
+  const r = g.sansEssaisEffaces({ factures, mouvements, abonnements, test: true, commandes });
+  assert.deepStrictEqual(r.factures.map((f) => f.id), ['in_1']);
+  assert.deepStrictEqual(r.mouvements.map((m) => m.id), ['m1']);
+  assert.deepStrictEqual(r.abonnements.map((a) => a.id), ['sub_garde']);
+  const reel = g.sansEssaisEffaces({ factures, mouvements, abonnements, test: false, commandes });
+  assert.strictEqual(reel.factures.length, 3);
+  assert.strictEqual(reel.mouvements.length, 3);
 });
