@@ -544,23 +544,26 @@ body .ps-bouton { bottom: 6.5rem; }
       autour.disabled = false;
       if (!ok) erreur.hidden = false;
     }
-    // Pas de délai maximum : la première fois, le téléphone demande l'autorisation, et le temps
-    // de répondre ne doit pas faire échouer la recherche (il fallait alors recliquer).
+    // Dès que la position est connue, les points relais sont cherchés tout de suite avec les coordonnées.
+    // Le code postal (Base Adresse Nationale) n'est retrouvé qu'en parallèle, pour le champ et la carte de
+    // secours : avant, trois appels s'enchaînaient (adresse, villes, points relais) et le bouton semblait long.
+    // Délai de 20 s : le temps de répondre à la demande d'autorisation n'y est pas compté.
     navigator.geolocation.getCurrentPosition(function (pos) {
       fin(true);
       pays.value = 'fr';
+      attente.hidden = false;
+      chercher(pos.coords);
       fetch('https://api-adresse.data.gouv.fr/reverse/?lon=' + pos.coords.longitude + '&lat=' + pos.coords.latitude)
         .then(function (r) { return r.json(); })
         .then(function (d) {
           var props = d.features && d.features[0] && d.features[0].properties;
           if (props && props.postcode) {
             cp.value = props.postcode;
-            return chargerVilles(props.city);
+            villesDe = pays.value + props.postcode;
           }
         })
-        .catch(function () {})
-        .then(function () { chercher(pos.coords); });
-    }, function () { fin(false); }, { maximumAge: 600000 });
+        .catch(function () {});
+    }, function () { fin(false); }, { maximumAge: 600000, timeout: 20000 });
   });
 
   // Retour depuis la page de paiement (bouton Retour, page fermée) : ce qui était rempli est gardé
