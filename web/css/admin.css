@@ -36,6 +36,8 @@
 }
 .nav-pied { margin-top: auto; padding: 0 8px; }
 .nav-pied p { margin: 0; overflow-wrap: anywhere; }
+/* L'adresse e-mail du menu tient sur une ligne. */
+.nav-pied p:first-child { font-size: 13px; overflow-wrap: normal; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .nav-pied .link { padding: 4px 0; }
 
 .contenu { padding: 24px 32px 48px; max-width: 1200px; width: 100%; }

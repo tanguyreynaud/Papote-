@@ -538,7 +538,9 @@ button.secondary.charge::after, button.link.charge::after { border-color: rgba(7
 .roue-attente { flex: none; width: 26px; height: 26px; border-radius: 50%; border: 3px solid rgba(79, 70, 229, .2); border-top-color: var(--accent); animation: roue 0.8s linear infinite; }
 
 /* Badge sans couleur d'état (Annulée, Terminée…) : gris neutre, pas le bleu de l'app famille. */
-.badge:not(.ok):not(.ko):not(.info) { color: var(--muted); background: var(--bg); font-weight: 600; }
+.badge:not(.ok):not(.ko):not(.info):not(.neutre) { color: var(--muted); background: var(--bg); font-weight: 600; }
+/* « aucun achat lié » : pastille neutre, le rouge reste pour les vraies alertes. */
+.badge.neutre { color: var(--muted); border-color: var(--line); background: transparent; }
 @media (prefers-reduced-motion: reduce) { .roue-attente { animation-duration: 2.5s; } }
 
 /* Listes de commandes (à envoyer, à récupérer) : chaque commande dans son propre bloc, bien séparé. */

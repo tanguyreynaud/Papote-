@@ -1837,7 +1837,7 @@ function remplirPageAccessoire(id) {
       ...modif('Alerte sous', a.seuil != null ? String(a.seuil) : null, 'seuil', { valeur: a.seuil ?? '', mode: 'numeric', vide: 'pas d\'alerte', convertir: (v) => nombre(v, true) }),
       ...modif('Prix unitaire', a.prixAchat != null ? euros(a.prixAchat) : null, 'prixAchat', { valeur: enEuros(a.prixAchat), mode: 'decimal', suffixe: '€', convertir: convertirEuros }),
       // Une dépense par livraison : la liste s'allonge (« Ajouter un achat »), une livraison saisie avec son montant s'y ajoute seule.
-      ...modif('Achats', (a.depenses || []).length ? h('span', {}, ...a.depenses.flatMap((x, i) => [i ? ', ' : null, lienAchat(x)])) : badge('aucun achat lié', 'ko'),
+      ...modif('Achats', (a.depenses || []).length ? h('span', {}, ...a.depenses.flatMap((x, i) => [i ? ', ' : null, lienAchat(x)])) : badge('aucun achat lié', 'neutre'),
         'depenses', { valeur: '', options: optionsAchats('Choisir l\'achat à ajouter'), convertir: (v) => (v ? [...(a.depenses || []), v] : (a.depenses || [])) }),
       ...modif('Part avec', donnees.envoisAccessoire[a.parEnvoi || ''], 'parEnvoi', { valeur: a.parEnvoi || '', options: Object.entries(donnees.envoisAccessoire) }),
       ...modif('Au retour', a.retour ? 'Revient et repart chez le client suivant' : 'Consommé à chaque envoi', 'retour', {
@@ -1957,7 +1957,7 @@ function remplirTablette(id) {
       ...(fichesAchetees(t).length
         // Fiche créée à l'installation faute d'achat « En stock » : on choisit la tablette achetée qu'elle est
         // vraiment (la fiche de l'achat prend le T-0… et le n° de série, celle-ci disparaît).
-        ? ligneModifiable('Achat', badge('aucun achat lié', 'ko'), {
+        ? ligneModifiable('Achat', badge('aucun achat lié', 'neutre'), {
           valeur: '', options: [['', 'Choisir la tablette achetée…'], ...fichesAchetees(t).map((x) => [x.id, libelleAchetee(x)])],
           enregistrer: (v) => (v ? enregistrerTablette(async () => {
             await appeler('gestionParcours', { type: 'lier', id: v, ref: t.ref });
@@ -1965,7 +1965,7 @@ function remplirTablette(id) {
             ouvrirTablette(v);
           }, `${t.ref} rattachée à son achat`, 'Rattachement à l\'achat…') : Promise.resolve(false)),
         })
-        : modif('Achat', t.depense ? ligneAchatTablette(t) : badge('aucun achat lié', 'ko'), 'depense', {
+        : modif('Achat', t.depense ? ligneAchatTablette(t) : badge('aucun achat lié', 'neutre'), 'depense', {
           valeur: t.depense || '', options: optionsAchats(), convertir: (v) => v || null })),
       ...modif('N° de série', t.numero || t.serieAndroid, 'numero', { valeur: t.numero || t.serieAndroid, vide: 'pas encore noté' }),
       ...modif('Modèle', t.modele, 'modele', { valeur: t.modele }),
@@ -2088,7 +2088,7 @@ function afficherDocumentsTablette(t) {
 // Colonne « Achat » de la liste du stock : la commande chez le vendeur (Tanguy, 2026-10-22 : chaque tablette
 // doit en avoir une), en rouge si elle manque. Le lien ouvre l'achat, pas la tablette.
 function celluleAchat(t) {
-  if (!t.depense) return badge('aucun achat lié', 'ko');
+  if (!t.depense) return badge('aucun achat lié', 'neutre');
   const achat = donnees.depenses.find((d) => d.id === t.depense);
   const texte = [t.fournisseur || (achat && achat.fournisseur), achat && achat.numero ? `n° ${achat.numero}` : null]
     .filter(Boolean).join(' ') || 'voir l\'achat';
@@ -2113,7 +2113,7 @@ function optionsAchats(premier = 'Aucun achat lié') {
 }
 // Lien vers un achat (vendeur et n° de commande), ou le badge rouge s'il n'y en a pas.
 function lienAchat(id) {
-  if (!id) return badge('aucun achat lié', 'ko');
+  if (!id) return badge('aucun achat lié', 'neutre');
   const d = donnees.depenses.find((x) => x.id === id);
   return h('a', { href: `#depense/${encodeURIComponent(id)}`, onclick: (e) => e.stopPropagation() },
     (d && ([d.fournisseur, d.numero ? `n° ${d.numero}` : null].filter(Boolean).join(' ') || d.libelle)) || 'voir l\'achat');
