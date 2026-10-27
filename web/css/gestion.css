@@ -580,3 +580,9 @@ button.secondary.charge::after, button.link.charge::after { border-color: rgba(7
 /* Page famille : mêmes lignes que les autres fiches (une colonne sur téléphone, le champ en pleine largeur). */
 #famille-fiche .family dl.fiche { grid-template-columns: max-content minmax(0, 1fr); }
 @media (max-width: 640px) { #famille-fiche .family dl.fiche { grid-template-columns: minmax(0, 1fr); gap: 0; } #famille-fiche .family dl.fiche dd:not(.modifiable) { margin-bottom: 8px; } }
+
+/* Alertes envoyées aux familles (accueil, page d'une tablette) : un chiffre par sorte, la liste datée en dessous. */
+.stats.compact .stat.actif { outline: 2px solid var(--accent); }
+.alertes-liste { list-style: none; margin: 12px 0 0; padding: 0; }
+.alertes-liste li { padding: 8px 0; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
+.alertes-liste .quand { font-variant-numeric: tabular-nums; font-weight: 600; }

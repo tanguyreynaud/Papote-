@@ -762,6 +762,7 @@ function afficherAccueil() {
   pastille('n-menu', taches.length);
   pastille('n-commandes', aEnvoyer + aRecuperer);
   pastille('n-stock', manque + aVerifier + simsAResilier + simsARegarder + accessoires.length + remplacees + clientsSansSim + simsSansTablette);
+  blocAlertes($('alertes-accueil'), donnees.alertes || [], { titre: 'Alertes envoyées aux familles', avecTablette: true });
   afficherAutomatique();
   afficherCourrier();
   afficherArchives();
@@ -1951,6 +1952,50 @@ function afficherBatterie(t) {
   );
 }
 
+// Alertes envoyées aux proches (journal du serveur, 90 derniers jours) : un chiffre par sorte d'alerte, qui ouvre
+// la liste datée (Tanguy, 27/10 : « compter chaque alerte pour analyser »). Sur l'accueil (toutes) et sur la page
+// de chaque tablette (les siennes).
+function blocAlertes(zone, liste, { titre, avecTablette }) {
+  zone.hidden = !donnees.genresAlerte;
+  if (zone.hidden) return;
+  const jours = donnees.alertesJours || 90;
+  const genres = donnees.genresAlerte;
+  const parGenre = new Map();
+  for (const a of liste) parGenre.set(a.genre, [...(parGenre.get(a.genre) || []), a]);
+  const detail = h('ul', { class: 'alertes-liste small', hidden: true });
+  let ouvert = null;
+  const montrer = (genre) => {
+    ouvert = ouvert === genre ? null : genre;
+    detail.hidden = !ouvert;
+    zone.querySelectorAll('.stat').forEach((s) => s.classList.toggle('actif', s.dataset.genre === ouvert));
+    if (!ouvert) return;
+    detail.replaceChildren(...(ouvert === '*' ? liste : parGenre.get(ouvert)).map((a) => {
+      const morceaux = [
+        ouvert === '*' ? genres[a.genre] || a.genre : null,
+        avecTablette && a.fiche ? h('a', { href: `#tablette/${encodeURIComponent(a.fiche)}` }, a.fiche) : null,
+        avecTablette ? a.famille : null,
+        a.telephones != null ? h('span', { class: 'muted' }, `${a.telephones} téléphone${a.telephones > 1 ? 's' : ''} prévenu${a.telephones > 1 ? 's' : ''}`) : null,
+      ].filter(Boolean);
+      return h('li', {},
+        h('span', { class: 'quand' }, a.le ? new Date(a.le).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '?'),
+        ...morceaux.flatMap((m, i) => [i ? ' · ' : ' ', m]));
+    }));
+  };
+  const chiffre = (genre, n, texte) => {
+    const el = cliquable(stat(String(n), texte), () => montrer(genre));
+    el.dataset.genre = genre;
+    return el;
+  };
+  zone.replaceChildren(
+    h('h2', {}, `${titre} (${jours} derniers jours)`),
+    liste.length
+      ? h('div', { class: 'stats compact' }, chiffre('*', liste.length, 'en tout'),
+        ...[...parGenre.entries()].sort((x, y) => y[1].length - x[1].length).map(([g, l]) => chiffre(g, l.length, genres[g] || g)))
+      : h('p', { class: 'muted small' }, 'Aucune alerte.'),
+    detail,
+  );
+}
+
 // Page d'une tablette : informations, achat, documents, historique.
 let tabletteOuverte = null;
 function ouvrirTablette(id) {
@@ -2018,6 +2063,7 @@ function remplirTablette(id) {
   }
   afficherDocumentsTablette(t);
   afficherBatterie(t);
+  blocAlertes($('dt-alertes'), (donnees.alertes || []).filter((a) => a.fiche === t.id), { titre: 'Alertes de cette tablette' });
   $('dt-historique').replaceChildren(...historiqueLisible(t).reverse().map(([le, texte]) => h('li', {},
     h('span', { class: 'quand' }, new Date(le).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })), ' ', texte)));
   if (!$('dt-historique').children.length) $('dt-historique').append(h('li', {}, 'Rien de noté pour l\'instant.'));
