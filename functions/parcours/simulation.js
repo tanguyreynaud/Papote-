@@ -68,9 +68,11 @@ mail.envoyer = async ({ a, contenu }) => {
 
 const notifications = [];
 const push = require('../push');
+// reglages.telephones = false : aucun téléphone n'a de notifications (appli pas installée, refusées).
+const reglages = { telephones: true };
 push.envoyer = async (db, fid, uids, data) => {
   notifications.push({ fid, uids: [...uids], ...data });
-  return uids.length;
+  return reglages.telephones ? uids.length : 0;
 };
 
 require('../voix').voixDocument = async () => null;
@@ -114,6 +116,7 @@ const { FieldValue, Timestamp } = require('firebase-admin/firestore');
 const DECLENCHEURS = [
   { chemin: 'families/{fid}', creation: ['nouvelleFamille'] },
   { chemin: 'families/{fid}/members/{uid}', creation: ['nouveauMembre'], ecriture: ['compterProches'] },
+  { chemin: 'families/{fid}/members/{uid}/private/push', ecriture: ['telephoneAppels'] },
   { chemin: 'families/{fid}/posts/{pid}', creation: ['quotaEnvois'], ecriture: ['voixEnvoi'] },
   { chemin: 'families/{fid}/reminders/{rid}', ecriture: ['voixRappel'] },
   { chemin: 'families/{fid}/calls/{cid}', creation: ['appelsSonnerie'], modification: ['appelsManques'] },
@@ -162,7 +165,7 @@ const ecoutes = [];
 function ecouter() {
   const requetes = [
     db.collection('families'), db.collectionGroup('members'), db.collectionGroup('posts'),
-    db.collectionGroup('reminders'), db.collectionGroup('calls'), db.collection('commandes'), db.collection('pairings'),
+    db.collectionGroup('reminders'), db.collectionGroup('calls'), db.collectionGroup('private'), db.collection('commandes'), db.collection('pairings'),
   ];
   return Promise.all(requetes.map((q) => new Promise((pret, rate) => {
     const connus = new Map();
@@ -308,10 +311,11 @@ async function remettreAZero() {
   journal.length = 0;
   fichiersEffaces.length = 0;
   decalage = 0;
+  reglages.telephones = true;
 }
 
 module.exports = {
   demarrer, arreter, remettreAZero, calme, avancer, JOUR,
-  stripe, boite, notifications, erreurs, journal, fichiersEffaces,
+  stripe, boite, notifications, erreurs, journal, fichiersEffaces, reglages,
   fonctions, db, FieldValue, Timestamp, lire, compte, appeler, tache, requete,
 };

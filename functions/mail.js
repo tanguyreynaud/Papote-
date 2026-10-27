@@ -57,6 +57,16 @@ function colisParti({ nom, suivi, lien, relais, code }) {
   ].filter(Boolean), { texte: 'Suivre mon colis', lien });
 }
 
+// Tablette remise en main propre par Tanguy (A1) : pas de colis à suivre, elle est déjà chez le client.
+function tabletteRemise({ nom, code }) {
+  return message('Votre tablette Papote est chez vous', [
+    `Bonjour${nom ? ` ${echapper(nom)}` : ''},`,
+    'Votre tablette Papote vous a été remise en main propre : elle est prête.',
+    `Branchez la tablette et allumez-la, puis <a href="${echapper(lienAppli(code))}" style="color:#4f46e5">ouvrez l'appli Papote</a> sur votre téléphone et scannez le code affiché sur la tablette. L'appli vous guide ensuite pas à pas.`,
+    'Vous avez 30 jours à partir d\'aujourd\'hui pour changer d\'avis : rien à payer et les 60 € remboursés.',
+  ], { texte: 'Ouvrir l\'appli Papote', lien: lienAppli(code) });
+}
+
 // delai : 'stock', 'precommande' ou 'long' (functions/stock.js), noté à la commande.
 const DELAIS = {
   stock: 'Je prépare et vérifie votre tablette moi-même sous 2 à 3 jours ouvrés',
@@ -76,7 +86,9 @@ function commandeConfirmee({ nom, code, relais, formule, delai, dejaInstallee })
   return message('Merci pour votre commande Papote', [
     `Bonjour${nom ? ` ${echapper(nom)}` : ''},`,
     `Merci pour votre commande !${code ? ` Son numéro : <b>${echapper(code)}</b>.` : ''}`,
-    `${DELAIS[delai] || DELAIS.stock}, puis Mondial Relay la livre en 3 à 5 jours ouvrés. Vous êtes prévenu par e-mail dès qu'elle part, et vous pouvez annuler à tout moment avant : les 60 € vous sont remboursés tout de suite.`,
+    // Plus de « vous pouvez annuler à tout moment avant » (Tanguy, 2026-10-27, A2) : les CGV couvrent le droit,
+    // l'e-mail n'invite pas à reculer. « Une question ? Répondez à cet e-mail » reste en pied.
+    `${DELAIS[delai] || DELAIS.stock}, puis Mondial Relay la livre en 3 à 5 jours ouvrés. Vous êtes prévenu par e-mail dès qu'elle part.`,
     relais && relais.transporteur
       ? `Livraison offerte au point relais <b>${relaisEnTexte(relais)}</b>${relais.destinataire ? `, à retirer par <b>${echapper(relais.destinataire)}</b>` : ''}.`
       : 'Livraison offerte à l\'adresse indiquée.',
@@ -284,6 +296,39 @@ function resiliation({ nom, email, code, commande, retractation, suivi, lienSuiv
   ], { texte: 'Ouvrir la commande', lien: `https://app.mapapote.fr/admin.html#commande/${encodeURIComponent(commande)}` }, { interne: true });
 }
 
+// Paiement de l'abonnement échoué (C1) : la famille est prévenue par Papote, pas seulement par Stripe.
+// pauseLe : date de la pause si rien n'est réglé (ms), lien : l'appli (Profil, Abonnement, « Gérer le paiement »).
+function paiementEchoue({ nom, famille, pauseLe, lien }) {
+  return message('Le paiement de Papote n\'a pas abouti', [
+    bonjour(nom),
+    `Le prélèvement de l'abonnement Papote${famille ? ` de <b>${echapper(famille)}</b>` : ''} a été refusé par la banque (carte expirée, compte insuffisant, prélèvement contesté…).`,
+    `Tout continue de fonctionner pour l'instant. Sans règlement, la tablette se mettra en pause le <b>${dateEnClair(pauseLe)}</b>.`,
+    'Pour régler : ouvrez l\'appli Papote, touchez Profil puis Abonnement, et « Gérer le paiement ». Vous pouvez y changer de carte ou de compte bancaire ; le prélèvement est refait automatiquement.',
+  ], { texte: 'Ouvrir l\'appli Papote', lien });
+}
+
+// Papote en pause (délai de grâce dépassé) : la tablette affiche « Papote est en pause, la famille a été prévenue ».
+function papoteEnPause({ nom, famille, lien }) {
+  return message('Papote est en pause', [
+    bonjour(nom),
+    `L'abonnement Papote${famille ? ` de <b>${echapper(famille)}</b>` : ''} n'a pas pu être prélevé, et le délai de sept jours est passé : la tablette est en pause. Elle n'affiche plus les photos ni les messages, et les appels sont coupés.`,
+    'Dès que le paiement est réglé, tout revient automatiquement, sans rien toucher à la tablette.',
+    'Pour régler : ouvrez l\'appli Papote, touchez Profil puis Abonnement, et « Gérer le paiement ».',
+  ], { texte: 'Ouvrir l\'appli Papote', lien });
+}
+
+// Appel ou SOS de la tablette qui n'a fait sonner aucun téléphone (D1) : tous les proches le savent par e-mail.
+function appelSansTelephone({ nom, sos, lien }) {
+  const qui = echapper(nom || 'Votre proche');
+  return message(sos ? `SOS : ${nom || 'votre proche'} a appelé, aucun téléphone n'a sonné` : `${nom || 'Votre proche'} a appelé, aucun téléphone n'a sonné`, [
+    'Bonjour,',
+    sos
+      ? `<b>${qui} a appuyé sur le bouton SOS</b> de sa tablette, mais aucun téléphone de la famille n'a pu sonner. Rappelez-la dès que possible.`
+      : `${qui} a appelé depuis sa tablette, mais aucun téléphone de la famille n'a pu sonner.`,
+    'Pour que les appels sonnent : ouvrez l\'appli Papote sur votre téléphone et autorisez les notifications (Profil, Notifications). Avec l\'appli Android Papote, le téléphone sonne comme pour un vrai appel.',
+  ], { texte: 'Ouvrir l\'appli Papote', lien });
+}
+
 // Alerte à Papote (prélèvement refusé ou contesté…), avec le lien vers la commande dans l'admin.
 function alerteAdmin({ titre, detail, commande }) {
   return message(titre, [echapper(detail)], commande
@@ -305,7 +350,7 @@ async function envoyer({ smtp, motDePasse, expediteur, a, contenu }) {
 }
 
 module.exports = {
-  colisParti, commandeConfirmee, nouvelleCommande, relancePanier, lancement, sepaRefuse, invitation, demandeRejoindre, rappelJumelage,
+  colisParti, tabletteRemise, paiementEchoue, papoteEnPause, appelSansTelephone, commandeConfirmee, nouvelleCommande, relancePanier, lancement, sepaRefuse, invitation, demandeRejoindre, rappelJumelage,
   retourTablette, etiquetteRetour, rappelRestitution, tabletteRecue, commandeAnnulee, annulationAvantEnvoi, resiliation, alerteAdmin,
-  envoyer, echapper, euros,
+  envoyer, echapper, euros, dateEnClair,
 };

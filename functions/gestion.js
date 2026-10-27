@@ -34,6 +34,7 @@ const mail = require('./mail');
 const sendcloud = require('./sendcloud');
 
 const STRIPE_SECRET = defineSecret('STRIPE_SECRET');
+const regles = require('./abonnement');
 // Même clé que le chat de support (outils/support/installer-support.bat), jamais dans le dépôt.
 const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
 // Sonnet : recopier montant, date et vendeur d'une facture est simple, et chaque fiche reste « à vérifier ».
@@ -660,12 +661,7 @@ exports.gestionDonnees = onCall(async (request) => {
       return aplatir({ id: d.id, ...d.data(), batterie, usure: usureBatterie(batterie) });
     }),
     depenses: depenses.docs.map((d) => aplatir({ id: d.id, ...d.data() })),
-    familles: familles.docs.map((f) => ({
-      id: f.id,
-      nom: f.get('name') || null,
-      statut: f.get('abonnement.statut') || null,
-      formule: f.get('abonnement.formule') || null,
-    })),
+    familles: familles.docs.map((f) => aplatir(familleResume(f))),
     etats: ETATS,
     categories: CATEGORIES,
     automatique: automatique.exists ? automatique.data() : null,
@@ -678,6 +674,20 @@ exports.gestionDonnees = onCall(async (request) => {
     envoisAccessoire: ENVOIS_ACCESSOIRE,
   };
 });
+
+// Résumé d'une famille pour la page admin et « À faire » : statut, dates du retard de paiement et de la tolérance.
+function familleResume(f) {
+  return {
+    id: f.id,
+    nom: f.get('name') || null,
+    statut: f.get('abonnement.statut') || null,
+    formule: f.get('abonnement.formule') || null,
+    graceJusqua: f.get('abonnement.graceJusqua') || null,
+    suspenduLe: f.get('abonnement.suspenduLe') || null,
+    toleranceJusqua: f.get('abonnement.toleranceJusqua') || null,
+    majLe: f.get('abonnement.majLe') || null,
+  };
+}
 
 // ---------- Stock ----------
 
@@ -1783,7 +1793,14 @@ async function colisLivres(bilan) {
   const api = sendcloud.client(SENDCLOUD_API.value());
   for (const snap of aSuivre) {
     try {
-      if (!(await api.livre(snap.get('etiquettes.aller.colis')))) continue;
+      const suivi = await api.suivi(snap.get('etiquettes.aller.colis'));
+      // Colis jamais retiré, renvoyé à l'expéditeur (A3) : noté sur la commande, « À faire » le montre, et
+      // Tanguy l'annule avec « Colis revenu » quand il l'a en main.
+      const retour = sendcloud.retourExpediteur(suivi.etape);
+      if ((suivi.etape || null) !== (snap.get('etiquettes.aller.etape') || null) || retour !== !!snap.get('etiquettes.aller.retourExpediteur')) {
+        await snap.ref.update({ 'etiquettes.aller.etape': suivi.etape || null, 'etiquettes.aller.retourExpediteur': retour });
+      }
+      if (!suivi.livre) continue;
       await snap.ref.update({ 'preparation.recuLe': Date.now(), 'preparation.recuPar': 'suivi Mondial Relay' });
       bilan.livres = (bilan.livres || []).concat(snap.get('nom') || snap.get('email') || snap.id);
     } catch (e) {
@@ -2012,15 +2029,24 @@ async function arreterEtRembourser(id) {
 
 // Annulation d'une commande pas encore partie : abonnement Stripe arrêté, tout ce qui a été payé remboursé,
 // tablette mise de côté rendue au stock, e-mail au client. Rejouable sans double remboursement.
+// { commande, colisRevenu: true } : colis jamais retiré, revenu chez Tanguy (A3, 2026-10-27) : même annulation
+// (tout remboursé, mois prélevé compris), la tablette revient au stock « à vérifier ». Seulement si aucune
+// famille n'est reliée : la tablette n'a jamais servi.
 exports.gestionAnnulerCommande = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE] }, async (request) => {
   verifierAdmin(request);
   const id = texte((request.data || {}).commande, 100);
+  const colisRevenu = (request.data || {}).colisRevenu === true;
   if (!id) throw new HttpsError('invalid-argument', 'Commande manquante.');
   const ref = db().doc(`commandes/${id}`);
   const snap = await ref.get();
   if (!snap.exists) throw new HttpsError('not-found', 'Commande introuvable.');
   const c = snap.data();
-  if (!['a-preparer', 'paiement-en-attente'].includes(c.expedition)) {
+  if (colisRevenu) {
+    if (c.expedition !== 'envoyee' || c.fid) {
+      throw new HttpsError('failed-precondition', c.fid ? 'Cette tablette est reliée à une famille : arrêtez plutôt l\'abonnement.'
+        : 'Seule une commande envoyée (colis revenu sans avoir été retiré) peut être annulée ainsi.');
+    }
+  } else if (!['a-preparer', 'paiement-en-attente'].includes(c.expedition)) {
     throw new HttpsError('failed-precondition', c.expedition === 'annulee' ? 'Cette commande est déjà annulée.'
       : 'La tablette est déjà partie : arrêtez plutôt l\'abonnement, le client renverra la tablette.');
   }
@@ -2044,15 +2070,16 @@ exports.gestionAnnulerCommande = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_P
   }
   const qui = request.auth.token.email || request.auth.uid;
   await ref.update({
-    expedition: 'annulee', annulation: 'admin', annuleeLe: FieldValue.serverTimestamp(), annuleePar: qui,
+    expedition: 'annulee', annulation: colisRevenu ? 'colis-revenu' : 'admin', annuleeLe: FieldValue.serverTimestamp(), annuleePar: qui,
     ...(rembourse ? { remboursement: { statut: 'fait', montant: rembourse, le: FieldValue.serverTimestamp() } } : {}),
   });
-  // Tablette mise de côté pour cette commande : de nouveau libre.
+  // Tablette mise de côté pour cette commande : de nouveau libre. Colis revenu : elle est « revenue », à vérifier.
   const tablettes = await db().collection('stock').where('commande', '==', id).get();
-  for (const t of tablettes.docs.filter((x) => ['en-stock', 'preparee'].includes(x.get('etat')))) {
+  for (const t of tablettes.docs.filter((x) => ['en-stock', 'preparee'].includes(x.get('etat')) || (colisRevenu && x.get('etat') === 'envoyee'))) {
+    const etat = colisRevenu && t.get('etat') === 'envoyee' ? 'revenue' : t.get('etat');
     await t.ref.update({
-      commande: null, majLe: FieldValue.serverTimestamp(),
-      historique: FieldValue.arrayUnion({ le: Date.now(), etat: t.get('etat'), par: qui, commande: null, motif: 'commande annulée' }),
+      commande: null, etat, majLe: FieldValue.serverTimestamp(),
+      historique: FieldValue.arrayUnion({ le: Date.now(), etat, par: qui, commande: null, motif: colisRevenu ? 'colis revenu sans être retiré' : 'commande annulée' }),
     });
   }
   let mailEnvoye = false;
@@ -2115,7 +2142,7 @@ async function serieProuvee(serie, tabletUid) {
 // son n° de série Android, noté à la préparation (outils/gestion/preparer-tablette).
 // Première fois : la commande est reliée à la famille, quelle que soit l'adresse e-mail du client.
 exports.gestionJumelage = onDocumentUpdated(
-  { document: 'pairings/{code}', database: BASE_FIRESTORE, region: process.env.REGION_FIRESTORE || 'europe-west1', secrets: [STRIPE_SECRET] },
+  { document: 'pairings/{code}', database: BASE_FIRESTORE, region: process.env.REGION_FIRESTORE || 'europe-west1', secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE] },
   async (event) => {
     const avant = event.data.before.data() || {};
     const p = event.data.after.data() || {};
@@ -2241,11 +2268,28 @@ async function argentDepuis(depuis) {
 const sansFacture = (t, maintenant) => t.prixAchat == null && !t.acheteeLe && !t.depense
   && !['perdue', 'hors-service'].includes(t.etat) && (ms(t.creeLe) || ms(t.preparee) || maintenant) < maintenant - JOURS(5);
 
-function aFaire({ commandes, stock, depenses, automatique, maintenant, sims = [], accessoires = [] }) {
+// familles : [{ id, nom, statut, graceJusqua, suspenduLe, majLe }] (gestionDonnees, recapitulatif).
+function aFaire({ commandes, stock, depenses, automatique, maintenant, sims = [], accessoires = [], familles = [] }) {
   const liste = [];
   // texte : « tablette(s) reçue(s) » → singulier ou pluriel selon n.
   const ajouter = (n, texte) => { if (n > 0) liste.push(`${n} ${texte.replace(/\(s\)/g, n > 1 ? 's' : '')}`); };
   const actives = commandes.filter((c) => c.expedition !== 'annulee');
+  // L'argent d'abord (E1 et C2, Tanguy 2026-10-27 : « rien ne doit m'échapper »).
+  const quand = (t) => (ms(t) ? ` (pause le ${new Date(ms(t)).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', timeZone: 'Europe/Paris' })})` : '');
+  const impayees = familles.filter((f) => f.statut === 'impaye');
+  if (impayees.length) liste.push(`${impayees.length} famille${impayees.length > 1 ? 's' : ''} en retard de paiement : ${impayees.map((f) => `${f.nom || f.id}${quand(f.graceJusqua)}`).join(', ')}`);
+  const suspendues = familles.filter((f) => f.statut === 'suspendu');
+  for (const f of suspendues) {
+    const depuis = ms(f.suspenduLe) || ms(f.majLe);
+    const jours = depuis ? Math.floor((maintenant - depuis) / JOUR) : null;
+    liste.push(`Famille ${f.nom || f.id} suspendue pour impayé${jours != null ? ` depuis ${jours} jour${jours > 1 ? 's' : ''}` : ''}${regles.suspendueDepuisTrop({ statut: 'suspendu', suspenduLe: depuis }, maintenant) ? ' : demander le retour de la tablette (« Arrêter l\'abonnement » sur la commande)' : ''}`);
+  }
+  ajouter(actives.filter((c) => c.dernierMois && c.dernierMois.statut === 'echec').length, 'dernier mois refusé(s) par la banque, à relancer depuis Stripe');
+  ajouter(actives.filter((c) => c.restitution && c.restitution.statut === 'echec').length, 'prélèvement(s) du matériel non rendu refusé(s), à relancer depuis Stripe');
+  ajouter(actives.filter((c) => c.expedition === 'paiement-en-attente' && ms(c.creeLe) && maintenant - ms(c.creeLe) > JOURS(10)).length, 'paiement(s) SEPA en attente depuis plus de 10 jours');
+  ajouter(commandes.filter((c) => (c.contestations || []).length).length, 'commande(s) avec un prélèvement contesté à la banque');
+  const revenus = actives.filter((c) => c.expedition === 'envoyee' && !c.fid && c.etiquettes && c.etiquettes.aller && c.etiquettes.aller.retourExpediteur);
+  for (const c of revenus) liste.push(`Colis de ${c.nom || c.email || c.id} en retour chez vous (jamais retiré) : « Colis revenu » sur la commande l'annule et rembourse`);
   const retour = (c) => c.restitution && ['attendue', 'echec'].includes(c.restitution.statut);
   const idsAEnvoyer = new Set(actives.filter((c) => c.expedition === 'a-preparer' && !retour(c)).map((c) => c.id));
   const aEnvoyer = idsAEnvoyer.size;
@@ -2297,7 +2341,7 @@ async function recapitulatif() {
     db().collection('commandes').get(),
     db().collection('stock').get(),
     db().collection('depenses').get(),
-    db().collection('families').select('abonnement').get(),
+    db().collection('families').select('name', 'abonnement').get(),
     db().doc('gestion/automatique').get(),
     db().doc('gestion/reglages').get(),
     argentDepuis(maintenant - JOURS(7)),
@@ -2313,6 +2357,7 @@ async function recapitulatif() {
   });
   const reglages = lireReglages(reglagesSnap.data());
   const liste = aFaire({
+    familles: familles.docs.map((f) => familleResume(f)),
     commandes,
     stock: stockSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
     depenses: depensesSnap.docs.map((d) => d.data()),

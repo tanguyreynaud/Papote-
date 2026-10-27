@@ -42,16 +42,24 @@ function message(type, nom) {
     : { titre: `La tablette de ${nom} est débranchée`, texte: 'Pensez à rebrancher son chargeur.' };
 }
 
+// Familles en pause hospitalisation (commandes/{id}.pause, pauseHospitalisation) : aucune alerte de tablette
+// pendant la pause (C4, Tanguy 2026-10-27) : la tablette est souvent éteinte à la maison.
+async function famillesEnPause(db, maintenant) {
+  const pauses = await db.collection('commandes').where('pause.jusqua', '>', new Date(maintenant)).get();
+  return new Set(pauses.docs.map((d) => d.get('fid')).filter(Boolean));
+}
+
 exports.alertesTablettes = onSchedule({ schedule: 'every 5 minutes', timeZone: 'Europe/Paris' }, async () => {
   const db = base();
   const maintenant = Date.now();
+  const enPause = await famillesEnPause(db, maintenant).catch((e) => { logger.warn('Pauses illisibles', e.message); return new Set(); });
   // Seulement les champs utiles des familles, et toutes les familles en même temps (et non l'une après l'autre) :
   // la tâche, lancée 288 fois par jour, finit plus vite et coûte moins de temps de calcul.
   const familles = await db.collection('families').select('abonnement', 'name', 'createdBy', 'admins').get();
   await Promise.all(familles.docs.map(async (fam) => {
     const famille = fam.data();
-    // Abonnement suspendu : la tablette est en pause, pas d'alerte.
-    if (!estActif(famille.abonnement)) return;
+    // Abonnement suspendu : la tablette est en pause, pas d'alerte. Hospitalisation : pas d'alerte non plus.
+    if (!estActif(famille.abonnement) || enPause.has(fam.id)) return;
     const tablettes = await fam.ref.collection('members').where('role', '==', 'tablette').get();
     for (const t of tablettes.docs) {
       const tablette = t.data();
@@ -88,18 +96,27 @@ function pasVueAujourdhui(tablette, maintenant) {
     .some((ms) => ms && jourParis(ms) === aujourdhui);
 }
 
+// « Pas vue ce matin » est due si aucune tablette ne l'a vue ni sentie, et qu'au moins une tablette répond :
+// une tablette hors ligne (box ou prise coupée) a déjà valu l'alerte « ne répond plus » aux responsables,
+// inutile d'inquiéter toute la famille en plus (D2, Tanguy 2026-10-27).
+function alerteMatinDue(tablettes, maintenant) {
+  if (!tablettes.length) return false;
+  if (tablettes.some((t) => !pasVueAujourdhui(t, maintenant))) return false;
+  return tablettes.some((t) => etatAlerte(t, maintenant) !== 'silence');
+}
+
 exports.alerteMatin = onSchedule({ schedule: 'every day 12:00', timeZone: 'Europe/Paris' }, async () => {
   const db = base();
   const maintenant = Date.now();
   const aujourdhui = jourParis(maintenant);
+  const enPause = await famillesEnPause(db, maintenant).catch((e) => { logger.warn('Pauses illisibles', e.message); return new Set(); });
   const familles = await db.collection('families').get();
   for (const fam of familles.docs) {
     const famille = fam.data();
-    if (!estActif(famille.abonnement)) continue;
+    if (!estActif(famille.abonnement) || enPause.has(fam.id)) continue;
     const membres = await fam.ref.collection('members').get();
     const tablettes = membres.docs.filter((m) => m.get('role') === 'tablette');
-    // Plusieurs tablettes : il suffit qu'une seule l'ait vue.
-    if (!tablettes.length || tablettes.some((t) => !pasVueAujourdhui(t.data(), maintenant))) continue;
+    if (!alerteMatinDue(tablettes.map((t) => t.data()), maintenant)) continue;
     // Une seule alerte par jour (notée sur la famille, quelle que soit la tablette).
     if (famille.alerteMatinLe === aujourdhui) continue;
     const proches = membres.docs
@@ -122,3 +139,4 @@ exports.alerteMatin = onSchedule({ schedule: 'every day 12:00', timeZone: 'Europ
 
 exports.etatAlerte = etatAlerte;
 exports.pasVueAujourdhui = pasVueAujourdhui;
+exports.alerteMatinDue = alerteMatinDue;

@@ -474,3 +474,47 @@ test('transitionPermise : la vie logique d\'une tablette, sans retour en arrièr
   assert.equal(g.transitionPermise('hors-service', 'en-stock'), false);
   assert.equal(g.transitionPermise('en-stock', 'en-stock'), true);
 });
+
+test('à faire : l\'argent d\'abord (familles impayées ou suspendues, prélèvements refusés, SEPA en attente, contestations, colis revenu)', () => {
+  const maintenant = Date.UTC(2026, 9, 27, 12);
+  const j = (n) => maintenant - n * 864e5;
+  const liste = g.aFaire({
+    maintenant,
+    familles: [
+      { id: 'f1', nom: 'Mamie Emma', statut: 'impaye', graceJusqua: maintenant + 3 * 864e5 },
+      { id: 'f2', nom: 'Papi Jean', statut: 'suspendu', suspenduLe: j(12) },
+      { id: 'f3', nom: 'Mamie B', statut: 'suspendu', suspenduLe: j(31) },
+      { id: 'f4', nom: 'Actif', statut: 'actif' },
+    ],
+    commandes: [
+      { id: 'a', expedition: 'envoyee', fid: 'f4', dernierMois: { statut: 'echec' } },
+      { id: 'b', expedition: 'envoyee', fid: 'f4', restitution: { statut: 'echec' } },
+      { id: 'c', expedition: 'paiement-en-attente', creeLe: j(11) },
+      { id: 'd', expedition: 'paiement-en-attente', creeLe: j(2) },
+      { id: 'e', expedition: 'annulee', contestations: [{ id: 'dp_1' }] },
+      { id: 'g', nom: 'Paul Martin', expedition: 'envoyee', fid: null, envoyeeLe: j(12), etiquettes: { aller: { colis: 1, retourExpediteur: true } } },
+    ],
+    stock: [],
+    depenses: [],
+    automatique: { erreurs: [] },
+  });
+  assert.deepStrictEqual(liste, [
+    '1 famille en retard de paiement : Mamie Emma (pause le 30 octobre)',
+    'Famille Papi Jean suspendue pour impayé depuis 12 jours',
+    'Famille Mamie B suspendue pour impayé depuis 31 jours : demander le retour de la tablette (« Arrêter l\'abonnement » sur la commande)',
+    '1 dernier mois refusé par la banque, à relancer depuis Stripe',
+    '1 prélèvement du matériel non rendu refusé, à relancer depuis Stripe',
+    '1 paiement SEPA en attente depuis plus de 10 jours',
+    '1 commande avec un prélèvement contesté à la banque',
+    'Colis de Paul Martin en retour chez vous (jamais retiré) : « Colis revenu » sur la commande l\'annule et rembourse',
+    '1 tablette à récupérer',
+  ]);
+});
+
+test('colis renvoyé à l\'expéditeur d\'après l\'étape Sendcloud', () => {
+  assert.strictEqual(sendcloud.retourExpediteur('Returned to sender'), true);
+  assert.strictEqual(sendcloud.retourExpediteur('Return to sender'), true);
+  assert.strictEqual(sendcloud.retourExpediteur('Retour à l\'expéditeur'), true);
+  assert.strictEqual(sendcloud.retourExpediteur('Delivered'), false);
+  assert.strictEqual(sendcloud.retourExpediteur(null), false);
+});

@@ -84,6 +84,12 @@ function colisLivre(corps) {
   return !!st && (st.id === 11 || /^delivered$/i.test(String(st.message || '')));
 }
 
+// Colis jamais retiré au point relais, renvoyé à l'expéditeur (étape Sendcloud « Returned to sender »,
+// « Return to sender »…) : Tanguy le recevra chez lui (A3).
+function retourExpediteur(etape) {
+  return /return(ed)?\s+to\s+sender|retour\s+(à\s+l')?exp[ée]diteur/i.test(String(etape || ''));
+}
+
 // Suivi d'un colis (réponse de GET /v2/parcels/{id}) : n° et lien de suivi, étape en clair, livré ou non.
 function suiviColis(corps) {
   const p = (corps && corps.parcel) || {};
@@ -215,4 +221,4 @@ function client(cles) {
   };
 }
 
-module.exports = { adresseClient, adressePapote, choisirOption, optionsPossibles, erreurLisible, colisLivre, suiviColis, client };
+module.exports = { adresseClient, adressePapote, choisirOption, optionsPossibles, erreurLisible, colisLivre, suiviColis, retourExpediteur, client };
