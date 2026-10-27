@@ -330,12 +330,23 @@ function releveBatterie(membre) {
 // Batterie usée : la tablette est à retirer du parc à son retour. Renvoie la raison, ou null.
 const SANTES_HS = { morte: 'batterie morte', panne: 'batterie en panne', surtension: 'batterie en surtension' };
 const CYCLES_USEE = 500;
-function usureBatterie(b) {
+// Compteur de cycles aberrant (certaines tablettes donnent un nombre sans rapport, ex. 2235 sur une Blackview
+// neuve) : ignoré au-delà de 1 500 cycles, ou de plus de 2 cycles par jour depuis l'achat (Tanguy, 2026-10-27).
+const CYCLES_MAX = 1500;
+function cyclesCredibles(cycles, depuis, maintenant = Date.now()) {
+  if (typeof cycles !== 'number' || cycles < 0 || cycles > CYCLES_MAX) return false;
+  const debut = ms(depuis);
+  if (!debut) return true;
+  return cycles <= 2 * Math.max(1, (maintenant - debut) / JOURS(1));
+}
+// depuis : date d'achat ou de création de la fiche, pour juger le compteur de cycles.
+function usureBatterie(b, depuis = null, maintenant = Date.now()) {
   if (!b) return null;
   if (SANTES_HS[b.sante]) return SANTES_HS[b.sante];
-  if (typeof b.cycles === 'number' && b.cycles >= CYCLES_USEE) return `batterie usée (${b.cycles} cycles)`;
+  if (cyclesCredibles(b.cycles, depuis, maintenant) && b.cycles >= CYCLES_USEE) return `batterie usée (${b.cycles} cycles)`;
   return null;
 }
+const debutTablette = (t) => (t && (t.acheteeLe || t.creeLe)) || null;
 
 // Le stock suit les commandes : ce que la nuit corrige quand une étape n'a pas été notée sur la tablette.
 // Renvoie les champs à changer ({ etat, commande }) ou null.
@@ -671,7 +682,7 @@ exports.gestionDonnees = onCall(async (request) => {
     }),
     stock: stock.docs.map((d) => {
       const batterie = batteries.get(d.id) || d.get('batterie') || null;
-      return aplatir({ id: d.id, ...d.data(), batterie, usure: usureBatterie(batterie) });
+      return aplatir({ id: d.id, ...d.data(), batterie, usure: usureBatterie(batterie, debutTablette(d.data())) });
     }),
     depenses: depenses.docs.map((d) => aplatir({ id: d.id, ...d.data() })),
     familles: familles.docs.map((f) => aplatir(familleResume(f))),
@@ -1383,6 +1394,20 @@ async function lireMouvements(periode) {
   });
 }
 
+// Stripe en mode test : les essais effacés de la base (outils/admin/repartir-des-tests) restent chez Stripe,
+// qui garde toujours ses factures. On ne compte que ce qui appartient à une commande encore là (Tanguy,
+// 2026-10-27 : « 0 facture »). En mode réel, tout est compté.
+function sansEssaisEffaces({ factures, mouvements, abonnements, test, commandes }) {
+  if (!test) return { factures, mouvements, abonnements };
+  const gardees = factures.filter((f) => f.abonnement && commandes.has(f.abonnement));
+  const ids = new Set(gardees.map((f) => f.id));
+  return {
+    factures: gardees,
+    mouvements: mouvements.filter((m) => m.facture && ids.has(m.facture)),
+    abonnements: abonnements.filter((a) => commandes.has(a.id)),
+  };
+}
+
 exports.gestionStripe = onCall({ secrets: [STRIPE_SECRET], timeoutSeconds: 120 }, async (request) => {
   verifierAdmin(request);
   const { debut, fin } = request.data || {};
@@ -1391,14 +1416,19 @@ exports.gestionStripe = onCall({ secrets: [STRIPE_SECRET], timeoutSeconds: 120 }
   }
   const periode = { gte: Math.floor(debut / 1000), lt: Math.floor(fin / 1000) };
 
-  const [factures, mouvements, abonnements] = await Promise.all([
+  const [toutesFactures, tousMouvements, tousAbonnements, commandes] = await Promise.all([
     tout(stripe().invoices.list({ created: periode, limit: 100 })),
     lireMouvements(periode),
     tout(stripe().subscriptions.list({ status: 'all', limit: 100 })),
+    db().collection('commandes').select().get(),
   ]);
+  const { factures, mouvements, abonnements } = sansEssaisEffaces({
+    factures: toutesFactures.map(versFacture), mouvements: tousMouvements, abonnements: tousAbonnements,
+    test: !STRIPE_SECRET.value().startsWith('sk_live_'), commandes: new Set(commandes.docs.map((d) => d.id)),
+  });
 
   return {
-    factures: factures.map(versFacture),
+    factures,
     mouvements,
     abonnements: abonnements.map((a) => ({
       id: a.id,
@@ -2237,8 +2267,8 @@ async function copierBatteries(bilan) {
     const b = releves.get(d.id);
     if (!b || ms(b.le) === ms((d.get('batterie') || {}).le)) continue;
     await d.ref.update({ batterie: b });
-    const usure = usureBatterie(b);
-    if (usure && !usureBatterie(d.get('batterie'))) bilan.stock.push(`${d.get('ref') || d.get('numero') || d.id} : ${usure}`);
+    const usure = usureBatterie(b, debutTablette(d.data()));
+    if (usure && !usureBatterie(d.get('batterie'), debutTablette(d.data()))) bilan.stock.push(`${d.get('ref') || d.get('numero') || d.id} : ${usure}`);
   }
 }
 
@@ -2317,8 +2347,8 @@ function aFaire({ commandes, stock, depenses, automatique, maintenant, sims = []
     && maintenant - ms(c.envoyeeLe) > JOURS(20)).length, 'tablette(s) reçue(s) mais pas jumelée(s) après 20 jours');
   ajouter(actives.filter(retour).length, 'tablette(s) à récupérer');
   ajouter(stock.filter((t) => t.etat === 'revenue').length, 'tablette(s) revenue(s) à vérifier');
-  for (const t of stock.filter((x) => x.etat === 'revenue' && usureBatterie(x.batterie))) {
-    liste.push(`Tablette ${t.ref || t.numero || ''} revenue : ${usureBatterie(t.batterie)}, à retirer du parc`);
+  for (const t of stock.filter((x) => x.etat === 'revenue' && usureBatterie(x.batterie, debutTablette(x), maintenant))) {
+    liste.push(`Tablette ${t.ref || t.numero || ''} revenue : ${usureBatterie(t.batterie, debutTablette(t), maintenant)}, à retirer du parc`);
   }
   ajouter(stock.filter((t) => t.etat === 'en-retour' && t.remplaceePour).length, 'tablette(s) remplacée(s) à récupérer chez le client');
   for (const t of stock.filter((x) => x.alerteJumelage && !(x.alerteJumelage === ALERTE_SANS_COMMANDE && x.commande))) liste.push(`Tablette ${t.ref || t.numero || ''} ${t.alerteJumelage}`);
@@ -3182,7 +3212,7 @@ exports.gestionParcours = onCall(async (request) => {
 });
 
 exports.regles = {
-  ETATS, CATEGORIES, natureMouvement, mensuel, centimes, lien, nomFichier, moisSuivant, lectureVersFormulaire, SCHEMA_FACTURE,
+  ETATS, CATEGORIES, sansEssaisEffaces, natureMouvement, mensuel, centimes, lien, nomFichier, moisSuivant, lectureVersFormulaire, SCHEMA_FACTURE,
   lireReglages, transitionPermise, SUITES, simAResilier, fichesARattacher, sansFacture, stockAJour, releveBatterie, usureBatterie, incoherences, materielLu, memeAccessoire, coutLigne, alertesSim, accessoiresAPrevoir, champsSim, aFaire, piecesFacture, debutMoisParis, moisPrecedent, csvTexte, livreDesRecettes,
   registreDesAchats, corpsDuMail, memeAchat, suiteJumelage, descriptionNonRendu, refusSuppression, fusionnerContacts, emailInformation, cleContact,
   avancementPropre,
