@@ -56,6 +56,7 @@ p { margin: 0; }
 .opt > span { display: grid; min-width: 0; }
 .opt small { color: var(--muted); }
 .opt .prix { margin-left: auto; font-weight: 700; white-space: nowrap; }
+.insecable { white-space: nowrap; }
 .cherche { display: flex; gap: .6rem; }
 .cherche input, .cherche select { font: inherit; color: var(--text); min-height: 3.25rem; padding: .5rem .9rem; border: 2px solid var(--line); border-radius: 14px; background: var(--bg); min-width: 0; }
 /* width: 0 : sinon la largeur par défaut du champ (20 caractères) élargit la page sur téléphone et oblige à dézoomer. */
@@ -130,7 +131,7 @@ body .ps-bouton { bottom: 6.5rem; }
 
   <form class="etape" id="recap">
     <h2><span class="n">1</span>Y a-t-il internet chez votre proche ?<span class="ok" id="ok1" hidden>✓</span></h2>
-    <label class="opt"><input type="radio" name="internet" value="oui" checked><span>Oui, une box Wi-Fi<small>La tablette utilise son Wi-Fi</small></span><span class="prix">20 €/mois</span></label>
+    <label class="opt"><input type="radio" name="internet" value="oui" checked><span><span>Oui, une box <span class="insecable">Wi-Fi</span></span><small>La tablette utilise son <span class="insecable">Wi-Fi</span></small></span><span class="prix">20 €/mois</span></label>
     <label class="opt"><input type="radio" name="internet" value="non"><span>Non, ou je ne sais pas<small>Internet inclus, rien à régler</small></span><span class="prix">30 €/mois</span></label>
   </form>
 
