@@ -629,8 +629,13 @@ function afficherAccueil() {
   const facturesAttendues = donnees.depenses.filter((d) => d.confirmation && Date.now() - (d.date || 0) > 5 * 864e5);
   const aVerifierMail = donnees.depenses.filter((d) => d.aVerifier);
   // Même règle que sansFacture (functions/gestion.js).
-  const sansFacture = donnees.stock.filter((t) => t.prixAchat == null && !t.acheteeLe && !t.depense
-    && !['perdue', 'hors-service'].includes(t.etat) && (t.creeLe || t.preparee || Date.now()) < Date.now() - 5 * 864e5).length;
+  const sansFactureListe = donnees.stock.filter((t) => t.prixAchat == null && !t.acheteeLe && !t.depense
+    && !['perdue', 'hors-service'].includes(t.etat) && (t.creeLe || t.preparee || Date.now()) < Date.now() - 5 * 864e5);
+  // Tablette installée alors que son achat attend sur une autre fiche : une seule ligne, sur la tablette, au lieu de
+  // « reçue sans facture » + « facture à télécharger » pour la même tablette (Tanguy, 2026-10-27).
+  const aRelier = sansFactureListe.filter((t) => fichesAchetees(t).length);
+  const achatsARelier = new Set(aRelier.flatMap((t) => fichesAchetees(t).map((x) => x.depense)).filter(Boolean));
+  const sansFacture = sansFactureListe.length - aRelier.length;
   const simsSansAchat = donnees.sims.filter((l) => !l.depense && l.statut !== 'resiliee').length;
   const accessoiresSansAchat = donnees.accessoires.filter((x) => !(x.depenses || []).length && (x.quantite || 0) > 0).length;
   const erreursMail = donnees.courrier ? (donnees.courrier.erreurs || []).length : 0;
@@ -683,7 +688,12 @@ function afficherAccueil() {
     ...jumelagesAVoir.map((t) => [1, `${nomT(t)} ${alerteJumelage(t)}`, versTablette(t), 'ko']),
     ...usees.map((t) => [1, `${nomT(t)} revenue : ${t.usure}, à retirer du parc`, versTablette(t), 'ko']),
     // Une ligne par achat, qui ouvre la page de cet achat.
-    ...facturesAttendues.map((d) => [1, `Facture ${d.fournisseur || 'du vendeur'} à télécharger : ${d.libelle || 'achat'}${d.numero ? `, commande ${d.numero}` : ''}. La télécharger chez le vendeur puis l'envoyer à factures@`,
+    ...aRelier.map((t) => {
+      const achats = fichesAchetees(t);
+      const de = [...new Set(achats.map((x) => x.fournisseur).filter(Boolean))].join(' ou ');
+      return [1, `${nomT(t)} n'est reliée à aucun achat : sur sa fiche, ligne « Achat », choisir la tablette achetée${de ? ` chez ${de}` : ''}`, versTablette(t), 'ko'];
+    }),
+    ...facturesAttendues.filter((d) => !achatsARelier.has(d.id)).map((d) => [1, `Facture ${d.fournisseur || 'du vendeur'} à télécharger : ${d.libelle || 'achat'}${d.numero ? `, commande ${d.numero}` : ''}. La télécharger chez le vendeur puis l'envoyer à factures@`,
       `#depense/${encodeURIComponent(d.id)}`, 'ko']),
     // Chaque carte SIM et chaque accessoire doit avoir son achat (Tanguy, 2026-10-22).
     [simsSansAchat, `${pluriel(simsSansAchat, 'carte SIM')} sans achat lié : ouvrir la carte et choisir son achat`, '#stock/sim', ''],
