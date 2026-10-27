@@ -53,3 +53,15 @@ test('minuit à Paris compte pour le jour même (22h30 UTC la veille)', () => {
 test('jamais vue : alerte', () => {
   assert.strictEqual(pasVueAujourdhui({}, midi), true);
 });
+
+const { alerteMatinDue } = require('./alertes');
+
+test('pas vue ce matin : seulement si une tablette répond encore (sinon « ne répond plus » a déjà prévenu)', () => {
+  const hier = new Date('2026-10-18T20:00:00Z');
+  assert.strictEqual(alerteMatinDue([{ lastSeen: hier, lastOnline: new Date(midi - 2 * MIN) }], midi), true);
+  assert.strictEqual(alerteMatinDue([{ lastSeen: hier, lastOnline: new Date(midi - 50 * MIN) }], midi), false, 'tablette hors ligne');
+  assert.strictEqual(alerteMatinDue([{ lastSeen: new Date('2026-10-19T08:00:00Z'), lastOnline: new Date(midi - MIN) }], midi), false, 'vue ce matin');
+  assert.strictEqual(alerteMatinDue([], midi), false);
+  // Deux tablettes : il suffit qu'une réponde et qu'aucune ne l'ait vue.
+  assert.strictEqual(alerteMatinDue([{ lastSeen: hier, lastOnline: new Date(midi - 50 * MIN) }, { lastSeen: hier, lastOnline: new Date(midi - MIN) }], midi), true);
+});

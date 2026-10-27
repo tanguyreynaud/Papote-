@@ -50,7 +50,7 @@ test('abonnement pris depuis l\'appli avec la tablette déjà installée : rien 
   const julie = await s.compte('Julie', 'julie@exemple.fr');
   const { fid, tablette } = await familleInstallee(julie);
   let fam = await s.lire(`families/${fid}`);
-  assert.strictEqual(fam.abonnement.statut, 'aucun', 'tablette hors commande : abonnement à prendre');
+  assert.strictEqual(fam.abonnement.statut, 'installation', 'tablette hors commande : 48 h pour la relier, abonnement à prendre');
   let fiche = await s.lire(`stock/${tablette.fiche}`);
   assert.strictEqual(fiche.alerteJumelage, 'jumelée sans commande');
 
@@ -261,8 +261,13 @@ test('installation abandonnée en route : un autre proche la reprend 30 minutes 
   assert.deepStrictEqual(r, { etat: 'reserve', fid });
   await s.calme();
   const fam = await s.lire(`families/${fid}`);
-  assert.strictEqual(fam.createdBy, paul.uid, 'Paul devient responsable');
+  assert.strictEqual(fam.createdBy, paul.uid, 'Paul devient propriétaire');
+  assert.ok(fam.admins.includes(julie.uid), 'Julie reste responsable');
   assert.ok(await s.lire(`families/${fid}/members/${julie.uid}`), 'Julie reste membre');
+  const avis = s.notifications.find((n) => n.type === 'alerte' && /a repris/.test(n.titre));
+  assert.ok(avis, 'Julie est prévenue');
+  assert.deepStrictEqual(avis.uids, [julie.uid]);
+  assert.strictEqual(avis.fid, fid);
   await s.appeler('finirInstallation', { fid }, paul);
   await s.calme();
   assert.strictEqual((await s.lire(`families/${fid}`)).installation.etape, 'fini');
@@ -309,14 +314,29 @@ test('commande reliée à la main avec son code XXXX-XXXX (tablette pas reconnue
   // Tablette qui n'est pas dans le stock (n° de série inconnu) : rien ne relie la commande tout seul.
   const t = { serie: 'INCONNUE', tabletUid: 'tablette-inconnue', callsUid: 'appels-inconnue' };
   await a.afficherCode(t);
+  s.boite.length = 0;
   const fid = await a.installer(julie, t);
-  assert.strictEqual((await s.lire(`families/${fid}`)).abonnement.statut, 'aucun');
+  // Pas de commande à l'e-mail de Julie : 48 h de tolérance (rien de bloqué chez Mamie), Tanguy prévenu.
+  let fam = await s.lire(`families/${fid}`);
+  assert.strictEqual(fam.abonnement.statut, 'installation');
+  assert.ok(Math.abs(fam.abonnement.toleranceJusqua.toMillis() - (Date.now() + 2 * s.JOUR)) < 60e3);
+  assert.ok(mailsA('contact@mapapote.fr').some((m) => /sans commande reliée/.test(m)));
+  await s.tache('finDeGrace');
+  assert.strictEqual((await s.lire(`families/${fid}`)).abonnement.statut, 'installation', 'toujours tolérée');
+  s.avancer(2.1);
+  await s.tache('finDeGrace');
+  await s.calme();
+  assert.strictEqual((await s.lire(`families/${fid}`)).abonnement.statut, 'aucun', 'après 48 h : Papote en pause');
+  await a.rejoindre(paul, fid);
+  await s.calme();
   await assert.rejects(s.appeler('rattacherCommande', { fid, code: 'ZZZZ-ZZZZ' }, julie), /Aucune commande/);
   const { code } = await commande(id);
   await s.appeler('rattacherCommande', { fid, code: `${code.slice(0, 4)}-${code.slice(4)}` }, julie);
   await s.calme();
-  assert.strictEqual((await s.lire(`families/${fid}`)).abonnement.statut, 'actif');
+  fam = await s.lire(`families/${fid}`);
+  assert.strictEqual(fam.abonnement.statut, 'actif');
   assert.strictEqual((await commande(id)).fid, fid);
+  assert.ok(fam.admins.includes(paul.uid), 'Paul, qui a payé, devient responsable');
 });
 
 test('commande offerte (les mamies) : tablette envoyée, installée par un proche, famille offerte, jamais en pause', async () => {
