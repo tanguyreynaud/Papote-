@@ -156,6 +156,9 @@ async function merci(page, scenario) {
   await page.waitForFunction(() => document.getElementById('code-valeur').textContent.trim() !== '', null, { timeout: 30000 })
     .catch(() => null);
   const code = (await page.locator('#code-valeur').textContent().catch(() => '')).trim();
+  // Pas de défilement horizontal non plus sur la page « Merci », récapitulatif affiché (bug du 27/10).
+  const large = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth).catch(() => 0);
+  if (large > 1) noter(scenario, false, `merci.html déborde de ${large} px en largeur`);
   const session = new URL(page.url()).searchParams.get('session');
   noter(scenario, !!code, code ? `merci.html affiche le code ${code}`
     : `merci.html sans code de commande (codeCommande : ${reponses.join(' | ') || 'pas appelé'}, adresse ${page.url().slice(0, 70)})`);
