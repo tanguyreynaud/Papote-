@@ -477,7 +477,11 @@ service cloud.firestore {
       match /birthdays/{bid} {
         allow read: if isMember(fid);
         allow create, update: if isMember(fid) && abonnementOk(fid)
-          && request.resource.data.keys().hasOnly(['name', 'day', 'month', 'year', 'createdBy', 'createdAt'])
+          && request.resource.data.keys().hasOnly(['name', 'day', 'month', 'year', 'createdBy', 'createdAt', 'photo'])
+          // Photo facultative : petite image JPEG carrée en data URL (comme les visages), ou null.
+          && (!('photo' in request.resource.data) || request.resource.data.photo == null
+              || (request.resource.data.photo is string && request.resource.data.photo.size() <= 200000
+                  && request.resource.data.photo.matches('data:image/jpeg;base64,.*')))
           && request.resource.data.name is string
           && request.resource.data.name.size() > 0
           && request.resource.data.name.size() <= 40

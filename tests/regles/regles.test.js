@@ -158,6 +158,17 @@ test('envois : autorisés pendant l\'installation et avec un abonnement actif, b
   await assertFails(setDoc(doc(proche('julie'), `families/${FID}/posts/m1`), envoi('julie', { type: 'message', text: 'Coucou' })));
 });
 
+test('anniversaire : photo facultative en JPEG (data URL), rien d\'autre', async () => {
+  await famille();
+  const db = proche('julie');
+  const anniv = (photo) => ({ name: 'Léo', day: 2, month: 11, year: null, createdBy: 'Julie', createdAt: serverTimestamp(), ...(photo === undefined ? {} : { photo }) });
+  await assertSucceeds(setDoc(doc(db, `families/${FID}/birthdays/a1`), anniv()));
+  await assertSucceeds(setDoc(doc(db, `families/${FID}/birthdays/a2`), anniv('data:image/jpeg;base64,AAAA')));
+  await assertSucceeds(setDoc(doc(db, `families/${FID}/birthdays/a3`), anniv(null)));
+  await assertFails(setDoc(doc(db, `families/${FID}/birthdays/a4`), anniv('javascript:alert(1)')));
+  await assertFails(setDoc(doc(db, `families/${FID}/birthdays/a5`), anniv('data:image/jpeg;base64,' + 'A'.repeat(200001))));
+});
+
 test('envois : un inconnu ne peut ni lire ni écrire ; légende limitée à 60 caractères', async () => {
   await famille();
   await assertFails(getDoc(doc(proche('inconnu'), `families/${FID}`)));

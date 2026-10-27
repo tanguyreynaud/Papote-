@@ -935,6 +935,14 @@
             <input id="bday-year" type="number" inputmode="numeric" min="1900" max="2100" placeholder="facultatif">
           </label>
         </div>
+        <div class="bday-photo">
+          <img id="bday-photo-img" alt="Photo de l'anniversaire" hidden>
+          <div class="bday-photo-actions">
+            <button type="button" class="secondary" id="bday-photo-choisir"><svg><use href="#i-photo"/></svg><span id="bday-photo-texte">Ajouter une photo (facultatif)</span></button>
+            <button type="button" class="link" id="bday-photo-retirer" hidden>Retirer la photo</button>
+          </div>
+          <input id="in-bday-photo" type="file" accept="image/*" hidden>
+        </div>
         <p class="muted small">La tablette le rappellera à <span class="grand-name"></span> le jour J, avec l'âge si vous donnez l'année.</p>
         <p id="bday-doublon" class="card doublon" role="status" hidden></p>
       </div>

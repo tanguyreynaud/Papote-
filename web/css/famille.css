@@ -1259,3 +1259,8 @@ a { text-decoration: none; }
 
 /* Anniversaire peut-être déjà dans l'agenda : prévenu dans la fenêtre, sans fenêtre grise. */
 .doublon { margin: 10px 0 0; padding: 12px 14px; font-size: 15px; line-height: 1.4; background: color-mix(in srgb, var(--accent) 10%, var(--surface)); border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
+
+/* Photo facultative d'un anniversaire : carrée, angles droits (jamais déformée ni arrondie). */
+.bday-photo { display: flex; align-items: center; gap: 14px; margin: 12px 0 4px; }
+.bday-photo img { width: 88px; height: 88px; object-fit: cover; border-radius: 0; flex: none; }
+.bday-photo-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }

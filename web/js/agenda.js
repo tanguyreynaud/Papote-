@@ -12,6 +12,29 @@ const KINDS = { medicament: 'Médicament', rdv: 'Rendez-vous', autre: 'Autre' };
 
 let session = null;
 let stops = [];
+// Photo de l'anniversaire en cours de saisie : data URL, null (aucune) ; préparée par famille.js (visageCarre).
+let bdayPhoto = null;
+let preparerPhoto = null;
+function montrerPhoto() {
+  $('bday-photo-img').hidden = !bdayPhoto;
+  if (bdayPhoto) $('bday-photo-img').src = bdayPhoto;
+  $('bday-photo-retirer').hidden = !bdayPhoto;
+  $('bday-photo-texte').textContent = bdayPhoto ? 'Changer la photo' : 'Ajouter une photo (facultatif)';
+}
+$('bday-photo-choisir').addEventListener('click', () => $('in-bday-photo').click());
+$('bday-photo-retirer').addEventListener('click', () => { bdayPhoto = null; montrerPhoto(); });
+$('in-bday-photo').addEventListener('change', async (e) => {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if (!file || !preparerPhoto) return;
+  try {
+    bdayPhoto = await preparerPhoto(file);
+    montrerPhoto();
+  } catch (err) {
+    console.error(err);
+    fail('Cette photo ne peut pas être lue. Essayez-en une autre.');
+  }
+});
 let reminders = [];
 let birthdays = [];
 let seg = 'reminder';
@@ -238,6 +261,8 @@ $('add-reminder').addEventListener('click', () => {
   $('rem-title').value = '';
   $('bday-name').value = '';
   $('bday-year').value = '';
+  bdayPhoto = null;
+  montrerPhoto();
   $('rem-days').querySelectorAll('input').forEach((i) => { i.checked = false; });
   $('rem-avance').value = '15';
   $('rem-fin').value = '';
@@ -271,6 +296,8 @@ function openEdit(coll, data) {
     $('bday-day').value = String(data.day || 1);
     $('bday-month').value = String(data.month || 1);
     $('bday-year').value = data.year ? String(data.year) : '';
+    bdayPhoto = data.photo || null;
+    montrerPhoto();
     setSeg('birthday');
   }
   openSheet();
@@ -368,7 +395,7 @@ function birthdayData() {
   if (year !== null && (!Number.isInteger(year) || year < 1900 || year > new Date().getFullYear())) {
     return fail("L'année ne semble pas juste.");
   }
-  return { name, day, month, year, createdBy: session.member.name, createdAt: serverTimestamp() };
+  return { name, day, month, year, photo: bdayPhoto || null, createdBy: session.member.name, createdAt: serverTimestamp() };
 }
 
 $('form-reminder').addEventListener('submit', async (e) => {
@@ -394,6 +421,7 @@ $('form-reminder').addEventListener('submit', async (e) => {
     $('rem-title').value = '';
     $('bday-name').value = '';
     $('bday-year').value = '';
+    bdayPhoto = null;
     history.back();
   } catch (error) {
     console.error(error);
@@ -403,7 +431,8 @@ $('form-reminder').addEventListener('submit', async (e) => {
   }
 });
 
-export function startAgenda(current, onChange) {
+export function startAgenda(current, onChange, preparer = null) {
+  preparerPhoto = preparer;
   session = current;
   $('rem-date').min = todayKey();
   $('rem-date').value = todayKey();

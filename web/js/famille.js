@@ -4398,7 +4398,7 @@ async function enterApp() {
   renderPauseNudge();
   if (pushAllowed()) enablePush(session.fid, session.uid);
   warmUpCalls();
-  startAgenda(session, setNotifReminders);
+  startAgenda(session, setNotifReminders, visageCarre);
   startNotifs(session);
   renderInstallCard();
   renderAccount();
