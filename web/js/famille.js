@@ -3334,8 +3334,10 @@ function launchedFromHomeScreen() {
     || document.referrer.startsWith('android-app://');
 }
 
+// Les endroits qui proposent l'installation : bouton de l'accueil, fin de l'installation de la tablette, connexion.
+const PROPOSITIONS_INSTALL = ['btn-install', 'setup-install-box', 'login-install'];
 function rememberInstalled() {
-  $('btn-install').hidden = true;
+  for (const id of PROPOSITIONS_INSTALL) $(id).hidden = true;
 }
 
 // Chrome Android propose l'installation : on garde l'invitation pour notre bouton.
@@ -3350,7 +3352,7 @@ async function renderInstallCard() {
   if (launchedFromHomeScreen()) { rememberInstalled(); return; }
   // L'ancien souvenir « déjà installée » cachait le bouton même après une désinstallation.
   try { localStorage.removeItem('papote.installed'); } catch (e) { /* rien */ }
-  $('btn-install').hidden = false;
+  for (const id of PROPOSITIONS_INSTALL) $(id).hidden = false;
   // Chrome Android sait dire si l'app est déjà installée, même ouverte dans le navigateur.
   try {
     const apps = await navigator.getInstalledRelatedApps?.();
@@ -3363,7 +3365,7 @@ async function renderInstallCard() {
 const PLAY_STORE_URL = '';
 const isAndroid = () => /android/i.test(navigator.userAgent);
 
-$('btn-install').addEventListener('click', async () => {
+async function installerApp() {
   if (PLAY_STORE_URL && isAndroid() && !inNativeApp()) {
     const code = session?.family?.code ? `&referrer=${encodeURIComponent(`code=${session.family.code}`)}` : '';
     location.href = PLAY_STORE_URL + code;
@@ -3380,7 +3382,10 @@ $('btn-install').addEventListener('click', async () => {
   notice(isIos()
     ? "Sur iPhone, dans Safari : touchez le bouton Partager (le carré avec une flèche vers le haut), choisissez « Sur l'écran d'accueil », puis « Ajouter »."
     : "Dans Chrome : touchez le menu ⋮ en haut à droite, puis « Installer l'application » ou « Ajouter à l'écran d'accueil ».");
-});
+}
+for (const id of ['btn-install', 'setup-install', 'login-install']) $(id).addEventListener('click', installerApp);
+// Dès l'ouverture : la connexion et la fin de l'installation le proposent aussi (Tanguy, 27/10).
+renderInstallCard();
 
 // ---------- Veille : activité de la tablette ----------
 

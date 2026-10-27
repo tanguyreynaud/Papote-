@@ -24,6 +24,21 @@ async function attendreVue(t, id, delai = 20_000) {
   } catch (e) {
     throw new Error(`[${t.nom}] écran ${id} attendu, affiché : ${await vue(t)}\n${t.console.slice(-15).join('\n')}`);
   }
+  await verifierLargeur(t, id);
+}
+
+/**
+ * Aucun écran plus large que le téléphone (bug du 27/10 : la page défilait de côté et le téléphone la dézoomait).
+ * Contrôlé à chaque écran atteint ; un débordement est une erreur du scénario.
+ */
+async function verifierLargeur(t, ecran) {
+  const d = await t.page.evaluate(() => {
+    const W = document.documentElement.clientWidth;
+    if (document.documentElement.scrollWidth <= W) return null;
+    const fautif = [...document.querySelectorAll('body *')].find((el) => el.getBoundingClientRect().right > W + 1 && el.offsetParent !== null);
+    return { large: document.documentElement.scrollWidth, W, fautif: fautif ? `${fautif.tagName.toLowerCase()}${fautif.id ? '#' + fautif.id : ''}${typeof fautif.className === 'string' && fautif.className ? '.' + fautif.className.trim().split(/\s+/).join('.') : ''}` : '?' };
+  }).catch(() => null);
+  if (d) t.erreurs.push(`[${t.nom}] écran ${ecran} plus large que le téléphone : ${d.large} px pour ${d.W} px (${d.fautif})`);
 }
 
 const visible = (t, selecteur) => t.page.locator(selecteur).filter({ visible: true });
@@ -295,6 +310,7 @@ async function attendreBase(fn, message, delai = 15_000) {
 }
 
 module.exports = {
+  verifierLargeur,
   vue, attendreVue, visible, repondre, texteFenetre, photo, video,
   ouvrir, seConnecter, remplirMoi, inscrire, tabletteAllumee, installer, fermerAccueil, familleInstallee, rejoindre, dernierMail, toast,
   ouvrirTuile, retourAccueil, lire, liste, attendreBase, codesEmail,

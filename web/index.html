@@ -114,6 +114,7 @@
         </form>
         <p id="login-error" class="error" hidden></p>
       </div>
+      <button type="button" class="link wide" id="login-install" hidden>Installer l'app sur ce téléphone</button>
     </section>
 
     <!-- Lien e-mail ouvert sur un autre appareil : redemander l'adresse -->
@@ -306,6 +307,10 @@
           <label class="toggle-row"><span class="toggle-text"><strong>Prochain rappel</strong><span>L'accueil affiche le prochain rappel de la journée : un médicament, un rendez-vous…</span></span><input type="checkbox" class="toggle" id="setup-opt-rappels"></label>
           <label class="toggle-row"><span class="toggle-text"><strong>Météo</strong><span id="setup-opt-meteo-ville">L'accueil affiche le temps qu'il fait. La ville se choisit dans Réglages.</span></span><input type="checkbox" class="toggle" id="setup-opt-meteo"></label>
           <label class="toggle-row"><span class="toggle-text"><strong>Radio</strong><span>Un bouton «&nbsp;Radio&nbsp;» pour écouter sa station. Éteint au départ, pour garder un écran simple.</span></span><input type="checkbox" class="toggle" id="setup-opt-radio"></label>
+        </div>
+        <div id="setup-install-box" class="setup-install" hidden>
+          <p class="muted small">Pour que ce téléphone sonne quand <span class="setup-qui"></span> appelle, installez l'app Papote.</p>
+          <button type="button" class="secondary wide" id="setup-install"><svg><use href="#i-download"/></svg>Installer l'app sur ce téléphone</button>
         </div>
         <button type="button" class="primary wide" id="setup-fin">C'est parfait</button>
         <p id="setup-fin-error" class="error" hidden></p>
