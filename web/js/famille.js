@@ -7,7 +7,7 @@ import {
   getStorage, ref, uploadBytes, getDownloadURL, deleteObject,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-storage.js';
 import {
-  db, doc, getDoc, setDoc, updateDoc, deleteDoc, collection, onSnapshot, writeBatch, serverTimestamp, bumpRev, increment,
+  db, doc, getDoc, setDoc, updateDoc, deleteDoc, collection, onSnapshot, writeBatch, serverTimestamp, bumpRev, increment, deleteField,
   loadMembership, createFamily, joinFamily, leaveFamily, watchMembers, currentUser, savedFamilyId, saveFamilyId,
   addPost, deletePost, loadMedia, formatCode, normalizeCode, toDate, CodeInconnuError,
   MAX_VIDEO_CHUNKS, VIDEO_CHUNK,
@@ -2039,6 +2039,13 @@ function renderMembers(all) {
         badge.textContent = 'Responsable';
         name.append(badge);
       }
+      // Mis en tête par le propriétaire : proposé d'abord dans « Qui voulez-vous appeler ? » sur la tablette.
+      if (m.enTete) {
+        const tete = document.createElement('span');
+        tete.className = 'badge';
+        tete.textContent = 'En tête';
+        name.append(tete);
+      }
       // Les responsables gèrent les autres membres. Le créateur reste toujours responsable et ne peut
       // pas être retiré (règles Firestore) : pas de « ⋮ » pour lui.
       if (amFamilyAdmin() && m.id !== session.uid && !isCreator) {
@@ -2050,6 +2057,7 @@ function renderMembers(all) {
         more.textContent = '⋮';
         more.addEventListener('click', async () => {
           const options = [];
+          if (f.createdBy === session.uid) options.push({ label: m.enTete ? 'Retirer de la tête' : 'Mettre en tête', value: 'tete' });
           options.push({ label: isAdmin ? 'Retirer le rôle de responsable' : 'Rendre responsable', value: 'admin' });
           options.push({ label: 'Retirer de la famille', value: 'remove', danger: true });
           const choix = await chooseAction(m.name, options);
@@ -2058,6 +2066,11 @@ function renderMembers(all) {
               ? `Retirer le rôle de responsable à ${m.name} ? Cette personne ne pourra plus accepter de membres ni changer les réglages.`
               : `Rendre ${m.name} responsable ? Cette personne pourra accepter des membres et changer les réglages de la tablette.`;
             if (await askConfirm(msg, isAdmin ? 'Retirer le rôle' : 'Rendre responsable')) setFamilyAdmin(m.id, !isAdmin);
+          } else if (choix === 'tete') {
+            const msg = m.enTete
+              ? `Retirer ${m.name} de la tête ? Sur la tablette, « Qui voulez-vous appeler ? » remettra cette personne à sa place habituelle.`
+              : `Mettre ${m.name} en tête ? Sur la tablette, « Qui voulez-vous appeler ? » proposera cette personne en premier.`;
+            if (await askConfirm(msg, m.enTete ? 'Retirer de la tête' : 'Mettre en tête')) setEnTete(m, !m.enTete);
           } else if (choix === 'remove') {
             removeMember(m);
           }
@@ -2074,6 +2087,16 @@ async function setFamilyAdmin(uid, on) {
   if (on) admins.add(uid); else admins.delete(uid);
   try {
     await updateDoc(doc(db, 'families', session.fid), { admins: [...admins] });
+  } catch (err) {
+    console.error(err);
+    notice("Le changement n'a pas pu être enregistré.");
+  }
+}
+
+// Ordre de « Qui voulez-vous appeler ? » sur la tablette : ceux mis en tête d'abord (le plus ancien en premier).
+async function setEnTete(m, on) {
+  try {
+    await updateDoc(doc(db, 'families', session.fid, 'members', m.id), { enTete: on ? serverTimestamp() : deleteField() });
   } catch (err) {
     console.error(err);
     notice("Le changement n'a pas pu être enregistré.");

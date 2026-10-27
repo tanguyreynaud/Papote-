@@ -6,7 +6,7 @@ const test = require('node:test');
 const fs = require('node:fs');
 const path = require('node:path');
 const { initializeTestEnvironment, assertFails, assertSucceeds } = require('@firebase/rules-unit-testing');
-const { doc, setDoc, updateDoc, deleteDoc, getDoc, serverTimestamp, Timestamp, setLogLevel } = require('firebase/firestore');
+const { doc, setDoc, updateDoc, deleteDoc, getDoc, serverTimestamp, deleteField, Timestamp, setLogLevel } = require('firebase/firestore');
 
 // Les refus attendus (assertFails) ne sont pas des erreurs : pas de journal.
 setLogLevel('silent');
@@ -75,6 +75,26 @@ test('un proche invité par e-mail entre directement', async () => {
     email: 'paul@exemple.fr', fid: FID, familyName: 'Mamie Emma',
   }));
   await assertSucceeds(setDoc(doc(proche('paul'), `families/${FID}/members/paul`), fiche('paul', { status: 'active' })));
+});
+
+test('le propriétaire met un proche en tête des appels ; un autre responsable non', async () => {
+  await famille();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, `families/${FID}`), { admins: ['paul'] }, { merge: true });
+    await setDoc(doc(db, `families/${FID}/members/paul`), fiche('paul', { status: 'active' }));
+    await setDoc(doc(db, `families/${FID}/members/lea`), fiche('lea', { name: 'Léa', status: 'active' }));
+  });
+  await assertSucceeds(updateDoc(doc(proche('julie'), `families/${FID}/members/paul`), { enTete: serverTimestamp() }));
+  await assertSucceeds(updateDoc(doc(proche('julie'), `families/${FID}/members/paul`), { enTete: deleteField() }));
+  // Seulement l'heure du serveur, et rien d'autre en même temps.
+  await assertFails(updateDoc(doc(proche('julie'), `families/${FID}/members/paul`), { enTete: Timestamp.fromMillis(0) }));
+  await assertFails(updateDoc(doc(proche('julie'), `families/${FID}/members/paul`), { enTete: serverTimestamp(), name: 'Pierre' }));
+  // Un responsable qui n'est pas le propriétaire, ou le proche lui-même : refusé.
+  await assertFails(updateDoc(doc(proche('paul'), `families/${FID}/members/lea`), { enTete: serverTimestamp() }));
+  await assertFails(updateDoc(doc(proche('paul'), `families/${FID}/members/paul`), { enTete: serverTimestamp() }));
+  // Pas la tablette.
+  await assertFails(updateDoc(doc(proche('julie'), `families/${FID}/members/tab`), { enTete: serverTimestamp() }));
 });
 
 test('31e proche refusé : ni par invitation, ni par le code, ni accepté par un responsable', async () => {

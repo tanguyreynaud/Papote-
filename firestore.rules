@@ -341,6 +341,14 @@ service cloud.firestore {
           && familleAPlace(fid)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
           && request.resource.data.status == 'active';
+        // Le propriétaire met un proche en tête de « Qui voulez-vous appeler ? » sur la tablette
+        // (horodatage serveur), ou l'en retire (champ supprimé).
+        allow update: if signedIn()
+          && uid != request.auth.uid
+          && get(familyPath(fid)).data.createdBy == request.auth.uid
+          && resource.data.role == 'famille'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['enTete'])
+          && (!('enTete' in request.resource.data) || request.resource.data.enTete == request.time);
         allow update: if signedIn()
           && uid == request.auth.uid
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'canCall', 'lastActive', 'lastOnline', 'callable', 'face', 'appVersion', 'uid', 'email', 'battery', 'sim', 'meteoVille', 'wifi', 'lastSeen', 'genre'])
