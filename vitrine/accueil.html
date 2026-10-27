@@ -74,7 +74,8 @@ section { padding-block: clamp(3rem, 7vw, 5rem); }
 .brand { display: flex; align-items: center; gap: .55rem; font: 800 1.4rem/1 var(--display); color: var(--text); }
 .brand img { width: 1.9rem; height: 1.9rem; }
 .top nav { display: flex; align-items: center; gap: 1.4rem; }
-.top nav a { color: var(--muted); font-weight: 700; font-size: 1rem; }
+.top nav a { color: var(--muted); font-weight: 700; font-size: 1rem; white-space: nowrap; }
+@media (max-width: 960px) { .top nav { gap: .9rem; } .top nav a { font-size: .92rem; } }
 .top nav a:hover { color: var(--text); }
 .top nav .btn { min-height: 2.6rem; padding: .5rem 1.1rem; font-size: .95rem; color: var(--accent-text); }
 .top nav .btn:hover { color: var(--accent-text); }
@@ -204,6 +205,7 @@ footer a { color: var(--muted); }
     <nav aria-label="Menu">
       <a href="#fonctionnement">Comment ça marche</a>
       <a href="#tarifs">Tarifs</a>
+      <a href="#qui">Qui suis-je</a>
       <a href="#questions">Questions</a>
       <a href="https://app.mapapote.fr">Espace client</a>
       <a class="btn btn-primary js-commander" href="commande.html">Commander</a>
