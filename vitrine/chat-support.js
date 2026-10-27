@@ -17,7 +17,7 @@
   var bas = (script.dataset && parseInt(script.dataset.bas, 10)) || 20;
   // Dans l'appli famille, la personne est déjà cliente : l'assistant la guide dans l'appli.
   var PAGE = ['papote-famille.web.app', 'app.mapapote.fr'].indexOf(location.hostname) !== -1 ? 'appli' : 'site';
-  var SUGGESTIONS = ['Combien ça coûte ?', 'Faut-il une box internet ?', 'Comment se passe l’installation ?'];
+  var SUGGESTIONS = PAGE === 'appli' ? ['La tablette ne répond plus', 'Comment inviter un proche ?', 'Régler le volume de la tablette'] : ['Combien ça coûte ?', 'Faut-il une box internet ?', 'Comment se passe l’installation ?'];
 
   var css = '' +
     '.ps-bouton,.ps-panneau{--ps-fond:#fdfaf5;--ps-carte:#fff;--ps-texte:#24212f;--ps-gris:#5f5a6b;--ps-ligne:#e9e1d4;--ps-indigo:#4f46e5;--ps-indigo-fonce:#3730a3;--ps-doux:#e8e6fd;' +
@@ -58,14 +58,15 @@
     '.ps-mention{font-size:.8rem;color:var(--ps-gris);margin:0}' +
     '.ps-panneau .ps-fin{display:block;margin:.4rem auto 0;border:0;border-radius:12px;background:var(--ps-indigo);color:#fff;font:inherit;font-weight:700;padding:.7rem 1.2rem;cursor:pointer}' +
     '.ps-erreur{color:#b91c1c;font-size:.95rem}' +
-    '.ps-note{font-size:.8rem;color:var(--ps-gris);text-align:center;padding:0 .75rem .6rem;background:var(--ps-carte)}';
+    '.ps-note{font-size:.8rem;color:var(--ps-gris);text-align:center;padding:0 .75rem .6rem;background:var(--ps-carte)}' +
+    '.ps-rappeler{align-self:flex-start;border:1.5px solid var(--ps-indigo);background:#fff;color:var(--ps-indigo-fonce);border-radius:999px;padding:.5rem .9rem;font:inherit;font-weight:700;cursor:pointer}' +
+    '@media (max-width:600px){.ps-panneau{width:100vw;height:100vh;height:100dvh;left:0;right:0;bottom:0;border-radius:0;max-height:none}}';
 
   var historique = [];
   try { historique = JSON.parse(sessionStorage.getItem(CLE)) || []; } catch (e) { historique = []; }
   // Coordonnées demandées à la première ouverture sur le site (pas dans l'appli : déjà clients).
   var contact = null;
   try { contact = JSON.parse(localStorage.getItem(CLE_CONTACT)); } catch (e) { contact = null; }
-  function faut() { return PAGE === 'site' && !(contact && contact.email); }
 
   function el(tag, cls, texte) {
     var n = document.createElement(tag);
@@ -88,7 +89,7 @@
     panneau.setAttribute('role', 'dialog');
     panneau.setAttribute('aria-label', 'Assistance Papote');
     var tete = el('div', 'ps-tete');
-    tete.appendChild(el('strong', '', 'Assistance Papote'));
+    tete.appendChild(el('strong', '', PAGE === 'appli' ? 'Assistant Papote' : 'Une question sur Papote ?'));
     var fermer = el('button', '', '×');
     fermer.type = 'button';
     fermer.setAttribute('aria-label', 'Fermer');
@@ -105,7 +106,7 @@
     envoyer.type = 'submit';
     saisie.appendChild(zone);
     saisie.appendChild(envoyer);
-    var note = el('div', 'ps-note', 'Réponses données par une IA. Pour une commande : ' + EMAIL);
+    var note = el('div', 'ps-note', 'Réponses données par une IA. Pour parler à Tanguy : ' + EMAIL);
     panneau.appendChild(tete);
     panneau.appendChild(fil);
     panneau.appendChild(saisie);
@@ -140,17 +141,18 @@
       return { label: l, input: i };
     }
 
-    // Avant la première question sur le site : prénom, nom, téléphone, e-mail, et l'accord
-    // (case jamais pré-cochée) pour recevoir les nouvelles de Papote.
-    function demanderCoordonnees() {
-      zone.disabled = true;
-      envoyer.disabled = true;
+    // « Être rappelé par Tanguy » : prénom, nom, téléphone, e-mail et l'accord (case jamais pré-cochée)
+    // pour recevoir les nouvelles de Papote. La fiche rejoint les contacts, puis la demande part avec la conversation.
+    function proposerRappel() {
+      var ancien = fil.querySelector('.ps-rappel');
+      if (ancien) ancien.remove();
       var form = el('form', 'ps-rappel');
       form.noValidate = true;
-      var prenom = champ('Votre prénom', 'text', 'given-name', 60);
-      var nom = champ('Votre nom', 'text', 'family-name', 60);
-      var tel = champ('Votre téléphone', 'tel', 'tel', 30);
-      var mel = champ('Votre e-mail', 'email', 'email', 120);
+      var c = contact || {};
+      var prenom = champ('Votre prénom', 'text', 'given-name', 60, c.prenom);
+      var nom = champ('Votre nom', 'text', 'family-name', 60, c.nom);
+      var tel = champ('Votre téléphone', 'tel', 'tel', 30, c.telephone);
+      var mel = champ('Votre e-mail', 'email', 'email', 120, c.email);
       var lCase = el('label', 'ps-case');
       var accord = el('input');
       accord.type = 'checkbox';
@@ -167,9 +169,13 @@
       lien.rel = 'noopener';
       mention.appendChild(lien);
       var erreur = el('div', 'ps-erreur');
-      var go = el('button', '', 'Commencer');
+      var go = el('button', '', 'Être rappelé');
       go.type = 'submit';
       [prenom.label, nom.label, tel.label, mel.label, lCase, mention, erreur, go].forEach(function (n) { form.appendChild(n); });
+      var poster = function (corps) {
+        return fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corps) })
+          .then(function (r) { return r.json().then(function (d) { return r.ok && d.ok ? d : Promise.reject(d); }); });
+      };
       form.onsubmit = function (e) {
         e.preventDefault();
         var v = { prenom: prenom.input.value.trim(), nom: nom.input.value.trim(), telephone: tel.input.value.trim(), email: mel.input.value.trim() };
@@ -183,90 +189,17 @@
         }
         erreur.textContent = '';
         go.disabled = true;
-        fetch(API, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ inscription: { prenom: v.prenom, nom: v.nom, telephone: v.telephone, email: v.email, marketing: accord.checked } }),
-        })
-          .then(function (r) { return r.json().then(function (d) { return r.ok && d.ok ? d : Promise.reject(d); }); })
+        var conversation = historique.slice(-12);
+        while (conversation.length && conversation[conversation.length - 1].role !== 'user') conversation.pop();
+        poster({ inscription: { prenom: v.prenom, nom: v.nom, telephone: v.telephone, email: v.email, marketing: accord.checked } })
           .then(function () {
             contact = v;
             try { localStorage.setItem(CLE_CONTACT, JSON.stringify(v)); } catch (e) { /* navigation privée */ }
-            zone.disabled = false;
-            envoyer.disabled = false;
-            afficher();
-            zone.focus();
+            return poster({ messages: conversation, contact: { nom: v.prenom + ' ' + v.nom, telephone: v.telephone, email: v.email } });
           })
-          .catch(function (d) {
-            go.disabled = false;
-            erreur.textContent = (d && d.erreur) || ('Envoi impossible. Écrivez-nous à ' + EMAIL + '.');
-          });
-      };
-      fil.appendChild(form);
-      prenom.input.focus();
-    }
-
-    // Formulaire « être recontacté », proposé seulement quand l'assistant n'a pas pu répondre.
-    function proposerRappel() {
-      var form = el('form', 'ps-rappel');
-      form.noValidate = true;
-      var lNom = el('label', '', 'Votre prénom');
-      var nom = el('input');
-      nom.autocomplete = 'given-name';
-      nom.maxLength = 60;
-      if (contact) nom.value = contact.prenom || '';
-      lNom.appendChild(nom);
-      var lTel = el('label', '', 'Votre téléphone');
-      var tel = el('input');
-      tel.type = 'tel';
-      tel.autocomplete = 'tel';
-      tel.maxLength = 30;
-      tel.required = true;
-      if (contact) tel.value = contact.telephone || '';
-      lTel.appendChild(tel);
-      var lMel = el('label', '', 'Votre e-mail');
-      var mel = el('input');
-      mel.type = 'email';
-      mel.autocomplete = 'email';
-      mel.maxLength = 120;
-      mel.required = true;
-      if (contact) mel.value = contact.email || '';
-      lMel.appendChild(mel);
-      var erreur = el('div', 'ps-erreur');
-      var go = el('button', '', 'Être recontacté');
-      go.type = 'submit';
-      form.appendChild(lNom);
-      form.appendChild(lTel);
-      form.appendChild(lMel);
-      form.appendChild(erreur);
-      form.appendChild(go);
-      form.onsubmit = function (e) {
-        e.preventDefault();
-        var t = tel.value.trim();
-        var m = mel.value.trim();
-        if (t.replace(/\D/g, '').length < 9) {
-          erreur.textContent = 'Indiquez votre numéro de téléphone.';
-          tel.focus();
-          return;
-        }
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(m)) {
-          erreur.textContent = 'Indiquez votre adresse e-mail.';
-          mel.focus();
-          return;
-        }
-        erreur.textContent = '';
-        go.disabled = true;
-        var conversation = historique.slice(-12);
-        while (conversation.length && conversation[conversation.length - 1].role !== 'user') conversation.pop();
-        fetch(API, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages: conversation, contact: { nom: nom.value, telephone: t, email: m } }),
-        })
-          .then(function (r) { return r.json().then(function (d) { return r.ok && d.ok ? d : Promise.reject(d); }); })
           .then(function () {
             form.remove();
-            var merci = 'Merci ! Votre demande est bien arrivée, quelqu\u2019un de l\u2019équipe va vous recontacter.';
+            var merci = 'Merci ! Votre demande est bien arrivée, Tanguy va vous recontacter.';
             historique.push({ role: 'user', content: '(Demande de rappel envoyée)' });
             historique.push({ role: 'assistant', content: merci });
             sauver();
@@ -285,7 +218,19 @@
       };
       fil.appendChild(form);
       fil.scrollTop = fil.scrollHeight;
-      nom.focus();
+      prenom.input.focus();
+    }
+
+    // Sur le site, après chaque réponse : le visiteur peut demander à être rappelé.
+    function boutonRappel() {
+      var ancien = fil.querySelector('.ps-rappeler');
+      if (ancien) ancien.remove();
+      if (PAGE !== 'site') return;
+      var b = el('button', 'ps-rappeler', '📞 Être rappelé par Tanguy');
+      b.type = 'button';
+      b.onclick = function () { b.remove(); proposerRappel(); };
+      fil.appendChild(b);
+      fil.scrollTop = fil.scrollHeight;
     }
 
     function sauver() {
@@ -294,12 +239,7 @@
 
     function afficher() {
       fil.textContent = '';
-      if (faut()) {
-        ajouter('assistant', 'Bonjour ! Avant votre première question, laissez-nous vos coordonnées : nous pourrons vous recontacter si besoin.');
-        demanderCoordonnees();
-        return;
-      }
-      ajouter('assistant', 'Bonjour ! Je réponds à vos questions sur Papote : la tablette, les tarifs, l’installation ou l’appli famille.');
+      ajouter('assistant', PAGE === 'appli' ? 'Bonjour ! Une question sur la tablette ou l’appli ? Je vous réponds tout de suite.' : 'Bonjour ! Je réponds à vos questions sur Papote : la tablette, les tarifs, l’installation ou l’appli famille.');
       if (!historique.length) {
         var idees = el('div', 'ps-idees');
         SUGGESTIONS.forEach(function (q) {
@@ -317,16 +257,15 @@
       panneau.classList.toggle('ps-ouvert', oui);
       bouton.style.display = oui ? 'none' : '';
       bouton.setAttribute('aria-expanded', String(oui));
-      if (oui) { afficher(); if (!faut()) zone.focus(); } else { bouton.focus(); }
+      if (oui) { afficher(); zone.focus(); } else { bouton.focus(); }
     }
 
     function poser(question) {
       question = question.trim();
-      if (!question || envoyer.disabled || faut()) return;
+      if (!question || envoyer.disabled) return;
       var idees = fil.querySelector('.ps-idees');
       if (idees) idees.remove();
-      var rappel = fil.querySelector('.ps-rappel');
-      if (rappel) rappel.remove();
+      ['.ps-rappel', '.ps-rappeler'].forEach(function (c) { var n = fil.querySelector(c); if (n) n.remove(); });
       historique.push({ role: 'user', content: question });
       ajouter('user', question);
       zone.value = '';
@@ -351,7 +290,7 @@
           ajouter('assistant', reponse);
           sauver();
           envoyer.disabled = false;
-          if (d.contact) proposerRappel(); else zone.focus();
+          if (d.contact) proposerRappel(); else { boutonRappel(); zone.focus(); }
         });
     }
 
