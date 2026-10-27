@@ -25,7 +25,9 @@ const admin = require('firebase-admin');
 const { getFirestore } = require('firebase-admin/firestore');
 
 const SITE = process.env.PAPOTE_SITE || 'https://mapapote.fr';
-const BOITE = process.env.PAPOTE_TEST_EMAIL || 'tanguyreynaud22@gmail.com';
+// Boîte qui reçoit les e-mails des commandes TEST (adresse + « +papote-test-… ») : variable PAPOTE_TEST_EMAIL
+// (une adresse personnelle, jamais écrite ici : le dépôt est public), sinon la boîte de Papote.
+const BOITE = process.env.PAPOTE_TEST_EMAIL || 'contact@mapapote.fr';
 const CP = process.env.PAPOTE_TEST_CP || '69001';
 const MARQUE = '+papote-test';
 const CAPTURES = path.join(__dirname, 'captures');
