@@ -1053,7 +1053,7 @@ async function confirmerCommande(ref, email, code) {
   if (!premier) return;
   await compterEtape('paye').catch((e) => logger.warn('Statistiques', e.message));
   const infos = { nom: premier.nom, code, relais: premier.livraison, formule: premier.formule, delai: premier.delai,
-    dejaInstallee: !!(premier.preparation && premier.preparation.recuPar === 'déjà installée') };
+    dejaInstallee: !!(premier.preparation && premier.preparation.recuPar === 'déjà installée'), reprise: premier.reprise === true };
   const envois = [envoyerMail(EMAIL_PAPOTE, mail.nouvelleCommande({ ...infos, email, telephone: premier.telephone }))];
   if (email) envois.push(envoyerMail(email, mail.commandeConfirmee(infos)));
   const resultats = await Promise.allSettled(envois);
