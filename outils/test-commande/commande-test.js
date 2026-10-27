@@ -22,7 +22,7 @@ const path = require('path');
 const { execSync } = require('child_process');
 const { chromium, devices } = require('playwright');
 const admin = require('firebase-admin');
-const { getFirestore, Timestamp } = require('firebase-admin/firestore');
+const { getFirestore } = require('firebase-admin/firestore');
 
 const SITE = process.env.PAPOTE_SITE || 'https://mapapote.fr';
 const BOITE = process.env.PAPOTE_TEST_EMAIL || 'tanguyreynaud22@gmail.com';
@@ -287,13 +287,19 @@ async function nettoyer(db, stripe) {
   // Paniers des scénarios sans paiement (refus, retour) et réservations restées ouvertes pendant le test.
   const paniers = await db.collection('paniers').get();
   for (const p of paniers.docs) if (String(p.get('email') || '').includes(MARQUE)) await p.ref.delete();
-  const resas = await db.collection('reservations').where('creeLe', '>=', Timestamp.fromMillis(debut - 60000)).get();
-  for (const r of resas.docs) await r.ref.delete();
+  // Pages Stripe TEST restées ouvertes (refus, retour, essais interrompus) : expirées, et leur tablette mise
+  // de côté rendue au stock. Seulement les pages au nom d'un e-mail +papote-test des 24 dernières heures.
+  let resas = 0;
   if (stripe) {
-    const sessions = await stripe.checkout.sessions.list({ status: 'open', limit: 100, created: { gte: Math.floor(debut / 1000) - 60 } });
-    for (const s of sessions.data) await stripe.checkout.sessions.expire(s.id).catch(() => null);
+    const depuis = Math.floor(Date.now() / 1000) - 24 * 3600;
+    for await (const s of stripe.checkout.sessions.list({ status: 'open', limit: 100, created: { gte: depuis } })) {
+      if (!String(s.customer_email || '').includes(MARQUE)) continue;
+      await stripe.checkout.sessions.expire(s.id).catch(() => null);
+      const resa = s.metadata && s.metadata.reservation;
+      if (resa && /^[A-Za-z0-9]{10,40}$/.test(resa)) { await db.doc(`reservations/${resa}`).delete(); resas++; }
+    }
   }
-  console.log(`  ${tests.length} commande(s) TEST et ${resas.size} réservation(s) du test supprimées.`);
+  console.log(`  ${tests.length} commande(s) TEST supprimée(s), ${resas} page(s) de paiement TEST fermée(s) et leur réservation rendue.`);
   if (!stripe) console.log('  Sans clé Stripe : clients et abonnements de test laissés dans Stripe (mode test).');
 }
 
