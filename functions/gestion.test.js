@@ -420,6 +420,11 @@ test('batterie : relevé de la tablette et usure', () => {
   assert.strictEqual(g.usureBatterie({ sante: 'morte' }), 'batterie morte');
   assert.strictEqual(g.usureBatterie({ sante: 'bonne', cycles: 650 }), 'batterie usée (650 cycles)');
   assert.strictEqual(g.usureBatterie({ sante: 'surchauffe', cycles: 120 }), null);
+  // Compteur aberrant ignoré : plus de 1 500 cycles, ou plus de 2 par jour depuis l'achat.
+  assert.strictEqual(g.usureBatterie({ sante: 'bonne', cycles: 2235 }), null);
+  const maintenant = Date.parse('2026-10-27T12:00:00Z');
+  assert.strictEqual(g.usureBatterie({ cycles: 650 }, maintenant - 10 * 864e5, maintenant), null);
+  assert.strictEqual(g.usureBatterie({ cycles: 650 }, maintenant - 400 * 864e5, maintenant), 'batterie usée (650 cycles)');
 });
 
 test('à faire : tablette revenue avec une batterie usée', () => {
