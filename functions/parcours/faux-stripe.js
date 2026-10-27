@@ -73,6 +73,13 @@ function creerFauxStripe(horloge) {
           if (params.expires_at && params.expires_at < secondes() + 30 * 60 - 5) {
             throw new Error('expires_at doit être au moins 30 minutes après maintenant');
           }
+          // Comme Stripe : la date de départ ne peut pas dépasser la prochaine échéance naturelle (un mois plus tard).
+          const ancre = params.subscription_data && params.subscription_data.billing_cycle_anchor;
+          if (ancre) {
+            const d = new Date(horloge());
+            d.setUTCMonth(d.getUTCMonth() + 1);
+            if (ancre * 1000 > d.getTime()) throw new Error('billing_cycle_anchor cannot be later than next natural billing date');
+          }
           const s = {
             id: id('cs'), object: 'checkout.session', status: 'open', payment_status: 'unpaid', mode: params.mode,
             url: null, metadata: { ...(params.metadata || {}) }, customer: params.customer || null,

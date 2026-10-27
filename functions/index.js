@@ -125,10 +125,13 @@ async function sessionPaiement({ formule, tablette, fid, email, client, relais, 
   if (fid) metadata.fid = fid;
   // Plus d'essai gratuit affiché (Tanguy, 2026-10-27) : une date de premier prélèvement, estimée d'après le délai
   // annoncé puis recalée à l'envoi (debutApresReception), et une phrase sous le bouton qui dit la règle.
-  const premier = regles.premierPrelevementMs(metadata.delai, Date.now(), { dejaInstallee: Boolean(dejaInstallee) });
+  const maintenant = Date.now();
+  const premier = regles.premierPrelevementMs(metadata.delai, maintenant, { dejaInstallee: Boolean(dejaInstallee) });
+  // Date voulue gardée sur l'abonnement : posée au paiement reçu si Stripe n'accepte pas d'aller si loin (ancrePaiement).
+  metadata.premier = String(Math.ceil(premier / 1000));
   const subscriptionData = {
     metadata,
-    billing_cycle_anchor: Math.ceil(premier / 1000),
+    billing_cycle_anchor: Math.ceil(regles.ancrePaiement(premier, maintenant) / 1000),
     proration_behavior: 'none',
   };
   const regle = reprise
@@ -828,11 +831,28 @@ exports.stripeWebhook = onRequest(
     }
   });
 
+// Premier prélèvement plus loin qu'un mois (délai de livraison + 30 jours) : Stripe ne l'accepte pas sur la page de
+// paiement (ancrePaiement), on le pose donc dès le paiement reçu. Rien si l'abonnement a déjà une date égale ou plus
+// tardive (message reçu deux fois, date déjà recalée à l'envoi).
+async function premierPrelevementVoulu(abonnementId, premierSecondes) {
+  const voulu = Number(premierSecondes) * 1000;
+  if (!Number.isFinite(voulu) || voulu <= Date.now() + 60 * 60 * 1000) return;
+  try {
+    const abo = await stripe().subscriptions.retrieve(abonnementId);
+    const actuel = regles.premierPrelevementDe(abo, Date.now());
+    if (!actuel || actuel >= voulu - 60 * 60 * 1000) return;
+    await stripe().subscriptions.update(abonnementId, { trial_end: Math.ceil(voulu / 1000), proration_behavior: 'none' });
+  } catch (e) {
+    logger.error(`Abonnement ${abonnementId} : premier prélèvement non posé`, e.message);
+  }
+}
+
 // Prélèvement SEPA : la page de paiement se termine avant que la banque confirme (quelques jours).
 // La commande attend en « paiement-en-attente » (tablette déjà comptée dans le stock), puis passe
 // « a-preparer » avec async_payment_succeeded ; les e-mails de confirmation partent à ce moment.
 async function paiementTermine(session) {
   if (!session.subscription) return;
+  await premierPrelevementVoulu(session.subscription, (session.metadata || {}).premier);
   const paye = session.payment_status !== 'unpaid';
   const details = session.customer_details || {};
   const adresse = (session.collected_information && session.collected_information.shipping_details)
