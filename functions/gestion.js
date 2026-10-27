@@ -320,10 +320,20 @@ function releveBatterie(membre) {
 // Batterie usée : la tablette est à retirer du parc à son retour. Renvoie la raison, ou null.
 const SANTES_HS = { morte: 'batterie morte', panne: 'batterie en panne', surtension: 'batterie en surtension' };
 const CYCLES_USEE = 500;
-function usureBatterie(b) {
+// Compteur de cycles fiable ? Certaines tablettes (Blackview Tab 60 Pro : 2235 cycles neuve, Tanguy 2026-10-27)
+// renvoient n'importe quoi : au-delà de 1 500, ou de deux cycles par jour depuis l'achat, on l'ignore.
+const CYCLES_ABSURDE = 1500;
+function cyclesFiables(b, fiche) {
+  if (typeof b.cycles !== 'number' || b.cycles >= CYCLES_ABSURDE) return false;
+  const achat = fiche && ms(fiche.acheteeLe);
+  if (!achat) return true;
+  const jours = Math.max(0, (Date.now() - achat) / 864e5);
+  return b.cycles <= 2 * jours + 60;
+}
+function usureBatterie(b, fiche) {
   if (!b) return null;
   if (SANTES_HS[b.sante]) return SANTES_HS[b.sante];
-  if (typeof b.cycles === 'number' && b.cycles >= CYCLES_USEE) return `batterie usée (${b.cycles} cycles)`;
+  if (cyclesFiables(b, fiche) && b.cycles >= CYCLES_USEE) return `batterie usée (${b.cycles} cycles)`;
   return null;
 }
 
@@ -658,7 +668,7 @@ exports.gestionDonnees = onCall(async (request) => {
     }),
     stock: stock.docs.map((d) => {
       const batterie = batteries.get(d.id) || d.get('batterie') || null;
-      return aplatir({ id: d.id, ...d.data(), batterie, usure: usureBatterie(batterie) });
+      return aplatir({ id: d.id, ...d.data(), batterie, usure: usureBatterie(batterie, d.data()) });
     }),
     depenses: depenses.docs.map((d) => aplatir({ id: d.id, ...d.data() })),
     familles: familles.docs.map((f) => aplatir(familleResume(f))),
@@ -2221,8 +2231,8 @@ async function copierBatteries(bilan) {
     const b = releves.get(d.id);
     if (!b || ms(b.le) === ms((d.get('batterie') || {}).le)) continue;
     await d.ref.update({ batterie: b });
-    const usure = usureBatterie(b);
-    if (usure && !usureBatterie(d.get('batterie'))) bilan.stock.push(`${d.get('ref') || d.get('numero') || d.id} : ${usure}`);
+    const usure = usureBatterie(b, d.data());
+    if (usure && !usureBatterie(d.get('batterie'), d.data())) bilan.stock.push(`${d.get('ref') || d.get('numero') || d.id} : ${usure}`);
   }
 }
 
@@ -2301,8 +2311,8 @@ function aFaire({ commandes, stock, depenses, automatique, maintenant, sims = []
     && maintenant - ms(c.envoyeeLe) > JOURS(20)).length, 'tablette(s) reçue(s) mais pas jumelée(s) après 20 jours');
   ajouter(actives.filter(retour).length, 'tablette(s) à récupérer');
   ajouter(stock.filter((t) => t.etat === 'revenue').length, 'tablette(s) revenue(s) à vérifier');
-  for (const t of stock.filter((x) => x.etat === 'revenue' && usureBatterie(x.batterie))) {
-    liste.push(`Tablette ${t.ref || t.numero || ''} revenue : ${usureBatterie(t.batterie)}, à retirer du parc`);
+  for (const t of stock.filter((x) => x.etat === 'revenue' && usureBatterie(x.batterie, x))) {
+    liste.push(`Tablette ${t.ref || t.numero || ''} revenue : ${usureBatterie(t.batterie, t)}, à retirer du parc`);
   }
   ajouter(stock.filter((t) => t.etat === 'en-retour' && t.remplaceePour).length, 'tablette(s) remplacée(s) à récupérer chez le client');
   for (const t of stock.filter((x) => x.alerteJumelage && !(x.alerteJumelage === ALERTE_SANS_COMMANDE && x.commande))) liste.push(`Tablette ${t.ref || t.numero || ''} ${t.alerteJumelage}`);

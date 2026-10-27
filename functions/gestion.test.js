@@ -420,6 +420,10 @@ test('batterie : relevé de la tablette et usure', () => {
   assert.strictEqual(g.usureBatterie({ sante: 'morte' }), 'batterie morte');
   assert.strictEqual(g.usureBatterie({ sante: 'bonne', cycles: 650 }), 'batterie usée (650 cycles)');
   assert.strictEqual(g.usureBatterie({ sante: 'surchauffe', cycles: 120 }), null);
+  // Compteur absurde (Blackview neuve : 2235 cycles) ou impossible vu la date d'achat : ignoré.
+  assert.strictEqual(g.usureBatterie({ sante: 'bonne', cycles: 2235 }), null);
+  assert.strictEqual(g.usureBatterie({ sante: 'bonne', cycles: 650 }, { acheteeLe: Date.now() - 10 * 864e5 }), null);
+  assert.strictEqual(g.usureBatterie({ sante: 'bonne', cycles: 650 }, { acheteeLe: Date.now() - 400 * 864e5 }), 'batterie usée (650 cycles)');
 });
 
 test('à faire : tablette revenue avec une batterie usée', () => {
