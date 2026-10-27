@@ -1545,7 +1545,7 @@ $('btn-leave').addEventListener('click', async () => {
 let currentCall = null;
 
 const CALL_MESSAGES = {
-  ringing: () => `Ça sonne chez ${session.family.name}…`,
+  ringing: () => 'Ça sonne…', // le nom est déjà écrit en grand juste au-dessus
   accepted: () => 'Connexion…',
   connected: () => '',
 };

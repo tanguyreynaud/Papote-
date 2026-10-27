@@ -1300,3 +1300,77 @@ a { text-decoration: none; }
 .bday-photo { display: flex; align-items: center; gap: 14px; margin: 12px 0 4px; }
 .bday-photo img { width: 88px; height: 88px; object-fit: cover; border-radius: 0; flex: none; }
 .bday-photo-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+
+/* ---------- Écrans de sonnerie (appel reçu, appel lancé) ----------
+   Une seule colonne qui se range d'elle-même : rien n'est placé en absolu, donc rien ne se chevauche,
+   même sur un petit téléphone avec la barre du navigateur. Téléphone couché (ou écran d'appel tourné
+   sur iPhone) : la photo à gauche, le nom et les boutons à droite. --H = hauteur vraiment visible. */
+.incoming, .call.sonne {
+  --H: 100dvh;
+  --photo: min(68vw, calc(var(--H) * .36), 300px);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto auto auto 1fr auto;
+  grid-template-areas: "kind" "face" "name" "sub" "." "actions";
+  justify-items: center;
+  align-content: stretch;
+  padding: calc(clamp(20px, 6dvh, 64px) + env(safe-area-inset-top)) 24px calc(clamp(24px, 9dvh, 96px) + env(safe-area-inset-bottom));
+  text-align: center;
+  overflow: hidden;
+}
+.call.sonne .call-audio-panel { display: contents; }
+.call.sonne .call-timer, .call.sonne #call-local, .call.sonne .call-video { display: none; }
+.incoming .incoming-kind, .call.sonne .incoming-kind { grid-area: kind; margin: 0 0 clamp(10px, 2.5dvh, 22px); }
+.incoming .call-face, .call.sonne .call-face {
+  grid-area: face;
+  width: var(--photo); height: var(--photo);
+  font-size: calc(var(--photo) * .4);
+}
+.incoming .incoming-name, .call.sonne .call-name {
+  grid-area: name;
+  margin: clamp(12px, 3dvh, 26px) 0 0;
+  font-size: clamp(28px, 4.6dvh, 40px);
+  max-width: 100%; overflow-wrap: anywhere;
+}
+.incoming .incoming-sub, .call.sonne .call-status {
+  grid-area: sub;
+  position: static; inset: auto;
+  margin: 6px 0 0;
+  font-size: 20px; font-weight: 500; text-shadow: none;
+  color: #5b5794;
+}
+.incoming .incoming-actions { grid-area: actions; margin: 0; width: 100%; max-width: 440px; }
+.call.sonne .call-hangup {
+  grid-area: actions;
+  position: static; transform: none; inset: auto;
+  width: 100%; max-width: 440px;
+}
+@media (orientation: landscape) {
+  .incoming, .call.sonne {
+    --photo: min(calc(var(--H) * .62), 40vw, 300px);
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: 1fr auto auto auto auto 1fr;
+    grid-template-areas: "face ." "face kind" "face name" "face sub" "face actions" "face .";
+    column-gap: clamp(24px, 6vw, 64px);
+    align-items: center;
+    padding: calc(16px + env(safe-area-inset-top)) calc(32px + env(safe-area-inset-right)) calc(16px + env(safe-area-inset-bottom)) calc(32px + env(safe-area-inset-left));
+  }
+  .incoming .call-face, .call.sonne .call-face { align-self: center; }
+  .incoming .incoming-name, .call.sonne .call-name { margin-top: 4px; }
+  .incoming .incoming-actions, .call.sonne .call-hangup { margin-top: 18px; }
+}
+/* iPhone tenu debout : l'écran d'appel est tourné d'un quart de tour (voir .force-landscape), la hauteur visible est donc la largeur. */
+@media (orientation: portrait) {
+  .call.sonne.force-landscape {
+    --H: 100vw;
+    --photo: min(calc(100vw * .62), calc(100dvh * .4), 300px);
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: 1fr auto auto auto auto 1fr;
+    grid-template-areas: "face ." "face kind" "face name" "face sub" "face actions" "face .";
+    column-gap: 40px;
+    align-items: center;
+    padding: 16px calc(32px + env(safe-area-inset-bottom)) 16px calc(32px + env(safe-area-inset-top));
+  }
+  .call.sonne.force-landscape .call-name { margin-top: 4px; font-size: 34px; }
+  .call.sonne.force-landscape .call-hangup { margin-top: 18px; }
+}
