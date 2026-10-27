@@ -24,7 +24,10 @@ test('commande, envoi, installation par un autre proche, envois, appel, annulati
   const params = s.stripe.etat.sessions.get(session).params;
   assert.deepStrictEqual(params.payment_method_types, ['card', 'sepa_debit']);
   assert.strictEqual(params.tax_id_collection, undefined, 'plus de numéro de TVA sur la page de paiement');
-  assert.strictEqual(params.subscription_data.trial_period_days, 90, 'rien prélevé avant la réception');
+  assert.strictEqual(params.subscription_data.trial_period_days, undefined, 'plus d\'« essai gratuit » sur la page de paiement');
+  assert.ok(Math.abs(params.subscription_data.billing_cycle_anchor * 1000 - (Date.now() + 33 * s.JOUR)) < 3600e3, 'premier prélèvement estimé : envoi 3 jours + 30');
+  assert.strictEqual(params.subscription_data.proration_behavior, 'none', 'rien pour l\'abonnement aujourd\'hui');
+  assert.match(params.custom_text.submit.message, /réception de la tablette/);
   assert.strictEqual(params.subscription_data.metadata.delai, 'stock');
   assert.ok(params.expires_at, 'la page de paiement expire (tablette mise de côté)');
   assert.strictEqual((await s.db.collection('reservations').get()).size, 1);
@@ -53,8 +56,8 @@ test('commande, envoi, installation par un autre proche, envois, appel, annulati
   assert.ok(c.mailEnvoiLe, 'e-mail « colis parti » envoyé');
   assert.strictEqual((await s.lire(`stock/${tablette.fiche}`)).etat, 'envoyee');
   // Premier prélèvement recalé : 30 jours après la réception estimée (envoi + 3 jours).
-  const essaiFin = s.stripe.etat.abonnements.get(id).trial_end * 1000;
-  assert.ok(Math.abs(essaiFin - (Date.now() + 33 * s.JOUR)) < 3600e3, 'fin du mois offert recalée sur la réception');
+  const premier = require('../abonnement').premierPrelevementDe(s.stripe.etat.abonnements.get(id), Date.now());
+  assert.ok(Math.abs(premier - (Date.now() + 33 * s.JOUR)) < 3600e3, 'premier prélèvement 30 jours après la réception estimée');
 
   // 4. La tablette arrive chez Mamie. Julie (pas l'e-mail de la commande) scanne et installe.
   //    Paul scanne aussi pendant l'installation : il sera invité.

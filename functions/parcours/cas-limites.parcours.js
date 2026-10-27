@@ -57,7 +57,8 @@ test('abonnement pris depuis l\'appli avec la tablette déjà installée : rien 
   const { url } = await s.appeler('creerPaiement', { fid, formule: 'wifi', tablette: 'incluse' }, julie);
   const session = url.split('/').pop();
   const params = s.stripe.etat.sessions.get(session).params;
-  assert.strictEqual(params.subscription_data.trial_period_days, 30);
+  assert.ok(Math.abs(params.subscription_data.billing_cycle_anchor * 1000 - (Date.now() + 30 * s.JOUR)) < 3600e3, 'premier prélèvement dans 30 jours');
+  assert.match(params.custom_text.submit.message, /dans 30 jours/);
   assert.strictEqual(params.subscription_data.metadata.dejaInstallee, '1');
   assert.strictEqual(params.shipping_address_collection, undefined, 'pas d\'adresse de livraison demandée');
   assert.strictEqual((await s.db.collection('reservations').get()).size, 0, 'aucune tablette mise de côté');
@@ -74,8 +75,10 @@ test('abonnement pris depuis l\'appli avec la tablette déjà installée : rien 
   assert.strictEqual(fiche.commande, id, 'la tablette installée prend la commande');
   assert.strictEqual(fiche.etat, 'chez-client');
   assert.strictEqual(fiche.alerteJumelage, null, 'plus d\'alerte « jumelée sans commande » dans l\'admin');
-  const essaiFin = s.stripe.etat.abonnements.get(id).trial_end * 1000;
-  assert.ok(Math.abs(essaiFin - (Date.now() + 30 * s.JOUR)) < 3600e3, 'premier prélèvement 30 jours plus tard');
+  const abo = s.stripe.etat.abonnements.get(id);
+  assert.strictEqual(abo.status, 'active', 'pas d\'essai : un abonnement qui démarre dans 30 jours');
+  assert.ok(Math.abs(abo.billing_cycle_anchor * 1000 - (Date.now() + 30 * s.JOUR)) < 3600e3, 'premier prélèvement 30 jours plus tard');
+  assert.ok(Math.abs(fam.abonnement.essaiJusqua.toMillis() - (Date.now() + 30 * s.JOUR)) < 3600e3, 'l\'appli montre la date du premier prélèvement');
   assert.ok(mailsA(julie.email).some((m) => /abonnement/i.test(m)), 'confirmation');
   const stock = await s.requete('stockDisponible');
   assert.strictEqual(stock.json.precommande, true, 'la tablette installée ne compte plus dans le stock');

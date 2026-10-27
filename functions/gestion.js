@@ -1401,7 +1401,7 @@ exports.gestionStripe = onCall({ secrets: [STRIPE_SECRET], timeoutSeconds: 120 }
       id: a.id,
       statut: a.status,
       debut: a.start_date * 1000,
-      finEssai: a.trial_end ? a.trial_end * 1000 : null,
+      finEssai: regles.premierPrelevementDe(a, Date.now()),
       finLe: a.ended_at ? a.ended_at * 1000 : null,
       arretPrevu: a.cancel_at ? a.cancel_at * 1000 : null,
       formule: (a.metadata && a.metadata.formule) || null,

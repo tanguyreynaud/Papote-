@@ -12,10 +12,23 @@
 const JOUR = 24 * 60 * 60 * 1000;
 const DELAI_GRACE_JOURS = 7;
 // Sans engagement, chaque mois payé une fois écoulé (Tanguy, 2026-10-21) : pas de prélèvement avant la
-// réception (« trial » Stripe d'ATTENTE_ENVOI_JOURS au paiement), puis, à l'envoi, fin du « trial » recalée
-// sur la fin des 30 jours pour changer d'avis (limiteRetractation) ; le dernier mois est prélevé à l'arrêt.
-// 90 jours couvrent l'attente la plus longue (3 à 4 semaines) ; une tablette jamais envoyée ne coûte rien.
-const ATTENTE_ENVOI_JOURS = 90;
+// réception, puis, à l'envoi, premier prélèvement recalé sur la fin des 30 jours pour changer d'avis
+// (limiteRetractation) ; le dernier mois est prélevé à l'arrêt.
+// Sur la page de paiement, plus d'« essai gratuit » (Tanguy, 2026-10-27 : « 90 jours gratuits » se lisait comme une
+// promesse) : une date de premier prélèvement (billing_cycle_anchor), estimée d'après le délai annoncé.
+const ATTENTE_ENVOI = { stock: 3, precommande: 10, long: 28 };
+function premierPrelevementMs(delai, maintenant, { dejaInstallee = false } = {}) {
+  const attente = dejaInstallee ? 0 : (ATTENTE_ENVOI[delai] != null ? ATTENTE_ENVOI[delai] : ATTENTE_ENVOI.long);
+  return maintenant + (attente + RETRACTATION_JOURS) * JOUR;
+}
+// Date du premier prélèvement d'un abonnement Stripe qui n'a encore rien prélevé (ms), sinon null :
+// « trial » recalé à l'envoi, ou date de départ posée au paiement et pas encore atteinte.
+function premierPrelevementDe(abo, maintenant) {
+  if (!abo) return null;
+  if (abo.status === 'trialing' && abo.trial_end) return abo.trial_end * 1000;
+  if (abo.status === 'active' && abo.billing_cycle_anchor && abo.billing_cycle_anchor * 1000 > maintenant) return abo.billing_cycle_anchor * 1000;
+  return null;
+}
 // Tablette incluse : à rendre dans les 30 jours après la fin de l'abonnement, sinon facturée
 // (Tanguy, 2026-10-20, comme les conditions de vente) : tablette 130 €, chargeur et câble 10 €,
 // enceinte 10 € seulement si elle était dans le colis. Plus de routeur 4G ; le socle n'est pas facturé.
@@ -236,7 +249,9 @@ function peutModifier(actuel) {
 
 module.exports = {
   DELAI_GRACE_JOURS,
-  ATTENTE_ENVOI_JOURS,
+  ATTENTE_ENVOI,
+  premierPrelevementMs,
+  premierPrelevementDe,
   RESTITUTION_JOURS,
   PENALITE_NON_RESTITUTION,
   penaliteRestitution,
