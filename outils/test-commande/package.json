@@ -1,0 +1,10 @@
+{
+  "name": "papote-test-commande",
+  "private": true,
+  "description": "Commande de bout en bout sur le site en ligne avec les cartes de test Stripe (outils/test-commande).",
+  "dependencies": {
+    "firebase-admin": "^13.0.0",
+    "playwright": "^1.48.0",
+    "stripe": "^17.0.0"
+  }
+}
