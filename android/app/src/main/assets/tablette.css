@@ -258,7 +258,7 @@ button {
     radial-gradient(circle at 85% 85%, rgba(187, 247, 208, .9), rgba(187, 247, 208, 0) 50%),
     linear-gradient(135deg, #fff4e8 0%, #fde3cf 45%, #d9f2e2 100%);
   color: #3f2d4a;
-  font-family: 'Alegreya Sans', Roboto, sans-serif;
+  font-family: 'Atkinson Hyperlegible', sans-serif;
   text-align: center;
 }
 .call-side {
@@ -300,7 +300,7 @@ button {
   padding: 0 10vmin;
   border-radius: 9vmin;
   color: #fff;
-  font-family: 'Alegreya Sans', Roboto, sans-serif;
+  font-family: 'Atkinson Hyperlegible', sans-serif;
   font-size: 8vmin;
   font-weight: bold;
   box-shadow: 0 1.2vmin 3vmin rgba(0, 0, 0, .25);
@@ -362,17 +362,6 @@ body.night .big-btn.messages { background: #312e81; }
  * la photo à droite, et en bas une barre avec l'heure et la date.
  */
 
-@font-face {
-  font-family: 'Alegreya Sans';
-  font-weight: 500;
-  src: url(fonts/alegreya-sans-500.ttf) format('truetype');
-}
-@font-face {
-  font-family: 'Alegreya Sans';
-  font-weight: 700;
-  src: url(fonts/alegreya-sans-700.ttf) format('truetype');
-}
-
 .overlay.ln {
   position: fixed;
   top: 0; right: 0; bottom: 0; left: 0;
@@ -384,7 +373,7 @@ body.night .big-btn.messages { background: #312e81; }
   padding: 0;
   background: #9c744e;
   color: #5b4566;
-  font-family: 'Alegreya Sans', Roboto, sans-serif;
+  font-family: 'Atkinson Hyperlegible', sans-serif;
 }
 .overlay.ln.reminder { z-index: 20; }
 .overlay.ln.call-ring { z-index: 30; }
@@ -407,18 +396,12 @@ body.night .big-btn.messages { background: #312e81; }
   -webkit-justify-content: center;
   justify-content: center;
   padding: 5vmin 6vmin;
-  background-color: #a98058;
   /* Planches de bois horizontales, dessinées en CSS (unités en px : Android 4.4 gère mal les vmin ici) */
   background-image:
     -webkit-repeating-linear-gradient(top, rgba(0, 0, 0, 0) 0px, rgba(0, 0, 0, 0) 116px, rgba(60, 34, 12, .5) 116px, rgba(60, 34, 12, .5) 120px),
     -webkit-repeating-linear-gradient(top, rgba(255, 235, 205, .08) 0px, rgba(80, 45, 15, .10) 60px, rgba(255, 235, 205, .08) 120px, rgba(80, 45, 15, .03) 240px, rgba(255, 235, 205, .07) 360px),
     -webkit-repeating-linear-gradient(left, rgba(255, 240, 220, .05) 0px, rgba(60, 35, 15, .07) 9px, rgba(255, 240, 220, .04) 23px),
     -webkit-linear-gradient(left, #a98058, #bb9064 50%, #a47b53);
-  background-image:
-    repeating-linear-gradient(to bottom, rgba(0, 0, 0, 0) 0px, rgba(0, 0, 0, 0) 116px, rgba(60, 34, 12, .5) 116px, rgba(60, 34, 12, .5) 120px),
-    repeating-linear-gradient(to bottom, rgba(255, 235, 205, .08) 0px, rgba(80, 45, 15, .10) 60px, rgba(255, 235, 205, .08) 120px, rgba(80, 45, 15, .03) 240px, rgba(255, 235, 205, .07) 360px),
-    repeating-linear-gradient(to right, rgba(255, 240, 220, .05) 0px, rgba(60, 35, 15, .07) 9px, rgba(255, 240, 220, .04) 23px),
-    linear-gradient(to right, #a98058, #bb9064 50%, #a47b53);
 }
 .ln-note {
   width: 100%;
@@ -448,7 +431,7 @@ body.night .big-btn.messages { background: #312e81; }
   border-radius: 10vmin;
   background: #5e4b63;
   color: #fff;
-  font-family: 'Alegreya Sans', Roboto, sans-serif;
+  font-family: 'Atkinson Hyperlegible', sans-serif;
   font-size: 9vmin;
   font-weight: 700;
 }
@@ -471,7 +454,7 @@ body.night .big-btn.messages { background: #312e81; }
   background: #5e4b63;
   color: #fff;
 }
-.ln-clock { -webkit-flex: 1; flex: 1; margin: 0; font-family: 'Alegreya Sans', Roboto, sans-serif; font-size: 6vmin; font-weight: 500; }
+.ln-clock { -webkit-flex: 1; flex: 1; margin: 0; font-family: 'Atkinson Hyperlegible', sans-serif; font-size: 6vmin; font-weight: 500; }
 .ln-actions { display: -webkit-flex; display: flex; }
 .ln-btn {
   min-height: 13vmin;
@@ -480,7 +463,7 @@ body.night .big-btn.messages { background: #312e81; }
   border-radius: 3vmin;
   background: rgba(255, 255, 255, .18);
   color: #fff;
-  font-family: 'Alegreya Sans', Roboto, sans-serif;
+  font-family: 'Atkinson Hyperlegible', sans-serif;
   font-size: 6vmin;
   font-weight: 700;
   white-space: nowrap;
@@ -509,23 +492,6 @@ body.night .weather-label { color: #9d97b5; }
 .home-left { -webkit-justify-content: center; justify-content: center; }
 .clock { font-size: 34vmin; }
 .date { font-size: 8vmin; }
-
-/* ---------- Fonds illustrés (à la place du bois) ---------- */
-
-.overlay.ln .ln-wood {
-  background-color: #fbf3ea;
-  background-image: none;
-  background-repeat: no-repeat;
-  background-position: center bottom;
-  -webkit-background-size: cover;
-  background-size: cover;
-}
-.overlay.mode-message .ln-wood { background-color: #fbe9dd; background-image: url(bg/message.svg); }
-.overlay.mode-voice .ln-wood { background-color: #ece4fd; background-image: url(bg/voice.svg); background-position: center; }
-.overlay.mode-photo .ln-wood { background-color: #e4f0f8; background-image: url(bg/photo.svg); background-position: center; }
-.overlay.mode-video .ln-wood { background-color: #d9eff2; background-image: url(bg/video.svg); background-position: center; }
-.overlay.reminder .ln-wood { background-color: #def3e8; background-image: url(bg/reminder.svg); background-position: center; }
-.overlay.call-ring .ln-wood { background-color: #dcf3e3; background-image: url(bg/call.svg); background-position: center; }
 
 /* Message : la feuille semble sortir de l'enveloppe */
 .overlay.mode-message .ln-wood { -webkit-align-items: flex-start; align-items: flex-start; padding-top: 4vmin; }
@@ -565,57 +531,8 @@ body.night .weather-label { color: #9d97b5; }
 
 /* Vocal / vidéo : titre sur une ligne, illustration au milieu, bouton en bas */
 .overlay.mode-voice .ln-text, .overlay.mode-video .ln-text { font-size: 7vmin; }
-.overlay.mode-voice .ln-wood, .overlay.mode-video .ln-wood {
-  -webkit-background-size: auto 58%;
-  background-size: auto 58%;
-  background-position: center 52%;
-}
-.overlay.mode-voice .ln-wood { background-color: #ebe3fc; }
-.overlay.mode-video .ln-wood { background-color: #d8eef1; }
-.overlay.call-ring .ln-wood, .overlay.reminder .ln-wood {
-  -webkit-background-size: auto 70%;
-  background-size: auto 70%;
-  background-position: center 85%;
-}
-.overlay.call-ring .ln-wood { background-color: #d8f1e0; }
-.overlay.reminder .ln-wood { background-color: #d9f1e5; }
-
-/* L'illustration (fond transparent) posée sur un dégradé doux qui remplit tout l'espace */
-.overlay.mode-voice .ln-wood {
-  background-image: url(bg/voice.svg), -webkit-linear-gradient(top left, #f5f0ff, #ddd0fb);
-  background-image: url(bg/voice.svg), linear-gradient(135deg, #f5f0ff, #ddd0fb);
-  -webkit-background-size: auto 58%, cover;
-  background-size: auto 58%, cover;
-  background-position: center 52%, center;
-}
-.overlay.mode-video .ln-wood {
-  background-image: url(bg/video.svg), -webkit-linear-gradient(top left, #ecf7f8, #c8e8ec);
-  background-image: url(bg/video.svg), linear-gradient(135deg, #ecf7f8, #c8e8ec);
-  -webkit-background-size: auto 58%, cover;
-  background-size: auto 58%, cover;
-  background-position: center 52%, center;
-}
-.overlay.reminder .ln-wood {
-  background-image: url(bg/reminder.svg), -webkit-linear-gradient(top, #f0faf5, #cdeedd);
-  background-image: url(bg/reminder.svg), linear-gradient(to bottom, #f0faf5, #cdeedd);
-  -webkit-background-size: auto 70%, cover;
-  background-size: auto 70%, cover;
-  background-position: center 85%, center;
-}
-.overlay.call-ring .ln-wood {
-  background-image: url(bg/call.svg), -webkit-linear-gradient(top left, #effaf2, #c7ecd2);
-  background-image: url(bg/call.svg), linear-gradient(135deg, #effaf2, #c7ecd2);
-  -webkit-background-size: auto 70%, cover;
-  background-size: auto 70%, cover;
-  background-position: center 85%, center;
-}
 .ln-clock { font-size: 5vmin; }
 .ln-btn { padding: 0 4vmin; font-size: 5.5vmin; }
-.overlay.mode-voice .ln-wood, .overlay.mode-video .ln-wood {
-  -webkit-background-size: auto 50%, cover;
-  background-size: auto 50%, cover;
-  background-position: center 42%, center;
-}
 
 /* ---------- Retouches ---------- */
 
@@ -630,9 +547,6 @@ body.night .weather-label { color: #9d97b5; }
   align-items: center;
   -webkit-justify-content: flex-start;
   justify-content: flex-start;
-  -webkit-background-size: auto 78%, cover;
-  background-size: auto 78%, cover;
-  background-position: center 70%, center;
 }
 .ln-playzone {
   -webkit-flex: 1;
@@ -653,12 +567,6 @@ body.night .weather-label { color: #9d97b5; }
 
 /* « Réécouter » / « Revoir » en bleu */
 .ln-btn.replay { background: #2563eb; }
-/* L'illustration se range en bas, sous le bouton « Écouter » / « Regarder » */
-.overlay.mode-voice .ln-wood, .overlay.mode-video .ln-wood {
-  -webkit-background-size: auto 30%, cover;
-  background-size: auto 30%, cover;
-  background-position: center 97%, center;
-}
 
 .ln-btn { -webkit-flex: none; flex: none; padding: 0 5vmin; }
 
@@ -710,7 +618,7 @@ body.night .weather-label { color: #9d97b5; }
 
 /* ---------- Diaporama : la photo en grand, sur un fond flou d'elle-même ---------- */
 
-.view.photos { padding: 0; background: #1b1620; color: #fff; font-family: 'Alegreya Sans', Roboto, sans-serif; }
+.view.photos { padding: 0; background: #1b1620; color: #fff; font-family: 'Atkinson Hyperlegible', sans-serif; }
 .photos .photo-stage { position: absolute; top: 0; right: 0; bottom: 0; left: 0; overflow: hidden; }
 .photo-bg {
   position: absolute;
@@ -875,13 +783,6 @@ body.night .bday-banner { background: #3b1426; color: #f9a8d4; }
   -webkit-align-items: flex-start;
   align-items: flex-start;
   padding-top: 4vmin;
-  background-color: #fde7ef;
-  background-image: url(bg/anniversaire.svg), -webkit-linear-gradient(top, #fff5f8, #fbd3e1);
-  background-image: url(bg/anniversaire.svg), linear-gradient(to bottom, #fff5f8, #fbd3e1);
-  -webkit-background-size: auto 62%, cover;
-  background-size: auto 62%, cover;
-  background-position: center 92%, center;
-  background-repeat: no-repeat;
 }
 .overlay.bday .ln-note { max-width: 130vmin; text-align: center; }
 .overlay.bday .ln-sign { text-align: center; font-weight: 700; color: #be185d; }
@@ -1014,7 +915,7 @@ html .ln-text.size-xs { font-size: calc(5.4vmin * var(--ts, 1)); }
   justify-content: center;
   background: linear-gradient(135deg, #f5f0ea, #e7ddd2);
   color: #3f3a36;
-  font-family: 'Alegreya Sans', Roboto, sans-serif;
+  font-family: 'Atkinson Hyperlegible', sans-serif;
   text-align: center;
 }
 .pause-title { margin: 0 0 3vmin; font-size: 11vmin; font-weight: 700; }
@@ -1255,7 +1156,6 @@ body.night .wifi-card-text { color: #9d97b5; }
 .overlay.mode-video .ln-wood, .overlay.reminder .ln-wood {
   position: relative;
   overflow: hidden;
-  background: linear-gradient(160deg, var(--bg1), var(--bg2));
 }
 /* Les petits cœurs qui montent, très lentement */
 .overlay.mode-message .ln-wood::before, .overlay.mode-photo .ln-wood::before, .overlay.mode-voice .ln-wood::before,
@@ -1264,8 +1164,6 @@ body.night .wifi-card-text { color: #9d97b5; }
   position: absolute;
   top: 0; left: 0; right: 0;
   height: 200%;
-  background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%22420%22%20height%3D%22420%22%20viewBox%3D%220%200%20420%20420%22%3E%3Cg%20fill%3D%22%23fff%22%20opacity%3D%22.55%22%3E%3Cpath%20d%3D%22M70%2092c-12-14-35-2-25%2018l25%2026%2025-26c10-20-13-32-25-18z%22/%3E%3Cpath%20d%3D%22M318%20268c-9-10-26-1-19%2013l19%2019%2019-19c7-14-10-23-19-13z%22/%3E%3Ccircle%20cx%3D%22300%22%20cy%3D%2270%22%20r%3D%2216%22/%3E%3Ccircle%20cx%3D%22120%22%20cy%3D%22320%22%20r%3D%2210%22/%3E%3Ccircle%20cx%3D%22210%22%20cy%3D%22190%22%20r%3D%226%22/%3E%3Ccircle%20cx%3D%22390%22%20cy%3D%22160%22%20r%3D%228%22/%3E%3Ccircle%20cx%3D%2230%22%20cy%3D%22230%22%20r%3D%225%22/%3E%3C/g%3E%3C/svg%3E");
-  background-size: 420px 420px;
   animation: ln-rise 60s linear infinite;
   pointer-events: none;
 }
@@ -1337,7 +1235,7 @@ span.head-face {
 .overlay.mode-voice .ln-note, .overlay.mode-video .ln-note { padding: 4vmin 6vmin; max-width: 86%; }
 .overlay.mode-voice .ln-head, .overlay.mode-video .ln-head { margin: 0; }
 .overlay.mode-video .ln-text { margin-top: 3vmin; text-align: left; }
-.overlay.mode-voice .ln-wood, .overlay.mode-video .ln-wood { padding-top: 6vmin; background-image: none; background: linear-gradient(160deg, var(--bg1), var(--bg2)); }
+.overlay.mode-voice .ln-wood, .overlay.mode-video .ln-wood { padding-top: 6vmin; }
 .overlay.mode-voice .ln-play, .overlay.mode-video .ln-play {
   display: flex;
   align-items: center;
@@ -1401,9 +1299,6 @@ span.head-face {
 .overlay.mode-photo.wide .head-chip { font-size: 3.6vmin; }
 .overlay.mode-photo.wide .ln-text { flex: 1; min-width: 0; }
 .overlay.mode-photo.wide .ln-btn { min-height: 15vmin; padding: 0 9vmin; }
-
-/* Rappel : « C'est l'heure ! » en pastille, l'icône dans un grand rond */
-.overlay.reminder .ln-wood { background-image: none; background: linear-gradient(160deg, var(--bg1), var(--bg2)); }
 .overlay.reminder .ln-note { max-width: 120vmin; }
 .overlay.reminder .ln-when {
   display: inline-block;
@@ -1732,7 +1627,7 @@ body.night .home-left .sos-btn { background: #2a1f2c; color: #f4a7b4; border-col
 }
 .overlay.papier .ln-head, .overlay.papier.wide .ln-head { display: none; }
 html .overlay.papier .ln-text, html .overlay.papier.wide .ln-text {
-  margin: 0; font-family: 'Alegreya Sans', 'Atkinson Hyperlegible', sans-serif;
+  margin: 0; font-family: 'Atkinson Hyperlegible', sans-serif;
   font-size: calc(9vmin * var(--ts, 1)); font-weight: 700; line-height: 1.1; color: #312e81;
   display: block; white-space: normal; overflow: hidden; text-overflow: clip; -webkit-line-clamp: none;
   width: 100%; max-width: 100%; min-width: 0; -webkit-flex: none; flex: none; text-align: left;
@@ -1740,7 +1635,7 @@ html .overlay.papier .ln-text, html .overlay.papier.wide .ln-text {
 }
 html .overlay.papier .ln-sign, html .overlay.papier.wide .ln-sign {
   display: block; margin: 2.5vmin 0 0; text-align: right;
-  font-family: 'Alegreya Sans', 'Atkinson Hyperlegible', sans-serif;
+  font-family: 'Atkinson Hyperlegible', sans-serif;
   font-size: calc(5.4vmin * var(--ts, 1)); font-weight: 600; color: #5b5794; /* indigo grisé, plus doux que le texte */
 }
 .overlay.papier .ln-media, .overlay.papier.wide .ln-media {
@@ -1773,7 +1668,7 @@ html .overlay.papier .ln-media img { top: 3vmin; left: 0; width: calc(100% - 3vm
 }
 .overlay-clock { display: none; }
 .overlay.papier .overlay-clock {
-  display: none; margin: 0; color: #fff; font-family: 'Alegreya Sans', 'Atkinson Hyperlegible', sans-serif;
+  display: none; margin: 0; color: #fff; font-family: 'Atkinson Hyperlegible', sans-serif;
   font-size: 4.6vmin; font-weight: 500; white-space: nowrap;
 }
 /* Haut-parleur et OK : dans le mot, en bas, au-dessus du bandeau. */
@@ -1864,7 +1759,7 @@ html .overlay.papier .ln-play.playing .play-icon { display: none; }
    Fond crème, à gauche une carte crème avec qui et quoi en indigo et le grand bouton, à droite
    une image dans un cadre : la photo de la personne appelée, ou Mamie qui se voit pour décrocher. */
 html .call-out, html .call-screen {
-  background: #f6efe4; color: #312e81; font-family: 'Alegreya Sans', 'Atkinson Hyperlegible', sans-serif;
+  background: #f6efe4; color: #312e81; font-family: 'Atkinson Hyperlegible', sans-serif;
 }
 html .call-out:not(.picker), html .call-ring, html .call-wait {
   display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: 1fr auto auto auto 1fr auto;
@@ -1876,7 +1771,7 @@ html .call-out:not(.picker)::before, html .call-ring::before, html .call-wait::b
 }
 /* Le texte dans la carte */
 html .call-out:not(.picker) .call-title, html .call-ring .call-title, html .call-wait .call-title {
-  grid-column: 1; grid-row: 3; z-index: 1; margin: 0 6vmin; font-family: 'Alegreya Sans', sans-serif;
+  grid-column: 1; grid-row: 3; z-index: 1; margin: 0 6vmin; font-family: 'Atkinson Hyperlegible', sans-serif;
   font-size: calc(11vmin * var(--ts, 1)); font-weight: 700; line-height: 1.05; color: #312e81; overflow-wrap: normal;
 }
 html .call-out:not(.picker) .call-sub, html .call-ring .call-sub, html .call-wait .call-sub {
@@ -1887,14 +1782,14 @@ html .call-out:not(.picker) .call-sub, html .call-ring .call-sub, html .call-wai
 html .call-out .call-hangup, html .call-ring .call-btn.answer {
   grid-column: 1; grid-row: 6; z-index: 1; justify-self: center; margin: 0 0 8vmin;
   min-width: 0; min-height: 15vmin; padding: 0 10vmin; border: 0; border-radius: 99vmin;
-  font-family: 'Alegreya Sans', sans-serif; font-size: 7.5vmin; font-weight: 800; color: #fff;
+  font-family: 'Atkinson Hyperlegible', sans-serif; font-size: 7.5vmin; font-weight: 800; color: #fff;
 }
 html .call-out .call-hangup { background: #dc2626; box-shadow: 0 1vmin 2.5vmin rgba(220, 38, 38, .3); }
 html .call-ring .call-btn.answer { background: #16a34a; box-shadow: 0 1vmin 2.5vmin rgba(22, 163, 74, .35); }
 /* L'image à droite : grande, coins carrés, comme une photo reçue */
 html .call-out:not(.picker) .call-face {
   grid-column: 2; grid-row: 1 / -1; align-self: stretch; width: calc(100vh - 6vmin); max-width: 48vw; height: auto;
-  border: 0; border-radius: 0; box-shadow: 0 1vmin 3vmin rgba(49, 46, 129, .12); font-family: 'Alegreya Sans', sans-serif;
+  border: 0; border-radius: 0; box-shadow: 0 1vmin 3vmin rgba(49, 46, 129, .12); font-family: 'Atkinson Hyperlegible', sans-serif;
   font-size: 40vmin; background: #e8e4f5; color: #4f46e5;
 }
 html .call-out:not(.picker) .call-face svg { width: 50%; height: 50%; }
@@ -1930,16 +1825,16 @@ html .call-ring:has(.caller-face[hidden]), html .call-wait { grid-template-colum
 html .call-wait { position: absolute; top: 0; right: 0; bottom: 0; left: 0; }
 
 /* Qui voulez-vous appeler ? : les visages sur des cartes crème, coins doux */
-html .call-out.picker .call-title { font-family: 'Alegreya Sans', sans-serif; font-size: 10vmin; font-weight: 700; color: #312e81; }
+html .call-out.picker .call-title { font-family: 'Atkinson Hyperlegible', sans-serif; font-size: 10vmin; font-weight: 700; color: #312e81; }
 html .call-out.picker .call-person { background: #fdfaf5; border-radius: 3vmin; box-shadow: 0 1vmin 3vmin rgba(49, 46, 129, .12); padding: 3vmin; }
 html .call-out.picker .call-person-face { width: 28vmin; height: 28vmin; border-radius: 2vmin; background: #4f46e5; }
-html .call-out.picker .call-person-name { font-family: 'Alegreya Sans', sans-serif; font-size: 7vmin; color: #312e81; }
-html .call-out.picker .call-back, html .call-out.picker .call-page { font-family: 'Alegreya Sans', sans-serif; color: #5b5794; }
+html .call-out.picker .call-person-name { font-family: 'Atkinson Hyperlegible', sans-serif; font-size: 7vmin; color: #312e81; }
+html .call-out.picker .call-back, html .call-out.picker .call-page { font-family: 'Atkinson Hyperlegible', sans-serif; color: #5b5794; }
 html .call-out.picker .call-back { margin-top: 4vmin; padding: 2vmin 7vmin; border-radius: 99vmin; background: #fdfaf5; box-shadow: 0 1vmin 2.5vmin rgba(49, 46, 129, .12); }
 
 /* Appel vidéo en cours : Mamie en petit, cadre crème */
 html #call-local { border: 1vmin solid #fdfaf5; border-radius: 1.5vmin; box-shadow: 0 1vmin 3vmin rgba(0, 0, 0, .3); }
-html .call-out-hangup { font-family: 'Alegreya Sans', sans-serif; font-weight: 800; border: 0; }
+html .call-out-hangup { font-family: 'Atkinson Hyperlegible', sans-serif; font-weight: 800; border: 0; }
 /* Carte seule (connexion, sonnerie sans caméra) : tout au milieu */
 html .call-wait, html .call-ring:has(.caller-face[hidden]) { justify-items: center; text-align: center; }
 
@@ -1958,7 +1853,7 @@ html .home-left .bday-banner .bday-cake { -webkit-flex: none; flex: none; }
 /* T21 : débranchée = petite étiquette en haut à droite, sur la photo ; SOS reste visible. */
 html .power-banner {
   left: auto; right: 3vmin; top: 3vmin; gap: 2vmin; padding: 1.6vmin 3.5vmin;
-  font-family: 'Alegreya Sans', 'Atkinson Hyperlegible', sans-serif; font-size: 4.2vmin;
+  font-family: 'Atkinson Hyperlegible', sans-serif; font-size: 4.2vmin;
   background: rgba(253, 250, 245, .95); color: #b42318; box-shadow: 0 1vmin 3vmin rgba(36, 33, 47, .25);
 }
 html .power-banner .power-plug { width: 5vmin; height: 5vmin; -webkit-flex: none; flex: none; }
@@ -1966,7 +1861,7 @@ html .power-banner .power-plug { width: 5vmin; height: 5vmin; -webkit-flex: none
 html .frame-rdv {
   top: 3vmin; right: 3vmin; bottom: 3vmin; left: 3vmin; padding: 5vmin; border-radius: 3vmin;
   background: #fdfaf5; color: #312e81; box-shadow: 0 1vmin 3vmin rgba(49, 46, 129, .12);
-  font-family: 'Alegreya Sans', 'Atkinson Hyperlegible', sans-serif;
+  font-family: 'Atkinson Hyperlegible', sans-serif;
 }
 html .home-frame:has(.frame-rdv:not([hidden])) { background: #f6efe4; }
 html .frame-rdv .rdv-icon { width: 16vmin; height: 16vmin; padding: 3.5vmin; box-sizing: border-box; border-radius: 50%; background: #4f46e5; color: #fff; }
@@ -1976,11 +1871,10 @@ html .frame-rdv .rdv-in { margin-top: 4vmin; padding: 2vmin 6vmin; font-family: 
 /* T30 : légende longue (jusqu'à 100 caractères) en entier, un peu plus petite. */
 html .overlay.papier .ln-text.tres-long, html .overlay.papier.wide .ln-text.tres-long { font-size: calc(6.2vmin * var(--ts, 1)); }
 /* T37 : anniversaire en plein écran, crème et indigo, OK centré sous le gâteau. */
-html .overlay.bday .ln-wood { background-color: #f6efe4 !important; background-image: url(bg/anniversaire.svg);
-  -webkit-background-size: auto 21%; background-size: auto 21%; background-position: center 64%; }
+html .overlay.bday .ln-wood { background-color: #f6efe4 !important; }
 html .overlay.bday .ln-note { background: #fdfaf5; box-shadow: 0 1vmin 3vmin rgba(49, 46, 129, .12); }
-html .overlay.bday .ln-text { font-family: 'Alegreya Sans', 'Atkinson Hyperlegible', sans-serif; color: #312e81; }
-html .overlay.bday .ln-sign { font-family: 'Alegreya Sans', 'Atkinson Hyperlegible', sans-serif; }
+html .overlay.bday .ln-text { font-family: 'Atkinson Hyperlegible', sans-serif; color: #312e81; }
+html .overlay.bday .ln-sign { font-family: 'Atkinson Hyperlegible', sans-serif; }
 html .overlay.bday .ln-bar { left: 0; right: 0; padding-left: 0; padding-right: 0; -webkit-justify-content: center; justify-content: center; }
 html .overlay.bday .ln-actions { -webkit-justify-content: center; justify-content: center; width: 100%; }
 /* T17 : le rendez-vous cache la photo (pas de bords de photo autour de la carte). */
