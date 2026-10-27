@@ -374,4 +374,8 @@ test('SOS sans réponse au 2e essai : toute la famille est alertée', async () =
   }
   const alertes = s.notifications.filter((n) => n.type === 'alerte' && /SOS/.test(n.titre));
   assert.strictEqual(alertes.length, 1, 'une seule alerte, après le 2e essai');
+  // Chaque alerte est comptée pour l'admin, sur la page de la tablette (journal-alertes.js).
+  const { alertes: journal } = await s.appeler('gestionDonnees', {}, a.TANGUY);
+  assert.deepStrictEqual(journal.map((x) => x.genre).sort(), ['sos', 'sos-sans-reponse']);
+  assert.ok(journal.every((x) => x.fid === fid && x.fiche === tablette.fiche && x.telephones === 2 && x.le), 'famille, tablette, téléphones, date');
 });
