@@ -1,4 +1,5 @@
 :root {
+  --barre-bas: 64px; /* hauteur de la barre du bas, sans la zone du geste */
   /* Thème clair : mêmes couleurs et polices que le site mapapote.fr */
   --bg: #fdfaf5;
   --surface: #ffffff;
@@ -935,12 +936,11 @@ h1, h2, h3, .brand, .tile, .splash-name { font-family: var(--display); letter-sp
 .site-link { display: flex; justify-content: center; text-decoration: none; margin-top: 16px; border-radius: 14px; padding: 13px 18px; font-weight: 600; }
 
 /* Bouton flottant « Installer l'app » (disparaît une fois l'app installée) */
+/* Sous les tuiles, dans la page : il ne recouvre jamais une tuile. */
 .install-fab {
-  position: fixed;
-  left: 50%;
-  transform: translateX(-50%);
-  bottom: calc(88px + env(safe-area-inset-bottom));
-  z-index: 7;
+  display: flex;
+  width: fit-content;
+  margin: 22px auto 0;
   gap: 8px;
   padding: 14px 22px;
   border-radius: 999px;
@@ -950,8 +950,12 @@ h1, h2, h3, .brand, .tile, .splash-name { font-family: var(--display); letter-sp
   white-space: nowrap;
 }
 .install-fab svg { width: 22px; height: 22px; }
-/* Bouton « Installer l'app » affiché : la page garde de la place en bas pour qu'il ne recouvre jamais les tuiles. */
-#view-home:has(#btn-install:not([hidden])) { padding-bottom: calc(180px + env(safe-area-inset-bottom)); }
+/* Photos et Messages ouverts depuis la barre du bas : pas de flèche retour, la barre reste en bas. */
+.depuis-barre .page-head .back { display: none; }
+.depuis-barre .chat-bar, .depuis-barre .fab { bottom: calc(var(--barre-bas) + env(safe-area-inset-bottom)); }
+.depuis-barre .chat-bar { padding-bottom: 10px; }
+.depuis-barre #view-photos, .depuis-barre #view-videos { padding-bottom: calc(var(--barre-bas) + 96px + env(safe-area-inset-bottom)); }
+.depuis-barre #view-messages { padding-bottom: calc(var(--barre-bas) + 160px + env(safe-area-inset-bottom)); }
 
 .switch-row { display: flex; align-items: center; gap: 10px; font-weight: 600; }
 .switch-row input { width: 22px; height: 22px; margin: 0; accent-color: var(--accent); }

@@ -49,6 +49,7 @@ const VIEWS = ['view-moi', 'view-sans-abo', 'view-invite', 'view-profile', 'view
 
 function show(view) {
   for (const id of VIEWS) $(id).hidden = id !== view;
+  document.body.classList.remove('depuis-barre');
   document.body.classList.toggle('on-support', view === 'view-support');
   // La barre du bas n'apparaît que sur Accueil, Notifications et Support.
   $('nav').hidden = !$(view).classList.contains('tab-page');
@@ -157,12 +158,21 @@ const PAGES = {
   invite: () => { renderSettings(); return null; },
 };
 
-function openPage(name, push = true) {
+// onglet : ouverte depuis la barre du bas (Photos, Messages) : la barre reste, sans flèche retour.
+function openPage(name, push = true, onglet = false) {
+  const dejaOnglet = document.body.classList.contains('depuis-barre');
   stopPage?.();
   stopPage = PAGES[name]();
   page = name;
-  if (push) history.pushState({ page: name }, '');
+  // D'un onglet à l'autre, on remplace l'entrée d'historique : « retour » ramène à l'accueil.
+  if (push && onglet && dejaOnglet) history.replaceState({ page: name, onglet }, '');
+  else if (push) history.pushState({ page: name, onglet }, '');
   show(`view-${name}`);
+  document.body.classList.toggle('depuis-barre', onglet);
+  if (onglet) {
+    $('nav').hidden = false;
+    document.querySelectorAll('.nav-item').forEach((b) => b.classList.toggle('active', b.dataset.page === name));
+  }
 }
 
 function goHome() {
@@ -208,7 +218,10 @@ document.querySelectorAll('.bell-btn[data-tab], .aide-card[data-tab]').forEach((
 // Barre du bas : on change d'onglet sans empiler l'historique.
 document.querySelectorAll('.nav-item').forEach((btn) => {
   btn.addEventListener('click', () => {
-    if (btn.dataset.page) { goHome(); openPage(btn.dataset.page); return; }
+    const surOnglet = document.body.classList.contains('depuis-barre');
+    if (btn.dataset.page) { if (!surOnglet) goHome(); openPage(btn.dataset.page, true, true); return; }
+    // On quitte Photos ou Messages par la barre : la page s'arrête, son entrée d'historique devient neutre.
+    if (surOnglet) { history.replaceState(null, ''); goHome(); }
     if (btn.dataset.tab === 'home') goHome();
     else show(`view-${btn.dataset.tab}`);
   });
@@ -230,7 +243,7 @@ window.addEventListener('popstate', (e) => {
     return;
   }
   const next = e.state?.page;
-  if (next && session) openPage(next, false);
+  if (next && session) openPage(next, false, !!e.state.onglet);
   else goHome();
 });
 
@@ -2583,7 +2596,7 @@ function renderAbonnement() {
   // Bandeaux : retard de paiement (responsables), pause (tout le monde).
   let text = '';
   if (statut === 'impaye' && admin) {
-    text = `Le dernier paiement a échoué. La tablette se mettra en pause le ${dateLongue(abo.graceJusqua)}.`;
+    text = `Le dernier paiement a échoué. La tablette se mettra en pause ${abo.graceJusqua ? `le ${dateLongue(abo.graceJusqua)}` : 'très bientôt'}.`;
   } else if (!abonnementOk(session.family)) {
     text = admin
       ? "Papote est en pause : l'abonnement de la famille doit être réglé. Tout reviendra automatiquement."
