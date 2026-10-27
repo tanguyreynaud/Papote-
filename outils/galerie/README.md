@@ -1,7 +1,7 @@
 # Galerie des écrans
 
 Une seule page avec **tous les écrans** de la tablette (en paysage, elle est bloquée ainsi) et de l'app famille
-(téléphone), chacun avec un numéro : « T12 » pour la tablette, « F7 » pour l'app famille. Pour
+(téléphone) et du site vitrine, chacun avec un numéro : « T12 » pour la tablette, « F7 » pour l'app famille, « S3 » pour le site. Pour
 donner un avis, il suffit de citer le numéro.
 
 Les écrans sont remplis avec une **fausse famille** (Mamie Jeanne, Julie, Thomas, Anne) et de
@@ -22,6 +22,7 @@ fichier, captures comprises, qu'on peut envoyer tel quel.
 galerie.bat               tablette + app famille (environ 2 minutes)
 galerie.bat tablette      seulement la tablette
 galerie.bat famille       seulement l'app famille
+galerie.bat vitrine       seulement le site vitrine (téléphone et ordinateur)
 ```
 
 Par défaut, la tablette vient de `origin/claude/project-thread-cmnwxy` et l'app famille de
