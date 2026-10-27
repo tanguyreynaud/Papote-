@@ -21,6 +21,13 @@ function premierPrelevementMs(delai, maintenant, { dejaInstallee = false } = {})
   const attente = dejaInstallee ? 0 : (ATTENTE_ENVOI[delai] != null ? ATTENTE_ENVOI[delai] : ATTENTE_ENVOI.long);
   return maintenant + (attente + RETRACTATION_JOURS) * JOUR;
 }
+// Stripe refuse une date de départ (billing_cycle_anchor) au-delà de la prochaine échéance naturelle, un mois après
+// le paiement (« le paiement n'a pas pu s'ouvrir », 27/10). La page de paiement part donc au plus à 27 jours (février
+// compris), et la vraie date (premierPrelevementMs) est posée dès le paiement reçu (trial_end, paiementTermine).
+const ANCRE_MAX_JOURS = 27;
+function ancrePaiement(premier, maintenant) {
+  return Math.min(premier, maintenant + ANCRE_MAX_JOURS * JOUR);
+}
 // Date du premier prélèvement d'un abonnement Stripe qui n'a encore rien prélevé (ms), sinon null :
 // « trial » recalé à l'envoi, ou date de départ posée au paiement et pas encore atteinte.
 function premierPrelevementDe(abo, maintenant) {
@@ -251,6 +258,7 @@ module.exports = {
   DELAI_GRACE_JOURS,
   ATTENTE_ENVOI,
   premierPrelevementMs,
+  ancrePaiement,
   premierPrelevementDe,
   RESTITUTION_JOURS,
   PENALITE_NON_RESTITUTION,
