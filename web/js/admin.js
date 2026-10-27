@@ -169,7 +169,35 @@ function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
   const pour = (formule) => accessoires.filter((a) => a.parEnvoi === formule).map((a) => a.nom);
   const enceinte = () => accessoires.find((a) => a.parEnvoi === 'option' && /enceinte|haut-parleur/i.test(a.nom))?.nom || 'L\'enceinte';
   const option = (valeur, texte, choisi) => creer('option', { value: valeur, selected: choisi }, texte);
+  // Remise en main propre (A1, 2026-10-27) : ni étiquette ni relais, la commande est reçue le jour même.
+  const enMain = (e) => e.mode === 'main';
+  const sortirDuStock = async (e) => {
+    try {
+      if (e.sim) await appeler('gestionSim', { action: 'modifier', id: e.sim, champs: { tablette: e.tablette } });
+      await appeler('gestionStock', { action: 'modifier', id: e.tablette, champs: { etat: 'envoyee', commande: c.id } });
+    } catch (err) {
+      prevenir(`Commande enregistrée, mais le kit n'a pas pu être sorti du stock : ${err.message}`);
+    }
+  };
   return [
+    {
+      cle: 'mode',
+      titre: 'Envoi ou main propre ?',
+      texte: 'Comment la tablette arrive-t-elle chez la famille ?',
+      contenu(zone, e, maj) {
+        const choix = (valeur, texte) => {
+          const r = creer('input', { type: 'radio', name: 'mode', value: valeur, checked: (e.mode || 'colis') === valeur });
+          r.addEventListener('change', () => { e.mode = valeur; maj(); });
+          const l = creer('label', { className: 'pc-case' });
+          l.append(r, ` ${texte}`);
+          return l;
+        };
+        e.mode = e.mode || 'colis';
+        zone.append(choix('colis', 'Par colis Mondial Relay'),
+          choix('main', 'En main propre : je la donne moi-même (la famille l\'a reçue aujourd\'hui)'));
+      },
+      pret: (e) => ['colis', 'main'].includes(e.mode),
+    },
     {
       cle: 'tablette',
       titre: 'Choisir la tablette',
@@ -247,6 +275,7 @@ function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
     {
       cle: 'carton',
       titre: 'La tablette dans le carton',
+      saute: enMain,
       cases: (e) => [
         `La tablette ${nom(e)} est dans le carton`,
         'Le chargeur et son câble sont dans le carton',
@@ -271,6 +300,7 @@ function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
     },
     {
       cle: 'fermer',
+      saute: enMain,
       titre: 'Fermer le colis',
       texte: 'Dernière vérification. Le carton contient :',
       contenu(zone, e) {
@@ -285,6 +315,7 @@ function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
     },
     {
       cle: 'feutre',
+      saute: enMain,
       titre: 'Le numéro au feutre',
       texte: 'Écrivez ce numéro au feutre sur le carton : il permet de retrouver la commande si l\'étiquette se décolle.',
       contenu(zone, e) {
@@ -294,6 +325,7 @@ function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
     },
     {
       cle: 'etiquette',
+      saute: enMain,
       titre: 'L\'étiquette',
       texte: 'Mondial Relay donne un QR code : au relais, montrez-le sur votre téléphone (ou imprimé), ils impriment l\'étiquette et la collent.',
       contenu(zone, e, maj) {
@@ -352,6 +384,7 @@ function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
     },
     {
       cle: 'depot',
+      saute: enMain,
       titre: 'Déposer au relais',
       texte: 'Déposez le colis dans un point relais Mondial Relay et montrez le QR code. Ensuite seulement, touchez « Colis déposé » : le client reçoit le lien de suivi par e-mail.',
       cases: ['Le colis est déposé au relais'],
@@ -362,12 +395,31 @@ function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
         } catch (err) {
           throw new Error(err.code?.endsWith('invalid-argument') ? 'Ce numéro de suivi ne semble pas valide.' : 'L\'enregistrement a échoué. Réessayez.');
         }
+        await sortirDuStock(e);
+      },
+    },
+    {
+      cle: 'remise',
+      saute: (e) => !enMain(e),
+      titre: 'Remettre la tablette',
+      texte: 'Donnez la tablette à la famille. Ensuite seulement, touchez « Tablette remise » : le client reçoit un e-mail, et ses 30 jours pour changer d\'avis commencent aujourd\'hui.',
+      contenu(zone, e) {
+        const ul = creer('ul', { className: 'pc-liste' });
+        const contenu = [`La tablette ${nom(e)}`, 'Le chargeur et son câble', ...pour('tous'),
+          ...(avecEnceinte(e) ? [enceinte()] : []),
+          ...(internet ? [`La carte SIM ${simTexte(simDe(e))}, dans la tablette`] : [])];
+        ul.append(...contenu.map((x) => creer('li', {}, x)));
+        zone.append(ul);
+      },
+      cases: ['Tout est remis à la famille'],
+      bouton: 'Tablette remise',
+      async valider(e) {
         try {
-          if (e.sim) await appeler('gestionSim', { action: 'modifier', id: e.sim, champs: { tablette: e.tablette } });
-          await appeler('gestionStock', { action: 'modifier', id: e.tablette, champs: { etat: 'envoyee', commande: c.id } });
+          await httpsCallable(functions, 'tabletteEnvoyee')({ commande: c.id, mainPropre: true });
         } catch (err) {
-          prevenir(`Colis enregistré, mais le kit n'a pas pu être sorti du stock : ${err.message}`);
+          throw new Error(err.code?.endsWith('failed-precondition') ? 'Cette commande est déjà notée comme envoyée.' : 'L\'enregistrement a échoué. Réessayez.');
         }
+        await sortirDuStock(e);
       },
     },
   ];

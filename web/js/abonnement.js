@@ -6,7 +6,7 @@ import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/
 const functions = getFunctions(getApp(), 'europe-west1');
 const call = (name, data) => httpsCallable(functions, name)(data).then((r) => r.data);
 
-export const OK_STATUTS = ['offert', 'actif', 'impaye'];
+export const OK_STATUTS = ['offert', 'actif', 'impaye', 'installation'];
 
 /** Envois, agenda et appels possibles ? (champ absent = famille d'avant les abonnements). */
 export function abonnementOk(family) {

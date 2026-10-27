@@ -79,22 +79,23 @@ test('Après 30 jours : résilier (avec l\'étape « Avant de partir »), puis g
   assert.ok(!(await famille(fid)).abonnement.resiliationLe, 'résiliation annulée');
 });
 
-test('Tablette installée sans commande : relier la commande payée par quelqu\'un d\'autre avec son code', async () => {
+// Installation finie sans commande reliée (B3, 27/10) : 48 h de tolérance, tout fonctionne, et un bandeau
+// demande le code de la commande.
+test('Tablette installée sans commande : 48 h pour relier la commande payée par quelqu\'un d\'autre avec son code', async () => {
   const julie = await banc.telephone('Julie');
   await g.inscrire(julie, 'julie@exemple.fr', 'Julie');
   const tab = await g.tabletteAllumee();
-  const fid = await g.installer(julie, tab).catch(async (e) => {
-    // Sans commande, l'installation finit sur la page « pas encore activé » au lieu de l'accueil.
-    if (!/view-home attendu, affiché : view-sans-abo/.test(e.message)) throw e;
-    return julie.page.evaluate(() => localStorage.getItem('papote.fid'));
-  });
-  await g.attendreVue(julie, 'view-sans-abo');
-  assert.strictEqual(await julie.page.locator('.guide-back').count(), 0, 'pas de guide tant que la tablette attend son abonnement');
-  assert.strictEqual((await famille(fid)).abonnement.statut, 'aucun');
-  await julie.page.click('#sans-abo-deja');
-  await julie.page.fill('#sans-abo-panel-deja .order-code', 'ZZZZZZZZ');
-  assert.strictEqual(await julie.page.inputValue('#sans-abo-panel-deja .order-code'), 'ZZZZ-ZZZZ', 'tiret ajouté tout seul');
-  await julie.page.click('#sans-abo-panel-deja button[type=submit]');
+  const fid = await g.installer(julie, tab);
+  await g.fermerAccueil(julie);
+  const abo = (await famille(fid)).abonnement;
+  assert.strictEqual(abo.statut, 'installation');
+  assert.ok(abo.toleranceJusqua, 'fin de la tolérance notée');
+  await julie.page.locator('#abo-banner', { hasText: 'Entrez le code de votre commande' }).waitFor();
+  assert.strictEqual(await julie.page.locator('#abo-banner-btn').isVisible(), false, 'rien à régler');
+  const champ = '#abo-banner-paid .order-code';
+  await julie.page.fill(champ, 'ZZZZZZZZ');
+  assert.strictEqual(await julie.page.inputValue(champ), 'ZZZZ-ZZZZ', 'tiret ajouté tout seul');
+  await julie.page.click('#abo-banner-paid button[type=submit]');
   assert.match(await g.texteFenetre(julie), /Ce code de commande est inconnu/);
   await g.repondre(julie, 'OK');
   banc.tolerer(julie, /FirebaseError|not-found|Aucune commande/);
@@ -102,14 +103,11 @@ test('Tablette installée sans commande : relier la commande payée par quelqu\'
   // Paul avait commandé sur le site avec son adresse.
   const { abonnement } = await acteurs.commanderEtPayer({ email: 'paul@exemple.fr' });
   const { code } = await g.lire(`commandes/${abonnement}`);
-  await julie.page.fill('#sans-abo-panel-deja .order-code', code);
-  await julie.page.click('#sans-abo-panel-deja button[type=submit]');
+  await julie.page.fill(champ, code);
+  await julie.page.click('#abo-banner-paid button[type=submit]');
   await g.toast(julie, 'Commande reliée');
   await s.calme();
-  await g.attendreVue(julie, 'view-home');
-  // Une fois la tablette démarrée, le petit guide est proposé.
-  await julie.page.locator('.guide-back .guide-skip').waitFor();
-  await g.fermerAccueil(julie);
+  await julie.page.locator('#abo-banner').waitFor({ state: 'hidden' });
   assert.strictEqual((await famille(fid)).abonnement.statut, 'actif');
 });
 
@@ -117,13 +115,11 @@ test('Tablette installée sans commande : prendre l\'abonnement depuis l\'app (p
   const julie = await banc.telephone('Julie');
   await g.inscrire(julie, 'julie@exemple.fr', 'Julie');
   const tab = await g.tabletteAllumee();
-  const fid = await g.installer(julie, tab).catch(async (e) => {
-    if (!/view-sans-abo/.test(e.message)) throw e;
-    return julie.page.evaluate(() => localStorage.getItem('papote.fid'));
-  });
-  await g.attendreVue(julie, 'view-sans-abo');
-  await julie.page.click('#sans-abo-prendre');
-  const formule = julie.page.locator('#sans-abo-formules .abo-formule', { hasText: 'Internet inclus' });
+  const fid = await g.installer(julie, tab);
+  await g.fermerAccueil(julie);
+  assert.strictEqual((await famille(fid)).abonnement.statut, 'installation');
+  await julie.page.click('.nav-item[data-tab="profile"]');
+  const formule = julie.page.locator('#abo-formules .abo-formule', { hasText: 'Internet inclus' });
   await formule.waitFor();
   const [requete] = await Promise.all([
     julie.page.waitForRequest((r) => r.url().startsWith('https://checkout.stripe.test/')),

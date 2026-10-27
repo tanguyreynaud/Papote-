@@ -1953,11 +1953,13 @@ navigator.serviceWorker?.addEventListener('message', (e) => {
   const famille = url && new URL(url, location.origin).searchParams.get('famille');
   if (famille && session && famille !== session.fid && myFamilies.some((f) => f.fid === famille)) {
     reglagesPending = url.includes('reglages');
+    abonnementPending = url.includes('abonnement=1');
     saveFamilyId(famille);
     enterApp();
     return;
   }
   if (url.includes('rappeler=1') && session) offerCallBack();
+  if (url.includes('abonnement=1') && session) ouvrirAbonnement();
   const cid = url && new URL(url, location.origin).searchParams.get('appel');
   if (cid && session) answerOnArrival(cid);
 });
@@ -2005,6 +2007,16 @@ function renderTabletOwnerNote() {
     : "La nuit, le son, les options et le Wi-Fi de la tablette se règlent depuis le téléphone d'un responsable de la famille.";
 }
 
+// Téléphones qui sonnent quand la tablette appelle (D1) : recoitAppels est posé par le serveur.
+function renderTelephonesAppels(members) {
+  const proches = members.filter((m) => m.role === 'famille');
+  const el = $('appels-telephones');
+  el.hidden = !tabletMembers.length || !proches.some((m) => typeof m.recoitAppels === 'boolean');
+  const n = proches.filter((m) => m.recoitAppels === true).length;
+  el.textContent = n ? `${n} téléphone${n > 1 ? 's reçoivent' : ' reçoit'} les appels de la tablette.`
+    : "Aucun téléphone ne reçoit encore les appels de la tablette : installez l'app et acceptez les notifications.";
+}
+
 function renderMembers(all) {
   allMembers = all;
   renderTabletOwnerNote();
@@ -2025,6 +2037,7 @@ function renderMembers(all) {
   myFace = faces[session.uid] || null;
   renderFace();
   setNotifMembers(members);
+  renderTelephonesAppels(members);
   renderActivity();
   renderRemote();
   // Le bouton d'appel n'apparaît que si une tablette sait recevoir les appels (Android 5 et plus).
@@ -2374,14 +2387,15 @@ document.querySelectorAll('[data-order-form]').forEach((form) => form.addEventLi
   }
 }));
 
+// L'abonnement est dans Profil.
+function ouvrirAbonnement() {
+  document.querySelector('.nav-item[data-tab="profile"]').click();
+  requestAnimationFrame(() => $('abo-card').scrollIntoView({ behavior: 'smooth', block: 'start' }));
+}
 $('abo-banner-btn').addEventListener('click', () => {
   const abo = session.family.abonnement;
   if (abo?.statut === 'impaye' || (abo?.statut === 'suspendu' && abo.stripeSubscriptionId && abo.stripeCustomerId)) withAboError(() => ouvrirPortail(session.fid));
-  else {
-    // L'abonnement est dans Profil.
-    document.querySelector('.nav-item[data-tab="profile"]').click();
-    requestAnimationFrame(() => $('abo-card').scrollIntoView({ behavior: 'smooth', block: 'start' }));
-  }
+  else ouvrirAbonnement();
 });
 // Essai de plus de 31 jours : la tablette n'est pas encore partie (le premier mois sera recalé à la réception).
 function enAttenteEnvoi(abo) {
@@ -2521,6 +2535,9 @@ async function renderFinDeContrat(abo) {
   }
   const rest = finInfo?.restitution;
   const remb = finInfo?.remboursement;
+  // Résilié, tablette pas encore rendue : on peut la garder et reprendre, sans nouvelle mise en service (C3).
+  $('btn-reprendre').hidden = !reprisePossible();
+  if (reprisePossible()) $('abo-choices').hidden = true;
   const box = $('retour-box');
   box.hidden = true;
   $('retour-etiquette').hidden = true;
@@ -2546,6 +2563,17 @@ async function renderFinDeContrat(abo) {
     }
   }
 }
+
+function reprisePossible() {
+  return session?.family?.abonnement?.statut === 'resilie' && amFamilyAdmin()
+    && ['attendue', 'echec'].includes(finInfo?.restitution?.statut);
+}
+$('btn-reprendre').addEventListener('click', async () => {
+  const abo = session.family.abonnement || {};
+  const formule = abo.formule === 'sim' ? 'sim' : 'wifi';
+  if (!await askConfirm(`Garder la tablette et reprendre l'abonnement (${formule === 'sim' ? '30' : '20'} € par mois) ? Pas de nouvelle mise en service à payer, et plus besoin de nous la renvoyer.`, 'Reprendre')) return;
+  withAboError(() => payer(session.fid, formule, abo.tablette || 'incluse'));
+});
 
 $('btn-retracter').addEventListener('click', async () => {
   const r = finInfo?.retractation;
@@ -2605,7 +2633,7 @@ function renderAbonnement() {
     resilierPossible = admin && enCours && !abo.resiliationLe && !!abo.stripeSubscriptionId;
     $('btn-resilier').hidden = !resilierPossible || !!finInfo?.retractation;
     $('btn-garder').hidden = !admin || !enCours || !abo.resiliationLe;
-    $('abo-choices').hidden = !admin || aRegler || !['aucun', 'resilie', 'suspendu'].includes(statut);
+    $('abo-choices').hidden = !admin || aRegler || reprisePossible() || !['aucun', 'resilie', 'suspendu', 'installation'].includes(statut);
   }
   // Bandeaux : retard de paiement (responsables), pause (tout le monde).
   let text = '';
@@ -2617,12 +2645,16 @@ function renderAbonnement() {
       : "Papote est en pause : l'abonnement de la famille doit être réglé par un responsable.";
   }
   // Sans abonnement en cours : un responsable peut relier une commande déjà payée sur le site.
-  const sansAbo = ['aucun', 'resilie', 'suspendu'].includes(statut) && admin;
+  const sansAbo = ['aucun', 'resilie', 'suspendu', 'installation'].includes(statut) && admin;
   // Fin d'installation sans commande reliée : dire quoi faire, pas seulement « en attente ».
   if (statut === 'aucun' && admin) text = "Aucune commande n'est reliée à cette tablette. Vous l'avez commandée sur le site ? Entrez le code de commande ci-dessous. Sinon, choisissez un abonnement dans Profil.";
+  // Installation finie sans commande reliée (B3) : tout fonctionne 48 h, le temps d'entrer le code.
+  if (statut === 'installation' && admin) {
+    text = `Entrez le code de votre commande (dans l'e-mail de confirmation) pour la relier à cette tablette.${abo.toleranceJusqua ? ` Papote fonctionne en attendant, jusqu'au ${dateLongue(abo.toleranceJusqua)}.` : ''}`;
+  }
   $('abo-banner').hidden = !text;
   $('abo-banner-text').textContent = text;
-  $('abo-banner-btn').hidden = !admin || statut === 'aucun';
+  $('abo-banner-btn').hidden = !admin || ['aucun', 'installation'].includes(statut);
   $('abo-banner-paid').hidden = !sansAbo;
   // Retour de la page de paiement : on confirme dès que le serveur a activé l'abonnement.
   let waiting = false;
@@ -4170,6 +4202,7 @@ let stopPending = null;
 let sharedPending = false;
 let rappelerPending = false; // ouvert par « Rappeler » sur une notification d'appel manqué
 let reglagesPending = false; // rouvert par l'app Android après le réglage de mise en pause
+let abonnementPending = false; // notification d'abonnement (paiement en retard, pause) : ouvre l'abonnement
 
 function rememberInviteCode(code, pour) {
   try {
@@ -4484,6 +4517,7 @@ async function enterApp() {
   if (sharedPending) { sharedPending = false; openShared(); }
   if (rappelerPending) { rappelerPending = false; offerCallBack(); }
   else if (reglagesPending) { reglagesPending = false; openPage('settings'); }
+  else if (abonnementPending) { abonnementPending = false; ouvrirAbonnement(); }
   else if (pairCode()) showSetupScan(pairCode());
 }
 
@@ -4504,6 +4538,7 @@ async function start() {
   sharedPending = params.has('partage');
   rappelerPending = params.has('rappeler');
   reglagesPending = params.has('reglages');
+  abonnementPending = params.get('abonnement') === '1';
   if (params.get('appel')) answerOnArrival(params.get('appel'));
   // Notification d'une autre famille (« veut rejoindre », « a rejoint ») : l'appli s'ouvre sur cette famille.
   if (params.get('famille')) saveFamilyId(params.get('famille'));

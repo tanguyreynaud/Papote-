@@ -53,7 +53,7 @@ service cloud.firestore {
     function abonnementOk(fid) {
       let fam = get(familyPath(fid)).data;
       let abo = fam.get('abonnement', null);
-      return abo == null || abo.get('statut', '') in ['offert', 'actif', 'impaye']
+      return abo == null || abo.get('statut', '') in ['offert', 'actif', 'impaye', 'installation']
         || fam.get('installation', {}).get('etape', 'fini') != 'fini';
     }
 

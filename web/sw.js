@@ -152,7 +152,8 @@ self.addEventListener('push', (event) => {
       tag: data.type === 'alerte' ? 'alerte-tablette' : undefined,
       icon: 'icons/icon-192.png',
       badge: 'icons/icon-192.png',
-      data: { url: '/' },
+      // fid : l'appli s'ouvre sur la bonne famille ; abonnement : sur son abonnement (paiement en retard, pause).
+      data: { url: `/${data.fid ? `?famille=${encodeURIComponent(data.fid)}${data.abonnement ? '&abonnement=1' : ''}` : data.abonnement ? '?abonnement=1' : ''}` },
     });
   }
   event.waitUntil(shown);

@@ -645,6 +645,10 @@ function afficherAccueil() {
   const tabletteDe = (c) => donnees.stock.find((t) => t.commande === c.id);
   const nomT = (t) => `Tablette ${t.ref || t.numero || t.modele || ''}`.trim();
   const versTablette = (t) => `#tablette/${encodeURIComponent(t.id)}`;
+  const versFamille = (f) => {
+    const c = cmd.find((x) => x.fid === f.id && x.expedition !== 'annulee');
+    return c ? versCommande(c) : `#clients/familles/${encodeURIComponent(f.id)}`;
+  };
   const versCommande = (c) => `#commande/${encodeURIComponent(c.id)}`;
   let taches = [
     // Client qui recommande (même IBAN, e-mail, téléphone ou adresse), avant l'envoi : gros signal s'il a déjà mal payé.
@@ -666,12 +670,20 @@ function afficherAccueil() {
     ...cmd.filter((c) => c.remboursement && c.remboursement.statut === 'echec')
       .map((c) => [1, `Remboursement échoué : ${c.nom || c.email || 'un client'}, à faire depuis Stripe`, versCommande(c), 'ko']),
     // Une ligne par famille impayée ou en pause, qui ouvre sa page (Stripe en secours si la famille manque).
-    ...(familleImpayees.length ? familleImpayees.map((f) => [1, `Abonnement impayé : famille ${f.nom || 'sans nom'}`, `#clients/familles/${encodeURIComponent(f.id)}`, 'ko'])
+    // Mêmes textes que aFaire (functions/gestion.js) ; chaque ligne ouvre la commande de la famille, sinon la famille.
+    ...(familleImpayees.length ? familleImpayees.map((f) => [1, `Famille ${f.nom || 'sans nom'} en retard de paiement${f.graceJusqua ? ` (pause le ${jour(f.graceJusqua)})` : ''}`, versFamille(f), 'ko'])
       : [[impayees, `${pluriel(impayees, 'abonnement')} impayé${impayees > 1 ? 's' : ''}`, '#compta/factures', 'ko']]),
-    ...donnees.familles.filter((f) => f.statut === 'suspendu')
-      .map((f) => [1, `Tablette en pause (abonnement non réglé) : famille ${f.nom || 'sans nom'}`, `#clients/familles/${encodeURIComponent(f.id)}`, 'ko']),
+    ...donnees.familles.filter((f) => f.statut === 'suspendu').map((f) => {
+      const depuis = f.suspenduLe || f.majLe;
+      const jours = depuis ? Math.floor((Date.now() - depuis) / 864e5) : null;
+      return [1, `Famille ${f.nom || 'sans nom'} suspendue pour impayé${jours != null ? ` depuis ${pluriel(jours, 'jour')}` : ''}${jours >= 30
+        ? ' : demander le retour de la tablette (« Arrêter l\'abonnement » sur la commande)' : ''}`, versFamille(f), 'ko'];
+    }),
+    // Colis jamais retiré au relais, revenu à l'expéditeur d'après Sendcloud (A3).
+    ...cmd.filter((c) => etatCommande(c) === 'en-route' && c.etiquettes && c.etiquettes.aller && c.etiquettes.aller.retourExpediteur)
+      .map((c) => [1, `Colis de ${c.nom || c.email || 'un client'} en retour chez vous (jamais retiré) : « Colis revenu » dans le ⋮ de la commande l'annule et rembourse`, versCommande(c), 'ko']),
     ...cmd.filter((c) => c.expedition === 'paiement-en-attente' && c.creeLe && Date.now() - c.creeLe > 10 * 864e5)
-      .map((c) => [1, `Prélèvement SEPA sans réponse de la banque depuis 10 jours : ${c.nom || c.email || 'client'}, regarder dans Stripe`, versCommande(c), 'ko']),
+      .map((c) => [1, `Paiement SEPA en attente depuis plus de 10 jours : ${c.nom || c.email || 'client'}, regarder dans Stripe`, versCommande(c), 'ko']),
     ...cmd.filter((c) => c.dernierMois && c.dernierMois.statut === 'echec')
       .map((c) => [1, `Dernier mois refusé par la banque : ${c.nom || c.email || 'client'}, le contacter`, versCommande(c), 'ko']),
     ...cmd.filter((c) => c.restitution && c.restitution.statut === 'echec')
@@ -1051,6 +1063,8 @@ function menuCommande(c, zoneRemplacement, etiquette) {
     ['a-preparer', 'paiement-en-attente'].includes(c.expedition)
       ? { libelle: 'Annuler la commande', danger: true, faire: () => lancer(() => annulerCommande(c)) } : null,
     annulable ? { libelle: 'Annuler la commande (30 jours)', danger: true, faire: () => lancer(() => annulerApresEnvoi(c)) } : null,
+    c.expedition === 'envoyee' && !c.fid && c.remise !== 'main-propre'
+      ? { libelle: 'Colis revenu (jamais retiré)', danger: true, faire: () => lancer(() => colisRevenu(c)) } : null,
     enCours && !annulable
       ? { libelle: 'Arrêter l\'abonnement', danger: true, faire: () => lancer(() => arreterAbonnement(c)) } : null,
     enCours && !annulable && !enPause ? { libelle: 'Pause hospitalisation…', faire: () => lancer(() => pauseHospitalisation(c)) } : null,
@@ -1077,6 +1091,15 @@ async function annulerCommande(c) {
   const r = await patienter('Annulation de la commande…', () => appeler('gestionAnnulerCommande', { commande: c.id }));
   return [`Commande annulée.`, r.stripeIntrouvable ? 'Stripe ne connaissait pas son abonnement (commande de test ?) : rien à rembourser, pas d\'e-mail au client.' : null,
     r.rembourse ? `${euros(r.rembourse)} remboursés.` : null,
+    r.mailEnvoye ? 'Le client a reçu un e-mail.' : null].filter(Boolean).join(' ');
+}
+
+// Colis jamais retiré au relais et revenu chez Papote (A3) : la commande est annulée et remboursée, la tablette revient.
+async function colisRevenu(c) {
+  if (!await demander(`Le colis de ${c.nom || c.email || 'ce client'} est revenu sans avoir été retiré ?\n\nLa commande ${codeCommande(c.code)} est annulée, tout ce qui a été payé est remboursé, et la tablette passe « Revenue, à vérifier ».`,
+    { oui: 'Colis revenu : annuler', non: 'Garder la commande', danger: true })) throw 'non';
+  const r = await patienter('Annulation de la commande…', () => appeler('gestionAnnulerCommande', { commande: c.id, colisRevenu: true }));
+  return ['Commande annulée, colis revenu.', r.rembourse ? `${euros(r.rembourse)} remboursés.` : null,
     r.mailEnvoye ? 'Le client a reçu un e-mail.' : null].filter(Boolean).join(' ');
 }
 
@@ -1354,7 +1377,7 @@ function prochaineEtape(c, t) {
 function parcoursCommande(c) {
   // La commande ouvre toujours le parcours, même créée dans la même seconde que la réservation.
   const etapes = [[-Infinity, c.offerte ? `Commande offerte créée${c.famille ? ` pour la famille ${c.famille}` : ''}` : 'Commande passée', c.creeLe]];
-  if (c.envoyeeLe) etapes.push([c.envoyeeLe, `Tablette envoyée${c.suivi ? ` (suivi ${c.suivi})` : ''}`]);
+  if (c.envoyeeLe) etapes.push([c.envoyeeLe, c.remise === 'main-propre' ? 'Tablette remise en main propre' : `Tablette envoyée${c.suivi ? ` (suivi ${c.suivi})` : ''}`]);
   for (const t of donnees.stock) {
     for (const x of t.historique || []) {
       if (!x.le || x.commande !== c.id) continue;
