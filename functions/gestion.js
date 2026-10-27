@@ -95,14 +95,24 @@ const ETATS = {
   perdue: 'Perdue',
   'hors-service': 'Hors service',
 };
+// Les clés déjà enregistrées ne changent pas (materiel = accessoires). « autre » reste en dernier.
 const CATEGORIES = {
   tablettes: 'Achat de tablettes',
   sim: 'Cartes SIM et forfaits',
-  expedition: 'Expédition',
-  hebergement: 'Hébergement et serveurs',
-  logiciels: 'Logiciels et abonnements',
+  materiel: 'Accessoires (support, câble, enceinte…)',
+  reparations: 'Réparations et remplacements',
+  expedition: 'Envoi des colis (Mondial Relay, Sendcloud)',
+  emballage: 'Emballage et impression',
+  deplacements: 'Déplacements (remise en main propre)',
+  hebergement: 'Hébergement, serveurs et nom de domaine',
+  logiciels: 'Logiciels et abonnements (Brevo, IA…)',
+  stores: 'Comptes développeur (Google Play)',
   publicite: 'Publicité',
-  materiel: 'Petit matériel',
+  assurance: 'Assurance (RC Pro)',
+  mediateur: 'Médiateur de la consommation',
+  juridique: 'Création de société et juridique',
+  comptabilite: 'Comptabilité',
+  banque: 'Banque et frais de paiement',
   autre: 'Autre',
 };
 
@@ -1529,10 +1539,13 @@ function memeAchat(depense, r) {
 const CONSIGNE_LECTURE = `Tu lis une facture d'achat (ou un ticket) reçue par Papote, une petite entreprise française
 qui prête des tablettes à des personnes âgées et leur famille. Remplis chaque champ d'après le document seulement :
 null quand l'information n'y figure pas, jamais d'invention. Montants en euros, tels qu'imprimés.
-Catégories : tablettes (achat de tablettes), sim (cartes SIM, forfaits mobiles), expedition (transport, colis,
-étiquettes, emballages), hebergement (serveurs, Firebase, Google Cloud, nom de domaine), logiciels (abonnements
-logiciels, IA), publicite (annonces, réseaux sociaux), materiel (petit matériel : câbles, chargeurs, supports),
-autre. Pour un achat de tablettes, remplis aussi « tablettes » avec les numéros de série (IMEI ou S/N) lisibles.
+Catégories : tablettes (achat de tablettes), sim (cartes SIM, forfaits mobiles), materiel (accessoires : câbles,
+chargeurs, supports, enceintes), reparations (réparation ou remplacement de matériel), expedition (transport, colis,
+étiquettes Mondial Relay ou Sendcloud), emballage (cartons, papier bulle, impression), deplacements (train, carburant,
+péage), hebergement (serveurs, Firebase, Google Cloud, nom de domaine), logiciels (abonnements logiciels, Brevo, IA),
+stores (Google Play, Apple Developer), publicite (annonces, réseaux sociaux), assurance (RC Pro, assurances),
+mediateur (médiateur de la consommation), juridique (création de société, greffe, annonces légales, avocat),
+comptabilite (expert-comptable, logiciel de comptabilité), banque (frais bancaires, frais Stripe), autre. Pour un achat de tablettes, remplis aussi « tablettes » avec les numéros de série (IMEI ou S/N) lisibles.
 Pour des cartes SIM achetées (kits, nouvelles lignes), remplis « cartesSim » avec les ICCID et numéros lisibles ;
 une facture mensuelle de forfaits reste une simple dépense (cartesSim null). Le petit matériel qui part avec les
 tablettes (clé ou routeur 4G, prise, chargeur, câble, support) va dans « accessoires ».
