@@ -13,6 +13,7 @@ const ilYa = (jours, hm = '10:00') => ms(hm, new Date(new Date(`${JOUR}T12:00:00
 
 const FID = 'famille-test';
 const MOI = { uid: 'u-julie', email: 'julie@exemple.fr', displayName: 'Julie Martin' };
+const NOMBREUX = ['Lucas', 'Emma', 'Hugo', 'Léa', 'Nathan', 'Chloé', 'Louis', 'Manon', 'Gabriel', 'Camille', 'Jules', 'Inès', 'Arthur', 'Zoé', 'Paul', 'Jade', 'Marius'];
 
 // Petites images (les vraies vignettes sont en JPEG, ici en SVG).
 const petite = (n, portrait) => fausseImage(n, portrait ? 300 : 400, portrait ? 400 : 300);
@@ -46,7 +47,11 @@ function famillePleine(o = {}) {
       wifi: { ssid: 'Livebox-6A2F' }, canCall: true,
     })]),
     ...(o.enAttente ? [membre('u-lucas', 'Lucas', { status: 'pending', joinedAt: ms('10:12') })] : []),
+    // Famille nombreuse : 17 proches de plus, sans photo (initiales), pour voir les longues listes.
+    ...(o.nombreux ? NOMBREUX.map((nom, i) => membre(`u-${nom.toLowerCase()}`, nom, { joinedAt: ilYa(19 - i) })) : []),
   ];
+  // Un proche « mis en tête » par le propriétaire : proposé d'abord dans « Qui appeler » sur la tablette.
+  if (o.enTete) membres[2].enTete = ilYa(2);
   for (const m of membres) docs[`families/${FID}/members/${m.uid}`] = m;
   if (!o.vide) {
     const auteurs = [['u-julie', 'Julie'], ['u-thomas', 'Thomas'], ['u-anne', 'Anne']];
@@ -95,6 +100,8 @@ const pause = (p, ms = 700) => p.waitForTimeout(ms);
 const toucher = (...sels) => async (p) => { for (const sel of sels) { await p.locator(sel).first().click(); await pause(p); } };
 const page = (nom) => `.tile[data-page="${nom}"]`;
 const onglet = (nom) => `.nav-item[data-tab="${nom}"]`;
+// Cloche des notifications en haut de l'accueil (ou l'ancien onglet, selon la version de l'app).
+const cloche = '#btn-bell, .nav-item[data-tab="notifs"]';
 const modifier = (carte) => `#${carte} .setting-modify`;
 const RESA = { status: 'reserved', claimedBy: MOI.uid, claimedName: 'Julie', createdAt: ms('10:20') };
 const sansFamille = (docs = {}) => ({ user: MOI, docs: { 'config/base': {}, ...docs }, local: { ...TELEPHONE_CONNU, 'papote.fid': '' } });
@@ -146,7 +153,8 @@ const SCENES = [
     'families/autre': { name: 'Papi Henri', createdBy: 'u-thomas', abonnement: { statut: 'actif' } },
     [`families/autre/members/${MOI.uid}`]: membre(MOI.uid, 'Julie', { email: MOI.email }),
   } }) },
-  { groupe: 'Accueil', titre: 'Paiement en retard', plein: true, donnees: () => abo({ statut: 'impaye', formule: 'wifi' }) },
+  { groupe: 'Accueil', titre: 'Paiement en retard', plein: true, donnees: () => abo({ statut: 'impaye', formule: 'wifi', graceJusqua: ilYa(-6) }) },
+  { groupe: 'Accueil', titre: 'Paiement en retard, sans date de grâce', plein: true, note: 'Cas limite : le bandeau doit rester une phrase complète sans la date.', donnees: () => abo({ statut: 'impaye', formule: 'wifi' }) },
   { groupe: 'Accueil', titre: 'Sans abonnement', plein: true, donnees: () => abo({ statut: 'aucun' }) },
   { groupe: 'Accueil', titre: 'Sans abonnement : prendre un abonnement', plein: true, donnees: () => abo({ statut: 'aucun' }), faire: toucher('#sans-abo-prendre') },
   { groupe: 'Accueil', titre: 'Pas d’internet', donnees: () => connecte(), faire: async (p) => {
@@ -180,6 +188,8 @@ const SCENES = [
   { groupe: 'Appels', titre: 'Mamie appelle', donnees: () => appelEntrant() },
 
   { groupe: 'Réglages', titre: 'Réglages (propriétaire)', plein: true, donnees: () => connecte(), faire: toucher(page('settings')) },
+  { groupe: 'Réglages', titre: 'Réglages : famille de 20 proches', plein: true, donnees: () => connecte({ nombreux: true }), faire: toucher(page('settings')) },
+  { groupe: 'Réglages', titre: 'Réglages : un proche mis en tête', plein: true, donnees: () => connecte({ enTete: true }), faire: toucher(page('settings')) },
   { groupe: 'Réglages', titre: 'Réglages (proche)', plein: true, donnees: () => connecte({ proprietaire: false }), faire: toucher(page('settings')) },
   { groupe: 'Réglages', titre: 'Menu d’un membre (⋮)', donnees: () => connecte(), faire: toucher(page('settings'), '#view-settings .member-more') },
   { groupe: 'Réglages', titre: 'Modifier : nom de la tablette', donnees: () => connecte(), faire: toucher(page('settings'), modifier('family-name-card')) },
@@ -192,14 +202,15 @@ const SCENES = [
 
   { groupe: 'Profil', titre: 'Profil : abonnement actif', plein: true, donnees: () => connecte(), faire: toucher(onglet('profile')) },
   { groupe: 'Profil', titre: 'Profil : commande offerte', plein: true, donnees: () => abo({ statut: 'offert' }), faire: toucher(onglet('profile')) },
-  { groupe: 'Profil', titre: 'Profil : paiement en retard', plein: true, donnees: () => abo({ statut: 'impaye', formule: 'wifi' }), faire: toucher(onglet('profile')) },
+  { groupe: 'Profil', titre: 'Profil : paiement en retard', plein: true, donnees: () => abo({ statut: 'impaye', formule: 'wifi', graceJusqua: ilYa(-6) }), faire: toucher(onglet('profile')) },
   { groupe: 'Profil', titre: 'Profil : en pause', plein: true, donnees: () => abo({ statut: 'suspendu', formule: 'wifi' }), faire: toucher(onglet('profile')) },
   { groupe: 'Profil', titre: 'Profil : résilié', plein: true, donnees: () => abo({ statut: 'resilie', formule: 'wifi', finLe: ilYa(-20) }), faire: toucher(onglet('profile')) },
   { groupe: 'Profil', titre: 'Profil d’un proche', plein: true, donnees: () => connecte({ proprietaire: false }), faire: toucher(onglet('profile')) },
   { groupe: 'Profil', titre: 'Résilier : avant de partir', donnees: () => connecte(), faire: toucher(onglet('profile'), '#btn-resilier') },
-  { groupe: 'Profil', titre: 'Notifications', plein: true, donnees: () => connecte(), faire: toucher(onglet('notifs')) },
-  { groupe: 'Profil', titre: 'Notifications : aucune', plein: true, donnees: () => connecte({ vide: true }), faire: toucher(onglet('notifs')) },
-  { groupe: 'Profil', titre: 'Support', plein: true, donnees: () => connecte(), faire: toucher(onglet('support')) },
+  // Depuis la barre du bas Accueil / Photos / Messages / Profil (27/10) : la cloche est en haut, le support dans le Profil.
+  { groupe: 'Profil', titre: 'Notifications', plein: true, donnees: () => connecte(), faire: toucher(cloche) },
+  { groupe: 'Profil', titre: 'Notifications : aucune', plein: true, donnees: () => connecte({ vide: true }), faire: toucher(cloche) },
+  { groupe: 'Profil', titre: 'Support', plein: true, donnees: () => connecte(), faire: toucher(onglet('profile'), '.aide-card, ' + onglet('support')) },
 ];
 
 const SDK = fs.readFileSync(path.join(__dirname, 'faux-firebase.js'), 'utf8');

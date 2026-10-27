@@ -4,8 +4,8 @@
 const fs = require('fs');
 const path = require('path');
 
-const NOMS = { tablette: 'Tablette', famille: 'App famille' };
-const LETTRES = { tablette: 'T', famille: 'F' };
+const NOMS = { tablette: 'Tablette', famille: 'App famille', vitrine: 'Site vitrine' };
+const LETTRES = { tablette: 'T', famille: 'F', vitrine: 'S' };
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -85,7 +85,7 @@ h4 { font-size:16px; }
 .erreur { margin:8px 0 0; color:var(--erreur); font-size:13px; }
 .captures { display:flex; gap:10px; align-items:flex-start; margin-top:10px; }
 figure { margin:0; min-width:0; }
-figure.paysage { flex:1; } figure.portrait { flex:1; } figure.telephone { flex:1; max-width:220px; }
+figure.paysage { flex:1; } figure.portrait { flex:1; } figure.telephone { flex:1; max-width:220px; } figure.ordinateur { flex:2; }
 figcaption { font-size:12px; color:var(--doux); text-align:center; margin-top:2px; }
 .zoom { display:block; width:100%; padding:0; border:1px solid var(--ligne); border-radius:6px; overflow:hidden; background:#000; cursor:zoom-in; }
 .zoom img { display:block; width:100%; height:auto; }

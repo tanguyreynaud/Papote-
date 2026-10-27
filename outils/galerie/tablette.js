@@ -18,6 +18,8 @@ const PROCHES = [
   { uid: 'u-emma', name: 'Emma' },
 ];
 const VISAGES = Object.fromEntries(PROCHES.map((p, i) => [p.uid, fauxVisage(p.name, i)]));
+// Famille nombreuse : les 5 proches habituels puis 15 autres sans photo (initiales).
+const BEAUCOUP = [...PROCHES, ...['Hugo', 'Léa', 'Nathan', 'Chloé', 'Louis', 'Manon', 'Gabriel', 'Camille', 'Jules', 'Inès', 'Arthur', 'Zoé', 'Paul', 'Jade', 'Marius'].map((n) => ({ uid: `u-${n.toLowerCase()}`, name: n }))];
 
 const IMAGES = {
   paysage: (n) => fausseImage(n, 1600, 1200),
@@ -240,6 +242,9 @@ const SCENES = [
   // Appels
   { groupe: 'Appels', titre: 'Qui voulez-vous appeler ?', faire: async (t) => {
     await accueil(t, photosVues()); await t.cliquer('.call-btn.big-btn'); await t.attendre(400);
+  } },
+  { groupe: 'Appels', titre: 'Qui appeler : famille de 20 proches (page 1, flèches)', faire: async (t) => {
+    await accueil(t, photosVues(), { people: BEAUCOUP }); await t.cliquer('.call-btn.big-btn'); await t.attendre(400);
   } },
   { groupe: 'Appels', titre: 'Qui appeler : une seule personne', faire: async (t) => {
     await accueil(t, photosVues(), { people: PROCHES.slice(0, 1) }); await t.cliquer('.call-btn.big-btn'); await t.attendre(400);

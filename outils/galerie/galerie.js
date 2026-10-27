@@ -5,8 +5,10 @@
 //   node galerie.js                      tablette + app famille, depuis les branches publiées
 //   node galerie.js tablette             seulement la tablette
 //   node galerie.js famille              seulement l'app famille
+//   node galerie.js vitrine              seulement le site (origin/main), téléphone et ordinateur
 //   --tablette=<branche|ici>             autre source pour android/ (ici = fichiers du disque)
 //   --famille=<branche|ici>              autre source pour web/
+//   --vitrine=<branche|ici>              autre source pour vitrine/
 //
 // Rien n'est envoyé nulle part : pas de Firebase, pas d'internet (sauf les polices Google).
 'use strict';
@@ -20,6 +22,7 @@ const page = require('./page');
 const SOURCES = {
   tablette: { ref: 'origin/claude/project-thread-cmnwxy', dossier: 'android/app/src/main/assets', module: './tablette' },
   famille: { ref: 'origin/claude/project-thread-dlattc', dossier: 'web', module: './famille' },
+  vitrine: { ref: 'origin/main', dossier: 'vitrine', module: './vitrine' },
 };
 
 async function main() {
@@ -37,12 +40,13 @@ async function main() {
   fs.mkdirSync(images, { recursive: true });
 
   // Caméra et micro simulés (mire de test) pour les écrans d'appel.
-  const browser = await chromium.launch({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] });
+  // --lang : les champs date/heure du navigateur s'affichent en français (sinon « 09:00 AM », « mm/dd/yyyy »).
+  const browser = await chromium.launch({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--lang=fr-FR'] });
   const parties = [];
   try {
     for (const nom of quoi) {
       const src = SOURCES[nom];
-      if (!src) { console.error(`Inconnu : ${nom} (tablette ou famille)`); continue; }
+      if (!src) { console.error(`Inconnu : ${nom} (tablette, famille ou vitrine)`); continue; }
       console.log(`${nom} : ${src.ref}`);
       const { dir, version } = extraire(src.ref, src.dossier);
       const serveur = await servir(dir);

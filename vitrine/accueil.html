@@ -17,9 +17,24 @@
 <meta property="og:image" content="https://mapapote.fr/mamie.jpg">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&display=swap">
+<!-- Polices servies par le site lui-même et demandées tout de suite : elles arrivent avant l'affichage
+     dans la plupart des cas. Sinon, le texte s'affiche d'abord en police du téléphone, agrandie ou réduite (« … repli »)
+     pour prendre la même place : rien ne saute quand la vraie police arrive. -->
+<link rel="preload" href="/polices/bricolage.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/polices/atkinson-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/polices/atkinson-700.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+@font-face { font-family: "Bricolage Grotesque"; src: url(/polices/bricolage.woff2) format("woff2"); font-weight: 200 800; font-display: swap; }
+@font-face { font-family: "Atkinson Hyperlegible"; src: url(/polices/atkinson-400.woff2) format("woff2"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "Atkinson Hyperlegible"; src: url(/polices/atkinson-700.woff2) format("woff2"); font-weight: 700; font-display: swap; }
+@font-face { font-family: "Atkinson repli"; src: local("Roboto"), local("Roboto-Regular"); font-weight: 400; size-adjust: 100%; }
+@font-face { font-family: "Atkinson repli"; src: local("Roboto Bold"), local("Roboto-Bold"); font-weight: 700; size-adjust: 108%; }
+@font-face { font-family: "Atkinson repli A"; src: local("Arial"), local("ArialMT"); font-weight: 400; size-adjust: 99.5%; }
+@font-face { font-family: "Atkinson repli A"; src: local("Arial Bold"), local("Arial-BoldMT"); font-weight: 700; size-adjust: 101.5%; }
+@font-face { font-family: "Bricolage repli"; src: local("Roboto SemiBold"), local("Roboto-SemiBold"); font-weight: 600; size-adjust: 105.5%; }
+@font-face { font-family: "Bricolage repli"; src: local("Roboto ExtraBold"), local("Roboto-ExtraBold"), local("Roboto Bold"), local("Roboto-Bold"); font-weight: 800; size-adjust: 106.5%; }
+@font-face { font-family: "Bricolage repli A"; src: local("Arial Bold"), local("Arial-BoldMT"); font-weight: 600 800; size-adjust: 100.5%; }
+</style>
 <style>
 /* Mise en page pensée pour le téléphone d'abord : titre, prix et bouton dans le premier écran, puis la tablette, puis « ce que vous payez ». Les illustrations (tablette, téléphone) sont dessinées en HTML pour rester fidèles aux vrais écrans. */
 :root {
@@ -38,8 +53,8 @@
   --bois-fonce: #c4ad8c;
   --feuille: #8fae8b;
   --feuille-fonce: #6f8f6b;
-  --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
-  --body: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+  --display: "Bricolage Grotesque", "Bricolage repli", "Bricolage repli A", "Segoe UI", system-ui, sans-serif;
+  --body: "Atkinson Hyperlegible", "Atkinson repli", "Atkinson repli A", "Segoe UI", system-ui, sans-serif;
   color-scheme: light;
 }
 * { box-sizing: border-box; }
