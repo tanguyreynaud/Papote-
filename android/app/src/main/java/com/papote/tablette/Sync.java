@@ -1418,6 +1418,35 @@ final class Sync {
 
     // ---------- Photos de profil et anniversaires ----------
 
+    /**
+     * « Qui voulez-vous appeler ? » et les visages du SOS : le créateur de la famille en premier, puis
+     * les autres proches par ordre alphabétique des prénoms (Tanguy, 27/10).
+     */
+    private JSONArray trierProches(String fid, JSONArray people) {
+        String createur = null;
+        try {
+            JSONObject fam = firebase.get("families/" + fid, "createdBy");
+            JSONObject f = fam == null ? null : fam.optJSONObject("fields");
+            createur = f == null ? null : Firebase.str(f, "createdBy");
+        } catch (Exception e) {
+            Log.w(TAG, "Créateur de la famille", e);
+        }
+        List<JSONObject> liste = new ArrayList<>();
+        for (int i = 0; i < people.length(); i++) liste.add(people.optJSONObject(i));
+        final String premier = createur;
+        final java.text.Collator alpha = java.text.Collator.getInstance(java.util.Locale.FRENCH);
+        alpha.setStrength(java.text.Collator.PRIMARY);
+        Collections.sort(liste, (a, b) -> {
+            boolean pa = premier != null && premier.equals(a.optString("uid"));
+            boolean pb = premier != null && premier.equals(b.optString("uid"));
+            if (pa != pb) return pa ? -1 : 1;
+            return alpha.compare(a.optString("name"), b.optString("name"));
+        });
+        JSONArray tries = new JSONArray();
+        for (JSONObject o : liste) tries.put(o);
+        return tries;
+    }
+
     private void syncFamilyExtras() {
         String fid = prefs.getString("fid", null);
         long now = System.currentTimeMillis();
@@ -1466,6 +1495,7 @@ final class Sync {
                 // La règle Firestore des anniversaires n'est peut-être pas encore en ligne.
                 Log.w(TAG, "Anniversaires", e);
             }
+            people = trierProches(fid, people);
             JSONObject payload = new JSONObject().put("faces", faces).put("birthdays", birthdays).put("people", people);
             String json = payload.toString();
             if (json.equals(lastFamilyJson)) return;
