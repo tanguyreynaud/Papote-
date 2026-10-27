@@ -271,6 +271,28 @@ function creerFauxStripe(horloge) {
     evenement('invoice.paid', f);
   }
 
+  // Prélèvement du mois refusé par la banque : abonnement « past_due », facture ouverte.
+  function banqueRefusePrelevement(abonnementId) {
+    const a = lire('abonnements', 'subscription', abonnementId);
+    const client = lire('clients', 'customer', a.customer);
+    const mensuel = a.items.data[0].price;
+    a.status = 'past_due';
+    const f = nouvelleFacture(client, { lignes: [{ amount: mensuel.unit_amount, price: mensuel.id }], abonnement: a.id });
+    f.status = 'open';
+    evenement('invoice.payment_failed', f);
+    evenement('customer.subscription.updated', a);
+  }
+
+  // Le client a changé de carte : la facture ouverte est payée, l'abonnement redevient « active ».
+  function banqueAccepteEnRetard(abonnementId) {
+    const a = lire('abonnements', 'subscription', abonnementId);
+    const f = [...etat.factures.values()].find((x) => x.subscription === a.id && x.status === 'open');
+    if (f) payer(f, lire('clients', 'customer', a.customer));
+    a.status = 'active';
+    evenement('invoice.paid', f || {});
+    evenement('customer.subscription.updated', a);
+  }
+
   // Date d'arrêt demandée (cancel_at) atteinte : Stripe arrête l'abonnement.
   function arreterALaDate(abonnementId) {
     const a = lire('abonnements', 'subscription', abonnementId);
@@ -295,7 +317,7 @@ function creerFauxStripe(horloge) {
       && (etat.factures.get(etat.paiements.get(r.payment_intent).invoice) || {}).subscription === abonnement)
     .reduce((t, r) => t + r.amount, 0);
 
-  return { api, etat, payerSession, banqueAccepte, banqueRefuse, expirerSession, finirEssai, arreterALaDate, rembourse, vider };
+  return { api, etat, payerSession, banqueAccepte, banqueRefuse, banqueRefusePrelevement, banqueAccepteEnRetard, expirerSession, finirEssai, arreterALaDate, rembourse, vider };
 }
 
 module.exports = { creerFauxStripe };

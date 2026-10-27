@@ -38,6 +38,33 @@ const PENALITE_NON_RESTITUTION = penaliteRestitution({});
 
 const STATUTS_OK = ['offert', 'actif', 'impaye'];
 
+// Famille suspendue (impayé au-delà du délai de grâce) depuis plus de 30 jours : le retour de la tablette est
+// à demander, à la main (Tanguy, 2026-10-27, C2 ; les CGV le disent).
+const SUSPENSION_RETOUR_JOURS = 30;
+function suspendueDepuisTrop(abonnement, maintenant) {
+  if (!abonnement || abonnement.statut !== 'suspendu') return false;
+  const depuis = enMillis(abonnement.suspenduLe != null ? abonnement.suspenduLe : abonnement.majLe);
+  return depuis != null && maintenant - depuis >= SUSPENSION_RETOUR_JOURS * JOUR;
+}
+
+// Fin d'installation sans commande reliée : 48 h de tolérance, tout fonctionne, pendant lesquelles Tanguy
+// relie la commande à la main (statut « installation » gardé, abonnement.toleranceJusqua), puis « aucun ».
+const TOLERANCE_INSTALLATION_MS = 48 * 60 * 60 * 1000;
+function toleranceDepassee(abonnement, maintenant) {
+  if (!abonnement || abonnement.statut !== 'installation') return false;
+  const fin = enMillis(abonnement.toleranceJusqua);
+  return fin != null && fin <= maintenant;
+}
+
+// Changement de statut qui mérite de prévenir la famille (C1) : 'impaye' (paiement échoué, pause dans 7 jours)
+// ou 'suspendu' (Papote en pause), une seule fois par épisode.
+function avisPaiement(avant, apres) {
+  const a = (avant && avant.statut) || null;
+  if (apres === 'impaye' && !['impaye', 'suspendu'].includes(a)) return 'impaye';
+  if (apres === 'suspendu' && a !== 'suspendu') return 'suspendu';
+  return null;
+}
+
 // Tarifs Stripe, retrouvés par leur « lookup key » (créés par outils/stripe/installer-stripe.js).
 const TARIFS = {
   wifi: { achetee: 'papote_wifi_achetee', incluse: 'papote_wifi_incluse' },
@@ -141,8 +168,10 @@ function materielParti(commande) {
 
 // La commande peut-elle encore être annulée et remboursée ?
 // commande : commandes/{id} (expedition, creeLe, envoyeeLe, retractation).
+// Reprise d'un abonnement résilié (tablette restée chez le proche, pas de mise en service) : ce n'est pas
+// une nouvelle vente, rien à annuler (Tanguy, 2026-10-27, C3).
 function retractationPossible(commande, maintenant) {
-  if (!commande || commande.retractation || commande.expedition === 'annulee') return false;
+  if (!commande || commande.retractation || commande.expedition === 'annulee' || commande.reprise) return false;
   if (!materielParti(commande)) return true;
   return maintenant <= limiteRetractation(enMillis(commande.creeLe), enMillis(commande.envoyeeLe), receptionDe(commande));
 }
@@ -226,6 +255,11 @@ module.exports = {
   rappelRestitutionDu,
   dateResiliation,
   STATUTS_OK,
+  SUSPENSION_RETOUR_JOURS,
+  suspendueDepuisTrop,
+  TOLERANCE_INSTALLATION_MS,
+  toleranceDepassee,
+  avisPaiement,
   TARIFS,
   TARIF_TABLETTE,
   TARIF_MISE_EN_SERVICE,

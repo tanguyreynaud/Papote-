@@ -16,8 +16,29 @@ const { logger } = require('firebase-functions/v2');
 const { onCall, onRequest, HttpsError } = require('firebase-functions/v2/https');
 const { FieldValue } = require('firebase-admin/firestore');
 
+const { defineSecret, defineString } = require('firebase-functions/params');
 const { BASE_FIRESTORE, REGION_FIRESTORE, db: base } = require('./base');
 const { envoyer } = require('./push');
+const mail = require('./mail');
+
+// Appel ou SOS qui ne fait sonner aucun téléphone (D1, Tanguy 2026-10-27) : tous les proches le savent par
+// e-mail (mêmes réglages que index.js ; en simulation, mail.envoyer est remplacé).
+const MAIL_SMTP = defineString('MAIL_SMTP', { default: 'smtp.gmail.com:465:' });
+const MAIL_EXPEDITEUR = defineString('MAIL_EXPEDITEUR', { default: '' });
+const MAIL_MOT_DE_PASSE = defineSecret('MAIL_MOT_DE_PASSE');
+const APPLI = 'https://app.mapapote.fr/';
+
+async function prevenirSansTelephone(db, fid, uids, { nom, sos }) {
+  const fiches = uids.length ? await db.getAll(...uids.map((uid) => db.doc(`families/${fid}/members/${uid}`))) : [];
+  const emails = [...new Set(fiches.map((m) => m.exists && m.get('email')).filter(Boolean).map((e) => String(e).toLowerCase()))];
+  logger.warn(`Famille ${fid} : ${sos ? 'SOS' : 'appel'} de la tablette sans aucun téléphone joignable, ${emails.length} e-mail(s)`);
+  const contenu = mail.appelSansTelephone({ nom, sos, lien: APPLI });
+  const envois = emails.map((a) => mail.envoyer({
+    smtp: MAIL_SMTP.value(), expediteur: MAIL_EXPEDITEUR.value(), motDePasse: MAIL_MOT_DE_PASSE.value(), a, contenu,
+  }));
+  (await Promise.allSettled(envois)).filter((r) => r.status === 'rejected')
+    .forEach((r) => logger.error(`Famille ${fid} : e-mail « aucun téléphone n'a sonné » non parti`, r.reason));
+}
 
 const DOC = 'families/{fid}/calls/{cid}';
 
@@ -46,7 +67,7 @@ const REPRISES = 4;
 const INTERVALLE_MS = 12_000;
 const attendre = (ms) => new Promise((r) => setTimeout(r, ms));
 
-exports.appelsSonnerie = onDocumentCreated({ document: DOC, region: REGION_FIRESTORE, database: BASE_FIRESTORE, timeoutSeconds: 90 }, async (event) => {
+exports.appelsSonnerie = onDocumentCreated({ document: DOC, region: REGION_FIRESTORE, database: BASE_FIRESTORE, timeoutSeconds: 90, secrets: [MAIL_MOT_DE_PASSE] }, async (event) => {
   const appel = event.data.data();
   if (!appel || appel.state !== 'ringing') return;
   const db = base();
@@ -60,6 +81,8 @@ exports.appelsSonnerie = onDocumentCreated({ document: DOC, region: REGION_FIRES
   const data = { type: 'appel', cid, fid, jeton, nom: essaiSos(appel) ? `SOS : ${nom}` : nom };
   const n = await envoyer(db, fid, uids, data, 45);
   logger.info(`Appel ${cid} : ${n} téléphone(s) prévenu(s)`);
+  // Personne ne sonne : les proches le savent par e-mail, au 1er essai seulement (le 2e essai du SOS suit de près).
+  if (n === 0 && essaiSos(appel) !== 2) await prevenirSansTelephone(db, fid, uids, { nom, sos: essaiSos(appel) > 0 });
   for (let i = 0; i < REPRISES; i++) {
     await attendre(INTERVALLE_MS);
     const cur = await event.data.ref.get();
@@ -68,7 +91,7 @@ exports.appelsSonnerie = onDocumentCreated({ document: DOC, region: REGION_FIRES
   }
 });
 
-exports.appelsManques = onDocumentUpdated({ document: DOC, region: REGION_FIRESTORE, database: BASE_FIRESTORE }, async (event) => {
+exports.appelsManques = onDocumentUpdated({ document: DOC, region: REGION_FIRESTORE, database: BASE_FIRESTORE, secrets: [MAIL_MOT_DE_PASSE] }, async (event) => {
   const avant = event.data.before.data();
   const apres = event.data.after.data();
   if (!avant || !apres || avant.state !== 'ringing' || apres.state === 'ringing') return;
@@ -81,8 +104,9 @@ exports.appelsManques = onDocumentUpdated({ document: DOC, region: REGION_FIREST
   if (sos && ['missed', 'declined'].includes(apres.state) && !apres.answer) {
     // 1er essai sans réponse : la tablette rappelle tout de suite, rien à dire. Au 2e, l'alerte.
     if (sos === 2) {
-      await envoyer(db, fid, uids, { type: 'alerte', titre: `${nom} a appuyé sur SOS`, texte: "Personne n'a pu répondre. Rappelez dès que possible." }, 24 * 3600);
+      const n = await envoyer(db, fid, uids, { type: 'alerte', titre: `${nom} a appuyé sur SOS`, texte: "Personne n'a pu répondre. Rappelez dès que possible." }, 24 * 3600);
       logger.warn(`SOS ${cid} : personne n'a répondu, famille alertée`);
+      if (n === 0) await prevenirSansTelephone(db, fid, uids, { nom, sos: true });
     }
   } else if (['missed', 'ended', 'declined'].includes(apres.state) && !apres.answer) {
     await envoyer(db, fid, uids, { type: 'manque', cid, nom }, 24 * 3600);

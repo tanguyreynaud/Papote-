@@ -23,6 +23,8 @@ const ATTENTE_MAX = 10;
 const ETAPES = ['photo', 'son', 'options', 'fini'];
 // Installation pas finie 30 minutes après le scan : le prochain proche qui scanne la reprend (Tanguy, 21/10).
 const REPRISE_MS = 30 * 60 * 1000;
+// Fin d'installation sans commande reliée : tolérance avant la pause (abonnement.js, B3).
+const { TOLERANCE_INSTALLATION_MS: TOLERANCE_MS } = require('./abonnement');
 
 // Options montrées déjà réglées dans le récapitulatif (document du parcours, 21/10).
 const OPTIONS_PAR_DEFAUT = Object.freeze({
@@ -98,9 +100,9 @@ function codeAuHasard() {
   return Array.from(bytes, (b) => CODE_ALPHABET[b % CODE_ALPHABET.length]).join('');
 }
 
-// deps : { db, compteVerifie, envoyerMail, mail, appli, logger }
+// deps : { db, compteVerifie, envoyerMail, mail, appli, logger, stockage, relierParEmail, prevenirPapote, notifier }
 function brancher(deps) {
-  const { db, compteVerifie, envoyerMail, mail, appli, logger, stockage } = deps;
+  const { db, compteVerifie, envoyerMail, mail, appli, logger, stockage, relierParEmail, prevenirPapote, notifier } = deps;
 
   async function reserverTablette(request) {
     const { uid, email } = compteVerifie(request);
@@ -109,6 +111,18 @@ function brancher(deps) {
     if (!code) throw new HttpsError('invalid-argument', 'Le code de la tablette a 8 caractères.');
     if (!prenom) throw new HttpsError('invalid-argument', 'Votre prénom est demandé.');
     const ref = db.doc(`pairings/${code}`);
+    const r = await reserver(ref, { uid, email, prenom });
+    // Installation reprise : le premier proche est prévenu sur son téléphone (B2).
+    if (r.reprise && r.fid && notifier) {
+      await notifier(r.fid, [r.reprise], {
+        type: 'alerte', titre: `${prenom} a repris l'installation`, fid: r.fid,
+        texte: `L'installation de la tablette${r.nomFamille ? ` de ${r.nomFamille}` : ''} continue sur son téléphone. Vous restez responsable de la famille.`,
+      }).catch((e) => logger.error(`Installation ${code} : premier proche non prévenu`, e.message));
+    }
+    return { etat: r.etat, ...(r.fid !== undefined ? { fid: r.fid } : {}), ...(r.par !== undefined ? { par: r.par } : {}) };
+  }
+
+  async function reserver(ref, { uid, email, prenom }) {
     return db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       const p = snap.exists ? snap.data() : null;
@@ -117,20 +131,25 @@ function brancher(deps) {
       const finie = !!(famRef && (!fam || !fam.installation || fam.installation.etape === 'fini'));
       const d = decisionScan(p, uid, Date.now(), finie);
       if (d.etat === 'reprise') {
-        // Le premier proche s'est arrêté en route : ce compte reprend, rien n'est effacé.
+        // Le premier proche s'est arrêté en route : ce compte reprend, rien n'est effacé. Le premier reste
+        // responsable de la famille et en est prévenu (B2, Tanguy 2026-10-27) : il garde la main sur l'abonnement.
         tx.update(ref, {
           claimedBy: uid, claimedName: prenom, claimedEmail: email, reservedAt: FieldValue.serverTimestamp(),
           attente: (p.attente || []).filter((a) => a.uid !== uid),
         });
         if (famRef) {
-          tx.update(famRef, { createdBy: uid, rev: FieldValue.increment(1) });
+          const admins = (fam && fam.admins) || [];
+          tx.update(famRef, {
+            createdBy: uid, rev: FieldValue.increment(1),
+            ...(p.claimedBy && !admins.includes(p.claimedBy) && admins.length < 10 ? { admins: [...admins, p.claimedBy] } : {}),
+          });
           tx.set(famRef.collection('members').doc(uid), {
             name: prenom, role: 'famille', code: fam.code || null, joinedAt: FieldValue.serverTimestamp(),
             uid, email, status: 'active', canCall: true,
           }, { merge: true });
         }
-        logger.info(`Installation ${code} reprise par ${uid} (avant : ${p.claimedBy})`);
-        return { etat: 'reserve', fid: d.fid };
+        logger.info(`Installation ${ref.id} reprise par ${uid} (avant : ${p.claimedBy})`);
+        return { etat: 'reserve', fid: d.fid, reprise: p.claimedBy || null, nomFamille: (fam && fam.name) || null };
       }
       if (d.etat === 'reserver') {
         tx.update(ref, {
@@ -253,12 +272,30 @@ function brancher(deps) {
     }
     if (fam.installation && fam.installation.etape === 'fini') return { ok: true };
     const maj = { 'installation.etape': 'fini', 'installation.fin': FieldValue.serverTimestamp() };
-    // Aucune commande reliée pendant l'installation (tablette hors commande) : abonnement à régler.
-    if (fam.abonnement && fam.abonnement.statut === 'installation') {
-      maj.abonnement = { statut: 'aucun', majLe: FieldValue.serverTimestamp() };
+    // Aucune commande reliée pendant l'installation (tablette pas reconnue). Avant de bloquer (B3, Tanguy
+    // 2026-10-27) : une seule commande en attente à l'e-mail d'un membre → reliée ; sinon 48 h de tolérance
+    // pendant lesquelles tout fonctionne et Tanguy relie la commande à la main, prévenu par e-mail.
+    let aRelier = fam.abonnement && fam.abonnement.statut === 'installation';
+    if (aRelier && relierParEmail) {
+      const membres = await ref.collection('members').where('role', '==', 'famille').get();
+      const emails = [...new Set(membres.docs.map((m) => m.get('email')).filter(Boolean).map((e) => String(e).toLowerCase()))];
+      try {
+        if (emails.length && await relierParEmail(fid, emails) === 1) aRelier = false;
+      } catch (e) {
+        logger.error(`Installation ${fid} : commande par e-mail`, e.message);
+      }
+    }
+    if (aRelier) {
+      maj['abonnement.toleranceJusqua'] = Timestamp.fromMillis(Date.now() + TOLERANCE_MS);
+      maj['abonnement.majLe'] = FieldValue.serverTimestamp();
       maj.rev = FieldValue.increment(1);
     }
     await ref.update(maj);
+    if (aRelier && prevenirPapote) {
+      await prevenirPapote(`Famille installée sans commande reliée : ${fam.name || fid}`,
+        `La tablette de « ${fam.name || fid} » vient d'être installée mais aucune commande n'est reliée (tablette pas reconnue à son n° de série, ou commande à un autre e-mail). Tout fonctionne pendant 48 h : reliez la commande depuis l'admin (page de la famille), sinon Papote passera en pause chez la personne.`)
+        .catch((e) => logger.error(`Installation ${fid} : Papote non prévenu`, e.message));
+    }
     await inviterAttente(fid, fam, uid);
     return { ok: true };
   }

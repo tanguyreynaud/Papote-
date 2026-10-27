@@ -96,8 +96,9 @@ function finDePeriodeMs(abo) {
   return fin ? fin * 1000 : null;
 }
 
-async function tarifs(formule, tablette) {
-  const cles = [regles.TARIFS[formule][tablette], regles.TARIF_MISE_EN_SERVICE];
+// reprise : abonnement repris sur une tablette restée chez le proche (C3) : pas de mise en service.
+async function tarifs(formule, tablette, { reprise = false } = {}) {
+  const cles = [regles.TARIFS[formule][tablette], ...(reprise ? [] : [regles.TARIF_MISE_EN_SERVICE])];
   const { data } = await stripe().prices.list({ lookup_keys: cles, active: true });
   const parCle = Object.fromEntries(data.map((p) => [p.lookup_key, p.id]));
   for (const cle of cles) {
@@ -110,9 +111,11 @@ async function tarifs(formule, tablette) {
 // (« trial » Stripe), ni pendant les 30 jours pour changer d'avis qui suivent la réception (debutApresReception),
 // puis un prélèvement par mois ; le mois en cours est prélevé à l'arrêt (prelevementDernierMois).
 // Chaque mois utilisé est donc payé une fois, à terme échu.
-async function sessionPaiement({ formule, tablette, fid, email, client, relais, accord, reservation, dejaInstallee }) {
+async function sessionPaiement({ formule, tablette, fid, email, client, relais, accord, reservation, dejaInstallee, reprise }) {
   const metadata = { formule, tablette, ...(relais ? livraison.relaisVersMeta(relais) : {}) };
   if (dejaInstallee) metadata.dejaInstallee = '1';
+  // Reprise après une résiliation, tablette encore chez le proche : pas de 60 €, rien à annuler (C3).
+  if (reprise) metadata.reprise = '1';
   // Tablette mise de côté pendant le paiement (stock.js), libérée au paiement ou à l'expiration de la page.
   if (reservation && reservation.id) metadata.reservation = reservation.id;
   // Délai annoncé au client (stock.js) : stock, precommande ou long.
@@ -127,7 +130,7 @@ async function sessionPaiement({ formule, tablette, fid, email, client, relais, 
   };
   const params = {
     mode: 'subscription',
-    line_items: await tarifs(formule, tablette),
+    line_items: await tarifs(formule, tablette, { reprise }),
     locale: 'fr',
     // Carte (avec Apple Pay et Google Pay) en premier, prélèvement SEPA ensuite (Tanguy, 2026-10-26 : la carte
     // se tape en 20 secondes sur un téléphone, l'IBAN rarement sous la main). Pas de code promo.
@@ -158,6 +161,13 @@ async function sessionPaiement({ formule, tablette, fid, email, client, relais, 
   }
 }
 
+// Une commande résiliée de la famille attend encore le retour de sa tablette : elle est toujours chez le proche.
+async function tabletteARendre(fid) {
+  const attendues = await db.collection('commandes').where('fid', '==', fid)
+    .where('restitution.statut', 'in', ['attendue', 'echec']).get();
+  return !attendues.empty;
+}
+
 // La famille a-t-elle déjà sa tablette (jumelage confirmé) ?
 async function tabletteInstallee(fid) {
   const jumelages = await db.collection('pairings').where('fid', '==', fid).get();
@@ -165,10 +175,19 @@ async function tabletteInstallee(fid) {
 }
 
 // La tablette du stock jumelée à cette famille (« jumelée sans commande ») prend la nouvelle commande,
-// et l'alerte de l'admin n'a plus lieu d'être.
-async function relierTabletteInstallee(fid, commande) {
+// et l'alerte de l'admin n'a plus lieu d'être. Reprise (C3) : la tablette de l'ancienne commande résiliée passe
+// sur la nouvelle, et le retour attendu de l'ancienne est annulé (plus de 140 € à prélever).
+async function relierTabletteInstallee(fid, commande, { reprise = false } = {}) {
+  if (reprise) {
+    const anciennes = await db.collection('commandes').where('fid', '==', fid)
+      .where('restitution.statut', 'in', ['attendue', 'echec']).get();
+    await Promise.all(anciennes.docs.filter((d) => d.id !== commande).map((d) => d.ref.update({
+      'restitution.statut': 'annulee', 'restitution.motif': 'reprise', 'restitution.reprisePar': commande,
+      'restitution.majLe': FieldValue.serverTimestamp(),
+    })));
+  }
   const fiches = await db.collection('stock').where('fid', '==', fid).get();
-  await Promise.all(fiches.docs.filter((d) => !d.get('commande'))
+  await Promise.all(fiches.docs.filter((d) => reprise || !d.get('commande'))
     .map((d) => d.ref.update({
       commande, etat: 'chez-client',
       ...(d.get('alerteJumelage') === 'jumelée sans commande' ? { alerteJumelage: null } : {}),
@@ -282,18 +301,22 @@ async function appliquer(fid, abonnementId) {
   if (commande.exists && commande.get('offerte')) return appliquerOfferte(fid, commande);
   const abo = await stripe().subscriptions.retrieve(abonnementId);
   const ref = db.doc(`families/${fid}`);
-  await db.runTransaction(async (tx) => {
+  const changement = await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
-    if (!snap.exists) return;
+    if (!snap.exists) return null;
     const actuel = snap.data().abonnement;
     if (!regles.peutModifier(actuel)) {
       logger.info(`Famille ${fid} offerte : abonnement ${abonnementId} ignoré.`);
-      return;
+      return null;
     }
     const { statut, graceJusqua } = regles.statutDepuisStripe(abo.status, actuel, Date.now());
+    // Date de suspension gardée (C2 : « suspendue depuis N jours » dans À faire), tant que ça dure.
+    const suspenduLe = statut === 'suspendu'
+      ? ((actuel && actuel.statut === 'suspendu' && actuel.suspenduLe) || Timestamp.fromMillis(Date.now())) : null;
     tx.update(ref, {
       abonnement: {
         statut,
+        suspenduLe,
         formule: abo.metadata.formule || null,
         tablette: abo.metadata.tablette || null,
         graceJusqua: versTimestamp(graceJusqua),
@@ -307,11 +330,61 @@ async function appliquer(fid, abonnementId) {
       },
       rev: FieldValue.increment(1),
     });
+    // Suspendue pour impayé puis arrêtée (C2) : pas de dernier mois en plus de la dette (prelevementDernierMois).
+    if (statut === 'resilie' && actuel && actuel.statut === 'suspendu') {
+      tx.set(db.doc(`commandes/${abo.id}`), { dernierMois: { statut: 'aucun', motif: 'famille suspendue pour impayé', le: FieldValue.serverTimestamp() } }, { merge: true });
+    }
+    return { avis: regles.avisPaiement(actuel, statut), graceJusqua, premiereFois: !(actuel && actuel.stripeSubscriptionId === abo.id) };
   });
   await db.doc(`commandes/${abo.id}`).set({ fid, statutStripe: abo.status }, { merge: true });
   await attendreRestitution(abo);
   if (abo.metadata.fid !== fid) {
     await stripe().subscriptions.update(abo.id, { metadata: { ...abo.metadata, fid } });
+  }
+  if (changement && changement.premiereFois) await promouvoirPayeur(fid, commande.exists ? commande.get('email') : null);
+  if (changement && changement.avis) await prevenirPaiement(fid, abo.id, changement.avis, changement.graceJusqua);
+}
+
+// Celui qui a payé la commande devient responsable de la famille s'il en est un simple proche (B1, Tanguy
+// 2026-10-27) : il voit l'abonnement et peut résilier. Le propriétaire reste celui qui a installé.
+async function promouvoirPayeur(fid, email) {
+  if (!email) return;
+  const membres = await db.collection(`families/${fid}/members`).where('email', '==', String(email).toLowerCase()).get();
+  const ref = db.doc(`families/${fid}`);
+  await db.runTransaction(async (tx) => {
+    const fam = await tx.get(ref);
+    if (!fam.exists) return;
+    const admins = fam.get('admins') || [];
+    const nouveaux = membres.docs
+      .filter((m) => m.get('role') === 'famille' && (m.get('status') || 'active') === 'active')
+      .map((m) => m.id).filter((uid) => uid !== fam.get('createdBy') && !admins.includes(uid));
+    if (!nouveaux.length || admins.length + nouveaux.length > 10) return;
+    tx.update(ref, { admins: [...admins, ...nouveaux] });
+  });
+}
+
+// Paiement échoué ou Papote en pause (C1) : notification aux responsables et e-mail à l'adresse de la commande.
+// Avant, personne n'était prévenu par Papote (la tablette disait pourtant « la famille a été prévenue »).
+async function prevenirPaiement(fid, commandeId, avis, graceJusqua) {
+  try {
+    const [fam, commande] = await Promise.all([db.doc(`families/${fid}`).get(), db.doc(`commandes/${commandeId}`).get()]);
+    if (!fam.exists) return;
+    const nom = fam.get('name') || 'Mamie';
+    const responsables = [...new Set([fam.get('createdBy'), ...(fam.get('admins') || [])].filter(Boolean))];
+    const pauseLe = graceJusqua || Date.now() + regles.DELAI_GRACE_JOURS * 24 * 3600e3;
+    const notification = avis === 'impaye'
+      ? { titre: 'Le paiement de Papote a échoué', texte: `La tablette de ${nom} se mettra en pause le ${mail.dateEnClair(pauseLe)}. Touchez pour régler.` }
+      : { titre: 'Papote est en pause', texte: `L'abonnement de ${nom} n'a pas été réglé. Touchez pour régler : tout reviendra.` };
+    const envois = [push.envoyer(db, fid, responsables, { type: 'alerte', ...notification, fid, abonnement: '1' }, 24 * 3600)];
+    const email = commande.exists && commande.get('email');
+    if (email) {
+      const infos = { nom: commande.get('nom'), famille: fam.get('name'), pauseLe, lien: APPLI_FAMILLE };
+      envois.push(envoyerMail(email, avis === 'impaye' ? mail.paiementEchoue(infos) : mail.papoteEnPause(infos)));
+    }
+    (await Promise.allSettled(envois)).filter((r) => r.status === 'rejected')
+      .forEach((r) => logger.error(`Famille ${fid} : avis « ${avis} » non envoyé`, r.reason));
+  } catch (e) {
+    logger.error(`Famille ${fid} : avis « ${avis} »`, e.message);
   }
 }
 
@@ -333,7 +406,10 @@ async function appliquerOfferte(fid, commande) {
     });
     return true;
   });
-  if (reliee) await commande.ref.update({ fid });
+  if (reliee) {
+    await commande.ref.update({ fid });
+    await promouvoirPayeur(fid, commande.get('email'));
+  }
 }
 
 // Fin d'un abonnement avec tablette incluse : la tablette est attendue sous 30 jours.
@@ -428,6 +504,17 @@ exports.creerPaiement = onCall({ secrets: [STRIPE_SECRET] }, async (request) => 
     throw new HttpsError('failed-precondition', 'Cette famille a déjà un abonnement.');
   }
   const client = fam.abonnement && fam.abonnement.stripeCustomerId;
+  // Famille suspendue pour impayé : pas de deuxième abonnement (60 € de plus, dette oubliée) ; le paiement en
+  // retard se règle dans le portail Stripe (C3, Tanguy 2026-10-27).
+  if (fam.abonnement && fam.abonnement.statut === 'suspendu' && fam.abonnement.stripeSubscriptionId) {
+    throw new HttpsError('failed-precondition', 'Réglez d\'abord le paiement en retard (« Gérer le paiement ») : tout reviendra automatiquement.');
+  }
+  // Résiliée, tablette encore chez le proche (retour attendu) : reprise sans mise en service, et le retour
+  // attendu est annulé au paiement (relierTabletteInstallee).
+  if (fam.abonnement && fam.abonnement.statut === 'resilie' && await tabletteARendre(fid)) {
+    const session = await sessionPaiement({ formule, tablette, fid, email, client, dejaInstallee: true, reprise: true });
+    return { url: session.url };
+  }
   // Tablette déjà installée chez le proche (la famille naît au jumelage) : rien à envoyer, le premier
   // mois court dès aujourd'hui et le premier prélèvement tombe 30 jours plus tard.
   if (await tabletteInstallee(fid)) {
@@ -456,7 +543,7 @@ exports.portailClient = onCall({ secrets: [STRIPE_SECRET] }, async (request) => 
 
 // Résiliation en ligne, sans engagement : l'abonnement s'arrête à la fin du mois en cours,
 // qui est prélevé à l'arrêt (prelevementDernierMois).
-exports.resilierAbonnement = onCall({ secrets: [STRIPE_SECRET] }, async (request) => {
+exports.resilierAbonnement = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE] }, async (request) => {
   const { fid } = request.data || {};
   const fam = await familleGeree(fid, request);
   const id = fam.abonnement && fam.abonnement.stripeSubscriptionId;
@@ -474,7 +561,7 @@ exports.resilierAbonnement = onCall({ secrets: [STRIPE_SECRET] }, async (request
   return { le };
 });
 
-exports.annulerResiliation = onCall({ secrets: [STRIPE_SECRET] }, async (request) => {
+exports.annulerResiliation = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE] }, async (request) => {
   const { fid } = request.data || {};
   const fam = await familleGeree(fid, request);
   const id = fam.abonnement && fam.abonnement.stripeSubscriptionId;
@@ -671,7 +758,7 @@ exports.codeCommande = onRequest({ secrets: [STRIPE_SECRET], cors: true }, async
   }
 });
 
-exports.rattacherCommande = onCall({ secrets: [STRIPE_SECRET] }, async (request) => {
+exports.rattacherCommande = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE] }, async (request) => {
   const { uid, email } = compteVerifie(request);
   const { fid, code: saisie } = request.data || {};
   const fam = await familleDuResponsable(fid, uid);
@@ -764,6 +851,8 @@ async function paiementTermine(session) {
         expedition: 'envoyee', envoyeeLe: FieldValue.serverTimestamp(),
         preparation: { recuLe: Date.now(), recuPar: 'déjà installée' },
       } : {}),
+      // Reprise d'un abonnement résilié (C3) : pas de mise en service, pas de délai pour changer d'avis.
+      ...(meta.reprise === '1' ? { reprise: true } : {}),
       delai: meta.delai || null,
       stripeCustomerId: session.customer,
       fid: (existante.exists && existante.get('fid')) || null,
@@ -791,7 +880,7 @@ async function paiementTermine(session) {
   if (existante.exists && existante.get('expedition') === 'paiement-en-attente' && meta.dejaInstallee !== '1') await ref.update({ expedition: 'a-preparer' });
   const fid = meta.fid || (existante.exists && existante.get('fid')) || await chercherFamille(email);
   if (fid) await appliquer(fid, session.subscription);
-  if (fid && meta.dejaInstallee === '1') await relierTabletteInstallee(fid, session.subscription);
+  if (fid && meta.dejaInstallee === '1') await relierTabletteInstallee(fid, session.subscription, { reprise: meta.reprise === '1' });
   await confirmerCommande(ref, email, code);
 }
 
@@ -1100,6 +1189,13 @@ async function prelevementDernierMois(abo) {
   if (!item || !item.price.unit_amount) return;
   const montant = item.price.unit_amount * (item.quantity || 1);
   const ref = db.doc(`commandes/${abo.id}`);
+  // Famille suspendue pour impayé dont Tanguy arrête l'abonnement (C2) : pas de dernier mois en plus de la dette.
+  const commandeDoc = await ref.get();
+  const famille = commandeDoc.exists && commandeDoc.get('fid') ? await db.doc(`families/${commandeDoc.get('fid')}`).get() : null;
+  if (famille && famille.exists && famille.get('abonnement.statut') === 'suspendu') {
+    logger.info(`Commande ${abo.id} : famille suspendue, pas de dernier mois.`);
+    return;
+  }
   const aPrelever = await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     const c = snap.exists ? snap.data() : {};
@@ -1181,7 +1277,7 @@ exports.compter = onRequest({ cors: true, maxInstances: 2 }, async (req, res) =>
 // ---------- Tâches automatiques ----------
 
 exports.finDeGrace = onSchedule(
-  { schedule: 'every 1 hours', timeZone: 'Europe/Paris' },
+  { schedule: 'every 1 hours', timeZone: 'Europe/Paris', secrets: [MAIL_MOT_DE_PASSE] },
   async () => {
     const maintenant = Date.now();
     const impayes = await db.collection('families').where('abonnement.statut', '==', 'impaye').get();
@@ -1189,10 +1285,23 @@ exports.finDeGrace = onSchedule(
       if (!regles.graceDepassee(snap.get('abonnement'), maintenant)) continue;
       await snap.ref.update({
         'abonnement.statut': 'suspendu',
+        'abonnement.suspenduLe': Timestamp.fromMillis(maintenant),
         'abonnement.majLe': FieldValue.serverTimestamp(),
         rev: FieldValue.increment(1),
       });
       logger.info(`Famille ${snap.id} suspendue : délai de grâce dépassé.`);
+      // La famille est prévenue (C1) : la tablette affiche « la famille a été prévenue ».
+      await prevenirPaiement(snap.id, snap.get('abonnement.stripeSubscriptionId'), 'suspendu', null);
+    }
+    // Installation finie sans commande reliée (B3) : 48 h de tolérance, puis « aucun » (Papote en pause).
+    const tolerees = await db.collection('families').where('abonnement.statut', '==', 'installation').get();
+    for (const snap of tolerees.docs) {
+      if (!regles.toleranceDepassee(snap.get('abonnement'), maintenant)) continue;
+      await snap.ref.update({
+        abonnement: { statut: 'aucun', majLe: FieldValue.serverTimestamp() },
+        rev: FieldValue.increment(1),
+      });
+      logger.warn(`Famille ${snap.id} : toujours aucune commande reliée 48 h après l'installation, Papote en pause.`);
     }
   });
 
@@ -1349,6 +1458,9 @@ exports.nouveauMembre = onDocumentCreated(
     if (!fam.exists) return;
     if (fam.get('createdBy') !== uid) {
       await prevenirArrivee(fid, uid, membre, fam);
+      // Celui qui a payé la commande de cette famille arrive après l'installation : responsable (B1).
+      const payee = await db.collection('commandes').where('fid', '==', fid).where('email', '==', membre.email.toLowerCase()).limit(1).get();
+      if (!payee.empty) await promouvoirPayeur(fid, membre.email);
       return;
     }
     // Secours seulement : la commande se relie normalement par la tablette (n° de série du jumelage,
@@ -1409,15 +1521,27 @@ async function prevenirArrivee(fid, uid, membre, fam) {
 
 // Le tableau de bord admin note le départ du colis : { commande, suivi } (numéro Mondial Relay).
 // Corriger un numéro déjà saisi renvoie l'e-mail avec le bon lien.
+// { commande, mainPropre: true } : tablette remise en main propre par Tanguy (A1, 2026-10-27) : pas de colis,
+// reçue le jour même, les 30 jours pour changer d'avis et le premier prélèvement partent d'aujourd'hui.
 exports.tabletteEnvoyee = onCall(async (request) => {
   verifierAdmin(request);
-  const { commande } = request.data || {};
+  const { commande, mainPropre } = request.data || {};
   const suivi = livraison.normaliserSuivi((request.data || {}).suivi);
   if (typeof commande !== 'string' || !commande) throw new HttpsError('invalid-argument', 'Commande manquante.');
-  if (!suivi) throw new HttpsError('invalid-argument', 'Numéro de suivi invalide.');
+  if (!suivi && mainPropre !== true) throw new HttpsError('invalid-argument', 'Numéro de suivi invalide.');
   const ref = db.doc(`commandes/${commande}`);
   const snap = await ref.get();
   if (!snap.exists) throw new HttpsError('not-found', 'Commande introuvable.');
+  if (mainPropre === true) {
+    if (snap.get('expedition') === 'envoyee') throw new HttpsError('failed-precondition', 'Cette commande est déjà envoyée.');
+    const maintenant = Date.now();
+    await ref.update({
+      expedition: 'envoyee', remise: 'main-propre', suivi: FieldValue.delete(),
+      envoyeeLe: Timestamp.fromMillis(maintenant), rappels: snap.get('rappels') || 0,
+      'preparation.recuLe': maintenant, 'preparation.recuPar': 'remise en main propre',
+    });
+    return { ok: true, lien: null };
+  }
   await ref.update({
     expedition: 'envoyee',
     suivi,
@@ -1459,7 +1583,20 @@ async function debutApresReception(event, avant, apres) {
 }
 
 async function mailEnvoi(event, avant, apres) {
-  if (apres.expedition !== 'envoyee' || !apres.suivi || !apres.email) return;
+  if (apres.expedition !== 'envoyee' || !apres.email) return;
+  // Remise en main propre (A1) : « votre tablette est chez vous », une fois, sans lien de suivi.
+  if (apres.remise === 'main-propre') {
+    if (avant.remise === 'main-propre' || apres.mailEnvoiLe) return;
+    try {
+      await envoyerMail(apres.email, mail.tabletteRemise({ nom: apres.nom, code: apres.code ? regles.afficherCode(apres.code) : null }));
+      await event.data.after.ref.update({ mailEnvoiLe: FieldValue.serverTimestamp(), mailErreur: FieldValue.delete() });
+    } catch (e) {
+      logger.error(`Commande ${event.params.id} : e-mail de remise non parti`, e.message);
+      await event.data.after.ref.update({ mailErreur: e.message });
+    }
+    return;
+  }
+  if (!apres.suivi) return;
   if (avant.expedition === 'envoyee' && avant.suivi === apres.suivi) return;
   const relais = apres.livraison && apres.livraison.transporteur ? apres.livraison : null;
   const code = apres.code ? regles.afficherCode(apres.code) : null;
@@ -1565,6 +1702,9 @@ exports.rappelsJumelage = onSchedule(
       if (livraison.alerteDue(depart, maintenant) && !c.alerteJumelage) {
         await snap.ref.update({ alerteJumelage: true });
         logger.warn(`Commande ${snap.id} : tablette toujours pas jumelée 20 jours après l'envoi.`);
+        // Tanguy prévenu par e-mail (A3) : le premier prélèvement tombe dans 13 jours, à lui d'appeler le client.
+        await prevenirPapote(`Tablette pas installée 20 jours après l'envoi : ${c.nom || c.email || snap.id}`, snap,
+          'La tablette est partie il y a 20 jours et n\'est toujours pas reliée à une famille. Appelez le client avant le premier prélèvement (33 jours après l\'envoi). Colis revenu chez vous ? « Colis revenu » sur la commande l\'annule et rembourse les 60 €.');
       }
       const numero = livraison.rappelDu(depart, c.rappels, maintenant);
       if (!numero || !c.email) continue;
@@ -1621,11 +1761,44 @@ exports.gestionJumelage = gestion.gestionJumelage;
 // Installation d'une nouvelle tablette depuis le téléphone du premier proche (installation.js).
 const installation = require('./installation').brancher({
   db, compteVerifie, envoyerMail, mail, appli: APPLI_FAMILLE, logger, stockage: () => admin.storage().bucket(base.BUCKET_STORAGE),
+  // B3 : une seule commande en attente à l'e-mail d'un membre → reliée ; sinon Tanguy est prévenu.
+  relierParEmail: async (fid, emails) => {
+    const lots = [];
+    for (let i = 0; i < emails.length; i += 10) lots.push(emails.slice(i, i + 10));
+    const trouvees = new Map();
+    for (const lot of lots) {
+      const r = await db.collection('commandes').where('email', 'in', lot).where('fid', '==', null).get();
+      r.docs.filter((d) => d.get('expedition') !== 'annulee').forEach((d) => trouvees.set(d.id, d));
+    }
+    if (trouvees.size !== 1) return trouvees.size;
+    await appliquer(fid, [...trouvees.keys()][0]);
+    return 1;
+  },
+  prevenirPapote: (titre, detail) => prevenirPapote(titre, null, detail),
+  notifier: (fid, uids, data) => push.envoyer(db, fid, uids, data, 24 * 3600),
 });
 exports.reserverTablette = onCall({ maxInstances: 2 }, installation.reserverTablette);
 exports.nommerFamille = onCall({ secrets: [MAIL_MOT_DE_PASSE], maxInstances: 2 }, installation.nommerFamille);
 exports.finirInstallation = onCall({ secrets: [MAIL_MOT_DE_PASSE], maxInstances: 2 }, installation.finirInstallation);
 exports.annulerInstallation = onCall({ timeoutSeconds: 300, memory: '512MiB', maxInstances: 2 }, installation.annulerInstallation);
+
+// « N téléphones reçoivent les appels » dans l'appli (D1, Tanguy 2026-10-27) : les jetons sont privés
+// (members/{uid}/private/push), l'appli ne peut pas les lire pour les autres ; le serveur pose
+// members/{uid}.recoitAppels (vrai si au moins un jeton, navigateur ou app Android) à chaque écriture.
+exports.telephoneAppels = onDocumentWritten(
+  { document: 'families/{fid}/members/{uid}/private/push', database: BASE_FIRESTORE, region: REGION_FIRESTORE },
+  async (event) => {
+    const apres = event.data && event.data.after;
+    const recoit = Boolean(apres && apres.exists && ((apres.get('tokens') || []).length || (apres.get('natifs') || []).length));
+    const membre = db.doc(`families/${event.params.fid}/members/${event.params.uid}`);
+    try {
+      const snap = await membre.get();
+      if (!snap.exists || Boolean(snap.get('recoitAppels')) === recoit) return;
+      await membre.update({ recoitAppels: recoit });
+    } catch (e) {
+      if (e.code !== 5) throw e;
+    }
+  });
 
 // Nombre de proches d'une famille (membres « famille » qui ont rejoint), lu par les règles
 // Firestore pour refuser un 31e proche. Recalculé seulement quand un proche arrive, part ou est accepté :

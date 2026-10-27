@@ -159,3 +159,35 @@ test('matériel non rendu : prix par élément, plafonné au matériel prêté',
   assert.strictEqual(a.montantManquants({ enceinteFournie: true }, []), 0);
   assert.strictEqual(a.PENALITE_NON_RESTITUTION, 14000);
 });
+
+test('reprise d\'un abonnement résilié : rien à annuler (pas de mise en service)', () => {
+  assert.strictEqual(a.retractationPossible({ expedition: 'envoyee', creeLe: T0, envoyeeLe: T0, reprise: true }, T0 + JOUR), false);
+  assert.strictEqual(a.retractationPossible({ expedition: 'envoyee', creeLe: T0, envoyeeLe: T0 }, T0 + JOUR), true);
+});
+
+test('famille suspendue depuis plus de 30 jours : retour de la tablette à demander', () => {
+  assert.strictEqual(a.suspendueDepuisTrop({ statut: 'suspendu', suspenduLe: T0 - 31 * JOUR }, T0), true);
+  assert.strictEqual(a.suspendueDepuisTrop({ statut: 'suspendu', suspenduLe: T0 - 29 * JOUR }, T0), false);
+  // Anciennes familles sans suspenduLe : la date de mise à jour fait foi.
+  assert.strictEqual(a.suspendueDepuisTrop({ statut: 'suspendu', majLe: T0 - 40 * JOUR }, T0), true);
+  assert.strictEqual(a.suspendueDepuisTrop({ statut: 'impaye', suspenduLe: T0 - 40 * JOUR }, T0), false);
+  assert.strictEqual(a.suspendueDepuisTrop(undefined, T0), false);
+});
+
+test('installation finie sans commande : 48 h de tolérance avant la pause', () => {
+  assert.ok(a.TOLERANCE_INSTALLATION_MS === 48 * 3600e3);
+  assert.strictEqual(a.toleranceDepassee({ statut: 'installation', toleranceJusqua: T0 - 1 }, T0), true);
+  assert.strictEqual(a.toleranceDepassee({ statut: 'installation', toleranceJusqua: T0 + 1 }, T0), false);
+  // Installation en cours (pas de tolérance posée) : rien ne change.
+  assert.strictEqual(a.toleranceDepassee({ statut: 'installation' }, T0), false);
+  assert.strictEqual(a.toleranceDepassee({ statut: 'aucun', toleranceJusqua: T0 - 1 }, T0), false);
+});
+
+test('qui prévenir quand le paiement échoue : une fois par épisode', () => {
+  assert.strictEqual(a.avisPaiement({ statut: 'actif' }, 'impaye'), 'impaye');
+  assert.strictEqual(a.avisPaiement({ statut: 'impaye' }, 'impaye'), null);
+  assert.strictEqual(a.avisPaiement({ statut: 'impaye' }, 'suspendu'), 'suspendu');
+  assert.strictEqual(a.avisPaiement({ statut: 'suspendu' }, 'suspendu'), null);
+  assert.strictEqual(a.avisPaiement({ statut: 'suspendu' }, 'actif'), null);
+  assert.strictEqual(a.avisPaiement(undefined, 'impaye'), 'impaye');
+});
