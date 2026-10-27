@@ -37,7 +37,7 @@
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
 body { margin: 0; background: var(--bg); color: var(--text); font: 400 1.05rem/1.5 "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif; }
-main { max-width: 40rem; margin: 0 auto; padding: 1rem max(16px, env(safe-area-inset-right)) 8rem max(16px, env(safe-area-inset-left)); display: grid; gap: 1.1rem; }
+main { max-width: 40rem; margin: 0 auto; padding: 1rem max(16px, env(safe-area-inset-right)) 8rem max(16px, env(safe-area-inset-left)); display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.1rem; }
 .haut { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 .top { display: inline-flex; align-items: center; gap: .5rem; font: 800 1.3rem "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif; color: var(--text); text-decoration: none; }
 .top img { width: 2rem; height: 2rem; }
@@ -46,7 +46,7 @@ h1 { margin: 0; font: 800 clamp(1.7rem, 6vw, 2.4rem)/1.1 "Bricolage Grotesque", 
 h2 { margin: 0; display: flex; align-items: center; gap: .6rem; font: 800 1.15rem/1.2 "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif; }
 p { margin: 0; }
 .sous, .muted { color: var(--muted); }
-.etape { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 1rem 1.1rem; display: grid; gap: .75rem; scroll-margin-top: 1rem; }
+.etape { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 1rem 1.1rem; display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; scroll-margin-top: 1rem; }
 .etape .n { display: inline-grid; place-items: center; width: 1.75rem; height: 1.75rem; border-radius: 50%; background: var(--accent); color: #fff; font-size: .95rem; flex: none; }
 .etape .ok { margin-left: auto; color: var(--accent-strong); font-size: 1rem; font-weight: 700; }
 .etape .ok[hidden] { display: none; }
@@ -58,7 +58,8 @@ p { margin: 0; }
 .opt .prix { margin-left: auto; font-weight: 700; white-space: nowrap; }
 .cherche { display: flex; gap: .6rem; }
 .cherche input, .cherche select { font: inherit; color: var(--text); min-height: 3.25rem; padding: .5rem .9rem; border: 2px solid var(--line); border-radius: 14px; background: var(--bg); min-width: 0; }
-.cherche #cp { flex: 1 1 7rem; }
+/* width: 0 : sinon la largeur par défaut du champ (20 caractères) élargit la page sur téléphone et oblige à dézoomer. */
+.cherche #cp { flex: 1 1 0; width: 0; }
 .cherche #autour { font: 700 1rem inherit; min-height: 3.25rem; padding: 0 1rem; border: 2px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--text); white-space: nowrap; cursor: pointer; }
 .cherche #autour:disabled { color: var(--muted); }
 .cherche [hidden] { display: none; }
@@ -98,7 +99,7 @@ p { margin: 0; }
 .erreur { color: #b91c1c; }
 .barre { position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; background: rgba(253, 250, 245, .96); border-top: 1px solid var(--line); padding: .7rem max(16px, env(safe-area-inset-right)) calc(.7rem + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
 .barre-in { max-width: 40rem; margin: 0 auto; display: flex; align-items: center; gap: .9rem; }
-.barre-in div { display: grid; line-height: 1.2; min-width: 0; }
+.barre-in div { display: grid; grid-template-columns: minmax(0, 1fr); line-height: 1.2; min-width: 0; overflow-wrap: anywhere; }
 .barre-in b { font-size: 1.1rem; }
 .barre-in small { color: var(--muted); }
 .barre .manque { margin: .4rem auto 0; max-width: 40rem; font-size: .9rem; color: var(--accent-strong); font-weight: 700; }
@@ -106,6 +107,7 @@ p { margin: 0; }
 .btn { margin-left: auto; display: inline-flex; align-items: center; justify-content: center; min-height: 3.25rem; padding: .75rem 1.4rem; border-radius: 999px; background: var(--accent); color: var(--accent-text); font: 700 1.05rem/1.2 inherit; text-decoration: none; border: 0; cursor: pointer; white-space: nowrap; flex: none; }
 .btn:hover { background: var(--accent-strong); }
 .btn[aria-disabled="true"] { background: #c9c6d8; }
+.btn.attend { opacity: .75; pointer-events: none; }
 /* Pas de soulignement des liens (Tanguy, 2026-10-22) : ils restent repérables par leur couleur et le gras. */
 a { text-decoration: none; }
 main a:not([class]) { color: var(--accent-strong); font-weight: 700; }
@@ -266,7 +268,13 @@ body .ps-bouton { bottom: 6.5rem; }
     payer.setAttribute('aria-disabled', 'false');
   }
   payer.addEventListener('click', function (e) {
-    if (payer.getAttribute('aria-disabled') === 'false') { compter('paiement'); return; }
+    if (payer.getAttribute('aria-disabled') === 'false') {
+      // La fonction crée la session Stripe puis redirige : 2 à 4 secondes sans rien à l'écran, on le dit.
+      payer.textContent = 'Un instant…';
+      payer.classList.add('attend');
+      compter('paiement');
+      return;
+    }
     e.preventDefault();
     manque.hidden = false;
     if (!cible) return;
