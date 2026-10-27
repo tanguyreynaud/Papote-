@@ -962,7 +962,9 @@ h1, h2, h3, .brand, .tile, .splash-name { font-family: var(--display); letter-sp
 .setup-install .secondary { justify-content: center; }
 /* Photos et Messages ouverts depuis la barre du bas : pas de flèche retour, la barre reste en bas. */
 .depuis-barre .page-head .back { display: none; }
-.depuis-barre .chat-bar, .depuis-barre .fab { bottom: calc(var(--barre-bas) + env(safe-area-inset-bottom)); }
+.depuis-barre .chat-bar { bottom: calc(var(--barre-bas) + env(safe-area-inset-bottom)); }
+/* Le bouton + garde un espace au-dessus de la barre du bas, il ne la touche pas (Tanguy, 27/10). */
+.depuis-barre .fab { bottom: calc(var(--barre-bas) + 16px + env(safe-area-inset-bottom)); }
 .depuis-barre .chat-bar { padding-bottom: 10px; }
 .depuis-barre #view-photos, .depuis-barre #view-videos { padding-bottom: calc(var(--barre-bas) + 96px + env(safe-area-inset-bottom)); }
 .depuis-barre #view-messages { padding-bottom: calc(var(--barre-bas) + 160px + env(safe-area-inset-bottom)); }

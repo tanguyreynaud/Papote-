@@ -2916,7 +2916,12 @@ function openSetting(card) {
   card.querySelector('.setting-edit').hidden = false;
   card.querySelector('.setting-value').hidden = true;
   card.querySelector('.setting-modify').hidden = true;
-  card.querySelector('.setting-edit input:not([type=checkbox]), .setting-edit select')?.focus();
+  // Sans preventScroll, le premier champ (parfois tout en bas, comme le volume des options) faisait défiler
+  // jusqu'à lui : on arrive sur le titre de la carte, juste sous l'en-tête collant (Tanguy, 27/10).
+  card.querySelector('.setting-edit input:not([type=checkbox]), .setting-edit select')?.focus({ preventScroll: true });
+  const entete = card.closest('section')?.querySelector('.page-head');
+  const haut = card.getBoundingClientRect().top + window.scrollY - (entete ? entete.getBoundingClientRect().height : 0) - 12;
+  window.scrollTo({ top: Math.max(0, haut), behavior: 'smooth' });
 }
 
 function closeSetting(card) {
