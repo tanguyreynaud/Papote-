@@ -108,7 +108,8 @@ async function siVisible(page, selecteur, valeur) {
 }
 
 async function moyen(page, type) {
-  const bouton = page.locator(`[data-testid="${type}-accordion-item-button"], #payment-method-accordion-item-title-${type}`).first();
+  // Le <button> de l'accordéon est masqué (0×0) : on clique la ligne entière.
+  const bouton = page.locator(`[data-testid="${type}-accordion-item"]`).first();
   await bouton.waitFor({ timeout: 30000 });
   await bouton.click();
 }
@@ -144,11 +145,20 @@ async function sansLink(page) {
 }
 
 async function merci(page, scenario) {
+  const reponses = [];
+  page.on('response', async (r) => {
+    if (/codeCommande/.test(r.url())) reponses.push(`${r.status()} ${(await r.text().catch(() => '')).slice(0, 80)}`);
+  });
   await page.waitForURL(/merci\.html/, { timeout: 60000 });
-  const code = await page.locator('#code-valeur').textContent({ timeout: 30000 }).catch(() => '');
-  await page.locator('#code').waitFor({ state: 'visible', timeout: 30000 }).catch(() => null);
+  // #code-valeur existe vide dès le chargement (et .code reste affiché malgré hidden) : attendre que la page
+  // l'ait rempli avec la réponse de codeCommande.
+  await page.waitForFunction(() => document.getElementById('code-valeur').textContent.trim() !== '', null, { timeout: 30000 })
+    .catch(() => null);
+  const code = (await page.locator('#code-valeur').textContent().catch(() => '')).trim();
   const session = new URL(page.url()).searchParams.get('session');
-  noter(scenario, !!code, code ? `merci.html affiche le code ${code}` : 'merci.html sans code de commande');
+  noter(scenario, !!code, code ? `merci.html affiche le code ${code}`
+    : `merci.html sans code de commande (codeCommande : ${reponses.join(' | ') || 'pas appelé'}, adresse ${page.url().slice(0, 70)})`);
+  if (!code) await page.screenshot({ path: path.join(CAPTURES, `${scenario}-merci-${Date.now()}.png`), fullPage: true }).catch(() => null);
   return { session, code };
 }
 
@@ -183,6 +193,7 @@ async function verifierCommande(db, stripe, scenario, email, { sepa } = {}) {
 
 const TELEPHONE = { ...devices['iPhone 13'], locale: 'fr-FR' };
 const ORDINATEUR = { viewport: { width: 1280, height: 800 }, locale: 'fr-FR' };
+const TELEPHONE_LARGEUR = { viewport: { width: 390, height: 800 }, locale: 'fr-FR' };
 
 const SCENARIOS = {
   'telephone-carte': async (navigateur, db, stripe) => {
@@ -223,18 +234,22 @@ const SCENARIOS = {
     noter('refus', r.empty, r.empty ? 'aucune commande créée' : `${r.size} commande(s) créée(s) malgré le refus`);
   },
   retour: async (navigateur) => {
-    const page = await (await navigateur.newContext(TELEPHONE)).newPage();
+    const contexte = await navigateur.newContext(TELEPHONE);
+    const page = await contexte.newPage();
     const email = emailDe('retour');
     await remplirCommande(page, { nom: 'TEST Retour', email });
     // Lien « ← » de la page Stripe (cancel_url).
     await page.locator('[data-testid="business-link"], a[href*="commande.html"]').first().click();
     await page.waitForURL(/commande\.html/, { timeout: 30000 });
     await verifierReprise(page, 'retour (lien Stripe)', email);
-    // Bouton Retour du navigateur, depuis la page Stripe.
-    await Promise.all([page.waitForURL(/checkout\.stripe\.com/, { timeout: 30000 }), page.locator('#payer').click()]);
-    await page.goBack();
-    await page.waitForURL(/commande\.html/, { timeout: 30000 });
-    await verifierReprise(page, 'retour (navigateur)', email);
+    // Chromium sans écran rend cet onglet revenu de Stripe avec innerWidth = 0 (défaut de l'émulateur, pas du
+    // site) : plus rien n'y est cliquable. Bouton Retour du navigateur testé dans un nouvel onglet (la commande
+    // gardée est propre à chaque onglet : on la remplit à nouveau).
+    const onglet = await contexte.newPage();
+    await remplirCommande(onglet, { nom: 'TEST Retour', email });
+    await onglet.goBack({ waitUntil: 'commit' });
+    await onglet.waitForURL(/commande\.html/, { timeout: 30000, waitUntil: 'commit' });
+    await verifierReprise(onglet, 'retour (navigateur)', email);
   },
 };
 
