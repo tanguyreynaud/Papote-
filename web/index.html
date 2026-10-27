@@ -282,18 +282,28 @@
 
       <div id="setup-son" class="card setup-step" hidden>
         <h2>Le son</h2>
-        <p class="muted">Regardez <span class="setup-qui"></span> : touchez « Faire sonner », puis « Faire parler », et réglez avec la barre jusqu'à ce qu'elle entende bien.</p>
-        <div class="setup-slider">
-          <p><strong>Sonnerie des appels</strong> <span id="setup-sonnerie-val"></span></p>
-          <input id="setup-sonnerie" type="range" min="10" max="100" step="10" aria-label="Volume de la sonnerie">
-          <button type="button" class="picker setup-essai" data-essai="sonnerie">Faire sonner</button>
+        <p class="muted">Glissez une barre : la tablette joue le son tout de suite. Réglez jusqu'à ce que <span class="setup-qui"></span> entende bien.</p>
+        <div class="setup-son-ligne">
+          <div class="setup-son-tete">
+            <strong>Sonnerie des appels</strong>
+            <span id="setup-sonnerie-val" class="setup-son-val"></span>
+          </div>
+          <div class="setup-son-ctrl">
+            <input id="setup-sonnerie" type="range" min="10" max="100" step="10" aria-label="Volume de la sonnerie">
+            <button type="button" class="setup-essai" data-essai="sonnerie" aria-label="Écouter la sonnerie"><svg><use href="#i-play"/></svg><span>Écouter</span></button>
+          </div>
         </div>
-        <div class="setup-slider">
-          <p><strong>Voix</strong> (appels, vidéos) <span id="setup-voix-val"></span></p>
-          <input id="setup-voix" type="range" min="10" max="100" step="10" aria-label="Volume de la voix">
-          <button type="button" class="picker setup-essai" data-essai="voix">Faire parler</button>
+        <div class="setup-son-ligne">
+          <div class="setup-son-tete">
+            <strong>Voix pendant les appels</strong>
+            <span id="setup-voix-val" class="setup-son-val"></span>
+          </div>
+          <div class="setup-son-ctrl">
+            <input id="setup-voix" type="range" min="10" max="100" step="10" aria-label="Volume de la voix">
+            <button type="button" class="setup-essai" data-essai="voix" aria-label="Écouter la voix"><svg><use href="#i-play"/></svg><span>Écouter</span></button>
+          </div>
         </div>
-        <p id="setup-son-status" class="muted small" hidden></p>
+        <p id="setup-son-status" class="setup-son-status" aria-live="polite" hidden></p>
         <button type="button" class="primary wide" id="setup-son-ok">C'est bien réglé</button>
         <p id="setup-son-error" class="error" hidden></p>
       </div>

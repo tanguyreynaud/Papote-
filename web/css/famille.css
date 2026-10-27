@@ -1249,10 +1249,22 @@ body:not(.on-support) .ps-bouton, body:not(.on-support) .ps-panneau { display: n
 .setup-preview { display: block; width: 100%; height: auto; margin-top: 14px; }
 #setup-photo-extra input { width: 100%; margin-top: 14px; }
 #setup-pickers { margin-top: 14px; }
-.setup-slider { border-top: 1px solid var(--line); padding-top: 14px; margin-top: 14px; }
-.setup-slider p { margin: 0 0 8px; }
-.setup-slider input[type=range] { width: 100%; accent-color: var(--accent); }
-.setup-essai { width: 100%; min-height: 54px; margin-top: 10px; flex-direction: row; justify-content: center; font-size: 17px; }
+/* Étape « Le son » : une ligne par réglage (titre + valeur, puis barre + bouton « Écouter »). */
+.setup-son-ligne { border-top: 1px solid var(--line); padding-top: 14px; margin-top: 14px; }
+.setup-son-tete { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.setup-son-tete strong { font-size: 17px; }
+.setup-son-val { flex: none; min-width: 3.2em; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--accent); }
+.setup-son-ctrl { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.setup-son-ctrl input[type=range] { flex: 1 1 auto; min-width: 0; height: 48px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.setup-essai {
+  flex: none; width: 118px; min-height: 48px; padding: 0 12px; gap: 6px;
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  color: var(--accent); border: 1.5px solid var(--accent); border-radius: 14px; font-size: 16px; font-weight: 700;
+}
+.setup-essai svg { width: 22px; height: 22px; stroke: none; fill: var(--accent); }
+.setup-essai:active { background: var(--accent); color: var(--accent-text); }
+.setup-essai:active svg { fill: var(--accent-text); }
+.setup-son-status { margin: 12px 0 0; padding: 10px 14px; border-radius: 12px; font-size: 15px; color: var(--text); background: var(--bg); border: 1px solid var(--line); }
 #setup-options .toggle-list { margin-top: 14px; }
 
 /* Aucun lien souligné, dans l'appli comme dans l'admin (demande de Tanguy, 22/10). */
