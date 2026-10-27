@@ -1419,8 +1419,8 @@ final class Sync {
     // ---------- Photos de profil et anniversaires ----------
 
     /**
-     * « Qui voulez-vous appeler ? » et les visages du SOS : le créateur de la famille en premier, puis
-     * les autres proches par ordre alphabétique des prénoms (Tanguy, 27/10).
+     * « Qui voulez-vous appeler ? » et les visages du SOS : ceux mis en tête dans l'app (enTete), puis
+     * le créateur de la famille, puis les autres proches par ordre alphabétique des prénoms (Tanguy, 27/10).
      */
     private JSONArray trierProches(String fid, JSONArray people) {
         String createur = null;
@@ -1437,6 +1437,10 @@ final class Sync {
         final java.text.Collator alpha = java.text.Collator.getInstance(java.util.Locale.FRENCH);
         alpha.setStrength(java.text.Collator.PRIMARY);
         Collections.sort(liste, (a, b) -> {
+            // D'abord ceux mis en tête dans l'app, le plus ancien en premier.
+            long ta = a.optLong("enTete"), tb = b.optLong("enTete");
+            if ((ta > 0) != (tb > 0)) return ta > 0 ? -1 : 1;
+            if (ta > 0 && ta != tb) return Long.compare(ta, tb);
             boolean pa = premier != null && premier.equals(a.optString("uid"));
             boolean pb = premier != null && premier.equals(b.optString("uid"));
             if (pa != pb) return pa ? -1 : 1;
@@ -1463,7 +1467,10 @@ final class Sync {
                     JSONObject f = doc.optJSONObject("fields");
                     String uid = doc.optString("name").substring(doc.optString("name").lastIndexOf('/') + 1);
                     if (f != null && !"tablette".equals(Firebase.str(f, "role"))) {
-                        people.put(new JSONObject().put("uid", uid).put("name", nz(Firebase.str(f, "name"))));
+                        // enTete : mis en tête de liste dans l'app (horodatage serveur), sinon absent.
+                        long enTete = Firebase.timestamp(f, "enTete");
+                        people.put(new JSONObject().put("uid", uid).put("name", nz(Firebase.str(f, "name")))
+                                .put("enTete", enTete > 0 ? enTete : 0));
                     }
                     String face = f == null ? null : Firebase.str(f, "face");
                     if (face == null || !face.startsWith("data:image")) continue;
