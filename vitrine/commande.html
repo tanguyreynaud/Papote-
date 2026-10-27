@@ -267,6 +267,13 @@ body .ps-bouton { bottom: 6.5rem; }
     payer.href = COMMANDER + '?' + params.toString();
     payer.setAttribute('aria-disabled', 'false');
   }
+  // Retour depuis Stripe avec le bouton Retour du navigateur : la page peut être restaurée telle quelle,
+  // bouton encore sur « Un instant… ». On le remet d'aplomb.
+  window.addEventListener('pageshow', function () {
+    if (!payer.classList.contains('attend')) return;
+    payer.classList.remove('attend');
+    payer.textContent = 'Payer 60 €';
+  });
   payer.addEventListener('click', function (e) {
     if (payer.getAttribute('aria-disabled') === 'false') {
       // La fonction crée la session Stripe puis redirige : 2 à 4 secondes sans rien à l'écran, on le dit.
