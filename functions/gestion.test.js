@@ -523,3 +523,17 @@ test('colis renvoyé à l\'expéditeur d\'après l\'étape Sendcloud', () => {
   assert.strictEqual(sendcloud.retourExpediteur('Delivered'), false);
   assert.strictEqual(sendcloud.retourExpediteur(null), false);
 });
+
+test('Stripe en mode test : seuls les essais encore en base sont comptés', () => {
+  const factures = [{ id: 'in_1', abonnement: 'sub_garde' }, { id: 'in_2', abonnement: 'sub_efface' }, { id: 'in_3', abonnement: null }];
+  const mouvements = [{ id: 'm1', facture: 'in_1' }, { id: 'm2', facture: 'in_2' }, { id: 'm3', facture: null }];
+  const abonnements = [{ id: 'sub_garde' }, { id: 'sub_efface' }];
+  const commandes = new Set(['sub_garde']);
+  const r = g.sansEssaisEffaces({ factures, mouvements, abonnements, test: true, commandes });
+  assert.deepStrictEqual(r.factures.map((f) => f.id), ['in_1']);
+  assert.deepStrictEqual(r.mouvements.map((m) => m.id), ['m1']);
+  assert.deepStrictEqual(r.abonnements.map((a) => a.id), ['sub_garde']);
+  const reel = g.sansEssaisEffaces({ factures, mouvements, abonnements, test: false, commandes });
+  assert.strictEqual(reel.factures.length, 3);
+  assert.strictEqual(reel.mouvements.length, 3);
+});

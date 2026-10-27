@@ -1394,6 +1394,20 @@ async function lireMouvements(periode) {
   });
 }
 
+// Stripe en mode test : les essais effacés de la base (outils/admin/repartir-des-tests) restent chez Stripe,
+// qui garde toujours ses factures. On ne compte que ce qui appartient à une commande encore là (Tanguy,
+// 2026-10-27 : « 0 facture »). En mode réel, tout est compté.
+function sansEssaisEffaces({ factures, mouvements, abonnements, test, commandes }) {
+  if (!test) return { factures, mouvements, abonnements };
+  const gardees = factures.filter((f) => f.abonnement && commandes.has(f.abonnement));
+  const ids = new Set(gardees.map((f) => f.id));
+  return {
+    factures: gardees,
+    mouvements: mouvements.filter((m) => m.facture && ids.has(m.facture)),
+    abonnements: abonnements.filter((a) => commandes.has(a.id)),
+  };
+}
+
 exports.gestionStripe = onCall({ secrets: [STRIPE_SECRET], timeoutSeconds: 120 }, async (request) => {
   verifierAdmin(request);
   const { debut, fin } = request.data || {};
@@ -1402,14 +1416,19 @@ exports.gestionStripe = onCall({ secrets: [STRIPE_SECRET], timeoutSeconds: 120 }
   }
   const periode = { gte: Math.floor(debut / 1000), lt: Math.floor(fin / 1000) };
 
-  const [factures, mouvements, abonnements] = await Promise.all([
+  const [toutesFactures, tousMouvements, tousAbonnements, commandes] = await Promise.all([
     tout(stripe().invoices.list({ created: periode, limit: 100 })),
     lireMouvements(periode),
     tout(stripe().subscriptions.list({ status: 'all', limit: 100 })),
+    db().collection('commandes').select().get(),
   ]);
+  const { factures, mouvements, abonnements } = sansEssaisEffaces({
+    factures: toutesFactures.map(versFacture), mouvements: tousMouvements, abonnements: tousAbonnements,
+    test: !STRIPE_SECRET.value().startsWith('sk_live_'), commandes: new Set(commandes.docs.map((d) => d.id)),
+  });
 
   return {
-    factures: factures.map(versFacture),
+    factures,
     mouvements,
     abonnements: abonnements.map((a) => ({
       id: a.id,
@@ -3193,7 +3212,7 @@ exports.gestionParcours = onCall(async (request) => {
 });
 
 exports.regles = {
-  ETATS, CATEGORIES, natureMouvement, mensuel, centimes, lien, nomFichier, moisSuivant, lectureVersFormulaire, SCHEMA_FACTURE,
+  ETATS, CATEGORIES, sansEssaisEffaces, natureMouvement, mensuel, centimes, lien, nomFichier, moisSuivant, lectureVersFormulaire, SCHEMA_FACTURE,
   lireReglages, transitionPermise, SUITES, simAResilier, fichesARattacher, sansFacture, stockAJour, releveBatterie, usureBatterie, incoherences, materielLu, memeAccessoire, coutLigne, alertesSim, accessoiresAPrevoir, champsSim, aFaire, piecesFacture, debutMoisParis, moisPrecedent, csvTexte, livreDesRecettes,
   registreDesAchats, corpsDuMail, memeAchat, suiteJumelage, descriptionNonRendu, refusSuppression, fusionnerContacts, emailInformation, cleContact,
   avancementPropre,
