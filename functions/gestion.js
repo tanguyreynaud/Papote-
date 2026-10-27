@@ -664,6 +664,9 @@ exports.gestionDonnees = onCall(async (request) => {
         preparation: c.preparation || null,
         stripeCustomerId: c.stripeCustomerId || null,
         offerte: c.offerte === true,
+        remise: c.remise || null,
+        annulation: c.annulation || null,
+        reprise: c.reprise === true,
       });
     }),
     stock: stock.docs.map((d) => {
