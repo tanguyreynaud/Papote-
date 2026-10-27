@@ -3356,18 +3356,25 @@ const EN_LIGNE_MS = 45 * 60_000;
 // ou au retour sur l'app, pour ne jamais afficher un état périmé.
 let membresDuCache = true;
 let relanceMembres = null;
+// Résolue dès que le serveur a donné les membres (ou en cas d'erreur) : l'ouverture l'attend un peu,
+// sinon l'état de la tablette arrive après l'accueil et pousse les tuiles vers le bas.
+let membresServeur = Promise.resolve();
 function abonnerMembres() {
   stopMembers?.();
   clearTimeout(relanceMembres);
   membresDuCache = true;
   const fid = session.fid;
+  let pret;
+  membresServeur = new Promise((ok) => { pret = ok; });
   stopMembers = watchMembers(fid, (all, fromCache) => {
     membresDuCache = fromCache;
+    if (!fromCache) pret();
     // Retiré de la famille par un responsable : on quitte tout de suite, sans attendre un rechargement.
     if (!fromCache && !all.some((m) => m.id === session.uid)) { quitterFamilleRetire(fid); return; }
     renderMembers(all);
     renderActivity();
   }, async (err) => {
+    pret();
     // Plus le droit de lire : on vérifie si l'on fait encore partie de la famille.
     if (err?.code === 'permission-denied') {
       try {
@@ -4434,13 +4441,13 @@ async function enterApp() {
   stopIncoming?.();
   stopIncoming = watchIncomingCalls(session.fid, session.uid,
     (uid) => tabletMembers.some((m) => m.id === uid), (list) => showIncoming(list[list.length - 1] || null));
-  renderPushNudge();
+  const nudge = renderPushNudge();
   renderPauseNudge();
   if (pushAllowed()) enablePush(session.fid, session.uid);
   warmUpCalls();
   startAgenda(session, setNotifReminders, visageCarre);
   startNotifs(session);
-  renderInstallCard();
+  const install = renderInstallCard();
   renderAccount();
   appliquerGenre();
   // Installation en cours sur cet écran (nom tout juste donné, reprise) : on continue ses étapes.
@@ -4451,6 +4458,11 @@ async function enterApp() {
     session.family.installation = { ...session.family.installation, etape: 'fini' };
     finirInstallation(session.fid).catch((err) => console.warn('Fin d\'installation', err));
   }
+  // L'accueil s'affiche une fois complet (état de la tablette, cartes, bouton « Installer l'app ») :
+  // rien ne s'ajoute ensuite au-dessus des tuiles. 1,5 s au plus, même sans réseau.
+  const ouverte = session;
+  await Promise.race([Promise.all([membresServeur, nudge, install]), new Promise((ok) => setTimeout(ok, 1500))]);
+  if (session !== ouverte) return;
   goHome();
   renderOutbox();
   flushOutbox();
