@@ -623,7 +623,7 @@ exports.gestionDonnees = onCall(async (request) => {
   // Tout est lu en même temps : « à vendre » et les batteries (qui attendent seulement le stock) ne font plus
   // deux allers-retours de plus vers la base après les autres lectures.
   const lectureStock = db().collection('stock').get();
-  const [commandes, stock, depenses, familles, automatique, reglages, courrier, archives, sims, accessoires, aVendre, batteries] = await Promise.all([
+  const [commandes, stock, depenses, familles, automatique, reglages, courrier, archives, sims, accessoires, aVendre, batteries, alertes] = await Promise.all([
     db().collection('commandes').get(),
     lectureStock,
     db().collection('depenses').get(),
@@ -638,8 +638,15 @@ exports.gestionDonnees = onCall(async (request) => {
     require('./stock').nombreDisponibles(db()).catch((e) => { logger.warn('À vendre', e.message); return null; }),
     // Batterie en direct pour les tablettes jumelées, sinon le dernier relevé gardé sur la fiche.
     lectureStock.then((s) => lireBatteries(s.docs)).catch((e) => { logger.warn('Batteries', e.message); return new Map(); }),
+    // Alertes envoyées aux proches (journal-alertes.js) : 90 derniers jours, les plus récentes d'abord.
+    db().collection('alertes').where('le', '>', new Date(Date.now() - ALERTES_JOURS * 86400000)).orderBy('le', 'desc').limit(2000).get()
+      .catch((e) => { logger.warn('Alertes', e.message); return { docs: [] }; }),
   ]);
   const parFid = new Map(familles.docs.map((f) => [f.id, f.data()]));
+  // Compte de la tablette -> sa fiche de stock (T-…), pour compter les alertes sur la page de la tablette.
+  const ficheParCompte = new Map(stock.docs.filter((d) => d.get('tabletUid')).map((d) => [d.get('tabletUid'), d.id]));
+  const ficheParFamille = new Map();
+  for (const d of stock.docs) if (d.get('fid')) ficheParFamille.set(d.get('fid'), ficheParFamille.has(d.get('fid')) ? null : d.id);
   return {
     aVendre,
     commandes: commandes.docs.map((d) => {
@@ -696,8 +703,21 @@ exports.gestionDonnees = onCall(async (request) => {
     accessoires: accessoires.docs.map((d) => aplatir({ id: d.id, ...d.data() })),
     statutsSim: STATUTS_SIM,
     envoisAccessoire: ENVOIS_ACCESSOIRE,
+    alertes: alertes.docs.map((d) => {
+      const a = d.data();
+      const famille = a.fid ? parFid.get(a.fid) : null;
+      return aplatir({
+        id: d.id, genre: a.genre || null, le: a.le || null, fid: a.fid || null, telephones: a.telephones ?? null,
+        famille: famille ? famille.name || null : null,
+        // Sans compte de tablette (paiement), la tablette seule de la famille.
+        fiche: (a.tablette && ficheParCompte.get(a.tablette)) || (a.fid && ficheParFamille.get(a.fid)) || null,
+      });
+    }),
+    genresAlerte: require('./journal-alertes').GENRES,
+    alertesJours: ALERTES_JOURS,
   };
 });
+const ALERTES_JOURS = 90;
 
 // Résumé d'une famille pour la page admin et « À faire » : statut, dates du retard de paiement et de la tolérance.
 function familleResume(f) {

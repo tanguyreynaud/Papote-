@@ -395,6 +395,7 @@ async function prevenirPaiement(fid, commandeId, avis, graceJusqua) {
     }
     (await Promise.allSettled(envois)).filter((r) => r.status === 'rejected')
       .forEach((r) => logger.error(`Famille ${fid} : avis « ${avis} » non envoyé`, r.reason));
+    await require('./journal-alertes').noter(db, { genre: avis === 'impaye' ? 'impaye' : 'pause', fid });
   } catch (e) {
     logger.error(`Famille ${fid} : avis « ${avis} »`, e.message);
   }

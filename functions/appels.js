@@ -20,6 +20,7 @@ const { defineSecret, defineString } = require('firebase-functions/params');
 const { BASE_FIRESTORE, REGION_FIRESTORE, db: base } = require('./base');
 const { envoyer } = require('./push');
 const mail = require('./mail');
+const journal = require('./journal-alertes');
 
 // Appel ou SOS qui ne fait sonner aucun téléphone (D1, Tanguy 2026-10-27) : tous les proches le savent par
 // e-mail (mêmes réglages que index.js ; en simulation, mail.envoyer est remplacé).
@@ -81,6 +82,8 @@ exports.appelsSonnerie = onDocumentCreated({ document: DOC, region: REGION_FIRES
   const data = { type: 'appel', cid, fid, jeton, nom: essaiSos(appel) ? `SOS : ${nom}` : nom };
   const n = await envoyer(db, fid, uids, data, 45);
   logger.info(`Appel ${cid} : ${n} téléphone(s) prévenu(s)`);
+  if (essaiSos(appel) === 1) await journal.noter(db, { genre: 'sos', fid, tablette: appel.callerUid, telephones: n });
+  if (n === 0 && essaiSos(appel) !== 2) await journal.noter(db, { genre: 'sans-telephone', fid, tablette: appel.callerUid, telephones: 0 });
   // Personne ne sonne : les proches le savent par e-mail, au 1er essai seulement (le 2e essai du SOS suit de près).
   if (n === 0 && essaiSos(appel) !== 2) await prevenirSansTelephone(db, fid, uids, { nom, sos: essaiSos(appel) > 0 });
   for (let i = 0; i < REPRISES; i++) {
@@ -106,10 +109,12 @@ exports.appelsManques = onDocumentUpdated({ document: DOC, region: REGION_FIREST
     if (sos === 2) {
       const n = await envoyer(db, fid, uids, { type: 'alerte', titre: `${nom} a appuyé sur SOS`, texte: "Personne n'a pu répondre. Rappelez dès que possible." }, 24 * 3600);
       logger.warn(`SOS ${cid} : personne n'a répondu, famille alertée`);
+      await journal.noter(db, { genre: 'sos-sans-reponse', fid, tablette: apres.callerUid, telephones: n });
       if (n === 0) await prevenirSansTelephone(db, fid, uids, { nom, sos: true });
     }
   } else if (['missed', 'ended', 'declined'].includes(apres.state) && !apres.answer) {
-    await envoyer(db, fid, uids, { type: 'manque', cid, nom }, 24 * 3600);
+    const n = await envoyer(db, fid, uids, { type: 'manque', cid, nom }, 24 * 3600);
+    await journal.noter(db, { genre: 'appel-manque', fid, tablette: apres.callerUid, telephones: n });
   } else {
     // Quelqu'un a décroché : les autres téléphones (app Android) arrêtent de sonner.
     await envoyer(db, fid, uids, { type: 'fin', cid }, 60, { natifsSeulement: true });

@@ -302,6 +302,8 @@ test('pause hospitalisation : aucune alerte de tablette pendant la pause', async
   s.avancer(11);
   await s.tache('alertesTablettes');
   assert.strictEqual(alertes().length, 1, 'pause finie : les alertes reprennent');
+  const { alertes: journal } = await s.appeler('gestionDonnees', {}, a.TANGUY);
+  assert.deepStrictEqual(journal.map((x) => x.genre), ['silence', 'silence'], 'deux alertes comptées pour l\'admin, aucune pendant la pause');
 });
 
 test('« N téléphones reçoivent les appels » : le serveur note sur chaque proche s\'il a un jeton', async () => {
