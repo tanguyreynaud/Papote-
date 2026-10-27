@@ -665,8 +665,8 @@ function afficherAccueil() {
       : [[impayees, `${pluriel(impayees, 'abonnement')} impayé${impayees > 1 ? 's' : ''}`, '#compta/factures', 'ko']]),
     ...donnees.familles.filter((f) => f.statut === 'suspendu')
       .map((f) => [1, `Tablette en pause (abonnement non réglé) : famille ${f.nom || 'sans nom'}`, `#clients/familles/${encodeURIComponent(f.id)}`, 'ko']),
-    ...cmd.filter((c) => c.expedition === 'paiement-en-attente' && c.creeLe && Date.now() - c.creeLe > 7 * 864e5)
-      .map((c) => [1, `Prélèvement SEPA sans réponse de la banque depuis 7 jours : ${c.nom || c.email || 'client'}, regarder dans Stripe`, versCommande(c), 'ko']),
+    ...cmd.filter((c) => c.expedition === 'paiement-en-attente' && c.creeLe && Date.now() - c.creeLe > 10 * 864e5)
+      .map((c) => [1, `Prélèvement SEPA sans réponse de la banque depuis 10 jours : ${c.nom || c.email || 'client'}, regarder dans Stripe`, versCommande(c), 'ko']),
     ...cmd.filter((c) => c.dernierMois && c.dernierMois.statut === 'echec')
       .map((c) => [1, `Dernier mois refusé par la banque : ${c.nom || c.email || 'client'}, le contacter`, versCommande(c), 'ko']),
     ...cmd.filter((c) => c.restitution && c.restitution.statut === 'echec')

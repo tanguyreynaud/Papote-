@@ -198,7 +198,7 @@ function accueilPremiereFois() {
 }
 
 function renderSansAbo() {
-  const admin = amOwner();
+  const admin = amFamilyAdmin();
   document.querySelectorAll('.sans-abo-nom').forEach((e) => { e.textContent = session.family.name; });
   document.querySelectorAll('.sans-abo-admin').forEach((e) => { e.hidden = !admin; });
   $('sans-abo-membre').hidden = admin;
@@ -1949,6 +1949,14 @@ async function offerCallBack() {
 // App déjà ouverte : le service worker la prévient au lieu de la rouvrir.
 navigator.serviceWorker?.addEventListener('message', (e) => {
   const url = e.data && e.data.type === 'appel-ouvert' ? String(e.data.url || '') : '';
+  // Notification d'une autre famille, l'appli déjà ouverte : on bascule dessus.
+  const famille = url && new URL(url, location.origin).searchParams.get('famille');
+  if (famille && session && famille !== session.fid && myFamilies.some((f) => f.fid === famille)) {
+    reglagesPending = url.includes('reglages');
+    saveFamilyId(famille);
+    enterApp();
+    return;
+  }
   if (url.includes('rappeler=1') && session) offerCallBack();
   const cid = url && new URL(url, location.origin).searchParams.get('appel');
   if (cid && session) answerOnArrival(cid);
@@ -1990,10 +1998,11 @@ let familyFull = false;
 function renderTabletOwnerNote() {
   if (!session) return;
   const owner = allMembers.find((m) => m.id === session.family.createdBy);
-  $('tablet-owner-note').hidden = amOwner();
+  // Abonnement et réglages de la tablette : tout responsable (propriétaire et responsables nommés).
+  $('tablet-owner-note').hidden = amFamilyAdmin();
   $('tablet-owner-text').textContent = owner?.name
-    ? `La nuit, le son, les options et le Wi-Fi de la tablette se règlent depuis le téléphone de ${owner.name}, qui l'a installée. Demandez-lui si besoin.`
-    : "La nuit, le son, les options et le Wi-Fi de la tablette se règlent depuis le téléphone de la personne qui l'a installée.";
+    ? `La nuit, le son, les options et le Wi-Fi de la tablette se règlent depuis le téléphone de ${owner.name}, qui l'a installée, ou d'un autre responsable de la famille. Demandez-leur si besoin.`
+    : "La nuit, le son, les options et le Wi-Fi de la tablette se règlent depuis le téléphone d'un responsable de la famille.";
 }
 
 function renderMembers(all) {
@@ -2303,7 +2312,7 @@ const dateLongue = (ts) => (ts ? toDate(ts).toLocaleDateString('fr-FR', { day: '
 // Abonnement en pause : envois, agenda et appels bloqués, avec une explication.
 function paused() {
   if (abonnementOk(session?.family)) return false;
-  notice(amOwner()
+  notice(amFamilyAdmin()
     ? "Papote est en pause : l'abonnement de la famille doit être réglé. Touchez Profil en bas de l'écran, puis Abonnement."
     : "Papote est en pause : l'abonnement de la famille doit être réglé par un responsable de la famille.");
   return true;
@@ -2358,7 +2367,7 @@ document.querySelectorAll('[data-order-form]').forEach((form) => form.addEventLi
         : `Aucune commande trouvée pour ${myEmail()}. Entrez le code de commande, il est sur la page de confirmation et sur la facture.`)
       : code.endsWith('invalid-argument') ? 'Ce code de commande n\'a pas le bon format (8 lettres, comme ABCD-EFGH).'
         : code.endsWith('failed-precondition') ? 'Cette famille a déjà un abonnement.'
-          : code.endsWith('permission-denied') ? 'Seul le propriétaire de la famille peut relier une commande.'
+          : code.endsWith('permission-denied') ? 'Seul un responsable de la famille peut relier une commande.'
             : 'La vérification a échoué. Réessayez dans un instant.');
   } finally {
     btn.disabled = false;
@@ -2366,7 +2375,8 @@ document.querySelectorAll('[data-order-form]').forEach((form) => form.addEventLi
 }));
 
 $('abo-banner-btn').addEventListener('click', () => {
-  if (session.family.abonnement?.statut === 'impaye') withAboError(() => ouvrirPortail(session.fid));
+  const abo = session.family.abonnement;
+  if (abo?.statut === 'impaye' || (abo?.statut === 'suspendu' && abo.stripeSubscriptionId && abo.stripeCustomerId)) withAboError(() => ouvrirPortail(session.fid));
   else {
     // L'abonnement est dans Profil.
     document.querySelector('.nav-item[data-tab="profile"]').click();
@@ -2555,11 +2565,11 @@ $('btn-retracter').addEventListener('click', async () => {
 function renderAbonnement() {
   const abo = session.family.abonnement;
   renderFinDeContrat(abo);
-  useOrderCodeFromSite(abo?.statut, amOwner());
-  const admin = amOwner(); // l'abonnement est l'affaire du propriétaire, celui qui paie
+  useOrderCodeFromSite(abo?.statut, amFamilyAdmin());
+  const admin = amFamilyAdmin(); // l'abonnement : tout responsable de la famille (Tanguy, 27/10)
   const statut = abo?.statut;
   // Bloc Abonnement du Profil (avant « Mon compte ») : tout le monde voit l'état,
-  // seul le propriétaire peut payer, changer de carte ou résilier.
+  // seuls les responsables peuvent payer, changer de carte ou résilier.
   $('abo-card').hidden = false;
   $('abo-readonly').hidden = admin || !abo;
   if (!abo) {
@@ -2587,11 +2597,15 @@ function renderAbonnement() {
     }
     $('abo-details').textContent = details.join(' · ');
     const enCours = ['actif', 'impaye'].includes(statut);
+    // En pause avec son abonnement Stripe : un seul geste, régler le paiement (plus de choix de formule).
+    const aRegler = statut === 'impaye' || (statut === 'suspendu' && !!abo.stripeSubscriptionId);
     $('btn-portail').hidden = !admin || !abo.stripeCustomerId || statut === 'offert';
+    $('btn-portail').className = aRegler ? 'primary wide' : 'secondary wide';
+    if (!$('btn-portail').disabled) $('btn-portail').textContent = aRegler ? 'Régler le paiement' : 'Gérer le paiement et les factures';
     resilierPossible = admin && enCours && !abo.resiliationLe && !!abo.stripeSubscriptionId;
     $('btn-resilier').hidden = !resilierPossible || !!finInfo?.retractation;
     $('btn-garder').hidden = !admin || !enCours || !abo.resiliationLe;
-    $('abo-choices').hidden = !admin || !['aucun', 'resilie', 'suspendu'].includes(statut);
+    $('abo-choices').hidden = !admin || aRegler || !['aucun', 'resilie', 'suspendu'].includes(statut);
   }
   // Bandeaux : retard de paiement (responsables), pause (tout le monde).
   let text = '';
@@ -2602,7 +2616,7 @@ function renderAbonnement() {
       ? "Papote est en pause : l'abonnement de la famille doit être réglé. Tout reviendra automatiquement."
       : "Papote est en pause : l'abonnement de la famille doit être réglé par un responsable.";
   }
-  // Sans abonnement en cours : le propriétaire peut relier une commande déjà payée sur le site.
+  // Sans abonnement en cours : un responsable peut relier une commande déjà payée sur le site.
   const sansAbo = ['aucun', 'resilie', 'suspendu'].includes(statut) && admin;
   // Fin d'installation sans commande reliée : dire quoi faire, pas seulement « en attente ».
   if (statut === 'aucun' && admin) text = "Aucune commande n'est reliée à cette tablette. Vous l'avez commandée sur le site ? Entrez le code de commande ci-dessous. Sinon, choisissez un abonnement dans Profil.";
@@ -2849,10 +2863,10 @@ async function renderLogsButton() {
 function renderRemote() {
   const admin = amFamilyAdmin();
   const tablet = targetTablet();
-  $('remote-card').hidden = !amOwner() || !tablet;
-  $('wifi-card').hidden = !amOwner() || !tablet;
+  $('remote-card').hidden = !admin || !tablet;
+  $('wifi-card').hidden = !admin || !tablet;
   renderWifi();
-  $('group-tablet').hidden = !amOwner();
+  $('group-tablet').hidden = !admin;
   renderLogsButton();
   if (tablet) {
     const online = tablet.lastOnline ? toDate(tablet.lastOnline) : null;
@@ -3229,7 +3243,7 @@ function applyFamily() {
   renderRemote();
   const admin = amFamilyAdmin();
   // Réglages : pour tout le monde ; seuls les responsables y voient la famille à gérer,
-  // et seul le propriétaire les réglages de la tablette.
+  // et les responsables les réglages de la tablette.
   $('tile-settings').hidden = false;
   renderTabletOwnerNote();
   // Un responsable ne quitte pas sa famille (il pourrait ne plus jamais revenir).
@@ -3237,13 +3251,13 @@ function applyFamily() {
   $('my-name-value').textContent = session.member.name;
   renderGenre();
   $('text-size-card').hidden = true; // plus réglable : le texte débordait sur la tablette
-  $('sleep-card').hidden = !amOwner();
+  $('sleep-card').hidden = !amFamilyAdmin();
   renderSleep();
-  $('volume-card').hidden = !amOwner();
+  $('volume-card').hidden = !amFamilyAdmin();
   renderVolume();
-  $('options-card').hidden = !amOwner();
+  $('options-card').hidden = !amFamilyAdmin();
   renderOptions();
-  $('meteo-card').hidden = !amOwner();
+  $('meteo-card').hidden = !amFamilyAdmin();
   renderMeteo();
   $('delete-family-info').hidden = !amOwner();
   renderTextSize();
@@ -3255,7 +3269,7 @@ function applyFamily() {
   $('family-title').textContent = `Pour ${name}`;
   document.querySelectorAll('.grand-name').forEach((el) => { el.textContent = name; });
   $('message-text').placeholder = `Écrire à ${name}…`;
-  $('family-name-card').hidden = !amOwner();
+  $('family-name-card').hidden = !amFamilyAdmin();
   $('family-name-value').textContent = name;
   if (allMembers.length) renderMembers(allMembers);
 }
@@ -4491,6 +4505,8 @@ async function start() {
   rappelerPending = params.has('rappeler');
   reglagesPending = params.has('reglages');
   if (params.get('appel')) answerOnArrival(params.get('appel'));
+  // Notification d'une autre famille (« veut rejoindre », « a rejoint ») : l'appli s'ouvre sur cette famille.
+  if (params.get('famille')) saveFamilyId(params.get('famille'));
   // Ouvert par l'app Android Papote : ce téléphone sonnera par elle (voir push.js).
   if (params.get('natif')) rememberNativeToken(params.get('natif'));
   // Rouvert par l'app Android : ?pause=1 tant que le réglage n'est pas fait (sinon absent).
