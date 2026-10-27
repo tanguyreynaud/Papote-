@@ -1556,6 +1556,15 @@ const END_MESSAGES = {
   failed: 'La connexion vidéo a échoué',
 };
 
+// Fin d'appel (ou appel qui n'a pas pu se faire) : l'écran crème avec la photo, le nom et la raison,
+// sans bouton (il se ferme tout seul), quel que soit l'écran d'avant (vidéo, audio, sonnerie).
+function finDAppel(texte) {
+  $('call').classList.remove('audio');
+  $('call').classList.add('sonne');
+  $('call-hangup').hidden = true;
+  setCallStatus(texte);
+}
+
 function setCallStatus(text) {
   $('call-status').textContent = text;
   $('call-status').hidden = !text;
@@ -1597,7 +1606,8 @@ document.addEventListener('visibilitychange', garderEcranAllume);
 
 function leaveCallScreen() {
   $('call').hidden = true;
-  $('call').classList.remove('audio');
+  $('call').classList.remove('audio', 'sonne');
+  $('call-hangup').hidden = false;
   $('call-video').disabled = false;
   $('call-remote').srcObject = null;
   $('call-local').srcObject = null;
@@ -1766,13 +1776,13 @@ async function answerFromTablet() {
       onVideo: (track) => {
         $('call-remote').srcObject = new MediaStream([track]);
         $('call-remote').play().catch(() => {});
-        $('call').classList.remove('audio');
+        $('call').classList.remove('audio', 'sonne');
         setCallStatus('');
       },
       onEnd: (reason) => {
         currentCall = null;
         stopCallTimer();
-        setCallStatus(reason === 'failed' ? 'La connexion a été perdue' : 'Appel terminé');
+        finDAppel(reason === 'failed' ? 'La connexion a été perdue' : 'Appel terminé');
         renderCallTile();
         setTimeout(() => { if (!currentCall) leaveCallScreen(); }, 2000);
       },
@@ -1780,7 +1790,7 @@ async function answerFromTablet() {
   } catch (err) {
     currentCall = null;
     if (!err || err.name !== 'TakenError') reportCallIncident('reponse-audio', `${err && err.name}: ${err && err.message}`, call.id);
-    setCallStatus(err && err.name === 'TakenError'
+    finDAppel(err && err.name === 'TakenError'
       ? 'Un autre proche a déjà répondu.'
       : callErrorMessage(err));
     setTimeout(() => { if (!currentCall) leaveCallScreen(); }, 3000);
@@ -1804,15 +1814,18 @@ function answerOnArrival(cid) {
   }
   $('call-video').disabled = true;
   $('call').classList.add('audio');
-  $('call-name').textContent = '';
-  $('call-face').replaceChildren();
+  // Ouvert avant l'accueil : la famille n'est peut-être pas encore chargée (photo et nom viennent après).
+  const nom = (session && session.family && session.family.name) || '';
+  $('call-name').textContent = nom;
+  if (nom) setCallFace($('call-face'), nom);
+  else $('call-face').replaceChildren();
   $('call').hidden = false;
   setCallStatus('Connexion…');
   setTimeout(() => {
     if (answerPending !== cid) return;
     answerPending = null;
     if (currentCall || callStarting) return;
-    setCallStatus("L'appel est terminé");
+    finDAppel("L'appel est terminé");
     setTimeout(() => { if (!currentCall && !callStarting) leaveCallScreen(); }, 2000);
   }, 15000);
 }
@@ -1827,7 +1840,10 @@ $('call-video').addEventListener('click', async () => {
   try {
     $('call-local').srcObject = await currentCall.enableVideo();
     $('call').classList.remove('audio');
-    if (!$('call-remote').srcObject) setCallStatus(`${session.family.name} va vous voir…`);
+    if (!$('call-remote').srcObject) {
+      $('call').classList.add('sonne');
+      setCallStatus(`${session.family.name} va vous voir…`);
+    }
   } catch (err) {
     console.error(err);
     reportCallIncident('camera-audio', `${err && err.name}: ${err && err.message}`);
@@ -1897,6 +1913,14 @@ $('tile-call').addEventListener('click', async () => {
   const allowed = await cameraAllowed();
   if (abort.signal.aborted) { callStarting = false; return; }
   if (allowed) enterCallScreen();
+  // Écran crème (photo, nom, état) de la préparation jusqu'à ce que Mamie apparaisse, et à la fin :
+  // jamais d'écran noir avec une ligne de texte.
+  $('call-remote').srcObject = null;
+  $('call-local').srcObject = null;
+  $('call').classList.remove('audio');
+  $('call').classList.add('sonne');
+  setCallFace($('call-face'), session.family.name);
+  $('call-name').textContent = session.family.name;
   $('call').hidden = false;
   setCallStatus('Préparation de la caméra…');
   try {
@@ -1906,18 +1930,18 @@ $('tile-call').addEventListener('click', async () => {
       remote: $('call-remote'),
       onState: (state) => {
         if (!allowed && state === 'ringing') enterCallScreen();
-        $('call').classList.toggle('sonne', state === 'ringing');
-        if (state === 'ringing') { setCallFace($('call-face'), session.family.name); $('call-name').textContent = session.family.name; }
+        // L'écran crème reste jusqu'à la première image de Mamie (voir « playing » plus bas) : pas d'écran noir.
+        if (state !== 'connected') $('call').classList.add('sonne');
         setCallStatus(CALL_MESSAGES[state]());
       },
       onEnd: (reason) => {
         currentCall = null;
         callAbort = null;
-        setCallStatus(END_MESSAGES[reason] || 'Appel terminé');
+        finDAppel(END_MESSAGES[reason] || 'Appel terminé');
         setTimeout(() => {
           if (currentCall) return;
           leaveCallScreen();
-          if (reason === 'missed' || reason === 'declined') offerVideoMessage();
+          if (reason === 'missed' || reason === 'declined') offerVideoMessage(reason);
         }, 2000);
       },
     });
@@ -1930,7 +1954,7 @@ $('tile-call').addEventListener('click', async () => {
     }
     console.error(err);
     if (!err || err.name !== 'BusyError') reportCallIncident('depart-video', `${err && err.name}: ${err && err.message}`);
-    setCallStatus(callErrorMessage(err));
+    finDAppel(callErrorMessage(err));
     setTimeout(() => { if (!currentCall) leaveCallScreen(); }, 4000);
   } finally {
     callStarting = false;
@@ -1965,9 +1989,10 @@ navigator.serviceWorker?.addEventListener('message', (e) => {
 });
 
 // Mamie n'a pas répondu : proposer de lui laisser un petit message vidéo à la place.
-async function offerVideoMessage() {
+async function offerVideoMessage(reason) {
   const name = session.family.name;
-  if (!await askConfirm(`${name} n'a pas répondu. Lui laisser un message vidéo ?`, 'Filmer')) return;
+  const quoi = reason === 'declined' ? 'ne peut pas répondre pour le moment' : "n'a pas répondu";
+  if (!await askConfirm(`${name} ${quoi}. Lui laisser un message vidéo ?`, 'Filmer')) return;
   openPage('videos');
   openAdd('video');
   $('in-video-camera').click();
@@ -1984,11 +2009,22 @@ function hangupCall() {
 // L'app fermée : on raccroche. Passer en arrière-plan ne coupe pas l'appel.
 window.addEventListener('pagehide', hangupCall);
 
+// C'est moi qui raccroche : l'écran se ferme tout de suite (pas de « Appel terminé » à attendre).
 $('call-hangup').addEventListener('click', () => {
-  const wasConnected = !!currentCall;
   hangupCall();
-  if (!wasConnected) leaveCallScreen();
+  leaveCallScreen();
 });
+
+// La première image de Mamie est là : on quitte l'écran crème pour la vidéo (jamais avant, sinon écran noir).
+const premiereImage = () => {
+  const call = $('call');
+  if (!call.hidden && !call.classList.contains('audio') && !$('call-hangup').hidden && $('call-remote').videoWidth) {
+    call.classList.remove('sonne');
+    setCallStatus('');
+  }
+};
+$('call-remote').addEventListener('playing', premiereImage);
+$('call-remote').addEventListener('resize', premiereImage);
 
 let allMembers = [];
 

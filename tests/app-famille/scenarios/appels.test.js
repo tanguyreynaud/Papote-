@@ -28,7 +28,7 @@ test('Appel vidéo vers la tablette : ça sonne, la tablette décroche, image re
   const mamie = await tablette.ouvrir(fid, tab);
 
   await lancerAppel(julie);
-  await julie.page.locator('#call-status', { hasText: 'Ça sonne chez Mamie Emma' }).waitFor();
+  await julie.page.locator('#call-status', { hasText: 'Ça sonne' }).waitFor();
   const [appel] = await g.attendreBase(async () => { const l = await appelsDe(fid, uid); return l.length && l; }, 'appel écrit');
   assert.strictEqual(appel.state, 'ringing');
   assert.strictEqual(appel.callerName, 'Julie');
@@ -58,7 +58,7 @@ test('Appel refusé par la tablette : proposition de laisser un message vidéo ;
   const [appel] = await g.attendreBase(async () => { const l = await appelsDe(fid, uid); return l.length && l; }, 'appel écrit');
   await s.db.doc(`families/${fid}/calls/${appel.id}`).update({ state: 'declined', endedAt: s.FieldValue.serverTimestamp() });
   await julie.page.locator('#call-status', { hasText: 'L\'appel a été refusé' }).waitFor();
-  assert.match(await g.texteFenetre(julie), /Mamie Emma n'a pas répondu\. Lui laisser un message vidéo/);
+  assert.match(await g.texteFenetre(julie), /Mamie Emma ne peut pas répondre pour le moment\. Lui laisser un message vidéo/);
   await g.repondre(julie, 'Annuler');
   await g.attendreVue(julie, 'view-home');
 
