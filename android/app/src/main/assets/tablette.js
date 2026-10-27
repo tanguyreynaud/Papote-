@@ -333,8 +333,12 @@
     img.className = 'invite-qr';
     img.setAttribute('src', qr);
     img.setAttribute('alt', '');
+    var titre = document.createElement('p');
+    titre.className = 'invite-titre';
+    titre.textContent = 'Les photos de la famille arriveront ici.';
     var text = document.createElement('p');
-    text.textContent = 'Famille : scannez ce code avec votre téléphone pour envoyer des photos';
+    text.textContent = 'Famille : scannez ce code avec votre téléphone.';
+    box.appendChild(titre);
     box.appendChild(img);
     box.appendChild(text);
     el.appendChild(box);
@@ -1359,6 +1363,11 @@
       show($('bday-age'), !!ageLabel(b));
       $('bday-alert').setAttribute('data-id', b.id);
       var uid = proche(b);
+      var bf = $('bday-face');
+      // Photo de l'anniversaire ajoutée dans l'app (data URL), sinon le visage du proche, sinon le gâteau seul.
+      var mid = String(b.id || '').indexOf('membre-') === 0 ? String(b.id).slice(7) : null;
+      var photo = typeof b.photo === 'string' && b.photo.indexOf('data:image/') === 0 ? b.photo : (mid && faces[mid]) || null;
+      if (photo) { bf.setAttribute('src', photo); show(bf, true); } else show(bf, false);
       if (uid) $('bday-call').textContent = 'Appeler ' + b.name;
       show($('bday-call'), !!uid);
       bdayQueue = [b];
@@ -1485,6 +1494,18 @@
 
   function initialOf(name) { return (name || '?').charAt(0).toUpperCase(); }
 
+  // Les visages de la famille (jusqu'à trois) : pour l'appel de toute la famille (SOS).
+  function famillePhotos() {
+    var box = el2('div', 'call-face family faces', '');
+    var n = 0;
+    for (var i = 0; i < people.length && n < 3; i++) {
+      if (!faces[people[i].uid]) continue;
+      box.appendChild(faceEl(people[i].uid, people[i].name, 'sos-face'));
+      n++;
+    }
+    if (!n) return el2('span', 'call-face family', '');
+    return box;
+  }
   function faceEl(uid, name, cls, url) {
     var face = url || (uid && faces[uid]);
     var e;
@@ -1630,8 +1651,8 @@
     callScreen.removeAttribute('hidden');
     callScreen.className = 'call-out state-' + state;
     if (state === 'ringing') startRingback(); else stopRingback();
-    var face = uid || name || faceUrl ? faceEl(uid, name, 'call-face', faceUrl) : el2('span', 'call-face family', '');
-    if (!uid && !name && !faceUrl) face.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M16 11a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm-8 0a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm0 2c-2.3 0-7 1.2-7 3.5V19h14v-2.5C15 14.2 10.3 13 8 13zm8 0c-.3 0-.6 0-1 .1 1.2.8 2 1.9 2 3.4V19h6v-2.5c0-2.3-4.7-3.5-7-3.5z"/></svg>';
+    var face = uid || name || faceUrl ? faceEl(uid, name, 'call-face', faceUrl) : famillePhotos();
+    if (!uid && !name && !faceUrl && !/faces/.test(face.className)) face.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M16 11a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm-8 0a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm0 2c-2.3 0-7 1.2-7 3.5V19h14v-2.5C15 14.2 10.3 13 8 13zm8 0c-.3 0-.6 0-1 .1 1.2.8 2 1.9 2 3.4V19h6v-2.5c0-2.3-4.7-3.5-7-3.5z"/></svg>';
     callScreen.appendChild(face);
     callScreen.appendChild(el2('h1', 'call-title', title));
     if (sub) callScreen.appendChild(el2('p', 'call-sub', sub));
@@ -1734,8 +1755,8 @@
     stopRingback();
     callScreen.className = 'call-out sos-countdown';
     callScreen.removeAttribute('hidden');
-    var face = el2('span', 'call-face family', '');
-    face.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M16 11a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm-8 0a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm0 2c-2.3 0-7 1.2-7 3.5V19h14v-2.5C15 14.2 10.3 13 8 13zm8 0c-.3 0-.6 0-1 .1 1.2.8 2 1.9 2 3.4V19h6v-2.5c0-2.3-4.7-3.5-7-3.5z"/></svg>';
+    var face = famillePhotos();
+    if (!/faces/.test(face.className)) face.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M16 11a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm-8 0a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm0 2c-2.3 0-7 1.2-7 3.5V19h14v-2.5C15 14.2 10.3 13 8 13zm8 0c-.3 0-.6 0-1 .1 1.2.8 2 1.9 2 3.4V19h6v-2.5c0-2.3-4.7-3.5-7-3.5z"/></svg>';
     callScreen.appendChild(face);
     callScreen.appendChild(el2('h1', 'call-title', 'On appelle toute la famille…'));
     var sub = el2('p', 'call-sub', '');
@@ -2133,7 +2154,7 @@
     alert.className = 'overlay ln bday';
     alert.setAttribute('hidden', '');
     alert.innerHTML = '<div class="ln-main"><div class="ln-wood"><div class="ln-note">' +
-      '<img class="bday-gateau" src="bg/gateau.svg" alt="">' +
+      '<img id="bday-face" class="bday-face" alt="" hidden><img class="bday-gateau" src="bg/gateau.svg" alt="">' +
       '<p id="bday-text" class="ln-text size-l"></p><p id="bday-age" class="ln-sign"></p>' +
       '</div></div></div><div class="ln-bar"><div class="ln-actions">' +
       '<button id="bday-call" class="ln-btn bday-call" hidden></button>' +

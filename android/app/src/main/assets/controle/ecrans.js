@@ -189,6 +189,16 @@
 
   var RAPPEL_MEDOC = { id: 'r1', kind: 'medicament', title: 'Prendre le cachet du midi', time: '12:00', repeat: 'daily', avanceMin: 15 };
   var RAPPEL_RDV = { id: 'r2', kind: 'rdv', title: 'Docteur Martin', time: '11:00', date: JOUR, repeat: 'none', avanceMin: 0 };
+  // Photo d'anniversaire ajoutée dans l'app (data URL carrée), dessinée ici : un portrait simple.
+  function photoAnniv() {
+    var c = document.createElement('canvas'); c.width = c.height = 320;
+    var x = c.getContext('2d');
+    var g = x.createLinearGradient(0, 0, 0, 320); g.addColorStop(0, '#fbcfe8'); g.addColorStop(1, '#f9a8d4');
+    x.fillStyle = g; x.fillRect(0, 0, 320, 320);
+    x.fillStyle = '#fde7d4'; x.beginPath(); x.arc(160, 130, 62, 0, 7); x.fill();
+    x.fillStyle = '#7c3aed'; x.beginPath(); x.arc(160, 330, 120, Math.PI, 0); x.fill();
+    return c.toDataURL('image/jpeg', .85);
+  }
   var BDAY = [{ id: 'b1', name: 'Léo', day: 26, month: 10, year: 2019 }];
   function sansWifi() { return t.faux({ wifi: { wifi: '', internet: false } }); }
   function appelerJulie() {
@@ -297,7 +307,7 @@
       return sos().then(function () { return t.avancer(6000); })
         .then(function () { return t.appel('missed'); }).then(function () { return t.appel('missed'); }).then(function () { return attendre(300); });
     }],
-    ['Rappels', 'Anniversaire d’un proche de l’app (bouton Appeler)', function () { return accueil(photosVues(), { birthdays: [{ id: 'membre-u-julie', name: 'Julie', day: 26, month: 10, year: 1988 }] }).then(function () { return attendre(400); }); }],
+    ['Rappels', 'Anniversaire d’un proche de l’app (bouton Appeler)', function () { return accueil(photosVues(), { birthdays: [{ id: 'membre-u-julie', name: 'Julie', day: 26, month: 10, year: 1988, photo: photoAnniv() }] }).then(function () { return attendre(400); }); }],
     ['Accueil', 'Accueil le plus chargé : radio, anniversaire, SOS', function () { return accueil(photosVues(), { birthdays: [{ id: 'b1', name: 'Léo', day: 26, month: 10, year: 2019 }], options: { radio: { nom: 'France Bleu', url: 'https://exemple.invalid/radio' } } }).then(function () { return t.cliquer('#bday-ok'); }).then(function () { return attendre(400); }); }]
   ];
 

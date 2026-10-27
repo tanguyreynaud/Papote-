@@ -1452,12 +1452,15 @@ final class Sync {
                     JSONObject f = doc.optJSONObject("fields");
                     if (f == null) continue;
                     String name = doc.optString("name");
+                    // Photo facultative de l'anniversaire, ajoutée dans l'app (data URL JPEG carrée, ~80 Ko).
+                    String photo = Firebase.str(f, "photo");
                     birthdays.put(new JSONObject()
                             .put("id", name.substring(name.lastIndexOf('/') + 1))
                             .put("name", nz(Firebase.str(f, "name")))
                             .put("day", Firebase.integer(f, "day"))
                             .put("month", Firebase.integer(f, "month"))
-                            .put("year", Firebase.integer(f, "year")));
+                            .put("year", Firebase.integer(f, "year"))
+                            .put("photo", photo != null && photo.startsWith("data:image/") ? photo : JSONObject.NULL));
                 }
             } catch (Exception e) {
                 // La règle Firestore des anniversaires n'est peut-être pas encore en ligne.
