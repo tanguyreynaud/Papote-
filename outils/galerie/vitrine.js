@@ -16,6 +16,23 @@ const RELAIS = [
   { id: 104, name: 'Librairie Saint-Vincent', street: 'Quai Saint-Vincent', house_number: '21', postal_code: '69001', city: 'Lyon', country: 'FR', distance: 1400 },
 ];
 
+// Réponse de codeCommande pour la page « Merci » : un vrai récapitulatif, avec une adresse e-mail longue (insécable).
+const RECAP = { code: 'ABCD-EFGH', date: 1761474600, nom: 'Marie-Christine Dupont-Lefebvre', email: 'mariechristine.dupontlefebvre@gmail.com', formule: 'sim', payeCentimes: 6000,
+  relais: { nom: 'Pressing des Terreaux', adresse: '3 Place des Terreaux', cp: '69001', ville: 'Lyon', destinataire: 'Marie-Christine Dupont-Lefebvre' } };
+
+// Largeur de la page : si elle dépasse l'écran, le téléphone dézoome tout (bug signalé deux fois, 27/10).
+// Donne le texte de l'erreur, ou rien.
+async function tropLarge(page) {
+  return page.evaluate(() => {
+    const de = document.documentElement;
+    if (de.scrollWidth <= de.clientWidth) return '';
+    const coupables = [...document.querySelectorAll('body *')]
+      .filter((el) => el.getBoundingClientRect().right > de.clientWidth + 1 && el.getBoundingClientRect().width > 0)
+      .slice(0, 3).map((el) => el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') + (el.classList.length ? '.' + [...el.classList].join('.') : ''));
+    return `page trop large (${de.scrollWidth} px pour un écran de ${de.clientWidth} px : ${coupables.join(', ')})`;
+  }).catch(() => '');
+}
+
 const pause = (p, ms = 700) => p.waitForTimeout(ms);
 // Étape 2 et 3 de la commande remplies : code postal, premier point relais, nom, e-mail.
 async function commandeRemplie(p) {
@@ -53,7 +70,7 @@ const SCENES = [
     await p.fill('#destinataire', 'Tanguy Reynaud'); await p.fill('#email', 'tanguy@exemple.fr'); await p.dispatchEvent('#email', 'input');
     await p.locator('#payer').click(); await pause(p);
   } },
-  { groupe: 'Commande', titre: 'Merci, commande enregistrée', fichier: 'merci.html?c=ABCD-EFGH', plein: true },
+  { groupe: 'Commande', titre: 'Merci, commande enregistrée (code et récapitulatif)', fichier: 'merci.html?session=cs_test_galerie', plein: true, note: 'Le récapitulatif vient d’une fausse réponse de codeCommande, avec une adresse e-mail longue (bug de largeur du 27/10).' },
   { groupe: 'Textes', titre: 'Conditions générales de vente', fichier: 'cgv.html', plein: true },
   { groupe: 'Textes', titre: 'Mentions légales et confidentialité', fichier: 'mentions.html', plein: true },
 ];
@@ -83,6 +100,7 @@ async function capturer({ browser, base, dossierImages, progression }) {
       // « Payer » part vers la fonction commander (puis Stripe) : ici une réponse 204, que le navigateur ignore,
       // la page reste donc affichée avec « Un instant… ».
       await page.route('**/commander**', (r) => r.fulfill({ status: 204 }));
+      await page.route('**/codeCommande**', (r) => r.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(RECAP) }));
       await page.route(/geo\.api\.gouv\.fr/, (r) => r.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: '[{"nom":"Lyon 1er Arrondissement","code":"69381"}]' }));
       await page.route(/servicepoints\.sendcloud\.sc/, (r) => r.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(RELAIS) }));
       try {
@@ -92,6 +110,8 @@ async function capturer({ browser, base, dossierImages, progression }) {
       } catch (e) {
         erreurs.push('Scène : ' + e.message.split('\n')[0]);
       }
+      const largeur = await tropLarge(page);
+      if (largeur) erreurs.push('Largeur : ' + largeur);
       const fichier = `vitrine-${String(n).padStart(3, '0')}.jpg`;
       if (scene.plein) {
         const h = await page.evaluate(() => document.documentElement.scrollHeight).catch(() => taille.height);
