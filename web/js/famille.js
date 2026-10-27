@@ -202,11 +202,13 @@ for (const quoi of ['deja', 'prendre']) {
     $(`sans-abo-panel-${quoi}`).scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
 }
-$('sans-abo-aide').addEventListener('click', () => document.querySelector('.nav-item[data-tab="support"]').click());
+$('sans-abo-aide').addEventListener('click', () => show('view-support'));
+document.querySelectorAll('.bell-btn[data-tab], .aide-card[data-tab]').forEach((b) => b.addEventListener('click', () => show(`view-${b.dataset.tab}`)));
 
 // Barre du bas : on change d'onglet sans empiler l'historique.
 document.querySelectorAll('.nav-item').forEach((btn) => {
   btn.addEventListener('click', () => {
+    if (btn.dataset.page) { goHome(); openPage(btn.dataset.page); return; }
     if (btn.dataset.tab === 'home') goHome();
     else show(`view-${btn.dataset.tab}`);
   });
@@ -1891,6 +1893,8 @@ $('tile-call').addEventListener('click', async () => {
       remote: $('call-remote'),
       onState: (state) => {
         if (!allowed && state === 'ringing') enterCallScreen();
+        $('call').classList.toggle('sonne', state === 'ringing');
+        if (state === 'ringing') { setCallFace($('call-face'), session.family.name); $('call-name').textContent = session.family.name; }
         setCallStatus(CALL_MESSAGES[state]());
       },
       onEnd: (reason) => {

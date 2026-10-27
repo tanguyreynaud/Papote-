@@ -359,10 +359,10 @@ button:disabled { opacity: .45; cursor: default; }
 .bubble p { margin: 0; }
 .bubble.mine { align-self: flex-end; background: var(--accent); color: var(--accent-text); border-bottom-right-radius: 6px; cursor: pointer; }
 .bubble.theirs { align-self: flex-start; border-bottom-left-radius: 6px; }
-.bubble.reply { border: 2px solid var(--ok); }
+.bubble.reply { border: 2px solid var(--accent); }
 .bubble-who { font-size: 15px; font-weight: 700; color: var(--muted); }
-.reply .bubble-who { color: var(--ok); }
-.bubble-text { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 17px; }
+.reply .bubble-who { color: var(--accent); }
+.bubble-text { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 18px; }
 .bubble-foot { font-size: 14px; opacity: .75; margin-top: 2px !important; text-align: right; }
 
 .chat-bar {
@@ -788,7 +788,7 @@ button:disabled { opacity: .45; cursor: default; }
 .outbox { margin: 0 0 16px; padding: 12px 14px; border-radius: 14px; background: color-mix(in srgb, var(--c-agenda) 14%, var(--surface)); font-size: 15px; font-weight: 600; }
 
 .read-badge { flex: none; font-size: 15px; font-weight: 700; padding: 3px 10px; border-radius: 999px; }
-.read-badge.read { color: var(--ok); background: color-mix(in srgb, var(--ok) 14%, transparent); }
+.read-badge.read { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
 .read-badge.unread { color: var(--muted); background: var(--bg); border: 1px solid var(--line); }
 
 /* ---------- Connexion ---------- */
@@ -912,6 +912,11 @@ h1, h2, h3, .brand, .tile, .splash-name { font-family: var(--display); letter-sp
 .home-head { position: relative; }
 .invite-btn { position: absolute; right: 0; top: 4px; gap: 6px; padding: 8px 14px; border-radius: 999px; font-size: 15px; background: var(--surface); color: var(--accent); box-shadow: var(--shadow); }
 .invite-btn svg { width: 20px; height: 20px; }
+/* La cloche des notifications, à gauche de « Inviter » (la barre du bas mène aux photos et messages). */
+.bell-btn { position: absolute; right: 108px; top: 4px; width: 40px; height: 40px; border-radius: 50%; background: var(--surface); color: var(--accent); box-shadow: var(--shadow); display: flex; align-items: center; justify-content: center; }
+.bell-btn svg { width: 22px; height: 22px; }
+.bell-btn .nav-badge { right: -8px; top: -6px; }
+.aide-card { width: 100%; text-align: left; }
 
 /* Appel à l'horizontale même quand le téléphone ne tourne pas l'écran */
 @media (orientation: portrait) {
@@ -1059,19 +1064,19 @@ body:not(.on-support) .ps-bouton, body:not(.on-support) .ps-panneau { display: n
 .defil-rail span { display: block; width: 100%; border-radius: 3px; background: var(--accent); }
 #sheet-wifi .wifi-list { max-height: 55vh; overflow-y: auto; }
 
-/* Mamie appelle (audio) : sonnerie en plein écran, puis appel sans vidéo, comme un téléphone */
-.incoming, .call.audio {
+/* Appels comme sur la tablette : crème, la photo en grand et carrée, deux grands boutons nommés. */
+.incoming, .call.audio, .call.sonne {
   background: #fdfaf5;
-  color: #3f2d4a;
+  color: #312e81;
 }
 .incoming {
   position: fixed; inset: 0; z-index: 40;
   display: flex; flex-direction: column; align-items: center;
-  padding: calc(56px + env(safe-area-inset-top)) 24px calc(48px + env(safe-area-inset-bottom));
+  padding: calc(72px + env(safe-area-inset-top)) 24px calc(48px + env(safe-area-inset-bottom));
   text-align: center;
 }
 .incoming[hidden] { display: none; }
-.incoming-kind { margin: 0 0 28px; font-size: 14px; letter-spacing: .08em; text-transform: uppercase; opacity: .75; }
+.incoming-kind { margin: 0 0 18px; font-size: 14px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #5b5794; }
 .call-face {
   width: 148px; height: 148px; border-radius: 50%;
   display: grid; place-items: center; overflow: hidden;
@@ -1079,36 +1084,33 @@ body:not(.on-support) .ps-bouton, body:not(.on-support) .ps-panneau { display: n
   font-size: 64px; font-weight: 700;
   box-shadow: 0 0 0 6px rgba(63, 45, 74, .08);
 }
+.incoming .call-face, .call.sonne .call-face {
+  width: min(72vw, 320px); height: min(72vw, 320px); border-radius: 14px;
+  font-size: 120px; background: #e8e6fd; color: #4f46e5;
+  box-shadow: 0 6px 24px rgba(49, 46, 129, .14);
+}
 .call-face img { width: 100%; height: 100%; object-fit: cover; }
-.call-face.ringing { animation: incoming-ring 1.6s ease-out infinite; }
-@keyframes incoming-ring {
-  0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, .35), 0 0 0 6px rgba(63, 45, 74, .08); }
-  100% { box-shadow: 0 0 0 36px rgba(34, 197, 94, 0), 0 0 0 6px rgba(63, 45, 74, .08); }
-}
-.incoming-name, .call-name { margin: 24px 0 0; font-size: 34px; font-weight: 700; line-height: 1.1; }
-.incoming-sub { margin: 6px 0 0; font-size: 18px; opacity: .8; }
+.incoming-name, .call-name { margin: 24px 0 0; font-family: var(--display); font-size: 38px; font-weight: 800; letter-spacing: -.01em; line-height: 1.1; color: #312e81; }
+.incoming-sub { margin: 6px 0 0; font-size: 20px; color: #5b5794; }
 /* Remontés vers le tiers bas de l'écran : tout en bas, ils tombaient sous le pouce mal placé. */
-.incoming-actions { margin-top: auto; margin-bottom: 26vh; display: flex; gap: 72px; }
+.incoming-actions { margin-top: auto; margin-bottom: 14vh; display: flex; gap: 14px; width: 100%; }
 .round-btn {
-  display: flex; flex-direction: column; align-items: center; gap: 10px;
-  background: none; color: #3f2d4a; font-size: 15px; font-weight: 600; padding: 0;
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 10px;
+  min-height: 68px; border-radius: 999px; padding: 0 16px;
+  font-family: var(--display); font-size: 20px; font-weight: 800; color: #fff;
 }
-.round-btn svg {
-  width: 72px; height: 72px; padding: 20px; border-radius: 50%;
-  box-sizing: border-box; box-shadow: 0 8px 24px rgba(63, 45, 74, .18); color: #fff;
-}
-.round-btn.answer svg { background: #22c55e; animation: incoming-wiggle 1.2s ease-in-out infinite; }
-.round-btn.decline svg { background: #dc2626; }
-@keyframes incoming-wiggle { 0%, 60%, 100% { transform: rotate(0); } 70% { transform: rotate(-12deg); } 80% { transform: rotate(12deg); } 90% { transform: rotate(-8deg); } }
+.round-btn svg { width: 30px; height: 30px; }
+.round-btn.answer { background: #16a34a; box-shadow: 0 8px 24px rgba(22, 163, 74, .3); }
+.round-btn.decline { background: #dc2626; box-shadow: 0 8px 24px rgba(220, 38, 38, .25); }
 
 .call-audio-panel { display: none; }
-.call.audio .call-audio-panel {
+.call.audio .call-audio-panel, .call.sonne .call-audio-panel {
   position: absolute; inset: 0;
   display: flex; flex-direction: column; align-items: center;
   padding: calc(56px + env(safe-area-inset-top)) 24px 0;
   text-align: center;
 }
-.call.audio video { display: none; }
+.call.audio video, .call.sonne video { display: none; }
 .call-timer { margin: 8px 0 0; font-size: 18px; font-variant-numeric: tabular-nums; opacity: .8; min-height: 1.3em; }
 .call.audio .call-status { top: auto; bottom: calc(150px + env(safe-area-inset-bottom)); font-size: 18px; font-weight: 500; text-shadow: none; opacity: .85; color: #3f2d4a; }
 .call.audio .call-hangup {
@@ -1117,6 +1119,10 @@ body:not(.on-support) .ps-bouton, body:not(.on-support) .ps-panneau { display: n
   font-size: 0; box-shadow: 0 8px 24px rgba(0, 0, 0, .3);
   background: #dc2626 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23fff' d='M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85a1 1 0 0 1-1.41-.02L.29 13.08a1 1 0 0 1 0-1.41C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67a1 1 0 0 1 0 1.41l-2.48 2.47a1 1 0 0 1-1.41.02c-.79-.73-1.69-1.36-2.67-1.85a1 1 0 0 1-.56-.9v-3.1A15 15 0 0 0 12 9z'/%3E%3C/svg%3E") center / 34px no-repeat;
 }
+/* Pendant que ça sonne chez Mamie : la photo, son nom et un grand bouton « Raccrocher ». */
+.call.sonne .call-audio-panel { padding-top: calc(72px + env(safe-area-inset-top)); color: #312e81; }
+.call.sonne .call-status { top: 58%; bottom: auto; color: #5b5794; font-size: 20px; font-weight: 600; text-shadow: none; }
+.call.sonne .call-hangup { height: auto; padding: 16px 36px; border-radius: 999px; background: #dc2626; width: calc(100% - 48px); max-width: 420px; min-height: 68px; bottom: 14vh; font-family: var(--display); font-size: 20px; font-weight: 800; box-shadow: 0 8px 24px rgba(220, 38, 38, .25); }
 
 .agenda-edit { padding: 0; margin-top: 6px; font-weight: 700; color: var(--accent); }
 

@@ -396,6 +396,7 @@
     <section id="view-home" class="page-pad tab-page" hidden>
       <header class="home-head">
         <button type="button" id="btn-invite" class="invite-btn" data-page="invite"><svg><use href="#i-user-plus"/></svg>Inviter</button>
+        <button type="button" id="btn-bell" class="bell-btn" data-tab="notifs" aria-label="Notifications"><span class="nav-icon"><svg><use href="#i-bell"/></svg><span id="nav-badge" class="nav-badge" hidden></span></span></button>
         <h1 class="brand">Papote</h1>
         <p id="family-title" class="muted"></p>
         <button type="button" id="tablet-chip" class="tablet-chip" aria-label="État de la tablette" hidden></button>
@@ -427,7 +428,6 @@
         <span class="avatar avatar-empty" aria-hidden="true">&#128241;</span>
         <span><strong>Empêcher Android de mettre Papote en pause</strong><br><span class="muted small">Sinon, votre téléphone pourrait ne plus sonner. Touchez ici, puis tout en bas, désactivez « Suspendre l'activité… »</span></span>
       </button>
-      <button type="button" id="btn-install" class="install-fab" hidden><svg><use href="#i-download"/></svg>Installer l'app</button>
       <div class="tiles">
         <button type="button" class="tile t-call" id="tile-call">
           <svg class="tile-icon"><use href="#i-call"/></svg><span>Appel vidéo</span>
@@ -448,6 +448,7 @@
           <svg class="tile-icon"><use href="#i-settings"/></svg><span>Réglages</span>
         </button>
       </div>
+      <button type="button" id="btn-install" class="install-fab" hidden><svg><use href="#i-download"/></svg>Installer l'app</button>
     </section>
 
     <!-- Photos -->
@@ -715,6 +716,7 @@
     <section id="view-profile" class="page tab-page" hidden>
       <header class="page-head"><h1>Profil</h1></header>
       <div class="page-pad">
+        <button type="button" class="card nudge aide-card" data-tab="support"><span class="avatar avatar-empty"><svg><use href="#i-help"/></svg></span><span><strong>Aide et support</strong><br><span class="muted small">Questions fréquentes, assistant Papote</span></span></button>
         <div class="card">
           <h2>Ma photo</h2>
           <p class="muted">Pour que <span class="grand-name"></span> vous reconnaisse quand vous envoyez quelque chose ou que vous appelez.</p>
@@ -863,8 +865,8 @@
   <!-- Barre de navigation -->
   <nav id="nav" class="nav" hidden>
     <button type="button" class="nav-item active" data-tab="home"><svg><use href="#i-home"/></svg><span>Accueil</span></button>
-    <button type="button" class="nav-item" data-tab="notifs"><span class="nav-icon"><svg><use href="#i-bell"/></svg><span id="nav-badge" class="nav-badge" hidden></span></span><span>Notifications</span></button>
-    <button type="button" class="nav-item" data-tab="support"><svg><use href="#i-help"/></svg><span>Support</span></button>
+    <button type="button" class="nav-item" data-page="photos"><svg><use href="#i-photo"/></svg><span>Photos</span></button>
+    <button type="button" class="nav-item" data-page="messages"><svg><use href="#i-message"/></svg><span>Messages</span></button>
     <button type="button" class="nav-item" data-tab="profile"><svg><use href="#i-user"/></svg><span>Profil</span></button>
   </nav>
 
@@ -1012,7 +1014,7 @@
 
   <!-- Mamie appelle (audio) -->
   <div id="incoming" class="incoming" hidden>
-    <p class="incoming-kind">Appel audio Papote</p>
+    <p class="incoming-kind">Appel Papote</p>
     <div id="incoming-face" class="call-face ringing" aria-hidden="true"></div>
     <p id="incoming-name" class="incoming-name"></p>
     <p class="incoming-sub">vous appelle</p>
@@ -1032,7 +1034,7 @@
   <div id="call" class="call" hidden>
     <audio id="call-audio" autoplay></audio>
     <div class="call-audio-panel">
-      <p class="incoming-kind">Appel audio Papote</p>
+      <p class="incoming-kind">Appel Papote</p>
       <div id="call-face" class="call-face" aria-hidden="true"></div>
       <p id="call-name" class="call-name"></p>
       <p id="call-timer" class="call-timer"></p>
