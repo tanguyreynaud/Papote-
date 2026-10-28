@@ -46,8 +46,8 @@ android {
         applicationId = "com.papote.tablette"
         minSdk = 28
         targetSdk = 36
-        versionCode = 190
-        versionName = "2.99.83"
+        versionCode = 191
+        versionName = "2.99.84"
         firebaseValues.forEach { (k, v) -> resValue("string", k, v) }
     }
 
