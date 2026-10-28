@@ -601,6 +601,19 @@ button:disabled { opacity: .45; cursor: default; }
   font-weight: 600;
   text-shadow: 0 1px 4px rgba(0, 0, 0, .8);
 }
+/* Visio sur le forfait de la tablette : petit bandeau crème en haut, qui s'efface tout seul. */
+.call-forfait {
+  position: absolute; z-index: 1;
+  /* En haut à gauche : la vignette de sa propre caméra est en haut à droite. */
+  top: calc(16px + env(safe-area-inset-top)); left: calc(16px + env(safe-area-inset-left));
+  max-width: min(420px, calc(100% - 32px - 30vw)); margin: 0;
+  padding: 8px 16px; border-radius: 999px;
+  background: rgba(253, 250, 245, .92); color: #312e81;
+  font-size: 15px; font-weight: 600; text-align: center;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .2);
+  animation: fade-in .4s ease;
+}
+.call.sonne .call-forfait, .call.audio .call-forfait { display: none; }
 /* Les boutons de l'appel, en bas au centre (pendant la vidéo : Raccrocher seul). */
 .call-actions {
   position: absolute; left: 0; right: 0;

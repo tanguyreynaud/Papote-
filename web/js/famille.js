@@ -1621,8 +1621,38 @@ async function garderEcranAllume() {
 new MutationObserver(garderEcranAllume).observe($('call'), { attributes: true, attributeFilter: ['hidden'] });
 document.addEventListener('visibilitychange', garderEcranAllume);
 
+// Visio avec une tablette sur SIM : toutes les 10 minutes, un petit bandeau discret rappelle au proche
+// que l'appel passe par le forfait de la tablette (Tanguy, 28/10). Rien sur la tablette, ni en Wi-Fi.
+const FORFAIT_TOUTES_MIN = 10;
+let visio = { reseau: null, debut: 0, timer: null, cache: null, deja: 0 };
+function noterReseauAppel(reseau) {
+  visio.reseau = reseau;
+}
+function debutVisio() {
+  if (visio.debut) return;
+  visio.debut = Date.now();
+  visio.timer = setInterval(() => {
+    const minutes = Math.floor((Date.now() - visio.debut) / 60_000);
+    const palier = Math.floor(minutes / FORFAIT_TOUTES_MIN) * FORFAIT_TOUTES_MIN;
+    if (visio.reseau !== 'sim' || palier < FORFAIT_TOUTES_MIN || palier <= visio.deja) return;
+    visio.deja = palier;
+    const nom = (session && session.family && session.family.name) || 'la tablette';
+    $('call-forfait').textContent = `Déjà ${palier} minutes de visio sur le forfait de ${nom}`;
+    $('call-forfait').hidden = false;
+    clearTimeout(visio.cache);
+    visio.cache = setTimeout(() => { $('call-forfait').hidden = true; }, 10_000);
+  }, 5_000);
+}
+function finVisio() {
+  clearInterval(visio.timer);
+  clearTimeout(visio.cache);
+  visio = { reseau: null, debut: 0, timer: null, cache: null, deja: 0 };
+  $('call-forfait').hidden = true;
+}
+
 function leaveCallScreen() {
   noteAppel = '';
+  finVisio();
   $('call').hidden = true;
   $('call').classList.remove('audio', 'sonne');
   $('call-hangup').hidden = false;
@@ -1792,12 +1822,14 @@ async function answerFromTablet() {
       audio: $('call-audio'),
       onState: () => { setCallStatus(''); startCallTimer(); },
       onRegime: regimeAppel,
+      onReseau: noterReseauAppel,
       // Mamie répond à notre caméra : on passe à l'écran vidéo.
       onVideo: (track) => {
         $('call-remote').srcObject = new MediaStream([track]);
         $('call-remote').play().catch(() => {});
         $('call').classList.remove('audio', 'sonne');
         setCallStatus('');
+        debutVisio();
       },
       onEnd: (reason) => {
         currentCall = null;
@@ -1949,6 +1981,7 @@ $('tile-call').addEventListener('click', async () => {
       local: $('call-local'),
       remote: $('call-remote'),
       onRegime: regimeAppel,
+      onReseau: noterReseauAppel,
       onState: (state) => {
         if (!allowed && state === 'ringing') enterCallScreen();
         // L'écran crème reste jusqu'à la première image de Mamie (voir « playing » plus bas) : pas d'écran noir.
@@ -2042,6 +2075,7 @@ const premiereImage = () => {
   if (!call.hidden && !call.classList.contains('audio') && !$('call-hangup').hidden && $('call-remote').videoWidth) {
     call.classList.remove('sonne');
     setCallStatus('');
+    debutVisio();
   }
 };
 $('call-remote').addEventListener('playing', premiereImage);

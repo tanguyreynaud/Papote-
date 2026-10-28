@@ -65,7 +65,7 @@ async function limiterVideo(pc) {
 }
 // Réseau de la tablette, écrit par elle dans sa réponse (appel du proche) ou dans son offre (appel de
 // Mamie), et son régime (forfait presque épuisé) : on règle de nouveau la vidéo s'il change ;
-// ui.onRegime(regime) prévient l'écran d'appel.
+// ui.onReseau(reseau) et ui.onRegime(regime) préviennent l'écran d'appel (bandeau du forfait, appel sans image).
 function noterReseau(pc, data, ui) {
   const reseau = [data && data.answer && data.answer.reseau, data && data.offer && data.offer.reseau]
     .find((r) => r === 'sim' || r === 'wifi');
@@ -74,9 +74,11 @@ function noterReseau(pc, data, ui) {
   const changeRegime = regime && regimeTablette.get(pc) !== regime;
   if (changeRegime) regimeTablette.set(pc, regime);
   if (changeRegime && ui && ui.onRegime) ui.onRegime(regime);
-  if (reseau && reseauTablette.get(pc) !== reseau) reseauTablette.set(pc, reseau);
-  else if (!changeRegime) return;
+  const changeReseau = reseau && reseauTablette.get(pc) !== reseau;
+  if (changeReseau) reseauTablette.set(pc, reseau);
+  if (!changeReseau && !changeRegime) return;
   limiterVideo(pc);
+  if (changeReseau && ui && ui.onReseau) ui.onReseau(reseau);
 }
 function limiterALaConnexion(pc) {
   pc.addEventListener('connectionstatechange', () => {
@@ -238,6 +240,7 @@ export function watchTabletBusy(fid, onChange) {
  *   ui.local / ui.remote : éléments <video>
  *   ui.onState(state)    : 'ringing' | 'accepted' | 'connected'
  *   ui.onEnd(reason)     : 'ended' | 'declined' | 'missed' | 'failed'
+ *   ui.onReseau(reseau)  : réseau de la tablette, 'sim' ou 'wifi' (quand elle le donne)
  *   ui.onRegime(regime)  : 'eco' | 'audio', forfait de la tablette presque épuisé (facultatif)
  *   ui.signal            : AbortSignal ; « Raccrocher » avant la fin du démarrage annule tout
  * Renvoie { hangup() }, ou lève une AbortError si l'appel a été annulé pendant le démarrage.
