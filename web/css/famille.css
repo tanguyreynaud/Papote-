@@ -1257,6 +1257,7 @@ body:not(.on-support) .ps-bouton, body:not(.on-support) .ps-panneau { display: n
 .setup-essai svg { width: 22px; height: 22px; stroke: none; fill: var(--accent); }
 .setup-essai:active { background: var(--accent); color: var(--accent-text); }
 .setup-essai:active svg { fill: var(--accent-text); }
+.volume-aide { margin: -4px 0 2px; }
 .setup-son-status { margin: 12px 0 0; padding: 10px 14px; border-radius: 12px; font-size: 15px; color: var(--text); background: var(--bg); border: 1px solid var(--line); }
 #setup-options .toggle-list { margin-top: 14px; }
 

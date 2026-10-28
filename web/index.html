@@ -630,14 +630,33 @@
           </form>
         </div>
         <div id="volume-card" class="card setting" hidden>
-          <div class="setting-head"><h2>Volume du son</h2><button type="button" class="link setting-modify">Modifier</button></div>
+          <div class="setting-head"><h2>Volumes</h2><button type="button" class="link setting-modify">Modifier</button></div>
           <p id="volume-text" class="setting-value"></p>
           <form id="form-volume" class="setting-edit" hidden>
-            <p class="muted small">Le son des vidéos et des appels sur la tablette.</p>
-            <div class="volume-row">
-              <input id="volume" type="range" min="10" max="100" step="5" aria-label="Volume de la tablette">
-              <span id="volume-value" class="volume-value"></span>
+            <p class="muted small">Glissez une barre : la tablette joue le son tout de suite. La voix pendant les appels est toujours au plus fort.</p>
+            <div class="setup-son-ligne">
+              <div class="setup-son-tete">
+                <strong>Sonnerie</strong>
+                <span id="volume-sonnerie-val" class="setup-son-val"></span>
+              </div>
+              <p class="muted small volume-aide">Les appels qui arrivent</p>
+              <div class="setup-son-ctrl">
+                <input id="volume-sonnerie" type="range" min="10" max="100" step="5" aria-label="Volume de la sonnerie">
+                <button type="button" class="setup-essai volume-essai" data-essai="sonnerie" aria-label="Écouter la sonnerie"><svg><use href="#i-play"/></svg><span>Écouter</span></button>
+              </div>
             </div>
+            <div class="setup-son-ligne">
+              <div class="setup-son-tete">
+                <strong>Vidéos et messages lus</strong>
+                <span id="volume-value" class="setup-son-val"></span>
+              </div>
+              <p class="muted small volume-aide">Le son des vidéos, les messages lus à voix haute, la radio</p>
+              <div class="setup-son-ctrl">
+                <input id="volume" type="range" min="10" max="100" step="5" aria-label="Volume des vidéos et des messages">
+                <button type="button" class="setup-essai volume-essai" data-essai="voix" aria-label="Écouter la voix"><svg><use href="#i-play"/></svg><span>Écouter</span></button>
+              </div>
+            </div>
+            <p id="volume-status" class="setup-son-status" aria-live="polite" hidden></p>
             <div class="setting-actions">
               <button type="button" class="secondary setting-cancel">Annuler</button>
               <button type="submit" class="primary">Enregistrer</button>
