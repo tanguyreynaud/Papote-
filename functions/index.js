@@ -1852,6 +1852,8 @@ exports.compterProches = onDocumentWritten(
 
 // Appels de la tablette vers la famille : sonnerie et appel manqué par notification push.
 Object.assign(exports, require('./appels'));
+// Réveil des tablettes par notification push (plus d'écoute ouverte en permanence) : voir reveil.js.
+Object.assign(exports, (({ reveilAppel, reveilOrdre, reveilFamille, reveilVersion }) => ({ reveilAppel, reveilOrdre, reveilFamille, reveilVersion }))(require('./reveil')));
 
 // Protections contre une facture qui s'emballe : coupe-circuit à 150 € et plafonds de stockage.
 exports.coupeCircuit = require('./budget').coupeCircuit;
