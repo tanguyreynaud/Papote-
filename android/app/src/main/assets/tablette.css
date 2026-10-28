@@ -719,8 +719,9 @@ body.night .weather-label { color: #9d97b5; }
 }
 .photos.calm .arrow, .photos.calm .ln-btn.photo-home { opacity: 0; visibility: hidden; }
 
-/* La nuit, le diaporama est assombri pour ne pas éblouir */
-.night-veil { display: none; position: absolute; top: 0; right: 0; bottom: 0; left: 0; background: rgba(0, 0, 0, .5); }
+/* Le soir, le diaporama est un peu assombri pour ne pas éblouir : léger (15 %), car l'écran est déjà à
+   55 % de luminosité (MainActivity) ; à 50 % les photos devenaient trop sombres (Tanguy, 28/10). */
+.night-veil { display: none; position: absolute; top: 0; right: 0; bottom: 0; left: 0; background: rgba(0, 0, 0, .15); }
 body.night .night-veil { display: block; }
 /* Les calques du fondu restent sous le voile de nuit, les flèches et la barre du bas */
 .photos .night-veil { z-index: 3; }
