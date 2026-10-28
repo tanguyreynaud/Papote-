@@ -964,7 +964,8 @@ window.papoteCallFamily = ({ to = null, toName = null, sos = 0, onState = () => 
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
     if (done) return;
-    await updateDoc(ref, { offer: { type: offer.type, sdp: limitReceive(offer.sdp) } });
+    // « reseau » : le téléphone règle sa vidéo selon le réseau de la tablette (règles du 28/10 requises).
+    await updateDoc(ref, { offer: { type: offer.type, sdp: limitReceive(offer.sdp), reseau: onSimData() ? 'sim' : 'wifi' } });
     const tOffre = Math.round(performance.now() - t0);
     if (tOffre > 3000) reportCallIncident('depart-lent', `appel-ecrit+micro=${tEcrit}ms offre=${tOffre}ms`, ref.id);
 
