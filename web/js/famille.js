@@ -613,7 +613,7 @@ function introVue() {
 function showIntroTablette() {
   if (!introAFaire()) return false;
   const nom = session.family.name;
-  const choix = { veille: { active: true, de: 23, a: 7 }, volume: 80,
+  const choix = { veille: { ...VEILLE_DEFAUT }, volume: 80,
     options: { lecture: true, sos: true, radio: { active: false, nom: RADIOS[0].nom, url: RADIOS[0].url } } };
   const back = document.createElement('div');
   back.className = 'guide-back intro-back';
@@ -657,15 +657,15 @@ function showIntroTablette() {
         <button type="button" class="link intro-prev">Retour</button>
         <button type="submit" class="primary intro-next"></button>
       </div>
-    </form>`.replaceAll('HOURS', `<option value="0">0 h</option><option value="1">1 h</option><option value="2">2 h</option><option value="3">3 h</option><option value="4">4 h</option><option value="5">5 h</option><option value="6">6 h</option><option value="7">7 h</option><option value="8">8 h</option><option value="9">9 h</option><option value="10">10 h</option><option value="11">11 h</option><option value="12">12 h</option><option value="13">13 h</option><option value="14">14 h</option><option value="15">15 h</option><option value="16">16 h</option><option value="17">17 h</option><option value="18">18 h</option><option value="19">19 h</option><option value="20">20 h</option><option value="21">21 h</option><option value="22">22 h</option><option value="23">23 h</option>`);
+    </form>`.replaceAll('HOURS', OPTIONS_HEURES);
   const $i = (sel) => back.querySelector(sel);
   const steps = [...back.querySelectorAll('.intro-step')];
   $i('.guide-dots').innerHTML = steps.map(() => '<span></span>').join('');
   $i('[data-step="0"] p').textContent = `Quelques questions pour que la tablette de ${nom} soit prête : nuit, son, options. Une minute, et tout reste modifiable dans Réglages.`;
   $i('[data-step="5"] p').textContent = `La tablette de ${nom} est réglée. Invitez maintenant la famille pour qu'elle envoie des photos.`;
   back.querySelectorAll('.intro-nom').forEach((e) => { e.textContent = nom; });
-  $i('#intro-de').value = '23';
-  $i('#intro-a').value = '7';
+  $i('#intro-de').value = valeurHeure(VEILLE_DEFAUT.de, VEILLE_DEFAUT.deMin);
+  $i('#intro-a').value = valeurHeure(VEILLE_DEFAUT.a, VEILLE_DEFAUT.aMin);
   $i('#intro-volume').value = String(choix.volume);
   $i('#intro-volume-val').textContent = `${choix.volume} %`;
   $i('#intro-lecture').checked = choix.options.lecture;
@@ -691,7 +691,7 @@ function showIntroTablette() {
   const close = () => { introVue(); back.remove(); };
 
   async function enregistrer() {
-    choix.veille = { active: $i('#intro-veille').checked, de: Number($i('#intro-de').value), a: Number($i('#intro-a').value) };
+    choix.veille = veilleChoisie($i('#intro-veille').checked, $i('#intro-de'), $i('#intro-a'));
     choix.volume = Number($i('#intro-volume').value);
     const r = RADIOS[Number($i('#intro-station').value)] || RADIOS[0];
     choix.options = {
@@ -2383,18 +2383,24 @@ function watchInvitations() {
       cancelInvitation(session.fid, email).catch((err) => console.warn('Invitation non effacée', err));
       return false;
     });
+    // Invitations pas encore utilisées, la plus récente en haut : l'initiale, l'adresse, « Annuler ».
+    restantes.sort((a, b) => (b.data().createdAt?.toMillis?.() || 0) - (a.data().createdAt?.toMillis?.() || 0));
+    $('invitations-titre').hidden = !restantes.length;
     $('invitations-sent').replaceChildren(...restantes.map((d) => {
       const inv = d.data();
       const li = document.createElement('li');
+      const rond = document.createElement('span');
+      rond.className = 'avatar invitation-rond';
+      rond.textContent = (inv.email || '?').charAt(0).toUpperCase();
       const name = document.createElement('span');
-      name.className = 'member-name';
-      name.textContent = `${inv.email} · invitation envoyée`;
+      name.className = 'member-name invitation-email';
+      name.textContent = inv.email;
       const cancel = document.createElement('button');
       cancel.type = 'button';
-      cancel.className = 'link danger small';
+      cancel.className = 'link small';
       cancel.textContent = 'Annuler';
       cancel.addEventListener('click', () => cancelInvitation(session.fid, inv.email).catch(console.error));
-      li.append(name, cancel);
+      li.append(rond, name, cancel);
       return li;
     }));
   }, (err) => console.warn('Invitations illisibles', err));
@@ -2404,6 +2410,22 @@ $('form-invite').addEventListener('submit', async (e) => {
   e.preventDefault();
   const email = $('invite-email').value.trim();
   if (familyFull) { notice('La famille est complète : 30 proches au maximum.'); return; }
+  // Le temps d'enregistrer l'invitation et d'envoyer l'e-mail : bouton « Un instant… », champ figé.
+  const bouton = $('form-invite').querySelector('button[type=submit]');
+  const libelle = bouton.textContent;
+  bouton.disabled = true;
+  $('invite-email').disabled = true;
+  bouton.replaceChildren(Object.assign(document.createElement('span'), { className: 'spinner-inline' }), 'Un instant…');
+  try {
+    await envoyerInvitation(email);
+  } finally {
+    bouton.disabled = false;
+    $('invite-email').disabled = false;
+    bouton.textContent = libelle;
+  }
+});
+
+async function envoyerInvitation(email) {
   try {
     await inviteByEmail(session.fid, session.family, email, session.member.name);
   } catch (err) {
@@ -2431,7 +2453,7 @@ $('form-invite').addEventListener('submit', async (e) => {
       }).catch(() => {});
     }
   }
-});
+}
 
 
 $('btn-new-code').addEventListener('click', async () => {
@@ -3148,26 +3170,47 @@ SETTINGS['my-genre-card'] = {
   },
 };
 
-// Mise en veille : families/{fid}.veille = { active, de, a } ; par défaut l'écran s'éteint de 23 h à 7 h.
-const veilleActuelle = () => session.family.veille || { active: true, de: 23, a: 7 };
+// Mise en veille : families/{fid}.veille = { active, de, a } en heures (0-23), plus deMin / aMin (30) pour
+// les demi-heures (absents = pile). Par défaut, l'écran s'éteint de 21 h à 6 h 30.
+const VEILLE_DEFAUT = { active: true, de: 21, a: 6, aMin: 30 };
+const veilleActuelle = () => session.family.veille || VEILLE_DEFAUT;
+const heureVeille = (h, m) => (m ? `${h} h ${m}` : `${h} h`);
+const OPTIONS_HEURES = Array.from({ length: 48 }, (_, i) => {
+  const h = Math.floor(i / 2), m = i % 2 ? 30 : 0;
+  return `<option value="${h}:${m}">${heureVeille(h, m)}</option>`;
+}).join('');
+const valeurHeure = (h, m) => `${h}:${m === 30 ? 30 : 0}`;
+// Deux listes De / à -> { active, de, a, deMin?, aMin? } (rien pour une heure pile, comme avant).
+function veilleChoisie(active, selDe, selA) {
+  const [de, deMin] = selDe.value.split(':').map(Number);
+  const [a, aMin] = selA.value.split(':').map(Number);
+  const veille = { active, de, a };
+  if (deMin) veille.deMin = deMin;
+  if (aMin) veille.aMin = aMin;
+  return veille;
+}
+const memeHeure = (v) => v.de === v.a && (v.deMin || 0) === (v.aMin || 0);
 
 function renderSleep() {
   const v = veilleActuelle();
-  $('sleep-value').textContent = v.active === false ? "Jamais : l'écran reste allumé" : `De ${v.de ?? 23} h à ${v.a ?? 7} h`;
+  $('sleep-value').textContent = v.active === false ? "Jamais : l'écran reste allumé"
+    : `De ${heureVeille(v.de ?? 21, v.deMin)} à ${heureVeille(v.a ?? 6, v.aMin)}`;
 }
 
+$('sleep-from').innerHTML = OPTIONS_HEURES;
+$('sleep-to').innerHTML = OPTIONS_HEURES;
 $('sleep-on').addEventListener('change', () => { $('sleep-hours').hidden = !$('sleep-on').checked; });
 SETTINGS['sleep-card'] = {
   fill() {
     const v = veilleActuelle();
     $('sleep-on').checked = v.active !== false;
-    $('sleep-from').value = String(v.de ?? 23);
-    $('sleep-to').value = String(v.a ?? 7);
+    $('sleep-from').value = valeurHeure(v.de ?? 21, v.deMin);
+    $('sleep-to').value = valeurHeure(v.a ?? 6, v.aMin);
     $('sleep-hours').hidden = !$('sleep-on').checked;
   },
   async save() {
-    const veille = { active: $('sleep-on').checked, de: Number($('sleep-from').value), a: Number($('sleep-to').value) };
-    if (veille.active && veille.de === veille.a) { notice("L'heure de fin doit être différente de l'heure de début."); return false; }
+    const veille = veilleChoisie($('sleep-on').checked, $('sleep-from'), $('sleep-to'));
+    if (veille.active && memeHeure(veille)) { notice("L'heure de fin doit être différente de l'heure de début."); return false; }
     await saveFamily({ veille }, 'Mise en veille enregistrée');
     return true;
   },

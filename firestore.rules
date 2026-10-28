@@ -208,10 +208,12 @@ service cloud.firestore {
           || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['code'])
             && isFamilyAdmin(fid)
             && getAfter(invitePath(request.resource.data.code)).data.fid == fid)
-          // Mise en veille de la tablette la nuit : { active, de, a } (heures 0-23).
+          // Mise en veille de la tablette la nuit : { active, de, a } (heures 0-23), deMin / aMin pour les demi-heures.
           || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['veille', 'rev'])
             && isFamilyAdmin(fid)
-            && request.resource.data.veille.keys().hasOnly(['active', 'de', 'a'])
+            && request.resource.data.veille.keys().hasOnly(['active', 'de', 'a', 'deMin', 'aMin'])
+            && request.resource.data.veille.get('deMin', 0) in [0, 30]
+            && request.resource.data.veille.get('aMin', 0) in [0, 30]
             && request.resource.data.veille.active is bool
             && request.resource.data.veille.de is int && request.resource.data.veille.de >= 0 && request.resource.data.veille.de <= 23
             && request.resource.data.veille.a is int && request.resource.data.veille.a >= 0 && request.resource.data.veille.a <= 23)

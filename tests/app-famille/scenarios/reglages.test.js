@@ -66,19 +66,19 @@ test('Réglages de la tablette : nom, options et radio, volume, nuit, météo, p
   assert.deepStrictEqual([fam.volume, fam.volumeSonnerie], [50, 70]);
   await julie.page.locator('#volume-text', { hasText: 'Sonnerie 70 % · Vidéos et messages 50 %' }).waitFor();
 
-  // Nuit : mêmes heures refusées, puis de 22 h à 8 h.
+  // Nuit : mêmes heures refusées, puis de 22 h à 6 h 30 (demi-heure).
   await modifier(julie, 'sleep-card');
-  await julie.page.selectOption('#sleep-from', '7');
-  await julie.page.selectOption('#sleep-to', '7');
+  await julie.page.selectOption('#sleep-from', '7:0');
+  await julie.page.selectOption('#sleep-to', '7:0');
   await enregistrer(julie, 'sleep-card');
   assert.match(await g.texteFenetre(julie), /L'heure de fin doit être différente/);
   await g.repondre(julie, 'OK');
-  await julie.page.selectOption('#sleep-from', '22');
-  await julie.page.selectOption('#sleep-to', '8');
+  await julie.page.selectOption('#sleep-from', '22:0');
+  await julie.page.selectOption('#sleep-to', '6:30');
   await enregistrer(julie, 'sleep-card');
   await g.toast(julie, 'Mise en veille enregistrée');
-  assert.deepStrictEqual((await g.lire(`families/${fid}`)).veille, { active: true, de: 22, a: 8 });
-  await julie.page.locator('#sleep-value', { hasText: 'De 22 h à 8 h' }).waitFor();
+  assert.deepStrictEqual((await g.lire(`families/${fid}`)).veille, { active: true, de: 22, a: 6, aMin: 30 });
+  await julie.page.locator('#sleep-value', { hasText: 'De 22 h à 6 h 30' }).waitFor();
 
   // Météo : code postal puis commune.
   await modifier(julie, 'meteo-card');

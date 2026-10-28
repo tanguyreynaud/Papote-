@@ -1400,3 +1400,10 @@ a { text-decoration: none; }
 /* App Android : bande gris léger sous les boutons Android, que Chrome laisse sur la page. */
 .app-android body::after { content: ''; position: fixed; left: 0; right: 0; bottom: 0; height: env(safe-area-inset-bottom); background: #ece9e4; z-index: 2147483647; pointer-events: none; }
 @media (prefers-color-scheme: dark) { .app-android body::after { background: #2a2826; } }
+
+/* Invitations par e-mail pas encore utilisées */
+.invitations-titre { margin: 18px 0 4px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.invitations li { gap: 12px; flex-wrap: nowrap; }
+.invitation-rond { width: 36px; height: 36px; font-weight: 700; font-size: 15px; color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--bg)); }
+.invitation-email { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#form-invite button[disabled] { opacity: 1; }
