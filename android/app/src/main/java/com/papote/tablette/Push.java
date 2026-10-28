@@ -43,6 +43,8 @@ public class Push extends FirebaseMessagingService {
     public void onMessageReceived(@NonNull RemoteMessage message) {
         String type = message.getData().get("type");
         if (type == null) return;
+        // Pour savoir, quand un envoi n'arrive pas, si le réveil n'est pas parti ou s'il n'est pas arrivé.
+        Journal.log(this, "Push reçu : " + type);
         SharedPreferences p = prefs(this);
         p.edit().putLong("pushDernier", System.currentTimeMillis()).apply();
         if ("ping".equals(type)) {
