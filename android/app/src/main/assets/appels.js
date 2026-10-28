@@ -283,12 +283,13 @@ const CAMERA = {
 // Débit de la vidéo envoyée par la tablette, réglé après la négociation (capVideo).
 // Sur la carte SIM (pas de Wi-Fi), mode « économie », réparti selon l'écran (Tanguy, 28/10) : la
 // famille regarde Mamie sur un petit téléphone, Mamie regarde la famille sur la grande tablette.
-// Mamie est filmée en ~300p à ~100 kbit/s (elle bouge peu), la vidéo du proche est demandée à
-// ~650 kbit/s. Mesuré avant le changement : 4,6 Mo la minute ; attendu ~5,5 Mo, ~330 Mo par heure.
-// Sur Wi-Fi : pleine qualité (Tanguy, 28/10), le plafond ne sert qu'à éviter les débits absurdes.
-const VIDEO_MAX_BITRATE = 1_200_000;
-const SIM_SEND_BITRATE = 100_000;
-const SIM_RECEIVE_KBPS = 650;
+// Mamie est filmée en 400x300, 12 i/s, 120 kbit/s (elle bouge peu : on garde la netteté, quitte à
+// perdre des images) ; la vidéo du proche est demandée à 500 kbit/s, le plafond du téléphone.
+// Mesuré avant : 4,6 Mo la minute ; attendu ~5,4 Mo (avis du fil « Réduire la consommation », 28/10).
+// Sur Wi-Fi : 640x480, 20 i/s, 700 kbit/s (au-delà, rien de plus en 480p), réception sans plafond.
+const VIDEO_MAX_BITRATE = 700_000;
+const SIM_SEND_BITRATE = 120_000;
+const SIM_RECEIVE_KBPS = 500;
 function onSimData() {
   try {
     const s = JSON.parse(android().wifiStatus());
@@ -323,7 +324,10 @@ function capVideo(pc) {
       const p = s.getParameters();
       if (!p.encodings || !p.encodings.length) p.encodings = [{}];
       p.encodings[0].maxBitrate = sim ? SIM_SEND_BITRATE : VIDEO_MAX_BITRATE;
-      p.encodings[0].maxFramerate = sim ? 15 : 24;
+      p.encodings[0].maxFramerate = sim ? 12 : 20;
+      // Quand Mamie bouge, l'encodeur perd des images plutôt que de la netteté.
+      p.degradationPreference = 'maintain-resolution';
+      try { s.track.contentHint = 'detail'; } catch (e) { /* ancien navigateur */ }
       if (sim) p.encodings[0].scaleResolutionDownBy = 1.6; // 640x480 -> environ 400x300 (petit écran en face)
       s.setParameters(p).catch(() => {});
     });
@@ -763,7 +767,8 @@ async function connectAnswer(id, data, callRef, stream) {
   const reply = await pc.createAnswer();
   await pc.setLocalDescription(reply);
   capVideo(pc);
-  await updateDoc(callRef, { answer: { type: reply.type, sdp: limitReceive(reply.sdp) }, state: 'accepted' });
+  // « reseau » : le téléphone règle sa vidéo selon le réseau de la tablette (SIM : 500 kbit/s).
+  await updateDoc(callRef, { answer: { type: reply.type, sdp: limitReceive(reply.sdp), reseau: onSimData() ? 'sim' : 'wifi' }, state: 'accepted' });
 
   active.stops.push(onSnapshot(collection(callRef, 'callerCandidates'), (snap) => {
     snap.docChanges().forEach((c) => {
