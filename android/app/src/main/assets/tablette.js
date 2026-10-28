@@ -2387,6 +2387,10 @@
     }, FRAME_MS);
 
     on(document, 'touchstart', resetIdle);
+    // Un toucher (OK, Écouter…) arrête aussi le carillon d'arrivée, pas seulement le visage vu.
+    on(document, 'touchstart', function () {
+      try { if (android() && android().carillonStop) android().carillonStop(); } catch (e) { }
+    });
     on(document, 'mousedown', resetIdle);
     var homes = document.querySelectorAll('[data-home]');
     for (var i = 0; i < homes.length; i++) {
