@@ -185,7 +185,12 @@ function euros(centimes) {
 }
 
 const bonjour = (nom) => `Bonjour${nom ? ` ${echapper(nom)}` : ''},`;
-const COMMENT_RENDRE = 'Mettez la tablette, son support, son chargeur et son câble (et l\'enceinte si vous l\'avez reçue) dans un carton, collez l\'étiquette dessus et déposez le colis dans n\'importe quel point relais Mondial Relay. Inutile de l\'effacer : nous nous en chargeons.';
+const CARTON = 'Mettez la tablette, son support, son chargeur et son câble (et l\'enceinte si vous l\'avez reçue) dans un carton';
+const COMMENT_RENDRE = `${CARTON}, collez l'étiquette dessus et déposez le colis dans n'importe quel point relais Mondial Relay. Inutile de l'effacer : nous nous en chargeons.`;
+const COMMENT_RENDRE_QR = `${CARTON} et déposez-le dans n'importe quel point relais Mondial Relay en montrant ce QR code (sur votre téléphone, pas besoin d'imprimer). Inutile d'effacer la tablette : nous nous en chargeons.`;
+// Où demander le QR code de retour : dans l'appli, au moment de déposer le colis (renvoyerTablette).
+const DEMANDER_QR = 'Quand le colis est prêt, ouvrez l\'appli Papote, onglet Profil, et touchez « Je renvoie la tablette » : un QR code prépayé s\'affiche, à montrer au point relais Mondial Relay. Pas besoin d\'imprimer, et vous n\'avez rien à payer.';
+const APPLI_RETOUR = { texte: 'Ouvrir l\'appli Papote', lien: `${APPLI}/?abonnement=1` };
 
 // Abonnement terminé ou commande annulée après l'envoi : la tablette prêtée est attendue.
 // retractation : montant remboursé au retour (centimes), sinon null.
@@ -195,17 +200,26 @@ function retourTablette({ nom, avant, retractation, montant }) {
     retractation != null
       ? 'Votre commande est bien annulée. Il reste à nous renvoyer la tablette.'
       : 'Votre abonnement Papote est terminé. Merci de nous avoir fait confiance ! La tablette est prêtée : il reste à nous la renvoyer.',
-    'Nous vous envoyons par e-mail, sous deux jours ouvrés, une étiquette de retour prépayée : vous n\'avez rien à payer.',
-    `${COMMENT_RENDRE} Date limite : <b>${dateEnClair(avant)}</b>.`,
+    DEMANDER_QR,
+    `${CARTON}. Inutile de l'effacer : nous nous en chargeons. Date limite : <b>${dateEnClair(avant)}</b>.`,
     retractation != null && retractation > 0
       ? `Dès que la tablette nous parvient, nous vous remboursons <b>${euros(retractation)}</b> sur votre compte.`
       : `Sans retour à cette date, ${euros(montant)} seront prélevés sur votre compte. Chaque élément manquant est facturé : tablette 130 €, chargeur et câble 10 €, enceinte 10 € si elle était dans le colis.`,
-  ]);
+  ], APPLI_RETOUR);
 }
 
 // fin : abonnement terminé ou commande annulée (le seul e-mail de retour, avec le mode d'emploi) ;
-// sinon remplacement d'un élément du kit.
-function etiquetteRetour({ nom, lien, avant, fin, retractation, montant }) {
+// sinon remplacement d'un élément du kit. qr : lien vers le QR code à montrer au point relais (sans impression).
+function etiquetteRetour({ nom, lien, qr, avant, fin, retractation, montant }) {
+  if (qr) {
+    return message('Votre QR code pour nous rendre la tablette', [
+      bonjour(nom),
+      'Voici le QR code prépayé pour nous renvoyer la tablette : vous n\'avez rien à payer. Il est aussi dans l\'appli Papote, onglet Profil.',
+      `${COMMENT_RENDRE_QR}${avant ? ` Date limite : <b>${dateEnClair(avant)}</b>.` : ''}`,
+      fin && retractation != null && retractation > 0
+        ? `Dès que la tablette nous parvient, nous vous remboursons <b>${euros(retractation)}</b> sur votre compte.` : '',
+    ].filter(Boolean), { texte: 'Afficher le QR code', lien });
+  }
   return message(fin ? 'Comment nous rendre la tablette Papote' : 'Votre étiquette de retour Papote', [
     bonjour(nom),
     fin ? (retractation != null
@@ -222,13 +236,13 @@ function etiquetteRetour({ nom, lien, avant, fin, retractation, montant }) {
   ].filter(Boolean), { texte: 'Imprimer l\'étiquette', lien });
 }
 
-function rappelRestitution({ nom, avant, lien, montant }) {
+function rappelRestitution({ nom, avant, lien, qr, montant }) {
   return message('Pensez à nous rendre la tablette Papote', [
     bonjour(nom),
     `Nous n'avons pas encore reçu la tablette. Déposez-la dans un point relais Mondial Relay avant le <b>${dateEnClair(avant)}</b> : sans retour à cette date, ${euros(montant)} seront prélevés sur votre compte.`,
-    lien ? 'Votre étiquette prépayée est disponible avec le bouton ci-dessous.' : 'Vous n\'avez pas reçu l\'étiquette de retour ? Répondez à cet e-mail : nous vous la renvoyons.',
+    lien ? `Votre ${qr ? 'QR code' : 'étiquette'} prépayé${qr ? '' : 'e'} est disponible avec le bouton ci-dessous.` : DEMANDER_QR,
     'Si vous avez déjà déposé le colis, ne tenez pas compte de ce message.',
-  ], lien ? { texte: 'Imprimer l\'étiquette', lien } : undefined);
+  ], lien ? { texte: qr ? 'Afficher le QR code' : 'Imprimer l\'étiquette', lien } : APPLI_RETOUR);
 }
 
 // rembourse : montant remboursé (centimes), 0 ou null s'il n'y a rien à rembourser.

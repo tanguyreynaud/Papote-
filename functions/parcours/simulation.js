@@ -77,9 +77,46 @@ push.envoyer = async (db, fid, uids, data) => {
 
 require('../voix').voixDocument = async () => null;
 
+// Faux Sendcloud : offres Mondial Relay (dont le retour « QR » sans impression), annonce des retours,
+// étiquettes, suivi et annulation. sendcloud.colis : les colis créés, par id.
+const sendcloud = { colis: new Map(), prochain: 1, sansQr: false };
+const KG = { min: { value: '0', unit: 'kg' }, max: { value: '30', unit: 'kg' } };
+function fauxSendcloud(url, options = {}) {
+  const chemin = new URL(url).pathname.replace(/^\/api\/v[23]/, '');
+  const json = (corps, statut = 200) => new Response(JSON.stringify(corps), { status: statut, headers: { 'content-type': 'application/json' } });
+  const corps = options.body ? JSON.parse(options.body) : null;
+  if (chemin === '/shipping-options') {
+    const f = (corps && corps.functionalities) || {};
+    const offres = [{ code: 'mondial_relay:retour', carrier: { code: 'mondial_relay' }, functionalities: { returns: true }, weight: KG }];
+    if (!sendcloud.sansQr) offres.push({ code: 'mondial_relay:retour-qr', carrier: { code: 'mondial_relay' }, functionalities: { returns: true, labelless: true }, weight: KG });
+    return json({ data: offres.filter((o) => !f.labelless || o.functionalities.labelless) });
+  }
+  if (chemin === '/returns/announce-synchronously') {
+    const id = sendcloud.prochain++;
+    sendcloud.colis.set(id, { id, livraison: corps.delivery_option, offre: corps.ship_with.shipping_option_code, statut: 1000, annule: false });
+    return json({ return_id: id, parcel_id: id });
+  }
+  let m = chemin.match(/^\/parcels\/(\d+)\/documents\/label$/);
+  if (m) return new Response(Buffer.from(`etiquette ${m[1]}`), { status: 200 });
+  m = chemin.match(/^\/parcels\/(\d+)\/cancel$/);
+  if (m) {
+    const c = sendcloud.colis.get(Number(m[1]));
+    if (c) c.annule = true;
+    return json({ status: 'cancelled' });
+  }
+  m = chemin.match(/^\/parcels\/(\d+)$/);
+  if (m) {
+    const c = sendcloud.colis.get(Number(m[1]));
+    if (!c) return json({}, 404);
+    return json({ parcel: { tracking_number: `MR${c.id}`, tracking_url: `https://suivi/MR${c.id}`, status: { id: c.statut, message: c.statut === 1000 ? 'Ready to send' : 'En route' } } });
+  }
+  return json({ error: { message: `faux Sendcloud : ${chemin} inconnu` } }, 404);
+}
+
 // Coordonnées de la commune du point relais (installation.js) : réponse fixe, sans internet.
 const vraiFetch = global.fetch;
 global.fetch = async (url, options) => {
+  if (String(url).startsWith('https://panel.sendcloud.sc/')) return fauxSendcloud(String(url), options);
   if (String(url).startsWith('https://geo.api.gouv.fr/')) {
     return new Response(JSON.stringify([{ nom: 'Saint-Martin-de-Valamas', centre: { coordinates: [4.37, 44.94] } }]));
   }
@@ -310,12 +347,14 @@ async function remettreAZero() {
   erreurs.length = 0;
   journal.length = 0;
   fichiersEffaces.length = 0;
+  sendcloud.colis.clear();
+  sendcloud.sansQr = false;
   decalage = 0;
   reglages.telephones = true;
 }
 
 module.exports = {
   demarrer, arreter, remettreAZero, calme, avancer, JOUR,
-  stripe, boite, notifications, erreurs, journal, fichiersEffaces, reglages,
+  stripe, boite, notifications, erreurs, journal, fichiersEffaces, reglages, sendcloud,
   fonctions, db, FieldValue, Timestamp, lire, compte, appeler, tache, requete,
 };

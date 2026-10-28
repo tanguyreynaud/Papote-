@@ -5,6 +5,7 @@
 //   creerPaiement      appel depuis l'appli famille : paiement pour une famille existante
 //   portailClient      appel depuis l'appli famille : compte bancaire, factures
 //   facturesFamille    appel depuis l'appli famille : liste des factures, avec leur PDF
+//   renvoyerTablette   appel depuis l'appli famille : QR code de retour de la tablette, créé à la demande
 //   resilierAbonnement appel depuis l'appli famille : résilie à la fin du mois en cours, prélevé à l'arrêt
 //   annulerResiliation appel depuis l'appli famille : garde l'abonnement
 //   rattacherCommande  appel depuis l'appli famille : relie une commande du site à la famille
@@ -71,6 +72,7 @@ const APPLI_FAMILLE = 'https://app.mapapote.fr/';
 const MAIL_SMTP = defineString('MAIL_SMTP', { default: 'smtp.gmail.com:465:' });
 const MAIL_EXPEDITEUR = defineString('MAIL_EXPEDITEUR', { default: '' });
 const MAIL_MOT_DE_PASSE = defineSecret('MAIL_MOT_DE_PASSE');
+const SENDCLOUD_API = defineSecret('SENDCLOUD_API');
 
 function envoyerMail(a, contenu) {
   return mail.envoyer({
@@ -729,9 +731,36 @@ exports.finDeContrat = onCall({ secrets: [STRIPE_SECRET] }, async (request) => {
       jusqua: c.expedition === 'a-preparer' ? null : regles.limiteRetractation(ms(c.creeLe), ms(c.envoyeeLe), regles.receptionDe(c)),
       montant: await montantPaye(id),
     } : null,
-    restitution: r ? { statut: r.statut, avant: ms(r.avant), etiquette: r.etiquette || null } : null,
+    restitution: r ? { statut: r.statut, avant: ms(r.avant), etiquette: r.etiquette || null, qr: r.qr || null } : null,
     remboursement: c.remboursement ? { statut: c.remboursement.statut, montant: c.remboursement.montant || 0 } : null,
   };
+});
+
+// « Je renvoie la tablette » : le QR code de retour (sans impression) n'est créé qu'au moment où la famille
+// est prête à déposer le colis, pour ne pas payer d'étiquette pour une tablette jamais rendue (Tanguy, 28/10).
+// Déjà créé : on renvoie le même. L'e-mail avec le QR code part avec commandeModifiee (suiviRetour).
+exports.renvoyerTablette = onCall({ secrets: [SENDCLOUD_API, MAIL_MOT_DE_PASSE], timeoutSeconds: 120 }, async (request) => {
+  const { id, ref, snap } = await commandeDeLaFamille((request.data || {}).fid, request);
+  const c = snap.data();
+  const r = c.restitution;
+  if (!r || !['attendue', 'echec'].includes(r.statut)) throw new HttpsError('failed-precondition', "Il n'y a pas de tablette à nous renvoyer.");
+  if (r.etiquette) return { etiquette: r.etiquette, qr: r.qr || null };
+  // Un seul QR à la fois, même si le bouton est touché deux fois.
+  const maintenant = Date.now();
+  await db.runTransaction(async (tx) => {
+    const demande = (await tx.get(ref)).get('restitution.qrDemandeLe');
+    if (demande && maintenant - demande < 2 * 60e3) throw new HttpsError('already-exists', 'Le QR code est en cours de création, un instant.');
+    tx.update(ref, { 'restitution.qrDemandeLe': maintenant });
+  });
+  try {
+    const e = await gestion.etiquetteRetourClient(id, request.auth.token.email || request.auth.uid);
+    return { etiquette: e.url, qr: e.qr || null };
+  } catch (e) {
+    await ref.update({ 'restitution.qrDemandeLe': FieldValue.delete() });
+    // Adresse de Papote ou du client manquante, panne Sendcloud : Papote le voit dans les journaux.
+    logger.error(`Commande ${id} : QR code de retour non créé`, e.message);
+    throw new HttpsError('internal', "Le QR code n'a pas pu être créé. Réessayez dans un instant, ou répondez à notre e-mail : nous vous l'envoyons.");
+  }
 });
 
 // Code de commande d'un abonnement : créé une seule fois, à la première demande.
@@ -1354,7 +1383,7 @@ exports.restitutions = onSchedule(
       if (regles.rappelRestitutionDu(r, maintenant) && snap.get('email')) {
         try {
           await envoyerMail(snap.get('email'), mail.rappelRestitution({
-            nom: snap.get('nom'), avant: r.avant.toMillis(), lien: r.etiquette || null,
+            nom: snap.get('nom'), avant: r.avant.toMillis(), lien: r.qr || r.etiquette || null, qr: !!r.qr,
             montant: regles.penaliteRestitution(snap.data()),
           }));
           await snap.ref.update({ 'restitution.rappelLe': FieldValue.serverTimestamp() });
@@ -1671,16 +1700,13 @@ async function suiviRetour(event, rAvant, r, c) {
   const id = event.params.id;
   const retractation = c.remboursement && c.remboursement.statut === 'au-retour' ? c.remboursement.montant : null;
 
-  // Tablette attendue : le client reçoit UN seul e-mail, le mode d'emploi avec l'étiquette à coller. Avec la
-  // vraie clé Stripe, l'étiquette est créée la nuit suivante (gestionAutomatique) et cet e-mail part avec elle
-  // (plus bas). En mode test, aucune étiquette n'est créée : le mode d'emploi part seul, tout de suite.
+  // Tablette attendue : le client reçoit le mode d'emploi tout de suite. Le QR code de retour n'est créé que
+  // quand il touche « Je renvoie la tablette » dans l'appli (renvoyerTablette) : il le reçoit alors par e-mail
+  // (plus bas), et Papote un second avis avec le suivi du colis.
   if (r.statut === 'attendue' && rAvant.statut !== 'attendue' && !r.mailLe) {
     await ref.update({ 'restitution.mailLe': FieldValue.serverTimestamp() });
-    const etiquetteAutomatique = STRIPE_SECRET.value().startsWith('sk_live_') && c.expedition === 'envoyee';
-    // L'avis à Papote part avec le suivi du colis de retour quand l'étiquette sera créée (plus bas) ;
-    // sans étiquette automatique (mode test), il part tout de suite, sans suivi.
-    if (!etiquetteAutomatique) await avisResiliation(id, c, retractation);
-    if (c.email && !r.etiquette && !etiquetteAutomatique) {
+    await avisResiliation(id, c, retractation);
+    if (c.email && !r.etiquette) {
       try {
         await envoyerMail(c.email, mail.retourTablette({ nom: c.nom, avant: r.avant.toMillis(), retractation, montant: regles.penaliteRestitution(c) }));
       } catch (e) {
@@ -1698,7 +1724,7 @@ async function suiviRetour(event, rAvant, r, c) {
   if (r.etiquette && r.etiquette !== rAvant.etiquette && c.email) {
     try {
       await envoyerMail(c.email, mail.etiquetteRetour({
-        nom: c.nom, lien: r.etiquette, avant: r.avant ? r.avant.toMillis() : null,
+        nom: c.nom, lien: r.qr || r.etiquette, qr: !!r.qr, avant: r.avant ? r.avant.toMillis() : null,
         fin: ['attendue', 'echec'].includes(r.statut), retractation, montant: regles.penaliteRestitution(c),
       }));
     } catch (e) {
