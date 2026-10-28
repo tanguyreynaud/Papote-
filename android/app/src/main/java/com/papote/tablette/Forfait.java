@@ -16,8 +16,8 @@ import java.util.TimeZone;
  * La tablette compte les Mo RÉELLEMENT passés par la carte SIM depuis le début du cycle de recharge
  * (compteur Android, le même que la page « Forfaits SIM » de l'admin) et se retient par paliers :
  *   niveau 0 : rien ne change ;
- *   niveau 1 (60 %) : la visio sur SIM passe en qualité réduite (≈ 1,6 Mo la minute au lieu de 5) ;
- *   niveau 2 (85 %) : plus d'image dans les appels sur SIM, le son seul (≈ 0,5 Mo la minute) ;
+ *   niveau 1 (70 %) : la visio sur SIM passe en qualité réduite (≈ 1,6 Mo la minute au lieu de 5) ;
+ *   niveau 2 (88 %) : plus d'image dans les appels sur SIM, le son seul (≈ 0,5 Mo la minute) ;
  *   niveau 3 (95 %) : plus de vidéos reçues, de météo ni de mise à jour sur SIM (textes et photos passent).
  * Sur le Wi-Fi, aucune limite, jamais. Les appels SOS passent toujours (en audio au pire).
  *
@@ -28,7 +28,7 @@ import java.util.TimeZone;
  */
 final class Forfait {
     static final long DEFAUT_MO = 1000;
-    static final int ECO = 60, AUDIO = 85, TEXTE = 95; // pour cent du forfait
+    static final int ECO = 70, AUDIO = 88, TEXTE = 95; // pour cent du forfait (1 Go : 1 h 45 de visio normale, puis réduite)
     static final long CYCLE_MS = 30L * 24 * 3600_000;
     private static final String TAG = "Papote";
 
