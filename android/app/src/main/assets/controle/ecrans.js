@@ -101,7 +101,7 @@
     extra = extra || {};
     return {
       familyName: 'Mamie Jeanne', familyCode: 'ABCD-1234', textSize: '', subscription: extra.subscription || 'actif',
-      options: Object.assign({}, OPTIONS, extra.options || {}), veille: { active: true, de: 23, a: 7 }, posts: posts
+      options: Object.assign({}, OPTIONS, extra.options || {}), veille: { active: true, de: 21 * 60, a: 6 * 60 + 30 }, posts: posts
     };
   }
 
@@ -246,12 +246,12 @@
     }],
     ['Accueil', 'Papote en pause (abonnement suspendu)', function () { return accueil(photosVues(), { subscription: 'suspendu' }); }],
 
-    ['Soir et nuit', 'Accueil le soir (21h30)', function () { return accueil(photosVues(), { meteo: METEO_NUIT }); }, '21:30'],
+    ['Soir et nuit', 'Accueil le soir (20h30)', function () { return accueil(photosVues(), { meteo: METEO_NUIT }); }, '20:30'],
     ['Soir et nuit', 'Veille la nuit (23h30)', function () { return accueil(photosVues(), { meteo: METEO_NUIT }).then(function () { return attendre(1200); }); }, '23:30'],
     ['Soir et nuit', 'Nouvelle photo le soir', function () {
-      return accueil([post({ image: IMAGES.paysage(3), text: 'Bonne nuit Mamie !', seen: false, at: heure('21:28') })].concat(photosVues()), { meteo: METEO_NUIT })
+      return accueil([post({ image: IMAGES.paysage(3), text: 'Bonne nuit Mamie !', seen: false, at: heure('20:28') })].concat(photosVues()), { meteo: METEO_NUIT })
         .then(function () { return attendre(800); });
-    }, '21:30'],
+    }, '20:30'],
 
     ['Nouvel envoi', 'Message court', function () { return accueil([post({ text: 'Coucou Mamie, on pense fort à toi !', seen: false, at: heure('10:05') })].concat(photosVues())); }],
     ['Nouvel envoi', 'Message long', function () {
@@ -309,7 +309,7 @@
     }],
     ['Rappels', 'Anniversaire d’un proche de l’app (bouton Appeler)', function () { return accueil(photosVues(), { birthdays: [{ id: 'membre-u-julie', name: 'Julie', day: 26, month: 10, year: 1988, photo: photoAnniv() }] }).then(function () { return attendre(400); }); }],
     ['Accueil', 'Accueil le plus chargé : radio, anniversaire, SOS', function () { return accueil(photosVues(), { birthdays: [{ id: 'b1', name: 'Léo', day: 26, month: 10, year: 2019 }], options: { radio: { nom: 'France Bleu', url: 'https://exemple.invalid/radio' } } }).then(function () { return t.cliquer('#bday-ok'); }).then(function () { return attendre(400); }); }],
-    ['Soir et nuit', 'Accueil le soir avec la radio (21h30)', function () { return accueil(photosVues(), { meteo: METEO_NUIT, options: { radio: { nom: 'France Bleu', url: 'https://exemple.invalid/radio' } } }); }, '21:30']
+    ['Soir et nuit', 'Accueil le soir avec la radio (20h30)', function () { return accueil(photosVues(), { meteo: METEO_NUIT, options: { radio: { nom: 'France Bleu', url: 'https://exemple.invalid/radio' } } }); }, '20:30']
   ];
 
   function pret(texte) {

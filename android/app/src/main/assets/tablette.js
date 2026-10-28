@@ -100,7 +100,7 @@
         : hour >= 12 && hour < 18 ? "L'après-midi"
           : hour >= 18 && hour < 22 ? 'Le soir' : 'La nuit';
     }
-    var evening = isEvening(hour);
+    var evening = isEvening(hour * 60 + now.getMinutes());
     document.body.className = (evening ? 'night' : '') +
       (playing && playing.post.video && !playing.cadre ? ' video-playing' : '');
     // Le soir, l'écran garde son fond noir mais éclaire moins.
@@ -2292,31 +2292,34 @@
   };
 
   // ---------- La nuit, l'écran se met en veille ----------
-  // Pendant la veille (23h-7h sauf réglage de la famille) : écran noir et luminosité au minimum. Un toucher le rallume 2 minutes ;
+  // Pendant la veille (21h-6h30 sauf réglage de la famille) : écran noir et luminosité au minimum. Un toucher le rallume 2 minutes ;
   // un rappel ou un appel le rallume tant qu'il est affiché. Un nouvel envoi attend le matin
   // (ou le prochain toucher) pour ne pas allumer l'écran en pleine nuit.
 
-  // Heures de veille réglées par la famille (families/{fid}.veille) ; sans réglage, 23h-7h.
-  var veille = { active: true, de: 23, a: 7 };
+  // Heures de veille réglées par la famille (families/{fid}.veille), en minutes depuis minuit
+  // (Sync.java les convertit) ; sans réglage, 21h-6h30 comme le serveur.
+  var VEILLE_DEFAUT = { active: true, de: 21 * 60, a: 6 * 60 + 30 };
+  var veille = VEILLE_DEFAUT;
 
   function setVeille(v) {
     veille = v && typeof v.de === 'number' && typeof v.a === 'number'
       ? { active: v.active !== false, de: v.de, a: v.a }
-      : { active: true, de: 23, a: 7 };
+      : VEILLE_DEFAUT;
   }
 
-  // Heure dans [de, a[, en passant minuit si besoin ; de === a : jamais.
-  function inHours(hour, from, to) {
-    if (from < to) return hour >= from && hour < to;
-    if (from > to) return hour >= from || hour < to;
+  // Minute dans [de, a[, en passant minuit si besoin ; de === a : jamais.
+  function inHours(min, from, to) {
+    if (from < to) return min >= from && min < to;
+    if (from > to) return min >= from || min < to;
     return false;
   }
 
-  function isNight(hour) { return veille.active && inHours(hour, veille.de, veille.a); }
+  function isNight(min) { return veille.active && inHours(min, veille.de, veille.a); }
 
-  // Couleurs du soir : deux heures avant la veille jusqu'au réveil (21h-7h sans réglage).
-  function isEvening(hour) {
-    return veille.active ? inHours(hour, (veille.de + 22) % 24, veille.a) : inHours(hour, 21, 7);
+  // Couleurs du soir : deux heures avant la veille jusqu'au réveil (19h-6h30 sans réglage),
+  // 21h-7h si la veille est coupée.
+  function isEvening(min) {
+    return veille.active ? inHours(min, (veille.de + 22 * 60) % (24 * 60), veille.a) : inHours(min, 21 * 60, 7 * 60);
   }
   var WAKE_MS = 120000;
   var wakeUntil = 0;
@@ -2330,8 +2333,8 @@
   }
 
   function updateSleep() {
-    var hour = new Date().getHours();
-    var night = isNight(hour);
+    var now = new Date();
+    var night = isNight(now.getHours() * 60 + now.getMinutes());
     var should = night && Date.now() > wakeUntil && !somethingToShow();
     if (should) stopRadio();
     if (should === asleep) return;

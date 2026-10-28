@@ -55,7 +55,7 @@ final class Sync {
     // 20 min, pour que le serveur voie la tablette au moins toutes les 45 min (alerte « ne répond plus »)
     // même si un tour manque.
     private static final long REALTIME_POLL_MS = 20 * 60_000;
-    // La nuit (heures de veille de la famille, 23 h-7 h par défaut) : un tour par heure seulement, et ni météo,
+    // La nuit (heures de veille de la famille, 21 h-6 h 30 par défaut) : un tour par heure seulement, et ni météo,
     // ni rappels, ni proches relus (Tanguy, 28/10). Les appels et les envois arrivent toujours par l'écoute en
     // direct de la page. Le serveur tolère 2 h de silence pendant la veille (functions/alertes.js) au lieu de 45 min.
     private static final long NIGHT_POLL_MS = 60 * 60_000;
@@ -2138,7 +2138,7 @@ final class Sync {
         lastStatusJson = null; // l'écran passe tout de suite à l'accueil
     }
 
-    /** Heures de veille réglées par la famille ({active, de, a}) ; absent = 23h-7h. */
+    /** Heures de veille réglées par la famille ({active, de, deMin, a, aMin}) ; absent = 21h-6h30. */
     private void readVeille(JSONObject ff) {
         JSONObject v = ff.optJSONObject("veille");
         JSONObject vf = v == null || v.optJSONObject("mapValue") == null ? null
@@ -2150,8 +2150,10 @@ final class Sync {
         } else {
             JSONObject act = vf.optJSONObject("active");
             boolean active = act == null || act.optBoolean("booleanValue", true);
-            int from = vf.has("de") ? (int) Firebase.integer(vf, "de") : Veille.DEFAULT_FROM;
-            int to = vf.has("a") ? (int) Firebase.integer(vf, "a") : Veille.DEFAULT_TO;
+            int from = vf.has("de") ? Veille.minutes(Firebase.integer(vf, "de"), vf.has("deMin") ? Firebase.integer(vf, "deMin") : 0)
+                    : Veille.DEFAULT_FROM;
+            int to = vf.has("a") ? Veille.minutes(Firebase.integer(vf, "a"), vf.has("aMin") ? Firebase.integer(vf, "aMin") : 0)
+                    : Veille.DEFAULT_TO;
             Veille.save(context, active, from, to);
         }
         if (before != Veille.active(context) || beforeFrom != Veille.from(context) || beforeTo != Veille.to(context)) {
@@ -2169,8 +2171,8 @@ final class Sync {
     private long msAvantLeJour() {
         java.util.Calendar c = java.util.Calendar.getInstance();
         long now = c.getTimeInMillis();
-        c.set(java.util.Calendar.HOUR_OF_DAY, Veille.to(context));
-        c.set(java.util.Calendar.MINUTE, 0);
+        c.set(java.util.Calendar.HOUR_OF_DAY, Veille.to(context) / 60);
+        c.set(java.util.Calendar.MINUTE, Veille.to(context) % 60);
         c.set(java.util.Calendar.SECOND, 30);
         c.set(java.util.Calendar.MILLISECOND, 0);
         if (c.getTimeInMillis() <= now) c.add(java.util.Calendar.DAY_OF_YEAR, 1);

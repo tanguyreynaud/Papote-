@@ -754,7 +754,7 @@ public class MainActivity extends Activity implements Sync.Listener {
     @SuppressWarnings("deprecation")
     @Override
     public void onNewArrival() {
-        // Pendant la veille (23h-7h sauf réglage de la famille), pas de sonnerie ni d'écran
+        // Pendant la veille (21h-6h30 sauf réglage de la famille), pas de sonnerie ni d'écran
         // allumé : l'envoi attend le matin.
         if (Veille.isNight(this)) return;
         handler.post(() -> sonner(1f));
@@ -861,7 +861,7 @@ public class MainActivity extends Activity implements Sync.Listener {
     /**
      * Android ne laisse aucune appli bloquer le bouton marche/arrêt : un appui éteint l'écran.
      * En journée, on le rallume dans la foulée (on ne voit qu'un bref noir).
-     * La nuit (23h-7h), on le laisse éteint.
+     * La nuit (21h-6h30 par défaut), on le laisse éteint.
      */
     // ---------- Test du son (installation et Réglages de l'app famille) ----------
 
