@@ -149,7 +149,8 @@ test('abonnement résilié, tablette encore là : reprise sans les 60 €, retou
   const params = s.stripe.etat.sessions.get(session).params;
   assert.strictEqual(params.line_items.length, 1, 'l\'abonnement seul, pas de mise en service');
   assert.strictEqual(params.metadata.reprise, '1');
-  assert.strictEqual(params.subscription_data.trial_period_days, 30, 'premier prélèvement à 30 jours');
+  assert.ok(Math.abs(Number(params.subscription_data.metadata.premier) * 1000 - (Date.now() + 30 * s.JOUR)) < 3600e3, 'premier prélèvement à 30 jours');
+  assert.match(params.custom_text.submit.message, /^Rien à régler aujourd'hui/);
   const { abonnement: id2 } = s.stripe.payerSession(session, { email: paul.email });
   await s.calme();
   assert.notStrictEqual(id2, id);
@@ -301,6 +302,8 @@ test('pause hospitalisation : aucune alerte de tablette pendant la pause', async
   s.avancer(11);
   await s.tache('alertesTablettes');
   assert.strictEqual(alertes().length, 1, 'pause finie : les alertes reprennent');
+  const { alertes: journal } = await s.appeler('gestionDonnees', {}, a.TANGUY);
+  assert.deepStrictEqual(journal.map((x) => x.genre), ['silence', 'silence'], 'deux alertes comptées pour l\'admin, aucune pendant la pause');
 });
 
 test('« N téléphones reçoivent les appels » : le serveur note sur chaque proche s\'il a un jeton', async () => {

@@ -10,6 +10,8 @@
 // Scénarios : telephone-carte (390 px, 4242), ordinateur-carte (1280 px, formule internet incluse, 4242),
 // sepa (IBAN de test), refus (carte 4000 0000 0000 0002 refusée), retour (lien retour de Stripe puis
 // bouton Retour du navigateur : la commande est gardée).
+// Chaque page Stripe, merci.html et les e-mails sont capturés et relus (rien de « gratuit » ni d'« essai »,
+// seulement 60 € puis 20 ou 30 €), puis montrés dans captures/<date>/rapport.html (--sans-rapport : pas ouvert).
 // Vérifié pour chaque commande payée : merci.html et son code, commandes/{abonnement} dans Firestore (ce que
 // lit l'admin), abonnement Stripe en période d'essai, réservation de stock libérée, e-mail de confirmation parti.
 //
@@ -145,6 +147,76 @@ async function sansLink(page) {
   if (await link.isChecked().catch(() => false)) await link.uncheck({ force: true }).catch(() => null);
 }
 
+// ---------- Relecture de ce que voit le client ----------
+// Chaque page (Stripe, merci.html) et chaque e-mail est capturé dans captures/<date>/ et son texte relu :
+// rien de « gratuit » ni d'« essai » (la période sans prélèvement avant la réception est une astuce Stripe,
+// le client ne doit pas la voir), et pas d'autre montant que 60 € puis 20 ou 30 € par mois.
+const RAPPORT = path.join(CAPTURES, new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-'));
+const pages = [];
+const INTERDITS = /gratuit|essai|offert pendant|free|trial|\b\d+\s+jours?\s+(?:gratuits?|offerts?)/i;
+
+function montants(texte) {
+  return [...texte.matchAll(/(\d{1,4}(?:[,.]\d{2})?)\s?(?:€|EUR)/g)].map((m) => Number(m[1].replace(',', '.')));
+}
+
+async function relire(page, scenario, quoi, { mensuel, montantsAttendus = true } = {}) {
+  fs.mkdirSync(RAPPORT, { recursive: true });
+  const fichier = `${scenario}-${quoi}.png`;
+  await page.screenshot({ path: path.join(RAPPORT, fichier), fullPage: true }).catch(() => null);
+  const texte = (await page.locator('body').innerText().catch(() => '')).replace(/\s+/g, ' ');
+  const problemes = [];
+  const interdit = texte.match(INTERDITS);
+  if (interdit) {
+    const i = interdit.index;
+    problemes.push(`« ${texte.slice(Math.max(0, i - 40), i + 50).trim()} »`);
+  }
+  if (montantsAttendus && mensuel) {
+    const vus = montants(texte);
+    if (!vus.includes(60)) problemes.push('60 € absent');
+    if (!vus.includes(mensuel)) problemes.push(`${mensuel} € par mois absent`);
+    const autres = [...new Set(vus.filter((m) => m !== 60 && m !== mensuel))];
+    if (autres.length) problemes.push(`autre(s) montant(s) : ${autres.map((m) => `${m} €`).join(', ')}`);
+  }
+  pages.push({ scenario, quoi, fichier, texte, problemes });
+  noter(scenario, !problemes.length, problemes.length ? `${quoi} : ${problemes.join(' ; ')} (capture ${fichier})` : `${quoi} relu, rien d'anormal`);
+}
+
+// Page Stripe : attendre que le récapitulatif (montants) soit affiché avant de le lire.
+async function relireStripe(page, scenario, mensuel) {
+  await page.getByText(/60,00|60\.00/).first().waitFor({ timeout: 30000 }).catch(() => null);
+  await relire(page, scenario, 'stripe', { mensuel });
+}
+
+// E-mails : ceux que le code de main écrit pour cette commande (functions/mail.js), affichés et relus.
+// (Le texte réellement parti dépend des fonctions publiées : à publier depuis main.)
+async function relireEmails(navigateur, scenario, c) {
+  let mail;
+  try { mail = require(path.join(__dirname, '..', '..', 'functions', 'mail.js')); } catch (_) { return; }
+  const infos = { nom: c.nom, code: c.code, relais: c.livraison, formule: c.formule, delai: c.delai, email: c.email, telephone: c.telephone };
+  const mensuel = c.formule === 'sim' ? 30 : 20;
+  const ctx = await navigateur.newContext({ viewport: { width: 700, height: 900 } });
+  for (const [quoi, m] of [['email-client', mail.commandeConfirmee(infos)], ['email-papote', mail.nouvelleCommande(infos)]]) {
+    const page = await ctx.newPage();
+    await page.setContent(`<p style="font:14px sans-serif;color:#666">Objet : ${mail.echapper(m.subject)}</p>${m.html}`);
+    await relire(page, scenario, quoi, { mensuel, montantsAttendus: quoi === 'email-client' });
+  }
+  await ctx.close();
+}
+
+// Rapport à ouvrir dans le navigateur : toutes les captures, avec ce qui a été relevé.
+function ecrireRapport() {
+  if (!pages.length) return null;
+  const e = (t) => String(t).replace(/[&<>]/g, (x) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[x]));
+  const blocs = pages.map((p) => `<section><h2>${e(p.scenario)} · ${e(p.quoi)} ${p.problemes.length ? '✗' : '✓'}</h2>`
+    + (p.problemes.length ? `<p class="ko">${e(p.problemes.join(' ; '))}</p>` : '')
+    + `<img src="${e(p.fichier)}" loading="lazy"><details><summary>Texte lu</summary><p>${e(p.texte)}</p></details></section>`).join('\n');
+  const html = `<!doctype html><meta charset="utf-8"><title>Commande de test</title><style>body{font:16px system-ui;max-width:900px;margin:auto;padding:16px;background:#fdfaf5}`
+    + `img{max-width:100%;border:1px solid #ddd}.ko{color:#b00020;font-weight:700}section{margin:2rem 0}</style><h1>Commande de test, ${e(new Date().toLocaleString('fr-FR'))}</h1>${blocs}`;
+  const f = path.join(RAPPORT, 'rapport.html');
+  fs.writeFileSync(f, html);
+  return f;
+}
+
 async function merci(page, scenario) {
   const reponses = [];
   page.on('response', async (r) => {
@@ -162,13 +234,13 @@ async function merci(page, scenario) {
   const session = new URL(page.url()).searchParams.get('session');
   noter(scenario, !!code, code ? `merci.html affiche le code ${code}`
     : `merci.html sans code de commande (codeCommande : ${reponses.join(' | ') || 'pas appelé'}, adresse ${page.url().slice(0, 70)})`);
-  if (!code) await page.screenshot({ path: path.join(CAPTURES, `${scenario}-merci-${Date.now()}.png`), fullPage: true }).catch(() => null);
+  await relire(page, scenario, 'merci', { montantsAttendus: false });
   return { session, code };
 }
 
 // ---------- Vérifications serveur ----------
 
-async function verifierCommande(db, stripe, scenario, email, { sepa } = {}) {
+async function verifierCommande(db, stripe, scenario, email, { sepa, navigateur } = {}) {
   let doc = null;
   for (let i = 0; i < 30 && !doc; i++) {
     const r = await db.collection('commandes').where('email', '==', email).get();
@@ -180,6 +252,7 @@ async function verifierCommande(db, stripe, scenario, email, { sepa } = {}) {
   const attendu = sepa ? ['paiement-en-attente', 'a-preparer'] : ['a-preparer'];
   noter(scenario, attendu.includes(c.expedition),
     `commande ${doc.id} (code ${c.code}) : ${c.expedition}, relais ${c.livraison && (c.livraison.nom || c.livraison.relais) ? 'OK' : 'ABSENT'}, téléphone ${c.telephone ? 'OK' : 'absent'}, formule ${c.formule}`);
+  if (navigateur) await relireEmails(navigateur, scenario, c);
   if (!sepa) noter(scenario, !!c.mailConfirmation, c.mailConfirmation ? 'e-mails de confirmation envoyés (client + Papote)' : 'e-mail de confirmation pas envoyé');
   if (stripe) {
     const abo = await stripe.subscriptions.retrieve(doc.id);
@@ -204,30 +277,34 @@ const SCENARIOS = {
     const page = await (await navigateur.newContext(TELEPHONE)).newPage();
     const email = emailDe('tel');
     await remplirCommande(page, { nom: 'TEST Téléphone', email });
+    await relireStripe(page, 'telephone-carte', 20);
     await payerCarte(page, '4242424242424242');
     await merci(page, 'telephone-carte');
-    await verifierCommande(db, stripe, 'telephone-carte', email);
+    await verifierCommande(db, stripe, 'telephone-carte', email, { navigateur });
   },
   'ordinateur-carte': async (navigateur, db, stripe) => {
     const page = await (await navigateur.newContext(ORDINATEUR)).newPage();
     const email = emailDe('pc');
     await remplirCommande(page, { nom: 'TEST Ordinateur', email, sansInternet: true });
+    await relireStripe(page, 'ordinateur-carte', 30);
     await payerCarte(page, '4242424242424242');
     await merci(page, 'ordinateur-carte');
-    await verifierCommande(db, stripe, 'ordinateur-carte', email);
+    await verifierCommande(db, stripe, 'ordinateur-carte', email, { navigateur });
   },
   sepa: async (navigateur, db, stripe) => {
     const page = await (await navigateur.newContext(ORDINATEUR)).newPage();
     const email = emailDe('sepa');
     await remplirCommande(page, { nom: 'TEST Sepa', email });
+    await relireStripe(page, 'sepa', 20);
     await payerSepa(page);
     await merci(page, 'sepa');
-    await verifierCommande(db, stripe, 'sepa', email, { sepa: true });
+    await verifierCommande(db, stripe, 'sepa', email, { sepa: true, navigateur });
   },
   refus: async (navigateur, db) => {
     const page = await (await navigateur.newContext(TELEPHONE)).newPage();
     const email = emailDe('refus');
     await remplirCommande(page, { nom: 'TEST Refus', email });
+    await relireStripe(page, 'refus', 20);
     await payerCarte(page, '4000000000000002');
     const erreur = page.getByText(/refusée|declined/i).first();
     const vu = await erreur.waitFor({ timeout: 30000 }).then(() => true).catch(() => false);
@@ -335,6 +412,12 @@ async function nettoyer(db, stripe) {
   if (options.has('--garder')) console.log('  --garder : commandes TEST laissées (node commande-test.js --nettoyer pour les supprimer).');
   else await nettoyer(db, stripe);
   const ko = bilan.filter((b) => !b.ok);
-  console.log(`\n${ko.length ? `${ko.length} problème(s)` : 'Tout est bon ✓'} (${bilan.length} vérifications). Captures des échecs : ${CAPTURES}`);
+  const rapport = ecrireRapport();
+  console.log(`\n${ko.length ? `${ko.length} problème(s)` : 'Tout est bon ✓'} (${bilan.length} vérifications).`);
+  if (rapport) {
+    console.log(`Captures de chaque page et e-mail : ${rapport}`);
+    // Ouvert dans le navigateur : un coup d'œil humain sur ce que voit le client, en plus des vérifications.
+    if (process.platform === 'win32' && !options.has('--sans-rapport')) execSync(`start "" "${rapport}"`, { shell: true, stdio: 'ignore' });
+  }
   process.exit(ko.length ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(2); });

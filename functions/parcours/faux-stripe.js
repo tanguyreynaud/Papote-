@@ -73,6 +73,13 @@ function creerFauxStripe(horloge) {
           if (params.expires_at && params.expires_at < secondes() + 30 * 60 - 5) {
             throw new Error('expires_at doit être au moins 30 minutes après maintenant');
           }
+          // Comme Stripe : la date de départ ne peut pas dépasser la prochaine échéance naturelle (un mois plus tard).
+          const ancre = params.subscription_data && params.subscription_data.billing_cycle_anchor;
+          if (ancre) {
+            const d = new Date(horloge());
+            d.setUTCMonth(d.getUTCMonth() + 1);
+            if (ancre * 1000 > d.getTime()) throw new Error('billing_cycle_anchor cannot be later than next natural billing date');
+          }
           const s = {
             id: id('cs'), object: 'checkout.session', status: 'open', payment_status: 'unpaid', mode: params.mode,
             url: null, metadata: { ...(params.metadata || {}) }, customer: params.customer || null,
@@ -106,7 +113,14 @@ function creerFauxStripe(horloge) {
         for (const [k, v] of Object.entries(maj)) {
           if (k === 'proration_behavior') continue;
           if (k === 'metadata') a.metadata = { ...v };
-          else if (k === 'trial_end') a.trial_end = v;
+          else if (k === 'trial_end') {
+            // Comme Stripe : un abonnement actif repasse en essai jusqu'à cette date, qui devient le début des mois.
+            a.trial_end = v;
+            a.status = 'trialing';
+            a.billing_cycle_anchor = v;
+            a.current_period_end = v;
+            a.items.data[0].current_period_end = v;
+          }
           else if (k === 'cancel_at') a.cancel_at = v === '' ? null : v;
           else if (k === 'pause_collection') a.pause_collection = v === '' ? null : v;
           else a[k] = v;
@@ -213,12 +227,16 @@ function creerFauxStripe(horloge) {
     const lignes = p.line_items.map((l) => prix.get(l.price));
     const mensuel = lignes.find((l) => l.recurring);
     const essai = p.subscription_data.trial_period_days;
+    // Date de départ posée au paiement (billing_cycle_anchor) : abonnement « active », premier mois à cette date.
+    const depart = p.subscription_data.billing_cycle_anchor || null;
+    const finPeriode = essai ? secondes() + essai * 86400 : (depart || secondes() + 30 * 86400);
     const a = {
       id: id('sub'), object: 'subscription', customer: client.id, status: essai ? 'trialing' : 'active',
-      metadata: { ...p.subscription_data.metadata }, trial_end: essai ? secondes() + essai * 86400 : null,
-      current_period_end: secondes() + (essai || 30) * 86400, cancel_at: null, cancel_at_period_end: false,
+      metadata: { ...p.subscription_data.metadata }, trial_end: essai ? finPeriode : null,
+      billing_cycle_anchor: finPeriode, start_date: secondes(),
+      current_period_end: finPeriode, cancel_at: null, cancel_at_period_end: false,
       default_payment_method: client.moyen.id, pause_collection: null, created: secondes(),
-      items: { data: [{ price: mensuel, quantity: 1, current_period_end: secondes() + (essai || 30) * 86400 }] },
+      items: { data: [{ price: mensuel, quantity: 1, current_period_end: finPeriode }] },
     };
     etat.abonnements.set(a.id, a);
     // Première facture : la mise en service (60 €), payée tout de suite (sauf SEPA en attente de la banque).
@@ -262,7 +280,8 @@ function creerFauxStripe(horloge) {
     const client = lire('clients', 'customer', a.customer);
     const mensuel = a.items.data[0].price;
     a.status = 'active';
-    a.trial_end = secondes();
+    a.trial_end = a.trial_end ? secondes() : null;
+    a.billing_cycle_anchor = secondes();
     a.current_period_end = secondes() + 30 * 86400;
     a.items.data[0].current_period_end = a.current_period_end;
     const f = nouvelleFacture(client, { lignes: [{ amount: mensuel.unit_amount, price: mensuel.id }], abonnement: a.id });

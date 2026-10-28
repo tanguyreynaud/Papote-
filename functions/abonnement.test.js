@@ -68,8 +68,18 @@ test('résiliation sans engagement : à la fin du mois payé', () => {
   assert.strictEqual(a.dateResiliation(null, T0), T0);
 });
 
-test('rien prélevé avant la réception (payé une fois écoulé)', () => {
-  assert.ok(a.ATTENTE_ENVOI_JOURS >= 60);
+test('rien prélevé avant la réception : date de premier prélèvement d\'après le délai annoncé, jamais d\'« essai gratuit »', () => {
+  assert.strictEqual(a.premierPrelevementMs('stock', T0), T0 + 33 * JOUR);
+  assert.strictEqual(a.premierPrelevementMs('precommande', T0), T0 + 40 * JOUR);
+  assert.strictEqual(a.premierPrelevementMs('long', T0), T0 + 58 * JOUR);
+  assert.strictEqual(a.premierPrelevementMs(undefined, T0), T0 + 58 * JOUR, 'délai inconnu : le plus long');
+  assert.strictEqual(a.premierPrelevementMs('stock', T0, { dejaInstallee: true }), T0 + 30 * JOUR);
+  // Abonnement Stripe : trial recalé à l'envoi, ou date de départ pas encore atteinte, sinon rien.
+  assert.strictEqual(a.premierPrelevementDe({ status: 'trialing', trial_end: (T0 + JOUR) / 1000 }, T0), T0 + JOUR);
+  assert.strictEqual(a.premierPrelevementDe({ status: 'active', billing_cycle_anchor: (T0 + JOUR) / 1000 }, T0), T0 + JOUR);
+  assert.strictEqual(a.premierPrelevementDe({ status: 'active', billing_cycle_anchor: (T0 - JOUR) / 1000 }, T0), null);
+  assert.strictEqual(a.premierPrelevementDe({ status: 'past_due', billing_cycle_anchor: (T0 + JOUR) / 1000 }, T0), null);
+  assert.strictEqual(a.premierPrelevementDe(null, T0), null);
 });
 
 test('tablette incluse non rendue : pénalité après 30 jours', () => {

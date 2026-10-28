@@ -123,11 +123,22 @@ async function sessionPaiement({ formule, tablette, fid, email, client, relais, 
   // Case « nouvelles de Papote par e-mail » cochée sur commande.html : reportée sur la commande.
   if (accord) metadata.accord = '1';
   if (fid) metadata.fid = fid;
+  // Plus d'essai gratuit affiché (Tanguy, 2026-10-27) : une date de premier prélèvement, estimée d'après le délai
+  // annoncé puis recalée à l'envoi (debutApresReception), et une phrase sous le bouton qui dit la règle.
+  const maintenant = Date.now();
+  const premier = regles.premierPrelevementMs(metadata.delai, maintenant, { dejaInstallee: Boolean(dejaInstallee) });
+  // Date voulue gardée sur l'abonnement : posée au paiement reçu si Stripe n'accepte pas d'aller si loin (ancrePaiement).
+  metadata.premier = String(Math.ceil(premier / 1000));
   const subscriptionData = {
     metadata,
-    trial_period_days: dejaInstallee ? regles.RETRACTATION_JOURS : regles.ATTENTE_ENVOI_JOURS,
-    trial_settings: { end_behavior: { missing_payment_method: 'cancel' } },
+    billing_cycle_anchor: Math.ceil(regles.ancrePaiement(premier, maintenant) / 1000),
+    proration_behavior: 'none',
   };
+  const regle = reprise
+    ? 'Rien à régler aujourd\'hui. Premier prélèvement dans 30 jours, puis chaque mois pour le mois écoulé. Sans engagement.'
+    : dejaInstallee
+      ? 'Aujourd\'hui : la mise en service. Premier prélèvement de l\'abonnement dans 30 jours, puis chaque mois pour le mois écoulé. Sans engagement.'
+      : 'Aujourd\'hui : la mise en service. L\'abonnement est compté à partir de la réception de la tablette : premier prélèvement 30 jours après, puis chaque mois pour le mois écoulé. Sans engagement.';
   const params = {
     mode: 'subscription',
     line_items: await tarifs(formule, tablette, { reprise }),
@@ -139,6 +150,7 @@ async function sessionPaiement({ formule, tablette, fid, email, client, relais, 
     phone_number_collection: { enabled: true },
     metadata,
     subscription_data: subscriptionData,
+    custom_text: { submit: { message: regle } },
     payment_method_collection: 'always',
     success_url: fid ? `${APPLI_FAMILLE}?abonnement=ok`
       : `${SITE_VITRINE.value()}/merci.html?session={CHECKOUT_SESSION_ID}`,
@@ -321,7 +333,7 @@ async function appliquer(fid, abonnementId) {
         tablette: abo.metadata.tablette || null,
         graceJusqua: versTimestamp(graceJusqua),
         finPeriode: versTimestamp(finDePeriodeMs(abo)),
-        essaiJusqua: versTimestamp(abo.status === 'trialing' && abo.trial_end ? abo.trial_end * 1000 : null),
+        essaiJusqua: versTimestamp(regles.premierPrelevementDe(abo, Date.now())),
         resiliationLe: versTimestamp(abo.cancel_at ? abo.cancel_at * 1000
           : (abo.cancel_at_period_end ? finDePeriodeMs(abo) : null)),
         stripeCustomerId: abo.customer,
@@ -383,6 +395,7 @@ async function prevenirPaiement(fid, commandeId, avis, graceJusqua) {
     }
     (await Promise.allSettled(envois)).filter((r) => r.status === 'rejected')
       .forEach((r) => logger.error(`Famille ${fid} : avis « ${avis} » non envoyé`, r.reason));
+    await require('./journal-alertes').noter(db, { genre: avis === 'impaye' ? 'impaye' : 'pause', fid });
   } catch (e) {
     logger.error(`Famille ${fid} : avis « ${avis} »`, e.message);
   }
@@ -550,9 +563,7 @@ exports.resilierAbonnement = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE
   if (!id) throw new HttpsError('failed-precondition', "Cette famille n'a pas d'abonnement.");
   const abo = await stripe().subscriptions.retrieve(id);
   const maintenant = Date.now();
-  const le = abo.status === 'trialing' && abo.trial_end
-    ? abo.trial_end * 1000
-    : regles.dateResiliation(finDePeriodeMs(abo), maintenant);
+  const le = regles.premierPrelevementDe(abo, maintenant) || regles.dateResiliation(finDePeriodeMs(abo), maintenant);
   await stripe().subscriptions.update(id, {
     cancel_at: Math.ceil(le / 1000),
     proration_behavior: 'none',
@@ -596,7 +607,7 @@ exports.pauseHospitalisation = onCall({ secrets: [STRIPE_SECRET] }, async (reque
   if (!Number.isFinite(fin) || fin <= Date.now() || fin > Date.now() + PAUSE_MAX_JOURS * 24 * 3600e3) {
     throw new HttpsError('invalid-argument', 'Choisissez une date de reprise dans les 6 prochains mois.');
   }
-  if (!['active', 'past_due'].includes(abo.status)) {
+  if (!['active', 'past_due'].includes(abo.status) || regles.premierPrelevementDe(abo, Date.now())) {
     throw new HttpsError('failed-precondition', 'Pause possible seulement pour un abonnement en cours (pas pendant les 30 premiers jours).');
   }
   await stripe().subscriptions.update(commande, {
@@ -821,11 +832,28 @@ exports.stripeWebhook = onRequest(
     }
   });
 
+// Premier prélèvement plus loin qu'un mois (délai de livraison + 30 jours) : Stripe ne l'accepte pas sur la page de
+// paiement (ancrePaiement), on le pose donc dès le paiement reçu. Rien si l'abonnement a déjà une date égale ou plus
+// tardive (message reçu deux fois, date déjà recalée à l'envoi).
+async function premierPrelevementVoulu(abonnementId, premierSecondes) {
+  const voulu = Number(premierSecondes) * 1000;
+  if (!Number.isFinite(voulu) || voulu <= Date.now() + 60 * 60 * 1000) return;
+  try {
+    const abo = await stripe().subscriptions.retrieve(abonnementId);
+    const actuel = regles.premierPrelevementDe(abo, Date.now());
+    if (!actuel || actuel >= voulu - 60 * 60 * 1000) return;
+    await stripe().subscriptions.update(abonnementId, { trial_end: Math.ceil(voulu / 1000), proration_behavior: 'none' });
+  } catch (e) {
+    logger.error(`Abonnement ${abonnementId} : premier prélèvement non posé`, e.message);
+  }
+}
+
 // Prélèvement SEPA : la page de paiement se termine avant que la banque confirme (quelques jours).
 // La commande attend en « paiement-en-attente » (tablette déjà comptée dans le stock), puis passe
 // « a-preparer » avec async_payment_succeeded ; les e-mails de confirmation partent à ce moment.
 async function paiementTermine(session) {
   if (!session.subscription) return;
+  await premierPrelevementVoulu(session.subscription, (session.metadata || {}).premier);
   const paye = session.payment_status !== 'unpaid';
   const details = session.customer_details || {};
   const adresse = (session.collected_information && session.collected_information.shipping_details)
@@ -1046,7 +1074,7 @@ async function confirmerCommande(ref, email, code) {
   if (!premier) return;
   await compterEtape('paye').catch((e) => logger.warn('Statistiques', e.message));
   const infos = { nom: premier.nom, code, relais: premier.livraison, formule: premier.formule, delai: premier.delai,
-    dejaInstallee: !!(premier.preparation && premier.preparation.recuPar === 'déjà installée') };
+    dejaInstallee: !!(premier.preparation && premier.preparation.recuPar === 'déjà installée'), reprise: premier.reprise === true };
   const envois = [envoyerMail(EMAIL_PAPOTE, mail.nouvelleCommande({ ...infos, email, telephone: premier.telephone }))];
   if (email) envois.push(envoyerMail(email, mail.commandeConfirmee(infos)));
   const resultats = await Promise.allSettled(envois);
@@ -1575,7 +1603,10 @@ async function debutApresReception(event, avant, apres) {
   if (fin <= Date.now() + 60 * 60 * 1000) return;
   try {
     const abo = await stripe().subscriptions.retrieve(event.params.id);
-    if (abo.status !== 'trialing') return;
+    // Un mois déjà prélevé : rien à recaler. Sinon, « trial » jusqu'à la date voulue (Stripe y recale aussi le
+    // début des mois, billing_cycle_anchor).
+    const premier = regles.premierPrelevementDe(abo, Date.now());
+    if (!premier || Math.abs(premier - fin) < 60 * 60 * 1000) return;
     await stripe().subscriptions.update(event.params.id, { trial_end: Math.ceil(fin / 1000), proration_behavior: 'none' });
   } catch (e) {
     logger.error(`Commande ${event.params.id} : début de l'abonnement non recalé`, e.message);

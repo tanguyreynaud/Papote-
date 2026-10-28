@@ -14,6 +14,7 @@ const { logger } = require('firebase-functions/v2');
 const { estActif } = require('./abonnement');
 const { db: base } = require('./base');
 const { envoyer } = require('./push');
+const journal = require('./journal-alertes');
 
 const DEBRANCHEE_MS = 10 * 60_000;
 const SILENCE_MS = 45 * 60_000;
@@ -74,6 +75,7 @@ exports.alertesTablettes = onSchedule({ schedule: 'every 5 minutes', timeZone: '
         const { titre, texte } = message(type, famille.name || 'Mamie');
         const n = await envoyer(db, fam.id, responsables, { type: 'alerte', titre, texte }, 6 * 3600);
         await t.ref.update({ alerteType: type, alerteLe: new Date(maintenant) });
+        await journal.noter(db, { genre: type === 'silence' ? 'silence' : 'debranchee', fid: fam.id, tablette: t.id, telephones: n });
         logger.info(`Famille ${fam.id}, tablette ${t.id} : alerte ${type}, ${n} téléphone(s)`);
       } catch (e) {
         logger.error(`Famille ${fam.id}, tablette ${t.id} : alerte non envoyée`, e.message);
@@ -130,6 +132,7 @@ exports.alerteMatin = onSchedule({ schedule: 'every day 12:00', timeZone: 'Europ
         texte: "La tablette ne l'a ni vue ni touchée depuis ce matin. Un petit appel pour prendre des nouvelles ?",
       }, 6 * 3600);
       await fam.ref.update({ alerteMatinLe: aujourdhui });
+      await journal.noter(db, { genre: 'pas-vue', fid: fam.id, tablette: tablettes.length === 1 ? tablettes[0].id : null, telephones: n });
       logger.info(`Famille ${fam.id} : pas vue ce matin, ${n} téléphone(s)`);
     } catch (e) {
       logger.error(`Famille ${fam.id} : alerte du matin non envoyée`, e.message);

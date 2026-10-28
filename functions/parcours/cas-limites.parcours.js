@@ -57,7 +57,10 @@ test('abonnement pris depuis l\'appli avec la tablette déjà installée : rien 
   const { url } = await s.appeler('creerPaiement', { fid, formule: 'wifi', tablette: 'incluse' }, julie);
   const session = url.split('/').pop();
   const params = s.stripe.etat.sessions.get(session).params;
-  assert.strictEqual(params.subscription_data.trial_period_days, 30);
+  // Stripe n'accepte pas plus d'un mois sur la page de paiement : départ à 27 jours, la vraie date est posée au paiement.
+  assert.ok(Math.abs(params.subscription_data.billing_cycle_anchor * 1000 - (Date.now() + 27 * s.JOUR)) < 3600e3, 'page de paiement : 27 jours au plus');
+  assert.ok(Math.abs(Number(params.subscription_data.metadata.premier) * 1000 - (Date.now() + 30 * s.JOUR)) < 3600e3, 'date voulue : 30 jours');
+  assert.match(params.custom_text.submit.message, /dans 30 jours/);
   assert.strictEqual(params.subscription_data.metadata.dejaInstallee, '1');
   assert.strictEqual(params.shipping_address_collection, undefined, 'pas d\'adresse de livraison demandée');
   assert.strictEqual((await s.db.collection('reservations').get()).size, 0, 'aucune tablette mise de côté');
@@ -74,8 +77,9 @@ test('abonnement pris depuis l\'appli avec la tablette déjà installée : rien 
   assert.strictEqual(fiche.commande, id, 'la tablette installée prend la commande');
   assert.strictEqual(fiche.etat, 'chez-client');
   assert.strictEqual(fiche.alerteJumelage, null, 'plus d\'alerte « jumelée sans commande » dans l\'admin');
-  const essaiFin = s.stripe.etat.abonnements.get(id).trial_end * 1000;
-  assert.ok(Math.abs(essaiFin - (Date.now() + 30 * s.JOUR)) < 3600e3, 'premier prélèvement 30 jours plus tard');
+  const abo = s.stripe.etat.abonnements.get(id);
+  assert.ok(Math.abs(require('../abonnement').premierPrelevementDe(abo, Date.now()) - (Date.now() + 30 * s.JOUR)) < 3600e3, 'premier prélèvement 30 jours plus tard, posé au paiement');
+  assert.ok(Math.abs(fam.abonnement.essaiJusqua.toMillis() - (Date.now() + 30 * s.JOUR)) < 3600e3, 'l\'appli montre la date du premier prélèvement');
   assert.ok(mailsA(julie.email).some((m) => /abonnement/i.test(m)), 'confirmation');
   const stock = await s.requete('stockDisponible');
   assert.strictEqual(stock.json.precommande, true, 'la tablette installée ne compte plus dans le stock');
@@ -370,4 +374,8 @@ test('SOS sans réponse au 2e essai : toute la famille est alertée', async () =
   }
   const alertes = s.notifications.filter((n) => n.type === 'alerte' && /SOS/.test(n.titre));
   assert.strictEqual(alertes.length, 1, 'une seule alerte, après le 2e essai');
+  // Chaque alerte est comptée pour l'admin, sur la page de la tablette (journal-alertes.js).
+  const { alertes: journal } = await s.appeler('gestionDonnees', {}, a.TANGUY);
+  assert.deepStrictEqual(journal.map((x) => x.genre).sort(), ['sos', 'sos-sans-reponse']);
+  assert.ok(journal.every((x) => x.fid === fid && x.fiche === tablette.fiche && x.telephones === 2 && x.le), 'famille, tablette, téléphones, date');
 });
