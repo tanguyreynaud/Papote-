@@ -553,13 +553,15 @@ service cloud.firestore {
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state', 'answer', 'endedAt'])
           && request.resource.data.state in ['ringing', 'accepted', 'declined', 'missed', 'ended'];
         // La tablette écrit l'appel tout de suite (sans offre, pour que les téléphones sonnent plus
-        // tôt), puis y ajoute son offre une seule fois, avec son réseau (sim ou wifi : qualité de la vidéo).
+        // tôt), puis y ajoute son offre une seule fois, avec son réseau (sim ou wifi : qualité de la vidéo)
+        // et son régime si son forfait SIM est presque épuisé (eco : image réduite ; audio : sans image).
         allow update: if isMember(fid)
           && resource.data.callerUid == request.auth.uid
           && resource.data.get('offer', null) == null
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['offer'])
-          && request.resource.data.offer.keys().hasOnly(['type', 'sdp', 'reseau'])
+          && request.resource.data.offer.keys().hasOnly(['type', 'sdp', 'reseau', 'regime'])
           && request.resource.data.offer.get('reseau', 'sim') in ['sim', 'wifi']
+          && request.resource.data.offer.get('regime', 'eco') in ['eco', 'audio']
           && request.resource.data.offer.type == 'offer'
           && request.resource.data.offer.sdp is string;
         allow delete: if isFamilyAdmin(fid);

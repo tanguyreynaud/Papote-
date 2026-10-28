@@ -1559,15 +1559,30 @@ const END_MESSAGES = {
 // Fin d'appel (ou appel qui n'a pas pu se faire) : l'écran crème avec la photo, le nom et la raison,
 // sans bouton (il se ferme tout seul), quel que soit l'écran d'avant (vidéo, audio, sonnerie).
 function finDAppel(texte) {
+  noteAppel = '';
   $('call').classList.remove('audio');
   $('call').classList.add('sonne');
   $('call-hangup').hidden = true;
   setCallStatus(texte);
 }
 
+// Forfait internet de la tablette presque épuisé (« regime » de l'appel, écrit par la tablette) : l'appel
+// passe sans image, et on le dit sous le nom tant qu'aucun autre message ne s'affiche.
+let noteAppel = '';
+const NOTE_SANS_IMAGE = 'Appel sans image : le forfait internet de la tablette est presque épuisé.';
 function setCallStatus(text) {
-  $('call-status').textContent = text;
-  $('call-status').hidden = !text;
+  const t = text || noteAppel;
+  $('call-status').textContent = t;
+  $('call-status').hidden = !t;
+}
+function regimeAppel(regime) {
+  if (regime !== 'audio' || $('call').hidden) return;
+  noteAppel = NOTE_SANS_IMAGE;
+  $('call').classList.add('audio');
+  $('call').classList.remove('sonne');
+  $('call-video').disabled = true;
+  $('call-video').hidden = true;
+  setCallStatus('');
 }
 
 // Pendant l'appel : plein écran. L'écran n'est pas forcé à l'horizontale : un téléphone tenu
@@ -1607,10 +1622,12 @@ new MutationObserver(garderEcranAllume).observe($('call'), { attributes: true, a
 document.addEventListener('visibilitychange', garderEcranAllume);
 
 function leaveCallScreen() {
+  noteAppel = '';
   $('call').hidden = true;
   $('call').classList.remove('audio', 'sonne');
   $('call-hangup').hidden = false;
   $('call-video').disabled = false;
+  $('call-video').hidden = false;
   $('call-remote').srcObject = null;
   $('call-local').srcObject = null;
   $('call').classList.remove('force-landscape');
@@ -1774,6 +1791,7 @@ async function answerFromTablet() {
     currentCall = await answerIncoming(session.fid, call.id, { uid: session.uid, name: session.member.name }, {
       audio: $('call-audio'),
       onState: () => { setCallStatus(''); startCallTimer(); },
+      onRegime: regimeAppel,
       // Mamie répond à notre caméra : on passe à l'écran vidéo.
       onVideo: (track) => {
         $('call-remote').srcObject = new MediaStream([track]);
@@ -1930,10 +1948,11 @@ $('tile-call').addEventListener('click', async () => {
       signal: abort.signal,
       local: $('call-local'),
       remote: $('call-remote'),
+      onRegime: regimeAppel,
       onState: (state) => {
         if (!allowed && state === 'ringing') enterCallScreen();
         // L'écran crème reste jusqu'à la première image de Mamie (voir « playing » plus bas) : pas d'écran noir.
-        if (state !== 'connected') $('call').classList.add('sonne');
+        if (state !== 'connected' && !noteAppel) $('call').classList.add('sonne');
         setCallStatus(CALL_MESSAGES[state]());
       },
       onEnd: (reason) => {
@@ -3504,6 +3523,25 @@ function tabletteEnLigne() {
   return !!(t?.lastOnline && Date.now() - toDate(t.lastOnline).getTime() < EN_LIGNE_MS);
 }
 
+// Garde-fou du forfait de la carte SIM (tablette, members/{uid}.sim : dataCycleMo, plafondMo, niveau,
+// cycleDebut) : à 80 %, l'accueil prévient la famille. Sur le Wi-Fi, rien ne change jamais.
+const FORFAIT_ALERTE = 80;
+function forfaitTablette() {
+  const sim = targetTablet()?.sim;
+  if (!sim || !(sim.plafondMo > 0) || !(sim.dataCycleMo >= 0)) return null;
+  const pourCent = Math.round((sim.dataCycleMo * 100) / sim.plafondMo);
+  const depuis = /^\d{4}-\d{2}-\d{2}$/.test(sim.cycleDebut || '')
+    ? new Date(`${sim.cycleDebut}T12:00:00`).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' }) : null;
+  return { pourCent, conso: sim.dataCycleMo, plafond: sim.plafondMo, niveau: sim.niveau || 0, depuis };
+}
+const enGoOuMo = (mo) => (mo >= 1000 ? `${(mo / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} Go` : `${Math.round(mo)} Mo`);
+function texteForfait(f, name) {
+  const debut = `Le forfait internet de la tablette de ${name} est utilisé à ${Math.min(f.pourCent, 100)} %`;
+  if (f.niveau >= 3) return `${debut} : jusqu'à sa recharge, les appels passent sans image et les vidéos attendent le Wi-Fi. Photos et messages passent toujours.`;
+  if (f.niveau >= 2) return `${debut} : les appels passent sans image jusqu'à sa recharge. Photos et messages passent toujours.`;
+  return `${debut} : les appels vidéo sont en image réduite jusqu'à sa recharge.`;
+}
+
 function renderTabletChip() {
   const chip = $('tablet-chip');
   const t = targetTablet();
@@ -3531,6 +3569,8 @@ $('tablet-chip').addEventListener('click', () => {
   if (b.charging === true) lignes.push('Branchée sur son chargeur.');
   else if (b.charging === false) lignes.push('Débranchée.');
   if (Number.isFinite(b.level)) lignes.push(`Batterie : ${b.level} %.`);
+  const f = forfaitTablette();
+  if (f) lignes.push(`Forfait internet : ${enGoOuMo(f.conso)} sur ${enGoOuMo(f.plafond)}${f.depuis ? ` depuis le ${f.depuis}` : ''}.`);
   notice(lignes.join(' '));
 });
 
@@ -3568,6 +3608,9 @@ function renderActivity() {
   } else if (battery && battery.level < 15 && !battery.charging) {
     el.classList.add('warn');
     el.textContent = `Batterie faible sur la tablette de ${name} (${battery.level} %). Pensez à la brancher.`;
+  } else if (forfaitTablette()?.pourCent >= FORFAIT_ALERTE) {
+    el.classList.add('warn');
+    el.textContent = texteForfait(forfaitTablette(), name);
   } else if (active && now - active > 12 * 3600_000 && hour >= 10 && hour < 21) {
     el.classList.add('warn');
     el.textContent = `${name} n'a pas touché la tablette depuis ${ago(active).replace('il y a ', '')}.`;

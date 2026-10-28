@@ -32,13 +32,18 @@ const REGLAGES_VIDEO = {
   sim: { maxBitrate: 500_000, maxFramerate: 15, scaleResolutionDownBy: 1.5 },
   wifi: { maxBitrate: 1_200_000, maxFramerate: 20, scaleResolutionDownBy: 1 },
   inconnu: { maxBitrate: 500_000, maxFramerate: 20, scaleResolutionDownBy: 1 },
+  // Forfait de la tablette à 60 % (« regime » eco, écrit par elle) : elle ne demande plus que 150 kbit/s.
+  eco: { maxBitrate: 150_000, maxFramerate: 10, scaleResolutionDownBy: 2 },
 };
 const reseauTablette = new WeakMap(); // pc -> 'sim' | 'wifi'
+// Garde-fou du forfait de la tablette (Forfait.java) : 'eco' (60 %, image réduite) ou 'audio' (85 %, sans image).
+const regimeTablette = new WeakMap(); // pc -> 'eco' | 'audio'
 function telephoneEnDonneesMobiles() {
   const c = navigator.connection;
   return !!c && c.type === 'cellular';
 }
 function reglagesVideo(pc) {
+  if (regimeTablette.has(pc)) return REGLAGES_VIDEO.eco;
   const reseau = reseauTablette.get(pc);
   if (reseau === 'sim') return REGLAGES_VIDEO.sim;
   if (reseau === 'wifi') return telephoneEnDonneesMobiles() ? REGLAGES_VIDEO.sim : REGLAGES_VIDEO.wifi;
@@ -52,17 +57,25 @@ async function limiterVideo(pc) {
       const params = sender.getParameters();
       if (!params.encodings || !params.encodings.length) params.encodings = [{}];
       Object.assign(params.encodings[0], reglages);
+      // Appel sans image : rien n'est envoyé (la tablette a fermé sa voie vidéo).
+      params.encodings[0].active = regimeTablette.get(pc) !== 'audio';
       await sender.setParameters(params);
     } catch (e) { /* navigateur sans réglage de débit : on garde le comportement par défaut */ }
   }
 }
 // Réseau de la tablette, écrit par elle dans sa réponse (appel du proche) ou dans son offre (appel de
-// Mamie) : on règle de nouveau la vidéo s'il change.
-function noterReseau(pc, data) {
+// Mamie), et son régime (forfait presque épuisé) : on règle de nouveau la vidéo s'il change ;
+// ui.onRegime(regime) prévient l'écran d'appel.
+function noterReseau(pc, data, ui) {
   const reseau = [data && data.answer && data.answer.reseau, data && data.offer && data.offer.reseau]
     .find((r) => r === 'sim' || r === 'wifi');
-  if (!reseau || reseauTablette.get(pc) === reseau) return;
-  reseauTablette.set(pc, reseau);
+  const regime = [data && data.answer && data.answer.regime, data && data.offer && data.offer.regime]
+    .find((r) => r === 'eco' || r === 'audio') || null;
+  const changeRegime = regime && regimeTablette.get(pc) !== regime;
+  if (changeRegime) regimeTablette.set(pc, regime);
+  if (changeRegime && ui && ui.onRegime) ui.onRegime(regime);
+  if (reseau && reseauTablette.get(pc) !== reseau) reseauTablette.set(pc, reseau);
+  else if (!changeRegime) return;
   limiterVideo(pc);
 }
 function limiterALaConnexion(pc) {
@@ -225,6 +238,7 @@ export function watchTabletBusy(fid, onChange) {
  *   ui.local / ui.remote : éléments <video>
  *   ui.onState(state)    : 'ringing' | 'accepted' | 'connected'
  *   ui.onEnd(reason)     : 'ended' | 'declined' | 'missed' | 'failed'
+ *   ui.onRegime(regime)  : 'eco' | 'audio', forfait de la tablette presque épuisé (facultatif)
  *   ui.signal            : AbortSignal ; « Raccrocher » avant la fin du démarrage annule tout
  * Renvoie { hangup() }, ou lève une AbortError si l'appel a été annulé pendant le démarrage.
  */
@@ -301,7 +315,7 @@ export async function startCall(fid, caller, ui) {
   stops.push(onSnapshot(callRef, async (snap) => {
     const data = snap.data();
     if (!data) return;
-    noterReseau(pc, data);
+    noterReseau(pc, data, ui);
     if (data.answer && !answered) {
       answered = true;
       clearTimeout(ringTimer);
@@ -435,7 +449,7 @@ export async function answerIncoming(fid, callId, me, ui) {
   };
 
   try {
-    noterReseau(pc, first);
+    noterReseau(pc, first, ui);
     await pc.setRemoteDescription(first.offer);
     // La tablette prévoit une voie vidéo vide : on l'accepte dans les deux sens pour pouvoir
     // allumer la caméra plus tard sans renégocier.
@@ -464,7 +478,7 @@ export async function answerIncoming(fid, callId, me, ui) {
     });
   }));
   stops.push(onSnapshot(ref, (snap) => {
-    noterReseau(pc, snap.data());
+    noterReseau(pc, snap.data(), ui);
     const state = snap.data() && snap.data().state;
     if (['ended', 'missed', 'declined'].includes(state)) finish('ended', null);
   }));

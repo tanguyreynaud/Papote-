@@ -1680,7 +1680,7 @@ function remplirPageSim(id) {
       ...modif('Carte bancaire', l.cb ? `…${l.cb}` : null, 'cb', { valeur: l.cb, mode: 'numeric', aide: '4 derniers chiffres' }),
       ...modif('Expiration de la carte', l.cbExp, 'cbExp', { valeur: l.cbExp, type: 'month' }),
       ...modif('Note', l.note, 'note', { valeur: l.note, long: true }))),
-    carteRecharges(l, modif),
+    carteRecharges(l, modif, vue),
     vue ? h('div', { class: 'card' }, h('h2', {}, 'Ce que dit la tablette'),
       h('dl', { class: 'fiche' },
         ...ligne('Réseau', vue.sim.reseau ? `${vue.sim.reseau}${vue.sim.signal >= 0 ? `, signal ${vue.sim.signal}/4` : ''}` : null),
@@ -1698,7 +1698,7 @@ function convertirEuros(v) {
 }
 
 // Recharges du forfait d'une ligne : fin du forfait, renouvellement, « J'ai rechargé » et les dépenses payées.
-function carteRecharges(l, modif) {
+function carteRecharges(l, modif, vue) {
   const recharges = donnees.depenses.filter((d) => d.sim === l.id).sort((a, b) => (b.date || 0) - (a.date || 0));
   if (l.statut === 'resiliee' && !recharges.length) return null;
   const duree = l.dureeForfait || 30;
@@ -1718,12 +1718,27 @@ function carteRecharges(l, modif) {
         convertir: (v) => { const n = Number(v); if (!Number.isInteger(n) || n < 1 || n > 366) throw new Error('Un nombre de jours, ex. 30.'); return n; } }),
       ...modif('Renouvellement', l.renouvellementAuto ? 'automatique, par l\'opérateur' : 'à la main', 'renouvellementAuto', {
         valeur: l.renouvellementAuto ? 'oui' : '', options: [['', 'À la main'], ['oui', 'Automatique, par l\'opérateur']], convertir: (v) => v === 'oui' }),
-      ...(cetteAnnee ? [h('dt', {}, `Payé en ${annee}`), h('dd', {}, euros(cetteAnnee))] : [])),
+      ...(cetteAnnee ? [h('dt', {}, `Payé en ${annee}`), h('dd', {}, euros(cetteAnnee))] : []),
+      ...ligneGardeFou(vue && vue.sim)),
     h('p', { class: 'muted small' }, l.renouvellementAuto
       ? 'Les factures de l\'opérateur envoyées à factures@mapapote.fr se rangent ici toutes seules. Sans facture 2 jours après la fin du forfait, une alerte s\'affiche.'
-      : 'Rappel 3 jours avant la fin du forfait. Une facture envoyée à factures@mapapote.fr se range aussi ici toute seule.'),
+      : 'Rappel 3 jours avant la fin du forfait. Une facture envoyée à factures@mapapote.fr se range aussi ici toute seule.',
+      ' La tablette reçoit le forfait (Go notés plus haut, 1 Go sinon) et la date de recharge : à 60 % elle réduit l\'image des appels, à 85 % elle les passe sans image, à 95 % les vidéos attendent le Wi-Fi.'),
     recharges.length ? h('div', { class: 'table' }, tableRecharges(recharges)) : h('p', { class: 'muted small' }, 'Aucune recharge notée.'));
 }
+// Garde-fou du forfait vu par la tablette (Forfait.java) : Mo passés par la carte depuis le début du pass,
+// sur le forfait recopié dans sa famille (Go de la carte, 1 Go sinon), et ce qu'elle retient.
+const PALIERS = ['normal', 'visio réduite', 'appels sans image', 'ni vidéo, ni météo, ni mise à jour'];
+const moTexte = (mo) => (mo >= 1000 ? `${(mo / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 2 })} Go` : `${Math.round(mo)} Mo`);
+function ligneGardeFou(sim) {
+  if (!sim || !(sim.plafondMo > 0) || !(sim.dataCycleMo >= 0)) return [];
+  const pc = Math.round((sim.dataCycleMo * 100) / sim.plafondMo);
+  return [h('dt', {}, 'Utilisé sur la tablette'), h('dd', {},
+    `${moTexte(sim.dataCycleMo)} sur ${moTexte(sim.plafondMo)} (${pc} %)`,
+    sim.niveau ? h('span', {}, ' ', badge(PALIERS[sim.niveau] || `palier ${sim.niveau}`, sim.niveau >= 2 ? 'ko' : 'info')) : null,
+    sim.cycleDebut ? h('span', { class: 'muted small' }, ` depuis le ${jour(Date.parse(`${sim.cycleDebut}T12:00:00`))}`) : null)];
+}
+
 function tableRecharges(recharges) {
   const table = h('table');
   remplirTable(table, [{ titre: 'Date' }, { titre: 'Libellé' }, { titre: 'Montant', n: 1 }], recharges.slice(0, 24).map((d) => ({
