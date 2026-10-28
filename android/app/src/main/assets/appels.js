@@ -373,7 +373,15 @@ function showRing(id, data) {
     hideRing();
     refuseCall(id);
   }, Math.max(5_000, RING_MAX_MS - (Date.now() - created)));
-  ringing = { id, data, timer };
+  ringing = { id, data, timer, stop: null };
+  // Réveil par le serveur : pas d'écoute des appels en permanence, mais le temps de la sonnerie on
+  // suit cet appel-là, pour s'arrêter si l'appelant raccroche avant la réponse.
+  if (modePush) {
+    ringing.stop = onSnapshot(doc(db, 'families', fid, 'calls', id), (snap) => {
+      const d = snap.data();
+      if (ringing && ringing.id === id && (!d || d.state !== 'ringing')) hideRing();
+    }, () => {});
+  }
   if (window.Papote && window.Papote.closeOverlayForCall) window.Papote.closeOverlayForCall();
   $('ring-name').textContent = data.callerName;
   $('call-ring').hidden = false;
@@ -400,6 +408,7 @@ async function showCallerFace(callId, uid) {
 // `keepStream` : la caméra déjà ouverte sert pour l'appel qu'on vient de décrocher.
 function hideRing(keepStream) {
   if (ringing) clearTimeout(ringing.timer);
+  if (ringing && ringing.stop) ringing.stop();
   ringing = null;
   $('call-ring').hidden = true;
   if (android()) android().ring(false);
@@ -676,8 +685,10 @@ async function closeStaleCalls() {
 // Nouvelle version de Papote annoncée par le script de publication (config/version) : la tablette
 // va la chercher tout de suite (l'app Android compare et installe). Rien ne se passe sinon.
 let versionSeen = false;
+let stopVersion = null;
 function watchVersion() {
-  onSnapshot(doc(db, 'config', 'version'), () => {
+  if (modePush) return; // le serveur réveille l'app Android (type 'version')
+  stopVersion = onSnapshot(doc(db, 'config', 'version'), () => {
     if (!versionSeen) { versionSeen = true; return; } // premier état : déjà vérifié au démarrage
     if (android() && android().checkUpdate) android().checkUpdate();
   }, () => {});
@@ -686,10 +697,22 @@ function watchVersion() {
 // Écoute arrêtée par une erreur (droits refusés un moment, jeton App Check absent) : sans nouvelle
 // écoute, plus aucun appel ne sonnait jusqu'au redémarrage. On réessaie 30 s après.
 let stopCalls = null;
+const appelsQuiSonnent = () => query(collection(db, 'families', fid, 'calls'), where('state', '==', 'ringing'));
+// Réveil par le serveur (« un proche appelle ») : une seule lecture au lieu d'une écoute ouverte.
+function lireAppels() {
+  if (!fid) return Promise.resolve();
+  return getDocs(appelsQuiSonnent()).then(traiterAppels).catch((e) => console.warn('Appels : lecture', e && e.code));
+}
 function watchCalls() {
   if (stopCalls) stopCalls();
-  const q = query(collection(db, 'families', fid, 'calls'), where('state', '==', 'ringing'));
-  stopCalls = onSnapshot(q, (snap) => {
+  if (modePush) { lireAppels(); return; }
+  stopCalls = onSnapshot(appelsQuiSonnent(), traiterAppels, (err) => {
+    console.error('Écoute des appels', err);
+    stopCalls = null;
+    setTimeout(() => { if (fid && !stopCalls) watchCalls(); }, 30_000);
+  });
+}
+function traiterAppels(snap) {
     const now = Date.now();
     const fresh = snap.docs.filter((d) => {
       const data = d.data({ serverTimestamps: 'estimate' });
@@ -710,11 +733,6 @@ function watchCalls() {
       const latest = fresh[fresh.length - 1];
       showRing(latest.id, latest.data({ serverTimestamps: 'estimate' }));
     }
-  }, (err) => {
-    console.error('Écoute des appels', err);
-    stopCalls = null;
-    setTimeout(() => { if (fid && !stopCalls) watchCalls(); }, 30_000);
-  });
 }
 
 // ---------- Appel ----------
@@ -1086,9 +1104,16 @@ $('call-remote').addEventListener('playing', () => { if (active) $('call-wait').
 // Nom de la famille (« Mamie »), gardé pour les appels sortants : pas de lecture au moment d'appeler.
 let familyNameCache = '';
 
+let stopFamily = null;
 function watchFamily() {
+  if (modePush) {
+    // Le serveur réveille l'app Android à chaque changement (type 'famille') ; ici, seulement le nom.
+    getDoc(doc(db, 'families', fid)).then((snap) => { familyNameCache = (snap.data() && snap.data().name) || familyNameCache; }).catch(() => {});
+    if (android() && android().realtime) android().realtime(true);
+    return;
+  }
   let first = true;
-  onSnapshot(doc(db, 'families', fid), (snap) => {
+  stopFamily = onSnapshot(doc(db, 'families', fid), (snap) => {
     familyNameCache = (snap.data() && snap.data().name) || familyNameCache;
     if (first) { first = false; return; }
     if (android() && android().changed) android().changed();
@@ -1112,6 +1137,8 @@ async function start() {
     return;
   }
   closeStaleCalls();
+  modePush = pushPret();
+  if (modePush) console.info('Appels : réveil par le serveur, pas d\'écoute ouverte');
   watchCalls();
   watchVersion();
   iceServers().catch(() => {}); // relais prêt avant le premier appel
@@ -1119,19 +1146,20 @@ async function start() {
   setTimeout(faceDetector, 20_000);
   watchFamily();
   watchCommands();
+  if (!modePush) setTimeout(surveillerPush, 15_000);
 }
 
 // ---------- Test du son à l'installation ----------
 // Le téléphone du proche écrit families/{fid}/commands/{id} { type: 'son', quoi: 'sonnerie' | 'voix',
 // volume, parle?, target: ce compte, state: 'pending' } : la tablette joue tout de suite (Android,
 // testSon), puis écrit state 'done'. Une commande de plus de 2 minutes est seulement marquée faite.
-function watchCommands() {
-  const u = auth.currentUser;
-  if (!u || !fid) return;
-  const q = query(collection(db, 'families', fid, 'commands'), where('target', '==', u.uid), where('state', '==', 'pending'));
-  onSnapshot(q, (snap) => {
-    snap.docChanges().forEach((c) => {
-      if (c.type !== 'added') return;
+let stopCommands = null;
+const ordresVus = new Set();
+function traiterOrdres(docs) {
+    docs.forEach((d0) => {
+      if (ordresVus.has(d0.id)) return;
+      ordresVus.add(d0.id);
+      const c = { doc: d0 };
       const d = c.doc.data();
       const recent = !d.createdAt || !d.createdAt.toMillis || Date.now() - d.createdAt.toMillis() < 120_000;
       if (d.type === 'son' && recent && !ringing && !active && android() && android().testSon) {
@@ -1139,8 +1167,49 @@ function watchCommands() {
       }
       updateDoc(c.doc.ref, { state: 'done' }).catch((e) => console.warn('Test du son : état', e && e.code));
     });
+}
+const ordresEnAttente = () => query(collection(db, 'families', fid, 'commands'), where('target', '==', auth.currentUser.uid), where('state', '==', 'pending'));
+function lireOrdres() {
+  if (!fid || !auth.currentUser) return Promise.resolve();
+  return getDocs(ordresEnAttente()).then((snap) => traiterOrdres(snap.docs)).catch((e) => console.warn('Test du son : lecture', e && e.code));
+}
+function watchCommands() {
+  const u = auth.currentUser;
+  if (!u || !fid) return;
+  if (modePush) { lireOrdres(); return; }
+  stopCommands = onSnapshot(ordresEnAttente(), (snap) => {
+    traiterOrdres(snap.docChanges().filter((c) => c.type === 'added').map((c) => c.doc));
   }, (err) => console.warn('Test du son : écoute impossible', err && err.code));
 }
+
+// ---------- Réveil par le serveur ----------
+// Avec l'app Android reliée à Firebase (google-services.json à la construction), le serveur réveille
+// la tablette par notification push (Push.java, functions/reveil.js) : la page ne garde plus
+// d'écoute ouverte en permanence (≈ 100 Mo par mois sur la carte SIM, mesuré le 28/10). Elle relit à
+// la demande : appels qui sonnent, ordres, nom de la famille. Sans push (ancienne construction,
+// services Google absents, jeton pas encore écrit), l'écoute en direct reste, comme avant ; dès que
+// le jeton est écrit (quelques secondes après le démarrage), les écoutes sont fermées.
+let modePush = false;
+function pushPret() {
+  try { return !!(android() && android().pushReady && android().pushReady()); } catch (e) { return false; }
+}
+function surveillerPush() {
+  if (modePush || !fid) return;
+  if (!pushPret()) { setTimeout(surveillerPush, 60_000); return; }
+  modePush = true;
+  [stopCalls, stopFamily, stopCommands, stopVersion].forEach((stop) => { if (stop) stop(); });
+  stopCalls = stopFamily = stopCommands = stopVersion = null;
+  console.info('Appels : réveil par le serveur, écoutes fermées');
+  lireAppels();
+  lireOrdres();
+}
+// Réveil reçu par l'app Android (Papote.onPush dans tablette.js) : { type: 'appel' | 'ordre' | 'famille' }.
+window.papoteReveil = (type) => {
+  if (!fid) return;
+  if (type === 'appel') lireAppels();
+  else if (type === 'ordre') lireOrdres();
+  else if (type === 'famille') watchFamily(); // le nom de la famille, si elle a été renommée
+};
 
 // Sur une tablette faite pour être tenue debout, la caméra se retrouve sur le côté une fois
 // couchée. On range alors Mamie (son rond et sa petite vidéo) du côté de la caméra :

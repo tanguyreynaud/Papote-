@@ -37,6 +37,7 @@ function imitation(etat) {
     checkUpdate: note('checkUpdate'), hasAppCheckKey: () => false, appCheckToken: () => '',
     firestoreDatabase: () => 'eu', isCharging: () => window.__etat.secteur !== false,
     wifiStatus: () => JSON.stringify(window.__etat.reseau || { wifi: 'Box', internet: true, mobile: false, sim: false }),
+    pushReady: () => !!window.__etat.push,
     simBudget: () => JSON.stringify(window.__etat.forfait || { plafondMo: 1000, consoMo: 0, niveau: 0, sim: false, cycleDebut: '2026-10-01' }),
     logError: note('logError'), wifiDone: note('wifiDone'), confirmPairing: note('confirmPairing'),
     welcomeBack: note('welcomeBack'), welcomeSeen: note('welcomeSeen'), cancelPairing: note('cancelPairing'),

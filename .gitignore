@@ -10,6 +10,7 @@ telephone/app/build/
 telephone/local.properties
 telephone/signing.properties
 telephone/app/google-services.json
+android/app/google-services.json
 *.jks
 *.keystore
 

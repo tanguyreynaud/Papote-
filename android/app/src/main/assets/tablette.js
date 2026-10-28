@@ -2260,6 +2260,8 @@
     // Famille supprimée ou installation annulée : le compte des appels oublie l'ancienne famille et
     // attendra le prochain jumelage (sa fiche a déjà disparu avec la famille).
     onFamilyLost: function () { if (window.papoteAppelsForget) window.papoteAppelsForget(); },
+    // Réveil par le serveur (Push.java) : un proche appelle, un ordre, la famille a changé.
+    onPush: function (p) { if (window.papoteReveil) window.papoteReveil(p && p.type, p && p.id); },
     closeOverlayForCall: closeOverlayForCall,
     goHome: function () { showView('view-home'); }
   };
