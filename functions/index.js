@@ -4,6 +4,7 @@
 //   stockDisponible    GET  depuis le site vitrine : { disponible: true|false } (stock.js)
 //   creerPaiement      appel depuis l'appli famille : paiement pour une famille existante
 //   portailClient      appel depuis l'appli famille : compte bancaire, factures
+//   facturesFamille    appel depuis l'appli famille : liste des factures, avec leur PDF
 //   resilierAbonnement appel depuis l'appli famille : résilie à la fin du mois en cours, prélevé à l'arrêt
 //   annulerResiliation appel depuis l'appli famille : garde l'abonnement
 //   rattacherCommande  appel depuis l'appli famille : relie une commande du site à la famille
@@ -552,6 +553,15 @@ exports.portailClient = onCall({ secrets: [STRIPE_SECRET] }, async (request) => 
     locale: 'fr',
   });
   return { url: session.url };
+});
+
+// Factures de la famille (page « Abonnement et paiement » de l'appli), les plus récentes d'abord.
+exports.facturesFamille = onCall({ secrets: [STRIPE_SECRET] }, async (request) => {
+  const fam = await familleGeree((request.data || {}).fid, request);
+  const client = fam.abonnement && fam.abonnement.stripeCustomerId;
+  if (!client) return { factures: [] };
+  const { data } = await stripe().invoices.list({ customer: client, limit: 36 });
+  return { factures: data.map(regles.factureClient).filter(Boolean) };
 });
 
 // Résiliation en ligne, sans engagement : l'abonnement s'arrête à la fin du mois en cours,
