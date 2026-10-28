@@ -1575,10 +1575,12 @@ function setCallStatus(text) {
 // Pendant l'appel : plein écran et toujours à l'horizontale, même sans rotation automatique.
 // Android : l'écran est verrouillé à l'horizontale. Sinon (iPhone), l'écran d'appel est tourné
 // d'un quart de tour tant que le téléphone est tenu debout. L'image envoyée reste à l'horizontale (appel.js).
+// App Android (Chrome en TWA) : pas de vrai plein écran, comme sur iPhone. En sortant du plein écran,
+// Chrome laisse la barre du haut noire avec des icônes foncées invisibles, jusqu'à la réouverture de l'app.
 function enterCallScreen() {
   $('call').classList.add('force-landscape');
   const el = document.documentElement;
-  if (!el.requestFullscreen || document.fullscreenElement) return;
+  if (inNativeApp() || !el.requestFullscreen || document.fullscreenElement) return;
   el.requestFullscreen({ navigationUI: 'hide' })
     .then(() => screen.orientation?.lock?.('landscape'))
     .then(() => $('call').classList.remove('force-landscape'))
