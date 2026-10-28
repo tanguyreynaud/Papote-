@@ -308,7 +308,8 @@
         .then(function () { return t.appel('missed'); }).then(function () { return t.appel('missed'); }).then(function () { return attendre(300); });
     }],
     ['Rappels', 'Anniversaire d’un proche de l’app (bouton Appeler)', function () { return accueil(photosVues(), { birthdays: [{ id: 'membre-u-julie', name: 'Julie', day: 26, month: 10, year: 1988, photo: photoAnniv() }] }).then(function () { return attendre(400); }); }],
-    ['Accueil', 'Accueil le plus chargé : radio, anniversaire, SOS', function () { return accueil(photosVues(), { birthdays: [{ id: 'b1', name: 'Léo', day: 26, month: 10, year: 2019 }], options: { radio: { nom: 'France Bleu', url: 'https://exemple.invalid/radio' } } }).then(function () { return t.cliquer('#bday-ok'); }).then(function () { return attendre(400); }); }]
+    ['Accueil', 'Accueil le plus chargé : radio, anniversaire, SOS', function () { return accueil(photosVues(), { birthdays: [{ id: 'b1', name: 'Léo', day: 26, month: 10, year: 2019 }], options: { radio: { nom: 'France Bleu', url: 'https://exemple.invalid/radio' } } }).then(function () { return t.cliquer('#bday-ok'); }).then(function () { return attendre(400); }); }],
+    ['Soir et nuit', 'Accueil le soir avec la radio (21h30)', function () { return accueil(photosVues(), { meteo: METEO_NUIT, options: { radio: { nom: 'France Bleu', url: 'https://exemple.invalid/radio' } } }); }, '21:30']
   ];
 
   function pret(texte) {

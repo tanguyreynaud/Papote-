@@ -1968,3 +1968,10 @@ html .call-face.faces .sos-face { width: 100%; height: 100%; object-fit: cover; 
   background: #4f46e5; color: #fff; font-size: 18vmin; display: flex; align-items: center; justify-content: center; }
 html .call-face.faces .sos-face:first-child { grid-row: 1 / 3; }
 html .call-face.faces .sos-face:only-child { grid-column: 1 / 3; }
+
+/* Le soir (Tanguy, 27/10) : SOS, Appeler et Radio plus clairs pour rester lisibles à faible luminosité,
+   en couleurs douces (rose pâle, vert franc, lavande), sans orange ni contraste agressif. */
+html body.night .home-left .sos-btn { background: #f6d5dc; color: #9f1239; border-color: #f6d5dc; }
+html body.night .home-left .call-btn { background: #22a05a; color: #fff; }
+html body.night .home-left .radio-btn:not(.playing) { background: #dcd8f6; color: #3730a3; border-color: #dcd8f6; }
+html body.night .home-left .radio-btn.playing { background: #c9c3f2; color: #312e81; }
