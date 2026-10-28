@@ -206,6 +206,47 @@ test('cartes SIM : coût et alertes', () => {
     { iccid: '893301234567', cb: '9012', prix: 299, go: 50, cbExp: null });
 });
 
+test('forfaits SIM prépayés : rappel de recharge et facture rangée sur sa ligne', () => {
+  const J = 24 * 3600 * 1000;
+  const now = Date.UTC(2026, 9, 28, 10);
+  const lyca = { statut: 'active', operateur: 'Lyca Mobile', prix: 499 };
+  assert.deepStrictEqual(g.alertesSim({ ...lyca, prochaineRecharge: now + 10 * J }, now), []);
+  assert.deepStrictEqual(g.alertesSim({ ...lyca, prochaineRecharge: now + 2.5 * J }, now), ['à recharger dans 3 j']);
+  assert.deepStrictEqual(g.alertesSim({ ...lyca, prochaineRecharge: now + 1000 }, now), ['à recharger dans 1 j']);
+  assert.deepStrictEqual(g.alertesSim({ ...lyca, prochaineRecharge: now - 1000 }, now), ['à recharger aujourd\'hui']);
+  assert.deepStrictEqual(g.alertesSim({ ...lyca, prochaineRecharge: now - 2 * J }, now), ['forfait fini : à recharger']);
+  // Renouvelé par l'opérateur : rien tant que la recharge peut encore arriver.
+  assert.deepStrictEqual(g.alertesSim({ ...lyca, renouvellementAuto: true, prochaineRecharge: now - J }, now), []);
+  assert.deepStrictEqual(g.alertesSim({ ...lyca, renouvellementAuto: true, prochaineRecharge: now - 3 * J }, now),
+    ['renouvellement pas vu : vérifier chez l\'opérateur']);
+  // Carte en stock ou résiliée : aucun rappel.
+  assert.deepStrictEqual(g.alertesSim({ ...lyca, statut: 'stock', prochaineRecharge: now - 2 * J }, now), []);
+  assert.deepStrictEqual(g.alertesSim({ ...lyca, statut: 'resiliee', prochaineRecharge: now - 2 * J }, now), []);
+
+  assert.strictEqual(g.finApresRecharge({}, now), now + 30 * J);
+  assert.strictEqual(g.finApresRecharge({ dureeForfait: 28 }, now), now + 28 * J);
+  // Facture arrivée en retard : la fin déjà notée ne recule pas.
+  assert.strictEqual(g.finApresRecharge({ prochaineRecharge: now + 40 * J }, now - 20 * J), now + 40 * J);
+
+  assert.deepStrictEqual(g.champsSim({ prochaineRecharge: now, dureeForfait: 30, renouvellementAuto: true }),
+    { prochaineRecharge: now, dureeForfait: 30, renouvellementAuto: true });
+  assert.deepStrictEqual(g.champsSim({ dureeForfait: 0, renouvellementAuto: 'oui' }), { dureeForfait: null, renouvellementAuto: false });
+
+  const sims = [
+    { id: 'a', statut: 'active', operateur: 'Lyca', numero: '07 51 23 45 67', iccid: '8944110068251234567' },
+    { id: 'b', statut: 'active', operateur: 'YouPrice', numero: '06 12 34 56 78' },
+    { id: 'c', statut: 'resiliee', operateur: 'Lyca', numero: '07 00 00 00 00' },
+  ];
+  assert.strictEqual(g.simDeFacture(sims, { ligne: '+33 7 51 23 45 67', fournisseur: 'Lycamobile' }).id, 'a');
+  assert.strictEqual(g.simDeFacture(sims, { ligne: '8944 1100 6825 1234 567' }).id, 'a');
+  assert.strictEqual(g.simDeFacture(sims, { ligne: null, fournisseur: 'Lyca Mobile France' }).id, 'a');
+  assert.strictEqual(g.simDeFacture(sims, { ligne: '07 00 00 00 00', fournisseur: 'Lyca' }), null);
+  assert.strictEqual(g.simDeFacture(sims, { ligne: null, fournisseur: 'Free' }), null);
+  // Deux lignes actives chez le même opérateur sans numéro sur la facture : à relier à la main.
+  assert.strictEqual(g.simDeFacture([...sims, { id: 'd', statut: 'active', operateur: 'Lyca' }], { fournisseur: 'Lyca' }), null);
+  assert.strictEqual(g.lectureVersFormulaire({ estUneFacture: true, categorie: 'sim', ligneMobile: '07 51 23 45 67' }).ligne, '07 51 23 45 67');
+});
+
 test('accessoires à prévoir pour les envois', () => {
   const aEnvoyer = [{ formule: 'sim' }, { formule: 'sim' }, { formule: 'wifi' }];
   const r = g.accessoiresAPrevoir([
