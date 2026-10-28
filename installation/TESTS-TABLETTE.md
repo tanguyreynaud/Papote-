@@ -47,3 +47,16 @@ Les autres listes (commandes, stock, app famille) viendront à côté de celle-c
 - 👤 Publier avec `publier-mise-a-jour.ps1 -Test`, vérifier que T-002 et T-003 se mettent à jour seules
 - 👤 Refaire A et C sur une tablette de test
 - 👤 Seulement ensuite : `promouvoir-mise-a-jour.ps1`
+
+## E. Appels avec l'app du téléphone (chaque nouvelle version de l'app famille ou de l'app Android)
+
+Sur un téléphone Android avec l'app Papote installée, connecté à la famille de la tablette de test.
+
+- 👤 Écran du téléphone éteint, la tablette appelle : le téléphone s'allume tout seul sur « Mamie vous appelle » (Répondre / Refuser)
+- 👤 La tablette raccroche sans réponse : notification « Appel manqué de Mamie, touchez pour la rappeler »
+- 👤 Téléphone allumé, la tablette appelle : bandeau avec Répondre / Refuser
+- 👤 Répondre : appel audio, la tablette affiche « En ligne avec … » ; bouton « Vidéo » : image dans les deux sens
+- 👤 Première fois sur un téléphone neuf : Chrome demande la caméra et le micro, et l'appel continue après « Autoriser »
+- 👤 Image de la tablette sur le téléphone couché ou debout : entière, jamais déformée ; fond flouté à la place des bandes noires (ou plein écran si les formes sont proches) ; bouton Raccrocher visible
+- 👤 Raccrocher depuis la tablette puis depuis le téléphone : les deux reviennent à l'accueil
+- 👤 Le téléphone appelle la tablette (« Appel vidéo ») : la tablette décroche toute seule quand Mamie est vue
