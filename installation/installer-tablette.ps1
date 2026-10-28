@@ -174,6 +174,8 @@ Adb shell settings put system show_navigationbar 0 | Out-Null
 # « Protection de charge > personnalisée » (mode 2), vérifié sur la Tab 60 Pro ; sans effet ailleurs.
 Adb shell settings put system bv_custom_charging_max 80 | Out-Null
 Adb shell settings put system bv_charging_protection_mode 2 | Out-Null
+# Données : seul Papote utilise internet (Économiseur de données, applis inutiles désactivées).
+& (Join-Path $PSScriptRoot 'economie-donnees.ps1')
 # Tablette en français, clavier AZERTY : Papote change la langue au démarrage grâce à ces droits
 Adb shell pm grant $Package android.permission.CHANGE_CONFIGURATION | Out-Null
 Adb shell appops set $Package WRITE_SETTINGS allow | Out-Null
