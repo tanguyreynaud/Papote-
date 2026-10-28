@@ -1924,19 +1924,33 @@ async function synchroniserStock(bilan) {
   }
 }
 
-// Fin de contrat : l'étiquette de retour part toute seule (aucun justificatif demandé au client). Seulement
-// avec la vraie clé Stripe : en mode test, les commandes d'essai ne doivent pas coûter d'étiquettes.
-async function etiquettesRetour(bilan) {
-  if (!STRIPE_SECRET.value().startsWith('sk_live_')) return;
-  const attendues = await db().collection('commandes').where('restitution.statut', '==', 'attendue').get();
-  for (const snap of attendues.docs) {
-    const c = snap.data();
-    if (c.restitution.etiquette || (c.etiquettes && c.etiquettes.retour) || c.expedition !== 'envoyee') continue;
+// Fin de contrat : plus d'étiquette créée d'office (payée même si la tablette ne revient jamais, Tanguy 28/10).
+// Le client la demande dans l'appli (« Je renvoie la tablette », renvoyerTablette) au moment de déposer le
+// colis. Un QR ou une étiquette pas déposé au bout de 30 jours est annulé, donc remboursé par Sendcloud
+// (dans les 42 jours) ; le client pourra en redemander un.
+const RETOUR_NON_DEPOSE_JOURS = 30;
+async function retoursNonDeposes(bilan, maintenant) {
+  const attendues = await db().collection('commandes').where('restitution.statut', 'in', ['attendue', 'echec']).get();
+  const vieux = attendues.docs.filter((d) => d.get('etiquettes.retour.colis')
+    && maintenant - (d.get('etiquettes.retour.le') || maintenant) >= RETOUR_NON_DEPOSE_JOURS * 864e5);
+  if (!vieux.length) return;
+  const api = sendcloud.client(SENDCLOUD_API.value());
+  for (const snap of vieux) {
+    const e = snap.get('etiquettes.retour');
     try {
-      await creerEtiquette(snap.id, 'retour', 'automatique');
-      bilan.etiquettes = (bilan.etiquettes || []).concat(c.nom || c.email || snap.id);
-    } catch (e) {
-      bilan.erreurs.push(`Étiquette de retour de ${c.nom || c.email || snap.id} : ${e.message} (à créer depuis Commandes)`);
+      const s = await api.suivi(e.colis);
+      if (!sendcloud.nonDepose(s.statut)) continue;
+      await api.annuler(e.colis);
+      await snap.ref.update({
+        'etiquettes.retour': FieldValue.delete(),
+        'etiquettes.annulees': FieldValue.arrayUnion({ ...e, sens: 'retour', annuleeLe: maintenant, par: 'automatique : pas déposé en 30 jours' }),
+        'restitution.etiquette': FieldValue.delete(),
+        'restitution.qr': FieldValue.delete(),
+        'restitution.etiquetteLe': FieldValue.delete(),
+      });
+      bilan.etiquettesAnnulees = (bilan.etiquettesAnnulees || []).concat(snap.get('nom') || snap.get('email') || snap.id);
+    } catch (err) {
+      bilan.erreurs.push(`Retour pas déposé de ${snap.get('nom') || snap.id} : ${err.message} (à annuler depuis Commandes)`);
     }
   }
 }
@@ -1990,6 +2004,8 @@ async function colisLivres(bilan) {
   }
 }
 
+exports.retoursNonDeposes = retoursNonDeposes; // pour le parcours simulé (automatiser touche aussi Stripe)
+
 async function automatiser(qui) {
   const maintenant = Date.now();
   const bilan = { factures: [], avoirs: [], depenses: 0, stock: [], erreurs: [] };
@@ -1999,7 +2015,7 @@ async function automatiser(qui) {
   await depensesRecurrentes(maintenant, bilan);
   await facturerPenalites(maintenant - FENETRE, bilan);
   await avoirsRemboursements(maintenant - FENETRE, bilan);
-  await etiquettesRetour(bilan).catch((e) => bilan.erreurs.push(`Étiquettes de retour : ${e.message}`));
+  await retoursNonDeposes(bilan, maintenant).catch((e) => bilan.erreurs.push(`Étiquettes de retour : ${e.message}`));
   await colisLivres(bilan).catch((e) => bilan.erreurs.push(`Suivi des colis : ${e.message}`));
   await retoursEnCours(bilan).catch((e) => bilan.erreurs.push(`Suivi des retours : ${e.message}`));
   await db().doc('gestion/automatique').set({ ...bilan, le: maintenant, par: qui });
@@ -2061,19 +2077,22 @@ exports.gestionReglages = onCall(async (request) => {
 
 // ---------- Étiquettes Sendcloud ----------
 
-// Range le PDF dans Storage avec un jeton de téléchargement : lien imprimable par l'admin et par le client.
-async function rangerEtiquette(commande, sens, colis, pdf) {
-  const chemin = `gestion/etiquettes/${commande}-${sens}-${colis}.pdf`;
+// Range le PDF (ou l'image du QR code, png) dans Storage avec un jeton de téléchargement : lien imprimable
+// par l'admin et par le client.
+async function rangerEtiquette(commande, sens, colis, contenu, format = 'pdf') {
+  const chemin = `gestion/etiquettes/${commande}-${sens}-${colis}.${format}`;
   const jeton = require('node:crypto').randomUUID();
   const bucket = stockage();
-  await bucket.file(chemin).save(pdf, {
-    contentType: 'application/pdf', resumable: false, metadata: { metadata: { firebaseStorageDownloadTokens: jeton } },
+  await bucket.file(chemin).save(contenu, {
+    contentType: format === 'png' ? 'image/png' : 'application/pdf', resumable: false,
+    metadata: { metadata: { firebaseStorageDownloadTokens: jeton } },
   });
   return `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(chemin)}?alt=media&token=${jeton}`;
 }
 
 // Crée l'étiquette Mondial Relay chez Sendcloud. Erreur à montrer telle quelle : HttpsError ; panne Sendcloud : Error.
-async function creerEtiquette(commande, sens, qui) {
+// sansImpression : retour par QR code à montrer au point relais (demandé par le client dans l'appli).
+async function creerEtiquette(commande, sens, qui, { sansImpression = false } = {}) {
   const ref = db().doc(`commandes/${commande}`);
   const [snap, reglagesSnap] = await Promise.all([ref.get(), db().doc('gestion/reglages').get()]);
   if (!snap.exists) throw new HttpsError('not-found', 'Commande introuvable.');
@@ -2097,16 +2116,18 @@ async function creerEtiquette(commande, sens, qui) {
     await ref.update({ 'etiquettes.aller': { colis: r.colis, suivi: r.suivi, url, le: Date.now(), par: qui } });
     return { ok: true, suivi: r.suivi, url };
   }
-  const r = await api.retour({ de: cl.adresse, vers: papote, poids, reference });
+  const r = await api.retour({ de: cl.adresse, vers: papote, poids, reference, sansImpression });
   const url = await rangerEtiquette(commande, 'retour', r.colis, r.pdf);
+  const qr = r.png ? await rangerEtiquette(commande, 'retour', r.colis, r.png, 'png') : null;
   // N° et lien de suivi du retour, pour le suivre depuis l'admin et l'avis de résiliation.
   const suivi = await api.suivi(r.colis).catch(() => ({}));
-  const maj = { 'etiquettes.retour': { colis: r.colis, url, le: Date.now(), par: qui,
+  const maj = { 'etiquettes.retour': { colis: r.colis, url, qr, le: Date.now(), par: qui,
     suivi: suivi.suivi || null, lienSuivi: suivi.lien || null, etape: suivi.etape || null } };
   const attendue = c.restitution && ['attendue', 'echec'].includes(c.restitution.statut);
   if (attendue) {
     // Fin de contrat : l'e-mail au client part avec commandeModifiee, comme une étiquette collée à la main.
     maj['restitution.etiquette'] = url;
+    maj['restitution.qr'] = qr;
     maj['restitution.etiquetteLe'] = FieldValue.serverTimestamp();
   }
   await ref.update(maj);
@@ -2117,8 +2138,11 @@ async function creerEtiquette(commande, sens, qui) {
       a: c.email, contenu: mail.etiquetteRetour({ nom: c.nom, lien: url, avant: null }),
     });
   }
-  return { ok: true, url, envoyee: !!c.email };
+  return { ok: true, url, qr, envoyee: !!c.email };
 }
+
+// « Je renvoie la tablette » dans l'appli (index.js, renvoyerTablette) : QR code de retour sans impression.
+exports.etiquetteRetourClient = (commande, qui) => creerEtiquette(commande, 'retour', qui, { sansImpression: true });
 
 // { commande, sens: 'aller' | 'retour' } : crée l'étiquette Mondial Relay chez Sendcloud.
 // Aller : renvoie le n° de suivi pour le formulaire d'envoi. Retour : le client la reçoit par e-mail.

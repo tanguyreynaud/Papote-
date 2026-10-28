@@ -519,8 +519,24 @@ test('colis livré d\'après Sendcloud', () => {
 test('suiviColis : n° et lien de suivi, étape, livré', () => {
   const { suiviColis } = require('./sendcloud');
   assert.deepStrictEqual(suiviColis({ parcel: { tracking_number: 'MR1', tracking_url: 'https://t/MR1', status: { id: 12, message: 'Awaiting customer pickup' } } }),
-    { suivi: 'MR1', lien: 'https://t/MR1', etape: 'Awaiting customer pickup', livre: false });
-  assert.deepStrictEqual(suiviColis(null), { suivi: null, lien: null, etape: null, livre: false });
+    { suivi: 'MR1', lien: 'https://t/MR1', etape: 'Awaiting customer pickup', statut: 12, livre: false });
+  assert.deepStrictEqual(suiviColis(null), { suivi: null, lien: null, etape: null, statut: null, livre: false });
+});
+
+test('retour sans impression : seulement les offres de retour « labelless » ; colis pas encore déposé', () => {
+  const { optionsPossibles, nonDepose } = require('./sendcloud');
+  const kgs = { min: { value: '0', unit: 'kg' }, max: { value: '30', unit: 'kg' } };
+  const options = [
+    { code: 'mr:retour', carrier: { code: 'mondial_relay' }, functionalities: { returns: true }, weight: kgs },
+    { code: 'mr:retour-qr', carrier: { code: 'mondial_relay' }, functionalities: { returns: true, labelless: true }, weight: kgs },
+  ];
+  assert.deepStrictEqual(optionsPossibles(options, 1.5, 'retour-qr').map((o) => o.code), ['mr:retour-qr']);
+  assert.strictEqual(optionsPossibles(options, 1.5, 'retour').length, 2);
+  assert.strictEqual(nonDepose(1000), true, 'Ready to send');
+  assert.strictEqual(nonDepose(999), true, 'No label');
+  assert.strictEqual(nonDepose(3), false, 'en route : déposé');
+  assert.strictEqual(nonDepose(11), false, 'livré');
+  assert.strictEqual(nonDepose(null), false);
 });
 
 test('transitionPermise : la vie logique d\'une tablette, sans retour en arrière', () => {

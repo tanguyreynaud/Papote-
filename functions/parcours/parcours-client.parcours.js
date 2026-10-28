@@ -134,6 +134,38 @@ test('commande, envoi, installation par un autre proche, envois, appel, annulati
   assert.strictEqual(c.dernierMois, undefined, 'rien prélevé pour une annulation dans les 30 jours');
   assert.ok(mailsA(paul.email).some((m) => /rendre la tablette/i.test(m)), 'mode d\'emploi du retour envoyé à l\'acheteur');
   assert.strictEqual(s.stripe.rembourse(id), 0, 'remboursé seulement au retour de la tablette');
+  assert.strictEqual(s.sendcloud.colis.size, 0, 'aucune étiquette créée d\'office');
+  assert.strictEqual((await s.appeler('finDeContrat', { fid }, julie)).restitution.qr, null);
+
+  // Julie est prête à déposer le colis : « Je renvoie la tablette » crée le QR code (sans impression), une seule fois.
+  await s.db.doc('gestion/reglages').set({ expediteur: { nom: 'Papote', adresse: '1 rue de test', cp: '07000', ville: 'Privas' } }, { merge: true });
+  const qr = await s.appeler('renvoyerTablette', { fid }, julie);
+  assert.ok(qr.qr && qr.etiquette, 'QR code et PDF');
+  assert.strictEqual([...s.sendcloud.colis.values()][0].livraison, 'drop_off_labelless');
+  assert.deepStrictEqual(await s.appeler('renvoyerTablette', { fid }, julie), qr, 'le même QR, pas un second');
+  assert.strictEqual(s.sendcloud.colis.size, 1);
+  await s.calme();
+  assert.strictEqual((await s.appeler('finDeContrat', { fid }, julie)).restitution.qr, qr.qr);
+  assert.ok(mailsA(paul.email).some((m) => /QR code/.test(m)), 'QR code envoyé par e-mail');
+
+  // Pas déposé en 30 jours : la nuit, le QR est annulé (remboursé par Sendcloud) et Julie peut en redemander un.
+  const nuit = async () => {
+    const bilan = { erreurs: [] };
+    await require('../gestion').retoursNonDeposes(bilan, Date.now());
+    assert.deepStrictEqual(bilan.erreurs, []);
+  };
+  s.avancer(29);
+  await nuit();
+  assert.strictEqual([...s.sendcloud.colis.values()][0].annule, false, 'pas avant 30 jours');
+  s.avancer(2);
+  await nuit();
+  await s.calme();
+  assert.strictEqual([...s.sendcloud.colis.values()][0].annule, true, 'QR pas déposé annulé');
+  c = await commande(id);
+  assert.strictEqual(c.restitution.qr, undefined);
+  assert.strictEqual(c.etiquettes.retour, undefined);
+  const qr2 = await s.appeler('renvoyerTablette', { fid }, julie);
+  assert.notStrictEqual(qr2.qr, qr.qr, 'nouveau QR code');
 
   // 8. La tablette revient complète : les 60 € sont remboursés.
   await s.appeler('tabletteRendue', { commande: id }, a.TANGUY);
