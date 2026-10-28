@@ -1918,19 +1918,31 @@ final class Sync {
      */
     private void ecrireJetonPush() {
         String fid = prefs.getString("fid", null);
+        if (fid == null) return;
         String jeton = Push.jetonAEcrire(context);
-        if (fid == null || jeton == null) return;
+        boolean controle = jeton == null && Push.controleDu(context);
+        if (jeton == null && !controle) return;
         try {
-            JSONObject fields = new JSONObject().put("tablette", new JSONObject().put("arrayValue",
-                    new JSONObject().put("values", new JSONArray().put(Firebase.string(jeton)))));
+            // pingDemande : le serveur (reveilPing) renvoie un { type: 'ping' } ; sans lui, pas de réveil.
+            JSONObject fields = new JSONObject().put("pingDemande", new JSONObject().put("timestampValue", isoNow()));
+            JSONArray mask = new JSONArray().put("pingDemande");
+            if (jeton != null) {
+                fields.put("tablette", new JSONObject().put("arrayValue",
+                        new JSONObject().put("values", new JSONArray().put(Firebase.string(jeton)))));
+                mask.put("tablette");
+            }
             JSONObject write = new JSONObject()
                     .put("update", new JSONObject()
                             .put("name", Firebase.docName("families/" + fid + "/members/" + firebase.uid() + "/private/push"))
                             .put("fields", fields))
-                    .put("updateMask", new JSONObject().put("fieldPaths", new JSONArray().put("tablette")));
+                    .put("updateMask", new JSONObject().put("fieldPaths", mask));
             firebase.commit(new JSONArray().put(write));
-            Push.jetonEcrit(context, jeton);
-            Journal.log(context, "Push : jeton écrit dans la famille, réveil par le serveur actif");
+            if (jeton != null) {
+                Push.jetonEcrit(context, jeton);
+                Journal.log(context, "Push : jeton écrit dans la famille, en attente du ping du serveur");
+            } else {
+                Push.controleDemande(context);
+            }
         } catch (Exception e) {
             Log.w(TAG, "Push : jeton", e);
         }

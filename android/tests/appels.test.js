@@ -274,3 +274,17 @@ test('jeton push écrit après le démarrage : les écoutes se ferment toutes se
     assert.ok(await b.visible('#call-ring'));
   } finally { await b.fermer(); }
 });
+
+test('réveil par le serveur qui ne répond plus (contrôle quotidien raté) : les écoutes en direct rouvrent', async () => {
+  const b = await ouvrir('2026-10-26T10:00:00', { ...FAMILLE, push: true });
+  try {
+    await b.android('onPosts', lot([]));
+    await b.avancer(3000);
+    assert.strictEqual(await ecoutes(b), 0);
+    await b.etat({ push: false });
+    await b.avancer(61_000);
+    assert.ok((await ecoutes(b)) >= 3, 'écoutes en direct rouvertes');
+    await appelEntrant(b, 'c1');
+    assert.ok(await b.visible('#call-ring'), 'un appel sonne de nouveau sans réveil');
+  } finally { await b.fermer(); }
+});

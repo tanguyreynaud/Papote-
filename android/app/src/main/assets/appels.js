@@ -1149,7 +1149,7 @@ async function start() {
   setTimeout(faceDetector, 20_000);
   watchFamily();
   watchCommands();
-  if (!modePush) setTimeout(surveillerPush, 15_000);
+  setTimeout(surveillerPush, 15_000);
 }
 
 // ---------- Test du son à l'installation ----------
@@ -1196,15 +1196,27 @@ let modePush = false;
 function pushPret() {
   try { return !!(android() && android().pushReady && android().pushReady()); } catch (e) { return false; }
 }
+// Dans les deux sens, vérifié chaque minute (appel local, sans réseau) : l'app Android ne dit « prêt »
+// qu'après un ping du serveur, et retire sa confiance si le contrôle quotidien échoue.
 function surveillerPush() {
-  if (modePush || !fid) return;
-  if (!pushPret()) { setTimeout(surveillerPush, 60_000); return; }
-  modePush = true;
-  [stopCalls, stopFamily, stopCommands, stopVersion].forEach((stop) => { if (stop) stop(); });
-  stopCalls = stopFamily = stopCommands = stopVersion = null;
-  console.info('Appels : réveil par le serveur, écoutes fermées');
-  lireAppels();
-  lireOrdres();
+  if (!fid) return;
+  const pret = pushPret();
+  if (pret && !modePush) {
+    modePush = true;
+    [stopCalls, stopFamily, stopCommands, stopVersion].forEach((stop) => { if (stop) stop(); });
+    stopCalls = stopFamily = stopCommands = stopVersion = null;
+    console.info('Appels : réveil par le serveur, écoutes fermées');
+    lireAppels();
+    lireOrdres();
+  } else if (!pret && modePush) {
+    modePush = false;
+    console.warn('Appels : réveil par le serveur incertain, écoutes en direct rouvertes');
+    watchCalls();
+    watchVersion();
+    watchFamily();
+    watchCommands();
+  }
+  setTimeout(surveillerPush, 60_000);
 }
 // Réveil reçu par l'app Android (Papote.onPush dans tablette.js) : { type: 'appel' | 'ordre' | 'famille' }.
 window.papoteReveil = (type) => {
