@@ -201,3 +201,14 @@ test('qui prévenir quand le paiement échoue : une fois par épisode', () => {
   assert.strictEqual(a.avisPaiement({ statut: 'suspendu' }, 'actif'), null);
   assert.strictEqual(a.avisPaiement(undefined, 'impaye'), 'impaye');
 });
+
+test('factures montrées à la famille : payées et à payer, sans brouillon ni annulée', () => {
+  const base = { id: 'in_1', number: 'PAP-0001', created: 1761000000, amount_paid: 6000, amount_due: 6000, invoice_pdf: 'https://pdf', hosted_invoice_url: 'https://page' };
+  assert.deepStrictEqual(a.factureClient({ ...base, status: 'paid' }), {
+    id: 'in_1', numero: 'PAP-0001', le: 1761000000000, montant: 6000, statut: 'payee', pdf: 'https://pdf', page: 'https://page',
+  });
+  assert.strictEqual(a.factureClient({ ...base, status: 'open', amount_due: 2000 }).statut, 'a-payer');
+  assert.strictEqual(a.factureClient({ ...base, status: 'open', amount_due: 2000 }).montant, 2000);
+  assert.strictEqual(a.factureClient({ ...base, status: 'draft' }), null);
+  assert.strictEqual(a.factureClient({ ...base, status: 'void' }), null);
+});

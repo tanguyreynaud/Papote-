@@ -249,6 +249,21 @@ function afficherCode(code) {
   return `${code.slice(0, 4)}-${code.slice(4)}`;
 }
 
+// Facture Stripe telle que l'appli famille la montre (page « Abonnement et paiement ») : brouillons et factures
+// annulées écartés, lien du PDF à télécharger. statut : 'payee' | 'a-payer'.
+function factureClient(f) {
+  if (!f || !['paid', 'open', 'uncollectible'].includes(f.status)) return null;
+  return {
+    id: f.id,
+    numero: f.number || null,
+    le: f.created * 1000,
+    montant: f.status === 'paid' ? f.amount_paid : f.amount_due,
+    statut: f.status === 'paid' ? 'payee' : 'a-payer',
+    pdf: f.invoice_pdf || null,
+    page: f.hosted_invoice_url || null,
+  };
+}
+
 // Faut-il appliquer un événement Stripe à cette famille ? Une famille offerte ne change jamais.
 function peutModifier(actuel) {
   return !(actuel && actuel.statut === 'offert');
@@ -291,6 +306,7 @@ module.exports = {
   statutDepuisStripe,
   graceDepassee,
   peutModifier,
+  factureClient,
   nouveauCode,
   normaliserCode,
   afficherCode,
