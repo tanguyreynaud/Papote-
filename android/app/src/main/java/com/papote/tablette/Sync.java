@@ -918,6 +918,7 @@ final class Sync {
         c.setReadTimeout(60_000);
         AppCheck.addHeader(context, c, url);
         File tmp = new File(imageDir, id + ".tmp");
+        // Connexion gardée ouverte pour le fichier suivant (keep-alive), sauf en cas d'erreur.
         try {
             if (c.getResponseCode() != 200) throw new IOException("HTTP " + c.getResponseCode());
             java.io.InputStream in = c.getInputStream();
@@ -935,8 +936,9 @@ final class Sync {
                 out.close();
                 in.close();
             }
-        } finally {
+        } catch (IOException e) {
             c.disconnect();
+            throw e;
         }
         File file = new File(imageDir, id + "." + ext);
         if (!tmp.renameTo(file)) throw new IOException("Renommage " + id);

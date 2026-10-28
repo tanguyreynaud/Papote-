@@ -85,9 +85,13 @@ final class Http {
             // 304 « pas modifié » : pas de corps.
             InputStream in = code == 304 ? null : code >= 400 ? c.getErrorStream() : c.getInputStream();
             return new Response(code, in == null ? "" : readAll(in), headers);
-        } finally {
-            c.disconnect();
+        } catch (IOException e) {
+            c.disconnect(); // connexion douteuse : pas réutilisée
+            throw e;
         }
+        // Corps lu jusqu'au bout et fermé, sans disconnect() : Android garde la connexion ouverte
+        // quelques minutes et les requêtes suivantes du même tour évitent une nouvelle poignée de
+        // main TLS (fil réseau, 28/10 : ~ −40 % de données au repos sur la SIM).
     }
 
     /** Envoi de données binaires (message vocal vers Firebase Storage). */
@@ -112,8 +116,9 @@ final class Http {
             int code = c.getResponseCode();
             InputStream in = code >= 400 ? c.getErrorStream() : c.getInputStream();
             return new Response(code, in == null ? "" : readAll(in));
-        } finally {
+        } catch (IOException e) {
             c.disconnect();
+            throw e;
         }
     }
 
