@@ -1023,7 +1023,10 @@ window.papoteCallFamily = ({ to = null, toName = null, sos = 0, onState = () => 
     await pc.setLocalDescription(offer);
     if (done) return;
     // « reseau » : le téléphone règle sa vidéo selon le réseau de la tablette (règles du 28/10 requises).
-    await updateDoc(ref, { offer: { type: offer.type, sdp: limitReceive(offer.sdp), reseau: onSimData() ? 'sim' : 'wifi' } });
+    const r = regime();
+    const offre = { type: offer.type, sdp: limitReceive(offer.sdp), reseau: r === 'wifi' ? 'wifi' : 'sim' };
+    if (r === 'eco' || r === 'audio') offre.regime = r; // forfait presque épuisé : l'app famille l'explique
+    await updateDoc(ref, { offer: offre });
     const tOffre = Math.round(performance.now() - t0);
     if (tOffre > 3000) reportCallIncident('depart-lent', `appel-ecrit+micro=${tEcrit}ms offre=${tOffre}ms`, ref.id);
 
