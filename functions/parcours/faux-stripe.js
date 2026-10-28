@@ -140,8 +140,9 @@ function creerFauxStripe(horloge) {
       },
     },
     invoices: {
-      list: ({ subscription, status }) => liste([...etat.factures.values()]
-        .filter((f) => (!subscription || f.subscription === subscription) && (!status || f.status === status))),
+      list: ({ subscription, customer, status }) => liste([...etat.factures.values()]
+        .filter((f) => (!subscription || f.subscription === subscription) && (!customer || f.customer === customer)
+          && (!status || f.status === status))),
       create: async ({ customer, metadata }) => {
         const client = lire('clients', 'customer', customer);
         const lignes = etat.lignes.filter((l) => l.customer === customer && !l.facture);
