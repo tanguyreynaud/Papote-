@@ -66,4 +66,35 @@ public class OutilsTest {
         assertFalse(Sync.retryable(new Firebase.ApiException(403, "")));
         assertFalse(Sync.retryable(new Firebase.ApiException(404, "")));
     }
+
+    @Test
+    public void forfaitPaliers() {
+        assertEquals(0, Forfait.niveau(1000, 0));
+        assertEquals(0, Forfait.niveau(1000, 699));
+        assertEquals(1, Forfait.niveau(1000, 700));
+        assertEquals(2, Forfait.niveau(1000, 880));
+        assertEquals(3, Forfait.niveau(1000, 950));
+        assertEquals(0, Forfait.niveau(0, 5000));   // pas de limite
+        assertEquals(0, Forfait.niveau(1000, -1));  // compteur inconnu : on ne bride pas
+        assertEquals(1, Forfait.niveau(2000, 1500)); // forfait 2 Go : 75 %
+    }
+
+    @Test
+    public void forfaitDebutDuCycle() {
+        java.util.TimeZone paris = java.util.TimeZone.getTimeZone("Europe/Paris");
+        java.util.Calendar c = java.util.Calendar.getInstance(paris);
+        c.clear();
+        c.set(2026, java.util.Calendar.OCTOBER, 28, 13, 0, 0);
+        long now = c.getTimeInMillis();
+        // Jour du mois : le 15 → 15 octobre ; le 1er → 1er octobre.
+        c.clear(); c.set(2026, java.util.Calendar.OCTOBER, 15, 0, 0, 0);
+        assertEquals(c.getTimeInMillis(), Forfait.debutCycle(15, "", now));
+        c.clear(); c.set(2026, java.util.Calendar.OCTOBER, 1, 0, 0, 0);
+        assertEquals(c.getTimeInMillis(), Forfait.debutCycle(1, "", now));
+        // Recharge Lyca du 20 septembre, cycles de 30 jours : 20 septembre, 20 octobre.
+        c.clear(); c.set(2026, java.util.Calendar.OCTOBER, 20, 0, 0, 0);
+        assertEquals(c.getTimeInMillis(), Forfait.debutCycle(1, "2026-09-20", now));
+        // Recharge dans le futur (faute de frappe) : cycle précédent, jamais une date après aujourd'hui.
+        assertTrue(Forfait.debutCycle(1, "2026-11-05", now) < now);
+    }
 }
