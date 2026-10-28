@@ -1590,17 +1590,33 @@ function regimeAppel(regime) {
 // Pendant l'appel : plein écran et toujours à l'horizontale, même sans rotation automatique.
 // Android : l'écran est verrouillé à l'horizontale. Sinon (iPhone), l'écran d'appel est tourné
 // d'un quart de tour tant que le téléphone est tenu debout. L'image envoyée reste à l'horizontale (appel.js).
-// App Android (Chrome en TWA) : pas de vrai plein écran, comme sur iPhone. En sortant du plein écran,
-// Chrome laisse la barre du haut noire avec des icônes foncées invisibles, jusqu'à la réouverture de l'app.
+// Vrai plein écran (barres du téléphone cachées) aussi dans l'app Android (Tanguy, 28/10). En sortant du
+// plein écran, Chrome en TWA laissait la barre du haut noire aux icônes foncées : on lui redonne sa
+// couleur (theme-color) une fois sorti, et le plein écran ne reste jamais en dehors d'un appel.
 function enterCallScreen() {
   $('call').classList.add('force-landscape');
   const el = document.documentElement;
-  if (inNativeApp() || !el.requestFullscreen || document.fullscreenElement) return;
+  if (!el.requestFullscreen || document.fullscreenElement) return;
   el.requestFullscreen({ navigationUI: 'hide' })
     .then(() => screen.orientation?.lock?.('landscape'))
     .then(() => $('call').classList.remove('force-landscape'))
     .catch(() => {});
 }
+
+function recolorerBarres() {
+  document.querySelectorAll('meta[name="theme-color"]').forEach((m) => {
+    const copie = m.cloneNode();
+    m.replaceWith(copie);
+  });
+}
+document.addEventListener('fullscreenchange', () => {
+  if (document.fullscreenElement) {
+    // Plein écran resté après la fin de l'appel (appel fini app en arrière-plan…) : on en sort.
+    if ($('call').hidden) document.exitFullscreen().catch(() => {});
+    return;
+  }
+  setTimeout(recolorerBarres, 300);
+});
 
 // Pendant un appel, l'écran reste allumé : sinon le téléphone se verrouille au bout de 30 s, et
 // sur iPhone, l'app mise en veille coupe l'appel. Le verrou tombe tout seul si l'app passe derrière.
@@ -2080,6 +2096,24 @@ const premiereImage = () => {
 };
 $('call-remote').addEventListener('playing', premiereImage);
 $('call-remote').addEventListener('resize', premiereImage);
+
+// Fond flouté derrière l'image du proche (même vidéo), ou plein écran si l'écran et l'image ont presque la même forme :
+// on ne coupe jamais plus de 15 % de l'image.
+const cadrerImage = () => {
+  const video = $('call-remote');
+  const fond = $('call-remote-fond');
+  if (fond.srcObject !== video.srcObject) {
+    fond.srcObject = video.srcObject;
+    if (fond.srcObject) fond.play().catch(() => {});
+  }
+  const call = $('call');
+  if (!video.videoWidth || !call.clientHeight) return;
+  const ecran = call.clientWidth / call.clientHeight;
+  const image = video.videoWidth / video.videoHeight;
+  video.classList.toggle('remplit', Math.min(ecran, image) / Math.max(ecran, image) >= 0.85);
+};
+for (const evenement of ['playing', 'resize', 'emptied']) $('call-remote').addEventListener(evenement, cadrerImage);
+window.addEventListener('resize', cadrerImage);
 
 let allMembers = [];
 
