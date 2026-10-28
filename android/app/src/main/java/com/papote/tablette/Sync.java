@@ -19,6 +19,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -117,6 +118,11 @@ final class Sync {
 
     // Accès uniquement depuis le fil de synchronisation.
     private final Map<String, Post> posts = new LinkedHashMap<>();
+    /** Téléchargements ratés par envoi (vocal, vidéo) : au-delà de MAX_ESSAIS_MEDIA, on n'insiste plus
+     *  avant la relecture complète (6 h) ou un redémarrage. Sinon un vocal dont le fichier n'existe plus
+     *  coûterait deux requêtes à chaque tour, et une vidéo qui rate toujours serait reprise sur la SIM. */
+    private final Map<String, Integer> essaisMedia = new HashMap<>();
+    private static final int MAX_ESSAIS_MEDIA = 3;
     private String familyName;
     private String familyCode;
     private String textSize;
@@ -602,6 +608,7 @@ final class Sync {
         }
         if (full) {
             lastFullRefresh = now;
+            essaisMedia.clear(); // nouvelle chance pour les fichiers abandonnés
             List<String> gone = new ArrayList<>();
             for (String id : posts.keySet()) if (!seenIds.contains(id)) gone.add(id);
             for (String id : gone) {
@@ -803,7 +810,7 @@ final class Sync {
         for (Post p : posts.values()) {
             boolean photo = "photo".equals(p.type) && p.imagePath == null
                     && (allowed.contains(p.id) || existing(p.id) != null); // déjà sur la tablette : gratuit
-            boolean voice = "voice".equals(p.type) && p.audioPath == null;
+            boolean voice = "voice".equals(p.type) && p.audioPath == null && !abandonne(p);
             if (!photo && !voice) continue;
             String field = photo ? "image" : "audio";
             File file = existing(p.id);
@@ -824,10 +831,10 @@ final class Sync {
                     }
                     if (dataUrl == null) {
                         JSONObject doc = firebase.get("families/" + fid + "/posts/" + p.id, field);
-                        if (doc == null || doc.optJSONObject("fields") == null) continue;
+                        if (doc == null || doc.optJSONObject("fields") == null) { echecMedia(p); continue; }
                         dataUrl = Firebase.str(doc.getJSONObject("fields"), field);
                     }
-                    if (dataUrl == null) continue;
+                    if (dataUrl == null) { echecMedia(p); continue; }
                     file = new File(imageDir, p.id + "." + extension(dataUrl));
                     byte[] bytes = Base64.decode(dataUrl.substring(dataUrl.indexOf(',') + 1), Base64.DEFAULT);
                     File tmp = new File(imageDir, p.id + ".tmp");
@@ -837,12 +844,14 @@ final class Sync {
                     } finally {
                         out.close();
                     }
-                    if (!tmp.renameTo(file)) continue;
+                    if (!tmp.renameTo(file)) { echecMedia(p); continue; }
                 } catch (Exception e) {
                     Log.w(TAG, "Média " + p.id, e);
+                    echecMedia(p);
                     continue;
                 }
             }
+            essaisMedia.remove(p.id);
             if (photo) p.imagePath = LocalContent.mediaUrl(file.getName());
             else p.audioPath = LocalContent.mediaUrl(file.getName());
         }
@@ -867,19 +876,35 @@ final class Sync {
         }
     }
 
-    /** Un envoi reçu dont le fichier n'est pas encore sur la tablette (vidéo, vocal). */
+    /** Un envoi reçu dont le fichier n'est pas encore sur la tablette (vidéo, vocal), hors abandons. */
     private boolean mediaEnAttente() {
         for (Post p : posts.values()) {
+            if (abandonne(p)) continue;
             if ("video".equals(p.type) && p.videoPath == null && (p.chunks > 0 || p.videoUrl != null)) return true;
             if ("voice".equals(p.type) && p.audioPath == null) return true;
         }
         return false;
     }
 
+    private boolean abandonne(Post p) {
+        Integer n = essaisMedia.get(p.id);
+        return n != null && n >= MAX_ESSAIS_MEDIA;
+    }
+
+    private void echecMedia(Post p) {
+        Integer n = essaisMedia.get(p.id);
+        int apres = (n == null ? 0 : n) + 1;
+        essaisMedia.put(p.id, apres);
+        if (apres >= MAX_ESSAIS_MEDIA) {
+            Journal.log(context, "Envoi " + p.id + " (" + p.type + ") : " + apres
+                    + " téléchargements ratés, on n'insiste plus avant la relecture complète");
+        }
+    }
+
     /** Vidéos : le base64 est découpé en posts/{id}/media/video0, video1… */
     private void downloadVideos(String fid) {
         for (Post p : posts.values()) {
-            if (!"video".equals(p.type) || p.videoPath != null) continue;
+            if (!"video".equals(p.type) || p.videoPath != null || abandonne(p)) continue;
             if (p.chunks <= 0 && p.videoUrl == null) continue;
             // Forfait SIM presque épuisé (palier 3) : la vidéo (3 à 30 Mo) attend le Wi-Fi ou la recharge ;
             // l'envoi n'est pas montré tant qu'elle n'est pas là (tablette.js), rien n'est perdu.
@@ -891,7 +916,11 @@ final class Sync {
                     file = downloadToFile(p.videoUrl, p.id, p.mime != null && p.mime.contains("webm") ? "webm" : "mp4");
                 } catch (Exception e) {
                     Log.w(TAG, "Vidéo " + p.id, e);
-                    Journal.log(context, "Vidéo " + p.id + " : téléchargement raté (" + e.getMessage() + "), nouvel essai au prochain tour");
+                    echecMedia(p);
+                    if (!abandonne(p)) {
+                        Journal.log(context, "Vidéo " + p.id + " : téléchargement raté (" + e.getMessage() + "), nouvel essai au prochain tour");
+                    }
+                    continue;
                 }
             }
             if (file == null && p.chunks > 0) {
@@ -902,7 +931,7 @@ final class Sync {
                         if (part == null || part.optJSONObject("fields") == null) { b64 = null; break; }
                         b64.append(Firebase.str(part.getJSONObject("fields"), "data"));
                     }
-                    if (b64 == null) continue;
+                    if (b64 == null) { echecMedia(p); continue; }
                     byte[] bytes = Base64.decode(b64.toString(), Base64.DEFAULT);
                     String ext = p.mime != null && p.mime.contains("webm") ? "webm" : "mp4";
                     File tmp = new File(imageDir, p.id + ".tmp");
@@ -913,12 +942,15 @@ final class Sync {
                         out.close();
                     }
                     file = new File(imageDir, p.id + "." + ext);
-                    if (!tmp.renameTo(file)) continue;
+                    if (!tmp.renameTo(file)) { echecMedia(p); continue; }
                 } catch (Exception e) {
                     Log.w(TAG, "Vidéo " + p.id, e);
+                    echecMedia(p);
                     continue;
                 }
             }
+            if (file == null) continue;
+            essaisMedia.remove(p.id);
             p.videoPath = LocalContent.mediaUrl(file.getName());
         }
     }
