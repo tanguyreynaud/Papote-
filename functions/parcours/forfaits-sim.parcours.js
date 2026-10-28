@@ -4,6 +4,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const s = require('./simulation');
+const a = require('./acteurs');
 const { brancher } = require('./commun');
 const { regles: g } = require('../gestion');
 
@@ -46,4 +47,22 @@ test('facture de forfait reliée à la main depuis sa page : la fin du forfait s
   const ligne = await s.lire(`sims/${id}`);
   assert.ok(Math.abs(ligne.prochaineRecharge - (Date.now() + 25 * s.JOUR)) < 60000);
   await assert.rejects(s.appeler('gestionDepense', { action: 'modifier', id: dep, champs: { sim: 'inconnue' } }, TANGUY), /introuvable/);
+});
+
+test('garde-fou du forfait : la famille de la tablette reçoit le forfait de sa carte, et sa nouvelle date à chaque recharge', async () => {
+  const proche = await s.compte('Paul', 'paul@exemple.fr');
+  const t = await a.tablettePreparee();
+  await a.afficherCode(t);
+  const fid = await a.installer(proche, t);
+  assert.strictEqual((await s.lire(`stock/${t.fiche}`)).fid, fid, 'tablette reliée à sa famille');
+  const { id } = await s.appeler('gestionSim', { action: 'ajouter', champs: {
+    statut: 'active', operateur: 'Lyca', numero: '07 51 23 45 67', prix: 499, go: 1, activation: Date.now(), tablette: t.fiche,
+  } }, TANGUY);
+  const jour = Math.min(Number(new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Paris' }).slice(8)), 28);
+  assert.deepStrictEqual((await s.lire(`families/${fid}`)).forfaitSim, { mo: 1000, jour });
+  await s.appeler('gestionSim', { action: 'recharger', id }, TANGUY);
+  const aujourdhui = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Paris' });
+  assert.deepStrictEqual((await s.lire(`families/${fid}`)).forfaitSim, { mo: 1000, debut: aujourdhui });
+  await s.appeler('gestionSim', { action: 'modifier', id, champs: { go: 2 } }, TANGUY);
+  assert.deepStrictEqual((await s.lire(`families/${fid}`)).forfaitSim, { mo: 2000, debut: aujourdhui });
 });
