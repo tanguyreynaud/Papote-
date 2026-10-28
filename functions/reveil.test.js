@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const { reveiller, aChange } = require('./reveil');
+const { reveiller, aChange, doitPinger } = require('./reveil');
 
 // Base imitée : membres d'une famille et leurs jetons privés.
 function base(membres, jetons) {
@@ -61,4 +61,14 @@ test('fiche de la famille : un compte tenu par le serveur ne réveille pas la ta
   assert.strictEqual(aChange({ name: 'Mamie', rev: 1 }, { name: 'Mamie', rev: 2 }), true);
   assert.strictEqual(aChange({ name: 'Mamie' }, { name: 'Mamie', veille: { de: 22, a: 7 } }), true);
   assert.strictEqual(aChange(undefined, { name: 'Mamie' }), true);
+});
+
+test('auto-contrôle : ping seulement quand pingDemande change et qu\'un jeton existe', () => {
+  const t = (ms) => ({ toMillis: () => ms });
+  assert.strictEqual(doitPinger(null, { tablette: ['j'], pingDemande: t(1) }), true);
+  assert.strictEqual(doitPinger({ tablette: ['j'], pingDemande: t(1) }, { tablette: ['j'], pingDemande: t(2) }), true);
+  assert.strictEqual(doitPinger({ tablette: ['j'], pingDemande: t(1) }, { tablette: ['j'], pingDemande: t(1) }), false, 'rien de neuf');
+  assert.strictEqual(doitPinger({ tablette: ['j'] }, { tablette: ['j', 'k'] }), false, 'jeton ajouté sans demande');
+  assert.strictEqual(doitPinger(null, { tablette: [], pingDemande: t(1) }), false, 'pas de jeton');
+  assert.strictEqual(doitPinger({ tablette: ['j'], pingDemande: t(1) }, null), false, 'document effacé');
 });

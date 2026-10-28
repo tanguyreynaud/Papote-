@@ -5,6 +5,8 @@
 //   reveilOrdre    test du son demandé par le téléphone (commands créé) : { type: 'ordre', id }
 //   reveilFamille  la fiche de la famille change (envoi, rappel, réglage…) : { type: 'famille' }
 //   reveilVersion  nouvelle version publiée (config/version) : { type: 'version' } à toutes les tablettes
+//   reveilPing     auto-contrôle : la tablette écrit pingDemande dans son document de jetons, le serveur
+//                  lui renvoie { type: 'ping' } ; sans ping reçu, la tablette garde son écoute en direct
 //
 // Jetons des tablettes : families/{fid}/members/{uid}/private/push = { tablette: [jeton] }, écrits par
 // l'app Android de la tablette (Sync.ecrireJetonPush). Messages « data » seulement, priorité haute :
@@ -97,6 +99,31 @@ exports.reveilVersion = onDocumentWritten({ ...OPTIONS, document: 'config/versio
   }
 });
 
+// Auto-contrôle du réveil : la tablette a écrit (ou réécrit) pingDemande dans son document de jetons.
+exports.reveilPing = onDocumentWritten({ ...OPTIONS, document: 'families/{fid}/members/{uid}/private/push' }, async (event) => {
+  const avant = event.data && event.data.before.exists ? event.data.before.data() : null;
+  const apres = event.data && event.data.after.exists ? event.data.after.data() : null;
+  if (!doitPinger(avant, apres)) return;
+  try {
+    const res = await admin.messaging().sendEachForMulticast({
+      tokens: apres.tablette,
+      data: { type: 'ping' },
+      android: { priority: 'high', ttl: 120_000, collapseKey: 'ping' },
+    });
+    logger.info('Réveil ping', { fid: event.params.fid, uid: event.params.uid, ok: res.successCount, ko: res.failureCount });
+  } catch (e) {
+    logger.warn('Réveil ping', e && e.message);
+  }
+});
+
+// pingDemande vient d'être écrit ou a changé, et il y a au moins un jeton de tablette.
+function doitPinger(avant, apres) {
+  if (!apres || !Array.isArray(apres.tablette) || !apres.tablette.length || apres.pingDemande == null) return false;
+  const ms = (v) => (v && typeof v.toMillis === 'function' ? v.toMillis() : v);
+  return !avant || ms(avant.pingDemande) !== ms(apres.pingDemande);
+}
+
 module.exports.jetonsTablettes = jetonsTablettes;
+module.exports.doitPinger = doitPinger;
 module.exports.reveiller = reveiller;
 module.exports.aChange = aChange;
