@@ -60,7 +60,14 @@ final class Sync {
     // direct de la page. Le serveur tolère 2 h de silence pendant la veille (functions/alertes.js) au lieu de 45 min.
     private static final long NIGHT_POLL_MS = 60 * 60_000;
     // La météo n'affiche qu'aujourd'hui et demain : 2 h suffisent, et seulement si elle a changé (Meteo.forecast).
-    private static final long WEATHER_MS = 2 * 3600_000;
+    /**
+     * Météo lue 2 fois par jour (demande de Tanguy, 28/10) : au premier tour du matin et 12 h plus tard
+     * (prévision du lendemain pour le soir). La réponse de MET Norway couvre 48 h heure par heure : entre
+     * deux lectures, elle est simplement rejouée chaque heure pour que « maintenant » suive la journée.
+     * Avant : toutes les 2 h ≈ 7 Mo/mois ; maintenant ≈ 1 Mo.
+     */
+    private static final long WEATHER_MS = 12 * 3600_000;
+    private int derniereHeureMeteo = -1;
     private static final long REMINDERS_MS = 6 * 3600_000;
     private static final int MAX_POSTS = 60;
     // Tablettes déjà reliées avant le choix de la ville : la météo de Saint-Martin-de-Valamas, comme avant.
@@ -1701,9 +1708,10 @@ final class Sync {
     private void refreshWeather() {
         resolvePendingCity();
         long now = System.currentTimeMillis();
-        if (now - lastWeather < WEATHER_MS) return;
-        if (nuit() && lastWeather > 0) return; // la nuit, la météo attend le matin (sauf si jamais lue)
-        if (lastWeather > 0 && Forfait.economie(context, 3)) return; // forfait SIM presque épuisé : celle gardée suffit
+        boolean aLire = now - lastWeather >= WEATHER_MS
+                && !(nuit() && lastWeather > 0) // la nuit, la météo attend le matin (sauf si jamais lue)
+                && !(lastWeather > 0 && Forfait.economie(context, 3)); // forfait SIM presque épuisé : celle gardée suffit
+        if (!aLire) { rejouerMeteo(now); return; }
         try {
             if (!Meteo.hasCity(context)) return; // pas encore de ville : pas de météo
             JSONObject weather = Meteo.forecast(http, Meteo.lat(context), Meteo.lon(context));
@@ -1715,10 +1723,32 @@ final class Sync {
             }
             // Gardée pour le prochain démarrage : l'accueil s'affiche d'un coup, météo comprise.
             prefs.edit().putString("meteoDerniere", weather.toString()).putLong("meteoDerniereA", now).apply();
+            derniereHeureMeteo = heureLocale(now);
             listener.onWeather(weather);
         } catch (Exception e) {
             Log.w(TAG, "Météo", e);
         }
+    }
+
+    /** Entre deux lectures : la prévision gardée est rejouée à chaque nouvelle heure (sans réseau). */
+    private void rejouerMeteo(long now) {
+        int heure = heureLocale(now);
+        if (heure == derniereHeureMeteo) return;
+        JSONObject weather = Meteo.rejouer();
+        if (weather == null) {
+            // Réponse gardée trop ancienne (plus d'heure proche) : relecture au prochain tour.
+            if (Meteo.lastBody != null) lastWeather = 0;
+            return;
+        }
+        derniereHeureMeteo = heure;
+        prefs.edit().putString("meteoDerniere", weather.toString()).apply();
+        listener.onWeather(weather);
+    }
+
+    private static int heureLocale(long ms) {
+        java.util.Calendar c = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("Europe/Paris"));
+        c.setTimeInMillis(ms);
+        return c.get(java.util.Calendar.HOUR_OF_DAY);
     }
 
     // ---------- Ordres de l'appli famille : families/{fid}/commands ----------

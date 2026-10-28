@@ -150,7 +150,25 @@ final class Meteo {
         lastUrl = url;
         lastDay = today;
         lastModified = r.header("Last-Modified");
+        lastBody = r.body;
         return parsed;
+    }
+
+    /** Dernière réponse complète de MET Norway (48 h heure par heure), pour rejouer la météo sans réseau. */
+    static String lastBody;
+
+    /**
+     * Météo de l'heure en cours à partir de la dernière réponse gardée (sans réseau) : la prévision du
+     * matin couvre toute la journée, il suffit de la relire pour que « maintenant » suive les heures.
+     * null si rien n'est gardé ou si la réponse ne couvre plus aujourd'hui.
+     */
+    static JSONObject rejouer() {
+        if (lastBody == null) return null;
+        try {
+            return parseForecast(lastBody);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     /** Réponse « compact » de MET Norway remise au format de la page. */
@@ -170,10 +188,17 @@ final class Meteo {
         double[] min = {999, 999};
         String[] noon = {null, null};
         int[] noonGap = {99, 99};
+        // « Maintenant » : l'heure de la série la plus proche de l'heure actuelle (la réponse du matin,
+        // relue l'après-midi, donne alors la température de l'après-midi, pas celle du matin).
+        long nowMs = System.currentTimeMillis();
+        int nowIndex = 0;
+        long nowGap = Long.MAX_VALUE;
         for (int i = 0; i < series.length(); i++) {
             JSONObject s = series.getJSONObject(i);
             java.util.Calendar t = java.util.Calendar.getInstance(paris);
             t.setTime(iso.parse(s.getString("time")));
+            long gapMs = Math.abs(t.getTimeInMillis() - nowMs);
+            if (gapMs < nowGap) { nowGap = gapMs; nowIndex = i; }
             int doy = t.get(java.util.Calendar.DAY_OF_YEAR);
             int d = doy == today ? 0 : doy == tomorrow ? 1 : -1;
             if (d < 0) continue;
@@ -187,7 +212,8 @@ final class Meteo {
             if (sym != null && gap < noonGap[d]) { noonGap[d] = gap; noon[d] = sym; }
         }
 
-        JSONObject first = series.getJSONObject(0).getJSONObject("data");
+        if (nowGap > 3 * 3600_000L) throw new java.io.IOException("Météo trop ancienne"); // plus d'heure proche : à relire
+        JSONObject first = series.getJSONObject(nowIndex).getJSONObject("data");
         String nowSym = symbol(first, "next_1_hours");
         if (nowSym == null) nowSym = symbol(first, "next_6_hours");
         double nowTemp = first.getJSONObject("instant").getJSONObject("details").optDouble("air_temperature", 0);
