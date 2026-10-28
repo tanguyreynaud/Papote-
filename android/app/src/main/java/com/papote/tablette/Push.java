@@ -129,8 +129,9 @@ public class Push extends FirebaseMessagingService {
     static final long PING_CHAQUE_MS = 24 * 3600_000;
     static final long PING_RELANCE_MS = 30 * 60_000;
 
-    static void jetonEcrit(Context c, String jeton) {
-        prefs(c).edit().putString("pushJetonEcrit", jeton).putLong("pushPingDemande", System.currentTimeMillis()).apply();
+    /** demande : heure prise AVANT l'écriture (le ping du serveur peut arriver avant la fin de l'écriture). */
+    static void jetonEcrit(Context c, String jeton, long demande) {
+        prefs(c).edit().putString("pushJetonEcrit", jeton).putLong("pushPingDemande", demande).apply();
     }
 
     /** Le contrôle quotidien est dû : Sync réécrit pingDemande (le serveur renvoie un ping). */
@@ -144,8 +145,8 @@ public class Push extends FirebaseMessagingService {
         return depuis >= (sansReponse ? PING_RELANCE_MS : PING_CHAQUE_MS);
     }
 
-    static void controleDemande(Context c) {
-        prefs(c).edit().putLong("pushPingDemande", System.currentTimeMillis()).putBoolean("pushEchecNote", false).apply();
+    static void controleDemande(Context c, long demande) {
+        prefs(c).edit().putLong("pushPingDemande", demande).putBoolean("pushEchecNote", false).apply();
     }
 
     /**

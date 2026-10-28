@@ -1936,12 +1936,15 @@ final class Sync {
                             .put("name", Firebase.docName("families/" + fid + "/members/" + firebase.uid() + "/private/push"))
                             .put("fields", fields))
                     .put("updateMask", new JSONObject().put("fieldPaths", mask));
+            // Heure de la demande prise avant l'écriture : le ping du serveur arrive parfois avant la
+            // réponse de Firestore, et passait alors pour « plus ancien que la demande » (28/10).
+            long demande = System.currentTimeMillis();
             firebase.commit(new JSONArray().put(write));
             if (jeton != null) {
-                Push.jetonEcrit(context, jeton);
+                Push.jetonEcrit(context, jeton, demande);
                 Journal.log(context, "Push : jeton écrit dans la famille, en attente du ping du serveur");
             } else {
-                Push.controleDemande(context);
+                Push.controleDemande(context, demande);
             }
         } catch (Exception e) {
             Log.w(TAG, "Push : jeton", e);
