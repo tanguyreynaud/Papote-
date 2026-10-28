@@ -129,7 +129,7 @@ final class Wifi {
         }
     }
 
-    /** {wifi: nom du réseau ou "", internet: true/false, mobile: données mobiles disponibles} */
+    /** {wifi: nom du réseau ou "", internet, mobile: données mobiles disponibles, via: wifi|mobile|autre|aucun} */
     @SuppressWarnings("deprecation")
     String status() {
         JSONObject j = new JSONObject();
@@ -147,7 +147,15 @@ final class Wifi {
                 internet = true;
                 if (caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) mobile = true;
             }
-            j.put("internet", internet).put("mobile", mobile).put("sim", hasSim());
+            // Réseau réellement utilisé : un wifi connecté mais sans internet laisse passer la carte SIM.
+            String via = "aucun";
+            NetworkCapabilities active = cm.getNetworkCapabilities(cm.getActiveNetwork());
+            if (active != null) {
+                if (active.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) via = "mobile";
+                else if (active.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) via = "wifi";
+                else via = "autre";
+            }
+            j.put("internet", internet).put("mobile", mobile).put("sim", hasSim()).put("via", via);
         } catch (Exception e) {
             Log.w(TAG, "État du réseau", e);
         }

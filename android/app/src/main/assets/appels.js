@@ -291,7 +291,9 @@ const SIM_RECEIVE_KBPS = 450;
 function onSimData() {
   try {
     const s = JSON.parse(android().wifiStatus());
-    return !s.wifi && !!s.mobile;
+    // Le réseau réellement utilisé : wifi branché sans internet + SIM qui prend le relais = forfait.
+    if (s.via) return s.via === 'mobile';
+    return !s.wifi && !!s.mobile; // ancienne app Android sans « via »
   } catch (e) {
     return false;
   }
