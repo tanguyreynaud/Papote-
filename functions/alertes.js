@@ -1,7 +1,7 @@
 // Alerte sur le téléphone des responsables quand la tablette est débranchée ou ne répond plus.
 //
 //   alertesTablettes  toutes les 5 minutes : une notification par épisode (débranchée depuis
-//                     plus de 10 min, ou silencieuse depuis plus de 45 min)
+//                     plus de 10 min, ou silencieuse depuis plus de 1 h 10)
 //   alerteMatin       chaque jour à 12h (Paris) : « {nom} n'a pas été vue ce matin » si la tablette
 //                     ne l'a ni vue (lastSeen, caméra) ni touchée (lastActive) depuis minuit
 //
@@ -18,7 +18,9 @@ const { FieldValue } = require('firebase-admin').firestore;
 const journal = require('./journal-alertes');
 
 const DEBRANCHEE_MS = 10 * 60_000;
-const SILENCE_MS = 45 * 60_000;
+// La tablette se signale toutes les 30 min sur la carte SIM (android/Sync.java, Tanguy 28/10) : deux tours
+// manqués plus une marge avant d'alerter.
+const SILENCE_MS = 70 * 60_000;
 // Pendant les heures de veille de la famille (families/{fid}.veille, 21 h-6 h 30 par défaut), la tablette ne
 // donne signe de vie qu'une fois par heure pour ménager la carte SIM (android/Sync.java, 28/10) : on
 // tolère 2 h de silence avant d'alerter.

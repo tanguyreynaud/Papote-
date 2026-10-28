@@ -284,17 +284,17 @@ test('pause hospitalisation : aucune alerte de tablette pendant la pause', async
   const { id, fid, t } = await familleAbonnee(paul);
   await premierMoisPasse(id);
   const tablette = s.db.doc(`families/${fid}/members/${t.tabletUid}`);
-  await tablette.update({ lastOnline: new Date(Date.now() - 3600e3) });
+  await tablette.update({ lastOnline: new Date(Date.now() - 3 * 3600e3) });
   s.notifications.length = 0;
   await s.tache('alertesTablettes');
-  assert.strictEqual(alertes().length, 1, 'tablette muette depuis 1 h : alerte');
+  assert.strictEqual(alertes().length, 1, 'tablette muette depuis 3 h : alerte');
   assert.match(alertes()[0].titre, /ne répond plus/);
 
   // La tablette revient, puis Mamie est hospitalisée : Tanguy met la commande en pause, la tablette reste éteinte.
   await tablette.update({ lastOnline: new Date(Date.now()) });
   await s.tache('alertesTablettes');
   await s.appeler('pauseHospitalisation', { commande: id, jusqua: Date.now() + 10 * s.JOUR }, a.TANGUY);
-  await tablette.update({ lastOnline: new Date(Date.now() - 3600e3) });
+  await tablette.update({ lastOnline: new Date(Date.now() - 3 * 3600e3) });
   s.notifications.length = 0;
   await s.tache('alertesTablettes');
   assert.strictEqual(alertes().length, 0, 'en pause : rien');
