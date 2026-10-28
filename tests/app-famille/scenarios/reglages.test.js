@@ -48,13 +48,23 @@ test('Réglages de la tablette : nom, options et radio, volume, nuit, météo, p
   assert.deepStrictEqual([options.radio.active, options.radio.nom], [true, 'FIP']);
   assert.match(await julie.page.locator('#options-value').innerText(), /FIP/);
 
-  // Volume.
+  // Volumes : sonnerie, vidéos et messages lus. Chaque barre lâchée fait sonner ou parler la tablette.
   await modifier(julie, 'volume-card');
+  await julie.page.locator('#volume-sonnerie').fill('70');
+  await julie.page.locator('#volume-status', { hasText: 'La tablette sonne à 70 %' }).waitFor();
   await julie.page.locator('#volume').fill('50');
+  await julie.page.locator('#volume-status', { hasText: 'La tablette parle à 50 %' }).waitFor();
+  const essais = await g.attendreBase(async () => {
+    const c = (await g.liste(`families/${fid}/commands`)).filter((d) => d.type === 'son');
+    return c.length >= 2 && c;
+  }, 'essais du son');
+  assert.ok(essais.some((c) => c.quoi === 'sonnerie' && c.volume === 70));
+  assert.ok(essais.some((c) => c.quoi === 'voix' && c.volume === 50));
   await enregistrer(julie, 'volume-card');
-  await g.toast(julie, 'Volume envoyé');
-  assert.strictEqual((await g.lire(`families/${fid}`)).volume, 50);
-  await julie.page.locator('#volume-text', { hasText: '50 %' }).waitFor();
+  await g.toast(julie, 'Volumes envoyés');
+  const fam = await g.lire(`families/${fid}`);
+  assert.deepStrictEqual([fam.volume, fam.volumeSonnerie], [50, 70]);
+  await julie.page.locator('#volume-text', { hasText: 'Sonnerie 70 % · Vidéos et messages 50 %' }).waitFor();
 
   // Nuit : mêmes heures refusées, puis de 22 h à 8 h.
   await modifier(julie, 'sleep-card');

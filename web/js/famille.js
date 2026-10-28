@@ -3294,19 +3294,53 @@ SETTINGS['options-card'] = {
   },
 };
 
-// Volume : families/{fid}.volume (0 à 100), appliqué au son des vidéos et des appels.
+// Volumes : families/{fid}.volume (vidéos, messages lus, radio) et volumeSonnerie (appels qui arrivent),
+// de 10 à 100. La voix pendant les appels est toujours au plus fort (tablette 2.99.85).
 const volumeActuel = () => (Number.isInteger(session.family.volume) ? session.family.volume : 80);
+const sonnerieActuelle = () => (Number.isInteger(session.family.volumeSonnerie) ? session.family.volumeSonnerie : 100);
 
-function renderVolume() { $('volume-text').textContent = `${volumeActuel()} %`; }
+function renderVolume() {
+  $('volume-text').textContent = `Sonnerie ${sonnerieActuelle()} % · Vidéos et messages ${volumeActuel()} %`;
+}
 
-$('volume').addEventListener('input', () => { $('volume-value').textContent = `${$('volume').value} %`; });
+function syncVolumes() {
+  $('volume-sonnerie-val').textContent = `${$('volume-sonnerie').value} %`;
+  $('volume-value').textContent = `${$('volume').value} %`;
+}
+
+// Écouter : la tablette sonne ou parle au niveau de la barre (même commande « son » qu'à l'installation),
+// puis reprend d'elle-même le niveau enregistré si on n'enregistre pas. Envoyée à chaque compte de la
+// tablette : seul celui des appels l'écoute.
+async function ecouterVolume(quoi) {
+  const status = (t) => { $('volume-status').textContent = t; $('volume-status').hidden = !t; };
+  if (!tabletMembers.length) { status('Aucune tablette dans la famille pour le moment.'); return; }
+  const volume = Number($(quoi === 'sonnerie' ? 'volume-sonnerie' : 'volume').value);
+  const data = {
+    type: 'son', quoi, volume, createdBy: session.uid, createdAt: serverTimestamp(), state: 'pending',
+  };
+  if (quoi === 'voix') data.parle = `Bonjour ${session.family.name}, c'est ${session.member.name}. Vous m'entendez bien ?`.slice(0, 200);
+  try {
+    await Promise.all(tabletMembers.map((t) => setDoc(doc(collection(db, 'families', session.fid, 'commands')), { ...data, target: t.id })));
+    status(quoi === 'sonnerie' ? `La tablette sonne à ${volume} %.` : `La tablette parle à ${volume} %.`);
+  } catch (err) {
+    console.error(err);
+    status('La tablette n\'a pas pu être prévenue. Vérifiez la connexion internet.');
+  }
+}
+$('volume-sonnerie').addEventListener('input', syncVolumes);
+$('volume').addEventListener('input', syncVolumes);
+$('volume-sonnerie').addEventListener('change', () => ecouterVolume('sonnerie'));
+$('volume').addEventListener('change', () => ecouterVolume('voix'));
+document.querySelectorAll('.volume-essai').forEach((b) => b.addEventListener('click', () => ecouterVolume(b.dataset.essai)));
 SETTINGS['volume-card'] = {
   fill() {
     $('volume').value = String(volumeActuel());
-    $('volume-value').textContent = `${volumeActuel()} %`;
+    $('volume-sonnerie').value = String(sonnerieActuelle());
+    syncVolumes();
+    $('volume-status').hidden = true;
   },
   async save() {
-    await saveFamily({ volume: Number($('volume').value) }, 'Volume envoyé à la tablette');
+    await saveFamily({ volume: Number($('volume').value), volumeSonnerie: Number($('volume-sonnerie').value) }, 'Volumes envoyés à la tablette');
     return true;
   },
 };
@@ -4290,7 +4324,7 @@ $('setup-voix').addEventListener('input', syncSon);
 // Barre lâchée : on refait l'essai tout de suite, au nouveau volume.
 $('setup-sonnerie').addEventListener('change', () => essaiSon('sonnerie'));
 $('setup-voix').addEventListener('change', () => essaiSon('voix'));
-document.querySelectorAll('.setup-essai').forEach((b) => b.addEventListener('click', () => essaiSon(b.dataset.essai)));
+document.querySelectorAll('.setup-essai:not(.volume-essai)').forEach((b) => b.addEventListener('click', () => essaiSon(b.dataset.essai)));
 
 $('setup-son-ok').addEventListener('click', async () => {
   const btn = $('setup-son-ok');
