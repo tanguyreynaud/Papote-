@@ -55,6 +55,9 @@ final class Sync {
     // 20 min, pour que le serveur voie la tablette au moins toutes les 45 min (alerte « ne répond plus »)
     // même si un tour manque.
     private static final long REALTIME_POLL_MS = 20 * 60_000;
+    // Réveil par le serveur vérifié (Push.pret) : chaque changement réveille la tablette, le tour et le
+    // signal « en ligne » passent à 30 min (Tanguy, 28/10 ; le serveur alerte à 1 h 10 sans signal).
+    private static final long PUSH_POLL_MS = 30 * 60_000;
     // La nuit (heures de veille de la famille, 21 h-6 h 30 par défaut) : un tour par heure seulement, et ni météo,
     // ni rappels, ni proches relus (Tanguy, 28/10). Les appels et les envois arrivent toujours par l'écoute en
     // direct de la page. Le serveur tolère 2 h de silence pendant la veille (functions/alertes.js) au lieu de 45 min.
@@ -393,7 +396,7 @@ final class Sync {
             // prévient du retour d'internet (watchNetwork) ; un essai par minute reste en secours.
             boolean offline = "offline".equals(lastState);
             handler.postDelayed(this, pairingActive() ? 4_000
-                    : realtime ? (offline ? 60_000 : nuit() ? Math.min(NIGHT_POLL_MS, msAvantLeJour()) : REALTIME_POLL_MS) : POLL_MS);
+                    : realtime ? (offline ? 60_000 : nuit() ? Math.min(NIGHT_POLL_MS, msAvantLeJour()) : tourDuJour()) : POLL_MS);
         }
     };
 
@@ -968,6 +971,11 @@ final class Sync {
     private final java.util.Map<String, Long> lastHeartbeat = new java.util.HashMap<>();
     private static final long HEARTBEAT_MS = 20 * 60_000;
 
+    /** Écart entre deux tours (et deux signaux « en ligne ») le jour, page à l'écoute. */
+    private long tourDuJour() {
+        return Push.pret(context) ? PUSH_POLL_MS : REALTIME_POLL_MS;
+    }
+
     /** Note sur la fiche de la tablette qu'elle est en ligne, ou que Mamie l'a touchée. */
     private void heartbeat(String fid, String field) {
         long now = System.currentTimeMillis();
@@ -975,7 +983,7 @@ final class Sync {
         // « En ligne » toutes les 10 min ; « vue » et « touchée » à la minute près, pour que la famille
         // voie tout de suite que Mamie a regardé (écritures rares : seulement quand elle est là).
         // Petite marge : le tour de synchronisation arrive quelques millisecondes après le précédent.
-        long every = "lastOnline".equals(field) ? (nuit() ? NIGHT_POLL_MS : HEARTBEAT_MS) - 60_000 : 60_000;
+        long every = "lastOnline".equals(field) ? (nuit() ? NIGHT_POLL_MS : Push.pret(context) ? PUSH_POLL_MS : HEARTBEAT_MS) - 60_000 : 60_000;
         if (fid == null || (last != null && now - last < every)) return;
         boolean enLigne = "lastOnline".equals(field);
         try {
