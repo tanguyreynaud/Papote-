@@ -1723,7 +1723,7 @@ function carteRecharges(l, modif, vue) {
     h('p', { class: 'muted small' }, l.renouvellementAuto
       ? 'Les factures de l\'opérateur envoyées à factures@mapapote.fr se rangent ici toutes seules. Sans facture 2 jours après la fin du forfait, une alerte s\'affiche.'
       : 'Rappel 3 jours avant la fin du forfait. Une facture envoyée à factures@mapapote.fr se range aussi ici toute seule.',
-      ' La tablette reçoit le forfait (Go notés plus haut, 1 Go sinon) et la date de recharge : à 60 % elle réduit l\'image des appels, à 85 % elle les passe sans image, à 95 % les vidéos attendent le Wi-Fi.'),
+      ' La tablette reçoit le forfait (Go notés plus haut, 1 Go sinon) et la date de recharge : à 70 % elle réduit l\'image des appels, à 88 % elle les passe sans image, à 95 % les vidéos attendent le Wi-Fi.'),
     recharges.length ? h('div', { class: 'table' }, tableRecharges(recharges)) : h('p', { class: 'muted small' }, 'Aucune recharge notée.'));
 }
 // Garde-fou du forfait vu par la tablette (Forfait.java) : Mo passés par la carte depuis le début du pass,

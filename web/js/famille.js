@@ -3539,7 +3539,7 @@ function texteForfait(f, name) {
   const debut = `Le forfait internet de la tablette de ${name} est utilisé à ${Math.min(f.pourCent, 100)} %`;
   if (f.niveau >= 3) return `${debut} : jusqu'à sa recharge, les appels passent sans image et les vidéos attendent le Wi-Fi. Photos et messages passent toujours.`;
   if (f.niveau >= 2) return `${debut} : les appels passent sans image jusqu'à sa recharge. Photos et messages passent toujours.`;
-  return `${debut} : les appels vidéo sont en image réduite jusqu'à sa recharge.`;
+  return `${debut} : les appels vidéo sont en image réduite jusqu'à sa recharge, et passeront sans image à 88 %. Photos et messages passent toujours.`;
 }
 
 function renderTabletChip() {

@@ -32,11 +32,11 @@ const REGLAGES_VIDEO = {
   sim: { maxBitrate: 500_000, maxFramerate: 15, scaleResolutionDownBy: 1.5 },
   wifi: { maxBitrate: 1_200_000, maxFramerate: 20, scaleResolutionDownBy: 1 },
   inconnu: { maxBitrate: 500_000, maxFramerate: 20, scaleResolutionDownBy: 1 },
-  // Forfait de la tablette à 60 % (« regime » eco, écrit par elle) : elle ne demande plus que 150 kbit/s.
+  // Forfait de la tablette à 70 % (« regime » eco, écrit par elle) : elle ne demande plus que 150 kbit/s.
   eco: { maxBitrate: 150_000, maxFramerate: 10, scaleResolutionDownBy: 2 },
 };
 const reseauTablette = new WeakMap(); // pc -> 'sim' | 'wifi'
-// Garde-fou du forfait de la tablette (Forfait.java) : 'eco' (60 %, image réduite) ou 'audio' (85 %, sans image).
+// Garde-fou du forfait de la tablette (Forfait.java) : 'eco' (70 %, image réduite) ou 'audio' (88 %, sans image).
 const regimeTablette = new WeakMap(); // pc -> 'eco' | 'audio'
 function telephoneEnDonneesMobiles() {
   const c = navigator.connection;
