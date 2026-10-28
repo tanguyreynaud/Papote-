@@ -58,12 +58,14 @@ async function limiterVideo(pc) {
 }
 // Réseau de la tablette, écrit par elle dans sa réponse (appel du proche) ou dans son offre (appel de
 // Mamie) : on règle de nouveau la vidéo s'il change.
-function noterReseau(pc, data) {
+// ui.onReseau(reseau) prévient l'écran d'appel (bandeau du forfait de la tablette).
+function noterReseau(pc, data, ui) {
   const reseau = [data && data.answer && data.answer.reseau, data && data.offer && data.offer.reseau]
     .find((r) => r === 'sim' || r === 'wifi');
   if (!reseau || reseauTablette.get(pc) === reseau) return;
   reseauTablette.set(pc, reseau);
   limiterVideo(pc);
+  if (ui && ui.onReseau) ui.onReseau(reseau);
 }
 function limiterALaConnexion(pc) {
   pc.addEventListener('connectionstatechange', () => {
@@ -225,6 +227,7 @@ export function watchTabletBusy(fid, onChange) {
  *   ui.local / ui.remote : éléments <video>
  *   ui.onState(state)    : 'ringing' | 'accepted' | 'connected'
  *   ui.onEnd(reason)     : 'ended' | 'declined' | 'missed' | 'failed'
+ *   ui.onReseau(reseau)  : réseau de la tablette, 'sim' ou 'wifi' (quand elle le donne)
  *   ui.signal            : AbortSignal ; « Raccrocher » avant la fin du démarrage annule tout
  * Renvoie { hangup() }, ou lève une AbortError si l'appel a été annulé pendant le démarrage.
  */
@@ -301,7 +304,7 @@ export async function startCall(fid, caller, ui) {
   stops.push(onSnapshot(callRef, async (snap) => {
     const data = snap.data();
     if (!data) return;
-    noterReseau(pc, data);
+    noterReseau(pc, data, ui);
     if (data.answer && !answered) {
       answered = true;
       clearTimeout(ringTimer);
@@ -435,7 +438,7 @@ export async function answerIncoming(fid, callId, me, ui) {
   };
 
   try {
-    noterReseau(pc, first);
+    noterReseau(pc, first, ui);
     await pc.setRemoteDescription(first.offer);
     // La tablette prévoit une voie vidéo vide : on l'accepte dans les deux sens pour pouvoir
     // allumer la caméra plus tard sans renégocier.
@@ -464,7 +467,7 @@ export async function answerIncoming(fid, callId, me, ui) {
     });
   }));
   stops.push(onSnapshot(ref, (snap) => {
-    noterReseau(pc, snap.data());
+    noterReseau(pc, snap.data(), ui);
     const state = snap.data() && snap.data().state;
     if (['ended', 'missed', 'declined'].includes(state)) finish('ended', null);
   }));
