@@ -217,3 +217,60 @@ test('forfait SIM à 85 % mais tablette en Wi-Fi : rien ne change, visio pleine 
     assert.ok(!appel.answer.sdp.includes('b=AS:'), 'réception sans plafond');
   } finally { await b.fermer(); }
 });
+
+// Réveil par le serveur (Push.java, functions/reveil.js) : pushReady() vrai = aucune écoute ouverte.
+const ecoutes = (b) => b.page.evaluate(() => window.__fs.ecoutes.size);
+
+test('réveil par le serveur : aucune écoute ouverte ; un push « appel » fait sonner, l\'appelant qui raccroche arrête la sonnerie', async () => {
+  const b = await ouvrir('2026-10-26T10:00:00', { ...FAMILLE, push: true });
+  try {
+    await b.android('onPosts', lot([]));
+    await b.avancer(3000);
+    assert.strictEqual(await ecoutes(b), 0, 'pas d\'écoute Firestore ouverte');
+    await appelEntrant(b, 'c1');
+    await b.avancer(2000);
+    assert.ok(!(await b.visible('#call-ring')), 'sans réveil, la tablette ne sait rien de l\'appel');
+    await b.page.evaluate(() => window.Papote.onPush({ type: 'appel', id: 'c1' }));
+    await b.avancer(500);
+    assert.ok(await b.visible('#call-ring'), 'le réveil fait sonner');
+    assert.strictEqual(await ecoutes(b), 1, 'cet appel-là est suivi le temps de la sonnerie');
+    const appel = await b.lire('families/F1/calls/c1');
+    await b.ecrire('families/F1/calls/c1', { ...appel, state: 'ended' });
+    await b.avancer(500);
+    assert.ok(!(await b.visible('#call-ring')), 'l\'appelant a raccroché : plus de sonnerie');
+    assert.strictEqual(await ecoutes(b), 0, 'et plus rien d\'ouvert');
+  } finally { await b.fermer(); }
+});
+
+test('réveil par le serveur : un push « ordre » joue le test du son demandé', async () => {
+  const b = await ouvrir('2026-10-26T10:00:00', { ...FAMILLE, push: true });
+  try {
+    await b.android('onPosts', lot([]));
+    await b.avancer(3000);
+    const moi = await b.page.evaluate(() => window.__fs.lire(`families/F1/members/${'appels-tablette-appels-essai'}`) && 'appels-tablette-appels-essai');
+    await b.ecrire('families/F1/commands/o1', { type: 'son', quoi: 'sonnerie', volume: 70, target: moi, state: 'pending', createdAt: { __serverTimestamp: true } });
+    await b.avancer(2000);
+    assert.strictEqual((await b.appels('testSon')).length, 0, 'rien sans réveil');
+    await b.page.evaluate(() => window.Papote.onPush({ type: 'ordre', id: 'o1' }));
+    await b.avancer(500);
+    assert.deepStrictEqual((await b.appels('testSon')).map((a) => a.args.slice(0, 2)), [['sonnerie', 70]]);
+    assert.strictEqual((await b.lire('families/F1/commands/o1')).state, 'done');
+    await b.page.evaluate(() => window.Papote.onPush({ type: 'ordre', id: 'o1' }));
+    await b.avancer(500);
+    assert.strictEqual((await b.appels('testSon')).length, 1, 'un ordre déjà fait n\'est pas rejoué');
+  } finally { await b.fermer(); }
+});
+
+test('jeton push écrit après le démarrage : les écoutes se ferment toutes seules', async () => {
+  const b = await tablette();
+  try {
+    assert.ok((await ecoutes(b)) >= 3, 'écoutes en direct au départ (appels, famille, ordres, version)');
+    await b.etat({ push: true });
+    await b.avancer(16_000);
+    assert.strictEqual(await ecoutes(b), 0, 'réveil par le serveur disponible : plus d\'écoute');
+    await appelEntrant(b, 'c1');
+    await b.page.evaluate(() => window.Papote.onPush({ type: 'appel', id: 'c1' }));
+    await b.avancer(500);
+    assert.ok(await b.visible('#call-ring'));
+  } finally { await b.fermer(); }
+});

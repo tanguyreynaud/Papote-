@@ -297,6 +297,7 @@ final class Sync {
         photosGardees.clear();
         prefs.edit().remove("photosGardees").apply();
         prefs.edit().remove("ecrituresEnAttente").apply(); // écritures pour l'ancienne famille
+        prefs.edit().remove("pushJetonEcrit").apply(); // le jeton push sera réécrit dans la nouvelle famille
         lastRemindersJson = null;
         lastFamilyJson = null;
     }
@@ -377,6 +378,7 @@ final class Sync {
                 syncPosts();
                 syncReminders();
                 syncFamilyExtras();
+                ecrireJetonPush();
             } catch (Exception e) {
                 Log.w(TAG, "Synchronisation", e);
             }
@@ -1877,6 +1879,30 @@ final class Sync {
         } catch (Exception e) {
             Log.w(TAG, "Carte SIM", e);
             return null;
+        }
+    }
+
+    /**
+     * Jeton push de la tablette (Push) écrit une fois dans families/{fid}/members/{uid}/private/push
+     * = { tablette: [jeton] } : le serveur (functions/reveil.js) s'en sert pour la réveiller.
+     */
+    private void ecrireJetonPush() {
+        String fid = prefs.getString("fid", null);
+        String jeton = Push.jetonAEcrire(context);
+        if (fid == null || jeton == null) return;
+        try {
+            JSONObject fields = new JSONObject().put("tablette", new JSONObject().put("arrayValue",
+                    new JSONObject().put("values", new JSONArray().put(Firebase.string(jeton)))));
+            JSONObject write = new JSONObject()
+                    .put("update", new JSONObject()
+                            .put("name", Firebase.docName("families/" + fid + "/members/" + firebase.uid() + "/private/push"))
+                            .put("fields", fields))
+                    .put("updateMask", new JSONObject().put("fieldPaths", new JSONArray().put("tablette")));
+            firebase.commit(new JSONArray().put(write));
+            Push.jetonEcrit(context, jeton);
+            Journal.log(context, "Push : jeton écrit dans la famille, réveil par le serveur actif");
+        } catch (Exception e) {
+            Log.w(TAG, "Push : jeton", e);
         }
     }
 

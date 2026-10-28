@@ -59,6 +59,8 @@ public class MainActivity extends Activity implements Sync.Listener {
     private WebView web;
     private SharedPreferences prefs;
     private Sync sync;
+    /** L'activité à l'écran (la tablette n'en a qu'une), pour les réveils du serveur (Push). */
+    private static volatile MainActivity courante;
     private CallAudio callAudio;
     /** Luminosité le soir (0 à 1) ; vrai pendant les heures du soir. */
     private static final float EVENING_BRIGHTNESS = 0.55f;
@@ -76,6 +78,7 @@ public class MainActivity extends Activity implements Sync.Listener {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         prefs = getSharedPreferences("papote", MODE_PRIVATE);
+        courante = this;
         Journal.catchCrashes(this);
         Journal.log(this, "Démarrage de Papote " + appVersionName());
 
@@ -204,6 +207,7 @@ public class MainActivity extends Activity implements Sync.Listener {
         sync.start();
         Updater.cleanup(this);
         handler.postDelayed(updateCheck, 60_000);
+        Push.demarrer(this);
         new Thread(() -> AppCheck.current(getApplicationContext()), "papote-appcheck").start();
     }
 
@@ -583,6 +587,12 @@ public class MainActivity extends Activity implements Sync.Listener {
         }
 
         /** Garde-fou du forfait SIM (Forfait) : {plafondMo, consoMo, niveau, sim, cycleDebut}. */
+        /** Le serveur réveille la tablette (Push) : la page n'a plus besoin d'écoute ouverte. */
+        @JavascriptInterface
+        public boolean pushReady() {
+            return Push.pret(MainActivity.this);
+        }
+
         @JavascriptInterface
         public String simBudget() {
             return Forfait.etat(MainActivity.this).toString();
@@ -650,6 +660,29 @@ public class MainActivity extends Activity implements Sync.Listener {
         public void inCall(boolean on) {
             handler.post(() -> callAudio.inCall(on));
         }
+    }
+
+    /** Réveil par le serveur (Push.onMessageReceived) ou nouveau jeton à écrire. */
+    static void surPush(String type, String id) {
+        MainActivity a = courante;
+        if (a == null) return;
+        a.handler.post(() -> {
+            if (a.sync == null) return;
+            switch (type) {
+                case "famille":
+                case "jeton":
+                    a.sync.poke();
+                    break;
+                case "version":
+                    a.handler.removeCallbacks(a.updateCheck);
+                    a.handler.postDelayed(a.updateCheck, 5_000 + (long) (Math.random() * 60_000));
+                    break;
+                default: // appel, ordre : la page relit
+                    try {
+                        a.callPage("onPush", new JSONObject().put("type", type).put("id", id == null ? JSONObject.NULL : id));
+                    } catch (JSONException ignored) { }
+            }
+        });
     }
 
     private void callPage(final String function, final JSONObject payload) {
@@ -1183,6 +1216,7 @@ public class MainActivity extends Activity implements Sync.Listener {
 
     @Override
     protected void onDestroy() {
+        if (courante == this) courante = null;
         if (tts != null) { try { tts.shutdown(); } catch (Exception ignored) { } }
         try { unregisterReceiver(screenOff); } catch (Exception ignored) { }
         try { unregisterReceiver(powerChange); } catch (Exception ignored) { }

@@ -99,6 +99,16 @@
             android:name=".UpdateResult"
             android:exported="false" />
 
+        <!-- Réveil par le serveur (functions/reveil.js) : un proche appelle, un envoi, un test du son,
+             une nouvelle version. Sans google-services.json, le service ne reçoit rien (pas de compte Firebase). -->
+        <service
+            android:name=".Push"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
         <receiver
             android:name=".BootReceiver"
             android:directBootAware="true"
