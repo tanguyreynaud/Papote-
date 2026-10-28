@@ -1411,3 +1411,12 @@ a { text-decoration: none; }
 /* Annuler ma commande / Résilier : un lien gris discret en bas de la carte, pas un bouton mis en avant. */
 .abo-sortie { display: inline-block; width: auto; min-height: 0; margin-top: 10px; padding: 4px 0; font-size: 14px; font-weight: 600; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; }
 .abo-sortie-info { margin: 14px 0 0; font-size: 13px; line-height: 1.45; }
+.factures { list-style: none; margin: 4px 0 0; padding: 0; }
+.factures li { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); }
+.factures li:first-child { border-top: 0; }
+.facture-quand { flex: 1; min-width: 0; }
+.facture-quand small { display: block; color: var(--muted); font-size: 13px; }
+.facture-montant { font-weight: 700; }
+.facture-lien { color: var(--accent); font-weight: 700; text-decoration: none; padding: 6px 0; }
+#view-abonnement .abo-sortie { margin-left: 4px; }
+#view-abonnement .abo-sortie-info { margin: 18px 4px 0; }

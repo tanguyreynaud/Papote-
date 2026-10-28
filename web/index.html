@@ -752,6 +752,31 @@
       </div>
     </section>
 
+    <!-- Abonnement et paiement : depuis Profil, « Gérer le paiement et les factures » (Tanguy, 28/10) -->
+    <section id="view-abonnement" class="page" hidden>
+      <header class="page-head">
+        <button type="button" class="icon-btn back" aria-label="Retour"><svg><use href="#i-back"/></svg></button>
+        <h1>Abonnement et paiement</h1>
+      </header>
+      <div class="page-pad">
+        <div class="card">
+          <h2>Moyen de paiement</h2>
+          <p class="muted small">Carte bancaire ou compte pour le prélèvement, à changer sur la page sécurisée de Stripe.</p>
+          <button type="button" id="btn-portail-page" class="secondary wide">Changer de moyen de paiement</button>
+        </div>
+        <div class="card">
+          <h2>Factures</h2>
+          <p id="factures-chargement" class="muted small"><span class="spinner-inline"></span>Chargement…</p>
+          <ul id="factures-liste" class="factures"></ul>
+          <p id="factures-vide" class="muted small" hidden>Aucune facture pour l'instant.</p>
+        </div>
+        <p id="abo-page-error" class="error" hidden></p>
+        <p id="retract-info" class="muted abo-sortie-info" hidden></p>
+        <button type="button" id="btn-retracter" class="link abo-sortie" hidden>Annuler ma commande</button>
+        <button type="button" id="btn-resilier" class="link abo-sortie" hidden>Résilier l'abonnement</button>
+      </div>
+    </section>
+
     <!-- Profil : pour chaque membre -->
     <section id="view-profile" class="page tab-page" hidden>
       <header class="page-head"><h1>Profil</h1></header>
@@ -820,11 +845,9 @@
           <p id="abo-status" class="abo-status"></p>
           <p id="abo-details" class="muted small"></p>
           <p id="abo-readonly" class="muted small" hidden>Seuls les responsables de la famille peuvent changer ou résilier l'abonnement.</p>
-          <button type="button" id="btn-portail" class="secondary wide" hidden>Gérer le paiement et les factures</button>
+          <button type="button" id="btn-portail" class="primary wide" hidden>Régler le paiement</button>
+          <button type="button" id="btn-abo-page" class="secondary wide" hidden>Gérer le paiement et les factures</button>
           <button type="button" id="btn-garder" class="primary wide" hidden>Garder mon abonnement</button>
-          <p id="retract-info" class="muted abo-sortie-info" hidden></p>
-          <button type="button" id="btn-retracter" class="link abo-sortie" hidden>Annuler ma commande</button>
-          <button type="button" id="btn-resilier" class="link abo-sortie" hidden>Résilier l'abonnement</button>
           <div id="retour-box" class="abo-retour" hidden>
             <p id="retour-text" class="abo-retour-title"></p>
             <a id="retour-etiquette" class="primary wide" target="_blank" rel="noopener" hidden>Imprimer l'étiquette</a>

@@ -53,6 +53,11 @@ export function resilier(fid) {
   return call('resilierAbonnement', { fid });
 }
 
+/** Factures de la famille, les plus récentes d'abord : [{ id, numero, le, montant, statut: 'payee'|'a-payer', pdf, page }]. */
+export async function facturesFamille(fid) {
+  return (await call('facturesFamille', { fid }))?.factures || [];
+}
+
 /** Fin de contrat : délai de rétractation, tablette à rendre, remboursement (voir functions/). */
 export function finDeContrat(fid) {
   return call('finDeContrat', { fid });

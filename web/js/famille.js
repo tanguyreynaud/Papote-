@@ -17,7 +17,7 @@ import { askConfirm, confirmerAvecCroix, notice, avantDePartir, chooseAction } f
 import { showGuideOnce } from './guide.js';
 import {
   abonnementOk, FORMULES, LIBELLES, ouvrirPortail, payer, rattacherCommande, resilier, annulerResiliation,
-  finDeContrat, retracter, inviterParEmail, reserverTablette, nommerFamille, finirInstallation,
+  finDeContrat, facturesFamille, retracter, inviterParEmail, reserverTablette, nommerFamille, finirInstallation,
   annulerInstallation,
 } from './abonnement.js';
 import { startCall, watchTabletBusy, watchIncomingCalls, answerIncoming, warmUpCalls, declineIncoming, reportCallIncident } from './appel.js';
@@ -45,7 +45,7 @@ let stopMembers = null;
 let stopTabletBusy = null;
 let stopIncoming = null;
 
-const VIEWS = ['view-moi', 'view-sans-abo', 'view-invite', 'view-profile', 'view-pair', 'view-setup', 'loading', 'view-login', 'view-link-email', 'view-invited', 'view-pending', 'view-join', 'view-home', 'view-photos', 'view-videos', 'view-messages', 'view-agenda', 'view-settings', 'view-notifs', 'view-support'];
+const VIEWS = ['view-moi', 'view-sans-abo', 'view-invite', 'view-abonnement', 'view-profile', 'view-pair', 'view-setup', 'loading', 'view-login', 'view-link-email', 'view-invited', 'view-pending', 'view-join', 'view-home', 'view-photos', 'view-videos', 'view-messages', 'view-agenda', 'view-settings', 'view-notifs', 'view-support'];
 
 function show(view) {
   for (const id of VIEWS) $(id).hidden = id !== view;
@@ -156,6 +156,7 @@ const PAGES = {
   pair: () => { resetPairing(); return () => { stopPair?.(); stopPair = null; }; },
   settings: () => { renderSettings(); return null; },
   invite: () => { renderSettings(); return null; },
+  abonnement: () => { renderFactures(); return null; },
 };
 
 // onglet : ouverte depuis la barre du bas (Photos, Messages) : la barre reste, sans flèche retour.
@@ -240,6 +241,15 @@ window.addEventListener('popstate', (e) => {
   if (!$('viewer').hidden || !$('sheet-post').hidden || !$('sheet-reminder').hidden || !$('sheet-wifi').hidden) {
     closeSheets();
     closeViewer();
+    return;
+  }
+  // Retour vers un onglet (Profil, depuis « Abonnement et paiement ») : on y revient, à la même carte.
+  if (e.state?.onglet === 'profile' && session) {
+    stopPage?.();
+    stopPage = null;
+    page = null;
+    show('view-profile');
+    if (e.state.carte) $(e.state.carte).scrollIntoView({ block: 'start' });
     return;
   }
   const next = e.state?.page;
@@ -2502,35 +2512,82 @@ function paused() {
 }
 
 async function withAboError(fn) {
+  // Sur la page « Abonnement et paiement », l'erreur s'affiche sur cette page.
+  const zone = $(page === 'abonnement' ? 'abo-page-error' : 'abo-error');
   $('abo-error').hidden = true;
+  $('abo-page-error').hidden = true;
   try {
     await fn();
   } catch (err) {
     console.error(err);
-    $('abo-error').textContent = err.code === 'functions/not-found'
+    zone.textContent = err.code === 'functions/not-found'
       ? `Aucun paiement trouvé pour ${myEmail()}. Utilisez la même adresse que sur le site.`
       : "L'opération n'a pas pu aboutir. Réessayez dans un instant.";
-    $('abo-error').hidden = false;
+    zone.hidden = false;
   }
 }
 
 // La page Stripe met quelques secondes à s'ouvrir : le bouton le montre tout de suite.
-$('btn-portail').addEventListener('click', async () => {
-  const b = $('btn-portail');
-  if (b.disabled) return;
-  const texte = b.textContent;
-  b.disabled = true;
-  b.replaceChildren(Object.assign(document.createElement('span'), { className: 'spinner-inline' }), 'Ouverture…');
-  await withAboError(() => ouvrirPortail(session.fid));
-  // En cas d'erreur, le bouton redevient normal ; sinon il garde « Ouverture… » jusqu'à Stripe.
-  if (!$('abo-error').hidden) { b.disabled = false; b.textContent = texte; }
-});
-// Retour arrière depuis Stripe (page gardée en cache) : le bouton redevient normal.
+// Page sécurisée de Stripe (régler un retard, changer de carte ou de compte).
+const TEXTES_PORTAIL = { 'btn-portail': 'Régler le paiement', 'btn-portail-page': 'Changer de moyen de paiement' };
+for (const [id, texte] of Object.entries(TEXTES_PORTAIL)) {
+  $(id).addEventListener('click', async () => {
+    const b = $(id);
+    if (b.disabled) return;
+    b.disabled = true;
+    b.replaceChildren(Object.assign(document.createElement('span'), { className: 'spinner-inline' }), 'Ouverture…');
+    await withAboError(() => ouvrirPortail(session.fid));
+    // En cas d'erreur, le bouton redevient normal ; sinon il garde « Ouverture… » jusqu'à Stripe.
+    if (!$('abo-error').hidden || !$('abo-page-error').hidden) { b.disabled = false; b.textContent = texte; }
+  });
+}
+// Retour arrière depuis Stripe (page gardée en cache) : les boutons redeviennent normaux.
 window.addEventListener('pageshow', (e) => {
   if (!e.persisted) return;
-  $('btn-portail').disabled = false;
-  $('btn-portail').textContent = 'Gérer le paiement et les factures';
+  for (const [id, texte] of Object.entries(TEXTES_PORTAIL)) { $(id).disabled = false; $(id).textContent = texte; }
 });
+$('btn-abo-page').addEventListener('click', () => {
+  // Le Profil n'a pas d'entrée d'historique à lui : « retour » doit y ramener, pas à l'accueil.
+  history.replaceState({ onglet: 'profile', carte: 'abo-card' }, '');
+  openPage('abonnement');
+});
+
+// Factures de la famille, avec leur PDF (page « Abonnement et paiement »).
+async function renderFactures() {
+  const liste = $('factures-liste');
+  liste.replaceChildren();
+  $('factures-vide').hidden = true;
+  $('factures-chargement').hidden = false;
+  $('abo-page-error').hidden = true;
+  let factures = [];
+  try {
+    factures = await facturesFamille(session.fid);
+  } catch (err) {
+    console.warn('Factures illisibles', err);
+    $('factures-chargement').hidden = true;
+    $('factures-vide').textContent = 'Les factures n\u2019ont pas pu être chargées. Réessayez dans un instant.';
+    $('factures-vide').hidden = false;
+    return;
+  }
+  $('factures-chargement').hidden = true;
+  $('factures-vide').textContent = 'Aucune facture pour l\u2019instant.';
+  $('factures-vide').hidden = factures.length > 0;
+  for (const f of factures) {
+    const li = document.createElement('li');
+    const quand = Object.assign(document.createElement('span'), { className: 'facture-quand', textContent: jourMois(f.le) });
+    if (f.statut === 'a-payer') quand.append(Object.assign(document.createElement('small'), { textContent: 'À régler' }));
+    else if (f.numero) quand.append(Object.assign(document.createElement('small'), { textContent: `Facture ${f.numero}` }));
+    li.append(quand, Object.assign(document.createElement('span'), { className: 'facture-montant', textContent: euros(f.montant || 0) }));
+    const lien = f.statut === 'a-payer' ? f.page : (f.pdf || f.page);
+    if (lien) {
+      li.append(Object.assign(document.createElement('a'), {
+        className: 'facture-lien', href: lien, target: '_blank', rel: 'noopener',
+        textContent: f.statut === 'a-payer' ? 'Régler' : 'Télécharger',
+      }));
+    }
+    liste.append(li);
+  }
+}
 // Commande payée sur le site : le propriétaire la relie avec son code, ou avec l'e-mail du compte.
 document.querySelectorAll('[data-order-form]').forEach((form) => form.addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -2775,7 +2832,7 @@ function renderAbonnement() {
     $('abo-status').className = 'abo-status s-offert';
     $('abo-details').textContent = 'Rien à régler pour cette famille.';
     resilierPossible = false;
-    for (const id of ['btn-portail', 'btn-resilier', 'btn-garder']) $(id).hidden = true;
+    for (const id of ['btn-portail', 'btn-abo-page', 'btn-resilier', 'btn-garder']) $(id).hidden = true;
     $('abo-choices').hidden = true;
   }
   if (abo) {
@@ -2797,9 +2854,9 @@ function renderAbonnement() {
     const enCours = ['actif', 'impaye'].includes(statut);
     // En pause avec son abonnement Stripe : un seul geste, régler le paiement (plus de choix de formule).
     const aRegler = statut === 'impaye' || (statut === 'suspendu' && !!abo.stripeSubscriptionId);
-    $('btn-portail').hidden = !admin || !abo.stripeCustomerId || statut === 'offert';
-    $('btn-portail').className = aRegler ? 'primary wide' : 'secondary wide';
-    if (!$('btn-portail').disabled) $('btn-portail').textContent = aRegler ? 'Régler le paiement' : 'Gérer le paiement et les factures';
+    // Le reste (moyen de paiement, factures, résilier) est sur la page « Abonnement et paiement ».
+    $('btn-portail').hidden = !admin || !abo.stripeCustomerId || !aRegler;
+    $('btn-abo-page').hidden = !admin || !abo.stripeCustomerId || statut === 'offert';
     resilierPossible = admin && enCours && !abo.resiliationLe && !!abo.stripeSubscriptionId;
     $('btn-resilier').hidden = !resilierPossible || !!finInfo?.retractation;
     $('btn-garder').hidden = !admin || !enCours || !abo.resiliationLe;

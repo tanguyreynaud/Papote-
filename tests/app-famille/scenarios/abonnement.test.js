@@ -16,6 +16,13 @@ async function profil(t) {
   await t.page.locator('#abo-card').waitFor({ state: 'visible' });
 }
 
+// « Gérer le paiement et les factures » : la page avec les factures, puis Annuler / Résilier en bas.
+async function pageAbonnement(t) {
+  await t.page.click('#btn-abo-page');
+  await g.attendreVue(t, 'view-abonnement');
+  await t.page.locator('#factures-chargement').waitFor({ state: 'hidden' });
+}
+
 const famille = (fid) => g.lire(`families/${fid}`);
 
 test('Dans les 30 jours : seule « Annuler ma commande » est proposée ; annulation et tablette à renvoyer', async () => {
@@ -24,10 +31,14 @@ test('Dans les 30 jours : seule « Annuler ma commande » est proposée ; annula
   await profil(julie);
   await julie.page.locator('#abo-status', { hasText: 'Actif' }).waitFor();
   assert.match(await julie.page.locator('#abo-details').innerText(), /Avec le Wi-Fi de la maison, 20 € par mois, tablette prêtée · Prochain prélèvement le/);
+  assert.strictEqual(await julie.page.locator('#btn-portail').isVisible(), false, 'rien à régler');
+  await pageAbonnement(julie);
+  // La mise en service payée à la commande : une facture, à télécharger.
+  await julie.page.locator('#factures-liste li', { hasText: '60 €' }).waitFor();
   await julie.page.locator('#btn-retracter').waitFor({ state: 'visible' });
   assert.match(await julie.page.locator('#retract-info').innerText(), /Annulation possible jusqu'au .* 60 € de mise en service compris/);
   assert.strictEqual(await julie.page.locator('#btn-resilier').isVisible(), false, 'pas de « Résilier » pendant les 30 jours');
-  assert.strictEqual(await julie.page.locator('#btn-portail').isVisible(), true);
+  assert.strictEqual(await julie.page.locator('#btn-portail-page').isVisible(), true);
 
   await julie.page.click('#btn-retracter');
   assert.match(await g.texteFenetre(julie), /Annuler votre commande \? Votre abonnement s'arrête tout de suite/);
@@ -37,6 +48,8 @@ test('Dans les 30 jours : seule « Annuler ma commande » est proposée ; annula
   await s.calme();
   const fam = await famille(fid);
   assert.ok(['resilie', 'aucun'].includes(fam.abonnement.statut), `statut ${fam.abonnement.statut}`);
+  await julie.page.goBack();
+  await g.attendreVue(julie, 'view-profile');
   await julie.page.locator('#retour-box', { hasText: 'Tablette à nous rendre' }).waitFor();
   assert.ok(g.dernierMail('julie@exemple.fr'), 'e-mail avec les instructions de retour');
   // Plus d'envoi possible : Papote est en pause.
@@ -53,6 +66,7 @@ test('Après 30 jours : résilier (avec l\'étape « Avant de partir »), puis g
   await julie.page.reload();
   await g.attendreVue(julie, 'view-home');
   await profil(julie);
+  await pageAbonnement(julie);
   await julie.page.locator('#btn-resilier').waitFor({ state: 'visible' });
   assert.strictEqual(await julie.page.locator('#btn-retracter').isVisible(), false);
 
@@ -68,13 +82,16 @@ test('Après 30 jours : résilier (avec l\'étape « Avant de partir »), puis g
   assert.match(await g.texteFenetre(julie), /Résiliation enregistrée\. Papote s'arrêtera le/);
   await g.repondre(julie, 'OK');
   await s.calme();
+  await julie.page.locator('#btn-resilier').waitFor({ state: 'hidden' });
+  await julie.page.goBack();
+  await g.attendreVue(julie, 'view-profile');
   await julie.page.locator('#abo-details', { hasText: 'Résilié : Papote s\'arrête le' }).waitFor();
   await julie.page.locator('#btn-garder').waitFor({ state: 'visible' });
-  assert.strictEqual(await julie.page.locator('#btn-resilier').isVisible(), false);
 
   await julie.page.click('#btn-garder');
   await g.toast(julie, 'Abonnement gardé');
   await s.calme();
+  await pageAbonnement(julie);
   await julie.page.locator('#btn-resilier').waitFor({ state: 'visible' });
   assert.ok(!(await famille(fid)).abonnement.resiliationLe, 'résiliation annulée');
 });
