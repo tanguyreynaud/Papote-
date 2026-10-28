@@ -288,7 +288,45 @@ function alertesSim(l, maintenant) {
     else if (j <= 60) liste.push(`${carte} expire dans ${j} j`);
   }
   if (l.statut === 'suspendue') liste.push('suspendue : à résilier ou réactiver');
+  const recharge = alerteRecharge(l, maintenant);
+  if (recharge) liste.unshift(recharge);
   return liste;
+}
+
+// Forfait prépayé (Lyca, 30 jours) d'une ligne active : rappel 3 jours avant la fin s'il se recharge à la main ;
+// renouvelé tout seul par l'opérateur, alerte seulement si aucune recharge n'est arrivée 2 jours après la date.
+function alerteRecharge(l, maintenant) {
+  if (l.statut !== 'active' || !l.prochaineRecharge) return null;
+  const j = Math.ceil((l.prochaineRecharge - maintenant) / (24 * 3600 * 1000));
+  if (l.renouvellementAuto) return j < -2 ? 'renouvellement pas vu : vérifier chez l\'opérateur' : null;
+  if (j < 0) return 'forfait fini : à recharger';
+  if (j === 0) return 'à recharger aujourd\'hui';
+  return j <= 3 ? `à recharger dans ${j} j` : null;
+}
+
+// Fin du forfait après une recharge payée le jour « date » (ms) : jamais avant la fin déjà notée
+// (une facture reçue en retard ne recule pas la date).
+const DUREE_FORFAIT = 30;
+function finApresRecharge(l, date) {
+  const fin = date + (l.dureeForfait || DUREE_FORFAIT) * 24 * 3600 * 1000;
+  return Math.max(fin, l.prochaineRecharge || 0);
+}
+
+// Ligne SIM d'une facture de forfait : par le numéro de ligne ou l'ICCID imprimé, sinon la seule ligne active
+// de cet opérateur. null si on ne sait pas : la dépense reste à relier à la main depuis sa page.
+const chiffres = (t) => String(t || '').replace(/\D/g, '');
+function simDeFacture(sims, r) {
+  const vivantes = sims.filter((l) => l.statut !== 'resiliee');
+  const lu = chiffres(r.ligne);
+  if (lu.length >= 9) {
+    const memes = vivantes.filter((l) => (chiffres(l.numero).length >= 9 && chiffres(l.numero).slice(-9) === lu.slice(-9))
+      || (lu.length >= 15 && chiffres(l.iccid).length >= 15 && (chiffres(l.iccid).endsWith(lu.slice(-15)) || lu.endsWith(chiffres(l.iccid).slice(-15)))));
+    // Un numéro imprimé qui n'est celui d'aucune ligne en service : ne pas deviner.
+    return memes.length === 1 ? memes[0] : null;
+  }
+  const actives = vivantes.filter((l) => l.statut === 'active' && l.operateur && r.fournisseur
+    && (memeAccessoire(l.operateur, r.fournisseur) || motsNom(r.fournisseur).some((m) => m.length >= 3 && motsNom(l.operateur).includes(m))));
+  return actives.length === 1 ? actives[0] : null;
 }
 
 // Accessoires qui manquent pour les commandes à envoyer, ou sous leur seuil d'alerte.
@@ -486,6 +524,7 @@ function lectureVersFormulaire(o) {
       prixAchat: euros(t.prixUnitaireTTC),
       numeros: (Array.isArray(t.numerosSerie) ? t.numerosSerie : []).map((n) => texte(n, 80)).filter(Boolean).slice(0, quantite),
     } : null,
+    ligne: texte(o.ligneMobile, 30),
     ...materielLu(o),
     remarque: texte(o.remarque, 300),
   };
@@ -528,7 +567,7 @@ const SCHEMA_FACTURE = {
   type: 'object',
   additionalProperties: false,
   required: ['estUneFacture', 'confirmationCommande', 'fournisseur', 'numero', 'date', 'totalTTC', 'tva', 'devise', 'categorie',
-    'libelle', 'tablettes', 'cartesSim', 'accessoires', 'remarque'],
+    'libelle', 'tablettes', 'cartesSim', 'ligneMobile', 'accessoires', 'remarque'],
   properties: {
     estUneFacture: { type: 'boolean', description: 'Faux si le document n\'est ni une facture, ni un ticket de caisse, ni une confirmation de commande avec le montant payé.' },
     confirmationCommande: { type: 'boolean', description: 'Vrai si c\'est une confirmation de commande d\'un site marchand et non la facture elle-même.' },
@@ -571,6 +610,8 @@ const SCHEMA_FACTURE = {
       description: 'Seulement pour des cartes SIM physiques achetées (kits SIM, nouvelles lignes) : sinon null. '
         + 'Une simple facture mensuelle de forfaits n\'en est pas une.',
     },
+    ligneMobile: { ...nul('string'), description: 'Pour une facture ou une recharge de forfait mobile : le numéro de ligne (06…) '
+      + 'ou l\'ICCID concerné, tel qu\'imprimé. null sinon, ou s\'il n\'y figure pas.' },
     accessoires: {
       type: 'array',
       description: 'Petit matériel envoyé avec les tablettes, à suivre en stock (clé ou routeur 4G, prise USB, chargeur, '
@@ -1080,7 +1121,10 @@ function champsSim(c) {
   if ('cbExp' in c) champs.cbExp = /^\d{4}-\d{2}$/.test(c.cbExp || '') ? c.cbExp : null;
   if ('go' in c) champs.go = Number.isFinite(c.go) && c.go >= 0 ? c.go : null;
   for (const cle of ['prix', 'prixApres']) if (cle in c) champs[cle] = centimes(c[cle]);
-  for (const cle of ['finPromo', 'activation', 'activerAvant']) if (cle in c) champs[cle] = dateOuNull(c[cle]);
+  for (const cle of ['finPromo', 'activation', 'activerAvant', 'prochaineRecharge']) if (cle in c) champs[cle] = dateOuNull(c[cle]);
+  // Forfait prépayé : sa durée en jours (30 par défaut) et s'il est renouvelé tout seul par l'opérateur.
+  if ('dureeForfait' in c) champs.dureeForfait = Number.isInteger(c.dureeForfait) && c.dureeForfait >= 1 && c.dureeForfait <= 366 ? c.dureeForfait : null;
+  if ('renouvellementAuto' in c) champs.renouvellementAuto = c.renouvellementAuto === true;
   // Achat de la carte (dépense), vérifié par enregistrerSim.
   if ('depense' in c) champs.depense = texte(c.depense, 100) || null;
   return champs;
@@ -1141,6 +1185,18 @@ async function enregistrerSim(id, c, qui) {
   return ref.id;
 }
 
+// Recharge payée le jour « date » sur la ligne simId : fin du forfait repoussée. Renvoie la nouvelle fin (ms).
+async function noterRecharge(simId, date) {
+  const ref = db().doc(`sims/${simId}`);
+  return db().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) return null;
+    const fin = finApresRecharge(snap.data(), date);
+    tx.update(ref, { prochaineRecharge: fin, derniereRecharge: Math.max(date, snap.get('derniereRecharge') || 0), majLe: FieldValue.serverTimestamp() });
+    return fin;
+  });
+}
+
 exports.gestionSim = onCall(async (request) => {
   verifierAdmin(request);
   if (reveil(request)) return { ok: true };
@@ -1154,6 +1210,23 @@ exports.gestionSim = onCall(async (request) => {
     if (snap.get('tablette')) await db().doc(`stock/${snap.get('tablette')}`).update(SANS_SIM).catch(() => null);
     await ref.delete();
     return { ok: true };
+  }
+
+  // Recharge du forfait payée : une dépense « Cartes SIM et forfaits » reliée à la ligne, et la fin du forfait repoussée.
+  if (d.action === 'recharger') {
+    const ref = db().doc(`sims/${d.id || '-'}`);
+    const snap = await ref.get();
+    if (!snap.exists) throw new HttpsError('not-found', 'Ligne introuvable.');
+    const l = snap.data();
+    const montant = d.montant != null ? centimes(d.montant) : coutLigne(l, Date.now());
+    if (!montant) throw new HttpsError('invalid-argument', 'Montant de la recharge manquant : notez le prix du forfait sur la carte.');
+    const date = ms(d.date) || Date.now();
+    const r = await ajouterDepense({
+      date, categorie: 'sim', fournisseur: l.operateur || null, montant, sim: ref.id,
+      libelle: `Recharge du forfait ${[l.operateur, l.numero || (l.iccid ? `…${String(l.iccid).slice(-4)}` : null)].filter(Boolean).join(' ')}`.trim(),
+    }, qui);
+    const prochaineRecharge = await noterRecharge(ref.id, date);
+    return { ok: true, depense: r.id, prochaineRecharge };
   }
 
   if (d.action !== 'ajouter' && d.action !== 'modifier') throw new HttpsError('invalid-argument', 'Action inconnue.');
@@ -1249,6 +1322,8 @@ async function ajouterDepense(d, qui) {
     justificatif: lien(d.justificatif),
     aVerifier: d.aVerifier === true,
     source: texte(d.source),
+    // Recharge d'un forfait : la ligne SIM payée (sims/{id}).
+    sim: texte(d.sim, 100) || null,
     // Dépense mensuelle (hébergement, forfaits…) : recopiée chaque mois par gestionAutomatique.
     recurrence: d.recurrente === true ? 'mensuelle' : null,
     jourRecurrence: d.recurrente === true ? jour : null,
@@ -1280,6 +1355,8 @@ function champsDepense(c) {
     if (!CATEGORIES[c.categorie]) throw new HttpsError('invalid-argument', 'Catégorie inconnue.');
     maj.categorie = c.categorie;
   }
+  // Ligne SIM rechargée par cette dépense (vérifiée par gestionDepense), null pour retirer le lien.
+  if ('sim' in c) maj.sim = texte(c.sim, 100) || null;
   if ('date' in c) {
     const t = Number(c.date);
     if (!Number.isFinite(t) || t < Date.UTC(2020, 0, 1) || t > Date.now() + 366 * 86400000) throw new HttpsError('invalid-argument', 'Date invalide.');
@@ -1318,7 +1395,10 @@ exports.gestionDepense = onCall(async (request) => {
     if (!snap.exists) throw new HttpsError('not-found', 'Dépense introuvable.');
     const maj = champsDepense(d.champs || {});
     if (!Object.keys(maj).length) throw new HttpsError('invalid-argument', 'Rien à modifier.');
+    if (maj.sim && !(await db().doc(`sims/${maj.sim}`).get()).exists) throw new HttpsError('not-found', 'Carte SIM introuvable.');
     await ref.update({ ...maj, majLe: FieldValue.serverTimestamp(), majPar: request.auth.token.email || request.auth.uid });
+    // Facture de forfait reliée à sa ligne : la fin du forfait suit (sa date ou la nouvelle).
+    if (maj.sim) await noterRecharge(maj.sim, maj.date ? maj.date.toMillis() : ms(snap.get('date')) || Date.now());
     // Mois déjà clôturé (livres envoyés) : la page propose de le refaire.
     const clos = (await db().doc('gestion/archives').get()).get('mois') || {};
     const moisTouches = [ms(snap.get('date')), maj.date ? maj.date.toMillis() : null].filter(Boolean).map(moisDeParis);
@@ -1610,7 +1690,9 @@ stores (Google Play, Apple Developer), publicite (annonces, réseaux sociaux), a
 mediateur (médiateur de la consommation), juridique (création de société, greffe, annonces légales, avocat),
 comptabilite (expert-comptable, logiciel de comptabilité), banque (frais bancaires, frais Stripe), autre. Pour un achat de tablettes, remplis aussi « tablettes » avec les numéros de série (IMEI ou S/N) lisibles.
 Pour des cartes SIM achetées (kits, nouvelles lignes), remplis « cartesSim » avec les ICCID et numéros lisibles ;
-une facture mensuelle de forfaits reste une simple dépense (cartesSim null). Le petit matériel qui part avec les
+une facture mensuelle de forfaits reste une simple dépense (cartesSim null), avec le numéro de ligne ou l'ICCID
+concerné dans « ligneMobile ». Un e-mail de recharge ou de renouvellement de forfait (Lyca…) qui donne le montant payé
+est une facture : confirmationCommande faux. Le petit matériel qui part avec les
 tablettes (clé ou routeur 4G, prise, chargeur, câble, support) va dans « accessoires ».
 Une confirmation de commande d'un site marchand (Cdiscount, Temu, Amazon…) qui donne le montant payé compte comme
 justificatif : estUneFacture vrai et confirmationCommande vrai, numero = numéro de commande. Une publicité, une lettre
@@ -2388,7 +2470,7 @@ function aFaire({ commandes, stock, depenses, automatique, maintenant, sims = []
   ajouter(depenses.filter((d) => d.aVerifier).length, 'facture(s) reçue(s) par e-mail à vérifier');
   ajouter(stock.filter((t) => sansFacture(t, maintenant)).length,
     'tablette(s) reçue(s) sans facture depuis 5 jours : transférez la facture du vendeur à factures@mapapote.fr');
-  ajouter(sims.filter((l) => alertesSim(l, maintenant).length).length, 'carte(s) SIM à regarder (promo, activation, carte bancaire)');
+  ajouter(sims.filter((l) => alertesSim(l, maintenant).length).length, 'carte(s) SIM à regarder (recharge, promo, activation, carte bancaire)');
   liste.push(...incoherences({ commandes: actives, stock, sims }));
   for (const a of accessoiresAPrevoir(accessoires, actives.filter((c) => c.expedition === 'a-preparer' && !retour(c)))) {
     liste.push(a.manque ? `${a.nom} : il en manque ${a.manque} pour les envois` : `${a.nom} : plus que ${a.quantite || 0} en stock`);
@@ -2657,6 +2739,7 @@ async function rangerFacture(r, piece, source) {
     }
   }
   let id;
+  let ligneSim = null;
   if (r.tablettes) {
     const t = r.tablettes;
     const prix = t.prixAchat != null ? t.prixAchat : r.montant != null ? Math.round(r.montant / t.quantite) : null;
@@ -2668,14 +2751,20 @@ async function rangerFacture(r, piece, source) {
     }, 'e-mail'));
   } else {
     if (r.montant == null) throw new Error('montant illisible');
+    // Facture ou recharge d'un forfait : rangée sur sa ligne SIM, dont la fin du forfait avance.
+    const sims = r.categorie === 'sim' && !r.cartesSim
+      ? (await db().collection('sims').get()).docs.map((x) => ({ id: x.id, ...x.data() })) : [];
+    ligneSim = sims.length ? simDeFacture(sims, r) : null;
     ({ id } = await ajouterDepense({
-      date: r.date, categorie: r.categorie, fournisseur: r.fournisseur, numero: r.numero,
+      date: r.date, categorie: r.categorie, fournisseur: r.fournisseur, numero: r.numero, sim: ligneSim && ligneSim.id,
       libelle: r.libelle || 'Facture reçue par e-mail', montant: r.montant, tva: r.tva, aVerifier: true, source,
     }, 'e-mail'));
+    if (ligneSim) await noterRecharge(ligneSim.id, r.date || Date.now());
   }
   if (r.confirmation) await db().doc(`depenses/${id}`).update({ confirmation: true });
   await enregistrerPiece('depenses', id, piece.filename || 'facture', piece.contentType, piece.content);
   const materiel = await entrerMateriel(r, { depense: id, numeroFacture: r.numero, source }, 'e-mail');
+  if (ligneSim) return { materiel, sim: ligneSim.numero || ligneSim.operateur || 'SIM' };
   return materiel.length ? { materiel } : null;
 }
 
@@ -2737,6 +2826,7 @@ async function releverFactures() {
               if (typeof rangee === 'string') bilan.ignorees.push(`${piece.filename || 'pièce'} : ${rangee}`);
               else {
                 const plus = rangee && rangee.rattachee ? ' (facture ajoutée à la confirmation de commande)'
+                  : rangee && rangee.sim ? ` (recharge de la SIM ${rangee.sim})`
                   : rangee && rangee.materiel && rangee.materiel.length ? ` (+ ${rangee.materiel.join(', ')})` : '';
                 bilan.rangees.push(`${r.fournisseur || de} : ${r.libelle || sujet}${plus}`);
               }
@@ -3233,7 +3323,7 @@ exports.gestionParcours = onCall(async (request) => {
 
 exports.regles = {
   ETATS, CATEGORIES, sansEssaisEffaces, natureMouvement, mensuel, centimes, lien, nomFichier, moisSuivant, lectureVersFormulaire, SCHEMA_FACTURE,
-  lireReglages, transitionPermise, SUITES, simAResilier, fichesARattacher, sansFacture, stockAJour, releveBatterie, usureBatterie, incoherences, materielLu, memeAccessoire, coutLigne, alertesSim, accessoiresAPrevoir, champsSim, aFaire, piecesFacture, debutMoisParis, moisPrecedent, csvTexte, livreDesRecettes,
+  lireReglages, transitionPermise, SUITES, simAResilier, fichesARattacher, sansFacture, stockAJour, releveBatterie, usureBatterie, incoherences, materielLu, memeAccessoire, coutLigne, alertesSim, finApresRecharge, simDeFacture, accessoiresAPrevoir, champsSim, aFaire, piecesFacture, debutMoisParis, moisPrecedent, csvTexte, livreDesRecettes,
   registreDesAchats, corpsDuMail, memeAchat, suiteJumelage, descriptionNonRendu, refusSuppression, fusionnerContacts, emailInformation, cleContact,
   avancementPropre,
 };
