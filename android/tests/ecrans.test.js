@@ -213,6 +213,34 @@ test('SOS : « Annuler » arrête tout, et sans l\'option il n\'y a pas de bouto
   } finally { await b.fermer(); }
 });
 
+test('radio : bouton seulement sur le Wi-Fi ; elle s\'arrête si la tablette passe sur la carte SIM', async () => {
+  const b = await ouvrir();
+  try {
+    // Le flux n'existe pas pendant les essais : un lecteur audio imité, qui note s'il a été arrêté.
+    await b.page.evaluate(() => {
+      window.Audio = function (src) { this.src = src; this.paused = false; window.__radio = this; };
+      window.Audio.prototype.play = function () { return Promise.resolve(); };
+      window.Audio.prototype.pause = function () { this.paused = true; };
+    });
+    const radio = { lecture: true, sos: false, radio: { nom: 'France Bleu', url: 'https://radio.exemple/flux.mp3' } };
+    await b.android('onPosts', lot([], { options: radio }));
+    assert.ok(await b.visible('.radio-btn'));
+    // Lancée sur le Wi-Fi, puis le Wi-Fi tombe et la carte SIM prend le relais : radio coupée, bouton caché.
+    await b.toucher('.radio-btn');
+    assert.ok(/Arrêter/.test(await b.texte('.radio-btn')));
+    await b.etat({ reseau: { wifi: '', internet: true, mobile: true, sim: true, via: 'mobile' } });
+    await b.avancer(31000);
+    assert.ok(!(await b.visible('.radio-btn')));
+    assert.ok(await b.page.evaluate(() => window.__radio && window.__radio.paused));
+    // Le Wi-Fi revient : le bouton aussi, à l'arrêt.
+    await b.etat({ reseau: { wifi: 'Box', internet: true, mobile: true, sim: true, via: 'wifi' } });
+    await b.avancer(31000);
+    assert.ok(await b.visible('.radio-btn'));
+    assert.ok(/Radio/.test(await b.texte('.radio-btn')));
+    await sansErreur(b);
+  } finally { await b.fermer(); }
+});
+
 test('anniversaire : en grand une fois, puis le bandeau de l\'accueil', async () => {
   const b = await ouvrir();
   try {

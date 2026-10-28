@@ -125,12 +125,37 @@ final class Meteo {
      * {current:{temperature_2m, weather_code, is_day}, daily:{weather_code[], temperature_2m_max[], temperature_2m_min[]}}
      * avec les codes météo WMO (0 soleil, 3 couvert, 61 pluie…). Aujourd'hui puis demain.
      */
+    /** Dernière réponse de MET Norway : adresse et « Last-Modified », pour ne redemander que si ça a changé. */
+    private static String lastUrl;
+    private static String lastModified;
+    private static int lastDay = -1; // jour (Paris) de la dernière lecture complète
+
+    /**
+     * null si les prévisions n'ont pas changé depuis la dernière lecture (réponse 304, quelques octets) :
+     * MET Norway demande aux clients d'envoyer If-Modified-Since, et ça ménage la carte SIM.
+     */
     static JSONObject forecast(Http http, double lat, double lon) throws Exception {
         String url = String.format(java.util.Locale.US,
                 "https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=%.4f&lon=%.4f", lat, lon);
-        Http.Response r = http.request("GET", url, null, null, null);
+        java.util.Map<String, String> headers = null;
+        int today = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("Europe/Paris")).get(java.util.Calendar.DAY_OF_YEAR);
+        // Même ville et même jour seulement : à minuit, « aujourd'hui » change, il faut relire en entier.
+        if (lastModified != null && url.equals(lastUrl) && today == lastDay) {
+            headers = java.util.Collections.singletonMap("If-Modified-Since", lastModified);
+        }
+        Http.Response r = http.request("GET", url, null, null, null, headers);
+        if (r.code == 304) return null;
         if (!r.ok()) throw new java.io.IOException("Météo HTTP " + r.code);
-        JSONArray series = new JSONObject(r.body).getJSONObject("properties").getJSONArray("timeseries");
+        JSONObject parsed = parseForecast(r.body);
+        lastUrl = url;
+        lastDay = today;
+        lastModified = r.header("Last-Modified");
+        return parsed;
+    }
+
+    /** Réponse « compact » de MET Norway remise au format de la page. */
+    static JSONObject parseForecast(String body) throws Exception {
+        JSONArray series = new JSONObject(body).getJSONObject("properties").getJSONArray("timeseries");
         if (series.length() == 0) throw new java.io.IOException("Météo vide");
 
         java.util.TimeZone paris = java.util.TimeZone.getTimeZone("Europe/Paris");

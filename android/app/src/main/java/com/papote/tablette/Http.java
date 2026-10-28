@@ -15,10 +15,21 @@ final class Http {
     static final class Response {
         final int code;
         final String body;
+        /** En-têtes de la réponse, noms en minuscules (header("Last-Modified")). */
+        final java.util.Map<String, String> headers;
 
         Response(int code, String body) {
+            this(code, body, java.util.Collections.<String, String>emptyMap());
+        }
+
+        Response(int code, String body, java.util.Map<String, String> headers) {
             this.code = code;
             this.body = body;
+            this.headers = headers;
+        }
+
+        String header(String name) {
+            return headers.get(name.toLowerCase(java.util.Locale.ROOT));
         }
 
         boolean ok() {
@@ -33,7 +44,16 @@ final class Http {
     }
 
     Response request(String method, String url, String contentType, String body, String bearer) throws IOException {
+        return request(method, url, contentType, body, bearer, null);
+    }
+
+    /** Même chose, avec des en-têtes en plus (If-Modified-Since…). */
+    Response request(String method, String url, String contentType, String body, String bearer,
+                     java.util.Map<String, String> extraHeaders) throws IOException {
         HttpsURLConnection c = (HttpsURLConnection) new URL(url).openConnection();
+        if (extraHeaders != null) {
+            for (java.util.Map.Entry<String, String> h : extraHeaders.entrySet()) c.setRequestProperty(h.getKey(), h.getValue());
+        }
         c.setConnectTimeout(20_000);
         c.setReadTimeout(30_000);
         c.setRequestMethod(method);
@@ -56,8 +76,15 @@ final class Http {
                 }
             }
             int code = c.getResponseCode();
-            InputStream in = code >= 400 ? c.getErrorStream() : c.getInputStream();
-            return new Response(code, in == null ? "" : readAll(in));
+            java.util.Map<String, String> headers = new java.util.HashMap<>();
+            for (java.util.Map.Entry<String, java.util.List<String>> h : c.getHeaderFields().entrySet()) {
+                if (h.getKey() != null && h.getValue() != null && !h.getValue().isEmpty()) {
+                    headers.put(h.getKey().toLowerCase(java.util.Locale.ROOT), h.getValue().get(0));
+                }
+            }
+            // 304 « pas modifié » : pas de corps.
+            InputStream in = code == 304 ? null : code >= 400 ? c.getErrorStream() : c.getInputStream();
+            return new Response(code, in == null ? "" : readAll(in), headers);
         } finally {
             c.disconnect();
         }

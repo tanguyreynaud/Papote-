@@ -1419,6 +1419,7 @@
     if (!android() || !android().wifiStatus) return;
     var st = {};
     try { st = JSON.parse(android().wifiStatus()); } catch (e) { return; }
+    noterReseau(st);
     var now = Date.now();
     if (st.internet) offlineSince = 0;
     else if (!offlineSince) offlineSince = now;
@@ -2008,9 +2009,11 @@
       on(radioBtn, 'click', toggleRadio);
       row.appendChild(radioBtn);
     }
-    if (!r || !r.url) stopRadio();
+    // Radio seulement sur le Wi-Fi (Tanguy, 28/10) : un flux coûte ≈ 60 Mo par heure, trop pour la carte SIM.
+    // Sur la SIM, le bouton disparaît ; si le Wi-Fi tombe en cours d'écoute, la radio s'arrête.
+    if (!r || !r.url || !radioPossible()) stopRadio();
     else if (radioAudio) radioAudio.volume = radioVolume(r);
-    show(radioBtn, !!(r && r.url));
+    show(radioBtn, !!(r && r.url && radioPossible()));
     renderRadioBtn();
   }
 
@@ -2031,8 +2034,25 @@
     return RADIO_GAIN;
   }
 
+  // Le réseau réellement utilisé (via : wifi | mobile | autre | aucun, Wifi.status). Une tablette sans
+  // carte SIM n'a que le Wi-Fi : la radio reste possible ; sans réseau du tout, le bouton ne sert à rien.
+  var reseauVia = '';
+  function radioPossible() {
+    if (!reseauVia && android() && android().wifiStatus) {
+      try { noterReseau(JSON.parse(android().wifiStatus())); } catch (e) { }
+    }
+    return reseauVia === 'wifi' || reseauVia === 'autre';
+  }
+  function noterReseau(st) {
+    var via = st.via || (st.wifi && st.internet ? 'wifi' : st.mobile ? 'mobile' : 'aucun');
+    if (via === reseauVia) return;
+    reseauVia = via;
+    if (radioBtn) setupRadio();
+  }
+
   function toggleRadio() {
     if (radioAudio) { stopRadio(); return; }
+    if (!radioPossible()) return;
     var r = options.radio;
     if (!r || !r.url) return;
     radioAudio = new Audio(r.url);

@@ -238,10 +238,11 @@ final class Firebase {
         return new JSONObject(r.body);
     }
 
-    /** Liste les documents d'une collection (jusqu'à 300). */
-    JSONArray list(String path) throws IOException, JSONException {
-        String url = FIRESTORE + docs() + "/" + path + "?pageSize=300";
-        Http.Response r = http.request("GET", url, null, null, token());
+    /** Liste les documents d'une collection (jusqu'à 300), seulement les champs demandés (tous si aucun). */
+    JSONArray list(String path, String... fieldMask) throws IOException, JSONException {
+        StringBuilder url = new StringBuilder(FIRESTORE).append(docs()).append('/').append(path).append("?pageSize=300");
+        for (String f : fieldMask) url.append("&mask.fieldPaths=").append(Uri.encode(f));
+        Http.Response r = http.request("GET", url.toString(), null, null, token());
         if (!r.ok()) throw new ApiException(r.code, r.body);
         JSONArray docs = new JSONObject(r.body).optJSONArray("documents");
         return docs == null ? new JSONArray() : docs;

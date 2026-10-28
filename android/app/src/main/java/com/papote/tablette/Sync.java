@@ -47,10 +47,16 @@ final class Sync {
     }
 
     private static final String TAG = "PapoteSync";
-    private static final long POLL_MS = 20_000;               // nouveaux envois
+    // Sans écoute en direct (page des appels en panne), la tablette interroge le serveur elle-même :
+    // 2 min au plus serré (avant le 28/10 : 20 s, soit ≈ 780 Mo par mois sur la carte SIM).
+    private static final long POLL_MS = 2 * 60_000;
     private static final long FULL_REFRESH_MS = 6 * 3600_000; // relecture complète de sécurité
-    private static final long REALTIME_POLL_MS = 10 * 60_000; // quand la page reçoit les changements en direct
-    private static final long WEATHER_MS = 30 * 60_000;
+    // Quand la page reçoit les changements en direct, ce tour ne sert qu'au signal « en ligne » (heartbeat) :
+    // 20 min, pour que le serveur voie la tablette au moins toutes les 45 min (alerte « ne répond plus »)
+    // même si un tour manque.
+    private static final long REALTIME_POLL_MS = 20 * 60_000;
+    // La météo n'affiche qu'aujourd'hui et demain : 2 h suffisent, et seulement si elle a changé (Meteo.forecast).
+    private static final long WEATHER_MS = 2 * 3600_000;
     private static final long REMINDERS_MS = 6 * 3600_000;
     private static final int MAX_POSTS = 60;
     // Tablettes déjà reliées avant le choix de la ville : la météo de Saint-Martin-de-Valamas, comme avant.
@@ -256,6 +262,7 @@ final class Sync {
             }
             if (lastRemindersJson == null && c.optJSONObject("reminders") != null) lastRemindersJson = c.getJSONObject("reminders").toString();
             if (lastFamilyJson == null && c.optJSONObject("family") != null) lastFamilyJson = c.getJSONObject("family").toString();
+            restaurerPhotosGardees();
         } catch (Exception e) {
             Log.w(TAG, "Copie sur la tablette illisible", e);
             dropCache();
@@ -283,6 +290,8 @@ final class Sync {
 
     private void dropCache() {
         cacheFile().delete();
+        photosGardees.clear();
+        prefs.edit().remove("photosGardees").apply();
         prefs.edit().remove("ecrituresEnAttente").apply(); // écritures pour l'ancienne famille
         lastRemindersJson = null;
         lastFamilyJson = null;
@@ -471,7 +480,7 @@ final class Sync {
         try {
             // Une seule lecture : le marqueur « rev » ne bouge que si la famille a envoyé ou supprimé
             // quelque chose (ou modifié les rappels). Sinon, rien d'autre à lire.
-            JSONObject family = firebase.get("families/" + fid, "name", "rev", "code", "textSize", "abonnement", "veille", "volume", "volumeSonnerie", "meteoVille", "options", "installation");
+            JSONObject family = firebase.get("families/" + fid, "name", "rev", "code", "textSize", "abonnement", "veille", "volume", "volumeSonnerie", "meteoVille", "options", "installation", "createdBy");
             long rev = 0;
             JSONObject ff = family == null ? null : family.optJSONObject("fields");
             if (ff != null) {
@@ -491,6 +500,7 @@ final class Sync {
                 readVolume(ff);
                 readOptions(ff);
                 readInstallation(ff);
+                createdBy = Firebase.str(ff, "createdBy");
                 if (Meteo.applyFamily(context, http, ff) || !meteoReported) {
                     lastWeather = 0; // nouvelle ville : la météo est relue tout de suite
                     reportMeteo(fid);
@@ -937,7 +947,7 @@ final class Sync {
     // ---------- Veille et réponses ----------
 
     private final java.util.Map<String, Long> lastHeartbeat = new java.util.HashMap<>();
-    private static final long HEARTBEAT_MS = 10 * 60_000;
+    private static final long HEARTBEAT_MS = 20 * 60_000;
 
     /** Note sur la fiche de la tablette qu'elle est en ligne, ou que Mamie l'a touchée. */
     private void heartbeat(String fid, String field) {
@@ -945,7 +955,8 @@ final class Sync {
         Long last = lastHeartbeat.get(field);
         // « En ligne » toutes les 10 min ; « vue » et « touchée » à la minute près, pour que la famille
         // voie tout de suite que Mamie a regardé (écritures rares : seulement quand elle est là).
-        long every = "lastOnline".equals(field) ? HEARTBEAT_MS : 60_000;
+        // Petite marge : le tour de synchronisation arrive quelques millisecondes après le précédent.
+        long every = "lastOnline".equals(field) ? HEARTBEAT_MS - 60_000 : 60_000;
         if (fid == null || (last != null && now - last < every)) return;
         boolean enLigne = "lastOnline".equals(field);
         try {
@@ -1086,7 +1097,8 @@ final class Sync {
 
     // ---------- Base Firestore : bascule vers l'Europe ----------
 
-    private static final long DATABASE_CHECK_MS = 5 * 60_000;
+    // La migration vers l'Europe est faite : au démarrage puis une fois par jour (avant le 28/10 : toutes les 5 min).
+    private static final long DATABASE_CHECK_MS = 24 * 3600_000;
     private long lastDatabaseCheck;
 
     /**
@@ -1436,15 +1448,11 @@ final class Sync {
      * « Qui voulez-vous appeler ? » et les visages du SOS : ceux mis en tête dans l'app (enTete), puis
      * le créateur de la famille, puis les autres proches par ordre alphabétique des prénoms (Tanguy, 27/10).
      */
+    /** Créateur de la famille (families/{fid}.createdBy), lu avec la fiche de la famille à chaque tour. */
+    private String createdBy;
+
     private JSONArray trierProches(String fid, JSONArray people) {
-        String createur = null;
-        try {
-            JSONObject fam = firebase.get("families/" + fid, "createdBy");
-            JSONObject f = fam == null ? null : fam.optJSONObject("fields");
-            createur = f == null ? null : Firebase.str(f, "createdBy");
-        } catch (Exception e) {
-            Log.w(TAG, "Créateur de la famille", e);
-        }
+        String createur = createdBy;
         List<JSONObject> liste = new ArrayList<>();
         for (int i = 0; i < people.length(); i++) liste.add(people.optJSONObject(i));
         final String premier = createur;
@@ -1473,9 +1481,12 @@ final class Sync {
         try {
             JSONObject faces = new JSONObject();
             // Les personnes de la famille (pas les tablettes), pour l'écran « Appeler ».
+            // Les fiches sont listées SANS leur photo (80 à 140 Ko chacune) : une photo n'est relue que si
+            // la fiche a changé depuis la dernière fois (updateTime), sinon celle gardée sur la tablette sert.
+            // Avant (28/10) : tous les visages retéléchargés à chaque envoi de la famille, ≈ 1 Mo par tour.
             JSONArray people = new JSONArray();
             try {
-                JSONArray members = firebase.list("families/" + fid + "/members");
+                JSONArray members = firebase.list("families/" + fid + "/members", "name", "role", "enTete");
                 for (int i = 0; i < members.length(); i++) {
                     JSONObject doc = members.getJSONObject(i);
                     JSONObject f = doc.optJSONObject("fields");
@@ -1485,27 +1496,31 @@ final class Sync {
                         long enTete = Firebase.timestamp(f, "enTete");
                         people.put(new JSONObject().put("uid", uid).put("name", nz(Firebase.str(f, "name")))
                                 .put("enTete", enTete > 0 ? enTete : 0));
+                    } else {
+                        continue; // les tablettes n'ont pas de visage
                     }
-                    String face = f == null ? null : Firebase.str(f, "face");
-                    if (face == null || !face.startsWith("data:image")) continue;
-                    String name = doc.optString("name");
-                    faces.put(name.substring(name.lastIndexOf('/') + 1), face);
+                    String face = photoGardee("members", "families/" + fid + "/members/" + uid, uid,
+                            doc.optString("updateTime"), "face");
+                    if (face != null && face.startsWith("data:image")) faces.put(uid, face);
                 }
             } catch (Exception e) {
                 Log.w(TAG, "Photos de profil", e);
             }
             JSONArray birthdays = new JSONArray();
             try {
-                JSONArray docs = firebase.list("families/" + fid + "/birthdays");
+                JSONArray docs = firebase.list("families/" + fid + "/birthdays", "name", "day", "month", "year");
                 for (int i = 0; i < docs.length(); i++) {
                     JSONObject doc = docs.getJSONObject(i);
                     JSONObject f = doc.optJSONObject("fields");
                     if (f == null) continue;
                     String name = doc.optString("name");
-                    // Photo facultative de l'anniversaire, ajoutée dans l'app (data URL JPEG carrée, ~80 Ko).
-                    String photo = Firebase.str(f, "photo");
+                    String id = name.substring(name.lastIndexOf('/') + 1);
+                    // Photo facultative de l'anniversaire, ajoutée dans l'app (data URL JPEG carrée, ~80 Ko),
+                    // relue seulement si la fiche a changé.
+                    String photo = photoGardee("birthdays", "families/" + fid + "/birthdays/" + id, id,
+                            doc.optString("updateTime"), "photo");
                     birthdays.put(new JSONObject()
-                            .put("id", name.substring(name.lastIndexOf('/') + 1))
+                            .put("id", id)
                             .put("name", nz(Firebase.str(f, "name")))
                             .put("day", Firebase.integer(f, "day"))
                             .put("month", Firebase.integer(f, "month"))
@@ -1516,6 +1531,7 @@ final class Sync {
                 // La règle Firestore des anniversaires n'est peut-être pas encore en ligne.
                 Log.w(TAG, "Anniversaires", e);
             }
+            oublierPhotosDisparues(people, birthdays);
             people = trierProches(fid, people);
             JSONObject payload = new JSONObject().put("faces", faces).put("birthdays", birthdays).put("people", people);
             String json = payload.toString();
@@ -1525,6 +1541,102 @@ final class Sync {
             saveCache();
         } catch (JSONException e) {
             Log.w(TAG, "Famille", e);
+        }
+    }
+
+    // ---------- Photos gardées (visages, anniversaires) ----------
+
+    /**
+     * Photos (data URL) des fiches, gardées en mémoire avec la date de modification (updateTime) de la fiche :
+     * photos[genre][id] = { "at": updateTime, "photo": data URL ou "" si la fiche n'en a pas }.
+     * Les dates sont aussi gardées sur la tablette (réglages) pour tenir après un redémarrage, les photos
+     * elles-mêmes revenant de la copie « dernier-etat.json » (restaurerPhotosGardees).
+     */
+    private final Map<String, Map<String, String[]>> photosGardees = new java.util.HashMap<>();
+
+    private Map<String, String[]> photos(String genre) {
+        Map<String, String[]> m = photosGardees.get(genre);
+        if (m == null) { m = new java.util.HashMap<>(); photosGardees.put(genre, m); }
+        return m;
+    }
+
+    /** La photo d'une fiche : celle gardée si la fiche n'a pas changé, sinon relue (une seule lecture, le champ seul). */
+    private String photoGardee(String genre, String path, String id, String updateTime, String champ) {
+        Map<String, String[]> m = photos(genre);
+        String[] known = m.get(id);
+        if (known != null && updateTime != null && !updateTime.isEmpty() && updateTime.equals(known[0])) {
+            return known[1].isEmpty() ? null : known[1];
+        }
+        try {
+            JSONObject doc = firebase.get(path, champ);
+            JSONObject f = doc == null ? null : doc.optJSONObject("fields");
+            String photo = f == null ? null : Firebase.str(f, champ);
+            if (photo == null || !photo.startsWith("data:image")) photo = "";
+            // La date de la fiche au moment de la lecture, pas celle de la liste : si la fiche change entre
+            // les deux, la liste suivante la relira.
+            String at = doc == null ? "" : doc.optString("updateTime", updateTime);
+            m.put(id, new String[]{ at, photo });
+            savePhotoStamps();
+            return photo.isEmpty() ? null : photo;
+        } catch (Exception e) {
+            Log.w(TAG, "Photo " + genre + " " + id, e);
+            return known == null || known[1].isEmpty() ? null : known[1]; // au pire, l'ancienne
+        }
+    }
+
+    /** Fiches disparues (proche retiré, anniversaire effacé) : leurs photos ne sont plus gardées. */
+    private void oublierPhotosDisparues(JSONArray people, JSONArray birthdays) {
+        Set<String> uids = new HashSet<>();
+        for (int i = 0; i < people.length(); i++) uids.add(people.optJSONObject(i).optString("uid"));
+        Set<String> ids = new HashSet<>();
+        for (int i = 0; i < birthdays.length(); i++) ids.add(birthdays.optJSONObject(i).optString("id"));
+        boolean changed = photos("members").keySet().retainAll(uids);
+        changed |= photos("birthdays").keySet().retainAll(ids);
+        if (changed) savePhotoStamps();
+    }
+
+    private void savePhotoStamps() {
+        try {
+            JSONObject all = new JSONObject();
+            for (Map.Entry<String, Map<String, String[]>> g : photosGardees.entrySet()) {
+                JSONObject m = new JSONObject();
+                for (Map.Entry<String, String[]> e : g.getValue().entrySet()) m.put(e.getKey(), e.getValue()[0]);
+                all.put(g.getKey(), m);
+            }
+            prefs.edit().putString("photosGardees", all.toString()).apply();
+        } catch (JSONException ignored) { }
+    }
+
+    /**
+     * Après un redémarrage : les dates viennent des réglages, les photos de la dernière copie envoyée à la
+     * page (lastFamilyJson). Une fiche dont la photo manque sera relue.
+     */
+    private void restaurerPhotosGardees() {
+        if (!photosGardees.isEmpty() || lastFamilyJson == null) return;
+        try {
+            JSONObject stamps = new JSONObject(prefs.getString("photosGardees", "{}"));
+            JSONObject family = new JSONObject(lastFamilyJson);
+            JSONObject faces = family.optJSONObject("faces");
+            JSONObject m = stamps.optJSONObject("members");
+            JSONArray people = family.optJSONArray("people");
+            for (int i = 0; m != null && people != null && i < people.length(); i++) {
+                String uid = people.getJSONObject(i).optString("uid");
+                String at = m.optString(uid, "");
+                if (at.isEmpty()) continue;
+                photos("members").put(uid, new String[]{ at, faces == null ? "" : faces.optString(uid, "") });
+            }
+            JSONObject b = stamps.optJSONObject("birthdays");
+            JSONArray birthdays = family.optJSONArray("birthdays");
+            for (int i = 0; b != null && birthdays != null && i < birthdays.length(); i++) {
+                JSONObject o = birthdays.getJSONObject(i);
+                String at = b.optString(o.optString("id"), "");
+                if (at.isEmpty()) continue;
+                String photo = o.isNull("photo") ? "" : o.optString("photo", "");
+                photos("birthdays").put(o.optString("id"), new String[]{ at, photo });
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "Photos gardées", e);
+            photosGardees.clear();
         }
     }
 
@@ -1581,6 +1693,11 @@ final class Sync {
             if (!Meteo.hasCity(context)) return; // pas encore de ville : pas de météo
             JSONObject weather = Meteo.forecast(http, Meteo.lat(context), Meteo.lon(context));
             lastWeather = now;
+            if (weather == null) {
+                // Inchangée depuis la dernière lecture (réponse 304, presque vide) : celle gardée reste bonne.
+                prefs.edit().putLong("meteoDerniereA", now).apply();
+                return;
+            }
             // Gardée pour le prochain démarrage : l'accueil s'affiche d'un coup, météo comprise.
             prefs.edit().putString("meteoDerniere", weather.toString()).putLong("meteoDerniereA", now).apply();
             listener.onWeather(weather);
@@ -1752,10 +1869,12 @@ final class Sync {
     private long lastJournalUpload;
     private String lastJournalSent;
 
-    /** Journal envoyé au plus une fois par heure (ou tout de suite pour l'ordre « état »). */
+    private static final long JOURNAL_MS = 6 * 3600_000;
+
+    /** Journal envoyé au plus toutes les 6 h et s'il a changé (ou tout de suite pour l'ordre « état »). */
     private void uploadJournal(String fid, boolean now) {
         long t = System.currentTimeMillis();
-        if (fid == null || (!now && t - lastJournalUpload < 3600_000)) return;
+        if (fid == null || (!now && t - lastJournalUpload < JOURNAL_MS)) return;
         String lines = Journal.tail(context, 200);
         if (!now && lines.equals(lastJournalSent)) return;
         try {
