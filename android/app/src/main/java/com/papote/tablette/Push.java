@@ -74,6 +74,7 @@ public class Push extends FirebaseMessagingService {
             Log.i(TAG, "Push : Firebase non configuré, la page garde son écoute en direct");
             return;
         }
+        apresMiseAJour(c);
         try {
             FirebaseMessaging fm = FirebaseMessaging.getInstance();
             fm.getToken().addOnSuccessListener((jeton) -> memoriser(c, jeton))
@@ -81,6 +82,29 @@ public class Push extends FirebaseMessagingService {
             fm.subscribeToTopic(TOPIC);
         } catch (Exception e) {
             Log.w(TAG, "Push", e);
+        }
+    }
+
+    /**
+     * Premier démarrage d'une nouvelle version : le ping est redemandé tout de suite (Sync le réécrit
+     * au tour qui suit). Vu le 28/10 sur T-003 : le ping envoyé 5 s après « adb install -r » s'est
+     * perdu pendant le remplacement de l'appli, et la tablette restait 30 min en écoute en direct.
+     */
+    static void apresMiseAJour(Context c) {
+        SharedPreferences p = prefs(c);
+        long version = versionInstallee(c);
+        if (version == 0 || version == p.getLong("pushVersion", 0)) return;
+        p.edit().putLong("pushVersion", version).apply();
+        if (p.getString("pushJetonEcrit", null) == null) return; // première installation : le jeton fera la demande
+        p.edit().putLong("pushPingDemande", 0).putBoolean("pushEchecNote", false).apply();
+        Journal.log(c, "Push : nouvelle version, ping redemandé au serveur");
+    }
+
+    static long versionInstallee(Context c) {
+        try {
+            return c.getPackageManager().getPackageInfo(c.getPackageName(), 0).getLongVersionCode();
+        } catch (Exception e) {
+            return 0;
         }
     }
 
