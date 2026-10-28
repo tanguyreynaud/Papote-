@@ -512,7 +512,8 @@ async function watchFace() {
   const callId = ringing && ringing.id;
   let stream;
   try {
-    stream = await navigator.mediaDevices.getUserMedia(CAMERA);
+    // Caméra seule pendant la sonnerie : ouvrir le micro coupait la sonnerie 2 secondes (Tanguy, 28/10).
+    stream = await navigator.mediaDevices.getUserMedia({ video: CAMERA.video });
   } catch (e) {
     console.warn('Caméra indisponible pendant la sonnerie', e);
     return;
@@ -521,8 +522,6 @@ async function watchFace() {
     stream.getTracks().forEach((t) => t.stop());
     return;
   }
-  // Le micro attend l'appel : on ne l'ouvre que pour éviter une deuxième demande.
-  stream.getAudioTracks().forEach((t) => { t.enabled = false; });
   const video = $('ring-face');
   video.srcObject = stream;
   video.hidden = false;
@@ -756,6 +755,11 @@ async function answer() {
 
   try {
     if (!stream) stream = await navigator.mediaDevices.getUserMedia(CAMERA);
+    // Caméra gardée de la sonnerie (sans micro) : le micro s'ouvre maintenant, au décroché.
+    if (!stream.getAudioTracks().length) {
+      const mic = await navigator.mediaDevices.getUserMedia({ audio: CAMERA.audio });
+      mic.getAudioTracks().forEach((t) => stream.addTrack(t));
+    }
   } catch (e) {
     console.error(e);
     reportCallIncident('camera', `${e && e.name}: ${e && e.message}`, id);
