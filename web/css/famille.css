@@ -1407,3 +1407,7 @@ a { text-decoration: none; }
 .invitation-rond { width: 36px; height: 36px; font-weight: 700; font-size: 15px; color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--bg)); }
 .invitation-email { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #form-invite button[disabled] { opacity: 1; }
+
+/* Annuler ma commande / Résilier : un lien gris discret en bas de la carte, pas un bouton mis en avant. */
+.abo-sortie { display: inline-block; width: auto; min-height: 0; margin-top: 10px; padding: 4px 0; font-size: 14px; font-weight: 600; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; }
+.abo-sortie-info { margin: 14px 0 0; font-size: 13px; line-height: 1.45; }
