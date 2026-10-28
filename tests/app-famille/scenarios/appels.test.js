@@ -21,6 +21,27 @@ async function lancerAppel(t) {
   await t.page.locator('#call').waitFor({ state: 'visible' });
 }
 
+// Note chaque réglage de débit vidéo demandé par l'app (RTCRtpSender.setParameters).
+const espionnerDebit = (tel) => tel.page.evaluate(() => {
+  window.__debits = window.__debits || [];
+  if (RTCRtpSender.prototype.setParameters.__espion) return;
+  const vrai = RTCRtpSender.prototype.setParameters;
+  RTCRtpSender.prototype.setParameters = function (params) {
+    if (this.track && this.track.kind === 'video' && params.encodings && params.encodings[0]) {
+      const { maxBitrate, maxFramerate, scaleResolutionDownBy } = params.encodings[0];
+      window.__debits.push({ maxBitrate, maxFramerate, scaleResolutionDownBy });
+    }
+    return vrai.call(this, params);
+  };
+  RTCRtpSender.prototype.setParameters.__espion = true;
+});
+// Le dernier réglage noté, une fois qu'il vaut `debit`.
+async function dernierDebit(tel, debit) {
+  await tel.page.waitForFunction((d) => { const l = window.__debits || []; return l.length && l[l.length - 1].maxBitrate === d; }, debit, { timeout: 10_000 })
+    .catch(async () => assert.fail(`débit attendu ${debit}, réglages notés : ${JSON.stringify(await tel.page.evaluate(() => window.__debits))}`));
+  return tel.page.evaluate(() => window.__debits[window.__debits.length - 1]);
+}
+
 test('Appel vidéo vers la tablette : ça sonne, la tablette décroche, image reçue, on raccroche', async () => {
   const julie = await banc.telephone('Julie');
   const { fid, tab } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
@@ -53,6 +74,13 @@ test('Appel vidéo vers la tablette : ça sonne, la tablette décroche, image re
   });
   assert.deepStrictEqual(cadrage, { ajustement: 'cover', pleinEcran: true }, 'image de Mamie en plein écran');
   assert.ok(await julie.page.locator('#call-hangup').isVisible(), 'Raccrocher visible');
+
+  // Qualité de la vidéo envoyée selon le réseau de la tablette (answer.reseau, écrit par la tablette avec sa réponse).
+  await espionnerDebit(julie);
+  await tablette.ref(mamie, appel.id).update({ 'answer.reseau': 'wifi' });
+  assert.deepStrictEqual(await dernierDebit(julie, 1_200_000), { maxBitrate: 1_200_000, maxFramerate: 20, scaleResolutionDownBy: 1 }, 'tablette en Wi-Fi : pleine qualité');
+  await tablette.ref(mamie, appel.id).update({ 'answer.reseau': 'sim' });
+  assert.deepStrictEqual(await dernierDebit(julie, 500_000), { maxBitrate: 500_000, maxFramerate: 15, scaleResolutionDownBy: 1.5 }, 'tablette sur SIM : économe');
 
   await julie.page.click('#call-hangup');
   await g.attendreBase(async () => (await tablette.ref(mamie, appel.id).get()).data().state === 'ended', 'appel terminé');
@@ -90,6 +118,9 @@ test('Mamie appelle Julie : sonnerie, réponse audio, passage en vidéo, Mamie r
   const cid = await tablette.appeler(mamie, { vers: uid });
   await julie.page.locator('#incoming').waitFor({ state: 'visible' });
   assert.strictEqual(await julie.page.locator('#incoming-name').innerText(), 'Mamie Emma');
+  // Tablette sur SIM : la vidéo envoyée en passant en vidéo reste économe.
+  await tablette.ref(mamie, cid).update({ 'offer.reseau': 'sim' });
+  await espionnerDebit(julie);
   await julie.page.click('#incoming-answer');
   const reponse = await tablette.prendreReponse(mamie, cid);
   assert.deepStrictEqual([reponse.uid, reponse.name], [uid, 'Julie']);
@@ -101,6 +132,7 @@ test('Mamie appelle Julie : sonnerie, réponse audio, passage en vidéo, Mamie r
   await julie.page.click('#call-video');
   await g.attendreBase(async () => (await tablette.ref(mamie, cid).get()).data().answer.video === true, 'vidéo signalée');
   await julie.page.waitForFunction(() => document.getElementById('call-local').srcObject);
+  assert.deepStrictEqual(await dernierDebit(julie, 500_000), { maxBitrate: 500_000, maxFramerate: 15, scaleResolutionDownBy: 1.5 }, 'tablette sur SIM : vidéo économe');
 
   await tablette.raccrocher(mamie, cid);
   await julie.page.locator('#call-status', { hasText: 'Appel terminé' }).waitFor();

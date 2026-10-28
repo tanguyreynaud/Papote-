@@ -22,25 +22,62 @@ async function iceServers() {
 }
 
 // À l'ouverture de l'app et dès qu'un appel sonne : le relais est prêt avant « Répondre ».
-// Débit de la vidéo envoyée à la tablette : 500 kbit/s et 20 images/s au plus (la tablette envoie
-// 300 kbit/s). À appliquer après setLocalDescription, à la connexion et après replaceTrack.
-const VIDEO_MAX_BITRATE = 500_000;
+// Vidéo envoyée à la tablette, selon le réseau de la tablette (champ « reseau » de l'appel, écrit par
+// elle : 'sim' ou 'wifi') et celui du téléphone. Tablette sur SIM, ou téléphone lui-même en 4G (Android
+// seulement : navigator.connection) : 500 kbit/s, 640x360, 15 images/s, pour ménager les forfaits.
+// Tablette en Wi-Fi : pleine qualité, 1,2 Mbit/s, 960x540, 20 images/s. Réseau inconnu (tablette pas
+// encore à jour) : comme avant, 500 kbit/s en 960x540 à 20 images/s.
+// À appliquer après setLocalDescription, à la connexion, après replaceTrack et quand un réseau change.
+const REGLAGES_VIDEO = {
+  sim: { maxBitrate: 500_000, maxFramerate: 15, scaleResolutionDownBy: 1.5 },
+  wifi: { maxBitrate: 1_200_000, maxFramerate: 20, scaleResolutionDownBy: 1 },
+  inconnu: { maxBitrate: 500_000, maxFramerate: 20, scaleResolutionDownBy: 1 },
+};
+const reseauTablette = new WeakMap(); // pc -> 'sim' | 'wifi'
+function telephoneEnDonneesMobiles() {
+  const c = navigator.connection;
+  return !!c && c.type === 'cellular';
+}
+function reglagesVideo(pc) {
+  const reseau = reseauTablette.get(pc);
+  if (reseau === 'sim') return REGLAGES_VIDEO.sim;
+  if (reseau === 'wifi') return telephoneEnDonneesMobiles() ? REGLAGES_VIDEO.sim : REGLAGES_VIDEO.wifi;
+  return REGLAGES_VIDEO.inconnu;
+}
 async function limiterVideo(pc) {
+  const reglages = reglagesVideo(pc);
   for (const sender of pc.getSenders()) {
     if (!sender.track || sender.track.kind !== 'video') continue;
     try {
       const params = sender.getParameters();
       if (!params.encodings || !params.encodings.length) params.encodings = [{}];
-      params.encodings[0].maxBitrate = VIDEO_MAX_BITRATE;
-      params.encodings[0].maxFramerate = 20;
+      Object.assign(params.encodings[0], reglages);
       await sender.setParameters(params);
     } catch (e) { /* navigateur sans réglage de débit : on garde le comportement par défaut */ }
   }
+}
+// Réseau de la tablette, écrit par elle dans sa réponse (appel du proche) ou dans son offre (appel de
+// Mamie) : on règle de nouveau la vidéo s'il change.
+function noterReseau(pc, data) {
+  const reseau = [data && data.answer && data.answer.reseau, data && data.offer && data.offer.reseau]
+    .find((r) => r === 'sim' || r === 'wifi');
+  if (!reseau || reseauTablette.get(pc) === reseau) return;
+  reseauTablette.set(pc, reseau);
+  limiterVideo(pc);
 }
 function limiterALaConnexion(pc) {
   pc.addEventListener('connectionstatechange', () => {
     if (pc.connectionState === 'connected') limiterVideo(pc);
   });
+  // Le téléphone passe du Wi-Fi à la 4G (ou l'inverse) pendant l'appel.
+  const c = navigator.connection;
+  if (c && c.addEventListener) {
+    const changer = () => {
+      if (pc.connectionState === 'closed') c.removeEventListener('change', changer);
+      else limiterVideo(pc);
+    };
+    c.addEventListener('change', changer);
+  }
 }
 
 export function warmUpCalls() {
@@ -264,6 +301,7 @@ export async function startCall(fid, caller, ui) {
   stops.push(onSnapshot(callRef, async (snap) => {
     const data = snap.data();
     if (!data) return;
+    noterReseau(pc, data);
     if (data.answer && !answered) {
       answered = true;
       clearTimeout(ringTimer);
@@ -397,6 +435,7 @@ export async function answerIncoming(fid, callId, me, ui) {
   };
 
   try {
+    noterReseau(pc, first);
     await pc.setRemoteDescription(first.offer);
     // La tablette prévoit une voie vidéo vide : on l'accepte dans les deux sens pour pouvoir
     // allumer la caméra plus tard sans renégocier.
@@ -425,6 +464,7 @@ export async function answerIncoming(fid, callId, me, ui) {
     });
   }));
   stops.push(onSnapshot(ref, (snap) => {
+    noterReseau(pc, snap.data());
     const state = snap.data() && snap.data().state;
     if (['ended', 'missed', 'declined'].includes(state)) finish('ended', null);
   }));
