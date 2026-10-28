@@ -280,14 +280,16 @@ const CAMERA = {
   audio: { echoCancellation: true, noiseSuppression: true },
 };
 
-// Vidéo envoyée par la tablette plafonnée (~300 kbit/s, 20 images/s) : environ 350 Mo par heure
-// de visio au total au lieu de ~550, soit ~14 h par mois avec 5 Go. À appeler après la négociation.
-// Sur la carte SIM (pas de Wi-Fi), mode « économie » : Mamie est filmée en 360p à ~150 kbit/s
-// (elle bouge peu), et la vidéo du proche, celle qu'elle regarde, est demandée à ~450 kbit/s.
-// Environ 300 Mo par heure de visio au lieu de ~1 Go. Sur Wi-Fi, rien ne compte : bonne qualité.
-const VIDEO_MAX_BITRATE = 300_000;
-const SIM_SEND_BITRATE = 150_000;
-const SIM_RECEIVE_KBPS = 450;
+// Débit de la vidéo envoyée par la tablette, réglé après la négociation (capVideo).
+// Sur la carte SIM (pas de Wi-Fi), mode « économie », réparti selon l'écran (Tanguy, 28/10) : la
+// famille regarde Mamie sur un petit téléphone, Mamie regarde la famille sur la grande tablette.
+// Mamie est filmée en 400x300, 12 i/s, 120 kbit/s (elle bouge peu : on garde la netteté, quitte à
+// perdre des images) ; la vidéo du proche est demandée à 500 kbit/s, le plafond du téléphone.
+// Mesuré avant : 4,6 Mo la minute ; attendu ~5,4 Mo (avis du fil « Réduire la consommation », 28/10).
+// Sur Wi-Fi : 640x480, 20 i/s, 700 kbit/s (au-delà, rien de plus en 480p), réception sans plafond.
+const VIDEO_MAX_BITRATE = 700_000;
+const SIM_SEND_BITRATE = 120_000;
+const SIM_RECEIVE_KBPS = 500;
 function onSimData() {
   try {
     const s = JSON.parse(android().wifiStatus());
@@ -322,8 +324,11 @@ function capVideo(pc) {
       const p = s.getParameters();
       if (!p.encodings || !p.encodings.length) p.encodings = [{}];
       p.encodings[0].maxBitrate = sim ? SIM_SEND_BITRATE : VIDEO_MAX_BITRATE;
-      p.encodings[0].maxFramerate = sim ? 15 : 20;
-      if (sim) p.encodings[0].scaleResolutionDownBy = 1.33; // 640x480 -> environ 480x360
+      p.encodings[0].maxFramerate = sim ? 12 : 20;
+      // Quand Mamie bouge, l'encodeur perd des images plutôt que de la netteté.
+      p.degradationPreference = 'maintain-resolution';
+      try { s.track.contentHint = 'detail'; } catch (e) { /* ancien navigateur */ }
+      if (sim) p.encodings[0].scaleResolutionDownBy = 1.6; // 640x480 -> environ 400x300 (petit écran en face)
       s.setParameters(p).catch(() => {});
     });
   } catch (e) { /* navigateur trop ancien : pas de plafond */ }
@@ -762,7 +767,8 @@ async function connectAnswer(id, data, callRef, stream) {
   const reply = await pc.createAnswer();
   await pc.setLocalDescription(reply);
   capVideo(pc);
-  await updateDoc(callRef, { answer: { type: reply.type, sdp: limitReceive(reply.sdp) }, state: 'accepted' });
+  // « reseau » : le téléphone règle sa vidéo selon le réseau de la tablette (SIM : 500 kbit/s).
+  await updateDoc(callRef, { answer: { type: reply.type, sdp: limitReceive(reply.sdp), reseau: onSimData() ? 'sim' : 'wifi' }, state: 'accepted' });
 
   active.stops.push(onSnapshot(collection(callRef, 'callerCandidates'), (snap) => {
     snap.docChanges().forEach((c) => {
@@ -958,7 +964,8 @@ window.papoteCallFamily = ({ to = null, toName = null, sos = 0, onState = () => 
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
     if (done) return;
-    await updateDoc(ref, { offer: { type: offer.type, sdp: limitReceive(offer.sdp) } });
+    // « reseau » : le téléphone règle sa vidéo selon le réseau de la tablette (règles du 28/10 requises).
+    await updateDoc(ref, { offer: { type: offer.type, sdp: limitReceive(offer.sdp), reseau: onSimData() ? 'sim' : 'wifi' } });
     const tOffre = Math.round(performance.now() - t0);
     if (tOffre > 3000) reportCallIncident('depart-lent', `appel-ecrit+micro=${tEcrit}ms offre=${tOffre}ms`, ref.id);
 
