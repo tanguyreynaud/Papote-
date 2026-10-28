@@ -52,6 +52,16 @@ test('Dans les 30 jours : seule « Annuler ma commande » est proposée ; annula
   await g.attendreVue(julie, 'view-profile');
   await julie.page.locator('#retour-box', { hasText: 'Tablette à nous rendre' }).waitFor();
   assert.ok(g.dernierMail('julie@exemple.fr'), 'e-mail avec les instructions de retour');
+  assert.strictEqual(s.sendcloud.colis.size, 0, 'pas d\'étiquette créée d\'office');
+  // Prête à déposer le colis : « Je renvoie la tablette » affiche le QR code, sans impression.
+  await s.db.doc('gestion/reglages').set({ expediteur: { nom: 'Papote', adresse: '1 rue de test', cp: '07000', ville: 'Privas' } }, { merge: true });
+  // L'image du QR code est rangée dans Storage (simulé) : une petite image à la place.
+  const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64');
+  await julie.page.route('https://firebasestorage.googleapis.com/**', (r) => r.fulfill({ contentType: 'image/png', body: PNG }));
+  await julie.page.click('#btn-renvoyer');
+  await julie.page.locator('#retour-qr-box').waitFor({ state: 'visible' });
+  assert.strictEqual(await julie.page.locator('#btn-renvoyer').isVisible(), false);
+  assert.strictEqual(s.sendcloud.colis.size, 1, 'un seul QR code');
   // Plus d'envoi possible : Papote est en pause.
   await julie.page.click('.nav-item[data-tab="home"]');
   await julie.page.locator('#abo-banner', { hasText: 'Papote est en pause' }).waitFor();

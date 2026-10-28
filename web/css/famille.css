@@ -1420,3 +1420,5 @@ a { text-decoration: none; }
 .facture-lien { color: var(--accent); font-weight: 700; text-decoration: none; padding: 6px 0; }
 #view-abonnement .abo-sortie { margin-left: 4px; }
 #view-abonnement .abo-sortie-info { margin: 18px 4px 0; }
+.retour-qr { margin: 4px 0 8px; text-align: center; }
+.retour-qr img { display: block; width: 100%; max-width: 320px; margin: 0 auto 8px; background: #fff; border-radius: 8px; }

@@ -63,6 +63,11 @@ export function finDeContrat(fid) {
   return call('finDeContrat', { fid });
 }
 
+/** « Je renvoie la tablette » : le QR code de retour (sans impression), créé à la demande : { etiquette, qr }. */
+export function renvoyerTablette(fid) {
+  return call('renvoyerTablette', { fid });
+}
+
 /** Annuler la commande (30 jours après la réception) : l'abonnement s'arrête tout de suite, tout est remboursé. */
 export function retracter(fid) {
   return call('retracter', { fid });

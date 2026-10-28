@@ -17,7 +17,7 @@ import { askConfirm, confirmerAvecCroix, notice, avantDePartir, chooseAction } f
 import { showGuideOnce } from './guide.js';
 import {
   abonnementOk, FORMULES, LIBELLES, ouvrirPortail, payer, rattacherCommande, resilier, annulerResiliation,
-  finDeContrat, facturesFamille, retracter, inviterParEmail, reserverTablette, nommerFamille, finirInstallation,
+  finDeContrat, facturesFamille, renvoyerTablette, retracter, inviterParEmail, reserverTablette, nommerFamille, finirInstallation,
   annulerInstallation,
 } from './abonnement.js';
 import { startCall, watchTabletBusy, watchIncomingCalls, answerIncoming, warmUpCalls, declineIncoming, reportCallIncident } from './appel.js';
@@ -2769,15 +2769,24 @@ async function renderFinDeContrat(abo) {
   box.hidden = true;
   $('retour-etiquette').hidden = true;
   $('retour-info').hidden = true;
+  $('retour-aide').hidden = true;
+  $('btn-renvoyer').hidden = true;
+  $('retour-qr-box').hidden = true;
   if (rest && ['attendue', 'echec'].includes(rest.statut)) {
     box.hidden = false;
     $('retour-text').textContent = rest.avant ? `Tablette à nous rendre avant le ${jourMois(rest.avant)}` : 'Tablette à nous rendre';
-    if (rest.etiquette) {
+    // Le QR code n'est créé qu'au moment de déposer le colis (« Je renvoie la tablette »).
+    if (rest.qr) {
+      $('retour-qr').src = rest.qr;
+      $('retour-qr-box').hidden = false;
+    } else if (rest.etiquette) {
       $('retour-etiquette').href = rest.etiquette;
       $('retour-etiquette').hidden = false;
+    } else if (amFamilyAdmin()) {
+      $('retour-aide').hidden = false;
+      $('btn-renvoyer').hidden = false;
     }
     const infos = [];
-    if (!rest.etiquette) infos.push("L'étiquette de retour prépayée arrive par e-mail.");
     if (remb?.statut === 'au-retour') infos.push(`${euros(remb.montant)} remboursés dès réception de la tablette.`);
     $('retour-info').textContent = infos.join(' ');
     $('retour-info').hidden = !infos.length;
@@ -2790,6 +2799,20 @@ async function renderFinDeContrat(abo) {
     }
   }
 }
+
+$('btn-renvoyer').addEventListener('click', async () => {
+  const b = $('btn-renvoyer');
+  if (b.disabled) return;
+  b.disabled = true;
+  b.replaceChildren(Object.assign(document.createElement('span'), { className: 'spinner-inline' }), 'Un instant…');
+  await withAboError(async () => {
+    await renvoyerTablette(session.fid);
+    finCle = null;
+    await renderFinDeContrat(session.family.abonnement);
+  });
+  b.disabled = false;
+  b.textContent = 'Je renvoie la tablette';
+});
 
 function reprisePossible() {
   return session?.family?.abonnement?.statut === 'resilie' && amFamilyAdmin()
