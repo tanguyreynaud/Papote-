@@ -1543,7 +1543,18 @@ function alertesSim(l) {
     else if (j <= 60) liste.push(`${carte} expire dans ${j} j`);
   }
   if (l.statut === 'suspendue') liste.push('suspendue : à résilier ou réactiver');
+  const recharge = alerteRecharge(l);
+  if (recharge) liste.unshift(recharge);
   return liste;
+}
+// Forfait prépayé (Lyca, 30 jours) : même règle qu'alerteRecharge (functions/gestion.js).
+function alerteRecharge(l) {
+  if (l.statut !== 'active' || !l.prochaineRecharge) return null;
+  const j = Math.ceil((l.prochaineRecharge - Date.now()) / JOUR_MS);
+  if (l.renouvellementAuto) return j < -2 ? 'renouvellement pas vu : vérifier chez l\'opérateur' : null;
+  if (j < 0) return 'forfait fini : à recharger';
+  if (j === 0) return 'à recharger aujourd\'hui';
+  return j <= 3 ? `à recharger dans ${j} j` : null;
 }
 const STATUT_CLASSE = { active: 'ok', stock: 'info', suspendue: 'ko', resiliee: '' };
 const fin4 = (iccid) => (iccid ? `…${String(iccid).slice(-4)}` : '');
@@ -1669,6 +1680,7 @@ function remplirPageSim(id) {
       ...modif('Carte bancaire', l.cb ? `…${l.cb}` : null, 'cb', { valeur: l.cb, mode: 'numeric', aide: '4 derniers chiffres' }),
       ...modif('Expiration de la carte', l.cbExp, 'cbExp', { valeur: l.cbExp, type: 'month' }),
       ...modif('Note', l.note, 'note', { valeur: l.note, long: true }))),
+    carteRecharges(l, modif),
     vue ? h('div', { class: 'card' }, h('h2', {}, 'Ce que dit la tablette'),
       h('dl', { class: 'fiche' },
         ...ligne('Réseau', vue.sim.reseau ? `${vue.sim.reseau}${vue.sim.signal >= 0 ? `, signal ${vue.sim.signal}/4` : ''}` : null),
@@ -1683,6 +1695,67 @@ function convertirEuros(v) {
   const c = enCentimes(v);
   if (Number.isNaN(c)) throw new Error('Montant illisible (ex. 2,99).');
   return c;
+}
+
+// Recharges du forfait d'une ligne : fin du forfait, renouvellement, « J'ai rechargé » et les dépenses payées.
+function carteRecharges(l, modif) {
+  const recharges = donnees.depenses.filter((d) => d.sim === l.id).sort((a, b) => (b.date || 0) - (a.date || 0));
+  if (l.statut === 'resiliee' && !recharges.length) return null;
+  const duree = l.dureeForfait || 30;
+  const j = l.prochaineRecharge ? Math.ceil((l.prochaineRecharge - Date.now()) / JOUR_MS) : null;
+  const fin = l.prochaineRecharge
+    ? `${jour(l.prochaineRecharge)} (${j > 1 ? `dans ${j} jours` : j === 1 ? 'demain' : j === 0 ? 'aujourd\'hui' : `il y a ${-j} j`})` : null;
+  const annee = new Date().getFullYear();
+  const cetteAnnee = recharges.filter((d) => new Date(d.date).getFullYear() === annee).reduce((t, d) => t + (d.montant || 0), 0);
+  const bouton = l.statut === 'active'
+    ? h('button', { type: 'button', class: 'primary small-btn no-print', onclick: () => noterRecharge(l) }, 'J\'ai rechargé') : null;
+  return h('div', { class: 'card' },
+    h('div', { class: 'tete-fiche' }, h('h2', {}, 'Recharges du forfait'), h('div', { class: 'tete-actions' }, bouton)),
+    h('dl', { class: 'fiche' },
+      ...modif('Fin du forfait', fin, 'prochaineRecharge', { valeur: dateChamp(l.prochaineRecharge), type: 'date', vide: 'pas notée',
+        convertir: (v) => (v ? dateSaisie(v) : null) }),
+      ...modif('Durée du forfait', `${duree} jours`, 'dureeForfait', { valeur: String(duree), mode: 'numeric', suffixe: 'jours',
+        convertir: (v) => { const n = Number(v); if (!Number.isInteger(n) || n < 1 || n > 366) throw new Error('Un nombre de jours, ex. 30.'); return n; } }),
+      ...modif('Renouvellement', l.renouvellementAuto ? 'automatique, par l\'opérateur' : 'à la main', 'renouvellementAuto', {
+        valeur: l.renouvellementAuto ? 'oui' : '', options: [['', 'À la main'], ['oui', 'Automatique, par l\'opérateur']], convertir: (v) => v === 'oui' }),
+      ...(cetteAnnee ? [h('dt', {}, `Payé en ${annee}`), h('dd', {}, euros(cetteAnnee))] : [])),
+    h('p', { class: 'muted small' }, l.renouvellementAuto
+      ? 'Les factures de l\'opérateur envoyées à factures@mapapote.fr se rangent ici toutes seules. Sans facture 2 jours après la fin du forfait, une alerte s\'affiche.'
+      : 'Rappel 3 jours avant la fin du forfait. Une facture envoyée à factures@mapapote.fr se range aussi ici toute seule.'),
+    recharges.length ? h('div', { class: 'table' }, tableRecharges(recharges)) : h('p', { class: 'muted small' }, 'Aucune recharge notée.'));
+}
+function tableRecharges(recharges) {
+  const table = h('table');
+  remplirTable(table, [{ titre: 'Date' }, { titre: 'Libellé' }, { titre: 'Montant', n: 1 }], recharges.slice(0, 24).map((d) => ({
+    onclick: () => { location.hash = `#depense/${encodeURIComponent(d.id)}`; },
+    cellules: [jour(d.date), h('span', {}, d.libelle, d.aVerifier ? h('span', {}, ' ', badge('à vérifier', 'ko')) : null), euros(d.montant)],
+  })));
+  return table;
+}
+
+// « J'ai rechargé » : le montant payé (prix du forfait proposé), puis la dépense et la nouvelle fin du forfait.
+async function noterRecharge(l) {
+  const v = await saisir(`Recharge payée aujourd'hui pour ${l.numero || 'cette carte'} : montant en euros`, enEuros(coutLigne(l)) || '', { oui: 'Noter la recharge' });
+  if (v == null) return;
+  let montant;
+  try {
+    montant = convertirEuros(v);
+    if (!montant) throw new Error('Montant manquant (ex. 4,99).');
+  } catch (e) {
+    prevenir(e.message);
+    return;
+  }
+  try {
+    const r = await patienter('Recharge notée…', async () => {
+      const res = await appeler('gestionSim', { action: 'recharger', id: l.id, montant });
+      donnees = await lireDonnees(true);
+      return res;
+    });
+    afficherTout();
+    annoncer(r.prochaineRecharge ? `Recharge notée, prochaine le ${jour(r.prochaineRecharge)}` : 'Recharge notée');
+  } catch (e) {
+    prevenir(messageErreur(e));
+  }
 }
 
 // attente : texte de la carte « en cours » pour une action du ⋮ (un crayon a déjà sa roue dans son bouton).
@@ -2548,6 +2621,10 @@ function remplirPageDepense(id) {
           ? h('span', {}, badge('pas encore reçue', 'info'), ' ', h('span', { class: 'muted small' }, 'seule la confirmation de commande est arrivée : transférez la facture à factures@mapapote.fr'))
           : pieces.length ? badge('reçue', 'ok') : h('span', { class: 'muted' }, 'aucun justificatif')),
         ligne('Justificatifs', pieces.length ? h('div', { class: 'pieces-liste' }, pieces) : null),
+        ...(d.categorie === 'sim' && !sims.length ? modif('Carte SIM rechargée', simDe(d.sim), 'sim', { valeur: d.sim || '', vide: 'aucune',
+          options: [['', 'Aucune'], ...donnees.sims.filter((l) => l.statut !== 'resiliee' || l.id === d.sim)
+            .map((l) => [l.id, [l.operateur, l.numero || fin4(l.iccid)].filter(Boolean).join(' · ') || 'Carte SIM'])],
+          convertir: (v) => v || null }) : []),
         ligne('Chaque mois', d.recurrence ? 'oui, ajoutée automatiquement chaque mois' : null),
         ligne('Entré au stock', (d.materiel || []).length ? d.materiel.join(', ') : null))),
     // Ce que l'achat a fait entrer : les tablettes (achat de tablettes) ou les cartes SIM, chacune vers sa page.
@@ -2561,6 +2638,12 @@ function remplirPageDepense(id) {
         h('span', { class: 'muted small' }, donnees.etats[etatTablette(t)] || t.etat))))
         : h('p', { class: 'muted small' }, 'Aucune tablette rattachée à cet achat.')) : null,
   ].filter(Boolean));
+}
+
+// Lien vers la page de la carte SIM rechargée par une dépense.
+function simDe(id) {
+  const l = id && donnees.sims.find((x) => x.id === id);
+  return l ? h('a', { href: `#sim/${encodeURIComponent(l.id)}` }, [l.operateur, l.numero || fin4(l.iccid)].filter(Boolean).join(' · ') || 'Carte SIM') : null;
 }
 
 function libelleDepense(d) {
