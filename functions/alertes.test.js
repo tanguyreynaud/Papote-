@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const { etatAlerte, pasVueAujourdhui } = require('./alertes');
+const { etatAlerte, pasVueDepuisLongtemps, alertePasVueDue } = require('./alertes');
 
 const MIN = 60_000;
 const maintenant = Date.parse('2026-10-19T10:00:00Z');
@@ -59,34 +59,27 @@ test('tablette jamais vue : pas d’alerte', () => {
 // 12h à Paris le 19 octobre 2026 = 10h UTC.
 const midi = Date.parse('2026-10-19T10:00:00Z');
 
-test('vue par la caméra ce matin : pas d’alerte', () => {
-  assert.strictEqual(pasVueAujourdhui({ lastSeen: new Date('2026-10-19T06:30:00Z') }, midi), false);
+const H = 3600_000;
+test('pas vue depuis deux jours : 48 h sans caméra ni toucher, l\'un ou l\'autre suffit', () => {
+  assert.strictEqual(pasVueDepuisLongtemps({ lastSeen: new Date(midi - 47 * H) }, midi), false, 'vue avant-hier midi : pas encore');
+  assert.strictEqual(pasVueDepuisLongtemps({ lastSeen: new Date(midi - 49 * H) }, midi), true);
+  assert.strictEqual(pasVueDepuisLongtemps({ lastSeen: new Date(midi - 60 * H), lastActive: new Date(midi - 3 * H) }, midi), false, 'touchée ce matin');
+  assert.strictEqual(pasVueDepuisLongtemps({ joinedAt: new Date(midi - 72 * H) }, midi), true, 'jamais vue depuis son arrivée il y a 3 jours');
+  assert.strictEqual(pasVueDepuisLongtemps({ joinedAt: new Date(midi - 10 * H) }, midi), false, 'installée ce matin');
+  assert.strictEqual(pasVueDepuisLongtemps({}, midi), false, 'rien de connu : rien');
 });
 
-test('touchée ce matin : pas d’alerte', () => {
-  assert.strictEqual(pasVueAujourdhui({ lastActive: new Date('2026-10-19T08:00:00Z') }, midi), false);
-});
-
-test('vue hier soir seulement : alerte', () => {
-  assert.strictEqual(pasVueAujourdhui({ lastSeen: new Date('2026-10-18T20:00:00Z'), lastActive: new Date('2026-10-18T19:00:00Z') }, midi), true);
-});
-
-test('minuit à Paris compte pour le jour même (22h30 UTC la veille)', () => {
-  assert.strictEqual(pasVueAujourdhui({ lastSeen: new Date('2026-10-18T22:30:00Z') }, midi), false);
-});
-
-test('jamais vue : alerte', () => {
-  assert.strictEqual(pasVueAujourdhui({}, midi), true);
-});
-
-const { alerteMatinDue } = require('./alertes');
-
-test('pas vue ce matin : seulement si une tablette répond encore (sinon « ne répond plus » a déjà prévenu)', () => {
-  const hier = new Date('2026-10-18T20:00:00Z');
-  assert.strictEqual(alerteMatinDue([{ lastSeen: hier, lastOnline: new Date(midi - 2 * MIN) }], midi), true);
-  assert.strictEqual(alerteMatinDue([{ lastSeen: hier, lastOnline: new Date(midi - 50 * MIN) }], midi), false, 'tablette hors ligne');
-  assert.strictEqual(alerteMatinDue([{ lastSeen: new Date('2026-10-19T08:00:00Z'), lastOnline: new Date(midi - MIN) }], midi), false, 'vue ce matin');
-  assert.strictEqual(alerteMatinDue([], midi), false);
+test('pas vue depuis deux jours : seulement si une tablette répond encore (sinon « ne répond plus » a déjà prévenu)', () => {
+  const hier = new Date(midi - 50 * H);
+  assert.strictEqual(alertePasVueDue([{ lastSeen: hier, lastOnline: new Date(midi - 2 * MIN) }], midi), true);
+  assert.strictEqual(alertePasVueDue([{ lastSeen: hier, lastOnline: new Date(midi - 50 * MIN) }], midi), false, 'tablette hors ligne');
+  assert.strictEqual(alertePasVueDue([{ lastSeen: new Date(midi - 20 * H), lastOnline: new Date(midi - MIN) }], midi), false, 'vue hier');
+  assert.strictEqual(alertePasVueDue([], midi), false);
   // Deux tablettes : il suffit qu'une réponde et qu'aucune ne l'ait vue.
-  assert.strictEqual(alerteMatinDue([{ lastSeen: hier, lastOnline: new Date(midi - 50 * MIN) }, { lastSeen: hier, lastOnline: new Date(midi - MIN) }], midi), true);
+  assert.strictEqual(alertePasVueDue([{ lastSeen: hier, lastOnline: new Date(midi - 50 * MIN) }, { lastSeen: hier, lastOnline: new Date(midi - MIN) }], midi), true);
+});
+
+test('le compte d’appels de la tablette (jamais en ligne) ne compte pas comme une tablette qui répond', () => {
+  const vieux = new Date(midi - 60 * H);
+  assert.strictEqual(alertePasVueDue([{ lastSeen: vieux, lastOnline: new Date(midi - 50 * MIN) }, { joinedAt: vieux }], midi), false);
 });
