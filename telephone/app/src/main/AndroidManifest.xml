@@ -37,9 +37,14 @@
             <meta-data
                 android:name="android.support.customtabs.trusted.STATUS_BAR_COLOR"
                 android:resource="@color/creme" />
+            <!-- Barre des boutons Android (retour, accueil) : sur le crème, Chrome les laissait
+                 blancs, donc invisibles. Indigo : boutons blancs toujours lisibles. -->
             <meta-data
                 android:name="android.support.customtabs.trusted.NAVIGATION_BAR_COLOR"
-                android:resource="@color/creme" />
+                android:resource="@color/indigo" />
+            <meta-data
+                android:name="android.support.customtabs.trusted.NAVIGATION_BAR_COLOR_DARK"
+                android:resource="@color/indigo" />
             <meta-data
                 android:name="android.support.customtabs.trusted.SPLASH_IMAGE_DRAWABLE"
                 android:resource="@drawable/logo_demarrage" />
