@@ -58,12 +58,13 @@ if ($Annuler) {
 
 Say 'Économie de données : seul Papote utilise internet…' 'Cyan'
 # 1. Économiseur de données, Papote autorisé en arrière-plan.
-$uid = [regex]::Match((Adb shell dumpsys package $Package), 'userId=(\d+)').Groups[1].Value
+# Android 14 et plus écrivent « appId= », les plus anciens « userId= ».
+$uid = [regex]::Match((Adb shell dumpsys package $Package), '(?:userId|appId)=(\d+)').Groups[1].Value
 if (-not $uid) { Say 'Papote n''est pas installé : économie de données non réglée.' 'Red'; return }
 Adb shell cmd netpolicy add restrict-background-whitelist $uid | Out-Null
 # Services Google aussi (même uid pour gms et gsf) : App Check / Play Integrity et notifications push.
 foreach ($g in 'com.google.android.gms', 'com.google.android.gsf') {
-    $gu = [regex]::Match((Adb shell dumpsys package $g), 'userId=(\d+)').Groups[1].Value
+    $gu = [regex]::Match((Adb shell dumpsys package $g), '(?:userId|appId)=(\d+)').Groups[1].Value
     if ($gu) { Adb shell cmd netpolicy add restrict-background-whitelist $gu | Out-Null }
 }
 Adb shell cmd netpolicy set restrict-background true | Out-Null
