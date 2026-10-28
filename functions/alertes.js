@@ -19,7 +19,7 @@ const journal = require('./journal-alertes');
 
 const DEBRANCHEE_MS = 10 * 60_000;
 const SILENCE_MS = 45 * 60_000;
-// Pendant les heures de veille de la famille (families/{fid}.veille, 23 h-7 h par défaut), la tablette ne
+// Pendant les heures de veille de la famille (families/{fid}.veille, 21 h-6 h 30 par défaut), la tablette ne
 // donne signe de vie qu'une fois par heure pour ménager la carte SIM (android/Sync.java, 28/10) : on
 // tolère 2 h de silence avant d'alerter.
 const SILENCE_NUIT_MS = 2 * 3600_000;
@@ -32,20 +32,27 @@ function enMillis(v) {
 }
 
 // Heure à Paris (0-23) d'un instant.
-function heureParis(ms) {
-  return Number(new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Paris', hour: 'numeric', hourCycle: 'h23' }).format(new Date(ms)));
+// Minutes écoulées depuis minuit, à Paris.
+function minutesParis(ms) {
+  const [h, m] = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+    .format(new Date(ms)).split(':').map(Number);
+  return h * 60 + m;
 }
 
-// Vrai pendant les heures de veille de la famille : { active, de, a } (absent = 23 h-7 h ; active false = jamais).
+// Réglage de la famille : { active, de, a } en heures (0-23) et, en plus, deMin / aMin (0 ou 30) pour les
+// demi-heures. Absent : de 21 h à 6 h 30.
+const VEILLE_DEFAUT = { de: 21, deMin: 0, a: 6, aMin: 30 };
+
+// Vrai pendant les heures de veille de la famille (active false = jamais).
 // Même règle que Veille.inRange sur la tablette : [de, a[, en passant minuit ; de == a : jamais.
 function enVeille(veille, maintenant) {
-  const v = veille || {};
+  const v = veille || VEILLE_DEFAUT;
   if (v.active === false) return false;
-  const de = Number.isInteger(v.de) ? v.de : 23;
-  const a = Number.isInteger(v.a) ? v.a : 7;
-  const h = heureParis(maintenant);
-  if (de < a) return h >= de && h < a;
-  if (de > a) return h >= de || h < a;
+  const de = (Number.isInteger(v.de) ? v.de : 21) * 60 + (v.deMin === 30 ? 30 : 0);
+  const a = (Number.isInteger(v.a) ? v.a : 6) * 60 + (v.aMin === 30 ? 30 : 0);
+  const t = minutesParis(maintenant);
+  if (de < a) return t >= de && t < a;
+  if (de > a) return t >= de || t < a;
   return false;
 }
 

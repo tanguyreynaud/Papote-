@@ -83,3 +83,15 @@ test('le compte d’appels de la tablette (jamais en ligne) ne compte pas comme 
   const vieux = new Date(midi - 60 * H);
   assert.strictEqual(alertePasVueDue([{ lastSeen: vieux, lastOnline: new Date(midi - 50 * MIN) }, { joinedAt: vieux }], midi), false);
 });
+
+test('veille par défaut de 21 h à 6 h 30, demi-heures prises en compte', () => {
+  const { enVeille } = require('./alertes');
+  const paris = (hhmm) => Date.parse(`2026-10-19T${hhmm}:00+02:00`);
+  assert.strictEqual(enVeille(undefined, paris('20:59')), false);
+  assert.strictEqual(enVeille(undefined, paris('21:00')), true);
+  assert.strictEqual(enVeille(undefined, paris('06:29')), true);
+  assert.strictEqual(enVeille(undefined, paris('06:30')), false);
+  assert.strictEqual(enVeille({ active: true, de: 22, deMin: 30, a: 7 }, paris('22:15')), false);
+  assert.strictEqual(enVeille({ active: true, de: 22, deMin: 30, a: 7 }, paris('22:45')), true);
+  assert.strictEqual(enVeille({ active: true, de: 23, a: 7 }, paris('06:45')), true);
+});
