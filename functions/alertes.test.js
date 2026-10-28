@@ -18,8 +18,12 @@ test('débranchée depuis plus de 10 minutes', () => {
   assert.strictEqual(etatAlerte({ lastOnline: il(1), battery: { charging: false, unpluggedAt: il(11) } }, maintenant), 'debranchee');
 });
 
-test('silencieuse depuis plus de 45 minutes, même débranchée : le silence passe avant', () => {
-  assert.strictEqual(etatAlerte({ lastOnline: il(50), battery: { charging: false, unpluggedAt: il(60) } }, maintenant), 'silence');
+test('silencieuse depuis plus de 1 h 10, même débranchée : le silence passe avant', () => {
+  assert.strictEqual(etatAlerte({ lastOnline: il(75), battery: { charging: false, unpluggedAt: il(85) } }, maintenant), 'silence');
+});
+
+test('60 minutes de silence en journée : pas encore d’alerte (tour de 30 min, un tour manqué)', () => {
+  assert.strictEqual(etatAlerte({ lastOnline: il(60) }, maintenant), null);
 });
 
 // 3 h du matin à Paris le 19 octobre 2026 = 1 h UTC : pendant la veille (23 h-7 h par défaut).
@@ -35,9 +39,9 @@ test('la nuit, plus de 2 heures de silence : alerte', () => {
   assert.strictEqual(etatAlerte({ lastOnline: laNuitIl(125) }, nuit), 'silence');
 });
 
-test('veille désactivée par la famille, ou plage qui ne couvre pas 3 h : règle de jour (45 minutes)', () => {
-  assert.strictEqual(etatAlerte({ lastOnline: laNuitIl(50) }, nuit, { active: false }), 'silence');
-  assert.strictEqual(etatAlerte({ lastOnline: laNuitIl(50) }, nuit, { active: true, de: 23, a: 2 }), 'silence');
+test('veille désactivée par la famille, ou plage qui ne couvre pas 3 h : règle de jour (1 h 10)', () => {
+  assert.strictEqual(etatAlerte({ lastOnline: laNuitIl(75) }, nuit, { active: false }), 'silence');
+  assert.strictEqual(etatAlerte({ lastOnline: laNuitIl(75) }, nuit, { active: true, de: 23, a: 2 }), 'silence');
 });
 
 test('en journée, la veille de la famille ne change rien', () => {
@@ -49,7 +53,7 @@ test('en journée, la veille de la famille ne change rien', () => {
 
 test('dates Firestore (toMillis) acceptées', () => {
   const ts = (d) => ({ toMillis: () => d.getTime() });
-  assert.strictEqual(etatAlerte({ lastOnline: ts(il(46)) }, maintenant), 'silence');
+  assert.strictEqual(etatAlerte({ lastOnline: ts(il(75)) }, maintenant), 'silence');
 });
 
 test('tablette jamais vue : pas d’alerte', () => {
@@ -72,16 +76,16 @@ test('pas vue depuis deux jours : 48 h sans caméra ni toucher, l\'un ou l\'autr
 test('pas vue depuis deux jours : seulement si une tablette répond encore (sinon « ne répond plus » a déjà prévenu)', () => {
   const hier = new Date(midi - 50 * H);
   assert.strictEqual(alertePasVueDue([{ lastSeen: hier, lastOnline: new Date(midi - 2 * MIN) }], midi), true);
-  assert.strictEqual(alertePasVueDue([{ lastSeen: hier, lastOnline: new Date(midi - 50 * MIN) }], midi), false, 'tablette hors ligne');
+  assert.strictEqual(alertePasVueDue([{ lastSeen: hier, lastOnline: new Date(midi - 80 * MIN) }], midi), false, 'tablette hors ligne');
   assert.strictEqual(alertePasVueDue([{ lastSeen: new Date(midi - 20 * H), lastOnline: new Date(midi - MIN) }], midi), false, 'vue hier');
   assert.strictEqual(alertePasVueDue([], midi), false);
   // Deux tablettes : il suffit qu'une réponde et qu'aucune ne l'ait vue.
-  assert.strictEqual(alertePasVueDue([{ lastSeen: hier, lastOnline: new Date(midi - 50 * MIN) }, { lastSeen: hier, lastOnline: new Date(midi - MIN) }], midi), true);
+  assert.strictEqual(alertePasVueDue([{ lastSeen: hier, lastOnline: new Date(midi - 80 * MIN) }, { lastSeen: hier, lastOnline: new Date(midi - MIN) }], midi), true);
 });
 
 test('le compte d’appels de la tablette (jamais en ligne) ne compte pas comme une tablette qui répond', () => {
   const vieux = new Date(midi - 60 * H);
-  assert.strictEqual(alertePasVueDue([{ lastSeen: vieux, lastOnline: new Date(midi - 50 * MIN) }, { joinedAt: vieux }], midi), false);
+  assert.strictEqual(alertePasVueDue([{ lastSeen: vieux, lastOnline: new Date(midi - 80 * MIN) }, { joinedAt: vieux }], midi), false);
 });
 
 test('veille par défaut de 21 h à 6 h 30, demi-heures prises en compte', () => {
