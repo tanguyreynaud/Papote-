@@ -74,12 +74,13 @@ exports.reveilOrdre = onDocumentCreated({ ...OPTIONS, document: 'families/{fid}/
 });
 
 // La fiche de la famille a changé (rev à chaque envoi, rappels, réglages, abonnement, nom…) : la
-// tablette fait un tour de synchronisation. Le message tient 10 min et les suivants le remplacent.
+// tablette fait un tour de synchronisation. Le message tient 1 h et les suivants le remplacent : un
+// réveil retardé par Android (28/10, vidéo de 18h54 jamais arrivée en 10 min) vaut mieux qu'un perdu.
 exports.reveilFamille = onDocumentUpdated({ ...OPTIONS, document: 'families/{fid}' }, async (event) => {
   if (!event.data) return;
   const champs = changements(event.data.before.data(), event.data.after.data());
   if (!champs.length) return;
-  const n = await reveiller(base(), event.params.fid, { type: 'famille' }, 600);
+  const n = await reveiller(base(), event.params.fid, { type: 'famille' }, 3600);
   // Toujours journalisé : « tablettes: 0 » = aucun jeton (ancienne version, jeton effacé), à distinguer
   // d'un message parti mais jamais arrivé (28/10 : vidéo envoyée, tablette pas réveillée).
   logger.info('Réveil famille', { fid: event.params.fid, champs, tablettes: n });
