@@ -43,6 +43,26 @@ test('Appel vidéo vers la tablette : ça sonne, la tablette décroche, image re
   }, null, { timeout: 15_000 });
   assert.deepStrictEqual((await tablette.pistes(mamie)).sort(), ['audio', 'video'], 'la tablette reçoit le son et l\'image');
 
+  // Cadrage de l'image de Mamie (4:3) : entière avec la même vidéo floutée derrière quand l'écran a une autre forme,
+  // plein écran quand on en couperait moins de 15 % ; Raccrocher toujours visible.
+  const cadrage = () => julie.page.evaluate(() => {
+    const video = document.getElementById('call-remote');
+    const fond = document.getElementById('call-remote-fond');
+    return {
+      remplit: video.classList.contains('remplit'),
+      ajustement: getComputedStyle(video).objectFit,
+      memeImage: !!video.srcObject && fond.srcObject === video.srcObject,
+      fondVisible: getComputedStyle(fond).display !== 'none',
+    };
+  });
+  await julie.page.waitForFunction(() => document.getElementById('call-remote-fond').srcObject);
+  assert.deepStrictEqual(await cadrage(), { remplit: false, ajustement: 'contain', memeImage: true, fondVisible: true }, 'téléphone : image entière sur fond flouté');
+  assert.ok(await julie.page.locator('#call-hangup').isVisible(), 'Raccrocher visible');
+  await julie.page.setViewportSize({ width: 1000, height: 750 });
+  await julie.page.waitForFunction(() => document.getElementById('call-remote').classList.contains('remplit'));
+  assert.deepStrictEqual(await cadrage(), { remplit: true, ajustement: 'cover', memeImage: true, fondVisible: false }, 'écran 4:3 : plein écran');
+  assert.ok(await julie.page.locator('#call-hangup').isVisible(), 'Raccrocher visible en plein écran');
+
   await julie.page.click('#call-hangup');
   await g.attendreBase(async () => (await tablette.ref(mamie, appel.id).get()).data().state === 'ended', 'appel terminé');
   await julie.page.locator('#call').waitFor({ state: 'hidden', timeout: 10_000 });
