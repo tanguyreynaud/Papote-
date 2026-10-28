@@ -1917,9 +1917,9 @@
   }
   var motAudio = null;
   // Voix enregistrée (Google) plus forte : elle sortait bien plus bas que la sonnerie (Tanguy, 28/10).
-  // Gain ×2,5 dans la page, avec un limiteur pour ne jamais saturer.
+  // Gain ×4 dans la page, avec un limiteur pour ne jamais saturer.
   var voixCtx = null;
-  var VOIX_GAIN = 2.5;
+  var VOIX_GAIN = 4;
   function voixForte(url) {
     var a = new Audio(url);
     // Seulement pour les sons de la tablette (même adresse) : un son en ligne sans autorisation

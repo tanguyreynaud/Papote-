@@ -830,8 +830,9 @@ public class MainActivity extends Activity implements Sync.Listener {
         AudioManager am = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
         int family = prefs.getInt("volume", -1);
         int media = family < 0 ? 85 : family;
-        // Appels vidéo un peu moins forts : au maximum, le micro reprend le haut-parleur (écho).
-        int call = family < 0 ? 72 : Math.round(family * 72f / 85f);
+        // Appels vidéo au même niveau que le reste (Tanguy, 28/10 : la voix du proche était bien plus
+        // faible que la sonnerie) ; l'annulation d'écho du navigateur reste active.
+        int call = family < 0 ? 85 : family;
         int[][] levels = {
                 {AudioManager.STREAM_MUSIC, media}, {AudioManager.STREAM_RING, prefs.getInt("volumeSonnerie", 100)},
                 {AudioManager.STREAM_NOTIFICATION, 90}, {AudioManager.STREAM_VOICE_CALL, Math.min(100, call)},
