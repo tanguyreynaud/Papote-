@@ -312,6 +312,21 @@ function finApresRecharge(l, date) {
   return Math.max(fin, l.prochaineRecharge || 0);
 }
 
+// Garde-fou du forfait sur la tablette (Forfait.java) : families/{fid}.forfaitSim = { mo, debut | jour }.
+// mo : Go du forfait noté sur la ligne (1 000 Mo sans réglage) ; debut : jour (à Paris) où le pass en cours a
+// commencé, d'après la fin du forfait notée (cycles de 30 jours ou de sa durée) ; sinon jour du mois d'activation.
+function forfaitFamille(l) {
+  const mo = Number.isFinite(l.go) ? Math.round(l.go * 1000) : 1000;
+  const duree = (l.dureeForfait || DUREE_FORFAIT) * 24 * 3600 * 1000;
+  const depart = l.prochaineRecharge ? l.prochaineRecharge - duree : l.derniereRecharge || null;
+  if (depart) {
+    const d = new Date(depart + decalageParis(depart));
+    return { mo, debut: `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}` };
+  }
+  const jour = l.activation ? new Date(l.activation + decalageParis(l.activation)).getUTCDate() : 1;
+  return { mo, jour: Math.min(Math.max(jour, 1), 28) };
+}
+
 // Ligne SIM d'une facture de forfait : par le numéro de ligne ou l'ICCID imprimé, sinon la seule ligne active
 // de cet opérateur. null si on ne sait pas : la dépense reste à relier à la main depuis sa page.
 const chiffres = (t) => String(t || '').replace(/\D/g, '');
@@ -1182,6 +1197,7 @@ async function enregistrerSim(id, c, qui) {
     ...(!id ? { creeLe: FieldValue.serverTimestamp(), par: qui } : {}),
   }, { merge: true });
   if (tablette) await db().doc(`stock/${tablette}`).update(simSurTablette(ref.id, ligne));
+  await ecrireForfaitFamille(ref.id).catch((e) => logger.warn('Forfait de la famille', e.message));
   return ref.id;
 }
 
@@ -1194,7 +1210,24 @@ async function noterRecharge(simId, date) {
     const fin = finApresRecharge(snap.data(), date);
     tx.update(ref, { prochaineRecharge: fin, derniereRecharge: Math.max(date, snap.get('derniereRecharge') || 0), majLe: FieldValue.serverTimestamp() });
     return fin;
+  }).then(async (fin) => {
+    await ecrireForfaitFamille(simId).catch((e) => logger.warn('Forfait de la famille', e.message));
+    return fin;
   });
+}
+
+// Réglage du garde-fou recopié sur la famille de la tablette où est la ligne (si elle est chez une famille).
+async function ecrireForfaitFamille(simId) {
+  const l = (await db().doc(`sims/${simId}`).get()).data();
+  if (!l || !l.tablette || !['active', 'stock'].includes(l.statut)) return;
+  const fid = (await db().doc(`stock/${l.tablette}`).get()).get('fid');
+  if (!fid) return;
+  const ref = db().doc(`families/${fid}`);
+  const famille = await ref.get();
+  if (!famille.exists) return;
+  const forfait = forfaitFamille(l);
+  if (JSON.stringify(famille.get('forfaitSim') || null) === JSON.stringify(forfait)) return;
+  await ref.update({ forfaitSim: forfait });
 }
 
 exports.gestionSim = onCall(async (request) => {
@@ -2321,6 +2354,8 @@ async function appliquerJumelage(p, pairingRef) {
   };
   if (t.etat === 'envoyee') maj.etat = 'chez-client';
   await fiche.ref.update(maj);
+  // La tablette arrive chez sa famille : le garde-fou du forfait suit sa carte SIM.
+  if (t.simId) await ecrireForfaitFamille(t.simId).catch((e) => logger.warn('Forfait de la famille', e.message));
   // Tablette reliée : elle est forcément reçue (si le suivi du colis ne l'a pas déjà noté).
   if (t.commande && commande && commande.envoyeeLe && !(commande.preparation && commande.preparation.recuLe)) {
     await db().doc(`commandes/${t.commande}`).update({ 'preparation.recuLe': Date.now(), 'preparation.recuPar': 'tablette reliée' });
@@ -3323,7 +3358,7 @@ exports.gestionParcours = onCall(async (request) => {
 
 exports.regles = {
   ETATS, CATEGORIES, sansEssaisEffaces, natureMouvement, mensuel, centimes, lien, nomFichier, moisSuivant, lectureVersFormulaire, SCHEMA_FACTURE,
-  lireReglages, transitionPermise, SUITES, simAResilier, fichesARattacher, sansFacture, stockAJour, releveBatterie, usureBatterie, incoherences, materielLu, memeAccessoire, coutLigne, alertesSim, finApresRecharge, simDeFacture, accessoiresAPrevoir, champsSim, aFaire, piecesFacture, debutMoisParis, moisPrecedent, csvTexte, livreDesRecettes,
+  lireReglages, transitionPermise, SUITES, simAResilier, fichesARattacher, sansFacture, stockAJour, releveBatterie, usureBatterie, incoherences, materielLu, memeAccessoire, coutLigne, alertesSim, finApresRecharge, simDeFacture, forfaitFamille, accessoiresAPrevoir, champsSim, aFaire, piecesFacture, debutMoisParis, moisPrecedent, csvTexte, livreDesRecettes,
   registreDesAchats, corpsDuMail, memeAchat, suiteJumelage, descriptionNonRendu, refusSuppression, fusionnerContacts, emailInformation, cleContact,
   avancementPropre,
 };

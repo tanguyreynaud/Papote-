@@ -247,6 +247,17 @@ test('forfaits SIM prépayés : rappel de recharge et facture rangée sur sa lig
   assert.strictEqual(g.lectureVersFormulaire({ estUneFacture: true, categorie: 'sim', ligneMobile: '07 51 23 45 67' }).ligne, '07 51 23 45 67');
 });
 
+test('garde-fou du forfait recopié sur la famille', () => {
+  // Pass de 30 jours qui finit le 27/11 à 10 h (Paris) : commencé le 28/10.
+  assert.deepStrictEqual(g.forfaitFamille({ go: 1, prochaineRecharge: Date.UTC(2026, 10, 27, 9) }), { mo: 1000, debut: '2026-10-28' });
+  assert.deepStrictEqual(g.forfaitFamille({ go: 2, dureeForfait: 28, prochaineRecharge: Date.UTC(2026, 10, 25, 9) }), { mo: 2000, debut: '2026-10-28' });
+  // Juste avant minuit à Paris (23 h 30 en hiver = 22 h 30 UTC) : le jour de Paris.
+  assert.deepStrictEqual(g.forfaitFamille({ derniereRecharge: Date.UTC(2026, 9, 30, 23, 30) }), { mo: 1000, debut: '2026-10-31' });
+  assert.deepStrictEqual(g.forfaitFamille({ go: 0.5, activation: Date.UTC(2026, 9, 30, 12) }), { mo: 500, jour: 28 });
+  assert.deepStrictEqual(g.forfaitFamille({ activation: Date.UTC(2026, 9, 12, 12) }), { mo: 1000, jour: 12 });
+  assert.deepStrictEqual(g.forfaitFamille({}), { mo: 1000, jour: 1 });
+});
+
 test('accessoires à prévoir pour les envois', () => {
   const aEnvoyer = [{ formule: 'sim' }, { formule: 'sim' }, { formule: 'wifi' }];
   const r = g.accessoiresAPrevoir([
