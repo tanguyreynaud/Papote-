@@ -528,6 +528,14 @@ final class Sync {
             if (rev == lastRev && now - lastFullRefresh < FULL_REFRESH_MS) {
                 status("ok", null);
                 flushPending();
+                // Une vidéo (ou un vocal) dont le téléchargement a raté au tour précédent (réseau, 4G) :
+                // nouvel essai à chaque tour, sans attendre un nouvel envoi ni la relecture complète (6 h).
+                // Vu le 28/10 : vidéo envoyée à 18h54, jamais montrée sur T-003.
+                if (mediaEnAttente()) {
+                    downloadMedia(fid);
+                    downloadVideos(fid);
+                    publishPosts();
+                }
                 heartbeat(fid, "lastOnline");
                 return;
             }
@@ -859,6 +867,15 @@ final class Sync {
         }
     }
 
+    /** Un envoi reçu dont le fichier n'est pas encore sur la tablette (vidéo, vocal). */
+    private boolean mediaEnAttente() {
+        for (Post p : posts.values()) {
+            if ("video".equals(p.type) && p.videoPath == null && (p.chunks > 0 || p.videoUrl != null)) return true;
+            if ("voice".equals(p.type) && p.audioPath == null) return true;
+        }
+        return false;
+    }
+
     /** Vidéos : le base64 est découpé en posts/{id}/media/video0, video1… */
     private void downloadVideos(String fid) {
         for (Post p : posts.values()) {
@@ -874,6 +891,7 @@ final class Sync {
                     file = downloadToFile(p.videoUrl, p.id, p.mime != null && p.mime.contains("webm") ? "webm" : "mp4");
                 } catch (Exception e) {
                     Log.w(TAG, "Vidéo " + p.id, e);
+                    Journal.log(context, "Vidéo " + p.id + " : téléchargement raté (" + e.getMessage() + "), nouvel essai au prochain tour");
                 }
             }
             if (file == null && p.chunks > 0) {
