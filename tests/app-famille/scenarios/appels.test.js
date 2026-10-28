@@ -58,6 +58,8 @@ test('Appel vidéo vers la tablette : ça sonne, la tablette décroche, image re
   await julie.page.waitForFunction(() => document.getElementById('call-remote-fond').srcObject);
   assert.deepStrictEqual(await cadrage(), { remplit: false, ajustement: 'contain', memeImage: true, fondVisible: true }, 'téléphone : image entière sur fond flouté');
   assert.ok(await julie.page.locator('#call-hangup').isVisible(), 'Raccrocher visible');
+  // L'appel vidéo passe en plein écran : le navigateur refuse alors de changer la taille de la page.
+  await julie.page.evaluate(() => document.fullscreenElement && document.exitFullscreen());
   await julie.page.setViewportSize({ width: 1000, height: 750 });
   await julie.page.waitForFunction(() => document.getElementById('call-remote').classList.contains('remplit'));
   assert.deepStrictEqual(await cadrage(), { remplit: true, ajustement: 'cover', memeImage: true, fondVisible: false }, 'écran 4:3 : plein écran');
