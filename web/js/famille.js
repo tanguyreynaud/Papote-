@@ -2097,8 +2097,11 @@ const premiereImage = () => {
 $('call-remote').addEventListener('playing', premiereImage);
 $('call-remote').addEventListener('resize', premiereImage);
 
-// Fond flouté derrière l'image du proche (même vidéo), ou plein écran si l'écran et l'image ont presque la même forme :
-// on ne coupe jamais plus de 15 % de l'image.
+// Cadrage de l'image du proche : un juste milieu entre l'image entière et le plein écran (Tanguy, 28/10 :
+// « le haut et le bas comptent peu »). On l'agrandit jusqu'à couper au plus 25 % de sa hauteur (ou de
+// sa largeur), coupés surtout en bas pour garder le visage ; la même vidéo floutée remplit ce qui reste.
+// Si l'écran et l'image ont presque la même forme, elle remplit tout l'écran (.remplit).
+const COUPE_MAX = 0.25;
 const cadrerImage = () => {
   const video = $('call-remote');
   const fond = $('call-remote-fond');
@@ -2107,10 +2110,30 @@ const cadrerImage = () => {
     if (fond.srcObject) fond.play().catch(() => {});
   }
   const call = $('call');
-  if (!video.videoWidth || !call.clientHeight) return;
-  const ecran = call.clientWidth / call.clientHeight;
-  const image = video.videoWidth / video.videoHeight;
-  video.classList.toggle('remplit', Math.min(ecran, image) / Math.max(ecran, image) >= 0.85);
+  const W = call.clientWidth;
+  const H = call.clientHeight;
+  const w = video.videoWidth;
+  const h = video.videoHeight;
+  if (!w || !h || !W || !H) return;
+  const entiere = Math.min(W / w, H / h);
+  const remplie = Math.max(W / w, H / h);
+  const echelle = Math.min(remplie, entiere / (1 - COUPE_MAX));
+  const remplit = echelle >= remplie - 1e-6;
+  video.classList.toggle('remplit', remplit);
+  if (remplit) {
+    video.style.removeProperty('width');
+    video.style.removeProperty('height');
+    video.style.removeProperty('left');
+    video.style.removeProperty('top');
+    return;
+  }
+  const largeur = w * echelle;
+  const hauteur = h * echelle;
+  video.style.width = `${largeur}px`;
+  video.style.height = `${hauteur}px`;
+  video.style.left = `${(W - largeur) / 2}px`;
+  // Ce qui dépasse en hauteur est coupé pour un tiers en haut et deux tiers en bas.
+  video.style.top = `${hauteur > H ? (H - hauteur) / 3 : (H - hauteur) / 2}px`;
 };
 for (const evenement of ['playing', 'resize', 'emptied']) $('call-remote').addEventListener(evenement, cadrerImage);
 window.addEventListener('resize', cadrerImage);

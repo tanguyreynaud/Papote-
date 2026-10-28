@@ -65,7 +65,7 @@ test('Appel vidéo vers la tablette : ça sonne, la tablette décroche, image re
   assert.deepStrictEqual((await tablette.pistes(mamie)).sort(), ['audio', 'video'], 'la tablette reçoit le son et l\'image');
 
   // Cadrage de l'image de Mamie : entière avec la même vidéo floutée derrière quand l'écran a une autre forme,
-  // plein écran quand on en couperait moins de 15 % ; Raccrocher toujours visible.
+  // agrandie jusqu'à 25 % coupés, plein écran si ça suffit à remplir l'écran ; Raccrocher toujours visible.
   const cadrage = () => julie.page.evaluate(() => {
     const video = document.getElementById('call-remote');
     const fond = document.getElementById('call-remote-fond');
