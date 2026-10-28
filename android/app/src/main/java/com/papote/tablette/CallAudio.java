@@ -29,6 +29,11 @@ final class CallAudio {
 
     @SuppressWarnings("deprecation")
     void ring(boolean on) {
+        // Déjà en train de sonner : on ne relance pas (le réveil par notification et la relecture des
+        // appels peuvent demander la sonnerie deux fois : elle repartait du début, « buguée au départ »).
+        if (on && ringing && ringer != null) {
+            try { if (ringer.isPlaying()) return; } catch (IllegalStateException ignored) { }
+        }
         stopRinging();
         ringing = on; // même si la sonnerie du téléphone ne se lance pas
         if (!on) return;

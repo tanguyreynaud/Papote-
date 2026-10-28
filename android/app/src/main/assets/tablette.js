@@ -1916,6 +1916,31 @@
     if (text && annonce) annonceDuTexte[text] = annonce;
   }
   var motAudio = null;
+  // Voix enregistrée (Google) plus forte : elle sortait bien plus bas que la sonnerie (Tanguy, 28/10).
+  // Gain ×2,5 dans la page, avec un limiteur pour ne jamais saturer.
+  var voixCtx = null;
+  var VOIX_GAIN = 2.5;
+  function voixForte(url) {
+    var a = new Audio(url);
+    // Seulement pour les sons de la tablette (même adresse) : un son en ligne sans autorisation
+    // CORS deviendrait muet une fois branché sur Web Audio.
+    var local = !/^https?:/.test(url) || url.indexOf(location.origin + '/') === 0;
+    if (!local) return a;
+    try {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return a;
+      if (!voixCtx) voixCtx = new AC();
+      if (voixCtx.resume) voixCtx.resume();
+      var src = voixCtx.createMediaElementSource(a);
+      var gain = voixCtx.createGain();
+      gain.gain.value = VOIX_GAIN;
+      var lim = voixCtx.createDynamicsCompressor();
+      lim.threshold.value = -3; lim.knee.value = 0; lim.ratio.value = 20; lim.attack.value = 0.002; lim.release.value = 0.1;
+      src.connect(gain); gain.connect(lim); lim.connect(voixCtx.destination);
+    } catch (e) { /* sans Web Audio : volume normal */ }
+    return a;
+  }
+
   function sayAloud(text) {
     if (!text) return;
     // Photo sans mot : « Julie vous écrit : Gros bisous ! ». Le mot a sa voix enregistrée (dans la voix
@@ -1926,12 +1951,12 @@
     if (url) {
       if (motAudio) motAudio.pause();
       var annonce = annonceDuTexte[text] || null;
-      motAudio = new Audio(annonce || url);
+      motAudio = voixForte(annonce || url);
       if (annonce) {
         var suite = motAudio;
         suite.onended = function () {
           if (motAudio !== suite) return;
-          motAudio = new Audio(url);
+          motAudio = voixForte(url);
           motAudio.onended = function () { setSpeech('idle'); };
           motAudio.onerror = function () { setSpeech('idle'); };
           motAudio.play();
