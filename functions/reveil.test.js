@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const { reveiller, aChange, doitPinger } = require('./reveil');
+const { reveiller, aChange, changements, doitPinger } = require('./reveil');
 
 // Base imitée : membres d'une famille et leurs jetons privés.
 function base(membres, jetons) {
@@ -61,6 +61,7 @@ test('fiche de la famille : un compte tenu par le serveur ne réveille pas la ta
   assert.strictEqual(aChange({ name: 'Mamie', rev: 1 }, { name: 'Mamie', rev: 2 }), true);
   assert.strictEqual(aChange({ name: 'Mamie' }, { name: 'Mamie', veille: { de: 22, a: 7 } }), true);
   assert.strictEqual(aChange(undefined, { name: 'Mamie' }), true);
+  assert.deepStrictEqual(changements({ name: 'Mamie', rev: 1, updatedAt: 1 }, { name: 'Mamie', rev: 2, updatedAt: 2 }), ['rev']);
 });
 
 test('auto-contrôle : ping seulement quand pingDemande change et qu\'un jeton existe', () => {

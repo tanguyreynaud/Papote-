@@ -69,25 +69,31 @@ exports.reveilAppel = onDocumentCreated({ ...OPTIONS, document: 'families/{fid}/
 exports.reveilOrdre = onDocumentCreated({ ...OPTIONS, document: 'families/{fid}/commands/{id}' }, async (event) => {
   const ordre = event.data && event.data.data();
   if (!ordre || ordre.state !== 'pending') return;
-  await reveiller(base(), event.params.fid, { type: 'ordre', id: event.params.id }, 120);
+  const n = await reveiller(base(), event.params.fid, { type: 'ordre', id: event.params.id }, 120);
+  logger.info('Réveil ordre', { fid: event.params.fid, id: event.params.id, tablettes: n });
 });
 
 // La fiche de la famille a changé (rev à chaque envoi, rappels, réglages, abonnement, nom…) : la
 // tablette fait un tour de synchronisation. Le message tient 10 min et les suivants le remplacent.
 exports.reveilFamille = onDocumentUpdated({ ...OPTIONS, document: 'families/{fid}' }, async (event) => {
-  if (!event.data || !aChange(event.data.before.data(), event.data.after.data())) return;
-  await reveiller(base(), event.params.fid, { type: 'famille' }, 600);
+  if (!event.data) return;
+  const champs = changements(event.data.before.data(), event.data.after.data());
+  if (!champs.length) return;
+  const n = await reveiller(base(), event.params.fid, { type: 'famille' }, 600);
+  // Toujours journalisé : « tablettes: 0 » = aucun jeton (ancienne version, jeton effacé), à distinguer
+  // d'un message parti mais jamais arrivé (28/10 : vidéo envoyée, tablette pas réveillée).
+  logger.info('Réveil famille', { fid: event.params.fid, champs, tablettes: n });
 });
 
 // Champs de la famille sans intérêt pour la tablette (comptes tenus par le serveur).
 const SANS_INTERET = new Set(['nbProches', 'updatedAt']);
-function aChange(avant, apres) {
+function changements(avant, apres) {
   const cles = new Set([...Object.keys(avant || {}), ...Object.keys(apres || {})]);
-  for (const k of cles) {
-    if (SANS_INTERET.has(k)) continue;
-    if (JSON.stringify((avant || {})[k]) !== JSON.stringify((apres || {})[k])) return true;
-  }
-  return false;
+  return [...cles].filter((k) => !SANS_INTERET.has(k)
+    && JSON.stringify((avant || {})[k]) !== JSON.stringify((apres || {})[k])).sort();
+}
+function aChange(avant, apres) {
+  return changements(avant, apres).length > 0;
 }
 
 // Nouvelle version publiée : toutes les tablettes (abonnées au sujet « tablettes » au démarrage).
@@ -127,3 +133,4 @@ module.exports.jetonsTablettes = jetonsTablettes;
 module.exports.doitPinger = doitPinger;
 module.exports.reveiller = reveiller;
 module.exports.aChange = aChange;
+module.exports.changements = changements;
