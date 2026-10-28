@@ -24,6 +24,11 @@ import com.google.firebase.messaging.RemoteMessage;
  * Jeton de la tablette : families/{fid}/members/{uid}/private/push = { tablette: [jeton] } (écrit par
  * Sync avec le compte de la tablette). Sans google-services.json à la construction, Firebase n'est pas
  * configuré : pas de jeton, la page garde son écoute en direct (pushReady() faux).
+ *
+ * Auto-contrôle : avec le jeton, Sync écrit pingDemande ; le serveur (reveilPing) renvoie { type: 'ping' }.
+ * Tant qu'aucun ping n'est reçu (ou si un contrôle quotidien échoue : économiseur de données, services
+ * Google en panne), pret() reste faux et la page garde son écoute en direct. Un appel manqué parce que
+ * les réveils n'arrivent pas serait bien pire que les Mo de l'écoute.
  */
 public class Push extends FirebaseMessagingService {
     private static final String TAG = "Papote";
@@ -38,7 +43,15 @@ public class Push extends FirebaseMessagingService {
     public void onMessageReceived(@NonNull RemoteMessage message) {
         String type = message.getData().get("type");
         if (type == null) return;
-        prefs(this).edit().putLong("pushDernier", System.currentTimeMillis()).apply();
+        SharedPreferences p = prefs(this);
+        p.edit().putLong("pushDernier", System.currentTimeMillis()).apply();
+        if ("ping".equals(type)) {
+            boolean premier = p.getLong("pushPingRecu", 0) == 0;
+            p.edit().putLong("pushPingRecu", System.currentTimeMillis()).putBoolean("pushEchecNote", false).apply();
+            if (premier) Journal.log(this, "Push : réveil par le serveur vérifié (ping reçu)");
+            MainActivity.surPush("jeton", null); // la page peut fermer ses écoutes dès ce tour
+            return;
+        }
         MainActivity.surPush(type, message.getData().get("id"));
     }
 
@@ -75,7 +88,7 @@ public class Push extends FirebaseMessagingService {
         if (jeton == null || jeton.isEmpty()) return;
         SharedPreferences p = prefs(c);
         if (jeton.equals(p.getString("pushJeton", null))) return;
-        p.edit().putString("pushJeton", jeton).remove("pushJetonEcrit").apply();
+        p.edit().putString("pushJeton", jeton).remove("pushJetonEcrit").remove("pushPingRecu").remove("pushPingDemande").apply();
         Journal.log(c, "Push : nouveau jeton, à écrire dans la famille");
         MainActivity.surPush("jeton", null);
     }
@@ -88,14 +101,41 @@ public class Push extends FirebaseMessagingService {
         return jeton;
     }
 
+    static final long PING_ATTENTE_MS = 2 * 60_000;
+    static final long PING_CHAQUE_MS = 24 * 3600_000;
+
     static void jetonEcrit(Context c, String jeton) {
-        prefs(c).edit().putString("pushJetonEcrit", jeton).apply();
+        prefs(c).edit().putString("pushJetonEcrit", jeton).putLong("pushPingDemande", System.currentTimeMillis()).apply();
     }
 
-    /** Le serveur peut réveiller la tablette : jeton connu ET écrit dans la famille. */
+    /** Le contrôle quotidien est dû : Sync réécrit pingDemande (le serveur renvoie un ping). */
+    static boolean controleDu(Context c) {
+        SharedPreferences p = prefs(c);
+        return p.getString("pushJetonEcrit", null) != null
+                && System.currentTimeMillis() - p.getLong("pushPingDemande", 0) >= PING_CHAQUE_MS;
+    }
+
+    static void controleDemande(Context c) {
+        prefs(c).edit().putLong("pushPingDemande", System.currentTimeMillis()).apply();
+    }
+
+    /**
+     * Le serveur peut réveiller la tablette : jeton connu, écrit dans la famille, ET un ping reçu après
+     * la dernière demande (ou la demande date de moins de 2 min : le ping est en route).
+     */
     static boolean pret(Context c) {
         SharedPreferences p = prefs(c);
         String jeton = p.getString("pushJeton", null);
-        return disponible(c) && jeton != null && jeton.equals(p.getString("pushJetonEcrit", null));
+        if (!disponible(c) || jeton == null || !jeton.equals(p.getString("pushJetonEcrit", null))) return false;
+        long demande = p.getLong("pushPingDemande", 0);
+        long recu = p.getLong("pushPingRecu", 0);
+        if (recu >= demande) return recu > 0;
+        boolean enRoute = System.currentTimeMillis() - demande < PING_ATTENTE_MS;
+        if (!enRoute && !p.getBoolean("pushEchecNote", false)) {
+            p.edit().putBoolean("pushEchecNote", true).apply();
+            Journal.log(c, "Push : aucun ping reçu en 2 min, la page garde son écoute en direct");
+        }
+        // Avant le premier ping, on ne ferme rien : le ping « en route » ne suffit pas.
+        return false;
     }
 }
