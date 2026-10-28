@@ -18,6 +18,10 @@ const journal = require('./journal-alertes');
 
 const DEBRANCHEE_MS = 10 * 60_000;
 const SILENCE_MS = 45 * 60_000;
+// Pendant les heures de veille de la famille (families/{fid}.veille, 23 h-7 h par défaut), la tablette ne
+// donne signe de vie qu'une fois par heure pour ménager la carte SIM (android/Sync.java, 28/10) : on
+// tolère 2 h de silence avant d'alerter.
+const SILENCE_NUIT_MS = 2 * 3600_000;
 
 function enMillis(v) {
   if (!v) return null;
@@ -26,11 +30,29 @@ function enMillis(v) {
   return typeof v === 'number' ? v : null;
 }
 
+// Heure à Paris (0-23) d'un instant.
+function heureParis(ms) {
+  return Number(new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Paris', hour: 'numeric', hourCycle: 'h23' }).format(new Date(ms)));
+}
+
+// Vrai pendant les heures de veille de la famille : { active, de, a } (absent = 23 h-7 h ; active false = jamais).
+// Même règle que Veille.inRange sur la tablette : [de, a[, en passant minuit ; de == a : jamais.
+function enVeille(veille, maintenant) {
+  const v = veille || {};
+  if (v.active === false) return false;
+  const de = Number.isInteger(v.de) ? v.de : 23;
+  const a = Number.isInteger(v.a) ? v.a : 7;
+  const h = heureParis(maintenant);
+  if (de < a) return h >= de && h < a;
+  if (de > a) return h >= de || h < a;
+  return false;
+}
+
 // Fiche de la tablette -> 'silence' | 'debranchee' | null. Une tablette qui ne répond plus
-// n'envoie plus l'état de sa batterie : le silence passe avant.
-function etatAlerte(tablette, maintenant) {
+// n'envoie plus l'état de sa batterie : le silence passe avant. veille : réglage de la famille.
+function etatAlerte(tablette, maintenant, veille) {
   const vue = enMillis(tablette.lastOnline);
-  if (vue && maintenant - vue > SILENCE_MS) return 'silence';
+  if (vue && maintenant - vue > (enVeille(veille, maintenant) ? SILENCE_NUIT_MS : SILENCE_MS)) return 'silence';
   const batterie = tablette.battery || {};
   const debranchee = enMillis(batterie.unpluggedAt);
   if (batterie.charging === false && debranchee && maintenant - debranchee > DEBRANCHEE_MS) return 'debranchee';
@@ -56,7 +78,7 @@ exports.alertesTablettes = onSchedule({ schedule: 'every 5 minutes', timeZone: '
   const enPause = await famillesEnPause(db, maintenant).catch((e) => { logger.warn('Pauses illisibles', e.message); return new Set(); });
   // Seulement les champs utiles des familles, et toutes les familles en même temps (et non l'une après l'autre) :
   // la tâche, lancée 288 fois par jour, finit plus vite et coûte moins de temps de calcul.
-  const familles = await db.collection('families').select('abonnement', 'name', 'createdBy', 'admins').get();
+  const familles = await db.collection('families').select('abonnement', 'name', 'createdBy', 'admins', 'veille').get();
   await Promise.all(familles.docs.map(async (fam) => {
     const famille = fam.data();
     // Abonnement suspendu : la tablette est en pause, pas d'alerte. Hospitalisation : pas d'alerte non plus.
@@ -64,7 +86,7 @@ exports.alertesTablettes = onSchedule({ schedule: 'every 5 minutes', timeZone: '
     const tablettes = await fam.ref.collection('members').where('role', '==', 'tablette').get();
     for (const t of tablettes.docs) {
       const tablette = t.data();
-      const type = etatAlerte(tablette, maintenant);
+      const type = etatAlerte(tablette, maintenant, famille.veille);
       try {
         if (!type) {
           if (tablette.alerteType) await t.ref.update({ alerteType: null, alerteLe: null });
@@ -141,5 +163,6 @@ exports.alerteMatin = onSchedule({ schedule: 'every day 12:00', timeZone: 'Europ
 });
 
 exports.etatAlerte = etatAlerte;
+exports.enVeille = enVeille;
 exports.pasVueAujourdhui = pasVueAujourdhui;
 exports.alerteMatinDue = alerteMatinDue;
