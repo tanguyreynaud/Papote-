@@ -43,7 +43,7 @@ test('Appel vidéo vers la tablette : ça sonne, la tablette décroche, image re
   }, null, { timeout: 15_000 });
   assert.deepStrictEqual((await tablette.pistes(mamie)).sort(), ['audio', 'video'], 'la tablette reçoit le son et l\'image');
 
-  // Cadrage de l'image de Mamie (4:3) : entière avec la même vidéo floutée derrière quand l'écran a une autre forme,
+  // Cadrage de l'image de Mamie : entière avec la même vidéo floutée derrière quand l'écran a une autre forme,
   // plein écran quand on en couperait moins de 15 % ; Raccrocher toujours visible.
   const cadrage = () => julie.page.evaluate(() => {
     const video = document.getElementById('call-remote');
@@ -60,9 +60,19 @@ test('Appel vidéo vers la tablette : ça sonne, la tablette décroche, image re
   assert.ok(await julie.page.locator('#call-hangup').isVisible(), 'Raccrocher visible');
   // L'appel vidéo passe en plein écran : le navigateur refuse alors de changer la taille de la page.
   await julie.page.evaluate(() => document.fullscreenElement && document.exitFullscreen());
-  await julie.page.setViewportSize({ width: 1000, height: 750 });
-  await julie.page.waitForFunction(() => document.getElementById('call-remote').classList.contains('remplit'));
-  assert.deepStrictEqual(await cadrage(), { remplit: true, ajustement: 'cover', memeImage: true, fondVisible: false }, 'écran 4:3 : plein écran');
+  // Écran couché de la même forme que l'image reçue (la fausse caméra n'est pas forcément en 4:3).
+  const { largeurImage, hauteurImage } = await julie.page.evaluate(() => {
+    const v = document.getElementById('call-remote');
+    return { largeurImage: v.videoWidth, hauteurImage: v.videoHeight };
+  });
+  await julie.page.setViewportSize({ width: 1000, height: Math.round((1000 * hauteurImage) / largeurImage) });
+  await julie.page.waitForFunction(() => document.getElementById('call-remote').classList.contains('remplit'), null, { timeout: 5_000 })
+    .catch(async () => assert.fail(`pas de plein écran : ${await julie.page.evaluate(() => {
+      const v = document.getElementById('call-remote');
+      const c = document.getElementById('call');
+      return `image ${v.videoWidth}x${v.videoHeight}, appel ${c.clientWidth}x${c.clientHeight}, classes « ${c.className} »`;
+    })}`));
+  assert.deepStrictEqual(await cadrage(), { remplit: true, ajustement: 'cover', memeImage: true, fondVisible: false }, 'écran de même forme : plein écran');
   assert.ok(await julie.page.locator('#call-hangup').isVisible(), 'Raccrocher visible en plein écran');
 
   await julie.page.click('#call-hangup');
