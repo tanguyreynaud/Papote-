@@ -290,6 +290,11 @@ const CAMERA = {
 const VIDEO_MAX_BITRATE = 700_000;
 const SIM_SEND_BITRATE = 120_000;
 const SIM_RECEIVE_KBPS = 500;
+// Garde-fou du forfait (Forfait.java, pont simBudget) : palier 1 (60 % du forfait) = visio réduite
+// (Mamie en 320x240 à 60 kbit/s, le proche demandé à 150 kbit/s : ≈ 1,6 Mo la minute) ; palier 2
+// (85 %) = appels sans image, le son seul. Jamais sur le Wi-Fi.
+const ECO_SEND_BITRATE = 60_000;
+const ECO_RECEIVE_KBPS = 150;
 function onSimData() {
   try {
     const s = JSON.parse(android().wifiStatus());
@@ -300,9 +305,29 @@ function onSimData() {
     return false;
   }
 }
+// 'wifi' : rien ne compte ; 'sim' : économie ; 'eco' : forfait à 60 % ; 'audio' : forfait à 85 %.
+function regime() {
+  if (!onSimData()) return 'wifi';
+  let niveau = 0;
+  try {
+    const a = android();
+    if (a && a.simBudget) niveau = JSON.parse(a.simBudget()).niveau || 0;
+  } catch (e) { /* ancienne app Android : pas de garde-fou */ }
+  return niveau >= 2 ? 'audio' : niveau >= 1 ? 'eco' : 'sim';
+}
+// Appel sans image (forfait presque épuisé) : les voies vidéo sont fermées dans les deux sens.
+function sansImage(pc) {
+  if (regime() !== 'audio') return false;
+  pc.getTransceivers().forEach((t) => {
+    if (t.receiver && t.receiver.track && t.receiver.track.kind === 'video') t.direction = 'inactive';
+  });
+  return true;
+}
 // Débit vidéo que la tablette accepte de recevoir (b=AS, respecté par le téléphone du proche).
 function limitReceive(sdp) {
-  if (!onSimData()) return sdp;
+  const r = regime();
+  if (r === 'wifi') return sdp;
+  const kbps = r === 'sim' ? SIM_RECEIVE_KBPS : ECO_RECEIVE_KBPS;
   // Ligne « b=AS » juste après la ligne « c= » de la section vidéo.
   const lines = sdp.split('\r\n');
   let inVideo = false;
@@ -310,7 +335,7 @@ function limitReceive(sdp) {
     if (lines[i].startsWith('m=')) inVideo = lines[i].startsWith('m=video');
     else if (inVideo && lines[i].startsWith('b=AS:')) return sdp; // déjà limité
     else if (inVideo && lines[i].startsWith('c=')) {
-      lines.splice(i + 1, 0, `b=AS:${SIM_RECEIVE_KBPS}`);
+      lines.splice(i + 1, 0, `b=AS:${kbps}`);
       return lines.join('\r\n');
     }
   }
@@ -318,17 +343,20 @@ function limitReceive(sdp) {
 }
 function capVideo(pc) {
   try {
-    const sim = onSimData();
+    const r = regime();
+    const sim = r !== 'wifi';
+    const eco = r === 'eco' || r === 'audio';
     pc.getSenders().forEach((s) => {
       if (!s.track || s.track.kind !== 'video' || !s.getParameters) return;
       const p = s.getParameters();
       if (!p.encodings || !p.encodings.length) p.encodings = [{}];
-      p.encodings[0].maxBitrate = sim ? SIM_SEND_BITRATE : VIDEO_MAX_BITRATE;
-      p.encodings[0].maxFramerate = sim ? 12 : 20;
+      p.encodings[0].maxBitrate = eco ? ECO_SEND_BITRATE : sim ? SIM_SEND_BITRATE : VIDEO_MAX_BITRATE;
+      p.encodings[0].maxFramerate = eco ? 8 : sim ? 12 : 20;
       // Quand Mamie bouge, l'encodeur perd des images plutôt que de la netteté.
       p.degradationPreference = 'maintain-resolution';
       try { s.track.contentHint = 'detail'; } catch (e) { /* ancien navigateur */ }
-      if (sim) p.encodings[0].scaleResolutionDownBy = 1.6; // 640x480 -> environ 400x300 (petit écran en face)
+      if (eco) p.encodings[0].scaleResolutionDownBy = 2; // 640x480 -> 320x240
+      else if (sim) p.encodings[0].scaleResolutionDownBy = 1.6; // 640x480 -> environ 400x300 (petit écran en face)
       s.setParameters(p).catch(() => {});
     });
   } catch (e) { /* navigateur trop ancien : pas de plafond */ }
@@ -739,7 +767,13 @@ async function answer() {
 async function connectAnswer(id, data, callRef, stream) {
   const pc = new RTCPeerConnection(await iceServers());
   active = { id, pc, stream, stops: [] };
-  stream.getTracks().forEach((t) => pc.addTrack(t, stream));
+  // Forfait presque épuisé : la caméra de Mamie reste éteinte, et l'image du proche n'est pas demandée.
+  const audioSeul = regime() === 'audio';
+  stream.getTracks().forEach((t) => {
+    if (audioSeul && t.kind === 'video') { t.stop(); return; }
+    pc.addTrack(t, stream);
+  });
+  if (audioSeul) { $('call-local').srcObject = null; setStatus('Appel sans image'); }
   pc.ontrack = (e) => {
     $('call-remote').srcObject = e.streams[0];
     $('call-remote').play().catch(() => {});
@@ -752,7 +786,7 @@ async function connectAnswer(id, data, callRef, stream) {
   let lostTimer = null;
   pc.onconnectionstatechange = () => {
     clearTimeout(lostTimer);
-    if (pc.connectionState === 'connected') { $('call-status').textContent = ''; capVideo(pc); }
+    if (pc.connectionState === 'connected') { if (!audioSeul) $('call-status').textContent = ''; capVideo(pc); }
     if (pc.connectionState === 'disconnected') lostTimer = setTimeout(() => {
       reportCallIncident('video-coupee', 'liaison perdue 8 s', id);
       hangup('La connexion a été perdue.');
@@ -764,11 +798,16 @@ async function connectAnswer(id, data, callRef, stream) {
   };
 
   await pc.setRemoteDescription(data.offer);
+  sansImage(pc);
   const reply = await pc.createAnswer();
   await pc.setLocalDescription(reply);
   capVideo(pc);
   // « reseau » : le téléphone règle sa vidéo selon le réseau de la tablette (SIM : 500 kbit/s).
-  await updateDoc(callRef, { answer: { type: reply.type, sdp: limitReceive(reply.sdp), reseau: onSimData() ? 'sim' : 'wifi' }, state: 'accepted' });
+  // « regime » (eco | audio) : le forfait de la tablette est presque épuisé, l'app famille l'explique.
+  const r = regime();
+  const answer = { type: reply.type, sdp: limitReceive(reply.sdp), reseau: r === 'wifi' ? 'wifi' : 'sim' };
+  if (r === 'eco' || r === 'audio') answer.regime = r;
+  await updateDoc(callRef, { answer, state: 'accepted' });
 
   active.stops.push(onSnapshot(collection(callRef, 'callerCandidates'), (snap) => {
     snap.docChanges().forEach((c) => {
@@ -909,7 +948,8 @@ window.papoteCallFamily = ({ to = null, toName = null, sos = 0, onState = () => 
     call.stream.getTracks().forEach((t) => pc.addTrack(t, call.stream));
     // Une voie vidéo prévue dès le départ, vide : le proche peut allumer sa caméra pendant
     // l'appel sans renégociation, et la tablette répond alors avec la sienne.
-    call.video = pc.addTransceiver('video', { direction: 'sendrecv' });
+    // Forfait presque épuisé : voie vidéo fermée (le proche ne pourra pas « passer en vidéo »).
+    call.video = pc.addTransceiver('video', { direction: regime() === 'audio' ? 'inactive' : 'sendrecv' });
     call.audio = new Audio();
     call.audio.autoplay = true;
     pc.ontrack = (e) => {
@@ -923,7 +963,7 @@ window.papoteCallFamily = ({ to = null, toName = null, sos = 0, onState = () => 
       call.remoteVideo = e.track;
     };
     const startOutgoingVideo = async (remoteTrack) => {
-      if (done || call.cam || call.videoStarting) return;
+      if (done || call.cam || call.videoStarting || regime() === 'audio') return;
       call.videoStarting = true;
       try {
         call.cam = await navigator.mediaDevices.getUserMedia({ video: CAMERA.video, audio: false });

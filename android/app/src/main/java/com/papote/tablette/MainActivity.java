@@ -222,6 +222,11 @@ public class MainActivity extends Activity implements Sync.Listener {
                 return;
             }
             new Thread(() -> {
+                // Forfait SIM presque épuisé (palier 3) : les 3 Mo de l'appli attendent le Wi-Fi ou la recharge.
+                if (Forfait.economie(getApplicationContext(), 3)) {
+                    handler.postDelayed(this, 6 * 3600_000L);
+                    return;
+                }
                 boolean ok = Updater.check(getApplicationContext());
                 handler.postDelayed(this, ok ? 24 * 3600_000L : 10 * 60_000L);
             }, "papote-maj").start();
@@ -575,6 +580,12 @@ public class MainActivity extends Activity implements Sync.Listener {
         @JavascriptInterface
         public String wifiStatus() {
             return wifi.status();
+        }
+
+        /** Garde-fou du forfait SIM (Forfait) : {plafondMo, consoMo, niveau, sim, cycleDebut}. */
+        @JavascriptInterface
+        public String simBudget() {
+            return Forfait.etat(MainActivity.this).toString();
         }
 
         /** Code PIN de la famille (donné à l'installation) pour régler le wifi plus tard. */

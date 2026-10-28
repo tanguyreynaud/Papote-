@@ -161,3 +161,59 @@ test('test du son demandé par le téléphone du proche : la tablette joue, puis
     assert.strictEqual((await b.lire('families/F1/commands/s1')).state, 'done');
   } finally { await b.fermer(); }
 });
+
+// Garde-fou du forfait SIM (Forfait.java, pont simBudget) : la tablette est sur la carte SIM.
+const SUR_SIM = { wifi: '', internet: true, mobile: true, sim: true, via: 'mobile' };
+
+test('forfait SIM à 60 % : la visio continue en qualité réduite, « regime: eco » écrit pour le proche', async () => {
+  const b = await tablette();
+  try {
+    await b.etat({ reseau: SUR_SIM, forfait: { plafondMo: 1000, consoMo: 650, niveau: 1, sim: true } });
+    await appelEntrant(b, 'c1');
+    await b.toucher('#ring-answer');
+    await b.patienter(3000);
+    const appel = await b.lire('families/F1/calls/c1');
+    assert.strictEqual(appel.state, 'accepted');
+    assert.strictEqual(appel.answer.reseau, 'sim');
+    assert.strictEqual(appel.answer.regime, 'eco');
+    assert.ok(appel.answer.sdp.includes('b=AS:150'), 'vidéo du proche demandée à 150 kbit/s');
+    assert.ok(!appel.answer.sdp.includes('b=AS:500'));
+    const lignes = appel.answer.sdp.split('\r\n');
+    const video = lignes.findIndex((l) => l.startsWith('m=video'));
+    assert.ok(lignes.slice(video).includes('a=sendrecv'), 'la vidéo passe toujours dans les deux sens');
+  } finally { await b.fermer(); }
+});
+
+test('forfait SIM à 85 % : appel sans image (voie vidéo fermée), « regime: audio » écrit pour le proche', async () => {
+  const b = await tablette();
+  try {
+    await b.etat({ reseau: SUR_SIM, forfait: { plafondMo: 1000, consoMo: 880, niveau: 2, sim: true } });
+    await appelEntrant(b, 'c1');
+    await b.toucher('#ring-answer');
+    await b.patienter(3000);
+    const appel = await b.lire('families/F1/calls/c1');
+    assert.strictEqual(appel.state, 'accepted');
+    assert.strictEqual(appel.answer.regime, 'audio');
+    const lignes = appel.answer.sdp.split('\r\n');
+    const video = lignes.findIndex((l) => l.startsWith('m=video'));
+    assert.ok(video > 0, 'section vidéo présente dans la réponse');
+    assert.ok(lignes.slice(video).includes('a=inactive'), 'voie vidéo fermée dans les deux sens');
+    assert.ok(lignes.slice(0, video).includes('a=sendrecv'), 'le son passe');
+    assert.strictEqual(await b.texte('#call-status'), 'Appel sans image');
+    assert.ok(await b.visible('#call-view'));
+  } finally { await b.fermer(); }
+});
+
+test('forfait SIM à 85 % mais tablette en Wi-Fi : rien ne change, visio pleine qualité', async () => {
+  const b = await tablette();
+  try {
+    await b.etat({ forfait: { plafondMo: 1000, consoMo: 880, niveau: 2, sim: false } });
+    await appelEntrant(b, 'c1');
+    await b.toucher('#ring-answer');
+    await b.patienter(3000);
+    const appel = await b.lire('families/F1/calls/c1');
+    assert.strictEqual(appel.answer.reseau, 'wifi');
+    assert.strictEqual(appel.answer.regime, undefined);
+    assert.ok(!appel.answer.sdp.includes('b=AS:'), 'réception sans plafond');
+  } finally { await b.fermer(); }
+});

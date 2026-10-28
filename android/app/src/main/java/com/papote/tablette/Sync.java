@@ -484,12 +484,13 @@ final class Sync {
         try {
             // Une seule lecture : le marqueur « rev » ne bouge que si la famille a envoyé ou supprimé
             // quelque chose (ou modifié les rappels). Sinon, rien d'autre à lire.
-            JSONObject family = firebase.get("families/" + fid, "name", "rev", "code", "textSize", "abonnement", "veille", "volume", "volumeSonnerie", "meteoVille", "options", "installation", "createdBy");
+            JSONObject family = firebase.get("families/" + fid, "name", "rev", "code", "textSize", "abonnement", "veille", "volume", "volumeSonnerie", "meteoVille", "options", "installation", "createdBy", "forfaitSim");
             long rev = 0;
             JSONObject ff = family == null ? null : family.optJSONObject("fields");
             if (ff != null) {
                 familyName = Firebase.str(ff, "name");
                 familyCode = Firebase.str(ff, "code");
+                reglerForfait(ff.optJSONObject("forfaitSim"));
                 textSize = Firebase.str(ff, "textSize");
                 JSONObject ab = ff.optJSONObject("abonnement");
                 JSONObject abf = ab == null || ab.optJSONObject("mapValue") == null ? null
@@ -851,6 +852,9 @@ final class Sync {
         for (Post p : posts.values()) {
             if (!"video".equals(p.type) || p.videoPath != null) continue;
             if (p.chunks <= 0 && p.videoUrl == null) continue;
+            // Forfait SIM presque épuisé (palier 3) : la vidéo (3 à 30 Mo) attend le Wi-Fi ou la recharge ;
+            // l'envoi n'est pas montré tant qu'elle n'est pas là (tablette.js), rien n'est perdu.
+            if (existing(p.id) == null && Forfait.economie(context, 3)) continue;
             File file = existing(p.id);
             if (file == null && p.videoUrl != null) {
                 // Nouveau format : jusqu'à ~30 Mo, écrit directement dans un fichier.
@@ -1483,6 +1487,7 @@ final class Sync {
         long now = System.currentTimeMillis();
         if (fid == null || now - lastFamilyExtras < REMINDERS_MS) return;
         if (nuit() && lastFamilyJson != null) return; // la nuit, relus au matin
+        if (lastFamilyJson != null && Forfait.economie(context, 3)) return; // forfait SIM presque épuisé : visages gardés
         lastFamilyExtras = now;
         try {
             JSONObject faces = new JSONObject();
@@ -1696,6 +1701,7 @@ final class Sync {
         long now = System.currentTimeMillis();
         if (now - lastWeather < WEATHER_MS) return;
         if (nuit() && lastWeather > 0) return; // la nuit, la météo attend le matin (sauf si jamais lue)
+        if (lastWeather > 0 && Forfait.economie(context, 3)) return; // forfait SIM presque épuisé : celle gardée suffit
         try {
             if (!Meteo.hasCity(context)) return; // pas encore de ville : pas de météo
             JSONObject weather = Meteo.forecast(http, Meteo.lat(context), Meteo.lon(context));
@@ -1845,6 +1851,7 @@ final class Sync {
     private JSONObject simValue() {
         try {
             JSONObject info = SimInfo.read(context);
+            JSONObject forfait = Forfait.etat(context);
             JSONObject value;
             if (info == null) {
                 value = new JSONObject().put("nullValue", JSONObject.NULL);
@@ -1855,6 +1862,12 @@ final class Sync {
                         .put("reseau", Firebase.string(info.optString("reseau")))
                         .put("signal", new JSONObject().put("integerValue", String.valueOf(info.optInt("signal", -1))))
                         .put("dataMoisMo", new JSONObject().put("integerValue", String.valueOf(info.optLong("dataMoisMo", -1))))
+                        // Garde-fou du forfait (Forfait) : conso depuis la recharge, plafond et palier, pour que
+                        // l'app famille prévienne (« forfait à 80 % », « appels sans image »).
+                        .put("dataCycleMo", new JSONObject().put("integerValue", String.valueOf(forfait.optLong("consoMo", -1))))
+                        .put("plafondMo", new JSONObject().put("integerValue", String.valueOf(forfait.optLong("plafondMo", 0))))
+                        .put("niveau", new JSONObject().put("integerValue", String.valueOf(forfait.optInt("niveau", 0))))
+                        .put("cycleDebut", Firebase.string(forfait.optString("cycleDebut")))
                         // Heure de la tablette (réglée automatiquement) : un horodatage serveur ne peut pas
                         // viser un champ à l'intérieur de « sim » écrit dans la même requête.
                         .put("vuLe", new JSONObject().put("timestampValue", isoNow()));
@@ -1864,6 +1877,28 @@ final class Sync {
         } catch (Exception e) {
             Log.w(TAG, "Carte SIM", e);
             return null;
+        }
+    }
+
+    /** families/{fid}.forfaitSim = { mo, jour | debut } (admin). Absent : 1 000 Mo, repart le 1er du mois. */
+    private void reglerForfait(JSONObject map) {
+        try {
+            JSONObject f = map == null || map.optJSONObject("mapValue") == null ? null
+                    : map.getJSONObject("mapValue").optJSONObject("fields");
+            long mo = Forfait.DEFAUT_MO;
+            int jour = 1;
+            String debut = "";
+            if (f != null) {
+                if (f.has("mo")) mo = Long.parseLong(f.getJSONObject("mo").optString("integerValue", String.valueOf(Forfait.DEFAUT_MO)));
+                if (f.has("jour")) jour = Integer.parseInt(f.getJSONObject("jour").optString("integerValue", "1"));
+                if (f.has("debut")) {
+                    JSONObject d = f.getJSONObject("debut");
+                    debut = d.has("timestampValue") ? d.optString("timestampValue").substring(0, 10) : d.optString("stringValue", "");
+                }
+            }
+            Forfait.regler(context, mo, jour, debut);
+        } catch (Exception e) {
+            Log.w(TAG, "Forfait de la famille", e);
         }
     }
 

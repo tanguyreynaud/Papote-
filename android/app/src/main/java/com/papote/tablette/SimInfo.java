@@ -82,19 +82,25 @@ final class SimInfo {
     }
 
     /** Données mobiles utilisées depuis le 1er du mois, en Mo (-1 si inconnu). */
-    @SuppressWarnings({"MissingPermission", "deprecation"})
     private static long monthlyDataMb(Context context, TelephonyManager tm) {
+        Calendar c = Calendar.getInstance();
+        c.set(Calendar.DAY_OF_MONTH, 1);
+        c.set(Calendar.HOUR_OF_DAY, 0);
+        c.set(Calendar.MINUTE, 0);
+        c.set(Calendar.SECOND, 0);
+        return dataDepuisMb(context, c.getTimeInMillis());
+    }
+
+    /** Données passées par la carte SIM depuis l'instant donné, en Mo (-1 si inconnu). Garde-fou : Forfait. */
+    @SuppressWarnings({"MissingPermission", "deprecation"})
+    static long dataDepuisMb(Context context, long sinceMs) {
         try {
-            Calendar c = Calendar.getInstance();
-            c.set(Calendar.DAY_OF_MONTH, 1);
-            c.set(Calendar.HOUR_OF_DAY, 0);
-            c.set(Calendar.MINUTE, 0);
-            c.set(Calendar.SECOND, 0);
+            TelephonyManager tm = (TelephonyManager) context.getSystemService(Context.TELEPHONY_SERVICE);
             NetworkStatsManager nsm = (NetworkStatsManager) context.getSystemService(Context.NETWORK_STATS_SERVICE);
             String subscriber = null;
-            try { subscriber = tm.getSubscriberId(); } catch (SecurityException ignored) { }
+            try { subscriber = tm == null ? null : tm.getSubscriberId(); } catch (SecurityException ignored) { }
             NetworkStats.Bucket b = nsm.querySummaryForDevice(ConnectivityManager.TYPE_MOBILE, subscriber,
-                    c.getTimeInMillis(), System.currentTimeMillis());
+                    sinceMs, System.currentTimeMillis());
             return (b.getRxBytes() + b.getTxBytes()) / (1024 * 1024);
         } catch (Exception e) {
             return -1;
