@@ -44,7 +44,7 @@ function choisirBase() {
 const functions = getFunctions(app, 'europe-west1');
 
 const $ = (id) => document.getElementById(id);
-const OFFLINE_MS = 45 * 60_000;
+const OFFLINE_MS = 70 * 60_000; // comme alertes.js : tour de 30 min sur la carte SIM
 const IDLE_MS = 24 * 3600_000;
 
 let families = [];

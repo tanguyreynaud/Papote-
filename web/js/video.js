@@ -101,7 +101,7 @@ export async function prepareVideo(file, onProgress, maxSeconds = MAX_SECONDS, d
   const mimeType = pickMime();
   const recorder = new MediaRecorder(stream, {
     ...(mimeType ? { mimeType } : {}),
-    videoBitsPerSecond: 1_400_000,
+    videoBitsPerSecond: 1_100_000,
     audioBitsPerSecond: 64_000,
   });
   const parts = [];

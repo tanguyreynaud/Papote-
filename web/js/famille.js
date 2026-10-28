@@ -3712,7 +3712,8 @@ function ago(ms) {
 }
 
 // Petit indicateur de l'accueil : en ligne (Wi-Fi ou carte SIM), branchée, batterie.
-const EN_LIGNE_MS = 45 * 60_000;
+// Au-delà, « ne répond plus » : la tablette se signale toutes les 30 min sur la carte SIM (alertes.js : 70 min).
+const EN_LIGNE_MS = 70 * 60_000;
 // Fiches des membres (dont l'état de la tablette) : écoute relancée si elle tombe en erreur
 // ou au retour sur l'app, pour ne jamais afficher un état périmé.
 let membresDuCache = true;
@@ -3839,10 +3840,10 @@ function renderActivity() {
   // Batterie : envoyée par la tablette ({ level, charging, unpluggedAt }).
   const battery = tabletMembers.filter((m) => m.battery && m.lastOnline)
     .sort((a, b) => toDate(b.lastOnline) - toDate(a.lastOnline))[0]?.battery;
-  if (now - online > 45 * 60_000 && membresDuCache) {
+  if (now - online > EN_LIGNE_MS && membresDuCache) {
     // Données pas encore confirmées par le serveur (retour sur l'app) : on ne crie pas au loup.
     el.textContent = "Mise à jour de l'état de la tablette…";
-  } else if (now - online > 45 * 60_000) {
+  } else if (now - online > EN_LIGNE_MS) {
     el.classList.add('warn');
     el.textContent = `La tablette de ${name} ne répond plus depuis ${ago(online).replace('il y a ', '')}. Est-elle branchée et connectée au wifi ?`;
   } else if (battery && battery.charging === false && battery.unpluggedAt) {
