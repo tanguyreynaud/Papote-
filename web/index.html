@@ -6,10 +6,10 @@
        installée depuis l'ancienne adresse : elle s'ouvrirait dans une fenêtre de navigateur. -->
   <script>if (location.hostname === 'papote-famille.web.app' && !matchMedia('(display-mode: standalone)').matches && navigator.standalone !== true) location.replace('https://app.mapapote.fr' + location.pathname + location.search + location.hash);</script>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <!-- App Android Papote (Chrome 135+, Android 15+) : avec viewport-fit=cover, Chrome dessine la page
-       sous les boutons Android (retour, accueil) et les laisse blancs, invisibles sur le crème.
-       Sans, il garde une bande de la couleur choisie par l'app, où les boutons se voient. -->
-  <script>try { if (/[?&](natif|pause)=/.test(location.search)) sessionStorage.setItem('papote.app', '1'); if (sessionStorage.getItem('papote.app') === '1') document.querySelector('meta[name=viewport]').content = 'width=device-width, initial-scale=1'; } catch (e) { /* rien */ }</script>
+  <!-- App Android Papote : Chrome dessine toujours la page sous les boutons Android (retour, accueil),
+       sans tenir compte de la couleur choisie par l'app. La page met elle-même une bande grise dessous
+       (.app-android, famille.css). -->
+  <script>try { if (/[?&](natif|pause)=/.test(location.search)) sessionStorage.setItem('papote.app', '1'); if (sessionStorage.getItem('papote.app') === '1') document.documentElement.classList.add('app-android'); } catch (e) { /* rien */ }</script>
   <title>Papote</title>
   <meta name="theme-color" content="#fdfaf5" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#121110" media="(prefers-color-scheme: dark)">
