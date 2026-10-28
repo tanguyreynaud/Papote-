@@ -103,6 +103,7 @@ public class Push extends FirebaseMessagingService {
 
     static final long PING_ATTENTE_MS = 2 * 60_000;
     static final long PING_CHAQUE_MS = 24 * 3600_000;
+    static final long PING_RELANCE_MS = 30 * 60_000;
 
     static void jetonEcrit(Context c, String jeton) {
         prefs(c).edit().putString("pushJetonEcrit", jeton).putLong("pushPingDemande", System.currentTimeMillis()).apply();
@@ -111,12 +112,16 @@ public class Push extends FirebaseMessagingService {
     /** Le contrôle quotidien est dû : Sync réécrit pingDemande (le serveur renvoie un ping). */
     static boolean controleDu(Context c) {
         SharedPreferences p = prefs(c);
-        return p.getString("pushJetonEcrit", null) != null
-                && System.currentTimeMillis() - p.getLong("pushPingDemande", 0) >= PING_CHAQUE_MS;
+        if (p.getString("pushJetonEcrit", null) == null) return false;
+        long depuis = System.currentTimeMillis() - p.getLong("pushPingDemande", 0);
+        // Pas de ping reçu pour la dernière demande (serveur pas encore à jour, coupure) : on redemande
+        // toutes les 30 min, au lieu d'attendre le lendemain en gardant l'écoute en direct (28/10).
+        boolean sansReponse = p.getLong("pushPingRecu", 0) < p.getLong("pushPingDemande", 0);
+        return depuis >= (sansReponse ? PING_RELANCE_MS : PING_CHAQUE_MS);
     }
 
     static void controleDemande(Context c) {
-        prefs(c).edit().putLong("pushPingDemande", System.currentTimeMillis()).apply();
+        prefs(c).edit().putLong("pushPingDemande", System.currentTimeMillis()).putBoolean("pushEchecNote", false).apply();
     }
 
     /**
