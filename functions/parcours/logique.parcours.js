@@ -322,3 +322,47 @@ test('« N téléphones reçoivent les appels » : le serveur note sur chaque pr
   await s.calme();
   assert.strictEqual((await membre.get()).get('recoitAppels'), true);
 });
+
+test('pas vue depuis deux jours : une alerte aux responsables, pas de rappel tant qu\'elle n\'est pas revue', async () => {
+  const paul = await s.compte('Paul', 'paul@exemple.fr');
+  const julie = await s.compte('Julie', 'julie@exemple.fr');
+  const marc = await s.compte('Marc', 'marc@exemple.fr');
+  const { fid, t } = await familleAbonnee(paul, julie);
+  await a.rejoindre(marc, fid);
+  await s.calme();
+  const tablette = s.db.doc(`families/${fid}/members/${t.tabletUid}`);
+  const H = 3600e3;
+  const enLigne = () => tablette.update({ lastOnline: new Date(Date.now()) });
+
+  await tablette.update({ lastSeen: new Date(Date.now() - 30 * H) });
+  await enLigne();
+  s.notifications.length = 0;
+  await s.tache('alerteMatin');
+  assert.strictEqual(alertes().length, 0, 'vue hier : rien');
+
+  s.avancer(1);
+  await enLigne();
+  await s.tache('alerteMatin');
+  assert.strictEqual(alertes().length, 1, 'plus de 48 h : alerte');
+  assert.match(alertes()[0].titre, /pas été vue depuis deux jours/);
+  assert.deepStrictEqual(alertes()[0].uids, [julie.uid], 'aux responsables seulement, pas à Marc');
+  s.avancer(1);
+  await enLigne();
+  await s.tache('alerteMatin');
+  assert.strictEqual(alertes().length, 1, 'le lendemain : pas de rappel, même épisode');
+
+  // Revue, puis de nouveau absente trois jours : nouvel épisode.
+  await tablette.update({ lastActive: new Date(Date.now()) });
+  await s.tache('alerteMatin');
+  assert.strictEqual(alertes().length, 1);
+  s.avancer(3);
+  await enLigne();
+  await s.tache('alerteMatin');
+  assert.strictEqual(alertes().length, 2, 'nouvel épisode : nouvelle alerte');
+
+  // Tablette hors ligne : « ne répond plus » s'en charge, pas d'alerte « pas vue » en plus.
+  await tablette.update({ lastActive: new Date(Date.now()) });
+  s.avancer(3);
+  await s.tache('alerteMatin');
+  assert.strictEqual(alertes().length, 2, 'hors ligne : rien');
+});
