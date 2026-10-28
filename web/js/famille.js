@@ -2026,6 +2026,24 @@ const premiereImage = () => {
 $('call-remote').addEventListener('playing', premiereImage);
 $('call-remote').addEventListener('resize', premiereImage);
 
+// Fond flouté derrière l'image du proche (même vidéo), ou plein écran si l'écran et l'image ont presque la même forme :
+// on ne coupe jamais plus de 15 % de l'image.
+const cadrerImage = () => {
+  const video = $('call-remote');
+  const fond = $('call-remote-fond');
+  if (fond.srcObject !== video.srcObject) {
+    fond.srcObject = video.srcObject;
+    if (fond.srcObject) fond.play().catch(() => {});
+  }
+  const call = $('call');
+  if (!video.videoWidth || !call.clientHeight) return;
+  const ecran = call.clientWidth / call.clientHeight;
+  const image = video.videoWidth / video.videoHeight;
+  video.classList.toggle('remplit', Math.min(ecran, image) / Math.max(ecran, image) >= 0.85);
+};
+for (const evenement of ['playing', 'resize', 'emptied']) $('call-remote').addEventListener(evenement, cadrerImage);
+window.addEventListener('resize', cadrerImage);
+
 let allMembers = [];
 
 // 30 proches au plus par famille (la tablette ne compte pas) : vérifié aussi par les règles.
