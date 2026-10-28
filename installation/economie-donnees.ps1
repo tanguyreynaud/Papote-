@@ -4,7 +4,7 @@
 #   1. Économiseur de données d'Android : aucune appli n'utilise le réseau en arrière-plan, sauf Papote.
 #   2. Les applis inutiles (Google et Blackview) sont désactivées : elles ne se lancent plus et ne
 #      téléchargent plus rien. Rien n'est désinstallé : -Annuler les remet toutes.
-# Gardés : services Google et WebView (pages de Papote), voix Google (lecture), clavier (mot de passe
+# Gardés (et autorisés en arrière-plan pour les services Google) : services Google et WebView (pages de Papote), voix Google (lecture), clavier (mot de passe
 # du wifi), installation des mises à jour de Papote, alertes d'urgence, connexion au wifi d'un hôtel.
 # Attention : sans Play Store, le WebView n'est plus mis à jour tout seul (à refaire par le script).
 # Lancé par installer-tablette.ps1 ; seul : .\economie-donnees.ps1 [-Serial X] [-Annuler]
@@ -61,6 +61,11 @@ Say 'Économie de données : seul Papote utilise internet…' 'Cyan'
 $uid = [regex]::Match((Adb shell dumpsys package $Package), 'userId=(\d+)').Groups[1].Value
 if (-not $uid) { Say 'Papote n''est pas installé : économie de données non réglée.' 'Red'; return }
 Adb shell cmd netpolicy add restrict-background-whitelist $uid | Out-Null
+# Services Google aussi (même uid pour gms et gsf) : App Check / Play Integrity et notifications push.
+foreach ($g in 'com.google.android.gms', 'com.google.android.gsf') {
+    $gu = [regex]::Match((Adb shell dumpsys package $g), 'userId=(\d+)').Groups[1].Value
+    if ($gu) { Adb shell cmd netpolicy add restrict-background-whitelist $gu | Out-Null }
+}
 Adb shell cmd netpolicy set restrict-background true | Out-Null
 # 2. Applis inutiles désactivées pour l'utilisateur (réversible, pas désinstallées).
 $faites = 0
