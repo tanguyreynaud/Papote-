@@ -2011,7 +2011,7 @@ final class Sync {
         }
     }
 
-    /** families/{fid}.forfaitSim = { mo, jour | debut } (admin). Absent : 1 000 Mo, repart le 1er du mois. */
+    /** families/{fid}.forfaitSim = { mo, jour | debut, visio } (admin). Absent : 1 000 Mo, repart le 1er du mois. */
     private void reglerForfait(JSONObject map) {
         try {
             JSONObject f = map == null || map.optJSONObject("mapValue") == null ? null
@@ -2019,7 +2019,15 @@ final class Sync {
             long mo = Forfait.DEFAUT_MO;
             int jour = 1;
             String debut = "";
+            int reception = 0, envoi = 0;
             if (f != null) {
+                // visio : { reception, envoi } en kbit/s, essai de qualité sur SIM (visio-sim.bat)
+                JSONObject v = f.optJSONObject("visio");
+                JSONObject vf = v == null || v.optJSONObject("mapValue") == null ? null : v.getJSONObject("mapValue").optJSONObject("fields");
+                if (vf != null) {
+                    if (vf.has("reception")) reception = Integer.parseInt(vf.getJSONObject("reception").optString("integerValue", "0"));
+                    if (vf.has("envoi")) envoi = Integer.parseInt(vf.getJSONObject("envoi").optString("integerValue", "0"));
+                }
                 if (f.has("mo")) mo = Long.parseLong(f.getJSONObject("mo").optString("integerValue", String.valueOf(Forfait.DEFAUT_MO)));
                 if (f.has("jour")) jour = Integer.parseInt(f.getJSONObject("jour").optString("integerValue", "1"));
                 if (f.has("debut")) {
@@ -2028,6 +2036,7 @@ final class Sync {
                 }
             }
             Forfait.regler(context, mo, jour, debut);
+            Forfait.reglerVisio(context, reception, envoi);
         } catch (Exception e) {
             Log.w(TAG, "Forfait de la famille", e);
         }

@@ -295,6 +295,18 @@ const SIM_RECEIVE_KBPS = 500;
 // (85 %) = appels sans image, le son seul. Jamais sur le Wi-Fi.
 const ECO_SEND_BITRATE = 60_000;
 const ECO_RECEIVE_KBPS = 150;
+// Essai de qualité sur SIM, réglé par l'admin pour une famille (families/{fid}.forfaitSim.visio =
+// { reception, envoi } en kbit/s, outils/admin/visio-sim.bat) : remplace 500 / 120 en régime « sim »
+// seulement (ni sur le Wi-Fi, ni aux paliers du garde-fou). Absent ou 0 : réglage normal.
+function visioSim() {
+  try {
+    const a = android();
+    const v = a && a.simBudget ? JSON.parse(a.simBudget()).visio : null;
+    return { reception: (v && v.reception) || SIM_RECEIVE_KBPS, envoi: ((v && v.envoi) || SIM_SEND_BITRATE / 1000) * 1000 };
+  } catch (e) {
+    return { reception: SIM_RECEIVE_KBPS, envoi: SIM_SEND_BITRATE };
+  }
+}
 function onSimData() {
   try {
     const s = JSON.parse(android().wifiStatus());
@@ -327,7 +339,7 @@ function sansImage(pc) {
 function limitReceive(sdp) {
   const r = regime();
   if (r === 'wifi') return sdp;
-  const kbps = r === 'sim' ? SIM_RECEIVE_KBPS : ECO_RECEIVE_KBPS;
+  const kbps = r === 'sim' ? visioSim().reception : ECO_RECEIVE_KBPS;
   // Ligne « b=AS » juste après la ligne « c= » de la section vidéo.
   const lines = sdp.split('\r\n');
   let inVideo = false;
@@ -346,11 +358,12 @@ function capVideo(pc) {
     const r = regime();
     const sim = r !== 'wifi';
     const eco = r === 'eco' || r === 'audio';
+    const envoiSim = sim && !eco ? visioSim().envoi : 0;
     pc.getSenders().forEach((s) => {
       if (!s.track || s.track.kind !== 'video' || !s.getParameters) return;
       const p = s.getParameters();
       if (!p.encodings || !p.encodings.length) p.encodings = [{}];
-      p.encodings[0].maxBitrate = eco ? ECO_SEND_BITRATE : sim ? SIM_SEND_BITRATE : VIDEO_MAX_BITRATE;
+      p.encodings[0].maxBitrate = eco ? ECO_SEND_BITRATE : sim ? envoiSim : VIDEO_MAX_BITRATE;
       p.encodings[0].maxFramerate = eco ? 8 : sim ? 12 : 20;
       // Quand Mamie bouge, l'encodeur perd des images plutôt que de la netteté.
       p.degradationPreference = 'maintain-resolution';

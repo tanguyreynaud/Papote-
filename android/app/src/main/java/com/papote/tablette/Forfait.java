@@ -25,6 +25,8 @@ import java.util.TimeZone;
  *   mo    : Mo du forfait (1000 par défaut ; 0 = pas de limite, carte illimitée ou formule Wi-Fi) ;
  *   jour  : jour du mois où le forfait repart (1 par défaut) ;
  *   debut : date « aaaa-mm-jj » d'une recharge, pour les pass de 30 jours (Lyca) : cycles de 30 jours.
+ *   visio : { reception, envoi } en kbit/s, réglage d'essai de la visio sur SIM (outils/admin/visio-sim.bat) ;
+ *           absent = réglage de la page (appels.js : 500 reçus, 120 envoyés). Jamais appliqué sur le Wi-Fi.
  */
 final class Forfait {
     static final long DEFAUT_MO = 1000;
@@ -50,6 +52,17 @@ final class Forfait {
         p.edit().putLong("forfaitMo", mo).putInt("forfaitJour", jour).putString("forfaitDebut", debut).apply();
         Journal.log(c, "Forfait SIM réglé : " + (mo <= 0 ? "sans limite" : mo + " Mo")
                 + (debut.isEmpty() ? ", repart le " + jour + " du mois" : ", recharge du " + debut + " (30 jours)"));
+    }
+
+    /** Réglage d'essai de la visio sur SIM (0 = réglage normal de la page). */
+    static void reglerVisio(Context c, int reception, int envoi) {
+        SharedPreferences p = prefs(c);
+        if (reception < 0) reception = 0;
+        if (envoi < 0) envoi = 0;
+        if (p.getInt("visioReception", 0) == reception && p.getInt("visioEnvoi", 0) == envoi) return;
+        p.edit().putInt("visioReception", reception).putInt("visioEnvoi", envoi).apply();
+        Journal.log(c, "Visio sur SIM : " + (reception <= 0 && envoi <= 0 ? "réglage normal"
+                : "essai, reçu " + reception + " kbit/s, envoyé " + envoi + " kbit/s"));
     }
 
     static long plafondMo(Context c) {
@@ -129,6 +142,9 @@ final class Forfait {
             j.put("plafondMo", plafond).put("consoMo", conso).put("niveau", niveau).put("sim", surSim(c))
                     .put("cycleDebut", String.format(java.util.Locale.US, "%04d-%02d-%02d",
                             d.get(Calendar.YEAR), d.get(Calendar.MONTH) + 1, d.get(Calendar.DAY_OF_MONTH)));
+            SharedPreferences pv = prefs(c);
+            int reception = pv.getInt("visioReception", 0), envoi = pv.getInt("visioEnvoi", 0);
+            if (reception > 0 || envoi > 0) j.put("visio", new JSONObject().put("reception", reception).put("envoi", envoi));
             // Changement de palier noté une fois dans le journal (visible dans l'admin).
             SharedPreferences p = prefs(c);
             if (p.getInt("forfaitNiveau", 0) != niveau) {
