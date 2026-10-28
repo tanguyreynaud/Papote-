@@ -55,6 +55,10 @@ final class Sync {
     // 20 min, pour que le serveur voie la tablette au moins toutes les 45 min (alerte « ne répond plus »)
     // même si un tour manque.
     private static final long REALTIME_POLL_MS = 20 * 60_000;
+    // La nuit (heures de veille de la famille, 23 h-7 h par défaut) : un tour par heure seulement, et ni météo,
+    // ni rappels, ni proches relus (Tanguy, 28/10). Les appels et les envois arrivent toujours par l'écoute en
+    // direct de la page. Le serveur tolère 2 h de silence pendant la veille (functions/alertes.js) au lieu de 45 min.
+    private static final long NIGHT_POLL_MS = 60 * 60_000;
     // La météo n'affiche qu'aujourd'hui et demain : 2 h suffisent, et seulement si elle a changé (Meteo.forecast).
     private static final long WEATHER_MS = 2 * 3600_000;
     private static final long REMINDERS_MS = 6 * 3600_000;
@@ -380,7 +384,7 @@ final class Sync {
             // prévient du retour d'internet (watchNetwork) ; un essai par minute reste en secours.
             boolean offline = "offline".equals(lastState);
             handler.postDelayed(this, pairingActive() ? 4_000
-                    : realtime ? (offline ? 60_000 : REALTIME_POLL_MS) : POLL_MS);
+                    : realtime ? (offline ? 60_000 : nuit() ? Math.min(NIGHT_POLL_MS, msAvantLeJour()) : REALTIME_POLL_MS) : POLL_MS);
         }
     };
 
@@ -956,7 +960,7 @@ final class Sync {
         // « En ligne » toutes les 10 min ; « vue » et « touchée » à la minute près, pour que la famille
         // voie tout de suite que Mamie a regardé (écritures rares : seulement quand elle est là).
         // Petite marge : le tour de synchronisation arrive quelques millisecondes après le précédent.
-        long every = "lastOnline".equals(field) ? HEARTBEAT_MS - 60_000 : 60_000;
+        long every = "lastOnline".equals(field) ? (nuit() ? NIGHT_POLL_MS : HEARTBEAT_MS) - 60_000 : 60_000;
         if (fid == null || (last != null && now - last < every)) return;
         boolean enLigne = "lastOnline".equals(field);
         try {
@@ -1395,6 +1399,7 @@ final class Sync {
         String fid = prefs.getString("fid", null);
         long now = System.currentTimeMillis();
         if (fid == null || now - lastReminders < REMINDERS_MS) return;
+        if (nuit() && lastRemindersJson != null) return; // la nuit, relus au matin (le tour du jour les reprend)
         try {
             JSONArray docs = firebase.list("families/" + fid + "/reminders");
             JSONArray out = new JSONArray();
@@ -1477,6 +1482,7 @@ final class Sync {
         String fid = prefs.getString("fid", null);
         long now = System.currentTimeMillis();
         if (fid == null || now - lastFamilyExtras < REMINDERS_MS) return;
+        if (nuit() && lastFamilyJson != null) return; // la nuit, relus au matin
         lastFamilyExtras = now;
         try {
             JSONObject faces = new JSONObject();
@@ -1689,6 +1695,7 @@ final class Sync {
         resolvePendingCity();
         long now = System.currentTimeMillis();
         if (now - lastWeather < WEATHER_MS) return;
+        if (nuit() && lastWeather > 0) return; // la nuit, la météo attend le matin (sauf si jamais lue)
         try {
             if (!Meteo.hasCity(context)) return; // pas encore de ville : pas de météo
             JSONObject weather = Meteo.forecast(http, Meteo.lat(context), Meteo.lon(context));
@@ -2045,6 +2052,23 @@ final class Sync {
             lastPostsJson = null; // la page doit l'apprendre tout de suite
             publishPosts();
         }
+    }
+
+    /** Heures de veille de la famille (réglage gardé sur la tablette). */
+    private boolean nuit() {
+        return Veille.isNight(context);
+    }
+
+    /** Temps jusqu'à la fin de la veille, pour que le premier tour du matin ne tarde pas (météo, rappels). */
+    private long msAvantLeJour() {
+        java.util.Calendar c = java.util.Calendar.getInstance();
+        long now = c.getTimeInMillis();
+        c.set(java.util.Calendar.HOUR_OF_DAY, Veille.to(context));
+        c.set(java.util.Calendar.MINUTE, 0);
+        c.set(java.util.Calendar.SECOND, 30);
+        c.set(java.util.Calendar.MILLISECOND, 0);
+        if (c.getTimeInMillis() <= now) c.add(java.util.Calendar.DAY_OF_YEAR, 1);
+        return Math.max(60_000, c.getTimeInMillis() - now);
     }
 
     /** Abonnement suspendu, résilié ou absent côté serveur : Papote est en pause. */
