@@ -204,9 +204,21 @@ final class Sync {
             } catch (JSONException ignored) { }
             lastReminders = 0;
             lastFamilyExtras = 0;
+            envoyerMeteoGardee();
             lastWeather = 0;
             refreshWeather();
         });
+    }
+
+    /** Dernière météo connue (moins de 6 h), envoyée tout de suite à la page avant la nouvelle lecture. */
+    private void envoyerMeteoGardee() {
+        String json = prefs.getString("meteoDerniere", null);
+        long age = System.currentTimeMillis() - prefs.getLong("meteoDerniereA", 0);
+        if (json == null || age > 6 * 3600_000L || !Meteo.hasCity(context)) return;
+        try {
+            JSONObject w = new JSONObject(json);
+            listener.onWeather(w);
+        } catch (JSONException ignored) { }
     }
 
     // ---------- Copie sur la tablette (redémarrage sans internet) ----------
@@ -340,6 +352,7 @@ final class Sync {
                 if (!cacheRestored) {
                     restoreCache();
                     if (!posts.isEmpty()) publishPosts();
+                    envoyerMeteoGardee();
                     try {
                         if (lastRemindersJson != null) listener.onReminders(new JSONObject(lastRemindersJson));
                         if (lastFamilyJson != null) listener.onFamily(new JSONObject(lastFamilyJson));
@@ -1163,6 +1176,7 @@ final class Sync {
             prefs.edit().remove("fid").remove("code").remove("pairing").remove("pairingExpires").remove("pairingFait")
                     .remove("tabletName").remove("wifiDone").apply();
             Meteo.forget(context);
+            prefs.edit().remove("meteoDerniere").remove("meteoDerniereA").apply();
             firebase.forgetAll();
             posts.clear();
             dropCache();
@@ -1567,6 +1581,8 @@ final class Sync {
             if (!Meteo.hasCity(context)) return; // pas encore de ville : pas de météo
             JSONObject weather = Meteo.forecast(http, Meteo.lat(context), Meteo.lon(context));
             lastWeather = now;
+            // Gardée pour le prochain démarrage : l'accueil s'affiche d'un coup, météo comprise.
+            prefs.edit().putString("meteoDerniere", weather.toString()).putLong("meteoDerniereA", now).apply();
             listener.onWeather(weather);
         } catch (Exception e) {
             Log.w(TAG, "Météo", e);

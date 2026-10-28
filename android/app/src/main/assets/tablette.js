@@ -233,6 +233,7 @@
       small.textContent = 'Demain : ' + tomorrow[1].toLowerCase() + ', ' + Math.round(data.daily.temperature_2m_max[1]) + '°';
       $('weather-label').appendChild(small);
       weatherReady = true;
+      bootPret('meteo');
       show($('weather'), options.meteo !== false);
       ajusterMeteo();
     } catch (e) { /* données incomplètes : on garde l'affichage précédent */ }
@@ -256,7 +257,7 @@
     var rdv = upcomingRdv();
     showRdv(rdv);
     // Rendez-vous en grand : pas de « Julie, aujourd'hui » de la photo en dessous (T17).
-    if (rdv) { show($('frame-caption'), false); return; }
+    if (rdv) { show($('frame-caption'), false); bootPret('photo'); return; }
     var has = photos.length > 0;
     // Au démarrage, avant que la tablette ait relu ses envois : rien (pas le QR « Envoyez une photo »
     // une seconde, juste avant que la photo arrive).
@@ -265,7 +266,7 @@
     if (frameBack) show(frameBack, has);
     show($('frame-caption'), has);
     show($('frame-empty'), !has);
-    if (!has) { renderInvite(); return; }
+    if (!has) { renderInvite(); bootPret('photo'); return; }
     frameIndex = frameIndex % Math.min(photos.length, 20);
     var p = photos[frameIndex];
     crossfadeFrame(p, function () { setCaption(p); });
@@ -288,6 +289,7 @@
     frameShown = p.image;
     var probe = new Image();
     probe.onload = probe.onerror = function () {
+      bootPret('photo');
       if (frameShown !== p.image) return;
       // La couche du dessous reçoit la nouvelle photo, transparente, passe au-dessus et apparaît.
       var top = front.style.zIndex === '2' ? front : frameBack;
@@ -960,8 +962,21 @@
   }
   setTimeout(hideBoot, 20000);
 
+  // Démarrage d'un coup (Tanguy, 28/10) : le logo reste tant que l'accueil n'est pas prêt — les envois
+  // reçus, la photo du cadre chargée, la météo et les proches arrivés — puis tout apparaît ensemble.
+  // Ce qui tarde (pas d'internet, pas de ville) n'attend pas plus de 6 s après les envois.
+  var pret = { envois: false, photo: false, meteo: false, proches: false };
+  var envoisRecusA = 0;
+  function bootPret(quoi) {
+    if (bootDone) return;
+    pret[quoi] = true;
+    if (!pret.envois) return;
+    if (!envoisRecusA) { envoisRecusA = Date.now(); setTimeout(hideBoot, 6000); }
+    if (pret.photo && pret.meteo && pret.proches) hideBoot();
+  }
+
   function onStatus(status) {
-    hideBoot();
+    if (status.state !== 'ok') hideBoot(); // accueil normal : on attend qu'il soit prêt (bootPret)
     // Première installation chez le client : nom, wifi, puis appairage (bienvenue.js).
     if (window.PapoteBienvenue) {
       // Pas encore de famille (ou remise sur Bienvenue) : pas d'écran « en pause » d'une famille d'avant.
@@ -977,7 +992,6 @@
   }
 
   function onPosts(payload) {
-    hideBoot();
     hasData = true;
     // On garde « vu » localement même si Firebase ne l'a pas encore enregistré.
     var seenBefore = {};
@@ -1015,6 +1029,7 @@
     if (isShown('view-setup')) showView('view-home');
     setBackdrops();
     renderFrame();
+    bootPret('envois');
     renderBadges();
     if (isShown('view-photos')) {
       if (slides.length) {
@@ -2190,6 +2205,7 @@
   }
 
   function onFamily(payload) {
+    bootPret('proches');
     faces = payload.faces || {};
     setPeople(payload.people);
     // Les photos de profil arrivent parfois après l'envoi affiché : on le met à jour.
