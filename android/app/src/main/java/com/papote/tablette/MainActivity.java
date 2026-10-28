@@ -863,11 +863,17 @@ public class MainActivity extends Activity implements Sync.Listener {
      * En journée, on le rallume dans la foulée (on ne voit qu'un bref noir).
      * La nuit (23h-7h), on le laisse éteint.
      */
-    // ---------- Test du son à l'installation ----------
+    // ---------- Test du son (installation et Réglages de l'app famille) ----------
+
+    // Après un essai, la tablette reprend les volumes enregistrés : un essai suivi d'« Annuler » dans
+    // l'app laissait la sonnerie ou les médias au niveau essayé jusqu'au prochain démarrage.
+    private final Runnable volumesEnregistres = this::setVolumes;
 
     private void playSoundTest(String quoi, int volume, String texte) {
         AudioManager am = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
         int v = Math.max(10, Math.min(100, volume));
+        handler.removeCallbacks(volumesEnregistres);
+        handler.postDelayed(volumesEnregistres, 12_000);
         try {
             if ("sonnerie".equals(quoi)) {
                 am.setStreamVolume(AudioManager.STREAM_RING, am.getStreamMaxVolume(AudioManager.STREAM_RING) * v / 100, 0);
