@@ -190,7 +190,7 @@ const COMMENT_RENDRE = `${CARTON}, collez l'étiquette dessus et déposez le col
 const COMMENT_RENDRE_QR = `${CARTON} et déposez-le dans n'importe quel point relais Mondial Relay en montrant ce QR code (sur votre téléphone, pas besoin d'imprimer). Inutile d'effacer la tablette : nous nous en chargeons.`;
 // Où demander le QR code de retour : dans l'appli, au moment de déposer le colis (renvoyerTablette).
 const DEMANDER_QR = 'Quand le colis est prêt, ouvrez l\'appli Papote, onglet Profil, et touchez « Je renvoie la tablette » : un QR code prépayé s\'affiche, à montrer au point relais Mondial Relay. Pas besoin d\'imprimer, et vous n\'avez rien à payer.';
-const APPLI_RETOUR = { texte: 'Ouvrir l\'appli Papote', lien: `${APPLI}/?retour=1` };
+const APPLI_RETOUR = { texte: 'Ouvrir l\'appli Papote', lien: `${APPLI}/?abonnement=1` };
 
 // Abonnement terminé ou commande annulée après l'envoi : la tablette prêtée est attendue.
 // retractation : montant remboursé au retour (centimes), sinon null.
