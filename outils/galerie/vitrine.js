@@ -96,6 +96,9 @@ const SCENES = [
     await p.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })));
     await pause(p, 300);
   } },
+  { groupe: 'Commande', titre: 'Commande : code postal à plusieurs villes, choix de la ville', fichier: 'commande.html', faire: async (p) => {
+    await p.fill('#cp', '63490'); await p.dispatchEvent('#cp', 'input'); await p.locator('#ville').waitFor({ timeout: 5000 }); await pause(p, 500);
+  } },
   { groupe: 'Commande', titre: 'Commande : il manque le point relais', fichier: 'commande.html', faire: async (p) => {
     await p.fill('#destinataire', 'Tanguy Reynaud'); await p.fill('#email', 'tanguy@exemple.fr'); await p.dispatchEvent('#email', 'input');
     await p.locator('#payer').click(); await pause(p);
@@ -131,7 +134,9 @@ async function capturer({ browser, base, dossierImages, progression }) {
       // la page reste donc affichée avec « Un instant… ».
       await page.route('**/commander**', (r) => r.fulfill({ status: 204 }));
       await page.route('**/codeCommande**', (r) => r.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(RECAP) }));
-      await page.route(/geo\.api\.gouv\.fr/, (r) => r.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: '[{"nom":"Lyon 1er Arrondissement","code":"69381"}]' }));
+      // 63490 : un code postal à plusieurs villes, pour voir le choix de la ville.
+      await page.route(/geo\.api\.gouv\.fr/, (r) => r.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' },
+        body: /63490/.test(r.request().url()) ? '[{"nom":"Brousse","code":"63056"},{"nom":"Sugères","code":"63423"},{"nom":"Sauviat","code":"63412"}]' : '[{"nom":"Lyon 1er Arrondissement","code":"69381"}]' }));
       await page.route(/data\.geopf\.fr\/geocodage\/search/, (r) => r.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(/citycode=/.test(r.request().url()) ? RUES : VILLES) }));
       // Couverture : la vraie règle (functions/couverture.js, carte de l'ARCEP) sur les coordonnées demandées.
       await page.route('**/couverture?**', (r) => {
