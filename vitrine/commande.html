@@ -130,10 +130,11 @@ body .ps-bouton { bottom: 6.5rem; }
 
   <section class="etape" id="etape-proche">
     <h2><span class="n">1</span>Où vit votre proche ?<span class="ok" id="ok1" hidden>✓</span></h2>
-    <label class="champ">Son adresse
-      <input id="adresse" autocomplete="off" maxlength="200" placeholder="Adresse, ou seulement la ville" aria-describedby="adresse-aide">
+    <label class="champ"><span id="adresse-titre">Sa ville</span>
+      <input id="adresse" autocomplete="off" maxlength="200" placeholder="Ville de votre proche" aria-describedby="adresse-aide">
       <small id="adresse-aide">Nous vérifions que la 4G passe bien chez votre proche.</small>
     </label>
+    <button class="lien" type="button" id="autre-ville" hidden>Changer de ville</button>
     <div class="points" id="suggestions" hidden></div>
     <p class="muted" id="verification" hidden>Vérification de la 4G…</p>
     <p class="verdict" id="verdict" hidden></p>
@@ -221,8 +222,27 @@ body .ps-bouton { bottom: 6.5rem; }
   var suggestions = document.getElementById('suggestions');
   var verification = document.getElementById('verification');
   var verdict = document.getElementById('verdict');
-  var proche = null; // { adresse, lat, lon, cp, niveau, eligible }
+  var proche = null; // { adresse, lat, lon, cp, niveau, eligible, insee si la ville seule suffit }
   function procheOk() { return !!(proche && proche.eligible); }
+  // D'abord la ville seule (Tanguy, 29/10) : elle suffit si la 4G passe bien sur au moins 95 % de la commune.
+  // Sinon on demande la rue, dans cette ville seulement (villeProche = { insee, nom }).
+  var villeProche = null;
+  var titreAdresse = document.getElementById('adresse-titre');
+  var autreVille = document.getElementById('autre-ville');
+  var aideAdresse = document.getElementById('adresse-aide');
+  function demanderRue(v) {
+    villeProche = v;
+    titreAdresse.textContent = v ? 'Sa rue, à ' + v.nom : 'Sa ville';
+    champAdresse.placeholder = v ? 'Rue (et numéro si vous le connaissez)' : 'Ville de votre proche';
+    autreVille.hidden = !v;
+    aideAdresse.textContent = v ? 'À ' + v.nom + ', la 4G ne passe pas partout : nous la vérifions à sa rue.'
+      : 'Nous vérifions que la 4G passe bien chez votre proche.';
+    champAdresse.value = '';
+    suggestions.hidden = true;
+  }
+  autreVille.addEventListener('click', function () {
+    proche = null; verdict.hidden = true; demanderRue(null); lienPaiement(); retenir(); champAdresse.focus();
+  });
   var tapeLe = 0;
   champAdresse.addEventListener('input', function () {
     proche = null;
@@ -230,10 +250,11 @@ body .ps-bouton { bottom: 6.5rem; }
     lienPaiement();
     var q = champAdresse.value.trim();
     var ici = ++tapeLe;
-    if (q.length < 4) { suggestions.hidden = true; return; }
+    if (q.length < 3) { suggestions.hidden = true; return; }
     setTimeout(function () {
       if (ici !== tapeLe) return;
-      fetch(GEOCODAGE + '/search?index=address&autocomplete=1&limit=5&q=' + encodeURIComponent(q))
+      fetch(GEOCODAGE + '/search?index=address&autocomplete=1&limit=5&q=' + encodeURIComponent(q)
+        + (villeProche ? '&citycode=' + encodeURIComponent(villeProche.insee) : '&type=municipality'))
         .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
         .then(function (d) { if (ici === tapeLe) proposer(d.features || []); })
         .catch(function () {
@@ -253,9 +274,11 @@ body .ps-bouton { bottom: 6.5rem; }
       var t = document.createElement('div');
       var nom = document.createElement('b');
       nom.textContent = p.name || p.label;
-      var ville = document.createElement('span');
-      ville.textContent = [p.postcode, p.city].filter(Boolean).join(' ');
-      t.append(nom, ville);
+      var lieu = document.createElement('span');
+      lieu.textContent = p.type === 'municipality'
+        ? [p.postcode, (p.context || '').split(', ')[1]].filter(Boolean).join(' · ')
+        : [p.postcode, p.city].filter(Boolean).join(' ');
+      t.append(nom, lieu);
       b.append(t);
       b.addEventListener('click', function () { choisirAdresse(f); });
       suggestions.append(b);
@@ -277,7 +300,8 @@ body .ps-bouton { bottom: 6.5rem; }
       .then(function (d) {
         verification.hidden = true;
         if (commune && !d.eligible) {
-          dire(false, 'Précisez la rue de votre proche.', 'Dans cette commune, la 4G ne passe pas partout : nous la vérifions à sa rue.');
+          demanderRue({ insee: p.citycode, nom: p.name || p.label });
+          champAdresse.focus();
           return;
         }
         proche = { adresse: p.label, lat: c[1], lon: c[0], cp: p.postcode, niveau: commune ? 'commune' : d.niveau, eligible: !!d.eligible };
@@ -340,7 +364,7 @@ body .ps-bouton { bottom: 6.5rem; }
     if (!procheOk() || !relais || !nomOk || !melOk) {
       payer.removeAttribute('href');
       payer.setAttribute('aria-disabled', 'true');
-      manque.textContent = !procheOk() ? (proche && !proche.eligible ? 'La 4G ne passe pas assez bien chez votre proche (étape 1).' : 'Il reste à indiquer l\'adresse de votre proche (étape 1).')
+      manque.textContent = !procheOk() ? (proche && !proche.eligible ? 'La 4G ne passe pas assez bien chez votre proche (étape 1).' : (villeProche ? 'Il reste à indiquer la rue de votre proche (étape 1).' : 'Il reste à indiquer la ville de votre proche (étape 1).'))
         : !relais ? 'Il reste à choisir un point relais (étape 2).'
         : !nomOk ? 'Il reste à indiquer votre prénom et votre nom (étape 3).' : 'Il reste à indiquer votre e-mail (étape 3).';
       manque.hidden = !(nom || mel || relais || proche);
@@ -644,7 +668,7 @@ body .ps-bouton { bottom: 6.5rem; }
   function retenir() {
     try {
       sessionStorage.setItem(CLE, JSON.stringify({
-        t: Date.now(), proche: proche, cp: cp.value, pays: pays.value,
+        t: Date.now(), proche: proche, ville: villeProche, cp: cp.value, pays: pays.value,
         relais: relais, nom: destinataire.value, email: champEmail.value, accord: accord.checked
       }));
     } catch (_) {}
@@ -653,6 +677,7 @@ body .ps-bouton { bottom: 6.5rem; }
     var d = null;
     try { d = JSON.parse(sessionStorage.getItem(CLE) || 'null'); } catch (_) {}
     if (!d || !d.t || Date.now() - d.t > 3600000) return;
+    if (d.ville && d.ville.insee) demanderRue(d.ville);
     if (d.proche && d.proche.adresse) { proche = d.proche; champAdresse.value = proche.adresse; montrerVerdict(); }
     if (d.cp) cp.value = d.cp;
     if (d.pays) pays.value = d.pays;
