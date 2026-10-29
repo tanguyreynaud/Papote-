@@ -283,20 +283,21 @@ const CAMERA = {
 // Débit de la vidéo envoyée par la tablette, réglé après la négociation (capVideo).
 // Sur la carte SIM (pas de Wi-Fi), mode « économie », réparti selon l'écran (Tanguy, 28/10) : la
 // famille regarde Mamie sur un petit téléphone, Mamie regarde la famille sur la grande tablette.
-// Mamie est filmée en 400x300, 12 i/s, 120 kbit/s (elle bouge peu : on garde la netteté, quitte à
-// perdre des images) ; la vidéo du proche est demandée à 500 kbit/s, le plafond du téléphone.
-// Mesuré avant : 4,6 Mo la minute ; attendu ~5,4 Mo (avis du fil « Réduire la consommation », 28/10).
+// Mamie est filmée en 400x300, 12 i/s, 100 kbit/s (elle bouge peu : on garde la netteté, quitte à
+// perdre des images) ; la vidéo du proche est demandée à 300 kbit/s. Réglage « Éco » choisi par Tanguy
+// le 29/10 après essai sur T-003 (qualité jugée suffisante) : ≈ 3,5 Mo la minute au lieu de 4,4 avec
+// 500 / 120 kbit/s, soit environ 2 h 20 de visio par mois sur un forfait d'1 Go.
 // Sur Wi-Fi : 640x480, 20 i/s, 700 kbit/s (au-delà, rien de plus en 480p), réception sans plafond.
 const VIDEO_MAX_BITRATE = 700_000;
-const SIM_SEND_BITRATE = 120_000;
-const SIM_RECEIVE_KBPS = 500;
+const SIM_SEND_BITRATE = 100_000;
+const SIM_RECEIVE_KBPS = 300;
 // Garde-fou du forfait (Forfait.java, pont simBudget) : palier 1 (60 % du forfait) = visio réduite
 // (Mamie en 320x240 à 60 kbit/s, le proche demandé à 150 kbit/s : ≈ 1,6 Mo la minute) ; palier 2
 // (85 %) = appels sans image, le son seul. Jamais sur le Wi-Fi.
 const ECO_SEND_BITRATE = 60_000;
 const ECO_RECEIVE_KBPS = 150;
 // Essai de qualité sur SIM, réglé par l'admin pour une famille (families/{fid}.forfaitSim.visio =
-// { reception, envoi } en kbit/s, outils/admin/visio-sim.bat) : remplace 500 / 120 en régime « sim »
+// { reception, envoi } en kbit/s, outils/admin/visio-sim.bat) : remplace 300 / 100 en régime « sim »
 // seulement (ni sur le Wi-Fi, ni aux paliers du garde-fou). Absent ou 0 : réglage normal.
 function visioSim() {
   try {
@@ -837,7 +838,8 @@ async function connectAnswer(id, data, callRef, stream) {
   const reply = await pc.createAnswer();
   await pc.setLocalDescription(reply);
   capVideo(pc);
-  // « reseau » : le téléphone règle sa vidéo selon le réseau de la tablette (SIM : 500 kbit/s).
+  // « reseau » : le téléphone règle sa vidéo selon le réseau de la tablette (SIM : plafond b=AS
+  // de limitReceive, 300 kbit/s ; l'app famille a son propre réglage « sim », à aligner).
   // « regime » (eco | audio) : le forfait de la tablette est presque épuisé, l'app famille l'explique.
   const r = regime();
   const answer = { type: reply.type, sdp: limitReceive(reply.sdp), reseau: r === 'wifi' ? 'wifi' : 'sim' };

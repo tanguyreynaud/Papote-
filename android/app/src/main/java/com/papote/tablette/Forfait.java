@@ -26,7 +26,7 @@ import java.util.TimeZone;
  *   jour  : jour du mois où le forfait repart (1 par défaut) ;
  *   debut : date « aaaa-mm-jj » d'une recharge, pour les pass de 30 jours (Lyca) : cycles de 30 jours.
  *   visio : { reception, envoi } en kbit/s, réglage d'essai de la visio sur SIM (outils/admin/visio-sim.bat) ;
- *           absent = réglage de la page (appels.js : 500 reçus, 120 envoyés). Jamais appliqué sur le Wi-Fi.
+ *           absent = réglage de la page (appels.js : 300 reçus, 100 envoyés). Jamais appliqué sur le Wi-Fi.
  */
 final class Forfait {
     static final long DEFAUT_MO = 1000;
