@@ -204,6 +204,57 @@ test('sans téléphone (tablette Wi-Fi) : le SOS et les appels passent par inter
   } finally { await b.fermer(); }
 });
 
+test('Raccrocher alors qu’Android n’a plus d’appel : l’écran se ferme quand même (bug du 29/10)', async () => {
+  const b = await tablette({ raccrocherKo: true });
+  try {
+    await b.toucher('#view-home .call-btn');
+    await choisir(b, 'Julie');
+    await b.android('onGsm', { etat: 'enLigne', sortant: true, uid: 'julie', name: 'Julie' });
+    assert.match(await b.texte('.call-out'), /En ligne avec Julie/);
+    await b.toucher('.call-hangup');
+    assert.strictEqual((await b.appels('phoneHangup')).length, 1);
+    // Pas de « fin » d'Android : l'écran dit quand même « Appel terminé », puis l'accueil.
+    assert.match(await b.texte('.call-out'), /Appel terminé/);
+    await b.avancer(4500);
+    assert.ok(!(await b.visible('.call-out')), 'retour à l’accueil');
+    await sansErreur(b);
+  } finally { await b.fermer(); }
+});
+
+test('écran d’appel sans nouvelle d’Android pendant 60 s : il se ferme si l’appel n’existe plus', async () => {
+  const b = await tablette({ appelGsm: { etat: 'enLigne', sortant: true, uid: 'julie', name: 'Julie' } });
+  try {
+    await b.toucher('#view-home .call-btn');
+    await choisir(b, 'Julie');
+    await b.android('onGsm', { etat: 'enLigne', sortant: true, uid: 'julie', name: 'Julie' });
+    // Android dit toujours « en ligne » : l'écran reste, aussi longtemps que dure l'appel.
+    await b.avancer(130000);
+    assert.match(await b.texte('.call-out'), /En ligne avec Julie/);
+    // Android n'a plus d'appel (phoneState vide) sans l'avoir dit : au contrôle suivant, l'écran se ferme.
+    await b.page.evaluate(() => { window.__etat.appelGsm = {}; });
+    await b.avancer(52000); // contrôle suivant à 180 s
+    assert.match(await b.texte('.call-out'), /Appel terminé/);
+    await b.avancer(4500);
+    assert.ok(!(await b.visible('.call-out')), 'retour à l’accueil');
+    await sansErreur(b);
+  } finally { await b.fermer(); }
+});
+
+test('« Appel vers Julie… » sans aucun état d’Android : fermé au bout de 60 s, liste des personnes', async () => {
+  const b = await tablette();
+  try {
+    await b.toucher('#view-home .call-btn');
+    await choisir(b, 'Julie');
+    await b.avancer(59000);
+    assert.match(await b.texte('.call-out'), /Appel vers Julie/);
+    await b.avancer(2000);
+    assert.match(await b.texte('.call-out'), /Julie n’a pas pu répondre/);
+    await b.avancer(4500);
+    assert.match(await b.texte('.call-out'), /Qui voulez-vous appeler/);
+    await sansErreur(b);
+  } finally { await b.fermer(); }
+});
+
 test('page rechargée pendant un appel téléphone : l’écran d’appel revient', async () => {
   const b = await ouvrir('2026-10-26T10:00:00', { telephone: true, appelGsm: { etat: 'enLigne', sortant: true, uid: 'julie', name: 'Julie' } });
   try {

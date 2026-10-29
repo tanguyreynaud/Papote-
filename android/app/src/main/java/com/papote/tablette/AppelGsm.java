@@ -61,8 +61,9 @@ public class AppelGsm extends InCallService {
         return courant != null;
     }
 
+    /** L'appel en cours tel que la page peut le reprendre ; {} s'il n'y a plus d'appel. */
     static JSONObject etat() {
-        return dernierEtat == null ? new JSONObject() : dernierEtat;
+        return dernierEtat == null || courant == null ? new JSONObject() : dernierEtat;
     }
 
     static boolean decrocher() {

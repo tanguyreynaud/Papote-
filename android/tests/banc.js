@@ -42,10 +42,11 @@ function imitation(etat) {
     logError: note('logError'), wifiDone: note('wifiDone'), confirmPairing: note('confirmPairing'),
     welcomeBack: note('welcomeBack'), welcomeSeen: note('welcomeSeen'), cancelPairing: note('cancelPairing'),
     testSon: note('testSon'), getPairing: () => null, ring: note('ring'), inCall: note('inCall'),
-    // Appels par la carte SIM (etat.telephone : la tablette sait téléphoner) ; phoneCall renvoie false avec etat.telephoneKo.
+    // Appels par la carte SIM (etat.telephone : la tablette sait téléphoner) ; phoneCall renvoie false avec etat.telephoneKo,
+    // phoneHangup avec etat.raccrocherKo (plus d'appel côté Android) ; phoneState lit etat.appelGsm.
     phoneReady: () => !!window.__etat.telephone,
     phoneCall: (...args) => { window.__appels.push({ nom: 'phoneCall', args }); return !window.__etat.telephoneKo; },
-    phoneAnswer: note('phoneAnswer'), phoneHangup: note('phoneHangup'), sendSms: (...args) => { window.__appels.push({ nom: 'sendSms', args }); return true; },
+    phoneAnswer: note('phoneAnswer'), phoneHangup: (...args) => { window.__appels.push({ nom: 'phoneHangup', args }); return !window.__etat.raccrocherKo; }, sendSms: (...args) => { window.__appels.push({ nom: 'sendSms', args }); return true; },
     phoneState: () => JSON.stringify(window.__etat.appelGsm || {}), phoneNumbers: () => '[]',
     qrCode: () => 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
   };

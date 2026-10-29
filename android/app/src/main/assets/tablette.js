@@ -1734,11 +1734,33 @@
   }
 
   function gsmHangup() {
-    if (android() && android().phoneHangup) { try { android().phoneHangup(); } catch (e) { } }
+    var ok = false;
+    if (android() && android().phoneHangup) { try { ok = android().phoneHangup() !== false; } catch (e) { ok = false; } }
+    if (ok) return;
+    // Android n'a plus d'appel à raccrocher (bug du 29/10 : écran resté sur « Appel vers… ») :
+    // l'écran se ferme quand même, comme à la fin de l'appel.
+    if (gsm) onGsm({ etat: 'fin', cause: 'raccroche' }); else closeCallScreen();
+  }
+
+  // Un écran d'appel téléphone sans nouvelle d'Android pendant 60 s : on lui demande où en est
+  // l'appel ; s'il n'y en a plus, l'écran se ferme et l'accueil revient (jamais d'écran bloqué).
+  var GSM_VEILLE_MS = 60000;
+  var gsmVeille = null;
+  function gsmSurveiller() {
+    clearTimeout(gsmVeille);
+    if (!gsm) return;
+    gsmVeille = setTimeout(function () {
+      if (!gsm) return;
+      var etat = null;
+      try { etat = JSON.parse((android() && android().phoneState) ? (android().phoneState() || '{}') : '{}'); } catch (e) { etat = null; }
+      if (etat && etat.etat && etat.etat !== 'fin') { gsmSurveiller(); return; }
+      onGsm({ etat: 'fin', cause: 'raccroche' });
+    }, GSM_VEILLE_MS);
   }
 
   function gsmClear() {
     if (gsm) clearTimeout(gsm.timer);
+    clearTimeout(gsmVeille);
     gsm = null;
     if (android() && android().ring) android().ring(false);
     if (android() && android().inCall) android().inCall(false);
@@ -1761,6 +1783,7 @@
     gsm.timer = setTimeout(function () {
       if (gsm && gsm.sortant && !gsm.enLigne) { gsm.sansReponse = true; gsmHangup(); }
     }, GSM_RING_MS);
+    gsmSurveiller();
   }
 
   // Fin d'un appel téléphone : message 4 s, puis la liste des personnes (pas de réponse) ou l'accueil.
@@ -1813,6 +1836,7 @@
       if (!gsm && ((($('call-view') && isShown('call-view')) || ($('call-ring') && isShown('call-ring'))))) { gsmHangup(); return; }
       if (!gsm) gsm = { uid: etat.uid || null, name: etat.name || '', sortant: false, enLigne: false, timer: null, who: etat.name || 'Un proche' };
       showGsmRing(etat);
+      gsmSurveiller();
       return;
     }
     if (!gsm) {
@@ -1822,11 +1846,13 @@
     }
     if (e === 'appel') {
       renderCall('ringing', 'Ça sonne…', 'Chez ' + gsm.who, gsm.uid, gsm.name);
+      gsmSurveiller();
     } else if (e === 'enLigne') {
       clearTimeout(gsm.timer);
       gsm.enLigne = true;
       if (android() && android().ring) android().ring(false);
       renderCall('connected', 'En ligne avec ' + gsm.who, 'Parlez normalement, la tablette vous entend.', gsm.uid, gsm.name);
+      gsmSurveiller();
     } else if (e === 'fin') {
       var repondu = gsm.enLigne;
       var who = gsm.who;
