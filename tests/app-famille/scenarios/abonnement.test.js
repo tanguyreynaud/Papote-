@@ -30,7 +30,7 @@ test('Dans les 30 jours : seule « Annuler ma commande » est proposée ; annula
   const { fid } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
   await profil(julie);
   await julie.page.locator('#abo-status', { hasText: 'Actif' }).waitFor();
-  assert.match(await julie.page.locator('#abo-details').innerText(), /Avec le Wi-Fi de la maison, 20 € par mois, tablette prêtée · Prochain prélèvement le/);
+  assert.match(await julie.page.locator('#abo-details').innerText(), /Tout compris, 25 € par mois, tablette prêtée · Prochain prélèvement le/);
   assert.strictEqual(await julie.page.locator('#btn-portail').isVisible(), false, 'rien à régler');
   await pageAbonnement(julie);
   // La mise en service payée à la commande : une facture, à télécharger.
@@ -146,7 +146,7 @@ test('Tablette installée sans commande : prendre l\'abonnement depuis l\'app (p
   await g.fermerAccueil(julie);
   assert.strictEqual((await famille(fid)).abonnement.statut, 'installation');
   await julie.page.click('.nav-item[data-tab="profile"]');
-  const formule = julie.page.locator('#abo-formules .abo-formule', { hasText: 'Internet inclus' });
+  const formule = julie.page.locator('#abo-formules .abo-formule', { hasText: 'tout compris' });
   await formule.waitFor();
   const [requete] = await Promise.all([
     julie.page.waitForRequest((r) => r.url().startsWith('https://checkout.stripe.test/')),

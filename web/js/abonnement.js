@@ -18,8 +18,8 @@ export function abonnementOk(family) {
 
 // La tablette est toujours prêtée : 60 € de mise en service à la commande, puis l'abonnement.
 export const FORMULES = [
-  { formule: 'wifi', tablette: 'incluse', titre: 'Avec le Wi-Fi de la maison', prix: '20 € par mois' },
-  { formule: 'sim', tablette: 'incluse', titre: 'Internet inclus', prix: '30 € par mois, sans box ni Wi-Fi' },
+  // Offre unique depuis le 29/10/2026 (Tanguy) : tout compris, carte SIM incluse.
+  { formule: 'sim', tablette: 'incluse', titre: 'Papote tout compris', prix: '25 € par mois, carte SIM 4G incluse' },
 ];
 
 export const LIBELLES = {

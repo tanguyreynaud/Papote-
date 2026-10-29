@@ -2827,8 +2827,8 @@ function reprisePossible() {
 }
 $('btn-reprendre').addEventListener('click', async () => {
   const abo = session.family.abonnement || {};
-  const formule = abo.formule === 'sim' ? 'sim' : 'wifi';
-  if (!await askConfirm(`Garder la tablette et reprendre l'abonnement (${formule === 'sim' ? '30' : '20'} € par mois) ? Pas de nouvelle mise en service à payer, et plus besoin de nous la renvoyer.`, 'Reprendre')) return;
+  const formule = 'sim'; // offre unique (29/10/2026)
+  if (!await askConfirm(`Garder la tablette et reprendre l'abonnement (25 € par mois, tout compris) ? Pas de nouvelle mise en service à payer, et plus besoin de nous la renvoyer.`, 'Reprendre')) return;
   withAboError(() => payer(session.fid, formule, abo.tablette || 'incluse'));
 });
 
@@ -2869,7 +2869,7 @@ function renderAbonnement() {
     $('abo-status').textContent = LIBELLES[statut] || statut;
     $('abo-status').className = `abo-status s-${statut}`;
     const details = [];
-    if (abo.formule) details.push(`${abo.formule === 'sim' ? 'Internet inclus, 30 € par mois' : 'Avec le Wi-Fi de la maison, 20 € par mois'}, ${abo.tablette === 'achetee' ? 'tablette achetée' : 'tablette prêtée'}`);
+    if (abo.formule) details.push(`${abo.formule === 'wifi' ? 'Avec le Wi-Fi de la maison, 20 € par mois' : 'Tout compris, 25 € par mois'}, ${abo.tablette === 'achetee' ? 'tablette achetée' : 'tablette prêtée'}`);
     const futur = (t) => t && toDate(t) > new Date();
     // Une seule phrase par date (sans engagement : plus de date d'engagement).
     if (abo.resiliationLe) details.push(`Résilié : Papote s'arrête le ${dateLongue(abo.resiliationLe)}`);

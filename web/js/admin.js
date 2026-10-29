@@ -160,8 +160,9 @@ const creer = (tag, attrs = {}, texte = '') => Object.assign(document.createElem
 
 // Étapes de l'envoi d'une commande. ctx : { stock, sims, accessoires } (vide pour seulement compter les étapes).
 function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
-  // Internet inclus : la carte SIM est dans la tablette. L'enceinte part seulement si on le choisit (e.enceinte = 'oui').
-  const internet = c.formule === 'sim';
+  // Offre unique (29/10/2026) : la carte SIM part dans chaque tablette, même pour une ancienne commande Wi-Fi de test.
+  // L'enceinte part seulement si on le choisit (e.enceinte = 'oui').
+  const internet = true;
   const avecEnceinte = (e) => e.enceinte === 'oui';
   const tablette = (e) => stock.find((t) => t.id === e.tablette);
   const nom = (e) => { const t = tablette(e); return t ? t.ref || t.numero || t.modele || 'choisie' : ''; };
