@@ -33,10 +33,12 @@ const app = admin.initializeApp({ credential: admin.credential.cert(require(keyP
   let fid = cible;
   let famille = await db.doc(`families/${fid}`).get();
   if (!famille.exists) {
-    const t = await db.collectionGroup('members').where('role', '==', 'tablette').where('name', '==', cible).get();
-    if (t.empty) { console.error(`Ni famille ni tablette « ${cible} »`); process.exit(1); }
-    if (t.size > 1) { console.error(`${t.size} tablettes s'appellent ${cible} : donner l'identifiant de la famille`); process.exit(1); }
-    fid = t.docs[0].ref.parent.parent.id;
+    // Un seul critère (comme tablettes.js) : deux « where » demanderaient un index composé.
+    const toutes = await db.collectionGroup('members').where('role', '==', 'tablette').get();
+    const t = toutes.docs.filter((d) => d.get('name') === cible);
+    if (!t.length) { console.error(`Ni famille ni tablette « ${cible} »`); process.exit(1); }
+    if (t.length > 1) { console.error(`${t.length} tablettes s'appellent ${cible} : donner l'identifiant de la famille`); process.exit(1); }
+    fid = t[0].ref.parent.parent.id;
     famille = await db.doc(`families/${fid}`).get();
   }
   const visio = (famille.get('forfaitSim') || {}).visio;
