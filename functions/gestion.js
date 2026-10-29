@@ -1210,11 +1210,7 @@ async function enregistrerSim(id, c, qui) {
     majLe: FieldValue.serverTimestamp(),
     ...(!id ? { creeLe: FieldValue.serverTimestamp(), par: qui } : {}),
   }, { merge: true });
-  if (tablette) {
-    const fiche = db().doc(`stock/${tablette}`);
-    await fiche.update(simSurTablette(ref.id, ligne));
-    await numeroSurLaFamille((await fiche.get()).data(), ligne.numero || null);
-  }
+  if (tablette) await db().doc(`stock/${tablette}`).update(simSurTablette(ref.id, ligne));
   await ecrireForfaitFamille(ref.id).catch((e) => logger.warn('Forfait de la famille', e.message));
   return ref.id;
 }
@@ -1235,18 +1231,38 @@ async function noterRecharge(simId, date) {
 }
 
 // Réglage du garde-fou recopié sur la famille de la tablette où est la ligne (si elle est chez une famille).
+// Ce que la famille sait de la carte SIM de sa tablette : le forfait (garde-fou) et le numéro
+// (members/{tabletUid}.telephone : l'app le montre aux proches, qui peuvent l'appeler par téléphone).
 async function ecrireForfaitFamille(simId) {
   const l = (await db().doc(`sims/${simId}`).get()).data();
   if (!l || !l.tablette || !['active', 'stock'].includes(l.statut)) return;
-  const fid = (await db().doc(`stock/${l.tablette}`).get()).get('fid');
-  if (!fid) return;
-  const ref = db().doc(`families/${fid}`);
+  const fiche = (await db().doc(`stock/${l.tablette}`).get()).data();
+  if (!fiche || !fiche.fid) return;
+  await numeroSurLaFamille(fiche, l.numero || null);
+  const ref = db().doc(`families/${fiche.fid}`);
   const famille = await ref.get();
   if (!famille.exists) return;
   const forfait = forfaitFamille(l);
   if (JSON.stringify(famille.get('forfaitSim') || null) === JSON.stringify(forfait)) return;
   await ref.update({ forfaitSim: forfait });
 }
+
+// Numéro de la carte SIM d'une tablette, d'après sa fiche de stock ; null sans carte ou sans numéro.
+async function numeroDeLaTablette(fiche) {
+  if (!fiche || !fiche.simId) return null;
+  const sim = await db().doc(`sims/${fiche.simId}`).get();
+  return (sim.exists && sim.get('numero')) || null;
+}
+
+// Tablette déjà dans sa famille sans numéro connu (SIM reliée avant le 29/10/2026, ou fiche jamais
+// complétée) : on le retrouve sur sa fiche de stock et on l'écrit (null s'il n'y en a pas, pour ne
+// plus chercher). Appelé par la tâche des alertes pour chaque tablette dont le numéro est inconnu.
+async function completerNumeroTablette(fid, uid) {
+  const fiches = await db().collection('stock').where('tabletUid', '==', uid).limit(1).get();
+  const fiche = fiches.empty ? null : fiches.docs[0].data();
+  await numeroSurLaFamille({ fid, tabletUid: uid }, fiche ? await numeroDeLaTablette(fiche) : null);
+}
+exports.completerNumeroTablette = completerNumeroTablette;
 
 exports.gestionSim = onCall(async (request) => {
   verifierAdmin(request);
@@ -2402,11 +2418,7 @@ async function appliquerJumelage(p, pairingRef) {
   await fiche.ref.update(maj);
   // La tablette arrive chez sa famille : le garde-fou du forfait suit sa carte SIM, et son numéro
   // rejoint sa fiche dans la famille (l'app le montre aux proches, qui peuvent l'appeler par téléphone).
-  if (t.simId) {
-    await ecrireForfaitFamille(t.simId).catch((e) => logger.warn('Forfait de la famille', e.message));
-    const sim = await db().doc(`sims/${t.simId}`).get();
-    if (sim.exists && sim.get('numero')) await numeroSurLaFamille({ ...t, ...maj }, sim.get('numero'));
-  }
+  if (t.simId) await ecrireForfaitFamille(t.simId).catch((e) => logger.warn('Forfait de la famille', e.message));
   // Tablette reliée : elle est forcément reçue (si le suivi du colis ne l'a pas déjà noté).
   if (t.commande && commande && commande.envoyeeLe && !(commande.preparation && commande.preparation.recuLe)) {
     await db().doc(`commandes/${t.commande}`).update({ 'preparation.recuLe': Date.now(), 'preparation.recuPar': 'tablette reliée' });

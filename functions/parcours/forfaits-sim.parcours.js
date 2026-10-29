@@ -65,4 +65,17 @@ test('garde-fou du forfait : la famille de la tablette reçoit le forfait de sa 
   assert.deepStrictEqual((await s.lire(`families/${fid}`)).forfaitSim, { mo: 1000, debut: aujourdhui });
   await s.appeler('gestionSim', { action: 'modifier', id, champs: { go: 2 } }, TANGUY);
   assert.deepStrictEqual((await s.lire(`families/${fid}`)).forfaitSim, { mo: 2000, debut: aujourdhui });
+  // Le numéro de la carte rejoint la fiche de la tablette dans la famille (tuile « Appeler » de l'app).
+  const tablette = () => s.lire(`families/${fid}/members/${t.tabletUid}`);
+  assert.strictEqual((await tablette()).telephone, '07 51 23 45 67');
+  await s.appeler('gestionSim', { action: 'modifier', id, champs: { numero: '07 00 00 00 01' } }, TANGUY);
+  assert.strictEqual((await tablette()).telephone, '07 00 00 00 01');
+  // Tablette reliée avant que le numéro soit recopié (ou fiche effacée) : la tâche des alertes le retrouve.
+  await s.db.doc(`families/${fid}/members/${t.tabletUid}`).update({ telephone: s.FieldValue.delete() });
+  assert.strictEqual((await tablette()).telephone, undefined);
+  await s.tache('alertesTablettes');
+  assert.strictEqual((await tablette()).telephone, '07 00 00 00 01');
+  // Carte retirée : plus de numéro (null : inutile de chercher encore).
+  await s.appeler('gestionSim', { action: 'modifier', id, champs: { tablette: null } }, TANGUY);
+  assert.strictEqual((await tablette()).telephone, null);
 });
