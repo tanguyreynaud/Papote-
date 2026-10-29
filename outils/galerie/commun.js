@@ -107,4 +107,29 @@ function fauxQr() {
   return 'data:image/svg+xml;base64,' + Buffer.from(svg).toString('base64');
 }
 
-module.exports = { RACINE, extraire, servir, fausseImage, fauxVisage, fauxQr };
+// Une petite vidéo de 2 secondes (un soleil qui bouge), fabriquée par le navigateur lui-même.
+// Petite vidéo WebM (ciel, herbe, soleil qui avance) : 640×360 par défaut, l = 360 et h = 640 pour une vidéo en portrait.
+async function fausseVideo(browser, l = 640, h = 360, duree = 2000) {
+  const page = await browser.newPage();
+  const b64 = await page.evaluate(({ l, h, duree }) => new Promise((resolve) => {
+    const c = document.createElement('canvas'); c.width = l; c.height = h;
+    const g = c.getContext('2d');
+    const rec = new MediaRecorder(c.captureStream(25), { mimeType: 'video/webm' });
+    const morceaux = [];
+    rec.ondataavailable = (e) => morceaux.push(e.data);
+    rec.onstop = () => { const r = new FileReader(); r.onload = () => resolve(r.result.split(',')[1]); r.readAsDataURL(new Blob(morceaux)); };
+    let i = 0;
+    const dessin = setInterval(() => {
+      g.fillStyle = '#7dd3fc'; g.fillRect(0, 0, l, h);
+      g.fillStyle = '#65a30d'; g.fillRect(0, h * 0.7, l, h * 0.3);
+      g.fillStyle = '#fde047'; g.beginPath(); g.arc(80 + (i * 8) % (l - 120), 100, 40, 0, 7); g.fill();
+      g.fillStyle = '#0f172a'; g.font = '28px sans-serif'; g.fillText('Vidéo', 20, h - 20); i++;
+    }, 40);
+    rec.start();
+    setTimeout(() => { clearInterval(dessin); rec.stop(); }, duree);
+  }), { l, h, duree });
+  await page.close();
+  return Buffer.from(b64, 'base64');
+}
+
+module.exports = { RACINE, extraire, servir, fausseImage, fauxVisage, fauxQr, fausseVideo };

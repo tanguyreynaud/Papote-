@@ -1,16 +1,17 @@
-// Fabrique la page de la galerie : un seul fichier HTML, les captures dedans (on peut l'envoyer tel quel).
+// Fabrique la page de la galerie. Par défaut un seul fichier HTML, les captures dedans (on peut l'envoyer tel quel) ;
+// avec { fichiers: true }, les captures restent à côté (images/…), pour l'Artifact publié sur claude.ai.
 'use strict';
 
 const fs = require('fs');
 const path = require('path');
 
-const NOMS = { tablette: 'Tablette', famille: 'App famille', vitrine: 'Site vitrine' };
-const LETTRES = { tablette: 'T', famille: 'F', vitrine: 'S' };
+const NOMS = { tablette: 'Tablette', famille: 'App famille', vitrine: 'Site vitrine', admin: 'Admin' };
+const LETTRES = { tablette: 'T', famille: 'F', vitrine: 'S', admin: 'A' };
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-function html(parties, dossierImages) {
-  const img = (f) => `data:image/jpeg;base64,${fs.readFileSync(path.join(dossierImages, f)).toString('base64')}`;
+function html(parties, dossierImages, { fichiers = false } = {}) {
+  const img = (f) => (fichiers ? `images/${f}` : `data:image/jpeg;base64,${fs.readFileSync(path.join(dossierImages, f)).toString('base64')}`);
   const quand = new Date().toLocaleString('fr-FR', { timeZone: 'Europe/Paris', dateStyle: 'long', timeStyle: 'short' });
   let corps = '';
   let sommaire = '';

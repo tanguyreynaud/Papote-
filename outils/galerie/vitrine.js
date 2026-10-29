@@ -76,6 +76,25 @@ const SCENES = [
   { groupe: 'Accueil', titre: 'Accueil : chat de support ouvert', fichier: 'accueil.html', faire: async (p) => {
     await p.locator('.ps-bouton').click(); await pause(p, 900);
   } },
+  { groupe: 'Accueil', titre: 'Chat : réponse de Papote, « Être rappelé » proposé', fichier: 'accueil.html', faire: async (p) => {
+    await p.locator('.ps-bouton').click(); await pause(p, 600); await p.locator('.ps-idees button').first().click(); await pause(p, 1200);
+  } },
+  { groupe: 'Accueil', titre: 'Chat : Papote écrit (bulle « … »)', fichier: 'accueil.html', routes: (p) => p.route('**/supportChat', () => {}), faire: async (p) => {
+    await p.locator('.ps-bouton').click(); await pause(p, 600); await p.locator('.ps-idees button').first().click(); await pause(p, 900);
+  } },
+  { groupe: 'Accueil', titre: 'Chat : indisponible', fichier: 'accueil.html', routes: (p) => p.route('**/supportChat', (r) => r.fulfill({ status: 500, body: '' })), faire: async (p) => {
+    await p.locator('.ps-bouton').click(); await pause(p, 600); await p.locator('.ps-idees button').first().click(); await pause(p, 1200);
+  } },
+  { groupe: 'Accueil', titre: 'Chat : demande de rappel, champ manquant', fichier: 'accueil.html', faire: async (p) => {
+    await p.locator('.ps-bouton').click(); await pause(p, 600); await p.locator('.ps-idees button').first().click(); await pause(p, 1200);
+    await p.locator('.ps-rappeler').click(); await pause(p, 400); await p.getByRole('button', { name: 'Être rappelé', exact: true }).click(); await pause(p, 500);
+  } },
+  { groupe: 'Accueil', titre: 'Chat : demande de rappel envoyée', fichier: 'accueil.html', faire: async (p) => {
+    await p.locator('.ps-bouton').click(); await pause(p, 600); await p.locator('.ps-idees button').first().click(); await pause(p, 1200);
+    await p.locator('.ps-rappeler').click(); await pause(p, 400);
+    for (const [label, v] of [['Votre prénom', 'Marie'], ['Votre nom', 'Dupont'], ['Votre téléphone', '06 12 34 56 78'], ['Votre e-mail', 'marie@exemple.fr']]) await p.getByLabel(label).fill(v);
+    await p.getByRole('button', { name: 'Être rappelé', exact: true }).click(); await pause(p, 1000);
+  } },
   { groupe: 'Commande', titre: 'Commande : page vide', fichier: 'commande.html', plein: true },
   { groupe: 'Commande', titre: 'Commande : ville du proche tapée, propositions', fichier: 'commande.html', faire: async (p) => {
     await p.fill('#adresse', 'lyon'); await p.locator('#suggestions .point').first().waitFor({ timeout: 5000 }); await pause(p, 300);
@@ -83,6 +102,31 @@ const SCENES = [
   { groupe: 'Commande', titre: 'Commande : la 4G ne passe pas partout dans la ville, sa rue est demandée', fichier: 'commande.html', faire: (p) => villeChoisie(p, 1) },
   { groupe: 'Commande', titre: 'Commande : la 4G ne passe pas assez bien dans sa rue', fichier: 'commande.html', faire: (p) => villeChoisie(p, 1, 0) },
   { groupe: 'Commande', titre: 'Commande : rue bien couverte', fichier: 'commande.html', faire: (p) => villeChoisie(p, 1, 1) },
+  { groupe: 'Commande', titre: 'Commande : la 4G passe bien dans toute la ville', fichier: 'commande.html', faire: (p) => villeChoisie(p, 0) },
+  { groupe: 'Commande', titre: 'Commande : vérification de la 4G en cours', fichier: 'commande.html', routes: (p) => p.route('**/couverture?**', () => {}), faire: (p) => villeChoisie(p, 0) },
+  { groupe: 'Commande', titre: 'Commande : la vérification de la 4G ne répond pas', fichier: 'commande.html', routes: (p) => p.route('**/couverture?**', (r) => r.fulfill({ status: 500, body: '' })), faire: (p) => villeChoisie(p, 0) },
+  { groupe: 'Commande', titre: 'Commande : les adresses ne s’affichent pas', fichier: 'commande.html', routes: (p) => p.route(/data\.geopf\.fr/, (r) => r.fulfill({ status: 500, body: '' })), faire: async (p) => {
+    await p.fill('#adresse', 'lyon'); await pause(p, 1200);
+  } },
+  { groupe: 'Commande', titre: 'Commande : point relais par code postal (une ville)', fichier: 'commande.html', faire: async (p) => {
+    await p.locator('#cp').pressSequentially('69001'); await pause(p, 1200); await p.locator('#points').scrollIntoViewIfNeeded().catch(() => {});
+  } },
+  { groupe: 'Commande', titre: 'Commande : code postal de plusieurs villes, choisir la ville', fichier: 'commande.html',
+    routes: (p) => p.route(/geo\.api\.gouv\.fr/, (r) => r.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: '[{"nom":"Le Cheylard"},{"nom":"Saint-Martin-de-Valamas"},{"nom":"Mariac"}]' })),
+    faire: async (p) => { await p.locator('#cp').pressSequentially('07160'); await pause(p, 1000); await p.locator('#pays-ville').scrollIntoViewIfNeeded().catch(() => {}); } },
+  { groupe: 'Commande', titre: 'Commande : « Autour de moi », position refusée', fichier: 'commande.html', faire: async (p) => {
+    await p.locator('#autour').scrollIntoViewIfNeeded(); await p.click('#autour'); await pause(p, 1200);
+  } },
+  { groupe: 'Commande', titre: 'Commande : « Autour de moi », points relais trouvés', fichier: 'commande.html', routes: async (p, ctx) => {
+    await ctx.grantPermissions(['geolocation']); await ctx.setGeolocation({ latitude: 45.767, longitude: 4.834 });
+  }, faire: async (p) => { await p.locator('#autour').scrollIntoViewIfNeeded(); await p.click('#autour'); await pause(p, 1500); } },
+  { groupe: 'Commande', titre: 'Commande : la liste et la carte des points relais ne s’affichent pas', fichier: 'commande.html', routes: (p) => p.route(/servicepoints\.sendcloud\.sc/, (r) => r.fulfill({ status: 500, body: '' })), faire: async (p) => {
+    await p.locator('#cp').pressSequentially('69001'); await pause(p, 1500); await p.locator('#erreur-carte').scrollIntoViewIfNeeded().catch(() => {});
+  } },
+  { groupe: 'Commande', titre: 'Commande : revenue plus tard, « Votre commande vous attend »', fichier: 'commande.html', plein: true,
+    note: 'Ce qui était rempli est gardé une heure dans le navigateur.',
+    session: { 'papote-commande': { t: new Date('2026-10-26T10:10:00+01:00').getTime(), proche: { adresse: 'Lyon', lat: 45.758, lon: 4.835, cp: '69001', niveau: 'commune', eligible: true, insee: '69123' }, cp: '69001', pays: 'fr',
+      relais: { id: 102, name: 'Pressing des Terreaux', adresse: '3 Place des Terreaux', postal_code: '69001', city: 'Lyon' }, nom: 'Tanguy Reynaud', email: 'tanguy@exemple.fr', accord: true } } },
   { groupe: 'Commande', titre: 'Commande : point relais et coordonnées remplis, « Payer » actif', fichier: 'commande.html', plein: true, faire: commandeRemplie },
   { groupe: 'Commande', titre: 'Commande : « Payer » touché, « Un instant… »', fichier: 'commande.html', note: 'Le paiement s’ouvre chez Stripe (coupé ici) : la barre montre l’attente.', faire: async (p) => {
     await commandeRemplie(p);
@@ -101,6 +145,7 @@ const SCENES = [
     await p.locator('#payer').click(); await pause(p);
   } },
   { groupe: 'Commande', titre: 'Merci, commande enregistrée (code et récapitulatif)', fichier: 'merci.html?session=cs_test_galerie', plein: true, note: 'Le récapitulatif vient d’une fausse réponse de codeCommande, avec une adresse e-mail longue (bug de largeur du 27/10).' },
+  { groupe: 'Commande', titre: 'Merci : le code de commande n’a pas pu être chargé', fichier: 'merci.html?session=cs_test_galerie', plein: true, routes: (p) => p.route('**/codeCommande**', (r) => r.fulfill({ status: 404, body: '' })) },
   { groupe: 'Textes', titre: 'Conditions générales de vente', fichier: 'cgv.html', plein: true },
   { groupe: 'Textes', titre: 'Mentions légales et confidentialité', fichier: 'mentions.html', plein: true },
 ];
@@ -120,6 +165,7 @@ async function capturer({ browser, base, dossierImages, progression }) {
         isMobile: taille.mobile, hasTouch: taille.mobile, locale: 'fr-FR', timezoneId: 'Europe/Paris',
       });
       const page = await ctx.newPage();
+      page.setDefaultTimeout(8000); // un bouton absent : erreur signalée vite, pas après 30 s
       const erreurs = [];
       page.on('pageerror', (e) => erreurs.push(String(e.message || e)));
       await page.clock.install({ time: new Date('2026-10-26T10:30:00+01:00') });
@@ -143,6 +189,16 @@ async function capturer({ browser, base, dossierImages, progression }) {
         r.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(corps) });
       });
       await page.route(/servicepoints\.sendcloud\.sc/, (r) => r.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(RELAIS) }));
+      // Réponse du chat de support (fonction supportChat) : une vraie réponse type, sans appel à Claude.
+      await page.route('**/supportChat', (r) => {
+        const corps = JSON.parse(r.request().postData() || '{}');
+        r.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(corps.messages || corps.inscription
+          ? { ok: true, reponse: 'Papote coûte 25 € par mois, tout compris : la tablette prêtée, la carte SIM 4G et l’appli pour toute la famille. Il y a 60 € de mise en service à la commande, et c’est sans engagement.' }
+          : { ok: true }) });
+      });
+      // Routes propres à la scène (pannes, attentes) : posées en dernier, elles passent avant les autres.
+      if (scene.routes) await scene.routes(page, ctx);
+      if (scene.session) await page.addInitScript((d) => { for (const [k, v] of Object.entries(d)) sessionStorage.setItem(k, typeof v === 'string' ? v : JSON.stringify(v)); }, scene.session);
       try {
         await page.goto(`${base}/${scene.fichier}`);
         await page.waitForTimeout(900);
