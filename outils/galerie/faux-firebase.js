@@ -269,7 +269,8 @@ export const getRedirectResult = async () => null;
 export const isSignInWithEmailLink = () => false;
 const pasIci = async () => { const e = new Error('Connexion impossible dans la galerie'); e.code = 'auth/operation-not-allowed'; throw e; };
 export const signInWithPopup = pasIci, signInWithRedirect = pasIci, linkWithPopup = pasIci, linkWithRedirect = pasIci,
-  signInWithCredential = pasIci, linkWithCredential = pasIci, signInWithEmailLink = pasIci, signInAnonymously = pasIci;
+  signInWithCredential = pasIci, linkWithCredential = pasIci, signInWithEmailLink = pasIci, signInAnonymously = pasIci,
+  signInWithCustomToken = pasIci;
 export const sendSignInLinkToEmail = async () => {};
 export const connectAuthEmulator = () => {};
 export class GoogleAuthProvider { setCustomParameters() { return this; } addScope() { return this; } static credentialFromError() { return null; } static credential() { return {}; } }
