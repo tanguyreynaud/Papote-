@@ -79,10 +79,8 @@ test('résiliation sans engagement : à la fin du mois payé', () => {
 
 test('rien prélevé avant la réception : date de premier prélèvement d\'après le délai annoncé, jamais d\'« essai gratuit »', () => {
   // Une semaine de plus depuis l'offre unique (ligne SIM ouverte à la commande).
-  assert.strictEqual(a.premierPrelevementMs('stock', T0), T0 + 40 * JOUR);
-  assert.strictEqual(a.premierPrelevementMs('precommande', T0), T0 + 47 * JOUR);
-  assert.strictEqual(a.premierPrelevementMs('long', T0), T0 + 65 * JOUR);
-  assert.strictEqual(a.premierPrelevementMs(undefined, T0), T0 + 65 * JOUR, 'délai inconnu : le plus long');
+  assert.strictEqual(a.premierPrelevementMs('stock', T0), T0 + 37 * JOUR);
+  assert.strictEqual(a.premierPrelevementMs('long', T0), T0 + 37 * JOUR, 'un seul délai annoncé, quel que soit le stock');
   assert.strictEqual(a.premierPrelevementMs('stock', T0, { dejaInstallee: true }), T0 + 30 * JOUR);
   // Abonnement Stripe : trial recalé à l'envoi, ou date de départ pas encore atteinte, sinon rien.
   assert.strictEqual(a.premierPrelevementDe({ status: 'trialing', trial_end: (T0 + JOUR) / 1000 }, T0), T0 + JOUR);

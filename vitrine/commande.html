@@ -5,31 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Votre commande · Papote</title>
 <meta name="robots" content="noindex">
-<script>
-  // Commandes ouvertes (26/10) : plus de liste d'attente. ?essai = commande test de Tanguy (voir
-  // commandesOuvertes dans functions/index.js).
-  (function () {
-    try {
-      if (/[?&]essai\b/.test(location.search)) sessionStorage.setItem('papote-essai', '1');
-      if (sessionStorage.getItem('papote-essai')) return;
-    } catch (_) {}
-    fetch('https://europe-west1-papote-famille.cloudfunctions.net/stockDisponible')
-      .then(function (r) { return r.ok ? r.json() : {}; })
-      .then(function (d) {
-        // Stock vide mais commandes encore possibles : délai de préparation plus long (stock.js).
-        // Au-delà de stock + 10 : attente longue (4 à 5 semaines), la commande reste possible.
-        var bloc = d.attenteLongue ? 'attente-longue' : d.precommande ? 'precommande' : null;
-        if (bloc) {
-          var montrer = function () {
-            var p = document.getElementById(bloc); if (p) p.hidden = false;
-            var e = document.getElementById('en-stock'); if (e) e.hidden = true;
-          };
-          if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', montrer); else montrer();
-        }
-      })
-      .catch(function () {});
-  })();
-</script>
 <meta name="theme-color" content="#fdfaf5">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <!-- Polices servies par le site lui-même et demandées tout de suite : elles arrivent avant l'affichage
@@ -113,11 +88,10 @@ p { margin: 0; }
 .resume p { display: flex; justify-content: space-between; gap: 1rem; }
 .resume p b { white-space: nowrap; }
 .resume .total { border-top: 2px solid var(--line); padding-top: .5rem; font-size: 1.15rem; }
-.resume .petit, .resume .precommande, .resume .reprise { display: block; }
+.resume .petit, .resume .reprise { display: block; }
 .ensuite summary { font-weight: 700; color: var(--accent-strong); cursor: pointer; min-height: 2.5rem; display: flex; align-items: center; }
 .ensuite p { margin-top: .4rem; color: var(--muted); font-size: .98rem; display: block; }
-.precommande { margin: 0; padding: .6rem .9rem; border-radius: 12px; background: var(--warm-soft); font-size: 1rem; }
-.precommande[hidden], .reprise[hidden], .erreur[hidden], #recherche[hidden] { display: none; }
+.reprise[hidden], .erreur[hidden], #recherche[hidden] { display: none; }
 .reprise { padding: .6rem .9rem; border-radius: 12px; background: var(--accent-soft); color: var(--accent-strong); font-weight: 700; }
 .erreur { color: #b91c1c; }
 .verdict { margin: 0; padding: .8rem 1rem; border-radius: 14px; font-weight: 700; }
@@ -212,11 +186,9 @@ body .ps-bouton { bottom: 6.5rem; }
     <p><span>Chaque mois, à partir de la réception, payé une fois écoulé</span><b id="mensuel">25 €</b></p>
     <p><span>Tablette prêtée, carte SIM 4G, livraison, appli famille</span><b>inclus</b></p>
     <p class="total"><span>À payer maintenant</span><b>60 €</b></p>
-    <p class="precommande" id="en-stock">Je prépare et vérifie votre tablette moi-même et j'ouvre sa carte SIM : elle est prête sous 7 à 10 jours ouvrés, puis Mondial Relay la livre en 3 à 5 jours ouvrés.</p>
-    <p class="precommande" id="precommande" hidden>Je prépare et vérifie chaque tablette moi-même, une par une. En ce moment, la vôtre est prête avec sa carte SIM sous 2 à 3 semaines, puis Mondial Relay la livre en 3 à 5 jours ouvrés.</p>
-    <p class="precommande" id="attente-longue" hidden>Beaucoup de commandes en ce moment : je prépare et vérifie chaque tablette moi-même, une par une, à Lyon. La vôtre part sous 4 à 5 semaines, puis Mondial Relay la livre en 3 à 5 jours ouvrés. Rien de plus n'est prélevé avant la réception, et vous pouvez annuler à tout moment avant l'envoi : les 60 € vous sont remboursés tout de suite.</p>
     <details class="ensuite">
       <summary>Et ensuite ?</summary>
+      <p>Je prépare et vérifie votre tablette moi-même, avec sa carte SIM : elle est expédiée sous 3 à 5 jours ouvrés, puis Mondial Relay la livre en 3 à 5 jours ouvrés.</p>
       <p>Le premier prélèvement mensuel a lieu 30 jours après la réception. Sans engagement : vous résiliez quand vous voulez depuis l'appli, le mois en cours est le dernier payé.</p>
       <p>30 jours après la réception pour changer d'avis : « Annuler ma commande » dans l'appli, la tablette nous revient, rien à payer et les 60 € remboursés.</p>
       <p>La tablette reste la nôtre et nous est rendue en fin d'abonnement. Une question ? <a href="mailto:contact@mapapote.fr">contact@mapapote.fr</a></p>

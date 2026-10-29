@@ -25,7 +25,7 @@ test('commande, envoi, installation par un autre proche, envois, appel, annulati
   assert.deepStrictEqual(params.payment_method_types, ['card', 'sepa_debit']);
   assert.strictEqual(params.tax_id_collection, undefined, 'plus de numéro de TVA sur la page de paiement');
   assert.strictEqual(params.subscription_data.trial_period_days, undefined, 'plus d\'« essai gratuit » sur la page de paiement');
-  assert.ok(Math.abs(Number(params.subscription_data.metadata.premier) * 1000 - (Date.now() + 40 * s.JOUR)) < 3600e3, 'premier prélèvement estimé : envoi 10 jours (carte SIM) + 30');
+  assert.ok(Math.abs(Number(params.subscription_data.metadata.premier) * 1000 - (Date.now() + 37 * s.JOUR)) < 3600e3, 'premier prélèvement estimé : envoi 7 jours + 30');
   // Stripe refuse plus d'un mois sur la page de paiement : 27 jours, puis la date voulue posée au paiement reçu.
   assert.ok(Math.abs(params.subscription_data.billing_cycle_anchor * 1000 - (Date.now() + 27 * s.JOUR)) < 3600e3, 'page de paiement : 27 jours au plus');
   assert.strictEqual(params.subscription_data.proration_behavior, 'none', 'rien pour l\'abonnement aujourd\'hui');
@@ -38,8 +38,8 @@ test('commande, envoi, installation par un autre proche, envois, appel, annulati
   await s.calme();
   let c = await commande(id);
   assert.strictEqual(c.expedition, 'a-preparer');
-  assert.ok(Math.abs(require('../abonnement').premierPrelevementDe(s.stripe.etat.abonnements.get(id), Date.now()) - (Date.now() + 40 * s.JOUR)) < 3600e3,
-    'au paiement reçu, le premier prélèvement passe à la date voulue (40 jours : carte SIM + 30)');
+  assert.ok(Math.abs(require('../abonnement').premierPrelevementDe(s.stripe.etat.abonnements.get(id), Date.now()) - (Date.now() + 37 * s.JOUR)) < 3600e3,
+    'au paiement reçu, le premier prélèvement passe à la date voulue (37 jours : envoi + 30)');
   assert.strictEqual(c.email, paul.email);
   assert.strictEqual(c.livraison.ville, 'SAINT MARTIN DE VALAMAS');
   assert.strictEqual(c.fid, null);

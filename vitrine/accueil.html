@@ -106,8 +106,6 @@ section { padding-block: clamp(3rem, 7vw, 5rem); }
 .prix-ligne b { font: 800 1.6rem/1 var(--display); color: var(--accent-strong); }
 .prix-ligne span { flex-basis: 100%; color: var(--muted); font-weight: 400; }
 .rassure { display: flex; flex-wrap: wrap; gap: .4rem 1.25rem; color: var(--muted); font-size: .98rem; }
-.precommande { margin: 0; padding: .6rem .9rem; border-radius: 12px; background: var(--accent-soft); font-size: 1rem; }
-.precommande[hidden] { display: none; }
 /* Scène : la tablette sur son support, posée sur un meuble, une plante à côté. */
 .scene { position: relative; margin: 0; padding: clamp(1.25rem, 3vw, 2rem) clamp(.75rem, 3vw, 1.5rem) 0; border-radius: 28px; background: var(--band); display: grid; grid-template-columns: minmax(0, 1fr); overflow: hidden; }
 .scene-rang { position: relative; z-index: 1; display: flex; align-items: flex-end; gap: 2%; }
@@ -240,8 +238,6 @@ footer a { color: var(--muted); }
           <a class="btn btn-ghost" href="#fonctionnement">Comment ça marche</a>
         </div>
         <p class="rassure"><span class="coche">30 jours pour changer d'avis</span><span class="coche">Préparée et vérifiée à Lyon</span></p>
-        <p class="precommande js-precommande" hidden>Je prépare et vérifie chaque tablette moi-même, une par une. En ce moment, la vôtre est prête avec sa carte SIM sous 2 à 3 semaines, puis Mondial Relay la livre en 3 à 5 jours ouvrés.</p>
-        <p class="precommande js-attente-longue" hidden>Beaucoup de commandes en ce moment : je prépare et vérifie chaque tablette moi-même, une par une, à Lyon. La vôtre part sous 4 à 5 semaines, puis Mondial Relay la livre en 3 à 5 jours ouvrés. Rien de plus n'est prélevé avant la réception, et vous pouvez annuler à tout moment avant l'envoi : les 60 € vous sont remboursés tout de suite.</p>
       </div>
       <figure class="scene">
         <div class="scene-rang">
@@ -398,8 +394,6 @@ footer a { color: var(--muted); }
         </div>
       </form>
       <p class="plans-note">Prix par tablette. L'abonnement commence à la réception et chaque mois est payé une fois écoulé, par carte bancaire ou prélèvement SEPA. Résiliation à tout moment depuis l'appli : le mois en cours est le dernier payé.</p>
-      <p class="precommande js-precommande" hidden>Je prépare et vérifie chaque tablette moi-même, une par une. En ce moment, la vôtre est prête avec sa carte SIM sous 2 à 3 semaines, puis Mondial Relay la livre en 3 à 5 jours ouvrés.</p>
-      <p class="precommande js-attente-longue" hidden>Beaucoup de commandes en ce moment : je prépare et vérifie chaque tablette moi-même, une par une, à Lyon. La vôtre part sous 4 à 5 semaines, puis Mondial Relay la livre en 3 à 5 jours ouvrés. Rien de plus n'est prélevé avant la réception, et vous pouvez annuler à tout moment avant l'envoi : les 60 € vous sont remboursés tout de suite.</p>
     </div>
   </section>
 
@@ -451,7 +445,7 @@ footer a { color: var(--muted); }
           </details>
           <details>
             <summary>Comment la tablette est-elle livrée&nbsp;?</summary>
-            <p>Gratuitement, en point relais Mondial Relay, en France métropolitaine : vous choisissez le point qui vous arrange au moment de commander, près de chez vous ou de chez votre proche. Je prépare et vérifie chaque tablette moi-même : et j'ouvre sa carte SIM : votre commande est prête sous 7 à 10 jours ouvrés quand la tablette est en stock (2 à 3 semaines sinon, et 4 à 5 semaines quand les commandes affluent), puis Mondial Relay la livre en 3 à 5 jours ouvrés. Le délai est affiché avant de payer. Dès que la tablette part, vous recevez un e-mail avec le lien de suivi, puis un message de Mondial Relay quand elle vous attend.</p>
+            <p>Gratuitement, en point relais Mondial Relay, en France métropolitaine : vous choisissez le point qui vous arrange au moment de commander, près de chez vous ou de chez votre proche. Je prépare et vérifie chaque tablette moi-même, avec sa carte SIM : elle est expédiée sous 3 à 5 jours ouvrés, puis Mondial Relay la livre en 3 à 5 jours ouvrés. Dès que la tablette part, vous recevez un e-mail avec le lien de suivi, puis un message de Mondial Relay quand elle vous attend.</p>
           </details>
           <details>
             <summary>Qui peut envoyer des photos&nbsp;?</summary>
@@ -502,22 +496,6 @@ footer a { color: var(--muted); }
   document.getElementById('faq-plus').addEventListener('click', function () {
     document.getElementById('faq').classList.add('ouverte');
   });
-</script>
-<script>
-  // Commandes ouvertes (26/10) : plus de liste d'attente. Elles ne ferment plus : seul le délai annoncé
-  // change (stockDisponible, functions/stock.js).
-  var commandesPossibles = true;
-  (function () {
-    fetch('https://europe-west1-papote-famille.cloudfunctions.net/stockDisponible')
-      .then(function (r) { return r.ok ? r.json() : {}; })
-      .then(function (d) {
-        // Stock vide mais commandes encore possibles : délai de préparation plus long (stock.js).
-        if (d.precommande) document.querySelectorAll('.js-precommande').forEach(function (p) { p.hidden = false; });
-        // Au-delà de stock + 10 : commandes toujours ouvertes, expédition sous 4 à 5 semaines.
-        if (d.attenteLongue) document.querySelectorAll('.js-attente-longue').forEach(function (p) { p.hidden = false; });
-      })
-      .catch(function () {}); // panne : affichage normal, commander revérifie le stock côté serveur
-  })();
 </script>
 <script>
   // Tarif unique (29/10/2026) : 25 € par mois tout compris, carte SIM incluse.

@@ -70,18 +70,13 @@ function tabletteRemise({ nom, code }) {
 // Offre unique depuis le 29/10/2026 (Tanguy) : un seul prix, carte SIM toujours fournie.
 const OFFRE = '25 € par mois, tout compris (carte SIM incluse)';
 
-// delai : 'stock', 'precommande' ou 'long' (functions/stock.js), noté à la commande.
-const DELAIS = {
-  // Une semaine de plus depuis l'offre unique (Tanguy, 29/10/2026) : la ligne SIM est ouverte à la commande et
-  // l'opérateur l'envoie en 3 à 5 jours.
-  stock: 'Je prépare et vérifie votre tablette moi-même, avec sa carte SIM : elle est prête sous 7 à 10 jours ouvrés',
-  precommande: 'Je prépare et vérifie chaque tablette moi-même, une par une, avec sa carte SIM : la vôtre sera prête sous 2 à 3 semaines',
-  long: 'Beaucoup de commandes en ce moment : je prépare et vérifie chaque tablette moi-même, une par une, à Lyon. La vôtre part sous 4 à 5 semaines',
-};
+// Un seul délai annoncé, quel que soit le stock (Tanguy, 29/10/2026 : « expédié sous 3 à 5 jours ouvrés ») :
+// Tanguy tient le stock de tablettes et de cartes SIM pour le respecter.
+const DELAI = 'Je prépare et vérifie votre tablette moi-même, avec sa carte SIM : elle est expédiée sous 3 à 5 jours ouvrés';
 
 // reprise : abonnement repris après une résiliation, tablette restée chez le proche (C3) : pas de mise en service,
 // pas de délai pour changer d'avis.
-function commandeConfirmee({ nom, code, relais, formule, delai, dejaInstallee, reprise }) {
+function commandeConfirmee({ nom, code, relais, formule, dejaInstallee, reprise }) {
   // Offre unique (29/10/2026) : la formule n'est plus lue, les anciennes commandes Wi-Fi n'étaient que des essais.
   const mensuel = OFFRE;
   // Abonnement pris dans l'appli, tablette déjà installée : ni envoi ni installation à annoncer.
@@ -99,7 +94,7 @@ function commandeConfirmee({ nom, code, relais, formule, delai, dejaInstallee, r
     `Merci pour votre commande !${code ? ` Son numéro : <b>${echapper(code)}</b>.` : ''}`,
     // Plus de « vous pouvez annuler à tout moment avant » (Tanguy, 2026-10-27, A2) : les CGV couvrent le droit,
     // l'e-mail n'invite pas à reculer. « Une question ? Répondez à cet e-mail » reste en pied.
-    `${DELAIS[delai] || DELAIS.stock}, puis Mondial Relay la livre en 3 à 5 jours ouvrés. Vous recevrez un e-mail dès qu'elle part.`,
+    `${DELAI}, puis Mondial Relay la livre en 3 à 5 jours ouvrés. Vous recevrez un e-mail dès qu'elle part.`,
     relais && relais.transporteur
       ? `Livraison offerte au point relais <b>${relaisEnTexte(relais)}</b>${relais.destinataire ? `, à retirer par <b>${echapper(relais.destinataire)}</b>` : ''}.`
       : 'Livraison offerte à l\'adresse indiquée.',
@@ -164,7 +159,7 @@ function nouvelleCommande({ nom, email, telephone, code, relais, proche, formule
       ? `Point relais : <b>${relaisEnTexte(relais)}</b> (n° ${echapper(relais.id)}). Retrait par : <b>${echapper(relais.destinataire || nom || '?')}</b>.`
       : `Livraison : ${relaisEnTexte(relais) || 'adresse non trouvée, voir Stripe'}.`,
     proche ? `Chez le proche : <b>${echapper(proche.adresse)}</b>, 4G Bouygues ${{ TBC: 'très bonne', BC: 'bonne', CL: 'limitée' }[proche.couverture4g] || 'inconnue'} (carte ARCEP).` : null,
-    `Délai annoncé : ${{ stock: 'en stock, 7 à 10 jours ouvrés', precommande: 'précommande, 2 à 3 semaines', long: 'attente longue, 4 à 5 semaines' }[delai] || 'en stock, 7 à 10 jours ouvrés'}.`,
+    `Stock : ${{ stock: 'tablette en stock', precommande: 'plus de tablette en stock, à préparer vite (expédition promise sous 3 à 5 jours ouvrés)', long: 'plus de 10 commandes au-delà du stock, à préparer vite (expédition promise sous 3 à 5 jours ouvrés)' }[delai] || 'tablette en stock'}.`,
     'Tablette à préparer, puis à marquer « envoyée » dans le tableau de bord.',
   ].filter(Boolean), null, { interne: true });
 }
