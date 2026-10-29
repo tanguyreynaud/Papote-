@@ -94,7 +94,7 @@ function commandeConfirmee({ nom, code, relais, formule, dejaInstallee, reprise 
     `Merci pour votre commande !${code ? ` Son numéro : <b>${echapper(code)}</b>.` : ''}`,
     // Plus de « vous pouvez annuler à tout moment avant » (Tanguy, 2026-10-27, A2) : les CGV couvrent le droit,
     // l'e-mail n'invite pas à reculer. « Une question ? Répondez à cet e-mail » reste en pied.
-    `${DELAI}, puis Mondial Relay la livre en 3 à 5 jours ouvrés. Vous recevrez un e-mail dès qu'elle part.`,
+    `${DELAI}. Vous recevrez un e-mail dès qu'elle part.`,
     relais && relais.transporteur
       ? `Livraison offerte au point relais <b>${relaisEnTexte(relais)}</b>${relais.destinataire ? `, à retirer par <b>${echapper(relais.destinataire)}</b>` : ''}.`
       : 'Livraison offerte à l\'adresse indiquée.',
@@ -158,7 +158,9 @@ function nouvelleCommande({ nom, email, telephone, code, relais, proche, formule
     relais && relais.transporteur
       ? `Point relais : <b>${relaisEnTexte(relais)}</b> (n° ${echapper(relais.id)}). Retrait par : <b>${echapper(relais.destinataire || nom || '?')}</b>.`
       : `Livraison : ${relaisEnTexte(relais) || 'adresse non trouvée, voir Stripe'}.`,
-    proche ? `Chez le proche : <b>${echapper(proche.adresse)}</b>, 4G Bouygues ${{ TBC: 'très bonne', BC: 'bonne', CL: 'limitée' }[proche.couverture4g] || 'inconnue'} (carte ARCEP).` : null,
+    proche ? `Chez le proche : <b>${echapper(proche.adresse)}</b>, 4G Bouygues ${/^commune:/.test(proche.couverture4g || '')
+      ? `bonne ou très bonne sur ${echapper(proche.couverture4g.slice(8))} % de la commune (adresse exacte inconnue)`
+      : { TBC: 'très bonne', BC: 'bonne', CL: 'limitée' }[proche.couverture4g] || 'inconnue'} (carte ARCEP).` : null,
     `Stock : ${{ stock: 'tablette en stock', precommande: 'plus de tablette en stock, à préparer vite (expédition promise sous 3 à 5 jours ouvrés)', long: 'plus de 10 commandes au-delà du stock, à préparer vite (expédition promise sous 3 à 5 jours ouvrés)' }[delai] || 'tablette en stock'}.`,
     'Tablette à préparer, puis à marquer « envoyée » dans le tableau de bord.',
   ].filter(Boolean), null, { interne: true });

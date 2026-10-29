@@ -30,6 +30,7 @@ test('commande, envoi, installation par un autre proche, envois, appel, annulati
   assert.ok(Math.abs(params.subscription_data.billing_cycle_anchor * 1000 - (Date.now() + 27 * s.JOUR)) < 3600e3, 'page de paiement : 27 jours au plus');
   assert.strictEqual(params.subscription_data.proration_behavior, 'none', 'rien pour l\'abonnement aujourd\'hui');
   assert.match(params.custom_text.submit.message, /réception de la tablette/);
+  assert.match(params.custom_text.submit.message, /\[conditions générales de vente\]\(https:\/\/[^)]+\/cgv\.html\)/, 'CGV acceptées sur la page de paiement');
   assert.strictEqual(params.subscription_data.metadata.delai, 'stock');
   assert.ok(params.expires_at, 'la page de paiement expire (tablette mise de côté)');
   assert.strictEqual((await s.db.collection('reservations').get()).size, 1);
