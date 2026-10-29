@@ -55,7 +55,9 @@ public class AppelEnCours extends Activity {
 
     /** Répondre à la tablette : la page décroche toute seule (?appel=…). */
     static Intent pourRepondre(Context ctx, String cid) {
-        return pour(ctx, "/?appel=" + Uri.encode(cid), Appels.connexion(ctx, cid));
+        String fid = Appels.famille(ctx, cid);
+        String chemin = "/?appel=" + Uri.encode(cid) + (fid != null ? "&famille=" + Uri.encode(fid) : "");
+        return pour(ctx, chemin, Appels.connexion(ctx, cid));
     }
 
     static Intent pour(Context ctx, String chemin, String connexion) {
