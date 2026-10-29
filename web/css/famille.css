@@ -490,9 +490,21 @@ button:disabled { opacity: .45; cursor: default; }
   border-radius: 50%; background: var(--text); color: var(--bg);
 }
 .preview button svg { width: 16px; height: 16px; stroke-width: 3; }
-.video-preview { width: 100%; max-height: 50vh; background: #000; margin-bottom: 12px; }
+/* Vidéo avant envoi : à sa forme, ni déformée ni arrondie, sans bandes noires ; toucher = lecture/pause. */
+.video-review { margin-bottom: 14px; }
+.video-cadre { position: relative; display: flex; justify-content: center; background: var(--bg); }
+.video-cadre video { display: block; max-width: 100%; max-height: 46vh; width: auto; height: auto; min-height: 120px; object-fit: contain; background: var(--bg); }
+.video-play {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: 72px; height: 72px; padding: 0; border-radius: 50%;
+  background: var(--accent); color: var(--accent-text); box-shadow: 0 4px 16px rgba(36, 33, 47, .25);
+}
+.video-play svg { width: 34px; height: 34px; margin-left: 4px; }
+.paire, .post-boutons { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+.paire .secondary, .post-boutons .secondary { justify-content: center; min-height: 54px; font-size: 16px; font-weight: 700; }
+.post-boutons { margin-top: 12px; }
+.post-boutons > :only-child, .post-boutons > :first-child[hidden] + * { grid-column: 1 / -1; }
 #post-text { margin: 0; }
-.send-btn { margin-top: 12px; }
 .composer-busy, .busy .previews { opacity: .5; }
 
 .spinner {

@@ -88,11 +88,11 @@ async function photo({ largeur = 1200, hauteur = 900, texte = 'Photo', nom = 'ph
 }
 
 /** Une petite vidéo WebM (secondes), filmée par le navigateur. */
-async function video({ secondes = 2, nom = 'video.webm' } = {}) {
+async function video({ secondes = 2, nom = 'video.webm', largeur = 320, hauteur = 240 } = {}) {
   const page = await pageAtelier();
-  const base64 = await page.evaluate(async (sec) => {
+  const base64 = await page.evaluate(async ({ sec, l, h }) => {
     const c = document.createElement('canvas');
-    c.width = 320; c.height = 240;
+    c.width = l; c.height = h;
     const g = c.getContext('2d');
     const flux = c.captureStream(25);
     const rec = new MediaRecorder(flux, { mimeType: 'video/webm' });
@@ -104,8 +104,8 @@ async function video({ secondes = 2, nom = 'video.webm' } = {}) {
     await new Promise((r) => {
       const dessiner = () => {
         const t = (performance.now() - debut) / 1000;
-        g.fillStyle = `hsl(${(t * 120) % 360} 70% 50%)`; g.fillRect(0, 0, 320, 240);
-        g.fillStyle = '#fff'; g.font = '40px sans-serif'; g.fillText(t.toFixed(1), 100, 130);
+        g.fillStyle = `hsl(${(t * 120) % 360} 70% 50%)`; g.fillRect(0, 0, l, h);
+        g.fillStyle = '#fff'; g.font = '40px sans-serif'; g.fillText(t.toFixed(1), l / 3, h / 2);
         if (t >= sec) r(); else setTimeout(dessiner, 40);
       };
       dessiner();
@@ -116,7 +116,7 @@ async function video({ secondes = 2, nom = 'video.webm' } = {}) {
     let bin = '';
     for (const b of buf) bin += String.fromCharCode(b);
     return btoa(bin);
-  }, secondes);
+  }, { sec: secondes, l: largeur, h: hauteur });
   return { name: nom, mimeType: 'video/webm', buffer: Buffer.from(base64, 'base64') };
 }
 

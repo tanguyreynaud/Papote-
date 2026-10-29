@@ -938,6 +938,7 @@ document.querySelectorAll('.quick-msg').forEach((b) => b.addEventListener('click
 let addMode = null; // 'photo' | 'video'
 let pendingPhotos = []; // { full, thumb } : data URLs prêtes à envoyer
 let pendingVideo = null; // { base64, mime, thumb, duration }
+let videoFilmee = false; // la vidéo en attente vient de « Filmer » (sinon de la galerie ou d'un partage)
 
 function loadImage(file) {
   return new Promise((resolve, reject) => {
@@ -1007,7 +1008,10 @@ function syncAddSheet() {
   $('video-hint').hidden = addMode !== 'video' || chosen;
   $('post-extra').hidden = !chosen;
   $('previews').hidden = addMode !== 'photo';
-  $('video-preview').hidden = addMode !== 'video' || !chosen;
+  $('video-review').hidden = addMode !== 'video' || !chosen;
+  $('video-refaire').hidden = addMode !== 'video' || !chosen;
+  $('video-refaire-label').textContent = videoFilmee ? 'Refaire' : 'Autre vidéo';
+  $('video-refaire').querySelector('use').setAttribute('href', videoFilmee ? '#i-camera' : '#i-gallery');
   renderPreviews();
 }
 
@@ -1018,7 +1022,7 @@ function closeSheets() {
   $('sheet-wifi').hidden = true;
   stopScan?.();
   stopScan = null;
-  $('video-preview').removeAttribute('src');
+  oublierApercuVideo();
   pendingPhotos = [];
   pendingVideo = null;
 }
@@ -1029,6 +1033,45 @@ document.querySelectorAll('.fab[data-add]').forEach((fab) => {
 $('photo-nudge').addEventListener('click', () => openAdd('photo'));
 $('post-close').addEventListener('click', () => history.back());
 $('sheet-post').addEventListener('click', (e) => { if (e.target === $('sheet-post')) history.back(); });
+
+function oublierApercuVideo() {
+  const v = $('video-preview');
+  v.pause();
+  if (v.src.startsWith('blob:')) URL.revokeObjectURL(v.src);
+  v.removeAttribute('src');
+  v.load();
+}
+
+// Aperçu de la vidéo avant envoi : nos boutons plutôt que ceux du navigateur (petits, et leur plein
+// écran ne s'ouvrait plus). Toucher la vidéo la lance ou la met en pause.
+function lireApercu(depuisDebut) {
+  const v = $('video-preview');
+  if (depuisDebut || v.ended) v.currentTime = 0;
+  v.play().catch(() => {});
+}
+$('video-play').addEventListener('click', () => lireApercu(false));
+$('video-preview').addEventListener('click', () => {
+  const v = $('video-preview');
+  if (v.paused) lireApercu(false); else v.pause();
+});
+$('video-revoir').addEventListener('click', () => lireApercu(true));
+for (const ev of ['play', 'pause', 'ended', 'emptied']) {
+  $('video-preview').addEventListener(ev, () => { $('video-play').hidden = !$('video-preview').paused; });
+}
+$('video-plein').addEventListener('click', () => {
+  const v = $('video-preview');
+  // iPhone : seul le plein écran propre à la vidéo existe (webkitEnterFullscreen).
+  const ouvrir = v.requestFullscreen ? v.requestFullscreen({ navigationUI: 'hide' }) : Promise.resolve(v.webkitEnterFullscreen?.());
+  Promise.resolve(ouvrir).catch((err) => console.warn('Plein écran refusé', err)).finally(() => lireApercu(v.ended));
+});
+// « Refaire » rouvre la caméra, « Autre vidéo » la galerie : la vidéo d'avant est oubliée.
+$('video-refaire').addEventListener('click', () => {
+  oublierApercuVideo();
+  pendingVideo = null;
+  syncAddSheet();
+  unlockVideo();
+  $(videoFilmee ? 'in-video-camera' : 'in-video-gallery').click();
+});
 
 $('pick-camera').addEventListener('click', () => {
   if (addMode === 'video') unlockVideo();
@@ -1077,7 +1120,7 @@ function renderPreviews() {
 
 function setBusy(label) {
   const btn = $('btn-send');
-  for (const id of ['btn-send', 'post-text', 'pick-camera', 'pick-gallery']) $(id).disabled = !!label;
+  for (const id of ['btn-send', 'post-text', 'pick-camera', 'pick-gallery', 'video-refaire']) $(id).disabled = !!label;
   $('form-post').classList.toggle('busy', !!label);
   btn.replaceChildren();
   if (label) {
@@ -1126,17 +1169,20 @@ async function addPhotoFiles(all) {
 async function onVideoChosen(e) {
   const file = e.target.files && e.target.files[0];
   e.target.value = '';
-  await addVideoFile(file);
+  await addVideoFile(file, e.target.id === 'in-video-camera');
 }
 
-async function addVideoFile(file) {
+async function addVideoFile(file, filmee = false) {
   if (!file) return;
+  videoFilmee = filmee;
   $('pickers').hidden = true;
+  $('video-hint').hidden = false;
   try {
     const result = await prepareVideo(file, (done, total) => {
       setStatus(`Préparation de la vidéo… ${Math.round(done)} / ${Math.round(total)} s`);
     }, MAX_VIDEO_SECONDS, demanderToucherVideo);
     pendingVideo = { blob: result.blob, mime: result.mime, thumb: result.thumb, duration: result.duration };
+    oublierApercuVideo();
     $('video-preview').src = URL.createObjectURL(result.blob);
     setStatus('');
   } catch (err) {
@@ -1735,8 +1781,10 @@ function recolorerBarres() {
 }
 document.addEventListener('fullscreenchange', () => {
   if (document.fullscreenElement) {
-    // Plein écran resté après la fin de l'appel (appel fini app en arrière-plan…) : on en sort.
-    if ($('call').hidden) document.exitFullscreen().catch(() => {});
+    // Plein écran de l'appel resté après sa fin (appel fini app en arrière-plan…) : on en sort.
+    // Seulement celui de l'appel (toute la page) : le plein écran d'une vidéo (aperçu avant envoi,
+    // visionneuse) se fermait sinon aussitôt ouvert (29/10).
+    if ($('call').hidden && document.fullscreenElement === document.documentElement) document.exitFullscreen().catch(() => {});
     return;
   }
   setTimeout(recolorerBarres, 300);
