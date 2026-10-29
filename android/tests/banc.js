@@ -27,7 +27,7 @@ function imitation(etat) {
     stopVoice: note('stopVoice'), setSleep: note('setSleep'), setDim: note('setDim'), realtime: note('realtime'),
     changed: note('changed'), morePhotos: note('morePhotos'), touched: note('touched'), seen: note('seen'),
     ackReminder: note('ackReminder'), seenReminder: note('seenReminder'), alert: note('alert'),
-    carillonStop: note('carillonStop'), carillonEnCours: () => false,
+    carillonStop: note('carillonStop'), carillonEnCours: () => false, fenetre: (o) => { window.__fenetre = o; },
     getCode: () => window.__etat.code || null,
     callsAccount: () => JSON.stringify(window.__etat.code ? { email: 'tablette-appels-essai@tablettes.papote-famille.web.app', password: 'secret' } : {}),
     setTabletName: note('setTabletName'),
@@ -125,7 +125,7 @@ function lot(posts, champs = {}) {
   return {
     familyName: 'Mamie', familyCode: 'ABCD-2345', textSize: '', subscription: 'actif',
     options: { lecture: true, sos: true, meteo: true, rappelsAccueil: true },
-    veille: { active: true, de: 23, a: 7 }, posts, ...champs,
+    veille: { active: true, de: 23 * 60, a: 7 * 60 }, posts, ...champs, // en minutes, comme Sync.java
   };
 }
 

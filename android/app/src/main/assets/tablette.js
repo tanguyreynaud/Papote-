@@ -2109,6 +2109,20 @@
     return !!callScreen && !callScreen.hasAttribute('hidden') && /state-(starting|ringing|connected)/.test(callScreen.className);
   }
 
+  // Une fenêtre est-elle ouverte par-dessus l'accueil (nouvel envoi, rappel, anniversaire, appel,
+  // SOS) ? Android ne joue alors pas le carillon d'un nouvel envoi : il attend son tour dans la
+  // file, sans sonner par-dessus (Tanguy, 29/10). L'accueil, « Appeler » et le diaporama sonnent.
+  // Redit chaque seconde : Android oublie une fenêtre qu'on ne lui redit plus (page arrêtée).
+  function fenetreOuverte() {
+    var ids = ['overlay', 'reminder-alert', 'bday-alert'];
+    for (var i = 0; i < ids.length; i++) if ($(ids[i]) && isShown(ids[i])) return true;
+    if (inCall()) return true;
+    return !!callScreen && !callScreen.hasAttribute('hidden') && !pickerOpen();
+  }
+  setInterval(function () {
+    try { if (android() && android().fenetre) android().fenetre(fenetreOuverte()); } catch (e) { }
+  }, 1000);
+
   // Périodes d'appel du jour, en minutes : un rappel qui tombe pendant un appel attend la fin,
   // et reste affiché d'autant plus longtemps (voir checkReminders).
   var callSpans = [];      // { day, from, to }

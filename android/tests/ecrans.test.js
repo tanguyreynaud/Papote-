@@ -333,7 +333,7 @@ test('appels indisponibles au démarrage (pas d\'internet) : la page se recharge
 
 test('rappel fermé puis page rechargée : il ne revient pas (le lastAck n\'est pas encore relu)', async () => {
   const b = await ouvrir('2026-10-26T10:30:00');
-  const rappel = { reminders: [{ id: 'r9', title: 'Cachet', kind: 'medicament', time: '10:30', repeat: 'daily', date: '', days: [], lastAck: '', avanceMin: 0, finLe: '', enPauseJusquau: '', voice: '' }] };
+  const rappel = { reminders: [{ id: 'r9', title: 'Cachet', kind: 'medicament', time: '10:20', repeat: 'daily', date: '', days: [], lastAck: '', avanceMin: 0, finLe: '', enPauseJusquau: '', voice: '' }] };
   try {
     await b.android('onPosts', lot([]));
     await b.android('onReminders', rappel);
@@ -347,6 +347,49 @@ test('rappel fermé puis page rechargée : il ne revient pas (le lastAck n\'est 
     await b.android('onReminders', rappel); // Android renvoie les rappels connus, sans le « fait » pas encore relu
     await b.avancer(31000);
     assert.ok(!(await b.visible('#reminder-alert')), 'pas une deuxième fois');
+    await sansErreur(b);
+  } finally { await b.fermer(); }
+});
+
+test('carillon d\'un nouvel envoi : pas par-dessus une fenêtre ouverte, normal sur l\'accueil, « Appeler » et le diaporama', async () => {
+  const b = await ouvrir('2026-10-26T10:10:00');
+  try {
+    const fenetre = async () => { await b.avancer(1100); return b.page.evaluate(() => window.__fenetre); };
+    await b.android('onPosts', lot([envoi({ seen: true, text: 'Vue' })]));
+    assert.strictEqual(await fenetre(), false, 'accueil');
+    // Deux nouvelles photos : la première s'affiche, Android est prévenu qu'une fenêtre est ouverte.
+    const deux = [envoi({ text: 'Photo 1' }), envoi({ text: 'Photo 2' })];
+    await b.android('onPosts', lot(recentsDabord(deux)));
+    await b.avancer(500);
+    assert.ok(await b.visible('#overlay'));
+    assert.strictEqual(await fenetre(), true, 'nouvel envoi affiché');
+    await b.toucher('#overlay-close');
+    await b.avancer(300);
+    assert.strictEqual(await fenetre(), true, 'la photo suivante prend la place');
+    await b.toucher('#overlay-close');
+    assert.strictEqual(await fenetre(), false, 'retour à l\'accueil');
+    // Rappel à l'heure : fenêtre ouverte.
+    await b.android('onReminders', { reminders: [{ id: 'r1', title: 'Cachet', kind: 'medicament', time: '10:20', repeat: 'daily', date: '', days: [], lastAck: '', avanceMin: 0, finLe: '', enPauseJusquau: '', voice: '' }] });
+    await b.avancer(15 * 60000);
+    assert.ok(await b.visible('#reminder-alert'));
+    assert.strictEqual(await fenetre(), true, 'rappel');
+    await b.toucher('#reminder-done');
+    assert.strictEqual(await fenetre(), false, 'rappel fermé');
+    // « Appeler » (choix de la personne) : lié à l'accueil, le carillon reste normal.
+    await b.android('onFamily', { faces: {}, birthdays: [], people: [{ uid: 'julie', name: 'Julie' }] });
+    await b.toucher('#view-home .call-btn');
+    assert.match(await b.texte('.call-out'), /Qui voulez-vous appeler/);
+    assert.strictEqual(await fenetre(), false, '« Appeler »');
+    await b.toucher('.call-back');
+    // SOS (décompte) : fenêtre ouverte ; « Annuler » : accueil.
+    await b.page.evaluate(() => { window.papoteCallFamily = () => ({ hangup() {} }); });
+    await b.toucher('#sos-btn');
+    assert.strictEqual(await fenetre(), true, 'SOS');
+    await b.toucher('.sos-cancel');
+    assert.strictEqual(await fenetre(), false, 'SOS annulé');
+    await b.toucher('#home-frame');
+    assert.ok(await b.visible('#view-photos'));
+    assert.strictEqual(await fenetre(), false, 'diaporama');
     await sansErreur(b);
   } finally { await b.fermer(); }
 });

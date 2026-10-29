@@ -16,6 +16,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.UserManager;
 import android.os.PowerManager;
+import android.os.SystemClock;
 import android.media.AudioManager;
 import android.media.Ringtone;
 import android.media.RingtoneManager;
@@ -70,6 +71,11 @@ public class MainActivity extends Activity implements Sync.Listener {
     private VideoView videoView;
     /** Carillon d'arrivée en cours (null quand il a fini). */
     private volatile android.media.MediaPlayer carillon;
+    /** Dernier « fenêtre ouverte » dit par la page (0 = aucune), et dernier carillon d'un envoi. */
+    private volatile long fenetreVueA;
+    private long dernierCarillon;
+    /** Envois d'affilée : un seul carillon dans ce délai. */
+    private static final long CARILLON_UNE_FOIS_MS = 90_000;
     private Wifi wifi;
     private SmsAlert smsAlert;
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -464,8 +470,15 @@ public class MainActivity extends Activity implements Sync.Listener {
         @JavascriptInterface
         public void alert() {
             // La nuit, un rappel sonne quand même, plus doucement (Tanguy, 26/10) ; un envoi, lui, attend le matin.
-            if (Veille.isNight(MainActivity.this)) handler.post(() -> sonner(0.35f));
-            else onNewArrival();
+            // Un rappel sonne même si une fenêtre est ouverte : c'est l'heure (médicament, rendez-vous).
+            float volume = Veille.isNight(MainActivity.this) ? 0.35f : 1f;
+            handler.post(() -> sonner(volume));
+        }
+
+        /** La page redit chaque seconde si une fenêtre (envoi, rappel, appel…) est ouverte. */
+        @JavascriptInterface
+        public void fenetre(boolean ouverte) {
+            fenetreVueA = ouverte ? SystemClock.elapsedRealtime() : 0;
         }
 
         /** Visage vu : le carillon (joué 5 fois) s'arrête tout de suite. */
@@ -477,12 +490,7 @@ public class MainActivity extends Activity implements Sync.Listener {
         /** Le carillon d'arrivée sonne-t-il encore ? La page attend la fin avant de parler. */
         @JavascriptInterface
         public boolean carillonEnCours() {
-            android.media.MediaPlayer mp = carillon;
-            try {
-                return mp != null && mp.isPlaying();
-            } catch (IllegalStateException e) {
-                return false;
-            }
+            return MainActivity.this.carillonEnCours();
         }
 
         @JavascriptInterface
@@ -757,7 +765,30 @@ public class MainActivity extends Activity implements Sync.Listener {
         // Pendant la veille (21h-6h30 sauf réglage de la famille), pas de sonnerie ni d'écran
         // allumé : l'envoi attend le matin.
         if (Veille.isNight(this)) return;
-        handler.post(() -> sonner(1f));
+        handler.post(() -> {
+            long now = SystemClock.elapsedRealtime();
+            // Une fenêtre est déjà ouverte (envoi affiché, rappel…) : pas de carillon par-dessus,
+            // l'envoi attend son tour dans la file (Tanguy, 29/10). Plusieurs envois d'affilée
+            // (5 photos choisies d'un coup) : un seul carillon, pas un par envoi.
+            boolean fenetre = fenetreVueA != 0 && now - fenetreVueA < 3_000;
+            boolean dejaSonne = carillonEnCours() || (dernierCarillon != 0 && now - dernierCarillon < CARILLON_UNE_FOIS_MS);
+            if (fenetre || dejaSonne) {
+                Log.i(TAG, "Nouvel envoi sans carillon (" + (fenetre ? "fenêtre ouverte" : "déjà sonné") + ")");
+                return;
+            }
+            if (callAudio.busy()) return;
+            dernierCarillon = now;
+            sonner(1f);
+        });
+    }
+
+    private boolean carillonEnCours() {
+        android.media.MediaPlayer mp = carillon;
+        try {
+            return mp != null && mp.isPlaying();
+        } catch (IllegalStateException e) {
+            return false;
+        }
     }
 
     /** Écran allumé et carillon de Papote, à ce volume (1 = volume des médias réglé par la famille). */
