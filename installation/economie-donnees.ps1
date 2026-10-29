@@ -43,7 +43,10 @@ $Inutiles = @(
     'com.google.android.apps.setupwizard.searchselector', 'com.google.android.dialer',
     'com.google.android.apps.carrier.carrierwifi', 'com.google.android.healthconnect.controller',
     'com.blackview.weather', 'com.blackview.filetrans', 'com.blackview.easytrans', 'com.blackview.appsedge',
-    'com.blackview.userfeedback', 'com.blackview.apkupgrade'
+    'com.blackview.userfeedback', 'com.blackview.apkupgrade',
+    # Enregistreurs : bouton flottant « magnétophone » pendant un appel téléphone, par-dessus Papote
+    # (vu le 29/10 sur T-003). Aucun enregistrement de voix sur la tablette (règle de Tanguy).
+    'com.blackview.call.recorder', 'com.android.soundrecorder'
 )
 
 $installes = (Adb shell pm list packages) -split "`n" | ForEach-Object { $_ -replace '^package:', '' }
