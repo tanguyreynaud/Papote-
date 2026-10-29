@@ -2130,8 +2130,9 @@ final class Sync {
     private void readVolume(JSONObject ff) {
         // Jamais sous 10 % : la tablette doit toujours s'entendre.
         int volume = ff.has("volume") ? (int) Math.max(10, Math.min(100, Firebase.integer(ff, "volume"))) : -1;
-        if (volume == prefs.getInt("volume", -1)) return;
-        prefs.edit().putInt("volume", volume).apply();
+        if (volume != prefs.getInt("volume", -1)) prefs.edit().putInt("volume", volume).apply();
+        // Réappliqué à chaque lecture, même inchangé : un volume baissé autrement (adb, Android) restait
+        // bas alors que l'app affichait 100 % (Tanguy, 29/10).
         listener.onVolume(volume);
     }
 

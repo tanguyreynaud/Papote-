@@ -751,7 +751,9 @@ public class MainActivity extends Activity implements Sync.Listener {
     }
     @Override public void onReminders(JSONObject payload) { callPage("onReminders", payload); }
     @Override public void onFamily(JSONObject payload) { callPage("onFamily", payload); }
-    @Override public void onVolume(int volume) { handler.post(this::setVolumes); }
+    @Override public void onVolume(int volume) {
+        handler.post(() -> { if (!essaiSon) setVolumes(); }); // pendant un essai du son, il garde son niveau
+    }
     @Override public void onFamilyLost() { callPage("onFamilyLost", new JSONObject()); }
 
     /** Migration de la base : la page (appels compris) repart sur la nouvelle base. */
@@ -899,11 +901,13 @@ public class MainActivity extends Activity implements Sync.Listener {
 
     // Après un essai, la tablette reprend les volumes enregistrés : un essai suivi d'« Annuler » dans
     // l'app laissait la sonnerie ou les médias au niveau essayé jusqu'au prochain démarrage.
-    private final Runnable volumesEnregistres = this::setVolumes;
+    private boolean essaiSon;
+    private final Runnable volumesEnregistres = () -> { essaiSon = false; setVolumes(); };
 
     private void playSoundTest(String quoi, int volume, String texte) {
         AudioManager am = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
         int v = Math.max(10, Math.min(100, volume));
+        essaiSon = true;
         handler.removeCallbacks(volumesEnregistres);
         handler.postDelayed(volumesEnregistres, 12_000);
         try {
