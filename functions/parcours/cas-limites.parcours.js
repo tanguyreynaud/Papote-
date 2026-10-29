@@ -379,3 +379,19 @@ test('SOS sans réponse au 2e essai : toute la famille est alertée', async () =
   assert.deepStrictEqual(journal.map((x) => x.genre).sort(), ['sos', 'sos-sans-reponse']);
   assert.ok(journal.every((x) => x.fid === fid && x.fiche === tablette.fiche && x.telephones === 2 && x.le), 'famille, tablette, téléphones, date');
 });
+
+test('couverture 4G vérifiée par Papote : pas de paiement là où la carte SIM capte mal, adresse du proche notée', async () => {
+  await a.tablettePreparee();
+  const essai = (proche) => s.requete('commander', { query: { formule: 'sim', tablette: 'incluse', ...a.RELAIS, ...proche, essai: '' } });
+  // Couverture limitée (Livradois), pas de couverture (Haute-Marne), adresse absente : retour à la commande.
+  for (const proche of [{ plat: '45.4882', plon: '3.5141' }, { plat: '48.0501', plon: '5.694' }, { padr: '', plat: '', plon: '' }]) {
+    const r = await essai({ ...proche, ...(proche.padr === '' ? {} : { padr: 'Quelque part' }) });
+    assert.strictEqual(r.statut, 303);
+    assert.ok(/commande\.html$/.test(r.redirection), `pas de paiement : ${r.redirection}`);
+  }
+  // Très bonne couverture : paiement, puis l'adresse et le niveau sont sur la commande et dans l'e-mail à Papote.
+  const { abonnement } = await a.commanderEtPayer({ email: 'lucie@exemple.fr', nom: 'Lucie Morel' });
+  const c = await commande(abonnement);
+  assert.deepStrictEqual(c.proche, { adresse: '2 place de l\'Église 07310 Saint-Martin-de-Valamas', lat: 44.9369, lon: 4.3683, couverture4g: 'TBC' });
+  assert.ok(s.boite.some((m) => m.a === 'contact@mapapote.fr' && /Chez le proche.*Saint-Martin-de-Valamas.*très bonne/.test(m.texte)));
+});

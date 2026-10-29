@@ -51,8 +51,9 @@
 @font-face { font-family: "Bricolage repli A"; src: local("Arial Bold"), local("Arial-BoldMT"); font-weight: 600 800; size-adjust: 100.5%; }
 </style>
 <style>
-/* Commande en deux étapes (mobile d'abord) : point relais, qui retire le colis. Plus de question « internet chez le
-   proche ? » depuis l'offre unique tout compris (29/10/2026) : la carte SIM est toujours fournie.
+/* Commande en trois étapes (mobile d'abord) : adresse du proche (la 4G de la carte SIM y est vérifiée par Papote),
+   point relais, qui retire le colis. Plus de question « internet chez le proche ? » depuis l'offre unique tout
+   compris (29/10/2026) : la carte SIM est toujours fournie.
    Le prix et le bouton Payer restent dans une barre fixée en bas de l'écran. */
 :root { --bg: #fdfaf5; --surface: #ffffff; --text: #24212f; --muted: #5f5a6b; --line: #e9e1d4; --accent: #4f46e5; --accent-strong: #3730a3; --accent-text: #ffffff; --accent-soft: #e8e6fd; --warm-soft: #e8e6fd; color-scheme: light; }
 * { box-sizing: border-box; }
@@ -119,6 +120,11 @@ p { margin: 0; }
 .precommande[hidden], .reprise[hidden], .erreur[hidden], #recherche[hidden] { display: none; }
 .reprise { padding: .6rem .9rem; border-radius: 12px; background: var(--accent-soft); color: var(--accent-strong); font-weight: 700; }
 .erreur { color: #b91c1c; }
+.verdict { margin: 0; padding: .8rem 1rem; border-radius: 14px; font-weight: 700; }
+.verdict small { display: block; font-weight: 400; margin-top: .2rem; }
+.verdict.oui { background: var(--accent-soft); color: var(--accent-strong); }
+.verdict.non { background: #fdecec; color: #8a1c1c; }
+.verdict[hidden], #suggestions[hidden] { display: none; }
 .barre { position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; background: rgba(253, 250, 245, .96); border-top: 1px solid var(--line); padding: .7rem max(16px, env(safe-area-inset-right)) calc(.7rem + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
 .barre-in { max-width: 40rem; margin: 0 auto; display: flex; align-items: center; gap: .9rem; }
 .barre-in div { display: grid; grid-template-columns: minmax(0, 1fr); line-height: 1.2; min-width: 0; overflow-wrap: anywhere; }
@@ -146,12 +152,23 @@ body .ps-bouton { bottom: 6.5rem; }
   </div>
   <div>
     <h1>Votre commande</h1>
-    <p class="sous">Deux étapes, deux minutes. Livraison offerte, 30 jours pour changer d'avis.</p>
+    <p class="sous">Trois étapes, deux minutes. Livraison offerte, 30 jours pour changer d'avis.</p>
   </div>
   <p class="reprise" id="reprise" hidden>Votre commande vous attend : tout est déjà rempli, il ne reste que le paiement.</p>
 
+  <section class="etape" id="etape-proche">
+    <h2><span class="n">1</span>Où vit votre proche ?<span class="ok" id="ok1" hidden>✓</span></h2>
+    <label class="champ">Son adresse
+      <input id="adresse" autocomplete="off" maxlength="200" placeholder="N°, rue et ville" aria-describedby="adresse-aide">
+      <small id="adresse-aide">La tablette se connecte avec sa carte SIM 4G : nous vérifions qu'elle capte bien chez elle.</small>
+    </label>
+    <div class="points" id="suggestions" hidden></div>
+    <p class="muted" id="verification" hidden>Vérification de la 4G…</p>
+    <p class="verdict" id="verdict" hidden></p>
+  </section>
+
   <section class="etape" id="etape-relais">
-    <h2><span class="n">1</span>Où retirer le colis ?<span class="ok" id="ok1" hidden>✓</span></h2>
+    <h2><span class="n">2</span>Où retirer le colis ?<span class="ok" id="ok2" hidden>✓</span></h2>
     <form class="cherche" id="cherche">
       <input id="cp" inputmode="numeric" autocomplete="postal-code" required maxlength="10" placeholder="Code postal" aria-label="Code postal">
       <button type="button" id="autour">📍 Autour de moi</button>
@@ -161,7 +178,7 @@ body .ps-bouton { bottom: 6.5rem; }
       <label id="ville-champ" hidden>Ville<select id="ville"></select></label>
       <label id="ville-libre" hidden>Ville<input id="ville-texte" autocomplete="address-level2" maxlength="60"></label>
     </div>
-    <p class="petit">Points relais Mondial Relay les plus proches, près de chez vous ou de chez votre proche.</p>
+    <p class="petit">Les points relais Mondial Relay les plus proches de chez votre proche s'affichent tout seuls. Vous la lui apportez ? Tapez votre code postal.</p>
     <p class="erreur" id="erreur-position" hidden>Impossible de trouver votre position. Tapez votre code postal.</p>
     <p class="muted" id="recherche" hidden>Recherche des points relais…</p>
     <div class="points" id="points" hidden></div>
@@ -175,7 +192,7 @@ body .ps-bouton { bottom: 6.5rem; }
   </section>
 
   <section class="etape" id="etape-qui">
-    <h2><span class="n">2</span>Qui retire le colis ?<span class="ok" id="ok2" hidden>✓</span></h2>
+    <h2><span class="n">3</span>Qui retire le colis ?<span class="ok" id="ok3" hidden>✓</span></h2>
     <label class="champ" id="qui">Prénom et nom
       <input id="destinataire" autocomplete="name" maxlength="80" placeholder="Prénom et nom">
       <small>Comme sur la pièce d'identité présentée au point relais.</small>
@@ -230,6 +247,108 @@ body .ps-bouton { bottom: 6.5rem; }
   // Clé PUBLIQUE de l'intégration Sendcloud « Papote » (points relais Mondial Relay). Pas un secret.
   var SENDCLOUD_CLE = 'f8875927-f7be-4ad7-ac24-22fd11c0efc5';
   var COMMANDER = 'https://europe-west1-papote-famille.cloudfunctions.net/commander';
+  // Adresses : Base Adresse Nationale, servie par la Géoplateforme de l'IGN (l'ancienne api-adresse.data.gouv.fr
+  // ne répond plus depuis 2026).
+  var GEOCODAGE = 'https://data.geopf.fr/geocodage';
+  var COUVERTURE = 'https://europe-west1-papote-famille.cloudfunctions.net/couverture';
+
+  // Étape 1 : l'adresse du proche. Papote vérifie que la 4G de la carte SIM (réseau Bouygues) y passe bien,
+  // d'après la carte de l'ARCEP (functions/couverture.js) ; sinon, pas de paiement. Les points relais les plus
+  // proches de chez lui sont ensuite proposés tout seuls.
+  var champAdresse = document.getElementById('adresse');
+  var suggestions = document.getElementById('suggestions');
+  var verification = document.getElementById('verification');
+  var verdict = document.getElementById('verdict');
+  var proche = null; // { adresse, lat, lon, cp, niveau, eligible }
+  function procheOk() { return !!(proche && proche.eligible); }
+  var tapeLe = 0;
+  champAdresse.addEventListener('input', function () {
+    proche = null;
+    verdict.hidden = true;
+    lienPaiement();
+    var q = champAdresse.value.trim();
+    var ici = ++tapeLe;
+    if (q.length < 4) { suggestions.hidden = true; return; }
+    setTimeout(function () {
+      if (ici !== tapeLe) return;
+      fetch(GEOCODAGE + '/search?index=address&autocomplete=1&limit=5&q=' + encodeURIComponent(q))
+        .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+        .then(function (d) { if (ici === tapeLe) proposer(d.features || []); })
+        .catch(function () {
+          if (ici !== tapeLe) return;
+          suggestions.hidden = true;
+          dire(false, 'Les adresses ne s\'affichent pas pour l\'instant.', 'Réessayez dans un instant, ou écrivez-nous à contact@mapapote.fr.');
+        });
+    }, 250);
+  });
+  function proposer(adresses) {
+    suggestions.textContent = '';
+    adresses.forEach(function (f) {
+      var p = f.properties || {};
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'point';
+      var t = document.createElement('div');
+      var nom = document.createElement('b');
+      nom.textContent = p.name || p.label;
+      var ville = document.createElement('span');
+      ville.textContent = [p.postcode, p.city].filter(Boolean).join(' ');
+      t.append(nom, ville);
+      b.append(t);
+      b.addEventListener('click', function () { choisirAdresse(f); });
+      suggestions.append(b);
+    });
+    suggestions.hidden = !adresses.length;
+  }
+  function choisirAdresse(f) {
+    var p = f.properties || {};
+    suggestions.hidden = true;
+    champAdresse.value = p.label;
+    // Une commune ou une rue entière : son centre ne dit pas si la 4G passe chez le proche.
+    if (p.type === 'municipality') {
+      dire(false, 'Précisez la rue et le numéro.', 'La 4G se vérifie à l\'adresse exacte de votre proche.');
+      return;
+    }
+    var c = f.geometry && f.geometry.coordinates;
+    verdict.hidden = true;
+    verification.hidden = false;
+    fetch(COUVERTURE + '?lat=' + c[1] + '&lon=' + c[0])
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function (d) {
+        verification.hidden = true;
+        proche = { adresse: p.label, lat: c[1], lon: c[0], cp: p.postcode, niveau: d.niveau, eligible: !!d.eligible };
+        montrerVerdict();
+        if (proche.eligible) {
+          // Points relais autour de chez le proche, sauf si un point est déjà choisi.
+          if (!relais) {
+            cp.value = proche.cp || '';
+            villesDe = pays.value + cp.value;
+            chercher({ latitude: proche.lat, longitude: proche.lon });
+          }
+        }
+        lienPaiement();
+        retenir();
+      })
+      .catch(function () {
+        verification.hidden = true;
+        dire(false, 'La vérification de la 4G ne répond pas pour l\'instant.', 'Réessayez dans un instant, ou écrivez-nous à contact@mapapote.fr.');
+      });
+  }
+  function dire(oui, titre, detail) {
+    verdict.className = 'verdict ' + (oui ? 'oui' : 'non');
+    verdict.textContent = (oui ? '✓ ' : '') + titre;
+    if (detail) { var sm = document.createElement('small'); sm.textContent = detail; verdict.append(sm); }
+    verdict.hidden = false;
+  }
+  function montrerVerdict() {
+    if (proche.eligible) {
+      dire(true, proche.niveau === 'TBC' ? 'La 4G passe très bien chez votre proche.' : 'La 4G passe bien chez votre proche.',
+        'La tablette s\'y connectera toute seule, sans box ni réglage.');
+    } else {
+      dire(false, 'Désolé, notre carte SIM ne capte pas assez bien à cette adresse pour l\'instant.',
+        'Dans la maison, la tablette risquerait de rester sans internet : nous préférons ne pas vous la livrer. Une question ? contact@mapapote.fr');
+    }
+  }
   var q = new URLSearchParams(location.search);
   var relais = null;
 
@@ -238,7 +357,7 @@ body .ps-bouton { bottom: 6.5rem; }
   var destinataire = document.getElementById('destinataire');
   var champEmail = document.getElementById('email');
   var accord = document.getElementById('accord');
-  var ok = [1, 2].map(function (i) { return document.getElementById('ok' + i); });
+  var ok = [1, 2, 3].map(function (i) { return document.getElementById('ok' + i); });
 
   // Prix : offre unique, 25 € par mois tout compris (carte SIM incluse) ; 60 € de mise en service à la commande.
 
@@ -250,15 +369,17 @@ body .ps-bouton { bottom: 6.5rem; }
     var mel = champEmail.value.trim();
     var melOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mel);
     var nomOk = nom.split(' ').length >= 2;
-    ok[0].hidden = !relais;
-    ok[1].hidden = !(nomOk && melOk);
-    if (!relais || !nomOk || !melOk) {
+    ok[0].hidden = !procheOk();
+    ok[1].hidden = !relais;
+    ok[2].hidden = !(nomOk && melOk);
+    if (!procheOk() || !relais || !nomOk || !melOk) {
       payer.removeAttribute('href');
       payer.setAttribute('aria-disabled', 'true');
-      manque.textContent = !relais ? 'Il reste à choisir un point relais (étape 1).'
-        : !nomOk ? 'Il reste à indiquer votre prénom et votre nom (étape 2).' : 'Il reste à indiquer votre e-mail (étape 2).';
-      manque.hidden = !(nom || mel || relais);
-      cible = !relais ? document.getElementById('etape-relais') : !nomOk ? destinataire : champEmail;
+      manque.textContent = !procheOk() ? (proche && !proche.eligible ? 'La 4G ne passe pas assez bien chez votre proche (étape 1).' : 'Il reste à indiquer l\'adresse de votre proche (étape 1).')
+        : !relais ? 'Il reste à choisir un point relais (étape 2).'
+        : !nomOk ? 'Il reste à indiquer votre prénom et votre nom (étape 3).' : 'Il reste à indiquer votre e-mail (étape 3).';
+      manque.hidden = !(nom || mel || relais || proche);
+      cible = !procheOk() ? champAdresse : !relais ? document.getElementById('etape-relais') : !nomOk ? destinataire : champEmail;
       return;
     }
     manque.hidden = true;
@@ -266,6 +387,7 @@ body .ps-bouton { bottom: 6.5rem; }
     var params = new URLSearchParams({
       rdest: nom, email: mel, accord: accord.checked ? '1' : '0',
       formule: 'sim', tablette: 'incluse',
+      padr: proche.adresse, plat: String(proche.lat), plon: String(proche.lon),
       relais: String(relais.id), rnom: relais.name, radr: relais.adresse,
       rcp: relais.postal_code, rville: relais.city, rpays: (relais.country || 'FR').toUpperCase()
     });
@@ -537,7 +659,7 @@ body .ps-bouton { bottom: 6.5rem; }
       pays.value = 'fr';
       attente.hidden = false;
       chercher(pos.coords);
-      fetch('https://api-adresse.data.gouv.fr/reverse/?lon=' + pos.coords.longitude + '&lat=' + pos.coords.latitude)
+      fetch(GEOCODAGE + '/reverse?index=address&limit=1&lon=' + pos.coords.longitude + '&lat=' + pos.coords.latitude)
         .then(function (r) { return r.json(); })
         .then(function (d) {
           var props = d.features && d.features[0] && d.features[0].properties;
@@ -556,7 +678,7 @@ body .ps-bouton { bottom: 6.5rem; }
   function retenir() {
     try {
       sessionStorage.setItem(CLE, JSON.stringify({
-        t: Date.now(), cp: cp.value, pays: pays.value,
+        t: Date.now(), proche: proche, cp: cp.value, pays: pays.value,
         relais: relais, nom: destinataire.value, email: champEmail.value, accord: accord.checked
       }));
     } catch (_) {}
@@ -565,6 +687,7 @@ body .ps-bouton { bottom: 6.5rem; }
     var d = null;
     try { d = JSON.parse(sessionStorage.getItem(CLE) || 'null'); } catch (_) {}
     if (!d || !d.t || Date.now() - d.t > 3600000) return;
+    if (d.proche && d.proche.adresse) { proche = d.proche; champAdresse.value = proche.adresse; montrerVerdict(); }
     if (d.cp) cp.value = d.cp;
     if (d.pays) pays.value = d.pays;
     destinataire.value = d.nom || '';

@@ -8,6 +8,8 @@ const { createHash, randomBytes } = require('node:crypto');
 const RELAIS = {
   relais: 'FR-012345', rnom: 'Tabac de la Place', radr: '1 place de la Mairie', rcp: '07310',
   rville: 'SAINT MARTIN DE VALAMAS', rpays: 'FR', rdest: 'Paul Martin',
+  // Adresse du proche, couverture 4G vérifiée par commander (très bonne ici, carte ARCEP 2026_T2).
+  padr: '2 place de l\'Église 07310 Saint-Martin-de-Valamas', plat: '44.9369', plon: '4.3683',
 };
 
 // ---------- Tanguy : stock et admin ----------
