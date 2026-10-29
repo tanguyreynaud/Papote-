@@ -244,12 +244,14 @@ service cloud.firestore {
                     && (!('nom' in request.resource.data.options.radio) || (request.resource.data.options.radio.nom is string && request.resource.data.options.radio.nom.size() <= 60))
                     && (!('url' in request.resource.data.options.radio) || (request.resource.data.options.radio.url is string && request.resource.data.options.radio.url.size() <= 300 && request.resource.data.options.radio.url.matches('https://.*'))))))
           // Volume de la tablette (10 à 100) et de sa sonnerie d'appel, avec le compteur qui la prévient.
-          || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['volume', 'volumeSonnerie', 'rev'])
+          || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['volume', 'volumeSonnerie', 'volumeAppel', 'rev'])
             && isFamilyAdmin(fid)
             && (!('volume' in request.resource.data)
                 || (request.resource.data.volume is int && request.resource.data.volume >= 10 && request.resource.data.volume <= 100))
             && (!('volumeSonnerie' in request.resource.data)
-                || (request.resource.data.volumeSonnerie is int && request.resource.data.volumeSonnerie >= 10 && request.resource.data.volumeSonnerie <= 100)))
+                || (request.resource.data.volumeSonnerie is int && request.resource.data.volumeSonnerie >= 10 && request.resource.data.volumeSonnerie <= 100))
+            && (!('volumeAppel' in request.resource.data)
+                || (request.resource.data.volumeAppel is int && request.resource.data.volumeAppel >= 10 && request.resource.data.volumeAppel <= 100)))
           // Étape du parcours d'installation (la fin, « fini », est écrite par le serveur).
           || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['installation'])
             && isFamilyAdmin(fid)

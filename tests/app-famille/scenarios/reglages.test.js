@@ -60,11 +60,13 @@ test('Réglages de la tablette : nom, options et radio, volume, nuit, météo, p
   }, 'essais du son');
   assert.ok(essais.some((c) => c.quoi === 'sonnerie' && c.volume === 70));
   assert.ok(essais.some((c) => c.quoi === 'voix' && c.volume === 50));
+  assert.strictEqual(await julie.page.inputValue('#volume-appel'), '100', 'appels au plus fort par défaut');
+  await julie.page.locator('#volume-appel').fill('80');
   await enregistrer(julie, 'volume-card');
   await g.toast(julie, 'Volumes envoyés');
   const fam = await g.lire(`families/${fid}`);
-  assert.deepStrictEqual([fam.volume, fam.volumeSonnerie], [50, 70]);
-  await julie.page.locator('#volume-text', { hasText: 'Sonnerie 70 % · Vidéos et messages 50 %' }).waitFor();
+  assert.deepStrictEqual([fam.volume, fam.volumeSonnerie, fam.volumeAppel], [50, 70, 80]);
+  await julie.page.locator('#volume-text', { hasText: 'Sonnerie 70 % · Vidéos et messages 50 % · Appels 80 %' }).waitFor();
 
   // Nuit : mêmes heures refusées, puis de 22 h à 6 h 30 (demi-heure).
   await modifier(julie, 'sleep-card');

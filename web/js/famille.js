@@ -3583,18 +3583,20 @@ SETTINGS['options-card'] = {
   },
 };
 
-// Volumes : families/{fid}.volume (vidéos, messages lus, radio) et volumeSonnerie (appels qui arrivent),
-// de 10 à 100. La voix pendant les appels est toujours au plus fort (tablette 2.99.85).
+// Volumes : families/{fid}.volume (vidéos, messages lus, radio), volumeSonnerie (appels qui arrivent)
+// et volumeAppel (voix du proche en visio et au téléphone, au plus fort si absent), de 10 à 100.
 const volumeActuel = () => (Number.isInteger(session.family.volume) ? session.family.volume : 80);
 const sonnerieActuelle = () => (Number.isInteger(session.family.volumeSonnerie) ? session.family.volumeSonnerie : 100);
+const appelActuel = () => (Number.isInteger(session.family.volumeAppel) ? session.family.volumeAppel : 100);
 
 function renderVolume() {
-  $('volume-text').textContent = `Sonnerie ${sonnerieActuelle()} % · Vidéos et messages ${volumeActuel()} %`;
+  $('volume-text').textContent = `Sonnerie ${sonnerieActuelle()} % · Vidéos et messages ${volumeActuel()} % · Appels ${appelActuel()} %`;
 }
 
 function syncVolumes() {
   $('volume-sonnerie-val').textContent = `${$('volume-sonnerie').value} %`;
   $('volume-value').textContent = `${$('volume').value} %`;
+  $('volume-appel-val').textContent = `${$('volume-appel').value} %`;
 }
 
 // Écouter : la tablette sonne ou parle au niveau de la barre (même commande « son » qu'à l'installation),
@@ -3618,6 +3620,7 @@ async function ecouterVolume(quoi) {
 }
 $('volume-sonnerie').addEventListener('input', syncVolumes);
 $('volume').addEventListener('input', syncVolumes);
+$('volume-appel').addEventListener('input', syncVolumes);
 $('volume-sonnerie').addEventListener('change', () => ecouterVolume('sonnerie'));
 $('volume').addEventListener('change', () => ecouterVolume('voix'));
 document.querySelectorAll('.volume-essai').forEach((b) => b.addEventListener('click', () => ecouterVolume(b.dataset.essai)));
@@ -3625,11 +3628,12 @@ SETTINGS['volume-card'] = {
   fill() {
     $('volume').value = String(volumeActuel());
     $('volume-sonnerie').value = String(sonnerieActuelle());
+    $('volume-appel').value = String(appelActuel());
     syncVolumes();
     $('volume-status').hidden = true;
   },
   async save() {
-    await saveFamily({ volume: Number($('volume').value), volumeSonnerie: Number($('volume-sonnerie').value) }, 'Volumes envoyés à la tablette');
+    await saveFamily({ volume: Number($('volume').value), volumeSonnerie: Number($('volume-sonnerie').value), volumeAppel: Number($('volume-appel').value) }, 'Volumes envoyés à la tablette');
     return true;
   },
 };
