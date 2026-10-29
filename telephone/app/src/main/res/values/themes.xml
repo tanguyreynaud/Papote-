@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Écran de démarrage (logo) avant l'app famille : barre des boutons Android gris léger avec des
+         boutons foncés. Ensuite c'est Chrome qui dessine l'écran et sa barre, ce thème n'y joue plus. -->
+    <style name="Papote.Ouverture" parent="@android:style/Theme.DeviceDefault.Light.NoActionBar">
+        <item name="android:navigationBarColor">@color/barre_boutons</item>
+        <item name="android:windowLightNavigationBar">true</item>
+    </style>
+</resources>
