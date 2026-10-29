@@ -13,7 +13,7 @@ import {
   MAX_VIDEO_CHUNKS, VIDEO_CHUNK,
   choisirBase, bucketUrl,
 } from './firebase.js';
-import { askConfirm, confirmerAvecCroix, notice, avantDePartir, chooseAction } from './ui.js';
+import { askConfirm, confirmerAvecCroix, notice, avantDePartir, chooseAction, fermerFenetre, demanderQuitter } from './ui.js';
 import { showGuideOnce } from './guide.js';
 import {
   abonnementOk, FORMULES, LIBELLES, ouvrirPortail, payer, rattacherCommande, resilier, annulerResiliation,
@@ -48,6 +48,9 @@ let stopIncoming = null;
 const VIEWS = ['view-moi', 'view-sans-abo', 'view-invite', 'view-abonnement', 'view-profile', 'view-pair', 'view-setup', 'loading', 'view-login', 'view-link-email', 'view-invited', 'view-pending', 'view-join', 'view-home', 'view-photos', 'view-videos', 'view-messages', 'view-agenda', 'view-settings', 'view-notifs', 'view-support'];
 
 function show(view) {
+  // L'accueil ou un écran de parcours (connexion, rejoindre…) : on redescend sur l'entrée de l'accueil,
+  // sinon « retour » rouvrirait la page quittée (ex. le Profil après « Rejoindre une autre famille »).
+  if (view === 'view-home' || view === 'view-sans-abo' || VUES_PARCOURS.includes(view)) redescendreSurAccueil();
   for (const id of VIEWS) $(id).hidden = id !== view;
   document.body.classList.remove('depuis-barre');
   document.body.classList.toggle('on-support', view === 'view-support');
@@ -119,7 +122,9 @@ $('form-create').addEventListener('submit', async (e) => {
 });
 
 // ---------- Navigation : l'accueil et une page par type d'envoi ----------
-// Chaque page ouverte ajoute une entrée d'historique : le bouton retour d'Android ramène à l'accueil.
+// Chaque page ouverte ajoute une entrée d'historique : le bouton retour d'Android ramène à l'écran
+// d'avant. Les onglets de la barre du bas (Photos, Messages, Notifications, Profil, Aide) partagent
+// une seule entrée au-dessus de l'accueil : « retour » depuis l'un d'eux ramène à l'accueil.
 
 let page = null;
 let stopPage = null;
@@ -161,13 +166,13 @@ const PAGES = {
 
 // onglet : ouverte depuis la barre du bas (Photos, Messages) : la barre reste, sans flèche retour.
 function openPage(name, push = true, onglet = false) {
-  const dejaOnglet = document.body.classList.contains('depuis-barre');
+  const dejaOnglet = surUnOnglet();
   stopPage?.();
   stopPage = PAGES[name]();
   page = name;
   // D'un onglet à l'autre, on remplace l'entrée d'historique : « retour » ramène à l'accueil.
-  if (push && onglet && dejaOnglet) history.replaceState({ page: name, onglet }, '');
-  else if (push) history.pushState({ page: name, onglet }, '');
+  if (push && onglet && dejaOnglet) remplacer({ page: name, onglet });
+  else if (push) empiler({ page: name, onglet });
   show(`view-${name}`);
   document.body.classList.toggle('depuis-barre', onglet);
   if (onglet) {
@@ -213,18 +218,35 @@ for (const quoi of ['deja', 'prendre']) {
     $(`sans-abo-panel-${quoi}`).scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
 }
-$('sans-abo-aide').addEventListener('click', () => show('view-support'));
-document.querySelectorAll('.bell-btn[data-tab], .aide-card[data-tab]').forEach((b) => b.addEventListener('click', () => show(`view-${b.dataset.tab}`)));
+$('sans-abo-aide').addEventListener('click', () => ouvrirOnglet('support'));
+document.querySelectorAll('.bell-btn[data-tab], .aide-card[data-tab]').forEach((b) => b.addEventListener('click', () => ouvrirOnglet(b.dataset.tab)));
+
+const VUES_ONGLETS = ['notifs', 'profile', 'support'];
+
+// Sur un onglet de la barre du bas : Photos ou Messages ouverts par la barre, Notifications, Profil, Aide.
+function surUnOnglet() {
+  return document.body.classList.contains('depuis-barre') || VUES_ONGLETS.some((v) => !$(`view-${v}`).hidden);
+}
+
+// Notifications, Profil, Aide : une entrée d'historique au-dessus de l'accueil, remplacée d'un onglet à l'autre.
+function ouvrirOnglet(nom) {
+  const etat = { vue: nom };
+  if (surUnOnglet()) remplacer(etat);
+  else empiler(etat);
+  stopPage?.();
+  stopPage = null;
+  page = null;
+  show(`view-${nom}`);
+}
 
 // Barre du bas : on change d'onglet sans empiler l'historique.
 document.querySelectorAll('.nav-item').forEach((btn) => {
   btn.addEventListener('click', () => {
-    const surOnglet = document.body.classList.contains('depuis-barre');
+    const surOnglet = surUnOnglet();
     if (btn.dataset.page) { if (!surOnglet) goHome(); openPage(btn.dataset.page, true, true); return; }
-    // On quitte Photos ou Messages par la barre : la page s'arrête, son entrée d'historique devient neutre.
-    if (surOnglet) { history.replaceState(null, ''); goHome(); }
-    if (btn.dataset.tab === 'home') goHome();
-    else show(`view-${btn.dataset.tab}`);
+    // Accueil depuis un onglet : comme « retour », l'entrée de l'onglet est juste au-dessus de l'accueil.
+    if (btn.dataset.tab === 'home') { if (surOnglet) history.back(); else goHome(); return; }
+    ouvrirOnglet(btn.dataset.tab);
   });
 });
 
@@ -236,19 +258,48 @@ document.querySelectorAll('.tile[data-page]').forEach((tile) => {
 document.querySelectorAll('.page .back').forEach((btn) => {
   btn.addEventListener('click', () => history.back());
 });
+
+// Chaque entrée d'historique connaît sa hauteur au-dessus de l'accueil (niveau).
+const niveau = () => history.state?.niveau || 0;
+function empiler(etat) { history.pushState({ ...etat, niveau: niveau() + 1 }, ''); }
+function remplacer(etat) { history.replaceState({ ...etat, niveau: niveau() }, ''); }
+
+// Retours faits par l'app (history.forward, history.go) : leur popstate ne change rien à l'écran.
+let retoursAnnules = 0;
+function annulerRetour() {
+  retoursAnnules++;
+  history.forward();
+}
+function redescendreSurAccueil() {
+  const n = niveau();
+  if (!n) return;
+  retoursAnnules++;
+  history.go(-n);
+}
+
 window.addEventListener('popstate', (e) => {
+  if (retoursAnnules > 0) { retoursAnnules--; return; }
+  // Une fenêtre de l'app (question, menu) : « retour » vaut « Annuler », l'écran ne bouge pas.
+  if (fermerFenetre()) { annulerRetour(); return; }
+  // Appel en cours ou qui sonne, guide de départ : « retour » ne fait rien (Raccrocher, Passer…).
+  if (!$('call').hidden || !$('incoming').hidden || document.querySelector('.guide-back')) { annulerRetour(); return; }
   // Une feuille ou la visionneuse ouverte se ferme d'abord.
   if (!$('viewer').hidden || !$('sheet-post').hidden || !$('sheet-reminder').hidden || !$('sheet-wifi').hidden) {
     closeSheets();
     closeViewer();
     return;
   }
+  // Connexion, installation, rejoindre une famille… : pas de page derrière, l'écran garde sa place.
+  const parcours = VUES_PARCOURS.find((v) => !$(v).hidden);
+  if (parcours && retourParcours(parcours)) { annulerRetour(); return; }
+  // Sous l'accueil : on demande avant de quitter (app Android).
+  if (e.state?.sortie) { proposerDeQuitter(true); return; }
   // Retour vers un onglet (Profil, depuis « Abonnement et paiement ») : on y revient, à la même carte.
-  if (e.state?.onglet === 'profile' && session) {
+  if (e.state?.vue && session) {
     stopPage?.();
     stopPage = null;
     page = null;
-    show('view-profile');
+    show(`view-${e.state.vue}`);
     if (e.state.carte) $(e.state.carte).scrollIntoView({ block: 'start' });
     return;
   }
@@ -256,6 +307,58 @@ window.addEventListener('popstate', (e) => {
   if (next && session) openPage(next, false, !!e.state.onglet);
   else goHome();
 });
+
+const VUES_PARCOURS = ['view-login', 'view-link-email', 'view-moi', 'view-invited', 'view-pending', 'view-join', 'view-setup'];
+
+// « Retour » sur un écran de parcours : son propre bouton Retour s'il en a un, sinon « Voulez-vous quitter ? »
+// (app Android). false : rien de prévu, l'historique suit son cours.
+function retourParcours(vue) {
+  const bouton = ['btn-join-back', 'setup-back', 'setup-check-back'].map($).find((b) => !b.hidden && b.offsetParent);
+  if (bouton) { bouton.click(); return true; }
+  // Le code de la tablette, venu de « Rejoindre une famille » : on y revient.
+  if (vue === 'view-setup' && setup.step === 'setup-code' && !session) { showJoin(myFamilies.length > 0); return true; }
+  // Vérification du code en cours : on attend sa réponse.
+  if (vue === 'view-setup' && setup.step === 'setup-check') return true;
+  if (!dansAppAndroid() || !peutFermer()) return false;
+  proposerDeQuitter(false);
+  return true;
+}
+
+// App Android : une entrée « sortie » sous l'accueil ; y revenir demande « Voulez-vous quitter Papote ? ».
+// Posée au premier toucher, sur l'accueil : Chrome saute au retour une entrée ajoutée sans geste.
+let sortiePosee = false;
+document.addEventListener('click', () => {
+  if (sortiePosee || history.state || !dansAppAndroid()) return;
+  sortiePosee = true;
+  history.replaceState({ sortie: true }, '');
+  history.pushState(null, '');
+}, true);
+
+function dansAppAndroid() {
+  try { return sessionStorage.getItem('papote.app') === '1'; } catch (e) { return false; }
+}
+
+// surSortie : on est déjà descendu sur l'entrée « sortie » ; « Rester » remonte sur l'accueil.
+let questionQuitter = false;
+async function proposerDeQuitter(surSortie) {
+  if (questionQuitter) return;
+  questionQuitter = true;
+  const quitter = await demanderQuitter();
+  questionQuitter = false;
+  if (quitter) quitterApp(surSortie);
+  else if (surSortie) annulerRetour();
+}
+
+// L'app Android sait fermer Papote (activité Quitter, lien papote://quitter) : elle l'annonce par ?quitter=1.
+function peutFermer() {
+  try { return sessionStorage.getItem('papote.quitter') === '1'; } catch (e) { return false; }
+}
+
+function quitterApp(surSortie) {
+  if (peutFermer()) { location.href = 'intent://quitter#Intent;scheme=papote;package=fr.mapapote.famille;end'; return; }
+  // Ancienne app Android, qui ne sait pas se fermer : un second retour quitte.
+  if (surSortie) notice('Appuyez encore une fois sur retour pour quitter Papote.');
+}
 
 // Les derniers envois d'un type, du plus récent au plus ancien.
 // Sans l'index Firestore (type + date), on lit les derniers envois et on trie ici.
@@ -430,7 +533,7 @@ function openViewer(post) {
   $('viewer-delete').hidden = !canDelete(post);
   $('viewer').hidden = false;
   $('viewer-caption').textContent = post.text || '';
-  history.pushState({ page, viewer: true }, '');
+  empiler({ page, viewer: true });
 }
 
 function closeViewer() {
@@ -887,7 +990,7 @@ function openAdd(kind) {
   setStatus('');
   syncAddSheet();
   $('sheet-post').hidden = false;
-  history.pushState({ page, sheet: true }, '');
+  empiler({ page, sheet: true });
 }
 
 // Légende : 60 caractères au plus (5 lignes à côté de la photo sur la tablette).
@@ -2054,7 +2157,7 @@ $('tile-call').addEventListener('click', async () => {
 // « Rappeler » depuis la notification d'appel manqué : une confirmation (qui sert aussi de geste
 // pour la caméra et le plein écran), puis l'appel vidéo part comme avec la tuile.
 async function offerCallBack() {
-  try { history.replaceState(null, '', location.pathname); } catch (e) { /* rien */ }
+  try { history.replaceState(history.state, '', location.pathname); } catch (e) { /* rien */ }
   if (!session || currentCall || callStarting || $('tile-call').disabled) return;
   if (!await askConfirm(`Rappeler ${session.family.name} en vidéo ?`, 'Appeler')) return;
   appelConfirme = true;
@@ -2557,8 +2660,8 @@ window.addEventListener('pageshow', (e) => {
   for (const [id, texte] of Object.entries(TEXTES_PORTAIL)) { $(id).disabled = false; $(id).textContent = texte; }
 });
 $('btn-abo-page').addEventListener('click', () => {
-  // Le Profil n'a pas d'entrée d'historique à lui : « retour » doit y ramener, pas à l'accueil.
-  history.replaceState({ onglet: 'profile', carte: 'abo-card' }, '');
+  // « Retour » ramène au Profil, à la carte de l'abonnement.
+  remplacer({ vue: 'profile', carte: 'abo-card' });
   openPage('abonnement');
 });
 
@@ -3024,7 +3127,7 @@ function barres(signal) {
 
 function ouvrirWifi() {
   $('sheet-wifi').hidden = false;
-  history.pushState({ page: 'settings', sheet: true }, '');
+  empiler({ page: 'settings', sheet: true });
   chercherReseaux();
 }
 $('wifi-modify').addEventListener('click', ouvrirWifi);
@@ -4895,8 +4998,10 @@ async function start() {
   // Ouvert par l'app Android Papote : ce téléphone sonnera par elle (voir push.js).
   if (params.get('natif')) rememberNativeToken(params.get('natif'));
   // Rouvert par l'app Android : ?pause=1 tant que le réglage n'est pas fait (sinon absent).
-  if (params.get('natif') || params.get('pause')) {
+  if (params.get('natif') || params.get('pause') || params.get('quitter')) {
     try { sessionStorage.setItem('papote.app', '1'); } catch (e) { /* rien */ }
+    // L'app Android sait se fermer (« Voulez-vous quitter Papote ? » puis « Quitter »).
+    if (params.get('quitter')) try { sessionStorage.setItem('papote.quitter', '1'); } catch (e) { /* rien */ }
     try { sessionStorage.setItem('papote.pause', params.get('pause') === '1' ? '1' : '0'); } catch (e) { /* rien */ }
   }
   // Arrivé par le lien ou le QR code d'invitation : le code est gardé le temps de se connecter.

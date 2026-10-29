@@ -251,7 +251,7 @@ $('rem-repeat').addEventListener('change', syncRepeatFields);
 function openSheet() {
   cacherDoublon();
   $('sheet-reminder').hidden = false;
-  history.pushState({ page: 'agenda', sheet: true }, '');
+  history.pushState({ page: 'agenda', sheet: true, niveau: (history.state?.niveau || 0) + 1 }, '');
 }
 
 $('add-reminder').addEventListener('click', () => {

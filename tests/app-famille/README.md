@@ -33,6 +33,7 @@ scénarios) ; utiliser plutôt
 | `reglages` | Réglages de la tablette, profil, thème, quitter la famille, deux familles, déconnexion |
 | `abonnement` | Annulation sous 30 jours, résiliation puis « garder », relier une commande, payer depuis l'app, pause |
 | `horsligne` | Envois gardés sans réseau, partis au retour du réseau ou à la prochaine ouverture |
+| `retour` | Bouton retour d'Android : chaque écran revient à celui d'avant, une fenêtre se ferme, « Voulez-vous quitter Papote ? » dans l'app Android |
 
 Chaque test échoue aussi s'il y a une erreur dans la console, une fenêtre grise du navigateur
 (confirm/alert) ou une erreur dans une fonction serveur.
