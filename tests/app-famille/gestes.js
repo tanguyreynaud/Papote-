@@ -155,7 +155,7 @@ async function seConnecter(t, email, suite = '') {
 }
 
 /** « Vos informations » : prénom, femme/homme, photo, numéro de téléphone, anniversaire. */
-async function remplirMoi(t, { prenom, genre = 'femme', tel = '06 12 34 56 78', jour = '12', mois = '5', annee = '1985' }) {
+async function remplirMoi(t, { prenom, genre = 'femme', tel = '0612345678', jour = '12', mois = '5', annee = '1985' }) {
   await attendreVue(t, 'view-moi');
   await t.page.fill('#moi-prenom', prenom);
   await t.page.fill('#moi-tel', tel);
