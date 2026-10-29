@@ -1,7 +1,7 @@
 // Essai de qualité de l'appel vidéo sur SIM, pour UNE famille (sa tablette) : families/{fid}.forfaitSim.visio.
 //
 //   node visio-sim.js T-003                : affiche le réglage en cours
-//   node visio-sim.js T-003 300 100        : image reçue 300 kbit/s, Mamie envoyée 100 kbit/s (normal : 300 / 100)
+//   node visio-sim.js T-003 300 100        : image reçue 300 kbit/s, Mamie envoyée 100 kbit/s (normal : 500 / 120)
 //   node visio-sim.js T-003 normal         : retire l'essai, réglage normal
 //
 // T-003 = numéro de la tablette (fiche stock/{id}.ref, reliée à sa famille), ou directement l'identifiant de la famille.
@@ -41,7 +41,7 @@ const app = admin.initializeApp({ credential: admin.credential.cert(require(keyP
     famille = await db.doc(`families/${fid}`).get();
   }
   const visio = (famille.get('forfaitSim') || {}).visio;
-  const etat = () => (visio ? `essai : reçu ${visio.reception} kbit/s, envoyé ${visio.envoi} kbit/s` : 'réglage normal (reçu 300, envoyé 100)');
+  const etat = () => (visio ? `essai : reçu ${visio.reception} kbit/s, envoyé ${visio.envoi} kbit/s` : 'réglage normal (reçu 500, envoyé 120)');
   console.log(`${famille.get('name') || fid} (${fid}), base ${db.databaseId} : ${etat()}`);
   if (!a) process.exit(0);
 

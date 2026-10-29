@@ -283,21 +283,25 @@ const CAMERA = {
 // Débit de la vidéo envoyée par la tablette, réglé après la négociation (capVideo).
 // Sur la carte SIM (pas de Wi-Fi), mode « économie », réparti selon l'écran (Tanguy, 28/10) : la
 // famille regarde Mamie sur un petit téléphone, Mamie regarde la famille sur la grande tablette.
-// Mamie est filmée en 400x300, 12 i/s, 100 kbit/s (elle bouge peu : on garde la netteté, quitte à
-// perdre des images) ; la vidéo du proche est demandée à 300 kbit/s. Réglage « Éco » choisi par Tanguy
-// le 29/10 après essai sur T-003 (qualité jugée suffisante) : ≈ 3,5 Mo la minute au lieu de 4,4 avec
-// 500 / 120 kbit/s, soit environ 2 h 20 de visio par mois sur un forfait d'1 Go.
+// Mamie est filmée en 400x300, 12 i/s, 120 kbit/s (elle bouge peu : on garde la netteté, quitte à
+// perdre des images) ; la vidéo du proche est demandée à 500 kbit/s. Mesuré sur T-003 : 4,4 Mo la minute
+// (≈ 2 h de visio par mois sur 1 Go, le reste du mois compris). Décision de Tanguy du 29/10 : pleine
+// qualité par défaut, puis les paliers du garde-fou prennent le relais (ci-dessous).
 // Sur Wi-Fi : 640x480, 20 i/s, 700 kbit/s (au-delà, rien de plus en 480p), réception sans plafond.
 const VIDEO_MAX_BITRATE = 700_000;
-const SIM_SEND_BITRATE = 100_000;
-const SIM_RECEIVE_KBPS = 300;
-// Garde-fou du forfait (Forfait.java, pont simBudget) : palier 1 (60 % du forfait) = visio réduite
-// (Mamie en 320x240 à 60 kbit/s, le proche demandé à 150 kbit/s : ≈ 1,6 Mo la minute) ; palier 2
-// (85 %) = appels sans image, le son seul. Jamais sur le Wi-Fi.
-const ECO_SEND_BITRATE = 60_000;
-const ECO_RECEIVE_KBPS = 150;
+const SIM_SEND_BITRATE = 120_000;
+const SIM_RECEIVE_KBPS = 500;
+// Garde-fou du forfait (Forfait.java, pont simBudget), jamais sur le Wi-Fi :
+//   palier 1 (70 %) « eco »   : Mamie à 100 kbit/s, le proche demandé à 300 : 2,8 Mo la minute (mesuré
+//                               29/10 sur T-003, 2 min 08 = 5,9 Mo, qualité jugée suffisante par Tanguy) ;
+//   palier 2 (88 %) « mini »  : Mamie en 320x240 à 60 kbit/s, le proche à 150 : ≈ 1,6 Mo la minute ;
+//   palier 3 (95 %) « audio » : appels sans image, le son seul (≈ 0,5 Mo la minute).
+const ECO_SEND_BITRATE = 100_000;
+const ECO_RECEIVE_KBPS = 300;
+const MINI_SEND_BITRATE = 60_000;
+const MINI_RECEIVE_KBPS = 150;
 // Essai de qualité sur SIM, réglé par l'admin pour une famille (families/{fid}.forfaitSim.visio =
-// { reception, envoi } en kbit/s, outils/admin/visio-sim.bat) : remplace 300 / 100 en régime « sim »
+// { reception, envoi } en kbit/s, outils/admin/visio-sim.bat) : remplace 500 / 120 en régime « sim »
 // seulement (ni sur le Wi-Fi, ni aux paliers du garde-fou). Absent ou 0 : réglage normal.
 function visioSim() {
   try {
@@ -318,7 +322,8 @@ function onSimData() {
     return false;
   }
 }
-// 'wifi' : rien ne compte ; 'sim' : économie ; 'eco' : forfait à 60 % ; 'audio' : forfait à 85 %.
+// 'wifi' : rien ne compte ; 'sim' : pleine qualité sur SIM ; 'eco' : forfait à 70 % ; 'mini' : 88 % ;
+// 'audio' : 95 %. Écrit tel quel dans answer.regime / offre.regime pour l'app famille (appel.js).
 function regime() {
   if (!onSimData()) return 'wifi';
   let niveau = 0;
@@ -326,7 +331,7 @@ function regime() {
     const a = android();
     if (a && a.simBudget) niveau = JSON.parse(a.simBudget()).niveau || 0;
   } catch (e) { /* ancienne app Android : pas de garde-fou */ }
-  return niveau >= 2 ? 'audio' : niveau >= 1 ? 'eco' : 'sim';
+  return niveau >= 3 ? 'audio' : niveau >= 2 ? 'mini' : niveau >= 1 ? 'eco' : 'sim';
 }
 // Appel sans image (forfait presque épuisé) : les voies vidéo sont fermées dans les deux sens.
 function sansImage(pc) {
@@ -340,7 +345,7 @@ function sansImage(pc) {
 function limitReceive(sdp) {
   const r = regime();
   if (r === 'wifi') return sdp;
-  const kbps = r === 'sim' ? visioSim().reception : ECO_RECEIVE_KBPS;
+  const kbps = r === 'sim' ? visioSim().reception : r === 'eco' ? ECO_RECEIVE_KBPS : MINI_RECEIVE_KBPS;
   // Ligne « b=AS » juste après la ligne « c= » de la section vidéo.
   const lines = sdp.split('\r\n');
   let inVideo = false;
@@ -358,18 +363,19 @@ function capVideo(pc) {
   try {
     const r = regime();
     const sim = r !== 'wifi';
-    const eco = r === 'eco' || r === 'audio';
-    const envoiSim = sim && !eco ? visioSim().envoi : 0;
+    const eco = r === 'eco';
+    const mini = r === 'mini' || r === 'audio';
+    const envoiSim = r === 'sim' ? visioSim().envoi : 0;
     pc.getSenders().forEach((s) => {
       if (!s.track || s.track.kind !== 'video' || !s.getParameters) return;
       const p = s.getParameters();
       if (!p.encodings || !p.encodings.length) p.encodings = [{}];
-      p.encodings[0].maxBitrate = eco ? ECO_SEND_BITRATE : sim ? envoiSim : VIDEO_MAX_BITRATE;
-      p.encodings[0].maxFramerate = eco ? 8 : sim ? 12 : 20;
+      p.encodings[0].maxBitrate = mini ? MINI_SEND_BITRATE : eco ? ECO_SEND_BITRATE : sim ? envoiSim : VIDEO_MAX_BITRATE;
+      p.encodings[0].maxFramerate = mini ? 8 : sim ? 12 : 20;
       // Quand Mamie bouge, l'encodeur perd des images plutôt que de la netteté.
       p.degradationPreference = 'maintain-resolution';
       try { s.track.contentHint = 'detail'; } catch (e) { /* ancien navigateur */ }
-      if (eco) p.encodings[0].scaleResolutionDownBy = 2; // 640x480 -> 320x240
+      if (mini) p.encodings[0].scaleResolutionDownBy = 2; // 640x480 -> 320x240
       else if (sim) p.encodings[0].scaleResolutionDownBy = 1.6; // 640x480 -> environ 400x300 (petit écran en face)
       s.setParameters(p).catch(() => {});
     });
@@ -843,7 +849,7 @@ async function connectAnswer(id, data, callRef, stream) {
   // « regime » (eco | audio) : le forfait de la tablette est presque épuisé, l'app famille l'explique.
   const r = regime();
   const answer = { type: reply.type, sdp: limitReceive(reply.sdp), reseau: r === 'wifi' ? 'wifi' : 'sim' };
-  if (r === 'eco' || r === 'audio') answer.regime = r;
+  if (r !== 'wifi' && r !== 'sim') answer.regime = r; // eco | mini | audio (un ancien téléphone traite « mini » comme « eco »)
   await updateDoc(callRef, { answer, state: 'accepted' });
 
   active.stops.push(onSnapshot(collection(callRef, 'callerCandidates'), (snap) => {
@@ -1044,7 +1050,7 @@ window.papoteCallFamily = ({ to = null, toName = null, sos = 0, onState = () => 
     // « reseau » : le téléphone règle sa vidéo selon le réseau de la tablette (règles du 28/10 requises).
     const r = regime();
     const offre = { type: offer.type, sdp: limitReceive(offer.sdp), reseau: r === 'wifi' ? 'wifi' : 'sim' };
-    if (r === 'eco' || r === 'audio') offre.regime = r; // forfait presque épuisé : l'app famille l'explique
+    if (r !== 'wifi' && r !== 'sim') offre.regime = r; // eco | mini | audio : forfait presque épuisé, l'app famille l'explique
     await updateDoc(ref, { offer: offre });
     const tOffre = Math.round(performance.now() - t0);
     if (tOffre > 3000) reportCallIncident('depart-lent', `appel-ecrit+micro=${tEcrit}ms offre=${tOffre}ms`, ref.id);

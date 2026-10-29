@@ -16,9 +16,11 @@ import java.util.TimeZone;
  * La tablette compte les Mo RÉELLEMENT passés par la carte SIM depuis le début du cycle de recharge
  * (compteur Android, le même que la page « Forfaits SIM » de l'admin) et se retient par paliers :
  *   niveau 0 : rien ne change ;
- *   niveau 1 (70 %) : la visio sur SIM passe en qualité réduite (≈ 1,6 Mo la minute au lieu de 5) ;
- *   niveau 2 (88 %) : plus d'image dans les appels sur SIM, le son seul (≈ 0,5 Mo la minute) ;
- *   niveau 3 (95 %) : plus de vidéos reçues, de météo ni de mise à jour sur SIM (textes et photos passent).
+ *   niveau 1 (70 %) : la visio sur SIM passe en « Éco » (2,8 Mo la minute au lieu de 4,4, encore nette) ;
+ *   niveau 2 (88 %) : visio réduite (≈ 1,6 Mo la minute) ;
+ *   niveau 3 (95 %) : plus d'image dans les appels (le son seul), plus de vidéos reçues, de météo ni de
+ *                     mise à jour sur SIM (textes et photos passent).
+ * Décision de Tanguy du 29/10 : « 2 h de visio en pleine qualité, puis jusqu'à 3 h en qualité réduite ».
  * Sur le Wi-Fi, aucune limite, jamais. Les appels SOS passent toujours (en audio au pire).
  *
  * Réglage par la famille (families/{fid}.forfaitSim, écrit par l'admin) : { mo, jour | debut }.
@@ -26,11 +28,11 @@ import java.util.TimeZone;
  *   jour  : jour du mois où le forfait repart (1 par défaut) ;
  *   debut : date « aaaa-mm-jj » d'une recharge, pour les pass de 30 jours (Lyca) : cycles de 30 jours.
  *   visio : { reception, envoi } en kbit/s, réglage d'essai de la visio sur SIM (outils/admin/visio-sim.bat) ;
- *           absent = réglage de la page (appels.js : 300 reçus, 100 envoyés). Jamais appliqué sur le Wi-Fi.
+ *           absent = réglage de la page (appels.js : 500 reçus, 120 envoyés). Jamais appliqué sur le Wi-Fi.
  */
 final class Forfait {
     static final long DEFAUT_MO = 1000;
-    static final int ECO = 70, AUDIO = 88, TEXTE = 95; // pour cent du forfait (1 Go : 1 h 45 de visio normale, puis réduite)
+    static final int ECO = 70, MINI = 88, AUDIO = 95; // pour cent du forfait (1 Go : ≈ 2 h de visio normale, puis Éco, réduite, son seul)
     static final long CYCLE_MS = 30L * 24 * 3600_000;
     private static final String TAG = "Papote";
 
@@ -100,12 +102,12 @@ final class Forfait {
         return SimInfo.dataDepuisMb(c, debutCycleMs(c));
     }
 
-    /** Palier atteint : 0 (rien), 1 (économie), 2 (audio seul), 3 (textes et photos seulement). */
+    /** Palier atteint : 0 (rien), 1 (visio Éco), 2 (visio réduite), 3 (son seul, textes et photos seulement). */
     static int niveau(long plafondMo, long consoMo) {
         if (plafondMo <= 0 || consoMo < 0) return 0;
         long pourCent = consoMo * 100 / plafondMo;
-        if (pourCent >= TEXTE) return 3;
-        if (pourCent >= AUDIO) return 2;
+        if (pourCent >= AUDIO) return 3;
+        if (pourCent >= MINI) return 2;
         if (pourCent >= ECO) return 1;
         return 0;
     }
@@ -150,7 +152,7 @@ final class Forfait {
             if (p.getInt("forfaitNiveau", 0) != niveau) {
                 p.edit().putInt("forfaitNiveau", niveau).apply();
                 Journal.log(c, "Forfait SIM : " + conso + " Mo sur " + plafond + ", palier " + niveau
-                        + (niveau == 0 ? " (normal)" : niveau == 1 ? " (visio réduite)" : niveau == 2 ? " (appels sans image)" : " (ni vidéo, ni météo, ni mise à jour)"));
+                        + (niveau == 0 ? " (normal)" : niveau == 1 ? " (visio Éco)" : niveau == 2 ? " (visio réduite)" : " (appels sans image, ni vidéo, ni météo, ni mise à jour)"));
             }
         } catch (Exception e) {
             Log.w(TAG, "Forfait", e);
