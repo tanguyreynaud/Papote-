@@ -13,7 +13,7 @@
 <meta property="og:locale" content="fr_FR">
 <meta property="og:url" content="https://mapapote.fr/">
 <meta property="og:title" content="Papote · Toute la famille près de Mamie, sans qu'elle touche à rien">
-<meta property="og:description" content="Photos, vidéos, messages et appels vidéo arrivent tout seuls sur une tablette simple, prêtée et prête à l'emploi. 20 € par mois, sans engagement.">
+<meta property="og:description" content="Photos, vidéos, messages et appels vidéo arrivent tout seuls sur une tablette simple, prêtée et prête à l'emploi, connexion 4G comprise. 25 € par mois tout compris, sans engagement.">
 <meta property="og:image" content="https://mapapote.fr/mamie.jpg">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
@@ -171,7 +171,7 @@ section { padding-block: clamp(3rem, 7vw, 5rem); }
 .included li { font-size: 1.02rem; }
 .offre-options { display: grid; gap: .75rem; align-content: start; }
 .offre-options h3 { font-size: 1.05rem; color: var(--muted); font-weight: 700; }
-.option { display: grid; grid-template-columns: 1.6rem minmax(0, 1fr) auto; gap: .2rem .8rem; align-items: start; padding: .9rem 1rem; border: 2px solid var(--line); border-radius: 16px; cursor: pointer; }
+.option { display: grid; grid-template-columns: minmax(0, 1fr); gap: .2rem .8rem; align-items: start; padding: .9rem 1rem; border: 2px solid var(--line); border-radius: 16px; }
 .option:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
 .option input { width: 1.4rem; height: 1.4rem; margin: .15rem 0 0; accent-color: var(--accent); }
 .option b { display: block; font-size: 1.05rem; }
@@ -234,14 +234,14 @@ footer a { color: var(--muted); }
         <p class="eyebrow">Zéro clic pour Mamie</p>
         <h1>Toute la famille près de Mamie. <span>Sans qu'elle touche à rien.</span></h1>
         <p class="lead">Les photos des petits, les mots doux et les appels vidéo arrivent tout seuls sur sa tablette. Elle regarde, elle sourit, elle vous voit.</p>
-        <p class="prix-ligne"><b>20 €</b> par mois<span>Sans engagement · tablette prêtée · livraison offerte</span></p>
+        <p class="prix-ligne"><b>25 €</b> par mois, tout compris<span>Sans engagement · tablette et connexion 4G · livraison offerte</span></p>
         <div class="hero-actions">
           <a class="btn btn-primary js-commander" href="commande.html">Commander</a>
           <a class="btn btn-ghost" href="#fonctionnement">Comment ça marche</a>
         </div>
         <p class="rassure"><span class="coche">30 jours pour changer d'avis</span><span class="coche">Préparée et vérifiée à Lyon</span></p>
-        <p class="precommande js-precommande" hidden>Je prépare et vérifie chaque tablette moi-même, une par une. En ce moment, la vôtre est prête sous 7 à 10 jours ouvrés, puis Mondial Relay la livre en 3 à 5 jours ouvrés.</p>
-        <p class="precommande js-attente-longue" hidden>Beaucoup de commandes en ce moment : je prépare et vérifie chaque tablette moi-même, une par une, à Lyon. La vôtre part sous 3 à 4 semaines, puis Mondial Relay la livre en 3 à 5 jours ouvrés. Rien de plus n'est prélevé avant la réception, et vous pouvez annuler à tout moment avant l'envoi : les 60 € vous sont remboursés tout de suite.</p>
+        <p class="precommande js-precommande" hidden>Je prépare et vérifie chaque tablette moi-même, une par une. En ce moment, la vôtre est prête avec sa carte SIM sous 2 à 3 semaines, puis Mondial Relay la livre en 3 à 5 jours ouvrés.</p>
+        <p class="precommande js-attente-longue" hidden>Beaucoup de commandes en ce moment : je prépare et vérifie chaque tablette moi-même, une par une, à Lyon. La vôtre part sous 4 à 5 semaines, puis Mondial Relay la livre en 3 à 5 jours ouvrés. Rien de plus n'est prélevé avant la réception, et vous pouvez annuler à tout moment avant l'envoi : les 60 € vous sont remboursés tout de suite.</p>
       </div>
       <figure class="scene">
         <div class="scene-rang">
@@ -286,7 +286,7 @@ footer a { color: var(--muted); }
         </div>
         <div class="moment">
           <span class="quand">Chaque fin de mois</span>
-          <span class="combien">20 € <small>ou 30 € avec internet inclus</small></span>
+          <span class="combien">25 € <small>tout compris</small></span>
           <p>Payés une fois le mois écoulé, par prélèvement. Sans engagement : vous arrêtez quand vous voulez depuis l'appli.</p>
         </div>
       </div>
@@ -374,33 +374,32 @@ footer a { color: var(--muted); }
       </div>
       <form class="offre" id="offre" action="commande.html">
         <div class="offre-base">
-          <div class="price"><strong id="offre-prix">20 €</strong><span>par mois, sans engagement</span></div>
+          <div class="price"><strong id="offre-prix">25 €</strong><span>par mois tout compris, sans engagement</span></div>
           <p class="mes"><b>+ 60 €</b> une seule fois à la commande, pour la mise en service.</p>
           <ul class="included">
-            <li class="coche">Tablette prêtée, livrée prête à l'emploi, livraison offerte</li>
+            <li class="coche">Tablette prêtée avec sa carte SIM 4G, livrée prête à l'emploi, livraison offerte</li>
             <li class="coche">Appli famille pour tous vos proches, sans supplément</li>
             <li class="coche">Photos, vidéos, messages, agenda, appels vidéo</li>
             <li class="coche">30 jours pour changer d'avis, les 60 € remboursés</li>
           </ul>
         </div>
         <div class="offre-options">
-          <h3>Chez votre proche, il y a :</h3>
-          <label class="option">
-            <input type="radio" name="formule" value="wifi" checked>
-            <span><b>Une box internet (Wi-Fi)</b><small>La tablette s'y connecte : vous nous donnez le mot de passe à la commande.</small></span>
-            <span class="option-prix">20 €</span>
-          </label>
-          <label class="option">
-            <input type="radio" name="formule" value="sim">
-            <span><b>Pas de box, ou je ne sais pas</b><small>Internet inclus : la tablette a sa propre connexion 4G, rien à régler.</small></span>
-            <span class="option-prix">30 €</span>
-          </label>
+          <h3>Pas besoin de box internet</h3>
+          <div class="option">
+            <span><b>Connexion 4G comprise</b><small>La tablette a sa propre carte SIM : elle se connecte toute seule, rien à régler.</small></span>
+          </div>
+          <div class="option">
+            <span><b>Chaque mois sur la carte SIM</b><small>2 h d'appels vidéo en pleine qualité, puis jusqu'à 3 h en qualité réduite, et 50 photos + 20 vidéos.</small></span>
+          </div>
+          <div class="option">
+            <span><b>Une box chez votre proche&nbsp;?</b><small>Ajoutez son <span class="insecable">Wi-Fi</span> quand vous voulez depuis l'appli : tout devient illimité, au même prix.</small></span>
+          </div>
           <button class="btn btn-primary offre-btn js-commander" type="submit">Commander</button>
         </div>
       </form>
       <p class="plans-note">Prix par tablette. L'abonnement commence à la réception et chaque mois est payé une fois écoulé, par carte bancaire ou prélèvement SEPA. Résiliation à tout moment depuis l'appli : le mois en cours est le dernier payé.</p>
-      <p class="precommande js-precommande" hidden>Je prépare et vérifie chaque tablette moi-même, une par une. En ce moment, la vôtre est prête sous 7 à 10 jours ouvrés, puis Mondial Relay la livre en 3 à 5 jours ouvrés.</p>
-      <p class="precommande js-attente-longue" hidden>Beaucoup de commandes en ce moment : je prépare et vérifie chaque tablette moi-même, une par une, à Lyon. La vôtre part sous 3 à 4 semaines, puis Mondial Relay la livre en 3 à 5 jours ouvrés. Rien de plus n'est prélevé avant la réception, et vous pouvez annuler à tout moment avant l'envoi : les 60 € vous sont remboursés tout de suite.</p>
+      <p class="precommande js-precommande" hidden>Je prépare et vérifie chaque tablette moi-même, une par une. En ce moment, la vôtre est prête avec sa carte SIM sous 2 à 3 semaines, puis Mondial Relay la livre en 3 à 5 jours ouvrés.</p>
+      <p class="precommande js-attente-longue" hidden>Beaucoup de commandes en ce moment : je prépare et vérifie chaque tablette moi-même, une par une, à Lyon. La vôtre part sous 4 à 5 semaines, puis Mondial Relay la livre en 3 à 5 jours ouvrés. Rien de plus n'est prélevé avant la réception, et vous pouvez annuler à tout moment avant l'envoi : les 60 € vous sont remboursés tout de suite.</p>
     </div>
   </section>
 
@@ -418,11 +417,11 @@ footer a { color: var(--muted); }
         </details>
         <details>
           <summary>Comment se passe l'installation&nbsp;?</summary>
-          <p>La tablette arrive prête. Vous la branchez, vous la connectez au wifi si besoin, puis vous scannez le QR code affiché à l'écran avec votre téléphone, ou vous tapez un code court sur app.mapapote.fr. Votre famille est créée à ce moment-là : vous choisissez le nom affiché, vous envoyez une première photo, vous essayez le son et vous vérifiez les options. Il ne reste qu'à inviter vos proches. C'est fait en quelques minutes.</p>
+          <p>La tablette arrive prête. Vous la branchez, elle se connecte toute seule grâce à sa carte SIM, puis vous scannez le QR code affiché à l'écran avec votre téléphone, ou vous tapez un code court sur app.mapapote.fr. Votre famille est créée à ce moment-là : vous choisissez le nom affiché, vous envoyez une première photo, vous essayez le son et vous vérifiez les options. Il ne reste qu'à inviter vos proches. C'est fait en quelques minutes.</p>
         </details>
         <details>
           <summary>Faut-il une box internet chez mon proche&nbsp;?</summary>
-          <p>Non. Sans box, prenez l'option internet inclus : nous fournissons la connexion 4G avec sa carte SIM, prête à l'emploi. Rien à configurer.</p>
+          <p>Non. La tablette a sa propre carte SIM 4G, comprise dans le prix : elle se connecte toute seule. Chaque mois, la carte permet 2 h d'appels vidéo en pleine qualité, puis jusqu'à 3 h en qualité réduite, et 50 photos + 20 vidéos. Si votre proche a une box, ajoutez son <span class="insecable">Wi-Fi</span> depuis l'appli : tout devient illimité, au même prix.</p>
         </details>
         <details>
           <summary>Je veux l'offrir, comment faire&nbsp;?</summary>
@@ -452,7 +451,7 @@ footer a { color: var(--muted); }
           </details>
           <details>
             <summary>Comment la tablette est-elle livrée&nbsp;?</summary>
-            <p>Gratuitement, en point relais Mondial Relay, en France, en Belgique ou au Luxembourg : vous choisissez le point qui vous arrange au moment de commander, près de chez vous ou de chez votre proche. Je prépare et vérifie chaque tablette moi-même : votre commande est prête sous 2 à 3 jours ouvrés quand la tablette est en stock (jusqu'à 10 jours ouvrés sinon, et 3 à 4 semaines quand les commandes affluent), puis Mondial Relay la livre en 3 à 5 jours ouvrés. Le délai est affiché avant de payer. Dès que la tablette part, vous recevez un e-mail avec le lien de suivi, puis un message de Mondial Relay quand elle vous attend.</p>
+            <p>Gratuitement, en point relais Mondial Relay, en France métropolitaine : vous choisissez le point qui vous arrange au moment de commander, près de chez vous ou de chez votre proche. Je prépare et vérifie chaque tablette moi-même : et j'ouvre sa carte SIM : votre commande est prête sous 7 à 10 jours ouvrés quand la tablette est en stock (2 à 3 semaines sinon, et 4 à 5 semaines quand les commandes affluent), puis Mondial Relay la livre en 3 à 5 jours ouvrés. Le délai est affiché avant de payer. Dès que la tablette part, vous recevez un e-mail avec le lien de suivi, puis un message de Mondial Relay quand elle vous attend.</p>
           </details>
           <details>
             <summary>Qui peut envoyer des photos&nbsp;?</summary>
@@ -514,25 +513,21 @@ footer a { color: var(--muted); }
       .then(function (d) {
         // Stock vide mais commandes encore possibles : délai de préparation plus long (stock.js).
         if (d.precommande) document.querySelectorAll('.js-precommande').forEach(function (p) { p.hidden = false; });
-        // Au-delà de stock + 10 : commandes toujours ouvertes, expédition sous 3 à 4 semaines.
+        // Au-delà de stock + 10 : commandes toujours ouvertes, expédition sous 4 à 5 semaines.
         if (d.attenteLongue) document.querySelectorAll('.js-attente-longue').forEach(function (p) { p.hidden = false; });
       })
       .catch(function () {}); // panne : affichage normal, commander revérifie le stock côté serveur
   })();
 </script>
 <script>
-  // Tarifs : abonnement 20 €, 30 € avec internet inclus ; le choix est repris sur la page de commande.
+  // Tarif unique (29/10/2026) : 25 € par mois tout compris, carte SIM incluse.
   (function () {
     var offre = document.getElementById('offre');
     if (!offre) return;
-    function sim() { return offre.formule.value === 'sim'; }
-    function maj() { document.getElementById('offre-prix').textContent = (sim() ? 30 : 20) + ' €'; }
-    offre.addEventListener('change', maj);
     offre.addEventListener('submit', function (e) {
       e.preventDefault();
-      location.href = 'commande.html' + (sim() ? '?formule=sim' : '');
+      location.href = 'commande.html';
     });
-    maj();
   })();
 </script>
 <script>

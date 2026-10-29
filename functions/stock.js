@@ -1,7 +1,8 @@
 // Délai annoncé selon le stock réel (Tanguy, 2026-10-21) : les commandes ne ferment jamais.
-//   en stock                       : préparée sous 2 à 3 jours ouvrés ;
-//   au-delà, jusqu'à stock + 10    : précommande, préparée sous 7 à 10 jours ouvrés (PRECOMMANDES) ;
-//   au-delà de stock + 10          : attente longue, expédition sous 3 à 4 semaines.
+//   en stock                       : préparée sous 7 à 10 jours ouvrés ;
+//   au-delà, jusqu'à stock + 10    : précommande, préparée sous 2 à 3 semaines (PRECOMMANDES) ;
+//   au-delà de stock + 10          : attente longue, expédition sous 4 à 5 semaines.
+// Une semaine de plus depuis l'offre unique (29/10/2026) : la ligne SIM est ouverte à la commande.
 //
 // Disponibles = fiches du stock libres (en stock ou préparées, sans commande)
 //             - commandes payées pas encore reliées à une fiche
@@ -89,7 +90,7 @@ async function liberer(db, id) {
 
 // Lecture publique pour le site : { disponible, precommande, attenteLongue } (vrai/faux), pas de nombre.
 // disponible : toujours vrai (les commandes ne ferment plus) ; precommande : plus de tablette en stock,
-// préparée sous 7 à 10 jours ouvrés ; attenteLongue : au-delà de stock + 10, expédition sous 3 à 4 semaines.
+// préparée sous 2 à 3 semaines ; attenteLongue : au-delà de stock + 10, expédition sous 4 à 5 semaines.
 function routeDisponible(db, logger) {
   return async (req, res) => {
     try {

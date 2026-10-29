@@ -8,9 +8,9 @@
 
 const TARIFS = {
   papote_wifi_incluse: { montant: 2000, recurrent: true },
-  papote_sim_incluse: { montant: 3000, recurrent: true },
+  papote_sim_incluse: { montant: 2500, recurrent: true },
   papote_wifi_achetee: { montant: 2000, recurrent: true },
-  papote_sim_achetee: { montant: 3000, recurrent: true },
+  papote_sim_achetee: { montant: 2500, recurrent: true },
   papote_mise_en_service: { montant: 6000, recurrent: false },
 };
 

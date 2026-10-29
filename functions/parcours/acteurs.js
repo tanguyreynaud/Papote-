@@ -57,7 +57,7 @@ async function preparerEtEnvoyer(commande, tablette, suivi = '12345678') {
 // ---------- Le client sur le site vitrine ----------
 
 // commande.html → « Payer » : la fonction commander ouvre la page Stripe. Renvoie l'id de la session.
-async function commanderSurLeSite({ formule = 'wifi', email, accord = true, essai = true } = {}) {
+async function commanderSurLeSite({ formule = 'sim', email, accord = true, essai = true } = {}) {
   const r = await s.requete('commander', {
     query: { formule, tablette: 'incluse', ...RELAIS, ...(email ? { email } : {}), ...(accord ? { accord: '1' } : {}), ...(essai ? { essai: '' } : {}) },
   });
@@ -68,7 +68,7 @@ async function commanderSurLeSite({ formule = 'wifi', email, accord = true, essa
 }
 
 // Commande + paiement : renvoie { session, abonnement } (abonnement = id de la commande).
-async function commanderEtPayer({ email, nom = 'Paul Martin', formule = 'wifi', sepaEnAttente = false } = {}) {
+async function commanderEtPayer({ email, nom = 'Paul Martin', formule = 'sim', sepaEnAttente = false } = {}) {
   const session = await commanderSurLeSite({ formule, email });
   const { abonnement } = s.stripe.payerSession(session, { email, nom, sepaEnAttente });
   await s.calme();

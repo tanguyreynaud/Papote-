@@ -62,6 +62,15 @@ test('formules', () => {
   assert.strictEqual(a.formuleValide('4g', 'incluse'), false);
 });
 
+test('offre unique : tout compris avec la carte SIM, même depuis un ancien lien Wi-Fi', () => {
+  assert.strictEqual(a.formuleVendue('sim', 'incluse'), 'sim');
+  assert.strictEqual(a.formuleVendue('wifi', 'incluse'), 'sim');
+  assert.strictEqual(a.formuleVendue(undefined), 'sim');
+  assert.strictEqual(a.formuleVendue('', 'incluse'), 'sim');
+  assert.strictEqual(a.formuleVendue('sim', 'achetee'), null);
+  assert.strictEqual(a.formuleVendue('4g', 'incluse'), null);
+});
+
 test('résiliation sans engagement : à la fin du mois payé', () => {
   const periode = T0 + 10 * JOUR;
   assert.strictEqual(a.dateResiliation(periode, T0), periode);
@@ -69,10 +78,11 @@ test('résiliation sans engagement : à la fin du mois payé', () => {
 });
 
 test('rien prélevé avant la réception : date de premier prélèvement d\'après le délai annoncé, jamais d\'« essai gratuit »', () => {
-  assert.strictEqual(a.premierPrelevementMs('stock', T0), T0 + 33 * JOUR);
-  assert.strictEqual(a.premierPrelevementMs('precommande', T0), T0 + 40 * JOUR);
-  assert.strictEqual(a.premierPrelevementMs('long', T0), T0 + 58 * JOUR);
-  assert.strictEqual(a.premierPrelevementMs(undefined, T0), T0 + 58 * JOUR, 'délai inconnu : le plus long');
+  // Une semaine de plus depuis l'offre unique (ligne SIM ouverte à la commande).
+  assert.strictEqual(a.premierPrelevementMs('stock', T0), T0 + 40 * JOUR);
+  assert.strictEqual(a.premierPrelevementMs('precommande', T0), T0 + 47 * JOUR);
+  assert.strictEqual(a.premierPrelevementMs('long', T0), T0 + 65 * JOUR);
+  assert.strictEqual(a.premierPrelevementMs(undefined, T0), T0 + 65 * JOUR, 'délai inconnu : le plus long');
   assert.strictEqual(a.premierPrelevementMs('stock', T0, { dejaInstallee: true }), T0 + 30 * JOUR);
   // Abonnement Stripe : trial recalé à l'envoi, ou date de départ pas encore atteinte, sinon rien.
   assert.strictEqual(a.premierPrelevementDe({ status: 'trialing', trial_end: (T0 + JOUR) / 1000 }, T0), T0 + JOUR);

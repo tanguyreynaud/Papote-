@@ -232,7 +232,7 @@ test('résiliation après le premier mois : dernier mois prélevé, rappel de re
   assert.strictEqual((await s.lire(`families/${fid}`)).abonnement.statut, 'resilie');
   let c = await commande(id);
   assert.strictEqual(c.dernierMois.statut, 'fait', 'mois écoulé prélevé à l\'arrêt');
-  assert.strictEqual(c.dernierMois.montant, 2000);
+  assert.strictEqual(c.dernierMois.montant, 2500, 'offre unique : 25 €');
   assert.strictEqual(c.restitution.statut, 'attendue');
   assert.ok(mailsA(paul.email).some((m) => /rendre la tablette/i.test(m)));
 

@@ -17,10 +17,13 @@
       .then(function (r) { return r.ok ? r.json() : {}; })
       .then(function (d) {
         // Stock vide mais commandes encore possibles : délai de préparation plus long (stock.js).
-        // Au-delà de stock + 10 : attente longue (3 à 4 semaines), la commande reste possible.
+        // Au-delà de stock + 10 : attente longue (4 à 5 semaines), la commande reste possible.
         var bloc = d.attenteLongue ? 'attente-longue' : d.precommande ? 'precommande' : null;
         if (bloc) {
-          var montrer = function () { var p = document.getElementById(bloc); if (p) p.hidden = false; };
+          var montrer = function () {
+            var p = document.getElementById(bloc); if (p) p.hidden = false;
+            var e = document.getElementById('en-stock'); if (e) e.hidden = true;
+          };
           if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', montrer); else montrer();
         }
       })
@@ -48,7 +51,8 @@
 @font-face { font-family: "Bricolage repli A"; src: local("Arial Bold"), local("Arial-BoldMT"); font-weight: 600 800; size-adjust: 100.5%; }
 </style>
 <style>
-/* Commande en trois étapes (26/10, mobile d'abord) : internet chez le proche, point relais, qui retire le colis.
+/* Commande en deux étapes (mobile d'abord) : point relais, qui retire le colis. Plus de question « internet chez le
+   proche ? » depuis l'offre unique tout compris (29/10/2026) : la carte SIM est toujours fournie.
    Le prix et le bouton Payer restent dans une barre fixée en bas de l'écran. */
 :root { --bg: #fdfaf5; --surface: #ffffff; --text: #24212f; --muted: #5f5a6b; --line: #e9e1d4; --accent: #4f46e5; --accent-strong: #3730a3; --accent-text: #ffffff; --accent-soft: #e8e6fd; --warm-soft: #e8e6fd; color-scheme: light; }
 * { box-sizing: border-box; }
@@ -142,28 +146,22 @@ body .ps-bouton { bottom: 6.5rem; }
   </div>
   <div>
     <h1>Votre commande</h1>
-    <p class="sous">Trois étapes, deux minutes. Livraison offerte, 30 jours pour changer d'avis.</p>
+    <p class="sous">Deux étapes, deux minutes. Livraison offerte, 30 jours pour changer d'avis.</p>
   </div>
   <p class="reprise" id="reprise" hidden>Votre commande vous attend : tout est déjà rempli, il ne reste que le paiement.</p>
 
-  <form class="etape" id="recap">
-    <h2><span class="n">1</span>Y a-t-il internet chez votre proche ?<span class="ok" id="ok1" hidden>✓</span></h2>
-    <label class="opt"><input type="radio" name="internet" value="oui" checked><span><span>Oui, une box <span class="insecable">Wi-Fi</span></span><small>La tablette utilise son <span class="insecable">Wi-Fi</span></small></span><span class="prix">20 €/mois</span></label>
-    <label class="opt"><input type="radio" name="internet" value="non"><span>Non, ou je ne sais pas<small>Internet inclus, rien à régler</small></span><span class="prix">30 €/mois</span></label>
-  </form>
-
   <section class="etape" id="etape-relais">
-    <h2><span class="n">2</span>Où retirer le colis ?<span class="ok" id="ok2" hidden>✓</span></h2>
+    <h2><span class="n">1</span>Où retirer le colis ?<span class="ok" id="ok1" hidden>✓</span></h2>
     <form class="cherche" id="cherche">
       <input id="cp" inputmode="numeric" autocomplete="postal-code" required maxlength="10" placeholder="Code postal" aria-label="Code postal">
       <button type="button" id="autour">📍 Autour de moi</button>
     </form>
     <div class="pays-ville" id="pays-ville" hidden>
-      <label id="pays-champ">Pays<select id="pays"><option value="fr">France</option><option value="be">Belgique</option><option value="lu">Luxembourg</option></select></label>
+      <label id="pays-champ">Pays<select id="pays"><option value="fr">France</option></select></label>
       <label id="ville-champ" hidden>Ville<select id="ville"></select></label>
       <label id="ville-libre" hidden>Ville<input id="ville-texte" autocomplete="address-level2" maxlength="60"></label>
     </div>
-    <p class="petit">Points relais Mondial Relay les plus proches, près de chez vous ou de chez votre proche. <button class="lien" type="button" id="autre-pays">Belgique ou Luxembourg ?</button></p>
+    <p class="petit">Points relais Mondial Relay les plus proches, près de chez vous ou de chez votre proche.</p>
     <p class="erreur" id="erreur-position" hidden>Impossible de trouver votre position. Tapez votre code postal.</p>
     <p class="muted" id="recherche" hidden>Recherche des points relais…</p>
     <div class="points" id="points" hidden></div>
@@ -177,7 +175,7 @@ body .ps-bouton { bottom: 6.5rem; }
   </section>
 
   <section class="etape" id="etape-qui">
-    <h2><span class="n">3</span>Qui retire le colis ?<span class="ok" id="ok3" hidden>✓</span></h2>
+    <h2><span class="n">2</span>Qui retire le colis ?<span class="ok" id="ok2" hidden>✓</span></h2>
     <label class="champ" id="qui">Prénom et nom
       <input id="destinataire" autocomplete="name" maxlength="80" placeholder="Prénom et nom">
       <small>Comme sur la pièce d'identité présentée au point relais.</small>
@@ -194,11 +192,12 @@ body .ps-bouton { bottom: 6.5rem; }
 
   <section class="etape resume">
     <p><span>Aujourd'hui, mise en service</span><b>60 €</b></p>
-    <p><span>Chaque mois, à partir de la réception, payé une fois écoulé</span><b id="mensuel">20 €</b></p>
-    <p><span>Tablette prêtée, livraison, appli famille</span><b>inclus</b></p>
+    <p><span>Chaque mois, à partir de la réception, payé une fois écoulé</span><b id="mensuel">25 €</b></p>
+    <p><span>Tablette prêtée, carte SIM 4G, livraison, appli famille</span><b>inclus</b></p>
     <p class="total"><span>À payer maintenant</span><b>60 €</b></p>
-    <p class="precommande" id="precommande" hidden>Je prépare et vérifie chaque tablette moi-même, une par une. En ce moment, la vôtre est prête sous 7 à 10 jours ouvrés, puis Mondial Relay la livre en 3 à 5 jours ouvrés.</p>
-    <p class="precommande" id="attente-longue" hidden>Beaucoup de commandes en ce moment : je prépare et vérifie chaque tablette moi-même, une par une, à Lyon. La vôtre part sous 3 à 4 semaines, puis Mondial Relay la livre en 3 à 5 jours ouvrés. Rien de plus n'est prélevé avant la réception, et vous pouvez annuler à tout moment avant l'envoi : les 60 € vous sont remboursés tout de suite.</p>
+    <p class="precommande" id="en-stock">Je prépare et vérifie votre tablette moi-même et j'ouvre sa carte SIM : elle est prête sous 7 à 10 jours ouvrés, puis Mondial Relay la livre en 3 à 5 jours ouvrés.</p>
+    <p class="precommande" id="precommande" hidden>Je prépare et vérifie chaque tablette moi-même, une par une. En ce moment, la vôtre est prête avec sa carte SIM sous 2 à 3 semaines, puis Mondial Relay la livre en 3 à 5 jours ouvrés.</p>
+    <p class="precommande" id="attente-longue" hidden>Beaucoup de commandes en ce moment : je prépare et vérifie chaque tablette moi-même, une par une, à Lyon. La vôtre part sous 4 à 5 semaines, puis Mondial Relay la livre en 3 à 5 jours ouvrés. Rien de plus n'est prélevé avant la réception, et vous pouvez annuler à tout moment avant l'envoi : les 60 € vous sont remboursés tout de suite.</p>
     <details class="ensuite">
       <summary>Et ensuite ?</summary>
       <p>Le premier prélèvement mensuel a lieu 30 jours après la réception. Sans engagement : vous résiliez quand vous voulez depuis l'appli, le mois en cours est le dernier payé.</p>
@@ -211,7 +210,7 @@ body .ps-bouton { bottom: 6.5rem; }
 
 <div class="barre">
   <div class="barre-in">
-    <div><b>60 € aujourd'hui</b><small id="barre-mensuel">puis 20 € par mois, sans engagement</small></div>
+    <div><b>60 € aujourd'hui</b><small id="barre-mensuel">puis 25 € par mois tout compris, sans engagement</small></div>
     <a class="btn" id="payer" href="#" aria-disabled="true">Payer 60 €</a>
   </div>
   <p class="manque" id="manque" hidden></p>
@@ -232,9 +231,6 @@ body .ps-bouton { bottom: 6.5rem; }
   var SENDCLOUD_CLE = 'f8875927-f7be-4ad7-ac24-22fd11c0efc5';
   var COMMANDER = 'https://europe-west1-papote-famille.cloudfunctions.net/commander';
   var q = new URLSearchParams(location.search);
-  var recap = document.getElementById('recap');
-  var sansInternet = function () { return recap.internet.value === 'non'; };
-  recap.internet.value = q.get('formule') === 'sim' ? 'non' : 'oui';
   var relais = null;
 
   var payer = document.getElementById('payer');
@@ -242,18 +238,9 @@ body .ps-bouton { bottom: 6.5rem; }
   var destinataire = document.getElementById('destinataire');
   var champEmail = document.getElementById('email');
   var accord = document.getElementById('accord');
-  var ok = [1, 2, 3].map(function (i) { return document.getElementById('ok' + i); });
+  var ok = [1, 2].map(function (i) { return document.getElementById('ok' + i); });
 
-  // Prix : abonnement 20 €, ou 30 € avec internet inclus ; 60 € de mise en service à la commande.
-  function maj() {
-    var mensuel = (sansInternet() ? 30 : 20) + ' €';
-    document.getElementById('mensuel').textContent = mensuel;
-    document.getElementById('barre-mensuel').textContent = 'puis ' + mensuel + ' par mois, sans engagement';
-    ok[0].hidden = false;
-    lienPaiement();
-    retenir();
-  }
-  recap.addEventListener('change', maj);
+  // Prix : offre unique, 25 € par mois tout compris (carte SIM incluse) ; 60 € de mise en service à la commande.
 
   // Payer : point relais choisi ET prénom + nom de la personne qui retire le colis ET e-mail.
   // La barre reste visible : quand il manque quelque chose, elle le dit, et le bouton y mène.
@@ -263,13 +250,13 @@ body .ps-bouton { bottom: 6.5rem; }
     var mel = champEmail.value.trim();
     var melOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mel);
     var nomOk = nom.split(' ').length >= 2;
-    ok[1].hidden = !relais;
-    ok[2].hidden = !(nomOk && melOk);
+    ok[0].hidden = !relais;
+    ok[1].hidden = !(nomOk && melOk);
     if (!relais || !nomOk || !melOk) {
       payer.removeAttribute('href');
       payer.setAttribute('aria-disabled', 'true');
-      manque.textContent = !relais ? 'Il reste à choisir un point relais (étape 2).'
-        : !nomOk ? 'Il reste à indiquer votre prénom et votre nom (étape 3).' : 'Il reste à indiquer votre e-mail (étape 3).';
+      manque.textContent = !relais ? 'Il reste à choisir un point relais (étape 1).'
+        : !nomOk ? 'Il reste à indiquer votre prénom et votre nom (étape 2).' : 'Il reste à indiquer votre e-mail (étape 2).';
       manque.hidden = !(nom || mel || relais);
       cible = !relais ? document.getElementById('etape-relais') : !nomOk ? destinataire : champEmail;
       return;
@@ -278,7 +265,7 @@ body .ps-bouton { bottom: 6.5rem; }
     cible = null;
     var params = new URLSearchParams({
       rdest: nom, email: mel, accord: accord.checked ? '1' : '0',
-      formule: sansInternet() ? 'sim' : 'wifi', tablette: 'incluse',
+      formule: 'sim', tablette: 'incluse',
       relais: String(relais.id), rnom: relais.name, radr: relais.adresse,
       rcp: relais.postal_code, rville: relais.city, rpays: (relais.country || 'FR').toUpperCase()
     });
@@ -344,12 +331,9 @@ body .ps-bouton { bottom: 6.5rem; }
   var voirCarte = document.getElementById('voir-carte');
   var derniere = '';
 
-  // Belgique ou Luxembourg : le pays et la ville ne sont montrés qu'à la demande.
+  // Livraison en France seulement depuis l'offre unique (29/10/2026) : la carte SIM est française. Le choix du pays
+  // reste dans la page (une seule option) pour que la recherche des points relais ne change pas.
   var paysVille = document.getElementById('pays-ville');
-  document.getElementById('autre-pays').addEventListener('click', function () {
-    paysVille.hidden = false;
-    pays.focus();
-  });
 
   // Un code postal peut couvrir plusieurs villes : la ville choisie précise la recherche.
   var villeChamp = document.getElementById('ville-champ');
@@ -572,7 +556,7 @@ body .ps-bouton { bottom: 6.5rem; }
   function retenir() {
     try {
       sessionStorage.setItem(CLE, JSON.stringify({
-        t: Date.now(), internet: recap.internet.value, cp: cp.value, pays: pays.value,
+        t: Date.now(), cp: cp.value, pays: pays.value,
         relais: relais, nom: destinataire.value, email: champEmail.value, accord: accord.checked
       }));
     } catch (_) {}
@@ -581,7 +565,6 @@ body .ps-bouton { bottom: 6.5rem; }
     var d = null;
     try { d = JSON.parse(sessionStorage.getItem(CLE) || 'null'); } catch (_) {}
     if (!d || !d.t || Date.now() - d.t > 3600000) return;
-    if (!q.get('formule') && d.internet) recap.internet.value = d.internet;
     if (d.cp) cp.value = d.cp;
     if (d.pays) pays.value = d.pays;
     destinataire.value = d.nom || '';
