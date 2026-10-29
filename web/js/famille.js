@@ -3357,11 +3357,13 @@ const renderTel = () => { if (session?.member) $('my-tel-value').textContent = t
 
 SETTINGS['my-tel-card'] = {
   fill() {
-    $('my-tel').value = telPropre(session.member.telephone);
+    $('my-tel').value = telPropre(session.member.telephone).replace(/ /g, '');
+    showError($('my-tel-error'), '');
   },
   async save() {
     const tel = telPropre($('my-tel').value);
-    if (!tel) { toast($('my-tel').value.trim() ? TEL_INVALIDE : TEL_MANQUANT); return false; }
+    showError($('my-tel-error'), tel ? '' : $('my-tel').value.trim() ? TEL_INVALIDE : TEL_MANQUANT);
+    if (!tel) return false;
     if (tel === telPropre(session.member.telephone)) return true;
     await updateDoc(doc(db, 'families', session.fid, 'members', session.uid), { telephone: tel });
     session.member.telephone = tel;
@@ -4193,8 +4195,18 @@ function telPropre(v) {
   if (!/^0[67]\d{8}$/.test(t)) return '';
   return t.replace(/(\d{2})(?=\d)/g, '$1 ');
 }
-const TEL_MANQUANT = 'Indiquez votre numéro de portable : votre proche vous appelle à ce numéro depuis sa tablette.';
-const TEL_INVALIDE = 'Indiquez un numéro de portable français (06 ou 07, 10 chiffres, par exemple 06 12 34 56 78).';
+const TEL_MANQUANT = 'Indiquez votre numéro de portable.';
+const TEL_INVALIDE = 'Numéro incomplet : 10 chiffres (06 ou 07), ou +33 suivi de 9 chiffres.';
+// À la frappe : seulement des chiffres, avec « + » possible en tête ; 10 caractères (06…) ou 12 (+33…), rien d'autre.
+function telALaFrappe(el) {
+  const plus = el.value.trimStart().startsWith('+');
+  const chiffres = el.value.replace(/\D/g, '');
+  const propre = (plus ? `+${chiffres}` : chiffres).slice(0, plus ? 12 : 10);
+  if (propre !== el.value) el.value = propre;
+}
+document.addEventListener('input', (e) => {
+  if (e.target.type === 'tel' && e.target.autocomplete === 'tel') telALaFrappe(e.target);
+}, true);
 let setup = { code: null, step: null }; // code de la tablette réservée
 let stopSetupPairing = null;
 let setupPhoto = null;
@@ -4245,7 +4257,7 @@ function showMoi() {
   $('moi-jour').value = a ? String(a.day) : '';
   $('moi-mois').value = a ? String(a.month) : '';
   $('moi-annee').value = a?.year ? String(a.year) : '';
-  $('moi-tel').value = savedTel();
+  $('moi-tel').value = savedTel().replace(/ /g, '');
   $('moi-error').hidden = true;
   moiComplet();
   show('view-moi');
