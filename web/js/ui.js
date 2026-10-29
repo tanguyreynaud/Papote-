@@ -1,5 +1,8 @@
 // Fenêtres de l'app à la place des confirm() et alert() du navigateur, jugées vieillottes.
 
+// Fenêtres ouvertes, la plus récente en dernier : le bouton retour d'Android ferme la dernière.
+const ouvertes = [];
+
 function dialog(message, buttons, extra = null) {
   return new Promise((resolve) => {
     const back = document.createElement('div');
@@ -13,6 +16,8 @@ function dialog(message, buttons, extra = null) {
     const row = document.createElement('div');
     row.className = extra?.stack ? 'dialog-buttons stack' : 'dialog-buttons';
     const close = (value) => {
+      if (back.classList.contains('closing')) return;
+      ouvertes.splice(ouvertes.indexOf(close), 1);
       back.classList.add('closing');
       setTimeout(() => back.remove(), 150);
       resolve(value);
@@ -62,6 +67,7 @@ function dialog(message, buttons, extra = null) {
     box.append(row);
     back.append(box);
     document.body.append(back);
+    ouvertes.push(close);
     (extra?.stack ? row.firstChild : row.lastChild).focus();
   });
 }
@@ -104,4 +110,20 @@ export function chooseAction(title, options) {
 
 export function notice(message) {
   return dialog(message, [{ label: 'OK', value: true, cls: 'primary' }]);
+}
+
+/** Bouton retour d'Android : ferme la dernière fenêtre ouverte comme « Annuler ». false s'il n'y en a pas. */
+export function fermerFenetre() {
+  const close = ouvertes[ouvertes.length - 1];
+  if (!close) return false;
+  close(false);
+  return true;
+}
+
+/** Retour arrière qui fermerait l'app : on demande d'abord. true = quitter. */
+export function demanderQuitter() {
+  return dialog('Voulez-vous quitter Papote ?', [
+    { label: 'Rester', value: false, cls: 'secondary' },
+    { label: 'Quitter', value: true, cls: 'primary' },
+  ]);
 }
