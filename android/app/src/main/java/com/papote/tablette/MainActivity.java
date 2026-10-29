@@ -74,9 +74,9 @@ public class MainActivity extends Activity implements Sync.Listener {
     /** Dernier « fenêtre ouverte » dit par la page (0 = aucune), et dernier carillon d'un envoi. */
     private volatile long fenetreVueA;
     private volatile long dernierCarillon;
-    /** Envois d'affilée, avant que le premier s'affiche : un seul carillon dans ce délai (remis à zéro
-     * dès qu'une fenêtre se referme). */
-    private static final long CARILLON_UNE_FOIS_MS = 90_000;
+    /** Envois arrivés ensemble (quelques secondes, avant que le premier s'affiche) : un seul carillon.
+     * Sinon seul l'écran en cours compte (Tanguy, 29/10 : pas de pause de 90 s). */
+    private static final long CARILLON_UNE_FOIS_MS = 10_000;
     private Wifi wifi;
     private SmsAlert smsAlert;
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -479,9 +479,6 @@ public class MainActivity extends Activity implements Sync.Listener {
         /** La page redit chaque seconde si une fenêtre (envoi, rappel, appel…) est ouverte. */
         @JavascriptInterface
         public void fenetre(boolean ouverte) {
-            // Fenêtre refermée, retour à l'accueil : le prochain envoi sonne de nouveau tout de suite
-            // (Tanguy, 29/10 : la vidéo arrivée juste après une photo vue n'avait pas sonné).
-            if (!ouverte && fenetreVueA != 0) dernierCarillon = 0;
             fenetreVueA = ouverte ? SystemClock.elapsedRealtime() : 0;
         }
 
@@ -772,8 +769,8 @@ public class MainActivity extends Activity implements Sync.Listener {
         handler.post(() -> {
             long now = SystemClock.elapsedRealtime();
             // Une fenêtre est déjà ouverte (envoi affiché, rappel…) : pas de carillon par-dessus,
-            // l'envoi attend son tour dans la file (Tanguy, 29/10). Plusieurs envois d'affilée
-            // (5 photos choisies d'un coup) : un seul carillon, pas un par envoi.
+            // l'envoi attend son tour dans la file (Tanguy, 29/10). Plusieurs envois arrivés ensemble :
+            // un seul carillon, pas un par envoi.
             boolean fenetre = fenetreVueA != 0 && now - fenetreVueA < 3_000;
             boolean dejaSonne = carillonEnCours() || (dernierCarillon != 0 && now - dernierCarillon < CARILLON_UNE_FOIS_MS);
             if (fenetre || dejaSonne) {

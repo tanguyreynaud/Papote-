@@ -393,3 +393,29 @@ test('carillon d\'un nouvel envoi : pas par-dessus une fenêtre ouverte, normal 
     await sansErreur(b);
   } finally { await b.fermer(); }
 });
+
+test('envoi de 3 photos : elles passent l\'une après l\'autre en grand, toutes les 6 s, jusqu\'à OK', async () => {
+  const b = await ouvrir();
+  try {
+    const e = envoi({ text: 'Trois photos' });
+    e.images = [`${e.image}?2`, `${e.image}?3`];
+    await b.android('onPosts', lot([e]));
+    await b.avancer(500);
+    const affichee = () => b.page.evaluate(() => document.querySelector('#overlay-img').getAttribute('data-url') || document.querySelector('#overlay-img').getAttribute('src'));
+    const vues = [await affichee()];
+    await b.avancer(6000); vues.push(await affichee());
+    await b.avancer(6000); vues.push(await affichee());
+    await b.avancer(6000); vues.push(await affichee());
+    assert.deepStrictEqual(vues, [e.image, e.images[0], e.images[1], e.image], 'les 3 photos, en boucle');
+    await b.toucher('#overlay-close');
+    await b.avancer(6500);
+    assert.ok(!(await b.visible('#overlay')), 'OK ferme');
+    // Diaporama : chaque photo garde la légende du proche (pas « Photo 1 sur 3 »).
+    await b.toucher('#home-frame');
+    for (let i = 0; i < 3; i++) {
+      assert.strictEqual(await b.texte('#photo-text'), 'Trois photos');
+      await b.toucher('#photo-next');
+    }
+    await sansErreur(b);
+  } finally { await b.fermer(); }
+});

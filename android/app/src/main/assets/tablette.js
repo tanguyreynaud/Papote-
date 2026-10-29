@@ -452,8 +452,9 @@
     }
     preloadNext();
     signWithFace($('photo-who'), p, p.authorName + ', ' + dayLabel(p.createdAt));
-    var partLabel = p.parts > 1 ? 'Photo ' + p.part + ' sur ' + p.parts : '';
-    var caption = p.text && partLabel ? p.text + ' · ' + partLabel : (p.text || partLabel);
+    // La légende du proche seule, pour chaque photo d'un envoi de plusieurs (plus de « Photo 1 sur 3 »
+    // à sa place quand il n'a rien écrit : Tanguy, 29/10).
+    var caption = legende(p.text);
     $('photo-text').textContent = caption;
     show($('photo-text'), !!caption);
     // En boucle : les flèches marchent toujours (sauf s'il n'y a qu'une photo).
@@ -755,23 +756,6 @@
     // Message : le mot seul sur toute la largeur, signé du prénom (pas de photo de profil : jugée moche).
     var papier = mode === 'photo' || mode === 'video' || mode === 'message';
     $('overlay').className = 'overlay ln mode-' + mode + (papier ? ' papier' : '') + (mode === 'message' ? ' seul' : '');
-    // Photo en paysage : elle prend toute la largeur, le mot passe dessous en bandeau.
-    if (mode === 'photo') {
-      var probe = new Image();
-      $('overlay').style.removeProperty('--photo-ratio');
-      probe.onload = function () {
-        if (overlayPost !== p || !probe.naturalHeight) return;
-        // En hauteur : la place de la photo suit ses proportions (photo entière, sans fond flou).
-        $('overlay').style.setProperty('--photo-ratio', String(probe.naturalWidth / probe.naturalHeight));
-        if (probe.naturalWidth > probe.naturalHeight * 1.1) {
-          $('overlay').className = 'overlay ln mode-photo papier wide';
-        }
-        // La carte change de largeur avec la photo : le texte est réajusté.
-        $('overlay-text').style.fontSize = '';
-        setTimeout(function () { ajusterTexte($('overlay-text')); }, 0);
-      };
-      probe.src = p.image;
-    }
     // Message ou photo : en haut, qui l'envoie (visage, prénom, quand) ; dessous, son mot ou sa légende.
     // Vocal ou vidéo : le visage au-dessus de « Une vidéo de … ».
     var text = mode === 'message' ? p.text
@@ -806,9 +790,18 @@
     show($('overlay-media-play'), mode === 'video');
     if (mode === 'video') videoPoster(p);
     if (mode === 'photo') {
-      setPicture($('overlay-img'), p.image);
-      $('overlay-img-bg').style.backgroundImage = 'none';
-      tinyCopy(p.image, function (bg) { $('overlay-img-bg').style.backgroundImage = bg; });
+      photoOverlay(p, p.image);
+      // Plusieurs photos dans le même envoi : elles passent l'une après l'autre en grand, toutes les
+      // 6 secondes et en boucle, jusqu'à OK (Tanguy, 29/10 : sur 3 photos, une seule s'affichait).
+      var toutes = [p.image].concat(p.images || []);
+      if (toutes.length > 1) {
+        var n = 0;
+        var tour = setInterval(function () {
+          if (overlayPost !== p) { clearInterval(tour); return; }
+          n = (n + 1) % toutes.length;
+          photoOverlay(p, toutes[n]);
+        }, OVERLAY_PHOTO_MS);
+      }
     }
     show($('ln-playzone'), media);
     $('overlay-play').className = 'ln-play';
@@ -823,6 +816,29 @@
       if (mode === 'message') markSeen(p);
       if (media) listenOverlay();
     }
+  }
+
+  var OVERLAY_PHOTO_MS = 6000;
+  // Une photo de l'envoi affiché, en grand. En paysage : elle prend toute la largeur, le mot passe
+  // dessous en bandeau ; en hauteur : la place de la photo suit ses proportions (entière, sans fond flou).
+  function photoOverlay(p, src) {
+    var probe = new Image();
+    $('overlay').style.removeProperty('--photo-ratio');
+    $('overlay').className = $('overlay').className.replace(' wide', '');
+    probe.onload = function () {
+      if (overlayPost !== p || !probe.naturalHeight) return;
+      $('overlay').style.setProperty('--photo-ratio', String(probe.naturalWidth / probe.naturalHeight));
+      if (probe.naturalWidth > probe.naturalHeight * 1.1) {
+        $('overlay').className = 'overlay ln mode-photo papier wide';
+      }
+      // La carte change de largeur avec la photo : le texte est réajusté.
+      $('overlay-text').style.fontSize = '';
+      setTimeout(function () { ajusterTexte($('overlay-text')); }, 0);
+    };
+    probe.src = src;
+    setPicture($('overlay-img'), src);
+    $('overlay-img-bg').style.backgroundImage = 'none';
+    tinyCopy(src, function (bg) { $('overlay-img-bg').style.backgroundImage = bg; });
   }
 
   // « aujourd'hui à 14h30 », « hier à 9h05 », « il y a 3 jours »
