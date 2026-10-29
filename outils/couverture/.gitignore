@@ -1,0 +1,4 @@
+# Fichiers de l'ARCEP téléchargés par construire.py (300 Mo à 700 Mo)
+*.gpkg
+*.7z
+venv/

@@ -25,9 +25,12 @@ test('commande, envoi, installation par un autre proche, envois, appel, annulati
   assert.deepStrictEqual(params.payment_method_types, ['card', 'sepa_debit']);
   assert.strictEqual(params.tax_id_collection, undefined, 'plus de numéro de TVA sur la page de paiement');
   assert.strictEqual(params.subscription_data.trial_period_days, undefined, 'plus d\'« essai gratuit » sur la page de paiement');
-  assert.ok(Math.abs(params.subscription_data.billing_cycle_anchor * 1000 - (Date.now() + 33 * s.JOUR)) < 3600e3, 'premier prélèvement estimé : envoi 3 jours + 30');
+  assert.ok(Math.abs(Number(params.subscription_data.metadata.premier) * 1000 - (Date.now() + 37 * s.JOUR)) < 3600e3, 'premier prélèvement estimé : envoi 7 jours + 30');
+  // Stripe refuse plus d'un mois sur la page de paiement : 27 jours, puis la date voulue posée au paiement reçu.
+  assert.ok(Math.abs(params.subscription_data.billing_cycle_anchor * 1000 - (Date.now() + 27 * s.JOUR)) < 3600e3, 'page de paiement : 27 jours au plus');
   assert.strictEqual(params.subscription_data.proration_behavior, 'none', 'rien pour l\'abonnement aujourd\'hui');
   assert.match(params.custom_text.submit.message, /réception de la tablette/);
+  assert.match(params.custom_text.submit.message, /\[conditions générales de vente\]\(https:\/\/[^)]+\/cgv\.html\)/, 'CGV acceptées sur la page de paiement');
   assert.strictEqual(params.subscription_data.metadata.delai, 'stock');
   assert.ok(params.expires_at, 'la page de paiement expire (tablette mise de côté)');
   assert.strictEqual((await s.db.collection('reservations').get()).size, 1);
@@ -36,6 +39,8 @@ test('commande, envoi, installation par un autre proche, envois, appel, annulati
   await s.calme();
   let c = await commande(id);
   assert.strictEqual(c.expedition, 'a-preparer');
+  assert.ok(Math.abs(require('../abonnement').premierPrelevementDe(s.stripe.etat.abonnements.get(id), Date.now()) - (Date.now() + 37 * s.JOUR)) < 3600e3,
+    'au paiement reçu, le premier prélèvement passe à la date voulue (37 jours : envoi + 30)');
   assert.strictEqual(c.email, paul.email);
   assert.strictEqual(c.livraison.ville, 'SAINT MARTIN DE VALAMAS');
   assert.strictEqual(c.fid, null);
@@ -130,6 +135,38 @@ test('commande, envoi, installation par un autre proche, envois, appel, annulati
   assert.strictEqual(c.dernierMois, undefined, 'rien prélevé pour une annulation dans les 30 jours');
   assert.ok(mailsA(paul.email).some((m) => /rendre la tablette/i.test(m)), 'mode d\'emploi du retour envoyé à l\'acheteur');
   assert.strictEqual(s.stripe.rembourse(id), 0, 'remboursé seulement au retour de la tablette');
+  assert.strictEqual(s.sendcloud.colis.size, 0, 'aucune étiquette créée d\'office');
+  assert.strictEqual((await s.appeler('finDeContrat', { fid }, julie)).restitution.qr, null);
+
+  // Julie est prête à déposer le colis : « Je renvoie la tablette » crée le QR code (sans impression), une seule fois.
+  await s.db.doc('gestion/reglages').set({ expediteur: { nom: 'Papote', adresse: '1 rue de test', cp: '07000', ville: 'Privas' } }, { merge: true });
+  const qr = await s.appeler('renvoyerTablette', { fid }, julie);
+  assert.ok(qr.qr && qr.etiquette, 'QR code et PDF');
+  assert.strictEqual([...s.sendcloud.colis.values()][0].livraison, 'drop_off_labelless');
+  assert.deepStrictEqual(await s.appeler('renvoyerTablette', { fid }, julie), qr, 'le même QR, pas un second');
+  assert.strictEqual(s.sendcloud.colis.size, 1);
+  await s.calme();
+  assert.strictEqual((await s.appeler('finDeContrat', { fid }, julie)).restitution.qr, qr.qr);
+  assert.ok(mailsA(paul.email).some((m) => /QR code/.test(m)), 'QR code envoyé par e-mail');
+
+  // Pas déposé en 30 jours : la nuit, le QR est annulé (remboursé par Sendcloud) et Julie peut en redemander un.
+  const nuit = async () => {
+    const bilan = { erreurs: [] };
+    await require('../gestion').retoursNonDeposes(bilan, Date.now());
+    assert.deepStrictEqual(bilan.erreurs, []);
+  };
+  s.avancer(29);
+  await nuit();
+  assert.strictEqual([...s.sendcloud.colis.values()][0].annule, false, 'pas avant 30 jours');
+  s.avancer(2);
+  await nuit();
+  await s.calme();
+  assert.strictEqual([...s.sendcloud.colis.values()][0].annule, true, 'QR pas déposé annulé');
+  c = await commande(id);
+  assert.strictEqual(c.restitution.qr, undefined);
+  assert.strictEqual(c.etiquettes.retour, undefined);
+  const qr2 = await s.appeler('renvoyerTablette', { fid }, julie);
+  assert.notStrictEqual(qr2.qr, qr.qr, 'nouveau QR code');
 
   // 8. La tablette revient complète : les 60 € sont remboursés.
   await s.appeler('tabletteRendue', { commande: id }, a.TANGUY);

@@ -49,13 +49,15 @@ function adressePapote(e) {
 
 const kg = (o) => (o && o.value != null ? Number(o.value) * ({ g: 0.001, kg: 1 }[o.unit] || 1) : null);
 
-// Options Mondial Relay qui acceptent ce poids (kg) et le besoin (point relais, domicile ou retour),
+// Options Mondial Relay qui acceptent ce poids (kg) et le besoin (point relais, domicile, retour, ou retour
+// sans impression « retour-qr » : un QR code à montrer au point relais),
 // celles d'un contrat d'abord (contrat Mondial Relay du compte).
 function optionsPossibles(options, poids, besoin) {
   return (options || []).filter((o) => {
     if (!o || !o.code || (o.carrier && o.carrier.code !== TRANSPORTEUR)) return false;
     const f = o.functionalities || {};
-    if (besoin === 'retour' && !f.returns) return false;
+    if ((besoin === 'retour' || besoin === 'retour-qr') && !f.returns) return false;
+    if (besoin === 'retour-qr' && !f.labelless) return false;
     if (besoin === 'relais' && f.last_mile !== 'service_point') return false;
     if (besoin === 'domicile' && (f.returns || f.last_mile === 'service_point')) return false;
     const min = kg(o.weight && o.weight.min);
@@ -84,6 +86,14 @@ function colisLivre(corps) {
   return !!st && (st.id === 11 || /^delivered$/i.test(String(st.message || '')));
 }
 
+// Colis de retour pas encore déposé au point relais (étiquette ou QR créé, jamais scanné) : statuts Sendcloud
+// « No label » (999), « Ready to send » (1000), « Announced » (1), « Announced: not collected » (13).
+// Une étiquette annulée sans avoir servi est remboursée par Sendcloud (dans les 42 jours).
+const STATUTS_NON_DEPOSE = [1, 13, 999, 1000];
+function nonDepose(statut) {
+  return STATUTS_NON_DEPOSE.includes(Number(statut));
+}
+
 // Colis jamais retiré au point relais, renvoyé à l'expéditeur (étape Sendcloud « Returned to sender »,
 // « Return to sender »…) : Tanguy le recevra chez lui (A3).
 function retourExpediteur(etape) {
@@ -97,6 +107,7 @@ function suiviColis(corps) {
     suivi: p.tracking_number || null,
     lien: p.tracking_url || null,
     etape: (p.status && p.status.message) || null,
+    statut: p.status && p.status.id != null ? Number(p.status.id) : null,
     livre: colisLivre(corps),
   };
 }
@@ -129,11 +140,13 @@ function client(cles) {
       ...(pointRelais ? { to_service_point: { id: pointRelais } } : {}),
       carrier_code: TRANSPORTEUR,
       parcels: [{ weight: { value: String(poids), unit: 'kg' }, dimensions: DIMENSIONS }],
-      ...(besoin === 'retour' ? { functionalities: { returns: true } } : pointRelais ? {} : { functionalities: { last_mile: 'home_delivery' } }),
+      ...(besoin === 'retour' ? { functionalities: { returns: true } }
+        : besoin === 'retour-qr' ? { functionalities: { returns: true, labelless: true } }
+          : pointRelais ? {} : { functionalities: { last_mile: 'home_delivery' } }),
     });
     const liste = optionsPossibles(r && r.data, poids, besoin);
     if (!liste.length) {
-      throw new Error(`aucune offre Mondial Relay ${besoin === 'retour' ? 'de retour ' : ''}pour ce colis dans votre compte Sendcloud (${de.postal_code} → ${vers.postal_code}${r && r.message ? ` : ${r.message}` : ''}).`);
+      throw new Error(`aucune offre Mondial Relay ${besoin === 'retour-qr' ? 'de retour sans impression ' : besoin === 'retour' ? 'de retour ' : ''}pour ce colis dans votre compte Sendcloud (${de.postal_code} → ${vers.postal_code}${r && r.message ? ` : ${r.message}` : ''}).`);
     }
     return liste;
   }
@@ -151,10 +164,13 @@ function client(cles) {
     throw new Error(`Sendcloud refuse ${refus.length > 1 ? 'les offres' : 'l\'offre'} ${refus.join(' | ')}`);
   }
 
-  // Étiquette PDF d'un colis : elle peut mettre quelques secondes à être prête après l'annonce.
-  async function etiquette(colis) {
+  // Étiquette d'un colis, en PDF A4 ou en image PNG (le QR code d'un retour sans impression) : elle peut
+  // mettre quelques secondes à être prête après l'annonce.
+  async function etiquette(colis, format = 'pdf') {
+    const chemin = format === 'png' ? 'dpi=300' : 'paper_size=A4';
+    const type = format === 'png' ? 'image/png' : 'application/pdf';
     for (let essai = 0; essai < 6; essai++) {
-      const r = await fetch(`${API}/parcels/${colis}/documents/label?paper_size=A4`, { headers: { Authorization: auth, Accept: 'application/pdf' } });
+      const r = await fetch(`${API}/parcels/${colis}/documents/label?${chemin}`, { headers: { Authorization: auth, Accept: type } });
       if (r.ok) return Buffer.from(await r.arrayBuffer());
       await new Promise((ok) => setTimeout(ok, 2000));
     }
@@ -203,22 +219,37 @@ function client(cles) {
       const pdf = p.label_file ? Buffer.from(p.label_file, 'base64') : await etiquette(p.id);
       return { colis: p.id, suivi: p.tracking_number || null, lienSuivi: p.tracking_url || null, pdf };
     },
-    // Colis retour, déposé par le client dans un point relais : { colis, pdf }.
-    async retour({ de, vers, poids, reference }) {
-      const liste = await options(de, vers, null, poids, 'retour');
-      const r = await essayer(liste, (o) => appel('POST', '/returns/announce-synchronously', {
+    // Colis retour, déposé par le client dans un point relais : { colis, pdf, png, sansImpression }.
+    // sansImpression : d'abord l'offre « Retour - QR » (QR code à montrer au point relais, png), sinon
+    // l'étiquette classique à imprimer.
+    async retour({ de, vers, poids, reference, sansImpression = false }) {
+      const annoncer = (o, livraison) => appel('POST', '/returns/announce-synchronously', {
         from_address: de,
         to_address: vers,
         ship_with: { type: 'shipping_option_code', shipping_option_code: o.code, ...(o.contract && o.contract.id ? { contract: o.contract.id } : {}) },
         weight: { value: poids, unit: 'kg' },
         dimensions: DIMENSIONS,
-        delivery_option: 'drop_off_point',
+        delivery_option: livraison,
         order_number: reference,
-      }));
+      });
+      if (sansImpression) {
+        try {
+          const liste = await options(de, vers, null, poids, 'retour-qr');
+          const r = await essayer(liste, (o) => annoncer(o, 'drop_off_labelless'));
+          if (!r || !r.parcel_id) throw new Error(`Sendcloud : ${erreurLisible(r)}`);
+          const [pdf, png] = await Promise.all([etiquette(r.parcel_id), etiquette(r.parcel_id, 'png')]);
+          return { colis: r.parcel_id, pdf, png, sansImpression: true };
+        } catch (e) {
+          // Pas d'offre sans impression dans le compte : étiquette classique, et Papote le saura par les journaux.
+          require('firebase-functions/logger').warn(`Retour sans impression impossible, étiquette classique : ${e.message}`);
+        }
+      }
+      const liste = await options(de, vers, null, poids, 'retour');
+      const r = await essayer(liste, (o) => annoncer(o, 'drop_off_point'));
       if (!r || !r.parcel_id) throw new Error(`Sendcloud : ${erreurLisible(r)}`);
-      return { colis: r.parcel_id, pdf: await etiquette(r.parcel_id) };
+      return { colis: r.parcel_id, pdf: await etiquette(r.parcel_id), png: null, sansImpression: false };
     },
   };
 }
 
-module.exports = { adresseClient, adressePapote, choisirOption, optionsPossibles, erreurLisible, colisLivre, suiviColis, retourExpediteur, client };
+module.exports = { adresseClient, adressePapote, choisirOption, optionsPossibles, erreurLisible, colisLivre, suiviColis, retourExpediteur, nonDepose, client };

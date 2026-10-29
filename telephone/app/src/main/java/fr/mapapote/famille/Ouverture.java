@@ -160,6 +160,8 @@ public class Ouverture extends LauncherActivity {
         Uri.Builder url = super.getLaunchingUrl().buildUpon();
         String jeton = prefs(this).getString(JETON, null);
         if (jeton != null) url.appendQueryParameter("natif", jeton);
+        // L'app famille peut demander « Voulez-vous quitter Papote ? » puis fermer l'app (Quitter).
+        url.appendQueryParameter("quitter", "1");
         // Android 11+ met en pause une app pas ouverte depuis quelques mois : elle ne recevrait
         // plus les appels. Tant que ce n'est pas réglé, l'app famille affiche une carte qui mène
         // au bon réglage (ReglagePause).

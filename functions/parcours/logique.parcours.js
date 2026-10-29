@@ -149,7 +149,7 @@ test('abonnement résilié, tablette encore là : reprise sans les 60 €, retou
   const params = s.stripe.etat.sessions.get(session).params;
   assert.strictEqual(params.line_items.length, 1, 'l\'abonnement seul, pas de mise en service');
   assert.strictEqual(params.metadata.reprise, '1');
-  assert.ok(Math.abs(params.subscription_data.billing_cycle_anchor * 1000 - (Date.now() + 30 * s.JOUR)) < 3600e3, 'premier prélèvement à 30 jours');
+  assert.ok(Math.abs(Number(params.subscription_data.metadata.premier) * 1000 - (Date.now() + 30 * s.JOUR)) < 3600e3, 'premier prélèvement à 30 jours');
   assert.match(params.custom_text.submit.message, /^Rien à régler aujourd'hui/);
   const { abonnement: id2 } = s.stripe.payerSession(session, { email: paul.email });
   await s.calme();
@@ -284,17 +284,17 @@ test('pause hospitalisation : aucune alerte de tablette pendant la pause', async
   const { id, fid, t } = await familleAbonnee(paul);
   await premierMoisPasse(id);
   const tablette = s.db.doc(`families/${fid}/members/${t.tabletUid}`);
-  await tablette.update({ lastOnline: new Date(Date.now() - 3600e3) });
+  await tablette.update({ lastOnline: new Date(Date.now() - 3 * 3600e3) });
   s.notifications.length = 0;
   await s.tache('alertesTablettes');
-  assert.strictEqual(alertes().length, 1, 'tablette muette depuis 1 h : alerte');
+  assert.strictEqual(alertes().length, 1, 'tablette muette depuis 3 h : alerte');
   assert.match(alertes()[0].titre, /ne répond plus/);
 
   // La tablette revient, puis Mamie est hospitalisée : Tanguy met la commande en pause, la tablette reste éteinte.
   await tablette.update({ lastOnline: new Date(Date.now()) });
   await s.tache('alertesTablettes');
   await s.appeler('pauseHospitalisation', { commande: id, jusqua: Date.now() + 10 * s.JOUR }, a.TANGUY);
-  await tablette.update({ lastOnline: new Date(Date.now() - 3600e3) });
+  await tablette.update({ lastOnline: new Date(Date.now() - 3 * 3600e3) });
   s.notifications.length = 0;
   await s.tache('alertesTablettes');
   assert.strictEqual(alertes().length, 0, 'en pause : rien');
@@ -302,6 +302,8 @@ test('pause hospitalisation : aucune alerte de tablette pendant la pause', async
   s.avancer(11);
   await s.tache('alertesTablettes');
   assert.strictEqual(alertes().length, 1, 'pause finie : les alertes reprennent');
+  const { alertes: journal } = await s.appeler('gestionDonnees', {}, a.TANGUY);
+  assert.deepStrictEqual(journal.map((x) => x.genre), ['silence', 'silence'], 'deux alertes comptées pour l\'admin, aucune pendant la pause');
 });
 
 test('« N téléphones reçoivent les appels » : le serveur note sur chaque proche s\'il a un jeton', async () => {
@@ -321,4 +323,48 @@ test('« N téléphones reçoivent les appels » : le serveur note sur chaque pr
   await jetons.set({ natifs: ['jeton-android'] });
   await s.calme();
   assert.strictEqual((await membre.get()).get('recoitAppels'), true);
+});
+
+test('pas vue depuis deux jours : une alerte aux responsables, pas de rappel tant qu\'elle n\'est pas revue', async () => {
+  const paul = await s.compte('Paul', 'paul@exemple.fr');
+  const julie = await s.compte('Julie', 'julie@exemple.fr');
+  const marc = await s.compte('Marc', 'marc@exemple.fr');
+  const { fid, t } = await familleAbonnee(paul, julie);
+  await a.rejoindre(marc, fid);
+  await s.calme();
+  const tablette = s.db.doc(`families/${fid}/members/${t.tabletUid}`);
+  const H = 3600e3;
+  const enLigne = () => tablette.update({ lastOnline: new Date(Date.now()) });
+
+  await tablette.update({ lastSeen: new Date(Date.now() - 30 * H) });
+  await enLigne();
+  s.notifications.length = 0;
+  await s.tache('alerteMatin');
+  assert.strictEqual(alertes().length, 0, 'vue hier : rien');
+
+  s.avancer(1);
+  await enLigne();
+  await s.tache('alerteMatin');
+  assert.strictEqual(alertes().length, 1, 'plus de 48 h : alerte');
+  assert.match(alertes()[0].titre, /pas été vue depuis deux jours/);
+  assert.deepStrictEqual(alertes()[0].uids, [julie.uid], 'aux responsables seulement, pas à Marc');
+  s.avancer(1);
+  await enLigne();
+  await s.tache('alerteMatin');
+  assert.strictEqual(alertes().length, 1, 'le lendemain : pas de rappel, même épisode');
+
+  // Revue, puis de nouveau absente trois jours : nouvel épisode.
+  await tablette.update({ lastActive: new Date(Date.now()) });
+  await s.tache('alerteMatin');
+  assert.strictEqual(alertes().length, 1);
+  s.avancer(3);
+  await enLigne();
+  await s.tache('alerteMatin');
+  assert.strictEqual(alertes().length, 2, 'nouvel épisode : nouvelle alerte');
+
+  // Tablette hors ligne : « ne répond plus » s'en charge, pas d'alerte « pas vue » en plus.
+  await tablette.update({ lastActive: new Date(Date.now()) });
+  s.avancer(3);
+  await s.tache('alerteMatin');
+  assert.strictEqual(alertes().length, 2, 'hors ligne : rien');
 });

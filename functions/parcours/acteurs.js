@@ -8,6 +8,8 @@ const { createHash, randomBytes } = require('node:crypto');
 const RELAIS = {
   relais: 'FR-012345', rnom: 'Tabac de la Place', radr: '1 place de la Mairie', rcp: '07310',
   rville: 'SAINT MARTIN DE VALAMAS', rpays: 'FR', rdest: 'Paul Martin',
+  // Adresse du proche, couverture 4G vérifiée par commander (très bonne ici, carte ARCEP 2026_T2).
+  padr: '2 place de l\'Église 07310 Saint-Martin-de-Valamas', plat: '44.9369', plon: '4.3683',
 };
 
 // ---------- Tanguy : stock et admin ----------
@@ -57,7 +59,7 @@ async function preparerEtEnvoyer(commande, tablette, suivi = '12345678') {
 // ---------- Le client sur le site vitrine ----------
 
 // commande.html → « Payer » : la fonction commander ouvre la page Stripe. Renvoie l'id de la session.
-async function commanderSurLeSite({ formule = 'wifi', email, accord = true, essai = true } = {}) {
+async function commanderSurLeSite({ formule = 'sim', email, accord = true, essai = true } = {}) {
   const r = await s.requete('commander', {
     query: { formule, tablette: 'incluse', ...RELAIS, ...(email ? { email } : {}), ...(accord ? { accord: '1' } : {}), ...(essai ? { essai: '' } : {}) },
   });
@@ -68,7 +70,7 @@ async function commanderSurLeSite({ formule = 'wifi', email, accord = true, essa
 }
 
 // Commande + paiement : renvoie { session, abonnement } (abonnement = id de la commande).
-async function commanderEtPayer({ email, nom = 'Paul Martin', formule = 'wifi', sepaEnAttente = false } = {}) {
+async function commanderEtPayer({ email, nom = 'Paul Martin', formule = 'sim', sepaEnAttente = false } = {}) {
   const session = await commanderSurLeSite({ formule, email });
   const { abonnement } = s.stripe.payerSession(session, { email, nom, sepaEnAttente });
   await s.calme();

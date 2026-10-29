@@ -1,7 +1,9 @@
 // Délai annoncé selon le stock réel (Tanguy, 2026-10-21) : les commandes ne ferment jamais.
-//   en stock                       : préparée sous 2 à 3 jours ouvrés ;
-//   au-delà, jusqu'à stock + 10    : précommande, préparée sous 7 à 10 jours ouvrés (PRECOMMANDES) ;
-//   au-delà de stock + 10          : attente longue, expédition sous 3 à 4 semaines.
+//   en stock                       : 'stock' ;
+//   au-delà, jusqu'à stock + 10    : 'precommande' (PRECOMMANDES) ;
+//   au-delà de stock + 10          : 'long'.
+// Depuis le 29/10/2026, le client voit toujours « expédiée sous 3 à 5 jours ouvrés » : ce délai ne sert plus qu'à
+// prévenir Tanguy (e-mail de nouvelle commande) qu'il faut racheter des tablettes.
 //
 // Disponibles = fiches du stock libres (en stock ou préparées, sans commande)
 //             - commandes payées pas encore reliées à une fiche
@@ -88,8 +90,8 @@ async function liberer(db, id) {
 }
 
 // Lecture publique pour le site : { disponible, precommande, attenteLongue } (vrai/faux), pas de nombre.
-// disponible : toujours vrai (les commandes ne ferment plus) ; precommande : plus de tablette en stock,
-// préparée sous 7 à 10 jours ouvrés ; attenteLongue : au-delà de stock + 10, expédition sous 3 à 4 semaines.
+// disponible : toujours vrai (les commandes ne ferment plus) ; precommande : plus de tablette en stock ;
+// attenteLongue : au-delà de stock + 10. Le site ne les affiche plus (29/10/2026).
 function routeDisponible(db, logger) {
   return async (req, res) => {
     try {

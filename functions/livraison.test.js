@@ -9,6 +9,9 @@ test('point relais choisi sur le site', () => {
   const r = l.relaisDepuisRequete({ relais: '012345', rnom: ' Tabac  du Port ', radr: '2 rue Neuve', rcp: '64200', rville: 'Biarritz', rpays: 'fr' });
   assert.deepStrictEqual(r, { id: '012345', nom: 'Tabac du Port', adresse: '2 rue Neuve', cp: '64200', ville: 'Biarritz', pays: 'FR' });
   assert.strictEqual(l.relaisDepuisRequete({ relais: '012345', rnom: 'X', rcp: '1000', rville: 'Genève', rpays: 'CH' }), null);
+  // France seulement depuis l'offre unique : la carte SIM est française.
+  assert.strictEqual(l.relaisDepuisRequete({ relais: '012345', rnom: 'X', rcp: '1000', rville: 'Bruxelles', rpays: 'BE' }), null);
+  assert.strictEqual(l.relaisDepuisRequete({ relais: '012345', rnom: 'X', rcp: '1009', rville: 'Luxembourg', rpays: 'LU' }), null);
   assert.strictEqual(l.relaisDepuisRequete({ relais: '01 2"', rnom: 'X', rcp: '1', rville: 'Y' }), null);
   assert.strictEqual(l.relaisDepuisRequete({}), null);
   const d = l.relaisDepuisRequete({ relais: '012345', rnom: 'Tabac', rcp: '64200', rville: 'Biarritz', rdest: ' Jeanne  Martin ' });

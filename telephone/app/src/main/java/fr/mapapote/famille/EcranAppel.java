@@ -88,7 +88,7 @@ public class EcranAppel extends Activity {
         if (REPONDRE.equals(intent.getAction())) repondre();
     }
 
-    // Déverrouille si besoin (code, empreinte), puis ouvre l'appel dans l'app famille.
+    // Déverrouille si besoin (code, empreinte), puis ouvre l'appel (AppelEnCours).
     private void repondre() {
         if (cid == null) {
             finish();
@@ -120,7 +120,8 @@ public class EcranAppel extends Activity {
     }
 
     private void ouvrirAppel() {
-        startActivity(Appels.ouvrirApp(this, Appels.URL_APP + "?appel=" + cid));
+        // Dans l'écran d'appel de l'app (et non dans Chrome) : le micro tient en arrière-plan.
+        startActivity(AppelEnCours.pourRepondre(this, cid));
         finish();
     }
 

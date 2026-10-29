@@ -288,7 +288,60 @@ function alertesSim(l, maintenant) {
     else if (j <= 60) liste.push(`${carte} expire dans ${j} j`);
   }
   if (l.statut === 'suspendue') liste.push('suspendue : à résilier ou réactiver');
+  const recharge = alerteRecharge(l, maintenant);
+  if (recharge) liste.unshift(recharge);
   return liste;
+}
+
+// Forfait prépayé (Lyca, 30 jours) d'une ligne active : rappel 3 jours avant la fin s'il se recharge à la main ;
+// renouvelé tout seul par l'opérateur, alerte seulement si aucune recharge n'est arrivée 2 jours après la date.
+function alerteRecharge(l, maintenant) {
+  if (l.statut !== 'active' || !l.prochaineRecharge) return null;
+  const j = Math.ceil((l.prochaineRecharge - maintenant) / (24 * 3600 * 1000));
+  if (l.renouvellementAuto) return j < -2 ? 'renouvellement pas vu : vérifier chez l\'opérateur' : null;
+  if (j < 0) return 'forfait fini : à recharger';
+  if (j === 0) return 'à recharger aujourd\'hui';
+  return j <= 3 ? `à recharger dans ${j} j` : null;
+}
+
+// Fin du forfait après une recharge payée le jour « date » (ms) : jamais avant la fin déjà notée
+// (une facture reçue en retard ne recule pas la date).
+const DUREE_FORFAIT = 30;
+function finApresRecharge(l, date) {
+  const fin = date + (l.dureeForfait || DUREE_FORFAIT) * 24 * 3600 * 1000;
+  return Math.max(fin, l.prochaineRecharge || 0);
+}
+
+// Garde-fou du forfait sur la tablette (Forfait.java) : families/{fid}.forfaitSim = { mo, debut | jour }.
+// mo : Go du forfait noté sur la ligne (1 000 Mo sans réglage) ; debut : jour (à Paris) où le pass en cours a
+// commencé, d'après la fin du forfait notée (cycles de 30 jours ou de sa durée) ; sinon jour du mois d'activation.
+function forfaitFamille(l) {
+  const mo = Number.isFinite(l.go) ? Math.round(l.go * 1000) : 1000;
+  const duree = (l.dureeForfait || DUREE_FORFAIT) * 24 * 3600 * 1000;
+  const depart = l.prochaineRecharge ? l.prochaineRecharge - duree : l.derniereRecharge || null;
+  if (depart) {
+    const d = new Date(depart + decalageParis(depart));
+    return { mo, debut: `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}` };
+  }
+  const jour = l.activation ? new Date(l.activation + decalageParis(l.activation)).getUTCDate() : 1;
+  return { mo, jour: Math.min(Math.max(jour, 1), 28) };
+}
+
+// Ligne SIM d'une facture de forfait : par le numéro de ligne ou l'ICCID imprimé, sinon la seule ligne active
+// de cet opérateur. null si on ne sait pas : la dépense reste à relier à la main depuis sa page.
+const chiffres = (t) => String(t || '').replace(/\D/g, '');
+function simDeFacture(sims, r) {
+  const vivantes = sims.filter((l) => l.statut !== 'resiliee');
+  const lu = chiffres(r.ligne);
+  if (lu.length >= 9) {
+    const memes = vivantes.filter((l) => (chiffres(l.numero).length >= 9 && chiffres(l.numero).slice(-9) === lu.slice(-9))
+      || (lu.length >= 15 && chiffres(l.iccid).length >= 15 && (chiffres(l.iccid).endsWith(lu.slice(-15)) || lu.endsWith(chiffres(l.iccid).slice(-15)))));
+    // Un numéro imprimé qui n'est celui d'aucune ligne en service : ne pas deviner.
+    return memes.length === 1 ? memes[0] : null;
+  }
+  const actives = vivantes.filter((l) => l.statut === 'active' && l.operateur && r.fournisseur
+    && (memeAccessoire(l.operateur, r.fournisseur) || motsNom(r.fournisseur).some((m) => m.length >= 3 && motsNom(l.operateur).includes(m))));
+  return actives.length === 1 ? actives[0] : null;
 }
 
 // Accessoires qui manquent pour les commandes à envoyer, ou sous leur seuil d'alerte.
@@ -486,6 +539,7 @@ function lectureVersFormulaire(o) {
       prixAchat: euros(t.prixUnitaireTTC),
       numeros: (Array.isArray(t.numerosSerie) ? t.numerosSerie : []).map((n) => texte(n, 80)).filter(Boolean).slice(0, quantite),
     } : null,
+    ligne: texte(o.ligneMobile, 30),
     ...materielLu(o),
     remarque: texte(o.remarque, 300),
   };
@@ -528,7 +582,7 @@ const SCHEMA_FACTURE = {
   type: 'object',
   additionalProperties: false,
   required: ['estUneFacture', 'confirmationCommande', 'fournisseur', 'numero', 'date', 'totalTTC', 'tva', 'devise', 'categorie',
-    'libelle', 'tablettes', 'cartesSim', 'accessoires', 'remarque'],
+    'libelle', 'tablettes', 'cartesSim', 'ligneMobile', 'accessoires', 'remarque'],
   properties: {
     estUneFacture: { type: 'boolean', description: 'Faux si le document n\'est ni une facture, ni un ticket de caisse, ni une confirmation de commande avec le montant payé.' },
     confirmationCommande: { type: 'boolean', description: 'Vrai si c\'est une confirmation de commande d\'un site marchand et non la facture elle-même.' },
@@ -571,6 +625,8 @@ const SCHEMA_FACTURE = {
       description: 'Seulement pour des cartes SIM physiques achetées (kits SIM, nouvelles lignes) : sinon null. '
         + 'Une simple facture mensuelle de forfaits n\'en est pas une.',
     },
+    ligneMobile: { ...nul('string'), description: 'Pour une facture ou une recharge de forfait mobile : le numéro de ligne (06…) '
+      + 'ou l\'ICCID concerné, tel qu\'imprimé. null sinon, ou s\'il n\'y figure pas.' },
     accessoires: {
       type: 'array',
       description: 'Petit matériel envoyé avec les tablettes, à suivre en stock (clé ou routeur 4G, prise USB, chargeur, '
@@ -623,7 +679,7 @@ exports.gestionDonnees = onCall(async (request) => {
   // Tout est lu en même temps : « à vendre » et les batteries (qui attendent seulement le stock) ne font plus
   // deux allers-retours de plus vers la base après les autres lectures.
   const lectureStock = db().collection('stock').get();
-  const [commandes, stock, depenses, familles, automatique, reglages, courrier, archives, sims, accessoires, aVendre, batteries] = await Promise.all([
+  const [commandes, stock, depenses, familles, automatique, reglages, courrier, archives, sims, accessoires, aVendre, batteries, alertes] = await Promise.all([
     db().collection('commandes').get(),
     lectureStock,
     db().collection('depenses').get(),
@@ -638,8 +694,15 @@ exports.gestionDonnees = onCall(async (request) => {
     require('./stock').nombreDisponibles(db()).catch((e) => { logger.warn('À vendre', e.message); return null; }),
     // Batterie en direct pour les tablettes jumelées, sinon le dernier relevé gardé sur la fiche.
     lectureStock.then((s) => lireBatteries(s.docs)).catch((e) => { logger.warn('Batteries', e.message); return new Map(); }),
+    // Alertes envoyées aux proches (journal-alertes.js) : 90 derniers jours, les plus récentes d'abord.
+    db().collection('alertes').where('le', '>', new Date(Date.now() - ALERTES_JOURS * 86400000)).orderBy('le', 'desc').limit(2000).get()
+      .catch((e) => { logger.warn('Alertes', e.message); return { docs: [] }; }),
   ]);
   const parFid = new Map(familles.docs.map((f) => [f.id, f.data()]));
+  // Compte de la tablette -> sa fiche de stock (T-…), pour compter les alertes sur la page de la tablette.
+  const ficheParCompte = new Map(stock.docs.filter((d) => d.get('tabletUid')).map((d) => [d.get('tabletUid'), d.id]));
+  const ficheParFamille = new Map();
+  for (const d of stock.docs) if (d.get('fid')) ficheParFamille.set(d.get('fid'), ficheParFamille.has(d.get('fid')) ? null : d.id);
   return {
     aVendre,
     commandes: commandes.docs.map((d) => {
@@ -696,8 +759,21 @@ exports.gestionDonnees = onCall(async (request) => {
     accessoires: accessoires.docs.map((d) => aplatir({ id: d.id, ...d.data() })),
     statutsSim: STATUTS_SIM,
     envoisAccessoire: ENVOIS_ACCESSOIRE,
+    alertes: alertes.docs.map((d) => {
+      const a = d.data();
+      const famille = a.fid ? parFid.get(a.fid) : null;
+      return aplatir({
+        id: d.id, genre: a.genre || null, le: a.le || null, fid: a.fid || null, telephones: a.telephones ?? null,
+        famille: famille ? famille.name || null : null,
+        // Sans compte de tablette (paiement), la tablette seule de la famille.
+        fiche: (a.tablette && ficheParCompte.get(a.tablette)) || (a.fid && ficheParFamille.get(a.fid)) || null,
+      });
+    }),
+    genresAlerte: require('./journal-alertes').GENRES,
+    alertesJours: ALERTES_JOURS,
   };
 });
+const ALERTES_JOURS = 90;
 
 // Résumé d'une famille pour la page admin et « À faire » : statut, dates du retard de paiement et de la tolérance.
 function familleResume(f) {
@@ -1060,7 +1136,10 @@ function champsSim(c) {
   if ('cbExp' in c) champs.cbExp = /^\d{4}-\d{2}$/.test(c.cbExp || '') ? c.cbExp : null;
   if ('go' in c) champs.go = Number.isFinite(c.go) && c.go >= 0 ? c.go : null;
   for (const cle of ['prix', 'prixApres']) if (cle in c) champs[cle] = centimes(c[cle]);
-  for (const cle of ['finPromo', 'activation', 'activerAvant']) if (cle in c) champs[cle] = dateOuNull(c[cle]);
+  for (const cle of ['finPromo', 'activation', 'activerAvant', 'prochaineRecharge']) if (cle in c) champs[cle] = dateOuNull(c[cle]);
+  // Forfait prépayé : sa durée en jours (30 par défaut) et s'il est renouvelé tout seul par l'opérateur.
+  if ('dureeForfait' in c) champs.dureeForfait = Number.isInteger(c.dureeForfait) && c.dureeForfait >= 1 && c.dureeForfait <= 366 ? c.dureeForfait : null;
+  if ('renouvellementAuto' in c) champs.renouvellementAuto = c.renouvellementAuto === true;
   // Achat de la carte (dépense), vérifié par enregistrerSim.
   if ('depense' in c) champs.depense = texte(c.depense, 100) || null;
   return champs;
@@ -1083,6 +1162,18 @@ function simSurTablette(id, l) {
   };
 }
 const SANS_SIM = { simId: null, sim: null, simOperateur: null, simCout: null };
+
+// Numéro de la carte SIM recopié sur la fiche de la tablette dans sa famille (members/{tabletUid}.telephone) :
+// l'app famille le montre aux proches, qui peuvent appeler Mamie par téléphone (chantier téléphone 29/10).
+// Sans numéro (carte retirée), le champ est effacé.
+async function numeroSurLaFamille(t, numero) {
+  const fid = t && t.fid;
+  const uid = t && t.tabletUid;
+  if (!fid || !uid) return;
+  await db().doc(`families/${fid}/members/${uid}`).update({ telephone: numero || null }).catch((e) => {
+    logger.warn(`Numéro de la tablette non recopié dans la famille ${fid}`, e);
+  });
+}
 
 // Crée (id null) ou modifie une ligne SIM, et tient à jour la fiche de sa tablette. Renvoie l'id.
 async function enregistrerSim(id, c, qui) {
@@ -1108,7 +1199,9 @@ async function enregistrerSim(id, c, qui) {
     if (autre && autre !== ref.id) await db().doc(`sims/${autre}`).update({ tablette: null }).catch(() => null);
   }
   if (avant.tablette && avant.tablette !== tablette) {
-    await db().doc(`stock/${avant.tablette}`).update(SANS_SIM).catch(() => null);
+    const ancienne = await db().doc(`stock/${avant.tablette}`).get();
+    await ancienne.ref.update(SANS_SIM).catch(() => null);
+    await numeroSurLaFamille(ancienne.data(), null);
   }
   ligne.tablette = tablette;
   await ref.set({
@@ -1118,8 +1211,58 @@ async function enregistrerSim(id, c, qui) {
     ...(!id ? { creeLe: FieldValue.serverTimestamp(), par: qui } : {}),
   }, { merge: true });
   if (tablette) await db().doc(`stock/${tablette}`).update(simSurTablette(ref.id, ligne));
+  await ecrireForfaitFamille(ref.id).catch((e) => logger.warn('Forfait de la famille', e.message));
   return ref.id;
 }
+
+// Recharge payée le jour « date » sur la ligne simId : fin du forfait repoussée. Renvoie la nouvelle fin (ms).
+async function noterRecharge(simId, date) {
+  const ref = db().doc(`sims/${simId}`);
+  return db().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) return null;
+    const fin = finApresRecharge(snap.data(), date);
+    tx.update(ref, { prochaineRecharge: fin, derniereRecharge: Math.max(date, snap.get('derniereRecharge') || 0), majLe: FieldValue.serverTimestamp() });
+    return fin;
+  }).then(async (fin) => {
+    await ecrireForfaitFamille(simId).catch((e) => logger.warn('Forfait de la famille', e.message));
+    return fin;
+  });
+}
+
+// Réglage du garde-fou recopié sur la famille de la tablette où est la ligne (si elle est chez une famille).
+// Ce que la famille sait de la carte SIM de sa tablette : le forfait (garde-fou) et le numéro
+// (members/{tabletUid}.telephone : l'app le montre aux proches, qui peuvent l'appeler par téléphone).
+async function ecrireForfaitFamille(simId) {
+  const l = (await db().doc(`sims/${simId}`).get()).data();
+  if (!l || !l.tablette || !['active', 'stock'].includes(l.statut)) return;
+  const fiche = (await db().doc(`stock/${l.tablette}`).get()).data();
+  if (!fiche || !fiche.fid) return;
+  await numeroSurLaFamille(fiche, l.numero || null);
+  const ref = db().doc(`families/${fiche.fid}`);
+  const famille = await ref.get();
+  if (!famille.exists) return;
+  const forfait = forfaitFamille(l);
+  if (JSON.stringify(famille.get('forfaitSim') || null) === JSON.stringify(forfait)) return;
+  await ref.update({ forfaitSim: forfait });
+}
+
+// Numéro de la carte SIM d'une tablette, d'après sa fiche de stock ; null sans carte ou sans numéro.
+async function numeroDeLaTablette(fiche) {
+  if (!fiche || !fiche.simId) return null;
+  const sim = await db().doc(`sims/${fiche.simId}`).get();
+  return (sim.exists && sim.get('numero')) || null;
+}
+
+// Tablette déjà dans sa famille sans numéro connu (SIM reliée avant le 29/10/2026, ou fiche jamais
+// complétée) : on le retrouve sur sa fiche de stock et on l'écrit (null s'il n'y en a pas, pour ne
+// plus chercher). Appelé par la tâche des alertes pour chaque tablette dont le numéro est inconnu.
+async function completerNumeroTablette(fid, uid) {
+  const fiches = await db().collection('stock').where('tabletUid', '==', uid).limit(1).get();
+  const fiche = fiches.empty ? null : fiches.docs[0].data();
+  await numeroSurLaFamille({ fid, tabletUid: uid }, fiche ? await numeroDeLaTablette(fiche) : null);
+}
+exports.completerNumeroTablette = completerNumeroTablette;
 
 exports.gestionSim = onCall(async (request) => {
   verifierAdmin(request);
@@ -1131,9 +1274,30 @@ exports.gestionSim = onCall(async (request) => {
     const ref = db().doc(`sims/${d.id || '-'}`);
     const snap = await ref.get();
     if (!snap.exists) throw new HttpsError('not-found', 'Ligne introuvable.');
-    if (snap.get('tablette')) await db().doc(`stock/${snap.get('tablette')}`).update(SANS_SIM).catch(() => null);
+    if (snap.get('tablette')) {
+      const fiche = await db().doc(`stock/${snap.get('tablette')}`).get();
+      await fiche.ref.update(SANS_SIM).catch(() => null);
+      await numeroSurLaFamille(fiche.data(), null);
+    }
     await ref.delete();
     return { ok: true };
+  }
+
+  // Recharge du forfait payée : une dépense « Cartes SIM et forfaits » reliée à la ligne, et la fin du forfait repoussée.
+  if (d.action === 'recharger') {
+    const ref = db().doc(`sims/${d.id || '-'}`);
+    const snap = await ref.get();
+    if (!snap.exists) throw new HttpsError('not-found', 'Ligne introuvable.');
+    const l = snap.data();
+    const montant = d.montant != null ? centimes(d.montant) : coutLigne(l, Date.now());
+    if (!montant) throw new HttpsError('invalid-argument', 'Montant de la recharge manquant : notez le prix du forfait sur la carte.');
+    const date = ms(d.date) || Date.now();
+    const r = await ajouterDepense({
+      date, categorie: 'sim', fournisseur: l.operateur || null, montant, sim: ref.id,
+      libelle: `Recharge du forfait ${[l.operateur, l.numero || (l.iccid ? `…${String(l.iccid).slice(-4)}` : null)].filter(Boolean).join(' ')}`.trim(),
+    }, qui);
+    const prochaineRecharge = await noterRecharge(ref.id, date);
+    return { ok: true, depense: r.id, prochaineRecharge };
   }
 
   if (d.action !== 'ajouter' && d.action !== 'modifier') throw new HttpsError('invalid-argument', 'Action inconnue.');
@@ -1229,6 +1393,8 @@ async function ajouterDepense(d, qui) {
     justificatif: lien(d.justificatif),
     aVerifier: d.aVerifier === true,
     source: texte(d.source),
+    // Recharge d'un forfait : la ligne SIM payée (sims/{id}).
+    sim: texte(d.sim, 100) || null,
     // Dépense mensuelle (hébergement, forfaits…) : recopiée chaque mois par gestionAutomatique.
     recurrence: d.recurrente === true ? 'mensuelle' : null,
     jourRecurrence: d.recurrente === true ? jour : null,
@@ -1260,6 +1426,8 @@ function champsDepense(c) {
     if (!CATEGORIES[c.categorie]) throw new HttpsError('invalid-argument', 'Catégorie inconnue.');
     maj.categorie = c.categorie;
   }
+  // Ligne SIM rechargée par cette dépense (vérifiée par gestionDepense), null pour retirer le lien.
+  if ('sim' in c) maj.sim = texte(c.sim, 100) || null;
   if ('date' in c) {
     const t = Number(c.date);
     if (!Number.isFinite(t) || t < Date.UTC(2020, 0, 1) || t > Date.now() + 366 * 86400000) throw new HttpsError('invalid-argument', 'Date invalide.');
@@ -1298,7 +1466,10 @@ exports.gestionDepense = onCall(async (request) => {
     if (!snap.exists) throw new HttpsError('not-found', 'Dépense introuvable.');
     const maj = champsDepense(d.champs || {});
     if (!Object.keys(maj).length) throw new HttpsError('invalid-argument', 'Rien à modifier.');
+    if (maj.sim && !(await db().doc(`sims/${maj.sim}`).get()).exists) throw new HttpsError('not-found', 'Carte SIM introuvable.');
     await ref.update({ ...maj, majLe: FieldValue.serverTimestamp(), majPar: request.auth.token.email || request.auth.uid });
+    // Facture de forfait reliée à sa ligne : la fin du forfait suit (sa date ou la nouvelle).
+    if (maj.sim) await noterRecharge(maj.sim, maj.date ? maj.date.toMillis() : ms(snap.get('date')) || Date.now());
     // Mois déjà clôturé (livres envoyés) : la page propose de le refaire.
     const clos = (await db().doc('gestion/archives').get()).get('mois') || {};
     const moisTouches = [ms(snap.get('date')), maj.date ? maj.date.toMillis() : null].filter(Boolean).map(moisDeParis);
@@ -1590,7 +1761,9 @@ stores (Google Play, Apple Developer), publicite (annonces, réseaux sociaux), a
 mediateur (médiateur de la consommation), juridique (création de société, greffe, annonces légales, avocat),
 comptabilite (expert-comptable, logiciel de comptabilité), banque (frais bancaires, frais Stripe), autre. Pour un achat de tablettes, remplis aussi « tablettes » avec les numéros de série (IMEI ou S/N) lisibles.
 Pour des cartes SIM achetées (kits, nouvelles lignes), remplis « cartesSim » avec les ICCID et numéros lisibles ;
-une facture mensuelle de forfaits reste une simple dépense (cartesSim null). Le petit matériel qui part avec les
+une facture mensuelle de forfaits reste une simple dépense (cartesSim null), avec le numéro de ligne ou l'ICCID
+concerné dans « ligneMobile ». Un e-mail de recharge ou de renouvellement de forfait (Lyca…) qui donne le montant payé
+est une facture : confirmationCommande faux. Le petit matériel qui part avec les
 tablettes (clé ou routeur 4G, prise, chargeur, câble, support) va dans « accessoires ».
 Une confirmation de commande d'un site marchand (Cdiscount, Temu, Amazon…) qui donne le montant payé compte comme
 justificatif : estUneFacture vrai et confirmationCommande vrai, numero = numéro de commande. Une publicité, une lettre
@@ -1789,19 +1962,33 @@ async function synchroniserStock(bilan) {
   }
 }
 
-// Fin de contrat : l'étiquette de retour part toute seule (aucun justificatif demandé au client). Seulement
-// avec la vraie clé Stripe : en mode test, les commandes d'essai ne doivent pas coûter d'étiquettes.
-async function etiquettesRetour(bilan) {
-  if (!STRIPE_SECRET.value().startsWith('sk_live_')) return;
-  const attendues = await db().collection('commandes').where('restitution.statut', '==', 'attendue').get();
-  for (const snap of attendues.docs) {
-    const c = snap.data();
-    if (c.restitution.etiquette || (c.etiquettes && c.etiquettes.retour) || c.expedition !== 'envoyee') continue;
+// Fin de contrat : plus d'étiquette créée d'office (payée même si la tablette ne revient jamais, Tanguy 28/10).
+// Le client la demande dans l'appli (« Je renvoie la tablette », renvoyerTablette) au moment de déposer le
+// colis. Un QR ou une étiquette pas déposé au bout de 30 jours est annulé, donc remboursé par Sendcloud
+// (dans les 42 jours) ; le client pourra en redemander un.
+const RETOUR_NON_DEPOSE_JOURS = 30;
+async function retoursNonDeposes(bilan, maintenant) {
+  const attendues = await db().collection('commandes').where('restitution.statut', 'in', ['attendue', 'echec']).get();
+  const vieux = attendues.docs.filter((d) => d.get('etiquettes.retour.colis')
+    && maintenant - (d.get('etiquettes.retour.le') || maintenant) >= RETOUR_NON_DEPOSE_JOURS * 864e5);
+  if (!vieux.length) return;
+  const api = sendcloud.client(SENDCLOUD_API.value());
+  for (const snap of vieux) {
+    const e = snap.get('etiquettes.retour');
     try {
-      await creerEtiquette(snap.id, 'retour', 'automatique');
-      bilan.etiquettes = (bilan.etiquettes || []).concat(c.nom || c.email || snap.id);
-    } catch (e) {
-      bilan.erreurs.push(`Étiquette de retour de ${c.nom || c.email || snap.id} : ${e.message} (à créer depuis Commandes)`);
+      const s = await api.suivi(e.colis);
+      if (!sendcloud.nonDepose(s.statut)) continue;
+      await api.annuler(e.colis);
+      await snap.ref.update({
+        'etiquettes.retour': FieldValue.delete(),
+        'etiquettes.annulees': FieldValue.arrayUnion({ ...e, sens: 'retour', annuleeLe: maintenant, par: 'automatique : pas déposé en 30 jours' }),
+        'restitution.etiquette': FieldValue.delete(),
+        'restitution.qr': FieldValue.delete(),
+        'restitution.etiquetteLe': FieldValue.delete(),
+      });
+      bilan.etiquettesAnnulees = (bilan.etiquettesAnnulees || []).concat(snap.get('nom') || snap.get('email') || snap.id);
+    } catch (err) {
+      bilan.erreurs.push(`Retour pas déposé de ${snap.get('nom') || snap.id} : ${err.message} (à annuler depuis Commandes)`);
     }
   }
 }
@@ -1855,6 +2042,8 @@ async function colisLivres(bilan) {
   }
 }
 
+exports.retoursNonDeposes = retoursNonDeposes; // pour le parcours simulé (automatiser touche aussi Stripe)
+
 async function automatiser(qui) {
   const maintenant = Date.now();
   const bilan = { factures: [], avoirs: [], depenses: 0, stock: [], erreurs: [] };
@@ -1864,7 +2053,7 @@ async function automatiser(qui) {
   await depensesRecurrentes(maintenant, bilan);
   await facturerPenalites(maintenant - FENETRE, bilan);
   await avoirsRemboursements(maintenant - FENETRE, bilan);
-  await etiquettesRetour(bilan).catch((e) => bilan.erreurs.push(`Étiquettes de retour : ${e.message}`));
+  await retoursNonDeposes(bilan, maintenant).catch((e) => bilan.erreurs.push(`Étiquettes de retour : ${e.message}`));
   await colisLivres(bilan).catch((e) => bilan.erreurs.push(`Suivi des colis : ${e.message}`));
   await retoursEnCours(bilan).catch((e) => bilan.erreurs.push(`Suivi des retours : ${e.message}`));
   await db().doc('gestion/automatique').set({ ...bilan, le: maintenant, par: qui });
@@ -1926,19 +2115,22 @@ exports.gestionReglages = onCall(async (request) => {
 
 // ---------- Étiquettes Sendcloud ----------
 
-// Range le PDF dans Storage avec un jeton de téléchargement : lien imprimable par l'admin et par le client.
-async function rangerEtiquette(commande, sens, colis, pdf) {
-  const chemin = `gestion/etiquettes/${commande}-${sens}-${colis}.pdf`;
+// Range le PDF (ou l'image du QR code, png) dans Storage avec un jeton de téléchargement : lien imprimable
+// par l'admin et par le client.
+async function rangerEtiquette(commande, sens, colis, contenu, format = 'pdf') {
+  const chemin = `gestion/etiquettes/${commande}-${sens}-${colis}.${format}`;
   const jeton = require('node:crypto').randomUUID();
   const bucket = stockage();
-  await bucket.file(chemin).save(pdf, {
-    contentType: 'application/pdf', resumable: false, metadata: { metadata: { firebaseStorageDownloadTokens: jeton } },
+  await bucket.file(chemin).save(contenu, {
+    contentType: format === 'png' ? 'image/png' : 'application/pdf', resumable: false,
+    metadata: { metadata: { firebaseStorageDownloadTokens: jeton } },
   });
   return `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(chemin)}?alt=media&token=${jeton}`;
 }
 
 // Crée l'étiquette Mondial Relay chez Sendcloud. Erreur à montrer telle quelle : HttpsError ; panne Sendcloud : Error.
-async function creerEtiquette(commande, sens, qui) {
+// sansImpression : retour par QR code à montrer au point relais (demandé par le client dans l'appli).
+async function creerEtiquette(commande, sens, qui, { sansImpression = false } = {}) {
   const ref = db().doc(`commandes/${commande}`);
   const [snap, reglagesSnap] = await Promise.all([ref.get(), db().doc('gestion/reglages').get()]);
   if (!snap.exists) throw new HttpsError('not-found', 'Commande introuvable.');
@@ -1962,16 +2154,18 @@ async function creerEtiquette(commande, sens, qui) {
     await ref.update({ 'etiquettes.aller': { colis: r.colis, suivi: r.suivi, url, le: Date.now(), par: qui } });
     return { ok: true, suivi: r.suivi, url };
   }
-  const r = await api.retour({ de: cl.adresse, vers: papote, poids, reference });
+  const r = await api.retour({ de: cl.adresse, vers: papote, poids, reference, sansImpression });
   const url = await rangerEtiquette(commande, 'retour', r.colis, r.pdf);
+  const qr = r.png ? await rangerEtiquette(commande, 'retour', r.colis, r.png, 'png') : null;
   // N° et lien de suivi du retour, pour le suivre depuis l'admin et l'avis de résiliation.
   const suivi = await api.suivi(r.colis).catch(() => ({}));
-  const maj = { 'etiquettes.retour': { colis: r.colis, url, le: Date.now(), par: qui,
+  const maj = { 'etiquettes.retour': { colis: r.colis, url, qr, le: Date.now(), par: qui,
     suivi: suivi.suivi || null, lienSuivi: suivi.lien || null, etape: suivi.etape || null } };
   const attendue = c.restitution && ['attendue', 'echec'].includes(c.restitution.statut);
   if (attendue) {
     // Fin de contrat : l'e-mail au client part avec commandeModifiee, comme une étiquette collée à la main.
     maj['restitution.etiquette'] = url;
+    maj['restitution.qr'] = qr;
     maj['restitution.etiquetteLe'] = FieldValue.serverTimestamp();
   }
   await ref.update(maj);
@@ -1982,8 +2176,11 @@ async function creerEtiquette(commande, sens, qui) {
       a: c.email, contenu: mail.etiquetteRetour({ nom: c.nom, lien: url, avant: null }),
     });
   }
-  return { ok: true, url, envoyee: !!c.email };
+  return { ok: true, url, qr, envoyee: !!c.email };
 }
+
+// « Je renvoie la tablette » dans l'appli (index.js, renvoyerTablette) : QR code de retour sans impression.
+exports.etiquetteRetourClient = (commande, qui) => creerEtiquette(commande, 'retour', qui, { sansImpression: true });
 
 // { commande, sens: 'aller' | 'retour' } : crée l'étiquette Mondial Relay chez Sendcloud.
 // Aller : renvoie le n° de suivi pour le formulaire d'envoi. Retour : le client la reçoit par e-mail.
@@ -2219,6 +2416,9 @@ async function appliquerJumelage(p, pairingRef) {
   };
   if (t.etat === 'envoyee') maj.etat = 'chez-client';
   await fiche.ref.update(maj);
+  // La tablette arrive chez sa famille : le garde-fou du forfait suit sa carte SIM, et son numéro
+  // rejoint sa fiche dans la famille (l'app le montre aux proches, qui peuvent l'appeler par téléphone).
+  if (t.simId) await ecrireForfaitFamille(t.simId).catch((e) => logger.warn('Forfait de la famille', e.message));
   // Tablette reliée : elle est forcément reçue (si le suivi du colis ne l'a pas déjà noté).
   if (t.commande && commande && commande.envoyeeLe && !(commande.preparation && commande.preparation.recuLe)) {
     await db().doc(`commandes/${t.commande}`).update({ 'preparation.recuLe': Date.now(), 'preparation.recuPar': 'tablette reliée' });
@@ -2368,7 +2568,7 @@ function aFaire({ commandes, stock, depenses, automatique, maintenant, sims = []
   ajouter(depenses.filter((d) => d.aVerifier).length, 'facture(s) reçue(s) par e-mail à vérifier');
   ajouter(stock.filter((t) => sansFacture(t, maintenant)).length,
     'tablette(s) reçue(s) sans facture depuis 5 jours : transférez la facture du vendeur à factures@mapapote.fr');
-  ajouter(sims.filter((l) => alertesSim(l, maintenant).length).length, 'carte(s) SIM à regarder (promo, activation, carte bancaire)');
+  ajouter(sims.filter((l) => alertesSim(l, maintenant).length).length, 'carte(s) SIM à regarder (recharge, promo, activation, carte bancaire)');
   liste.push(...incoherences({ commandes: actives, stock, sims }));
   for (const a of accessoiresAPrevoir(accessoires, actives.filter((c) => c.expedition === 'a-preparer' && !retour(c)))) {
     liste.push(a.manque ? `${a.nom} : il en manque ${a.manque} pour les envois` : `${a.nom} : plus que ${a.quantite || 0} en stock`);
@@ -2637,6 +2837,7 @@ async function rangerFacture(r, piece, source) {
     }
   }
   let id;
+  let ligneSim = null;
   if (r.tablettes) {
     const t = r.tablettes;
     const prix = t.prixAchat != null ? t.prixAchat : r.montant != null ? Math.round(r.montant / t.quantite) : null;
@@ -2648,14 +2849,20 @@ async function rangerFacture(r, piece, source) {
     }, 'e-mail'));
   } else {
     if (r.montant == null) throw new Error('montant illisible');
+    // Facture ou recharge d'un forfait : rangée sur sa ligne SIM, dont la fin du forfait avance.
+    const sims = r.categorie === 'sim' && !r.cartesSim
+      ? (await db().collection('sims').get()).docs.map((x) => ({ id: x.id, ...x.data() })) : [];
+    ligneSim = sims.length ? simDeFacture(sims, r) : null;
     ({ id } = await ajouterDepense({
-      date: r.date, categorie: r.categorie, fournisseur: r.fournisseur, numero: r.numero,
+      date: r.date, categorie: r.categorie, fournisseur: r.fournisseur, numero: r.numero, sim: ligneSim && ligneSim.id,
       libelle: r.libelle || 'Facture reçue par e-mail', montant: r.montant, tva: r.tva, aVerifier: true, source,
     }, 'e-mail'));
+    if (ligneSim) await noterRecharge(ligneSim.id, r.date || Date.now());
   }
   if (r.confirmation) await db().doc(`depenses/${id}`).update({ confirmation: true });
   await enregistrerPiece('depenses', id, piece.filename || 'facture', piece.contentType, piece.content);
   const materiel = await entrerMateriel(r, { depense: id, numeroFacture: r.numero, source }, 'e-mail');
+  if (ligneSim) return { materiel, sim: ligneSim.numero || ligneSim.operateur || 'SIM' };
   return materiel.length ? { materiel } : null;
 }
 
@@ -2717,6 +2924,7 @@ async function releverFactures() {
               if (typeof rangee === 'string') bilan.ignorees.push(`${piece.filename || 'pièce'} : ${rangee}`);
               else {
                 const plus = rangee && rangee.rattachee ? ' (facture ajoutée à la confirmation de commande)'
+                  : rangee && rangee.sim ? ` (recharge de la SIM ${rangee.sim})`
                   : rangee && rangee.materiel && rangee.materiel.length ? ` (+ ${rangee.materiel.join(', ')})` : '';
                 bilan.rangees.push(`${r.fournisseur || de} : ${r.libelle || sujet}${plus}`);
               }
@@ -2992,13 +3200,14 @@ exports.gestionFamilleOfferte = onCall(async (request) => {
 
 // Commande offerte (les mamies de Tanguy) : une vraie commande, sans Stripe, avec son code de commande.
 // La famille choisie passe « offerte » (jamais en pause) ; la tablette choisie est rattachée à la commande.
-// { nom, email?, telephone?, formule: 'wifi'|'sim', fid?, tablette?, dejaInstallee? }
+// { nom, email?, telephone?, fid?, tablette?, dejaInstallee? } (formule ignorée : toujours 'sim')
 exports.gestionCommandeOfferte = onCall(async (request) => {
   verifierAdmin(request);
   const d = request.data || {};
   const nom = texte(d.nom, 100);
   if (!nom) throw new HttpsError('invalid-argument', 'Nom manquant.');
-  const formule = d.formule === 'sim' ? 'sim' : 'wifi';
+  // Offre unique (29/10/2026) : carte SIM toujours fournie, même pour une commande offerte.
+  const formule = 'sim';
   const fid = typeof d.fid === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(d.fid) ? d.fid : null;
   const famille = fid ? await db().doc(`families/${fid}`).get() : null;
   if (fid && !famille.exists) throw new HttpsError('not-found', 'Famille introuvable.');
@@ -3213,7 +3422,7 @@ exports.gestionParcours = onCall(async (request) => {
 
 exports.regles = {
   ETATS, CATEGORIES, sansEssaisEffaces, natureMouvement, mensuel, centimes, lien, nomFichier, moisSuivant, lectureVersFormulaire, SCHEMA_FACTURE,
-  lireReglages, transitionPermise, SUITES, simAResilier, fichesARattacher, sansFacture, stockAJour, releveBatterie, usureBatterie, incoherences, materielLu, memeAccessoire, coutLigne, alertesSim, accessoiresAPrevoir, champsSim, aFaire, piecesFacture, debutMoisParis, moisPrecedent, csvTexte, livreDesRecettes,
+  lireReglages, transitionPermise, SUITES, simAResilier, fichesARattacher, sansFacture, stockAJour, releveBatterie, usureBatterie, incoherences, materielLu, memeAccessoire, coutLigne, alertesSim, finApresRecharge, simDeFacture, forfaitFamille, accessoiresAPrevoir, champsSim, aFaire, piecesFacture, debutMoisParis, moisPrecedent, csvTexte, livreDesRecettes,
   registreDesAchats, corpsDuMail, memeAchat, suiteJumelage, descriptionNonRendu, refusSuppression, fusionnerContacts, emailInformation, cleContact,
   avancementPropre,
 };

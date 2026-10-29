@@ -81,7 +81,7 @@ main a:not([class]), footer a:not([class]), .rassure a { font-weight: 700; }
   <button class="btn" type="button" id="imprimer" hidden>🖨️ Imprimer ou enregistrer en PDF</button>
   <ol>
     <li>Dès que la tablette part, vous recevez un e-mail avec le suivi du colis. Retirez-la au point relais choisi quand Mondial Relay vous prévient.</li>
-    <li>Branchez-la, donnez-lui un nom et connectez-la au wifi si besoin.</li>
+    <li>Branchez-la : elle se connecte toute seule grâce à sa carte SIM.</li>
     <li>Ouvrez l'appli Papote sur votre téléphone, connectez-vous avec la même adresse e-mail que pour le paiement, et scannez le QR code affiché sur la tablette. Votre famille est créée et l'abonnement s'y rattache tout seul.</li>
     <li>Invitez vos proches depuis l'appli.</li>
   </ol>
@@ -96,7 +96,7 @@ main a:not([class]), footer a:not([class]), .rassure a { font-weight: 700; }
       ['Commande', d.code],
       ['Date', d.date ? new Date(d.date * 1000).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : ''],
       ['Client', [d.nom, d.email].filter(Boolean).join(' · ')],
-      ['Abonnement', d.formule === 'sim' ? '30 € par mois, internet inclus' : '20 € par mois'],
+      ['Abonnement', '25 € par mois, tout compris (carte SIM incluse)'],
       ['Paiement', 'Chaque mois une fois écoulé, sans engagement'],
       ['Changer d\'avis', '30 jours après la réception : rien à payer, 60 € remboursés'],
       ['Payé aujourd\'hui', typeof d.payeCentimes === 'number' ? (d.payeCentimes / 100).toLocaleString('fr-FR') + ' € (mise en service)' : ''],

@@ -62,6 +62,15 @@ test('formules', () => {
   assert.strictEqual(a.formuleValide('4g', 'incluse'), false);
 });
 
+test('offre unique : tout compris avec la carte SIM, même depuis un ancien lien Wi-Fi', () => {
+  assert.strictEqual(a.formuleVendue('sim', 'incluse'), 'sim');
+  assert.strictEqual(a.formuleVendue('wifi', 'incluse'), 'sim');
+  assert.strictEqual(a.formuleVendue(undefined), 'sim');
+  assert.strictEqual(a.formuleVendue('', 'incluse'), 'sim');
+  assert.strictEqual(a.formuleVendue('sim', 'achetee'), null);
+  assert.strictEqual(a.formuleVendue('4g', 'incluse'), null);
+});
+
 test('résiliation sans engagement : à la fin du mois payé', () => {
   const periode = T0 + 10 * JOUR;
   assert.strictEqual(a.dateResiliation(periode, T0), periode);
@@ -69,10 +78,9 @@ test('résiliation sans engagement : à la fin du mois payé', () => {
 });
 
 test('rien prélevé avant la réception : date de premier prélèvement d\'après le délai annoncé, jamais d\'« essai gratuit »', () => {
-  assert.strictEqual(a.premierPrelevementMs('stock', T0), T0 + 33 * JOUR);
-  assert.strictEqual(a.premierPrelevementMs('precommande', T0), T0 + 40 * JOUR);
-  assert.strictEqual(a.premierPrelevementMs('long', T0), T0 + 58 * JOUR);
-  assert.strictEqual(a.premierPrelevementMs(undefined, T0), T0 + 58 * JOUR, 'délai inconnu : le plus long');
+  // Une semaine de plus depuis l'offre unique (ligne SIM ouverte à la commande).
+  assert.strictEqual(a.premierPrelevementMs('stock', T0), T0 + 37 * JOUR);
+  assert.strictEqual(a.premierPrelevementMs('long', T0), T0 + 37 * JOUR, 'un seul délai annoncé, quel que soit le stock');
   assert.strictEqual(a.premierPrelevementMs('stock', T0, { dejaInstallee: true }), T0 + 30 * JOUR);
   // Abonnement Stripe : trial recalé à l'envoi, ou date de départ pas encore atteinte, sinon rien.
   assert.strictEqual(a.premierPrelevementDe({ status: 'trialing', trial_end: (T0 + JOUR) / 1000 }, T0), T0 + JOUR);
@@ -200,4 +208,15 @@ test('qui prévenir quand le paiement échoue : une fois par épisode', () => {
   assert.strictEqual(a.avisPaiement({ statut: 'suspendu' }, 'suspendu'), null);
   assert.strictEqual(a.avisPaiement({ statut: 'suspendu' }, 'actif'), null);
   assert.strictEqual(a.avisPaiement(undefined, 'impaye'), 'impaye');
+});
+
+test('factures montrées à la famille : payées et à payer, sans brouillon ni annulée', () => {
+  const base = { id: 'in_1', number: 'PAP-0001', created: 1761000000, amount_paid: 6000, amount_due: 6000, invoice_pdf: 'https://pdf', hosted_invoice_url: 'https://page' };
+  assert.deepStrictEqual(a.factureClient({ ...base, status: 'paid' }), {
+    id: 'in_1', numero: 'PAP-0001', le: 1761000000000, montant: 6000, statut: 'payee', pdf: 'https://pdf', page: 'https://page',
+  });
+  assert.strictEqual(a.factureClient({ ...base, status: 'open', amount_due: 2000 }).statut, 'a-payer');
+  assert.strictEqual(a.factureClient({ ...base, status: 'open', amount_due: 2000 }).montant, 2000);
+  assert.strictEqual(a.factureClient({ ...base, status: 'draft' }), null);
+  assert.strictEqual(a.factureClient({ ...base, status: 'void' }), null);
 });

@@ -2,8 +2,11 @@
 //
 //   commander          GET  depuis le site vitrine : ouvre la page de paiement Stripe (si une tablette est disponible)
 //   stockDisponible    GET  depuis le site vitrine : { disponible: true|false } (stock.js)
+//   couverture         GET  depuis le site vitrine : la 4G de la carte SIM passe-t-elle chez le proche ? (couverture.js)
 //   creerPaiement      appel depuis l'appli famille : paiement pour une famille existante
 //   portailClient      appel depuis l'appli famille : compte bancaire, factures
+//   facturesFamille    appel depuis l'appli famille : liste des factures, avec leur PDF
+//   renvoyerTablette   appel depuis l'appli famille : QR code de retour de la tablette, créé à la demande
 //   resilierAbonnement appel depuis l'appli famille : résilie à la fin du mois en cours, prélevé à l'arrêt
 //   annulerResiliation appel depuis l'appli famille : garde l'abonnement
 //   rattacherCommande  appel depuis l'appli famille : relie une commande du site à la famille
@@ -48,6 +51,7 @@ const relances = require('./relances');
 
 const base = require('./base');
 const stock = require('./stock');
+const couverture = require('./couverture');
 const push = require('./push');
 
 // Bucket Europe après la migration (BUCKET_STORAGE dans .env), sinon celui du projet.
@@ -70,6 +74,7 @@ const APPLI_FAMILLE = 'https://app.mapapote.fr/';
 const MAIL_SMTP = defineString('MAIL_SMTP', { default: 'smtp.gmail.com:465:' });
 const MAIL_EXPEDITEUR = defineString('MAIL_EXPEDITEUR', { default: '' });
 const MAIL_MOT_DE_PASSE = defineSecret('MAIL_MOT_DE_PASSE');
+const SENDCLOUD_API = defineSecret('SENDCLOUD_API');
 
 function envoyerMail(a, contenu) {
   return mail.envoyer({
@@ -111,8 +116,8 @@ async function tarifs(formule, tablette, { reprise = false } = {}) {
 // (« trial » Stripe), ni pendant les 30 jours pour changer d'avis qui suivent la réception (debutApresReception),
 // puis un prélèvement par mois ; le mois en cours est prélevé à l'arrêt (prelevementDernierMois).
 // Chaque mois utilisé est donc payé une fois, à terme échu.
-async function sessionPaiement({ formule, tablette, fid, email, client, relais, accord, reservation, dejaInstallee, reprise }) {
-  const metadata = { formule, tablette, ...(relais ? livraison.relaisVersMeta(relais) : {}) };
+async function sessionPaiement({ formule, tablette, fid, email, client, relais, proche, accord, reservation, dejaInstallee, reprise }) {
+  const metadata = { formule, tablette, ...(relais ? livraison.relaisVersMeta(relais) : {}), ...(proche ? couverture.procheVersMeta(proche) : {}) };
   if (dejaInstallee) metadata.dejaInstallee = '1';
   // Reprise après une résiliation, tablette encore chez le proche : pas de 60 €, rien à annuler (C3).
   if (reprise) metadata.reprise = '1';
@@ -125,10 +130,13 @@ async function sessionPaiement({ formule, tablette, fid, email, client, relais, 
   if (fid) metadata.fid = fid;
   // Plus d'essai gratuit affiché (Tanguy, 2026-10-27) : une date de premier prélèvement, estimée d'après le délai
   // annoncé puis recalée à l'envoi (debutApresReception), et une phrase sous le bouton qui dit la règle.
-  const premier = regles.premierPrelevementMs(metadata.delai, Date.now(), { dejaInstallee: Boolean(dejaInstallee) });
+  const maintenant = Date.now();
+  const premier = regles.premierPrelevementMs(metadata.delai, maintenant, { dejaInstallee: Boolean(dejaInstallee) });
+  // Date voulue gardée sur l'abonnement : posée au paiement reçu si Stripe n'accepte pas d'aller si loin (ancrePaiement).
+  metadata.premier = String(Math.ceil(premier / 1000));
   const subscriptionData = {
     metadata,
-    billing_cycle_anchor: Math.ceil(premier / 1000),
+    billing_cycle_anchor: Math.ceil(regles.ancrePaiement(premier, maintenant) / 1000),
     proration_behavior: 'none',
   };
   const regle = reprise
@@ -147,7 +155,8 @@ async function sessionPaiement({ formule, tablette, fid, email, client, relais, 
     phone_number_collection: { enabled: true },
     metadata,
     subscription_data: subscriptionData,
-    custom_text: { submit: { message: regle } },
+    // Les CGV sont acceptées ici, sur la page de paiement (Tanguy, 29/10/2026 : plus de bloc sous « À payer »).
+    custom_text: { submit: { message: `${regle} En payant, vous acceptez les [conditions générales de vente](${SITE_VITRINE.value()}/cgv.html).` } },
     payment_method_collection: 'always',
     success_url: fid ? `${APPLI_FAMILLE}?abonnement=ok`
       : `${SITE_VITRINE.value()}/merci.html?session={CHECKOUT_SESSION_ID}`,
@@ -155,7 +164,7 @@ async function sessionPaiement({ formule, tablette, fid, email, client, relais, 
   };
   // Commande du site : livrée au point relais choisi avant le paiement. Depuis l'appli : à l'adresse saisie.
   if (reservation && reservation.expireA) params.expires_at = reservation.expireA;
-  if (!relais && !dejaInstallee) params.shipping_address_collection = { allowed_countries: ['FR', 'BE', 'LU'] };
+  if (!relais && !dejaInstallee) params.shipping_address_collection = { allowed_countries: ['FR'] };
   // Plus de numéro de TVA sur la page de paiement (Tanguy, 2026-10-26) : un champ de moins, l'admin peut
   // compléter une facture à la main. Le téléphone reste demandé : il sert au suivi du colis et au doublon.
   if (client) {
@@ -392,6 +401,7 @@ async function prevenirPaiement(fid, commandeId, avis, graceJusqua) {
     }
     (await Promise.allSettled(envois)).filter((r) => r.status === 'rejected')
       .forEach((r) => logger.error(`Famille ${fid} : avis « ${avis} » non envoyé`, r.reason));
+    await require('./journal-alertes').noter(db, { genre: avis === 'impaye' ? 'impaye' : 'pause', fid });
   } catch (e) {
     logger.error(`Famille ${fid} : avis « ${avis} »`, e.message);
   }
@@ -471,9 +481,17 @@ exports.commander = onRequest({ secrets: [STRIPE_SECRET] }, async (req, res) => 
     res.redirect(303, `${SITE_VITRINE.value()}/#lancement`);
     return;
   }
-  const { formule, tablette } = req.query;
-  if (!regles.formuleValide(formule, tablette)) {
+  const tablette = 'incluse';
+  const formule = regles.formuleVendue(req.query.formule, req.query.tablette || tablette);
+  if (!formule) {
     res.redirect(303, `${SITE_VITRINE.value()}/#tarifs`);
+    return;
+  }
+  // Couverture 4G vérifiée par Papote à l'adresse du proche (Tanguy, 2026-10-29), à nouveau ici : la page ne
+  // laisse payer que si elle passe, mais un lien ancien ou modifié ne doit pas ouvrir le paiement.
+  const proche = await couverture.procheDepuisRequete(req.query);
+  if (!proche || !proche.eligible) {
+    res.redirect(303, `${SITE_VITRINE.value()}/commande.html`);
     return;
   }
   // Sans point relais, retour à la page de choix du point relais.
@@ -488,7 +506,7 @@ exports.commander = onRequest({ secrets: [STRIPE_SECRET] }, async (req, res) => 
     // Plus de tablette disponible : liste d'attente « Être prévenu ».
     // Toujours une réservation : les commandes ne ferment plus, seul le délai annoncé change (stock.js).
     const reservation = await reserverTablette();
-    const session = await sessionPaiement({ formule, tablette, relais, email, accord, reservation });
+    const session = await sessionPaiement({ formule, tablette, relais, proche, email, accord, reservation });
     // Lien d'une relance : le panier d'origine est déjà noté.
     if (email && !req.query.relance) {
       await noterPanier(session.id, { email, accord, formule, relais, query: req.query })
@@ -505,9 +523,11 @@ exports.commander = onRequest({ secrets: [STRIPE_SECRET] }, async (req, res) => 
 
 exports.creerPaiement = onCall({ secrets: [STRIPE_SECRET] }, async (request) => {
   const { uid, email } = compteVerifie(request);
-  const { fid, formule, tablette } = request.data || {};
+  const { fid } = request.data || {};
+  const tablette = 'incluse';
   if (!commandesOuvertes()) throw new HttpsError('failed-precondition', 'Les commandes ouvrent très bientôt.');
-  if (!regles.formuleValide(formule, tablette)) throw new HttpsError('invalid-argument', 'Formule inconnue.');
+  const formule = regles.formuleVendue((request.data || {}).formule, (request.data || {}).tablette || tablette);
+  if (!formule) throw new HttpsError('invalid-argument', 'Formule inconnue.');
   const fam = await familleDuResponsable(fid, uid);
   if (fam.abonnement && ['actif', 'impaye', 'offert'].includes(fam.abonnement.statut)) {
     throw new HttpsError('failed-precondition', 'Cette famille a déjà un abonnement.');
@@ -548,6 +568,15 @@ exports.portailClient = onCall({ secrets: [STRIPE_SECRET] }, async (request) => 
     locale: 'fr',
   });
   return { url: session.url };
+});
+
+// Factures de la famille (page « Abonnement et paiement » de l'appli), les plus récentes d'abord.
+exports.facturesFamille = onCall({ secrets: [STRIPE_SECRET] }, async (request) => {
+  const fam = await familleGeree((request.data || {}).fid, request);
+  const client = fam.abonnement && fam.abonnement.stripeCustomerId;
+  if (!client) return { factures: [] };
+  const { data } = await stripe().invoices.list({ customer: client, limit: 36 });
+  return { factures: data.map(regles.factureClient).filter(Boolean) };
 });
 
 // Résiliation en ligne, sans engagement : l'abonnement s'arrête à la fin du mois en cours,
@@ -715,9 +744,36 @@ exports.finDeContrat = onCall({ secrets: [STRIPE_SECRET] }, async (request) => {
       jusqua: c.expedition === 'a-preparer' ? null : regles.limiteRetractation(ms(c.creeLe), ms(c.envoyeeLe), regles.receptionDe(c)),
       montant: await montantPaye(id),
     } : null,
-    restitution: r ? { statut: r.statut, avant: ms(r.avant), etiquette: r.etiquette || null } : null,
+    restitution: r ? { statut: r.statut, avant: ms(r.avant), etiquette: r.etiquette || null, qr: r.qr || null } : null,
     remboursement: c.remboursement ? { statut: c.remboursement.statut, montant: c.remboursement.montant || 0 } : null,
   };
+});
+
+// « Je renvoie la tablette » : le QR code de retour (sans impression) n'est créé qu'au moment où la famille
+// est prête à déposer le colis, pour ne pas payer d'étiquette pour une tablette jamais rendue (Tanguy, 28/10).
+// Déjà créé : on renvoie le même. L'e-mail avec le QR code part avec commandeModifiee (suiviRetour).
+exports.renvoyerTablette = onCall({ secrets: [SENDCLOUD_API, MAIL_MOT_DE_PASSE], timeoutSeconds: 120 }, async (request) => {
+  const { id, ref, snap } = await commandeDeLaFamille((request.data || {}).fid, request);
+  const c = snap.data();
+  const r = c.restitution;
+  if (!r || !['attendue', 'echec'].includes(r.statut)) throw new HttpsError('failed-precondition', "Il n'y a pas de tablette à nous renvoyer.");
+  if (r.etiquette) return { etiquette: r.etiquette, qr: r.qr || null };
+  // Un seul QR à la fois, même si le bouton est touché deux fois.
+  const maintenant = Date.now();
+  await db.runTransaction(async (tx) => {
+    const demande = (await tx.get(ref)).get('restitution.qrDemandeLe');
+    if (demande && maintenant - demande < 2 * 60e3) throw new HttpsError('already-exists', 'Le QR code est en cours de création, un instant.');
+    tx.update(ref, { 'restitution.qrDemandeLe': maintenant });
+  });
+  try {
+    const e = await gestion.etiquetteRetourClient(id, request.auth.token.email || request.auth.uid);
+    return { etiquette: e.url, qr: e.qr || null };
+  } catch (e) {
+    await ref.update({ 'restitution.qrDemandeLe': FieldValue.delete() });
+    // Adresse de Papote ou du client manquante, panne Sendcloud : Papote le voit dans les journaux.
+    logger.error(`Commande ${id} : QR code de retour non créé`, e.message);
+    throw new HttpsError('internal', "Le QR code n'a pas pu être créé. Réessayez dans un instant, ou répondez à notre e-mail : nous vous l'envoyons.");
+  }
 });
 
 // Code de commande d'un abonnement : créé une seule fois, à la première demande.
@@ -828,11 +884,28 @@ exports.stripeWebhook = onRequest(
     }
   });
 
+// Premier prélèvement plus loin qu'un mois (délai de livraison + 30 jours) : Stripe ne l'accepte pas sur la page de
+// paiement (ancrePaiement), on le pose donc dès le paiement reçu. Rien si l'abonnement a déjà une date égale ou plus
+// tardive (message reçu deux fois, date déjà recalée à l'envoi).
+async function premierPrelevementVoulu(abonnementId, premierSecondes) {
+  const voulu = Number(premierSecondes) * 1000;
+  if (!Number.isFinite(voulu) || voulu <= Date.now() + 60 * 60 * 1000) return;
+  try {
+    const abo = await stripe().subscriptions.retrieve(abonnementId);
+    const actuel = regles.premierPrelevementDe(abo, Date.now());
+    if (!actuel || actuel >= voulu - 60 * 60 * 1000) return;
+    await stripe().subscriptions.update(abonnementId, { trial_end: Math.ceil(voulu / 1000), proration_behavior: 'none' });
+  } catch (e) {
+    logger.error(`Abonnement ${abonnementId} : premier prélèvement non posé`, e.message);
+  }
+}
+
 // Prélèvement SEPA : la page de paiement se termine avant que la banque confirme (quelques jours).
 // La commande attend en « paiement-en-attente » (tablette déjà comptée dans le stock), puis passe
 // « a-preparer » avec async_payment_succeeded ; les e-mails de confirmation partent à ce moment.
 async function paiementTermine(session) {
   if (!session.subscription) return;
+  await premierPrelevementVoulu(session.subscription, (session.metadata || {}).premier);
   const paye = session.payment_status !== 'unpaid';
   const details = session.customer_details || {};
   const adresse = (session.collected_information && session.collected_information.shipping_details)
@@ -851,6 +924,8 @@ async function paiementTermine(session) {
       tablette: meta.tablette || null,
       livraison: livraison.relaisDepuisMeta(meta)
         || (adresse ? { nom: adresse.name || null, adresse: adresse.address || null } : null),
+      // Adresse du proche, où la couverture 4G a été vérifiée avant le paiement.
+      proche: couverture.procheDepuisMeta(meta),
       // Tablette à préparer et envoyer par Tanguy (« envoyee » une fois partie).
       expedition: paye ? 'a-preparer' : 'paiement-en-attente',
       // Abonnement pris dans l'appli avec la tablette déjà chez le proche : rien à envoyer, reçue aujourd'hui.
@@ -1052,7 +1127,7 @@ async function confirmerCommande(ref, email, code) {
   });
   if (!premier) return;
   await compterEtape('paye').catch((e) => logger.warn('Statistiques', e.message));
-  const infos = { nom: premier.nom, code, relais: premier.livraison, formule: premier.formule, delai: premier.delai,
+  const infos = { nom: premier.nom, code, relais: premier.livraison, proche: premier.proche || null, formule: premier.formule, delai: premier.delai,
     dejaInstallee: !!(premier.preparation && premier.preparation.recuPar === 'déjà installée'), reprise: premier.reprise === true };
   const envois = [envoyerMail(EMAIL_PAPOTE, mail.nouvelleCommande({ ...infos, email, telephone: premier.telephone }))];
   if (email) envois.push(envoyerMail(email, mail.commandeConfirmee(infos)));
@@ -1095,6 +1170,19 @@ async function noterPanier(sessionId, { email, accord, formule, relais, query })
 // Liste d'attente du lancement (site vitrine) : l'adresse rejoint contacts/ avec l'accord et un jeton de
 // désinscription, source « liste-attente », pour l'e-mail d'ouverture des commandes (onglet Clients).
 // Le site affiche « Être prévenu » à la place de « Commander » quand il n'y a plus de tablette.
+// ?lat&lon : l'adresse exacte ; ?insee : une commune seule (part de sa surface bien couverte).
+exports.couverture = onRequest({ cors: [/mapapote\.fr$/, /papote\.web\.app$/], maxInstances: 3 }, async (req, res) => {
+  if (req.query.insee) {
+    const v = await couverture.verifierCommune(String(req.query.insee)).catch((e) => { logger.warn('Couverture', e.message); return undefined; });
+    if (v === undefined) { res.status(503).json({ erreur: 'indisponible' }); return; }
+    res.set('Cache-Control', 'public, max-age=86400');
+    res.json(v || { part: 0, eligible: false });
+    return;
+  }
+  res.set('Cache-Control', 'public, max-age=86400');
+  res.json(couverture.verifier(req.query.lat, req.query.lon));
+});
+
 exports.stockDisponible = onRequest({ cors: [/mapapote\.fr$/, /papote\.web\.app$/], maxInstances: 2 }, stock.routeDisponible(db, logger));
 
 exports.listeAttente = onRequest({ cors: [/mapapote\.fr$/, /papote\.web\.app$/], maxInstances: 2 }, async (req, res) => {
@@ -1323,7 +1411,7 @@ exports.restitutions = onSchedule(
       if (regles.rappelRestitutionDu(r, maintenant) && snap.get('email')) {
         try {
           await envoyerMail(snap.get('email'), mail.rappelRestitution({
-            nom: snap.get('nom'), avant: r.avant.toMillis(), lien: r.etiquette || null,
+            nom: snap.get('nom'), avant: r.avant.toMillis(), lien: r.qr || r.etiquette || null, qr: !!r.qr,
             montant: regles.penaliteRestitution(snap.data()),
           }));
           await snap.ref.update({ 'restitution.rappelLe': FieldValue.serverTimestamp() });
@@ -1640,16 +1728,13 @@ async function suiviRetour(event, rAvant, r, c) {
   const id = event.params.id;
   const retractation = c.remboursement && c.remboursement.statut === 'au-retour' ? c.remboursement.montant : null;
 
-  // Tablette attendue : le client reçoit UN seul e-mail, le mode d'emploi avec l'étiquette à coller. Avec la
-  // vraie clé Stripe, l'étiquette est créée la nuit suivante (gestionAutomatique) et cet e-mail part avec elle
-  // (plus bas). En mode test, aucune étiquette n'est créée : le mode d'emploi part seul, tout de suite.
+  // Tablette attendue : le client reçoit le mode d'emploi tout de suite. Le QR code de retour n'est créé que
+  // quand il touche « Je renvoie la tablette » dans l'appli (renvoyerTablette) : il le reçoit alors par e-mail
+  // (plus bas), et Papote un second avis avec le suivi du colis.
   if (r.statut === 'attendue' && rAvant.statut !== 'attendue' && !r.mailLe) {
     await ref.update({ 'restitution.mailLe': FieldValue.serverTimestamp() });
-    const etiquetteAutomatique = STRIPE_SECRET.value().startsWith('sk_live_') && c.expedition === 'envoyee';
-    // L'avis à Papote part avec le suivi du colis de retour quand l'étiquette sera créée (plus bas) ;
-    // sans étiquette automatique (mode test), il part tout de suite, sans suivi.
-    if (!etiquetteAutomatique) await avisResiliation(id, c, retractation);
-    if (c.email && !r.etiquette && !etiquetteAutomatique) {
+    await avisResiliation(id, c, retractation);
+    if (c.email && !r.etiquette) {
       try {
         await envoyerMail(c.email, mail.retourTablette({ nom: c.nom, avant: r.avant.toMillis(), retractation, montant: regles.penaliteRestitution(c) }));
       } catch (e) {
@@ -1667,7 +1752,7 @@ async function suiviRetour(event, rAvant, r, c) {
   if (r.etiquette && r.etiquette !== rAvant.etiquette && c.email) {
     try {
       await envoyerMail(c.email, mail.etiquetteRetour({
-        nom: c.nom, lien: r.etiquette, avant: r.avant ? r.avant.toMillis() : null,
+        nom: c.nom, lien: r.qr || r.etiquette, qr: !!r.qr, avant: r.avant ? r.avant.toMillis() : null,
         fin: ['attendue', 'echec'].includes(r.statut), retractation, montant: regles.penaliteRestitution(c),
       }));
     } catch (e) {
@@ -1831,6 +1916,8 @@ exports.compterProches = onDocumentWritten(
 
 // Appels de la tablette vers la famille : sonnerie et appel manqué par notification push.
 Object.assign(exports, require('./appels'));
+// Réveil des tablettes par notification push (plus d'écoute ouverte en permanence) : voir reveil.js.
+Object.assign(exports, (({ reveilAppel, reveilOrdre, reveilFamille, reveilVersion, reveilPing }) => ({ reveilAppel, reveilOrdre, reveilFamille, reveilVersion, reveilPing }))(require('./reveil')));
 
 // Protections contre une facture qui s'emballe : coupe-circuit à 150 € et plafonds de stockage.
 exports.coupeCircuit = require('./budget').coupeCircuit;

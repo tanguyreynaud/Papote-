@@ -16,10 +16,19 @@ const DELAI_GRACE_JOURS = 7;
 // (limiteRetractation) ; le dernier mois est prélevé à l'arrêt.
 // Sur la page de paiement, plus d'« essai gratuit » (Tanguy, 2026-10-27 : « 90 jours gratuits » se lisait comme une
 // promesse) : une date de premier prélèvement (billing_cycle_anchor), estimée d'après le délai annoncé.
-const ATTENTE_ENVOI = { stock: 3, precommande: 10, long: 28 };
+// Un seul délai annoncé depuis le 29/10/2026 : expédiée sous 3 à 5 jours ouvrés, quel que soit le stock (delai n'est
+// plus lu). 7 jours : 5 jours ouvrés et un week-end.
+const ATTENTE_ENVOI = 7;
 function premierPrelevementMs(delai, maintenant, { dejaInstallee = false } = {}) {
-  const attente = dejaInstallee ? 0 : (ATTENTE_ENVOI[delai] != null ? ATTENTE_ENVOI[delai] : ATTENTE_ENVOI.long);
+  const attente = dejaInstallee ? 0 : ATTENTE_ENVOI;
   return maintenant + (attente + RETRACTATION_JOURS) * JOUR;
+}
+// Stripe refuse une date de départ (billing_cycle_anchor) au-delà de la prochaine échéance naturelle, un mois après
+// le paiement (« le paiement n'a pas pu s'ouvrir », 27/10). La page de paiement part donc au plus à 27 jours (février
+// compris), et la vraie date (premierPrelevementMs) est posée dès le paiement reçu (trial_end, paiementTermine).
+const ANCRE_MAX_JOURS = 27;
+function ancrePaiement(premier, maintenant) {
+  return Math.min(premier, maintenant + ANCRE_MAX_JOURS * JOUR);
 }
 // Date du premier prélèvement d'un abonnement Stripe qui n'a encore rien prélevé (ms), sinon null :
 // « trial » recalé à l'envoi, ou date de départ posée au paiement et pas encore atteinte.
@@ -91,6 +100,14 @@ const TARIF_MISE_EN_SERVICE = 'papote_mise_en_service';
 // Les tarifs « achetee » restent dans TARIFS pour lire les anciennes commandes de test.
 function formuleValide(formule, tablette) {
   return tablette === 'incluse' && Boolean(TARIFS[formule] && TARIFS[formule][tablette]);
+}
+// Offre unique depuis le 29/10/2026 (Tanguy) : 25 € par mois tout compris, carte SIM toujours fournie.
+// Plus de formule Wi-Fi : un ancien lien (formule=wifi, ou sans formule) donne aussi l'offre unique.
+const FORMULE = 'sim';
+// → 'sim', ou null si la demande ne correspond à rien (tablette achetée, formule inconnue).
+function formuleVendue(formule, tablette = 'incluse') {
+  if (formule != null && formule !== '' && !TARIFS[formule]) return null;
+  return formuleValide(FORMULE, tablette) ? FORMULE : null;
 }
 
 // La tablette fonctionne et la famille peut envoyer.
@@ -242,6 +259,21 @@ function afficherCode(code) {
   return `${code.slice(0, 4)}-${code.slice(4)}`;
 }
 
+// Facture Stripe telle que l'appli famille la montre (page « Abonnement et paiement ») : brouillons et factures
+// annulées écartés, lien du PDF à télécharger. statut : 'payee' | 'a-payer'.
+function factureClient(f) {
+  if (!f || !['paid', 'open', 'uncollectible'].includes(f.status)) return null;
+  return {
+    id: f.id,
+    numero: f.number || null,
+    le: f.created * 1000,
+    montant: f.status === 'paid' ? f.amount_paid : f.amount_due,
+    statut: f.status === 'paid' ? 'payee' : 'a-payer',
+    pdf: f.invoice_pdf || null,
+    page: f.hosted_invoice_url || null,
+  };
+}
+
 // Faut-il appliquer un événement Stripe à cette famille ? Une famille offerte ne change jamais.
 function peutModifier(actuel) {
   return !(actuel && actuel.statut === 'offert');
@@ -251,6 +283,7 @@ module.exports = {
   DELAI_GRACE_JOURS,
   ATTENTE_ENVOI,
   premierPrelevementMs,
+  ancrePaiement,
   premierPrelevementDe,
   RESTITUTION_JOURS,
   PENALITE_NON_RESTITUTION,
@@ -279,10 +312,13 @@ module.exports = {
   TARIF_TABLETTE,
   TARIF_MISE_EN_SERVICE,
   formuleValide,
+  formuleVendue,
+  FORMULE,
   estActif,
   statutDepuisStripe,
   graceDepassee,
   peutModifier,
+  factureClient,
   nouveauCode,
   normaliserCode,
   afficherCode,

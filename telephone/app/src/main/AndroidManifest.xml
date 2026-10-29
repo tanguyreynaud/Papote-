@@ -7,6 +7,13 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Appel en cours dans l'app (AppelEnCours, AppelService) : micro et caméra, même en arrière-plan -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
 
     <application
         android:allowBackup="false"
@@ -30,9 +37,14 @@
             <meta-data
                 android:name="android.support.customtabs.trusted.STATUS_BAR_COLOR"
                 android:resource="@color/creme" />
+            <!-- Barre des boutons Android (retour, accueil) : gris léger, un peu plus foncé que le
+                 crème, avec des boutons gris foncé (Chrome les choisit d'après la couleur). -->
             <meta-data
                 android:name="android.support.customtabs.trusted.NAVIGATION_BAR_COLOR"
-                android:resource="@color/creme" />
+                android:resource="@color/barre_boutons" />
+            <meta-data
+                android:name="android.support.customtabs.trusted.NAVIGATION_BAR_COLOR_DARK"
+                android:resource="@color/barre_boutons_sombre" />
             <meta-data
                 android:name="android.support.customtabs.trusted.SPLASH_IMAGE_DRAWABLE"
                 android:resource="@drawable/logo_demarrage" />
@@ -87,6 +99,43 @@
                 <data android:scheme="papote" android:host="sans-pause" />
             </intent-filter>
         </activity>
+
+        <!-- « Voulez-vous quitter Papote ? » puis « Quitter » dans l'app famille : ferme l'app -->
+        <activity
+            android:name=".Quitter"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="papote" android:host="quitter" />
+            </intent-filter>
+        </activity>
+
+        <!-- Appel en cours : la page d'appel dans l'app, qui garde le micro en arrière-plan -->
+        <activity
+            android:name=".AppelEnCours"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:taskAffinity="fr.mapapote.famille.encours"
+            android:showWhenLocked="true"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode"
+            android:theme="@android:style/Theme.DeviceDefault.Light.NoActionBar">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="papote" android:host="appel" />
+            </intent-filter>
+        </activity>
+
+        <service
+            android:name=".AppelService"
+            android:exported="false"
+            android:foregroundServiceType="microphone|camera" />
 
         <!-- Bouton « Refuser » de la notification -->
         <receiver

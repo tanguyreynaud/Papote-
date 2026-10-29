@@ -7,11 +7,11 @@
 //   node commande-test.js --nettoyer      : supprime seulement les commandes TEST restantes
 //   node commande-test.js --voir          : navigateur visible
 //
-// Scénarios : telephone-carte (390 px, 4242), ordinateur-carte (1280 px, formule internet incluse, 4242),
+// Scénarios : telephone-carte (390 px, 4242), ordinateur-carte (1280 px, 4242),
 // sepa (IBAN de test), refus (carte 4000 0000 0000 0002 refusée), retour (lien retour de Stripe puis
 // bouton Retour du navigateur : la commande est gardée).
 // Chaque page Stripe, merci.html et les e-mails sont capturés et relus (rien de « gratuit » ni d'« essai »,
-// seulement 60 € puis 20 ou 30 €), puis montrés dans captures/<date>/rapport.html (--sans-rapport : pas ouvert).
+// seulement 60 € puis 25 €, offre unique), puis montrés dans captures/<date>/rapport.html (--sans-rapport : pas ouvert).
 // Vérifié pour chaque commande payée : merci.html et son code, commandes/{abonnement} dans Firestore (ce que
 // lit l'admin), abonnement Stripe en période d'essai, réservation de stock libérée, e-mail de confirmation parti.
 //
@@ -82,9 +82,8 @@ function cleStripe() {
 
 // ---------- Gestes sur le site ----------
 
-async function remplirCommande(page, { nom, email, sansInternet }) {
+async function remplirCommande(page, { nom, email }) {
   await page.goto(`${SITE}/commande.html`, { waitUntil: 'domcontentloaded' });
-  if (sansInternet) await page.locator('input[name="internet"][value="non"]').check();
   await page.locator('#cp').fill(CP);
   const point = page.locator('#points .point').first();
   await point.waitFor({ timeout: 20000 });
@@ -150,7 +149,9 @@ async function sansLink(page) {
 // ---------- Relecture de ce que voit le client ----------
 // Chaque page (Stripe, merci.html) et chaque e-mail est capturé dans captures/<date>/ et son texte relu :
 // rien de « gratuit » ni d'« essai » (la période sans prélèvement avant la réception est une astuce Stripe,
-// le client ne doit pas la voir), et pas d'autre montant que 60 € puis 20 ou 30 € par mois.
+// le client ne doit pas la voir), et pas d'autre montant que 60 € puis 25 € par mois (offre unique tout compris, 29/10/2026).
+// Offre unique : 25 € par mois tout compris.
+const MENSUEL = 25;
 const RAPPORT = path.join(CAPTURES, new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-'));
 const pages = [];
 const INTERDITS = /gratuit|essai|offert pendant|free|trial|\b\d+\s+jours?\s+(?:gratuits?|offerts?)/i;
@@ -193,7 +194,7 @@ async function relireEmails(navigateur, scenario, c) {
   let mail;
   try { mail = require(path.join(__dirname, '..', '..', 'functions', 'mail.js')); } catch (_) { return; }
   const infos = { nom: c.nom, code: c.code, relais: c.livraison, formule: c.formule, delai: c.delai, email: c.email, telephone: c.telephone };
-  const mensuel = c.formule === 'sim' ? 30 : 20;
+  const mensuel = MENSUEL;
   const ctx = await navigateur.newContext({ viewport: { width: 700, height: 900 } });
   for (const [quoi, m] of [['email-client', mail.commandeConfirmee(infos)], ['email-papote', mail.nouvelleCommande(infos)]]) {
     const page = await ctx.newPage();
@@ -277,7 +278,7 @@ const SCENARIOS = {
     const page = await (await navigateur.newContext(TELEPHONE)).newPage();
     const email = emailDe('tel');
     await remplirCommande(page, { nom: 'TEST Téléphone', email });
-    await relireStripe(page, 'telephone-carte', 20);
+    await relireStripe(page, 'telephone-carte', MENSUEL);
     await payerCarte(page, '4242424242424242');
     await merci(page, 'telephone-carte');
     await verifierCommande(db, stripe, 'telephone-carte', email, { navigateur });
@@ -285,8 +286,8 @@ const SCENARIOS = {
   'ordinateur-carte': async (navigateur, db, stripe) => {
     const page = await (await navigateur.newContext(ORDINATEUR)).newPage();
     const email = emailDe('pc');
-    await remplirCommande(page, { nom: 'TEST Ordinateur', email, sansInternet: true });
-    await relireStripe(page, 'ordinateur-carte', 30);
+    await remplirCommande(page, { nom: 'TEST Ordinateur', email });
+    await relireStripe(page, 'ordinateur-carte', MENSUEL);
     await payerCarte(page, '4242424242424242');
     await merci(page, 'ordinateur-carte');
     await verifierCommande(db, stripe, 'ordinateur-carte', email, { navigateur });
@@ -295,7 +296,7 @@ const SCENARIOS = {
     const page = await (await navigateur.newContext(ORDINATEUR)).newPage();
     const email = emailDe('sepa');
     await remplirCommande(page, { nom: 'TEST Sepa', email });
-    await relireStripe(page, 'sepa', 20);
+    await relireStripe(page, 'sepa', MENSUEL);
     await payerSepa(page);
     await merci(page, 'sepa');
     await verifierCommande(db, stripe, 'sepa', email, { sepa: true, navigateur });
@@ -304,7 +305,7 @@ const SCENARIOS = {
     const page = await (await navigateur.newContext(TELEPHONE)).newPage();
     const email = emailDe('refus');
     await remplirCommande(page, { nom: 'TEST Refus', email });
-    await relireStripe(page, 'refus', 20);
+    await relireStripe(page, 'refus', MENSUEL);
     await payerCarte(page, '4000000000000002');
     const erreur = page.getByText(/refusée|declined/i).first();
     const vu = await erreur.waitFor({ timeout: 30000 }).then(() => true).catch(() => false);

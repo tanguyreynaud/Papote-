@@ -8,9 +8,9 @@
 
 const TARIFS = {
   papote_wifi_incluse: { montant: 2000, recurrent: true },
-  papote_sim_incluse: { montant: 3000, recurrent: true },
+  papote_sim_incluse: { montant: 2500, recurrent: true },
   papote_wifi_achetee: { montant: 2000, recurrent: true },
-  papote_sim_achetee: { montant: 3000, recurrent: true },
+  papote_sim_achetee: { montant: 2500, recurrent: true },
   papote_mise_en_service: { montant: 6000, recurrent: false },
 };
 
@@ -73,6 +73,13 @@ function creerFauxStripe(horloge) {
           if (params.expires_at && params.expires_at < secondes() + 30 * 60 - 5) {
             throw new Error('expires_at doit être au moins 30 minutes après maintenant');
           }
+          // Comme Stripe : la date de départ ne peut pas dépasser la prochaine échéance naturelle (un mois plus tard).
+          const ancre = params.subscription_data && params.subscription_data.billing_cycle_anchor;
+          if (ancre) {
+            const d = new Date(horloge());
+            d.setUTCMonth(d.getUTCMonth() + 1);
+            if (ancre * 1000 > d.getTime()) throw new Error('billing_cycle_anchor cannot be later than next natural billing date');
+          }
           const s = {
             id: id('cs'), object: 'checkout.session', status: 'open', payment_status: 'unpaid', mode: params.mode,
             url: null, metadata: { ...(params.metadata || {}) }, customer: params.customer || null,
@@ -133,8 +140,9 @@ function creerFauxStripe(horloge) {
       },
     },
     invoices: {
-      list: ({ subscription, status }) => liste([...etat.factures.values()]
-        .filter((f) => (!subscription || f.subscription === subscription) && (!status || f.status === status))),
+      list: ({ subscription, customer, status }) => liste([...etat.factures.values()]
+        .filter((f) => (!subscription || f.subscription === subscription) && (!customer || f.customer === customer)
+          && (!status || f.status === status))),
       create: async ({ customer, metadata }) => {
         const client = lire('clients', 'customer', customer);
         const lignes = etat.lignes.filter((l) => l.customer === customer && !l.facture);

@@ -1,0 +1,10 @@
+{
+  "source": "ARCEP, Mon réseau mobile, couverture théorique 4G Bouygues Telecom, 2026_T2",
+  "trimestre": "2026_T2",
+  "epsg": 2154,
+  "x0": 99000,
+  "y1": 7111000,
+  "pas": 100,
+  "largeur": 11440,
+  "hauteur": 10650
+}

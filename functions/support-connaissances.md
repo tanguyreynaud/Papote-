@@ -34,7 +34,7 @@ les fonctions suffit pour que le chat en tienne compte.
 
 ## Recevoir et jumeler la tablette
 - La tablette arrive en point relais, déjà configurée. On choisit le point relais à la commande, où l'on veut (près de chez soi ou près du proche) : pas besoin de passer la main pour cela. Suivi du colis : quand il part, l'e-mail « Votre tablette est en route » donne le numéro de suivi et un bouton « Suivre mon colis » qui ouvre le suivi Mondial Relay. Il n'y a pas de page de suivi sur le site ni dans l'appli.
-- À l'allumage, elle affiche un écran de bienvenue, demande le Wi-Fi de la maison (sauf avec l'option internet inclus), puis montre un QR code et un code à 8 caractères (ABCD-1234). On scanne le QR code avec l'appareil photo du téléphone, ou on va sur app.mapapote.fr et on tape le code.
+- À l'allumage, elle affiche un écran de bienvenue et se connecte toute seule grâce à sa carte SIM (pas besoin de Wi-Fi), puis montre un QR code et un code à 8 caractères (ABCD-1234). On scanne le QR code avec l'appareil photo du téléphone, ou on va sur app.mapapote.fr et on tape le code.
 - Ensuite, tout se fait sur le téléphone, en quelques minutes : le nom affiché sur la tablette (par exemple « Mamie Emma »), au moins une photo, un essai du son, puis les options (au départ : SOS famille, lecture à voix haute, météo et prochain rappel activés ; radio éteinte). Pendant ce temps, la tablette affiche « On prépare votre tablette… » jusqu'à la première photo. Les proches invités rejoignent ensuite la famille avec le lien ou le code. La personne qui scanne devient propriétaire de la famille.
 - Si l'installation est laissée en plan plus de 30 minutes, le prochain proche qui scanne le QR code la reprend là où elle en était. Le bouton « Annuler l'installation » efface une installation en cours (pas une famille déjà payée).
 - Se connecter à l'appli avec l'adresse e-mail utilisée pour le paiement : la commande se rattache toute seule à la famille. Sinon, Profil, Abonnement : entrer le code de commande (il est sur la page de confirmation et la facture).
@@ -55,7 +55,7 @@ les fonctions suffit pour que le chat en tienne compte.
 - Les vidéos déjà vues repassent ensuite dans le diaporama, avec les photos.
 
 ## Dépannage
-- La tablette ne répond plus : vérifier qu'elle est branchée et connectée au Wi-Fi ; puis dans Réglages, « Dépanner la tablette » : « Redémarrer la tablette ». Sinon, appui d'environ 10 secondes sur le bouton marche.
+- La tablette ne répond plus : vérifier qu'elle est branchée (et, si elle utilise le Wi-Fi de la maison, que la box marche) ; puis dans Réglages, « Dépanner la tablette » : « Redémarrer la tablette ». Sinon, appui d'environ 10 secondes sur le bouton marche.
 - Nouvelle box ou nouveau mot de passe Wi-Fi : Réglages, « Changer le Wi-Fi », entrer le nom du réseau et le mot de passe puis « Envoyer à la tablette ». Si c'est faux, elle garde son Wi-Fi actuel. Cela ne marche que si la tablette est encore connectée. Si le mot de passe de la box a déjà été changé et que la tablette n'a plus internet, l'appli ne peut plus lui envoyer le Wi-Fi : redémarrer ne suffit pas, il faut l'aide du support (demande de contact).
 - L'appel vidéo ne marche pas : autoriser la caméra et le micro quand le téléphone le demande (sinon dans les réglages du navigateur). Le bouton « Appel vidéo » reste grisé tant que la tablette ne peut pas recevoir d'appel (éteinte ou sans internet).
 - La tablette affiche « Papote est en pause » : l'abonnement est suspendu (paiement non réglé ou abonnement terminé). Régulariser ou changer de compte bancaire dans l'appli famille, onglet Profil, « Gérer le paiement et les factures » ; tout repart dès le paiement.
@@ -70,15 +70,16 @@ les fonctions suffit pour que le chat en tienne compte.
 
 ## Questions fréquentes (réponses validées par Papote)
 - Acheter la tablette : non, elle n'est jamais vendue ; elle est prêtée pendant l'abonnement et rendue à la fin.
-- Pas d'internet chez le proche : aucun problème avec l'option internet inclus : nous fournissons la connexion 4G avec sa carte SIM, prête à l'emploi. Rien à configurer ni à brancher en plus.
+- Pas d'internet chez le proche : aucun problème, c'est le cas normal : la tablette a sa propre connexion 4G avec sa carte SIM, comprise dans le prix, prête à l'emploi. Rien à configurer ni à brancher en plus.
+- Vérification de la 4G : à la commande, on tape la ville du proche (et sa rue si la 4G ne passe pas partout dans la commune) et Papote vérifie aussitôt, sur la carte officielle de l'ARCEP, que notre carte SIM capte bien chez le proche (4G bonne ou très bonne). Sinon, la commande n'est pas possible pour l'instant : mieux vaut ne pas livrer une tablette qui resterait sans internet. Livraison en France métropolitaine seulement (ni Belgique, ni Luxembourg, ni outre-mer).
 - La tablette : une tablette Android de notre fournisseur (on ne donne pas la marque), avec un bel écran de 10 pouces et une bonne caméra. Elle est préparée en France ; seule sa fabrication ne l'est pas.
 - Batterie : elle est faite pour rester branchée en permanence, comme un cadre photo.
 - Son : il est fort, pensé pour les personnes qui entendent mal.
 - Deux tablettes dans la même famille (par exemple deux grands-parents à deux endroits) : c'est possible, avec deux abonnements.
-- Maison de retraite (EHPAD) : ça marche avec le Wi-Fi de l'établissement s'il ne demande pas de page de connexion ; sinon, prendre l'option internet inclus (connexion 4G fournie).
+- Maison de retraite (EHPAD) : ça marche avec la carte SIM fournie, sans rien demander à l'établissement.
 - Box 4G ou partage de connexion d'un téléphone : ça marche, c'est un Wi-Fi comme un autre.
-- Option internet inclus : la tablette 4G a sa propre carte SIM et se connecte toute seule au réseau mobile. Il n'y a pas de routeur ni de box à brancher, rien à configurer.
-- Opérateur de la carte SIM : il n'est pas fixe ; on choisit celui qui couvre le mieux le domicile du client.
+- Carte SIM : toujours comprise, une seule offre à 25 € par mois tout compris. La tablette 4G se connecte toute seule au réseau mobile, sans routeur ni box à brancher. Sur la carte SIM, chaque mois : environ 2 h de visio en pleine qualité, puis jusqu'à 3 h en qualité réduite, et 100 photos + 20 vidéos. Avec le Wi-Fi de la maison (facultatif, réglé dans l'appli), tout est illimité.
+- Opérateur de la carte SIM : il n'est pas fixe ; c'est Papote qui le choisit et qui le paie. Si un jour il faut changer d'opérateur, Papote envoie une nouvelle carte avec une fiche d'une page pour la glisser dans la tablette.
 - Autres usages (Internet, jeux, YouTube) : non, la tablette est réservée à Papote pour rester simple et sans risque.
 - Tablette perdue ou volée : il n'y a pas de garantie pour cela. Il faut nous le signaler pour suspendre le contrat. La tablette est prêtée : la perte ou le vol est facturé comme un matériel non rendu (tablette 130 €, chargeur et câble 10 €, enceinte 10 € si elle a été fournie, soit 140 € ou 150 €). Pour en recevoir une nouvelle : demande de contact. Pour le signaler : demande de contact.
 - Nombre de proches dans la famille : jusqu'à 30.
@@ -86,18 +87,18 @@ les fonctions suffit pour que le chat en tienne compte.
 - Le proche âgé ne peut pas envoyer de photo ni de message écrit, et il n'y a aucun message vocal. Il peut appeler un proche (bouton « Appeler », appel audio), appeler toute la famille (bouton « SOS famille ») et confirmer un rappel.
 - Appels vidéo à plusieurs en même temps : pas encore prévu.
 - Appli sur ordinateur ou vieux téléphone : elle marche dans le navigateur d'un ordinateur ou d'un téléphone récent (iPhone ou Android).
-- Délai de livraison : Tanguy prépare et vérifie chaque tablette lui-même, une par une, à Lyon (c'est la raison des délais, pas un envoi depuis l'étranger). En stock : préparée sous 2 à 3 jours ouvrés. En précommande (plus de tablette en stock) : 7 à 10 jours ouvrés. Quand les commandes affluent (au-delà de 10 précommandes) : expédition sous 3 à 4 semaines ; les commandes restent ouvertes. Puis Mondial Relay livre en 3 à 5 jours ouvrés. Le délai est affiché sur le site avant de payer. On peut annuler à tout moment avant l'envoi : les 60 € sont remboursés tout de suite.
+- Délai de livraison : Tanguy prépare et vérifie chaque tablette lui-même, avec sa carte SIM, à Lyon. Elle est expédiée sous 3 à 5 jours ouvrés, en point relais Mondial Relay. On peut annuler à tout moment avant l'envoi : les 60 € sont remboursés tout de suite.
 - Offrir Papote : commandez à votre nom et choisissez un point relais près de chez le proche, ou près de chez vous si vous la lui apportez. La tablette arrive prête : on la branche, puis vous la reliez à la famille depuis votre téléphone en scannant le QR code qu'elle affiche. Le proche n'a rien à régler ni à apprendre, et c'est vous qui gérez l'abonnement. Un autre proche peut aussi payer.
-- Livraison hors France, Belgique et Luxembourg (Suisse, DOM-TOM…) : pas pour le moment.
-- Changer de formule : passer à l'option internet inclus ou revenir au Wi-Fi de la maison est possible ; nous disons alors s'il faut envoyer ou renvoyer du matériel. Dans les deux cas : demande de contact.
-- Paiement : uniquement par prélèvement SEPA, avec l'IBAN d'un compte en France, en Belgique ou au Luxembourg, saisi sur la page sécurisée Stripe (mandat signé en ligne). Pas de carte bancaire, ni Google Pay, Apple Pay ou Link, ni chèque, virement ou espèces. L'abonnement est prélevé chaque mois. La tablette part dès que la banque a confirmé le premier prélèvement (quelques jours) ; s'il est refusé, la commande est annulée ; les factures sont dans l'appli, onglet Profil, « Gérer le paiement et les factures ».
+- Livraison hors de France métropolitaine (Belgique, Luxembourg, Suisse, DOM-TOM…) : pas pour le moment, car la carte SIM fournie est française. On peut en revanche payer avec un compte en Belgique ou au Luxembourg pour un proche qui vit en France.
+- Changer de formule : il n'y a qu'une seule offre, tout compris avec la carte SIM. Le Wi-Fi de la maison peut s'ajouter quand on veut dans l'appli (Réglages, « Changer le Wi-Fi »), sans changer le prix.
+- Paiement : par carte bancaire (Apple Pay, Google Pay) ou par prélèvement SEPA (IBAN d'un compte en France, en Belgique ou au Luxembourg), sur la page sécurisée Stripe. Ni chèque, virement ou espèces. L'abonnement est payé chaque mois. Avec le SEPA, la tablette part dès que la banque a confirmé le premier paiement (quelques jours) ; s'il est refusé, la commande est annulée ; les factures sont dans l'appli, onglet Profil, « Gérer le paiement et les factures ».
 - Tablette arrivée abîmée (écran fissuré, colis endommagé) : ce n'est pas de votre faute et ce n'est pas une rétractation. Prenez des photos et faites une demande de contact : l'équipe s'en occupe.
 - Panne (tablette qui ne marche plus sans avoir été cassée) : réparée gratuitement. Nous envoyons une étiquette de retour ; comptez le temps de nous l'envoyer, environ 5 jours ouvrés de réparation, puis environ 5 jours ouvrés pour la recevoir de nouveau. Demande de contact pour lancer le retour.
 - Après une résiliation, les photos sont gardées 12 mois puis supprimées. Gardez toujours vos originaux sur votre téléphone.
 - Appels la nuit : oui, on peut appeler à toute heure ; l'appel réveille la tablette même quand l'écran est éteint.
 - Si la tablette est déjà en appel, un autre proche ne peut pas l'appeler en même temps.
 - Appli depuis l'étranger : oui, partout, tant que la connexion internet est bonne.
-- Déménagement du proche : il garde la même tablette et le même abonnement. Pensez à envoyer le nouveau Wi-Fi (Réglages, « Changer le Wi-Fi ») avant que la tablette perde l'ancien. Pas possible dans un autre pays.
+- Déménagement du proche : il garde la même tablette et le même abonnement ; la carte SIM suit, rien à faire. Pas possible dans un autre pays.
 - Le proche ne veut pas parler : il n'est jamais obligé, il peut simplement ne pas répondre.
 - Changer de compte bancaire (IBAN) : onglet Profil, « Gérer le paiement et les factures ». Pour qu'une autre personne reprenne l'abonnement à son nom : demande de contact.
 - La société s'appelle Papote.
@@ -112,9 +113,9 @@ les fonctions suffit pour que le chat en tienne compte.
 - Matériel non rendu : seuls les éléments manquants sont prélevés : tablette 130 €, chargeur et câble 10 €, enceinte 10 € (seulement si elle a été fournie), soit 140 € si rien n'est rendu (150 € avec l'enceinte). Le socle n'est jamais facturé. Il n'y a pas de routeur. Aucune caution n'est prélevée d'avance.
 - Aide fiscale (services à la personne) : pas pour le moment.
 - Chaleur : la tablette devient tiède à force de rester allumée, c'est normal. Évitez simplement le plein soleil et la proximité d'un radiateur.
-- Connexion internet nécessaire : une box classique suffit (ADSL, fibre ou 4G) ; il faut juste que le Wi-Fi capte bien là où la tablette est posée.
+- Connexion internet nécessaire : rien à prévoir, la carte SIM 4G est fournie. Une box en Wi-Fi est un plus (tout devient illimité) mais pas obligatoire.
 - Consommation d'internet : très faible pour les photos et les messages ; un appel vidéo d'une heure consomme environ 0,5 à 1 Go.
-- Carte cadeau : pas pour le moment, mais au lancement on pourra commander pour un proche et faire livrer près de chez lui (voir Offrir Papote).
+- Carte cadeau : pas pour le moment, mais au lancement on pourra commander pour un proche et faire livrer près de chez le proche (voir Offrir Papote).
 - Commande par téléphone : non, seulement sur le site, au lancement (liste d'attente en attendant).
 - Voir la tablette en magasin : non, la vente est uniquement en ligne ; le plus simple pour se faire une idée est d'essayer, avec 30 jours après la réception pour changer d'avis (rien à payer, 60 € remboursés). Ne pas proposer de rappel.
 - Facture au nom d'une autre personne que celle qui paie (par exemple le parent) : la facture est au nom de celui qui paie ; pour un autre nom, demande de contact.

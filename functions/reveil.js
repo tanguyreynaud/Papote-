@@ -1,0 +1,137 @@
+// Réveil des tablettes par notification push, à la place d'une écoute Firestore ouverte en permanence
+// dans la page de la tablette (≈ 100 Mo par mois sur la carte SIM, mesuré le 28/10).
+//
+//   reveilAppel    un proche appelle (families/{fid}/calls créé par un téléphone) : { type: 'appel', id }
+//   reveilOrdre    test du son demandé par le téléphone (commands créé) : { type: 'ordre', id }
+//   reveilFamille  la fiche de la famille change (envoi, rappel, réglage…) : { type: 'famille' }
+//   reveilVersion  nouvelle version publiée (config/version) : { type: 'version' } à toutes les tablettes
+//   reveilPing     auto-contrôle : la tablette écrit pingDemande dans son document de jetons, le serveur
+//                  lui renvoie { type: 'ping' } ; sans ping reçu, la tablette garde son écoute en direct
+//
+// Jetons des tablettes : families/{fid}/members/{uid}/private/push = { tablette: [jeton] }, écrits par
+// l'app Android de la tablette (Sync.ecrireJetonPush). Messages « data » seulement, priorité haute :
+// l'app Android (Push.java) réveille la page ou la synchronisation. Une tablette sans jeton (ancienne
+// version, services Google absents) garde son écoute en direct : rien à envoyer, rien de perdu.
+
+const { onDocumentCreated, onDocumentUpdated, onDocumentWritten } = require('firebase-functions/v2/firestore');
+const { logger } = require('firebase-functions/v2');
+const admin = require('firebase-admin');
+const { FieldValue } = require('firebase-admin/firestore');
+
+const { BASE_FIRESTORE, REGION_FIRESTORE, db: base } = require('./base');
+
+const TOPIC = 'tablettes';
+const OPTIONS = { region: REGION_FIRESTORE, database: BASE_FIRESTORE, maxInstances: 5 };
+
+// Jetons push des tablettes de la famille : [{ t, ref }].
+async function jetonsTablettes(db, fid) {
+  const membres = await db.collection(`families/${fid}/members`).where('role', '==', 'tablette').get();
+  if (membres.empty) return [];
+  const refs = membres.docs.map((m) => db.doc(`families/${fid}/members/${m.id}/private/push`));
+  const docs = await db.getAll(...refs);
+  return docs.flatMap((d, i) => (d.exists ? (d.get('tablette') || []) : []).map((t) => ({ t, ref: refs[i] })));
+}
+
+// Envoie `data` aux tablettes de la famille ; oublie les jetons périmés. Renvoie le nombre atteint.
+// `messagerie` : admin.messaging() (remplaçable dans les essais).
+async function reveiller(db, fid, data, ttlSecondes = 60, messagerie = () => admin.messaging()) {
+  const jetons = await jetonsTablettes(db, fid);
+  if (!jetons.length) return 0;
+  const res = await messagerie().sendEachForMulticast({
+    tokens: jetons.map((j) => j.t),
+    data,
+    android: { priority: 'high', ttl: ttlSecondes * 1000, collapseKey: data.type },
+  });
+  const perimes = [];
+  res.responses.forEach((r, i) => {
+    const code = r.error && r.error.code;
+    if (code === 'messaging/registration-token-not-registered' || code === 'messaging/invalid-registration-token') {
+      perimes.push(jetons[i]);
+    }
+  });
+  await Promise.all(perimes.map((j) => j.ref.update({ tablette: FieldValue.arrayRemove(j.t) }).catch(() => {})));
+  return res.responses.filter((r) => r.success).length;
+}
+
+// Un proche appelle la tablette (pas la tablette qui appelle : ces appels-là font sonner les téléphones).
+exports.reveilAppel = onDocumentCreated({ ...OPTIONS, document: 'families/{fid}/calls/{cid}' }, async (event) => {
+  const appel = event.data && event.data.data();
+  if (!appel || appel.state !== 'ringing' || !appel.callerUid) return;
+  const db = base();
+  const { fid, cid } = event.params;
+  const appelant = await db.doc(`families/${fid}/members/${appel.callerUid}`).get();
+  if (appelant.get('role') === 'tablette') return;
+  const n = await reveiller(db, fid, { type: 'appel', id: cid });
+  logger.info('Réveil appel', { fid, cid, tablettes: n });
+});
+
+// Ordre d'un téléphone (test du son à l'installation).
+exports.reveilOrdre = onDocumentCreated({ ...OPTIONS, document: 'families/{fid}/commands/{id}' }, async (event) => {
+  const ordre = event.data && event.data.data();
+  if (!ordre || ordre.state !== 'pending') return;
+  const n = await reveiller(base(), event.params.fid, { type: 'ordre', id: event.params.id }, 120);
+  logger.info('Réveil ordre', { fid: event.params.fid, id: event.params.id, tablettes: n });
+});
+
+// La fiche de la famille a changé (rev à chaque envoi, rappels, réglages, abonnement, nom…) : la
+// tablette fait un tour de synchronisation. Le message tient 1 h et les suivants le remplacent : un
+// réveil retardé par Android (28/10, vidéo de 18h54 jamais arrivée en 10 min) vaut mieux qu'un perdu.
+exports.reveilFamille = onDocumentUpdated({ ...OPTIONS, document: 'families/{fid}' }, async (event) => {
+  if (!event.data) return;
+  const champs = changements(event.data.before.data(), event.data.after.data());
+  if (!champs.length) return;
+  const n = await reveiller(base(), event.params.fid, { type: 'famille' }, 3600);
+  // Toujours journalisé : « tablettes: 0 » = aucun jeton (ancienne version, jeton effacé), à distinguer
+  // d'un message parti mais jamais arrivé (28/10 : vidéo envoyée, tablette pas réveillée).
+  logger.info('Réveil famille', { fid: event.params.fid, champs, tablettes: n });
+});
+
+// Champs de la famille sans intérêt pour la tablette (comptes tenus par le serveur).
+const SANS_INTERET = new Set(['nbProches', 'updatedAt']);
+function changements(avant, apres) {
+  const cles = new Set([...Object.keys(avant || {}), ...Object.keys(apres || {})]);
+  return [...cles].filter((k) => !SANS_INTERET.has(k)
+    && JSON.stringify((avant || {})[k]) !== JSON.stringify((apres || {})[k])).sort();
+}
+function aChange(avant, apres) {
+  return changements(avant, apres).length > 0;
+}
+
+// Nouvelle version publiée : toutes les tablettes (abonnées au sujet « tablettes » au démarrage).
+exports.reveilVersion = onDocumentWritten({ ...OPTIONS, document: 'config/version' }, async () => {
+  try {
+    await admin.messaging().send({ topic: TOPIC, data: { type: 'version' }, android: { priority: 'high', ttl: 3600_000 } });
+  } catch (e) {
+    logger.warn('Réveil version', e && e.message);
+  }
+});
+
+// Auto-contrôle du réveil : la tablette a écrit (ou réécrit) pingDemande dans son document de jetons.
+exports.reveilPing = onDocumentWritten({ ...OPTIONS, document: 'families/{fid}/members/{uid}/private/push' }, async (event) => {
+  const avant = event.data && event.data.before.exists ? event.data.before.data() : null;
+  const apres = event.data && event.data.after.exists ? event.data.after.data() : null;
+  if (!doitPinger(avant, apres)) return;
+  try {
+    const res = await admin.messaging().sendEachForMulticast({
+      tokens: apres.tablette,
+      data: { type: 'ping' },
+      android: { priority: 'high', ttl: 120_000, collapseKey: 'ping' },
+    });
+    logger.info('Réveil ping', { fid: event.params.fid, uid: event.params.uid, ok: res.successCount, ko: res.failureCount });
+  } catch (e) {
+    logger.warn('Réveil ping', e && e.message);
+  }
+});
+
+// pingDemande vient d'être écrit ou a changé, et il y a au moins un jeton de tablette.
+function doitPinger(avant, apres) {
+  if (!apres || !Array.isArray(apres.tablette) || !apres.tablette.length || apres.pingDemande == null) return false;
+  const ms = (v) => (v && typeof v.toMillis === 'function' ? v.toMillis() : v);
+  return !avant || ms(avant.pingDemande) !== ms(apres.pingDemande);
+}
+
+module.exports.jetonsTablettes = jetonsTablettes;
+module.exports.doitPinger = doitPinger;
+module.exports.reveiller = reveiller;
+module.exports.aChange = aChange;
+module.exports.changements = changements;

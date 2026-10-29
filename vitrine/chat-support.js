@@ -35,11 +35,11 @@
     '.ps-msg a{color:inherit}' +
     '.ps-ia{align-self:flex-start;background:var(--ps-carte);border:1px solid var(--ps-ligne)}' +
     '.ps-moi{align-self:flex-end;background:var(--ps-indigo);color:#fff}' +
-    '.ps-attente{color:var(--ps-gris);font-style:italic}' +
-    '.ps-points span{animation:ps-point 1.2s infinite both}' +
-    '.ps-points span:nth-child(2){animation-delay:.2s}.ps-points span:nth-child(3){animation-delay:.4s}' +
-    '@keyframes ps-point{0%,80%,100%{opacity:.2}40%{opacity:1}}' +
-    '@media (prefers-reduced-motion:reduce){.ps-points span{animation:none}}' +
+    '.ps-attente{display:flex;align-items:center;gap:.35rem;min-height:2.9rem;padding:.9rem 1rem}' +
+    '.ps-attente span{width:.6rem;height:.6rem;border-radius:50%;background:var(--ps-indigo);animation:ps-point 1.2s ease-in-out infinite}' +
+    '.ps-attente span:nth-child(2){animation-delay:.15s}.ps-attente span:nth-child(3){animation-delay:.3s}' +
+    '@keyframes ps-point{0%,60%,100%{transform:translateY(0);opacity:.35}30%{transform:translateY(-.35rem);opacity:1}}' +
+    '@media (prefers-reduced-motion:reduce){.ps-attente span{animation:none;opacity:.7}}' +
     '.ps-idees{display:flex;flex-wrap:wrap;gap:.4rem}' +
     '.ps-idees button{border:1px solid var(--ps-indigo);background:var(--ps-doux);color:var(--ps-indigo-fonce);border-radius:999px;padding:.45rem .8rem;font:inherit;font-size:.95rem;cursor:pointer}' +
     '.ps-saisie{display:flex;gap:.5rem;padding:.75rem;background:var(--ps-carte);border-top:1px solid var(--ps-ligne)}' +
@@ -270,12 +270,12 @@
       ajouter('user', question);
       zone.value = '';
       envoyer.disabled = true;
-      // « Papote écrit… » avec des points qui clignotent : la réponse prend quelques secondes.
-      var attente = ajouter('assistant', 'Papote écrit', 'ps-attente');
-      var points = el('span', 'ps-points');
-      points.setAttribute('aria-hidden', 'true');
-      for (var i = 0; i < 3; i++) points.appendChild(el('span', '', '.'));
-      attente.appendChild(points);
+      // Bulle « … » : trois points qui montent et descendent tant que la réponse se prépare (quelques secondes),
+      // comme dans une messagerie ; sans texte, pour qu'on voie qu'il se passe quelque chose (Tanguy, 28/10).
+      var attente = ajouter('assistant', '', 'ps-attente');
+      attente.setAttribute('role', 'status');
+      attente.setAttribute('aria-label', 'Papote écrit');
+      for (var i = 0; i < 3; i++) attente.appendChild(el('span'));
       fetch(API, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

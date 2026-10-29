@@ -57,7 +57,9 @@ test('abonnement pris depuis l\'appli avec la tablette déjà installée : rien 
   const { url } = await s.appeler('creerPaiement', { fid, formule: 'wifi', tablette: 'incluse' }, julie);
   const session = url.split('/').pop();
   const params = s.stripe.etat.sessions.get(session).params;
-  assert.ok(Math.abs(params.subscription_data.billing_cycle_anchor * 1000 - (Date.now() + 30 * s.JOUR)) < 3600e3, 'premier prélèvement dans 30 jours');
+  // Stripe n'accepte pas plus d'un mois sur la page de paiement : départ à 27 jours, la vraie date est posée au paiement.
+  assert.ok(Math.abs(params.subscription_data.billing_cycle_anchor * 1000 - (Date.now() + 27 * s.JOUR)) < 3600e3, 'page de paiement : 27 jours au plus');
+  assert.ok(Math.abs(Number(params.subscription_data.metadata.premier) * 1000 - (Date.now() + 30 * s.JOUR)) < 3600e3, 'date voulue : 30 jours');
   assert.match(params.custom_text.submit.message, /dans 30 jours/);
   assert.strictEqual(params.subscription_data.metadata.dejaInstallee, '1');
   assert.strictEqual(params.shipping_address_collection, undefined, 'pas d\'adresse de livraison demandée');
@@ -76,8 +78,7 @@ test('abonnement pris depuis l\'appli avec la tablette déjà installée : rien 
   assert.strictEqual(fiche.etat, 'chez-client');
   assert.strictEqual(fiche.alerteJumelage, null, 'plus d\'alerte « jumelée sans commande » dans l\'admin');
   const abo = s.stripe.etat.abonnements.get(id);
-  assert.strictEqual(abo.status, 'active', 'pas d\'essai : un abonnement qui démarre dans 30 jours');
-  assert.ok(Math.abs(abo.billing_cycle_anchor * 1000 - (Date.now() + 30 * s.JOUR)) < 3600e3, 'premier prélèvement 30 jours plus tard');
+  assert.ok(Math.abs(require('../abonnement').premierPrelevementDe(abo, Date.now()) - (Date.now() + 30 * s.JOUR)) < 3600e3, 'premier prélèvement 30 jours plus tard, posé au paiement');
   assert.ok(Math.abs(fam.abonnement.essaiJusqua.toMillis() - (Date.now() + 30 * s.JOUR)) < 3600e3, 'l\'appli montre la date du premier prélèvement');
   assert.ok(mailsA(julie.email).some((m) => /abonnement/i.test(m)), 'confirmation');
   const stock = await s.requete('stockDisponible');
@@ -142,7 +143,7 @@ test('page de paiement abandonnée : la tablette mise de côté est libérée', 
   assert.strictEqual((await s.requete('stockDisponible')).json.precommande, false);
 });
 
-test('stock épuisé : précommande jusqu\'à stock + 10, puis « 3 à 4 semaines », jamais fermé', async () => {
+test('stock épuisé : précommande jusqu\'à stock + 10, puis attente longue, jamais fermé', async () => {
   let session = await a.commanderSurLeSite({ email: 'a@exemple.fr' });
   assert.strictEqual(s.stripe.etat.sessions.get(session).params.subscription_data.metadata.delai, 'precommande');
   s.stripe.expirerSession(session);
@@ -231,7 +232,7 @@ test('résiliation après le premier mois : dernier mois prélevé, rappel de re
   assert.strictEqual((await s.lire(`families/${fid}`)).abonnement.statut, 'resilie');
   let c = await commande(id);
   assert.strictEqual(c.dernierMois.statut, 'fait', 'mois écoulé prélevé à l\'arrêt');
-  assert.strictEqual(c.dernierMois.montant, 2000);
+  assert.strictEqual(c.dernierMois.montant, 2500, 'offre unique : 25 €');
   assert.strictEqual(c.restitution.statut, 'attendue');
   assert.ok(mailsA(paul.email).some((m) => /rendre la tablette/i.test(m)));
 
@@ -373,4 +374,24 @@ test('SOS sans réponse au 2e essai : toute la famille est alertée', async () =
   }
   const alertes = s.notifications.filter((n) => n.type === 'alerte' && /SOS/.test(n.titre));
   assert.strictEqual(alertes.length, 1, 'une seule alerte, après le 2e essai');
+  // Chaque alerte est comptée pour l'admin, sur la page de la tablette (journal-alertes.js).
+  const { alertes: journal } = await s.appeler('gestionDonnees', {}, a.TANGUY);
+  assert.deepStrictEqual(journal.map((x) => x.genre).sort(), ['sos', 'sos-sans-reponse']);
+  assert.ok(journal.every((x) => x.fid === fid && x.fiche === tablette.fiche && x.telephones === 2 && x.le), 'famille, tablette, téléphones, date');
+});
+
+test('couverture 4G vérifiée par Papote : pas de paiement là où la carte SIM capte mal, adresse du proche notée', async () => {
+  await a.tablettePreparee();
+  const essai = (proche) => s.requete('commander', { query: { formule: 'sim', tablette: 'incluse', ...a.RELAIS, ...proche, essai: '' } });
+  // Couverture limitée (Livradois), pas de couverture (Haute-Marne), adresse absente : retour à la commande.
+  for (const proche of [{ plat: '45.4882', plon: '3.5141' }, { plat: '48.0501', plon: '5.694' }, { padr: '', plat: '', plon: '' }]) {
+    const r = await essai({ ...proche, ...(proche.padr === '' ? {} : { padr: 'Quelque part' }) });
+    assert.strictEqual(r.statut, 303);
+    assert.ok(/commande\.html$/.test(r.redirection), `pas de paiement : ${r.redirection}`);
+  }
+  // Très bonne couverture : paiement, puis l'adresse et le niveau sont sur la commande et dans l'e-mail à Papote.
+  const { abonnement } = await a.commanderEtPayer({ email: 'lucie@exemple.fr', nom: 'Lucie Morel' });
+  const c = await commande(abonnement);
+  assert.deepStrictEqual(c.proche, { adresse: '2 place de l\'Église 07310 Saint-Martin-de-Valamas', lat: 44.9369, lon: 4.3683, couverture4g: 'TBC' });
+  assert.ok(s.boite.some((m) => m.a === 'contact@mapapote.fr' && /Chez le proche.*Saint-Martin-de-Valamas.*très bonne/.test(m.texte)));
 });

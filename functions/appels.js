@@ -3,6 +3,7 @@
 //   appelsSonnerie  appel créé par la tablette : notification push « Mamie vous appelle »
 //   appelsManques   l'appel de la tablette s'arrête sans réponse : « Appel manqué de Mamie » ;
 //                   s'il a été décroché, les autres téléphones arrêtent de sonner (« fin »)
+//   jetonAppelNatif connexion de l'écran d'appel de l'app Android (voir envoyerConnexions)
 //                   SOS (bouton « SOS famille ») : « SOS : Mamie vous appelle » ; sans réponse au
 //                   2e essai, « Mamie a appuyé sur SOS » à toute la famille
 //   refuserAppel    « Refuser » sur l'app Android (pas connectée à Firebase) : l'appel s'arrête pour
@@ -15,11 +16,13 @@ const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/
 const { logger } = require('firebase-functions/v2');
 const { onCall, onRequest, HttpsError } = require('firebase-functions/v2/https');
 const { FieldValue } = require('firebase-admin/firestore');
+const { getAuth } = require('firebase-admin/auth');
 
 const { defineSecret, defineString } = require('firebase-functions/params');
 const { BASE_FIRESTORE, REGION_FIRESTORE, db: base } = require('./base');
 const { envoyer } = require('./push');
 const mail = require('./mail');
+const journal = require('./journal-alertes');
 
 // Appel ou SOS qui ne fait sonner aucun téléphone (D1, Tanguy 2026-10-27) : tous les proches le savent par
 // e-mail (mêmes réglages que index.js ; en simulation, mail.envoyer est remplacé).
@@ -81,14 +84,37 @@ exports.appelsSonnerie = onDocumentCreated({ document: DOC, region: REGION_FIRES
   const data = { type: 'appel', cid, fid, jeton, nom: essaiSos(appel) ? `SOS : ${nom}` : nom };
   const n = await envoyer(db, fid, uids, data, 45);
   logger.info(`Appel ${cid} : ${n} téléphone(s) prévenu(s)`);
+  if (essaiSos(appel) === 1) await journal.noter(db, { genre: 'sos', fid, tablette: appel.callerUid, telephones: n });
+  if (n === 0 && essaiSos(appel) !== 2) await journal.noter(db, { genre: 'sans-telephone', fid, tablette: appel.callerUid, telephones: 0 });
   // Personne ne sonne : les proches le savent par e-mail, au 1er essai seulement (le 2e essai du SOS suit de près).
   if (n === 0 && essaiSos(appel) !== 2) await prevenirSansTelephone(db, fid, uids, { nom, sos: essaiSos(appel) > 0 });
+  if (n > 0) await envoyerConnexions(db, fid, cid, uids);
   for (let i = 0; i < REPRISES; i++) {
     await attendre(INTERVALLE_MS);
     const cur = await event.data.ref.get();
     if (!cur.exists || cur.get('state') !== 'ringing') return;
     await envoyer(db, fid, uids, data, 20, { websSeulement: true });
   }
+});
+
+// L'app Android passe l'appel dans son propre écran (micro gardé en arrière-plan, comme un vrai
+// appel) : elle s'y connecte au compte du proche avec ce jeton de connexion Firebase, envoyé juste
+// après la sonnerie pour ne pas la retarder. Valable une heure, seulement vers ses téléphones.
+async function envoyerConnexions(db, fid, cid, uids) {
+  await Promise.all(uids.map(async (uid) => {
+    try {
+      const connexion = await getAuth().createCustomToken(uid);
+      await envoyer(db, fid, [uid], { type: 'connexion', cid, connexion }, 45, { natifsSeulement: true });
+    } catch (e) {
+      logger.warn(`Appel ${cid} : jeton de connexion impossible pour ${uid}`, e.message);
+    }
+  }));
+}
+
+// Même jeton, pour un appel lancé depuis l'app Android (bouton Appel vidéo de l'app famille).
+exports.jetonAppelNatif = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Connexion requise.');
+  return { connexion: await getAuth().createCustomToken(request.auth.uid) };
 });
 
 exports.appelsManques = onDocumentUpdated({ document: DOC, region: REGION_FIRESTORE, database: BASE_FIRESTORE, secrets: [MAIL_MOT_DE_PASSE] }, async (event) => {
@@ -106,10 +132,12 @@ exports.appelsManques = onDocumentUpdated({ document: DOC, region: REGION_FIREST
     if (sos === 2) {
       const n = await envoyer(db, fid, uids, { type: 'alerte', titre: `${nom} a appuyé sur SOS`, texte: "Personne n'a pu répondre. Rappelez dès que possible." }, 24 * 3600);
       logger.warn(`SOS ${cid} : personne n'a répondu, famille alertée`);
+      await journal.noter(db, { genre: 'sos-sans-reponse', fid, tablette: apres.callerUid, telephones: n });
       if (n === 0) await prevenirSansTelephone(db, fid, uids, { nom, sos: true });
     }
   } else if (['missed', 'ended', 'declined'].includes(apres.state) && !apres.answer) {
-    await envoyer(db, fid, uids, { type: 'manque', cid, nom }, 24 * 3600);
+    const n = await envoyer(db, fid, uids, { type: 'manque', cid, nom }, 24 * 3600);
+    await journal.noter(db, { genre: 'appel-manque', fid, tablette: apres.callerUid, telephones: n });
   } else {
     // Quelqu'un a décroché : les autres téléphones (app Android) arrêtent de sonner.
     await envoyer(db, fid, uids, { type: 'fin', cid }, 60, { natifsSeulement: true });
