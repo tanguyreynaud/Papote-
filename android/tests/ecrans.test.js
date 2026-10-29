@@ -197,6 +197,55 @@ test('SOS : décompte de 5 s, deux essais, puis « La famille est prévenue »',
   } finally { await b.fermer(); }
 });
 
+test('SOS, « La famille est prévenue » avec deux visages : côte à côte sur toute la hauteur (pas de quart vide)', async () => {
+  const b = await ouvrir();
+  try {
+    const PIX = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+    await b.page.evaluate(() => {
+      window.__sos = [];
+      window.papoteCallFamily = (o) => { window.__sos.push(o); return { hangup() {} }; };
+    });
+    await b.android('onPosts', lot([]));
+    await b.android('onFamily', { faces: { julie: PIX, paul: PIX }, birthdays: [], people: [{ uid: 'julie', name: 'Julie' }, { uid: 'paul', name: 'Paul' }] });
+    await b.toucher('#sos-btn');
+    await b.avancer(5200);
+    await b.page.evaluate(() => window.__sos[0].onState('missed'));
+    await b.page.evaluate(() => window.__sos[1].onState('missed'));
+    assert.match(await b.texte('.call-out'), /La famille est prévenue/);
+    const boites = await b.page.evaluate(() => [...document.querySelectorAll('.call-out .sos-face')].map((e) => e.getBoundingClientRect().height));
+    const cadre = await b.page.evaluate(() => document.querySelector('.call-out .call-face.faces').getBoundingClientRect().height);
+    assert.strictEqual(boites.length, 2);
+    assert.ok(boites.every((h) => Math.abs(h - cadre) < 2), `deux visages pleine hauteur : ${boites.join(', ')} / ${cadre}`);
+    await sansErreur(b);
+  } finally { await b.fermer(); }
+});
+
+test('installation : « Recommencer avec un autre téléphone » reste dans l\'écran (en haut, à la place de Retour)', async () => {
+  const b = await ouvrir();
+  try {
+    for (const step of ['pair', 'prepare']) {
+      await b.page.evaluate((st) => window.PapoteBienvenue.show({ step: st, code: 'ABCDEFGH', restart: true }), step);
+      await b.avancer(300);
+      const bouton = await b.page.evaluate(() => {
+        const e = document.querySelector('.welcome .welcome-again');
+        const r = e.getBoundingClientRect();
+        return { texte: e.textContent, bas: r.bottom, haut: r.top, dansLeHaut: !!e.closest('.welcome-head') };
+      });
+      assert.strictEqual(bouton.texte, 'Recommencer avec un autre téléphone');
+      assert.ok(bouton.dansLeHaut, `${step} : dans l'en-tête`);
+      assert.ok(bouton.haut >= 0 && bouton.bas <= 800, `${step} : visible sans défiler (${bouton.haut}-${bouton.bas})`);
+      // Deux appuis pour recommencer, un seul ne fait rien.
+      await b.page.click('.welcome .welcome-again');
+      assert.strictEqual((await b.appels('cancelPairing')).length, 0);
+      await b.page.click('.welcome .welcome-again');
+      assert.strictEqual((await b.appels('cancelPairing')).length, 1);
+      await b.vider();
+      await b.page.evaluate(() => window.PapoteBienvenue.hide());
+    }
+    await sansErreur(b);
+  } finally { await b.fermer(); }
+});
+
 test('SOS : « Annuler » arrête tout, et sans l\'option il n\'y a pas de bouton', async () => {
   const b = await ouvrir();
   try {

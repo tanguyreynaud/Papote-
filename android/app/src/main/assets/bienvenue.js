@@ -147,6 +147,26 @@
 
   // « Retour » : l'écran d'installation précédent (Sync.welcomeBack), pour avancer sans stress.
   // En haut, à côté du logo : toujours visible, même quand l'écran défile.
+  // « Recommencer avec un autre téléphone », en haut à la place de « Retour » (en bas, il passait sous
+  // le bord de l'écran avec le QR code). Touché deux fois : un appui par erreur n'annule pas l'installation.
+  function addAgain(box) {
+    var again = el('button', 'welcome-back welcome-again', 'Recommencer avec un autre téléphone');
+    again.addEventListener('click', function () {
+      if (!again.armed) {
+        again.armed = true;
+        again.textContent = 'Touchez encore pour recommencer';
+        setTimeout(function () { again.armed = false; again.textContent = 'Recommencer avec un autre téléphone'; }, 5000);
+        return;
+      }
+      again.disabled = true;
+      again.textContent = 'Un instant…';
+      android().cancelPairing();
+    }, false);
+    var head = box.querySelector('.welcome-head');
+    head.classList.add('has-back');
+    head.insertBefore(again, head.querySelector('.welcome-dots') || head.querySelector('.welcome-listen'));
+  }
+
   function addBack(box, toStart) {
     var b = el('button', 'welcome-back', '‹ Retour');
     b.addEventListener('click', function () {
@@ -516,18 +536,7 @@
     }
     if (s.restart) {
       // Touché deux fois : un appui par erreur n'annule pas l'installation en cours.
-      var again = button('Recommencer avec un autre téléphone', 'no small', function () {
-        if (!again.armed) {
-          again.armed = true;
-          again.textContent = 'Touchez encore pour recommencer';
-          setTimeout(function () { again.armed = false; again.textContent = 'Recommencer avec un autre téléphone'; }, 5000);
-          return;
-        }
-        again.disabled = true;
-        again.textContent = 'Un instant…';
-        android().cancelPairing();
-      });
-      box.appendChild(again);
+      addAgain(box);
     }
   }
 
@@ -544,18 +553,7 @@
     box.className += ' welcome-prepare';
     box.appendChild(el('span', 'boot-spin welcome-spin', ''));
     if (s.restart) {
-      var again = button('Recommencer avec un autre téléphone', 'no small', function () {
-        if (!again.armed) {
-          again.armed = true;
-          again.textContent = 'Touchez encore pour recommencer';
-          setTimeout(function () { again.armed = false; again.textContent = 'Recommencer avec un autre téléphone'; }, 5000);
-          return;
-        }
-        again.disabled = true;
-        again.textContent = 'Un instant…';
-        android().cancelPairing();
-      });
-      box.appendChild(again);
+      addAgain(box);
     }
   }
 

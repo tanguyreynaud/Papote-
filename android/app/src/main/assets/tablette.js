@@ -1716,6 +1716,12 @@
   var gsm = null;          // { uid, name, tel, sortant, enLigne, timer, onEnd }
   var reveilAppel = false;
 
+  // Même numéro (9 derniers chiffres : 06…, +33 6…).
+  function memeNumero(a, b) {
+    var x = String(a).replace(/\D/g, ''), y = String(b).replace(/\D/g, '');
+    return x.length >= 9 && y.length >= 9 && x.slice(-9) === y.slice(-9);
+  }
+
   function gsmReady() {
     try { return !!(android() && android().phoneReady && android().phoneReady()); } catch (e) { return false; }
   }
@@ -1764,7 +1770,8 @@
     gsm = null;
     if (android() && android().ring) android().ring(false);
     if (android() && android().inCall) android().inCall(false);
-    if (reveilAppel) { reveilAppel = false; if (asleep && android() && android().setSleep) android().setSleep(true); }
+    // Rallumée pour un appel la nuit : la veille reprend d'elle-même une fois l'écran d'appel fermé (updateSleep).
+    if (reveilAppel) { reveilAppel = false; updateSleep(); }
   }
 
   // Mamie appelle un proche par téléphone. onEnd(repondu) : pour le SOS, qui enchaîne les proches.
@@ -1772,8 +1779,9 @@
     stopRadio();
     var who = name || 'votre proche';
     gsmClear();
-    gsm = { uid: uid, name: name, tel: tel, sortant: true, enLigne: false, timer: null, onEnd: onEnd || null, who: who };
-    renderCall('starting', 'Appel vers ' + who + '…', '', uid, name);
+    gsm = { uid: uid, name: name, tel: tel, sortant: true, enLigne: false, timer: null, onEnd: onEnd || null, who: who, sos: !!onEnd };
+    if (gsm.sos) renderSos('starting', 'SOS : on appelle ' + who + '…', uid, name);
+    else renderCall('starting', 'Appel vers ' + who + '…', '', uid, name);
     var parti = false;
     try { parti = !!(android().phoneCall(tel)); } catch (e) { parti = false; }
     if (!parti) {
@@ -1786,12 +1794,19 @@
     gsmSurveiller();
   }
 
+  // SOS par téléphone : l'écran dit SOS (la famille a reçu un SMS), proche après proche.
+  function renderSos(state, title, uid, name) {
+    renderCall(state, title, 'La famille a reçu votre SOS par SMS.', uid, name);
+    callScreen.className += ' sos';
+  }
+
   // Fin d'un appel téléphone : message 4 s, puis la liste des personnes (pas de réponse) ou l'accueil.
   function gsmFinish(title, sub, backToList, repondu) {
     var onEnd = gsm && gsm.onEnd;
+    var uid = gsm && gsm.uid, nom = gsm && gsm.name;
     gsmClear();
     if (onEnd) { onEnd(repondu); return; }
-    renderCall('ended', title, sub);
+    renderCall('ended', title, sub, uid, nom);
     setTimeout(function () {
       if (!gsm && /state-ended/.test(callScreen.className)) {
         if (backToList && CALL_MODE === 'personne') showPicker(); else closeCallScreen();
@@ -1802,7 +1817,6 @@
   // Un proche appelle par téléphone : sa photo, « vous appelle », Décrocher en grand.
   function showGsmRing(etat) {
     stopRadio();
-    if (asleep && android() && android().setSleep) { reveilAppel = true; android().setSleep(false); }
     closeOverlayForCall();
     var name = etat.name || '';
     ensureCallScreen();
@@ -1810,6 +1824,8 @@
     stopRingback();
     callScreen.removeAttribute('hidden');
     callScreen.className = 'call-out gsm-ring state-ringing';
+    // La nuit : l'écran se rallume (et l'écran noir de veille s'efface) le temps de l'appel.
+    if (asleep) { reveilAppel = true; updateSleep(); }
     callScreen.appendChild(faceEl(etat.uid, name || 'Un proche', 'call-face'));
     callScreen.appendChild(el2('h1', 'call-title', name || 'Un proche'));
     callScreen.appendChild(el2('p', 'call-sub', 'vous appelle'));
@@ -1844,8 +1860,14 @@
       if (e === 'fin') return;
       gsm = { uid: etat.uid || null, name: etat.name || '', sortant: !!etat.sortant, enLigne: false, timer: null, who: etat.name || 'votre proche' };
     }
+    if (e === 'fin' && gsm.sortant && gsm.tel && etat.numero && !memeNumero(etat.numero, gsm.tel)) {
+      // Android répète la fin de l'appel d'avant (DISCONNECTED puis onCallRemoved) : pas celle de celui-ci
+      // (SOS : l'appel suivant est déjà parti).
+      return;
+    }
     if (e === 'appel') {
-      renderCall('ringing', 'Ça sonne…', 'Chez ' + gsm.who, gsm.uid, gsm.name);
+      if (gsm.sos) renderSos('ringing', 'SOS : ça sonne chez ' + gsm.who + '…', gsm.uid, gsm.name);
+      else renderCall('ringing', 'Ça sonne…', 'Chez ' + gsm.who, gsm.uid, gsm.name);
       gsmSurveiller();
     } else if (e === 'enLigne') {
       clearTimeout(gsm.timer);
@@ -2044,7 +2066,7 @@
     var liste = phonePeople();
     var tels = [];
     for (var i = 0; i < liste.length; i++) tels.push(liste[i].tel);
-    renderCall('starting', 'Appel de toute la famille…', '');
+    renderSos('starting', 'SOS : on prévient la famille…', null, null);
     try {
       android().sendSms(tels.join(','), 'SOS Papote : ' + (familyName || 'votre proche') + ' a appuyé sur le bouton SOS de sa tablette. Appelez-la vite.');
     } catch (e) { }
@@ -2584,6 +2606,8 @@
   function somethingToShow() {
     var ids = ['reminder-alert', 'call-ring', 'call-view'];
     for (var i = 0; i < ids.length; i++) if ($(ids[i]) && isShown(ids[i])) return true;
+    // L'écran d'appel téléphone (.call-out) : sinon, la nuit, l'écran noir de veille le recouvrait.
+    if (callScreen && !callScreen.hasAttribute('hidden')) return true;
     return document.body.className.indexOf('video-playing') >= 0;
   }
 

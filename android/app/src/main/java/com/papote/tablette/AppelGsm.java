@@ -31,6 +31,7 @@ public class AppelGsm extends InCallService {
     private static Object proprietaire;
     private static JSONObject dernierEtat;
     private static boolean sortant;
+    private static boolean finPubliee; // « fin » une seule fois par appel (DISCONNECTED, puis onCallRemoved)
 
     /**
      * La page de cette activité reçoit les états GSM. Après une mise à jour ou une relance du
@@ -99,6 +100,7 @@ public class AppelGsm extends InCallService {
             return;
         }
         courant = call;
+        finPubliee = false;
         sortant = call.getState() != Call.STATE_RINGING;
         call.registerCallback(callback);
         hautParleur();
@@ -156,6 +158,10 @@ public class AppelGsm extends InCallService {
                 case Call.STATE_DISCONNECTED:
                 case Call.STATE_DISCONNECTING: nom = "fin"; break;
                 default: nom = "appel";
+            }
+            if ("fin".equals(nom)) {
+                if (finPubliee) return;
+                finPubliee = true;
             }
             etat.put("etat", nom).put("sortant", sortant).put("numero", numero);
             JSONObject proche = Telephone.proche(getApplicationContext(), numero);

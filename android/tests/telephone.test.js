@@ -48,6 +48,9 @@ test('Mamie appelle Julie par téléphone : ça sonne, en ligne, puis « Appel t
     assert.strictEqual((await b.appels('phoneHangup')).length, 1, 'Raccrocher passe par Android');
     await b.android('onGsm', { etat: 'fin', sortant: true, cause: 'raccroche', uid: 'julie', name: 'Julie' });
     assert.match(await b.texte('.call-out'), /Appel terminé/);
+    // La photo de Julie (son initiale), pas le collage de la famille (bug du 29/10 : trois visages).
+    assert.strictEqual(await b.page.evaluate(() => document.querySelectorAll('.call-out .call-face').length), 1);
+    assert.strictEqual(await b.texte('.call-out .call-face'), 'J');
     await b.avancer(4500);
     assert.ok(!(await b.visible('.call-out')), 'retour à l’accueil');
     await sansErreur(b);
@@ -145,8 +148,15 @@ test('la nuit, un appel téléphone rallume l’écran le temps de l’appel', a
     await b.vider();
     await b.android('onGsm', { etat: 'sonne', sortant: false, uid: 'julie', name: 'Julie' });
     assert.deepStrictEqual((await b.appels('setSleep')).map((a) => a.args[0]), [false], 'écran rallumé');
+    const voileNoir = () => b.page.evaluate(() => document.querySelector('.night-clock').parentElement.style.display !== 'none');
+    assert.strictEqual(await voileNoir(), false, 'l’écran noir de veille ne cache pas l’appel');
+    await b.avancer(3000);
+    assert.strictEqual(await voileNoir(), false, 'toujours visible pendant que ça sonne');
+    assert.ok(!(await b.appels('setSleep')).some((a) => a.args[0] === true), 'pas rendormie pendant l’appel');
     await b.android('onGsm', { etat: 'fin', sortant: false, cause: 'manque', uid: 'julie', name: 'Julie' });
+    await b.avancer(5500); // « Julie a appelé » 4 s, puis la veille reprend
     assert.ok((await b.appels('setSleep')).some((a) => a.args[0] === true), 'écran éteint après l’appel');
+    assert.strictEqual(await voileNoir(), true);
     await sansErreur(b);
   } finally { await b.fermer(); }
 });
@@ -161,12 +171,21 @@ test('SOS par téléphone : un SMS à tous, Paul (responsable) appelé d’abord
     assert.strictEqual(sms[0].args[0], '0700000000,0612345678', 'responsable en tête, Anne sans numéro');
     assert.match(sms[0].args[1], /SOS Papote : Mamie a appuyé sur le bouton SOS/);
     assert.deepStrictEqual((await b.appels('phoneCall')).map((a) => a.args[0]), ['0700000000']);
-    assert.match(await b.texte('.call-out'), /Appel vers Paul/);
-    await b.android('onGsm', { etat: 'appel', sortant: true, uid: 'paul', name: 'Paul' });
+    // Un écran SOS clair, pas « Appel vers Paul… » (galerie du 29/10).
+    assert.match(await b.texte('.call-out .call-title'), /SOS : on appelle Paul/);
+    assert.match(await b.texte('.call-out'), /La famille a reçu votre SOS par SMS/);
+    assert.ok(await b.page.evaluate(() => /\bsos\b/.test(document.querySelector('.call-out').className)), 'classe sos');
+    await b.android('onGsm', { etat: 'appel', sortant: true, numero: '0700000000', uid: 'paul', name: 'Paul' });
+    assert.match(await b.texte('.call-out .call-title'), /SOS : ça sonne chez Paul/);
     await b.avancer(46000);
     assert.strictEqual((await b.appels('phoneHangup')).length, 1, 'Paul ne répond pas : raccroché');
-    await b.android('onGsm', { etat: 'fin', sortant: true, cause: 'raccroche', uid: 'paul', name: 'Paul' });
+    await b.android('onGsm', { etat: 'fin', sortant: true, cause: 'raccroche', numero: '0700000000', uid: 'paul', name: 'Paul' });
     assert.deepStrictEqual((await b.appels('phoneCall')).map((a) => a.args[0]), ['0700000000', '0612345678'], 'Julie ensuite');
+    assert.match(await b.texte('.call-out .call-title'), /SOS : on appelle Julie/);
+    // Android répète la fin de l'appel de Paul (onCallRemoved) : l'appel de Julie continue.
+    await b.android('onGsm', { etat: 'fin', sortant: true, cause: 'raccroche', numero: '0700000000', uid: 'paul', name: 'Paul' });
+    assert.match(await b.texte('.call-out .call-title'), /SOS : on appelle Julie/);
+    assert.strictEqual((await b.appels('phoneCall')).length, 2, 'pas d’appel sauté');
     await b.android('onGsm', { etat: 'enLigne', sortant: true, uid: 'julie', name: 'Julie' });
     assert.match(await b.texte('.call-out'), /En ligne avec Julie/);
     await b.android('onGsm', { etat: 'fin', sortant: true, cause: 'raccroche', uid: 'julie', name: 'Julie' });
