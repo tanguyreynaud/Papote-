@@ -148,7 +148,7 @@ function lancement({ prenom, desinscription }) {
   });
 }
 
-function nouvelleCommande({ nom, email, telephone, code, relais, formule, delai, dejaInstallee, reprise }) {
+function nouvelleCommande({ nom, email, telephone, code, relais, proche, formule, delai, dejaInstallee, reprise }) {
   const client = `Client : <b>${echapper(nom || '?')}</b>, ${echapper(email || 'sans e-mail')}${telephone ? `, ${echapper(telephone)}` : ''}.`;
   const offre = `Offre : ${OFFRE}.${dejaInstallee ? '' : ' Ligne SIM à ouvrir pour cette commande.'}`;
   if (dejaInstallee) {
@@ -163,9 +163,10 @@ function nouvelleCommande({ nom, email, telephone, code, relais, formule, delai,
     relais && relais.transporteur
       ? `Point relais : <b>${relaisEnTexte(relais)}</b> (n° ${echapper(relais.id)}). Retrait par : <b>${echapper(relais.destinataire || nom || '?')}</b>.`
       : `Livraison : ${relaisEnTexte(relais) || 'adresse non trouvée, voir Stripe'}.`,
+    proche ? `Chez le proche : <b>${echapper(proche.adresse)}</b>, 4G Bouygues ${{ TBC: 'très bonne', BC: 'bonne', CL: 'limitée' }[proche.couverture4g] || 'inconnue'} (carte ARCEP).` : null,
     `Délai annoncé : ${{ stock: 'en stock, 7 à 10 jours ouvrés', precommande: 'précommande, 2 à 3 semaines', long: 'attente longue, 4 à 5 semaines' }[delai] || 'en stock, 7 à 10 jours ouvrés'}.`,
     'Tablette à préparer, puis à marquer « envoyée » dans le tableau de bord.',
-  ], null, { interne: true });
+  ].filter(Boolean), null, { interne: true });
 }
 
 function rappelJumelage({ nom, numero, code }) {

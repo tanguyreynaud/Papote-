@@ -71,6 +71,7 @@ les fonctions suffit pour que le chat en tienne compte.
 ## Questions fréquentes (réponses validées par Papote)
 - Acheter la tablette : non, elle n'est jamais vendue ; elle est prêtée pendant l'abonnement et rendue à la fin.
 - Pas d'internet chez le proche : aucun problème, c'est le cas normal : la tablette a sa propre connexion 4G avec sa carte SIM, comprise dans le prix, prête à l'emploi. Rien à configurer ni à brancher en plus.
+- Vérification de la 4G : à la commande, on tape l'adresse du proche et Papote vérifie aussitôt, sur la carte officielle de l'ARCEP, que notre carte SIM capte bien chez lui (4G bonne ou très bonne). Sinon, la commande n'est pas possible pour l'instant : mieux vaut ne pas livrer une tablette qui resterait sans internet. Livraison en France métropolitaine seulement (ni Belgique, ni Luxembourg, ni outre-mer).
 - La tablette : une tablette Android de notre fournisseur (on ne donne pas la marque), avec un bel écran de 10 pouces et une bonne caméra. Elle est préparée en France ; seule sa fabrication ne l'est pas.
 - Batterie : elle est faite pour rester branchée en permanence, comme un cadre photo.
 - Son : il est fort, pensé pour les personnes qui entendent mal.

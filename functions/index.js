@@ -2,6 +2,7 @@
 //
 //   commander          GET  depuis le site vitrine : ouvre la page de paiement Stripe (si une tablette est disponible)
 //   stockDisponible    GET  depuis le site vitrine : { disponible: true|false } (stock.js)
+//   couverture         GET  depuis le site vitrine : la 4G de la carte SIM passe-t-elle chez le proche ? (couverture.js)
 //   creerPaiement      appel depuis l'appli famille : paiement pour une famille existante
 //   portailClient      appel depuis l'appli famille : compte bancaire, factures
 //   facturesFamille    appel depuis l'appli famille : liste des factures, avec leur PDF
@@ -50,6 +51,7 @@ const relances = require('./relances');
 
 const base = require('./base');
 const stock = require('./stock');
+const couverture = require('./couverture');
 const push = require('./push');
 
 // Bucket Europe après la migration (BUCKET_STORAGE dans .env), sinon celui du projet.
@@ -114,8 +116,8 @@ async function tarifs(formule, tablette, { reprise = false } = {}) {
 // (« trial » Stripe), ni pendant les 30 jours pour changer d'avis qui suivent la réception (debutApresReception),
 // puis un prélèvement par mois ; le mois en cours est prélevé à l'arrêt (prelevementDernierMois).
 // Chaque mois utilisé est donc payé une fois, à terme échu.
-async function sessionPaiement({ formule, tablette, fid, email, client, relais, accord, reservation, dejaInstallee, reprise }) {
-  const metadata = { formule, tablette, ...(relais ? livraison.relaisVersMeta(relais) : {}) };
+async function sessionPaiement({ formule, tablette, fid, email, client, relais, proche, accord, reservation, dejaInstallee, reprise }) {
+  const metadata = { formule, tablette, ...(relais ? livraison.relaisVersMeta(relais) : {}), ...(proche ? couverture.procheVersMeta(proche) : {}) };
   if (dejaInstallee) metadata.dejaInstallee = '1';
   // Reprise après une résiliation, tablette encore chez le proche : pas de 60 €, rien à annuler (C3).
   if (reprise) metadata.reprise = '1';
@@ -484,6 +486,13 @@ exports.commander = onRequest({ secrets: [STRIPE_SECRET] }, async (req, res) => 
     res.redirect(303, `${SITE_VITRINE.value()}/#tarifs`);
     return;
   }
+  // Couverture 4G vérifiée par Papote à l'adresse du proche (Tanguy, 2026-10-29), à nouveau ici : la page ne
+  // laisse payer que si elle passe, mais un lien ancien ou modifié ne doit pas ouvrir le paiement.
+  const proche = couverture.procheDepuisRequete(req.query);
+  if (!proche || !proche.eligible) {
+    res.redirect(303, `${SITE_VITRINE.value()}/commande.html`);
+    return;
+  }
   // Sans point relais, retour à la page de choix du point relais.
   const relais = livraison.relaisDepuisRequete(req.query);
   if (!relais) {
@@ -496,7 +505,7 @@ exports.commander = onRequest({ secrets: [STRIPE_SECRET] }, async (req, res) => 
     // Plus de tablette disponible : liste d'attente « Être prévenu ».
     // Toujours une réservation : les commandes ne ferment plus, seul le délai annoncé change (stock.js).
     const reservation = await reserverTablette();
-    const session = await sessionPaiement({ formule, tablette, relais, email, accord, reservation });
+    const session = await sessionPaiement({ formule, tablette, relais, proche, email, accord, reservation });
     // Lien d'une relance : le panier d'origine est déjà noté.
     if (email && !req.query.relance) {
       await noterPanier(session.id, { email, accord, formule, relais, query: req.query })
@@ -914,6 +923,8 @@ async function paiementTermine(session) {
       tablette: meta.tablette || null,
       livraison: livraison.relaisDepuisMeta(meta)
         || (adresse ? { nom: adresse.name || null, adresse: adresse.address || null } : null),
+      // Adresse du proche, où la couverture 4G a été vérifiée avant le paiement.
+      proche: couverture.procheDepuisMeta(meta),
       // Tablette à préparer et envoyer par Tanguy (« envoyee » une fois partie).
       expedition: paye ? 'a-preparer' : 'paiement-en-attente',
       // Abonnement pris dans l'appli avec la tablette déjà chez le proche : rien à envoyer, reçue aujourd'hui.
@@ -1115,7 +1126,7 @@ async function confirmerCommande(ref, email, code) {
   });
   if (!premier) return;
   await compterEtape('paye').catch((e) => logger.warn('Statistiques', e.message));
-  const infos = { nom: premier.nom, code, relais: premier.livraison, formule: premier.formule, delai: premier.delai,
+  const infos = { nom: premier.nom, code, relais: premier.livraison, proche: premier.proche || null, formule: premier.formule, delai: premier.delai,
     dejaInstallee: !!(premier.preparation && premier.preparation.recuPar === 'déjà installée'), reprise: premier.reprise === true };
   const envois = [envoyerMail(EMAIL_PAPOTE, mail.nouvelleCommande({ ...infos, email, telephone: premier.telephone }))];
   if (email) envois.push(envoyerMail(email, mail.commandeConfirmee(infos)));
@@ -1158,6 +1169,11 @@ async function noterPanier(sessionId, { email, accord, formule, relais, query })
 // Liste d'attente du lancement (site vitrine) : l'adresse rejoint contacts/ avec l'accord et un jeton de
 // désinscription, source « liste-attente », pour l'e-mail d'ouverture des commandes (onglet Clients).
 // Le site affiche « Être prévenu » à la place de « Commander » quand il n'y a plus de tablette.
+exports.couverture = onRequest({ cors: [/mapapote\.fr$/, /papote\.web\.app$/], maxInstances: 3 }, (req, res) => {
+  res.set('Cache-Control', 'public, max-age=86400');
+  res.json(couverture.verifier(req.query.lat, req.query.lon));
+});
+
 exports.stockDisponible = onRequest({ cors: [/mapapote\.fr$/, /papote\.web\.app$/], maxInstances: 2 }, stock.routeDisponible(db, logger));
 
 exports.listeAttente = onRequest({ cors: [/mapapote\.fr$/, /papote\.web\.app$/], maxInstances: 2 }, async (req, res) => {
