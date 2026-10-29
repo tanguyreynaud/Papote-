@@ -281,9 +281,14 @@ const storage0 = { app: app0 };
 export const getStorage = () => storage0;
 export const ref = (_s, chemin = '') => ({ fullPath: chemin, name: chemin.split('/').pop() });
 export const getDownloadURL = async (r) => (D.fichiers || {})[r.fullPath] || D.imageParDefaut || '';
-export const uploadBytes = async (r) => ({ ref: r, metadata: {} });
-export const uploadBytesResumable = (r) => ({ on: (_e, _p, _err, fin) => setTimeout(() => fin?.(), 0), then: (f) => Promise.resolve({ ref: r }).then(f) });
-export const uploadString = async (r) => ({ ref: r });
+// D.envoiBloque : l'envoi reste en cours (à 40 %), pour voir l'écran « Envoi… ».
+const jamais = () => new Promise(() => {});
+export const uploadBytes = async (r) => (D.envoiBloque ? jamais() : { ref: r, metadata: {} });
+export const uploadBytesResumable = (r) => ({
+  on: (_e, progres, _err, fin) => { if (D.envoiBloque) { setTimeout(() => progres?.({ bytesTransferred: 40, totalBytes: 100 }), 0); return; } setTimeout(() => fin?.(), 0); },
+  then: (f, g) => (D.envoiBloque ? jamais() : Promise.resolve({ ref: r })).then(f, g),
+});
+export const uploadString = async (r) => (D.envoiBloque ? jamais() : { ref: r });
 export const deleteObject = async () => {};
 export const connectStorageEmulator = () => {};
 

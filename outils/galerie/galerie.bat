@@ -1,8 +1,8 @@
 @echo off
-rem Galerie de tous les ecrans (tablette + app famille), avec de fausses donnees.
-rem   galerie.bat            : tablette et app famille, depuis les branches publiees
+rem Galerie de tous les ecrans (tablette, app famille, site, admin), avec de fausses donnees.
+rem   galerie.bat            : tout, depuis les branches publiees
 rem   galerie.bat tablette   : seulement la tablette
-rem   galerie.bat famille    : seulement l app famille
+rem   galerie.bat famille    : seulement l app famille (aussi : vitrine, admin)
 rem Rien n est envoye sur Firebase. Resultat : sortie\galerie.html (ouvert a la fin).
 cd /d "%~dp0"
 if not exist node_modules\playwright (
