@@ -535,6 +535,7 @@
       } catch (e) { }
     };
     v.setAttribute('src', p.video);
+    renforcer(v, p.video, VIDEO_GAIN);
     v.style.display = '';
     stopRadio();
     v.play().catch(function () { v.onerror(); });
@@ -2126,11 +2127,15 @@
   var voixCtx = null;
   var VOIX_GAIN = 4;
   function voixForte(url) {
-    var a = new Audio(url);
+    return renforcer(new Audio(url), url, VOIX_GAIN);
+  }
+  // Vidéos du diaporama ×2 (Tanguy, 29/10 : « mieux vaut que 100 % soit trop fort »), même limiteur.
+  var VIDEO_GAIN = 2;
+  function renforcer(a, url, facteur) {
     // Seulement pour les sons de la tablette (même adresse) : un son en ligne sans autorisation
-    // CORS deviendrait muet une fois branché sur Web Audio.
+    // CORS deviendrait muet une fois branché sur Web Audio. Un élément n'est branché qu'une fois.
     var local = !/^https?:/.test(url) || url.indexOf(location.origin + '/') === 0;
-    if (!local) return a;
+    if (!local || a.papoteRenfort) return a;
     try {
       var AC = window.AudioContext || window.webkitAudioContext;
       if (!AC) return a;
@@ -2138,10 +2143,11 @@
       if (voixCtx.resume) voixCtx.resume();
       var src = voixCtx.createMediaElementSource(a);
       var gain = voixCtx.createGain();
-      gain.gain.value = VOIX_GAIN;
+      gain.gain.value = facteur;
       var lim = voixCtx.createDynamicsCompressor();
       lim.threshold.value = -3; lim.knee.value = 0; lim.ratio.value = 20; lim.attack.value = 0.002; lim.release.value = 0.1;
       src.connect(gain); gain.connect(lim); lim.connect(voixCtx.destination);
+      a.papoteRenfort = true;
     } catch (e) { /* sans Web Audio : volume normal */ }
     return a;
   }
@@ -2256,10 +2262,9 @@
       '"/></svg><span>' + (on2 ? 'Arrêter' : 'Radio') + '</span>';
   }
 
-  // Même niveau que le reste de la tablette (vocaux, vidéos), réglé par le volume de la famille
-  // et le haut-parleur (décision de Tanguy). Les radios sont mixées plus fort qu'un vocal
-  // enregistré au téléphone : on les baisse d'autant (environ -6 dB) pour que tout sonne pareil.
-  var RADIO_GAIN = 0.5;
+  // Au plus fort (Tanguy, 29/10 : « mieux vaut que 100 % soit trop fort »), réglée par la barre
+  // « Vidéos et messages lus » de la famille (avant : baissée de 6 dB pour sonner comme les vocaux).
+  var RADIO_GAIN = 1;
   function radioVolume() {
     return RADIO_GAIN;
   }

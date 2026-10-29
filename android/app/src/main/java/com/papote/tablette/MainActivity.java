@@ -180,6 +180,7 @@ public class MainActivity extends Activity implements Sync.Listener {
         vlp.gravity = Gravity.CENTER;
         root.setBackgroundColor(Color.BLACK);
         root.addView(videoView, vlp);
+        videoView.setOnPreparedListener(renfortVideo::sur);
         videoView.setOnCompletionListener(mp -> endVideo());
         videoView.setOnErrorListener((mp, what, extra) -> {
             Log.w(TAG, "Lecture vidéo impossible " + what + "/" + extra);
@@ -378,6 +379,7 @@ public class MainActivity extends Activity implements Sync.Listener {
         @JavascriptInterface
         public void stopVideo() {
             handler.post(() -> {
+                renfortVideo.arreter();
                 videoView.stopPlayback();
                 videoView.setVisibility(View.GONE);
                 if (web != null) web.setVisibility(View.VISIBLE);
@@ -798,7 +800,11 @@ public class MainActivity extends Activity implements Sync.Listener {
         videoView.start();
     }
 
+    private final Renfort renfortVideo = new Renfort();
+    private final Renfort renfortCarillon = new Renfort();
+
     private void endVideo() {
+        renfortVideo.arreter();
         videoView.stopPlayback();
         videoView.setVisibility(View.GONE);
         if (web != null) web.setVisibility(View.VISIBLE);
@@ -875,6 +881,7 @@ public class MainActivity extends Activity implements Sync.Listener {
                     carillon = mp;
                     mp.setOnCompletionListener(m -> { if (carillon == m) carillon = null; m.release(); });
                     mp.setVolume(volume, volume);
+                    renfortCarillon.sur(mp);
                     mp.start();
                 } else {
                     Ringtone r = RingtoneManager.getRingtone(this, RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION));

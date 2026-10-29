@@ -20,6 +20,7 @@ final class VoicePlayer {
     private final Context context;
     private final Listener listener;
     private MediaPlayer player;
+    private final Renfort renfort = new Renfort();
 
     VoicePlayer(Context context, Listener listener) {
         this.context = context.getApplicationContext();
@@ -42,6 +43,7 @@ final class VoicePlayer {
                 listener.onVoiceEnded();
             });
             player.prepare();
+            renfort.sur(player);
             player.start();
         } catch (Exception e) {
             Log.w("Papote", "Lecture du vocal", e);
@@ -51,6 +53,7 @@ final class VoicePlayer {
     }
 
     void stop() {
+        renfort.arreter();
         if (player == null) return;
         try { player.stop(); } catch (Exception ignored) { }
         player.release();
