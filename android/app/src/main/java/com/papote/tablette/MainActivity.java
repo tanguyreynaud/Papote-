@@ -73,8 +73,9 @@ public class MainActivity extends Activity implements Sync.Listener {
     private volatile android.media.MediaPlayer carillon;
     /** Dernier « fenêtre ouverte » dit par la page (0 = aucune), et dernier carillon d'un envoi. */
     private volatile long fenetreVueA;
-    private long dernierCarillon;
-    /** Envois d'affilée : un seul carillon dans ce délai. */
+    private volatile long dernierCarillon;
+    /** Envois d'affilée, avant que le premier s'affiche : un seul carillon dans ce délai (remis à zéro
+     * dès qu'une fenêtre se referme). */
     private static final long CARILLON_UNE_FOIS_MS = 90_000;
     private Wifi wifi;
     private SmsAlert smsAlert;
@@ -478,6 +479,9 @@ public class MainActivity extends Activity implements Sync.Listener {
         /** La page redit chaque seconde si une fenêtre (envoi, rappel, appel…) est ouverte. */
         @JavascriptInterface
         public void fenetre(boolean ouverte) {
+            // Fenêtre refermée, retour à l'accueil : le prochain envoi sonne de nouveau tout de suite
+            // (Tanguy, 29/10 : la vidéo arrivée juste après une photo vue n'avait pas sonné).
+            if (!ouverte && fenetreVueA != 0) dernierCarillon = 0;
             fenetreVueA = ouverte ? SystemClock.elapsedRealtime() : 0;
         }
 
