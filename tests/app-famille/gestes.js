@@ -281,7 +281,10 @@ async function toast(t, motif) {
 // ---------- Accueil et pages ----------
 
 async function ouvrirTuile(t, pageNom) {
-  await t.page.click(`.tile[data-page="${pageNom}"]`);
+  // Photos n'a plus de tuile quand la tablette a un numéro : la page est dans la barre du bas.
+  const tuile = t.page.locator(`.tile[data-page="${pageNom}"]`);
+  if (await tuile.isVisible()) await tuile.click();
+  else await t.page.click(`.nav-item[data-page="${pageNom}"]`);
   await attendreVue(t, `view-${pageNom}`);
 }
 

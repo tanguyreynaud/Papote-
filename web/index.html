@@ -52,6 +52,7 @@
 <body>
   <!-- Icônes au trait, réutilisées partout avec <use href="#i-…"> -->
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-phone" viewBox="0 0 24 24"><path d="M5 3h4l2 5-2.5 1.5a11 11 0 0 0 6 6L16 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 5a2 2 0 0 1 2-2z"/></symbol>
     <symbol id="i-call" viewBox="0 0 24 24"><rect x="2" y="6" width="14" height="12" rx="3"/><path d="M16 10.5l6-3.5v10l-6-3.5z"/></symbol>
     <symbol id="i-photo" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/></symbol>
     <symbol id="i-video" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="3"/><path d="M10 9l5 3-5 3z"/></symbol>
@@ -438,6 +439,10 @@
       </div>
       <p id="activity" class="activity" hidden></p>
       <p id="outbox" class="outbox" hidden></p>
+      <button type="button" id="photo-nudge" class="card nudge">
+        <span class="avatar avatar-empty" aria-hidden="true"><svg><use href="#i-camera"/></svg></span>
+        <span><strong>Envoyer une photo</strong><br><span class="muted small">Elle s'affiche sur la tablette de <span class="grand-name"></span></span></span>
+      </button>
       <button type="button" id="face-nudge" class="card nudge" hidden>
         <span class="avatar avatar-empty"><svg><use href="#i-user"/></svg></span>
         <span><strong>Ajoutez votre photo</strong><br><span class="muted small">Pour que <span class="grand-name"></span> vous reconnaisse</span></span>
@@ -454,7 +459,10 @@
         <button type="button" class="tile t-call" id="tile-call">
           <svg class="tile-icon"><use href="#i-call"/></svg><span>Appel vidéo</span>
         </button>
-        <button type="button" class="tile t-photo" data-page="photos">
+        <a class="tile t-phone" id="tile-phone" href="tel:" hidden>
+          <svg class="tile-icon"><use href="#i-phone"/></svg><span>Appeler par téléphone</span>
+        </a>
+        <button type="button" class="tile t-photo" id="tile-photo" data-page="photos">
           <svg class="tile-icon"><use href="#i-photo"/></svg><span>Photos</span>
         </button>
         <button type="button" class="tile t-video" data-page="videos">

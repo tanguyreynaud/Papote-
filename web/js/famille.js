@@ -1026,6 +1026,7 @@ function closeSheets() {
 document.querySelectorAll('.fab[data-add]').forEach((fab) => {
   fab.addEventListener('click', () => openAdd(fab.dataset.add));
 });
+$('photo-nudge').addEventListener('click', () => openAdd('photo'));
 $('post-close').addEventListener('click', () => history.back());
 $('sheet-post').addEventListener('click', (e) => { if (e.target === $('sheet-post')) history.back(); });
 
@@ -3978,8 +3979,18 @@ $('tablet-chip').addEventListener('click', () => {
   notice(lignes.join(' '));
 });
 
+// Dès que la tablette a un numéro (carte SIM), la tuile Photos laisse la place à
+// « Appeler par téléphone » (Photos reste dans la barre du bas) : six tuiles, jamais cinq.
+function renderTuileTelephone() {
+  const tel = numeroTablette();
+  $('tile-phone').href = tel ? `tel:${tel.replace(/\s/g, '')}` : 'tel:';
+  $('tile-phone').hidden = !tel;
+  $('tile-photo').hidden = !!tel;
+}
+
 function renderActivity() {
   renderTabletChip();
+  renderTuileTelephone();
   renderWifi();
   const el = $('activity');
   const latest = (field) => Math.max(0, ...tabletMembers.map((m) => (m[field] ? toDate(m[field]).getTime() : 0)));
