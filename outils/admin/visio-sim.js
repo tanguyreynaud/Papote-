@@ -4,7 +4,7 @@
 //   node visio-sim.js T-003 300 100        : image reçue 300 kbit/s, Mamie envoyée 100 kbit/s (normal : 500 / 120)
 //   node visio-sim.js T-003 normal         : retire l'essai, réglage normal
 //
-// T-003 = nom de la tablette (members, role tablette), ou directement l'identifiant de la famille.
+// T-003 = numéro de la tablette (fiche stock/{id}.ref, reliée à sa famille), ou directement l'identifiant de la famille.
 // Le marqueur « rev » est avancé en même temps : la tablette est réveillée par le push et applique
 // le réglage dans la minute (journal « Visio sur SIM : … »). Jamais appliqué sur le Wi-Fi.
 // Clé d'administration : %USERPROFILE%\.papote\cle-admin-firebase.json (jamais dans le dépôt).
@@ -33,12 +33,11 @@ const app = admin.initializeApp({ credential: admin.credential.cert(require(keyP
   let fid = cible;
   let famille = await db.doc(`families/${fid}`).get();
   if (!famille.exists) {
-    // Un seul critère (comme tablettes.js) : deux « where » demanderaient un index composé.
-    const toutes = await db.collectionGroup('members').where('role', '==', 'tablette').get();
-    const t = toutes.docs.filter((d) => d.get('name') === cible);
-    if (!t.length) { console.error(`Ni famille ni tablette « ${cible} »`); process.exit(1); }
-    if (t.length > 1) { console.error(`${t.length} tablettes s'appellent ${cible} : donner l'identifiant de la famille`); process.exit(1); }
-    fid = t[0].ref.parent.parent.id;
+    // Le numéro T-… est sur la fiche de stock (stock/{id}.ref), reliée à la famille au jumelage (fid).
+    const t = (await db.collection('stock').where('ref', '==', cible.toUpperCase()).get()).docs.filter((d) => d.get('fid'));
+    if (!t.length) { console.error(`Ni famille ni tablette reliée à une famille « ${cible} »`); process.exit(1); }
+    if (t.length > 1) { console.error(`${t.length} fiches de stock portent ${cible} : donner l'identifiant de la famille`); process.exit(1); }
+    fid = t[0].get('fid');
     famille = await db.doc(`families/${fid}`).get();
   }
   const visio = (famille.get('forfaitSim') || {}).visio;
