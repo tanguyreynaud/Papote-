@@ -28,12 +28,33 @@ public class AppelGsm extends InCallService {
 
     private static Call courant;
     private static Ecouteur ecouteur;
+    private static Object proprietaire;
     private static JSONObject dernierEtat;
     private static boolean sortant;
 
-    static void ecouter(Ecouteur e) {
+    /**
+     * La page de cette activité reçoit les états GSM. Après une mise à jour ou une relance du
+     * kiosque, Android garde un moment deux MainActivity : la plus récente écoute, et la
+     * destruction de l'ancienne (oublier) ne doit pas lui retirer l'écoute.
+     */
+    static void ecouter(Object qui, Ecouteur e) {
+        proprietaire = qui;
         ecouteur = e;
         if (e != null && dernierEtat != null) e.onGsm(dernierEtat);
+    }
+
+    /** Retire l'écoute, seulement si c'est encore celle de cette activité. */
+    static void oublier(Object qui) {
+        if (proprietaire != qui) return;
+        proprietaire = null;
+        ecouteur = null;
+    }
+
+    /** Pour les tests : un état reçu du téléphone. */
+    static void simuler(JSONObject etat) {
+        dernierEtat = etat;
+        Ecouteur e = ecouteur;
+        if (e != null) e.onGsm(etat);
     }
 
     static boolean enCours() {

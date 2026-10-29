@@ -218,7 +218,7 @@ public class MainActivity extends Activity implements Sync.Listener {
         Push.demarrer(this);
         new Thread(() -> AppCheck.current(getApplicationContext()), "papote-appcheck").start();
         // Appels de la carte SIM : la page sonne et décroche (AppelGsm).
-        AppelGsm.ecouter((etat) -> {
+        AppelGsm.ecouter(this, (etat) -> {
             if (sync != null && sync.paused() && "sonne".equals(etat.optString("etat"))) {
                 AppelGsm.raccrocher(); // Papote en pause (abonnement) : pas d'appel
                 return;
@@ -1318,7 +1318,7 @@ public class MainActivity extends Activity implements Sync.Listener {
     @Override
     protected void onDestroy() {
         if (courante == this) courante = null;
-        AppelGsm.ecouter(null);
+        AppelGsm.oublier(this);
         if (tts != null) { try { tts.shutdown(); } catch (Exception ignored) { } }
         try { unregisterReceiver(screenOff); } catch (Exception ignored) { }
         try { unregisterReceiver(powerChange); } catch (Exception ignored) { }
