@@ -1036,6 +1036,7 @@ final class Sync {
 
     /** Note sur la fiche de la tablette qu'elle est en ligne, ou que Mamie l'a touchée. */
     private void heartbeat(String fid, String field) {
+        if ("lastOnline".equals(field)) journalUrgent(fid);
         long now = System.currentTimeMillis();
         Long last = lastHeartbeat.get(field);
         // « En ligne » toutes les 10 min ; « vue » et « touchée » à la minute près, pour que la famille
@@ -1044,6 +1045,14 @@ final class Sync {
         long every = "lastOnline".equals(field) ? (nuit() ? NIGHT_POLL_MS : Push.pret(context) ? PUSH_POLL_MS : HEARTBEAT_MS) - 60_000 : 60_000;
         if (fid == null || (last != null && now - last < every)) return;
         boolean enLigne = "lastOnline".equals(field);
+        // Page figée à l'écran (chien de garde) : pas de « en ligne », pour que l'alerte « ne répond
+        // plus » prévienne la famille si le chien de garde n'arrive pas à la réparer.
+        if (enLigne && !Gardien.pageVivante()) {
+            if (!pageMorteNotee) Journal.urgent(context, "GARDE-FOU : la page ne répond plus, « en ligne » n'est plus envoyé");
+            pageMorteNotee = true;
+            return;
+        }
+        if (enLigne) pageMorteNotee = false;
         try {
             // La version de l'appli, pour le tableau de bord de la famille ; toutes les 10 min, avec la
             // batterie et la carte SIM dans la MÊME écriture : une seule notification de changement pour
@@ -1073,6 +1082,20 @@ final class Sync {
             Log.w(TAG, "Veille " + field, e);
         }
         if (enLigne) uploadJournal(fid, false);
+    }
+
+    private boolean pageMorteNotee;
+
+    /** Journal.urgent : envoi sur le fil de la synchronisation, sans attendre le prochain tour. */
+    void incident() {
+        handler.post(() -> journalUrgent(prefs.getString("fid", null)));
+    }
+
+    /** Un incident (Journal.urgent) : le journal part tout de suite, sans attendre 6 h. */
+    private void journalUrgent(String fid) {
+        if (fid == null || !prefs.getBoolean(Journal.URGENT, false)) return;
+        prefs.edit().putBoolean(Journal.URGENT, false).apply();
+        uploadJournal(fid, true);
     }
 
     private JSONObject memberWrite(String fid, JSONObject fields, JSONArray mask, String horodatage) throws JSONException {

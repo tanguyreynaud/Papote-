@@ -141,7 +141,7 @@ public class MainActivity extends Activity implements Sync.Listener {
             // Android ferme Papote. On note l'incident et on refait l'écran (la page repart, état renvoyé).
             @Override
             public boolean onRenderProcessGone(WebView view, android.webkit.RenderProcessGoneDetail detail) {
-                Journal.log(MainActivity.this, "Page arrêtée par Android (" + (detail.didCrash() ? "plantage" : "mémoire") + ") : écran refait");
+                Journal.urgent(MainActivity.this, "Page arrêtée par Android (" + (detail.didCrash() ? "plantage" : "mémoire") + ") : écran refait");
                 if (view == web) {
                     if (web.getParent() != null) ((android.view.ViewGroup) web.getParent()).removeView(web);
                     web.destroy();
@@ -151,6 +151,28 @@ public class MainActivity extends Activity implements Sync.Listener {
                 return true;
             }
         });
+        // Page qui ne répond plus du tout (boucle, moteur coincé) pendant 30 s : son moteur est arrêté,
+        // et onRenderProcessGone refait l'écran (Android 10+ ; avant, le chien de garde la recharge).
+        if (android.os.Build.VERSION.SDK_INT >= 29) {
+            web.setWebViewRenderProcessClient(new android.webkit.WebViewRenderProcessClient() {
+                private long muetteDepuis;
+
+                @Override
+                public void onRenderProcessUnresponsive(WebView view, android.webkit.WebViewRenderProcess process) {
+                    long t = SystemClock.uptimeMillis();
+                    if (muetteDepuis == 0) { muetteDepuis = t; return; }
+                    if (t - muetteDepuis < 30_000 || process == null || kioskPaused()) return;
+                    muetteDepuis = 0;
+                    Journal.urgent(MainActivity.this, "GARDE-FOU : la page ne répond plus depuis 30 s, moteur relancé");
+                    process.terminate();
+                }
+
+                @Override
+                public void onRenderProcessResponsive(WebView view, android.webkit.WebViewRenderProcess process) {
+                    muetteDepuis = 0;
+                }
+            });
+        }
         web.setWebChromeClient(new WebChromeClient() {
             // Messages et erreurs de la page dans logcat (adb logcat -s PapoteJS).
             @Override
@@ -212,8 +234,10 @@ public class MainActivity extends Activity implements Sync.Listener {
         power.addAction(Intent.ACTION_POWER_DISCONNECTED);
         registerReceiver(powerChange, power);
         handler.postDelayed(daytimeWatch, 60_000);
+        Gardien.nouvellePage();
         web.loadUrl(LocalContent.PAGE);
         sync.start();
+        Gardien.demarrer(this, GARDIEN_PAGE);
         Updater.cleanup(this);
         handler.postDelayed(updateCheck, 60_000);
         Push.demarrer(this);
@@ -619,6 +643,19 @@ public class MainActivity extends Activity implements Sync.Listener {
         }
 
         /** Code PIN de la famille (donné à l'installation) pour régler le wifi plus tard. */
+        /** Pouls de la page pour le chien de garde (toutes les 20 s). */
+        @JavascriptInterface
+        public void pouls() {
+            Gardien.pouls();
+        }
+
+        /** Garde-fou de la page (écran bloqué refermé, rechargement de nuit), noté dans le journal. */
+        @JavascriptInterface
+        public void gardeFou(String message, boolean urgent) {
+            if (urgent) Journal.urgent(MainActivity.this, message);
+            else Journal.log(MainActivity.this, message);
+        }
+
         /** Erreurs de la page, notées dans le journal. */
         @JavascriptInterface
         public void logError(String message) {
@@ -1095,6 +1132,28 @@ public class MainActivity extends Activity implements Sync.Listener {
         }
     };
 
+    /** Chien de garde : la page de l'activité à l'écran (elle change si l'écran est refait). */
+    private static final Gardien.Page GARDIEN_PAGE = new Gardien.Page() {
+        @Override public void recharger() {
+            MainActivity a = courante;
+            if (a == null || a.web == null) return;
+            Gardien.nouvellePage();
+            a.web.reload();
+        }
+
+        @Override public boolean maintenance() {
+            if (android.os.Debug.isDebuggerConnected()) return true;
+            MainActivity a = courante;
+            return a != null && a.kioskPaused();
+        }
+    };
+
+    /** Journal.urgent : le journal part à la famille sans attendre. */
+    static void incident() {
+        MainActivity a = courante;
+        if (a != null && a.sync != null) a.sync.incident();
+    }
+
     private boolean kioskPaused() {
         return prefs.getBoolean("kioskPaused", false);
     }
@@ -1310,6 +1369,7 @@ public class MainActivity extends Activity implements Sync.Listener {
     protected void onResume() {
         super.onResume();
         if (web != null) web.onResume();
+        Gardien.aLEcran(true);
         handler.removeCallbacks(rehideBars);
         handler.post(rehideBars);
         enterKiosk();
@@ -1317,6 +1377,7 @@ public class MainActivity extends Activity implements Sync.Listener {
 
     @Override
     protected void onPause() {
+        Gardien.aLEcran(false);
         if (web != null) web.onPause();
         handler.removeCallbacks(rehideBars);
         super.onPause();

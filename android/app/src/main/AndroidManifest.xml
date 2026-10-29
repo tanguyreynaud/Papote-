@@ -20,6 +20,8 @@
     <uses-permission android:name="android.permission.READ_PHONE_NUMBERS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Chien de garde (Gardien) : Papote bloquée se rouvre 2 s après son arrêt. -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <!-- Mise à jour à distance -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- Appels vidéo -->

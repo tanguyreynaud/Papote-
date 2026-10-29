@@ -49,6 +49,22 @@ final class Journal {
         }
     }
 
+    /**
+     * Incident (plantage, page rechargée, Papote relancée) : noté, et le journal part à la famille au
+     * prochain tour de synchronisation au lieu d'attendre 6 h (Sync.journalUrgent).
+     */
+    static void urgent(Context context, String message) {
+        log(context, message);
+        try {
+            context.getSharedPreferences("papote", Context.MODE_PRIVATE).edit().putBoolean(URGENT, true).commit();
+            MainActivity.incident();
+        } catch (Exception e) {
+            Log.w("PapoteJournal", "Journal urgent", e);
+        }
+    }
+
+    static final String URGENT = "journalUrgent";
+
     /** Les dernières lignes, les plus récentes en bas. */
     static String tail(Context context, int max) {
         synchronized (LOCK) {
@@ -81,7 +97,7 @@ final class Journal {
                 StringBuilder sb = new StringBuilder("PLANTAGE : ").append(error);
                 StackTraceElement[] st = error.getStackTrace();
                 for (int i = 0; i < Math.min(6, st.length); i++) sb.append(" | ").append(st[i]);
-                log(app, sb.toString());
+                urgent(app, sb.toString());
             } catch (Throwable ignored) { }
             if (previous != null) previous.uncaughtException(thread, error);
         });

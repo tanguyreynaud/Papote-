@@ -49,6 +49,8 @@ function imitation(etat) {
     phoneAnswer: note('phoneAnswer'), phoneHangup: (...args) => { window.__appels.push({ nom: 'phoneHangup', args }); return !window.__etat.raccrocherKo; }, sendSms: (...args) => { window.__appels.push({ nom: 'sendSms', args }); return true; },
     phoneState: () => JSON.stringify(window.__etat.appelGsm || {}), phoneNumbers: () => '[]',
     qrCode: () => 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
+    // Chien de garde (Gardien.java) et garde-fous de la page.
+    pouls: note('pouls'), gardeFou: note('gardeFou'),
   };
   // Caméra : window.__visage() fait « voir » un visage à toutes les surveillances en cours.
   window.__surveillances = new Set();
