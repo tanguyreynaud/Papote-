@@ -59,6 +59,19 @@ test.before(async () => {
 test.after(() => env.cleanup());
 test.beforeEach(() => env.clearFirestore());
 
+// Mon numéro de téléphone (chantier téléphone 29/10) : écrit par le proche sur sa fiche, à l'inscription ou après.
+test('numéro de téléphone du proche : accepté bien formé, refusé sinon', async () => {
+  await famille();
+  await assertSucceeds(setDoc(doc(proche('paul'), `families/${FID}/members/paul`), fiche('paul', { status: 'pending', telephone: '06 12 34 56 78' })));
+  await assertSucceeds(updateDoc(doc(proche('julie'), `families/${FID}/members/julie`), { telephone: '+33612345678' }));
+  await assertSucceeds(updateDoc(doc(proche('julie'), `families/${FID}/members/julie`), { telephone: null }));
+  await assertFails(updateDoc(doc(proche('julie'), `families/${FID}/members/julie`), { telephone: 'zéro six' }));
+  await assertFails(updateDoc(doc(proche('julie'), `families/${FID}/members/julie`), { telephone: '06 12 34 56 78 90 12 34 56' }));
+  await assertFails(updateDoc(doc(proche('julie'), `families/${FID}/members/julie`), { telephone: 12345678 }));
+  // Le numéro d'un autre proche n'est pas à moi.
+  await assertFails(updateDoc(doc(proche('paul'), `families/${FID}/members/julie`), { telephone: '0612345678' }));
+});
+
 test('un proche arrivé avec le code famille attend l\'accord d\'un responsable', async () => {
   await famille();
   await assertFails(setDoc(doc(proche('paul'), `families/${FID}/members/paul`), fiche('paul', { status: 'active' })));

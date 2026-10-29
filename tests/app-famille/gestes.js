@@ -154,10 +154,11 @@ async function seConnecter(t, email, suite = '') {
   t.email = email;
 }
 
-/** « Vos informations » : prénom, femme/homme, photo, anniversaire. */
-async function remplirMoi(t, { prenom, genre = 'femme', jour = '12', mois = '5', annee = '1985' }) {
+/** « Vos informations » : prénom, femme/homme, photo, numéro de téléphone, anniversaire. */
+async function remplirMoi(t, { prenom, genre = 'femme', tel = '06 12 34 56 78', jour = '12', mois = '5', annee = '1985' }) {
   await attendreVue(t, 'view-moi');
   await t.page.fill('#moi-prenom', prenom);
+  await t.page.fill('#moi-tel', tel);
   await t.page.click(`#form-moi .genre-btn[data-genre="${genre}"]`);
   await t.page.setInputFiles('#moi-in', await photo({ largeur: 800, hauteur: 800, texte: prenom }));
   await t.page.locator('#moi-photo').waitFor({ state: 'visible' });

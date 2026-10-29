@@ -157,6 +157,9 @@
           <span class="muted small">Pour que votre proche vous reconnaisse</span>
         </button>
         <input id="moi-in" type="file" accept="image/*" hidden>
+        <p class="genre-titre">Votre numéro de téléphone</p>
+        <input id="moi-tel" type="tel" inputmode="tel" autocomplete="tel" maxlength="20" placeholder="06 12 34 56 78" aria-label="Votre numéro de téléphone">
+        <p class="muted small">Pour que votre proche puisse vous appeler par téléphone depuis sa tablette. Seule votre famille le voit.</p>
         <p class="genre-titre">Votre anniversaire</p>
         <div class="moi-date">
           <select id="moi-jour" aria-label="Jour"><option value="">Jour</option></select>
@@ -802,6 +805,18 @@
           <p id="my-name-value" class="setting-value"></p>
           <form id="form-my-name" class="setting-edit" hidden>
             <input id="my-name" maxlength="40" autocomplete="given-name" required aria-label="Mon prénom">
+            <div class="setting-actions">
+              <button type="button" class="secondary setting-cancel">Annuler</button>
+              <button type="submit" class="primary">Enregistrer</button>
+            </div>
+          </form>
+        </div>
+        <div id="my-tel-card" class="card setting">
+          <div class="setting-head"><h2>Mon numéro de téléphone</h2><button type="button" class="link setting-modify">Modifier</button></div>
+          <p id="my-tel-value" class="setting-value"></p>
+          <form id="form-my-tel" class="setting-edit" hidden>
+            <input id="my-tel" type="tel" inputmode="tel" autocomplete="tel" maxlength="20" placeholder="06 12 34 56 78" aria-label="Mon numéro de téléphone">
+            <p class="muted small">La tablette de votre proche vous appelle à ce numéro, et seuls les numéros de la famille peuvent l'appeler. Visible par votre famille seulement.</p>
             <div class="setting-actions">
               <button type="button" class="secondary setting-cancel">Annuler</button>
               <button type="submit" class="primary">Enregistrer</button>

@@ -810,6 +810,7 @@ button:disabled { opacity: .45; cursor: default; }
 .inline-field button { min-height: 0; }
 .members li { flex-wrap: wrap; }
 .member-name { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.member-tel { font-size: .9em; color: var(--indigo, #4f46e5); text-decoration: none; }
 .badge { font-size: 14px; font-weight: 700; color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); padding: 2px 8px; border-radius: 999px; }
 .member-actions { display: flex; gap: 14px; width: 100%; padding-left: 52px; }
 .member-actions .link { padding: 2px 0; }

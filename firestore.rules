@@ -96,6 +96,11 @@ service cloud.firestore {
     }
 
     // Responsables de la famille : le créateur, plus ceux qu'il a désignés (champ admins).
+    // « 06 12 34 56 78 » ou « +33612345678 » : 20 caractères au plus, chiffres, espaces et un « + » devant.
+    function telephoneValide(d) {
+      return !('telephone' in d) || d.telephone == null
+        || (d.telephone is string && d.telephone.size() <= 20 && d.telephone.matches('\\+?[0-9 ]{8,20}'));
+    }
     function isFamilyAdmin(fid) {
       let fam = get(familyPath(fid)).data;
       return isMember(fid)
@@ -284,7 +289,8 @@ service cloud.firestore {
         allow get: if signedIn() && uid == request.auth.uid;
         allow create: if signedIn()
           && uid == request.auth.uid
-          && request.resource.data.keys().hasOnly(['name', 'role', 'code', 'joinedAt', 'canCall', 'uid', 'email', 'status', 'pairing'])
+          && request.resource.data.keys().hasOnly(['name', 'role', 'code', 'joinedAt', 'canCall', 'uid', 'email', 'status', 'pairing', 'telephone'])
+          && telephoneValide(request.resource.data)
           && request.resource.data.name is string
           && request.resource.data.name.size() > 0
           && request.resource.data.name.size() <= 40
@@ -353,7 +359,9 @@ service cloud.firestore {
           && (!('enTete' in request.resource.data) || request.resource.data.enTete == request.time);
         allow update: if signedIn()
           && uid == request.auth.uid
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'canCall', 'lastActive', 'lastOnline', 'callable', 'face', 'appVersion', 'uid', 'email', 'battery', 'sim', 'meteoVille', 'wifi', 'lastSeen', 'genre'])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'canCall', 'lastActive', 'lastOnline', 'callable', 'face', 'appVersion', 'uid', 'email', 'battery', 'sim', 'meteoVille', 'wifi', 'lastSeen', 'genre', 'telephone'])
+          // Mon numéro de téléphone : la tablette m'appelle par la carte SIM et n'accepte que les numéros de la famille.
+          && telephoneValide(request.resource.data)
           // Je suis une femme / un homme : voix qui lit mes messages sur la tablette.
           && (!('genre' in request.resource.data) || request.resource.data.genre in ['femme', 'homme'])
           // lastSeen : dernière fois que la caméra a vu quelqu'un (horodatage serveur).

@@ -2335,6 +2335,15 @@ function renderMembers(all) {
     name.className = 'member-name';
     name.textContent = m.role === 'tablette' ? `Tablette de ${session.family.name}` : m.name;
     li.append(name);
+    // Numéro de la tablette (carte SIM) : la famille peut l'appeler par téléphone ; les autres numéros sont refusés.
+    const telTablette = m.role === 'tablette' ? numeroTablette() : '';
+    if (telTablette) {
+      const tel = document.createElement('a');
+      tel.className = 'member-tel';
+      tel.href = `tel:${telTablette.replace(/\s/g, '')}`;
+      tel.textContent = telTablette;
+      name.append(tel);
+    }
     if (m.role === 'famille') {
       const f = session.family;
       const isCreator = f.createdBy === m.id;
@@ -3343,6 +3352,27 @@ SETTINGS['my-name-card'] = {
   },
 };
 
+// Mon numéro de téléphone (Profil) : members/{uid}.telephone, pour les appels de la tablette par la carte SIM.
+const renderTel = () => { if (session?.member) $('my-tel-value').textContent = telPropre(session.member.telephone) || 'Non renseigné'; };
+
+SETTINGS['my-tel-card'] = {
+  fill() {
+    $('my-tel').value = telPropre(session.member.telephone);
+  },
+  async save() {
+    const tel = telPropre($('my-tel').value);
+    if (!tel) { toast($('my-tel').value.trim() ? TEL_INVALIDE : TEL_MANQUANT); return false; }
+    if (tel === telPropre(session.member.telephone)) return true;
+    await updateDoc(doc(db, 'families', session.fid, 'members', session.uid), { telephone: tel });
+    session.member.telephone = tel;
+    rememberTel(tel);
+    await bumpFamilyRev();
+    renderTel();
+    toast('Numéro enregistré');
+    return true;
+  },
+};
+
 // Je suis une femme / un homme (Profil) : members/{uid}.genre, pour la voix qui lit mes messages sur la tablette.
 const GENRES = { femme: 'Une femme', homme: 'Un homme' };
 const renderGenre = () => { $('my-genre-value').textContent = GENRES[session.member.genre] || 'Non précisé'; };
@@ -3896,6 +3926,12 @@ function forfaitTablette() {
     ? new Date(`${sim.cycleDebut}T12:00:00`).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' }) : null;
   return { pourCent, conso: sim.dataCycleMo, plafond: sim.plafondMo, niveau: sim.niveau || 0, depuis };
 }
+// Numéro de téléphone de la tablette : posé par l'admin avec la carte SIM (members/{uid}.telephone),
+// sinon lu par la tablette elle-même (sim.numero, pas toujours connu).
+function numeroTablette() {
+  const t = tabletMembers.find((m) => telPropre(m.telephone) || telPropre(m.sim?.numero));
+  return t ? telPropre(t.telephone) || telPropre(t.sim?.numero) : '';
+}
 const enGoOuMo = (mo) => (mo >= 1000 ? `${(mo / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} Go` : `${Math.round(mo)} Mo`);
 function texteForfait(f, name) {
   const debut = `Le forfait internet de la tablette de ${name} est utilisé à ${Math.min(f.pourCent, 100)} %`;
@@ -3973,6 +4009,14 @@ function renderActivity() {
   } else if (forfaitTablette()?.pourCent >= FORFAIT_ALERTE) {
     el.classList.add('warn');
     el.textContent = texteForfait(forfaitTablette(), name);
+    // Forfait presque épuisé (88 %) : mieux vaut l'appeler par téléphone, ça ne coûte rien au forfait.
+    const tel = numeroTablette();
+    if (forfaitTablette().niveau >= 2 && tel) {
+      const a = document.createElement('a');
+      a.href = `tel:${tel.replace(/\s/g, '')}`;
+      a.textContent = `Appeler ${name} par téléphone`;
+      el.append(' ', a);
+    }
   } else if (active && now - active > 12 * 3600_000 && hour >= 10 && hour < 21) {
     el.classList.add('warn');
     el.textContent = `${name} n'a pas touché la tablette depuis ${ago(active).replace('il y a ', '')}.`;
@@ -4130,6 +4174,21 @@ $('form-pair-claim').addEventListener('submit', async (e) => {
 const SETUP_STEPS = ['setup-code', 'setup-check', 'setup-nom', 'setup-photo', 'setup-son', 'setup-options'];
 const SETUP_DOT = { 'setup-code': 0, 'setup-check': 0, 'setup-nom': 1, 'setup-photo': 2, 'setup-son': 3, 'setup-options': 4 };
 const PRENOM_KEY = 'papote.prenom';
+// Mon numéro de téléphone (obligatoire depuis le 29/10 : la tablette appelle ses proches par la carte SIM,
+// et n'accepte que les appels des numéros de la famille) : gardé sur ce téléphone puis écrit dans members/{uid}.telephone.
+const TEL_KEY = 'papote.telephone';
+function savedTel() { try { return localStorage.getItem(TEL_KEY) || ''; } catch (e) { return ''; } }
+function rememberTel(t) { try { localStorage.setItem(TEL_KEY, t); } catch (e) { /* rien */ } }
+// « 06 12 34 56 78 », « +33 6 12 34 56 78 » : un numéro de téléphone complet, français ou étranger.
+function telPropre(v) {
+  const t = String(v || '').replace(/[^\d+]/g, '');
+  if (/^0\d{9}$/.test(t)) return t.replace(/(\d{2})(?=\d)/g, '$1 ');
+  if (/^\+\d{8,15}$/.test(t)) return t;
+  if (/^00\d{8,15}$/.test(t)) return `+${t.slice(2)}`;
+  return '';
+}
+const TEL_MANQUANT = 'Indiquez votre numéro de téléphone : votre proche vous appelle à ce numéro depuis sa tablette.';
+const TEL_INVALIDE = 'Ce numéro ne semble pas complet (10 chiffres, par exemple 06 12 34 56 78).';
 let setup = { code: null, step: null }; // code de la tablette réservée
 let stopSetupPairing = null;
 let setupPhoto = null;
@@ -4168,7 +4227,9 @@ function connaitMoi(memberships) {
   if (!savedGenre() && genre) rememberGenre(genre);
   const visage = memberships.map((m) => m.member?.face).find(Boolean);
   if (!savedVisage() && visage) rememberVisage(visage);
-  return !!savedPrenom() && !!savedGenre() && !!savedVisage() && !!savedAnniv()?.year;
+  const tel = memberships.map((m) => m.member?.telephone).find((t) => telPropre(t));
+  if (!savedTel() && tel) rememberTel(telPropre(tel));
+  return !!savedPrenom() && !!savedGenre() && !!savedVisage() && !!savedAnniv()?.year && !!savedTel();
 }
 function showMoi() {
   $('moi-prenom').value = (savedPrenom() || defaultName()).replace(HORS_PRENOM, '').trim();
@@ -4178,6 +4239,7 @@ function showMoi() {
   $('moi-jour').value = a ? String(a.day) : '';
   $('moi-mois').value = a ? String(a.month) : '';
   $('moi-annee').value = a?.year ? String(a.year) : '';
+  $('moi-tel').value = savedTel();
   $('moi-error').hidden = true;
   moiComplet();
   show('view-moi');
@@ -4188,6 +4250,8 @@ $('form-moi').addEventListener('submit', (e) => {
   if (!/\p{L}/u.test(prenom)) { showError($('moi-error'), 'Indiquez votre prénom : la famille le verra.'); return; }
   if (!genreDe($('form-moi'))) { showError($('moi-error'), GENRE_MANQUANT); return; }
   if (!savedVisage()) { showError($('moi-error'), 'Ajoutez une photo de vous : votre proche vous reconnaîtra sur la tablette.'); return; }
+  if (!$('moi-tel').value.trim()) { showError($('moi-error'), TEL_MANQUANT); return; }
+  if (!telPropre($('moi-tel').value)) { showError($('moi-error'), TEL_INVALIDE); return; }
   if (!$('moi-jour').value || !$('moi-mois').value || !$('moi-annee').value) {
     showError($('moi-error'), 'Indiquez votre date de naissance : jour, mois et année.');
     return;
@@ -4195,6 +4259,7 @@ $('form-moi').addEventListener('submit', (e) => {
   rememberAnniv({ day: Number($('moi-jour').value), month: Number($('moi-mois').value), year: Number($('moi-annee').value) });
   rememberPrenom(prenom);
   rememberGenre(genreDe($('form-moi')));
+  rememberTel(telPropre($('moi-tel').value));
   enterApp();
 });
 
@@ -4211,7 +4276,7 @@ $('form-moi').addEventListener('submit', (e) => {
 // « Continuer » reste grisé tant qu'il manque le prénom, le genre, la photo ou l'anniversaire.
 function moiComplet() {
   $('form-moi').querySelector('button[type=submit]').disabled = !($('moi-prenom').value.trim()
-    && genreDe($('form-moi')) && savedVisage() && $('moi-jour').value && $('moi-mois').value && $('moi-annee').value);
+    && genreDe($('form-moi')) && savedVisage() && $('moi-tel').value.trim() && $('moi-jour').value && $('moi-mois').value && $('moi-annee').value);
 }
 // Prénom : seulement des lettres (accents compris), espace, tiret et apostrophe.
 const HORS_PRENOM = /[^\p{L}\p{M} '’-]/gu;
@@ -4224,7 +4289,7 @@ document.addEventListener('input', (e) => {
   el.value = propre;
   el.setSelectionRange(pos, pos);
 }, true);
-for (const id of ['moi-prenom', 'moi-jour', 'moi-mois', 'moi-annee']) {
+for (const id of ['moi-prenom', 'moi-tel', 'moi-jour', 'moi-mois', 'moi-annee']) {
   $(id).addEventListener('input', moiComplet);
   $(id).addEventListener('change', moiComplet);
 }
@@ -4281,11 +4346,24 @@ function appliquerGenre() {
     saveFace(v).catch((err) => console.warn('Photo non enregistrée', err));
   }
   ajouterMonAnniversaire();
+  // Mon numéro de téléphone, donné à l'inscription : il rejoint ma fiche s'il y manque.
+  const tel = savedTel();
+  if (session?.member && session.member.role !== 'tablette' && !telPropre(session.member.telephone) && tel) {
+    session.member.telephone = tel;
+    updateDoc(doc(db, 'families', session.fid, 'members', session.uid), { telephone: tel })
+      .then(() => bumpFamilyRev()).catch((err) => console.warn('Numéro non enregistré', err));
+  }
+  renderTel();
   const g = savedGenre();
   if (!session?.member || session.member.genre || !['femme', 'homme'].includes(g)) return;
   session.member.genre = g;
   updateDoc(doc(db, 'families', session.fid, 'members', session.uid), { genre: g })
     .catch((err) => console.warn('Genre non enregistré', err));
+}
+// La tablette relit les numéros de la famille quand la fiche de la famille bouge (rev).
+function bumpFamilyRev() {
+  if (!session?.fid) return Promise.resolve();
+  return updateDoc(doc(db, 'families', session.fid), { rev: increment(1) }).catch(() => null);
 }
 
 function setupStep(step) {
