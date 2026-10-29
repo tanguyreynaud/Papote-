@@ -16,10 +16,11 @@ const DELAI_GRACE_JOURS = 7;
 // (limiteRetractation) ; le dernier mois est prélevé à l'arrêt.
 // Sur la page de paiement, plus d'« essai gratuit » (Tanguy, 2026-10-27 : « 90 jours gratuits » se lisait comme une
 // promesse) : une date de premier prélèvement (billing_cycle_anchor), estimée d'après le délai annoncé.
-// Une semaine de plus depuis l'offre unique (29/10/2026) : la ligne SIM est ouverte à la commande.
-const ATTENTE_ENVOI = { stock: 10, precommande: 17, long: 35 };
+// Un seul délai annoncé depuis le 29/10/2026 : expédiée sous 3 à 5 jours ouvrés, quel que soit le stock (delai n'est
+// plus lu). 7 jours : 5 jours ouvrés et un week-end.
+const ATTENTE_ENVOI = 7;
 function premierPrelevementMs(delai, maintenant, { dejaInstallee = false } = {}) {
-  const attente = dejaInstallee ? 0 : (ATTENTE_ENVOI[delai] != null ? ATTENTE_ENVOI[delai] : ATTENTE_ENVOI.long);
+  const attente = dejaInstallee ? 0 : ATTENTE_ENVOI;
   return maintenant + (attente + RETRACTATION_JOURS) * JOUR;
 }
 // Stripe refuse une date de départ (billing_cycle_anchor) au-delà de la prochaine échéance naturelle, un mois après

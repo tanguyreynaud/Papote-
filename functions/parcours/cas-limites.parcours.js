@@ -143,7 +143,7 @@ test('page de paiement abandonnée : la tablette mise de côté est libérée', 
   assert.strictEqual((await s.requete('stockDisponible')).json.precommande, false);
 });
 
-test('stock épuisé : précommande jusqu\'à stock + 10, puis « 3 à 4 semaines », jamais fermé', async () => {
+test('stock épuisé : précommande jusqu\'à stock + 10, puis attente longue, jamais fermé', async () => {
   let session = await a.commanderSurLeSite({ email: 'a@exemple.fr' });
   assert.strictEqual(s.stripe.etat.sessions.get(session).params.subscription_data.metadata.delai, 'precommande');
   s.stripe.expirerSession(session);
