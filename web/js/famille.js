@@ -4183,16 +4183,18 @@ const PRENOM_KEY = 'papote.prenom';
 const TEL_KEY = 'papote.telephone';
 function savedTel() { try { return localStorage.getItem(TEL_KEY) || ''; } catch (e) { return ''; } }
 function rememberTel(t) { try { localStorage.setItem(TEL_KEY, t); } catch (e) { /* rien */ } }
-// « 06 12 34 56 78 », « +33 6 12 34 56 78 » : un numéro de téléphone complet, français ou étranger.
+// « 06 12 34 56 78 », « +33 6 12 34 56 78 », « 0033 7… » : seulement un portable français, rendu « 06 12 34 56 78 ».
+// Rien d'autre (étranger, fixe, numéro spécial) : la tablette appelle et envoie ses SMS dans le forfait, jamais au-delà (Tanguy, 29/10).
 function telPropre(v) {
-  const t = String(v || '').replace(/[^\d+]/g, '');
-  if (/^0\d{9}$/.test(t)) return t.replace(/(\d{2})(?=\d)/g, '$1 ');
-  if (/^\+\d{8,15}$/.test(t)) return t;
-  if (/^00\d{8,15}$/.test(t)) return `+${t.slice(2)}`;
-  return '';
+  let t = String(v || '').replace(/[^\d+]/g, '');
+  if (t.startsWith('+')) t = t.slice(1);
+  else if (t.startsWith('00')) t = t.slice(2);
+  if (t.startsWith('33')) t = `0${t.slice(2).replace(/^0/, '')}`;
+  if (!/^0[67]\d{8}$/.test(t)) return '';
+  return t.replace(/(\d{2})(?=\d)/g, '$1 ');
 }
-const TEL_MANQUANT = 'Indiquez votre numéro de téléphone : votre proche vous appelle à ce numéro depuis sa tablette.';
-const TEL_INVALIDE = 'Ce numéro ne semble pas complet (10 chiffres, par exemple 06 12 34 56 78).';
+const TEL_MANQUANT = 'Indiquez votre numéro de portable : votre proche vous appelle à ce numéro depuis sa tablette.';
+const TEL_INVALIDE = 'Indiquez un numéro de portable français (06 ou 07, 10 chiffres, par exemple 06 12 34 56 78).';
 let setup = { code: null, step: null }; // code de la tablette réservée
 let stopSetupPairing = null;
 let setupPhoto = null;

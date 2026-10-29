@@ -63,8 +63,12 @@ test.beforeEach(() => env.clearFirestore());
 test('numéro de téléphone du proche : accepté bien formé, refusé sinon', async () => {
   await famille();
   await assertSucceeds(setDoc(doc(proche('paul'), `families/${FID}/members/paul`), fiche('paul', { status: 'pending', telephone: '06 12 34 56 78' })));
-  await assertSucceeds(updateDoc(doc(proche('julie'), `families/${FID}/members/julie`), { telephone: '+33612345678' }));
+  await assertSucceeds(updateDoc(doc(proche('julie'), `families/${FID}/members/julie`), { telephone: '0712345678' }));
   await assertSucceeds(updateDoc(doc(proche('julie'), `families/${FID}/members/julie`), { telephone: null }));
+  // Jamais hors forfait : étranger, fixe, « +33 » brut (l'app le réécrit en 06) sont refusés.
+  await assertFails(updateDoc(doc(proche('julie'), `families/${FID}/members/julie`), { telephone: '+33612345678' }));
+  await assertFails(updateDoc(doc(proche('julie'), `families/${FID}/members/julie`), { telephone: '+32 470 12 34 56' }));
+  await assertFails(updateDoc(doc(proche('julie'), `families/${FID}/members/julie`), { telephone: '01 42 00 00 00' }));
   await assertFails(updateDoc(doc(proche('julie'), `families/${FID}/members/julie`), { telephone: 'zéro six' }));
   await assertFails(updateDoc(doc(proche('julie'), `families/${FID}/members/julie`), { telephone: '06 12 34 56 78 90 12 34 56' }));
   await assertFails(updateDoc(doc(proche('julie'), `families/${FID}/members/julie`), { telephone: 12345678 }));

@@ -96,10 +96,11 @@ service cloud.firestore {
     }
 
     // Responsables de la famille : le créateur, plus ceux qu'il a désignés (champ admins).
-    // « 06 12 34 56 78 » ou « +33612345678 » : 20 caractères au plus, chiffres, espaces et un « + » devant.
+    // Seulement un portable français, « 06 12 34 56 78 » (espaces facultatifs) : la tablette appelle et envoie
+    // ses SMS dans le forfait, jamais au-delà. La tablette (role tablette) reçoit son numéro du serveur.
     function telephoneValide(d) {
       return !('telephone' in d) || d.telephone == null
-        || (d.telephone is string && d.telephone.size() <= 20 && d.telephone.matches('\\+?[0-9 ]{8,20}'));
+        || (d.telephone is string && d.telephone.matches('0[67]( ?[0-9]{2}){4}'));
     }
     function isFamilyAdmin(fid) {
       let fam = get(familyPath(fid)).data;
