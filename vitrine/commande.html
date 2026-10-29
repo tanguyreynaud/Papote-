@@ -89,8 +89,6 @@ p { margin: 0; }
 .resume p b { white-space: nowrap; }
 .resume .total { border-top: 2px solid var(--line); padding-top: .5rem; font-size: 1.15rem; }
 .resume .petit, .resume .reprise { display: block; }
-.ensuite summary { font-weight: 700; color: var(--accent-strong); cursor: pointer; min-height: 2.5rem; display: flex; align-items: center; }
-.ensuite p { margin-top: .4rem; color: var(--muted); font-size: .98rem; display: block; }
 .reprise[hidden], .erreur[hidden], #recherche[hidden] { display: none; }
 .reprise { padding: .6rem .9rem; border-radius: 12px; background: var(--accent-soft); color: var(--accent-strong); font-weight: 700; }
 .erreur { color: #b91c1c; }
@@ -126,15 +124,15 @@ body .ps-bouton { bottom: 6.5rem; }
   </div>
   <div>
     <h1>Votre commande</h1>
-    <p class="sous">Trois étapes, deux minutes. Livraison offerte, 30 jours pour changer d'avis.</p>
+    <p class="sous">Trois étapes, deux minutes. Expédiée sous 3 à 5 jours ouvrés, livraison offerte, 30 jours pour changer d'avis.</p>
   </div>
   <p class="reprise" id="reprise" hidden>Votre commande vous attend : tout est déjà rempli, il ne reste que le paiement.</p>
 
   <section class="etape" id="etape-proche">
     <h2><span class="n">1</span>Où vit votre proche ?<span class="ok" id="ok1" hidden>✓</span></h2>
     <label class="champ">Son adresse
-      <input id="adresse" autocomplete="off" maxlength="200" placeholder="N°, rue et ville" aria-describedby="adresse-aide">
-      <small id="adresse-aide">Nous vérifions que la 4G passe bien chez elle.</small>
+      <input id="adresse" autocomplete="off" maxlength="200" placeholder="Adresse, ou seulement la ville" aria-describedby="adresse-aide">
+      <small id="adresse-aide">Nous vérifions que la 4G passe bien chez votre proche.</small>
     </label>
     <div class="points" id="suggestions" hidden></div>
     <p class="muted" id="verification" hidden>Vérification de la 4G…</p>
@@ -177,7 +175,7 @@ body .ps-bouton { bottom: 6.5rem; }
     </label>
     <label class="accord" id="qui-accord">
       <input type="checkbox" id="accord">
-      <span>Recevoir les nouvelles de Papote par e-mail, et un rappel si je ne termine pas ma commande (désinscription en un clic).</span>
+      <span>Recevoir les nouvelles de Papote par e-mail</span>
     </label>
   </section>
 
@@ -186,14 +184,6 @@ body .ps-bouton { bottom: 6.5rem; }
     <p><span>Puis chaque mois, tout compris</span><b id="mensuel">25 €</b></p>
     <p><span>Tablette, carte SIM 4G, livraison, appli famille</span><b>inclus</b></p>
     <p class="total"><span>À payer maintenant</span><b>60 €</b></p>
-    <details class="ensuite">
-      <summary>Et ensuite ?</summary>
-      <p>Je prépare et vérifie votre tablette moi-même, avec sa carte SIM : elle est expédiée sous 3 à 5 jours ouvrés, puis Mondial Relay la livre en 3 à 5 jours ouvrés.</p>
-      <p>Le premier prélèvement mensuel a lieu 30 jours après la réception. Sans engagement : vous résiliez quand vous voulez depuis l'appli, le mois en cours est le dernier payé.</p>
-      <p>30 jours après la réception pour changer d'avis : « Annuler ma commande » dans l'appli, la tablette nous revient, rien à payer et les 60 € remboursés.</p>
-      <p>La tablette reste la nôtre et nous est rendue en fin d'abonnement. Une question ? <a href="mailto:contact@mapapote.fr">contact@mapapote.fr</a></p>
-    </details>
-    <p class="petit">Paiement sécurisé par carte, Apple Pay, Google Pay ou prélèvement SEPA. En payant, vous acceptez les <a href="cgv.html">conditions générales de vente</a>.</p>
   </section>
 </main>
 
@@ -226,7 +216,7 @@ body .ps-bouton { bottom: 6.5rem; }
 
   // Étape 1 : l'adresse du proche. Papote vérifie que la 4G de la carte SIM (réseau Bouygues) y passe bien,
   // d'après la carte de l'ARCEP (functions/couverture.js) ; sinon, pas de paiement. Les points relais les plus
-  // proches de chez lui sont ensuite proposés tout seuls.
+  // proches du proche sont ensuite proposés tout seuls.
   var champAdresse = document.getElementById('adresse');
   var suggestions = document.getElementById('suggestions');
   var verification = document.getElementById('verification');
@@ -276,19 +266,22 @@ body .ps-bouton { bottom: 6.5rem; }
     var p = f.properties || {};
     suggestions.hidden = true;
     champAdresse.value = p.label;
-    // Une commune ou une rue entière : son centre ne dit pas si la 4G passe chez le proche.
-    if (p.type === 'municipality') {
-      dire(false, 'Précisez la rue et le numéro.', 'La 4G se vérifie à l\'adresse exacte de votre proche.');
-      return;
-    }
+    // Commune seule (adresse exacte inconnue, Tanguy 29/10) : acceptée si la 4G passe bien sur au moins 95 % de
+    // sa surface (functions/couverture.js), sinon on demande la rue.
+    var commune = p.type === 'municipality' && p.citycode;
     var c = f.geometry && f.geometry.coordinates;
     verdict.hidden = true;
     verification.hidden = false;
-    fetch(COUVERTURE + '?lat=' + c[1] + '&lon=' + c[0])
+    fetch(COUVERTURE + (commune ? '?insee=' + encodeURIComponent(p.citycode) : '?lat=' + c[1] + '&lon=' + c[0]))
       .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
       .then(function (d) {
         verification.hidden = true;
-        proche = { adresse: p.label, lat: c[1], lon: c[0], cp: p.postcode, niveau: d.niveau, eligible: !!d.eligible };
+        if (commune && !d.eligible) {
+          dire(false, 'Précisez la rue de votre proche.', 'Dans cette commune, la 4G ne passe pas partout : nous la vérifions à sa rue.');
+          return;
+        }
+        proche = { adresse: p.label, lat: c[1], lon: c[0], cp: p.postcode, niveau: commune ? 'commune' : d.niveau, eligible: !!d.eligible };
+        if (commune) proche.insee = p.citycode;
         montrerVerdict();
         if (proche.eligible) {
           // Points relais autour de chez le proche, sauf si un point est déjà choisi.
@@ -314,7 +307,7 @@ body .ps-bouton { bottom: 6.5rem; }
   }
   function montrerVerdict() {
     if (proche.eligible) {
-      dire(true, proche.niveau === 'TBC' ? 'La 4G passe très bien chez votre proche.' : 'La 4G passe bien chez votre proche.',
+      dire(true, proche.insee ? 'La 4G passe bien dans toute la commune.' : proche.niveau === 'TBC' ? 'La 4G passe très bien chez votre proche.' : 'La 4G passe bien chez votre proche.',
         'La tablette s\'y connectera toute seule, sans box ni réglage.');
     } else {
       dire(false, 'Désolé, notre carte SIM ne capte pas assez bien à cette adresse pour l\'instant.',
@@ -363,6 +356,7 @@ body .ps-bouton { bottom: 6.5rem; }
       relais: String(relais.id), rnom: relais.name, radr: relais.adresse,
       rcp: relais.postal_code, rville: relais.city, rpays: (relais.country || 'FR').toUpperCase()
     });
+    if (proche.insee) params.set('pinsee', proche.insee);
     payer.href = COMMANDER + '?' + params.toString();
     payer.setAttribute('aria-disabled', 'false');
   }

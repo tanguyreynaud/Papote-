@@ -25,3 +25,33 @@ test('éligible seulement en très bonne ou bonne couverture, en France métropo
   assert.deepStrictEqual(c.verifier('abc', ''), { niveau: null, eligible: false, trimestre: null });
   assert.strictEqual(c.coordonnees(-21.1, 55.5), null, 'La Réunion : hors France métropolitaine');
 });
+
+// Carré de côté d (m) autour d'un point, en Lambert-93 (comme les contours de la Géoplateforme).
+function carre(lat, lon, d) {
+  const { x, y } = c.lambert93(lat, lon);
+  return { type: 'Polygon', coordinates: [[[x - d, y - d], [x + d, y - d], [x + d, y + d], [x - d, y + d], [x - d, y - d]]] };
+}
+
+test('commune seule : part de sa surface bien couverte', () => {
+  assert.strictEqual(c.partCouverte(carre(45.764, 4.835, 1000)), 1, 'Lyon, centre');
+  assert.strictEqual(c.partCouverte(carre(48.0501, 5.694, 300)), 0, 'Haute-Marne, zone blanche');
+  const trouee = carre(45.764, 4.835, 1000);
+  trouee.coordinates.push(carre(45.764, 4.835, 500).coordinates[0]);
+  assert.strictEqual(c.partCouverte({ type: 'MultiPolygon', coordinates: [trouee.coordinates] }), 1, 'trou et multipolygone');
+});
+
+test('commune seule : acceptée à partir de 95 % bien couverts, sinon la rue est demandée', async () => {
+  const contour = (g) => async (url) => {
+    assert.match(url, /code_insee%3D'69123'/);
+    return { ok: true, json: async () => ({ features: g ? [{ geometry: g }] : [] }) };
+  };
+  assert.deepStrictEqual(await c.verifierCommune('69123', { chercher: contour(carre(45.764, 4.835, 1000)) }), { part: 1, eligible: true, trimestre: '2026_T2' });
+  assert.strictEqual(await c.verifierCommune('abc', { chercher: contour(null) }), null, 'code INSEE invalide');
+  const p = await c.procheDepuisRequete({ padr: 'Lyon', plat: '45.76', plon: '4.83', pinsee: '69123' });
+  assert.deepStrictEqual(p, { adresse: 'Lyon', lat: 45.76, lon: 4.83, niveau: 'commune:100', eligible: true }, 'résultat gardé en mémoire');
+  const bof = { padr: 'Quelque part', plat: '48.05', plon: '5.69', pinsee: '52001' };
+  const panne = async () => ({ ok: false, status: 500 });
+  assert.strictEqual(await c.procheDepuisRequete(bof, { chercher: panne }), null, 'contour introuvable : pas de paiement');
+  const blanc = async () => ({ ok: true, json: async () => ({ features: [{ geometry: carre(48.0501, 5.694, 300) }] }) });
+  assert.strictEqual((await c.procheDepuisRequete(bof, { chercher: blanc })).eligible, false);
+});

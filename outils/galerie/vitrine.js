@@ -20,7 +20,8 @@ const RELAIS = [
 const ADRESSES = { type: 'FeatureCollection', features: [
   { geometry: { type: 'Point', coordinates: [4.8320, 45.7578] }, properties: { label: '12 Place Bellecour 69002 Lyon', name: '12 Place Bellecour', postcode: '69002', city: 'Lyon', type: 'housenumber' } },
   { geometry: { type: 'Point', coordinates: [3.5141, 45.4882] }, properties: { label: 'Le Bourg 63880 Le Brugeron', name: 'Le Bourg', postcode: '63880', city: 'Le Brugeron', type: 'street' } },
-  { geometry: { type: 'Point', coordinates: [4.835, 45.764] }, properties: { label: 'Lyon', name: 'Lyon', postcode: '69001', city: 'Lyon', type: 'municipality' } },
+  { geometry: { type: 'Point', coordinates: [4.835, 45.764] }, properties: { label: 'Lyon', name: 'Lyon', postcode: '69001', city: 'Lyon', citycode: '69123', type: 'municipality' } },
+  { geometry: { type: 'Point', coordinates: [3.0955, 45.6997] }, properties: { label: 'Brousse', name: 'Brousse', postcode: '63490', city: 'Brousse', citycode: '63056', type: 'municipality' } },
 ] };
 
 // Réponse de codeCommande pour la page « Merci » : un vrai récapitulatif, avec une adresse e-mail longue (insécable).
@@ -41,7 +42,7 @@ async function tropLarge(page) {
 }
 
 const pause = (p, ms = 700) => p.waitForTimeout(ms);
-// Adresse du proche tapée, puis la n-ième proposition choisie (0 : Lyon, 4G très bonne ; 1 : limitée ; 2 : commune).
+// Adresse du proche tapée, puis la n-ième proposition choisie (0 : Lyon, 4G très bonne ; 1 : limitée ; 2 : commune bien couverte ; 3 : commune où la 4G ne passe pas partout).
 async function adresseChoisie(p, n = 0) {
   await p.fill('#adresse', 'place bellecour');
   await p.locator('#suggestions .point').nth(n).waitFor({ timeout: 5000 });
@@ -72,7 +73,8 @@ const SCENES = [
     await p.fill('#adresse', 'place bellecour'); await p.locator('#suggestions .point').first().waitFor({ timeout: 5000 }); await pause(p, 300);
   } },
   { groupe: 'Commande', titre: 'Commande : la 4G ne passe pas assez bien chez le proche', fichier: 'commande.html', faire: (p) => adresseChoisie(p, 1) },
-  { groupe: 'Commande', titre: 'Commande : une commune seule, sans rue', fichier: 'commande.html', faire: (p) => adresseChoisie(p, 2) },
+  { groupe: 'Commande', titre: 'Commande : seulement la ville, bien couverte', fichier: 'commande.html', faire: (p) => adresseChoisie(p, 2) },
+  { groupe: 'Commande', titre: 'Commande : seulement la ville, la 4G ne passe pas partout', fichier: 'commande.html', faire: (p) => adresseChoisie(p, 3) },
   { groupe: 'Commande', titre: 'Commande : point relais et coordonnées remplis, « Payer » actif', fichier: 'commande.html', plein: true, faire: commandeRemplie },
   { groupe: 'Commande', titre: 'Commande : « Payer » touché, « Un instant… »', fichier: 'commande.html', note: 'Le paiement s’ouvre chez Stripe (coupé ici) : la barre montre l’attente.', faire: async (p) => {
     await commandeRemplie(p);
@@ -126,7 +128,10 @@ async function capturer({ browser, base, dossierImages, progression }) {
       // Couverture : la vraie règle (functions/couverture.js, carte de l'ARCEP) sur les coordonnées demandées.
       await page.route('**/couverture?**', (r) => {
         const u = new URL(r.request().url());
-        const corps = require('../../functions/couverture').verifier(u.searchParams.get('lat'), u.searchParams.get('lon'));
+        // Commune seule : parts mesurées sur les vrais contours (Lyon 100 %, Brousse 85 %).
+        const insee = u.searchParams.get('insee');
+        const corps = insee ? { part: insee === '69123' ? 1 : 0.85, eligible: insee === '69123', trimestre: '2026_T2' }
+          : require('../../functions/couverture').verifier(u.searchParams.get('lat'), u.searchParams.get('lon'));
         r.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(corps) });
       });
       await page.route(/servicepoints\.sendcloud\.sc/, (r) => r.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(RELAIS) }));

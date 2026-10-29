@@ -66,12 +66,76 @@ function verifier(lat, lon) {
   return { niveau, eligible: ELIGIBLES.includes(niveau), trimestre: c ? charger().meta.trimestre : null };
 }
 
-// Adresse de la personne équipée choisie sur la page de commande (paramètres padr, plat, plon de commander),
-// vérifiée ici à nouveau : { adresse, lat, lon, niveau, eligible }, ou null si elle manque.
-function procheDepuisRequete(q) {
+// Commune seule, quand l'acheteur ne connaît pas l'adresse exacte (Tanguy, 2026-10-29) : acceptée si au moins
+// 95 % de sa surface a une 4G bonne ou très bonne, sans autre vérification ensuite. En dessous, la page demande la rue.
+const SEUIL_COMMUNE = 0.95;
+const CONTOURS = 'https://data.geopf.fr/wfs/ows?service=WFS&version=2.0.0&request=GetFeature'
+  + '&typeNames=ADMINEXPRESS-COG-CARTO.LATEST:commune&outputFormat=application/json&srsName=EPSG:2154&cql_filter=';
+
+// Le point (Lambert-93) est-il dans ce polygone, trous compris (règle pair-impair sur tous les anneaux) ?
+function dansAnneaux(x, y, anneaux) {
+  let dedans = false;
+  for (const anneau of anneaux) {
+    for (let i = 0, j = anneau.length - 1; i < anneau.length; j = i++) {
+      const [xi, yi] = anneau[i];
+      const [xj, yj] = anneau[j];
+      if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) dedans = !dedans;
+    }
+  }
+  return dedans;
+}
+
+// Part des carreaux de 100 m de la commune (géométrie GeoJSON en Lambert-93) dont la 4G est bonne ou très bonne.
+function partCouverte(geometrie) {
+  const { meta, octets } = charger();
+  const polygones = geometrie.type === 'Polygon' ? [geometrie.coordinates] : geometrie.coordinates;
+  let total = 0;
+  let bons = 0;
+  for (const anneaux of polygones) {
+    const xs = anneaux[0].map((p) => p[0]);
+    const ys = anneaux[0].map((p) => p[1]);
+    const c0 = Math.max(0, Math.floor((Math.min(...xs) - meta.x0) / meta.pas));
+    const c1 = Math.min(meta.largeur - 1, Math.floor((Math.max(...xs) - meta.x0) / meta.pas));
+    const l0 = Math.max(0, Math.floor((meta.y1 - Math.max(...ys)) / meta.pas));
+    const l1 = Math.min(meta.hauteur - 1, Math.floor((meta.y1 - Math.min(...ys)) / meta.pas));
+    for (let lig = l0; lig <= l1; lig++) {
+      const y = meta.y1 - (lig + 0.5) * meta.pas;
+      for (let col = c0; col <= c1; col++) {
+        if (!dansAnneaux(meta.x0 + (col + 0.5) * meta.pas, y, anneaux)) continue;
+        total++;
+        const i = lig * meta.largeur + col;
+        if (ELIGIBLES.includes(NIVEAUX[(octets[i >> 2] >> (6 - 2 * (i & 3))) & 3])) bons++;
+      }
+    }
+  }
+  return total ? bons / total : 0;
+}
+
+// { part, eligible, trimestre } pour une commune (code INSEE), ou null si la commune est introuvable.
+const communes = new Map();
+async function verifierCommune(insee, { chercher = fetch } = {}) {
+  if (typeof insee !== 'string' || !/^(\d{5}|2[AB]\d{3})$/.test(insee)) return null;
+  if (!communes.has(insee)) {
+    const r = await chercher(CONTOURS + encodeURIComponent(`code_insee='${insee}'`));
+    if (!r.ok) throw new Error(`Contour de la commune ${insee} : ${r.status}`);
+    const f = ((await r.json()).features || [])[0];
+    communes.set(insee, f ? Math.floor(partCouverte(f.geometry) * 100) / 100 : null);
+  }
+  const part = communes.get(insee);
+  if (part == null) return null;
+  return { part, eligible: part >= SEUIL_COMMUNE, trimestre: charger().meta.trimestre };
+}
+
+// Adresse de la personne équipée choisie sur la page de commande (paramètres padr, plat, plon de commander, et
+// pinsee pour une commune seule), vérifiée ici à nouveau : { adresse, lat, lon, niveau, eligible }, ou null.
+async function procheDepuisRequete(q, options) {
   const adresse = typeof q.padr === 'string' ? q.padr.replace(/\s+/g, ' ').trim().slice(0, 200) : '';
   const c = coordonnees(q.plat, q.plon);
   if (!adresse || !c) return null;
+  if (q.pinsee) {
+    const v = await verifierCommune(String(q.pinsee), options).catch(() => null);
+    return v && { adresse, lat: c.lat, lon: c.lon, niveau: `commune:${Math.round(v.part * 100)}`, eligible: v.eligible };
+  }
   const { niveau, eligible } = verifier(c.lat, c.lon);
   return { adresse, lat: c.lat, lon: c.lon, niveau, eligible };
 }
@@ -85,4 +149,4 @@ function procheDepuisMeta(m) {
   return { adresse: m.proche_adresse, lat: Number(m.proche_lat), lon: Number(m.proche_lon), couverture4g: m.proche_4g || null };
 }
 
-module.exports = { lambert93, niveauA, coordonnees, verifier, procheDepuisRequete, procheVersMeta, procheDepuisMeta, ELIGIBLES };
+module.exports = { lambert93, niveauA, coordonnees, verifier, partCouverte, verifierCommune, SEUIL_COMMUNE, procheDepuisRequete, procheVersMeta, procheDepuisMeta, ELIGIBLES };

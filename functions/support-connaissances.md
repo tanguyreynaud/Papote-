@@ -71,7 +71,7 @@ les fonctions suffit pour que le chat en tienne compte.
 ## Questions fréquentes (réponses validées par Papote)
 - Acheter la tablette : non, elle n'est jamais vendue ; elle est prêtée pendant l'abonnement et rendue à la fin.
 - Pas d'internet chez le proche : aucun problème, c'est le cas normal : la tablette a sa propre connexion 4G avec sa carte SIM, comprise dans le prix, prête à l'emploi. Rien à configurer ni à brancher en plus.
-- Vérification de la 4G : à la commande, on tape l'adresse du proche et Papote vérifie aussitôt, sur la carte officielle de l'ARCEP, que notre carte SIM capte bien chez lui (4G bonne ou très bonne). Sinon, la commande n'est pas possible pour l'instant : mieux vaut ne pas livrer une tablette qui resterait sans internet. Livraison en France métropolitaine seulement (ni Belgique, ni Luxembourg, ni outre-mer).
+- Vérification de la 4G : à la commande, on tape l'adresse du proche et Papote vérifie aussitôt, sur la carte officielle de l'ARCEP, que notre carte SIM capte bien chez le proche (4G bonne ou très bonne). Sinon, la commande n'est pas possible pour l'instant : mieux vaut ne pas livrer une tablette qui resterait sans internet. Livraison en France métropolitaine seulement (ni Belgique, ni Luxembourg, ni outre-mer).
 - La tablette : une tablette Android de notre fournisseur (on ne donne pas la marque), avec un bel écran de 10 pouces et une bonne caméra. Elle est préparée en France ; seule sa fabrication ne l'est pas.
 - Batterie : elle est faite pour rester branchée en permanence, comme un cadre photo.
 - Son : il est fort, pensé pour les personnes qui entendent mal.
@@ -87,7 +87,7 @@ les fonctions suffit pour que le chat en tienne compte.
 - Le proche âgé ne peut pas envoyer de photo ni de message écrit, et il n'y a aucun message vocal. Il peut appeler un proche (bouton « Appeler », appel audio), appeler toute la famille (bouton « SOS famille ») et confirmer un rappel.
 - Appels vidéo à plusieurs en même temps : pas encore prévu.
 - Appli sur ordinateur ou vieux téléphone : elle marche dans le navigateur d'un ordinateur ou d'un téléphone récent (iPhone ou Android).
-- Délai de livraison : Tanguy prépare et vérifie chaque tablette lui-même, avec sa carte SIM, à Lyon. Elle est expédiée sous 3 à 5 jours ouvrés, puis Mondial Relay la livre en 3 à 5 jours ouvrés. On peut annuler à tout moment avant l'envoi : les 60 € sont remboursés tout de suite.
+- Délai de livraison : Tanguy prépare et vérifie chaque tablette lui-même, avec sa carte SIM, à Lyon. Elle est expédiée sous 3 à 5 jours ouvrés, en point relais Mondial Relay. On peut annuler à tout moment avant l'envoi : les 60 € sont remboursés tout de suite.
 - Offrir Papote : commandez à votre nom et choisissez un point relais près de chez le proche, ou près de chez vous si vous la lui apportez. La tablette arrive prête : on la branche, puis vous la reliez à la famille depuis votre téléphone en scannant le QR code qu'elle affiche. Le proche n'a rien à régler ni à apprendre, et c'est vous qui gérez l'abonnement. Un autre proche peut aussi payer.
 - Livraison hors de France métropolitaine (Belgique, Luxembourg, Suisse, DOM-TOM…) : pas pour le moment, car la carte SIM fournie est française. On peut en revanche payer avec un compte en Belgique ou au Luxembourg pour un proche qui vit en France.
 - Changer de formule : il n'y a qu'une seule offre, tout compris avec la carte SIM. Le Wi-Fi de la maison peut s'ajouter quand on veut dans l'appli (Réglages, « Changer le Wi-Fi »), sans changer le prix.
@@ -115,7 +115,7 @@ les fonctions suffit pour que le chat en tienne compte.
 - Chaleur : la tablette devient tiède à force de rester allumée, c'est normal. Évitez simplement le plein soleil et la proximité d'un radiateur.
 - Connexion internet nécessaire : rien à prévoir, la carte SIM 4G est fournie. Une box en Wi-Fi est un plus (tout devient illimité) mais pas obligatoire.
 - Consommation d'internet : très faible pour les photos et les messages ; un appel vidéo d'une heure consomme environ 0,5 à 1 Go.
-- Carte cadeau : pas pour le moment, mais au lancement on pourra commander pour un proche et faire livrer près de chez lui (voir Offrir Papote).
+- Carte cadeau : pas pour le moment, mais au lancement on pourra commander pour un proche et faire livrer près de chez le proche (voir Offrir Papote).
 - Commande par téléphone : non, seulement sur le site, au lancement (liste d'attente en attendant).
 - Voir la tablette en magasin : non, la vente est uniquement en ligne ; le plus simple pour se faire une idée est d'essayer, avec 30 jours après la réception pour changer d'avis (rien à payer, 60 € remboursés). Ne pas proposer de rappel.
 - Facture au nom d'une autre personne que celle qui paie (par exemple le parent) : la facture est au nom de celui qui paie ; pour un autre nom, demande de contact.

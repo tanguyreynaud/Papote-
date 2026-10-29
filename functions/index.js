@@ -155,7 +155,8 @@ async function sessionPaiement({ formule, tablette, fid, email, client, relais, 
     phone_number_collection: { enabled: true },
     metadata,
     subscription_data: subscriptionData,
-    custom_text: { submit: { message: regle } },
+    // Les CGV sont acceptées ici, sur la page de paiement (Tanguy, 29/10/2026 : plus de bloc sous « À payer »).
+    custom_text: { submit: { message: `${regle} En payant, vous acceptez les [conditions générales de vente](${SITE_VITRINE.value()}/cgv.html).` } },
     payment_method_collection: 'always',
     success_url: fid ? `${APPLI_FAMILLE}?abonnement=ok`
       : `${SITE_VITRINE.value()}/merci.html?session={CHECKOUT_SESSION_ID}`,
@@ -488,7 +489,7 @@ exports.commander = onRequest({ secrets: [STRIPE_SECRET] }, async (req, res) => 
   }
   // Couverture 4G vérifiée par Papote à l'adresse du proche (Tanguy, 2026-10-29), à nouveau ici : la page ne
   // laisse payer que si elle passe, mais un lien ancien ou modifié ne doit pas ouvrir le paiement.
-  const proche = couverture.procheDepuisRequete(req.query);
+  const proche = await couverture.procheDepuisRequete(req.query);
   if (!proche || !proche.eligible) {
     res.redirect(303, `${SITE_VITRINE.value()}/commande.html`);
     return;
@@ -1169,7 +1170,15 @@ async function noterPanier(sessionId, { email, accord, formule, relais, query })
 // Liste d'attente du lancement (site vitrine) : l'adresse rejoint contacts/ avec l'accord et un jeton de
 // désinscription, source « liste-attente », pour l'e-mail d'ouverture des commandes (onglet Clients).
 // Le site affiche « Être prévenu » à la place de « Commander » quand il n'y a plus de tablette.
-exports.couverture = onRequest({ cors: [/mapapote\.fr$/, /papote\.web\.app$/], maxInstances: 3 }, (req, res) => {
+// ?lat&lon : l'adresse exacte ; ?insee : une commune seule (part de sa surface bien couverte).
+exports.couverture = onRequest({ cors: [/mapapote\.fr$/, /papote\.web\.app$/], maxInstances: 3 }, async (req, res) => {
+  if (req.query.insee) {
+    const v = await couverture.verifierCommune(String(req.query.insee)).catch((e) => { logger.warn('Couverture', e.message); return undefined; });
+    if (v === undefined) { res.status(503).json({ erreur: 'indisponible' }); return; }
+    res.set('Cache-Control', 'public, max-age=86400');
+    res.json(v || { part: 0, eligible: false });
+    return;
+  }
   res.set('Cache-Control', 'public, max-age=86400');
   res.json(couverture.verifier(req.query.lat, req.query.lon));
 });
