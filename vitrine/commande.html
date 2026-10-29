@@ -134,7 +134,7 @@ body .ps-bouton { bottom: 6.5rem; }
     <h2><span class="n">1</span>Où vit votre proche ?<span class="ok" id="ok1" hidden>✓</span></h2>
     <label class="champ">Son adresse
       <input id="adresse" autocomplete="off" maxlength="200" placeholder="N°, rue et ville" aria-describedby="adresse-aide">
-      <small id="adresse-aide">La tablette se connecte avec sa carte SIM 4G : nous vérifions qu'elle capte bien chez elle.</small>
+      <small id="adresse-aide">Nous vérifions que la 4G passe bien chez elle.</small>
     </label>
     <div class="points" id="suggestions" hidden></div>
     <p class="muted" id="verification" hidden>Vérification de la 4G…</p>
@@ -152,7 +152,7 @@ body .ps-bouton { bottom: 6.5rem; }
       <label id="ville-champ" hidden>Ville<select id="ville"></select></label>
       <label id="ville-libre" hidden>Ville<input id="ville-texte" autocomplete="address-level2" maxlength="60"></label>
     </div>
-    <p class="petit">Les points relais Mondial Relay les plus proches de chez votre proche s'affichent tout seuls. Vous la lui apportez ? Tapez votre code postal.</p>
+    <p class="petit">Points relais Mondial Relay près de chez votre proche, ou tapez un autre code postal.</p>
     <p class="erreur" id="erreur-position" hidden>Impossible de trouver votre position. Tapez votre code postal.</p>
     <p class="muted" id="recherche" hidden>Recherche des points relais…</p>
     <div class="points" id="points" hidden></div>
@@ -173,7 +173,7 @@ body .ps-bouton { bottom: 6.5rem; }
     </label>
     <label class="champ" id="qui-mail">Votre e-mail
       <input id="email" type="email" autocomplete="email" inputmode="email" maxlength="120" placeholder="vous@exemple.fr">
-      <small>Confirmation de commande et suivi du colis. Votre téléphone sera demandé sur la page de paiement, pour le suivi du colis.</small>
+      <small>Pour la confirmation et le suivi du colis.</small>
     </label>
     <label class="accord" id="qui-accord">
       <input type="checkbox" id="accord">
@@ -182,9 +182,9 @@ body .ps-bouton { bottom: 6.5rem; }
   </section>
 
   <section class="etape resume">
-    <p><span>Aujourd'hui, mise en service</span><b>60 €</b></p>
-    <p><span>Chaque mois, à partir de la réception, payé une fois écoulé</span><b id="mensuel">25 €</b></p>
-    <p><span>Tablette prêtée, carte SIM 4G, livraison, appli famille</span><b>inclus</b></p>
+    <p><span>Mise en service</span><b>60 €</b></p>
+    <p><span>Puis chaque mois, tout compris</span><b id="mensuel">25 €</b></p>
+    <p><span>Tablette, carte SIM 4G, livraison, appli famille</span><b>inclus</b></p>
     <p class="total"><span>À payer maintenant</span><b>60 €</b></p>
     <details class="ensuite">
       <summary>Et ensuite ?</summary>
@@ -193,7 +193,7 @@ body .ps-bouton { bottom: 6.5rem; }
       <p>30 jours après la réception pour changer d'avis : « Annuler ma commande » dans l'appli, la tablette nous revient, rien à payer et les 60 € remboursés.</p>
       <p>La tablette reste la nôtre et nous est rendue en fin d'abonnement. Une question ? <a href="mailto:contact@mapapote.fr">contact@mapapote.fr</a></p>
     </details>
-    <p class="petit">Paiement par carte bancaire (Apple Pay, Google Pay) ou prélèvement SEPA, sur la page sécurisée de Stripe. En payant, vous acceptez les <a href="cgv.html">conditions générales de vente</a>.</p>
+    <p class="petit">Paiement sécurisé par carte, Apple Pay, Google Pay ou prélèvement SEPA. En payant, vous acceptez les <a href="cgv.html">conditions générales de vente</a>.</p>
   </section>
 </main>
 

@@ -110,7 +110,7 @@ function relancePanier({ etape = 1, nom, formule, lien, desinscription }) {
   const textes = {
     1: ['Votre commande Papote vous attend', [
       'Vous avez commencé une commande Papote sans la terminer. Elle est gardée de côté : vous pouvez la reprendre en un clic, avec le même point relais.',
-      `Pour rappel : 60 € de mise en service à la commande, puis ${prix}, payés une fois le mois écoulé, sans engagement, livraison offerte, et 30 jours pour changer d'avis. La tablette est prêtée et déjà configurée.`,
+      `Pour rappel : 60 € de mise en service à la commande, puis ${prix}, sans engagement, livraison offerte, et 30 jours pour changer d'avis. La tablette est prêtée et déjà configurée.`,
     ]],
     2: ['Une question avant de vous décider ?', [
       'Vous avez regardé Papote hier. Si quelque chose vous fait hésiter, répondez simplement à cet e-mail : nous vous répondons personnellement.',
@@ -118,7 +118,7 @@ function relancePanier({ etape = 1, nom, formule, lien, desinscription }) {
     ]],
     3: ['Dernier rappel pour votre commande Papote', [
       'Votre commande Papote est toujours prête. C\'est notre dernier rappel : nous ne vous écrirons plus à ce sujet.',
-      `Livraison offerte, 60 € de mise en service puis ${prix} payés une fois le mois écoulé, sans engagement, 30 jours pour changer d'avis, sans rien à installer pour votre proche.`,
+      `Livraison offerte, 60 € de mise en service puis ${prix}, sans engagement, 30 jours pour changer d'avis, sans rien à installer pour votre proche.`,
     ]],
   };
   const [titre, corps] = textes[etape] || textes[1];
@@ -136,7 +136,7 @@ function lancement({ prenom, desinscription }) {
     bonjour(prenom),
     'Vous nous aviez demandé de vous prévenir : c\'est le moment, les commandes Papote sont ouvertes.',
     'La tablette arrive prête à brancher, en point relais près de chez vous ou de chez votre proche. Votre proche n\'a rien à régler : c\'est la famille qui envoie les photos et qui appelle, la tablette décroche toute seule.',
-    `60 € de mise en service à la commande, puis ${OFFRE}, payés une fois le mois écoulé, sans engagement. 30 jours pour changer d\'avis, livraison offerte, tablette prêtée.`,
+    `60 € de mise en service à la commande, puis ${OFFRE}, sans engagement. 30 jours pour changer d\'avis, livraison offerte, tablette prêtée.`,
     'Nous préparons les tablettes par petits lots : les premières commandes partent en premier.',
   ].filter(Boolean), { texte: 'Commander ma tablette', lien: 'https://mapapote.fr/commande.html' }, {
     pied: desinscription ? `Vous recevez cet e-mail car vous vous êtes inscrit à la liste d'attente de Papote. <a href="${echapper(desinscription)}" style="color:#5f5a6b">Se désinscrire</a>.` : '',
