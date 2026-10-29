@@ -1,5 +1,5 @@
 // Accueil de l'app : la carte « Envoyer une photo » en haut, et la tuile Photos qui laisse la
-// place à « Appeler par téléphone » dès que la tablette a un numéro (carte SIM).
+// place à « Appeler » (par téléphone, à gauche) dès que la tablette a un numéro (carte SIM).
 
 const test = require('node:test');
 const assert = require('node:assert');
@@ -11,7 +11,7 @@ banc.brancher();
 
 const capture = (t, nom) => t.page.screenshot({ path: path.join(__dirname, '..', 'captures', 'accueil', `${nom}.png`) });
 
-test('Accueil : « Envoyer une photo » en haut ; tuile Photos remplacée par « Appeler par téléphone » quand la tablette a un numéro', async () => {
+test('Accueil : « Envoyer une photo » en haut ; tuile Photos remplacée par « Appeler » quand la tablette a un numéro', async () => {
   const julie = await banc.telephone('Julie');
   const { fid, tab } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
 

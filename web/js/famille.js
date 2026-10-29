@@ -3980,7 +3980,7 @@ $('tablet-chip').addEventListener('click', () => {
 });
 
 // Dès que la tablette a un numéro (carte SIM), la tuile Photos laisse la place à
-// « Appeler par téléphone » (Photos reste dans la barre du bas) : six tuiles, jamais cinq.
+// « Appeler » (par téléphone, à gauche ; Photos reste dans la barre du bas) : six tuiles, jamais cinq.
 function renderTuileTelephone() {
   const tel = numeroTablette();
   $('tile-phone').href = tel ? `tel:${tel.replace(/\s/g, '')}` : 'tel:';
