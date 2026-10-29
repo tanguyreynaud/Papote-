@@ -1,7 +1,8 @@
 // Prépare le compte Stripe de Papote et range les clés dans Firebase (Secret Manager).
 //
-//  1. Tarifs : 20 € ou 30 € par mois, tablette prêtée avec 50 € de mise en service, retrouvés par
-//     les fonctions grâce à leur « lookup key » (functions/abonnement.js).
+//  1. Tarifs : 25 € par mois tout compris (carte SIM incluse), tablette prêtée avec 60 € de mise en service,
+//     retrouvés par les fonctions grâce à leur « lookup key » (functions/abonnement.js).
+//     Offre unique depuis le 29/10/2026 : les tarifs Wi-Fi à 20 € ne se vendent plus (gardés pour les anciens essais).
 //  2. Portail client : carte bancaire et factures (la résiliation passe par l'appli famille).
 //  3. Webhook vers la fonction stripeWebhook (recréé à chaque lancement pour obtenir son secret).
 //  4. firebase functions:secrets:set STRIPE_SECRET et STRIPE_WEBHOOK_SECRET.
@@ -27,6 +28,11 @@ const EVENEMENTS = [
   'customer.subscription.deleted',
   'customer.subscription.paused',
   'customer.subscription.resumed',
+  // Prélèvements hors abonnement (dernier mois, matériel non rendu) refusés, et contestations SEPA.
+  'invoice.paid',
+  'invoice.payment_failed',
+  'payment_intent.payment_failed',
+  'charge.dispute.created',
 ];
 
 const PRODUITS = [
@@ -39,11 +45,11 @@ const PRODUITS = [
     ],
   },
   {
-    nom: 'Abonnement Papote, internet inclus',
-    description: 'Tablette Papote avec carte SIM, sans box internet.',
+    nom: 'Abonnement Papote tout compris',
+    description: 'Tablette Papote prêtée avec sa carte SIM 4G, appli famille illimitée.',
     tarifs: [
-      { cle: 'papote_sim_achetee', montant: 3000, nom: 'Tablette achetée' },
-      { cle: 'papote_sim_incluse', montant: 3000, nom: 'Tablette incluse' },
+      { cle: 'papote_sim_achetee', montant: 2500, nom: 'Tablette achetée' },
+      { cle: 'papote_sim_incluse', montant: 2500, nom: 'Tablette incluse' },
     ],
   },
   {

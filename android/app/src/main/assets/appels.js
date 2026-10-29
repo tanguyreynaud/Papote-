@@ -3,6 +3,7 @@
 // La tablette a ici sa propre identité Firebase (SDK web, en temps réel) ; le reste de l'écran
 // passe par l'app Android (Sync.java).
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
+import { initializeAppCheck, CustomProvider } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app-check.js';
 import {
   getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
@@ -21,10 +22,9 @@ const app = initializeApp({
 });
 // App Check : la tablette prouve qu'elle est une vraie tablette Papote (jeton fourni par l'app
 // Android, PapoteAndroid.appCheckToken). Seulement si la tablette a reçu sa clé à l'installation ;
-// sans clé, rien ne change.
+// sans clé, rien ne change. (Pas de « await » au premier niveau : les WebView d'avant 89 refusent tout le fichier.)
 try {
   if (window.PapoteAndroid && window.PapoteAndroid.hasAppCheckKey && window.PapoteAndroid.hasAppCheckKey()) {
-    const { initializeAppCheck, CustomProvider } = await import('https://www.gstatic.com/firebasejs/12.19.0/firebase-app-check.js');
     initializeAppCheck(app, {
       provider: new CustomProvider({
         getToken: async () => {
@@ -266,9 +266,57 @@ async function joinFamily() {
 const CAMERA = {
   // 4:3 comme le capteur (1600x1200) : sur la tablette UNISOC, le 16:9 est découpé sur un bord
   // et rate la personne assise en face.
-  video: { facingMode: 'user', width: { ideal: 960 }, height: { ideal: 720 }, aspectRatio: { ideal: 4 / 3 } },
+  // 640x480 suffit pour voir Mamie sur un téléphone et ménage la carte SIM (avec capVideo).
+  video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 }, aspectRatio: { ideal: 4 / 3 }, frameRate: { ideal: 20, max: 24 } },
   audio: { echoCancellation: true, noiseSuppression: true },
 };
+
+// Vidéo envoyée par la tablette plafonnée (~300 kbit/s, 20 images/s) : environ 350 Mo par heure
+// de visio au total au lieu de ~550, soit ~14 h par mois avec 5 Go. À appeler après la négociation.
+// Sur la carte SIM (pas de Wi-Fi), mode « économie » : Mamie est filmée en 360p à ~150 kbit/s
+// (elle bouge peu), et la vidéo du proche, celle qu'elle regarde, est demandée à ~450 kbit/s.
+// Environ 300 Mo par heure de visio au lieu de ~1 Go. Sur Wi-Fi, rien ne compte : bonne qualité.
+const VIDEO_MAX_BITRATE = 300_000;
+const SIM_SEND_BITRATE = 150_000;
+const SIM_RECEIVE_KBPS = 450;
+function onSimData() {
+  try {
+    const s = JSON.parse(android().wifiStatus());
+    return !s.wifi && !!s.mobile;
+  } catch (e) {
+    return false;
+  }
+}
+// Débit vidéo que la tablette accepte de recevoir (b=AS, respecté par le téléphone du proche).
+function limitReceive(sdp) {
+  if (!onSimData()) return sdp;
+  // Ligne « b=AS » juste après la ligne « c= » de la section vidéo.
+  const lines = sdp.split('\r\n');
+  let inVideo = false;
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].startsWith('m=')) inVideo = lines[i].startsWith('m=video');
+    else if (inVideo && lines[i].startsWith('b=AS:')) return sdp; // déjà limité
+    else if (inVideo && lines[i].startsWith('c=')) {
+      lines.splice(i + 1, 0, `b=AS:${SIM_RECEIVE_KBPS}`);
+      return lines.join('\r\n');
+    }
+  }
+  return sdp;
+}
+function capVideo(pc) {
+  try {
+    const sim = onSimData();
+    pc.getSenders().forEach((s) => {
+      if (!s.track || s.track.kind !== 'video' || !s.getParameters) return;
+      const p = s.getParameters();
+      if (!p.encodings || !p.encodings.length) p.encodings = [{}];
+      p.encodings[0].maxBitrate = sim ? SIM_SEND_BITRATE : VIDEO_MAX_BITRATE;
+      p.encodings[0].maxFramerate = sim ? 15 : 20;
+      if (sim) p.encodings[0].scaleResolutionDownBy = 1.33; // 640x480 -> environ 480x360
+      s.setParameters(p).catch(() => {});
+    });
+  } catch (e) { /* navigateur trop ancien : pas de plafond */ }
+}
 
 function showRing(id, data) {
   ringing = { id, data };
@@ -570,6 +618,16 @@ async function closeStaleCalls() {
   }
 }
 
+// Nouvelle version de Papote annoncée par le script de publication (config/version) : la tablette
+// va la chercher tout de suite (l'app Android compare et installe). Rien ne se passe sinon.
+let versionSeen = false;
+function watchVersion() {
+  onSnapshot(doc(db, 'config', 'version'), () => {
+    if (!versionSeen) { versionSeen = true; return; } // premier état : déjà vérifié au démarrage
+    if (android() && android().checkUpdate) android().checkUpdate();
+  }, () => {});
+}
+
 function watchCalls() {
   const q = query(collection(db, 'families', fid, 'calls'), where('state', '==', 'ringing'));
   onSnapshot(q, (snap) => {
@@ -642,7 +700,7 @@ async function answer() {
   let lostTimer = null;
   pc.onconnectionstatechange = () => {
     clearTimeout(lostTimer);
-    if (pc.connectionState === 'connected') $('call-status').textContent = '';
+    if (pc.connectionState === 'connected') { $('call-status').textContent = ''; capVideo(pc); }
     if (pc.connectionState === 'disconnected') lostTimer = setTimeout(() => {
       reportCallIncident('video-coupee', 'liaison perdue 8 s', id);
       hangup('La connexion a été perdue.');
@@ -656,7 +714,8 @@ async function answer() {
   await pc.setRemoteDescription(data.offer);
   const reply = await pc.createAnswer();
   await pc.setLocalDescription(reply);
-  await updateDoc(callRef, { answer: { type: reply.type, sdp: reply.sdp }, state: 'accepted' });
+  capVideo(pc);
+  await updateDoc(callRef, { answer: { type: reply.type, sdp: limitReceive(reply.sdp) }, state: 'accepted' });
 
   active.stops.push(onSnapshot(collection(callRef, 'callerCandidates'), (snap) => {
     snap.docChanges().forEach((c) => {
@@ -695,6 +754,8 @@ function closeView() {
 // ---------- Appel de Mamie vers la famille (audio seulement) ----------
 // window.papoteCallFamily({ to, onState }) -> { hangup() } pour tablette.js.
 //   to : uid d'un proche, ou null pour toute la famille (le premier qui décroche a l'appel).
+//   sos : 1 ou 2 (2e essai) pour le bouton SOS : toute la famille, marqué dans calleeName
+//         ('SOS', 'SOS 2') pour que le serveur affiche « SOS » et prévienne si personne ne répond.
 //   onState(state, info) : 'ringing' { names } | 'connected' { uid, name, face } | 'ended'
 //                          | 'missed' | 'busy' | 'failed'.
 // Le proche qui décroche écrit son uid et son prénom dans answer (seul champ modifiable).
@@ -708,7 +769,7 @@ async function familyPeople() {
     .filter((m) => m.role === 'famille' && (m.status === undefined || m.status === 'active'));
 }
 
-window.papoteCallFamily = ({ to = null, toName = null, onState = () => {} } = {}) => {
+window.papoteCallFamily = ({ to = null, toName = null, sos = 0, onState = () => {} } = {}) => {
   let done = false;
   let call = null; // { ref, pc, stream, stops, timer, audio }
   const emit = (state, info = {}) => {
@@ -761,8 +822,8 @@ window.papoteCallFamily = ({ to = null, toName = null, onState = () => {} } = {}
     call.ready = setDoc(ref, {
       callerUid: auth.currentUser.uid,
       callerName: familyName,
-      calleeUid: to || null, // jamais toute la famille par erreur
-      calleeName: toName || null,
+      calleeUid: sos ? null : to || null, // jamais toute la famille par erreur
+      calleeName: sos ? (sos === 2 ? 'SOS 2' : 'SOS') : toName || null,
       state: 'ringing',
       offer: null,
       answer: null,
@@ -818,7 +879,7 @@ window.papoteCallFamily = ({ to = null, toName = null, onState = () => {} } = {}
         call.cam = null;
       }
       if (done) { if (call.cam) call.cam.getTracks().forEach((t) => t.stop()); return; }
-      if (call.cam) call.video.sender.replaceTrack(call.cam.getVideoTracks()[0]).catch(() => {});
+      if (call.cam) call.video.sender.replaceTrack(call.cam.getVideoTracks()[0]).then(() => capVideo(call.pc)).catch(() => {});
       $('call-remote').srcObject = new MediaStream([remoteTrack]);
       $('call-local').srcObject = call.cam;
       $('call-wait').hidden = true;
@@ -850,7 +911,7 @@ window.papoteCallFamily = ({ to = null, toName = null, onState = () => {} } = {}
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
     if (done) return;
-    await updateDoc(ref, { offer: { type: offer.type, sdp: offer.sdp } });
+    await updateDoc(ref, { offer: { type: offer.type, sdp: limitReceive(offer.sdp) } });
     const tOffre = Math.round(performance.now() - t0);
     if (tOffre > 3000) reportCallIncident('depart-lent', `appel-ecrit+micro=${tEcrit}ms offre=${tOffre}ms`, ref.id);
 
@@ -945,6 +1006,7 @@ async function start() {
   }
   closeStaleCalls();
   watchCalls();
+  watchVersion();
   iceServers().catch(() => {}); // relais prêt avant le premier appel
   // Détection du visage chargée à l'avance (puis gardée en cache) pour décrocher sans attendre.
   setTimeout(faceDetector, 20_000);

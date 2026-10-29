@@ -60,6 +60,9 @@ public class MainActivity extends Activity implements Sync.Listener {
     private SharedPreferences prefs;
     private Sync sync;
     private CallAudio callAudio;
+    /** Luminosité le soir (0 à 1) ; vrai pendant les heures du soir. */
+    private static final float EVENING_BRIGHTNESS = 0.55f;
+    private boolean dimmed;
     private VoicePlayer voicePlayer;
     private VideoView videoView;
     private Wifi wifi;
@@ -188,8 +191,9 @@ public class MainActivity extends Activity implements Sync.Listener {
     }
 
     /**
-     * Toutes les heures : une nouvelle version de Papote est-elle publiée ? (un correctif urgent
-     * doit arriver vite). En cas d'échec (wifi pas encore prêt au démarrage…), nouvel essai 10 min après.
+     * Une nouvelle version de Papote est-elle publiée ? Au démarrage, dès que la publication est
+     * annoncée (config/version, écouté par la page : pont checkUpdate), et une fois par jour en secours.
+     * En cas d'échec (wifi pas encore prêt au démarrage…), nouvel essai 10 min après.
      */
     private final Runnable updateCheck = new Runnable() {
         @Override
@@ -197,12 +201,12 @@ public class MainActivity extends Activity implements Sync.Listener {
             handler.removeCallbacks(this);
             if (!isDeviceOwner()) {
                 Journal.log(MainActivity.this, "Mise à jour : Papote n'est pas propriétaire de l'appareil");
-                handler.postDelayed(this, 3600_000L);
+                handler.postDelayed(this, 24 * 3600_000L);
                 return;
             }
             new Thread(() -> {
                 boolean ok = Updater.check(getApplicationContext());
-                handler.postDelayed(this, ok ? 3600_000L : 10 * 60_000L);
+                handler.postDelayed(this, ok ? 24 * 3600_000L : 10 * 60_000L);
             }, "papote-maj").start();
         }
     };
@@ -361,8 +365,21 @@ public class MainActivity extends Activity implements Sync.Listener {
             Journal.log(MainActivity.this, asleep ? "Veille de nuit : écran noir" : "Fin de la veille de nuit");
             handler.post(() -> {
                 WindowManager.LayoutParams lp = getWindow().getAttributes();
-                float brightness = asleep ? 0.01f : WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
+                float brightness = asleep ? 0.01f
+                        : dimmed ? EVENING_BRIGHTNESS : WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
                 lp.screenBrightness = brightness;
+                getWindow().setAttributes(lp);
+            });
+        }
+
+        /** Le soir (couleurs du soir) : écran moins lumineux ; le reste du temps, réglage normal. */
+        @JavascriptInterface
+        public void setDim(boolean on) {
+            handler.post(() -> {
+                dimmed = on;
+                WindowManager.LayoutParams lp = getWindow().getAttributes();
+                if (lp.screenBrightness >= 0 && lp.screenBrightness < 0.05f) return; // veille de nuit en cours
+                lp.screenBrightness = on ? EVENING_BRIGHTNESS : WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
                 getWindow().setAttributes(lp);
             });
         }
@@ -494,6 +511,15 @@ public class MainActivity extends Activity implements Sync.Listener {
         }
 
         /** Jeton App Check pour appels.js : {token, expireTimeMillis}, ou "" sans clé ni jeton. */
+        /** Nouvelle version annoncée (config/version) : vérification tout de suite. */
+        @JavascriptInterface
+        public void checkUpdate() {
+            handler.post(() -> {
+                handler.removeCallbacks(updateCheck);
+                handler.postDelayed(updateCheck, 5_000 + (long) (Math.random() * 60_000));
+            });
+        }
+
         @JavascriptInterface
         public boolean hasAppCheckKey() {
             return AppCheck.hasKey(getApplicationContext());

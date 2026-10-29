@@ -143,4 +143,4 @@
 .dot.on { background: var(--ok); }
 .dot.off { background: var(--danger); }
 #famille-retour { margin-bottom: 12px; }
-#famille-fiche .families { display: block; max-width: 640px; }
+

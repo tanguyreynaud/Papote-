@@ -206,6 +206,58 @@ test('cartes SIM : coût et alertes', () => {
     { iccid: '893301234567', cb: '9012', prix: 299, go: 50, cbExp: null });
 });
 
+test('forfaits SIM prépayés : rappel de recharge et facture rangée sur sa ligne', () => {
+  const J = 24 * 3600 * 1000;
+  const now = Date.UTC(2026, 9, 28, 10);
+  const lyca = { statut: 'active', operateur: 'Lyca Mobile', prix: 499 };
+  assert.deepStrictEqual(g.alertesSim({ ...lyca, prochaineRecharge: now + 10 * J }, now), []);
+  assert.deepStrictEqual(g.alertesSim({ ...lyca, prochaineRecharge: now + 2.5 * J }, now), ['à recharger dans 3 j']);
+  assert.deepStrictEqual(g.alertesSim({ ...lyca, prochaineRecharge: now + 1000 }, now), ['à recharger dans 1 j']);
+  assert.deepStrictEqual(g.alertesSim({ ...lyca, prochaineRecharge: now - 1000 }, now), ['à recharger aujourd\'hui']);
+  assert.deepStrictEqual(g.alertesSim({ ...lyca, prochaineRecharge: now - 2 * J }, now), ['forfait fini : à recharger']);
+  // Renouvelé par l'opérateur : rien tant que la recharge peut encore arriver.
+  assert.deepStrictEqual(g.alertesSim({ ...lyca, renouvellementAuto: true, prochaineRecharge: now - J }, now), []);
+  assert.deepStrictEqual(g.alertesSim({ ...lyca, renouvellementAuto: true, prochaineRecharge: now - 3 * J }, now),
+    ['renouvellement pas vu : vérifier chez l\'opérateur']);
+  // Carte en stock ou résiliée : aucun rappel.
+  assert.deepStrictEqual(g.alertesSim({ ...lyca, statut: 'stock', prochaineRecharge: now - 2 * J }, now), []);
+  assert.deepStrictEqual(g.alertesSim({ ...lyca, statut: 'resiliee', prochaineRecharge: now - 2 * J }, now), []);
+
+  assert.strictEqual(g.finApresRecharge({}, now), now + 30 * J);
+  assert.strictEqual(g.finApresRecharge({ dureeForfait: 28 }, now), now + 28 * J);
+  // Facture arrivée en retard : la fin déjà notée ne recule pas.
+  assert.strictEqual(g.finApresRecharge({ prochaineRecharge: now + 40 * J }, now - 20 * J), now + 40 * J);
+
+  assert.deepStrictEqual(g.champsSim({ prochaineRecharge: now, dureeForfait: 30, renouvellementAuto: true }),
+    { prochaineRecharge: now, dureeForfait: 30, renouvellementAuto: true });
+  assert.deepStrictEqual(g.champsSim({ dureeForfait: 0, renouvellementAuto: 'oui' }), { dureeForfait: null, renouvellementAuto: false });
+
+  const sims = [
+    { id: 'a', statut: 'active', operateur: 'Lyca', numero: '07 51 23 45 67', iccid: '8944110068251234567' },
+    { id: 'b', statut: 'active', operateur: 'YouPrice', numero: '06 12 34 56 78' },
+    { id: 'c', statut: 'resiliee', operateur: 'Lyca', numero: '07 00 00 00 00' },
+  ];
+  assert.strictEqual(g.simDeFacture(sims, { ligne: '+33 7 51 23 45 67', fournisseur: 'Lycamobile' }).id, 'a');
+  assert.strictEqual(g.simDeFacture(sims, { ligne: '8944 1100 6825 1234 567' }).id, 'a');
+  assert.strictEqual(g.simDeFacture(sims, { ligne: null, fournisseur: 'Lyca Mobile France' }).id, 'a');
+  assert.strictEqual(g.simDeFacture(sims, { ligne: '07 00 00 00 00', fournisseur: 'Lyca' }), null);
+  assert.strictEqual(g.simDeFacture(sims, { ligne: null, fournisseur: 'Free' }), null);
+  // Deux lignes actives chez le même opérateur sans numéro sur la facture : à relier à la main.
+  assert.strictEqual(g.simDeFacture([...sims, { id: 'd', statut: 'active', operateur: 'Lyca' }], { fournisseur: 'Lyca' }), null);
+  assert.strictEqual(g.lectureVersFormulaire({ estUneFacture: true, categorie: 'sim', ligneMobile: '07 51 23 45 67' }).ligne, '07 51 23 45 67');
+});
+
+test('garde-fou du forfait recopié sur la famille', () => {
+  // Pass de 30 jours qui finit le 27/11 à 10 h (Paris) : commencé le 28/10.
+  assert.deepStrictEqual(g.forfaitFamille({ go: 1, prochaineRecharge: Date.UTC(2026, 10, 27, 9) }), { mo: 1000, debut: '2026-10-28' });
+  assert.deepStrictEqual(g.forfaitFamille({ go: 2, dureeForfait: 28, prochaineRecharge: Date.UTC(2026, 10, 25, 9) }), { mo: 2000, debut: '2026-10-28' });
+  // Juste avant minuit à Paris (23 h 30 en hiver = 22 h 30 UTC) : le jour de Paris.
+  assert.deepStrictEqual(g.forfaitFamille({ derniereRecharge: Date.UTC(2026, 9, 30, 23, 30) }), { mo: 1000, debut: '2026-10-31' });
+  assert.deepStrictEqual(g.forfaitFamille({ go: 0.5, activation: Date.UTC(2026, 9, 30, 12) }), { mo: 500, jour: 28 });
+  assert.deepStrictEqual(g.forfaitFamille({ activation: Date.UTC(2026, 9, 12, 12) }), { mo: 1000, jour: 12 });
+  assert.deepStrictEqual(g.forfaitFamille({}), { mo: 1000, jour: 1 });
+});
+
 test('accessoires à prévoir pour les envois', () => {
   const aEnvoyer = [{ formule: 'sim' }, { formule: 'sim' }, { formule: 'wifi' }];
   const r = g.accessoiresAPrevoir([
@@ -399,7 +451,7 @@ test('matériel non rendu : nature du prélèvement et ligne de facture', () => 
 });
 
 test('suppression de famille : Mamie protégée, abonnement en cours refusé, nom à retaper', () => {
-  assert.match(g.refusSuppression({ name: 'Mamie', abonnement: { statut: 'offert' } }, 'Mamie'), /offerte/);
+  assert.equal(g.refusSuppression({ name: 'Mamie', abonnement: { statut: 'offert' } }, 'Mamie'), null);
   assert.match(g.refusSuppression({ name: 'Durand', abonnement: { statut: 'actif' } }, 'Durand'), /résiliez/);
   assert.match(g.refusSuppression({ name: 'Durand', abonnement: { statut: 'resilie' } }, 'Dupont'), /ne correspond pas/);
   assert.match(g.refusSuppression({ name: 'Durand' }, ''), /ne correspond pas/);
@@ -420,6 +472,11 @@ test('batterie : relevé de la tablette et usure', () => {
   assert.strictEqual(g.usureBatterie({ sante: 'morte' }), 'batterie morte');
   assert.strictEqual(g.usureBatterie({ sante: 'bonne', cycles: 650 }), 'batterie usée (650 cycles)');
   assert.strictEqual(g.usureBatterie({ sante: 'surchauffe', cycles: 120 }), null);
+  // Compteur aberrant ignoré : plus de 1 500 cycles, ou plus de 2 par jour depuis l'achat.
+  assert.strictEqual(g.usureBatterie({ sante: 'bonne', cycles: 2235 }), null);
+  const maintenant = Date.parse('2026-10-27T12:00:00Z');
+  assert.strictEqual(g.usureBatterie({ cycles: 650 }, maintenant - 10 * 864e5, maintenant), null);
+  assert.strictEqual(g.usureBatterie({ cycles: 650 }, maintenant - 400 * 864e5, maintenant), 'batterie usée (650 cycles)');
 });
 
 test('à faire : tablette revenue avec une batterie usée', () => {
@@ -429,4 +486,122 @@ test('à faire : tablette revenue avec une batterie usée', () => {
   });
   assert.ok(liste.includes('Tablette T-004 revenue : batterie en panne, à retirer du parc'));
   assert.ok(!liste.some((l) => l.includes('T-005')));
+});
+
+test('achat enregistré après l\'installation : complète les fiches sans facture', () => {
+  const sans = [{ id: 'b', creeLe: 2, serieAndroid: 'AK26 0612' }, { id: 'a', creeLe: 1 }];
+  assert.deepStrictEqual(g.fichesARattacher(sans, ['ak260612'], 1), ['b']);
+  assert.deepStrictEqual(g.fichesARattacher(sans, [], 1), ['a']);
+  assert.deepStrictEqual(g.fichesARattacher(sans, ['X', '', 'Y'], 3), ['a', 'b', null]);
+  assert.deepStrictEqual(g.fichesARattacher([], ['X'], 2), [null, null]);
+  // Tablette déjà envoyée à un client : seulement par son n° de série.
+  const partie = [{ id: 'c', creeLe: 1, etat: 'envoyee', commande: 'cmd', numero: 'S1' }];
+  assert.deepStrictEqual(g.fichesARattacher(partie, [], 1), [null]);
+  assert.deepStrictEqual(g.fichesARattacher(partie, ['s1'], 1), ['c']);
+});
+
+test('tablette reçue sans facture depuis 5 jours', () => {
+  const maintenant = Date.UTC(2026, 9, 20);
+  const vieille = maintenant - 6 * 86400000;
+  assert.strictEqual(g.sansFacture({ etat: 'en-stock', prixAchat: null, creeLe: vieille }, maintenant), true);
+  assert.strictEqual(g.sansFacture({ etat: 'preparee', prixAchat: null, preparee: maintenant - 86400000 }, maintenant), false);
+  assert.strictEqual(g.sansFacture({ etat: 'en-stock', prixAchat: 8000, creeLe: vieille }, maintenant), false);
+  assert.strictEqual(g.sansFacture({ etat: 'perdue', prixAchat: null, creeLe: vieille }, maintenant), false);
+});
+
+test('colis livré d\'après Sendcloud', () => {
+  const { colisLivre } = require('./sendcloud');
+  assert.strictEqual(colisLivre({ parcel: { status: { id: 11, message: 'Delivered' } } }), true);
+  assert.strictEqual(colisLivre({ parcel: { status: { id: 12, message: 'Awaiting customer pickup' } } }), false);
+  assert.strictEqual(colisLivre(null), false);
+});
+
+test('suiviColis : n° et lien de suivi, étape, livré', () => {
+  const { suiviColis } = require('./sendcloud');
+  assert.deepStrictEqual(suiviColis({ parcel: { tracking_number: 'MR1', tracking_url: 'https://t/MR1', status: { id: 12, message: 'Awaiting customer pickup' } } }),
+    { suivi: 'MR1', lien: 'https://t/MR1', etape: 'Awaiting customer pickup', statut: 12, livre: false });
+  assert.deepStrictEqual(suiviColis(null), { suivi: null, lien: null, etape: null, statut: null, livre: false });
+});
+
+test('retour sans impression : seulement les offres de retour « labelless » ; colis pas encore déposé', () => {
+  const { optionsPossibles, nonDepose } = require('./sendcloud');
+  const kgs = { min: { value: '0', unit: 'kg' }, max: { value: '30', unit: 'kg' } };
+  const options = [
+    { code: 'mr:retour', carrier: { code: 'mondial_relay' }, functionalities: { returns: true }, weight: kgs },
+    { code: 'mr:retour-qr', carrier: { code: 'mondial_relay' }, functionalities: { returns: true, labelless: true }, weight: kgs },
+  ];
+  assert.deepStrictEqual(optionsPossibles(options, 1.5, 'retour-qr').map((o) => o.code), ['mr:retour-qr']);
+  assert.strictEqual(optionsPossibles(options, 1.5, 'retour').length, 2);
+  assert.strictEqual(nonDepose(1000), true, 'Ready to send');
+  assert.strictEqual(nonDepose(999), true, 'No label');
+  assert.strictEqual(nonDepose(3), false, 'en route : déposé');
+  assert.strictEqual(nonDepose(11), false, 'livré');
+  assert.strictEqual(nonDepose(null), false);
+});
+
+test('transitionPermise : la vie logique d\'une tablette, sans retour en arrière', () => {
+  assert.equal(g.transitionPermise('commandee', 'en-stock'), true);
+  assert.equal(g.transitionPermise('en-stock', 'commandee'), false);
+  assert.equal(g.transitionPermise('revenue', 'en-stock'), true);
+  assert.equal(g.transitionPermise('chez-client', 'en-stock'), false);
+  assert.equal(g.transitionPermise('hors-service', 'en-stock'), false);
+  assert.equal(g.transitionPermise('en-stock', 'en-stock'), true);
+});
+
+test('à faire : l\'argent d\'abord (familles impayées ou suspendues, prélèvements refusés, SEPA en attente, contestations, colis revenu)', () => {
+  const maintenant = Date.UTC(2026, 9, 27, 12);
+  const j = (n) => maintenant - n * 864e5;
+  const liste = g.aFaire({
+    maintenant,
+    familles: [
+      { id: 'f1', nom: 'Mamie Emma', statut: 'impaye', graceJusqua: maintenant + 3 * 864e5 },
+      { id: 'f2', nom: 'Papi Jean', statut: 'suspendu', suspenduLe: j(12) },
+      { id: 'f3', nom: 'Mamie B', statut: 'suspendu', suspenduLe: j(31) },
+      { id: 'f4', nom: 'Actif', statut: 'actif' },
+    ],
+    commandes: [
+      { id: 'a', expedition: 'envoyee', fid: 'f4', dernierMois: { statut: 'echec' } },
+      { id: 'b', expedition: 'envoyee', fid: 'f4', restitution: { statut: 'echec' } },
+      { id: 'c', expedition: 'paiement-en-attente', creeLe: j(11) },
+      { id: 'd', expedition: 'paiement-en-attente', creeLe: j(2) },
+      { id: 'e', expedition: 'annulee', contestations: [{ id: 'dp_1' }] },
+      { id: 'g', nom: 'Paul Martin', expedition: 'envoyee', fid: null, envoyeeLe: j(12), etiquettes: { aller: { colis: 1, retourExpediteur: true } } },
+    ],
+    stock: [],
+    depenses: [],
+    automatique: { erreurs: [] },
+  });
+  assert.deepStrictEqual(liste, [
+    '1 famille en retard de paiement : Mamie Emma (pause le 30 octobre)',
+    'Famille Papi Jean suspendue pour impayé depuis 12 jours',
+    'Famille Mamie B suspendue pour impayé depuis 31 jours : demander le retour de la tablette (« Arrêter l\'abonnement » sur la commande)',
+    '1 dernier mois refusé par la banque, à relancer depuis Stripe',
+    '1 prélèvement du matériel non rendu refusé, à relancer depuis Stripe',
+    '1 paiement SEPA en attente depuis plus de 10 jours',
+    '1 commande avec un prélèvement contesté à la banque',
+    'Colis de Paul Martin en retour chez vous (jamais retiré) : « Colis revenu » sur la commande l\'annule et rembourse',
+    '1 tablette à récupérer',
+  ]);
+});
+
+test('colis renvoyé à l\'expéditeur d\'après l\'étape Sendcloud', () => {
+  assert.strictEqual(sendcloud.retourExpediteur('Returned to sender'), true);
+  assert.strictEqual(sendcloud.retourExpediteur('Return to sender'), true);
+  assert.strictEqual(sendcloud.retourExpediteur('Retour à l\'expéditeur'), true);
+  assert.strictEqual(sendcloud.retourExpediteur('Delivered'), false);
+  assert.strictEqual(sendcloud.retourExpediteur(null), false);
+});
+
+test('Stripe en mode test : seuls les essais encore en base sont comptés', () => {
+  const factures = [{ id: 'in_1', abonnement: 'sub_garde' }, { id: 'in_2', abonnement: 'sub_efface' }, { id: 'in_3', abonnement: null }];
+  const mouvements = [{ id: 'm1', facture: 'in_1' }, { id: 'm2', facture: 'in_2' }, { id: 'm3', facture: null }];
+  const abonnements = [{ id: 'sub_garde' }, { id: 'sub_efface' }];
+  const commandes = new Set(['sub_garde']);
+  const r = g.sansEssaisEffaces({ factures, mouvements, abonnements, test: true, commandes });
+  assert.deepStrictEqual(r.factures.map((f) => f.id), ['in_1']);
+  assert.deepStrictEqual(r.mouvements.map((m) => m.id), ['m1']);
+  assert.deepStrictEqual(r.abonnements.map((a) => a.id), ['sub_garde']);
+  const reel = g.sansEssaisEffaces({ factures, mouvements, abonnements, test: false, commandes });
+  assert.strictEqual(reel.factures.length, 3);
+  assert.strictEqual(reel.mouvements.length, 3);
 });

@@ -5,7 +5,8 @@ const JOUR = 24 * 60 * 60 * 1000;
 const RAPPELS_JOURS = [5, 12];
 // Au-delà, la commande est signalée à l'administrateur.
 const ALERTE_JOURS = 20;
-const PAYS_RELAIS = ['FR', 'BE', 'LU'];
+// France seulement depuis l'offre unique (29/10/2026) : la carte SIM française n'est pas faite pour rester à l'étranger.
+const PAYS_RELAIS = ['FR'];
 
 function texte(v, max) {
   if (typeof v !== 'string') return null;

@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const { tablettesDisponibles } = require('./stock');
+const { tablettesDisponibles, placesDisponibles, delai } = require('./stock');
 
 const maintenant = Date.parse('2026-10-19T14:00:00Z');
 const compter = (d) => tablettesDisponibles({ stock: [], commandes: [], reservations: [], maintenant, ...d });
@@ -35,4 +35,21 @@ test('une commande SEPA en attente de la banque garde sa tablette', () => {
     stock: [{ etat: 'en-stock' }, { etat: 'en-stock' }],
     commandes: [{ id: 'a', expedition: 'paiement-en-attente' }, { id: 'b', expedition: 'annulee' }],
   }), 1);
+});
+
+test('précommandes : stock + 10 commandes, 10 même avec un stock vide', () => {
+  assert.strictEqual(placesDisponibles(0), 10);
+  assert.strictEqual(placesDisponibles(3), 13);
+  assert.strictEqual(placesDisponibles(-4), 6);
+  assert.strictEqual(placesDisponibles(-10), 0);
+  assert.strictEqual(placesDisponibles(-12), 0);
+});
+
+test('délai annoncé : stock, précommande jusqu\'à stock + 10, puis attente longue', () => {
+  assert.strictEqual(delai(2), 'stock');
+  assert.strictEqual(delai(1), 'stock');
+  assert.strictEqual(delai(0), 'precommande');
+  assert.strictEqual(delai(-9), 'precommande');
+  assert.strictEqual(delai(-10), 'long');
+  assert.strictEqual(delai(-40), 'long');
 });
