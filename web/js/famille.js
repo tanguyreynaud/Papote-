@@ -3,6 +3,8 @@ import {
   query, where, orderBy, limit, getDocs, getCountFromServer,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
 import { getApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
+import { signInWithCustomToken } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
+import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-functions.js';
 import {
   getStorage, ref, uploadBytes, getDownloadURL, deleteObject,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-storage.js';
@@ -11,7 +13,7 @@ import {
   loadMembership, createFamily, joinFamily, leaveFamily, watchMembers, currentUser, savedFamilyId, saveFamilyId,
   addPost, deletePost, loadMedia, formatCode, normalizeCode, toDate, CodeInconnuError,
   MAX_VIDEO_CHUNKS, VIDEO_CHUNK,
-  choisirBase, bucketUrl,
+  choisirBase, bucketUrl, auth,
 } from './firebase.js';
 import { askConfirm, confirmerAvecCroix, notice, avantDePartir, chooseAction, fermerFenetre, demanderQuitter } from './ui.js';
 import { showGuideOnce } from './guide.js';
@@ -200,7 +202,7 @@ function sansAbonnement() {
 // Famille toute neuve : d'abord régler la tablette ; sinon le petit guide habituel.
 // Pas tant que la tablette attend son abonnement : le guide parlerait de choses encore impossibles.
 function accueilPremiereFois() {
-  if (sansAbonnement() || document.querySelector('.guide-back')) return;
+  if (sansAbonnement() || document.querySelector('.guide-back') || window.PapoteNatif) return;
   if (!showIntroTablette()) showGuideOnce(session.family.name);
 }
 
@@ -1739,6 +1741,52 @@ $('btn-leave').addEventListener('click', async () => {
 
 let currentCall = null;
 
+// ---------- Appel dans l'app Android ----------
+// Dans Chrome (l'app Android ouvre l'app famille dans Chrome), Android coupe le micro et la caméra
+// dès qu'on passe à une autre app. L'app Android a donc son propre écran d'appel (AppelEnCours,
+// telephone/) : cette même page dans une WebView, avec la notification « Appel en cours » qui garde
+// micro et caméra en arrière-plan, comme WhatsApp.
+// - Dans cette WebView (window.PapoteNatif) : la page dit à l'app où en est l'appel.
+// - Dans Chrome ouvert par l'app : « Répondre » et « Appel vidéo » passent la main à cet écran,
+//   connecté au même compte par un jeton du serveur (jetonAppelNatif). Sans jeton, l'appel reste ici.
+function etatNatif(etat, video) {
+  if (!window.PapoteNatif) return;
+  try { window.PapoteNatif.etat(etat, (session && session.family && session.family.name) || '', !!video); } catch (e) { /* rien */ }
+}
+function finNatif() {
+  if (!window.PapoteNatif) return;
+  try { window.PapoteNatif.fin(); } catch (e) { /* rien */ }
+}
+// Bouton « Raccrocher » de la notification de l'app.
+window.papoteRaccrocher = () => {
+  hangupCall();
+  leaveCallScreen();
+};
+
+function ouvertParAppAndroid() {
+  if (window.PapoteNatif) return false;
+  try { return sessionStorage.getItem('papote.app') === '1'; } catch (e) { return false; }
+}
+let jetonNatif = null; // { connexion, le } : valable 1 h, redemandé toutes les 50 min
+async function chargerJetonNatif() {
+  if (!ouvertParAppAndroid() || !session) return;
+  try {
+    const r = await httpsCallable(getFunctions(getApp(), 'europe-west1'), 'jetonAppelNatif')({});
+    jetonNatif = r.data && r.data.connexion ? { connexion: r.data.connexion, le: Date.now() } : null;
+  } catch (err) {
+    console.warn('Jeton de l\'écran d\'appel de l\'app Android', err);
+    jetonNatif = null;
+  }
+}
+setInterval(chargerJetonNatif, 50 * 60_000);
+/** Passe l'appel à l'écran d'appel de l'app Android ; false s'il doit rester dans cette page. */
+function appelDansApp(chemin) {
+  if (!ouvertParAppAndroid() || !jetonNatif || Date.now() - jetonNatif.le > 55 * 60_000) return false;
+  location.href = `intent://appel?u=${encodeURIComponent(chemin)}&connexion=${encodeURIComponent(jetonNatif.connexion)}`
+    + '#Intent;scheme=papote;package=fr.mapapote.famille;end';
+  return true;
+}
+
 const CALL_MESSAGES = {
   ringing: () => 'Ça sonne…', // le nom est déjà écrit en grand juste au-dessus
   accepted: () => 'Connexion…',
@@ -1871,6 +1919,7 @@ function finVisio() {
 }
 
 function leaveCallScreen() {
+  finNatif();
   noteAppel = '';
   finVisio();
   $('call').hidden = true;
@@ -2026,7 +2075,9 @@ async function answerFromTablet() {
   if (!call) return;
   showIncoming(null);
   closeCallNotification(call.id);
+  if (appelDansApp(`/?appel=${call.id}&famille=${session.fid}`)) return;
   callStarting = true;
+  etatNatif('connexion', false);
   const caller = call.callerName || session.family.name;
   // Écran remis à neuf : un appel précédent passé en vidéo ne doit rien laisser derrière lui.
   $('call-video').disabled = false;
@@ -2040,7 +2091,7 @@ async function answerFromTablet() {
   try {
     currentCall = await answerIncoming(session.fid, call.id, { uid: session.uid, name: session.member.name }, {
       audio: $('call-audio'),
-      onState: () => { setCallStatus(''); startCallTimer(); },
+      onState: () => { setCallStatus(''); startCallTimer(); etatNatif('en_cours', !!$('call-local').srcObject); },
       onRegime: regimeAppel,
       onReseau: noterReseauAppel,
       // Mamie répond à notre caméra : on passe à l'écran vidéo.
@@ -2079,6 +2130,7 @@ $('incoming-answer').addEventListener('click', answerFromTablet);
 let answerPending = null;
 function answerOnArrival(cid) {
   answerPending = cid;
+  etatNatif('connexion', false);
   if (incoming && incoming.id === cid) {
     answerPending = null;
     answerFromTablet();
@@ -2111,6 +2163,7 @@ $('call-video').addEventListener('click', async () => {
   $('call-video').disabled = true;
   try {
     $('call-local').srcObject = await currentCall.enableVideo();
+    etatNatif('en_cours', true);
     $('call').classList.remove('audio');
     if (!$('call-remote').srcObject) {
       $('call').classList.add('sonne');
@@ -2180,6 +2233,8 @@ $('tile-call').addEventListener('click', async () => {
   const dejaConfirme = appelConfirme;
   appelConfirme = false;
   if (!dejaConfirme && !await askConfirm(`Appeler ${session.family.name} en vidéo ?`, 'Appeler')) { callStarting = false; return; }
+  if (appelDansApp(`/?appeler=video&famille=${session.fid}`)) { callStarting = false; return; }
+  etatNatif('connexion', true);
   const abort = new AbortController();
   callAbort = abort;
   const allowed = await cameraAllowed();
@@ -2204,6 +2259,7 @@ $('tile-call').addEventListener('click', async () => {
       onReseau: noterReseauAppel,
       onState: (state) => {
         if (!allowed && state === 'ringing') enterCallScreen();
+        etatNatif(state === 'connected' ? 'en_cours' : state === 'ringing' ? 'sonne' : 'connexion', true);
         // L'écran crème reste jusqu'à la première image de Mamie (voir « playing » plus bas) : pas d'écran noir.
         if (state !== 'connected' && !$('call').classList.contains('audio')) $('call').classList.add('sonne');
         setCallStatus(CALL_MESSAGES[state]());
@@ -4841,6 +4897,7 @@ let skipInvites = false;
 let stopPending = null;
 let sharedPending = false;
 let rappelerPending = false; // ouvert par « Rappeler » sur une notification d'appel manqué
+let appelerPending = false; // écran d'appel de l'app Android : l'appel vidéo part dès l'arrivée
 let reglagesPending = false; // rouvert par l'app Android après le réglage de mise en pause
 let abonnementPending = false; // notification d'abonnement (paiement en retard, pause) : ouvre l'abonnement
 
@@ -5155,7 +5212,9 @@ async function enterApp() {
   flushOutbox();
   accueilPremiereFois();
   if (sharedPending) { sharedPending = false; openShared(); }
-  if (rappelerPending) { rappelerPending = false; offerCallBack(); }
+  chargerJetonNatif();
+  if (appelerPending) { appelerPending = false; appelConfirme = true; $('tile-call').click(); }
+  else if (rappelerPending) { rappelerPending = false; offerCallBack(); }
   else if (reglagesPending) { reglagesPending = false; openPage('settings'); }
   else if (abonnementPending) { abonnementPending = false; ouvrirAbonnement(); }
   else if (pairCode()) showSetupScan(pairCode());
@@ -5173,11 +5232,29 @@ function renderAccount() {
   $('account-email').textContent = `Connecté avec ${myEmail()}`;
 }
 
+// Écran d'appel de l'app Android (#connexion=<jeton>) : connecté au compte du proche par le jeton
+// du serveur, avant de choisir entre connexion et accueil. Le jeton ne reste pas dans l'adresse.
+async function connexionAppAndroid() {
+  const jeton = new URLSearchParams(location.hash.slice(1)).get('connexion');
+  if (!jeton) return;
+  history.replaceState(null, '', location.pathname + location.search);
+  try {
+    const b64 = jeton.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    const uid = JSON.parse(atob(b64)).uid;
+    const user = await currentUser();
+    if (!user || user.uid !== uid) await signInWithCustomToken(auth, jeton);
+  } catch (err) {
+    console.error("Connexion de l'écran d'appel de l'app Android", err);
+  }
+}
+
 async function start() {
+  await connexionAppAndroid();
   const params = new URLSearchParams(location.search);
   sharedPending = params.has('partage');
   rappelerPending = params.has('rappeler');
   reglagesPending = params.has('reglages');
+  appelerPending = params.get('appeler') === 'video';
   abonnementPending = params.get('abonnement') === '1';
   if (params.get('appel')) answerOnArrival(params.get('appel'));
   // Notification d'une autre famille (« veut rejoindre », « a rejoint ») : l'appli s'ouvre sur cette famille.
