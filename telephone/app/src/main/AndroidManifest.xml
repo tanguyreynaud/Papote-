@@ -30,6 +30,7 @@
         <activity
             android:name=".Ouverture"
             android:exported="true"
+            android:theme="@style/Papote.Ouverture"
             android:label="@string/app_name">
             <meta-data
                 android:name="android.support.customtabs.trusted.DEFAULT_URL"
