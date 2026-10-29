@@ -513,8 +513,12 @@
     var shown = false;
     var reveal = function () { if (!shown && token === fadeToken) { shown = true; slide.style.opacity = '1'; } };
     v.onplaying = reveal;
-    // Vidéo en hauteur : un peu agrandie, comme les photos en hauteur.
-    v.addEventListener('loadedmetadata', function () { v.classList.toggle('portrait', v.videoHeight > v.videoWidth); });
+    // Comme les photos : vidéo en largeur sur tout l'écran, vidéo en hauteur un peu agrandie.
+    v.addEventListener('loadedmetadata', function () {
+      var portrait = v.videoHeight > v.videoWidth;
+      v.classList.toggle('portrait', portrait);
+      v.classList.toggle('paysage', !portrait);
+    });
     setTimeout(reveal, 3000); // au pire, au bout de 3 s
     v.onerror = function () { reveal(); slideTimer = setTimeout(next, SLIDE_MS); }; // vidéo illisible : on passe
     v.onloadeddata = function () {
