@@ -63,7 +63,7 @@ function tabletteRemise({ nom, code }) {
     `Bonjour${nom ? ` ${echapper(nom)}` : ''},`,
     'Votre tablette Papote vous a été remise en main propre : elle est prête.',
     `Branchez la tablette et allumez-la, puis <a href="${echapper(lienAppli(code))}" style="color:#4f46e5">ouvrez l'appli Papote</a> sur votre téléphone et scannez le code affiché sur la tablette. L'appli vous guide ensuite pas à pas.`,
-    'Vous avez 30 jours à partir d\'aujourd\'hui pour changer d\'avis : rien à payer et les 60 € remboursés.',
+    // Plus de « 30 jours pour changer d'avis » (Tanguy, 2026-10-29) : même règle que l'e-mail de commande, les CGV couvrent le droit.
   ], { texte: 'Ouvrir l\'appli Papote', lien: lienAppli(code) });
 }
 
