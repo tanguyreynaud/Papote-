@@ -100,6 +100,21 @@
             </intent-filter>
         </activity>
 
+        <!-- « Voulez-vous quitter Papote ? » puis « Quitter » dans l'app famille : ferme l'app -->
+        <activity
+            android:name=".Quitter"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="papote" android:host="quitter" />
+            </intent-filter>
+        </activity>
+
         <!-- Appel en cours : la page d'appel dans l'app, qui garde le micro en arrière-plan -->
         <activity
             android:name=".AppelEnCours"
