@@ -1002,7 +1002,10 @@ async function addPhotoFiles(all) {
   if (!all.length) return;
   const room = MAX_PHOTOS - pendingPhotos.length;
   const files = all.slice(0, Math.max(0, room));
-  if (all.length > room) notice(`${MAX_PHOTOS} photos au plus par envoi : les ${files.length} premières sont gardées.`);
+  if (all.length > room) {
+    const gardees = files.length === 0 ? 'aucune autre n\'est ajoutée' : files.length === 1 ? 'seule la première est gardée' : `les ${files.length} premières sont gardées`;
+    notice(`${MAX_PHOTOS} photos au plus par envoi : ${gardees}.`);
+  }
   setStatus('Préparation…');
   for (const file of files) {
     try {
