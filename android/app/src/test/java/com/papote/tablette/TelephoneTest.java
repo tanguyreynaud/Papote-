@@ -32,11 +32,25 @@ public class TelephoneTest {
     }
 
     @Test
-    public void composerUnNumeroFrancais() {
+    public void composerSeulementUnPortableFrancais() {
         assertEquals("0612345678", Telephone.composer("+33 6 12 34 56 78"));
         assertEquals("0612345678", Telephone.composer("06 12 34 56 78"));
-        assertEquals("0612345678", Telephone.composer("0033612345678"));
-        assertEquals("+41791234567", Telephone.composer("+41 79 123 45 67"));
+        assertEquals("0712345678", Telephone.composer("0033712345678"));
+        assertEquals("0612345678", Telephone.composer("+33 06 12 34 56 78"));
+        assertTrue(Telephone.portableFrancais("07 00 00 00 00"));
+    }
+
+    @Test
+    public void jamaisHorsForfait() {
+        // Étranger, fixe, numéro spécial, numéro incomplet : jamais composé (Tanguy, 29/10).
+        assertEquals("", Telephone.composer("+41 79 123 45 67"));
+        assertEquals("", Telephone.composer("+32 470 12 34 56"));
+        assertEquals("", Telephone.composer("01 42 00 00 00"));
+        assertEquals("", Telephone.composer("08 99 00 00 00"));
+        assertEquals("", Telephone.composer("3615"));
+        assertEquals("", Telephone.composer("0612345"));
         assertEquals("", Telephone.composer(""));
+        assertEquals("", Telephone.composer(null));
+        assertFalse(Telephone.portableFrancais("+44 7700 900123"));
     }
 }

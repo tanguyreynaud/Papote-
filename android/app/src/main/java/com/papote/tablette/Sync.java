@@ -1585,7 +1585,8 @@ final class Sync {
                         // enTete : mis en tête de liste dans l'app (horodatage serveur), sinon absent.
                         long enTete = Firebase.timestamp(f, "enTete");
                         // telephone : numéro du proche (app famille), pour les appels par la carte SIM.
-                        String tel = nz(Firebase.str(f, "telephone"));
+                        // Seulement les portables français (06/07) : jamais d'appel ni de SMS hors forfait.
+                        String tel = Telephone.composer(nz(Firebase.str(f, "telephone")));
                         boolean responsable = uid.equals(createdBy) || admins.contains(uid);
                         people.put(new JSONObject().put("uid", uid).put("name", nz(Firebase.str(f, "name")))
                                 .put("enTete", enTete > 0 ? enTete : 0).put("tel", tel).put("responsable", responsable));

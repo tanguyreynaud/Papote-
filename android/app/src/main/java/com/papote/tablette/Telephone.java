@@ -43,8 +43,9 @@ final class Telephone {
         if (numero == null) return "";
         String n = numero.replaceAll("[^0-9+]", "");
         if (n.startsWith("+")) n = n.substring(1);
-        if (n.startsWith("00")) n = n.substring(2);
+        else if (n.startsWith("00")) n = n.substring(2);
         if (n.startsWith("33") && n.length() == 11) n = n.substring(2);
+        else if (n.startsWith("33") && n.length() == 12 && n.charAt(2) == '0') n = n.substring(3); // « +33 06… », faute courante
         if (n.startsWith("0") && n.length() == 10) n = n.substring(1);
         return n;
     }
@@ -57,12 +58,20 @@ final class Telephone {
         return na.length() >= 9 && nb.length() >= 9 && na.substring(na.length() - 9).equals(nb.substring(nb.length() - 9));
     }
 
-    /** Numéro tel qu'on le compose : « 0612345678 » pour un numéro français, sinon « +… ». */
+    /**
+     * Numéro tel qu'on le compose : « 0612345678 », seulement pour un portable français (06, 07, +33 6/7).
+     * Tout autre numéro (étranger, fixe, numéro spécial) donne « » : jamais le moindre hors-forfait
+     * (Tanguy, 29/10). Les appels et SMS vers les portables français sont dans le forfait.
+     */
     static String composer(String numero) {
         String n = normaliser(numero);
-        if (n.length() == 9 && !n.startsWith("0")) return "0" + n;
-        String brut = numero == null ? "" : numero.replaceAll("[^0-9+]", "");
-        return brut.startsWith("+") ? brut : brut.startsWith("00") ? "+" + brut.substring(2) : brut;
+        if (n.length() == 9 && (n.startsWith("6") || n.startsWith("7"))) return "0" + n;
+        return "";
+    }
+
+    /** Le numéro est-il un portable français ? */
+    static boolean portableFrancais(String numero) {
+        return !composer(numero).isEmpty();
     }
 
     static void garderNumeros(Context c, JSONArray liste) {
@@ -178,7 +187,7 @@ final class Telephone {
                     n = Build.VERSION.SDK_INT >= 33 ? sm.getPhoneNumber(subs.get(0).getSubscriptionId()) : subs.get(0).getNumber();
                 }
             }
-            return n == null ? "" : composer(n);
+            return n == null ? "" : composer(n).isEmpty() ? n.replaceAll("[^0-9+]", "") : composer(n);
         } catch (Exception e) {
             return "";
         }

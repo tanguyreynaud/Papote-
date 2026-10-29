@@ -9,8 +9,8 @@ const { ouvrir, lot } = require('./banc');
 const PROCHES = {
   faces: {}, birthdays: [],
   people: [
-    { uid: 'julie', name: 'Julie', tel: '06 12 34 56 78', responsable: false },
-    { uid: 'paul', name: 'Paul', tel: '+33 7 00 00 00 00', responsable: true },
+    { uid: 'julie', name: 'Julie', tel: '0612345678', responsable: false },
+    { uid: 'paul', name: 'Paul', tel: '0700000000', responsable: true },
     { uid: 'anne', name: 'Anne', tel: '' },
   ],
 };
@@ -36,7 +36,7 @@ test('Mamie appelle Julie par téléphone : ça sonne, en ligne, puis « Appel t
     await b.toucher('#view-home .call-btn');
     await choisir(b, 'Julie');
     const appels = await b.appels('phoneCall');
-    assert.deepStrictEqual(appels.map((a) => a.args[0]), ['06 12 34 56 78']);
+    assert.deepStrictEqual(appels.map((a) => a.args[0]), ['0612345678']);
     assert.match(await b.texte('.call-out'), /Appel vers Julie/);
     await b.android('onGsm', { etat: 'appel', sortant: true, numero: '0612345678', uid: 'julie', name: 'Julie' });
     assert.match(await b.texte('.call-out'), /Ça sonne/);
@@ -77,7 +77,7 @@ test('Paul est déjà en ligne : « occupé » ; l’appel qui ne part pas : « 
   try {
     await b.toucher('#view-home .call-btn');
     await choisir(b, 'Paul');
-    assert.deepStrictEqual((await b.appels('phoneCall')).map((a) => a.args[0]), ['+33 7 00 00 00 00']);
+    assert.deepStrictEqual((await b.appels('phoneCall')).map((a) => a.args[0]), ['0700000000']);
     await b.android('onGsm', { etat: 'fin', sortant: true, cause: 'occupe', uid: 'paul', name: 'Paul' });
     assert.match(await b.texte('.call-out'), /Paul est déjà en ligne/);
     await b.avancer(4500);
@@ -158,15 +158,15 @@ test('SOS par téléphone : un SMS à tous, Paul (responsable) appelé d’abord
     await b.avancer(5500);
     const sms = await b.appels('sendSms');
     assert.strictEqual(sms.length, 1, 'un SMS');
-    assert.strictEqual(sms[0].args[0], '+33 7 00 00 00 00,06 12 34 56 78', 'responsable en tête, Anne sans numéro');
+    assert.strictEqual(sms[0].args[0], '0700000000,0612345678', 'responsable en tête, Anne sans numéro');
     assert.match(sms[0].args[1], /SOS Papote : Mamie a appuyé sur le bouton SOS/);
-    assert.deepStrictEqual((await b.appels('phoneCall')).map((a) => a.args[0]), ['+33 7 00 00 00 00']);
+    assert.deepStrictEqual((await b.appels('phoneCall')).map((a) => a.args[0]), ['0700000000']);
     assert.match(await b.texte('.call-out'), /Appel vers Paul/);
     await b.android('onGsm', { etat: 'appel', sortant: true, uid: 'paul', name: 'Paul' });
     await b.avancer(46000);
     assert.strictEqual((await b.appels('phoneHangup')).length, 1, 'Paul ne répond pas : raccroché');
     await b.android('onGsm', { etat: 'fin', sortant: true, cause: 'raccroche', uid: 'paul', name: 'Paul' });
-    assert.deepStrictEqual((await b.appels('phoneCall')).map((a) => a.args[0]), ['+33 7 00 00 00 00', '06 12 34 56 78'], 'Julie ensuite');
+    assert.deepStrictEqual((await b.appels('phoneCall')).map((a) => a.args[0]), ['0700000000', '0612345678'], 'Julie ensuite');
     await b.android('onGsm', { etat: 'enLigne', sortant: true, uid: 'julie', name: 'Julie' });
     assert.match(await b.texte('.call-out'), /En ligne avec Julie/);
     await b.android('onGsm', { etat: 'fin', sortant: true, cause: 'raccroche', uid: 'julie', name: 'Julie' });
