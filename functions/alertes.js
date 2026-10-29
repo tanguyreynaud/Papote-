@@ -91,9 +91,16 @@ exports.alertesTablettes = onSchedule({ schedule: 'every 5 minutes', timeZone: '
   const familles = await db.collection('families').select('abonnement', 'name', 'createdBy', 'admins', 'veille').get();
   await Promise.all(familles.docs.map(async (fam) => {
     const famille = fam.data();
+    const tablettes = await fam.ref.collection('members').where('role', '==', 'tablette').get();
+    // Numéro de la tablette jamais écrit dans la famille (carte SIM reliée avant le 29/10/2026) : retrouvé ici,
+    // abonnement actif ou non.
+    for (const t of tablettes.docs) {
+      if (!numeroInconnu(t.data())) continue;
+      await require('./gestion').completerNumeroTablette(fam.id, t.id)
+        .catch((e) => logger.warn(`Famille ${fam.id}, tablette ${t.id} : numéro non retrouvé`, e.message));
+    }
     // Abonnement suspendu : la tablette est en pause, pas d'alerte. Hospitalisation : pas d'alerte non plus.
     if (!estActif(famille.abonnement) || enPause.has(fam.id)) return;
-    const tablettes = await fam.ref.collection('members').where('role', '==', 'tablette').get();
     for (const t of tablettes.docs) {
       const tablette = t.data();
       const type = etatAlerte(tablette, maintenant, famille.veille);
@@ -115,6 +122,11 @@ exports.alertesTablettes = onSchedule({ schedule: 'every 5 minutes', timeZone: '
     }
   }));
 });
+
+// Numéro de la tablette jamais écrit sur sa fiche (ni numéro, ni « aucun » = null).
+function numeroInconnu(tablette) {
+  return tablette.telephone === undefined;
+}
 
 // Jour « AAAA-MM-JJ » à Paris pour un instant donné.
 function jourParis(ms) {
@@ -186,4 +198,5 @@ exports.etatAlerte = etatAlerte;
 exports.enVeille = enVeille;
 exports.pasVueDepuisLongtemps = pasVueDepuisLongtemps;
 exports.alertePasVueDue = alertePasVueDue;
+exports.numeroInconnu = numeroInconnu;
 exports.PAS_VUE_MS = PAS_VUE_MS;

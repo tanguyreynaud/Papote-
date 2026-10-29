@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const { etatAlerte, pasVueDepuisLongtemps, alertePasVueDue } = require('./alertes');
+const { etatAlerte, pasVueDepuisLongtemps, alertePasVueDue, numeroInconnu } = require('./alertes');
 
 const MIN = 60_000;
 const maintenant = Date.parse('2026-10-19T10:00:00Z');
@@ -98,4 +98,10 @@ test('veille par défaut de 21 h à 6 h 30, demi-heures prises en compte', () =>
   assert.strictEqual(enVeille({ active: true, de: 22, deMin: 30, a: 7 }, paris('22:15')), false);
   assert.strictEqual(enVeille({ active: true, de: 22, deMin: 30, a: 7 }, paris('22:45')), true);
   assert.strictEqual(enVeille({ active: true, de: 23, a: 7 }, paris('06:45')), true);
+});
+
+test('numéro de la tablette à retrouver seulement s’il n’a jamais été écrit (null = « aucun », déjà cherché)', () => {
+  assert.strictEqual(numeroInconnu({}), true);
+  assert.strictEqual(numeroInconnu({ telephone: null }), false);
+  assert.strictEqual(numeroInconnu({ telephone: '07 51 23 45 67' }), false);
 });
