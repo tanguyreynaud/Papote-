@@ -67,17 +67,23 @@ function tabletteRemise({ nom, code }) {
   ], { texte: 'Ouvrir l\'appli Papote', lien: lienAppli(code) });
 }
 
+// Offre unique depuis le 29/10/2026 (Tanguy) : un seul prix, carte SIM toujours fournie.
+const OFFRE = '25 € par mois, tout compris (carte SIM incluse)';
+
 // delai : 'stock', 'precommande' ou 'long' (functions/stock.js), noté à la commande.
 const DELAIS = {
-  stock: 'Je prépare et vérifie votre tablette moi-même sous 2 à 3 jours ouvrés',
-  precommande: 'Je prépare et vérifie chaque tablette moi-même, une par une : la vôtre sera prête sous 7 à 10 jours ouvrés',
-  long: 'Beaucoup de commandes en ce moment : je prépare et vérifie chaque tablette moi-même, une par une, à Lyon. La vôtre part sous 3 à 4 semaines',
+  // Une semaine de plus depuis l'offre unique (Tanguy, 29/10/2026) : la ligne SIM est ouverte à la commande et
+  // l'opérateur l'envoie en 3 à 5 jours.
+  stock: 'Je prépare et vérifie votre tablette moi-même, avec sa carte SIM : elle est prête sous 7 à 10 jours ouvrés',
+  precommande: 'Je prépare et vérifie chaque tablette moi-même, une par une, avec sa carte SIM : la vôtre sera prête sous 2 à 3 semaines',
+  long: 'Beaucoup de commandes en ce moment : je prépare et vérifie chaque tablette moi-même, une par une, à Lyon. La vôtre part sous 4 à 5 semaines',
 };
 
 // reprise : abonnement repris après une résiliation, tablette restée chez le proche (C3) : pas de mise en service,
 // pas de délai pour changer d'avis.
 function commandeConfirmee({ nom, code, relais, formule, delai, dejaInstallee, reprise }) {
-  const mensuel = formule === 'sim' ? '30 € par mois, internet inclus' : '20 € par mois';
+  // Offre unique (29/10/2026) : la formule n'est plus lue, les anciennes commandes Wi-Fi n'étaient que des essais.
+  const mensuel = OFFRE;
   // Abonnement pris dans l'appli, tablette déjà installée : ni envoi ni installation à annoncer.
   if (dejaInstallee) {
     return message(reprise ? 'Votre abonnement Papote reprend' : 'Merci pour votre abonnement Papote', [
@@ -105,7 +111,7 @@ function commandeConfirmee({ nom, code, relais, formule, delai, dejaInstallee, r
 // Prévient Papote qu'une tablette est à préparer.
 // Panier abandonné (functions/relances.js) : etape 1 (une heure après), 2 (lendemain soir), 3 (une semaine après).
 function relancePanier({ etape = 1, nom, formule, lien, desinscription }) {
-  const prix = formule === 'sim' ? '30 € par mois, internet inclus' : '20 € par mois';
+  const prix = OFFRE;
   const textes = {
     1: ['Votre commande Papote vous attend', [
       'Vous avez commencé une commande Papote sans la terminer. Elle est gardée de côté : vous pouvez la reprendre en un clic, avec le même point relais.',
@@ -135,7 +141,7 @@ function lancement({ prenom, desinscription }) {
     bonjour(prenom),
     'Vous nous aviez demandé de vous prévenir : c\'est le moment, les commandes Papote sont ouvertes.',
     'La tablette arrive prête à brancher, en point relais près de chez vous ou de chez votre proche. Votre proche n\'a rien à régler : c\'est la famille qui envoie les photos et qui appelle, la tablette décroche toute seule.',
-    '60 € de mise en service à la commande, puis 20 € par mois (30 € avec internet inclus) payés une fois le mois écoulé, sans engagement. 30 jours pour changer d\'avis, livraison offerte, tablette prêtée.',
+    `60 € de mise en service à la commande, puis ${OFFRE}, payés une fois le mois écoulé, sans engagement. 30 jours pour changer d\'avis, livraison offerte, tablette prêtée.`,
     'Nous préparons les tablettes par petits lots : les premières commandes partent en premier.',
   ].filter(Boolean), { texte: 'Commander ma tablette', lien: 'https://mapapote.fr/commande.html' }, {
     pied: desinscription ? `Vous recevez cet e-mail car vous vous êtes inscrit à la liste d'attente de Papote. <a href="${echapper(desinscription)}" style="color:#5f5a6b">Se désinscrire</a>.` : '',
@@ -144,7 +150,7 @@ function lancement({ prenom, desinscription }) {
 
 function nouvelleCommande({ nom, email, telephone, code, relais, formule, delai, dejaInstallee, reprise }) {
   const client = `Client : <b>${echapper(nom || '?')}</b>, ${echapper(email || 'sans e-mail')}${telephone ? `, ${echapper(telephone)}` : ''}.`;
-  const offre = `Formule : ${formule === 'sim' ? '30 € par mois, internet inclus (carte SIM dans la tablette)' : '20 € par mois (wifi)'}.`;
+  const offre = `Offre : ${OFFRE}.${dejaInstallee ? '' : ' Ligne SIM à ouvrir pour cette commande.'}`;
   if (dejaInstallee) {
     return message(`${reprise ? 'Abonnement repris' : 'Nouvel abonnement'} ${code || ''}`.trim(), [client, offre,
       reprise
@@ -157,7 +163,7 @@ function nouvelleCommande({ nom, email, telephone, code, relais, formule, delai,
     relais && relais.transporteur
       ? `Point relais : <b>${relaisEnTexte(relais)}</b> (n° ${echapper(relais.id)}). Retrait par : <b>${echapper(relais.destinataire || nom || '?')}</b>.`
       : `Livraison : ${relaisEnTexte(relais) || 'adresse non trouvée, voir Stripe'}.`,
-    `Délai annoncé : ${{ stock: 'en stock, 2 à 3 jours ouvrés', precommande: 'précommande, 7 à 10 jours ouvrés', long: 'attente longue, 3 à 4 semaines' }[delai] || 'en stock, 2 à 3 jours ouvrés'}.`,
+    `Délai annoncé : ${{ stock: 'en stock, 7 à 10 jours ouvrés', precommande: 'précommande, 2 à 3 semaines', long: 'attente longue, 4 à 5 semaines' }[delai] || 'en stock, 7 à 10 jours ouvrés'}.`,
     'Tablette à préparer, puis à marquer « envoyée » dans le tableau de bord.',
   ], null, { interne: true });
 }

@@ -16,7 +16,8 @@ const DELAI_GRACE_JOURS = 7;
 // (limiteRetractation) ; le dernier mois est prélevé à l'arrêt.
 // Sur la page de paiement, plus d'« essai gratuit » (Tanguy, 2026-10-27 : « 90 jours gratuits » se lisait comme une
 // promesse) : une date de premier prélèvement (billing_cycle_anchor), estimée d'après le délai annoncé.
-const ATTENTE_ENVOI = { stock: 3, precommande: 10, long: 28 };
+// Une semaine de plus depuis l'offre unique (29/10/2026) : la ligne SIM est ouverte à la commande.
+const ATTENTE_ENVOI = { stock: 10, precommande: 17, long: 35 };
 function premierPrelevementMs(delai, maintenant, { dejaInstallee = false } = {}) {
   const attente = dejaInstallee ? 0 : (ATTENTE_ENVOI[delai] != null ? ATTENTE_ENVOI[delai] : ATTENTE_ENVOI.long);
   return maintenant + (attente + RETRACTATION_JOURS) * JOUR;
@@ -98,6 +99,14 @@ const TARIF_MISE_EN_SERVICE = 'papote_mise_en_service';
 // Les tarifs « achetee » restent dans TARIFS pour lire les anciennes commandes de test.
 function formuleValide(formule, tablette) {
   return tablette === 'incluse' && Boolean(TARIFS[formule] && TARIFS[formule][tablette]);
+}
+// Offre unique depuis le 29/10/2026 (Tanguy) : 25 € par mois tout compris, carte SIM toujours fournie.
+// Plus de formule Wi-Fi : un ancien lien (formule=wifi, ou sans formule) donne aussi l'offre unique.
+const FORMULE = 'sim';
+// → 'sim', ou null si la demande ne correspond à rien (tablette achetée, formule inconnue).
+function formuleVendue(formule, tablette = 'incluse') {
+  if (formule != null && formule !== '' && !TARIFS[formule]) return null;
+  return formuleValide(FORMULE, tablette) ? FORMULE : null;
 }
 
 // La tablette fonctionne et la famille peut envoyer.
@@ -302,6 +311,8 @@ module.exports = {
   TARIF_TABLETTE,
   TARIF_MISE_EN_SERVICE,
   formuleValide,
+  formuleVendue,
+  FORMULE,
   estActif,
   statutDepuisStripe,
   graceDepassee,

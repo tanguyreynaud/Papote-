@@ -3161,13 +3161,14 @@ exports.gestionFamilleOfferte = onCall(async (request) => {
 
 // Commande offerte (les mamies de Tanguy) : une vraie commande, sans Stripe, avec son code de commande.
 // La famille choisie passe « offerte » (jamais en pause) ; la tablette choisie est rattachée à la commande.
-// { nom, email?, telephone?, formule: 'wifi'|'sim', fid?, tablette?, dejaInstallee? }
+// { nom, email?, telephone?, fid?, tablette?, dejaInstallee? } (formule ignorée : toujours 'sim')
 exports.gestionCommandeOfferte = onCall(async (request) => {
   verifierAdmin(request);
   const d = request.data || {};
   const nom = texte(d.nom, 100);
   if (!nom) throw new HttpsError('invalid-argument', 'Nom manquant.');
-  const formule = d.formule === 'sim' ? 'sim' : 'wifi';
+  // Offre unique (29/10/2026) : carte SIM toujours fournie, même pour une commande offerte.
+  const formule = 'sim';
   const fid = typeof d.fid === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(d.fid) ? d.fid : null;
   const famille = fid ? await db().doc(`families/${fid}`).get() : null;
   if (fid && !famille.exists) throw new HttpsError('not-found', 'Famille introuvable.');

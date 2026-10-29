@@ -161,7 +161,7 @@ async function sessionPaiement({ formule, tablette, fid, email, client, relais, 
   };
   // Commande du site : livrée au point relais choisi avant le paiement. Depuis l'appli : à l'adresse saisie.
   if (reservation && reservation.expireA) params.expires_at = reservation.expireA;
-  if (!relais && !dejaInstallee) params.shipping_address_collection = { allowed_countries: ['FR', 'BE', 'LU'] };
+  if (!relais && !dejaInstallee) params.shipping_address_collection = { allowed_countries: ['FR'] };
   // Plus de numéro de TVA sur la page de paiement (Tanguy, 2026-10-26) : un champ de moins, l'admin peut
   // compléter une facture à la main. Le téléphone reste demandé : il sert au suivi du colis et au doublon.
   if (client) {
@@ -478,8 +478,9 @@ exports.commander = onRequest({ secrets: [STRIPE_SECRET] }, async (req, res) => 
     res.redirect(303, `${SITE_VITRINE.value()}/#lancement`);
     return;
   }
-  const { formule, tablette } = req.query;
-  if (!regles.formuleValide(formule, tablette)) {
+  const tablette = 'incluse';
+  const formule = regles.formuleVendue(req.query.formule, req.query.tablette || tablette);
+  if (!formule) {
     res.redirect(303, `${SITE_VITRINE.value()}/#tarifs`);
     return;
   }
@@ -512,9 +513,11 @@ exports.commander = onRequest({ secrets: [STRIPE_SECRET] }, async (req, res) => 
 
 exports.creerPaiement = onCall({ secrets: [STRIPE_SECRET] }, async (request) => {
   const { uid, email } = compteVerifie(request);
-  const { fid, formule, tablette } = request.data || {};
+  const { fid } = request.data || {};
+  const tablette = 'incluse';
   if (!commandesOuvertes()) throw new HttpsError('failed-precondition', 'Les commandes ouvrent très bientôt.');
-  if (!regles.formuleValide(formule, tablette)) throw new HttpsError('invalid-argument', 'Formule inconnue.');
+  const formule = regles.formuleVendue((request.data || {}).formule, (request.data || {}).tablette || tablette);
+  if (!formule) throw new HttpsError('invalid-argument', 'Formule inconnue.');
   const fam = await familleDuResponsable(fid, uid);
   if (fam.abonnement && ['actif', 'impaye', 'offert'].includes(fam.abonnement.statut)) {
     throw new HttpsError('failed-precondition', 'Cette famille a déjà un abonnement.');
