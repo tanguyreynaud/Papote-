@@ -24,12 +24,13 @@ async function iceServers() {
 // À l'ouverture de l'app et dès qu'un appel sonne : le relais est prêt avant « Répondre ».
 // Vidéo envoyée à la tablette, selon le réseau de la tablette (champ « reseau » de l'appel, écrit par
 // elle : 'sim' ou 'wifi') et celui du téléphone. Tablette sur SIM, ou téléphone lui-même en 4G (Android
-// seulement : navigator.connection) : 500 kbit/s, 640x360, 15 images/s, pour ménager les forfaits.
+// seulement : navigator.connection) : 300 kbit/s, 640x360, 15 images/s, pour ménager les forfaits
+// (réglage « Éco » par défaut sur SIM, comme la tablette : Tanguy, 29/10).
 // Tablette en Wi-Fi : pleine qualité, 1,2 Mbit/s, 960x540, 20 images/s. Réseau inconnu (tablette pas
 // encore à jour) : comme avant, 500 kbit/s en 960x540 à 20 images/s.
 // À appliquer après setLocalDescription, à la connexion, après replaceTrack et quand un réseau change.
 const REGLAGES_VIDEO = {
-  sim: { maxBitrate: 500_000, maxFramerate: 15, scaleResolutionDownBy: 1.5 },
+  sim: { maxBitrate: 300_000, maxFramerate: 15, scaleResolutionDownBy: 1.5 },
   wifi: { maxBitrate: 1_200_000, maxFramerate: 20, scaleResolutionDownBy: 1 },
   inconnu: { maxBitrate: 500_000, maxFramerate: 20, scaleResolutionDownBy: 1 },
   // Forfait de la tablette à 70 % (« regime » eco, écrit par elle) : elle ne demande plus que 150 kbit/s.

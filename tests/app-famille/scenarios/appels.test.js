@@ -101,7 +101,7 @@ test('Appel vidéo vers la tablette : ça sonne, la tablette décroche, image re
   await tablette.ref(mamie, appel.id).update({ 'answer.reseau': 'wifi' });
   assert.deepStrictEqual(await dernierDebit(julie, 1_200_000), { maxBitrate: 1_200_000, maxFramerate: 20, scaleResolutionDownBy: 1 }, 'tablette en Wi-Fi : pleine qualité');
   await tablette.ref(mamie, appel.id).update({ 'answer.reseau': 'sim' });
-  assert.deepStrictEqual(await dernierDebit(julie, 500_000), { maxBitrate: 500_000, maxFramerate: 15, scaleResolutionDownBy: 1.5 }, 'tablette sur SIM : économe');
+  assert.deepStrictEqual(await dernierDebit(julie, 300_000), { maxBitrate: 300_000, maxFramerate: 15, scaleResolutionDownBy: 1.5 }, 'tablette sur SIM : économe');
 
   await julie.page.click('#call-hangup');
   await g.attendreBase(async () => (await tablette.ref(mamie, appel.id).get()).data().state === 'ended', 'appel terminé');
@@ -153,7 +153,7 @@ test('Mamie appelle Julie : sonnerie, réponse audio, passage en vidéo, Mamie r
   await julie.page.click('#call-video');
   await g.attendreBase(async () => (await tablette.ref(mamie, cid).get()).data().answer.video === true, 'vidéo signalée');
   await julie.page.waitForFunction(() => document.getElementById('call-local').srcObject);
-  assert.deepStrictEqual(await dernierDebit(julie, 500_000), { maxBitrate: 500_000, maxFramerate: 15, scaleResolutionDownBy: 1.5 }, 'tablette sur SIM : vidéo économe');
+  assert.deepStrictEqual(await dernierDebit(julie, 300_000), { maxBitrate: 300_000, maxFramerate: 15, scaleResolutionDownBy: 1.5 }, 'tablette sur SIM : vidéo économe');
 
   await tablette.raccrocher(mamie, cid);
   await julie.page.locator('#call-status', { hasText: 'Appel terminé' }).waitFor();
