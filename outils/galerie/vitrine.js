@@ -95,6 +95,9 @@ const SCENES = [
     for (const [label, v] of [['Votre prénom', 'Marie'], ['Votre nom', 'Dupont'], ['Votre téléphone', '06 12 34 56 78'], ['Votre e-mail', 'marie@exemple.fr']]) await p.getByLabel(label).fill(v);
     await p.getByRole('button', { name: 'Être rappelé', exact: true }).click(); await pause(p, 1000);
   } },
+  { groupe: 'Accueil', titre: 'Accueil : menu ☰ ouvert (téléphone)', fichier: 'accueil.html', faire: async (p) => {
+    if (await p.locator('#menu-bouton').isVisible()) { await p.click('#menu-bouton'); await pause(p, 400); }
+  } },
   { groupe: 'Commande', titre: 'Commande : page vide', fichier: 'commande.html', plein: true },
   { groupe: 'Commande', titre: 'Commande : ville du proche tapée, propositions', fichier: 'commande.html', faire: async (p) => {
     await p.fill('#adresse', 'lyon'); await p.locator('#suggestions .point').first().waitFor({ timeout: 5000 }); await pause(p, 300);
