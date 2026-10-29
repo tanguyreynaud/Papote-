@@ -1977,3 +1977,9 @@ html body.night .home-left .sos-btn { background: #f6d5dc; color: #9f1239; borde
 html body.night .home-left .call-btn { background: #22a05a; color: #fff; }
 html body.night .home-left .radio-btn:not(.playing) { background: #dcd8f6; color: #3730a3; border-color: #dcd8f6; }
 html body.night .home-left .radio-btn.playing { background: #c9c3f2; color: #312e81; }
+
+/* Appel par la carte SIM qui arrive (chantier téléphone 29/10) : Décrocher en vert, « Pas maintenant » discret */
+html .call-out .call-buttons { grid-column: 1; grid-row: 6; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 3vmin; margin: 0 0 6vmin; }
+html .call-out .call-buttons .call-hangup { margin: 0; }
+html .call-out .call-hangup.call-answer { background: #16a34a; box-shadow: 0 1vmin 2.5vmin rgba(22, 163, 74, .35); }
+html .call-out .call-decline { border: 0; background: transparent; color: #5b5794; font-family: 'Atkinson Hyperlegible', sans-serif; font-size: 5.5vmin; font-weight: 700; padding: 2vmin 4vmin; }

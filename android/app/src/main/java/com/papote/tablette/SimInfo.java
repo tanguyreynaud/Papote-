@@ -58,6 +58,8 @@ final class SimInfo {
             try { level = tm.getSignalStrength() == null ? -1 : tm.getSignalStrength().getLevel(); } catch (Exception ignored) { }
             sim.put("signal", level);
             sim.put("dataMoisMo", monthlyDataMb(context, tm));
+            // Numéro de la ligne, montré à la famille (vide quand Android ne le lit pas : l'admin le saisit).
+            sim.put("numero", Telephone.numeroTablette(context));
             return sim;
         } catch (Exception e) {
             Log.w("Papote", "Carte SIM", e);

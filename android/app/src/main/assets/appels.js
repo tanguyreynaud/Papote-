@@ -743,6 +743,11 @@ function traiterAppels(snap) {
       fresh.forEach((d) => refuseCall(d.id));
       return;
     }
+    // Au téléphone par la carte SIM (tablette.js) : pas de visio par-dessus, l'appelant voit « Pas de réponse ».
+    if (window.Papote && window.Papote.gsmEnCours && window.Papote.gsmEnCours()) {
+      fresh.forEach((d) => refuseCall(d.id));
+      return;
+    }
     // L'appel qui sonnait a été annulé par l'appelant.
     if (ringing && !fresh.some((d) => d.id === ringing.id)) hideRing();
     // Déjà en communication : un deuxième appel est refusé tout de suite (« Pas de réponse »).

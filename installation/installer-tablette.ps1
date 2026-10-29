@@ -226,11 +226,15 @@ if ($simState -match 'PIN_REQUIRED|PUK_REQUIRED|NETWORK_LOCKED') {
     Say 'Pas de carte SIM.' 'DarkGray'
 }
 
-# 6. Appels et SMS de la carte SIM refusés (Papote filtre les appels), applis inutiles désactivées
+# 6. Appels de la carte SIM : Papote est l'application Téléphone (écran d'appel Papote, appels de Mamie
+#    par la ligne) et filtre les appels entrants (seulement les numéros de la famille) ; applis inutiles désactivées
+Adb shell cmd role add-role-holder android.app.role.DIALER $Package | Out-Null
 Adb shell cmd role add-role-holder android.app.role.CALL_SCREENING $Package | Out-Null
+Adb shell pm grant $Package android.permission.CALL_PHONE | Out-Null
+Adb shell pm grant $Package android.permission.READ_PHONE_NUMBERS | Out-Null
 $useless = Get-Content (Join-Path $PSScriptRoot 'applis-inutiles.txt') | Where-Object { $_ -and $_ -notmatch '^#' }
 foreach ($p in $useless) { Adb shell pm disable-user --user 0 $p.Trim() | Out-Null }
-Say 'Appels de la carte SIM bloqués, applis inutiles désactivées.' 'Green'
+Say 'Papote est l’application Téléphone (appels de la famille seulement), applis inutiles désactivées.' 'Green'
 
 # 7. Lancement relié à la famille
 $pinArgs = @()

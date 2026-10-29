@@ -78,6 +78,12 @@ final class SmsAlert {
 
     @SuppressWarnings("deprecation")
     private boolean send(String numbers, String text) {
+        return envoyer(context, numbers, text);
+    }
+
+    /** Un SMS aux numéros donnés (séparés par des virgules). Sert aussi au SOS (chantier téléphone). */
+    @SuppressWarnings("deprecation")
+    static boolean envoyer(Context context, String numbers, String text) {
         boolean sent = false;
         for (String n : numbers.split(",")) {
             String number = n.trim();

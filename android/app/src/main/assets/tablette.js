@@ -320,6 +320,7 @@
 
   // Sans photo : un QR code pour que la famille rejoigne Papote depuis son téléphone.
   var familyCode = '';
+  var familyName = '';
   var inviteFor = null;
   function renderInvite() {
     var code = familyCode.replace(/-/g, '');
@@ -1018,6 +1019,7 @@
     for (var i = 0; i < posts.length; i++) if (posts[i].seen) seenBefore[posts[i].id] = true;
     posts = payload.posts || [];
     familyCode = payload.familyCode || '';
+    familyName = payload.familyName || familyName;
     setTextSize(payload.textSize);
     setPaused(payload.subscription);
     setOptions(payload.options);
@@ -1695,6 +1697,7 @@
     if (state === 'ringing' || state === 'connected' || state === 'starting') {
       var hang = el2('button', 'call-hangup', 'Raccrocher');
       on(hang, 'click', function () {
+        if (gsm) { gsmHangup(); return; }
         if (outCall && outCall.hangup) { try { outCall.hangup(); } catch (e) { } }
         closeCallScreen();
       });
@@ -1702,8 +1705,156 @@
     }
   }
 
+  // ---------- Appels par la carte SIM (chantier téléphone, 29/10) ----------
+  // Décision de Tanguy : depuis la tablette, Mamie appelle TOUJOURS par téléphone (la ligne, 0 Mo) ;
+  // la visio ne part plus que depuis l'app du proche. Un proche sans numéro est encore appelé par internet.
+  // Android (AppelGsm.java) nous dit l'état de l'appel : Papote.onGsm({etat, sortant, numero, uid, name, cause}).
+  // Un proche appelle : ça sonne (photo, « vous appelle »), Mamie décroche avec le gros bouton, jamais
+  // tout seul. Pas de réponse au bout de 45 s : on raccroche, comme pour la visio.
+  var GSM_RING_MS = 45000;
+  var gsm = null;          // { uid, name, tel, sortant, enLigne, timer, onEnd }
+  var reveilAppel = false;
+
+  function gsmReady() {
+    try { return !!(android() && android().phoneReady && android().phoneReady()); } catch (e) { return false; }
+  }
+
+  function personOf(uid) {
+    for (var i = 0; i < people.length; i++) if (people[i].uid === uid) return people[i];
+    return null;
+  }
+
+  // Les proches joignables par téléphone, responsables d'abord (ordre de la liste « Qui appeler ? » sinon).
+  function phonePeople() {
+    var out = [];
+    for (var i = 0; i < people.length; i++) if (people[i].tel) out.push(people[i]);
+    out.sort(function (a, b) { return (b.responsable ? 1 : 0) - (a.responsable ? 1 : 0); });
+    return out;
+  }
+
+  function gsmHangup() {
+    if (android() && android().phoneHangup) { try { android().phoneHangup(); } catch (e) { } }
+  }
+
+  function gsmClear() {
+    if (gsm) clearTimeout(gsm.timer);
+    gsm = null;
+    if (android() && android().ring) android().ring(false);
+    if (android() && android().inCall) android().inCall(false);
+    if (reveilAppel) { reveilAppel = false; if (asleep && android() && android().setSleep) android().setSleep(true); }
+  }
+
+  // Mamie appelle un proche par téléphone. onEnd(repondu) : pour le SOS, qui enchaîne les proches.
+  function startGsmCall(uid, name, tel, onEnd) {
+    stopRadio();
+    var who = name || 'votre proche';
+    gsmClear();
+    gsm = { uid: uid, name: name, tel: tel, sortant: true, enLigne: false, timer: null, onEnd: onEnd || null, who: who };
+    renderCall('starting', 'Appel vers ' + who + '…', '', uid, name);
+    var parti = false;
+    try { parti = !!(android().phoneCall(tel)); } catch (e) { parti = false; }
+    if (!parti) {
+      gsmFinish('L’appel n’a pas pu partir', 'Réessayez dans un moment.', true, false);
+      return;
+    }
+    gsm.timer = setTimeout(function () {
+      if (gsm && gsm.sortant && !gsm.enLigne) { gsm.sansReponse = true; gsmHangup(); }
+    }, GSM_RING_MS);
+  }
+
+  // Fin d'un appel téléphone : message 4 s, puis la liste des personnes (pas de réponse) ou l'accueil.
+  function gsmFinish(title, sub, backToList, repondu) {
+    var onEnd = gsm && gsm.onEnd;
+    gsmClear();
+    if (onEnd) { onEnd(repondu); return; }
+    renderCall('ended', title, sub);
+    setTimeout(function () {
+      if (!gsm && /state-ended/.test(callScreen.className)) {
+        if (backToList && CALL_MODE === 'personne') showPicker(); else closeCallScreen();
+      }
+    }, 4000);
+  }
+
+  // Un proche appelle par téléphone : sa photo, « vous appelle », Décrocher en grand.
+  function showGsmRing(etat) {
+    stopRadio();
+    if (asleep && android() && android().setSleep) { reveilAppel = true; android().setSleep(false); }
+    closeOverlayForCall();
+    var name = etat.name || '';
+    ensureCallScreen();
+    callScreen.innerHTML = '';
+    stopRingback();
+    callScreen.removeAttribute('hidden');
+    callScreen.className = 'call-out gsm-ring state-ringing';
+    callScreen.appendChild(faceEl(etat.uid, name || 'Un proche', 'call-face'));
+    callScreen.appendChild(el2('h1', 'call-title', name || 'Un proche'));
+    callScreen.appendChild(el2('p', 'call-sub', 'vous appelle'));
+    var row = el2('div', 'call-buttons');
+    var yes = el2('button', 'call-hangup call-answer', 'Décrocher');
+    on(yes, 'click', function () {
+      if (android() && android().phoneAnswer) { try { android().phoneAnswer(); } catch (e) { } }
+      yes.disabled = true;
+    });
+    var no = el2('button', 'call-decline', 'Pas maintenant');
+    on(no, 'click', gsmHangup);
+    row.appendChild(yes);
+    row.appendChild(no);
+    callScreen.appendChild(row);
+    if (android() && android().ring) android().ring(true);
+  }
+
+  function onGsm(etat) {
+    etat = etat || {};
+    var e = etat.etat;
+    if (!e) return;
+    if (e === 'sonne') {
+      if (!gsm) gsm = { uid: etat.uid || null, name: etat.name || '', sortant: false, enLigne: false, timer: null, who: etat.name || 'Un proche' };
+      showGsmRing(etat);
+      return;
+    }
+    if (!gsm) {
+      // Appel lancé sans nous (page rechargée pendant l'appel) : on reprend l'écran.
+      if (e === 'fin') return;
+      gsm = { uid: etat.uid || null, name: etat.name || '', sortant: !!etat.sortant, enLigne: false, timer: null, who: etat.name || 'votre proche' };
+    }
+    if (e === 'appel') {
+      renderCall('ringing', 'Ça sonne…', 'Chez ' + gsm.who, gsm.uid, gsm.name);
+    } else if (e === 'enLigne') {
+      clearTimeout(gsm.timer);
+      gsm.enLigne = true;
+      if (android() && android().ring) android().ring(false);
+      renderCall('connected', 'En ligne avec ' + gsm.who, 'Parlez normalement, la tablette vous entend.', gsm.uid, gsm.name);
+    } else if (e === 'fin') {
+      var repondu = gsm.enLigne;
+      var who = gsm.who;
+      if (repondu) {
+        gsmFinish('Appel terminé', '', false, true);
+      } else if (!gsm.sortant) {
+        gsmFinish(who + ' a appelé', '', false, false);
+      } else if (etat.cause === 'occupe') {
+        gsmFinish(who + ' est déjà en ligne', 'Réessayez dans un moment.', true, false);
+      } else if (etat.cause === 'erreur') {
+        gsmFinish('L’appel n’a pas pu partir', 'Réessayez dans un moment.', true, false);
+      } else {
+        gsmFinish(who + ' n’a pas pu répondre', 'Réessayez plus tard.', true, false);
+      }
+    }
+  }
+
+  // La page vient de (re)démarrer pendant un appel téléphone : l'écran d'appel revient.
+  function resumeGsm() {
+    try {
+      if (!android() || !android().phoneState) return;
+      var etat = JSON.parse(android().phoneState() || '{}');
+      if (etat && etat.etat && etat.etat !== 'fin') onGsm(etat);
+    } catch (e) { }
+  }
+
   function startCall(uid, name) {
     stopRadio();
+    // Par téléphone (carte SIM) dès que le proche a donné son numéro ; sinon par internet, comme avant.
+    var p = uid ? personOf(uid) : null;
+    if (p && p.tel && gsmReady()) { startGsmCall(uid, name, p.tel); return; }
     if (!callApiReady()) {
       renderCall('failed', 'L’appel n’est pas encore disponible', 'Réessayez dans un moment.', uid, name);
       setTimeout(closeCallScreen, 4000);
@@ -1813,6 +1964,7 @@
   }
 
   function startSos(attempt) {
+    if (attempt === 1 && gsmReady() && phonePeople().length) { startSosTelephone(); return; }
     if (!callApiReady()) {
       renderCall('failed', 'L’appel n’est pas encore disponible', 'Réessayez dans un moment.');
       setTimeout(closeCallScreen, 4000);
@@ -1854,6 +2006,37 @@
     } catch (e) {
       finish('L’appel n’a pas pu partir', 'Réessayez dans un moment.');
     }
+  }
+
+  // SOS par la carte SIM : un SMS à tous les numéros de la famille, puis un vrai appel au responsable,
+  // puis aux autres un à un (45 s chacun) jusqu'à ce que quelqu'un décroche. Personne : l'appel par
+  // internet d'avant (2e essai), qui fait prévenir toute la famille par le serveur.
+  function startSosTelephone() {
+    var liste = phonePeople();
+    var tels = [];
+    for (var i = 0; i < liste.length; i++) tels.push(liste[i].tel);
+    renderCall('starting', 'Appel de toute la famille…', '');
+    try {
+      android().sendSms(tels.join(','), 'SOS Papote : ' + (familyName || 'votre proche') + ' a appuyé sur le bouton SOS de sa tablette. Appelez-la vite.');
+    } catch (e) { }
+    var n = 0;
+    var suivant = function (repondu) {
+      if (repondu) {
+        renderCall('ended', 'Appel terminé', '');
+        setTimeout(function () { if (!gsm && /state-ended/.test(callScreen.className)) closeCallScreen(); }, 4000);
+        return;
+      }
+      if (n >= liste.length) {
+        // Personne n'a décroché : la famille est prévenue par le serveur (appel internet, 2e essai).
+        if (callApiReady()) { startSos(2); return; }
+        renderCall('ended', 'La famille est prévenue', 'Quelqu’un va vous rappeler.');
+        setTimeout(function () { if (!gsm && /state-ended/.test(callScreen.className)) closeCallScreen(); }, 8000);
+        return;
+      }
+      var p = liste[n++];
+      startGsmCall(p.uid, p.name, p.tel, suivant);
+    };
+    suivant(false);
   }
 
   // ---------- Options réglées par la famille : Écouter, Radio ----------
@@ -2121,6 +2304,7 @@
   function inCall() {
     var ids = ['call-ring', 'call-view'];
     for (var i = 0; i < ids.length; i++) if ($(ids[i]) && isShown(ids[i])) return true;
+    if (gsm) return true; // appel par la carte SIM (sonnerie ou conversation)
     // Appel lancé par Mamie (« Ça sonne… », « En ligne avec… »), pas le choix de la personne.
     return !!callScreen && !callScreen.hasAttribute('hidden') && /state-(starting|ringing|connected)/.test(callScreen.className);
   }
@@ -2225,6 +2409,7 @@
     setInterval(lookForPresence, PRESENCE_EVERY_MS);
     setTimeout(lookForPresence, 60000);
     setupCallButton();
+    setTimeout(resumeGsm, 1500);
     setInterval(checkConnection, 30000);
     setTimeout(checkConnection, 20000);
     setInterval(checkPower, 15000);
@@ -2321,6 +2506,9 @@
     onFamilyLost: function () { if (window.papoteAppelsForget) window.papoteAppelsForget(); },
     // Réveil par le serveur (Push.java) : un proche appelle, un ordre, la famille a changé.
     onPush: function (p) { if (window.papoteReveil) window.papoteReveil(p && p.type, p && p.id); },
+    // Appels par la carte SIM (AppelGsm.java) ; gsmEnCours : appels.js refuse une visio pendant ce temps.
+    onGsm: onGsm,
+    gsmEnCours: function () { return !!gsm; },
     closeOverlayForCall: closeOverlayForCall,
     goHome: function () { showView('view-home'); }
   };

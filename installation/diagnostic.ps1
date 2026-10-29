@@ -48,10 +48,12 @@ Say "`nMode kiosque" 'Cyan'
 $dp = Adb shell dumpsys device_policy
 if ($dp -match "Device Owner[\s\S]*?$Package") { Ok 'Propriétaire de l''appareil (kiosque complet, mises à jour automatiques)' }
 else { Bad 'Mode kiosque inactif' 'Supprimer les comptes de la tablette puis relancer installer-tablette.bat' }
-if ($dp -match 'no_outgoing_calls') { Ok 'Appels sortants de la carte SIM bloqués' } else { Bad 'Blocage des appels sortants absent' 'Relancer installer-tablette.bat' }
+if ($dp -match 'no_outgoing_calls') { Bad 'Appels sortants de la carte SIM encore bloqués' 'Redémarrer Papote (la règle est levée au démarrage depuis la 2.99.92)' } else { Ok 'Appels sortants de la carte SIM permis (Mamie appelle par téléphone)' }
 $role = Adb shell dumpsys role
-if ($role -match "CALL_SCREENING[\s\S]{0,200}holders=$Package") { Ok 'Appels de la carte SIM refusés (filtrage des appels)' }
+if ($role -match "CALL_SCREENING[\s\S]{0,200}holders=$Package") { Ok 'Appels de la carte SIM filtrés (seulement la famille)' }
 else { Bad 'Filtrage des appels inactif' 'Relancer installer-tablette.bat' }
+if ($role -match "\bDIALER[\s\S]{0,200}holders=$Package") { Ok 'Papote est l’application Téléphone (écran d’appel Papote)' }
+else { Bad 'Papote n’est pas l’application Téléphone' 'Relancer installer-tablette.bat' }
 
 Say "`nRéglages" 'Cyan'
 if ((Adb shell settings get global auto_time).Trim() -eq '1') { Ok 'Date et heure automatiques' } else { Bad 'Heure manuelle' 'Relancer installer-tablette.bat' }

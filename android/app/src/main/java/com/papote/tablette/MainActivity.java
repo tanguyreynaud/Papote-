@@ -217,6 +217,14 @@ public class MainActivity extends Activity implements Sync.Listener {
         handler.postDelayed(updateCheck, 60_000);
         Push.demarrer(this);
         new Thread(() -> AppCheck.current(getApplicationContext()), "papote-appcheck").start();
+        // Appels de la carte SIM : la page sonne et décroche (AppelGsm).
+        AppelGsm.ecouter((etat) -> {
+            if (sync != null && sync.paused() && "sonne".equals(etat.optString("etat"))) {
+                AppelGsm.raccrocher(); // Papote en pause (abonnement) : pas d'appel
+                return;
+            }
+            callPage("onGsm", etat);
+        });
     }
 
     /**
@@ -670,6 +678,53 @@ public class MainActivity extends Activity implements Sync.Listener {
         public void inCall(boolean on) {
             handler.post(() -> callAudio.inCall(on));
         }
+
+        // ----- Appels par la carte SIM (Telephone, AppelGsm) -----
+
+        /** La tablette peut téléphoner (carte SIM prête, Papote application Téléphone). */
+        @JavascriptInterface
+        public boolean phoneReady() {
+            return Telephone.pret(MainActivity.this);
+        }
+
+        /** Appelle ce numéro par la carte SIM ; la suite arrive par Papote.onGsm. false : l'appel n'est pas parti. */
+        @JavascriptInterface
+        public boolean phoneCall(String numero) {
+            if (sync.paused() || AppelGsm.enCours()) return false;
+            return Telephone.appeler(MainActivity.this, numero);
+        }
+
+        @JavascriptInterface
+        public boolean phoneAnswer() {
+            return AppelGsm.decrocher();
+        }
+
+        @JavascriptInterface
+        public boolean phoneHangup() {
+            return AppelGsm.raccrocher();
+        }
+
+        /** État de l'appel téléphonique en cours ({} s'il n'y en a pas), pour une page qui vient de se recharger. */
+        @JavascriptInterface
+        public String phoneState() {
+            return AppelGsm.etat().toString();
+        }
+
+        /** Numéros de la famille connus de la tablette : [{uid, name, tel, responsable}]. */
+        @JavascriptInterface
+        public String phoneNumbers() {
+            return Telephone.numeros(MainActivity.this).toString();
+        }
+
+        /** SMS du SOS aux numéros donnés (séparés par des virgules). */
+        @JavascriptInterface
+        public boolean sendSms(String numeros, String texte) {
+            if (numeros == null || numeros.trim().isEmpty() || texte == null || texte.isEmpty()) return false;
+            if (!wifi.hasSim()) return false;
+            String n = numeros.replaceAll("[^0-9+,]", "");
+            String t = texte.length() > 300 ? texte.substring(0, 300) : texte;
+            return SmsAlert.envoyer(MainActivity.this, n, t);
+        }
     }
 
     /** Réveil par le serveur (Push.onMessageReceived) ou nouveau jeton à écrire. */
@@ -850,7 +905,6 @@ public class MainActivity extends Activity implements Sync.Listener {
     }
 
     private static final String[] RESTRICTIONS = {
-            UserManager.DISALLOW_OUTGOING_CALLS,
             UserManager.DISALLOW_SAFE_BOOT,
     };
 
@@ -1086,8 +1140,11 @@ public class MainActivity extends Activity implements Sync.Listener {
             dpm.setLockTaskPackages(admin, new String[]{getPackageName()});
             // Pas de menu « Éteindre / Redémarrer » sur le bouton marche/arrêt.
             dpm.setLockTaskFeatures(admin, DevicePolicyManager.LOCK_TASK_FEATURE_NONE);
-            // Pas d'appel ni de SMS par la carte SIM : tout passe par Papote.
             for (String r : RESTRICTIONS) dpm.addUserRestriction(admin, r);
+            // Appels par la carte SIM (chantier téléphone 29/10) : Mamie appelle ses proches par la ligne.
+            // Avant, les appels sortants étaient interdits (DISALLOW_OUTGOING_CALLS) : levé sur les tablettes déjà installées.
+            dpm.clearUserRestriction(admin, UserManager.DISALLOW_OUTGOING_CALLS);
+            Telephone.preparer(this);
             // Les SMS servent aux alertes de Papote : plus bloqués (l'appli Messages reste désactivée,
             // rien ne s'affiche). Envoi autorisé d'office.
             dpm.clearUserRestriction(admin, UserManager.DISALLOW_SMS);
@@ -1261,6 +1318,7 @@ public class MainActivity extends Activity implements Sync.Listener {
     @Override
     protected void onDestroy() {
         if (courante == this) courante = null;
+        AppelGsm.ecouter(null);
         if (tts != null) { try { tts.shutdown(); } catch (Exception ignored) { } }
         try { unregisterReceiver(screenOff); } catch (Exception ignored) { }
         try { unregisterReceiver(powerChange); } catch (Exception ignored) { }

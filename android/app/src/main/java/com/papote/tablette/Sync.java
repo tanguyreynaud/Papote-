@@ -502,7 +502,7 @@ final class Sync {
         try {
             // Une seule lecture : le marqueur « rev » ne bouge que si la famille a envoyé ou supprimé
             // quelque chose (ou modifié les rappels). Sinon, rien d'autre à lire.
-            JSONObject family = firebase.get("families/" + fid, "name", "rev", "code", "textSize", "abonnement", "veille", "volume", "volumeSonnerie", "meteoVille", "options", "installation", "createdBy", "forfaitSim");
+            JSONObject family = firebase.get("families/" + fid, "name", "rev", "code", "textSize", "abonnement", "veille", "volume", "volumeSonnerie", "meteoVille", "options", "installation", "createdBy", "admins", "forfaitSim");
             long rev = 0;
             JSONObject ff = family == null ? null : family.optJSONObject("fields");
             if (ff != null) {
@@ -524,6 +524,14 @@ final class Sync {
                 readOptions(ff);
                 readInstallation(ff);
                 createdBy = Firebase.str(ff, "createdBy");
+                // Responsables nommés dans l'app (families/{fid}.admins) : appelés en premier par le SOS.
+                admins.clear();
+                try {
+                    JSONObject av = ff.optJSONObject("admins");
+                    JSONArray vals = av == null || av.optJSONObject("arrayValue") == null ? null
+                            : av.getJSONObject("arrayValue").optJSONArray("values");
+                    for (int i = 0; vals != null && i < vals.length(); i++) admins.add(vals.getJSONObject(i).optString("stringValue"));
+                } catch (Exception ignored) { }
                 if (Meteo.applyFamily(context, http, ff) || !meteoReported) {
                     lastWeather = 0; // nouvelle ville : la météo est relue tout de suite
                     reportMeteo(fid);
@@ -1528,6 +1536,7 @@ final class Sync {
      */
     /** Créateur de la famille (families/{fid}.createdBy), lu avec la fiche de la famille à chaque tour. */
     private String createdBy;
+    private final java.util.Set<String> admins = new java.util.HashSet<>();
 
     private JSONArray trierProches(String fid, JSONArray people) {
         String createur = createdBy;
@@ -1566,7 +1575,8 @@ final class Sync {
             // Avant (28/10) : tous les visages retéléchargés à chaque envoi de la famille, ≈ 1 Mo par tour.
             JSONArray people = new JSONArray();
             try {
-                JSONArray members = firebase.list("families/" + fid + "/members", "name", "role", "enTete");
+                JSONArray members = firebase.list("families/" + fid + "/members", "name", "role", "enTete", "telephone");
+                JSONArray numeros = new JSONArray();
                 for (int i = 0; i < members.length(); i++) {
                     JSONObject doc = members.getJSONObject(i);
                     JSONObject f = doc.optJSONObject("fields");
@@ -1574,8 +1584,15 @@ final class Sync {
                     if (f != null && !"tablette".equals(Firebase.str(f, "role"))) {
                         // enTete : mis en tête de liste dans l'app (horodatage serveur), sinon absent.
                         long enTete = Firebase.timestamp(f, "enTete");
+                        // telephone : numéro du proche (app famille), pour les appels par la carte SIM.
+                        String tel = nz(Firebase.str(f, "telephone"));
+                        boolean responsable = uid.equals(createdBy) || admins.contains(uid);
                         people.put(new JSONObject().put("uid", uid).put("name", nz(Firebase.str(f, "name")))
-                                .put("enTete", enTete > 0 ? enTete : 0));
+                                .put("enTete", enTete > 0 ? enTete : 0).put("tel", tel).put("responsable", responsable));
+                        if (!tel.isEmpty()) {
+                            numeros.put(new JSONObject().put("uid", uid).put("name", nz(Firebase.str(f, "name")))
+                                    .put("tel", tel).put("responsable", responsable));
+                        }
                     } else {
                         continue; // les tablettes n'ont pas de visage
                     }
@@ -1583,6 +1600,7 @@ final class Sync {
                             doc.optString("updateTime"), "face");
                     if (face != null && face.startsWith("data:image")) faces.put(uid, face);
                 }
+                Telephone.garderNumeros(context, numeros);
             } catch (Exception e) {
                 Log.w(TAG, "Photos de profil", e);
             }
@@ -1954,6 +1972,7 @@ final class Sync {
                         .put("reseau", Firebase.string(info.optString("reseau")))
                         .put("signal", new JSONObject().put("integerValue", String.valueOf(info.optInt("signal", -1))))
                         .put("dataMoisMo", new JSONObject().put("integerValue", String.valueOf(info.optLong("dataMoisMo", -1))))
+                        .put("numero", Firebase.string(info.optString("numero")))
                         // Garde-fou du forfait (Forfait) : conso depuis la recharge, plafond et palier, pour que
                         // l'app famille prévienne (« forfait à 80 % », « appels sans image »).
                         .put("dataCycleMo", new JSONObject().put("integerValue", String.valueOf(forfait.optLong("consoMo", -1))))

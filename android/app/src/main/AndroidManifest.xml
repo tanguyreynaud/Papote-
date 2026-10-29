@@ -15,6 +15,9 @@
     <uses-permission android:name="android.permission.SEND_SMS" />
     <!-- Carte SIM (ICCID, opérateur, réseau) pour la page « Forfaits SIM » de la famille -->
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <!-- Appels par la carte SIM (chantier téléphone 29/10) : Papote est l'application Téléphone de la tablette -->
+    <uses-permission android:name="android.permission.CALL_PHONE" />
+    <uses-permission android:name="android.permission.READ_PHONE_NUMBERS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Mise à jour à distance -->
@@ -34,6 +37,7 @@
             <action android:name="android.intent.action.TTS_SERVICE" />
         </intent>
     </queries>
+    <uses-feature android:name="android.hardware.telephony" android:required="false" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.front" android:required="false" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
@@ -61,7 +65,29 @@
                 <category android:name="android.intent.category.HOME" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
+            <!-- Exigé pour le rôle « Téléphone » : composer un numéro ouvre Papote (qui n'en fait rien). -->
+            <intent-filter>
+                <action android:name="android.intent.action.DIAL" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.DIAL" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="tel" />
+            </intent-filter>
         </activity>
+
+        <!-- Écran d'appel des appels de la carte SIM (rôle « Téléphone ») : la page Papote sonne et décroche -->
+        <service
+            android:name=".AppelGsm"
+            android:exported="true"
+            android:permission="android.permission.BIND_INCALL_SERVICE">
+            <meta-data android:name="android.telecom.IN_CALL_SERVICE_UI" android:value="true" />
+            <meta-data android:name="android.telecom.IN_CALL_SERVICE_RINGING" android:value="true" />
+            <intent-filter>
+                <action android:name="android.telecom.InCallService" />
+            </intent-filter>
+        </service>
 
         <!-- Contrôle atelier, lancé par installer-tablette.ps1 (adb) ; DUMP : réservé à adb. -->
         <activity
@@ -85,7 +111,7 @@
             </intent-filter>
         </receiver>
 
-        <!-- Refuse les appels de la carte SIM (rôle « filtrage des appels ») -->
+        <!-- Filtre les appels de la carte SIM : seulement les numéros de la famille (rôle « filtrage des appels ») -->
         <service
             android:name=".BlockCalls"
             android:exported="true"
