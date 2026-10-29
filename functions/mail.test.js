@@ -19,3 +19,10 @@ test('désinscription sous le bouton, et e-mails internes sans « Une question ?
   assert.match(mail.commandeAnnulee({ nom: 'Paul' }).html, /Une question/);
   assert.strictEqual((mail.sepaRefuse({ nom: 'Paul' }).text.match(/Une question/g) || []).length, 1);
 });
+
+test('tablette remise en main propre : rien qui invite à changer d\'avis', () => {
+  const m = mail.tabletteRemise({ nom: 'Marie', code: 'ABCD-1234' });
+  assert.ok(m.html.includes('remise en main propre'));
+  assert.ok(!m.text.includes('changer d\'avis'));
+  assert.ok(!m.text.includes('60 €'));
+});
