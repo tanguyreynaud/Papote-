@@ -2547,6 +2547,87 @@
     checkReminders();
   }, 1000);
 
+  // ---------- Garde-fous : jamais de tablette figée chez Mamie (29/10) ----------
+  // Note dans le journal de la tablette, envoyé tout de suite à la famille si « urgent ».
+  function noteGardeFou(message, urgent) {
+    try { if (android() && android().gardeFou) android().gardeFou(message, !!urgent); } catch (e) { }
+  }
+
+  // Écran d'appel ou de SOS resté 3 minutes sans aucun changement, alors qu'Android ne connaît
+  // aucun appel téléphone et qu'aucune visio n'est en conversation : il se ferme, l'accueil revient.
+  // Une conversation (téléphone ou visio) n'est jamais coupée, même longue et immobile. Les photos
+  // reçues et les rappels ne sont pas concernés : ils attendent « OK » exprès.
+  var GARDE_FOU_MS = 3 * 60000;
+  var gardeFou = { cle: '', depuis: 0 };
+
+  function etatAppelsInternet() {
+    try { return window.papoteAppelsEtat ? window.papoteAppelsEtat() : ''; } catch (e) { return ''; }
+  }
+
+  // Ce qui est à l'écran (et en cours) : le garde-fou compte le temps tant que rien n'en change.
+  function cleEcrans() {
+    var parts = [];
+    var ids = ['call-ring', 'call-view'];
+    for (var i = 0; i < ids.length; i++) {
+      if ($(ids[i]) && isShown(ids[i])) parts.push(ids[i] + ':' + ($('call-status') ? $('call-status').textContent : ''));
+    }
+    if (callScreen && !callScreen.hasAttribute('hidden') && !pickerOpen()) {
+      parts.push(callScreen.className + ':' + callScreen.textContent);
+    }
+    var etat = etatAppelsInternet();
+    if (etat) parts.push('internet:' + etat);
+    if (gsm) parts.push('gsm');
+    return parts.join('|');
+  }
+
+  function conversationEnCours() {
+    try {
+      var e = JSON.parse((android() && android().phoneState) ? (android().phoneState() || '{}') : '{}');
+      if (e && e.etat && e.etat !== 'fin') return true;
+    } catch (x) { }
+    return etatAppelsInternet() === 'connecte';
+  }
+
+  function gardeFouEcrans() {
+    var cle = cleEcrans();
+    if (!cle || conversationEnCours()) { gardeFou.cle = ''; return; }
+    var now = Date.now();
+    if (cle !== gardeFou.cle) { gardeFou.cle = cle; gardeFou.depuis = now; return; }
+    if (now - gardeFou.depuis < GARDE_FOU_MS) return;
+    gardeFou.cle = '';
+    noteGardeFou('GARDE-FOU : écran bloqué 3 min (' + cle.slice(0, 120) + '), retour à l’accueil', true);
+    try { if (window.papoteAppelsReset) window.papoteAppelsReset(); } catch (e) { }
+    clearInterval(sosTimer);
+    if (gsm) gsmClear(); // Android n'a plus d'appel (vérifié par conversationEnCours)
+    closeCallScreen();
+    showView('view-home');
+  }
+  setInterval(gardeFouEcrans, 15000);
+
+  // Pouls pour le chien de garde d'Android (Gardien.java) : sans pouls pendant 3 min, la page
+  // est rechargée, puis Papote relancée.
+  function pouls() {
+    try { if (android() && android().pouls) android().pouls(); } catch (e) { }
+  }
+  setInterval(pouls, 20000);
+
+  // Une fois par nuit, vers 3 h, la page repart à neuf (mémoire, état resté coincé), si elle tourne
+  // depuis plus de 12 h, que personne n'a touché l'écran depuis 30 min et que rien n'est en cours.
+  var pageNeeA = Date.now();
+  var dernierToucher = Date.now();
+  document.addEventListener('touchstart', function () { dernierToucher = Date.now(); }, true);
+  function rechargementDeNuit() {
+    var now = Date.now();
+    if (new Date().getHours() !== 3) return;
+    if (now - pageNeeA < 12 * 3600000 || now - dernierToucher < 30 * 60000) return;
+    if (inCall() || fenetreOuverte() || playing || etatAppelsInternet() || (radioAudio && !radioAudio.paused)) return;
+    if (document.body.className.indexOf('video-playing') >= 0) return;
+    pageNeeA = now; // pas deux fois si le rechargement tarde
+    noteGardeFou('Rechargement de nuit de la page', false);
+    location.reload();
+  }
+  setInterval(rechargementDeNuit, 60000);
+
   window.Papote = {
     onStatus: onStatus,
     onPosts: onPosts,
@@ -2723,6 +2804,7 @@
 
     showView('view-home');
     if (android()) android().ready();
+    pouls();
 
     // Appels vidéo : seulement si le navigateur de la tablette sait faire de la vidéo (Android 5+).
     var probe = document.createElement('script');

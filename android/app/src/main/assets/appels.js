@@ -948,7 +948,7 @@ window.papoteCallFamily = ({ to = null, toName = null, sos = 0, onState = () => 
     if (active || ringing) { finish('busy'); return; }
     stopPresence();
     call = { ref: null, pc: null, stream: null, stops: [], timer: null, lostTimer: null, audio: null, video: null, cam: null };
-    active = { id: null, outgoing: true, finish, stops: call.stops };
+    active = { id: null, outgoing: true, finish, stops: call.stops, call };
     if (android()) android().inCall(true);
 
     // L'appel est écrit TOUT DE SUITE, sans offre : les téléphones sonnent pendant que la tablette
@@ -1105,6 +1105,25 @@ window.papoteCallFamily = ({ to = null, toName = null, sos = 0, onState = () => 
   });
 
   return { hangup: () => finish('ended', 'ended') };
+};
+
+// ---------- Garde-fou (tablette.js, gardeFouEcrans) ----------
+// État des appels par internet : 'connecte' (conversation en cours, à ne jamais couper),
+// 'sonne', 'actif' (appel en préparation) ou '' (rien).
+window.papoteAppelsEtat = () => {
+  const pc = active && (active.outgoing ? active.call && active.call.pc : active.pc);
+  if (pc && pc.connectionState === 'connected') return 'connecte';
+  if (ringing) return 'sonne';
+  return active ? 'actif' : '';
+};
+// Écran d'appel resté bloqué sans conversation : tout est refermé, caméra et micro compris,
+// comme à la fin d'un appel (l'appel est marqué terminé pour l'appelant).
+window.papoteAppelsReset = () => {
+  if (ringing) { const id = ringing.id; hideRing(); refuseCall(id); }
+  if (active && active.outgoing && active.finish) active.finish('ended', 'ended');
+  else if (active) hangup('Appel terminé');
+  $('call-out-hangup').hidden = true;
+  closeView();
 };
 
 // Maintenance : la tablette quitte la famille (commande ADB « leave »).
