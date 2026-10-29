@@ -94,7 +94,19 @@ section { padding-block: clamp(3rem, 7vw, 5rem); }
 .top nav a:hover { color: var(--text); }
 .top nav .btn { min-height: 2.6rem; padding: .5rem 1.1rem; font-size: .95rem; color: var(--accent-text); }
 .top nav .btn:hover { color: var(--accent-text); }
-@media (max-width: 760px) { .top nav a:not(.btn) { display: none; } }
+/* Téléphone : menu ☰ (Tanguy, 29/10). Le bouton Commander reste visible, les autres liens s'ouvrent en dessous. */
+.menu-bouton { display: none; }
+@media (max-width: 760px) {
+  .top .wrap { position: relative; }
+  .top nav { gap: .6rem; }
+  .top nav a:not(.btn) { display: none; }
+  .menu-bouton { display: inline-grid; place-items: center; order: 2; width: 2.75rem; height: 2.75rem; margin-left: .6rem; border: 2px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--text); font-size: 1.35rem; line-height: 1; cursor: pointer; }
+  .top .brand { order: 0; }
+  .top nav { order: 1; margin-left: auto; }
+  .top.ouvert nav { position: absolute; top: 100%; left: 0; right: 0; flex-direction: column; align-items: stretch; gap: 0; margin: 0; padding: .4rem 16px 1rem; background: var(--bg); border-bottom: 1px solid var(--line); box-shadow: 0 12px 24px rgba(0, 0, 0, .06); }
+  .top.ouvert nav a:not(.btn) { display: flex; align-items: center; min-height: 3rem; font-size: 1.05rem; color: var(--text); border-bottom: 1px solid var(--line); }
+  .top.ouvert nav .btn { margin-top: .8rem; min-height: 3rem; justify-content: center; }
+}
 /* En-tête */
 .hero { padding-block: clamp(2rem, 5vw, 4rem) clamp(2.5rem, 6vw, 4.5rem); }
 .hero .wrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: clamp(2rem, 5vw, 4rem); align-items: center; }
@@ -215,7 +227,8 @@ footer a { color: var(--muted); }
 <header class="top">
   <div class="wrap">
     <a class="brand" href="#"><img src="icon.svg" alt="">Papote</a>
-    <nav aria-label="Menu">
+    <button class="menu-bouton" type="button" id="menu-bouton" aria-label="Menu" aria-expanded="false" aria-controls="menu">☰</button>
+    <nav aria-label="Menu" id="menu">
       <a href="#fonctionnement">Comment ça marche</a>
       <a href="#tarifs">Tarifs</a>
       <a href="#qui">Qui suis-je</a>
@@ -235,7 +248,6 @@ footer a { color: var(--muted); }
         <p class="prix-ligne"><b>25 €</b> par mois, tout compris<span>Sans engagement · tablette et connexion 4G · livraison offerte</span></p>
         <div class="hero-actions">
           <a class="btn btn-primary js-commander" href="commande.html">Commander</a>
-          <a class="btn btn-ghost" href="#fonctionnement">Comment ça marche</a>
         </div>
         <p class="rassure"><span class="coche">30 jours pour changer d'avis</span><span class="coche">Préparée et vérifiée à Lyon</span></p>
       </div>
@@ -278,7 +290,7 @@ footer a { color: var(--muted); }
         <div class="moment">
           <span class="quand">À la réception</span>
           <span class="combien">0 €</span>
-          <p>Vous avez 30 jours pour changer d'avis : vous renvoyez la tablette avec l'étiquette offerte et les 60 € vous sont remboursés.</p>
+          <p>Vous avez 30 jours pour changer d'avis : vous renvoyez la tablette avec le retour offert et les 60 € vous sont remboursés.</p>
         </div>
         <div class="moment">
           <span class="quand">Chaque fin de mois</span>
@@ -423,7 +435,7 @@ footer a { color: var(--muted); }
         </details>
         <details>
           <summary>Et si ça ne lui plaît pas&nbsp;?</summary>
-          <p>Vous avez 30 jours après la réception de la tablette pour changer d'avis : le bouton « Annuler ma commande » de l'appli suffit. Vous nous renvoyez la tablette avec l'étiquette offerte, vous ne payez rien pour l'abonnement et les 60 € de mise en service vous sont remboursés.</p>
+          <p>Vous avez 30 jours après la réception de la tablette pour changer d'avis : le bouton « Annuler ma commande » de l'appli suffit. Vous nous renvoyez la tablette avec le retour offert, vous ne payez rien pour l'abonnement et les 60 € de mise en service vous sont remboursés.</p>
         </details>
         <details>
           <summary>Suis-je engagé&nbsp;? Comment résilier&nbsp;?</summary>
@@ -516,6 +528,16 @@ footer a { color: var(--muted); }
     try { if (navigator.sendBeacon && navigator.sendBeacon(url)) return; } catch (_) {}
     fetch(url, { method: 'POST', keepalive: true }).catch(function () {});
   }
+</script>
+<script>
+  // Menu ☰ du téléphone : ouvre et ferme la liste des liens, se referme quand on en choisit un.
+  (function () {
+    var haut = document.querySelector('.top');
+    var bouton = document.getElementById('menu-bouton');
+    function ouvrir(oui) { haut.classList.toggle('ouvert', oui); bouton.setAttribute('aria-expanded', oui ? 'true' : 'false'); bouton.textContent = oui ? '✕' : '☰'; }
+    bouton.addEventListener('click', function () { ouvrir(!haut.classList.contains('ouvert')); });
+    document.querySelectorAll('#menu a').forEach(function (a) { a.addEventListener('click', function () { ouvrir(false); }); });
+  })();
 </script>
 <script>compter('accueil');</script>
 <script src="chat-support.js" defer></script>
