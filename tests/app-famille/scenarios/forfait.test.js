@@ -55,10 +55,17 @@ test('Appel vers la tablette au forfait presque épuisé : image réduite, puis 
   });
   const dernier = () => julie.page.evaluate(() => window.__debits[window.__debits.length - 1] || null);
   await tablette.ref(mamie, appel.id).update({ 'answer.reseau': 'sim', 'answer.regime': 'eco' });
-  await julie.page.waitForFunction(() => (window.__debits || []).some((d) => d.maxBitrate === 150_000));
+  await julie.page.waitForFunction(() => (window.__debits || []).some((d) => d.maxBitrate === 300_000));
   const eco = await dernier();
-  assert.deepStrictEqual([eco.maxBitrate, eco.maxFramerate, eco.scaleResolutionDownBy, eco.active], [150_000, 10, 2, true], 'image réduite');
-  assert.ok(await julie.page.locator('#call-status').isHidden(), 'rien d\'affiché en image réduite');
+  assert.deepStrictEqual([eco.maxBitrate, eco.maxFramerate, eco.scaleResolutionDownBy, eco.active], [300_000, 12, 1.5, true], 'image réduite à 70 %');
+  await julie.page.locator('#call-status', { hasText: 'utilisé à 70 %' }).waitFor();
+
+  await tablette.ref(mamie, appel.id).update({ 'answer.regime': 'mini' });
+  await julie.page.waitForFunction(() => (window.__debits || []).some((d) => d.maxBitrate === 150_000));
+  const mini = await dernier();
+  assert.deepStrictEqual([mini.maxBitrate, mini.maxFramerate, mini.scaleResolutionDownBy, mini.active], [150_000, 10, 2, true], 'image très réduite à 88 %');
+  await julie.page.locator('#call-status', { hasText: 'utilisé à 88 %' }).waitFor();
+  assert.ok(!(await julie.page.locator('#call').evaluate((c) => c.classList.contains('audio'))), 'toujours en vidéo');
 
   await tablette.ref(mamie, appel.id).update({ 'answer.regime': 'audio' });
   await julie.page.locator('#call-status', { hasText: 'Appel sans image : le forfait internet de la tablette est presque épuisé.' }).waitFor();

@@ -32,18 +32,19 @@ const REGLAGES_VIDEO = {
   sim: { maxBitrate: 500_000, maxFramerate: 15, scaleResolutionDownBy: 1.5 },
   wifi: { maxBitrate: 1_200_000, maxFramerate: 20, scaleResolutionDownBy: 1 },
   inconnu: { maxBitrate: 500_000, maxFramerate: 20, scaleResolutionDownBy: 1 },
-  // Forfait de la tablette à 70 % (« regime » eco, écrit par elle) : elle ne demande plus que 150 kbit/s.
-  eco: { maxBitrate: 150_000, maxFramerate: 10, scaleResolutionDownBy: 2 },
+  // Forfait de la tablette à 70 % puis 88 % (« regime » eco puis mini, écrit par elle) : image réduite.
+  eco: { maxBitrate: 300_000, maxFramerate: 12, scaleResolutionDownBy: 1.5 },
+  mini: { maxBitrate: 150_000, maxFramerate: 10, scaleResolutionDownBy: 2 },
 };
 const reseauTablette = new WeakMap(); // pc -> 'sim' | 'wifi'
-// Garde-fou du forfait de la tablette (Forfait.java) : 'eco' (70 %, image réduite) ou 'audio' (88 %, sans image).
-const regimeTablette = new WeakMap(); // pc -> 'eco' | 'audio'
+// Garde-fou du forfait de la tablette (Forfait.java) : 'eco' (70 %), 'mini' (88 %), 'audio' (95 %, sans image).
+const regimeTablette = new WeakMap(); // pc -> 'eco' | 'mini' | 'audio'
 function telephoneEnDonneesMobiles() {
   const c = navigator.connection;
   return !!c && c.type === 'cellular';
 }
 function reglagesVideo(pc) {
-  if (regimeTablette.has(pc)) return REGLAGES_VIDEO.eco;
+  if (regimeTablette.has(pc)) return regimeTablette.get(pc) === 'eco' ? REGLAGES_VIDEO.eco : REGLAGES_VIDEO.mini;
   const reseau = reseauTablette.get(pc);
   if (reseau === 'sim') return REGLAGES_VIDEO.sim;
   if (reseau === 'wifi') return telephoneEnDonneesMobiles() ? REGLAGES_VIDEO.sim : REGLAGES_VIDEO.wifi;
@@ -69,8 +70,10 @@ async function limiterVideo(pc) {
 function noterReseau(pc, data, ui) {
   const reseau = [data && data.answer && data.answer.reseau, data && data.offer && data.offer.reseau]
     .find((r) => r === 'sim' || r === 'wifi');
+  // Un régime inconnu (tablette plus récente) compte comme 'mini' : image la plus réduite.
   const regime = [data && data.answer && data.answer.regime, data && data.offer && data.offer.regime]
-    .find((r) => r === 'eco' || r === 'audio') || null;
+    .filter((r) => typeof r === 'string' && r)
+    .map((r) => (['eco', 'mini', 'audio'].includes(r) ? r : 'mini'))[0] || null;
   const changeRegime = regime && regimeTablette.get(pc) !== regime;
   if (changeRegime) regimeTablette.set(pc, regime);
   if (changeRegime && ui && ui.onRegime) ui.onRegime(regime);

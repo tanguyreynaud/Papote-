@@ -1576,22 +1576,29 @@ function finDAppel(texte) {
   setCallStatus(texte);
 }
 
-// Forfait internet de la tablette presque épuisé (« regime » de l'appel, écrit par la tablette) : l'appel
-// passe sans image, et on le dit sous le nom tant qu'aucun autre message ne s'affiche.
+// Forfait internet de la tablette entamé (« regime » de l'appel, écrit par la tablette) : à 70 % puis 88 %
+// l'image est réduite, à 95 % l'appel passe sans image. On le dit sous le nom tant qu'aucun autre
+// message ne s'affiche.
 let noteAppel = '';
-const NOTE_SANS_IMAGE = 'Appel sans image : le forfait internet de la tablette est presque épuisé.';
+const NOTES_REGIME = {
+  eco: 'Image réduite : le forfait internet de la tablette est utilisé à 70 %.',
+  mini: 'Image très réduite : le forfait internet de la tablette est utilisé à 88 %.',
+  audio: 'Appel sans image : le forfait internet de la tablette est presque épuisé.',
+};
 function setCallStatus(text) {
   const t = text || noteAppel;
   $('call-status').textContent = t;
   $('call-status').hidden = !t;
 }
 function regimeAppel(regime) {
-  if (regime !== 'audio' || $('call').hidden) return;
-  noteAppel = NOTE_SANS_IMAGE;
-  $('call').classList.add('audio');
-  $('call').classList.remove('sonne');
-  $('call-video').disabled = true;
-  $('call-video').hidden = true;
+  if (!NOTES_REGIME[regime] || $('call').hidden) return;
+  noteAppel = NOTES_REGIME[regime];
+  if (regime === 'audio') {
+    $('call').classList.add('audio');
+    $('call').classList.remove('sonne');
+    $('call-video').disabled = true;
+    $('call-video').hidden = true;
+  }
   setCallStatus('');
 }
 
@@ -2011,7 +2018,7 @@ $('tile-call').addEventListener('click', async () => {
       onState: (state) => {
         if (!allowed && state === 'ringing') enterCallScreen();
         // L'écran crème reste jusqu'à la première image de Mamie (voir « playing » plus bas) : pas d'écran noir.
-        if (state !== 'connected' && !noteAppel) $('call').classList.add('sonne');
+        if (state !== 'connected' && !$('call').classList.contains('audio')) $('call').classList.add('sonne');
         setCallStatus(CALL_MESSAGES[state]());
       },
       onEnd: (reason) => {
