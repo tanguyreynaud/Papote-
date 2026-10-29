@@ -679,7 +679,7 @@ exports.gestionDonnees = onCall(async (request) => {
   // Tout est lu en même temps : « à vendre » et les batteries (qui attendent seulement le stock) ne font plus
   // deux allers-retours de plus vers la base après les autres lectures.
   const lectureStock = db().collection('stock').get();
-  const [commandes, stock, depenses, familles, automatique, reglages, courrier, archives, sims, accessoires, aVendre, batteries, alertes] = await Promise.all([
+  const [commandes, stock, depenses, familles, automatique, reglages, courrier, archives, sims, accessoires, aVendre, batteries, alertes, gardes] = await Promise.all([
     db().collection('commandes').get(),
     lectureStock,
     db().collection('depenses').get(),
@@ -697,6 +697,7 @@ exports.gestionDonnees = onCall(async (request) => {
     // Alertes envoyées aux proches (journal-alertes.js) : 90 derniers jours, les plus récentes d'abord.
     db().collection('alertes').where('le', '>', new Date(Date.now() - ALERTES_JOURS * 86400000)).orderBy('le', 'desc').limit(2000).get()
       .catch((e) => { logger.warn('Alertes', e.message); return { docs: [] }; }),
+    lectureStock.then((s) => lireGardeFous(s.docs)).catch((e) => { logger.warn('Garde-fous', e.message); return new Map(); }),
   ]);
   const parFid = new Map(familles.docs.map((f) => [f.id, f.data()]));
   // Compte de la tablette -> sa fiche de stock (T-…), pour compter les alertes sur la page de la tablette.
@@ -745,7 +746,7 @@ exports.gestionDonnees = onCall(async (request) => {
     }),
     stock: stock.docs.map((d) => {
       const batterie = batteries.get(d.id) || d.get('batterie') || null;
-      return aplatir({ id: d.id, ...d.data(), batterie, usure: usureBatterie(batterie, debutTablette(d.data())) });
+      return aplatir({ id: d.id, ...d.data(), batterie, usure: usureBatterie(batterie, debutTablette(d.data())), gardeFous: gardes.get(d.id) || [] });
     }),
     depenses: depenses.docs.map((d) => aplatir({ id: d.id, ...d.data() })),
     familles: familles.docs.map((f) => aplatir(familleResume(f))),
@@ -770,6 +771,7 @@ exports.gestionDonnees = onCall(async (request) => {
       });
     }),
     genresAlerte: require('./journal-alertes').GENRES,
+    genresGardeFou: GARDE_FOUS,
     alertesJours: ALERTES_JOURS,
   };
 });
@@ -2459,6 +2461,46 @@ async function lireBatteries(fiches) {
     .filter(([, b]) => b && (b.le || b.niveau != null)));
 }
 
+// Garde-fous de la tablette (Gardien.java, tablette.js) : chaque geste est une ligne « GARDE-FOU : … » de son
+// journal (families/{fid}/logs/{uid}, ses 200 dernières lignes, « jj/mm hh:mm:ss  message »). Comptés par sorte
+// sur la page de la tablette (Tanguy, 29/10). Le journal tourne : seuls les gestes encore dedans sont comptés.
+const GARDE_FOUS = {
+  ecran: 'écran bloqué', page: 'page rechargée', appli: 'appli relancée', redemarrage: 'tablette redémarrée', autre: 'autre',
+};
+function genreGardeFou(texte) {
+  if (/écran bloqué/i.test(texte)) return 'ecran';
+  if (/la tablette redémarre/i.test(texte)) return 'redemarrage';
+  if (/Papote relancée/i.test(texte)) return 'appli';
+  if (/rechargée|moteur relancé/i.test(texte)) return 'page';
+  return 'autre';
+}
+// lignes : le texte du journal ; maintenant : pour l'année (le journal n'écrit ni l'année ni le fuseau, heure de Paris).
+function gardeFous(lignes, maintenant = Date.now()) {
+  const annee = Number(new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', year: 'numeric' }).format(maintenant));
+  const res = [];
+  for (const l of String(lignes || '').split('\n')) {
+    const m = /^(\d{2})\/(\d{2}) (\d{2}):(\d{2}):(\d{2})\s+GARDE-FOU\s*:\s*(.+)$/.exec(l.trim());
+    if (!m) continue;
+    const [, j, mo, hh, mi, ss, texte] = m;
+    const date = (a) => {
+      const utc = Date.parse(`${a}-${mo}-${j}T${hh}:${mi}:${ss}Z`);
+      return utc - decalageParis(utc);
+    };
+    // Ligne de décembre lue en janvier : l'année d'avant.
+    let le = date(annee);
+    if (le > maintenant + 86400000) le = date(annee - 1);
+    if (!Number.isFinite(le)) continue;
+    res.push({ le, genre: genreGardeFou(texte), texte: texte.trim().slice(0, 200) });
+  }
+  return res.sort((a, b) => b.le - a.le);
+}
+async function lireGardeFous(fiches) {
+  const jumelees = fiches.filter((d) => d.get('fid') && d.get('tabletUid'));
+  if (!jumelees.length) return new Map();
+  const journaux = await db().getAll(...jumelees.map((d) => db().doc(`families/${d.get('fid')}/logs/${d.get('tabletUid')}`)));
+  return new Map(jumelees.map((d, i) => [d.id, journaux[i].exists ? gardeFous(journaux[i].get('lines')) : []]));
+}
+
 // Chaque nuit : dernier relevé recopié sur la fiche, pour le garder quand la tablette quitte sa famille.
 async function copierBatteries(bilan) {
   const fiches = (await db().collection('stock').where('fid', '!=', null).get()).docs;
@@ -3424,5 +3466,5 @@ exports.regles = {
   ETATS, CATEGORIES, sansEssaisEffaces, natureMouvement, mensuel, centimes, lien, nomFichier, moisSuivant, lectureVersFormulaire, SCHEMA_FACTURE,
   lireReglages, transitionPermise, SUITES, simAResilier, fichesARattacher, sansFacture, stockAJour, releveBatterie, usureBatterie, incoherences, materielLu, memeAccessoire, coutLigne, alertesSim, finApresRecharge, simDeFacture, forfaitFamille, accessoiresAPrevoir, champsSim, aFaire, piecesFacture, debutMoisParis, moisPrecedent, csvTexte, livreDesRecettes,
   registreDesAchats, corpsDuMail, memeAchat, suiteJumelage, descriptionNonRendu, refusSuppression, fusionnerContacts, emailInformation, cleContact,
-  avancementPropre,
+  avancementPropre, gardeFous,
 };

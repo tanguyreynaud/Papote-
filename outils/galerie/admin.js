@@ -42,7 +42,13 @@ function gestionDonnees(o = {}) {
       extra: { restitution: { statut: 'rendue' }, remboursement: { statut: 'echec', montant: 6000, le: il(2) } } }),
   ];
   const stock = [
-    { id: 'T-001', ref: 'T-001', numero: 'BV60P-0001', modele: 'Blackview Tab 60 Pro', etat: 'chez-client', commande: 'CMD-GH78', fid: FID, sim: '07 45 12 34 56', simId: 'S1', batterie: { niveau: 82, le: il(0.01) }, prixAchat: 12999, acheteeLe: il(40), depense: 'D-A1', creeLe: il(40) },
+    { id: 'T-001', ref: 'T-001', numero: 'BV60P-0001', modele: 'Blackview Tab 60 Pro', etat: 'chez-client', commande: 'CMD-GH78', fid: FID, sim: '07 45 12 34 56', simId: 'S1', batterie: { niveau: 82, le: il(0.01) }, tabletUid: 'tab-jeanne',
+      gardeFous: [
+        { le: il(0.2), genre: 'page', texte: 'la page ne répond plus depuis 3 min, rechargée (1/3)' },
+        { le: il(1.5), genre: 'ecran', texte: 'écran bloqué 3 min (diaporama), retour à l’accueil' },
+        { le: il(4), genre: 'ecran', texte: 'écran bloqué 3 min (rappel), retour à l’accueil' },
+        { le: il(6), genre: 'appli', texte: 'page morte, Papote relancée' },
+      ], prixAchat: 12999, acheteeLe: il(40), depense: 'D-A1', creeLe: il(40) },
     { id: 'T-002', ref: 'T-002', numero: 'BV60P-0002', modele: 'Blackview Tab 60 Pro', etat: 'en-stock', prixAchat: 12999, acheteeLe: il(40), depense: 'D-A1', creeLe: il(40) },
     { id: 'T-003', ref: 'T-003', numero: 'Tab60P15EEA026347', modele: 'Blackview Tab 60 Pro', etat: 'preparee', commande: 'CMD-AB12', prixAchat: 12999, acheteeLe: il(6), depense: 'D-A2', creeLe: il(6) },
     { id: 'T-004', ref: 'T-004', numero: 'BV60P-0004', modele: 'Blackview Tab 60 Pro', etat: 'envoyee', commande: 'CMD-EF56', sim: '07 45 98 76 54', simId: 'S2', prixAchat: 12999, acheteeLe: il(6), depense: 'D-A2', creeLe: il(6) },
@@ -104,6 +110,7 @@ function gestionDonnees(o = {}) {
     envoisAccessoire: { wifi: 'Wi-Fi', sim: 'Carte SIM', tous: 'Tous les envois' },
     genresAlerte: { debranchee: 'Tablette débranchée', neRepondPlus: 'Tablette qui ne répond plus', pasVue: 'Photo pas vue depuis 48 h', sos: 'SOS famille', forfait: 'Forfait internet presque épuisé' },
     alertesJours: 90,
+    genresGardeFou: { ecran: 'écran bloqué', page: 'page rechargée', appli: 'appli relancée', redemarrage: 'tablette redémarrée', autre: 'autre' },
     reglages: { seuilTva: 3750000, tauxUrssaf: 21.2, forfaitSim: 499, vieTablette: 24, poidsColis: 1500, miseEnService: 6000, fraisEnvoi: 799, fraisRetour: 800, masquees: [], expediteur: { nom: 'Papote', adresse: '1 rue de la Paix', cp: '69001', ville: 'Lyon', telephone: '06 00 00 00 00', email: 'contact@mapapote.fr' } },
     automatique: { le: il(0.2), factures: ['PAP-0004'], avoirs: [], depenses: 1, stock: ['T-001 chez le client'], etiquettes: [], livres: ['Sophie Bernard'],
       erreurs: ['Relance du colis CMD-RT22 : Sendcloud n’a pas répondu'] },
@@ -259,6 +266,11 @@ const SCENES = [
   { groupe: 'Comptabilité', titre: 'Factures', page: '#compta/factures', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Comptabilité', titre: 'Dépenses', page: '#compta/depenses', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Comptabilité', titre: 'Une dépense (achat de tablettes, facture attendue)', page: '#depense/D-A2', tailles: ['pc'], plein: true, donnees: () => donnees() },
+  // Vérifie aussi que le bouton ouvre bien le choix du fichier (Tanguy, 29/10 : « je ne peux pas ajouter une facture »).
+  { groupe: 'Comptabilité', titre: 'Achat : « Ajouter la facture » ouvre le choix du fichier', page: '#depense/D-A2', tailles: ['pc', 'tel'], donnees: () => donnees(), faire: async (p) => {
+    const [choix] = await Promise.all([p.waitForEvent('filechooser', { timeout: 4000 }), p.click('#dd-ajouter-facture')]);
+    if (!choix.isMultiple()) throw new Error('le choix du fichier devrait accepter plusieurs fichiers');
+  } },
   { groupe: 'Comptabilité', titre: 'Une dépense reçue par e-mail, à vérifier', page: '#depense/D-M1', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Comptabilité', titre: 'URSSAF et TVA', page: '#compta/urssaf', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Comptabilité', titre: 'Rentabilité', page: '#compta/rentabilite', tailles: ['pc'], plein: true, donnees: () => donnees() },
