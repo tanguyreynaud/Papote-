@@ -2,6 +2,9 @@
 <resources>
     <color name="creme">#FDFAF5</color>
     <color name="indigo">#4F46E5</color>
+    <!-- Barre des boutons Android dans l'app famille : gris léger, Chrome y met des boutons foncés -->
+    <color name="barre_boutons">#ECE9E4</color>
+    <color name="barre_boutons_sombre">#2A2826</color>
     <color name="texte">#1F1B16</color>
     <color name="texte_doux">#5B5348</color>
     <color name="vert">#16A34A</color>

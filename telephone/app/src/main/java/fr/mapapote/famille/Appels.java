@@ -77,6 +77,8 @@ final class Appels {
         if (dejaTraite(ctx, cid)) return;
         // Gardés pour « Refuser » : le serveur arrête l'appel pour la tablette sur ce jeton.
         if (fid != null && jeton != null) prefs(ctx).edit().putString("refus." + cid, fid + "/" + jeton).apply();
+        // Gardée pour « Répondre » : l'écran d'appel s'ouvre sur cette famille (plusieurs possibles).
+        if (fid != null) prefs(ctx).edit().putString("fid." + cid, fid).apply();
         creerCanaux(ctx);
         Person appelant = new Person.Builder().setName(nom).setImportant(true).build();
         PendingIntent ecran = PendingIntent.getActivity(ctx, code(cid, 0),
@@ -105,6 +107,11 @@ final class Appels {
         // Sonne en boucle jusqu'à la réponse, au refus ou à la fin de l'appel.
         n.flags |= Notification.FLAG_INSISTENT;
         ctx.getSystemService(NotificationManager.class).notify(cid, ID_APPEL, n);
+    }
+
+    /** Famille de l'appel (reçue avec la sonnerie), ou null. */
+    static String famille(Context ctx, String cid) {
+        return prefs(ctx).getString("fid." + cid, null);
     }
 
     /** L'appel ne sonne plus (réponse, refus, la tablette a raccroché) : silence. */
@@ -156,6 +163,17 @@ final class Appels {
                 if (fini != null) fini.run();
             }
         }).start();
+    }
+
+    /** Jeton de connexion de l'écran d'appel pour cet appel (functions/appels.js, envoyerConnexions). */
+    static void memoriserConnexion(Context ctx, String cid, String connexion) {
+        prefs(ctx).edit().putString("connexion." + cid, connexion).apply();
+    }
+
+    static String connexion(Context ctx, String cid) {
+        String c = prefs(ctx).getString("connexion." + cid, null);
+        prefs(ctx).edit().remove("connexion." + cid).apply();
+        return c;
     }
 
     /** Personne n'a répondu : « Appel manqué », qui rappelle la tablette (pendant 24 h). */
