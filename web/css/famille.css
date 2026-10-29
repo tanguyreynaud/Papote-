@@ -510,6 +510,16 @@ button:disabled { opacity: .45; cursor: default; }
 .paire { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
 .paire .secondary { justify-content: center; min-height: 54px; font-size: 16px; font-weight: 700; }
 .send-btn { margin-top: 12px; }
+/* Téléphone couché : la vidéo à gauche, la légende et Envoyer à droite, sans rien à faire défiler. */
+@media (orientation: landscape) and (max-height: 560px) {
+  .sheet-body:has(> .video-review:not([hidden])) {
+    display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); column-gap: 18px; align-content: start;
+    max-width: 920px;
+  }
+  .sheet-body:has(> .video-review:not([hidden])) > * { grid-column: 2; }
+  .sheet-body:has(> .video-review:not([hidden])) > .video-review { grid-column: 1; grid-row: 1 / span 8; margin-bottom: 0; }
+  .sheet-body:has(> .video-review:not([hidden])) .video-cadre video { max-height: calc(92vh - 110px); }
+}
 #post-text { margin: 0; }
 .composer-busy, .busy .previews { opacity: .5; }
 
@@ -990,6 +1000,8 @@ h1, h2, h3, .brand, .tile, .splash-name { font-family: var(--display); letter-sp
 .site-link { display: flex; justify-content: center; text-decoration: none; margin-top: 16px; border-radius: 14px; padding: 13px 18px; font-weight: 600; }
 
 /* Bouton flottant « Installer l'app » (disparaît une fois l'app installée) */
+/* Hors ligne : pas d'installation possible, et le bandeau du haut le ferait passer sur les tuiles. */
+body:has(#hors-ligne-bandeau:not([hidden])) .install-fab { display: none; }
 /* Flottant (Tanguy : il faut que les gens installent l'app) mais collant : quand tout tient à l'écran, il se pose
    sous les tuiles ; sinon il flotte au-dessus de la barre du bas, et la marge sous la grille laisse tout lire en faisant défiler. */
 .install-fab {

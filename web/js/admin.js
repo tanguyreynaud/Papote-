@@ -535,7 +535,7 @@ async function loadReturns() {
       const avant = toDate(r.avant);
       const li = document.createElement('li');
       li.innerHTML = '<strong></strong><span class="muted small"></span><span class="small"></span><span class="small etiq"></span><span class="small remb"></span>';
-      titreCommande(li, d.id, c.livraison?.nom || c.nom || c.email);
+      titreCommande(li, d.id, c.nom || c.email || 'Client');
       // Information seulement : le retour se coche et l'étiquette se refait sur la page de la commande.
       li.classList.add('cliquable');
       li.addEventListener('click', (e) => { if (!e.target.closest('a')) location.hash = `#commande/${encodeURIComponent(d.id)}`; });

@@ -577,6 +577,20 @@ button.secondary.charge::after, button.link.charge::after { border-color: rgba(7
   [data-panneau="stock"] .table .pieces-liste { justify-content: flex-end; }
 }
 
+/* Paiements d'une commande, recharges d'une carte SIM : sur téléphone, une carte par ligne au lieu d'un tableau
+   coupé qu'il faudrait faire glisser de côté. */
+@media (max-width: 640px) {
+  .table.cartes { overflow: visible; }
+  .table.cartes table, .table.cartes tbody { display: block; }
+  .table.cartes thead { display: none; }
+  .table.cartes tbody tr { display: block; background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 8px 14px; margin-bottom: 10px; }
+  .table.cartes tbody td { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 4px 0; border: none; text-align: right; white-space: normal; overflow-wrap: anywhere; }
+  .table.cartes tbody td::before { content: attr(data-titre); color: var(--muted); font-weight: 600; text-align: left; flex: none; }
+  .table.cartes tbody td:empty, .table.cartes tbody td[data-titre=""]::before { display: none; }
+  .table.cartes tbody td.vide { display: block; text-align: center; }
+  .table.cartes tbody td.vide::before { content: none; }
+}
+
 /* Page famille : mêmes lignes que les autres fiches (une colonne sur téléphone, le champ en pleine largeur). */
 #famille-fiche .family dl.fiche { grid-template-columns: max-content minmax(0, 1fr); }
 @media (max-width: 640px) { #famille-fiche .family dl.fiche { grid-template-columns: minmax(0, 1fr); gap: 0; } #famille-fiche .family dl.fiche dd:not(.modifiable) { margin-bottom: 8px; } }
@@ -586,3 +600,6 @@ button.secondary.charge::after, button.link.charge::after { border-color: rgba(7
 .alertes-liste { list-style: none; margin: 12px 0 0; padding: 0; }
 .alertes-liste li { padding: 8px 0; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
 .alertes-liste .quand { font-variant-numeric: tabular-nums; font-weight: 600; }
+
+/* Page d'un achat : la facture et son bouton « Ajouter la facture » sur la même ligne, l'un sous l'autre sur téléphone. */
+.facture-achat { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }

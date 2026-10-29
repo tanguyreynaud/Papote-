@@ -1037,7 +1037,7 @@ async function remplirCommande(id) {
     }
     factures.replaceChildren(...[r.erreur ? h('p', { class: 'muted small' }, r.erreur) : null,
       h('p', { class: 'small' }, `Payé au total : ${euros(paye)}`),
-      r.factures.length ? h('div', { class: 'table' }, table) : null, autres.length ? h('div', { class: 'table' }, table2) : null].filter(Boolean));
+      r.factures.length ? h('div', { class: 'table cartes' }, table) : null, autres.length ? h('div', { class: 'table cartes' }, table2) : null].filter(Boolean));
   } catch (e) {
     factures.replaceChildren(h('p', { class: 'error small' }, messageErreur(e)));
   }
@@ -1724,19 +1724,19 @@ function carteRecharges(l, modif, vue) {
     h('p', { class: 'muted small' }, l.renouvellementAuto
       ? 'Les factures de l\'opérateur envoyées à factures@mapapote.fr se rangent ici toutes seules. Sans facture 2 jours après la fin du forfait, une alerte s\'affiche.'
       : 'Rappel 3 jours avant la fin du forfait. Une facture envoyée à factures@mapapote.fr se range aussi ici toute seule.',
-      ' La tablette reçoit le forfait (Go notés plus haut, 1 Go sinon) et la date de recharge : à 70 % elle réduit l\'image des appels, à 88 % elle les passe sans image, à 95 % les vidéos attendent le Wi-Fi.'),
-    recharges.length ? h('div', { class: 'table' }, tableRecharges(recharges)) : h('p', { class: 'muted small' }, 'Aucune recharge notée.'));
+      ' La tablette reçoit le forfait (Go notés plus haut, 1 Go sinon) et la date de recharge : à 70 % elle réduit l\'image des appels, à 88 % encore plus, à 95 % elle les passe sans image et les vidéos attendent le Wi-Fi.'),
+    recharges.length ? h('div', { class: 'table cartes' }, tableRecharges(recharges)) : h('p', { class: 'muted small' }, 'Aucune recharge notée.'));
 }
 // Garde-fou du forfait vu par la tablette (Forfait.java) : Mo passés par la carte depuis le début du pass,
 // sur le forfait recopié dans sa famille (Go de la carte, 1 Go sinon), et ce qu'elle retient.
-const PALIERS = ['normal', 'visio réduite', 'appels sans image', 'ni vidéo, ni météo, ni mise à jour'];
+const PALIERS = ['normal', 'visio Éco', 'visio très réduite', 'appels sans image, ni vidéo, ni météo, ni mise à jour'];
 const moTexte = (mo) => (mo >= 1000 ? `${(mo / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 2 })} Go` : `${Math.round(mo)} Mo`);
 function ligneGardeFou(sim) {
   if (!sim || !(sim.plafondMo > 0) || !(sim.dataCycleMo >= 0)) return [];
   const pc = Math.round((sim.dataCycleMo * 100) / sim.plafondMo);
   return [h('dt', {}, 'Utilisé sur la tablette'), h('dd', {},
     `${moTexte(sim.dataCycleMo)} sur ${moTexte(sim.plafondMo)} (${pc} %)`,
-    sim.niveau ? h('span', {}, ' ', badge(PALIERS[sim.niveau] || `palier ${sim.niveau}`, sim.niveau >= 2 ? 'ko' : 'info')) : null,
+    sim.niveau ? h('span', {}, ' ', badge(PALIERS[sim.niveau] || `palier ${sim.niveau}`, sim.niveau >= 3 ? 'ko' : 'info')) : null,
     sim.cycleDebut ? h('span', { class: 'muted small' }, ` depuis le ${jour(Date.parse(`${sim.cycleDebut}T12:00:00`))}`) : null)];
 }
 
@@ -2085,6 +2085,43 @@ function blocAlertes(zone, liste, { titre, avecTablette }) {
   );
 }
 
+// Garde-fous de la tablette (functions/gestion.js, gardeFous) : chaque fois qu'elle s'est remise d'aplomb toute
+// seule (écran bloqué, page rechargée, appli relancée, tablette redémarrée), lu dans son journal. Un chiffre par
+// sorte, qui ouvre la liste datée (Tanguy, 29/10).
+function blocGardeFous(zone, t) {
+  const genres = donnees.genresGardeFou;
+  zone.hidden = !genres || !t.tabletUid;
+  if (zone.hidden) return;
+  const liste = t.gardeFous || [];
+  const parGenre = new Map();
+  for (const g of liste) parGenre.set(g.genre, [...(parGenre.get(g.genre) || []), g]);
+  const detail = h('ul', { class: 'alertes-liste small', hidden: true });
+  let ouvert = null;
+  const montrer = (genre) => {
+    ouvert = ouvert === genre ? null : genre;
+    detail.hidden = !ouvert;
+    zone.querySelectorAll('.stat').forEach((s) => s.classList.toggle('actif', s.dataset.genre === ouvert));
+    if (!ouvert) return;
+    detail.replaceChildren(...(ouvert === '*' ? liste : parGenre.get(ouvert)).map((g) => h('li', {},
+      h('span', { class: 'quand' }, new Date(g.le).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })), ' ',
+      ouvert === '*' ? `${genres[g.genre] || g.genre} · ` : '', h('span', { class: 'muted' }, g.texte))));
+  };
+  const chiffre = (genre, n, texte) => {
+    const el = cliquable(stat(String(n), texte), () => montrer(genre));
+    el.dataset.genre = genre;
+    return el;
+  };
+  zone.replaceChildren(
+    h('h2', {}, 'Garde-fous de la tablette'),
+    liste.length
+      ? h('div', { class: 'stats compact' }, chiffre('*', liste.length, 'en tout'),
+        ...Object.keys(genres).filter((g) => parGenre.has(g)).map((g) => chiffre(g, parGenre.get(g).length, genres[g])))
+      : h('p', { class: 'muted small' }, 'Aucun dans son journal.'),
+    h('p', { class: 'muted small' }, 'Comptés dans le journal de la tablette (ses 200 dernières lignes).'),
+    detail,
+  );
+}
+
 // Page d'une tablette : informations, achat, documents, historique.
 let tabletteOuverte = null;
 function ouvrirTablette(id) {
@@ -2153,6 +2190,7 @@ function remplirTablette(id) {
   afficherDocumentsTablette(t);
   afficherBatterie(t);
   blocAlertes($('dt-alertes'), (donnees.alertes || []).filter((a) => a.fiche === t.id), { titre: 'Alertes de cette tablette' });
+  blocGardeFous($('dt-gardefous'), t);
   $('dt-historique').replaceChildren(...historiqueLisible(t).reverse().map(([le, texte]) => h('li', {},
     h('span', { class: 'quand' }, new Date(le).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })), ' ', texte)));
   if (!$('dt-historique').children.length) $('dt-historique').append(h('li', {}, 'Rien de noté pour l\'instant.'));
@@ -2633,9 +2671,12 @@ function remplirPageDepense(id) {
         } }),
         ...modif('dont TVA', d.tva != null ? euros(d.tva) : null, 'tva', { valeur: enEuros(d.tva), mode: 'decimal', suffixe: '€', vide: 'aucune',
           convertir: (v) => (String(v).trim() ? convertirEuros(v) : null) }),
-        ligne('Facture', d.confirmation
-          ? h('span', {}, badge('pas encore reçue', 'info'), ' ', h('span', { class: 'muted small' }, 'seule la confirmation de commande est arrivée : transférez la facture à factures@mapapote.fr'))
-          : pieces.length ? badge('reçue', 'ok') : h('span', { class: 'muted' }, 'aucun justificatif')),
+        // Facture ajoutée d'ici, d'un bouton visible (Tanguy, 29/10 : « je ne peux pas ajouter une facture »).
+        ligne('Facture', h('div', { class: 'facture-achat' }, d.confirmation
+          ? h('span', {}, badge('pas encore reçue', 'info'), ' ', h('span', { class: 'muted small' }, 'seule la confirmation de commande est arrivée : ajoutez la facture ici, ou transférez-la à factures@mapapote.fr'))
+          : pieces.length ? badge('reçue', 'ok') : h('span', { class: 'muted' }, 'aucun justificatif'),
+        h('button', { type: 'button', class: 'secondary small-btn no-print', id: 'dd-ajouter-facture', onclick: () => { fichierDepense = d.id; choixFichier.click(); } },
+          d.confirmation || !pieces.length ? 'Ajouter la facture' : 'Ajouter un document'))),
         ligne('Justificatifs', pieces.length ? h('div', { class: 'pieces-liste' }, pieces) : null),
         ...(d.categorie === 'sim' && !sims.length ? modif('Carte SIM rechargée', simDe(d.sim), 'sim', { valeur: d.sim || '', vide: 'aucune',
           options: [['', 'Aucune'], ...donnees.sims.filter((l) => l.statut !== 'resiliee' || l.id === d.sim)

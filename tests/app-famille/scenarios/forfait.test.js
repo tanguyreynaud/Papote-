@@ -26,10 +26,15 @@ test('Forfait de la tablette : rien avant 80 %, puis l\'accueil explique l\'imag
   await julie.page.locator('#activity', { hasText: 'Tablette en ligne' }).waitFor();
   await sim(820, 1);
   await julie.page.locator('#activity.warn', { hasText: 'forfait internet de la tablette de Mamie Emma est utilisé à 82 %' }).waitFor();
-  assert.match(await julie.page.locator('#activity').textContent(), /image réduite jusqu'à sa recharge, et passeront sans image à 88 %/);
+  assert.match(await julie.page.locator('#activity').textContent(), /image réduite jusqu'à sa recharge, et passeront sans image à 95 %/);
   await sim(900, 2);
   await julie.page.locator('#activity.warn', { hasText: 'utilisé à 90 %' }).waitFor();
-  assert.match(await julie.page.locator('#activity').textContent(), /appels passent sans image jusqu'à sa recharge/);
+  assert.match(await julie.page.locator('#activity').textContent(), /image très réduite jusqu'à sa recharge, et passeront sans image à 95 %/);
+  await sim(960, 3);
+  await julie.page.locator('#activity.warn', { hasText: 'utilisé à 96 %' }).waitFor();
+  assert.match(await julie.page.locator('#activity').textContent(), /appels passent sans image et les vidéos attendent le Wi-Fi/);
+  await sim(900, 2);
+  await julie.page.locator('#activity.warn', { hasText: 'utilisé à 90 %' }).waitFor();
   await julie.page.click('#tablet-chip');
   assert.match(await g.texteFenetre(julie), /Forfait internet : 900 Mo sur 1 Go depuis le 28 octobre\./);
 });

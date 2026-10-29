@@ -2300,6 +2300,18 @@ async function offerCallBack() {
   appelConfirme = true;
   $('tile-call').click();
 }
+// Écran d'appel de l'app Android (?appeler=video) : l'appel déjà confirmé dans Chrome part dès que la tablette
+// est connue (la tuile reste grisée tant que sa fiche n'est pas arrivée).
+async function appelerDesQuePossible() {
+  for (let i = 0; i < 60 && $('tile-call').disabled; i++) await new Promise((r) => setTimeout(r, 250));
+  if ($('tile-call').disabled) {
+    notice(`La tablette de ${session.family.name} ne peut pas recevoir d'appel pour le moment.`);
+    finNatif();
+    return;
+  }
+  appelConfirme = true;
+  $('tile-call').click();
+}
 // App déjà ouverte : le service worker la prévient au lieu de la rouvrir.
 navigator.serviceWorker?.addEventListener('message', (e) => {
   const url = e.data && e.data.type === 'appel-ouvert' ? String(e.data.url || '') : '';
@@ -4079,8 +4091,9 @@ const enGoOuMo = (mo) => (mo >= 1000 ? `${(mo / 1000).toLocaleString('fr-FR', { 
 function texteForfait(f, name) {
   const debut = `Le forfait internet de la tablette de ${name} est utilisé à ${Math.min(f.pourCent, 100)} %`;
   if (f.niveau >= 3) return `${debut} : jusqu'à sa recharge, les appels passent sans image et les vidéos attendent le Wi-Fi. Photos et messages passent toujours.`;
-  if (f.niveau >= 2) return `${debut} : les appels passent sans image jusqu'à sa recharge. Photos et messages passent toujours.`;
-  return `${debut} : les appels vidéo sont en image réduite jusqu'à sa recharge, et passeront sans image à 88 %. Photos et messages passent toujours.`;
+  // Paliers de la tablette (Forfait.java) : 70 % image réduite, 88 % très réduite, 95 % son seul.
+  if (f.niveau >= 2) return `${debut} : les appels vidéo sont en image très réduite jusqu'à sa recharge, et passeront sans image à 95 %. Photos et messages passent toujours.`;
+  return `${debut} : les appels vidéo sont en image réduite jusqu'à sa recharge, et passeront sans image à 95 %. Photos et messages passent toujours.`;
 }
 
 function renderTabletChip() {
@@ -5148,7 +5161,8 @@ async function enterApp() {
     ]);
     // Fiche d'avant tout juste complétée (uid ajouté) : elle n'était pas encore dans la liste.
     const memberships = completee ? await myMemberships() : lues;
-    if (!connaitMoi(memberships)) { showMoi(); return; }
+    // Écran d'appel de l'app Android (WebView neuve, sans la fiche « Moi » du téléphone) : seulement l'appel.
+    if (!window.PapoteNatif && !connaitMoi(memberships)) { showMoi(); return; }
     const invitations = invitationsLues.filter((inv) => !memberships.some((m) => m.fid === inv.fid));
     if (invitations.length && !skipInvites) { showInvitations(invitations); return; }
     const active = memberships.filter((m) => m.status !== 'pending');
@@ -5213,7 +5227,7 @@ async function enterApp() {
   accueilPremiereFois();
   if (sharedPending) { sharedPending = false; openShared(); }
   chargerJetonNatif();
-  if (appelerPending) { appelerPending = false; appelConfirme = true; $('tile-call').click(); }
+  if (appelerPending) { appelerPending = false; appelerDesQuePossible(); }
   else if (rappelerPending) { rappelerPending = false; offerCallBack(); }
   else if (reglagesPending) { reglagesPending = false; openPage('settings'); }
   else if (abonnementPending) { abonnementPending = false; ouvrirAbonnement(); }
