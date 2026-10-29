@@ -4,7 +4,7 @@
 const MAX_SECONDS = 30;
 const MAX_SIDE = 960;
 
-function pickMime() {
+export function pickMime() {
   // MP4 (H.264) d'abord : lu partout, tablettes récentes et iPhone ; WebM si le navigateur ne sait pas.
   const candidates = [
     'video/mp4;codecs=avc1.42E01E,mp4a.40.2',

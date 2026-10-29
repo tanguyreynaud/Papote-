@@ -10,7 +10,7 @@ const FIREBASE = 'https://www.gstatic.com/firebasejs/12.19.0/';
 const PRECACHE = [
   '/', 'manifest.webmanifest', 'css/famille.css', 'icons/icon.svg', 'icons/icon-192.png',
   'js/famille.js', 'js/firebase.js', 'js/ui.js', 'js/dialogue.js', 'js/guide.js', 'js/appel.js',
-  'js/push.js', 'js/video.js', 'js/agenda.js', 'js/abonnement.js', 'js/compte.js', 'js/notifs.js',
+  'js/push.js', 'js/video.js', 'js/filmer.js', 'js/agenda.js', 'js/abonnement.js', 'js/compte.js', 'js/notifs.js',
   'js/parcours.js', 'js/sim.js', 'js/gestion-api.js', 'vendor/qrcode.js',
   ...['app', 'app-check', 'auth', 'firestore', 'functions', 'messaging', 'storage']
     .map((m) => `${FIREBASE}firebase-${m}.js`),

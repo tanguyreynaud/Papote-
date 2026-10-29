@@ -126,10 +126,13 @@ test('Vidéo : préparée dans le téléphone, envoyée dans Storage, lue dans l
   await julie.page.locator('#viewer').waitFor({ state: 'hidden' });
 });
 
+// Captures des écrans de cette partie, si PAPOTE_CAPTURES donne un dossier (pour les montrer à Tanguy).
+const capture = async (p, nom) => { if (process.env.PAPOTE_CAPTURES) await p.screenshot({ path: require('node:path').join(process.env.PAPOTE_CAPTURES, `${nom}.png`) }); };
+
 // Bug du 29/10 : le plein écran de l'aperçu se refermait aussitôt (l'app fermait tout plein écran hors
-// appel). L'écran d'après-film : la vidéo à sa forme, Revoir / Plein écran, Refaire / Envoyer.
+// appel). L'aperçu avant envoi : la vidéo à sa forme, lecture et plein écran sur la vidéo, Refilmer / Galerie, Envoyer.
 for (const [forme, largeur, hauteur] of [['debout', 240, 426], ['couchée', 426, 240]]) {
-  test(`Vidéo filmée ${forme} : aperçu à sa forme, Revoir, plein écran qui reste ouvert, Refaire, téléphone tourné`, async () => {
+  test(`Vidéo ${forme} : aperçu à sa forme, lecture, plein écran qui reste ouvert, Galerie, téléphone tourné`, async () => {
     const julie = await banc.telephone('Julie');
     const { fid } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
     const p = julie.page;
@@ -137,9 +140,10 @@ for (const [forme, largeur, hauteur] of [['debout', 240, 426], ['couchée', 426,
     await g.ouvrirTuile(julie, 'videos');
     await p.click('.fab[data-add="video"]');
     await p.locator('#video-hint').waitFor({ state: 'visible' });
-    await p.setInputFiles('#in-video-camera', await g.video({ secondes: 2, largeur, hauteur }));
+    await p.setInputFiles('#in-video-gallery', await g.video({ secondes: 2, largeur, hauteur }));
     await g.visible(julie, '#btn-send').waitFor({ timeout: 30_000 });
     await p.waitForFunction(() => document.getElementById('video-preview').readyState >= 1);
+    await capture(p, `apercu-${forme}`);
 
     // La vidéo garde sa forme (ni déformée, ni arrondie), sans les boutons du navigateur.
     const v = await p.evaluate(() => {
@@ -150,15 +154,14 @@ for (const [forme, largeur, hauteur] of [['debout', 240, 426], ['couchée', 426,
     assert.ok(Math.abs(v.ratio - v.attendu) < 0.05, `vidéo déformée : ${v.ratio} pour ${v.attendu}`);
     assert.strictEqual(v.rayon, '0px');
     assert.strictEqual(v.controls, false);
-    assert.strictEqual(await p.locator('#video-refaire').innerText(), 'Refaire');
-    // Boutons de même taille, deux à deux.
-    for (const [a, b] of [['#video-revoir', '#video-plein'], ['#video-refaire', '#btn-send']]) {
-      const [ra, rb] = await Promise.all([p.locator(a).boundingBox(), p.locator(b).boundingBox()]);
-      assert.ok(Math.abs(ra.width - rb.width) < 1 && Math.abs(ra.height - rb.height) < 1, `${a} et ${b} de tailles différentes`);
-    }
+    // Refilmer et Galerie de même taille ; l'icône plein écran dans le coin de la vidéo.
+    const [ra, rb] = await Promise.all([p.locator('#video-refilmer').boundingBox(), p.locator('#video-autre').boundingBox()]);
+    assert.ok(Math.abs(ra.width - rb.width) < 1 && Math.abs(ra.height - rb.height) < 1, 'Refilmer et Galerie de tailles différentes');
+    const [rv, rp] = await Promise.all([p.locator('#video-preview').boundingBox(), p.locator('#video-plein').boundingBox()]);
+    assert.ok(rp.x + rp.width <= rv.x + rv.width + 1 && rp.y + rp.height <= rv.y + rv.height + 1 && rp.x > rv.x + rv.width / 2, 'plein écran hors du coin de la vidéo');
 
-    // Revoir : la vidéo repart du début, le gros bouton lecture disparaît.
-    await p.click('#video-revoir');
+    // Le gros bouton lecture lance la vidéo et disparaît.
+    await p.click('#video-play');
     await p.waitForFunction(() => !document.getElementById('video-preview').paused);
     await p.locator('#video-play').waitFor({ state: 'hidden', timeout: 2000 });
 
@@ -176,9 +179,9 @@ for (const [forme, largeur, hauteur] of [['debout', 240, 426], ['couchée', 426,
     await g.verifierLargeur(julie, 'aperçu vidéo couché');
     await p.setViewportSize({ width: 390, height: 844 });
 
-    // Refaire : la caméra se rouvre, la nouvelle vidéo remplace l'ancienne.
-    const [choix] = await Promise.all([p.waitForEvent('filechooser'), p.click('#video-refaire')]);
-    assert.ok(await p.locator('#video-review').isHidden());
+    // Galerie : la galerie se rouvre, la nouvelle vidéo remplace l'ancienne.
+    const [choix] = await Promise.all([p.waitForEvent('filechooser'), p.click('#video-autre')]);
+    assert.strictEqual(await choix.element().getAttribute('id'), 'in-video-gallery');
     await choix.setFiles(await g.video({ secondes: 1, largeur, hauteur }));
     await g.visible(julie, '#btn-send').waitFor({ timeout: 30_000 });
     await p.click('#btn-send');
@@ -189,18 +192,114 @@ for (const [forme, largeur, hauteur] of [['debout', 240, 426], ['couchée', 426,
   });
 }
 
-// Une vidéo de la galerie : « Autre vidéo » rouvre la galerie.
-test('Vidéo choisie dans la galerie : « Autre vidéo » au lieu de « Refaire »', async () => {
+// Filmer dans Papote (29/10) : la caméra dans la page plutôt que l'appareil photo du téléphone.
+// Le navigateur du banc filme avec une fausse caméra (image de test et bip).
+test('Filmer dans Papote : caméra, Filmer / Arrêter, aperçu, Refilmer, retour d\'Android, envoi sans préparation', async () => {
+  const julie = await banc.telephone('Julie');
+  const { fid } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
+  const p = julie.page;
+  const pret = () => p.waitForFunction(() => document.getElementById('filmer').dataset.etat === 'pret', null, { timeout: 15_000 });
+
+  await g.ouvrirTuile(julie, 'videos');
+  await p.click('.fab[data-add="video"]');
+  assert.strictEqual(await p.locator('#pick-camera').innerText(), 'Filmer');
+  await p.click('#pick-camera');
+  await p.locator('#filmer').waitFor({ state: 'visible' });
+  await pret();
+  assert.strictEqual(await p.locator('#filmer-temps').innerText(), '0:00 / 1:00');
+  await capture(p, 'filmer-pret');
+  // L'image de la caméra n'est ni déformée ni arrondie.
+  const cam = await p.evaluate(() => {
+    const el = document.getElementById('filmer-live');
+    const r = el.getBoundingClientRect();
+    return { ratio: r.width / r.height, attendu: el.videoWidth / el.videoHeight, rayon: getComputedStyle(el).borderRadius };
+  });
+  assert.ok(Math.abs(cam.ratio - cam.attendu) < 0.05, `caméra déformée : ${cam.ratio} pour ${cam.attendu}`);
+  assert.strictEqual(cam.rayon, '0px');
+  // Annuler et Retourner de même taille.
+  const [ra, rb] = await Promise.all([p.locator('#filmer-annuler').boundingBox(), p.locator('#filmer-tourner').boundingBox()]);
+  assert.ok(Math.abs(ra.width - rb.width) < 1 && Math.abs(ra.height - rb.height) < 1, 'Annuler et Retourner de tailles différentes');
+
+  // Retour d'Android : la caméra se ferme, la feuille d'envoi reste.
+  await p.goBack();
+  await p.locator('#filmer').waitFor({ state: 'hidden' });
+  await g.visible(julie, '#pick-camera').waitFor();
+  assert.ok(await p.locator('#sheet-post').isVisible());
+  assert.strictEqual(await p.evaluate(() => document.getElementById('filmer-live').srcObject), null, 'caméra restée allumée');
+
+  // Filmer 2 s, Arrêter : l'aperçu tout de suite, sans « Préparation de la vidéo… ».
+  await p.click('#pick-camera');
+  await pret();
+  await p.click('#filmer-rec');
+  await p.waitForFunction(() => document.getElementById('filmer').dataset.etat === 'film');
+  assert.strictEqual(await p.locator('#filmer-rec-label').innerText(), 'Arrêter');
+  assert.ok(await p.locator('#filmer-tourner').isDisabled(), 'Retourner pendant le film');
+  await p.waitForTimeout(2300);
+  assert.match(await p.locator('#filmer-temps').innerText(), /^0:0[23] \/ 1:00$/);
+  await capture(p, 'filmer-en-cours');
+  await p.setViewportSize({ width: 844, height: 390 });
+  await capture(p, 'filmer-couche');
+  await g.verifierLargeur(julie, 'caméra couchée');
+  await p.setViewportSize({ width: 390, height: 844 });
+  await p.click('#filmer-rec');
+  await p.locator('#filmer').waitFor({ state: 'hidden' });
+  await g.visible(julie, '#btn-send').waitFor({ timeout: 5000 });
+  await p.waitForFunction(() => document.getElementById('video-preview').readyState >= 1);
+  await capture(p, 'filmer-apercu');
+
+  // Refilmer puis Annuler : la caméra se ferme, la vidéo d'avant est toujours là.
+  await p.click('#video-refilmer');
+  await pret();
+  await p.click('#filmer-annuler');
+  await p.locator('#filmer').waitFor({ state: 'hidden' });
+  await g.visible(julie, '#btn-send').waitFor();
+  assert.ok(await p.locator('#video-review').isVisible());
+
+  // Annuler pendant le film : rien n'est gardé, la vidéo d'avant reste.
+  await p.click('#video-refilmer');
+  await pret();
+  await p.click('#filmer-rec');
+  await p.waitForTimeout(1200);
+  await p.click('#filmer-annuler');
+  await p.locator('#filmer').waitFor({ state: 'hidden' });
+  await p.waitForTimeout(500);
+  assert.ok(await p.evaluate(() => document.getElementById('video-preview').duration > 1.8 || !Number.isFinite(document.getElementById('video-preview').duration)), 'la vidéo annulée a remplacé la première');
+
+  // Refilmer 1 s : cette vidéo remplace la première, et c'est elle qui part.
+  await p.click('#video-refilmer');
+  await pret();
+  await p.click('#filmer-rec');
+  await p.waitForTimeout(1300);
+  await p.click('#filmer-rec');
+  await g.visible(julie, '#btn-send').waitFor({ timeout: 5000 });
+  await p.fill('#post-text', 'Filmé dans Papote');
+  await p.click('#btn-send');
+  await g.toast(julie, 'Envoyé');
+  const [v] = await g.attendreBase(async () => { const l = await postsDe(fid, 'video'); return l.length ? l : null; }, 'vidéo envoyée');
+  assert.match(v.storagePath, /\.(webm|mp4)$/);
+  assert.ok(v.duration >= 1 && v.duration <= 2, `durée ${v.duration}`);
+  assert.ok(v.thumb.startsWith('data:image/jpeg'));
+  assert.strictEqual(v.text, 'Filmé dans Papote');
+});
+
+test('Filmer : caméra refusée, message clair et repli sur l\'appareil photo du téléphone', async () => {
   const julie = await banc.telephone('Julie');
   await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
   const p = julie.page;
+  await p.evaluate(() => {
+    navigator.mediaDevices.getUserMedia = () => Promise.reject(new DOMException('refus', 'NotAllowedError'));
+  });
   await g.ouvrirTuile(julie, 'videos');
   await p.click('.fab[data-add="video"]');
-  await p.setInputFiles('#in-video-gallery', await g.video({ secondes: 1 }));
+  await p.click('#pick-camera');
+  await p.locator('#filmer-erreur').waitFor({ state: 'visible' });
+  assert.ok(await p.locator('#filmer-rec').isDisabled());
+  await capture(p, 'filmer-refus');
+  const [choix] = await Promise.all([p.waitForEvent('filechooser'), p.click('#filmer-repli')]);
+  assert.strictEqual(await choix.element().getAttribute('id'), 'in-video-camera');
+  await p.locator('#filmer').waitFor({ state: 'hidden' });
+  await choix.setFiles(await g.video({ secondes: 1 }));
   await g.visible(julie, '#btn-send').waitFor({ timeout: 30_000 });
-  assert.strictEqual(await p.locator('#video-refaire').innerText(), 'Autre vidéo');
-  const [choix] = await Promise.all([p.waitForEvent('filechooser'), p.click('#video-refaire')]);
-  assert.strictEqual(await choix.element().getAttribute('id'), 'in-video-gallery');
 });
 
 test('Messages : écrit, message rapide, vu par la tablette, réponse de Mamie, suppression', async () => {

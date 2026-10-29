@@ -23,6 +23,7 @@ import {
 import { startCall, watchTabletBusy, watchIncomingCalls, answerIncoming, warmUpCalls, declineIncoming, reportCallIncident } from './appel.js';
 import { pushSupported, pushAllowed, pushRefused, enablePush, closeCallNotification, rememberNativeToken, inNativeApp } from './push.js';
 import { prepareVideo, unlockVideo } from './video.js';
+import { filmerPossible, filmerOuvert, ouvrirFilmer, fermerFilmer } from './filmer.js';
 import { startAgenda, stopAgenda } from './agenda.js';
 import {
   isRealAccount, myEmail, signInGoogle, finishRedirect, sendEmailLink, isEmailLink, completeEmailLink, pendingEmail, logOut,
@@ -283,6 +284,8 @@ window.addEventListener('popstate', (e) => {
   if (fermerFenetre()) { annulerRetour(); return; }
   // Appel en cours ou qui sonne, guide de départ : « retour » ne fait rien (Raccrocher, Passer…).
   if (!$('call').hidden || !$('incoming').hidden || document.querySelector('.guide-back')) { annulerRetour(); return; }
+  // La caméra (Filmer) se ferme d'abord : on revient à la feuille d'envoi.
+  if (filmerOuvert()) { fermerFilmer(); return; }
   // Une feuille ou la visionneuse ouverte se ferme d'abord.
   if (!$('viewer').hidden || !$('sheet-post').hidden || !$('sheet-reminder').hidden || !$('sheet-wifi').hidden) {
     closeSheets();
@@ -938,7 +941,6 @@ document.querySelectorAll('.quick-msg').forEach((b) => b.addEventListener('click
 let addMode = null; // 'photo' | 'video'
 let pendingPhotos = []; // { full, thumb } : data URLs prêtes à envoyer
 let pendingVideo = null; // { base64, mime, thumb, duration }
-let videoFilmee = false; // la vidéo en attente vient de « Filmer » (sinon de la galerie ou d'un partage)
 
 function loadImage(file) {
   return new Promise((resolve, reject) => {
@@ -1009,9 +1011,6 @@ function syncAddSheet() {
   $('post-extra').hidden = !chosen;
   $('previews').hidden = addMode !== 'photo';
   $('video-review').hidden = addMode !== 'video' || !chosen;
-  $('video-refaire').hidden = addMode !== 'video' || !chosen;
-  $('video-refaire-label').textContent = videoFilmee ? 'Refaire' : 'Autre vidéo';
-  $('video-refaire').querySelector('use').setAttribute('href', videoFilmee ? '#i-camera' : '#i-gallery');
   renderPreviews();
 }
 
@@ -1054,7 +1053,6 @@ $('video-preview').addEventListener('click', () => {
   const v = $('video-preview');
   if (v.paused) lireApercu(false); else v.pause();
 });
-$('video-revoir').addEventListener('click', () => lireApercu(true));
 for (const ev of ['play', 'pause', 'ended', 'emptied']) {
   $('video-preview').addEventListener(ev, () => { $('video-play').hidden = !$('video-preview').paused; });
 }
@@ -1064,18 +1062,49 @@ $('video-plein').addEventListener('click', () => {
   const ouvrir = v.requestFullscreen ? v.requestFullscreen({ navigationUI: 'hide' }) : Promise.resolve(v.webkitEnterFullscreen?.());
   Promise.resolve(ouvrir).catch((err) => console.warn('Plein écran refusé', err)).finally(() => lireApercu(v.ended));
 });
-// « Refaire » rouvre la caméra, « Autre vidéo » la galerie : la vidéo d'avant est oubliée.
-$('video-refaire').addEventListener('click', () => {
-  oublierApercuVideo();
-  pendingVideo = null;
-  syncAddSheet();
+// Changer de vidéo : « Refilmer » rouvre la caméra, « Galerie » la galerie du téléphone. La vidéo d'avant
+// reste tant qu'aucune autre ne la remplace (caméra annulée, rien choisi dans la galerie).
+$('video-refilmer').addEventListener('click', () => filmer());
+$('video-autre').addEventListener('click', () => {
   unlockVideo();
-  $(videoFilmee ? 'in-video-camera' : 'in-video-gallery').click();
+  $('in-video-gallery').click();
 });
 
+// « Filmer » : la caméra dans Papote (filmer.js). Sans elle (vieux navigateur, caméra refusée),
+// l'appareil photo du téléphone comme avant.
+function filmer() {
+  if (!filmerPossible()) {
+    unlockVideo();
+    $('in-video-camera').click();
+    return;
+  }
+  empiler({ page, sheet: true, filmer: true });
+  ouvrirFilmer({
+    max: MAX_VIDEO_SECONDS,
+    onVideo: (v) => {
+      oublierApercuVideo();
+      pendingVideo = v;
+      $('video-preview').src = URL.createObjectURL(v.blob);
+      setStatus('');
+      syncAddSheet();
+    },
+  });
+}
+$('filmer-repli').addEventListener('click', () => {
+  unlockVideo();
+  $('in-video-camera').click();
+  history.back();
+});
+// Un appel qui arrive ou qui part : la caméra est libérée (ce qui était filmé est gardé).
+for (const id of ['incoming', 'call']) {
+  new MutationObserver(() => {
+    if (!$(id).hidden && filmerOuvert()) fermerFilmer();
+  }).observe($(id), { attributes: true, attributeFilter: ['hidden'] });
+}
+
 $('pick-camera').addEventListener('click', () => {
-  if (addMode === 'video') unlockVideo();
-  $(addMode === 'photo' ? 'in-photo-camera' : 'in-video-camera').click();
+  if (addMode === 'video') { filmer(); return; }
+  $('in-photo-camera').click();
 });
 $('pick-gallery').addEventListener('click', () => {
   if (addMode === 'video') unlockVideo();
@@ -1120,7 +1149,7 @@ function renderPreviews() {
 
 function setBusy(label) {
   const btn = $('btn-send');
-  for (const id of ['btn-send', 'post-text', 'pick-camera', 'pick-gallery', 'video-refaire']) $(id).disabled = !!label;
+  for (const id of ['btn-send', 'post-text', 'pick-camera', 'pick-gallery', 'video-refilmer', 'video-autre']) $(id).disabled = !!label;
   $('form-post').classList.toggle('busy', !!label);
   btn.replaceChildren();
   if (label) {
@@ -1169,17 +1198,20 @@ async function addPhotoFiles(all) {
 async function onVideoChosen(e) {
   const file = e.target.files && e.target.files[0];
   e.target.value = '';
-  await addVideoFile(file, e.target.id === 'in-video-camera');
+  await addVideoFile(file);
 }
 
-async function addVideoFile(file, filmee = false) {
+async function addVideoFile(file) {
   if (!file) return;
-  videoFilmee = filmee;
+  // La nouvelle vidéo remplace l'ancienne : plus d'aperçu ni d'« Envoyer » pendant sa préparation.
+  pendingVideo = null;
+  oublierApercuVideo();
+  syncAddSheet();
   $('pickers').hidden = true;
   $('video-hint').hidden = false;
   try {
     const result = await prepareVideo(file, (done, total) => {
-      setStatus(`Préparation de la vidéo… ${Math.round(done)} / ${Math.round(total)} s`);
+      setStatus(`Préparation de la vidéo… ${Math.round(done)} / ${Math.round(total)} s. Restez sur cet écran.`);
     }, MAX_VIDEO_SECONDS, demanderToucherVideo);
     pendingVideo = { blob: result.blob, mime: result.mime, thumb: result.thumb, duration: result.duration };
     oublierApercuVideo();

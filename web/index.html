@@ -80,7 +80,7 @@
     <symbol id="i-google" viewBox="0 0 24 24"><path d="M21 12.2c0-.7-.1-1.3-.2-1.9H12v3.6h5.1a4.4 4.4 0 0 1-1.9 2.9v2.4h3.1c1.8-1.7 2.7-4.1 2.7-7z" fill="#4285F4" stroke="none"/><path d="M12 21.5c2.6 0 4.7-.9 6.3-2.3l-3.1-2.4c-.9.6-1.9.9-3.2.9-2.5 0-4.6-1.7-5.3-3.9H3.5v2.5A9.5 9.5 0 0 0 12 21.5z" fill="#34A853" stroke="none"/><path d="M6.7 13.8a5.7 5.7 0 0 1 0-3.6V7.7H3.5a9.5 9.5 0 0 0 0 8.6z" fill="#FBBC05" stroke="none"/><path d="M12 6.3c1.4 0 2.6.5 3.6 1.4l2.7-2.7A9.5 9.5 0 0 0 3.5 7.7l3.2 2.5C7.4 8 9.5 6.3 12 6.3z" fill="#EA4335" stroke="none"/></symbol>
     <symbol id="i-user-plus" viewBox="0 0 24 24"><circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0M19 8v6M16 11h6"/></symbol>
     <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor"/></symbol>
-    <symbol id="i-replay" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.3-5.6M4 4v4.5h4.5"/></symbol>
+    <symbol id="i-flip" viewBox="0 0 24 24"><path d="M4 7a2 2 0 0 1 2-2h2l1.5-2h5L16 5h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M9 11.5a3 3 0 0 1 5.2-1.6M15 13.5a3 3 0 0 1-5.2 1.6M14.5 8.5v1.6h-1.6M9.5 16.5v-1.6h1.6"/></symbol>
     <symbol id="i-expand" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></symbol>
   </svg>
 
@@ -1000,27 +1000,27 @@
         <button type="button" class="picker" id="pick-camera"><svg><use href="#i-camera"/></svg><span id="pick-camera-label"></span></button>
         <button type="button" class="picker" id="pick-gallery"><svg><use href="#i-gallery"/></svg><span id="pick-gallery-label"></span></button>
       </div>
-      <p class="muted small" id="video-hint" hidden>1 minute au maximum. Restez sur cet écran pendant la préparation de la vidéo.</p>
+      <p class="muted small" id="video-hint" hidden>1 minute au maximum.</p>
       <button type="button" id="video-go" class="primary wide" hidden>Touchez ici pour préparer la vidéo</button>
       <!-- Après le film ou le choix : la vidéo à sa forme (debout ou couchée), Revoir et Plein écran. -->
       <div id="video-review" class="video-review" hidden>
         <div class="video-cadre">
-          <video id="video-preview" playsinline></video>
-          <button type="button" id="video-play" class="video-play" aria-label="Regarder la vidéo"><svg><use href="#i-play"/></svg></button>
+          <div class="video-boite">
+            <video id="video-preview" playsinline></video>
+            <button type="button" id="video-play" class="video-play" aria-label="Regarder la vidéo"><svg><use href="#i-play"/></svg></button>
+            <button type="button" id="video-plein" class="video-plein" aria-label="Plein écran"><svg><use href="#i-expand"/></svg></button>
+          </div>
         </div>
         <div class="paire">
-          <button type="button" id="video-revoir" class="secondary"><svg><use href="#i-replay"/></svg>Revoir</button>
-          <button type="button" id="video-plein" class="secondary"><svg><use href="#i-expand"/></svg>Plein écran</button>
+          <button type="button" id="video-refilmer" class="secondary"><svg><use href="#i-camera"/></svg>Refilmer</button>
+          <button type="button" id="video-autre" class="secondary"><svg><use href="#i-gallery"/></svg>Galerie</button>
         </div>
       </div>
       <div id="previews" class="previews"></div>
       <div id="post-extra" hidden>
         <input id="post-text" maxlength="60" placeholder="Légende courte (60 caractères)" aria-describedby="post-text-compte">
         <p id="post-text-compte" class="muted small legende-compte" aria-live="polite">0 / 60</p>
-        <div id="post-boutons" class="post-boutons">
-          <button type="button" id="video-refaire" class="secondary" hidden><svg><use href="#i-camera"/></svg><span id="video-refaire-label">Refaire</span></button>
-          <button type="submit" class="primary send-btn" id="btn-send">Envoyer</button>
-        </div>
+        <button type="submit" class="primary wide send-btn" id="btn-send">Envoyer</button>
       </div>
       <p id="post-status" class="muted small" hidden></p>
       <input id="in-photo-camera" type="file" accept="image/*" capture="environment" hidden>
@@ -1028,6 +1028,24 @@
       <input id="in-video-camera" type="file" accept="video/*" capture="environment" hidden>
       <input id="in-video-gallery" type="file" accept="video/*" hidden>
     </form>
+  </div>
+
+  <!-- Filmer dans Papote : la caméra dans la page, un gros bouton Filmer / Arrêter, 1 minute au plus. -->
+  <div id="filmer" class="filmer" data-etat="attente" hidden>
+    <div class="filmer-image">
+      <video id="filmer-live" playsinline muted autoplay></video>
+      <p id="filmer-temps" class="filmer-temps">0:00 / 1:00</p>
+      <div id="filmer-erreur" class="filmer-erreur" hidden>
+        <p>Papote n'arrive pas à ouvrir la caméra. Vérifiez que Papote a le droit d'utiliser la caméra et le micro.</p>
+        <button type="button" id="filmer-reessayer" class="primary">Réessayer</button>
+        <button type="button" id="filmer-repli" class="secondary">Filmer avec l'appareil photo du téléphone</button>
+      </div>
+    </div>
+    <div class="filmer-bas">
+      <button type="button" id="filmer-annuler" class="filmer-cote"><svg><use href="#i-close"/></svg>Annuler</button>
+      <button type="button" id="filmer-rec" class="filmer-rec" aria-label="Filmer" disabled><span class="filmer-rond"></span><span id="filmer-rec-label">Filmer</span></button>
+      <button type="button" id="filmer-tourner" class="filmer-cote" disabled><svg><use href="#i-flip"/></svg>Retourner</button>
+    </div>
   </div>
 
   <!-- Nouveau rappel -->
