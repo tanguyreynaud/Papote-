@@ -183,7 +183,7 @@ async function inscrire(t, email, prenom, options = {}) {
 async function tabletteAllumee({ commande = null } = {}) {
   const tab = await acteurs.tablettePreparee();
   if (commande) {
-    const { abonnement } = await acteurs.commanderEtPayer({ email: commande.email, formule: commande.formule || 'wifi' });
+    const { abonnement } = await acteurs.commanderEtPayer({ email: commande.email, formule: commande.formule || 'sim' });
     await acteurs.preparerEtEnvoyer(abonnement, tab);
     tab.commande = abonnement;
   }

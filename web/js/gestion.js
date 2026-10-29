@@ -568,7 +568,8 @@ const RETOURS = {
 const REMBOURSEMENTS = {
   'en-cours': 'en cours de remboursement', 'au-retour': 'remboursés au retour', fait: 'remboursés', echec: 'à rembourser depuis Stripe',
 };
-const FORMULES = { wifi: 'Wi-Fi', sim: 'Internet inclus' };
+// Offre unique depuis le 29/10/2026 : « wifi » ne reste que pour les anciennes commandes de test.
+const FORMULES = { sim: 'Tout compris', wifi: 'Wi-Fi (ancienne formule)' };
 const formuleTexte = (c) => [FORMULES[c.formule] || c.formule, c.tablette === 'achetee' ? 'tablette achetée' : null,
   c.offerte ? 'offerte' : null]
   .filter(Boolean).join(', ');
@@ -693,7 +694,7 @@ function afficherAccueil() {
     [simsAResilier, `${pluriel(simsAResilier, 'forfait SIM')} payé${simsAResilier > 1 ? 's' : ''} depuis 30 jours pour une tablette sans client : à résilier ou suspendre`, '#stock/sim', 'ko'],
     ...donnees.stock.filter((t) => t.etat === 'en-retour' && t.remplaceePour)
       .map((t) => [1, `${nomT(t)} remplacée, à récupérer chez le client`, versTablette(t), '']),
-    [clientsSansSim, `${clientsSansSim} client${clientsSansSim > 1 ? 's' : ''} Internet inclus sans carte SIM notée sur sa tablette`, '#stock/sim', 'ko'],
+    [clientsSansSim, `${clientsSansSim} client${clientsSansSim > 1 ? 's' : ''} sans carte SIM notée sur sa tablette`, '#stock/sim', 'ko'],
     [simsSansTablette, `${simsSansTablette} ligne${simsSansTablette > 1 ? 's SIM actives reliées' : ' SIM active reliée'} à aucune tablette`, '#stock/sim', 'ko'],
     [simsARegarder, `${simsARegarder} carte${simsARegarder > 1 ? 's' : ''} SIM à regarder (promo, activation, carte bancaire)`, '#stock/sim', 'ko'],
     ...accessoires.map((a) => [1, a.manque ? `${a.nom} : il en manque ${a.manque} pour les envois` : `${a.nom} : stock bas (${a.quantite || 0})`, '#stock/accessoires', a.manque ? 'ko' : '']),
@@ -2469,7 +2470,7 @@ function afficherBilan() {
     stat(String(enCours.length), 'abonnements en cours',
       `${enCours.filter((a) => a.statut === 'trialing').length} au premier mois · ${enCours.filter((a) => a.statut === 'past_due').length} impayé(s)`),
     stat(euros(mrr), 'revenu mensuel', 'abonnements payants'),
-    stat(String(commandes.length), 'commandes', `${commandes.filter((c) => c.formule === 'sim').length} avec internet inclus`),
+    stat(String(commandes.length), 'commandes', `${commandes.filter((c) => c.formule === 'sim').length} tout compris`),
     stat(String(abos.filter((a) => dansPeriode(a.finLe)).length), 'abonnements terminés'),
   );
   const montant = (c) => h('span', { class: c < 0 ? 'neg' : null }, euros(c));
@@ -3415,9 +3416,10 @@ function afficherRentabilite() {
   const payants = stripe.abonnements.filter((a) => ['active', 'past_due'].includes(a.statut));
   const somme = (liste) => liste.reduce((s, a) => s + (a.prixAchat || 0), 0);
   const charges = (montant) => Math.round(montant * tauxFrais) + Math.round((montant * r.tauxUrssaf) / 100);
-  const lignes = Object.entries(FORMULES).map(([cle, nom]) => {
+  // Offre unique : l'ancienne formule Wi-Fi n'apparaît que s'il reste un abonné.
+  const lignes = Object.entries(FORMULES).filter(([cle]) => cle === 'sim' || payants.some((a) => a.formule === cle)).map(([cle, nom]) => {
     const abos = payants.filter((a) => a.formule === cle);
-    const prix = abos.length ? Math.round(abos.reduce((s, a) => s + a.mensuel, 0) / abos.length) : (cle === 'sim' ? 3000 : 2000);
+    const prix = abos.length ? Math.round(abos.reduce((s, a) => s + a.mensuel, 0) / abos.length) : (cle === 'sim' ? 2500 : 2000);
     const sim = cle === 'sim' ? forfait : 0;
     const parMois = prix - charges(prix) - sim;
     const colis = (donnees.accessoires || []).filter((a) => a.parEnvoi === 'tous' || a.parEnvoi === cle);
@@ -3666,7 +3668,7 @@ function afficherClients() {
   ], liste.map((c) => ({
     cellules: [
       c.nom || '', c.email, c.telephone || '',
-      [TYPES_CLIENT[c.type] || '', c.statut && c.type !== 'panier' ? ` (${STATUTS_CLIENT[c.statut] || c.statut})` : '', c.formule ? ` · ${c.formule === 'sim' ? 'internet' : 'Wi-Fi'}` : ''].join(''),
+      [TYPES_CLIENT[c.type] || '', c.statut && c.type !== 'panier' ? ` (${STATUTS_CLIENT[c.statut] || c.statut})` : '', c.formule === 'wifi' ? ' · Wi-Fi (ancienne formule)' : ''].join(''),
       jour(c.depuis), accordTexte(c),
     ],
     onclick: () => { location.hash = `#client/${encodeURIComponent(c.email)}`; },
@@ -3749,7 +3751,7 @@ async function remplirClient(email) {
         ligne('Situation', [TYPES_CLIENT[c.type] || '', c.statut && c.type !== 'panier' ? ` (${STATUTS_CLIENT[c.statut] || c.statut})` : ''].join('')),
         ligne('E-mail', h('a', { href: `mailto:${c.email}` }, c.email)),
         ligne('Téléphone', c.telephone ? h('a', { href: `tel:${c.telephone.replace(/\s/g, '')}` }, c.telephone) : null),
-        ligne('Formule', c.formule ? (c.formule === 'sim' ? 'Internet inclus (carte SIM)' : 'Wi-Fi de la maison') : null),
+        ligne('Formule', c.formule ? (c.formule === 'sim' ? 'Tout compris (carte SIM)' : 'Wi-Fi (ancienne formule)') : null),
         ligne('Client depuis', jour(c.depuis)),
         // Interrupteur : il ne bascule qu'après la confirmation (changerAccord relit la liste).
         ligne('E-mails d\'information', h('label', { class: 'interrupteur' },
