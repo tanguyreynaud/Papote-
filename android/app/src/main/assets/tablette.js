@@ -1808,6 +1808,8 @@
     var e = etat.etat;
     if (!e) return;
     if (e === 'sonne') {
+      // Déjà en visio par internet : pas de deuxième appel par-dessus, le proche entend « occupé ».
+      if (!gsm && ((($('call-view') && isShown('call-view')) || ($('call-ring') && isShown('call-ring'))))) { gsmHangup(); return; }
       if (!gsm) gsm = { uid: etat.uid || null, name: etat.name || '', sortant: false, enLigne: false, timer: null, who: etat.name || 'Un proche' };
       showGsmRing(etat);
       return;

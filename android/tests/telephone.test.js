@@ -214,3 +214,14 @@ test('page rechargée pendant un appel téléphone : l’écran d’appel revien
     await sansErreur(b);
   } finally { await b.fermer(); }
 });
+
+test('déjà en visio par internet : un appel téléphone qui arrive est refusé', async () => {
+  const b = await tablette();
+  try {
+    await b.page.evaluate(() => { document.getElementById('call-view').hidden = false; });
+    await b.android('onGsm', { etat: 'sonne', sortant: false, uid: 'julie', name: 'Julie' });
+    assert.strictEqual((await b.appels('phoneHangup')).length, 1, 'refusé');
+    assert.strictEqual((await b.appels('ring')).length, 0, 'pas de sonnerie');
+    await sansErreur(b);
+  } finally { await b.fermer(); }
+});
