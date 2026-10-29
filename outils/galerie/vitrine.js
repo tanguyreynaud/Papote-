@@ -16,12 +16,14 @@ const RELAIS = [
   { id: 104, name: 'Librairie Saint-Vincent', street: 'Quai Saint-Vincent', house_number: '21', postal_code: '69001', city: 'Lyon', country: 'FR', distance: 1400 },
 ];
 
-// Adresses proposées par la Géoplateforme (Base Adresse Nationale) quand on tape l'adresse du proche.
-const ADRESSES = { type: 'FeatureCollection', features: [
-  { geometry: { type: 'Point', coordinates: [4.8320, 45.7578] }, properties: { label: '12 Place Bellecour 69002 Lyon', name: '12 Place Bellecour', postcode: '69002', city: 'Lyon', type: 'housenumber' } },
-  { geometry: { type: 'Point', coordinates: [3.5141, 45.4882] }, properties: { label: 'Le Bourg 63880 Le Brugeron', name: 'Le Bourg', postcode: '63880', city: 'Le Brugeron', type: 'street' } },
-  { geometry: { type: 'Point', coordinates: [4.835, 45.764] }, properties: { label: 'Lyon', name: 'Lyon', postcode: '69001', city: 'Lyon', citycode: '69123', type: 'municipality' } },
-  { geometry: { type: 'Point', coordinates: [3.0955, 45.6997] }, properties: { label: 'Brousse', name: 'Brousse', postcode: '63490', city: 'Brousse', citycode: '63056', type: 'municipality' } },
+// Villes, puis rues d'une ville, proposées par la Géoplateforme (Base Adresse Nationale) pour le proche.
+const VILLES = { type: 'FeatureCollection', features: [
+  { geometry: { type: 'Point', coordinates: [4.835, 45.758] }, properties: { label: 'Lyon', name: 'Lyon', postcode: '69001', citycode: '69123', context: '69, Rhône, Auvergne-Rhône-Alpes', type: 'municipality' } },
+  { geometry: { type: 'Point', coordinates: [3.0955, 45.6997] }, properties: { label: 'Brousse', name: 'Brousse', postcode: '63490', citycode: '63056', context: '63, Puy-de-Dôme, Auvergne-Rhône-Alpes', type: 'municipality' } },
+] };
+const RUES = { type: 'FeatureCollection', features: [
+  { geometry: { type: 'Point', coordinates: [3.5141, 45.4882] }, properties: { label: 'Le Bourg 63490 Brousse', name: 'Le Bourg', postcode: '63490', city: 'Brousse', type: 'street' } },
+  { geometry: { type: 'Point', coordinates: [4.8320, 45.7578] }, properties: { label: 'Fougère 63490 Brousse', name: 'Fougère', postcode: '63490', city: 'Brousse', type: 'street' } },
 ] };
 
 // Réponse de codeCommande pour la page « Merci » : un vrai récapitulatif, avec une adresse e-mail longue (insécable).
@@ -42,17 +44,23 @@ async function tropLarge(page) {
 }
 
 const pause = (p, ms = 700) => p.waitForTimeout(ms);
-// Adresse du proche tapée, puis la n-ième proposition choisie (0 : Lyon, 4G très bonne ; 1 : limitée ; 2 : commune bien couverte ; 3 : commune où la 4G ne passe pas partout).
-async function adresseChoisie(p, n = 0) {
-  await p.fill('#adresse', 'place bellecour');
+// Ville du proche tapée, puis la n-ième proposition choisie (0 : Lyon, bien couverte ; 1 : Brousse, rue demandée),
+// puis, pour Brousse, la rue r (0 : 4G limitée ; 1 : bonne).
+async function villeChoisie(p, n = 0, r = null) {
+  await p.fill('#adresse', 'lyon');
   await p.locator('#suggestions .point').nth(n).waitFor({ timeout: 5000 });
   await p.locator('#suggestions .point').nth(n).click();
+  await pause(p, 500);
+  if (r == null) return;
+  await p.fill('#adresse', 'le bourg');
+  await p.locator('#suggestions .point').nth(r).waitFor({ timeout: 5000 });
+  await p.locator('#suggestions .point').nth(r).click();
   await pause(p, 500);
 }
 // Les trois étapes de la commande remplies : adresse du proche (points relais proposés autour), premier point
 // relais, nom, e-mail.
 async function commandeRemplie(p) {
-  await adresseChoisie(p, 0);
+  await villeChoisie(p, 0);
   await p.locator('#points .point').first().waitFor({ timeout: 5000 });
   await pause(p, 300);
   await p.locator('#points .point').first().click();
@@ -69,12 +77,12 @@ const SCENES = [
     await p.locator('.ps-bouton').click(); await pause(p, 900);
   } },
   { groupe: 'Commande', titre: 'Commande : page vide', fichier: 'commande.html', plein: true },
-  { groupe: 'Commande', titre: 'Commande : adresse du proche tapée, propositions', fichier: 'commande.html', faire: async (p) => {
-    await p.fill('#adresse', 'place bellecour'); await p.locator('#suggestions .point').first().waitFor({ timeout: 5000 }); await pause(p, 300);
+  { groupe: 'Commande', titre: 'Commande : ville du proche tapée, propositions', fichier: 'commande.html', faire: async (p) => {
+    await p.fill('#adresse', 'lyon'); await p.locator('#suggestions .point').first().waitFor({ timeout: 5000 }); await pause(p, 300);
   } },
-  { groupe: 'Commande', titre: 'Commande : la 4G ne passe pas assez bien chez le proche', fichier: 'commande.html', faire: (p) => adresseChoisie(p, 1) },
-  { groupe: 'Commande', titre: 'Commande : seulement la ville, bien couverte', fichier: 'commande.html', faire: (p) => adresseChoisie(p, 2) },
-  { groupe: 'Commande', titre: 'Commande : seulement la ville, la 4G ne passe pas partout', fichier: 'commande.html', faire: (p) => adresseChoisie(p, 3) },
+  { groupe: 'Commande', titre: 'Commande : la 4G ne passe pas partout dans la ville, sa rue est demandée', fichier: 'commande.html', faire: (p) => villeChoisie(p, 1) },
+  { groupe: 'Commande', titre: 'Commande : la 4G ne passe pas assez bien dans sa rue', fichier: 'commande.html', faire: (p) => villeChoisie(p, 1, 0) },
+  { groupe: 'Commande', titre: 'Commande : rue bien couverte', fichier: 'commande.html', faire: (p) => villeChoisie(p, 1, 1) },
   { groupe: 'Commande', titre: 'Commande : point relais et coordonnées remplis, « Payer » actif', fichier: 'commande.html', plein: true, faire: commandeRemplie },
   { groupe: 'Commande', titre: 'Commande : « Payer » touché, « Un instant… »', fichier: 'commande.html', note: 'Le paiement s’ouvre chez Stripe (coupé ici) : la barre montre l’attente.', faire: async (p) => {
     await commandeRemplie(p);
@@ -124,7 +132,7 @@ async function capturer({ browser, base, dossierImages, progression }) {
       await page.route('**/commander**', (r) => r.fulfill({ status: 204 }));
       await page.route('**/codeCommande**', (r) => r.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(RECAP) }));
       await page.route(/geo\.api\.gouv\.fr/, (r) => r.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: '[{"nom":"Lyon 1er Arrondissement","code":"69381"}]' }));
-      await page.route(/data\.geopf\.fr\/geocodage\/search/, (r) => r.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(ADRESSES) }));
+      await page.route(/data\.geopf\.fr\/geocodage\/search/, (r) => r.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(/citycode=/.test(r.request().url()) ? RUES : VILLES) }));
       // Couverture : la vraie règle (functions/couverture.js, carte de l'ARCEP) sur les coordonnées demandées.
       await page.route('**/couverture?**', (r) => {
         const u = new URL(r.request().url());
