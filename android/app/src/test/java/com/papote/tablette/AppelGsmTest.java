@@ -14,28 +14,29 @@ import org.junit.Test;
  */
 public class AppelGsmTest {
 
-    private static JSONObject etat(String e) throws Exception {
-        return new JSONObject().put("etat", e);
-    }
+    // Sous JUnit, org.json est la version vide d'Android (put ne garde rien) : on compare les objets
+    // eux-mêmes, pas leur contenu.
+    private static final JSONObject APPEL = new JSONObject(), EN_LIGNE = new JSONObject(),
+            FIN = new JSONObject(), SONNE = new JSONObject();
 
     @Test
-    public void laDestructionDeLAncienneActiviteNeCoupePasLaNouvelle() throws Exception {
+    public void laDestructionDeLAncienneActiviteNeCoupePasLaNouvelle() {
         Object ancienne = new Object(), nouvelle = new Object();
-        List<String> recuAncienne = new ArrayList<>(), recuNouvelle = new ArrayList<>();
-        AppelGsm.ecouter(ancienne, (s) -> recuAncienne.add(s.optString("etat")));
-        AppelGsm.simuler(etat("appel"));
+        List<JSONObject> recuAncienne = new ArrayList<>(), recuNouvelle = new ArrayList<>();
+        AppelGsm.ecouter(ancienne, (s) -> recuAncienne.add(s));
+        AppelGsm.simuler(APPEL);
         // Nouvelle activité créée : elle prend l'écoute et reçoit tout de suite l'état en cours.
-        AppelGsm.ecouter(nouvelle, (s) -> recuNouvelle.add(s.optString("etat")));
-        assertEquals(List.of("appel"), recuNouvelle);
+        AppelGsm.ecouter(nouvelle, (s) -> recuNouvelle.add(s));
+        assertEquals(List.of(APPEL), recuNouvelle);
         // L'ancienne est détruite après coup : sans effet sur la nouvelle.
         AppelGsm.oublier(ancienne);
-        AppelGsm.simuler(etat("enLigne"));
-        AppelGsm.simuler(etat("fin"));
-        assertEquals(List.of("appel", "enLigne", "fin"), recuNouvelle);
-        assertEquals(List.of("appel"), recuAncienne);
+        AppelGsm.simuler(EN_LIGNE);
+        AppelGsm.simuler(FIN);
+        assertEquals(List.of(APPEL, EN_LIGNE, FIN), recuNouvelle);
+        assertEquals(List.of(APPEL), recuAncienne);
         // La nouvelle détruite à son tour : plus personne n'écoute.
         AppelGsm.oublier(nouvelle);
-        AppelGsm.simuler(etat("sonne"));
+        AppelGsm.simuler(SONNE);
         assertEquals(3, recuNouvelle.size());
         AppelGsm.ecouter(null, null);
     }
