@@ -127,6 +127,8 @@ public class AppelGsm extends InCallService {
         if (courant != null && audioState.getRoute() != CallAudioState.ROUTE_SPEAKER
                 && (audioState.getSupportedRouteMask() & CallAudioState.ROUTE_SPEAKER) != 0) {
             hautParleur();
+        } else if (courant != null) {
+            CallAudio.volumeAppel(this); // sur le haut-parleur : au volume réglé par la famille
         }
     }
 

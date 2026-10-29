@@ -918,9 +918,9 @@ public class MainActivity extends Activity implements Sync.Listener {
         AudioManager am = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
         int family = prefs.getInt("volume", -1);
         int media = family < 0 ? 85 : family;
-        // Appels vidéo au maximum (Tanguy, 28/10 : la voix du proche restait plus faible que la sonnerie,
-        // le flux « appel » d'Android est bien moins fort que les autres) ; l'annulation d'écho reste active.
-        int call = 100;
+        // Appels (visio et téléphone) au maximum par défaut (Tanguy, 28/10 : la voix du proche restait plus
+        // faible que la sonnerie) ; réglables depuis l'app famille (barre « Appels », 29/10).
+        int call = prefs.getInt("volumeAppel", 100);
         int[][] levels = {
                 {AudioManager.STREAM_MUSIC, media}, {AudioManager.STREAM_RING, prefs.getInt("volumeSonnerie", 100)},
                 {AudioManager.STREAM_NOTIFICATION, 90}, {AudioManager.STREAM_VOICE_CALL, Math.min(100, call)},

@@ -76,12 +76,28 @@ final class CallAudio {
         if (on) {
             am.setMode(AudioManager.MODE_IN_COMMUNICATION);
             am.setSpeakerphoneOn(true);
+            volumeAppel(context);
         } else {
             // Toujours le mode normal à la fin : le navigateur passe parfois en « communication »
             // avant nous, et reprendre « le mode d'avant » laissait la tablette coincée en appel
             // (son des vidéos et de la radio faussé jusqu'au redémarrage).
             am.setMode(AudioManager.MODE_NORMAL);
             am.setSpeakerphoneOn(false);
+        }
+    }
+
+    /**
+     * Volume de la voix du proche réglé par la famille (volumeAppel, 100 par défaut), remis une fois
+     * l'appel sur le haut-parleur : Android garde un volume d'appel par sortie, celui réglé hors appel
+     * ne s'appliquait pas au haut-parleur (mesuré sur la Tab 60 Pro, 28/10).
+     */
+    static void volumeAppel(Context c) {
+        try {
+            int v = c.getApplicationContext().getSharedPreferences("papote", Context.MODE_PRIVATE).getInt("volumeAppel", 100);
+            AudioManager am = (AudioManager) c.getSystemService(Context.AUDIO_SERVICE);
+            am.setStreamVolume(AudioManager.STREAM_VOICE_CALL, Math.max(1, am.getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL) * v / 100), 0);
+        } catch (Exception e) {
+            Log.w(TAG, "Volume de l'appel", e);
         }
     }
 

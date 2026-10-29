@@ -502,7 +502,7 @@ final class Sync {
         try {
             // Une seule lecture : le marqueur « rev » ne bouge que si la famille a envoyé ou supprimé
             // quelque chose (ou modifié les rappels). Sinon, rien d'autre à lire.
-            JSONObject family = firebase.get("families/" + fid, "name", "rev", "code", "textSize", "abonnement", "veille", "volume", "volumeSonnerie", "meteoVille", "options", "installation", "createdBy", "admins", "forfaitSim");
+            JSONObject family = firebase.get("families/" + fid, "name", "rev", "code", "textSize", "abonnement", "veille", "volume", "volumeSonnerie", "volumeAppel", "meteoVille", "options", "installation", "createdBy", "admins", "forfaitSim");
             long rev = 0;
             JSONObject ff = family == null ? null : family.optJSONObject("fields");
             if (ff != null) {
@@ -2151,6 +2151,9 @@ final class Sync {
         // Jamais sous 10 % : la tablette doit toujours s'entendre.
         int volume = ff.has("volume") ? (int) Math.max(10, Math.min(100, Firebase.integer(ff, "volume"))) : -1;
         if (volume != prefs.getInt("volume", -1)) prefs.edit().putInt("volume", volume).apply();
+        // Voix du proche pendant les appels (visio et téléphone), absent = au plus fort.
+        int appel = ff.has("volumeAppel") ? (int) Math.max(10, Math.min(100, Firebase.integer(ff, "volumeAppel"))) : 100;
+        if (appel != prefs.getInt("volumeAppel", 100)) prefs.edit().putInt("volumeAppel", appel).apply();
         // Réappliqué à chaque lecture, même inchangé : un volume baissé autrement (adb, Android) restait
         // bas alors que l'app affichait 100 % (Tanguy, 29/10).
         listener.onVolume(volume);
