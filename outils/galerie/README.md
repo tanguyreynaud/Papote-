@@ -1,9 +1,10 @@
 # Galerie des écrans
 
 Une seule page avec **tous les écrans, dans tous leurs états** : la tablette (en paysage, elle est bloquée
-ainsi), l'app famille (téléphone), le site vitrine et l'admin (ordinateur et téléphone), chacun avec un numéro :
-« T12 » pour la tablette, « F7 » pour l'app famille, « S3 » pour le site, « A5 » pour l'admin. Pour donner un
-avis, il suffit de citer le numéro.
+ainsi), l'app famille (téléphone), le site vitrine et l'admin (ordinateur et téléphone), et tous les e-mails
+envoyés par les fonctions (téléphone et ordinateur), chacun avec un numéro : « T12 » pour la tablette, « F7 »
+pour l'app famille, « S3 » pour le site, « A5 » pour l'admin, « E9 » pour un e-mail. Pour donner un avis, il
+suffit de citer le numéro.
 
 Les écrans sont remplis avec une **fausse famille** (Mamie Jeanne, Julie, Thomas, Anne) et de
 fausses photos. Rien ne touche Firebase ni les vraies familles :
@@ -41,10 +42,11 @@ galerie.bat tablette      seulement la tablette
 galerie.bat famille       seulement l'app famille
 galerie.bat vitrine       seulement le site vitrine (téléphone et ordinateur)
 galerie.bat admin         seulement l'admin (ordinateur et téléphone)
+galerie.bat emails        seulement les e-mails (téléphone et ordinateur)
 ```
 
 Par défaut, la tablette vient de `origin/claude/project-thread-cmnwxy`, l'app famille et l'admin de
-`origin/claude/project-thread-dlattc`, le site de `origin/main` (mises à jour avant). Pour une autre source :
+`origin/claude/project-thread-dlattc`, le site et les e-mails de `origin/main` (mises à jour avant). Pour une autre source :
 `node galerie.js --tablette=<branche>` ou `--famille=ici` (les fichiers du disque).
 
 ## Ajouter un écran
@@ -54,6 +56,9 @@ Une scène = un titre, ses données et les gestes à faire avant la capture :
 - tablette : tableau `SCENES` de `tablette.js` (`t.statut`, `t.famille`, `t.rappels`, `t.cliquer`,
   `t.appel('ringing')`, `t.avancer(ms)`…) ;
 - app famille, site, admin : tableau `SCENES` de `famille.js`, `vitrine.js`, `admin.js` (`donnees` = la base de départ, `faire` = les
-  touchers ; `plein: true` capture toute la page qui défile).
+  touchers ; `plein: true` capture toute la page qui défile) ;
+- e-mails : fonction `scenes()` de `emails.js` (`contenu` = l'e-mail fabriqué par `functions/mail.js` avec de fausses
+  données). La galerie vérifie que rien ne déborde sur un téléphone, et que chaque somme en euros du HTML est aussi
+  dans le texte brut.
 
 Les numéros suivent l'ordre des scènes : ajouter une scène au milieu décale les suivants.

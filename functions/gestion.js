@@ -2686,24 +2686,12 @@ async function recapitulatif() {
     ['À faire', liste.length ? liste : ['Rien, tout est à jour.']],
     ['Franchise de TVA', [`${eurosTexte(ca)} encaissés depuis le 1er janvier, soit ${part} % du seuil de ${eurosTexte(reglages.seuilTva)}.`]],
   ];
-  const html = `<!doctype html><html lang="fr"><body style="margin:0;background:#fdfaf5;color:#24212f;font:16px/1.6 Arial,sans-serif">
-<div style="max-width:560px;margin:0 auto;padding:28px 20px">
-<p style="margin:0 0 20px;font-weight:bold;font-size:20px;color:#4f46e5">Papote · récap de la semaine</p>
-${lignes.map(([titre, items]) => `<h2 style="font-size:18px;margin:20px 0 6px">${mail.echapper(titre)}</h2>
-<ul style="margin:0;padding-left:20px">${items.map((i) => `<li>${mail.echapper(i)}</li>`).join('')}</ul>`).join('')}
-<p style="margin:28px 0"><a href="${ESPACE_ADMIN}" style="display:inline-block;background:#4f46e5;color:#fff;text-decoration:none;font-weight:bold;padding:12px 22px;border-radius:999px">Ouvrir l'espace admin</a></p>
-</div></body></html>`;
-  const text = [...lignes.flatMap(([titre, items]) => [titre, ...items.map((i) => `- ${i}`), '']), ESPACE_ADMIN].join('\n');
   await mail.envoyer({
     smtp: MAIL_SMTP.value(),
     expediteur: MAIL_EXPEDITEUR.value(),
     motDePasse: MAIL_MOT_DE_PASSE.value(),
     a: EMAIL_PAPOTE,
-    contenu: {
-      subject: liste.length ? `Papote : ${liste.length} chose${liste.length > 1 ? 's' : ''} à faire cette semaine` : 'Papote : tout est à jour',
-      html,
-      text,
-    },
+    contenu: mail.recapSemaine({ lignes, aFaire: liste.length }),
   });
   return { ok: true, aFaire: liste.length };
 }
@@ -2836,16 +2824,6 @@ async function cloturer(maintenant, refaire) {
   if (!Object.keys(mois).length) return { ok: true, mois: [] };
   await ref.set({ mois, ...(Object.keys(annees).length ? { annees } : {}) }, { merge: true });
 
-  const html = `<!doctype html><html lang="fr"><body style="margin:0;background:#fdfaf5;color:#24212f;font:16px/1.6 Arial,sans-serif">
-<div style="max-width:560px;margin:0 auto;padding:28px 20px">
-<p style="margin:0 0 20px;font-weight:bold;font-size:20px;color:#4f46e5">Papote · livres comptables</p>
-<p>Le livre des recettes et le registre des achats sont joints (fichiers à ouvrir avec Excel) et rangés dans l'espace admin, rubrique Comptabilité. Gardez cet e-mail : ce sont les registres obligatoires de la micro-entreprise.</p>
-${resume.map(([titre, items]) => `<h2 style="font-size:18px;margin:20px 0 6px">${mail.echapper(titre)}</h2>
-<ul style="margin:0;padding-left:20px">${items.map((i) => `<li>${mail.echapper(i)}</li>`).join('')}</ul>`).join('')}
-<p style="margin:28px 0"><a href="${ESPACE_ADMIN}#compta" style="display:inline-block;background:#4f46e5;color:#fff;text-decoration:none;font-weight:bold;padding:12px 22px;border-radius:999px">Ouvrir l'espace admin</a></p>
-</div></body></html>`;
-  const text = ['Le livre des recettes et le registre des achats sont joints et rangés dans l\'espace admin.', '',
-    ...resume.flatMap(([titre, items]) => [titre, ...items.map((i) => `- ${i}`), '']), ESPACE_ADMIN].join('\n');
   const titres = resume.filter(([t]) => !t.startsWith('Année')).map(([t]) => t);
   let envoye = true;
   try {
@@ -2854,7 +2832,7 @@ ${resume.map(([titre, items]) => `<h2 style="font-size:18px;margin:20px 0 6px">$
       expediteur: MAIL_EXPEDITEUR.value(),
       motDePasse: MAIL_MOT_DE_PASSE.value(),
       a: EMAIL_PAPOTE,
-      contenu: { subject: `Papote : livres comptables de ${titres.join(', ')}`, html, text, attachments: pieces },
+      contenu: { ...mail.livresComptables({ resume, titres }), attachments: pieces },
     });
   } catch (e) {
     envoye = false;
@@ -3118,27 +3096,9 @@ async function lireContacts() {
   });
 }
 
-// E-mail d'information : texte saisi par l'admin (paragraphes séparés par une ligne vide), {prenom} remplacé.
-function emailInformation({ objet, message, nom, lienDesinscription }) {
-  const prenom = nom ? String(nom).trim().split(/\s+/)[0] : '';
-  const texte = String(message).replace(/\{prenom\}/g, prenom).replace(/ ,/g, ',');
-  const paragraphes = texte.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
-  const html = `<!doctype html><html lang="fr"><body style="margin:0;background:#fdfaf5;color:#24212f;font:17px/1.6 Arial,sans-serif">
-<div style="max-width:560px;margin:0 auto;padding:32px 20px">
-<p style="margin:0 0 24px;font-weight:bold;font-size:20px;color:#4f46e5">Papote</p>
-${paragraphes.map((p) => `<p style="margin:0 0 16px">${mail.echapper(p).replace(/\n/g, '<br>')}</p>`).join('')}
-<p style="margin:32px 0 0;font-size:13px;color:#5f5a6b">Vous recevez cet e-mail car vous avez accepté les nouvelles de Papote.
-<a href="${mail.echapper(lienDesinscription)}" style="color:#5f5a6b">Se désinscrire</a></p>
-</div></body></html>`;
-  return {
-    subject: String(objet).trim(),
-    html,
-    text: `${paragraphes.join('\n\n')}\n\n--\nSe désinscrire : ${lienDesinscription}`,
-    headers: { 'List-Unsubscribe': `<${lienDesinscription}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' },
-  };
-}
+// E-mail d'information : texte saisi par l'admin (paragraphes séparés par une ligne vide), {prenom} remplacé (mail.js).
+const emailInformation = mail.information;
 
-// Liste des contacts et historique des envois.
 exports.gestionClients = onCall(async (request) => {
   verifierAdmin(request);
   const [contacts, campagnes] = await Promise.all([

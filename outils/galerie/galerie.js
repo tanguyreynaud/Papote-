@@ -7,10 +7,12 @@
 //   node galerie.js famille              seulement l'app famille
 //   node galerie.js vitrine              seulement le site (origin/main), téléphone et ordinateur
 //   node galerie.js admin                seulement l'admin (web/admin.html), ordinateur et téléphone
+//   node galerie.js emails               seulement les e-mails (functions/mail.js), téléphone et ordinateur
 //   --tablette=<branche|ici>             autre source pour android/ (ici = fichiers du disque)
 //   --famille=<branche|ici>              autre source pour web/
 //   --vitrine=<branche|ici>              autre source pour vitrine/
 //   --admin=<branche|ici>                autre source pour web/ (admin.html)
+//   --emails=<branche|ici>               autre source pour functions/ (mail.js)
 //
 // Rien n'est envoyé nulle part : pas de Firebase, pas d'internet (sauf les polices Google).
 'use strict';
@@ -26,6 +28,7 @@ const SOURCES = {
   famille: { ref: 'origin/claude/project-thread-dlattc', dossier: 'web', module: './famille' },
   vitrine: { ref: 'origin/main', dossier: 'vitrine', module: './vitrine' },
   admin: { ref: 'origin/claude/project-thread-dlattc', dossier: 'web', module: './admin' },
+  emails: { ref: 'origin/main', dossier: 'functions', module: './emails' },
 };
 
 async function main() {
@@ -49,13 +52,13 @@ async function main() {
   try {
     for (const nom of quoi) {
       const src = SOURCES[nom];
-      if (!src) { console.error(`Inconnu : ${nom} (tablette, famille, vitrine ou admin)`); continue; }
+      if (!src) { console.error(`Inconnu : ${nom} (tablette, famille, vitrine, admin ou emails)`); continue; }
       console.log(`${nom} : ${src.ref}`);
       const { dir, version } = extraire(src.ref, src.dossier);
       const serveur = await servir(dir);
       try {
         const ecrans = await require(src.module).capturer({
-          browser, base: serveur.url, dossierImages: images,
+          browser, base: serveur.url, dossierImages: images, dossierSource: dir,
           progression: (t) => process.stdout.write(`\r  ${t}   `),
         });
         process.stdout.write('\n');
