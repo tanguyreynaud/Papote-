@@ -1154,6 +1154,8 @@ public class MainActivity extends Activity implements Sync.Listener {
         if (a != null && a.sync != null) a.sync.incident();
     }
 
+    private boolean aLEcran;
+
     private boolean kioskPaused() {
         return prefs.getBoolean("kioskPaused", false);
     }
@@ -1338,7 +1340,17 @@ public class MainActivity extends Activity implements Sync.Listener {
             handler.postDelayed(this, 60_000);
             final SmsAlert alert = smsAlert;
             if (alert != null) new Thread(alert::check, "papote-sms").start();
-            if (kioskPaused() || Veille.isNight(MainActivity.this)) return;
+            if (kioskPaused()) return;
+            // Mode kiosque perdu (écran de contrôle, mise à jour…) : sans lui, le bouton marche/arrêt
+            // rouvre le menu « Éteindre / Redémarrer ». Remis tout de suite, de jour comme de nuit.
+            if (aLEcran && isDeviceOwner()) {
+                ActivityManager am = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
+                if (am.getLockTaskModeState() == ActivityManager.LOCK_TASK_MODE_NONE) {
+                    Journal.log(MainActivity.this, "Mode kiosque retrouvé éteint : remis");
+                    enterKiosk();
+                }
+            }
+            if (Veille.isNight(MainActivity.this)) return;
             try {
                 PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
                 if (!pm.isInteractive()) {
@@ -1369,6 +1381,7 @@ public class MainActivity extends Activity implements Sync.Listener {
     protected void onResume() {
         super.onResume();
         if (web != null) web.onResume();
+        aLEcran = true;
         Gardien.aLEcran(true);
         handler.removeCallbacks(rehideBars);
         handler.post(rehideBars);
@@ -1377,6 +1390,7 @@ public class MainActivity extends Activity implements Sync.Listener {
 
     @Override
     protected void onPause() {
+        aLEcran = false;
         Gardien.aLEcran(false);
         if (web != null) web.onPause();
         handler.removeCallbacks(rehideBars);
