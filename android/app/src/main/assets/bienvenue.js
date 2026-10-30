@@ -209,6 +209,7 @@
     var box = screen('Bienvenue !', 'Pour commencer, donnez un nom à cette tablette.');
     var input = el('input', 'welcome-input');
     input.type = 'text';
+    input.setAttribute('aria-label', 'Nom de la tablette');
     input.maxLength = 40;
     input.placeholder = 'Ex. : Mamie Jeanne';
     box.appendChild(input);
@@ -322,6 +323,7 @@
     sayGuide('wifi-mdp', 'Tapez le mot de passe du wifi. Il est souvent écrit sous la box.');
     var input = el('input', 'welcome-input');
     input.type = 'text';
+    input.setAttribute('aria-label', 'Mot de passe du wifi');
     input.autocomplete = 'off';
     input.autocapitalize = 'off';
     input.spellcheck = false;
@@ -522,6 +524,7 @@
     var qr = android().qrCode ? android().qrCode('https://app.mapapote.fr/?tablette=' + s.code) : '';
     if (qr) {
       var img = el('img', 'welcome-qr');
+      img.alt = 'QR code à scanner avec le téléphone';
       img.src = qr;
       scan.appendChild(img);
     }

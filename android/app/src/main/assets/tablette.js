@@ -2116,6 +2116,7 @@
       b = document.createElement('button');
       b.id = id;
       b.className = 'ln-btn listen';
+      b.setAttribute('aria-label', 'Écouter');
       b.innerHTML = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 10v4h4l5 5V5L7 10H3zm13.5 2A4.5 4.5 0 0 0 14 8v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg><span>Écouter</span>';
       on(b, 'click', function () {
         if (speech !== 'idle') { stopSpeaking(); return; }
@@ -2297,6 +2298,7 @@
       row.appendChild(call);
       radioBtn = document.createElement('button');
       radioBtn.className = 'big-btn radio-btn';
+      radioBtn.setAttribute('aria-label', 'Radio');
       on(radioBtn, 'click', toggleRadio);
       row.appendChild(radioBtn);
     }
