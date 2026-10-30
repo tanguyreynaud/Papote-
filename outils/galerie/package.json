@@ -6,6 +6,7 @@
     "galerie": "node galerie.js"
   },
   "dependencies": {
+    "axe-core": "^4.10.3",
     "playwright": "1.56.1"
   }
 }

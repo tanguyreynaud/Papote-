@@ -21,6 +21,8 @@
 //                                        poids, liens, texte brut, contraste clair et inversé (courriels.js)
 //   --identifiants [admin famille]       au lieu des captures : chaque bouton qui agit sur une commande ou un abonnement
 //                                        doit envoyer au serveur la commande de la page / la famille ouverte (identifiants.js)
+//   --accessibilite [famille vitrine admin tablette]  au lieu des captures : chaque écran passé à axe-core (WCAG A/AA : lecteur
+//                                        d'écran, contrastes, étiquettes) + texte trop petit, cible trop petite (accessibilite.js)
 //   --boutons                            au lieu des captures : touche chaque bouton de l'app famille et de l'admin,
 //                                        serveur bloqué, et liste ceux qui ne montrent rien (sortie/boutons.txt)
 //
@@ -48,6 +50,7 @@ async function main() {
   if (args.includes('--identifiants')) return identifiants(args.filter((a) => a !== '--identifiants'));
   if (args.includes('--gestes')) return gestes(args.filter((a) => a !== '--gestes'));
   if (args.includes('--courriels')) return courriels(args.filter((a) => a !== '--courriels'));
+  if (args.includes('--accessibilite')) return double(args.filter((a) => a !== '--accessibilite'), require('./accessibilite'), ['famille', 'vitrine', 'admin', 'tablette']);
   const choix = args.filter((a) => !a.startsWith('--'));
   for (const a of args.filter((a) => a.startsWith('--'))) {
     const [k, v] = a.slice(2).split('=');
