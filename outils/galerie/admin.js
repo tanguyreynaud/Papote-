@@ -281,6 +281,19 @@ const SCENES = [
     const [choix] = await Promise.all([p.waitForEvent('filechooser', { timeout: 4000 }), p.click('#dd-ajouter-facture')]);
     if (!choix.isMultiple()) throw new Error('le choix du fichier devrait accepter plusieurs fichiers');
   } },
+  // Facture choisie : le crayon tourne et « Envoi du fichier… » s'affiche tant que le serveur n'a pas répondu (Tanguy, 30/10).
+  { groupe: 'Comptabilité', titre: 'Achat : facture choisie, envoi en cours', page: '#depense/D-A2', tailles: ['pc'], donnees: () => donnees(), faire: async (p) => {
+    await p.evaluate(() => { window.__fonctionsBloquees = true; });
+    const [choix] = await Promise.all([p.waitForEvent('filechooser', { timeout: 4000 }), p.click('#dd-ajouter-facture')]);
+    await choix.setFiles({ name: 'facture-cdiscount.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 facture') });
+    await p.waitForTimeout(900);
+  } },
+  { groupe: 'Comptabilité', titre: 'Achat : facture ajoutée', page: '#depense/D-A2', tailles: ['pc'], donnees: () => donnees({ fonctions: { gestionPiece: { ok: true } } }), faire: async (p) => {
+    const [choix] = await Promise.all([p.waitForEvent('filechooser', { timeout: 4000 }), p.click('#dd-ajouter-facture')]);
+    await choix.setFiles({ name: 'facture-cdiscount.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 facture') });
+    await p.waitForSelector('.bulle-annonce.visible', { timeout: 5000 });
+    await p.waitForTimeout(500); // la fenêtre « Envoi… » finit de se fermer
+  } },
   { groupe: 'Comptabilité', titre: 'Une dépense reçue par e-mail, à vérifier', page: '#depense/D-M1', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Comptabilité', titre: 'URSSAF et TVA', page: '#compta/urssaf', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Comptabilité', titre: 'Rentabilité', page: '#compta/rentabilite', tailles: ['pc'], plein: true, donnees: () => donnees() },
