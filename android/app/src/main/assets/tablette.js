@@ -1739,7 +1739,11 @@
     return out;
   }
 
+  var raccrochage = 0;
   function gsmHangup() {
+    // Double touche sur « Pas maintenant » : un seul raccrochage (le 2e disait à tort « plus d'appel »).
+    if (Date.now() - raccrochage < 1500) return;
+    raccrochage = Date.now();
     var ok = false;
     if (android() && android().phoneHangup) { try { ok = android().phoneHangup() !== false; } catch (e) { ok = false; } }
     if (ok) return;
@@ -2221,7 +2225,10 @@
           motAudio.play();
         };
       }
+      var dejaLu = false;
       var parAndroid = function () { // son injoignable (hors ligne) : la voix d'Android lit le texte
+        if (dejaLu) return; // onerror ET play().catch arrivent tous les deux : une seule lecture
+        dejaLu = true;
         setSpeech('idle');
         if (android() && android().speak) { setSpeech('loading'); android().speak(text); }
       };

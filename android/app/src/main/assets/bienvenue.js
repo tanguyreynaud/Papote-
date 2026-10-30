@@ -139,9 +139,17 @@
     playGuide(lastGuide);
   }
 
+  // Un bouton d'installation ne fait qu'une étape : touché deux fois de suite (double clic), la 2e touche est ignorée
+  // pendant 1,5 s, pour ne jamais envoyer deux fois le même ordre à Android (vérifié par node galerie.js --double).
   function button(text, cls, onClick) {
     var b = el('button', 'welcome-btn ' + (cls || ''), text);
-    b.addEventListener('click', onClick, false);
+    var dernier = 0;
+    b.addEventListener('click', function (e) {
+      var t = Date.now();
+      if (t - dernier < 1500) return;
+      dernier = t;
+      onClick.call(this, e);
+    }, false);
     return b;
   }
 
