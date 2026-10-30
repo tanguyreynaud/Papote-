@@ -38,6 +38,7 @@ test('remise en main propre : envoyée et reçue le jour même, e-mail « chez v
   const t = await a.tablettePreparee();
   const { abonnement: id } = await a.commanderEtPayer({ email: paul.email });
   await s.appeler('gestionStock', { action: 'modifier', id: t.fiche, champs: { commande: id } }, a.TANGUY);
+  await a.simSurTablette(t);
   s.boite.length = 0;
   s.avancer(10);
   const r = await s.appeler('tabletteEnvoyee', { commande: id, mainPropre: true }, a.TANGUY);
