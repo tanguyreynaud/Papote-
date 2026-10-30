@@ -236,6 +236,47 @@ test('appels : la tablette appelle quand l\'abonnement est actif, pas quand il e
   await assertFails(setDoc(doc(tablette('tab'), `families/${FID}/calls/c2`), appel));
 });
 
+// Tableau de bord (badge admin) : ordres à la tablette, fiche de membre, journal, volumes.
+const admin = (uid = 'tanguy') => env.authenticatedContext(uid, {
+  email: `${uid}@exemple.fr`, email_verified: true, admin: true, firebase: { sign_in_provider: 'google.com' },
+}).firestore();
+
+test('tableau de bord : ordres à la tablette (redémarrer, état, mise à jour, canal, remise à zéro)', async () => {
+  await famille();
+  const ordre = (extra) => ({ type: 'restart', target: 'tab', createdBy: 'tanguy', createdAt: serverTimestamp(), state: 'pending', ...extra });
+  await assertSucceeds(setDoc(doc(admin(), `families/${FID}/commands/o1`), ordre()));
+  await assertSucceeds(setDoc(doc(admin(), `families/${FID}/commands/o2`), ordre({ type: 'maj' })));
+  await assertSucceeds(setDoc(doc(admin(), `families/${FID}/commands/o3`), ordre({ type: 'canal', canal: 'test' })));
+  await assertSucceeds(setDoc(doc(admin(), `families/${FID}/commands/o4`), ordre({ type: 'usine', serie: 'Tab60P15EEA026347' })));
+  // Garde-fous : canal inconnu, remise à zéro sans n° de série, ordre d'un autre, wifi (réservé à la famille), état faux.
+  await assertFails(setDoc(doc(admin(), `families/${FID}/commands/k1`), ordre({ type: 'canal', canal: 'beta' })));
+  await assertFails(setDoc(doc(admin(), `families/${FID}/commands/k2`), ordre({ type: 'usine' })));
+  await assertFails(setDoc(doc(admin(), `families/${FID}/commands/k3`), ordre({ createdBy: 'julie' })));
+  await assertFails(setDoc(doc(admin(), `families/${FID}/commands/k4`), ordre({ type: 'wifi', ssid: 'Box', security: 'wpa2', password: 'x' })));
+  await assertFails(setDoc(doc(admin(), `families/${FID}/commands/k5`), ordre({ state: 'done' })));
+  // Un proche sans badge ne peut pas envoyer « maj » ni « usine » (pas dans sa liste).
+  await assertFails(setDoc(doc(proche('julie'), `families/${FID}/commands/k6`), { ...ordre({ type: 'usine', serie: 'X1234' }), createdBy: 'julie' }));
+  // La tablette répond : « running » (redémarrage en cours) puis « done » ; l'admin lit et efface.
+  await assertSucceeds(updateDoc(doc(tablette('tab'), `families/${FID}/commands/o1`), { state: 'running', result: 'La tablette redémarre…', doneAt: serverTimestamp() }));
+  await assertSucceeds(updateDoc(doc(tablette('tab'), `families/${FID}/commands/o1`), { state: 'done', result: 'Revenue en 38 s', doneAt: serverTimestamp() }));
+  await assertFails(updateDoc(doc(tablette('tab'), `families/${FID}/commands/o2`), { state: 'bizarre' }));
+  await assertSucceeds(getDoc(doc(admin(), `families/${FID}/commands/o1`)));
+  await assertSucceeds(deleteDoc(doc(admin(), `families/${FID}/commands/o1`)));
+  await assertFails(getDoc(doc(proche('paul'), `families/${FID}/commands/o2`)));
+});
+
+test('tableau de bord : fiche de la tablette, journal et volumes', async () => {
+  await famille();
+  await assertSucceeds(getDoc(doc(admin(), `families/${FID}/members/tab`)));
+  await assertFails(getDoc(doc(proche('paul'), `families/${FID}/members/tab`)));
+  await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), `families/${FID}/logs/tab`), { lines: 'ok', version: '2.99.99' }));
+  await assertSucceeds(getDoc(doc(admin(), `families/${FID}/logs/tab`)));
+  await assertFails(getDoc(doc(proche('paul'), `families/${FID}/logs/tab`)));
+  await assertSucceeds(updateDoc(doc(admin(), `families/${FID}`), { volume: 70, volumeAppel: 100, volumeSonnerie: 90, rev: 1 }));
+  await assertFails(updateDoc(doc(admin(), `families/${FID}`), { volume: 5 }));
+  await assertFails(updateDoc(doc(admin(), `families/${FID}`), { volume: 80, name: 'X' }));
+});
+
 test('commandes et abonnement : jamais écrits par l\'appli', async () => {
   await famille();
   await assertFails(getDoc(doc(proche('julie'), 'commandes/sub_1')));
