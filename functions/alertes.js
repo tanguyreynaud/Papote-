@@ -2,8 +2,8 @@
 //
 //   alertesTablettes  toutes les 5 minutes : une notification par épisode (débranchée depuis
 //                     plus de 10 min, ou silencieuse depuis plus de 1 h 10)
-//   alerteMatin       chaque jour à 12h (Paris) : « {nom} n'a pas été vue ce matin » si la tablette
-//                     ne l'a ni vue (lastSeen, caméra) ni touchée (lastActive) depuis minuit
+//   alerteMatin       chaque jour à 10 h (Paris) : « {nom} n'a pas été vue depuis deux jours » si la
+//                     tablette ne l'a ni vue (lastSeen, caméra) ni touchée (lastActive) depuis 48 h
 //
 // L'épisode est noté sur la fiche de la tablette (alerteType, alerteLe) et remis à zéro quand
 // tout revient, pour ne pas prévenir toutes les 5 minutes. La décision est dans etatAlerte,
@@ -159,9 +159,10 @@ function alertePasVueDue(tablettes, maintenant) {
   return tablettes.some((t) => enMillis(t.lastOnline) && etatAlerte(t, maintenant) !== 'silence');
 }
 
-// Chaque midi : une seule alerte par épisode (tant qu'elle n'est pas revue, pas de rappel le lendemain),
-// aux responsables de la famille.
-exports.alerteMatin = onSchedule({ schedule: 'every day 12:00', timeZone: 'Europe/Paris' }, async () => {
+// Chaque jour à 10 h (Tanguy, 29/10 : une heure où l'on peut appeler, jamais la nuit) : une seule alerte par
+// épisode (tant qu'elle n'est pas revue, pas de rappel le lendemain), aux responsables de la famille.
+const HORAIRE_PAS_VUE = 'every day 10:00';
+exports.alerteMatin = onSchedule({ schedule: HORAIRE_PAS_VUE, timeZone: 'Europe/Paris' }, async () => {
   const db = base();
   const maintenant = Date.now();
   const enPause = await famillesEnPause(db, maintenant).catch((e) => { logger.warn('Pauses illisibles', e.message); return new Set(); });
@@ -198,5 +199,6 @@ exports.etatAlerte = etatAlerte;
 exports.enVeille = enVeille;
 exports.pasVueDepuisLongtemps = pasVueDepuisLongtemps;
 exports.alertePasVueDue = alertePasVueDue;
+exports.HORAIRE_PAS_VUE = HORAIRE_PAS_VUE;
 exports.numeroInconnu = numeroInconnu;
 exports.PAS_VUE_MS = PAS_VUE_MS;
