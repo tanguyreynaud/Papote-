@@ -27,3 +27,15 @@ test('relance en retard sautée, jamais deux à la suite', () => {
   // Rien d'envoyé et déjà le lendemain soir : seulement la 2e.
   assert.strictEqual(relanceDue(cree, 0, Date.UTC(2026, 9, 16, 18)), 2);
 });
+
+test('portableFrancais : 06/07 seulement, +33 réécrit, vide accepté', () => {
+  const { portableFrancais } = require('./relances');
+  assert.strictEqual(portableFrancais('06 12 34 56 78'), '0612345678');
+  assert.strictEqual(portableFrancais('+33 7 12 34 56 78'), '0712345678');
+  assert.strictEqual(portableFrancais('0033612345678'), '0612345678');
+  assert.strictEqual(portableFrancais(''), null);
+  assert.strictEqual(portableFrancais(undefined), null);
+  assert.strictEqual(portableFrancais('04 78 00 00 00'), false);
+  assert.strictEqual(portableFrancais('+32 470 12 34 56'), false);
+  assert.strictEqual(portableFrancais(612345678), false);
+});

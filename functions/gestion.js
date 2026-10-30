@@ -3031,7 +3031,8 @@ const cleContact = (email) => require('node:crypto').createHash('sha256').update
 const enMs = (v) => (v == null ? null : typeof v === 'number' ? v : v.toMillis ? v.toMillis() : v._seconds ? v._seconds * 1000 : Date.parse(v) || null);
 
 // { commandes, paniers, contacts, statutFamille(fid) } → [{ email, nom, telephone, type, statut, formule, depuis, consentement, desinscrit }]
-// type : client (abonnement en cours), ancien (résilié, annulé), panier (panier abandonné sans commande).
+// type : client (abonnement en cours), ancien (résilié, annulé), panier (panier abandonné sans commande),
+// attente (« Être prévenu » du site), chat, contact.
 function fusionnerContacts({ commandes = [], paniers = [], contacts = [], statutFamille = () => null }) {
   const parEmail = new Map();
   const fiche = (email) => {
@@ -3070,7 +3071,9 @@ function fusionnerContacts({ commandes = [], paniers = [], contacts = [], statut
     // chatLe : coordonnées laissées à l'ouverture du chat du site (functions/support.js).
     if (!email || (!parEmail.has(email) && k.consentement !== true && !k.chatLe)) continue;
     const f = fiche(email);
-    if (!f.type) f.type = k.chatLe ? 'chat' : 'contact';
+    // listeAttente : inscrit sur « Être prévenu » du site, plus de tablette en stock (index.js listeAttente).
+    if (!f.type) f.type = k.listeAttente ? 'attente' : k.chatLe ? 'chat' : 'contact';
+    if (f.type === 'attente' && !f.depuis) f.depuis = enMs(k.listeAttenteLe || k.creeLe);
     f.nom = f.nom || k.nom || null;
     f.telephone = f.telephone || k.telephone || null;
     if (f.type === 'chat' && !f.depuis) f.depuis = enMs(k.chatDepuis || k.chatLe);

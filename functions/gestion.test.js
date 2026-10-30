@@ -627,3 +627,12 @@ test('garde-fous : lignes « GARDE-FOU » du journal de la tablette, par sorte, 
   assert.deepStrictEqual(g.gardeFous('', maintenant), []);
   assert.deepStrictEqual(g.gardeFous(undefined, maintenant), []);
 });
+
+test('clients : inscrit sur « Être prévenu », avec son téléphone', () => {
+  const [c] = g.fusionnerContacts({
+    contacts: [{ email: 'attend@x.fr', consentement: true, listeAttente: true, listeAttenteLe: 70, telephone: '0712345678' }],
+  });
+  assert.equal(c.type, 'attente');
+  assert.equal(c.telephone, '0712345678');
+  assert.equal(c.depuis, 70);
+});

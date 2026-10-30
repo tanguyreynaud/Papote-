@@ -59,6 +59,26 @@ async function villeChoisie(p, n = 0, r = null) {
 }
 // Les trois étapes de la commande remplies : adresse du proche (points relais proposés autour), premier point
 // relais, nom, e-mail.
+// Plus de tablette en stock : le site propose « Être prévenu » (stockDisponible → disponible: false).
+const CORS = { 'Access-Control-Allow-Origin': '*' };
+async function stockVide(p, listeAttente = 204) {
+  // Défilement immédiat vers « Être prévenu » : la capture ne tombe pas au milieu du défilement doux.
+  await p.emulateMedia({ reducedMotion: 'reduce' });
+  await p.route('**/stockDisponible', (r) => r.fulfill({ contentType: 'application/json', headers: CORS, body: '{"disponible":false,"precommande":true,"attenteLongue":false}' }));
+  await p.route('**/listeAttente', (r) => r.fulfill({ status: listeAttente, headers: { ...CORS, 'Access-Control-Allow-Headers': 'Content-Type' }, body: '' }));
+  // commande.html renvoie vers « / » : ici, pas de fonction accueil, la page elle-même.
+  await p.route(/127\.0\.0\.1:\d+\/\?complet=1/, (r) => r.fulfill({ status: 302, headers: { Location: '/accueil.html?complet=1#prevenir' } }));
+}
+async function prevenir(p, { email = '', tel = '', accord = true } = {}) {
+  await p.locator('.hero .js-commander').click();
+  await p.locator('#attente-email').waitFor({ state: 'visible' });
+  if (email) await p.fill('#attente-email', email);
+  if (tel) await p.fill('#attente-tel', tel);
+  if (accord) await p.check('#attente input[name="accord"]');
+  await p.locator('#attente button').click();
+  await pause(p, 400);
+}
+
 async function commandeRemplie(p) {
   await villeChoisie(p, 0);
   await p.locator('#points .point').first().waitFor({ timeout: 5000 });
@@ -97,6 +117,21 @@ const SCENES = [
   } },
   { groupe: 'Accueil', titre: 'Accueil : menu ☰ ouvert (téléphone)', fichier: 'accueil.html', faire: async (p) => {
     if (await p.locator('#menu-bouton').isVisible()) { await p.click('#menu-bouton'); await pause(p, 400); }
+  } },
+  { groupe: 'Être prévenu', titre: 'Accueil : plus de tablette en stock, « Être prévenu » à la place de « Commander »', fichier: 'accueil.html', plein: true, routes: (p) => stockVide(p) },
+  { groupe: 'Être prévenu', titre: 'Être prévenu : touché depuis le haut de page, formulaire', fichier: 'accueil.html', routes: (p) => stockVide(p), faire: async (p) => {
+    await p.locator('.hero .js-commander').click(); await pause(p, 600);
+  } },
+  { groupe: 'Être prévenu', titre: 'Être prévenu : e-mail manquant', fichier: 'accueil.html', routes: (p) => stockVide(p), faire: (p) => prevenir(p) },
+  { groupe: 'Être prévenu', titre: 'Être prévenu : numéro qui n’est pas un portable français', fichier: 'accueil.html', routes: (p) => stockVide(p), faire: (p) => prevenir(p, { email: 'jeanne@exemple.fr', tel: '04 78 12 34 56' }) },
+  { groupe: 'Être prévenu', titre: 'Être prévenu : case pas cochée', fichier: 'accueil.html', routes: (p) => stockVide(p), faire: (p) => prevenir(p, { email: 'jeanne@exemple.fr', accord: false }) },
+  { groupe: 'Être prévenu', titre: 'Être prévenu : inscription envoyée', fichier: 'accueil.html', routes: (p) => stockVide(p), faire: (p) => prevenir(p, { email: 'jeanne@exemple.fr', tel: '06 12 34 56 78' }) },
+  { groupe: 'Être prévenu', titre: 'Être prévenu : l’inscription n’a pas abouti', fichier: 'accueil.html', routes: (p) => stockVide(p, 500), faire: (p) => prevenir(p, { email: 'jeanne@exemple.fr' }) },
+  { groupe: 'Être prévenu', titre: 'Être prévenu : menu ☰ (téléphone)', fichier: 'accueil.html', routes: (p) => stockVide(p), faire: async (p) => {
+    if (await p.locator('#menu-bouton').isVisible()) await p.locator('#menu-bouton').click(); await pause(p, 300);
+  } },
+  { groupe: 'Être prévenu', titre: 'Page de commande ouverte sans stock : renvoyée vers « Être prévenu »', fichier: 'commande.html', routes: (p) => stockVide(p), faire: async (p) => {
+    await p.waitForURL(/complet=1/); await p.locator('#prevenir').waitFor({ state: 'visible' }); await pause(p, 600);
   } },
   { groupe: 'Commande', titre: 'Commande : page vide', fichier: 'commande.html', plein: true },
   { groupe: 'Commande', titre: 'Commande : ville du proche tapée, propositions', fichier: 'commande.html', faire: async (p) => {

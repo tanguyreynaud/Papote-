@@ -188,6 +188,16 @@ section { padding-block: clamp(3rem, 7vw, 5rem); }
 .option small { display: block; color: var(--muted); font-size: .95rem; }
 .option-prix { font: 800 1.25rem/1.1 var(--display); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .offre-btn { justify-self: stretch; margin-top: .5rem; }
+.prevenir[hidden] { display: none; }
+#prevenir { scroll-margin-top: 4.5rem; }
+.attente { display: grid; gap: 1rem; max-width: 34rem; background: var(--surface); border: 2px solid var(--accent); border-radius: 20px; padding: clamp(1.25rem, 3vw, 1.75rem); }
+.attente label { display: grid; gap: .35rem; font-weight: 700; }
+.attente input[type="email"], .attente input[type="tel"] { font: inherit; font-weight: 400; color: var(--text); min-height: 3.25rem; padding: .5rem .9rem; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); min-width: 0; }
+.attente .muted { font-weight: 400; color: var(--muted); }
+.attente .attente-accord { display: flex; gap: .6rem; align-items: flex-start; font-weight: 400; color: var(--muted); cursor: pointer; }
+.attente-accord input { width: 1.3rem; height: 1.3rem; margin-top: .2rem; flex: none; accent-color: var(--accent); }
+.attente-msg { margin: 0; font-weight: 700; }
+.attente [hidden] { display: none; }
 .plans-note { margin-top: 1.25rem; color: var(--muted); font-size: 1rem; max-width: 46rem; }
 /* FAQ : huit questions visibles, les autres sur demande. */
 .faq { display: grid; gap: .6rem; max-width: 48rem; }
@@ -409,6 +419,27 @@ footer a { color: var(--muted); }
     </div>
   </section>
 
+  <!-- Plus de tablette en stock (stockDisponible, functions/stock.js) : « Commander » devient « Être prévenu » et mène ici. -->
+  <section id="prevenir" class="prevenir" hidden>
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">Être prévenu</p>
+        <h2>Toutes les tablettes sont parties.</h2>
+        <p class="lead">Je prépare les suivantes à Lyon. Laissez votre e-mail : vous serez prévenu dès qu'elles sont prêtes.</p>
+      </div>
+      <form class="attente" id="attente" novalidate>
+        <label>Votre adresse e-mail
+          <input name="email" id="attente-email" type="email" autocomplete="email" required maxlength="120"></label>
+        <label><span>Votre portable <span class="muted">(facultatif, pour que je vous appelle)</span></span>
+          <input name="telephone" id="attente-tel" type="tel" inputmode="tel" autocomplete="tel" maxlength="20"></label>
+        <label class="attente-accord"><input type="checkbox" name="accord">
+          <span>Être prévenu par e-mail ou par téléphone, puis recevoir les nouvelles de Papote</span></label>
+        <button class="btn btn-primary" type="submit">Me prévenir</button>
+        <p class="attente-msg" id="attente-msg" role="status" hidden></p>
+      </form>
+    </div>
+  </section>
+
 
   <section id="questions">
     <div class="wrap">
@@ -516,7 +547,60 @@ footer a { color: var(--muted); }
     if (!offre) return;
     offre.addEventListener('submit', function (e) {
       e.preventDefault();
-      location.href = 'commande.html';
+      if (complet) document.getElementById('prevenir').scrollIntoView({ behavior: 'smooth' });
+      else location.href = 'commande.html';
+    });
+  })();
+</script>
+<script>
+  // Lancement (Tanguy, 2026-10-30) : on ne vend que le stock réel. Plus de tablette : « Commander » devient
+  // « Être prévenu » (liste d'attente : contacts/, onglet Clients de l'admin). Sans réponse, on garde « Commander » :
+  // la page de commande vérifie aussi, et le serveur refuse le paiement.
+  var complet = false;
+  (function () {
+    var section = document.getElementById('prevenir');
+    function prevenir() {
+      complet = true;
+      section.hidden = false;
+      document.querySelectorAll('.js-commander').forEach(function (b) {
+        b.textContent = 'Être prévenu';
+        if (b.tagName === 'A') b.setAttribute('href', '#prevenir');
+      });
+    }
+    var q = new URLSearchParams(location.search);
+    if (q.get('complet') === '1') prevenir();
+    fetch('https://europe-west1-papote-famille.cloudfunctions.net/stockDisponible')
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function (d) { if (d.disponible === false) { prevenir(); if (location.hash === '#prevenir') section.scrollIntoView(); } })
+      .catch(function () {});
+
+    var form = document.getElementById('attente');
+    var msg = document.getElementById('attente-msg');
+    function dire(texte) { msg.textContent = texte; msg.hidden = false; }
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var email = form.email.value.trim();
+      var tel = form.telephone.value.replace(/[\s.()-]/g, '').replace(/^(\+|00)33/, '0');
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { dire('Indiquez votre e-mail.'); form.email.focus(); return; }
+      if (tel && !/^0[67]\d{8}$/.test(tel)) { dire('Un numéro de portable français, en 06 ou 07.'); form.telephone.focus(); return; }
+      if (!form.accord.checked) { dire('Cochez la case pour être prévenu.'); form.accord.focus(); return; }
+      var bouton = form.querySelector('button');
+      bouton.disabled = true;
+      msg.hidden = true;
+      fetch('https://europe-west1-papote-famille.cloudfunctions.net/listeAttente', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email, telephone: tel, accord: true }),
+      }).then(function (r) {
+        if (!r.ok) throw new Error(r.status);
+        form.querySelectorAll('label').forEach(function (l) { l.hidden = true; });
+        bouton.hidden = true;
+        dire('C\u2019est noté, merci ! Vous serez prévenu dès qu\u2019une tablette est prête.');
+        section.scrollIntoView({ block: 'start' });
+      }).catch(function () {
+        bouton.disabled = false;
+        dire('L\u2019inscription n\u2019a pas abouti. Réessayez dans un instant.');
+      });
     });
   })();
 </script>
