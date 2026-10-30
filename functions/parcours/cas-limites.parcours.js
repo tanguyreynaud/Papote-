@@ -143,17 +143,20 @@ test('page de paiement abandonnée : la tablette mise de côté est libérée', 
   assert.strictEqual((await s.requete('stockDisponible')).json.precommande, false);
 });
 
-test('stock épuisé : précommande jusqu\'à stock + 10, puis attente longue, jamais fermé', async () => {
-  let session = await a.commanderSurLeSite({ email: 'a@exemple.fr' });
-  assert.strictEqual(s.stripe.etat.sessions.get(session).params.subscription_data.metadata.delai, 'precommande');
+test('stock épuisé : au lancement, on ne vend que le stock réel (« Être prévenu » sur le site)', async () => {
+  assert.deepStrictEqual((await s.requete('stockDisponible')).json, { disponible: false, precommande: true, attenteLongue: false });
+  // Clé Stripe de test (simulation) : une commande d'essai passe quand même, sans rien mettre de côté.
+  const session = await a.commanderSurLeSite({ email: 'a@exemple.fr' });
+  assert.strictEqual(s.stripe.etat.sessions.get(session).params.subscription_data.metadata.reservation, undefined);
+  assert.strictEqual((await s.db.collection('reservations').get()).size, 0);
   s.stripe.expirerSession(session);
   await s.calme();
-  for (let i = 0; i < 10; i++) {
-    await s.db.collection('commandes').add({ expedition: 'a-preparer', email: `c${i}@exemple.fr`, fid: null });
-  }
-  assert.deepStrictEqual((await s.requete('stockDisponible')).json, { disponible: true, precommande: false, attenteLongue: true });
-  session = await a.commanderSurLeSite({ email: 'b@exemple.fr' });
-  assert.strictEqual(s.stripe.etat.sessions.get(session).params.subscription_data.metadata.delai, 'long');
+  // Une tablette arrive : le site revend.
+  await a.tablettePreparee();
+  assert.deepStrictEqual((await s.requete('stockDisponible')).json, { disponible: true, precommande: false, attenteLongue: false });
+  const vendue = await a.commanderSurLeSite({ email: 'b@exemple.fr' });
+  assert.strictEqual(s.stripe.etat.sessions.get(vendue).params.subscription_data.metadata.delai, 'stock');
+  assert.strictEqual((await s.requete('stockDisponible')).json.disponible, false, 'la seule tablette est mise de côté pendant le paiement');
 });
 
 test('webhook Stripe avec une fausse signature : refusé', async () => {
