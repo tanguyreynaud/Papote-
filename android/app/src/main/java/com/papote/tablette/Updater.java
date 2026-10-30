@@ -48,6 +48,25 @@ final class Updater {
         }
     }
 
+    /**
+     * Ordre « maj » du tableau de bord : vérification tout de suite, avec une phrase pour l'administrateur.
+     * Hors du fil principal. Une installation lancée suit son cours (Android relance Papote à la fin).
+     */
+    static String maintenant(Context context) {
+        try {
+            boolean test = "test".equals(context.getSharedPreferences("papote", Context.MODE_PRIVATE).getString("canal", ""));
+            JSONObject feed = new JSONObject(new String(download(test ? FEED_TEST : FEED), "UTF-8"));
+            int latest = feed.getInt("versionCode");
+            long current = currentVersion(context);
+            String nom = feed.optString("versionName", String.valueOf(latest));
+            if (latest <= current) return "Déjà à jour (version " + nom + (test ? ", canal test" : "") + ").";
+            if (!check(context)) return "Impossible de mettre à jour pour l'instant (téléchargement raté), nouvel essai dans 10 min.";
+            return "Mise à jour vers la version " + nom + " lancée : Papote se relance toute seule dans une minute.";
+        } catch (Exception e) {
+            return "Impossible de vérifier la version : " + e.getMessage();
+        }
+    }
+
     private static boolean verifier(Context context) {
         try {
             boolean test = "test".equals(context.getSharedPreferences("papote", Context.MODE_PRIVATE).getString("canal", ""));

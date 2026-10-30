@@ -782,6 +782,9 @@ public class MainActivity extends Activity implements Sync.Listener {
                     a.handler.postDelayed(a.updateCheck, 5_000 + (long) (Math.random() * 60_000));
                     break;
                 default: // appel, ordre : la page relit
+                    // Un ordre peut viser la synchronisation (redémarrer, état, mise à jour… depuis l'app
+                    // famille ou le tableau de bord) : elle relit tout de suite, sans attendre son tour.
+                    if ("ordre".equals(type)) a.sync.poke();
                     try {
                         a.callPage("onPush", new JSONObject().put("type", type).put("id", id == null ? JSONObject.NULL : id));
                     } catch (JSONException ignored) { }
@@ -853,6 +856,11 @@ public class MainActivity extends Activity implements Sync.Listener {
         handler.post(() -> { if (!essaiSon) setVolumes(); }); // pendant un essai du son, il garde son niveau
     }
     @Override public void onFamilyLost() { callPage("onFamilyLost", new JSONObject()); }
+
+    /** Ordre « recharger » (tableau de bord) : la page repart de zéro, sans redémarrer la tablette. */
+    @Override public void onRecharger() {
+        handler.post(() -> { if (web != null) web.reload(); });
+    }
 
     /** Migration de la base : la page (appels compris) repart sur la nouvelle base. */
     @Override public void onDatabaseChanged(String database) {

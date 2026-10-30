@@ -45,6 +45,8 @@ final class Sync {
         default void onFamilyLost() { }
         /** La base Firestore a changé (migration) : la page doit se recharger pour la suivre. */
         default void onDatabaseChanged(String database) { }
+        /** Ordre « recharger » (tableau de bord) : la page se recharge, comme si l'écran était figé. */
+        default void onRecharger() { }
     }
 
     private static final String TAG = "PapoteSync";
@@ -381,6 +383,7 @@ final class Sync {
             try {
                 if (!cacheRestored) {
                     restoreCache();
+                    repondreRedemarrage();
                     if (!posts.isEmpty()) publishPosts();
                     envoyerMeteoGardee();
                     try {
@@ -1895,6 +1898,7 @@ final class Sync {
         boolean ok = true;
         String result;
         boolean reboot = false;
+        boolean usine = false;
         if ("wifi".equals(type)) {
             String ssid = nz(Firebase.str(f, "ssid"));
             ok = !ssid.isEmpty() && wifi().connect(ssid, nz(Firebase.str(f, "password")));
@@ -1927,21 +1931,50 @@ final class Sync {
             }
             result = "Aucun réseau wifi trouvé autour de la tablette.";
         } else if ("restart".equals(type)) {
-            result = "La tablette redémarre.";
+            result = "La tablette redémarre…";
             reboot = true;
         } else if ("status".equals(type)) {
             result = statusText();
             uploadJournal(prefs.getString("fid", null), true);
+        } else if ("maj".equals(type)) {
+            // Tableau de bord : vérification de la version tout de suite (sinon, à l'annonce ou 1×/jour).
+            result = Updater.maintenant(context);
+            ok = !result.startsWith("Impossible");
+        } else if ("recharger".equals(type)) {
+            // Écran figé ou page cassée : la page se recharge sans redémarrer la tablette.
+            result = "L'écran de Papote se recharge.";
+            listener.onRecharger();
+        } else if ("canal".equals(type)) {
+            String canal = "test".equals(nz(Firebase.str(f, "canal"))) ? "test" : "";
+            prefs.edit().putString("canal", canal).apply();
+            result = canal.isEmpty() ? "Canal des versions : stable." : "Canal des versions : test (nouvelles versions en premier).";
+        } else if ("usine".equals(type)) {
+            // Remise à zéro à distance (tablette revenue ou perdue) : seulement si l'ordre nomme bien cette
+            // tablette par son n° de série, pour qu'une erreur de fiche n'efface jamais la tablette de Mamie.
+            String serie = nz(Firebase.str(f, "serie"));
+            if (!serie.isEmpty() && serie.equals(serialNumber())) {
+                result = "La tablette est remise à zéro (réglages d'usine).";
+                usine = true;
+            } else {
+                ok = false;
+                result = "Remise à zéro refusée : le n° de série de l'ordre ne correspond pas à cette tablette.";
+            }
         } else {
             ok = false;
             result = "Ordre inconnu.";
         }
         // Résultat, et le mot de passe du wifi effacé dans la même écriture.
+        // Redémarrage : l'ordre reste « running », le premier tour après le redémarrage écrit le résultat
+        // (repondreRedemarrage), pour que la famille ou le tableau de bord voie que Papote est bien revenue.
+        if (reboot) {
+            prefs.edit().putString("ordreRedemarrage", doc.getString("name"))
+                    .putLong("ordreRedemarrageLe", System.currentTimeMillis()).apply();
+        }
         JSONObject write = new JSONObject()
                 .put("update", new JSONObject()
                         .put("name", doc.getString("name"))
                         .put("fields", new JSONObject()
-                                .put("state", Firebase.string(ok ? "done" : "failed"))
+                                .put("state", Firebase.string(reboot ? "running" : ok ? "done" : "failed"))
                                 .put("result", Firebase.string(result))))
                 .put("updateMask", new JSONObject().put("fieldPaths",
                         new JSONArray().put("state").put("result").put("password")))
@@ -1949,17 +1982,62 @@ final class Sync {
                         .put("fieldPath", "doneAt").put("setToServerValue", "REQUEST_TIME")));
         firebase.commit(new JSONArray().put(write));
         Journal.log(context, "Ordre " + type + " : " + result);
-        if (reboot) {
+        if (reboot || usine) {
+            final boolean effacer = usine;
             handler.postDelayed(() -> {
                 try {
                     android.app.admin.DevicePolicyManager dpm = (android.app.admin.DevicePolicyManager)
                             context.getSystemService(Context.DEVICE_POLICY_SERVICE);
-                    dpm.reboot(new android.content.ComponentName(context, AdminReceiver.class));
+                    if (effacer) dpm.wipeData(0);
+                    else dpm.reboot(new android.content.ComponentName(context, AdminReceiver.class));
                 } catch (Exception e) {
-                    Log.w(TAG, "Redémarrage", e);
+                    Log.w(TAG, effacer ? "Remise à zéro" : "Redémarrage", e);
+                    prefs.edit().remove("ordreRedemarrage").apply();
                 }
             }, 3000);
         }
+    }
+
+    /**
+     * Premier tour après un redémarrage demandé (ordre « restart ») : l'ordre passe « done » avec le temps
+     * mis par Papote pour revenir et si elle est bien verrouillée (kiosque). Sans redémarrage demandé : rien.
+     */
+    private void repondreRedemarrage() {
+        String name = prefs.getString("ordreRedemarrage", null);
+        if (name == null) return;
+        long demande = prefs.getLong("ordreRedemarrageLe", 0);
+        prefs.edit().remove("ordreRedemarrage").remove("ordreRedemarrageLe").apply();
+        // Un ordre trop vieux (tablette restée éteinte des heures) n'intéresse plus personne.
+        if (demande > 0 && System.currentTimeMillis() - demande > 6 * 3600_000L) return;
+        boolean verrouillee = false;
+        try {
+            android.app.ActivityManager am = (android.app.ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
+            verrouillee = am.getLockTaskModeState() != android.app.ActivityManager.LOCK_TASK_MODE_NONE;
+        } catch (Exception ignored) { }
+        String result = texteRedemarrage(android.os.SystemClock.elapsedRealtime(), verrouillee);
+        try {
+            JSONObject write = new JSONObject()
+                    .put("update", new JSONObject()
+                            .put("name", name)
+                            .put("fields", new JSONObject()
+                                    .put("state", Firebase.string("done"))
+                                    .put("result", Firebase.string(result))))
+                    .put("updateMask", new JSONObject().put("fieldPaths", new JSONArray().put("state").put("result")))
+                    .put("updateTransforms", new JSONArray().put(new JSONObject()
+                            .put("fieldPath", "doneAt").put("setToServerValue", "REQUEST_TIME")));
+            firebase.commit(new JSONArray().put(write));
+            Journal.log(context, "Ordre restart : " + result);
+        } catch (Exception e) {
+            // L'ordre a pu être effacé entre-temps (résultat déjà lu) : rien de grave.
+            Log.w(TAG, "Réponse au redémarrage", e);
+        }
+    }
+
+    /** Phrase du résultat après redémarrage : ms depuis le démarrage d'Android, kiosque actif ou non. */
+    static String texteRedemarrage(long depuisDemarrageMs, boolean verrouillee) {
+        long s = Math.max(1, Math.round(depuisDemarrageMs / 1000.0));
+        return "La tablette a redémarré : Papote est revenue en " + s + " s"
+                + (verrouillee ? ", verrouillée sur Papote." : ", mais SANS le mode kiosque (à vérifier).");
     }
 
     /** État de la tablette en une phrase, pour l'appli famille. */
