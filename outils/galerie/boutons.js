@@ -17,6 +17,9 @@ function lister(sel) {
   const noms = [];
   const vus = [...document.querySelectorAll(sel)].filter((el) => {
     if (el.disabled || el.getAttribute('aria-disabled') === 'true' || el.closest('[hidden], [inert]')) return false;
+    // Choix déjà fait (onglet ouvert, thème choisi, case cochée) : le retoucher ne change rien, c'est normal.
+    if (['aria-pressed', 'aria-checked', 'aria-selected'].some((k) => el.getAttribute(k) === 'true') || el.hasAttribute('aria-current')
+      || /\b(active|on|selected|actif)\b/.test(el.className)) return false;
     const st = getComputedStyle(el);
     if (st.visibility === 'hidden' || st.display === 'none' || Number(st.opacity) <= 0.05) return false;
     const r = el.getBoundingClientRect();
@@ -40,6 +43,13 @@ function guetter() {
   const w = window;
   w.__changes = [];
   w.__toucheA = 0;
+  w.__signal = '';
+  // Retours que le navigateur ou le téléphone montrent eux-mêmes : bulle « Remplissez ce champ », impression,
+  // feuille de partage, clavier qui s'ouvre sur un champ.
+  document.addEventListener('invalid', () => { w.__signal = 'champ à remplir'; }, true);
+  w.print = () => { w.__signal = 'impression'; };
+  if (navigator.share) navigator.share = async () => { w.__signal = 'partage'; };
+  document.addEventListener('focusin', (e) => { if (w.__toucheA && e.target.matches('input, textarea, [contenteditable]')) w.__signal = 'champ touché'; }, true);
   const visible = (n) => {
     const el = n && (n.nodeType === 1 ? n : n.parentElement);
     return Boolean(el && el.isConnected && el.getClientRects().length);
@@ -59,6 +69,7 @@ function guetter() {
 
 function bilan() {
   const w = window;
+  if (w.__signal) return 1;
   const avant = new Set(w.__changes.filter((c) => c.t < w.__toucheA).map((c) => c.cible));
   return w.__changes.filter((c) => c.t >= w.__toucheA && !avant.has(c.cible)).length;
 }
