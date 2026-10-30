@@ -68,7 +68,11 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // Appli compressée (R8) : moins de Mo à chaque mise à jour sur la carte SIM (Tanguy, 30/10).
+            // Les ponts de la page (@JavascriptInterface) sont protégés dans proguard-rules.pro.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             if (signingProps.isNotEmpty()) signingConfig = signingConfigs.getByName("release")
         }
     }

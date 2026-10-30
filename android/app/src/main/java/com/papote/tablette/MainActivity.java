@@ -649,7 +649,7 @@ public class MainActivity extends Activity implements Sync.Listener {
             Gardien.pouls();
         }
 
-        /** Garde-fou de la page (écran bloqué refermé, rechargement de nuit), noté dans le journal. */
+        /** Garde-fou de la page (écran bloqué refermé, rechargement de la semaine), noté dans le journal. */
         @JavascriptInterface
         public void gardeFou(String message, boolean urgent) {
             if (urgent) Journal.urgent(MainActivity.this, message);

@@ -107,38 +107,55 @@ test('Le pouls part au démarrage puis toutes les 20 s (chien de garde Android)'
   } finally { await b.fermer(); }
 });
 
-test('La nuit vers 3 h, la page repart à neuf (une fois), seulement si rien n’est en cours', async () => {
-  const b = await tablette('2026-10-26T14:00:00');
+// Rechargement de la semaine : la nuit du samedi au dimanche vers 3 h (choix de Tanguy, 30/10).
+// Le 1/11/2026 est un dimanche ; samedi 31/10 à 14 h + 12 h 59 = dimanche 2 h 59.
+const chargementsDe = (b) => {
+  const n = { v: 0 };
+  b.page.on('framenavigated', (f) => { if (f === b.page.mainFrame()) n.v++; });
+  return n;
+};
+
+test('Dimanche vers 3 h, la page repart à neuf (une fois), seulement si rien n’est en cours', async () => {
+  const b = await tablette('2026-10-31T14:00:00');
   try {
-    let chargements = 0;
-    b.page.on('framenavigated', (f) => { if (f === b.page.mainFrame()) chargements++; });
-    await b.page.clock.fastForward('12:59:00'); // 2 h 59
+    const n = chargementsDe(b);
+    await b.page.clock.fastForward('12:59:00');
     await b.avancer(30 * 1000);
-    assert.strictEqual(chargements, 0, 'pas avant 3 h');
+    assert.strictEqual(n.v, 0, 'pas avant 3 h');
     await b.avancer(2 * MIN);
     await new Promise((r) => setTimeout(r, 2000)); // le rechargement se fait après coup
-    assert.strictEqual(chargements, 1, 'rechargée à 3 h');
+    assert.strictEqual(n.v, 1, 'rechargée à 3 h');
     await b.page.evaluate(visioImitee);
     await b.android('onPosts', lot([]));
     await b.android('onFamily', PROCHES);
     await b.avancer(10 * MIN);
     await new Promise((r) => setTimeout(r, 2000));
-    assert.strictEqual(chargements, 1, 'une seule fois');
+    assert.strictEqual(n.v, 1, 'une seule fois');
   } finally { await b.fermer(); }
 });
 
-test('Pas de rechargement de nuit pendant un appel téléphone', async () => {
-  const b = await tablette('2026-10-26T14:00:00');
+test('Les autres nuits, pas de rechargement à 3 h', async () => {
+  const b = await tablette('2026-11-02T14:00:00'); // lundi : la nuit suivante est celle du mardi
   try {
-    let chargements = 0;
-    b.page.on('framenavigated', (f) => { if (f === b.page.mainFrame()) chargements++; });
+    const n = chargementsDe(b);
+    await b.page.clock.fastForward('12:59:00');
+    await b.avancer(5 * MIN);
+    await new Promise((r) => setTimeout(r, 2000));
+    assert.strictEqual(n.v, 0);
+  } finally { await b.fermer(); }
+});
+
+test('Pas de rechargement du dimanche pendant un appel téléphone', async () => {
+  const b = await tablette('2026-10-31T14:00:00');
+  try {
+    const n = chargementsDe(b);
     await b.page.clock.fastForward('12:50:00');
     await b.etat({ appelGsm: { etat: 'enLigne', sortant: false, uid: 'julie', name: 'Julie' } });
     await b.android('onGsm', { etat: 'sonne', uid: 'julie', name: 'Julie' });
     await b.android('onGsm', { etat: 'enLigne', uid: 'julie', name: 'Julie' });
     await b.avancer(20 * MIN);
     await new Promise((r) => setTimeout(r, 2000));
-    assert.strictEqual(chargements, 0);
+    assert.strictEqual(n.v, 0);
   } finally { await b.fermer(); }
 });
 

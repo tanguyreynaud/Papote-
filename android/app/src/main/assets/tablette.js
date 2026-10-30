@@ -2611,22 +2611,25 @@
   }
   setInterval(pouls, 20000);
 
-  // Une fois par nuit, vers 3 h, la page repart à neuf (mémoire, état resté coincé), si elle tourne
-  // depuis plus de 12 h, que personne n'a touché l'écran depuis 30 min et que rien n'est en cours.
+  // Une fois par semaine, la nuit du samedi au dimanche vers 3 h, la page repart à neuf (mémoire,
+  // état resté de travers) : quelques dizaines de Ko (choix de Tanguy, 30/10 : pas chaque nuit).
+  // Seulement si elle tourne depuis plus de 12 h, que personne n'a touché l'écran depuis 30 min
+  // et que rien n'est en cours.
   var pageNeeA = Date.now();
   var dernierToucher = Date.now();
   document.addEventListener('touchstart', function () { dernierToucher = Date.now(); }, true);
-  function rechargementDeNuit() {
+  function rechargementDuDimanche() {
     var now = Date.now();
-    if (new Date().getHours() !== 3) return;
+    var d = new Date();
+    if (d.getDay() !== 0 || d.getHours() !== 3) return;
     if (now - pageNeeA < 12 * 3600000 || now - dernierToucher < 30 * 60000) return;
     if (inCall() || fenetreOuverte() || playing || etatAppelsInternet() || (radioAudio && !radioAudio.paused)) return;
     if (document.body.className.indexOf('video-playing') >= 0) return;
     pageNeeA = now; // pas deux fois si le rechargement tarde
-    noteGardeFou('Rechargement de nuit de la page', false);
+    noteGardeFou('Rechargement de la semaine de la page', false);
     location.reload();
   }
-  setInterval(rechargementDeNuit, 60000);
+  setInterval(rechargementDuDimanche, 60000);
 
   window.Papote = {
     onStatus: onStatus,
