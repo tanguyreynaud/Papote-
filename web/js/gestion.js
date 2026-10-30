@@ -3,6 +3,7 @@
 // gestion* (functions/gestion.js) : l'argent vient de Stripe, le stock et les dépenses de Firestore.
 // Les factures déposées sont lues automatiquement (gestionLireFacture) pour préremplir les fiches.
 // La connexion et les sections familles, envois et maintenance sont dans admin.js.
+import './retour.js';
 import { demander, saisir, prevenir, menuPoints, annoncer, boutonCharge, patienter, ligneModifiable } from './dialogue.js';
 import { getApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
 import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';

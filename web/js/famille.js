@@ -1,4 +1,5 @@
 // App famille : envoyer photos, vidéos et messages vers la tablette.
+import './retour.js';
 import {
   query, where, orderBy, limit, getDocs, getCountFromServer,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
@@ -2932,7 +2933,7 @@ $('btn-resilier').addEventListener('click', async () => {
 
 $('btn-garder').addEventListener('click', () => withAboError(async () => {
   await annulerResiliation(session.fid);
-  toast('Abonnement gardé');
+  notice('Résiliation annulée : votre abonnement continue comme avant.');
 }));
 
 
