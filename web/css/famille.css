@@ -927,6 +927,9 @@ button:disabled { opacity: .45; cursor: default; }
 .dialog-buttons { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 10px; }
 .dialog-buttons button { min-height: 48px; justify-content: center; }
 .danger-btn { background: var(--danger); color: #fff; }
+/* Nuit : le rouge est clair, le texte blanc n'y tient plus (contraste 2,8) : texte sombre, comme sur les boutons indigo. */
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .danger-btn { color: var(--accent-text); } }
+:root[data-theme="dark"] .danger-btn { color: var(--accent-text); }
 .data-card p { margin: 10px 0; } .data-card summary { font-size: 19px; }
 
 /* Envoi de plusieurs photos : défilement horizontal, une photo à la fois */
@@ -1188,9 +1191,10 @@ body:not(.on-support) .ps-bouton, body:not(.on-support) .ps-panneau { display: n
 .incoming-name, .call-name { margin: 24px 0 0; font-family: var(--display); font-size: 38px; font-weight: 800; letter-spacing: -.01em; line-height: 1.1; color: #312e81; }
 .incoming-sub { margin: 6px 0 0; font-size: 20px; color: #5b5794; }
 /* Remontés vers le tiers bas de l'écran : tout en bas, ils tombaient sous le pouce mal placé. */
-.incoming-actions { margin-top: auto; margin-bottom: 14vh; display: flex; gap: 14px; width: 100%; }
+/* flex-wrap : avec un texte très agrandi, les deux boutons passent l'un sous l'autre au lieu de sortir de l'écran. */
+.incoming-actions { margin-top: auto; margin-bottom: 14vh; display: flex; flex-wrap: wrap; gap: 14px; width: 100%; }
 .round-btn {
-  flex: 1; display: flex; align-items: center; justify-content: center; gap: 10px;
+  flex: 1 1 140px; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 10px;
   min-height: 68px; border-radius: 999px; padding: 0 16px;
   font-family: var(--display); font-size: 20px; font-weight: 800; color: #fff;
 }
@@ -1330,7 +1334,7 @@ a { text-decoration: none; }
 .genre-titre { font-weight: 600; margin: 14px 0 6px; }
 .genre-choix { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; background: var(--bg); border: 1px solid var(--line); border-radius: 14px; }
 .genre-btn { padding: 10px 0; border: 0; border-radius: 10px; background: transparent; color: var(--muted); font: inherit; }
-.genre-btn[aria-checked="true"] { background: var(--card, #fff); color: var(--accent); font-weight: 600; box-shadow: 0 1px 3px rgba(0, 0, 0, .12); }
+.genre-btn[aria-checked="true"] { background: var(--surface); color: var(--accent); font-weight: 600; box-shadow: 0 1px 3px rgba(0, 0, 0, .12); }
 .genre-choix + .primary { margin-top: 20px; }
 /* Ma photo à l'inscription : un petit rond (souhait de Tanguy), centré, avec un badge appareil photo. */
 .moi-visage { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; margin: 4px 0; padding: 0; background: none; border: 0; color: inherit; font: inherit; }
@@ -1339,7 +1343,7 @@ a { text-decoration: none; }
 .moi-rond > svg[hidden], .moi-rond img[hidden] { display: none; }
 .moi-rond > svg { width: 40px; height: 40px; color: color-mix(in srgb, var(--accent) 60%, transparent); }
 .moi-rond:has(img:not([hidden])) { border-style: solid; border-color: var(--accent); }
-.moi-badge { position: absolute; right: -2px; bottom: -2px; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: var(--accent-text); border: 3px solid var(--card, #fff); }
+.moi-badge { position: absolute; right: -2px; bottom: -2px; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: var(--accent-text); border: 3px solid var(--surface); }
 .moi-badge svg { width: 16px; height: 16px; }
 #moi-visage-titre { color: var(--accent); margin-top: 6px; }
 .moi-date { display: grid; grid-template-columns: 1.2fr 1.5fr 1.3fr; gap: 8px; }
