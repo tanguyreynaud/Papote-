@@ -97,4 +97,12 @@ public class OutilsTest {
         // Recharge dans le futur (faute de frappe) : cycle précédent, jamais une date après aujourd'hui.
         assertTrue(Forfait.debutCycle(1, "2026-11-05", now) < now);
     }
+
+    @Test
+    public void texteApresRedemarrage() {
+        assertEquals("La tablette a redémarré : Papote est revenue en 38 s, verrouillée sur Papote.",
+                Sync.texteRedemarrage(38_400, true));
+        assertEquals("La tablette a redémarré : Papote est revenue en 1 s, mais SANS le mode kiosque (à vérifier).",
+                Sync.texteRedemarrage(0, false));
+    }
 }
