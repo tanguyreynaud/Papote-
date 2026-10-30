@@ -1026,8 +1026,13 @@ exports.gestionStock = onCall(async (request) => {
       }
       if (champs.etat !== snap.get('etat')) {
         maj.etat = champs.etat;
-        // Perdue (volée) ou hors service : plus d'accès aux photos de la famille.
-        if (ETATS_BLOQUES.includes(champs.etat) && await retirerDeLaFamille(snap.data(), snap.ref)) maj.fid = null;
+        // Perdue (volée), hors service, ou de retour chez Papote (revenue, en stock, à réparer) : plus dans la famille,
+        // plus d'accès à ses photos ; la fiche oublie la famille et les comptes de la tablette, pour que ses ordres,
+        // ses relevés et son prochain jumelage ne visent jamais l'ancienne famille (inspection du 30/10).
+        if (ETATS_RETIREES.includes(champs.etat) && snap.get('fid')) {
+          await retirerDeLaFamille(snap.data(), snap.ref);
+          Object.assign(maj, { fid: null, tabletUid: null, callsUid: null, jumeleeLe: FieldValue.delete() });
+        }
         // Remise en stock : la tablette n'appartient plus à la commande (l'historique la garde).
         // (Sauf à la réception d'une tablette commandée : elle reste réservée à sa commande.)
         if (champs.etat === 'en-stock' && !('commande' in champs) && snap.get('etat') !== 'commandee') maj.commande = null;
@@ -2313,18 +2318,27 @@ exports.gestionAnnulerCommande = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_P
   const colisRevenu = (request.data || {}).colisRevenu === true;
   if (!id) throw new HttpsError('invalid-argument', 'Commande manquante.');
   const ref = db().doc(`commandes/${id}`);
-  const snap = await ref.get();
-  if (!snap.exists) throw new HttpsError('not-found', 'Commande introuvable.');
-  const c = snap.data();
-  if (colisRevenu) {
-    if (c.expedition !== 'envoyee' || c.fid) {
-      throw new HttpsError('failed-precondition', c.fid ? 'Cette tablette est reliée à une famille : arrêtez plutôt l\'abonnement.'
-        : 'Seule une commande envoyée (colis revenu sans avoir été retiré) peut être annulée ainsi.');
+  // Un seul onglet à la fois : la commande est réservée dans une transaction avant d'aller chez Stripe (deux clics ou
+  // deux onglets en même temps = un seul arrêt, un seul remboursement, un seul e-mail).
+  const c = await db().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new HttpsError('not-found', 'Commande introuvable.');
+    const c = snap.data();
+    if (c.annulationEnCours && Date.now() - c.annulationEnCours < 5 * 60 * 1000) {
+      throw new HttpsError('already-exists', 'Annulation déjà en cours (autre onglet) : rechargez la page.');
     }
-  } else if (!['a-preparer', 'paiement-en-attente'].includes(c.expedition)) {
-    throw new HttpsError('failed-precondition', c.expedition === 'annulee' ? 'Cette commande est déjà annulée.'
-      : 'La tablette est déjà partie : arrêtez plutôt l\'abonnement, le client renverra la tablette.');
-  }
+    if (colisRevenu) {
+      if (c.expedition !== 'envoyee' || c.fid) {
+        throw new HttpsError('failed-precondition', c.fid ? 'Cette tablette est reliée à une famille : arrêtez plutôt l\'abonnement.'
+          : 'Seule une commande envoyée (colis revenu sans avoir été retiré) peut être annulée ainsi.');
+      }
+    } else if (!['a-preparer', 'paiement-en-attente'].includes(c.expedition)) {
+      throw new HttpsError('failed-precondition', c.expedition === 'annulee' ? 'Cette commande est déjà annulée.'
+        : 'La tablette est déjà partie : arrêtez plutôt l\'abonnement, le client renverra la tablette.');
+    }
+    tx.update(ref, { annulationEnCours: Date.now() });
+    return c;
+  });
   let rembourse = 0;
   // Abonnement inconnu de Stripe (commande de test, abonnement effacé) : rien à arrêter ni à rembourser,
   // la commande s'annule quand même, sans e-mail au client.
@@ -2339,12 +2353,14 @@ exports.gestionAnnulerCommande = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_P
       } else {
       // Erreur Stripe : un message lisible plutôt que « le serveur ne répond pas » ; rien n'est encore noté annulé.
       logger.error(`Commande ${id} : annulation Stripe impossible`, e.message);
+      await ref.update({ annulationEnCours: FieldValue.delete() }).catch(() => null);
       throw new HttpsError('aborted', `Stripe a refusé l'annulation : ${e.message}`);
       }
     }
   }
   const qui = request.auth.token.email || request.auth.uid;
   await ref.update({
+    annulationEnCours: FieldValue.delete(),
     expedition: 'annulee', annulation: colisRevenu ? 'colis-revenu' : 'admin', annuleeLe: FieldValue.serverTimestamp(), annuleePar: qui,
     ...(rembourse ? { remboursement: { statut: 'fait', montant: rembourse, le: FieldValue.serverTimestamp() } } : {}),
   });
@@ -2380,6 +2396,8 @@ exports.brancher = (f) => Object.assign(vitrine, f);
 
 // Tablette perdue ou hors service : retirée de sa famille, jamais plus jumelée.
 const ETATS_BLOQUES = ['perdue', 'hors-service'];
+// États où la tablette n'est plus chez un client : retirée de sa famille (gestionStock, changement d'état).
+const ETATS_RETIREES = [...ETATS_BLOQUES, 'revenue', 'en-stock', 'a-reparer'];
 
 // Que faire quand une tablette du stock est jumelée à une famille (pure, testée).
 // t : fiche stock ; commande : sa commande (ou null) ; fid : famille qui vient de la jumeler.
@@ -3362,10 +3380,13 @@ async function closOffertes(offertes, recupere, qui) {
     }
     await d.ref.update({ abonnement: 'resilie', restitution: { statut: recupere ? 'rendue' : 'a-recuperer', le: Date.now() } });
     if (recupere) {
-      await Promise.all(tablettes.docs.filter((t) => ETATS_PARTIS.includes(t.get('etat'))).map((t) => t.ref.update({
-        etat: 'revenue', majLe: FieldValue.serverTimestamp(),
-        historique: FieldValue.arrayUnion({ le: Date.now(), etat: 'revenue', par: qui, commande: d.id }),
-      })));
+      await Promise.all(tablettes.docs.filter((t) => ETATS_PARTIS.includes(t.get('etat'))).map(async (t) => {
+        await retirerDeLaFamille(t.data(), t.ref);
+        await t.ref.update({
+          etat: 'revenue', fid: null, tabletUid: null, callsUid: null, jumeleeLe: FieldValue.delete(), majLe: FieldValue.serverTimestamp(),
+          historique: FieldValue.arrayUnion({ le: Date.now(), etat: 'revenue', par: qui, commande: d.id }),
+        });
+      }));
     }
   }
 }

@@ -655,9 +655,24 @@ exports.resilierAbonnement = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE
     metadata: { ...abo.metadata, arretPar: parPapote ? 'papote' : 'client' },
   });
   await appliquer(fid, id);
-  await mailArret(id, fam, (infos) => mail.resiliationEnregistree({ ...infos, le, parPapote }));
+  // Deux responsables (ou deux onglets) qui demandent l'arrêt en même temps : un seul e-mail.
+  if (await premiereDemande(id, `arret-${Math.ceil(le / 1000)}`)) {
+    await mailArret(id, fam, (infos) => mail.resiliationEnregistree({ ...infos, le, parPapote }));
+  }
   return { le };
 });
+
+// Une demande (arrêt à telle date, reprise) n'est notée qu'une fois sur la commande : rejouée en même temps depuis
+// deux téléphones ou deux onglets, elle ne vaut qu'un e-mail. Renvoie true la première fois.
+async function premiereDemande(commandeId, cle) {
+  const ref = db.doc(`commandes/${commandeId}`);
+  return db.runTransaction(async (t) => {
+    const snap = await t.get(ref);
+    if (!snap.exists || snap.get('derniereDemande') === cle) return false;
+    t.update(ref, { derniereDemande: cle });
+    return true;
+  });
+}
 
 // E-mail au client qui a payé (adresse de la commande) quand l'arrêt est demandé ou annulé.
 async function mailArret(commandeId, fam, faire) {
@@ -687,7 +702,7 @@ exports.annulerResiliation = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE
   }
   await stripe().subscriptions.update(id, { cancel_at: '', metadata: { ...abo.metadata, arretPar: '' } });
   await appliquer(fid, id);
-  await mailArret(id, fam, (infos) => mail.resiliationAnnulee(infos));
+  if (await premiereDemande(id, 'reprise')) await mailArret(id, fam, (infos) => mail.resiliationAnnulee(infos));
   return { ok: true };
 });
 

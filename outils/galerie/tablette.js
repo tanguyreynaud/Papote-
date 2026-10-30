@@ -553,11 +553,36 @@ function fausseAndroid(qr) {
       { nom: 'Saint-Christol', detail: '07160 · Ardèche', lat: 44.87, lon: 4.42 },
       { nom: 'Mariac', detail: '07160 · Ardèche', lat: 44.89, lon: 4.39 },
     ] : []),
-  }, { get: (o, k) => (k in o ? o[k] : rien) });
+  }, { get: (o, k) => (k in o ? o[k] : (...a) => { (window.__android || (window.__android = [])).push(String(k)); return rien(...a); }) });
   // Appels : on garde la main pour faire passer l'appel par ses états (ça sonne, en ligne…).
   // La caméra « ne voit personne » : un envoi reste affiché comme quand Mamie n'est pas devant.
   window.papoteWatchPresence = () => rien;
-  window.papoteCallFamily = (opts) => { window.__appelEnCours = opts; return { hangup: rien }; };
+  window.papoteCallFamily = (opts) => { (window.__android || (window.__android = [])).push('papoteCallFamily'); window.__appelEnCours = opts; return { hangup: rien }; };
+}
+
+// Ouvre l'écran d'une scène dans un nouveau navigateur : fausse app Android, internet coupé.
+async function ouvrir(browser, base, scene, taille, video) {
+  const ctx = await browser.newContext({
+    viewport: { width: taille.width, height: taille.height }, locale: 'fr-FR', timezoneId: 'Europe/Paris',
+    hasTouch: true, permissions: [],
+  });
+  const page = await ctx.newPage();
+  page.setDefaultTimeout(8000); // un bouton absent : erreur signalée vite, pas après 30 s
+  const erreurs = [];
+  page.on('pageerror', (e) => erreurs.push(String(e.message || e)));
+  await page.clock.install({ time: new Date(`${JOUR}T${scene.heure || '10:30'}:00+01:00`) });
+  await page.addInitScript(fausseAndroid, fauxQr());
+  // Les appels vidéo (Firebase, caméra) ne sont pas chargés : la scène joue leur rôle.
+  await page.route(/faux\.webm|radio-fausse\.webm/, (r) => r.fulfill({ contentType: 'video/webm', body: video || Buffer.alloc(0) }));
+  await page.route('**/appels.js', (r) => r.fulfill({ contentType: 'text/javascript', body: '' }));
+  await page.route(/^https?:\/\/(?!127\.0\.0\.1)/, (r) => r.abort());
+  try {
+    await page.goto(`${base}/tablette.html`);
+    await scene.faire(outils(page));
+  } catch (e) {
+    erreurs.push('Scène : ' + e.message.split('\n')[0]);
+  }
+  return { ctx, page, erreurs };
 }
 
 async function capturer({ browser, base, dossierImages, progression }) {
@@ -571,26 +596,7 @@ async function capturer({ browser, base, dossierImages, progression }) {
   async function ouvrier() {
     for (let job = travaux.shift(); job; job = travaux.shift()) {
       const { scene, taille, n } = job;
-      const ctx = await browser.newContext({
-        viewport: { width: taille.width, height: taille.height }, locale: 'fr-FR', timezoneId: 'Europe/Paris',
-        hasTouch: true, permissions: [],
-      });
-      const page = await ctx.newPage();
-      page.setDefaultTimeout(8000); // un bouton absent : erreur signalée vite, pas après 30 s
-      const erreurs = [];
-      page.on('pageerror', (e) => erreurs.push(String(e.message || e)));
-      await page.clock.install({ time: new Date(`${JOUR}T${scene.heure || '10:30'}:00+01:00`) });
-      await page.addInitScript(fausseAndroid, fauxQr());
-      // Les appels vidéo (Firebase, caméra) ne sont pas chargés : la scène joue leur rôle.
-      await page.route(/faux\.webm|radio-fausse\.webm/, (r) => r.fulfill({ contentType: 'video/webm', body: video }));
-      await page.route('**/appels.js', (r) => r.fulfill({ contentType: 'text/javascript', body: '' }));
-      await page.route(/^https?:\/\/(?!127\.0\.0\.1)/, (r) => r.abort());
-      await page.goto(`${base}/tablette.html`);
-      try {
-        await scene.faire(outils(page));
-      } catch (e) {
-        erreurs.push('Scène : ' + e.message.split('\n')[0]);
-      }
+      const { ctx, page, erreurs } = await ouvrir(browser, base, scene, taille, video);
       const fichier = `tablette-${String(n).padStart(3, '0')}.jpg`;
       await page.screenshot({ path: `${dossierImages}/${fichier}`, type: 'jpeg', quality: 70 });
       resultats.push({ n, groupe: scene.groupe, titre: scene.titre, note: scene.note, taille: taille.nom, fichier, erreurs, scene: SCENES.indexOf(scene) });
@@ -603,4 +609,4 @@ async function capturer({ browser, base, dossierImages, progression }) {
   return resultats.sort((a, b) => a.n - b.n);
 }
 
-module.exports = { capturer, SCENES };
+module.exports = { capturer, ouvrir, SCENES, TAILLES };
