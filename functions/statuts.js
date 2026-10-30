@@ -30,6 +30,18 @@ function refusEtiquette(c, sens, { remplacee = false } = {}) {
   return "Rien à récupérer chez ce client : pas de fin de contrat ni de tablette remplacée. Pas d'étiquette de retour.";
 }
 
+// Deuxième étiquette pour le même sens alors qu'une étiquette payée existe (double clic, vieil onglet) : refusée,
+// sauf si l'ancienne a servi (colis livré) ou date de plus de 30 jours (annulée par la nuit si pas déposée).
+const ETIQUETTE_JOURS = 30;
+function refusEtiquetteEnDouble(c, sens, maintenant) {
+  const e = c && c.etiquettes && c.etiquettes[sens];
+  if (!e || !e.colis || e.livre) return '';
+  if (e.le && maintenant - e.le >= ETIQUETTE_JOURS * 864e5) return '';
+  return sens === 'aller'
+    ? "Une étiquette d'envoi existe déjà pour cette commande : annulez-la d'abord pour en refaire une."
+    : 'Une étiquette de retour existe déjà pour cette commande (lien sur la commande) : annulez-la d\'abord pour en refaire une.';
+}
+
 // « Colis envoyé » avec un n° de suivi : commande à envoyer, ou déjà envoyée (numéro corrigé).
 // Remise en main propre : seulement une commande à envoyer.
 function refusEnvoi(c, { mainPropre = false } = {}) {
@@ -87,6 +99,6 @@ function refusSuppressionSim(ligne, tablette) {
 }
 
 module.exports = {
-  refusEtiquette, refusEnvoi, refusReception, refusRetourMateriel, refusLienCommande,
+  refusEtiquette, refusEtiquetteEnDouble, refusEnvoi, refusReception, refusRetourMateriel, refusLienCommande,
   refusStatutSim, refusRecharge, refusSuppressionSim, SUITES_SIM, RESTITUTION_EN_COURS,
 };

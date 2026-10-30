@@ -2157,6 +2157,9 @@ async function creerEtiquette(commande, sens, qui, { sansImpression = false } = 
     .where('etat', '==', 'en-retour').limit(1).get()).empty;
   const refus = statuts.refusEtiquette(c, sens, { remplacee });
   if (refus) throw new HttpsError('failed-precondition', refus);
+  // Une étiquette payée existe déjà (double clic, vieil onglet) : pas une deuxième. Annuler l'ancienne pour refaire.
+  const doublon = statuts.refusEtiquetteEnDouble(c, sens, Date.now());
+  if (doublon) throw new HttpsError('already-exists', doublon);
   const reglages = lireReglages(reglagesSnap.data());
   const papote = sendcloud.adressePapote(reglages.expediteur);
   if (!papote) throw new HttpsError('failed-precondition', "Renseignez l'adresse d'expédition de Papote (Réglages, Étiquettes Sendcloud).");
@@ -2269,10 +2272,13 @@ exports.gestionRenvoyerCode = onCall({ secrets: [MAIL_MOT_DE_PASSE] }, async (re
 
 // Abonnement Stripe arrêté (s'il tourne encore) et chaque facture payée remboursée de ce qui reste à rendre.
 // Rejouable : une facture déjà remboursée (ici ou à la main dans Stripe) est sautée.
-async function arreterEtRembourser(id) {
+async function arreterEtRembourser(id, motif = 'admin') {
   const abo = await stripe().subscriptions.retrieve(id).catch(() => null);
   // Un abonnement fini (annulé, ou jamais payé : incomplete_expired) ne s'annule plus.
   if (abo && !['canceled', 'incomplete_expired'].includes(abo.status)) {
+    // Marque posée chez Stripe avant l'arrêt : le message « abonnement supprimé » la porte, et le dernier mois
+    // n'est pas prélevé (index.js, prelevementDernierMois), même s'il arrive avant l'écriture « annulée » ici.
+    await stripe().subscriptions.update(id, { metadata: { ...(abo.metadata || {}), annulation: motif } });
     await stripe().subscriptions.cancel(id, { prorate: false, invoice_now: false });
   }
   let rembourse = 0;
@@ -2321,7 +2327,7 @@ exports.gestionAnnulerCommande = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_P
   let stripeIntrouvable = false;
   if (!c.offerte && id.startsWith('sub_')) {
     try {
-      rembourse = await arreterEtRembourser(id);
+      rembourse = await arreterEtRembourser(id, colisRevenu ? 'colis-revenu' : 'admin');
     } catch (e) {
       if (e.code === 'resource_missing' || /No such subscription/i.test(e.message || '')) {
         stripeIntrouvable = true;
@@ -3281,6 +3287,8 @@ exports.gestionCommandeOfferte = onCall(async (request) => {
 // est close (annulée si la tablette n'est pas partie, sinon matériel noté récupéré ou encore à récupérer).
 
 const STATUTS_A_RESILIER = ['actif', 'impaye', 'suspendu'];
+const { STRIPE_VIVANTS } = require('./abonnement');
+const codeDe = (d) => (d.get('code') ? `${d.get('code').slice(0, 4)}-${d.get('code').slice(4)}` : d.id);
 const nomCompare = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().replace(/\s+/g, ' ').toLowerCase();
 
 // Raison de refuser la suppression, ou null.
@@ -3301,6 +3309,11 @@ exports.gestionSupprimerFamille = onCall({ timeoutSeconds: 540, memory: '512MiB'
   const refus = refusSuppression(snap.data(), nom);
   if (refus) throw new HttpsError('failed-precondition', refus);
   const commandes = await db().collection('commandes').where('fid', '==', fid).get();
+  // Le statut de la famille ne suffit pas : une autre commande reliée peut encore être prélevée chez Stripe.
+  const vivante = commandes.docs.find((d) => STRIPE_VIVANTS.includes(d.get('statutStripe')));
+  if (vivante) {
+    throw new HttpsError('failed-precondition', `La commande ${codeDe(vivante)} de cette famille a encore un abonnement Stripe en cours : arrêtez-le d'abord, sinon le client continuerait à payer.`);
+  }
   // Commande offerte partie chez le proche : l'admin dit si la tablette et ses accessoires sont récupérés.
   const { offertes, parties } = offertesOuvertes(commandes.docs);
   const { recupere } = request.data || {};
