@@ -41,12 +41,24 @@ function juger(seuilContraste) {
   };
   const nom = (el) => (el.id ? `#${el.id} ` : '') + `« ${(el.textContent || el.getAttribute('aria-label') || '').trim().replace(/\s+/g, ' ').slice(0, 40)} »`;
   if (document.documentElement.scrollWidth > W + 2) pb.push(`défilement horizontal (${document.documentElement.scrollWidth} px pour ${W})`);
+  // rgb(r, g, b[, a]) ou, pour un color-mix() calculé, color(srgb r g b[ / a]) avec des valeurs de 0 à 1.
+  const canaux = (c) => {
+    const m = (c.match(/[\d.]+/g) || ['0', '0', '0']).map(Number);
+    return c.startsWith('color(') ? m.map((x, i) => (i < 3 ? x * 255 : x)) : m;
+  };
   const lum = (c) => {
-    const m = c.match(/[\d.]+/g) || [0, 0, 0];
-    const [r, g, b] = m.slice(0, 3).map((x) => { const v = Number(x) / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; });
+    const [r, g, b] = canaux(c).slice(0, 3).map((x) => { const v = x / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; });
     return 0.2126 * r + 0.7152 * g + 0.0722 * b;
   };
-  const alpha = (c) => { const m = c.match(/[\d.]+/g); return m && m.length >= 4 ? Number(m[3]) : (c === 'transparent' ? 0 : 1); };
+  const alpha = (c) => { const m = canaux(c); return m.length >= 4 ? m[3] : (c === 'transparent' ? 0 : 1); };
+  // Un bouton dans une rangée qui défile (messages rapides) a le droit d'être plus loin que le bord.
+  const defile = (el) => {
+    for (let e = el.parentElement; e && e !== document.body; e = e.parentElement) {
+      const ox = getComputedStyle(e).overflowX;
+      if ((ox === 'auto' || ox === 'scroll') && e.scrollWidth > e.clientWidth + 3) return true;
+    }
+    return false;
+  };
   const fond = (el) => {
     for (let e = el; e; e = e.parentElement) {
       const st = getComputedStyle(e);
@@ -62,7 +74,7 @@ function juger(seuilContraste) {
     const r = el.getBoundingClientRect();
     const st = getComputedStyle(el);
     const bouton = el.matches('button, [role=button], a.primary, a.secondary, .nav-item');
-    if (bouton && (r.right > W + 2 || r.left < -2)) pb.push(`bouton hors de l'écran : ${nom(el)}`);
+    if (bouton && (r.right > W + 2 || r.left < -2) && !defile(el)) pb.push(`bouton hors de l'écran : ${nom(el)}`);
     if (bouton && el.scrollWidth > el.clientWidth + 3 && st.overflow !== 'visible' && st.textOverflow !== 'ellipsis') pb.push(`texte coupé : ${nom(el)}`);
     if (!bouton && r.right > W + 2 && el.textContent.trim()) pb.push(`texte qui dépasse de l'écran : ${nom(el)}`);
     // Lisibilité : couleur du texte contre le fond réel (sauf fond en image).
@@ -130,6 +142,8 @@ async function balayer({ browser, base, partie, progression }) {
         // Bouton retour du téléphone : une fenêtre ouverte doit se fermer, et l'appli rester là.
         if (v.nom === 'normal' && await page.locator(COUCHE).count()) {
           const avant = page.url();
+          // Appli famille : comme dans l'app Android, une entrée « sortie » sous l'accueil (posée au premier toucher).
+          if (partie === 'famille') await page.evaluate(() => { if (!history.state) { history.replaceState({ sortie: true }, ''); history.pushState(null, ''); } }).catch(() => {});
           await page.goBack({ waitUntil: 'commit', timeout: 3000 }).catch(() => {});
           await page.waitForTimeout(600);
           const encore = await page.locator(COUCHE).count().catch(() => 0);
