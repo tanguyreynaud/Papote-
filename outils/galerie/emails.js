@@ -154,7 +154,7 @@ async function capturer({ browser, base, dossierImages, progression, dossierSour
       const fichier = `emails-${String(n).padStart(3, '0')}.jpg`;
       await page.screenshot({ path: `${dossierImages}/${fichier}`, type: 'jpeg', quality: 70, fullPage: true, timeout: 15000 })
         .catch((e) => erreurs.push('Capture : ' + e.message.split('\n')[0]));
-      resultats.push({ n, groupe: scene.groupe, titre: scene.titre, note: scene.note, taille: taille.nom, fichier, erreurs, scene: SCENES.indexOf(scene) });
+      resultats.push({ n, groupe: scene.groupe, titre: scene.titre, note: scene.note, fonction: scene.fonction, taille: taille.nom, fichier, erreurs, scene: SCENES.indexOf(scene) });
       await ctx.close();
       progression(`e-mails ${n}/${total}`);
     }

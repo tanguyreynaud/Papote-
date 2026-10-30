@@ -17,6 +17,8 @@
 //                                        et signale toute action partie en double (double.js)
 //   --identifiants [admin famille]       au lieu des captures : chaque bouton qui agit sur une commande ou un abonnement
 //                                        doit envoyer au serveur la commande de la page / la famille ouverte (identifiants.js)
+//   Chaque galerie range aussi ses captures dans validation/ pour l'espace Validation de l'admin :
+//   publier-validation.bat les met en ligne (voir README).
 //   --boutons                            au lieu des captures : touche chaque bouton de l'app famille et de l'admin,
 //                                        serveur bloqué, et liste ceux qui ne montrent rien (sortie/boutons.txt)
 //
@@ -88,6 +90,8 @@ async function main() {
   fs.writeFileSync(path.join(sortie, 'artifact.html'), page.html(parties, images, { fichiers: true })
     .replace(/<!doctype html>\s*<html[^>]*>\s*<head>/i, '').replace(/<\/head>\s*<body>/i, '').replace(/<\/body>\s*<\/html>\s*$/i, '')
     .replace(/<meta charset="utf-8">\s*<meta name="viewport"[^>]*>/i, ''));
+  // Mêmes captures rangées pour l'espace Validation de l'admin (validation.js, publié par publier-validation.mjs).
+  require('./validation').ecrire(parties, images);
   const total = parties.reduce((s, p) => s + p.ecrans.length, 0);
   const erreurs = parties.flatMap((p) => p.ecrans.filter((e) => e.erreurs.length));
   console.log(`\n${total} captures : ${fichier}`);

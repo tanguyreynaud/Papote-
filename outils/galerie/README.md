@@ -70,3 +70,23 @@ chaque bouton différent de l'app famille et de l'admin, sur le premier écran o
 répond jamais. Dans les 0,7 s, l'écran doit montrer quelque chose (roue, fenêtre, message, autre page, choix d'un
 fichier…). Les boutons qui ne montrent rien sont listés dans `sortie/boutons.txt`. Le message de fin (réussite ou
 erreur, une fois que le serveur répond) n'est pas vérifié ici : il se regarde dans la galerie.
+
+## Espace Validation de l'admin
+
+Chaque galerie range aussi ses captures dans `validation/` (une fiche par partie, captures nommées par leur empreinte).
+`publier-validation.bat` refait la galerie puis met les captures en ligne sur le site Firebase **papote-validation**
+(hébergement gratuit, créé tout seul la première fois) ; l'admin les montre dans **Validation › Écrans**, rangées par
+parcours, avec « Validé » / « À revoir » et un commentaire par écran.
+
+```
+cd C:\Users\tangu\papote-deploiement
+git fetch origin
+git checkout --detach origin/main
+cd outils\galerie
+.\publier-validation.bat          tout (environ 10 minutes)
+.\publier-validation.bat admin    seulement l'admin : les autres parties gardent leurs captures
+```
+
+Chaque écran a un identifiant stable (partie, parcours, titre) : le choix de Tanguy le suit même quand les numéros
+changent. Si ses captures changent après validation, l'admin le signale (« A changé »). Renommer une scène = un écran
+neuf, à revalider. Le site est public mais sans moteur de recherche (noindex) : il ne montre que de fausses données.
