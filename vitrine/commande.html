@@ -218,6 +218,11 @@ body .ps-bouton { bottom: 6.5rem; }
   // Clé PUBLIQUE de l'intégration Sendcloud « Papote » (points relais Mondial Relay). Pas un secret.
   var SENDCLOUD_CLE = 'f8875927-f7be-4ad7-ac24-22fd11c0efc5';
   var COMMANDER = 'https://europe-west1-papote-famille.cloudfunctions.net/commander';
+  // On ne vend que le stock réel (Tanguy, 2026-10-30) : plus de tablette, l'accueil propose « Être prévenu ».
+  fetch('https://europe-west1-papote-famille.cloudfunctions.net/stockDisponible')
+    .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(function (d) { if (d.disponible === false) location.replace('/?complet=1#prevenir'); })
+    .catch(function () {});
   // Adresses : Base Adresse Nationale, servie par la Géoplateforme de l'IGN (l'ancienne api-adresse.data.gouv.fr
   // ne répond plus depuis 2026).
   var GEOCODAGE = 'https://data.geopf.fr/geocodage';

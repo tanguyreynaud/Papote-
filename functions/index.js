@@ -503,9 +503,12 @@ exports.commander = onRequest({ secrets: [STRIPE_SECRET] }, async (req, res) => 
   const email = emailValide(req.query.email);
   const accord = req.query.accord === '1';
   try {
-    // Plus de tablette disponible : liste d'attente « Être prévenu ».
-    // Toujours une réservation : les commandes ne ferment plus, seul le délai annoncé change (stock.js).
+    // Plus de tablette à vendre (stock.js) : retour à la page de commande, qui propose « Être prévenu ».
     const reservation = await reserverTablette();
+    if (!reservation) {
+      res.redirect(303, `${SITE_VITRINE.value()}/commande.html`);
+      return;
+    }
     const session = await sessionPaiement({ formule, tablette, relais, proche, email, accord, reservation });
     // Lien d'une relance : le panier d'origine est déjà noté.
     if (email && !req.query.relance) {
@@ -1193,11 +1196,18 @@ exports.listeAttente = onRequest({ cors: [/mapapote\.fr$/, /papote\.web\.app$/],
     return;
   }
   const prenom = typeof d.prenom === 'string' ? d.prenom.trim().slice(0, 60) : '';
+  // Téléphone facultatif, pour que Tanguy rappelle dès qu'une tablette arrive (2026-10-30) : portable français seulement.
+  const telephone = relances.portableFrancais(d.telephone);
+  if (telephone === false) {
+    res.status(400).json({ erreur: 'Numéro de portable français (06 ou 07) seulement.' });
+    return;
+  }
   const ref = db.doc(`contacts/${cleContact(email)}`);
   const snap = await ref.get();
   await ref.set({
     email, consentement: true, desinscritLe: FieldValue.delete(),
     ...(prenom ? { prenom } : {}),
+    ...(telephone ? { telephone } : {}),
     ...(snap.exists ? {} : { source: 'liste-attente', creeLe: FieldValue.serverTimestamp() }),
     listeAttente: true, listeAttenteLe: FieldValue.serverTimestamp(),
     ...(snap.exists && snap.get('jeton') ? {} : { jeton: require('node:crypto').randomBytes(16).toString('hex') }),
