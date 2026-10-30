@@ -341,9 +341,11 @@ service cloud.firestore {
               && request.resource.data.uid == request.auth.uid
               && request.resource.data.email == myEmail()
               && (
-                // Créateur de la famille, ou invité par e-mail : actif tout de suite.
+                // Créateur de la famille, ou invité par e-mail : actif tout de suite. L'invitation est consommée
+                // dans la même écriture (effacée) : retiré de la famille, le proche ne revient pas tout seul avec elle.
                 ((isCreatorAfter(fid)
-                    || exists(/databases/$(database)/documents/families/$(fid)/invitations/$(myEmail())))
+                    || (exists(/databases/$(database)/documents/families/$(fid)/invitations/$(myEmail()))
+                      && !existsAfter(/databases/$(database)/documents/families/$(fid)/invitations/$(myEmail()))))
                   && request.resource.data.status == 'active')
                 // Arrivé avec le code famille : en attente d'un responsable.
                 || (get(invitePath(request.resource.data.code)).data.fid == fid

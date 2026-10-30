@@ -1,9 +1,9 @@
 {
   "name": "papote-tests-regles",
   "private": true,
-  "description": "Tests des règles Firestore (firestore.rules) du parcours client, sur l'émulateur : rien en ligne.",
+  "description": "Tests des règles Firestore (firestore.rules) et Storage (storage.rules) sur l'émulateur : qui peut voir ou modifier quelle famille. Rien en ligne.",
   "scripts": {
-    "test": "npx --yes firebase-tools@14 emulators:exec --only firestore --project demo-papote --config firebase.json \"node --test --test-concurrency=1 regles.test.js\""
+    "test": "npx --yes firebase-tools@14 emulators:exec --only firestore,storage --project demo-papote --config firebase.json \"node --test --test-concurrency=1 regles.test.js\""
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^4.0.1",

@@ -1,6 +1,7 @@
 {
   "emulators": {
     "firestore": { "port": 8086 },
+    "storage": { "port": 9196 },
     "ui": { "enabled": false },
     "singleProjectMode": true
   }

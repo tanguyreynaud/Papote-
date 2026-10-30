@@ -160,11 +160,14 @@ export async function myInvitations() {
 export async function acceptInvitation(invitation, name) {
   const user = auth.currentUser;
   const email = myEmail();
-  await setDoc(doc(db, 'families', invitation.fid, 'members', user.uid), {
+  // Fiche créée et invitation effacée d'un seul coup : la règle Firestore l'exige (une invitation ne sert qu'une fois).
+  const batch = writeBatch(db);
+  batch.set(doc(db, 'families', invitation.fid, 'members', user.uid), {
     name, role: 'famille', code: '', joinedAt: serverTimestamp(),
     uid: user.uid, email, status: 'active',
   });
-  await deleteDoc(doc(db, 'families', invitation.fid, 'invitations', email));
+  batch.delete(doc(db, 'families', invitation.fid, 'invitations', email));
+  await batch.commit();
 }
 
 // ---------- Côté responsable ----------

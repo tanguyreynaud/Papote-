@@ -202,7 +202,11 @@ export async function joinFamily(rawCode, name, role = 'famille') {
     };
     try {
       // Le propriétaire qui revient dans sa famille (ou un invité par e-mail) entre directement…
-      await setDoc(memberRef, { ...base, status: 'active' });
+      // L'invitation à son adresse est effacée dans la même écriture : la règle Firestore l'exige, elle ne sert qu'une fois.
+      const batch = writeBatch(db);
+      batch.set(memberRef, { ...base, status: 'active' });
+      if (user.email) batch.delete(doc(db, 'families', fid, 'invitations', user.email.toLowerCase()));
+      await batch.commit();
     } catch (e) {
       // … sinon il arrive en attente : un responsable doit l'accepter.
       await setDoc(memberRef, { ...base, status: 'pending' });

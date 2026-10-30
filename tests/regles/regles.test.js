@@ -1,12 +1,16 @@
-// Règles Firestore du parcours client (firestore.rules), vérifiées sur l'émulateur : ce que l'appli
+// Règles Firestore (firestore.rules) et Storage (storage.rules), vérifiées sur l'émulateur : ce que l'appli
 // famille et la tablette ont le droit d'écrire, et ce qui doit être refusé. Rien ne touche la vraie base.
-// Lancer : « npm test » dans tests/regles (Java nécessaire pour l'émulateur Firestore).
+// Deuxième partie (30/10, inspection « qui peut voir ou modifier quelle famille ») : une autre famille, un proche en
+// attente, une invitation réutilisée, un responsable désigné, les ordres à la tablette, les photos dans Storage.
+// Lancer : « npm test » dans tests/regles (Java nécessaire pour les émulateurs).
 
 const test = require('node:test');
+const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
 const { initializeTestEnvironment, assertFails, assertSucceeds } = require('@firebase/rules-unit-testing');
-const { doc, setDoc, updateDoc, deleteDoc, getDoc, serverTimestamp, deleteField, Timestamp, setLogLevel } = require('firebase/firestore');
+const { doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, collection, collectionGroup, query, where, writeBatch, serverTimestamp, deleteField, Timestamp, setLogLevel } = require('firebase/firestore');
+const { ref, uploadString, getBytes, deleteObject } = require('firebase/storage');
 
 // Les refus attendus (assertFails) ne sont pas des erreurs : pas de journal.
 setLogLevel('silent');
@@ -54,10 +58,11 @@ test.before(async () => {
   env = await initializeTestEnvironment({
     projectId: 'demo-papote',
     firestore: { rules: fs.readFileSync(path.join(__dirname, '../../firestore.rules'), 'utf8') },
+    storage: { rules: fs.readFileSync(path.join(__dirname, '../../storage.rules'), 'utf8') },
   });
 });
 test.after(() => env.cleanup());
-test.beforeEach(() => env.clearFirestore());
+test.beforeEach(async () => { await env.clearFirestore(); await env.clearStorage(); });
 
 // Mon numéro de téléphone (chantier téléphone 29/10) : écrit par le proche sur sa fiche, à l'inscription ou après.
 test('numéro de téléphone du proche : accepté bien formé, refusé sinon', async () => {
@@ -86,12 +91,18 @@ test('un proche arrivé avec le code famille attend l\'accord d\'un responsable'
   await assertSucceeds(setDoc(doc(proche('paul'), `families/${FID}/posts/p1`), envoi('paul')));
 });
 
-test('un proche invité par e-mail entre directement', async () => {
+test('un proche invité par e-mail entre directement, en consommant son invitation', async () => {
   await famille();
   await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), `families/${FID}/invitations/paul@exemple.fr`), {
     email: 'paul@exemple.fr', fid: FID, familyName: 'Mamie Emma',
   }));
-  await assertSucceeds(setDoc(doc(proche('paul'), `families/${FID}/members/paul`), fiche('paul', { status: 'active' })));
+  const paul = proche('paul');
+  // L'invitation doit disparaître dans la même écriture (compte.js acceptInvitation, firebase.js joinFamily).
+  await assertFails(setDoc(doc(paul, `families/${FID}/members/paul`), fiche('paul', { status: 'active' })));
+  const lot = writeBatch(paul);
+  lot.set(doc(paul, `families/${FID}/members/paul`), fiche('paul', { status: 'active' }));
+  lot.delete(doc(paul, `families/${FID}/invitations/paul@exemple.fr`));
+  await assertSucceeds(lot.commit());
 });
 
 test('le propriétaire met un proche en tête des appels ; un autre responsable non', async () => {
@@ -283,4 +294,227 @@ test('commandes et abonnement : jamais écrits par l\'appli', async () => {
   await assertFails(setDoc(doc(proche('julie'), 'commandes/sub_1'), { fid: FID }));
   await assertFails(updateDoc(doc(proche('julie'), `families/${FID}`), { abonnement: { statut: 'offert' } }));
   await assertFails(updateDoc(doc(proche('julie'), `families/${FID}`), { nbProches: 0 }));
+});
+
+// ---------- Qui peut voir ou modifier quelle famille (inspection du 30/10) ----------
+
+const FID2 = 'famille-rose';
+// Deuxième famille (Ève et sa tablette), et dans la famille d'Emma : Paul responsable désigné, Léa simple proche,
+// Marc arrivé avec le code, en attente.
+async function deuxFamilles() {
+  await famille();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, `families/${FID}`), { admins: ['paul'] }, { merge: true });
+    await setDoc(doc(db, `families/${FID}/members/paul`), fiche('paul', { status: 'active' }));
+    await setDoc(doc(db, `families/${FID}/members/lea`), fiche('lea', { name: 'Léa', status: 'active' }));
+    await setDoc(doc(db, `families/${FID}/members/marc`), fiche('marc', { name: 'Marc', status: 'pending' }));
+    await setDoc(doc(db, `families/${FID}/posts/p1`), { ...envoi('julie'), createdAt: Timestamp.now() });
+    await setDoc(doc(db, `families/${FID}/commands/o1`), { type: 'status', target: 'tab', createdBy: 'paul', createdAt: Timestamp.now(), state: 'pending' });
+    await setDoc(doc(db, `families/${FID}/logs/tab`), { lines: 'ok', version: '2.99.99' });
+    await setDoc(doc(db, `families/${FID}/members/julie/private/push`), { tablette: 'jeton-julie' });
+    await setDoc(doc(db, `families/${FID2}`), { name: 'Mamie Rose', code: 'ROSE2345', createdBy: 'eve', abonnement: { statut: 'actif' }, nbProches: 1 });
+    await setDoc(doc(db, `invites/ROSE2345`), { fid: FID2, createdBy: 'eve' });
+    await setDoc(doc(db, `families/${FID2}/members/eve`), fiche('eve', { name: 'Ève', code: 'ROSE2345', status: 'active' }));
+    await setDoc(doc(db, `families/${FID2}/members/tab2`), { name: 'Tablette', role: 'tablette', pairing: 'AUTRE1234' });
+  });
+}
+const ordre = (createdBy, extra = {}) => ({ type: 'restart', target: 'tab', createdBy, createdAt: serverTimestamp(), state: 'pending', ...extra });
+const appel = (callerUid) => ({ callerUid, callerName: 'Ève', calleeUid: 'tab', calleeName: 'Tablette', state: 'ringing', offer: null, answer: null, createdAt: serverTimestamp(), endedAt: null });
+const rappel = (createdBy) => ({ title: 'Cachet', kind: 'medicament', time: '12:00', repeat: 'daily', createdBy, createdAt: serverTimestamp() });
+
+test('une autre famille : Ève (responsable chez Rose) ne voit ni n\'écrit rien chez Emma', async () => {
+  await deuxFamilles();
+  const eve = proche('eve');
+  await assertFails(getDoc(doc(eve, `families/${FID}`)));
+  await assertFails(getDoc(doc(eve, `families/${FID}/posts/p1`)));
+  await assertFails(getDocs(collection(eve, `families/${FID}/posts`)));
+  await assertFails(getDocs(collection(eve, `families/${FID}/members`)));
+  await assertFails(getDoc(doc(eve, `families/${FID}/members/julie`)));
+  await assertFails(getDoc(doc(eve, `families/${FID}/logs/tab`)));
+  await assertFails(getDoc(doc(eve, `families/${FID}/commands/o1`)));
+  await assertFails(getDoc(doc(eve, `families/${FID}/members/julie/private/push`)));
+  await assertFails(setDoc(doc(eve, `families/${FID}/posts/p2`), envoi('eve')));
+  await assertFails(setDoc(doc(eve, `families/${FID}/reminders/r1`), rappel('eve')));
+  await assertFails(setDoc(doc(eve, `families/${FID}/calls/c1`), appel('eve')));
+  await assertFails(setDoc(doc(eve, `families/${FID}/commands/o2`), ordre('eve')));
+  await assertFails(updateDoc(doc(eve, `families/${FID}`), { veille: { active: true, de: 21, a: 6 }, rev: 2 }));
+  await assertFails(updateDoc(doc(eve, `families/${FID}`), { admins: ['eve'] }));
+  await assertFails(updateDoc(doc(eve, `families/${FID}`), { name: 'Mamie Ève' }));
+  await assertFails(setDoc(doc(eve, `families/${FID}/invitations/ami@exemple.fr`), { email: 'ami@exemple.fr', fid: FID, familyName: 'Mamie Emma', invitedBy: 'Ève', createdAt: serverTimestamp() }));
+  await assertFails(deleteDoc(doc(eve, `families/${FID}/members/lea`)));
+  await assertFails(updateDoc(doc(eve, `families/${FID}/members/marc`), { status: 'active' }));
+  // Ni s'inviter elle-même, ni réclamer la tablette d'Emma pour sa famille, ni lister les codes d'Emma.
+  await assertFails(setDoc(doc(eve, `families/${FID}/members/eve`), fiche('eve', { status: 'active' })));
+  await assertFails(setDoc(doc(eve, `invites/NOUV3AU2`), { fid: FID, createdBy: 'eve' }));
+  await assertFails(getDocs(query(collection(eve, 'invites'), where('fid', '==', FID))));
+  await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), 'pairings/LIBRE123'), {
+    status: 'waiting', tabletUid: 'tab3', callsUid: 'tab3-appels', name: 'Tablette', createdAt: Timestamp.now(), expiresAt: Timestamp.fromMillis(Date.now() + 10 * 60 * 1000),
+  }));
+  await assertFails(updateDoc(doc(eve, 'pairings/LIBRE123'), { status: 'claimed', fid: FID, familyName: 'Mamie Emma', claimedBy: 'eve', claimedName: 'Ève' }));
+  await assertSucceeds(updateDoc(doc(eve, 'pairings/LIBRE123'), { status: 'claimed', fid: FID2, familyName: 'Mamie Rose', claimedBy: 'eve', claimedName: 'Ève' }));
+  // La requête « mes familles » (fiches membres qui portent mon uid) ne rend que les siennes.
+  const miennes = await assertSucceeds(getDocs(query(collectionGroup(eve, 'members'), where('uid', '==', 'eve'))));
+  assert.deepStrictEqual(miennes.docs.map((d) => d.ref.path), [`families/${FID2}/members/eve`]);
+  await assertFails(getDocs(query(collectionGroup(eve, 'members'), where('uid', '==', 'julie'))));
+  // La tablette de Rose ne lit pas la famille d'Emma et ne répond pas à ses ordres.
+  await assertFails(getDoc(doc(tablette('tab2'), `families/${FID}`)));
+  await assertFails(updateDoc(doc(tablette('tab2'), `families/${FID}/commands/o1`), { state: 'done', result: 'x', doneAt: serverTimestamp() }));
+});
+
+test('un proche en attente ne voit que sa fiche, et ne s\'accepte pas lui-même', async () => {
+  await deuxFamilles();
+  const marc = proche('marc');
+  await assertSucceeds(getDoc(doc(marc, `families/${FID}/members/marc`)));
+  await assertFails(getDoc(doc(marc, `families/${FID}`)));
+  await assertFails(getDocs(collection(marc, `families/${FID}/posts`)));
+  await assertFails(getDocs(collection(marc, `families/${FID}/members`)));
+  await assertFails(setDoc(doc(marc, `families/${FID}/posts/p9`), envoi('marc')));
+  await assertFails(setDoc(doc(marc, `families/${FID}/calls/c9`), appel('marc')));
+  await assertFails(updateDoc(doc(marc, `families/${FID}/members/marc`), { status: 'active' }));
+  // Un simple proche (Léa) ne l'accepte pas non plus ; un responsable (Paul) si.
+  await assertFails(updateDoc(doc(proche('lea'), `families/${FID}/members/marc`), { status: 'active' }));
+  await assertSucceeds(updateDoc(doc(proche('paul'), `families/${FID}/members/marc`), { status: 'active' }));
+  await assertSucceeds(getDoc(doc(marc, `families/${FID}`)));
+});
+
+test('invitation par e-mail : à l\'adresse invitée seulement, consommée en entrant ; un proche retiré revient en attente', async () => {
+  await deuxFamilles();
+  const invitation = { email: 'paulo@exemple.fr', fid: FID, familyName: 'Mamie Emma', invitedBy: 'Julie', createdAt: serverTimestamp() };
+  await assertSucceeds(setDoc(doc(proche('julie'), `families/${FID}/invitations/paulo@exemple.fr`), invitation));
+  // Une autre adresse ne sert pas de l'invitation ; l'adresse invitée voit la sienne (requête « mes invitations »).
+  await assertFails(setDoc(doc(proche('lea2'), `families/${FID}/members/lea2`), fiche('lea2', { status: 'active' })));
+  await assertFails(getDocs(query(collectionGroup(proche('lea2'), 'invitations'), where('email', '==', 'paulo@exemple.fr'))));
+  const miennes = await assertSucceeds(getDocs(query(collectionGroup(proche('paulo'), 'invitations'), where('email', '==', 'paulo@exemple.fr'))));
+  assert.strictEqual(miennes.size, 1);
+  // Entrer sans consommer l'invitation : refusé (sinon elle resservirait après un départ). Entrer en l'effaçant : accepté.
+  const paulo = proche('paulo');
+  await assertFails(setDoc(doc(paulo, `families/${FID}/members/paulo`), fiche('paulo', { status: 'active' })));
+  const lot = writeBatch(paulo);
+  lot.set(doc(paulo, `families/${FID}/members/paulo`), fiche('paulo', { status: 'active' }));
+  lot.delete(doc(paulo, `families/${FID}/invitations/paulo@exemple.fr`));
+  await assertSucceeds(lot.commit());
+  await assertSucceeds(getDoc(doc(paulo, `families/${FID}`)));
+  // Retiré par un responsable : plus d'invitation, il ne revient qu'en attente (le code famille), jamais actif tout seul.
+  await assertSucceeds(deleteDoc(doc(proche('paul'), `families/${FID}/members/paulo`)));
+  await assertFails(getDoc(doc(proche('paulo'), `families/${FID}`)));
+  await assertFails(setDoc(doc(proche('paulo'), `families/${FID}/members/paulo`), fiche('paulo', { status: 'active' })));
+  await assertSucceeds(setDoc(doc(proche('paulo'), `families/${FID}/members/paulo`), fiche('paulo', { status: 'pending' })));
+  await assertFails(getDoc(doc(proche('paulo'), `families/${FID}`)));
+});
+
+test('responsables : désignés par un responsable, jamais au détriment du propriétaire ; un proche ne touche pas à la liste', async () => {
+  await deuxFamilles();
+  await assertSucceeds(updateDoc(doc(proche('paul'), `families/${FID}`), { admins: ['paul', 'lea'] }));
+  await assertSucceeds(updateDoc(doc(proche('julie'), `families/${FID}`), { admins: ['paul'] }));
+  await assertFails(updateDoc(doc(proche('lea'), `families/${FID}`), { admins: ['lea', 'marc'] }));
+  await assertFails(updateDoc(doc(proche('paul'), `families/${FID}`), { createdBy: 'paul' }));
+  await assertFails(updateDoc(doc(proche('paul'), `families/${FID}`), { admins: ['paul'], createdBy: 'paul' }));
+  // Onze responsables : refusé (dix au plus).
+  await assertFails(updateDoc(doc(proche('julie'), `families/${FID}`), { admins: Array.from({ length: 11 }, (_, i) => `r${i}`) }));
+  // Le propriétaire ne peut être retiré ni par un responsable, ni par Papote, ni partir lui-même.
+  await env.withSecurityRulesDisabled((ctx) => updateDoc(doc(ctx.firestore(), `families/${FID}`), { admins: ['paul'] }));
+  await assertFails(deleteDoc(doc(proche('paul'), `families/${FID}/members/julie`)));
+  await assertFails(deleteDoc(doc(admin(), `families/${FID}/members/julie`)));
+  await assertFails(deleteDoc(doc(proche('julie'), `families/${FID}/members/julie`)));
+  // Un responsable retire un proche ou refuse une demande ; un proche part de lui-même ; Papote peut aussi retirer.
+  await assertSucceeds(deleteDoc(doc(proche('paul'), `families/${FID}/members/marc`)));
+  await assertFails(deleteDoc(doc(proche('lea'), `families/${FID}/members/paul`)));
+  await assertSucceeds(deleteDoc(doc(proche('lea'), `families/${FID}/members/lea`)));
+  await assertSucceeds(deleteDoc(doc(admin(), `families/${FID}/members/paul`)));
+  // Papote désigne un nouveau propriétaire (secours), personne d'autre.
+  await assertSucceeds(updateDoc(doc(admin(), `families/${FID}`), { createdBy: 'paul', admins: [] }));
+  // Les fiches ne changent ni de rôle ni de compte.
+  await assertFails(updateDoc(doc(proche('lea'), `families/${FID}/members/lea`), { role: 'tablette' }));
+  await assertFails(updateDoc(doc(proche('julie'), `families/${FID}/members/julie`), { uid: 'paul' }));
+  await assertFails(updateDoc(doc(proche('julie'), `families/${FID}/members/julie`), { email: 'autre@exemple.fr' }));
+});
+
+test('ordres à la tablette : un responsable de CETTE famille ; la tablette ne répond qu\'aux siens', async () => {
+  await deuxFamilles();
+  const wifi = (par) => ordre(par, { type: 'wifi', ssid: 'Box', security: 'wpa2', password: 'secret' });
+  await assertSucceeds(setDoc(doc(proche('paul'), `families/${FID}/commands/w1`), wifi('paul')));
+  await assertFails(setDoc(doc(proche('lea'), `families/${FID}/commands/w2`), wifi('lea')));
+  await assertFails(setDoc(doc(proche('paul'), `families/${FID}/commands/w3`), wifi('julie')));
+  await assertFails(setDoc(doc(proche('eve'), `families/${FID}/commands/w4`), wifi('eve')));
+  // La tablette lit et termine ses ordres (le mot de passe disparaît), pas ceux d'une autre tablette.
+  await assertSucceeds(getDoc(doc(tablette('tab'), `families/${FID}/commands/w1`)));
+  await assertSucceeds(updateDoc(doc(tablette('tab'), `families/${FID}/commands/w1`), { state: 'done', result: 'ok', doneAt: serverTimestamp(), password: deleteField() }));
+  await assertFails(updateDoc(doc(tablette('tab'), `families/${FID}/commands/w1`), { state: 'done', target: 'tab2' }));
+  await assertFails(updateDoc(doc(tablette('tab2'), `families/${FID}/commands/o1`), { state: 'done', result: 'x', doneAt: serverTimestamp() }));
+  await assertFails(getDoc(doc(tablette('tab2'), `families/${FID}/commands/o1`)));
+  // Un ordre visant une autre tablette : elle seule pourrait y répondre, elle ne le lit pas (autre famille).
+  await assertSucceeds(setDoc(doc(proche('paul'), `families/${FID}/commands/w5`), { ...wifi('paul'), target: 'tab2' }));
+  await assertFails(updateDoc(doc(tablette('tab'), `families/${FID}/commands/w5`), { state: 'done' }));
+  await assertSucceeds(deleteDoc(doc(proche('paul'), `families/${FID}/commands/w5`)));
+  await assertFails(deleteDoc(doc(proche('lea'), `families/${FID}/commands/w1`)));
+});
+
+test('jeton de notification (private) : lisible et modifiable de soi seul', async () => {
+  await deuxFamilles();
+  await assertSucceeds(getDoc(doc(proche('julie'), `families/${FID}/members/julie/private/push`)));
+  await assertSucceeds(setDoc(doc(proche('julie'), `families/${FID}/members/julie/private/push`), { tablette: 'nouveau' }));
+  await assertFails(getDoc(doc(proche('paul'), `families/${FID}/members/julie/private/push`)));
+  await assertFails(setDoc(doc(proche('paul'), `families/${FID}/members/julie/private/push`), { tablette: 'pirate' }));
+  await assertFails(getDoc(doc(admin(), `families/${FID}/members/julie/private/push`)));
+  await assertFails(getDoc(doc(tablette('tab'), `families/${FID}/members/julie/private/push`)));
+});
+
+test('tablette revenue (fiche retirée par Papote) : elle ne lit plus rien de la famille', async () => {
+  await deuxFamilles();
+  await assertSucceeds(getDoc(doc(tablette('tab'), `families/${FID}`)));
+  await assertSucceeds(deleteDoc(doc(admin(), `families/${FID}/members/tab`)));
+  await assertFails(getDoc(doc(tablette('tab'), `families/${FID}`)));
+  await assertFails(getDocs(collection(tablette('tab'), `families/${FID}/posts`)));
+  await assertFails(setDoc(doc(tablette('tab'), `families/${FID}/calls/c1`), appel('tab')));
+  // Papote ne retire pas un proche propriétaire par ce chemin, et un proche simple si.
+  await assertFails(deleteDoc(doc(admin(), `families/${FID}/members/julie`)));
+  await assertSucceeds(deleteDoc(doc(admin(), `families/${FID}/members/lea`)));
+});
+
+test('code d\'installation d\'une tablette : ouvre la famille à une tablette seulement, et à la bonne', async () => {
+  await deuxFamilles();
+  await assertSucceeds(setDoc(doc(admin(), 'invites/TABL2345'), { fid: FID, createdBy: 'tanguy', kind: 'tablette' }));
+  await assertFails(setDoc(doc(proche('eve'), 'invites/TABL2346'), { fid: FID, createdBy: 'eve', kind: 'tablette' }));
+  const membre = (code) => ({ name: 'Tablette', role: 'tablette', code, canCall: true, joinedAt: serverTimestamp() });
+  await assertSucceeds(setDoc(doc(tablette('tab9'), `families/${FID}/members/tab9`), membre('TABL2345')));
+  await assertFails(setDoc(doc(tablette('tab8'), `families/${FID2}/members/tab8`), membre('TABL2345')));
+  await assertFails(setDoc(doc(tablette('tab7'), `families/${FID}/members/tab7`), membre(CODE)));
+  // Un téléphone avec ce code : ni actif, ni en attente.
+  await assertFails(setDoc(doc(proche('x'), `families/${FID}/members/x`), fiche('x', { code: 'TABL2345', status: 'active' })));
+  await assertFails(setDoc(doc(proche('x'), `families/${FID}/members/x`), fiche('x', { code: 'TABL2345', status: 'pending' })));
+});
+
+// ---------- Storage : photos et vidéos des familles ----------
+
+const stockage = (ctx) => ctx.storage('gs://demo-papote.appspot.com');
+const procheStockage = (uid) => stockage(env.authenticatedContext(uid, { email: `${uid}@exemple.fr`, email_verified: true, firebase: { sign_in_provider: 'google.com' } }));
+const adminStockage = () => stockage(env.authenticatedContext('tanguy', { email: 'tanguy@exemple.fr', email_verified: true, admin: true, firebase: { sign_in_provider: 'google.com' } }));
+const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+
+test('photos (Storage) : les membres de la famille seulement, pas une autre famille ni un proche en attente', async () => {
+  await deuxFamilles();
+  await env.withSecurityRulesDisabled((ctx) => uploadString(ref(stockage(ctx), `families/${FID}/media/a.png`), PNG, 'data_url', { contentType: 'image/png' }));
+  await assertSucceeds(getBytes(ref(procheStockage('lea'), `families/${FID}/media/a.png`)));
+  await assertSucceeds(getBytes(ref(adminStockage(), `families/${FID}/media/a.png`)));
+  await assertFails(getBytes(ref(procheStockage('eve'), `families/${FID}/media/a.png`)));
+  await assertFails(getBytes(ref(procheStockage('marc'), `families/${FID}/media/a.png`)));
+  await assertFails(getBytes(ref(procheStockage('inconnu'), `families/${FID}/media/a.png`)));
+  await assertSucceeds(uploadString(ref(procheStockage('lea'), `families/${FID}/media/b.png`), PNG, 'data_url', { contentType: 'image/png' }));
+  await assertFails(uploadString(ref(procheStockage('eve'), `families/${FID}/media/c.png`), PNG, 'data_url', { contentType: 'image/png' }));
+  await assertFails(uploadString(ref(procheStockage('marc'), `families/${FID}/media/d.png`), PNG, 'data_url', { contentType: 'image/png' }));
+  // Seulement des images, vidéos et sons ; effacé par un membre, pas par un étranger.
+  // (Le remplacement d'un fichier existant, interdit par « allow update: if false », n'est pas vérifiable ici :
+  // l'émulateur Storage le traite comme une création.)
+  await assertFails(uploadString(ref(procheStockage('lea'), `families/${FID}/media/e.txt`), 'coucou', 'raw', { contentType: 'text/plain' }));
+  await assertFails(deleteObject(ref(procheStockage('eve'), `families/${FID}/media/a.png`)));
+  await assertSucceeds(deleteObject(ref(procheStockage('lea'), `families/${FID}/media/a.png`)));
+  // En dehors du dossier des familles : rien pour personne.
+  await assertFails(uploadString(ref(procheStockage('lea'), 'autre/x.png'), PNG, 'data_url', { contentType: 'image/png' }));
+});
+
+test('les règles du bucket Europe sont les mêmes, base « europe » au lieu de « (default) »', () => {
+  const normale = fs.readFileSync(path.join(__dirname, '../../storage.rules'), 'utf8').replace(/^\/\/.*\n/gm, '');
+  const europe = fs.readFileSync(path.join(__dirname, '../../storage-eu.rules'), 'utf8').replace(/^\/\/.*\n/gm, '');
+  assert.strictEqual(europe.replace(/\/databases\/europe\//g, '/databases/(default)/'), normale);
 });
