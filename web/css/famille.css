@@ -687,6 +687,11 @@ button:disabled { opacity: .45; cursor: default; }
   -webkit-backdrop-filter: blur(14px);
   border-top: 1px solid var(--line);
 }
+/* Clavier ouvert (la page rétrécit, interactive-widget=resizes-content) : la barre du bas et « Installer l'app »
+   remonteraient au-dessus du clavier et cacheraient le champ tapé. Ils reviennent quand le clavier se ferme. */
+@media (hover: none) and (pointer: coarse) {
+  body:has(:is(input:not([type=checkbox], [type=radio], [type=range], [type=file], [type=button], [type=submit]), textarea):focus) :is(.nav, .install-fab) { display: none; }
+}
 .nav-item {
   flex: 1;
   max-width: 200px;

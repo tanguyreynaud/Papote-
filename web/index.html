@@ -5,7 +5,7 @@
   <!-- L'ancienne adresse renvoie vers la nouvelle (même page, mêmes paramètres), sauf dans l'app
        installée depuis l'ancienne adresse : elle s'ouvrirait dans une fenêtre de navigateur. -->
   <script>if (location.hostname === 'papote-famille.web.app' && !matchMedia('(display-mode: standalone)').matches && navigator.standalone !== true) location.replace('https://app.mapapote.fr' + location.pathname + location.search + location.hash);</script>
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
   <!-- App Android Papote : Chrome dessine toujours la page sous les boutons Android (retour, accueil),
        sans tenir compte de la couleur choisie par l'app. La page met elle-même une bande grise dessous
        (.app-android, famille.css). -->
