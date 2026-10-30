@@ -3,6 +3,7 @@
 // serveur, envoi…) montre une petite roue à la place de son texte et ne se touche plus, jusqu'à la fin de l'action.
 // Une seule règle pour toute l'app, même pour un bouton ajouté plus tard. L'action garde son message de fin
 // (réussite ou erreur) ; un bouton qui gère déjà son attente (désactivé, aria-busy, « Un instant… ») est laissé tel quel.
+// Tant que l'action dure, les clics suivants sur le même bouton sont ignorés : un double clic n'appelle rien deux fois.
 // Vérifié par la galerie : node galerie.js --boutons (outils/galerie/boutons.js).
 
 const ATTENTE = 120; // ms : une action plus rapide ne fait pas clignoter de roue
@@ -17,6 +18,10 @@ style.textContent = '[data-retour]{position:relative;pointer-events:none;color:t
   + '@media (prefers-reduced-motion:reduce){[data-retour]::after{animation-duration:2.4s}}';
 document.head.append(style);
 
+// Un bouton dont l'action est en cours ne se touche plus : le 2e clic d'un double clic (avant même la roue, qui attend
+// 120 ms) est ignoré, pour qu'aucune action ne parte deux fois (Tanguy, 30/10 ; vérifié par node galerie.js --double).
+const occupes = new WeakMap(); // bouton → événement qui l'a occupé
+
 // Une fenêtre est ouverte (confirmation, choix) : c'est elle, le retour ; la roue attend qu'elle se ferme.
 const fenetreOuverte = () => Boolean(document.querySelector('.dialog-back:not(.closing), dialog[open]'));
 
@@ -26,8 +31,9 @@ function boutonDe(e, ecouteur) {
   return b && (ecouteur === b || ecouteur?.contains?.(b) || ecouteur === document || ecouteur === window) ? b : null;
 }
 
-function occuper(b, promesse) {
-  if (b.dataset.retour !== undefined) return;
+function occuper(b, promesse, evenement) {
+  if (occupes.has(b)) return;
+  occupes.set(b, evenement);
   let fini = false;
   let pose = false;
   const gereDeja = () => b.disabled || b.getAttribute('aria-busy') === 'true' || b.classList.contains('charge');
@@ -50,7 +56,7 @@ function occuper(b, promesse) {
   };
   const suivi = setInterval(() => { if (fenetreOuverte()) enlever(); else poser(); }, 150);
   const debut = setTimeout(poser, ATTENTE);
-  const fin = () => { fini = true; clearInterval(suivi); clearTimeout(debut); clearTimeout(limite); enlever(); };
+  const fin = () => { fini = true; occupes.delete(b); clearInterval(suivi); clearTimeout(debut); clearTimeout(limite); enlever(); };
   const limite = setTimeout(fin, MAX);
   promesse.then(fin, fin);
 }
@@ -66,11 +72,11 @@ proto.addEventListener = function (type, ecouteur, options) {
   let env = enveloppes.get(ecouteur);
   if (!env) {
     env = function (e) {
+      const b = boutonDe(e, this);
+      const enCours = b && occupes.get(b);
+      if (enCours && enCours !== e) { e.preventDefault(); e.stopImmediatePropagation(); return undefined; }
       const r = ecouteur.apply(this, arguments);
-      if (r && typeof r.then === 'function') {
-        const b = boutonDe(e, this);
-        if (b) occuper(b, r);
-      }
+      if (b && r && typeof r.then === 'function') occuper(b, r, e);
       return r;
     };
     enveloppes.set(ecouteur, env);

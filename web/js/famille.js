@@ -3278,7 +3278,8 @@ async function sendCommand(type, extra = {}) {
 
 document.querySelectorAll('[data-cmd]').forEach((btn) => btn.addEventListener('click', async () => {
   if (btn.dataset.cmd === 'restart' && !await askConfirm('Redémarrer la tablette ? Elle sera indisponible une minute.', 'Redémarrer')) return;
-  sendCommand(btn.dataset.cmd);
+  // Attendue : le bouton tourne et ne se touche plus tant que l'ordre part (sinon un double clic envoyait 2 ordres).
+  await sendCommand(btn.dataset.cmd);
 }));
 
 // Journal de la tablette : ses dernières lignes d'erreur, envoyées au plus toutes les heures
@@ -3319,6 +3320,7 @@ function barres(signal) {
 }
 
 function ouvrirWifi() {
+  if (!$('sheet-wifi').hidden) return; // déjà ouverte (double clic) : pas de 2e recherche de réseaux
   $('sheet-wifi').hidden = false;
   empiler({ page: 'settings', sheet: true });
   chercherReseaux();

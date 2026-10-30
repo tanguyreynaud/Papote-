@@ -195,7 +195,7 @@ function prendreFichiers(genre) {
 }
 
 function lienPiece(piece) {
-  return h('button', { type: 'button', class: 'piece', title: piece.nom, onclick: (e) => { e.stopPropagation(); ouvrirPiece(piece); } },
+  return h('button', { type: 'button', class: 'piece', title: piece.nom, onclick: (e) => { e.stopPropagation(); return ouvrirPiece(piece); } },
     '📎 ', piece.nom.length > 28 ? `${piece.nom.slice(0, 25)}…` : piece.nom);
 }
 
@@ -3908,7 +3908,7 @@ function afficherArchives() {
   }));
   const refaire = (cle) => h('button', {
     type: 'button', class: 'link', title: 'Refaire avec les données actuelles',
-    onclick: (e) => { e.stopPropagation(); cloturer(cle); },
+    onclick: (e) => { e.stopPropagation(); return cloturer(cle); }, // promesse rendue : pas de 2e clôture par double clic
   }, 'Refaire');
   remplirTable($('t-archives'), [
     { titre: 'Mois' }, { titre: 'Recettes', n: 1 }, { titre: 'Achats', n: 1 }, { titre: 'Fichiers' }, { titre: 'Figé le' }, { titre: '' },
