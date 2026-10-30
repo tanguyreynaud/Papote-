@@ -3319,15 +3319,18 @@ function barres(signal) {
   return `<span class="bars" aria-label="Signal ${n} sur 4">${[1, 2, 3, 4].map((i) => `<i class="${i <= n ? 'on' : ''}"></i>`).join('')}</span>`;
 }
 
+let wifiOuvertLe = 0;
 function ouvrirWifi() {
   if (!$('sheet-wifi').hidden) return; // déjà ouverte (double clic) : pas de 2e recherche de réseaux
+  wifiOuvertLe = Date.now();
   $('sheet-wifi').hidden = false;
   empiler({ page: 'settings', sheet: true });
   chercherReseaux();
 }
 $('wifi-modify').addEventListener('click', ouvrirWifi);
 $('wifi-close').addEventListener('click', () => history.back());
-$('sheet-wifi').addEventListener('click', (e) => { if (e.target === $('sheet-wifi')) history.back(); });
+// Le 2e clic d'un double clic sur « Modifier » tombe sur le voile : il ne referme pas la fenêtre à peine ouverte.
+$('sheet-wifi').addEventListener('click', (e) => { if (e.target === $('sheet-wifi') && Date.now() - wifiOuvertLe > 500) history.back(); });
 
 async function connecter(r, password) {
   await sendCommand('wifi', { ssid: r.ssid, security: r.security, ...(r.security === 'open' ? {} : { password }) });
