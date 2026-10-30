@@ -228,6 +228,7 @@ const TITRES = {
   clients: 'Clients',
   stock: 'Stock',
   compta: 'Comptabilité',
+  validation: 'Validation',
   outils: 'Réglages',
   tablette: 'Tablette',
   commande: 'Commande',

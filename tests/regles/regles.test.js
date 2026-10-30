@@ -288,6 +288,16 @@ test('tableau de bord : fiche de la tablette, journal et volumes', async () => {
   await assertFails(updateDoc(doc(admin(), `families/${FID}`), { volume: 80, name: 'X' }));
 });
 
+test('espace Validation : l\'administrateur seul lit et écrit ses choix', async () => {
+  const choix = { e: { xabc: { s: 'ok', c: '', h: 'h1', t: 1 } } };
+  await assertSucceeds(setDoc(doc(admin(), 'validation/etat'), choix, { merge: true }));
+  await assertSucceeds(getDoc(doc(admin(), 'validation/etat')));
+  await assertFails(getDoc(doc(proche('julie'), 'validation/etat')));
+  await assertFails(setDoc(doc(proche('julie'), 'validation/etat'), choix, { merge: true }));
+  await assertFails(getDoc(doc(tablette('tab'), 'validation/etat')));
+  await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(), 'validation/etat')));
+});
+
 test('commandes et abonnement : jamais écrits par l\'appli', async () => {
   await famille();
   await assertFails(getDoc(doc(proche('julie'), 'commandes/sub_1')));

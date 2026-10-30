@@ -21,8 +21,11 @@
   <link rel="modulepreload" href="js/sim.js">
   <link rel="modulepreload" href="js/gestion-api.js">
   <link rel="modulepreload" href="js/parcours.js">
+  <link rel="modulepreload" href="js/validation.js">
+  <link rel="modulepreload" href="js/validation-donnees.js">
   <link rel="stylesheet" href="css/admin.css">
   <link rel="stylesheet" href="css/gestion.css">
+  <link rel="stylesheet" href="css/validation.css">
 </head>
 <body class="admin-body">
   <div id="chargement" class="chargement" role="status">
@@ -64,6 +67,9 @@
         <a href="#compta" data-page="compta">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h3.5v-9H4zm6.25 0h3.5V5h-3.5zM16.5 20H20v-6h-3.5z"/></svg>
           Comptabilité</a>
+        <a href="#validation" data-page="validation">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11l3 3 8-8M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/></svg>
+          Validation</a>
         <a href="#outils" data-page="outils" class="nav-reglages">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.5-.5-.5-2.5z"/></svg>
           Réglages</a>
@@ -383,6 +389,20 @@
       </section>
 
       <!-- ---------- Réglages et maintenance ---------- -->
+      <!-- ---------- Validation : tout voir et tout valider avant le 5 décembre (validation.js) ---------- -->
+      <section data-panneau="validation" hidden>
+        <div class="onglets no-print" role="tablist">
+          <button type="button" data-onglet="ecrans">Écrans</button>
+          <button type="button" data-onglet="parcours">Parcours</button>
+          <button type="button" data-onglet="depenses">Dépenses</button>
+          <button type="button" data-onglet="gestes">Gestes humains</button>
+        </div>
+        <div data-onglet="ecrans" id="v-ecrans"></div>
+        <div data-onglet="parcours" id="v-parcours"></div>
+        <div data-onglet="depenses" id="v-depenses"></div>
+        <div data-onglet="gestes" id="v-gestes"></div>
+      </section>
+
       <section data-panneau="outils" hidden>
         <div class="onglets no-print" role="tablist">
           <button type="button" data-onglet="automatique">Automatique</button>
@@ -602,5 +622,6 @@
 
   <script type="module" src="js/admin.js"></script>
   <script type="module" src="js/gestion.js"></script>
+  <script type="module" src="js/validation.js"></script>
 </body>
 </html>

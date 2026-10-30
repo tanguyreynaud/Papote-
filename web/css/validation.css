@@ -1,0 +1,95 @@
+/* Espace Validation de l'admin (validation.js) : crème et indigo, aucun orange, boutons de même taille. */
+.v-titre { margin: 4px 0 8px; }
+.v-sous-titre { margin: 22px 0 8px; color: var(--muted); }
+.v-liste { display: grid; gap: 10px; margin-top: 12px; }
+.v-ligne { display: flex; align-items: center; gap: 14px; color: inherit; text-decoration: none; margin: 0; }
+.v-ligne:hover { border-color: var(--accent); }
+.v-ligne-texte { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.v-ligne .v-barre { flex: 0 0 140px; }
+.v-barre { display: flex; height: 8px; border-radius: 999px; overflow: hidden; background: var(--line); }
+.v-barre .v-ok { background: var(--ok); }
+.v-barre .v-revoir { background: var(--danger); }
+.v-tuile { text-decoration: none; color: inherit; }
+
+.v-etat.v-ok { color: var(--ok); border-color: currentColor; }
+.v-etat.v-revoir, .v-etat.v-change { color: var(--danger); border-color: currentColor; }
+.v-etat.v-avoir { color: var(--muted); }
+.v-alerte { background: #fdecec; color: var(--danger); border-radius: 10px; padding: 8px 12px; margin: 6px 0; }
+
+.v-grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); gap: 14px; margin-top: 10px; }
+.v-ecran { margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.v-ecran-tete { display: flex; align-items: baseline; gap: 10px; }
+.v-ecran-tete h3 { flex: 1; margin: 0; font-size: 16px; }
+.v-num { font: 700 15px var(--display); background: #eef0ff; color: var(--accent); border-radius: 6px; padding: 2px 8px; flex: none; }
+.v-captures { display: flex; gap: 8px; align-items: flex-start; }
+.v-capture { flex: 1; min-width: 0; padding: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); cursor: zoom-in; display: flex; flex-direction: column; overflow: hidden; }
+.v-capture img { display: block; width: 100%; height: auto; }
+.v-capture small { color: var(--muted); font-size: 12px; padding: 2px 0; }
+.v-capture.v-telephone { max-width: 200px; }
+.v-capture.v-ordinateur { flex: 2; }
+
+.v-bloc-choix { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.v-choix-ligne { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.v-choix { min-height: 44px; padding: 8px 12px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--surface); color: var(--text); font: inherit; font-weight: 700; cursor: pointer; justify-content: center; }
+.v-oui[aria-pressed="true"] { background: var(--ok); border-color: var(--ok); color: #fff; }
+.v-non[aria-pressed="true"] { background: var(--danger); border-color: var(--danger); color: #fff; }
+.v-com-bloc { display: flex; flex-direction: column; gap: 6px; }
+.v-com { width: 100%; font: inherit; font-size: 15px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--text); resize: vertical; }
+.v-garder { align-self: flex-start; }
+.v-ajouter { align-self: flex-start; }
+.v-msg { margin: 0; font-size: 14px; }
+.v-msg:empty { display: none; }
+.v-msg.ok { color: var(--ok); }
+.v-msg.error { color: var(--danger); }
+.v-suivant { display: flex; justify-content: center; margin: 18px 0; text-decoration: none; font-weight: 700; }
+.v-commande { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; overflow-x: auto; font-size: 14px; }
+
+/* Grand écran : une capture après l'autre. */
+body.v-zoom-ouvert { overflow: hidden; }
+.v-zoom { position: fixed; inset: 0; z-index: 900; background: var(--bg); display: flex; flex-direction: column; }
+.v-zoom-barre { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--surface); }
+.v-zoom-barre .muted { margin-right: auto; }
+.v-zoom-corps { flex: 1; overflow-y: auto; padding: 14px 16px 32px; max-width: 1400px; width: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 10px; }
+.v-zoom-images { display: flex; gap: 12px; align-items: flex-start; overflow-x: auto; }
+.v-zoom-images figure { margin: 0; flex: 1 1 0; min-width: 240px; }
+.v-zoom-images img { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: 8px; }
+.v-zoom-images figcaption { text-align: center; font-size: 12px; color: var(--muted); }
+.v-zoom .v-bloc-choix { max-width: 560px; }
+
+/* Parcours */
+.v-etapes { list-style: none; counter-reset: etape; padding: 0; margin: 12px 0; display: grid; gap: 10px; }
+.v-etape { counter-increment: etape; position: relative; margin: 0; padding-left: 52px; }
+.v-etape::before { content: counter(etape); position: absolute; left: 14px; top: 16px; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: #fff; font: 700 14px/26px var(--display); text-align: center; }
+.v-etape p { margin: 6px 0; }
+.v-etape-tete { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.v-qui { font-weight: 700; }
+.v-qui-tanguy { color: var(--accent); border-color: currentColor; }
+.v-qui-papote { color: var(--muted); }
+.v-mails { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0; }
+.v-mail { cursor: pointer; font: inherit; font-size: 13px; background: var(--surface); }
+.v-infos { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; margin: 6px 0 0; font-size: 14px; }
+.v-infos dt { color: var(--muted); font-weight: 700; }
+.v-infos dd { margin: 0; }
+
+/* Dépenses */
+.v-champs { display: flex; flex-wrap: wrap; gap: 12px; margin: 10px 0; }
+.v-champ { display: flex; flex-direction: column; gap: 4px; font-size: 14px; color: var(--muted); }
+.v-champ input { width: 140px; margin: 0; }
+.v-depense, .v-geste { margin: 0; }
+.v-depense h3 { margin: 0; font-size: 17px; }
+.v-montant { white-space: nowrap; color: var(--accent); }
+.v-pistes { margin: 4px 0 8px; padding-left: 20px; }
+.v-pistes li { margin: 2px 0; }
+
+@media (max-width: 640px) {
+  .v-ligne { flex-wrap: wrap; }
+  .v-ligne .v-barre { flex-basis: 100%; }
+  .v-etape { padding-left: 16px; padding-top: 44px; }
+  .v-etape::before { top: 12px; }
+  .v-captures { flex-direction: column; }
+  .v-capture.v-telephone { max-width: none; }
+  .v-zoom-images { flex-direction: column; }
+  .v-zoom-images figure { min-width: 0; width: 100%; }
+}
+.v-zoom-corps > * { flex: none; }
+.v-zoom-images img { max-height: 78vh; width: auto; max-width: 100%; margin: 0 auto; }
