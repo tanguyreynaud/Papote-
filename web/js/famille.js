@@ -3148,7 +3148,7 @@ function renderAbonnement() {
     const futur = (t) => t && toDate(t) > new Date();
     // Une seule phrase par date (sans engagement : plus de date d'engagement).
     if (abo.resiliationLe && abo.arretPar === 'papote') details.push('Arrêté par Papote');
-    if (abo.resiliationLe) details.push(abo.tablette === 'achetee' ? 'Plus rien ne sera prélevé ensuite' : 'Ce jour-là, vous recevrez l\'étiquette prépayée pour nous renvoyer la tablette');
+    if (abo.resiliationLe) details.push(abo.tablette === 'achetee' ? 'Plus rien ne sera prélevé ensuite' : 'La tablette est à nous renvoyer, gratuitement');
     // Chaque mois est payé une fois écoulé : le premier prélèvement tombe à la fin du premier mois.
     else if (statut === 'actif' && enAttenteEnvoi(abo)) {
       // Avant l'envoi, l'essai Stripe court 90 jours par sécurité : la vraie date n'est connue qu'à la réception.
