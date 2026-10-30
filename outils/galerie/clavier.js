@@ -85,6 +85,8 @@ function examiner(i) {
 // Vérifie les champs de l'écran affiché. Rend { problemes: [...], capture: bool } ; la capture « clavier ouvert »
 // (premier champ, ou premier champ en défaut) est écrite dans fichier si l'écran a un champ.
 async function verifier(page, taille, fichier) {
+  // Menu ☰ ouvert : on le referme avant de taper dans la page, rien à juger ici.
+  if (await page.locator('[aria-expanded="true"]').count().catch(() => 0)) return { problemes: [], capture: false };
   const champs = await champsVisibles(page).catch(() => []);
   if (!champs.length) return { problemes: [], capture: false };
   const paysage = taille.width > taille.height;
