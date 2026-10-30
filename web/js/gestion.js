@@ -3648,7 +3648,8 @@ $('btn-cloturer').addEventListener('click', () => cloturer());
 // qui ont accepté (vérifié aussi par le serveur), avec un lien de désinscription.
 
 let clients = null;
-const TYPES_CLIENT = { client: 'Abonné', ancien: 'Ancien client', panier: 'Panier abandonné', contact: 'Contact', chat: 'Contact du chat' };
+// attente : « Être prévenu » du site quand il n'y a plus de tablette en stock (à rappeler à la main, aucun SMS automatique).
+const TYPES_CLIENT = { client: 'Abonné', ancien: 'Ancien client', panier: 'Panier abandonné', attente: 'Liste d\'attente', contact: 'Contact', chat: 'Contact du chat' };
 const STATUTS_CLIENT = {
   actif: 'actif', offert: 'offert', impaye: 'impayé', suspendu: 'suspendu', resilie: 'résilié', aucun: 'sans abonnement', installation: 'installation en cours', annulee: 'annulée',
 };
@@ -3700,6 +3701,7 @@ function afficherClients() {
     stat(String(compte((c) => c.type === 'client')), 'abonnés'),
     stat(String(compte((c) => c.type === 'ancien')), 'anciens clients'),
     stat(String(compte((c) => c.type === 'panier')), 'paniers abandonnés'),
+    stat(String(compte((c) => c.type === 'attente')), 'en liste d\'attente'),
     stat(String(compte((c) => c.type === 'chat')), 'contacts du chat'),
     stat(String(compte((c) => c.consentement && !c.desinscrit)), 'acceptent les e-mails', `${compte((c) => c.desinscrit)} désinscrits`),
   );
@@ -3708,7 +3710,9 @@ function afficherClients() {
     { titre: 'Nom' }, { titre: 'E-mail' }, { titre: 'Téléphone' }, { titre: 'Situation' }, { titre: 'Depuis' }, { titre: 'E-mails' },
   ], liste.map((c) => ({
     cellules: [
-      c.nom || '', c.email, c.telephone || '',
+      c.nom || '', c.email,
+      // Toucher le numéro appelle (sans ouvrir la fiche).
+      c.telephone ? h('a', { href: `tel:${c.telephone.replace(/\s/g, '')}`, onclick: (e) => e.stopPropagation() }, c.telephone) : '',
       [TYPES_CLIENT[c.type] || '', c.statut && c.type !== 'panier' ? ` (${STATUTS_CLIENT[c.statut] || c.statut})` : '', c.formule === 'wifi' ? ' · Wi-Fi (ancienne formule)' : ''].join(''),
       jour(c.depuis), accordTexte(c),
     ],
