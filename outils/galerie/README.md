@@ -57,3 +57,11 @@ Une scène = un titre, ses données et les gestes à faire avant la capture :
   touchers ; `plein: true` capture toute la page qui défile).
 
 Les numéros suivent l'ordre des scènes : ajouter une scène au milieu décale les suivants.
+
+## Aucun bouton sans effet
+
+`node galerie.js --boutons` (ou `--boutons famille`, `--boutons admin`) : au lieu des captures, touche une fois
+chaque bouton différent de l'app famille et de l'admin, sur le premier écran où il apparaît, avec un serveur qui ne
+répond jamais. Dans les 0,7 s, l'écran doit montrer quelque chose (roue, fenêtre, message, autre page, choix d'un
+fichier…). Les boutons qui ne montrent rien sont listés dans `sortie/boutons.txt`. Le message de fin (réussite ou
+erreur, une fois que le serveur répond) n'est pas vérifié ici : il se regarde dans la galerie.

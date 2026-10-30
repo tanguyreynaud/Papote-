@@ -320,6 +320,10 @@ async function appliquer(fid, abonnementId) {
   if (commande.exists && commande.get('offerte')) return appliquerOfferte(fid, commande);
   const abo = await stripe().subscriptions.retrieve(abonnementId);
   const ref = db.doc(`families/${fid}`);
+  // Abonnement déjà en place pour cette famille : son état chez Stripe dit s'il peut céder la place.
+  const avant = (await ref.get()).get('abonnement');
+  const autreId = avant && avant.stripeSubscriptionId && avant.stripeSubscriptionId !== abo.id ? avant.stripeSubscriptionId : null;
+  const autreStatut = autreId ? ((await stripe().subscriptions.retrieve(autreId).catch(() => null)) || {}).status || null : null;
   const changement = await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     if (!snap.exists) return null;
@@ -327,6 +331,9 @@ async function appliquer(fid, abonnementId) {
     if (!regles.peutModifier(actuel)) {
       logger.info(`Famille ${fid} offerte : abonnement ${abonnementId} ignoré.`);
       return null;
+    }
+    if (actuel && actuel.stripeSubscriptionId === autreId && regles.garderAbonnementActuel(actuel, abo.id, autreStatut)) {
+      return { garde: autreId };
     }
     const { statut, graceJusqua } = regles.statutDepuisStripe(abo.status, actuel, Date.now());
     // Date de suspension gardée (C2 : « suspendue depuis N jours » dans À faire), tant que ça dure.
@@ -343,6 +350,7 @@ async function appliquer(fid, abonnementId) {
         essaiJusqua: versTimestamp(regles.premierPrelevementDe(abo, Date.now())),
         resiliationLe: versTimestamp(abo.cancel_at ? abo.cancel_at * 1000
           : (abo.cancel_at_period_end ? finDePeriodeMs(abo) : null)),
+        arretPar: abo.cancel_at || abo.cancel_at_period_end ? (abo.metadata.arretPar || 'client') : null,
         stripeCustomerId: abo.customer,
         stripeSubscriptionId: abo.id,
         majLe: FieldValue.serverTimestamp(),
@@ -355,8 +363,13 @@ async function appliquer(fid, abonnementId) {
     }
     return { avis: regles.avisPaiement(actuel, statut), graceJusqua, premiereFois: !(actuel && actuel.stripeSubscriptionId === abo.id) };
   });
-  await db.doc(`commandes/${abo.id}`).set({ fid, statutStripe: abo.status }, { merge: true });
+  await db.doc(`commandes/${abo.id}`).set({ fid, statutStripe: abo.status, autreAbonnement: (changement && changement.garde) || null }, { merge: true });
   await attendreRestitution(abo);
+  if (changement && changement.garde) {
+    // Deuxième abonnement pour la même famille : la famille garde le sien, Tanguy voit les deux commandes dans l'admin.
+    if (regles.STRIPE_VIVANTS.includes(abo.status)) logger.warn(`Famille ${fid} : deux abonnements en cours (${changement.garde} gardé, ${abo.id} à arrêter).`);
+    return;
+  }
   if (abo.metadata.fid !== fid) {
     await stripe().subscriptions.update(abo.id, { metadata: { ...abo.metadata, fid } });
   }
@@ -593,21 +606,48 @@ exports.resilierAbonnement = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE
   const abo = await stripe().subscriptions.retrieve(id);
   const maintenant = Date.now();
   const le = regles.premierPrelevementDe(abo, maintenant) || regles.dateResiliation(finDePeriodeMs(abo), maintenant);
+  // Arrêté depuis l'admin (impayé, abus…) : le client ne peut pas le reprendre seul (Tanguy, 30/10).
+  const parPapote = request.auth.token.admin === true && (request.data || {}).par === 'papote';
   await stripe().subscriptions.update(id, {
     cancel_at: Math.ceil(le / 1000),
     proration_behavior: 'none',
+    metadata: { ...abo.metadata, arretPar: parPapote ? 'papote' : 'client' },
   });
   await appliquer(fid, id);
+  await mailArret(id, fam, (infos) => mail.resiliationEnregistree({ ...infos, le, parPapote }));
   return { le };
 });
+
+// E-mail au client qui a payé (adresse de la commande) quand l'arrêt est demandé ou annulé.
+async function mailArret(commandeId, fam, faire) {
+  try {
+    const c = await db.doc(`commandes/${commandeId}`).get();
+    const email = c.exists && c.get('email');
+    if (!email) return;
+    await envoyerMail(email, faire({
+      nom: c.get('nom') || null, famille: fam.name || null,
+      tablettePretee: fam.abonnement && fam.abonnement.tablette !== 'achetee',
+    }));
+  } catch (e) {
+    logger.error(`Commande ${commandeId} : e-mail d'arrêt non parti`, e.message);
+  }
+}
 
 exports.annulerResiliation = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE] }, async (request) => {
   const { fid } = request.data || {};
   const fam = await familleGeree(fid, request);
   const id = fam.abonnement && fam.abonnement.stripeSubscriptionId;
   if (!id) throw new HttpsError('failed-precondition', "Cette famille n'a pas d'abonnement.");
-  await stripe().subscriptions.update(id, { cancel_at: '' });
+  const abo = await stripe().subscriptions.retrieve(id);
+  if ((await db.doc(`commandes/${id}`).get()).get('restitution')) {
+    throw new HttpsError('failed-precondition', 'La tablette est déjà en retour : écrivez-nous pour garder l\'abonnement.');
+  }
+  if (abo.metadata.arretPar === 'papote' && request.auth.token.admin !== true) {
+    throw new HttpsError('permission-denied', 'Papote a arrêté cet abonnement : écrivez-nous pour le reprendre.');
+  }
+  await stripe().subscriptions.update(id, { cancel_at: '', metadata: { ...abo.metadata, arretPar: '' } });
   await appliquer(fid, id);
+  await mailArret(id, fam, (infos) => mail.resiliationAnnulee(infos));
   return { ok: true };
 });
 
@@ -669,6 +709,12 @@ async function rembourser(abonnementId) {
     total += r.amount;
   }
   return total;
+}
+
+// Tablette prêtée, partie chez le client, abonnement de cette commande avec un arrêt prévu, retour pas commencé.
+function retourAnticipePossible(c, abonnement) {
+  return Boolean(c && !c.restitution && c.tablette !== 'achetee' && regles.materielParti(c)
+    && abonnement && abonnement.resiliationLe && ['actif', 'impaye'].includes(abonnement.statut));
 }
 
 async function commandeDeLaFamille(fid, request) {
@@ -749,6 +795,8 @@ exports.finDeContrat = onCall({ secrets: [STRIPE_SECRET] }, async (request) => {
       montant: await montantPaye(id),
     } : null,
     restitution: r ? { statut: r.statut, avant: ms(r.avant), etiquette: r.etiquette || null, qr: r.qr || null } : null,
+    // Arrêt prévu : la famille peut renvoyer la tablette sans attendre la date d'arrêt (Tanguy, 30/10).
+    retourAnticipe: !r && retourAnticipePossible(c, (await db.doc(`families/${c.fid}`).get()).get('abonnement')),
     remboursement: c.remboursement ? { statut: c.remboursement.statut, montant: c.remboursement.montant || 0 } : null,
   };
 });
@@ -759,7 +807,14 @@ exports.finDeContrat = onCall({ secrets: [STRIPE_SECRET] }, async (request) => {
 exports.renvoyerTablette = onCall({ secrets: [SENDCLOUD_API, MAIL_MOT_DE_PASSE], timeoutSeconds: 120 }, async (request) => {
   const { id, ref, snap } = await commandeDeLaFamille((request.data || {}).fid, request);
   const c = snap.data();
-  const r = c.restitution;
+  let r = c.restitution;
+  // Arrêt prévu, retour avant la date d'arrêt : le retour commence maintenant, avec la même date limite
+  // qu'à l'arrêt. mailLe : pas de mode d'emploi en plus, l'e-mail du QR code suffit.
+  if (!r && retourAnticipePossible(c, (await db.doc(`families/${c.fid}`).get()).get('abonnement'))) {
+    const fin = (await db.doc(`families/${c.fid}`).get()).get('abonnement.resiliationLe').toMillis();
+    r = { statut: 'attendue', avant: versTimestamp(regles.limiteRestitution(fin)), anticipe: true, mailLe: Timestamp.now() };
+    await ref.update({ restitution: r });
+  }
   if (!r || !['attendue', 'echec'].includes(r.statut)) throw new HttpsError('failed-precondition', "Il n'y a pas de tablette à nous renvoyer.");
   if (r.etiquette) return { etiquette: r.etiquette, qr: r.qr || null };
   // Un seul QR à la fois, même si le bouton est touché deux fois.

@@ -726,7 +726,8 @@ exports.gestionDonnees = onCall(async (request) => {
         fid: c.fid || null,
         famille: famille ? famille.name || null : null,
         abonnement: famille && famille.abonnement ? famille.abonnement.statut || null : (c.statutStripe || null),
-        resiliationLe: famille && famille.abonnement ? famille.abonnement.resiliationLe || null : null,
+        // Arrêt prévu : seulement pour la commande dont l'abonnement est celui de la famille.
+        resiliationLe: famille && famille.abonnement && famille.abonnement.stripeSubscriptionId === d.id ? famille.abonnement.resiliationLe || null : null,
         restitution: c.restitution ? { statut: c.restitution.statut || null, avant: c.restitution.avant || null } : null,
         remboursement: c.remboursement || null,
         restitutionErreur: c.restitution && c.restitution.erreur ? c.restitution.erreur : null,
