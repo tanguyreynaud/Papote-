@@ -184,10 +184,13 @@ const bonjour = (nom) => `Bonjour${nom ? ` ${echapper(nom)}` : ''},`;
 const lienHtml = (lien, texte) => `<a href="${echapper(lien)}" style="color:${C.indigo}">${texte}</a>`;
 
 // Les trois gestes à l'arrivée de la tablette (colis parti, remise en main propre, rappels de jumelage).
+// Parcours d'installation du 21/10/2026 : la carte SIM est déjà dans la tablette (pas de wifi à régler), le QR code
+// se scanne avec l'appareil photo du téléphone (ou le code se tape sur app.mapapote.fr), puis l'appli demande le
+// nom du proche, une première photo et fait le test du son.
 const GESTES_ARRIVEE = (code) => ({ etapes: [
-  'Branchez la tablette et allumez-la.',
-  `${lienHtml(lienAppli(code), 'Ouvrez l\'appli Papote')} sur votre téléphone.`,
-  'Scannez le code affiché sur la tablette : l\'appli vous guide ensuite pas à pas.',
+  'Branchez la tablette et allumez-la. La carte SIM est déjà dedans : rien à régler.',
+  `Avec l'appareil photo de votre téléphone, scannez le QR code affiché sur la tablette (ou ${lienHtml(lienAppli(code), 'ouvrez app.mapapote.fr')} et tapez le code affiché).`,
+  'L\'appli vous guide ensuite : le nom de votre proche, une première photo, le test du son. Deux minutes, et la tablette est prête.',
 ] });
 
 // ---------- Commande et livraison ----------
