@@ -184,6 +184,7 @@ function donnees(o = {}) {
   docs['families/f-odette'] = { name: 'Mamie Odette', code: 'ODET2345', createdBy: 'u-isa', createdAt: { __ms: il(70) }, abonnement: { statut: 'resilie', formule: 'sim' } };
   docs['families/f-odette/members/u-isa'] = membre('u-isa', 'Isabelle');
   docs['families/f-mamies'] = { name: 'Mamie Lucette', createdBy: 'u-tanguy', abonnement: { statut: 'offert' } };
+  docs['validation/etat'] = VALIDATION_ETAT;
   // Les commandes sont aussi dans la base : les listes « à envoyer », « en route » et « à récupérer » la lisent directement.
   for (const c of (o.donnees || gestionDonnees(o)).commandes) {
     const { id, famille, abonnement, ...reste } = c;
@@ -208,6 +209,46 @@ function donnees(o = {}) {
 const pause = (p, ms = 700) => p.waitForTimeout(ms);
 const toucher = (...sels) => async (p) => { for (const sel of sels) { await p.locator(sel).first().click(); await pause(p); } };
 const onglet = (t) => async (p) => { await p.locator('#kpi-commandes .onglet').filter({ hasText: t }).first().click(); await pause(p); };
+
+// Espace Validation : faux site papote-validation (index.json + captures) et quelques choix déjà faits.
+const VALIDATION_INDEX = {
+  le: MAINTENANT - 3600_000,
+  parties: [
+    { partie: 'tablette', source: 'origin/claude/project-thread-cmnwxy @ 9229c7d', le: MAINTENANT - 3600_000, ecrans: [
+      { id: 'xt1', num: 'T1', groupe: 'Démarrage', titre: 'Bienvenue', note: '', erreurs: [], captures: [{ f: 'i/t1.jpg', taille: 'paysage' }], h: 'h1' },
+      { id: 'xt2', num: 'T2', groupe: 'Démarrage', titre: 'QR code d\'installation', note: '', erreurs: [], captures: [{ f: 'i/t2.jpg', taille: 'paysage' }], h: 'h2' },
+      { id: 'xt3', num: 'T3', groupe: 'Accueil', titre: 'Accueil avec météo', note: 'Nouveau : la météo en haut.', erreurs: [], captures: [{ f: 'i/t3.jpg', taille: 'paysage' }], h: 'h3-neuf' },
+      { id: 'xt4', num: 'T4', groupe: 'Accueil', titre: 'Accueil la nuit', note: '', erreurs: ['Largeur : page trop large (1290 px pour 1280 px)'], captures: [{ f: 'i/t4.jpg', taille: 'paysage' }], h: 'h4' },
+    ] },
+    { partie: 'famille', source: 'origin/claude/project-thread-dlattc @ 6759276', le: MAINTENANT - 3600_000, ecrans: [
+      { id: 'xf1', num: 'F1', groupe: 'Installation', titre: 'Scanner la tablette', note: '', erreurs: [], captures: [{ f: 'i/f1.jpg', taille: 'telephone' }, { f: 'i/f1c.jpg', taille: 'clavier ouvert' }], h: 'h5' },
+      { id: 'xf2', num: 'F2', groupe: 'Envois', titre: 'Envoyer une photo', note: '', erreurs: [], captures: [{ f: 'i/f2.jpg', taille: 'telephone' }], h: 'h6' },
+    ] },
+    { partie: 'emails', source: 'origin/main @ 24fd3ae', le: MAINTENANT - 3600_000, ecrans: [
+      { id: 'xe1', num: 'E1', groupe: 'Commande', titre: 'Commande confirmée (point relais)', fonction: 'commandeConfirmee', note: '', erreurs: [], captures: [{ f: 'i/e1.jpg', taille: 'telephone' }, { f: 'i/e1o.jpg', taille: 'ordinateur' }], h: 'h7' },
+      { id: 'xe2', num: 'E2', groupe: 'Commande', titre: 'Nouvelle commande (tablette en stock)', fonction: 'nouvelleCommande', note: '', erreurs: [], captures: [{ f: 'i/e2.jpg', taille: 'telephone' }], h: 'h8' },
+    ] },
+  ],
+};
+const VALIDATION_ETAT = {
+  e: { xt1: { s: 'ok', c: '', h: 'h1', t: MAINTENANT - 86400_000 }, xt3: { s: 'ok', c: '', h: 'h3-ancien', t: MAINTENANT - 2 * 86400_000 },
+    xt4: { s: 'revoir', c: 'Le texte de la nuit est trop clair.', h: 'h4', t: MAINTENANT - 7200_000 } },
+  f: { commande: { s: 'revoir', c: 'Je veux voir le prix de l\'étiquette.', t: MAINTENANT - 7200_000 } },
+  d: {}, g: { double: { s: 'ok', c: '', t: MAINTENANT - 7200_000 } },
+};
+// Fausse capture : un écran crème avec son nom (paysage, téléphone ou ordinateur selon le nom du fichier).
+function fausseCapture(nom) {
+  const [w, hauteur] = /f1|f2|e1\.|e2/.test(nom) ? [390, 780] : /e1o/.test(nom) ? [1000, 640] : [1280, 800];
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${hauteur}" viewBox="0 0 ${w} ${hauteur}"><rect width="100%" height="100%" fill="#fdfaf5"/>`
+    + `<rect x="24" y="24" width="${w - 48}" height="72" rx="16" fill="#4f46e5"/><text x="50%" y="55%" font-family="sans-serif" font-size="40" fill="#4f46e5" text-anchor="middle">${nom}</text></svg>`;
+}
+const validation = (p, en = true) => (en
+  ? p.route('https://papote-validation.web.app/**', (r) => {
+    const u = new URL(r.request().url());
+    if (u.pathname === '/index.json') return r.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(VALIDATION_INDEX) });
+    return r.fulfill({ contentType: 'image/svg+xml', body: fausseCapture(u.pathname.split('/').pop().replace('.jpg', '')) });
+  })
+  : p.route('https://papote-validation.web.app/**', (r) => r.fulfill({ status: 404, body: '' })));
 
 // page : adresse dans l'admin (#…) ; tailles : pc et/ou tel ; plein : toute la page.
 const SCENES = [
@@ -301,6 +342,19 @@ const SCENES = [
   { groupe: 'Comptabilité', titre: 'Ajouter une dépense', page: '#nouveau/depense', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees() },
   { groupe: 'Comptabilité', titre: 'Ajouter un achat de tablettes', page: '#nouveau/achat', tailles: ['pc'], plein: true, donnees: () => donnees() },
 
+  { groupe: 'Validation', titre: 'Écrans : où j\'en suis, partie par partie', page: '#validation/ecrans', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees() },
+  { groupe: 'Validation', titre: 'Écrans : les parcours de la tablette', page: '#validation/ecrans/tablette', tailles: ['pc'], plein: true, donnees: () => donnees() },
+  { groupe: 'Validation', titre: 'Écrans : un parcours (validé, changé, à revoir)', page: '#validation/ecrans/tablette/1', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees() },
+  { groupe: 'Validation', titre: 'Écrans : « À revoir » touché, commentaire à écrire', page: '#validation/ecrans/tablette/0', tailles: ['pc'], plein: true, donnees: () => donnees(), faire: toucher('#v-xt2 .v-non') },
+  { groupe: 'Validation', titre: 'Écrans : passer en revue en grand', page: '#validation/ecrans/famille/0', tailles: ['pc', 'tel'], donnees: () => donnees(), faire: toucher('text=Passer en revue en grand') },
+  { groupe: 'Validation', titre: 'Écrans : tous les écrans à revoir', page: '#validation/ecrans/etat/revoir', tailles: ['pc'], plein: true, donnees: () => donnees() },
+  { groupe: 'Validation', titre: 'Écrans : captures pas encore publiées', page: '#validation/ecrans', tailles: ['pc'], validation: false, donnees: () => donnees() },
+  { groupe: 'Validation', titre: 'Parcours : la liste', page: '#validation/parcours', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees() },
+  { groupe: 'Validation', titre: 'Parcours : la commande, étape par étape', page: '#validation/parcours/commande', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees() },
+  { groupe: 'Validation', titre: 'Parcours : un e-mail ouvert depuis une étape', page: '#validation/parcours/commande', tailles: ['pc'], donnees: () => donnees(), faire: toucher('.v-mail') },
+  { groupe: 'Validation', titre: 'Dépenses : coût par famille et pistes', page: '#validation/depenses', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees() },
+  { groupe: 'Validation', titre: 'Gestes humains : comment chacun est vérifié', page: '#validation/gestes', tailles: ['pc'], plein: true, donnees: () => donnees() },
+
   { groupe: 'Outils', titre: 'Outils : automatique', page: '#outils/automatique', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Outils', titre: 'Outils : expédition', page: '#outils/expedition', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Outils', titre: 'Outils : calculs', page: '#outils/calculs', tailles: ['pc'], plein: true, donnees: () => donnees() },
@@ -325,6 +379,7 @@ async function ouvrir(browser, base, scene, taille) {
     body: r.request().url().endsWith('/faux-sdk.js') ? SDK : "export * from 'https://www.gstatic.com/firebasejs/faux-sdk.js';",
   }));
   await page.route(/^https?:\/\/(?!127\.0\.0\.1|fonts\.googleapis\.com|fonts\.gstatic\.com|www\.gstatic\.com\/firebasejs)/, (r) => r.abort());
+  await validation(page, scene.validation !== false);
   try {
     await page.goto(`${base}/admin.html${scene.page}`);
     await page.waitForTimeout(2000);
