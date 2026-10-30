@@ -167,6 +167,12 @@ const COMMANDE = {
   paiements: [{ id: 'ch_1', le: il(1), montant: 6000, rembourse: 0, statut: 'succeeded', description: 'Mise en service', recu: 'https://exemple.invalid/r' }],
 };
 
+// Abonnement de la commande en service arrêté depuis l'admin, fin dans 27 jours.
+function arretPrevu() {
+  const g = gestionDonnees({});
+  return { ...g, commandes: g.commandes.map((c) => (c.id === 'CMD-GH78' ? { ...c, resiliationLe: il(-27) } : c)) };
+}
+
 function donnees(o = {}) {
   const docs = famillePleine({ sim: true });
   docs['families/f-henri'] = { name: 'Papi Henri', createdBy: 'u-nicolas', abonnement: { statut: 'impaye', formule: 'sim', graceJusqua: { __ms: il(-6) } } };
@@ -232,6 +238,7 @@ const SCENES = [
   { groupe: 'Commandes', titre: 'Commande annulée et remboursée', page: '#commande/CMD-AN77', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Commandes', titre: 'Commande terminée, remboursement échoué', page: '#commande/CMD-RB10', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Commandes', titre: 'Commande : menu ⋮ des actions', page: '#commande/CMD-GH78', tailles: ['pc'], donnees: () => donnees(), faire: toucher('#dc-corps .menu-points > button, #dc-corps [aria-haspopup]') },
+  { groupe: 'Commandes', titre: 'Commande : arrêt prévu, menu ⋮ (Reprendre l’abonnement)', page: '#commande/CMD-GH78', tailles: ['pc'], donnees: () => donnees({ donnees: arretPrevu() }), faire: toucher('#dc-corps .menu-points > button, #dc-corps [aria-haspopup]') },
   { groupe: 'Commandes', titre: 'Nouvelle commande offerte', page: '#commandes', tailles: ['pc'], plein: true, donnees: () => donnees(), faire: toucher('#b-offerte') },
 
   { groupe: 'Clients', titre: 'Clients : liste', page: '#clients/liste', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees() },

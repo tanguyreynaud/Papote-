@@ -661,6 +661,9 @@ function ms(valeur) {
   return null;
 }
 
+// L'abonnement de la famille est celui de cette commande.
+const estCourante = (famille, id) => Boolean(famille && famille.abonnement && famille.abonnement.stripeSubscriptionId === id);
+
 // Timestamps Firestore → millisecondes, pour les renvoyer à la page.
 function aplatir(valeur) {
   if (valeur == null || typeof valeur !== 'object') return valeur;
@@ -725,9 +728,10 @@ exports.gestionDonnees = onCall(async (request) => {
         creeLe: c.creeLe || null,
         fid: c.fid || null,
         famille: famille ? famille.name || null : null,
-        abonnement: famille && famille.abonnement ? famille.abonnement.statut || null : (c.statutStripe || null),
-        // Arrêt prévu : seulement pour la commande dont l'abonnement est celui de la famille.
-        resiliationLe: famille && famille.abonnement && famille.abonnement.stripeSubscriptionId === d.id ? famille.abonnement.resiliationLe || null : null,
+        // Commande dont l'abonnement est celui de la famille : l'état de la famille ; une autre (2e commande pour la
+        // même famille) : son propre état chez Stripe et son propre arrêt prévu.
+        abonnement: estCourante(famille, d.id) ? famille.abonnement.statut || null : (c.statutStripe || (famille && famille.abonnement ? famille.abonnement.statut || null : null)),
+        resiliationLe: estCourante(famille, d.id) ? famille.abonnement.resiliationLe || null : c.resiliationLe || null,
         restitution: c.restitution ? { statut: c.restitution.statut || null, avant: c.restitution.avant || null } : null,
         remboursement: c.remboursement || null,
         restitutionErreur: c.restitution && c.restitution.erreur ? c.restitution.erreur : null,
