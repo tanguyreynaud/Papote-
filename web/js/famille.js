@@ -3022,6 +3022,7 @@ async function renderFinDeContrat(abo) {
     try { finInfo = await finDeContrat(session.fid); } catch (err) { console.warn('Fin de contrat illisible', err); finInfo = null; }
     if (cle !== finCle) return;
   }
+  if (finInfo?.restitution) $('btn-garder').hidden = true;
   // Tant que la commande peut être annulée (et remboursée), c'est le seul bouton proposé :
   // il arrête aussi l'abonnement. Ensuite, il ne reste que « Résilier l'abonnement ».
   const r = finInfo?.retractation;
@@ -3063,6 +3064,12 @@ async function renderFinDeContrat(abo) {
     if (remb?.statut === 'au-retour') infos.push(`${euros(remb.montant)} remboursés dès réception de la tablette.`);
     $('retour-info').textContent = infos.join(' ');
     $('retour-info').hidden = !infos.length;
+  } else if (finInfo?.retourAnticipe && amFamilyAdmin()) {
+    // Arrêt prévu : renvoyer la tablette sans attendre la date d'arrêt (Tanguy, 30/10). Elle marche jusqu'au dépôt.
+    box.hidden = false;
+    $('retour-text').textContent = 'Vous pouvez nous renvoyer la tablette dès maintenant';
+    $('retour-aide').hidden = false;
+    $('btn-renvoyer').hidden = false;
   } else if (rest?.statut === 'rendue') {
     box.hidden = false;
     $('retour-text').textContent = 'Tablette bien reçue, merci';
@@ -3095,7 +3102,7 @@ $('btn-reprendre').addEventListener('click', async () => {
   const abo = session.family.abonnement || {};
   const formule = 'sim'; // offre unique (29/10/2026)
   if (!await askConfirm(`Garder la tablette et reprendre l'abonnement (25 € par mois, tout compris) ? Pas de nouvelle mise en service à payer, et plus besoin de nous la renvoyer.`, 'Reprendre')) return;
-  withAboError(() => payer(session.fid, formule, abo.tablette || 'incluse'));
+  await withAboError(() => payer(session.fid, formule, abo.tablette || 'incluse'));
 });
 
 $('btn-retracter').addEventListener('click', async () => {
@@ -3159,7 +3166,8 @@ function renderAbonnement() {
     resilierPossible = admin && enCours && !abo.resiliationLe && !!abo.stripeSubscriptionId;
     $('btn-resilier').hidden = !resilierPossible || !!finInfo?.retractation;
     // Arrêté par Papote (impayé…) : le client ne peut pas le reprendre seul.
-    $('btn-garder').hidden = !admin || !enCours || !abo.resiliationLe || abo.arretPar === 'papote';
+    // Tablette déjà en retour : plus de « Garder » (il faudrait la renvoyer au client).
+    $('btn-garder').hidden = !admin || !enCours || !abo.resiliationLe || abo.arretPar === 'papote' || !!finInfo?.restitution;
     $('abo-choices').hidden = !admin || aRegler || reprisePossible() || !['aucun', 'resilie', 'suspendu', 'installation'].includes(statut);
   }
   // Bandeaux : retard de paiement (responsables), pause (tout le monde).
