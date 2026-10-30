@@ -297,6 +297,12 @@ function afficherPage() {
   afficherFiche();
 }
 
+// Page tablette : relevés en direct (déclarés ici, afficherFiche les coupe dès le premier affichage).
+let stopReleves = null;
+let stopOrdre = null;
+let membreTablette = null; // dernière fiche de membre lue (version, batterie, SIM, en ligne)
+let familleTablette = null; // volumes de la famille
+
 // Fiche ouverte dans l'adresse (#tablette/id ou #commande/id), redessinée à chaque nouvelle lecture des données.
 function afficherFiche() {
   const [page, id, sous] = location.hash.slice(1).split('/');
@@ -2166,11 +2172,6 @@ const ORDRES = [
   { type: 'usine', titre: 'Remettre à zéro', sous: () => 'Réglages d\'usine, tout est effacé', attente: 120_000, danger: true },
 ];
 const nomTablette = (t) => (t.ref ? `la tablette ${t.ref}` : 'cette tablette');
-
-let stopReleves = null;
-let stopOrdre = null;
-let membreTablette = null; // dernière fiche de membre lue (version, batterie, SIM, en ligne)
-let familleTablette = null; // volumes de la famille
 
 // Fiche de membre de la tablette, en direct : en ligne, batterie, carte SIM, version.
 function blocReleves(zone, t) {
