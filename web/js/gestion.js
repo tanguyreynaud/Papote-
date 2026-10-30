@@ -3450,12 +3450,13 @@ function afficherTva(t) {
 // aller et retour, moins la mise en service. Les accessoires « en option » (enceinte) ne sont pas comptés.
 function afficherRentabilite() {
   const r = donnees.reglages;
-  // Frais Stripe réels de la période (part du montant encaissé), sinon prélèvement SEPA (~1 %).
+  // Frais Stripe réels de la période (part du montant encaissé), sinon ~3 % : carte, le cas le moins favorable
+  // (1,5 % + 0,25 € et 0,7 % d'abonnement Stripe sur 25 €, Tanguy 2026-10-30).
   const paiements = stripe.mouvements.filter((m) => ENCAISSEMENTS.includes(m.nature));
   const encaisse = paiements.reduce((s, m) => s + m.montant, 0);
-  const tauxFrais = encaisse ? paiements.reduce((s, m) => s + m.frais, 0) / encaisse : 0.01;
+  const tauxFrais = encaisse ? paiements.reduce((s, m) => s + m.frais, 0) / encaisse : 0.03;
   const prixTablettes = donnees.stock.map((t) => t.prixAchat).filter((p) => p > 0);
-  const tablette = prixTablettes.length ? Math.round(prixTablettes.reduce((s, p) => s + p, 0) / prixTablettes.length) : 8000;
+  const tablette = prixTablettes.length ? Math.round(prixTablettes.reduce((s, p) => s + p, 0) / prixTablettes.length) : 12500; // ~125 € (Tab 60 Pro)
   const enService = lignesSim().filter((l) => !l.aResilier);
   const forfait = enService.length ? Math.round(enService.reduce((s, l) => s + coutSim(l.t), 0) / enService.length) : r.forfaitSim;
   const payants = stripe.abonnements.filter((a) => ['active', 'past_due'].includes(a.statut));
