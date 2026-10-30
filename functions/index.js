@@ -655,21 +655,33 @@ exports.annulerResiliation = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE
 // jusqu'à une date (rien n'est prélevé pour les mois de pause, la tablette continue de marcher), ou les
 // reprend plus tôt. Un décès, lui, est une résiliation comme une autre.
 const PAUSE_MAX_JOURS = 186;
-exports.pauseHospitalisation = onCall({ secrets: [STRIPE_SECRET] }, async (request) => {
+exports.pauseHospitalisation = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE] }, async (request) => {
   verifierAdmin(request);
   const { commande, jusqua } = request.data || {};
   if (typeof commande !== 'string' || !/^[A-Za-z0-9_]{5,80}$/.test(commande)) throw new HttpsError('invalid-argument', 'Commande manquante.');
   const ref = db.doc(`commandes/${commande}`);
-  if (!(await ref.get()).exists) throw new HttpsError('not-found', 'Commande introuvable.');
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Commande introuvable.');
   let abo;
   try {
     abo = await stripe().subscriptions.retrieve(commande);
   } catch (e) {
     throw new HttpsError('failed-precondition', 'Stripe ne connaît pas cet abonnement (commande de test ?).');
   }
+  // Le client est prévenu par e-mail de la pause et de la reprise (2026-10-30) ; un échec d'envoi ne bloque pas.
+  const prevenir = async (contenu) => {
+    if (!snap.get('email')) return;
+    try {
+      await envoyerMail(snap.get('email'), contenu);
+    } catch (e) {
+      logger.error(`Commande ${commande} : e-mail de pause non parti`, e.message);
+    }
+  };
+  const famille = snap.get('fid') ? (await db.doc(`families/${snap.get('fid')}`).get()).get('name') : null;
   if (jusqua == null) {
     await stripe().subscriptions.update(commande, { pause_collection: '' });
     await ref.update({ pause: FieldValue.delete() });
+    if (snap.get('pause')) await prevenir(mail.reprisePrelevements({ nom: snap.get('nom'), famille }));
     return { ok: true, reprise: true };
   }
   const fin = Number(jusqua);
@@ -683,6 +695,7 @@ exports.pauseHospitalisation = onCall({ secrets: [STRIPE_SECRET] }, async (reque
     pause_collection: { behavior: 'void', resumes_at: Math.ceil(fin / 1000) },
   });
   await ref.update({ pause: { motif: 'hospitalisation', jusqua: Timestamp.fromMillis(fin), le: FieldValue.serverTimestamp() } });
+  await prevenir(mail.pausePrelevements({ nom: snap.get('nom'), famille, jusqua: fin }));
   return { ok: true, jusqua: fin };
 });
 
@@ -769,7 +782,7 @@ exports.retracter = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE] }, asyn
     const rembourse = await rembourser(id);
     await ref.update({ remboursement: { statut: 'fait', montant: rembourse, le: FieldValue.serverTimestamp() } });
     const envois = [envoyerMail(EMAIL_PAPOTE, mail.annulationAvantEnvoi({
-      nom: c.nom, email: c.email, code: c.code ? regles.afficherCode(c.code) : null,
+      nom: c.nom, email: c.email, code: c.code ? regles.afficherCode(c.code) : null, commande: id,
     }))];
     if (c.email) envois.push(envoyerMail(c.email, mail.commandeAnnulee({ nom: c.nom, rembourse })));
     (await Promise.allSettled(envois)).filter((r) => r.status === 'rejected')
@@ -1106,7 +1119,7 @@ async function paiementSepaRefuse(session) {
   if (!snap.exists || snap.get('expedition') !== 'paiement-en-attente') return;
   await ref.update({ expedition: 'annulee', annulation: 'sepa-refuse', annuleeLe: FieldValue.serverTimestamp() });
   await stripe().subscriptions.cancel(session.subscription).catch((e) => logger.warn('Annulation SEPA', e.message));
-  const envois = [envoyerMail(EMAIL_PAPOTE, mail.sepaRefuse({ nom: snap.get('nom'), email: snap.get('email'), papote: true }))];
+  const envois = [envoyerMail(EMAIL_PAPOTE, mail.sepaRefuse({ nom: snap.get('nom'), email: snap.get('email'), papote: true, commande: ref.id }))];
   if (snap.get('email')) envois.push(envoyerMail(snap.get('email'), mail.sepaRefuse({ nom: snap.get('nom') })));
   (await Promise.allSettled(envois)).filter((r) => r.status === 'rejected')
     .forEach((r) => logger.error(`E-mail SEPA refusé non envoyé (${ref.id})`, r.reason));
@@ -1188,7 +1201,7 @@ async function confirmerCommande(ref, email, code) {
   await compterEtape('paye').catch((e) => logger.warn('Statistiques', e.message));
   const infos = { nom: premier.nom, code, relais: premier.livraison, proche: premier.proche || null, formule: premier.formule, delai: premier.delai,
     dejaInstallee: !!(premier.preparation && premier.preparation.recuPar === 'déjà installée'), reprise: premier.reprise === true };
-  const envois = [envoyerMail(EMAIL_PAPOTE, mail.nouvelleCommande({ ...infos, email, telephone: premier.telephone }))];
+  const envois = [envoyerMail(EMAIL_PAPOTE, mail.nouvelleCommande({ ...infos, email, telephone: premier.telephone, commande: ref.id }))];
   if (email) envois.push(envoyerMail(email, mail.commandeConfirmee(infos)));
   const resultats = await Promise.allSettled(envois);
   resultats.filter((r) => r.status === 'rejected')
@@ -1244,7 +1257,7 @@ exports.couverture = onRequest({ cors: [/mapapote\.fr$/, /papote\.web\.app$/], m
 
 exports.stockDisponible = onRequest({ cors: [/mapapote\.fr$/, /papote\.web\.app$/], maxInstances: 2 }, stock.routeDisponible(db, logger));
 
-exports.listeAttente = onRequest({ cors: [/mapapote\.fr$/, /papote\.web\.app$/], maxInstances: 2 }, async (req, res) => {
+exports.listeAttente = onRequest({ cors: [/mapapote\.fr$/, /papote\.web\.app$/], maxInstances: 2, secrets: [MAIL_MOT_DE_PASSE] }, async (req, res) => {
   const d = req.method === 'POST' && req.body && typeof req.body === 'object' ? req.body : {};
   const email = emailValide(d.email);
   if (!email || d.accord !== true) {
@@ -1260,15 +1273,23 @@ exports.listeAttente = onRequest({ cors: [/mapapote\.fr$/, /papote\.web\.app$/],
   }
   const ref = db.doc(`contacts/${cleContact(email)}`);
   const snap = await ref.get();
+  const jeton = (snap.exists && snap.get('jeton')) || require('node:crypto').randomBytes(16).toString('hex');
   await ref.set({
     email, consentement: true, desinscritLe: FieldValue.delete(),
     ...(prenom ? { prenom } : {}),
     ...(telephone ? { telephone } : {}),
     ...(snap.exists ? {} : { source: 'liste-attente', creeLe: FieldValue.serverTimestamp() }),
     listeAttente: true, listeAttenteLe: FieldValue.serverTimestamp(),
-    ...(snap.exists && snap.get('jeton') ? {} : { jeton: require('node:crypto').randomBytes(16).toString('hex') }),
+    jeton,
   }, { merge: true });
   res.status(204).end();
+  // « C'est noté » (2026-10-30) : une fois par inscription, après la réponse au site (un échec d'envoi ne la bloque pas).
+  if (snap.exists && snap.get('listeAttente') === true && !snap.get('desinscritLe')) return;
+  try {
+    await envoyerMail(email, mail.listeAttenteConfirmee({ prenom, telephone, desinscription: `${URL_DESINSCRIPTION}?c=${cleContact(email)}&j=${jeton}` }));
+  } catch (e) {
+    logger.error(`Liste d'attente ${email} : confirmation non envoyée`, e.message);
+  }
 });
 
 // Toutes les heures : relances dues (1 h après, lendemain 19 h, une semaine après 19 h),
@@ -1500,14 +1521,21 @@ exports.restitutions = onSchedule(
           'restitution.majLe': FieldValue.serverTimestamp(),
         });
         logger.info(`Commande ${snap.id} : tablette non rendue, ${mail.euros(regles.penaliteRestitution(snap.data()))} prélevés.`);
+        // Le client sait ce qui a été prélevé et pourquoi (2026-10-30).
+        if (snap.get('email')) {
+          await envoyerMail(snap.get('email'), mail.materielNonRendu({ nom: snap.get('nom'), montant: regles.penaliteRestitution(snap.data()), avant: r.avant.toMillis() }))
+            .catch((e2) => logger.error(`Commande ${snap.id} : e-mail « matériel prélevé » non parti`, e2.message));
+        }
       } catch (e) {
-        // Carte expirée ou refusée : à relancer à la main, depuis le tableau de bord Stripe.
+        // Carte expirée ou refusée : à relancer à la main, depuis le tableau de bord Stripe. Tanguy est prévenu (2026-10-30).
         await snap.ref.update({
           'restitution.statut': 'echec',
           'restitution.erreur': e.message,
           'restitution.majLe': FieldValue.serverTimestamp(),
         });
         logger.warn(`Commande ${snap.id} : prélèvement de la tablette non rendue refusé`, e.message);
+        await prevenirPapote(`Tablette non rendue, prélèvement refusé : ${snap.get('nom') || snap.get('email') || snap.id}`, snap,
+          `La tablette n'a pas été rendue avant le ${mail.dateEnClair(r.avant.toMillis())} et le prélèvement de ${mail.euros(regles.penaliteRestitution(snap.data()))} a été refusé (${e.message}). À relancer à la main depuis Stripe, ou à voir avec le client.`);
       }
     }
   });
@@ -1566,6 +1594,7 @@ exports.tabletteRendue = onCall({ secrets: [STRIPE_SECRET] }, async (request) =>
     } catch (e) {
       restitution.statut = 'echec';
       restitution.erreur = e.message;
+      restitution.montant = montant;
     }
   }
   await ref.set({ restitution }, { merge: true });
@@ -1662,6 +1691,23 @@ async function prevenirDemande(fid, uid, membre) {
   (await Promise.allSettled(envois)).filter((r) => r.status === 'rejected')
     .forEach((r) => logger.error(`Demande ${fid}/${uid} : prévenir les responsables`, r.reason));
 }
+
+// Demande acceptée par un responsable (fiche « pending » → active) : la personne le sait par e-mail (2026-10-30),
+// car elle a pu fermer l'appli en attendant. Un refus supprime la fiche : rien n'est envoyé.
+exports.membreAccepte = onDocumentUpdated(
+  { document: 'families/{fid}/members/{uid}', database: BASE_FIRESTORE, region: REGION_FIRESTORE, secrets: [MAIL_MOT_DE_PASSE] },
+  async (event) => {
+    const avant = event.data.before.data();
+    const apres = event.data.after.data();
+    if (avant.status !== 'pending' || apres.status === 'pending' || !apres.email) return;
+    const fam = await db.doc(`families/${event.params.fid}`).get();
+    if (!fam.exists) return;
+    try {
+      await envoyerMail(apres.email, mail.demandeAcceptee({ prenom: apres.name, famille: fam.get('name'), lien: APPLI_FAMILLE }));
+    } catch (e) {
+      logger.error(`Demande ${event.params.fid}/${event.params.uid} : e-mail « acceptée » non parti`, e.message);
+    }
+  });
 
 // Un proche invité par e-mail est entré directement : les responsables reçoivent une notification.
 async function prevenirArrivee(fid, uid, membre, fam) {
@@ -1827,6 +1873,19 @@ async function suiviRetour(event, rAvant, r, c) {
     }
   }
 
+  // Tablette revenue, mais le prélèvement des éléments manquants a été refusé : le client le sait, et Papote aussi.
+  if (r.statut === 'echec' && rAvant.statut !== 'echec' && r.manquants && r.manquants.length && c.email && !c.offerte) {
+    const manquants = r.manquants.map((m) => regles.NOMS_MATERIEL[m] || m);
+    await prevenirPapote(`Éléments manquants non prélevés : ${c.nom || c.email || id}`, event.data.after,
+      `La tablette est revenue sans ${manquants.join(', ')}, mais le prélèvement de ${mail.euros(r.montant || 0)} a été refusé (${r.erreur || 'raison inconnue'}). À relancer depuis Stripe.`)
+      .catch((e) => logger.error(`Commande ${id} : Papote non prévenu`, e.message));
+    try {
+      await envoyerMail(c.email, mail.tabletteRecue({ nom: c.nom, rembourse: 0, manquants, montant: r.montant || 0, echec: true }));
+    } catch (e) {
+      logger.error(`Commande ${id} : e-mail « tablette reçue » non parti`, e.message);
+    }
+  }
+
   if (r.statut === 'rendue' && rAvant.statut !== 'rendue') {
     let rembourse = 0;
     if (retractation != null) {
@@ -1842,7 +1901,9 @@ async function suiviRetour(event, rAvant, r, c) {
     // Commande offerte (famille supprimée, matériel repris par Papote) : pas d'e-mail au proche.
     if (!c.email || c.offerte) return;
     try {
-      await envoyerMail(c.email, mail.tabletteRecue({ nom: c.nom, rembourse }));
+      await envoyerMail(c.email, mail.tabletteRecue({
+        nom: c.nom, rembourse, manquants: (r.manquants || []).map((m) => regles.NOMS_MATERIEL[m] || m), montant: r.montant || 0,
+      }));
     } catch (e) {
       logger.error(`Commande ${id} : e-mail « tablette reçue » non parti`, e.message);
     }
