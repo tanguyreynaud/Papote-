@@ -86,3 +86,13 @@ test('envoi : tablette reliée et carte SIM obligatoires pour l\'offre tout comp
   permis(s.refusEnvoiSansSim({ expedition: 'envoyee', formule: 'sim' }, []));
   permis(s.refusEnvoiSansSim({ expedition: 'a-preparer', formule: 'wifi' }, []));
 });
+
+test('étiquette en double (double clic, vieil onglet) : refusée tant que l\'ancienne n\'a pas servi ou n\'est pas vieille de 30 jours', () => {
+  const maintenant = Date.now();
+  permis(s.refusEtiquetteEnDouble({}, 'retour', maintenant));
+  permis(s.refusEtiquetteEnDouble({ etiquettes: { aller: { colis: 1, le: maintenant } } }, 'retour', maintenant), 'un autre sens ne compte pas');
+  refuse(s.refusEtiquetteEnDouble({ etiquettes: { retour: { colis: 1, le: maintenant - 3600e3 } } }, 'retour', maintenant), /existe déjà/);
+  refuse(s.refusEtiquetteEnDouble({ etiquettes: { aller: { colis: 1, le: maintenant } } }, 'aller', maintenant), /existe déjà/);
+  permis(s.refusEtiquetteEnDouble({ etiquettes: { retour: { colis: 1, le: maintenant, livre: true } } }, 'retour', maintenant), 'colis arrivé : une nouvelle est possible');
+  permis(s.refusEtiquetteEnDouble({ etiquettes: { retour: { colis: 1, le: maintenant - 31 * 864e5 } } }, 'retour', maintenant), 'vieille de 31 jours');
+});

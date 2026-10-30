@@ -132,6 +132,75 @@ test('suspendue depuis 30 jours : Tanguy arrête l\'abonnement, pas de dernier m
   assert.ok(mailsA(paul.email).some((m) => /rendre la tablette/i.test(m)), 'e-mail de retour');
 });
 
+test('deux commandes pour la même famille : « Arrêter » et « Reprendre » dans l\'admin visent la commande choisie, pas celle de la famille', async () => {
+  const paul = await s.compte('Paul', 'paul@exemple.fr');
+  const { id, fid } = await familleAbonnee(paul);
+  await premierMoisPasse(id);
+  // Deuxième commande payée par Paul, reliée à la même famille (Tanguy, 30/10 : 8X9K-EB7T et EJ4N-DVBA).
+  const { abonnement: id2 } = await a.commanderEtPayer({ email: paul.email });
+  await s.db.doc(`commandes/${id2}`).update({ fid });
+  const ligne = async (x) => (await s.appeler('gestionDonnees', {}, a.TANGUY)).commandes.find((c) => c.id === x);
+
+  // Seul Tanguy choisit une commande précise, et seulement une commande de cette famille.
+  await assert.rejects(s.appeler('resilierAbonnement', { fid, commande: id2 }, paul), /Réservé à Papote/);
+  const autre = await familleAbonnee(await s.compte('Léa', 'lea@exemple.fr'));
+  await assert.rejects(s.appeler('resilierAbonnement', { fid, commande: autre.id, par: 'papote' }, a.TANGUY), /pas reliée à cette famille/);
+
+  const { le } = await s.appeler('resilierAbonnement', { fid, commande: id2, par: 'papote' }, a.TANGUY);
+  await s.calme();
+  assert.strictEqual(s.stripe.etat.abonnements.get(id2).cancel_at, Math.ceil(le / 1000), 'la 2e commande s\'arrête');
+  assert.strictEqual(s.stripe.etat.abonnements.get(id).cancel_at, null, 'celle de la famille continue');
+  const fam = await famille(fid);
+  assert.strictEqual(fam.abonnement.stripeSubscriptionId, id);
+  assert.strictEqual(fam.abonnement.statut, 'actif');
+  assert.strictEqual(fam.abonnement.resiliationLe, null);
+  assert.ok((await ligne(id2)).resiliationLe, 'admin : arrêt prévu sur la 2e commande');
+  assert.strictEqual((await ligne(id)).resiliationLe, null, 'admin : rien sur la commande de la famille');
+
+  await s.appeler('annulerResiliation', { fid, commande: id2 }, a.TANGUY);
+  await s.calme();
+  assert.strictEqual(s.stripe.etat.abonnements.get(id2).cancel_at, null, 'reprise de la 2e commande');
+  assert.strictEqual((await ligne(id2)).resiliationLe, null);
+
+  // Sans commande précise : toujours l'abonnement de la famille (appli du client).
+  await s.appeler('resilierAbonnement', { fid }, paul);
+  await s.calme();
+  assert.ok(s.stripe.etat.abonnements.get(id).cancel_at);
+  assert.strictEqual(s.stripe.etat.abonnements.get(id2).cancel_at, null);
+  assert.ok((await ligne(id)).resiliationLe);
+});
+
+test('résiliation : la tablette peut être renvoyée tout de suite ; sans adresse, un message clair et rien de bloqué', async () => {
+  await s.db.doc('gestion/reglages').set({ expediteur: { nom: 'Papote', adresse: '1 rue de test', cp: '07000', ville: 'Privas' } }, { merge: true });
+  const paul = await s.compte('Paul', 'paul@exemple.fr');
+  const { id, fid } = await familleAbonnee(paul);
+  await premierMoisPasse(id);
+  s.boite.length = 0;
+  const { le } = await s.appeler('resilierAbonnement', { fid }, paul);
+  await s.calme();
+  const mailArret = s.boite.find((m) => m.a === paul.email && /résiliation/i.test(m.sujet));
+  assert.ok(mailArret && /Je renvoie la tablette/.test(mailArret.texte), 'e-mail : renvoyer dès maintenant');
+  assert.doesNotMatch(mailArret.texte, /attendre ce jour/);
+  assert.strictEqual((await s.appeler('finDeContrat', { fid }, paul)).retourAnticipe, true);
+
+  // Commande sans adresse (Tanguy, 30/10 : tablette jumelée sans livraison) : message clair, on peut réessayer plus tard.
+  const livraison = (await commande(id)).livraison;
+  await s.db.doc(`commandes/${id}`).update({ livraison: null });
+  await assert.rejects(s.appeler('renvoyerTablette', { fid }, paul), /pas d'adresse pour créer le QR code/);
+  assert.ok(s.erreurs.some((e) => /QR code de retour non créé/.test(e)), 'Papote le voit dans les journaux');
+  s.erreurs.length = 0;
+  let c = await commande(id);
+  assert.strictEqual(c.restitution.statut, 'attendue');
+  assert.strictEqual(c.restitution.anticipe, true);
+  assert.strictEqual(c.restitution.qrDemandeLe, undefined, 'pas bloqué deux minutes');
+
+  await s.db.doc(`commandes/${id}`).update({ livraison });
+  const qr = await s.appeler('renvoyerTablette', { fid }, paul);
+  assert.ok(qr.qr && qr.etiquette, 'QR code créé dès que l\'adresse est là');
+  c = await commande(id);
+  assert.ok(Math.abs(c.restitution.avant.toMillis() - regles.limiteRestitution(le)) < 60e3, 'même date limite qu\'à l\'arrêt');
+});
+
 test('abonnement résilié, tablette encore là : reprise sans les 60 €, retour attendu annulé, tablette rattachée', async () => {
   const paul = await s.compte('Paul', 'paul@exemple.fr');
   const julie = await s.compte('Julie', 'julie@exemple.fr');

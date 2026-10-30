@@ -529,7 +529,7 @@ function resiliationEnregistree({ nom, famille, le, tablettePretee, parPapote })
       : `Votre demande de résiliation de l'abonnement Papote${famille ? ` de <b>${echapper(famille)}</b>` : ''} est bien enregistrée.`,
     `Tout continue de fonctionner jusqu'au <b>${dateEnClair(le)}</b>. Ce dernier mois est prélevé à l'arrêt, puis plus rien.`,
     tablettePretee
-      ? 'La tablette est à nous renvoyer, sans frais : un QR code prépayé, rien à imprimer. Vous pouvez le faire dès maintenant (dans l\'appli Papote, onglet Profil, « Je renvoie la tablette »), ou attendre ce jour-là : vous recevrez alors le mode d\'emploi par e-mail.'
+      ? `La tablette est à nous renvoyer, sans frais : un QR code prépayé, rien à imprimer. Vous pouvez la renvoyer dès maintenant : dans l'appli Papote, onglet Profil, touchez « Je renvoie la tablette ». Sinon, nous vous enverrons le mode d'emploi par e-mail le ${dateEnClair(le)}.`
       : 'La tablette est à vous : vous n\'avez rien à renvoyer.',
     parPapote ? '' : 'Vous changez d\'avis d\'ici là ? Dans l\'appli Papote, onglet Profil, touchez « Garder mon abonnement ».',
   ].filter(Boolean), APPLI_RETOUR);
