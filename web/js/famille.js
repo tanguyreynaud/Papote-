@@ -3131,13 +3131,15 @@ function renderAbonnement() {
     $('abo-choices').hidden = true;
   }
   if (abo) {
-    $('abo-status').textContent = LIBELLES[statut] || statut;
-    $('abo-status').className = `abo-status s-${statut}`;
+    // Arrêt demandé (par le client ou par Papote) : on dit la date d'arrêt, pas « Actif » à côté de « Résilié ».
+    const arretPrevu = abo.resiliationLe && ['actif', 'impaye'].includes(statut);
+    $('abo-status').textContent = arretPrevu ? `Arrêt prévu le ${dateLongue(abo.resiliationLe)}` : (LIBELLES[statut] || statut);
+    $('abo-status').className = `abo-status s-${arretPrevu ? 'arret' : statut}`;
     const details = [];
     if (abo.formule) details.push(`${abo.formule === 'wifi' ? 'Avec le Wi-Fi de la maison, 20 € par mois' : 'Tout compris, 25 € par mois'}, ${abo.tablette === 'achetee' ? 'tablette achetée' : 'tablette prêtée'}`);
     const futur = (t) => t && toDate(t) > new Date();
     // Une seule phrase par date (sans engagement : plus de date d'engagement).
-    if (abo.resiliationLe) details.push(`Résilié : Papote s'arrête le ${dateLongue(abo.resiliationLe)}`);
+    if (abo.resiliationLe) details.push(abo.tablette === 'achetee' ? 'Plus rien ne sera prélevé ensuite' : 'Ce jour-là, vous recevrez l\'étiquette prépayée pour nous renvoyer la tablette');
     // Chaque mois est payé une fois écoulé : le premier prélèvement tombe à la fin du premier mois.
     else if (statut === 'actif' && enAttenteEnvoi(abo)) {
       // Avant l'envoi, l'essai Stripe court 90 jours par sécurité : la vraie date n'est connue qu'à la réception.
