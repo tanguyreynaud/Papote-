@@ -20,8 +20,9 @@ function creerFauxStripe(horloge) {
   const secondes = () => Math.floor(horloge() / 1000);
   const etat = {
     sessions: new Map(), abonnements: new Map(), clients: new Map(), factures: new Map(),
-    paiements: new Map(), remboursements: [], lignes: [], evenements: [],
+    paiements: new Map(), remboursements: [], lignes: [], evenements: [], avoirs: [],
   };
+  const charges = () => [...etat.paiements.values()].map((p) => p.latest_charge).filter(Boolean);
   const prix = new Map(Object.entries(TARIFS).map(([cle, t]) => [`price_${cle}`, {
     id: `price_${cle}`, lookup_key: cle, unit_amount: t.montant, currency: 'eur', active: true,
     recurring: t.recurrent ? { interval: 'month' } : null,
@@ -47,7 +48,11 @@ function creerFauxStripe(horloge) {
       id: id('pi'), amount: facture.amount_due, currency: 'eur', status: 'succeeded', customer: client.id,
       metadata: { ...(facture.metadata || {}) }, invoice: facture.id, description: facture.description || null,
     };
-    pi.latest_charge = { id: id('ch'), amount: pi.amount, amount_refunded: 0, payment_intent: pi.id };
+    pi.created = secondes();
+    pi.latest_charge = {
+      id: id('ch'), object: 'charge', amount: pi.amount, amount_refunded: 0, payment_intent: pi.id, status: 'succeeded',
+      customer: client.id, invoice: facture.id, description: facture.description || null, metadata: {}, created: secondes(), refunded: false,
+    };
     etat.paiements.set(pi.id, pi);
     Object.assign(facture, { status: 'paid', amount_paid: facture.amount_due, payment_intent: pi.id });
     return pi;
@@ -98,6 +103,7 @@ function creerFauxStripe(horloge) {
       retrieve: async (x) => copie(lire('clients', 'customer', x)),
     },
     subscriptions: {
+      list: ({ status } = {}) => liste([...etat.abonnements.values()].filter((a) => !status || status === 'all' || a.status === status)),
       retrieve: async (x, options = {}) => {
         const a = copie(lire('abonnements', 'subscription', x));
         const etendre = options.expand || [];
@@ -140,9 +146,15 @@ function creerFauxStripe(horloge) {
       },
     },
     invoices: {
-      list: ({ subscription, customer, status }) => liste([...etat.factures.values()]
+      list: ({ subscription, customer, status, created }) => liste([...etat.factures.values()]
         .filter((f) => (!subscription || f.subscription === subscription) && (!customer || f.customer === customer)
-          && (!status || f.status === status))),
+          && (!status || f.status === status) && (!created || !created.gte || f.created >= created.gte))),
+      retrieve: async (x) => copie(lire('factures', 'invoice', x)),
+      // Seule recherche utilisée : metadata['charge']:'ch_…' (facture déjà faite pour un prélèvement hors abonnement).
+      search: async ({ query }) => {
+        const m = /metadata\['(\w+)'\]:'([^']+)'/.exec(query || '');
+        return { data: m ? [...etat.factures.values()].filter((f) => (f.metadata || {})[m[1]] === m[2]).map(copie) : [] };
+      },
       create: async ({ customer, metadata }) => {
         const client = lire('clients', 'customer', customer);
         const lignes = etat.lignes.filter((l) => l.customer === customer && !l.facture);
@@ -173,13 +185,37 @@ function creerFauxStripe(horloge) {
       retrieve: async (x) => copie(lire('paiements', 'payment_intent', x)),
       create: async ({ amount, customer, description, metadata }) => {
         const client = lire('clients', 'customer', customer);
+        if (client.carteExpiree) throw Object.assign(new Error('Your card has expired.'), { code: 'expired_card', type: 'StripeCardError', statusCode: 402 });
         const f = nouvelleFacture(client, { lignes: [{ amount, description }], metadata, description });
         const pi = payer(f, client);
         pi.description = description;
         return copie(pi);
       },
     },
+    // Lectures comptables (gestion.js : récap du lundi, clôture, factures des pénalités, avoirs) : dérivées des paiements.
+    charges: {
+      list: ({ customer, created } = {}) => liste(charges().filter((c) => (!customer || c.customer === customer) && (!created || !created.gte || c.created >= created.gte))),
+      retrieve: async (x) => copie(charges().find((c) => c.id === x) || introuvable('charge', x)),
+      update: async (x, maj) => { const c = charges().find((c2) => c2.id === x); if (!c) throw introuvable('charge', x); Object.assign(c, copie(maj)); return copie(c); },
+    },
+    balanceTransactions: {
+      list: ({ created } = {}) => liste([
+        ...charges().map((c) => ({ id: `txn_${c.id}`, type: 'charge', amount: c.amount, net: c.amount, fee: 0, created: c.created, source: c, description: c.description })),
+        ...etat.remboursements.map((r) => ({ id: `txn_${r.id}`, type: 'refund', amount: -r.amount, net: -r.amount, fee: 0, created: r.created, source: r, description: 'Remboursement' })),
+      ].filter((bt) => !created || !created.gte || bt.created >= created.gte)),
+    },
+    creditNotes: {
+      list: ({ invoice }) => liste(etat.avoirs.filter((a) => !invoice || a.invoice === invoice)),
+      create: async ({ invoice, refund, lines }) => {
+        const a = { id: id('cn'), invoice, refund, lines, amount: (lines || []).reduce((t, l) => t + (l.unit_amount || 0) * (l.quantity || 1), 0), created: secondes() };
+        etat.avoirs.push(a);
+        return copie(a);
+      },
+    },
     refunds: {
+      list: ({ created } = {}) => liste(etat.remboursements.filter((r) => !created || !created.gte || r.created >= created.gte)
+        .map((r) => ({ ...r, charge: charges().find((c) => c.id === r.charge) || r.charge }))),
+      update: async (x, maj) => { const r = etat.remboursements.find((r2) => r2.id === x); if (!r) throw introuvable('refund', x); Object.assign(r, copie(maj)); return copie(r); },
       create: async ({ payment_intent: x, amount }, options = {}) => {
         const cle = options.idempotencyKey;
         const deja = cle && etat.remboursements.find((r) => r.cle === cle);
@@ -189,7 +225,8 @@ function creerFauxStripe(horloge) {
         const montant = amount == null ? reste : amount;
         if (montant > reste || montant <= 0) throw new Error(`Charge ${pi.latest_charge.id} has already been refunded.`);
         pi.latest_charge.amount_refunded += montant;
-        const r = { id: id('re'), amount: montant, payment_intent: x, cle };
+        pi.latest_charge.refunded = pi.latest_charge.amount_refunded >= pi.latest_charge.amount;
+        const r = { id: id('re'), object: 'refund', amount: montant, payment_intent: x, charge: pi.latest_charge.id, status: 'succeeded', metadata: {}, created: secondes(), cle };
         etat.remboursements.push(r);
         return copie(r);
       },
@@ -291,12 +328,29 @@ function creerFauxStripe(horloge) {
     evenement('invoice.paid', f);
   }
 
+  // Un mois de plus : Stripe prélève le mois suivant (abonnement « active », nouvelle période de 30 jours).
+  function prelevementMensuel(abonnementId) {
+    const a = lire('abonnements', 'subscription', abonnementId);
+    if (a.status !== 'active') throw new Error(`Abonnement ${abonnementId} : pas « active » (${a.status}), rien à prélever`);
+    const client = lire('clients', 'customer', a.customer);
+    const mensuel = a.items.data[0].price;
+    a.current_period_end = Math.max(a.current_period_end || 0, secondes()) + 30 * 86400;
+    a.items.data[0].current_period_end = a.current_period_end;
+    const f = nouvelleFacture(client, { lignes: [{ amount: mensuel.unit_amount, price: mensuel.id }], abonnement: a.id });
+    payer(f, client);
+    evenement('invoice.paid', f);
+    evenement('customer.subscription.updated', a);
+  }
+
   // Prélèvement du mois refusé par la banque : abonnement « past_due », facture ouverte.
   function banqueRefusePrelevement(abonnementId) {
     const a = lire('abonnements', 'subscription', abonnementId);
     const client = lire('clients', 'customer', a.customer);
     const mensuel = a.items.data[0].price;
     a.status = 'past_due';
+    // Comme Stripe : la nouvelle période commence quand même, sa facture reste ouverte.
+    a.current_period_end = Math.max(a.current_period_end || 0, secondes()) + 30 * 86400;
+    a.items.data[0].current_period_end = a.current_period_end;
     const f = nouvelleFacture(client, { lignes: [{ amount: mensuel.unit_amount, price: mensuel.id }], abonnement: a.id });
     f.status = 'open';
     evenement('invoice.payment_failed', f);
@@ -311,6 +365,12 @@ function creerFauxStripe(horloge) {
     a.status = 'active';
     evenement('invoice.paid', f || {});
     evenement('customer.subscription.updated', a);
+  }
+
+  // La carte du client a expiré : tout prélèvement hors abonnement (dernier mois, matériel non rendu) est refusé.
+  function carteExpiree(abonnementId) {
+    const a = lire('abonnements', 'subscription', abonnementId);
+    lire('clients', 'customer', a.customer).carteExpiree = true;
   }
 
   // Date d'arrêt demandée (cancel_at) atteinte : Stripe arrête l'abonnement.
@@ -337,7 +397,7 @@ function creerFauxStripe(horloge) {
       && (etat.factures.get(etat.paiements.get(r.payment_intent).invoice) || {}).subscription === abonnement)
     .reduce((t, r) => t + r.amount, 0);
 
-  return { api, etat, payerSession, banqueAccepte, banqueRefuse, banqueRefusePrelevement, banqueAccepteEnRetard, expirerSession, finirEssai, arreterALaDate, rembourse, vider };
+  return { api, etat, payerSession, banqueAccepte, banqueRefuse, prelevementMensuel, carteExpiree, banqueRefusePrelevement, banqueAccepteEnRetard, expirerSession, finirEssai, arreterALaDate, rembourse, vider };
 }
 
 module.exports = { creerFauxStripe };

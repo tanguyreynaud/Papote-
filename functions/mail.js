@@ -140,13 +140,13 @@ a { color:${C.indigo}; }
 <td style="padding-left:10px;font-family:${POLICE_TITRE};font-size:21px;font-weight:bold;line-height:1;color:${C.indigo}">Papote${options.interne ? `<span style="font-family:${POLICE};font-size:14px;font-weight:normal;color:${C.doux}"> · pour Tanguy</span>` : ''}</td>
 </tr></table>
 </td></tr>
-<tr><td class="carte" style="background:${C.carte};border:1px solid ${C.ligne};border-radius:18px;padding:30px 28px 24px;font-family:${POLICE};font-size:17px;line-height:1.6;color:${C.texte}">
+<tr><td class="carte" style="background:${C.carte};border:1px solid ${C.ligne};border-radius:18px;padding:30px 28px 24px;font-family:${POLICE};font-size:17px;line-height:1.6;color:${C.texte};word-break:break-word;overflow-wrap:anywhere">
 <h1 class="titre" style="margin:0 0 20px;font-family:${POLICE_TITRE};font-size:27px;line-height:1.2;color:${C.texte}">${insecables(echapper(titre))}</h1>
 ${corps}
 ${btn}
 ${question}
 </td></tr>
-<tr><td style="padding:18px 6px 0;font-family:${POLICE};font-size:13px;line-height:1.5;color:${C.doux}">${pied}${pourquoi}</td></tr>
+<tr><td style="padding:18px 6px 0;font-family:${POLICE};font-size:13px;line-height:1.5;color:${C.doux};word-break:break-word;overflow-wrap:anywhere">${pied}${pourquoi}</td></tr>
 </table>
 </td></tr>
 </table>

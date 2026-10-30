@@ -15,6 +15,10 @@
 //   --emails=<branche|ici>               autre source pour functions/ (mail.js)
 //   --double [vitrine famille tablette admin]  au lieu des captures : touche chaque bouton deux fois, serveur bloqué,
 //                                        et signale toute action partie en double (double.js)
+//   --gestes [famille vitrine]           au lieu des captures : chaque écran en paysage, zoom 130 %, texte +30 %, mode sombre,
+//                                        noms très longs ; bouton retour sur les fenêtres ; retour après paiement (gestes.js)
+//   --courriels                          au lieu des captures : chaque e-mail à 320/375/412/600/900 px sans police ni image,
+//                                        poids, liens, texte brut, contraste clair et inversé (courriels.js)
 //   --identifiants [admin famille]       au lieu des captures : chaque bouton qui agit sur une commande ou un abonnement
 //                                        doit envoyer au serveur la commande de la page / la famille ouverte (identifiants.js)
 //   Chaque galerie range aussi ses captures dans validation/ pour l'espace Validation de l'admin :
@@ -44,6 +48,8 @@ async function main() {
   if (args.includes('--boutons')) return boutons(args.filter((a) => a !== '--boutons'));
   if (args.includes('--double')) return double(args.filter((a) => a !== '--double'));
   if (args.includes('--identifiants')) return identifiants(args.filter((a) => a !== '--identifiants'));
+  if (args.includes('--gestes')) return gestes(args.filter((a) => a !== '--gestes'));
+  if (args.includes('--courriels')) return courriels(args.filter((a) => a !== '--courriels'));
   const choix = args.filter((a) => !a.startsWith('--'));
   for (const a of args.filter((a) => a.startsWith('--'))) {
     const [k, v] = a.slice(2).split('=');
@@ -132,15 +138,43 @@ async function boutons(args) {
   console.log(`\n${texte}\n\n${fichier}`);
 }
 
+// E-mails dans les vraies boîtes (courriels.js) : largeurs Gmail / Apple Mail / Outlook, sans police ni image, mode sombre.
+async function courriels(args) {
+  for (const a of args.filter((a2) => a2.startsWith('--'))) {
+    const [k, v] = a.slice(2).split('=');
+    if (SOURCES[k] && v) SOURCES[k].ref = v;
+  }
+  const { verifier, rapport } = require('./courriels');
+  const sortie = path.join(__dirname, 'sortie');
+  fs.mkdirSync(sortie, { recursive: true });
+  const src = SOURCES.emails;
+  console.log(`emails : ${src.ref}`);
+  const { dir, version } = extraire(src.ref, src.dossier);
+  const browser = await chromium.launch();
+  try {
+    const resultats = await verifier({ browser, dossierSource: dir, progression: (t) => process.stdout.write(`\r  ${t}   `) });
+    process.stdout.write('\n');
+    const { fichier, texte } = rapport(resultats, version, sortie);
+    console.log(`\n${texte}\n\n${fichier}`);
+  } finally {
+    await browser.close();
+  }
+}
+
+// Gestes humains (gestes.js) : paysage, zoom, texte agrandi, mode sombre, noms longs, bouton retour, retour après paiement.
+async function gestes(args) {
+  return double(args, require('./gestes'), ['famille', 'vitrine']);
+}
+
 // Double clic (double.js) : chaque bouton touché deux fois, rien ne doit partir en double.
-async function double(args) {
-  const { balayer, rapport } = require('./double');
+async function double(args, outil = require('./double'), defaut = ['vitrine', 'famille', 'tablette', 'admin']) {
+  const { balayer, rapport } = outil;
   for (const a of args.filter((a) => a.startsWith('--'))) {
     const [k, v] = a.slice(2).split('=');
     if (SOURCES[k] && v) SOURCES[k].ref = v;
   }
   const choix = args.filter((a) => !a.startsWith('--'));
-  const quoi = (choix.length ? choix : ['vitrine', 'famille', 'tablette', 'admin']).filter((n) => ['vitrine', 'famille', 'tablette', 'admin'].includes(n));
+  const quoi = (choix.length ? choix : defaut).filter((n) => defaut.includes(n));
   const sortie = path.join(__dirname, 'sortie');
   fs.mkdirSync(sortie, { recursive: true });
   const browser = await chromium.launch({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--lang=fr-FR'] });
