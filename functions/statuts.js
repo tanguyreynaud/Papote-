@@ -40,6 +40,16 @@ function refusEnvoi(c, { mainPropre = false } = {}) {
   return "Cette commande n'est pas à envoyer.";
 }
 
+// Offre unique avec carte SIM (Tanguy, 2026-10-30) : un premier envoi part seulement avec sa tablette reliée
+// à la commande (Stock) et une carte SIM reliée à cette tablette. tablettes : fiches stock de la commande.
+function refusEnvoiSansSim(c, tablettes) {
+  if (c.expedition === 'envoyee' || c.formule !== 'sim') return '';
+  const t = tablettes.find((x) => ['en-stock', 'preparee', 'envoyee'].includes(x.etat));
+  if (!t) return "Reliez d'abord la tablette à cette commande (Stock).";
+  if (!t.simId) return `Reliez d'abord une carte SIM à la tablette ${t.ref || ''}`.trim() + ' (Stock, Cartes SIM).';
+  return '';
+}
+
 // « Le client a reçu le colis » : fait partir les 30 jours et le premier prélèvement, donc colis parti seulement.
 function refusReception(c) {
   if (c.expedition === 'envoyee') return '';
@@ -87,6 +97,7 @@ function refusSuppressionSim(ligne, tablette) {
 }
 
 module.exports = {
+  refusEnvoiSansSim,
   refusEtiquette, refusEnvoi, refusReception, refusRetourMateriel, refusLienCommande,
   refusStatutSim, refusRecharge, refusSuppressionSim, SUITES_SIM, RESTITUTION_EN_COURS,
 };
