@@ -1083,6 +1083,8 @@ function menuCommande(c, zoneRemplacement, etiquette) {
       ? { libelle: 'Colis revenu (jamais retiré)', danger: true, faire: () => lancer(() => colisRevenu(c)) } : null,
     enCours && !annulable
       ? { libelle: 'Arrêter l\'abonnement', danger: true, faire: () => lancer(() => arreterAbonnement(c)) } : null,
+    c.fid && c.resiliationLe && !c.restitution && c.resiliationLe > Date.now()
+      ? { libelle: 'Reprendre l\'abonnement', faire: () => lancer(() => reprendreAbonnement(c)) } : null,
     enCours && !annulable && !enPause ? { libelle: 'Pause hospitalisation…', faire: () => lancer(() => pauseHospitalisation(c)) } : null,
     enPause ? { libelle: 'Reprendre les prélèvements', faire: () => lancer(() => reprendrePrelevements(c)) } : null,
     zoneRemplacement ? { libelle: 'Remplacer un élément du kit (cassé ou perdu)…', faire: () => {
@@ -1163,8 +1165,15 @@ async function reprendrePrelevements(c) {
 
 async function arreterAbonnement(c) {
   if (!await demander(`Arrêter l'abonnement de ${c.nom || c.email || 'ce client'} ?\n\nComme si le client résiliait lui-même dans l'appli : l'abonnement prend fin à la fin du mois en cours, prélevé à l'arrêt.`, { oui: 'Arrêter l\'abonnement', non: 'Garder', danger: true })) throw 'non';
-  const r = await patienter('Arrêt de l\'abonnement…', () => appeler('resilierAbonnement', { fid: c.fid, par: 'papote' }));
+  // L'abonnement de cette commande, même si la famille en a un autre (Tanguy, 30/10).
+  const r = await patienter('Arrêt de l\'abonnement…', () => appeler('resilierAbonnement', { fid: c.fid, commande: c.id, par: 'papote' }));
   return `Abonnement arrêté : il prend fin le ${jour(r.le)}.`;
+}
+
+async function reprendreAbonnement(c) {
+  if (!await demander(`Reprendre l'abonnement de ${c.nom || c.email || 'ce client'} ?\n\nL'arrêt prévu le ${jour(c.resiliationLe)} est annulé : l'abonnement continue comme avant et le client reçoit un e-mail.`, { oui: 'Reprendre l\'abonnement' })) throw 'non';
+  await patienter('Reprise de l\'abonnement…', () => appeler('annulerResiliation', { fid: c.fid, commande: c.id }));
+  return 'Abonnement repris : il continue comme avant.';
 }
 
 // Colis de retour : n° de suivi (lien Mondial Relay) et où il en est, mis à jour chaque nuit.
