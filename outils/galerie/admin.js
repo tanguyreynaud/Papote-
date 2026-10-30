@@ -4,6 +4,7 @@
 'use strict';
 
 const { famillePleine, membre, poserDonnees, SDK, ilYa, FID } = require('./famille');
+const clavier = require('./clavier');
 
 const TAILLES = {
   pc: { nom: 'ordinateur', width: 1280, height: 800, mobile: false },
@@ -324,6 +325,14 @@ async function capturer({ browser, base, dossierImages, progression }) {
       }
       await page.screenshot({ path: `${dossierImages}/${fichier}`, type: 'jpeg', quality: 62 }).catch((e) => erreurs.push('Capture : ' + e.message.split('\n')[0]));
       resultats.push({ n, groupe: scene.groupe, titre: scene.titre, note: scene.note, taille: taille.nom, fichier, erreurs, scene: SCENES.indexOf(scene) });
+      // Téléphone : clavier ouvert sur les champs de l'écran (clavier.js).
+      if (taille.mobile) {
+        await page.setViewportSize({ width: taille.width, height: taille.height });
+        await page.evaluate(() => window.scrollTo(0, 0)).catch(() => {});
+        const fc = `admin-${String(n).padStart(3, '0')}-clavier.jpg`;
+        const { problemes, capture } = await clavier.verifier(page, taille, `${dossierImages}/${fc}`);
+        if (capture) resultats.push({ n: n + 0.5, groupe: scene.groupe, titre: scene.titre, note: scene.note, taille: 'clavier ouvert', fichier: fc, erreurs: problemes, scene: SCENES.indexOf(scene) });
+      }
       await ctx.close();
       progression(`admin ${++faits}/${n0}`);
     }

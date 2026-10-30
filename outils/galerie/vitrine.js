@@ -3,6 +3,8 @@
 // remplacés par de fausses réponses : rien ne part sur internet, aucune commande n'est créée.
 'use strict';
 
+const clavier = require('./clavier');
+
 const TAILLES = [
   { nom: 'telephone', width: 390, height: 844, mobile: true },
   { nom: 'ordinateur', width: 1280, height: 800, mobile: false },
@@ -223,6 +225,13 @@ async function capturer({ browser, base, dossierImages, progression }) {
       }
       await page.screenshot({ path: `${dossierImages}/${fichier}`, type: 'jpeg', quality: 62, timeout: 15000 }).catch((e) => erreurs.push('Capture : ' + e.message.split('\n')[0]));
       resultats.push({ n, groupe: scene.groupe, titre: scene.titre, note: scene.note, taille: taille.nom, fichier, erreurs, scene: SCENES.indexOf(scene) });
+      // Téléphone : clavier ouvert sur les champs de l'écran (clavier.js).
+      if (taille.mobile) {
+        await page.setViewportSize({ width: taille.width, height: taille.height });
+        const fc = `vitrine-${String(n).padStart(3, '0')}-clavier.jpg`;
+        const { problemes, capture } = await clavier.verifier(page, taille, `${dossierImages}/${fc}`);
+        if (capture) resultats.push({ n: n + 0.5, groupe: scene.groupe, titre: scene.titre, note: scene.note, taille: 'clavier ouvert', fichier: fc, erreurs: problemes, scene: SCENES.indexOf(scene) });
+      }
       await ctx.close();
       progression(`site vitrine ${++faits}/${n0}`);
     }

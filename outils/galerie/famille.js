@@ -5,6 +5,7 @@
 const fs = require('fs');
 const path = require('path');
 const { fausseImage, fauxVisage, fauxQr, fausseVideo } = require('./commun');
+const clavier = require('./clavier');
 
 const TAILLES = [{ nom: 'telephone', width: 390, height: 844 }];
 const JOUR = '2026-10-26';
@@ -565,6 +566,14 @@ async function capturer({ browser, base, dossierImages, progression }) {
       }
       await page.screenshot({ path: `${dossierImages}/${fichier}`, type: 'jpeg', quality: 62 });
       resultats.push({ n, groupe: scene.groupe, titre: scene.titre, note: scene.note, taille: taille.nom, fichier, erreurs, scene: SCENES.indexOf(scene) });
+      // Clavier ouvert sur les champs de l'écran (clavier.js) : capture à côté, problèmes signalés.
+      if (!scene.avant) {
+        await page.setViewportSize({ width: taille.width, height: taille.height });
+        await page.evaluate(() => window.scrollTo(0, 0)).catch(() => {});
+        const fc = `famille-${String(n).padStart(3, '0')}-clavier.jpg`;
+        const { problemes, capture } = await clavier.verifier(page, taille, `${dossierImages}/${fc}`);
+        if (capture) resultats.push({ n: n + 0.5, groupe: scene.groupe, titre: scene.titre, note: scene.note, taille: 'clavier ouvert', fichier: fc, erreurs: problemes, scene: SCENES.indexOf(scene) });
+      }
       await ctx.close();
       progression(`app famille ${++faits}/${n0}`);
     }

@@ -18,6 +18,16 @@ Ce qui ne se capture pas : l'écran de l'appareil photo du téléphone (après a
 envoyer), le vrai plein écran du lecteur vidéo (imité), une vraie visio entre deux appareils, les pages Stripe,
 la voix, l'iPhone.
 
+## Clavier ouvert
+
+Sur téléphone (app famille, site, admin), chaque écran qui a un champ à remplir est repris **clavier ouvert**
+(`clavier.js`) : on touche chaque champ visible, puis la hauteur de l'écran est réduite de la place du clavier
+(330 px en portrait, 210 en paysage), comme le fait Chrome Android avec `interactive-widget=resizes-content`
+posé dans les pages. La capture « clavier ouvert » est mise à côté de l'écran, et la galerie signale en rouge :
+un champ qui perd la main ou reste caché (sous la barre du bas, une barre « Payer »…), un bouton d'envoi
+qu'on ne peut pas atteindre, une page qui devient plus large que l'écran. La tablette n'a aucun champ à remplir.
+C'est une simulation : un vrai clavier Android ou iPhone reste à essayer sur le téléphone.
+
 ## Lancer
 
 Sur le PC, double-cliquer `galerie.bat` (la première fois, il installe Playwright et son

@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <title>Votre commande · Papote</title>
 <meta name="robots" content="noindex">
 <meta name="theme-color" content="#fdfaf5">
@@ -110,6 +110,8 @@ p { margin: 0; }
 .barre-in small { color: var(--muted); }
 .barre .manque { margin: .4rem auto 0; max-width: 40rem; font-size: .9rem; color: var(--accent-strong); font-weight: 700; }
 .barre .manque[hidden] { display: none; }
+/* Clavier ouvert : le champ tapé s'arrête au-dessus de la barre « Payer », qui reste au-dessus du clavier. */
+html { scroll-padding-bottom: 8.5rem; }
 .btn { margin-left: auto; display: inline-flex; align-items: center; justify-content: center; min-height: 3.25rem; padding: .75rem 1.4rem; border-radius: 999px; background: var(--accent); color: var(--accent-text); font: 700 1.05rem/1.2 inherit; text-decoration: none; border: 0; cursor: pointer; white-space: nowrap; flex: none; }
 .btn:hover { background: var(--accent-strong); }
 .btn[aria-disabled="true"] { background: #c9c6d8; }
