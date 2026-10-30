@@ -130,7 +130,8 @@ async function balayer({ browser, base, partie, progression }) {
         if (!texte) rechargements.push({ scene: scenes[i].titre, probleme: 'écran vide après un rafraîchissement' });
         for (const e of erreurs.slice(avant)) rechargements.push({ scene: scenes[i].titre, probleme: `erreur après un rafraîchissement : ${e.slice(0, 140)}` });
       } catch (e) {
-        rechargements.push({ scene: scenes[i].titre, probleme: `rafraîchissement impossible : ${e.message.split('\n')[0]}` });
+        // Écran « pas d'internet » : le navigateur ne peut pas recharger, c'est voulu.
+        if (!/ERR_INTERNET_DISCONNECTED/.test(e.message)) rechargements.push({ scene: scenes[i].titre, probleme: `rafraîchissement impossible : ${e.message.split('\n')[0]}` });
       }
       await ctx.close();
       progression(`${partie} : boutons des écrans ${++faits}/${scenes.length}`);
