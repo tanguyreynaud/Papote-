@@ -77,6 +77,16 @@ test('cartes SIM : statuts, recharge et suppression', () => {
   for (const etat of ['envoyee', 'chez-client', 'en-retour']) refuse(s.refusSuppressionSim({}, { etat }), /chez un client/);
 });
 
+test('envoi : tablette reliée et carte SIM obligatoires pour l\'offre tout compris', () => {
+  const c = { expedition: 'a-preparer', formule: 'sim' };
+  refuse(s.refusEnvoiSansSim(c, []), /Reliez d'abord la tablette/);
+  refuse(s.refusEnvoiSansSim(c, [{ etat: 'preparee', ref: 'T-004' }]), /carte SIM à la tablette T-004/);
+  permis(s.refusEnvoiSansSim(c, [{ etat: 'preparee', simId: 'sim1' }]));
+  // Numéro de suivi corrigé après le départ, ancienne commande Wi-Fi : rien de plus demandé.
+  permis(s.refusEnvoiSansSim({ expedition: 'envoyee', formule: 'sim' }, []));
+  permis(s.refusEnvoiSansSim({ expedition: 'a-preparer', formule: 'wifi' }, []));
+});
+
 test('étiquette en double (double clic, vieil onglet) : refusée tant que l\'ancienne n\'a pas servi ou n\'est pas vieille de 30 jours', () => {
   const maintenant = Date.now();
   permis(s.refusEtiquetteEnDouble({}, 'retour', maintenant));

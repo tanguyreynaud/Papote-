@@ -200,6 +200,59 @@ const SCENES = [
   { groupe: 'Textes', titre: 'Page introuvable (404)', fichier: '404.html', plein: true },
 ];
 
+// Ouvre l'écran d'une scène dans un nouveau navigateur : internet coupé, faux services, aucune commande créée.
+async function ouvrir(browser, base, scene, taille) {
+  const ctx = await browser.newContext({
+    viewport: { width: taille.width, height: taille.height }, deviceScaleFactor: taille.mobile ? 2 : 1,
+    isMobile: taille.mobile, hasTouch: taille.mobile, locale: 'fr-FR', timezoneId: 'Europe/Paris',
+  });
+  const page = await ctx.newPage();
+  page.setDefaultTimeout(8000); // un bouton absent : erreur signalée vite, pas après 30 s
+  const erreurs = [];
+  page.on('pageerror', (e) => erreurs.push(String(e.message || e)));
+  await page.clock.install({ time: new Date('2026-10-26T10:30:00+01:00') });
+  // Internet coupé (sauf les polices), puis les faux services : Playwright regarde les routes de la dernière à la première.
+  await page.route(/^https?:\/\/(?!127\.0\.0\.1|fonts\.googleapis\.com|fonts\.gstatic\.com)/, (r) => r.abort());
+  await page.route('**/stockDisponible', (r) => r.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: '{"disponible":4}' }));
+  await page.route('**/compter**', (r) => r.fulfill({ status: 204, headers: { 'Access-Control-Allow-Origin': '*' } }));
+  // « Payer » part vers la fonction commander (puis Stripe) : ici une réponse 204, que le navigateur ignore,
+  // la page reste donc affichée avec « Un instant… ».
+  await page.route('**/commander**', (r) => r.fulfill({ status: 204 }));
+  await page.route('**/codeCommande**', (r) => r.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(RECAP) }));
+  // 63490 : un code postal à plusieurs villes, pour voir le choix de la ville.
+  await page.route(/geo\.api\.gouv\.fr/, (r) => r.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' },
+    body: /63490/.test(r.request().url()) ? '[{"nom":"Brousse","code":"63056"},{"nom":"Sugères","code":"63423"},{"nom":"Sauviat","code":"63412"}]' : '[{"nom":"Lyon 1er Arrondissement","code":"69381"}]' }));
+  await page.route(/data\.geopf\.fr\/geocodage\/search/, (r) => r.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(/citycode=/.test(r.request().url()) ? RUES : VILLES) }));
+  // Couverture : la vraie règle (functions/couverture.js, carte de l'ARCEP) sur les coordonnées demandées.
+  await page.route('**/couverture?**', (r) => {
+    const u = new URL(r.request().url());
+    // Commune seule : parts mesurées sur les vrais contours (Lyon 100 %, Brousse 85 %).
+    const insee = u.searchParams.get('insee');
+    const corps = insee ? { part: insee === '69123' ? 1 : 0.85, eligible: insee === '69123', trimestre: '2026_T2' }
+      : require('../../functions/couverture').verifier(u.searchParams.get('lat'), u.searchParams.get('lon'));
+    r.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(corps) });
+  });
+  await page.route(/servicepoints\.sendcloud\.sc/, (r) => r.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(RELAIS) }));
+  // Réponse du chat de support (fonction supportChat) : une vraie réponse type, sans appel à Claude.
+  await page.route('**/supportChat', (r) => {
+    const corps = JSON.parse(r.request().postData() || '{}');
+    r.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(corps.messages || corps.inscription
+      ? { ok: true, reponse: 'Papote coûte 25 € par mois, tout compris : la tablette prêtée, la carte SIM 4G et l’appli pour toute la famille. Il y a 60 € de mise en service à la commande, et c’est sans engagement.' }
+      : { ok: true }) });
+  });
+  // Routes propres à la scène (pannes, attentes) : posées en dernier, elles passent avant les autres.
+  if (scene.routes) await scene.routes(page, ctx);
+  if (scene.session) await page.addInitScript((d) => { for (const [k, v] of Object.entries(d)) sessionStorage.setItem(k, typeof v === 'string' ? v : JSON.stringify(v)); }, scene.session);
+  try {
+    await page.goto(`${base}/${scene.fichier}`);
+    await page.waitForTimeout(900);
+    if (scene.faire) await scene.faire(page);
+  } catch (e) {
+    erreurs.push('Scène : ' + e.message.split('\n')[0]);
+  }
+  return { ctx, page, erreurs };
+}
+
 async function capturer({ browser, base, dossierImages, progression }) {
   const travaux = [];
   let n = 0;
@@ -210,54 +263,7 @@ async function capturer({ browser, base, dossierImages, progression }) {
   async function ouvrier() {
     for (let job = travaux.shift(); job; job = travaux.shift()) {
       const { scene, taille, n } = job;
-      const ctx = await browser.newContext({
-        viewport: { width: taille.width, height: taille.height }, deviceScaleFactor: taille.mobile ? 2 : 1,
-        isMobile: taille.mobile, hasTouch: taille.mobile, locale: 'fr-FR', timezoneId: 'Europe/Paris',
-      });
-      const page = await ctx.newPage();
-      page.setDefaultTimeout(8000); // un bouton absent : erreur signalée vite, pas après 30 s
-      const erreurs = [];
-      page.on('pageerror', (e) => erreurs.push(String(e.message || e)));
-      await page.clock.install({ time: new Date('2026-10-26T10:30:00+01:00') });
-      // Internet coupé (sauf les polices), puis les faux services : Playwright regarde les routes de la dernière à la première.
-      await page.route(/^https?:\/\/(?!127\.0\.0\.1|fonts\.googleapis\.com|fonts\.gstatic\.com)/, (r) => r.abort());
-      await page.route('**/stockDisponible', (r) => r.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: '{"disponible":4}' }));
-      await page.route('**/compter**', (r) => r.fulfill({ status: 204, headers: { 'Access-Control-Allow-Origin': '*' } }));
-      // « Payer » part vers la fonction commander (puis Stripe) : ici une réponse 204, que le navigateur ignore,
-      // la page reste donc affichée avec « Un instant… ».
-      await page.route('**/commander**', (r) => r.fulfill({ status: 204 }));
-      await page.route('**/codeCommande**', (r) => r.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(RECAP) }));
-      // 63490 : un code postal à plusieurs villes, pour voir le choix de la ville.
-      await page.route(/geo\.api\.gouv\.fr/, (r) => r.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' },
-        body: /63490/.test(r.request().url()) ? '[{"nom":"Brousse","code":"63056"},{"nom":"Sugères","code":"63423"},{"nom":"Sauviat","code":"63412"}]' : '[{"nom":"Lyon 1er Arrondissement","code":"69381"}]' }));
-      await page.route(/data\.geopf\.fr\/geocodage\/search/, (r) => r.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(/citycode=/.test(r.request().url()) ? RUES : VILLES) }));
-      // Couverture : la vraie règle (functions/couverture.js, carte de l'ARCEP) sur les coordonnées demandées.
-      await page.route('**/couverture?**', (r) => {
-        const u = new URL(r.request().url());
-        // Commune seule : parts mesurées sur les vrais contours (Lyon 100 %, Brousse 85 %).
-        const insee = u.searchParams.get('insee');
-        const corps = insee ? { part: insee === '69123' ? 1 : 0.85, eligible: insee === '69123', trimestre: '2026_T2' }
-          : require('../../functions/couverture').verifier(u.searchParams.get('lat'), u.searchParams.get('lon'));
-        r.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(corps) });
-      });
-      await page.route(/servicepoints\.sendcloud\.sc/, (r) => r.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(RELAIS) }));
-      // Réponse du chat de support (fonction supportChat) : une vraie réponse type, sans appel à Claude.
-      await page.route('**/supportChat', (r) => {
-        const corps = JSON.parse(r.request().postData() || '{}');
-        r.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(corps.messages || corps.inscription
-          ? { ok: true, reponse: 'Papote coûte 25 € par mois, tout compris : la tablette prêtée, la carte SIM 4G et l’appli pour toute la famille. Il y a 60 € de mise en service à la commande, et c’est sans engagement.' }
-          : { ok: true }) });
-      });
-      // Routes propres à la scène (pannes, attentes) : posées en dernier, elles passent avant les autres.
-      if (scene.routes) await scene.routes(page, ctx);
-      if (scene.session) await page.addInitScript((d) => { for (const [k, v] of Object.entries(d)) sessionStorage.setItem(k, typeof v === 'string' ? v : JSON.stringify(v)); }, scene.session);
-      try {
-        await page.goto(`${base}/${scene.fichier}`);
-        await page.waitForTimeout(900);
-        if (scene.faire) await scene.faire(page);
-      } catch (e) {
-        erreurs.push('Scène : ' + e.message.split('\n')[0]);
-      }
+      const { ctx, page, erreurs } = await ouvrir(browser, base, scene, taille);
       const largeur = await tropLarge(page);
       if (largeur) erreurs.push('Largeur : ' + largeur);
       const fichier = `vitrine-${String(n).padStart(3, '0')}.jpg`;
@@ -282,4 +288,4 @@ async function capturer({ browser, base, dossierImages, progression }) {
   return resultats.sort((a, b) => a.n - b.n);
 }
 
-module.exports = { capturer, SCENES };
+module.exports = { capturer, ouvrir, SCENES, TAILLES };

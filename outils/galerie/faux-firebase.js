@@ -198,10 +198,14 @@ function poserChamp(o, chemin, x) {
   if (x && x[SENTINELLE] === 'effacer') delete c[der]; else c[der] = appliquer(c[der], x);
 }
 
+// Balayage « double clic » (double.js) : chaque écriture est notée dans window.__ecritures { op, chemin }.
+function noter(op, chemin) { (window.__ecritures || (window.__ecritures = [])).push({ op, chemin }); }
 function ecrireSet(ref, data, opts) {
+  noter(opts && (opts.merge || opts.mergeFields) ? 'fusion' : 'set', ref.path);
   store.set(ref.path, opts && (opts.merge || opts.mergeFields) ? fusionner(store.get(ref.path), data) : appliquer(undefined, data));
 }
 function ecrireUpdate(ref, a, ...rest) {
+  noter('update', ref.path);
   if (!store.has(ref.path)) { const e = new Error(`No document to update: ${ref.path}`); e.code = 'not-found'; throw e; }
   const o = copie(store.get(ref.path));
   const paires = typeof a === 'string' ? [[a, rest[0]], ...rest.slice(1).reduce((acc, x, i, arr) => (i % 2 ? acc : [...acc, [x, arr[i + 1]]]), [])] : Object.entries(a);
@@ -211,19 +215,20 @@ function ecrireUpdate(ref, a, ...rest) {
 
 export async function setDoc(ref, data, opts) { ecrireSet(ref, data, opts); prevenir(); }
 export async function updateDoc(ref, ...a) { ecrireUpdate(ref, ...a); prevenir(); }
-export async function deleteDoc(ref) { store.delete(ref.path); prevenir(); }
-export async function addDoc(coll, data) { const ref = doc(coll); ecrireSet(ref, data); prevenir(); return ref; }
+export async function deleteDoc(ref) { noter('delete', ref.path); store.delete(ref.path); prevenir(); }
+export async function addDoc(coll, data) { const ref = doc(coll); noter('add', coll.path); ecrireSet(ref, data); prevenir(); return ref; }
 export function writeBatch() {
   const ops = [];
   const b = {
     set: (r, d, o) => { ops.push(() => ecrireSet(r, d, o)); return b; },
     update: (r, ...a) => { ops.push(() => ecrireUpdate(r, ...a)); return b; },
-    delete: (r) => { ops.push(() => store.delete(r.path)); return b; },
-    commit: async () => { ops.forEach((f) => f()); prevenir(); },
+    delete: (r) => { ops.push(() => { noter('delete', r.path); store.delete(r.path); }); return b; },
+    commit: async () => { noter('commit', ''); ops.forEach((f) => f()); prevenir(); },
   };
   return b;
 }
 export async function runTransaction(_db, fn) {
+  noter('transaction', '');
   const b = writeBatch();
   const r = await fn({ get: getDoc, set: (...a) => { b.set(...a); }, update: (...a) => { b.update(...a); }, delete: (r) => { b.delete(r); } });
   await b.commit();
@@ -284,12 +289,12 @@ export const ref = (_s, chemin = '') => ({ fullPath: chemin, name: chemin.split(
 export const getDownloadURL = async (r) => (D.fichiers || {})[r.fullPath] || D.imageParDefaut || '';
 // D.envoiBloque : l'envoi reste en cours (à 40 %), pour voir l'écran « Envoi… ».
 const jamais = () => new Promise(() => {});
-export const uploadBytes = async (r) => (D.envoiBloque ? jamais() : { ref: r, metadata: {} });
-export const uploadBytesResumable = (r) => ({
+export const uploadBytes = async (r) => (noter('upload', r.fullPath), D.envoiBloque ? jamais() : { ref: r, metadata: {} });
+export const uploadBytesResumable = (r) => (noter('upload', r.fullPath), {
   on: (_e, progres, _err, fin) => { if (D.envoiBloque) { setTimeout(() => progres?.({ bytesTransferred: 40, totalBytes: 100 }), 0); return; } setTimeout(() => fin?.(), 0); },
   then: (f, g) => (D.envoiBloque ? jamais() : Promise.resolve({ ref: r })).then(f, g),
 });
-export const uploadString = async (r) => (D.envoiBloque ? jamais() : { ref: r });
+export const uploadString = async (r) => (noter('upload', r.fullPath), D.envoiBloque ? jamais() : { ref: r });
 export const deleteObject = async () => {};
 export const connectStorageEmulator = () => {};
 

@@ -167,6 +167,12 @@ const COMMANDE = {
   paiements: [{ id: 'ch_1', le: il(1), montant: 6000, rembourse: 0, statut: 'succeeded', description: 'Mise en service', recu: 'https://exemple.invalid/r' }],
 };
 
+// Abonnement de la commande en service arrêté depuis l'admin, fin dans 27 jours.
+function arretPrevu() {
+  const g = gestionDonnees({});
+  return { ...g, commandes: g.commandes.map((c) => (c.id === 'CMD-GH78' ? { ...c, resiliationLe: il(-27) } : c)) };
+}
+
 function donnees(o = {}) {
   const docs = famillePleine({ sim: true });
   docs['families/f-henri'] = { name: 'Papi Henri', createdBy: 'u-nicolas', abonnement: { statut: 'impaye', formule: 'sim', graceJusqua: { __ms: il(-6) } } };
@@ -232,6 +238,7 @@ const SCENES = [
   { groupe: 'Commandes', titre: 'Commande annulée et remboursée', page: '#commande/CMD-AN77', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Commandes', titre: 'Commande terminée, remboursement échoué', page: '#commande/CMD-RB10', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Commandes', titre: 'Commande : menu ⋮ des actions', page: '#commande/CMD-GH78', tailles: ['pc'], donnees: () => donnees(), faire: toucher('#dc-corps .menu-points > button, #dc-corps [aria-haspopup]') },
+  { groupe: 'Commandes', titre: 'Commande : arrêt prévu, menu ⋮ (Reprendre l’abonnement)', page: '#commande/CMD-GH78', tailles: ['pc'], donnees: () => donnees({ donnees: arretPrevu() }), faire: toucher('#dc-corps .menu-points > button, #dc-corps [aria-haspopup]') },
   { groupe: 'Commandes', titre: 'Nouvelle commande offerte', page: '#commandes', tailles: ['pc'], plein: true, donnees: () => donnees(), faire: toucher('#b-offerte') },
 
   { groupe: 'Clients', titre: 'Clients : liste', page: '#clients/liste', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees() },
@@ -273,6 +280,19 @@ const SCENES = [
   { groupe: 'Comptabilité', titre: 'Achat : « Ajouter la facture » ouvre le choix du fichier', page: '#depense/D-A2', tailles: ['pc', 'tel'], donnees: () => donnees(), faire: async (p) => {
     const [choix] = await Promise.all([p.waitForEvent('filechooser', { timeout: 4000 }), p.click('#dd-ajouter-facture')]);
     if (!choix.isMultiple()) throw new Error('le choix du fichier devrait accepter plusieurs fichiers');
+  } },
+  // Facture choisie : le crayon tourne et « Envoi du fichier… » s'affiche tant que le serveur n'a pas répondu (Tanguy, 30/10).
+  { groupe: 'Comptabilité', titre: 'Achat : facture choisie, envoi en cours', page: '#depense/D-A2', tailles: ['pc'], donnees: () => donnees(), faire: async (p) => {
+    await p.evaluate(() => { window.__fonctionsBloquees = true; });
+    const [choix] = await Promise.all([p.waitForEvent('filechooser', { timeout: 4000 }), p.click('#dd-ajouter-facture')]);
+    await choix.setFiles({ name: 'facture-cdiscount.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 facture') });
+    await p.waitForTimeout(900);
+  } },
+  { groupe: 'Comptabilité', titre: 'Achat : facture ajoutée', page: '#depense/D-A2', tailles: ['pc'], donnees: () => donnees({ fonctions: { gestionPiece: { ok: true } } }), faire: async (p) => {
+    const [choix] = await Promise.all([p.waitForEvent('filechooser', { timeout: 4000 }), p.click('#dd-ajouter-facture')]);
+    await choix.setFiles({ name: 'facture-cdiscount.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 facture') });
+    await p.waitForSelector('.bulle-annonce.visible', { timeout: 5000 });
+    await p.waitForTimeout(500); // la fenêtre « Envoi… » finit de se fermer
   } },
   { groupe: 'Comptabilité', titre: 'Une dépense reçue par e-mail, à vérifier', page: '#depense/D-M1', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Comptabilité', titre: 'URSSAF et TVA', page: '#compta/urssaf', tailles: ['pc'], plein: true, donnees: () => donnees() },

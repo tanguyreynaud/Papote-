@@ -363,7 +363,10 @@ async function appliquer(fid, abonnementId) {
     }
     return { avis: regles.avisPaiement(actuel, statut), graceJusqua, premiereFois: !(actuel && actuel.stripeSubscriptionId === abo.id) };
   });
-  await db.doc(`commandes/${abo.id}`).set({ fid, statutStripe: abo.status, autreAbonnement: (changement && changement.garde) || null }, { merge: true });
+  // Arrêt prévu gardé aussi sur la commande : l'admin le montre même pour un abonnement qui n'est pas celui de la famille.
+  const arretLe = abo.cancel_at ? abo.cancel_at * 1000 : (abo.cancel_at_period_end ? finDePeriodeMs(abo) : null);
+  await db.doc(`commandes/${abo.id}`).set({ fid, statutStripe: abo.status, resiliationLe: versTimestamp(arretLe),
+    autreAbonnement: (changement && changement.garde) || null }, { merge: true });
   await attendreRestitution(abo);
   if (changement && changement.garde) {
     // Deuxième abonnement pour la même famille : la famille garde le sien, Tanguy voit les deux commandes dans l'admin.
@@ -621,11 +624,26 @@ exports.facturesFamille = onCall({ secrets: [STRIPE_SECRET] }, async (request) =
 
 // Résiliation en ligne, sans engagement : l'abonnement s'arrête à la fin du mois en cours,
 // qui est prélevé à l'arrêt (prelevementDernierMois).
+// L'abonnement visé : celui de la famille, ou pour l'admin celui d'une commande précise de la famille (Tanguy,
+// 30/10 : « Arrêter » sur une 2e commande arrêtait l'abonnement de la commande avec la tablette).
+async function abonnementVise(fid, fam, request) {
+  const { commande } = request.data || {};
+  if (commande === undefined || commande === null) {
+    const id = fam.abonnement && fam.abonnement.stripeSubscriptionId;
+    if (!id) throw new HttpsError('failed-precondition', "Cette famille n'a pas d'abonnement.");
+    return id;
+  }
+  if (request.auth.token.admin !== true) throw new HttpsError('permission-denied', 'Réservé à Papote.');
+  if (typeof commande !== 'string' || !/^[A-Za-z0-9_]{5,80}$/.test(commande)) throw new HttpsError('invalid-argument', 'Commande illisible.');
+  const c = await db.doc(`commandes/${commande}`).get();
+  if (!c.exists || c.get('fid') !== fid) throw new HttpsError('failed-precondition', "Cette commande n'est pas reliée à cette famille.");
+  return commande;
+}
+
 exports.resilierAbonnement = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE] }, async (request) => {
   const { fid } = request.data || {};
   const fam = await familleGeree(fid, request);
-  const id = fam.abonnement && fam.abonnement.stripeSubscriptionId;
-  if (!id) throw new HttpsError('failed-precondition', "Cette famille n'a pas d'abonnement.");
+  const id = await abonnementVise(fid, fam, request);
   const abo = await stripe().subscriptions.retrieve(id);
   const maintenant = Date.now();
   const le = regles.premierPrelevementDe(abo, maintenant) || regles.dateResiliation(finDePeriodeMs(abo), maintenant);
@@ -637,9 +655,24 @@ exports.resilierAbonnement = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE
     metadata: { ...abo.metadata, arretPar: parPapote ? 'papote' : 'client' },
   });
   await appliquer(fid, id);
-  await mailArret(id, fam, (infos) => mail.resiliationEnregistree({ ...infos, le, parPapote }));
+  // Deux responsables (ou deux onglets) qui demandent l'arrêt en même temps : un seul e-mail.
+  if (await premiereDemande(id, `arret-${Math.ceil(le / 1000)}`)) {
+    await mailArret(id, fam, (infos) => mail.resiliationEnregistree({ ...infos, le, parPapote }));
+  }
   return { le };
 });
+
+// Une demande (arrêt à telle date, reprise) n'est notée qu'une fois sur la commande : rejouée en même temps depuis
+// deux téléphones ou deux onglets, elle ne vaut qu'un e-mail. Renvoie true la première fois.
+async function premiereDemande(commandeId, cle) {
+  const ref = db.doc(`commandes/${commandeId}`);
+  return db.runTransaction(async (t) => {
+    const snap = await t.get(ref);
+    if (!snap.exists || snap.get('derniereDemande') === cle) return false;
+    t.update(ref, { derniereDemande: cle });
+    return true;
+  });
+}
 
 // E-mail au client qui a payé (adresse de la commande) quand l'arrêt est demandé ou annulé.
 async function mailArret(commandeId, fam, faire) {
@@ -659,8 +692,7 @@ async function mailArret(commandeId, fam, faire) {
 exports.annulerResiliation = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE] }, async (request) => {
   const { fid } = request.data || {};
   const fam = await familleGeree(fid, request);
-  const id = fam.abonnement && fam.abonnement.stripeSubscriptionId;
-  if (!id) throw new HttpsError('failed-precondition', "Cette famille n'a pas d'abonnement.");
+  const id = await abonnementVise(fid, fam, request);
   const abo = await stripe().subscriptions.retrieve(id);
   if ((await db.doc(`commandes/${id}`).get()).get('restitution')) {
     throw new HttpsError('failed-precondition', 'La tablette est déjà en retour : écrivez-nous pour garder l\'abonnement.');
@@ -670,7 +702,7 @@ exports.annulerResiliation = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE
   }
   await stripe().subscriptions.update(id, { cancel_at: '', metadata: { ...abo.metadata, arretPar: '' } });
   await appliquer(fid, id);
-  await mailArret(id, fam, (infos) => mail.resiliationAnnulee(infos));
+  if (await premiereDemande(id, 'reprise')) await mailArret(id, fam, (infos) => mail.resiliationAnnulee(infos));
   return { ok: true };
 });
 
@@ -888,7 +920,11 @@ exports.renvoyerTablette = onCall({ secrets: [SENDCLOUD_API, MAIL_MOT_DE_PASSE],
     await ref.update({ 'restitution.qrDemandeLe': FieldValue.delete() });
     // Adresse de Papote ou du client manquante, panne Sendcloud : Papote le voit dans les journaux.
     logger.error(`Commande ${id} : QR code de retour non créé`, e.message);
-    throw new HttpsError('internal', "Le QR code n'a pas pu être créé. Réessayez dans un instant, ou répondez à notre e-mail : nous vous l'envoyons.");
+    // Commande sans adresse (tablette remise en main propre…) : réessayer n'y changera rien.
+    if (/pas d'adresse/.test(e.message)) {
+      throw new HttpsError('failed-precondition', "Nous n'avons pas d'adresse pour créer le QR code de retour. Écrivez-nous à contact@mapapote.fr : nous vous l'envoyons.");
+    }
+    throw new HttpsError('internal', "Le QR code n'a pas pu être créé. Réessayez dans un instant, ou écrivez-nous à contact@mapapote.fr : nous vous l'envoyons.");
   }
 });
 
@@ -1787,6 +1823,9 @@ exports.tabletteEnvoyee = onCall(async (request) => {
   if (!snap.exists) throw new HttpsError('not-found', 'Commande introuvable.');
   const refusEnvoi = statuts.refusEnvoi(snap.data(), { mainPropre: mainPropre === true });
   if (refusEnvoi) throw new HttpsError('failed-precondition', refusEnvoi);
+  const fiches = await db.collection('stock').where('commande', '==', commande).get();
+  const refusSim = statuts.refusEnvoiSansSim(snap.data(), fiches.docs.map((d) => d.data()));
+  if (refusSim) throw new HttpsError('failed-precondition', refusSim);
   if (mainPropre === true) {
     const maintenant = Date.now();
     await ref.update({

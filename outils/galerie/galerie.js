@@ -13,6 +13,10 @@
 //   --vitrine=<branche|ici>              autre source pour vitrine/
 //   --admin=<branche|ici>                autre source pour web/ (admin.html)
 //   --emails=<branche|ici>               autre source pour functions/ (mail.js)
+//   --double [vitrine famille tablette admin]  au lieu des captures : touche chaque bouton deux fois, serveur bloqué,
+//                                        et signale toute action partie en double (double.js)
+//   --identifiants [admin famille]       au lieu des captures : chaque bouton qui agit sur une commande ou un abonnement
+//                                        doit envoyer au serveur la commande de la page / la famille ouverte (identifiants.js)
 //   --boutons                            au lieu des captures : touche chaque bouton de l'app famille et de l'admin,
 //                                        serveur bloqué, et liste ceux qui ne montrent rien (sortie/boutons.txt)
 //
@@ -36,6 +40,8 @@ const SOURCES = {
 async function main() {
   const args = process.argv.slice(2);
   if (args.includes('--boutons')) return boutons(args.filter((a) => a !== '--boutons'));
+  if (args.includes('--double')) return double(args.filter((a) => a !== '--double'));
+  if (args.includes('--identifiants')) return identifiants(args.filter((a) => a !== '--identifiants'));
   const choix = args.filter((a) => !a.startsWith('--'));
   for (const a of args.filter((a) => a.startsWith('--'))) {
     const [k, v] = a.slice(2).split('=');
@@ -119,6 +125,74 @@ async function boutons(args) {
     await browser.close();
   }
   const { fichier, texte } = rapport(parties, sortie);
+  console.log(`\n${texte}\n\n${fichier}`);
+}
+
+// Double clic (double.js) : chaque bouton touché deux fois, rien ne doit partir en double.
+async function double(args) {
+  const { balayer, rapport } = require('./double');
+  for (const a of args.filter((a) => a.startsWith('--'))) {
+    const [k, v] = a.slice(2).split('=');
+    if (SOURCES[k] && v) SOURCES[k].ref = v;
+  }
+  const choix = args.filter((a) => !a.startsWith('--'));
+  const quoi = (choix.length ? choix : ['vitrine', 'famille', 'tablette', 'admin']).filter((n) => ['vitrine', 'famille', 'tablette', 'admin'].includes(n));
+  const sortie = path.join(__dirname, 'sortie');
+  fs.mkdirSync(sortie, { recursive: true });
+  const browser = await chromium.launch({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--lang=fr-FR'] });
+  const parties = [];
+  try {
+    for (const nom of quoi) {
+      const src = SOURCES[nom];
+      console.log(`${nom} : ${src.ref}`);
+      const { dir, version } = extraire(src.ref, src.dossier);
+      const serveur = await servir(dir);
+      try {
+        const r = await balayer({ browser, base: serveur.url, partie: nom, progression: (t) => process.stdout.write(`\r  ${t}   `) });
+        process.stdout.write('\n');
+        parties.push({ nom, version, ...r });
+      } finally {
+        serveur.close();
+      }
+    }
+  } finally {
+    await browser.close();
+  }
+  const { fichier, texte } = rapport(parties, sortie);
+  console.log(`\n${texte}\n\n${fichier}`);
+}
+
+// Le bon identifiant part au serveur (identifiants.js) : admin (pages de commande) et appli famille (abonnement).
+async function identifiants(args) {
+  const mod = require('./identifiants');
+  for (const a of args.filter((a) => a.startsWith('--'))) {
+    const [k, v] = a.slice(2).split('=');
+    if (SOURCES[k] && v) SOURCES[k].ref = v;
+  }
+  const choix = args.filter((a) => !a.startsWith('--'));
+  const quoi = (choix.length ? choix : ['admin', 'famille']).filter((n) => n === 'admin' || n === 'famille');
+  const sortie = path.join(__dirname, 'sortie');
+  fs.mkdirSync(sortie, { recursive: true });
+  const browser = await chromium.launch({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--lang=fr-FR'] });
+  const parties = [];
+  try {
+    for (const nom of quoi) {
+      const src = SOURCES[nom];
+      console.log(`${nom} : ${src.ref}`);
+      const { dir, version } = extraire(src.ref, src.dossier);
+      const serveur = await servir(dir);
+      try {
+        const resultats = await mod[nom]({ browser, base: serveur.url, progression: (t) => process.stdout.write(`\r  ${t}   `) });
+        process.stdout.write('\n');
+        parties.push({ nom, version, resultats });
+      } finally {
+        serveur.close();
+      }
+    }
+  } finally {
+    await browser.close();
+  }
+  const { fichier, texte } = mod.rapport(parties, sortie);
   console.log(`\n${texte}\n\n${fichier}`);
 }
 
