@@ -28,7 +28,7 @@ async function confirmer(page, valeur) {
   for (let i = 0; i < 3; i++) {
     const champ = page.locator('dialog.dialogue-papote input, .dialog-back .dialog input').first();
     if (await champ.count()) await champ.fill(valeur).catch(() => {});
-    const ok = page.locator('dialog.dialogue-papote .actions button.primary, .dialog-back .dialog .dialog-buttons button.primary, .dialog-back .dialog .dialog-buttons button.danger').first();
+    const ok = page.locator('dialog.dialogue-papote .actions button.primary, dialog.dialogue-papote .actions button.danger, .dialog-back .dialog .dialog-buttons button.primary, .dialog-back .dialog .dialog-buttons button.danger').first();
     if (!await ok.count()) return i > 0;
     await ok.click({ timeout: 1500 }).catch(() => {});
     await pause(page, 500);
@@ -45,7 +45,11 @@ async function toucher(mod, browser, base, scene, taille, nom, valeur) {
     const i = noms.indexOf(nom);
     if (i < 0) return null;
     await page.evaluate(() => { window.__appels = []; });
-    await page.locator(`[data-bouton="${i}"]`).click({ timeout: 2000, noWaitAfter: true });
+    // Le menu ⋮ se ferme au moindre défilement (celui de la liste des boutons) : on le rouvre avant de toucher l'item.
+    const cible = page.locator(`[data-bouton="${i}"]`);
+    await pause(page, 300); // le défilement de la liste ferme le menu une image plus tard
+    if (!await cible.isVisible() && scene.faire) await scene.faire(page);
+    await cible.click({ timeout: 2000, noWaitAfter: true });
     await pause(page, 500);
     await confirmer(page, valeur);
     // Une zone qui s'ouvre (« Matériel reçu », « Remplacer un élément ») : son bouton principal est touché à son tour.
