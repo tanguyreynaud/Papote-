@@ -136,6 +136,12 @@ const SCENES = [
     await p.locator('#payer').click({ noWaitAfter: true }).catch(() => {});
     await pause(p, 400);
   } },
+  { groupe: 'Commande', titre: 'Commande : « Payer » touché sans connexion internet', fichier: 'commande.html', note: 'Le navigateur se croit hors ligne : la page le dit au lieu d’ouvrir la page d’erreur du navigateur.', faire: async (p) => {
+    await commandeRemplie(p);
+    await p.evaluate(() => Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false }));
+    await p.locator('#payer').click({ noWaitAfter: true }).catch(() => {});
+    await pause(p, 300);
+  } },
   { groupe: 'Commande', titre: 'Commande : retour depuis Stripe avec le bouton Retour', fichier: 'commande.html', note: 'La page revient telle quelle : le bouton doit être redevenu « Payer 60 € », le relais et le nom gardés.', faire: async (p) => {
     await commandeRemplie(p);
     await p.locator('#payer').click({ noWaitAfter: true }).catch(() => {});
@@ -154,6 +160,7 @@ const SCENES = [
   { groupe: 'Commande', titre: 'Merci : le code de commande n’a pas pu être chargé', fichier: 'merci.html?session=cs_test_galerie', plein: true, routes: (p) => p.route('**/codeCommande**', (r) => r.fulfill({ status: 404, body: '' })) },
   { groupe: 'Textes', titre: 'Conditions générales de vente', fichier: 'cgv.html', plein: true },
   { groupe: 'Textes', titre: 'Mentions légales et confidentialité', fichier: 'mentions.html', plein: true },
+  { groupe: 'Textes', titre: 'Page introuvable (404)', fichier: '404.html', plein: true },
 ];
 
 async function capturer({ browser, base, dossierImages, progression }) {
