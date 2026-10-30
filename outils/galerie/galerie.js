@@ -11,6 +11,8 @@
 //   --famille=<branche|ici>              autre source pour web/
 //   --vitrine=<branche|ici>              autre source pour vitrine/
 //   --admin=<branche|ici>                autre source pour web/ (admin.html)
+//   --boutons                            au lieu des captures : touche chaque bouton de l'app famille et de l'admin,
+//                                        serveur bloqué, et liste ceux qui ne montrent rien (sortie/boutons.txt)
 //
 // Rien n'est envoyé nulle part : pas de Firebase, pas d'internet (sauf les polices Google).
 'use strict';
@@ -30,6 +32,7 @@ const SOURCES = {
 
 async function main() {
   const args = process.argv.slice(2);
+  if (args.includes('--boutons')) return boutons(args.filter((a) => a !== '--boutons'));
   const choix = args.filter((a) => !a.startsWith('--'));
   for (const a of args.filter((a) => a.startsWith('--'))) {
     const [k, v] = a.slice(2).split('=');
@@ -80,6 +83,40 @@ async function main() {
   const erreurs = parties.flatMap((p) => p.ecrans.filter((e) => e.erreurs.length));
   console.log(`\n${total} captures : ${fichier}`);
   if (erreurs.length) console.log(`${erreurs.length} écran(s) avec une erreur de la page (signalée dans la galerie).`);
+}
+
+// Balayage des boutons (boutons.js) : app famille et admin seulement (la tablette et le site ont leurs propres tests).
+async function boutons(args) {
+  const { balayer, rapport } = require('./boutons');
+  for (const a of args.filter((a) => a.startsWith('--'))) {
+    const [k, v] = a.slice(2).split('=');
+    if (SOURCES[k] && v) SOURCES[k].ref = v;
+  }
+  const choix = args.filter((a) => !a.startsWith('--'));
+  const quoi = (choix.length ? choix : ['famille', 'admin']).filter((n) => n === 'famille' || n === 'admin');
+  const sortie = path.join(__dirname, 'sortie');
+  fs.mkdirSync(sortie, { recursive: true });
+  const browser = await chromium.launch({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--lang=fr-FR'] });
+  const parties = [];
+  try {
+    for (const nom of quoi) {
+      const src = SOURCES[nom];
+      console.log(`${nom} : ${src.ref}`);
+      const { dir, version } = extraire(src.ref, src.dossier);
+      const serveur = await servir(dir);
+      try {
+        const r = await balayer({ browser, base: serveur.url, partie: nom, progression: (t) => process.stdout.write(`\r  ${t}   `) });
+        process.stdout.write('\n');
+        parties.push({ nom, version, ...r });
+      } finally {
+        serveur.close();
+      }
+    }
+  } finally {
+    await browser.close();
+  }
+  const { fichier, texte } = rapport(parties, sortie);
+  console.log(`\n${texte}\n\n${fichier}`);
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

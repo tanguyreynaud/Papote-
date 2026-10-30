@@ -212,6 +212,30 @@ function retourTablette({ nom, avant, retractation, montant }) {
   ], APPLI_RETOUR);
 }
 
+// Arrêt demandé (par le client dans l'appli, ou par Papote depuis l'admin) : confirmation écrite, avec la date
+// d'arrêt et la suite (la loi demande de confirmer une résiliation sur un support durable).
+function resiliationEnregistree({ nom, famille, le, tablettePretee, parPapote }) {
+  return message(parPapote ? 'Papote arrête votre abonnement' : 'Votre résiliation Papote est enregistrée', [
+    bonjour(nom),
+    parPapote
+      ? `Nous arrêtons l'abonnement Papote${famille ? ` de <b>${echapper(famille)}</b>` : ''}.`
+      : `Votre demande de résiliation de l'abonnement Papote${famille ? ` de <b>${echapper(famille)}</b>` : ''} est bien enregistrée.`,
+    `Tout continue de fonctionner jusqu'au <b>${dateEnClair(le)}</b>. Ce dernier mois est prélevé à l'arrêt, puis plus rien.`,
+    tablettePretee
+      ? 'Ce jour-là, vous recevrez par e-mail le mode d\'emploi pour nous renvoyer la tablette, avec un QR code prépayé : rien à payer, rien à imprimer.'
+      : 'La tablette est à vous : vous n\'avez rien à renvoyer.',
+    parPapote ? '' : 'Vous changez d\'avis d\'ici là ? Dans l\'appli Papote, onglet Profil, touchez « Garder mon abonnement ».',
+  ].filter(Boolean), APPLI_RETOUR);
+}
+
+// Résiliation annulée (« Garder mon abonnement ») : rien ne change.
+function resiliationAnnulee({ nom, famille }) {
+  return message('Votre abonnement Papote continue', [
+    bonjour(nom),
+    `La résiliation de l'abonnement Papote${famille ? ` de <b>${echapper(famille)}</b>` : ''} est annulée : tout continue comme avant, sans rien à faire.`,
+  ], APPLI_RETOUR);
+}
+
 // fin : abonnement terminé ou commande annulée (le seul e-mail de retour, avec le mode d'emploi) ;
 // sinon remplacement d'un élément du kit. qr : lien vers le QR code à montrer au point relais (sans impression).
 function etiquetteRetour({ nom, lien, qr, avant, fin, retractation, montant }) {
@@ -377,6 +401,6 @@ async function envoyer({ smtp, motDePasse, expediteur, a, contenu }) {
 
 module.exports = {
   colisParti, tabletteRemise, paiementEchoue, papoteEnPause, appelSansTelephone, commandeConfirmee, nouvelleCommande, relancePanier, lancement, sepaRefuse, invitation, demandeRejoindre, rappelJumelage,
-  retourTablette, etiquetteRetour, rappelRestitution, tabletteRecue, commandeAnnulee, annulationAvantEnvoi, resiliation, alerteAdmin,
+  retourTablette, etiquetteRetour, resiliationEnregistree, resiliationAnnulee, rappelRestitution, tabletteRecue, commandeAnnulee, annulationAvantEnvoi, resiliation, alerteAdmin,
   envoyer, echapper, euros, dateEnClair,
 };

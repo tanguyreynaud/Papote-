@@ -287,6 +287,34 @@ const SCENES = [
   { groupe: 'Outils', titre: 'Outils : maintenance', page: '#outils/maintenance', tailles: ['pc'], plein: true, donnees: () => donnees() },
 ];
 
+// Ouvre l'écran d'une scène dans un nouveau navigateur (fausses données, faux Firebase, internet coupé).
+async function ouvrir(browser, base, scene, taille) {
+  const ctx = await browser.newContext({
+    viewport: { width: taille.width, height: taille.height }, deviceScaleFactor: taille.mobile ? 2 : 1, isMobile: taille.mobile, hasTouch: taille.mobile,
+    locale: 'fr-FR', timezoneId: 'Europe/Paris', serviceWorkers: 'block',
+  });
+  const page = await ctx.newPage();
+  page.setDefaultTimeout(8000);
+  const erreurs = [];
+  page.on('pageerror', (e) => erreurs.push(String(e.message || e)));
+  if (process.env.CONSOLE) page.on('console', (m) => { if (m.type() === 'error') console.log('CONSOLE', m.text(), m.location().url, m.location().lineNumber); });
+  await page.clock.install({ time: new Date(MAINTENANT) });
+  await page.addInitScript(poserDonnees, scene.donnees());
+  await page.route('https://www.gstatic.com/firebasejs/**', (r) => r.fulfill({
+    contentType: 'text/javascript', headers: { 'Access-Control-Allow-Origin': '*' },
+    body: r.request().url().endsWith('/faux-sdk.js') ? SDK : "export * from 'https://www.gstatic.com/firebasejs/faux-sdk.js';",
+  }));
+  await page.route(/^https?:\/\/(?!127\.0\.0\.1|fonts\.googleapis\.com|fonts\.gstatic\.com|www\.gstatic\.com\/firebasejs)/, (r) => r.abort());
+  try {
+    await page.goto(`${base}/admin.html${scene.page}`);
+    await page.waitForTimeout(2000);
+    if (scene.faire) await scene.faire(page);
+  } catch (e) {
+    erreurs.push('Scène : ' + e.message.split('\n')[0]);
+  }
+  return { ctx, page, erreurs };
+}
+
 async function capturer({ browser, base, dossierImages, progression }) {
   const travaux = [];
   let n = 0;
@@ -297,29 +325,7 @@ async function capturer({ browser, base, dossierImages, progression }) {
   async function ouvrier() {
     for (let job = travaux.shift(); job; job = travaux.shift()) {
       const { scene, taille, n } = job;
-      const ctx = await browser.newContext({
-        viewport: { width: taille.width, height: taille.height }, deviceScaleFactor: taille.mobile ? 2 : 1, isMobile: taille.mobile, hasTouch: taille.mobile,
-        locale: 'fr-FR', timezoneId: 'Europe/Paris', serviceWorkers: 'block',
-      });
-      const page = await ctx.newPage();
-      page.setDefaultTimeout(8000);
-      const erreurs = [];
-      page.on('pageerror', (e) => erreurs.push(String(e.message || e)));
-      if (process.env.CONSOLE) page.on('console', (m) => { if (m.type() === 'error') console.log('CONSOLE', m.text(), m.location().url, m.location().lineNumber); });
-      await page.clock.install({ time: new Date(MAINTENANT) });
-      await page.addInitScript(poserDonnees, scene.donnees());
-      await page.route('https://www.gstatic.com/firebasejs/**', (r) => r.fulfill({
-        contentType: 'text/javascript', headers: { 'Access-Control-Allow-Origin': '*' },
-        body: r.request().url().endsWith('/faux-sdk.js') ? SDK : "export * from 'https://www.gstatic.com/firebasejs/faux-sdk.js';",
-      }));
-      await page.route(/^https?:\/\/(?!127\.0\.0\.1|fonts\.googleapis\.com|fonts\.gstatic\.com|www\.gstatic\.com\/firebasejs)/, (r) => r.abort());
-      try {
-        await page.goto(`${base}/admin.html${scene.page}`);
-        await page.waitForTimeout(2000);
-        if (scene.faire) await scene.faire(page);
-      } catch (e) {
-        erreurs.push('Scène : ' + e.message.split('\n')[0]);
-      }
+      const { ctx, page, erreurs } = await ouvrir(browser, base, scene, taille);
       const fichier = `admin-${String(n).padStart(3, '0')}.jpg`;
       if (scene.plein) {
         const h = await page.evaluate(() => document.documentElement.scrollHeight).catch(() => taille.height);
@@ -343,4 +349,4 @@ async function capturer({ browser, base, dossierImages, progression }) {
   return resultats.sort((a, b) => a.n - b.n);
 }
 
-module.exports = { capturer, SCENES };
+module.exports = { capturer, ouvrir, SCENES, TAILLES };

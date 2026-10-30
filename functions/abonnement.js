@@ -150,6 +150,15 @@ function statutDepuisStripe(statutStripe, actuel, maintenant) {
   }
 }
 
+// Une famille n'a qu'un abonnement. Une autre commande reliée à la même famille (par la tablette, l'e-mail…)
+// ne prend pas sa place tant que l'abonnement actuel vit encore chez Stripe : sinon la famille passe de l'un à
+// l'autre au gré des messages de Stripe (Tanguy, 30/10 : « Garder mon abonnement » revenu tout seul).
+const STRIPE_VIVANTS = ['active', 'trialing', 'past_due', 'unpaid', 'paused'];
+function garderAbonnementActuel(actuel, idEntrant, statutStripeActuel) {
+  return Boolean(actuel && actuel.stripeSubscriptionId && actuel.stripeSubscriptionId !== idEntrant
+    && STRIPE_VIVANTS.includes(statutStripeActuel));
+}
+
 // Le délai de grâce est-il dépassé ?
 function graceDepassee(abonnement, maintenant) {
   if (!abonnement || abonnement.statut !== 'impaye') return false;
@@ -316,6 +325,8 @@ module.exports = {
   FORMULE,
   estActif,
   statutDepuisStripe,
+  garderAbonnementActuel,
+  STRIPE_VIVANTS,
   graceDepassee,
   peutModifier,
   factureClient,

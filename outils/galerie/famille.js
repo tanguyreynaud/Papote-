@@ -453,6 +453,8 @@ const SCENES = [
 
   { groupe: 'Profil', titre: 'Profil : abonnement actif', plein: true, donnees: () => connecte(), faire: toucher(onglet('profile')) },
   { groupe: 'Profil', titre: 'Profil : tout compris 25 € (offre unique)', plein: true, donnees: () => abo({ statut: 'actif', formule: 'sim', tablette: 'pretee', finPeriode: ilYa(-12), stripeCustomerId: 'cus_faux', stripeSubscriptionId: 'sub_faux' }), faire: toucher(onglet('profile')) },
+  { groupe: 'Profil', titre: 'Profil : résiliation demandée, « Garder mon abonnement »', plein: true, donnees: () => abo({ statut: 'actif', formule: 'sim', tablette: 'pretee', finPeriode: ilYa(-12), resiliationLe: ilYa(-12), stripeCustomerId: 'cus_faux', stripeSubscriptionId: 'sub_faux' }), faire: toucher(onglet('profile')) },
+  { groupe: 'Profil', titre: 'Profil : abonnement arrêté par Papote (pas de « Garder »)', plein: true, donnees: () => abo({ statut: 'actif', formule: 'sim', tablette: 'pretee', finPeriode: ilYa(-12), resiliationLe: ilYa(-12), arretPar: 'papote', stripeCustomerId: 'cus_faux', stripeSubscriptionId: 'sub_faux' }), faire: toucher(onglet('profile')) },
   { groupe: 'Profil', titre: 'Profil : commandé, tablette pas encore partie', plein: true, donnees: () => abo({ statut: 'actif', formule: 'sim', essaiJusqua: ilYa(-80), stripeCustomerId: 'cus_faux', stripeSubscriptionId: 'sub_faux' }, { fonctions: { finDeContrat: { retractation: { jusqua: null, montant: 6000 } } } }), faire: toucher(onglet('profile')) },
   { groupe: 'Profil', titre: 'Profil : commande offerte', plein: true, donnees: () => abo({ statut: 'offert' }), faire: toucher(onglet('profile')) },
   { groupe: 'Profil', titre: 'Profil : formule d’origine, sans abonnement', plein: true, donnees: () => abo(null), faire: toucher(onglet('profile')) },
@@ -493,6 +495,49 @@ function poserDonnees(d) {
   window.__donnees = d;
 }
 
+// Ouvre l'écran d'une scène dans un nouveau navigateur (fausses données, faux Firebase, internet coupé).
+async function ouvrir(browser, base, scene, taille, video) {
+  const ctx = await browser.newContext({
+    viewport: { width: taille.width, height: taille.height }, deviceScaleFactor: 2, isMobile: true, hasTouch: true,
+    locale: 'fr-FR', timezoneId: 'Europe/Paris', serviceWorkers: 'block', permissions: ['camera', 'microphone'],
+    userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36',
+  });
+  const page = await ctx.newPage();
+  page.setDefaultTimeout(8000); // un bouton absent : erreur signalée vite, pas après 30 s
+  const erreurs = [];
+  page.on('pageerror', (e) => erreurs.push(String(e.message || e)));
+  await page.clock.install({ time: new Date(`${JOUR}T${scene.heure || '10:30'}:00+01:00`) });
+  await page.addInitScript(poserDonnees, scene.donnees());
+  await page.route('**/faux.webm', (r) => r.fulfill({ contentType: 'video/webm', body: video || Buffer.alloc(0) }));
+  // Tous les modules Firebase deviennent le faux SDK (une seule copie, partagée).
+  await page.route('https://www.gstatic.com/firebasejs/**', (r) => r.fulfill({
+    contentType: 'text/javascript', headers: { 'Access-Control-Allow-Origin': '*' },
+    body: r.request().url().endsWith('/faux-sdk.js') ? SDK : "export * from 'https://www.gstatic.com/firebasejs/faux-sdk.js';",
+  }));
+  // Polices Google : gardées pour que les écrans aient leur vraie police. Le reste d'internet est coupé.
+  await page.route(/^https?:\/\/(?!127\.0\.0\.1|fonts\.googleapis\.com|fonts\.gstatic\.com|www\.gstatic\.com\/firebasejs)/, (r) => r.abort());
+  // Recherche de commune par code postal (météo) : 3 fausses communes pour 07160, aucune sinon.
+  await page.route('https://geo.api.gouv.fr/**', (r) => r.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' },
+    body: JSON.stringify(r.request().url().includes('codePostal=07160') ? [
+      { nom: 'Le Cheylard', centre: { coordinates: [4.42, 44.91] }, departement: { nom: 'Ardèche' } },
+      { nom: 'Saint-Martin-de-Valamas', centre: { coordinates: [4.37, 44.93] }, departement: { nom: 'Ardèche' } },
+      { nom: 'Mariac', centre: { coordinates: [4.38, 44.89] }, departement: { nom: 'Ardèche' } },
+    ] : []) }));
+  if (scene.avant) {
+    await page.goto(`${base}/index.html`, { waitUntil: 'commit' });
+    await page.waitForTimeout(50);
+  } else {
+    await page.goto(`${base}/index.html`);
+    await page.waitForTimeout(1500);
+    try {
+      if (scene.faire) await scene.faire(page);
+    } catch (e) {
+      erreurs.push('Scène : ' + e.message.split('\n')[0]);
+    }
+  }
+  return { ctx, page, erreurs };
+}
+
 async function capturer({ browser, base, dossierImages, progression }) {
   const video = await fausseVideo(browser);
   fs.mkdirSync(path.join(__dirname, 'sortie'), { recursive: true });
@@ -519,44 +564,7 @@ async function capturer({ browser, base, dossierImages, progression }) {
       const { scene, n } = job;
       // Téléphone tenu en paysage : largeur et hauteur échangées.
       const taille = scene.paysage ? { ...job.taille, width: job.taille.height, height: job.taille.width } : job.taille;
-      const ctx = await browser.newContext({
-        viewport: { width: taille.width, height: taille.height }, deviceScaleFactor: 2, isMobile: true, hasTouch: true,
-        locale: 'fr-FR', timezoneId: 'Europe/Paris', serviceWorkers: 'block', permissions: ['camera', 'microphone'],
-        userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36',
-      });
-      const page = await ctx.newPage();
-      page.setDefaultTimeout(8000); // un bouton absent : erreur signalée vite, pas après 30 s
-      const erreurs = [];
-      page.on('pageerror', (e) => erreurs.push(String(e.message || e)));
-      await page.clock.install({ time: new Date(`${JOUR}T${scene.heure || '10:30'}:00+01:00`) });
-      await page.addInitScript(poserDonnees, scene.donnees());
-      await page.route('**/faux.webm', (r) => r.fulfill({ contentType: 'video/webm', body: video }));
-      // Tous les modules Firebase deviennent le faux SDK (une seule copie, partagée).
-      await page.route('https://www.gstatic.com/firebasejs/**', (r) => r.fulfill({
-        contentType: 'text/javascript', headers: { 'Access-Control-Allow-Origin': '*' },
-        body: r.request().url().endsWith('/faux-sdk.js') ? SDK : "export * from 'https://www.gstatic.com/firebasejs/faux-sdk.js';",
-      }));
-      // Polices Google : gardées pour que les écrans aient leur vraie police. Le reste d'internet est coupé.
-      await page.route(/^https?:\/\/(?!127\.0\.0\.1|fonts\.googleapis\.com|fonts\.gstatic\.com|www\.gstatic\.com\/firebasejs)/, (r) => r.abort());
-      // Recherche de commune par code postal (météo) : 3 fausses communes pour 07160, aucune sinon.
-      await page.route('https://geo.api.gouv.fr/**', (r) => r.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' },
-        body: JSON.stringify(r.request().url().includes('codePostal=07160') ? [
-          { nom: 'Le Cheylard', centre: { coordinates: [4.42, 44.91] }, departement: { nom: 'Ardèche' } },
-          { nom: 'Saint-Martin-de-Valamas', centre: { coordinates: [4.37, 44.93] }, departement: { nom: 'Ardèche' } },
-          { nom: 'Mariac', centre: { coordinates: [4.38, 44.89] }, departement: { nom: 'Ardèche' } },
-        ] : []) }));
-      if (scene.avant) {
-        await page.goto(`${base}/index.html`, { waitUntil: 'commit' });
-        await page.waitForTimeout(50);
-      } else {
-        await page.goto(`${base}/index.html`);
-        await page.waitForTimeout(1500);
-        try {
-          if (scene.faire) await scene.faire(page);
-        } catch (e) {
-          erreurs.push('Scène : ' + e.message.split('\n')[0]);
-        }
-      }
+      const { ctx, page, erreurs } = await ouvrir(browser, base, scene, taille, video);
       const fichier = `famille-${String(n).padStart(3, '0')}.jpg`;
       // Page qui défile : le téléphone est « agrandi » à toute la hauteur (4 écrans au plus),
       // pour que la barre du bas reste en bas.
@@ -582,4 +590,4 @@ async function capturer({ browser, base, dossierImages, progression }) {
   return resultats.sort((a, b) => a.n - b.n);
 }
 
-module.exports = { capturer, SCENES, famillePleine, membre, poserDonnees, SDK, ilYa, ms, FID };
+module.exports = { capturer, ouvrir, TAILLES, SCENES, famillePleine, membre, poserDonnees, SDK, ilYa, ms, FID };

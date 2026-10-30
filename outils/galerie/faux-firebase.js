@@ -300,6 +300,8 @@ export const connectFunctionsEmulator = () => {};
 export function httpsCallable(_f, nom) {
   return async (data) => {
     (window.__appels || (window.__appels = [])).push({ nom, data });
+    // Balayage des boutons (boutons.js) : le serveur ne répond jamais, pour voir ce que montre l'écran en attendant.
+    if (window.__fonctionsBloquees) return new Promise(() => {});
     let r = (D.fonctions || {})[nom];
     // { __ecrire: { chemin: données }, __si: 'champ', resultat } : le « serveur » écrit dans la base
     // (seulement si l'appel porte ce champ), puis répond resultat.

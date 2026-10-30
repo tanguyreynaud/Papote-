@@ -220,3 +220,15 @@ test('factures montrées à la famille : payées et à payer, sans brouillon ni 
   assert.strictEqual(a.factureClient({ ...base, status: 'draft' }), null);
   assert.strictEqual(a.factureClient({ ...base, status: 'void' }), null);
 });
+
+test('garderAbonnementActuel : une deuxième commande ne remplace pas un abonnement en cours', () => {
+  const actuel = { statut: 'actif', stripeSubscriptionId: 'sub_A' };
+  assert.equal(a.garderAbonnementActuel(actuel, 'sub_B', 'active'), true);
+  assert.equal(a.garderAbonnementActuel(actuel, 'sub_B', 'past_due'), true);
+  // L'ancien est fini chez Stripe : le nouveau prend sa place (réabonnement après résiliation).
+  assert.equal(a.garderAbonnementActuel(actuel, 'sub_B', 'canceled'), false);
+  assert.equal(a.garderAbonnementActuel(actuel, 'sub_B', null), false);
+  // Même abonnement, ou famille sans abonnement : rien à garder.
+  assert.equal(a.garderAbonnementActuel(actuel, 'sub_A', 'active'), false);
+  assert.equal(a.garderAbonnementActuel(null, 'sub_B', 'active'), false);
+});
