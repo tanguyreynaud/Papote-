@@ -1133,7 +1133,9 @@ const annulableApresEnvoi = (c) => c.expedition === 'envoyee' && !c.retractation
 async function annulerApresEnvoi(c) {
   if (!await demander(`Annuler la commande ${codeCommande(c.code)} de ${c.nom || c.email || 'ce client'} ?\n\nLa tablette est chez le client depuis moins de 30 jours (jusqu'au ${jour(limiteAnnulation(c))}) : l'abonnement s'arrête tout de suite, rien n'est prélevé, et tout ce qui a été payé (60 € compris) est remboursé dès que la tablette revient. Le client reçoit l'étiquette de retour par e-mail.`,
     { oui: 'Annuler la commande', non: 'Garder la commande', danger: true })) throw 'non';
-  const r = await patienter('Annulation de la commande…', () => appeler('retracter', { fid: c.fid }));
+  // La commande ouverte est transmise (commande: c.id) : une famille peut avoir deux commandes, le serveur ne doit pas
+  // deviner laquelle d'après « l'abonnement de la famille » (audit du 30/10, cas 8X9K-EB7T / EJ4N-DVBA).
+  const r = await patienter('Annulation de la commande…', () => appeler('retracter', { fid: c.fid, commande: c.id }));
   return `Commande annulée. ${euros(r.montant)} seront remboursés au retour de la tablette.`;
 }
 
