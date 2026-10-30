@@ -2167,7 +2167,6 @@ const ORDRES = [
   { type: 'journal', titre: 'Lire le journal', sous: () => 'Ses 200 dernières lignes, à l\'instant', attente: 120_000 },
   { type: 'maj', titre: 'Mettre à jour maintenant', sous: (t, m) => (m && m.appVersion ? `Version ${m.appVersion} installée` : 'Vérifie la version publiée'), attente: 120_000 },
   { type: 'recharger', titre: 'Recharger l\'écran', sous: () => 'Si l\'écran semble figé, sans redémarrer', attente: 120_000 },
-  { type: 'canal', titre: 'Canal des versions', sous: () => 'Stable, ou test (nouvelles versions en premier)', attente: 120_000, choix: true },
   { type: 'volumes', titre: 'Volumes', sous: (t, m, f) => (f ? `Général ${f.volume ?? 'auto'} · appel ${f.volumeAppel ?? 100} · sonnerie ${f.volumeSonnerie ?? 100}` : 'Général, appel, sonnerie'), choix: true },
   { type: 'usine', titre: 'Remettre à zéro', sous: () => 'Réglages d\'usine, tout est effacé', attente: 120_000, danger: true },
 ];
@@ -2258,14 +2257,12 @@ function blocAgir(zone, t) {
   zone.replaceChildren(
     h('h2', {}, 'Agir sur la tablette'),
     h('p', { class: 'muted small' }, 'La tablette est réveillée tout de suite par notification et répond en général en moins d\'une minute. Chaque action lui coûte quelques Ko.'),
-    grille, choix, retour, detail,
+    grille, retour, detail,
   );
 
   async function lancerOrdre(o, b) {
-    choix.hidden = true;
     detail.hidden = true;
     if (o.type === 'volumes') return choisirVolumes();
-    if (o.type === 'canal') return choisirCanal();
     let extra = {};
     if (o.confirmer) {
       extra = await o.confirmer(t);
@@ -2340,15 +2337,6 @@ function blocAgir(zone, t) {
     }
   }
 
-  // Canal des versions : stable, ou test (la tablette reçoit les nouvelles versions en premier).
-  function choisirCanal() {
-    const select = h('select', { 'aria-label': 'Canal des versions' }, h('option', { value: 'stable' }, 'Stable (comme les clients)'), h('option', { value: 'test' }, 'Test (nouvelles versions en premier)'));
-    const b = boutons.get('canal');
-    const appliquer = h('button', { type: 'button', class: 'primary small-btn', onclick: () => envoyer(ORDRES.find((x) => x.type === 'canal'), b, 'canal', { canal: select.value }) }, 'Appliquer');
-    choix.hidden = false;
-    choix.replaceChildren(h('span', {}, 'Canal : '), select, appliquer);
-  }
-
   // Volumes (10 à 100) : mêmes réglages que la famille (families/{fid}.volume…), la tablette les relit au réveil.
   function choisirVolumes() {
     const f = familleTablette || {};
@@ -2376,15 +2364,18 @@ function blocAgir(zone, t) {
         familleTablette = { ...f, ...champs, rev: undefined };
         rafraichirSousTitres();
         montrer(`✓ ${heure()} · Volumes enregistrés : la tablette les applique à son réveil (notification envoyée).`, 'ok');
-        choix.hidden = true;
+        choix.replaceWith(b);
       } catch (err) {
         montrer(`Volumes non enregistrés (${messageErreur(err)}).`, 'ko');
       } finally {
         boutonCharge(appliquer, false);
       }
     });
+    const annuler = h('button', { type: 'button', class: 'secondary small-btn', onclick: () => { choix.replaceWith(b); b.focus(); } }, 'Annuler');
     choix.hidden = false;
-    choix.replaceChildren(lg, la, ls, appliquer);
+    choix.replaceChildren(h('strong', {}, 'Volumes'), lg, la, ls, h('span', { class: 'choix-boutons' }, appliquer, annuler));
+    // La saisie remplace le bouton « Volumes » dans la grille, à sa taille ; le bouton revient après.
+    b.replaceWith(choix);
   }
 }
 

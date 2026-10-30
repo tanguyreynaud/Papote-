@@ -610,9 +610,11 @@ button.secondary.charge::after, button.link.charge::after { border-color: rgba(7
 .agir button small { display: block; font-weight: 400; font-size: 13px; color: var(--muted); margin-top: 3px; }
 .agir button.danger small { color: var(--danger); opacity: .8; }
 .agir button.charge small { color: transparent; }
-.choix-ordre { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 12px; }
-.choix-ordre select, .choix-ordre input { width: auto; min-width: 72px; }
-.choix-ordre label { display: inline-flex; align-items: center; gap: 6px; }
+.choix-ordre { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding: 12px 14px; min-height: 64px; border: 1px solid var(--accent); border-radius: 14px; background: var(--surface); grid-column: 1 / -1; }
+.choix-ordre strong { margin-right: 4px; }
+.choix-ordre input { width: 64px; min-width: 0; padding: 6px 8px; }
+.choix-ordre label { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--muted); }
+.choix-boutons { display: inline-flex; gap: 8px; margin-left: auto; }
 .retour-ordre { margin-top: 14px; padding: 12px 14px; border-radius: 12px; font-size: 15px; background: var(--bg); border-left: 5px solid var(--line); }
 .retour-ordre.ok { color: var(--ok); border-left-color: var(--ok); }
 .retour-ordre.ko { color: var(--danger); border-left-color: var(--danger); }
