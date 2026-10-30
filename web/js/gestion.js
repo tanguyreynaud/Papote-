@@ -548,6 +548,8 @@ function etatCommande(c) {
   // Prélèvement SEPA pas encore confirmé par la banque : ne pas envoyer.
   if (c.expedition === 'paiement-en-attente') return 'paiement';
   if (c.expedition === 'envoyee' && !c.fid) return 'en-route';
+  // Résiliation demandée (par le client ou depuis l'admin) : encore en service jusqu'à la date d'arrêt.
+  if (c.resiliationLe) return 'arret';
   return 'active';
 }
 const ETATS_COMMANDE = {
@@ -555,6 +557,7 @@ const ETATS_COMMANDE = {
   paiement: ['Paiement en attente (SEPA), ne pas envoyer', ''],
   'en-route': ['En route', 'info'],
   active: ['En service', 'ok'],
+  arret: ['Arrêt prévu', 'info'],
   retour: ['Tablette à récupérer', 'ko'],
   terminee: ['Terminée', ''],
   annulee: ['Annulée', ''],
@@ -1150,7 +1153,7 @@ async function reprendrePrelevements(c) {
 
 async function arreterAbonnement(c) {
   if (!await demander(`Arrêter l'abonnement de ${c.nom || c.email || 'ce client'} ?\n\nComme si le client résiliait lui-même dans l'appli : l'abonnement prend fin à la fin du mois en cours, prélevé à l'arrêt.`, { oui: 'Arrêter l\'abonnement', non: 'Garder', danger: true })) throw 'non';
-  const r = await patienter('Arrêt de l\'abonnement…', () => appeler('resilierAbonnement', { fid: c.fid }));
+  const r = await patienter('Arrêt de l\'abonnement…', () => appeler('resilierAbonnement', { fid: c.fid, par: 'papote' }));
   return `Abonnement arrêté : il prend fin le ${jour(r.le)}.`;
 }
 

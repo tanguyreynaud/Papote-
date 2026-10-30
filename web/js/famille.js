@@ -3139,6 +3139,7 @@ function renderAbonnement() {
     if (abo.formule) details.push(`${abo.formule === 'wifi' ? 'Avec le Wi-Fi de la maison, 20 € par mois' : 'Tout compris, 25 € par mois'}, ${abo.tablette === 'achetee' ? 'tablette achetée' : 'tablette prêtée'}`);
     const futur = (t) => t && toDate(t) > new Date();
     // Une seule phrase par date (sans engagement : plus de date d'engagement).
+    if (abo.resiliationLe && abo.arretPar === 'papote') details.push('Papote a arrêté l\'abonnement. Une question ? Écrivez-nous depuis la page Support');
     if (abo.resiliationLe) details.push(abo.tablette === 'achetee' ? 'Plus rien ne sera prélevé ensuite' : 'Ce jour-là, vous recevrez l\'étiquette prépayée pour nous renvoyer la tablette');
     // Chaque mois est payé une fois écoulé : le premier prélèvement tombe à la fin du premier mois.
     else if (statut === 'actif' && enAttenteEnvoi(abo)) {
@@ -3156,7 +3157,8 @@ function renderAbonnement() {
     $('btn-abo-page').hidden = !admin || !abo.stripeCustomerId || statut === 'offert';
     resilierPossible = admin && enCours && !abo.resiliationLe && !!abo.stripeSubscriptionId;
     $('btn-resilier').hidden = !resilierPossible || !!finInfo?.retractation;
-    $('btn-garder').hidden = !admin || !enCours || !abo.resiliationLe;
+    // Arrêté par Papote (impayé…) : le client ne peut pas le reprendre seul.
+    $('btn-garder').hidden = !admin || !enCours || !abo.resiliationLe || abo.arretPar === 'papote';
     $('abo-choices').hidden = !admin || aRegler || reprisePossible() || !['aucun', 'resilie', 'suspendu', 'installation'].includes(statut);
   }
   // Bandeaux : retard de paiement (responsables), pause (tout le monde).
