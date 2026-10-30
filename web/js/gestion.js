@@ -11,6 +11,9 @@ import {
   appeler, donnees as lireDonnees, signalerChangement, messageErreur, reveiller,
 } from './gestion-api.js';
 import { ouvrirParcours, fermerParcours } from './parcours.js';
+import {
+  getFirestore, doc, collection, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, increment,
+} from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
 import { simVue, go as enGo } from './sim.js';
 
 const $ = (id) => document.getElementById(id);
@@ -297,6 +300,7 @@ function afficherPage() {
 // Fiche ouverte dans l'adresse (#tablette/id ou #commande/id), redessinée à chaque nouvelle lecture des données.
 function afficherFiche() {
   const [page, id, sous] = location.hash.slice(1).split('/');
+  if (page !== 'tablette' && stopReleves) { stopReleves(); stopReleves = null; $('dt-agir').dataset.id = ''; }
   if (!donnees || !id) return;
   if (page === 'clients' && id === 'familles' && sous) remplirLiensFamille(decodeURIComponent(sous));
   if (page === 'tablette') remplirTablette(decodeURIComponent(id));
@@ -2126,6 +2130,263 @@ function blocGardeFous(zone, t) {
   );
 }
 
+// ---------- Agir sur une tablette à distance (page de la tablette) ----------
+// Les ordres passent par families/{fid}/commands, comme ceux de l'app famille : le serveur réveille la
+// tablette par notification (reveilOrdre), elle exécute et écrit le résultat dans le même document. Un
+// ordre coûte quelques Ko à la tablette ; rien n'est ajouté à ses tours réguliers. Les « derniers relevés »
+// viennent de sa fiche de membre, qu'elle met à jour avec son signal « en ligne » (rien de plus).
+
+let bddAdmin = null;
+// Base Firestore : celle d'origine, ou celle que config/base désigne (bascule en Europe), comme admin.js.
+async function bdd() {
+  if (bddAdmin) return bddAdmin;
+  const app = getApp('admin');
+  let d = getFirestore(app);
+  try {
+    const c = (await getDoc(doc(d, 'config', 'base'))).data() || {};
+    if (typeof c.database === 'string' && c.database && c.database !== '(default)') d = getFirestore(app, c.database);
+  } catch (e) { console.warn('config/base illisible, base d\'origine gardée', e); }
+  bddAdmin = d;
+  return d;
+}
+
+const heure = (d = new Date()) => d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+const relieeAUneFamille = (t) => !!(t && t.fid && t.tabletUid);
+
+// Ordres disponibles : { type, titre, sous(t), attente (ms avant « pas de réponse »), confirmer(t) → extra ou null }.
+const ORDRES = [
+  { type: 'restart', titre: 'Redémarrer', sous: () => 'Elle dit quand Papote est revenue', attente: 240_000,
+    confirmer: (t) => demander(`Redémarrer ${nomTablette(t)} ? Elle sera indisponible une minute, puis dira si Papote est bien revenue verrouillée.`, { oui: 'Redémarrer' }).then((ok) => (ok ? {} : null)) },
+  { type: 'status', titre: 'État complet maintenant', sous: () => 'Wifi, internet, carte SIM, batterie, version', attente: 120_000 },
+  { type: 'journal', titre: 'Lire le journal', sous: () => 'Ses 200 dernières lignes, à l\'instant', attente: 120_000 },
+  { type: 'maj', titre: 'Mettre à jour maintenant', sous: (t, m) => (m && m.appVersion ? `Version ${m.appVersion} installée` : 'Vérifie la version publiée'), attente: 120_000 },
+  { type: 'recharger', titre: 'Recharger l\'écran', sous: () => 'Si l\'écran semble figé, sans redémarrer', attente: 120_000 },
+  { type: 'canal', titre: 'Canal des versions', sous: () => 'Stable, ou test (nouvelles versions en premier)', attente: 120_000, choix: true },
+  { type: 'volumes', titre: 'Volumes', sous: (t, m, f) => (f ? `Général ${f.volume ?? 'auto'} · appel ${f.volumeAppel ?? 100} · sonnerie ${f.volumeSonnerie ?? 100}` : 'Général, appel, sonnerie'), choix: true },
+  { type: 'usine', titre: 'Remettre à zéro', sous: () => 'Réglages d\'usine, tout est effacé', attente: 120_000, danger: true },
+];
+const nomTablette = (t) => (t.ref ? `la tablette ${t.ref}` : 'cette tablette');
+
+let stopReleves = null;
+let stopOrdre = null;
+let membreTablette = null; // dernière fiche de membre lue (version, batterie, SIM, en ligne)
+let familleTablette = null; // volumes de la famille
+
+// Fiche de membre de la tablette, en direct : en ligne, batterie, carte SIM, version.
+function blocReleves(zone, t) {
+  if (stopReleves) { stopReleves(); stopReleves = null; }
+  membreTablette = null;
+  familleTablette = null;
+  zone.hidden = !relieeAUneFamille(t);
+  if (zone.hidden) return;
+  zone.replaceChildren(h('h2', {}, 'Derniers relevés'), h('p', { class: 'muted small' }, 'Lecture de la fiche de la tablette…'));
+  const dessiner = () => {
+    const m = membreTablette || {};
+    const b = m.battery || {};
+    const sim = m.sim || null;
+    const ms = (v) => (v && typeof v.toMillis === 'function' ? v.toMillis() : v || null);
+    const enLigne = ms(m.lastOnline);
+    const signal = sim && sim.signal >= 0 ? `${sim.signal} / 4` : null;
+    const mo = sim && sim.dataMoisMo >= 0 ? `${sim.dataMoisMo} Mo ce mois` : null;
+    zone.replaceChildren(
+      h('h2', {}, 'Derniers relevés ', h('span', { class: 'muted small' }, '· envoyés par la tablette avec son signal « en ligne », rien de plus')),
+      h('div', { class: 'stats compact' },
+        stat(enLigne ? ilYA(enLigne) : '—', 'En ligne', enLigne && Date.now() - enLigne > 70 * 60_000 ? 'ne répond plus ?' : null, enLigne && Date.now() - enLigne > 70 * 60_000 ? 'warn' : null),
+        stat(b.level != null ? `${b.level} %` : '—', b.charging ? 'Batterie, sur le chargeur' : 'Batterie, débranchée', null, b.charging === false ? 'warn' : null),
+        stat(sim ? (sim.reseau || sim.operateur || 'Carte SIM') : 'Wi-Fi', sim ? [sim.operateur !== sim.reseau ? sim.operateur : null, signal ? `signal ${signal}` : null].filter(Boolean).join(' · ') || 'carte SIM' : 'pas de carte SIM', mo),
+        stat(m.appVersion || '—', 'Version de Papote')),
+      h('p', { class: 'muted small' }, 'Fiche de la tablette lue en direct : la page se met à jour toute seule quand elle donne de ses nouvelles.'),
+    );
+    rafraichirSousTitres();
+  };
+  bdd().then((d) => {
+    if ($('dt-releves') !== zone || tabletteOuverte !== t.id) return;
+    stopReleves = onSnapshot(doc(d, 'families', t.fid, 'members', t.tabletUid), (snap) => {
+      membreTablette = snap.exists() ? snap.data() : {};
+      dessiner();
+    }, (err) => {
+      console.warn('Fiche de la tablette illisible', err);
+      zone.replaceChildren(h('h2', {}, 'Derniers relevés'), h('p', { class: 'muted small' }, `Fiche de la tablette illisible (${messageErreur(err)}).`));
+    });
+    getDoc(doc(d, 'families', t.fid)).then((snap) => { familleTablette = snap.exists() ? snap.data() : {}; rafraichirSousTitres(); }).catch(() => null);
+  });
+}
+
+// Les sous-titres des boutons (version installée, volumes) suivent les relevés.
+function rafraichirSousTitres() {
+  const zone = $('dt-agir');
+  const t = donnees && donnees.stock.find((x) => x.id === tabletteOuverte);
+  if (!t || zone.hidden) return;
+  zone.querySelectorAll('button[data-ordre] small').forEach((el) => {
+    const o = ORDRES.find((x) => x.type === el.parentElement.dataset.ordre);
+    if (o) el.textContent = o.sous(t, membreTablette, familleTablette);
+  });
+}
+
+// Boutons d'action, chacun avec son retour visible : « Un instant… » puis le résultat daté (ou « pas de réponse »).
+function blocAgir(zone, t) {
+  if (stopOrdre) { stopOrdre(); stopOrdre = null; }
+  zone.hidden = false;
+  if (!relieeAUneFamille(t)) {
+    zone.replaceChildren(h('h2', {}, 'Agir sur la tablette'),
+      h('p', { class: 'muted small' }, 'Cette tablette n\'est pas reliée à une famille : les actions à distance (redémarrer, état, mise à jour…) seront possibles dès qu\'elle sera jumelée.'));
+    return;
+  }
+  const retour = h('div', { class: 'retour-ordre', hidden: true, role: 'status' });
+  const detail = h('div', { hidden: true });
+  const choix = h('div', { class: 'choix-ordre', hidden: true });
+  const grille = h('div', { class: 'agir' });
+  const boutons = new Map();
+  const occuper = (actif) => boutons.forEach((b) => { b.disabled = actif; });
+  const montrer = (texte, classe) => {
+    retour.hidden = false;
+    retour.className = `retour-ordre ${classe || ''}`;
+    retour.textContent = texte;
+  };
+  for (const o of ORDRES) {
+    const b = h('button', { type: 'button', class: `secondary${o.danger ? ' danger' : ''}`, 'data-ordre': o.type },
+      o.titre, h('small', {}, o.sous(t, membreTablette, familleTablette)));
+    if (o.type === 'usine' && !['revenue', 'perdue', 'a-reparer', 'hors-service'].includes(t.etat)) {
+      b.disabled = true;
+      b.querySelector('small').textContent = 'Seulement une tablette revenue, perdue, à réparer ou hors service';
+    }
+    b.addEventListener('click', () => lancerOrdre(o, b));
+    boutons.set(o.type, b);
+    grille.append(b);
+  }
+  zone.replaceChildren(
+    h('h2', {}, 'Agir sur la tablette'),
+    h('p', { class: 'muted small' }, 'La tablette est réveillée tout de suite par notification et répond en général en moins d\'une minute. Chaque action lui coûte quelques Ko.'),
+    grille, choix, retour, detail,
+  );
+
+  async function lancerOrdre(o, b) {
+    choix.hidden = true;
+    detail.hidden = true;
+    if (o.type === 'volumes') return choisirVolumes();
+    if (o.type === 'canal') return choisirCanal();
+    let extra = {};
+    if (o.confirmer) {
+      extra = await o.confirmer(t);
+      if (!extra) return;
+    }
+    if (o.type === 'usine') {
+      const serie = t.numero || t.serieAndroid;
+      if (!serie) { prevenir('Le n° de série de cette tablette n\'est pas noté sur sa fiche : impossible de la remettre à zéro à distance (la tablette exige son n° de série).'); return; }
+      const saisi = await saisir(`Remettre ${nomTablette(t)} à zéro, à distance ? TOUT est effacé sur la tablette (Papote, photos, réglages) : elle revient comme neuve, à réinstaller.\n\nPour confirmer, retapez son numéro :`, '', { oui: 'Remettre à zéro' });
+      if (saisi == null) return;
+      if ((saisi || '').trim().toUpperCase() !== String(t.ref || serie).toUpperCase()) { prevenir('Numéro différent : rien n\'a été fait.'); return; }
+      extra = { serie };
+    }
+    await envoyer(o, b, o.type === 'journal' ? 'status' : o.type, extra);
+  }
+
+  async function envoyer(o, b, type, extra) {
+    occuper(true);
+    boutonCharge(b, true);
+    const demandeA = heure();
+    montrer(`Un instant… « ${o.titre} » demandé à ${demandeA}, la tablette se réveille.`, 'en-attente');
+    let ref = null;
+    try {
+      const d = await bdd();
+      const uid = getAuth(getApp('admin')).currentUser.uid;
+      ref = doc(collection(d, 'families', t.fid, 'commands'));
+      await setDoc(ref, { type, target: t.tabletUid, createdBy: uid, createdAt: serverTimestamp(), state: 'pending', ...extra });
+      // Marqueur de changement de la famille : une tablette d'avant la 2.99.99 ne relit ses ordres qu'à ce signal.
+      await updateDoc(doc(d, 'families', t.fid), { rev: increment(1) }).catch(() => null);
+    } catch (err) {
+      occuper(false);
+      boutonCharge(b, false);
+      montrer(`L'ordre n'a pas pu être envoyé (${messageErreur(err)}).`, 'ko');
+      return;
+    }
+    const fini = (texte, classe) => {
+      if (stopOrdre) { stopOrdre(); stopOrdre = null; }
+      clearTimeout(minuterie);
+      occuper(false);
+      boutonCharge(b, false);
+      montrer(texte, classe);
+    };
+    let minuterie = setTimeout(() => {
+      fini(`Pas de réponse après ${Math.round((o.attente || 120_000) / 60_000)} min : la tablette est peut-être éteinte ou sans réseau. Elle fera « ${o.titre} » dès qu'elle se reconnectera.`, 'ko');
+    }, o.attente || 120_000);
+    stopOrdre = onSnapshot(ref, async (snap) => {
+      const c = snap.data();
+      if (!c || c.state === 'pending') return;
+      if (c.state === 'running') { montrer(`${heure()} · ${c.result || 'La tablette redémarre…'} Papote dira quand elle est revenue.`, 'en-attente'); return; }
+      const ok = c.state === 'done';
+      let texte = c.result || (ok ? 'C\'est fait.' : 'La tablette n\'a pas pu le faire.');
+      if (o.type === 'journal' && ok) texte = await montrerJournal(texte);
+      fini(`${ok ? '✓' : '✗'} ${heure()} · ${texte}`, ok ? 'ok' : 'ko');
+      deleteDoc(ref).catch(() => null); // résultat affiché : l'ordre n'a plus besoin d'être gardé
+    }, (err) => fini(`Résultat illisible (${messageErreur(err)}).`, 'ko'));
+  }
+
+  // Journal : la tablette vient de l'envoyer avec son état (ordre « status »), on le lit dans families/{fid}/logs.
+  async function montrerJournal(etat) {
+    try {
+      const d = await bdd();
+      const snap = await getDoc(doc(d, 'families', t.fid, 'logs', t.tabletUid));
+      const lignes = snap.exists() ? snap.get('lines') || '' : '';
+      const quand = snap.exists() && snap.get('updatedAt') && snap.get('updatedAt').toDate ? snap.get('updatedAt').toDate() : null;
+      detail.hidden = false;
+      detail.replaceChildren(
+        h('p', { class: 'small muted' }, `Journal de la tablette${quand ? ` (envoyé le ${quand.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })})` : ''} · ${lignes ? lignes.split('\n').length : 0} lignes, la plus récente en bas.`),
+        h('pre', { class: 'journal-tablette' }, lignes || 'Journal vide.'));
+      return `${etat} Journal reçu, ci-dessous.`;
+    } catch (err) {
+      return `${etat} Journal illisible (${messageErreur(err)}).`;
+    }
+  }
+
+  // Canal des versions : stable, ou test (la tablette reçoit les nouvelles versions en premier).
+  function choisirCanal() {
+    const select = h('select', { 'aria-label': 'Canal des versions' }, h('option', { value: 'stable' }, 'Stable (comme les clients)'), h('option', { value: 'test' }, 'Test (nouvelles versions en premier)'));
+    const b = boutons.get('canal');
+    const appliquer = h('button', { type: 'button', class: 'primary small-btn', onclick: () => envoyer(ORDRES.find((x) => x.type === 'canal'), b, 'canal', { canal: select.value }) }, 'Appliquer');
+    choix.hidden = false;
+    choix.replaceChildren(h('span', {}, 'Canal : '), select, appliquer);
+  }
+
+  // Volumes (10 à 100) : mêmes réglages que la famille (families/{fid}.volume…), la tablette les relit au réveil.
+  function choisirVolumes() {
+    const f = familleTablette || {};
+    const champ = (nom, valeur, libelle) => {
+      const input = h('input', { type: 'number', min: 10, max: 100, step: 5, value: valeur ?? '', name: nom, 'aria-label': libelle, placeholder: 'auto' });
+      return [h('label', { class: 'small' }, `${libelle} `, input), input];
+    };
+    const [lg, ig] = champ('volume', f.volume, 'Général');
+    const [la, ia] = champ('volumeAppel', f.volumeAppel ?? 100, 'Appel');
+    const [ls, is] = champ('volumeSonnerie', f.volumeSonnerie ?? 100, 'Sonnerie');
+    const b = boutons.get('volumes');
+    const appliquer = h('button', { type: 'button', class: 'primary small-btn' }, 'Appliquer');
+    appliquer.addEventListener('click', async () => {
+      const champs = { rev: increment(1) };
+      for (const [cle, input] of [['volume', ig], ['volumeAppel', ia], ['volumeSonnerie', is]]) {
+        if (input.value === '') continue;
+        const v = Number(input.value);
+        if (!Number.isInteger(v) || v < 10 || v > 100) { montrer('Chaque volume va de 10 à 100.', 'ko'); return; }
+        champs[cle] = v;
+      }
+      boutonCharge(appliquer, true);
+      try {
+        const d = await bdd();
+        await updateDoc(doc(d, 'families', t.fid), champs);
+        familleTablette = { ...f, ...champs, rev: undefined };
+        rafraichirSousTitres();
+        montrer(`✓ ${heure()} · Volumes enregistrés : la tablette les applique à son réveil (notification envoyée).`, 'ok');
+        choix.hidden = true;
+      } catch (err) {
+        montrer(`Volumes non enregistrés (${messageErreur(err)}).`, 'ko');
+      } finally {
+        boutonCharge(appliquer, false);
+      }
+    });
+    choix.hidden = false;
+    choix.replaceChildren(lg, la, ls, appliquer);
+  }
+}
+
 // Page d'une tablette : informations, achat, documents, historique.
 let tabletteOuverte = null;
 function ouvrirTablette(id) {
@@ -2192,6 +2453,14 @@ function remplirTablette(id) {
       ...modif('Notes', t.notes, 'notes', { valeur: t.notes, long: true, vide: 'aucune' }));
   }
   afficherDocumentsTablette(t);
+  // Relevés en direct et actions à distance : redessinés seulement si on change de tablette (un ordre en
+  // cours garde son retour affiché quand les données se relisent).
+  const cleAgir = [t.id, t.fid || '', t.tabletUid || '', t.etat || ''].join('|');
+  if ($('dt-agir').dataset.id !== cleAgir) {
+    $('dt-agir').dataset.id = cleAgir;
+    blocReleves($('dt-releves'), t);
+    blocAgir($('dt-agir'), t);
+  }
   afficherBatterie(t);
   blocAlertes($('dt-alertes'), (donnees.alertes || []).filter((a) => a.fiche === t.id), { titre: 'Alertes de cette tablette' });
   blocGardeFous($('dt-gardefous'), t);

@@ -3251,6 +3251,13 @@ async function sendCommand(type, extra = {}) {
   stopCommand = onSnapshot(ref2, (snap) => {
     const cmd = snap.data();
     if (!cmd || cmd.state === 'pending') return;
+    // La tablette redémarre : elle dira elle-même quand Papote est revenue (jusqu'à 4 min).
+    if (cmd.state === 'running') {
+      showRemote(cmd.result || 'La tablette redémarre…');
+      clearTimeout(timer);
+      timer = setTimeout(() => showRemote("La tablette n'est pas encore revenue. Si elle reste éteinte, vérifiez son chargeur.", 'warn'), 240_000);
+      return;
+    }
     clearTimeout(timer);
     stopCommand?.();
     stopCommand = null;
