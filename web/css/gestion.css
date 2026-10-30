@@ -602,7 +602,6 @@ button.secondary.charge::after, button.link.charge::after { border-color: rgba(7
 .alertes-liste .quand { font-variant-numeric: tabular-nums; font-weight: 600; }
 
 /* Page d'un achat : la facture et son bouton « Ajouter la facture » sur la même ligne, l'un sous l'autre sur téléphone. */
-.facture-achat { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 
 /* Page tablette : « Agir sur la tablette » (ordres à distance) et derniers relevés en direct. */
 .agir { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }

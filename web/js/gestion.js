@@ -2812,18 +2812,26 @@ function numeroFacture(id) {
 }
 
 let fichierDepense = null; // dépense à laquelle ajouter une pièce
+let boutonFichier = null; // bouton qui a ouvert le choix : sa roue tourne pendant l'envoi
 const choixFichier = h('input', { type: 'file', accept: 'application/pdf,image/*', multiple: true, hidden: true });
 document.body.append(choixFichier);
 choixFichier.addEventListener('change', async () => {
   const fichiers = [...choixFichier.files];
+  const bouton = boutonFichier;
   choixFichier.value = '';
+  boutonFichier = null;
   if (!fichiers.length || !fichierDepense) return;
+  boutonCharge(bouton, true);
   try {
-    await envoyerPieces('depenses', fichierDepense, fichiers);
+    // Envoi visible même sans bouton (⋮ d'une ligne de tableau) : fenêtre « Envoi… » le temps de l'envoi.
+    await patienter(fichiers.length > 1 ? `Envoi des ${fichiers.length} fichiers…` : 'Envoi du fichier…', () => envoyerPieces('depenses', fichierDepense, fichiers));
     donnees = await lireDonnees(true);
     afficherTout();
+    annoncer(fichiers.length > 1 ? `${fichiers.length} fichiers ajoutés` : 'Fichier ajouté');
   } catch (e) {
     prevenir(messageErreur(e));
+  } finally {
+    boutonCharge(bouton, false);
   }
 });
 
@@ -2947,12 +2955,8 @@ function remplirPageDepense(id) {
         } }),
         ...modif('dont TVA', d.tva != null ? euros(d.tva) : null, 'tva', { valeur: enEuros(d.tva), mode: 'decimal', suffixe: '€', vide: 'aucune',
           convertir: (v) => (String(v).trim() ? convertirEuros(v) : null) }),
-        // Facture ajoutée d'ici, d'un bouton visible (Tanguy, 29/10 : « je ne peux pas ajouter une facture »).
-        ligne('Facture', h('div', { class: 'facture-achat' }, d.confirmation
-          ? h('span', {}, badge('pas encore reçue', 'info'), ' ', h('span', { class: 'muted small' }, 'seule la confirmation de commande est arrivée : ajoutez la facture ici, ou transférez-la à factures@mapapote.fr'))
-          : pieces.length ? badge('reçue', 'ok') : h('span', { class: 'muted' }, 'aucun justificatif'),
-        h('button', { type: 'button', class: 'secondary small-btn no-print', id: 'dd-ajouter-facture', onclick: () => { fichierDepense = d.id; choixFichier.click(); } },
-          d.confirmation || !pieces.length ? 'Ajouter la facture' : 'Ajouter un document'))),
+        // Facture ajoutée d'ici avec le crayon, comme les autres lignes (Tanguy, 30/10) : roue pendant l'envoi, puis résultat.
+        ...ligneFacture(d, pieces),
         ligne('Justificatifs', pieces.length ? h('div', { class: 'pieces-liste' }, pieces) : null),
         ...(d.categorie === 'sim' && !sims.length ? modif('Carte SIM rechargée', simDe(d.sim), 'sim', { valeur: d.sim || '', vide: 'aucune',
           options: [['', 'Aucune'], ...donnees.sims.filter((l) => l.statut !== 'resiliee' || l.id === d.sim)
@@ -2971,6 +2975,26 @@ function remplirPageDepense(id) {
         h('span', { class: 'muted small' }, donnees.etats[etatTablette(t)] || t.etat))))
         : h('p', { class: 'muted small' }, 'Aucune tablette rattachée à cet achat.')) : null,
   ].filter(Boolean));
+}
+
+// Ligne « Facture » de la page d'un achat : toute la ligne et son crayon ouvrent le choix du fichier.
+function ligneFacture(d, pieces) {
+  const ajouter = d.confirmation || !pieces.length ? 'Ajouter la facture' : 'Ajouter un document';
+  const crayon = h('button', { type: 'button', class: 'crayon no-print', id: 'dd-ajouter-facture', title: ajouter, 'aria-label': ajouter }, '✎');
+  const ouvrir = () => {
+    if (crayon.classList.contains('charge')) return;
+    fichierDepense = d.id;
+    boutonFichier = crayon;
+    choixFichier.click();
+  };
+  crayon.addEventListener('click', ouvrir);
+  const dd = h('dd', { class: 'modifiable' },
+    h('span', { class: 'valeur' }, d.confirmation
+      ? [badge('pas encore reçue', 'info'), ' ', h('span', { class: 'muted small' }, 'seule la confirmation de commande est arrivée : touchez le crayon pour ajouter la facture, ou transférez-la à factures@mapapote.fr')]
+      : pieces.length ? badge('reçue', 'ok') : h('span', { class: 'muted' }, 'aucun justificatif : touchez le crayon pour en ajouter un')),
+    crayon);
+  dd.addEventListener('click', (e) => { if (!e.target.closest('a, button')) ouvrir(); });
+  return [h('dt', { class: 'modifiable' }, 'Facture'), dd];
 }
 
 // Lien vers la page de la carte SIM rechargée par une dépense.
