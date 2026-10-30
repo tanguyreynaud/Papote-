@@ -1725,8 +1725,13 @@ $('btn-share').addEventListener('click', async () => {
   if (navigator.share) {
     try { await navigator.share({ title: 'Papote', text, url }); } catch (e) { /* annulé */ }
   } else {
-    await navigator.clipboard.writeText(`${text}\n${url}`);
-    notice('Lien copié. Collez-le dans un SMS ou un e-mail.');
+    // Presse-papiers refusé (navigateur ancien, permission) : le lien s'affiche, à copier à la main.
+    try {
+      await navigator.clipboard.writeText(`${text}\n${url}`);
+      notice('Lien copié. Collez-le dans un SMS ou un e-mail.');
+    } catch (e) {
+      notice(`Envoyez ce lien par SMS ou par e-mail : ${url}`);
+    }
   }
 });
 
