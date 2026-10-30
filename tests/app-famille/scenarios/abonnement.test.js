@@ -95,11 +95,13 @@ test('Après 30 jours : résilier (avec l\'étape « Avant de partir »), puis g
   await julie.page.locator('#btn-resilier').waitFor({ state: 'hidden' });
   await julie.page.goBack();
   await g.attendreVue(julie, 'view-profile');
-  await julie.page.locator('#abo-details', { hasText: 'Résilié : Papote s\'arrête le' }).waitFor();
+  await julie.page.locator('#abo-status', { hasText: 'Arrêt prévu le' }).waitFor();
   await julie.page.locator('#btn-garder').waitFor({ state: 'visible' });
 
   await julie.page.click('#btn-garder');
-  await g.toast(julie, 'Abonnement gardé');
+  // Pendant l'appel au serveur, le bouton tourne (retour.js), puis la confirmation reste à l'écran.
+  assert.match(await g.texteFenetre(julie), /Résiliation annulée : votre abonnement continue/);
+  await g.repondre(julie, 'OK');
   await s.calme();
   await pageAbonnement(julie);
   await julie.page.locator('#btn-resilier').waitFor({ state: 'visible' });
