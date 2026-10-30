@@ -131,7 +131,7 @@ button {
 }
 button:disabled { opacity: .45; cursor: default; }
 .primary { background: var(--accent); color: var(--accent-text); min-height: 54px; }
-.link { color: var(--muted); padding: 10px 0; }
+.link { color: var(--muted); padding: 10px 0; min-height: 44px; } /* cible tactile */
 .danger { color: var(--danger); }
 .wide { width: 100%; margin-top: 8px; }
 
@@ -371,6 +371,7 @@ button:disabled { opacity: .45; cursor: default; }
 .reply .bubble-who { color: var(--accent); }
 .bubble-text { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 18px; }
 .bubble-foot { font-size: 14px; opacity: .75; margin-top: 2px !important; text-align: right; }
+.mine .bubble-foot { opacity: .92; } /* blanc sur indigo : contraste 4,5 */
 
 .chat-bar {
   position: fixed;
@@ -422,7 +423,7 @@ button:disabled { opacity: .45; cursor: default; }
 .reminder-body p { margin: 0; }
 .reminder-kind { font-size: 15px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--c-agenda); }
 .k-medicament { color: var(--c-video); }
-.k-rdv { color: var(--c-photo); }
+.k-rdv { color: color-mix(in srgb, var(--c-photo) 75%, var(--text)); } /* cyan assombri : contraste 4,5 sur blanc */
 .reminder-title { font-size: 18px; font-weight: 600; }
 .reminder-when { margin-top: 2px !important; }
 .reminder.en-pause .reminder-title, .reminder.en-pause .reminder-when { opacity: .55; }
@@ -713,7 +714,7 @@ button:disabled { opacity: .45; cursor: default; }
   padding: 0 5px;
   border-radius: 10px;
   background: var(--danger);
-  color: #fff;
+  color: var(--accent-text); /* blanc le jour, sombre la nuit (rouge clair) : lisible dans les deux cas */
   font-size: 12.5px;
   font-weight: 700;
   line-height: 20px;
@@ -846,7 +847,7 @@ button:disabled { opacity: .45; cursor: default; }
 #viewer-delete { color: #fca5a5; }
 
 /* Corbeille dans les bulles de message */
-.bubble-del { padding: 0 6px 0 0; color: inherit; opacity: .8; vertical-align: middle; }
+.bubble-del { padding: 14px; margin: -14px -4px -14px -14px; color: inherit; opacity: .8; vertical-align: middle; } /* cible 44 px autour de l'icône */
 .bubble-del svg { width: 16px; height: 16px; }
 
 /* ---------- Réglages : nom de Mamie, responsables ---------- */
@@ -942,7 +943,7 @@ button:disabled { opacity: .45; cursor: default; }
 
 /* ---------- Abonnement ---------- */
 
-.abo-banner { display: flex; align-items: center; gap: 12px; margin: 0 0 16px; padding: 12px 14px; border-radius: 14px; background: color-mix(in srgb, var(--danger) 12%, var(--surface)); color: var(--danger); font-weight: 600; }
+.abo-banner { display: flex; align-items: center; gap: 12px; margin: 0 0 16px; padding: 12px 14px; border-radius: 14px; background: color-mix(in srgb, var(--danger) 12%, var(--surface)); color: color-mix(in srgb, var(--danger) 80%, var(--text)); font-weight: 600; }
 .abo-banner p { margin: 0; flex: 1; font-size: 15px; }
 .abo-status { margin: 4px 0; font-size: 18px; font-weight: 700; }
 #btn-portail { justify-content: center; min-height: 54px; margin-top: 14px; font-size: 17px; font-weight: 700; }
@@ -1540,3 +1541,6 @@ a { text-decoration: none; }
   .filmer-bas .filmer-rec { order: 2; }
   .filmer-bas .filmer-cote:last-child { order: 1; }
 }
+
+/* Accessibilité (30/10) : un lien dans une phrase se voit autrement que par sa couleur. */
+.activity a, .card p a { text-decoration: underline; text-underline-offset: 3px; }
