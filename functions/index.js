@@ -44,6 +44,7 @@ const { setGlobalOptions, logger } = require('firebase-functions/v2');
 const { defineSecret, defineString } = require('firebase-functions/params');
 const admin = require('firebase-admin');
 const regles = require('./abonnement');
+const statuts = require('./statuts');
 const livraison = require('./livraison');
 const mail = require('./mail');
 const avis = require('./avis');
@@ -1485,9 +1486,8 @@ exports.tabletteRendue = onCall({ secrets: [STRIPE_SECRET] }, async (request) =>
   const ref = db.doc(`commandes/${commande}`);
   const snap = await ref.get();
   if (!snap.exists) throw new HttpsError('not-found', 'Commande introuvable.');
-  if (snap.get('restitution.statut') === 'facturee') {
-    throw new HttpsError('failed-precondition', 'Le matériel non rendu a déjà été prélevé : remboursez depuis Stripe si besoin.');
-  }
+  const refusRetour = statuts.refusRetourMateriel(snap.data());
+  if (refusRetour) throw new HttpsError('failed-precondition', refusRetour);
   const liste = [...new Set(manquants || [])].filter((m) => regles.materielPrete(snap.data()).includes(m));
   const montant = regles.montantManquants(snap.data(), liste);
   const restitution = { statut: 'rendue', majLe: FieldValue.serverTimestamp() };
@@ -1627,8 +1627,9 @@ exports.tabletteEnvoyee = onCall(async (request) => {
   const ref = db.doc(`commandes/${commande}`);
   const snap = await ref.get();
   if (!snap.exists) throw new HttpsError('not-found', 'Commande introuvable.');
+  const refusEnvoi = statuts.refusEnvoi(snap.data(), { mainPropre: mainPropre === true });
+  if (refusEnvoi) throw new HttpsError('failed-precondition', refusEnvoi);
   if (mainPropre === true) {
-    if (snap.get('expedition') === 'envoyee') throw new HttpsError('failed-precondition', 'Cette commande est déjà envoyée.');
     const maintenant = Date.now();
     await ref.update({
       expedition: 'envoyee', remise: 'main-propre', suivi: FieldValue.delete(),

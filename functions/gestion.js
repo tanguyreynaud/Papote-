@@ -35,6 +35,7 @@ const sendcloud = require('./sendcloud');
 
 const STRIPE_SECRET = defineSecret('STRIPE_SECRET');
 const regles = require('./abonnement');
+const statuts = require('./statuts');
 // Même clé que le chat de support (outils/support/installer-support.bat), jamais dans le dépôt.
 const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
 // Sonnet : recopier montant, date et vendeur d'une facture est simple, et chaque fiche reste « à vérifier ».
@@ -1001,8 +1002,12 @@ exports.gestionStock = onCall(async (request) => {
     if ('depense' in champs) maj.depense = await depenseExistante(champs.depense);
     if ('commande' in champs) {
       const commande = texte(champs.commande, 100);
-      if (commande && !(await db().doc(`commandes/${commande}`).get()).exists) {
-        throw new HttpsError('not-found', 'Commande introuvable.');
+      const cmd = commande ? await db().doc(`commandes/${commande}`).get() : null;
+      if (commande && !cmd.exists) throw new HttpsError('not-found', 'Commande introuvable.');
+      // Nouveau lien seulement : une tablette déjà à cette commande garde son lien (retour, réparation…).
+      if (commande && commande !== snap.get('commande')) {
+        const refus = statuts.refusLienCommande(snap.data(), 'etat' in champs ? champs.etat : snap.get('etat'), cmd.data());
+        if (refus) throw new HttpsError('failed-precondition', refus);
       }
       maj.commande = commande;
       // Tablette jumelée avant d'être rattachée à sa commande : l'alerte n'a plus lieu d'être.
@@ -1278,6 +1283,8 @@ exports.gestionSim = onCall(async (request) => {
     if (!snap.exists) throw new HttpsError('not-found', 'Ligne introuvable.');
     if (snap.get('tablette')) {
       const fiche = await db().doc(`stock/${snap.get('tablette')}`).get();
+      const refus = statuts.refusSuppressionSim(snap.data(), fiche.data());
+      if (refus) throw new HttpsError('failed-precondition', refus);
       await fiche.ref.update(SANS_SIM).catch(() => null);
       await numeroSurLaFamille(fiche.data(), null);
     }
@@ -1291,6 +1298,8 @@ exports.gestionSim = onCall(async (request) => {
     const snap = await ref.get();
     if (!snap.exists) throw new HttpsError('not-found', 'Ligne introuvable.');
     const l = snap.data();
+    const refus = statuts.refusRecharge(l);
+    if (refus) throw new HttpsError('failed-precondition', refus);
     const montant = d.montant != null ? centimes(d.montant) : coutLigne(l, Date.now());
     if (!montant) throw new HttpsError('invalid-argument', 'Montant de la recharge manquant : notez le prix du forfait sur la carte.');
     const date = ms(d.date) || Date.now();
@@ -1303,6 +1312,11 @@ exports.gestionSim = onCall(async (request) => {
   }
 
   if (d.action !== 'ajouter' && d.action !== 'modifier') throw new HttpsError('invalid-argument', 'Action inconnue.');
+  if (d.action === 'modifier' && d.champs && 'statut' in d.champs) {
+    const avant = await db().doc(`sims/${d.id || '-'}`).get();
+    const refus = avant.exists ? statuts.refusStatutSim(avant.get('statut'), d.champs.statut) : '';
+    if (refus) throw new HttpsError('failed-precondition', refus);
+  }
   return { ok: true, id: await enregistrerSim(d.action === 'ajouter' ? null : d.id || '-', d.champs || {}, qui) };
 });
 
@@ -2137,6 +2151,11 @@ async function creerEtiquette(commande, sens, qui, { sansImpression = false } = 
   const [snap, reglagesSnap] = await Promise.all([ref.get(), db().doc('gestion/reglages').get()]);
   if (!snap.exists) throw new HttpsError('not-found', 'Commande introuvable.');
   const c = snap.data();
+  // Retour pour un remplacement : l'ancienne tablette de cette commande est notée « en retour ».
+  const remplacee = sens === 'retour' && !(await db().collection('stock').where('remplaceePour', '==', commande)
+    .where('etat', '==', 'en-retour').limit(1).get()).empty;
+  const refus = statuts.refusEtiquette(c, sens, { remplacee });
+  if (refus) throw new HttpsError('failed-precondition', refus);
   const reglages = lireReglages(reglagesSnap.data());
   const papote = sendcloud.adressePapote(reglages.expediteur);
   if (!papote) throw new HttpsError('failed-precondition', "Renseignez l'adresse d'expédition de Papote (Réglages, Étiquettes Sendcloud).");
@@ -3435,7 +3454,11 @@ exports.gestionParcours = onCall(async (request) => {
     const ref = db().doc(`commandes/${texte(d.commande, 100) || '-'}`);
     const snap = await ref.get();
     if (!snap.exists) throw new HttpsError('not-found', 'Commande introuvable.');
-    if (d.type === 'recu') await ref.update({ 'preparation.recuLe': Date.now(), 'preparation.recuPar': qui });
+    if (d.type === 'recu') {
+      const refus = statuts.refusReception(snap.data());
+      if (refus) throw new HttpsError('failed-precondition', refus);
+      await ref.update({ 'preparation.recuLe': Date.now(), 'preparation.recuPar': qui });
+    }
     else {
       const preparation = avancementPropre(d.preparation, ['tablette', 'sim', 'suivi', 'enceinte']);
       // Date de réception déjà notée (suivi du colis, jumelage, « Le client a reçu le colis ») : gardée, car elle
