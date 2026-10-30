@@ -2788,6 +2788,15 @@ function paused() {
   return true;
 }
 
+// Message écrit pour le client par le serveur (« La tablette est déjà en retour… », « Nous n'avons pas d'adresse… ») :
+// il dit quoi faire, mieux qu'un « n'a pas pu aboutir » (Tanguy, 30/10). Les erreurs techniques restent génériques.
+function messageServeur(err) {
+  const codes = ['failed-precondition', 'permission-denied', 'already-exists', 'invalid-argument', 'internal'];
+  const code = String(err?.code || '').replace(/^functions\//, '');
+  const texte = String(err?.message || '').trim();
+  return codes.includes(code) && /\s/.test(texte) && /[a-zà-ÿ]/.test(texte) && texte.length < 300 ? texte : '';
+}
+
 async function withAboError(fn) {
   // Sur la page « Abonnement et paiement », l'erreur s'affiche sur cette page.
   const zone = $(page === 'abonnement' ? 'abo-page-error' : 'abo-error');
@@ -2799,7 +2808,7 @@ async function withAboError(fn) {
     console.error(err);
     zone.textContent = err.code === 'functions/not-found'
       ? `Aucun paiement trouvé pour ${myEmail()}. Utilisez la même adresse que sur le site.`
-      : "L'opération n'a pas pu aboutir. Réessayez dans un instant.";
+      : messageServeur(err) || "L'opération n'a pas pu aboutir. Réessayez dans un instant.";
     zone.hidden = false;
   }
 }
