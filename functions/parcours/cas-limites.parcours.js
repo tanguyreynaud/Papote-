@@ -396,5 +396,5 @@ test('couverture 4G vérifiée par Papote : pas de paiement là où la carte SIM
   const { abonnement } = await a.commanderEtPayer({ email: 'lucie@exemple.fr', nom: 'Lucie Morel' });
   const c = await commande(abonnement);
   assert.deepStrictEqual(c.proche, { adresse: '2 place de l\'Église 07310 Saint-Martin-de-Valamas', lat: 44.9369, lon: 4.3683, couverture4g: 'TBC' });
-  assert.ok(s.boite.some((m) => m.a === 'contact@mapapote.fr' && /Chez le proche.*Saint-Martin-de-Valamas.*très bonne/.test(m.texte)));
+  assert.ok(s.boite.some((m) => m.a === 'contact@mapapote.fr' && /Chez le proche.*Saint-Martin-de-Valamas[\s\S]*très bonne/.test(m.texte)));
 });

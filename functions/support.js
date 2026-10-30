@@ -172,26 +172,26 @@ async function demandeDeRappel(ip, messages, contact) {
   if (!(await quotaOk(ip, 'rappels'))) {
     return { status: 429, corps: { erreur: `Écrivez-nous à ${EMAIL_SUPPORT}.` } };
   }
-  const conversation = messages.map((m) => `${m.role === 'user' ? 'Visiteur' : 'Assistant'} : ${m.content}`).join('\n\n');
   await base().collection('supportDemandes').add({
     nom, ...coord, conversation: messages, statut: 'nouvelle', creeLe: admin.firestore.FieldValue.serverTimestamp(),
   });
-  const qui = [nom, coord.telephone, coord.email].filter(Boolean).join(' · ');
+  const smtp = { smtp: MAIL_SMTP.value(), expediteur: MAIL_EXPEDITEUR.value(), motDePasse: MAIL_MOT_DE_PASSE.value() };
   try {
     await mail.envoyer({
-      smtp: MAIL_SMTP.value(), expediteur: MAIL_EXPEDITEUR.value(), motDePasse: MAIL_MOT_DE_PASSE.value(),
-      a: EMAIL_SUPPORT,
-      contenu: {
-        subject: `Demande de rappel : ${qui}`,
-        text: `${qui}\n\nL'assistant n'a pas su répondre. Conversation :\n\n${conversation}`,
-        html: `<p><strong>${mail.echapper(qui)}</strong></p><p>L'assistant n'a pas su répondre. Conversation :</p>`
-          + messages.map((m) => `<p><strong>${m.role === 'user' ? 'Visiteur' : 'Assistant'} :</strong> ${mail.echapper(m.content).replace(/\n/g, '<br>')}</p>`).join(''),
-        ...(coord.email ? { replyTo: coord.email } : {}),
-      },
+      ...smtp, a: EMAIL_SUPPORT,
+      contenu: { ...mail.demandeRappel({ nom, telephone: coord.telephone, email: coord.email, messages }), ...(coord.email ? { replyTo: coord.email } : {}) },
     });
   } catch (e) {
     // La demande reste dans supportDemandes/ : rien n'est perdu.
     logger.error('Demande de rappel : e-mail non envoyé', e);
+  }
+  // Le visiteur sait que sa demande est bien partie (2026-10-30).
+  if (coord.email) {
+    try {
+      await mail.envoyer({ ...smtp, a: coord.email, contenu: mail.rappelConfirme({ nom, telephone: coord.telephone }) });
+    } catch (e) {
+      logger.error('Demande de rappel : confirmation au visiteur non envoyée', e);
+    }
   }
   return { status: 200, corps: { ok: true } };
 }
@@ -297,18 +297,10 @@ exports.bilanSupport = onSchedule(
     const rappels = quotas.reduce((n, d) => n + (d.get('rappels') || 0), 0);
     const sans = await db.collection('supportSansReponse').where('creeLe', '>=', depuis).orderBy('creeLe').get();
     if (!questions && sans.empty) return;
-    const liste = sans.docs.map((d) => `• ${d.get('question')}`);
-    const titre = `Support Papote : ${questions} questions cette semaine, ${sans.size} sans réponse`;
-    const intro = `${questions} questions posées au chat, ${rappels} demandes de rappel, ${sans.size} questions sans réponse.`;
-    const fin = 'Pour que le chat sache y répondre, ajoutez la réponse dans functions/support-connaissances.md (ou donnez-la à Claude).';
     await mail.envoyer({
       smtp: MAIL_SMTP.value(), expediteur: MAIL_EXPEDITEUR.value(), motDePasse: MAIL_MOT_DE_PASSE.value(),
       a: EMAIL_SUPPORT,
-      contenu: {
-        subject: titre,
-        text: [intro, '', ...liste, '', fin].join('\n'),
-        html: `<p>${intro}</p>${liste.length ? `<ul>${sans.docs.map((d) => `<li>${mail.echapper(d.get('question'))}</li>`).join('')}</ul>` : ''}<p>${fin}</p>`,
-      },
+      contenu: mail.bilanSupport({ questions, rappels, sansReponse: sans.docs.map((d) => d.get('question')) }),
     });
   });
 
