@@ -2893,8 +2893,9 @@ function ouvrirAbonnement() {
 }
 $('abo-banner-btn').addEventListener('click', () => {
   const abo = session.family.abonnement;
-  if (abo?.statut === 'impaye' || (abo?.statut === 'suspendu' && abo.stripeSubscriptionId && abo.stripeCustomerId)) withAboError(() => ouvrirPortail(session.fid));
-  else ouvrirAbonnement();
+  // La page de paiement met quelques secondes à s'ouvrir : la promesse rendue fait tourner le bouton (retour.js).
+  if (abo?.statut === 'impaye' || (abo?.statut === 'suspendu' && abo.stripeSubscriptionId && abo.stripeCustomerId)) return withAboError(() => ouvrirPortail(session.fid));
+  return ouvrirAbonnement();
 });
 // Essai de plus de 31 jours : la tablette n'est pas encore partie (le premier mois sera recalé à la réception).
 function enAttenteEnvoi(abo) {
@@ -2925,7 +2926,7 @@ $('btn-resilier').addEventListener('click', async () => {
     suite,
   });
   if (!partir) { toast('Merci de rester avec Papote'); return; }
-  withAboError(async () => {
+  await withAboError(async () => {
     const { le } = await resilier(session.fid);
     notice(`Résiliation enregistrée. Papote s'arrêtera le ${dateLongue(le) || quand || 'dernier jour du mois en cours'}.`);
   });
