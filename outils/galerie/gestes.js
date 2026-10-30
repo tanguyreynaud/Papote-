@@ -94,7 +94,8 @@ async function texteAgrandi(page, facteur) {
 const VARIANTES = [
   { nom: 'normal' },
   { nom: 'paysage', taille: (t) => ({ ...t, width: Math.max(t.width, t.height), height: Math.min(t.width, t.height) }) },
-  { nom: 'zoom 130 %', apres: async (p) => { await p.evaluate(() => { document.documentElement.style.zoom = '1.3'; }); await p.waitForTimeout(300); } },
+  // Zoom du navigateur à 130 % : la page voit un écran 1,3 fois plus petit (390 px → 300 px), tout le reste pareil.
+  { nom: 'zoom 130 %', taille: (t) => ({ ...t, width: Math.round(t.width / 1.3), height: Math.round(t.height / 1.3) }) },
   { nom: 'texte +30 %', apres: (p) => texteAgrandi(p, 1.3) },
   { nom: 'mode sombre', apres: async (p) => { await p.emulateMedia({ colorScheme: 'dark' }); await p.waitForTimeout(300); } },
   { nom: 'noms très longs', donnees: allonger },
@@ -107,8 +108,10 @@ async function balayer({ browser, base, partie, progression }) {
   const resultats = []; // { scene, variante, problemes }
   const retours = []; // { scene, resultat }
   let faits = 0;
+  // GESTES_VARIANTES="zoom 130 %,paysage" : seulement ces variantes (pour rejouer vite une partie du balayage).
+  const choisies = process.env.GESTES_VARIANTES ? VARIANTES.filter((v) => process.env.GESTES_VARIANTES.split(',').includes(v.nom)) : VARIANTES;
   for (const scene of scenes) {
-    for (const v of VARIANTES) {
+    for (const v of choisies) {
       if (v.donnees && partie !== 'famille') continue;
       const sc = v.donnees ? { ...scene, donnees: () => v.donnees(scene.donnees()) } : scene;
       const taille = v.taille ? v.taille(taille0) : taille0;
@@ -139,7 +142,7 @@ async function balayer({ browser, base, partie, progression }) {
         await ctx.close();
       }
     }
-    progression(`${partie} : ${++faits}/${scenes.length} écrans × ${VARIANTES.length} variantes`);
+    progression(`${partie} : ${++faits}/${scenes.length} écrans × ${choisies.length} variantes`);
   }
   // Retour arrière après le paiement : l'adresse de retour (?paiement=…) est effacée, un retour ne rejoue rien.
   let paiement = null;
@@ -155,7 +158,7 @@ async function balayer({ browser, base, partie, progression }) {
       await ctx.close();
     }
   }
-  return { total: scenes.length, variantes: VARIANTES.map((v) => v.nom), resultats, retours, paiement };
+  return { total: scenes.length, variantes: choisies.map((v) => v.nom), resultats, retours, paiement };
 }
 
 function rapport(parties, dossier) {
@@ -183,4 +186,4 @@ function rapport(parties, dossier) {
   return { fichier, texte: lignes.join('\n') };
 }
 
-module.exports = { balayer, rapport, VARIANTES, allonger };
+module.exports = { balayer, rapport, VARIANTES, allonger, juger };
