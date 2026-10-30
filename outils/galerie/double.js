@@ -52,7 +52,7 @@ async function essayer(partie, browser, base, scene, taille, nom) {
       requetes.set(k, (requetes.get(k) || 0) + 1);
     });
     page.on('dialog', (d) => d.dismiss().catch(() => {}));
-    await page.evaluate(() => { window.__fonctionsBloquees = true; });
+    await page.evaluate(() => { window.__fonctionsBloquees = true; window.__ecrituresBloquees = true; });
     const noms = await page.evaluate(lister, SEL);
     const i = noms.indexOf(nom);
     if (i < 0) return null; // l'écran a changé entre-temps : rien à juger

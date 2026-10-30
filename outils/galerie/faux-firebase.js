@@ -213,17 +213,20 @@ function ecrireUpdate(ref, a, ...rest) {
   store.set(ref.path, o);
 }
 
-export async function setDoc(ref, data, opts) { ecrireSet(ref, data, opts); prevenir(); }
-export async function updateDoc(ref, ...a) { ecrireUpdate(ref, ...a); prevenir(); }
-export async function deleteDoc(ref) { noter('delete', ref.path); store.delete(ref.path); prevenir(); }
-export async function addDoc(coll, data) { const ref = doc(coll); noter('add', coll.path); ecrireSet(ref, data); prevenir(); return ref; }
+// Balayage « double clic » : la base ne répond jamais non plus (une vraie écriture prend 100 à 300 ms, le 2e clic
+// d'un double clic arrive avant) ; l'écriture est notée, puis l'attente dure.
+const bloquee = () => !!window.__ecrituresBloquees;
+export async function setDoc(ref, data, opts) { ecrireSet(ref, data, opts); if (bloquee()) return jamais(); prevenir(); }
+export async function updateDoc(ref, ...a) { ecrireUpdate(ref, ...a); if (bloquee()) return jamais(); prevenir(); }
+export async function deleteDoc(ref) { noter('delete', ref.path); store.delete(ref.path); if (bloquee()) return jamais(); prevenir(); }
+export async function addDoc(coll, data) { const ref = doc(coll); noter('add', coll.path); ecrireSet(ref, data); if (bloquee()) return jamais(); prevenir(); return ref; }
 export function writeBatch() {
   const ops = [];
   const b = {
     set: (r, d, o) => { ops.push(() => ecrireSet(r, d, o)); return b; },
     update: (r, ...a) => { ops.push(() => ecrireUpdate(r, ...a)); return b; },
     delete: (r) => { ops.push(() => { noter('delete', r.path); store.delete(r.path); }); return b; },
-    commit: async () => { noter('commit', ''); ops.forEach((f) => f()); prevenir(); },
+    commit: async () => { noter('commit', ''); ops.forEach((f) => f()); if (bloquee()) return jamais(); prevenir(); },
   };
   return b;
 }
