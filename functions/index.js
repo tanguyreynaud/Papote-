@@ -1740,6 +1740,9 @@ exports.tabletteEnvoyee = onCall(async (request) => {
   if (!snap.exists) throw new HttpsError('not-found', 'Commande introuvable.');
   const refusEnvoi = statuts.refusEnvoi(snap.data(), { mainPropre: mainPropre === true });
   if (refusEnvoi) throw new HttpsError('failed-precondition', refusEnvoi);
+  const fiches = await db.collection('stock').where('commande', '==', commande).get();
+  const refusSim = statuts.refusEnvoiSansSim(snap.data(), fiches.docs.map((d) => d.data()));
+  if (refusSim) throw new HttpsError('failed-precondition', refusSim);
   if (mainPropre === true) {
     const maintenant = Date.now();
     await ref.update({

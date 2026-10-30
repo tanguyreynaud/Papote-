@@ -294,7 +294,7 @@ test('clients, tablettes et SIM qui ne collent pas', () => {
     stock: [{ commande: 'c1', etat: 'chez-client', sim: null }, { commande: 'c2', etat: 'envoyee', sim: '06' }, { commande: 'c3', etat: 'envoyee' }],
     sims: [{ statut: 'active', tablette: null }, { statut: 'active', tablette: 't' }, { statut: 'stock', tablette: null }],
   });
-  assert.deepStrictEqual(r, ['1 client Internet inclus sans carte SIM notée sur sa tablette', '1 ligne SIM active reliée à aucune tablette']);
+  assert.deepStrictEqual(r, ['1 client Tout compris sans carte SIM notée sur sa tablette', '1 ligne SIM active reliée à aucune tablette']);
 });
 
 // ---------- Étiquettes Sendcloud ----------
