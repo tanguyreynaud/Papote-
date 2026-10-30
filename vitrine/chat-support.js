@@ -24,6 +24,8 @@
     'font-family:"Atkinson Hyperlegible","Segoe UI",system-ui,sans-serif;position:fixed;z-index:2147483000;' + cote + ':20px;bottom:' + bas + 'px}' +
     '.ps-bouton{display:flex;align-items:center;gap:.5rem;border:0;border-radius:999px;background:var(--ps-indigo);color:#fff;font-family:inherit;font-weight:700;font-size:1.05rem;line-height:1;padding:.9rem 1.2rem;box-shadow:0 6px 20px rgba(36,33,47,.25);cursor:pointer}' +
     '.ps-bouton:hover{background:var(--ps-indigo-fonce)}' +
+    // Téléphone, clavier ouvert : la bulle ne recouvre pas le champ en train d'être rempli.
+    '@media (hover:none) and (pointer:coarse){body:has(:is(input:not([type=checkbox],[type=radio],[type=range],[type=file],[type=button],[type=submit]),textarea):focus) .ps-bouton{display:none}}' +
     '.ps-bouton:focus-visible,.ps-panneau button:focus-visible,.ps-panneau textarea:focus-visible{outline:3px solid #4338ca;outline-offset:2px}' +
     '.ps-panneau{width:min(380px,calc(100vw - 32px));height:min(560px,calc(100vh - ' + (bas + 40) + 'px));display:none;flex-direction:column;background:var(--ps-fond);color:var(--ps-texte);border:1px solid var(--ps-ligne);border-radius:18px;box-shadow:0 12px 40px rgba(36,33,47,.28);overflow:hidden}' +
     '.ps-panneau.ps-ouvert{display:flex}' +
