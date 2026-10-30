@@ -4,6 +4,7 @@
 'use strict';
 
 const { famillePleine, membre, poserDonnees, SDK, ilYa, FID } = require('./famille');
+const clavier = require('./clavier');
 
 const TAILLES = {
   pc: { nom: 'ordinateur', width: 1280, height: 800, mobile: false },
@@ -153,6 +154,8 @@ const CLIENTS = {
     { email: 'isabelle@exemple.fr', nom: 'Isabelle Morel', type: 'ancien', statut: 'resilie', formule: 'sim', depuis: il(72), consentement: true, desinscrit: false },
     { email: 'gerard@exemple.fr', nom: 'Gérard Simon', telephone: '06 55 44 33 22', type: 'panier', statut: 'panier', formule: 'sim', depuis: il(4), consentement: false, desinscrit: false },
     { email: 'marie@exemple.fr', nom: 'Marie Dupont', telephone: '06 12 34 56 78', type: 'chat', depuis: il(2), consentement: true, desinscrit: false },
+    // « Être prévenu » du site quand le stock est vide : à rappeler à la main.
+    { email: 'odile@exemple.fr', nom: 'Odile Faure', telephone: '07 81 22 45 90', type: 'attente', depuis: il(1), consentement: false, desinscrit: false },
   ],
   campagnes: [{ id: 'c1', le: il(7), objet: 'Papote arrive bientôt', envoyes: 12 }],
   envoisMax: 300,
@@ -324,6 +327,14 @@ async function capturer({ browser, base, dossierImages, progression }) {
       }
       await page.screenshot({ path: `${dossierImages}/${fichier}`, type: 'jpeg', quality: 62 }).catch((e) => erreurs.push('Capture : ' + e.message.split('\n')[0]));
       resultats.push({ n, groupe: scene.groupe, titre: scene.titre, note: scene.note, taille: taille.nom, fichier, erreurs, scene: SCENES.indexOf(scene) });
+      // Téléphone : clavier ouvert sur les champs de l'écran (clavier.js).
+      if (taille.mobile) {
+        await page.setViewportSize({ width: taille.width, height: taille.height });
+        await page.evaluate(() => window.scrollTo(0, 0)).catch(() => {});
+        const fc = `admin-${String(n).padStart(3, '0')}-clavier.jpg`;
+        const { problemes, capture } = await clavier.verifier(page, taille, `${dossierImages}/${fc}`);
+        if (capture) resultats.push({ n: n + 0.5, groupe: scene.groupe, titre: scene.titre, note: scene.note, taille: 'clavier ouvert', fichier: fc, erreurs: problemes, scene: SCENES.indexOf(scene) });
+      }
       await ctx.close();
       progression(`admin ${++faits}/${n0}`);
     }
