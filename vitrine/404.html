@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Page introuvable · Papote</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#fdfaf5">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<!-- Polices servies par le site lui-même et demandées tout de suite : elles arrivent avant l'affichage
+     dans la plupart des cas. Sinon, le texte s'affiche d'abord en police du téléphone, agrandie ou réduite (« … repli »)
+     pour prendre la même place : rien ne saute quand la vraie police arrive. -->
+<link rel="preload" href="/polices/bricolage.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/polices/atkinson-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/polices/atkinson-700.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+@font-face { font-family: "Bricolage Grotesque"; src: url(/polices/bricolage.woff2) format("woff2"); font-weight: 200 800; font-display: swap; }
+@font-face { font-family: "Atkinson Hyperlegible"; src: url(/polices/atkinson-400.woff2) format("woff2"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "Atkinson Hyperlegible"; src: url(/polices/atkinson-700.woff2) format("woff2"); font-weight: 700; font-display: swap; }
+@font-face { font-family: "Atkinson repli"; src: local("Roboto"), local("Roboto-Regular"); font-weight: 400; size-adjust: 100%; }
+@font-face { font-family: "Atkinson repli"; src: local("Roboto Bold"), local("Roboto-Bold"); font-weight: 700; size-adjust: 108%; }
+@font-face { font-family: "Atkinson repli A"; src: local("Arial"), local("ArialMT"); font-weight: 400; size-adjust: 99.5%; }
+@font-face { font-family: "Atkinson repli A"; src: local("Arial Bold"), local("Arial-BoldMT"); font-weight: 700; size-adjust: 101.5%; }
+@font-face { font-family: "Bricolage repli"; src: local("Roboto SemiBold"), local("Roboto-SemiBold"); font-weight: 600; size-adjust: 105.5%; }
+@font-face { font-family: "Bricolage repli"; src: local("Roboto ExtraBold"), local("Roboto-ExtraBold"), local("Roboto Bold"), local("Roboto-Bold"); font-weight: 800; size-adjust: 106.5%; }
+@font-face { font-family: "Bricolage repli A"; src: local("Arial Bold"), local("Arial-BoldMT"); font-weight: 600 800; size-adjust: 100.5%; }
+</style>
+<style>
+/* Page servie par Firebase pour toute adresse inconnue du site (404.html), aux couleurs du site. */
+:root { --bg: #fdfaf5; --text: #24212f; --muted: #5f5a6b; --accent: #4f46e5; --accent-strong: #3730a3; color-scheme: light; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 400 1.0625rem/1.65 "Atkinson Hyperlegible", "Atkinson repli", "Atkinson repli A", "Segoe UI", system-ui, sans-serif; }
+main { max-width: 34rem; min-height: 100vh; margin: 0 auto; padding: 24px 20px 4rem; display: flex; flex-direction: column; }
+.top { display: flex; align-items: center; gap: .6rem; font: 800 1.4rem/1 "Bricolage Grotesque", "Bricolage repli", "Bricolage repli A", "Segoe UI", system-ui, sans-serif; color: var(--text); text-decoration: none; }
+.top img { width: 2rem; height: 2rem; }
+.centre { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; padding: 3rem 0; }
+h1 { margin: 0 0 .75rem; font: 800 clamp(1.8rem, 6vw, 2.4rem)/1.15 "Bricolage Grotesque", "Bricolage repli", "Bricolage repli A", "Segoe UI", system-ui, sans-serif; }
+p { margin: 0 0 1.75rem; color: var(--muted); }
+.btn { display: inline-flex; align-items: center; justify-content: center; min-height: 3.25rem; padding: .75rem 1.6rem; border-radius: 999px; background: var(--accent); color: #fff; font-weight: 700; font-size: 1.05rem; text-decoration: none; }
+.btn:hover { background: var(--accent-strong); }
+</style>
+</head>
+<body>
+<main>
+  <a class="top" href="/"><img src="/icon.svg" alt="">Papote</a>
+  <div class="centre">
+    <h1>Cette page n'existe pas</h1>
+    <p>Le lien est peut-être incomplet. Tout le reste est sur l'accueil.</p>
+    <a class="btn" href="/">Retour à l'accueil</a>
+  </div>
+</main>
+</body>
+</html>

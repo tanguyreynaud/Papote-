@@ -397,8 +397,16 @@ body .ps-bouton { bottom: 6.5rem; }
     payer.classList.remove('attend');
     payer.textContent = 'Payer 60 €';
   });
+  window.addEventListener('online', lienPaiement);
   payer.addEventListener('click', function (e) {
     if (payer.getAttribute('aria-disabled') === 'false') {
+      // Sans réseau, le lien mènerait à la page d'erreur du navigateur : on le dit ici, la commande reste remplie.
+      if (navigator.onLine === false) {
+        e.preventDefault();
+        manque.textContent = 'Pas de connexion internet. Réessayez dès que le réseau revient.';
+        manque.hidden = false;
+        return;
+      }
       // La fonction crée la session Stripe puis redirige : 2 à 4 secondes sans rien à l'écran, on le dit.
       payer.textContent = 'Un instant…';
       payer.classList.add('attend');
