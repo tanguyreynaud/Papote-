@@ -4,3 +4,5 @@
 famille | color-contrast | #invite-email-card | carte d'invitation volontairement estompée quand la famille est pleine (30 proches) : rien à faire dessus
 famille | color-contrast | #invite-email | idem : champ de la carte estompée
 famille | color-contrast | #form-invite > .primary | idem : bouton de la carte estompée
+tablette | meta-viewport | meta | tablette en kiosque : l'écran ne doit pas se zoomer sous un doigt qui glisse (user-scalable=no voulu)
+tablette | color-contrast | .night-clock | horloge de nuit volontairement très douce (bleu nuit, 55 %) pour ne pas éclairer la chambre
