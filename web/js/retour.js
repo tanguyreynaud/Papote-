@@ -73,7 +73,8 @@ proto.addEventListener = function (type, ecouteur, options) {
   if (!env) {
     env = function (e) {
       const b = boutonDe(e, this);
-      const enCours = b && occupes.get(b);
+      // Un envoi par requestSubmit() (message rapide) n'a pas de bouton touché : il n'est jamais bloqué.
+      const enCours = b && (e.type !== 'submit' || e.submitter) && occupes.get(b);
       if (enCours && enCours !== e) { e.preventDefault(); e.stopImmediatePropagation(); return undefined; }
       const r = ecouteur.apply(this, arguments);
       if (b && r && typeof r.then === 'function') occuper(b, r, e);
