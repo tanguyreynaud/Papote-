@@ -732,7 +732,7 @@ exports.gestionDonnees = onCall(async (request) => {
         // même famille) : son propre état chez Stripe et son propre arrêt prévu.
         abonnement: estCourante(famille, d.id) ? famille.abonnement.statut || null : (c.statutStripe || (famille && famille.abonnement ? famille.abonnement.statut || null : null)),
         resiliationLe: estCourante(famille, d.id) ? famille.abonnement.resiliationLe || null : c.resiliationLe || null,
-        restitution: c.restitution ? { statut: c.restitution.statut || null, avant: c.restitution.avant || null } : null,
+        restitution: c.restitution ? { statut: c.restitution.statut || null, avant: c.restitution.avant || null, mainPropreLe: c.restitution.mainPropreLe || null } : null,
         remboursement: c.remboursement || null,
         restitutionErreur: c.restitution && c.restitution.erreur ? c.restitution.erreur : null,
         retractation: c.retractation || null,
@@ -2172,7 +2172,7 @@ async function creerEtiquette(commande, sens, qui, { sansImpression = false } = 
   const reglages = lireReglages(reglagesSnap.data());
   const papote = sendcloud.adressePapote(reglages.expediteur);
   if (!papote) throw new HttpsError('failed-precondition', "Renseignez l'adresse d'expédition de Papote (Réglages, Étiquettes Sendcloud).");
-  const cl = sendcloud.adresseClient(c);
+  const cl = sens === 'retour' ? sendcloud.adresseRetour(c) : sendcloud.adresseClient(c);
   if (!cl) throw new HttpsError('failed-precondition', "Cette commande n'a pas d'adresse ni de point relais utilisable.");
   const poids = Math.max(0.1, (reglages.poidsColis || 1500) / 1000);
   const reference = c.code ? String(c.code) : commande.slice(-12);

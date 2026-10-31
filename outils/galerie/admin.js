@@ -173,6 +173,13 @@ function arretPrevu() {
   return { ...g, commandes: g.commandes.map((c) => (c.id === 'CMD-GH78' ? { ...c, resiliationLe: il(-27) } : c)) };
 }
 
+// Tablette remise en main propre, abonnement fini : le client veut la rendre en main propre (31/10).
+function retourEnMain() {
+  const g = gestionDonnees({});
+  return { ...g, commandes: g.commandes.map((c) => (c.id === 'CMD-RS45'
+    ? { ...c, remise: 'main-propre', suivi: null, restitution: { ...c.restitution, mainPropreLe: il(1) } } : c)) };
+}
+
 function donnees(o = {}) {
   const docs = famillePleine({ sim: true });
   docs['families/f-henri'] = { name: 'Papi Henri', createdBy: 'u-nicolas', abonnement: { statut: 'impaye', formule: 'sim', graceJusqua: { __ms: il(-6) } } };
@@ -280,6 +287,8 @@ const SCENES = [
   { groupe: 'Commandes', titre: 'Commande terminée, remboursement échoué', page: '#commande/CMD-RB10', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Commandes', titre: 'Commande : menu ⋮ des actions', page: '#commande/CMD-GH78', tailles: ['pc'], donnees: () => donnees(), faire: toucher('#dc-corps .menu-points > button, #dc-corps [aria-haspopup]') },
   { groupe: 'Commandes', titre: 'Commande : arrêt prévu, menu ⋮ (Reprendre l’abonnement)', page: '#commande/CMD-GH78', tailles: ['pc'], donnees: () => donnees({ donnees: arretPrevu() }), faire: toucher('#dc-corps .menu-points > button, #dc-corps [aria-haspopup]') },
+  { groupe: 'Commandes', titre: 'Commande : le client veut rendre la tablette en main propre', page: '#commande/CMD-RS45', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees({ donnees: retourEnMain() }) },
+  { groupe: 'Commandes', titre: 'Accueil : à faire, tablette à récupérer en main propre', page: '#accueil', tailles: ['pc'], plein: true, donnees: () => donnees({ donnees: retourEnMain() }) },
   { groupe: 'Commandes', titre: 'Nouvelle commande offerte', page: '#commandes', tailles: ['pc'], plein: true, donnees: () => donnees(), faire: toucher('#b-offerte') },
 
   { groupe: 'Clients', titre: 'Clients : liste', page: '#clients/liste', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees() },
