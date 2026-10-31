@@ -6,6 +6,10 @@
 (function () {
   'use strict';
 
+  // Appui long : Android (MainActivity) ignore déjà le long clic ; la page empêche aussi le menu du
+  // long appui, pour que rien ne sorte jamais de l'écran de Mamie (appui long, 31/10).
+  document.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+
   var IDLE_MS = 90000;   // retour à l'accueil après 1 min 30 sans toucher l'écran
   var FRAME_MS = 12000;  // changement de photo sur l'accueil
   var SLIDE_MS = 10000;  // défilement tout seul du diaporama
@@ -1739,7 +1743,11 @@
     return out;
   }
 
+  var raccrochage = 0;
   function gsmHangup() {
+    // Double touche sur « Pas maintenant » : un seul raccrochage (le 2e disait à tort « plus d'appel »).
+    if (Date.now() - raccrochage < 1500) return;
+    raccrochage = Date.now();
     var ok = false;
     if (android() && android().phoneHangup) { try { ok = android().phoneHangup() !== false; } catch (e) { ok = false; } }
     if (ok) return;
@@ -2112,8 +2120,13 @@
       b = document.createElement('button');
       b.id = id;
       b.className = 'ln-btn listen';
+      b.setAttribute('aria-label', 'Écouter');
       b.innerHTML = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 10v4h4l5 5V5L7 10H3zm13.5 2A4.5 4.5 0 0 0 14 8v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg><span>Écouter</span>';
       on(b, 'click', function () {
+        // Un doigt qui hésite touche deux fois de suite : le 2e toucher (moins de 600 ms après)
+        // ne doit ni arrêter ni relancer la lecture (double clic, 30/10).
+        if (Date.now() - (b.dernierToucher || 0) < 600) return;
+        b.dernierToucher = Date.now();
         if (speech !== 'idle') { stopSpeaking(); return; }
         sayAloud(getText());
       });
@@ -2221,7 +2234,10 @@
           motAudio.play();
         };
       }
+      var dejaLu = false;
       var parAndroid = function () { // son injoignable (hors ligne) : la voix d'Android lit le texte
+        if (dejaLu) return; // onerror ET play().catch arrivent tous les deux : une seule lecture
+        dejaLu = true;
         setSpeech('idle');
         if (android() && android().speak) { setSpeech('loading'); android().speak(text); }
       };
@@ -2290,6 +2306,7 @@
       row.appendChild(call);
       radioBtn = document.createElement('button');
       radioBtn.className = 'big-btn radio-btn';
+      radioBtn.setAttribute('aria-label', 'Radio');
       on(radioBtn, 'click', toggleRadio);
       row.appendChild(radioBtn);
     }
