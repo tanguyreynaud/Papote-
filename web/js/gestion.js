@@ -679,7 +679,8 @@ function afficherAccueil() {
       .map((c) => [1, `Tablette pas jumelée après 20 jours : ${c.nom || c.email || 'client'}, l'appeler`, versCommande(c), 'ko']),
     ...cmd.filter((c) => etatCommande(c) === 'retour' && c.restitution.statut !== 'echec').map((c) => {
       const t = tabletteDe(c);
-      return [1, `${t ? nomT(t) : 'Tablette'} à récupérer chez ${c.nom || c.email || 'le client'}`, t ? versTablette(t) : versCommande(c), ''];
+      const main = c.restitution.mainPropreLe ? ` : en main propre, l'appeler pour convenir d'un moment` : '';
+      return [1, `${t ? nomT(t) : 'Tablette'} à récupérer chez ${c.nom || c.email || 'le client'}${main}`, t ? versTablette(t) : versCommande(c), ''];
     }),
     ...donnees.stock.filter((t) => t.etat === 'revenue' && !t.usure)
       .map((t) => [1, `${nomT(t)} revenue, à vérifier avant de remettre en stock`, versTablette(t), '']),
@@ -1428,6 +1429,7 @@ function parcoursCommande(c) {
   }
   if (c.resiliationLe) etapes.push([null, `Abonnement arrêté, fin le ${jour(c.resiliationLe)}`]);
   if (c.expedition === 'annulee') etapes.push([null, 'Commande annulée']);
+  if (c.restitution?.mainPropreLe) etapes.push([c.restitution.mainPropreLe, 'Le client veut rendre la tablette en main propre']);
   // La date du retour est une date limite, pas celle d'un événement : à la suite, dans le texte.
   if (c.restitution) etapes.push([null, `${RETOURS[c.restitution.statut] || c.restitution.statut}${c.restitution.avant && c.restitution.statut === 'attendue' ? `, à rendre avant le ${jour(c.restitution.avant)}` : ''}`]);
   if (c.remboursement) etapes.push([null, `${euros(c.remboursement.montant)} ${REMBOURSEMENTS[c.remboursement.statut] || c.remboursement.statut}`]);

@@ -3059,6 +3059,8 @@ async function renderFinDeContrat(abo) {
   $('retour-info').hidden = true;
   $('retour-aide').hidden = true;
   $('btn-renvoyer').hidden = true;
+  $('btn-rendre-main').hidden = true;
+  $('retour-main').hidden = true;
   $('retour-qr-box').hidden = true;
   if (rest && ['attendue', 'echec'].includes(rest.statut)) {
     box.hidden = false;
@@ -3071,8 +3073,7 @@ async function renderFinDeContrat(abo) {
       $('retour-etiquette').href = rest.etiquette;
       $('retour-etiquette').hidden = false;
     } else if (amFamilyAdmin()) {
-      $('retour-aide').hidden = false;
-      $('btn-renvoyer').hidden = false;
+      montrerChoixRetour();
     }
     const infos = [];
     if (remb?.statut === 'au-retour') infos.push(`${euros(remb.montant)} remboursés dès réception de la tablette.`);
@@ -3082,8 +3083,7 @@ async function renderFinDeContrat(abo) {
     // Arrêt prévu : renvoyer la tablette sans attendre la date d'arrêt (Tanguy, 30/10). Elle marche jusqu'au dépôt.
     box.hidden = false;
     $('retour-text').textContent = 'Vous pouvez nous renvoyer la tablette dès maintenant';
-    $('retour-aide').hidden = false;
-    $('btn-renvoyer').hidden = false;
+    montrerChoixRetour();
   } else if (rest?.statut === 'rendue') {
     box.hidden = false;
     $('retour-text').textContent = 'Tablette bien reçue, merci';
@@ -3092,20 +3092,71 @@ async function renderFinDeContrat(abo) {
       $('retour-info').hidden = false;
     }
   }
+  // Les champs d'adresse restent ouverts (et remplis) tant que le bouton Mondial Relay est là.
+  if ($('btn-renvoyer').hidden) $('retour-adresse').hidden = true;
+}
+
+// Tablette remise en main propre : la famille choisit, main propre ou Mondial Relay (Tanguy, 31/10).
+// Sans adresse connue, le premier appui sur Mondial Relay ouvre les champs d'adresse.
+const AIDE_QR = 'Quand le colis est prêt, touchez ce bouton : un QR code prépayé s\'affiche, à montrer au point relais Mondial Relay. Pas besoin d\'imprimer.';
+const AIDE_DEUX = 'Deux façons de nous la rendre : en main propre, ou dans un point relais Mondial Relay avec un QR code prépayé, sans rien imprimer.';
+function texteRenvoyer() {
+  if (!$('retour-adresse').hidden) return 'Créer le QR code';
+  return finInfo?.mainPropre ? 'Par Mondial Relay' : 'Je renvoie la tablette';
+}
+function montrerChoixRetour() {
+  const main = Boolean(finInfo?.mainPropre);
+  $('retour-aide').textContent = main ? AIDE_DEUX : AIDE_QR;
+  $('retour-aide').hidden = false;
+  $('btn-renvoyer').hidden = false;
+  $('btn-renvoyer').textContent = texteRenvoyer();
+  $('btn-rendre-main').hidden = !main || Boolean(finInfo?.rendreEnMain);
+  $('retour-main').hidden = !main || !finInfo?.rendreEnMain;
+}
+function ouvrirAdresse() {
+  $('retour-adresse').hidden = false;
+  $('btn-renvoyer').textContent = texteRenvoyer();
+  $('retour-rue').focus();
 }
 
 $('btn-renvoyer').addEventListener('click', async () => {
   const b = $('btn-renvoyer');
   if (b.disabled) return;
+  if (finInfo && finInfo.adresse === false && $('retour-adresse').hidden) { ouvrirAdresse(); return; }
+  const adresse = $('retour-adresse').hidden ? null
+    : { rue: $('retour-rue').value, cp: $('retour-cp').value.trim(), ville: $('retour-ville').value };
   b.disabled = true;
+  $('btn-rendre-main').disabled = true;
   b.replaceChildren(Object.assign(document.createElement('span'), { className: 'spinner-inline' }), 'Un instant…');
   await withAboError(async () => {
-    await renvoyerTablette(session.fid);
+    try {
+      await renvoyerTablette(session.fid, adresse);
+    } catch (err) {
+      if (err?.details?.adresse) ouvrirAdresse();
+      throw err;
+    }
     finCle = null;
     await renderFinDeContrat(session.family.abonnement);
   });
   b.disabled = false;
-  b.textContent = 'Je renvoie la tablette';
+  $('btn-rendre-main').disabled = false;
+  b.textContent = texteRenvoyer();
+});
+
+$('btn-rendre-main').addEventListener('click', async () => {
+  const b = $('btn-rendre-main');
+  if (b.disabled) return;
+  b.disabled = true;
+  $('btn-renvoyer').disabled = true;
+  b.replaceChildren(Object.assign(document.createElement('span'), { className: 'spinner-inline' }), 'Un instant…');
+  await withAboError(async () => {
+    await renvoyerTablette(session.fid, null, 'main');
+    finCle = null;
+    await renderFinDeContrat(session.family.abonnement);
+  });
+  b.disabled = false;
+  $('btn-renvoyer').disabled = false;
+  b.textContent = 'En main propre';
 });
 
 function reprisePossible() {

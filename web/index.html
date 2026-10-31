@@ -887,7 +887,21 @@
           <div id="retour-box" class="abo-retour" hidden>
             <p id="retour-text" class="abo-retour-title"></p>
             <p id="retour-aide" class="muted small" hidden>Quand le colis est prêt, touchez ce bouton : un QR code prépayé s'affiche, à montrer au point relais Mondial Relay. Pas besoin d'imprimer.</p>
+            <div id="retour-adresse" hidden>
+              <p class="muted small">Mondial Relay demande votre adresse pour le QR code de retour.</p>
+              <label>Numéro et rue
+                <input id="retour-rue" autocomplete="street-address" maxlength="100" placeholder="3 place Bellecour">
+              </label>
+              <label>Code postal
+                <input id="retour-cp" autocomplete="postal-code" inputmode="numeric" maxlength="5" placeholder="69002">
+              </label>
+              <label>Ville
+                <input id="retour-ville" autocomplete="address-level2" maxlength="60" placeholder="Lyon">
+              </label>
+            </div>
             <button type="button" id="btn-renvoyer" class="primary wide" hidden>Je renvoie la tablette</button>
+            <button type="button" id="btn-rendre-main" class="secondary wide" hidden>En main propre</button>
+            <p id="retour-main" class="muted small" hidden>C'est noté : nous vous contactons pour convenir d'un moment. Vous pouvez aussi la renvoyer par Mondial Relay.</p>
             <div id="retour-qr-box" class="retour-qr" hidden>
               <img id="retour-qr" alt="QR code de retour à montrer au point relais">
               <p class="muted small">Au point relais Mondial Relay, montrez ce QR code avec le colis. Il est aussi dans votre e-mail.</p>
