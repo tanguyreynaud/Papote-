@@ -28,6 +28,7 @@ scénarios) ; utiliser plutôt
 | `installation` | Inscription, code de la tablette, réglages de départ, accueil |
 | `proches` | Invitation par e-mail, code famille (accepté, refusé, faux), responsable, retrait d'un proche |
 | `envois` | Photos (légende, 5 max, suppression, zip), vidéo, aperçu avant envoi (forme gardée, plein écran qui reste ouvert, Refilmer / Galerie, debout et couchée), filmer dans Papote (caméra, Filmer / Arrêter, retour, caméra refusée), messages (rapides, vu, réponse de Mamie), droits |
+| `photos-multiples` | 5 photos en un envoi : transfert coupé à la 3e (réseau gardé, ou coupé net puis revenu), double appui sur Envoyer, ordre des photos, aucun fichier orphelin dans Storage ; limite des 200 derniers envois de photos |
 | `agenda` | Rappels (erreurs, modification, pause, confirmation de Mamie), anniversaires |
 | `appels` | Vidéo vers la tablette (vraie liaison WebRTC), refus, Mamie appelle un proche ou toute la famille |
 | `reglages` | Réglages de la tablette, profil, thème, quitter la famille, deux familles, déconnexion |

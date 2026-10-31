@@ -691,15 +691,23 @@ function updateCount() {
 }
 $('message-text').addEventListener('input', updateCount);
 
-$('form-message').addEventListener('submit', async (e) => {
+$('form-message').addEventListener('submit', (e) => {
   e.preventDefault();
   const text = $('message-text').value.trim();
   if (!text) { $('message-text').focus(); return; }
+  envoyerMessage(text);
+});
+
+// Envoie un message écrit. Le champ est vidé tout de suite : le message s'affiche dans la conversation
+// sans attendre le serveur (réseau lent : sinon le texte reste écrit et donne envie de le renvoyer).
+// Plusieurs messages peuvent être en route en même temps (un message rapide juste après un message
+// écrit) : le bouton reste grisé tant qu'il en reste un.
+let messagesEnRoute = 0;
+async function envoyerMessage(text) {
   if (paused()) return;
+  messagesEnRoute++;
   $('btn-message').disabled = true;
   const item = { kind: 'message', text, author: { authorUid: session.uid, authorName: session.member.name } };
-  // Le message s'affiche tout de suite dans la conversation : on vide le champ sans attendre le serveur
-  // (réseau lent : sinon le texte reste écrit et donne envie de le renvoyer).
   $('message-text').value = '';
   updateCount();
   try {
@@ -709,9 +717,9 @@ $('form-message').addEventListener('submit', async (e) => {
     console.warn('Message mis en attente', err);
     await queue(item);
   } finally {
-    $('btn-message').disabled = false;
+    if (--messagesEnRoute === 0) $('btn-message').disabled = false;
   }
-});
+}
 
 // ---------- Première installation : régler la tablette pas à pas (propriétaire) ----------
 // Une famille toute neuve (ni veille, ni options) : on propose de tout régler d'un coup.
@@ -930,13 +938,14 @@ $('btn-photos-zip').addEventListener('click', async () => {
 });
 
 // Messages rapides : un toucher envoie le message tel quel.
-// Un message rapide part même si le précédent est encore en route (il était perdu sans rien dire) ;
-// un double appui sur le même bouton n'en envoie qu'un.
+// Un message rapide part même si le précédent est encore en route : il n'est pas passé par
+// form.requestSubmit(), que Chrome ignore sans rien dire tant que le bouton Envoyer est grisé
+// (le message était perdu, vu par le test « Messages » le 31/10). Un double appui sur le même
+// bouton n'en envoie qu'un.
 document.querySelectorAll('.quick-msg').forEach((b) => b.addEventListener('click', () => {
   if (Date.now() - (b.dernier || 0) < 2000) return;
   b.dernier = Date.now();
-  $('message-text').value = b.textContent;
-  $('form-message').requestSubmit();
+  envoyerMessage(b.textContent);
 }));
 
 // ---------- Ajouter une photo ou une vidéo ----------
@@ -1265,6 +1274,7 @@ async function openShared() {
 
 $('form-post').addEventListener('submit', async (e) => {
   e.preventDefault();
+  if ($('form-post').classList.contains('busy')) return; // envoi déjà en cours
   const text = $('post-text').value.trim();
   const author = { authorUid: session.uid, authorName: session.member.name };
   setStatus('');
@@ -1307,7 +1317,8 @@ $('form-post').addEventListener('submit', async (e) => {
 function sendItem(item) {
   if (item.kind === 'message') return addPost(session.fid, { type: 'message', text: item.text, ...item.author });
   if (item.kind === 'video') return sendVideo(item.video, item.text, item.author);
-  return sendPhotos(item.photos || [item.photo], item.text, item.author);
+  if (!item.photos) item.photos = [item.photo]; // envois en attente d'une ancienne version
+  return sendPhotos(item);
 }
 
 function outboxDb() {
@@ -1358,7 +1369,13 @@ async function flushOutbox() {
     const items = await outbox('readonly', (store) => store.getAll());
     for (const item of items) {
       if (item.fid !== session.fid) { await outbox('readwrite', (store) => store.delete(item.id)); continue; }
-      await sendItem(item);
+      try {
+        await sendItem(item);
+      } catch (err) {
+        // Ce qui est déjà fait (photos transférées ou parties) est gardé pour le prochain essai.
+        await outbox('readwrite', (store) => store.put(item)).catch(() => {});
+        throw err;
+      }
       await outbox('readwrite', (store) => store.delete(item.id));
       pruneOld(item.kind === 'message' ? null : item.kind);
     }
@@ -1408,24 +1425,32 @@ async function addStoragePost(data) {
 
 // Jusqu'à 5 photos dans un seul envoi : la première reste dans imageUrl/thumb (les anciennes
 // tablettes l'affichent seule), la liste complète est dans photos[] { imageUrl, storagePath, thumb }.
-async function sendPhotos(photos, text, author) {
+// L'envoi (item) garde ce qui est déjà fait : si le réseau coupe à la 3e photo, la reprise repart de
+// la 3e, sans renvoyer ni laisser traîner les deux premières ; en repli par la base, les photos déjà
+// parties sont retirées de l'envoi, pour ne jamais en envoyer une deux fois.
+async function sendPhotos(item) {
+  const { photos, text, author } = item;
   if (photos.length === 1 || !storage) {
-    for (let i = 0; i < photos.length; i++) await sendPhoto(photos[i], i === 0 ? text : '', author);
+    while (photos.length) {
+      await sendPhoto(photos[0], item.legendeEnvoyee ? '' : text, author);
+      photos.shift();
+      item.legendeEnvoyee = true;
+    }
     return;
   }
-  const uploaded = [];
+  const uploaded = item.uploaded || (item.uploaded = []);
   try {
-    for (const photo of photos) {
+    for (const photo of photos.slice(uploaded.length)) {
       const file = await upload(await (await fetch(photo.full)).blob(), 'jpg');
       uploaded.push({ imageUrl: file.url, storagePath: file.path, thumb: photo.small || photo.thumb });
     }
   } catch (err) {
-    if (!navigator.onLine) throw err;
+    if (!navigator.onLine) throw err; // les fichiers déjà transférés serviront à la reprise
     console.warn('Storage indisponible, une photo par envoi', err);
     for (const f of uploaded) deleteObject(ref(storage, f.storagePath)).catch(() => {});
+    item.uploaded = [];
     storage = null;
-    for (let i = 0; i < photos.length; i++) await sendPhoto(photos[i], i === 0 ? text : '', author);
-    return;
+    return sendPhotos(item);
   }
   await addStoragePost({
     type: 'photo', text, thumb: photos[0].thumb, imageUrl: uploaded[0].imageUrl,
