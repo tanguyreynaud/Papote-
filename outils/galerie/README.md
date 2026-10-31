@@ -71,6 +71,26 @@ répond jamais. Dans les 0,7 s, l'écran doit montrer quelque chose (roue, fenê
 fichier…). Les boutons qui ne montrent rien sont listés dans `sortie/boutons.txt`. Le message de fin (réussite ou
 erreur, une fois que le serveur répond) n'est pas vérifié ici : il se regarde dans la galerie.
 
+## Les autres balayages
+
+Même mécanique (serveur bloqué, premier écran où chaque bouton apparaît), un fichier `sortie/*.txt` chacun :
+
+| Commande | Ce qui est vérifié | Rapport |
+| --- | --- | --- |
+| `--double [vitrine famille tablette admin]` | chaque bouton touché deux fois puis une 3e fois : rien ne part en double | `double-clic.txt` |
+| `--appui [vitrine famille tablette admin]` | le doigt posé 1,2 s sur chaque bouton : une action au plus, rien de sélectionné, pas de menu du long appui (tablette) | `appui-long.txt` |
+| `--gestes [famille vitrine]` | chaque écran en paysage, zoom 130 %, texte +30 %, mode sombre, noms très longs ; bouton retour ; retour après paiement | `gestes.txt` |
+| `--identifiants [admin famille]` | chaque bouton qui agit sur une commande ou un abonnement envoie bien l'identifiant de la page ouverte | `identifiants.txt` |
+| `--accessibilite [famille vitrine admin tablette]` | axe-core (WCAG A/AA) + texte trop petit, cible trop petite ; les défauts WCAG acceptés sont dans `acceptes.txt` | `accessibilite.txt` |
+| `--courriels` | chaque e-mail à 320/375/412/600/900 px sans police ni image, poids, liens, texte brut, contraste | `courriels.txt` |
+
+**Chaque balayage, et la galerie elle-même (erreur de page, clavier ouvert, largeur), finit en erreur (code 1)
+dès qu'un souci est trouvé.** C'est ce que GitHub Actions lance à chaque changement, sur la branche concernée :
+`balayages.yml` sur main (site, e-mails) et sur la branche de l'app/admin (web/), `tablette.yml` sur la branche de
+la tablette (android/ : scénarios de l'écran, APK de débogage, balayages). Les règles « seniors » de
+l'accessibilité (texte-petit, cible-petite) sont signalées sans bloquer : Tanguy tranche écran par écran.
+Rien ne se fusionne tant qu'un balayage est rouge.
+
 ## Espace Validation de l'admin
 
 Chaque galerie range aussi ses captures dans `validation/` (une fiche par partie, captures nommées par leur empreinte).

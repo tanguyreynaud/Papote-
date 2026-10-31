@@ -177,8 +177,10 @@ async function balayer({ browser, base, partie, progression }) {
 
 function rapport(parties, dossier) {
   const lignes = [];
+  let soucis = 0;
   for (const { nom, version, total, resultats, retours, paiement } of parties) {
     const faux = resultats.filter((r) => r.problemes.length);
+    soucis += faux.length;
     lignes.push(`${nom} (${version}) : ${total} écrans × ${[...new Set(resultats.map((r) => r.variante))].length} variantes, ${faux.length} écran-variante(s) avec un souci`);
     const parVariante = new Map();
     for (const r of faux) parVariante.set(r.variante, (parVariante.get(r.variante) || 0) + 1);
@@ -197,7 +199,7 @@ function rapport(parties, dossier) {
   }
   const fichier = path.join(dossier, 'gestes.txt');
   fs.writeFileSync(fichier, lignes.join('\n') + '\n');
-  return { fichier, texte: lignes.join('\n') };
+  return { fichier, texte: lignes.join('\n'), soucis };
 }
 
 module.exports = { balayer, rapport, VARIANTES, allonger, juger };

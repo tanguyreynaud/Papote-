@@ -92,7 +92,7 @@ function rapport(resultats, version, dossier) {
   for (const r of faux) { lignes.push(`  - ${r.titre}`); r.pb.forEach((p) => lignes.push(`      ${p}`)); }
   const fichier = path.join(dossier, 'courriels.txt');
   fs.writeFileSync(fichier, lignes.join('\n') + '\n');
-  return { fichier, texte: lignes.join('\n') };
+  return { fichier, texte: lignes.join('\n'), soucis: faux.length };
 }
 
 module.exports = { verifier, rapport, LARGEURS };

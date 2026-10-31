@@ -158,7 +158,9 @@ async function balayer({ browser, base, partie, progression }) {
 
 function rapport(parties, dossier) {
   const lignes = [];
+  let soucis = 0;
   for (const { nom, version, total, problemes, rechargements = [] } of parties) {
+    soucis += problemes.length + rechargements.length;
     lignes.push(`${nom} (${version}) : ${total} boutons touchés, ${problemes.length} sans effet visible`);
     for (const p of problemes.sort((a, b) => a.scene.localeCompare(b.scene))) lignes.push(`  - ${p.scene} : ${p.bouton} : ${p.probleme}`);
     lignes.push(`${nom} : ${rechargements.length} écran(s) qui reviennent mal après un rafraîchissement`);
@@ -166,7 +168,7 @@ function rapport(parties, dossier) {
   }
   const fichier = path.join(dossier, 'boutons.txt');
   fs.writeFileSync(fichier, lignes.join('\n') + '\n');
-  return { fichier, texte: lignes.join('\n') };
+  return { fichier, texte: lignes.join('\n'), soucis };
 }
 
 module.exports = { balayer, rapport, essayer, lister, SEL };
