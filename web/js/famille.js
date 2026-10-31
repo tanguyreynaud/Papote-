@@ -439,7 +439,7 @@ function galleryItem(post, what, onOpen) {
   const frame = document.createElement('button');
   frame.type = 'button';
   frame.className = 'shot-frame';
-  frame.setAttribute('aria-label', `Voir ${what}`);
+  frame.setAttribute('aria-label', post.type === 'video' && post.duration ? `Voir ${what}, ${post.duration} s` : `Voir ${what}`);
   const img = document.createElement('img');
   img.src = post.thumb || post.image || '';
   img.alt = '';
@@ -4198,6 +4198,7 @@ function renderTabletChip() {
   chip.innerHTML = `<span class="chip-part${enLigne ? ' ok' : ' bad'}"><svg><use href="#${parSim ? 'i-signal' : 'i-wifi'}"/></svg></span>`
     + (b.charging ? '<span class="chip-part ok"><svg><use href="#i-plug"/></svg></span>' : '')
     + (niveau !== null ? `<span class="chip-part${bas ? ' bad' : ''}"><span class="batt"><span style="width:${niveau}%"></span></span>${niveau} %</span>` : '');
+  chip.setAttribute('aria-label', `État de la tablette : ${enLigne ? 'en ligne' : 'hors ligne'}${b.charging ? ', en charge' : ''}${niveau !== null ? `, batterie ${niveau} %` : ''}`);
   chip.hidden = false;
 }
 
@@ -5326,6 +5327,8 @@ function renderFamilySwitch(current) {
   const btn = $('family-switch');
   const actuelle = myFamilies.find((f) => f.fid === current);
   btn.textContent = `Pour ${actuelle?.name || ''}`;
+  // L'intitulé lu reprend le texte affiché (règle WCAG « label in name »).
+  btn.setAttribute('aria-label', `${btn.textContent}, changer de famille`);
   btn.hidden = myFamilies.length < 2;
   $('family-title').hidden = myFamilies.length >= 2;
 }

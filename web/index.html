@@ -154,7 +154,7 @@
         </label>
         <p class="genre-titre">Vous êtes</p><div class="genre-choix" role="radiogroup" aria-label="Vous êtes"><button type="button" class="genre-btn" role="radio" aria-checked="false" data-genre="femme">Une femme</button><button type="button" class="genre-btn" role="radio" aria-checked="false" data-genre="homme">Un homme</button></div>
                 <p class="genre-titre">Votre photo</p>
-        <button type="button" class="moi-visage" id="moi-visage" aria-label="Ajouter ma photo">
+        <button type="button" class="moi-visage" id="moi-visage">
           <span class="moi-rond"><img id="moi-photo" alt="" hidden><svg id="moi-photo-vide"><use href="#i-user"/></svg><span class="moi-badge"><svg><use href="#i-camera"/></svg></span></span>
           <strong id="moi-visage-titre">Ajouter ma photo</strong>
           <span class="muted small">Pour que votre proche vous reconnaisse</span>
@@ -421,10 +421,10 @@
     <section id="view-home" class="page-pad tab-page" hidden>
       <header class="home-head">
         <button type="button" id="btn-invite" class="invite-btn" data-page="invite"><svg><use href="#i-user-plus"/></svg>Inviter</button>
-        <button type="button" id="btn-bell" class="bell-btn" data-tab="notifs" aria-label="Notifications"><span class="nav-icon"><svg><use href="#i-bell"/></svg><span id="nav-badge" class="nav-badge" hidden></span></span></button>
+        <button type="button" id="btn-bell" class="bell-btn" data-tab="notifs"><span class="sr-only">Notifications</span><span class="nav-icon"><svg><use href="#i-bell"/></svg><span id="nav-badge" class="nav-badge" hidden></span></span></button>
         <h1 class="brand">Papote</h1>
         <p id="family-title" class="muted"></p>
-        <button type="button" id="family-switch" class="family-switch" aria-label="Changer de famille" hidden></button>
+        <button type="button" id="family-switch" class="family-switch" hidden></button>
         <button type="button" id="tablet-chip" class="tablet-chip" aria-label="État de la tablette" hidden></button>
       </header>
       <section id="pending-banner" class="join-requests" aria-label="Demandes pour rejoindre la famille" hidden></section>
@@ -488,7 +488,7 @@
       <header class="page-head">
         <button type="button" class="icon-btn back" aria-label="Retour"><svg><use href="#i-back"/></svg></button>
         <h1>Photos</h1>
-        <button type="button" id="btn-photos-zip" class="head-action" aria-label="Télécharger toutes les photos"><svg><use href="#i-download"/></svg>Tout télécharger</button>
+        <button type="button" id="btn-photos-zip" class="head-action"><svg><use href="#i-download"/></svg>Tout télécharger</button>
       </header>
       <p class="outbox" hidden></p>
       <ul id="photos" class="gallery"></ul>

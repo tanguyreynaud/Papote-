@@ -1545,3 +1545,6 @@ a { text-decoration: none; }
 
 /* Accessibilité (30/10) : un lien dans une phrase se voit autrement que par sa couleur. */
 .activity a, .card p a { text-decoration: underline; text-underline-offset: 3px; }
+
+/* Texte lu par le lecteur d'écran seulement. */
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
