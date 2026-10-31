@@ -1397,6 +1397,7 @@ function prochaineEtape(c, t) {
     case 'retour':
       if (c.restitution.statut === 'a-recuperer') return ['reprendre la tablette et ses accessoires chez le proche, puis, sur la page de la tablette, « Modifier » et choisir « Revenue, à vérifier ».'];
       if (c.restitution.statut === 'echec') return ['la tablette n\'a pas été rendue et le prélèvement a échoué : contacter le client.'];
+      if (c.restitution.mainPropreLe && !(r && r.colis)) return ['le client veut la rendre en main propre : l\'appeler pour convenir d\'un moment, puis « Matériel reçu ».'];
       return [r && r.colis ? 'attendre le colis de retour (suivi ci-dessus).' : 'envoyer au client l\'étiquette de retour (bouton en haut).'];
     default: return null;
   }
