@@ -25,6 +25,11 @@
 //                                        d'écran, contrastes, étiquettes) + texte trop petit, cible trop petite (accessibilite.js)
 //   --boutons                            au lieu des captures : touche chaque bouton de l'app famille et de l'admin,
 //                                        serveur bloqué, et liste ceux qui ne montrent rien (sortie/boutons.txt)
+//   --appui [vitrine famille tablette admin]  au lieu des captures : garde le doigt 1,2 s sur chaque bouton, serveur
+//                                        bloqué : une action au plus, rien de sélectionné, pas de menu (appui.js)
+//
+// Chaque balayage, et la galerie elle-même (erreurs de page, clavier ouvert, largeur), finit en erreur (code 1)
+// dès qu'un souci est trouvé : c'est ce qui bloque la fusion dans GitHub Actions (.github/workflows/balayages.yml).
 //
 // Rien n'est envoyé nulle part : pas de Firebase, pas d'internet (sauf les polices Google).
 'use strict';
@@ -51,6 +56,7 @@ async function main() {
   if (args.includes('--gestes')) return gestes(args.filter((a) => a !== '--gestes'));
   if (args.includes('--courriels')) return courriels(args.filter((a) => a !== '--courriels'));
   if (args.includes('--accessibilite')) return double(args.filter((a) => a !== '--accessibilite'), require('./accessibilite'), ['famille', 'vitrine', 'admin', 'tablette']);
+  if (args.includes('--appui')) return double(args.filter((a) => a !== '--appui'), require('./appui'), ['vitrine', 'famille', 'tablette', 'admin']);
   const choix = args.filter((a) => !a.startsWith('--'));
   for (const a of args.filter((a) => a.startsWith('--'))) {
     const [k, v] = a.slice(2).split('=');
@@ -100,7 +106,18 @@ async function main() {
   const total = parties.reduce((s, p) => s + p.ecrans.length, 0);
   const erreurs = parties.flatMap((p) => p.ecrans.filter((e) => e.erreurs.length));
   console.log(`\n${total} captures : ${fichier}`);
-  if (erreurs.length) console.log(`${erreurs.length} écran(s) avec une erreur de la page (signalée dans la galerie).`);
+  if (erreurs.length) {
+    console.log(`${erreurs.length} écran(s) avec un souci (erreur de la page, clavier ouvert, largeur), signalé dans la galerie :`);
+    for (const e of erreurs) console.log(`  - ${e.titre} (${e.taille}) : ${e.erreurs.join(' · ')}`);
+  }
+  verdict(erreurs.length);
+}
+
+// Code de sortie 1 dès qu'un souci est trouvé (GitHub Actions bloque alors la fusion).
+function verdict(soucis) {
+  if (!soucis) { console.log('\nRAS : aucun souci.'); return; }
+  console.log(`\nÉCHEC : ${soucis} souci(s).`);
+  process.exitCode = 1;
 }
 
 // Balayage des boutons (boutons.js) : app famille et admin seulement (la tablette et le site ont leurs propres tests).
@@ -133,8 +150,9 @@ async function boutons(args) {
   } finally {
     await browser.close();
   }
-  const { fichier, texte } = rapport(parties, sortie);
+  const { fichier, texte, soucis } = rapport(parties, sortie);
   console.log(`\n${texte}\n\n${fichier}`);
+  verdict(soucis);
 }
 
 // E-mails dans les vraies boîtes (courriels.js) : largeurs Gmail / Apple Mail / Outlook, sans police ni image, mode sombre.
@@ -153,8 +171,9 @@ async function courriels(args) {
   try {
     const resultats = await verifier({ browser, dossierSource: dir, progression: (t) => process.stdout.write(`\r  ${t}   `) });
     process.stdout.write('\n');
-    const { fichier, texte } = rapport(resultats, version, sortie);
+    const { fichier, texte, soucis } = rapport(resultats, version, sortie);
     console.log(`\n${texte}\n\n${fichier}`);
+    verdict(soucis);
   } finally {
     await browser.close();
   }
@@ -195,8 +214,9 @@ async function double(args, outil = require('./double'), defaut = ['vitrine', 'f
   } finally {
     await browser.close();
   }
-  const { fichier, texte } = rapport(parties, sortie);
+  const { fichier, texte, soucis } = rapport(parties, sortie);
   console.log(`\n${texte}\n\n${fichier}`);
+  verdict(soucis);
 }
 
 // Le bon identifiant part au serveur (identifiants.js) : admin (pages de commande) et appli famille (abonnement).
@@ -229,8 +249,9 @@ async function identifiants(args) {
   } finally {
     await browser.close();
   }
-  const { fichier, texte } = mod.rapport(parties, sortie);
+  const { fichier, texte, soucis } = mod.rapport(parties, sortie);
   console.log(`\n${texte}\n\n${fichier}`);
+  verdict(soucis);
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

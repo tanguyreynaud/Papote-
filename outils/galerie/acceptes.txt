@@ -1,0 +1,6 @@
+# Défauts WCAG (axe-core) acceptés en connaissance de cause. Une ligne par cible :
+#   partie | règle | début de la cible (sélecteur) | pourquoi
+# Tout autre défaut WCAG fait échouer « node galerie.js --accessibilite ».
+famille | color-contrast | #invite-email-card | carte d'invitation volontairement estompée quand la famille est pleine (30 proches) : rien à faire dessus
+famille | color-contrast | #invite-email | idem : champ de la carte estompée
+famille | color-contrast | #form-invite > .primary | idem : bouton de la carte estompée
