@@ -89,7 +89,7 @@ p { margin: 0; }
 .champ input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 .champ small { color: var(--muted); font-weight: 400; }
 .accord { display: flex; gap: .6rem; align-items: flex-start; color: var(--muted); font-size: .95rem; cursor: pointer; }
-.accord input { width: 1.3rem; height: 1.3rem; margin-top: .15rem; flex: none; accent-color: var(--accent); }
+.accord input { width: 1.5rem; height: 1.5rem; margin-top: .15rem; flex: none; accent-color: var(--accent); }
 .resume { display: grid; gap: .45rem; }
 .resume p { display: flex; justify-content: space-between; gap: 1rem; }
 .resume p b { white-space: nowrap; }
@@ -115,7 +115,7 @@ html { scroll-padding-bottom: 8.5rem; }
 .btn { margin-left: auto; display: inline-flex; align-items: center; justify-content: center; min-height: 3.25rem; padding: .75rem 1.4rem; border-radius: 999px; background: var(--accent); color: var(--accent-text); font: 700 1.05rem/1.2 inherit; text-decoration: none; border: 0; cursor: pointer; white-space: nowrap; flex: none; }
 .btn:hover { background: var(--accent-strong); }
 .btn[aria-disabled="true"] { background: #c9c6d8; }
-.btn.attend { opacity: .75; pointer-events: none; }
+.btn.attend { opacity: .9; cursor: wait; pointer-events: none; } /* opacité plus forte : le texte reste lisible (contraste 4,5) */
 /* Pas de soulignement des liens (Tanguy, 2026-10-22) : ils restent repérables par leur couleur et le gras. */
 a { text-decoration: none; }
 main a:not([class]) { color: var(--accent-strong); font-weight: 700; }

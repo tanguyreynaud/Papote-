@@ -31,7 +31,7 @@
     '.ps-panneau.ps-ouvert{display:flex}' +
     '.ps-tete{display:flex;align-items:center;justify-content:space-between;gap:.5rem;padding:.9rem 1rem;background:var(--ps-carte);border-bottom:1px solid var(--ps-ligne)}' +
     '.ps-tete strong{font:700 1.15rem/1.2 "Bricolage Grotesque","Segoe UI",system-ui,sans-serif}' +
-    '.ps-tete button{border:0;background:none;color:var(--ps-gris);font-size:1.6rem;line-height:1;cursor:pointer;padding:.2rem .5rem;border-radius:8px}' +
+    '.ps-tete button{border:0;background:none;color:var(--ps-gris);font-size:1.6rem;line-height:1;cursor:pointer;min-width:44px;min-height:44px;padding:.2rem .5rem;border-radius:8px}' +
     '.ps-fil{flex:1;overflow-y:auto;padding:1rem;display:flex;flex-direction:column;gap:.6rem}' +
     '.ps-msg{max-width:85%;padding:.7rem .9rem;border-radius:14px;font-size:1.05rem;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere}' +
     '.ps-msg a{color:inherit}' +
@@ -85,6 +85,7 @@
     var bouton = el('button', 'ps-bouton');
     bouton.type = 'button';
     bouton.setAttribute('aria-expanded', 'false');
+    bouton.setAttribute('aria-label', 'Une question sur Papote ? Ouvrir l\'assistance');
     bouton.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg><span>Une question ?</span>';
 
     var panneau = el('div', 'ps-panneau');
@@ -169,6 +170,7 @@
       lien.href = 'https://mapapote.fr/mentions.html#confidentialite';
       lien.target = '_blank';
       lien.rel = 'noopener';
+      lien.style.textDecoration = 'underline';
       mention.appendChild(lien);
       var erreur = el('div', 'ps-erreur');
       var go = el('button', '', 'Être rappelé');

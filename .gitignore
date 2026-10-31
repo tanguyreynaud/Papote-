@@ -34,3 +34,4 @@ outils/*/package-lock.json
 # Galerie des écrans (outils/galerie/galerie.bat)
 outils/galerie/sortie/
 outils/galerie/validation/
+outils/admin/sauvegardes/

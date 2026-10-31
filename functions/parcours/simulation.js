@@ -37,6 +37,67 @@ Object.assign(process.env, {
 
 const erreurs = [];
 
+// ---------- Compteur de lectures et d'écritures Firestore, par fonction ----------
+// Chaque fonction (déclencheur, tâche planifiée, onCall, onRequest) tourne dans son propre contexte : les
+// requêtes Firestore qu'elle envoie (commit, batchGetDocuments, runQuery, runAggregationQuery) lui sont
+// comptées. Les lectures de la simulation elle-même (écoutes, s.lire, s.db) ne comptent pas : c'est le coût
+// du serveur en ligne qu'on mesure (cout.parcours.js). compteur.bilan() : { fonction: { appels, lectures,
+// ecritures, suppressions } }.
+const { AsyncLocalStorage } = require('node:async_hooks');
+const contexteFonction = new AsyncLocalStorage();
+const compteur = { parFonction: new Map(), actif: false };
+function compterPour(nom) {
+  if (!compteur.actif) return null;
+  if (!compteur.parFonction.has(nom)) compteur.parFonction.set(nom, { appels: 0, lectures: 0, ecritures: 0, suppressions: 0 });
+  return compteur.parFonction.get(nom);
+}
+function compter(champ, n = 1) {
+  const ctx = contexteFonction.getStore();
+  const c = compterPour(ctx ? ctx.fonction : 'simulation');
+  if (c) c[champ] += n;
+}
+function enFonction(nom, f) {
+  const c = compterPour(nom);
+  if (c) c.appels += 1;
+  return contexteFonction.run({ fonction: nom }, f);
+}
+compteur.activer = () => { compteur.actif = true; compteur.parFonction.clear(); };
+compteur.arreter = () => { compteur.actif = false; };
+compteur.bilan = () => Object.fromEntries([...compteur.parFonction].filter(([n]) => n !== 'simulation'));
+{
+  const { Firestore } = require('@google-cloud/firestore');
+  const vraiRequest = Firestore.prototype.request;
+  Firestore.prototype.request = function request(methodName, requete, ...reste) {
+    if ((methodName === 'commit' || methodName === 'batchWrite') && requete && requete.writes) {
+      const suppressions = requete.writes.filter((w) => w.delete).length;
+      compter('suppressions', suppressions);
+      compter('ecritures', requete.writes.length - suppressions);
+      // COUT_DETAIL=1 : les chemins écrits par chaque fonction (pour comprendre une écriture de trop).
+      if (process.env.COUT_DETAIL) {
+        const ctx = contexteFonction.getStore();
+        const c = compterPour(ctx ? ctx.fonction : 'simulation');
+        if (c) (c.chemins = c.chemins || []).push(...requete.writes.map((w) => ((w.update || w.delete || {}).name || w.delete || '?').toString().replace(/^.*\/documents\//, '').replace(/\/[^/]+$/, '/*')));
+      }
+    }
+    return vraiRequest.call(this, methodName, requete, ...reste);
+  };
+  const vraiRequestStream = Firestore.prototype.requestStream;
+  Firestore.prototype.requestStream = function requestStream(methodName, bidi, requete, ...reste) {
+    const promesse = vraiRequestStream.call(this, methodName, bidi, requete, ...reste);
+    if (methodName === 'batchGetDocuments' && requete && requete.documents) compter('lectures', requete.documents.length);
+    if (methodName === 'runAggregationQuery') compter('lectures', 1);
+    if (methodName !== 'runQuery' || !contexteFonction.getStore()) return promesse;
+    // Une requête coûte une lecture par document rendu, et au moins une.
+    const ctx = contexteFonction.getStore();
+    return promesse.then((flux) => {
+      let n = 0;
+      flux.on('data', (morceau) => { if (morceau && morceau.document) n += 1; });
+      flux.on('end', () => { contexteFonction.run(ctx, () => compter('lectures', Math.max(1, n))); });
+      return flux;
+    });
+  };
+}
+
 // ---------- Horloge ----------
 const vraiMaintenant = Date.now.bind(Date);
 let decalage = 0;
@@ -179,7 +240,7 @@ const absent = (ref) => ({ exists: false, ref, id: ref.id, data: () => undefined
 
 function lancer(nom, evenement) {
   const p = Promise.resolve()
-    .then(() => fonctions[nom].run(evenement))
+    .then(() => enFonction(nom, () => fonctions[nom].run(evenement)))
     .catch((e) => erreurs.push(`${nom} (${evenement.chemin}) : ${e && e.stack ? e.stack : e}`))
     .finally(() => { enCours.delete(p); derniereActivite = vraiMaintenant(); });
   enCours.add(p);
@@ -240,7 +301,7 @@ function demarrerServeur() {
     }
     const f = fonctions[req.params.nom];
     if (!f) return res.status(404).send('fonction inconnue');
-    return f(req, res);
+    return enFonction(req.params.nom, () => f(req, res));
   });
   return new Promise((pret) => {
     serveur = http.createServer(app).listen(0, '127.0.0.1', () => {
@@ -305,11 +366,11 @@ function appeler(nom, data, qui) {
     uid: qui.uid,
     token: { email: qui.email, email_verified: true, firebase: { sign_in_provider: 'password' }, ...(qui.admin ? { admin: true } : {}) },
   } : undefined;
-  return fonctions[nom].run({ data, auth, rawRequest: { headers: {} } });
+  return enFonction(nom, () => fonctions[nom].run({ data, auth, rawRequest: { headers: {} } }));
 }
 
 // Tâche planifiée (onSchedule) lancée tout de suite.
-const tache = (nom) => fonctions[nom].run({ scheduleTime: new Date(Date.now()).toISOString() });
+const tache = (nom) => enFonction(nom, () => fonctions[nom].run({ scheduleTime: new Date(Date.now()).toISOString() }));
 
 // ---------- Base ----------
 // Vidage complet par l'API de l'émulateur (plus sûr que recursiveDelete pendant que la simulation écoute).
@@ -356,5 +417,5 @@ async function remettreAZero() {
 module.exports = {
   demarrer, arreter, remettreAZero, calme, avancer, JOUR,
   stripe, boite, notifications, erreurs, journal, fichiersEffaces, reglages, sendcloud,
-  fonctions, db, FieldValue, Timestamp, lire, compte, appeler, tache, requete,
+  fonctions, db, FieldValue, Timestamp, lire, compte, appeler, tache, requete, compteur,
 };
