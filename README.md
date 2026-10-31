@@ -39,6 +39,8 @@ Outils `node` : depuis le dossier du projet, `node <chemin>`.
 | Vérifier l'app famille | Contrôle l'app famille avant sa mise en ligne | `node outils/web/verifier.mjs` (branche de l'app famille) |
 | Publier le site vitrine | Met en ligne mapapote.fr : d'abord `test`, puis `en-ligne` | `node outils/vitrine/publier.mjs test` |
 | Abonnements | Liste les familles et leur abonnement ; famille offerte | `node outils/admin/abonnements.js` |
+| Sauvegarder la base | Copie toute la base (et la liste des comptes) dans `outils/admin/sauvegardes/papote-<date>.json`, à garder hors du PC ; chaque semaine | `.\outils\admin\sauvegarder.bat` |
+| Restaurer la base | Réécrit une sauvegarde dans la base (`--oui` pour faire, `--effacer` pour remettre exactement, `--comptes` pour les comptes) | `.\outils\admin\restaurer.bat sauvegardes\papote-….json` |
 | Badge administrateur | Donne ou retire l'accès admin à un compte Google | `node outils/admin/badge-admin.js` |
 | Statistiques | Visites et commandes des 30 derniers jours | `node outils/admin/statistiques.js [jours]` |
 | Nettoyer les comptes anonymes | Supprime les comptes anonymes qui ne sont dans aucune famille | `node outils/admin/nettoyer-comptes-anonymes.js` |
