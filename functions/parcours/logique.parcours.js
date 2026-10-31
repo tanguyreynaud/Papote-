@@ -464,7 +464,7 @@ test('tablette remise en main propre : au retour, la famille choisit main propre
   await s.appeler('resilierAbonnement', { fid }, paul);
   await s.calme();
   const arret = s.boite.find((m) => m.a === paul.email && /résiliation/i.test(m.sujet));
-  assert.match(arret.texte, /Je renvoie la tablette/, 'Mondial Relay toujours proposé');
+  assert.match(arret.texte, /« Par Mondial Relay »/, 'Mondial Relay toujours proposé, nommé comme le bouton de l\'appli');
   assert.match(arret.texte, /En main propre/, 'et la main propre aussi');
   const fin = await s.appeler('finDeContrat', { fid }, paul);
   assert.strictEqual(fin.mainPropre, true);
