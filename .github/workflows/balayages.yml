@@ -16,7 +16,8 @@ on:
 jobs:
   balayage:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # Les gestes de l'app famille (170 écrans × 6 variantes) prennent environ 50 min.
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
