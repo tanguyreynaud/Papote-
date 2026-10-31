@@ -2400,7 +2400,7 @@ function remplirTablette(id) {
   const t = donnees.stock.find((x) => x.id === id);
   if (!t) {
     $('dt-titre').textContent = 'Tablette introuvable';
-    $('dt-infos').replaceChildren(h('dd', {}, 'Elle a peut-être été supprimée.'));
+    $('dt-infos').replaceChildren(h('dt', {}, 'Tablette'), h('dd', {}, 'Elle a peut-être été supprimée.'));
     return;
   }
   // Même tablette déjà affichée : ne pas effacer ce qui est en cours de saisie.
@@ -3560,7 +3560,7 @@ function graphique(conteneur, mois, series) {
   const x0 = (i) => G + i * pas + pas / 2;
   const format = series[0].format || String;
   const graduations = [min, (min + max) / 2, max].filter((v, i, a) => a.indexOf(v) === i);
-  const dessin = svg('svg', { viewBox: `0 0 ${L} ${H}`, class: 'graphique', role: 'img' },
+  const dessin = svg('svg', { viewBox: `0 0 ${L} ${H}`, class: 'graphique', role: 'img', 'aria-label': `Graphique : ${series.map((x) => x.nom).join(', ')} par mois` },
     graduations.map((v) => [
       svg('line', { x1: G, x2: L, y1: y(v), y2: y(v), class: v === 0 ? 'g-zero' : 'g-grille' }),
       svg('text', { x: G - 6, y: y(v) + 4, class: 'g-axe', 'text-anchor': 'end' }, format(Math.round(v))),
@@ -3731,7 +3731,7 @@ function afficherTva(t) {
   }
   const pct = Math.min(100, Math.round(t.part * 100));
   $('tva').replaceChildren(
-    h('div', { class: `jauge${t.alerte ? ' ko' : ''}`, role: 'progressbar', 'aria-valuenow': pct, 'aria-valuemin': 0, 'aria-valuemax': 100 },
+    h('div', { class: `jauge${t.alerte ? ' ko' : ''}`, role: 'progressbar', 'aria-label': 'Part du seuil de TVA atteinte', 'aria-valuenow': pct, 'aria-valuemin': 0, 'aria-valuemax': 100 },
       h('span', { style: `width:${pct}%` })),
     h('p', { class: 'small' }, `${euros(t.ca)} encaissés depuis le 1er janvier, soit ${pct} % du seuil de ${euros(t.seuil)}. `,
       `À ce rythme : environ ${euros(t.projection)} fin décembre.`),

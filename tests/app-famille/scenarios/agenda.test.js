@@ -13,7 +13,7 @@ banc.brancher();
 const jour = (decalage = 0) => {
   const d = new Date();
   d.setDate(d.getDate() + decalage);
-  return d.toLocaleDateString('sv-SE');
+  return d.toLocaleDateString('sv-SE', { timeZone: 'Europe/Paris' }); // comme la page (le PC ou le serveur de tests peut être en UTC)
 };
 
 async function ouvrirAjout(t) {
