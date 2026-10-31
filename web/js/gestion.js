@@ -679,7 +679,7 @@ function afficherAccueil() {
       .map((c) => [1, `Tablette pas jumelée après 20 jours : ${c.nom || c.email || 'client'}, l'appeler`, versCommande(c), 'ko']),
     ...cmd.filter((c) => etatCommande(c) === 'retour' && c.restitution.statut !== 'echec').map((c) => {
       const t = tabletteDe(c);
-      const main = c.restitution.mainPropreLe ? ` : en main propre, l'appeler pour convenir d'un moment` : '';
+      const main = c.restitution.mainPropreLe ? ' (en main propre)' : '';
       return [1, `${t ? nomT(t) : 'Tablette'} à récupérer chez ${c.nom || c.email || 'le client'}${main}`, t ? versTablette(t) : versCommande(c), ''];
     }),
     ...donnees.stock.filter((t) => t.etat === 'revenue' && !t.usure)
@@ -1093,6 +1093,11 @@ function menuCommande(c, zoneRemplacement, etiquette) {
       zoneRemplacement.hidden = false;
       zoneRemplacement.querySelector('select').focus();
     } } : null,
+    // Retour en main propre : seulement ici, jamais proposé à la famille (Tanguy, 31/10). Le QR Mondial Relay reste possible.
+    c.restitution && ['attendue', 'echec'].includes(c.restitution.statut)
+      ? (c.restitution.mainPropreLe
+        ? { libelle: 'Retour par Mondial Relay', faire: () => lancer(() => retourEnMain(c, false)) }
+        : { libelle: 'Retour en main propre', faire: () => lancer(() => retourEnMain(c, true)) }) : null,
     etiquette ? { libelle: 'Créer l\'étiquette de retour', faire: () => lancer(async () => {
       if (!await demander(`Créer une étiquette de retour Mondial Relay et l'envoyer à ${c.email || 'ce client'} ?`, { oui: 'Créer et envoyer' })) throw 'non';
       const r = await patienter('Création de l\'étiquette de retour…', () => appeler('gestionEtiquette', { commande: c.id, sens: 'retour' }));
@@ -1103,6 +1108,13 @@ function menuCommande(c, zoneRemplacement, etiquette) {
 }
 
 let annonceCommande = null; // Résultat de la dernière action, affiché en haut de la page commande rechargée.
+
+async function retourEnMain(c, main) {
+  await patienter(main ? 'Retour en main propre…' : 'Retour par Mondial Relay…',
+    () => appeler('gestionCommande', { commande: c.id, action: 'retourEnMain', main }));
+  return main ? 'Retour en main propre noté : récupérez la tablette, puis « Matériel reçu ». Le client n\'est pas prévenu.'
+    : 'Retour par Mondial Relay : le client garde son QR code dans l\'appli.';
+}
 
 async function annulerCommande(c) {
   if (!await demander(`Annuler la commande ${codeCommande(c.code)} de ${c.nom || c.email || 'ce client'} ?\n\n${c.offerte
@@ -1397,7 +1409,7 @@ function prochaineEtape(c, t) {
     case 'retour':
       if (c.restitution.statut === 'a-recuperer') return ['reprendre la tablette et ses accessoires chez le proche, puis, sur la page de la tablette, « Modifier » et choisir « Revenue, à vérifier ».'];
       if (c.restitution.statut === 'echec') return ['la tablette n\'a pas été rendue et le prélèvement a échoué : contacter le client.'];
-      if (c.restitution.mainPropreLe && !(r && r.colis)) return ['le client veut la rendre en main propre : l\'appeler pour convenir d\'un moment, puis « Matériel reçu ».'];
+      if (c.restitution.mainPropreLe && !(r && r.colis)) return ['récupérer la tablette en main propre chez le client, puis « Matériel reçu ».'];
       return [r && r.colis ? 'attendre le colis de retour (suivi ci-dessus).' : 'envoyer au client l\'étiquette de retour (bouton en haut).'];
     default: return null;
   }
@@ -1430,7 +1442,7 @@ function parcoursCommande(c) {
   }
   if (c.resiliationLe) etapes.push([null, `Abonnement arrêté, fin le ${jour(c.resiliationLe)}`]);
   if (c.expedition === 'annulee') etapes.push([null, 'Commande annulée']);
-  if (c.restitution?.mainPropreLe) etapes.push([c.restitution.mainPropreLe, 'Le client veut rendre la tablette en main propre']);
+  if (c.restitution?.mainPropreLe) etapes.push([c.restitution.mainPropreLe, 'Retour en main propre prévu']);
   // La date du retour est une date limite, pas celle d'un événement : à la suite, dans le texte.
   if (c.restitution) etapes.push([null, `${RETOURS[c.restitution.statut] || c.restitution.statut}${c.restitution.avant && c.restitution.statut === 'attendue' ? `, à rendre avant le ${jour(c.restitution.avant)}` : ''}`]);
   if (c.remboursement) etapes.push([null, `${euros(c.remboursement.montant)} ${REMBOURSEMENTS[c.remboursement.statut] || c.remboursement.statut}`]);

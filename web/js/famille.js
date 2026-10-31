@@ -3084,8 +3084,6 @@ async function renderFinDeContrat(abo) {
   $('retour-info').hidden = true;
   $('retour-aide').hidden = true;
   $('btn-renvoyer').hidden = true;
-  $('btn-rendre-main').hidden = true;
-  $('retour-main').hidden = true;
   $('retour-qr-box').hidden = true;
   if (rest && ['attendue', 'echec'].includes(rest.statut)) {
     box.hidden = false;
@@ -3121,22 +3119,13 @@ async function renderFinDeContrat(abo) {
   if ($('btn-renvoyer').hidden) $('retour-adresse').hidden = true;
 }
 
-// Tablette remise en main propre : la famille choisit, main propre ou Mondial Relay (Tanguy, 31/10).
-// Sans adresse connue, le premier appui sur Mondial Relay ouvre les champs d'adresse.
-const AIDE_QR = 'Quand le colis est prêt, touchez ce bouton : un QR code prépayé s\'affiche, à montrer au point relais Mondial Relay. Pas besoin d\'imprimer.';
-const AIDE_DEUX = 'Deux façons de nous la rendre : en main propre, ou dans un point relais Mondial Relay avec un QR code prépayé, sans rien imprimer.';
-function texteRenvoyer() {
-  if (!$('retour-adresse').hidden) return 'Créer le QR code';
-  return finInfo?.mainPropre ? 'Par Mondial Relay' : 'Je renvoie la tablette';
-}
+// Mondial Relay, toujours (Tanguy, 31/10 : la main propre ne se propose jamais à la famille).
+// Sans adresse connue, le premier appui ouvre les champs d'adresse et le bouton devient « Créer le QR code ».
+const texteRenvoyer = () => ($('retour-adresse').hidden ? 'Je renvoie la tablette' : 'Créer le QR code');
 function montrerChoixRetour() {
-  const main = Boolean(finInfo?.mainPropre);
-  $('retour-aide').textContent = main ? AIDE_DEUX : AIDE_QR;
   $('retour-aide').hidden = false;
   $('btn-renvoyer').hidden = false;
   $('btn-renvoyer').textContent = texteRenvoyer();
-  $('btn-rendre-main').hidden = !main || Boolean(finInfo?.rendreEnMain);
-  $('retour-main').hidden = !main || !finInfo?.rendreEnMain;
 }
 function ouvrirAdresse() {
   $('retour-adresse').hidden = false;
@@ -3151,7 +3140,6 @@ $('btn-renvoyer').addEventListener('click', async () => {
   const adresse = $('retour-adresse').hidden ? null
     : { rue: $('retour-rue').value, cp: $('retour-cp').value.trim(), ville: $('retour-ville').value };
   b.disabled = true;
-  $('btn-rendre-main').disabled = true;
   b.replaceChildren(Object.assign(document.createElement('span'), { className: 'spinner-inline' }), 'Un instant…');
   await withAboError(async () => {
     try {
@@ -3164,24 +3152,7 @@ $('btn-renvoyer').addEventListener('click', async () => {
     await renderFinDeContrat(session.family.abonnement);
   });
   b.disabled = false;
-  $('btn-rendre-main').disabled = false;
   b.textContent = texteRenvoyer();
-});
-
-$('btn-rendre-main').addEventListener('click', async () => {
-  const b = $('btn-rendre-main');
-  if (b.disabled) return;
-  b.disabled = true;
-  $('btn-renvoyer').disabled = true;
-  b.replaceChildren(Object.assign(document.createElement('span'), { className: 'spinner-inline' }), 'Un instant…');
-  await withAboError(async () => {
-    await renvoyerTablette(session.fid, null, 'main');
-    finCle = null;
-    await renderFinDeContrat(session.family.abonnement);
-  });
-  b.disabled = false;
-  $('btn-renvoyer').disabled = false;
-  b.textContent = 'En main propre';
 });
 
 function reprisePossible() {
