@@ -1,0 +1,61 @@
+# Balayages de la galerie (outils/galerie, sur main) sur l'app famille et l'admin de cette branche, à chaque
+# changement de web/ : double toucher, appui long, aucun bouton sans effet visible, bon identifiant envoyé au
+# serveur, gestes humains (paysage, zoom, texte agrandi, sombre, noms longs, bouton retour), accessibilité
+# (WCAG, texte et cibles trop petits), et la galerie elle-même (erreurs de page, clavier ouvert, largeur).
+# Chaque balayage échoue (code 1) dès qu'un souci est trouvé : rien ne se fusionne en rouge.
+# Gratuit (dépôt public), rien ne part en ligne. Rapports dans l'artefact « balayages ».
+name: Balayages app famille et admin
+
+on:
+  push:
+    paths: ['web/**', '.github/workflows/balayages.yml']
+  pull_request:
+    paths: ['web/**', '.github/workflows/balayages.yml']
+  workflow_dispatch:
+
+jobs:
+  balayage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        mode:
+          - '--double famille admin'
+          - '--appui famille admin'
+          - '--boutons famille admin'
+          - '--identifiants admin famille'
+          - '--gestes famille'
+          - '--accessibilite famille admin'
+          - 'famille admin'
+    defaults:
+      run:
+        working-directory: outil/outils/galerie
+    steps:
+      - uses: actions/checkout@v4
+      # L'outil vit sur main ; les écrans testés sont ceux de cette branche (web/ copié à côté de l'outil).
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          path: outil
+          sparse-checkout: outils/galerie
+      - run: rm -rf outil/web && cp -r web outil/web
+        working-directory: .
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: outil/outils/galerie/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Balayage ${{ matrix.mode }}
+        run: node galerie.js ${{ matrix.mode }} --famille=ici --admin=ici
+      - name: Rapports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: balayages-${{ strategy.job-index }}
+          path: |
+            outil/outils/galerie/sortie/*.txt
+            outil/outils/galerie/sortie/galerie.html
+          if-no-files-found: ignore

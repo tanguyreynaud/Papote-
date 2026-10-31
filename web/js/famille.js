@@ -938,10 +938,10 @@ $('btn-photos-zip').addEventListener('click', async () => {
 });
 
 // Messages rapides : un toucher envoie le message tel quel.
-// Un message rapide part même si le précédent est encore en route : il n'est pas passé par
-// form.requestSubmit(), que Chrome ignore sans rien dire tant que le bouton Envoyer est grisé
-// (le message était perdu, vu par le test « Messages » le 31/10). Un double appui sur le même
-// bouton n'en envoie qu'un.
+// Un message rapide part même si le précédent est encore en route : il appelle l'envoi directement,
+// sans passer par un « submit » du formulaire (retour.js ignorait ce submit tant que le message
+// précédent partait : message perdu, vu par le test « Messages » le 31/10, corrigé aussi dans retour.js).
+// Un double appui sur le même bouton n'en envoie qu'un.
 document.querySelectorAll('.quick-msg').forEach((b) => b.addEventListener('click', () => {
   if (Date.now() - (b.dernier || 0) < 2000) return;
   b.dernier = Date.now();
@@ -2187,7 +2187,8 @@ function answerOnArrival(cid) {
 
 // Appel audio de Mamie : « Passer en vidéo » allume la caméra, la tablette suit toute seule.
 $('call-video').addEventListener('click', async () => {
-  if (!currentCall || !currentCall.enableVideo) return;
+  // Pas d'appel en cours : le bouton se grise plutôt que de ne rien faire (aucun bouton sans effet visible).
+  if (!currentCall || !currentCall.enableVideo) { $('call-video').disabled = true; return; }
   // Comme un appel vidéo lancé depuis l'app : écran à l'horizontale (plein écran et verrouillage,
   // sinon l'écran d'appel tourné en CSS), même si la rotation automatique est bloquée.
   enterCallScreen();
