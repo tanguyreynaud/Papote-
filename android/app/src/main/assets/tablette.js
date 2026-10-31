@@ -6,6 +6,10 @@
 (function () {
   'use strict';
 
+  // Appui long : Android (MainActivity) ignore déjà le long clic ; la page empêche aussi le menu du
+  // long appui, pour que rien ne sorte jamais de l'écran de Mamie (appui long, 31/10).
+  document.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+
   var IDLE_MS = 90000;   // retour à l'accueil après 1 min 30 sans toucher l'écran
   var FRAME_MS = 12000;  // changement de photo sur l'accueil
   var SLIDE_MS = 10000;  // défilement tout seul du diaporama
@@ -2119,6 +2123,10 @@
       b.setAttribute('aria-label', 'Écouter');
       b.innerHTML = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 10v4h4l5 5V5L7 10H3zm13.5 2A4.5 4.5 0 0 0 14 8v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg><span>Écouter</span>';
       on(b, 'click', function () {
+        // Un doigt qui hésite touche deux fois de suite : le 2e toucher (moins de 600 ms après)
+        // ne doit ni arrêter ni relancer la lecture (double clic, 30/10).
+        if (Date.now() - (b.dernierToucher || 0) < 600) return;
+        b.dernierToucher = Date.now();
         if (speech !== 'idle') { stopSpeaking(); return; }
         sayAloud(getText());
       });
