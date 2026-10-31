@@ -6,9 +6,8 @@
 name: Tablette
 
 on:
+  # Seulement à l'envoi (push) : une PR rejoue les mêmes vérifications sur le même code et doublait les e-mails d'échec.
   push:
-    paths: ['android/**', '.github/workflows/tablette.yml']
-  pull_request:
     paths: ['android/**', '.github/workflows/tablette.yml']
   workflow_dispatch:
 
@@ -69,9 +68,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: outil/outils/galerie/package-lock.json
-      - run: npm ci
+      # Pas de package-lock.json dans outils/ (.gitignore) : npm install, pas npm ci.
+      - run: npm install --no-audit --no-fund
       - run: npx playwright install --with-deps chromium
       - name: Balayage ${{ matrix.mode }}
         run: node galerie.js ${{ matrix.mode }} --tablette=ici
