@@ -1649,6 +1649,15 @@ exports.gestionCommande = onCall({ secrets: [STRIPE_SECRET] }, async (request) =
   if (typeof commande !== 'string' || !commande) throw new HttpsError('invalid-argument', 'Commande manquante.');
   const snap = await db().doc(`commandes/${commande}`).get();
   if (!snap.exists) throw new HttpsError('not-found', 'Commande introuvable.');
+  // { action: 'retourEnMain', main } : Papote récupère lui-même la tablette (ou revient à Mondial Relay).
+  // Seulement dans l'admin : la main propre n'est jamais proposée à la famille (Tanguy, 31/10).
+  if (request.data.action === 'retourEnMain') {
+    const r = snap.get('restitution');
+    if (!r || !['attendue', 'echec'].includes(r.statut)) throw new HttpsError('failed-precondition', 'Aucune tablette attendue en retour pour cette commande.');
+    const main = request.data.main === true;
+    await snap.ref.update({ 'restitution.mainPropreLe': main ? FieldValue.serverTimestamp() : FieldValue.delete() });
+    return { ok: true, main };
+  }
   // Commande offerte : ni facture ni paiement.
   if (snap.get('offerte')) return { factures: [], paiements: [] };
   const client = snap.get('stripeCustomerId');

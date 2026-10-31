@@ -444,48 +444,41 @@ test('pas vue depuis deux jours : une alerte aux responsables, pas de rappel tan
   assert.strictEqual(alertes().length, 2, 'hors ligne : rien');
 });
 
-test('tablette remise en main propre : au retour, la famille choisit main propre ou Mondial Relay', async () => {
+test('tablette remise en main propre : la famille n\'a que Mondial Relay (adresse demandée) ; la main propre se note dans l\'admin', async () => {
   await s.db.doc('gestion/reglages').set({ expediteur: { nom: 'Papote', adresse: '1 rue de test', cp: '07000', ville: 'Privas' } }, { merge: true });
   const paul = await s.compte('Paul', 'paul@exemple.fr');
   const { id, fid } = await familleAbonnee(paul);
   await premierMoisPasse(id);
-  // Arrivée colis : le retour en main propre n'est pas proposé.
-  await s.appeler('resilierAbonnement', { fid }, paul);
-  await s.calme();
-  assert.strictEqual((await s.appeler('finDeContrat', { fid }, paul)).mainPropre, false);
-  await assert.rejects(s.appeler('renvoyerTablette', { fid, mode: 'main' }, paul), /arrivée par colis/);
-  await assert.rejects(s.appeler('renvoyerTablette', { fid, mode: 'pigeon' }, paul), /Choix de retour inconnu/);
-  await s.appeler('annulerResiliation', { fid }, paul);
-  await s.calme();
-
   // Remise en main propre (comme EJ4N : pas d'adresse de livraison).
   await s.db.doc(`commandes/${id}`).update({ remise: 'main-propre', livraison: null });
   s.boite.length = 0;
+  await assert.rejects(s.appeler('gestionCommande', { commande: id, action: 'retourEnMain', main: true }, a.TANGUY), /Aucune tablette attendue/);
   await s.appeler('resilierAbonnement', { fid }, paul);
   await s.calme();
+  // Jamais de main propre proposée à la famille (Tanguy, 31/10) : ni dans l'e-mail, ni dans l'appli.
   const arret = s.boite.find((m) => m.a === paul.email && /résiliation/i.test(m.sujet));
-  assert.match(arret.texte, /« Par Mondial Relay »/, 'Mondial Relay toujours proposé, nommé comme le bouton de l\'appli');
-  assert.match(arret.texte, /En main propre/, 'et la main propre aussi');
+  assert.match(arret.texte, /Je renvoie la tablette/);
+  assert.doesNotMatch(arret.texte, /main propre/i);
   const fin = await s.appeler('finDeContrat', { fid }, paul);
-  assert.strictEqual(fin.mainPropre, true);
   assert.strictEqual(fin.adresse, false);
-  assert.strictEqual(fin.rendreEnMain, false);
-
-  s.boite.length = 0;
-  assert.deepStrictEqual(await s.appeler('renvoyerTablette', { fid, mode: 'main' }, paul), { main: true });
-  assert.deepStrictEqual(await s.appeler('renvoyerTablette', { fid, mode: 'main' }, paul), { main: true }, 'touché deux fois');
-  await s.calme();
-  const avisPapote = s.boite.filter((m) => m.a === 'contact@mapapote.fr' && /main propre/.test(m.sujet));
-  assert.strictEqual(avisPapote.length, 1, 'Papote prévenu une seule fois');
-  assert.match(avisPapote[0].texte, /paul@exemple\.fr/);
-  assert.match(avisPapote[0].texte, /Tablette rendue/);
-  assert.strictEqual((await s.appeler('finDeContrat', { fid }, paul)).rendreEnMain, true);
-  assert.strictEqual(s.sendcloud.colis.size, 0, 'pas d\'étiquette payée');
-
-  // Elle change d'avis : Mondial Relay reste possible, avec son adresse.
+  assert.strictEqual(fin.mainPropre, undefined);
+  // Sans adresse : l'appli la demande, puis le QR code Mondial Relay se crée (le retour commence).
+  await assert.rejects(s.appeler('renvoyerTablette', { fid }, paul), /Indiquez votre adresse/);
   const qr = await s.appeler('renvoyerTablette', { fid, adresse: { rue: '8 rue des Lilas', cp: '07000', ville: 'Privas' } }, paul);
-  assert.ok(qr.qr);
-  // Tanguy la récupère : « Tablette rendue » clôt comme pour un colis.
+  assert.ok(qr.qr, 'QR code Mondial Relay');
+  // Tanguy préfère passer la chercher : il le note dans l'admin. Seul l'admin peut le faire.
+  let c = await commande(id);
+  assert.ok(c.restitution && c.restitution.statut === 'attendue');
+  await assert.rejects(s.appeler('gestionCommande', { commande: id, action: 'retourEnMain', main: true }, paul), /administrateur/);
+  assert.deepStrictEqual(await s.appeler('gestionCommande', { commande: id, action: 'retourEnMain', main: true }, a.TANGUY), { ok: true, main: true });
+  c = await commande(id);
+  assert.ok(c.restitution.mainPropreLe, 'retour en main propre noté');
+  assert.ok(!s.boite.some((m) => m.a === paul.email && /main propre/i.test(m.texte)), 'la famille ne reçoit rien à ce sujet');
+  const ligne = (await s.appeler('gestionDonnees', {}, a.TANGUY)).commandes.find((x) => x.id === id);
+  assert.ok(ligne.restitution.mainPropreLe, 'visible dans l\'admin');
+  // Retour à Mondial Relay, puis Tanguy la récupère : « Matériel reçu » clôt comme pour un colis.
+  await s.appeler('gestionCommande', { commande: id, action: 'retourEnMain', main: false }, a.TANGUY);
+  assert.strictEqual((await commande(id)).restitution.mainPropreLe, undefined);
   await s.appeler('tabletteRendue', { commande: id }, a.TANGUY);
   await s.calme();
   assert.strictEqual((await commande(id)).restitution.statut, 'rendue');
