@@ -82,10 +82,16 @@ async function essayer(partie, browser, base, scene, taille, nom, tablette) {
     const problemes = [];
     const doubles = await page.evaluate(compter).catch(() => null);
     if (!doubles) return { problemes }; // page partie ailleurs : rien n'est parti deux fois
-    const r = await page.evaluate(() => ({
-      selection: String((window.getSelection && window.getSelection().toString()) || '').trim().slice(0, 40),
-      menus: window.__menus || 0,
-    })).catch(() => ({ selection: '', menus: 0 }));
+    const r = await page.evaluate(() => {
+      // Un champ qui vient de prendre la main avec son contenu sélectionné (crayon « Modifier » de l'admin,
+      // prêt à être retapé) : c'est voulu, ce n'est pas du texte de la page qui bleuit.
+      const actif = document.activeElement;
+      const champ = actif && /^(INPUT|TEXTAREA)$/.test(actif.tagName);
+      return {
+        selection: champ ? '' : String((window.getSelection && window.getSelection().toString()) || '').trim().slice(0, 40),
+        menus: window.__menus || 0,
+      };
+    }).catch(() => ({ selection: '', menus: 0 }));
     for (const d of doubles) problemes.push(`${d.quoi} ×${d.n}`);
     for (const [quoi, n] of requetes) if (n >= 2) problemes.push(`requête ${quoi.replace(base, '')} ×${n}`);
     if (r.selection) problemes.push(`texte sélectionné : « ${r.selection} »`);
