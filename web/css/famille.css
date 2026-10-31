@@ -1078,6 +1078,7 @@ body:not(.on-support) .ps-bouton, body:not(.on-support) .ps-panneau { display: n
 .abo-retour { margin-top: 14px; padding: 14px; border-radius: 14px; background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
 .abo-retour-title { margin: 0 0 8px; font-weight: 700; }
 .abo-retour .primary { display: block; text-align: center; text-decoration: none; }
+.abo-retour .secondary { justify-content: center; text-align: center; min-height: 54px; font-size: 16px; font-weight: 700; } /* même taille que le bouton principal */
 
 .dialog-title { margin: 0 0 8px; font-family: var(--display); font-size: 22px; }
 .dialog-list { margin: 0 0 12px; padding-left: 20px; }
