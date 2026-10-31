@@ -144,9 +144,12 @@
   function button(text, cls, onClick) {
     var b = el('button', 'welcome-btn ' + (cls || ''), text);
     var dernier = 0;
+    // Une touche double n'agit qu'une fois (1,5 s), sauf les touches du pavé de chiffres : « 75011 »
+    // ou « 07160 » tapé d'un trait répète un chiffre, qui était perdu (galerie, 31/10).
+    var pave = /(^| )digit( |$)/.test(cls || '');
     b.addEventListener('click', function (e) {
       var t = Date.now();
-      if (t - dernier < 1500) return;
+      if (!pave && t - dernier < 1500) return;
       dernier = t;
       onClick.call(this, e);
     }, false);
