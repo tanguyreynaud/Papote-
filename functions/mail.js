@@ -495,8 +495,10 @@ function sepaRefuse({ nom, email, papote, commande }) {
 
 const CARTON = 'Mettez la tablette, son support, son chargeur et son câble (et l\'enceinte si vous l\'avez reçue) dans un carton';
 const CARTON_ETAPE = `${CARTON}. Inutile d'effacer la tablette : nous nous en chargeons.`;
-const ETAPES_RETOUR_QR = [
-  'Dans l\'appli Papote, onglet Profil, touchez « Je renvoie la tablette » : un QR code prépayé s\'affiche.',
+// Le bouton de l'appli s'appelle « Par Mondial Relay » quand la tablette a été remise en main propre.
+const boutonRetour = (mainPropre) => (mainPropre ? '« Par Mondial Relay »' : '« Je renvoie la tablette »');
+const etapesRetourQr = (mainPropre) => [
+  `Dans l'appli Papote, onglet Profil, touchez ${boutonRetour(mainPropre)} : un QR code prépayé s'affiche.`,
   CARTON_ETAPE,
   'Déposez le colis dans n\'importe quel point relais Mondial Relay en montrant le QR code sur votre téléphone. Rien à payer, rien à imprimer.',
 ];
@@ -513,7 +515,7 @@ function retourTablette({ nom, avant, retractation, montant, mainPropre }) {
     retractation != null
       ? 'Votre commande est bien annulée. Il reste à nous renvoyer la tablette, en trois gestes :'
       : 'Votre abonnement Papote est terminé. Merci de nous avoir fait confiance ! La tablette est prêtée : il reste à nous la renvoyer, en trois gestes :',
-    { etapes: ETAPES_RETOUR_QR },
+    { etapes: etapesRetourQr(mainPropre) },
     mainPropre ? EN_MAIN_PROPRE : null,
     { encadre: `Date limite : <b>${dateEnClair(avant)}</b>.${retractation != null && retractation > 0
       ? ` Dès que la tablette nous parvient, nous vous remboursons <b>${euros(retractation)}</b> sur votre compte.`
@@ -532,7 +534,7 @@ function resiliationEnregistree({ nom, famille, le, tablettePretee, parPapote, m
       : `Votre demande de résiliation de l'abonnement Papote${famille ? ` de <b>${echapper(famille)}</b>` : ''} est bien enregistrée.`,
     `Tout continue de fonctionner jusqu'au <b>${dateEnClair(le)}</b>. Ce dernier mois est prélevé à l'arrêt, puis plus rien.`,
     tablettePretee
-      ? `La tablette est à nous renvoyer, sans frais : un QR code prépayé, rien à imprimer. Vous pouvez la renvoyer dès maintenant : dans l'appli Papote, onglet Profil, touchez « Je renvoie la tablette ». Sinon, nous vous enverrons le mode d'emploi par e-mail le ${dateEnClair(le)}.`
+      ? `La tablette est à nous renvoyer, sans frais : un QR code prépayé, rien à imprimer. Vous pouvez la renvoyer dès maintenant : dans l'appli Papote, onglet Profil, touchez ${boutonRetour(mainPropre)}. Sinon, nous vous enverrons le mode d'emploi par e-mail le ${dateEnClair(le)}.`
       : 'La tablette est à vous : vous n\'avez rien à renvoyer.',
     tablettePretee && mainPropre ? EN_MAIN_PROPRE : null,
     parPapote ? '' : 'Vous changez d\'avis d\'ici là ? Dans l\'appli Papote, onglet Profil, touchez « Garder mon abonnement ».',
@@ -588,7 +590,7 @@ function rappelRestitution({ nom, avant, lien, qr, montant }) {
     'Nous n\'avons pas encore reçu la tablette.',
     { encadre: `Déposez-la dans un point relais Mondial Relay avant le <b>${dateEnClair(avant)}</b> : sans retour à cette date, ${euros(montant)} seront prélevés sur votre compte.` },
     lien ? `Votre ${qr ? 'QR code' : 'étiquette'} prépayé${qr ? '' : 'e'} est disponible avec le bouton ci-dessous.` : 'Pour obtenir le QR code prépayé :',
-    lien ? null : { etapes: ETAPES_RETOUR_QR },
+    lien ? null : { etapes: etapesRetourQr(false) },
     { petit: 'Si vous avez déjà déposé le colis, ne tenez pas compte de ce message.' },
   ], lien ? { texte: qr ? 'Afficher le QR code' : 'Imprimer l\'étiquette', lien } : APPLI_RETOUR);
 }
