@@ -154,7 +154,7 @@ function fauxSendcloud(url, options = {}) {
   }
   if (chemin === '/returns/announce-synchronously') {
     const id = sendcloud.prochain++;
-    sendcloud.colis.set(id, { id, livraison: corps.delivery_option, offre: corps.ship_with.shipping_option_code, statut: 1000, annule: false });
+    sendcloud.colis.set(id, { id, de: corps.from_address, livraison: corps.delivery_option, offre: corps.ship_with.shipping_option_code, statut: 1000, annule: false });
     return json({ return_id: id, parcel_id: id });
   }
   let m = chemin.match(/^\/parcels\/(\d+)\/documents\/label$/);

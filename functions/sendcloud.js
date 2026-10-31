@@ -36,6 +36,22 @@ function adresseClient(c) {
   };
 }
 
+// Retour de la tablette : l'adresse que le client a donnée dans l'appli (remise en main propre, ou il a déménagé)
+// passe avant celle de la commande, qui peut dater de plusieurs années ou ne pas exister.
+function adresseRetour(c) {
+  const a = c.retourAdresse;
+  if (!a || !a.rue || !a.cp || !a.ville) return adresseClient(c);
+  return {
+    adresse: {
+      name: propre(c.nom || c.email, 70),
+      ...(c.telephone ? { phone_number: propre(c.telephone, 20) } : {}),
+      ...(c.email ? { email: propre(c.email, 120) } : {}),
+      address_line_1: propre(a.rue), postal_code: propre(a.cp, 10), city: propre(a.ville), country_code: 'FR',
+    },
+    pointRelais: null,
+  };
+}
+
 // Adresse de Papote (réglage « expediteur ») : départ des colis, arrivée des retours.
 function adressePapote(e) {
   if (!e || !e.nom || !e.adresse || !e.cp || !e.ville) return null;
@@ -252,4 +268,4 @@ function client(cles) {
   };
 }
 
-module.exports = { adresseClient, adressePapote, choisirOption, optionsPossibles, erreurLisible, colisLivre, suiviColis, retourExpediteur, nonDepose, client };
+module.exports = { adresseClient, adresseRetour, adressePapote, choisirOption, optionsPossibles, erreurLisible, colisLivre, suiviColis, retourExpediteur, nonDepose, client };

@@ -47,6 +47,7 @@ const regles = require('./abonnement');
 const statuts = require('./statuts');
 const livraison = require('./livraison');
 const mail = require('./mail');
+const sendcloud = require('./sendcloud');
 const avis = require('./avis');
 const relances = require('./relances');
 
@@ -683,6 +684,7 @@ async function mailArret(commandeId, fam, faire) {
     await envoyerMail(email, faire({
       nom: c.get('nom') || null, famille: fam.name || null,
       tablettePretee: fam.abonnement && fam.abonnement.tablette !== 'achetee',
+      mainPropre: c.get('remise') === 'main-propre',
     }));
   } catch (e) {
     logger.error(`Commande ${commandeId} : e-mail d'arrêt non parti`, e.message);
@@ -887,15 +889,29 @@ exports.finDeContrat = onCall({ secrets: [STRIPE_SECRET] }, async (request) => {
     // Arrêt prévu : la famille peut renvoyer la tablette sans attendre la date d'arrêt (Tanguy, 30/10).
     retourAnticipe: !r && retourAnticipePossible(c, (await db.doc(`families/${c.fid}`).get()).get('abonnement')),
     remboursement: c.remboursement ? { statut: c.remboursement.statut, montant: c.remboursement.montant || 0 } : null,
+    // Tablette remise en main propre : la famille choisit, main propre ou Mondial Relay (Tanguy, 31/10).
+    mainPropre: c.remise === 'main-propre',
+    rendreEnMain: Boolean(r && r.mainPropreLe),
+    // Sans adresse utilisable, l'appli la demande avant de créer le QR code.
+    adresse: Boolean(sendcloud.adresseRetour(c)),
   };
 });
 
 // « Je renvoie la tablette » : le QR code de retour (sans impression) n'est créé qu'au moment où la famille
 // est prête à déposer le colis, pour ne pas payer d'étiquette pour une tablette jamais rendue (Tanguy, 28/10).
 // Déjà créé : on renvoie le même. L'e-mail avec le QR code part avec commandeModifiee (suiviRetour).
+// { fid, adresse? } : adresse { rue, cp, ville } donnée dans l'appli quand la commande n'en a pas d'utilisable.
+// { fid, mode: 'main' } : tablette remise en main propre, la famille préfère la rendre de la même façon :
+// Papote est prévenu et la contacte (Tanguy, 31/10 : Mondial Relay reste toujours possible).
 exports.renvoyerTablette = onCall({ secrets: [SENDCLOUD_API, MAIL_MOT_DE_PASSE], timeoutSeconds: 120 }, async (request) => {
   const { id, ref, snap } = await commandeDeLaFamille((request.data || {}).fid, request);
   const c = snap.data();
+  const { mode, adresse } = request.data || {};
+  const nouvelleAdresse = adresse == null ? null : adresseDonnee(adresse);
+  if (mode != null && mode !== 'main') throw new HttpsError('invalid-argument', 'Choix de retour inconnu.');
+  if (mode === 'main' && c.remise !== 'main-propre') {
+    throw new HttpsError('failed-precondition', 'Cette tablette est arrivée par colis : renvoyez-la avec le QR code Mondial Relay.');
+  }
   let r = c.restitution;
   // Arrêt prévu, retour avant la date d'arrêt : le retour commence maintenant, avec la même date limite
   // qu'à l'arrêt. mailLe : pas de mode d'emploi en plus, l'e-mail du QR code suffit.
@@ -905,7 +921,24 @@ exports.renvoyerTablette = onCall({ secrets: [SENDCLOUD_API, MAIL_MOT_DE_PASSE],
     await ref.update({ restitution: r });
   }
   if (!r || !['attendue', 'echec'].includes(r.statut)) throw new HttpsError('failed-precondition', "Il n'y a pas de tablette à nous renvoyer.");
+  if (mode === 'main') {
+    // Une seule fois, même touché deux fois : Papote n'est prévenu qu'à la première demande.
+    const premiere = await db.runTransaction(async (tx) => {
+      if ((await tx.get(ref)).get('restitution.mainPropreLe')) return false;
+      tx.update(ref, { 'restitution.mainPropreLe': Timestamp.now() });
+      return true;
+    });
+    if (premiere) {
+      await prevenirPapote(`Retour en main propre : ${c.nom || c.email || id}`, snap,
+        `${c.nom || 'Le client'} (${[c.email, c.telephone].filter(Boolean).join(', ') || 'pas de contact'}) veut rendre la tablette en main propre${r.avant ? ` avant le ${new Date(r.avant.toMillis()).toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' })}` : ''}. À contacter pour convenir d'un moment, puis « Tablette rendue » dans l'admin.`);
+    }
+    return { main: true };
+  }
   if (r.etiquette) return { etiquette: r.etiquette, qr: r.qr || null };
+  if (nouvelleAdresse) await ref.update({ retourAdresse: nouvelleAdresse });
+  else if (!sendcloud.adresseRetour(c)) {
+    throw new HttpsError('failed-precondition', 'Indiquez votre adresse : Mondial Relay en a besoin pour créer le QR code de retour.', { adresse: true });
+  }
   // Un seul QR à la fois, même si le bouton est touché deux fois.
   const maintenant = Date.now();
   await db.runTransaction(async (tx) => {
@@ -920,13 +953,25 @@ exports.renvoyerTablette = onCall({ secrets: [SENDCLOUD_API, MAIL_MOT_DE_PASSE],
     await ref.update({ 'restitution.qrDemandeLe': FieldValue.delete() });
     // Adresse de Papote ou du client manquante, panne Sendcloud : Papote le voit dans les journaux.
     logger.error(`Commande ${id} : QR code de retour non créé`, e.message);
-    // Commande sans adresse (tablette remise en main propre…) : réessayer n'y changera rien.
+    // Adresse refusée par Mondial Relay : la famille peut en redonner une.
     if (/pas d'adresse/.test(e.message)) {
-      throw new HttpsError('failed-precondition', "Nous n'avons pas d'adresse pour créer le QR code de retour. Écrivez-nous à contact@mapapote.fr : nous vous l'envoyons.");
+      throw new HttpsError('failed-precondition', 'Indiquez votre adresse : Mondial Relay en a besoin pour créer le QR code de retour.', { adresse: true });
     }
     throw new HttpsError('internal', "Le QR code n'a pas pu être créé. Réessayez dans un instant, ou écrivez-nous à contact@mapapote.fr : nous vous l'envoyons.");
   }
 });
+
+// Adresse du client pour le QR code de retour (France) : { rue, cp, ville } vérifiés, sinon un message clair.
+function adresseDonnee(a) {
+  const texte = (v, max) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, max) : '');
+  const rue = texte(a && a.rue, 100);
+  const cp = texte(a && a.cp, 5);
+  const ville = texte(a && a.ville, 60);
+  if (rue.length < 3) throw new HttpsError('invalid-argument', 'Indiquez le numéro et la rue.');
+  if (!/^\d{5}$/.test(cp)) throw new HttpsError('invalid-argument', 'Le code postal a 5 chiffres.');
+  if (ville.length < 2) throw new HttpsError('invalid-argument', 'Indiquez la ville.');
+  return { rue, cp, ville };
+}
 
 // Code de commande d'un abonnement : créé une seule fois, à la première demande.
 async function codeDe(abonnementId) {
@@ -1934,7 +1979,7 @@ async function suiviRetour(event, rAvant, r, c) {
     await avisResiliation(id, c, retractation);
     if (c.email && !r.etiquette) {
       try {
-        await envoyerMail(c.email, mail.retourTablette({ nom: c.nom, avant: r.avant.toMillis(), retractation, montant: regles.penaliteRestitution(c) }));
+        await envoyerMail(c.email, mail.retourTablette({ nom: c.nom, avant: r.avant.toMillis(), retractation, montant: regles.penaliteRestitution(c), mainPropre: c.remise === 'main-propre' }));
       } catch (e) {
         logger.error(`Commande ${id} : e-mail de retour non parti`, e.message);
       }

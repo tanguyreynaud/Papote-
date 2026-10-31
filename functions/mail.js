@@ -501,17 +501,20 @@ const ETAPES_RETOUR_QR = [
   'Déposez le colis dans n\'importe quel point relais Mondial Relay en montrant le QR code sur votre téléphone. Rien à payer, rien à imprimer.',
 ];
 const APPLI_RETOUR = { texte: 'Ouvrir l\'appli Papote', lien: `${APPLI}/?abonnement=1` };
+// Tablette remise en main propre : la famille peut la rendre de la même façon (Tanguy, 31/10).
+const EN_MAIN_PROPRE = 'Vous préférez nous la rendre en main propre ? Dans l\'appli, touchez « En main propre » : nous vous contactons pour convenir d\'un moment.';
 const MANQUANTS = 'Chaque élément manquant est facturé : tablette 130 €, chargeur et câble 10 €, enceinte 10 € si elle était dans le colis.';
 
 // Abonnement terminé ou commande annulée après l'envoi : la tablette prêtée est attendue.
 // retractation : montant remboursé au retour (centimes), sinon null.
-function retourTablette({ nom, avant, retractation, montant }) {
+function retourTablette({ nom, avant, retractation, montant, mainPropre }) {
   return message('Comment nous rendre la tablette Papote', [
     bonjour(nom),
     retractation != null
       ? 'Votre commande est bien annulée. Il reste à nous renvoyer la tablette, en trois gestes :'
       : 'Votre abonnement Papote est terminé. Merci de nous avoir fait confiance ! La tablette est prêtée : il reste à nous la renvoyer, en trois gestes :',
     { etapes: ETAPES_RETOUR_QR },
+    mainPropre ? EN_MAIN_PROPRE : null,
     { encadre: `Date limite : <b>${dateEnClair(avant)}</b>.${retractation != null && retractation > 0
       ? ` Dès que la tablette nous parvient, nous vous remboursons <b>${euros(retractation)}</b> sur votre compte.`
       : ` Sans retour à cette date, ${euros(montant)} seront prélevés sur votre compte.`}` },
@@ -521,7 +524,7 @@ function retourTablette({ nom, avant, retractation, montant }) {
 
 // Arrêt demandé (par le client dans l'appli, ou par Papote depuis l'admin) : confirmation écrite, avec la date
 // d'arrêt et la suite (la loi demande de confirmer une résiliation sur un support durable).
-function resiliationEnregistree({ nom, famille, le, tablettePretee, parPapote }) {
+function resiliationEnregistree({ nom, famille, le, tablettePretee, parPapote, mainPropre }) {
   return message(parPapote ? 'Papote arrête votre abonnement' : 'Votre résiliation Papote est enregistrée', [
     bonjour(nom),
     parPapote
@@ -531,6 +534,7 @@ function resiliationEnregistree({ nom, famille, le, tablettePretee, parPapote })
     tablettePretee
       ? `La tablette est à nous renvoyer, sans frais : un QR code prépayé, rien à imprimer. Vous pouvez la renvoyer dès maintenant : dans l'appli Papote, onglet Profil, touchez « Je renvoie la tablette ». Sinon, nous vous enverrons le mode d'emploi par e-mail le ${dateEnClair(le)}.`
       : 'La tablette est à vous : vous n\'avez rien à renvoyer.',
+    tablettePretee && mainPropre ? EN_MAIN_PROPRE : null,
     parPapote ? '' : 'Vous changez d\'avis d\'ici là ? Dans l\'appli Papote, onglet Profil, touchez « Garder mon abonnement ».',
   ].filter(Boolean), APPLI_RETOUR);
 }

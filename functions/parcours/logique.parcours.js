@@ -170,7 +170,7 @@ test('deux commandes pour la même famille : « Arrêter » et « Reprendre » d
   assert.ok((await ligne(id)).resiliationLe);
 });
 
-test('résiliation : la tablette peut être renvoyée tout de suite ; sans adresse, un message clair et rien de bloqué', async () => {
+test('résiliation : la tablette peut être renvoyée tout de suite ; sans adresse, l\'appli la demande et le QR code se crée', async () => {
   await s.db.doc('gestion/reglages').set({ expediteur: { nom: 'Papote', adresse: '1 rue de test', cp: '07000', ville: 'Privas' } }, { merge: true });
   const paul = await s.compte('Paul', 'paul@exemple.fr');
   const { id, fid } = await familleAbonnee(paul);
@@ -183,21 +183,26 @@ test('résiliation : la tablette peut être renvoyée tout de suite ; sans adres
   assert.doesNotMatch(mailArret.texte, /attendre ce jour/);
   assert.strictEqual((await s.appeler('finDeContrat', { fid }, paul)).retourAnticipe, true);
 
-  // Commande sans adresse (Tanguy, 30/10 : tablette jumelée sans livraison) : message clair, on peut réessayer plus tard.
-  const livraison = (await commande(id)).livraison;
+  // Commande sans adresse (Tanguy, 30/10 : tablette jumelée sans livraison) : l'appli demande l'adresse (Tanguy, 31/10 :
+  // Mondial Relay toujours possible), rien n'est bloqué ni payé chez Sendcloud avant.
   await s.db.doc(`commandes/${id}`).update({ livraison: null });
-  await assert.rejects(s.appeler('renvoyerTablette', { fid }, paul), /pas d'adresse pour créer le QR code/);
-  assert.ok(s.erreurs.some((e) => /QR code de retour non créé/.test(e)), 'Papote le voit dans les journaux');
-  s.erreurs.length = 0;
+  assert.strictEqual((await s.appeler('finDeContrat', { fid }, paul)).adresse, false, 'l\'appli sait qu\'il faut l\'adresse');
+  await assert.rejects(s.appeler('renvoyerTablette', { fid }, paul), (e) => /Indiquez votre adresse/.test(e.message) && e.details && e.details.adresse === true);
+  await assert.rejects(s.appeler('renvoyerTablette', { fid, adresse: { rue: '3 place Bellecour', cp: '6900', ville: 'Lyon' } }, paul), /5 chiffres/);
+  await assert.rejects(s.appeler('renvoyerTablette', { fid, adresse: { rue: '', cp: '69002', ville: 'Lyon' } }, paul), /numéro et la rue/);
   let c = await commande(id);
   assert.strictEqual(c.restitution.statut, 'attendue');
   assert.strictEqual(c.restitution.anticipe, true);
   assert.strictEqual(c.restitution.qrDemandeLe, undefined, 'pas bloqué deux minutes');
+  assert.strictEqual(s.sendcloud.colis.size, 0, 'aucune étiquette payée sans adresse');
 
-  await s.db.doc(`commandes/${id}`).update({ livraison });
-  const qr = await s.appeler('renvoyerTablette', { fid }, paul);
-  assert.ok(qr.qr && qr.etiquette, 'QR code créé dès que l\'adresse est là');
+  const qr = await s.appeler('renvoyerTablette', { fid, adresse: { rue: ' 3  place Bellecour ', cp: '69002', ville: 'Lyon' } }, paul);
+  assert.ok(qr.qr && qr.etiquette, 'QR code créé avec l\'adresse donnée');
+  const colis = [...s.sendcloud.colis.values()][0];
+  assert.strictEqual(colis.de.address_line_1, '3 place Bellecour');
+  assert.strictEqual(colis.de.postal_code, '69002');
   c = await commande(id);
+  assert.deepStrictEqual(c.retourAdresse, { rue: '3 place Bellecour', cp: '69002', ville: 'Lyon' });
   assert.ok(Math.abs(c.restitution.avant.toMillis() - regles.limiteRestitution(le)) < 60e3, 'même date limite qu\'à l\'arrêt');
 });
 
@@ -437,4 +442,51 @@ test('pas vue depuis deux jours : une alerte aux responsables, pas de rappel tan
   s.avancer(3);
   await s.tache('alerteMatin');
   assert.strictEqual(alertes().length, 2, 'hors ligne : rien');
+});
+
+test('tablette remise en main propre : au retour, la famille choisit main propre ou Mondial Relay', async () => {
+  await s.db.doc('gestion/reglages').set({ expediteur: { nom: 'Papote', adresse: '1 rue de test', cp: '07000', ville: 'Privas' } }, { merge: true });
+  const paul = await s.compte('Paul', 'paul@exemple.fr');
+  const { id, fid } = await familleAbonnee(paul);
+  await premierMoisPasse(id);
+  // Arrivée colis : le retour en main propre n'est pas proposé.
+  await s.appeler('resilierAbonnement', { fid }, paul);
+  await s.calme();
+  assert.strictEqual((await s.appeler('finDeContrat', { fid }, paul)).mainPropre, false);
+  await assert.rejects(s.appeler('renvoyerTablette', { fid, mode: 'main' }, paul), /arrivée par colis/);
+  await assert.rejects(s.appeler('renvoyerTablette', { fid, mode: 'pigeon' }, paul), /Choix de retour inconnu/);
+  await s.appeler('annulerResiliation', { fid }, paul);
+  await s.calme();
+
+  // Remise en main propre (comme EJ4N : pas d'adresse de livraison).
+  await s.db.doc(`commandes/${id}`).update({ remise: 'main-propre', livraison: null });
+  s.boite.length = 0;
+  await s.appeler('resilierAbonnement', { fid }, paul);
+  await s.calme();
+  const arret = s.boite.find((m) => m.a === paul.email && /résiliation/i.test(m.sujet));
+  assert.match(arret.texte, /Je renvoie la tablette/, 'Mondial Relay toujours proposé');
+  assert.match(arret.texte, /En main propre/, 'et la main propre aussi');
+  const fin = await s.appeler('finDeContrat', { fid }, paul);
+  assert.strictEqual(fin.mainPropre, true);
+  assert.strictEqual(fin.adresse, false);
+  assert.strictEqual(fin.rendreEnMain, false);
+
+  s.boite.length = 0;
+  assert.deepStrictEqual(await s.appeler('renvoyerTablette', { fid, mode: 'main' }, paul), { main: true });
+  assert.deepStrictEqual(await s.appeler('renvoyerTablette', { fid, mode: 'main' }, paul), { main: true }, 'touché deux fois');
+  await s.calme();
+  const avisPapote = s.boite.filter((m) => m.a === 'contact@mapapote.fr' && /main propre/.test(m.sujet));
+  assert.strictEqual(avisPapote.length, 1, 'Papote prévenu une seule fois');
+  assert.match(avisPapote[0].texte, /paul@exemple\.fr/);
+  assert.match(avisPapote[0].texte, /Tablette rendue/);
+  assert.strictEqual((await s.appeler('finDeContrat', { fid }, paul)).rendreEnMain, true);
+  assert.strictEqual(s.sendcloud.colis.size, 0, 'pas d\'étiquette payée');
+
+  // Elle change d'avis : Mondial Relay reste possible, avec son adresse.
+  const qr = await s.appeler('renvoyerTablette', { fid, adresse: { rue: '8 rue des Lilas', cp: '07000', ville: 'Privas' } }, paul);
+  assert.ok(qr.qr);
+  // Tanguy la récupère : « Tablette rendue » clôt comme pour un colis.
+  await s.appeler('tabletteRendue', { commande: id }, a.TANGUY);
+  await s.calme();
+  assert.strictEqual((await commande(id)).restitution.statut, 'rendue');
 });
