@@ -141,8 +141,10 @@ async function famille({ browser, base, progression }) {
 
 function rapport(parties, dossier) {
   const lignes = [];
+  let soucis = 0;
   for (const { nom, version, resultats } of parties) {
     const faux = resultats.filter((r) => r.problemes.length);
+    soucis += faux.length;
     lignes.push(`${nom} (${version}) : ${resultats.length} bouton(s) qui agissent sur une commande ou un abonnement, ${faux.length} avec un mauvais identifiant`);
     for (const r of resultats) {
       lignes.push(`  ${r.problemes.length ? 'FAUX' : 'ok  '} ${r.page} · ${r.etape} · ${r.bouton} → ${r.appels.join(' ; ')}`);
@@ -151,7 +153,7 @@ function rapport(parties, dossier) {
   }
   const fichier = path.join(dossier, 'identifiants.txt');
   fs.writeFileSync(fichier, lignes.join('\n') + '\n');
-  return { fichier, texte: lignes.join('\n') };
+  return { fichier, texte: lignes.join('\n'), soucis };
 }
 
 module.exports = { admin, famille, rapport };

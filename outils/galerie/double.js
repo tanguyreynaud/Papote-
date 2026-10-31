@@ -113,7 +113,9 @@ async function balayer({ browser, base, partie: nom, progression }) {
 function rapport(parties, dossier) {
   const lignes = [];
   const tri = (a, b) => a.scene.localeCompare(b.scene) || a.bouton.localeCompare(b.bouton);
+  let soucis = 0;
   for (const { nom, version, total, graves, repetees } of parties) {
+    soucis += graves.length;
     lignes.push(`${nom} (${version}) : ${total} boutons touchés deux fois, ${graves.length} action(s) partie(s) en double`);
     for (const p of graves.sort(tri)) lignes.push(`  - ${p.scene} : ${p.bouton} : ${p.quoi} ×${p.n}`);
     lignes.push(`${nom} : ${repetees.length} écriture(s) répétée(s) sur le même document (à juger : souvent la même valeur réécrite)`);
@@ -122,7 +124,7 @@ function rapport(parties, dossier) {
   const fichier = path.join(dossier, 'double-clic.txt');
   fs.writeFileSync(fichier, lignes.join('\n') + '\n');
   fs.writeFileSync(path.join(dossier, 'double-clic.json'), JSON.stringify(parties, null, 1));
-  return { fichier, texte: lignes.join('\n') };
+  return { fichier, texte: lignes.join('\n'), soucis };
 }
 
 module.exports = { balayer, rapport };

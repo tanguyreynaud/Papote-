@@ -90,9 +90,26 @@ async function balayer({ browser, base, partie, progression }) {
 }
 
 // Un défaut = une règle sur une cible (le même bouton sur 100 écrans compte une fois) ; les lignes disent sur combien d'écrans.
+// Défauts WCAG acceptés en connaissance de cause (acceptes.txt : « partie | règle | début de la cible | pourquoi »).
+// Les règles « seniors » (texte-petit, cible-petite) sont signalées sans bloquer : Tanguy tranche écran par écran.
+function acceptes() {
+  const f = path.join(__dirname, 'acceptes.txt');
+  if (!fs.existsSync(f)) return [];
+  return fs.readFileSync(f, 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'))
+    .map((l) => l.split('|').map((x) => x.trim())).map(([partie, regle, cible]) => ({ partie, regle, cible }));
+}
+
 function rapport(parties, dossier) {
   const lignes = [];
+  const ok = acceptes();
+  let soucis = 0;
   for (const { nom, version, total, constats } of parties) {
+    for (const c of constats) {
+      if (c.impact === 'seniors' || c.impact === 'outil') continue;
+      const cible = c.cible || c.html || '';
+      if (ok.some((a) => a.partie === nom && a.regle === c.regle && cible.startsWith(a.cible))) continue;
+      soucis++;
+    }
     const parRegle = new Map();
     for (const c of constats) {
       if (!parRegle.has(c.regle)) parRegle.set(c.regle, { impact: c.impact, aide: c.aide, lien: c.lien, cibles: new Map() });
@@ -116,7 +133,7 @@ function rapport(parties, dossier) {
   const texte = lignes.join('\n');
   const fichier = path.join(dossier, 'accessibilite.txt');
   fs.writeFileSync(fichier, `${texte}\n`);
-  return { fichier, texte };
+  return { fichier, texte, soucis };
 }
 
 module.exports = { balayer, rapport, seniors };

@@ -9,5 +9,8 @@ if not exist node_modules\playwright (
   call npm install --silent || exit /b 1
   call npx playwright install chromium || exit /b 1
 )
-node galerie.js %* || exit /b 1
+rem La galerie finit en erreur dès qu'un souci est trouvé (pour GitHub) : les captures sont publiées quand même,
+rem c'est justement là qu'on regarde les soucis.
+node galerie.js %*
+if errorlevel 1 echo Des soucis ont ete trouves (voir ci-dessus) : les captures sont publiees quand meme.
 node publier-validation.mjs
