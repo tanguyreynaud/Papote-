@@ -2187,7 +2187,8 @@ function answerOnArrival(cid) {
 
 // Appel audio de Mamie : « Passer en vidéo » allume la caméra, la tablette suit toute seule.
 $('call-video').addEventListener('click', async () => {
-  if (!currentCall || !currentCall.enableVideo) return;
+  // Pas d'appel en cours : le bouton se grise plutôt que de ne rien faire (aucun bouton sans effet visible).
+  if (!currentCall || !currentCall.enableVideo) { $('call-video').disabled = true; return; }
   // Comme un appel vidéo lancé depuis l'app : écran à l'horizontale (plein écran et verrouillage,
   // sinon l'écran d'appel tourné en CSS), même si la rotation automatique est bloquée.
   enterCallScreen();
