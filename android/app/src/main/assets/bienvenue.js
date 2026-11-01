@@ -379,6 +379,8 @@
   var repairWatch = null;
 
   function openRepair() {
+    // Déjà ouvert (réglage du wifi, ou installation en cours) : on ne touche à rien, la saisie en cours reste.
+    if (repair || (root && !root.hasAttribute('hidden') && current)) return;
     ensureRoot();
     repair = true;
     current = 'repair';

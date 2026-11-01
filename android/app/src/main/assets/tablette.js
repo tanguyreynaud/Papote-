@@ -1496,7 +1496,9 @@
   function rechargerPourLesAppels() {
     var avant = 0;
     try { avant = Number(window.sessionStorage.getItem('papote.rechargeAppels')) || 0; } catch (e) { }
-    if (Date.now() - avant < 30 * 60000 || inCall() || overlayPost || isShown('reminder-alert')) return;
+    // Jamais pendant un écran d'appel ouvert (décompte du SOS compris : un rechargement l'annulerait).
+    if (Date.now() - avant < 30 * 60000 || inCall() || overlayPost || isShown('reminder-alert') ||
+      (callScreen && !callScreen.hasAttribute('hidden'))) return;
     try { window.sessionStorage.setItem('papote.rechargeAppels', String(Date.now())); } catch (e) { return; }
     if (window.PapoteAndroid && window.PapoteAndroid.logError) window.PapoteAndroid.logError('Appels absents au démarrage : page rechargée');
     window.location.reload();
