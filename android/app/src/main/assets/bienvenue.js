@@ -139,9 +139,20 @@
     playGuide(lastGuide);
   }
 
+  // Un bouton d'installation ne fait qu'une étape : touché deux fois de suite (double clic), la 2e touche est ignorée
+  // pendant 1,5 s, pour ne jamais envoyer deux fois le même ordre à Android (vérifié par node galerie.js --double).
   function button(text, cls, onClick) {
     var b = el('button', 'welcome-btn ' + (cls || ''), text);
-    b.addEventListener('click', onClick, false);
+    var dernier = 0;
+    // Une touche double n'agit qu'une fois (1,5 s), sauf les touches du pavé de chiffres : « 75011 »
+    // ou « 07160 » tapé d'un trait répète un chiffre, qui était perdu (galerie, 31/10).
+    var pave = /(^| )digit( |$)/.test(cls || '');
+    b.addEventListener('click', function (e) {
+      var t = Date.now();
+      if (!pave && t - dernier < 1500) return;
+      dernier = t;
+      onClick.call(this, e);
+    }, false);
     return b;
   }
 
@@ -201,6 +212,7 @@
     var box = screen('Bienvenue !', 'Pour commencer, donnez un nom à cette tablette.');
     var input = el('input', 'welcome-input');
     input.type = 'text';
+    input.setAttribute('aria-label', 'Nom de la tablette');
     input.maxLength = 40;
     input.placeholder = 'Ex. : Mamie Jeanne';
     box.appendChild(input);
@@ -314,6 +326,7 @@
     sayGuide('wifi-mdp', 'Tapez le mot de passe du wifi. Il est souvent écrit sous la box.');
     var input = el('input', 'welcome-input');
     input.type = 'text';
+    input.setAttribute('aria-label', 'Mot de passe du wifi');
     input.autocomplete = 'off';
     input.autocapitalize = 'off';
     input.spellcheck = false;
@@ -514,6 +527,7 @@
     var qr = android().qrCode ? android().qrCode('https://app.mapapote.fr/?tablette=' + s.code) : '';
     if (qr) {
       var img = el('img', 'welcome-qr');
+      img.alt = 'QR code à scanner avec le téléphone';
       img.src = qr;
       scan.appendChild(img);
     }

@@ -10,7 +10,7 @@ npx playwright install chromium
 node --test "android/tests/*.test.js"
 ```
 
-26 scénarios : file des envois, voix, nuit, rappels, SOS, anniversaire, pause, wifi, appels
+28 scénarios : trois jours simulés et mise à jour (duree.test.js), file des envois, voix, nuit, rappels, SOS, anniversaire, pause, wifi, appels
 (sonnerie, décrocher, raccrocher, appelant disparu, deuxième appel, Mamie qui appelle, test du son).
 
 **Petites fonctions Java** (veille, dates, météo, jeton, écritures en attente) :

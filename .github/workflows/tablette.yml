@@ -1,0 +1,84 @@
+# Tablette, à chaque changement de android/ : les scénarios de l'écran (android/tests, Playwright : journée,
+# rappels, appels, SOS, veille, mise à jour, 3 jours simulés…), puis les balayages de la galerie (outils/galerie,
+# sur main) sur les écrans de cette branche : double toucher, appui long, accessibilité, et la galerie elle-même
+# (erreurs de page). Chaque étape échoue (code 1) dès qu'un souci est trouvé : rien ne se fusionne en rouge.
+# Gratuit (dépôt public), rien ne part en ligne. L'APK lui-même n'est pas construit ici (clé de signature sur le PC).
+name: Tablette
+
+on:
+  # Seulement à l'envoi (push) : une PR rejoue les mêmes vérifications sur le même code et doublait les e-mails d'échec.
+  push:
+    paths: ['android/**', '.github/workflows/tablette.yml']
+  workflow_dispatch:
+
+jobs:
+  scenarios:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-save playwright@1.56.1
+      - run: npx playwright install --with-deps chromium
+      - name: Scénarios de l'écran (android/tests)
+        run: node --test --test-concurrency=1 android/tests/*.test.js
+
+  # L'APK de débogage se construit (le code Java compile, les ressources passent) ; la vraie version signée
+  # reste construite sur le PC. Pas encore bloquant : à rendre bloquant (retirer continue-on-error) dès qu'il
+  # est vert une première fois.
+  apk-debogage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+      - run: chmod +x gradlew && ./gradlew --no-daemon assembleDebug
+        working-directory: android
+
+  balayage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        mode:
+          - '--double tablette'
+          - '--appui tablette'
+          - '--accessibilite tablette'
+          - 'tablette'
+    defaults:
+      run:
+        working-directory: outil/outils/galerie
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          path: outil
+          sparse-checkout: outils/galerie
+      - run: rm -rf outil/android && cp -r android outil/android
+        working-directory: .
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Pas de package-lock.json dans outils/ (.gitignore) : npm install, pas npm ci.
+      - run: npm install --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - name: Balayage ${{ matrix.mode }}
+        run: node galerie.js ${{ matrix.mode }} --tablette=ici
+      - name: Rapports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: balayages-${{ strategy.job-index }}
+          path: |
+            outil/outils/galerie/sortie/*.txt
+            outil/outils/galerie/sortie/galerie.html
+          if-no-files-found: ignore
