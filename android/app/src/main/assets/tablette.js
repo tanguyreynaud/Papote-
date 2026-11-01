@@ -131,6 +131,9 @@
     // Plus court qu'une date : « il y a 3 jours », puis en semaines et en mois.
     var days = Math.round((new Date(now.getFullYear(), now.getMonth(), now.getDate()) -
       new Date(d.getFullYear(), d.getMonth(), d.getDate())) / 86400000);
+    // Date dans le futur : l'horloge n'est pas encore à l'heure (démarrage sans réseau, date d'usine).
+    // Pas de « il y a -568 jours » : rien plutôt qu'une durée fausse.
+    if (days < 0) return '';
     if (days < 14) return 'il y a ' + days + ' jours';
     if (days < 60) return 'il y a ' + Math.floor(days / 7) + ' semaines';
     var months = Math.floor(days / 30);
@@ -315,7 +318,8 @@
   }
 
   function setCaption(p) {
-    signWithFace($('frame-caption'), p, p.authorName + ', ' + dayLabel(p.createdAt).replace(/ /g, ' '));
+    var quand = dayLabel(p.createdAt);
+    signWithFace($('frame-caption'), p, p.authorName + (quand ? ', ' + quand.replace(/ /g, ' ') : ''));
   }
 
   // Sans photo : un QR code pour que la famille rejoigne Papote depuis son téléphone.
@@ -452,7 +456,8 @@
       playSlideVideo(next, p, token);
     }
     preloadNext();
-    signWithFace($('photo-who'), p, p.authorName + ', ' + dayLabel(p.createdAt));
+    var quand = dayLabel(p.createdAt);
+    signWithFace($('photo-who'), p, p.authorName + (quand ? ', ' + quand : ''));
     // La légende du proche seule, pour chaque photo d'un envoi de plusieurs (plus de « Photo 1 sur 3 »
     // à sa place quand il n'a rien écrit : Tanguy, 29/10).
     var caption = legende(p.text);
@@ -1436,6 +1441,7 @@
   // réseau mobile ne répond plus (pas de réseau, forfait épuisé) ; le texte le dit, sans bouton wifi.
   // C'est la seule indication : pas de phrase en plus sous l'heure.
   var offlineSince = 0;
+  var dejaEnLigne = false;   // internet vu depuis le démarrage de la page
   var wifiCard = null;
   var wifiAutoOpened = false;
   function checkConnection() {
@@ -1444,10 +1450,12 @@
     try { st = JSON.parse(android().wifiStatus()); } catch (e) { return; }
     noterReseau(st);
     var now = Date.now();
-    if (st.internet) offlineSince = 0;
+    if (st.internet) { offlineSince = 0; dejaEnLigne = true; }
     else if (!offlineSince) offlineSince = now;
     if (st.internet && appelsKo) rechargerPourLesAppels();
-    var showIt = offlineSince && now - offlineSince > 60000 && !st.mobile;
+    // Une coupure en cours de route attend une minute (la box qui redémarre) ; au démarrage sans
+    // internet, la carte vient vite (Tanguy, 01/11 : elle n'arrivait qu'au bout d'une minute et demie).
+    var showIt = offlineSince && now - offlineSince > (dejaEnLigne ? 60000 : 10000) && !st.mobile;
     // Tablette qui démarre sans internet ni données de la famille (par exemple une tablette de
     // remplacement arrivée chez le client) : l'écran du wifi s'ouvre tout de suite, une fois.
     if (!st.internet && !st.mobile && !hasData && !wifiAutoOpened && window.PapoteBienvenue) {
@@ -2466,7 +2474,8 @@
     setupCallButton();
     setTimeout(resumeGsm, 1500);
     setInterval(checkConnection, 30000);
-    setTimeout(checkConnection, 20000);
+    setTimeout(checkConnection, 5000);
+    setTimeout(checkConnection, 16000);
     setInterval(checkPower, 15000);
     setTimeout(checkPower, 5000);
     var moment = document.createElement('p');

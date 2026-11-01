@@ -321,6 +321,28 @@ test('plus d\'internet depuis une minute : la carte « Pas d\'internet » rempla
   } finally { await b.fermer(); }
 });
 
+test('démarrage sans internet avec des envois : la carte « Pas d\'internet » vient en moins de 20 s', async () => {
+  const b = await ouvrir('2026-10-26T10:00:00', { reseau: { wifi: '', internet: false, mobile: false, sim: true } });
+  try {
+    await b.android('onPosts', lot([envoi({ seen: true })]));
+    await b.avancer(17000);
+    assert.ok(await b.visible('.wifi-card'), 'carte affichée sans attendre une minute');
+    await sansErreur(b);
+  } finally { await b.fermer(); }
+});
+
+test('horloge pas encore à l\'heure (date d\'usine) : jamais « il y a -568 jours »', async () => {
+  const b = await ouvrir('2025-04-11T10:00:00');
+  try {
+    await b.android('onPosts', lot([envoi({ seen: true, createdAt: Date.parse('2026-10-31T09:00:00+01:00') })]));
+    await b.avancer(2000);
+    const legende = await b.texte('#frame-caption');
+    assert.ok(!/-\d/.test(legende), 'pas de durée négative : ' + legende);
+    assert.match(legende, /Julie/);
+    await sansErreur(b);
+  } finally { await b.fermer(); }
+});
+
 test('démarrage sans internet : l\'écran du wifi s\'ouvre, puis se ferme seul quand internet revient', async () => {
   const b = await ouvrir('2026-10-26T10:00:00', { reseau: { wifi: '', internet: false, mobile: false, sim: false } });
   try {
