@@ -229,6 +229,14 @@ function restitutionEchue(restitution, maintenant) {
   return limite != null && limite <= maintenant;
 }
 
+// Reprendre un abonnement dont l'arrêt est prévu : impossible une fois la tablette en retour, sauf pour Papote
+// (Tanguy, 02/11) quand le retour a été demandé AVANT la date d'arrêt (« Je renvoie la tablette », anticipe) et
+// qu'il est encore attendu sans remise en main propre notée. Le colis déposé se vérifie à part (Sendcloud).
+function reprisePossible(restitution, admin) {
+  if (!restitution) return true;
+  return admin === true && restitution.anticipe === true && restitution.statut === 'attendue' && !restitution.mainPropreLe;
+}
+
 // Ancienne commande d'un client qui recommande (même IBAN, e-mail, téléphone ou adresse) : raisons d'en faire
 // un mauvais payeur (Tanguy, 2026-10-22 : « grosse signalisation » avant d'envoyer une 2e tablette).
 // commande : commandes/{id} ; statutFamille : families/{fid}.abonnement.statut ou null.
@@ -303,6 +311,7 @@ module.exports = {
   montantManquants,
   limiteRestitution,
   restitutionEchue,
+  reprisePossible,
   RETRACTATION_JOURS,
   receptionDe,
   materielParti,
