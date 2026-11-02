@@ -339,6 +339,9 @@ test('horloge pas encore à l\'heure (date d\'usine) : jamais « il y a -568 jou
     const legende = await b.texte('#frame-caption');
     assert.ok(!/-\d/.test(legende), 'pas de durée négative : ' + legende);
     assert.match(legende, /Julie/);
+    // Ni heure ni date fausses à l'accueil tant que l'horloge n'est pas à l'heure.
+    assert.strictEqual((await b.texte('#clock')).trim(), '');
+    assert.match(await b.texte('#date'), /attend le réseau/);
     await sansErreur(b);
   } finally { await b.fermer(); }
 });

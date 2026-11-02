@@ -84,8 +84,34 @@
 
   var dimmed = null;
 
+  // Heure sûre ? Sans réseau au démarrage, l'horloge peut repartir de sa date d'usine (vu le 01/11 :
+  // « il y a -568 jours »). Tant qu'elle est avant cette date, ou avant la dernière heure vue par la
+  // page, on n'affiche ni heure ni date, et ni rappels ni veille ne se déclenchent (Tanguy, 01/11).
+  var HEURE_PLANCHER = Date.UTC(2026, 9, 1);
+  var heureVue = 0;
+  try { heureVue = +localStorage.getItem('papote.heureVue') || 0; } catch (e) { }
+  function heureSure() {
+    var now = Date.now();
+    if (now < HEURE_PLANCHER || now < heureVue - 3600000) return false;
+    if (now - heureVue > 600000) {
+      heureVue = now;
+      try { localStorage.setItem('papote.heureVue', String(now)); } catch (e) { }
+    }
+    return true;
+  }
+
   function tick() {
     var now = new Date();
+    if (!heureSure()) {
+      $('clock').textContent = '';
+      $('setup-clock').textContent = '';
+      $('date').textContent = 'Papote attend le réseau pour se mettre à l’heure';
+      if ($('overlay-clock')) $('overlay-clock').textContent = '';
+      if ($('moment')) $('moment').textContent = '';
+      document.body.className = playing && playing.post.video && !playing.cadre ? 'video-playing' : '';
+      if (dimmed) { dimmed = false; if (android() && android().setDim) android().setDim(false); }
+      return;
+    }
     var time = now.getHours() + ':' + pad(now.getMinutes());
     $('clock').textContent = time;
     $('setup-clock').textContent = time;
@@ -1211,6 +1237,7 @@
 
   function checkReminders() {
     if (isShown('view-home')) renderFrame();
+    if (!heureSure()) return; // horloge pas à l'heure : pas de rappel au mauvais moment
     var now = new Date();
     var nowMin = now.getHours() * 60 + now.getMinutes();
     var key = dateKey(now);
@@ -1385,7 +1412,7 @@
   }
 
   function renderBirthdayBanner() {
-    var today = todaysBirthdays();
+    var today = heureSure() ? todaysBirthdays() : [];
     var el = $('bday-banner');
     if (!today.length) { show(el, false); return; }
     var names = [];
@@ -1397,7 +1424,7 @@
 
   function checkBirthdays() {
     renderBirthdayBanner();
-    if (isShown('bday-alert') || asleep) return;
+    if (isShown('bday-alert') || asleep || !heureSure()) return;
     // Le grand écran d'anniversaire attend 9 h (pas au réveil de la tablette, à 7 h).
     if (new Date().getHours() < 9) return;
     if (isShown('overlay') || isShown('reminder-alert') || isShown('call-ring') || isShown('call-view')) return;
@@ -2703,7 +2730,7 @@
     return false;
   }
 
-  function isNight(min) { return veille.active && inHours(min, veille.de, veille.a); }
+  function isNight(min) { return veille.active && heureSure() && inHours(min, veille.de, veille.a); }
 
   // Couleurs du soir : deux heures avant la veille jusqu'au réveil (19h-6h30 sans réglage),
   // 21h-7h si la veille est coupée.
