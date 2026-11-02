@@ -2047,7 +2047,23 @@ final class Sync {
             JSONObject w = new JSONObject(wifi().status());
             sb.append(w.optString("wifi").isEmpty() ? "Pas de wifi" : "Wifi « " + w.optString("wifi") + " »");
             sb.append(w.optBoolean("internet") ? ", internet OK" : ", pas d'internet");
-            if (w.optBoolean("sim")) sb.append(", carte SIM présente");
+            if (w.optBoolean("sim")) {
+                sb.append(", carte SIM présente");
+                // Réseau mobile et meilleure antenne entendue (Antennes), pour juger la couverture chez Mamie.
+                JSONObject info = SimInfo.read(context);
+                if (info != null && !info.optString("service").isEmpty()) {
+                    sb.append(" (réseau ").append(info.optString("service"));
+                    JSONArray ant = info.optJSONArray("antennes");
+                    JSONObject a0 = ant == null ? null : ant.optJSONObject(0);
+                    if (a0 != null) {
+                        sb.append(", ").append(a0.optString("nom").isEmpty() ? a0.optString("reseau") : a0.optString("nom"))
+                                .append(' ').append(a0.optString("type"));
+                        if (a0.optInt("bande", -1) > 0) sb.append(" bande ").append(a0.optInt("bande"));
+                        sb.append(' ').append(a0.optInt("dbm")).append(" dBm");
+                    }
+                    sb.append(')');
+                }
+            }
             android.os.BatteryManager bm =
                     (android.os.BatteryManager) context.getSystemService(Context.BATTERY_SERVICE);
             sb.append(". Batterie ").append(bm.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY))
@@ -2075,6 +2091,11 @@ final class Sync {
                         .put("signal", new JSONObject().put("integerValue", String.valueOf(info.optInt("signal", -1))))
                         .put("dataMoisMo", new JSONObject().put("integerValue", String.valueOf(info.optLong("dataMoisMo", -1))))
                         .put("numero", Firebase.string(info.optString("numero")))
+                        // Réseau mobile chez Mamie (Antennes) : l'admin prévient si l'opérateur de la SIM
+                        // n'a aucune antenne ou si le signal est faible.
+                        .put("simReseau", Firebase.string(info.optString("simReseau")))
+                        .put("service", Firebase.string(info.optString("service")))
+                        .put("antennes", Antennes.enFirestore(info.optJSONArray("antennes")))
                         // Garde-fou du forfait (Forfait) : conso depuis la recharge, plafond et palier, pour que
                         // l'app famille prévienne (« forfait à 80 % », « appels sans image »).
                         .put("dataCycleMo", new JSONObject().put("integerValue", String.valueOf(forfait.optLong("consoMo", -1))))

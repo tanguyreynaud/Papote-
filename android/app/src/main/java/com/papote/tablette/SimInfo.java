@@ -60,6 +60,8 @@ final class SimInfo {
             sim.put("dataMoisMo", monthlyDataMb(context, tm));
             // Numéro de la ligne, montré à la famille (vide quand Android ne le lit pas : l'admin le saisit).
             sim.put("numero", Telephone.numeroTablette(context));
+            // Antennes entendues et service du réseau mobile (Antennes), pour l'admin.
+            Antennes.ajouter(context, tm, sim);
             return sim;
         } catch (Exception e) {
             Log.w("Papote", "Carte SIM", e);
