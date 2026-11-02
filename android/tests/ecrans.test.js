@@ -313,10 +313,10 @@ test('plus d\'internet depuis une minute : la carte « Pas d\'internet » rempla
     await b.android('onPosts', lot([]));
     await b.etat({ reseau: { wifi: '', internet: false, mobile: false, sim: false } });
     await b.avancer(100000);
-    assert.ok(await b.visible('.wifi-card'));
+    assert.ok(await b.visible('.net-banner'));
     await b.etat({ reseau: { wifi: 'Box', internet: true, mobile: false, sim: false } });
     await b.avancer(4000);
-    assert.ok(!(await b.visible('.wifi-card')), 'disparue en quelques secondes au retour du réseau');
+    assert.ok(!(await b.visible('.net-banner')), 'disparue en quelques secondes au retour du réseau');
     await sansErreur(b);
   } finally { await b.fermer(); }
 });
@@ -326,7 +326,7 @@ test('démarrage sans internet avec des envois : la carte « Pas d\'internet » 
   try {
     await b.android('onPosts', lot([envoi({ seen: true })]));
     await b.avancer(17000);
-    assert.ok(await b.visible('.wifi-card'), 'carte affichée sans attendre une minute');
+    assert.ok(await b.visible('.net-banner'), 'carte affichée sans attendre une minute');
     await sansErreur(b);
   } finally { await b.fermer(); }
 });

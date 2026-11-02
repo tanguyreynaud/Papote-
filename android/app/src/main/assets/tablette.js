@@ -1493,28 +1493,23 @@
       wifiAutoOpened = true;
       window.PapoteBienvenue.openWifi();
     }
+    // Une petite étiquette « Pas d'internet » sur la photo, comme « Tablette débranchée » : Mamie garde
+    // ses photos et le diaporama (Tanguy, 02/11). Sur une tablette à wifi, la toucher ouvre le wifi.
     if (!wifiCard) {
       if (!showIt) return;
       wifiCard = document.createElement('div');
-      wifiCard.className = 'wifi-card';
-      wifiCard.innerHTML = '<img class="wifi-card-art" src="bienvenue/wifi.svg" alt="">' +
-        '<p class="wifi-card-title">Pas d’internet</p>' +
-        '<p class="wifi-card-text"></p>' +
-        '<button class="wifi-card-btn">Régler le wifi</button>';
-      // Toucher la carte n'ouvre pas la galerie photo (le cadre en dessous) ; le bouton ouvre le wifi.
+      wifiCard.className = 'power-banner net-banner';
+      wifiCard.innerHTML = '<svg class="power-plug" viewBox="0 0 24 24" aria-hidden="true">' +
+        '<path d="M2 8.5a15 15 0 0 1 20 0M5 12a10 10 0 0 1 14 0M8.5 15.5a5 5 0 0 1 7 0M3 3l18 18" fill="none" ' +
+        'stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>' +
+        '<span>Pas d’internet</span>';
       on(wifiCard, 'click', function (e) {
         e.stopPropagation();
-        if (e.target.tagName === 'BUTTON' && window.PapoteBienvenue) window.PapoteBienvenue.openWifi();
+        if (wifiCard.papoteWifi && window.PapoteBienvenue) window.PapoteBienvenue.openWifi();
       });
-      $('home-frame').appendChild(wifiCard);
+      $('view-home').appendChild(wifiCard);
     }
-    if (showIt) {
-      var simOnly = st.sim && !st.wifi;
-      wifiCard.querySelector('.wifi-card-text').textContent = simOnly
-        ? 'Le réseau mobile ne répond pas pour le moment. La tablette réessaie toute seule.'
-        : 'La tablette n’est plus connectée au wifi.';
-      show(wifiCard.querySelector('.wifi-card-btn'), !simOnly);
-    }
+    if (showIt) wifiCard.papoteWifi = !(st.sim && !st.wifi);
     show(wifiCard, !!showIt);
   }
 
@@ -1554,6 +1549,7 @@
       $('view-home').appendChild(powerBanner);
     }
     show(powerBanner, !!showIt);
+    document.body.classList.toggle('debranchee', !!showIt);
   }
 
   // ---------- Appeler la famille (appel audio, sans vidéo) ----------

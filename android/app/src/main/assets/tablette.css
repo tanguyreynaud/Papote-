@@ -1858,6 +1858,9 @@ html .power-banner {
   background: rgba(253, 250, 245, .95); color: #b42318; box-shadow: 0 1vmin 3vmin rgba(36, 33, 47, .25);
 }
 html .power-banner .power-plug { width: 5vmin; height: 5vmin; -webkit-flex: none; flex: none; }
+/* « Pas d'internet » : même étiquette, sous « Tablette débranchée » quand les deux sont là (02/11). */
+html .net-banner { color: #3730a3; }
+html body.debranchee .net-banner { top: 12vmin; }
 /* T17 : rendez-vous dans l'heure, en carte crème comme les photos et les messages. */
 html .frame-rdv {
   top: 3vmin; right: 3vmin; bottom: 3vmin; left: 3vmin; padding: 5vmin; border-radius: 3vmin;
