@@ -302,10 +302,10 @@ const SCENES = [
     await t.faux({ wifi: { wifi: '', internet: false } });
     await t.avancer(100000); await t.attendre(400);
   } },
-  { groupe: 'Accueil', titre: 'Pas d’internet : régler le wifi', faire: async (t) => {
+  { groupe: 'Accueil', titre: 'Pas d’internet : toucher l’étiquette ouvre le wifi', faire: async (t) => {
     await accueil(t, photosVues());
     await t.faux({ wifi: { wifi: '', internet: false } });
-    await t.avancer(100000); await t.cliquer('.wifi-card-btn'); await t.attendre(1600);
+    await t.avancer(100000); await t.cliquer('.net-banner, .wifi-card-btn'); await t.attendre(1600);
   } },
   { groupe: 'Accueil', titre: 'Pas de réseau (tablette à carte SIM)', faire: async (t) => {
     await accueil(t, photosVues());
