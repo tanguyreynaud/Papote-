@@ -53,6 +53,9 @@
     '.ps-rappel input{border:1px solid var(--ps-ligne);border-radius:10px;padding:.55rem .7rem;font:inherit;font-size:1.05rem;color:var(--ps-texte);background:var(--ps-fond)}' +
     '.ps-rappel button{border:0;border-radius:12px;background:var(--ps-indigo);color:#fff;font:inherit;font-weight:700;padding:.7rem;cursor:pointer}' +
     '.ps-rappel button:disabled{opacity:.5;cursor:default}' +
+    '.ps-rappel button.ps-envoi{opacity:.85;display:flex;align-items:center;justify-content:center;gap:.5rem}' +
+    '.ps-rappel button.ps-envoi::before{content:"";width:1rem;height:1rem;border-radius:50%;border:2px solid rgba(255,255,255,.45);border-top-color:#fff;animation:ps-tourne .8s linear infinite}' +
+    '@keyframes ps-tourne{to{transform:rotate(360deg)}}' +
     '.ps-rappel .ps-case{flex-direction:row;align-items:flex-start;gap:.6rem;color:var(--ps-texte);background:var(--ps-doux);border-radius:10px;padding:.6rem .7rem;cursor:pointer}' +
     '.ps-case b{color:var(--ps-indigo-fonce)}' +
     '.ps-case small{display:block;color:var(--ps-gris);font-size:.85rem;margin-top:.15rem}' +
@@ -192,7 +195,10 @@
           return;
         }
         erreur.textContent = '';
+        // Le bouton dit ce qu'il fait pendant l'envoi (Tanguy, 2/11 : un signe à chaque attente de plus de 0,25 s).
         go.disabled = true;
+        go.classList.add('ps-envoi');
+        go.textContent = 'Envoi…';
         var conversation = historique.slice(-12);
         while (conversation.length && conversation[conversation.length - 1].role !== 'user') conversation.pop();
         poster({ inscription: { prenom: v.prenom, nom: v.nom, telephone: v.telephone, email: v.email, marketing: accord.checked } })
@@ -217,6 +223,8 @@
           })
           .catch(function (d) {
             go.disabled = false;
+            go.classList.remove('ps-envoi');
+            go.textContent = 'Réessayer';
             erreur.textContent = (d && d.erreur) || ('Envoi impossible. Écrivez-nous à ' + EMAIL + '.');
           });
       };

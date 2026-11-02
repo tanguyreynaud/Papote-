@@ -20,6 +20,7 @@
 <!-- Polices servies par le site lui-même et demandées tout de suite : elles arrivent avant l'affichage
      dans la plupart des cas. Sinon, le texte s'affiche d'abord en police du téléphone, agrandie ou réduite (« … repli »)
      pour prendre la même place : rien ne saute quand la vraie police arrive. -->
+<link rel="preload" href="ecran-accueil.webp" as="image" type="image/webp" fetchpriority="high">
 <link rel="preload" href="/polices/bricolage.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/polices/atkinson-400.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/polices/atkinson-700.woff2" as="font" type="font/woff2" crossorigin>
@@ -127,7 +128,7 @@ section { padding-block: clamp(3rem, 7vw, 5rem); }
 .stand { height: 1.3rem; width: 36%; margin-top: -.1rem; background: linear-gradient(#e2d8c8, #c8bba7); border-radius: 0 0 10px 10px; }
 .meuble { position: relative; z-index: 0; height: clamp(2.5rem, 6vw, 3.5rem); margin: 0 -1% 0; border-top: 10px solid var(--bois); box-shadow: inset 0 6px 0 var(--bois-fonce); border-radius: 4px 4px 0 0; }
 .scene figcaption { color: var(--muted); font-size: .95rem; text-align: center; padding: .9rem 1rem 1.1rem; }
-.screen { display: block; width: 100%; height: auto; border-radius: 8px; }
+.screen { display: block; width: 100%; height: auto; border-radius: 8px; background: var(--bg); } /* crème tant que l'image n'est pas là, jamais un écran noir (Tanguy, 2/11) */
 /* Ce que vous payez : trois moments, dans l'ordre du temps. */
 .payer { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
 @media (max-width: 760px) { .payer { grid-template-columns: minmax(0, 1fr); } }
