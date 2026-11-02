@@ -54,7 +54,7 @@ function gestionDonnees(o = {}) {
     { id: 'T-003', ref: 'T-003', numero: 'Tab60P15EEA026347', modele: 'Blackview Tab 60 Pro', etat: 'preparee', commande: 'CMD-AB12', prixAchat: 12999, acheteeLe: il(6), depense: 'D-A2', creeLe: il(6) },
     { id: 'T-004', ref: 'T-004', numero: 'BV60P-0004', modele: 'Blackview Tab 60 Pro', etat: 'envoyee', commande: 'CMD-EF56', sim: '07 45 98 76 54', simId: 'S2', prixAchat: 12999, acheteeLe: il(6), depense: 'D-A2', creeLe: il(6) },
     { id: 'T-005', ref: 'T-005', numero: 'BV60P-0005', modele: 'Blackview Tab 60 Pro', etat: 'envoyee', commande: 'CMD-RT22', sim: '06 98 76 54 32', simId: 'S3', prixAchat: 12999, acheteeLe: il(30), depense: 'D-A0', creeLe: il(30) },
-    { id: 'T-006', ref: 'T-006', numero: 'BV60P-0006', modele: 'Blackview Tab 60 Pro', etat: 'chez-client', commande: 'CMD-IM90', fid: 'f-henri', sim: '07 51 23 45 67', simId: 'S4', batterie: { niveau: 15, le: il(0.2) }, prixAchat: 12999, acheteeLe: il(45), depense: 'D-A0', creeLe: il(45) },
+    { id: 'T-006', ref: 'T-006', numero: 'BV60P-0006', modele: 'Blackview Tab 60 Pro', etat: 'chez-client', commande: 'CMD-IM90', fid: 'f-henri', tabletUid: 't-henri', sim: '07 51 23 45 67', simId: 'S4', batterie: { niveau: 15, le: il(0.2) }, prixAchat: 12999, acheteeLe: il(45), depense: 'D-A0', creeLe: il(45) },
     { id: 'T-007', ref: 'T-007', numero: 'BV60P-0007', modele: 'Blackview Tab 60 Pro', etat: 'chez-client', commande: 'CMD-RS45', fid: 'f-odette', sim: '07 51 00 11 22', simId: 'S5', prixAchat: 12999, acheteeLe: il(80), depense: 'D-A0', creeLe: il(80) },
     { id: 'T-008', ref: 'T-008', numero: 'BV60P-0008', modele: 'Blackview Tab 60 Pro', etat: 'revenue', prixAchat: 12999, acheteeLe: il(80), depense: 'D-A0', creeLe: il(80), batterie: { niveau: 64, le: il(2) } },
     { id: 'T-009', ref: 'T-009', numero: 'BV60P-0009', modele: 'Blackview Tab 60 Pro', etat: 'revenue', usure: 'batterie usée (62 % de sa capacité)', prixAchat: 12999, acheteeLe: il(200), depense: 'D-A0', creeLe: il(200) },
@@ -184,7 +184,14 @@ function donnees(o = {}) {
   const docs = famillePleine({ sim: true });
   docs['families/f-henri'] = { name: 'Papi Henri', createdBy: 'u-nicolas', abonnement: { statut: 'impaye', formule: 'sim', graceJusqua: { __ms: il(-6) } } };
   docs['families/f-henri/members/u-nicolas'] = membre('u-nicolas', 'Nicolas');
-  docs['families/f-henri/members/t-henri'] = membre('t-henri', 'Tablette', { role: 'tablette', email: '', lastOnline: { __ms: il(0.3) }, lastActive: { __ms: il(0.9) }, appVersion: '2.99.88' });
+  // Antennes entendues (tablette 2.99.105+) : chez Jeanne tout va bien ; chez Henri la carte (Lyca, réseau Bouygues) n'a
+  // aucune antenne, seulement Orange (cas réel de Poissy, 01/11) : alerte à l'accueil et sur la page de la tablette.
+  const antenne = (reseau, type, bande, dbm, utilisee = false) => ({ reseau, nom: '', type, bande, dbm, utilisee });
+  docs[`families/${FID}/members/tab-jeanne`] = membre('tab-jeanne', 'Tablette', { role: 'tablette', email: '', lastOnline: { __ms: il(0.01) }, lastActive: { __ms: il(0.05) }, appVersion: '2.99.106',
+    battery: { level: 82, charging: true }, sim: { operateur: 'Lycamobile', reseau: 'Bouygues Telecom', signal: 3, dataMoisMo: 214, service: 'ok', simReseau: '20825',
+      antennes: [antenne('20801', '4G', 3, -88), antenne('20820', '4G', 20, -95, true), antenne('20810', '4G', 28, -101)] } });
+  docs['families/f-henri/members/t-henri'] = membre('t-henri', 'Tablette', { role: 'tablette', email: '', lastOnline: { __ms: il(0.3) }, lastActive: { __ms: il(0.9) }, appVersion: '2.99.88',
+    sim: { operateur: 'Lycamobile', reseau: '', signal: 0, dataMoisMo: 3, service: 'urgences', simReseau: '20825', antennes: [antenne('20801', '4G', 28, -106)] } });
   docs['families/f-paulette'] = { name: 'Mamie Paulette', code: 'PAUL2345', createdBy: 'u-luc', createdAt: { __ms: il(60) }, abonnement: { statut: 'suspendu', formule: 'sim' } };
   docs['families/f-paulette/members/u-luc'] = membre('u-luc', 'Luc');
   docs['families/f-paulette/members/t-paulette'] = membre('t-paulette', 'Tablette', { role: 'tablette', email: '', lastOnline: { __ms: il(3) }, lastActive: { __ms: il(3) }, appVersion: '2.99.80' });
@@ -305,6 +312,7 @@ const SCENES = [
 
   { groupe: 'Stock', titre: 'Stock : tablettes', page: '#stock/tablettes', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees() },
   { groupe: 'Stock', titre: 'Tablette chez le client (batterie, SIM, famille)', page: '#tablette/T-001', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees() },
+  { groupe: 'Stock', titre: 'Tablette chez le client, carte SIM sans réseau ici (antennes)', page: '#tablette/T-006', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees() },
   { groupe: 'Stock', titre: 'Tablette en stock', page: '#tablette/T-002', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Stock', titre: 'Tablette préparée pour une commande', page: '#tablette/T-003', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Stock', titre: 'Tablette revenue, à vérifier', page: '#tablette/T-008', tailles: ['pc'], plein: true, donnees: () => donnees() },
