@@ -1007,6 +1007,23 @@
   var bootStart = Date.now();
   var bootDone = false;
 
+  // Démarrage lent (connexion faible) : au bout de 2 s, un mot qui change toutes les 3 s pour faire
+  // passer le temps (Tanguy, 2/11). Rien tant que le démarrage est rapide.
+  var BOOT_NOTES = ['Papote se réveille…', 'On cherche les photos de la famille…', 'On regarde la météo…', 'On y est presque…'];
+  (function animerBoot() {
+    var note = $('boot-note');
+    if (!note) return;
+    var i = 0;
+    function suivant() {
+      if (bootDone || !note.parentNode) return;
+      note.textContent = BOOT_NOTES[Math.min(i, BOOT_NOTES.length - 1)];
+      note.className = 'boot-note visible';
+      i++;
+      if (i < BOOT_NOTES.length) setTimeout(suivant, 3000);
+    }
+    setTimeout(suivant, 2000);
+  })();
+
   function hideBoot() {
     if (bootDone) return;
     bootDone = true;
@@ -1038,7 +1055,13 @@
     if (window.PapoteBienvenue) {
       // Pas encore de famille (ou remise sur Bienvenue) : pas d'écran « en pause » d'une famille d'avant.
       if (status.state === 'welcome') { setPaused(''); window.PapoteBienvenue.show(status); return; }
-      window.PapoteBienvenue.hide();
+      // Fin de l'installation : l'écran de bienvenue reste jusqu'aux premiers envois (6 s au plus),
+      // au lieu d'un accueil vide pendant 2 s (relecture du 28/10).
+      if (status.state === 'ok' && !hasData && !bienvenueAttend) {
+        bienvenueAttend = true;
+        setTimeout(finBienvenue, 6000);
+      }
+      if (!bienvenueAttend) window.PapoteBienvenue.hide();
     }
     if (status.state === 'setup') {
       $('setup-detail').textContent = status.message || '';
@@ -1048,8 +1071,16 @@
     }
   }
 
+  var bienvenueAttend = false;
+  function finBienvenue() {
+    if (!bienvenueAttend) return;
+    bienvenueAttend = false;
+    if (window.PapoteBienvenue) window.PapoteBienvenue.hide();
+  }
+
   function onPosts(payload) {
     hasData = true;
+    if (bienvenueAttend) setTimeout(finBienvenue, 300);
     // On garde « vu » localement même si Firebase ne l'a pas encore enregistré.
     var seenBefore = {};
     for (var i = 0; i < posts.length; i++) if (posts[i].seen) seenBefore[posts[i].id] = true;
@@ -1538,6 +1569,9 @@
     if (charging) unpluggedSince = 0;
     else if (!unpluggedSince) unpluggedSince = now;
     var showIt = unpluggedSince && now - unpluggedSince > 60000;
+    // Toujours débranchée après 5 minutes : la même pastille, un peu plus grande et plus parlante,
+    // calme (Tanguy, 2/11 : « un peu plus gros »). La famille n'est prévenue qu'après 10 minutes.
+    var longtemps = unpluggedSince && now - unpluggedSince > 5 * 60000;
     if (!powerBanner) {
       if (!showIt) return;
       powerBanner = document.createElement('div');
@@ -1549,6 +1583,10 @@
       $('view-home').appendChild(powerBanner);
     }
     show(powerBanner, !!showIt);
+    if (powerBanner.className !== 'power-banner' + (longtemps ? ' longtemps' : '')) {
+      powerBanner.className = 'power-banner' + (longtemps ? ' longtemps' : '');
+      powerBanner.querySelector('span').textContent = longtemps ? 'Pensez à rebrancher la tablette' : 'Tablette débranchée';
+    }
     document.body.classList.toggle('debranchee', !!showIt);
   }
 
@@ -1699,8 +1737,12 @@
     return b;
   }
 
-  // Liste « Qui voulez-vous appeler ? » : retour à l'accueil après 1 minute sans toucher l'écran.
+  // Liste « Qui voulez-vous appeler ? » : retour à l'accueil après 1 minute sans toucher l'écran ;
+  // 20 s seulement quand la liste revient après un appel sans réponse (Tanguy, 2/11) : Mamie n'a
+  // rien demandé de plus, l'accueil revient tout seul.
   var PICKER_IDLE_MS = 60000;
+  var PICKER_APRES_APPEL_MS = 20000;
+  var pickerIdleMs = PICKER_IDLE_MS;
   var pickerTimer = null;
   function pickerOpen() {
     return !!callScreen && !callScreen.hasAttribute('hidden') && /\bpicker\b/.test(callScreen.className);
@@ -1710,9 +1752,15 @@
     if (!pickerOpen()) return;
     pickerTimer = setTimeout(function () {
       if (pickerOpen()) { pickerPage = 0; closeCallScreen(); }
-    }, PICKER_IDLE_MS);
+    }, pickerIdleMs);
   }
-  document.addEventListener('pointerdown', armPickerIdle, true);
+  document.addEventListener('pointerdown', function () { pickerIdleMs = PICKER_IDLE_MS; armPickerIdle(); }, true);
+  // La liste revenue toute seule après un appel : son compte à rebours démarre sans toucher.
+  function showPickerApresAppel() {
+    pickerIdleMs = PICKER_APRES_APPEL_MS;
+    showPicker();
+    armPickerIdle();
+  }
 
   function onCallButton() {
     pickerPage = 0;
@@ -1850,7 +1898,7 @@
     renderCall('ended', title, sub, uid, nom);
     setTimeout(function () {
       if (!gsm && /state-ended/.test(callScreen.className)) {
-        if (backToList && CALL_MODE === 'personne') showPicker(); else closeCallScreen();
+        if (backToList && CALL_MODE === 'personne') showPickerApresAppel(); else closeCallScreen();
       }
     }, 4000);
   }
@@ -1963,7 +2011,7 @@
       renderCall('ended', title, sub, uid, name);
       setTimeout(function () {
         outCall = null;
-        if (backToList && CALL_MODE === 'personne') showPicker();
+        if (backToList && CALL_MODE === 'personne') showPickerApresAppel();
         else closeCallScreen();
       }, 4000);
     }
@@ -2740,6 +2788,8 @@
   var wakeUntil = 0;
   var asleep = false;
   var sleepScreen = null;
+  var sleepFade = null;
+  var nuitDeja = false; // déjà passée en veille cette nuit (le fondu ne joue qu'au coucher)
 
   function somethingToShow() {
     var ids = ['reminder-alert', 'call-ring', 'call-view'];
@@ -2752,16 +2802,41 @@
   function updateSleep() {
     var now = new Date();
     var night = isNight(now.getHours() * 60 + now.getMinutes());
+    if (!night) nuitDeja = false;
     var should = night && Date.now() > wakeUntil && !somethingToShow();
     if (should) stopRadio();
     if (should === asleep) return;
     asleep = should;
-    sleepScreen.style.display = should ? 'block' : 'none';
+    // Extinction du soir en fondu de 2 s, comme une lampe qu'on baisse (Tanguy, 2/11) ; le réveil au
+    // toucher reste immédiat. La luminosité d'Android baisse à la fin du fondu.
+    clearTimeout(sleepFade);
+    // Le fondu : seulement au coucher du soir (premier passage en veille de la nuit, tablette déjà
+    // démarrée). Rendormie après un toucher ou un appel : tout de suite, comme avant.
+    var fondu = should && bootDone && !nuitDeja;
+    if (should) nuitDeja = true;
+    if (should && !fondu) {
+      sleepScreen.style.transition = 'none';
+      sleepScreen.style.opacity = '1';
+      sleepScreen.style.display = 'block';
+      if (android() && android().setSleep) android().setSleep(true);
+    } else if (should) {
+      sleepScreen.style.transition = 'none';
+      sleepScreen.style.opacity = '0';
+      sleepScreen.style.display = 'block';
+      void sleepScreen.offsetWidth;
+      sleepScreen.style.transition = 'opacity 2s ease-in';
+      sleepScreen.style.opacity = '1';
+      sleepFade = setTimeout(function () { if (asleep && android() && android().setSleep) android().setSleep(true); }, 2000);
+    } else {
+      sleepScreen.style.transition = 'none';
+      sleepScreen.style.opacity = '0';
+      sleepScreen.style.display = 'none';
+    }
     if (should) { showView('view-home'); stopRadio(); }
     // Envoi affiché au moment de la veille : il attend, sans être compté comme vu (comme pour un appel).
     if (should) closeOverlayForCall();
     else if (!overlayPost && overlayQueue.length && !inCall()) nextOverlay();
-    if (android() && android().setSleep) android().setSleep(should);
+    if (!should && android() && android().setSleep) android().setSleep(false);
   }
 
   function wakeScreen() {

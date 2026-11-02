@@ -516,7 +516,14 @@
     preloadFaceDetector();
     stepNum = 3;
     art = ''; // le QR code est l'illustration
-    var box = screen('Connectez votre téléphone', '');
+    // Le proche règle la tablette sur son téléphone : le sous-titre suit ses étapes (Tanguy, 2/11).
+    var sousTitre = '';
+    if (s.joined) {
+      var qui = s.claimedName || 'Votre proche';
+      var etapes = { son: qui + ' règle le son…', options: qui + ' choisit les options…', fini: 'Presque prêt…' };
+      sousTitre = etapes[s.etape] || (qui + ' s’en occupe sur son téléphone…');
+    }
+    var box = screen('Connectez votre téléphone', sousTitre);
     if (!s.error) sayGuide('code', 'Dernière étape : avec votre téléphone, scannez le code affiché à l\'écran.');
     if (s.error) {
       box.appendChild(el('p', 'welcome-error', s.error));
@@ -701,7 +708,7 @@
       if (placing) return; // la tablette est reliée : on finit le placement avant tout le reste
       ensureRoot();
       root.removeAttribute('hidden');
-      var key = s.step + '|' + (s.code || '') + '|' + (s.error || '') + '|' + (s.claimedName || '') + '|' + (s.familyName || '') + '|' + (s.restart ? 1 : 0) + '|' + (s.joined ? 1 : 0) + '|' + (s.reprendre ? 1 : 0);
+      var key = s.step + '|' + (s.code || '') + '|' + (s.error || '') + '|' + (s.claimedName || '') + '|' + (s.familyName || '') + '|' + (s.restart ? 1 : 0) + '|' + (s.joined ? 1 : 0) + '|' + (s.reprendre ? 1 : 0) + '|' + (s.etape || '');
       if (key === current) return; // déjà affiché (et la saisie en cours n'est pas effacée)
       current = key;
       clearInterval(wifiTimer);

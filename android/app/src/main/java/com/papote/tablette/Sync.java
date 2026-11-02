@@ -2291,8 +2291,16 @@ final class Sync {
             JSONObject in = ff.optJSONObject("installation");
             JSONObject inf = in == null || in.optJSONObject("mapValue") == null ? null
                     : in.optJSONObject("mapValue").optJSONObject("fields");
-            if (inf != null && "fini".equals(Firebase.str(inf, "etape"))) finInstallation();
-            else relireReprise();
+            String etape = inf == null ? "" : nz(Firebase.str(inf, "etape"));
+            if ("fini".equals(etape)) finInstallation();
+            else {
+                relireReprise();
+                // L'écran du code suit les étapes du téléphone (« Julie règle le son… », Tanguy 2/11).
+                if (!etape.equals(prefs.getString("installEtape", ""))) {
+                    prefs.edit().putString("installEtape", etape).apply();
+                    try { welcome(installScreen()); } catch (JSONException e) { Log.w(TAG, "Étape d'installation", e); }
+                }
+            }
         }
         int sonnerie = ff.has("volumeSonnerie") ? (int) Math.max(10, Math.min(100, Firebase.integer(ff, "volumeSonnerie"))) : 100;
         if (sonnerie != prefs.getInt("volumeSonnerie", 100)) {
@@ -2306,6 +2314,7 @@ final class Sync {
         String code = prefs.getString("pairing", null);
         JSONObject s = new JSONObject().put("step", "pair").put("name", "Tablette")
                 .put("claimedName", prefs.getString("installPar", "")).put("joined", true)
+                .put("etape", prefs.getString("installEtape", ""))
                 .put("reprendre", reprisePossible());
         if (code != null) s.put("code", code);
         return s;
@@ -2345,7 +2354,7 @@ final class Sync {
         // Le code reste connu du compte des appels (pairingFait) : s'il n'a pas encore rejoint la famille
         // (il attendait un ancien code), il peut encore le faire avec celui-ci (règles : 1 h après expiration).
         String code = prefs.getString("pairing", null);
-        SharedPreferences.Editor e = prefs.edit().remove("installEnCours").remove("installPar").remove("installDepuis")
+        SharedPreferences.Editor e = prefs.edit().remove("installEnCours").remove("installPar").remove("installDepuis").remove("installEtape")
                 .remove("pairing").remove("pairingExpires");
         if (code != null) e.putString("pairingFait", code);
         e.apply();

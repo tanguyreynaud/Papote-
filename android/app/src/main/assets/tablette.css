@@ -1054,6 +1054,17 @@ html .bday-banner { font-size: calc(4.8vmin * var(--ts, 1)); }
   animation: boot-spin 1s linear infinite;
 }
 @keyframes boot-spin { to { transform: rotate(360deg); } }
+/* Un mot qui change pendant le démarrage lent (Tanguy, 2/11) : on sait que ça avance. */
+.boot-note {
+  margin: 4vmin 0 0;
+  min-height: 1.4em;
+  font-family: 'Atkinson Hyperlegible', Roboto, sans-serif;
+  font-size: 4.2vmin;
+  color: #5f5a6b;
+  opacity: 0;
+  transition: opacity .6s ease;
+}
+.boot-note.visible { opacity: 1; }
 
 /* Pas d'internet : carte à la place de la photo de l'accueil, avec le bouton du wifi */
 .home-frame { position: relative; }
@@ -1858,6 +1869,9 @@ html .power-banner {
   background: rgba(253, 250, 245, .95); color: #b42318; box-shadow: 0 1vmin 3vmin rgba(36, 33, 47, .25);
 }
 html .power-banner .power-plug { width: 5vmin; height: 5vmin; -webkit-flex: none; flex: none; }
+/* Débranchée depuis plus de 5 min : un peu plus grande, lisible à 3 m, toujours calme. */
+html .power-banner.longtemps { font-size: 5.2vmin; padding: 2.2vmin 4.5vmin; }
+html .power-banner.longtemps .power-plug { width: 6.5vmin; height: 6.5vmin; }
 /* « Pas d'internet » : même étiquette, sous « Tablette débranchée » quand les deux sont là (02/11). */
 html .net-banner { color: #3730a3; }
 html body.debranchee .net-banner { top: 12vmin; }
