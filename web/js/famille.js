@@ -2608,6 +2608,14 @@ function renderMembers(all) {
       tel.href = `tel:${telTablette.replace(/\s/g, '')}`;
       tel.textContent = telTablette;
       name.append(tel);
+      // Enregistrer le numéro de la tablette dans ses contacts (Tanguy, 2/11) : une fiche contact (vCard) que le
+      // téléphone propose d'ajouter ; la tablette sonne alors avec le bon nom quand elle appelle.
+      const fiche = document.createElement('button');
+      fiche.type = 'button';
+      fiche.className = 'link small member-vcard';
+      fiche.textContent = 'Enregistrer dans mes contacts';
+      fiche.addEventListener('click', () => enregistrerContact(session.family.name, telTablette, fiche));
+      name.append(fiche);
     }
     if (m.role === 'famille') {
       const f = session.family;
@@ -4300,6 +4308,35 @@ $('tablet-chip').addEventListener('click', () => {
   if (f) lignes.push(`Forfait internet : ${enGoOuMo(f.conso)} sur ${enGoOuMo(f.plafond)}${f.depuis ? ` depuis le ${f.depuis}` : ''}.`);
   notice(lignes.join(' '));
 });
+
+// Fiche contact (vCard 3.0) du numéro de la tablette : « Mamie Emma (Papote) », portable en +33.
+export function vcardTablette(nom, tel) {
+  const propre = String(nom || 'Tablette').replace(/[\r\n;,\\]/g, ' ').trim() || 'Tablette';
+  const intl = `+33${telPropre(tel).replace(/\s/g, '').slice(1)}`;
+  return ['BEGIN:VCARD', 'VERSION:3.0', `FN:${propre} (Papote)`, `N:;${propre} (Papote);;;`,
+    `TEL;TYPE=CELL:${intl}`, 'NOTE:Tablette Papote', 'END:VCARD', ''].join('\r\n');
+}
+function enregistrerContact(nom, tel, bouton) {
+  bouton.disabled = true;
+  const texte = bouton.textContent;
+  bouton.textContent = 'Un instant…';
+  try {
+    const url = URL.createObjectURL(new Blob([vcardTablette(nom, tel)], { type: 'text/vcard' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${String(nom || 'Tablette').replace(/[^\p{L}\p{N} -]/gu, '').trim() || 'Tablette'}.vcf`;
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    notice(`Fiche contact de ${nom} prête : ouvrez-la pour l'ajouter à vos contacts.`);
+  } catch (e) {
+    console.error(e);
+    notice("La fiche contact n'a pas pu être créée. Notez le numéro : " + tel);
+  } finally {
+    setTimeout(() => { bouton.disabled = false; bouton.textContent = texte; }, 1500);
+  }
+}
 
 // Dès que la tablette a un numéro (carte SIM), la tuile Photos laisse la place à
 // « Appeler » (par téléphone, à gauche ; Photos reste dans la barre du bas) : six tuiles, jamais cinq.
