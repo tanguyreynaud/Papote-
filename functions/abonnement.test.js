@@ -232,3 +232,14 @@ test('garderAbonnementActuel : une deuxième commande ne remplace pas un abonnem
   assert.equal(a.garderAbonnementActuel(actuel, 'sub_A', 'active'), false);
   assert.equal(a.garderAbonnementActuel(null, 'sub_B', 'active'), false);
 });
+
+test('reprise malgré un retour : seulement Papote, retour anticipé encore attendu, sans main propre (02/11)', () => {
+  assert.strictEqual(a.reprisePossible(null, false), true);
+  assert.strictEqual(a.reprisePossible(undefined, true), true);
+  assert.strictEqual(a.reprisePossible({ statut: 'attendue', anticipe: true }, true), true);
+  assert.strictEqual(a.reprisePossible({ statut: 'attendue', anticipe: true }, false), false, 'la famille écrit à Papote');
+  assert.strictEqual(a.reprisePossible({ statut: 'attendue' }, true), false, 'abonnement fini : retour normal');
+  assert.strictEqual(a.reprisePossible({ statut: 'attendue', anticipe: true, mainPropreLe: 1 }, true), false);
+  assert.strictEqual(a.reprisePossible({ statut: 'echec', anticipe: true }, true), false);
+  assert.strictEqual(a.reprisePossible({ statut: 'rendue', anticipe: true }, true), false);
+});

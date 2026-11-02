@@ -732,7 +732,8 @@ exports.gestionDonnees = onCall(async (request) => {
         // même famille) : son propre état chez Stripe et son propre arrêt prévu.
         abonnement: estCourante(famille, d.id) ? famille.abonnement.statut || null : (c.statutStripe || (famille && famille.abonnement ? famille.abonnement.statut || null : null)),
         resiliationLe: estCourante(famille, d.id) ? famille.abonnement.resiliationLe || null : c.resiliationLe || null,
-        restitution: c.restitution ? { statut: c.restitution.statut || null, avant: c.restitution.avant || null, mainPropreLe: c.restitution.mainPropreLe || null } : null,
+        restitution: c.restitution ? { statut: c.restitution.statut || null, avant: c.restitution.avant || null, mainPropreLe: c.restitution.mainPropreLe || null,
+          anticipe: c.restitution.anticipe === true } : null,
         remboursement: c.remboursement || null,
         restitutionErreur: c.restitution && c.restitution.erreur ? c.restitution.erreur : null,
         retractation: c.retractation || null,

@@ -690,18 +690,42 @@ async function mailArret(commandeId, fam, faire) {
   }
 }
 
-exports.annulerResiliation = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE] }, async (request) => {
+exports.annulerResiliation = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE, SENDCLOUD_API] }, async (request) => {
   const { fid } = request.data || {};
   const fam = await familleGeree(fid, request);
   const id = await abonnementVise(fid, fam, request);
   const abo = await stripe().subscriptions.retrieve(id);
-  if ((await db.doc(`commandes/${id}`).get()).get('restitution')) {
-    throw new HttpsError('failed-precondition', 'La tablette est déjà en retour : écrivez-nous pour garder l\'abonnement.');
+  const admin = request.auth.token.admin === true;
+  const ref = db.doc(`commandes/${id}`);
+  const commande = (await ref.get()).data() || {};
+  const r = commande.restitution;
+  if (!regles.reprisePossible(r, admin)) {
+    throw new HttpsError('failed-precondition', admin
+      ? 'La tablette est déjà en retour (abonnement fini, retour en main propre ou délai échu) : l\'abonnement ne peut plus être repris.'
+      : 'La tablette est déjà en retour : écrivez-nous pour garder l\'abonnement.');
   }
-  if (abo.metadata.arretPar === 'papote' && request.auth.token.admin !== true) {
+  if (abo.metadata.arretPar === 'papote' && !admin) {
     throw new HttpsError('permission-denied', 'Papote a arrêté cet abonnement : écrivez-nous pour le reprendre.');
   }
+  // Retour demandé avant la date d'arrêt, repris par Papote (Tanguy, 02/11) : le QR de retour pas encore déposé
+  // est annulé (remboursé par Sendcloud), puis le retour lui-même, après Stripe.
+  const e = r && commande.etiquettes && commande.etiquettes.retour;
+  if (e && e.colis) {
+    const api = sendcloud.client(SENDCLOUD_API.value());
+    const s = await api.suivi(e.colis);
+    if (!sendcloud.nonDepose(s.statut)) {
+      throw new HttpsError('failed-precondition', 'Le colis de retour est déjà déposé : la tablette revient, l\'abonnement ne peut plus être repris.');
+    }
+    await api.annuler(e.colis);
+    await ref.update({
+      'etiquettes.retour': FieldValue.delete(),
+      'etiquettes.annulees': FieldValue.arrayUnion({ ...e, sens: 'retour', annuleeLe: Date.now(), par: 'reprise de l\'abonnement par Papote' }),
+      'restitution.etiquette': FieldValue.delete(), 'restitution.qr': FieldValue.delete(), 'restitution.etiquetteLe': FieldValue.delete(),
+    });
+  }
   await stripe().subscriptions.update(id, { cancel_at: '', metadata: { ...abo.metadata, arretPar: '' } });
+  // Le retour disparaît (rien à rendre, plus de 140 € à prélever) ; un arrêt plus tard en recréera un.
+  if (r) await ref.update({ restitution: FieldValue.delete(), retourAnnule: { le: Date.now(), par: 'papote', avant: r.avant || null } });
   await appliquer(fid, id);
   if (await premiereDemande(id, 'reprise')) await mailArret(id, fam, (infos) => mail.resiliationAnnulee(infos));
   return { ok: true };
