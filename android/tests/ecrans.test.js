@@ -213,7 +213,7 @@ test('SOS, « La famille est prévenue » avec deux visages : côte à côte sur
     await b.page.evaluate(() => window.__sos[1].onState('missed'));
     assert.match(await b.texte('.call-out'), /La famille est prévenue/);
     const boites = await b.page.evaluate(() => [...document.querySelectorAll('.call-out .sos-face')].map((e) => e.getBoundingClientRect().height));
-    const cadre = await b.page.evaluate(() => document.querySelector('.call-out .call-face.faces').getBoundingClientRect().height);
+    const cadre = await b.page.evaluate(() => document.querySelector('.call-out .call-face.faces').clientHeight); // sans le cadre indigo
     assert.strictEqual(boites.length, 2);
     assert.ok(boites.every((h) => Math.abs(h - cadre) < 2), `deux visages pleine hauteur : ${boites.join(', ')} / ${cadre}`);
     await sansErreur(b);

@@ -1801,12 +1801,13 @@ html .call-ring .call-btn.answer { background: #16a34a; box-shadow: 0 1vmin 2.5v
 /* L'image à droite : grande, coins carrés, comme une photo reçue */
 html .call-out:not(.picker) .call-face {
   grid-column: 2; grid-row: 1 / -1; align-self: stretch; width: calc(100vh - 6vmin); max-width: 48vw; height: auto;
-  border: 0; border-radius: 0; box-shadow: 0 1vmin 3vmin rgba(49, 46, 129, .12); font-family: 'Atkinson Hyperlegible', sans-serif;
+  /* Cadre indigo fin, coins carrés, sans ombre ni animation (Tanguy, 2/11). */
+  border: .9vmin solid #4f46e5; border-radius: 0; box-shadow: none; font-family: 'Atkinson Hyperlegible', sans-serif;
   font-size: 40vmin; background: #e8e4f5; color: #4f46e5;
 }
 html .call-out:not(.picker) .call-face svg { width: 50%; height: 50%; }
 html .state-ringing .call-face, html .state-starting .call-face { animation: none; }
-html .call-out.state-connected .call-face { box-shadow: 0 0 0 1.2vmin #16a34a, 0 1vmin 3vmin rgba(49, 46, 129, .12); }
+html .call-out.state-connected .call-face { border-color: #16a34a; box-shadow: none; }
 /* Sans image (appel de toute la famille, compte à rebours SOS) : la carte seule, toute la largeur */
 html .call-out.sos-countdown { display: grid; grid-template-columns: minmax(0, 1fr); }
 html .call-out.sos-countdown .call-face { display: none; }

@@ -274,6 +274,28 @@ test('« Appel vers Julie… » sans aucun état d’Android : fermé au bout de
   } finally { await b.fermer(); }
 });
 
+test('la photo du proche a un cadre indigo fin, coins carrés, sans ombre ni animation ; vert en ligne', async () => {
+  const b = await tablette();
+  try {
+    const cadre = () => b.page.evaluate(() => {
+      const c = getComputedStyle(document.querySelector('.call-out .call-face'));
+      return { largeur: parseFloat(c.borderTopWidth), couleur: c.borderTopColor, rayon: c.borderTopLeftRadius, ombre: c.boxShadow, animation: c.animationName };
+    });
+    await b.android('onGsm', { etat: 'sonne', sortant: false, uid: 'julie', name: 'Julie' });
+    let c = await cadre();
+    assert.ok(c.largeur >= 5 && c.largeur <= 10, `cadre fin : ${c.largeur}px`);
+    assert.strictEqual(c.couleur, 'rgb(79, 70, 229)');
+    assert.strictEqual(c.rayon, '0px', 'coins carrés');
+    assert.strictEqual(c.ombre, 'none');
+    assert.strictEqual(c.animation, 'none');
+    await b.android('onGsm', { etat: 'enLigne', sortant: false, uid: 'julie', name: 'Julie' });
+    c = await cadre();
+    assert.strictEqual(c.couleur, 'rgb(22, 163, 74)', 'vert en ligne');
+    assert.strictEqual(c.ombre, 'none');
+    await sansErreur(b);
+  } finally { await b.fermer(); }
+});
+
 test('page rechargée pendant un appel téléphone : l’écran d’appel revient', async () => {
   const b = await ouvrir('2026-10-26T10:00:00', { telephone: true, appelGsm: { etat: 'enLigne', sortant: true, uid: 'julie', name: 'Julie' } });
   try {
