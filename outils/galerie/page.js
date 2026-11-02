@@ -39,7 +39,7 @@ function html(parties, dossierImages, { fichiers = false } = {}) {
       corps += `<article class="ecran" id="${num}">
 <header><span class="num">${num}</span><h4>${esc(s.titre)}</h4></header>
 ${s.note ? `<p class="note">${esc(s.note)}</p>` : ''}
-<div class="captures">${s.captures.map((c) => `<figure class="${c.taille}"><button class="zoom" data-num="${num}" data-titre="${esc(s.titre)} · ${c.taille}"><img loading="lazy" src="${img(c.fichier)}" alt="${num} ${esc(s.titre)}, ${c.taille}"></button><figcaption>${c.taille}</figcaption></figure>`).join('')}</div>
+<div class="captures">${s.captures.filter((c) => c.fichier).map((c) => `<figure class="${c.taille}"><button class="zoom" data-num="${num}" data-titre="${esc(s.titre)} · ${c.taille}"><img loading="lazy" src="${img(c.fichier)}" alt="${num} ${esc(s.titre)}, ${c.taille}"></button><figcaption>${c.taille}</figcaption></figure>`).join('')}</div>
 ${s.erreurs?.length ? `<p class="erreur">Erreur de la page : ${esc(s.erreurs.join(' · '))}</p>` : ''}
 </article>`;
     });

@@ -208,6 +208,7 @@ async function ouvrir(browser, base, scene, taille) {
   });
   const page = await ctx.newPage();
   page.setDefaultTimeout(8000); // un bouton absent : erreur signalée vite, pas après 30 s
+  page.setDefaultNavigationTimeout(30000); // ouverture de la page : un PC plus lent que la CI (Tanguy, 2/11)
   const erreurs = [];
   page.on('pageerror', (e) => erreurs.push(String(e.message || e)));
   await page.clock.install({ time: new Date('2026-10-26T10:30:00+01:00') });
