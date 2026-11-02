@@ -397,6 +397,7 @@ async function ouvrir(browser, base, scene, taille) {
   });
   const page = await ctx.newPage();
   page.setDefaultTimeout(8000);
+  page.setDefaultNavigationTimeout(30000); // ouverture de la page : un PC plus lent que la CI (Tanguy, 2/11)
   const erreurs = [];
   page.on('pageerror', (e) => erreurs.push(String(e.message || e)));
   if (process.env.CONSOLE) page.on('console', (m) => { if (m.type() === 'error') console.log('CONSOLE', m.text(), m.location().url, m.location().lineNumber); });

@@ -506,6 +506,7 @@ async function ouvrir(browser, base, scene, taille, video) {
   });
   const page = await ctx.newPage();
   page.setDefaultTimeout(8000); // un bouton absent : erreur signalée vite, pas après 30 s
+  page.setDefaultNavigationTimeout(30000); // ouverture de la page : un PC plus lent que la CI (Tanguy, 2/11)
   const erreurs = [];
   page.on('pageerror', (e) => erreurs.push(String(e.message || e)));
   await page.clock.install({ time: new Date(`${JOUR}T${scene.heure || '10:30'}:00+01:00`) });
@@ -566,7 +567,16 @@ async function capturer({ browser, base, dossierImages, progression }) {
       const { scene, n } = job;
       // Téléphone tenu en paysage : largeur et hauteur échangées.
       const taille = scene.paysage ? { ...job.taille, width: job.taille.height, height: job.taille.width } : job.taille;
-      const { ctx, page, erreurs } = await ouvrir(browser, base, scene, taille, video);
+      let ouvert;
+      try {
+        ouvert = await ouvrir(browser, base, scene, taille, video);
+      } catch (e) {
+        // Page qui ne s'ouvre pas : l'écran est signalé en souci, la galerie continue (avant, tout s'arrêtait).
+        resultats.push({ n, groupe: scene.groupe, titre: scene.titre, note: scene.note, taille: taille.nom, fichier: null, erreurs: ['Ouverture : ' + e.message.split('\n')[0]], scene: SCENES.indexOf(scene) });
+        progression(`app famille ${++faits}/${n0}`);
+        continue;
+      }
+      const { ctx, page, erreurs } = ouvert;
       const fichier = `famille-${String(n).padStart(3, '0')}.jpg`;
       // Page qui défile : le téléphone est « agrandi » à toute la hauteur (4 écrans au plus),
       // pour que la barre du bas reste en bas.

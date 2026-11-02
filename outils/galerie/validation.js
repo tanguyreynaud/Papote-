@@ -32,7 +32,7 @@ function ecrire(parties, dossierImages, dossier = DOSSIER) {
       const { groupe, titre, note, fonction } = s.e;
       const cle = `${partie.nom}|${groupe || ''}|${titre}`;
       vus[cle] = (vus[cle] || 0) + 1;
-      const captures = s.captures.map((c) => {
+      const captures = s.captures.filter((c) => c.fichier).map((c) => { // sans fichier : page qui n'a pas pu s'ouvrir
         const octets = fs.readFileSync(path.join(dossierImages, c.fichier));
         const nom = `${empreinte(octets)}.jpg`;
         const cible = path.join(dossier, 'i', nom);
@@ -59,6 +59,7 @@ function ecrire(parties, dossierImages, dossier = DOSSIER) {
 // Assemble les parties présentes en un seul index.json (une lecture pour l'admin) et retire les captures
 // qu'aucune partie n'utilise plus. Renvoie le résumé affiché à la fin.
 function assembler(dossier = DOSSIER) {
+  fs.mkdirSync(dossier, { recursive: true }); // galerie arrêtée avant d'écrire : pas de dossier (Tanguy, 2/11)
   const ordre = ['tablette', 'famille', 'vitrine', 'admin', 'emails'];
   const parties = ordre
     .filter((p) => fs.existsSync(path.join(dossier, `${p}.json`)))
