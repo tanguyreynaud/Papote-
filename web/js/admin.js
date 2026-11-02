@@ -431,16 +431,24 @@ function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
 document.addEventListener('papote:preparer-envoi', (e) => preparerEnvoi(e.detail.commande, e.detail.bouton));
 
 async function preparerEnvoi(c, bouton) {
+  // Le bouton le dit tout de suite (« Préparation… » et une roue) : le stock et les accessoires mettent
+  // 1 à 2 s à arriver avant que l'assistant s'ouvre (relecture du 28/10).
+  const texte = bouton.textContent;
   bouton.disabled = true;
+  const roue = document.createElement('span');
+  roue.className = 'spinner';
+  bouton.replaceChildren(roue, 'Préparation…');
   let ctx;
   try {
     ctx = await donnees(true);
   } catch (err) {
     prevenir(`Lecture du stock impossible : ${err.message}`);
     bouton.disabled = false;
+    bouton.textContent = texte;
     return;
   }
   bouton.disabled = false;
+  bouton.textContent = texte;
   const etat = { etape: 0, faits: {}, ...(c.preparation || {}) };
   etat.suivi = etat.suivi || c.etiquettes?.aller?.suivi || null;
   if (!etat.tablette) etat.tablette = ctx.stock.find((t) => t.commande === c.id)?.id || null;

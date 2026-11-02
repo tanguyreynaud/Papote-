@@ -20,7 +20,8 @@ const $ = (id) => document.getElementById(id);
 
 // ---------- Mise en forme ----------
 
-const euros = (c) => (c == null ? '' : (c / 100).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }));
+// Un montant qui n'est pas encore calculé (base vide, donnée absente) : un tiret, jamais « NaN € » (relecture du 28/10).
+const euros = (c) => (c == null ? '' : !Number.isFinite(c) ? '—' : (c / 100).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }));
 const jour = (ms) => (ms ? new Date(ms).toLocaleDateString('fr-FR') : '');
 const moisCle = (ms) => {
   const d = new Date(ms);
@@ -293,6 +294,8 @@ function afficherPage() {
   $('periode').hidden = !AVEC_PERIODE.includes(page);
   $('p-etat').hidden = !AVEC_PERIODE.includes(page);
   window.scrollTo(0, 0);
+  // Téléphone : le menu ☰ se replie juste après et la page restait un peu descendue (titre sous la barre).
+  requestAnimationFrame(() => window.scrollTo(0, 0));
   // Clients déjà lus : affichés tout de suite, relus en fond s'ils datent de plus d'une minute.
   if ((page === 'clients' || page === 'client') && connecte && (!clients || Date.now() - clientsLus > 60_000)) chargerClients();
   afficherFiche();
@@ -343,6 +346,13 @@ function fermerChargement() {
 onAuthStateChanged(getAuth(getApp('admin')), (user) => {
   connecte = !!user;
   if (!user) { fermerChargement(); return; }
+  // La page apparaît tout de suite (menu, titres, cartes fantômes) ; les chiffres arrivent dedans,
+  // au lieu d'un logo qui attend que toutes les données soient là (relecture du 28/10).
+  if (!donnees) {
+    $('kpi-mois').replaceChildren(...[0, 1, 2, 3].map(() => h('div', { class: 'stat fantome', 'aria-hidden': 'true' }, h('span', {}, '0'), h('p', {}, 'chargement'))));
+    $('a-faire').replaceChildren(h('li', { role: 'status', 'aria-label': 'Chargement' }, h('span', { class: 'fantome-ligne' }), h('span', { class: 'fantome-ligne' }), h('span', { class: 'fantome-ligne' })));
+  }
+  fermerChargement();
   reveiller();
   // Lus dès la connexion, pour que la page Clients s'ouvre sans attendre.
   chargerClients();
@@ -1027,6 +1037,8 @@ async function remplirCommande(id) {
   }
   try {
     const r = await appeler('gestionCommande', { commande: c.id });
+    r.factures = r.factures || [];
+    r.paiements = r.paiements || [];
     const table = h('table');
     remplirTable(table, [{ titre: 'Date' }, { titre: 'N°' }, { titre: 'Détail' }, { titre: 'Montant', n: 1 }, { titre: 'Statut' }, { titre: '' }],
       r.factures.sort((a, b) => b.le - a.le).map((f) => {
@@ -1055,7 +1067,10 @@ async function remplirCommande(id) {
       h('p', { class: 'small' }, `Payé au total : ${euros(paye)}`),
       r.factures.length ? h('div', { class: 'table cartes' }, table) : null, autres.length ? h('div', { class: 'table cartes' }, table2) : null].filter(Boolean));
   } catch (e) {
-    factures.replaceChildren(h('p', { class: 'error small' }, messageErreur(e)));
+    // Jamais le texte brut de l'erreur : un mot humain et « Réessayer » (relecture du 28/10).
+    console.warn('Factures de la commande', e);
+    factures.replaceChildren(h('p', { class: 'muted small' }, 'Stripe ne répond pas pour le moment : les factures et paiements de cette commande ne peuvent pas être lus.'),
+      h('button', { type: 'button', class: 'secondary', onclick: () => remplirCommande(c.id) }, 'Réessayer'));
   }
 }
 
