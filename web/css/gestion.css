@@ -26,6 +26,8 @@
 .badge.ok { color: var(--ok); border-color: currentColor; }
 .badge.ko { color: var(--danger); border-color: currentColor; }
 .badge.info { color: var(--accent); border-color: currentColor; }
+/* Alertes en phrase (réseau mobile…) : elles passent à la ligne au lieu d'élargir la page sur téléphone. */
+.badges-longs .badge { white-space: normal; max-width: 100%; box-sizing: border-box; }
 
 /* Écran d'ouverture plein écran jusqu'aux premières données. */
 .chargement { position: fixed; inset: 0; z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; background: #fdfaf5; transition: opacity 0.3s ease; }
