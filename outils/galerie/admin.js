@@ -180,6 +180,14 @@ function retourEnMain() {
     ? { ...c, remise: 'main-propre', suivi: null, restitution: { ...c.restitution, mainPropreLe: il(1) } } : c)) };
 }
 
+// Retour demandé par le client AVANT la date d'arrêt (« Je renvoie la tablette », anticipé) : Papote peut encore
+// reprendre l'abonnement (Tanguy, 02/11) ; le menu ⋮ propose « Reprendre l'abonnement ».
+function retourAnticipe() {
+  const g = gestionDonnees({});
+  return { ...g, commandes: g.commandes.map((c) => (c.id === 'CMD-RS45'
+    ? { ...c, abonnement: 'actif', resiliationLe: il(-20), restitution: { statut: 'attendue', avant: il(-50), mainPropreLe: null, anticipe: true } } : c)) };
+}
+
 function donnees(o = {}) {
   const docs = famillePleine({ sim: true });
   docs['families/f-henri'] = { name: 'Papi Henri', createdBy: 'u-nicolas', abonnement: { statut: 'impaye', formule: 'sim', graceJusqua: { __ms: il(-6) } } };
@@ -297,6 +305,7 @@ const SCENES = [
   { groupe: 'Commandes', titre: 'Commande : retour en main propre noté par Papote', page: '#commande/CMD-RS45', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees({ donnees: retourEnMain() }) },
   { groupe: 'Commandes', titre: 'Commande : tablette à récupérer, menu ⋮ (Retour en main propre)', page: '#commande/CMD-RS45', tailles: ['pc'], donnees: () => donnees(), faire: toucher('#dc-corps .menu-points > button, #dc-corps [aria-haspopup]') },
   { groupe: 'Commandes', titre: 'Commande : retour en main propre, menu ⋮ (Retour par Mondial Relay)', page: '#commande/CMD-RS45', tailles: ['pc'], donnees: () => donnees({ donnees: retourEnMain() }), faire: toucher('#dc-corps .menu-points > button, #dc-corps [aria-haspopup]') },
+  { groupe: 'Commandes', titre: 'Commande : retour demandé avant l’arrêt, menu ⋮ (Reprendre l’abonnement)', page: '#commande/CMD-RS45', tailles: ['pc'], donnees: () => donnees({ donnees: retourAnticipe() }), faire: toucher('#dc-corps .menu-points > button, #dc-corps [aria-haspopup]') },
   { groupe: 'Commandes', titre: 'Accueil : à faire, tablette à récupérer en main propre', page: '#accueil', tailles: ['pc'], plein: true, donnees: () => donnees({ donnees: retourEnMain() }) },
   { groupe: 'Commandes', titre: 'Nouvelle commande offerte', page: '#commandes', tailles: ['pc'], plein: true, donnees: () => donnees(), faire: toucher('#b-offerte') },
 
