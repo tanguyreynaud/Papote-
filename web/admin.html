@@ -7,6 +7,14 @@
   <title>Papote · Administration</title>
   <meta name="robots" content="noindex">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <!-- Écran d'ouverture écrit ici même : fond crème et logo dès le premier dessin, avant les feuilles de
+       style (1,7 s d'écran blanc sinon en 4G, relecture du 28/10). -->
+  <style>
+    html, body { margin: 0; background: #fdfaf5; }
+    .chargement { position: fixed; inset: 0; z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; background: #fdfaf5; }
+    .chargement-logo { width: 96px; height: 96px; }
+    .chargement-nom { margin: 0; font-family: 'Bricolage Grotesque', system-ui, sans-serif; font-size: 34px; font-weight: 700; color: #4f46e5; }
+  </style>
   <link rel="stylesheet" href="css/famille.css">
   <!-- Modules de l'administration demandés tous d'un coup : sans cette liste, le navigateur ne découvre chaque fichier
        qu'après avoir lu celui qui l'importe (un aller-retour réseau de plus à chaque niveau). -->
@@ -77,8 +85,8 @@
       <div class="nav-pied">
         <p id="who" class="muted small"></p>
         <button type="button" id="btn-signout" class="link small">Se déconnecter</button>
-        <!-- Version de l'admin : à changer à chaque mise à jour, pour voir que la bonne est en ligne. -->
-        <p class="muted small version-admin">Version du 23/10 à 12 h 30</p>
+        <!-- Version en ligne : web/version.json, écrit à chaque publication (outils/web/version.mjs). -->
+        <p class="muted small version-admin" id="version-admin" hidden></p>
       </div>
     </aside>
 

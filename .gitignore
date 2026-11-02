@@ -21,6 +21,9 @@ Thumbs.db
 # Mises à jour publiées (générées par installation/publier-mise-a-jour.ps1)
 maj/public/
 
+# Version publiée (écrite par outils/web/version.mjs à chaque publication)
+web/version.json
+
 # Outils
 outils/*/node_modules/
 outils/*/package-lock.json

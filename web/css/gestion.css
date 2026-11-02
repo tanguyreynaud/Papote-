@@ -26,6 +26,8 @@
 .badge.ok { color: var(--ok); border-color: currentColor; }
 .badge.ko { color: var(--danger); border-color: currentColor; }
 .badge.info { color: var(--accent); border-color: currentColor; }
+/* Alertes en phrase (réseau mobile…) : elles passent à la ligne au lieu d'élargir la page sur téléphone. */
+.badges-longs .badge { white-space: normal; max-width: 100%; box-sizing: border-box; }
 
 /* Écran d'ouverture plein écran jusqu'aux premières données. */
 .chargement { position: fixed; inset: 0; z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; background: #fdfaf5; transition: opacity 0.3s ease; }
@@ -82,6 +84,23 @@
 .ligne-chiffres .stats.compact .stat { padding: 4px 8px; border-radius: 0; background: none; box-shadow: none; }
 .ligne-chiffres .stat span { font-size: 20px; white-space: nowrap; }
 .ligne-chiffres .stat p { font-size: 13px; line-height: 1.3; }
+/* Téléphone : deux chiffres par ligne, lisibles, au lieu de quatre colonnes serrées (Tanguy, 2/11). */
+@media (max-width: 560px) {
+  .ligne-chiffres { grid-template-columns: 1fr 1fr; gap: 10px 8px; padding: 12px 10px; }
+  .ligne-chiffres .stat span { font-size: 24px; }
+  .ligne-chiffres .stat p { font-size: 14px; }
+}
+/* Cartes fantômes pendant le premier chargement : la page a déjà sa forme, les chiffres arrivent dedans. */
+.stat.fantome span, .stat.fantome p, .fantome-ligne {
+  display: block; border-radius: 8px; background: var(--line); color: transparent; animation: respire 1.2s ease-in-out infinite;
+}
+.stat.fantome span { width: 60%; height: 24px; margin-bottom: 8px; }
+.stat.fantome p { width: 85%; height: 14px; }
+.fantome-ligne { height: 18px; margin: 12px 0; }
+.fantome-ligne:nth-child(2) { width: 70%; }
+.fantome-ligne:nth-child(3) { width: 85%; }
+@keyframes respire { 50% { opacity: .45; } }
+@media (prefers-reduced-motion: reduce) { .stat.fantome span, .stat.fantome p, .fantome-ligne { animation: none; } }
 .raccourcis { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 4px 0 8px; }
 .raccourcis button { width: auto; }
 

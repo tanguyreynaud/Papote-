@@ -14,13 +14,14 @@ import { ouvrirParcours, fermerParcours } from './parcours.js';
 import {
   getFirestore, doc, collection, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, increment,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
-import { simVue, go as enGo } from './sim.js';
+import { simVue, reseauMobile, go as enGo } from './sim.js';
 
 const $ = (id) => document.getElementById(id);
 
 // ---------- Mise en forme ----------
 
-const euros = (c) => (c == null ? '' : (c / 100).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }));
+// Un montant qui n'est pas encore calculé (base vide, donnée absente) : un tiret, jamais « NaN € » (relecture du 28/10).
+const euros = (c) => (c == null ? '' : !Number.isFinite(c) ? '—' : (c / 100).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }));
 const jour = (ms) => (ms ? new Date(ms).toLocaleDateString('fr-FR') : '');
 const moisCle = (ms) => {
   const d = new Date(ms);
@@ -293,6 +294,8 @@ function afficherPage() {
   $('periode').hidden = !AVEC_PERIODE.includes(page);
   $('p-etat').hidden = !AVEC_PERIODE.includes(page);
   window.scrollTo(0, 0);
+  // Téléphone : le menu ☰ se replie juste après et la page restait un peu descendue (titre sous la barre).
+  requestAnimationFrame(() => window.scrollTo(0, 0));
   // Clients déjà lus : affichés tout de suite, relus en fond s'ils datent de plus d'une minute.
   if ((page === 'clients' || page === 'client') && connecte && (!clients || Date.now() - clientsLus > 60_000)) chargerClients();
   afficherFiche();
@@ -343,6 +346,13 @@ function fermerChargement() {
 onAuthStateChanged(getAuth(getApp('admin')), (user) => {
   connecte = !!user;
   if (!user) { fermerChargement(); return; }
+  // La page apparaît tout de suite (menu, titres, cartes fantômes) ; les chiffres arrivent dedans,
+  // au lieu d'un logo qui attend que toutes les données soient là (relecture du 28/10).
+  if (!donnees) {
+    $('kpi-mois').replaceChildren(...[0, 1, 2, 3].map(() => h('div', { class: 'stat fantome', 'aria-hidden': 'true' }, h('span', {}, '0'), h('p', {}, 'chargement'))));
+    $('a-faire').replaceChildren(h('li', {}, h('div', { role: 'status', 'aria-label': 'Chargement' }, h('span', { class: 'fantome-ligne' }), h('span', { class: 'fantome-ligne' }), h('span', { class: 'fantome-ligne' }))));
+  }
+  fermerChargement();
   reveiller();
   // Lus dès la connexion, pour que la page Clients s'ouvre sans attendre.
   chargerClients();
@@ -350,6 +360,9 @@ onAuthStateChanged(getAuth(getApp('admin')), (user) => {
   chargerMois();
   changerPeriode();
 });
+
+// Relevés des tablettes lus après les données de gestion : l'accueil reprend leurs alertes de réseau mobile.
+document.addEventListener('papote:sim', () => { if (donnees) afficherAccueil(); });
 
 document.addEventListener('papote:maj', () => {
   chargerDonnees();
@@ -712,6 +725,12 @@ function afficherAccueil() {
       .map((t) => [1, `${nomT(t)} remplacée, à récupérer chez le client`, versTablette(t), '']),
     [clientsSansSim, `${clientsSansSim} client${clientsSansSim > 1 ? 's' : ''} sans carte SIM notée sur sa tablette`, '#stock/sim', 'ko'],
     [simsSansTablette, `${simsSansTablette} ligne${simsSansTablette > 1 ? 's SIM actives reliées' : ' SIM active reliée'} à aucune tablette`, '#stock/sim', 'ko'],
+    // Réseau mobile chez le client, d'après les antennes que sa tablette entend (sim.js, reseauMobile).
+    ...donnees.stock.filter((t) => t.etat === 'chez-client' && t.fid).map((t) => {
+      const vue = simVue(t.fid);
+      const r = vue && reseauMobile(vue.sim);
+      return r && r.alerte ? [1, `${nomT(t)}, réseau mobile : ${r.alerte.charAt(0).toLowerCase()}${r.alerte.slice(1)}`, versTablette(t), 'ko'] : null;
+    }).filter(Boolean),
     [simsARegarder, `${simsARegarder} carte${simsARegarder > 1 ? 's' : ''} SIM à regarder (promo, activation, carte bancaire)`, '#stock/sim', 'ko'],
     ...accessoires.map((a) => [1, a.manque ? `${a.nom} : il en manque ${a.manque} pour les envois` : `${a.nom} : stock bas (${a.quantite || 0})`, '#stock/accessoires', a.manque ? 'ko' : '']),
     ...jumelagesAVoir.map((t) => [1, `${nomT(t)} ${alerteJumelage(t)}`, versTablette(t), 'ko']),
@@ -1027,6 +1046,8 @@ async function remplirCommande(id) {
   }
   try {
     const r = await appeler('gestionCommande', { commande: c.id });
+    r.factures = r.factures || [];
+    r.paiements = r.paiements || [];
     const table = h('table');
     remplirTable(table, [{ titre: 'Date' }, { titre: 'N°' }, { titre: 'Détail' }, { titre: 'Montant', n: 1 }, { titre: 'Statut' }, { titre: '' }],
       r.factures.sort((a, b) => b.le - a.le).map((f) => {
@@ -1055,7 +1076,10 @@ async function remplirCommande(id) {
       h('p', { class: 'small' }, `Payé au total : ${euros(paye)}`),
       r.factures.length ? h('div', { class: 'table cartes' }, table) : null, autres.length ? h('div', { class: 'table cartes' }, table2) : null].filter(Boolean));
   } catch (e) {
-    factures.replaceChildren(h('p', { class: 'error small' }, messageErreur(e)));
+    // Jamais le texte brut de l'erreur : un mot humain et « Réessayer » (relecture du 28/10).
+    console.warn('Factures de la commande', e);
+    factures.replaceChildren(h('p', { class: 'muted small' }, 'Stripe ne répond pas pour le moment : les factures et paiements de cette commande ne peuvent pas être lus.'),
+      h('button', { type: 'button', class: 'secondary', onclick: () => remplirCommande(c.id) }, 'Réessayer'));
   }
 }
 
@@ -1085,7 +1109,9 @@ function menuCommande(c, zoneRemplacement, etiquette) {
       ? { libelle: 'Colis revenu (jamais retiré)', danger: true, faire: () => lancer(() => colisRevenu(c)) } : null,
     enCours && !annulable
       ? { libelle: 'Arrêter l\'abonnement', danger: true, faire: () => lancer(() => arreterAbonnement(c)) } : null,
-    c.fid && c.resiliationLe && !c.restitution && c.resiliationLe > Date.now()
+    // Retour demandé par le client avant la date d'arrêt : Papote peut encore reprendre (annulerResiliation l'annule).
+    c.fid && c.resiliationLe && c.resiliationLe > Date.now()
+      && (!c.restitution || (c.restitution.anticipe && c.restitution.statut === 'attendue' && !c.restitution.mainPropreLe))
       ? { libelle: 'Reprendre l\'abonnement', faire: () => lancer(() => reprendreAbonnement(c)) } : null,
     enCours && !annulable && !enPause ? { libelle: 'Pause hospitalisation…', faire: () => lancer(() => pauseHospitalisation(c)) } : null,
     enPause ? { libelle: 'Reprendre les prélèvements', faire: () => lancer(() => reprendrePrelevements(c)) } : null,
@@ -1187,7 +1213,8 @@ async function arreterAbonnement(c) {
 }
 
 async function reprendreAbonnement(c) {
-  if (!await demander(`Reprendre l'abonnement de ${c.nom || c.email || 'ce client'} ?\n\nL'arrêt prévu le ${jour(c.resiliationLe)} est annulé : l'abonnement continue comme avant et le client reçoit un e-mail.`, { oui: 'Reprendre l\'abonnement' })) throw 'non';
+  const retour = c.restitution ? '\n\nLe retour de la tablette demandé par le client est annulé aussi (son QR code de retour, s\'il n\'est pas encore déposé).' : '';
+  if (!await demander(`Reprendre l'abonnement de ${c.nom || c.email || 'ce client'} ?\n\nL'arrêt prévu le ${jour(c.resiliationLe)} est annulé : l'abonnement continue comme avant et le client reçoit un e-mail.${retour}`, { oui: 'Reprendre l\'abonnement' })) throw 'non';
   await patienter('Reprise de l\'abonnement…', () => appeler('annulerResiliation', { fid: c.fid, commande: c.id }));
   return 'Abonnement repris : il continue comme avant.';
 }
@@ -1697,7 +1724,7 @@ function remplirPageSim(id) {
   const tablettesPossibles = donnees.stock.filter((x) => x.id === l.tablette || (!x.simId && !x.sim && !['perdue', 'hors-service'].includes(x.etat)));
   zone.replaceChildren(...[h('div', { class: 'card' },
     tete,
-    alertes.length ? h('p', { class: 'small' }, ...alertes.map((a) => badge(a, 'ko'))) : null,
+    alertes.length ? h('p', { class: 'small badges-longs' }, ...alertes.map((a) => badge(a, 'ko'))) : null,
     h('dl', { class: 'fiche' },
       ...ligne('Statut', badge(donnees.statutsSim[l.statut] || l.statut, STATUT_CLASSE[l.statut])),
       ...modif('Opérateur', l.operateur, 'operateur', { valeur: l.operateur }),
@@ -1727,6 +1754,10 @@ function remplirPageSim(id) {
       h('dl', { class: 'fiche' },
         ...ligne('Réseau', vue.sim.reseau ? `${vue.sim.reseau}${vue.sim.signal >= 0 ? `, signal ${vue.sim.signal}/4` : ''}` : null),
         ...ligne('Data du mois', enGo(vue.sim.dataMoisMo)),
+        ...ligne('Antennes chez le client', (() => {
+          const r = reseauMobile(vue.sim);
+          return r && r.antennes.length ? r.antennes.map((a) => `${a.texte}${a.utilisee ? ' (utilisée)' : ''}`).join(' · ') : null;
+        })()),
         ...ligne('Carte vue le', vue.vuLe ? vue.vuLe.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : null),
         ...ligne('Tablette en ligne le', vue.vue ? vue.vue.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : null),
         ...ligne('ICCID lu', vue.sim.iccid && l.iccid && !String(vue.sim.iccid).endsWith(String(l.iccid).replace(/\D/g, '').slice(-6))
@@ -2199,6 +2230,18 @@ const ORDRES = [
 ];
 const nomTablette = (t) => (t.ref ? `la tablette ${t.ref}` : 'cette tablette');
 
+// Réseau mobile chez le client : état du service, antennes entendues (la plus forte d'abord), alerte éventuelle.
+function blocReseau(r) {
+  if (!r) return null;
+  return h('div', { class: 'reseau-mobile' },
+    h('h3', {}, 'Réseau mobile chez le client'),
+    r.alerte ? h('p', { class: 'error' }, r.alerte) : null,
+    r.service ? h('p', { class: 'small' }, `Carte SIM : ${r.service}`) : null,
+    r.antennes.length
+      ? h('ul', { class: 'small' }, ...r.antennes.map((a) => h('li', {}, a.texte, a.utilisee ? h('span', { class: 'muted' }, ' · utilisée') : null)))
+      : h('p', { class: 'muted small' }, 'Aucune antenne listée (position coupée sur la tablette, ou pas encore relevé).'));
+}
+
 // Fiche de membre de la tablette, en direct : en ligne, batterie, carte SIM, version.
 function blocReleves(zone, t) {
   if (stopReleves) { stopReleves(); stopReleves = null; }
@@ -2222,6 +2265,7 @@ function blocReleves(zone, t) {
         stat(b.level != null ? `${b.level} %` : '—', b.charging ? 'Batterie, sur le chargeur' : 'Batterie, débranchée', null, b.charging === false ? 'warn' : null),
         stat(sim ? (sim.reseau || sim.operateur || 'Carte SIM') : 'Wi-Fi', sim ? [sim.operateur !== sim.reseau ? sim.operateur : null, signal ? `signal ${signal}` : null].filter(Boolean).join(' · ') || 'carte SIM' : 'pas de carte SIM', mo),
         stat(m.appVersion || '—', 'Version de Papote')),
+      blocReseau(reseauMobile(sim)),
       h('p', { class: 'muted small' }, 'Fiche de la tablette lue en direct : la page se met à jour toute seule quand elle donne de ses nouvelles.'),
     );
     rafraichirSousTitres();

@@ -7,7 +7,7 @@ import { getApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.
 import { signInWithCustomToken } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-functions.js';
 import {
-  getStorage, ref, uploadBytes, getDownloadURL, deleteObject,
+  getStorage, ref, uploadBytes, uploadBytesResumable, getDownloadURL, deleteObject,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-storage.js';
 import {
   db, doc, getDoc, setDoc, updateDoc, deleteDoc, collection, onSnapshot, writeBatch, serverTimestamp, bumpRev, increment, deleteField,
@@ -51,11 +51,16 @@ let stopIncoming = null;
 
 const VIEWS = ['view-moi', 'view-sans-abo', 'view-invite', 'view-abonnement', 'view-profile', 'view-pair', 'view-setup', 'loading', 'view-login', 'view-link-email', 'view-invited', 'view-pending', 'view-join', 'view-home', 'view-photos', 'view-videos', 'view-messages', 'view-agenda', 'view-settings', 'view-notifs', 'view-support'];
 
+let splashNoteTimer = null;
 function show(view) {
   // L'accueil ou un écran de parcours (connexion, rejoindre…) : on redescend sur l'entrée de l'accueil,
   // sinon « retour » rouvrirait la page quittée (ex. le Profil après « Rejoindre une autre famille »).
   if (view === 'view-home' || view === 'view-sans-abo' || VUES_PARCOURS.includes(view)) redescendreSurAccueil();
   for (const id of VIEWS) $(id).hidden = id !== view;
+  // Écran de démarrage revu (changement de famille…) : « On y est presque… » repart de zéro après 4 s.
+  clearTimeout(splashNoteTimer);
+  $('splash-note').textContent = '';
+  if (view === 'loading') splashNoteTimer = setTimeout(() => { if (!$('loading').hidden) $('splash-note').textContent = 'On y est presque…'; }, 4000);
   document.body.classList.remove('depuis-barre');
   document.body.classList.toggle('on-support', view === 'view-support');
   // La barre du bas n'apparaît que sur Accueil, Notifications et Support.
@@ -677,8 +682,15 @@ function renderMessages(posts) {
     li.append(foot);
     return li;
   });
+  // Un message en route que la base renvoie (le mien, même texte) : sa bulle grise s'efface.
+  for (const b of bullesEnRoute.slice()) {
+    const arrive = shown.some((p) => p.authorUid === session.uid && p.type === 'message' && p.text === b.text
+      && (!p.createdAt || toDate(p.createdAt).getTime() >= b.depuis - 60_000));
+    if (arrive) retirerBulleEnRoute(b);
+  }
   list.replaceChildren(...items);
   $('messages-empty').hidden = shown.length > 0;
+  montrerBullesEnRoute();
   requestAnimationFrame(() => window.scrollTo(0, document.body.scrollHeight));
 }
 
@@ -703,6 +715,35 @@ $('form-message').addEventListener('submit', (e) => {
 // Plusieurs messages peuvent être en route en même temps (un message rapide juste après un message
 // écrit) : le bouton reste grisé tant qu'il en reste un.
 let messagesEnRoute = 0;
+// Bulles « en route » : le message apparaît dans la conversation à l'instant où on touche Envoyer,
+// en gris avec « Envoi… », et devient indigo quand la base le renvoie (4 s de vide sinon en 4G,
+// relecture du 28/10). Sans réseau, la bulle reste avec « En attente de réseau ».
+const bullesEnRoute = [];
+function bulleEnRoute(text, etat) {
+  const li = document.createElement('li');
+  li.className = 'bubble mine en-route';
+  const t = document.createElement('p');
+  t.className = 'bubble-text';
+  t.textContent = text;
+  const foot = document.createElement('p');
+  foot.className = 'bubble-foot';
+  foot.textContent = etat;
+  li.append(t, foot);
+  return li;
+}
+function montrerBullesEnRoute() {
+  const list = $('messages');
+  list.querySelectorAll('.en-route').forEach((e) => e.remove());
+  if (!bullesEnRoute.length) return;
+  list.append(...bullesEnRoute.map((b) => b.li));
+  $('messages-empty').hidden = true;
+  requestAnimationFrame(() => window.scrollTo(0, document.body.scrollHeight));
+}
+function retirerBulleEnRoute(b) {
+  const i = bullesEnRoute.indexOf(b);
+  if (i >= 0) bullesEnRoute.splice(i, 1);
+  b.li.remove();
+}
 async function envoyerMessage(text) {
   if (paused()) return;
   messagesEnRoute++;
@@ -710,11 +751,17 @@ async function envoyerMessage(text) {
   const item = { kind: 'message', text, author: { authorUid: session.uid, authorName: session.member.name } };
   $('message-text').value = '';
   updateCount();
+  const bulle = { text, li: bulleEnRoute(text, 'Envoi…'), depuis: Date.now() };
+  bullesEnRoute.push(bulle);
+  montrerBullesEnRoute();
   try {
     if (!navigator.onLine) throw new Error('hors ligne');
     await sendItem(item);
+    // La base renvoie le message tout de suite après : la vraie bulle prend la place de celle-ci.
+    setTimeout(() => retirerBulleEnRoute(bulle), 1500);
   } catch (err) {
     console.warn('Message mis en attente', err);
+    bulle.li.querySelector('.bubble-foot').textContent = 'En attente de réseau';
     await queue(item);
   } finally {
     if (--messagesEnRoute === 0) $('btn-message').disabled = false;
@@ -1170,6 +1217,8 @@ function setBusy(label) {
     btn.append(spin, label);
   } else {
     btn.textContent = 'Envoyer';
+    $('send-progress').hidden = true;
+    $('send-progress').firstElementChild.style.width = '0';
   }
 }
 
@@ -1316,7 +1365,7 @@ $('form-post').addEventListener('submit', async (e) => {
 
 function sendItem(item) {
   if (item.kind === 'message') return addPost(session.fid, { type: 'message', text: item.text, ...item.author });
-  if (item.kind === 'video') return sendVideo(item.video, item.text, item.author);
+  if (item.kind === 'video') return sendVideo(item.video, item.text, item.author, item.silencieux);
   if (!item.photos) item.photos = [item.photo]; // envois en attente d'une ancienne version
   return sendPhotos(item);
 }
@@ -1369,6 +1418,7 @@ async function flushOutbox() {
     const items = await outbox('readonly', (store) => store.getAll());
     for (const item of items) {
       if (item.fid !== session.fid) { await outbox('readwrite', (store) => store.delete(item.id)); continue; }
+      item.silencieux = true; // envoi de fond : pas d'avancement sur le bouton Envoyer
       try {
         await sendItem(item);
       } catch (err) {
@@ -1407,11 +1457,26 @@ try {
   ouvrirStorage(bucketUrl());
 } catch (e) { /* Storage indisponible */ }
 
-async function upload(blob, ext) {
+// avancement(0..1) : appelé pendant le transfert pour l'afficher (« Photo 1 sur 2 · 40 % »).
+async function upload(blob, ext, avancement) {
   const path = `families/${session.fid}/media/${doc(collection(db, 'families')).id}.${ext}`;
   const fileRef = ref(storage, path);
-  await uploadBytes(fileRef, blob, { contentType: blob.type });
+  if (avancement) {
+    const tache = uploadBytesResumable(fileRef, blob, { contentType: blob.type });
+    const stop = tache.on('state_changed', (etat) => avancement(etat.totalBytes ? etat.bytesTransferred / etat.totalBytes : 0));
+    try { await tache; } finally { stop(); }
+  } else {
+    await uploadBytes(fileRef, blob, { contentType: blob.type });
+  }
   return { path, url: await getDownloadURL(fileRef) };
+}
+
+// Avancement de l'envoi (bouton + barre) : « Photo 1 sur 2 · 40 % », « Vidéo · 70 % ».
+function avancementEnvoi(quoi, part) {
+  const pct = Math.round(Math.min(1, Math.max(0, part)) * 100);
+  setBusy(`${quoi} · ${pct} %`);
+  $('send-progress').hidden = false;
+  $('send-progress').firstElementChild.style.width = `${pct}%`;
 }
 
 async function addStoragePost(data) {
@@ -1432,16 +1497,19 @@ async function sendPhotos(item) {
   const { photos, text, author } = item;
   if (photos.length === 1 || !storage) {
     while (photos.length) {
-      await sendPhoto(photos[0], item.legendeEnvoyee ? '' : text, author);
+      await sendPhoto(photos[0], item.legendeEnvoyee ? '' : text, author, item.silencieux);
       photos.shift();
       item.legendeEnvoyee = true;
     }
     return;
   }
   const uploaded = item.uploaded || (item.uploaded = []);
+  const total = photos.length;
   try {
     for (const photo of photos.slice(uploaded.length)) {
-      const file = await upload(await (await fetch(photo.full)).blob(), 'jpg');
+      const n = uploaded.length + 1;
+      const file = await upload(await (await fetch(photo.full)).blob(), 'jpg',
+        item.silencieux ? null : (part) => avancementEnvoi(`Photo ${n} sur ${total}`, part));
       uploaded.push({ imageUrl: file.url, storagePath: file.path, thumb: photo.small || photo.thumb });
     }
   } catch (err) {
@@ -1458,10 +1526,10 @@ async function sendPhotos(item) {
   });
 }
 
-async function sendPhoto(photo, text, author) {
+async function sendPhoto(photo, text, author, silencieux) {
   if (storage) {
     try {
-      const file = await upload(await (await fetch(photo.full)).blob(), 'jpg');
+      const file = await upload(await (await fetch(photo.full)).blob(), 'jpg', silencieux ? null : (part) => avancementEnvoi('Photo', part));
       await addStoragePost({ type: 'photo', text, thumb: photo.thumb, imageUrl: file.url, storagePath: file.path, ...author });
       return;
     } catch (err) {
@@ -1484,11 +1552,11 @@ function toBase64(blob) {
   });
 }
 
-async function sendVideo(video, text, author) {
+async function sendVideo(video, text, author, silencieux) {
   const ext = video.mime.includes('mp4') ? 'mp4' : 'webm';
   if (storage) {
     try {
-      const file = await upload(new Blob([video.blob], { type: video.mime }), ext);
+      const file = await upload(new Blob([video.blob], { type: video.mime }), ext, silencieux ? null : (part) => avancementEnvoi('Vidéo', part));
       await addStoragePost({
         type: 'video', text, thumb: video.thumb, videoUrl: file.url, storagePath: file.path,
         mime: video.mime, duration: video.duration, ...author,
@@ -2269,11 +2337,9 @@ $('tile-call').addEventListener('click', async () => {
   etatNatif('connexion', true);
   const abort = new AbortController();
   callAbort = abort;
-  const allowed = await cameraAllowed();
-  if (abort.signal.aborted) { callStarting = false; return; }
-  if (allowed) enterCallScreen();
   // Écran crème (photo, nom, état) de la préparation jusqu'à ce que Mamie apparaisse, et à la fin :
-  // jamais d'écran noir avec une ligne de texte.
+  // jamais d'écran noir avec une ligne de texte. Il s'affiche AVANT le plein écran et la rotation
+  // (1,5 s d'écran noir couché sinon, relecture du 28/10).
   $('call-remote').srcObject = null;
   $('call-local').srcObject = null;
   $('call').classList.remove('audio');
@@ -2282,6 +2348,9 @@ $('tile-call').addEventListener('click', async () => {
   $('call-name').textContent = session.family.name;
   $('call').hidden = false;
   setCallStatus('Préparation de la caméra…');
+  const allowed = await cameraAllowed();
+  if (abort.signal.aborted) { callStarting = false; leaveCallScreen(); return; }
+  if (allowed) enterCallScreen();
   try {
     currentCall = await startCall(session.fid, { uid: session.uid, name: session.member.name }, {
       signal: abort.signal,
@@ -2303,6 +2372,7 @@ $('tile-call').addEventListener('click', async () => {
         setTimeout(() => {
           if (currentCall) return;
           leaveCallScreen();
+          tuileLibre();
           if (reason === 'missed' || reason === 'declined') offerVideoMessage(reason);
         }, 2000);
       },
@@ -2323,11 +2393,18 @@ $('tile-call').addEventListener('click', async () => {
   }
 });
 
-// « Rappeler » depuis la notification d'appel manqué : une confirmation (qui sert aussi de geste
-// pour la caméra et le plein écran), puis l'appel vidéo part comme avec la tuile.
+// « Rappeler » depuis la notification d'appel manqué : un appel téléphonique dès que la tablette a un
+// numéro (Tanguy, 2/11 : rappeler, c'est appeler, pas lancer une visio), sinon l'appel vidéo comme avec
+// la tuile. Une confirmation d'abord : elle sert aussi de geste pour le téléphone, la caméra et le plein écran.
 async function offerCallBack() {
   try { history.replaceState(history.state, '', location.pathname); } catch (e) { /* rien */ }
-  if (!session || currentCall || callStarting || $('tile-call').disabled) return;
+  if (!session || currentCall || callStarting) return;
+  if (numeroTablette()) {
+    if (!await askConfirm(`Rappeler ${session.family.name} par téléphone ?`, 'Appeler')) return;
+    $('tile-phone').click();
+    return;
+  }
+  if ($('tile-call').disabled) return;
   if (!await askConfirm(`Rappeler ${session.family.name} en vidéo ?`, 'Appeler')) return;
   appelConfirme = true;
   $('tile-call').click();
@@ -2387,7 +2464,14 @@ window.addEventListener('pagehide', hangupCall);
 $('call-hangup').addEventListener('click', () => {
   hangupCall();
   leaveCallScreen();
+  tuileLibre();
 });
+// Appel fini de notre côté : la tuile redevient « Appel vidéo » tout de suite, sans attendre que la
+// tablette se dise libre (« Déjà en appel » restait affiché plusieurs secondes, relecture du 28/10).
+function tuileLibre() {
+  tabletInCall = false;
+  renderCallTile();
+}
 
 // La première image de Mamie est là : on quitte l'écran crème pour la vidéo (jamais avant, sinon écran noir).
 const premiereImage = () => {
@@ -2524,6 +2608,14 @@ function renderMembers(all) {
       tel.href = `tel:${telTablette.replace(/\s/g, '')}`;
       tel.textContent = telTablette;
       name.append(tel);
+      // Enregistrer le numéro de la tablette dans ses contacts (Tanguy, 2/11) : une fiche contact (vCard) que le
+      // téléphone propose d'ajouter ; la tablette sonne alors avec le bon nom quand elle appelle.
+      const fiche = document.createElement('button');
+      fiche.type = 'button';
+      fiche.className = 'link small member-vcard';
+      fiche.textContent = 'Enregistrer dans mes contacts';
+      fiche.addEventListener('click', () => enregistrerContact(session.family.name, telTablette, fiche));
+      name.append(fiche);
     }
     if (m.role === 'famille') {
       const f = session.family;
@@ -4217,6 +4309,35 @@ $('tablet-chip').addEventListener('click', () => {
   notice(lignes.join(' '));
 });
 
+// Fiche contact (vCard 3.0) du numéro de la tablette : « Mamie Emma (Papote) », portable en +33.
+export function vcardTablette(nom, tel) {
+  const propre = String(nom || 'Tablette').replace(/[\r\n;,\\]/g, ' ').trim() || 'Tablette';
+  const intl = `+33${telPropre(tel).replace(/\s/g, '').slice(1)}`;
+  return ['BEGIN:VCARD', 'VERSION:3.0', `FN:${propre} (Papote)`, `N:;${propre} (Papote);;;`,
+    `TEL;TYPE=CELL:${intl}`, 'NOTE:Tablette Papote', 'END:VCARD', ''].join('\r\n');
+}
+function enregistrerContact(nom, tel, bouton) {
+  bouton.disabled = true;
+  const texte = bouton.textContent;
+  bouton.textContent = 'Un instant…';
+  try {
+    const url = URL.createObjectURL(new Blob([vcardTablette(nom, tel)], { type: 'text/vcard' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${String(nom || 'Tablette').replace(/[^\p{L}\p{N} -]/gu, '').trim() || 'Tablette'}.vcf`;
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    notice(`Fiche contact de ${nom} prête : ouvrez-la pour l'ajouter à vos contacts.`);
+  } catch (e) {
+    console.error(e);
+    notice("La fiche contact n'a pas pu être créée. Notez le numéro : " + tel);
+  } finally {
+    setTimeout(() => { bouton.disabled = false; bouton.textContent = texte; }, 1500);
+  }
+}
+
 // Dès que la tablette a un numéro (carte SIM), la tuile Photos laisse la place à
 // « Appeler » (par téléphone, à gauche ; Photos reste dans la barre du bas) : six tuiles, jamais cinq.
 function renderTuileTelephone() {
@@ -4817,7 +4938,9 @@ $('setup-nom').addEventListener('submit', async (e) => {
     stopSetupPairing?.();
     stopSetupPairing = null;
     saveFamilyId(fid);
-    await enterApp();
+    // L'écran « Création de la famille… » reste jusqu'à l'étape suivante : pas de retour au logo
+    // de démarrage entre les deux (Tanguy, 2/11 : « c'est pas logique »).
+    await enterApp({ garderEcran: true });
   } catch (err) {
     console.error(err);
     setupStep('setup-nom');
@@ -4869,7 +4992,7 @@ $('setup-photo-send').addEventListener('click', async () => {
   btn.textContent = 'Envoi…';
   $('setup-photo-error').hidden = true;
   try {
-    await sendPhoto(setupPhoto, $('setup-photo-text').value.trim(), { authorUid: session.uid, authorName: session.member.name });
+    await sendPhoto(setupPhoto, $('setup-photo-text').value.trim(), { authorUid: session.uid, authorName: session.member.name }, true);
     await setupEtape('son');
     setupPhoto = null;
     fillSon();
@@ -5230,9 +5353,9 @@ function showPending(fid) {
   show('view-pending');
 }
 
-async function enterApp() {
+async function enterApp({ garderEcran = false } = {}) {
   stopSession();
-  show('loading');
+  if (!garderEcran) show('loading');
   authUser = await currentUser();
   if (!isRealAccount(authUser)) { showLogin(!!savedFamilyId()); return; }
   // Bascule en Europe : la bonne base et le bon bucket avant toute lecture.

@@ -12,6 +12,7 @@
     }
   ],
   "hosting": {
+    "predeploy": ["node outils/web/version.mjs"],
     "public": "web",
     "ignore": [
       "firebase.json",
