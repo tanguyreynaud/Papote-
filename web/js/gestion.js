@@ -350,7 +350,7 @@ onAuthStateChanged(getAuth(getApp('admin')), (user) => {
   // au lieu d'un logo qui attend que toutes les données soient là (relecture du 28/10).
   if (!donnees) {
     $('kpi-mois').replaceChildren(...[0, 1, 2, 3].map(() => h('div', { class: 'stat fantome', 'aria-hidden': 'true' }, h('span', {}, '0'), h('p', {}, 'chargement'))));
-    $('a-faire').replaceChildren(h('li', { role: 'status', 'aria-label': 'Chargement' }, h('span', { class: 'fantome-ligne' }), h('span', { class: 'fantome-ligne' }), h('span', { class: 'fantome-ligne' })));
+    $('a-faire').replaceChildren(h('li', {}, h('div', { role: 'status', 'aria-label': 'Chargement' }, h('span', { class: 'fantome-ligne' }), h('span', { class: 'fantome-ligne' }), h('span', { class: 'fantome-ligne' }))));
   }
   fermerChargement();
   reveiller();
