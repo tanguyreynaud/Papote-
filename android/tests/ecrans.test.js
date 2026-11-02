@@ -315,8 +315,8 @@ test('plus d\'internet depuis une minute : la carte « Pas d\'internet » rempla
     await b.avancer(100000);
     assert.ok(await b.visible('.wifi-card'));
     await b.etat({ reseau: { wifi: 'Box', internet: true, mobile: false, sim: false } });
-    await b.avancer(31000);
-    assert.ok(!(await b.visible('.wifi-card')));
+    await b.avancer(4000);
+    assert.ok(!(await b.visible('.wifi-card')), 'disparue en quelques secondes au retour du réseau');
     await sansErreur(b);
   } finally { await b.fermer(); }
 });

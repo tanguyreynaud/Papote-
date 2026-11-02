@@ -2520,6 +2520,9 @@
     setupCallButton();
     setTimeout(resumeGsm, 1500);
     setInterval(checkConnection, 30000);
+    // Sans internet, on regarde toutes les 3 s : « Pas d'internet » disparaît dès que le réseau revient
+    // (Tanguy, 02/11). Un simple appel à Android, sans réseau.
+    setInterval(function () { if (offlineSince) checkConnection(); }, 3000);
     setTimeout(checkConnection, 5000);
     setTimeout(checkConnection, 16000);
     setInterval(checkPower, 15000);
