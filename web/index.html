@@ -22,7 +22,21 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&display=swap">
+  <!-- Les polices n'empêchent plus l'affichage : la page apparaît avec la police du téléphone et change
+       dès qu'elles arrivent (sinon, écran blanc tant que Google Fonts ne répond pas, 6 s en 4G faible). -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&display=swap" media="print" onload="this.media='all'">
+  <!-- Écran de démarrage écrit ici même : fond crème et logo dès le premier dessin, avant la feuille de
+       style et les scripts (un écran blanc attendait sinon jusqu'à 6 s en 4G faible). -->
+  <style>
+    :root { --bg: #fdfaf5; --text: #24212f; --muted: #5f5a6b; --accent: #4f46e5; }
+    @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #121110; --text: #f5f5f4; --muted: #a8a29e; --accent: #818cf8; } }
+    :root[data-theme="dark"] { --bg: #121110; --text: #f5f5f4; --muted: #a8a29e; --accent: #818cf8; }
+    html, body { margin: 0; background: var(--bg); color: var(--text); }
+    .splash { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: var(--bg); }
+    .splash-mark { width: 96px; height: 96px; }
+    .splash-name { margin: 0; font-size: 28px; font-weight: 800; letter-spacing: -.02em; font-family: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif; }
+    .splash-note { margin: 0; color: var(--muted); font-size: 17px; min-height: 1.4em; }
+  </style>
   <link rel="stylesheet" href="css/famille.css">
   <!-- Modules de l'app demandés tous d'un coup : sans cette liste, le navigateur ne découvre chaque fichier
        qu'après avoir lu celui qui l'importe (un aller-retour réseau de plus à chaque niveau). -->
@@ -91,7 +105,12 @@
       <img class="splash-mark" src="icons/icon.svg" alt="">
       <p class="splash-name">Papote</p>
       <div class="splash-dots"><span></span><span></span><span></span></div>
+      <p class="splash-note" id="splash-note" aria-live="polite"></p>
     </div>
+    <script>
+      // Au bout de 4 s de démarrage (réseau lent), un mot pour dire que ça avance (Tanguy, 2/11).
+      setTimeout(function () { var n = document.getElementById('splash-note'); if (n && !document.getElementById('loading').hidden) n.textContent = 'On y est presque…'; }, 4000);
+    </script>
 
     <!-- Connexion -->
     <section id="view-login" class="page-pad" hidden>
@@ -1032,6 +1051,7 @@
       <div id="post-extra" hidden>
         <input id="post-text" maxlength="60" placeholder="Légende courte (60 caractères)" aria-describedby="post-text-compte">
         <p id="post-text-compte" class="muted small legende-compte" aria-live="polite">0 / 60</p>
+        <div class="send-progress" id="send-progress" hidden><span></span></div>
         <button type="submit" class="primary wide send-btn" id="btn-send">Envoyer</button>
       </div>
       <p id="post-status" class="muted small" hidden></p>

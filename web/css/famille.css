@@ -324,6 +324,9 @@ button:disabled { opacity: .45; cursor: default; }
 .feed-more { height: 1px; }
 .shot-frame { display: block; position: relative; width: 100%; padding: 0; border-radius: 0; }
 .shot-frame img { display: block; width: 100%; height: auto; background: var(--line); }
+/* La place de la photo est réservée avant qu'elle n'arrive (4/3, la forme la plus courante) : la liste
+   ne saute pas pendant le chargement ; la vraie forme prend le relais dès que l'image est là. */
+.shot-frame img { aspect-ratio: auto 4 / 3; }
 .shot-play {
   position: absolute;
   left: 50%; top: 50%;
@@ -366,6 +369,8 @@ button:disabled { opacity: .45; cursor: default; }
 .bubble p { margin: 0; }
 .bubble.mine { align-self: flex-end; background: var(--accent); color: var(--accent-text); border-bottom-right-radius: 6px; cursor: pointer; }
 .bubble.theirs { align-self: flex-start; border-bottom-left-radius: 6px; }
+/* Message en route : gris tant que la base ne l'a pas renvoyé, puis la vraie bulle indigo. */
+.bubble.mine.en-route { background: var(--line); color: var(--muted); cursor: default; }
 .bubble.reply { border: 2px solid var(--accent); }
 .bubble-who { font-size: 15px; font-weight: 700; color: var(--muted); }
 .reply .bubble-who { color: var(--accent); }
@@ -523,6 +528,10 @@ button:disabled { opacity: .45; cursor: default; }
 }
 #post-text { margin: 0; }
 .composer-busy, .busy .previews { opacity: .5; }
+/* Avancement de l'envoi des photos : « Photo 1 sur 2 · 40 % » et une barre qui se remplit. */
+.send-progress { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; margin: 0 0 10px; }
+.send-progress[hidden] { display: none; }
+.send-progress span { display: block; height: 100%; width: 0; background: var(--accent); transition: width .3s ease-out; }
 
 .spinner {
   width: 18px;
