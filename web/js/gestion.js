@@ -1094,7 +1094,9 @@ function menuCommande(c, zoneRemplacement, etiquette) {
       ? { libelle: 'Colis revenu (jamais retiré)', danger: true, faire: () => lancer(() => colisRevenu(c)) } : null,
     enCours && !annulable
       ? { libelle: 'Arrêter l\'abonnement', danger: true, faire: () => lancer(() => arreterAbonnement(c)) } : null,
-    c.fid && c.resiliationLe && !c.restitution && c.resiliationLe > Date.now()
+    // Retour demandé par le client avant la date d'arrêt : Papote peut encore reprendre (annulerResiliation l'annule).
+    c.fid && c.resiliationLe && c.resiliationLe > Date.now()
+      && (!c.restitution || (c.restitution.anticipe && c.restitution.statut === 'attendue' && !c.restitution.mainPropreLe))
       ? { libelle: 'Reprendre l\'abonnement', faire: () => lancer(() => reprendreAbonnement(c)) } : null,
     enCours && !annulable && !enPause ? { libelle: 'Pause hospitalisation…', faire: () => lancer(() => pauseHospitalisation(c)) } : null,
     enPause ? { libelle: 'Reprendre les prélèvements', faire: () => lancer(() => reprendrePrelevements(c)) } : null,
@@ -1196,7 +1198,8 @@ async function arreterAbonnement(c) {
 }
 
 async function reprendreAbonnement(c) {
-  if (!await demander(`Reprendre l'abonnement de ${c.nom || c.email || 'ce client'} ?\n\nL'arrêt prévu le ${jour(c.resiliationLe)} est annulé : l'abonnement continue comme avant et le client reçoit un e-mail.`, { oui: 'Reprendre l\'abonnement' })) throw 'non';
+  const retour = c.restitution ? '\n\nLe retour de la tablette demandé par le client est annulé aussi (son QR code de retour, s\'il n\'est pas encore déposé).' : '';
+  if (!await demander(`Reprendre l'abonnement de ${c.nom || c.email || 'ce client'} ?\n\nL'arrêt prévu le ${jour(c.resiliationLe)} est annulé : l'abonnement continue comme avant et le client reçoit un e-mail.${retour}`, { oui: 'Reprendre l\'abonnement' })) throw 'non';
   await patienter('Reprise de l\'abonnement…', () => appeler('annulerResiliation', { fid: c.fid, commande: c.id }));
   return 'Abonnement repris : il continue comme avant.';
 }

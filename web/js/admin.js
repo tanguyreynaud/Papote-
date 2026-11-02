@@ -20,6 +20,16 @@ import { refreshSim } from './sim.js';
 import { appeler, donnees, signalerChangement } from './gestion-api.js';
 import { ouvrirParcours } from './parcours.js';
 
+// Version en ligne, écrite à la publication : « Version du 02/11 à 21 h 05 · d1e42b0 » (rien si absente).
+fetch('/version.json', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).then((v) => {
+  const d = v && v.date ? new Date(v.date) : null;
+  if (!d || Number.isNaN(d.getTime())) return;
+  const deux = (n) => String(n).padStart(2, '0');
+  const el = document.getElementById('version-admin');
+  el.textContent = `Version du ${deux(d.getDate())}/${deux(d.getMonth() + 1)} à ${d.getHours()} h ${deux(d.getMinutes())}${v.sha ? ` · ${v.sha}` : ''}`;
+  el.hidden = false;
+}).catch(() => {});
+
 const app = initializeApp({
   apiKey: 'AIzaSyAvoivJR8p-u2VxUWzlyHzTgP20-5ZG_-E',
   authDomain: 'papote-famille.firebaseapp.com',
