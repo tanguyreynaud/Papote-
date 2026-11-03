@@ -85,7 +85,7 @@ async function purgerFamilles(db, maintenant) {
     const commandes = await db.collection('commandes').where('fid', '==', snap.id).get();
     if (!familleAPurger(snap.data(), commandes.docs.map((c) => c.data()), maintenant)) continue;
     try {
-      await effacerFamille({ fid: snap.id, snap, commandes: commandes.docs, par: 'purge 12 mois' });
+      await effacerFamille({ fid: snap.id, snap, commandes: commandes.docs, par: 'purge automatique (3 mois après la résiliation)' });
       n++;
     } catch (e) {
       logger.error(`Purge : famille ${snap.id} non effacée`, e);
