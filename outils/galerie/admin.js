@@ -207,6 +207,9 @@ function donnees(o = {}) {
   docs['families/f-odette/members/u-isa'] = membre('u-isa', 'Isabelle');
   docs['families/f-mamies'] = { name: 'Mamie Lucette', createdBy: 'u-tanguy', abonnement: { statut: 'offert' } };
   docs['validation/etat'] = VALIDATION_ETAT;
+  // Captures publiées (publier-validation.mjs) : la liste et le jeton secret de chaque image, lus par l'admin seul.
+  docs['validation/captures'] = { le: VALIDATION_INDEX.le, bucket: 'papote-famille.firebasestorage.app',
+    parties: VALIDATION_INDEX.parties.map((p) => ({ ...p, ecrans: p.ecrans.map((e) => ({ ...e, captures: e.captures.map((c) => ({ ...c, t: `jeton-${c.f.slice(2, -4)}` })) })) })) };
   // Les commandes sont aussi dans la base : les listes « à envoyer », « en route » et « à récupérer » la lisent directement.
   for (const c of (o.donnees || gestionDonnees(o)).commandes) {
     const { id, famille, abonnement, ...reste } = c;
@@ -264,13 +267,18 @@ function fausseCapture(nom) {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${hauteur}" viewBox="0 0 ${w} ${hauteur}"><rect width="100%" height="100%" fill="#fdfaf5"/>`
     + `<rect x="24" y="24" width="${w - 48}" height="72" rx="16" fill="#4f46e5"/><text x="50%" y="55%" font-family="sans-serif" font-size="40" fill="#4f46e5" text-anchor="middle">${nom}</text></svg>`;
 }
-const validation = (p, en = true) => (en
+// Images du stockage Firebase (adresse avec jeton) ; l'ancien site papote-validation reste servi pour l'admin d'avant.
+const validation = (p, en = true) => Promise.all([p.route('https://firebasestorage.googleapis.com/**', (r) => {
+  const u = new URL(r.request().url());
+  if (!en || !u.searchParams.get('token')) return r.fulfill({ status: 403, body: '' });
+  return r.fulfill({ contentType: 'image/svg+xml', body: fausseCapture(decodeURIComponent(u.pathname.split('/o/')[1] || '').split('/').pop().replace('.jpg', '')) });
+}), en
   ? p.route('https://papote-validation.web.app/**', (r) => {
     const u = new URL(r.request().url());
     if (u.pathname === '/index.json') return r.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(VALIDATION_INDEX) });
     return r.fulfill({ contentType: 'image/svg+xml', body: fausseCapture(u.pathname.split('/').pop().replace('.jpg', '')) });
   })
-  : p.route('https://papote-validation.web.app/**', (r) => r.fulfill({ status: 404, body: '' })));
+  : p.route('https://papote-validation.web.app/**', (r) => r.fulfill({ status: 404, body: '' }))]);
 
 // page : adresse dans l'admin (#…) ; tailles : pc et/ou tel ; plein : toute la page.
 const SCENES = [
@@ -381,6 +389,7 @@ const SCENES = [
   { groupe: 'Validation', titre: 'Parcours : la commande, étape par étape', page: '#validation/parcours/commande', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees() },
   { groupe: 'Validation', titre: 'Parcours : un e-mail ouvert depuis une étape', page: '#validation/parcours/commande', tailles: ['pc'], donnees: () => donnees(), faire: toucher('.v-mail') },
   { groupe: 'Validation', titre: 'Dépenses : coût par famille et pistes', page: '#validation/depenses', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees() },
+  { groupe: 'Validation', titre: 'Dépenses : calcul avec la TVA (au-delà du seuil)', page: '#validation/depenses', tailles: ['pc', 'tel'], donnees: () => donnees(), faire: toucher('.v-tva') },
   { groupe: 'Validation', titre: 'Gestes humains : comment chacun est vérifié', page: '#validation/gestes', tailles: ['pc'], plein: true, donnees: () => donnees() },
 
   { groupe: 'Outils', titre: 'Outils : automatique', page: '#outils/automatique', tailles: ['pc'], plein: true, donnees: () => donnees() },
@@ -402,7 +411,9 @@ async function ouvrir(browser, base, scene, taille) {
   page.on('pageerror', (e) => erreurs.push(String(e.message || e)));
   if (process.env.CONSOLE) page.on('console', (m) => { if (m.type() === 'error') console.log('CONSOLE', m.text(), m.location().url, m.location().lineNumber); });
   await page.clock.install({ time: new Date(MAINTENANT) });
-  await page.addInitScript(poserDonnees, scene.donnees());
+  const donneesScene = scene.donnees();
+  if (scene.validation === false) delete donneesScene.docs['validation/captures']; // captures pas encore publiées
+  await page.addInitScript(poserDonnees, donneesScene);
   await page.route('https://www.gstatic.com/firebasejs/**', (r) => r.fulfill({
     contentType: 'text/javascript', headers: { 'Access-Control-Allow-Origin': '*' },
     body: r.request().url().endsWith('/faux-sdk.js') ? SDK : "export * from 'https://www.gstatic.com/firebasejs/faux-sdk.js';",

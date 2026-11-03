@@ -1,7 +1,7 @@
 // Captures pour l'espace « Validation » de l'admin (admin.html#validation) : chaque partie de la galerie est
 // rangée dans outils/galerie/validation/<partie>.json, avec ses captures dans validation/i/, nommées par leur
 // empreinte. Le dossier n'est pas vidé d'une galerie à l'autre : « galerie.bat admin » ne remplace que l'admin.
-// publier-validation.mjs assemble le tout (index.json) et le met en ligne sur le site papote-validation.
+// publier-validation.mjs assemble le tout (index.json) et le met en ligne pour l'admin seul (stockage + Firestore).
 //
 // Chaque écran a un identifiant stable (partie, parcours, titre) : la validation de Tanguy le suit même quand les
 // numéros changent. L'empreinte de ses captures dit si l'écran a changé depuis qu'il l'a validé.
