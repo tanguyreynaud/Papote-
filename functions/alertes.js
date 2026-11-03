@@ -110,10 +110,23 @@ exports.alertesTablettes = onSchedule({ schedule: 'every 5 minutes', timeZone: '
           continue;
         }
         if (tablette.alerteType === type) continue; // déjà prévenu pour cet épisode
+        // Deux tours en même temps (tour en retard, nouvel essai) : un seul prend l'épisode et prévient.
+        const pris = await db.runTransaction(async (tx) => {
+          if ((await tx.get(t.ref)).get('alerteType') === type) return false;
+          tx.update(t.ref, { alerteType: type, alerteLe: new Date(maintenant) });
+          return true;
+        });
+        if (!pris) continue;
         const responsables = [...new Set([famille.createdBy, ...(famille.admins || [])].filter(Boolean))];
         const { titre, texte } = message(type, famille.name || 'Mamie');
-        const n = await envoyer(db, fam.id, responsables, { type: 'alerte', titre, texte }, 6 * 3600);
-        await t.ref.update({ alerteType: type, alerteLe: new Date(maintenant) });
+        let n;
+        try {
+          n = await envoyer(db, fam.id, responsables, { type: 'alerte', titre, texte }, 6 * 3600);
+        } catch (e) {
+          // Rien n'est parti : l'épisode est rendu, le tour suivant réessaie.
+          await t.ref.update({ alerteType: tablette.alerteType || null, alerteLe: tablette.alerteLe || null });
+          throw e;
+        }
         await journal.noter(db, { genre: type === 'silence' ? 'silence' : 'debranchee', fid: fam.id, tablette: t.id, telephones: n });
         logger.info(`Famille ${fam.id}, tablette ${t.id} : alerte ${type}, ${n} téléphone(s)`);
       } catch (e) {
