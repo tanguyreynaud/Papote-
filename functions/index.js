@@ -1672,11 +1672,18 @@ exports.restitutions = onSchedule(
       try {
         const paiement = await preleverMateriel(snap.id, regles.penaliteRestitution(snap.data()),
           'Papote : matériel non rendu', `restitution-${snap.id}`);
-        await snap.ref.update({
-          'restitution.statut': 'facturee',
-          'restitution.paiement': paiement.id,
-          'restitution.majLe': FieldValue.serverTimestamp(),
+        // Deux tâches en même temps : Stripe n'a prélevé qu'une fois (même clé), et seule la première note
+        // « facturée » et prévient le client.
+        const premiere = await db.runTransaction(async (tx) => {
+          if ((await tx.get(snap.ref)).get('restitution.statut') !== 'attendue') return false;
+          tx.update(snap.ref, {
+            'restitution.statut': 'facturee',
+            'restitution.paiement': paiement.id,
+            'restitution.majLe': FieldValue.serverTimestamp(),
+          });
+          return true;
         });
+        if (!premiere) continue;
         logger.info(`Commande ${snap.id} : tablette non rendue, ${mail.euros(regles.penaliteRestitution(snap.data()))} prélevés.`);
         // Le client sait ce qui a été prélevé et pourquoi (2026-10-30).
         if (snap.get('email')) {
