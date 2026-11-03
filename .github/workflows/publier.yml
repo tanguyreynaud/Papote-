@@ -1,0 +1,141 @@
+# Bouton « Publier » (Tanguy, 3/11) : publie en ligne sans taper de commande sur le PC.
+# Lancer : GitHub > Actions > Publier > Run workflow, puis « Approve » (environnement production : rien ne part sans Tanguy).
+#   1. Vérifie que la CI de main et de l'admin (claude/project-thread-dlattc) est verte, sinon s'arrête.
+#   2. Écrit les SHA publiés et ce qui change depuis la dernière publication.
+#   3. Fonctions depuis main (--only functions, --non-interactive : une fonction à supprimer ARRÊTE la publication,
+#      jamais de « oui » ni de --force), puis la vitrine, puis hébergement + règles depuis l'admin.
+# Gratuit (dépôt public). Clé : secret FIREBASE_CLE_PUBLICATION du compte « papote-publication » (publier seulement).
+# La tablette et la sauvegarde restent sur le PC de Tanguy.
+name: Publier
+
+on:
+  workflow_dispatch:
+    inputs:
+      quoi:
+        description: Que publier
+        type: choice
+        default: tout
+        options: [tout, fonctions et vitrine (main), app et admin (hébergement et règles)]
+
+concurrency:
+  group: publier
+  cancel-in-progress: false
+
+permissions:
+  contents: write   # étiquettes publie/main et publie/admin (ce qui est en ligne)
+  actions: read
+
+env:
+  ADMIN: claude/project-thread-dlattc
+  PROJET: papote-famille
+
+jobs:
+  verifier:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      main: ${{ steps.sha.outputs.main }}
+      admin: ${{ steps.sha.outputs.admin }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: sha
+        name: SHA à publier
+        run: |
+          git fetch -q origin "$ADMIN" --tags
+          echo "main=$(git rev-parse origin/main)" >> "$GITHUB_OUTPUT"
+          echo "admin=$(git rev-parse "origin/$ADMIN")" >> "$GITHUB_OUTPUT"
+      - name: CI verte
+        env:
+          GH_TOKEN: ${{ github.token }}
+          QUOI: ${{ inputs.quoi }}
+        run: |
+          if [ "$QUOI" != "app et admin (hébergement et règles)" ]; then outils/publier/ci-verte.sh "${{ steps.sha.outputs.main }}" "main"; fi
+          if [ "$QUOI" != "fonctions et vitrine (main)" ]; then outils/publier/ci-verte.sh "${{ steps.sha.outputs.admin }}" "admin"; fi
+      - name: Ce qui change
+        env:
+          QUOI: ${{ inputs.quoi }}
+        run: |
+          {
+            echo "## Publication demandée : $QUOI"
+            for p in "main:${{ steps.sha.outputs.main }}" "admin:${{ steps.sha.outputs.admin }}"; do
+              nom=${p%%:*}; sha=${p#*:}
+              echo; echo "### $nom → ${sha:0:7}"
+              if git rev-parse -q --verify "refs/tags/publie/$nom" >/dev/null; then
+                avant=$(git rev-parse "refs/tags/publie/$nom")
+                if [ "$avant" = "$sha" ]; then echo "Rien de nouveau depuis la dernière publication."; continue; fi
+                echo "Depuis la dernière publication (${avant:0:7}) :"; echo '```'
+                git log --oneline --no-merges "$avant..$sha" | head -40; echo '```'
+                echo '```'; git diff --stat "$avant" "$sha" | tail -1; echo '```'
+              else
+                echo "Première publication par le bouton : derniers changements :"; echo '```'
+                git log --oneline --no-merges -15 "$sha"; echo '```'
+              fi
+            done
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+  publier:
+    needs: verifier
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    environment: production   # attend le « Approve » de Tanguy
+    env:
+      QUOI: ${{ inputs.quoi }}
+      FONCTIONS: ${{ inputs.quoi != 'app et admin (hébergement et règles)' }}
+      APP: ${{ inputs.quoi != 'fonctions et vitrine (main)' }}
+    steps:
+      - name: Code de main
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.verifier.outputs.main }}
+          path: main
+      - name: Code de l'admin
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.verifier.outputs.admin }}
+          path: admin
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: main/functions/package-lock.json
+      - name: Clé de publication et outil Firebase
+        env:
+          CLE: ${{ secrets.FIREBASE_CLE_PUBLICATION }}
+        run: |
+          if [ -z "$CLE" ]; then echo "::error::Secret FIREBASE_CLE_PUBLICATION absent (environnement production)."; exit 1; fi
+          printf '%s' "$CLE" > "$RUNNER_TEMP/cle.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/cle.json" >> "$GITHUB_ENV"
+          npm install -g firebase-tools@14 >/dev/null
+          firebase --version
+      - name: Fonctions (main ${{ needs.verifier.outputs.main }})
+        if: env.FONCTIONS == 'true'
+        working-directory: main
+        env:
+          FUNCTIONS_DISCOVERY_TIMEOUT: 60
+        run: |
+          (cd functions && npm ci)
+          # --non-interactive : si une fonction devait être supprimée, firebase S'ARRÊTE (jamais de --force ici).
+          # Quota Google (429) : on relance ; les fonctions déjà à jour sont passées.
+          for essai in 1 2 3; do
+            if firebase deploy --only functions --config firebase.fonctions.json --project "$PROJET" --non-interactive; then exit 0; fi
+            echo "Essai $essai raté, nouvel essai dans 90 s"; sleep 90
+          done
+          exit 1
+      - name: Vitrine (main)
+        if: env.FONCTIONS == 'true'
+        working-directory: main
+        run: node outils/vitrine/publier.mjs en-ligne
+      - name: Hébergement et règles (admin ${{ needs.verifier.outputs.admin }})
+        if: env.APP == 'true'
+        working-directory: admin
+        run: firebase deploy --only hosting,firestore:rules,storage --project "$PROJET" --non-interactive
+      - name: Noter ce qui est en ligne
+        working-directory: main
+        run: |
+          if [ "$FONCTIONS" = true ]; then git tag -f publie/main "${{ needs.verifier.outputs.main }}"; git push -f origin refs/tags/publie/main; fi
+          if [ "$APP" = true ]; then git fetch -q origin "${{ needs.verifier.outputs.admin }}"; git tag -f publie/admin "${{ needs.verifier.outputs.admin }}"; git push -f origin refs/tags/publie/admin; fi
+          echo "En ligne : main ${{ needs.verifier.outputs.main }} / admin ${{ needs.verifier.outputs.admin }} ($QUOI)" | tee -a "$GITHUB_STEP_SUMMARY"
+      - if: always()
+        run: rm -f "$RUNNER_TEMP/cle.json"
