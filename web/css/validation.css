@@ -93,3 +93,4 @@ body.v-zoom-ouvert { overflow: hidden; }
 }
 .v-zoom-corps > * { flex: none; }
 .v-zoom-images img { max-height: 78vh; width: auto; max-width: 100%; margin: 0 auto; }
+.v-tva { margin: 4px 0 12px; }
