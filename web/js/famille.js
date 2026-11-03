@@ -2947,7 +2947,8 @@ function paused() {
 function messageServeur(err) {
   const codes = ['failed-precondition', 'permission-denied', 'already-exists', 'invalid-argument', 'internal'];
   const code = String(err?.code || '').replace(/^functions\//, '');
-  const texte = String(err?.message || '').trim();
+  // Le SDK ajoute le statut HTTP au message (« … [400] », « internal [0] » sans réseau) : jamais montré.
+  const texte = String(err?.message || '').replace(/\s*\[\d{1,3}\]$/, '').trim();
   return codes.includes(code) && /\s/.test(texte) && /[a-zà-ÿ]/.test(texte) && texte.length < 300 ? texte : '';
 }
 
