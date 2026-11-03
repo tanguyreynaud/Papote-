@@ -98,6 +98,8 @@ function apercuDe(blocs, options) {
 // options.interne : e-mail pour Papote (pied « message automatique », lien vers l'admin), sans « Une question ? » ;
 // options.desinscription (lien) + options.pourquoi : e-mail envoyé avec l'accord de la personne (relances, nouvelles) ;
 // options.apercu : texte d'aperçu dans la boîte de réception (sinon le premier paragraphe).
+// Pour Outlook bureau seulement ([if mso]) : 96 dpi (sinon tout grossit sur les écrans à 120 dpi) et Arial
+// partout (sans police installée, Word peut passer en Times New Roman au lieu de suivre la liste de repli).
 function page(titre, blocs, bouton, options = {}) {
   const corps = blocs.map(blocHtml).join('\n');
   // Bouton « à toute épreuve » : cellule colorée ; Outlook (Word) ignore le padding du lien, mso-padding-alt le
@@ -115,13 +117,15 @@ function page(titre, blocs, bouton, options = {}) {
     : `Papote · <a href="${SITE}" style="color:${C.doux};text-decoration:none">mapapote.fr</a> · la tablette qui relie les familles`;
   const apercu = apercuDe(blocs, options);
   return `<!doctype html>
-<html lang="fr">
+<html lang="fr" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light">
 <meta name="supported-color-schemes" content="light">
 <title>${echapper(titre)}</title>
+<!--[if mso]><noscript><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript>
+<style>body, table, td, p, a, h1, h2, ul, li, div, span { font-family:Arial, Helvetica, sans-serif !important; }</style><![endif]-->
 <style>
 body { margin:0; padding:0; background:${C.fond}; -webkit-text-size-adjust:100%; }
 a { color:${C.indigo}; }
