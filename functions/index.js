@@ -1792,6 +1792,7 @@ exports.nouveauMembre = onDocumentCreated(
   async (event) => {
     const membre = event.data.data();
     const { fid, uid } = event.params;
+    if (await base.restaurationEnCours()) return; // membres remis par une restauration : aucun e-mail « a rejoint »
     if (membre.status === 'pending') {
       await prevenirDemande(fid, uid, membre);
       return;
