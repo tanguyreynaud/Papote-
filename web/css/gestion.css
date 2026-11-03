@@ -464,7 +464,12 @@ label.interrupteur, .fiche label.interrupteur { display: inline-flex; flex-direc
 .form-modif .boutons { display: flex; gap: 8px; }
 @media (max-width: 640px) {
   /* Le ⋮ reste sur la ligne du titre (le titre passe à la ligne s'il est long). */
-  .tete-fiche h2 { min-width: 0; overflow-wrap: anywhere; }
+  /* Titre et boutons de la fiche : les boutons passent dessous quand ils ne tiennent pas à côté du titre ;
+     le ⋮ seul reste sur la ligne du titre (avant : « Commande EJ4N-DVBA » une lettre par ligne, 3/11). */
+  .tete-fiche { flex-wrap: wrap; }
+  .tete-fiche h2 { flex: 1 1 10em; min-width: min(10em, 100%); overflow-wrap: break-word; }
+  /* Chiffres en petites tuiles : le nom de l'opérateur (« Lycamobile ») tient sur une ligne. */
+  .stats.compact .stat span { font-size: clamp(18px, 5vw, 26px); }
   .bouton-message { align-items: flex-start; }
 }
 .a-faire a .tache-titre { color: var(--text); }

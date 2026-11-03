@@ -29,6 +29,8 @@ jobs:
           - '--gestes famille'
           - '--accessibilite famille admin'
           - 'famille admin'
+          # App et admin dans WebKit (moteur de Safari) en iPhone SE et iPhone 15 : simulé, pas un vrai iPhone.
+          - '--iphone famille admin'
     defaults:
       run:
         working-directory: outil/outils/galerie
@@ -48,6 +50,8 @@ jobs:
       # Pas de package-lock.json dans outils/ (.gitignore) : npm install, pas npm ci.
       - run: npm install --no-audit --no-fund
       - run: npx playwright install --with-deps chromium
+      - if: contains(matrix.mode, '--iphone')
+        run: npx playwright install --with-deps webkit
       - name: Balayage ${{ matrix.mode }}
         run: node galerie.js ${{ matrix.mode }} --famille=ici --admin=ici
       - name: Rapports
