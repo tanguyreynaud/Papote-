@@ -2223,6 +2223,7 @@ async function answerFromTablet() {
   setCallFace($('call-face'), caller);
   $('call').hidden = false;
   setCallStatus('Connexion…');
+  reponseAbandonnee = false;
   try {
     currentCall = await answerIncoming(session.fid, call.id, { uid: session.uid, name: session.member.name }, {
       audio: $('call-audio'),
@@ -2245,6 +2246,13 @@ async function answerFromTablet() {
         setTimeout(() => { if (!currentCall) leaveCallScreen(); }, 2000);
       },
     });
+    // « Raccrocher » touché pendant « Connexion… » : l'appel pris est coupé aussitôt (sinon il continuait, micro
+    // ouvert, écran fermé).
+    if (reponseAbandonnee) {
+      const pris = currentCall;
+      currentCall = null;
+      pris.hangup();
+    }
   } catch (err) {
     currentCall = null;
     if (!err || err.name !== 'TakenError') reportCallIncident('reponse-audio', `${err && err.name}: ${err && err.message}`, call.id);
@@ -2263,6 +2271,7 @@ $('incoming-answer').addEventListener('click', answerFromTablet);
 // Ouvert par « Répondre » (?appel=<id>) : l'écran d'appel s'affiche tout de suite, avant même
 // l'accueil, et l'appel est pris dès qu'il arrive. S'il ne sonne plus, on le dit.
 let answerPending = null;
+let reponseAbandonnee = false; // « Raccrocher » touché avant que la réponse à Mamie soit prise
 function answerOnArrival(cid) {
   answerPending = cid;
   etatNatif('connexion', false);
@@ -2498,6 +2507,8 @@ window.addEventListener('pagehide', hangupCall);
 
 // C'est moi qui raccroche : l'écran se ferme tout de suite (pas de « Appel terminé » à attendre).
 $('call-hangup').addEventListener('click', () => {
+  // Réponse à Mamie encore en route (pas d'appel à annuler) : elle sera raccrochée dès qu'elle est prise.
+  if (callStarting && !currentCall && !callAbort) reponseAbandonnee = true;
   hangupCall();
   leaveCallScreen();
   tuileLibre();
