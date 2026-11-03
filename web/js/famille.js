@@ -3302,7 +3302,8 @@ $('btn-retracter').addEventListener('click', async () => {
   const quand = r.jusqua === null || r.jusqua === undefined ? 'tout de suite' : 'dès que la tablette nous revient';
   const montant = r.montant ? ` Tout ce que vous avez payé (${euros(r.montant)}) vous est remboursé ${quand}.` : '';
   if (!await askConfirm(`Annuler votre commande ? Votre abonnement s'arrête tout de suite.${montant}`, 'Annuler ma commande')) return;
-  withAboError(async () => {
+  // Attendu : le bouton tourne pendant l'appel et un 2e appui ne repose pas la question (retour.js).
+  await withAboError(async () => {
     const res = await retracter(session.fid);
     finCle = null;
     notice(res?.remboursement === 'fait'
