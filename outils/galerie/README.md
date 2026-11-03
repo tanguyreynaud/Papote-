@@ -94,9 +94,11 @@ Rien ne se fusionne tant qu'un balayage est rouge.
 ## Espace Validation de l'admin
 
 Chaque galerie range aussi ses captures dans `validation/` (une fiche par partie, captures nommées par leur empreinte).
-`publier-validation.bat` refait la galerie puis met les captures en ligne sur le site Firebase **papote-validation**
-(hébergement gratuit, créé tout seul la première fois) ; l'admin les montre dans **Validation › Écrans**, rangées par
-parcours, avec « Validé » / « À revoir » et un commentaire par écran.
+`publier-validation.bat` refait la galerie puis met les captures en ligne, **visibles par l'admin seul** (3/11) :
+les images dans le stockage Firebase (`validation/i/`, chacune avec un jeton secret, aucune règle ne les ouvre), la
+liste et les jetons dans le document Firestore `validation/captures` (règle : admin seul). Il utilise la clé admin du
+PC (`%USERPROFILE%\.papote\cle-admin-firebase.json`) et le firebase-admin de `outils/admin`. L'admin les montre dans
+**Validation › Écrans**, rangées par parcours, avec « Validé » / « À revoir » et un commentaire par écran.
 
 ```
 cd C:\Users\tangu\papote-deploiement
