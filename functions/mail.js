@@ -99,9 +99,11 @@ function apercuDe(blocs, options) {
 // options.apercu : texte d'aperçu dans la boîte de réception (sinon le premier paragraphe).
 function page(titre, blocs, bouton, options = {}) {
   const corps = blocs.map(blocHtml).join('\n');
+  // Bouton « à toute épreuve » : cellule colorée ; Outlook (Word) ignore le padding du lien, mso-padding-alt le
+  // remet sur la cellule pour lui seul (sinon le bouton se réduit à son texte).
   const btn = bouton
     ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 10px;border-collapse:separate">
-<tr><td align="center" style="background:${C.indigo};border-radius:999px"><a href="${echapper(bouton.lien)}" style="display:inline-block;padding:15px 28px;font-family:${POLICE};font-size:17px;font-weight:bold;line-height:1.2;color:#ffffff;text-decoration:none;border-radius:999px">${insecables(echapper(bouton.texte))}&nbsp;→</a></td></tr></table>`
+<tr><td align="center" style="background:${C.indigo};border-radius:999px;mso-padding-alt:15px 28px"><a href="${echapper(bouton.lien)}" style="display:inline-block;padding:15px 28px;font-family:${POLICE};font-size:17px;font-weight:bold;line-height:1.2;color:#ffffff;text-decoration:none;border-radius:999px">${insecables(echapper(bouton.texte))}&nbsp;→</a></td></tr></table>`
     : '';
   const question = options.interne ? '' : `<p style="margin:22px 0 0;font-size:15px;line-height:1.5;color:${C.doux}">Une question&nbsp;? Répondez simplement à cet e&#8209;mail, nous vous répondons personnellement.</p>`;
   const pourquoi = options.desinscription
