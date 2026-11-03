@@ -5,10 +5,10 @@
 # rien ne se fusionne en rouge. Gratuit (dépôt public), rien ne part en ligne. Rapports dans l'artefact « balayages ».
 name: Balayages site et e-mails
 
+# Une seule fois par changement : au push (les résultats s'affichent aussi sur la PR). Avant, push + pull_request
+# faisaient tourner tout deux fois et doublaient les e-mails d'échec (Tanguy, 3/11).
 on:
   push:
-    paths: ['vitrine/**', 'functions/mail.js', 'functions/mail/**', 'outils/galerie/**', '.github/workflows/balayages.yml']
-  pull_request:
     paths: ['vitrine/**', 'functions/mail.js', 'functions/mail/**', 'outils/galerie/**', '.github/workflows/balayages.yml']
   workflow_dispatch:
 
