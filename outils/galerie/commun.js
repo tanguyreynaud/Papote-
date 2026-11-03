@@ -142,9 +142,16 @@ async function miseEnPage(page) {
     const de = document.documentElement;
     const nom = (el) => el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') + (el.classList.length ? '.' + [...el.classList].join('.') : '');
     if (de.scrollWidth > de.clientWidth + 1) {
+      // Un élément dans une bande qui défile (onglets) ne fait pas déborder la page : on nomme les vrais coupables.
+      const dansBande = (el) => {
+        for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+          if (/auto|scroll|hidden|clip/.test(getComputedStyle(p).overflowX)) return true;
+        }
+        return false;
+      };
       const coupables = [...document.querySelectorAll('body *')]
-        .filter((el) => el.getBoundingClientRect().right > de.clientWidth + 1 && el.getBoundingClientRect().width > 0)
-        .slice(0, 3).map(nom);
+        .filter((el) => el.getBoundingClientRect().right > de.clientWidth + 1 && el.getBoundingClientRect().width > 0 && !dansBande(el))
+        .slice(0, 3).map((el) => nom(el) + (el.children.length ? '' : ` « ${el.textContent.trim().slice(0, 30)} »`));
       soucis.push(`Largeur : page trop large (${de.scrollWidth} px pour un écran de ${de.clientWidth} px : ${coupables.join(', ')})`);
     }
     const vus = new Set();
