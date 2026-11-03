@@ -231,6 +231,7 @@ const TITRES = {
   compta: 'Comptabilité',
   validation: 'Validation',
   outils: 'Réglages',
+  aide: 'Que faire si…', // guide des pépins courants (admin.html, section « aide »)
   tablette: 'Tablette',
   commande: 'Commande',
   client: 'Client',

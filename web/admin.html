@@ -81,6 +81,9 @@
         <a href="#outils" data-page="outils" class="nav-reglages">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.5-.5-.5-2.5z"/></svg>
           Réglages</a>
+        <a href="#aide" data-page="aide" class="nav-aide">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6M12 17h.01"/></svg>
+          Que faire si…</a>
       </nav>
       <div class="nav-pied">
         <p id="who" class="muted small"></p>
@@ -445,6 +448,81 @@
           <button type="button" id="btn-migrate" class="primary wide" disabled>Transférer vers Storage</button>
           <pre id="migrate-log" class="log" hidden></pre>
         </div>
+      </section>
+      <!-- ---------- Que faire si… (#aide) : 6 cas, 3 étapes chacun, chaque bouton ouvre l'écran de l'admin qui sert. ---------- -->
+      <!-- Texte fixe, lisible même sans données. Seulement ce qui existe vraiment dans l'admin ; sinon, quoi faire à la place. -->
+      <section data-panneau="aide" hidden>
+        <p class="muted aide-intro">Un souci ? Touchez le cas qui vous arrive : trois étapes, dans l'ordre. Chaque bouton ouvre le bon écran.</p>
+
+        <details class="card aide-cas">
+          <summary><h2>Tablette perdue ou volée</h2></summary>
+          <ol class="aide-etapes">
+            <li><p><strong>Verrouillez-la à distance.</strong> Ouvrez la tablette dans le stock, puis « Verrouiller (perdue ou volée) » (il faut retaper son n° de série). Plus rien ne répond dessus ; les photos et données de la famille restent gardées. Si elle est éteinte, elle se verrouille dès qu'elle se reconnecte.</p>
+              <p class="aide-liens"><a class="secondary small-btn" href="#stock/tablettes">Ouvrir les tablettes</a></p></li>
+            <li><p><strong>Envoyez-en une autre.</strong> Sur la commande du client, menu ⋮ « Remplacer un élément du kit (cassé ou perdu)… » : d'abord la tablette, puis la carte SIM (l'ancienne carte passe « suspendue » : résiliez-la aussi chez l'opérateur). Prévenez la famille par téléphone : l'étiquette de retour qu'elle reçoit par e-mail ne sert pas si la tablette a disparu.</p>
+              <p class="aide-liens"><a class="secondary small-btn" href="#commandes">Ouvrir les commandes</a></p></li>
+            <li><p><strong>Rayez l'ancienne du stock.</strong> Sur sa page, menu ⋮ « Déclarer perdue ». Si elle réapparaît : ⋮ « Retrouvée », puis « Déverrouiller ».</p>
+              <p class="aide-liens"><a class="secondary small-btn" href="#stock/tablettes">Ouvrir les tablettes</a></p></li>
+          </ol>
+        </details>
+
+        <details class="card aide-cas">
+          <summary><h2>Paiement refusé (prélèvement SEPA ou carte)</h2></summary>
+          <ol class="aide-etapes">
+            <li><p><strong>Repérez la famille.</strong> L'accueil l'affiche dans « À faire » : « en retard de paiement », avec la date de mise en pause. Pendant 7 jours, tout marche encore ; ensuite la tablette affiche « Papote est en pause ».</p>
+              <p class="aide-liens"><a class="secondary small-btn" href="#accueil">Ouvrir l'accueil</a></p></li>
+            <li><p><strong>Appelez la famille.</strong> Elle met à jour sa carte ou son compte dans l'appli famille : Réglages, page Abonnement, « Carte bancaire et factures ». Tout repart dès que le paiement passe. Son numéro est dans la liste des clients.</p>
+              <p class="aide-liens"><a class="secondary small-btn" href="#clients/liste">Ouvrir les clients</a></p></li>
+            <li><p><strong>Toujours rien ?</strong> Regardez le paiement dans Stripe (refus, contestation). Après 30 jours de pause, l'accueil vous propose de demander le retour de la tablette (« Arrêter l'abonnement » sur la commande).</p>
+              <p class="aide-liens"><a class="secondary small-btn" href="https://dashboard.stripe.com" target="_blank" rel="noopener">Ouvrir Stripe ↗</a><a class="secondary small-btn" href="#compta/factures">Voir les factures</a></p></li>
+          </ol>
+        </details>
+
+        <details class="card aide-cas">
+          <summary><h2>Mamie à l'hôpital (absence longue)</h2></summary>
+          <ol class="aide-etapes">
+            <li><p><strong>Demandez un justificatif.</strong> Un bulletin d'hospitalisation, envoyé par la famille (e-mail ou photo).</p></li>
+            <li><p><strong>Mettez en pause.</strong> Sur la commande, menu ⋮ « Pause hospitalisation… », puis la date de reprise. Plus aucun prélèvement ni alerte « ne répond plus » jusque-là ; la famille reçoit un e-mail. La tablette continue de marcher. Le menu ne la propose qu'après les 30 premiers jours de l'abonnement : avant, appelez la famille.</p>
+              <p class="aide-liens"><a class="secondary small-btn" href="#commandes">Ouvrir les commandes</a></p></li>
+            <li><p><strong>Au retour.</strong> À la date choisie, les prélèvements reprennent seuls. Retour plus tôt : menu ⋮ « Reprendre les prélèvements » sur la commande.</p>
+              <p class="aide-liens"><a class="secondary small-btn" href="#commandes">Ouvrir les commandes</a></p></li>
+          </ol>
+        </details>
+
+        <details class="card aide-cas">
+          <summary><h2>Panne Firebase ou Google (le service ne répond plus)</h2></summary>
+          <ol class="aide-etapes">
+            <li><p><strong>Vérifiez que la panne vient de Google.</strong> La page d'état de Firebase dit si un service est en panne et depuis quand. Si l'admin elle-même ne s'ouvre plus, c'est sans doute ça.</p>
+              <p class="aide-liens"><a class="secondary small-btn" href="https://status.firebase.google.com" target="_blank" rel="noopener">État de Firebase ↗</a></p></li>
+            <li><p><strong>Ne touchez à rien.</strong> Pas de remise à zéro des tablettes pendant la panne. Si elle dure, prévenez les familles par téléphone ou depuis votre propre messagerie (l'e-mail d'information de l'admin passe lui aussi par Google).</p></li>
+            <li><p><strong>Une fois revenu.</strong> Regardez l'accueil, puis la page de chaque tablette : « En ligne » doit redevenir récent. Une tablette toujours muette : « Redémarrer ».</p>
+              <p class="aide-liens"><a class="secondary small-btn" href="#accueil">Ouvrir l'accueil</a><a class="secondary small-btn" href="#stock/tablettes">Ouvrir les tablettes</a></p></li>
+          </ol>
+        </details>
+
+        <details class="card aide-cas">
+          <summary><h2>Carte SIM sans données ou forfait épuisé</h2></summary>
+          <ol class="aide-etapes">
+            <li><p><strong>Regardez la carte SIM.</strong> Sur sa page : « Fin du forfait » et « Data du mois » disent si le forfait est fini ou plein. Une ligne « suspendue » se réactive chez l'opérateur.</p>
+              <p class="aide-liens"><a class="secondary small-btn" href="#stock/sim">Ouvrir les cartes SIM</a></p></li>
+            <li><p><strong>Rechargez chez l'opérateur</strong>, puis touchez « J'ai rechargé » sur la page de la carte : la dépense et la nouvelle fin du forfait sont notées.</p>
+              <p class="aide-liens"><a class="secondary small-btn" href="#stock/sim">Ouvrir les cartes SIM</a></p></li>
+            <li><p><strong>Vérifiez la tablette.</strong> Sur sa page, « État complet maintenant » : la carte SIM et internet doivent revenir. Sinon, « Redémarrer ».</p>
+              <p class="aide-liens"><a class="secondary small-btn" href="#stock/tablettes">Ouvrir les tablettes</a></p></li>
+          </ol>
+        </details>
+
+        <details class="card aide-cas">
+          <summary><h2>Tablette cassée</h2></summary>
+          <ol class="aide-etapes">
+            <li><p><strong>Trouvez une tablette de rechange.</strong> Il en faut une « En stock » dans la liste des tablettes.</p>
+              <p class="aide-liens"><a class="secondary small-btn" href="#stock/tablettes">Ouvrir les tablettes</a></p></li>
+            <li><p><strong>Remplacez-la.</strong> Sur la commande du client, menu ⋮ « Remplacer un élément du kit (cassé ou perdu)… », « la tablette », avec le motif (ex. écran cassé). L'étiquette d'envoi s'ouvre ; celle du retour part au client par e-mail. Sa carte SIM passe dans la nouvelle tablette. Vous pouvez aussi faire l'échange en main propre.</p>
+              <p class="aide-liens"><a class="secondary small-btn" href="#commandes">Ouvrir les commandes</a></p></li>
+            <li><p><strong>Quand l'ancienne revient.</strong> L'accueil la suit (« remplacée, à récupérer »). Une fois revenue, sur sa page : menu ⋮ « Mettre à réparer », ou « Déclarer hors service » si elle est fichue.</p>
+              <p class="aide-liens"><a class="secondary small-btn" href="#stock/tablettes">Ouvrir les tablettes</a></p></li>
+          </ol>
+        </details>
       </section>
       <!-- ---------- Page d'une tablette (#tablette/id) ---------- -->
       <section data-panneau="tablette" hidden>
