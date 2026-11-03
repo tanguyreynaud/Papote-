@@ -5,8 +5,9 @@
 //       contacts/ créées seulement par le chat (sans accord pour les nouvelles, ni liste d'attente, ni commande)
 //       sans question depuis 12 mois ;
 //     - paniers/ (commandes non terminées) de plus de 12 mois ;
-//     - familles résiliées depuis plus de 12 mois : photos, vidéos, messages, membres… (gestion.effacerFamille),
-//       jamais une famille dont une commande vit encore chez Stripe. Une famille jamais abonnée n'est pas touchée.
+//     - familles résiliées depuis plus de 3 mois (Tanguy, 3/11, fil Inspecter) : photos, vidéos, messages, membres…
+//       (gestion.effacerFamille), jamais une famille dont une commande vit encore chez Stripe. Une famille jamais
+//       abonnée n'est pas touchée.
 //
 // Les décisions sont des fonctions pures (testées dans purge.test.js) ; la tâche ne fait que lire, décider, effacer
 // par lots de 400. Une erreur sur un lot est journalisée et n'empêche pas le reste : le mois suivant finit le travail.
@@ -18,6 +19,7 @@ const { STRIPE_VIVANTS } = require('./abonnement');
 
 const JOUR = 86400e3;
 const DUREE_MS = 365 * JOUR;
+const DUREE_FAMILLE_MS = 90 * JOUR;
 const LOT = 400;
 
 function enMillis(v) {
@@ -42,7 +44,7 @@ function contactChatAPurger(c, maintenant) {
   return perime(c.chatLe, maintenant);
 }
 
-// Famille résiliée depuis plus de 12 mois (dernier changement d'abonnement et date de fin), dont aucune
+// Famille résiliée depuis plus de 3 mois (dernier changement d'abonnement et date de fin), dont aucune
 // commande ne vit encore chez Stripe.
 function familleAPurger(fam, commandes, maintenant) {
   const abo = fam && fam.abonnement;
@@ -50,7 +52,7 @@ function familleAPurger(fam, commandes, maintenant) {
   const dates = [enMillis(abo.majLe), enMillis(abo.resiliationLe), enMillis(abo.finPeriode)].filter((d) => d != null);
   if (!dates.length) return false;
   if ((commandes || []).some((c) => STRIPE_VIVANTS.includes(c.statutStripe))) return false;
-  return Math.max(...dates) <= maintenant - DUREE_MS;
+  return Math.max(...dates) <= maintenant - DUREE_FAMILLE_MS;
 }
 
 async function effacerParLots(db, refs) {
@@ -118,4 +120,4 @@ exports.purgeMensuelle = onSchedule(
   () => purger(base()),
 );
 
-exports._test = { perime, contactChatAPurger, familleAPurger, purger, DUREE_MS };
+exports._test = { perime, contactChatAPurger, familleAPurger, purger, DUREE_MS, DUREE_FAMILLE_MS };
