@@ -499,10 +499,15 @@ function poserDonnees(d) {
 
 // Ouvre l'écran d'une scène dans un nouveau navigateur (fausses données, faux Firebase, internet coupé).
 async function ouvrir(browser, base, scene, taille, video) {
+  // iPhone simulé (WebKit) : pas de permission caméra dans Playwright, et l'app doit se croire sur un iPhone
+  // (messages et chemins propres à l'iPhone), d'où l'agent Safari.
+  const webkit = browser.browserType().name() === 'webkit';
   const ctx = await browser.newContext({
     viewport: { width: taille.width, height: taille.height }, deviceScaleFactor: 2, isMobile: true, hasTouch: true,
-    locale: 'fr-FR', timezoneId: 'Europe/Paris', serviceWorkers: 'block', permissions: ['camera', 'microphone'],
-    userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36',
+    locale: 'fr-FR', timezoneId: 'Europe/Paris', serviceWorkers: 'block', permissions: webkit ? [] : ['camera', 'microphone'],
+    userAgent: webkit
+      ? 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1'
+      : 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36',
   });
   const page = await ctx.newPage();
   page.setDefaultTimeout(8000); // un bouton absent : erreur signalée vite, pas après 30 s
