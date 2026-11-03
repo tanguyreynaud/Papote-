@@ -649,3 +649,30 @@ button.secondary.charge::after, button.link.charge::after { border-color: rgba(7
 .retour-ordre.ko { color: var(--danger); border-left-color: var(--danger); }
 .retour-ordre.en-attente { border-left-color: var(--accent); }
 .journal-tablette { max-height: 360px; overflow: auto; font-size: 12px; line-height: 1.4; white-space: pre-wrap; background: var(--bg); padding: 10px 12px; border-radius: 12px; }
+
+/* « Que faire si… » (#aide) : un cas par carte, repliée ; trois étapes numérotées, un bouton par écran utile. */
+.nav nav a.nav-aide { color: var(--muted); font-weight: 500; }
+.nav nav a.nav-aide.actif { color: var(--accent); }
+.aide-intro { margin: 0 0 14px; }
+.aide-cas { padding: 0; }
+.aide-cas summary { display: flex; align-items: center; gap: 12px; padding: 16px 18px; cursor: pointer; list-style: none; min-height: 44px; box-sizing: border-box; }
+.aide-cas summary::-webkit-details-marker { display: none; }
+.aide-cas summary h2 { margin: 0; flex: 1; font-size: 18px; }
+.aide-cas summary::after { content: '›'; font-size: 24px; line-height: 1; color: var(--accent); transition: transform .15s ease; }
+.aide-cas[open] summary::after { transform: rotate(90deg); }
+.aide-cas summary:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; border-radius: inherit; }
+.aide-etapes { list-style: none; counter-reset: etape; margin: 0; padding: 0 18px 16px; display: flex; flex-direction: column; gap: 14px; }
+.aide-etapes li { counter-increment: etape; position: relative; padding-left: 40px; }
+.aide-etapes li::before {
+  content: counter(etape); position: absolute; left: 0; top: 0; width: 28px; height: 28px; border-radius: 50%;
+  background: var(--accent); color: var(--accent-text); font-weight: 700; display: flex; align-items: center; justify-content: center;
+}
+.aide-etapes p { margin: 0; overflow-wrap: anywhere; }
+.aide-etapes .aide-liens { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.aide-liens .small-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; box-sizing: border-box; text-decoration: none; color: var(--text); font-weight: 600; }
+@media (prefers-reduced-motion: reduce) { .aide-cas summary::after { transition: none; } }
+@media (max-width: 560px) {
+  .aide-cas summary { padding: 14px; }
+  .aide-etapes { padding: 0 14px 14px; }
+  .aide-etapes li { padding-left: 36px; }
+}
