@@ -1,7 +1,7 @@
 // Espace « Validation » de l'admin (admin.html#validation) : tout voir et tout valider avant le 5 décembre.
 //   Écrans    : les captures de la galerie (tablette, app famille, site, admin, e-mails), rangées par parcours,
 //               chacune « Validé » ou « À revoir » avec un commentaire. Publiées par outils/galerie/publier-validation.bat
-//               sur le site papote-validation (hébergement gratuit) ; un écran qui change après validation est signalé.
+//               pour l'admin seul (stockage Firebase + document validation/captures) ; un écran qui change après validation est signalé.
 //   Parcours  : chaque flux expliqué étape par étape (validation-donnees.js), validé flux par flux.
 //   Dépenses  : chaque poste, son coût par famille et les pistes pour le réduire.
 //   Gestes    : les gestes humains (double clic, clavier, retour…) et comment ils sont vérifiés.
@@ -14,7 +14,6 @@ import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/
 import { getFirestore, doc, getDoc, setDoc } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
 import { FLUX, DEPENSES, GESTES, QUI, TESTS, PRIX_MOIS } from './validation-donnees.js';
 
-const SITE = 'https://papote-validation.web.app';
 const PARTIES = { tablette: 'Tablette', famille: 'App famille', vitrine: 'Site vitrine', admin: 'Admin', emails: 'E-mails' };
 const ETATS = { ok: 'Validé', revoir: 'À revoir', change: 'A changé', avoir: 'À voir' };
 
@@ -53,7 +52,7 @@ function empreinte(objet) {
   return a.toString(36);
 }
 
-// ---------- Données : captures (site papote-validation) et choix (Firestore) ----------
+// ---------- Données : captures et choix (Firestore, admin seul) ----------
 
 let index = null; // { le, parties: [{ partie, source, le, ecrans }] }
 let indexErreur = null;
@@ -64,13 +63,23 @@ let etatEnCours = null;
 let etatErreur = null;
 let uid = null;
 
+// Captures : le document validation/captures (admin seul) donne chaque écran et le jeton secret de ses images,
+// rangées dans le stockage Firebase où aucune règle ne les ouvre (publier-validation.mjs, Tanguy 3/11).
 function chargerIndex() {
-  indexEnCours = indexEnCours || fetch(`${SITE}/index.json`, { cache: 'no-cache' })
-    .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-    .then((j) => { index = j; indexErreur = null; })
-    .catch((e) => { indexErreur = e; console.warn('Captures de validation illisibles', e); })
+  indexEnCours = indexEnCours || (async () => {
+    const snap = await getDoc(doc(await bdd(), 'validation', 'captures'));
+    if (!snap.exists()) throw new Error('Captures pas encore publiées');
+    index = snap.data();
+    indexErreur = null;
+  })().catch((e) => { indexErreur = e; console.warn('Captures de validation illisibles', e); })
     .finally(() => { indexEnCours = null; rendre(); });
   return indexEnCours;
+}
+
+// Adresse d'une capture : stockage Firebase avec son jeton (rien sans jeton).
+function image(x) {
+  const bucket = (index && index.bucket) || 'papote-famille.firebasestorage.app';
+  return `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodeURIComponent(`validation/${x.f}`)}?alt=media&token=${encodeURIComponent(x.t || '')}`;
 }
 
 let bddValidation = null;
@@ -211,7 +220,7 @@ function carteEcran(e, liste) {
   const captures = h('div', { class: 'v-captures' }, e.captures.map((x) => h('button', {
     type: 'button', class: `v-capture v-${x.taille || 'ecran'}`, 'aria-label': `Agrandir ${e.num} ${x.taille || ''}`,
     onclick: () => zoom(liste, liste.indexOf(e)),
-  }, h('img', { src: `${SITE}/${x.f}`, alt: '', loading: 'lazy', decoding: 'async' }), x.taille ? h('small', {}, x.taille) : null)));
+  }, h('img', { src: image(x), alt: '', loading: 'lazy', decoding: 'async' }), x.taille ? h('small', {}, x.taille) : null)));
   const carte = h('article', { class: 'card v-ecran', id: `v-${e.id}` },
     tete,
     e.note ? h('p', { class: 'muted small' }, e.note) : null,
@@ -226,7 +235,7 @@ function vueEcrans(boite, [partieNom, groupe]) {
   if (indexErreur && !index) {
     mettre(boite, h('div', { class: 'card' },
       h('h2', {}, 'Les captures ne sont pas encore en ligne'),
-      h('p', {}, 'Elles sont faites par la galerie sur ton PC, puis publiées sur un petit site gratuit (papote-validation). Une seule commande, environ 10 minutes :'),
+      h('p', {}, 'Elles sont faites par la galerie sur ton PC, puis rangées dans le stockage Firebase, visibles par l\'admin seul. Une seule commande, environ 10 minutes :'),
       h('pre', { class: 'v-commande' }, 'cd C:\\Users\\tangu\\papote-deploiement\ngit fetch origin\ngit checkout --detach origin/main\ncd outils\\galerie\n.\\publier-validation.bat'),
       h('p', { class: 'muted small' }, 'Les choix déjà faits sont gardés : ils suivent chaque écran, même si son numéro change.'),
       h('button', { type: 'button', class: 'secondary small-btn', onclick: () => chargerIndex() }, 'Réessayer')));
@@ -314,7 +323,7 @@ function zoom(liste, i) {
     remplacer(corps, 
       h('header', { class: 'v-ecran-tete' }, h('span', { class: 'v-num' }, e.num), h('h3', {}, e.titre), badgeEtat(etatEcran(e))),
       e.note ? h('p', { class: 'muted small' }, e.note) : null,
-      h('div', { class: 'v-zoom-images' }, e.captures.map((x) => h('figure', {}, h('img', { src: `${SITE}/${x.f}`, alt: `${e.num} ${x.taille || ''}` }), x.taille ? h('figcaption', {}, x.taille) : null))),
+      h('div', { class: 'v-zoom-images' }, e.captures.map((x) => h('figure', {}, h('img', { src: image(x), alt: `${e.num} ${x.taille || ''}` }), x.taille ? h('figcaption', {}, x.taille) : null))),
       blocChoix('e', e.id, { h: e.h }, undefined, {
         // Validé : l'écran suivant vient tout seul ; À revoir : on reste pour écrire le commentaire.
         surChoix: (s) => { if (s === 'ok' && pos < liste.length - 1) setTimeout(() => aller(pos + 1), 250); else aller(pos); },
@@ -397,17 +406,28 @@ function vueParcours(boite, [id]) {
 
 let familles = 10;
 let dureeMois = 24;
+let avecTva = false;
+
+// Au-delà du seuil de franchise (37 500 € par an, environ 120 familles), 20 % de TVA sont dus sur les 25 € ;
+// en échange, la TVA payée sur ces postes est récupérée. Stripe (frais financiers), ton temps, Firebase et
+// l'IA (facturés hors taxe depuis l'étranger) ne changent pas. Gardé ici et non dans DEPENSES : y ajouter
+// un champ changerait l'empreinte des dépenses déjà validées.
+const TAUX_TVA = 0.2;
+const TVA_RECUPERABLE = new Set(['sim', 'envoi', 'retour', 'emballage', 'tablette', 'domaine', 'societe']);
+const horsTva = (d, v) => (avecTva && TVA_RECUPERABLE.has(d.id) ? v / (1 + TAUX_TVA) : v);
 
 function vueDepenses(boite) {
-  const parMois = DEPENSES.reduce((t, d) => t + (d.parMois || 0), 0);
-  const unique = DEPENSES.reduce((t, d) => t + (d.unique || 0), 0);
-  const fixe = DEPENSES.reduce((t, d) => t + (d.fixe || 0), 0);
   const resultat = h('div', { class: 'stats compact' });
   const calculer = () => {
+    const parMois = DEPENSES.reduce((t, d) => t + horsTva(d, d.parMois || 0), 0);
+    const unique = DEPENSES.reduce((t, d) => t + horsTva(d, d.unique || 0), 0);
+    const fixe = DEPENSES.reduce((t, d) => t + horsTva(d, d.fixe || 0), 0);
+    const prix = avecTva ? PRIX_MOIS / (1 + TAUX_TVA) : PRIX_MOIS;
     const parFamille = parMois + unique / dureeMois + fixe / Math.max(familles, 1);
-    remplacer(resultat, 
-      h('div', { class: 'stat' }, h('span', {}, euros(parFamille)), h('p', {}, 'coûte une famille par mois'), h('small', {}, `dont ${euros(unique / dureeMois)} d'arrivée et ${euros(fixe / Math.max(familles, 1))} de frais fixes`)),
-      h('div', { class: 'stat' }, h('span', { class: PRIX_MOIS - parFamille > 0 ? '' : 'neg' }, euros(PRIX_MOIS - parFamille)), h('p', {}, `reste sur ${PRIX_MOIS} € par famille et par mois`), h('small', {}, 'avant impôts, casse et impayés')),
+    remplacer(resultat,
+      h('div', { class: 'stat' }, h('span', {}, euros(parFamille)), h('p', {}, `coûte une famille par mois${avecTva ? ' (hors TVA)' : ''}`), h('small', {}, `dont ${euros(unique / dureeMois)} d'arrivée et ${euros(fixe / Math.max(familles, 1))} de frais fixes`)),
+      h('div', { class: 'stat' }, h('span', { class: prix - parFamille > 0 ? '' : 'neg' }, euros(prix - parFamille)),
+        h('p', {}, avecTva ? `reste sur ${euros(prix)} hors TVA (${PRIX_MOIS} € payés)` : `reste sur ${PRIX_MOIS} € par famille et par mois`), h('small', {}, 'avant impôts, casse et impayés')),
       h('div', { class: 'stat' }, h('span', {}, euros(parMois * familles + fixe)), h('p', {}, `de dépenses par mois à ${familles} familles`), h('small', {}, `plus ${euros(unique)} à chaque nouveau client`)));
   };
   const champ = (libelle, valeur, min, max, changer) => {
@@ -418,13 +438,27 @@ function vueDepenses(boite) {
     });
     return h('label', { class: 'v-champ' }, libelle, input);
   };
+  const texteTva = h('span', {});
+  const noteTva = h('p', { class: 'muted small' });
+  const majTva = () => {
+    texteTva.textContent = avecTva ? 'Avec TVA (au-delà du seuil)' : 'Sans TVA (franchise)';
+    noteTva.textContent = avecTva
+      ? 'Calcul hors TVA : 20 % reversés sur les 25 € (4,17 €), TVA récupérée sur la carte SIM, l\'envoi, l\'emballage, la tablette, le domaine et les frais de la société. Taux à confirmer avec le comptable.'
+      : 'Montants TTC, ce que tu paies vraiment. Pas de TVA sur les 25 € tant que Papote reste sous le seuil de franchise (37 500 € par an, environ 120 familles ; suivi dans Compta, URSSAF et TVA).';
+  };
+  majTva();
   calculer();
   mettre(boite, 
     h('p', { class: 'muted' }, 'Chaque dépense de Papote, ce qu\'elle coûte par famille, d\'où vient le chiffre et comment la réduire. Les chiffres marqués « estimé » ou « à vérifier » restent à confirmer sur une vraie facture.'),
     h('div', { class: 'v-champs' },
       champ('Familles', familles, 1, 5000, (n) => { familles = n; }),
       champ('Durée moyenne d\'un client (mois)', dureeMois, 1, 120, (n) => { dureeMois = n; })),
+    h('label', { class: 'interrupteur v-tva' },
+      h('input', { type: 'checkbox', class: 'toggle', checked: avecTva, 'aria-label': 'Calculer avec la TVA',
+        onchange: (e) => { avecTva = e.target.checked; majTva(); calculer(); } }),
+      texteTva),
     resultat,
+    noteTva,
     h('p', { class: 'muted small' }, 'Ton calcul du 29/10 donnait environ 19,50 € de marge : ici, la tablette est amortie à 4 € par mois en plus.'),
     h('div', { class: 'v-liste' }, DEPENSES.map((d) => h('article', { class: 'card v-depense' },
       h('div', { class: 'tete' }, h('h3', {}, d.poste), h('strong', { class: 'v-montant' }, montant(d))),
