@@ -2189,6 +2189,8 @@ Object.assign(exports, (({ quotaFichier, quotaFichierEfface, quotaEnvois }) => (
 // Alertes sur le téléphone des responsables : tablette débranchée ou qui ne répond plus.
 exports.alertesTablettes = require('./alertes').alertesTablettes;
 exports.alerteMatin = require('./alertes').alerteMatin;
+// Purge mensuelle des données de plus de 12 mois (chat, paniers, familles résiliées) : purge.js.
+exports.purgeMensuelle = require('./purge').purgeMensuelle;
 
 // Voix des messages et des rappels sur la tablette : son créé une fois, rejoué autant qu'il faut (voix.js).
 const voix = require('./voix');

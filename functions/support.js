@@ -7,7 +7,9 @@
 //                pour compléter support-connaissances.md.
 //
 // Les réponses s'appuient sur le texte du site vitrine (FAQ, tarifs), relu au plus une fois
-// par heure, et sur support-connaissances.md (appli famille, tablette, dépannage).
+// par heure, sur support-connaissances.md (appli famille, tablette, dépannage) et sur l'état du stock
+// (stock.js, relu toutes les 5 minutes) : le chat dit si une tablette est disponible ou s'il faut
+// laisser son e-mail (« Être prévenu »), comme le site.
 // Quand l'IA est sûre de ne pas pouvoir répondre, elle termine par [CONTACT] : la page propose
 // alors de laisser son téléphone et son e-mail. La demande est gardée dans supportDemandes/ et
 // envoyée par e-mail à l'adresse de support, avec la conversation.
@@ -25,6 +27,7 @@ const path = require('path');
 const mail = require('./mail');
 // Base Firestore réglée dans .env (BASE_FIRESTORE), comme index.js et gestion.js.
 const { db: base } = require('./base');
+const stock = require('./stock');
 
 const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
 const SITE_VITRINE = defineString('SITE_VITRINE', { default: 'https://mapapote.fr' });
@@ -87,6 +90,22 @@ async function lireSite(adresse) {
     .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&#39;|&rsquo;/g, "'")
     .replace(/&euro;/g, '€').replace(/&laquo;/g, '«').replace(/&raquo;/g, '»')
     .replace(/[ \t]+/g, ' ').replace(/\s*\n\s*/g, '\n').trim();
+}
+
+// Ligne « État du stock » du guide : la vérité du moment, comme le bouton du site (Commander / Être prévenu).
+let etatStock = { texte: '', lu: 0 };
+const STOCK_DISPONIBLE = "# État du stock\n\nAujourd'hui, des tablettes sont disponibles : on commande sur mapapote.fr, bouton « Commander ». Ne renvoie pas vers « Être prévenu ».";
+const STOCK_EPUISE = "# État du stock\n\nAujourd'hui, toutes les tablettes sont parties : on ne peut pas commander pour l'instant. Sur mapapote.fr, bouton « Être prévenu » : laisser son e-mail pour être prévenu dès que des tablettes sont prêtes. Ne donne pas de date, ne propose pas de rappel.";
+async function texteDuStock() {
+  if (etatStock.texte && Date.now() - etatStock.lu < 5 * 60e3) return etatStock.texte;
+  try {
+    const n = await stock.nombreDisponibles(base());
+    etatStock = { texte: stock.vendable(n) ? STOCK_DISPONIBLE : STOCK_EPUISE, lu: Date.now() };
+  } catch (e) {
+    // Sans réponse : le guide dit de renvoyer vers le site, qui affiche l'état en direct.
+    logger.warn('Stock illisible pour le chat', e.message);
+  }
+  return etatStock.texte;
 }
 
 async function texteDuSite() {
@@ -253,7 +272,7 @@ exports.supportChat = onRequest(
 
     try {
       if (!client) client = new (require('@anthropic-ai/sdk'))({ apiKey: ANTHROPIC_API_KEY.value() });
-      const texte = await texteDuSite();
+      const [texte, etat] = await Promise.all([texteDuSite(), texteDuStock()]);
       const reponse = await client.messages.create({
         model: MODELE,
         // La réflexion de l'IA compte dans max_tokens : assez de marge pour ne jamais couper une réponse.
@@ -262,6 +281,8 @@ exports.supportChat = onRequest(
         system: [
           { type: 'text', text: CONSIGNES },
           { type: 'text', text: `${CONNAISSANCES}\n\n# Contenu du site Papote\n\n${texte}`, cache_control: { type: 'ephemeral' } },
+          // Après le bloc mis en cache : l'état du stock change sans invalider le cache du guide et du site.
+          ...(etat ? [{ type: 'text', text: etat }] : []),
           { type: 'text', text: page === 'appli'
             ? 'La personne écrit depuis l\u2019appli famille : elle est déjà cliente. Guide-la dans l\u2019appli (« dans Réglages… »).'
             : 'La personne écrit depuis le site : elle découvre peut-être Papote.' },
@@ -304,4 +325,4 @@ exports.bilanSupport = onSchedule(
     });
   });
 
-exports._test = { nettoyer, coordonneesValides, lireReponse, inscriptionValide };
+exports._test = { nettoyer, coordonneesValides, lireReponse, inscriptionValide, STOCK_DISPONIBLE, STOCK_EPUISE };

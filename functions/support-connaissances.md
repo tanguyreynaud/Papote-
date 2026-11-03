@@ -3,11 +3,10 @@
 Ce texte complète le site (tarifs, FAQ), relu automatiquement. Le modifier puis redéployer
 les fonctions suffit pour que le chat en tienne compte.
 
-## Commander : pas encore ouvert (liste d'attente)
-- Papote n'est pas encore ouvert à la commande : les premières tablettes partent très bientôt. Ne dis jamais qu'on peut commander maintenant, ne renvoie jamais vers une page de commande.
-- Pour être prévenu du lancement : sur la page d'accueil de mapapote.fr, bouton « Être prévenu », puis laisser son e-mail dans « Soyez prévenu du lancement ». Un e-mail part au lancement, et ces personnes sont parmi les premières à pouvoir commander.
-- Les tarifs, la livraison, les 30 jours pour changer d'avis et le reste de ce guide restent valables : réponds normalement, en précisant si besoin que ce sera ainsi au lancement.
-- Date de lancement : pas encore fixée. Ne donne jamais de date. Pas de précommande, pas de réservation, pas de rappel pour commander.
+## Commander
+- On commande sur mapapote.fr, bouton « Commander » : trois étapes, deux minutes (ville du proche pour vérifier la 4G, point relais, nom et e-mail), puis le paiement sur la page sécurisée Stripe. Pas de commande par téléphone ni par e-mail.
+- Tanguy prépare chaque tablette lui-même, à Lyon : quand toutes sont parties, le bouton « Commander » du site devient « Être prévenu » : on laisse son e-mail (et son portable si on veut), et un e-mail part dès que des tablettes sont prêtes. Pas de précommande ni de réservation, et ne donne jamais de date.
+- L'état du jour (tablettes disponibles ou non) est indiqué à la fin de ce guide, sous « État du stock » : appuie-toi dessus. S'il manque, dis que le site indique en direct si une tablette est disponible.
 
 ## L'appli famille (https://app.mapapote.fr)
 - C'est une page web qu'on installe comme une appli, rien à télécharger dans un store.
@@ -42,9 +41,10 @@ les fonctions suffit pour que le chat en tienne compte.
 ## La tablette au quotidien
 - Elle reste allumée : heure, date, météo et photos en diaporama. Les nouveaux envois s'affichent en grand tout seuls.
 - Appel vidéo : la famille appelle depuis la tuile « Appel vidéo ». La tablette décroche toute seule quand la personne regarde l'écran : elle n'a rien à toucher.
-- La personne âgée peut aussi appeler : bouton « Appeler » sur l'accueil, elle touche la photo du proche voulu, et le téléphone de ce proche sonne dans l'appli famille (appel audio, sans image). Sans réponse au bout de 45 secondes, le proche reçoit « Appel manqué ».
-- Bouton « SOS famille » (option, activée au départ) : en haut de la tablette. Un appui, 5 secondes pour annuler, puis toute la famille sonne en même temps ; le premier qui décroche prend l'appel. Si personne ne répond, la tablette réessaie, puis la famille reçoit une alerte. Ce n'est pas un service d'urgence : en cas d'urgence, appeler le 15 ou le 112.
-- Alertes à la famille : les responsables reçoivent une notification sur leur téléphone si la tablette est débranchée depuis plus de 10 minutes, ou si elle ne répond plus depuis 45 minutes (éteinte ou sans internet). À midi, si la tablette n'a ni vu ni senti la personne depuis le matin, la famille reçoit « X n'a pas été vue ce matin », pour penser à l'appeler.
+- La personne âgée peut aussi appeler : bouton « Appeler » sur l'accueil, elle touche la photo du proche voulu, et la tablette lui téléphone, comme un téléphone : le portable du proche sonne normalement (numéro donné dans l'appli, « Vos informations » ou Profil). Ces appels vers les portables français (06, 07) sont compris dans l'abonnement, rien à payer en plus. Un proche sans portable français (fixe, étranger) est appelé par internet, dans l'appli. Sans réponse au bout de 45 secondes, l'appel est noté manqué et le proche le voit dans l'appli.
+- La tablette a son propre numéro de téléphone (celui de sa carte SIM) : la famille le trouve dans l'appli (« Appeler par téléphone ») et peut l'appeler comme un téléphone ; la tablette décroche toute seule. Il sert à la famille, pas à des inconnus : les appels de numéros qui ne sont pas ceux de la famille sont bloqués.
+- Bouton « SOS famille » (option, activée au départ) : en haut de la tablette. Un appui, 5 secondes pour annuler, puis tous les proches reçoivent un SMS « SOS » et la tablette les appelle un par un jusqu'à ce que quelqu'un décroche ; les proches sans portable français sont appelés par internet. Si personne ne répond, la tablette réessaie, puis la famille reçoit une alerte. Ce n'est pas un service d'urgence : en cas d'urgence, appeler le 15 ou le 112.
+- Alertes à la famille : les responsables reçoivent une notification sur leur téléphone si la tablette est débranchée depuis plus de 10 minutes, ou si elle ne donne plus signe de vie depuis environ une heure (éteinte ou sans internet ; deux heures la nuit). À midi, si la tablette n'a ni vu ni senti la personne depuis le matin, la famille reçoit « X n'a pas été vue ce matin », pour penser à l'appeler.
 - Le soir l'écran s'assombrit ; la nuit il s'éteint (de 23 h à 7 h au départ, réglable dans Réglages, « Écran éteint la nuit »). Un toucher le rallume, un appel ou un rappel le réveille.
 - Les mises à jour se font toutes seules.
 - Le bouton marche/arrêt ne l'éteint pas (pour éviter les fausses manœuvres) ; un appui d'environ 10 secondes la redémarre.
@@ -75,26 +75,26 @@ les fonctions suffit pour que le chat en tienne compte.
 - La tablette : une tablette Android de notre fournisseur (on ne donne pas la marque), avec un bel écran de 10 pouces et une bonne caméra. Elle est préparée en France ; seule sa fabrication ne l'est pas.
 - Batterie : elle est faite pour rester branchée en permanence, comme un cadre photo.
 - Son : il est fort, pensé pour les personnes qui entendent mal.
-- Deux tablettes dans la même famille (par exemple deux grands-parents à deux endroits) : c'est possible, avec deux abonnements.
+- Deux grands-parents à deux adresses : une famille Papote = une tablette et un abonnement. Il faut donc deux commandes, qui créent deux familles ; chaque proche peut être dans les deux et passe de l'une à l'autre en haut de l'accueil de l'appli. Un couple sous le même toit : une seule tablette suffit, un seul nom affiché, les deux l'utilisent.
 - Maison de retraite (EHPAD) : ça marche avec la carte SIM fournie, sans rien demander à l'établissement.
 - Box 4G ou partage de connexion d'un téléphone : ça marche, c'est un Wi-Fi comme un autre.
 - Carte SIM : toujours comprise, une seule offre à 25 € par mois tout compris. La tablette 4G se connecte toute seule au réseau mobile, sans routeur ni box à brancher. Sur la carte SIM, chaque mois : environ 2 h de visio en pleine qualité, puis jusqu'à 3 h en qualité réduite, et 100 photos + 20 vidéos. Avec le Wi-Fi de la maison (facultatif, réglé dans l'appli), tout est illimité.
 - Opérateur de la carte SIM : il n'est pas fixe ; c'est Papote qui le choisit et qui le paie. Si un jour il faut changer d'opérateur, Papote envoie une nouvelle carte avec une fiche d'une page pour la glisser dans la tablette.
 - Autres usages (Internet, jeux, YouTube) : non, la tablette est réservée à Papote pour rester simple et sans risque.
-- Tablette perdue ou volée : il n'y a pas de garantie pour cela. Il faut nous le signaler pour suspendre le contrat. La tablette est prêtée : la perte ou le vol est facturé comme un matériel non rendu (tablette 130 €, chargeur et câble 10 €, enceinte 10 € si elle a été fournie, soit 140 € ou 150 €). Pour en recevoir une nouvelle : demande de contact. Pour le signaler : demande de contact.
+- Tablette perdue ou volée : il n'y a pas de garantie pour cela. Il faut nous le signaler pour suspendre le contrat et bloquer sa carte SIM. La tablette est prêtée : la perte ou le vol est facturé comme un matériel non rendu (tablette 130 €, chargeur et câble 10 €, enceinte 10 € si elle a été fournie, soit 140 € ou 150 €). Pour en recevoir une nouvelle : demande de contact. Pour le signaler : demande de contact.
 - Nombre de proches dans la famille : jusqu'à 30.
 - Enfants : ils peuvent envoyer des photos, il n'y a pas d'âge minimum.
-- Le proche âgé ne peut pas envoyer de photo ni de message écrit, et il n'y a aucun message vocal. Il peut appeler un proche (bouton « Appeler », appel audio), appeler toute la famille (bouton « SOS famille ») et confirmer un rappel.
+- Le proche âgé ne peut pas envoyer de photo ni de message écrit, ni répondre à un message, et il n'y a aucun message vocal. Il peut téléphoner à un proche (bouton « Appeler »), prévenir toute la famille (bouton « SOS famille »), raccrocher (bouton « Raccrocher » à l'écran) et confirmer un rappel.
 - Appels vidéo à plusieurs en même temps : pas encore prévu.
 - Appli sur ordinateur ou vieux téléphone : elle marche dans le navigateur d'un ordinateur ou d'un téléphone récent (iPhone ou Android).
 - Délai de livraison : Tanguy prépare et vérifie chaque tablette lui-même, avec sa carte SIM, à Lyon. Elle est expédiée sous 3 à 5 jours ouvrés, en point relais Mondial Relay. On peut annuler à tout moment avant l'envoi : les 60 € sont remboursés tout de suite.
 - Offrir Papote : commandez à votre nom et choisissez un point relais près de chez le proche, ou près de chez vous si vous la lui apportez. La tablette arrive prête : on la branche, puis vous la reliez à la famille depuis votre téléphone en scannant le QR code qu'elle affiche. Le proche n'a rien à régler ni à apprendre, et c'est vous qui gérez l'abonnement. Un autre proche peut aussi payer.
 - Livraison hors de France métropolitaine (Belgique, Luxembourg, Suisse, DOM-TOM…) : pas pour le moment, car la carte SIM fournie est française. On peut en revanche payer avec un compte en Belgique ou au Luxembourg pour un proche qui vit en France.
 - Changer de formule : il n'y a qu'une seule offre, tout compris avec la carte SIM. Le Wi-Fi de la maison peut s'ajouter quand on veut dans l'appli (Réglages, « Changer le Wi-Fi »), sans changer le prix.
-- Paiement : par carte bancaire (Apple Pay, Google Pay) ou par prélèvement SEPA (IBAN d'un compte en France, en Belgique ou au Luxembourg), sur la page sécurisée Stripe. Ni chèque, virement ou espèces. L'abonnement est payé chaque mois. Avec le SEPA, la tablette part dès que la banque a confirmé le premier paiement (quelques jours) ; s'il est refusé, la commande est annulée ; les factures sont dans l'appli, onglet Profil, « Gérer le paiement et les factures ».
+- Paiement : par carte bancaire (Apple Pay, Google Pay) ou par prélèvement SEPA (IBAN d'un compte en France, en Belgique ou au Luxembourg), sur la page sécurisée Stripe. Ni chèque, virement ou espèces. L'abonnement est payé chaque mois. Avec le SEPA, la tablette part dès que la banque a confirmé le premier paiement (quelques jours) ; s'il est refusé, la commande est annulée.
 - Tablette arrivée abîmée (écran fissuré, colis endommagé) : ce n'est pas de votre faute et ce n'est pas une rétractation. Prenez des photos et faites une demande de contact : l'équipe s'en occupe.
 - Panne (tablette qui ne marche plus sans avoir été cassée) : réparée gratuitement. Le retour est offert ; comptez le temps de nous l'envoyer, environ 5 jours ouvrés de réparation, puis environ 5 jours ouvrés pour la recevoir de nouveau. Demande de contact pour lancer le retour.
-- Après une résiliation, les photos sont gardées 12 mois puis supprimées. Gardez toujours vos originaux sur votre téléphone.
+- Après une résiliation, les photos et toutes les données de la famille sont gardées 3 mois puis supprimées automatiquement. Gardez toujours vos originaux sur votre téléphone.
 - Appels la nuit : oui, on peut appeler à toute heure ; l'appel réveille la tablette même quand l'écran est éteint.
 - Si la tablette est déjà en appel, un autre proche ne peut pas l'appeler en même temps.
 - Appli depuis l'étranger : oui, partout, tant que la connexion internet est bonne.
@@ -115,8 +115,8 @@ les fonctions suffit pour que le chat en tienne compte.
 - Chaleur : la tablette devient tiède à force de rester allumée, c'est normal. Évitez simplement le plein soleil et la proximité d'un radiateur.
 - Connexion internet nécessaire : rien à prévoir, la carte SIM 4G est fournie. Une box en Wi-Fi est un plus (tout devient illimité) mais pas obligatoire.
 - Consommation d'internet : très faible pour les photos et les messages ; un appel vidéo d'une heure consomme environ 0,5 à 1 Go.
-- Carte cadeau : pas pour le moment, mais au lancement on pourra commander pour un proche et faire livrer près de chez le proche (voir Offrir Papote).
-- Commande par téléphone : non, seulement sur le site, au lancement (liste d'attente en attendant).
+- Carte cadeau : pas pour le moment ; on peut commander pour un proche et faire livrer près de chez lui (voir Offrir Papote).
+- Commande par téléphone : non, seulement sur le site, bouton « Commander ».
 - Voir la tablette en magasin : non, la vente est uniquement en ligne ; le plus simple pour se faire une idée est d'essayer, avec 30 jours après la réception pour changer d'avis (rien à payer, 60 € remboursés). Ne pas proposer de rappel.
 - Facture au nom d'une autre personne que celle qui paie (par exemple le parent) : la facture est au nom de celui qui paie ; pour un autre nom, demande de contact.
 - Photo favorite ou affichée en permanence : non, les photos défilent en diaporama.
@@ -141,3 +141,24 @@ les fonctions suffit pour que le chat en tienne compte.
 - Alexa, Google Home ou autre assistant vocal : non, pas compatible.
 - Établissements (EHPAD, résidences) qui veulent plusieurs tablettes : projet à discuter directement par e-mail à contact@mapapote.fr.
 - Changer d'adresse ou de point relais après la commande : seulement si le colis n'est pas encore parti, en écrivant vite à contact@mapapote.fr.
+- Livraison à domicile : non, en point relais Mondial Relay seulement, retirée avec une pièce d'identité. Pas de point relais près de chez le proche (campagne) : choisissez-en un près de chez vous et apportez-lui la tablette, elle marche partout en France.
+- Venir chercher la tablette ou la rapporter à Lyon : non. Envoi et retour passent toujours par Mondial Relay, offerts dans les deux sens.
+- Renvoyer la tablette : depuis l'appli (Profil, Abonnement), Papote envoie l'étiquette retour ; on remet la tablette, son socle, le chargeur et le câble dans le carton d'origine si on l'a gardé (sinon un carton solide), on colle l'étiquette et on dépose le colis dans un point relais Mondial Relay.
+- Taille et poids : un écran de 10 pouces (environ 24 × 16 cm), à peu près 500 g, posée sur son socle : la place d'un cadre photo sur un meuble.
+- Raccrocher ou refuser un appel : la personne touche « Raccrocher » à l'écran. Elle n'a pas à décrocher : la tablette décroche toute seule quand elle voit un visage.
+- Couper le décroché automatique : non, c'est le principe de Papote (« zéro clic ») ; la personne reste libre de raccrocher ou de ne pas venir devant l'écran.
+- Appli sur le Play Store ou l'App Store : pas encore. L'appli s'ouvre dans le navigateur (app.mapapote.fr) et s'ajoute à l'écran d'accueil (voir L'appli famille).
+- Lien de connexion jamais reçu par e-mail : attendre deux minutes, regarder dans les indésirables (spam) et les onglets Promotions, vérifier l'adresse tapée, puis redemander un lien ; ou se connecter avec Google. Toujours rien : demande de contact.
+- Le QR code ne se scanne pas : aller sur app.mapapote.fr et taper le code à 8 caractères affiché sous le QR code (ABCD-1234).
+- Durée d'affichage d'une photo : la photo arrive en grand pendant environ 2 minutes (lue à voix haute si l'option est active), puis rejoint le diaporama avec les autres.
+- Sans photo : la tablette affiche l'heure, la date et la météo ; avant la première photo, « On prépare votre tablette… ».
+- Envoyer depuis WhatsApp ou la galerie : dans l'appli, le bouton « Photo » propose de prendre une photo ou d'en choisir dans la galerie du téléphone (une photo reçue sur WhatsApp est dans la galerie). Pas de partage direct depuis WhatsApp vers Papote.
+- Vidéo : filmée sur le moment dans l'appli, ou choisie dans la galerie du téléphone ; 1 minute au maximum.
+- Vacances, séjour chez un enfant : la tablette suit partout en France métropolitaine, on la branche et elle se reconnecte toute seule grâce à sa carte SIM. Pas à l'étranger.
+- Est-ce que Papote voit nos photos ? Elles sont stockées chez Google Firebase, chiffrées sur ses serveurs ; Papote n'y accède que pour vous dépanner, à votre demande. Jamais revendues ni utilisées pour de la publicité.
+- Panne de l'opérateur de la carte SIM : rien à faire, la tablette se reconnecte toute seule au retour du réseau (la famille est prévenue si elle reste sans réponse). Si ça dure, Papote envoie une nouvelle carte SIM gratuitement.
+- Plusieurs plages de silence (sieste, par exemple) : non, une seule plage de nuit, réglable dans l'appli (Réglages, « Écran éteint la nuit »).
+- Le propriétaire de la famille quitte la famille, décède ou ne peut plus gérer : demande de contact, Papote transfère la famille et l'abonnement à un autre proche.
+- Attestation pour l'APA, la mutuelle ou une aide : la facture mensuelle est dans l'appli (Profil, « Gérer le paiement et les factures ») ; il n'y a pas d'attestation particulière.
+- Brancher la tablette sur une télévision : non.
+- Durée de la mise en service : brancher, scanner le QR code, choisir le nom, envoyer une première photo : 5 à 10 minutes.
