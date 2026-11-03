@@ -130,8 +130,13 @@ mail.envoyer = async ({ a, contenu }) => {
 const notifications = [];
 const push = require('../push');
 // reglages.telephones = false : aucun téléphone n'a de notifications (appli pas installée, refusées).
-const reglages = { telephones: true };
+// reglages.pushEnPanne = n : les n prochains envois échouent (service de notifications injoignable).
+const reglages = { telephones: true, pushEnPanne: 0 };
 push.envoyer = async (db, fid, uids, data) => {
+  if (reglages.pushEnPanne > 0) {
+    reglages.pushEnPanne -= 1;
+    throw new Error('Simulation : service de notifications injoignable');
+  }
   notifications.push({ fid, uids: [...uids], ...data });
   return reglages.telephones ? uids.length : 0;
 };
@@ -140,12 +145,16 @@ require('../voix').voixDocument = async () => null;
 
 // Faux Sendcloud : offres Mondial Relay (dont le retour « QR » sans impression), annonce des retours,
 // étiquettes, suivi et annulation. sendcloud.colis : les colis créés, par id.
-const sendcloud = { colis: new Map(), prochain: 1, sansQr: false };
+// sendcloud.panne = true : toutes les requêtes reçoivent une erreur 503 (Sendcloud en panne).
+const sendcloud = { colis: new Map(), prochain: 1, sansQr: false, panne: false };
 const KG = { min: { value: '0', unit: 'kg' }, max: { value: '30', unit: 'kg' } };
 function fauxSendcloud(url, options = {}) {
   const chemin = new URL(url).pathname.replace(/^\/api\/v[23]/, '');
   const json = (corps, statut = 200) => new Response(JSON.stringify(corps), { status: statut, headers: { 'content-type': 'application/json' } });
   const corps = options.body ? JSON.parse(options.body) : null;
+  if (sendcloud.panne) {
+    return json({ error: { message: 'Service Unavailable' } }, 503);
+  }
   if (chemin === '/shipping-options') {
     const f = (corps && corps.functionalities) || {};
     const offres = [{ code: 'mondial_relay:retour', carrier: { code: 'mondial_relay' }, functionalities: { returns: true }, weight: KG }];
@@ -410,8 +419,10 @@ async function remettreAZero() {
   fichiersEffaces.length = 0;
   sendcloud.colis.clear();
   sendcloud.sansQr = false;
+  sendcloud.panne = false;
   decalage = 0;
   reglages.telephones = true;
+  reglages.pushEnPanne = 0;
 }
 
 module.exports = {
