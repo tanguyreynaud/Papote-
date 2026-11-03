@@ -454,6 +454,20 @@
       <section data-panneau="aide" hidden>
         <p class="muted aide-intro">Un souci ? Touchez le cas qui vous arrive : trois étapes, dans l'ordre. Chaque bouton ouvre le bon écran.</p>
 
+        <!-- Question libre à l'aide (fonction iaAdmin) : elle lit ce guide et l'état des tablettes, répond par des étapes
+             et des liens vers l'admin, et ne fait jamais rien elle-même. Sans elle (panne, plus de questions), les 6 cas
+             ci-dessous restent tels quels. -->
+        <form class="card aide-ia" id="aide-ia" novalidate>
+          <label for="aide-ia-question">Une autre question ? Demandez à l'aide</label>
+          <p class="muted small" id="aide-ia-note">Elle lit ce guide et l'état des tablettes, puis vous dit quoi toucher. Elle ne fait rien à votre place.</p>
+          <div class="aide-ia-ligne">
+            <input id="aide-ia-question" type="text" maxlength="500" autocomplete="off" enterkeyhint="send" aria-describedby="aide-ia-note"
+              placeholder="Ex. : la tablette de Mamie Jeanne ne répond plus">
+            <button type="submit" class="primary" id="aide-ia-demander">Demander</button>
+          </div>
+          <div id="aide-ia-reponse" class="aide-ia-reponse" role="status" aria-live="polite"></div>
+        </form>
+
         <details class="card aide-cas">
           <summary><h2>Tablette perdue ou volée</h2></summary>
           <ol class="aide-etapes">
