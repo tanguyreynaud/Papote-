@@ -4,10 +4,10 @@
 #   sauvegarde sauvegarde/restauration de la base et des photos, et le script de vérification (outils/admin)
 name: Tests
 
+# Une seule fois par changement : au push (les résultats s'affichent aussi sur la PR). Avant, push + pull_request
+# faisaient tourner tout deux fois et doublaient les e-mails d'échec (Tanguy, 3/11).
 on:
   push:
-    paths: ['functions/**', 'outils/admin/**', '.github/workflows/tests.yml']
-  pull_request:
     paths: ['functions/**', 'outils/admin/**', '.github/workflows/tests.yml']
   workflow_dispatch:
 
