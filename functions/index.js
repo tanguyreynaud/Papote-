@@ -657,10 +657,13 @@ exports.resilierAbonnement = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE
   const le = regles.premierPrelevementDe(abo, maintenant) || regles.dateResiliation(finDePeriodeMs(abo), maintenant);
   // Arrêté depuis l'admin (impayé, abus…) : le client ne peut pas le reprendre seul (Tanguy, 30/10).
   const parPapote = request.auth.token.admin === true && (request.data || {}).par === 'papote';
+  // La famille qui touche encore « Résilier » (vieil onglet) après un arrêt de Papote ne le change pas en arrêt
+  // « client », qu'elle pourrait ensuite reprendre seule.
+  const resteParPapote = request.auth.token.admin !== true && abo.cancel_at && abo.metadata.arretPar === 'papote';
   await stripe().subscriptions.update(id, {
     cancel_at: Math.ceil(le / 1000),
     proration_behavior: 'none',
-    metadata: { ...abo.metadata, arretPar: parPapote ? 'papote' : 'client' },
+    metadata: { ...abo.metadata, arretPar: parPapote || resteParPapote ? 'papote' : 'client' },
   });
   await appliquer(fid, id);
   // Deux responsables (ou deux onglets) qui demandent l'arrêt en même temps : un seul e-mail.
