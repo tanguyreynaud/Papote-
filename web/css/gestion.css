@@ -205,8 +205,8 @@ body.depot-actif::after {
 
 /* ---------- Graphiques ---------- */
 
-.graphiques { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
-.graphiques figure { margin: 0; }
+.graphiques { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 16px; }
+.graphiques figure { margin: 0; min-width: 0; }
 .graphiques figcaption { font-size: 14px; color: var(--muted); margin-bottom: 6px; }
 .graphique { width: 100%; height: auto; display: block; }
 .graphique .g-grille { stroke: var(--line); stroke-width: 1; }
@@ -443,6 +443,8 @@ label.interrupteur, .fiche label.interrupteur { display: inline-flex; flex-direc
 /* Libellés en gras, réponses normales (fiches commande, tablette, client, famille). */
 .fiche dt, .family dt { color: var(--text); font-weight: 700; }
 .fiche dd, .family dd { color: var(--text); font-weight: 400; }
+/* Lien-bouton dans une fiche (la tablette d'une commande) : aligné à gauche comme le reste quand il passe à la ligne. */
+.fiche dd button.link { text-align: left; }
 /* Bloc entièrement cliquable : le nom n'est jamais souligné. */
 .liste-liens a, .liste-liens a:hover, .liste-liens li:hover a, tr[tabindex] a, tr[tabindex] a:hover { text-decoration: none !important; }
 /* En-tête d'une fiche : bouton principal visible, puis le ⋮. */
@@ -464,7 +466,16 @@ label.interrupteur, .fiche label.interrupteur { display: inline-flex; flex-direc
 .form-modif .boutons { display: flex; gap: 8px; }
 @media (max-width: 640px) {
   /* Le ⋮ reste sur la ligne du titre (le titre passe à la ligne s'il est long). */
-  .tete-fiche h2 { min-width: 0; overflow-wrap: anywhere; }
+  /* Titre et boutons de la fiche : les boutons passent dessous quand ils ne tiennent pas à côté du titre ;
+     le ⋮ seul reste sur la ligne du titre (avant : « Commande EJ4N-DVBA » une lettre par ligne, 3/11). */
+  .tete-fiche { flex-wrap: wrap; }
+  .tete-fiche h2 { flex: 1 1 10em; min-width: min(10em, 100%); overflow-wrap: break-word; }
+  /* Un badge long (« Paiement en attente (SEPA), ne pas envoyer ») passe à la ligne au lieu d'élargir la page (iPhone SE, 3/11). */
+  .badge { white-space: normal; max-width: 100%; box-sizing: border-box; }
+  /* Un bouton long (« Tout exporter pour le comptable ») passe à la ligne au lieu de sortir de l'écran. */
+  .actions > button { white-space: normal; max-width: 100%; }
+  /* Chiffres en petites tuiles : le nom de l'opérateur (« Lycamobile ») tient sur une ligne. */
+  .stats.compact .stat span { font-size: clamp(18px, 5vw, 26px); }
   .bouton-message { align-items: flex-start; }
 }
 .a-faire a .tache-titre { color: var(--text); }
