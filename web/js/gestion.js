@@ -2107,9 +2107,13 @@ function afficherBatterie(t) {
   ].filter(Boolean).join(' · ');
   const vues = [b.le ? `relevé ${ilYA(b.le)}` : null, b.enLigneLe ? `en ligne ${ilYA(b.enLigneLe)}` : null,
     b.vueLe ? `Mamie vue ${ilYA(b.vueLe)}` : null].filter(Boolean).join(' · ');
+  // Fuseau horaire relevé par la tablette : tout sauf Europe/Paris décale la veille et les rappels.
+  const fuseau = b.fuseau ? h('p', { class: 'small' }, h('strong', {}, 'Fuseau horaire '), b.fuseau, ' ',
+    b.fuseau === 'Europe/Paris' ? null : badge('pas Europe/Paris : veille et rappels décalés', 'ko')) : null;
   zone.replaceChildren(
     h('p', { class: 'small' }, h('strong', {}, 'Batterie '), infos || 'pas encore de relevé', t.usure ? ' ' : null, t.usure ? badge(t.usure, 'ko') : null),
     vues ? h('p', { class: 'small muted' }, vues) : null,
+    fuseau,
   );
 }
 
@@ -2226,8 +2230,16 @@ const ORDRES = [
   { type: 'maj', titre: 'Mettre à jour maintenant', sous: (t, m) => (m && m.appVersion ? `Version ${m.appVersion} installée` : 'Vérifie la version publiée'), attente: 120_000 },
   { type: 'recharger', titre: 'Recharger l\'écran', sous: () => 'Si l\'écran semble figé, sans redémarrer', attente: 120_000 },
   { type: 'volumes', titre: 'Volumes', sous: (t, m, f) => (f ? `Général ${f.volume ?? 'auto'} · appel ${f.volumeAppel ?? 100} · sonnerie ${f.volumeSonnerie ?? 100}` : 'Général, appel, sonnerie'), choix: true },
+  { type: 'verrouiller', titre: 'Verrouiller (perdue ou volée)', sous: () => 'Écran « tablette verrouillée », plus rien ne répond ; photos et données gardées', attente: 120_000, danger: true },
+  { type: 'deverrouiller', titre: 'Déverrouiller', sous: () => 'Papote revient tel quel sur la tablette', attente: 120_000 },
   { type: 'usine', titre: 'Remettre à zéro', sous: () => 'Réglages d\'usine, tout est effacé', attente: 120_000, danger: true },
 ];
+// Ordres qui exigent le n° de série de la tablette (elle refuse sinon) : l'admin le retape pour confirmer.
+const AVEC_SERIE = {
+  usine: (t) => `Remettre ${nomTablette(t)} à zéro, à distance ? TOUT est effacé sur la tablette (Papote, photos, réglages) : elle revient comme neuve, à réinstaller.`,
+  verrouiller: (t) => `Verrouiller ${nomTablette(t)}, à distance ? Elle affichera « Cette tablette est verrouillée » avec notre adresse, plus rien ne répondra (ni appels, ni SOS). Les photos et données de la famille restent sur le serveur. Réversible avec « Déverrouiller ».`,
+  deverrouiller: (t) => `Déverrouiller ${nomTablette(t)} ? Papote revient tel quel.`,
+};
 const nomTablette = (t) => (t.ref ? `la tablette ${t.ref}` : 'cette tablette');
 
 // Réseau mobile chez le client : état du service, antennes entendues (la plus forte d'abord), alerte éventuelle.
@@ -2339,10 +2351,10 @@ function blocAgir(zone, t) {
       extra = await o.confirmer(t);
       if (!extra) return;
     }
-    if (o.type === 'usine') {
+    if (AVEC_SERIE[o.type]) {
       const serie = t.numero || t.serieAndroid;
-      if (!serie) { prevenir('Le n° de série de cette tablette n\'est pas noté sur sa fiche : impossible de la remettre à zéro à distance (la tablette exige son n° de série).'); return; }
-      const saisi = await saisir(`Remettre ${nomTablette(t)} à zéro, à distance ? TOUT est effacé sur la tablette (Papote, photos, réglages) : elle revient comme neuve, à réinstaller.\n\nPour confirmer, retapez son numéro :`, '', { oui: 'Remettre à zéro' });
+      if (!serie) { prevenir(`Le n° de série de cette tablette n\'est pas noté sur sa fiche : impossible de « ${o.titre} » à distance (la tablette exige son n° de série).`); return; }
+      const saisi = await saisir(`${AVEC_SERIE[o.type](t)}\n\nPour confirmer, retapez son numéro :`, '', { oui: o.titre });
       if (saisi == null) return;
       if ((saisi || '').trim().toUpperCase() !== String(t.ref || serie).toUpperCase()) { prevenir('Numéro différent : rien n\'a été fait.'); return; }
       extra = { serie };

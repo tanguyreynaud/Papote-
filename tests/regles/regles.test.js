@@ -166,6 +166,13 @@ test('la tablette entre encore quelques heures après la confirmation (wifi tomb
   await assertFails(setDoc(doc(tablette('pirate'), `families/${FID}/members/pirate`), membre));
 });
 
+test('fuseau horaire : la tablette remonte son fuseau dans sa fiche, un proche ne peut pas le changer', async () => {
+  await famille();
+  await assertSucceeds(updateDoc(doc(tablette('tab'), `families/${FID}/members/tab`), { fuseau: 'Europe/Paris' }));
+  await assertSucceeds(updateDoc(doc(tablette('tab'), `families/${FID}/members/tab`), { fuseau: 'America/Montreal', appVersion: '2.99.109' }));
+  await assertFails(updateDoc(doc(proche('julie'), `families/${FID}/members/tab`), { fuseau: 'Europe/Paris' }));
+});
+
 test('compte des appels de la tablette : revient après l\'expiration du jumelage tant que la tablette est membre', async () => {
   await famille();
   // Jumelage expiré depuis longtemps (réinstallations), la tablette principale est toujours membre.
@@ -259,6 +266,11 @@ test('tableau de bord : ordres à la tablette (redémarrer, état, mise à jour,
   await assertSucceeds(setDoc(doc(admin(), `families/${FID}/commands/o2`), ordre({ type: 'maj' })));
   await assertSucceeds(setDoc(doc(admin(), `families/${FID}/commands/o3`), ordre({ type: 'canal', canal: 'test' })));
   await assertSucceeds(setDoc(doc(admin(), `families/${FID}/commands/o4`), ordre({ type: 'usine', serie: 'Tab60P15EEA026347' })));
+  // Tablette perdue : verrouiller / déverrouiller, toujours avec le n° de série.
+  await assertSucceeds(setDoc(doc(admin(), `families/${FID}/commands/o5`), ordre({ type: 'verrouiller', serie: 'Tab60P15EEA026347' })));
+  await assertSucceeds(setDoc(doc(admin(), `families/${FID}/commands/o6`), ordre({ type: 'deverrouiller', serie: 'Tab60P15EEA026347' })));
+  await assertFails(setDoc(doc(admin(), `families/${FID}/commands/k0`), ordre({ type: 'verrouiller' })));
+  await assertFails(setDoc(doc(proche('julie'), `families/${FID}/commands/k7`), { ...ordre({ type: 'verrouiller', serie: 'X1234' }), createdBy: 'julie' }));
   // Garde-fous : canal inconnu, remise à zéro sans n° de série, ordre d'un autre, wifi (réservé à la famille), état faux.
   await assertFails(setDoc(doc(admin(), `families/${FID}/commands/k1`), ordre({ type: 'canal', canal: 'beta' })));
   await assertFails(setDoc(doc(admin(), `families/${FID}/commands/k2`), ordre({ type: 'usine' })));
