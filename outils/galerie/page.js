@@ -27,7 +27,7 @@ function html(parties, dossierImages, { fichiers = false } = {}) {
     const L = LETTRES[partie.nom];
     sommaire += `<a class="chip" href="#${partie.nom}">${NOMS[partie.nom]} <span>${scenes.length}</span></a>`;
     corps += `<section class="partie" id="${partie.nom}" data-partie="${partie.nom}">
-<h2>${NOMS[partie.nom]}</h2><p class="source">Source : ${esc(partie.version)}</p>${partie.nom === 'emails' ? '<p class="note">Chaque e-mail tel qu\'il arrive dans la boîte de réception (expéditeur, objet, aperçu), sur un téléphone et sur un ordinateur, sans aucune police ni image chargée.</p>' : ''}`;
+<h2>${NOMS[partie.nom]}</h2><p class="source">Source : ${esc(partie.version)}</p>${partie.note ? `<p class="note">${esc(partie.note)}</p>` : partie.nom === 'emails' ? '<p class="note">Chaque e-mail tel qu\'il arrive dans la boîte de réception (expéditeur, objet, aperçu), sur un téléphone et sur un ordinateur, sans aucune police ni image chargée.</p>' : ''}`;
     let groupe = null;
     scenes.forEach((s, i) => {
       if (s.groupe !== groupe) {
@@ -39,7 +39,7 @@ function html(parties, dossierImages, { fichiers = false } = {}) {
       corps += `<article class="ecran" id="${num}">
 <header><span class="num">${num}</span><h4>${esc(s.titre)}</h4></header>
 ${s.note ? `<p class="note">${esc(s.note)}</p>` : ''}
-<div class="captures">${s.captures.filter((c) => c.fichier).map((c) => `<figure class="${c.taille}"><button class="zoom" data-num="${num}" data-titre="${esc(s.titre)} · ${c.taille}"><img loading="lazy" src="${img(c.fichier)}" alt="${num} ${esc(s.titre)}, ${c.taille}"></button><figcaption>${c.taille}</figcaption></figure>`).join('')}</div>
+<div class="captures">${s.captures.filter((c) => c.fichier).map((c) => `<figure class="${c.classe || c.taille}"><button class="zoom" data-num="${num}" data-titre="${esc(s.titre)} · ${c.taille}"><img loading="lazy" src="${img(c.fichier)}" alt="${num} ${esc(s.titre)}, ${c.taille}"></button><figcaption>${c.taille}</figcaption></figure>`).join('')}</div>
 ${s.erreurs?.length ? `<p class="erreur">Erreur de la page : ${esc(s.erreurs.join(' · '))}</p>` : ''}
 </article>`;
     });
@@ -85,7 +85,9 @@ h4 { font-size:16px; }
 .note { margin:4px 0 0; color:var(--doux); font-size:14px; }
 .erreur { margin:8px 0 0; color:var(--erreur); font-size:13px; }
 .captures { display:flex; gap:10px; align-items:flex-start; margin-top:10px; }
+.captures:has(figure.mode) { flex-wrap:wrap; }
 figure { margin:0; min-width:0; }
+figure.mode { flex:1 1 110px; max-width:200px; } figure.mode-large { flex:2 1 220px; }
 figure.paysage { flex:1; } figure.portrait { flex:1; } figure.telephone { flex:1; max-width:220px; } figure.ordinateur { flex:2; }
 figcaption { font-size:12px; color:var(--doux); text-align:center; margin-top:2px; }
 .zoom { display:block; width:100%; padding:0; border:1px solid var(--ligne); border-radius:6px; overflow:hidden; background:#000; cursor:zoom-in; }

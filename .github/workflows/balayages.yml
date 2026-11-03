@@ -1,6 +1,7 @@
 # Balayages de la galerie (outils/galerie) sur le site vitrine et les e-mails, à chaque changement de vitrine/
 # ou du générateur d'e-mails : double toucher, appui long, gestes humains (paysage, zoom, texte agrandi, sombre),
-# accessibilité (WCAG, texte et cibles trop petits), e-mails dans les vraies boîtes, et la galerie elle-même
+# accessibilité (WCAG, texte et cibles trop petits), e-mails dans les vraies boîtes (Gmail sans styles, Outlook approché,
+# mode sombre, images bloquées : captures dans courriels.html), et la galerie elle-même
 # (erreurs de page, clavier ouvert, largeur). Chaque balayage échoue (code 1) dès qu'un souci est trouvé :
 # rien ne se fusionne en rouge. Gratuit (dépôt public), rien ne part en ligne. Rapports dans l'artefact « balayages ».
 name: Balayages site et e-mails
@@ -51,4 +52,5 @@ jobs:
           path: |
             outils/galerie/sortie/*.txt
             outils/galerie/sortie/galerie.html
+            outils/galerie/sortie/courriels.html
           if-no-files-found: ignore
