@@ -637,7 +637,7 @@ button.secondary.charge::after, button.link.charge::after { border-color: rgba(7
 .agir { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
 .agir button { display: block; width: 100%; text-align: left; padding: 12px 14px; min-height: 64px; white-space: normal; line-height: 1.3; }
 .agir button small { display: block; font-weight: 400; font-size: 13px; color: var(--muted); margin-top: 3px; }
-.agir button.danger small { color: var(--danger); opacity: .8; }
+.agir button.danger small { color: var(--danger); } /* sans transparence : contraste 4,5 (accessibilité, 3/11) */
 .agir button.charge small { color: transparent; }
 .choix-ordre { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding: 12px 14px; min-height: 64px; border: 1px solid var(--accent); border-radius: 14px; background: var(--surface); grid-column: 1 / -1; }
 .choix-ordre strong { margin-right: 4px; }

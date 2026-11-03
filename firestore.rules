@@ -377,7 +377,7 @@ service cloud.firestore {
           && (!('enTete' in request.resource.data) || request.resource.data.enTete == request.time);
         allow update: if signedIn()
           && uid == request.auth.uid
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'canCall', 'lastActive', 'lastOnline', 'callable', 'face', 'appVersion', 'uid', 'email', 'battery', 'sim', 'meteoVille', 'wifi', 'lastSeen', 'genre', 'telephone'])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'canCall', 'lastActive', 'lastOnline', 'callable', 'face', 'appVersion', 'uid', 'email', 'battery', 'sim', 'fuseau', 'meteoVille', 'wifi', 'lastSeen', 'genre', 'telephone'])
           // Mon numéro de téléphone : la tablette m'appelle par la carte SIM et n'accepte que les numéros de la famille.
           && telephoneValide(request.resource.data)
           // Je suis une femme / un homme : voix qui lit mes messages sur la tablette.
@@ -535,13 +535,14 @@ service cloud.firestore {
       match /commands/{cid} {
         allow read: if isFamilyAdmin(fid) || (signedIn() && resource.data.target == request.auth.uid);
         // Tableau de bord (page de la tablette) : redémarrer, état, mise à jour, recharger l'écran, canal
-        // des versions, remise à zéro (serie : le n° de série attendu, la tablette refuse si ce n'est pas le sien).
+        // des versions, remise à zéro, verrouillage et déverrouillage d'une tablette perdue (serie : le n° de série
+        // attendu, la tablette refuse si ce n'est pas le sien).
         allow read, delete: if isAdmin();
         allow create: if isAdmin()
           && request.resource.data.keys().hasOnly(['type', 'target', 'createdBy', 'createdAt', 'state', 'canal', 'serie'])
-          && request.resource.data.type in ['restart', 'status', 'maj', 'recharger', 'canal', 'usine']
+          && request.resource.data.type in ['restart', 'status', 'maj', 'recharger', 'canal', 'usine', 'verrouiller', 'deverrouiller']
           && (request.resource.data.type != 'canal' || request.resource.data.canal in ['stable', 'test'])
-          && (request.resource.data.type != 'usine' || (request.resource.data.serie is string && request.resource.data.serie.size() >= 4))
+          && (!(request.resource.data.type in ['usine', 'verrouiller', 'deverrouiller']) || (request.resource.data.serie is string && request.resource.data.serie.size() >= 4))
           && request.resource.data.target is string
           && request.resource.data.createdBy == request.auth.uid
           && request.resource.data.state == 'pending';

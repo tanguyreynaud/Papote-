@@ -756,7 +756,16 @@ async function envoyerMessage(text) {
   montrerBullesEnRoute();
   try {
     if (!navigator.onLine) throw new Error('hors ligne');
-    await sendItem(item);
+    const envoi = sendItem(item);
+    if (await serveurMuet(envoi)) {
+      // Le serveur ne répond pas : le message est déjà dans la conversation (mémoire de l'appli) et partira tout
+      // seul. On retire la bulle « Envoi… » (sinon il serait affiché deux fois), on le dit, et rien n'est remis en
+      // attente (ce serait envoyé deux fois).
+      retirerBulleEnRoute(bulle);
+      toast(TOAST_SERVEUR_MUET);
+      envoi.catch((err) => { console.warn('Message mis en attente', err); queue(item); });
+      return;
+    }
     // La base renvoie le message tout de suite après : la vraie bulle prend la place de celle-ci.
     setTimeout(() => retirerBulleEnRoute(bulle), 1500);
   } catch (err) {
@@ -766,6 +775,16 @@ async function envoyerMessage(text) {
   } finally {
     if (--messagesEnRoute === 0) $('btn-message').disabled = false;
   }
+}
+
+// Le serveur ne répond pas (panne Firebase : ce n'est pas « hors ligne », le téléphone a du réseau). L'écriture
+// reste dans la mémoire de l'appli (cache persistant) et partira d'elle-même dès que le serveur revient, même si
+// l'appli est fermée entre-temps. Au bout de 15 s, on ferme la fenêtre et on le dit, plutôt que de laisser
+// « Envoi… » tourner sans fin. Rien n'est remis en attente (outbox) : ce serait envoyé deux fois (inspection 5, 3/11).
+const SERVEUR_MUET_MS = 15_000;
+const TOAST_SERVEUR_MUET = "Le serveur ne répond pas : l'envoi partira tout seul";
+function serveurMuet(promesse) {
+  return Promise.race([promesse.then(() => false), new Promise((r) => setTimeout(() => r(true), SERVEUR_MUET_MS))]);
 }
 
 // ---------- Première installation : régler la tablette pas à pas (propriétaire) ----------
@@ -1338,7 +1357,17 @@ $('form-post').addEventListener('submit', async (e) => {
     for (const item of items) {
       if (!navigator.onLine) throw new Error('hors ligne');
       setBusy(kind === 'video' ? 'Envoi de la vidéo…' : pendingPhotos.length > 1 ? `Envoi des ${pendingPhotos.length} photos…` : 'Envoi…');
-      await sendItem(item);
+      const envoi = sendItem(item);
+      if (await serveurMuet(envoi)) {
+        setBusy('');
+        history.back();
+        toast(TOAST_SERVEUR_MUET);
+        envoi.then(() => pruneOld(kind)).catch(async (err) => {
+          console.warn('Envoi mis en attente', err);
+          if (!/trop lourde/.test(err.message)) await queue(item);
+        });
+        return;
+      }
       sent++;
     }
     setBusy('');
@@ -1582,7 +1611,14 @@ async function removePost(post) {
       try { await deleteObject(ref(storage, path)); } catch (err) { console.warn('Fichier déjà absent', err); }
     }
   }
-  await deletePost(session.fid, post);
+  try {
+    await deletePost(session.fid, post);
+  } catch (err) {
+    // Déjà supprimé par un autre proche au même instant : les règles refusent d'effacer ce qui n'existe plus,
+    // mais le résultat voulu est là (inspection 5, 3/11).
+    if (err?.code === 'permission-denied' && !(await getDoc(doc(db, 'families', session.fid, 'posts', post.id))).exists()) return;
+    throw err;
+  }
 }
 
 // ---------- Support ----------
