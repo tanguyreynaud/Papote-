@@ -133,7 +133,8 @@ a { color:${C.indigo}; }
 <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:${C.fond};font-size:1px;line-height:1px">${echapper(apercu)}${'&#847;&zwnj;&nbsp;'.repeat(30)}</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.fond}">
 <tr><td align="center" class="enveloppe" style="padding:28px 16px 32px">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;margin:0 auto;border-collapse:separate">
+<!--[if mso]><table role="presentation" width="560" align="center" cellpadding="0" cellspacing="0"><tr><td><![endif]-->
+<table role="presentation" width="100%" align="center" cellpadding="0" cellspacing="0" style="max-width:560px;margin:0 auto;border-collapse:separate">
 <tr><td style="padding:0 6px 16px">
 <table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:separate"><tr>
 <td width="34" height="34" align="center" valign="middle" style="width:34px;height:34px;border-radius:9px;background:${C.indigo};color:#ffffff;font-family:${POLICE_TITRE};font-size:20px;font-weight:bold;line-height:34px;text-align:center">P</td>
@@ -148,6 +149,7 @@ ${question}
 </td></tr>
 <tr><td style="padding:18px 6px 0;font-family:${POLICE};font-size:13px;line-height:1.5;color:${C.doux};word-break:break-word;overflow-wrap:anywhere">${pied}${pourquoi}</td></tr>
 </table>
+<!--[if mso]></td></tr></table><![endif]-->
 </td></tr>
 </table>
 </body>
