@@ -200,7 +200,8 @@ const SCENES = [
   { groupe: 'Commande', titre: 'Merci, commande enregistrée (code et récapitulatif)', fichier: 'merci.html?session=cs_test_galerie', plein: true, note: 'Le récapitulatif vient d’une fausse réponse de codeCommande, avec une adresse e-mail longue (bug de largeur du 27/10).' },
   { groupe: 'Commande', titre: 'Merci : le code de commande n’a pas pu être chargé', fichier: 'merci.html?session=cs_test_galerie', plein: true, routes: (p) => p.route('**/codeCommande**', (r) => r.fulfill({ status: 404, body: '' })) },
   { groupe: 'Textes', titre: 'Conditions générales de vente', fichier: 'cgv.html', plein: true },
-  { groupe: 'Textes', titre: 'Mentions légales et confidentialité', fichier: 'mentions.html', plein: true },
+  { groupe: 'Textes', titre: 'Mentions légales', fichier: 'mentions.html', plein: true },
+  { groupe: 'Textes', titre: 'Politique de confidentialité', fichier: 'confidentialite.html', plein: true },
   { groupe: 'Textes', titre: 'Page introuvable (404)', fichier: '404.html', plein: true },
 ];
 
