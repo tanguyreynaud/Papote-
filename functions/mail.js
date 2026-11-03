@@ -649,7 +649,7 @@ function resiliation({ nom, email, code, commande, retractation, suivi, lienSuiv
     { fiche: [['Client', echapper(qui)], ['E-mail', email && nom ? echapper(email) : null], ['Commande', code ? echapper(code) : null]] },
     `Le client a ${retractation != null ? 'annulé sa commande après l\'envoi' : 'résilié son abonnement'}.`,
     lienSuivi
-      ? `Le client a reçu le mode d'emploi et l'étiquette de retour. Suivi du colis de retour : <a href="${echapper(lienSuivi)}">${echapper(suivi || 'suivre le colis')}</a> (aussi sur la page de la commande).`
+      ? `Le client a reçu le mode d'emploi et l'étiquette de retour. Suivi du colis de retour : ${lienHtml(lienSuivi, echapper(suivi || 'suivre le colis'))} (aussi sur la page de la commande).`
       : 'Le client reçoit par e-mail le mode d\'emploi du retour. Le suivi du colis apparaîtra sur la page de la commande.',
   ], { texte: 'Ouvrir la commande', lien: lienCommandeAdmin(commande) }, { interne: true });
 }
