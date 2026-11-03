@@ -313,7 +313,79 @@ async function attendreBase(fn, message, delai = 15_000) {
   }
 }
 
+// ---------- Gestes humains (doigt pressé, maladroit, pressé de partir) ----------
+
+/** Le centre d'un élément visible, ramené à l'écran s'il le faut. */
+async function centre(t, selecteur) {
+  const el = t.page.locator(selecteur).filter({ visible: true }).first();
+  await el.scrollIntoViewIfNeeded();
+  const b = await el.boundingBox();
+  return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+}
+
+/** Double appui du doigt : deux touchers coup sur coup, au même endroit. */
+async function doubleAppui(t, selecteur) {
+  const { x, y } = await centre(t, selecteur);
+  await t.page.touchscreen.tap(x, y);
+  await t.page.touchscreen.tap(x, y);
+}
+
+/** Appui long du doigt (presque une seconde) : le bouton agit au plus une fois, jamais deux. */
+async function appuiLong(t, selecteur, ms = 900) {
+  const { x, y } = await centre(t, selecteur);
+  const cdp = await t.context.newCDPSession(t.page);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+  await t.page.waitForTimeout(ms);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await cdp.detach().catch(() => {});
+}
+
+/** Clavier du téléphone ouvert (environ 330 px de moins en hauteur), ou refermé. */
+async function clavier(t, ouvert) {
+  await t.page.setViewportSize({ width: 390, height: ouvert ? 510 : 844 });
+}
+
+/** Nombre de fenêtres de l'app ouvertes (confirmation, notice). */
+const fenetresOuvertes = (t) => t.page.locator('.dialog-back:not(.closing)').count();
+
+/** Le bouton montre qu'il travaille : roue (retour.js), désactivé ou « Un instant… ». */
+async function attendreRetourVisible(t, selecteur, delai = 3_000) {
+  await t.page.waitForFunction((sel) => {
+    const b = document.querySelector(sel);
+    return b && (b.dataset.retour !== undefined || b.disabled || b.getAttribute('aria-busy') === 'true' || b.hidden);
+  }, selecteur, { timeout: delai }).catch(() => assert.fail(`[${t.nom}] ${selecteur} ne montre pas qu'il travaille`));
+}
+
+/** Combien de fois l'app a appelé cette fonction serveur depuis le début du test. */
+const nbAppels = (nom) => banc.appels.filter((a) => a.nom === nom).length;
+
+/**
+ * Une fonction serveur qui ne répond pas (réseau qui tient, serveur muet) : la requête attend.
+ * Renvoie { lacher() } : la requête part enfin au serveur ; { couper() } : elle échoue.
+ */
+async function serveurMuet(t, nom) {
+  const enAttente = [];
+  const motif = new RegExp(`/${banc.PROJET}/[a-z0-9-]+/${nom}$`);
+  await t.context.route(motif, (route) => { enAttente.push(route); });
+  const fin = async (geste) => {
+    for (const r of enAttente.splice(0)) await geste(r).catch(() => {});
+    await t.context.unroute(motif);
+  };
+  return {
+    get attente() { return enAttente.length; },
+    lacher: () => fin((r) => r.fallback()),
+    couper: () => fin((r) => r.abort('connectionreset')),
+  };
+}
+
+// La remise « en main propre » n'est jamais proposée à la famille (Tanguy, 31/10) : seulement Mondial Relay.
+async function jamaisMainPropre(t) {
+  const texte = await t.page.evaluate(() => document.body.textContent);
+  assert.doesNotMatch(texte, /main[\s ]+propre/i, `[${t.nom}] « main propre » apparaît dans l'app famille`);
+}
+
 module.exports = {
+  centre, doubleAppui, appuiLong, clavier, fenetresOuvertes, attendreRetourVisible, nbAppels, serveurMuet, jamaisMainPropre,
   verifierLargeur,
   vue, attendreVue, visible, repondre, texteFenetre, photo, video,
   ouvrir, seConnecter, remplirMoi, inscrire, tabletteAllumee, installer, fermerAccueil, familleInstallee, rejoindre, dernierMail, toast,

@@ -35,6 +35,9 @@ scénarios) ; utiliser plutôt
 | `abonnement` | Annulation sous 30 jours, résiliation puis « garder », relier une commande, payer depuis l'app, pause |
 | `horsligne` | Envois gardés sans réseau, partis au retour du réseau ou à la prochaine ouverture |
 | `retour` | Bouton retour d'Android : chaque écran revient à celui d'avant, une fenêtre se ferme, « Voulez-vous quitter Papote ? » dans l'app Android |
+| `resiliation` | Résilier (« Avant de partir », garder), « Garder mon abonnement », annuler la commande sous 30 jours, « Garder la tablette et reprendre » : double appui, appui long, retour d'Android, page rechargée (aussi pendant l'appel au serveur), petite hauteur ; sans réseau, serveur muet, serveur en panne (503) à chaque bouton : un seul appel au serveur, une roue pendant l'attente, un message clair |
+| `renvoi` | Renvoyer la tablette (Mondial Relay, QR code sans impression) : adresse demandée quand la commande n'en a pas (erreur de code postal, clavier ouvert), retour avant la date d'arrêt, réseau coupé, serveur muet puis page rechargée, un seul QR code ; tablette reçue et remboursée ; « main propre » jamais proposée |
+| `sos` | SOS de la tablette : toute la famille sonne, retour d'Android pendant la sonnerie, double appui sur « Répondre », sonnerie arrêtée chez les autres, téléphone sans réseau pendant la sonnerie, page rechargée, 2e essai sans réponse ; ce qu'en disent les Notifications |
 
 Chaque test échoue aussi s'il y a une erreur dans la console, une fenêtre grise du navigateur
 (confirm/alert) ou une erreur dans une fonction serveur.
@@ -48,7 +51,10 @@ Chaque test échoue aussi s'il y a une erreur dans la console, une fenêtre gris
 - **SDK Firebase** : l'app le charge depuis gstatic ; le banc (`banc.js`) le sert depuis
   `node_modules/firebase` et le branche sur les émulateurs (App Check et notifications coupés).
 - **Tablette** : simulée (`tablette.js`) avec le SDK admin et une vraie page WebRTC pour les appels.
-- **Gestes** (`gestes.js`) : se connecter, installer, rejoindre une famille, répondre aux fenêtres…
+- **Gestes** (`gestes.js`) : se connecter, installer, rejoindre une famille, répondre aux fenêtres… et les gestes
+  maladroits : double appui et appui long du doigt, clavier ouvert (petite hauteur), fonction serveur qui ne répond
+  pas (`serveurMuet`), nombre d'appels au serveur (`nbAppels`), « main propre » jamais affichée (`jamaisMainPropre`).
+- **Serveur en panne** : `banc.pannes.set('nomDeLaFonction', { status: 'UNAVAILABLE' })` fait répondre 503 à la fonction.
 
 Ports des émulateurs : Firestore 8087, Auth 9097, Storage 9197 (voir `firebase.json`).
 

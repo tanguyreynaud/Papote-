@@ -85,13 +85,14 @@ async function decrocher(tablette, cid) {
 
 /**
  * La tablette appelle (audio, voie vidéo prête) : vers un proche ou toute la famille (vers = null).
+ * sos : bouton SOS de la tablette, toute la famille (1 = premier essai, 2 = deuxième essai sans réponse au premier).
  * Renvoie l'id de l'appel.
  */
-async function appeler(tablette, { vers = null, nom = 'Mamie Emma' } = {}) {
+async function appeler(tablette, { vers = null, nom = 'Mamie Emma', sos = 0 } = {}) {
   const callRef = s.db.collection(`families/${tablette.fid}/calls`).doc();
   // Comme la tablette : l'appel est écrit tout de suite (sonnerie), l'offre juste après.
   await callRef.set({
-    callerUid: tablette.tab.callsUid, callerName: nom, calleeUid: vers, calleeName: null,
+    callerUid: tablette.tab.callsUid, callerName: nom, calleeUid: sos ? null : vers, calleeName: sos ? (sos === 2 ? 'SOS 2' : 'SOS') : null,
     state: 'ringing', offer: null, answer: null, createdAt: s.FieldValue.serverTimestamp(), endedAt: null,
   });
   const offer = await tablette.page.evaluate(async (preparer) => {
