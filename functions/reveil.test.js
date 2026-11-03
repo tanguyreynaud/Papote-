@@ -56,6 +56,25 @@ test('réveil : un jeton périmé est oublié', async () => {
   assert.strictEqual(db.maj[0].chemin, 'families/F1/members/t1/private/push');
 });
 
+test('réveil : réseau coupé entre le serveur et Google (erreur passagère) : aucun jeton oublié, la tablette garde son réveil', async () => {
+  const db = base([{ id: 't1', role: 'tablette' }], { t1: { tablette: ['bon'] } });
+  const envois = [];
+  const n = await reveiller(db, 'F1', { type: 'famille' }, 600, messagerie([{ success: false, error: { code: 'messaging/unavailable' } }], envois));
+  assert.strictEqual(n, 0, 'aucune tablette atteinte');
+  assert.strictEqual(envois.length, 1);
+  assert.deepStrictEqual(db.maj, [], 'le jeton reste : il resservira au prochain réveil');
+  const n2 = await reveiller(db, 'F1', { type: 'famille' }, 600, messagerie([{ success: false, error: { code: 'messaging/internal-error' } }], envois));
+  assert.strictEqual(n2, 0);
+  assert.deepStrictEqual(db.maj, []);
+});
+
+test('réveil : service de notifications injoignable : l\'erreur remonte (la fonction échoue, rien n\'est effacé)', async () => {
+  const db = base([{ id: 't1', role: 'tablette' }], { t1: { tablette: ['bon'] } });
+  const panne = () => ({ sendEachForMulticast: async () => { throw new Error('getaddrinfo ENOTFOUND fcm.googleapis.com'); } });
+  await assert.rejects(reveiller(db, 'F1', { type: 'famille' }, 600, panne), /ENOTFOUND/);
+  assert.deepStrictEqual(db.maj, []);
+});
+
 test('fiche de la famille : un compte tenu par le serveur ne réveille pas la tablette', () => {
   assert.strictEqual(aChange({ name: 'Mamie', nbProches: 3 }, { name: 'Mamie', nbProches: 4 }), false);
   assert.strictEqual(aChange({ name: 'Mamie', rev: 1 }, { name: 'Mamie', rev: 2 }), true);

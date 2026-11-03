@@ -183,12 +183,17 @@ function creerFauxStripe(horloge) {
     },
     paymentIntents: {
       retrieve: async (x) => copie(lire('paiements', 'payment_intent', x)),
-      create: async ({ amount, customer, description, metadata }) => {
+      // Comme Stripe : une même clé d'idempotence rend le même paiement, sans prélever deux fois.
+      create: async ({ amount, customer, description, metadata }, options = {}) => {
+        const cle = options.idempotencyKey;
+        const deja = cle && [...etat.paiements.values()].find((p) => p.cle === cle);
+        if (deja) return copie(deja);
         const client = lire('clients', 'customer', customer);
         if (client.carteExpiree) throw Object.assign(new Error('Your card has expired.'), { code: 'expired_card', type: 'StripeCardError', statusCode: 402 });
         const f = nouvelleFacture(client, { lignes: [{ amount, description }], metadata, description });
         const pi = payer(f, client);
         pi.description = description;
+        if (cle) pi.cle = cle;
         return copie(pi);
       },
     },
