@@ -238,6 +238,24 @@ const pause = (p, ms = 700) => p.waitForTimeout(ms);
 const toucher = (...sels) => async (p) => { for (const sel of sels) { await p.locator(sel).first().click(); await pause(p); } };
 const onglet = (t) => async (p) => { await p.locator('#kpi-commandes .onglet').filter({ hasText: t }).first().click(); await pause(p); };
 
+// Aide du guide « Que faire si… » (#aide) : la question tapée puis « Demander ». bloque : le serveur ne répond pas.
+// Écran sans la question à l'aide (admin d'avant) : rien à toucher, la scène montre le guide seul.
+const demanderAide = ({ bloque = false, question = 'La tablette de Papi Henri ne répond plus' } = {}) => async (p) => {
+  if (!await p.locator('#aide-ia-question').count()) return;
+  if (bloque) await p.evaluate(() => { window.__fonctionsBloquees = true; });
+  await p.fill('#aide-ia-question', question);
+  await p.click('#aide-ia-demander');
+  await pause(p, 900);
+};
+// Réponse type de iaAdmin (functions/ia-admin.js) : étapes courtes, liens vers des écrans de l'admin. Le dernier lien,
+// hors de la liste permise, doit rester du texte (la page revérifie après le serveur).
+const REPONSE_AIDE = { ok: true, reponse: [
+  '1. La tablette T-006 de Papi Henri n’a pas donné signe de vie depuis 7 h et sa carte SIM n’a plus de réseau. Ouvrez sa fiche : [Ouvrir la tablette](#tablette/T-006)',
+  '2. Le forfait se finit demain : rechargez chez l’opérateur, puis touchez « J’ai rechargé » sur la carte. [Ouvrir la carte SIM](#sim/S4)',
+  '3. Sur la page de la tablette, touchez « État complet maintenant », puis « Redémarrer » si elle reste muette.',
+  '4. Le paiement est aussi en retard : appelez la famille (voir [ce site](https://exemple.invalid/piege)). [Ouvrir les clients](#clients/liste)',
+].join('\n') };
+
 // Espace Validation : faux site papote-validation (index.json + captures) et quelques choix déjà faits.
 const VALIDATION_INDEX = {
   le: MAINTENANT - 3600_000,
@@ -394,6 +412,19 @@ const SCENES = [
   { groupe: 'Validation', titre: 'Dépenses : coût par famille et pistes', page: '#validation/depenses', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees() },
   { groupe: 'Validation', titre: 'Dépenses : calcul avec la TVA (au-delà du seuil)', page: '#validation/depenses', tailles: ['pc', 'tel'], donnees: () => donnees(), faire: toucher('.v-tva') },
   { groupe: 'Validation', titre: 'Gestes humains : comment chacun est vérifié', page: '#validation/gestes', tailles: ['pc'], plein: true, donnees: () => donnees() },
+
+  // Question à l'aide du guide « Que faire si… » (#aide, fonction iaAdmin) : vide, en attente, réponse avec liens,
+  // plus de questions aujourd'hui, serveur en panne. Les 6 cas du guide restent dessous dans tous les cas.
+  { groupe: 'Que faire si…', titre: 'Aide : question vide', page: '#aide', tailles: ['pc', 'tel'], donnees: () => donnees() },
+  { groupe: 'Que faire si…', titre: 'Aide : question posée, réponse en attente', page: '#aide', tailles: ['pc', 'tel'], donnees: () => donnees(),
+    faire: demanderAide({ bloque: true }) },
+  { groupe: 'Que faire si…', titre: 'Aide : réponse en étapes, avec les liens vers l’admin', page: '#aide', tailles: ['pc', 'tel'], plein: true,
+    donnees: () => donnees({ fonctions: { iaAdmin: REPONSE_AIDE } }), faire: demanderAide() },
+  { groupe: 'Que faire si…', titre: 'Aide : plus de questions aujourd’hui', page: '#aide', tailles: ['pc', 'tel'],
+    donnees: () => donnees({ fonctions: { iaAdmin: { ok: false, raison: 'quota', reponse: 'L’aide a assez répondu pour aujourd’hui. Les 6 cas du guide, juste en dessous, donnent les étapes et les bons écrans.' } } }),
+    faire: demanderAide() },
+  { groupe: 'Que faire si…', titre: 'Aide : serveur en panne', page: '#aide', tailles: ['pc', 'tel'],
+    donnees: () => donnees({ fonctions: { iaAdmin: { erreur: 'internal', code: 'functions/internal' } } }), faire: demanderAide() },
 
   { groupe: 'Outils', titre: 'Outils : automatique', page: '#outils/automatique', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Outils', titre: 'Outils : expédition', page: '#outils/expedition', tailles: ['pc'], plein: true, donnees: () => donnees() },
