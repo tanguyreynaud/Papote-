@@ -61,9 +61,10 @@ ${lignes.map(([k, v], i) => `<tr><td style="padding:${i === 0 ? 14 : 8}px 16px $
 <div style="font-size:17px;line-height:1.45;font-weight:bold;color:${C.texte};word-break:break-word">${insecables(v)}</div></td></tr>`).join('\n')}
 </table>`;
   }
+  // Numéro d'étape : une cellule de 32 × 32 (Outlook ignore la taille d'un <div> ; le rond devient un carré, lisible).
   if (b.etapes) {
     return `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 18px;border-collapse:separate">
-${b.etapes.map((e, i) => `<tr><td valign="top" width="32" style="width:32px;padding:0 12px 12px 0"><div style="width:32px;height:32px;border-radius:50%;background:${C.indigo};color:#ffffff;font-family:${POLICE_TITRE};font-size:16px;font-weight:bold;line-height:32px;text-align:center">${i + 1}</div></td>
+${b.etapes.map((e, i) => `<tr><td valign="top" width="32" style="width:32px;padding:0 12px 12px 0"><table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:separate"><tr><td width="32" height="32" align="center" valign="middle" style="width:32px;height:32px;border-radius:50%;background:${C.indigo};color:#ffffff;font-family:${POLICE_TITRE};font-size:16px;font-weight:bold;line-height:32px;text-align:center;mso-line-height-rule:exactly">${i + 1}</td></tr></table></td>
 <td valign="top" style="padding:4px 0 12px;font-family:${POLICE};font-size:17px;line-height:1.5;color:${C.texte}">${insecables(e)}</td></tr>`).join('\n')}
 </table>`;
   }
