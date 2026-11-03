@@ -443,6 +443,8 @@ label.interrupteur, .fiche label.interrupteur { display: inline-flex; flex-direc
 /* Libellés en gras, réponses normales (fiches commande, tablette, client, famille). */
 .fiche dt, .family dt { color: var(--text); font-weight: 700; }
 .fiche dd, .family dd { color: var(--text); font-weight: 400; }
+/* Lien-bouton dans une fiche (la tablette d'une commande) : aligné à gauche comme le reste quand il passe à la ligne. */
+.fiche dd button.link { text-align: left; }
 /* Bloc entièrement cliquable : le nom n'est jamais souligné. */
 .liste-liens a, .liste-liens a:hover, .liste-liens li:hover a, tr[tabindex] a, tr[tabindex] a:hover { text-decoration: none !important; }
 /* En-tête d'une fiche : bouton principal visible, puis le ⋮. */
