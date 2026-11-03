@@ -5,7 +5,13 @@
 // Les valeurs Firestore qui n'existent pas en JSON sont encodées : { "@type": "timestamp", "ms", "ns" },
 // { "@type": "geo", "lat", "lon" }, { "@type": "ref", "chemin" }, { "@type": "bytes", "base64" }. Les cartes qui
 // auraient elles-mêmes une clé « @type » sont protégées ({ "@type": "map", "valeurs" }).
-const { Timestamp, GeoPoint, DocumentReference } = require('firebase-admin/firestore');
+// firebase-admin : celui d'outils/admin (npm install sur le PC), sinon celui de functions/ (tests et exercices du dépôt).
+function charger(nom) {
+  try { return require(nom); } catch (e) {
+    return require(require.resolve(nom, { paths: [require('path').join(__dirname, '..', '..', 'functions')] }));
+  }
+}
+const { Timestamp, GeoPoint, DocumentReference } = charger('firebase-admin/firestore');
 
 const VERSION = 1;
 
@@ -109,13 +115,24 @@ async function restaurer({ db, auth = null, sauvegarde, effacer = false, progres
       await lot.commit();
     }
   }
+  // Pendant l'écriture, les déclencheurs du serveur qui préviennent des humains ou réveillent des tablettes se
+  // taisent (functions/base.js restaurationEnCours) : drapeau interne/restauration, 2 h au plus, retiré à la fin.
+  const drapeau = db.doc('interne/restauration');
+  await drapeau.set({ enCours: true, jusque: Timestamp.fromMillis(Date.now() + 2 * 3600 * 1000), le: Timestamp.now() });
   let ecrits = 0;
-  for (let i = 0; i < sauvegarde.documents.length; i += 400) {
-    const lot = db.batch();
-    for (const d of sauvegarde.documents.slice(i, i + 400)) lot.set(db.doc(d.chemin), decoder(d.donnees, db));
-    await lot.commit();
-    ecrits += Math.min(400, sauvegarde.documents.length - i);
-    progression(ecrits);
+  try {
+    const documents = sauvegarde.documents.filter((d) => d.chemin !== 'interne/restauration');
+    for (let i = 0; i < documents.length; i += 400) {
+      const lot = db.batch();
+      for (const d of documents.slice(i, i + 400)) lot.set(db.doc(d.chemin), decoder(d.donnees, db));
+      await lot.commit();
+      ecrits += Math.min(400, documents.length - i);
+      progression(ecrits);
+    }
+    // Les déclencheurs tournent encore quelques secondes après la dernière écriture.
+    await new Promise((r) => setTimeout(r, 5000));
+  } finally {
+    await drapeau.delete();
   }
   let comptes = 0;
   if (auth && sauvegarde.comptes && sauvegarde.comptes.length) {
