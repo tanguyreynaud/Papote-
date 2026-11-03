@@ -6,10 +6,10 @@
 # Gratuit (dépôt public), rien ne part en ligne. Rapports dans l'artefact « balayages ».
 name: Balayages app famille et admin
 
+# Une seule fois par changement : au push (les résultats s'affichent aussi sur la PR). Avant, push + pull_request
+# faisaient tourner tout deux fois et doublaient les e-mails d'échec (Tanguy, 3/11).
 on:
   push:
-    paths: ['web/**', '.github/workflows/balayages.yml']
-  pull_request:
     paths: ['web/**', '.github/workflows/balayages.yml']
   workflow_dispatch:
 

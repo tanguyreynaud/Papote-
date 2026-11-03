@@ -3,10 +3,10 @@
 # hors ligne. Gratuit, rien en ligne. Mode d'emploi : tests/app-famille/README.md.
 name: App famille
 
+# Une seule fois par changement : au push (les résultats s'affichent aussi sur la PR). Avant, push + pull_request
+# faisaient tourner tout deux fois et doublaient les e-mails d'échec (Tanguy, 3/11).
 on:
   push:
-    paths: ['web/**', 'firestore.rules', 'storage-eu.rules', 'tests/app-famille/**', '.github/workflows/app-famille.yml']
-  pull_request:
     paths: ['web/**', 'firestore.rules', 'storage-eu.rules', 'tests/app-famille/**', '.github/workflows/app-famille.yml']
   workflow_dispatch:
 
