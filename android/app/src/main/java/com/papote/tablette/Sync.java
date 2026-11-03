@@ -1067,6 +1067,9 @@ final class Sync {
                 if (battery != null) { fields.put("battery", battery); mask.put("battery"); }
                 JSONObject sim = simValue();
                 if (sim != null) { fields.put("sim", sim); mask.put("sim"); }
+                // Fuseau horaire de la tablette : l'admin le voit (la veille et les rappels en dépendent).
+                fields.put("fuseau", Firebase.string(java.util.TimeZone.getDefault().getID()));
+                mask.put("fuseau");
             }
             firebase.commit(new JSONArray().put(memberWrite(fid, fields, mask, field)));
             lastHeartbeat.put(field, now);
@@ -1401,6 +1404,7 @@ final class Sync {
                     .put("options", options)
                     .put("veille", new JSONObject().put("active", Veille.active(context))
                             .put("de", Veille.from(context)).put("a", Veille.to(context)))
+                    .put("perdue", prefs.getBoolean("perdue", false)) // tablette verrouillée à distance (ordre « verrouiller »)
                     .put("posts", arr);
             String json = payload.toString();
             if (json.equals(lastPostsJson)) return;
@@ -1948,6 +1952,21 @@ final class Sync {
             String canal = "test".equals(nz(Firebase.str(f, "canal"))) ? "test" : "";
             prefs.edit().putString("canal", canal).apply();
             result = canal.isEmpty() ? "Canal des versions : stable." : "Canal des versions : test (nouvelles versions en premier).";
+        } else if ("verrouiller".equals(type) || "deverrouiller".equals(type)) {
+            // Tablette perdue ou volée (inspection 5, 3/11) : écran « Cette tablette est verrouillée », plus rien ne répond,
+            // les photos et données de la famille restent intactes sur le serveur. Réversible (« deverrouiller »).
+            // Même garde-fou que la remise à zéro : l'ordre doit nommer cette tablette par son n° de série.
+            boolean verrouiller = "verrouiller".equals(type);
+            String serie = nz(Firebase.str(f, "serie"));
+            if (!serie.isEmpty() && serie.equals(serialNumber())) {
+                prefs.edit().putBoolean("perdue", verrouiller).apply();
+                result = verrouiller ? "La tablette est verrouillée : écran « tablette verrouillée », plus rien ne répond jusqu'au déverrouillage."
+                        : "La tablette est déverrouillée : Papote revient à l'écran.";
+                resend();
+            } else {
+                ok = false;
+                result = (verrouiller ? "Verrouillage" : "Déverrouillage") + " refusé : le n° de série de l'ordre ne correspond pas à cette tablette.";
+            }
         } else if ("usine".equals(type)) {
             // Remise à zéro à distance (tablette revenue ou perdue) : seulement si l'ordre nomme bien cette
             // tablette par son n° de série, pour qu'une erreur de fiche n'efface jamais la tablette de Mamie.

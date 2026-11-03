@@ -30,6 +30,7 @@ Outils `node` : depuis le dossier du projet, `node <chemin>`.
 | --- | --- | --- |
 | Installer une tablette | Installe Papote, le mode kiosque et les réglages ; note la tablette dans le stock | `.\installation\installer-tablette.bat` |
 | Diagnostic | Vérifie une tablette branchée et dit ce qui ne va pas | `.\installation\diagnostic.bat` |
+| Relevé mémoire | Tenue sur plusieurs jours sans redémarrage : mémoire de Papote, plantages, comparaison avec le 1er relevé (lecture seule) ; jour 0 puis jour 3 | `.\installation\releve-memoire.bat` |
 | Retirer Papote | Enlève Papote et le mode kiosque, réactive les applis (sans tout effacer) | `.\installation\retirer-papote.bat` |
 | Remettre à l'état usine | Efface tout pour rendre la tablette au fournisseur (n° de série à retaper) | `.\installation\remettre-a-zero.bat` |
 | Publier une mise à jour tablette | Compile et publie : les tablettes l'installent seules (`-Test` : tablettes de test d'abord) | `.\installation\publier-mise-a-jour.ps1` |

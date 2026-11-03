@@ -174,9 +174,11 @@
   // Abonnement suspendu, résilié ou absent (écrit par le serveur) : Papote est en pause.
   // Champ absent ou tablette hors ligne : rien ne change.
   var pauseScreen = null;
+  var pausedStatut = false;
   function setPaused(statut) {
-    var paused = statut === 'suspendu' || statut === 'resilie' || statut === 'aucun';
-    window.papotePaused = paused; // lu par appels.js pour ne pas sonner
+    pausedStatut = statut === 'suspendu' || statut === 'resilie' || statut === 'aucun';
+    var paused = pausedStatut || perdue;
+    window.papotePaused = paused; // lu par appels.js pour ne pas sonner (abonnement en pause, ou tablette verrouillée)
     if (!pauseScreen) {
       if (!paused) return;
       pauseScreen = document.createElement('div');
@@ -192,6 +194,26 @@
       if (overlayPost) { overlayPost = null; show($('overlay'), false); }
       showView('view-home');
     }
+  }
+
+  // Tablette perdue ou volée : verrouillée à distance depuis le tableau de bord (ordre « verrouiller », Sync.java).
+  // Un écran couvre tout, aucun toucher ne passe, pas d'appel ; les photos et données restent sur le serveur.
+  // Réversible : l'ordre « deverrouiller » rend Papote tel quel.
+  var perdue = false;
+  var perdueScreen = null;
+  function setPerdue(etat) {
+    perdue = !!etat;
+    if (!perdueScreen) {
+      if (!perdue) return;
+      perdueScreen = document.createElement('div');
+      perdueScreen.className = 'pause-screen perdue-screen';
+      perdueScreen.innerHTML = '<div class="pause-box"><p class="pause-title">Cette tablette est verrouillée</p>' +
+        '<p class="pause-text">Elle appartient à une famille.<br>Merci de nous écrire : contact@mapapote.fr</p></div>';
+      on(perdueScreen, 'click', function (e) { e.stopPropagation(); });
+      document.body.appendChild(perdueScreen);
+    }
+    perdueScreen.style.display = perdue ? 'flex' : 'none';
+    setPaused(pausedStatut ? 'suspendu' : 'actif'); // ferme ce qui est ouvert et coupe les appels tant qu'elle est verrouillée
   }
 
   // Taille du texte choisie par la famille (normale, grande, très grande).
@@ -1088,6 +1110,7 @@
     familyCode = payload.familyCode || '';
     familyName = payload.familyName || familyName;
     setTextSize(payload.textSize);
+    if (('perdue' in payload) && !!payload.perdue !== perdue) setPerdue(payload.perdue);
     setPaused(payload.subscription);
     setOptions(payload.options);
     setVeille(payload.veille);

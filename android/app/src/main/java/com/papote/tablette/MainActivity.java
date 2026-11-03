@@ -1234,6 +1234,18 @@ public class MainActivity extends Activity implements Sync.Listener {
             hideOtherLaunchers(dpm, admin);
             dpm.setKeyguardDisabled(admin, true);
             dpm.setStatusBarDisabled(admin, true);
+            // Fuseau horaire : toujours Europe/Paris (Papote n'est vendu qu'en France). Sinon la veille de
+            // 21 h à 6 h 30, les rappels et l'horloge suivent le fuseau deviné par Android, parfois faux sans
+            // carte SIM (inspection 5, 3/11). L'heure elle-même reste automatique (réseau).
+            try {
+                if (android.os.Build.VERSION.SDK_INT >= 30) dpm.setAutoTimeZoneEnabled(admin, false);
+                if (!"Europe/Paris".equals(java.util.TimeZone.getDefault().getID())) {
+                    boolean ok = dpm.setTimeZone(admin, "Europe/Paris");
+                    Log.i(TAG, "Fuseau horaire mis à Europe/Paris : " + ok);
+                }
+            } catch (Throwable e) {
+                Log.w(TAG, "Fuseau horaire", e);
+            }
             // Luminosité automatique en journée, si la tablette a un capteur de lumière.
             android.hardware.SensorManager sm = (android.hardware.SensorManager) getSystemService(SENSOR_SERVICE);
             if (sm != null && sm.getDefaultSensor(android.hardware.Sensor.TYPE_LIGHT) != null) {

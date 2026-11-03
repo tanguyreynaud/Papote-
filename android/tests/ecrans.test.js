@@ -174,6 +174,33 @@ test('abonnement en pause : écran « Papote est en pause », aucun envoi affich
   } finally { await b.fermer(); }
 });
 
+test('tablette verrouillée à distance (perdue) : écran « verrouillée », aucun toucher ne passe, pas d\'appel ; déverrouillage', async () => {
+  const b = await ouvrir();
+  try {
+    await b.android('onPosts', lot([envoi()], { perdue: true }));
+    await b.avancer(1000);
+    assert.ok(await b.visible('.perdue-screen'));
+    assert.match(await b.texte('.perdue-screen'), /Cette tablette est verrouillée[\s\S]*contact@mapapote.fr/);
+    assert.ok(!(await b.visible('#overlay')), 'aucun envoi affiché');
+    assert.strictEqual(await b.page.evaluate(() => window.papotePaused), true, 'les appels ne sonnent pas');
+    // Le toucher atterrit sur l'écran de verrouillage, jamais sur ce qu'il y a dessous.
+    const dessous = await b.page.evaluate(() => document.elementFromPoint(640, 400).closest('.perdue-screen') !== null);
+    assert.ok(dessous, 'tout l\'écran est couvert');
+    // Un vrai doigt sur le bouton SOS (sous l'écran de verrouillage) : rien ne part.
+    const sos = await b.page.locator('#sos-btn').boundingBox();
+    await b.page.mouse.click(sos.x + sos.width / 2, sos.y + sos.height / 2);
+    await b.avancer(6000);
+    assert.ok(!(await b.visible('.call-out')), 'le SOS ne part pas');
+    // Déverrouillage : tout revient.
+    await b.android('onPosts', lot([envoi({ id: 'apres' })], { perdue: false }));
+    await b.avancer(1000);
+    assert.ok(!(await b.visible('.perdue-screen')));
+    assert.strictEqual(await b.page.evaluate(() => window.papotePaused), false);
+    assert.ok(await b.visible('#overlay'));
+    await sansErreur(b);
+  } finally { await b.fermer(); }
+});
+
 test('SOS : décompte de 5 s, deux essais, puis « La famille est prévenue »', async () => {
   const b = await ouvrir();
   try {
