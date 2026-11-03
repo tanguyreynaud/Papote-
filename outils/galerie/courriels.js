@@ -159,7 +159,7 @@ function relire() {
     for (const m of horsMedia.matchAll(/([^{}]+)\{/g)) if (/[.#]/.test(m[1])) avert.push(`règle « ${m[1].trim()} » seulement dans <style> : perdue dans Gmail sans styles`);
   }
   for (const a of document.querySelectorAll('a[href]')) if (!/color/.test(sty(a))) avert.push(`lien « ${a.textContent.trim().slice(0, 25)} » sans couleur en ligne : bleu par défaut dans Gmail sans styles`);
-  if (/'(Atkinson|Bricolage)/.test(source) && !/<!--\[if mso\]>\s*<style/i.test(source)) {
+  if (/'(Atkinson|Bricolage)/.test(source) && !/<!--\[if mso\]>(?:(?!<!\[endif\]-->)[\s\S])*<style[^>]*>[^<]*font-family/i.test(source)) {
     avert.push('police de la marque en premier sans repli pour Outlook ([if mso] <style> font-family:Arial) : risque de Times New Roman');
   }
   if (!/PixelsPerInch/.test(source)) avert.push('pas de PixelsPerInch 96 pour Outlook : largeurs agrandies sur les écrans à 120 dpi');
