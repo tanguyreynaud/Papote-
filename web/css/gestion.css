@@ -470,6 +470,8 @@ label.interrupteur, .fiche label.interrupteur { display: inline-flex; flex-direc
      le ⋮ seul reste sur la ligne du titre (avant : « Commande EJ4N-DVBA » une lettre par ligne, 3/11). */
   .tete-fiche { flex-wrap: wrap; }
   .tete-fiche h2 { flex: 1 1 10em; min-width: min(10em, 100%); overflow-wrap: break-word; }
+  /* Un badge long (« Paiement en attente (SEPA), ne pas envoyer ») passe à la ligne au lieu d'élargir la page (iPhone SE, 3/11). */
+  .badge { white-space: normal; max-width: 100%; box-sizing: border-box; }
   /* Chiffres en petites tuiles : le nom de l'opérateur (« Lycamobile ») tient sur une ligne. */
   .stats.compact .stat span { font-size: clamp(18px, 5vw, 26px); }
   .bouton-message { align-items: flex-start; }
