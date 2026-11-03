@@ -399,6 +399,11 @@ const SCENES = [
   { groupe: 'Outils', titre: 'Outils : expédition', page: '#outils/expedition', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Outils', titre: 'Outils : calculs', page: '#outils/calculs', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Outils', titre: 'Outils : maintenance', page: '#outils/maintenance', tailles: ['pc'], plein: true, donnees: () => donnees() },
+  // Guide « Que faire si… » (#aide) : les 6 cas repliés, puis tous ouverts (chaque bouton y est touché).
+  { groupe: 'Outils', titre: 'Que faire si… : les 6 cas', page: '#aide', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees() },
+  { groupe: 'Outils', titre: 'Que faire si… : un cas ouvert (tablette perdue)', page: '#aide', tailles: ['tel'], plein: true, donnees: () => donnees(), faire: toucher('.aide-cas summary') },
+  { groupe: 'Outils', titre: 'Que faire si… : toutes les étapes', page: '#aide', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees(),
+    faire: async (p) => { await p.evaluate(() => document.querySelectorAll('.aide-cas').forEach((d) => { d.open = true; })); await pause(p, 300); } },
 ];
 
 // Ouvre l'écran d'une scène dans un nouveau navigateur (fausses données, faux Firebase, internet coupé).
