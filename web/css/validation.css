@@ -29,7 +29,7 @@
 .v-capture.v-ordinateur { flex: 2; }
 
 .v-bloc-choix { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
-.v-choix-ligne { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.v-choix-ligne { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .v-choix { min-height: 44px; padding: 8px 12px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--surface); color: var(--text); font: inherit; font-weight: 700; cursor: pointer; justify-content: center; }
 .v-oui[aria-pressed="true"] { background: var(--ok); border-color: var(--ok); color: #fff; }
 .v-non[aria-pressed="true"] { background: var(--danger); border-color: var(--danger); color: #fff; }
@@ -82,6 +82,8 @@ body.v-zoom-ouvert { overflow: hidden; }
 .v-pistes li { margin: 2px 0; }
 
 @media (max-width: 640px) {
+  /* Petit téléphone : un montant long (« 12 € / mois · 60 € par client ») passe à la ligne (3/11). */
+  .v-montant { white-space: normal; }
   .v-ligne { flex-wrap: wrap; }
   .v-ligne .v-barre { flex-basis: 100%; }
   .v-etape { padding-left: 16px; padding-top: 44px; }

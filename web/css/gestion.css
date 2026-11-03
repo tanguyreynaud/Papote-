@@ -205,8 +205,8 @@ body.depot-actif::after {
 
 /* ---------- Graphiques ---------- */
 
-.graphiques { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
-.graphiques figure { margin: 0; }
+.graphiques { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 16px; }
+.graphiques figure { margin: 0; min-width: 0; }
 .graphiques figcaption { font-size: 14px; color: var(--muted); margin-bottom: 6px; }
 .graphique { width: 100%; height: auto; display: block; }
 .graphique .g-grille { stroke: var(--line); stroke-width: 1; }
@@ -472,6 +472,8 @@ label.interrupteur, .fiche label.interrupteur { display: inline-flex; flex-direc
   .tete-fiche h2 { flex: 1 1 10em; min-width: min(10em, 100%); overflow-wrap: break-word; }
   /* Un badge long (« Paiement en attente (SEPA), ne pas envoyer ») passe à la ligne au lieu d'élargir la page (iPhone SE, 3/11). */
   .badge { white-space: normal; max-width: 100%; box-sizing: border-box; }
+  /* Un bouton long (« Tout exporter pour le comptable ») passe à la ligne au lieu de sortir de l'écran. */
+  .actions > button { white-space: normal; max-width: 100%; }
   /* Chiffres en petites tuiles : le nom de l'opérateur (« Lycamobile ») tient sur une ligne. */
   .stats.compact .stat span { font-size: clamp(18px, 5vw, 26px); }
   .bouton-message { align-items: flex-start; }
