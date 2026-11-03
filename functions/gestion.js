@@ -35,6 +35,7 @@ const sendcloud = require('./sendcloud');
 
 const STRIPE_SECRET = defineSecret('STRIPE_SECRET');
 const regles = require('./abonnement');
+const statuts = require('./statuts');
 // Même clé que le chat de support (outils/support/installer-support.bat), jamais dans le dépôt.
 const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
 // Sonnet : recopier montant, date et vendeur d'une facture est simple, et chaque fiche reste « à vérifier ».
@@ -251,7 +252,7 @@ const STATUTS_SIM = {
 };
 // Avec quels envois part un accessoire (clé 4G, prise…) : sorti du stock à chaque tablette envoyée.
 // « option » : envoyé à la demande (enceinte), jamais sorti du stock automatiquement ni compté dans la rentabilité.
-const ENVOIS_ACCESSOIRE = { '': 'Aucun envoi', tous: 'Chaque envoi', sim: 'Envois Internet inclus', wifi: 'Envois Wi-Fi', option: 'En option (à la demande)' };
+const ENVOIS_ACCESSOIRE = { '': 'Aucun envoi', tous: 'Chaque envoi', sim: 'Envois Tout compris', wifi: 'Envois Wi-Fi', option: 'En option (à la demande)' };
 
 // Prix payé ce mois-ci pour une ligne (centimes) : le prix après la promo quand elle est finie.
 function coutLigne(l, maintenant) {
@@ -364,7 +365,7 @@ function incoherences({ commandes, stock, sims }) {
   const sansTablette = sims.filter((l) => l.statut === 'active' && !l.tablette).length;
   const pluriel = (n, un, plusieurs) => `${n} ${n > 1 ? plusieurs : un}`;
   return [
-    sansSim ? `${pluriel(sansSim, 'client Internet inclus', 'clients Internet inclus')} sans carte SIM notée sur sa tablette` : null,
+    sansSim ? `${pluriel(sansSim, 'client Tout compris', 'clients Tout compris')} sans carte SIM notée sur sa tablette` : null,
     sansTablette ? `${pluriel(sansTablette, 'ligne SIM active reliée', 'lignes SIM actives reliées')} à aucune tablette` : null,
   ].filter(Boolean);
 }
@@ -660,6 +661,9 @@ function ms(valeur) {
   return null;
 }
 
+// L'abonnement de la famille est celui de cette commande.
+const estCourante = (famille, id) => Boolean(famille && famille.abonnement && famille.abonnement.stripeSubscriptionId === id);
+
 // Timestamps Firestore → millisecondes, pour les renvoyer à la page.
 function aplatir(valeur) {
   if (valeur == null || typeof valeur !== 'object') return valeur;
@@ -679,7 +683,7 @@ exports.gestionDonnees = onCall(async (request) => {
   // Tout est lu en même temps : « à vendre » et les batteries (qui attendent seulement le stock) ne font plus
   // deux allers-retours de plus vers la base après les autres lectures.
   const lectureStock = db().collection('stock').get();
-  const [commandes, stock, depenses, familles, automatique, reglages, courrier, archives, sims, accessoires, aVendre, batteries, alertes] = await Promise.all([
+  const [commandes, stock, depenses, familles, automatique, reglages, courrier, archives, sims, accessoires, aVendre, batteries, alertes, gardes] = await Promise.all([
     db().collection('commandes').get(),
     lectureStock,
     db().collection('depenses').get(),
@@ -697,6 +701,7 @@ exports.gestionDonnees = onCall(async (request) => {
     // Alertes envoyées aux proches (journal-alertes.js) : 90 derniers jours, les plus récentes d'abord.
     db().collection('alertes').where('le', '>', new Date(Date.now() - ALERTES_JOURS * 86400000)).orderBy('le', 'desc').limit(2000).get()
       .catch((e) => { logger.warn('Alertes', e.message); return { docs: [] }; }),
+    lectureStock.then((s) => lireGardeFous(s.docs)).catch((e) => { logger.warn('Garde-fous', e.message); return new Map(); }),
   ]);
   const parFid = new Map(familles.docs.map((f) => [f.id, f.data()]));
   // Compte de la tablette -> sa fiche de stock (T-…), pour compter les alertes sur la page de la tablette.
@@ -723,9 +728,12 @@ exports.gestionDonnees = onCall(async (request) => {
         creeLe: c.creeLe || null,
         fid: c.fid || null,
         famille: famille ? famille.name || null : null,
-        abonnement: famille && famille.abonnement ? famille.abonnement.statut || null : (c.statutStripe || null),
-        resiliationLe: famille && famille.abonnement ? famille.abonnement.resiliationLe || null : null,
-        restitution: c.restitution ? { statut: c.restitution.statut || null, avant: c.restitution.avant || null } : null,
+        // Commande dont l'abonnement est celui de la famille : l'état de la famille ; une autre (2e commande pour la
+        // même famille) : son propre état chez Stripe et son propre arrêt prévu.
+        abonnement: estCourante(famille, d.id) ? famille.abonnement.statut || null : (c.statutStripe || (famille && famille.abonnement ? famille.abonnement.statut || null : null)),
+        resiliationLe: estCourante(famille, d.id) ? famille.abonnement.resiliationLe || null : c.resiliationLe || null,
+        restitution: c.restitution ? { statut: c.restitution.statut || null, avant: c.restitution.avant || null, mainPropreLe: c.restitution.mainPropreLe || null,
+          anticipe: c.restitution.anticipe === true } : null,
         remboursement: c.remboursement || null,
         restitutionErreur: c.restitution && c.restitution.erreur ? c.restitution.erreur : null,
         retractation: c.retractation || null,
@@ -745,7 +753,7 @@ exports.gestionDonnees = onCall(async (request) => {
     }),
     stock: stock.docs.map((d) => {
       const batterie = batteries.get(d.id) || d.get('batterie') || null;
-      return aplatir({ id: d.id, ...d.data(), batterie, usure: usureBatterie(batterie, debutTablette(d.data())) });
+      return aplatir({ id: d.id, ...d.data(), batterie, usure: usureBatterie(batterie, debutTablette(d.data())), gardeFous: gardes.get(d.id) || [] });
     }),
     depenses: depenses.docs.map((d) => aplatir({ id: d.id, ...d.data() })),
     familles: familles.docs.map((f) => aplatir(familleResume(f))),
@@ -770,6 +778,7 @@ exports.gestionDonnees = onCall(async (request) => {
       });
     }),
     genresAlerte: require('./journal-alertes').GENRES,
+    genresGardeFou: GARDE_FOUS,
     alertesJours: ALERTES_JOURS,
   };
 });
@@ -999,8 +1008,12 @@ exports.gestionStock = onCall(async (request) => {
     if ('depense' in champs) maj.depense = await depenseExistante(champs.depense);
     if ('commande' in champs) {
       const commande = texte(champs.commande, 100);
-      if (commande && !(await db().doc(`commandes/${commande}`).get()).exists) {
-        throw new HttpsError('not-found', 'Commande introuvable.');
+      const cmd = commande ? await db().doc(`commandes/${commande}`).get() : null;
+      if (commande && !cmd.exists) throw new HttpsError('not-found', 'Commande introuvable.');
+      // Nouveau lien seulement : une tablette déjà à cette commande garde son lien (retour, réparation…).
+      if (commande && commande !== snap.get('commande')) {
+        const refus = statuts.refusLienCommande(snap.data(), 'etat' in champs ? champs.etat : snap.get('etat'), cmd.data());
+        if (refus) throw new HttpsError('failed-precondition', refus);
       }
       maj.commande = commande;
       // Tablette jumelée avant d'être rattachée à sa commande : l'alerte n'a plus lieu d'être.
@@ -1014,8 +1027,13 @@ exports.gestionStock = onCall(async (request) => {
       }
       if (champs.etat !== snap.get('etat')) {
         maj.etat = champs.etat;
-        // Perdue (volée) ou hors service : plus d'accès aux photos de la famille.
-        if (ETATS_BLOQUES.includes(champs.etat) && await retirerDeLaFamille(snap.data(), snap.ref)) maj.fid = null;
+        // Perdue (volée), hors service, ou de retour chez Papote (revenue, en stock, à réparer) : plus dans la famille,
+        // plus d'accès à ses photos ; la fiche oublie la famille et les comptes de la tablette, pour que ses ordres,
+        // ses relevés et son prochain jumelage ne visent jamais l'ancienne famille (inspection du 30/10).
+        if (ETATS_RETIREES.includes(champs.etat) && snap.get('fid')) {
+          await retirerDeLaFamille(snap.data(), snap.ref);
+          Object.assign(maj, { fid: null, tabletUid: null, callsUid: null, jumeleeLe: FieldValue.delete() });
+        }
         // Remise en stock : la tablette n'appartient plus à la commande (l'historique la garde).
         // (Sauf à la réception d'une tablette commandée : elle reste réservée à sa commande.)
         if (champs.etat === 'en-stock' && !('commande' in champs) && snap.get('etat') !== 'commandee') maj.commande = null;
@@ -1276,6 +1294,8 @@ exports.gestionSim = onCall(async (request) => {
     if (!snap.exists) throw new HttpsError('not-found', 'Ligne introuvable.');
     if (snap.get('tablette')) {
       const fiche = await db().doc(`stock/${snap.get('tablette')}`).get();
+      const refus = statuts.refusSuppressionSim(snap.data(), fiche.data());
+      if (refus) throw new HttpsError('failed-precondition', refus);
       await fiche.ref.update(SANS_SIM).catch(() => null);
       await numeroSurLaFamille(fiche.data(), null);
     }
@@ -1289,6 +1309,8 @@ exports.gestionSim = onCall(async (request) => {
     const snap = await ref.get();
     if (!snap.exists) throw new HttpsError('not-found', 'Ligne introuvable.');
     const l = snap.data();
+    const refus = statuts.refusRecharge(l);
+    if (refus) throw new HttpsError('failed-precondition', refus);
     const montant = d.montant != null ? centimes(d.montant) : coutLigne(l, Date.now());
     if (!montant) throw new HttpsError('invalid-argument', 'Montant de la recharge manquant : notez le prix du forfait sur la carte.');
     const date = ms(d.date) || Date.now();
@@ -1301,6 +1323,11 @@ exports.gestionSim = onCall(async (request) => {
   }
 
   if (d.action !== 'ajouter' && d.action !== 'modifier') throw new HttpsError('invalid-argument', 'Action inconnue.');
+  if (d.action === 'modifier' && d.champs && 'statut' in d.champs) {
+    const avant = await db().doc(`sims/${d.id || '-'}`).get();
+    const refus = avant.exists ? statuts.refusStatutSim(avant.get('statut'), d.champs.statut) : '';
+    if (refus) throw new HttpsError('failed-precondition', refus);
+  }
   return { ok: true, id: await enregistrerSim(d.action === 'ajouter' ? null : d.id || '-', d.champs || {}, qui) };
 });
 
@@ -1623,6 +1650,15 @@ exports.gestionCommande = onCall({ secrets: [STRIPE_SECRET] }, async (request) =
   if (typeof commande !== 'string' || !commande) throw new HttpsError('invalid-argument', 'Commande manquante.');
   const snap = await db().doc(`commandes/${commande}`).get();
   if (!snap.exists) throw new HttpsError('not-found', 'Commande introuvable.');
+  // { action: 'retourEnMain', main } : Papote récupère lui-même la tablette (ou revient à Mondial Relay).
+  // Seulement dans l'admin : la main propre n'est jamais proposée à la famille (Tanguy, 31/10).
+  if (request.data.action === 'retourEnMain') {
+    const r = snap.get('restitution');
+    if (!r || !['attendue', 'echec'].includes(r.statut)) throw new HttpsError('failed-precondition', 'Aucune tablette attendue en retour pour cette commande.');
+    const main = request.data.main === true;
+    await snap.ref.update({ 'restitution.mainPropreLe': main ? FieldValue.serverTimestamp() : FieldValue.delete() });
+    return { ok: true, main };
+  }
   // Commande offerte : ni facture ni paiement.
   if (snap.get('offerte')) return { factures: [], paiements: [] };
   const client = snap.get('stripeCustomerId');
@@ -2135,10 +2171,18 @@ async function creerEtiquette(commande, sens, qui, { sansImpression = false } = 
   const [snap, reglagesSnap] = await Promise.all([ref.get(), db().doc('gestion/reglages').get()]);
   if (!snap.exists) throw new HttpsError('not-found', 'Commande introuvable.');
   const c = snap.data();
+  // Retour pour un remplacement : l'ancienne tablette de cette commande est notée « en retour ».
+  const remplacee = sens === 'retour' && !(await db().collection('stock').where('remplaceePour', '==', commande)
+    .where('etat', '==', 'en-retour').limit(1).get()).empty;
+  const refus = statuts.refusEtiquette(c, sens, { remplacee });
+  if (refus) throw new HttpsError('failed-precondition', refus);
+  // Une étiquette payée existe déjà (double clic, vieil onglet) : pas une deuxième. Annuler l'ancienne pour refaire.
+  const doublon = statuts.refusEtiquetteEnDouble(c, sens, Date.now());
+  if (doublon) throw new HttpsError('already-exists', doublon);
   const reglages = lireReglages(reglagesSnap.data());
   const papote = sendcloud.adressePapote(reglages.expediteur);
   if (!papote) throw new HttpsError('failed-precondition', "Renseignez l'adresse d'expédition de Papote (Réglages, Étiquettes Sendcloud).");
-  const cl = sendcloud.adresseClient(c);
+  const cl = sens === 'retour' ? sendcloud.adresseRetour(c) : sendcloud.adresseClient(c);
   if (!cl) throw new HttpsError('failed-precondition', "Cette commande n'a pas d'adresse ni de point relais utilisable.");
   const poids = Math.max(0.1, (reglages.poidsColis || 1500) / 1000);
   const reference = c.code ? String(c.code) : commande.slice(-12);
@@ -2247,10 +2291,13 @@ exports.gestionRenvoyerCode = onCall({ secrets: [MAIL_MOT_DE_PASSE] }, async (re
 
 // Abonnement Stripe arrêté (s'il tourne encore) et chaque facture payée remboursée de ce qui reste à rendre.
 // Rejouable : une facture déjà remboursée (ici ou à la main dans Stripe) est sautée.
-async function arreterEtRembourser(id) {
+async function arreterEtRembourser(id, motif = 'admin') {
   const abo = await stripe().subscriptions.retrieve(id).catch(() => null);
   // Un abonnement fini (annulé, ou jamais payé : incomplete_expired) ne s'annule plus.
   if (abo && !['canceled', 'incomplete_expired'].includes(abo.status)) {
+    // Marque posée chez Stripe avant l'arrêt : le message « abonnement supprimé » la porte, et le dernier mois
+    // n'est pas prélevé (index.js, prelevementDernierMois), même s'il arrive avant l'écriture « annulée » ici.
+    await stripe().subscriptions.update(id, { metadata: { ...(abo.metadata || {}), annulation: motif } });
     await stripe().subscriptions.cancel(id, { prorate: false, invoice_now: false });
   }
   let rembourse = 0;
@@ -2281,25 +2328,34 @@ exports.gestionAnnulerCommande = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_P
   const colisRevenu = (request.data || {}).colisRevenu === true;
   if (!id) throw new HttpsError('invalid-argument', 'Commande manquante.');
   const ref = db().doc(`commandes/${id}`);
-  const snap = await ref.get();
-  if (!snap.exists) throw new HttpsError('not-found', 'Commande introuvable.');
-  const c = snap.data();
-  if (colisRevenu) {
-    if (c.expedition !== 'envoyee' || c.fid) {
-      throw new HttpsError('failed-precondition', c.fid ? 'Cette tablette est reliée à une famille : arrêtez plutôt l\'abonnement.'
-        : 'Seule une commande envoyée (colis revenu sans avoir été retiré) peut être annulée ainsi.');
+  // Un seul onglet à la fois : la commande est réservée dans une transaction avant d'aller chez Stripe (deux clics ou
+  // deux onglets en même temps = un seul arrêt, un seul remboursement, un seul e-mail).
+  const c = await db().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new HttpsError('not-found', 'Commande introuvable.');
+    const c = snap.data();
+    if (c.annulationEnCours && Date.now() - c.annulationEnCours < 5 * 60 * 1000) {
+      throw new HttpsError('already-exists', 'Annulation déjà en cours (autre onglet) : rechargez la page.');
     }
-  } else if (!['a-preparer', 'paiement-en-attente'].includes(c.expedition)) {
-    throw new HttpsError('failed-precondition', c.expedition === 'annulee' ? 'Cette commande est déjà annulée.'
-      : 'La tablette est déjà partie : arrêtez plutôt l\'abonnement, le client renverra la tablette.');
-  }
+    if (colisRevenu) {
+      if (c.expedition !== 'envoyee' || c.fid) {
+        throw new HttpsError('failed-precondition', c.fid ? 'Cette tablette est reliée à une famille : arrêtez plutôt l\'abonnement.'
+          : 'Seule une commande envoyée (colis revenu sans avoir été retiré) peut être annulée ainsi.');
+      }
+    } else if (!['a-preparer', 'paiement-en-attente'].includes(c.expedition)) {
+      throw new HttpsError('failed-precondition', c.expedition === 'annulee' ? 'Cette commande est déjà annulée.'
+        : 'La tablette est déjà partie : arrêtez plutôt l\'abonnement, le client renverra la tablette.');
+    }
+    tx.update(ref, { annulationEnCours: Date.now() });
+    return c;
+  });
   let rembourse = 0;
   // Abonnement inconnu de Stripe (commande de test, abonnement effacé) : rien à arrêter ni à rembourser,
   // la commande s'annule quand même, sans e-mail au client.
   let stripeIntrouvable = false;
   if (!c.offerte && id.startsWith('sub_')) {
     try {
-      rembourse = await arreterEtRembourser(id);
+      rembourse = await arreterEtRembourser(id, colisRevenu ? 'colis-revenu' : 'admin');
     } catch (e) {
       if (e.code === 'resource_missing' || /No such subscription/i.test(e.message || '')) {
         stripeIntrouvable = true;
@@ -2307,12 +2363,14 @@ exports.gestionAnnulerCommande = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_P
       } else {
       // Erreur Stripe : un message lisible plutôt que « le serveur ne répond pas » ; rien n'est encore noté annulé.
       logger.error(`Commande ${id} : annulation Stripe impossible`, e.message);
+      await ref.update({ annulationEnCours: FieldValue.delete() }).catch(() => null);
       throw new HttpsError('aborted', `Stripe a refusé l'annulation : ${e.message}`);
       }
     }
   }
   const qui = request.auth.token.email || request.auth.uid;
   await ref.update({
+    annulationEnCours: FieldValue.delete(),
     expedition: 'annulee', annulation: colisRevenu ? 'colis-revenu' : 'admin', annuleeLe: FieldValue.serverTimestamp(), annuleePar: qui,
     ...(rembourse ? { remboursement: { statut: 'fait', montant: rembourse, le: FieldValue.serverTimestamp() } } : {}),
   });
@@ -2348,6 +2406,8 @@ exports.brancher = (f) => Object.assign(vitrine, f);
 
 // Tablette perdue ou hors service : retirée de sa famille, jamais plus jumelée.
 const ETATS_BLOQUES = ['perdue', 'hors-service'];
+// États où la tablette n'est plus chez un client : retirée de sa famille (gestionStock, changement d'état).
+const ETATS_RETIREES = [...ETATS_BLOQUES, 'revenue', 'en-stock', 'a-reparer'];
 
 // Que faire quand une tablette du stock est jumelée à une famille (pure, testée).
 // t : fiche stock ; commande : sa commande (ou null) ; fid : famille qui vient de la jumeler.
@@ -2457,6 +2517,46 @@ async function lireBatteries(fiches) {
   const membres = await db().getAll(...jumelees.map((d) => db().doc(`families/${d.get('fid')}/members/${d.get('tabletUid')}`)));
   return new Map(jumelees.map((d, i) => [d.id, membres[i].exists ? releveBatterie(membres[i].data()) : null])
     .filter(([, b]) => b && (b.le || b.niveau != null)));
+}
+
+// Garde-fous de la tablette (Gardien.java, tablette.js) : chaque geste est une ligne « GARDE-FOU : … » de son
+// journal (families/{fid}/logs/{uid}, ses 200 dernières lignes, « jj/mm hh:mm:ss  message »). Comptés par sorte
+// sur la page de la tablette (Tanguy, 29/10). Le journal tourne : seuls les gestes encore dedans sont comptés.
+const GARDE_FOUS = {
+  ecran: 'écran bloqué', page: 'page rechargée', appli: 'appli relancée', redemarrage: 'tablette redémarrée', autre: 'autre',
+};
+function genreGardeFou(texte) {
+  if (/écran bloqué/i.test(texte)) return 'ecran';
+  if (/la tablette redémarre/i.test(texte)) return 'redemarrage';
+  if (/Papote relancée/i.test(texte)) return 'appli';
+  if (/rechargée|moteur relancé/i.test(texte)) return 'page';
+  return 'autre';
+}
+// lignes : le texte du journal ; maintenant : pour l'année (le journal n'écrit ni l'année ni le fuseau, heure de Paris).
+function gardeFous(lignes, maintenant = Date.now()) {
+  const annee = Number(new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', year: 'numeric' }).format(maintenant));
+  const res = [];
+  for (const l of String(lignes || '').split('\n')) {
+    const m = /^(\d{2})\/(\d{2}) (\d{2}):(\d{2}):(\d{2})\s+GARDE-FOU\s*:\s*(.+)$/.exec(l.trim());
+    if (!m) continue;
+    const [, j, mo, hh, mi, ss, texte] = m;
+    const date = (a) => {
+      const utc = Date.parse(`${a}-${mo}-${j}T${hh}:${mi}:${ss}Z`);
+      return utc - decalageParis(utc);
+    };
+    // Ligne de décembre lue en janvier : l'année d'avant.
+    let le = date(annee);
+    if (le > maintenant + 86400000) le = date(annee - 1);
+    if (!Number.isFinite(le)) continue;
+    res.push({ le, genre: genreGardeFou(texte), texte: texte.trim().slice(0, 200) });
+  }
+  return res.sort((a, b) => b.le - a.le);
+}
+async function lireGardeFous(fiches) {
+  const jumelees = fiches.filter((d) => d.get('fid') && d.get('tabletUid'));
+  if (!jumelees.length) return new Map();
+  const journaux = await db().getAll(...jumelees.map((d) => db().doc(`families/${d.get('fid')}/logs/${d.get('tabletUid')}`)));
+  return new Map(jumelees.map((d, i) => [d.id, journaux[i].exists ? gardeFous(journaux[i].get('lines')) : []]));
 }
 
 // Chaque nuit : dernier relevé recopié sur la fiche, pour le garder quand la tablette quitte sa famille.
@@ -2625,24 +2725,12 @@ async function recapitulatif() {
     ['À faire', liste.length ? liste : ['Rien, tout est à jour.']],
     ['Franchise de TVA', [`${eurosTexte(ca)} encaissés depuis le 1er janvier, soit ${part} % du seuil de ${eurosTexte(reglages.seuilTva)}.`]],
   ];
-  const html = `<!doctype html><html lang="fr"><body style="margin:0;background:#fdfaf5;color:#24212f;font:16px/1.6 Arial,sans-serif">
-<div style="max-width:560px;margin:0 auto;padding:28px 20px">
-<p style="margin:0 0 20px;font-weight:bold;font-size:20px;color:#4f46e5">Papote · récap de la semaine</p>
-${lignes.map(([titre, items]) => `<h2 style="font-size:18px;margin:20px 0 6px">${mail.echapper(titre)}</h2>
-<ul style="margin:0;padding-left:20px">${items.map((i) => `<li>${mail.echapper(i)}</li>`).join('')}</ul>`).join('')}
-<p style="margin:28px 0"><a href="${ESPACE_ADMIN}" style="display:inline-block;background:#4f46e5;color:#fff;text-decoration:none;font-weight:bold;padding:12px 22px;border-radius:999px">Ouvrir l'espace admin</a></p>
-</div></body></html>`;
-  const text = [...lignes.flatMap(([titre, items]) => [titre, ...items.map((i) => `- ${i}`), '']), ESPACE_ADMIN].join('\n');
   await mail.envoyer({
     smtp: MAIL_SMTP.value(),
     expediteur: MAIL_EXPEDITEUR.value(),
     motDePasse: MAIL_MOT_DE_PASSE.value(),
     a: EMAIL_PAPOTE,
-    contenu: {
-      subject: liste.length ? `Papote : ${liste.length} chose${liste.length > 1 ? 's' : ''} à faire cette semaine` : 'Papote : tout est à jour',
-      html,
-      text,
-    },
+    contenu: mail.recapSemaine({ lignes, aFaire: liste.length }),
   });
   return { ok: true, aFaire: liste.length };
 }
@@ -2775,16 +2863,6 @@ async function cloturer(maintenant, refaire) {
   if (!Object.keys(mois).length) return { ok: true, mois: [] };
   await ref.set({ mois, ...(Object.keys(annees).length ? { annees } : {}) }, { merge: true });
 
-  const html = `<!doctype html><html lang="fr"><body style="margin:0;background:#fdfaf5;color:#24212f;font:16px/1.6 Arial,sans-serif">
-<div style="max-width:560px;margin:0 auto;padding:28px 20px">
-<p style="margin:0 0 20px;font-weight:bold;font-size:20px;color:#4f46e5">Papote · livres comptables</p>
-<p>Le livre des recettes et le registre des achats sont joints (fichiers à ouvrir avec Excel) et rangés dans l'espace admin, rubrique Comptabilité. Gardez cet e-mail : ce sont les registres obligatoires de la micro-entreprise.</p>
-${resume.map(([titre, items]) => `<h2 style="font-size:18px;margin:20px 0 6px">${mail.echapper(titre)}</h2>
-<ul style="margin:0;padding-left:20px">${items.map((i) => `<li>${mail.echapper(i)}</li>`).join('')}</ul>`).join('')}
-<p style="margin:28px 0"><a href="${ESPACE_ADMIN}#compta" style="display:inline-block;background:#4f46e5;color:#fff;text-decoration:none;font-weight:bold;padding:12px 22px;border-radius:999px">Ouvrir l'espace admin</a></p>
-</div></body></html>`;
-  const text = ['Le livre des recettes et le registre des achats sont joints et rangés dans l\'espace admin.', '',
-    ...resume.flatMap(([titre, items]) => [titre, ...items.map((i) => `- ${i}`), '']), ESPACE_ADMIN].join('\n');
   const titres = resume.filter(([t]) => !t.startsWith('Année')).map(([t]) => t);
   let envoye = true;
   try {
@@ -2793,7 +2871,7 @@ ${resume.map(([titre, items]) => `<h2 style="font-size:18px;margin:20px 0 6px">$
       expediteur: MAIL_EXPEDITEUR.value(),
       motDePasse: MAIL_MOT_DE_PASSE.value(),
       a: EMAIL_PAPOTE,
-      contenu: { subject: `Papote : livres comptables de ${titres.join(', ')}`, html, text, attachments: pieces },
+      contenu: { ...mail.livresComptables({ resume, titres }), attachments: pieces },
     });
   } catch (e) {
     envoye = false;
@@ -2989,7 +3067,8 @@ const cleContact = (email) => require('node:crypto').createHash('sha256').update
 const enMs = (v) => (v == null ? null : typeof v === 'number' ? v : v.toMillis ? v.toMillis() : v._seconds ? v._seconds * 1000 : Date.parse(v) || null);
 
 // { commandes, paniers, contacts, statutFamille(fid) } → [{ email, nom, telephone, type, statut, formule, depuis, consentement, desinscrit }]
-// type : client (abonnement en cours), ancien (résilié, annulé), panier (panier abandonné sans commande).
+// type : client (abonnement en cours), ancien (résilié, annulé), panier (panier abandonné sans commande),
+// attente (« Être prévenu » du site), chat, contact.
 function fusionnerContacts({ commandes = [], paniers = [], contacts = [], statutFamille = () => null }) {
   const parEmail = new Map();
   const fiche = (email) => {
@@ -3028,7 +3107,9 @@ function fusionnerContacts({ commandes = [], paniers = [], contacts = [], statut
     // chatLe : coordonnées laissées à l'ouverture du chat du site (functions/support.js).
     if (!email || (!parEmail.has(email) && k.consentement !== true && !k.chatLe)) continue;
     const f = fiche(email);
-    if (!f.type) f.type = k.chatLe ? 'chat' : 'contact';
+    // listeAttente : inscrit sur « Être prévenu » du site, plus de tablette en stock (index.js listeAttente).
+    if (!f.type) f.type = k.listeAttente ? 'attente' : k.chatLe ? 'chat' : 'contact';
+    if (f.type === 'attente' && !f.depuis) f.depuis = enMs(k.listeAttenteLe || k.creeLe);
     f.nom = f.nom || k.nom || null;
     f.telephone = f.telephone || k.telephone || null;
     if (f.type === 'chat' && !f.depuis) f.depuis = enMs(k.chatDepuis || k.chatLe);
@@ -3054,27 +3135,9 @@ async function lireContacts() {
   });
 }
 
-// E-mail d'information : texte saisi par l'admin (paragraphes séparés par une ligne vide), {prenom} remplacé.
-function emailInformation({ objet, message, nom, lienDesinscription }) {
-  const prenom = nom ? String(nom).trim().split(/\s+/)[0] : '';
-  const texte = String(message).replace(/\{prenom\}/g, prenom).replace(/ ,/g, ',');
-  const paragraphes = texte.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
-  const html = `<!doctype html><html lang="fr"><body style="margin:0;background:#fdfaf5;color:#24212f;font:17px/1.6 Arial,sans-serif">
-<div style="max-width:560px;margin:0 auto;padding:32px 20px">
-<p style="margin:0 0 24px;font-weight:bold;font-size:20px;color:#4f46e5">Papote</p>
-${paragraphes.map((p) => `<p style="margin:0 0 16px">${mail.echapper(p).replace(/\n/g, '<br>')}</p>`).join('')}
-<p style="margin:32px 0 0;font-size:13px;color:#5f5a6b">Vous recevez cet e-mail car vous avez accepté les nouvelles de Papote.
-<a href="${mail.echapper(lienDesinscription)}" style="color:#5f5a6b">Se désinscrire</a></p>
-</div></body></html>`;
-  return {
-    subject: String(objet).trim(),
-    html,
-    text: `${paragraphes.join('\n\n')}\n\n--\nSe désinscrire : ${lienDesinscription}`,
-    headers: { 'List-Unsubscribe': `<${lienDesinscription}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' },
-  };
-}
+// E-mail d'information : texte saisi par l'admin (paragraphes séparés par une ligne vide), {prenom} remplacé (mail.js).
+const emailInformation = mail.information;
 
-// Liste des contacts et historique des envois.
 exports.gestionClients = onCall(async (request) => {
   verifierAdmin(request);
   const [contacts, campagnes] = await Promise.all([
@@ -3256,6 +3319,8 @@ exports.gestionCommandeOfferte = onCall(async (request) => {
 // est close (annulée si la tablette n'est pas partie, sinon matériel noté récupéré ou encore à récupérer).
 
 const STATUTS_A_RESILIER = ['actif', 'impaye', 'suspendu'];
+const { STRIPE_VIVANTS } = require('./abonnement');
+const codeDe = (d) => (d.get('code') ? `${d.get('code').slice(0, 4)}-${d.get('code').slice(4)}` : d.id);
 const nomCompare = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().replace(/\s+/g, ' ').toLowerCase();
 
 // Raison de refuser la suppression, ou null.
@@ -3276,6 +3341,11 @@ exports.gestionSupprimerFamille = onCall({ timeoutSeconds: 540, memory: '512MiB'
   const refus = refusSuppression(snap.data(), nom);
   if (refus) throw new HttpsError('failed-precondition', refus);
   const commandes = await db().collection('commandes').where('fid', '==', fid).get();
+  // Le statut de la famille ne suffit pas : une autre commande reliée peut encore être prélevée chez Stripe.
+  const vivante = commandes.docs.find((d) => STRIPE_VIVANTS.includes(d.get('statutStripe')));
+  if (vivante) {
+    throw new HttpsError('failed-precondition', `La commande ${codeDe(vivante)} de cette famille a encore un abonnement Stripe en cours : arrêtez-le d'abord, sinon le client continuerait à payer.`);
+  }
   // Commande offerte partie chez le proche : l'admin dit si la tablette et ses accessoires sont récupérés.
   const { offertes, parties } = offertesOuvertes(commandes.docs);
   const { recupere } = request.data || {};
@@ -3320,10 +3390,13 @@ async function closOffertes(offertes, recupere, qui) {
     }
     await d.ref.update({ abonnement: 'resilie', restitution: { statut: recupere ? 'rendue' : 'a-recuperer', le: Date.now() } });
     if (recupere) {
-      await Promise.all(tablettes.docs.filter((t) => ETATS_PARTIS.includes(t.get('etat'))).map((t) => t.ref.update({
-        etat: 'revenue', majLe: FieldValue.serverTimestamp(),
-        historique: FieldValue.arrayUnion({ le: Date.now(), etat: 'revenue', par: qui, commande: d.id }),
-      })));
+      await Promise.all(tablettes.docs.filter((t) => ETATS_PARTIS.includes(t.get('etat'))).map(async (t) => {
+        await retirerDeLaFamille(t.data(), t.ref);
+        await t.ref.update({
+          etat: 'revenue', fid: null, tabletUid: null, callsUid: null, jumeleeLe: FieldValue.delete(), majLe: FieldValue.serverTimestamp(),
+          historique: FieldValue.arrayUnion({ le: Date.now(), etat: 'revenue', par: qui, commande: d.id }),
+        });
+      }));
     }
   }
 }
@@ -3393,7 +3466,11 @@ exports.gestionParcours = onCall(async (request) => {
     const ref = db().doc(`commandes/${texte(d.commande, 100) || '-'}`);
     const snap = await ref.get();
     if (!snap.exists) throw new HttpsError('not-found', 'Commande introuvable.');
-    if (d.type === 'recu') await ref.update({ 'preparation.recuLe': Date.now(), 'preparation.recuPar': qui });
+    if (d.type === 'recu') {
+      const refus = statuts.refusReception(snap.data());
+      if (refus) throw new HttpsError('failed-precondition', refus);
+      await ref.update({ 'preparation.recuLe': Date.now(), 'preparation.recuPar': qui });
+    }
     else {
       const preparation = avancementPropre(d.preparation, ['tablette', 'sim', 'suivi', 'enceinte']);
       // Date de réception déjà notée (suivi du colis, jumelage, « Le client a reçu le colis ») : gardée, car elle
@@ -3424,5 +3501,5 @@ exports.regles = {
   ETATS, CATEGORIES, sansEssaisEffaces, natureMouvement, mensuel, centimes, lien, nomFichier, moisSuivant, lectureVersFormulaire, SCHEMA_FACTURE,
   lireReglages, transitionPermise, SUITES, simAResilier, fichesARattacher, sansFacture, stockAJour, releveBatterie, usureBatterie, incoherences, materielLu, memeAccessoire, coutLigne, alertesSim, finApresRecharge, simDeFacture, forfaitFamille, accessoiresAPrevoir, champsSim, aFaire, piecesFacture, debutMoisParis, moisPrecedent, csvTexte, livreDesRecettes,
   registreDesAchats, corpsDuMail, memeAchat, suiteJumelage, descriptionNonRendu, refusSuppression, fusionnerContacts, emailInformation, cleContact,
-  avancementPropre,
+  avancementPropre, gardeFous,
 };

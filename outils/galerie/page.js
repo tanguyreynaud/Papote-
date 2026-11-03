@@ -5,8 +5,8 @@
 const fs = require('fs');
 const path = require('path');
 
-const NOMS = { tablette: 'Tablette', famille: 'App famille', vitrine: 'Site vitrine', admin: 'Admin' };
-const LETTRES = { tablette: 'T', famille: 'F', vitrine: 'S', admin: 'A' };
+const NOMS = { tablette: 'Tablette', famille: 'App famille', vitrine: 'Site vitrine', admin: 'Admin', emails: 'E-mails' };
+const LETTRES = { tablette: 'T', famille: 'F', vitrine: 'S', admin: 'A', emails: 'E' };
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -27,7 +27,7 @@ function html(parties, dossierImages, { fichiers = false } = {}) {
     const L = LETTRES[partie.nom];
     sommaire += `<a class="chip" href="#${partie.nom}">${NOMS[partie.nom]} <span>${scenes.length}</span></a>`;
     corps += `<section class="partie" id="${partie.nom}" data-partie="${partie.nom}">
-<h2>${NOMS[partie.nom]}</h2><p class="source">Source : ${esc(partie.version)}</p>`;
+<h2>${NOMS[partie.nom]}</h2><p class="source">Source : ${esc(partie.version)}</p>${partie.nom === 'emails' ? '<p class="note">Chaque e-mail tel qu\'il arrive dans la boîte de réception (expéditeur, objet, aperçu), sur un téléphone et sur un ordinateur, sans aucune police ni image chargée.</p>' : ''}`;
     let groupe = null;
     scenes.forEach((s, i) => {
       if (s.groupe !== groupe) {
@@ -39,7 +39,7 @@ function html(parties, dossierImages, { fichiers = false } = {}) {
       corps += `<article class="ecran" id="${num}">
 <header><span class="num">${num}</span><h4>${esc(s.titre)}</h4></header>
 ${s.note ? `<p class="note">${esc(s.note)}</p>` : ''}
-<div class="captures">${s.captures.map((c) => `<figure class="${c.taille}"><button class="zoom" data-num="${num}" data-titre="${esc(s.titre)} · ${c.taille}"><img loading="lazy" src="${img(c.fichier)}" alt="${num} ${esc(s.titre)}, ${c.taille}"></button><figcaption>${c.taille}</figcaption></figure>`).join('')}</div>
+<div class="captures">${s.captures.filter((c) => c.fichier).map((c) => `<figure class="${c.taille}"><button class="zoom" data-num="${num}" data-titre="${esc(s.titre)} · ${c.taille}"><img loading="lazy" src="${img(c.fichier)}" alt="${num} ${esc(s.titre)}, ${c.taille}"></button><figcaption>${c.taille}</figcaption></figure>`).join('')}</div>
 ${s.erreurs?.length ? `<p class="erreur">Erreur de la page : ${esc(s.erreurs.join(' · '))}</p>` : ''}
 </article>`;
     });

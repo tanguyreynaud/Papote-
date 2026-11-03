@@ -10,7 +10,7 @@ const { FieldValue } = require('firebase-admin/firestore');
 const GENRES = {
   debranchee: 'Tablette débranchée',
   silence: 'Tablette qui ne répond plus',
-  'pas-vue': 'Pas vue ce matin',
+  'pas-vue': 'Pas vue depuis deux jours',
   sos: 'SOS',
   'sos-sans-reponse': 'SOS sans réponse',
   'appel-manque': 'Appel manqué de la tablette',

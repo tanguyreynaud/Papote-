@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <title>Votre commande · Papote</title>
 <meta name="robots" content="noindex">
 <meta name="theme-color" content="#fdfaf5">
@@ -82,6 +82,17 @@ p { margin: 0; }
 .point span { color: var(--muted); font-size: .92rem; }
 .point .coche { width: 1.6rem; height: 1.6rem; border-radius: 50%; border: 2px solid var(--line); display: grid; place-items: center; flex: none; font-size: .9rem; }
 .point.on .coche { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
+/* Pendant la recherche : quatre lignes « fantômes » de la taille d'un point relais, qui respirent (Tanguy, 2/11). */
+.point.fantome { pointer-events: none; animation: respire 1.2s ease-in-out infinite; }
+.point.fantome div span, .point.fantome div b { display: block; height: .85rem; border-radius: 6px; background: var(--line); color: transparent; }
+.point.fantome div b { width: 55%; height: 1rem; margin-bottom: .4rem; }
+.point.fantome div span { width: 85%; }
+.point.fantome .coche { border-style: dashed; }
+@keyframes respire { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .point.fantome { animation: none; opacity: .7; } }
+.reessayer { justify-self: start; border: 1.5px solid var(--accent); background: var(--surface); color: var(--accent-strong); border-radius: 999px; padding: .5rem 1rem; font: inherit; font-weight: 700; cursor: pointer; margin-top: .5rem; }
+.reessayer[hidden] { display: none; }
+.verdict .reessayer { display: inline-block; margin-top: .5rem; }
 .choisi { display: grid; gap: .25rem; padding: .9rem 1rem; border: 2px solid var(--accent); border-radius: 14px; background: var(--accent-soft); }
 .choisi[hidden] { display: none; }
 .champ { display: grid; gap: .3rem; font-weight: 700; }
@@ -89,7 +100,7 @@ p { margin: 0; }
 .champ input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 .champ small { color: var(--muted); font-weight: 400; }
 .accord { display: flex; gap: .6rem; align-items: flex-start; color: var(--muted); font-size: .95rem; cursor: pointer; }
-.accord input { width: 1.3rem; height: 1.3rem; margin-top: .15rem; flex: none; accent-color: var(--accent); }
+.accord input { width: 1.5rem; height: 1.5rem; margin-top: .15rem; flex: none; accent-color: var(--accent); }
 .resume { display: grid; gap: .45rem; }
 .resume p { display: flex; justify-content: space-between; gap: 1rem; }
 .resume p b { white-space: nowrap; }
@@ -110,10 +121,12 @@ p { margin: 0; }
 .barre-in small { color: var(--muted); }
 .barre .manque { margin: .4rem auto 0; max-width: 40rem; font-size: .9rem; color: var(--accent-strong); font-weight: 700; }
 .barre .manque[hidden] { display: none; }
+/* Clavier ouvert : le champ tapé s'arrête au-dessus de la barre « Payer », qui reste au-dessus du clavier. */
+html { scroll-padding-bottom: 8.5rem; }
 .btn { margin-left: auto; display: inline-flex; align-items: center; justify-content: center; min-height: 3.25rem; padding: .75rem 1.4rem; border-radius: 999px; background: var(--accent); color: var(--accent-text); font: 700 1.05rem/1.2 inherit; text-decoration: none; border: 0; cursor: pointer; white-space: nowrap; flex: none; }
 .btn:hover { background: var(--accent-strong); }
 .btn[aria-disabled="true"] { background: #c9c6d8; }
-.btn.attend { opacity: .75; pointer-events: none; }
+.btn.attend { opacity: .9; cursor: wait; pointer-events: none; } /* opacité plus forte : le texte reste lisible (contraste 4,5) */
 /* Pas de soulignement des liens (Tanguy, 2026-10-22) : ils restent repérables par leur couleur et le gras. */
 a { text-decoration: none; }
 main a:not([class]) { color: var(--accent-strong); font-weight: 700; }
@@ -167,7 +180,8 @@ body .ps-bouton { bottom: 6.5rem; }
       <span id="choisi-adresse"></span>
     </div>
     <button class="lien" type="button" id="voir-carte" hidden>Voir plus de points relais, ou sur une carte</button>
-    <p class="erreur" id="erreur-carte" hidden>La carte des points relais ne s'affiche pas. Rechargez la page, ou écrivez-nous à contact@mapapote.fr.</p>
+    <p class="erreur" id="erreur-carte" hidden>Les points relais ne s'affichent pas pour l'instant.</p>
+    <button class="reessayer" type="button" id="reessayer-relais" hidden>Réessayer</button>
   </section>
 
   <section class="etape" id="etape-qui">
@@ -216,6 +230,11 @@ body .ps-bouton { bottom: 6.5rem; }
   // Clé PUBLIQUE de l'intégration Sendcloud « Papote » (points relais Mondial Relay). Pas un secret.
   var SENDCLOUD_CLE = 'f8875927-f7be-4ad7-ac24-22fd11c0efc5';
   var COMMANDER = 'https://europe-west1-papote-famille.cloudfunctions.net/commander';
+  // On ne vend que le stock réel (Tanguy, 2026-10-30) : plus de tablette, l'accueil propose « Être prévenu ».
+  fetch('https://europe-west1-papote-famille.cloudfunctions.net/stockDisponible')
+    .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(function (d) { if (d.disponible === false) location.replace('/?complet=1#prevenir'); })
+    .catch(function () {});
   // Adresses : Base Adresse Nationale, servie par la Géoplateforme de l'IGN (l'ancienne api-adresse.data.gouv.fr
   // ne répond plus depuis 2026).
   var GEOCODAGE = 'https://data.geopf.fr/geocodage';
@@ -291,8 +310,10 @@ body .ps-bouton { bottom: 6.5rem; }
     });
     suggestions.hidden = !adresses.length;
   }
+  var derniereAdresse = null;
   function choisirAdresse(f) {
     var p = f.properties || {};
+    derniereAdresse = f;
     suggestions.hidden = true;
     champAdresse.value = p.label;
     // Commune seule (adresse exacte inconnue, Tanguy 29/10) : acceptée si la 4G passe bien sur au moins 95 % de
@@ -301,6 +322,13 @@ body .ps-bouton { bottom: 6.5rem; }
     var c = f.geometry && f.geometry.coordinates;
     verdict.hidden = true;
     verification.hidden = false;
+    // Les points relais se cherchent tout de suite, en même temps que la 4G (Tanguy, 2/11) : on ne les attend
+    // plus l'un après l'autre. S'ils sont inutiles (4G trop faible), la liste est retirée au verdict.
+    if (!relais && c) {
+      cp.value = p.postcode || '';
+      villesDe = pays.value + cp.value;
+      chercher({ latitude: c[1], longitude: c[0] });
+    }
     fetch(COUVERTURE + (commune ? '?insee=' + encodeURIComponent(p.citycode) : '?lat=' + c[1] + '&lon=' + c[0]))
       .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
       .then(function (d) {
@@ -313,26 +341,34 @@ body .ps-bouton { bottom: 6.5rem; }
         proche = { adresse: p.label, lat: c[1], lon: c[0], cp: p.postcode, niveau: commune ? 'commune' : d.niveau, eligible: !!d.eligible };
         if (commune) proche.insee = p.citycode;
         montrerVerdict();
-        if (proche.eligible) {
-          // Points relais autour de chez le proche, sauf si un point est déjà choisi.
-          if (!relais) {
-            cp.value = proche.cp || '';
-            villesDe = pays.value + cp.value;
-            chercher({ latitude: proche.lat, longitude: proche.lon });
-          }
+        if (!proche.eligible && !relais) {
+          // Pas de livraison ici : la liste des relais n'a plus de sens.
+          liste.hidden = true;
+          attente.hidden = true;
+          voirCarte.hidden = true;
+          derniere = '';
         }
         lienPaiement();
         retenir();
       })
       .catch(function () {
         verification.hidden = true;
-        dire(false, 'La vérification de la 4G ne répond pas pour l\'instant.', 'Réessayez dans un instant, ou écrivez-nous à contact@mapapote.fr.');
+        dire(false, 'La vérification de la 4G ne répond pas pour l\'instant.', 'Réessayez dans un instant, ou écrivez-nous à contact@mapapote.fr.', function () { choisirAdresse(derniereAdresse); });
       });
   }
-  function dire(oui, titre, detail) {
+  // reessayer : une fonction à relancer, montrée comme un bouton « Réessayer » (Tanguy, 2/11 : un bouton, jamais « rechargez la page »).
+  function dire(oui, titre, detail, reessayer) {
     verdict.className = 'verdict ' + (oui ? 'oui' : 'non');
     verdict.textContent = (oui ? '✓ ' : '') + titre;
     if (detail) { var sm = document.createElement('small'); sm.textContent = detail; verdict.append(sm); }
+    if (reessayer) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'reessayer';
+      b.textContent = 'Réessayer';
+      b.addEventListener('click', reessayer);
+      verdict.append(b);
+    }
     verdict.hidden = false;
   }
   function montrerVerdict() {
@@ -397,8 +433,16 @@ body .ps-bouton { bottom: 6.5rem; }
     payer.classList.remove('attend');
     payer.textContent = 'Payer 60 €';
   });
+  window.addEventListener('online', lienPaiement);
   payer.addEventListener('click', function (e) {
     if (payer.getAttribute('aria-disabled') === 'false') {
+      // Sans réseau, le lien mènerait à la page d'erreur du navigateur : on le dit ici, la commande reste remplie.
+      if (navigator.onLine === false) {
+        e.preventDefault();
+        manque.textContent = 'Pas de connexion internet. Réessayez dès que le réseau revient.';
+        manque.hidden = false;
+        return;
+      }
       // La fonction crée la session Stripe puis redirige : 2 à 4 secondes sans rien à l'écran, on le dit.
       payer.textContent = 'Un instant…';
       payer.classList.add('attend');
@@ -502,13 +546,33 @@ body .ps-bouton { bottom: 6.5rem; }
   ville.addEventListener('change', function () { if (ville.value) chercher(); });
   villeTexte.addEventListener('change', function () { chercher(); });
 
-  function chercher(position) {
+  var reessayerRelais = document.getElementById('reessayer-relais');
+  var dernierePosition = null;
+  function fantomes() {
+    liste.textContent = '';
+    for (var i = 0; i < 4; i++) {
+      var l = document.createElement('div');
+      l.className = 'point fantome';
+      l.setAttribute('aria-hidden', 'true');
+      var t = document.createElement('div');
+      t.append(document.createElement('b'), document.createElement('span'));
+      var c = document.createElement('span');
+      c.className = 'coche';
+      l.append(t, c);
+      liste.append(l);
+    }
+    liste.hidden = false;
+  }
+  function chercher(position, deuxieme) {
     var adresse = [cp.value.trim(), villeChoisie()].filter(Boolean).join(' ');
     var cle = position ? position.latitude + ',' + position.longitude : pays.value + adresse;
-    if (cle === derniere) return;
+    if (cle === derniere && !deuxieme) return;
     derniere = cle;
+    dernierePosition = position || null;
     document.getElementById('erreur-carte').hidden = true;
-    liste.hidden = true;
+    reessayerRelais.hidden = true;
+    // Quatre lignes fantômes à la place de la liste : l'attente se voit, et rien ne bouge à l'arrivée (Tanguy, 2/11).
+    fantomes();
     attente.hidden = false;
     var params = new URLSearchParams({ country: pays.value.toUpperCase(), carrier: 'mondial_relay', access_token: SENDCLOUD_CLE });
     if (position) { params.set('latitude', position.latitude); params.set('longitude', position.longitude); }
@@ -516,19 +580,27 @@ body .ps-bouton { bottom: 6.5rem; }
     fetch('https://servicepoints.sendcloud.sc/api/v2/service-points/?' + params.toString())
       .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
       .then(function (d) {
+        if (cle !== derniere) return;
         var points = (Array.isArray(d) ? d : (d && d.results) || []).filter(function (p) { return p && p.id; });
         if (!points.length) throw new Error('aucun point');
         points.sort(function (x, y) { return (x.distance || 0) - (y.distance || 0); });
         afficher(points.slice(0, 4));
       })
       .catch(function (err) {
+        if (cle !== derniere) return;
+        // Un deuxième essai tout seul après 1,5 s, puis la carte Sendcloud, puis un bouton « Réessayer ».
+        if (!deuxieme) { setTimeout(function () { if (cle === derniere) chercher(position, true); }, 1500); return; }
         console.warn('Liste des points relais indisponible, carte à la place :', err);
         attente.hidden = true;
+        liste.hidden = true;
         derniere = '';
         ouvrirCarte();
       });
   }
-
+  reessayerRelais.addEventListener('click', function () {
+    derniere = '';
+    chercher(dernierePosition);
+  });
   function afficher(points) {
     liste.textContent = '';
     points.forEach(function (p) {
@@ -597,11 +669,13 @@ body .ps-bouton { bottom: 6.5rem; }
         if (erreurs && erreurs.indexOf('Closed') !== -1) return;
         console.error('Points relais :', erreurs);
         erreur.hidden = false;
+        reessayerRelais.hidden = false;
       });
     }).catch(function () {
       carteOuverte = false;
       attente.hidden = true;
       erreur.hidden = false;
+      reessayerRelais.hidden = false;
     });
   }
   voirCarte.addEventListener('click', ouvrirCarte);

@@ -297,6 +297,12 @@ function brancher(deps) {
         .catch((e) => logger.error(`Installation ${fid} : Papote non prévenu`, e.message));
     }
     await inviterAttente(fid, fam, uid);
+    // Le mode d'emploi en trois lignes, à garder (2026-10-30) ; un échec d'envoi ne bloque pas la fin de l'installation.
+    const { email } = compteVerifie(request);
+    if (email && envoyerMail && mail.installationFinie) {
+      await envoyerMail(email, mail.installationFinie({ prenom: membre.get('name'), famille: fam.name, lien: appli }))
+        .catch((e) => logger.error(`Installation ${fid} : e-mail « tablette prête » non envoyé`, e.message));
+    }
     return { ok: true };
   }
 

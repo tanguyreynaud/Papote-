@@ -294,7 +294,7 @@ test('clients, tablettes et SIM qui ne collent pas', () => {
     stock: [{ commande: 'c1', etat: 'chez-client', sim: null }, { commande: 'c2', etat: 'envoyee', sim: '06' }, { commande: 'c3', etat: 'envoyee' }],
     sims: [{ statut: 'active', tablette: null }, { statut: 'active', tablette: 't' }, { statut: 'stock', tablette: null }],
   });
-  assert.deepStrictEqual(r, ['1 client Internet inclus sans carte SIM notée sur sa tablette', '1 ligne SIM active reliée à aucune tablette']);
+  assert.deepStrictEqual(r, ['1 client Tout compris sans carte SIM notée sur sa tablette', '1 ligne SIM active reliée à aucune tablette']);
 });
 
 // ---------- Étiquettes Sendcloud ----------
@@ -604,4 +604,35 @@ test('Stripe en mode test : seuls les essais encore en base sont comptés', () =
   const reel = g.sansEssaisEffaces({ factures, mouvements, abonnements, test: false, commandes });
   assert.strictEqual(reel.factures.length, 3);
   assert.strictEqual(reel.mouvements.length, 3);
+});
+
+test('garde-fous : lignes « GARDE-FOU » du journal de la tablette, par sorte, datées à l\'heure de Paris', () => {
+  const journal = [
+    '29/10 14:02:11  Forfait SIM : 300 Mo sur 1000, palier 0 (normal)',
+    '29/10 14:05:00  GARDE-FOU : écran bloqué 3 min (diaporama), retour à l’accueil',
+    '29/10 15:10:00  GARDE-FOU : la page ne répond plus depuis 3 min, rechargée (1/3)',
+    '29/10 15:20:00  GARDE-FOU : la page ne répond plus depuis 30 s, moteur relancé',
+    '29/10 15:30:00  GARDE-FOU : page morte, 3 relances en 30 min : la tablette redémarre',
+    '29/10 15:31:00  GARDE-FOU : redémarrage impossible (SecurityException), Papote relancée',
+    '29/10 15:32:00  GARDE-FOU : la page ne répond plus, « en ligne » n\'est plus envoyé',
+    '31/12 23:59:00  GARDE-FOU : écran bloqué 3 min (rappel), retour à l’accueil',
+  ].join('\n');
+  const maintenant = Date.parse('2026-10-29T15:00:00Z');
+  const l = g.gardeFous(journal, maintenant);
+  assert.deepStrictEqual(l.map((x) => x.genre), ['autre', 'appli', 'redemarrage', 'page', 'page', 'ecran', 'ecran']);
+  // 15:32 à Paris le 29/10 (heure d'hiver depuis le 25/10) = 14:32 UTC.
+  assert.strictEqual(new Date(l[0].le).toISOString(), '2026-10-29T14:32:00.000Z');
+  // 31/12 vu le 29/10 : l'année d'avant.
+  assert.strictEqual(new Date(l[l.length - 1].le).toISOString(), '2025-12-31T22:59:00.000Z');
+  assert.deepStrictEqual(g.gardeFous('', maintenant), []);
+  assert.deepStrictEqual(g.gardeFous(undefined, maintenant), []);
+});
+
+test('clients : inscrit sur « Être prévenu », avec son téléphone', () => {
+  const [c] = g.fusionnerContacts({
+    contacts: [{ email: 'attend@x.fr', consentement: true, listeAttente: true, listeAttenteLe: 70, telephone: '0712345678' }],
+  });
+  assert.equal(c.type, 'attente');
+  assert.equal(c.telephone, '0712345678');
+  assert.equal(c.depuis, 70);
 });

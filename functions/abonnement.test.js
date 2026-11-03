@@ -220,3 +220,26 @@ test('factures montrées à la famille : payées et à payer, sans brouillon ni 
   assert.strictEqual(a.factureClient({ ...base, status: 'draft' }), null);
   assert.strictEqual(a.factureClient({ ...base, status: 'void' }), null);
 });
+
+test('garderAbonnementActuel : une deuxième commande ne remplace pas un abonnement en cours', () => {
+  const actuel = { statut: 'actif', stripeSubscriptionId: 'sub_A' };
+  assert.equal(a.garderAbonnementActuel(actuel, 'sub_B', 'active'), true);
+  assert.equal(a.garderAbonnementActuel(actuel, 'sub_B', 'past_due'), true);
+  // L'ancien est fini chez Stripe : le nouveau prend sa place (réabonnement après résiliation).
+  assert.equal(a.garderAbonnementActuel(actuel, 'sub_B', 'canceled'), false);
+  assert.equal(a.garderAbonnementActuel(actuel, 'sub_B', null), false);
+  // Même abonnement, ou famille sans abonnement : rien à garder.
+  assert.equal(a.garderAbonnementActuel(actuel, 'sub_A', 'active'), false);
+  assert.equal(a.garderAbonnementActuel(null, 'sub_B', 'active'), false);
+});
+
+test('reprise malgré un retour : seulement Papote, retour anticipé encore attendu, sans main propre (02/11)', () => {
+  assert.strictEqual(a.reprisePossible(null, false), true);
+  assert.strictEqual(a.reprisePossible(undefined, true), true);
+  assert.strictEqual(a.reprisePossible({ statut: 'attendue', anticipe: true }, true), true);
+  assert.strictEqual(a.reprisePossible({ statut: 'attendue', anticipe: true }, false), false, 'la famille écrit à Papote');
+  assert.strictEqual(a.reprisePossible({ statut: 'attendue' }, true), false, 'abonnement fini : retour normal');
+  assert.strictEqual(a.reprisePossible({ statut: 'attendue', anticipe: true, mainPropreLe: 1 }, true), false);
+  assert.strictEqual(a.reprisePossible({ statut: 'echec', anticipe: true }, true), false);
+  assert.strictEqual(a.reprisePossible({ statut: 'rendue', anticipe: true }, true), false);
+});

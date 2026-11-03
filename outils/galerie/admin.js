@@ -4,6 +4,7 @@
 'use strict';
 
 const { famillePleine, membre, poserDonnees, SDK, ilYa, FID } = require('./famille');
+const clavier = require('./clavier');
 
 const TAILLES = {
   pc: { nom: 'ordinateur', width: 1280, height: 800, mobile: false },
@@ -42,12 +43,18 @@ function gestionDonnees(o = {}) {
       extra: { restitution: { statut: 'rendue' }, remboursement: { statut: 'echec', montant: 6000, le: il(2) } } }),
   ];
   const stock = [
-    { id: 'T-001', ref: 'T-001', numero: 'BV60P-0001', modele: 'Blackview Tab 60 Pro', etat: 'chez-client', commande: 'CMD-GH78', fid: FID, sim: '07 45 12 34 56', simId: 'S1', batterie: { niveau: 82, le: il(0.01) }, prixAchat: 12999, acheteeLe: il(40), depense: 'D-A1', creeLe: il(40) },
+    { id: 'T-001', ref: 'T-001', numero: 'BV60P-0001', modele: 'Blackview Tab 60 Pro', etat: 'chez-client', commande: 'CMD-GH78', fid: FID, sim: '07 45 12 34 56', simId: 'S1', batterie: { niveau: 82, le: il(0.01) }, tabletUid: 'tab-jeanne',
+      gardeFous: [
+        { le: il(0.2), genre: 'page', texte: 'la page ne répond plus depuis 3 min, rechargée (1/3)' },
+        { le: il(1.5), genre: 'ecran', texte: 'écran bloqué 3 min (diaporama), retour à l’accueil' },
+        { le: il(4), genre: 'ecran', texte: 'écran bloqué 3 min (rappel), retour à l’accueil' },
+        { le: il(6), genre: 'appli', texte: 'page morte, Papote relancée' },
+      ], prixAchat: 12999, acheteeLe: il(40), depense: 'D-A1', creeLe: il(40) },
     { id: 'T-002', ref: 'T-002', numero: 'BV60P-0002', modele: 'Blackview Tab 60 Pro', etat: 'en-stock', prixAchat: 12999, acheteeLe: il(40), depense: 'D-A1', creeLe: il(40) },
     { id: 'T-003', ref: 'T-003', numero: 'Tab60P15EEA026347', modele: 'Blackview Tab 60 Pro', etat: 'preparee', commande: 'CMD-AB12', prixAchat: 12999, acheteeLe: il(6), depense: 'D-A2', creeLe: il(6) },
     { id: 'T-004', ref: 'T-004', numero: 'BV60P-0004', modele: 'Blackview Tab 60 Pro', etat: 'envoyee', commande: 'CMD-EF56', sim: '07 45 98 76 54', simId: 'S2', prixAchat: 12999, acheteeLe: il(6), depense: 'D-A2', creeLe: il(6) },
     { id: 'T-005', ref: 'T-005', numero: 'BV60P-0005', modele: 'Blackview Tab 60 Pro', etat: 'envoyee', commande: 'CMD-RT22', sim: '06 98 76 54 32', simId: 'S3', prixAchat: 12999, acheteeLe: il(30), depense: 'D-A0', creeLe: il(30) },
-    { id: 'T-006', ref: 'T-006', numero: 'BV60P-0006', modele: 'Blackview Tab 60 Pro', etat: 'chez-client', commande: 'CMD-IM90', fid: 'f-henri', sim: '07 51 23 45 67', simId: 'S4', batterie: { niveau: 15, le: il(0.2) }, prixAchat: 12999, acheteeLe: il(45), depense: 'D-A0', creeLe: il(45) },
+    { id: 'T-006', ref: 'T-006', numero: 'BV60P-0006', modele: 'Blackview Tab 60 Pro', etat: 'chez-client', commande: 'CMD-IM90', fid: 'f-henri', tabletUid: 't-henri', sim: '07 51 23 45 67', simId: 'S4', batterie: { niveau: 15, le: il(0.2) }, prixAchat: 12999, acheteeLe: il(45), depense: 'D-A0', creeLe: il(45) },
     { id: 'T-007', ref: 'T-007', numero: 'BV60P-0007', modele: 'Blackview Tab 60 Pro', etat: 'chez-client', commande: 'CMD-RS45', fid: 'f-odette', sim: '07 51 00 11 22', simId: 'S5', prixAchat: 12999, acheteeLe: il(80), depense: 'D-A0', creeLe: il(80) },
     { id: 'T-008', ref: 'T-008', numero: 'BV60P-0008', modele: 'Blackview Tab 60 Pro', etat: 'revenue', prixAchat: 12999, acheteeLe: il(80), depense: 'D-A0', creeLe: il(80), batterie: { niveau: 64, le: il(2) } },
     { id: 'T-009', ref: 'T-009', numero: 'BV60P-0009', modele: 'Blackview Tab 60 Pro', etat: 'revenue', usure: 'batterie usée (62 % de sa capacité)', prixAchat: 12999, acheteeLe: il(200), depense: 'D-A0', creeLe: il(200) },
@@ -104,6 +111,7 @@ function gestionDonnees(o = {}) {
     envoisAccessoire: { wifi: 'Wi-Fi', sim: 'Carte SIM', tous: 'Tous les envois' },
     genresAlerte: { debranchee: 'Tablette débranchée', neRepondPlus: 'Tablette qui ne répond plus', pasVue: 'Photo pas vue depuis 48 h', sos: 'SOS famille', forfait: 'Forfait internet presque épuisé' },
     alertesJours: 90,
+    genresGardeFou: { ecran: 'écran bloqué', page: 'page rechargée', appli: 'appli relancée', redemarrage: 'tablette redémarrée', autre: 'autre' },
     reglages: { seuilTva: 3750000, tauxUrssaf: 21.2, forfaitSim: 499, vieTablette: 24, poidsColis: 1500, miseEnService: 6000, fraisEnvoi: 799, fraisRetour: 800, masquees: [], expediteur: { nom: 'Papote', adresse: '1 rue de la Paix', cp: '69001', ville: 'Lyon', telephone: '06 00 00 00 00', email: 'contact@mapapote.fr' } },
     automatique: { le: il(0.2), factures: ['PAP-0004'], avoirs: [], depenses: 1, stock: ['T-001 chez le client'], etiquettes: [], livres: ['Sophie Bernard'],
       erreurs: ['Relance du colis CMD-RT22 : Sendcloud n’a pas répondu'] },
@@ -146,6 +154,8 @@ const CLIENTS = {
     { email: 'isabelle@exemple.fr', nom: 'Isabelle Morel', type: 'ancien', statut: 'resilie', formule: 'sim', depuis: il(72), consentement: true, desinscrit: false },
     { email: 'gerard@exemple.fr', nom: 'Gérard Simon', telephone: '06 55 44 33 22', type: 'panier', statut: 'panier', formule: 'sim', depuis: il(4), consentement: false, desinscrit: false },
     { email: 'marie@exemple.fr', nom: 'Marie Dupont', telephone: '06 12 34 56 78', type: 'chat', depuis: il(2), consentement: true, desinscrit: false },
+    // « Être prévenu » du site quand le stock est vide : à rappeler à la main.
+    { email: 'odile@exemple.fr', nom: 'Odile Faure', telephone: '07 81 22 45 90', type: 'attente', depuis: il(1), consentement: false, desinscrit: false },
   ],
   campagnes: [{ id: 'c1', le: il(7), objet: 'Papote arrive bientôt', envoyes: 12 }],
   envoisMax: 300,
@@ -157,17 +167,49 @@ const COMMANDE = {
   paiements: [{ id: 'ch_1', le: il(1), montant: 6000, rembourse: 0, statut: 'succeeded', description: 'Mise en service', recu: 'https://exemple.invalid/r' }],
 };
 
+// Abonnement de la commande en service arrêté depuis l'admin, fin dans 27 jours.
+function arretPrevu() {
+  const g = gestionDonnees({});
+  return { ...g, commandes: g.commandes.map((c) => (c.id === 'CMD-GH78' ? { ...c, resiliationLe: il(-27) } : c)) };
+}
+
+// Tablette à récupérer : Papote a noté qu'il la récupère en main propre (admin seulement, 31/10).
+function retourEnMain() {
+  const g = gestionDonnees({});
+  return { ...g, commandes: g.commandes.map((c) => (c.id === 'CMD-RS45'
+    ? { ...c, remise: 'main-propre', suivi: null, restitution: { ...c.restitution, mainPropreLe: il(1) } } : c)) };
+}
+
+// Retour demandé par le client AVANT la date d'arrêt (« Je renvoie la tablette », anticipé) : Papote peut encore
+// reprendre l'abonnement (Tanguy, 02/11) ; le menu ⋮ propose « Reprendre l'abonnement ».
+function retourAnticipe() {
+  const g = gestionDonnees({});
+  return { ...g, commandes: g.commandes.map((c) => (c.id === 'CMD-RS45'
+    ? { ...c, abonnement: 'actif', resiliationLe: il(-20), restitution: { statut: 'attendue', avant: il(-50), mainPropreLe: null, anticipe: true } } : c)) };
+}
+
 function donnees(o = {}) {
   const docs = famillePleine({ sim: true });
   docs['families/f-henri'] = { name: 'Papi Henri', createdBy: 'u-nicolas', abonnement: { statut: 'impaye', formule: 'sim', graceJusqua: { __ms: il(-6) } } };
   docs['families/f-henri/members/u-nicolas'] = membre('u-nicolas', 'Nicolas');
-  docs['families/f-henri/members/t-henri'] = membre('t-henri', 'Tablette', { role: 'tablette', email: '', lastOnline: { __ms: il(0.3) }, lastActive: { __ms: il(0.9) }, appVersion: '2.99.88' });
+  // Antennes entendues (tablette 2.99.105+) : chez Jeanne tout va bien ; chez Henri la carte (Lyca, réseau Bouygues) n'a
+  // aucune antenne, seulement Orange (cas réel de Poissy, 01/11) : alerte à l'accueil et sur la page de la tablette.
+  const antenne = (reseau, type, bande, dbm, utilisee = false) => ({ reseau, nom: '', type, bande, dbm, utilisee });
+  docs[`families/${FID}/members/tab-jeanne`] = membre('tab-jeanne', 'Tablette', { role: 'tablette', email: '', lastOnline: { __ms: il(0.01) }, lastActive: { __ms: il(0.05) }, appVersion: '2.99.106',
+    battery: { level: 82, charging: true }, sim: { operateur: 'Lycamobile', reseau: 'Bouygues Telecom', signal: 3, dataMoisMo: 214, service: 'ok', simReseau: '20825',
+      antennes: [antenne('20801', '4G', 3, -88), antenne('20820', '4G', 20, -95, true), antenne('20810', '4G', 28, -101)] } });
+  docs['families/f-henri/members/t-henri'] = membre('t-henri', 'Tablette', { role: 'tablette', email: '', lastOnline: { __ms: il(0.3) }, lastActive: { __ms: il(0.9) }, appVersion: '2.99.88',
+    sim: { operateur: 'Lycamobile', reseau: '', signal: 0, dataMoisMo: 3, service: 'urgences', simReseau: '20825', antennes: [antenne('20801', '4G', 28, -106)] } });
   docs['families/f-paulette'] = { name: 'Mamie Paulette', code: 'PAUL2345', createdBy: 'u-luc', createdAt: { __ms: il(60) }, abonnement: { statut: 'suspendu', formule: 'sim' } };
   docs['families/f-paulette/members/u-luc'] = membre('u-luc', 'Luc');
   docs['families/f-paulette/members/t-paulette'] = membre('t-paulette', 'Tablette', { role: 'tablette', email: '', lastOnline: { __ms: il(3) }, lastActive: { __ms: il(3) }, appVersion: '2.99.80' });
   docs['families/f-odette'] = { name: 'Mamie Odette', code: 'ODET2345', createdBy: 'u-isa', createdAt: { __ms: il(70) }, abonnement: { statut: 'resilie', formule: 'sim' } };
   docs['families/f-odette/members/u-isa'] = membre('u-isa', 'Isabelle');
   docs['families/f-mamies'] = { name: 'Mamie Lucette', createdBy: 'u-tanguy', abonnement: { statut: 'offert' } };
+  docs['validation/etat'] = VALIDATION_ETAT;
+  // Captures publiées (publier-validation.mjs) : la liste et le jeton secret de chaque image, lus par l'admin seul.
+  docs['validation/captures'] = { le: VALIDATION_INDEX.le, bucket: 'papote-famille.firebasestorage.app',
+    parties: VALIDATION_INDEX.parties.map((p) => ({ ...p, ecrans: p.ecrans.map((e) => ({ ...e, captures: e.captures.map((c) => ({ ...c, t: `jeton-${c.f.slice(2, -4)}` })) })) })) };
   // Les commandes sont aussi dans la base : les listes « à envoyer », « en route » et « à récupérer » la lisent directement.
   for (const c of (o.donnees || gestionDonnees(o)).commandes) {
     const { id, famille, abonnement, ...reste } = c;
@@ -192,6 +234,51 @@ function donnees(o = {}) {
 const pause = (p, ms = 700) => p.waitForTimeout(ms);
 const toucher = (...sels) => async (p) => { for (const sel of sels) { await p.locator(sel).first().click(); await pause(p); } };
 const onglet = (t) => async (p) => { await p.locator('#kpi-commandes .onglet').filter({ hasText: t }).first().click(); await pause(p); };
+
+// Espace Validation : faux site papote-validation (index.json + captures) et quelques choix déjà faits.
+const VALIDATION_INDEX = {
+  le: MAINTENANT - 3600_000,
+  parties: [
+    { partie: 'tablette', source: 'origin/claude/project-thread-cmnwxy @ 9229c7d', le: MAINTENANT - 3600_000, ecrans: [
+      { id: 'xt1', num: 'T1', groupe: 'Démarrage', titre: 'Bienvenue', note: '', erreurs: [], captures: [{ f: 'i/t1.jpg', taille: 'paysage' }], h: 'h1' },
+      { id: 'xt2', num: 'T2', groupe: 'Démarrage', titre: 'QR code d\'installation', note: '', erreurs: [], captures: [{ f: 'i/t2.jpg', taille: 'paysage' }], h: 'h2' },
+      { id: 'xt3', num: 'T3', groupe: 'Accueil', titre: 'Accueil avec météo', note: 'Nouveau : la météo en haut.', erreurs: [], captures: [{ f: 'i/t3.jpg', taille: 'paysage' }], h: 'h3-neuf' },
+      { id: 'xt4', num: 'T4', groupe: 'Accueil', titre: 'Accueil la nuit', note: '', erreurs: ['Largeur : page trop large (1290 px pour 1280 px)'], captures: [{ f: 'i/t4.jpg', taille: 'paysage' }], h: 'h4' },
+    ] },
+    { partie: 'famille', source: 'origin/claude/project-thread-dlattc @ 6759276', le: MAINTENANT - 3600_000, ecrans: [
+      { id: 'xf1', num: 'F1', groupe: 'Installation', titre: 'Scanner la tablette', note: '', erreurs: [], captures: [{ f: 'i/f1.jpg', taille: 'telephone' }, { f: 'i/f1c.jpg', taille: 'clavier ouvert' }], h: 'h5' },
+      { id: 'xf2', num: 'F2', groupe: 'Envois', titre: 'Envoyer une photo', note: '', erreurs: [], captures: [{ f: 'i/f2.jpg', taille: 'telephone' }], h: 'h6' },
+    ] },
+    { partie: 'emails', source: 'origin/main @ 24fd3ae', le: MAINTENANT - 3600_000, ecrans: [
+      { id: 'xe1', num: 'E1', groupe: 'Commande', titre: 'Commande confirmée (point relais)', fonction: 'commandeConfirmee', note: '', erreurs: [], captures: [{ f: 'i/e1.jpg', taille: 'telephone' }, { f: 'i/e1o.jpg', taille: 'ordinateur' }], h: 'h7' },
+      { id: 'xe2', num: 'E2', groupe: 'Commande', titre: 'Nouvelle commande (tablette en stock)', fonction: 'nouvelleCommande', note: '', erreurs: [], captures: [{ f: 'i/e2.jpg', taille: 'telephone' }], h: 'h8' },
+    ] },
+  ],
+};
+const VALIDATION_ETAT = {
+  e: { xt1: { s: 'ok', c: '', h: 'h1', t: MAINTENANT - 86400_000 }, xt3: { s: 'ok', c: '', h: 'h3-ancien', t: MAINTENANT - 2 * 86400_000 },
+    xt4: { s: 'revoir', c: 'Le texte de la nuit est trop clair.', h: 'h4', t: MAINTENANT - 7200_000 } },
+  f: { commande: { s: 'revoir', c: 'Je veux voir le prix de l\'étiquette.', t: MAINTENANT - 7200_000 } },
+  d: {}, g: { double: { s: 'ok', c: '', t: MAINTENANT - 7200_000 } },
+};
+// Fausse capture : un écran crème avec son nom (paysage, téléphone ou ordinateur selon le nom du fichier).
+function fausseCapture(nom) {
+  const [w, hauteur] = /f1|f2|e1\.|e2/.test(nom) ? [390, 780] : /e1o/.test(nom) ? [1000, 640] : [1280, 800];
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${hauteur}" viewBox="0 0 ${w} ${hauteur}"><rect width="100%" height="100%" fill="#fdfaf5"/>`
+    + `<rect x="24" y="24" width="${w - 48}" height="72" rx="16" fill="#4f46e5"/><text x="50%" y="55%" font-family="sans-serif" font-size="40" fill="#4f46e5" text-anchor="middle">${nom}</text></svg>`;
+}
+// Images du stockage Firebase (adresse avec jeton) ; l'ancien site papote-validation reste servi pour l'admin d'avant.
+const validation = (p, en = true) => Promise.all([p.route('https://firebasestorage.googleapis.com/**', (r) => {
+  const u = new URL(r.request().url());
+  if (!en || !u.searchParams.get('token')) return r.fulfill({ status: 403, body: '' });
+  return r.fulfill({ contentType: 'image/svg+xml', body: fausseCapture(decodeURIComponent(u.pathname.split('/o/')[1] || '').split('/').pop().replace('.jpg', '')) });
+}), en
+  ? p.route('https://papote-validation.web.app/**', (r) => {
+    const u = new URL(r.request().url());
+    if (u.pathname === '/index.json') return r.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(VALIDATION_INDEX) });
+    return r.fulfill({ contentType: 'image/svg+xml', body: fausseCapture(u.pathname.split('/').pop().replace('.jpg', '')) });
+  })
+  : p.route('https://papote-validation.web.app/**', (r) => r.fulfill({ status: 404, body: '' }))]);
 
 // page : adresse dans l'admin (#…) ; tailles : pc et/ou tel ; plein : toute la page.
 const SCENES = [
@@ -222,6 +309,12 @@ const SCENES = [
   { groupe: 'Commandes', titre: 'Commande annulée et remboursée', page: '#commande/CMD-AN77', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Commandes', titre: 'Commande terminée, remboursement échoué', page: '#commande/CMD-RB10', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Commandes', titre: 'Commande : menu ⋮ des actions', page: '#commande/CMD-GH78', tailles: ['pc'], donnees: () => donnees(), faire: toucher('#dc-corps .menu-points > button, #dc-corps [aria-haspopup]') },
+  { groupe: 'Commandes', titre: 'Commande : arrêt prévu, menu ⋮ (Reprendre l’abonnement)', page: '#commande/CMD-GH78', tailles: ['pc'], donnees: () => donnees({ donnees: arretPrevu() }), faire: toucher('#dc-corps .menu-points > button, #dc-corps [aria-haspopup]') },
+  { groupe: 'Commandes', titre: 'Commande : retour en main propre noté par Papote', page: '#commande/CMD-RS45', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees({ donnees: retourEnMain() }) },
+  { groupe: 'Commandes', titre: 'Commande : tablette à récupérer, menu ⋮ (Retour en main propre)', page: '#commande/CMD-RS45', tailles: ['pc'], donnees: () => donnees(), faire: toucher('#dc-corps .menu-points > button, #dc-corps [aria-haspopup]') },
+  { groupe: 'Commandes', titre: 'Commande : retour en main propre, menu ⋮ (Retour par Mondial Relay)', page: '#commande/CMD-RS45', tailles: ['pc'], donnees: () => donnees({ donnees: retourEnMain() }), faire: toucher('#dc-corps .menu-points > button, #dc-corps [aria-haspopup]') },
+  { groupe: 'Commandes', titre: 'Commande : retour demandé avant l’arrêt, menu ⋮ (Reprendre l’abonnement)', page: '#commande/CMD-RS45', tailles: ['pc'], donnees: () => donnees({ donnees: retourAnticipe() }), faire: toucher('#dc-corps .menu-points > button, #dc-corps [aria-haspopup]') },
+  { groupe: 'Commandes', titre: 'Accueil : à faire, tablette à récupérer en main propre', page: '#accueil', tailles: ['pc'], plein: true, donnees: () => donnees({ donnees: retourEnMain() }) },
   { groupe: 'Commandes', titre: 'Nouvelle commande offerte', page: '#commandes', tailles: ['pc'], plein: true, donnees: () => donnees(), faire: toucher('#b-offerte') },
 
   { groupe: 'Clients', titre: 'Clients : liste', page: '#clients/liste', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees() },
@@ -236,6 +329,7 @@ const SCENES = [
 
   { groupe: 'Stock', titre: 'Stock : tablettes', page: '#stock/tablettes', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees() },
   { groupe: 'Stock', titre: 'Tablette chez le client (batterie, SIM, famille)', page: '#tablette/T-001', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees() },
+  { groupe: 'Stock', titre: 'Tablette chez le client, carte SIM sans réseau ici (antennes)', page: '#tablette/T-006', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees() },
   { groupe: 'Stock', titre: 'Tablette en stock', page: '#tablette/T-002', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Stock', titre: 'Tablette préparée pour une commande', page: '#tablette/T-003', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Stock', titre: 'Tablette revenue, à vérifier', page: '#tablette/T-008', tailles: ['pc'], plein: true, donnees: () => donnees() },
@@ -259,6 +353,24 @@ const SCENES = [
   { groupe: 'Comptabilité', titre: 'Factures', page: '#compta/factures', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Comptabilité', titre: 'Dépenses', page: '#compta/depenses', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Comptabilité', titre: 'Une dépense (achat de tablettes, facture attendue)', page: '#depense/D-A2', tailles: ['pc'], plein: true, donnees: () => donnees() },
+  // Vérifie aussi que le bouton ouvre bien le choix du fichier (Tanguy, 29/10 : « je ne peux pas ajouter une facture »).
+  { groupe: 'Comptabilité', titre: 'Achat : « Ajouter la facture » ouvre le choix du fichier', page: '#depense/D-A2', tailles: ['pc', 'tel'], donnees: () => donnees(), faire: async (p) => {
+    const [choix] = await Promise.all([p.waitForEvent('filechooser', { timeout: 4000 }), p.click('#dd-ajouter-facture')]);
+    if (!choix.isMultiple()) throw new Error('le choix du fichier devrait accepter plusieurs fichiers');
+  } },
+  // Facture choisie : le crayon tourne et « Envoi du fichier… » s'affiche tant que le serveur n'a pas répondu (Tanguy, 30/10).
+  { groupe: 'Comptabilité', titre: 'Achat : facture choisie, envoi en cours', page: '#depense/D-A2', tailles: ['pc'], donnees: () => donnees(), faire: async (p) => {
+    await p.evaluate(() => { window.__fonctionsBloquees = true; });
+    const [choix] = await Promise.all([p.waitForEvent('filechooser', { timeout: 4000 }), p.click('#dd-ajouter-facture')]);
+    await choix.setFiles({ name: 'facture-cdiscount.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 facture') });
+    await p.waitForTimeout(900);
+  } },
+  { groupe: 'Comptabilité', titre: 'Achat : facture ajoutée', page: '#depense/D-A2', tailles: ['pc'], donnees: () => donnees({ fonctions: { gestionPiece: { ok: true } } }), faire: async (p) => {
+    const [choix] = await Promise.all([p.waitForEvent('filechooser', { timeout: 4000 }), p.click('#dd-ajouter-facture')]);
+    await choix.setFiles({ name: 'facture-cdiscount.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 facture') });
+    await p.waitForSelector('.bulle-annonce.visible', { timeout: 5000 });
+    await p.waitForTimeout(500); // la fenêtre « Envoi… » finit de se fermer
+  } },
   { groupe: 'Comptabilité', titre: 'Une dépense reçue par e-mail, à vérifier', page: '#depense/D-M1', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Comptabilité', titre: 'URSSAF et TVA', page: '#compta/urssaf', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Comptabilité', titre: 'Rentabilité', page: '#compta/rentabilite', tailles: ['pc'], plein: true, donnees: () => donnees() },
@@ -266,11 +378,57 @@ const SCENES = [
   { groupe: 'Comptabilité', titre: 'Ajouter une dépense', page: '#nouveau/depense', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees() },
   { groupe: 'Comptabilité', titre: 'Ajouter un achat de tablettes', page: '#nouveau/achat', tailles: ['pc'], plein: true, donnees: () => donnees() },
 
+  { groupe: 'Validation', titre: 'Écrans : où j\'en suis, partie par partie', page: '#validation/ecrans', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees() },
+  { groupe: 'Validation', titre: 'Écrans : les parcours de la tablette', page: '#validation/ecrans/tablette', tailles: ['pc'], plein: true, donnees: () => donnees() },
+  { groupe: 'Validation', titre: 'Écrans : un parcours (validé, changé, à revoir)', page: '#validation/ecrans/tablette/1', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees() },
+  { groupe: 'Validation', titre: 'Écrans : « À revoir » touché, commentaire à écrire', page: '#validation/ecrans/tablette/0', tailles: ['pc'], plein: true, donnees: () => donnees(), faire: toucher('#v-xt2 .v-non') },
+  { groupe: 'Validation', titre: 'Écrans : passer en revue en grand', page: '#validation/ecrans/famille/0', tailles: ['pc', 'tel'], donnees: () => donnees(), faire: toucher('text=Passer en revue en grand') },
+  { groupe: 'Validation', titre: 'Écrans : tous les écrans à revoir', page: '#validation/ecrans/etat/revoir', tailles: ['pc'], plein: true, donnees: () => donnees() },
+  { groupe: 'Validation', titre: 'Écrans : captures pas encore publiées', page: '#validation/ecrans', tailles: ['pc'], validation: false, donnees: () => donnees() },
+  { groupe: 'Validation', titre: 'Parcours : la liste', page: '#validation/parcours', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees() },
+  { groupe: 'Validation', titre: 'Parcours : la commande, étape par étape', page: '#validation/parcours/commande', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees() },
+  { groupe: 'Validation', titre: 'Parcours : un e-mail ouvert depuis une étape', page: '#validation/parcours/commande', tailles: ['pc'], donnees: () => donnees(), faire: toucher('.v-mail') },
+  { groupe: 'Validation', titre: 'Dépenses : coût par famille et pistes', page: '#validation/depenses', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees() },
+  { groupe: 'Validation', titre: 'Dépenses : calcul avec la TVA (au-delà du seuil)', page: '#validation/depenses', tailles: ['pc', 'tel'], donnees: () => donnees(), faire: toucher('.v-tva') },
+  { groupe: 'Validation', titre: 'Gestes humains : comment chacun est vérifié', page: '#validation/gestes', tailles: ['pc'], plein: true, donnees: () => donnees() },
+
   { groupe: 'Outils', titre: 'Outils : automatique', page: '#outils/automatique', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Outils', titre: 'Outils : expédition', page: '#outils/expedition', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Outils', titre: 'Outils : calculs', page: '#outils/calculs', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Outils', titre: 'Outils : maintenance', page: '#outils/maintenance', tailles: ['pc'], plein: true, donnees: () => donnees() },
 ];
+
+// Ouvre l'écran d'une scène dans un nouveau navigateur (fausses données, faux Firebase, internet coupé).
+async function ouvrir(browser, base, scene, taille) {
+  const ctx = await browser.newContext({
+    viewport: { width: taille.width, height: taille.height }, deviceScaleFactor: taille.mobile ? 2 : 1, isMobile: taille.mobile, hasTouch: taille.mobile,
+    locale: 'fr-FR', timezoneId: 'Europe/Paris', serviceWorkers: 'block',
+  });
+  const page = await ctx.newPage();
+  page.setDefaultTimeout(8000);
+  page.setDefaultNavigationTimeout(30000); // ouverture de la page : un PC plus lent que la CI (Tanguy, 2/11)
+  const erreurs = [];
+  page.on('pageerror', (e) => erreurs.push(String(e.message || e)));
+  if (process.env.CONSOLE) page.on('console', (m) => { if (m.type() === 'error') console.log('CONSOLE', m.text(), m.location().url, m.location().lineNumber); });
+  await page.clock.install({ time: new Date(MAINTENANT) });
+  const donneesScene = scene.donnees();
+  if (scene.validation === false) delete donneesScene.docs['validation/captures']; // captures pas encore publiées
+  await page.addInitScript(poserDonnees, donneesScene);
+  await page.route('https://www.gstatic.com/firebasejs/**', (r) => r.fulfill({
+    contentType: 'text/javascript', headers: { 'Access-Control-Allow-Origin': '*' },
+    body: r.request().url().endsWith('/faux-sdk.js') ? SDK : "export * from 'https://www.gstatic.com/firebasejs/faux-sdk.js';",
+  }));
+  await page.route(/^https?:\/\/(?!127\.0\.0\.1|fonts\.googleapis\.com|fonts\.gstatic\.com|www\.gstatic\.com\/firebasejs)/, (r) => r.abort());
+  await validation(page, scene.validation !== false);
+  try {
+    await page.goto(`${base}/admin.html${scene.page}`);
+    await page.waitForTimeout(2000);
+    if (scene.faire) await scene.faire(page);
+  } catch (e) {
+    erreurs.push('Scène : ' + e.message.split('\n')[0]);
+  }
+  return { ctx, page, erreurs };
+}
 
 async function capturer({ browser, base, dossierImages, progression }) {
   const travaux = [];
@@ -282,29 +440,7 @@ async function capturer({ browser, base, dossierImages, progression }) {
   async function ouvrier() {
     for (let job = travaux.shift(); job; job = travaux.shift()) {
       const { scene, taille, n } = job;
-      const ctx = await browser.newContext({
-        viewport: { width: taille.width, height: taille.height }, deviceScaleFactor: taille.mobile ? 2 : 1, isMobile: taille.mobile, hasTouch: taille.mobile,
-        locale: 'fr-FR', timezoneId: 'Europe/Paris', serviceWorkers: 'block',
-      });
-      const page = await ctx.newPage();
-      page.setDefaultTimeout(8000);
-      const erreurs = [];
-      page.on('pageerror', (e) => erreurs.push(String(e.message || e)));
-      if (process.env.CONSOLE) page.on('console', (m) => { if (m.type() === 'error') console.log('CONSOLE', m.text(), m.location().url, m.location().lineNumber); });
-      await page.clock.install({ time: new Date(MAINTENANT) });
-      await page.addInitScript(poserDonnees, scene.donnees());
-      await page.route('https://www.gstatic.com/firebasejs/**', (r) => r.fulfill({
-        contentType: 'text/javascript', headers: { 'Access-Control-Allow-Origin': '*' },
-        body: r.request().url().endsWith('/faux-sdk.js') ? SDK : "export * from 'https://www.gstatic.com/firebasejs/faux-sdk.js';",
-      }));
-      await page.route(/^https?:\/\/(?!127\.0\.0\.1|fonts\.googleapis\.com|fonts\.gstatic\.com|www\.gstatic\.com\/firebasejs)/, (r) => r.abort());
-      try {
-        await page.goto(`${base}/admin.html${scene.page}`);
-        await page.waitForTimeout(2000);
-        if (scene.faire) await scene.faire(page);
-      } catch (e) {
-        erreurs.push('Scène : ' + e.message.split('\n')[0]);
-      }
+      const { ctx, page, erreurs } = await ouvrir(browser, base, scene, taille);
       const fichier = `admin-${String(n).padStart(3, '0')}.jpg`;
       if (scene.plein) {
         const h = await page.evaluate(() => document.documentElement.scrollHeight).catch(() => taille.height);
@@ -312,6 +448,14 @@ async function capturer({ browser, base, dossierImages, progression }) {
       }
       await page.screenshot({ path: `${dossierImages}/${fichier}`, type: 'jpeg', quality: 62 }).catch((e) => erreurs.push('Capture : ' + e.message.split('\n')[0]));
       resultats.push({ n, groupe: scene.groupe, titre: scene.titre, note: scene.note, taille: taille.nom, fichier, erreurs, scene: SCENES.indexOf(scene) });
+      // Téléphone : clavier ouvert sur les champs de l'écran (clavier.js).
+      if (taille.mobile) {
+        await page.setViewportSize({ width: taille.width, height: taille.height });
+        await page.evaluate(() => window.scrollTo(0, 0)).catch(() => {});
+        const fc = `admin-${String(n).padStart(3, '0')}-clavier.jpg`;
+        const { problemes, capture } = await clavier.verifier(page, taille, `${dossierImages}/${fc}`);
+        if (capture) resultats.push({ n: n + 0.5, groupe: scene.groupe, titre: scene.titre, note: scene.note, taille: 'clavier ouvert', fichier: fc, erreurs: problemes, scene: SCENES.indexOf(scene) });
+      }
       await ctx.close();
       progression(`admin ${++faits}/${n0}`);
     }
@@ -320,4 +464,4 @@ async function capturer({ browser, base, dossierImages, progression }) {
   return resultats.sort((a, b) => a.n - b.n);
 }
 
-module.exports = { capturer, SCENES };
+module.exports = { capturer, ouvrir, SCENES, TAILLES };

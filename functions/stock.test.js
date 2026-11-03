@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const { tablettesDisponibles, placesDisponibles, delai } = require('./stock');
+const { tablettesDisponibles, placesDisponibles, vendable, delai } = require('./stock');
 
 const maintenant = Date.parse('2026-10-19T14:00:00Z');
 const compter = (d) => tablettesDisponibles({ stock: [], commandes: [], reservations: [], maintenant, ...d });
@@ -52,4 +52,13 @@ test('délai annoncé : stock, précommande jusqu\'à stock + 10, puis attente l
   assert.strictEqual(delai(-9), 'precommande');
   assert.strictEqual(delai(-10), 'long');
   assert.strictEqual(delai(-40), 'long');
+});
+
+test('vendable : seulement le stock réel au lancement, précommandes si on vend sans stock', () => {
+  assert.strictEqual(vendable(1), true);
+  assert.strictEqual(vendable(0), false);
+  assert.strictEqual(vendable(-3), false);
+  assert.strictEqual(vendable(0, true), true);
+  assert.strictEqual(vendable(-9, true), true);
+  assert.strictEqual(vendable(-10, true), false);
 });

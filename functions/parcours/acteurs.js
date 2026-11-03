@@ -41,9 +41,19 @@ async function tablettePreparee() {
   return t;
 }
 
+// Carte SIM Lyca reliée à la tablette dans Stock, Cartes SIM : obligatoire avant le premier envoi (offre tout compris).
+async function simSurTablette(tablette) {
+  numero += 1;
+  const { id } = await s.appeler('gestionSim', { action: 'ajouter', champs: {
+    statut: 'active', operateur: 'Lyca', numero: `07 45 ${String(numero).padStart(2, '0')} 77 17`, prix: 499, tablette: tablette.fiche,
+  } }, TANGUY);
+  return id;
+}
+
 // « Préparer l'envoi » dans l'admin (web/js/admin.js, etapesEnvoi), étape par étape, puis « Colis déposé ».
 async function preparerEtEnvoyer(commande, tablette, suivi = '12345678') {
   await s.appeler('gestionStock', { action: 'modifier', id: tablette.fiche, champs: { commande } }, TANGUY);
+  if (!(await s.lire(`stock/${tablette.fiche}`)).simId) await simSurTablette(tablette);
   const faits = {};
   for (const cle of ['tablette', 'carton', 'enceinte-choix', 'fermer', 'feutre', 'etiquette']) {
     faits[cle] = Date.now();
@@ -162,6 +172,6 @@ async function rejoindre(proche, fid, { attente = false } = {}) {
 }
 
 module.exports = {
-  RELAIS, TANGUY, tablettePreparee, preparerEtEnvoyer, commanderSurLeSite, commanderEtPayer,
+  RELAIS, TANGUY, tablettePreparee, simSurTablette, preparerEtEnvoyer, commanderSurLeSite, commanderEtPayer,
   afficherCode, entrerDansLaFamille, appelerDepuisLaTablette, installer, envoyer, rejoindre,
 };

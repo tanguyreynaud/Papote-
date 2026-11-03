@@ -105,3 +105,10 @@ test('numéro de la tablette à retrouver seulement s’il n’a jamais été é
   assert.strictEqual(numeroInconnu({ telephone: null }), false);
   assert.strictEqual(numeroInconnu({ telephone: '07 51 23 45 67' }), false);
 });
+
+test('« pas vue depuis deux jours » part chaque jour à 10 h (Paris), hors des heures de veille', () => {
+  const { HORAIRE_PAS_VUE, enVeille } = require('./alertes');
+  assert.strictEqual(HORAIRE_PAS_VUE, 'every day 10:00');
+  // 10 h à Paris le 29 octobre 2026 (heure d'hiver) = 9 h UTC : jamais pendant la veille par défaut (21 h-6 h 30).
+  assert.strictEqual(enVeille(undefined, Date.parse('2026-10-29T09:00:00Z')), false);
+});

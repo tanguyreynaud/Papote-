@@ -36,4 +36,13 @@ function relanceDue(creeMs, dejaEnvoyees, maintenant) {
   return null;
 }
 
-module.exports = { soirParis, echeances, relanceDue, RELANCES_MAX, JOUR };
+// Téléphone laissé sur « Être prévenu » du site (listeAttente), pour que Tanguy rappelle lui-même : pas de SMS.
+// '06 12 34 56 78', '+33 6 12 34 56 78' → '0612345678' ; vide → null ; autre chose → false.
+function portableFrancais(v) {
+  if (v == null || (typeof v === 'string' && !v.trim())) return null;
+  if (typeof v !== 'string') return false;
+  const n = v.replace(/[\s.()-]/g, '').replace(/^(\+|00)33/, '0');
+  return /^0[67]\d{8}$/.test(n) ? n : false;
+}
+
+module.exports = { portableFrancais, soirParis, echeances, relanceDue, RELANCES_MAX, JOUR };

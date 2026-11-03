@@ -43,38 +43,7 @@ function aPrevenir(atteint, dejaPrevenu) {
 
 function message(palier, cout, devise, coupee = true) {
   const montant = `${cout.toFixed(2).replace('.', ',')} ${devise === 'EUR' ? '€' : devise}`;
-  const lien = 'https://console.cloud.google.com/billing';
-  if (palier === 'alerte') {
-    return {
-      subject: `Papote : la facture Google Cloud du mois atteint ${montant}`,
-      text: `La facture Google Cloud de Papote atteint ${montant} ce mois-ci (alerte à ${PALIERS.alerte} €).\n\n`
-        + `Rien n'est coupé. Pour information, le coupe-circuit coupera tout à ${PALIERS.coupure} €.\n\n${lien}`,
-    };
-  }
-  if (palier === 'avertissement') {
-    return {
-      subject: `Attention : coupe-circuit bientôt, facture Google Cloud à ${montant}`,
-      text: `Attention, la facture Google Cloud de Papote atteint ${montant} ce mois-ci.\n\n`
-        + `Le coupe-circuit coupera tout à ${PALIERS.coupure} € : l'app famille, les tablettes et le site ne marcheront plus.\n`
-        + `Si Papote a grandi et que c'est normal, montez le seuil (PALIERS dans functions/budget.js et le budget dans la console).\n`
-        + `Sinon, regardez ce qui coûte : ${lien}`,
-    };
-  }
-  if (!coupee) {
-    return {
-      subject: `URGENT : facture Google Cloud à ${montant}, le coupe-circuit n'a pas pu couper`,
-      text: `La facture Google Cloud de Papote a atteint ${montant}, mais la facturation n'a pas pu être désactivée `
-        + `(rôle « Gestionnaire de facturation de projet » manquant ?).\n\n`
-        + `Coupez-la vous-même : ${lien} > Gestion des comptes > Papote > Désactiver la facturation.`,
-    };
-  }
-  return {
-    subject: `COUPE-CIRCUIT : facturation Google Cloud désactivée à ${montant}`,
-    text: `La facture Google Cloud de Papote a atteint ${montant} ce mois-ci : la facturation du projet a été désactivée.\n\n`
-      + `Les fonctions, l'app famille et les tablettes sont arrêtées ou limitées. Les données ne sont pas effacées.\n`
-      + `Pour tout relancer : ${lien} > Gestion des comptes > Papote > Associer un compte de facturation.\n`
-      + `Avant, trouvez ce qui a coûté (Rapports de facturation).`,
-  };
+  return mail.budget({ palier, montant, paliers: PALIERS, coupee });
 }
 
 // Retire le compte de facturation du projet (API Cloud Billing). Le compte de service des

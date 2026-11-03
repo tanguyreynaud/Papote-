@@ -38,6 +38,7 @@ test('remise en main propre : envoyée et reçue le jour même, e-mail « chez v
   const t = await a.tablettePreparee();
   const { abonnement: id } = await a.commanderEtPayer({ email: paul.email });
   await s.appeler('gestionStock', { action: 'modifier', id: t.fiche, champs: { commande: id } }, a.TANGUY);
+  await a.simSurTablette(t);
   s.boite.length = 0;
   s.avancer(10);
   const r = await s.appeler('tabletteEnvoyee', { commande: id, mainPropre: true }, a.TANGUY);
@@ -129,6 +130,80 @@ test('suspendue depuis 30 jours : Tanguy arrête l\'abonnement, pas de dernier m
   assert.strictEqual(c.dernierMois.facture, undefined);
   assert.strictEqual(c.restitution.statut, 'attendue');
   assert.ok(mailsA(paul.email).some((m) => /rendre la tablette/i.test(m)), 'e-mail de retour');
+});
+
+test('deux commandes pour la même famille : « Arrêter » et « Reprendre » dans l\'admin visent la commande choisie, pas celle de la famille', async () => {
+  const paul = await s.compte('Paul', 'paul@exemple.fr');
+  const { id, fid } = await familleAbonnee(paul);
+  await premierMoisPasse(id);
+  // Deuxième commande payée par Paul, reliée à la même famille (Tanguy, 30/10 : 8X9K-EB7T et EJ4N-DVBA).
+  const { abonnement: id2 } = await a.commanderEtPayer({ email: paul.email });
+  await s.db.doc(`commandes/${id2}`).update({ fid });
+  const ligne = async (x) => (await s.appeler('gestionDonnees', {}, a.TANGUY)).commandes.find((c) => c.id === x);
+
+  // Seul Tanguy choisit une commande précise, et seulement une commande de cette famille.
+  await assert.rejects(s.appeler('resilierAbonnement', { fid, commande: id2 }, paul), /Réservé à Papote/);
+  const autre = await familleAbonnee(await s.compte('Léa', 'lea@exemple.fr'));
+  await assert.rejects(s.appeler('resilierAbonnement', { fid, commande: autre.id, par: 'papote' }, a.TANGUY), /pas reliée à cette famille/);
+
+  const { le } = await s.appeler('resilierAbonnement', { fid, commande: id2, par: 'papote' }, a.TANGUY);
+  await s.calme();
+  assert.strictEqual(s.stripe.etat.abonnements.get(id2).cancel_at, Math.ceil(le / 1000), 'la 2e commande s\'arrête');
+  assert.strictEqual(s.stripe.etat.abonnements.get(id).cancel_at, null, 'celle de la famille continue');
+  const fam = await famille(fid);
+  assert.strictEqual(fam.abonnement.stripeSubscriptionId, id);
+  assert.strictEqual(fam.abonnement.statut, 'actif');
+  assert.strictEqual(fam.abonnement.resiliationLe, null);
+  assert.ok((await ligne(id2)).resiliationLe, 'admin : arrêt prévu sur la 2e commande');
+  assert.strictEqual((await ligne(id)).resiliationLe, null, 'admin : rien sur la commande de la famille');
+
+  await s.appeler('annulerResiliation', { fid, commande: id2 }, a.TANGUY);
+  await s.calme();
+  assert.strictEqual(s.stripe.etat.abonnements.get(id2).cancel_at, null, 'reprise de la 2e commande');
+  assert.strictEqual((await ligne(id2)).resiliationLe, null);
+
+  // Sans commande précise : toujours l'abonnement de la famille (appli du client).
+  await s.appeler('resilierAbonnement', { fid }, paul);
+  await s.calme();
+  assert.ok(s.stripe.etat.abonnements.get(id).cancel_at);
+  assert.strictEqual(s.stripe.etat.abonnements.get(id2).cancel_at, null);
+  assert.ok((await ligne(id)).resiliationLe);
+});
+
+test('résiliation : la tablette peut être renvoyée tout de suite ; sans adresse, l\'appli la demande et le QR code se crée', async () => {
+  await s.db.doc('gestion/reglages').set({ expediteur: { nom: 'Papote', adresse: '1 rue de test', cp: '07000', ville: 'Privas' } }, { merge: true });
+  const paul = await s.compte('Paul', 'paul@exemple.fr');
+  const { id, fid } = await familleAbonnee(paul);
+  await premierMoisPasse(id);
+  s.boite.length = 0;
+  const { le } = await s.appeler('resilierAbonnement', { fid }, paul);
+  await s.calme();
+  const mailArret = s.boite.find((m) => m.a === paul.email && /résiliation/i.test(m.sujet));
+  assert.ok(mailArret && /Je renvoie la tablette/.test(mailArret.texte), 'e-mail : renvoyer dès maintenant');
+  assert.doesNotMatch(mailArret.texte, /attendre ce jour/);
+  assert.strictEqual((await s.appeler('finDeContrat', { fid }, paul)).retourAnticipe, true);
+
+  // Commande sans adresse (Tanguy, 30/10 : tablette jumelée sans livraison) : l'appli demande l'adresse (Tanguy, 31/10 :
+  // Mondial Relay toujours possible), rien n'est bloqué ni payé chez Sendcloud avant.
+  await s.db.doc(`commandes/${id}`).update({ livraison: null });
+  assert.strictEqual((await s.appeler('finDeContrat', { fid }, paul)).adresse, false, 'l\'appli sait qu\'il faut l\'adresse');
+  await assert.rejects(s.appeler('renvoyerTablette', { fid }, paul), (e) => /Indiquez votre adresse/.test(e.message) && e.details && e.details.adresse === true);
+  await assert.rejects(s.appeler('renvoyerTablette', { fid, adresse: { rue: '3 place Bellecour', cp: '6900', ville: 'Lyon' } }, paul), /5 chiffres/);
+  await assert.rejects(s.appeler('renvoyerTablette', { fid, adresse: { rue: '', cp: '69002', ville: 'Lyon' } }, paul), /numéro et la rue/);
+  let c = await commande(id);
+  assert.strictEqual(c.restitution.statut, 'attendue');
+  assert.strictEqual(c.restitution.anticipe, true);
+  assert.strictEqual(c.restitution.qrDemandeLe, undefined, 'pas bloqué deux minutes');
+  assert.strictEqual(s.sendcloud.colis.size, 0, 'aucune étiquette payée sans adresse');
+
+  const qr = await s.appeler('renvoyerTablette', { fid, adresse: { rue: ' 3  place Bellecour ', cp: '69002', ville: 'Lyon' } }, paul);
+  assert.ok(qr.qr && qr.etiquette, 'QR code créé avec l\'adresse donnée');
+  const colis = [...s.sendcloud.colis.values()][0];
+  assert.strictEqual(colis.de.address_line_1, '3 place Bellecour');
+  assert.strictEqual(colis.de.postal_code, '69002');
+  c = await commande(id);
+  assert.deepStrictEqual(c.retourAdresse, { rue: '3 place Bellecour', cp: '69002', ville: 'Lyon' });
+  assert.ok(Math.abs(c.restitution.avant.toMillis() - regles.limiteRestitution(le)) < 60e3, 'même date limite qu\'à l\'arrêt');
 });
 
 test('abonnement résilié, tablette encore là : reprise sans les 60 €, retour attendu annulé, tablette rattachée', async () => {
@@ -367,4 +442,44 @@ test('pas vue depuis deux jours : une alerte aux responsables, pas de rappel tan
   s.avancer(3);
   await s.tache('alerteMatin');
   assert.strictEqual(alertes().length, 2, 'hors ligne : rien');
+});
+
+test('tablette remise en main propre : la famille n\'a que Mondial Relay (adresse demandée) ; la main propre se note dans l\'admin', async () => {
+  await s.db.doc('gestion/reglages').set({ expediteur: { nom: 'Papote', adresse: '1 rue de test', cp: '07000', ville: 'Privas' } }, { merge: true });
+  const paul = await s.compte('Paul', 'paul@exemple.fr');
+  const { id, fid } = await familleAbonnee(paul);
+  await premierMoisPasse(id);
+  // Remise en main propre (comme EJ4N : pas d'adresse de livraison).
+  await s.db.doc(`commandes/${id}`).update({ remise: 'main-propre', livraison: null });
+  s.boite.length = 0;
+  await assert.rejects(s.appeler('gestionCommande', { commande: id, action: 'retourEnMain', main: true }, a.TANGUY), /Aucune tablette attendue/);
+  await s.appeler('resilierAbonnement', { fid }, paul);
+  await s.calme();
+  // Jamais de main propre proposée à la famille (Tanguy, 31/10) : ni dans l'e-mail, ni dans l'appli.
+  const arret = s.boite.find((m) => m.a === paul.email && /résiliation/i.test(m.sujet));
+  assert.match(arret.texte, /Je renvoie la tablette/);
+  assert.doesNotMatch(arret.texte, /main propre/i);
+  const fin = await s.appeler('finDeContrat', { fid }, paul);
+  assert.strictEqual(fin.adresse, false);
+  assert.strictEqual(fin.mainPropre, undefined);
+  // Sans adresse : l'appli la demande, puis le QR code Mondial Relay se crée (le retour commence).
+  await assert.rejects(s.appeler('renvoyerTablette', { fid }, paul), /Indiquez votre adresse/);
+  const qr = await s.appeler('renvoyerTablette', { fid, adresse: { rue: '8 rue des Lilas', cp: '07000', ville: 'Privas' } }, paul);
+  assert.ok(qr.qr, 'QR code Mondial Relay');
+  // Tanguy préfère passer la chercher : il le note dans l'admin. Seul l'admin peut le faire.
+  let c = await commande(id);
+  assert.ok(c.restitution && c.restitution.statut === 'attendue');
+  await assert.rejects(s.appeler('gestionCommande', { commande: id, action: 'retourEnMain', main: true }, paul), /administrateur/);
+  assert.deepStrictEqual(await s.appeler('gestionCommande', { commande: id, action: 'retourEnMain', main: true }, a.TANGUY), { ok: true, main: true });
+  c = await commande(id);
+  assert.ok(c.restitution.mainPropreLe, 'retour en main propre noté');
+  assert.ok(!s.boite.some((m) => m.a === paul.email && /main propre/i.test(m.texte)), 'la famille ne reçoit rien à ce sujet');
+  const ligne = (await s.appeler('gestionDonnees', {}, a.TANGUY)).commandes.find((x) => x.id === id);
+  assert.ok(ligne.restitution.mainPropreLe, 'visible dans l\'admin');
+  // Retour à Mondial Relay, puis Tanguy la récupère : « Matériel reçu » clôt comme pour un colis.
+  await s.appeler('gestionCommande', { commande: id, action: 'retourEnMain', main: false }, a.TANGUY);
+  assert.strictEqual((await commande(id)).restitution.mainPropreLe, undefined);
+  await s.appeler('tabletteRendue', { commande: id }, a.TANGUY);
+  await s.calme();
+  assert.strictEqual((await commande(id)).restitution.statut, 'rendue');
 });

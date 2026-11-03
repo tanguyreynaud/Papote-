@@ -143,17 +143,20 @@ test('page de paiement abandonnée : la tablette mise de côté est libérée', 
   assert.strictEqual((await s.requete('stockDisponible')).json.precommande, false);
 });
 
-test('stock épuisé : précommande jusqu\'à stock + 10, puis attente longue, jamais fermé', async () => {
-  let session = await a.commanderSurLeSite({ email: 'a@exemple.fr' });
-  assert.strictEqual(s.stripe.etat.sessions.get(session).params.subscription_data.metadata.delai, 'precommande');
+test('stock épuisé : au lancement, on ne vend que le stock réel (« Être prévenu » sur le site)', async () => {
+  assert.deepStrictEqual((await s.requete('stockDisponible')).json, { disponible: false, precommande: true, attenteLongue: false });
+  // Clé Stripe de test (simulation) : une commande d'essai passe quand même, sans rien mettre de côté.
+  const session = await a.commanderSurLeSite({ email: 'a@exemple.fr' });
+  assert.strictEqual(s.stripe.etat.sessions.get(session).params.subscription_data.metadata.reservation, undefined);
+  assert.strictEqual((await s.db.collection('reservations').get()).size, 0);
   s.stripe.expirerSession(session);
   await s.calme();
-  for (let i = 0; i < 10; i++) {
-    await s.db.collection('commandes').add({ expedition: 'a-preparer', email: `c${i}@exemple.fr`, fid: null });
-  }
-  assert.deepStrictEqual((await s.requete('stockDisponible')).json, { disponible: true, precommande: false, attenteLongue: true });
-  session = await a.commanderSurLeSite({ email: 'b@exemple.fr' });
-  assert.strictEqual(s.stripe.etat.sessions.get(session).params.subscription_data.metadata.delai, 'long');
+  // Une tablette arrive : le site revend.
+  await a.tablettePreparee();
+  assert.deepStrictEqual((await s.requete('stockDisponible')).json, { disponible: true, precommande: false, attenteLongue: false });
+  const vendue = await a.commanderSurLeSite({ email: 'b@exemple.fr' });
+  assert.strictEqual(s.stripe.etat.sessions.get(vendue).params.subscription_data.metadata.delai, 'stock');
+  assert.strictEqual((await s.requete('stockDisponible')).json.disponible, false, 'la seule tablette est mise de côté pendant le paiement');
 });
 
 test('webhook Stripe avec une fausse signature : refusé', async () => {
@@ -393,5 +396,5 @@ test('couverture 4G vérifiée par Papote : pas de paiement là où la carte SIM
   const { abonnement } = await a.commanderEtPayer({ email: 'lucie@exemple.fr', nom: 'Lucie Morel' });
   const c = await commande(abonnement);
   assert.deepStrictEqual(c.proche, { adresse: '2 place de l\'Église 07310 Saint-Martin-de-Valamas', lat: 44.9369, lon: 4.3683, couverture4g: 'TBC' });
-  assert.ok(s.boite.some((m) => m.a === 'contact@mapapote.fr' && /Chez le proche.*Saint-Martin-de-Valamas.*très bonne/.test(m.texte)));
+  assert.ok(s.boite.some((m) => m.a === 'contact@mapapote.fr' && /Chez le proche.*Saint-Martin-de-Valamas[\s\S]*très bonne/.test(m.texte)));
 });

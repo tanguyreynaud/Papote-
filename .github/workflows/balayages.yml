@@ -1,0 +1,50 @@
+# Balayages de la galerie (outils/galerie) sur le site vitrine et les e-mails, à chaque changement de vitrine/
+# ou du générateur d'e-mails : double toucher, appui long, gestes humains (paysage, zoom, texte agrandi, sombre),
+# accessibilité (WCAG, texte et cibles trop petits), e-mails dans les vraies boîtes, et la galerie elle-même
+# (erreurs de page, clavier ouvert, largeur). Chaque balayage échoue (code 1) dès qu'un souci est trouvé :
+# rien ne se fusionne en rouge. Gratuit (dépôt public), rien ne part en ligne. Rapports dans l'artefact « balayages ».
+name: Balayages site et e-mails
+
+on:
+  push:
+    paths: ['vitrine/**', 'functions/mail.js', 'functions/mail/**', 'outils/galerie/**', '.github/workflows/balayages.yml']
+  pull_request:
+    paths: ['vitrine/**', 'functions/mail.js', 'functions/mail/**', 'outils/galerie/**', '.github/workflows/balayages.yml']
+  workflow_dispatch:
+
+jobs:
+  balayage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        mode:
+          - '--double vitrine'
+          - '--appui vitrine'
+          - '--gestes vitrine'
+          - '--accessibilite vitrine'
+          - '--courriels'
+          - 'vitrine emails'
+    defaults:
+      run:
+        working-directory: outils/galerie
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Pas de package-lock.json dans outils/ (.gitignore) : npm install, pas npm ci.
+      - run: npm install --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - name: Balayage ${{ matrix.mode }}
+        run: node galerie.js ${{ matrix.mode }} --vitrine=ici --emails=ici
+      - name: Rapports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: balayages-${{ strategy.job-index }}
+          path: |
+            outils/galerie/sortie/*.txt
+            outils/galerie/sortie/galerie.html
+          if-no-files-found: ignore
