@@ -1,6 +1,6 @@
 # Installe la sauvegarde automatique de Papote : chaque dimanche à 3 h (ou au prochain allumage du PC si
 # celui-ci était éteint), sauvegarder.bat --auto --vers <dossier>, avec un journal dans <dossier>\journal.txt.
-# Utilisation : .\installer-sauvegarde-hebdo.bat D:\PapoteSauvegardes   (dossier par défaut : Documents\PapoteSauvegardes)
+# Utilisation : .\installer-sauvegarde-hebdo.bat "G:\Mon Drive\PapoteSauvegardes"   (dossier par défaut : Documents\PapoteSauvegardes)
 #               .\installer-sauvegarde-hebdo.bat -Retirer                 (supprime la tâche)
 param([string]$Dossier = "$env:USERPROFILE\Documents\PapoteSauvegardes", [switch]$Retirer)
 

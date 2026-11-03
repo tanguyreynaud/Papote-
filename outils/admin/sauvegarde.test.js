@@ -173,3 +173,17 @@ test('verifier-sauvegarde.js : une vraie sauvegarde sur le disque se relit ; un 
   assert.match(manque.sortie, /1 envoi\(s\) de la base sans fichier dans la copie \(ex\. families\/fam1\/p2.jpg\)/);
   fs.rmSync(dossier, { recursive: true, force: true });
 });
+
+test('garderDernieres : seules les 4 sauvegardes les plus récentes restent, le reste du dossier n\'est pas touché', () => {
+  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'papote-garder-'));
+  const noms = ['papote-2026-10-04-03-00-00.json', 'papote-2026-10-11-03-00-01.json', 'papote-2026-10-18-03-00-00.json',
+    'papote-2026-10-25-03-00-00.json', 'papote-2026-11-01-03-00-00.json', 'papote-2026-11-08-03-00-00.json'];
+  for (const n of noms) fs.writeFileSync(path.join(dossier, n), '{}');
+  fs.writeFileSync(path.join(dossier, 'journal.txt'), 'x');
+  fs.writeFileSync(path.join(dossier, 'papote-test.json'), '{}'); // nom sans date : jamais effacé
+  assert.deepStrictEqual(lib.garderDernieres(dossier, 4), noms.slice(0, 2));
+  assert.deepStrictEqual(fs.readdirSync(dossier).sort(), [...noms.slice(2), 'journal.txt', 'papote-test.json'].sort());
+  assert.deepStrictEqual(lib.garderDernieres(dossier, 4), [], 'rien de plus à effacer');
+  assert.deepStrictEqual(lib.garderDernieres(dossier, 0), [], '0 = tout garder');
+  fs.rmSync(dossier, { recursive: true, force: true });
+});

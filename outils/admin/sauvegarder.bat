@@ -1,5 +1,5 @@
 @echo off
-rem Sauvegarde de la base (et des photos/videos) dans sauvegardes\ (a copier hors du PC). --auto : sans pause (tache planifiee).
+rem Sauvegarde de la base et des comptes dans sauvegardes\ (4 dernieres gardees). --photos : aussi les fichiers. --auto : sans pause (tache planifiee).
 cd /d "%~dp0"
 if not exist node_modules\firebase-admin (
   echo Installation de firebase-admin...

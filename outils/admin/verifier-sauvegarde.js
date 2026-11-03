@@ -49,7 +49,7 @@ if (!process.env.FIRESTORE_EMULATOR_HOST) { console.error('À lancer par verifie
     if (sansCopie.length) soucis.push(`${sansCopie.length} envoi(s) de la base sans fichier dans la copie (ex. ${sansCopie[0]})`);
     else console.log(`  Les ${attendus.length} fichiers cités par la base sont dans la copie.`);
   } else {
-    console.log('Photos et vidéos : pas de dossier fichiers à côté de la sauvegarde (sauvegarde faite avec --sans-photos ?).');
+    console.log('Photos et vidéos : pas copiées ici (normal : protégées par la suppression douce du bucket, voir RESTAURER-UN-FICHIER.md).');
   }
 
   const age = (Date.now() - new Date(sauvegarde.le).getTime()) / 86_400_000;

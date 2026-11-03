@@ -202,4 +202,15 @@ async function restaurerFichiers({ bucket, dossier, progression = () => {}, para
   return { remis, total: aRemettre.length };
 }
 
-module.exports = { encoder, decoder, toutLire, lireComptes, sauvegarder, restaurer, sauvegarderFichiers, verifierFichiers, restaurerFichiers, VERSION };
+// Ne garde que les n sauvegardes de la base les plus récentes du dossier (papote-<date>.json, le nom porte la date).
+// Rend les noms effacés. n = 0 : rien n'est effacé.
+function garderDernieres(dossier, n = 4) {
+  if (!n || n < 1) return [];
+  const fs = require('fs');
+  const fichiers = fs.readdirSync(dossier).filter((f) => /^papote-\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}\.json$/.test(f)).sort();
+  const aEffacer = fichiers.slice(0, Math.max(0, fichiers.length - n));
+  for (const f of aEffacer) fs.unlinkSync(pathLib.join(dossier, f));
+  return aEffacer;
+}
+
+module.exports = { encoder, decoder, toutLire, lireComptes, sauvegarder, restaurer, sauvegarderFichiers, verifierFichiers, restaurerFichiers, garderDernieres, VERSION };
