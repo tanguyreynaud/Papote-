@@ -466,7 +466,7 @@ test('avancement des parcours nettoyé', () => {
 
 test('batterie : relevé de la tablette et usure', () => {
   const b = g.releveBatterie({ battery: { level: 80, charging: true, health: 'bonne', temperature: 31.5, at: 5 }, lastSeen: 4 });
-  assert.deepStrictEqual(b, { niveau: 80, enCharge: true, sante: 'bonne', temperature: 31.5, cycles: null, le: 5, vueLe: 4, enLigneLe: null });
+  assert.deepStrictEqual(b, { niveau: 80, enCharge: true, sante: 'bonne', temperature: 31.5, cycles: null, le: 5, vueLe: 4, enLigneLe: null, fuseau: null });
   assert.strictEqual(g.usureBatterie(b), null);
   assert.strictEqual(g.usureBatterie(null), null);
   assert.strictEqual(g.usureBatterie({ sante: 'morte' }), 'batterie morte');

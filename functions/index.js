@@ -216,8 +216,8 @@ async function relierTabletteInstallee(fid, commande, { reprise = false } = {}) 
 
 // Une tablette du stock mise de côté pour ce paiement, ou null s'il n'y en a plus.
 // En clé Stripe de test, une commande d'essai passe même sans stock, sans rien réserver.
-async function reserverTablette() {
-  const resa = await stock.reserver(db);
+async function reserverTablette(qui = {}) {
+  const resa = await stock.reserver(db, qui);
   if (resa || !STRIPE_SECRET.value().startsWith('sk_test_')) return resa;
   logger.info("Stock à 0 : commande d'essai acceptée (clé Stripe de test).");
   return { id: null, expireA: null };
@@ -544,8 +544,15 @@ exports.commander = onRequest({ secrets: [STRIPE_SECRET] }, async (req, res) => 
   const email = emailValide(req.query.email);
   const accord = req.query.accord === '1';
   try {
+    // Trop de pages de paiement ouvertes sans payer (stock.js) : la page de commande le dit.
+    const ip = String(req.get('x-forwarded-for') || req.ip || '').split(',')[0].trim();
+    if (await stock.tropDEssais(db, { ip, email })) {
+      logger.warn(`commander : trop d'essais${email ? ` pour ${email}` : ''}`);
+      res.redirect(303, `${SITE_VITRINE.value()}/commande.html?trop=1`);
+      return;
+    }
     // Plus de tablette à vendre (stock.js) : retour à la page de commande, qui propose « Être prévenu ».
-    const reservation = await reserverTablette();
+    const reservation = await reserverTablette({ ip, email });
     if (!reservation) {
       res.redirect(303, `${SITE_VITRINE.value()}/commande.html`);
       return;
@@ -1062,6 +1069,21 @@ exports.stripeWebhook = onRequest(
       return;
     }
 
+    // Chaque événement n'est traité qu'une fois (interne/stripe/evenements/{id}) : Stripe renvoie un événement
+    // tant qu'il n'a pas eu de réponse à temps, et parfois après l'avoir eue. Un traitement encore en cours
+    // (moins de 2 minutes) renvoie une erreur : Stripe réessaiera plus tard.
+    const marque = db.doc(`interne/stripe/evenements/${event.id}`);
+    try {
+      await marque.create({ type: event.type, recuLe: FieldValue.serverTimestamp(), fini: false });
+    } catch (e) {
+      if (e.code !== 6 && !/already exists/i.test(e.message || '')) throw e;
+      const m = await marque.get();
+      if (m.get('fini')) { res.json({ recu: true, deja: true }); return; }
+      const recuLe = m.get('recuLe');
+      if (recuLe && Date.now() - recuLe.toMillis() < 2 * 60 * 1000) { res.status(500).send('Déjà en cours'); return; }
+      await marque.set({ recuLe: FieldValue.serverTimestamp() }, { merge: true });
+    }
+
     try {
       if (event.type === 'checkout.session.completed' || event.type === 'checkout.session.async_payment_succeeded') {
         await paiementTermine(event.data.object);
@@ -1076,6 +1098,7 @@ exports.stripeWebhook = onRequest(
       } else if (event.type === 'charge.dispute.created') {
         await contestation(event.data.object);
       }
+      await marque.set({ fini: true, finiLe: FieldValue.serverTimestamp() }, { merge: true });
       res.json({ recu: true });
     } catch (e) {
       // Stripe renverra l'événement plus tard.

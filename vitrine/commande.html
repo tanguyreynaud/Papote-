@@ -382,6 +382,11 @@ body .ps-bouton { bottom: 6.5rem; }
   }
   var q = new URLSearchParams(location.search);
   var relais = null;
+  // Trop de pages de paiement ouvertes sans payer (garde-fou du serveur) : on le dit, sans rien bloquer d'autre.
+  if (q.get('trop') === '1') {
+    dire(false, 'Plusieurs paiements ont été ouverts sans aboutir depuis cette connexion.',
+      'Par sécurité, attendez une heure avant de réessayer. Une question ? contact@mapapote.fr');
+  }
 
   var payer = document.getElementById('payer');
   var manque = document.getElementById('manque');
