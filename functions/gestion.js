@@ -3352,6 +3352,18 @@ exports.gestionSupprimerFamille = onCall({ timeoutSeconds: 540, memory: '512MiB'
   if (parties.length && typeof recupere !== 'boolean') {
     throw new HttpsError('failed-precondition', 'Dites d\'abord si la tablette et les accessoires de la commande offerte sont récupérés.');
   }
+  const qui = request.auth.token.email || request.auth.uid;
+  const { membres } = await effacerFamille({ fid, snap, commandes: commandes.docs, par: qui });
+  await closOffertes(offertes, recupere === true, qui);
+  logger.info(`Famille ${fid} supprimée par ${request.auth.token.email}`);
+  return { ok: true, membres };
+});
+
+// Efface tout ce qui reste d'une famille : fichiers, base, jumelages ; les commandes gardent la trace de la
+// suppression (pièces comptables) et suppressions/ note qui l'a faite. Partagé avec la purge mensuelle
+// (purge.js) des familles résiliées depuis plus de 12 mois.
+async function effacerFamille({ fid, snap, commandes, par }) {
+  const ref = db().doc(`families/${fid}`);
   const membres = await ref.collection('members').get();
   // Fichiers d'abord : si la base échoue ensuite, un nouvel essai finit le travail.
   await stockage().deleteFiles({ prefix: `families/${fid}/`, force: true });
@@ -3359,14 +3371,13 @@ exports.gestionSupprimerFamille = onCall({ timeoutSeconds: 540, memory: '512MiB'
   // Jumelages de cette famille : sans eux, le rattrapage de nuit ne relie plus la tablette à une famille disparue.
   const jumelages = await db().collection('pairings').where('fid', '==', fid).get();
   await Promise.all(jumelages.docs.map((d) => d.ref.delete()));
-  await Promise.all(commandes.docs.map((d) => d.ref.update({ familleSupprimeeLe: Date.now() })));
-  await closOffertes(offertes, recupere === true, request.auth.token.email || request.auth.uid);
+  await Promise.all(commandes.map((d) => d.ref.update({ familleSupprimeeLe: Date.now() })));
   await db().collection('suppressions').add({
-    fid, nom: snap.get('name') || null, membres: membres.size, le: Date.now(), par: request.auth.token.email || request.auth.uid,
+    fid, nom: snap.get('name') || null, membres: membres.size, le: Date.now(), par,
   });
-  logger.info(`Famille ${fid} supprimée par ${request.auth.token.email}`);
-  return { ok: true, membres: membres.size };
-});
+  return { membres: membres.size };
+}
+exports.effacerFamille = effacerFamille;
 
 // Commandes offertes encore ouvertes (ni annulées ni closes), et celles dont la tablette est partie chez le proche.
 function offertesOuvertes(docs) {

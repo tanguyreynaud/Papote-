@@ -65,3 +65,17 @@ test('coordonnées à l\'ouverture du chat : tout est obligatoire, accord seulem
   assert.strictEqual(inscriptionValide({ prenom: 'Léa', nom: 'Martin', telephone: '0612', email: 'lea@x.fr' }), null);
   assert.strictEqual(inscriptionValide({ prenom: 'Léa', nom: 'Martin', telephone: '0612345678', email: 'lea' }), null);
 });
+
+// Le guide du chat ne doit plus contredire l'offre (audit du 2026-11-03).
+test('le guide ne dit plus que la commande est fermée ni que deux abonnements vont dans une famille', () => {
+  const guide = require('fs').readFileSync(require('path').join(__dirname, 'support-connaissances.md'), 'utf8');
+  for (const faux of ["pas encore ouvert", "liste d'attente", 'avec deux abonnements', '45 minutes', 'au lancement']) {
+    assert.ok(!guide.includes(faux), `le guide contient encore « ${faux} »`);
+  }
+  for (const vrai of ['bouton « Commander »', 'État du stock', 'une famille Papote = une tablette', 'environ une heure', 'Livraison à domicile', 'numéro de téléphone']) {
+    assert.ok(guide.includes(vrai), `le guide ne contient pas « ${vrai} »`);
+  }
+  const { STOCK_DISPONIBLE, STOCK_EPUISE } = require('./support')._test;
+  assert.ok(STOCK_DISPONIBLE.startsWith('# État du stock') && STOCK_EPUISE.startsWith('# État du stock'));
+  assert.ok(STOCK_DISPONIBLE.includes('Commander') && STOCK_EPUISE.includes('Être prévenu'));
+});
