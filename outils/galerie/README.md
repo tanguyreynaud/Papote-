@@ -82,7 +82,27 @@ Même mécanique (serveur bloqué, premier écran où chaque bouton apparaît), 
 | `--gestes [famille vitrine]` | chaque écran en paysage, zoom 130 %, texte +30 %, mode sombre, noms très longs ; bouton retour ; retour après paiement | `gestes.txt` |
 | `--identifiants [admin famille]` | chaque bouton qui agit sur une commande ou un abonnement envoie bien l'identifiant de la page ouverte | `identifiants.txt` |
 | `--accessibilite [famille vitrine admin tablette]` | axe-core (WCAG A/AA) + texte trop petit, cible trop petite ; les défauts WCAG acceptés sont dans `acceptes.txt` | `accessibilite.txt` |
-| `--courriels` | chaque e-mail à 320/375/412/600/900 px sans police ni image, poids, liens, texte brut, contraste | `courriels.txt` |
+| `--courriels` | chaque e-mail de 320 à 1000 px sans police ni image ; simulé dans Gmail sans styles, Outlook bureau (Word, approché), mode sombre partiel et total, images bloquées ; relecture du code d'après caniemail ; poids, liens, texte brut, contraste | `courriels.txt`, captures dans `courriels.html` |
+
+### E-mails : ce que `--courriels` simule, et ce qu'il ne voit pas
+
+Sans vraie boîte ni envoi, chaque e-mail est transformé comme le ferait chaque boîte puis rendu dans Chromium :
+
+- **Gmail sans styles** (applis Gmail, comptes non Google, transferts) : `<style>`, `<link>`, `<script>`, `class`, `id`,
+  `position` et images de fond retirés ; 360 et 1000 px. Rien ne doit déborder, le bouton doit garder sa taille.
+- **Outlook bureau (moteur Word), approché** : commentaires `[if mso]` appliqués, `@media`, `max-width`, `border-radius`,
+  flex/grid, padding des liens et taille des `<div>` ignorés ; 1000 px. La carte doit rester à 640 px au plus.
+- **Mode sombre** : inversion totale (Outlook.com, applis Outlook, Gmail iOS) et partielle (appli Gmail Android :
+  fonds clairs et textes foncés seulement), clarté inversée dans l'espace Lab. Chaque texte garde un contraste ≥ 4,5.
+- **Images bloquées** : chaque `<img>` a un `alt` (vide si décorative), `width` et `height` ; le texte reste lisible.
+- **Relecture du code** (caniemail) : en erreur ce qui casse vraiment (flex/grid, `max-width` sans tableau fixe pour
+  Outlook, bouton sans repli `mso-padding-alt`, image sans `alt` ou sans `width`, `position`, image de fond sans
+  couleur) ; le reste en avertissement à la fin de `courriels.txt`.
+
+Ne se voit que dans une vraie boîte : les bizarreries exactes de Word (interlignes, marges des paragraphes, polices
+de repli, mise à l'échelle 120 dpi), les vrais algorithmes de mode sombre (chaque boîte a le sien, et ils changent),
+Apple Mail et Yahoo, les filtres anti-spam et la délivrabilité (SPF, DKIM, DMARC, réputation), le rendu des polices
+réelles. Pour cela : un envoi de test vers de vraies boîtes Gmail et Outlook, ou un service comme Litmus / Email on Acid.
 
 **Chaque balayage, et la galerie elle-même (erreur de page, clavier ouvert, largeur), finit en erreur (code 1)
 dès qu'un souci est trouvé.** C'est ce que GitHub Actions lance à chaque changement, sur la branche concernée :

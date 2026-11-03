@@ -93,3 +93,14 @@ test('rien ne cite une ancienne formule, Linote, ni un essai gratuit', () => {
     assert.ok(s.contenu.html.length < 60000, s.titre);
   }
 });
+
+test('Outlook et Gmail sans styles : carte de 560 px [if mso], bouton à toute épreuve, ni flex ni <div> dimensionné', () => {
+  const m = mail.colisParti({ nom: 'Julie', suivi: '12345678', lien: 'https://x/s', relais: { nom: 'Tabac', adresse: '4 rue', cp: '69003', ville: 'Lyon' }, code: 'ABCD-1234' });
+  assert.match(m.html, /<!--\[if mso\]><table role="presentation" width="560"/);
+  assert.match(m.html, /mso-padding-alt:15px 28px"><a /);
+  assert.match(m.html, /<o:PixelsPerInch>96<\/o:PixelsPerInch>/);
+  assert.doesNotMatch(m.html, /display:(flex|grid)|position:/);
+  assert.doesNotMatch(m.html, /<div style="width:/);
+  assert.doesNotMatch(m.html, /<a href="[^"]*">/); // chaque lien a sa couleur en ligne
+  for (const t of m.html.match(/<table\b[^>]*>/g)) assert.match(t, /role="presentation"/);
+});
