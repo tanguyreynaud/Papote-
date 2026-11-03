@@ -4,14 +4,21 @@
 //   node sauvegarder.js                      : écrit sauvegardes\papote-<date>.json à côté de ce script
 //   node sauvegarder.js --vers D:\sauvegardes : dans ce dossier
 //   node sauvegarder.js --base europe        : force la base (sinon config/base, comme les autres outils)
-// Coût : une lecture Firestore par document (quelques milliers pour dix familles).
+//   node sauvegarder.js --sans-photos        : la base seulement (sinon les photos et vidéos sont copiées aussi,
+//                                              dans <dossier>\fichiers, seulement ce qui est nouveau ou a changé)
+//   node sauvegarder.js --auto               : lancé par la tâche planifiée (voir installer-sauvegarde-hebdo.bat)
+// Coût : une lecture Firestore par document (quelques milliers pour dix familles) ; un téléchargement par nouveau
+// fichier Storage (sortie gratuite jusqu'à 1 Go par jour, puis 0,12 $/Go : une famille = 200 photos, ~100 Mo).
+// Rien n'est jamais effacé du dossier : garder les 4 dernières sauvegardes de la base suffit, le dossier fichiers
+// se complète tout seul.
 // Clé d'administration : %USERPROFILE%\.papote\cle-admin-firebase.json (jamais dans le dépôt).
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const admin = require('firebase-admin');
 const { ouvrirBase } = require('./base');
-const { sauvegarder } = require('./sauvegarde-lib');
+const { sauvegarder, sauvegarderFichiers } = require('./sauvegarde-lib');
+const BUCKET = process.env.BUCKET_STORAGE || 'papote-famille-eu';
 
 function option(name, fallback) {
   const i = process.argv.indexOf(`--${name}`);
@@ -43,7 +50,18 @@ const dossier = option('vers', path.join(__dirname, 'sauvegardes'));
   fs.writeFileSync(fichier, JSON.stringify(s));
   const ko = Math.round(fs.statSync(fichier).size / 1024);
   console.log(`Sauvegarde écrite : ${fichier} (${s.documents.length} documents, ${s.comptes.length} comptes, ${ko} ko).`);
-  console.log('À copier hors du PC. Les photos et vidéos (Storage) ne sont pas dedans : voir le README.');
+  if (process.argv.includes('--sans-photos')) {
+    console.log('Photos et vidéos non copiées (--sans-photos).');
+  } else {
+    const bucket = admin.storage(app).bucket(BUCKET);
+    const f = await sauvegarderFichiers({
+      bucket, dossier: path.join(dossier, 'fichiers'),
+      progression: (n, total) => process.stdout.write(`\r${n} / ${total} fichiers copiés`),
+    });
+    if (f.copies) process.stdout.write('\n');
+    console.log(`Photos et vidéos : ${f.total} fichiers dans ${BUCKET}, ${f.copies} nouveaux copiés (${Math.round(f.octets / 1024 / 1024)} Mo) dans ${path.join(dossier, 'fichiers')}.`);
+  }
+  console.log('À garder hors du PC (clé USB, disque). Vérifier une fois par mois : verifier-sauvegarde.bat <fichier.json>.');
   process.exit(0);
 })().catch((e) => {
   console.error('Sauvegarde impossible :', e.message);

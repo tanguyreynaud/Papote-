@@ -1,13 +1,14 @@
 # Tests des fonctions serveur, à chaque changement de functions/ (gratuit, rien ne part en ligne) :
 #   unitaires  règles pures (npm test)
 #   parcours   parcours client complet sur les émulateurs Firebase, Stripe et e-mails simulés (npm run parcours)
+#   sauvegarde sauvegarde/restauration de la base et des photos, et le script de vérification (outils/admin)
 name: Tests
 
 on:
   push:
-    paths: ['functions/**', '.github/workflows/tests.yml']
+    paths: ['functions/**', 'outils/admin/**', '.github/workflows/tests.yml']
   pull_request:
-    paths: ['functions/**', '.github/workflows/tests.yml']
+    paths: ['functions/**', 'outils/admin/**', '.github/workflows/tests.yml']
   workflow_dispatch:
 
 jobs:
@@ -37,3 +38,7 @@ jobs:
         run: npm test
       - name: Parcours client (émulateurs)
         run: npm run parcours
+      - name: Sauvegarde et restauration (émulateurs)
+        env:
+          NODE_PATH: ${{ github.workspace }}/functions/node_modules
+        run: npx --yes firebase-tools@14 emulators:exec --only firestore,auth --project demo-papote --config parcours/firebase.json "node --test ../outils/admin/sauvegarde.test.js"

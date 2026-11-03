@@ -5,6 +5,8 @@
 //   node restaurer.js sauvegardes\papote-....json --oui                     : restaure (écrase les documents)
 //   node restaurer.js sauvegardes\papote-....json --oui --effacer           : et efface ce qui n'est pas dedans
 //   node restaurer.js ... --comptes                                         : restaure aussi les comptes absents
+//   node restaurer.js ... --photos                                          : remet aussi les photos et vidéos
+//                                                                             (dossier fichiers à côté du .json)
 // Options : --base europe. Les comptes restaurés n'ont pas de mot de passe (comptes Google ou anonymes : rien à
 // faire ; comptes « appels » des tablettes : la tablette le recrée).
 // Clé d'administration : %USERPROFILE%\.papote\cle-admin-firebase.json (jamais dans le dépôt).
@@ -13,7 +15,8 @@ const os = require('os');
 const path = require('path');
 const admin = require('firebase-admin');
 const { ouvrirBase } = require('./base');
-const { restaurer } = require('./sauvegarde-lib');
+const { restaurer, restaurerFichiers } = require('./sauvegarde-lib');
+const BUCKET = process.env.BUCKET_STORAGE || 'papote-famille-eu';
 
 function option(name, fallback) {
   const i = process.argv.indexOf(`--${name}`);
@@ -34,6 +37,7 @@ if (option('base', null)) process.env.PAPOTE_BASE = option('base', null);
 const oui = process.argv.includes('--oui');
 const effacer = process.argv.includes('--effacer');
 const comptes = process.argv.includes('--comptes');
+const photos = process.argv.includes('--photos');
 
 (async () => {
   const sauvegarde = JSON.parse(fs.readFileSync(fichier, 'utf8'));
@@ -57,6 +61,14 @@ const comptes = process.argv.includes('--comptes');
   });
   process.stdout.write('\n');
   console.log(`Restauré : ${r.documents} documents, ${r.comptes} comptes.`);
+  if (photos) {
+    const f = await restaurerFichiers({
+      bucket: admin.storage(app).bucket(BUCKET), dossier: path.join(path.dirname(fichier), 'fichiers'),
+      progression: (n, total) => process.stdout.write(`\r${n} / ${total} fichiers remis`),
+    });
+    if (f.total) process.stdout.write('\n');
+    console.log(`Photos et vidéos : ${f.remis} fichier(s) remis dans ${BUCKET}.`);
+  }
   process.exit(0);
 })().catch((e) => {
   console.error('Restauration impossible :', e.message);

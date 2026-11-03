@@ -378,6 +378,8 @@ function releveBatterie(membre) {
   return {
     niveau: val(b.level), enCharge: val(b.charging), sante: b.health || null, temperature: val(b.temperature),
     cycles: val(b.cycles), le: b.at || null, vueLe: (membre && membre.lastSeen) || null, enLigneLe: (membre && membre.lastOnline) || null,
+    // Fuseau horaire de la tablette (Sync.java) : la veille 21 h-6 h 30 et les rappels en dépendent.
+    fuseau: (membre && membre.fuseau) || null,
   };
 }
 
@@ -2084,6 +2086,7 @@ async function automatiser(qui) {
   const maintenant = Date.now();
   const bilan = { factures: [], avoirs: [], depenses: 0, stock: [], erreurs: [] };
   await synchroniserStock(bilan);
+  await require('./stock').nettoyerReservations(db()).catch((e) => bilan.erreurs.push(`Réservations : ${e.message}`));
   await rattraperJumelages(bilan);
   await copierBatteries(bilan).catch((e) => bilan.erreurs.push(`Batteries : ${e.message}`));
   await depensesRecurrentes(maintenant, bilan);

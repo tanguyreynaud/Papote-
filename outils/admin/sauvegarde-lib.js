@@ -132,4 +132,74 @@ async function restaurer({ db, auth = null, sauvegarde, effacer = false, progres
   return { documents: ecrits, comptes };
 }
 
-module.exports = { encoder, decoder, toutLire, lireComptes, sauvegarder, restaurer, VERSION };
+// ---------- Photos et vidéos (Storage) ----------
+// Les fichiers du bucket sont copiés tels quels dans un dossier (fichiers/<chemin dans le bucket>), avec un index
+// (fichiers/index.json : chemin → { md5, taille, type }). Copie incrémentale : seul ce qui est nouveau ou a changé
+// est téléchargé ; rien n'est jamais effacé du dossier (une photo supprimée depuis reste dans la copie).
+const fsp = require('fs').promises;
+const pathLib = require('path');
+const crypto = require('crypto');
+
+const INDEX = 'index.json';
+const cheminLocal = (dossier, chemin) => pathLib.join(dossier, ...chemin.split('/'));
+
+async function lireIndex(dossier) {
+  try { return JSON.parse(await fsp.readFile(pathLib.join(dossier, INDEX), 'utf8')); } catch { return {}; }
+}
+
+async function sauvegarderFichiers({ bucket, dossier, progression = () => {}, parallele = 8 }) {
+  await fsp.mkdir(dossier, { recursive: true });
+  const index = await lireIndex(dossier);
+  const [fichiers] = await bucket.getFiles({ autoPaginate: true });
+  const aCopier = fichiers.filter((f) => !f.name.endsWith('/') && (!index[f.name] || index[f.name].md5 !== f.metadata.md5Hash));
+  let copies = 0;
+  let octets = 0;
+  for (let i = 0; i < aCopier.length; i += parallele) {
+    await Promise.all(aCopier.slice(i, i + parallele).map(async (f) => {
+      const destination = cheminLocal(dossier, f.name);
+      await fsp.mkdir(pathLib.dirname(destination), { recursive: true });
+      await f.download({ destination });
+      index[f.name] = { md5: f.metadata.md5Hash, taille: Number(f.metadata.size), type: f.metadata.contentType || null };
+      copies++;
+      octets += Number(f.metadata.size) || 0;
+      progression(copies, aCopier.length);
+    }));
+    await fsp.writeFile(pathLib.join(dossier, INDEX), JSON.stringify(index));
+  }
+  await fsp.writeFile(pathLib.join(dossier, INDEX), JSON.stringify(index));
+  return { total: fichiers.length, copies, octets, index };
+}
+
+// Vérifie la copie locale : chaque fichier de l'index existe et a bien le même contenu (md5). Rend les manquants
+// et les abîmés.
+async function verifierFichiers(dossier) {
+  const index = await lireIndex(dossier);
+  const manquants = [];
+  const abimes = [];
+  for (const [chemin, info] of Object.entries(index)) {
+    let contenu;
+    try { contenu = await fsp.readFile(cheminLocal(dossier, chemin)); } catch { manquants.push(chemin); continue; }
+    if (crypto.createHash('md5').update(contenu).digest('base64') !== info.md5) abimes.push(chemin);
+  }
+  return { total: Object.keys(index).length, manquants, abimes };
+}
+
+// Remet dans le bucket les fichiers de la copie qui n'y sont plus (ou qui ont changé). Ce qui est dans le bucket et
+// pas dans la copie est laissé.
+async function restaurerFichiers({ bucket, dossier, progression = () => {}, parallele = 8 }) {
+  const index = await lireIndex(dossier);
+  const [presents] = await bucket.getFiles({ autoPaginate: true });
+  const dejaLa = new Map(presents.map((f) => [f.name, f.metadata.md5Hash]));
+  const aRemettre = Object.entries(index).filter(([chemin, info]) => dejaLa.get(chemin) !== info.md5);
+  let remis = 0;
+  for (let i = 0; i < aRemettre.length; i += parallele) {
+    await Promise.all(aRemettre.slice(i, i + parallele).map(async ([chemin, info]) => {
+      await bucket.upload(cheminLocal(dossier, chemin), { destination: chemin, contentType: info.type || undefined, resumable: false });
+      remis++;
+      progression(remis, aRemettre.length);
+    }));
+  }
+  return { remis, total: aRemettre.length };
+}
+
+module.exports = { encoder, decoder, toutLire, lireComptes, sauvegarder, restaurer, sauvegarderFichiers, verifierFichiers, restaurerFichiers, VERSION };
