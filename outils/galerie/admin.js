@@ -5,10 +5,13 @@
 
 const { famillePleine, membre, poserDonnees, SDK, ilYa, FID } = require('./famille');
 const clavier = require('./clavier');
+const { miseEnPage } = require('./commun');
 
 const TAILLES = {
   pc: { nom: 'ordinateur', width: 1280, height: 800, mobile: false },
   tel: { nom: 'telephone', width: 390, height: 844, mobile: true },
+  // Petit téléphone (360 px) : chaque écran y est vérifié (mise en page), sans capture (Tanguy, 3/11).
+  etroit: { nom: 'petit telephone', width: 360, height: 780, mobile: true, verifier: true },
 };
 const MAINTENANT = new Date('2026-10-26T10:30:00+01:00').getTime();
 const J = 864e5;
@@ -433,7 +436,10 @@ async function ouvrir(browser, base, scene, taille) {
 async function capturer({ browser, base, dossierImages, progression }) {
   const travaux = [];
   let n = 0;
-  for (const scene of SCENES) for (const t of scene.tailles) travaux.push({ scene, taille: TAILLES[t], n: ++n });
+  for (const scene of SCENES) {
+    for (const t of scene.tailles) travaux.push({ scene, taille: TAILLES[t], n: ++n });
+    travaux.push({ scene, taille: TAILLES.etroit, n: n + 0.25 });
+  }
   const n0 = travaux.length;
   const resultats = [];
   let faits = 0;
@@ -441,6 +447,14 @@ async function capturer({ browser, base, dossierImages, progression }) {
     for (let job = travaux.shift(); job; job = travaux.shift()) {
       const { scene, taille, n } = job;
       const { ctx, page, erreurs } = await ouvrir(browser, base, scene, taille);
+      if (taille.mobile) erreurs.push(...await miseEnPage(page));
+      if (taille.verifier) {
+        // Vérification seule : un résultat sans capture, affiché seulement s'il y a un souci.
+        if (erreurs.length) resultats.push({ n, groupe: scene.groupe, titre: scene.titre, note: scene.note, taille: taille.nom, fichier: null, erreurs, scene: SCENES.indexOf(scene) });
+        await ctx.close();
+        progression(`admin ${++faits}/${n0}`);
+        continue;
+      }
       const fichier = `admin-${String(n).padStart(3, '0')}.jpg`;
       if (scene.plein) {
         const h = await page.evaluate(() => document.documentElement.scrollHeight).catch(() => taille.height);
