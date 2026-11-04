@@ -63,6 +63,9 @@ public class MainActivity extends Activity implements Sync.Listener {
     private Sync sync;
     /** L'activité à l'écran (la tablette n'en a qu'une), pour les réveils du serveur (Push). */
     private static volatile MainActivity courante;
+    /** Fin (SystemClock.elapsedRealtime) de la pause levée par un SOS : appels et rappels de la famille passent. */
+    private static volatile long sosJusqua = 0;
+    private static final long SOS_LEVEE_MS = 30 * 60_000L;
     private CallAudio callAudio;
     /** Luminosité le soir (0 à 1) ; vrai pendant les heures du soir. */
     private static final float EVENING_BRIGHTNESS = 0.55f;
@@ -244,7 +247,7 @@ public class MainActivity extends Activity implements Sync.Listener {
         new Thread(() -> AppCheck.current(getApplicationContext()), "papote-appcheck").start();
         // Appels de la carte SIM : la page sonne et décroche (AppelGsm).
         AppelGsm.ecouter(this, (etat) -> {
-            if (sync != null && (sync.paused() || sync.perdue()) && "sonne".equals(etat.optString("etat"))) {
+            if ((enPause() || (sync != null && sync.perdue())) && "sonne".equals(etat.optString("etat"))) {
                 AppelGsm.raccrocher(); // Papote en pause (abonnement) ou tablette verrouillée : pas d'appel (« occupé »)
                 return;
             }
@@ -709,7 +712,7 @@ public class MainActivity extends Activity implements Sync.Listener {
         @JavascriptInterface
         public void ring(boolean on) {
             // Papote en pause (abonnement) : pas de sonnerie.
-            if (on && sync.paused()) return;
+            if (on && enPause()) return;
             handler.post(() -> callAudio.ring(on));
         }
 
@@ -729,8 +732,16 @@ public class MainActivity extends Activity implements Sync.Listener {
         /** Appelle ce numéro par la carte SIM ; la suite arrive par Papote.onGsm. false : l'appel n'est pas parti. */
         @JavascriptInterface
         public boolean phoneCall(String numero) {
-            if (sync.paused() || AppelGsm.enCours()) return false;
+            if (enPause() || AppelGsm.enCours()) return false;
             return Telephone.appeler(MainActivity.this, numero);
+        }
+
+        /** Mamie a appuyé sur SOS : la pause de l'abonnement est levée 30 min (jamais si la tablette est verrouillée). */
+        @JavascriptInterface
+        public void sosDemarre() {
+            if (prefs.getBoolean("perdue", false)) return;
+            sosJusqua = SystemClock.elapsedRealtime() + SOS_LEVEE_MS;
+            Journal.log(MainActivity.this, "SOS : pause de l'abonnement levée 30 min");
         }
 
         @JavascriptInterface
@@ -790,6 +801,11 @@ public class MainActivity extends Activity implements Sync.Listener {
                     } catch (JSONException ignored) { }
             }
         });
+    }
+
+    /** Papote en pause (abonnement), sauf dans les 30 min qui suivent un SOS. */
+    private boolean enPause() {
+        return sync != null && sync.paused() && SystemClock.elapsedRealtime() >= sosJusqua;
     }
 
     private void callPage(final String function, final JSONObject payload) {

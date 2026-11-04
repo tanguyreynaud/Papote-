@@ -176,11 +176,16 @@
   // Taille du texte selon sa longueur : il tient toujours à l'écran sans faire défiler.
   // Abonnement suspendu, résilié ou absent (écrit par le serveur) : Papote est en pause.
   // Champ absent ou tablette hors ligne : rien ne change.
+  // Le SOS marche toujours : un appui sur SOS lève la pause 30 min (SMS, appels par la carte SIM ou
+  // par internet, et la famille qui rappelle). Tablette verrouillée : le SOS de l'écran verrouillé
+  // seulement (afficherVerrou), sans lever le verrou.
   var pauseScreen = null;
   var pausedStatut = false;
+  var SOS_LEVEE_MS = 30 * 60000;
+  var sosJusqua = 0, sosLeveeTimer = null;
   function setPaused(statut) {
     pausedStatut = statut === 'suspendu' || statut === 'resilie' || statut === 'aucun';
-    var paused = pausedStatut || perdue;
+    var paused = (pausedStatut && Date.now() >= sosJusqua) || perdue;
     window.papotePaused = paused; // lu par appels.js pour ne pas sonner (abonnement en pause, ou tablette verrouillée)
     if (!pauseScreen) {
       if (!paused) return;
@@ -188,15 +193,38 @@
       pauseScreen.className = 'pause-screen';
       pauseScreen.innerHTML = '<div class="pause-box"><p class="pause-title">Papote est en pause</p>' +
         '<p class="pause-text">La famille a été prévenue.<br>Tout reviendra dès que ce sera réglé.</p></div>';
+      var sos = el2('button', 'big-btn pause-sos', 'SOS');
+      on(sos, 'click', showSosCountdown);
+      pauseScreen.firstChild.appendChild(sos);
       document.body.appendChild(pauseScreen);
+      showSosButton();
     }
-    pauseScreen.style.display = paused ? 'flex' : 'none';
+    pauseScreen.style.display = paused && !window.papoteSosEnCours ? 'flex' : 'none';
     if (paused) {
       overlayQueue = [];
       shownInOverlay = {}; // ils reviendront à la fin de la pause
       if (overlayPost) { overlayPost = null; show($('overlay'), false); }
       showView('view-home');
     }
+  }
+
+  function leverPausePourSos(lever) {
+    clearTimeout(sosLeveeTimer);
+    sosJusqua = lever ? Date.now() + SOS_LEVEE_MS : 0;
+    if (lever) {
+      try { if (android() && android().sosDemarre) android().sosDemarre(); } catch (e) { }
+      sosLeveeTimer = setTimeout(finLeveeSos, SOS_LEVEE_MS + 1000);
+    }
+    setPaused(pausedStatut ? 'suspendu' : 'actif');
+  }
+  function finLeveeSos() {
+    // Encore en communication (ou écran d'appel ouvert) : la pause attendra la fin.
+    if (gsm || (callScreen && !callScreen.hasAttribute('hidden')) || etatAppelsInternet()) {
+      sosJusqua = Date.now() + 60000;
+      sosLeveeTimer = setTimeout(finLeveeSos, 61000);
+      return;
+    }
+    setPaused(pausedStatut ? 'suspendu' : 'actif');
   }
 
   // Tablette perdue ou volée : verrouillée à distance depuis le tableau de bord (ordre « verrouiller », Sync.java).
@@ -2157,10 +2185,15 @@
   function showSosButton() {
     var b = $('sos-btn');
     if (b) show(b, !!options.sos);
+    var p = pauseScreen && pauseScreen.querySelector('.pause-sos');
+    if (p) show(p, !!options.sos);
     afficherVerrou(); // le SOS de l'écran verrouillé suit le même réglage
   }
 
   function showSosCountdown() {
+    // Tablette verrouillée : seulement le SOS de son propre écran (Tanguy, 05/11), jamais celui de dessous.
+    if (perdue && !window.papoteSosEnCours) return;
+    leverPausePourSos(true); // même sans pause : une pause arrivée pendant le SOS ne le couvre pas
     stopRadio();
     ensureCallScreen();
     callScreen.innerHTML = '';
@@ -2174,7 +2207,11 @@
     var sub = el2('p', 'call-sub', '');
     callScreen.appendChild(sub);
     var cancel = el2('button', 'sos-cancel', 'Annuler');
-    on(cancel, 'click', function () { clearInterval(sosTimer); closeCallScreen(); });
+    on(cancel, 'click', function () {
+      clearInterval(sosTimer);
+      closeCallScreen();
+      leverPausePourSos(false); // appui par erreur : la pause revient (si l'abonnement est en pause)
+    });
     callScreen.appendChild(cancel);
     var left = SOS_DELAY_S;
     var show = function () { sub.textContent = 'L’appel part dans ' + left + (left > 1 ? ' secondes' : ' seconde'); };

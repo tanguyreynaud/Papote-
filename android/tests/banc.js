@@ -46,6 +46,7 @@ function imitation(etat) {
     // phoneHangup avec etat.raccrocherKo (plus d'appel côté Android) ; phoneState lit etat.appelGsm.
     phoneReady: () => !!window.__etat.telephone,
     phoneCall: (...args) => { window.__appels.push({ nom: 'phoneCall', args }); return !window.__etat.telephoneKo; },
+    sosDemarre: note('sosDemarre'),
     phoneAnswer: note('phoneAnswer'), phoneHangup: (...args) => { window.__appels.push({ nom: 'phoneHangup', args }); return !window.__etat.raccrocherKo; }, sendSms: (...args) => { window.__appels.push({ nom: 'sendSms', args }); return true; },
     phoneState: () => JSON.stringify(window.__etat.appelGsm || {}), phoneNumbers: () => '[]',
     qrCode: () => 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',

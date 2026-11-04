@@ -19,7 +19,7 @@ async function tablette(etat = {}, champs = {}) {
   const b = await ouvrir('2026-10-26T10:00:00', { telephone: true, ...etat });
   await b.android('onPosts', lot([], champs));
   await b.android('onFamily', PROCHES);
-  await b.avancer(500);
+  await b.avancer(8000); // l'écran de démarrage (boot) s'efface
   // Appel internet imité : on note chaque départ (sos 1 ou 2).
   await b.page.evaluate(() => {
     window.__internet = [];
@@ -84,5 +84,86 @@ test('SOS (F-c, témoin) : vraie conversation de 60 s avec Paul : la chaîne s\'
     await b.avancer(1000);
     assert.deepStrictEqual(await appelsTel(b), ['0700000000']);
     assert.match(await ecran(b), /Appel terminé/);
+  } finally { await b.fermer(); }
+});
+
+test('SOS (F-a) : abonnement suspendu : gros bouton SOS sur l\'écran de pause, SMS et appels partent, la famille peut rappeler', async () => {
+  const b = await tablette({}, { subscription: 'suspendu' });
+  try {
+    assert.ok(await b.visible('.pause-screen'), 'écran de pause');
+    assert.ok(await b.visible('.pause-screen .pause-sos'), 'bouton SOS sur l\'écran de pause');
+    await b.toucher('.pause-screen .pause-sos');
+    // Le décompte est visible (Annuler touchable), plus sous l'écran de pause.
+    const dessus = await b.page.evaluate(() => { const e = document.elementFromPoint(640, 400); return !!(e && e.closest('.call-out')); });
+    assert.ok(dessus, 'écran SOS au-dessus de la pause');
+    assert.strictEqual((await b.appels('sosDemarre')).length, 1, 'Android prévenu : pause levée pour le SOS');
+    assert.strictEqual(await b.page.evaluate(() => window.papotePaused), false, 'appels.js laisse passer le SOS');
+    await b.avancer(5500);
+    assert.strictEqual((await b.appels('sendSms')).length, 1, 'SMS de SOS envoyé');
+    assert.deepStrictEqual(await appelsTel(b), ['0700000000'], 'Paul appelé');
+    // Personne ne décroche, la chaîne se termine ; 10 min après, Julie rappelle (SMS reçu) : ça sonne.
+    for (const p of [PAUL, { sortant: true, numero: '0612345678', uid: 'julie', name: 'Julie' }, { sortant: true, numero: '0611111111', uid: 'marc', name: 'Marc' }]) {
+      await b.android('onGsm', { etat: 'fin', cause: 'manque', ...p });
+      await b.avancer(500);
+    }
+    await b.avancer(10 * 60000);
+    await b.android('onGsm', { etat: 'sonne', sortant: false, numero: '0612345678', uid: 'julie', name: 'Julie' });
+    const sonne = await b.page.evaluate(() => { const e = document.elementFromPoint(640, 400); return !!(e && e.closest('.gsm-ring')); });
+    assert.ok(sonne, 'le rappel de Julie s\'affiche (pas caché par la pause)');
+    await b.android('onGsm', { etat: 'fin', cause: 'raccroche', sortant: false, numero: '0612345678', uid: 'julie', name: 'Julie' });
+    // 30 min après le SOS : la pause revient.
+    await b.avancer(21 * 60000);
+    assert.ok(await b.visible('.pause-screen'), 'pause de retour 30 min après le SOS');
+    assert.strictEqual(await b.page.evaluate(() => window.papotePaused), true);
+  } finally { await b.fermer(); }
+});
+
+test('SOS (F-a) : appui par erreur pendant la pause, « Annuler » : la pause revient aussitôt', async () => {
+  const b = await tablette({}, { subscription: 'suspendu' });
+  try {
+    await b.toucher('.pause-screen .pause-sos');
+    await b.toucher('.sos-cancel');
+    await b.avancer(6000);
+    assert.ok(await b.visible('.pause-screen'));
+    assert.strictEqual((await b.appels('sendSms')).length, 0);
+  } finally { await b.fermer(); }
+});
+
+test('SOS (F-a) : SOS désactivé par la famille : pas de bouton sur l\'écran de pause', async () => {
+  const b = await tablette({}, { subscription: 'suspendu', options: { sos: false } });
+  try {
+    assert.ok(await b.visible('.pause-screen'));
+    assert.ok(!(await b.visible('.pause-screen .pause-sos')));
+  } finally { await b.fermer(); }
+});
+
+test('SOS (F-a) : abonnement suspendu, sans carte SIM : le SOS part par internet', async () => {
+  const b = await tablette({ telephone: false }, { subscription: 'resilie' });
+  try {
+    await b.toucher('.pause-screen .pause-sos');
+    await b.avancer(5500);
+    assert.deepStrictEqual(await internet(b), [1], 'appel SOS internet lancé');
+  } finally { await b.fermer(); }
+});
+
+test('SOS (F-a) : tablette verrouillée (perdue) : pas de SOS (pas de fausse alerte à la famille)', async () => {
+  const b = await tablette({}, { subscription: 'suspendu', perdue: true });
+  try {
+    const dessous = await b.page.evaluate(() => document.elementFromPoint(640, 400).closest('.perdue-screen') !== null);
+    assert.ok(dessous, 'écran verrouillé au-dessus de tout');
+    await b.page.mouse.click(640, 400);
+    await b.avancer(6000);
+    assert.strictEqual((await b.appels('sendSms')).length, 0);
+    assert.deepStrictEqual(await appelsTel(b), []);
+  } finally { await b.fermer(); }
+});
+
+test('SOS : abonnement actif, rien ne change (bouton SOS de l\'accueil, appel SOS)', async () => {
+  const b = await tablette();
+  try {
+    assert.ok(!(await b.visible('.pause-screen')));
+    await b.toucher('#sos-btn');
+    await b.avancer(5500);
+    assert.deepStrictEqual(await appelsTel(b), ['0700000000']);
   } finally { await b.fermer(); }
 });

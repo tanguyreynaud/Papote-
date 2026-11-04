@@ -122,6 +122,21 @@ test('Papote en pause : aucun appel ne sonne', async () => {
   } finally { await b.fermer(); }
 });
 
+test('Papote en pause : le SOS part quand même par internet (« SOS ») et n\'est pas coupé', async () => {
+  const b = await tablette();
+  try {
+    await b.android('onPosts', lot([], { subscription: 'suspendu' }));
+    await b.toucher('.pause-screen .pause-sos');
+    await b.avancer(5500);
+    await b.patienter(2000);
+    const id = (await b.page.evaluate(() => [...window.__fs.docs.keys()].filter((k) => /^families\/F1\/calls\/[^/]+$/.test(k))))[0];
+    assert.ok(id, 'appel SOS écrit');
+    assert.strictEqual((await b.lire(id)).calleeName, 'SOS');
+    await b.patienter(4000); // la surveillance de la pause (toutes les 2 s) ne le coupe pas
+    assert.strictEqual((await b.lire(id)).state, 'ringing');
+  } finally { await b.fermer(); }
+});
+
 test('écoute des appels coupée par une erreur : elle repart, les appels sonnent de nouveau', async () => {
   const b = await tablette();
   try {
