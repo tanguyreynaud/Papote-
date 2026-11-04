@@ -173,6 +173,25 @@ test('retour anticipé, colis déjà déposé au point relais : la reprise est r
   assert.deepStrictEqual(s.boite, []);
 });
 
+test('résiliée, colis de retour déjà déposé : la famille ne peut pas payer une reprise ; avant le dépôt, elle peut', async () => {
+  const paul = await s.compte('Paul', 'paul@exemple.fr');
+  const { id, fid } = await finDeContrat(paul);
+  await s.appeler('renvoyerTablette', { fid }, paul);
+  await s.calme();
+  const colis = [...s.sendcloud.colis.values()][0];
+  assert.ok(colis, 'QR code de retour créé');
+  // Pas encore déposé : la reprise payante reste possible.
+  const { url } = await s.appeler('creerPaiement', { fid, formule: 'wifi', tablette: 'incluse' }, paul);
+  assert.ok(url);
+  // Déposé au point relais : refusé, message clair, rien ne change.
+  colis.statut = 3;
+  const avant = await commande(id);
+  const sessions = s.stripe.etat.sessions.size;
+  await assert.rejects(s.appeler('creerPaiement', { fid, formule: 'wifi', tablette: 'incluse' }, paul), /déjà en route vers Papote/);
+  assert.strictEqual(s.stripe.etat.sessions.size, sessions, 'aucune page de paiement créée');
+  assert.deepStrictEqual((await commande(id)).restitution, avant.restitution, 'le retour continue');
+});
+
 test('tablette rendue avant la date d\'arrêt (retour anticipé) : à l\'arrêt, rien de nouveau à rendre, ni rappel ni 140 € ; « Garder » refusé', async () => {
   const paul = await s.compte('Paul', 'paul@exemple.fr');
   const { id, fid, le } = await retourAnticipe(paul);

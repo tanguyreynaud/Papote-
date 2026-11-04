@@ -189,6 +189,27 @@ async function tabletteARendre(fid) {
   return !attendues.empty;
 }
 
+// Un colis de retour de cette famille est-il déjà déposé chez Mondial Relay ? Sendcloud illisible : on refuse
+// pour le moment (« réessayez »), plutôt que de faire payer une reprise d'une tablette peut-être en route.
+async function colisRetourParti(fid) {
+  const attendues = await db.collection('commandes').where('fid', '==', fid)
+    .where('restitution.statut', 'in', ['attendue', 'echec']).get();
+  const colis = attendues.docs.map((d) => d.get('etiquettes.retour.colis')).filter(Boolean);
+  if (!colis.length) return false;
+  const api = sendcloud.client(SENDCLOUD_API.value());
+  for (const id of colis) {
+    let statut;
+    try {
+      ({ statut } = await api.suivi(id));
+    } catch (e) {
+      logger.warn(`Suivi du colis de retour ${id} illisible`, e.message);
+      throw new HttpsError('unavailable', 'Impossible de vérifier le retour de la tablette pour le moment : réessayez dans quelques minutes.');
+    }
+    if (!sendcloud.nonDepose(statut)) return true;
+  }
+  return false;
+}
+
 // La famille a-t-elle déjà sa tablette (jumelage confirmé) ?
 async function tabletteInstallee(fid) {
   const jumelages = await db.collection('pairings').where('fid', '==', fid).get();
@@ -573,7 +594,7 @@ exports.commander = onRequest({ secrets: [STRIPE_SECRET] }, async (req, res) => 
 
 // ---------- Appli famille ----------
 
-exports.creerPaiement = onCall({ secrets: [STRIPE_SECRET] }, async (request) => {
+exports.creerPaiement = onCall({ secrets: [STRIPE_SECRET, SENDCLOUD_API] }, async (request) => {
   const { uid, email } = compteVerifie(request);
   const { fid } = request.data || {};
   const tablette = 'incluse';
@@ -593,6 +614,10 @@ exports.creerPaiement = onCall({ secrets: [STRIPE_SECRET] }, async (request) => 
   // Résiliée, tablette encore chez le proche (retour attendu) : reprise sans mise en service, et le retour
   // attendu est annulé au paiement (relierTabletteInstallee).
   if (fam.abonnement && fam.abonnement.statut === 'resilie' && await tabletteARendre(fid)) {
+    // Colis de retour déjà déposé : la tablette revient, pas de reprise (comme pour Papote ; Tanguy, 4/11).
+    if (await colisRetourParti(fid)) {
+      throw new HttpsError('failed-precondition', 'Votre tablette est déjà en route vers Papote : attendez qu\'elle arrive, puis vous pourrez recommander.');
+    }
     const session = await sessionPaiement({ formule, tablette, fid, email, client, dejaInstallee: true, reprise: true });
     return { url: session.url };
   }
