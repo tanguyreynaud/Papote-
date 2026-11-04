@@ -1608,13 +1608,13 @@ final class Sync {
             // Avant (28/10) : tous les visages retéléchargés à chaque envoi de la famille, ≈ 1 Mo par tour.
             JSONArray people = new JSONArray();
             try {
-                JSONArray members = firebase.list("families/" + fid + "/members", "name", "role", "enTete", "telephone");
+                JSONArray members = firebase.list("families/" + fid + "/members", "name", "role", "enTete", "telephone", "status");
                 JSONArray numeros = new JSONArray();
                 for (int i = 0; i < members.length(); i++) {
                     JSONObject doc = members.getJSONObject(i);
                     JSONObject f = doc.optJSONObject("fields");
                     String uid = doc.optString("name").substring(doc.optString("name").lastIndexOf('/') + 1);
-                    if (f != null && !"tablette".equals(Firebase.str(f, "role"))) {
+                    if (f != null && procheActif(Firebase.str(f, "role"), Firebase.str(f, "status"))) {
                         // enTete : mis en tête de liste dans l'app (horodatage serveur), sinon absent.
                         long enTete = Firebase.timestamp(f, "enTete");
                         // telephone : numéro du proche (app famille), pour les appels par la carte SIM.
@@ -1628,7 +1628,7 @@ final class Sync {
                                     .put("tel", tel).put("responsable", responsable));
                         }
                     } else {
-                        continue; // les tablettes n'ont pas de visage
+                        continue; // les tablettes n'ont pas de visage ; une demande en attente n'est ni montrée ni appelée
                     }
                     String face = photoGardee("members", "families/" + fid + "/members/" + uid, uid,
                             doc.optString("updateTime"), "face");
@@ -2423,6 +2423,14 @@ final class Sync {
         c.set(java.util.Calendar.MILLISECOND, 0);
         if (c.getTimeInMillis() <= now) c.add(java.util.Calendar.DAY_OF_YEAR, 1);
         return Math.max(60_000, c.getTimeInMillis() - now);
+    }
+
+    /**
+     * Un proche de la liste « Appeler » et du SOS (appels, SMS) : pas une tablette, et un membre accepté
+     * (status absent ou « active », comme appels.js et les fonctions) : jamais une demande en attente (« pending »).
+     */
+    static boolean procheActif(String role, String status) {
+        return !"tablette".equals(role) && (status == null || "active".equals(status));
     }
 
     /** Abonnement suspendu, résilié ou absent côté serveur : Papote est en pause. */
