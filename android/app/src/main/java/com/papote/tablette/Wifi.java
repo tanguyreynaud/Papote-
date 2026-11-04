@@ -156,10 +156,52 @@ final class Wifi {
                 else via = "autre";
             }
             j.put("internet", internet).put("mobile", mobile).put("sim", hasSim()).put("via", via);
+            if (ssid.isEmpty()) relancerConnexion();
         } catch (Exception e) {
             Log.w(TAG, "État du réseau", e);
         }
         return j.toString();
+    }
+
+    // Android ne se connecte tout seul qu'au-dessus d'environ -73 dBm (« Networks filtered out due to
+    // low signal strength ») : une box à -76 dBm, qui marche très bien, était abandonnée après un
+    // redémarrage (T-003, 04/11). Papote, propriétaire de l'appareil, force la connexion à un réseau
+    // déjà enregistré qui est visible, au plus une fois toutes les 2 minutes.
+    private static final int SIGNAL_MIN_DBM = -85;
+    private static final long RELANCE_MS = 2 * 60_000;
+    private long derniereRelance;
+
+    @SuppressWarnings({"deprecation", "MissingPermission"})
+    private void relancerConnexion() {
+        long now = android.os.SystemClock.elapsedRealtime();
+        if (derniereRelance != 0 && now - derniereRelance < RELANCE_MS) return;
+        derniereRelance = now;
+        try {
+            WifiManager wm = wm();
+            if (!wm.isWifiEnabled()) return;
+            allowScan();
+            List<WifiConfiguration> enregistres = wm.getConfiguredNetworks();
+            List<ScanResult> vus = wm.getScanResults();
+            if (enregistres == null || enregistres.isEmpty() || vus == null) return;
+            WifiConfiguration meilleur = null;
+            int meilleurNiveau = Integer.MIN_VALUE;
+            for (WifiConfiguration c : enregistres) {
+                String nom = c.SSID == null ? "" : c.SSID.replace("\"", "");
+                for (ScanResult r : vus) {
+                    if (nom.equals(r.SSID) && r.level >= SIGNAL_MIN_DBM && r.level > meilleurNiveau) {
+                        meilleur = c;
+                        meilleurNiveau = r.level;
+                    }
+                }
+            }
+            if (meilleur == null) return;
+            boolean ok = wm.enableNetwork(meilleur.networkId, true);
+            wm.reconnect();
+            Journal.log(context, "Wifi : connexion relancée vers " + meilleur.SSID.replace("\"", "") + " (" + meilleurNiveau
+                    + " dBm)" + (ok ? "" : ", refusée par Android"));
+        } catch (Exception e) {
+            Log.w(TAG, "Relance du wifi", e);
+        }
     }
 
     boolean hasSim() {
