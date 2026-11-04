@@ -44,22 +44,22 @@ test('SOS : Julie et Paul sonnent ; retour d\'Android ne coupe pas la sonnerie ;
   await julie.page.waitForTimeout(400);
   assert.strictEqual(await julie.page.locator('#incoming').isVisible(), true, 'la sonnerie reste à l\'écran');
 
-  // Paul répond d'un double appui : une seule réponse. Le 2e appui tombe sur l'écran d'appel qui s'ouvre
-  // (« Raccrocher » est à la place de « Répondre ») : l'appel ne doit jamais continuer écran fermé, micro ouvert.
+  // Paul répond d'un double appui : une seule réponse. Le 2e appui tombe sur « Raccrocher » (à la place de
+  // « Répondre »), qui ne répond pas pendant 4 s : l'appel reste pris, écran ouvert (décision Tanguy 4/11).
   await g.doubleAppui(paul, '#incoming-answer');
   const { answer } = await g.attendreBase(async () => { const d = (await tablette.ref(mamie, cid).get()).data(); return d.answer && d; }, 'réponse de Paul');
   assert.strictEqual(answer.uid, uidPaul);
-  // La tablette prend la réponse (la liaison s'établit, sauf si l'appel vient d'être raccroché).
+  assert.strictEqual(await paul.page.locator('#call-hangup').isDisabled(), true, '« Raccrocher » grisé juste après la réponse');
   await mamie.page.evaluate((a) => window.pc.setRemoteDescription({ type: a.type, sdp: a.sdp }), answer).catch(() => {});
   await julie.page.locator('#incoming').waitFor({ state: 'hidden' });
   await paul.page.waitForTimeout(2500);
   const etat = (await tablette.ref(mamie, cid).get()).data().state;
-  const ecranOuvert = await paul.page.locator('#call').isVisible();
-  assert.ok(ecranOuvert || etat === 'ended', `appel « ${etat} » en cours alors que l'écran d'appel est fermé`);
-  if (ecranOuvert) {
-    await paul.page.locator('#call-timer', { hasText: /0:0\d/ }).waitFor();
-    await paul.page.click('#call-hangup');
-  }
+  assert.strictEqual(await paul.page.locator('#call').isVisible(), true, 'le double appui ne raccroche pas');
+  assert.notStrictEqual(etat, 'ended', 'le double appui ne raccroche pas');
+  await paul.page.locator('#call-timer', { hasText: /0:0\d/ }).waitFor();
+  // Après 4 s, « Raccrocher » marche de nouveau.
+  await paul.page.locator('#call-hangup:not([disabled])').waitFor({ timeout: 5_000 });
+  await paul.page.click('#call-hangup');
   await g.attendreBase(async () => (await tablette.ref(mamie, cid).get()).data().state === 'ended', 'appel terminé');
   await paul.page.locator('#call').waitFor({ state: 'hidden', timeout: 10_000 });
   await mamie.arreterRelais?.();

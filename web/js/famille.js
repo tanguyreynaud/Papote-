@@ -2224,6 +2224,7 @@ async function answerFromTablet() {
   $('call').hidden = false;
   setCallStatus('Connexion…');
   reponseAbandonnee = false;
+  bloquerRaccrocher();
   try {
     currentCall = await answerIncoming(session.fid, call.id, { uid: session.uid, name: session.member.name }, {
       audio: $('call-audio'),
@@ -2272,9 +2273,19 @@ $('incoming-answer').addEventListener('click', answerFromTablet);
 // l'accueil, et l'appel est pris dès qu'il arrive. S'il ne sonne plus, on le dit.
 let answerPending = null;
 let reponseAbandonnee = false; // « Raccrocher » touché avant que la réponse à Mamie soit prise
+// « Raccrocher » est à la place de « Répondre » : il ne répond pas pendant 4 s après la réponse, pour qu'un
+// double appui ne raccroche pas aussitôt (un SOS surtout ; décision Tanguy 4/11). Grisé le temps de l'attente.
+let finBlocageRaccrocher = null;
+function bloquerRaccrocher() {
+  const b = $('call-hangup');
+  b.disabled = true;
+  clearTimeout(finBlocageRaccrocher);
+  finBlocageRaccrocher = setTimeout(() => { b.disabled = false; }, 4000);
+}
 function answerOnArrival(cid) {
   answerPending = cid;
   etatNatif('connexion', false);
+  bloquerRaccrocher();
   if (incoming && incoming.id === cid) {
     answerPending = null;
     answerFromTablet();

@@ -683,6 +683,7 @@ button:disabled { opacity: .45; cursor: default; }
   font-size: 18px;
   font-weight: 700;
 }
+.call-hangup:disabled { opacity: .55; cursor: default; }
 
 /* ---------- Barre de navigation ---------- */
 
