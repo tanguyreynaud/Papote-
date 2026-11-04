@@ -79,7 +79,11 @@ test('photo toute neuve : la lecture attend la voix du serveur au lieu de la voi
 test('la nuit, un envoi attend : ni caméra, ni lecture, ni « vu » ; un toucher le montre', async () => {
   const b = await ouvrir('2026-10-26T23:30:00');
   try {
+    // Sans réglages de la famille, la veille par défaut attend 10 s (les heures de la famille arrivent
+    // en général avant : pas d'écran noir pour rien au démarrage).
     await b.avancer(1500);
+    assert.deepStrictEqual(await b.appels('setSleep'), [], 'pas de veille avant les réglages de la famille');
+    await b.avancer(10000);
     assert.deepStrictEqual((await b.appels('setSleep')).map((x) => x.args[0]), [true], 'écran en veille');
     await b.android('onPosts', lot([envoi({ text: 'Bonne nuit' })]));
     await b.avancer(1500);

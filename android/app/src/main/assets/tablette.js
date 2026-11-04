@@ -2914,6 +2914,9 @@
     on(document, 'touchstart', function () { if (!asleep) wakeUntil = Date.now() + WAKE_MS; });
     setInterval(updateSleep, 1000);
     updateSleep();
+    // Sans réglages de la famille au bout de 10 s (pas encore de copie sur la tablette), la veille par
+    // défaut s'applique quand même.
+    setTimeout(function () { veilleRecue = true; }, 10000);
   }
 
   // ---------- Événements ----------
