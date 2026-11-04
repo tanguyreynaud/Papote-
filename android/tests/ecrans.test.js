@@ -364,7 +364,7 @@ test('redémarrage sans aucun réseau (heure inconnue) : une seule carte calme �
     await b.android('onPosts', lot([envoi({ seen: true })]));
     await b.avancer(6000);
     assert.ok(await b.visible('.sans-reseau'), 'carte « Pas de réseau »');
-    assert.ok(!(await b.visible('#clock')), 'pas d\'heure');
+    assert.ok(!(await b.visible('.home-time')), 'pas d\'heure');
     assert.ok(await b.visible('#frame-img'), 'la photo reste');
     await b.etat({ reseau: { wifi: 'Box', internet: true, mobile: false, sim: true } });
     await b.avancer(4000);
