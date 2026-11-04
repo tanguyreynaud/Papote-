@@ -1934,8 +1934,12 @@
     if (reveilAppel) { reveilAppel = false; updateSleep(); }
   }
 
+  // SOS : Android publie « fin » dès STATE_DISCONNECTING, mais garde l'appel (AppelGsm.enCours) jusqu'à
+  // onCallRemoved : le proche suivant attend que la ligne se libère (phoneCall refusé) au lieu d'être sauté.
+  var SOS_LIGNE_ESSAIS = 12, SOS_LIGNE_MS = 500;
+
   // Mamie appelle un proche par téléphone. onEnd(repondu) : pour le SOS, qui enchaîne les proches.
-  function startGsmCall(uid, name, tel, onEnd) {
+  function startGsmCall(uid, name, tel, onEnd, essai) {
     stopRadio();
     var who = name || 'votre proche';
     gsmClear();
@@ -1944,6 +1948,11 @@
     else renderCall('starting', 'Appel vers ' + who + '…', '', uid, name);
     var parti = false;
     try { parti = !!(android().phoneCall(tel)); } catch (e) { parti = false; }
+    if (!parti && gsm.sos && (essai || 0) < SOS_LIGNE_ESSAIS) {
+      var attente = gsm;
+      setTimeout(function () { if (gsm === attente) startGsmCall(uid, name, tel, onEnd, (essai || 0) + 1); }, SOS_LIGNE_MS);
+      return;
+    }
     if (!parti) {
       gsmFinish('L’appel n’a pas pu partir', 'Réessayez dans un moment.', true, false);
       return;
