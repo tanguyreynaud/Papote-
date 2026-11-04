@@ -10,6 +10,15 @@ Abonnements et paiements Stripe. Plan complet et état des familles : `abonnemen
 4. Paiement d'essai depuis le site avec la carte 4242 4242 4242 4242.
 5. Relancer `installer-stripe.bat` avec la clé **réelle**, puis redéployer.
 
+## Tâches planifiées
+
+Deux fonctions planifiées seulement (Cloud Scheduler : 3 gratuites, puis 0,10 $/tâche/mois) :
+`alertesTablettes` toutes les 5 minutes (`alertes.js`), et `tachesHoraires` toutes les heures pile, heure de Paris
+(`taches.js`), qui lance à leur heure les autres tâches (`taches.PLANNING`) : `relancesPaniers`, `finDeGrace`,
+`gestionCourrier` toutes les heures ; `gestionAutomatique` à 4 h, `restitutions` à 9 h, `rappelsJumelage` et
+`alerteMatin` à 10 h chaque jour ; `gestionRecap` (8 h) et `bilanSupport` (9 h) le lundi ; `purgeMensuelle` (4 h) et
+`gestionCloture` (5 h) le 1er du mois. Une tâche en erreur est journalisée et n'arrête pas les autres.
+
 ## Tests
 
 `npm test` : règles de passage entre statuts (actif, impayé, suspendu...).
