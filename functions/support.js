@@ -2,7 +2,7 @@
 //
 //   supportChat  POST {messages: [{role: 'user'|'assistant', content}], page?} → {reponse, contact?}
 //                POST {messages, contact: {nom, telephone, email}} → {ok}  demande de rappel
-//   bilanSupport chaque lundi 9 h : e-mail à l'adresse de support avec le nombre de questions
+//   bilanSupport chaque lundi 9 h (lancée par taches.js) : e-mail à l'adresse de support avec le nombre de questions
 //                de la semaine et celles auxquelles l'IA n'a pas su répondre (supportSansReponse/),
 //                pour compléter support-connaissances.md.
 //
@@ -17,7 +17,6 @@
 // Garde-fous : 300 questions (30 après la phase de test) et 3 demandes de rappel par jour et par visiteur, 2 000 questions par jour au total.
 
 const { onRequest } = require('firebase-functions/v2/https');
-const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { defineSecret, defineString } = require('firebase-functions/params');
 const { logger } = require('firebase-functions/v2');
 const admin = require('firebase-admin');
@@ -306,23 +305,23 @@ exports.supportChat = onRequest(
     }
   });
 
-exports.bilanSupport = onSchedule(
-  { schedule: 'every monday 09:00', timeZone: 'Europe/Paris', secrets: [MAIL_MOT_DE_PASSE] },
-  async () => {
-    const db = base();
-    const depuis = new Date(Date.now() - 7 * 86400e3);
-    const jours = [];
-    for (let i = 1; i <= 7; i++) jours.push(new Date(Date.now() - i * 86400e3).toISOString().slice(0, 10));
-    const quotas = await Promise.all(jours.map((j) => db.doc(`supportQuota/${j}`).get()));
-    const questions = quotas.reduce((n, d) => n + (d.get('n') || 0), 0);
-    const rappels = quotas.reduce((n, d) => n + (d.get('rappels') || 0), 0);
-    const sans = await db.collection('supportSansReponse').where('creeLe', '>=', depuis).orderBy('creeLe').get();
-    if (!questions && sans.empty) return;
-    await mail.envoyer({
-      smtp: MAIL_SMTP.value(), expediteur: MAIL_EXPEDITEUR.value(), motDePasse: MAIL_MOT_DE_PASSE.value(),
-      a: EMAIL_SUPPORT,
-      contenu: mail.bilanSupport({ questions, rappels, sansReponse: sans.docs.map((d) => d.get('question')) }),
-    });
+// Le lundi à 9 h, lancée par taches.js (tachesHoraires).
+exports.bilanSupport = async () => {
+  const db = base();
+  const depuis = new Date(Date.now() - 7 * 86400e3);
+  const jours = [];
+  for (let i = 1; i <= 7; i++) jours.push(new Date(Date.now() - i * 86400e3).toISOString().slice(0, 10));
+  const quotas = await Promise.all(jours.map((j) => db.doc(`supportQuota/${j}`).get()));
+  const questions = quotas.reduce((n, d) => n + (d.get('n') || 0), 0);
+  const rappels = quotas.reduce((n, d) => n + (d.get('rappels') || 0), 0);
+  const sans = await db.collection('supportSansReponse').where('creeLe', '>=', depuis).orderBy('creeLe').get();
+  if (!questions && sans.empty) return;
+  await mail.envoyer({
+    smtp: MAIL_SMTP.value(), expediteur: MAIL_EXPEDITEUR.value(), motDePasse: MAIL_MOT_DE_PASSE.value(),
+    a: EMAIL_SUPPORT,
+    contenu: mail.bilanSupport({ questions, rappels, sansReponse: sans.docs.map((d) => d.get('question')) }),
   });
+};
+
 
 exports._test = { nettoyer, coordonneesValides, lireReponse, inscriptionValide, STOCK_DISPONIBLE, STOCK_EPUISE };

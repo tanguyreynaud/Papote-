@@ -444,6 +444,24 @@ test('pas vue depuis deux jours : une alerte aux responsables, pas de rappel tan
   assert.strictEqual(alertes().length, 2, 'hors ligne : rien');
 });
 
+test('tâches regroupées (tachesHoraires) : l\'alerte « pas vue » part à 10 h (Paris), pas à 3 h, sans erreur des autres tâches', async () => {
+  const paul = await s.compte('Paul', 'paul@exemple.fr');
+  const { fid, t } = await familleAbonnee(paul);
+  const tablette = s.db.doc(`families/${fid}/members/${t.tabletUid}`);
+  await tablette.update({ lastSeen: new Date(Date.now() - 72 * 3600e3), lastOnline: new Date(Date.now()) });
+  s.notifications.length = 0;
+  // Mercredi 4 novembre 2026 à 3 h (Paris) : les tâches horaires seulement.
+  const nuit = await s.fonctions.tachesHoraires.run({ scheduleTime: '2026-11-04T02:00:00.000Z' });
+  assert.deepStrictEqual(nuit, { relancesPaniers: 'ok', finDeGrace: 'ok', gestionCourrier: 'ok' });
+  await s.calme();
+  assert.strictEqual(alertes().length, 0, '3 h : pas d\'alerte « pas vue »');
+  // Le même jour à 10 h : en plus, rappels de jumelage et alerte du matin.
+  const matin = await s.fonctions.tachesHoraires.run({ scheduleTime: '2026-11-04T09:00:00.000Z' });
+  assert.deepStrictEqual(matin, { relancesPaniers: 'ok', finDeGrace: 'ok', gestionCourrier: 'ok', rappelsJumelage: 'ok', alerteMatin: 'ok' });
+  await s.calme();
+  assert.strictEqual(alertes().length, 1, '10 h : alerte « pas vue »');
+});
+
 test('tablette remise en main propre : la famille n\'a que Mondial Relay (adresse demandée) ; la main propre se note dans l\'admin', async () => {
   await s.db.doc('gestion/reglages').set({ expediteur: { nom: 'Papote', adresse: '1 rue de test', cp: '07000', ville: 'Privas' } }, { merge: true });
   const paul = await s.compte('Paul', 'paul@exemple.fr');

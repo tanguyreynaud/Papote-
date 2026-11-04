@@ -2,7 +2,7 @@
 //
 //   alertesTablettes  toutes les 5 minutes : une notification par épisode (débranchée depuis
 //                     plus de 10 min, ou silencieuse depuis plus de 1 h 10)
-//   alerteMatin       chaque jour à 10 h (Paris) : « {nom} n'a pas été vue depuis deux jours » si la
+//   alerteMatin       chaque jour à 10 h (Paris, lancée par taches.js) : « {nom} n'a pas été vue depuis deux jours » si la
 //                     tablette ne l'a ni vue (lastSeen, caméra) ni touchée (lastActive) depuis 48 h
 //
 // L'épisode est noté sur la fiche de la tablette (alerteType, alerteLe) et remis à zéro quand
@@ -175,7 +175,8 @@ function alertePasVueDue(tablettes, maintenant) {
 // Chaque jour à 10 h (Tanguy, 29/10 : une heure où l'on peut appeler, jamais la nuit) : une seule alerte par
 // épisode (tant qu'elle n'est pas revue, pas de rappel le lendemain), aux responsables de la famille.
 const HORAIRE_PAS_VUE = 'every day 10:00';
-exports.alerteMatin = onSchedule({ schedule: HORAIRE_PAS_VUE, timeZone: 'Europe/Paris' }, async () => {
+// Lancée par taches.js (tachesHoraires) à l'heure de HORAIRE_PAS_VUE.
+exports.alerteMatin = async () => {
   const db = base();
   const maintenant = Date.now();
   const enPause = await famillesEnPause(db, maintenant).catch((e) => { logger.warn('Pauses illisibles', e.message); return new Set(); });
@@ -206,7 +207,7 @@ exports.alerteMatin = onSchedule({ schedule: HORAIRE_PAS_VUE, timeZone: 'Europe/
       logger.error(`Famille ${fam.id} : alerte « pas vue » non envoyée`, e.message);
     }
   }
-});
+};
 
 exports.etatAlerte = etatAlerte;
 exports.enVeille = enVeille;

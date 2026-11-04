@@ -1,6 +1,6 @@
 // Purge mensuelle des données qui ont dépassé la durée promise dans les mentions légales (Tanguy, 2026-11-03) :
 //
-//   purgeMensuelle  le 1er de chaque mois à 4 h (Paris) :
+//   purgeMensuelle  le 1er de chaque mois à 4 h (Paris, lancée par taches.js) :
 //     - aide par écrit (chat) : supportDemandes/ et supportSansReponse/ de plus de 12 mois, et les fiches de
 //       contacts/ créées seulement par le chat (sans accord pour les nouvelles, ni liste d'attente, ni commande)
 //       sans question depuis 12 mois ;
@@ -12,7 +12,6 @@
 // Les décisions sont des fonctions pures (testées dans purge.test.js) ; la tâche ne fait que lire, décider, effacer
 // par lots de 400. Une erreur sur un lot est journalisée et n'empêche pas le reste : le mois suivant finit le travail.
 
-const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { logger } = require('firebase-functions/v2');
 const { db: base } = require('./base');
 const { STRIPE_VIVANTS } = require('./abonnement');
@@ -115,9 +114,7 @@ async function purger(db, maintenant = Date.now()) {
   return bilan;
 }
 
-exports.purgeMensuelle = onSchedule(
-  { schedule: '1 of month 04:00', timeZone: 'Europe/Paris', timeoutSeconds: 540, memory: '512MiB' },
-  () => purger(base()),
-);
+// Lancée par taches.js (tachesHoraires) le 1er du mois à 4 h.
+exports.purgeMensuelle = () => purger(base());
 
 exports._test = { perime, contactChatAPurger, familleAPurger, purger, DUREE_MS, DUREE_FAMILLE_MS };

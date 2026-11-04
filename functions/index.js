@@ -39,7 +39,6 @@
 // Clés Stripe dans Secret Manager (outils/stripe/installer-stripe.bat), jamais dans le dépôt.
 
 const { onRequest, onCall, HttpsError } = require('firebase-functions/v2/https');
-const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { onDocumentCreated, onDocumentUpdated, onDocumentWritten } = require('firebase-functions/v2/firestore');
 const { setGlobalOptions, logger } = require('firebase-functions/v2');
 const { defineSecret, defineString } = require('firebase-functions/params');
@@ -1474,34 +1473,32 @@ exports.listeAttente = onRequest({ cors: [/mapapote\.fr$/, /papote\.web\.app$/],
 
 // Toutes les heures : relances dues (1 h après, lendemain 19 h, une semaine après 19 h),
 // seulement avec l'accord, sans paiement depuis et sans désinscription.
-exports.relancesPaniers = onSchedule(
-  { schedule: 'every 60 minutes', timeZone: 'Europe/Paris', secrets: [MAIL_MOT_DE_PASSE] },
-  async () => {
-    const maintenant = Date.now();
-    const depuis = new Date(maintenant - 9 * relances.JOUR);
-    const paniers = await db.collection('paniers').where('creeLe', '>=', depuis).get();
-    for (const p of paniers.docs) {
-      const d = p.data();
-      if (!d.marketing || d.payeLe || !d.email || !d.creeLe) continue;
-      const etape = relances.relanceDue(d.creeLe.toMillis(), d.relances, maintenant);
-      if (!etape) continue;
-      try {
-        const deja = await db.collection('commandes').where('email', '==', d.email).limit(1).get();
-        const contact = await db.doc(`contacts/${cleContact(d.email)}`).get();
-        if (!deja.empty || (contact.exists && (contact.get('desinscritLe') || contact.get('consentement') === false))) {
-          await p.ref.update({ relances: relances.RELANCES_MAX, relanceArretee: true });
-          continue;
-        }
-        const desinscription = contact.exists && contact.get('jeton')
-          ? `${URL_DESINSCRIPTION}?c=${contact.id}&j=${contact.get('jeton')}` : null;
-        const lien = `${URL_COMMANDER}?${d.requete}&email=${encodeURIComponent(d.email)}&relance=${p.id}`;
-        await envoyerMail(d.email, mail.relancePanier({ etape, nom: d.nom, formule: d.formule, lien, desinscription }));
-        await p.ref.update({ relances: etape, [`relance${etape}Le`]: FieldValue.serverTimestamp() });
-      } catch (e) {
-        logger.error(`Relance ${etape} du panier ${p.id} non envoyée`, e.message);
+async function relancesPaniers() {
+  const maintenant = Date.now();
+  const depuis = new Date(maintenant - 9 * relances.JOUR);
+  const paniers = await db.collection('paniers').where('creeLe', '>=', depuis).get();
+  for (const p of paniers.docs) {
+    const d = p.data();
+    if (!d.marketing || d.payeLe || !d.email || !d.creeLe) continue;
+    const etape = relances.relanceDue(d.creeLe.toMillis(), d.relances, maintenant);
+    if (!etape) continue;
+    try {
+      const deja = await db.collection('commandes').where('email', '==', d.email).limit(1).get();
+      const contact = await db.doc(`contacts/${cleContact(d.email)}`).get();
+      if (!deja.empty || (contact.exists && (contact.get('desinscritLe') || contact.get('consentement') === false))) {
+        await p.ref.update({ relances: relances.RELANCES_MAX, relanceArretee: true });
+        continue;
       }
+      const desinscription = contact.exists && contact.get('jeton')
+        ? `${URL_DESINSCRIPTION}?c=${contact.id}&j=${contact.get('jeton')}` : null;
+      const lien = `${URL_COMMANDER}?${d.requete}&email=${encodeURIComponent(d.email)}&relance=${p.id}`;
+      await envoyerMail(d.email, mail.relancePanier({ etape, nom: d.nom, formule: d.formule, lien, desinscription }));
+      await p.ref.update({ relances: etape, [`relance${etape}Le`]: FieldValue.serverTimestamp() });
+    } catch (e) {
+      logger.error(`Relance ${etape} du panier ${p.id} non envoyée`, e.message);
     }
-  });
+  }
+}
 
 // Admin : e-mail d'ouverture des commandes à la liste d'attente. { test: true } l'envoie seulement à l'admin
 // qui appelle. Sinon, une fois par contact (lancementEnvoyeLe), avec l'accord et sans désinscription.
@@ -1640,95 +1637,92 @@ exports.compter = onRequest({ cors: true, maxInstances: 2 }, async (req, res) =>
 });
 
 // ---------- Tâches automatiques ----------
+// Lancées par tachesHoraires (taches.js), chacune à son heure : voir taches.PLANNING.
 
-exports.finDeGrace = onSchedule(
-  { schedule: 'every 1 hours', timeZone: 'Europe/Paris', secrets: [MAIL_MOT_DE_PASSE] },
-  async () => {
-    const maintenant = Date.now();
-    const impayes = await db.collection('families').where('abonnement.statut', '==', 'impaye').get();
-    for (const snap of impayes.docs) {
-      if (!regles.graceDepassee(snap.get('abonnement'), maintenant)) continue;
-      await snap.ref.update({
-        'abonnement.statut': 'suspendu',
-        'abonnement.suspenduLe': Timestamp.fromMillis(maintenant),
-        'abonnement.majLe': FieldValue.serverTimestamp(),
-        rev: FieldValue.increment(1),
-      });
-      logger.info(`Famille ${snap.id} suspendue : délai de grâce dépassé.`);
-      // La famille est prévenue (C1) : la tablette affiche « la famille a été prévenue ».
-      await prevenirPaiement(snap.id, snap.get('abonnement.stripeSubscriptionId'), 'suspendu', null);
-    }
-    // Installation finie sans commande reliée (B3) : 48 h de tolérance, puis « aucun » (Papote en pause).
-    const tolerees = await db.collection('families').where('abonnement.statut', '==', 'installation').get();
-    for (const snap of tolerees.docs) {
-      if (!regles.toleranceDepassee(snap.get('abonnement'), maintenant)) continue;
-      await snap.ref.update({
-        abonnement: { statut: 'aucun', majLe: FieldValue.serverTimestamp() },
-        rev: FieldValue.increment(1),
-      });
-      logger.warn(`Famille ${snap.id} : toujours aucune commande reliée 48 h après l'installation, Papote en pause.`);
-    }
-  });
+async function finDeGrace() {
+  const maintenant = Date.now();
+  const impayes = await db.collection('families').where('abonnement.statut', '==', 'impaye').get();
+  for (const snap of impayes.docs) {
+    if (!regles.graceDepassee(snap.get('abonnement'), maintenant)) continue;
+    await snap.ref.update({
+      'abonnement.statut': 'suspendu',
+      'abonnement.suspenduLe': Timestamp.fromMillis(maintenant),
+      'abonnement.majLe': FieldValue.serverTimestamp(),
+      rev: FieldValue.increment(1),
+    });
+    logger.info(`Famille ${snap.id} suspendue : délai de grâce dépassé.`);
+    // La famille est prévenue (C1) : la tablette affiche « la famille a été prévenue ».
+    await prevenirPaiement(snap.id, snap.get('abonnement.stripeSubscriptionId'), 'suspendu', null);
+  }
+  // Installation finie sans commande reliée (B3) : 48 h de tolérance, puis « aucun » (Papote en pause).
+  const tolerees = await db.collection('families').where('abonnement.statut', '==', 'installation').get();
+  for (const snap of tolerees.docs) {
+    if (!regles.toleranceDepassee(snap.get('abonnement'), maintenant)) continue;
+    await snap.ref.update({
+      abonnement: { statut: 'aucun', majLe: FieldValue.serverTimestamp() },
+      rev: FieldValue.increment(1),
+    });
+    logger.warn(`Famille ${snap.id} : toujours aucune commande reliée 48 h après l'installation, Papote en pause.`);
+  }
+}
 
 // Tablette incluse non rendue dans les 30 jours : le matériel prêté (abonnement.js, penaliteRestitution) prélevé sur le compte de l'abonnement.
-exports.restitutions = onSchedule(
-  { schedule: 'every day 09:00', timeZone: 'Europe/Paris', secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE] },
-  async () => {
-    const maintenant = Date.now();
-    const attendues = await db.collection('commandes').where('restitution.statut', '==', 'attendue').get();
-    for (const snap of attendues.docs) {
-      const r = snap.get('restitution');
-      if (regles.rappelRestitutionDu(r, maintenant) && snap.get('email')) {
-        try {
-          await envoyerMail(snap.get('email'), mail.rappelRestitution({
-            nom: snap.get('nom'), avant: r.avant.toMillis(), lien: r.qr || r.etiquette || null, qr: !!r.qr,
-            montant: regles.penaliteRestitution(snap.data()),
-          }));
-          await snap.ref.update({ 'restitution.rappelLe': FieldValue.serverTimestamp() });
-        } catch (e) {
-          logger.error(`Commande ${snap.id} : rappel de retour non parti`, e.message);
-        }
-      }
-      if (!regles.restitutionEchue(snap.get('restitution'), maintenant)) continue;
-      // Jamais de prélèvement pour une tablette qui n'est pas partie (commande annulée avant l'envoi).
-      if (!regles.materielParti(snap.data())) {
-        logger.warn(`Commande ${snap.id} : retour attendu mais tablette jamais envoyée, rien prélevé.`);
-        continue;
-      }
+async function restitutions() {
+  const maintenant = Date.now();
+  const attendues = await db.collection('commandes').where('restitution.statut', '==', 'attendue').get();
+  for (const snap of attendues.docs) {
+    const r = snap.get('restitution');
+    if (regles.rappelRestitutionDu(r, maintenant) && snap.get('email')) {
       try {
-        const paiement = await preleverMateriel(snap.id, regles.penaliteRestitution(snap.data()),
-          'Papote : matériel non rendu', `restitution-${snap.id}`);
-        // Deux tâches en même temps : Stripe n'a prélevé qu'une fois (même clé), et seule la première note
-        // « facturée » et prévient le client.
-        const premiere = await db.runTransaction(async (tx) => {
-          if ((await tx.get(snap.ref)).get('restitution.statut') !== 'attendue') return false;
-          tx.update(snap.ref, {
-            'restitution.statut': 'facturee',
-            'restitution.paiement': paiement.id,
-            'restitution.majLe': FieldValue.serverTimestamp(),
-          });
-          return true;
-        });
-        if (!premiere) continue;
-        logger.info(`Commande ${snap.id} : tablette non rendue, ${mail.euros(regles.penaliteRestitution(snap.data()))} prélevés.`);
-        // Le client sait ce qui a été prélevé et pourquoi (2026-10-30).
-        if (snap.get('email')) {
-          await envoyerMail(snap.get('email'), mail.materielNonRendu({ nom: snap.get('nom'), montant: regles.penaliteRestitution(snap.data()), avant: r.avant.toMillis() }))
-            .catch((e2) => logger.error(`Commande ${snap.id} : e-mail « matériel prélevé » non parti`, e2.message));
-        }
+        await envoyerMail(snap.get('email'), mail.rappelRestitution({
+          nom: snap.get('nom'), avant: r.avant.toMillis(), lien: r.qr || r.etiquette || null, qr: !!r.qr,
+          montant: regles.penaliteRestitution(snap.data()),
+        }));
+        await snap.ref.update({ 'restitution.rappelLe': FieldValue.serverTimestamp() });
       } catch (e) {
-        // Carte expirée ou refusée : à relancer à la main, depuis le tableau de bord Stripe. Tanguy est prévenu (2026-10-30).
-        await snap.ref.update({
-          'restitution.statut': 'echec',
-          'restitution.erreur': e.message,
-          'restitution.majLe': FieldValue.serverTimestamp(),
-        });
-        logger.warn(`Commande ${snap.id} : prélèvement de la tablette non rendue refusé`, e.message);
-        await prevenirPapote(`Tablette non rendue, prélèvement refusé : ${snap.get('nom') || snap.get('email') || snap.id}`, snap,
-          `La tablette n'a pas été rendue avant le ${mail.dateEnClair(r.avant.toMillis())} et le prélèvement de ${mail.euros(regles.penaliteRestitution(snap.data()))} a été refusé (${e.message}). À relancer à la main depuis Stripe, ou à voir avec le client.`);
+        logger.error(`Commande ${snap.id} : rappel de retour non parti`, e.message);
       }
     }
-  });
+    if (!regles.restitutionEchue(snap.get('restitution'), maintenant)) continue;
+    // Jamais de prélèvement pour une tablette qui n'est pas partie (commande annulée avant l'envoi).
+    if (!regles.materielParti(snap.data())) {
+      logger.warn(`Commande ${snap.id} : retour attendu mais tablette jamais envoyée, rien prélevé.`);
+      continue;
+    }
+    try {
+      const paiement = await preleverMateriel(snap.id, regles.penaliteRestitution(snap.data()),
+        'Papote : matériel non rendu', `restitution-${snap.id}`);
+      // Deux tâches en même temps : Stripe n'a prélevé qu'une fois (même clé), et seule la première note
+      // « facturée » et prévient le client.
+      const premiere = await db.runTransaction(async (tx) => {
+        if ((await tx.get(snap.ref)).get('restitution.statut') !== 'attendue') return false;
+        tx.update(snap.ref, {
+          'restitution.statut': 'facturee',
+          'restitution.paiement': paiement.id,
+          'restitution.majLe': FieldValue.serverTimestamp(),
+        });
+        return true;
+      });
+      if (!premiere) continue;
+      logger.info(`Commande ${snap.id} : tablette non rendue, ${mail.euros(regles.penaliteRestitution(snap.data()))} prélevés.`);
+      // Le client sait ce qui a été prélevé et pourquoi (2026-10-30).
+      if (snap.get('email')) {
+        await envoyerMail(snap.get('email'), mail.materielNonRendu({ nom: snap.get('nom'), montant: regles.penaliteRestitution(snap.data()), avant: r.avant.toMillis() }))
+          .catch((e2) => logger.error(`Commande ${snap.id} : e-mail « matériel prélevé » non parti`, e2.message));
+      }
+    } catch (e) {
+      // Carte expirée ou refusée : à relancer à la main, depuis le tableau de bord Stripe. Tanguy est prévenu (2026-10-30).
+      await snap.ref.update({
+        'restitution.statut': 'echec',
+        'restitution.erreur': e.message,
+        'restitution.majLe': FieldValue.serverTimestamp(),
+      });
+      logger.warn(`Commande ${snap.id} : prélèvement de la tablette non rendue refusé`, e.message);
+      await prevenirPapote(`Tablette non rendue, prélèvement refusé : ${snap.get('nom') || snap.get('email') || snap.id}`, snap,
+        `La tablette n'a pas été rendue avant le ${mail.dateEnClair(r.avant.toMillis())} et le prélèvement de ${mail.euros(regles.penaliteRestitution(snap.data()))} a été refusé (${e.message}). À relancer à la main depuis Stripe, ou à voir avec le client.`);
+    }
+  }
+}
 
 // Prélève du matériel non rendu sur la carte de l'abonnement. La description contient « non rendu » :
 // gestion.js en fait une facture chaque nuit.
@@ -2106,37 +2100,35 @@ async function suiviRetour(event, rAvant, r, c) {
 
 // Chaque jour : rappel au client dont la tablette est partie mais pas encore jumelée (J+5, J+12),
 // puis signalement à l'administrateur (alerteJumelage) à J+20.
-exports.rappelsJumelage = onSchedule(
-  { schedule: 'every day 10:00', timeZone: 'Europe/Paris', secrets: [MAIL_MOT_DE_PASSE] },
-  async () => {
-    const maintenant = Date.now();
-    const envoyees = await db.collection('commandes')
-      .where('expedition', '==', 'envoyee').where('fid', '==', null).get();
-    for (const snap of envoyees.docs) {
-      const c = snap.data();
-      const depart = c.envoyeeLe && c.envoyeeLe.toMillis();
-      if (livraison.alerteDue(depart, maintenant) && !c.alerteJumelage) {
-        await snap.ref.update({ alerteJumelage: true });
-        logger.warn(`Commande ${snap.id} : tablette toujours pas jumelée 20 jours après l'envoi.`);
-        // Tanguy prévenu par e-mail (A3) : le premier prélèvement tombe dans 13 jours, à lui d'appeler le client.
-        await prevenirPapote(`Tablette pas installée 20 jours après l'envoi : ${c.nom || c.email || snap.id}`, snap,
-          'La tablette est partie il y a 20 jours et n\'est toujours pas reliée à une famille. Appelez le client avant le premier prélèvement (33 jours après l\'envoi). Colis revenu chez vous ? « Colis revenu » sur la commande l\'annule et rembourse les 60 €.');
-      }
-      const numero = livraison.rappelDu(depart, c.rappels, maintenant);
-      if (!numero || !c.email) continue;
-      try {
-        await envoyerMail(c.email, mail.rappelJumelage({
-          nom: c.nom, numero, code: c.code ? regles.afficherCode(c.code) : null,
-        }));
-        await snap.ref.update({ rappels: numero, dernierRappelLe: FieldValue.serverTimestamp() });
-      } catch (e) {
-        logger.error(`Commande ${snap.id} : rappel de jumelage non parti`, e.message);
-      }
+async function rappelsJumelage() {
+  const maintenant = Date.now();
+  const envoyees = await db.collection('commandes')
+    .where('expedition', '==', 'envoyee').where('fid', '==', null).get();
+  for (const snap of envoyees.docs) {
+    const c = snap.data();
+    const depart = c.envoyeeLe && c.envoyeeLe.toMillis();
+    if (livraison.alerteDue(depart, maintenant) && !c.alerteJumelage) {
+      await snap.ref.update({ alerteJumelage: true });
+      logger.warn(`Commande ${snap.id} : tablette toujours pas jumelée 20 jours après l'envoi.`);
+      // Tanguy prévenu par e-mail (A3) : le premier prélèvement tombe dans 13 jours, à lui d'appeler le client.
+      await prevenirPapote(`Tablette pas installée 20 jours après l'envoi : ${c.nom || c.email || snap.id}`, snap,
+        'La tablette est partie il y a 20 jours et n\'est toujours pas reliée à une famille. Appelez le client avant le premier prélèvement (33 jours après l\'envoi). Colis revenu chez vous ? « Colis revenu » sur la commande l\'annule et rembourse les 60 €.');
     }
-  });
+    const numero = livraison.rappelDu(depart, c.rappels, maintenant);
+    if (!numero || !c.email) continue;
+    try {
+      await envoyerMail(c.email, mail.rappelJumelage({
+        nom: c.nom, numero, code: c.code ? regles.afficherCode(c.code) : null,
+      }));
+      await snap.ref.update({ rappels: numero, dernierRappelLe: FieldValue.serverTimestamp() });
+    } catch (e) {
+      logger.error(`Commande ${snap.id} : rappel de jumelage non parti`, e.message);
+    }
+  }
+}
+
 const support = require('./support');
 exports.supportChat = support.supportChat;
-exports.bilanSupport = support.bilanSupport;
 // IA de l'admin (page #aide) : répond avec le guide et l'état du parc lu en direct, n'agit jamais (ia-admin.js).
 exports.iaAdmin = require('./ia-admin').iaAdmin;
 
@@ -2151,14 +2143,10 @@ exports.gestionStripe = gestion.gestionStripe;
 exports.gestionCommande = gestion.gestionCommande;
 exports.gestionPiece = gestion.gestionPiece;
 exports.gestionLireFacture = gestion.gestionLireFacture;
-exports.gestionAutomatique = gestion.gestionAutomatique;
 exports.gestionAutomatiser = gestion.gestionAutomatiser;
 exports.gestionReglages = gestion.gestionReglages;
-exports.gestionRecap = gestion.gestionRecap;
 exports.gestionRecapMaintenant = gestion.gestionRecapMaintenant;
-exports.gestionCourrier = gestion.gestionCourrier;
 exports.gestionCourrierMaintenant = gestion.gestionCourrierMaintenant;
-exports.gestionCloture = gestion.gestionCloture;
 exports.gestionCloturer = gestion.gestionCloturer;
 exports.gestionSim = gestion.gestionSim;
 exports.gestionAccessoire = gestion.gestionAccessoire;
@@ -2250,9 +2238,19 @@ Object.assign(exports, (({ quotaFichier, quotaFichierEfface, quotaEnvois }) => (
 
 // Alertes sur le téléphone des responsables : tablette débranchée ou qui ne répond plus.
 exports.alertesTablettes = require('./alertes').alertesTablettes;
-exports.alerteMatin = require('./alertes').alerteMatin;
-// Purge mensuelle des données de plus de 12 mois (chat, paniers, familles résiliées) : purge.js.
-exports.purgeMensuelle = require('./purge').purgeMensuelle;
+
+// Les autres tâches planifiées, regroupées dans une seule fonction lancée toutes les heures (taches.js : Cloud
+// Scheduler est gratuit jusqu'à 3 tâches). Chacune garde son heure : voir taches.PLANNING.
+exports.tachesHoraires = require('./taches').planifier({
+  relancesPaniers, finDeGrace, restitutions, rappelsJumelage,
+  gestionCourrier: gestion.gestionCourrier, gestionAutomatique: gestion.gestionAutomatique,
+  gestionRecap: gestion.gestionRecap, gestionCloture: gestion.gestionCloture,
+  bilanSupport: support.bilanSupport,
+  // « Pas vue depuis deux jours », chaque matin à 10 h (alertes.js).
+  alerteMatin: require('./alertes').alerteMatin,
+  // Purge mensuelle des données de plus de 12 mois (chat, paniers, familles résiliées) : purge.js.
+  purgeMensuelle: require('./purge').purgeMensuelle,
+});
 
 // Voix des messages et des rappels sur la tablette : son créé une fois, rejoué autant qu'il faut (voix.js).
 const voix = require('./voix');

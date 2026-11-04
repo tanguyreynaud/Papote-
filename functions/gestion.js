@@ -26,7 +26,6 @@
 
 const { onCall, onRequest, HttpsError } = require('firebase-functions/v2/https');
 const { onDocumentUpdated } = require('firebase-functions/v2/firestore');
-const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { logger } = require('firebase-functions/v2');
 const { defineSecret, defineString } = require('firebase-functions/params');
 const admin = require('firebase-admin');
@@ -2100,9 +2099,9 @@ async function automatiser(qui) {
   return bilan;
 }
 
-exports.gestionAutomatique = onSchedule(
-  { schedule: 'every day 04:00', timeZone: 'Europe/Paris', secrets: [STRIPE_SECRET, SENDCLOUD_API, MAIL_MOT_DE_PASSE], timeoutSeconds: 300 },
-  () => automatiser('automatique'));
+// Tâches planifiées : lancées par taches.js (tachesHoraires), chacune à son heure.
+// Chaque jour à 4 h.
+exports.gestionAutomatique = () => automatiser('automatique');
 
 exports.gestionAutomatiser = onCall({ secrets: [STRIPE_SECRET, SENDCLOUD_API, MAIL_MOT_DE_PASSE], timeoutSeconds: 300 }, async (request) => {
   verifierAdmin(request);
@@ -2738,9 +2737,8 @@ async function recapitulatif() {
   return { ok: true, aFaire: liste.length };
 }
 
-exports.gestionRecap = onSchedule(
-  { schedule: 'every monday 08:00', timeZone: 'Europe/Paris', secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE], timeoutSeconds: 300 },
-  () => recapitulatif());
+// Le lundi à 8 h (taches.js).
+exports.gestionRecap = () => recapitulatif();
 
 exports.gestionRecapMaintenant = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE], timeoutSeconds: 300 }, async (request) => {
   verifierAdmin(request);
@@ -2885,9 +2883,8 @@ async function cloturer(maintenant, refaire) {
 
 const OPTIONS_CLOTURE = { secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE], memory: '512MiB', timeoutSeconds: 540 };
 
-exports.gestionCloture = onSchedule(
-  { ...OPTIONS_CLOTURE, schedule: '0 5 1 * *', timeZone: 'Europe/Paris' },
-  () => cloturer(Date.now()));
+// Le 1er du mois à 5 h (taches.js).
+exports.gestionCloture = () => cloturer(Date.now());
 
 exports.gestionCloturer = onCall(OPTIONS_CLOTURE, async (request) => {
   verifierAdmin(request);
@@ -3045,9 +3042,8 @@ const OPTIONS_COURRIER = {
   secrets: [ANTHROPIC_API_KEY, FACTURES_MOT_DE_PASSE], memory: '512MiB', timeoutSeconds: 540,
 };
 
-exports.gestionCourrier = onSchedule(
-  { ...OPTIONS_COURRIER, schedule: 'every 60 minutes', timeZone: 'Europe/Paris' },
-  () => releverFactures());
+// Toutes les heures (taches.js).
+exports.gestionCourrier = () => releverFactures();
 
 exports.gestionCourrierMaintenant = onCall(OPTIONS_COURRIER, async (request) => {
   verifierAdmin(request);

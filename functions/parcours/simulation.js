@@ -378,8 +378,11 @@ function appeler(nom, data, qui) {
   return enFonction(nom, () => fonctions[nom].run({ data, auth, rawRequest: { headers: {} } }));
 }
 
-// Tâche planifiée (onSchedule) lancée tout de suite.
-const tache = (nom) => enFonction(nom, () => fonctions[nom].run({ scheduleTime: new Date(Date.now()).toISOString() }));
+// Tâche planifiée lancée tout de suite : une fonction onSchedule (alertesTablettes, tachesHoraires) ou une des tâches
+// regroupées dans tachesHoraires (taches.js), lancée seule et comptée sous son propre nom.
+const tache = (nom) => enFonction(nom, () => (fonctions[nom]
+  ? fonctions[nom].run({ scheduleTime: new Date(Date.now()).toISOString() })
+  : fonctions.tachesHoraires.taches[nom]()));
 
 // ---------- Base ----------
 // Vidage complet par l'API de l'émulateur (plus sûr que recursiveDelete pendant que la simulation écoute).

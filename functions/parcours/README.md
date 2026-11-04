@@ -27,6 +27,9 @@ impayés et pause, reprise d'un abonnement résilié, deux commandes sur une fam
 en même temps, messages Stripe en double ou dans le désordre, étiquettes et « Matériel reçu » en double, cinq mois
 jour par jour.
 
+Tâches planifiées : `s.tache('restitutions')` (et les autres tâches de `taches.js`) lance la tâche seule, comme
+`tachesHoraires` le fait à son heure ; `tachesHoraires` elle-même est lancée à 3 h et 10 h dans `logique.parcours.js`.
+
 Gestes humains côté serveur (tests de nuit, 03/11) : double appui, nouvel essai après une panne, gestes dans le
 désordre, appels ou tâches en même temps.
 
