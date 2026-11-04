@@ -4538,3 +4538,92 @@ document.addEventListener('click', (e) => {
   e.stopImmediatePropagation();
   history.back();
 }, true);
+
+// ---------- « Que faire si… » : question libre à l'aide (fonction iaAdmin, functions/ia-admin.js) ----------
+// L'aide lit le guide et l'état des tablettes et répond par des étapes ; elle ne fait rien elle-même. Les liens de sa
+// réponse ne s'ouvrent que s'ils mènent à un écran de l'admin (le serveur filtre déjà, la page revérifie).
+// Sans elle (hors ligne, panne, plus de questions aujourd'hui) : une phrase calme, les 6 cas du guide restent là.
+const AIDE_IA_CALME = 'L’aide ne répond pas pour le moment. Les 6 cas ci-dessous donnent les étapes et les bons écrans.';
+const AIDE_IA_HORS_LIGNE = 'Pas d’internet pour le moment : l’aide ne peut pas répondre. Les 6 cas ci-dessous marchent sans elle.';
+const AIDE_IA_EXTERIEURS = ['https://dashboard.stripe.com', 'https://status.firebase.google.com'];
+const lienAidePermis = (href) => AIDE_IA_EXTERIEURS.includes(href)
+  || /^#(aide|accueil|commandes|clients\/liste|clients\/familles|stock\/tablettes|stock\/sim|compta\/factures)$/.test(href)
+  || /^#(tablette|commande|sim)\/[\w.-]{1,80}$/.test(href);
+
+// Une ligne de la réponse : le texte, et les liens en boutons dessous (comme les étapes du guide). Un lien au milieu
+// d'une phrase garde son libellé dans le texte ; un lien en fin de ligne n'apparaît que comme bouton.
+function ligneAide(texte) {
+  const liens = [];
+  const sansLiens = texte.replace(/\[([^\]\n]{1,80})\]\(([^)\s]+)\)([\s.,;:!?]*)$/, (tout, libelle, href) => {
+    if (!lienAidePermis(href)) return libelle;
+    liens.push({ libelle, href });
+    return '';
+  }).replace(/\[([^\]\n]{1,80})\]\(([^)\s]+)\)/g, (tout, libelle, href) => {
+    if (lienAidePermis(href)) liens.push({ libelle, href });
+    return libelle;
+  }).trim();
+  const p = h('p', {}, sansLiens);
+  if (!liens.length) return [p];
+  const rangee = h('p', { class: 'aide-liens' });
+  for (const l of liens) {
+    const exterieur = l.href.startsWith('https://');
+    rangee.append(h('a', { class: 'secondary small-btn', href: l.href, ...(exterieur ? { target: '_blank', rel: 'noopener' } : {}) }, exterieur ? `${l.libelle} ↗` : l.libelle));
+  }
+  return [p, rangee];
+}
+
+function afficherReponseAide(zone, r) {
+  zone.replaceChildren();
+  if (!r || !r.ok) {
+    zone.append(h('p', { class: 'aide-ia-calme' }, (r && r.reponse) || AIDE_IA_CALME));
+    return;
+  }
+  const lignes = String(r.reponse).split('\n').map((l) => l.trim()).filter(Boolean);
+  const etapes = lignes.filter((l) => /^\d+[.)]\s/.test(l));
+  if (etapes.length && etapes.length === lignes.length) {
+    const ol = h('ol', { class: 'aide-etapes' });
+    for (const l of etapes) ol.append(h('li', {}, ...ligneAide(l.replace(/^\d+[.)]\s+/, ''))));
+    zone.append(ol);
+  } else {
+    for (const l of lignes) zone.append(...ligneAide(l));
+  }
+  zone.append(h('p', { class: 'aide-ia-pied' }, 'Réponse de l’aide, à vérifier sur l’écran. Rien n’a été changé.'));
+}
+
+{
+  const formulaire = $('aide-ia');
+  const champ = $('aide-ia-question');
+  const bouton = $('aide-ia-demander');
+  const zone = $('aide-ia-reponse');
+  let enCours = false; // deux touches rapides : une seule question part
+  formulaire.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (enCours) return;
+    const question = champ.value.trim();
+    if (question.length < 3) {
+      zone.replaceChildren(h('p', { class: 'aide-ia-calme' }, 'Écrivez d’abord votre question, par exemple : « carte SIM sans données ».'));
+      champ.focus();
+      return;
+    }
+    if (!navigator.onLine) {
+      zone.replaceChildren(h('p', { class: 'aide-ia-calme' }, AIDE_IA_HORS_LIGNE));
+      return;
+    }
+    enCours = true;
+    bouton.disabled = true;
+    bouton.textContent = '…';
+    bouton.setAttribute('aria-label', 'Demande en cours');
+    zone.replaceChildren(h('p', { class: 'aide-ia-calme' }, 'L’aide lit le guide et l’état des tablettes…'));
+    try {
+      afficherReponseAide(zone, await appeler('iaAdmin', { question }));
+    } catch (err) {
+      const code = (err && err.code) || '';
+      afficherReponseAide(zone, { ok: false, reponse: code.endsWith('permission-denied') ? messageErreur(err) : AIDE_IA_CALME });
+    } finally {
+      enCours = false;
+      bouton.disabled = false;
+      bouton.textContent = 'Demander';
+      bouton.removeAttribute('aria-label');
+    }
+  });
+}

@@ -670,8 +670,30 @@ button.secondary.charge::after, button.link.charge::after { border-color: rgba(7
 .aide-etapes p { margin: 0; overflow-wrap: anywhere; }
 .aide-etapes .aide-liens { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .aide-liens .small-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; box-sizing: border-box; text-decoration: none; color: var(--text); font-weight: 600; }
+/* Question à l'aide (#aide-ia) : un champ, un bouton de la même hauteur que ceux du guide, la réponse en étapes. */
+.aide-ia { margin-bottom: 16px; }
+.aide-ia label { margin: 0 0 4px; font-size: 18px; font-family: var(--display); }
+.aide-ia > p.muted { margin: 0 0 10px; }
+.aide-ia-ligne { display: flex; gap: 8px; align-items: stretch; }
+.aide-ia-ligne input { flex: 1 1 auto; min-width: 0; margin: 0; min-height: 44px; box-sizing: border-box; padding: 10px 14px; }
+.aide-ia-ligne button.primary { flex: none; min-height: 44px; padding: 0 18px; font-size: 15px; }
+/* Appuyé : grisé tout de suite (« … »), sans perdre le contraste du texte. */
+.aide-ia-ligne button:disabled { opacity: 1; background: var(--warm); color: var(--accent-text); cursor: progress; }
+.aide-ia-reponse:empty { display: none; }
+/* Téléphone : famille.css cache la barre .nav quand un champ a le clavier ; ici c'est la barre du haut de l'admin, qui
+   revenait au moment du toucher sur « Demander » et poussait le bouton de 62 px sous le doigt (le toucher tombait à côté). */
+@media screen and (hover: none) and (pointer: coarse) {
+  body:has(#aide-ia-question:focus) .shell > aside.nav { display: flex !important; }
+}
+.aide-ia-reponse { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+.aide-ia-reponse > p { margin: 0 0 8px; overflow-wrap: anywhere; }
+.aide-ia-reponse .aide-etapes { padding: 0; }
+.aide-ia-reponse .aide-ia-calme { color: var(--muted); }
+.aide-ia-reponse .aide-ia-pied { margin: 12px 0 0; font-size: 14px; color: var(--muted); }
 @media (prefers-reduced-motion: reduce) { .aide-cas summary::after { transition: none; } }
 @media (max-width: 560px) {
+  .aide-ia-ligne { flex-direction: column; }
+  .aide-ia-ligne button.primary { width: 100%; }
   .aide-cas summary { padding: 14px; }
   .aide-etapes { padding: 0 14px 14px; }
   .aide-etapes li { padding-left: 36px; }
