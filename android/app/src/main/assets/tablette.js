@@ -109,7 +109,8 @@
       $('date').textContent = 'Papote attend le réseau pour se mettre à l’heure';
       if ($('overlay-clock')) $('overlay-clock').textContent = '';
       if ($('moment')) $('moment').textContent = '';
-      document.body.className = playing && playing.post.video && !playing.cadre ? 'video-playing' : '';
+      document.body.classList.remove('night');
+      document.body.classList.toggle('video-playing', !!(playing && playing.post.video && !playing.cadre));
       if (dimmed) { dimmed = false; if (android() && android().setDim) android().setDim(false); }
       return;
     }
@@ -132,8 +133,9 @@
           : hour >= 18 && hour < 22 ? 'Le soir' : 'La nuit';
     }
     var evening = isEvening(hour * 60 + now.getMinutes());
-    document.body.className = (evening ? 'night' : '') +
-      (playing && playing.post.video && !playing.cadre ? ' video-playing' : '');
+    // classList : les autres marques du corps (débranchée, sans réseau) restent en place.
+    document.body.classList.toggle('night', evening);
+    document.body.classList.toggle('video-playing', !!(playing && playing.post.video && !playing.cadre));
     // Le soir, l'écran garde son fond noir mais éclaire moins.
     if (evening !== dimmed) {
       dimmed = evening;
@@ -658,11 +660,11 @@
         } else {
           // En largeur : toute la hauteur de l'écran, centrée (les côtés qui dépassent sont coupés).
           var hh = window.innerHeight, ww = hh * ratio;
-          document.body.className += ' video-playing';
+          document.body.classList.add('video-playing');
           a.playVideoAt(p.video, (window.innerWidth - ww) / 2, 0, ww, hh, true);
         }
       } else if (a && a.playVideo) {
-        document.body.className += ' video-playing';
+        document.body.classList.add('video-playing');
         a.playVideo(p.video);
       }
     } else if (android() && android().playVoice) {
@@ -678,7 +680,7 @@
     if (!playing) return;
     if (playing.post.video) {
       if (android() && android().stopVideo) android().stopVideo();
-      document.body.className = document.body.className.replace(' video-playing', '');
+      document.body.classList.remove('video-playing');
     } else if (android() && android().stopVoice) android().stopVoice();
     else $('player').pause();
     playing = null;
@@ -686,7 +688,7 @@
 
   // Fin de lecture (appelé par Android quand le vocal est terminé).
   function voiceEnded() {
-    document.body.className = document.body.className.replace(' video-playing', '');
+    document.body.classList.remove('video-playing');
     var p = playing;
     playing = null;
     if (p && p.onEnd) p.onEnd();
