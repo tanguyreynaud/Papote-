@@ -2223,6 +2223,7 @@ async function answerFromTablet() {
   setCallFace($('call-face'), caller);
   $('call').hidden = false;
   setCallStatus('Connexion…');
+  reponseAbandonnee = false;
   try {
     currentCall = await answerIncoming(session.fid, call.id, { uid: session.uid, name: session.member.name }, {
       audio: $('call-audio'),
@@ -2245,6 +2246,13 @@ async function answerFromTablet() {
         setTimeout(() => { if (!currentCall) leaveCallScreen(); }, 2000);
       },
     });
+    // « Raccrocher » touché pendant « Connexion… » : l'appel pris est coupé aussitôt (sinon il continuait, micro
+    // ouvert, écran fermé).
+    if (reponseAbandonnee) {
+      const pris = currentCall;
+      currentCall = null;
+      pris.hangup();
+    }
   } catch (err) {
     currentCall = null;
     if (!err || err.name !== 'TakenError') reportCallIncident('reponse-audio', `${err && err.name}: ${err && err.message}`, call.id);
@@ -2263,6 +2271,7 @@ $('incoming-answer').addEventListener('click', answerFromTablet);
 // Ouvert par « Répondre » (?appel=<id>) : l'écran d'appel s'affiche tout de suite, avant même
 // l'accueil, et l'appel est pris dès qu'il arrive. S'il ne sonne plus, on le dit.
 let answerPending = null;
+let reponseAbandonnee = false; // « Raccrocher » touché avant que la réponse à Mamie soit prise
 function answerOnArrival(cid) {
   answerPending = cid;
   etatNatif('connexion', false);
@@ -2498,6 +2507,8 @@ window.addEventListener('pagehide', hangupCall);
 
 // C'est moi qui raccroche : l'écran se ferme tout de suite (pas de « Appel terminé » à attendre).
 $('call-hangup').addEventListener('click', () => {
+  // Réponse à Mamie encore en route (pas d'appel à annuler) : elle sera raccrochée dès qu'elle est prise.
+  if (callStarting && !currentCall && !callAbort) reponseAbandonnee = true;
   hangupCall();
   leaveCallScreen();
   tuileLibre();
@@ -2947,7 +2958,8 @@ function paused() {
 function messageServeur(err) {
   const codes = ['failed-precondition', 'permission-denied', 'already-exists', 'invalid-argument', 'internal'];
   const code = String(err?.code || '').replace(/^functions\//, '');
-  const texte = String(err?.message || '').trim();
+  // Le SDK ajoute le statut HTTP au message (« … [400] », « internal [0] » sans réseau) : jamais montré.
+  const texte = String(err?.message || '').replace(/\s*\[\d{1,3}\]$/, '').trim();
   return codes.includes(code) && /\s/.test(texte) && /[a-zà-ÿ]/.test(texte) && texte.length < 300 ? texte : '';
 }
 
@@ -3301,7 +3313,8 @@ $('btn-retracter').addEventListener('click', async () => {
   const quand = r.jusqua === null || r.jusqua === undefined ? 'tout de suite' : 'dès que la tablette nous revient';
   const montant = r.montant ? ` Tout ce que vous avez payé (${euros(r.montant)}) vous est remboursé ${quand}.` : '';
   if (!await askConfirm(`Annuler votre commande ? Votre abonnement s'arrête tout de suite.${montant}`, 'Annuler ma commande')) return;
-  withAboError(async () => {
+  // Attendu : le bouton tourne pendant l'appel et un 2e appui ne repose pas la question (retour.js).
+  await withAboError(async () => {
     const res = await retracter(session.fid);
     finCle = null;
     notice(res?.remboursement === 'fait'

@@ -54,12 +54,22 @@ function events() {
       add(toDate(p.seenAt), 'seen', `${grand} a vu ${WHAT_OF[p.type]} ${of}`);
     }
   }
+  // La tablette appelle un proche (calleeUid), ou toute la famille et le SOS (sans calleeUid, comme les appels
+  // des proches vers la tablette : on les reconnaît à l'appelant).
+  const tablettes = new Set(members.filter((m) => m.role === 'tablette').map((m) => m.id));
   for (const c of calls) {
-    const fromTablet = !!c.calleeUid;
+    const fromTablet = !!c.calleeUid || tablettes.has(c.callerUid);
     const date = toDate(c.endedAt) || toDate(c.createdAt);
     // Un appel sans réponse (personne n'a décroché, ou refusé) est un appel manqué.
     const manque = !c.answer && ['missed', 'declined', 'ended'].includes(c.state);
-    if (fromTablet) {
+    if (fromTablet && !c.calleeUid) {
+      if (c.state === 'ringing') continue;
+      const qui = c.answer?.uid ? who(c.answer.uid, c.answer.name) : null;
+      const repondu = qui && (qui === 'Vous' ? 'vous avez répondu' : `${qui} a répondu`);
+      if (/^SOS/.test(c.calleeName || '')) add(date, 'call', `${grand} a appuyé sur SOS : ${repondu || 'personne n\'a pu répondre'}`, false, !repondu);
+      else if (repondu) add(date, 'call', `${grand} a appelé toute la famille : ${repondu}`);
+      else if (manque) add(date, 'call', `Appel manqué de ${grand}`, false, true);
+    } else if (fromTablet) {
       if (c.state === 'ringing') continue;
       const to = who(c.calleeUid, c.calleeName);
       if (manque) add(date, 'call', `Appel manqué de ${grand}${to === 'Vous' ? '' : ` pour ${to}`}`, false, true);
