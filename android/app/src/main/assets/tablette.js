@@ -2811,7 +2811,11 @@
   var VEILLE_DEFAUT = { active: true, de: 21 * 60, a: 6 * 60 + 30 };
   var veille = VEILLE_DEFAUT;
 
+  // Pas de veille tant que les réglages de la famille ne sont pas arrivés (premier onPosts) : au
+  // démarrage, la veille par défaut (21 h) éteignait l'écran 2 s avant l'heure de la famille (04/11).
+  var veilleRecue = false;
   function setVeille(v) {
+    veilleRecue = true;
     veille = v && typeof v.de === 'number' && typeof v.a === 'number'
       ? { active: v.active !== false, de: v.de, a: v.a }
       : VEILLE_DEFAUT;
@@ -2824,7 +2828,7 @@
     return false;
   }
 
-  function isNight(min) { return veille.active && heureSure() && inHours(min, veille.de, veille.a); }
+  function isNight(min) { return veilleRecue && veille.active && heureSure() && inHours(min, veille.de, veille.a); }
 
   // Couleurs du soir : deux heures avant la veille jusqu'au réveil (19h-6h30 sans réglage),
   // 21h-7h si la veille est coupée.
