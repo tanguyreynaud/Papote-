@@ -242,7 +242,10 @@ final class Sync {
     private void envoyerMeteoGardee() {
         String json = prefs.getString("meteoDerniere", null);
         long age = System.currentTimeMillis() - prefs.getLong("meteoDerniereA", 0);
-        if (json == null || age > 6 * 3600_000L || !Meteo.hasCity(context)) return;
+        // Âge négatif : l'horloge n'est pas à l'heure (date d'usine, démarrage sans réseau) ; on ne sait
+        // pas de quand date la météo gardée, on ne la montre pas (04/11).
+        if (json == null || age < 0 || age > 6 * 3600_000L || !Meteo.hasCity(context)
+                || System.currentTimeMillis() < Veille.HEURE_PLANCHER) return;
         try {
             JSONObject w = new JSONObject(json);
             listener.onWeather(w);

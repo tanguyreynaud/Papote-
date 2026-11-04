@@ -358,6 +358,21 @@ test('démarrage sans internet avec des envois : la carte « Pas d\'internet » 
   } finally { await b.fermer(); }
 });
 
+test('redémarrage sans aucun réseau (heure inconnue) : une seule carte calme à gauche, les photos à droite', async () => {
+  const b = await ouvrir('2025-04-11T10:00:00', { reseau: { wifi: '', internet: false, mobile: false, sim: true } });
+  try {
+    await b.android('onPosts', lot([envoi({ seen: true })]));
+    await b.avancer(6000);
+    assert.ok(await b.visible('.sans-reseau'), 'carte « Pas de réseau »');
+    assert.ok(!(await b.visible('#clock')), 'pas d\'heure');
+    assert.ok(await b.visible('#frame-img'), 'la photo reste');
+    await b.etat({ reseau: { wifi: 'Box', internet: true, mobile: false, sim: true } });
+    await b.avancer(4000);
+    assert.ok(!(await b.visible('.sans-reseau')), 'repartie au retour du réseau');
+    await sansErreur(b);
+  } finally { await b.fermer(); }
+});
+
 test('horloge pas encore à l\'heure (date d\'usine) : jamais « il y a -568 jours »', async () => {
   const b = await ouvrir('2025-04-11T10:00:00');
   try {

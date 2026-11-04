@@ -2005,3 +2005,18 @@ html .call-out .call-buttons { grid-column: 1; grid-row: 6; z-index: 1; display:
 html .call-out .call-buttons .call-hangup { margin: 0; }
 html .call-out .call-hangup.call-answer { background: #16a34a; box-shadow: 0 1vmin 2.5vmin rgba(22, 163, 74, .35); }
 html .call-out .call-decline { border: 0; background: transparent; color: #5b5794; font-family: 'Atkinson Hyperlegible', sans-serif; font-size: 5.5vmin; font-weight: 700; padding: 2vmin 4vmin; }
+
+/* Redémarrage sans aucun réseau (04/11) : une carte calme à la place de l'heure, de la météo et des
+   boutons, qui ne peuvent rien faire sans réseau. Les photos restent à droite. */
+.sans-reseau { display: none; }
+html body.sans-reseau-actif .home-left > *:not(.sans-reseau) { display: none !important; }
+html body.sans-reseau-actif .home-left > .sans-reseau {
+  display: -webkit-flex; display: flex; -webkit-flex-direction: column; flex-direction: column;
+  -webkit-align-items: center; align-items: center; text-align: center;
+  margin: auto 0; padding: 5vmin 4vmin; border-radius: 4vmin;
+  background: #fdfaf5; box-shadow: 0 1vmin 3vmin rgba(36, 33, 47, .10);
+}
+html body.sans-reseau-actif .net-banner { display: none !important; }
+html .sans-reseau-art { width: 26vmin; height: auto; margin-bottom: 3vmin; }
+html .sans-reseau-titre { margin: 0 0 2vmin; font-family: 'Alegreya Sans', sans-serif; font-weight: 800; font-size: 6vmin; color: #312e81; line-height: 1.1; }
+html .sans-reseau-texte { margin: 0; font-family: 'Atkinson Hyperlegible', sans-serif; font-size: 4.2vmin; color: #5f5a6b; line-height: 1.3; }

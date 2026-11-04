@@ -102,6 +102,7 @@
 
   function tick() {
     var now = new Date();
+    if (carteSansReseau) majSansReseau();
     if (!heureSure()) {
       $('clock').textContent = '';
       $('setup-clock').textContent = '';
@@ -1527,6 +1528,25 @@
   // C'est la seule indication : pas de phrase en plus sous l'heure.
   var offlineSince = 0;
   var dejaEnLigne = false;   // internet vu depuis le démarrage de la page
+  var internetVu = true;     // dernier état connu d'internet (Android)
+
+  // Redémarrage sans aucun réseau : l'heure est inconnue et rien ne peut partir (ni météo, ni appel,
+  // ni SOS). Le bloc de gauche devient une seule carte calme, les photos restent à droite ; tout
+  // revient seul dès que le réseau ou l'heure reviennent (Tanguy, 04/11).
+  var carteSansReseau = null;
+  function majSansReseau() {
+    var sans = !internetVu && !heureSure();
+    if (sans && !carteSansReseau) {
+      carteSansReseau = document.createElement('div');
+      carteSansReseau.className = 'sans-reseau';
+      carteSansReseau.innerHTML = '<img class="sans-reseau-art" src="bienvenue/wifi.svg" alt="">' +
+        '<p class="sans-reseau-titre">Pas de réseau pour le moment</p>' +
+        '<p class="sans-reseau-texte">La tablette se remet en route toute seule dès qu’il revient.</p>';
+      var gauche = document.querySelector('#view-home .home-left');
+      if (gauche) gauche.appendChild(carteSansReseau);
+    }
+    document.body.classList.toggle('sans-reseau-actif', sans);
+  }
   var wifiCard = null;
   var wifiAutoOpened = false;
   function checkConnection() {
@@ -1535,6 +1555,8 @@
     try { st = JSON.parse(android().wifiStatus()); } catch (e) { return; }
     noterReseau(st);
     var now = Date.now();
+    internetVu = !!st.internet;
+    majSansReseau();
     if (st.internet) { offlineSince = 0; dejaEnLigne = true; }
     else if (!offlineSince) offlineSince = now;
     if (st.internet && appelsKo) rechargerPourLesAppels();
