@@ -1937,6 +1937,7 @@
   // SOS : Android publie « fin » dès STATE_DISCONNECTING, mais garde l'appel (AppelGsm.enCours) jusqu'à
   // onCallRemoved : le proche suivant attend que la ligne se libère (phoneCall refusé) au lieu d'être sauté.
   var SOS_LIGNE_ESSAIS = 12, SOS_LIGNE_MS = 500;
+  var SOS_REPONDU_MS = 40000;
 
   // Mamie appelle un proche par téléphone. onEnd(repondu) : pour le SOS, qui enchaîne les proches.
   function startGsmCall(uid, name, tel, onEnd, essai) {
@@ -2040,12 +2041,15 @@
       gsmSurveiller();
     } else if (e === 'enLigne') {
       clearTimeout(gsm.timer);
+      if (!gsm.enLigne) gsm.enLigneDepuis = Date.now();
       gsm.enLigne = true;
       if (android() && android().ring) android().ring(false);
       renderCall('connected', 'En ligne avec ' + gsm.who, 'Parlez normalement, la tablette vous entend.', gsm.uid, gsm.name);
       gsmSurveiller();
     } else if (e === 'fin') {
-      var repondu = gsm.enLigne;
+      // SOS : la messagerie du proche « décroche » aussi (STATE_ACTIVE) ; seul un appel resté en ligne
+      // au moins 40 s compte comme une vraie réponse, sinon la chaîne passe au proche suivant.
+      var repondu = gsm.enLigne && (!gsm.sos || Date.now() - gsm.enLigneDepuis >= SOS_REPONDU_MS);
       var who = gsm.who;
       if (repondu) {
         gsmFinish('Appel terminé', '', false, true);

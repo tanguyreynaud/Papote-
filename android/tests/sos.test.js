@@ -53,3 +53,36 @@ test('SOS (F-b) : Android retire l\'appel sans réponse 1 s après « fin » : l
     assert.match(await ecran(b), /SOS : on appelle Julie/);
   } finally { await b.fermer(); }
 });
+
+test('SOS (F-c) : la messagerie de Paul décroche (25 s « en ligne ») : la chaîne continue vers Julie', async () => {
+  const b = await tablette();
+  try {
+    await b.toucher('#sos-btn');
+    await b.avancer(5500);
+    await b.android('onGsm', { etat: 'appel', ...PAUL });
+    await b.avancer(20000);
+    await b.android('onGsm', { etat: 'enLigne', ...PAUL }); // répondeur
+    await b.avancer(25000);
+    await b.android('onGsm', { etat: 'fin', cause: 'raccroche', ...PAUL });
+    await b.avancer(1000);
+    const tel = await appelsTel(b);
+    assert.deepStrictEqual(tel, ['0700000000', '0612345678'], 'Julie appelée après la messagerie de Paul');
+    assert.match(await ecran(b), /SOS : on appelle Julie/);
+  } finally { await b.fermer(); }
+});
+
+test('SOS (F-c, témoin) : vraie conversation de 60 s avec Paul : la chaîne s\'arrête', async () => {
+  const b = await tablette();
+  try {
+    await b.toucher('#sos-btn');
+    await b.avancer(5500);
+    await b.android('onGsm', { etat: 'appel', ...PAUL });
+    await b.avancer(5000);
+    await b.android('onGsm', { etat: 'enLigne', ...PAUL });
+    await b.avancer(60000);
+    await b.android('onGsm', { etat: 'fin', cause: 'raccroche', ...PAUL });
+    await b.avancer(1000);
+    assert.deepStrictEqual(await appelsTel(b), ['0700000000']);
+    assert.match(await ecran(b), /Appel terminé/);
+  } finally { await b.fermer(); }
+});
