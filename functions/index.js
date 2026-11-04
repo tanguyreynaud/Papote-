@@ -32,6 +32,7 @@
 //   jetonAppCheck      POST depuis la tablette : jeton App Check contre sa clé d'installation (appcheck.js)
 //   quota*             plafonds de stockage par famille appliqués par le serveur (quota.js)
 //   gestion*           page de gestion admin : stock, commandes, factures, comptabilité (gestion.js)
+//   iaAdmin            appel depuis l'admin (#aide) : « que faire si… » avec le guide et l'état du parc, sans rien faire (ia-admin.js)
 //
 // État écrit sur families/{fid}.abonnement (voir abonnement.js), avec rev + 1 pour que la
 // tablette relise la famille. Commandes : commandes/{id de l'abonnement Stripe}.
@@ -2111,6 +2112,8 @@ exports.rappelsJumelage = onSchedule(
 const support = require('./support');
 exports.supportChat = support.supportChat;
 exports.bilanSupport = support.bilanSupport;
+// IA de l'admin (page #aide) : répond avec le guide et l'état du parc lu en direct, n'agit jamais (ia-admin.js).
+exports.iaAdmin = require('./ia-admin').iaAdmin;
 
 // Stock de tablettes, commandes, factures et comptabilité (page web/gestion.html, admin).
 const gestion = require('./gestion');
