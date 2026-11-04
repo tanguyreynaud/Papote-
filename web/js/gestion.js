@@ -987,6 +987,7 @@ async function remplirCommande(id) {
   // Retour du matériel : coché ici seulement (la liste « à récupérer » ne fait qu'ouvrir la commande).
   const aRecuperer = etatCommande(c) === 'retour';
   const zoneReception = aRecuperer ? zoneMaterielRecu(c, t) : null;
+  zoneReceptionAffichee = zoneReception;
   const sansEtiquette = !(c.etiquettes && c.etiquettes.retour) && !(c.restitution && c.restitution.etiquette);
   const annonce = annonceCommande;
   annonceCommande = null;
@@ -1001,7 +1002,7 @@ async function remplirCommande(id) {
     h('div', { class: 'card' },
       h('div', { class: 'tete-fiche' }, h('h2', {}, `Commande ${codeCommande(c.code)}`, c.offerte ? ' (offerte)' : ''),
         h('div', { class: 'tete-actions' },
-          aRecuperer ? h('button', { type: 'button', class: 'primary small-btn no-print', onclick: () => { zoneReception.hidden = false; } }, 'Matériel reçu') : null,
+          aRecuperer ? h('button', { type: 'button', class: 'primary small-btn no-print', onclick: () => zoneReception.ouvrir(false) }, 'Matériel reçu') : null,
           // L'étiquette de retour est créée toute seule ; ce bouton ne sert que si elle manque.
           aRecuperer && sansEtiquette && !c.offerte ? boutonEtiquetteRetour(c) : null,
           menuCommande(c, t && partie && ['active', 'en-route'].includes(etatCommande(c)) ? zoneRemplacement : null,
@@ -1120,11 +1121,13 @@ function menuCommande(c, zoneRemplacement, etiquette) {
       zoneRemplacement.hidden = false;
       zoneRemplacement.querySelector('select').focus();
     } } : null,
-    // Retour en main propre : seulement ici, jamais proposé à la famille (Tanguy, 31/10). Le QR Mondial Relay reste possible.
-    c.restitution && ['attendue', 'echec'].includes(c.restitution.statut)
-      ? (c.restitution.mainPropreLe
-        ? { libelle: 'Retour par Mondial Relay', faire: () => lancer(() => retourEnMain(c, false)) }
-        : { libelle: 'Retour en main propre', faire: () => lancer(() => retourEnMain(c, true)) }) : null,
+    // Retour en main propre : seulement ici, jamais proposé à la famille (Tanguy, 31/10). Le noter, c'est que la
+    // tablette est déjà dans les mains de Papote (Tanguy, 4/11) : on enregistre le retour tout de suite, rien à facturer.
+    c.restitution && ['attendue', 'echec'].includes(c.restitution.statut) && zoneReceptionAffichee
+      ? { libelle: 'Reçue en main propre…', faire: () => zoneReceptionAffichee.ouvrir(true) } : null,
+    // Ancien état « main propre prévue » (avant le 4/11) : on peut encore revenir à Mondial Relay.
+    c.restitution && ['attendue', 'echec'].includes(c.restitution.statut) && c.restitution.mainPropreLe
+      ? { libelle: 'Retour par Mondial Relay', faire: () => lancer(() => retourEnMain(c, false)) } : null,
     etiquette ? { libelle: 'Créer l\'étiquette de retour', faire: () => lancer(async () => {
       if (!await demander(`Créer une étiquette de retour Mondial Relay et l'envoyer à ${c.email || 'ce client'} ?`, { oui: 'Créer et envoyer' })) throw 'non';
       const r = await patienter('Création de l\'étiquette de retour…', () => appeler('gestionEtiquette', { commande: c.id, sens: 'retour' }));
@@ -1134,6 +1137,7 @@ function menuCommande(c, zoneRemplacement, etiquette) {
   return items.length ? menuPoints(items, `Actions pour la commande ${codeCommande(c.code)}`) : null;
 }
 
+let zoneReceptionAffichee = null; // « Matériel reçu » de la commande affichée (aussi ouvert par « Reçue en main propre »)
 let annonceCommande = null; // Résultat de la dernière action, affiché en haut de la page commande rechargée.
 
 async function retourEnMain(c, main) {
@@ -1247,9 +1251,17 @@ function zoneMaterielRecu(c, t) {
   const cases = [['tablette', 'la tablette'], ['chargeur', 'le chargeur et son câble'], c.enceinteFournie === true ? ['enceinte', 'l\'enceinte'] : null]
     .filter(Boolean).map(([k, v]) => h('label', { class: 'case' }, h('input', { type: 'checkbox', value: k }), ` ${v} (${PRIX_MATERIEL[k]} €)`));
   const msg = h('p', { class: 'small error', hidden: true });
+  const titre = h('strong', {}, 'Colis de retour reçu. ');
+  let enMain = false;
   const zone = h('div', { class: 'zone-remplacement no-print', hidden: true },
-    h('p', {}, h('strong', {}, 'Colis de retour reçu. '), c.offerte ? 'Cochez ce qui manque (commande offerte : rien n\'est prélevé).' : 'Cochez ce qui manque, ce sera prélevé au client :'),
+    h('p', {}, titre, c.offerte ? 'Cochez ce qui manque (commande offerte : rien n\'est prélevé).' : 'Cochez ce qui manque, ce sera prélevé au client :'),
     ...cases, msg);
+  zone.ouvrir = (main) => {
+    enMain = main;
+    titre.textContent = main ? 'Tablette reçue en main propre. ' : 'Colis de retour reçu. ';
+    zone.hidden = false;
+    (zone.querySelector('input') || valider).focus();
+  };
   const valider = h('button', { type: 'button', class: 'primary small-btn' }, 'Enregistrer le retour');
   valider.addEventListener('click', async () => {
     const manquants = [...zone.querySelectorAll('input:checked')].map((i) => i.value);
@@ -1261,6 +1273,7 @@ function zoneMaterielRecu(c, t) {
     msg.hidden = true;
     try {
       const r = await patienter('Enregistrement du retour…', async () => {
+        if (enMain && !(c.restitution && c.restitution.mainPropreLe)) await appeler('gestionCommande', { commande: c.id, action: 'retourEnMain', main: true });
         const res = await appeler('tabletteRendue', { commande: c.id, manquants });
         if (t) await appeler('gestionStock', { action: 'modifier', id: t.id, champs: { etat: manquants.includes('tablette') ? 'perdue' : 'revenue' } }).catch(() => null);
         donnees = await lireDonnees(true);
