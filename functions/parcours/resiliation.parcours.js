@@ -158,3 +158,109 @@ test('abonnement arrivé à sa date d\'arrêt : « Garder » refusé à la famil
   assert.deepStrictEqual(s.boite, [], 'aucun e-mail');
   assert.strictEqual(s.stripe.etat.remboursements.length, 0);
 });
+
+// Reprise depuis l'appli d'un abonnement fini (Tanguy, 5/11) : les mois d'abonnement impayés se règlent d'abord,
+// les 140 € du matériel jamais (la tablette reste chez le proche, son retour est annulé).
+
+// Famille arrêtée à sa date d'arrêt (résiliée par la famille) : renvoie { id, fid, paul }.
+async function familleResiliee({ carteExpireeAvantArret = false } = {}) {
+  const paul = await s.compte('Paul', 'paul@exemple.fr');
+  const { id, fid } = await familleAbonnee(paul);
+  const { le } = await s.appeler('resilierAbonnement', { fid }, paul);
+  await s.calme();
+  if (carteExpireeAvantArret) s.stripe.carteExpiree(id);
+  s.avancer((le - Date.now()) / s.JOUR + 0.1);
+  s.stripe.arreterALaDate(id);
+  await s.calme();
+  assert.strictEqual((await famille(fid)).abonnement.statut, 'resilie');
+  return { id, fid, paul };
+}
+
+test('reprise : famille arrêtée par Papote pour impayé, 140 € refusés : pas de reprise seule, « écrivez-nous »', async () => {
+  const paul = await s.compte('Paul', 'paul@exemple.fr');
+  const { id, fid } = await familleAbonnee(paul);
+  s.stripe.banqueRefusePrelevement(id);
+  await s.calme();
+  s.avancer(8);
+  await s.tache('finDeGrace');
+  await s.calme();
+  assert.strictEqual((await famille(fid)).abonnement.statut, 'suspendu');
+  const { le } = await s.appeler('resilierAbonnement', { fid, commande: id, par: 'papote' }, a.TANGUY);
+  await s.calme();
+  s.stripe.carteExpiree(id);
+  s.avancer((le - Date.now()) / s.JOUR + 0.1);
+  s.stripe.arreterALaDate(id);
+  await s.calme();
+  assert.strictEqual((await famille(fid)).abonnement.statut, 'resilie');
+  s.avancer(31);
+  await s.tache('restitutions');
+  await s.calme();
+  assert.strictEqual((await commande(id)).restitution.statut, 'echec');
+  s.erreurs.length = 0;
+
+  const sessions = s.stripe.etat.sessions.size;
+  await assert.rejects(s.appeler('creerPaiement', { fid, formule: 'wifi', tablette: 'incluse' }, paul), /Papote a arrêté cet abonnement : écrivez-nous/);
+  assert.strictEqual(s.stripe.etat.sessions.size, sessions, 'aucune page de paiement');
+  assert.strictEqual((await commande(id)).restitution.statut, 'echec', 'la dette reste visible pour Tanguy');
+});
+
+test('reprise : dernier mois refusé par la banque : « Réglez d\'abord le paiement en retard » ; facture payée, la reprise passe', async () => {
+  const { id, fid, paul } = await familleResiliee({ carteExpireeAvantArret: true });
+  let c = await commande(id);
+  assert.strictEqual(c.dernierMois.statut, 'echec', 'dernier mois refusé (carte expirée)');
+  assert.ok(c.dernierMois.facture);
+  s.erreurs.length = 0;
+
+  const sessions = s.stripe.etat.sessions.size;
+  await assert.rejects(s.appeler('creerPaiement', { fid, formule: 'wifi', tablette: 'incluse' }, paul), /Réglez d'abord le paiement en retard/);
+  assert.strictEqual(s.stripe.etat.sessions.size, sessions, 'aucune page de paiement : la dette ne s\'efface pas');
+  // La facture à payer est dans « Abonnement et paiement », avec sa page Stripe.
+  const { factures } = await s.appeler('facturesFamille', { fid }, paul);
+  assert.ok(factures.some((f) => f.id === c.dernierMois.facture && f.statut === 'a-payer'));
+
+  // Paul paie la facture depuis sa page : le dernier mois est réglé, la reprise s'ouvre (tablette gardée, sans 60 €).
+  s.stripe.payerFacture(c.dernierMois.facture);
+  await s.calme();
+  c = await commande(id);
+  assert.strictEqual(c.dernierMois.statut, 'fait');
+  const { url } = await s.appeler('creerPaiement', { fid, formule: 'wifi', tablette: 'incluse' }, paul);
+  const params = s.stripe.etat.sessions.get(url.split('/').pop()).params;
+  assert.strictEqual(params.metadata.reprise, '1');
+  assert.strictEqual(params.line_items.length, 1, 'l\'abonnement seul, pas de mise en service');
+});
+
+test('reprise : 140 € du matériel refusés, abonnement réglé : la reprise passe, le retour est annulé, rien n\'est prélevé', async () => {
+  const { id, fid, paul } = await familleResiliee();
+  assert.strictEqual((await commande(id)).dernierMois.statut, 'fait');
+  s.stripe.carteExpiree(id);
+  s.avancer(31);
+  await s.tache('restitutions');
+  await s.calme();
+  assert.strictEqual((await commande(id)).restitution.statut, 'echec', 'prélèvement du matériel refusé');
+  s.erreurs.length = 0;
+
+  const { url } = await s.appeler('creerPaiement', { fid, formule: 'wifi', tablette: 'incluse' }, paul);
+  const session = url.split('/').pop();
+  const params = s.stripe.etat.sessions.get(session).params;
+  assert.strictEqual(params.metadata.reprise, '1');
+  assert.strictEqual(params.line_items.length, 1, 'ni mise en service, ni 140 € sur la page de paiement');
+  const { abonnement: id2 } = s.stripe.payerSession(session, { email: paul.email });
+  await s.calme();
+  assert.strictEqual((await famille(fid)).abonnement.statut, 'actif');
+  const ancienne = await commande(id);
+  assert.strictEqual(ancienne.restitution.statut, 'annulee', 'la tablette reste : plus de retour attendu');
+  assert.strictEqual(ancienne.restitution.reprisePar, id2);
+  // Nouvelle carte (un prélèvement passerait) : la tâche de la nuit ne prélève quand même rien pour le matériel.
+  for (const client of s.stripe.etat.clients.values()) client.carteExpiree = false;
+  s.avancer(31);
+  await s.tache('restitutions');
+  await s.calme();
+  assert.strictEqual((await commande(id)).restitution.statut, 'annulee');
+  const materiel = [...s.stripe.etat.paiements.values()].filter((p) => /non rendu/.test(p.description || ''));
+  assert.strictEqual(materiel.length, 0, 'aucun prélèvement du matériel');
+});
+
+test('reprise : sans dette (avant la date limite du retour), la reprise reste possible', async () => {
+  const { fid, paul } = await familleResiliee();
+  assert.ok((await s.appeler('creerPaiement', { fid, formule: 'wifi', tablette: 'incluse' }, paul)).url);
+});

@@ -209,6 +209,42 @@ async function colisRetourParti(fid) {
   return false;
 }
 
+// Reprise depuis l'appli d'un abonnement fini (« resilie » ou « aucun », Tanguy 5/11), ou '' si rien ne s'y oppose :
+//   - arrêté par Papote (famille, ou metadata de l'ancien abonnement Stripe) : « écrivez-nous » ;
+//   - mois d'abonnement impayés (facture d'abonnement ouverte chez Stripe, dernier mois refusé par la banque) : à
+//     régler d'abord, sinon la reprise les effacerait ; la facture se paie depuis « Abonnement et paiement » ;
+//   - prélèvement contesté auprès de la banque : « écrivez-nous ».
+// Le matériel non rendu dont le prélèvement a échoué (restitution « echec ») ne bloque PAS : à la reprise, la
+// tablette reste chez le proche et son retour est annulé (relierTabletteInstallee), rien n'est prélevé.
+const REPRISE_DETTE = 'Réglez d\'abord le paiement en retard : la facture à payer est dans « Abonnement et paiement ». Ensuite, vous pourrez reprendre Papote.';
+async function repriseRefusee(fid, abonnement) {
+  if (!abonnement || !['resilie', 'aucun'].includes(abonnement.statut)) return '';
+  try {
+    let arretPar = abonnement.arretPar || null;
+    if (!arretPar && abonnement.stripeSubscriptionId) {
+      const ancien = await stripe().subscriptions.retrieve(abonnement.stripeSubscriptionId);
+      arretPar = (ancien.metadata && ancien.metadata.arretPar) || null;
+    }
+    if (arretPar === 'papote') return 'Papote a arrêté cet abonnement : écrivez-nous pour le reprendre.';
+    const commandes = await db.collection('commandes').where('fid', '==', fid).get();
+    if (commandes.docs.some((d) => (d.get('contestations') || []).length)) {
+      return 'Un paiement de votre ancien abonnement a été contesté : écrivez-nous pour reprendre Papote.';
+    }
+    const dernier = commandes.docs.find((d) => d.get('dernierMois.statut') === 'echec');
+    if (dernier) return dernier.get('dernierMois.facture') ? REPRISE_DETTE : 'Un paiement de votre ancien abonnement reste à régler : écrivez-nous pour reprendre Papote.';
+    // Mois d'abonnement restés impayés (famille suspendue puis arrêtée) : factures de l'abonnement encore ouvertes.
+    // Les factures à part (dernier mois en cours de prélèvement SEPA) sont jugées par dernierMois ci-dessus.
+    if (abonnement.stripeCustomerId) {
+      const { data } = await stripe().invoices.list({ customer: abonnement.stripeCustomerId, status: 'open', limit: 20 });
+      if (data.some((f) => f.subscription && f.amount_due > 0)) return REPRISE_DETTE;
+    }
+  } catch (e) {
+    logger.warn(`Famille ${fid} : reprise, Stripe illisible`, e.message);
+    throw new HttpsError('unavailable', 'Impossible de vérifier votre ancien abonnement pour le moment : réessayez dans quelques minutes.');
+  }
+  return '';
+}
+
 // La famille a-t-elle déjà sa tablette (jumelage confirmé) ?
 async function tabletteInstallee(fid) {
   const jumelages = await db.collection('pairings').where('fid', '==', fid).get();
@@ -610,6 +646,9 @@ exports.creerPaiement = onCall({ secrets: [STRIPE_SECRET, SENDCLOUD_API] }, asyn
   if (fam.abonnement && fam.abonnement.statut === 'suspendu' && fam.abonnement.stripeSubscriptionId) {
     throw new HttpsError('failed-precondition', 'Réglez d\'abord le paiement en retard (« Gérer le paiement ») : tout reviendra automatiquement.');
   }
+  // Abonnement fini : pas de reprise seule s'il a été arrêté par Papote ou s'il reste des mois impayés.
+  const refusReprise = await repriseRefusee(fid, fam.abonnement);
+  if (refusReprise) throw new HttpsError('failed-precondition', refusReprise);
   // Résiliée, tablette encore chez le proche (retour attendu) : reprise sans mise en service, et le retour
   // attendu est annulé au paiement (relierTabletteInstallee).
   if (fam.abonnement && fam.abonnement.statut === 'resilie' && await tabletteARendre(fid)) {

@@ -169,7 +169,13 @@ function creerFauxStripe(horloge) {
       },
       pay: async (x) => {
         const f = lire('factures', 'invoice', x);
-        payer(f, lire('clients', 'customer', f.customer));
+        const client = lire('clients', 'customer', f.customer);
+        // Comme Stripe : carte expirée, la facture reste ouverte (payable depuis sa page) et le refus part au webhook.
+        if (client.carteExpiree) {
+          evenement('invoice.payment_failed', f);
+          throw Object.assign(new Error('Your card has expired.'), { code: 'expired_card', type: 'StripeCardError', statusCode: 402 });
+        }
+        payer(f, client);
         evenement('invoice.paid', f);
         return copie(f);
       },
@@ -378,6 +384,14 @@ function creerFauxStripe(horloge) {
     lire('clients', 'customer', a.customer).carteExpiree = true;
   }
 
+  // Le client paie une facture ouverte depuis sa page Stripe (lien « Payer » de « Abonnement et paiement »).
+  function payerFacture(factureId) {
+    const f = lire('factures', 'invoice', factureId);
+    if (f.status !== 'open') throw new Error(`Facture ${factureId} : pas ouverte (${f.status})`);
+    payer(f, lire('clients', 'customer', f.customer));
+    evenement('invoice.paid', f);
+  }
+
   // Date d'arrêt demandée (cancel_at) atteinte : Stripe arrête l'abonnement.
   function arreterALaDate(abonnementId) {
     const a = lire('abonnements', 'subscription', abonnementId);
@@ -402,7 +416,7 @@ function creerFauxStripe(horloge) {
       && (etat.factures.get(etat.paiements.get(r.payment_intent).invoice) || {}).subscription === abonnement)
     .reduce((t, r) => t + r.amount, 0);
 
-  return { api, etat, payerSession, banqueAccepte, banqueRefuse, prelevementMensuel, carteExpiree, banqueRefusePrelevement, banqueAccepteEnRetard, expirerSession, finirEssai, arreterALaDate, rembourse, vider };
+  return { api, etat, payerSession, banqueAccepte, banqueRefuse, prelevementMensuel, carteExpiree, banqueRefusePrelevement, banqueAccepteEnRetard, expirerSession, finirEssai, arreterALaDate, payerFacture, rembourse, vider };
 }
 
 module.exports = { creerFauxStripe };
