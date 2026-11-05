@@ -1,4 +1,4 @@
-# Relevé de la mémoire et de la tenue de Papote sur une tablette branchée en USB, après plusieurs jours sans
+﻿# Relevé de la mémoire et de la tenue de Papote sur une tablette branchée en USB, après plusieurs jours sans
 # redémarrage (inspection 5, 3/11) : la tablette doit tenir 3 jours chez Mamie sans ralentir ni planter.
 # À lancer : jour 0 juste après l'allumage, puis chaque jour (ou au moins au jour 3). Chaque relevé est ajouté
 # à releve-memoire.csv à côté de ce script ; le script compare au premier relevé et dit si la mémoire grimpe.
