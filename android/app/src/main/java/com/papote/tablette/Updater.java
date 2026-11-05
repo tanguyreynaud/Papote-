@@ -78,12 +78,31 @@ final class Updater {
             Log.i(TAG, "Mise à jour " + current + " -> " + latest);
             Journal.log(context, "Mise à jour " + current + " -> " + latest);
             // L'APK est rangé sur GitHub (Firebase gratuit refuse les APK), la version sur Firebase.
-            byte[] apk = download(feed.getString("url"));
+            // Garde-fous (MajGarde) : seulement le dépôt Papote à un commit précis, taille plafonnée, et une
+            // empreinte déjà refusée n'est plus retéléchargée (forfait SIM), même si version.json a été modifié.
+            android.content.SharedPreferences prefs = context.getSharedPreferences("papote", Context.MODE_PRIVATE);
+            String refus = MajGarde.refus(feed.optString("url", null), feed.optString("sha256", null),
+                    prefs.getString("majRefusee", null));
+            if (refus != null) {
+                Log.w(TAG, "Mise à jour ignorée : " + refus);
+                Journal.log(context, "Mise à jour ignorée : " + refus);
+                return true;
+            }
+            byte[] apk;
+            try {
+                apk = download(feed.getString("url"), MajGarde.TAILLE_MAX);
+            } catch (TropGros e) {
+                // Pas de nouvel essai dans 10 min pour un fichier trop gros : il serait retéléchargé sans fin.
+                prefs.edit().putString("majRefusee", feed.getString("sha256")).apply();
+                Journal.log(context, "Mise à jour ignorée : " + e.getMessage());
+                return true;
+            }
             if (!sha256(apk).equalsIgnoreCase(feed.getString("sha256"))) {
+                prefs.edit().putString("majRefusee", feed.getString("sha256")).apply();
                 Log.w(TAG, "Mise à jour ignorée : empreinte incorrecte");
                 Journal.log(context, "Mise à jour ignorée : empreinte incorrecte");
-                // Pas de nouvel essai dans 10 min : ce serait l'APK entier retéléchargé sans fin (forfait SIM).
-                // Réessai à la prochaine vérification normale ou à la prochaine annonce de version.
+                // Pas de nouvel essai : ce serait l'APK entier retéléchargé sans fin (forfait SIM). Une nouvelle
+                // publication (autre empreinte) sera prise à la prochaine vérification ou annonce.
                 return true;
             }
             install(context, apk);
@@ -128,19 +147,33 @@ final class Updater {
         // Une fois installée, Android relance Papote (BootReceiver, MY_PACKAGE_REPLACED).
     }
 
+    /** Fichier plus gros que permis (MajGarde.TAILLE_MAX) : refusé pour de bon, pas réessayé. */
+    static final class TropGros extends IOException {
+        TropGros(String message) { super(message); }
+    }
+
     private static byte[] download(String url) throws IOException {
+        return download(url, 1024 * 1024);
+    }
+
+    /** Téléchargement plafonné : refusé si le serveur annonce plus, interrompu s'il envoie plus. */
+    private static byte[] download(String url, long max) throws IOException {
         HttpsURLConnection c = (HttpsURLConnection) new URL(url).openConnection();
         c.setConnectTimeout(20_000);
         c.setReadTimeout(60_000);
         c.setUseCaches(false);
         try {
             if (c.getResponseCode() != 200) throw new IOException("HTTP " + c.getResponseCode() + " " + url);
+            if (c.getContentLengthLong() > max) throw new TropGros("Fichier trop gros (" + c.getContentLengthLong() + " octets) " + url);
             InputStream in = c.getInputStream();
             try {
                 java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
                 byte[] buf = new byte[32 * 1024];
                 int n;
-                while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+                while ((n = in.read(buf)) > 0) {
+                    out.write(buf, 0, n);
+                    if (out.size() > max) throw new TropGros("Fichier trop gros (plus de " + max + " octets) " + url);
+                }
                 return out.toByteArray();
             } finally {
                 in.close();
