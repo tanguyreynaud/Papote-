@@ -804,6 +804,13 @@ body .ps-bouton { bottom: 6.5rem; }
       function placer() { if (mq.matches) barre.insertBefore(b, document.getElementById('payer')); else document.body.appendChild(b); }
       placer();
       mq.addEventListener ? mq.addEventListener('change', placer) : mq.addListener(placer);
+      // La barre grandit (message « il manque… », bulle du chat) : la marge de défilement suit sa hauteur,
+      // sinon le champ touché, clavier ouvert, finit caché sous elle.
+      var bas = document.querySelector('.barre');
+      if (bas && window.ResizeObserver) new ResizeObserver(function () {
+        var px = bas.offsetHeight + 16 + 'px';
+        document.documentElement.style.scrollPaddingBottom = px;
+      }).observe(bas);
     }
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ranger);
     else ranger();
