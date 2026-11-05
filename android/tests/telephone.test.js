@@ -196,7 +196,7 @@ test('SOS par téléphone : un SMS à tous, Paul (responsable) appelé d’abord
   } finally { await b.fermer(); }
 });
 
-test('SOS par téléphone : personne ne décroche → l’appel internet d’avant prévient la famille', async () => {
+test('SOS par téléphone : personne ne décroche, pas d’appel internet → l’écran dit seulement ce qui est vrai (SMS reçu)', async () => {
   const b = await tablette({ appelsKo: true });
   try {
     await b.toucher('#sos-btn');
@@ -207,8 +207,10 @@ test('SOS par téléphone : personne ne décroche → l’appel internet d’ava
       await b.android('onGsm', { etat: 'fin', sortant: true, cause: 'raccroche', uid, name });
     }
     assert.strictEqual((await b.appels('phoneCall')).length, 2);
-    // appels.js ne charge pas (appelsKo) : le 2e essai par internet ne peut pas partir, Mamie le voit.
-    assert.match(await b.texte('.call-out'), /pas encore disponible|La famille est prévenue/);
+    // appels.js ne charge pas (appelsKo) : pas de 2e essai par internet. Le SMS du SOS est parti (banc) :
+    // l'écran le dit, sans promettre de rappel (audits Fable et promesses, 05/11).
+    assert.match(await b.texte('.call-out'), /La famille a reçu votre SOS/);
+    assert.doesNotMatch(await b.texte('.call-out'), /va vous rappeler/);
     await sansErreur(b);
   } finally { await b.fermer(); }
 });
