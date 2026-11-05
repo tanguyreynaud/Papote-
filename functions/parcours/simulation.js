@@ -190,6 +190,11 @@ global.fetch = async (url, options) => {
   if (String(url).startsWith('https://geo.api.gouv.fr/')) {
     return new Response(JSON.stringify([{ nom: 'Saint-Martin-de-Valamas', centre: { coordinates: [4.37, 44.94] } }]));
   }
+  // Fichier de version des tablettes (installation par QR, installation-qr.js) ; le secours maj.mapapote.fr ne répond pas.
+  if (String(url) === 'https://papote-maj.web.app/version.json') {
+    return new Response(JSON.stringify({ versionCode: 120, versionName: '2.99.120', sha256: 'f'.repeat(64),
+      url: `https://raw.githubusercontent.com/tanguyreynaud/Papote-/${'c'.repeat(40)}/installation/Papote.apk` }));
+  }
   if (/^https?:\/\/(127\.0\.0\.1|localhost)/.test(String(url))) return vraiFetch(url, options);
   throw new Error(`Simulation : pas d'internet (${url})`);
 };

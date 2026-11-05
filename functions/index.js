@@ -29,6 +29,8 @@
 //   annulerInstallation appel depuis l'appli famille : « Annuler l'installation » efface la famille (installation.js)
 //   rappelsJumelage    chaque jour : rappel au client dont la tablette n'est pas jumelée (J+5, J+12)
 //   coupeCircuit       avis du budget Google Cloud : e-mail à 30 € et 100 €, facturation coupée à 150 € (budget.js)
+//   jetonInstallation  appel depuis l'admin (Stock › Installer une tablette) : QR d'installation, 24 h (installation-qr.js)
+//   inscrireTablette   appel depuis la tablette installée par QR, sans compte : stock et clé App Check (installation-qr.js)
 //   jetonAppCheck      POST depuis la tablette : jeton App Check contre sa clé d'installation (appcheck.js)
 //   quota*             plafonds de stockage par famille appliqués par le serveur (quota.js)
 //   gestion*           page de gestion admin : stock, commandes, factures, comptabilité (gestion.js)
@@ -2284,6 +2286,11 @@ const installation = require('./installation').brancher({
 exports.reserverTablette = onCall({ maxInstances: 2 }, installation.reserverTablette);
 exports.nommerFamille = onCall({ secrets: [MAIL_MOT_DE_PASSE], maxInstances: 2 }, installation.nommerFamille);
 exports.finirInstallation = onCall({ secrets: [MAIL_MOT_DE_PASSE], maxInstances: 2 }, installation.finirInstallation);
+// Installation d'une tablette par QR code (provisionnement Android), sans PC (installation-qr.js).
+const installationQr = require('./installation-qr').brancher({ db: base.db, logger, verifierAdmin: gestion.verifierAdmin });
+exports.jetonInstallation = onCall({ maxInstances: 2 }, installationQr.jetonInstallation);
+// Sans compte ni App Check : la tablette vient d'être remise à zéro ; le jeton (32 caractères, 24 h) est la preuve.
+exports.inscrireTablette = onCall({ maxInstances: 2 }, installationQr.inscrireTablette);
 exports.annulerInstallation = onCall({ timeoutSeconds: 300, memory: '512MiB', maxInstances: 2 }, installation.annulerInstallation);
 
 // « N téléphones reçoivent les appels » dans l'appli (D1, Tanguy 2026-10-27) : les jetons sont privés
