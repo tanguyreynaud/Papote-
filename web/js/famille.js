@@ -4394,15 +4394,31 @@ function tabletteEnLigne() {
 }
 
 // Garde-fou du forfait de la carte SIM (tablette, members/{uid}.sim : dataCycleMo, plafondMo, niveau,
-// cycleDebut) : à 80 %, l'accueil prévient la famille. Sur le Wi-Fi, rien ne change jamais.
+// cycleDebut) : à 80 %, l'accueil prévient la famille, calmement. Sur le Wi-Fi, rien ne change jamais.
+// Au bout du forfait (families/{fid}.forfaitSim.finForfait, réglé par Papote) : 'reduit' = plus lent, 'bloque' =
+// internet coupé jusqu'au forfait suivant (fin : 30 jours après pour un pass « debut », le mois suivant sinon).
 const FORFAIT_ALERTE = 80;
 function forfaitTablette() {
   const sim = targetTablet()?.sim;
   if (!sim || !(sim.plafondMo > 0) || !(sim.dataCycleMo >= 0)) return null;
   const pourCent = Math.round((sim.dataCycleMo * 100) / sim.plafondMo);
-  const depuis = /^\d{4}-\d{2}-\d{2}$/.test(sim.cycleDebut || '')
-    ? new Date(`${sim.cycleDebut}T12:00:00`).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' }) : null;
-  return { pourCent, conso: sim.dataCycleMo, plafond: sim.plafondMo, niveau: sim.niveau || 0, depuis };
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(sim.cycleDebut || '');
+  const reglage = session?.family?.forfaitSim || {};
+  const jourMois = (d) => d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', timeZone: 'UTC' });
+  const debut = m ? new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], 12)) : null;
+  const finMs = debut ? (reglage.debut ? Date.UTC(+m[1], +m[2] - 1, +m[3] + 30, 12) : Date.UTC(+m[1], +m[2], +m[3], 12)) : null;
+  return {
+    pourCent, conso: sim.dataCycleMo, plafond: sim.plafondMo, niveau: sim.niveau || 0,
+    depuis: debut ? jourMois(debut) : null,
+    // Jour où le forfait repart (null s'il est déjà reparti : la tablette enverra le nouveau).
+    fin: finMs && finMs > Date.now() ? jourMois(new Date(finMs)) : null,
+    coupe: reglage.finForfait === 'bloque',
+  };
+}
+// Forfait « internet coupé » passé 95 % : si la tablette se tait, c'est sans doute le forfait, pas une panne.
+function coupeeParForfait() {
+  const f = forfaitTablette();
+  return f && f.coupe && f.fin && f.pourCent >= 95 ? f : null;
 }
 // Numéro de téléphone de la tablette : posé par l'admin avec la carte SIM (members/{uid}.telephone),
 // sinon lu par la tablette elle-même (sim.numero, pas toujours connu).
@@ -4413,10 +4429,17 @@ function numeroTablette() {
 const enGoOuMo = (mo) => (mo >= 1000 ? `${(mo / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} Go` : `${Math.round(mo)} Mo`);
 function texteForfait(f, name) {
   const debut = `Le forfait internet de la tablette de ${name} est utilisé à ${Math.min(f.pourCent, 100)} %`;
-  if (f.niveau >= 3) return `${debut} : jusqu'à sa recharge, les appels passent sans image et les vidéos attendent le Wi-Fi. Photos et messages passent toujours.`;
+  const jusqua = f.fin ? `jusqu'au ${f.fin}` : 'jusqu\'à sa recharge';
+  // Forfait « internet coupé » au bout (Sosh 1 Go bloqué) : le dire simplement, avec la date et le geste utile.
+  const coupe = f.coupe && f.fin ? ` Une fois épuisé, internet sera coupé jusqu'au ${f.fin} ; branchez-la au wifi si vous pouvez.` : '';
+  if (f.niveau >= 3) {
+    return f.coupe && f.fin
+      ? `${debut} : les appels passent sans image et les vidéos attendent le Wi-Fi.${coupe}`
+      : `${debut} : ${jusqua}, les appels passent sans image et les vidéos attendent le Wi-Fi. Photos et messages passent toujours.${f.fin ? ' Branchez-la au wifi si vous pouvez.' : ''}`;
+  }
   // Paliers de la tablette (Forfait.java) : 70 % image réduite, 88 % très réduite, 95 % son seul.
-  if (f.niveau >= 2) return `${debut} : les appels vidéo sont en image très réduite jusqu'à sa recharge, et passeront sans image à 95 %. Photos et messages passent toujours.`;
-  return `${debut} : les appels vidéo sont en image réduite jusqu'à sa recharge, et passeront sans image à 95 %. Photos et messages passent toujours.`;
+  const image = f.niveau >= 2 ? 'très réduite' : 'réduite';
+  return `${debut} : les appels vidéo sont en image ${image} ${jusqua}, et passeront sans image à 95 %. Photos et messages passent toujours.${coupe}`;
 }
 
 function renderTabletChip() {
@@ -4448,7 +4471,8 @@ $('tablet-chip').addEventListener('click', () => {
   else if (b.charging === false) lignes.push('Débranchée.');
   if (Number.isFinite(b.level)) lignes.push(`Batterie : ${b.level} %.`);
   const f = forfaitTablette();
-  if (f) lignes.push(`Forfait internet : ${enGoOuMo(f.conso)} sur ${enGoOuMo(f.plafond)}${f.depuis ? ` depuis le ${f.depuis}` : ''}.`);
+  if (f) lignes.push(`Forfait internet : ${enGoOuMo(f.conso)} sur ${enGoOuMo(f.plafond)}${f.depuis ? ` depuis le ${f.depuis}` : ''}.`
+    + (f.fin ? ` Il repart le ${f.fin}${f.coupe ? ' (internet coupé s\'il est épuisé avant)' : ''}.` : ''));
   notice(lignes.join(' '));
 });
 
@@ -4504,13 +4528,17 @@ function renderActivity() {
   const now = Date.now();
   const hour = new Date().getHours();
   el.hidden = false;
-  el.classList.remove('warn');
+  el.classList.remove('warn', 'calme');
   // Batterie : envoyée par la tablette ({ level, charging, unpluggedAt }).
   const battery = tabletMembers.filter((m) => m.battery && m.lastOnline)
     .sort((a, b) => toDate(b.lastOnline) - toDate(a.lastOnline))[0]?.battery;
   if (now - online > EN_LIGNE_MS && membresDuCache) {
     // Données pas encore confirmées par le serveur (retour sur l'app) : on ne crie pas au loup.
     el.textContent = "Mise à jour de l'état de la tablette…";
+  } else if (now - online > EN_LIGNE_MS && coupeeParForfait()) {
+    // Forfait « internet coupé » épuisé : pas de panique « ne répond plus », la vraie raison et la date.
+    el.classList.add('calme');
+    el.textContent = `La tablette de ${name} n'a sans doute plus internet : son forfait du mois est épuisé, internet revient le ${coupeeParForfait().fin}. Branchez-la au wifi si vous pouvez.`;
   } else if (now - online > EN_LIGNE_MS) {
     el.classList.add('warn');
     el.textContent = `La tablette de ${name} ne répond plus depuis ${ago(online).replace('il y a ', '')}. Est-elle branchée et connectée au wifi ?`;
@@ -4526,7 +4554,8 @@ function renderActivity() {
     el.classList.add('warn');
     el.textContent = `Batterie faible sur la tablette de ${name} (${battery.level} %). Pensez à la brancher.`;
   } else if (forfaitTablette()?.pourCent >= FORFAIT_ALERTE) {
-    el.classList.add('warn');
+    // Ton calme (Tanguy, 5/11) : une information, pas une alerte rouge.
+    el.classList.add('calme');
     el.textContent = texteForfait(forfaitTablette(), name);
     // Forfait presque épuisé (88 %) : mieux vaut l'appeler par téléphone, ça ne coûte rien au forfait.
     const tel = numeroTablette();
@@ -4548,6 +4577,7 @@ function renderActivity() {
   for (const id of copies) {
     $(id).hidden = false;
     $(id).classList.toggle('warn', el.classList.contains('warn'));
+    $(id).classList.toggle('calme', el.classList.contains('calme'));
     $(id).textContent = el.textContent;
   }
 }

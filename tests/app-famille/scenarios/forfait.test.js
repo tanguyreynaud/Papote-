@@ -13,30 +13,69 @@ banc.brancher();
 
 const ficheTablette = async (fid) => (await g.liste(`families/${fid}/members`)).find((m) => m.role === 'tablette');
 
-test('Forfait de la tablette : rien avant 80 %, puis l\'accueil explique l\'image réduite et l\'appel sans image', async () => {
+// Début du forfait en cours : aujourd'hui (à Paris), et le jour où il repart, comme l'app l'écrit.
+const aujourdhui = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Paris' });
+function finDuForfait(debut, pass) {
+  const [a, m, j] = debut.split('-').map(Number);
+  return new Date(pass ? Date.UTC(a, m - 1, j + 30, 12) : Date.UTC(a, m, j, 12)).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', timeZone: 'UTC' });
+}
+
+test('Forfait de la tablette : rien avant 80 %, puis l\'accueil explique calmement l\'image réduite et l\'appel sans image', async () => {
   const julie = await banc.telephone('Julie');
   const { fid } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
   const tab = await ficheTablette(fid);
   const ref = s.db.doc(`families/${fid}/members/${tab.id}`);
+  const debut = aujourdhui();
+  const fin = finDuForfait(debut, false);
   const sim = (dataCycleMo, niveau) => ref.update({
     lastOnline: s.Timestamp.now(), lastActive: s.Timestamp.now(),
-    sim: { operateur: 'Lyca', dataMoisMo: dataCycleMo, dataCycleMo, plafondMo: 1000, niveau, cycleDebut: '2026-10-28', vuLe: s.Timestamp.now() },
+    sim: { operateur: 'Lyca', dataMoisMo: dataCycleMo, dataCycleMo, plafondMo: 1000, niveau, cycleDebut: debut, vuLe: s.Timestamp.now() },
   });
   await sim(750, 1);
   await julie.page.locator('#activity', { hasText: 'Tablette en ligne' }).waitFor();
   await sim(820, 1);
-  await julie.page.locator('#activity.warn', { hasText: 'forfait internet de la tablette de Mamie Emma est utilisé à 82 %' }).waitFor();
-  assert.match(await julie.page.locator('#activity').textContent(), /image réduite jusqu'à sa recharge, et passeront sans image à 95 %/);
+  await julie.page.locator('#activity.calme', { hasText: 'forfait internet de la tablette de Mamie Emma est utilisé à 82 %' }).waitFor();
+  assert.ok(!(await julie.page.locator('#activity').evaluate((e) => e.classList.contains('warn'))), 'pas d\'alerte rouge pour le forfait');
+  assert.ok((await julie.page.locator('#activity').textContent()).includes(`image réduite jusqu'au ${fin}, et passeront sans image à 95 %`));
   await sim(900, 2);
-  await julie.page.locator('#activity.warn', { hasText: 'utilisé à 90 %' }).waitFor();
-  assert.match(await julie.page.locator('#activity').textContent(), /image très réduite jusqu'à sa recharge, et passeront sans image à 95 %/);
+  await julie.page.locator('#activity.calme', { hasText: 'utilisé à 90 %' }).waitFor();
+  assert.ok((await julie.page.locator('#activity').textContent()).includes(`image très réduite jusqu'au ${fin}, et passeront sans image à 95 %`));
   await sim(960, 3);
-  await julie.page.locator('#activity.warn', { hasText: 'utilisé à 96 %' }).waitFor();
-  assert.match(await julie.page.locator('#activity').textContent(), /appels passent sans image et les vidéos attendent le Wi-Fi/);
+  await julie.page.locator('#activity.calme', { hasText: 'utilisé à 96 %' }).waitFor();
+  assert.ok((await julie.page.locator('#activity').textContent()).includes(`jusqu'au ${fin}, les appels passent sans image et les vidéos attendent le Wi-Fi. Photos et messages passent toujours. Branchez-la au wifi si vous pouvez.`));
   await sim(900, 2);
-  await julie.page.locator('#activity.warn', { hasText: 'utilisé à 90 %' }).waitFor();
+  await julie.page.locator('#activity.calme', { hasText: 'utilisé à 90 %' }).waitFor();
   await julie.page.click('#tablet-chip');
-  assert.match(await g.texteFenetre(julie), /Forfait internet : 900 Mo sur 1 Go depuis le 28 octobre\./);
+  const fenetre = await g.texteFenetre(julie);
+  assert.match(fenetre, /Forfait internet : 900 Mo sur 1 Go depuis le \d+ \S+\./);
+  assert.ok(fenetre.includes(`Il repart le ${fin}.`), fenetre);
+});
+
+test('Forfait « internet coupé » au bout : la date de coupure, puis une tablette muette expliquée sans panique', async () => {
+  const julie = await banc.telephone('Julie');
+  const { fid } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
+  const debut = aujourdhui();
+  const fin = finDuForfait(debut, true);
+  // Réglage écrit par Papote (gestionSim) : pass de 30 jours, internet coupé au bout.
+  await s.db.doc(`families/${fid}`).update({ forfaitSim: { mo: 1000, debut, finForfait: 'bloque' } });
+  const tab = await ficheTablette(fid);
+  const ref = s.db.doc(`families/${fid}/members/${tab.id}`);
+  const sim = (dataCycleMo, niveau, vue = s.Timestamp.now()) => ref.update({
+    lastOnline: vue, lastActive: vue,
+    sim: { operateur: 'Sosh', dataMoisMo: dataCycleMo, dataCycleMo, plafondMo: 1000, niveau, cycleDebut: debut, vuLe: vue },
+  });
+  await sim(820, 1);
+  await julie.page.locator('#activity.calme', { hasText: 'utilisé à 82 %' }).waitFor();
+  assert.ok((await julie.page.locator('#activity').textContent()).includes(`Une fois épuisé, internet sera coupé jusqu'au ${fin} ; branchez-la au wifi si vous pouvez.`));
+  await sim(970, 3);
+  await julie.page.locator('#activity.calme', { hasText: 'utilisé à 97 %' }).waitFor();
+  assert.ok((await julie.page.locator('#activity').textContent()).includes(`internet sera coupé jusqu'au ${fin}`));
+  // L'opérateur coupe : la tablette ne donne plus de nouvelles depuis 2 h.
+  await sim(990, 3, s.Timestamp.fromMillis(Date.now() - 2 * 3600_000));
+  await julie.page.locator('#activity.calme', { hasText: 'n\'a sans doute plus internet' }).waitFor();
+  const texte = await julie.page.locator('#activity').textContent();
+  assert.strictEqual(texte, `La tablette de Mamie Emma n'a sans doute plus internet : son forfait du mois est épuisé, internet revient le ${fin}. Branchez-la au wifi si vous pouvez.`);
+  assert.doesNotMatch(texte, /ne répond plus/);
 });
 
 test('Appel vers la tablette au forfait presque épuisé : image réduite, puis appel sans image expliqué', async () => {
