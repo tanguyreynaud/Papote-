@@ -3202,7 +3202,10 @@ exports.gestionCampagne = onCall({ secrets: [MAIL_MOT_DE_PASSE], timeoutSeconds:
   const voulus = new Set((Array.isArray(d.emails) ? d.emails : []).map(emailPropre).filter(Boolean));
   const destinataires = (await lireContacts()).filter((c) => voulus.has(c.email) && c.consentement && !c.desinscrit);
   if (!destinataires.length) throw new HttpsError('failed-precondition', "Personne dans cette liste n'a accepté les e-mails d'information.");
-  if (destinataires.length > ENVOIS_MAX) throw new HttpsError('failed-precondition', `${destinataires.length} destinataires : ${ENVOIS_MAX} au plus par jour avec Brevo. Réduisez la liste.`);
+  // Quota Brevo partagé avec tous les autres e-mails du jour (quota-courriels.js) : 100 gardés pour les urgents.
+  const quota = require('./quota-courriels');
+  const permis = quota.permisEnNombre(await quota.partisAujourdhui(db()), destinataires.length);
+  if (destinataires.length > permis) throw new HttpsError('failed-precondition', `${destinataires.length} destinataires : ${permis} au plus aujourd'hui avec Brevo (${ENVOIS_MAX} par jour pour tous les e-mails, dont ${quota.RESERVE_URGENTS} gardés pour les e-mails urgents). Réduisez la liste ou envoyez demain.`);
   const ref = db().collection('campagnes').doc();
   await ref.set({ objet, message, le: Date.now(), par: request.auth.token.email || request.auth.uid, prevus: destinataires.length, envoyes: 0, ignores: voulus.size - destinataires.length });
   let envoyes = 0;
@@ -3217,12 +3220,13 @@ exports.gestionCampagne = onCall({ secrets: [MAIL_MOT_DE_PASSE], timeoutSeconds:
         await cref.set({ email: c.email, jeton }, { merge: true });
       }
       const lien = `${URL_DESINSCRIPTION}?c=${cleContact(c.email)}&j=${jeton}`;
-      await mail.envoyer({ ...smtp, a: c.email, contenu: emailInformation({ objet, message, nom: c.nom, lienDesinscription: lien }) });
+      await mail.envoyer({ ...smtp, a: c.email, contenu: emailInformation({ objet, message, nom: c.nom, lienDesinscription: lien }), enNombre: true });
       envoyes++;
     } catch (e) {
       erreurs.push(`${c.email} : ${e.message}`);
     }
   }
+  if (envoyes) await quota.compter(db(), envoyes, logger);
   await ref.update({ envoyes, erreurs: erreurs.slice(0, 20), finiLe: Date.now() });
   return { envoyes, ignores: voulus.size - destinataires.length, erreurs: erreurs.slice(0, 5) };
 });

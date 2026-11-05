@@ -63,6 +63,10 @@ const { FieldValue, Timestamp } = admin.firestore;
 
 setGlobalOptions({ region: 'europe-west1', maxInstances: 5 });
 
+// Chaque e-mail parti est compté pour le quota Brevo (300 par jour en offre gratuite) : quota-courriels.js.
+const quotaCourriels = require('./quota-courriels');
+mail.surChaqueEnvoi((n) => quotaCourriels.compter(db, n, logger));
+
 const STRIPE_SECRET = defineSecret('STRIPE_SECRET');
 const STRIPE_WEBHOOK_SECRET = defineSecret('STRIPE_WEBHOOK_SECRET');
 const SITE_VITRINE = defineString('SITE_VITRINE', { default: 'https://mapapote.fr' });
@@ -1578,14 +1582,23 @@ exports.lancementListeAttente = onCall({ secrets: [MAIL_MOT_DE_PASSE], timeoutSe
     return { envoyes: 1, test: true };
   }
   const contacts = await db.collection('contacts').where('listeAttente', '==', true).get();
+  const aPrevenir = contacts.docs.filter((c) => {
+    const d = c.data();
+    return d.email && d.consentement === true && !d.desinscritLe && !d.lancementEnvoyeLe;
+  });
+  // Quota Brevo : au plus ce qui reste aujourd'hui pour les envois en nombre (100 e-mails gardés pour les urgents) ;
+  // les autres partent quand on relance le lendemain (lancementEnvoyeLe évite les doublons).
+  const permis = quotaCourriels.permisEnNombre(await quotaCourriels.partisAujourdhui(db), aPrevenir.length);
   let envoyes = 0;
   let erreurs = 0;
-  for (const c of contacts.docs) {
+  for (const c of aPrevenir.slice(0, permis)) {
     const d = c.data();
-    if (!d.email || d.consentement !== true || d.desinscritLe || d.lancementEnvoyeLe) continue;
     try {
       const desinscription = d.jeton ? `${URL_DESINSCRIPTION}?c=${c.id}&j=${d.jeton}` : null;
-      await envoyerMail(d.email, mail.lancement({ prenom: d.prenom, desinscription }));
+      await mail.envoyer({
+        smtp: MAIL_SMTP.value(), expediteur: MAIL_EXPEDITEUR.value(), motDePasse: MAIL_MOT_DE_PASSE.value(),
+        a: d.email, contenu: mail.lancement({ prenom: d.prenom, desinscription }), enNombre: true,
+      });
       await c.ref.update({ lancementEnvoyeLe: FieldValue.serverTimestamp() });
       envoyes += 1;
     } catch (e) {
@@ -1593,7 +1606,8 @@ exports.lancementListeAttente = onCall({ secrets: [MAIL_MOT_DE_PASSE], timeoutSe
       logger.error(`E-mail de lancement non envoyé (${c.id})`, e.message);
     }
   }
-  return { envoyes, erreurs };
+  if (envoyes) await quotaCourriels.compter(db, envoyes, logger);
+  return { envoyes, erreurs, restants: aPrevenir.length - envoyes - erreurs };
 });
 
 async function abonnementModifie(abo) {
