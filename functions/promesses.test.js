@@ -48,14 +48,17 @@ test('aucune promesse connue comme fausse ne revient', () => {
   assert.deepStrictEqual(trouves, []);
 });
 
-test('les heures de veille annoncées sont celles du code', () => {
-  const src = lire('functions/alertes.js');
-  const m = /VEILLE_DEFAUT = \{ de: (\d+), deMin: (\d+), a: (\d+), aMin: (\d+) \}/.exec(src);
-  assert.ok(m, 'VEILLE_DEFAUT introuvable dans alertes.js');
-  const h = (heure, min) => `${heure} h${Number(min) ? ` ${min}` : ''}`;
-  const annonce = `${h(m[1], m[2])} à ${h(m[3], m[4])}`;
-  assert.match(SOURCES['vitrine/accueil.html'], new RegExp(annonce));
-  assert.match(SOURCES['functions/support-connaissances.md'], new RegExp(annonce));
+// La veille de nuit est réglée par la famille (Tanguy, 05/11/2026) : le site et le chat ne citent pas d'heures.
+test('la veille de nuit est annoncée sans heures fixes, réglée par la famille', () => {
+  for (const f of ['vitrine/accueil.html', 'functions/support-connaissances.md']) {
+    const t = SOURCES[f];
+    const phrases = t.split(/(?<=[.!?])\s/).filter((p) => /veille la nuit|nuit il s'éteint|l'écran se met en veille/i.test(p));
+    assert.ok(phrases.length, `${f} : la veille de nuit n'est plus expliquée`);
+    for (const p of phrases) {
+      assert.doesNotMatch(p, /\d+ ?h\b/, `${f} : heures fixes dans « ${p} »`);
+      assert.match(p, /choisi/, `${f} : « ${p} » doit dire que la famille choisit les heures`);
+    }
+  }
 });
 
 test('l\'alerte « pas vue » annoncée a le délai du code', () => {
