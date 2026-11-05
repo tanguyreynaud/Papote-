@@ -310,6 +310,20 @@ test('espace Validation : l\'administrateur seul lit et écrit ses choix', async
   await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(), 'validation/etat')));
 });
 
+test('installation par QR : jetons et clés de tablette jamais lus ni écrits par une appli, même admin', async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), 'installations/J'), { serie: null });
+    await setDoc(doc(ctx.firestore(), 'clesTablettes/E'), { serie: 'S1' });
+  });
+  for (const db of [admin(), proche('julie'), tablette('tab'), env.unauthenticatedContext().firestore()]) {
+    for (const chemin of ['installations/J', 'clesTablettes/E']) {
+      await assertFails(getDoc(doc(db, chemin)));
+      await assertFails(setDoc(doc(db, chemin), { serie: 'S2' }));
+    }
+    await assertFails(getDocs(collection(db, 'installations')));
+  }
+});
+
 test('commandes et abonnement : jamais écrits par l\'appli', async () => {
   await famille();
   await assertFails(getDoc(doc(proche('julie'), 'commandes/sub_1')));

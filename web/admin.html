@@ -257,6 +257,7 @@
               <div class="actions no-print">
                 <button type="button" class="secondary small-btn" id="x-stock">Exporter</button>
                 <button type="button" class="secondary small-btn" id="btn-achat">Ajouter un achat</button>
+                <button type="button" class="secondary small-btn" id="btn-installer-qr">Installer une tablette</button>
                 <button type="button" class="primary small-btn" id="btn-recevoir">Recevoir une tablette</button>
               </div>
             </div>
@@ -711,6 +712,34 @@
       <p class="f-msg small" hidden></p>
     </form>
   </div>
+
+  <!-- Installation d'une tablette par QR code (provisionnement Android) : le wifi tapé ici n'est mis que dans le QR,
+       jamais envoyé au serveur ni enregistré (gestion.js, installerParQr). -->
+  <dialog id="d-installer" class="fenetre">
+    <div class="fenetre-tete"><h2>Installer une tablette</h2><button type="button" class="fermer" aria-label="Fermer">✕</button></div>
+    <form id="f-installer" class="grille" autocomplete="off">
+      <p class="large avertissement-qr" role="note">Sans wifi, l'installation passe par la 4G : la carte SIM doit déjà être SANS code PIN.</p>
+      <label>Nom du wifi (facultatif) <input name="wifi" autocomplete="off" spellcheck="false" autocapitalize="off"></label>
+      <label>Mot de passe du wifi <input name="motDePasse" type="password" autocomplete="new-password" spellcheck="false" autocapitalize="off"></label>
+      <p class="large small muted">Le wifi est seulement mis dans le QR code : il n'est jamais enregistré.</p>
+      <label>Canal des mises à jour
+        <select name="canal"><option value="stable">Stable (toutes les tablettes)</option><option value="test">Test (nouvelles versions en premier)</option></select>
+      </label>
+      <label class="case large"><input type="checkbox" name="essai"> Tablette d'essai (jamais pour un client)</label>
+      <div class="large boutons"><button type="submit" class="primary">Afficher le QR code</button></div>
+      <p class="f-msg small" hidden></p>
+    </form>
+    <div id="installer-qr" class="installer-qr" hidden>
+      <div id="installer-qr-image" class="installer-qr-image" role="img" aria-label="QR code d'installation de la tablette"></div>
+      <ol class="pc-liste">
+        <li>Tablette remise à zéro (configuration d'usine), allumée sur l'écran d'accueil « Bienvenue ».</li>
+        <li>Touchez 6 fois de suite le même endroit de cet écran d'accueil.</li>
+        <li>Scannez ce QR code avec la tablette, puis laissez-la faire (téléchargement et installation de Papote).</li>
+      </ol>
+      <p id="installer-qr-info" class="small muted"></p>
+      <div class="boutons"><button type="button" class="secondary" id="installer-autre">Autre tablette</button></div>
+    </div>
+  </dialog>
 
   <dialog id="d-scan" class="fenetre">
     <div class="fenetre-tete"><h2>Scanner un code-barres</h2><button type="button" class="fermer" aria-label="Fermer">✕</button></div>

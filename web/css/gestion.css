@@ -558,7 +558,8 @@ button.secondary.charge::after, button.link.charge::after { border-color: rgba(7
 .bulle-annonce.visible { opacity: 1; transform: translate(-50%, 0); }
 
 /* Message d'erreur d'un formulaire : un encadré lisible plutôt qu'une ligne de texte. */
-.f-msg.error { background: #fdecec; color: var(--danger); border-radius: 10px; padding: 8px 12px; }
+/* Rouge foncé : contraste 4,5 sur le fond rosé (axe, 05/11). */
+.f-msg.error { background: #fdecec; color: #b91c1c; border-radius: 10px; padding: 8px 12px; }
 @media (prefers-reduced-motion: reduce) { .barre-chargement::before, button.charge::after, .roue-attente { animation-duration: 2.5s; } }
 
 /* Carte « … en cours » pendant une action. */
@@ -705,3 +706,9 @@ button.secondary.charge::after, button.link.charge::after { border-color: rgba(7
 .choix-fin-forfait[aria-pressed="true"] { background: #4f46e5; color: #fff; }
 .choix-fin-forfait:focus-visible { outline: 3px solid #4f46e5; outline-offset: 2px; }
 button.choix-fin-forfait.charge::after { border-color: rgba(255, 255, 255, .45); border-top-color: #fff; }
+
+/* Installation d'une tablette par QR code (Stock › Installer une tablette) */
+.avertissement-qr { margin: 0; padding: 12px 16px; border-radius: 12px; background: #fdecec; color: #8a1c1c; border: 2px solid var(--danger); font-size: 17px; font-weight: 700; }
+.installer-qr { display: flex; flex-direction: column; gap: 12px; }
+.installer-qr-image { background: #fff; padding: 12px; border-radius: 12px; width: min(100%, 440px); align-self: center; box-sizing: border-box; }
+.installer-qr-image svg { display: block; width: 100%; height: auto; }
