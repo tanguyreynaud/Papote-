@@ -639,11 +639,13 @@
     var reveal = function () { if (!shown && token === fadeToken) { shown = true; slide.style.opacity = '1'; } };
     v.onplaying = reveal;
     // Comme les photos : vidéo en largeur sur tout l'écran, vidéo en hauteur un peu agrandie.
-    v.addEventListener('loadedmetadata', function () {
+    // onloadedmetadata (et pas addEventListener) : l'élément <video> du calque est réutilisé à chaque
+    // vidéo du diaporama ; un écouteur ajouté à chaque passage s'accumulait (audit endurance du 05/11).
+    v.onloadedmetadata = function () {
       var portrait = v.videoHeight > v.videoWidth;
       v.classList.toggle('portrait', portrait);
       v.classList.toggle('paysage', !portrait);
-    });
+    };
     setTimeout(reveal, 3000); // au pire, au bout de 3 s
     v.onerror = function () { reveal(); slideTimer = setTimeout(next, SLIDE_MS); }; // vidéo illisible : on passe
     v.onloadeddata = function () {
@@ -679,7 +681,7 @@
   function stopSlideVideo() {
     var vs = document.querySelectorAll('#view-photos video.slide-vid');
     for (var i = 0; i < vs.length; i++) {
-      vs[i].onended = vs[i].onerror = vs[i].onloadeddata = vs[i].onplaying = null;
+      vs[i].onended = vs[i].onerror = vs[i].onloadeddata = vs[i].onplaying = vs[i].onloadedmetadata = null;
       try { vs[i].pause(); } catch (e) { }
       vs[i].removeAttribute('src');
       vs[i].style.display = 'none';
