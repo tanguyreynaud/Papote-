@@ -936,64 +936,90 @@ function showIntroTablette() {
   return true;
 }
 
-// ---------- Télécharger toutes les photos (fichier .zip) ----------
-// Toutes les photos de la famille, pour les garder avant l'effacement au-delà des 200 dernières.
+// ---------- Tout télécharger : photos, vidéos et messages (fichier .zip) ----------
+// Tout ce que la famille a envoyé, pour le garder (au-delà des 200 derniers envois, ou avant l'effacement des
+// données trois mois après l'arrêt de l'abonnement). Le .zip est assemblé petit à petit (zip.js) : les vidéos ne
+// sont jamais recopiées en mémoire, un téléphone tient une quarantaine de vidéos. Le bouton montre où on en est.
 
-function chargerJSZip() {
-  if (window.JSZip) return Promise.resolve(window.JSZip);
-  return new Promise((resolve, reject) => {
-    const s = document.createElement('script');
-    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
-    s.onload = () => resolve(window.JSZip);
-    s.onerror = reject;
-    document.head.append(s);
+const sansCaracteresInterdits = (t) => String(t || '').replace(/[\/\\:*?"<>|]/g, '').trim();
+const pluriel = (n, mot) => `${n} ${mot}${n > 1 ? 's' : ''}`;
+
+// Les messages, du plus ancien au plus récent : « 5 novembre 2026 à 14:02, Julie : Coucou ».
+function messagesEnTexte(posts) {
+  const grand = session.family.name;
+  const lignes = posts.map((p) => {
+    const quand = toDate(p.createdAt);
+    const date = quand ? `${quand.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })} à ${quand.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}` : '';
+    return `${date}, ${p.type === 'reply' ? grand : (p.authorName || 'Papote')} : ${p.text}`;
   });
+  return `Messages de la famille de ${grand} sur Papote\r\n\r\n${lignes.join('\r\n')}\r\n`;
 }
 
 $('btn-photos-zip').addEventListener('click', async () => {
   const btn = $('btn-photos-zip');
+  if (btn.disabled) return;
   btn.disabled = true;
+  btn.lastChild.textContent = 'Un instant…';
   try {
-    const [JSZip, snap] = await Promise.all([
-      chargerJSZip(),
-      getDocs(query(collection(db, 'families', session.fid, 'posts'), where('type', '==', 'photo'))),
+    const [{ creerZip }, snap] = await Promise.all([
+      import('./zip.js'),
+      getDocs(query(collection(db, 'families', session.fid, 'posts'), where('type', 'in', ['photo', 'video', 'message', 'reply']))),
     ]);
     const posts = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
       .sort((a, b) => (toDate(a.createdAt)?.getTime() || 0) - (toDate(b.createdAt)?.getTime() || 0));
     const sources = [];
     for (const p of posts) {
+      if (p.type !== 'photo' && p.type !== 'video') continue;
       const quand = toDate(p.createdAt) || new Date();
-      const base = `${quand.toISOString().slice(0, 10)} ${(p.authorName || 'Papote').replace(/[\/:*?"<>|]/g, '')}`;
+      const base = `${quand.toISOString().slice(0, 10)} ${sansCaracteresInterdits(p.authorName) || 'Papote'}`;
+      if (p.type === 'video') {
+        const ext = String(p.mime || '').includes('webm') ? 'webm' : 'mp4';
+        sources.push({ nom: `Vidéos/${base} ${p.id.slice(0, 4)}.${ext}`, url: p.videoUrl, post: p, video: true, quand });
+        continue;
+      }
       const urls = (p.photos || []).map((x) => x.imageUrl).filter(Boolean);
       if (!urls.length && p.imageUrl) urls.push(p.imageUrl);
-      if (urls.length) urls.forEach((u, i) => sources.push({ nom: `${base} ${p.id.slice(0, 4)}-${i + 1}.jpg`, url: u }));
-      else sources.push({ nom: `${base} ${p.id.slice(0, 4)}.jpg`, post: p });
+      if (urls.length) urls.forEach((u, i) => sources.push({ nom: `Photos/${base} ${p.id.slice(0, 4)}-${i + 1}.jpg`, url: u, quand }));
+      else sources.push({ nom: `Photos/${base} ${p.id.slice(0, 4)}.jpg`, post: p, quand });
     }
-    if (!sources.length) { notice("Il n'y a encore aucune photo à télécharger."); return; }
-    const zip = new JSZip();
+    const messages = posts.filter((p) => (p.type === 'message' || p.type === 'reply') && p.text);
+    if (!sources.length && !messages.length) { notice("Il n'y a encore rien à télécharger."); return; }
+    const zip = creerZip();
     let n = 0;
+    let photos = 0;
+    let videos = 0;
+    let manquants = 0;
     for (const src of sources) {
       n += 1;
       btn.lastChild.textContent = `${n} / ${sources.length}`;
       try {
-        const url = src.url || await loadMedia(session.fid, src.post, 'image');
-        if (!url) continue;
-        const blob = await (await fetch(url)).blob();
-        zip.file(src.nom, blob);
+        const url = src.url || await loadMedia(session.fid, src.post, src.video ? 'video' : 'image');
+        if (!url) { manquants += 1; continue; }
+        const r = await fetch(url);
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        await zip.ajouter(src.nom, await r.blob(), src.quand);
+        if (src.video) videos += 1; else photos += 1;
       } catch (err) {
-        console.warn('Photo non récupérée', src.nom, err);
+        console.warn('Fichier non récupéré', src.nom, err);
+        manquants += 1;
       }
     }
-    btn.lastChild.textContent = 'Préparation…';
-    const fichier = await zip.generateAsync({ type: 'blob' });
+    if (!photos && !videos && !messages.length) throw new Error('Aucun fichier récupéré');
+    if (messages.length) await zip.ajouter('Messages.txt', new Blob([messagesEnTexte(messages)], { type: 'text/plain;charset=utf-8' }));
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(fichier);
-    a.download = `Photos Papote - ${session.family.name}.zip`;
+    a.href = URL.createObjectURL(zip.fermer());
+    a.download = `Papote - ${sansCaracteresInterdits(session.family.name) || 'famille'}.zip`;
     document.body.append(a);
     a.click();
     a.remove();
-    setTimeout(() => URL.revokeObjectURL(a.href), 60_000);
-    toast(`${sources.length} photo${sources.length > 1 ? 's' : ''} téléchargée${sources.length > 1 ? 's' : ''}`);
+    setTimeout(() => URL.revokeObjectURL(a.href), 120_000);
+    const parties = [];
+    if (photos) parties.push(pluriel(photos, 'photo'));
+    if (videos) parties.push(pluriel(videos, 'vidéo'));
+    if (messages.length) parties.push('les messages');
+    const fait = `Téléchargé : ${parties.join(', ').replace(/, ([^,]*)$/, ' et $1')}.`;
+    if (manquants) notice(`${fait} ${pluriel(manquants, 'fichier')} n'${manquants > 1 ? 'ont' : 'a'} pas pu être récupéré${manquants > 1 ? 's' : ''} : réessayez plus tard pour ${manquants > 1 ? 'les' : 'le'} avoir.`);
+    else toast(fait);
   } catch (err) {
     console.error(err);
     notice("Le téléchargement n'a pas pu se faire. Vérifiez la connexion et réessayez.");
@@ -2955,9 +2981,14 @@ applyTheme(currentTheme());
 const ABO_OK_KEY = 'papote.retourPaiement';
 const dateLongue = (ts) => (ts ? toDate(ts).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : '');
 
+// Abonnement arrêté : la famille l'a voulu, jamais « doit être réglé » (lu par une famille en deuil).
+const TEXTE_ARRETE = "L'abonnement Papote est arrêté : la tablette ne reçoit plus de photos ni d'appels. Les photos, les vidéos et les messages restent ici quelque temps : vous pouvez tout télécharger depuis la page Photos.";
+
 // Abonnement en pause : envois, agenda et appels bloqués, avec une explication.
 function paused() {
   if (abonnementOk(session?.family)) return false;
+  // Abonnement arrêté (résiliation voulue, décès, EHPAD) : rien n'est à régler (audit « mauvais jours », 5/11).
+  if (session?.family?.abonnement?.statut === 'resilie') { notice(TEXTE_ARRETE); return true; }
   notice(amFamilyAdmin()
     ? "Papote est en pause : l'abonnement de la famille doit être réglé. Touchez Profil en bas de l'écran, puis Abonnement."
     : "Papote est en pause : l'abonnement de la famille doit être réglé par un responsable de la famille.");
@@ -3123,6 +3154,32 @@ $('btn-resilier').addEventListener('click', async () => {
   });
 });
 
+// Décès du proche (audit « mauvais jours », 5/11) : pas d'« Avant de partir » ni de « Merci de rester », un seul
+// geste, des mots justes ; le serveur envoie des e-mails de deuil et n'écrit plus de nouvelles à cette adresse.
+$('btn-resilier-deces').addEventListener('click', async () => {
+  const b = $('btn-resilier-deces');
+  if (b.disabled) return;
+  const quand = dateArret(session.family.abonnement);
+  // Tablette prêtée : 60 jours pour la rendre après un décès (Tanguy, 5/11), au lieu de 30.
+  const tablette = session.family.abonnement?.tablette !== 'achetee'
+    ? ' La tablette sera à nous renvoyer sans frais, sans vous presser : vous aurez deux mois.' : '';
+  const ok = await askConfirm(`Nous sommes sincèrement désolés. Papote s'arrêtera ${quand ? `le ${quand}` : 'à la fin du mois en cours'}, sans autre démarche ni justificatif. Les photos, les vidéos et les messages restent dans l'appli trois mois : vous pourrez tout garder avec « Tout télécharger », sur la page Photos.${tablette}`, 'Arrêter Papote');
+  if (!ok || b.disabled) return;
+  // Le temps de l'appel au serveur : bouton « Un instant… », un second appui ne fait rien.
+  const libelle = b.textContent;
+  b.disabled = true;
+  b.replaceChildren(Object.assign(document.createElement('span'), { className: 'spinner-inline' }), 'Un instant…');
+  try {
+    await withAboError(async () => {
+      await resilier(session.fid, { motif: 'deces' });
+      notice('C\'est noté. Toutes nos pensées vous accompagnent.');
+    });
+  } finally {
+    b.disabled = false;
+    b.textContent = libelle;
+  }
+});
+
 $('btn-garder').addEventListener('click', () => withAboError(async () => {
   await annulerResiliation(session.fid);
   notice('Résiliation annulée : votre abonnement continue comme avant.');
@@ -3219,6 +3276,7 @@ async function renderFinDeContrat(abo) {
   const r = finInfo?.retractation;
   $('btn-retracter').hidden = !r;
   $('btn-resilier').hidden = !resilierPossible || !!r;
+  $('btn-resilier-deces').hidden = $('btn-resilier').hidden;
   $('retract-info').hidden = !r;
   if (r) {
     $('retract-info').textContent = r.jusqua
@@ -3379,6 +3437,7 @@ function renderAbonnement() {
     $('btn-abo-page').hidden = !admin || !abo.stripeCustomerId || statut === 'offert';
     resilierPossible = admin && enCours && !abo.resiliationLe && !!abo.stripeSubscriptionId;
     $('btn-resilier').hidden = !resilierPossible || !!finInfo?.retractation;
+    $('btn-resilier-deces').hidden = $('btn-resilier').hidden;
     // Arrêté par Papote (impayé…) : le client ne peut pas le reprendre seul.
     // Tablette déjà en retour : plus de « Garder » (il faudrait la renvoyer au client).
     $('btn-garder').hidden = !admin || !enCours || !abo.resiliationLe || abo.arretPar === 'papote' || !!finInfo?.restitution;
@@ -3388,6 +3447,8 @@ function renderAbonnement() {
   let text = '';
   if (statut === 'impaye' && admin) {
     text = `Le dernier paiement a échoué. La tablette se mettra en pause ${abo.graceJusqua ? `le ${dateLongue(abo.graceJusqua)}` : 'très bientôt'}.`;
+  } else if (statut === 'resilie') {
+    text = TEXTE_ARRETE;
   } else if (!abonnementOk(session.family)) {
     text = admin
       ? "Papote est en pause : l'abonnement de la famille doit être réglé. Tout reviendra automatiquement."
@@ -3403,8 +3464,10 @@ function renderAbonnement() {
   }
   $('abo-banner').hidden = !text;
   $('abo-banner-text').textContent = text;
-  $('abo-banner-btn').hidden = !admin || ['aucun', 'installation'].includes(statut);
-  $('abo-banner-paid').hidden = !sansAbo;
+  // « Régler » seulement s'il y a quelque chose à régler (pas après un arrêt : reprendre se fait dans Profil).
+  $('abo-banner-btn').hidden = !admin || ['aucun', 'installation', 'resilie'].includes(statut);
+  // Après un arrêt (souvent un décès), pas de « Déjà commandé ? » sous le bandeau : la reprise reste dans Profil.
+  $('abo-banner-paid').hidden = !sansAbo || statut === 'resilie';
   // Retour de la page de paiement : on confirme dès que le serveur a activé l'abonnement.
   let waiting = false;
   try { waiting = localStorage.getItem(ABO_OK_KEY) === '1'; } catch (e) { /* rien */ }

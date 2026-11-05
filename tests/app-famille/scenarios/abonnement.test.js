@@ -62,9 +62,9 @@ test('Dans les 30 jours : seule « Annuler ma commande » est proposée ; annula
   await julie.page.locator('#retour-qr-box').waitFor({ state: 'visible' });
   assert.strictEqual(await julie.page.locator('#btn-renvoyer').isVisible(), false);
   assert.strictEqual(s.sendcloud.colis.size, 1, 'un seul QR code');
-  // Plus d'envoi possible : Papote est en pause.
+  // Plus d'envoi possible : l'abonnement est arrêté (sans « doit être réglé » : rien à régler).
   await julie.page.click('.nav-item[data-tab="home"]');
-  await julie.page.locator('#abo-banner', { hasText: 'Papote est en pause' }).waitFor();
+  await julie.page.locator('#abo-banner', { hasText: 'abonnement Papote est arrêté' }).waitFor();
 });
 
 test('Après 30 jours : résilier (avec l\'étape « Avant de partir »), puis garder son abonnement', async () => {

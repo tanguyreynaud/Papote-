@@ -49,8 +49,8 @@ export function rattacherCommande(fid, code) {
 }
 
 /** Résilier (sans engagement) : l'abonnement s'arrête à la date renvoyée ({ le }), fin du mois en cours, prélevé à l'arrêt. */
-export function resilier(fid) {
-  return call('resilierAbonnement', { fid });
+export function resilier(fid, { motif } = {}) {
+  return call('resilierAbonnement', motif ? { fid, motif } : { fid });
 }
 
 /** Factures de la famille, les plus récentes d'abord : [{ id, numero, le, montant, statut: 'payee'|'a-payer', pdf, page }]. */
