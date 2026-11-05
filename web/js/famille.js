@@ -835,7 +835,7 @@ function showIntroTablette() {
         <h2>Les options</h2>
         <div class="toggle-list">
           <label class="toggle-row"><span class="toggle-text"><strong>Lecture à voix haute</strong><span>Lit les messages et rappels à voix haute quand elle est devant la tablette, avec un bouton « Écouter »</span></span><input type="checkbox" class="toggle" id="intro-lecture"></label>
-          <label class="toggle-row"><span class="toggle-text"><strong>SOS famille</strong><span>Un bouton « SOS famille » en haut de la tablette : un appui, et toute la famille sonne</span></span><input type="checkbox" class="toggle" id="intro-sos"></label>
+          <label class="toggle-row"><span class="toggle-text"><strong>SOS famille</strong><span>Un bouton « SOS famille » en haut de la tablette : un appui, 5 secondes pour annuler, puis un SMS à toute la famille et la tablette appelle les proches un par un. Ce n\'est pas un service d\'urgence : 15 ou 112.</span></span><input type="checkbox" class="toggle" id="intro-sos"></label>
           <label class="toggle-row"><span class="toggle-text"><strong>Radio</strong><span>Un bouton « Radio » à côté de « Appeler »</span></span><input type="checkbox" class="toggle" id="intro-radio"></label>
           <label class="station" id="intro-station-wrap" hidden>Station <select id="intro-station"></select></label>
         </div>

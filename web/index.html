@@ -341,7 +341,7 @@
         <h2>Les options de la tablette</h2>
         <p class="muted">Voici ce que fera la tablette. Tout est déjà réglé : touchez un interrupteur pour changer. Vous pourrez aussi changer plus tard dans Réglages.</p>
         <div class="toggle-list">
-          <label class="toggle-row"><span class="toggle-text"><strong>Bouton SOS</strong><span><span class="setup-qui"></span> appuie sur «&nbsp;SOS&nbsp;» en haut de l'écran : 5 secondes plus tard, les téléphones de la famille sonnent. Elle peut annuler pendant ces 5 secondes.</span></span><input type="checkbox" class="toggle" id="setup-opt-sos"></label>
+          <label class="toggle-row"><span class="toggle-text"><strong>Bouton SOS</strong><span><span class="setup-qui"></span> appuie sur «&nbsp;SOS&nbsp;» en haut de l'écran : 5 secondes plus tard (elle peut annuler pendant ce temps), un SMS part à toute la famille et la tablette appelle les proches un par un. Ce n'est pas un service d'urgence : 15 ou 112.</span></span><input type="checkbox" class="toggle" id="setup-opt-sos"></label>
           <label class="toggle-row"><span class="toggle-text"><strong>Lire les messages à voix haute</strong><span>Quand un message arrive, la tablette le lit dès qu'elle voit <span class="setup-qui"></span> devant l'écran. Le bouton «&nbsp;Écouter&nbsp;» permet de le réentendre.</span></span><input type="checkbox" class="toggle" id="setup-opt-lecture"></label>
           <label class="toggle-row"><span class="toggle-text"><strong>Prochain rappel</strong><span>L'accueil affiche le prochain rappel de la journée : un médicament, un rendez-vous…</span></span><input type="checkbox" class="toggle" id="setup-opt-rappels"></label>
           <label class="toggle-row"><span class="toggle-text"><strong>Météo</strong><span id="setup-opt-meteo-ville">L'accueil affiche le temps qu'il fait. La ville se choisit dans Réglages.</span></span><input type="checkbox" class="toggle" id="setup-opt-meteo"></label>
@@ -649,7 +649,7 @@
             <label class="toggle-row"><span class="toggle-text"><strong>Lecture à voix haute</strong><span>Lit les messages et rappels à voix haute quand elle est devant la tablette, avec un bouton «&nbsp;Écouter&nbsp;»</span></span><input type="checkbox" class="toggle" id="opt-lecture"></label>
             <label class="toggle-row"><span class="toggle-text"><strong>Météo sur l'accueil</strong><span>Le temps du jour sur l'écran de la tablette</span></span><input type="checkbox" class="toggle" id="opt-meteo"></label>
             <label class="toggle-row"><span class="toggle-text"><strong>Prochain rappel sur l'accueil</strong><span>Le prochain rappel de la journée sur l'écran de la tablette</span></span><input type="checkbox" class="toggle" id="opt-rappels-accueil"></label>
-            <label class="toggle-row"><span class="toggle-text"><strong>SOS famille</strong><span>Un bouton « SOS famille » en haut de la tablette : un appui, et toute la famille sonne</span></span><input type="checkbox" class="toggle" id="opt-sos"></label>
+            <label class="toggle-row"><span class="toggle-text"><strong>SOS famille</strong><span>Un bouton « SOS famille » en haut de la tablette : un appui, 5 secondes pour annuler, puis un SMS à toute la famille et la tablette appelle les proches un par un. Ce n'est pas un service d'urgence : 15 ou 112.</span></span><input type="checkbox" class="toggle" id="opt-sos"></label>
             <label class="toggle-row"><span class="toggle-text"><strong>Radio</strong><span>Un bouton «&nbsp;Radio&nbsp;» à côté de « Appeler »</span></span><input type="checkbox" class="toggle" id="opt-radio"></label>
               <div id="opt-radio-wrap" class="station">
                 <label for="opt-radio-station">Station</label>
@@ -888,8 +888,8 @@
         </div>
         <details class="card data-card">
           <summary>Vos données</summary>
-          <p class="muted"><strong>Ce qui est gardé</strong> : les prénoms et adresses e-mail des membres, leur photo de profil, les photos, vidéos et messages envoyés, l'agenda et les anniversaires.</p>
-          <p class="muted"><strong>Qui les voit</strong> : uniquement les membres de la famille et la tablette. Personne d'autre, ni aucune publicité.</p>
+          <p class="muted"><strong>Ce qui est gardé</strong> : les prénoms, adresses e-mail, numéros de portable et dates de naissance des membres, leur photo de profil, les photos, vidéos et messages envoyés, l'agenda et les anniversaires, l'historique des appels, et l'heure à laquelle la tablette a vu ou senti votre proche pour la dernière fois.</p>
+          <p class="muted"><strong>Qui les voit</strong> : les membres de la famille et la tablette. Papote n'y accède que pour vous dépanner. Aucune publicité, rien n'est revendu.</p>
           <p class="muted"><strong>Combien de temps</strong> : les 200 dernières photos et les 40 dernières vidéos ; les plus anciennes s'effacent toutes seules. Un envoi supprimé disparaît aussi de la tablette.</p>
           <p class="muted"><strong>Où</strong> : sur les serveurs Google Firebase.</p>
           <p class="muted"><strong>Une question, une demande</strong> : écrivez au support depuis la page Support.</p>
