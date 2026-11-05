@@ -196,6 +196,13 @@ const lienHtml = (lien, texte) => `<a href="${echapper(lien)}" style="color:${C.
 // Parcours d'installation du 21/10/2026 : la carte SIM est déjà dans la tablette (pas de wifi à régler), le QR code
 // se scanne avec l'appareil photo du téléphone (ou le code se tape sur app.mapapote.fr), puis l'appli demande le
 // nom du proche, une première photo et fait le test du son.
+// Famille préparée dès la commande (famille-preparee.js, 05/11) : la tablette retrouve sa famille toute seule.
+const GESTES_PREPAREE = { etapes: [
+  'Branchez la tablette et allumez-la. La carte SIM est déjà dedans : rien à régler.',
+  'Touchez « Commencer » sur l\'écran : la tablette retrouve votre famille toute seule, sans code à scanner.',
+  'Les photos déjà envoyées depuis l\'appli Papote s\'affichent. Invitez vos proches depuis l\'appli : ils pourront envoyer des photos et appeler en vidéo.',
+] };
+const gestes = (code, preparee) => (preparee ? GESTES_PREPAREE : GESTES_ARRIVEE(code));
 const GESTES_ARRIVEE = (code) => ({ etapes: [
   'Branchez la tablette sur une prise, puis appuyez 3 secondes sur le bouton de marche (sur la tranche). Elle démarre en une minute environ ; si l\'écran reste noir, laissez-la charger un quart d\'heure. La carte SIM est déjà dedans : rien à régler.',
   `Avec l'appareil photo de votre téléphone, scannez le QR code affiché sur la tablette (ou ${lienHtml(lienAppli(code), 'ouvrez app.mapapote.fr')} et tapez le code affiché).`,
@@ -204,22 +211,24 @@ const GESTES_ARRIVEE = (code) => ({ etapes: [
 
 // ---------- Commande et livraison ----------
 
-function colisParti({ nom, suivi, lien, relais, code }) {
+function colisParti({ nom, suivi, lien, relais, code, preparee }) {
   return message('Votre tablette Papote est en route', [
     bonjour(nom),
     `Votre tablette vient de partir. Vous recevrez un message de Mondial Relay dès qu'elle sera disponible${relais ? ' au point relais' : ' au point relais choisi'}.`,
     { fiche: [['Numéro de suivi', echapper(suivi)], ['Point relais', relais ? relaisEnTexte(relais) : null]] },
     'À son arrivée, trois gestes :',
-    GESTES_ARRIVEE(code),
+    gestes(code, preparee),
   ], { texte: 'Suivre mon colis', lien });
 }
 
 // Tablette remise en main propre par Tanguy (A1) : pas de colis à suivre, elle est déjà chez le client.
-function tabletteRemise({ nom, code }) {
+function tabletteRemise({ nom, code, preparee }) {
   return message('Votre tablette Papote est chez vous', [
     bonjour(nom),
-    'Votre tablette Papote vous a été remise en main propre : elle est prête. Trois gestes pour la relier à votre famille :',
-    GESTES_ARRIVEE(code),
+    preparee
+      ? 'Votre tablette Papote vous a été remise en main propre : elle est prête et déjà reliée à votre famille. Trois gestes :'
+      : 'Votre tablette Papote vous a été remise en main propre : elle est prête. Trois gestes pour la relier à votre famille :',
+    gestes(code, preparee),
     // Plus de « 30 jours pour changer d'avis » (Tanguy, 2026-10-29) : même règle que l'e-mail de commande, les CGV couvrent le droit.
   ], { texte: 'Ouvrir l\'appli Papote', lien: lienAppli(code) });
 }
@@ -239,7 +248,7 @@ const DELAI = 'Je prépare et vérifie votre tablette moi-même, avec sa carte S
 
 // reprise : abonnement repris après une résiliation, tablette restée chez le proche (C3) : pas de mise en service,
 // pas de délai pour changer d'avis.
-function commandeConfirmee({ nom, code, relais, formule, dejaInstallee, reprise }) {
+function commandeConfirmee({ nom, code, relais, formule, dejaInstallee, reprise, famille }) {
   // Offre unique (29/10/2026) : la formule n'est plus lue, les anciennes commandes Wi-Fi n'étaient que des essais.
   const mensuel = OFFRE;
   // Abonnement pris dans l'appli, tablette déjà installée : ni envoi ni installation à annoncer.
@@ -271,9 +280,12 @@ function commandeConfirmee({ nom, code, relais, formule, dejaInstallee, reprise 
       ['Abonnement', `${mensuel}, payés une fois chaque mois écoulé à partir de la réception, sans engagement`],
       ['Changer d\'avis', '30 jours après la réception : rien à payer et les 60 € remboursés'],
     ] },
-    '<b>En attendant, installez l\'appli Papote sur votre téléphone</b> avec le bouton ci-dessous. Vous n\'avez pas encore de code, c\'est normal : il s\'affichera sur l\'écran de la tablette quand vous l\'allumerez. Vous le scannerez avec votre téléphone, et l\'appli vous guidera.',
+    // Famille préparée (05/11) : l'espace famille existe dès le paiement, la tablette y entrera seule.
+    famille
+      ? '<b>Votre espace famille Papote est déjà prêt.</b> Ouvrez l\'appli Papote avec le bouton ci-dessous et connectez-vous avec cette adresse e-mail : vous pourrez donner le nom de votre proche, préparer les premières photos et inviter la famille avant même l\'arrivée de la tablette. À son arrivée, il suffira de la brancher : elle retrouvera votre famille toute seule.'
+      : '<b>En attendant, installez l\'appli Papote sur votre téléphone</b> avec le bouton ci-dessous. Vous n\'avez pas encore de code, c\'est normal : il s\'affichera sur l\'écran de la tablette quand vous l\'allumerez. Vous le scannerez avec votre téléphone, et l\'appli vous guidera.',
     { petit: 'La tablette est prêtée et configurée : vous n\'avez rien à installer.' },
-  ], { texte: 'Installer l\'appli Papote', lien: APPLI });
+  ], famille ? { texte: 'Ouvrir mon espace famille', lien: famille } : { texte: 'Installer l\'appli Papote', lien: APPLI });
 }
 
 // Panier abandonné (functions/relances.js) : etape 1 (une heure après), 2 (lendemain soir), 3 (une semaine après).
@@ -359,14 +371,14 @@ function nouvelleCommande({ nom, email, telephone, code, relais, proche, formule
   ], bouton, { interne: true });
 }
 
-function rappelJumelage({ nom, numero, code }) {
+function rappelJumelage({ nom, numero, code, preparee }) {
   const titre = numero === 1 ? 'Votre tablette Papote vous attend' : 'Besoin d\'un coup de main avec Papote ?';
   return message(titre, [
     bonjour(nom),
     numero === 1
       ? 'Votre tablette Papote devrait être arrivée au point relais, mais elle n\'est pas encore reliée à votre famille. Cela prend deux minutes :'
       : 'Votre tablette Papote n\'est toujours pas reliée à votre famille. Si quelque chose bloque, répondez à cet e-mail : nous vous aidons. Pour la relier :',
-    GESTES_ARRIVEE(code),
+    gestes(code, preparee),
   ], { texte: 'Ouvrir l\'appli Papote', lien: lienAppli(code) });
 }
 

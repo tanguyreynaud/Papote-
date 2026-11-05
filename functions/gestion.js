@@ -2340,8 +2340,10 @@ exports.gestionAnnulerCommande = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_P
       throw new HttpsError('already-exists', 'Annulation déjà en cours (autre onglet) : rechargez la page.');
     }
     if (colisRevenu) {
-      if (c.expedition !== 'envoyee' || c.fid) {
-        throw new HttpsError('failed-precondition', c.fid ? 'Cette tablette est reliée à une famille : arrêtez plutôt l\'abonnement.'
+      // Famille préparée à la commande : seule l'entrée de la tablette dans la famille compte (famille-preparee.js).
+      const installee = require('./famille-preparee').regles.tabletteDansLaFamille(c);
+      if (c.expedition !== 'envoyee' || installee) {
+        throw new HttpsError('failed-precondition', installee ? 'Cette tablette est reliée à une famille : arrêtez plutôt l\'abonnement.'
           : 'Seule une commande envoyée (colis revenu sans avoir été retiré) peut être annulée ainsi.');
       }
     } else if (!['a-preparer', 'paiement-en-attente'].includes(c.expedition)) {
@@ -2406,8 +2408,8 @@ exports.gestionAnnulerCommande = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_P
 const vitrine = {};
 exports.brancher = (f) => Object.assign(vitrine, f);
 
-// Tablette perdue ou hors service : retirée de sa famille, jamais plus jumelée.
-const ETATS_BLOQUES = ['perdue', 'hors-service'];
+// Tablette perdue ou hors service : retirée de sa famille, jamais plus jumelée (famille-preparee.js).
+const { ETATS_BLOQUES } = require('./famille-preparee').regles;
 // États où la tablette n'est plus chez un client : retirée de sa famille (gestionStock, changement d'état).
 const ETATS_RETIREES = [...ETATS_BLOQUES, 'revenue', 'en-stock', 'a-reparer'];
 
@@ -2422,26 +2424,8 @@ function suiteJumelage(t, commande, fid) {
   return {};
 }
 
-async function ficheDeLaTablette(p) {
-  const par = async (champ, valeur) => (valeur
-    ? (await db().collection('stock').where(champ, '==', valeur).limit(1).get()).docs[0] || null : null);
-  const connue = await par('tabletUid', p.tabletUid);
-  if (connue || !p.serie) return connue;
-  // Le n° de série est écrit par la tablette elle-même dans pairings/ : n'importe quel compte pourrait
-  // y mettre celui d'une tablette livrée et récupérer la commande. On ne le croit que si la clé
-  // App Check posée à l'installation de CE n° de série est reliée au même compte (jetonAppCheck).
-  if (!(await serieProuvee(p.serie, p.tabletUid))) {
-    logger.warn(`Jumelage : n° de série ${p.serie} non prouvé pour le compte ${p.tabletUid || '?'}, ignoré.`);
-    return null;
-  }
-  return par('serieAndroid', p.serie);
-}
-
-async function serieProuvee(serie, tabletUid) {
-  if (!tabletUid) return false;
-  const cles = await db().collection('clesTablettes').where('serie', '==', serie).get();
-  return cles.docs.some((d) => d.get('tabletUid') === tabletUid);
-}
+// Fiche stock de la tablette (compte, ou n° de série prouvé par sa clé App Check) : famille-preparee.js.
+const ficheDeLaTablette = (p) => require('./famille-preparee').ficheDeLaTablette(db(), p, logger);
 
 // Jumelage (pairings/{code}, écrit par la tablette et l'appli famille) : la tablette est reconnue par
 // son n° de série Android, noté à la préparation (outils/gestion/preparer-tablette).
@@ -3486,7 +3470,7 @@ exports.gestionParcours = onCall(async (request) => {
       await ref.update({ 'preparation.recuLe': Date.now(), 'preparation.recuPar': qui });
     }
     else {
-      const preparation = avancementPropre(d.preparation, ['tablette', 'sim', 'suivi', 'enceinte']);
+      const preparation = avancementPropre(d.preparation, ['tablette', 'sim', 'suivi', 'enceinte', 'tabletteLue']);
       // Date de réception déjà notée (suivi du colis, jumelage, « Le client a reçu le colis ») : gardée, car elle
       // fait partir les 30 jours pour changer d'avis et le premier prélèvement.
       const avant = snap.get('preparation') || {};

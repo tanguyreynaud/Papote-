@@ -138,6 +138,7 @@ test('deux commandes pour la même famille : « Arrêter » et « Reprendre » d
   await premierMoisPasse(id);
   // Deuxième commande payée par Paul, reliée à la même famille (Tanguy, 30/10 : 8X9K-EB7T et EJ4N-DVBA).
   const { abonnement: id2 } = await a.commanderEtPayer({ email: paul.email });
+  await a.commandeDAvant(id2);
   await s.db.doc(`commandes/${id2}`).update({ fid });
   const ligne = async (x) => (await s.appeler('gestionDonnees', {}, a.TANGUY)).commandes.find((c) => c.id === x);
 
@@ -272,6 +273,7 @@ test('celui qui a payé rejoint la famille installée par un autre : responsable
 test('l\'acheteur installe lui-même une tablette pas reconnue : sa commande est reliée par son e-mail, sans code', async () => {
   const paul = await s.compte('Paul', 'paul@exemple.fr');
   const { abonnement: id } = await a.commanderEtPayer({ email: paul.email });
+  await a.commandeDAvant(id); // commande d'avant la famille préparée
   const t = { serie: 'INCONNUE2', tabletUid: 'tablette-inconnue2', callsUid: 'appels-inconnue2' };
   await a.afficherCode(t);
   s.boite.length = 0;
@@ -280,6 +282,52 @@ test('l\'acheteur installe lui-même une tablette pas reconnue : sa commande est
   assert.strictEqual(fam.abonnement.statut, 'actif');
   assert.strictEqual((await commande(id)).fid, fid);
   assert.deepStrictEqual(mailsA('contact@mapapote.fr'), [], 'rien à faire pour Tanguy');
+});
+
+test('famille préparée, tablette pas reconnue : celui qui a payé scanne, elle entre dans SA famille (pas une deuxième)', async () => {
+  const paul = await s.compte('Paul', 'paul@exemple.fr');
+  const { abonnement: id } = await a.commanderEtPayer({ email: paul.email });
+  const { fid } = await commande(id);
+  await a.entrerParInvitation(paul, fid);
+  const t = { serie: 'INCONNUE4', tabletUid: 'tablette-inconnue4', callsUid: 'appels-inconnue4' };
+  await a.afficherCode(t);
+  assert.strictEqual((await s.lire(`pairings/${t.code}`)).status, 'waiting', 'pas reconnue : pas de jumelage tout seul');
+  s.boite.length = 0;
+  const r = await s.appeler('reserverTablette', { code: t.code, prenom: 'Paul' }, paul);
+  assert.deepStrictEqual(r, { etat: 'reserve', fid }, 'l\'appli entre directement dans la famille');
+  await s.calme();
+  assert.strictEqual(await a.entrerDansLaFamille(t), fid);
+  assert.strictEqual((await famille(fid)).abonnement.statut, 'actif');
+  assert.ok((await commande(id)).tabletteRelieeLe, 'plus de rappel de jumelage');
+  assert.strictEqual((await s.db.collection('families').get()).size, 1, 'aucune deuxième famille');
+  assert.deepStrictEqual(mailsA('contact@mapapote.fr'), [], 'rien à faire pour Tanguy');
+  // Une deuxième tablette inconnue ne s'y ajoute pas d'office : la famille a déjà la sienne.
+  const t2 = { serie: 'INCONNUE5', tabletUid: 'tablette-inconnue5', callsUid: 'appels-inconnue5' };
+  await a.afficherCode(t2);
+  assert.deepStrictEqual(await s.appeler('reserverTablette', { code: t2.code, prenom: 'Paul' }, paul), { etat: 'reserve' });
+});
+
+test('famille préparée : tablette perdue en route refusée, la tablette de remplacement entre seule dans la même famille', async () => {
+  const paul = await s.compte('Paul', 'paul@exemple.fr');
+  const t1 = await a.tablettePreparee();
+  const { abonnement: id } = await a.commanderEtPayer({ email: paul.email });
+  const { fid } = await commande(id);
+  await a.preparerEtEnvoyer(id, t1);
+  // Colis perdu : Tanguy note la tablette « Perdue » et relie une autre tablette à la même commande.
+  await s.appeler('gestionStock', { action: 'modifier', id: t1.fiche, champs: { etat: 'perdue' } }, a.TANGUY);
+  const t2 = await a.tablettePreparee();
+  await s.appeler('gestionStock', { action: 'modifier', id: t2.fiche, champs: { commande: id, etat: 'envoyee' } }, a.TANGUY);
+  await s.calme();
+  // La tablette perdue, allumée par quelqu'un d'autre : aucune famille.
+  await a.afficherCode(t1);
+  assert.strictEqual((await s.lire(`pairings/${t1.code}`)).status, 'waiting', 'tablette perdue : pas de famille');
+  assert.ok(!(await s.lire(`pairings/${t1.code}`)).fid);
+  await a.afficherCode(t2);
+  const p = await s.lire(`pairings/${t2.code}`);
+  assert.strictEqual(p.status, 'confirmed');
+  assert.strictEqual(p.fid, fid, 'la remplaçante entre dans la famille de la commande');
+  await a.entrerDansLaFamille(t2);
+  assert.strictEqual((await s.lire(`stock/${t2.fiche}`)).fid, fid);
 });
 
 test('deux commandes en attente au même e-mail : rien n\'est relié tout seul, Tanguy est prévenu', async () => {

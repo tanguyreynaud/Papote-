@@ -38,6 +38,8 @@ async function premierMoisPasse(id) {
 async function deuxCommandes(paul) {
   const { id: A, fid, t: t1 } = await familleAbonnee(paul);
   const { abonnement: B } = await a.commanderEtPayer({ email: paul.email });
+  // 2e commande payée avant la famille préparée (aujourd'hui elle aurait sa propre famille) : reliée par la tablette.
+  await a.commandeDAvant(B);
   assert.strictEqual((await commande(B)).fid, null, 'famille déjà abonnée : la 2e commande n\'est pas reliée toute seule');
   const t2 = await a.tablettePreparee();
   await a.preparerEtEnvoyer(B, t2);
@@ -169,7 +171,7 @@ test('colis revenu, annulé par Tanguy après un mois prélevé : tout rembours�
   const { abonnement: id } = await a.commanderEtPayer({ email: paul.email });
   await a.preparerEtEnvoyer(id, t);
   await premierMoisPasse(id);
-  assert.strictEqual((await commande(id)).fid, null, 'jamais installée');
+  assert.strictEqual((await commande(id)).tabletteRelieeLe, undefined, 'jamais installée');
 
   const r = await stripeRepondToutDeSuite(() => s.appeler('gestionAnnulerCommande', { commande: id, colisRevenu: true }, a.TANGUY));
   await s.calme();
