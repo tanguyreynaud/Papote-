@@ -31,6 +31,9 @@
   var hasData = false;
 
   function $(id) { return document.getElementById(id); }
+  // Texte changé seulement s'il est différent : réécrire le même texte chaque seconde refait la mise en page
+  // et l'affichage de la tablette 24 h sur 24 (audit endurance du 05/11 : 5 réécritures par seconde).
+  function setText(el, t) { if (el && el.textContent !== t) el.textContent = t; }
   function android() { return window.PapoteAndroid; }
 
   // Erreurs de la page notées dans le journal de la tablette (envoyé à la famille).
@@ -104,33 +107,33 @@
     var now = new Date();
     if (carteSansReseau) majSansReseau();
     if (!heureSure()) {
-      $('clock').textContent = '';
-      $('setup-clock').textContent = '';
-      $('date').textContent = 'Papote attend le réseau pour se mettre à l’heure';
-      if ($('overlay-clock')) $('overlay-clock').textContent = '';
-      if ($('moment')) $('moment').textContent = '';
+      setText($('clock'), '');
+      setText($('setup-clock'), '');
+      setText($('date'), 'Papote attend le réseau pour se mettre à l’heure');
+      setText($('overlay-clock'), '');
+      setText($('moment'), '');
       document.body.classList.remove('night');
       document.body.classList.toggle('video-playing', !!(playing && playing.post.video && !playing.cadre));
       if (dimmed) { dimmed = false; if (android() && android().setDim) android().setDim(false); }
       return;
     }
     var time = now.getHours() + ':' + pad(now.getMinutes());
-    $('clock').textContent = time;
-    $('setup-clock').textContent = time;
+    setText($('clock'), time);
+    setText($('setup-clock'), time);
     var day = JOURS[now.getDay()];
-    $('date').textContent = day.charAt(0).toUpperCase() + day.slice(1) + ' ' + now.getDate() +
-      (now.getDate() === 1 ? 'er' : '') + ' ' + MOIS[now.getMonth()];
+    setText($('date'), day.charAt(0).toUpperCase() + day.slice(1) + ' ' + now.getDate() +
+      (now.getDate() === 1 ? 'er' : '') + ' ' + MOIS[now.getMonth()]);
     // Bandeau bas d'une photo reçue : « Il est 14h24, vendredi 23 octobre ».
     if ($('overlay-clock')) {
-      $('overlay-clock').textContent = 'Il est ' + now.getHours() + 'h' + pad(now.getMinutes()) + ', ' + day + ' ' +
-        now.getDate() + (now.getDate() === 1 ? 'er' : '') + ' ' + MOIS[now.getMonth()];
+      setText($('overlay-clock'), 'Il est ' + now.getHours() + 'h' + pad(now.getMinutes()) + ', ' + day + ' ' +
+        now.getDate() + (now.getDate() === 1 ? 'er' : '') + ' ' + MOIS[now.getMonth()]);
     }
     var hour = now.getHours();
     // Le moment de la journée, un repère de plus sous la date.
     if ($('moment')) {
-      $('moment').textContent = hour >= 5 && hour < 12 ? 'Le matin'
+      setText($('moment'), hour >= 5 && hour < 12 ? 'Le matin'
         : hour >= 12 && hour < 18 ? "L'après-midi"
-          : hour >= 18 && hour < 22 ? 'Le soir' : 'La nuit';
+          : hour >= 18 && hour < 22 ? 'Le soir' : 'La nuit');
     }
     var evening = isEvening(hour * 60 + now.getMinutes());
     // classList : les autres marques du corps (débranchée, sans réseau) restent en place.
@@ -2950,7 +2953,8 @@
     var night = isNight(now.getHours() * 60 + now.getMinutes());
     if (!night) nuitDeja = false;
     var should = night && Date.now() > wakeUntil && !somethingToShow();
-    if (should) stopRadio();
+    // Radio arrêtée une fois (pas renderRadioBtn chaque seconde de la nuit, qui refaisait le bouton).
+    if (should && radioAudio) stopRadio();
     if (should === asleep) return;
     asleep = should;
     // Extinction du soir en fondu de 2 s, comme une lampe qu'on baisse (Tanguy, 2/11) ; le réveil au
@@ -2999,7 +3003,7 @@
     sleepScreen.appendChild(nightClock);
     function tickNight() {
       var d = new Date();
-      nightClock.textContent = d.getHours() + ':' + pad(d.getMinutes());
+      setText(nightClock, d.getHours() + ':' + pad(d.getMinutes()));
     }
     tickNight();
     setInterval(tickNight, 20000);
@@ -3025,7 +3029,9 @@
     tick();
     setInterval(tick, 1000);
     setInterval(function () {
-      if (!photos.length || !isShown('view-home')) return;
+      // La nuit, sous l'écran noir, la photo de l'accueil ne change plus : chaque changement relançait
+      // un fondu et un zoom de 12 s (FRAME_MS = 12 s, donc une animation sans fin) que personne ne voit.
+      if (!photos.length || !isShown('view-home') || asleep) return;
       frameIndex = (frameIndex + 1) % Math.min(photos.length, 20);
       renderFrame();
     }, FRAME_MS);
