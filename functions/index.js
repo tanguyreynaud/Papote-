@@ -1267,7 +1267,18 @@ async function paiementTermine(session) {
     return;
   }
   if (existante.exists && existante.get('expedition') === 'paiement-en-attente' && meta.dejaInstallee !== '1') await ref.update({ expedition: 'a-preparer' });
-  const fid = meta.fid || (existante.exists && existante.get('fid')) || await chercherFamille(email);
+  let fid = meta.fid || (existante.exists && existante.get('fid')) || null;
+  if (!fid) {
+    // Client qui recommande sur le site : sa famille sans abonnement est reliée tout de suite (il peut annuler
+    // depuis l'appli avant l'envoi), mais à titre provisoire : si la tablette de cette commande est jumelée à une
+    // autre famille (une autre grand-mère), le jumelage y déplace la commande et remet celle-ci comme avant
+    // (gestion.js, suiteJumelage).
+    fid = await chercherFamille(email);
+    if (fid) {
+      const avant = (await db.doc(`families/${fid}`).get()).get('abonnement') || null;
+      await ref.update({ relieeParEmail: { fid, abonnementAvant: avant } });
+    }
+  }
   if (fid) await appliquer(fid, session.subscription);
   if (fid && meta.dejaInstallee === '1') await relierTabletteInstallee(fid, session.subscription, { reprise: meta.reprise === '1' });
   await confirmerCommande(ref, email, code);
@@ -1587,7 +1598,9 @@ exports.lancementListeAttente = onCall({ secrets: [MAIL_MOT_DE_PASSE], timeoutSe
 
 async function abonnementModifie(abo) {
   const commande = await db.doc(`commandes/${abo.id}`).get();
-  const fid = (abo.metadata && abo.metadata.fid) || (commande.exists && commande.get('fid'));
+  // La famille notée sur la commande d'abord : le message peut être ancien (metadata.fid d'avant un changement de
+  // famille, gestion.js delierAncienneFamille) ; metadata.fid seulement tant que la commande n'est pas reliée.
+  const fid = (commande.exists && commande.get('fid')) || (abo.metadata && abo.metadata.fid);
   if (fid) await appliquer(fid, abo.id);
   else if (commande.exists) await commande.ref.update({ statutStripe: abo.status });
   await prelevementDernierMois(abo);

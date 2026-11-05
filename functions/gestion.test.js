@@ -393,6 +393,11 @@ test('suite du jumelage d\'une tablette du stock', () => {
   assert.deepStrictEqual(g.suiteJumelage({ etat: 'envoyee', commande: 'c' }, { fid: 'autre' }, 'f'),
     { alerte: 'jumelée à une autre famille que celle de sa commande' });
   assert.deepStrictEqual(g.suiteJumelage({ etat: 'preparee', commande: null }, null, 'f'), { alerte: 'jumelée sans commande' });
+  // Commande reliée d'office (par l'e-mail) à l'ancienne famille d'un client qui recommande : suit sa tablette.
+  assert.deepStrictEqual(g.suiteJumelage({ etat: 'envoyee', commande: 'c' }, { fid: 'ancienne', relieeParEmail: { fid: 'ancienne' } }, 'f'),
+    { relier: true, delier: 'ancienne' });
+  assert.deepStrictEqual(g.suiteJumelage({ etat: 'envoyee', commande: 'c' }, { fid: 'ancienne', relieeParEmail: { fid: 'ancienne' } }, 'ancienne'), {});
+  assert.strictEqual(g.suiteJumelage({ etat: 'envoyee', commande: 'c' }, { fid: 'x', relieeParEmail: { fid: 'y' } }, 'f').relier, undefined);
 });
 
 test('clients : fusion par e-mail, statut et accord pour les e-mails', () => {
