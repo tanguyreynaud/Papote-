@@ -1,0 +1,9 @@
+{
+  "name": "papote-audit-api",
+  "private": true,
+  "type": "module",
+  "description": "Audits du code Papote par l'API Message Batches (lecture seule).",
+  "dependencies": {
+    "@anthropic-ai/sdk": "1.1.0"
+  }
+}
