@@ -515,7 +515,20 @@ const MANQUANTS = 'Chaque élément manquant est facturé : tablette 130 €, ch
 
 // Abonnement terminé ou commande annulée après l'envoi : la tablette prêtée est attendue.
 // retractation : montant remboursé au retour (centimes), sinon null.
-function retourTablette({ nom, avant, retractation, montant }) {
+// deces : arrêt après le décès du proche (resilierAbonnement { motif: 'deces' }) : pas de « Merci de nous avoir fait
+// confiance ! », pas de somme en gras ; la règle des 140 € reste écrite, en petit, avec une porte ouverte.
+const RETOUR_DECES = 'Rien ne presse. Si le retour est difficile en ce moment, répondez simplement à cet e-mail : nous trouverons une solution ensemble.';
+function retourTablette({ nom, avant, retractation, montant, deces }) {
+  if (deces) {
+    return message('La tablette Papote, quand vous serez prêt', [
+      bonjour(nom),
+      'L\'abonnement Papote est maintenant arrêté. Nous pensons bien à vous.',
+      'Quand vous le pourrez, la tablette prêtée est à nous renvoyer, sans frais, en trois gestes :',
+      { etapes: ETAPES_RETOUR_QR },
+      { encadre: `Vous avez jusqu'au <b>${dateEnClair(avant)}</b>. ${RETOUR_DECES}` },
+      { petit: `Sans retour à cette date, le matériel prêté (${euros(montant)}) serait facturé. ${MANQUANTS}` },
+    ], APPLI_RETOUR);
+  }
   return message('Comment nous rendre la tablette Papote', [
     bonjour(nom),
     retractation != null
@@ -531,7 +544,19 @@ function retourTablette({ nom, avant, retractation, montant }) {
 
 // Arrêt demandé (par le client dans l'appli, ou par Papote depuis l'admin) : confirmation écrite, avec la date
 // d'arrêt et la suite (la loi demande de confirmer une résiliation sur un support durable).
-function resiliationEnregistree({ nom, famille, le, tablettePretee, parPapote }) {
+function resiliationEnregistree({ nom, famille, le, tablettePretee, parPapote, deces }) {
+  if (deces) {
+    return message('Nous pensons bien à vous', [
+      bonjour(nom),
+      `Nous avons appris avec beaucoup de tristesse le décès${famille ? ` de <b>${echapper(famille)}</b>` : ' de votre proche'}. Toute l'équipe de Papote vous adresse ses sincères condoléances, à vous et à toute la famille.`,
+      `Vous n'avez rien d'autre à faire : l'abonnement s'arrête le <b>${dateEnClair(le)}</b>, sans démarche ni justificatif. Le mois en cours est le dernier mois d'abonnement prélevé.`,
+      { encadre: 'Les photos, les vidéos et les messages de la famille restent dans l\'appli Papote pendant trois mois après l\'arrêt. Pour tout garder : onglet Photos, « Tout télécharger ».' },
+      tablettePretee
+        ? `La tablette prêtée est à nous renvoyer sans frais, mais rien ne presse : vous aurez deux mois après l'arrêt, et nous vous enverrons le mode d'emploi le ${dateEnClair(le)}. ${RETOUR_DECES}`
+        : null,
+      'Nous n\'enverrons plus aucune nouvelle de Papote à cette adresse.',
+    ].filter(Boolean), { texte: 'Ouvrir l\'appli Papote', lien: APPLI });
+  }
   return message(parPapote ? 'Papote arrête votre abonnement' : 'Votre résiliation Papote est enregistrée', [
     bonjour(nom),
     parPapote
@@ -588,7 +613,17 @@ function etiquetteRetour({ nom, lien, qr, avant, fin, retractation, montant }) {
   ], { texte: 'Imprimer l\'étiquette', lien });
 }
 
-function rappelRestitution({ nom, avant, lien, qr, montant }) {
+function rappelRestitution({ nom, avant, lien, qr, montant, deces }) {
+  if (deces) {
+    return message('La tablette Papote, un petit rappel', [
+      bonjour(nom),
+      `Nous n'avons pas encore reçu la tablette prêtée. Vous pouvez la déposer dans un point relais Mondial Relay jusqu'au <b>${dateEnClair(avant)}</b>.`,
+      lien ? `Votre ${qr ? 'QR code' : 'étiquette'} prépayé${qr ? '' : 'e'} est disponible avec le bouton ci-dessous.` : 'Pour obtenir le QR code prépayé :',
+      lien ? null : { etapes: ETAPES_RETOUR_QR },
+      RETOUR_DECES,
+      { petit: `Sans retour à cette date, le matériel prêté (${euros(montant)}) serait facturé. Si vous avez déjà déposé le colis, ne tenez pas compte de ce message.` },
+    ], lien ? { texte: qr ? 'Afficher le QR code' : 'Imprimer l\'étiquette', lien } : APPLI_RETOUR);
+  }
   return message('Pensez à nous rendre la tablette Papote', [
     bonjour(nom),
     'Nous n\'avons pas encore reçu la tablette.',
@@ -597,6 +632,22 @@ function rappelRestitution({ nom, avant, lien, qr, montant }) {
     lien ? null : { etapes: ETAPES_RETOUR_QR },
     { petit: 'Si vous avez déjà déposé le colis, ne tenez pas compte de ce message.' },
   ], lien ? { texte: qr ? 'Afficher le QR code' : 'Imprimer l\'étiquette', lien } : APPLI_RETOUR);
+}
+
+// Famille arrêtée depuis bientôt 3 mois (purge.js) : les photos seront effacées le … ; un mois pour les garder.
+// deces : version de deuil (motif noté à l'arrêt).
+function avantEffacement({ nom, famille, le, deces }) {
+  return message(deces ? 'Les photos de la famille, à garder' : 'Vos photos Papote seront effacées le ' + dateEnClair(le), [
+    bonjour(nom),
+    `Comme prévu après l'arrêt de Papote, les photos, les vidéos et les messages de la famille${famille ? ` de <b>${echapper(famille)}</b>` : ''} seront effacés de nos serveurs le <b>${dateEnClair(le)}</b>.`,
+    'Pour les garder sur votre téléphone ou votre ordinateur :',
+    { etapes: [
+      'Ouvrez l\'appli Papote et touchez Photos.',
+      'Touchez « Tout télécharger » : un fichier avec les photos, les vidéos et les messages s\'enregistre.',
+    ] },
+    deces ? 'Si vous avez besoin de plus de temps, répondez simplement à cet e-mail : nous attendrons.'
+      : 'Besoin de plus de temps ? Répondez à cet e-mail.',
+  ], { texte: 'Ouvrir l\'appli Papote', lien: APPLI });
 }
 
 // rembourse : montant remboursé (centimes), 0 ou null s'il n'y a rien à rembourser.
@@ -771,7 +822,7 @@ module.exports = {
   // abonnement
   paiementEchoue, papoteEnPause, pausePrelevements, reprisePrelevements,
   // fin de contrat
-  retourTablette, etiquetteRetour, resiliationEnregistree, resiliationAnnulee, rappelRestitution, tabletteRecue, materielNonRendu, commandeAnnulee, annulationAvantEnvoi, resiliation, alerteAdmin,
+  retourTablette, etiquetteRetour, resiliationEnregistree, avantEffacement, resiliationAnnulee, rappelRestitution, tabletteRecue, materielNonRendu, commandeAnnulee, annulationAvantEnvoi, resiliation, alerteAdmin,
   // support et admin
   rappelConfirme, demandeRappel, bilanSupport, information, recapSemaine, livresComptables, budget,
   // outils

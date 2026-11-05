@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const { perime, contactChatAPurger, familleAPurger, DUREE_MS, DUREE_FAMILLE_MS } = require('./purge')._test;
+const { perime, contactChatAPurger, familleAPurger, avisEffacementDu, DUREE_MS, DUREE_FAMILLE_MS } = require('./purge')._test;
 
 const T = Date.parse('2027-11-01T03:00:00Z');
 const JOUR = 86400e3;
@@ -37,11 +37,23 @@ test('contact du chat : gardé s\'il a un accord, la liste d\'attente, une comma
   assert.strictEqual(contactChatAPurger(null, T), false);
 });
 
-test('famille résiliée depuis plus de 3 mois : effacée', () => {
+test('famille résiliée depuis plus de 3 mois, prévenue depuis 3 semaines : effacée', () => {
   assert.strictEqual(DUREE_FAMILLE_MS, 90 * JOUR);
-  const fam = { name: 'Mamie', abonnement: { statut: 'resilie', majLe: ts(ilYA(91)), resiliationLe: ts(ilYA(100)) } };
+  const fam = { name: 'Mamie', avisEffacementLe: ts(ilYA(30)), abonnement: { statut: 'resilie', majLe: ts(ilYA(91)), resiliationLe: ts(ilYA(100)) } };
   assert.strictEqual(familleAPurger(fam, [{ statutStripe: 'canceled' }], T), true);
   assert.strictEqual(familleAPurger(fam, [], T), true);
+});
+
+test('jamais effacée sans avoir été prévenue un mois avant (audit « mauvais jours »)', () => {
+  const abonnement = { statut: 'resilie', majLe: ts(ilYA(91)), resiliationLe: ts(ilYA(100)) };
+  assert.strictEqual(familleAPurger({ abonnement }, [], T), false, 'pas prévenue : gardée');
+  assert.strictEqual(avisEffacementDu({ abonnement }, [], T), true, 'à prévenir');
+  assert.strictEqual(familleAPurger({ abonnement, avisEffacementLe: ts(ilYA(10)) }, [], T), false, 'prévenue il y a 10 jours : gardée');
+  assert.strictEqual(avisEffacementDu({ abonnement, avisEffacementLe: ts(ilYA(10)) }, [], T), false, 'une seule fois');
+  // Résiliée il y a 65 jours : effacement dans 25 jours, l'avis part maintenant ; à 40 jours, pas encore.
+  assert.strictEqual(avisEffacementDu({ abonnement: { statut: 'resilie', majLe: ts(ilYA(65)) } }, [], T), true);
+  assert.strictEqual(avisEffacementDu({ abonnement: { statut: 'resilie', majLe: ts(ilYA(40)) } }, [], T), false);
+  assert.strictEqual(avisEffacementDu({ abonnement: { statut: 'suspendu', majLe: ts(ilYA(400)) } }, [], T), false);
 });
 
 test('famille gardée : abonnement en cours, résiliation récente, commande encore vivante chez Stripe, sans date', () => {

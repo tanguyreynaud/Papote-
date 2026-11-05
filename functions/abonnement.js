@@ -42,6 +42,8 @@ function premierPrelevementDe(abo, maintenant) {
 // (Tanguy, 2026-10-20, comme les conditions de vente) : tablette 130 €, chargeur et câble 10 €,
 // enceinte 10 € seulement si elle était dans le colis. Plus de routeur 4G ; le socle n'est pas facturé.
 const RESTITUTION_JOURS = 30;
+// Après le décès du proche (resilierAbonnement { motif: 'deces' }) : 60 jours pour rendre la tablette (Tanguy, 5/11).
+const RESTITUTION_DECES_JOURS = 60;
 // Prix de chaque élément prêté, en centimes : un élément manquant au retour est facturé seul.
 const PRIX_MATERIEL = { tablette: 13000, chargeur: 1000, enceinte: 1000 };
 const NOMS_MATERIEL = { tablette: 'tablette', chargeur: 'chargeur et câble', enceinte: 'enceinte' };
@@ -172,8 +174,9 @@ function dateResiliation(finPeriodeMs, maintenant) {
 }
 
 // Date limite de retour d'une tablette incluse, à partir de la fin de l'abonnement.
-function limiteRestitution(finMs) {
-  return finMs + RESTITUTION_JOURS * JOUR;
+// deces : arrêt après le décès du proche, délai porté à 60 jours ; sinon 30 jours.
+function limiteRestitution(finMs, { deces = false } = {}) {
+  return finMs + (deces ? RESTITUTION_DECES_JOURS : RESTITUTION_JOURS) * JOUR;
 }
 
 // « Annuler ma commande » : 30 jours après la réception de la tablette (CGV : le délai légal
@@ -303,6 +306,7 @@ module.exports = {
   ancrePaiement,
   premierPrelevementDe,
   RESTITUTION_JOURS,
+  RESTITUTION_DECES_JOURS,
   PENALITE_NON_RESTITUTION,
   penaliteRestitution,
   PRIX_MATERIEL,

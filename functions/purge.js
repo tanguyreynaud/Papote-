@@ -43,15 +43,48 @@ function contactChatAPurger(c, maintenant) {
   return perime(c.chatLe, maintenant);
 }
 
-// Famille résiliée depuis plus de 3 mois (dernier changement d'abonnement et date de fin), dont aucune
-// commande ne vit encore chez Stripe.
-function familleAPurger(fam, commandes, maintenant) {
+// Date d'effacement d'une famille résiliée (ms) : 3 mois après le dernier changement d'abonnement et la date de fin ;
+// null si elle n'est pas à effacer (abonnement en cours, commande encore vivante chez Stripe, sans date).
+function dateEffacement(fam, commandes) {
   const abo = fam && fam.abonnement;
-  if (!abo || abo.statut !== 'resilie') return false;
+  if (!abo || abo.statut !== 'resilie') return null;
   const dates = [enMillis(abo.majLe), enMillis(abo.resiliationLe), enMillis(abo.finPeriode)].filter((d) => d != null);
-  if (!dates.length) return false;
-  if ((commandes || []).some((c) => STRIPE_VIVANTS.includes(c.statutStripe))) return false;
-  return Math.max(...dates) <= maintenant - DUREE_FAMILLE_MS;
+  if (!dates.length) return null;
+  if ((commandes || []).some((c) => STRIPE_VIVANTS.includes(c.statutStripe))) return null;
+  return Math.max(...dates) + DUREE_FAMILLE_MS;
+}
+
+// La famille est prévenue un mois avant (audit « mauvais jours », 5/11 : après un décès, les photos de Mamie
+// disparaissaient sans un mot) : avis à envoyer quand l'effacement tombe dans les 30 jours (ou est déjà passé).
+const AVIS_AVANT_MS = 30 * JOUR;
+// Et jamais d'effacement moins de 3 semaines après l'avis (la tâche ne tourne qu'une fois par mois).
+const AVIS_DELAI_MS = 21 * JOUR;
+function avisEffacementDu(fam, commandes, maintenant) {
+  const le = dateEffacement(fam, commandes);
+  return le != null && !fam.avisEffacementLe && le - AVIS_AVANT_MS <= maintenant;
+}
+
+// Famille résiliée depuis plus de 3 mois, prévenue depuis au moins 3 semaines, dont aucune commande ne vit encore
+// chez Stripe.
+function familleAPurger(fam, commandes, maintenant) {
+  const le = dateEffacement(fam, commandes);
+  if (le == null || le > maintenant) return false;
+  const avis = enMillis(fam.avisEffacementLe);
+  return avis != null && avis <= maintenant - AVIS_DELAI_MS;
+}
+
+// E-mail « vos photos seront effacées le … » à l'adresse de la dernière commande, puis avisEffacementLe sur la famille.
+async function prevenirAvantEffacement(db, snap, commandes, maintenant) {
+  const le = Math.max(dateEffacement(snap.data(), commandes.map((c) => c.data())), maintenant + AVIS_DELAI_MS);
+  const derniere = commandes.filter((c) => c.get('email'))
+    .sort((a, b) => (enMillis(b.get('creeLe')) || 0) - (enMillis(a.get('creeLe')) || 0))[0];
+  if (derniere) {
+    const mail = require('./mail');
+    await require('./gestion').envoyerAuClient(derniere.get('email'), mail.avantEffacement({
+      nom: derniere.get('nom') || null, famille: snap.get('name') || null, le, deces: derniere.get('motif') === 'deces',
+    }));
+  }
+  await snap.ref.update({ avisEffacementLe: new Date(maintenant) });
 }
 
 async function effacerParLots(db, refs) {
@@ -82,6 +115,14 @@ async function purgerFamilles(db, maintenant) {
   let n = 0;
   for (const snap of resiliees.docs) {
     const commandes = await db.collection('commandes').where('fid', '==', snap.id).get();
+    if (avisEffacementDu(snap.data(), commandes.docs.map((c) => c.data()), maintenant)) {
+      try {
+        await prevenirAvantEffacement(db, snap, commandes.docs, maintenant);
+      } catch (e) {
+        logger.error(`Purge : famille ${snap.id} non prévenue`, e);
+      }
+      continue;
+    }
     if (!familleAPurger(snap.data(), commandes.docs.map((c) => c.data()), maintenant)) continue;
     try {
       await effacerFamille({ fid: snap.id, snap, commandes: commandes.docs, par: 'purge automatique (3 mois après la résiliation)' });
@@ -117,4 +158,4 @@ async function purger(db, maintenant = Date.now()) {
 // Lancée par taches.js (tachesHoraires) le 1er du mois à 4 h.
 exports.purgeMensuelle = () => purger(base());
 
-exports._test = { perime, contactChatAPurger, familleAPurger, purger, DUREE_MS, DUREE_FAMILLE_MS };
+exports._test = { perime, contactChatAPurger, familleAPurger, avisEffacementDu, purger, DUREE_MS, DUREE_FAMILLE_MS, AVIS_DELAI_MS };

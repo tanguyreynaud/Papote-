@@ -493,7 +493,7 @@ async function appliquerOfferte(fid, commande) {
   }
 }
 
-// Fin d'un abonnement avec tablette incluse : la tablette est attendue sous 30 jours.
+// Fin d'un abonnement avec tablette incluse : la tablette est attendue sous 30 jours (60 après un décès).
 async function attendreRestitution(abo) {
   if (abo.status !== 'canceled' || abo.metadata.tablette !== 'incluse') return;
   const ref = db.doc(`commandes/${abo.id}`);
@@ -502,8 +502,10 @@ async function attendreRestitution(abo) {
     // Rien à rendre si la tablette n'est jamais partie.
     if (snap.exists && (snap.get('restitution') || ['a-preparer', 'paiement-en-attente', 'annulee'].includes(snap.get('expedition')))) return;
     const fin = (abo.ended_at || abo.canceled_at || Math.floor(Date.now() / 1000)) * 1000;
+    // Après un décès : 60 jours au lieu de 30 (Tanguy, 5/11).
+    const deces = snap.get('motif') === 'deces' || (abo.metadata || {}).motif === 'deces';
     tx.set(ref, {
-      restitution: { statut: 'attendue', avant: versTimestamp(regles.limiteRestitution(fin)) },
+      restitution: { statut: 'attendue', avant: versTimestamp(regles.limiteRestitution(fin, { deces })) },
     }, { merge: true });
   });
 }
@@ -685,18 +687,33 @@ exports.resilierAbonnement = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE
   // La famille qui touche encore « Résilier » (vieil onglet) après un arrêt de Papote ne le change pas en arrêt
   // « client », qu'elle pourrait ensuite reprendre seule.
   const resteParPapote = request.auth.token.admin !== true && abo.cancel_at && abo.metadata.arretPar === 'papote';
+  // Décès du proche (audit « mauvais jours », 5/11) : même arrêt (fin du mois, CGV), mais des e-mails de deuil
+  // (resiliationEnregistree, retourTablette, rappelRestitution) et plus aucune nouvelle de Papote à cette adresse.
+  const deces = (request.data || {}).motif === 'deces';
   await stripe().subscriptions.update(id, {
     cancel_at: Math.ceil(le / 1000),
     proration_behavior: 'none',
-    metadata: { ...abo.metadata, arretPar: parPapote || resteParPapote ? 'papote' : 'client' },
+    metadata: { ...abo.metadata, arretPar: parPapote || resteParPapote ? 'papote' : 'client', ...(deces ? { motif: 'deces' } : {}) },
   });
+  if (deces) await noterDeces(id);
   await appliquer(fid, id);
   // Deux responsables (ou deux onglets) qui demandent l'arrêt en même temps : un seul e-mail.
   if (await premiereDemande(id, `arret-${Math.ceil(le / 1000)}`)) {
-    await mailArret(id, fam, (infos) => mail.resiliationEnregistree({ ...infos, le, parPapote }));
+    await mailArret(id, fam, (infos) => mail.resiliationEnregistree({ ...infos, le, parPapote, deces }));
   }
   return { le };
 });
+
+// Décès noté sur la commande (e-mails de retour adaptés) ; l'adresse de la commande ne reçoit plus de nouvelles.
+async function noterDeces(commandeId) {
+  const ref = db.doc(`commandes/${commandeId}`);
+  await ref.set({ motif: 'deces', motifLe: FieldValue.serverTimestamp() }, { merge: true });
+  const email = (await ref.get()).get('email');
+  if (email) {
+    await db.doc(`contacts/${cleContact(String(email).toLowerCase())}`)
+      .set({ email: String(email).toLowerCase(), consentement: false, desinscritLe: Date.now(), desinscritPar: 'deces' }, { merge: true });
+  }
+}
 
 // Une demande (arrêt à telle date, reprise) n'est notée qu'une fois sur la commande : rejouée en même temps depuis
 // deux téléphones ou deux onglets, elle ne vaut qu'un e-mail. Renvoie true la première fois.
@@ -968,7 +985,7 @@ exports.renvoyerTablette = onCall({ secrets: [SENDCLOUD_API, MAIL_MOT_DE_PASSE],
   // qu'à l'arrêt. mailLe : pas de mode d'emploi en plus, l'e-mail du QR code suffit.
   if (!r && retourAnticipePossible(c, (await db.doc(`families/${c.fid}`).get()).get('abonnement'))) {
     const fin = (await db.doc(`families/${c.fid}`).get()).get('abonnement.resiliationLe').toMillis();
-    r = { statut: 'attendue', avant: versTimestamp(regles.limiteRestitution(fin)), anticipe: true, mailLe: Timestamp.now() };
+    r = { statut: 'attendue', avant: versTimestamp(regles.limiteRestitution(fin, { deces: c.motif === 'deces' })), anticipe: true, mailLe: Timestamp.now() };
     await ref.update({ restitution: r });
   }
   if (!r || !['attendue', 'echec'].includes(r.statut)) throw new HttpsError('failed-precondition', "Il n'y a pas de tablette à nous renvoyer.");
@@ -1676,7 +1693,7 @@ async function restitutions() {
       try {
         await envoyerMail(snap.get('email'), mail.rappelRestitution({
           nom: snap.get('nom'), avant: r.avant.toMillis(), lien: r.qr || r.etiquette || null, qr: !!r.qr,
-          montant: regles.penaliteRestitution(snap.data()),
+          montant: regles.penaliteRestitution(snap.data()), deces: snap.get('motif') === 'deces',
         }));
         await snap.ref.update({ 'restitution.rappelLe': FieldValue.serverTimestamp() });
       } catch (e) {
@@ -2076,7 +2093,7 @@ async function suiviRetour(event, rAvant, r, c) {
     await avisResiliation(id, c, retractation);
     if (c.email && !r.etiquette) {
       try {
-        await envoyerMail(c.email, mail.retourTablette({ nom: c.nom, avant: r.avant.toMillis(), retractation, montant: regles.penaliteRestitution(c) }));
+        await envoyerMail(c.email, mail.retourTablette({ nom: c.nom, avant: r.avant.toMillis(), retractation, montant: regles.penaliteRestitution(c), deces: c.motif === 'deces' }));
       } catch (e) {
         logger.error(`Commande ${id} : e-mail de retour non parti`, e.message);
       }
