@@ -621,14 +621,20 @@ function piecesTablette(t) {
 }
 
 const DISPONIBLES = ['en-stock', 'preparee'];
-// Alerte notée au jumelage, sauf « sans commande » quand la tablette a été rattachée depuis.
-const alerteJumelage = (t) => (t.alerteJumelage === 'jumelée sans commande' && t.commande ? null : t.alerteJumelage || null);
+// Tablette jumelée à une famille sans commande (la tablette de test dans la « famille test ») : jamais à vendre,
+// sans rien à cocher (Tanguy, 5/11). Elle sort d'elle-même du stock libre, comme sur le site (functions/stock.js).
+const dansUneFamille = (t) => !!t.fid && !t.commande;
+const nomFamille = (fid) => ((donnees.familles || []).find((f) => f.id === fid) || {}).nom || 'sans nom';
+const pasAVendre = (t) => `Dans la famille ${nomFamille(t.fid)} : pas à vendre`;
+// Libre pour un client : en stock ou préparée, sans commande, dans aucune famille,
+// ni d'essai ni hors critères pas gardée (installation par QR), comme functions/stock.js.
+const tabletteLibre = (t) => DISPONIBLES.includes(t.etat) && !t.commande && !t.fid && t.essai !== true && !t.horsCriteres;
+// Alerte notée au jumelage. « Jumelée sans commande » n'en est plus une : la tablette n'est simplement pas à vendre.
+const alerteJumelage = (t) => (t.alerteJumelage === 'jumelée sans commande' ? null : t.alerteJumelage || null);
 // Tablettes du stock qui peuvent partir : libres, ou déjà réservées à une commande pas encore envoyée.
 function tablettesPretes() {
   const aEnvoyer = new Set(donnees.commandes.filter((c) => etatCommande(c) === 'a-envoyer').map((c) => c.id));
-  // Tablette d'essai, ou hors critères pas encore gardée (installation par QR) : pas pour un client (functions/stock.js).
-  return donnees.stock.filter((t) => DISPONIBLES.includes(t.etat) && (!t.commande || aEnvoyer.has(t.commande))
-    && (t.commande || (t.essai !== true && !t.horsCriteres)));
+  return donnees.stock.filter((t) => tabletteLibre(t) || (DISPONIBLES.includes(t.etat) && t.commande && aEnvoyer.has(t.commande)));
 }
 
 // Installation par QR (functions/installation-qr.js) : ce que la tablette a signalé, bien visible.
@@ -1381,7 +1387,7 @@ function formulaireRemplacement(c, t) {
   const bouton = h('button', { type: 'submit', class: 'secondary small-btn', hidden: true }, 'Remplacer');
   const msg = h('p', { class: 'small muted', hidden: true });
   const libres = {
-    tablette: () => donnees.stock.filter((x) => DISPONIBLES.includes(x.etat) && !x.commande)
+    tablette: () => donnees.stock.filter(tabletteLibre)
       .map((x) => [x.id, [x.ref, x.numero || (x.ref ? null : 'sans n° de série'), x.modele].filter(Boolean).join(' · ')]),
     sim: () => donnees.sims.filter((l) => !l.tablette && ['stock', 'active'].includes(l.statut) && (l.numero || l.iccid))
       .map((l) => [l.id, [l.numero || `ICCID ${fin4(l.iccid)}`, l.operateur].filter(Boolean).join(' · ')]),
@@ -1510,9 +1516,10 @@ function parcoursCommande(c) {
 
 // Regroupements du filtre de la liste des tablettes (les chiffres du haut) : [libellé, états, condition].
 const GROUPES_STOCK = {
-  // Tablette d'essai ou hors critères pas gardée (installation par QR) : pas comptée comme libre pour un client.
-  'g:disponibles': ['En stock, libres', DISPONIBLES, (t) => !t.commande && t.essai !== true && !t.horsCriteres],
+  // Ni dans une famille, ni d'essai, ni hors critères pas gardée (installation par QR) : pas libre pour un client.
+  'g:disponibles': ['En stock, libres', DISPONIBLES, (t) => !t.commande && !t.fid && t.essai !== true && !t.horsCriteres],
   'g:reservees': ['Réservées pour un envoi', DISPONIBLES, (t) => !!t.commande],
+  'g:famille': ['Dans une famille, pas à vendre', DISPONIBLES, dansUneFamille],
   'g:chez': ['Chez les clients', ['envoyee', 'chez-client', 'en-retour']],
   'g:verifier': ['À vérifier ou réparer', ['revenue', 'a-reparer']],
   'g:sorties': ['Perdues ou hors service', ['perdue', 'hors-service']],
@@ -1549,6 +1556,7 @@ function afficherStock() {
   const lien = (n, texte, filtre) => (n ? h('button', { type: 'button', class: 'link', onclick: filtrer(filtre) }, `${n} ${texte}`) : null);
   const suite = [
     lien(compte(['commandee']), compte(['commandee']) > 1 ? 'commandées chez le vendeur' : 'commandée chez le vendeur', 'commandee'),
+    lien(stock.filter((t) => dansGroupe(GROUPES_STOCK['g:famille'], t)).length, 'dans une famille, pas à vendre', 'g:famille'),
     lien(compte(['revenue', 'a-reparer']), 'à vérifier ou réparer', 'g:verifier'),
     lien(compte(['perdue', 'hors-service']), 'perdue(s) ou hors service', 'g:sorties'),
     donnees.aVendre == null ? null : h('span', { class: 'muted' }, donnees.aVendre
@@ -1576,6 +1584,7 @@ function afficherStock() {
         cellules: [
           h('div', {}, t.ref ? h('strong', {}, `${t.ref} `) : null, t.numero || t.serieAndroid || h('span', { class: 'muted' }, 'à saisir'),
             alerteJumelage(t) ? h('div', {}, badge(alerteJumelage(t), 'ko')) : null,
+            DISPONIBLES.includes(t.etat) && dansUneFamille(t) ? h('div', {}, badge(pasAVendre(t), 'info')) : null,
             t.usure ? h('div', {}, badge(t.usure, 'ko')) : null,
             ...badgesInstallation(t).map((b) => h('div', {}, b))),
           t.modele || '',
@@ -2597,8 +2606,10 @@ function remplirTablette(id) {
     infos.dataset.id = t.id;
     infos.replaceChildren(
       ...ligne('Où est-elle ?', friseTablette(t, actions.bouton)),
+      // Jumelée sans commande (tablette de test) : elle reste dans sa famille, hors du stock à vendre, rien à faire.
+      ...ligne('Famille', DISPONIBLES.includes(t.etat) && dansUneFamille(t) ? badge(pasAVendre(t), 'info') : null),
       // Attribuée à une commande par « Préparer l'envoi » (SIM, accessoires, étiquette), pas à la main.
-      ...ligne('Commande', c ? h('a', { href: `#commande/${encodeURIComponent(c.id)}` }, `Commande ${codeCommande(c.code)}${c.offerte ? ' (offerte)' : ''}`) : h('span', { class: 'muted' }, 'pas encore attribuée')),
+      ...ligne('Commande', c ? h('a', { href: `#commande/${encodeURIComponent(c.id)}` }, `Commande ${codeCommande(c.code)}${c.offerte ? ' (offerte)' : ''}`) : dansUneFamille(t) ? null : h('span', { class: 'muted' }, 'pas encore attribuée')),
       ...ligne('Client', c && c.email ? h('a', { href: `#client/${encodeURIComponent(c.email.toLowerCase())}` }, c.nom || c.email) : c ? c.nom : null),
       ...(fichesAchetees(t).length
         // Fiche créée à l'installation faute d'achat « En stock » : on choisit la tablette achetée qu'elle est
