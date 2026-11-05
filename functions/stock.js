@@ -9,7 +9,8 @@
 // Depuis le 29/10/2026, le client voit toujours « expédiée sous 3 à 5 jours ouvrés » : ce délai ne sert plus qu'à
 // prévenir Tanguy (e-mail de nouvelle commande) qu'il faut racheter des tablettes.
 //
-// Disponibles = fiches du stock libres (en stock ou préparées, sans commande)
+// Disponibles = fiches du stock libres (en stock ou préparées, sans commande, et pas jumelées à une famille :
+//               une tablette dans une famille, comme celle de la « famille test » de Tanguy, n'est jamais à vendre)
 //             - commandes payées pas encore reliées à une fiche
 //             - paiements en cours (reservations/{id}, une tablette mise de côté pendant le paiement Stripe).
 // Une réservation naît à l'ouverture du paiement, disparaît au paiement réussi (la commande prend le relais)
@@ -29,10 +30,10 @@ const MARGE_MS = 2 * 60 * 1000;
 
 const ms = (v) => (v == null ? null : typeof v === 'number' ? v : v.toMillis ? v.toMillis() : null);
 
-// { stock: [{ etat, commande }], commandes: [{ id, expedition }], reservations: [{ expireLe }] } → tablettes du stock
+// { stock: [{ etat, commande, fid }], commandes: [{ id, expedition }], reservations: [{ expireLe }] } → tablettes du stock
 // encore libres, négatif quand des commandes attendent une tablette pas encore achetée.
 function solde({ stock, commandes, reservations, maintenant }) {
-  const libres = stock.filter((t) => ETATS_LIBRES.includes(t.etat) && !t.commande).length;
+  const libres = stock.filter((t) => ETATS_LIBRES.includes(t.etat) && !t.commande && !t.fid).length;
   const reliees = new Set(stock.map((t) => t.commande).filter(Boolean));
   const enAttente = commandes.filter((c) => A_SERVIR.includes(c.expedition) && !reliees.has(c.id)).length;
   const enPaiement = reservations.filter((r) => (ms(r.expireLe) || 0) > maintenant).length;

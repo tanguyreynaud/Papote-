@@ -95,6 +95,9 @@ function refusRetourMateriel(c) {
 function refusLienCommande(tablette, etat, c) {
   if (ETATS_INUTILISABLES.includes(etat)) return 'Cette tablette est perdue, hors service ou à réparer : elle ne part chez aucun client.';
   if (c && c.expedition === 'annulee') return 'Cette commande est annulée.';
+  // Tablette jumelée à une famille (la tablette de test de Tanguy) : jamais à vendre, sauf à la commande de cette
+  // même famille (abonnement pris ensuite depuis l'appli).
+  if (tablette && tablette.fid && c && c.fid !== tablette.fid) return 'Cette tablette est dans une famille : pas à vendre. Choisissez-en une autre.';
   return '';
 }
 

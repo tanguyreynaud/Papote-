@@ -808,7 +808,7 @@ function familleResume(f) {
 const ETATS_A_RATTACHER = ['commandee', 'en-stock', 'preparee'];
 function fichesARattacher(sansAchat, numeros, quantite) {
   const restantes = sansAchat.slice().sort((a, b) => (a.creeLe || 0) - (b.creeLe || 0));
-  const libre = (t) => !t.commande && (!t.etat || ETATS_A_RATTACHER.includes(t.etat));
+  const libre = (t) => !t.commande && !t.fid && (!t.etat || ETATS_A_RATTACHER.includes(t.etat));
   const prendre = (i) => (i < 0 ? null : restantes.splice(i, 1)[0].id);
   const serie = (n) => String(n || '').replace(/\s/g, '').toUpperCase();
   const choix = Array.from({ length: quantite }, (_, i) => {
@@ -904,6 +904,7 @@ async function remplacer(d, qui) {
     if (!neuve.exists || neuve.get('commande') || !['en-stock', 'preparee'].includes(neuve.get('etat'))) {
       throw new HttpsError('failed-precondition', 'Choisissez une tablette disponible du stock.');
     }
+    if (neuve.get('fid')) throw new HttpsError('failed-precondition', 'Cette tablette est dans une famille : pas à vendre. Choisissez-en une autre.');
     await kit.ref.update({
       etat: 'en-retour', commande: null, remplaceePour: commande, majLe: FieldValue.serverTimestamp(),
       historique: FieldValue.arrayUnion(trace('en-retour', { remplacement: true })),
@@ -2415,10 +2416,13 @@ const ETATS_RETIREES = [...ETATS_BLOQUES, 'revenue', 'en-stock', 'a-reparer'];
 
 // Que faire quand une tablette du stock est jumelée à une famille (pure, testée).
 // t : fiche stock ; commande : sa commande (ou null) ; fid : famille qui vient de la jumeler.
+// Jumelée sans commande (la tablette de test de Tanguy dans sa « famille test ») : rien à faire, pas d'alerte.
+// Sa fiche garde la famille (fid) et sort d'elle-même du stock à vendre (stock.js) ; l'admin l'affiche
+// « Dans la famille … : pas à vendre » (Tanguy, 5/11). L'ancienne alerte, encore sur de vieilles fiches, est ignorée.
 const ALERTE_SANS_COMMANDE = 'jumelée sans commande';
 function suiteJumelage(t, commande, fid) {
   if (ETATS_BLOQUES.includes(t.etat)) return { refuser: true };
-  if (!t.commande || !commande) return { alerte: ALERTE_SANS_COMMANDE };
+  if (!t.commande || !commande) return {};
   if (!commande.fid) return { relier: true };
   if (commande.fid !== fid) return { alerte: 'jumelée à une autre famille que celle de sa commande' };
   return {};
@@ -2626,7 +2630,8 @@ function aFaire({ commandes, stock, depenses, automatique, maintenant, sims = []
   const idsAEnvoyer = new Set(actives.filter((c) => c.expedition === 'a-preparer' && !retour(c)).map((c) => c.id));
   const aEnvoyer = idsAEnvoyer.size;
   // Une tablette réservée à une commande pas encore envoyée compte pour cette commande.
-  const dispo = stock.filter((t) => ['en-stock', 'preparee'].includes(t.etat) && (!t.commande || idsAEnvoyer.has(t.commande))).length;
+  // Une tablette jumelée à une famille sans commande (tablette de test) n'est pas à vendre : elle ne compte pas.
+  const dispo = stock.filter((t) => ['en-stock', 'preparee'].includes(t.etat) && (t.commande ? idsAEnvoyer.has(t.commande) : !t.fid)).length;
   ajouter(aEnvoyer, 'tablette(s) à envoyer');
   ajouter(Math.max(0, aEnvoyer - dispo), 'tablette(s) manquante(s) en stock pour les envoyer');
   ajouter(actives.filter((c) => c.expedition === 'envoyee' && !c.fid && ms(c.envoyeeLe)
@@ -2637,7 +2642,7 @@ function aFaire({ commandes, stock, depenses, automatique, maintenant, sims = []
     liste.push(`Tablette ${t.ref || t.numero || ''} revenue : ${usureBatterie(t.batterie, debutTablette(t), maintenant)}, à retirer du parc`);
   }
   ajouter(stock.filter((t) => t.etat === 'en-retour' && t.remplaceePour).length, 'tablette(s) remplacée(s) à récupérer chez le client');
-  for (const t of stock.filter((x) => x.alerteJumelage && !(x.alerteJumelage === ALERTE_SANS_COMMANDE && x.commande))) liste.push(`Tablette ${t.ref || t.numero || ''} ${t.alerteJumelage}`);
+  for (const t of stock.filter((x) => x.alerteJumelage && x.alerteJumelage !== ALERTE_SANS_COMMANDE)) liste.push(`Tablette ${t.ref || t.numero || ''} ${t.alerteJumelage}`);
   ajouter(actives.filter((c) => c.remboursement && c.remboursement.statut === 'echec').length, 'remboursement(s) échoué(s), à faire depuis Stripe');
   const parId = new Map(commandes.map((c) => [c.id, c]));
   const lignes = new Map(sims.map((l) => [l.id, l]));
