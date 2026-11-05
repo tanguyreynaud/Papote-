@@ -241,6 +241,8 @@ test('SOS : décompte de 5 s, deux essais, puis « La famille est prévenue »',
     assert.deepStrictEqual(await b.page.evaluate(() => window.__sos.map((o) => o.sos)), [1, 2], 'deuxième essai');
     await b.page.evaluate(() => window.__sos[1].onState('missed'));
     assert.match(await b.texte('.call-out'), /La famille est prévenue/);
+    // Audit promesses (05/11) : rien ne garantit un rappel, on ne le promet pas à Mamie.
+    assert.doesNotMatch(await b.texte('.call-out'), /va vous rappeler/);
     await b.avancer(9000);
     assert.ok(!(await b.visible('.call-out')), 'retour à l\'accueil');
     await sansErreur(b);

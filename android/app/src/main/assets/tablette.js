@@ -2272,7 +2272,7 @@
             finished = true;
             startSos(2);
           } else if (state === 'missed') {
-            finish('La famille est prévenue', 'Quelqu’un va vous rappeler.', 8000);
+            finish('La famille est prévenue', 'Votre SOS lui a été envoyé.', 8000);
           } else if (state === 'busy') {
             finish('Occupé', 'Réessayez dans un moment.');
           } else if (state === 'failed') {
