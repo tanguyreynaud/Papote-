@@ -101,8 +101,34 @@ async function sauvegarder({ db, auth = null, projet = '', base = '', progressio
   return { version: VERSION, le: new Date().toISOString(), projet, base, documents, comptes };
 }
 
-// Réécrit chaque document tel qu'il était (set complet, 400 par lot). Les documents présents dans la base et absents
-// de la sauvegarde sont laissés tels quels, sauf avec effacer: true (remise exacte à l'état sauvegardé).
+// Lots d'écriture : 400 documents au plus, et 3,5 Mio au plus en tout. Firestore refuse une requête de plus de
+// 10 Mio (et l'émulateur reste bloqué au-delà de 4 Mio environ), or un document peut peser près de 1 Mio (photo
+// en taille réelle posts/{id}/media/image, morceaux de vidéo de 700 000 caractères) : 400 documents de ce genre ne
+// passent pas en un seul commit. La taille est estimée d'après le JSON du document (plus grande que la taille
+// réelle : le base64 des octets compte 4/3). Un document seul plus gros que la limite part seul dans son lot.
+const MAX_DOCS_LOT = 400;
+const MAX_OCTETS_LOT = 3.5 * 1024 * 1024;
+const tailleEstimee = (d) => Buffer.byteLength(d.chemin) + Buffer.byteLength(JSON.stringify(d.donnees || {})) + 64;
+function lotsDEcriture(documents, { maxDocs = MAX_DOCS_LOT, maxOctets = MAX_OCTETS_LOT } = {}) {
+  const lots = [];
+  let lot = [];
+  let octets = 0;
+  for (const d of documents) {
+    const taille = tailleEstimee(d);
+    if (lot.length && (lot.length >= maxDocs || octets + taille > maxOctets)) {
+      lots.push(lot);
+      lot = [];
+      octets = 0;
+    }
+    lot.push(d);
+    octets += taille;
+  }
+  if (lot.length) lots.push(lot);
+  return lots;
+}
+
+// Réécrit chaque document tel qu'il était (set complet, par lots : lotsDEcriture). Les documents présents dans la
+// base et absents de la sauvegarde sont laissés tels quels, sauf avec effacer: true (remise exacte à l'état sauvegardé).
 async function restaurer({ db, auth = null, sauvegarde, effacer = false, progression = () => {} }) {
   if (sauvegarde.version !== VERSION) throw new Error(`Version de sauvegarde inconnue : ${sauvegarde.version}`);
   if (effacer) {
@@ -122,11 +148,11 @@ async function restaurer({ db, auth = null, sauvegarde, effacer = false, progres
   let ecrits = 0;
   try {
     const documents = sauvegarde.documents.filter((d) => d.chemin !== 'interne/restauration');
-    for (let i = 0; i < documents.length; i += 400) {
+    for (const paquet of lotsDEcriture(documents)) {
       const lot = db.batch();
-      for (const d of documents.slice(i, i + 400)) lot.set(db.doc(d.chemin), decoder(d.donnees, db));
+      for (const d of paquet) lot.set(db.doc(d.chemin), decoder(d.donnees, db));
       await lot.commit();
-      ecrits += Math.min(400, documents.length - i);
+      ecrits += paquet.length;
       progression(ecrits);
     }
     // Les déclencheurs tournent encore quelques secondes après la dernière écriture.
@@ -230,4 +256,4 @@ function garderDernieres(dossier, n = 4) {
   return aEffacer;
 }
 
-module.exports = { encoder, decoder, toutLire, lireComptes, sauvegarder, restaurer, sauvegarderFichiers, verifierFichiers, restaurerFichiers, garderDernieres, VERSION };
+module.exports = { encoder, decoder, lotsDEcriture, MAX_OCTETS_LOT, toutLire, lireComptes, sauvegarder, restaurer, sauvegarderFichiers, verifierFichiers, restaurerFichiers, garderDernieres, VERSION };
