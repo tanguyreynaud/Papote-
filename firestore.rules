@@ -166,6 +166,15 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Jetons d'installation par QR (functions/installation-qr.js) : le jeton prouve la tablette, il ne se lit jamais
+    // depuis une appli, même admin (l'admin le reçoit de jetonInstallation). Clés App Check des tablettes : idem.
+    match /installations/{jeton} {
+      allow read, write: if false;
+    }
+    match /clesTablettes/{empreinte} {
+      allow read, write: if false;
+    }
+
     // Espace Validation de l'admin (web/js/validation.js) : les choix de l'administrateur, lui seul.
     match /validation/{doc} {
       allow read, write: if isAdmin();

@@ -626,7 +626,18 @@ const alerteJumelage = (t) => (t.alerteJumelage === 'jumelée sans commande' && 
 // Tablettes du stock qui peuvent partir : libres, ou déjà réservées à une commande pas encore envoyée.
 function tablettesPretes() {
   const aEnvoyer = new Set(donnees.commandes.filter((c) => etatCommande(c) === 'a-envoyer').map((c) => c.id));
-  return donnees.stock.filter((t) => DISPONIBLES.includes(t.etat) && (!t.commande || aEnvoyer.has(t.commande)));
+  // Tablette d'essai, ou hors critères pas encore gardée (installation par QR) : pas pour un client (functions/stock.js).
+  return donnees.stock.filter((t) => DISPONIBLES.includes(t.etat) && (!t.commande || aEnvoyer.has(t.commande))
+    && (t.commande || (t.essai !== true && !t.horsCriteres)));
+}
+
+// Installation par QR (functions/installation-qr.js) : ce que la tablette a signalé, bien visible.
+function badgesInstallation(t) {
+  return [
+    t.horsCriteres ? badge('hors critères', 'ko') : null,
+    t.simPin ? badge('SIM avec code PIN', 'ko') : null,
+    t.essai === true ? badge('tablette d\'essai', 'info') : null,
+  ].filter(Boolean);
 }
 
 // ---------- Accueil ----------
@@ -1499,7 +1510,8 @@ function parcoursCommande(c) {
 
 // Regroupements du filtre de la liste des tablettes (les chiffres du haut) : [libellé, états, condition].
 const GROUPES_STOCK = {
-  'g:disponibles': ['En stock, libres', DISPONIBLES, (t) => !t.commande],
+  // Tablette d'essai ou hors critères pas gardée (installation par QR) : pas comptée comme libre pour un client.
+  'g:disponibles': ['En stock, libres', DISPONIBLES, (t) => !t.commande && t.essai !== true && !t.horsCriteres],
   'g:reservees': ['Réservées pour un envoi', DISPONIBLES, (t) => !!t.commande],
   'g:chez': ['Chez les clients', ['envoyee', 'chez-client', 'en-retour']],
   'g:verifier': ['À vérifier ou réparer', ['revenue', 'a-reparer']],
@@ -1564,7 +1576,8 @@ function afficherStock() {
         cellules: [
           h('div', {}, t.ref ? h('strong', {}, `${t.ref} `) : null, t.numero || t.serieAndroid || h('span', { class: 'muted' }, 'à saisir'),
             alerteJumelage(t) ? h('div', {}, badge(alerteJumelage(t), 'ko')) : null,
-            t.usure ? h('div', {}, badge(t.usure, 'ko')) : null),
+            t.usure ? h('div', {}, badge(t.usure, 'ko')) : null,
+            ...badgesInstallation(t).map((b) => h('div', {}, b))),
           t.modele || '',
           badge(donnees.etats[t.affiche] || t.affiche, classeEtat(t.affiche)),
           celluleAchat(t),
@@ -2543,6 +2556,7 @@ function remplirTablette(id) {
         }),
       }),
       ...ligne('Accessoires', (t.accessoires || []).join(', ')),
+      ...ligne('Installation', ligneInstallation(t)),
       ...modif('Notes', t.notes, 'notes', { valeur: t.notes, long: true, vide: 'aucune' }));
   }
   afficherDocumentsTablette(t);
@@ -2562,6 +2576,29 @@ function remplirTablette(id) {
   if (!$('dt-historique').children.length) $('dt-historique').append(h('li', {}, 'Rien de noté pour l\'instant.'));
   $('dt-actions').replaceChildren(actions.menu);
   f.querySelector('.f-msg').hidden = true;
+}
+
+// Installée par QR : critères manquants (la tablette n'est pas refusée, l'administrateur décide), SIM avec code PIN,
+// tablette d'essai. « Garder quand même » la remet en vente ; sinon, la passer « Hors service » (menu ⋮).
+function ligneInstallation(t) {
+  const badges = badgesInstallation(t);
+  if (!badges.length && !(t.installation && t.installation.par === 'qr')) return null;
+  const detail = t.horsCriteres && (t.horsCriteres.detail || []).length ? h('div', { class: 'small' }, t.horsCriteres.detail.join(' · ')) : null;
+  const quand = t.installation && t.installation.le ? h('div', { class: 'small muted' },
+    `Installée par QR le ${new Date(t.installation.le).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}${t.android ? `, Android ${t.android}` : ''}${t.iccid ? `, ICCID ${t.iccid}` : ''}`) : null;
+  const garder = t.horsCriteres ? h('button', { type: 'button', class: 'secondary small-btn', onclick: async (e) => {
+    const b = e.currentTarget;
+    if (b.disabled) return;
+    b.disabled = true;
+    boutonCharge(b, true);
+    try {
+      await enregistrerTablette(() => appeler('gestionStock', { action: 'modifier', id: t.id, champs: { horsCriteres: null } }), 'Tablette gardée');
+    } finally {
+      b.disabled = false;
+      boutonCharge(b, false);
+    }
+  } }, 'Garder quand même') : null;
+  return h('div', {}, badges.length ? h('div', { class: 'alertes' }, ...badges) : null, detail, quand, garder);
 }
 
 // Où en est la tablette : les étapes de son parcours habituel, l'étape actuelle en couleur.
@@ -4459,6 +4496,107 @@ async function recevoirTablette(id) {
   signalerChangement();
 }
 $('btn-recevoir').addEventListener('click', recevoirTablette);
+
+// ---------- Installer une tablette par QR code (provisionnement Android, functions/installation-qr.js) ----------
+// Le serveur donne le contenu du QR (APK de la dernière version, jeton de 24 h) ; le wifi, tapé ici, est ajouté
+// dans le QR seulement : jamais envoyé au serveur, jamais enregistré (champs vidés à la fermeture).
+
+let qrCharge = null;
+function chargerQr() {
+  qrCharge = qrCharge || new Promise((ok, ko) => {
+    const script = document.createElement('script');
+    script.src = 'vendor/qrcode.js';
+    script.onload = ok;
+    script.onerror = () => { qrCharge = null; ko(new Error('Dessin du QR code indisponible : rechargez la page.')); };
+    document.head.append(script);
+  });
+  return qrCharge;
+}
+
+function installerRemettreAZero() {
+  const f = $('f-installer');
+  f.reset();
+  f.hidden = false;
+  f.querySelector('.f-msg').hidden = true;
+  $('installer-qr').hidden = true;
+  $('installer-qr-image').replaceChildren();
+  $('installer-qr-info').textContent = '';
+}
+$('btn-installer-qr').addEventListener('click', () => {
+  installerRemettreAZero();
+  $('d-installer').showModal();
+  $('f-installer').elements.wifi.focus();
+});
+// Fermée : plus rien du wifi ni du QR dans la page.
+$('d-installer').addEventListener('close', installerRemettreAZero);
+$('installer-autre').addEventListener('click', () => {
+  installerRemettreAZero();
+  $('f-installer').elements.wifi.focus();
+});
+
+let qrEnCours = false;
+$('f-installer').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const f = e.target;
+  // Double clic : un seul jeton.
+  if (qrEnCours) return;
+  qrEnCours = true;
+  const bouton = f.querySelector('button[type="submit"]');
+  bouton.disabled = true;
+  boutonCharge(bouton, true);
+  f.querySelector('.f-msg').hidden = true;
+  try {
+    const wifi = f.wifi.value.trim();
+    const motDePasse = f.motDePasse.value;
+    const [r] = await Promise.all([
+      appeler('jetonInstallation', { canal: f.canal.value === 'test' ? 'test' : 'stable', essai: f.essai.checked }),
+      chargerQr(),
+    ]);
+    if (!r || !r.provisionnement) throw new Error('Réponse du serveur incomplète : réessayez.');
+    const contenu = { ...r.provisionnement };
+    if (wifi) {
+      contenu['android.app.extra.PROVISIONING_WIFI_SSID'] = wifi;
+      if (motDePasse) {
+        contenu['android.app.extra.PROVISIONING_WIFI_PASSWORD'] = motDePasse;
+        contenu['android.app.extra.PROVISIONING_WIFI_SECURITY_TYPE'] = 'WPA';
+      } else contenu['android.app.extra.PROVISIONING_WIFI_SECURITY_TYPE'] = 'NONE';
+    }
+    // Octets UTF-8 (nom de wifi accentué) : la tablette lit le QR en UTF-8.
+    const avant = window.qrcode.stringToBytes;
+    window.qrcode.stringToBytes = window.qrcode.stringToBytesFuncs['UTF-8'] || avant;
+    // Correction « L » : plus gros carrés, plus facile à lire pour la caméra de la tablette (QR affiché sur un écran net).
+    const qr = window.qrcode(0, 'L');
+    try {
+      qr.addData(JSON.stringify(contenu), 'Byte');
+      qr.make();
+    } finally {
+      window.qrcode.stringToBytes = avant;
+    }
+    $('installer-qr-image').innerHTML = qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true });
+    const expire = new Date(r.expire).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
+    $('installer-qr-info').textContent = [
+      `Valable jusqu'au ${expire}, pour une seule tablette.`,
+      f.essai.checked ? 'Tablette d\'essai.' : null,
+      f.canal.value === 'test' ? 'Canal test.' : null,
+      wifi ? `Wifi « ${wifi} ».` : 'Sans wifi : par la 4G.',
+      r.versionName ? `Papote ${r.versionName}.` : null,
+    ].filter(Boolean).join(' ');
+    f.motDePasse.value = '';
+    f.hidden = true;
+    $('installer-qr').hidden = false;
+    annoncer('QR code prêt');
+  } catch (err) {
+    console.error(err);
+    const code = (err && err.code) || '';
+    message(f, code.endsWith('not-found') && /^not[- ]found$/i.test(err.message || '')
+      ? 'L\'installation par QR n\'est pas encore en ligne (fonction jetonInstallation à publier).'
+      : messageErreur(err));
+  } finally {
+    qrEnCours = false;
+    bouton.disabled = false;
+    boutonCharge(bouton, false);
+  }
+});
 
 // ---------- Réception d'accessoires (routeurs 4G…), pas à pas ----------
 
