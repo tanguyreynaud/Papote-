@@ -254,7 +254,7 @@ test('main propre notée par Papote, puis la famille passe quand même par Mondi
   assert.strictEqual(s.sendcloud.colis.size, 1);
 });
 
-test('tâche des restitutions relancée le même jour : un seul rappel, 140 € prélevés une fois, un seul avis ; « Matériel reçu » ensuite refusé, rien remboursé', async () => {
+test('tâche des restitutions relancée le même jour : un seul rappel, 140 € prélevés une fois, un seul avis ; « Matériel reçu » ensuite : rendue, 140 € remboursés d\'office', async () => {
   const paul = await s.compte('Paul', 'paul@exemple.fr');
   const { id } = await finDeContrat(paul);
   s.boite.length = 0;
@@ -279,10 +279,47 @@ test('tâche des restitutions relancée le même jour : un seul rappel, 140 € 
   assert.deepStrictEqual(preleveMateriel().map((p) => p.amount), [14000], '140 € une seule fois');
   assert.deepStrictEqual(mailsA(paul.email), [RAPPEL, AVIS]);
 
-  // La tablette arrive enfin chez Papote : déjà prélevée, rien d'automatique (pas de remboursement hors des cas prévus).
-  await assert.rejects(s.appeler('tabletteRendue', { commande: id, manquants: [] }, a.TANGUY), /déjà été prélevé/);
+  // La tablette arrive enfin chez Papote : « Matériel reçu » la note rendue et rembourse les 140 € d'office.
+  assert.deepStrictEqual(await s.appeler('tabletteRendue', { commande: id, manquants: [] }, a.TANGUY), { ok: true, montant: 0, erreur: null });
   await s.calme();
-  assert.strictEqual((await commande(id)).restitution.statut, 'facturee');
+  const rendue = (await commande(id)).restitution;
+  assert.strictEqual(rendue.statut, 'rendue');
+  assert.strictEqual(rendue.rembourse.montant, 14000);
+  assert.deepStrictEqual(s.stripe.etat.remboursements.map((r) => [r.payment_intent, r.amount]), [[c.restitution.paiement, 14000]]);
+  // Double appui : refusé (déjà rendue), rien remboursé deux fois.
+  await assert.rejects(s.appeler('tabletteRendue', { commande: id, manquants: [] }, a.TANGUY), /déjà noté rendu/);
+  assert.strictEqual(s.stripe.etat.remboursements.length, 1);
+});
+
+test('colis de retour déposé avant la limite, encore en route à la limite : rien prélevé ; à l\'arrivée, « Matériel reçu »', async () => {
+  const paul = await s.compte('Paul', 'paul@exemple.fr');
+  const { id, fid } = await finDeContrat(paul);
+  s.avancer(27);
+  await s.appeler('renvoyerTablette', { fid }, paul);
+  await s.calme();
+  const colis = [...s.sendcloud.colis.values()][0];
+  colis.statut = 3; // scanné au point relais : « En route »
+  s.avancer(4);
+  await s.tache('restitutions');
+  await s.tache('restitutions');
+  await s.calme();
+  let c = await commande(id);
+  assert.strictEqual(c.restitution.statut, 'attendue', 'toujours attendue');
+  assert.ok(c.restitution.enRouteLe, 'noté en route');
+  assert.deepStrictEqual(preleveMateriel(), [], 'pas de 140 € pour une tablette en route');
+  assert.ok(!mailsA(paul.email).some((m) => /prélevé/.test(m)), 'pas d\'avis de prélèvement');
+  // Suivi Sendcloud en panne la nuit suivante : rien prélevé non plus, on réessaie le lendemain.
+  s.sendcloud.panne = true;
+  s.avancer(1);
+  await s.tache('restitutions');
+  await s.calme();
+  s.sendcloud.panne = false;
+  assert.deepStrictEqual(preleveMateriel(), [], 'suivi illisible : rien prélevé');
+  s.avancer(2);
+  assert.deepStrictEqual(await s.appeler('tabletteRendue', { commande: id, manquants: [] }, a.TANGUY), { ok: true, montant: 0, erreur: null });
+  await s.calme();
+  c = await commande(id);
+  assert.strictEqual(c.restitution.statut, 'rendue');
   assert.strictEqual(s.stripe.etat.remboursements.length, 0);
 });
 

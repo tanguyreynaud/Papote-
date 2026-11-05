@@ -51,7 +51,7 @@ test('matériel rendu : seulement un retour attendu', () => {
   refuse(s.refusRetourMateriel({ expedition: 'envoyee', fid: 'f' }), /Aucun retour/);
   refuse(s.refusRetourMateriel({ expedition: 'a-preparer' }), /Aucun retour/);
   refuse(s.refusRetourMateriel({ restitution: { statut: 'rendue' } }), /déjà noté rendu/);
-  refuse(s.refusRetourMateriel({ restitution: { statut: 'facturee' } }), /déjà été prélevé/);
+  permis(s.refusRetourMateriel({ restitution: { statut: 'facturee' } }));
 });
 
 test('tablette reliée à une commande : ni inutilisable, ni commande annulée', () => {

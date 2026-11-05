@@ -1689,6 +1689,35 @@ async function restitutions() {
       logger.warn(`Commande ${snap.id} : retour attendu mais tablette jamais envoyée, rien prélevé.`);
       continue;
     }
+    // Colis de retour déjà déposé au point relais (QR scanné) : la tablette est en route, rien n'est prélevé ;
+    // « Matériel reçu » clôt le retour à son arrivée. Suivi illisible : on réessaie la nuit suivante.
+    const colis = snap.get('etiquettes.retour.colis');
+    if (colis) {
+      let statut;
+      try {
+        ({ statut } = await sendcloud.client(SENDCLOUD_API.value()).suivi(colis));
+      } catch (e) {
+        logger.warn(`Commande ${snap.id} : suivi du colis de retour illisible, prélèvement remis à demain`, e.message);
+        continue;
+      }
+      if (!sendcloud.nonDepose(statut)) {
+        if (!r.enRouteLe) await snap.ref.update({ 'restitution.enRouteLe': FieldValue.serverTimestamp() });
+        logger.info(`Commande ${snap.id} : délai dépassé mais colis de retour déposé, rien prélevé.`);
+        continue;
+      }
+    }
+    // Une seule tentative de prélèvement par retour (Stripe oublie une clé d'idempotence au bout de 24 h) : la
+    // tentative est notée avant l'appel ; une tentative restée sans suite (arrêt en plein milieu) va à Tanguy.
+    const tentative = await db.runTransaction(async (tx) => {
+      const c = (await tx.get(snap.ref)).get('restitution') || {};
+      if (c.statut !== 'attendue' || c.prelevementTenteLe) return false;
+      tx.update(snap.ref, { 'restitution.prelevementTenteLe': FieldValue.serverTimestamp() });
+      return true;
+    });
+    if (!tentative) {
+      if (snap.get('restitution.prelevementTenteLe')) logger.error(`Commande ${snap.id} : prélèvement du matériel déjà tenté sans résultat noté, à vérifier dans Stripe.`);
+      continue;
+    }
     try {
       const paiement = await preleverMateriel(snap.id, regles.penaliteRestitution(snap.data()),
         'Papote : matériel non rendu', `restitution-${snap.id}`);
@@ -1768,6 +1797,17 @@ exports.tabletteRendue = onCall({ secrets: [STRIPE_SECRET] }, async (request) =>
   const liste = [...new Set(manquants || [])].filter((m) => regles.materielPrete(snap.data()).includes(m));
   const montant = regles.montantManquants(snap.data(), liste);
   const restitution = { statut: 'rendue', majLe: FieldValue.serverTimestamp() };
+  // Tablette arrivée après le prélèvement des 140 € (colis en route à la date limite) : remboursés d'office.
+  const avant = snap.get('restitution') || {};
+  if (avant.statut === 'facturee' && avant.paiement) {
+    try {
+      const r = await stripe().refunds.create({ payment_intent: avant.paiement, reason: 'requested_by_customer', metadata: { commande: snap.id } },
+        { idempotencyKey: `restitution-rendue-${snap.id}` });
+      restitution.rembourse = { montant: r.amount, le: FieldValue.serverTimestamp(), paiement: avant.paiement };
+    } catch (e) {
+      throw new HttpsError('unavailable', `Remboursement du matériel prélevé refusé par Stripe (${e.message}) : réessayez, ou remboursez depuis Stripe.`);
+    }
+  }
   if (montant > 0) {
     restitution.manquants = liste;
     try {

@@ -74,7 +74,8 @@ function refusRetourMateriel(c) {
   const r = restitutionDe(c);
   if (RESTITUTION_EN_COURS.includes(r)) return '';
   if (r === 'rendue') return 'Le matériel de cette commande est déjà noté rendu.';
-  if (r === 'facturee') return 'Le matériel non rendu a déjà été prélevé : remboursez depuis Stripe si besoin.';
+  // Matériel prélevé puis arrivé quand même (colis en route à la date limite) : reçu, et remboursé d'office.
+  if (r === 'facturee') return '';
   return "Aucun retour de matériel n'est attendu pour cette commande.";
 }
 
