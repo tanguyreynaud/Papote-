@@ -791,26 +791,47 @@
   // Renvoie false quand la tablette ne sait pas regarder (pas de caméra côté page).
 
   var SEEN_CLOSE_MS = 120000;
+  // Personne devant la tablette : la caméra regarde 3 minutes à l'arrivée de l'envoi, puis 1 minute toutes les
+  // 5 minutes
+  // (avant : allumée, avec la détection du visage 2 fois par seconde, tant que l'envoi n'était pas vu,
+  // toute la journée si Mamie était sortie ; audit endurance du 05/11). Un toucher la relance aussitôt.
+  var CAMERA_D_ABORD_MS = 3 * 60000;
+  var CAMERA_REGARDE_MS = 60000;
+  var CAMERA_REPOS_MS = 4 * 60000;
   var watchers = {};
 
   function watchSeen(slot, onSeen, close) {
     unwatchSeen(slot);
     if (typeof window.papoteWatchPresence !== 'function') { console.warn('Caméra : pas de détection de visage'); return false; }
-    var w = { stop: null, timer: null };
+    var w = { stop: null, timer: null, cycle: null };
     watchers[slot] = w;
+    var vu = function () {
+      if (watchers[slot] !== w || w.timer) return;
+      clearTimeout(w.cycle);
+      console.warn('Visage vu (' + slot + ')');
+      // Elle est là : le carillon d'arrivée s'arrête.
+      try { if (android() && android().carillonStop) android().carillonStop(); } catch (e) { }
+      try { onSeen(); } catch (e) { console.warn('Visage vu : ' + e); }
+      w.timer = setTimeout(function () {
+        if (watchers[slot] !== w) return;
+        unwatchSeen(slot);
+        close();
+      }, SEEN_CLOSE_MS);
+    };
+    w.regarder = function (duree) {
+      if (watchers[slot] !== w || w.timer || w.stop) return;
+      clearTimeout(w.cycle);
+      w.stop = window.papoteWatchPresence(vu);
+      w.cycle = setTimeout(w.reposer, duree || CAMERA_REGARDE_MS);
+    };
+    w.reposer = function () {
+      if (watchers[slot] !== w || w.timer) return;
+      try { if (typeof w.stop === 'function') w.stop(); } catch (e) { }
+      w.stop = null;
+      w.cycle = setTimeout(w.regarder, CAMERA_REPOS_MS);
+    };
     try {
-      w.stop = window.papoteWatchPresence(function () {
-        if (watchers[slot] !== w || w.timer) return;
-        console.warn('Visage vu (' + slot + ')');
-        // Elle est là : le carillon d'arrivée s'arrête.
-        try { if (android() && android().carillonStop) android().carillonStop(); } catch (e) { }
-        try { onSeen(); } catch (e) { console.warn('Visage vu : ' + e); }
-        w.timer = setTimeout(function () {
-          if (watchers[slot] !== w) return;
-          unwatchSeen(slot);
-          close();
-        }, SEEN_CLOSE_MS);
-      });
+      w.regarder(CAMERA_D_ABORD_MS);
     } catch (e) {
       delete watchers[slot];
       return false;
@@ -823,8 +844,14 @@
     if (!w) return;
     delete watchers[slot];
     clearTimeout(w.timer);
+    clearTimeout(w.cycle);
     try { if (typeof w.stop === 'function') w.stop(); } catch (e) { }
   }
+
+  // Un toucher : quelqu'un est là, la caméra au repos se remet à regarder tout de suite.
+  document.addEventListener('pointerdown', function () {
+    for (var k in watchers) if (watchers[k] && watchers[k].regarder) watchers[k].regarder(CAMERA_REGARDE_MS);
+  }, true);
 
   // Un appel arrive : la photo ou le message affiché s'efface, sans être compté comme vu ;
   // il revient en tête de file à la fin de l'appel, avec ceux qui attendaient.
