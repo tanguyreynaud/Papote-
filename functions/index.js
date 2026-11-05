@@ -72,6 +72,8 @@ const SITE_VITRINE = defineString('SITE_VITRINE', { default: 'https://mapapote.f
 const COMMANDES_OUVERTES = defineString('COMMANDES_OUVERTES', { default: 'non' });
 const commandesOuvertes = () => COMMANDES_OUVERTES.value() === 'oui' || STRIPE_SECRET.value().startsWith('sk_test_');
 const APPLI_FAMILLE = 'https://app.mapapote.fr/';
+// Famille préparée dès la commande (famille-preparee.js) : créée au paiement, la tablette y entre seule.
+const famillePreparee = require('./famille-preparee').brancher({ db, logger });
 // E-mails : MAIL_SMTP (« hote:port:utilisateur ») et MAIL_EXPEDITEUR dans .env, mot de passe en secret.
 const MAIL_SMTP = defineString('MAIL_SMTP', { default: 'smtp.gmail.com:465:' });
 const MAIL_EXPEDITEUR = defineString('MAIL_EXPEDITEUR', { default: '' });
@@ -544,34 +546,6 @@ async function attendreRestitution(abo) {
       restitution: { statut: 'attendue', avant: versTimestamp(regles.limiteRestitution(fin, { deces })) },
     }, { merge: true });
   });
-}
-
-// Familles dont ce compte est responsable et qui n'ont pas d'abonnement en cours.
-async function famillesSansAbonnement(uid) {
-  const membres = await db.collectionGroup('members').where('uid', '==', uid).get();
-  const fids = [...new Set(membres.docs.map((m) => m.ref.parent.parent.id))];
-  const libres = [];
-  for (const fid of fids) {
-    const snap = await db.doc(`families/${fid}`).get();
-    if (!snap.exists) continue;
-    const fam = snap.data();
-    const responsable = fam.createdBy === uid || (fam.admins || []).includes(uid);
-    const statut = fam.abonnement && fam.abonnement.statut;
-    if (responsable && ['aucun', 'resilie', 'suspendu'].includes(statut)) libres.push(fid);
-  }
-  return libres;
-}
-
-// Commande faite sur le site : retrouve la famille du client par son e-mail, s'il n'y en a qu'une.
-async function chercherFamille(email) {
-  try {
-    const user = await admin.auth().getUserByEmail(email);
-    const libres = await famillesSansAbonnement(user.uid);
-    return libres.length === 1 ? libres[0] : null;
-  } catch (e) {
-    if (e.code === 'auth/user-not-found') return null;
-    throw e;
-  }
 }
 
 // ---------- Site vitrine ----------
@@ -1267,7 +1241,8 @@ async function paiementTermine(session) {
     return;
   }
   if (existante.exists && existante.get('expedition') === 'paiement-en-attente' && meta.dejaInstallee !== '1') await ref.update({ expedition: 'a-preparer' });
-  const fid = meta.fid || (existante.exists && existante.get('fid')) || await chercherFamille(email);
+  // Commande du site : sa famille est préparée tout de suite (plus de recherche par l'e-mail du client, A14-1).
+  const fid = meta.fid || (existante.exists && existante.get('fid')) || await famillePreparee.creer(ref, meta);
   if (fid) await appliquer(fid, session.subscription);
   if (fid && meta.dejaInstallee === '1') await relierTabletteInstallee(fid, session.subscription, { reprise: meta.reprise === '1' });
   await confirmerCommande(ref, email, code);
@@ -1436,6 +1411,11 @@ async function confirmerCommande(ref, email, code) {
   await compterEtape('paye').catch((e) => logger.warn('Statistiques', e.message));
   const infos = { nom: premier.nom, code, relais: premier.livraison, proche: premier.proche || null, formule: premier.formule, delai: premier.delai,
     dejaInstallee: !!(premier.preparation && premier.preparation.recuPar === 'déjà installée'), reprise: premier.reprise === true };
+  // Famille préparée : le lien de l'e-mail ouvre l'appli avec le code famille (l'invitation à son e-mail suffit d'habitude).
+  if (premier.famillePreparee && premier.fid) {
+    const fam = (await db.doc(`families/${premier.fid}`).get()).data();
+    if (fam && fam.code) infos.famille = `${APPLI_FAMILLE}?code=${regles.afficherCode(fam.code)}`;
+  }
   const envois = [envoyerMail(EMAIL_PAPOTE, mail.nouvelleCommande({ ...infos, email, telephone: premier.telephone, commande: ref.id }))];
   if (email) envois.push(envoyerMail(email, mail.commandeConfirmee(infos)));
   const resultats = await Promise.allSettled(envois);
@@ -1921,6 +1901,11 @@ exports.nouveauMembre = onDocumentCreated(
     const membre = event.data.data();
     const { fid, uid } = event.params;
     if (await base.restaurationEnCours()) return; // membres remis par une restauration : aucun e-mail « a rejoint »
+    // Famille préparée à la commande, encore sans responsable : ce premier proche le devient (famille-preparee.js).
+    if (membre.role === 'famille' && await famillePreparee.proprietaire(fid, uid)) {
+      logger.info(`Famille préparée ${fid} : ${uid} en devient responsable.`);
+      return;
+    }
     if (membre.status === 'pending') {
       await prevenirDemande(fid, uid, membre);
       return;
@@ -2026,6 +2011,10 @@ exports.tabletteEnvoyee = onCall(async (request) => {
   const fiches = await db.collection('stock').where('commande', '==', commande).get();
   const refusSim = statuts.refusEnvoiSansSim(snap.data(), fiches.docs.map((d) => d.data()));
   if (refusSim) throw new HttpsError('failed-precondition', refusSim);
+  // Numéro T-… lu sur la tablette mise dans le carton (A14-4) : deux colis préparés en même temps ne
+  // s'échangent pas (la tablette entre seule dans la famille de SA commande).
+  const refusTablette = statuts.refusAutreTablette((request.data || {}).tablette, fiches.docs.map((d) => d.data()));
+  if (refusTablette) throw new HttpsError('failed-precondition', refusTablette);
   if (mainPropre === true) {
     const maintenant = Date.now();
     await ref.update({
@@ -2084,7 +2073,7 @@ async function mailEnvoi(event, avant, apres) {
   if (apres.remise === 'main-propre') {
     if (avant.remise === 'main-propre' || apres.mailEnvoiLe) return;
     try {
-      await envoyerMail(apres.email, mail.tabletteRemise({ nom: apres.nom, code: apres.code ? regles.afficherCode(apres.code) : null }));
+      await envoyerMail(apres.email, mail.tabletteRemise({ nom: apres.nom, code: apres.code ? regles.afficherCode(apres.code) : null, preparee: apres.famillePreparee === true }));
       await event.data.after.ref.update({ mailEnvoiLe: FieldValue.serverTimestamp(), mailErreur: FieldValue.delete() });
     } catch (e) {
       logger.error(`Commande ${event.params.id} : e-mail de remise non parti`, e.message);
@@ -2098,7 +2087,7 @@ async function mailEnvoi(event, avant, apres) {
   const code = apres.code ? regles.afficherCode(apres.code) : null;
   try {
     await envoyerMail(apres.email, mail.colisParti({
-      nom: apres.nom, suivi: apres.suivi, relais, code,
+      nom: apres.nom, suivi: apres.suivi, relais, code, preparee: apres.famillePreparee === true,
       lien: livraison.lienSuivi(apres.suivi, relais && relais.cp),
     }));
     await event.data.after.ref.update({ mailEnvoiLe: FieldValue.serverTimestamp(), mailErreur: FieldValue.delete() });
@@ -2200,10 +2189,11 @@ async function suiviRetour(event, rAvant, r, c) {
 // puis signalement à l'administrateur (alerteJumelage) à J+20.
 async function rappelsJumelage() {
   const maintenant = Date.now();
-  const envoyees = await db.collection('commandes')
-    .where('expedition', '==', 'envoyee').where('fid', '==', null).get();
+  const envoyees = await db.collection('commandes').where('expedition', '==', 'envoyee').get();
   for (const snap of envoyees.docs) {
     const c = snap.data();
+    // Famille préparée : en attente tant que la tablette n'y est pas entrée (tabletteRelieeLe, famille-preparee.js).
+    if (require('./famille-preparee').regles.tabletteDansLaFamille(c)) continue;
     const depart = c.envoyeeLe && c.envoyeeLe.toMillis();
     if (livraison.alerteDue(depart, maintenant) && !c.alerteJumelage) {
       await snap.ref.update({ alerteJumelage: true });
@@ -2216,7 +2206,7 @@ async function rappelsJumelage() {
     if (!numero || !c.email) continue;
     try {
       await envoyerMail(c.email, mail.rappelJumelage({
-        nom: c.nom, numero, code: c.code ? regles.afficherCode(c.code) : null,
+        nom: c.nom, numero, code: c.code ? regles.afficherCode(c.code) : null, preparee: c.famillePreparee === true,
       }));
       await snap.ref.update({ rappels: numero, dernierRappelLe: FieldValue.serverTimestamp() });
     } catch (e) {
@@ -2280,11 +2270,29 @@ const installation = require('./installation').brancher({
   },
   prevenirPapote: (titre, detail) => prevenirPapote(titre, null, detail),
   notifier: (fid, uids, data) => push.envoyer(db, fid, uids, data, 24 * 3600),
+  familleDuScan: famillePreparee.familleDuScan,
 });
 exports.reserverTablette = onCall({ maxInstances: 2 }, installation.reserverTablette);
 exports.nommerFamille = onCall({ secrets: [MAIL_MOT_DE_PASSE], maxInstances: 2 }, installation.nommerFamille);
 exports.finirInstallation = onCall({ secrets: [MAIL_MOT_DE_PASSE], maxInstances: 2 }, installation.finirInstallation);
 exports.annulerInstallation = onCall({ timeoutSeconds: 300, memory: '512MiB', maxInstances: 2 }, installation.annulerInstallation);
+
+// Famille préparée dès la commande (famille-preparee.js) : la tablette affiche son code, le serveur la fait
+// entrer dans la famille de sa commande sans que personne ne scanne. gestionJumelage met ensuite sa fiche à jour.
+exports.jumelageAutomatique = onDocumentCreated(
+  { document: 'pairings/{code}', database: BASE_FIRESTORE, region: REGION_FIRESTORE },
+  async (event) => {
+    await famillePreparee.jumeler(event.data.ref, event.data.data());
+  });
+
+// « Comment appelez-vous la personne ? » dans l'appli, la première fois qu'un responsable ouvre une famille préparée.
+exports.nommerFamillePreparee = onCall({ maxInstances: 2 }, async (request) => {
+  const { uid } = compteVerifie(request);
+  const { fid, nom } = request.data || {};
+  if (typeof fid !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(fid)) throw new HttpsError('invalid-argument', 'Famille manquante.');
+  if (!(await membreActif(fid, uid))) throw new HttpsError('permission-denied', 'Réservé aux membres de la famille.');
+  return famillePreparee.nommer(fid, uid, nom);
+});
 
 // « N téléphones reçoivent les appels » dans l'appli (D1, Tanguy 2026-10-27) : les jetons sont privés
 // (members/{uid}/private/push), l'appli ne peut pas les lire pour les autres ; le serveur pose

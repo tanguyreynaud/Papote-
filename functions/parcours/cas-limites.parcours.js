@@ -194,11 +194,15 @@ test('client qui recommande et annule depuis l\'appli avant l\'envoi : rembours�
   await s.calme();
   const t = await a.tablettePreparee();
   const { abonnement: id } = await a.commanderEtPayer({ email: paul.email });
-  assert.strictEqual((await commande(id)).fid, fam.id, 'commande reliée à sa famille par son e-mail');
-  assert.strictEqual((await s.lire(`families/${fam.id}`)).abonnement.statut, 'actif');
+  // A14-1 : plus jamais reliée à l'ancienne famille par l'e-mail ; une famille neuve est préparée.
+  const fid = (await commande(id)).fid;
+  assert.ok(fid && fid !== fam.id, 'nouvelle famille préparée, pas l\'ancienne');
+  assert.strictEqual((await s.lire(`families/${fam.id}`)).abonnement.statut, 'resilie', 'l\'ancienne famille ne change pas');
+  assert.strictEqual((await s.lire(`families/${fid}`)).abonnement.statut, 'actif');
+  await a.entrerParInvitation(paul, fid);
   await s.appeler('gestionStock', { action: 'modifier', id: t.fiche, champs: { commande: id } }, a.TANGUY);
 
-  const r = await s.appeler('retracter', { fid: fam.id }, paul);
+  const r = await s.appeler('retracter', { fid }, paul);
   assert.deepStrictEqual(r, { ok: true, remboursement: 'fait', montant: 6000 });
   await s.calme();
   assert.strictEqual(s.stripe.rembourse(id), 6000);
@@ -305,6 +309,7 @@ test('« Annuler l\'installation » refusée quand la commande payée est déjà
   const paul = await s.compte('Paul', 'paul@exemple.fr');
   const t = await a.tablettePreparee();
   const { abonnement: id } = await a.commanderEtPayer({ email: paul.email });
+  await a.commandeDAvant(id);
   await a.preparerEtEnvoyer(id, t);
   await a.afficherCode(t);
   await s.appeler('reserverTablette', { code: t.code, prenom: 'Paul' }, paul);
@@ -318,6 +323,7 @@ test('commande reliée à la main avec son code XXXX-XXXX (tablette pas reconnue
   const paul = await s.compte('Paul', 'paul@exemple.fr');
   const julie = await s.compte('Julie', 'julie@exemple.fr');
   const { abonnement: id } = await a.commanderEtPayer({ email: paul.email });
+  await a.commandeDAvant(id);
   // Tablette qui n'est pas dans le stock (n° de série inconnu) : rien ne relie la commande tout seul.
   const t = { serie: 'INCONNUE', tabletUid: 'tablette-inconnue', callsUid: 'appels-inconnue' };
   await a.afficherCode(t);
