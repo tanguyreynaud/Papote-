@@ -548,10 +548,10 @@ function resiliationEnregistree({ nom, famille, le, tablettePretee, parPapote, d
     return message('Nous pensons bien à vous', [
       bonjour(nom),
       `Nous avons appris avec beaucoup de tristesse le décès${famille ? ` de <b>${echapper(famille)}</b>` : ' de votre proche'}. Toute l'équipe de Papote vous adresse ses sincères condoléances, à vous et à toute la famille.`,
-      `Vous n'avez rien d'autre à faire : l'abonnement s'arrête le <b>${dateEnClair(le)}</b>, sans démarche ni justificatif. Le mois en cours est le dernier prélevé, puis plus rien.`,
-      { encadre: 'Les photos, les vidéos et les messages de la famille restent dans l\'appli Papote pendant trois mois après l\'arrêt. Pour les garder : onglet Photos, « Tout télécharger ».' },
+      `Vous n'avez rien d'autre à faire : l'abonnement s'arrête le <b>${dateEnClair(le)}</b>, sans démarche ni justificatif. Le mois en cours est le dernier mois d'abonnement prélevé.`,
+      { encadre: 'Les photos, les vidéos et les messages de la famille restent dans l\'appli Papote pendant trois mois après l\'arrêt. Pour tout garder : onglet Photos, « Tout télécharger ».' },
       tablettePretee
-        ? `La tablette prêtée est à nous renvoyer sans frais, mais rien ne presse : nous vous enverrons le mode d'emploi le ${dateEnClair(le)}. ${RETOUR_DECES}`
+        ? `La tablette prêtée est à nous renvoyer sans frais, mais rien ne presse : vous aurez deux mois après l'arrêt, et nous vous enverrons le mode d'emploi le ${dateEnClair(le)}. ${RETOUR_DECES}`
         : null,
       'Nous n\'enverrons plus aucune nouvelle de Papote à cette adresse.',
     ].filter(Boolean), { texte: 'Ouvrir l\'appli Papote', lien: APPLI });
@@ -639,10 +639,10 @@ function avantEffacement({ nom, famille, le, deces }) {
   return message(deces ? 'Les photos de la famille, à garder' : 'Vos photos Papote seront effacées le ' + dateEnClair(le), [
     bonjour(nom),
     `Comme prévu après l'arrêt de Papote, les photos, les vidéos et les messages de la famille${famille ? ` de <b>${echapper(famille)}</b>` : ''} seront effacés de nos serveurs le <b>${dateEnClair(le)}</b>.`,
-    'Pour garder les photos sur votre téléphone ou votre ordinateur :',
+    'Pour les garder sur votre téléphone ou votre ordinateur :',
     { etapes: [
       'Ouvrez l\'appli Papote et touchez Photos.',
-      'Touchez « Tout télécharger » : un fichier avec toutes les photos s\'enregistre.',
+      'Touchez « Tout télécharger » : un fichier avec les photos, les vidéos et les messages s\'enregistre.',
     ] },
     deces ? 'Si vous avez besoin de plus de temps, répondez simplement à cet e-mail : nous attendrons.'
       : 'Besoin de plus de temps ? Répondez à cet e-mail.',

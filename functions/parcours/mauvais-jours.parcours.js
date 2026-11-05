@@ -48,8 +48,18 @@ test('décès : arrêt avec le motif « décès », e-mails de deuil sans « Mer
   assert.doesNotMatch(retour.texte, /Merci de nous avoir fait confiance/);
   assert.match(retour.texte, /Rien ne presse/);
   assert.doesNotMatch(retour.texte, /seront prélevés/, 'pas de menace de prélèvement, seulement la règle en petit');
+  // Après un décès : 60 jours pour rendre la tablette, pas 30 (Tanguy, 5/11).
+  const { restitution } = await commande(id);
+  const jours = (restitution.avant.toMillis() - Date.now()) / s.JOUR;
+  assert.ok(jours > 50 && jours <= 61, `60 jours pour la rendre, pas 30 (reste ${jours.toFixed(1)} jours)`);
 
+  // À J+24 (le rappel d'un arrêt ordinaire), rien : la date est encore loin.
+  const avantRappel = mailsComplets(paul.email).length;
   s.avancer(24);
+  await s.tache('restitutions');
+  assert.strictEqual(mailsComplets(paul.email).length, avantRappel, 'pas de rappel à J+24');
+  assert.strictEqual((await commande(id)).restitution.statut, 'attendue');
+  s.avancer(30);
   await s.tache('restitutions');
   const rappel = mailsComplets(paul.email).at(-1);
   assert.strictEqual(rappel.sujet, 'La tablette Papote, un petit rappel');

@@ -111,6 +111,9 @@ test('décès : e-mails de deuil, sans « Merci de nous avoir fait confiance »,
   assert.strictEqual(arret.subject, 'Nous pensons bien à vous');
   assert.match(arret.text, /condoléances/);
   assert.match(arret.text, /Tout télécharger/);
+  assert.match(arret.text, /deux mois après l'arrêt/, 'après un décès : 60 jours pour rendre la tablette');
+  const avis = mail.avantEffacement({ nom: 'Paul', famille: 'Mamie Jeanne', le, deces: true });
+  assert.match(avis.text, /les photos, les vidéos et les messages s'enregistre/);
   assert.doesNotMatch(arret.text, /Garder mon abonnement|Merci de nous avoir/);
   const retour = mail.retourTablette({ nom: 'Paul', avant: le, retractation: null, montant: 14000, deces: true });
   assert.doesNotMatch(retour.text, /Merci de nous avoir fait confiance|seront prélevés/);

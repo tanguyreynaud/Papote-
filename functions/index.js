@@ -493,7 +493,7 @@ async function appliquerOfferte(fid, commande) {
   }
 }
 
-// Fin d'un abonnement avec tablette incluse : la tablette est attendue sous 30 jours.
+// Fin d'un abonnement avec tablette incluse : la tablette est attendue sous 30 jours (60 après un décès).
 async function attendreRestitution(abo) {
   if (abo.status !== 'canceled' || abo.metadata.tablette !== 'incluse') return;
   const ref = db.doc(`commandes/${abo.id}`);
@@ -502,8 +502,10 @@ async function attendreRestitution(abo) {
     // Rien à rendre si la tablette n'est jamais partie.
     if (snap.exists && (snap.get('restitution') || ['a-preparer', 'paiement-en-attente', 'annulee'].includes(snap.get('expedition')))) return;
     const fin = (abo.ended_at || abo.canceled_at || Math.floor(Date.now() / 1000)) * 1000;
+    // Après un décès : 60 jours au lieu de 30 (Tanguy, 5/11).
+    const deces = snap.get('motif') === 'deces' || (abo.metadata || {}).motif === 'deces';
     tx.set(ref, {
-      restitution: { statut: 'attendue', avant: versTimestamp(regles.limiteRestitution(fin)) },
+      restitution: { statut: 'attendue', avant: versTimestamp(regles.limiteRestitution(fin, { deces })) },
     }, { merge: true });
   });
 }
@@ -983,7 +985,7 @@ exports.renvoyerTablette = onCall({ secrets: [SENDCLOUD_API, MAIL_MOT_DE_PASSE],
   // qu'à l'arrêt. mailLe : pas de mode d'emploi en plus, l'e-mail du QR code suffit.
   if (!r && retourAnticipePossible(c, (await db.doc(`families/${c.fid}`).get()).get('abonnement'))) {
     const fin = (await db.doc(`families/${c.fid}`).get()).get('abonnement.resiliationLe').toMillis();
-    r = { statut: 'attendue', avant: versTimestamp(regles.limiteRestitution(fin)), anticipe: true, mailLe: Timestamp.now() };
+    r = { statut: 'attendue', avant: versTimestamp(regles.limiteRestitution(fin, { deces: c.motif === 'deces' })), anticipe: true, mailLe: Timestamp.now() };
     await ref.update({ restitution: r });
   }
   if (!r || !['attendue', 'echec'].includes(r.statut)) throw new HttpsError('failed-precondition', "Il n'y a pas de tablette à nous renvoyer.");
