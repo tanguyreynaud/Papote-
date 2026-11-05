@@ -4102,29 +4102,6 @@ SETTINGS['volume-card'] = {
   },
 };
 
-// Taille du texte sur la tablette.
-const TEXT_SIZES = ['normal', 'grande', 'tres-grande'];
-const TEXT_SIZE_LABELS = { normal: 'Normale', grande: 'Grande', 'tres-grande': 'Très grande' };
-const tailleActuelle = () => (TEXT_SIZES.includes(session.family.textSize) ? session.family.textSize : 'normal');
-let tailleChoisie = 'normal';
-
-function renderTextSize() { $('text-size-value').textContent = TEXT_SIZE_LABELS[tailleActuelle()]; }
-
-function markSize() {
-  document.querySelectorAll('[data-size]').forEach((b) => b.classList.toggle('active', b.dataset.size === tailleChoisie));
-}
-document.querySelectorAll('[data-size]').forEach((btn) => btn.addEventListener('click', () => {
-  tailleChoisie = btn.dataset.size;
-  markSize();
-}));
-SETTINGS['text-size-card'] = {
-  fill() { tailleChoisie = tailleActuelle(); markSize(); },
-  async save() {
-    await saveFamily({ textSize: tailleChoisie }, 'Taille du texte changée sur la tablette');
-    return true;
-  },
-};
-
 // Ville de la météo : families/{fid}.meteoVille = { nom, lat, lon }, choisie par code postal ;
 // la tablette publie la sienne sur sa fiche membre, celle de la famille l'emporte.
 let communes = [];
@@ -4203,7 +4180,6 @@ function applyFamily() {
   $('btn-leave').hidden = admin;
   $('my-name-value').textContent = session.member.name;
   renderGenre();
-  $('text-size-card').hidden = true; // plus réglable : le texte débordait sur la tablette
   $('sleep-card').hidden = !amFamilyAdmin();
   renderSleep();
   $('volume-card').hidden = !amFamilyAdmin();
@@ -4213,7 +4189,6 @@ function applyFamily() {
   $('meteo-card').hidden = !amFamilyAdmin();
   renderMeteo();
   $('delete-family-info').hidden = !amOwner();
-  renderTextSize();
   $('invite-email-card').hidden = !admin;
   $('btn-new-code').hidden = !admin || !CHANGE_CODE_READY;
   if (admin && !stopInvitations) watchInvitations();
