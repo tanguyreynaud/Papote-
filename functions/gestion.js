@@ -422,13 +422,63 @@ function stockAJour(tablette, commande) {
 }
 
 // Pièces jointes d'un e-mail à lire comme factures : PDF et photos, sans les petits logos de signature.
+// Chaque PDF envoyé à l'IA coûte ~3 000 jetons par page : une confirmation Sosh avec 5 PDF joints
+// (conditions générales, tarifs…) a coûté 330 000 jetons le 5/11. Décision de Tanguy (5/11) : un PDF
+// de plus de 2 pages, trop lourd ou dont le titre dit que ce n'est pas une facture n'est pas lu.
 const MAX_PIECES_MAIL = 10;
-function piecesFacture(pieces) {
+const MAX_PAGES_PDF = 2;
+const MAX_KO_PDF = 1024;
+const TITRES_PAS_FACTURE = /conditions?|cgv|cgu|cga|tarif|retract|offres?|notice|guide|brochure|catalogue|fiche.?d.?information|mentions.?legales|confidentialite|reglement|manuel/;
+
+// Nombre de pages d'un PDF, sans bibliothèque : objets « /Type /Page » en clair, puis dans les flux
+// compressés (PDF récents : objets rangés dans des flux /ObjStm). null si on ne sait pas les compter.
+function pagesPdf(contenu) {
+  if (!Buffer.isBuffer(contenu)) return null;
+  const PAGE = /\/Type\s*\/Page(?![A-Za-z])/g;
+  const brut = contenu.toString('latin1');
+  let n = (brut.match(PAGE) || []).length;
+  if (n) return n;
+  const zlib = require('node:zlib');
+  const flux = /\/ObjStm[\s\S]{0,400}?stream\r?\n/g;
+  let m;
+  while ((m = flux.exec(brut))) {
+    const debut = m.index + m[0].length;
+    const fin = brut.indexOf('endstream', debut);
+    if (fin < 0) break;
+    try {
+      n += (zlib.inflateSync(contenu.subarray(debut, fin), { finishFlush: zlib.constants.Z_SYNC_FLUSH })
+        .toString('latin1').match(PAGE) || []).length;
+    } catch { /* flux illisible : ignoré */ }
+  }
+  return n || null;
+}
+
+// Nom de fichier sans accents ni majuscules, pour le comparer aux titres connus.
+const titreSimple = (nom) => String(nom || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+// ignorees (facultatif) : reçoit la raison de chaque PDF écarté, affichée dans le relevé de l'admin.
+function piecesFacture(pieces, ignorees = []) {
   return (pieces || []).filter((p) => {
     const type = String(p.contentType || '').toLowerCase();
     const taille = p.size || (p.content && p.content.length) || 0;
     if (taille > 6 * 1024 * 1024 || !taille) return false;
-    if (type === 'application/pdf') return true;
+    if (type === 'application/pdf') {
+      const nom = p.filename || 'PDF';
+      if (TITRES_PAS_FACTURE.test(titreSimple(p.filename))) {
+        ignorees.push(`${nom} : pas une facture d'après son titre`);
+        return false;
+      }
+      if (taille > MAX_KO_PDF * 1024) {
+        ignorees.push(`${nom} : trop lourd pour une facture (${Math.round(taille / 1024)} Ko)`);
+        return false;
+      }
+      const pages = pagesPdf(p.content);
+      if (pages > MAX_PAGES_PDF) {
+        ignorees.push(`${nom} : ${pages} pages, trop long pour une facture`);
+        return false;
+      }
+      return true;
+    }
     return /^image\/(png|jpeg|webp|gif)$/.test(type) && taille > 40 * 1024 && p.contentDisposition !== 'inline';
   }).slice(0, MAX_PIECES_MAIL);
 }
@@ -1766,6 +1816,28 @@ exports.gestionPiece = onCall({ memory: '512MiB' }, async (request) => {
 
 const TYPES_LECTURE = /^(application\/pdf|image\/(png|jpeg|webp|gif))$/;
 
+// Texte UTF-8 lu comme du windows-1252 (« AccÃ©der », « 2,99 â‚¬ ») : certains e-mails (Sosh, 5/11)
+// annoncent le mauvais jeu de caractères. Chaque suite cassée (« Ã© », « â‚¬ ») est remise en octets
+// et relue en UTF-8 ; une suite qui ne donne pas de l'UTF-8 valide reste telle quelle.
+const CP1252 = '€\u0081‚ƒ„…†‡ˆ‰Š‹Œ\u008DŽ\u008F\u0090‘’“”•–—˜™š›œ\u009DžŸ';
+const SUITE_CONTINUATION = `[\\u0080-\\u00BF${CP1252.replace(/[\u0080-\u009F]/g, '')}]`;
+const SUITE_CASSEE = new RegExp(`[\\u00C2-\\u00DF]${SUITE_CONTINUATION}|[\\u00E0-\\u00EF]${SUITE_CONTINUATION}{2}|[\\u00F0-\\u00F4]${SUITE_CONTINUATION}{3}`, 'g');
+const octet = (c) => {
+  const code = c.codePointAt(0);
+  return code <= 0xFF ? code : 0x80 + CP1252.indexOf(c);
+};
+function reparerAccents(t) {
+  return String(t).replace(SUITE_CASSEE, (suite) => {
+    try {
+      const c = new TextDecoder('utf-8', { fatal: true }).decode(Uint8Array.from([...suite].map(octet)));
+      // Seulement des lettres accentuées et la ponctuation courante (é, °, €, •, ’, ™) : rien d'exotique.
+      return /^[\u00A0-\u024F\u2000-\u20CF\u2122]$/.test(c) ? c : suite;
+    } catch {
+      return suite;
+    }
+  });
+}
+
 // Texte d'un e-mail sans facture jointe (confirmation de commande Cdiscount, Temu…), lu comme un justificatif.
 function corpsDuMail(m) {
   let t = m && m.text ? m.text : '';
@@ -1773,6 +1845,9 @@ function corpsDuMail(m) {
     t = m.html.replace(/<(style|script)[\s\S]*?<\/\1>/gi, ' ').replace(/<br\s*\/?>|<\/(p|div|tr|li|h\d)>/gi, '\n')
       .replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&euro;/g, '€');
   }
+  t = reparerAccents(t).replace(/&#(\d+);/g, (x, n) => String.fromCodePoint(Number(n)))
+    .replace(/&#x([0-9a-f]+);/gi, (x, n) => String.fromCodePoint(parseInt(n, 16)))
+    .replace(/&gt;/g, '>').replace(/&lt;/g, '<').replace(/&quot;/g, '"').replace(/\u00ad/g, '');
   t = t.replace(/[ \t]+/g, ' ').replace(/\n\s*\n+/g, '\n').trim();
   if (t.length < 150) return null;
   const entete = [`De : ${(m.from && m.from.text) || ''}`, `Objet : ${m.subject || ''}`,
@@ -2982,7 +3057,9 @@ async function releverFactures() {
           const mailLu = await simpleParser(content);
           const de = (mailLu.from && mailLu.from.text) || 'expéditeur inconnu';
           const sujet = mailLu.subject || '(sans objet)';
-          const pieces = piecesFacture(mailLu.attachments);
+          const ecartees = [];
+          const pieces = piecesFacture(mailLu.attachments, ecartees);
+          for (const x of ecartees) bilan.ignorees.push(`${x} (« ${sujet} »)`);
           // Le texte de l'e-mail (confirmation de commande) passe après les pièces jointes : lu seulement si
           // aucune pièce n'est une facture (images de produits d'un e-mail transféré, par exemple).
           const corps = corpsDuMail(mailLu);
@@ -3514,6 +3591,6 @@ exports.gestionParcours = onCall(async (request) => {
 exports.regles = {
   ETATS, CATEGORIES, sansEssaisEffaces, natureMouvement, mensuel, centimes, lien, nomFichier, moisSuivant, lectureVersFormulaire, SCHEMA_FACTURE,
   lireReglages, transitionPermise, SUITES, simAResilier, fichesARattacher, sansFacture, stockAJour, releveBatterie, usureBatterie, incoherences, materielLu, memeAccessoire, coutLigne, alertesSim, finApresRecharge, simDeFacture, forfaitFamille, accessoiresAPrevoir, champsSim, aFaire, piecesFacture, debutMoisParis, moisPrecedent, csvTexte, livreDesRecettes,
-  registreDesAchats, corpsDuMail, memeAchat, suiteJumelage, descriptionNonRendu, refusSuppression, fusionnerContacts, emailInformation, cleContact,
+  registreDesAchats, corpsDuMail, pagesPdf, reparerAccents, memeAchat, suiteJumelage, descriptionNonRendu, refusSuppression, fusionnerContacts, emailInformation, cleContact,
   avancementPropre, gardeFous,
 };
