@@ -59,6 +59,10 @@ test('tablette reliée à une commande : ni inutilisable, ni commande annulée',
   permis(s.refusLienCommande({}, 'commandee', { expedition: 'a-preparer' }));
   for (const etat of ['perdue', 'hors-service', 'a-reparer']) refuse(s.refusLienCommande({}, etat, { expedition: 'a-preparer' }), /perdue, hors service ou à réparer/);
   refuse(s.refusLienCommande({}, 'en-stock', { expedition: 'annulee' }), /annulée/);
+  // Tablette jumelée à une famille : pas à vendre, sauf pour une commande de cette même famille.
+  refuse(s.refusLienCommande({ fid: 'test' }, 'en-stock', { expedition: 'a-preparer', fid: 'client' }), /dans une famille : pas à vendre/);
+  refuse(s.refusLienCommande({ fid: 'test' }, 'en-stock', { expedition: 'a-preparer' }), /pas à vendre/);
+  permis(s.refusLienCommande({ fid: 'f' }, 'chez-client', { expedition: 'envoyee', fid: 'f' }));
 });
 
 test('cartes SIM : statuts, recharge et suppression', () => {

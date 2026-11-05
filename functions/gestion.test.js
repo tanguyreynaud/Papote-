@@ -126,6 +126,22 @@ test('liste à faire du récapitulatif', () => {
   ]);
 });
 
+test('à faire : une tablette jumelée sans commande ne compte pas en stock et ne demande rien', () => {
+  const liste = g.aFaire({
+    maintenant: Date.UTC(2026, 10, 5),
+    commandes: [{ id: 'a', expedition: 'a-preparer' }],
+    stock: [{ etat: 'en-stock', commande: null, fid: 'famille-test', alerteJumelage: 'jumelée sans commande', ref: 'T-1' }],
+    depenses: [],
+    automatique: { erreurs: [] },
+  });
+  assert.deepStrictEqual(liste, ['1 tablette à envoyer', '1 tablette manquante en stock pour les envoyer']);
+});
+
+test('achat enregistré : une tablette jumelée à une famille n\'est pas complétée à la place d\'une libre', () => {
+  const sans = [{ id: 'a', etat: 'en-stock', creeLe: 1, fid: 'famille-test' }, { id: 'b', etat: 'en-stock', creeLe: 2 }];
+  assert.deepStrictEqual(g.fichesARattacher(sans, [], 1), ['b']);
+});
+
 test('pièces jointes lues comme factures', () => {
   const ko = 1024;
   const pieces = g.piecesFacture([
@@ -398,7 +414,8 @@ test('suite du jumelage d\'une tablette du stock', () => {
   assert.deepStrictEqual(g.suiteJumelage({ etat: 'envoyee', commande: 'c' }, { fid: 'f' }, 'f'), {});
   assert.deepStrictEqual(g.suiteJumelage({ etat: 'envoyee', commande: 'c' }, { fid: 'autre' }, 'f'),
     { alerte: 'jumelée à une autre famille que celle de sa commande' });
-  assert.deepStrictEqual(g.suiteJumelage({ etat: 'preparee', commande: null }, null, 'f'), { alerte: 'jumelée sans commande' });
+  // Tablette de test jumelée sans commande : rien à cocher pour l'admin (elle n'est simplement pas à vendre).
+  assert.deepStrictEqual(g.suiteJumelage({ etat: 'preparee', commande: null }, null, 'f'), {});
   // Commande reliée d'office (par l'e-mail) à l'ancienne famille d'un client qui recommande : suit sa tablette.
   assert.deepStrictEqual(g.suiteJumelage({ etat: 'envoyee', commande: 'c' }, { fid: 'ancienne', relieeParEmail: { fid: 'ancienne' } }, 'f'),
     { relier: true, delier: 'ancienne' });
