@@ -27,7 +27,7 @@ scénarios) ; utiliser plutôt
 | --- | --- |
 | `installation` | Inscription, code de la tablette, réglages de départ, accueil |
 | `proches` | Invitation par e-mail, code famille (accepté, refusé, faux), responsable, retrait d'un proche |
-| `envois` | Photos (légende, 5 max, suppression, zip), vidéo, aperçu avant envoi (forme gardée, plein écran qui reste ouvert, Refilmer / Galerie, debout et couchée), filmer dans Papote (caméra, Filmer / Arrêter, retour, caméra refusée), messages (rapides, vu, réponse de Mamie), droits |
+| `envois` | Photos (légende, 5 max, suppression, « Tout télécharger » : photos, vidéos et messages dans un .zip), vidéo, aperçu avant envoi (forme gardée, plein écran qui reste ouvert, Refilmer / Galerie, debout et couchée), filmer dans Papote (caméra, Filmer / Arrêter, retour, caméra refusée), messages (rapides, vu, réponse de Mamie), droits |
 | `photos-multiples` | 5 photos en un envoi : transfert coupé à la 3e (réseau gardé, ou coupé net puis revenu), double appui sur Envoyer, ordre des photos, aucun fichier orphelin dans Storage ; limite des 200 derniers envois de photos |
 | `agenda` | Rappels (erreurs, modification, pause, confirmation de Mamie), anniversaires |
 | `appels` | Vidéo vers la tablette (vraie liaison WebRTC), refus, Mamie appelle un proche ou toute la famille |
@@ -37,6 +37,7 @@ scénarios) ; utiliser plutôt
 | `retour` | Bouton retour d'Android : chaque écran revient à celui d'avant, une fenêtre se ferme, « Voulez-vous quitter Papote ? » dans l'app Android |
 | `resiliation` | Résilier (« Avant de partir », garder), « Garder mon abonnement », annuler la commande sous 30 jours, « Garder la tablette et reprendre » : double appui, appui long, retour d'Android, page rechargée (aussi pendant l'appel au serveur), petite hauteur ; sans réseau, serveur muet, serveur en panne (503) à chaque bouton : un seul appel au serveur, une roue pendant l'attente, un message clair |
 | `renvoi` | Renvoyer la tablette (Mondial Relay, QR code sans impression) : adresse demandée quand la commande n'en a pas (erreur de code postal, clavier ouvert), retour avant la date d'arrêt, réseau coupé, serveur muet puis page rechargée, un seul QR code ; tablette reçue et remboursée ; « main propre » jamais proposée |
+| `mauvais-jours` | Abonnement arrêté : jamais « doit être réglé » ni « Régler » ; « Votre proche est décédé ? » : une question, un seul appel au serveur, des mots justes |
 | `sos` | SOS de la tablette : toute la famille sonne, retour d'Android pendant la sonnerie, double appui sur « Répondre », sonnerie arrêtée chez les autres, téléphone sans réseau pendant la sonnerie, page rechargée, 2e essai sans réponse ; ce qu'en disent les Notifications |
 
 Chaque test échoue aussi s'il y a une erreur dans la console, une fenêtre grise du navigateur

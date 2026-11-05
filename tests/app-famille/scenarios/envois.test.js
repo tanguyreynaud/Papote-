@@ -124,6 +124,29 @@ test('Vidéo : préparée dans le téléphone, envoyée dans Storage, lue dans l
   }, null, { timeout: 15_000 });
   await julie.page.click('#viewer-close');
   await julie.page.locator('#viewer').waitFor({ state: 'hidden' });
+
+  // Tout télécharger (Tanguy, 5/11) : les vidéos et les messages aussi, dans le même fichier .zip.
+  await s.db.collection(`families/${fid}/posts`).add({ type: 'message', text: 'Bisous Mamie', authorName: 'Julie', authorUid: 'autre', createdAt: s.FieldValue.serverTimestamp() });
+  await s.db.collection(`families/${fid}/posts`).add({ type: 'reply', text: 'Merci ma chérie', createdAt: s.FieldValue.serverTimestamp() });
+  await julie.page.click('#view-videos .back');
+  await g.ouvrirTuile(julie, 'photos');
+  const [telechargement] = await Promise.all([
+    julie.page.waitForEvent('download', { timeout: 30_000 }),
+    g.doubleAppui(julie, '#btn-photos-zip'),
+  ]);
+  await g.toast(julie, 'Téléchargé : 1 photo, 1 vidéo et les messages.');
+  const JSZip = require('jszip');
+  const zip = await JSZip.loadAsync(require('node:fs').readFileSync(await telechargement.path()), { checkCRC32: true });
+  const noms = Object.keys(zip.files);
+  const video = noms.find((n) => /^Vidéos\/.*\.(webm|mp4)$/.test(n));
+  assert.ok(video, `vidéo dans le zip : ${noms.join(', ')}`);
+  const taille = await julie.page.evaluate(async (url) => (await (await fetch(url)).arrayBuffer()).byteLength, v.videoUrl);
+  assert.strictEqual((await zip.file(video).async('nodebuffer')).length, taille, 'vidéo entière');
+  const texte = await zip.file('Messages.txt').async('string');
+  assert.match(texte, /Julie : Bisous Mamie/);
+  assert.match(texte, /: Merci ma chérie/);
+  assert.deepStrictEqual(noms.map((n) => n.split('/')[0]).sort(), ['Messages.txt', 'Photos', 'Vidéos'], `la photo de l'installation, la vidéo, les messages : ${noms.join(', ')}`);
+  assert.strictEqual(await julie.page.locator('#btn-photos-zip').innerText(), 'Tout télécharger');
 });
 
 // Captures des écrans de cette partie, si PAPOTE_CAPTURES donne un dossier (pour les montrer à Tanguy).
