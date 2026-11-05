@@ -315,14 +315,21 @@ function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
       saute: enMain,
       titre: 'Fermer le colis',
       texte: 'Dernière vérification. Le carton contient :',
-      contenu(zone, e) {
+      contenu(zone, e, maj) {
         const ul = creer('ul', { className: 'pc-liste' });
         const contenu = [`La tablette ${nom(e)}`, 'Le chargeur et son câble', ...pour('tous'),
           ...(avecEnceinte(e) ? [enceinte()] : []),
           ...(internet ? [`La carte SIM ${simTexte(simDe(e))}, dans la tablette`] : [])];
         ul.append(...contenu.map((x) => creer('li', {}, x)));
-        zone.append(ul);
+        // Numéro lu sur la tablette mise dans le carton (A14-4) : vérifié au « Colis déposé », car la tablette
+        // entre seule dans la famille de SA commande (deux colis préparés ensemble ne doivent pas s'échanger).
+        const lu = creer('input', { placeholder: 'T-003', autocomplete: 'off', value: e.tabletteLue || '', ariaLabel: 'Numéro lu sur la tablette' });
+        lu.addEventListener('input', () => { e.tabletteLue = lu.value.trim() || null; maj(); });
+        const champ = creer('label', { className: 'pc-case' });
+        champ.append('Numéro T-… collé sur la tablette du carton ', lu);
+        zone.append(ul, champ);
       },
+      pret: (e) => !!e.tabletteLue,
       cases: ['Rien ne manque', 'Le carton est fermé avec du scotch'],
     },
     {
@@ -403,8 +410,9 @@ function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
       bouton: 'Colis déposé',
       async valider(e) {
         try {
-          await httpsCallable(functions, 'tabletteEnvoyee')({ commande: c.id, suivi: e.suivi });
+          await httpsCallable(functions, 'tabletteEnvoyee')({ commande: c.id, suivi: e.suivi, ...(e.tabletteLue ? { tablette: e.tabletteLue } : {}) });
         } catch (err) {
+          if (err.code?.endsWith('failed-precondition')) throw new Error(err.message);
           throw new Error(err.code?.endsWith('invalid-argument') ? 'Ce numéro de suivi ne semble pas valide.' : 'L\'enregistrement a échoué. Réessayez.');
         }
         await sortirDuStock(e);

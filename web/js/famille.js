@@ -21,7 +21,7 @@ import { showGuideOnce } from './guide.js';
 import {
   abonnementOk, FORMULES, LIBELLES, ouvrirPortail, payer, rattacherCommande, resilier, annulerResiliation,
   finDeContrat, facturesFamille, renvoyerTablette, retracter, inviterParEmail, reserverTablette, nommerFamille, finirInstallation,
-  annulerInstallation,
+  annulerInstallation, nommerFamillePreparee,
 } from './abonnement.js';
 import { startCall, watchTabletBusy, watchIncomingCalls, answerIncoming, warmUpCalls, declineIncoming, reportCallIncident } from './appel.js';
 import { pushSupported, pushAllowed, pushRefused, enablePush, closeCallNotification, rememberNativeToken, inNativeApp, launchFromAndroidApp, nativeNotificationsOff } from './push.js';
@@ -2659,6 +2659,7 @@ function renderMembers(all) {
   $('invite-email-card').classList.toggle('disabled-card', familyFull);
   renderRequests(pending);
   tabletMembers = members.filter((m) => m.role === 'tablette');
+  renderPreparee();
   if (!$('view-setup').hidden) renderSetupTablet();
   renderTabletFace();
   renderMeteo();
@@ -3792,8 +3793,10 @@ SETTINGS['family-name-card'] = {
   async save() {
     const name = $('family-name').value.trim();
     if (!name) return false;
-    if (name === session.family.name) return true;
-    await updateDoc(doc(db, 'families', session.fid), { name });
+    if (name === session.family.name && !session.family.nomAChoisir) return true;
+    // Famille préparée : le serveur enlève aussi le nom d'attente et renomme la fiche de la tablette.
+    if (session.family.nomAChoisir) await nommerFamillePreparee(session.fid, name);
+    else await updateDoc(doc(db, 'families', session.fid), { name });
     toast('Nom enregistré');
     return true;
   },
@@ -4225,7 +4228,39 @@ function applyFamily() {
   $('family-name-card').hidden = !amFamilyAdmin();
   $('family-name-value').textContent = name;
   if (allMembers.length) renderMembers(allMembers);
+  renderPreparee();
 }
+
+// Famille préparée dès la commande (functions/famille-preparee.js) : le nom à donner, puis « tablette en route »
+// tant qu'elle n'est pas entrée dans la famille.
+function renderPreparee() {
+  const fam = session?.family || {};
+  const nomADonner = !!fam.nomAChoisir && amFamilyAdmin();
+  if ($('nom-prepare').hidden && nomADonner) $('nom-prepare-error').hidden = true;
+  $('nom-prepare').hidden = !nomADonner;
+  $('tablette-en-route').hidden = nomADonner || !fam.installation?.preparee || tabletMembers.length > 0;
+}
+
+$('nom-prepare').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = $('nom-prepare-btn');
+  if (btn.disabled) return; // double appui : un seul appel
+  const nom = $('nom-prepare-input').value.trim();
+  $('nom-prepare-error').hidden = true;
+  if (!nom) { showError($('nom-prepare-error'), 'Indiquez comment vous l\'appelez, par exemple « Mamie Emma ».'); return; }
+  btn.disabled = true;
+  btn.textContent = 'Enregistrement…';
+  try {
+    await nommerFamillePreparee(session.fid, nom);
+    toast('Nom enregistré');
+  } catch (err) {
+    console.error(err);
+    showError($('nom-prepare-error'), 'L\'enregistrement a échoué. Vérifiez la connexion internet et réessayez.');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Enregistrer';
+  }
+});
 
 let stopFamily = null;
 function watchFamily() {
@@ -5448,8 +5483,12 @@ function showInvitations(invitations) {
     card.className = 'card';
     card.innerHTML = '<h2></h2><p class="muted"></p>'
       + '<button type="submit" class="primary wide">Rejoindre la famille</button><p class="error" hidden></p>';
-    card.querySelector('h2').textContent = `Famille de ${inv.familyName}`;
-    card.querySelector('p.muted').textContent = `${inv.invitedBy || 'Un responsable'} vous invite à rejoindre la famille.`;
+    // Famille préparée à la commande (functions/famille-preparee.js) : c'est l'espace de celui qui a payé.
+    card.querySelector('h2').textContent = inv.preparee ? 'Votre espace famille Papote' : `Famille de ${inv.familyName}`;
+    card.querySelector('p.muted').textContent = inv.preparee
+      ? 'Votre commande est enregistrée et votre famille vous attend : donnez le nom de votre proche, envoyez les premières photos et invitez vos proches.'
+      : `${inv.invitedBy || 'Un responsable'} vous invite à rejoindre la famille.`;
+    if (inv.preparee) card.querySelector('button[type=submit]').textContent = 'Entrer dans ma famille';
     card.addEventListener('submit', async (e) => {
       e.preventDefault();
       card.querySelector('button[type=submit]').disabled = true;
