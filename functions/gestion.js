@@ -653,6 +653,7 @@ function verifierAdmin(request) {
   const token = request.auth && request.auth.token;
   if (!token || token.admin !== true) throw new HttpsError('permission-denied', 'Réservé à l\'administrateur.');
 }
+exports.verifierAdmin = verifierAdmin;
 
 // La page admin réveille à l'ouverture les fonctions qu'elle appelle pour enregistrer ({ action: 'reveil' }) :
 // chacune démarre une fois en avance au lieu de faire attendre la première modification. Rien n'est lu ni écrit.
@@ -852,7 +853,8 @@ async function ajouterAchat(d, qui) {
     });
   }
   const sansAchat = (await db().collection('stock').where('acheteeLe', '==', null).get()).docs
-    .filter((x) => x.get('prixAchat') == null && !x.get('depense'))
+    // Tablette d'essai (installée par QR) : jamais complétée par un achat.
+    .filter((x) => x.get('prixAchat') == null && !x.get('depense') && x.get('essai') !== true)
     .map((x) => ({ id: x.id, numero: x.get('numero'), serieAndroid: x.get('serieAndroid'), modele: x.get('modele'),
       etat: x.get('etat'), commande: x.get('commande') || null, creeLe: ms(x.get('creeLe')) || 0 }));
   const rattachees = fichesARattacher(sansAchat, numeros, quantite);
@@ -1008,6 +1010,12 @@ exports.gestionStock = onCall(async (request) => {
       if ((await dep.get()).exists) await dep.update({ fournisseur: maj.fournisseur, majLe: FieldValue.serverTimestamp() });
     }
     if ('simCout' in champs) maj.simCout = centimes(champs.simCout);
+    // Installée par QR hors critères (installation-qr.js) : l'administrateur la garde quand même.
+    if (champs.horsCriteres === null && snap.get('horsCriteres')) {
+      maj.horsCriteres = null;
+      maj.simPin = false;
+      maj.horsCriteresAccepte = { le: Date.now(), par: qui, detail: snap.get('horsCriteres.detail') || [] };
+    }
     // Achat chez le vendeur (Tanguy, 2026-10-22 : chaque tablette, carte SIM ou accessoire a son achat).
     if ('depense' in champs) maj.depense = await depenseExistante(champs.depense);
     if ('commande' in champs) {
