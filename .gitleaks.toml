@@ -1,0 +1,18 @@
+# Règles gitleaks par défaut + exceptions connues (valeurs publiques par conception).
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Valeurs publiques ou factices de Papote"
+# sk_test_simulation / whsec_simulation : faux secrets des parcours (functions/parcours/simulation.js).
+regexes = [
+  '''sk_test_simulation''',
+  '''whsec_simulation''',
+]
+# Clé web Firebase (publique, protégée par règles + App Check) et clé de site reCAPTCHA (publique).
+paths = [
+  '''web/js/(firebase|admin|gestion)\.js''',
+  '''android/app/src/main/assets/appels\.js''',
+  '''android/app/src/main/java/com/papote/tablette/Firebase\.java''',
+  '''installation/.*\.apk''',
+]
