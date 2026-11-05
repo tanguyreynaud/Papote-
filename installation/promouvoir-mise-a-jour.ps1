@@ -5,6 +5,8 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 . (Join-Path $PSScriptRoot 'maj-commun.ps1')
 
+# Pas deux versions pour toutes les tablettes en moins de 30 jours, sauf urgence.
+Confirm-StableCadence
 $feeds = Get-PublishedFeeds
 if ([int]$feeds.test.versionCode -le [int]$feeds.stable.versionCode) {
     Write-Host "Rien à faire : la version de test ($($feeds.test.versionName)) est déjà celle de toutes les tablettes." -ForegroundColor Yellow

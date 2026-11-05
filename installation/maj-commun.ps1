@@ -62,3 +62,15 @@ function Publish-Feeds($feeds) {
         finally { $ErrorActionPreference = $old }
     }
 }
+
+# Garde-fou « Urgence ? » (Tanguy, 05/11) : pas deux versions pour toutes les tablettes en moins de 30 jours,
+# sauf urgence. La date est celle du dernier envoi de installation/Papote.apk (une publication stable = un commit).
+function Confirm-StableCadence {
+    $last = git -C $root log -1 --format=%ct -- installation/Papote.apk
+    if (-not $last) { return }
+    $days = [math]::Floor(((Get-Date).ToUniversalTime() - [DateTimeOffset]::FromUnixTimeSeconds([long]$last).UtcDateTime).TotalDays)
+    if ($days -ge 30) { return }
+    Write-Host "La dernière version pour toutes les tablettes date de $days jour(s) (moins de 30)." -ForegroundColor Yellow
+    $r = Read-Host 'Urgence ? (O/N)'
+    if ($r -notmatch '^[oOyY]') { throw "Publication arrêtée : pas d'urgence, la prochaine version attendra." }
+}

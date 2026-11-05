@@ -22,6 +22,9 @@ $gradle = git -C $root show HEAD:android/app/build.gradle.kts | Out-String
 $code = [int]([regex]::Match($gradle, 'versionCode = (\d+)').Groups[1].Value)
 $name = [regex]::Match($gradle, 'versionName = "([^"]+)"').Groups[1].Value
 
+# Pas deux versions pour toutes les tablettes en moins de 30 jours, sauf urgence (le canal test n'est pas concerné).
+if (-not $Test) { Confirm-StableCadence }
+
 # Versions déjà publiées
 $feeds = Get-PublishedFeeds
 $published = [int]($(if ($Test) { $feeds.test } else { $feeds.stable }).versionCode)
