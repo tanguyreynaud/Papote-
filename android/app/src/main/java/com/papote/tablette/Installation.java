@@ -159,6 +159,9 @@ final class Installation {
             }
             p.edit().remove("installJeton").apply();
             JSONObject res = body.optJSONObject("result");
+            // Clé App Check propre à la tablette (avant : envoyée par adb, étape 8 du script d'installation).
+            String cle = res == null ? "" : res.optString("appCheckKey", "");
+            if (cle.matches("[A-Za-z0-9_-]{20,100}")) AppCheck.saveKey(c, cle);
             String code = res == null ? "" : res.optString("code", "");
             Journal.log(c, "Tablette inscrite (installation par QR)" + (code.isEmpty() ? "" : ", code reçu"));
             return code.isEmpty() ? null : code;
