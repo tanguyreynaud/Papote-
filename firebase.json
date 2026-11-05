@@ -55,15 +55,5 @@
       "bucket": "papote-famille-eu",
       "rules": "storage-eu.rules"
     }
-  ],
-  "functions": [
-    {
-      "source": "functions",
-      "codebase": "default",
-      "ignore": [
-        "node_modules",
-        "*.test.js"
-      ]
-    }
   ]
 }
