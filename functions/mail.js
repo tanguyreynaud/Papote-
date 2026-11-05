@@ -633,6 +633,22 @@ function rappelRestitution({ nom, avant, lien, qr, montant, deces }) {
   ], lien ? { texte: qr ? 'Afficher le QR code' : 'Imprimer l\'étiquette', lien } : APPLI_RETOUR);
 }
 
+// Famille arrêtée depuis bientôt 3 mois (purge.js) : les photos seront effacées le … ; un mois pour les garder.
+// deces : version de deuil (motif noté à l'arrêt).
+function avantEffacement({ nom, famille, le, deces }) {
+  return message(deces ? 'Les photos de la famille, à garder' : 'Vos photos Papote seront effacées le ' + dateEnClair(le), [
+    bonjour(nom),
+    `Comme prévu après l'arrêt de Papote, les photos, les vidéos et les messages de la famille${famille ? ` de <b>${echapper(famille)}</b>` : ''} seront effacés de nos serveurs le <b>${dateEnClair(le)}</b>.`,
+    'Pour garder les photos sur votre téléphone ou votre ordinateur :',
+    { etapes: [
+      'Ouvrez l\'appli Papote et touchez Photos.',
+      'Touchez « Tout télécharger » : un fichier avec toutes les photos s\'enregistre.',
+    ] },
+    deces ? 'Si vous avez besoin de plus de temps, répondez simplement à cet e-mail : nous attendrons.'
+      : 'Besoin de plus de temps ? Répondez à cet e-mail.',
+  ], { texte: 'Ouvrir l\'appli Papote', lien: APPLI });
+}
+
 // rembourse : montant remboursé (centimes), 0 ou null s'il n'y a rien à rembourser.
 // manquants : noms des éléments absents du colis, montant : ce qu'ils ont coûté (centimes), echec : prélèvement refusé.
 function tabletteRecue({ nom, rembourse, manquants, montant, echec }) {
@@ -805,7 +821,7 @@ module.exports = {
   // abonnement
   paiementEchoue, papoteEnPause, pausePrelevements, reprisePrelevements,
   // fin de contrat
-  retourTablette, etiquetteRetour, resiliationEnregistree, resiliationAnnulee, rappelRestitution, tabletteRecue, materielNonRendu, commandeAnnulee, annulationAvantEnvoi, resiliation, alerteAdmin,
+  retourTablette, etiquetteRetour, resiliationEnregistree, avantEffacement, resiliationAnnulee, rappelRestitution, tabletteRecue, materielNonRendu, commandeAnnulee, annulationAvantEnvoi, resiliation, alerteAdmin,
   // support et admin
   rappelConfirme, demandeRappel, bilanSupport, information, recapSemaine, livresComptables, budget,
   // outils

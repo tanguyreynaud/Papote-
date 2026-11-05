@@ -3377,6 +3377,10 @@ async function effacerFamille({ fid, snap, commandes, par }) {
   return { membres: membres.size };
 }
 exports.effacerFamille = effacerFamille;
+// E-mail à un client depuis une tâche planifiée (purge : avertissement avant l'effacement).
+exports.envoyerAuClient = (a, contenu) => mail.envoyer({
+  smtp: MAIL_SMTP.value(), expediteur: MAIL_EXPEDITEUR.value(), motDePasse: MAIL_MOT_DE_PASSE.value(), a, contenu,
+});
 
 // Commandes offertes encore ouvertes (ni annulées ni closes), et celles dont la tablette est partie chez le proche.
 function offertesOuvertes(docs) {

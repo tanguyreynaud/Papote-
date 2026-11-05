@@ -62,3 +62,35 @@ test('décès : arrêt avec le motif « décès », e-mails de deuil sans « Mer
   assert.deepStrictEqual(mailsA(julie.email), [], 'rien d\'autre à Julie');
   assert.strictEqual((await famille(fid)).abonnement.statut, 'resilie');
 });
+
+test('effacement 3 mois après l\'arrêt : la famille est prévenue un mois avant, avec « Tout télécharger », puis seulement effacée', async () => {
+  const paul = await s.compte('Paul', 'paul@exemple.fr');
+  const julie = await s.compte('Julie', 'julie@exemple.fr');
+  const { id, fid } = await familleAbonnee(paul, julie);
+  await s.appeler('resilierAbonnement', { fid, motif: 'deces' }, julie);
+  s.avancer(30);
+  s.stripe.arreterALaDate(id);
+  await s.calme();
+  s.boite.length = 0;
+
+  s.avancer(40);
+  await s.tache('purgeMensuelle');
+  assert.deepStrictEqual(mailsA(paul.email), [], 'trop tôt pour prévenir');
+  s.avancer(25);
+  await s.tache('purgeMensuelle');
+  await s.calme();
+  assert.ok(await famille(fid), 'pas encore effacée');
+  const [avis] = mailsComplets(paul.email);
+  assert.ok(avis, 'e-mail avant l\'effacement');
+  assert.strictEqual(avis.sujet, 'Les photos de la famille, à garder');
+  assert.match(avis.texte, /Tout télécharger/);
+  // Effacement prévu dans 25 jours, la tâche suivante tombe un mois plus tard : effacée à ce moment-là.
+  s.avancer(10);
+  await s.tache('purgeMensuelle');
+  assert.ok(await famille(fid), 'prévenue il y a 10 jours : gardée');
+  s.avancer(21);
+  await s.tache('purgeMensuelle');
+  await s.calme();
+  assert.ok(!(await famille(fid)), 'effacée après l\'avis');
+  assert.strictEqual(mailsComplets(paul.email).length, 1, 'un seul avis');
+});
