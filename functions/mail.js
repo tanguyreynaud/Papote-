@@ -814,7 +814,11 @@ function budget({ palier, montant, paliers, coupee = true }) {
 
 // smtp : « hote:port:utilisateur » (MAIL_SMTP), expediteur : adresse affichée (MAIL_EXPEDITEUR).
 let transport;
-async function envoyer({ smtp, motDePasse, expediteur, a, contenu }) {
+// Appelé après chaque e-mail parti (index.js y branche le compteur du quota Brevo, quota-courriels.js).
+// enNombre : l'appelant compte lui-même ses envois en une fois (campagne, liste d'attente).
+let apresEnvoi = null;
+function surChaqueEnvoi(f) { apresEnvoi = f; }
+async function envoyer({ smtp, motDePasse, expediteur, a, contenu, enNombre = false }) {
   if (!motDePasse || !expediteur) throw new Error('E-mails non configurés (MAIL_EXPEDITEUR, MAIL_MOT_DE_PASSE).');
   if (!transport) {
     const [hote, port, utilisateur] = smtp.split(':');
@@ -824,6 +828,7 @@ async function envoyer({ smtp, motDePasse, expediteur, a, contenu }) {
     });
   }
   await transport.sendMail({ from: `Papote <${expediteur}>`, replyTo: expediteur, to: a, ...contenu });
+  if (apresEnvoi && !enNombre) await Promise.resolve().then(() => apresEnvoi(1)).catch(() => null);
 }
 
 module.exports = {
@@ -838,5 +843,5 @@ module.exports = {
   // support et admin
   rappelConfirme, demandeRappel, bilanSupport, information, recapSemaine, livresComptables, budget,
   // outils
-  message, envoyer, echapper, euros, dateEnClair, sansBalises,
+  message, envoyer, surChaqueEnvoi, echapper, euros, dateEnClair, sansBalises,
 };

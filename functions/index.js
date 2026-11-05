@@ -63,6 +63,10 @@ const { FieldValue, Timestamp } = admin.firestore;
 
 setGlobalOptions({ region: 'europe-west1', maxInstances: 5 });
 
+// Chaque e-mail parti est compté pour le quota Brevo (300 par jour en offre gratuite) : quota-courriels.js.
+const quotaCourriels = require('./quota-courriels');
+mail.surChaqueEnvoi((n) => quotaCourriels.compter(db, n, logger));
+
 const STRIPE_SECRET = defineSecret('STRIPE_SECRET');
 const STRIPE_WEBHOOK_SECRET = defineSecret('STRIPE_WEBHOOK_SECRET');
 const SITE_VITRINE = defineString('SITE_VITRINE', { default: 'https://mapapote.fr' });
@@ -1548,14 +1552,23 @@ exports.lancementListeAttente = onCall({ secrets: [MAIL_MOT_DE_PASSE], timeoutSe
     return { envoyes: 1, test: true };
   }
   const contacts = await db.collection('contacts').where('listeAttente', '==', true).get();
+  const aPrevenir = contacts.docs.filter((c) => {
+    const d = c.data();
+    return d.email && d.consentement === true && !d.desinscritLe && !d.lancementEnvoyeLe;
+  });
+  // Quota Brevo : au plus ce qui reste aujourd'hui pour les envois en nombre (100 e-mails gardés pour les urgents) ;
+  // les autres partent quand on relance le lendemain (lancementEnvoyeLe évite les doublons).
+  const permis = quotaCourriels.permisEnNombre(await quotaCourriels.partisAujourdhui(db), aPrevenir.length);
   let envoyes = 0;
   let erreurs = 0;
-  for (const c of contacts.docs) {
+  for (const c of aPrevenir.slice(0, permis)) {
     const d = c.data();
-    if (!d.email || d.consentement !== true || d.desinscritLe || d.lancementEnvoyeLe) continue;
     try {
       const desinscription = d.jeton ? `${URL_DESINSCRIPTION}?c=${c.id}&j=${d.jeton}` : null;
-      await envoyerMail(d.email, mail.lancement({ prenom: d.prenom, desinscription }));
+      await mail.envoyer({
+        smtp: MAIL_SMTP.value(), expediteur: MAIL_EXPEDITEUR.value(), motDePasse: MAIL_MOT_DE_PASSE.value(),
+        a: d.email, contenu: mail.lancement({ prenom: d.prenom, desinscription }), enNombre: true,
+      });
       await c.ref.update({ lancementEnvoyeLe: FieldValue.serverTimestamp() });
       envoyes += 1;
     } catch (e) {
@@ -1563,12 +1576,15 @@ exports.lancementListeAttente = onCall({ secrets: [MAIL_MOT_DE_PASSE], timeoutSe
       logger.error(`E-mail de lancement non envoyé (${c.id})`, e.message);
     }
   }
-  return { envoyes, erreurs };
+  if (envoyes) await quotaCourriels.compter(db, envoyes, logger);
+  return { envoyes, erreurs, restants: aPrevenir.length - envoyes - erreurs };
 });
 
 async function abonnementModifie(abo) {
   const commande = await db.doc(`commandes/${abo.id}`).get();
-  const fid = (abo.metadata && abo.metadata.fid) || (commande.exists && commande.get('fid'));
+  // La famille notée sur la commande d'abord : le message peut être ancien (metadata.fid d'avant un changement de
+  // famille, gestion.js delierAncienneFamille) ; metadata.fid seulement tant que la commande n'est pas reliée.
+  const fid = (commande.exists && commande.get('fid')) || (abo.metadata && abo.metadata.fid);
   if (fid) await appliquer(fid, abo.id);
   else if (commande.exists) await commande.ref.update({ statutStripe: abo.status });
   await prelevementDernierMois(abo);
@@ -2220,6 +2236,29 @@ const support = require('./support');
 exports.supportChat = support.supportChat;
 // IA de l'admin (page #aide) : répond avec le guide et l'état du parc lu en direct, n'agit jamais (ia-admin.js).
 exports.iaAdmin = require('./ia-admin').iaAdmin;
+
+// Tablette volée ou perdue : un seul geste coupe son identité (ordre verrouiller/usine, fiches membre, comptes Auth,
+// clé App Check, fiche stock « perdue »). Admin seulement. Détail et ordre des étapes : tablette-volee.js.
+const tabletteVolee = require('./tablette-volee');
+exports.tabletteVolee = onCall({ maxInstances: 1 }, async (request) => {
+  if (!request.auth || request.auth.token.admin !== true) throw new HttpsError('permission-denied', 'Réservé à l\'administrateur.');
+  const r = await tabletteVolee.revoquer({
+    db, auth: admin.auth(), qui: request.auth.uid, maintenant: () => Date.now(),
+    supprimerChamp: () => FieldValue.delete(), ajouterHistorique: (x) => FieldValue.arrayUnion(x),
+    horodatage: () => FieldValue.serverTimestamp(),
+  }, request.data || {});
+  if (!r.ok) throw new HttpsError('failed-precondition', r.erreur);
+  logger.warn(`Tablette ${request.data.serie} révoquée par ${request.auth.uid} : ${JSON.stringify(r)}`);
+  return r;
+});
+// L'ordre de révocation est exécuté (ou refusé) par la tablette : son compte est désactivé.
+exports.tabletteVoleeSuite = onDocumentUpdated(
+  { document: 'families/{fid}/commands/{cid}', database: BASE_FIRESTORE, region: REGION_FIRESTORE },
+  async (event) => {
+    const uid = tabletteVolee.apresOrdre(event.data.before.data(), event.data.after.data());
+    if (!uid) return;
+    await admin.auth().updateUser(uid, { disabled: true }).catch((e) => logger.error(`Révocation ${uid} : ${e.message}`));
+  });
 
 // Stock de tablettes, commandes, factures et comptabilité (page web/gestion.html, admin).
 const gestion = require('./gestion');

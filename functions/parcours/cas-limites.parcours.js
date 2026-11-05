@@ -214,6 +214,50 @@ test('client qui recommande et annule depuis l\'appli avant l\'envoi : rembours�
   assert.strictEqual((await s.requete('stockDisponible')).json.precommande, false);
 });
 
+test('client qui recommande pour une autre grand-mère : la commande suit la nouvelle tablette, l\'ancienne famille reste résiliée', async () => {
+  const paul = await s.compte('Paul', 'paul@exemple.fr');
+  const t1 = await a.tablettePreparee();
+  const { abonnement: id1 } = await a.commanderEtPayer({ email: paul.email });
+  await a.preparerEtEnvoyer(id1, t1);
+  s.avancer(2);
+  await a.afficherCode(t1);
+  const f1 = await a.installer(paul, t1, { nom: 'Mamie Emma' });
+  s.avancer(31);
+  s.stripe.finirEssai(id1);
+  await s.calme();
+  const { le } = await s.appeler('resilierAbonnement', { fid: f1 }, paul);
+  await s.calme();
+  s.avancer((le - Date.now()) / s.JOUR + 0.1);
+  s.stripe.arreterALaDate(id1);
+  await s.calme();
+  await s.appeler('tabletteRendue', { commande: id1, manquants: [] }, a.TANGUY);
+  await s.calme();
+  assert.strictEqual((await s.lire(`families/${f1}`)).abonnement.statut, 'resilie');
+
+  // Deux mois plus tard, même e-mail, une tablette pour Mamie Rose.
+  s.avancer(60);
+  const t2 = await a.tablettePreparee();
+  const { abonnement: id2 } = await a.commanderEtPayer({ email: paul.email });
+  assert.strictEqual((await commande(id2)).fid, f1, 'reliée d\'office à l\'ancienne famille (annulable depuis l\'appli)');
+  await a.preparerEtEnvoyer(id2, t2);
+  s.avancer(2);
+  await a.afficherCode(t2);
+  const f2 = await a.installer(paul, t2, { nom: 'Mamie Rose' });
+  await s.calme();
+  assert.strictEqual((await commande(id2)).fid, f2, 'la commande suit sa tablette');
+  assert.strictEqual((await s.lire(`families/${f2}`)).abonnement.statut, 'actif');
+  assert.strictEqual((await s.lire(`families/${f2}`)).abonnement.stripeSubscriptionId, id2);
+  const ancienne = (await s.lire(`families/${f1}`)).abonnement;
+  assert.strictEqual(ancienne.statut, 'resilie', 'l\'ancienne famille redevient résiliée');
+  assert.strictEqual(ancienne.stripeSubscriptionId, id1);
+  assert.strictEqual((await s.lire(`stock/${t2.fiche}`)).alerteJumelage, null, 'pas d\'alerte pour Tanguy');
+  assert.strictEqual(s.stripe.etat.abonnements.get(id2).metadata.fid, f2);
+  s.avancer(2.1);
+  await s.tache('finDeGrace');
+  await s.calme();
+  assert.strictEqual((await s.lire(`families/${f2}`)).abonnement.statut, 'actif', 'pas de pause 48 h plus tard');
+});
+
 test('résiliation après le premier mois : dernier mois prélevé, rappel de retour, 140 € si la tablette ne revient pas', async () => {
   const paul = await s.compte('Paul', 'paul@exemple.fr');
   const julie = await s.compte('Julie', 'julie@exemple.fr');

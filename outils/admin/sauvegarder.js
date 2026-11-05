@@ -11,6 +11,11 @@
 //   node sauvegarder.js --garder 4           : nombre de sauvegardes de la base gardées dans le dossier (4 par défaut,
 //                                              les plus anciennes sont effacées ; 0 = tout garder)
 //   node sauvegarder.js --auto               : lancé par la tâche planifiée (voir installer-sauvegarde-hebdo.bat)
+//   node sauvegarder.js --copie E:\Papote     : écrit AUSSI une copie chiffrée (.json.enc, AES-256) dans ce dossier,
+//                                              hors du compte Google (clé USB, disque, dossier d'un autre nuage) ;
+//                                              12 copies gardées. Phrase : PAPOTE_PHRASE_SAUVEGARDE ou
+//                                              %USERPROFILE%\.papote\phrase-sauvegarde.txt (voir chiffrement.js).
+//                                              Relire : dechiffrer-sauvegarde.bat <fichier.json.enc>
 // Coût : une lecture Firestore par document (quelques milliers pour dix familles) ; avec --photos, un téléchargement
 // par nouveau fichier Storage (sortie gratuite jusqu'à 1 Go par jour, puis 0,12 $/Go ; ~0,45 Go par famille pleine).
 // Taille : la base fait quelques Mo par sauvegarde ; 4 sauvegardes = quelques dizaines de Mo au plus.
@@ -20,6 +25,7 @@ const path = require('path');
 const admin = require('firebase-admin');
 const { ouvrirBase } = require('./base');
 const { sauvegarder, sauvegarderFichiers, garderDernieres } = require('./sauvegarde-lib');
+const { chiffrer, phraseSecrete, garderCopies } = require('./chiffrement');
 const BUCKET = process.env.BUCKET_STORAGE || 'papote-famille-eu';
 
 function option(name, fallback) {
@@ -54,6 +60,18 @@ const dossier = option('vers', path.join(__dirname, 'sauvegardes'));
   console.log(`Sauvegarde écrite : ${fichier} (${s.documents.length} documents, ${s.comptes.length} comptes, ${ko} ko).`);
   const effacees = garderDernieres(dossier, Number(option('garder', 4)));
   if (effacees.length) console.log(`Anciennes sauvegardes effacées (on garde les ${option('garder', 4)} dernières) : ${effacees.join(', ')}.`);
+  const copie = option('copie', null);
+  if (copie) {
+    // Pas de phrase, ou dossier absent (clé USB débranchée) : la sauvegarde principale est faite, on le dit
+    // clairement et on sort en erreur pour que le journal le montre.
+    const phrase = phraseSecrete();
+    if (!phrase) throw new Error('copie chiffrée NON faite : phrase secrète introuvable (PAPOTE_PHRASE_SAUVEGARDE ou .papote\\phrase-sauvegarde.txt).');
+    if (!fs.existsSync(copie)) throw new Error(`copie chiffrée NON faite : dossier ${copie} introuvable (clé USB branchée ?).`);
+    const enc = path.join(copie, `${nom}.enc`);
+    fs.writeFileSync(enc, chiffrer(fs.readFileSync(fichier), phrase));
+    const parties = garderCopies(copie, 12);
+    console.log(`Copie chiffrée hors Google : ${enc}${parties.length ? ` (anciennes effacées : ${parties.join(', ')})` : ''}.`);
+  }
   if (process.argv.includes('--photos')) {
     const bucket = admin.storage(app).bucket(BUCKET);
     const f = await sauvegarderFichiers({

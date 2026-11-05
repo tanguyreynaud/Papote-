@@ -2420,7 +2420,12 @@ function suiteJumelage(t, commande, fid) {
   if (ETATS_BLOQUES.includes(t.etat)) return { refuser: true };
   if (!t.commande || !commande) return { alerte: ALERTE_SANS_COMMANDE };
   if (!commande.fid) return { relier: true };
-  if (commande.fid !== fid) return { alerte: 'jumelée à une autre famille que celle de sa commande' };
+  if (commande.fid !== fid) {
+    // Commande reliée d'office à l'ancienne famille d'un client qui recommande (index.js, paiementTermine) : sa
+    // tablette, jumelée ailleurs, dit quelle famille elle sert vraiment. L'ancienne famille est remise comme avant.
+    if (commande.relieeParEmail && commande.relieeParEmail.fid === commande.fid) return { relier: true, delier: commande.fid };
+    return { alerte: 'jumelée à une autre famille que celle de sa commande' };
+  }
   return {};
 }
 
@@ -2466,6 +2471,12 @@ async function appliquerJumelage(p, pairingRef) {
   // rejoint sa fiche dans la famille (l'app le montre aux proches, qui peuvent l'appeler par téléphone).
   if (t.simId) await ecrireForfaitFamille(t.simId).catch((e) => logger.warn('Forfait de la famille', e.message));
   // Tablette reliée : elle est forcément reçue (si le suivi du colis ne l'a pas déjà noté).
+  // Avant toute autre écriture sur la commande (qui pousse des messages Stripe) : elle quitte l'ancienne famille.
+  if (suite.delier) await delierAncienneFamille(suite.delier, p.fid, t.commande, commande.relieeParEmail.abonnementAvant);
+  // Tablette jumelée à la famille reliée d'office : le lien n'est plus provisoire.
+  if (t.commande && commande && commande.relieeParEmail && commande.fid === p.fid) {
+    await db().doc(`commandes/${t.commande}`).update({ relieeParEmail: FieldValue.delete() });
+  }
   if (t.commande && commande && commande.envoyeeLe && !(commande.preparation && commande.preparation.recuLe)) {
     await db().doc(`commandes/${t.commande}`).update({ 'preparation.recuLe': Date.now(), 'preparation.recuPar': 'tablette reliée' });
   }
@@ -2474,6 +2485,21 @@ async function appliquerJumelage(p, pairingRef) {
     logger.info(`Commande ${t.commande} reliée à la famille ${p.fid} par la tablette ${t.ref || fiche.id}.`);
   }
   return fiche;
+}
+
+// L'ancienne famille reliée d'office à la commande d'un client qui recommande retrouve son abonnement d'avant
+// (résilié, aucun…), si elle suit encore cette commande ; la commande passe à la nouvelle famille dans la même
+// écriture (les messages Stripe en route, qui portent encore l'ancienne famille, suivent commandes/{id}.fid).
+async function delierAncienneFamille(ancienne, nouvelle, abonnementId, abonnementAvant) {
+  const ref = db().doc(`families/${ancienne}`);
+  await db().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (snap.exists && snap.get('abonnement.stripeSubscriptionId') === abonnementId) {
+      tx.update(ref, { abonnement: abonnementAvant || { statut: 'aucun', majLe: FieldValue.serverTimestamp() }, rev: FieldValue.increment(1) });
+    }
+    tx.update(db().doc(`commandes/${abonnementId}`), { fid: nouvelle, relieeParEmail: FieldValue.delete() });
+  });
+  logger.info(`Commande ${abonnementId} : sa tablette est jumelée ailleurs, la famille ${ancienne} retrouve son abonnement d'avant.`);
 }
 
 // Rattrapage (chaque nuit et « Lancer maintenant ») : tablette préparée ou envoyée, jumelée (pairing
@@ -3160,7 +3186,10 @@ exports.gestionCampagne = onCall({ secrets: [MAIL_MOT_DE_PASSE], timeoutSeconds:
   const voulus = new Set((Array.isArray(d.emails) ? d.emails : []).map(emailPropre).filter(Boolean));
   const destinataires = (await lireContacts()).filter((c) => voulus.has(c.email) && c.consentement && !c.desinscrit);
   if (!destinataires.length) throw new HttpsError('failed-precondition', "Personne dans cette liste n'a accepté les e-mails d'information.");
-  if (destinataires.length > ENVOIS_MAX) throw new HttpsError('failed-precondition', `${destinataires.length} destinataires : ${ENVOIS_MAX} au plus par jour avec Brevo. Réduisez la liste.`);
+  // Quota Brevo partagé avec tous les autres e-mails du jour (quota-courriels.js) : 100 gardés pour les urgents.
+  const quota = require('./quota-courriels');
+  const permis = quota.permisEnNombre(await quota.partisAujourdhui(db()), destinataires.length);
+  if (destinataires.length > permis) throw new HttpsError('failed-precondition', `${destinataires.length} destinataires : ${permis} au plus aujourd'hui avec Brevo (${ENVOIS_MAX} par jour pour tous les e-mails, dont ${quota.RESERVE_URGENTS} gardés pour les e-mails urgents). Réduisez la liste ou envoyez demain.`);
   const ref = db().collection('campagnes').doc();
   await ref.set({ objet, message, le: Date.now(), par: request.auth.token.email || request.auth.uid, prevus: destinataires.length, envoyes: 0, ignores: voulus.size - destinataires.length });
   let envoyes = 0;
@@ -3175,12 +3204,13 @@ exports.gestionCampagne = onCall({ secrets: [MAIL_MOT_DE_PASSE], timeoutSeconds:
         await cref.set({ email: c.email, jeton }, { merge: true });
       }
       const lien = `${URL_DESINSCRIPTION}?c=${cleContact(c.email)}&j=${jeton}`;
-      await mail.envoyer({ ...smtp, a: c.email, contenu: emailInformation({ objet, message, nom: c.nom, lienDesinscription: lien }) });
+      await mail.envoyer({ ...smtp, a: c.email, contenu: emailInformation({ objet, message, nom: c.nom, lienDesinscription: lien }), enNombre: true });
       envoyes++;
     } catch (e) {
       erreurs.push(`${c.email} : ${e.message}`);
     }
   }
+  if (envoyes) await quota.compter(db(), envoyes, logger);
   await ref.update({ envoyes, erreurs: erreurs.slice(0, 20), finiLe: Date.now() });
   return { envoyes, ignores: voulus.size - destinataires.length, erreurs: erreurs.slice(0, 5) };
 });
