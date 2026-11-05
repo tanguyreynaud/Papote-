@@ -500,12 +500,12 @@ test('tâches regroupées (tachesHoraires) : l\'alerte « pas vue » part à 10 
   s.notifications.length = 0;
   // Mercredi 4 novembre 2026 à 3 h (Paris) : les tâches horaires seulement.
   const nuit = await s.fonctions.tachesHoraires.run({ scheduleTime: '2026-11-04T02:00:00.000Z' });
-  assert.deepStrictEqual(nuit, { relancesPaniers: 'ok', finDeGrace: 'ok', gestionCourrier: 'ok' });
+  assert.deepStrictEqual(nuit, { relancesPaniers: 'ok', finDeGrace: 'ok', gestionCourrier: 'ok', alerteForfait: 'ok' });
   await s.calme();
   assert.strictEqual(alertes().length, 0, '3 h : pas d\'alerte « pas vue »');
   // Le même jour à 10 h : en plus, rappels de jumelage et alerte du matin.
   const matin = await s.fonctions.tachesHoraires.run({ scheduleTime: '2026-11-04T09:00:00.000Z' });
-  assert.deepStrictEqual(matin, { relancesPaniers: 'ok', finDeGrace: 'ok', gestionCourrier: 'ok', rappelsJumelage: 'ok', alerteMatin: 'ok' });
+  assert.deepStrictEqual(matin, { relancesPaniers: 'ok', finDeGrace: 'ok', gestionCourrier: 'ok', alerteForfait: 'ok', rappelsJumelage: 'ok', alerteMatin: 'ok' });
   await s.calme();
   assert.strictEqual(alertes().length, 1, '10 h : alerte « pas vue »');
 });

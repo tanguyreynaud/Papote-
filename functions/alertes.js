@@ -69,7 +69,13 @@ function etatAlerte(tablette, maintenant, veille) {
   return null;
 }
 
-function message(type, nom) {
+// coupee : jour où internet revient, quand le forfait « internet coupé » est sans doute épuisé (forfait-alerte.js) :
+// pas de « ne répond plus » inquiétant, la vraie raison et le geste utile.
+function message(type, nom, coupee) {
+  if (type === 'silence' && coupee) {
+    const fin = require('./forfait-alerte').jourTexte(coupee);
+    return { titre: `La tablette de ${nom} n'a sans doute plus internet`, texte: `Son forfait du mois est épuisé, internet revient le ${fin}. Branchez-la au wifi si vous pouvez.` };
+  }
   return type === 'silence'
     ? { titre: `La tablette de ${nom} ne répond plus`, texte: 'Est-elle branchée et connectée au Wi-Fi ?' }
     : { titre: `La tablette de ${nom} est débranchée`, texte: 'Pensez à rebrancher son chargeur.' };
@@ -117,7 +123,7 @@ exports.alertesTablettes = onSchedule({ schedule: 'every 5 minutes', timeZone: '
   // Seulement les familles concernées, et seulement les champs utiles.
   const fids = [...parFamille.keys()];
   const familles = await db.getAll(...fids.map((fid) => db.doc(`families/${fid}`)),
-    { fieldMask: ['abonnement', 'name', 'createdBy', 'admins', 'veille'] });
+    { fieldMask: ['abonnement', 'name', 'createdBy', 'admins', 'veille', 'forfaitSim'] });
   await Promise.all(familles.map(async (fam) => {
     if (!fam.exists) return;
     const famille = fam.data();
@@ -140,7 +146,7 @@ exports.alertesTablettes = onSchedule({ schedule: 'every 5 minutes', timeZone: '
         });
         if (!pris) continue;
         const responsables = [...new Set([famille.createdBy, ...(famille.admins || [])].filter(Boolean))];
-        const { titre, texte } = message(type, famille.name || 'Mamie');
+        const { titre, texte } = message(type, famille.name || 'Mamie', type === 'silence' && require('./forfait-alerte').coupeeParForfait(tablette, famille.forfaitSim, maintenant));
         let n;
         try {
           n = await envoyer(db, fam.id, responsables, { type: 'alerte', titre, texte }, 6 * 3600);
@@ -239,6 +245,7 @@ exports.alerteMatin = async () => {
 };
 
 exports.etatAlerte = etatAlerte;
+exports.message = message;
 exports.enVeille = enVeille;
 exports.pasVueDepuisLongtemps = pasVueDepuisLongtemps;
 exports.alertePasVueDue = alertePasVueDue;

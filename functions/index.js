@@ -2394,6 +2394,8 @@ exports.tachesHoraires = require('./taches').planifier({
   bilanSupport: support.bilanSupport,
   // « Pas vue depuis deux jours », chaque matin à 10 h (alertes.js).
   alerteMatin: require('./alertes').alerteMatin,
+  // Forfait internet de la tablette à 80 et 95 % : Papote, puis la famille (forfait-alerte.js).
+  alerteForfait: () => require('./forfait-alerte').alerteForfait(envoyerMail, { emailPapote: EMAIL_PAPOTE, auth: admin.auth(), estActif: require('./abonnement').estActif }),
   // Purge mensuelle des données de plus de 12 mois (chat, paniers, familles résiliées) : purge.js.
   purgeMensuelle: require('./purge').purgeMensuelle,
 });
