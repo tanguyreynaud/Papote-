@@ -94,6 +94,11 @@ export function nommerFamille(code, nom, reveil = false) {
   return call('nommerFamille', reveil ? { reveil: true } : { code, nom });
 }
 
+// Famille préparée dès la commande (functions/famille-preparee.js) : le responsable donne le nom.
+export function nommerFamillePreparee(fid, nom) {
+  return call('nommerFamillePreparee', { fid, nom });
+}
+
 export function finirInstallation(fid) {
   return call('finirInstallation', { fid });
 }

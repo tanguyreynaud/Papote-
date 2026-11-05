@@ -458,6 +458,18 @@
         </form>
         </div>
       </div>
+      <!-- Famille préparée dès la commande : le nom d'abord, puis la tablette arrive toute seule. -->
+      <form id="nom-prepare" class="card" hidden novalidate>
+        <p class="seen small">Votre espace famille est prêt</p>
+        <h2>Comment appelez-vous la personne ?</h2>
+        <p class="muted">Le nom que toute la famille utilise, par exemple « Mamie Emma ». Il s'affichera sur la tablette, pour les appels et les alertes.</p>
+        <label>Son nom
+          <input id="nom-prepare-input" maxlength="40" placeholder="Mamie Emma" required>
+        </label>
+        <button type="submit" class="primary wide" id="nom-prepare-btn">Enregistrer</button>
+        <p id="nom-prepare-error" class="error" hidden></p>
+      </form>
+      <p id="tablette-en-route" class="card small" hidden>La tablette est en route. À son arrivée, il suffira de la brancher : elle retrouvera la famille toute seule, avec les photos déjà envoyées. Vous pouvez déjà inviter vos proches.</p>
       <p id="activity" class="activity" hidden></p>
       <p id="outbox" class="outbox" hidden></p>
       <button type="button" id="photo-nudge" class="card nudge photo-cta">
