@@ -985,7 +985,9 @@ async function remplirCommande(id) {
     t && partie ? formulaireRemplacement(c, t) : null);
   const etape = prochaineEtape(c, t);
   // Retour du matériel : coché ici seulement (la liste « à récupérer » ne fait qu'ouvrir la commande).
-  const aRecuperer = etatCommande(c) === 'retour';
+  // Tablette arrivée après le prélèvement des 140 € : « Matériel reçu » la note rendue et rembourse (Tanguy, 5/11).
+  const recueApres = !!(c.restitution && c.restitution.statut === 'facturee');
+  const aRecuperer = etatCommande(c) === 'retour' || recueApres;
   const zoneReception = aRecuperer ? zoneMaterielRecu(c, t) : null;
   zoneReceptionAffichee = zoneReception;
   const sansEtiquette = !(c.etiquettes && c.etiquettes.retour) && !(c.restitution && c.restitution.etiquette);
@@ -1255,6 +1257,7 @@ function zoneMaterielRecu(c, t) {
   let enMain = false;
   const zone = h('div', { class: 'zone-remplacement no-print', hidden: true },
     h('p', {}, titre, c.offerte ? 'Cochez ce qui manque (commande offerte : rien n\'est prélevé).' : 'Cochez ce qui manque, ce sera prélevé au client :'),
+    c.restitution && c.restitution.statut === 'facturee' ? h('p', { class: 'small' }, 'Le matériel non rendu a déjà été prélevé : il sera remboursé au client en enregistrant le retour.') : null,
     ...cases, msg);
   zone.ouvrir = (main) => {
     enMain = main;
@@ -1280,6 +1283,7 @@ function zoneMaterielRecu(c, t) {
         return res;
       });
       annonceCommande = r && r.erreur ? `Prélèvement refusé : ${r.erreur}. À relancer depuis Stripe.`
+        : c.restitution && c.restitution.statut === 'facturee' ? 'Retour enregistré : le matériel prélevé est remboursé au client.'
         : `Retour enregistré.${t && !manquants.includes('tablette') ? ' La tablette est à vérifier avant de repartir.' : ''}`;
       commandeAffichee = null;
       afficherTout();
