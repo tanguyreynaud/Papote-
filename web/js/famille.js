@@ -3128,6 +3128,18 @@ $('btn-resilier').addEventListener('click', async () => {
   });
 });
 
+// Décès du proche (audit « mauvais jours », 5/11) : pas d'« Avant de partir » ni de « Merci de rester », un seul
+// geste, des mots justes ; le serveur envoie des e-mails de deuil et n'écrit plus de nouvelles à cette adresse.
+$('btn-resilier-deces').addEventListener('click', async () => {
+  const quand = dateArret(session.family.abonnement);
+  const ok = await askConfirm(`Nous sommes sincèrement désolés. Papote s'arrêtera ${quand ? `le ${quand}` : 'à la fin du mois en cours'}, sans autre démarche ni justificatif. Les photos et les messages restent dans l'appli trois mois : vous pourrez les télécharger depuis la page Photos.`, 'Arrêter Papote');
+  if (!ok) return;
+  await withAboError(async () => {
+    await resilier(session.fid, { motif: 'deces' });
+    notice('C\'est noté. Toutes nos pensées vous accompagnent.');
+  });
+});
+
 $('btn-garder').addEventListener('click', () => withAboError(async () => {
   await annulerResiliation(session.fid);
   notice('Résiliation annulée : votre abonnement continue comme avant.');
@@ -3224,6 +3236,7 @@ async function renderFinDeContrat(abo) {
   const r = finInfo?.retractation;
   $('btn-retracter').hidden = !r;
   $('btn-resilier').hidden = !resilierPossible || !!r;
+  $('btn-resilier-deces').hidden = $('btn-resilier').hidden;
   $('retract-info').hidden = !r;
   if (r) {
     $('retract-info').textContent = r.jusqua
@@ -3384,6 +3397,7 @@ function renderAbonnement() {
     $('btn-abo-page').hidden = !admin || !abo.stripeCustomerId || statut === 'offert';
     resilierPossible = admin && enCours && !abo.resiliationLe && !!abo.stripeSubscriptionId;
     $('btn-resilier').hidden = !resilierPossible || !!finInfo?.retractation;
+    $('btn-resilier-deces').hidden = $('btn-resilier').hidden;
     // Arrêté par Papote (impayé…) : le client ne peut pas le reprendre seul.
     // Tablette déjà en retour : plus de « Garder » (il faudrait la renvoyer au client).
     $('btn-garder').hidden = !admin || !enCours || !abo.resiliationLe || abo.arretPar === 'papote' || !!finInfo?.restitution;

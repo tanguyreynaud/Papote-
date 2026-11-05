@@ -15,6 +15,7 @@ banc.brancher();
 
 const DOSSIER = process.env.CAPTURES || path.join(__dirname, '..', 'captures', 'mauvais-jours');
 async function capture(t, nom) {
+  await t.page.waitForTimeout(500); // fin des fondus des fenêtres
   await fs.promises.mkdir(DOSSIER, { recursive: true });
   await t.page.screenshot({ path: path.join(DOSSIER, `${nom}.png`) });
 }
@@ -54,4 +55,33 @@ test('Abonnement arrêté (résilié) : aucun « doit être réglé », ni pour 
   // Impayé suspendu : l'ancien texte reste (c'est bien à régler).
   await s.db.doc(`families/${fid}`).update({ 'abonnement.statut': 'suspendu', 'abonnement.stripeSubscriptionId': 'sub_x' });
   await paul.page.locator('#abo-banner', { hasText: 'réglé par un responsable' }).waitFor();
+});
+
+test('Décès : « Votre proche est décédé ? » arrête Papote en un geste, sans « Avant de partir » ni « Merci de rester »', async () => {
+  const julie = await banc.telephone('Julie');
+  const { fid, tab } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
+  s.avancer(31);
+  s.stripe.finirEssai(tab.commande);
+  await s.calme();
+  await julie.page.reload();
+  await g.attendreVue(julie, 'view-home');
+  await julie.page.click('.nav-item[data-tab="profile"]');
+  await g.attendreVue(julie, 'view-profile');
+  await julie.page.click('#btn-abo-page');
+  await g.attendreVue(julie, 'view-abonnement');
+  await julie.page.locator('#btn-resilier-deces').waitFor({ state: 'visible' });
+  await capture(julie, 'B-page-abonnement-bouton-deces');
+  await julie.page.click('#btn-resilier-deces');
+  const question = await g.texteFenetre(julie);
+  await capture(julie, 'B-question-deces');
+  assert.match(question, /sincèrement désolés/);
+  assert.doesNotMatch(question, /perdra|Avant de partir/);
+  await g.repondre(julie, 'Arrêter Papote');
+  assert.match(await g.texteFenetre(julie), /Toutes nos pensées vous accompagnent/);
+  await capture(julie, 'B-confirmation-deces');
+  await g.repondre(julie, 'OK');
+  await s.calme();
+  assert.ok((await g.lire(`families/${fid}`)).abonnement.resiliationLe, 'arrêt prévu');
+  assert.strictEqual((await g.lire(`commandes/${tab.commande}`)).motif, 'deces', 'motif noté (fonctions de main avec le correctif décès)');
+  assert.strictEqual(g.dernierMail('julie@exemple.fr').sujet, 'Nous pensons bien à vous');
 });
