@@ -305,7 +305,7 @@ button {
   font-weight: bold;
   box-shadow: 0 1.2vmin 3vmin rgba(0, 0, 0, .25);
 }
-.call-btn.answer { background: #16a34a; animation: pulse 1.2s infinite; }
+.call-btn.answer { background: #15803d; animation: pulse 1.2s infinite; }
 @keyframes pulse { 50% { transform: scale(1.06); } }
 
 /* Appel en cours : la vidéo de la famille sur tout l'écran, Mamie en petit dans le coin */
@@ -339,7 +339,7 @@ button {
 /* Le soir : bleu nuit doux, dans les tons de l'horloge de veille (pas un noir dur). */
 body.night { background: #1a1828; color: #e6e3f0; }
 body.night .date, body.night .offline, body.night .frame-empty, body.night .message-head,
-body.night .empty, body.night .setup-detail { color: #9d97b5; }
+body.night .empty, body.night .setup-detail { color: #aaa4c2; }
 body.night .home-frame { background: #252238; }
 body.night .message { background: #252238; }
 body.night .message.unseen { background: #2f2a4a; }
@@ -469,7 +469,7 @@ body.night .big-btn.messages { background: #312e81; }
   white-space: nowrap;
 }
 .ln-btn.heart { background: #e11d48; }
-.ln-btn.ok, .ln-btn.answer { background: #16a34a; }
+.ln-btn.ok, .ln-btn.answer { background: #15803d; }
 .ln-btn.decline { background: #dc2626; }
 .ln-btn[disabled] { opacity: .7; }
 
@@ -484,7 +484,7 @@ body.video-playing .overlay { visibility: hidden; }
 .weather-temp { font-size: 11vmin; font-weight: bold; margin-right: 3vmin; }
 .weather-label { font-size: 5.5vmin; font-weight: bold; color: #57534e; line-height: 1.2; }
 .weather-label small { display: block; font-size: 4.2vmin; font-weight: normal; color: #78716c; }
-body.night .weather-label { color: #9d97b5; }
+body.night .weather-label { color: #aaa4c2; }
 
 .home-buttons .big-btn { font-size: 7.5vmin; min-height: 20vmin; }
 
@@ -822,7 +822,7 @@ body.night .moment { color: #a5b4fc; }
   image-rendering: pixelated;
 }
 .invite p { margin: 0; font-size: 4.6vmin; font-weight: bold; color: #57534e; line-height: 1.25; }
-body.night .invite p { color: #9d97b5; }
+body.night .invite p { color: #aaa4c2; }
 
 /* ---------- Rendez-vous dans moins d'une heure, à la place de la photo ---------- */
 
@@ -966,8 +966,8 @@ html, body {
   font-weight: 800;
 }
 .clock { color: #24212f; letter-spacing: -0.03em; }
-.date, .weather-label { color: #5f5a6b; }
-.weather-label small, .offline, .frame-empty, .invite p { color: #5f5a6b; }
+.date, .weather-label { color: #524d5f; }
+.weather-label small, .offline, .frame-empty, .invite p { color: #524d5f; }
 .moment { color: #4f46e5; }
 .home-frame { background: #f6efe4; }
 
@@ -976,7 +976,7 @@ html, body {
   font-family: 'Atkinson Hyperlegible', Roboto, sans-serif;
 }
 .ln-text { color: #24212f; }
-.ln-sign { color: #5f5a6b; }
+.ln-sign { color: #524d5f; }
 .ln-note { background: #ffffff; }
 .ln-btn.ok, .ln-btn.answer { background: #15803d; }
 .ln-btn.replay { background: #4f46e5; }
@@ -991,13 +991,13 @@ html, body {
 .rdv-in { background: #4f46e5; }
 .wifi-help { background: #4f46e5; font-family: 'Atkinson Hyperlegible', Roboto, sans-serif; }
 .pause-screen { background: linear-gradient(135deg, #fdfaf5, #f6efe4); color: #24212f; }
-.pause-text { color: #5f5a6b; font-family: 'Atkinson Hyperlegible', Roboto, sans-serif; }
+.pause-text { color: #524d5f; font-family: 'Atkinson Hyperlegible', Roboto, sans-serif; }
 
 /* Le soir et la nuit : mêmes polices, couleurs sombres (inchangées pour ménager les yeux) */
 /* Le soir : bleu nuit doux, dans les tons de l'horloge de veille (pas un noir dur). */
 body.night { background: #1a1828; color: #e6e3f0; }
 body.night .clock { color: #f0eef8; }
-body.night .date, body.night .weather-label { color: #9d97b5; }
+body.night .date, body.night .weather-label { color: #aaa4c2; }
 body.night .home-frame { background: #252238; }
 body.night .bday-banner { background: #3b1a0c; color: #fdba74; }
 /* Bricolage est plus haute que l'ancienne police : l'heure un peu plus petite pour que tout tienne */
@@ -1067,7 +1067,7 @@ html .bday-banner { font-size: calc(4.8vmin * var(--ts, 1)); }
   min-height: 1.4em;
   font-family: 'Atkinson Hyperlegible', Roboto, sans-serif;
   font-size: 4.2vmin;
-  color: #5f5a6b;
+  color: #524d5f;
   opacity: 0;
   transition: opacity .6s ease;
 }
@@ -1096,7 +1096,7 @@ html .bday-banner { font-size: calc(4.8vmin * var(--ts, 1)); }
   font-weight: 800;
   color: #24212f;
 }
-.wifi-card-text { margin: 0 0 4vmin; font-size: 4.6vmin; color: #5f5a6b; font-family: 'Atkinson Hyperlegible', Roboto, sans-serif; }
+.wifi-card-text { margin: 0 0 4vmin; font-size: 4.6vmin; color: #524d5f; font-family: 'Atkinson Hyperlegible', Roboto, sans-serif; }
 .wifi-card-btn {
   min-height: 13vmin;
   padding: 0 8vmin;
@@ -1112,7 +1112,7 @@ html .bday-banner { font-size: calc(4.8vmin * var(--ts, 1)); }
 .wifi-card-btn:active { transform: scale(.97); }
 body.night .wifi-card { background: #252238; }
 body.night .wifi-card-title { color: #e6e3f0; }
-body.night .wifi-card-text { color: #9d97b5; }
+body.night .wifi-card-text { color: #aaa4c2; }
 .home-frame .wifi-card .wifi-card-art {
   position: static;
   display: block;
@@ -1341,7 +1341,7 @@ span.head-face {
   color: #fff;
 }
 .overlay.reminder .reminder-icon svg { width: 10vmin; height: 10vmin; }
-.overlay.reminder .ln-sign { text-align: left; font-weight: 700; color: #5f5a6b; }
+.overlay.reminder .ln-sign { text-align: left; font-weight: 700; color: #524d5f; }
 
 /* ---------- Accueil : le prochain rappel du jour sous la météo ---------- */
 .home-next {
@@ -1482,7 +1482,7 @@ body.night .next-when { color: #a5b4fc; }
   font-size: 9vmin;
   font-weight: 800;
 }
-.call-sub { margin: 0; font-size: 5vmin; color: #5f5a6b; }
+.call-sub { margin: 0; font-size: 5vmin; color: #524d5f; }
 .call-hangup {
   margin-top: 6vmin;
   min-width: 60vmin;
@@ -1508,7 +1508,7 @@ body.night .next-when { color: #a5b4fc; }
   background: #4f46e5; color: #fff; font-size: 11vmin; font-weight: 800;
 }
 .call-person-name { font-size: 6vmin; font-weight: 700; color: #24212f; }
-.call-back { margin-top: 3vmin; border: 0; background: transparent; color: #5f5a6b; font-size: 5.5vmin; font-weight: 700; }
+.call-back { margin-top: 3vmin; border: 0; background: transparent; color: #524d5f; font-size: 5.5vmin; font-weight: 700; }
 .call-out.picker .call-title { margin-top: 0; }
 .call-out.picker .call-people { flex-wrap: nowrap; gap: 3vmin; }
 .call-out.picker .call-person { min-width: 0; width: 34vmin; }
@@ -1606,7 +1606,7 @@ body.night .radio-btn:not(.playing) { background: #252238; color: #c7c2f0; borde
 body.night .home-left .sos-btn { background: #2a1f2c; color: #f4a7b4; border-color: #4a2e3a; }
 .sos-cancel {
   margin-top: 6vmin; min-width: 52vmin; min-height: 15vmin; padding: 0 8vmin; border-radius: 99vmin;
-  border: .5vmin solid #e9e1d4; background: #fff; color: #5f5a6b; box-shadow: 0 1vmin 3vmin rgba(36, 33, 47, .1);
+  border: .5vmin solid #e9e1d4; background: #fff; color: #524d5f; box-shadow: 0 1vmin 3vmin rgba(36, 33, 47, .1);
   font-family: 'Bricolage Grotesque', 'Atkinson Hyperlegible', sans-serif; font-size: 7.5vmin; font-weight: 800;
 }
 
@@ -1804,7 +1804,7 @@ html .call-out .call-hangup, html .call-ring .call-btn.answer {
   font-family: 'Atkinson Hyperlegible', sans-serif; font-size: 7.5vmin; font-weight: 800; color: #fff;
 }
 html .call-out .call-hangup { background: #dc2626; box-shadow: 0 1vmin 2.5vmin rgba(220, 38, 38, .3); }
-html .call-ring .call-btn.answer { background: #16a34a; box-shadow: 0 1vmin 2.5vmin rgba(22, 163, 74, .35); }
+html .call-ring .call-btn.answer { background: #15803d; box-shadow: 0 1vmin 2.5vmin rgba(21, 128, 61, .35); }
 /* L'image à droite : grande, coins carrés, comme une photo reçue */
 html .call-out:not(.picker) .call-face {
   grid-column: 2; grid-row: 1 / -1; align-self: stretch; width: calc(100vh - 6vmin); max-width: 48vw; height: auto;
@@ -1985,7 +1985,7 @@ html .overlay.bday .ln-note:has(.bday-face:not([hidden])) .ln-sign { grid-column
 /* P4 : accueil sans photo : une phrase pour Mamie, le QR code plus petit pour la famille. */
 html .home-frame .invite-qr { width: 30vmin; height: 30vmin; margin: 0 auto 2.5vmin; }
 html .invite .invite-titre { font-family: 'Bricolage Grotesque', 'Atkinson Hyperlegible', sans-serif; font-size: 6.4vmin; font-weight: 800; color: #312e81; margin: 0 0 4vmin; line-height: 1.15; }
-html .invite p { font-size: 4.2vmin; font-weight: 400; color: #5f5a6b; }
+html .invite p { font-size: 4.2vmin; font-weight: 400; color: #524d5f; }
 
 /* P5 : SOS : les visages de la famille à la place du pictogramme. */
 html .call-out:not(.picker) .call-face.faces {
@@ -2001,14 +2001,14 @@ html .call-face.faces .sos-face:first-child:nth-last-child(2) + .sos-face { grid
 /* Le soir (Tanguy, 27/10) : SOS, Appeler et Radio plus clairs pour rester lisibles à faible luminosité,
    en couleurs douces (rose pâle, vert franc, lavande), sans orange ni contraste agressif. */
 html body.night .home-left .sos-btn { background: #f6d5dc; color: #9f1239; border-color: #f6d5dc; }
-html body.night .home-left .call-btn { background: #22a05a; color: #fff; }
+html body.night .home-left .call-btn { background: #178446; color: #fff; }
 html body.night .home-left .radio-btn:not(.playing) { background: #dcd8f6; color: #3730a3; border-color: #dcd8f6; }
 html body.night .home-left .radio-btn.playing { background: #c9c3f2; color: #312e81; }
 
 /* Appel par la carte SIM qui arrive (chantier téléphone 29/10) : Décrocher en vert, « Pas maintenant » discret */
 html .call-out .call-buttons { grid-column: 1; grid-row: 6; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 3vmin; margin: 0 0 6vmin; }
 html .call-out .call-buttons .call-hangup { margin: 0; }
-html .call-out .call-hangup.call-answer { background: #16a34a; box-shadow: 0 1vmin 2.5vmin rgba(22, 163, 74, .35); }
+html .call-out .call-hangup.call-answer { background: #15803d; box-shadow: 0 1vmin 2.5vmin rgba(21, 128, 61, .35); }
 html .call-out .call-decline { border: 0; background: transparent; color: #5b5794; font-family: 'Atkinson Hyperlegible', sans-serif; font-size: 5.5vmin; font-weight: 700; padding: 2vmin 4vmin; }
 
 /* Redémarrage sans aucun réseau (04/11) : une carte calme à la place de l'heure, de la météo et des
@@ -2024,4 +2024,11 @@ html body.sans-reseau-actif .home-left > .sans-reseau {
 html body.sans-reseau-actif .net-banner { display: none !important; }
 html .sans-reseau-art { width: 26vmin; height: auto; margin-bottom: 3vmin; }
 html .sans-reseau-titre { margin: 0 0 2vmin; font-family: 'Alegreya Sans', sans-serif; font-weight: 800; font-size: 6vmin; color: #312e81; line-height: 1.1; }
-html .sans-reseau-texte { margin: 0; font-family: 'Atkinson Hyperlegible', sans-serif; font-size: 4.2vmin; color: #5f5a6b; line-height: 1.3; }
+html .sans-reseau-texte { margin: 0; font-family: 'Atkinson Hyperlegible', sans-serif; font-size: 4.2vmin; color: #524d5f; line-height: 1.3; }
+/* ---------- Audit d'accessibilité (3/11) : contrastes mesurés sur les écrans de Mamie ----------
+   - Textes secondaires (date, météo, signatures, sous-titres) : #5f5a6b → #524d5f (6,4:1 → 7,8:1 sur crème),
+     et la nuit #9d97b5 → #aaa4c2 (6,3:1 → 7,3:1) : AAA même en texte normal, et moins lavés en plein soleil.
+   - « Décrocher » et les boutons verts d'un appel : #16a34a (3,3:1, tout juste AA) → #15803d (5,0:1), le vert d'« Appeler ».
+   - « Appeler » la nuit : #22a05a (3,4:1) → #178446 (4,8:1 avec le blanc, 3,7:1 sur le fond nuit).
+   Volontairement inchangés : l'heure de veille (#4a4560 sur noir, 2,3:1 : l'écran doit rester sombre dans la chambre)
+   et le blocage du zoom (kiosque). */

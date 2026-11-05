@@ -5,7 +5,7 @@
   --w-bg: #fdfaf5;
   --w-surface: #ffffff;
   --w-text: #24212f;
-  --w-muted: #5f5a6b;
+  --w-muted: #524d5f;
   --w-line: #e9e1d4;
   --w-accent: #4f46e5;
   --w-accent-soft: #e8e6fd;
@@ -307,7 +307,7 @@
 /* ---------- Étape 3 : ville de la météo, fenêtre « Choisir la ville » comme pour le wifi ---------- */
 .welcome-modal.top { align-items: flex-start; padding-top: 3vmin; }
 .meteo-input { text-align: left; margin: 0 0 2vmin; max-width: none; }
-.city-detail { font-size: 3.4vmin; color: #5f5a6b; font-weight: 400; }
+.city-detail { font-size: 3.4vmin; color: #524d5f; font-weight: 400; }
 
 /* ---------- Barre de défilement toujours visible (listes et écrans qui dépassent) ---------- */
 .scroll-track {
@@ -344,7 +344,7 @@
   border-radius: 3vmin; font-size: 6vmin; font-weight: 700; background: #f6f5ff; border-color: #e8e6fd;
 }
 .welcome-btn.digit:active { background: #e8e6fd; }
-.welcome-btn.digit.erase { background: #fff; color: #5f5a6b; }
+.welcome-btn.digit.erase { background: #fff; color: #524d5f; }
 .digit.empty { display: block; }
 .cities-list { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .cities-list .welcome-list { flex: 1; min-height: 0; max-width: none; margin: 0; overflow-y: auto; gap: 0; }
