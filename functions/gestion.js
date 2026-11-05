@@ -1924,6 +1924,11 @@ exports.gestionLireFacture = onCall(
     if (!TYPES_LECTURE.test(d.type || '')) throw new HttpsError('invalid-argument', 'PDF, JPEG ou PNG seulement.');
     const contenu = String(d.contenu || '');
     if (!contenu || contenu.length > MAX_PIECE * 1.4) throw new HttpsError('invalid-argument', 'Fichier vide ou trop lourd.');
+    // Même règle que pour les e-mails : un long PDF n'est pas une facture et coûte cher à lire.
+    const pages = d.type === 'application/pdf' ? pagesPdf(Buffer.from(contenu, 'base64')) : null;
+    if (pages > MAX_PAGES_PDF) {
+      throw new HttpsError('failed-precondition', `Ce PDF fait ${pages} pages : il n'est pas lu automatiquement. Remplissez la fiche à la main.`);
+    }
     return lireDocument(contenu, d.type);
   });
 
