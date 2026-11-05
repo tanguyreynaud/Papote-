@@ -2355,6 +2355,12 @@ function blocAgir(zone, t) {
     boutons.set(o.type, b);
     grille.append(b);
   }
+  // Tablette volée : un seul geste coupe son identité (fonction tabletteVolee, functions/tablette-volee.js).
+  const volee = h('button', { type: 'button', class: 'secondary danger', 'data-volee': '' },
+    'Tablette volée : tout couper', h('small', {}, 'Verrouille (ou efface), sort de la famille, désactive ses comptes'));
+  volee.addEventListener('click', () => couperTablette(volee));
+  boutons.set('volee', volee);
+  grille.append(volee);
   zone.replaceChildren(
     h('h2', {}, 'Agir sur la tablette'),
     h('p', { class: 'muted small' }, 'La tablette est réveillée tout de suite par notification et répond en général en moins d\'une minute. Chaque action lui coûte quelques Ko.'),
@@ -2378,6 +2384,38 @@ function blocAgir(zone, t) {
       extra = { serie };
     }
     await envoyer(o, b, o.type === 'journal' ? 'status' : o.type, extra);
+  }
+
+  // Ordre verrouiller (ou usine) envoyé AVANT de sortir la tablette de sa famille, fiches membre supprimées, compte
+  // des appels désactivé, jetons révoqués, clé App Check retirée, fiche « perdue » ; le compte de la tablette est
+  // désactivé dès qu'elle a exécuté l'ordre. Le serveur cherche la tablette par son n° de série Android.
+  async function couperTablette(b) {
+    detail.hidden = true;
+    if (!t.serieAndroid) { prevenir('Le n° de série Android de cette tablette n\'est pas noté sur sa fiche : impossible de la couper à distance.'); return; }
+    const effacer = await demander(`Tablette volée ou perdue pour de bon : effacer aussi tout le contenu de ${nomTablette(t)} (remise à zéro) ? Si on compte la retrouver, la verrouiller suffit.`, { oui: 'Remettre à zéro', non: 'Verrouiller seulement', danger: true });
+    const saisi = await saisir(`${nomTablette(t).charAt(0).toUpperCase()}${nomTablette(t).slice(1)} reçoit l'ordre de ${effacer ? 'tout effacer (remise à zéro)' : 'se verrouiller'}, sort de sa famille (plus aucune photo ni message), ses comptes sont désactivés et la fiche passe en « Perdue ». Pour la remettre en service, il faudra la réinstaller.\n\nPour confirmer, retapez son numéro :`, '', { oui: 'Tout couper' });
+    if (saisi == null) return;
+    if ((saisi || '').trim().toUpperCase() !== String(t.ref || t.serieAndroid).toUpperCase()) { prevenir('Numéro différent : rien n\'a été fait.'); return; }
+    occuper(true);
+    boutonCharge(b, true);
+    montrer(`Un instant… coupure de ${nomTablette(t)} demandée à ${heure()}.`, 'en-attente');
+    try {
+      const r = await appeler('tabletteVolee', { serie: t.serieAndroid, effacer: effacer === true });
+      const morceaux = [
+        r.ordre ? `ordre « ${effacer ? 'Remettre à zéro' : 'Verrouiller'} » envoyé` : 'aucun ordre (tablette déjà hors famille)',
+        `${r.membres || 0} fiche(s) membre supprimée(s)`,
+        `${(r.desactives || []).length} compte(s) désactivé(s)`,
+        `${r.cles || 0} clé(s) App Check retirée(s)`,
+        'fiche passée en « Perdue »',
+      ];
+      boutonCharge(b, false);
+      montrer(`✓ ${heure()} · ${morceaux.join(', ')}.${r.attente ? ` ${r.attente}` : ''}${(r.erreurs || []).length ? ` À vérifier : ${r.erreurs.join(' ; ')}` : ''} Pensez à suspendre la carte SIM (Lyca).`, 'ok');
+      signalerChangement();
+    } catch (err) {
+      occuper(false);
+      boutonCharge(b, false);
+      montrer(`La tablette n'a pas pu être coupée (${messageErreur(err)}).`, 'ko');
+    }
   }
 
   async function envoyer(o, b, type, extra) {
