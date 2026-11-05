@@ -100,9 +100,9 @@ function codeAuHasard() {
   return Array.from(bytes, (b) => CODE_ALPHABET[b % CODE_ALPHABET.length]).join('');
 }
 
-// deps : { db, compteVerifie, envoyerMail, mail, appli, logger, stockage, relierParEmail, prevenirPapote, notifier }
+// deps : { db, compteVerifie, envoyerMail, mail, appli, logger, stockage, relierParEmail, prevenirPapote, notifier, familleDuScan }
 function brancher(deps) {
-  const { db, compteVerifie, envoyerMail, mail, appli, logger, stockage, relierParEmail, prevenirPapote, notifier } = deps;
+  const { db, compteVerifie, envoyerMail, mail, appli, logger, stockage, relierParEmail, prevenirPapote, notifier, familleDuScan } = deps;
 
   async function reserverTablette(request) {
     const { uid, email } = compteVerifie(request);
@@ -111,6 +111,9 @@ function brancher(deps) {
     if (!code) throw new HttpsError('invalid-argument', 'Le code de la tablette a 8 caractères.');
     if (!prenom) throw new HttpsError('invalid-argument', 'Votre prénom est demandé.');
     const ref = db.doc(`pairings/${code}`);
+    // Famille préparée à la commande (famille-preparee.js) et tablette pas reconnue : elle y entre directement.
+    const preparee = familleDuScan ? await entrerFamillePreparee(ref, { uid, email, prenom }) : null;
+    if (preparee) return preparee;
     const r = await reserver(ref, { uid, email, prenom });
     // Installation reprise : le premier proche est prévenu sur son téléphone (B2).
     if (r.reprise && r.fid && notifier) {
@@ -120,6 +123,26 @@ function brancher(deps) {
       }).catch((e) => logger.error(`Installation ${code} : premier proche non prévenu`, e.message));
     }
     return { etat: r.etat, ...(r.fid !== undefined ? { fid: r.fid } : {}), ...(r.par !== undefined ? { par: r.par } : {}) };
+  }
+
+  async function entrerFamillePreparee(ref, { uid, email, prenom }) {
+    const p = (await ref.get()).data();
+    if (!p || p.status !== 'waiting' || (ms(p.expiresAt) || 0) <= Date.now()) return null;
+    const cible = await familleDuScan(uid, p);
+    if (!cible) return null;
+    const fait = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists || snap.get('status') !== 'waiting') return false;
+      tx.update(ref, {
+        status: 'confirmed', fid: cible.fid, familyName: cible.nom, claimedBy: uid, claimedName: prenom, claimedEmail: email,
+        reservedAt: FieldValue.serverTimestamp(), expiresAt: Timestamp.fromMillis(Date.now() + ENTREE_TABLETTE_MS),
+      });
+      if (cible.commande) tx.update(db.doc(`commandes/${cible.commande}`), { tabletteRelieeLe: FieldValue.serverTimestamp() });
+      return true;
+    });
+    if (!fait) return null;
+    logger.info(`Installation ${ref.id} : tablette pas reconnue, entrée dans la famille préparée ${cible.fid} de ${uid}.`);
+    return { etat: 'reserve', fid: cible.fid };
   }
 
   async function reserver(ref, { uid, email, prenom }) {
@@ -373,5 +396,5 @@ function refusAnnulation(fam, uid) {
 
 module.exports = {
   brancher,
-  regles: { decisionScan, refusAnnulation, REPRISE_MS, villeDuRelais, villeAvecCoordonnees, normaliserCode, OPTIONS_PAR_DEFAUT, ETAPES },
+  regles: { decisionScan, refusAnnulation, REPRISE_MS, villeDuRelais, villeAvecCoordonnees, normaliserCode, codeAuHasard, OPTIONS_PAR_DEFAUT, ETAPES },
 };

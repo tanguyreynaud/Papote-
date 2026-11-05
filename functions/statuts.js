@@ -62,6 +62,18 @@ function refusEnvoiSansSim(c, tablettes) {
   return '';
 }
 
+// « Colis déposé » avec le numéro T-… lu sur la tablette du carton (A14-4) : il doit être celui de la tablette
+// reliée à la commande. Sans numéro saisi (anciens écrans de l'admin), rien n'est vérifié.
+function refusAutreTablette(saisie, tablettes) {
+  const norme = (v) => String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/^T0*(\d)/, 'T$1');
+  const lu = norme(saisie);
+  if (!lu) return '';
+  const reliees = tablettes.filter((x) => ['en-stock', 'preparee', 'envoyee'].includes(x.etat));
+  if (reliees.some((x) => norme(x.ref) === lu)) return '';
+  const attendue = reliees.map((x) => x.ref).filter(Boolean).join(' ou ');
+  return `La tablette du carton (${String(saisie).trim()}) n'est pas celle de cette commande${attendue ? ` (${attendue})` : ''} : vérifiez le numéro T-… collé sur la tablette.`;
+}
+
 // « Le client a reçu le colis » : fait partir les 30 jours et le premier prélèvement, donc colis parti seulement.
 function refusReception(c) {
   if (c.expedition === 'envoyee') return '';
@@ -109,7 +121,7 @@ function refusSuppressionSim(ligne, tablette) {
 }
 
 module.exports = {
-  refusEnvoiSansSim,
+  refusEnvoiSansSim, refusAutreTablette,
   refusEtiquette, refusEtiquetteEnDouble, refusEnvoi, refusReception, refusRetourMateriel, refusLienCommande,
   refusStatutSim, refusRecharge, refusSuppressionSim, SUITES_SIM, RESTITUTION_EN_COURS,
 };
