@@ -66,6 +66,8 @@ a.btn { justify-self: start; display: inline-flex; align-items: center; min-heig
 /* Pas de soulignement des liens (Tanguy, 2026-10-22) : ils restent repérables par leur couleur et le gras. */
 a { text-decoration: none; }
 main a:not([class]), footer a:not([class]), .rassure a { font-weight: 700; }
+/* Bulle du chat (chat-support.js) : sur téléphone, un simple rond pour ne pas recouvrir le code de commande. */
+@media (max-width: 760px) { body .ps-bouton span { display: none; } body .ps-bouton { padding: .95rem; } }
 </style>
 </head>
 <body>
