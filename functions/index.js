@@ -1694,14 +1694,16 @@ async function finDeGrace() {
     await prevenirPaiement(snap.id, snap.get('abonnement.stripeSubscriptionId'), 'suspendu', null);
   }
   // Installation finie sans commande reliée (B3) : 48 h de tolérance, puis « aucun » (Papote en pause).
+  // Installation jamais finie (F2) : 72 h après son début. pendantInstallation : « C'est parfait » redonne 48 h.
   const tolerees = await db.collection('families').where('abonnement.statut', '==', 'installation').get();
   for (const snap of tolerees.docs) {
     if (!regles.toleranceDepassee(snap.get('abonnement'), maintenant)) continue;
+    const pendant = snap.get('installation.etape') !== 'fini';
     await snap.ref.update({
-      abonnement: { statut: 'aucun', majLe: FieldValue.serverTimestamp() },
+      abonnement: { statut: 'aucun', majLe: FieldValue.serverTimestamp(), ...(pendant ? { pendantInstallation: true } : {}) },
       rev: FieldValue.increment(1),
     });
-    logger.warn(`Famille ${snap.id} : toujours aucune commande reliée 48 h après l'installation, Papote en pause.`);
+    logger.warn(`Famille ${snap.id} : toujours aucune commande reliée ${pendant ? '72 h après le début de l\'installation' : '48 h après l\'installation'}, Papote en pause.`);
   }
 }
 

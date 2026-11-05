@@ -398,3 +398,46 @@ test('couverture 4G vérifiée par Papote : pas de paiement là où la carte SIM
   assert.deepStrictEqual(c.proche, { adresse: '2 place de l\'Église 07310 Saint-Martin-de-Valamas', lat: 44.9369, lon: 4.3683, couverture4g: 'TBC' });
   assert.ok(s.boite.some((m) => m.a === 'contact@mapapote.fr' && /Chez le proche.*Saint-Martin-de-Valamas[\s\S]*très bonne/.test(m.texte)));
 });
+
+test('installation commencée mais jamais finie : pas gratuite pour toujours, « aucun » 72 h après le début ; finie ensuite, 48 h de plus', async () => {
+  const julie = await s.compte('Julie', 'julie@exemple.fr');
+  // Tablette hors du stock (n° de série inconnu) : aucune commande ne se relie toute seule.
+  const t = { serie: 'INCONNUE-F2', tabletUid: 'tablette-f2', callsUid: 'appels-f2' };
+  await a.afficherCode(t);
+  await s.appeler('reserverTablette', { code: t.code, prenom: 'Julie' }, julie);
+  const { fid } = await s.appeler('nommerFamille', { code: t.code, nom: 'Mamie Emma' }, julie);
+  await s.calme();
+  await a.entrerDansLaFamille(t);
+  let fam = await s.lire(`families/${fid}`);
+  assert.strictEqual(fam.abonnement.statut, 'installation');
+  assert.ok(Math.abs(fam.abonnement.toleranceJusqua.toMillis() - (Date.now() + 3 * s.JOUR)) < 60e3, 'tolérance de 72 h dès le début');
+
+  // Julie ne touche jamais « C'est parfait ».
+  s.avancer(2.9);
+  await s.tache('finDeGrace');
+  assert.strictEqual((await s.lire(`families/${fid}`)).abonnement.statut, 'installation', 'toujours tolérée avant 72 h');
+  s.avancer(0.2);
+  await s.tache('finDeGrace');
+  await s.calme();
+  fam = await s.lire(`families/${fid}`);
+  assert.strictEqual(fam.abonnement.statut, 'aucun', 'après 72 h : Papote en pause');
+  assert.strictEqual(fam.abonnement.pendantInstallation, true);
+
+  // Elle finit enfin l'installation : les 48 h habituelles pour relier sa commande, une seule fois.
+  s.boite.length = 0;
+  await s.appeler('finirInstallation', { fid }, julie);
+  await s.calme();
+  fam = await s.lire(`families/${fid}`);
+  assert.strictEqual(fam.abonnement.statut, 'installation');
+  assert.ok(Math.abs(fam.abonnement.toleranceJusqua.toMillis() - (Date.now() + 2 * s.JOUR)) < 60e3);
+  assert.ok(!fam.abonnement.pendantInstallation);
+  assert.ok(mailsA('contact@mapapote.fr').some((m) => /sans commande reliée/.test(m)), 'Tanguy prévenu');
+  s.avancer(2.1);
+  await s.tache('finDeGrace');
+  await s.calme();
+  fam = await s.lire(`families/${fid}`);
+  assert.strictEqual(fam.abonnement.statut, 'aucun', 'après les 48 h : en pause pour de bon');
+  assert.ok(!fam.abonnement.pendantInstallation);
+  await s.appeler('finirInstallation', { fid }, julie);
+  assert.strictEqual((await s.lire(`families/${fid}`)).abonnement.statut, 'aucun', 'pas de 2e tolérance');
+});
