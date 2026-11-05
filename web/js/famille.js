@@ -2955,9 +2955,14 @@ applyTheme(currentTheme());
 const ABO_OK_KEY = 'papote.retourPaiement';
 const dateLongue = (ts) => (ts ? toDate(ts).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : '');
 
+// Abonnement arrêté : la famille l'a voulu, jamais « doit être réglé » (lu par une famille en deuil).
+const TEXTE_ARRETE = "L'abonnement Papote est arrêté : la tablette ne reçoit plus de photos ni d'appels. Les photos déjà envoyées restent ici quelque temps : vous pouvez les télécharger depuis la page Photos.";
+
 // Abonnement en pause : envois, agenda et appels bloqués, avec une explication.
 function paused() {
   if (abonnementOk(session?.family)) return false;
+  // Abonnement arrêté (résiliation voulue, décès, EHPAD) : rien n'est à régler (audit « mauvais jours », 5/11).
+  if (session?.family?.abonnement?.statut === 'resilie') { notice(TEXTE_ARRETE); return true; }
   notice(amFamilyAdmin()
     ? "Papote est en pause : l'abonnement de la famille doit être réglé. Touchez Profil en bas de l'écran, puis Abonnement."
     : "Papote est en pause : l'abonnement de la famille doit être réglé par un responsable de la famille.");
@@ -3388,6 +3393,8 @@ function renderAbonnement() {
   let text = '';
   if (statut === 'impaye' && admin) {
     text = `Le dernier paiement a échoué. La tablette se mettra en pause ${abo.graceJusqua ? `le ${dateLongue(abo.graceJusqua)}` : 'très bientôt'}.`;
+  } else if (statut === 'resilie') {
+    text = TEXTE_ARRETE;
   } else if (!abonnementOk(session.family)) {
     text = admin
       ? "Papote est en pause : l'abonnement de la famille doit être réglé. Tout reviendra automatiquement."
@@ -3403,8 +3410,10 @@ function renderAbonnement() {
   }
   $('abo-banner').hidden = !text;
   $('abo-banner-text').textContent = text;
-  $('abo-banner-btn').hidden = !admin || ['aucun', 'installation'].includes(statut);
-  $('abo-banner-paid').hidden = !sansAbo;
+  // « Régler » seulement s'il y a quelque chose à régler (pas après un arrêt : reprendre se fait dans Profil).
+  $('abo-banner-btn').hidden = !admin || ['aucun', 'installation', 'resilie'].includes(statut);
+  // Après un arrêt (souvent un décès), pas de « Déjà commandé ? » sous le bandeau : la reprise reste dans Profil.
+  $('abo-banner-paid').hidden = !sansAbo || statut === 'resilie';
   // Retour de la page de paiement : on confirme dès que le serveur a activé l'abonnement.
   let waiting = false;
   try { waiting = localStorage.getItem(ABO_OK_KEY) === '1'; } catch (e) { /* rien */ }
