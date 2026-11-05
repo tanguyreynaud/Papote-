@@ -5404,6 +5404,8 @@ $('family-switch').addEventListener('click', async () => {
 
 function showLogin(legacy) {
   $('login-legacy').hidden = !legacy;
+  // QR code de la tablette scanné (?tablette=…) : on le dit, sinon l'écran ressemble à une première ouverture quelconque.
+  $('login-tablette').hidden = legacy || !pairCode();
   $('email-sent').hidden = true;
   // iPhone, app installée, rouverte après être allée chercher le lien dans l'e-mail : on peut le coller.
   const attendu = isIos() && launchedFromHomeScreen() ? pendingEmail() : '';
