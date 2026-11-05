@@ -146,12 +146,14 @@ test('SOS (F-a) : abonnement suspendu, sans carte SIM : le SOS part par internet
   } finally { await b.fermer(); }
 });
 
-test('SOS (F-a) : tablette verrouillée (perdue) : pas de SOS (pas de fausse alerte à la famille)', async () => {
+// Depuis le 05/11 (Tanguy), l'écran verrouillé a son propre bouton SOS (ecrans.test.js) : ici, un toucher
+// ailleurs sur l'écran verrouillé ne déclenche rien.
+test('SOS (F-a) : tablette verrouillée (perdue) : un toucher hors du bouton SOS ne déclenche rien', async () => {
   const b = await tablette({}, { subscription: 'suspendu', perdue: true });
   try {
     const dessous = await b.page.evaluate(() => document.elementFromPoint(640, 400).closest('.perdue-screen') !== null);
     assert.ok(dessous, 'écran verrouillé au-dessus de tout');
-    await b.page.mouse.click(640, 400);
+    await b.page.mouse.click(640, 60);
     await b.avancer(6000);
     assert.strictEqual((await b.appels('sendSms')).length, 0);
     assert.deepStrictEqual(await appelsTel(b), []);
