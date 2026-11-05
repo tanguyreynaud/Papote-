@@ -104,3 +104,14 @@ test('Outlook et Gmail sans styles : carte de 560 px [if mso], bouton à toute �
   assert.doesNotMatch(m.html, /<a href="[^"]*">/); // chaque lien a sa couleur en ligne
   for (const t of m.html.match(/<table\b[^>]*>/g)) assert.match(t, /role="presentation"/);
 });
+
+test('premier jour : allumer la tablette expliqué, pas de « décroche toute seule » trompeur', () => {
+  // Audit premier jour (05/11) : la tablette décroche quand elle voit un visage, pas toute seule.
+  const colis = mail.colisParti({ nom: 'Julie', suivi: '1', lien: 'https://x', relais: null, code: 'AB' });
+  assert.match(colis.text, /bouton de marche/);
+  assert.match(colis.text, /laissez-la charger/);
+  for (const m of [mail.installationFinie({ prenom: 'Julie', famille: 'Mamie Jeanne' }), mail.demandeAcceptee({ prenom: 'Anne', famille: 'Mamie Jeanne' })]) {
+    assert.doesNotMatch(m.text, /décroche toute seule|n'a rien à faire/);
+    assert.match(m.text, /regarde l.écran/);
+  }
+});

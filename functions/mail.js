@@ -197,9 +197,9 @@ const lienHtml = (lien, texte) => `<a href="${echapper(lien)}" style="color:${C.
 // se scanne avec l'appareil photo du téléphone (ou le code se tape sur app.mapapote.fr), puis l'appli demande le
 // nom du proche, une première photo et fait le test du son.
 const GESTES_ARRIVEE = (code) => ({ etapes: [
-  'Branchez la tablette et allumez-la. La carte SIM est déjà dedans : rien à régler.',
+  'Branchez la tablette sur une prise, puis appuyez 3 secondes sur le bouton de marche (sur la tranche). Elle démarre en une minute environ ; si l\'écran reste noir, laissez-la charger un quart d\'heure. La carte SIM est déjà dedans : rien à régler.',
   `Avec l'appareil photo de votre téléphone, scannez le QR code affiché sur la tablette (ou ${lienHtml(lienAppli(code), 'ouvrez app.mapapote.fr')} et tapez le code affiché).`,
-  'L\'appli vous guide ensuite : le nom de votre proche, une première photo, le test du son. Deux minutes, et la tablette est prête.',
+  'L\'appli vous guide ensuite : votre compte, le nom de votre proche, une première photo, le test du son. Cinq minutes environ, et la tablette est prête.',
 ] });
 
 // ---------- Commande et livraison ----------
@@ -402,7 +402,7 @@ function demandeAcceptee({ prenom, famille, lien }) {
   return message(`Bienvenue dans la famille de ${famille || 'votre proche'}`, [
     bonjour(prenom),
     `Votre demande est acceptée : vous faites maintenant partie de la famille de <b>${echapper(famille || 'votre proche')}</b> sur Papote.`,
-    'Vous pouvez dès maintenant envoyer une photo ou un message à la tablette, et l\'appeler en vidéo : la tablette décroche toute seule.',
+    'Vous pouvez dès maintenant envoyer une photo ou un message à la tablette, et l\'appeler en vidéo : la tablette sonne et décroche dès que votre proche regarde l\'écran.',
   ], { texte: 'Ouvrir l\'appli Papote', lien: lien || APPLI });
 }
 
@@ -414,7 +414,7 @@ function installationFinie({ prenom, famille, lien }) {
     `C'est fait : la tablette de <b>${qui}</b> est reliée à votre famille. Gardez cet e-mail, il résume l'essentiel.`,
     { etapes: [
       `<b>Envoyer une photo ou un message</b> : dans l'appli, touchez « Envoyer ». La tablette l'affiche tout de suite, avec un petit carillon.`,
-      `<b>Appeler en vidéo</b> : touchez « Appeler ». La tablette décroche toute seule, ${qui} n'a rien à faire.`,
+      `<b>Appeler en vidéo</b> : touchez « Appeler ». La tablette sonne ; dès que ${qui} regarde l'écran, l'appel démarre tout seul (ou elle touche « Décrocher »).`,
       '<b>Inviter la famille</b> : onglet Famille, « Inviter ». Chacun installe l\'appli sur son téléphone, rien de plus.',
       `<b>Rester rassuré</b> : si la tablette est débranchée ou si ${qui} appuie sur SOS, vous êtes prévenu sur votre téléphone.`,
     ] },
