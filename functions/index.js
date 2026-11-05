@@ -685,18 +685,33 @@ exports.resilierAbonnement = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE
   // La famille qui touche encore « Résilier » (vieil onglet) après un arrêt de Papote ne le change pas en arrêt
   // « client », qu'elle pourrait ensuite reprendre seule.
   const resteParPapote = request.auth.token.admin !== true && abo.cancel_at && abo.metadata.arretPar === 'papote';
+  // Décès du proche (audit « mauvais jours », 5/11) : même arrêt (fin du mois, CGV), mais des e-mails de deuil
+  // (resiliationEnregistree, retourTablette, rappelRestitution) et plus aucune nouvelle de Papote à cette adresse.
+  const deces = (request.data || {}).motif === 'deces';
   await stripe().subscriptions.update(id, {
     cancel_at: Math.ceil(le / 1000),
     proration_behavior: 'none',
-    metadata: { ...abo.metadata, arretPar: parPapote || resteParPapote ? 'papote' : 'client' },
+    metadata: { ...abo.metadata, arretPar: parPapote || resteParPapote ? 'papote' : 'client', ...(deces ? { motif: 'deces' } : {}) },
   });
+  if (deces) await noterDeces(id);
   await appliquer(fid, id);
   // Deux responsables (ou deux onglets) qui demandent l'arrêt en même temps : un seul e-mail.
   if (await premiereDemande(id, `arret-${Math.ceil(le / 1000)}`)) {
-    await mailArret(id, fam, (infos) => mail.resiliationEnregistree({ ...infos, le, parPapote }));
+    await mailArret(id, fam, (infos) => mail.resiliationEnregistree({ ...infos, le, parPapote, deces }));
   }
   return { le };
 });
+
+// Décès noté sur la commande (e-mails de retour adaptés) ; l'adresse de la commande ne reçoit plus de nouvelles.
+async function noterDeces(commandeId) {
+  const ref = db.doc(`commandes/${commandeId}`);
+  await ref.set({ motif: 'deces', motifLe: FieldValue.serverTimestamp() }, { merge: true });
+  const email = (await ref.get()).get('email');
+  if (email) {
+    await db.doc(`contacts/${cleContact(String(email).toLowerCase())}`)
+      .set({ email: String(email).toLowerCase(), consentement: false, desinscritLe: Date.now(), desinscritPar: 'deces' }, { merge: true });
+  }
+}
 
 // Une demande (arrêt à telle date, reprise) n'est notée qu'une fois sur la commande : rejouée en même temps depuis
 // deux téléphones ou deux onglets, elle ne vaut qu'un e-mail. Renvoie true la première fois.
@@ -1676,7 +1691,7 @@ async function restitutions() {
       try {
         await envoyerMail(snap.get('email'), mail.rappelRestitution({
           nom: snap.get('nom'), avant: r.avant.toMillis(), lien: r.qr || r.etiquette || null, qr: !!r.qr,
-          montant: regles.penaliteRestitution(snap.data()),
+          montant: regles.penaliteRestitution(snap.data()), deces: snap.get('motif') === 'deces',
         }));
         await snap.ref.update({ 'restitution.rappelLe': FieldValue.serverTimestamp() });
       } catch (e) {
@@ -2036,7 +2051,7 @@ async function suiviRetour(event, rAvant, r, c) {
     await avisResiliation(id, c, retractation);
     if (c.email && !r.etiquette) {
       try {
-        await envoyerMail(c.email, mail.retourTablette({ nom: c.nom, avant: r.avant.toMillis(), retractation, montant: regles.penaliteRestitution(c) }));
+        await envoyerMail(c.email, mail.retourTablette({ nom: c.nom, avant: r.avant.toMillis(), retractation, montant: regles.penaliteRestitution(c), deces: c.motif === 'deces' }));
       } catch (e) {
         logger.error(`Commande ${id} : e-mail de retour non parti`, e.message);
       }
