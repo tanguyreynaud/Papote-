@@ -305,7 +305,7 @@ button {
   font-weight: bold;
   box-shadow: 0 1.2vmin 3vmin rgba(0, 0, 0, .25);
 }
-.call-btn.answer { background: #15803d; animation: pulse 1.2s infinite; }
+.call-btn.answer { background: #166534; animation: pulse 1.2s infinite; }
 @keyframes pulse { 50% { transform: scale(1.06); } }
 
 /* Appel en cours : la vidéo de la famille sur tout l'écran, Mamie en petit dans le coin */
@@ -1804,7 +1804,7 @@ html .call-out .call-hangup, html .call-ring .call-btn.answer {
   font-family: 'Atkinson Hyperlegible', sans-serif; font-size: 7.5vmin; font-weight: 800; color: #fff;
 }
 html .call-out .call-hangup { background: #dc2626; box-shadow: 0 1vmin 2.5vmin rgba(220, 38, 38, .3); }
-html .call-ring .call-btn.answer { background: #15803d; box-shadow: 0 1vmin 2.5vmin rgba(21, 128, 61, .35); }
+html .call-ring .call-btn.answer { background: #166534; box-shadow: 0 1vmin 2.5vmin rgba(22, 101, 52, .35); }
 /* L'image à droite : grande, coins carrés, comme une photo reçue */
 html .call-out:not(.picker) .call-face {
   grid-column: 2; grid-row: 1 / -1; align-self: stretch; width: calc(100vh - 6vmin); max-width: 48vw; height: auto;
@@ -2001,14 +2001,14 @@ html .call-face.faces .sos-face:first-child:nth-last-child(2) + .sos-face { grid
 /* Le soir (Tanguy, 27/10) : SOS, Appeler et Radio plus clairs pour rester lisibles à faible luminosité,
    en couleurs douces (rose pâle, vert franc, lavande), sans orange ni contraste agressif. */
 html body.night .home-left .sos-btn { background: #f6d5dc; color: #9f1239; border-color: #f6d5dc; }
-html body.night .home-left .call-btn { background: #178446; color: #fff; }
+html body.night .home-left .call-btn { background: #166534; color: #fff; }
 html body.night .home-left .radio-btn:not(.playing) { background: #dcd8f6; color: #3730a3; border-color: #dcd8f6; }
 html body.night .home-left .radio-btn.playing { background: #c9c3f2; color: #312e81; }
 
 /* Appel par la carte SIM qui arrive (chantier téléphone 29/10) : Décrocher en vert, « Pas maintenant » discret */
 html .call-out .call-buttons { grid-column: 1; grid-row: 6; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 3vmin; margin: 0 0 6vmin; }
 html .call-out .call-buttons .call-hangup { margin: 0; }
-html .call-out .call-hangup.call-answer { background: #15803d; box-shadow: 0 1vmin 2.5vmin rgba(21, 128, 61, .35); }
+html .call-out .call-hangup.call-answer { background: #166534; box-shadow: 0 1vmin 2.5vmin rgba(22, 101, 52, .35); }
 html .call-out .call-decline { border: 0; background: transparent; color: #5b5794; font-family: 'Atkinson Hyperlegible', sans-serif; font-size: 5.5vmin; font-weight: 700; padding: 2vmin 4vmin; }
 
 /* Redémarrage sans aucun réseau (04/11) : une carte calme à la place de l'heure, de la météo et des
@@ -2032,3 +2032,4 @@ html .sans-reseau-texte { margin: 0; font-family: 'Atkinson Hyperlegible', sans-
    - « Appeler » la nuit : #22a05a (3,4:1) → #178446 (4,8:1 avec le blanc, 3,7:1 sur le fond nuit).
    Volontairement inchangés : l'heure de veille (#4a4560 sur noir, 2,3:1 : l'écran doit rester sombre dans la chambre)
    et le blocage du zoom (kiosque). */
+/* Décrocher et Appeler du soir en vert foncé #166534 (Tanguy, 05/11) : 7,1:1 avec le texte blanc. */

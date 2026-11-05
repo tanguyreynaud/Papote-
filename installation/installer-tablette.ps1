@@ -170,11 +170,8 @@ Adb shell settings put global auto_time_zone 1 | Out-Null
 Adb shell settings put global stay_on_while_plugged_in 7 | Out-Null
 # Barre de navigation du bas masquée pour de bon (réglage des tablettes UNISOC, sans effet ailleurs)
 Adb shell settings put system show_navigationbar 0 | Out-Null
-# Batterie ménagée (tablette toujours branchée) : la charge s'arrête à 80 %. Réglage Blackview
-# « Protection de charge > personnalisée » (mode 2), vérifié sur la Tab 60 Pro ; sans effet ailleurs.
-Adb shell settings put system bv_custom_charging_max 80 | Out-Null
-Adb shell settings put system bv_charging_protection_mode 2 | Out-Null
 # Données : seul Papote utilise internet (Économiseur de données, applis inutiles désactivées).
+# Pas de plafond de charge (Tanguy, 05/11).
 & (Join-Path $PSScriptRoot 'economie-donnees.ps1')
 # Tablette en français, clavier AZERTY : Papote change la langue au démarrage grâce à ces droits
 Adb shell pm grant $Package android.permission.CHANGE_CONFIGURATION | Out-Null
