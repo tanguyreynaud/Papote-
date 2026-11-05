@@ -395,7 +395,7 @@ test('« N téléphones reçoivent les appels » : le serveur note sur chaque pr
   await jetons.set({ tokens: [], natifs: [] });
   await s.calme();
   assert.strictEqual((await membre.get()).get('recoitAppels'), false, 'plus de jeton : plus de téléphone');
-  await jetons.set({ natifs: ['jeton-android'] });
+  await jetons.set({ natifs: ['jeton-android'], natifsV: 2 });
   await s.calme();
   assert.strictEqual((await membre.get()).get('recoitAppels'), true);
 });

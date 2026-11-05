@@ -2195,7 +2195,7 @@ exports.telephoneAppels = onDocumentWritten(
   { document: 'families/{fid}/members/{uid}/private/push', database: BASE_FIRESTORE, region: REGION_FIRESTORE },
   async (event) => {
     const apres = event.data && event.data.after;
-    const recoit = Boolean(apres && apres.exists && ((apres.get('tokens') || []).length || (apres.get('natifs') || []).length));
+    const recoit = Boolean(apres && apres.exists && ((apres.get('tokens') || []).length || push.natifsFiables(apres).length));
     const membre = db.doc(`families/${event.params.fid}/members/${event.params.uid}`);
     try {
       const snap = await membre.get();
