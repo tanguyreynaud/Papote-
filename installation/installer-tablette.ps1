@@ -231,7 +231,7 @@ Adb shell pm grant $Package android.permission.CALL_PHONE | Out-Null
 Adb shell pm grant $Package android.permission.READ_PHONE_NUMBERS | Out-Null
 $useless = Get-Content (Join-Path $PSScriptRoot 'applis-inutiles.txt') | Where-Object { $_ -and $_ -notmatch '^#' }
 foreach ($p in $useless) { Adb shell pm disable-user --user 0 $p.Trim() | Out-Null }
-Say 'Papote est l’application Téléphone (appels de la famille seulement), applis inutiles désactivées.' 'Green'
+Say "Papote est l'application Téléphone (appels de la famille seulement), applis inutiles désactivées." 'Green'
 
 # 7. Lancement relié à la famille
 $pinArgs = @()

@@ -52,8 +52,8 @@ if ($dp -match 'no_outgoing_calls') { Bad 'Appels sortants de la carte SIM encor
 $role = Adb shell dumpsys role
 if ($role -match "CALL_SCREENING[\s\S]{0,200}holders=$Package") { Ok 'Appels de la carte SIM filtrés (seulement la famille)' }
 else { Bad 'Filtrage des appels inactif' 'Relancer installer-tablette.bat' }
-if ($role -match "\bDIALER[\s\S]{0,200}holders=$Package") { Ok 'Papote est l’application Téléphone (écran d’appel Papote)' }
-else { Bad 'Papote n’est pas l’application Téléphone' 'Relancer installer-tablette.bat' }
+if ($role -match "\bDIALER[\s\S]{0,200}holders=$Package") { Ok "Papote est l'application Téléphone (écran d'appel Papote)" }
+else { Bad "Papote n'est pas l'application Téléphone" 'Relancer installer-tablette.bat' }
 
 Say "`nRéglages" 'Cyan'
 if ((Adb shell settings get global auto_time).Trim() -eq '1') { Ok 'Date et heure automatiques' } else { Bad 'Heure manuelle' 'Relancer installer-tablette.bat' }
