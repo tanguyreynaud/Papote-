@@ -558,7 +558,8 @@ button.secondary.charge::after, button.link.charge::after { border-color: rgba(7
 .bulle-annonce.visible { opacity: 1; transform: translate(-50%, 0); }
 
 /* Message d'erreur d'un formulaire : un encadré lisible plutôt qu'une ligne de texte. */
-.f-msg.error { background: #fdecec; color: var(--danger); border-radius: 10px; padding: 8px 12px; }
+/* Rouge foncé : contraste 4,5 sur le fond rosé (axe, 05/11). */
+.f-msg.error { background: #fdecec; color: #b91c1c; border-radius: 10px; padding: 8px 12px; }
 @media (prefers-reduced-motion: reduce) { .barre-chargement::before, button.charge::after, .roue-attente { animation-duration: 2.5s; } }
 
 /* Carte « … en cours » pendant une action. */
