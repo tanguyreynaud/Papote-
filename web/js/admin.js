@@ -215,7 +215,8 @@ function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
       titre: 'Choisir la tablette',
       texte: 'Prenez une tablette déjà installée : elle a un numéro T-… écrit dessus.',
       contenu(zone, e, maj) {
-        const dispo = stock.filter((t) => t.commande === c.id || (['en-stock', 'preparee'].includes(t.etat) && !t.commande))
+        // Une tablette jumelée à une autre famille (tablette de test) n'est jamais proposée : pas à vendre.
+        const dispo = stock.filter((t) => t.commande === c.id || (['en-stock', 'preparee'].includes(t.etat) && !t.commande && (!t.fid || t.fid === c.fid)))
           .sort((a, b) => !!b.ref - !!a.ref);
         const choix = creer('select', { ariaLabel: 'Tablette' });
         choix.append(option('', dispo.length ? 'Choisir la tablette…' : 'Aucune tablette en stock', !e.tablette),
