@@ -74,6 +74,9 @@ function suspendueDepuisTrop(abonnement, maintenant) {
 // Fin d'installation sans commande reliée : 48 h de tolérance, tout fonctionne, pendant lesquelles Tanguy
 // relie la commande à la main (statut « installation » gardé, abonnement.toleranceJusqua), puis « aucun ».
 const TOLERANCE_INSTALLATION_MS = 48 * 60 * 60 * 1000;
+// Installation commencée (nommerFamille) mais jamais finie : pas gratuite pour toujours (F2, Tanguy 5/11). La même
+// tolérance part dès le début, sur 72 h ; « C'est parfait » la remplace par les 48 h ci-dessus.
+const TOLERANCE_DEBUT_INSTALLATION_MS = 72 * 60 * 60 * 1000;
 function toleranceDepassee(abonnement, maintenant) {
   if (!abonnement || abonnement.statut !== 'installation') return false;
   const fin = enMillis(abonnement.toleranceJusqua);
@@ -328,6 +331,7 @@ module.exports = {
   SUSPENSION_RETOUR_JOURS,
   suspendueDepuisTrop,
   TOLERANCE_INSTALLATION_MS,
+  TOLERANCE_DEBUT_INSTALLATION_MS,
   toleranceDepassee,
   avisPaiement,
   TARIFS,
