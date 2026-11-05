@@ -1809,6 +1809,7 @@ function carteRecharges(l, modif, vue) {
         convertir: (v) => { const n = Number(v); if (!Number.isInteger(n) || n < 1 || n > 366) throw new Error('Un nombre de jours, ex. 30.'); return n; } }),
       ...modif('Renouvellement', l.renouvellementAuto ? 'automatique, par l\'opérateur' : 'à la main', 'renouvellementAuto', {
         valeur: l.renouvellementAuto ? 'oui' : '', options: [['', 'À la main'], ['oui', 'Automatique, par l\'opérateur']], convertir: (v) => v === 'oui' }),
+      ...ligneFinForfait(l),
       ...(cetteAnnee ? [h('dt', {}, `Payé en ${annee}`), h('dd', {}, euros(cetteAnnee))] : []),
       ...ligneGardeFou(vue && vue.sim)),
     h('p', { class: 'muted small' }, l.renouvellementAuto
@@ -1817,6 +1818,38 @@ function carteRecharges(l, modif, vue) {
       ' La tablette reçoit le forfait (Go notés plus haut, 1 Go sinon) et la date de recharge : à 70 % elle réduit l\'image des appels, à 88 % encore plus, à 95 % elle les passe sans image et les vidéos attendent le Wi-Fi.'),
     recharges.length ? h('div', { class: 'table cartes' }, tableRecharges(recharges)) : h('p', { class: 'muted small' }, 'Aucune recharge notée.'));
 }
+// Ce que fait l'opérateur au bout du forfait (Tanguy, 5/11) : débit réduit (Lyca, Bouygues) ou internet coupé
+// (Sosh 1 Go bloqué). Recopié sur la famille : l'alerte de fin de forfait et l'app famille adaptent leur message.
+// Deux boutons de même taille, sans confirmation : le choix s'affiche tout de suite, une roue pendant l'envoi,
+// un seul envoi même en touchant deux fois.
+const FINS_FORFAIT = [['reduit', 'Débit réduit'], ['bloque', 'Internet coupé']];
+function ligneFinForfait(l) {
+  const actuel = l.finForfait === 'bloque' ? 'bloque' : 'reduit';
+  let envoi = false;
+  const boutons = FINS_FORFAIT.map(([v, texte]) => h('button', {
+    type: 'button', class: 'choix-fin-forfait no-print', 'data-fin': v, 'aria-pressed': String(v === actuel),
+  }, texte));
+  const marquer = (choisi) => boutons.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.fin === choisi)));
+  for (const b of boutons) {
+    b.addEventListener('click', async () => {
+      if (envoi || b.getAttribute('aria-pressed') === 'true') return;
+      envoi = true;
+      marquer(b.dataset.fin);
+      b.classList.add('charge');
+      const fait = b.dataset.fin === 'bloque' ? 'Noté : internet coupé à la fin du forfait' : 'Noté : débit réduit à la fin du forfait';
+      const ok = await modifierChampsSim(l.id, { finForfait: b.dataset.fin }, fait);
+      b.classList.remove('charge');
+      if (!ok) marquer(actuel);
+      envoi = false;
+    });
+  }
+  return [h('dt', {}, 'À la fin du forfait'), h('dd', {},
+    h('div', { class: 'fins-forfait', role: 'group', 'aria-label': 'À la fin du forfait' }, ...boutons),
+    h('span', { class: 'muted small' }, actuel === 'bloque'
+      ? 'Internet coupé jusqu\'au forfait suivant : la famille est prévenue à 95 % (« internet sera coupé jusqu\'au … »).'
+      : 'Débit réduit jusqu\'au forfait suivant : la famille est prévenue à 95 % (« les appels vidéo seront plus lents »).'))];
+}
+
 // Garde-fou du forfait vu par la tablette (Forfait.java) : Mo passés par la carte depuis le début du pass,
 // sur le forfait recopié dans sa famille (Go de la carte, 1 Go sinon), et ce qu'elle retient.
 const PALIERS = ['normal', 'visio Éco', 'visio très réduite', 'appels sans image, ni vidéo, ni météo, ni mise à jour'];

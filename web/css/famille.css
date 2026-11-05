@@ -238,6 +238,8 @@ button:disabled { opacity: .45; cursor: default; }
 }
 .activity.warn { color: var(--danger); font-weight: 600; }
 .activity.warn::before { background: var(--danger); }
+/* Information calme (forfait internet de la tablette) : point indigo, texte normal, ni rouge ni orange. */
+.activity.calme::before { background: var(--accent); }
 
 /* ---------- Accueil : six grandes tuiles ---------- */
 
