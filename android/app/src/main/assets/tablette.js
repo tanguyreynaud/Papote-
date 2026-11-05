@@ -2257,7 +2257,7 @@
             finished = true;
             startSos(2);
           } else if (state === 'missed') {
-            finish('La famille est prévenue', 'Quelqu’un va vous rappeler.', 8000);
+            finish('La famille est prévenue', 'Votre SOS lui a été envoyé.', 8000);
           } else if (state === 'busy') {
             finish('Occupé', 'Réessayez dans un moment.');
           } else if (state === 'failed') {
@@ -2291,7 +2291,7 @@
       if (n >= liste.length) {
         // Personne n'a décroché : la famille est prévenue par le serveur (appel internet, 2e essai).
         if (callApiReady()) { startSos(2); return; }
-        renderCall('ended', 'La famille est prévenue', 'Quelqu’un va vous rappeler.');
+        renderCall('ended', 'La famille est prévenue', 'Votre SOS lui a été envoyé.');
         setTimeout(function () { if (!gsm && /state-ended/.test(callScreen.className)) closeCallScreen(); }, 8000);
         return;
       }
