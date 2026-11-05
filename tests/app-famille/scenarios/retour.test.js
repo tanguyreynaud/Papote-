@@ -95,8 +95,8 @@ test('Retour : chaque écran ramène à celui d\'avant, une fenêtre se ferme sa
 
 test('App Android : retour depuis l\'accueil demande « Voulez-vous quitter Papote ? », dans la page', async () => {
   const lea = await banc.telephone('Léa');
-  // Ouverte par l'app Android (Ouverture.java ajoute ?quitter=1).
-  await g.ouvrir(lea, '?quitter=1');
+  // Ouverte par l'app Android (Ouverture.java ajoute ?quitter=1 ; Chrome donne son referrer).
+  await g.ouvrirParApp(lea, '?quitter=1');
   await g.familleInstallee(lea, { email: 'lea.retour@exemple.fr', prenom: 'Léa' });
 
   // Un premier toucher sur l'accueil pose l'étape « sortie » sous l'accueil.

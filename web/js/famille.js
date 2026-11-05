@@ -24,7 +24,7 @@ import {
   annulerInstallation,
 } from './abonnement.js';
 import { startCall, watchTabletBusy, watchIncomingCalls, answerIncoming, warmUpCalls, declineIncoming, reportCallIncident } from './appel.js';
-import { pushSupported, pushAllowed, pushRefused, enablePush, closeCallNotification, rememberNativeToken, inNativeApp } from './push.js';
+import { pushSupported, pushAllowed, pushRefused, enablePush, closeCallNotification, rememberNativeToken, inNativeApp, launchFromAndroidApp, nativeNotificationsOff } from './push.js';
 import { prepareVideo, unlockVideo } from './video.js';
 import { filmerPossible, filmerOuvert, ouvrirFilmer, fermerFilmer } from './filmer.js';
 import { startAgenda, stopAgenda } from './agenda.js';
@@ -1821,7 +1821,10 @@ async function renderPhoneCard() {
   const push = $('phone-push');
   push.checked = pushAllowed();
   push.disabled = false;
-  if (pushAllowed()) {
+  if (nativeNotificationsOff()) {
+    $('phone-push-text').textContent = "Votre téléphone ne sonnera pas : Android bloque les notifications de l'app Papote. Touchez la carte rouge de l'accueil pour les autoriser.";
+    push.disabled = true;
+  } else if (pushAllowed()) {
     $('phone-push-text').textContent = isIos()
       ? `Une notification vous prévient quand ${nom} appelle, même app fermée (un seul son, laissez le mode silencieux coupé).`
       : `Votre téléphone sonne quand ${nom} appelle, même app fermée.`;
@@ -2392,6 +2395,13 @@ function ouvrirReglagePause(depuis) {
   location.href = `intent://sans-pause?depuis=${depuis}#Intent;scheme=papote;package=fr.mapapote.famille;end`;
 }
 $('pause-nudge').addEventListener('click', () => ouvrirReglagePause('accueil'));
+// App Android aux notifications bloquées (?notifs=0) : elle ne peut pas sonner. La carte rouge
+// (un lien intent://notifications, voir telephone/ReglageNotifs) ouvre leur réglage dans Android.
+function renderNotifsNudge() {
+  let ouvertParApp = false;
+  try { ouvertParApp = sessionStorage.getItem('papote.app') === '1'; } catch (e) { /* rien */ }
+  $('notifs-nudge').hidden = !session || !ouvertParApp || !nativeNotificationsOff();
+}
 // « Plus tard » : la sonnerie s'arrête ici, les autres proches peuvent encore répondre.
 // « Refuser » : l'appel s'arrête tout de suite, la tablette affiche que vous n'avez pas pu répondre.
 $('incoming-decline').addEventListener('click', () => {
@@ -5536,7 +5546,9 @@ async function enterApp({ garderEcran = false } = {}) {
     (uid) => tabletMembers.some((m) => m.id === uid), (list) => showIncoming(list[list.length - 1] || null));
   const nudge = renderPushNudge();
   renderPauseNudge();
-  if (pushAllowed()) enablePush(session.fid, session.uid);
+  // App Android aux notifications coupées : enablePush retire son jeton (le serveur prévient autrement).
+  if (pushAllowed() || inNativeApp()) enablePush(session.fid, session.uid);
+  renderNotifsNudge();
   warmUpCalls();
   startAgenda(session, setNotifReminders, visageCarre);
   startNotifs(session);
@@ -5610,10 +5622,12 @@ async function start() {
   if (params.get('appel')) answerOnArrival(params.get('appel'));
   // Notification d'une autre famille (« veut rejoindre », « a rejoint ») : l'appli s'ouvre sur cette famille.
   if (params.get('famille')) saveFamilyId(params.get('famille'));
-  // Ouvert par l'app Android Papote : ce téléphone sonnera par elle (voir push.js).
-  if (params.get('natif')) rememberNativeToken(params.get('natif'));
+  // Ouvert par l'app Android Papote : ce téléphone sonnera par elle (voir push.js). Ces paramètres
+  // ne sont crus que venant de l'app elle-même : un lien piégé ne fait rien.
+  const parApp = launchFromAndroidApp(params);
+  if (parApp && parApp.natif) rememberNativeToken(parApp.natif, parApp.notifsOff);
   // Rouvert par l'app Android : ?pause=1 tant que le réglage n'est pas fait (sinon absent).
-  if (params.get('natif') || params.get('pause') || params.get('quitter')) {
+  if (parApp && (parApp.natif || params.get('pause') || params.get('quitter'))) {
     try { sessionStorage.setItem('papote.app', '1'); } catch (e) { /* rien */ }
     // L'app Android sait se fermer (« Voulez-vous quitter Papote ? » puis « Quitter »).
     if (params.get('quitter')) try { sessionStorage.setItem('papote.quitter', '1'); } catch (e) { /* rien */ }

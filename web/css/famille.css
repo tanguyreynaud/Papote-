@@ -822,6 +822,8 @@ button:disabled { opacity: .45; cursor: default; }
 .face-buttons .link { justify-content: flex-start; padding: 4px 0; font-size: 15px; }
 
 .nudge { display: flex; align-items: center; gap: 14px; width: 100%; text-align: left; font-weight: 400; }
+.nudge.alerte { border: 2px solid var(--danger); color: inherit; text-decoration: none; }
+.nudge.alerte strong { color: var(--danger); }
 .nudge .avatar-empty { width: 48px; height: 48px; color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
 /* « Envoyer une photo » : le geste principal de l'accueil, en indigo plein, plus grand que les autres cartes. */
 .photo-cta { padding: 20px 18px; gap: 16px; background: var(--accent); color: var(--accent-text); box-shadow: 0 10px 24px color-mix(in srgb, var(--accent) 35%, transparent); transition: transform .12s; }

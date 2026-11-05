@@ -21,8 +21,8 @@ async function espionnerNavigation(t) {
 
 test('App Android : « Appel vidéo » passe à l\'écran d\'appel de l\'app, qui se connecte et appelle tout seul', async () => {
   const julie = await banc.telephone('Julie');
-  // Ouverte par l'app Android (Ouverture.java ajoute ?quitter=1).
-  await g.ouvrir(julie, '?quitter=1');
+  // Ouverte par l'app Android (Ouverture.java ajoute ?quitter=1 ; Chrome donne son referrer).
+  await g.ouvrirParApp(julie, '?quitter=1');
   // Le jeton est demandé dès l'arrivée sur l'accueil.
   const jeton = julie.page.waitForResponse((r) => r.url().includes('jetonAppelNatif'), { timeout: 60_000 });
   const { fid, tab } = await g.familleInstallee(julie, { email: 'julie.android@exemple.fr', prenom: 'Julie' });
