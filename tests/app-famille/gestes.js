@@ -134,6 +134,15 @@ async function ouvrir(t, suite = '') {
   await t.page.goto(`${banc.origine}/${suite}`);
 }
 
+/** Ouverture par l'app Android (TWA) : Chrome met document.referrer = android-app://fr.mapapote.famille/,
+ *  seule preuve que la page croit pour ?natif=, ?quitter=1… (web/js/push.js, launchFromAndroidApp). */
+async function ouvrirParApp(t, suite = '') {
+  await t.context.addInitScript(() => {
+    Object.defineProperty(Document.prototype, 'referrer', { get: () => 'android-app://fr.mapapote.famille/', configurable: true });
+  });
+  await ouvrir(t, suite);
+}
+
 /** Connexion par lien e-mail, comme un proche : adresse tapée, lien reçu, lien touché. */
 async function seConnecter(t, email, suite = '') {
   if (!t.page.url().startsWith(banc.origine)) await ouvrir(t, suite);
@@ -388,6 +397,6 @@ module.exports = {
   centre, doubleAppui, appuiLong, clavier, fenetresOuvertes, attendreRetourVisible, nbAppels, serveurMuet, jamaisMainPropre,
   verifierLargeur,
   vue, attendreVue, visible, repondre, texteFenetre, photo, video,
-  ouvrir, seConnecter, remplirMoi, inscrire, tabletteAllumee, installer, fermerAccueil, familleInstallee, rejoindre, dernierMail, toast,
+  ouvrir, ouvrirParApp, seConnecter, remplirMoi, inscrire, tabletteAllumee, installer, fermerAccueil, familleInstallee, rejoindre, dernierMail, toast,
   ouvrirTuile, retourAccueil, lire, liste, attendreBase, codesEmail,
 };

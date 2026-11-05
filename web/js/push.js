@@ -9,15 +9,45 @@ import { db, doc, setDoc, serverTimestamp } from './firebase.js';
 
 // App Android Papote (dossier telephone/ du dépôt) : elle ouvre l'app famille avec ?natif=<jeton>.
 // Ce téléphone sonne alors comme un vrai appel par elle, plus par les notifications du navigateur.
-const CLE_NATIF = 'papote.jetonNatif';
+// Le jeton n'est cru que si la page a été ouverte par l'app elle-même (Chrome met alors
+// document.referrer = android-app://fr.mapapote.famille/) : un simple lien
+// https://app.mapapote.fr/?natif=<jeton d'un autre> enverrait sinon les appels (et le jeton de
+// connexion de l'écran d'appel, functions/appels.js) à ce jeton-là. Ancienne clé (papote.jetonNatif)
+// abandonnée : elle a pu être remplie par un tel lien avant ce contrôle.
+const CLE_NATIF = 'papote.natif';
+const CLE_MUET = 'papote.natifMuet';
+const PAR_APP_ANDROID = /^android-app:\/\/fr\.mapapote\.famille(\/|$)/;
+const JETON_FCM = /^[A-Za-z0-9_:-]{20,4096}$/;
+try { localStorage.removeItem('papote.jetonNatif'); } catch (e) { /* rien */ }
 
-export function rememberNativeToken(jeton) {
-  try { localStorage.setItem(CLE_NATIF, jeton); } catch (e) { /* rien */ }
+/**
+ * Paramètres que seule l'app Android peut donner (natif, notifs, pause, quitter), ou null si la
+ * page n'a pas été ouverte par elle. Le dernier ?natif= est le sien (Ouverture l'ajoute à la fin,
+ * même quand elle a été ouverte par un lien qui en portait déjà un).
+ */
+export function launchFromAndroidApp(params, referrer = document.referrer) {
+  if (!PAR_APP_ANDROID.test(referrer || '')) return null;
+  const natif = params.getAll('natif').pop() || null;
+  return { natif: natif && JETON_FCM.test(natif) ? natif : null, notifsOff: params.get('notifs') === '0' };
+}
+
+// notifsOff : Android bloque les notifications de l'app (ou son canal « Appels ») : elle ne peut
+// pas sonner, le jeton ne doit pas compter comme un téléphone prévenu.
+export function rememberNativeToken(jeton, notifsOff = false) {
+  try {
+    localStorage.setItem(CLE_NATIF, jeton);
+    if (notifsOff) localStorage.setItem(CLE_MUET, '1'); else localStorage.removeItem(CLE_MUET);
+  } catch (e) { /* rien */ }
 }
 
 // Ouvert dans l'app Android : c'est elle qui fait sonner le téléphone.
 export function inNativeApp() {
   return !!nativeToken();
+}
+
+/** L'app Android est là, mais Android l'empêche de sonner (notifications coupées). */
+export function nativeNotificationsOff() {
+  try { return !!nativeToken() && localStorage.getItem(CLE_MUET) === '1'; } catch (e) { return false; }
 }
 
 function nativeToken() {
@@ -34,11 +64,13 @@ export async function pushSupported() {
 }
 
 export function pushAllowed() {
-  return !!nativeToken() || 'Notification' in window && Notification.permission === 'granted';
+  if (nativeToken()) return !nativeNotificationsOff();
+  return 'Notification' in window && Notification.permission === 'granted';
 }
 
 export function pushRefused() {
-  return !nativeToken() && 'Notification' in window && Notification.permission === 'denied';
+  if (nativeToken()) return nativeNotificationsOff();
+  return 'Notification' in window && Notification.permission === 'denied';
 }
 
 // À appeler après un appui (le navigateur exige un geste pour demander l'autorisation),
@@ -72,9 +104,16 @@ export async function enablePush(fid, uid, onGranted) {
 // retiré, sinon il sonnerait deux fois.
 async function enableNativePush(fid, uid) {
   const ref = doc(db, 'families', fid, 'members', uid, 'private', 'push');
+  if (nativeNotificationsOff()) {
+    // L'app ne peut pas sonner : sans jeton natif, le serveur se rabat sur les navigateurs du
+    // proche, et sinon sur l'e-mail « aucun téléphone n'a sonné ».
+    try { await setDoc(ref, { natifs: arrayRemove(nativeToken()), majLe: serverTimestamp() }, { merge: true }); } catch (e) { /* rien */ }
+    return false;
+  }
   try {
     // Un seul jeton par compte : celui de l'app installée aujourd'hui (une réinstallation en change).
-    await setDoc(ref, { natifs: [nativeToken()], majLe: serverTimestamp() }, { merge: true });
+    // natifsV : rangé par une page qui contrôle d'où vient le jeton (voir functions/push.js).
+    await setDoc(ref, { natifs: [nativeToken()], natifsV: 2, majLe: serverTimestamp() }, { merge: true });
   } catch (e) {
     console.warn('Notifications : jeton de l\'app impossible à ranger', e);
     return false;

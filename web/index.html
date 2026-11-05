@@ -468,6 +468,10 @@
         <span class="avatar avatar-empty"><svg><use href="#i-user"/></svg></span>
         <span><strong>Ajoutez votre photo</strong><br><span class="muted small">Pour que <span class="grand-name"></span> vous reconnaisse</span></span>
       </button>
+      <a id="notifs-nudge" class="card nudge alerte" href="intent://notifications#Intent;scheme=papote;package=fr.mapapote.famille;end" hidden>
+        <span class="avatar avatar-empty" aria-hidden="true">&#128277;</span>
+        <span><strong>Votre téléphone ne sonnera pas</strong><br><span class="small">Android bloque les notifications de Papote : <span class="grand-name"></span> ne pourra pas vous appeler. Touchez ici pour les autoriser.</span></span>
+      </a>
       <button type="button" id="push-nudge" class="card nudge" hidden>
         <span class="avatar avatar-empty" aria-hidden="true">&#128276;</span>
         <span><strong>Recevoir les appels de <span class="grand-name"></span></strong><br><span class="muted small" id="push-nudge-text">Votre téléphone sonnera même app fermée, et vous serez prévenu si la tablette est débranchée</span></span>
