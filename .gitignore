@@ -35,3 +35,17 @@ outils/*/package-lock.json
 outils/galerie/sortie/
 outils/galerie/validation/
 outils/admin/sauvegardes/
+
+# Secrets (ne jamais versionner ; functions/.env reste versionné car sans secret)
+.env.*
+!functions/.env
+functions/.secret.local
+functions/.runtimeconfig.json
+*.pem
+!android/app/src/main/res/raw/*.pem
+*.p12
+*.key
+*-service-account*.json
+*-adminsdk-*.json
+cle*.json
+.dev.vars
