@@ -7,7 +7,7 @@ const API = 'https://europe-west1-papote-famille.cloudfunctions.net/supportChat'
 const CAS = [
   // [question ou conversation, page, attendu]  (réponses validées par Tanguy le 3/11/2026)
   // Offre et prix
-  ['Combien de visio sur la carte SIM ?', 'site', '2 h en pleine qualité puis jusqu\'à 3 h en qualité réduite par mois, illimité en Wi-Fi'],
+  ['Combien de visio sur la carte SIM ?', 'site', 'environ 2 h en pleine qualité puis 1 h 30 environ en qualité réduite par mois, illimité en Wi-Fi'],
   ['Combien ça coûte ?', 'site', '60 € à la commande puis 25 €/mois tout compris, carte SIM incluse'],
   ['C\'est quoi les 60 € ?', 'site', 'mise en service, remboursés si on annule la commande (30 jours après réception)'],
   ['Je peux acheter la tablette ?', 'site', 'non, elle est prêtée'],
@@ -45,7 +45,7 @@ const CAS = [
   ['On a une box 4G, ça marche ?', 'site', 'oui'],
   ['Ma mère pourra aller sur YouTube ?', 'site', 'non'],
   ['Ma mère pourra m\'appeler ?', 'site', 'oui, bouton « Appeler », elle touche votre photo, votre portable sonne (vrai appel téléphonique, compris)'],
-  ['La tablette a un numéro de téléphone ?', 'site', 'oui (sa carte SIM), dans l\'appli « Appeler par téléphone » ; décroche toute seule ; inconnus bloqués'],
+  ['La tablette a un numéro de téléphone ?', 'site', 'oui (sa carte SIM), dans l\'appli « Appeler par téléphone » ; elle touche « Décrocher » (pas de décroché automatique) ; inconnus bloqués'],
   ['Comment elle décroche ?', 'site', 'toute seule quand elle regarde l\'écran'],
   ['Elle peut raccrocher ?', 'site', 'oui, bouton « Raccrocher » à l\'écran'],
   ['On peut désactiver le décroché automatique ?', 'site', 'non, c\'est le principe de Papote'],
