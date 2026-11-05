@@ -67,6 +67,11 @@
                 <category android:name="android.intent.category.HOME" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
+            <!-- Fin de l'installation par QR code : Android ouvre Papote. -->
+            <intent-filter>
+                <action android:name="android.app.action.PROVISIONING_SUCCESSFUL" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
             <!-- Exigé pour le rôle « Téléphone » : composer un numéro ouvre Papote (qui n'en fait rien). -->
             <intent-filter>
                 <action android:name="android.intent.action.DIAL" />
@@ -100,6 +105,28 @@
             android:screenOrientation="sensorLandscape"
             android:lockTaskMode="if_whitelisted"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden" />
+
+        <!-- Installation par QR code (Installation.java) : mode « appareil géré », puis réglages de la tablette. -->
+        <activity
+            android:name=".Installation$ModeInstallation"
+            android:exported="true"
+            android:permission="android.permission.BIND_DEVICE_ADMIN"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.app.action.GET_PROVISIONING_MODE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name=".Installation$Conformite"
+            android:exported="true"
+            android:permission="android.permission.BIND_DEVICE_ADMIN"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.app.action.ADMIN_POLICY_COMPLIANCE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
 
         <receiver
             android:name=".AdminReceiver"

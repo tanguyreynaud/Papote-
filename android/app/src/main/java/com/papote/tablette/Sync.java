@@ -395,6 +395,15 @@ final class Sync {
                     } catch (JSONException ignored) { }
                 }
                 checkDatabase();
+                // Installation par QR : inscription auprès du serveur (jeton du QR), tant qu'elle n'a pas réussi.
+                String codeQr = Installation.inscrire(context, http);
+                if (codeQr != null) {
+                    codeQr = codeQr.toUpperCase().replaceAll("[^A-Z0-9]", "");
+                    if (codeQr.length() == 8 && !codeQr.equals(prefs.getString("code", null))) {
+                        prefs.edit().putString("code", codeQr).apply();
+                        reset();
+                    }
+                }
                 refreshWeather();
                 reportWifi();
                 syncPosts();
