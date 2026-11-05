@@ -1,0 +1,30 @@
+# Scripts PowerShell du PC de Tanguy (PowerShell 5) : chaque .ps1 doit passer le parseur.
+# Incident du 5/11 : une apostrophe typographique ’ dans une chaîne '…' la fermait trop tôt et
+# installer-tablette.ps1 ne se lançait plus. Un fichier avec des accents doit aussi garder son BOM UTF-8,
+# sinon PowerShell 5 le lit en ANSI.
+name: PowerShell
+on:
+  push:
+    paths: ['**/*.ps1', '.github/workflows/powershell.yml']
+  workflow_dispatch:
+jobs:
+  parseur:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parseur et encodage de chaque .ps1
+        shell: pwsh
+        run: |
+          $ko = 0
+          foreach ($f in Get-ChildItem -Recurse -Filter *.ps1 -File | Where-Object { $_.FullName -notmatch 'node_modules' }) {
+            $tokens = $null; $errs = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$tokens, [ref]$errs) | Out-Null
+            foreach ($e in $errs) { Write-Host "::error file=$($f.FullName),line=$($e.Extent.StartLineNumber)::$($e.Message)"; $ko++ }
+            $octets = [System.IO.File]::ReadAllBytes($f.FullName)
+            $bom = $octets.Length -ge 3 -and $octets[0] -eq 0xEF -and $octets[1] -eq 0xBB -and $octets[2] -eq 0xBF
+            if (-not $bom -and ($octets | Where-Object { $_ -gt 127 } | Select-Object -First 1)) {
+              Write-Host "::error file=$($f.FullName)::caractères accentués sans BOM UTF-8 : PowerShell 5 lirait le fichier en ANSI"; $ko++
+            }
+          }
+          if ($ko) { exit 1 }
+          Write-Host 'Tous les .ps1 passent le parseur.'
