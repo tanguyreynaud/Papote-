@@ -152,7 +152,8 @@ async function sessionPaiement({ formule, tablette, fid, email, client, relais, 
     locale: 'fr',
     // Carte (avec Apple Pay et Google Pay) en premier, prélèvement SEPA ensuite (Tanguy, 2026-10-26 : la carte
     // se tape en 20 secondes sur un téléphone, l'IBAN rarement sous la main). Pas de code promo.
-    payment_method_types: ['card', 'sepa_debit'],
+    // Link (carte enregistrée chez Stripe, payée en un code) remis par Tanguy le 5/11 (décision du 13/10).
+    payment_method_types: ['card', 'link', 'sepa_debit'],
     billing_address_collection: 'auto',
     phone_number_collection: { enabled: true },
     metadata,

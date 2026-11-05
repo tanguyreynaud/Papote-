@@ -22,7 +22,7 @@ test('commande, envoi, installation par un autre proche, envois, appel, annulati
   // 2. Paul commande sur le site et paie (carte en premier, SEPA en second, pas de TVA : 26/10).
   const session = await a.commanderSurLeSite({ email: paul.email });
   const params = s.stripe.etat.sessions.get(session).params;
-  assert.deepStrictEqual(params.payment_method_types, ['card', 'sepa_debit']);
+  assert.deepStrictEqual(params.payment_method_types, ['card', 'link', 'sepa_debit']);
   assert.strictEqual(params.tax_id_collection, undefined, 'plus de numéro de TVA sur la page de paiement');
   assert.strictEqual(params.subscription_data.trial_period_days, undefined, 'plus d\'« essai gratuit » sur la page de paiement');
   assert.ok(Math.abs(Number(params.subscription_data.metadata.premier) * 1000 - (Date.now() + 37 * s.JOUR)) < 3600e3, 'premier prélèvement estimé : envoi 7 jours + 30');
