@@ -178,6 +178,25 @@ test('abonnement en pause : écran « Papote est en pause », aucun envoi affich
   } finally { await b.fermer(); }
 });
 
+test('tablette verrouillée : le SOS de l\'écran verrouillé lance le décompte, « Annuler » rend l\'écran verrouillé', async () => {
+  const b = await ouvrir();
+  try {
+    await b.android('onPosts', lot([envoi({ seen: true })], { perdue: true }));
+    await b.avancer(1000);
+    assert.ok(await b.visible('.perdue-sos'), 'bouton SOS sur l\'écran verrouillé');
+    await b.toucher('.perdue-sos');
+    await b.avancer(500);
+    assert.ok(await b.visible('.sos-countdown'), 'décompte du SOS');
+    assert.ok(!(await b.visible('.perdue-screen')), 'écran verrouillé écarté pendant le SOS');
+    assert.strictEqual(await b.page.evaluate(() => window.papoteSosEnCours), true);
+    await b.toucher('.sos-cancel');
+    await b.avancer(500);
+    assert.ok(await b.visible('.perdue-screen'), 'écran verrouillé revenu');
+    assert.notStrictEqual(await b.page.evaluate(() => window.papoteSosEnCours), true);
+    await sansErreur(b);
+  } finally { await b.fermer(); }
+});
+
 test('tablette verrouillée à distance (perdue) : écran « verrouillée », aucun toucher ne passe, pas d\'appel ; déverrouillage', async () => {
   const b = await ouvrir();
   try {

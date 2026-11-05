@@ -670,7 +670,8 @@ function stopPresence() {
 // ---------- Pause (abonnement suspendu) ----------
 // L'app Android met window.papotePaused à true pendant la pause.
 
-const paused = () => window.papotePaused === true;
+// Sauf pendant un SOS lancé depuis l'écran de la tablette verrouillée (tablette.js).
+const paused = () => window.papotePaused === true && window.papoteSosEnCours !== true;
 
 function refuseCall(id) {
   updateDoc(doc(db, 'families', fid, 'calls', id), { state: 'missed', endedAt: serverTimestamp() }).catch(() => {});

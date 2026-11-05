@@ -2426,6 +2426,11 @@ final class Sync {
     }
 
     /** Abonnement suspendu, résilié ou absent côté serveur : Papote est en pause. */
+    /** Tablette verrouillée à distance (ordre « verrouiller ») : plus d'appel entrant par la carte SIM. */
+    boolean perdue() {
+        return prefs.getBoolean("perdue", false);
+    }
+
     boolean paused() {
         return "suspendu".equals(subscription) || "resilie".equals(subscription) || "aucun".equals(subscription);
     }

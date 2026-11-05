@@ -244,8 +244,8 @@ public class MainActivity extends Activity implements Sync.Listener {
         new Thread(() -> AppCheck.current(getApplicationContext()), "papote-appcheck").start();
         // Appels de la carte SIM : la page sonne et décroche (AppelGsm).
         AppelGsm.ecouter(this, (etat) -> {
-            if (sync != null && sync.paused() && "sonne".equals(etat.optString("etat"))) {
-                AppelGsm.raccrocher(); // Papote en pause (abonnement) : pas d'appel
+            if (sync != null && (sync.paused() || sync.perdue()) && "sonne".equals(etat.optString("etat"))) {
+                AppelGsm.raccrocher(); // Papote en pause (abonnement) ou tablette verrouillée : pas d'appel (« occupé »)
                 return;
             }
             callPage("onGsm", etat);

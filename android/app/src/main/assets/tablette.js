@@ -212,11 +212,33 @@
       perdueScreen.className = 'pause-screen perdue-screen';
       perdueScreen.innerHTML = '<div class="pause-box"><p class="pause-title">Cette tablette est verrouillée</p>' +
         '<p class="pause-text">Elle appartient à une famille.<br>Merci de nous écrire : contact@mapapote.fr</p></div>';
+      // Le SOS reste possible (Tanguy, 05/11) : verrouillée pour un impayé, Mamie a toujours la tablette.
+      var sos = el2('button', 'big-btn sos-btn perdue-sos', '');
+      sos.innerHTML = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54z"/></svg>' +
+        '<span>SOS</span>';
+      on(sos, 'click', function (e) {
+        e.stopPropagation();
+        window.papoteSosEnCours = true;
+        afficherVerrou();
+        showSosCountdown();
+      });
+      perdueScreen.querySelector('.pause-box').appendChild(sos);
       on(perdueScreen, 'click', function (e) { e.stopPropagation(); });
       document.body.appendChild(perdueScreen);
     }
-    perdueScreen.style.display = perdue ? 'flex' : 'none';
+    afficherVerrou();
     setPaused(pausedStatut ? 'suspendu' : 'actif'); // ferme ce qui est ouvert et coupe les appels tant qu'elle est verrouillée
+  }
+
+  // Écran verrouillé (et écran de pause dessous), sauf pendant un SOS lancé depuis lui.
+  function afficherVerrou() {
+    var sosEnCours = window.papoteSosEnCours === true;
+    if (perdueScreen) {
+      perdueScreen.style.display = perdue && !sosEnCours ? 'flex' : 'none';
+      var b = perdueScreen.querySelector('.perdue-sos');
+      if (b) show(b, !!options.sos);
+    }
+    if (pauseScreen) pauseScreen.style.display = (pausedStatut || perdue) && !sosEnCours ? 'flex' : 'none';
   }
 
   // Taille du texte choisie par la famille (normale, grande, très grande).
@@ -1729,6 +1751,8 @@
     stopRingback();
     if (callScreen) { callScreen.setAttribute('hidden', ''); callScreen.innerHTML = ''; }
     outCall = null;
+    // SOS lancé depuis l'écran verrouillé : il revient.
+    if (window.papoteSosEnCours) { window.papoteSosEnCours = false; afficherVerrou(); }
   }
 
   function el2(tag, cls, text) {
@@ -2120,6 +2144,7 @@
   function showSosButton() {
     var b = $('sos-btn');
     if (b) show(b, !!options.sos);
+    afficherVerrou(); // le SOS de l'écran verrouillé suit le même réglage
   }
 
   function showSosCountdown() {
