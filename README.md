@@ -11,7 +11,7 @@ et une app pour que la famille lui envoie photos et messages depuis iPhone ou An
 - chaque nouvel envoi s'affiche en plein écran : photo, message, message vocal, vidéo ;
 - rappels en plein écran 15 minutes avant puis à l'heure ; anniversaires de la famille ;
 - appels vidéo de la famille vers la tablette, avec un gros bouton « Décrocher » ;
-- couleurs sombres le soir, écran en veille de 23 h à 7 h ;
+- couleurs sombres le soir, écran en veille de 21 h à 6 h 30 (réglable par la famille) ;
 - mises à jour installées toutes seules (voir « Publier une mise à jour »).
 
 **Sur le téléphone de la famille** : https://app.mapapote.fr
@@ -125,7 +125,7 @@ Option : `-Numeros "0612345678,0698765432"`
 (avec une carte SIM : SMS d'alerte quand la tablette n'a plus internet depuis 30 minutes, puis quand il revient).
 
 Au démarrage, l'appli règle elle-même le volume (fort), bloque les boutons de volume, rallume l'écran en
-journée si on appuie sur le bouton marche/arrêt, et met l'écran en veille de 23 h à 7 h.
+journée si on appuie sur le bouton marche/arrêt, et met l'écran en veille de 21 h à 6 h 30 (réglable par la famille).
 
 Pour vérifier une tablette branchée (avant un envoi, ou en cas de souci) : `installation/diagnostic.bat`.
 Il contrôle la version, le mode kiosque, les réglages, le réseau, la batterie et affiche le journal récent.
