@@ -108,13 +108,14 @@ function requetesServeur(src, fichier) {
     }
     // Variable : const posts = db.collection(...); … posts.where(...)
     const affect = /(?:const|let|var)\s+(\w+)\s*=\s*[^;=]*$/.exec(src.slice(Math.max(0, m.index - 200), m.index));
-    if (affect && !q.filtres.length && !q.tris.length) {
+    let usages = 0;
+    if (affect) {
       const nom = affect[1];
       const reVar = new RegExp(`(?<![\\w.])${nom}\\s*\\.\\s*(where|orderBy)\\s*\\(`, 'g');
       reVar.lastIndex = i;
       let v;
       while ((v = reVar.exec(src))) {
-        const qv = { ...q, ligne: ligneDe(src, v.index), filtres: [], tris: [] };
+        const qv = { ...q, ligne: ligneDe(src, v.index), filtres: [...q.filtres], tris: [...q.tris] };
         let k = v.index + v[0].length - 1 - v[1].length - 1;
         for (;;) {
           const suite = /^\s*\.\s*(where|orderBy|limit|select|count|offset)\s*\(/.exec(src.slice(k));
@@ -125,9 +126,11 @@ function requetesServeur(src, fichier) {
           k = f;
         }
         res.push(qv);
+        usages += 1;
       }
     }
-    if (q.filtres.length || q.tris.length) res.push(q);
+    // Requête de base rangée dans une variable puis complétée (membres.where(…)) : seules les requêtes complètes comptent.
+    if (!usages && (q.filtres.length || q.tris.length)) res.push(q);
   }
   return res;
 }

@@ -70,10 +70,10 @@ test('garde-fou du forfait : la famille de la tablette reçoit le forfait de sa 
   assert.strictEqual((await tablette()).telephone, '07 51 23 45 67');
   await s.appeler('gestionSim', { action: 'modifier', id, champs: { numero: '07 00 00 00 01' } }, TANGUY);
   assert.strictEqual((await tablette()).telephone, '07 00 00 00 01');
-  // Tablette reliée avant que le numéro soit recopié (ou fiche effacée) : la tâche des alertes le retrouve.
+  // Tablette reliée avant que le numéro soit recopié (ou fiche effacée) : la tâche du matin (alerteMatin) le retrouve.
   await s.db.doc(`families/${fid}/members/${t.tabletUid}`).update({ telephone: s.FieldValue.delete() });
   assert.strictEqual((await tablette()).telephone, undefined);
-  await s.tache('alertesTablettes');
+  await s.tache('alerteMatin');
   assert.strictEqual((await tablette()).telephone, '07 00 00 00 01');
   // Carte retirée : plus de numéro (null : inutile de chercher encore).
   await s.appeler('gestionSim', { action: 'modifier', id, champs: { tablette: null } }, TANGUY);
