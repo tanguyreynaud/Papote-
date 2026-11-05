@@ -169,3 +169,23 @@ test('SOS : abonnement actif, rien ne change (bouton SOS de l\'accueil, appel SO
     assert.deepStrictEqual(await appelsTel(b), ['0700000000']);
   } finally { await b.fermer(); }
 });
+
+// Audit Fable (5/11) : sans SMS parti (pas de carte SIM, pas de réseau), l'écran ne dit jamais que la famille l'a reçu.
+test('SOS : SMS pas parti, jamais « La famille a reçu votre SOS »', async () => {
+  const b = await tablette({ smsKo: true });
+  try {
+    await b.toucher('#sos-btn');
+    await b.avancer(5500);
+    assert.strictEqual((await b.appels('sendSms')).length, 1, 'le SMS a été tenté');
+    assert.doesNotMatch(await ecran(b), /reçu/i, 'pas de « reçu » sans SMS');
+  } finally { await b.fermer(); }
+});
+
+test('SOS : SMS parti, l’écran le dit', async () => {
+  const b = await tablette();
+  try {
+    await b.toucher('#sos-btn');
+    await b.avancer(5500);
+    assert.match(await ecran(b), /reçu votre SOS par SMS/);
+  } finally { await b.fermer(); }
+});

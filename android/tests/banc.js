@@ -47,7 +47,7 @@ function imitation(etat) {
     phoneReady: () => !!window.__etat.telephone,
     phoneCall: (...args) => { window.__appels.push({ nom: 'phoneCall', args }); return !window.__etat.telephoneKo; },
     sosDemarre: note('sosDemarre'),
-    phoneAnswer: note('phoneAnswer'), phoneHangup: (...args) => { window.__appels.push({ nom: 'phoneHangup', args }); return !window.__etat.raccrocherKo; }, sendSms: (...args) => { window.__appels.push({ nom: 'sendSms', args }); return true; },
+    phoneAnswer: note('phoneAnswer'), phoneHangup: (...args) => { window.__appels.push({ nom: 'phoneHangup', args }); return !window.__etat.raccrocherKo; }, sendSms: (...args) => { window.__appels.push({ nom: 'sendSms', args }); return !window.__etat.smsKo; },
     phoneState: () => JSON.stringify(window.__etat.appelGsm || {}), phoneNumbers: () => '[]',
     qrCode: () => 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
     // Chien de garde (Gardien.java) et garde-fous de la page.

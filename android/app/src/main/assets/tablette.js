@@ -2006,8 +2006,10 @@
   }
 
   // SOS par téléphone : l'écran dit SOS (la famille a reçu un SMS), proche après proche.
+  // Vrai seulement si Android a bien envoyé le SMS du SOS (pas de carte SIM, pas de réseau : faux).
+  var sosSmsParti = false;
   function renderSos(state, title, uid, name) {
-    renderCall(state, title, 'La famille a reçu votre SOS par SMS.', uid, name);
+    renderCall(state, title, sosSmsParti ? 'La famille a reçu votre SOS par SMS.' : '', uid, name);
     callScreen.className += ' sos';
   }
 
@@ -2290,10 +2292,12 @@
     var liste = phonePeople();
     var tels = [];
     for (var i = 0; i < liste.length; i++) tels.push(liste[i].tel);
-    renderSos('starting', 'SOS : on prévient la famille…', null, null);
+    // Ne jamais dire « la famille a reçu votre SOS » si le SMS n'est pas parti (audit Fable, 5/11).
+    sosSmsParti = false;
     try {
-      android().sendSms(tels.join(','), 'SOS Papote : ' + (familyName || 'votre proche') + ' a appuyé sur le bouton SOS de sa tablette. Appelez-la vite.');
-    } catch (e) { }
+      sosSmsParti = android().sendSms(tels.join(','), 'SOS Papote : ' + (familyName || 'votre proche') + ' a appuyé sur le bouton SOS de sa tablette. Appelez-la vite.') === true;
+    } catch (e) { sosSmsParti = false; }
+    renderSos('starting', 'SOS : on prévient la famille…', null, null);
     var n = 0;
     var suivant = function (repondu) {
       if (repondu) {
@@ -2304,7 +2308,8 @@
       if (n >= liste.length) {
         // Personne n'a décroché : la famille est prévenue par le serveur (appel internet, 2e essai).
         if (callApiReady()) { startSos(2); return; }
-        renderCall('ended', 'La famille est prévenue', 'Quelqu’un va vous rappeler.');
+        renderCall('ended', sosSmsParti ? 'La famille a reçu votre SOS' : 'Personne n’a pu répondre',
+          sosSmsParti ? 'Elle a reçu un message.' : 'Réessayez dans un moment.');
         setTimeout(function () { if (!gsm && /state-ended/.test(callScreen.className)) closeCallScreen(); }, 8000);
         return;
       }
