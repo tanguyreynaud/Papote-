@@ -130,9 +130,14 @@ html { scroll-padding-bottom: 8.5rem; }
 /* Pas de soulignement des liens (Tanguy, 2026-10-22) : ils restent repérables par leur couleur et le gras. */
 a { text-decoration: none; }
 main a:not([class]) { color: var(--accent-strong); font-weight: 700; }
-/* Bulle du chat : au-dessus de la barre de paiement. */
+/* Bulle du chat : au-dessus de la barre de paiement. Sur téléphone, elle recouvrait « Autour de moi » et les
+   coches des étapes (relecture du 3/11) : elle prend place dans la barre, entre le prix et « Payer », en simple rond. */
 body .ps-bouton { bottom: 6.5rem; }
-@media (max-width: 760px) { body .ps-bouton span { display: none; } body .ps-bouton { padding: .95rem; } }
+@media (max-width: 760px) {
+  body .ps-bouton span { display: none; }
+  body .ps-bouton { padding: .95rem; }
+  .barre-in .ps-bouton { display: flex !important; position: static; flex: none; width: 3rem; height: 3rem; padding: 0; justify-content: center; box-shadow: none; }
+}
 </style>
 </head>
 <body>
@@ -788,5 +793,21 @@ body .ps-bouton { bottom: 6.5rem; }
 })();
 </script>
 <script src="chat-support.js" defer></script>
+<script>
+  // Téléphone : la bulle du chat rejoint la barre « Payer » (voir le style .barre-in .ps-bouton).
+  (function () {
+    function ranger() {
+      var b = document.querySelector('body > .ps-bouton');
+      var barre = document.querySelector('.barre-in');
+      if (!b || !barre) return;
+      var mq = window.matchMedia('(max-width: 760px)');
+      function placer() { if (mq.matches) barre.insertBefore(b, document.getElementById('payer')); else document.body.appendChild(b); }
+      placer();
+      mq.addEventListener ? mq.addEventListener('change', placer) : mq.addListener(placer);
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ranger);
+    else ranger();
+  })();
+</script>
 </body>
 </html>
