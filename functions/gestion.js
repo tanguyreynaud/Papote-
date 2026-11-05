@@ -3466,7 +3466,7 @@ exports.gestionParcours = onCall(async (request) => {
       await ref.update({ 'preparation.recuLe': Date.now(), 'preparation.recuPar': qui });
     }
     else {
-      const preparation = avancementPropre(d.preparation, ['tablette', 'sim', 'suivi', 'enceinte']);
+      const preparation = avancementPropre(d.preparation, ['tablette', 'sim', 'suivi', 'enceinte', 'tabletteLue']);
       // Date de réception déjà notée (suivi du colis, jumelage, « Le client a reçu le colis ») : gardée, car elle
       // fait partir les 30 jours pour changer d'avis et le premier prélèvement.
       const avant = snap.get('preparation') || {};
