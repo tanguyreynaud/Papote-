@@ -183,20 +183,33 @@
   var pausedStatut = false;
   var SOS_LEVEE_MS = 30 * 60000;
   var sosJusqua = 0, sosLeveeTimer = null;
+  // Ce que Mamie lit (audit « mauvais jours », 5/11) : jamais un mot d'argent ni « à régler » (impayé), et après un
+  // arrêt voulu (déménagement, EHPAD, décès d'un conjoint qui payait…) pas de « tout reviendra ».
+  var TEXTES_PAUSE = {
+    pause: ['Papote se repose un moment', 'Votre famille le sait.<br>Les photos et les appels reviendront bientôt.'],
+    arret: ['Papote s’arrête ici', 'Merci pour tous ces beaux moments.<br>Votre famille s’occupe de la suite.'],
+  };
+  var textePause = null;
   function setPaused(statut) {
-    pausedStatut = statut === 'suspendu' || statut === 'resilie' || statut === 'aucun';
-    var paused = (pausedStatut && Date.now() >= sosJusqua) || perdue;
+    // 'garder' (verrou, levée du SOS) : le statut d'avant est gardé tel quel.
+    if (statut !== 'garder') pausedStatut = statut === 'suspendu' || statut === 'resilie' || statut === 'aucun' ? statut : false;
+    var paused = (!!pausedStatut && Date.now() >= sosJusqua) || perdue;
     window.papotePaused = paused; // lu par appels.js pour ne pas sonner (abonnement en pause, ou tablette verrouillée)
     if (!pauseScreen) {
       if (!paused) return;
       pauseScreen = document.createElement('div');
       pauseScreen.className = 'pause-screen';
-      pauseScreen.innerHTML = '<div class="pause-box"><p class="pause-title">Papote est en pause</p>' +
-        '<p class="pause-text">La famille a été prévenue.<br>Tout reviendra dès que ce sera réglé.</p></div>';
+      document.body.appendChild(pauseScreen);
+    }
+    var cle = pausedStatut === 'resilie' ? 'arret' : 'pause';
+    if (textePause !== cle) {
+      textePause = cle;
+      pauseScreen.innerHTML = '<div class="pause-box"><p class="pause-title">' + TEXTES_PAUSE[cle][0] + '</p>' +
+        '<p class="pause-text">' + TEXTES_PAUSE[cle][1] + '</p></div>';
+      // Le SOS reste possible pendant la pause (audit F-a, 5/11).
       var sos = el2('button', 'big-btn pause-sos', 'SOS');
       on(sos, 'click', showSosCountdown);
       pauseScreen.firstChild.appendChild(sos);
-      document.body.appendChild(pauseScreen);
       showSosButton();
     }
     pauseScreen.style.display = paused && !window.papoteSosEnCours ? 'flex' : 'none';
@@ -215,7 +228,7 @@
       try { if (android() && android().sosDemarre) android().sosDemarre(); } catch (e) { }
       sosLeveeTimer = setTimeout(finLeveeSos, SOS_LEVEE_MS + 1000);
     }
-    setPaused(pausedStatut ? 'suspendu' : 'actif');
+    setPaused('garder');
   }
   function finLeveeSos() {
     // Encore en communication (ou écran d'appel ouvert) : la pause attendra la fin.
@@ -224,7 +237,7 @@
       sosLeveeTimer = setTimeout(finLeveeSos, 61000);
       return;
     }
-    setPaused(pausedStatut ? 'suspendu' : 'actif');
+    setPaused('garder');
   }
 
   // Tablette perdue ou volée : verrouillée à distance depuis le tableau de bord (ordre « verrouiller », Sync.java).
@@ -255,7 +268,7 @@
       document.body.appendChild(perdueScreen);
     }
     afficherVerrou();
-    setPaused(pausedStatut ? 'suspendu' : 'actif'); // ferme ce qui est ouvert et coupe les appels tant qu'elle est verrouillée
+    setPaused('garder'); // ferme ce qui est ouvert et coupe les appels tant qu'elle est verrouillée
   }
 
   // Écran verrouillé (et écran de pause dessous), sauf pendant un SOS lancé depuis lui.
@@ -266,7 +279,7 @@
       var b = perdueScreen.querySelector('.perdue-sos');
       if (b) show(b, !!options.sos);
     }
-    if (pauseScreen) pauseScreen.style.display = (pausedStatut || perdue) && !sosEnCours ? 'flex' : 'none';
+    if (pauseScreen) pauseScreen.style.display = ((!!pausedStatut && Date.now() >= sosJusqua) || perdue) && !sosEnCours ? 'flex' : 'none';
   }
 
   // Taille du texte choisie par la famille (normale, grande, très grande).

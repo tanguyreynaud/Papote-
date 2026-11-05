@@ -558,3 +558,23 @@ test('envoi de 3 photos : elles passent l\'une après l\'autre en grand, toutes 
     await sansErreur(b);
   } finally { await b.fermer(); }
 });
+
+// Audit « mauvais jours » (5/11) : Mamie ne lit jamais un mot d'argent ou de problème à régler, et après un arrêt
+// (déménagement, fin voulue) l'écran ne promet pas que « tout reviendra ». Le bouton SOS reste sur l'écran (F-a).
+test('pause : jamais « réglé » sous les yeux de Mamie ; après un arrêt, pas de « tout reviendra » ; SOS présent', async () => {
+  const b = await ouvrir();
+  try {
+    for (const statut of ['suspendu', 'resilie', 'aucun']) {
+      await b.android('onPosts', lot([], { subscription: statut }));
+      await b.avancer(500);
+      assert.ok(await b.visible('.pause-screen'), statut);
+      const texte = await b.texte('.pause-screen .pause-box p:not(.pause-sos)');
+      const tout = await b.texte('.pause-screen');
+      assert.doesNotMatch(tout, /régl|paiement|abonnement|pay/i, `${statut} : « ${tout} »`);
+      if (statut === 'resilie') assert.doesNotMatch(tout, /reviendr/i, `résilié : « ${tout} »`);
+      assert.ok(texte.length > 0);
+      assert.ok(await b.visible('.pause-sos'), `${statut} : bouton SOS`);
+    }
+    await sansErreur(b);
+  } finally { await b.fermer(); }
+});
