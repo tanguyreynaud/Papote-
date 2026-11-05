@@ -636,3 +636,70 @@ test('clients : inscrit sur « Être prévenu », avec son téléphone', () => {
   assert.equal(c.telephone, '0712345678');
   assert.equal(c.depuis, 70);
 });
+
+// PDF minimal à n pages ; compresse : objets des pages rangés dans un flux /ObjStm compressé (PDF récents).
+function pdfDe(n, compresse = false) {
+  const zlib = require('node:zlib');
+  const pages = Array.from({ length: n }, (_, i) => `${3 + i} 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] >>\nendobj\n`).join('');
+  if (!compresse) {
+    return Buffer.from(`%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Count ${n} >>\nendobj\n${pages}%%EOF\n`, 'latin1');
+  }
+  const objets = Buffer.from(`<< /Type /Pages /Count ${n} >> ${Array.from({ length: n }, () => '<</Type/Page/Parent 2 0 R>>').join(' ')}`, 'latin1');
+  const flux = zlib.deflateSync(objets);
+  return Buffer.concat([
+    Buffer.from(`%PDF-1.7\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n9 0 obj\n<< /Type /ObjStm /N ${n + 1} /First 10 /Filter /FlateDecode /Length ${flux.length} >>\nstream\n`, 'latin1'),
+    flux, Buffer.from('\nendstream\nendobj\n%%EOF\n', 'latin1')]);
+}
+
+test('nombre de pages d\'un PDF', () => {
+  assert.strictEqual(g.pagesPdf(pdfDe(1)), 1);
+  assert.strictEqual(g.pagesPdf(pdfDe(5)), 5); // « /Type /Pages » n'est pas compté
+  assert.strictEqual(g.pagesPdf(pdfDe(2, true)), 2);
+  assert.strictEqual(g.pagesPdf(pdfDe(40, true)), 40);
+  assert.strictEqual(g.pagesPdf(Buffer.from('pas un pdf')), null);
+  assert.strictEqual(g.pagesPdf(undefined), null);
+});
+
+test('PDF joints non lus : titre, poids, plus de 2 pages (e-mail Sosh du 5/11)', () => {
+  const ko = 1024;
+  const pdf = (filename, content, size) => ({ filename, contentType: 'application/pdf', content, size: size || content.length });
+  const ignorees = [];
+  const lues = g.piecesFacture([
+    pdf('Conditions_generales_de_l_offre_mobile_Sosh.pdf', pdfDe(1), 179 * ko),
+    pdf('Conditions_Generales_de_Vente_Sosh.pdf', pdfDe(30, true), 272 * ko),
+    pdf('Tarifs_de_l_offre_Sosh.pdf', pdfDe(12), 347 * ko),
+    pdf('Formulaire_de_rétractation_Sosh.pdf', pdfDe(1), 41 * ko),
+    pdf('les-offres-sosh_rc_4836.pdf', pdfDe(4), 220 * ko),
+    pdf('document.pdf', pdfDe(8, true), 200 * ko), // titre neutre mais 8 pages
+    pdf('scan.pdf', pdfDe(1), 3 * 1024 * ko), // trop lourd
+    pdf('Facture_FR123.pdf', pdfDe(2), 90 * ko),
+    pdf('4815162342.pdf', pdfDe(1, true), 60 * ko),
+  ], ignorees);
+  assert.deepStrictEqual(lues.map((p) => p.filename), ['Facture_FR123.pdf', '4815162342.pdf']);
+  assert.strictEqual(ignorees.length, 7);
+  assert.match(ignorees[0], /Conditions_generales.* : pas une facture d'après son titre/);
+  assert.match(ignorees[3], /rétractation.*titre/);
+  assert.match(ignorees[5], /document\.pdf : 8 pages/);
+  assert.match(ignorees[6], /scan\.pdf : trop lourd/);
+});
+
+test('accents cassés réparés (texte UTF-8 lu en windows-1252, Sosh 5/11)', () => {
+  const casse = (s) => Buffer.from(s, 'utf8').toString('latin1')
+    .replace(/[\u0080-\u009f]/g, (c) => ({ '\u0080': '€', '\u0082': '‚', '\u0095': '•', '\u0099': '™' }[c] || c));
+  const texte = 'Merci d\'avoir fait confiance à Sosh. Pour accéder au suivi, rendez-vous sur l\'app. N° de mobile : 06. Déjà réglé : 10 € pour l\'activation. Forfait 2,99€ 1Go. Votre 1ère facture, prélèvement SEPA, rétractation.';
+  assert.notStrictEqual(casse(texte), texte);
+  assert.strictEqual(g.reparerAccents(casse(texte)), texte);
+  // Texte déjà correct, ou vrais « Ã » isolés : inchangé.
+  assert.strictEqual(g.reparerAccents(texte), texte);
+  assert.strictEqual(g.reparerAccents('SÃO PAULO'), 'SÃO PAULO');
+  const p = g.corpsDuMail({ text: `${casse(texte)}\n &#8226; Un accès au suivi.\n boutique&shy;sosh&gt;`.replace('&shy;', '­'), subject: 'Confirmation de votre commande', from: { text: 'votre boutique SOSH <boutique@sosh.fr>' } });
+  const t = p.content.toString('utf8');
+  assert.match(t, /Pour accéder au suivi/);
+  assert.match(t, /10 € pour/);
+  assert.match(t, /• Un accès/);
+  assert.match(t, /boutiquesosh>/);
+});
+
+test('accents : un texte correct mêlé à des suites cassées', () => {
+  assert.strictEqual(g.reparerAccents('Un accès, puis accÃ©der et 2,99 â‚¬, NÂ° 3, payé à € 5'), 'Un accès, puis accéder et 2,99 €, N° 3, payé à € 5');
+});
