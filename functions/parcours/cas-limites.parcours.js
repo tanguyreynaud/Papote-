@@ -52,7 +52,8 @@ test('abonnement pris depuis l\'appli avec la tablette déjà installée : rien 
   let fam = await s.lire(`families/${fid}`);
   assert.strictEqual(fam.abonnement.statut, 'installation', 'tablette hors commande : 48 h pour la relier, abonnement à prendre');
   let fiche = await s.lire(`stock/${tablette.fiche}`);
-  assert.strictEqual(fiche.alerteJumelage, 'jumelée sans commande');
+  assert.strictEqual(fiche.alerteJumelage, null, 'rien à cocher dans l\'admin : la tablette est dans sa famille, pas à vendre');
+  assert.strictEqual(fiche.fid, fid);
 
   const { url } = await s.appeler('creerPaiement', { fid, formule: 'wifi', tablette: 'incluse' }, julie);
   const session = url.split('/').pop();
@@ -83,6 +84,26 @@ test('abonnement pris depuis l\'appli avec la tablette déjà installée : rien 
   assert.ok(mailsA(julie.email).some((m) => /abonnement/i.test(m)), 'confirmation');
   const stock = await s.requete('stockDisponible');
   assert.strictEqual(stock.json.precommande, true, 'la tablette installée ne compte plus dans le stock');
+});
+
+test('tablette de test jumelée sans commande (famille test de Tanguy) : jamais à vendre, rien à cocher', async () => {
+  const tanguy = await s.compte('Tanguy', 'tanguy.test@exemple.fr');
+  const t = await a.tablettePreparee();
+  assert.strictEqual((await s.requete('stockDisponible')).json.disponible, true, 'une tablette préparée au stock : à vendre');
+  const { fid } = await familleInstallee(tanguy, { tablette: t });
+  const fiche = await s.lire(`stock/${t.fiche}`);
+  assert.strictEqual(fiche.fid, fid, 'la fiche garde sa famille');
+  assert.strictEqual(fiche.commande, null);
+  assert.strictEqual(fiche.etat, 'preparee', 'son état ne change pas : rien à faire');
+  assert.strictEqual(fiche.alerteJumelage, null, 'pas d\'alerte « jumelée sans commande » à cocher');
+  const stock = await s.requete('stockDisponible');
+  assert.strictEqual(stock.json.disponible, false, 'seule tablette du stock, mais dans une famille : le site ne la vend pas');
+
+  // Une commande d'un client ne peut pas la prendre, même à la main dans l'admin.
+  const { abonnement: id } = await a.commanderEtPayer({ email: 'paul@exemple.fr' });
+  await assert.rejects(s.appeler('gestionStock', { action: 'modifier', id: t.fiche, champs: { commande: id } }, a.TANGUY),
+    /dans une famille : pas à vendre/);
+  assert.strictEqual((await s.lire(`stock/${t.fiche}`)).commande, null);
 });
 
 test('31e proche : le compteur lu par les règles suit les arrivées (les demandes en attente ne comptent pas)', async () => {

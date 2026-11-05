@@ -1,0 +1,35 @@
+admin (combine9 @ 8df5a10) : 20 bouton(s) qui agissent sur une commande ou un abonnement, 0 avec un mauvais identifiant
+  ok   Commande à envoyer (2e commande du même client) (CMD-CD34) · menu ⋮ · « Annuler la commande » → gestionAnnulerCommande {"commande":"CMD-CD34"} ; gestionCommande {"commande":"CMD-CD34"}
+  ok   Commande à envoyer, tablette préparée (CMD-AB12) · menu ⋮ · « Annuler la commande » → gestionAnnulerCommande {"commande":"CMD-AB12"} ; gestionCommande {"commande":"CMD-AB12"}
+  ok   Commande : paiement SEPA en attente (CMD-SE01) · menu ⋮ · « Annuler la commande » → gestionAnnulerCommande {"commande":"CMD-SE01"} ; gestionCommande {"commande":"CMD-SE01"}
+  ok   Commande en route (CMD-EF56) · page · « Renvoyer le code au client » → gestionRenvoyerCode {"commande":"CMD-EF56","email":"15/12/2027"}
+  ok   Commande en route (CMD-EF56) · menu ⋮ · « Colis revenu (jamais retiré) » → gestionAnnulerCommande {"commande":"CMD-EF56","colisRevenu":true} ; gestionCommande {"commande":"CMD-EF56"}
+  ok   Commande en route (CMD-EF56) · menu ⋮ · « Renvoyer le code au client » → gestionRenvoyerCode {"commande":"CMD-EF56","email":"15/12/2027"}
+  ok   Commande en route depuis 24 jours, pas jumelée (CMD-RT22) · page · « Renvoyer le code au client » → gestionRenvoyerCode {"commande":"CMD-RT22","email":"15/12/2027"}
+  ok   Commande en route depuis 24 jours, pas jumelée (CMD-RT22) · menu ⋮ · « Colis revenu (jamais retiré) » → gestionAnnulerCommande {"commande":"CMD-RT22","colisRevenu":true} ; gestionCommande {"commande":"CMD-RT22"}
+  ok   Commande en route depuis 24 jours, pas jumelée (CMD-RT22) · menu ⋮ · « Renvoyer le code au client » → gestionRenvoyerCode {"commande":"CMD-RT22","email":"15/12/2027"}
+  ok   Commande en service (CMD-GH78) · page · « Renvoyer le code au client » → gestionRenvoyerCode {"commande":"CMD-GH78","email":"15/12/2027"}
+  ok   Commande en service (CMD-GH78) · menu ⋮ · « Annuler la commande (30 jours) » → retracter {"fid":"famille-test","commande":"CMD-GH78"} ; gestionCommande {"commande":"CMD-GH78"}
+  ok   Commande en service (CMD-GH78) · menu ⋮ · « Renvoyer le code au client » → gestionRenvoyerCode {"commande":"CMD-GH78","email":"15/12/2027"}
+  ok   Commande en service, paiement en retard (CMD-IM90) · page · « Renvoyer le code au client » → gestionRenvoyerCode {"commande":"CMD-IM90","email":"15/12/2027"}
+  ok   Commande en service, paiement en retard (CMD-IM90) · menu ⋮ · « Arrêter l'abonnement » → resilierAbonnement {"fid":"f-henri","commande":"CMD-IM90","par":"papote"} ; gestionCommande {"commande":"CMD-IM90"}
+  ok   Commande en service, paiement en retard (CMD-IM90) · menu ⋮ · « Pause hospitalisation… » → pauseHospitalisation {"commande":"CMD-IM90","jusqua":1828868400000} ; gestionCommande {"commande":"CMD-IM90"}
+  ok   Commande en service, paiement en retard (CMD-IM90) · menu ⋮ · « Renvoyer le code au client » → gestionRenvoyerCode {"commande":"CMD-IM90","email":"15/12/2027"}
+  ok   Commande résiliée, tablette à récupérer (CMD-RS45) · page · « Matériel reçu » → tabletteRendue {"commande":"CMD-RS45","manquants":[]} ; gestionCommande {"commande":"CMD-RS45"}
+  ok   Commande offerte (CMD-OF01) · page · « Renvoyer le code au client » → gestionRenvoyerCode {"commande":"CMD-OF01","email":"15/12/2027"}
+  ok   Commande offerte (CMD-OF01) · menu ⋮ · « Renvoyer le code au client » → gestionRenvoyerCode {"commande":"CMD-OF01","email":"15/12/2027"}
+  ok   Commande : retour en main propre noté par Papote (CMD-RS45) · page · « Matériel reçu » → tabletteRendue {"commande":"CMD-RS45","manquants":[]} ; gestionCommande {"commande":"CMD-RS45"}
+famille (combine9 @ 8df5a10) : 13 bouton(s) qui agissent sur une commande ou un abonnement, 0 avec un mauvais identifiant
+  ok   Profil : abonnement actif · écran · #btn-abo-page « Gérer le paiement et les factures » → facturesFamille {"fid":"famille-test"}
+  ok   Profil : résiliation demandée, « Garder mon abonnement » · écran · #btn-abo-page « Gérer le paiement et les factures » → facturesFamille {"fid":"famille-test"}
+  ok   Profil : résiliation demandée, « Garder mon abonnement » · écran · #btn-garder « Garder mon abonnement » → annulerResiliation {"fid":"famille-test"}
+  ok   Profil : abonnement arrêté par Papote (pas de « Garder ») · écran · #btn-abo-page « Gérer le paiement et les factures » → facturesFamille {"fid":"famille-test"}
+  ok   Profil : résiliation programmée (garder l’abonnement) · écran · #btn-abo-page « Gérer le paiement et les factures » → facturesFamille {"fid":"famille-test"}
+  ok   Profil : résiliation programmée (garder l’abonnement) · écran · #btn-garder « Garder mon abonnement » → annulerResiliation {"fid":"famille-test"}
+  ok   Profil : résilié, tablette à renvoyer · écran · #btn-abo-page « Gérer le paiement et les factures » → facturesFamille {"fid":"famille-test"}
+  ok   Profil : résilié, tablette à renvoyer · écran · #btn-renvoyer « Je renvoie la tablette » → renvoyerTablette {"fid":"famille-test"} ; finDeContrat {"fid":"famille-test"}
+  ok   Profil : résilié, QR code de retour Mondial Relay · écran · #btn-abo-page « Gérer le paiement et les factures » → facturesFamille {"fid":"famille-test"}
+  ok   Profil : résilié, sans adresse : adresse demandée pour le QR code · écran · #btn-abo-page « Gérer le paiement et les factures » → facturesFamille {"fid":"famille-test"}
+  ok   Profil : résilié, sans adresse : adresse demandée pour le QR code · écran · #btn-renvoyer « Créer le QR code » → renvoyerTablette {"fid":"famille-test","adresse":{"rue":"","cp":"","ville":""}} ; finDeContrat {"fid":"famille-test"}
+  ok   Abonnement et paiement : annuler ma commande (14 jours) · écran · #btn-retracter « Annuler ma commande » → retracter {"fid":"famille-test"}
+  ok   Résilier : avant de partir · écran · « Résilier quand même » → resilierAbonnement {"fid":"famille-test"}
