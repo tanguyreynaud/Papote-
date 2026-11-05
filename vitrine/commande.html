@@ -373,8 +373,9 @@ body .ps-bouton { bottom: 6.5rem; }
   }
   function montrerVerdict() {
     if (proche.eligible) {
-      dire(true, proche.insee ? 'La 4G passe bien dans toute la commune.' : proche.niveau === 'TBC' ? 'La 4G passe très bien chez votre proche.' : 'La 4G passe bien chez votre proche.',
-        'La tablette s\'y connectera toute seule, sans box ni réglage.');
+      // Carte ARCEP : « bonne » = dehors, et seulement parfois dans la maison (couverture.js) : on le dit sans promettre.
+      dire(true, proche.insee ? 'D\'après la carte de l\'ARCEP, la 4G est bonne dans toute la commune.' : proche.niveau === 'TBC' ? 'D\'après la carte de l\'ARCEP, la 4G est très bonne chez votre proche.' : 'D\'après la carte de l\'ARCEP, la 4G est bonne chez votre proche.',
+        'La tablette s\'y connectera toute seule, sans box ni réglage. Si elle capte mal dans la maison, vous avez 30 jours pour la renvoyer.');
     } else {
       dire(false, 'Désolé, notre carte SIM ne capte pas assez bien à cette adresse pour l\'instant.',
         'Dans la maison, la tablette risquerait de rester sans internet : nous préférons ne pas vous la livrer. Une question ? contact@mapapote.fr');

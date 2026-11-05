@@ -197,9 +197,9 @@ const lienHtml = (lien, texte) => `<a href="${echapper(lien)}" style="color:${C.
 // se scanne avec l'appareil photo du téléphone (ou le code se tape sur app.mapapote.fr), puis l'appli demande le
 // nom du proche, une première photo et fait le test du son.
 const GESTES_ARRIVEE = (code) => ({ etapes: [
-  'Branchez la tablette et allumez-la. La carte SIM est déjà dedans : rien à régler.',
+  'Branchez la tablette sur une prise, puis appuyez 3 secondes sur le bouton de marche (sur la tranche). Elle démarre en une minute environ ; si l\'écran reste noir, laissez-la charger un quart d\'heure. La carte SIM est déjà dedans : rien à régler.',
   `Avec l'appareil photo de votre téléphone, scannez le QR code affiché sur la tablette (ou ${lienHtml(lienAppli(code), 'ouvrez app.mapapote.fr')} et tapez le code affiché).`,
-  'L\'appli vous guide ensuite : le nom de votre proche, une première photo, le test du son. Deux minutes, et la tablette est prête.',
+  'L\'appli vous guide ensuite : votre compte, le nom de votre proche, une première photo, le test du son. Cinq minutes environ, et la tablette est prête.',
 ] });
 
 // ---------- Commande et livraison ----------
@@ -320,7 +320,7 @@ function lancement({ prenom, desinscription }) {
   return message('Papote est disponible : vous pouvez commander', [
     bonjour(prenom),
     'Vous nous aviez demandé de vous prévenir : c\'est le moment, les commandes Papote sont ouvertes.',
-    'La tablette arrive prête à brancher, en point relais près de chez vous ou de chez votre proche. Votre proche n\'a rien à régler : c\'est la famille qui envoie les photos et qui appelle, la tablette décroche toute seule.',
+    'La tablette arrive prête à brancher, en point relais près de chez vous ou de chez votre proche. Votre proche n\'a rien à régler : c\'est la famille qui envoie les photos et qui appelle, et l\'appel vidéo démarre dès que votre proche regarde l\'écran.',
     { fiche: FICHE_OFFRE },
     'Nous préparons les tablettes par petits lots : les premières commandes partent en premier.',
   ], { texte: 'Commander ma tablette', lien: `${SITE}/commande.html` }, {
@@ -402,7 +402,7 @@ function demandeAcceptee({ prenom, famille, lien }) {
   return message(`Bienvenue dans la famille de ${famille || 'votre proche'}`, [
     bonjour(prenom),
     `Votre demande est acceptée : vous faites maintenant partie de la famille de <b>${echapper(famille || 'votre proche')}</b> sur Papote.`,
-    'Vous pouvez dès maintenant envoyer une photo ou un message à la tablette, et l\'appeler en vidéo : la tablette décroche toute seule.',
+    'Vous pouvez dès maintenant envoyer une photo ou un message à la tablette, et l\'appeler en vidéo : la tablette sonne et décroche dès que votre proche regarde l\'écran.',
   ], { texte: 'Ouvrir l\'appli Papote', lien: lien || APPLI });
 }
 
@@ -413,9 +413,9 @@ function installationFinie({ prenom, famille, lien }) {
     bonjour(prenom),
     `C'est fait : la tablette de <b>${qui}</b> est reliée à votre famille. Gardez cet e-mail, il résume l'essentiel.`,
     { etapes: [
-      `<b>Envoyer une photo ou un message</b> : dans l'appli, touchez « Envoyer ». La tablette l'affiche tout de suite, avec un petit carillon.`,
-      `<b>Appeler en vidéo</b> : touchez « Appeler ». La tablette décroche toute seule, ${qui} n'a rien à faire.`,
-      '<b>Inviter la famille</b> : onglet Famille, « Inviter ». Chacun installe l\'appli sur son téléphone, rien de plus.',
+      `<b>Envoyer une photo ou un message</b> : dans l'appli, touchez « Photos » ou « Messages ». La tablette l'affiche tout de suite, avec un petit carillon.`,
+      `<b>Appeler en vidéo</b> : touchez « Appel vidéo ». La tablette sonne ; dès que ${qui} regarde l'écran, l'appel démarre tout seul (ou elle touche « Décrocher »).`,
+      '<b>Inviter la famille</b> : bouton « Inviter », en haut de l\'accueil. Chacun installe l\'appli sur son téléphone, rien de plus.',
       `<b>Rester rassuré</b> : si la tablette est débranchée ou si ${qui} appuie sur SOS, vous êtes prévenu sur votre téléphone.`,
     ] },
     'Si quelque chose ne marche pas comme prévu, répondez à cet e-mail : nous vous aidons.',
@@ -433,8 +433,9 @@ function appelSansTelephone({ nom, sos, lien }) {
     'Pour que les appels sonnent la prochaine fois :',
     { etapes: [
       'Ouvrez l\'appli Papote sur votre téléphone.',
-      'Touchez Profil, puis Notifications, et autorisez-les.',
-      'Avec l\'appli Android Papote, le téléphone sonne comme pour un vrai appel.',
+      'Touchez Réglages puis, sous « Ce téléphone », activez « Notifications ».',
+      'Sur iPhone, ajoutez d\'abord l\'appli à l\'écran d\'accueil (bouton Partager, « Sur l\'écran d\'accueil ») : sinon, les notifications n\'arrivent pas.',
+      'Donnez votre numéro de portable dans l\'appli (Profil, « Mon numéro de portable ») : la tablette vous appellera alors comme un téléphone.',
     ] },
   ], { texte: 'Ouvrir l\'appli Papote', lien });
 }
@@ -461,7 +462,7 @@ function paiementEchoue({ nom, famille, pauseLe, lien }) {
 function papoteEnPause({ nom, famille, lien }) {
   return message('Papote est en pause', [
     bonjour(nom),
-    `L'abonnement Papote${famille ? ` de <b>${echapper(famille)}</b>` : ''} n'a pas pu être prélevé, et le délai de sept jours est passé : la tablette est en pause. Elle n'affiche plus les photos ni les messages, et les appels sont coupés.`,
+    `L'abonnement Papote${famille ? ` de <b>${echapper(famille)}</b>` : ''} n'a pas pu être prélevé, et le délai de sept jours est passé : la tablette est en pause. Elle n'affiche plus les photos ni les messages, et les appels sont coupés, bouton SOS compris.`,
     { encadre: 'Dès que le paiement est réglé, tout revient automatiquement, sans rien toucher à la tablette.' },
     'Pour régler : ouvrez l\'appli Papote, touchez Profil puis, sous Abonnement, « Régler le paiement ».',
   ], { texte: 'Régler le paiement', lien });
