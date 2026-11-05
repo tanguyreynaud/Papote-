@@ -239,6 +239,10 @@ const SCENES = [
   { groupe: 'Accueil', titre: 'Forfait SIM à 80 % (image réduite)', plein: true, donnees: () => sousTablette({ forfait: 80 }) },
   { groupe: 'Accueil', titre: 'Forfait SIM à 88 % (sans image, « Appeler par téléphone »)', plein: true, donnees: () => sousTablette({ forfait: 89 }) },
   { groupe: 'Accueil', titre: 'Forfait SIM à 95 % (vidéos en attente du Wi-Fi)', plein: true, donnees: () => sousTablette({ forfait: 96 }) },
+  // Forfait « internet coupé » au bout (Sosh 1 Go bloqué, families/{fid}.forfaitSim.finForfait, 5/11) : la date, calmement.
+  { groupe: 'Accueil', titre: 'Forfait SIM à 82 %, internet coupé au bout du forfait', plein: true, note: 'Nouveau (5/11).', donnees: () => sousTablette({ forfait: 82, famille: { forfaitSim: { mo: 1000, jour: 5, finForfait: 'bloque' } } }) },
+  { groupe: 'Accueil', titre: 'Forfait SIM à 96 %, internet coupé au bout du forfait', plein: true, note: 'Nouveau (5/11).', donnees: () => sousTablette({ forfait: 96, famille: { forfaitSim: { mo: 1000, jour: 5, finForfait: 'bloque' } } }) },
+  { groupe: 'Accueil', titre: 'Tablette muette : forfait « internet coupé » sans doute épuisé', plein: true, note: 'Nouveau (5/11) : pas de « ne répond plus ».', donnees: () => sousTablette({ forfait: 99, tabletteHorsLigne: true, famille: { forfaitSim: { mo: 1000, jour: 5, finForfait: 'bloque' } } }) },
   { groupe: 'Accueil', titre: 'Accueil d’un proche (pas propriétaire)', plein: true, donnees: () => connecte({ proprietaire: false }) },
   { groupe: 'Accueil', titre: 'Plusieurs familles', plein: true, donnees: () => connecte({ docs: {
     'families/autre': { name: 'Papi Henri', createdBy: 'u-thomas', abonnement: { statut: 'actif' } },

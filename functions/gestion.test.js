@@ -231,6 +231,9 @@ test('forfaits SIM prépayés : rappel de recharge et facture rangée sur sa lig
   assert.deepStrictEqual(g.champsSim({ prochaineRecharge: now, dureeForfait: 30, renouvellementAuto: true }),
     { prochaineRecharge: now, dureeForfait: 30, renouvellementAuto: true });
   assert.deepStrictEqual(g.champsSim({ dureeForfait: 0, renouvellementAuto: 'oui' }), { dureeForfait: null, renouvellementAuto: false });
+  assert.deepStrictEqual(g.champsSim({ finForfait: 'bloque' }), { finForfait: 'bloque' });
+  assert.deepStrictEqual(g.champsSim({ finForfait: 'coupe' }), { finForfait: 'reduit' });
+  assert.deepStrictEqual(g.champsSim({ finForfait: null }), { finForfait: 'reduit' });
 
   const sims = [
     { id: 'a', statut: 'active', operateur: 'Lyca', numero: '07 51 23 45 67', iccid: '8944110068251234567' },
@@ -249,13 +252,16 @@ test('forfaits SIM prépayés : rappel de recharge et facture rangée sur sa lig
 
 test('garde-fou du forfait recopié sur la famille', () => {
   // Pass de 30 jours qui finit le 27/11 à 10 h (Paris) : commencé le 28/10.
-  assert.deepStrictEqual(g.forfaitFamille({ go: 1, prochaineRecharge: Date.UTC(2026, 10, 27, 9) }), { mo: 1000, debut: '2026-10-28' });
-  assert.deepStrictEqual(g.forfaitFamille({ go: 2, dureeForfait: 28, prochaineRecharge: Date.UTC(2026, 10, 25, 9) }), { mo: 2000, debut: '2026-10-28' });
+  assert.deepStrictEqual(g.forfaitFamille({ go: 1, prochaineRecharge: Date.UTC(2026, 10, 27, 9) }), { mo: 1000, debut: '2026-10-28', finForfait: 'reduit' });
+  assert.deepStrictEqual(g.forfaitFamille({ go: 2, dureeForfait: 28, prochaineRecharge: Date.UTC(2026, 10, 25, 9) }), { mo: 2000, debut: '2026-10-28', finForfait: 'reduit' });
   // Juste avant minuit à Paris (23 h 30 en hiver = 22 h 30 UTC) : le jour de Paris.
-  assert.deepStrictEqual(g.forfaitFamille({ derniereRecharge: Date.UTC(2026, 9, 30, 23, 30) }), { mo: 1000, debut: '2026-10-31' });
-  assert.deepStrictEqual(g.forfaitFamille({ go: 0.5, activation: Date.UTC(2026, 9, 30, 12) }), { mo: 500, jour: 28 });
-  assert.deepStrictEqual(g.forfaitFamille({ activation: Date.UTC(2026, 9, 12, 12) }), { mo: 1000, jour: 12 });
-  assert.deepStrictEqual(g.forfaitFamille({}), { mo: 1000, jour: 1 });
+  assert.deepStrictEqual(g.forfaitFamille({ derniereRecharge: Date.UTC(2026, 9, 30, 23, 30) }), { mo: 1000, debut: '2026-10-31', finForfait: 'reduit' });
+  assert.deepStrictEqual(g.forfaitFamille({ go: 0.5, activation: Date.UTC(2026, 9, 30, 12) }), { mo: 500, jour: 28, finForfait: 'reduit' });
+  assert.deepStrictEqual(g.forfaitFamille({ activation: Date.UTC(2026, 9, 12, 12) }), { mo: 1000, jour: 12, finForfait: 'reduit' });
+  assert.deepStrictEqual(g.forfaitFamille({}), { mo: 1000, jour: 1, finForfait: 'reduit' });
+  // Forfait « internet coupé » au bout (Sosh 1 Go bloqué) : recopié pour l'alerte et l'app famille.
+  assert.deepStrictEqual(g.forfaitFamille({ go: 1, activation: Date.UTC(2026, 9, 12, 12), finForfait: 'bloque' }), { mo: 1000, jour: 12, finForfait: 'bloque' });
+  assert.deepStrictEqual(g.forfaitFamille({ finForfait: 'n\'importe' }).finForfait, 'reduit');
 });
 
 test('accessoires à prévoir pour les envois', () => {

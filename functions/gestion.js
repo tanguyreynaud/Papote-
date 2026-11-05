@@ -312,19 +312,22 @@ function finApresRecharge(l, date) {
   return Math.max(fin, l.prochaineRecharge || 0);
 }
 
-// Garde-fou du forfait sur la tablette (Forfait.java) : families/{fid}.forfaitSim = { mo, debut | jour }.
+// Garde-fou du forfait sur la tablette (Forfait.java) : families/{fid}.forfaitSim = { mo, debut | jour, finForfait }.
 // mo : Go du forfait noté sur la ligne (1 000 Mo sans réglage) ; debut : jour (à Paris) où le pass en cours a
 // commencé, d'après la fin du forfait notée (cycles de 30 jours ou de sa durée) ; sinon jour du mois d'activation.
+// finForfait : 'reduit' ou 'bloque' (champ de la ligne, 'reduit' sans réglage) : l'alerte de fin de forfait
+// (forfait-alerte.js) et l'app famille adaptent leur message ; la tablette l'ignore.
 function forfaitFamille(l) {
   const mo = Number.isFinite(l.go) ? Math.round(l.go * 1000) : 1000;
+  const finForfait = l.finForfait === 'bloque' ? 'bloque' : 'reduit';
   const duree = (l.dureeForfait || DUREE_FORFAIT) * 24 * 3600 * 1000;
   const depart = l.prochaineRecharge ? l.prochaineRecharge - duree : l.derniereRecharge || null;
   if (depart) {
     const d = new Date(depart + decalageParis(depart));
-    return { mo, debut: `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}` };
+    return { mo, debut: `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`, finForfait };
   }
   const jour = l.activation ? new Date(l.activation + decalageParis(l.activation)).getUTCDate() : 1;
-  return { mo, jour: Math.min(Math.max(jour, 1), 28) };
+  return { mo, jour: Math.min(Math.max(jour, 1), 28), finForfait };
 }
 
 // Ligne SIM d'une facture de forfait : par le numéro de ligne ou l'ICCID imprimé, sinon la seule ligne active
@@ -1159,6 +1162,9 @@ function champsSim(c) {
   // Forfait prépayé : sa durée en jours (30 par défaut) et s'il est renouvelé tout seul par l'opérateur.
   if ('dureeForfait' in c) champs.dureeForfait = Number.isInteger(c.dureeForfait) && c.dureeForfait >= 1 && c.dureeForfait <= 366 ? c.dureeForfait : null;
   if ('renouvellementAuto' in c) champs.renouvellementAuto = c.renouvellementAuto === true;
+  // Ce que fait l'opérateur au bout du forfait (Tanguy, 5/11) : 'reduit' (débit réduit, Lyca, Bouygues) ou
+  // 'bloque' (internet coupé jusqu'au forfait suivant, Sosh 1 Go bloqué). Toute autre valeur : 'reduit'.
+  if ('finForfait' in c) champs.finForfait = c.finForfait === 'bloque' ? 'bloque' : 'reduit';
   // Achat de la carte (dépense), vérifié par enregistrerSim.
   if ('depense' in c) champs.depense = texte(c.depense, 100) || null;
   return champs;

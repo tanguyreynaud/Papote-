@@ -69,6 +69,8 @@ function gestionDonnees(o = {}) {
     { id: 'S1', operateur: 'Lyca', numero: '07 45 12 34 56', iccid: '8933150000000001', statut: 'active', prix: 499, go: 1, dureeForfait: 30, activation: il(25), prochaineRecharge: il(-5), tablette: 'T-001', depense: 'D-S1' },
     { id: 'S2', operateur: 'Lyca', numero: '07 45 98 76 54', iccid: '8933150000000002', statut: 'active', prix: 499, go: 1, dureeForfait: 30, activation: il(28), prochaineRecharge: il(-2), tablette: 'T-004', depense: 'D-S2' },
     { id: 'S3', operateur: 'NRJ Mobile', numero: '06 98 76 54 32', iccid: '8933010000000003', statut: 'active', prix: 299, prixApres: 799, finPromo: il(-12), go: 2, renouvellementAuto: true, activation: il(30), tablette: 'T-005' },
+    // finForfait 'bloque' : internet coupé au bout du forfait (Sosh 1 Go bloqué, 5/11) ; absent = débit réduit.
+    { id: 'S9', operateur: 'Sosh', numero: '06 31 41 59 26', iccid: '8933010000000009', statut: 'active', prix: 599, go: 1, renouvellementAuto: true, finForfait: 'bloque', activation: il(40), prochaineRecharge: il(-12) },
     { id: 'S4', operateur: 'Lyca', numero: '07 51 23 45 67', iccid: '8933150000000004', statut: 'active', prix: 499, go: 1, dureeForfait: 30, activation: il(33), prochaineRecharge: il(1), tablette: 'T-006', depense: 'D-S4', cb: 'Visa …4242', cbExp: '2026-11' },
     { id: 'S5', operateur: 'Lyca', numero: '07 51 00 11 22', iccid: '8933150000000005', statut: 'suspendue', prix: 499, go: 1, tablette: 'T-007', depense: 'D-S4' },
     { id: 'S6', operateur: 'Cdiscount Mobile', iccid: '8933010000000006', statut: 'stock', prix: 199, go: 1, activerAvant: il(-20) },
@@ -360,6 +362,7 @@ const SCENES = [
   { groupe: 'Stock', titre: 'Tablette introuvable', page: '#tablette/T-999', tailles: ['pc'], donnees: () => donnees() },
   { groupe: 'Stock', titre: 'Stock : cartes SIM', page: '#stock/sim', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees() },
   { groupe: 'Stock', titre: 'Carte SIM active, forfait Lyca (recharge dans 5 jours)', page: '#sim/S1', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees() },
+  { groupe: 'Stock', titre: 'Carte SIM Sosh : internet coupé à la fin du forfait', page: '#sim/S9', tailles: ['pc', 'tel'], plein: true, note: 'Nouveau (5/11) : « À la fin du forfait ».', donnees: () => donnees() },
   { groupe: 'Stock', titre: 'Carte SIM : à recharger demain, carte bancaire qui expire', page: '#sim/S4', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Stock', titre: 'Carte SIM : promo qui finit dans 12 jours, renouvellement automatique', page: '#sim/S3', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Stock', titre: 'Carte SIM suspendue', page: '#sim/S5', tailles: ['pc'], plein: true, donnees: () => donnees() },

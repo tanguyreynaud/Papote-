@@ -17,6 +17,7 @@ const GENRES = {
   'sans-telephone': 'Appel sans aucun téléphone joignable',
   impaye: 'Paiement échoué',
   pause: 'Papote en pause (impayé)',
+  forfait: 'Forfait internet presque épuisé (e-mail)',
 };
 
 async function noter(db, { genre, fid, tablette = null, telephones = null }) {

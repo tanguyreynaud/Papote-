@@ -440,6 +440,24 @@ function appelSansTelephone({ nom, sos, lien }) {
   ], { texte: 'Ouvrir l\'appli Papote', lien });
 }
 
+// Forfait internet de la tablette presque épuisé (95 %, forfait-alerte.js) : aux responsables, une seule fois par
+// forfait. Ton calme (Tanguy, 5/11) : ce qui va changer, jusqu'à quand, et le seul geste utile (le wifi).
+// type : 'reduit' (débit réduit au bout du forfait) ou 'bloque' (internet coupé) ; fin : jour où le forfait repart (ms).
+function forfaitPresqueEpuise({ nom, type, fin, lien }) {
+  const qui = nom || 'votre proche';
+  const date = new Date(fin).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', timeZone: 'Europe/Paris' });
+  const suite = type === 'bloque'
+    ? `internet sera coupé jusqu'au <b>${date}</b>`
+    : `jusqu'au <b>${date}</b> les appels vidéo seront plus lents`;
+  return message(`La tablette de ${qui} a presque utilisé son forfait internet du mois`, [
+    'Bonjour,',
+    `La tablette de <b>${echapper(qui)}</b> a presque utilisé son forfait internet du mois : ${suite} ; branchez-la au wifi si vous pouvez.`,
+    type === 'bloque'
+      ? `Rien n'est cassé : le forfait repart le ${date} et internet revient tout seul. Vous n'avez rien d'autre à faire.`
+      : `Rien n'est cassé : photos et messages continuent d'arriver, et le forfait repart le ${date}. Vous n'avez rien d'autre à faire.`,
+  ], { texte: 'Ouvrir l\'appli Papote', lien: lien || APPLI });
+}
+
 // ---------- Abonnement ----------
 
 // Paiement de l'abonnement échoué (C1) : la famille est prévenue par Papote, pas seulement par Stripe.
@@ -712,6 +730,30 @@ function alerteAdmin({ titre, detail, commande }) {
     ? { texte: 'Ouvrir la commande', lien: lienCommandeAdmin(commande) } : null, { interne: true });
 }
 
+// Forfait SIM d'une tablette à 80 ou 95 %, ou forfait « internet coupé » sans doute épuisé (forfait-alerte.js).
+// debut, fin : jours du forfait en cours (ms) ; type : 'reduit' | 'bloque' ; seuil : 80 | 95 ; coupee : bool.
+function alerteForfait({ nom, famille, pourCent, conso, plafond, debut, fin, type, seuil, coupee, commande }) {
+  const jourMois = (ms) => new Date(ms).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', timeZone: 'Europe/Paris' });
+  const mo = (n) => (n >= 1000 ? `${(n / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 2 })} Go` : `${Math.round(n)} Mo`);
+  const qui = `${nom || 'Mamie'}${famille ? ` (famille ${famille})` : ''}`;
+  const utilise = `${mo(conso)} utilisés sur ${mo(plafond)} depuis le ${jourMois(debut)}.`;
+  if (coupee) {
+    return alerteAdmin({
+      titre: `Tablette de ${nom || 'Mamie'} : internet sans doute coupé par le forfait`,
+      detail: `La tablette de ${qui} avait utilisé ${pourCent} % de son forfait « internet coupé » et ne donne plus de nouvelles depuis plus de 2 heures : c'est sans doute l'opérateur qui a coupé internet au bout du forfait, pas une panne. Internet revient le ${jourMois(fin)} ; une recharge le rétablit plus tôt. ${utilise}`,
+      commande,
+    });
+  }
+  const auBout = type === 'bloque'
+    ? `Forfait « internet coupé » au bout : sans recharge, la tablette n'aura plus internet jusqu'au ${jourMois(fin)} (sauf en wifi).`
+    : `Forfait « débit réduit » au bout : les appels vidéo seront plus lents jusqu'au ${jourMois(fin)}.`;
+  return alerteAdmin({
+    titre: `Forfait SIM à ${seuil} % : tablette de ${nom || 'Mamie'}`,
+    detail: `La tablette de ${qui} a utilisé ${pourCent} % de son forfait internet. ${utilise} ${auBout}${seuil >= 95 ? ' La famille est prévenue par e-mail (en journée).' : ''} Recharger ou augmenter le forfait si besoin : admin, Stock, cartes SIM.`,
+    commande,
+  });
+}
+
 // ---------- Support du site ----------
 
 // Le visiteur a laissé ses coordonnées au chat du site (demande de rappel) : il sait que c'est bien parti.
@@ -818,11 +860,11 @@ module.exports = {
   // commande et livraison
   colisParti, tabletteRemise, commandeConfirmee, nouvelleCommande, relancePanier, listeAttenteConfirmee, lancement, rappelJumelage, sepaRefuse,
   // famille
-  invitation, demandeRejoindre, demandeAcceptee, installationFinie, appelSansTelephone,
+  invitation, demandeRejoindre, demandeAcceptee, installationFinie, appelSansTelephone, forfaitPresqueEpuise,
   // abonnement
   paiementEchoue, papoteEnPause, pausePrelevements, reprisePrelevements,
   // fin de contrat
-  retourTablette, etiquetteRetour, resiliationEnregistree, avantEffacement, resiliationAnnulee, rappelRestitution, tabletteRecue, materielNonRendu, commandeAnnulee, annulationAvantEnvoi, resiliation, alerteAdmin,
+  retourTablette, etiquetteRetour, resiliationEnregistree, avantEffacement, resiliationAnnulee, rappelRestitution, tabletteRecue, materielNonRendu, commandeAnnulee, annulationAvantEnvoi, resiliation, alerteAdmin, alerteForfait,
   // support et admin
   rappelConfirme, demandeRappel, bilanSupport, information, recapSemaine, livresComptables, budget,
   // outils

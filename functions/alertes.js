@@ -69,7 +69,13 @@ function etatAlerte(tablette, maintenant, veille) {
   return null;
 }
 
-function message(type, nom) {
+// coupee : jour où internet revient, quand le forfait « internet coupé » est sans doute épuisé (forfait-alerte.js) :
+// pas de « ne répond plus » inquiétant, la vraie raison et le geste utile.
+function message(type, nom, coupee) {
+  if (type === 'silence' && coupee) {
+    const fin = require('./forfait-alerte').jourTexte(coupee);
+    return { titre: `La tablette de ${nom} n'a sans doute plus internet`, texte: `Son forfait du mois est épuisé, internet revient le ${fin}. Branchez-la au wifi si vous pouvez.` };
+  }
   return type === 'silence'
     ? { titre: `La tablette de ${nom} ne répond plus`, texte: 'Est-elle branchée et connectée au Wi-Fi ?' }
     : { titre: `La tablette de ${nom} est débranchée`, texte: 'Pensez à rebrancher son chargeur.' };
@@ -88,7 +94,7 @@ exports.alertesTablettes = onSchedule({ schedule: 'every 5 minutes', timeZone: '
   const enPause = await famillesEnPause(db, maintenant).catch((e) => { logger.warn('Pauses illisibles', e.message); return new Set(); });
   // Seulement les champs utiles des familles, et toutes les familles en même temps (et non l'une après l'autre) :
   // la tâche, lancée 288 fois par jour, finit plus vite et coûte moins de temps de calcul.
-  const familles = await db.collection('families').select('abonnement', 'name', 'createdBy', 'admins', 'veille').get();
+  const familles = await db.collection('families').select('abonnement', 'name', 'createdBy', 'admins', 'veille', 'forfaitSim').get();
   await Promise.all(familles.docs.map(async (fam) => {
     const famille = fam.data();
     const tablettes = await fam.ref.collection('members').where('role', '==', 'tablette').get();
@@ -118,7 +124,7 @@ exports.alertesTablettes = onSchedule({ schedule: 'every 5 minutes', timeZone: '
         });
         if (!pris) continue;
         const responsables = [...new Set([famille.createdBy, ...(famille.admins || [])].filter(Boolean))];
-        const { titre, texte } = message(type, famille.name || 'Mamie');
+        const { titre, texte } = message(type, famille.name || 'Mamie', type === 'silence' && require('./forfait-alerte').coupeeParForfait(tablette, famille.forfaitSim, maintenant));
         let n;
         try {
           n = await envoyer(db, fam.id, responsables, { type: 'alerte', titre, texte }, 6 * 3600);
@@ -210,6 +216,7 @@ exports.alerteMatin = async () => {
 };
 
 exports.etatAlerte = etatAlerte;
+exports.message = message;
 exports.enVeille = enVeille;
 exports.pasVueDepuisLongtemps = pasVueDepuisLongtemps;
 exports.alertePasVueDue = alertePasVueDue;

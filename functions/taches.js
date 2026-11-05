@@ -26,6 +26,7 @@ const PLANNING = {
   restitutions: { heure: 9 }, //               (every day 09:00)
   rappelsJumelage: { heure: 10 }, //           (every day 10:00)
   alerteMatin: { heure: 10 }, //               (alertes.HORAIRE_PAS_VUE : every day 10:00)
+  alerteForfait: TOUTES_LES_HEURES, //         (nouvelle, 5/11 : forfait SIM à 80 et 95 %, forfait-alerte.js)
   gestionRecap: { heure: 8, lundi: true }, //  (every monday 08:00)
   bilanSupport: { heure: 9, lundi: true }, //  (every monday 09:00)
   purgeMensuelle: { heure: 4, premier: true }, // (1 of month 04:00)
