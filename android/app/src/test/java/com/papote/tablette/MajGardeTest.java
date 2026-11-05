@@ -17,6 +17,7 @@ public class MajGardeTest {
     public void adresseEcriteParMajCommunAcceptee() {
         assertNull(MajGarde.refus(BONNE, SHA, null));
         assertNull(MajGarde.refus(BONNE.replace("Papote.apk", "Papote-test.apk"), SHA.toUpperCase(), ""));
+        assertNull(MajGarde.refus("https://maj.mapapote.fr/Papote-221.apk", SHA, null));
     }
 
     @Test
@@ -30,6 +31,9 @@ public class MajGardeTest {
         assertNotNull(MajGarde.refus(BONNE + "?x=1", SHA, null));
         assertNotNull(MajGarde.refus("https://raw.githubusercontent.com.attaquant.fr/tanguyreynaud/Papote-/" + COMMIT + "/installation/Papote.apk", SHA, null));
         assertNotNull(MajGarde.refus(null, SHA, null));
+        assertNotNull(MajGarde.refus("https://maj.mapapote.fr.attaquant.fr/Papote.apk", SHA, null));
+        assertNotNull(MajGarde.refus("https://maj.mapapote.fr/../x/Papote.apk", SHA, null));
+        assertNotNull(MajGarde.refus("https://autre.mapapote.fr/Papote.apk", SHA, null));
     }
 
     @Test

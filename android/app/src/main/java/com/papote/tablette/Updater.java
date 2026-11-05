@@ -31,6 +31,16 @@ final class Updater {
     private static final String FEED = "https://papote-maj.web.app/version.json";
     /** Tablettes de test (installées avec -Canal test) : elles reçoivent les nouvelles versions en premier. */
     private static final String FEED_TEST = "https://papote-maj.web.app/version-test.json";
+    /**
+     * Fichiers de version de secours, sur le domaine de Papote (DNS chez OVH, hors de Google) : si le projet Firebase
+     * disparaît (compte Google perdu, projet supprimé), papote-maj.web.app disparaît avec lui et aucune tablette
+     * ne pourrait plus recevoir la version qui pointe vers le nouveau projet : il faudrait passer chez chaque Mamie.
+     * Tanguy fait alors pointer maj.mapapote.fr vers un autre hébergement (GitHub Pages, Cloudflare Pages…) et y
+     * dépose version.json. Tant que l'adresse ne répond pas, rien ne change. Sûr : l'APK reste limité au dépôt
+     * Papote (MajGarde) et Android exige la signature de Papote ; on prend la version la plus récente des deux.
+     */
+    private static final String FEED_SECOURS = "https://maj.mapapote.fr/version.json";
+    private static final String FEED_SECOURS_TEST = "https://maj.mapapote.fr/version-test.json";
 
     private static int echecs;
     /** Une seule vérification à la fois (une annonce peut arriver pendant un téléchargement). */
@@ -55,7 +65,7 @@ final class Updater {
     static String maintenant(Context context) {
         try {
             boolean test = "test".equals(context.getSharedPreferences("papote", Context.MODE_PRIVATE).getString("canal", ""));
-            JSONObject feed = new JSONObject(new String(download(test ? FEED_TEST : FEED), "UTF-8"));
+            JSONObject feed = lireVersion(test);
             int latest = feed.getInt("versionCode");
             long current = currentVersion(context);
             String nom = feed.optString("versionName", String.valueOf(latest));
@@ -70,7 +80,7 @@ final class Updater {
     private static boolean verifier(Context context) {
         try {
             boolean test = "test".equals(context.getSharedPreferences("papote", Context.MODE_PRIVATE).getString("canal", ""));
-            JSONObject feed = new JSONObject(new String(download(test ? FEED_TEST : FEED), "UTF-8"));
+            JSONObject feed = lireVersion(test);
             int latest = feed.getInt("versionCode");
             long current = currentVersion(context);
             echecs = 0;
@@ -115,6 +125,22 @@ final class Updater {
             if (echecs == 3) Journal.log(context, "Mise à jour impossible depuis 30 min : " + e);
             return false;
         }
+    }
+
+    /** Le fichier de version le plus récent entre l'adresse habituelle et celle de secours ; erreur si aucune ne répond. */
+    private static JSONObject lireVersion(boolean test) throws Exception {
+        JSONObject meilleur = null;
+        Exception derniere = null;
+        for (String url : test ? new String[]{FEED_TEST, FEED_SECOURS_TEST} : new String[]{FEED, FEED_SECOURS}) {
+            try {
+                JSONObject f = new JSONObject(new String(download(url), "UTF-8"));
+                if (meilleur == null || f.getInt("versionCode") > meilleur.getInt("versionCode")) meilleur = f;
+            } catch (Exception e) {
+                derniere = e;
+            }
+        }
+        if (meilleur == null) throw derniere != null ? derniere : new IOException("aucun fichier de version");
+        return meilleur;
     }
 
     private static long currentVersion(Context context) throws PackageManager.NameNotFoundException {
