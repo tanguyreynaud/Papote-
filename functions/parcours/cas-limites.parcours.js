@@ -238,7 +238,9 @@ test('client qui recommande pour une autre grand-mère : la commande suit la nou
   s.avancer(60);
   const t2 = await a.tablettePreparee();
   const { abonnement: id2 } = await a.commanderEtPayer({ email: paul.email });
-  assert.strictEqual((await commande(id2)).fid, f1, 'reliée d\'office à l\'ancienne famille (annulable depuis l\'appli)');
+  // Famille préparée dès la commande : la nouvelle commande a sa propre famille, jamais l'ancienne (A14-1).
+  const preparee = (await commande(id2)).fid;
+  assert.ok(preparee && preparee !== f1, 'nouvelle famille préparée, pas l\'ancienne');
   await a.preparerEtEnvoyer(id2, t2);
   s.avancer(2);
   await a.afficherCode(t2);
