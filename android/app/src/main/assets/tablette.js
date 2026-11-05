@@ -1076,9 +1076,15 @@
     $('overlay-img').setAttribute('src', BLANK);
     $('overlay-img').style.backgroundImage = 'none';
     $('overlay-img-bg').style.backgroundImage = 'none';
+    // Un seul <video> d'aperçu à la fois, toujours libéré : une vidéo qui ne se charge pas (ou jamais
+    // jusqu'à « seeked ») gardait son élément en vie, un par vidéo reçue (essai d'endurance, 05/11).
+    libererApercu();
     var v = document.createElement('video');
+    apercuVideo = v;
     v.muted = true;
     v.preload = 'auto';
+    v.addEventListener('error', libererApercu);
+    apercuTimer = setTimeout(libererApercu, 20000);
     v.addEventListener('loadeddata', function () { try { v.currentTime = Math.min(0.5, (v.duration || 1) / 2); } catch (e) { /* tant pis */ } });
     v.addEventListener('seeked', function () {
       if (overlayPost !== p || !v.videoWidth) return;
@@ -1096,9 +1102,19 @@
         setPicture($('overlay-img'), url);
         $('overlay-img-bg').style.backgroundImage = 'url("' + url + '")';
       } catch (e) { /* pas d'image : le fond reste uni */ }
-      v.removeAttribute('src');
+      libererApercu();
     });
     v.src = p.video;
+  }
+
+  var apercuVideo = null, apercuTimer = null;
+  function libererApercu() {
+    clearTimeout(apercuTimer);
+    apercuTimer = null;
+    var v = apercuVideo;
+    apercuVideo = null;
+    if (!v) return;
+    try { v.removeAttribute('src'); v.load(); } catch (e) { /* déjà libre */ }
   }
 
   function listenOverlay() {
