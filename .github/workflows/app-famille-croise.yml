@@ -6,13 +6,13 @@ name: App famille avec ces fonctions
 
 on:
   push:
-    branches: [main, claude/app-famille-sur-main]
+    branches: [main]
     paths: ['functions/**', '.github/workflows/app-famille-croise.yml']
   workflow_dispatch:
 
 jobs:
   app-famille:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
       - name: App famille (dlattc)
