@@ -199,7 +199,22 @@ function brancher({ db, logger, villeAvecCoordonnees = installation.villeAvecCoo
     return { fid: f.id, nom: f.get('nomAChoisir') ? '' : (f.get('name') || ''), commande: (f.get('installation') || {}).commande || null };
   }
 
-  return { creer, jumeler, proprietaire, nommer, familleDuScan };
+  // Fiche de la tablette écrite après le nom : jumelée quand la famille portait encore le nom d'attente, elle
+  // s'appelle « Tablette » (Sync.java) alors que nommer() est déjà passé. Elle prend le nom de la famille.
+  async function nomDeLaTablette(fid, uid) {
+    const famRef = db.doc(`families/${fid}`);
+    const membreRef = famRef.collection('members').doc(uid);
+    return db.runTransaction(async (tx) => {
+      const [fam, membre] = await Promise.all([tx.get(famRef), tx.get(membreRef)]);
+      if (!fam.exists || !membre.exists || membre.get('role') !== 'tablette') return false;
+      if (!(fam.get('installation') || {}).preparee || fam.get('nomAChoisir') || !fam.get('name')) return false;
+      if (membre.get('name') === fam.get('name')) return false;
+      tx.update(membreRef, { name: fam.get('name') });
+      return true;
+    });
+  }
+
+  return { creer, jumeler, proprietaire, nommer, familleDuScan, nomDeLaTablette };
 }
 
 module.exports = {

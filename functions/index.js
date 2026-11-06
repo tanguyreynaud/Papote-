@@ -1925,6 +1925,11 @@ exports.nouveauMembre = onDocumentCreated(
       logger.info(`Famille préparée ${fid} : ${uid} en devient responsable.`);
       return;
     }
+    // Tablette entrée juste après que la famille a reçu son nom : sa fiche le prend aussi.
+    if (membre.role === 'tablette') {
+      await famillePreparee.nomDeLaTablette(fid, uid);
+      return;
+    }
     if (membre.status === 'pending') {
       await prevenirDemande(fid, uid, membre);
       return;

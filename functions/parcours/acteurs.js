@@ -139,8 +139,9 @@ async function entrerDansLaFamille(t) {
   if (!p || p.status !== 'confirmed' || !p.fid) throw new Error(`La tablette n'est pas confirmée (${p && p.status})`);
   t.fid = p.fid;
   for (const uid of [t.tabletUid, t.callsUid]) {
+    // Sync.java (joinFamily) : le nom de la famille donné par le jumelage, sinon « Tablette ».
     await s.db.doc(`families/${p.fid}/members/${uid}`).create({
-      name: 'Tablette', role: 'tablette', pairing: t.code, canCall: true, joinedAt: s.FieldValue.serverTimestamp(),
+      name: p.familyName || 'Tablette', role: 'tablette', pairing: t.code, canCall: true, joinedAt: s.FieldValue.serverTimestamp(),
     });
   }
   await s.calme();

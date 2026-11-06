@@ -307,6 +307,36 @@ test('famille préparée, tablette pas reconnue : celui qui a payé scanne, elle
   assert.deepStrictEqual(await s.appeler('reserverTablette', { code: t2.code, prenom: 'Paul' }, paul), { etat: 'reserve' });
 });
 
+test('famille préparée nommée pendant que la tablette entre : sa fiche prend quand même le nom de la famille', async () => {
+  const paul = await s.compte('Paul', 'paul@exemple.fr');
+  const t = await a.tablettePreparee();
+  const { abonnement: id } = await a.commanderEtPayer({ email: paul.email });
+  const { fid } = await commande(id);
+  await a.entrerParInvitation(paul, fid);
+  await a.preparerEtEnvoyer(id, t);
+  // La tablette affiche son code avant le nom : jumelage confirmé sans nom (« Tablette »)…
+  await a.afficherCode(t);
+  assert.strictEqual((await s.lire(`pairings/${t.code}`)).familyName, '');
+  // … Paul donne le nom, puis seulement la tablette écrit sa fiche (elle relit toutes les 4 s).
+  await s.appeler('nommerFamillePreparee', { fid, nom: 'Mamie Emma' }, paul);
+  await a.entrerDansLaFamille(t);
+  for (const uid of [t.tabletUid, t.callsUid]) {
+    assert.strictEqual((await s.lire(`families/${fid}/members/${uid}`)).name, 'Mamie Emma', 'pas « Tablette »');
+  }
+  // Nommée avant l'arrivée : la tablette prend le nom par le jumelage.
+  const julie = await s.compte('Julie', 'julie@exemple.fr');
+  const t2 = await a.tablettePreparee();
+  const { abonnement: id2 } = await a.commanderEtPayer({ email: julie.email });
+  const fid2 = (await commande(id2)).fid;
+  await a.entrerParInvitation(julie, fid2);
+  await s.appeler('nommerFamillePreparee', { fid: fid2, nom: 'Papi Jo' }, julie);
+  await a.preparerEtEnvoyer(id2, t2);
+  await a.afficherCode(t2);
+  assert.strictEqual((await s.lire(`pairings/${t2.code}`)).familyName, 'Papi Jo');
+  await a.entrerDansLaFamille(t2);
+  assert.strictEqual((await s.lire(`families/${fid2}/members/${t2.tabletUid}`)).name, 'Papi Jo');
+});
+
 test('famille préparée : tablette perdue en route refusée, la tablette de remplacement entre seule dans la même famille', async () => {
   const paul = await s.compte('Paul', 'paul@exemple.fr');
   const t1 = await a.tablettePreparee();
