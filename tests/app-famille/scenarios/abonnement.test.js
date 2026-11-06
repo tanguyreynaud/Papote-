@@ -131,6 +131,9 @@ test('Tablette installée sans commande : 48 h pour relier la commande payée pa
 
   // Paul avait commandé sur le site avec son adresse.
   const { abonnement } = await acteurs.commanderEtPayer({ email: 'paul@exemple.fr' });
+  // Commande d'avant la famille préparée (il en reste en ligne) : sans famille, elle attend d'être reliée par son code.
+  // Une commande d'aujourd'hui a déjà sa propre famille (functions/famille-preparee.js) et ne se relie plus.
+  await acteurs.commandeDAvant(abonnement);
   const { code } = await g.lire(`commandes/${abonnement}`);
   await julie.page.fill(champ, code);
   await julie.page.click('#abo-banner-paid button[type=submit]');
