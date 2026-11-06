@@ -2,7 +2,7 @@
 // appuyé »). Pour chaque bouton différent de l'app famille et de l'admin (le premier écran où il apparaît), on
 // rouvre l'écran, on bloque le serveur (il ne répond jamais), on touche le bouton et on regarde l'écran pendant
 // 0,7 s : il doit se passer quelque chose de visible (roue, bouton grisé, fenêtre, message, autre page, choix
-// d'un fichier…). Sinon le bouton est signalé : c'est ce que vit quelqu'un qui touche et ne voit rien venir.
+// d'un fichier, nouvel onglet d'un lien externe…). Sinon le bouton est signalé : c'est ce que vit quelqu'un qui touche et ne voit rien venir.
 // Chaque écran est aussi rafraîchi une fois : il doit revenir, sans erreur ni écran vide.
 // Ne vérifie pas le message de fin (réussite ou erreur) une fois que le serveur répond : à regarder dans la galerie.
 'use strict';
@@ -79,6 +79,7 @@ async function essayer(mod, browser, base, scene, taille, nom) {
   try {
     let evenement = '';
     page.on('popup', () => { evenement = 'fenêtre'; });
+    ctx.on('page', () => { evenement = 'fenêtre'; });
     page.on('filechooser', () => { evenement = 'fichier'; });
     page.on('download', () => { evenement = 'téléchargement'; });
     page.on('dialog', (d) => { evenement = 'dialogue'; d.dismiss().catch(() => {}); });
@@ -94,8 +95,14 @@ async function essayer(mod, browser, base, scene, taille, nom) {
     await page.evaluate(guetter);
     await page.waitForTimeout(500);
     await page.evaluate(() => { window.__toucheA = performance.now(); });
+    // Lien vers un autre site dans un nouvel onglet (« État de Firebase ↗ ») : l'onglet qui s'ouvre est le retour
+    // visible. Sur une machine chargée (GitHub, 4 essais en parallèle), il met parfois plus de 0,7 s à apparaître :
+    // on l'attend jusqu'à 5 s plutôt que de signaler le lien (faux « rien ne bouge » du 05/11 sur dlattc).
+    const nouvelOnglet = await loc.evaluate((el) => el.matches('a[href][target="_blank"]')).catch(() => false);
+    const onglet = nouvelOnglet ? ctx.waitForEvent('page', { timeout: 5000 }).then(() => { evenement = 'fenêtre'; }, () => {}) : null;
     await loc.click({ timeout: 2000, noWaitAfter: true });
     await page.waitForTimeout(700);
+    if (!evenement && onglet) await onglet;
     if (evenement || page.url() !== url) { if (process.env.DEBUG) console.log('\n', nom, '→', evenement || 'url'); return ''; }
     const n = await page.evaluate(bilan).catch(() => 1); // page partie ailleurs : il s'est passé quelque chose
     if (process.env.DEBUG) console.log('\n', nom, '→', n, await page.evaluate(() => window.__changes.filter((c) => c.t >= window.__toucheA).slice(0, 3).map((c) => (c.cible && (c.cible.id || c.cible.className || c.cible.tagName)))).catch(() => ''));
