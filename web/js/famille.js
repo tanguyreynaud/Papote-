@@ -4198,6 +4198,13 @@ function applyFamily() {
   if (!$('view-settings').hidden) renderSettings();
   const name = session.family.name;
   $('family-title').textContent = `Pour ${name}`;
+  // Plusieurs familles : le bouton « Pour … · Changer » et la liste prennent aussi le nouveau nom (famille
+  // préparée nommée, nom changé dans les réglages) ; ils gardaient le nom lu à l'ouverture (« Votre proche »).
+  const actuelle = myFamilies.find((f) => f.fid === session.fid);
+  if (actuelle && name && actuelle.name !== name) {
+    actuelle.name = name;
+    renderFamilySwitch(session.fid);
+  }
   document.querySelectorAll('.grand-name').forEach((el) => { el.textContent = name; });
   $('message-text').placeholder = `Écrire à ${name}…`;
   $('family-name-card').hidden = !amFamilyAdmin();
@@ -4242,7 +4249,9 @@ function watchFamily() {
   stopFamily?.();
   stopFamily = onSnapshot(doc(db, 'families', session.fid), (snap) => {
     if (!snap.exists()) return;
-    session.family = { ...session.family, ...snap.data() };
+    // Le document tel qu'il est : un champ effacé par le serveur disparaît aussi ici (nomAChoisir effacé quand le
+    // nom de la famille préparée est donné ; gardé par une fusion, « Comment appelez-vous la personne ? » restait).
+    session.family = snap.data();
     applyFamily();
     repriseParUnAutre();
   }, (err) => {
