@@ -1,0 +1,58 @@
+# L'app famille (branche claude/project-thread-dlattc) est testée contre les fonctions de main.
+# Un changement de main peut donc la casser sans toucher web/ : c'est arrivé le 5/11 (famille préparée).
+# Ici, à chaque changement des fonctions sur main, les tests de bout en bout de l'app famille repartent,
+# avec l'app de dlattc et les fonctions de ce commit (Tanguy, 6/11). Gratuit (dépôt public).
+name: App famille avec ces fonctions
+
+on:
+  push:
+    branches: [main, claude/app-famille-sur-main]
+    paths: ['functions/**', '.github/workflows/app-famille-croise.yml']
+  workflow_dispatch:
+
+jobs:
+  app-famille:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: App famille (dlattc)
+        uses: actions/checkout@v4
+        with:
+          ref: claude/project-thread-dlattc
+          fetch-depth: 0
+      - name: Fonctions de ce commit
+        uses: actions/checkout@v4
+        with:
+          path: .main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            tests/app-famille/package-lock.json
+            .main/functions/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: emulateurs-firebase-14
+      - run: npm ci --no-audit --no-fund
+        working-directory: .main/functions
+      - run: npm ci
+        working-directory: tests/app-famille
+      - run: npx playwright install --with-deps chromium
+        working-directory: tests/app-famille
+      - run: npm test
+        working-directory: tests/app-famille
+        env:
+          PAPOTE_FONCTIONS: ${{ github.workspace }}/.main/functions
+      - name: Captures en cas d'échec
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: captures-app-famille
+          path: tests/app-famille/captures/
+          if-no-files-found: ignore
