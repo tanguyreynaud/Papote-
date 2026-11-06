@@ -15,7 +15,9 @@ on:
 
 jobs:
   balayage:
-    runs-on: ubuntu-latest
+    # Ubuntu 24.04 fixé : ubuntu-latest est passé en 26.04 le 06/11 et Playwright 1.56.1 (outils/galerie)
+    # n'y installe pas Chromium (« Playwright does not support chromium on ubuntu26.04-x64 »).
+    runs-on: ubuntu-24.04
     # Les gestes de l'app famille (170 écrans × 6 variantes) prennent environ 50 min.
     timeout-minutes: 90
     strategy:
