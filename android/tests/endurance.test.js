@@ -37,8 +37,11 @@ test(`${JOURS} jours sans redémarrage : minuteries, écoutes, appels et mémoir
     console.log('délais en attente :', JSON.stringify(dernier.detailDelais, null, 1));
     if (process.env.ENDURANCE_CSV) require('node:fs').writeFileSync(process.env.ENDURANCE_CSV, JSON.stringify(mesures, null, 1));
     assert.deepStrictEqual(await erreurs(b), [], 'erreurs JavaScript');
-    // Pente sur la 2e moitié (le 1er jour remplit les caches normaux : 60 envois, visages, détecteur).
-    const a = mesures[1], z = dernier, n = mesures.length - 2 || 1;
+    // Pente à partir de J4 : le 1er jour remplit les caches normaux (60 envois, visages, détecteur) et J3
+    // ajoute une fois pour toutes les deux vidéos du diaporama (~150 nœuds chacune), plat ensuite
+    // (relevé de Gestion sur d806686, 07/11). Seuil inchangé. Moins de 5 jours : depuis J1, comme avant.
+    const debut = mesures.length > 5 ? 4 : 1;
+    const a = mesures[debut], z = dernier, n = mesures.length - 1 - debut || 1;
     const pente = (k) => (z[k] - a[k]) / n;
     const detail = `pente/jour : intervalles ${pente('intervalles')}, délais ${pente('delais')}, écoutes Firestore ${pente('ecoutesFirestore')}, ` +
       `WebRTC ${pente('pcOuvertes')}, flux ${pente('fluxActifs')}, nœuds ${pente('noeuds')}, écouteurs ${pente('ecouteurs')}, ` +
