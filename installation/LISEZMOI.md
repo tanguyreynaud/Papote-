@@ -1,0 +1,91 @@
+# Tablette : installation, mises à jour, maintenance
+
+### Installer une nouvelle tablette
+
+1. Sur la tablette : Paramètres > À propos > appuyer 7 fois sur « Numéro de build »,
+   puis Options pour les développeurs > activer « Débogage USB ».
+2. Pour le mode kiosque complet, la tablette ne doit avoir **aucun compte** (Google, Samsung…).
+   Le plus simple : la réinitialiser et passer la configuration sans ajouter de compte.
+3. Brancher la tablette au PC en USB et double-cliquer sur `installation/installer-tablette.bat`.
+4. Entrer le code tablette (app famille, Réglages > Installer une tablette), ou rien :
+   la tablette affiche alors l'écran « Bienvenue » et le client la configure lui-même, sans PC :
+   nom de la tablette, wifi (sauté s'il y a une carte SIM avec internet), ville de la météo, puis QR code
+   ou code à taper dans l'app famille (« Ajouter ma tablette »), confirmation « C'est bien vous ? » sur la
+   tablette, et placement de la tablette face à la personne (image de la caméra).
+   Ville de la météo connue d'avance : `-Ville "Lyon"` au script d'installation (l'étape est alors sautée).
+   Sur la tablette, on tape le code postal puis on choisit la commune dans la liste (geo.api.gouv.fr).
+   La famille peut la changer ensuite : l'appli famille écrit `families/{fid}.meteoVille = {nom, lat, lon}`
+   (lat/lon facultatifs, retrouvés d'après le nom), et la tablette indique la ville en cours sur sa fiche
+   (`members/{uid}.meteoVille`).
+5. Sur le PC qui a la clé d'administration (`%USERPROFILE%\.papote\cle-admin-firebase.json`),
+   l'installation note aussi la tablette dans le stock (`outils/gestion/preparer-tablette.js`,
+   d'après son n° de série) et affiche son numéro, par exemple « >>> Écrivez T-012 sur le carton. ».
+   Écrivez-le sur le carton. Au jumelage chez le client, la tablette envoie ce n° de série et sa
+   commande est reliée à la famille. Sans la clé, cette étape est simplement sautée.
+6. L'installation refuse une tablette hors critères : Android réel sous 13 (le niveau système compte, pas
+   le numéro affiché, souvent maquillé) ou puce sans 4G récente (SC7731E, SC9863A…). `-Essai` l'installe
+   quand même pour un test, sans la noter dans le stock.
+7. L'installation crée aussi la clé App Check de la tablette (`outils/admin/cle-tablette.js --serie`)
+   et la lui envoie : la tablette prouve ainsi à Firebase qu'elle est une vraie tablette Papote.
+   La clé n'est écrite nulle part sur le PC. La remise à zéro la retire (`--retirer`).
+   Sans l'outil, la tablette marche quand même : rien n'est encore exigé côté Firebase.
+
+### Remettre une tablette à l'état usine (retour au fournisseur)
+
+Brancher la tablette en USB et double-cliquer sur `installation/remettre-a-zero.bat`.
+Le script affiche le n° de série de la tablette et demande de le retaper pour confirmer.
+La tablette quitte sa famille, puis Android efface tout (famille, photos, wifi, Papote) et
+redémarre sur l'écran de première configuration, comme sortie du carton. Garde-fou : Papote
+n'efface que la tablette dont on lui donne le n° de série.
+Une tablette qui n'est pas en mode kiosque se remet à zéro à la main :
+Paramètres > Système > Réinitialiser > Effacer toutes les données.
+
+### Publier une mise à jour
+
+1. Augmenter `versionCode` et `versionName` dans `android/app/build.gradle.kts`, puis faire un commit.
+2. Lancer `installation/publier-mise-a-jour.ps1 -Test` : seules les tablettes de test (installées avec
+   `-Canal test`) reçoivent la nouvelle version.
+3. Si tout va bien, `installation/promouvoir-mise-a-jour.ps1` la passe à toutes les tablettes, sans recompiler.
+   (Sans `-Test`, `publier-mise-a-jour.ps1` publie directement pour toutes les tablettes.)
+4. Les tablettes vérifient toutes les 6 heures et s'installent la nouvelle version toutes seules.
+
+En une commande, depuis un PowerShell dans `installation/` :
+
+    .\installer-tablette.ps1 -Code ABCD-2345 -Wifi "Nom du wifi" -MotDePasse "..." -Oui
+
+Ce que le script fait à la tablette, de A à Z :
+1. installe Papote (caméra et micro autorisés d'office) ;
+2. date et heure automatiques, écran toujours allumé sur le chargeur, barre de navigation du bas masquée,
+   wifi si demandé ;
+3. mode kiosque (propriétaire de l'appareil) : Papote est l'écran d'accueil et ne se quitte pas, pas de volet
+   de notifications, pas de menu « Éteindre », pas de démarrage sans échec ;
+4. Papote filtre les appels (rôle « filtrage des appels ») : appels de la carte SIM refusés ; les SMS reçus ne
+   s'affichent nulle part (appli Messages désactivée) et Papote peut envoyer ses alertes ;
+5. désactive les applis inutiles listées dans `installation/applis-inutiles.txt` (rien n'est effacé) ;
+6. relie la tablette à la famille avec le code tablette.
+
+Option : `-Numeros "0612345678,0698765432"`
+(avec une carte SIM : SMS d'alerte quand la tablette n'a plus internet depuis 30 minutes, puis quand il revient).
+
+Au démarrage, l'appli règle elle-même le volume (fort), bloque les boutons de volume, rallume l'écran en
+journée si on appuie sur le bouton marche/arrêt, et met l'écran en veille de 21 h à 6 h 30 (réglable par la famille).
+
+Pour vérifier une tablette branchée (avant un envoi, ou en cas de souci) : `installation/diagnostic.bat`.
+Il contrôle la version, le mode kiosque, les réglages, le réseau, la batterie et affiche le journal récent.
+
+Pour remettre la tablette à la normale : `installation/retirer-papote.bat`.
+
+Maintenance par ADB :
+- sortir du kiosque temporairement : `adb shell am start -n com.papote.tablette/.MainActivity --ez unlock true`
+- y revenir : `adb shell am start -n com.papote.tablette/.MainActivity --ez lock true`
+
+### Reconstruire l'app Android
+
+La clé de signature est hors du dépôt, dans `%USERPROFILE%\.papote\` (à sauvegarder) :
+copier `signing.properties` dans `android/`, puis
+
+```
+cd android
+gradlew assembleRelease
+copy app\build\outputs\apk\release\app-release.apk ..\installation\Papote.apk
+```
