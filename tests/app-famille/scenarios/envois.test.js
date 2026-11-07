@@ -368,6 +368,29 @@ test('Messages : écrit, message rapide, vu par la tablette, réponse de Mamie, 
   assert.deepStrictEqual((await postsDe(fid, 'message')).map((m) => m.text), ['Bisous de Lyon, à dimanche !']);
 });
 
+test('Emojis : un message avec emojis (famille, teinte, drapeau, cœur) gardé entier, affiché tel quel, même après rechargement', async () => {
+  const julie = await banc.telephone('Julie');
+  const { fid } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
+  // Emojis faits de plusieurs caractères : rien ne doit être coupé ni remplacé par un carré.
+  const texte = 'Bisous ❤️ de 👨‍👩‍👧 🇫🇷 bravo 👍🏽🎉 1️⃣';
+  await g.ouvrirTuile(julie, 'messages');
+  await julie.page.fill('#message-text', texte);
+  await julie.page.click('#btn-message');
+  const bulle = julie.page.locator('#messages li.bubble.mine', { hasText: 'Bisous' });
+  await bulle.waitFor();
+  assert.ok((await bulle.innerText()).includes(texte), 'bulle affichée avec tous ses emojis');
+  const [m] = await g.attendreBase(async () => { const l = await postsDe(fid, 'message'); return l.length === 1 && l; }, '1 message');
+  assert.strictEqual(m.text, texte, 'texte enregistré à l\'identique');
+  assert.ok(!/\uFFFD/.test(m.text), 'aucun caractère cassé');
+  // Après rechargement, toujours entier.
+  await julie.page.reload();
+  await g.attendreVue(julie, 'view-home');
+  await g.ouvrirTuile(julie, 'messages');
+  const apres = julie.page.locator('#messages li.bubble.mine', { hasText: 'Bisous' });
+  await apres.waitFor();
+  assert.ok((await apres.innerText()).includes(texte));
+});
+
 test('Un proche voit les envois des autres, ne peut supprimer que les siens', async () => {
   const julie = await banc.telephone('Julie');
   const { fid } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
