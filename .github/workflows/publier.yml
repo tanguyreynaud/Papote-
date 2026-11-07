@@ -128,6 +128,19 @@ jobs:
             echo "Essai $essai raté, nouvel essai dans 90 s"; sleep 90
           done
           exit 1
+      # Ménage des secrets (Tanguy, 7/11) : chaque nouvelle valeur d'un secret laisse l'ancienne version active,
+      # payée chaque mois (6 versions gratuites). Après la publication des fonctions, on détruit les versions
+      # qu'AUCUNE fonction en ligne n'utilise. Droit nécessaire au compte de publication : « Secret Manager Secret
+      # Version Manager » (rien d'autre). Sans ce droit, la publication continue et un avertissement le dit.
+      - name: Ménage des vieilles versions de secrets
+        if: env.FONCTIONS == 'true'
+        working-directory: main
+        continue-on-error: true
+        run: |
+          if ! firebase functions:secrets:prune --force --project "$PROJET" --non-interactive; then
+            echo "::warning::Ménage des secrets impossible (droit « Secret Manager Secret Version Manager » manquant ?). Rien n'est cassé."
+            exit 1
+          fi
       - name: Vitrine (main)
         if: env.FONCTIONS == 'true'
         working-directory: main
