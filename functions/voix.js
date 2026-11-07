@@ -66,10 +66,18 @@ async function fichierVoix(fid, texte, genre) {
   return { url: adresse(bucket, chemin, jeton), nom };
 }
 
-// Texte à lire pour un document (envoi ou rappel), ou '' si rien.
+// Emojis : Mamie les voit à l'écran, la voix ne les lit pas (Tanguy, 7/11) : pas de « cœur rouge » lu à voix
+// haute, et des caractères en moins à payer. Pictogrammes, drapeaux, teintes de peau, liaisons et variantes.
+const EMOJIS = /[\p{Extended_Pictographic}\u{1F1E6}-\u{1F1FF}\u{1F3FB}-\u{1F3FF}\u200D\uFE0F\u20E3]/gu;
+function sansEmojis(t) {
+  return t.replace(EMOJIS, ' ').replace(/\s+/g, ' ').trim();
+}
+
+// Texte à lire pour un document (envoi ou rappel), ou '' si rien (un message fait que d'emojis : rien à lire).
+// Coupé par caractères entiers, jamais au milieu d'une lettre.
 function texteDe(data, champ) {
-  const t = typeof data[champ] === 'string' ? data[champ].trim() : '';
-  return t.slice(0, MAX);
+  const t = typeof data[champ] === 'string' ? sansEmojis(data[champ]) : '';
+  return Array.from(t).slice(0, MAX).join('');
 }
 
 // Annonce dite avant le message (« Julie vous écrit : »), fichier à part : créée une seule fois par
@@ -120,4 +128,4 @@ async function voixDocument(db, ref, data, champ, auteurUid, prenomAnnonce) {
   return `voix créée (${v.nom}${annonce ? ', avec annonce' : ''})`;
 }
 
-module.exports = { nomVoix, motParDefaut, MOTS, cheminFichier, texteDe, texteAnnonce, voixDocument, fichierVoix, VOIX, MAX };
+module.exports = { sansEmojis, nomVoix, motParDefaut, MOTS, cheminFichier, texteDe, texteAnnonce, voixDocument, fichierVoix, VOIX, MAX };
