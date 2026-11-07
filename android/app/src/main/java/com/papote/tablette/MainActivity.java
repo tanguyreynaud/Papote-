@@ -1118,7 +1118,8 @@ public class MainActivity extends Activity implements Sync.Listener {
     }
 
     private void speakNow(String text) {
-        if (text == null || text.trim().isEmpty()) return;
+        text = Emojis.sans(text); // affichés à l'écran, jamais lus
+        if (text == null || text.trim().isEmpty()) { speechState("done"); return; }
         if (ttsFailed) { speechState("done"); return; }
         if (tts == null || !ttsReady) { ttsPending = text; prepareTts(); return; }
         ttsPendingGuide = false;

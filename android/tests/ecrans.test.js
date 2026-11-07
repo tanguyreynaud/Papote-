@@ -580,3 +580,22 @@ test('pause : jamais « réglé » sous les yeux de Mamie ; après un arrêt, pa
     await sansErreur(b);
   } finally { await b.fermer(); }
 });
+
+// Emojis (Tanguy, 07/11) : affichés en entier dans le message (famille ZWJ comprise), rien de coupé ni caché.
+test('message avec emojis 👍❤️🎉👨‍👩‍👧 : affiché en entier, sans caractère coupé', async () => {
+  const b = await ouvrir();
+  try {
+    const texte = 'Bravo Mamie 👍❤️🎉 toute la famille 👨‍👩‍👧';
+    await b.android('onPosts', lot([envoi({ type: 'message', image: null, text: texte })]));
+    await b.avancer(3000);
+    assert.ok(await b.visible('#overlay'), 'message affiché');
+    const affiche = await b.page.evaluate(() => document.getElementById('overlay-text').textContent);
+    assert.ok(affiche.includes('👍❤️🎉'), `emojis présents : « ${affiche} »`);
+    assert.ok(affiche.includes('👨‍👩‍👧'), `famille entière (pas coupée au liant) : « ${affiche} »`);
+    assert.doesNotMatch(affiche, /�|…/, 'ni caractère de remplacement ni texte coupé');
+    // Rien ne déborde du cadre du message (pas de texte caché).
+    const deborde = await b.page.evaluate(() => { const e = document.getElementById('overlay-text'); return e.scrollWidth > e.clientWidth + 1 || e.scrollHeight > e.clientHeight + 1; });
+    assert.ok(!deborde, 'le message tient dans son cadre');
+    await sansErreur(b);
+  } finally { await b.fermer(); }
+});
