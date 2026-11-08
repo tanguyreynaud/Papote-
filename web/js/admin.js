@@ -914,7 +914,7 @@ function carteFamille(f) {
     ['Dernier envoi', ago(f.lastPost)],
     ['Créée', toDate(f.createdAt) ? toDate(f.createdAt).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '–'],
     ['Identifiant', f.id],
-  ]) dl.append(el('dt', null, k), el('dd', null, v));
+  ]) dl.append(el('dt', null, k), el('dd', k === 'État' ? 'etat' : null, v));
   tete.append(titre, dl);
 
   // Membres affichés d'office, avec les demandes « veut rejoindre » en tête.
