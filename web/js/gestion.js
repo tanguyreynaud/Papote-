@@ -14,7 +14,7 @@ import { ouvrirParcours, fermerParcours } from './parcours.js';
 import {
   getFirestore, doc, collection, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, increment,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
-import { simVue, reseauMobile, go as enGo } from './sim.js';
+import { simVue, reseauMobile, reseauAVoir, reseauVuDe, alerteReseau, noterReseauVu, go as enGo } from './sim.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -743,11 +743,14 @@ function afficherAccueil() {
       .map((t) => [1, `${nomT(t)} remplacée, à récupérer chez le client`, versTablette(t), '']),
     [clientsSansSim, `${clientsSansSim} client${clientsSansSim > 1 ? 's' : ''} sans carte SIM notée sur sa tablette`, '#stock/sim', 'ko'],
     [simsSansTablette, `${simsSansTablette} ligne${simsSansTablette > 1 ? 's SIM actives reliées' : ' SIM active reliée'} à aucune tablette`, '#stock/sim', 'ko'],
-    // Réseau mobile chez le client, d'après les antennes que sa tablette entend (sim.js, reseauMobile).
+    // Réseau mobile chez le client, d'après les antennes que sa tablette entend (sim.js, reseauMobile). « Vu » dans le ⋮
+    // l'enlève de la liste et du compteur ; elle ne revient que si le réseau empire (sim.js, reseauAVoir).
     ...donnees.stock.filter((t) => t.etat === 'chez-client' && t.fid).map((t) => {
       const vue = simVue(t.fid);
-      const r = vue && reseauMobile(vue.sim);
-      return r && r.alerte ? [1, `${nomT(t)}, réseau mobile : ${r.alerte.charAt(0).toLowerCase()}${r.alerte.slice(1)}`, versTablette(t), 'ko'] : null;
+      const alerte = alerteReseau(vue);
+      const uid = vue && (vue.membreId || t.tabletUid);
+      return alerte ? [1, `${nomT(t)}, réseau mobile : ${alerte.charAt(0).toLowerCase()}${alerte.slice(1)}`, versTablette(t), 'ko',
+        uid ? { libelle: 'Vu', faire: () => marquerReseauVu(t.fid, uid, vue.reseau) } : null] : null;
     }).filter(Boolean),
     [simsARegarder, `${simsARegarder} carte${simsARegarder > 1 ? 's' : ''} SIM à regarder (promo, activation, carte bancaire)`, '#stock/sim', 'ko'],
     ...accessoires.map((a) => [1, a.manque ? `${a.nom} : il en manque ${a.manque} pour les envois` : `${a.nom} : stock bas (${a.quantite || 0})`, '#stock/accessoires', a.manque ? 'ko' : '']),
@@ -800,7 +803,7 @@ function afficherAccueil() {
       h('span', { class: 'tache' }, h('span', { class: 'tache-titre' }, titre.charAt(0).toUpperCase() + titre.slice(1)),
         detail ? h('span', { class: 'tache-detail' }, detail.charAt(0).toUpperCase() + detail.slice(1)) : null),
       h('span', { class: 'fleche', 'aria-hidden': 'true' }, '›')),
-    menuPoints([{ libelle: 'Masquer 7 jours', faire: () => masquer(cleTache(tache), 7) }], 'Actions pour cette ligne')));
+    menuPoints([tache[4], { libelle: 'Masquer 7 jours', faire: () => masquer(cleTache(tache), 7) }], 'Actions pour cette ligne')));
   }
   $('a-faire').replaceChildren(...(taches.length
     ? [...groupes].filter(([, l]) => l.length).map(([g, l]) => h('li', { class: 'groupe-taches' }, h('h3', {}, g), h('ul', {}, l)))
@@ -2320,12 +2323,37 @@ const AVEC_SERIE = {
 };
 const nomTablette = (t) => (t.ref ? `la tablette ${t.ref}` : 'cette tablette');
 
+// « Vu » sur l'alerte réseau d'une tablette : gardé sur sa fiche de membre (reseauVu, firestore.rules), l'alerte quitte
+// l'accueil et ne revient que si le réseau empire (sim.js, reseauAVoir). Depuis l'accueil (menu ⋮) ou sa page.
+async function marquerReseauVu(fid, uid, r, bouton = null) {
+  if (bouton) { if (bouton.disabled) return; bouton.disabled = true; boutonCharge(bouton, true); }
+  const vu = reseauVuDe(r);
+  try {
+    await patienter('Alerte réseau notée comme vue…', async () => updateDoc(doc(await bdd(), 'families', fid, 'members', uid), { reseauVu: vu }));
+    noterReseauVu(fid, vu);
+    annoncer('Alerte vue');
+  } catch (e) {
+    prevenir(`L'alerte n'a pas pu être notée comme vue (${messageErreur(e)}).`);
+  } finally {
+    if (bouton) { bouton.disabled = false; boutonCharge(bouton, false); }
+  }
+}
+
 // Réseau mobile chez le client : état du service, antennes entendues (la plus forte d'abord), alerte éventuelle.
-function blocReseau(r) {
+function blocReseau(r, { vu = null, fid = null, uid = null } = {}) {
   if (!r) return null;
+  const aVoir = reseauAVoir(r, vu);
+  const quand = vu && vu.le ? new Date(vu.le).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' }) : null;
+  let bouton = null;
+  if (aVoir && fid && uid) {
+    bouton = h('button', { type: 'button', class: 'secondary small-btn no-print', title: 'L\'alerte quitte l\'accueil et ne revient que si le réseau empire',
+      onclick: () => marquerReseauVu(fid, uid, r, bouton) }, 'Vu');
+  }
   return h('div', { class: 'reseau-mobile' },
     h('h3', {}, 'Réseau mobile chez le client'),
-    r.alerte ? h('p', { class: 'error' }, r.alerte) : null,
+    r.alerte && aVoir ? h('p', { class: 'error' }, r.alerte, bouton ? ' ' : null, bouton) : null,
+    r.alerte && !aVoir ? h('p', { class: 'small' }, r.alerte,
+      h('span', { class: 'muted' }, ` · vu${quand ? ` le ${quand}` : ''}, l'alerte ne revient que si le réseau empire`)) : null,
     r.service ? h('p', { class: 'small' }, `Carte SIM : ${r.service}`) : null,
     r.antennes.length
       ? h('ul', { class: 'small' }, ...r.antennes.map((a) => h('li', {}, a.texte, a.utilisee ? h('span', { class: 'muted' }, ' · utilisée') : null)))
@@ -2355,7 +2383,7 @@ function blocReleves(zone, t) {
         stat(b.level != null ? `${b.level} %` : '—', b.charging ? 'Batterie, sur le chargeur' : 'Batterie, débranchée', null, b.charging === false ? 'warn' : null),
         stat(sim ? (sim.reseau || sim.operateur || 'Carte SIM') : 'Wi-Fi', sim ? [sim.operateur !== sim.reseau ? sim.operateur : null, signal ? `signal ${signal}` : null].filter(Boolean).join(' · ') || 'carte SIM' : 'pas de carte SIM', mo),
         stat(m.appVersion || '—', 'Version de Papote')),
-      blocReseau(reseauMobile(sim)),
+      blocReseau(reseauMobile(sim), { vu: m.reseauVu || null, fid: t.fid, uid: t.tabletUid }),
       h('p', { class: 'muted small' }, 'Fiche de la tablette lue en direct : la page se met à jour toute seule quand elle donne de ses nouvelles.'),
     );
     rafraichirSousTitres();
