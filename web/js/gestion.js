@@ -3147,6 +3147,7 @@ function remplirPageDepense(id) {
           { libelle: 'Supprimer la dépense', danger: true, faire: async () => { if (await supprimerDepense(d)) location.hash = '#compta/depenses'; } },
         ], `Actions pour « ${d.libelle} »`)))),
       d.aVerifier ? h('p', { class: 'small a-verifier' }, badge('à vérifier', 'ko'), ' ', sourceDepense(d), ' : vérifiez le montant, la date et le vendeur, puis validez.') : null,
+      d.aVerifier && d.remarque ? h('p', { class: 'small a-verifier' }, d.remarque) : null,
       h('dl', { class: 'fiche' },
         // Chaque information se corrige avec son crayon (facture mal lue, faute de frappe).
         ...modif('Date', jour(d.date), 'date', { valeur: dateChamp(d.date), type: 'date', convertir: (v) => {
