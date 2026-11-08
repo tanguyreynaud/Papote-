@@ -2033,7 +2033,9 @@ exports.tabletteEnvoyee = onCall(async (request) => {
   const refusEnvoi = statuts.refusEnvoi(snap.data(), { mainPropre: mainPropre === true });
   if (refusEnvoi) throw new HttpsError('failed-precondition', refusEnvoi);
   const fiches = await db.collection('stock').where('commande', '==', commande).get();
-  const refusSim = statuts.refusEnvoiSansSim(snap.data(), fiches.docs.map((d) => d.data()));
+  const simIds = [...new Set(fiches.docs.map((d) => d.get('simId')).filter(Boolean))];
+  const lignes = Object.fromEntries(await Promise.all(simIds.map(async (id) => [id, (await db.doc(`sims/${id}`).get()).data() || null])));
+  const refusSim = statuts.refusEnvoiSansSim(snap.data(), fiches.docs.map((d) => d.data()), lignes);
   if (refusSim) throw new HttpsError('failed-precondition', refusSim);
   // Numéro T-… lu sur la tablette mise dans le carton (A14-4) : deux colis préparés en même temps ne
   // s'échangent pas (la tablette entre seule dans la famille de SA commande).

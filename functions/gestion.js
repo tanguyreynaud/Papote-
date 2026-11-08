@@ -988,6 +988,16 @@ async function ajouterAchat(d, qui) {
   return { ok: true, ajoutees: quantite - completees, completees, depense: depenseId };
 }
 
+// Carte SIM avec numéro obligatoire avant tout départ de tablette (Tanguy, 8/11) : '' ou la raison du refus.
+// Une ancienne commande Wi-Fi (sans carte) passe.
+async function refusSimAvantDepart(commande, fiche) {
+  const c = commande ? (await db().doc(`commandes/${commande}`).get()).data() : null;
+  if (c && c.formule === 'wifi') return '';
+  const simId = fiche && fiche.simId;
+  const ligne = simId ? (await db().doc(`sims/${simId}`).get()).data() : null;
+  return statuts.refusSimSansNumero(fiche, ligne);
+}
+
 // Remplacement d'un élément du kit chez un client : la tablette, la carte SIM ou un accessoire.
 // La tablette remplacée passe « en retour » (à récupérer) et laisse sa carte SIM à la nouvelle ;
 // la carte SIM remplacée passe « suspendue » (à résilier) ; l'accessoire sort du stock.
@@ -1005,6 +1015,10 @@ async function remplacer(d, qui) {
       throw new HttpsError('failed-precondition', 'Choisissez une tablette disponible du stock.');
     }
     if (neuve.get('fid')) throw new HttpsError('failed-precondition', 'Cette tablette est dans une famille : pas à vendre. Choisissez-en une autre.');
+    // La remplaçante part avec sa propre carte SIM, sinon avec celle de l'ancienne : avec un numéro, toujours.
+    const avecSim = neuve.get('simId') ? neuve.data() : { ...neuve.data(), simId: kit.get('simId') || null };
+    const refusSim = await refusSimAvantDepart(commande, avecSim);
+    if (refusSim) throw new HttpsError('failed-precondition', refusSim);
     await kit.ref.update({
       etat: 'en-retour', commande: null, remplaceePour: commande, majLe: FieldValue.serverTimestamp(),
       historique: FieldValue.arrayUnion(trace('en-retour', { remplacement: true })),
@@ -1013,7 +1027,7 @@ async function remplacer(d, qui) {
       etat: 'envoyee', commande, accessoires: kit.get('accessoires') || [], majLe: FieldValue.serverTimestamp(),
       historique: FieldValue.arrayUnion(trace('envoyee', { remplacement: true })),
     });
-    if (kit.get('simId')) await enregistrerSim(kit.get('simId'), { tablette: neuve.id }, qui);
+    if (kit.get('simId') && !neuve.get('simId')) await enregistrerSim(kit.get('simId'), { tablette: neuve.id }, qui);
     return { ok: true };
   }
 
@@ -1148,6 +1162,8 @@ exports.gestionStock = onCall(async (request) => {
         const commande = maj.commande !== undefined ? maj.commande : snap.get('commande') || null;
         // Départ du colis : les accessoires qui partent avec cette formule sortent du stock.
         if (champs.etat === 'envoyee' && commande) {
+          const refusSim = await refusSimAvantDepart(commande, snap.data());
+          if (refusSim) throw new HttpsError('failed-precondition', refusSim);
           sortis = await sortirAccessoires(commande);
           // Le kit du client : ce qui est parti avec la tablette.
           maj.accessoires = sortis;
@@ -2371,6 +2387,14 @@ async function creerEtiquette(commande, sens, qui, { sansImpression = false } = 
   // Une étiquette payée existe déjà (double clic, vieil onglet) : pas une deuxième. Annuler l'ancienne pour refaire.
   const doublon = statuts.refusEtiquetteEnDouble(c, sens, Date.now());
   if (doublon) throw new HttpsError('already-exists', doublon);
+  if (sens === 'aller') {
+    // Pas d'étiquette d'envoi pour une tablette sans carte SIM avec numéro (Tanguy, 8/11).
+    const fiches = (await db().collection('stock').where('commande', '==', commande).get()).docs.map((d) => d.data());
+    const t = fiches.find((x) => ['en-stock', 'preparee', 'envoyee'].includes(x.etat));
+    if (!t && c.formule !== 'wifi') throw new HttpsError('failed-precondition', "Reliez d'abord la tablette à cette commande (Stock).");
+    const refusSim = t ? await refusSimAvantDepart(commande, t) : '';
+    if (refusSim) throw new HttpsError('failed-precondition', refusSim);
+  }
   const reglages = lireReglages(reglagesSnap.data());
   const papote = sendcloud.adressePapote(reglages.expediteur);
   if (!papote) throw new HttpsError('failed-precondition', "Renseignez l'adresse d'expédition de Papote (Réglages, Étiquettes Sendcloud).");

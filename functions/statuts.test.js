@@ -85,10 +85,23 @@ test('envoi : tablette reliée et carte SIM obligatoires pour l\'offre tout comp
   const c = { expedition: 'a-preparer', formule: 'sim' };
   refuse(s.refusEnvoiSansSim(c, []), /Reliez d'abord la tablette/);
   refuse(s.refusEnvoiSansSim(c, [{ etat: 'preparee', ref: 'T-004' }]), /carte SIM à la tablette T-004/);
-  permis(s.refusEnvoiSansSim(c, [{ etat: 'preparee', simId: 'sim1' }]));
+  // Carte SIM sans numéro de ligne (Tanguy, 8/11) : refusé aussi.
+  refuse(s.refusEnvoiSansSim(c, [{ etat: 'preparee', ref: 'T-004', simId: 'sim1' }]), /numéro de ligne de la carte SIM de la tablette T-004/);
+  refuse(s.refusEnvoiSansSim(c, [{ etat: 'preparee', simId: 'sim1' }], { sim1: { iccid: '8933' } }), /numéro de ligne/);
+  refuse(s.refusEnvoiSansSim(c, [{ etat: 'preparee', simId: 'sim1' }], { sim1: { numero: '  ' } }), /numéro de ligne/);
+  permis(s.refusEnvoiSansSim(c, [{ etat: 'preparee', simId: 'sim1' }], { sim1: { numero: '07 45 91 77 17' } }));
+  // Formule absente (commande récente) : la carte reste obligatoire.
+  refuse(s.refusEnvoiSansSim({ expedition: 'a-preparer' }, [{ etat: 'preparee' }]), /carte SIM/);
   // Numéro de suivi corrigé après le départ, ancienne commande Wi-Fi : rien de plus demandé.
   permis(s.refusEnvoiSansSim({ expedition: 'envoyee', formule: 'sim' }, []));
   permis(s.refusEnvoiSansSim({ expedition: 'a-preparer', formule: 'wifi' }, []));
+});
+
+test('départ d\'une tablette (envoi, étiquette, remplacement) : carte SIM avec numéro obligatoire', () => {
+  refuse(s.refusSimSansNumero({ ref: 'T-007' }, null), /Reliez d'abord une carte SIM à la tablette T-007/);
+  refuse(s.refusSimSansNumero({ ref: 'T-007', simId: 'x' }, null), /numéro de ligne/);
+  refuse(s.refusSimSansNumero({ simId: 'x' }, { iccid: '8933', numero: null }), /numéro de ligne/);
+  permis(s.refusSimSansNumero({ simId: 'x' }, { numero: '0608991612' }));
 });
 
 test('étiquette en double (double clic, vieil onglet) : refusée tant que l\'ancienne n\'a pas servi ou n\'est pas vieille de 30 jours', () => {
