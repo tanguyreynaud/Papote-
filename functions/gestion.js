@@ -306,9 +306,21 @@ function alerteRecharge(l, maintenant) {
 
 // Fin du forfait après une recharge payée le jour « date » (ms) : jamais avant la fin déjà notée
 // (une facture reçue en retard ne recule pas la date).
+// Forfait mensuel (periode 'mois', le cas de presque tous les opérateurs, Tanguy 8/11) : un mois du calendrier,
+// le même jour (le dernier du mois s'il n'existe pas : 31 janvier → 28 ou 29 février). Sinon (periode 'jours',
+// ou ancienne ligne sans periode) un pass de dureeForfait jours, 30 par défaut (Lyca).
 const DUREE_FORFAIT = 30;
+function unMoisApres(t) {
+  const d = new Date(t + decalageParis(t));
+  const jour = d.getUTCDate();
+  const suivant = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1, d.getUTCHours(), d.getUTCMinutes()));
+  const dernier = new Date(Date.UTC(suivant.getUTCFullYear(), suivant.getUTCMonth() + 1, 0)).getUTCDate();
+  suivant.setUTCDate(Math.min(jour, dernier));
+  const local = suivant.getTime();
+  return local - decalageParis(local);
+}
 function finApresRecharge(l, date) {
-  const fin = date + (l.dureeForfait || DUREE_FORFAIT) * 24 * 3600 * 1000;
+  const fin = l.periode === 'mois' ? unMoisApres(date) : date + (l.dureeForfait || DUREE_FORFAIT) * 24 * 3600 * 1000;
   return Math.max(fin, l.prochaineRecharge || 0);
 }
 
@@ -320,6 +332,11 @@ function finApresRecharge(l, date) {
 function forfaitFamille(l) {
   const mo = Number.isFinite(l.go) ? Math.round(l.go * 1000) : 1000;
   const finForfait = l.finForfait === 'bloque' ? 'bloque' : 'reduit';
+  // Forfait mensuel : la tablette repart le même jour chaque mois (pas de cycles de 30 jours qui glissent).
+  const repere = l.prochaineRecharge || l.derniereRecharge || l.activation;
+  if (l.periode === 'mois' && repere) {
+    return { mo, jour: Math.min(Math.max(new Date(repere + decalageParis(repere)).getUTCDate(), 1), 28), finForfait };
+  }
   const duree = (l.dureeForfait || DUREE_FORFAIT) * 24 * 3600 * 1000;
   const depart = l.prochaineRecharge ? l.prochaineRecharge - duree : l.derniereRecharge || null;
   if (depart) {
@@ -626,8 +643,11 @@ function materielLu(o, enCentimes = false) {
       forfait: prix(enCentimes ? c.forfait : c.forfaitMensuelTTC),
       go: Number.isFinite(c.goParMois) && c.goParMois > 0 && c.goParMois <= 1000 ? c.goParMois : null,
       renouvellementAuto: typeof c.renouvellementAuto === 'boolean' ? c.renouvellementAuto : null,
-      dureeForfait: Number.isInteger(c.dureeForfaitJours) && c.dureeForfaitJours >= 1 && c.dureeForfaitJours <= 366 ? c.dureeForfaitJours : null,
+      // Mensuel par défaut (Tanguy, 8/11 : « 95 % des opérateurs ») ; en jours seulement si le document le dit.
+      periode: c.periodeForfait === 'jours' ? 'jours' : 'mois',
+      dureeForfait: c.periodeForfait === 'jours' && Number.isInteger(c.dureeForfaitJours) && c.dureeForfaitJours >= 1 && c.dureeForfaitJours <= 366 ? c.dureeForfaitJours : null,
       finForfait: ['reduit', 'bloque'].includes(c.finForfait) ? c.finForfait : null,
+      identifiantClient: texte(c.identifiantClient, 120),
     } : null,
     accessoires: (Array.isArray(o.accessoires) ? o.accessoires : []).map((a) => ({
       nom: texte(a && a.nom, 80),
@@ -681,7 +701,7 @@ const SCHEMA_FACTURE = {
         type: 'object',
         additionalProperties: false,
         required: ['quantite', 'operateur', 'iccids', 'numeros', 'prixCarteTTC', 'forfaitMensuelTTC', 'goParMois',
-          'renouvellementAuto', 'dureeForfaitJours', 'finForfait'],
+          'renouvellementAuto', 'periodeForfait', 'dureeForfaitJours', 'finForfait', 'identifiantClient'],
         properties: {
           quantite: { type: 'integer' },
           operateur: nul('string'),
@@ -692,9 +712,14 @@ const SCHEMA_FACTURE = {
           goParMois: { ...nul('number'), description: 'Données internet du forfait, en Go par période (1 pour « 1Go »).' },
           renouvellementAuto: { ...nul('boolean'), description: 'Vrai pour un forfait reconduit et prélevé tout seul (abonnement mensuel, '
             + 'sans engagement, prélèvement SEPA) ; faux pour une recharge prépayée payée à chaque fois ; null si le document ne permet pas de le dire.' },
-          dureeForfaitJours: { ...nul('integer'), description: 'Durée d\'une période du forfait en jours (30 pour « 30 jours » ou « par mois »).' },
+          periodeForfait: { anyOf: [{ type: 'null' }, { type: 'string', enum: ['mois', 'jours'] }],
+            description: '« jours » seulement si le document parle d\'un pass d\'un nombre de jours (« valable 30 jours », « 28 jours ») ; '
+              + '« mois » pour un forfait par mois (« /mois », mensuel, prélevé chaque mois) ; null si le document ne le dit pas (compté par mois).' },
+          dureeForfaitJours: { ...nul('integer'), description: 'Seulement pour un pass en jours : sa durée (30 pour « 30 jours »). null pour un forfait mensuel.' },
           finForfait: { anyOf: [{ type: 'null' }, { type: 'string', enum: ['reduit', 'bloque'] }],
             description: 'Au bout des Go : « reduit » (débit réduit) ou « bloque » (internet coupé), seulement si le document le dit, sinon null.' },
+          identifiantClient: { ...nul('string'), description: 'Identifiant ou numéro client chez l\'opérateur (pour se connecter à l\'espace client), '
+            + 'seulement s\'il est écrit ; sinon null. Jamais un n° de commande, de facture, de ligne ni une ICCID.' },
         },
       }],
       description: 'Seulement pour des cartes SIM physiques achetées (kits SIM, nouvelles lignes) : sinon null. '
@@ -1202,8 +1227,11 @@ async function entrerMateriel(m, { depense, numeroFacture, source }, qui) {
         // Forfait lu sur la confirmation ou la facture (Tanguy, 8/11) : ce qui n'y est pas reste à remplir à la main.
         ...(c.go != null ? { go: c.go } : {}),
         ...(c.renouvellementAuto != null ? { renouvellementAuto: c.renouvellementAuto } : {}),
+        periode: c.periode === 'jours' ? 'jours' : 'mois',
         ...(c.dureeForfait != null ? { dureeForfait: c.dureeForfait } : {}),
         ...(c.finForfait ? { finForfait: c.finForfait } : {}),
+        // Identifiant client : celui de l'opérateur s'il est écrit, sinon l'adresse qui a reçu l'e-mail (Tanguy, 8/11).
+        client: c.identifiantClient || m.destinataire || null,
         note: [numeroFacture ? `Facture ${numeroFacture}` : null, source].filter(Boolean).join(' · ') || null,
         creeLe: FieldValue.serverTimestamp(), par: qui,
       });
@@ -1252,6 +1280,7 @@ function champsSim(c) {
   for (const cle of ['prix', 'prixApres']) if (cle in c) champs[cle] = centimes(c[cle]);
   for (const cle of ['finPromo', 'activation', 'activerAvant', 'prochaineRecharge']) if (cle in c) champs[cle] = dateOuNull(c[cle]);
   // Forfait prépayé : sa durée en jours (30 par défaut) et s'il est renouvelé tout seul par l'opérateur.
+  if ('periode' in c) champs.periode = c.periode === 'jours' ? 'jours' : 'mois';
   if ('dureeForfait' in c) champs.dureeForfait = Number.isInteger(c.dureeForfait) && c.dureeForfait >= 1 && c.dureeForfait <= 366 ? c.dureeForfait : null;
   if ('renouvellementAuto' in c) champs.renouvellementAuto = c.renouvellementAuto === true;
   // Ce que fait l'opérateur au bout du forfait (Tanguy, 5/11) : 'reduit' (débit réduit, Lyca, Bouygues) ou
@@ -1300,6 +1329,8 @@ async function enregistrerSim(id, c, qui) {
   const champs = champsSim(c);
   if ('depense' in champs) champs.depense = await depenseExistante(champs.depense);
   if (!id && !champs.statut) champs.statut = 'stock';
+  // Nouvelle carte : forfait mensuel sauf durée en jours donnée (les anciennes lignes sans « periode » restent en jours).
+  if (!id && !champs.periode) champs.periode = champs.dureeForfait ? 'jours' : 'mois';
   const ligne = { ...avant, ...champs };
   // Tablette : une seule ligne par tablette ; une ligne résiliée n'est plus sur aucune tablette.
   let tablette = 'tablette' in c ? texte(c.tablette, 100) : avant.tablette || null;
@@ -1958,7 +1989,7 @@ justificatif : estUneFacture vrai et confirmationCommande vrai, numero = numéro
 d'information ou un avis d'expédition sans montant payé n'est pas une facture.
 Un « justificatif d'achat », un récapitulatif ou un bon de commande qui ne s'intitule pas « Facture » et n'a pas de
 numéro de facture est une confirmation de commande (confirmationCommande vrai), même s'il donne le montant payé.
-Pour des cartes SIM, relève aussi le forfait : Go par mois, renouvellement automatique, durée, fin de forfait.`;
+Pour des cartes SIM, relève aussi le forfait : Go par mois, renouvellement automatique, durée, fin de forfait, identifiant client.`;
 
 // contenu : fichier en base64. Erreur HttpsError lisible si la lecture échoue.
 async function lireDocument(contenu, type) {
@@ -3071,6 +3102,11 @@ exports.gestionCloturer = onCall(OPTIONS_CLOTURE, async (request) => {
 // Numéro de ligne lu sur un document suivant du même achat (« Bienvenue chez Sosh » : « N° de mobile : 06… ») :
 // donné aux cartes SIM de cet achat qui n'en ont pas encore.
 async function completerSims(depense, r) {
+  const client = (r.cartesSim && r.cartesSim.identifiantClient) || r.destinataire;
+  if (client) {
+    const sansClient = (await db().collection('sims').where('depense', '==', depense).get()).docs.filter((d) => !d.get('client'));
+    await Promise.all(sansClient.map((d) => d.ref.update({ client })));
+  }
   const numeros = [...((r.cartesSim && r.cartesSim.numeros) || []), r.ligne]
     .map((n) => String(n || '').replace(/\s/g, '')).filter((n) => /^0[67]\d{8}$/.test(n));
   if (!numeros.length) return;
@@ -3152,6 +3188,24 @@ async function rangerFacture(r, piece, source) {
   return materiel.length ? { materiel } : null;
 }
 
+// Adresse qui a reçu l'e-mail chez le vendeur : un destinataire autre que la boîte des factures, sinon le « À : »
+// de l'e-mail transféré (Gmail « ---------- Forwarded message ---------- », Outlook « De : … À : … »).
+const ADRESSE_MAIL = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/;
+function destinataireDuMail(mailLu, boite) {
+  const b = String(boite || '').toLowerCase();
+  const adresses = ['to', 'cc'].flatMap((k) => [].concat((mailLu && mailLu[k]) || []))
+    .flatMap((a) => (a && a.value) || []).map((v) => String(v.address || '').toLowerCase()).filter(Boolean);
+  const autre = adresses.find((a) => a !== b);
+  if (autre) return autre;
+  const texteMail = String((mailLu && (mailLu.text || String(mailLu.html || '').replace(/<[^>]+>/g, ' '))) || '');
+  for (const ligne of texteMail.split(/\r?\n/)) {
+    const m = /^\s*[>*\s]*(?:À|A|To|Pour)\s*:\s*(.*)$/i.exec(ligne);
+    const a = m && ADRESSE_MAIL.exec(m[1]);
+    if (a && a[0].toLowerCase() !== b) return a[0].toLowerCase();
+  }
+  return null;
+}
+
 async function releverFactures() {
   const { ImapFlow } = require('imapflow');
   const { simpleParser } = require('mailparser');
@@ -3208,6 +3262,7 @@ async function releverFactures() {
                 continue;
               }
               trouvee = true;
+              r.destinataire = destinataireDuMail(mailLu, adresse);
               const rangee = await rangerFacture(r, piece, `e-mail de ${de}`.slice(0, 200));
               if (typeof rangee === 'string') bilan.ignorees.push(`${piece.filename || 'pièce'} : ${rangee}`);
               else {
@@ -3728,6 +3783,6 @@ exports.gestionParcours = onCall(async (request) => {
 exports.regles = {
   ETATS, CATEGORIES, sansEssaisEffaces, natureMouvement, mensuel, centimes, lien, nomFichier, moisSuivant, lectureVersFormulaire, SCHEMA_FACTURE,
   lireReglages, transitionPermise, SUITES, simAResilier, fichesARattacher, sansFacture, stockAJour, releveBatterie, usureBatterie, incoherences, materielLu, memeAccessoire, coutLigne, alertesSim, finApresRecharge, simDeFacture, forfaitFamille, accessoiresAPrevoir, champsSim, aFaire, piecesFacture, debutMoisParis, moisPrecedent, csvTexte, livreDesRecettes,
-  registreDesAchats, corpsDuMail, pagesPdf, reparerAccents, confirmationSelonTitre, confirmationARattacher, rangerFacture, memeFournisseur, memeAchat, suiteJumelage, descriptionNonRendu, refusSuppression, fusionnerContacts, emailInformation, cleContact,
+  registreDesAchats, corpsDuMail, pagesPdf, reparerAccents, confirmationSelonTitre, confirmationARattacher, rangerFacture, memeFournisseur, destinataireDuMail, memeAchat, suiteJumelage, descriptionNonRendu, refusSuppression, fusionnerContacts, emailInformation, cleContact,
   avancementPropre, gardeFous,
 };

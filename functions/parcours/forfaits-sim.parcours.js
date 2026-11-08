@@ -15,7 +15,7 @@ const TANGUY = { uid: 'tanguy-admin', email: 'tanguy@mapapote.fr', prenom: 'Tang
 
 test('« J\'ai rechargé » : dépense reliée à la carte, fin du forfait 30 jours plus tard, rappel 3 jours avant', async () => {
   const { id } = await s.appeler('gestionSim', { action: 'ajouter', champs: {
-    statut: 'active', operateur: 'Lyca', numero: '07 51 23 45 67', prix: 499, prochaineRecharge: Date.now() + 2 * s.JOUR,
+    statut: 'active', operateur: 'Lyca', periode: 'jours', numero: '07 51 23 45 67', prix: 499, prochaineRecharge: Date.now() + 2 * s.JOUR,
   } }, TANGUY);
   const alertes = async () => g.alertesSim(await s.lire(`sims/${id}`), Date.now());
   assert.deepStrictEqual(await alertes(), ['à recharger dans 2 j']);
@@ -40,7 +40,7 @@ test('« J\'ai rechargé » : dépense reliée à la carte, fin du forfait 30 jo
 });
 
 test('facture de forfait reliée à la main depuis sa page : la fin du forfait suit', async () => {
-  const { id } = await s.appeler('gestionSim', { action: 'ajouter', champs: { statut: 'active', operateur: 'Lyca', prix: 499 } }, TANGUY);
+  const { id } = await s.appeler('gestionSim', { action: 'ajouter', champs: { statut: 'active', operateur: 'Lyca', periode: 'jours', prix: 499 } }, TANGUY);
   const { id: dep } = await s.appeler('gestionDepense', {
     action: 'ajouter', categorie: 'sim', libelle: 'Lyca Pass', montant: 499, date: Date.now() - 5 * s.JOUR,
   }, TANGUY);
@@ -57,7 +57,7 @@ test('garde-fou du forfait : la famille de la tablette reçoit le forfait de sa 
   const fid = await a.installer(proche, t);
   assert.strictEqual((await s.lire(`stock/${t.fiche}`)).fid, fid, 'tablette reliée à sa famille');
   const { id } = await s.appeler('gestionSim', { action: 'ajouter', champs: {
-    statut: 'active', operateur: 'Lyca', numero: '07 51 23 45 67', prix: 499, go: 1, activation: Date.now(), tablette: t.fiche,
+    statut: 'active', operateur: 'Lyca', periode: 'jours', numero: '07 51 23 45 67', prix: 499, go: 1, activation: Date.now(), tablette: t.fiche,
   } }, TANGUY);
   const jour = Math.min(Number(new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Paris' }).slice(8)), 28);
   assert.deepStrictEqual((await s.lire(`families/${fid}`)).forfaitSim, { mo: 1000, jour, finForfait: 'reduit' });
@@ -98,7 +98,7 @@ async function familleSurSim(finForfait) {
   // Famille abonnée (sans commande reliée, l'installation la laisse « en attente » : pas d'alerte).
   await s.db.doc(`families/${fid}`).update({ 'abonnement.statut': 'actif' });
   const { id } = await s.appeler('gestionSim', { action: 'ajouter', champs: {
-    statut: 'active', operateur: finForfait === 'bloque' ? 'Sosh' : 'Lyca', numero: '07 51 23 45 67', go: 1, activation: Date.now(), tablette: t.fiche, finForfait,
+    statut: 'active', operateur: finForfait === 'bloque' ? 'Sosh' : 'Lyca', periode: 'jours', numero: '07 51 23 45 67', go: 1, activation: Date.now(), tablette: t.fiche, finForfait,
   } }, TANGUY);
   const forfait = (await s.lire(`families/${fid}`)).forfaitSim;
   assert.strictEqual(forfait.finForfait, finForfait);
@@ -177,16 +177,17 @@ test('achat Sosh par e-mail : confirmation, justificatif, puis vraie facture d\'
   const lu = { facture: true, fournisseur: 'Sosh', categorie: 'sim', libelle: 'Carte SIM Sosh', tva: null, numero: null, ligne: null, accessoires: [], tablettes: null };
   const le5 = Date.UTC(2026, 10, 5, 12);
   // 1. Confirmation de commande : achat « facture pas encore reçue », SIM en stock avec son forfait.
-  await g.rangerFacture({ ...lu, confirmation: true, montant: 1000, date: le5, numero: 'X041532676',
-    cartesSim: { quantite: 1, operateur: 'Sosh', iccids: [], numeros: [], prixCarte: 1000, forfait: 299, go: 1, renouvellementAuto: true, dureeForfait: 30, finForfait: null },
+  await g.rangerFacture({ ...lu, confirmation: true, montant: 1000, date: le5, numero: 'X041532676', destinataire: 'tanguy@exemple.fr',
+    cartesSim: { quantite: 1, operateur: 'Sosh', iccids: [], numeros: [], prixCarte: 1000, forfait: 299, go: 1, renouvellementAuto: true, periode: 'mois', dureeForfait: null, finForfait: null, identifiantClient: null },
   }, piece('confirmation-commande.txt'), 'e-mail de Sosh');
   const achats = async () => (await s.db.collection('depenses').get()).docs.filter((d) => /sosh/i.test(d.get('fournisseur')));
   const [achat] = await achats();
   assert.strictEqual(achat.get('confirmation'), true);
   const sims = async () => (await s.db.collection('sims').where('depense', '==', achat.id).get()).docs.map((d) => d.data());
   const [sim] = await sims();
-  assert.deepStrictEqual([sim.prix, sim.go, sim.renouvellementAuto, sim.dureeForfait, sim.numero], [299, 1, true, 30, null], 'fiche SIM préremplie');
+  assert.deepStrictEqual([sim.prix, sim.go, sim.renouvellementAuto, sim.periode, sim.dureeForfait, sim.numero], [299, 1, true, 'mois', undefined, null], 'fiche SIM préremplie');
   assert.strictEqual(sim.finForfait, undefined, 'fin de forfait pas écrite dans le mail : laissée vide');
+  assert.strictEqual(sim.client, 'tanguy@exemple.fr', 'identifiant client : l\'adresse qui a reçu le mail');
 
   // 2. « Bienvenue chez Sosh » : « Justificatif d'achat.pdf » lu comme une facture de 10 € par l'IA, au nom de
   // « Sosh (Orange) », avec la carte SIM et son numéro (ce qui avait créé un 2e achat et une 2e carte le 7/11).
@@ -196,6 +197,7 @@ test('achat Sosh par e-mail : confirmation, justificatif, puis vraie facture d\'
   assert.match(await g.rangerFacture(justificatif, piece("Justificatif d'achat.pdf"), 'e-mail de Sosh'), /déjà enregistrée/);
   assert.strictEqual((await s.lire(`depenses/${achat.id}`)).confirmation, true, 'toujours « facture pas encore reçue »');
   assert.strictEqual((await sims())[0].numero, '0608991612', 'le numéro de la ligne complète la carte SIM');
+  assert.strictEqual((await sims())[0].client, 'tanguy@exemple.fr', 'identifiant client gardé');
   assert.strictEqual((await achats()).length, 1, 'pas de 2e achat « Sosh (Orange) »');
   assert.strictEqual((await s.db.collection('sims').where('operateur', '==', 'Sosh').get()).size, 1, 'pas de 2e carte SIM');
 
@@ -223,4 +225,13 @@ test('justificatif sans titre parlant, au nom « Sosh (Orange) » : rattaché à
   assert.strictEqual(cartes.length, 1, 'même ICCID : une seule carte');
   const achats = (await s.db.collection('depenses').where('numero', '==', 'C-77').get()).docs;
   assert.strictEqual(achats.length, 1, 'un seul achat');
+});
+
+test('forfait mensuel (Sosh) : nouvelle carte comptée par mois, fin du forfait le même jour le mois suivant', async () => {
+  const { id } = await s.appeler('gestionSim', { action: 'ajouter', champs: { statut: 'active', operateur: 'Sosh', numero: '06 08 99 16 12', prix: 299 } }, TANGUY);
+  assert.strictEqual((await s.lire(`sims/${id}`)).periode, 'mois', 'mensuel par défaut');
+  await s.appeler('gestionSim', { action: 'recharger', id }, TANGUY);
+  const jourParis = (t) => new Date(t).toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' });
+  const fin = (await s.lire(`sims/${id}`)).prochaineRecharge;
+  assert.strictEqual(jourParis(fin), jourParis(g.finApresRecharge({ periode: 'mois' }, Date.now())));
 });

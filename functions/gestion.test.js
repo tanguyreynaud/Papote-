@@ -300,7 +300,7 @@ test('cartes SIM et accessoires lus sur une facture', () => {
   });
   assert.deepStrictEqual(r.cartesSim, {
     quantite: 2, operateur: 'YouPrice', iccids: ['8933010000000000001', '8933010000000000002'], numeros: [], prixCarte: 1000, forfait: 299,
-    go: null, renouvellementAuto: null, dureeForfait: null, finForfait: null, // forfait pas détaillé sur la facture
+    go: null, renouvellementAuto: null, periode: 'mois', dureeForfait: null, finForfait: null, identifiantClient: null, // pas détaillé : mensuel par défaut
   });
   assert.deepStrictEqual(r.accessoires, [{ nom: 'Clé 4G USB', quantite: 3, prixUnitaire: 990 }]);
   assert.strictEqual(g.lectureVersFormulaire({ cartesSim: null }).cartesSim, null);
@@ -770,10 +770,14 @@ test('forfait d\'une carte SIM lu sur la confirmation', () => {
   const lu = g.lectureVersFormulaire({
     estUneFacture: true, confirmationCommande: true, fournisseur: 'Sosh', totalTTC: 10, categorie: 'sim',
     cartesSim: { quantite: 1, operateur: 'Sosh', iccids: [], numeros: [], prixCarteTTC: 10, forfaitMensuelTTC: 2.99,
-      goParMois: 1, renouvellementAuto: true, dureeForfaitJours: 30, finForfait: null },
+      goParMois: 1, renouvellementAuto: true, periodeForfait: 'mois', dureeForfaitJours: 30, finForfait: null, identifiantClient: '  1234 5678 ' },
   });
   assert.deepStrictEqual(lu.cartesSim, { quantite: 1, operateur: 'Sosh', iccids: [], numeros: [], prixCarte: 1000, forfait: 299,
-    go: 1, renouvellementAuto: true, dureeForfait: 30, finForfait: null });
+    go: 1, renouvellementAuto: true, periode: 'mois', dureeForfait: null, finForfait: null, identifiantClient: '1234 5678' }, 'forfait mensuel : pas de durée en jours');
+  const lyca = g.lectureVersFormulaire({ cartesSim: { quantite: 1, periodeForfait: 'jours', dureeForfaitJours: 30 } });
+  assert.deepStrictEqual([lyca.cartesSim.periode, lyca.cartesSim.dureeForfait], ['jours', 30]);
+  const rien = g.lectureVersFormulaire({ cartesSim: { quantite: 1, periodeForfait: null, dureeForfaitJours: 30 } });
+  assert.deepStrictEqual([rien.cartesSim.periode, rien.cartesSim.dureeForfait], ['mois', null], 'rien d\'écrit : mensuel');
   const bizarre = g.lectureVersFormulaire({ cartesSim: { quantite: 1, goParMois: -3, renouvellementAuto: 'oui', dureeForfaitJours: 9999, finForfait: 'coupe' } });
   assert.strictEqual(bizarre.cartesSim.go, null);
   assert.strictEqual(bizarre.cartesSim.renouvellementAuto, null);
@@ -788,4 +792,36 @@ test('même vendeur sous deux noms', () => {
   assert.ok(!g.memeFournisseur('Sosh', 'Lycamobile'));
   assert.ok(!g.memeFournisseur('', 'Sosh'));
   assert.ok(!g.memeFournisseur('SA', 'Samsung')); // trop court pour conclure
+});
+
+test('forfait mensuel : même date chaque mois, pas 30 jours (Tanguy, 8/11)', () => {
+  const paris = (a, m, j) => Date.UTC(a, m - 1, j, 10); // 11 h ou 12 h à Paris
+  const jourParis = (t) => new Date(t).toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' });
+  const mois = { periode: 'mois' };
+  assert.strictEqual(jourParis(g.finApresRecharge(mois, paris(2026, 11, 5))), '05/12/2026');
+  assert.strictEqual(jourParis(g.finApresRecharge(mois, paris(2027, 1, 31))), '28/02/2027'); // pas de 31 février
+  assert.strictEqual(jourParis(g.finApresRecharge(mois, paris(2028, 1, 31))), '29/02/2028');
+  assert.strictEqual(jourParis(g.finApresRecharge(mois, paris(2026, 12, 15))), '15/01/2027');
+  assert.strictEqual(jourParis(g.finApresRecharge(mois, paris(2027, 3, 20))), '20/04/2027'); // passage à l'heure d'été
+  // Pass de 30 jours (Lyca) : inchangé.
+  assert.strictEqual(jourParis(g.finApresRecharge({}, paris(2027, 1, 31))), '02/03/2027');
+  // La tablette repart le même jour chaque mois (au plus le 28).
+  assert.deepStrictEqual(g.forfaitFamille({ periode: 'mois', go: 1, prochaineRecharge: paris(2026, 12, 5) }), { mo: 1000, jour: 5, finForfait: 'reduit' });
+  assert.deepStrictEqual(g.forfaitFamille({ periode: 'mois', prochaineRecharge: paris(2026, 12, 31) }), { mo: 1000, jour: 28, finForfait: 'reduit' });
+  assert.deepStrictEqual(g.champsSim({ periode: 'mois' }), { periode: 'mois' });
+  assert.deepStrictEqual(g.champsSim({ periode: 'jours' }), { periode: 'jours' });
+  assert.deepStrictEqual(g.champsSim({ periode: 'n importe' }), { periode: 'mois' });
+});
+
+test('identifiant client par défaut : l\'adresse qui a reçu l\'e-mail du vendeur (Tanguy, 8/11)', () => {
+  const boite = 'factures@papote.fr';
+  const adr = (...a) => ({ value: a.map((address) => ({ address })) });
+  assert.strictEqual(g.destinataireDuMail({ to: adr('Tanguy.R@gmail.com', boite) }, boite), 'tanguy.r@gmail.com');
+  assert.strictEqual(g.destinataireDuMail({ to: adr(boite), cc: [adr('x@orange.fr')] }, boite), 'x@orange.fr');
+  // Transféré vers la boîte des factures : le « À : » de l'e-mail d'origine.
+  const transfere = { to: adr(boite), text: 'Bonjour\n---------- Forwarded message ---------\nDe : Sosh <noreply@sosh.fr>\nDate: 7 nov.\nÀ : <tanguy.r@gmail.com>\nObjet : Bienvenue' };
+  assert.strictEqual(g.destinataireDuMail(transfere, boite), 'tanguy.r@gmail.com');
+  assert.strictEqual(g.destinataireDuMail({ to: adr(boite), text: '> To: Moi <moi@free.fr>' }, boite), 'moi@free.fr');
+  assert.strictEqual(g.destinataireDuMail({ to: adr(boite), text: 'pas de transfert' }, boite), null);
+  assert.strictEqual(g.destinataireDuMail({}, boite), null);
 });

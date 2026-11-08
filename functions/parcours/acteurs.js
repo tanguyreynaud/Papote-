@@ -45,7 +45,7 @@ async function tablettePreparee() {
 async function simSurTablette(tablette) {
   numero += 1;
   const { id } = await s.appeler('gestionSim', { action: 'ajouter', champs: {
-    statut: 'active', operateur: 'Lyca', numero: `07 45 ${String(numero).padStart(2, '0')} 77 17`, prix: 499, tablette: tablette.fiche,
+    statut: 'active', operateur: 'Lyca', periode: 'jours', numero: `07 45 ${String(numero).padStart(2, '0')} 77 17`, prix: 499, tablette: tablette.fiche,
   } }, TANGUY);
   return id;
 }
