@@ -1830,7 +1830,7 @@ function carteRecharges(l, modif, vue) {
         convertir: (v) => (v ? dateSaisie(v) : null) }),
       // Mensuel par défaut (Tanguy, 8/11) : même date chaque mois, fin de mois gérée. En jours pour un pass (Lyca 30 jours).
       // Une ligne notée avant le 8/11 sans période reste en jours, comme le compte le serveur.
-      ...modif('Durée du forfait', mensuel ? '1 mois (même date chaque mois)' : `${duree} jours`, 'periode', {
+      ...modif('Durée du forfait', mensuel ? '1 mois (même date chaque mois)' : 'En jours (pass)', 'periode', {
         valeur: mensuel ? 'mois' : 'jours', options: [['mois', '1 mois (même date chaque mois)'], ['jours', 'En jours (pass)']] }),
       ...(mensuel ? [] : modif('Nombre de jours', `${duree} jours`, 'dureeForfait', { valeur: String(duree), mode: 'numeric', suffixe: 'jours',
         convertir: (v) => { const n = Number(v); if (!Number.isInteger(n) || n < 1 || n > 366) throw new Error('Un nombre de jours, ex. 30.'); return n; } })),
