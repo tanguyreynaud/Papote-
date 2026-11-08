@@ -1903,10 +1903,20 @@ function corpsDuMail(m) {
   return { filename: 'confirmation-commande.txt', contentType: 'text/plain', content: contenu, size: contenu.length };
 }
 
+// Même vendeur malgré une écriture différente : « Sosh » et « Sosh (Orange) », « Cdiscount » et « CDISCOUNT.com »
+// (doublon de carte SIM du 8/11 : la même commande Sosh lue sous deux noms).
+function memeFournisseur(a, b) {
+  const norm = (x) => String(x || '').toLowerCase().normalize('NFD').replace(/[^a-z0-9]/g, '');
+  const x = norm(a); const y = norm(b);
+  if (!x || !y) return false;
+  if (x === y) return true;
+  const [court, long] = x.length <= y.length ? [x, y] : [y, x];
+  return court.length >= 3 && long.startsWith(court);
+}
+
 // Une facture qui arrive après la confirmation de commande du même achat (même vendeur, même montant, à 30 jours).
 function memeAchat(depense, r) {
-  const norm = (x) => String(x || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-  return !!depense.confirmation && !!r.fournisseur && norm(depense.fournisseur) === norm(r.fournisseur)
+  return !!depense.confirmation && !!r.fournisseur && memeFournisseur(depense.fournisseur, r.fournisseur)
     && depense.montant === r.montant && Math.abs((depense.date || 0) - (r.date || depense.date || 0)) <= 30 * 24 * 3600 * 1000;
 }
 // Confirmation de commande encore sans facture à laquelle rattacher une facture reçue : même montant d'abord ;
@@ -1916,8 +1926,7 @@ function confirmationARattacher(depenses, r) {
   if (!r || r.confirmation || !r.fournisseur || r.montant == null) return null;
   const meme = depenses.find((d) => memeAchat(d, r));
   if (meme) return { depense: meme, montantDifferent: false };
-  const norm = (x) => String(x || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-  const ouvertes = depenses.filter((d) => d.confirmation && norm(d.fournisseur) === norm(r.fournisseur)
+  const ouvertes = depenses.filter((d) => d.confirmation && memeFournisseur(d.fournisseur, r.fournisseur)
     && Math.abs((d.date || 0) - (r.date || d.date || 0)) <= 45 * 864e5 && d.montant != null && r.montant >= d.montant);
   return ouvertes.length === 1 ? { depense: ouvertes[0], montantDifferent: true } : null;
 }
@@ -3065,7 +3074,7 @@ async function completerSims(depense, r) {
 async function rangerFacture(r, piece, source) {
   if (r.numero) {
     const memes = await db().collection('depenses').where('numero', '==', r.numero).get();
-    if (memes.docs.some((d) => (d.get('fournisseur') || '') === (r.fournisseur || ''))) {
+    if (memes.docs.some((d) => memeFournisseur(d.get('fournisseur'), r.fournisseur) || !d.get('fournisseur') || !r.fournisseur)) {
       return `déjà enregistrée (${r.fournisseur || ''} n° ${r.numero})`;
     }
   }
@@ -3706,6 +3715,6 @@ exports.gestionParcours = onCall(async (request) => {
 exports.regles = {
   ETATS, CATEGORIES, sansEssaisEffaces, natureMouvement, mensuel, centimes, lien, nomFichier, moisSuivant, lectureVersFormulaire, SCHEMA_FACTURE,
   lireReglages, transitionPermise, SUITES, simAResilier, fichesARattacher, sansFacture, stockAJour, releveBatterie, usureBatterie, incoherences, materielLu, memeAccessoire, coutLigne, alertesSim, finApresRecharge, simDeFacture, forfaitFamille, accessoiresAPrevoir, champsSim, aFaire, piecesFacture, debutMoisParis, moisPrecedent, csvTexte, livreDesRecettes,
-  registreDesAchats, corpsDuMail, pagesPdf, reparerAccents, confirmationSelonTitre, confirmationARattacher, rangerFacture, memeAchat, suiteJumelage, descriptionNonRendu, refusSuppression, fusionnerContacts, emailInformation, cleContact,
+  registreDesAchats, memeFournisseur, corpsDuMail, pagesPdf, reparerAccents, confirmationSelonTitre, confirmationARattacher, rangerFacture, memeAchat, suiteJumelage, descriptionNonRendu, refusSuppression, fusionnerContacts, emailInformation, cleContact,
   avancementPropre, gardeFous,
 };

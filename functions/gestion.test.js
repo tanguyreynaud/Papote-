@@ -780,3 +780,16 @@ test('forfait d\'une carte SIM lu sur la confirmation', () => {
   assert.strictEqual(bizarre.cartesSim.dureeForfait, null);
   assert.strictEqual(bizarre.cartesSim.finForfait, null);
 });
+
+test('même vendeur malgré une écriture différente (doublon de carte SIM Sosh du 8/11)', () => {
+  assert.ok(g.memeFournisseur('Sosh', 'Sosh (Orange)'));
+  assert.ok(g.memeFournisseur('CDISCOUNT.com', 'Cdiscount'));
+  assert.ok(g.memeFournisseur('Lycamobile', 'lycamobile'));
+  assert.ok(!g.memeFournisseur('Sosh', 'SFR'));
+  assert.ok(!g.memeFournisseur('Or', 'Orange'), 'trop court pour conclure');
+  assert.ok(!g.memeFournisseur('', 'Sosh'));
+  // Confirmation « Sosh (Orange) », facture « Sosh » : rattachée, pas de 2e achat ni de 2e carte SIM.
+  const jour = 24 * 3600 * 1000;
+  const conf = { confirmation: true, fournisseur: 'Sosh (Orange)', montant: 300, date: Date.now() - 2 * jour };
+  assert.ok(g.memeAchat(conf, { fournisseur: 'Sosh', montant: 300, date: Date.now() }));
+});
