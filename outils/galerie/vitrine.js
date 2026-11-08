@@ -69,7 +69,11 @@ async function stockVide(p, listeAttente = 204) {
   await p.route('**/stockDisponible', (r) => r.fulfill({ contentType: 'application/json', headers: CORS, body: '{"disponible":false,"precommande":true,"attenteLongue":false}' }));
   await p.route('**/listeAttente', (r) => r.fulfill({ status: listeAttente, headers: { ...CORS, 'Access-Control-Allow-Headers': 'Content-Type' }, body: '' }));
   // commande.html renvoie vers « / » : ici, pas de fonction accueil, la page elle-même.
-  await p.route(/127\.0\.0\.1:\d+\/\?complet=1/, (r) => r.fulfill({ status: 302, headers: { Location: '/accueil.html?complet=1#prevenir' } }));
+  // WebKit (--iphone) refuse une redirection simulée : la page renvoie alors elle-même vers la bonne adresse.
+  const webkit = p.context().browser().browserType().name() === 'webkit';
+  await p.route(/127\.0\.0\.1:\d+\/\?complet=1/, (r) => (webkit
+    ? r.fulfill({ contentType: 'text/html', body: '<script>location.replace("/accueil.html?complet=1#prevenir")</script>' })
+    : r.fulfill({ status: 302, headers: { Location: '/accueil.html?complet=1#prevenir' } })).catch(() => {}));
 }
 async function prevenir(p, { email = '', tel = '', accord = true } = {}) {
   await p.locator('.hero .js-commander').click();

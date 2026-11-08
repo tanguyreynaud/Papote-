@@ -12,10 +12,11 @@ const a = require('./acteurs');
 const FAMILLES = 10;
 const JOURS = 3;
 
-// Exécutions par jour de chaque tâche planifiée (functions/*.js : onSchedule).
+// Exécutions par jour de chaque tâche planifiée (alertesTablettes, et les tâches de tachesHoraires : taches.PLANNING).
 const CADENCE = {
   alertesTablettes: 288, relancesPaniers: 24, finDeGrace: 24, gestionCourrier: 24, restitutions: 1, rappelsJumelage: 1,
   alerteMatin: 1, gestionAutomatique: 1, gestionRecap: 1 / 7, gestionCloture: 1 / 30, bilanSupport: 1 / 7,
+  alerteForfait: 24,
 };
 
 // Prix Firestore (région Europe multi-régions eur3, base nommée « europe » : pas de quota gratuit, celui-ci ne vaut que
@@ -153,8 +154,8 @@ test(`coût du serveur : ${FAMILLES} familles pendant ${JOURS} jours, extrapolé
   ligne('**Écritures en tout**', (t) => `**${n(t.ecritures)}**`);
   ligne('Firestore (eur3, sans quota gratuit)', (t) => usd(t.cout));
   ligne('Par famille et par mois', (t) => usd(t.cout / (t === total[10] ? 10 : 100)));
-  sortie.push('', 'Hors tableau : Cloud Functions (2 M d\'appels gratuits par mois, loin au-dessus), Cloud Scheduler (11 tâches planifiées :',
-    '3 gratuites puis 0,10 $/tâche/mois ≈ 0,80 $/mois fixes), Storage (photos : 200 × ~300 ko × N familles), sortie réseau.');
+  sortie.push('', 'Hors tableau : Cloud Functions (2 M d\'appels gratuits par mois, loin au-dessus), Cloud Scheduler (2 tâches planifiées :',
+    'alertesTablettes et tachesHoraires, 3 gratuites : 0 $), Storage (photos : 200 × ~300 ko × N familles), sortie réseau.');
   console.log(`\n${sortie.join('\n')}\n`);
   if (process.env.COUT_DETAIL) {
     for (const [nom, c] of Object.entries(bilan)) {

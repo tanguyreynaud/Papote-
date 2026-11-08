@@ -126,6 +126,22 @@ test('liste à faire du récapitulatif', () => {
   ]);
 });
 
+test('à faire : une tablette jumelée sans commande ne compte pas en stock et ne demande rien', () => {
+  const liste = g.aFaire({
+    maintenant: Date.UTC(2026, 10, 5),
+    commandes: [{ id: 'a', expedition: 'a-preparer' }],
+    stock: [{ etat: 'en-stock', commande: null, fid: 'famille-test', alerteJumelage: 'jumelée sans commande', ref: 'T-1' }],
+    depenses: [],
+    automatique: { erreurs: [] },
+  });
+  assert.deepStrictEqual(liste, ['1 tablette à envoyer', '1 tablette manquante en stock pour les envoyer']);
+});
+
+test('achat enregistré : une tablette jumelée à une famille n\'est pas complétée à la place d\'une libre', () => {
+  const sans = [{ id: 'a', etat: 'en-stock', creeLe: 1, fid: 'famille-test' }, { id: 'b', etat: 'en-stock', creeLe: 2 }];
+  assert.deepStrictEqual(g.fichesARattacher(sans, [], 1), ['b']);
+});
+
 test('pièces jointes lues comme factures', () => {
   const ko = 1024;
   const pieces = g.piecesFacture([
@@ -231,6 +247,9 @@ test('forfaits SIM prépayés : rappel de recharge et facture rangée sur sa lig
   assert.deepStrictEqual(g.champsSim({ prochaineRecharge: now, dureeForfait: 30, renouvellementAuto: true }),
     { prochaineRecharge: now, dureeForfait: 30, renouvellementAuto: true });
   assert.deepStrictEqual(g.champsSim({ dureeForfait: 0, renouvellementAuto: 'oui' }), { dureeForfait: null, renouvellementAuto: false });
+  assert.deepStrictEqual(g.champsSim({ finForfait: 'bloque' }), { finForfait: 'bloque' });
+  assert.deepStrictEqual(g.champsSim({ finForfait: 'coupe' }), { finForfait: 'reduit' });
+  assert.deepStrictEqual(g.champsSim({ finForfait: null }), { finForfait: 'reduit' });
 
   const sims = [
     { id: 'a', statut: 'active', operateur: 'Lyca', numero: '07 51 23 45 67', iccid: '8944110068251234567' },
@@ -249,13 +268,16 @@ test('forfaits SIM prépayés : rappel de recharge et facture rangée sur sa lig
 
 test('garde-fou du forfait recopié sur la famille', () => {
   // Pass de 30 jours qui finit le 27/11 à 10 h (Paris) : commencé le 28/10.
-  assert.deepStrictEqual(g.forfaitFamille({ go: 1, prochaineRecharge: Date.UTC(2026, 10, 27, 9) }), { mo: 1000, debut: '2026-10-28' });
-  assert.deepStrictEqual(g.forfaitFamille({ go: 2, dureeForfait: 28, prochaineRecharge: Date.UTC(2026, 10, 25, 9) }), { mo: 2000, debut: '2026-10-28' });
+  assert.deepStrictEqual(g.forfaitFamille({ go: 1, prochaineRecharge: Date.UTC(2026, 10, 27, 9) }), { mo: 1000, debut: '2026-10-28', finForfait: 'reduit' });
+  assert.deepStrictEqual(g.forfaitFamille({ go: 2, dureeForfait: 28, prochaineRecharge: Date.UTC(2026, 10, 25, 9) }), { mo: 2000, debut: '2026-10-28', finForfait: 'reduit' });
   // Juste avant minuit à Paris (23 h 30 en hiver = 22 h 30 UTC) : le jour de Paris.
-  assert.deepStrictEqual(g.forfaitFamille({ derniereRecharge: Date.UTC(2026, 9, 30, 23, 30) }), { mo: 1000, debut: '2026-10-31' });
-  assert.deepStrictEqual(g.forfaitFamille({ go: 0.5, activation: Date.UTC(2026, 9, 30, 12) }), { mo: 500, jour: 28 });
-  assert.deepStrictEqual(g.forfaitFamille({ activation: Date.UTC(2026, 9, 12, 12) }), { mo: 1000, jour: 12 });
-  assert.deepStrictEqual(g.forfaitFamille({}), { mo: 1000, jour: 1 });
+  assert.deepStrictEqual(g.forfaitFamille({ derniereRecharge: Date.UTC(2026, 9, 30, 23, 30) }), { mo: 1000, debut: '2026-10-31', finForfait: 'reduit' });
+  assert.deepStrictEqual(g.forfaitFamille({ go: 0.5, activation: Date.UTC(2026, 9, 30, 12) }), { mo: 500, jour: 28, finForfait: 'reduit' });
+  assert.deepStrictEqual(g.forfaitFamille({ activation: Date.UTC(2026, 9, 12, 12) }), { mo: 1000, jour: 12, finForfait: 'reduit' });
+  assert.deepStrictEqual(g.forfaitFamille({}), { mo: 1000, jour: 1, finForfait: 'reduit' });
+  // Forfait « internet coupé » au bout (Sosh 1 Go bloqué) : recopié pour l'alerte et l'app famille.
+  assert.deepStrictEqual(g.forfaitFamille({ go: 1, activation: Date.UTC(2026, 9, 12, 12), finForfait: 'bloque' }), { mo: 1000, jour: 12, finForfait: 'bloque' });
+  assert.deepStrictEqual(g.forfaitFamille({ finForfait: 'n\'importe' }).finForfait, 'reduit');
 });
 
 test('accessoires à prévoir pour les envois', () => {
@@ -278,6 +300,7 @@ test('cartes SIM et accessoires lus sur une facture', () => {
   });
   assert.deepStrictEqual(r.cartesSim, {
     quantite: 2, operateur: 'YouPrice', iccids: ['8933010000000000001', '8933010000000000002'], numeros: [], prixCarte: 1000, forfait: 299,
+    go: null, renouvellementAuto: null, periode: 'mois', dureeForfait: null, finForfait: null, identifiantClient: null, // pas détaillé : mensuel par défaut
   });
   assert.deepStrictEqual(r.accessoires, [{ nom: 'Clé 4G USB', quantite: 3, prixUnitaire: 990 }]);
   assert.strictEqual(g.lectureVersFormulaire({ cartesSim: null }).cartesSim, null);
@@ -392,7 +415,13 @@ test('suite du jumelage d\'une tablette du stock', () => {
   assert.deepStrictEqual(g.suiteJumelage({ etat: 'envoyee', commande: 'c' }, { fid: 'f' }, 'f'), {});
   assert.deepStrictEqual(g.suiteJumelage({ etat: 'envoyee', commande: 'c' }, { fid: 'autre' }, 'f'),
     { alerte: 'jumelée à une autre famille que celle de sa commande' });
-  assert.deepStrictEqual(g.suiteJumelage({ etat: 'preparee', commande: null }, null, 'f'), { alerte: 'jumelée sans commande' });
+  // Tablette de test jumelée sans commande : rien à cocher pour l'admin (elle n'est simplement pas à vendre).
+  assert.deepStrictEqual(g.suiteJumelage({ etat: 'preparee', commande: null }, null, 'f'), {});
+  // Commande reliée d'office (par l'e-mail) à l'ancienne famille d'un client qui recommande : suit sa tablette.
+  assert.deepStrictEqual(g.suiteJumelage({ etat: 'envoyee', commande: 'c' }, { fid: 'ancienne', relieeParEmail: { fid: 'ancienne' } }, 'f'),
+    { relier: true, delier: 'ancienne' });
+  assert.deepStrictEqual(g.suiteJumelage({ etat: 'envoyee', commande: 'c' }, { fid: 'ancienne', relieeParEmail: { fid: 'ancienne' } }, 'ancienne'), {});
+  assert.strictEqual(g.suiteJumelage({ etat: 'envoyee', commande: 'c' }, { fid: 'x', relieeParEmail: { fid: 'y' } }, 'f').relier, undefined);
 });
 
 test('clients : fusion par e-mail, statut et accord pour les e-mails', () => {
@@ -466,7 +495,7 @@ test('avancement des parcours nettoyé', () => {
 
 test('batterie : relevé de la tablette et usure', () => {
   const b = g.releveBatterie({ battery: { level: 80, charging: true, health: 'bonne', temperature: 31.5, at: 5 }, lastSeen: 4 });
-  assert.deepStrictEqual(b, { niveau: 80, enCharge: true, sante: 'bonne', temperature: 31.5, cycles: null, le: 5, vueLe: 4, enLigneLe: null });
+  assert.deepStrictEqual(b, { niveau: 80, enCharge: true, sante: 'bonne', temperature: 31.5, cycles: null, le: 5, vueLe: 4, enLigneLe: null, fuseau: null });
   assert.strictEqual(g.usureBatterie(b), null);
   assert.strictEqual(g.usureBatterie(null), null);
   assert.strictEqual(g.usureBatterie({ sante: 'morte' }), 'batterie morte');
@@ -635,4 +664,164 @@ test('clients : inscrit sur « Être prévenu », avec son téléphone', () => {
   assert.equal(c.type, 'attente');
   assert.equal(c.telephone, '0712345678');
   assert.equal(c.depuis, 70);
+});
+
+// PDF minimal à n pages ; compresse : objets des pages rangés dans un flux /ObjStm compressé (PDF récents).
+function pdfDe(n, compresse = false) {
+  const zlib = require('node:zlib');
+  const pages = Array.from({ length: n }, (_, i) => `${3 + i} 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] >>\nendobj\n`).join('');
+  if (!compresse) {
+    return Buffer.from(`%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Count ${n} >>\nendobj\n${pages}%%EOF\n`, 'latin1');
+  }
+  const objets = Buffer.from(`<< /Type /Pages /Count ${n} >> ${Array.from({ length: n }, () => '<</Type/Page/Parent 2 0 R>>').join(' ')}`, 'latin1');
+  const flux = zlib.deflateSync(objets);
+  return Buffer.concat([
+    Buffer.from(`%PDF-1.7\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n9 0 obj\n<< /Type /ObjStm /N ${n + 1} /First 10 /Filter /FlateDecode /Length ${flux.length} >>\nstream\n`, 'latin1'),
+    flux, Buffer.from('\nendstream\nendobj\n%%EOF\n', 'latin1')]);
+}
+
+test('nombre de pages d\'un PDF', () => {
+  assert.strictEqual(g.pagesPdf(pdfDe(1)), 1);
+  assert.strictEqual(g.pagesPdf(pdfDe(5)), 5); // « /Type /Pages » n'est pas compté
+  assert.strictEqual(g.pagesPdf(pdfDe(2, true)), 2);
+  assert.strictEqual(g.pagesPdf(pdfDe(40, true)), 40);
+  assert.strictEqual(g.pagesPdf(Buffer.from('pas un pdf')), null);
+  assert.strictEqual(g.pagesPdf(undefined), null);
+});
+
+test('PDF joints non lus : titre, poids, plus de 2 pages (e-mail Sosh du 5/11)', () => {
+  const ko = 1024;
+  const pdf = (filename, content, size) => ({ filename, contentType: 'application/pdf', content, size: size || content.length });
+  const ignorees = [];
+  const lues = g.piecesFacture([
+    pdf('Conditions_generales_de_l_offre_mobile_Sosh.pdf', pdfDe(1), 179 * ko),
+    pdf('Conditions_Generales_de_Vente_Sosh.pdf', pdfDe(30, true), 272 * ko),
+    pdf('Tarifs_de_l_offre_Sosh.pdf', pdfDe(12), 347 * ko),
+    pdf('Formulaire_de_rétractation_Sosh.pdf', pdfDe(1), 41 * ko),
+    pdf('les-offres-sosh_rc_4836.pdf', pdfDe(4), 220 * ko),
+    pdf('document.pdf', pdfDe(8, true), 200 * ko), // titre neutre mais 8 pages
+    pdf('scan.pdf', pdfDe(1), 3 * 1024 * ko), // trop lourd
+    pdf('Facture_FR123.pdf', pdfDe(2), 90 * ko),
+    pdf('4815162342.pdf', pdfDe(1, true), 60 * ko),
+  ], ignorees);
+  assert.deepStrictEqual(lues.map((p) => p.filename), ['Facture_FR123.pdf', '4815162342.pdf']);
+  assert.strictEqual(ignorees.length, 7);
+  assert.match(ignorees[0], /Conditions_generales.* : pas une facture d'après son titre/);
+  assert.match(ignorees[3], /rétractation.*titre/);
+  assert.match(ignorees[5], /document\.pdf : 8 pages/);
+  assert.match(ignorees[6], /scan\.pdf : trop lourd/);
+});
+
+test('accents cassés réparés (texte UTF-8 lu en windows-1252, Sosh 5/11)', () => {
+  const casse = (s) => Buffer.from(s, 'utf8').toString('latin1')
+    .replace(/[\u0080-\u009f]/g, (c) => ({ '\u0080': '€', '\u0082': '‚', '\u0095': '•', '\u0099': '™' }[c] || c));
+  const texte = 'Merci d\'avoir fait confiance à Sosh. Pour accéder au suivi, rendez-vous sur l\'app. N° de mobile : 06. Déjà réglé : 10 € pour l\'activation. Forfait 2,99€ 1Go. Votre 1ère facture, prélèvement SEPA, rétractation.';
+  assert.notStrictEqual(casse(texte), texte);
+  assert.strictEqual(g.reparerAccents(casse(texte)), texte);
+  // Texte déjà correct, ou vrais « Ã » isolés : inchangé.
+  assert.strictEqual(g.reparerAccents(texte), texte);
+  assert.strictEqual(g.reparerAccents('SÃO PAULO'), 'SÃO PAULO');
+  const p = g.corpsDuMail({ text: `${casse(texte)}\n &#8226; Un accès au suivi.\n boutique&shy;sosh&gt;`.replace('&shy;', '­'), subject: 'Confirmation de votre commande', from: { text: 'votre boutique SOSH <boutique@sosh.fr>' } });
+  const t = p.content.toString('utf8');
+  assert.match(t, /Pour accéder au suivi/);
+  assert.match(t, /10 € pour/);
+  assert.match(t, /• Un accès/);
+  assert.match(t, /boutiquesosh>/);
+});
+
+test('accents : un texte correct mêlé à des suites cassées', () => {
+  assert.strictEqual(g.reparerAccents('Un accès, puis accÃ©der et 2,99 â‚¬, NÂ° 3, payé à € 5'), 'Un accès, puis accéder et 2,99 €, N° 3, payé à € 5');
+});
+
+test('justificatif d\'achat pris pour une facture : le titre le remet en confirmation (Sosh, 7/11)', () => {
+  const lu = { facture: true, confirmation: false, fournisseur: 'Sosh', montant: 1000 };
+  assert.strictEqual(g.confirmationSelonTitre(lu, "Justificatif d'achat.pdf").confirmation, true);
+  assert.strictEqual(g.confirmationSelonTitre(lu, 'Récapitulatif de commande.pdf').confirmation, true);
+  assert.strictEqual(g.confirmationSelonTitre(lu, 'Facture commande 123.pdf').confirmation, false); // le titre dit « facture »
+  assert.strictEqual(g.confirmationSelonTitre(lu, 'FR2026-0042.pdf').confirmation, false);
+  assert.strictEqual(g.confirmationSelonTitre(lu, undefined).confirmation, false);
+  assert.strictEqual(g.confirmationSelonTitre({ ...lu, facture: false }, 'Justificatif.pdf').confirmation, false);
+  // Contrat et mandat joints au mail de bienvenue : pas lus du tout.
+  const ignorees = [];
+  assert.deepStrictEqual(g.piecesFacture([{ filename: 'Contrat.pdf', contentType: 'application/pdf', size: 90000 }], ignorees), []);
+  assert.match(ignorees[0], /Contrat\.pdf : pas une facture d'après son titre/);
+});
+
+test('la vraie facture rejoint la confirmation ouverte du même vendeur, même si le montant diffère', () => {
+  const jour = 864e5;
+  const sosh = { id: 'a', confirmation: true, fournisseur: 'Sosh', montant: 1000, date: Date.UTC(2026, 10, 5) };
+  const facture = { facture: true, confirmation: false, fournisseur: 'SOSH', montant: 1299, date: sosh.date + 15 * jour };
+  assert.deepStrictEqual(g.confirmationARattacher([sosh], facture), { depense: sosh, montantDifferent: true });
+  // Même montant : rattachée sans doute.
+  assert.deepStrictEqual(g.confirmationARattacher([sosh], { ...facture, montant: 1000 }), { depense: sosh, montantDifferent: false });
+  // Montant plus petit, autre vendeur, trop tard, ou déjà une confirmation : rien.
+  assert.strictEqual(g.confirmationARattacher([sosh], { ...facture, montant: 500 }), null);
+  assert.strictEqual(g.confirmationARattacher([sosh], { ...facture, fournisseur: 'Free' }), null);
+  assert.strictEqual(g.confirmationARattacher([sosh], { ...facture, date: sosh.date + 50 * jour }), null);
+  assert.strictEqual(g.confirmationARattacher([sosh], { ...facture, confirmation: true }), null);
+  // Deux commandes ouvertes chez le même vendeur et montant différent : on ne devine pas.
+  const autre = { ...sosh, id: 'b', montant: 800 };
+  assert.strictEqual(g.confirmationARattacher([sosh, autre], facture), null);
+  // … mais le même montant désigne la bonne.
+  assert.strictEqual(g.confirmationARattacher([sosh, autre], { ...facture, montant: 800 }).depense.id, 'b');
+});
+
+test('forfait d\'une carte SIM lu sur la confirmation', () => {
+  const lu = g.lectureVersFormulaire({
+    estUneFacture: true, confirmationCommande: true, fournisseur: 'Sosh', totalTTC: 10, categorie: 'sim',
+    cartesSim: { quantite: 1, operateur: 'Sosh', iccids: [], numeros: [], prixCarteTTC: 10, forfaitMensuelTTC: 2.99,
+      goParMois: 1, renouvellementAuto: true, periodeForfait: 'mois', dureeForfaitJours: 30, finForfait: null, identifiantClient: '  1234 5678 ' },
+  });
+  assert.deepStrictEqual(lu.cartesSim, { quantite: 1, operateur: 'Sosh', iccids: [], numeros: [], prixCarte: 1000, forfait: 299,
+    go: 1, renouvellementAuto: true, periode: 'mois', dureeForfait: null, finForfait: null, identifiantClient: '1234 5678' }, 'forfait mensuel : pas de durée en jours');
+  const lyca = g.lectureVersFormulaire({ cartesSim: { quantite: 1, periodeForfait: 'jours', dureeForfaitJours: 30 } });
+  assert.deepStrictEqual([lyca.cartesSim.periode, lyca.cartesSim.dureeForfait], ['jours', 30]);
+  const rien = g.lectureVersFormulaire({ cartesSim: { quantite: 1, periodeForfait: null, dureeForfaitJours: 30 } });
+  assert.deepStrictEqual([rien.cartesSim.periode, rien.cartesSim.dureeForfait], ['mois', null], 'rien d\'écrit : mensuel');
+  const bizarre = g.lectureVersFormulaire({ cartesSim: { quantite: 1, goParMois: -3, renouvellementAuto: 'oui', dureeForfaitJours: 9999, finForfait: 'coupe' } });
+  assert.strictEqual(bizarre.cartesSim.go, null);
+  assert.strictEqual(bizarre.cartesSim.renouvellementAuto, null);
+  assert.strictEqual(bizarre.cartesSim.dureeForfait, null);
+  assert.strictEqual(bizarre.cartesSim.finForfait, null);
+});
+
+test('même vendeur sous deux noms', () => {
+  assert.ok(g.memeFournisseur('Sosh', 'Sosh (Orange)'));
+  assert.ok(g.memeFournisseur('CDISCOUNT', 'Cdiscount.com'));
+  assert.ok(g.memeFournisseur('Amazon EU S.à r.l.', 'amazon'));
+  assert.ok(!g.memeFournisseur('Sosh', 'Lycamobile'));
+  assert.ok(!g.memeFournisseur('', 'Sosh'));
+  assert.ok(!g.memeFournisseur('SA', 'Samsung')); // trop court pour conclure
+});
+
+test('forfait mensuel : même date chaque mois, pas 30 jours (Tanguy, 8/11)', () => {
+  const paris = (a, m, j) => Date.UTC(a, m - 1, j, 10); // 11 h ou 12 h à Paris
+  const jourParis = (t) => new Date(t).toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' });
+  const mois = { periode: 'mois' };
+  assert.strictEqual(jourParis(g.finApresRecharge(mois, paris(2026, 11, 5))), '05/12/2026');
+  assert.strictEqual(jourParis(g.finApresRecharge(mois, paris(2027, 1, 31))), '28/02/2027'); // pas de 31 février
+  assert.strictEqual(jourParis(g.finApresRecharge(mois, paris(2028, 1, 31))), '29/02/2028');
+  assert.strictEqual(jourParis(g.finApresRecharge(mois, paris(2026, 12, 15))), '15/01/2027');
+  assert.strictEqual(jourParis(g.finApresRecharge(mois, paris(2027, 3, 20))), '20/04/2027'); // passage à l'heure d'été
+  // Pass de 30 jours (Lyca) : inchangé.
+  assert.strictEqual(jourParis(g.finApresRecharge({}, paris(2027, 1, 31))), '02/03/2027');
+  // La tablette repart le même jour chaque mois (au plus le 28).
+  assert.deepStrictEqual(g.forfaitFamille({ periode: 'mois', go: 1, prochaineRecharge: paris(2026, 12, 5) }), { mo: 1000, jour: 5, finForfait: 'reduit' });
+  assert.deepStrictEqual(g.forfaitFamille({ periode: 'mois', prochaineRecharge: paris(2026, 12, 31) }), { mo: 1000, jour: 28, finForfait: 'reduit' });
+  assert.deepStrictEqual(g.champsSim({ periode: 'mois' }), { periode: 'mois' });
+  assert.deepStrictEqual(g.champsSim({ periode: 'jours' }), { periode: 'jours' });
+  assert.deepStrictEqual(g.champsSim({ periode: 'n importe' }), { periode: 'mois' });
+});
+
+test('identifiant client par défaut : l\'adresse qui a reçu l\'e-mail du vendeur (Tanguy, 8/11)', () => {
+  const boite = 'factures@papote.fr';
+  const adr = (...a) => ({ value: a.map((address) => ({ address })) });
+  assert.strictEqual(g.destinataireDuMail({ to: adr('Tanguy.R@gmail.com', boite) }, boite), 'tanguy.r@gmail.com');
+  assert.strictEqual(g.destinataireDuMail({ to: adr(boite), cc: [adr('x@orange.fr')] }, boite), 'x@orange.fr');
+  // Transféré vers la boîte des factures : le « À : » de l'e-mail d'origine.
+  const transfere = { to: adr(boite), text: 'Bonjour\n---------- Forwarded message ---------\nDe : Sosh <noreply@sosh.fr>\nDate: 7 nov.\nÀ : <tanguy.r@gmail.com>\nObjet : Bienvenue' };
+  assert.strictEqual(g.destinataireDuMail(transfere, boite), 'tanguy.r@gmail.com');
+  assert.strictEqual(g.destinataireDuMail({ to: adr(boite), text: '> To: Moi <moi@free.fr>' }, boite), 'moi@free.fr');
+  assert.strictEqual(g.destinataireDuMail({ to: adr(boite), text: 'pas de transfert' }, boite), null);
+  assert.strictEqual(g.destinataireDuMail({}, boite), null);
 });

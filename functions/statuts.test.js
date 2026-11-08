@@ -51,7 +51,7 @@ test('matériel rendu : seulement un retour attendu', () => {
   refuse(s.refusRetourMateriel({ expedition: 'envoyee', fid: 'f' }), /Aucun retour/);
   refuse(s.refusRetourMateriel({ expedition: 'a-preparer' }), /Aucun retour/);
   refuse(s.refusRetourMateriel({ restitution: { statut: 'rendue' } }), /déjà noté rendu/);
-  refuse(s.refusRetourMateriel({ restitution: { statut: 'facturee' } }), /déjà été prélevé/);
+  permis(s.refusRetourMateriel({ restitution: { statut: 'facturee' } }));
 });
 
 test('tablette reliée à une commande : ni inutilisable, ni commande annulée', () => {
@@ -59,6 +59,10 @@ test('tablette reliée à une commande : ni inutilisable, ni commande annulée',
   permis(s.refusLienCommande({}, 'commandee', { expedition: 'a-preparer' }));
   for (const etat of ['perdue', 'hors-service', 'a-reparer']) refuse(s.refusLienCommande({}, etat, { expedition: 'a-preparer' }), /perdue, hors service ou à réparer/);
   refuse(s.refusLienCommande({}, 'en-stock', { expedition: 'annulee' }), /annulée/);
+  // Tablette jumelée à une famille : pas à vendre, sauf pour une commande de cette même famille.
+  refuse(s.refusLienCommande({ fid: 'test' }, 'en-stock', { expedition: 'a-preparer', fid: 'client' }), /dans une famille : pas à vendre/);
+  refuse(s.refusLienCommande({ fid: 'test' }, 'en-stock', { expedition: 'a-preparer' }), /pas à vendre/);
+  permis(s.refusLienCommande({ fid: 'f' }, 'chez-client', { expedition: 'envoyee', fid: 'f' }));
 });
 
 test('cartes SIM : statuts, recharge et suppression', () => {
@@ -81,10 +85,23 @@ test('envoi : tablette reliée et carte SIM obligatoires pour l\'offre tout comp
   const c = { expedition: 'a-preparer', formule: 'sim' };
   refuse(s.refusEnvoiSansSim(c, []), /Reliez d'abord la tablette/);
   refuse(s.refusEnvoiSansSim(c, [{ etat: 'preparee', ref: 'T-004' }]), /carte SIM à la tablette T-004/);
-  permis(s.refusEnvoiSansSim(c, [{ etat: 'preparee', simId: 'sim1' }]));
+  // Carte SIM sans numéro de ligne (Tanguy, 8/11) : refusé aussi.
+  refuse(s.refusEnvoiSansSim(c, [{ etat: 'preparee', ref: 'T-004', simId: 'sim1' }]), /numéro de ligne de la carte SIM de la tablette T-004/);
+  refuse(s.refusEnvoiSansSim(c, [{ etat: 'preparee', simId: 'sim1' }], { sim1: { iccid: '8933' } }), /numéro de ligne/);
+  refuse(s.refusEnvoiSansSim(c, [{ etat: 'preparee', simId: 'sim1' }], { sim1: { numero: '  ' } }), /numéro de ligne/);
+  permis(s.refusEnvoiSansSim(c, [{ etat: 'preparee', simId: 'sim1' }], { sim1: { numero: '07 45 91 77 17' } }));
+  // Formule absente (commande récente) : la carte reste obligatoire.
+  refuse(s.refusEnvoiSansSim({ expedition: 'a-preparer' }, [{ etat: 'preparee' }]), /carte SIM/);
   // Numéro de suivi corrigé après le départ, ancienne commande Wi-Fi : rien de plus demandé.
   permis(s.refusEnvoiSansSim({ expedition: 'envoyee', formule: 'sim' }, []));
   permis(s.refusEnvoiSansSim({ expedition: 'a-preparer', formule: 'wifi' }, []));
+});
+
+test('départ d\'une tablette (envoi, étiquette, remplacement) : carte SIM avec numéro obligatoire', () => {
+  refuse(s.refusSimSansNumero({ ref: 'T-007' }, null), /Reliez d'abord une carte SIM à la tablette T-007/);
+  refuse(s.refusSimSansNumero({ ref: 'T-007', simId: 'x' }, null), /numéro de ligne/);
+  refuse(s.refusSimSansNumero({ simId: 'x' }, { iccid: '8933', numero: null }), /numéro de ligne/);
+  permis(s.refusSimSansNumero({ simId: 'x' }, { numero: '0608991612' }));
 });
 
 test('étiquette en double (double clic, vieil onglet) : refusée tant que l\'ancienne n\'a pas servi ou n\'est pas vieille de 30 jours', () => {

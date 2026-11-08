@@ -9,7 +9,9 @@
 // Depuis le 29/10/2026, le client voit toujours « expédiée sous 3 à 5 jours ouvrés » : ce délai ne sert plus qu'à
 // prévenir Tanguy (e-mail de nouvelle commande) qu'il faut racheter des tablettes.
 //
-// Disponibles = fiches du stock libres (en stock ou préparées, sans commande)
+// Disponibles = fiches du stock libres (en stock ou préparées, sans commande, ni d'essai ni hors critères, et pas
+//               jumelées à une famille : une tablette dans une famille, comme celle de la « famille test » de Tanguy,
+//               n'est jamais à vendre)
 //             - commandes payées pas encore reliées à une fiche
 //             - paiements en cours (reservations/{id}, une tablette mise de côté pendant le paiement Stripe).
 // Une réservation naît à l'ouverture du paiement, disparaît au paiement réussi (la commande prend le relais)
@@ -29,10 +31,11 @@ const MARGE_MS = 2 * 60 * 1000;
 
 const ms = (v) => (v == null ? null : typeof v === 'number' ? v : v.toMillis ? v.toMillis() : null);
 
-// { stock: [{ etat, commande }], commandes: [{ id, expedition }], reservations: [{ expireLe }] } → tablettes du stock
+// { stock: [{ etat, commande, fid }], commandes: [{ id, expedition }], reservations: [{ expireLe }] } → tablettes du stock
 // encore libres, négatif quand des commandes attendent une tablette pas encore achetée.
 function solde({ stock, commandes, reservations, maintenant }) {
-  const libres = stock.filter((t) => ETATS_LIBRES.includes(t.etat) && !t.commande).length;
+  // Tablette d'essai, installée hors critères sans accord, ou jumelée à une famille : pas à vendre.
+  const libres = stock.filter((t) => ETATS_LIBRES.includes(t.etat) && !t.commande && !t.fid && t.essai !== true && !t.horsCriteres).length;
   const reliees = new Set(stock.map((t) => t.commande).filter(Boolean));
   const enAttente = commandes.filter((c) => A_SERVIR.includes(c.expedition) && !reliees.has(c.id)).length;
   const enPaiement = reservations.filter((r) => (ms(r.expireLe) || 0) > maintenant).length;
@@ -77,7 +80,7 @@ function delai(n) {
 // ou null quand il n'y a plus rien à vendre (rien n'est écrit).
 // Le document gestion/stock est lu et écrit à chaque réservation : deux paiements simultanés passent
 // l'un après l'autre et ne peuvent pas prendre la même dernière tablette.
-async function reserver(db) {
+async function reserver(db, { ip, email } = {}) {
   const maintenant = Date.now();
   const verrou = db.doc('gestion/stock');
   const ref = db.collection('reservations').doc();
@@ -85,12 +88,50 @@ async function reserver(db) {
     await tx.get(verrou);
     const n = await lireEtCompter(db, (q) => tx.get(q), maintenant);
     if (!vendable(n)) return null;
-    tx.set(ref, { creeLe: FieldValue.serverTimestamp(), expireLe: Timestamp.fromMillis(maintenant + DUREE_PAIEMENT_MS + MARGE_MS) });
+    tx.set(ref, {
+      creeLe: Timestamp.fromMillis(maintenant), expireLe: Timestamp.fromMillis(maintenant + DUREE_PAIEMENT_MS + MARGE_MS),
+      ip: hacher(ip), email: email ? String(email).toLowerCase() : null,
+    });
     tx.set(verrou, { derniereReservation: FieldValue.serverTimestamp() }, { merge: true });
     return delai(n);
   });
   if (!d) return null;
   return { id: ref.id, expireA: Math.floor((maintenant + DUREE_PAIEMENT_MS) / 1000), delai: d };
+}
+
+// Garde-fou (inspection 5, 3/11) : quelqu'un qui ouvre des pages de paiement sans jamais payer bloquerait tout le
+// stock 32 minutes à chaque fois. Au-delà de 5 réservations en une heure depuis la même adresse internet, ou de 2
+// pour le même e-mail, la commande est refusée (le site le dit). L'adresse est gardée hachée, une heure.
+const ESSAIS_HEURE_IP = 5;
+const ESSAIS_HEURE_EMAIL = 2;
+const HEURE_MS = 60 * 60 * 1000;
+
+function hacher(texte) {
+  return texte ? require('node:crypto').createHash('sha256').update(String(texte)).digest('hex').slice(0, 32) : null;
+}
+
+async function tropDEssais(db, { ip, email }) {
+  const depuis = Date.now() - HEURE_MS;
+  const recentes = async (champ, valeur) => {
+    if (!valeur) return 0;
+    const snap = await db.collection('reservations').where(champ, '==', valeur).get();
+    return snap.docs.filter((d) => (ms(d.get('creeLe')) || 0) >= depuis).length;
+  };
+  const [parIp, parEmail] = await Promise.all([recentes('ip', hacher(ip)), recentes('email', email ? String(email).toLowerCase() : null)]);
+  return parIp >= ESSAIS_HEURE_IP || parEmail >= ESSAIS_HEURE_EMAIL;
+}
+
+// Réservations finies depuis plus d'un jour : effacées (gestionAutomatique), la collection reste petite.
+async function nettoyerReservations(db) {
+  const vieilles = await db.collection('reservations').where('expireLe', '<', Timestamp.fromMillis(Date.now() - 24 * HEURE_MS)).get();
+  let lot = db.batch();
+  let n = 0;
+  for (const d of vieilles.docs) {
+    lot.delete(d.ref);
+    if (++n % 400 === 0) { await lot.commit(); lot = db.batch(); }
+  }
+  if (n % 400) await lot.commit();
+  return n;
 }
 
 // Paiement réussi, page expirée ou ouverture du paiement ratée : la tablette n'est plus mise de côté.
@@ -119,4 +160,4 @@ function routeDisponible(db, logger) {
 const ERREUR_COMPLET = () => new HttpsError('resource-exhausted',
   "Toutes nos tablettes sont réservées pour le moment. Inscrivez-vous sur mapapote.fr pour être prévenu dès qu'il y en a.");
 
-module.exports = { tablettesDisponibles, placesDisponibles, vendable, VENDRE_SANS_STOCK, delai, PRECOMMANDES, nombreDisponibles, reserver, liberer, routeDisponible, ERREUR_COMPLET, DUREE_PAIEMENT_MS };
+module.exports = { tropDEssais, nettoyerReservations, ESSAIS_HEURE_IP, ESSAIS_HEURE_EMAIL, tablettesDisponibles, placesDisponibles, vendable, VENDRE_SANS_STOCK, delai, PRECOMMANDES, nombreDisponibles, reserver, liberer, routeDisponible, ERREUR_COMPLET, DUREE_PAIEMENT_MS };

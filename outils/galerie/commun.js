@@ -132,4 +132,54 @@ async function fausseVideo(browser, l = 640, h = 360, duree = 2000) {
   return Buffer.from(b64, 'base64');
 }
 
-module.exports = { RACINE, extraire, servir, fausseImage, fauxVisage, fauxQr, fausseVideo };
+// Mise en page sur un téléphone (admin, 3/11 : « Commande EJ4N-DVBA » écrit une lettre par ligne, écrasé par ses
+// boutons). Signale : la page plus large que l'écran, et tout mot coupé sur plusieurs lignes alors qu'il est court
+// (moins de 25 signes ; les adresses e-mail, les liens et les suites plus longues ne comptent pas).
+// Donne la liste des soucis, vide si tout va bien.
+async function miseEnPage(page) {
+  return page.evaluate(() => {
+    const soucis = [];
+    const de = document.documentElement;
+    const nom = (el) => el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') + (el.classList.length ? '.' + [...el.classList].join('.') : '');
+    if (de.scrollWidth > de.clientWidth + 1) {
+      // Un élément dans une bande qui défile (onglets) ne fait pas déborder la page : on nomme les vrais coupables.
+      const dansBande = (el) => {
+        for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+          if (/auto|scroll|hidden|clip/.test(getComputedStyle(p).overflowX)) return true;
+        }
+        return false;
+      };
+      const coupables = [...document.querySelectorAll('body *')]
+        .filter((el) => el.getBoundingClientRect().right > de.clientWidth + 1 && el.getBoundingClientRect().width > 0 && !dansBande(el))
+        .slice(0, 3).map((el) => nom(el) + (el.children.length ? '' : ` « ${el.textContent.trim().slice(0, 30)} »`));
+      soucis.push(`Largeur : page trop large (${de.scrollWidth} px pour un écran de ${de.clientWidth} px : ${coupables.join(', ')})`);
+    }
+    const vus = new Set();
+    const marcheur = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    for (let n = marcheur.nextNode(); n && soucis.length < 6; n = marcheur.nextNode()) {
+      const el = n.parentElement;
+      if (!el || vus.has(el) || ['SCRIPT', 'STYLE', 'TEXTAREA', 'OPTION'].includes(el.tagName)) continue;
+      const mot = /[0-9A-Za-zÀ-ÖØ-öø-ÿ’']{4,24}/g;
+      for (let m = mot.exec(n.data); m; m = mot.exec(n.data)) {
+        // Le « mot » entier entre deux espaces : une adresse e-mail, un lien ou une suite de plus de 24 signes
+        // a le droit de se couper (l'admin les coupe exprès pour ne pas dépasser).
+        const debut = n.data.lastIndexOf(' ', m.index) + 1;
+        const fin = n.data.indexOf(' ', m.index) < 0 ? n.data.length : n.data.indexOf(' ', m.index);
+        const entier = n.data.slice(debut, fin);
+        if (/[@/]/.test(entier) || entier.length > 24) continue;
+        const r = document.createRange();
+        r.setStart(n, m.index);
+        r.setEnd(n, m.index + m[0].length);
+        const lignes = new Set([...r.getClientRects()].filter((x) => x.width > 0 && x.height > 0).map((x) => Math.round(x.top)));
+        if (lignes.size > 1) {
+          vus.add(el);
+          soucis.push(`Texte écrasé : « ${m[0]} » coupé sur ${lignes.size} lignes (${nom(el)}, ${Math.round(el.getBoundingClientRect().width)} px de large)`);
+          break;
+        }
+      }
+    }
+    return soucis;
+  }).catch(() => []);
+}
+
+module.exports = { RACINE, extraire, servir, fausseImage, fauxVisage, fauxQr, fausseVideo, miseEnPage };

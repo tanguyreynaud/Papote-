@@ -24,7 +24,7 @@ const ETAPES = ['photo', 'son', 'options', 'fini'];
 // Installation pas finie 30 minutes après le scan : le prochain proche qui scanne la reprend (Tanguy, 21/10).
 const REPRISE_MS = 30 * 60 * 1000;
 // Fin d'installation sans commande reliée : tolérance avant la pause (abonnement.js, B3).
-const { TOLERANCE_INSTALLATION_MS: TOLERANCE_MS } = require('./abonnement');
+const { TOLERANCE_INSTALLATION_MS: TOLERANCE_MS, TOLERANCE_DEBUT_INSTALLATION_MS: TOLERANCE_DEBUT_MS } = require('./abonnement');
 
 // Options montrées déjà réglées dans le récapitulatif (document du parcours, 21/10).
 const OPTIONS_PAR_DEFAUT = Object.freeze({
@@ -100,9 +100,9 @@ function codeAuHasard() {
   return Array.from(bytes, (b) => CODE_ALPHABET[b % CODE_ALPHABET.length]).join('');
 }
 
-// deps : { db, compteVerifie, envoyerMail, mail, appli, logger, stockage, relierParEmail, prevenirPapote, notifier }
+// deps : { db, compteVerifie, envoyerMail, mail, appli, logger, stockage, relierParEmail, prevenirPapote, notifier, familleDuScan }
 function brancher(deps) {
-  const { db, compteVerifie, envoyerMail, mail, appli, logger, stockage, relierParEmail, prevenirPapote, notifier } = deps;
+  const { db, compteVerifie, envoyerMail, mail, appli, logger, stockage, relierParEmail, prevenirPapote, notifier, familleDuScan } = deps;
 
   async function reserverTablette(request) {
     const { uid, email } = compteVerifie(request);
@@ -111,6 +111,9 @@ function brancher(deps) {
     if (!code) throw new HttpsError('invalid-argument', 'Le code de la tablette a 8 caractères.');
     if (!prenom) throw new HttpsError('invalid-argument', 'Votre prénom est demandé.');
     const ref = db.doc(`pairings/${code}`);
+    // Famille préparée à la commande (famille-preparee.js) et tablette pas reconnue : elle y entre directement.
+    const preparee = familleDuScan ? await entrerFamillePreparee(ref, { uid, email, prenom }) : null;
+    if (preparee) return preparee;
     const r = await reserver(ref, { uid, email, prenom });
     // Installation reprise : le premier proche est prévenu sur son téléphone (B2).
     if (r.reprise && r.fid && notifier) {
@@ -120,6 +123,26 @@ function brancher(deps) {
       }).catch((e) => logger.error(`Installation ${code} : premier proche non prévenu`, e.message));
     }
     return { etat: r.etat, ...(r.fid !== undefined ? { fid: r.fid } : {}), ...(r.par !== undefined ? { par: r.par } : {}) };
+  }
+
+  async function entrerFamillePreparee(ref, { uid, email, prenom }) {
+    const p = (await ref.get()).data();
+    if (!p || p.status !== 'waiting' || (ms(p.expiresAt) || 0) <= Date.now()) return null;
+    const cible = await familleDuScan(uid, p);
+    if (!cible) return null;
+    const fait = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists || snap.get('status') !== 'waiting') return false;
+      tx.update(ref, {
+        status: 'confirmed', fid: cible.fid, familyName: cible.nom, claimedBy: uid, claimedName: prenom, claimedEmail: email,
+        reservedAt: FieldValue.serverTimestamp(), expiresAt: Timestamp.fromMillis(Date.now() + ENTREE_TABLETTE_MS),
+      });
+      if (cible.commande) tx.update(db.doc(`commandes/${cible.commande}`), { tabletteRelieeLe: FieldValue.serverTimestamp() });
+      return true;
+    });
+    if (!fait) return null;
+    logger.info(`Installation ${ref.id} : tablette pas reconnue, entrée dans la famille préparée ${cible.fid} de ${uid}.`);
+    return { etat: 'reserve', fid: cible.fid };
   }
 
   async function reserver(ref, { uid, email, prenom }) {
@@ -215,8 +238,12 @@ function brancher(deps) {
         name: nom, code: invite, createdBy: uid, createdAt: FieldValue.serverTimestamp(),
         options: OPTIONS_PAR_DEFAUT, volumeSonnerie: VOLUME_SONNERIE, rev: 1,
         // Ni l'app ni la tablette ne se mettent « en pause » pendant l'installation ; la commande
-        // reliée au jumelage (gestionJumelage) remplace ce statut, sinon « aucun » à la fin.
-        abonnement: { statut: 'installation', majLe: FieldValue.serverTimestamp() },
+        // reliée au jumelage (gestionJumelage) remplace ce statut, sinon « aucun » à la fin. Installation jamais
+        // finie : « aucun » 72 h après ce début (F2), comme 48 h après une fin sans commande (finDeGrace).
+        abonnement: {
+          statut: 'installation', majLe: FieldValue.serverTimestamp(),
+          toleranceJusqua: Timestamp.fromMillis(Date.now() + TOLERANCE_DEBUT_MS),
+        },
         ...(ville ? { meteoVille: ville } : {}),
         installation: { etape: 'photo', pairing: code, debut: FieldValue.serverTimestamp() },
       });
@@ -275,7 +302,9 @@ function brancher(deps) {
     // Aucune commande reliée pendant l'installation (tablette pas reconnue). Avant de bloquer (B3, Tanguy
     // 2026-10-27) : une seule commande en attente à l'e-mail d'un membre → reliée ; sinon 48 h de tolérance
     // pendant lesquelles tout fonctionne et Tanguy relie la commande à la main, prévenu par e-mail.
-    let aRelier = fam.abonnement && fam.abonnement.statut === 'installation';
+    // Tolérance du début (72 h) écoulée avant « C'est parfait » (installation lente) : la fin redonne ses 48 h, une fois.
+    const horsDelai = fam.abonnement && fam.abonnement.statut === 'aucun' && fam.abonnement.pendantInstallation === true;
+    let aRelier = fam.abonnement && (fam.abonnement.statut === 'installation' || horsDelai);
     if (aRelier && relierParEmail) {
       const membres = await ref.collection('members').where('role', '==', 'famille').get();
       const emails = [...new Set(membres.docs.map((m) => m.get('email')).filter(Boolean).map((e) => String(e).toLowerCase()))];
@@ -287,6 +316,10 @@ function brancher(deps) {
     }
     if (aRelier) {
       maj['abonnement.toleranceJusqua'] = Timestamp.fromMillis(Date.now() + TOLERANCE_MS);
+      if (horsDelai) {
+        maj['abonnement.statut'] = 'installation';
+        maj['abonnement.pendantInstallation'] = FieldValue.delete();
+      }
       maj['abonnement.majLe'] = FieldValue.serverTimestamp();
       maj.rev = FieldValue.increment(1);
     }
@@ -373,5 +406,5 @@ function refusAnnulation(fam, uid) {
 
 module.exports = {
   brancher,
-  regles: { decisionScan, refusAnnulation, REPRISE_MS, villeDuRelais, villeAvecCoordonnees, normaliserCode, OPTIONS_PAR_DEFAUT, ETAPES },
+  regles: { decisionScan, refusAnnulation, REPRISE_MS, villeDuRelais, villeAvecCoordonnees, normaliserCode, codeAuHasard, OPTIONS_PAR_DEFAUT, ETAPES },
 };

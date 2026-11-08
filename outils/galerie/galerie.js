@@ -17,8 +17,10 @@
 //                                        et signale toute action partie en double (double.js)
 //   --gestes [famille vitrine]           au lieu des captures : chaque écran en paysage, zoom 130 %, texte +30 %, mode sombre,
 //                                        noms très longs ; bouton retour sur les fenêtres ; retour après paiement (gestes.js)
-//   --courriels                          au lieu des captures : chaque e-mail à 320/375/412/600/900 px sans police ni image,
-//                                        poids, liens, texte brut, contraste clair et inversé (courriels.js)
+//   --courriels                          au lieu des captures : chaque e-mail de 320 à 1000 px sans police ni image, dans
+//                                        Gmail sans styles, Outlook (Word) approché, sombre partiel et total, images
+//                                        bloquées ; relecture du code (caniemail), poids, liens, texte brut, contraste ;
+//                                        captures dans sortie/courriels.html (courriels.js)
 //   --identifiants [admin famille]       au lieu des captures : chaque bouton qui agit sur une commande ou un abonnement
 //                                        doit envoyer au serveur la commande de la page / la famille ouverte (identifiants.js)
 //   Chaque galerie range aussi ses captures dans validation/ pour l'espace Validation de l'admin :
@@ -27,6 +29,8 @@
 //                                        d'écran, contrastes, étiquettes) + texte trop petit, cible trop petite (accessibilite.js)
 //   --boutons                            au lieu des captures : touche chaque bouton de l'app famille et de l'admin,
 //                                        serveur bloqué, et liste ceux qui ne montrent rien (sortie/boutons.txt)
+//   --iphone [vitrine famille admin]     au lieu des captures : chaque écran dans WebKit (moteur de Safari) en iPhone SE
+//                                        et iPhone 15 : erreurs de page, page trop large, texte écrasé (iphone.js)
 //   --appui [vitrine famille tablette admin]  au lieu des captures : garde le doigt 1,2 s sur chaque bouton, serveur
 //                                        bloqué : une action au plus, rien de sélectionné, pas de menu (appui.js)
 //
@@ -38,7 +42,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { chromium } = require('playwright');
+const { chromium, webkit } = require('playwright');
 const { extraire, servir } = require('./commun');
 const page = require('./page');
 
@@ -57,6 +61,7 @@ async function main() {
   if (args.includes('--identifiants')) return identifiants(args.filter((a) => a !== '--identifiants'));
   if (args.includes('--gestes')) return gestes(args.filter((a) => a !== '--gestes'));
   if (args.includes('--courriels')) return courriels(args.filter((a) => a !== '--courriels'));
+  if (args.includes('--iphone')) return double(args.filter((a) => a !== '--iphone'), require('./iphone'), ['vitrine', 'famille', 'admin'], 'webkit');
   if (args.includes('--accessibilite')) return double(args.filter((a) => a !== '--accessibilite'), require('./accessibilite'), ['famille', 'vitrine', 'admin', 'tablette']);
   if (args.includes('--appui')) return double(args.filter((a) => a !== '--appui'), require('./appui'), ['vitrine', 'famille', 'tablette', 'admin']);
   const choix = args.filter((a) => !a.startsWith('--'));
@@ -159,7 +164,8 @@ async function boutons(args) {
   verdict(soucis);
 }
 
-// E-mails dans les vraies boîtes (courriels.js) : largeurs Gmail / Apple Mail / Outlook, sans police ni image, mode sombre.
+// E-mails dans les vraies boîtes (courriels.js) : largeurs Gmail / Apple Mail / Outlook, sans police ni image,
+// Gmail sans styles, Outlook (Word) approché, mode sombre partiel et total, images bloquées, relecture du code.
 async function courriels(args) {
   for (const a of args.filter((a2) => a2.startsWith('--'))) {
     const [k, v] = a.slice(2).split('=');
@@ -173,10 +179,17 @@ async function courriels(args) {
   const { dir, version } = extraire(src.ref, src.dossier);
   const browser = await chromium.launch();
   try {
-    const resultats = await verifier({ browser, dossierSource: dir, progression: (t) => process.stdout.write(`\r  ${t}   `) });
+    // Captures de chaque boîte simulée : sortie/images/courriels-*.jpg et sortie/courriels.html (numéros E1, E2… de la galerie).
+    const images = path.join(sortie, 'images');
+    fs.mkdirSync(images, { recursive: true });
+    for (const f of fs.readdirSync(images)) if (f.startsWith('courriels-')) fs.rmSync(path.join(images, f));
+    const { resultats, ecrans } = await verifier({ browser, dossierSource: dir, dossierImages: images, progression: (t) => process.stdout.write(`\r  ${t}   `) });
     process.stdout.write('\n');
+    const note = 'Chaque e-mail tel que chaque boîte le transforme (simulation, rien n\'est envoyé) : Gmail sans styles (360 px), Outlook bureau approché (moteur Word, 1000 px), mode sombre partiel (Gmail Android) et total (Outlook, Gmail iOS), images bloquées.';
+    const galerie = path.join(sortie, 'courriels.html');
+    fs.writeFileSync(galerie, page.html([{ nom: 'emails', version, ecrans, note }], images));
     const { fichier, texte, soucis } = rapport(resultats, version, sortie);
-    console.log(`\n${texte}\n\n${fichier}`);
+    console.log(`\n${texte}\n\n${fichier}\n${galerie}`);
     verdict(soucis);
   } finally {
     await browser.close();
@@ -189,7 +202,7 @@ async function gestes(args) {
 }
 
 // Double clic (double.js) : chaque bouton touché deux fois, rien ne doit partir en double.
-async function double(args, outil = require('./double'), defaut = ['vitrine', 'famille', 'tablette', 'admin']) {
+async function double(args, outil = require('./double'), defaut = ['vitrine', 'famille', 'tablette', 'admin'], moteur = 'chromium') {
   const { balayer, rapport } = outil;
   for (const a of args.filter((a) => a.startsWith('--'))) {
     const [k, v] = a.slice(2).split('=');
@@ -199,7 +212,9 @@ async function double(args, outil = require('./double'), defaut = ['vitrine', 'f
   const quoi = (choix.length ? choix : defaut).filter((n) => defaut.includes(n));
   const sortie = path.join(__dirname, 'sortie');
   fs.mkdirSync(sortie, { recursive: true });
-  const browser = await chromium.launch({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--lang=fr-FR'] });
+  // WebKit (moteur de Safari, --iphone) : pas d'options de caméra simulée, elles sont propres à Chromium.
+  const browser = moteur === 'webkit' ? await webkit.launch()
+    : await chromium.launch({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--lang=fr-FR'] });
   const parties = [];
   try {
     for (const nom of quoi) {

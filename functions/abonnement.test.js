@@ -92,6 +92,8 @@ test('rien prélevé avant la réception : date de premier prélèvement d\'apr�
 
 test('tablette incluse non rendue : pénalité après 30 jours', () => {
   assert.strictEqual(a.limiteRestitution(T0), T0 + 30 * JOUR);
+  assert.strictEqual(a.limiteRestitution(T0, { deces: false }), T0 + 30 * JOUR);
+  assert.strictEqual(a.limiteRestitution(T0, { deces: true }), T0 + 60 * JOUR, 'après un décès : 60 jours');
   assert.strictEqual(a.restitutionEchue({ statut: 'attendue', avant: T0 - 1 }, T0), true);
   assert.strictEqual(a.restitutionEchue({ statut: 'attendue', avant: T0 + JOUR }, T0), false);
   assert.strictEqual(a.restitutionEchue({ statut: 'rendue', avant: T0 - 1 }, T0), false);

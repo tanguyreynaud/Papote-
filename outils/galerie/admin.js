@@ -5,10 +5,13 @@
 
 const { famillePleine, membre, poserDonnees, SDK, ilYa, FID } = require('./famille');
 const clavier = require('./clavier');
+const { miseEnPage } = require('./commun');
 
 const TAILLES = {
   pc: { nom: 'ordinateur', width: 1280, height: 800, mobile: false },
   tel: { nom: 'telephone', width: 390, height: 844, mobile: true },
+  // Petit téléphone (360 px) : chaque écran y est vérifié (mise en page), sans capture (Tanguy, 3/11).
+  etroit: { nom: 'petit telephone', width: 360, height: 780, mobile: true, verifier: true },
 };
 const MAINTENANT = new Date('2026-10-26T10:30:00+01:00').getTime();
 const J = 864e5;
@@ -61,12 +64,20 @@ function gestionDonnees(o = {}) {
     { id: 'T-010', ref: 'T-010', numero: '', modele: 'Blackview Tab 60 Pro', etat: 'en-stock', creeLe: il(9) },
     { id: 'T-011', ref: 'T-011', numero: 'BV60P-0011', modele: 'Blackview Tab 60 Pro', etat: 'a-reparer', notes: 'Écran fissuré au retour', prixAchat: 12999, acheteeLe: il(90), depense: 'D-A0', creeLe: il(90) },
     { id: 'T-012', ref: 'T-012', numero: 'BV60P-0012', modele: 'Blackview Tab 60 Pro', etat: 'chez-client', commande: 'CMD-OF01', fid: 'f-mamies', prixAchat: 12999, acheteeLe: il(25), depense: 'D-A0', creeLe: il(25) },
+    // Installées par QR (functions/installation-qr.js) : hors critères avec une SIM à code PIN, et une tablette d'essai.
+    { id: 'T-013', ref: 'T-013', numero: 'TAB10X0042', serieAndroid: 'TAB10X0042', modele: 'Tab 10 X', android: '11', iccid: '89331500000000000013', etat: 'preparee', simPin: true,
+      horsCriteres: { detail: ['écran 8.0"', 'Android 11', 'carte SIM avec code PIN'], le: il(0.1) }, installation: { par: 'qr', le: il(0.1), criteres: [] },
+      notes: 'Créée à l’installation par QR : aucun achat en stock à rattacher (ajoutez la facture).', creeLe: il(0.1) },
+    { id: 'E-001', numero: 'R9TT0001', serieAndroid: 'R9TT0001', modele: 'Blackview Tab 60 Pro', android: '14', etat: 'en-stock', essai: true,
+      horsCriteres: null, installation: { par: 'qr', le: il(1), criteres: [] }, notes: 'Tablette d’essai installée par QR : jamais pour un client.', creeLe: il(1) },
   ];
   const sims = [
-    { id: 'S1', operateur: 'Lyca', numero: '07 45 12 34 56', iccid: '8933150000000001', statut: 'active', prix: 499, go: 1, dureeForfait: 30, activation: il(25), prochaineRecharge: il(-5), tablette: 'T-001', depense: 'D-S1' },
-    { id: 'S2', operateur: 'Lyca', numero: '07 45 98 76 54', iccid: '8933150000000002', statut: 'active', prix: 499, go: 1, dureeForfait: 30, activation: il(28), prochaineRecharge: il(-2), tablette: 'T-004', depense: 'D-S2' },
+    { id: 'S1', operateur: 'Lyca', numero: '07 45 12 34 56', iccid: '8933150000000001', statut: 'active', prix: 499, go: 1, periode: 'jours', dureeForfait: 30, activation: il(25), prochaineRecharge: il(-5), tablette: 'T-001', depense: 'D-S1' },
+    { id: 'S2', operateur: 'Lyca', numero: '07 45 98 76 54', iccid: '8933150000000002', statut: 'active', prix: 499, go: 1, periode: 'jours', dureeForfait: 30, activation: il(28), prochaineRecharge: il(-2), tablette: 'T-004', depense: 'D-S2' },
     { id: 'S3', operateur: 'NRJ Mobile', numero: '06 98 76 54 32', iccid: '8933010000000003', statut: 'active', prix: 299, prixApres: 799, finPromo: il(-12), go: 2, renouvellementAuto: true, activation: il(30), tablette: 'T-005' },
-    { id: 'S4', operateur: 'Lyca', numero: '07 51 23 45 67', iccid: '8933150000000004', statut: 'active', prix: 499, go: 1, dureeForfait: 30, activation: il(33), prochaineRecharge: il(1), tablette: 'T-006', depense: 'D-S4', cb: 'Visa …4242', cbExp: '2026-11' },
+    // finForfait 'bloque' : internet coupé au bout du forfait (Sosh 1 Go bloqué, 5/11) ; absent = débit réduit.
+    { id: 'S9', operateur: 'Sosh', numero: '06 31 41 59 26', iccid: '8933010000000009', statut: 'active', prix: 599, go: 1, renouvellementAuto: true, periode: 'mois', client: 'tanguy@exemple.fr', finForfait: 'bloque', activation: il(40), prochaineRecharge: il(-12) },
+    { id: 'S4', operateur: 'Lyca', numero: '07 51 23 45 67', iccid: '8933150000000004', statut: 'active', prix: 499, go: 1, periode: 'jours', dureeForfait: 30, activation: il(33), prochaineRecharge: il(1), tablette: 'T-006', depense: 'D-S4', cb: 'Visa …4242', cbExp: '2026-11' },
     { id: 'S5', operateur: 'Lyca', numero: '07 51 00 11 22', iccid: '8933150000000005', statut: 'suspendue', prix: 499, go: 1, tablette: 'T-007', depense: 'D-S4' },
     { id: 'S6', operateur: 'Cdiscount Mobile', iccid: '8933010000000006', statut: 'stock', prix: 199, go: 1, activerAvant: il(-20) },
     { id: 'S7', operateur: 'Lyca', numero: '07 00 00 00 07', iccid: '8933150000000007', statut: 'resiliee', prix: 499, go: 1, depense: 'D-S1' },
@@ -81,6 +92,13 @@ function gestionDonnees(o = {}) {
     { id: 'D-S4', date: il(3), categorie: 'sim', fournisseur: 'Lyca', libelle: 'Recharge du forfait Lyca 07 51 23 45 67', montant: 499, sim: 'S4', pieces: [] },
     { id: 'D-E1', date: il(10), categorie: 'envoi', fournisseur: 'Sendcloud', libelle: 'Étiquettes Mondial Relay', montant: 1490, pieces: [] },
     { id: 'D-L1', date: il(16), categorie: 'logiciel', fournisseur: 'OVH', libelle: 'Nom de domaine mapapote.fr', montant: 1199, recurrence: 'annuel', pieces: [] },
+    // Achat Sosh lu par e-mail (8/11) : un justificatif pris pour la facture, puis une facture d'un autre montant.
+    { id: 'D-S5', date: il(3), categorie: 'sim', fournisseur: 'Sosh', libelle: 'Activation d\'une carte SIM Sosh (forfait 1 Go à 2,99 €/mois)', montant: 1000, numero: 'X041532676',
+      source: 'e-mail de "votre boutique SOSH" <boutique@sosh.fr>', materiel: ['1 carte SIM en stock'],
+      pieces: [{ nom: 'confirmation-commande.txt', chemin: 'z1', type: 'text/plain', le: il(3) }, { nom: 'Justificatif d\'achat.pdf', chemin: 'z2', type: 'application/pdf', le: il(1) }] },
+    { id: 'D-S6', date: il(1), categorie: 'sim', fournisseur: 'Sosh', libelle: 'Activation d\'une carte SIM Sosh (forfait 1 Go à 2,99 €/mois)', montant: 1299, tva: 217, numero: 'FA-2026-11', aVerifier: true,
+      source: 'e-mail de "Sosh" <facture@sosh.fr>', remarque: 'Montant de la facture (12,99 €) différent de la commande (10,00 €) : vérifiez qu\'il s\'agit bien du même achat.',
+      pieces: [{ nom: 'confirmation-commande.txt', chemin: 'z3', type: 'text/plain', le: il(5) }, { nom: 'Facture.pdf', chemin: 'z4', type: 'application/pdf', le: il(1) }] },
     { id: 'D-M1', date: il(1), categorie: 'accessoires', fournisseur: 'Amazon', libelle: 'Supports de tablette', montant: 3596, aVerifier: true, pieces: [{ nom: 'facture-amazon.pdf', chemin: 'y', type: 'application/pdf', le: il(1) }] },
   ];
   const familles = [
@@ -232,8 +250,39 @@ function donnees(o = {}) {
 }
 
 const pause = (p, ms = 700) => p.waitForTimeout(ms);
+// Réponse de jetonInstallation (functions/installation-qr.js) : le contenu du QR sans le wifi.
+const QR_INSTALLATION = {
+  jeton: 'GaLeRiEjEtOnFaCtIcE0123456789ab', expire: il(-1), versionName: '2.99.120',
+  provisionnement: {
+    'android.app.extra.PROVISIONING_DEVICE_ADMIN_COMPONENT_NAME': 'com.papote.tablette/.AdminReceiver',
+    'android.app.extra.PROVISIONING_DEVICE_ADMIN_PACKAGE_DOWNLOAD_LOCATION': `https://raw.githubusercontent.com/tanguyreynaud/Papote-/${'c'.repeat(40)}/installation/Papote.apk`,
+    'android.app.extra.PROVISIONING_DEVICE_ADMIN_SIGNATURE_CHECKSUM': '_yWAPegUjhtPlkspLstFmFlfmTSzn5Ywzxk_lFzSBZk',
+    'android.app.extra.PROVISIONING_LOCALE': 'fr_FR',
+    'android.app.extra.PROVISIONING_TIME_ZONE': 'Europe/Paris',
+    'android.app.extra.PROVISIONING_LEAVE_ALL_SYSTEM_APPS_ENABLED': false,
+    'android.app.extra.PROVISIONING_ADMIN_EXTRAS_BUNDLE': { papote_jeton: 'GaLeRiEjEtOnFaCtIcE0123456789ab', papote_canal: 'stable' },
+  },
+};
 const toucher = (...sels) => async (p) => { for (const sel of sels) { await p.locator(sel).first().click(); await pause(p); } };
 const onglet = (t) => async (p) => { await p.locator('#kpi-commandes .onglet').filter({ hasText: t }).first().click(); await pause(p); };
+
+// Aide du guide « Que faire si… » (#aide) : la question tapée puis « Demander ». bloque : le serveur ne répond pas.
+// Écran sans la question à l'aide (admin d'avant) : rien à toucher, la scène montre le guide seul.
+const demanderAide = ({ bloque = false, question = 'La tablette de Papi Henri ne répond plus' } = {}) => async (p) => {
+  if (!await p.locator('#aide-ia-question').count()) return;
+  if (bloque) await p.evaluate(() => { window.__fonctionsBloquees = true; });
+  await p.fill('#aide-ia-question', question);
+  await p.click('#aide-ia-demander');
+  await pause(p, 900);
+};
+// Réponse type de iaAdmin (functions/ia-admin.js) : étapes courtes, liens vers des écrans de l'admin. Le dernier lien,
+// hors de la liste permise, doit rester du texte (la page revérifie après le serveur).
+const REPONSE_AIDE = { ok: true, reponse: [
+  '1. La tablette T-006 de Papi Henri n’a pas donné signe de vie depuis 7 h et sa carte SIM n’a plus de réseau. Ouvrez sa fiche : [Ouvrir la tablette](#tablette/T-006)',
+  '2. Le forfait se finit demain : rechargez chez l’opérateur, puis touchez « J’ai rechargé » sur la carte. [Ouvrir la carte SIM](#sim/S4)',
+  '3. Sur la page de la tablette, touchez « État complet maintenant », puis « Redémarrer » si elle reste muette.',
+  '4. Le paiement est aussi en retard : appelez la famille (voir [ce site](https://exemple.invalid/piege)). [Ouvrir les clients](#clients/liste)',
+].join('\n') };
 
 // Espace Validation : faux site papote-validation (index.json + captures) et quelques choix déjà faits.
 const VALIDATION_INDEX = {
@@ -337,8 +386,23 @@ const SCENES = [
   { groupe: 'Stock', titre: 'Tablette reçue sans facture', page: '#tablette/T-010', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Stock', titre: 'Tablette à réparer', page: '#tablette/T-011', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Stock', titre: 'Tablette introuvable', page: '#tablette/T-999', tailles: ['pc'], donnees: () => donnees() },
+  { groupe: 'Stock', titre: 'Installer une tablette par QR : le formulaire', page: '#stock/tablettes', tailles: ['pc', 'tel'], donnees: () => donnees(), faire: toucher('#btn-installer-qr') },
+  { groupe: 'Stock', titre: 'Installer une tablette par QR : le QR code', page: '#stock/tablettes', tailles: ['pc', 'tel'], plein: true,
+    donnees: () => donnees({ fonctions: { jetonInstallation: QR_INSTALLATION } }), faire: async (p) => {
+      await p.click('#btn-installer-qr');
+      await p.fill('#f-installer [name="wifi"]', 'Livebox-Atelier');
+      await p.fill('#f-installer [name="motDePasse"]', 'mot-de-passe-factice');
+      await p.click('#f-installer button[type="submit"]');
+      await p.waitForSelector('#installer-qr-image svg', { timeout: 5000 });
+      await pause(p);
+    } },
+  { groupe: 'Stock', titre: 'Installer une tablette par QR : fonction pas encore publiée', page: '#stock/tablettes', tailles: ['pc'],
+    donnees: () => donnees({ fonctions: { jetonInstallation: { erreur: 'not-found', code: 'functions/not-found' } } }), faire: toucher('#btn-installer-qr', '#f-installer button[type="submit"]') },
+  { groupe: 'Stock', titre: 'Tablette installée par QR, hors critères et SIM à code PIN', page: '#tablette/T-013', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees() },
+  { groupe: 'Stock', titre: 'Tablette d’essai installée par QR', page: '#tablette/E-001', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Stock', titre: 'Stock : cartes SIM', page: '#stock/sim', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees() },
   { groupe: 'Stock', titre: 'Carte SIM active, forfait Lyca (recharge dans 5 jours)', page: '#sim/S1', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees() },
+  { groupe: 'Stock', titre: 'Carte SIM Sosh : internet coupé à la fin du forfait', page: '#sim/S9', tailles: ['pc', 'tel'], plein: true, note: 'Nouveau (8/11) : forfait « 1 mois (même date chaque mois) », identifiant client = adresse qui a reçu le mail.', donnees: () => donnees() },
   { groupe: 'Stock', titre: 'Carte SIM : à recharger demain, carte bancaire qui expire', page: '#sim/S4', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Stock', titre: 'Carte SIM : promo qui finit dans 12 jours, renouvellement automatique', page: '#sim/S3', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Stock', titre: 'Carte SIM suspendue', page: '#sim/S5', tailles: ['pc'], plein: true, donnees: () => donnees() },
@@ -372,6 +436,12 @@ const SCENES = [
     await p.waitForTimeout(500); // la fenêtre « Envoi… » finit de se fermer
   } },
   { groupe: 'Comptabilité', titre: 'Une dépense reçue par e-mail, à vérifier', page: '#depense/D-M1', tailles: ['pc'], plein: true, donnees: () => donnees() },
+  { groupe: 'Comptabilité', titre: 'Achat lu par e-mail : « Ce n\'est pas la facture »', page: '#depense/D-S5', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees() },
+  { groupe: 'Comptabilité', titre: 'Achat : « Ce n\'est pas la facture » touché', page: '#depense/D-S5', tailles: ['pc'], donnees: () => donnees({ fonctions: { gestionDepense: { ok: true } } }), faire: async (p) => {
+    await p.click('#dd-pas-la-facture');
+    await p.waitForSelector('.bulle-annonce.visible', { timeout: 5000 });
+  } },
+  { groupe: 'Comptabilité', titre: 'Achat : facture d\'un autre montant que la commande, à vérifier', page: '#depense/D-S6', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Comptabilité', titre: 'URSSAF et TVA', page: '#compta/urssaf', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Comptabilité', titre: 'Rentabilité', page: '#compta/rentabilite', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Comptabilité', titre: 'Registres', page: '#compta/registres', tailles: ['pc'], plein: true, donnees: () => donnees() },
@@ -392,10 +462,28 @@ const SCENES = [
   { groupe: 'Validation', titre: 'Dépenses : calcul avec la TVA (au-delà du seuil)', page: '#validation/depenses', tailles: ['pc', 'tel'], donnees: () => donnees(), faire: toucher('.v-tva') },
   { groupe: 'Validation', titre: 'Gestes humains : comment chacun est vérifié', page: '#validation/gestes', tailles: ['pc'], plein: true, donnees: () => donnees() },
 
+  // Question à l'aide du guide « Que faire si… » (#aide, fonction iaAdmin) : vide, en attente, réponse avec liens,
+  // plus de questions aujourd'hui, serveur en panne. Les 6 cas du guide restent dessous dans tous les cas.
+  { groupe: 'Que faire si…', titre: 'Aide : question vide', page: '#aide', tailles: ['pc', 'tel'], donnees: () => donnees() },
+  { groupe: 'Que faire si…', titre: 'Aide : question posée, réponse en attente', page: '#aide', tailles: ['pc', 'tel'], donnees: () => donnees(),
+    faire: demanderAide({ bloque: true }) },
+  { groupe: 'Que faire si…', titre: 'Aide : réponse en étapes, avec les liens vers l’admin', page: '#aide', tailles: ['pc', 'tel'], plein: true,
+    donnees: () => donnees({ fonctions: { iaAdmin: REPONSE_AIDE } }), faire: demanderAide() },
+  { groupe: 'Que faire si…', titre: 'Aide : plus de questions aujourd’hui', page: '#aide', tailles: ['pc', 'tel'],
+    donnees: () => donnees({ fonctions: { iaAdmin: { ok: false, raison: 'quota', reponse: 'L’aide a assez répondu pour aujourd’hui. Les 6 cas du guide, juste en dessous, donnent les étapes et les bons écrans.' } } }),
+    faire: demanderAide() },
+  { groupe: 'Que faire si…', titre: 'Aide : serveur en panne', page: '#aide', tailles: ['pc', 'tel'],
+    donnees: () => donnees({ fonctions: { iaAdmin: { erreur: 'internal', code: 'functions/internal' } } }), faire: demanderAide() },
+
   { groupe: 'Outils', titre: 'Outils : automatique', page: '#outils/automatique', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Outils', titre: 'Outils : expédition', page: '#outils/expedition', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Outils', titre: 'Outils : calculs', page: '#outils/calculs', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Outils', titre: 'Outils : maintenance', page: '#outils/maintenance', tailles: ['pc'], plein: true, donnees: () => donnees() },
+  // Guide « Que faire si… » (#aide) : les 6 cas repliés, puis tous ouverts (chaque bouton y est touché).
+  { groupe: 'Outils', titre: 'Que faire si… : les 6 cas', page: '#aide', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees() },
+  { groupe: 'Outils', titre: 'Que faire si… : un cas ouvert (tablette perdue)', page: '#aide', tailles: ['tel'], plein: true, donnees: () => donnees(), faire: toucher('.aide-cas summary') },
+  { groupe: 'Outils', titre: 'Que faire si… : toutes les étapes', page: '#aide', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees(),
+    faire: async (p) => { await p.evaluate(() => document.querySelectorAll('.aide-cas').forEach((d) => { d.open = true; })); await pause(p, 300); } },
 ];
 
 // Ouvre l'écran d'une scène dans un nouveau navigateur (fausses données, faux Firebase, internet coupé).
@@ -433,7 +521,10 @@ async function ouvrir(browser, base, scene, taille) {
 async function capturer({ browser, base, dossierImages, progression }) {
   const travaux = [];
   let n = 0;
-  for (const scene of SCENES) for (const t of scene.tailles) travaux.push({ scene, taille: TAILLES[t], n: ++n });
+  for (const scene of SCENES) {
+    for (const t of scene.tailles) travaux.push({ scene, taille: TAILLES[t], n: ++n });
+    travaux.push({ scene, taille: TAILLES.etroit, n: n + 0.25 });
+  }
   const n0 = travaux.length;
   const resultats = [];
   let faits = 0;
@@ -441,6 +532,14 @@ async function capturer({ browser, base, dossierImages, progression }) {
     for (let job = travaux.shift(); job; job = travaux.shift()) {
       const { scene, taille, n } = job;
       const { ctx, page, erreurs } = await ouvrir(browser, base, scene, taille);
+      if (taille.mobile) erreurs.push(...await miseEnPage(page));
+      if (taille.verifier) {
+        // Vérification seule : un résultat sans capture, affiché seulement s'il y a un souci.
+        if (erreurs.length) resultats.push({ n, groupe: scene.groupe, titre: scene.titre, note: scene.note, taille: taille.nom, fichier: null, erreurs, scene: SCENES.indexOf(scene) });
+        await ctx.close();
+        progression(`admin ${++faits}/${n0}`);
+        continue;
+      }
       const fichier = `admin-${String(n).padStart(3, '0')}.jpg`;
       if (scene.plein) {
         const h = await page.evaluate(() => document.documentElement.scrollHeight).catch(() => taille.height);

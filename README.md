@@ -11,7 +11,7 @@ et une app pour que la famille lui envoie photos et messages depuis iPhone ou An
 - chaque nouvel envoi s'affiche en plein écran : photo, message, message vocal, vidéo ;
 - rappels en plein écran 15 minutes avant puis à l'heure ; anniversaires de la famille ;
 - appels vidéo de la famille vers la tablette, avec un gros bouton « Décrocher » ;
-- couleurs sombres le soir, écran en veille de 23 h à 7 h ;
+- couleurs sombres le soir, écran en veille de 21 h à 6 h 30 (réglable par la famille) ;
 - mises à jour installées toutes seules (voir « Publier une mise à jour »).
 
 **Sur le téléphone de la famille** : https://app.mapapote.fr
@@ -39,8 +39,11 @@ Outils `node` : depuis le dossier du projet, `node <chemin>`.
 | Vérifier l'app famille | Contrôle l'app famille avant sa mise en ligne | `node outils/web/verifier.mjs` (branche de l'app famille) |
 | Publier le site vitrine | Met en ligne mapapote.fr : d'abord `test`, puis `en-ligne` | `node outils/vitrine/publier.mjs test` |
 | Abonnements | Liste les familles et leur abonnement ; famille offerte | `node outils/admin/abonnements.js` |
-| Sauvegarder la base | Copie toute la base (et la liste des comptes) dans `outils/admin/sauvegardes/papote-<date>.json`, à garder hors du PC ; chaque semaine | `.\outils\admin\sauvegarder.bat` |
-| Restaurer la base | Réécrit une sauvegarde dans la base (`--oui` pour faire, `--effacer` pour remettre exactement, `--comptes` pour les comptes) | `.\outils\admin\restaurer.bat sauvegardes\papote-….json` |
+| Sauvegarder | Copie la base et la liste des comptes dans `outils/admin/sauvegardes\` (les 4 dernières gardées) ; `--photos` pour copier aussi les fichiers | `.\outils\admin\sauvegarder.bat` |
+| Sauvegarde automatique | Installe la sauvegarde chaque dimanche 3 h (tâche Windows, journal.txt dans le dossier, Google Drive conseillé) | `.\outils\admin\installer-sauvegarde-hebdo.bat "G:\Mon Drive\PapoteSauvegardes"` |
+| Vérifier une sauvegarde | Restaure à blanc dans l'émulateur (Java requis) et contrôle chaque document ; une fois par mois | `.\outils\admin\verifier-sauvegarde.bat sauvegardes\papote-<date>.json` |
+| Photo effacée | Les fichiers Storage sont gardés 7 jours par le bucket (suppression douce) : commandes gcloud | `outils/admin/RESTAURER-UN-FICHIER.md` |
+| Restaurer la base | Réécrit une sauvegarde dans la base (`--oui` pour faire, `--effacer` pour remettre exactement, `--comptes` pour les comptes, `--photos` pour les photos et vidéos) | `.\outils\admin\restaurer.bat sauvegardes\papote-….json` |
 | Badge administrateur | Donne ou retire l'accès admin à un compte Google | `node outils/admin/badge-admin.js` |
 | Statistiques | Visites et commandes des 30 derniers jours | `node outils/admin/statistiques.js [jours]` |
 | Nettoyer les comptes anonymes | Supprime les comptes anonymes qui ne sont dans aucune famille | `node outils/admin/nettoyer-comptes-anonymes.js` |
@@ -122,7 +125,7 @@ Option : `-Numeros "0612345678,0698765432"`
 (avec une carte SIM : SMS d'alerte quand la tablette n'a plus internet depuis 30 minutes, puis quand il revient).
 
 Au démarrage, l'appli règle elle-même le volume (fort), bloque les boutons de volume, rallume l'écran en
-journée si on appuie sur le bouton marche/arrêt, et met l'écran en veille de 23 h à 7 h.
+journée si on appuie sur le bouton marche/arrêt, et met l'écran en veille de 21 h à 6 h 30 (réglable par la famille).
 
 Pour vérifier une tablette branchée (avant un envoi, ou en cas de souci) : `installation/diagnostic.bat`.
 Il contrôle la version, le mode kiosque, les réglages, le réseau, la batterie et affiche le journal récent.

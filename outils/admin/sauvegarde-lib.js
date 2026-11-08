@@ -5,7 +5,13 @@
 // Les valeurs Firestore qui n'existent pas en JSON sont encodées : { "@type": "timestamp", "ms", "ns" },
 // { "@type": "geo", "lat", "lon" }, { "@type": "ref", "chemin" }, { "@type": "bytes", "base64" }. Les cartes qui
 // auraient elles-mêmes une clé « @type » sont protégées ({ "@type": "map", "valeurs" }).
-const { Timestamp, GeoPoint, DocumentReference } = require('firebase-admin/firestore');
+// firebase-admin : celui d'outils/admin (npm install sur le PC), sinon celui de functions/ (tests et exercices du dépôt).
+function charger(nom) {
+  try { return require(nom); } catch (e) {
+    return require(require.resolve(nom, { paths: [require('path').join(__dirname, '..', '..', 'functions')] }));
+  }
+}
+const { Timestamp, GeoPoint, DocumentReference } = charger('firebase-admin/firestore');
 
 const VERSION = 1;
 
@@ -95,8 +101,34 @@ async function sauvegarder({ db, auth = null, projet = '', base = '', progressio
   return { version: VERSION, le: new Date().toISOString(), projet, base, documents, comptes };
 }
 
-// Réécrit chaque document tel qu'il était (set complet, 400 par lot). Les documents présents dans la base et absents
-// de la sauvegarde sont laissés tels quels, sauf avec effacer: true (remise exacte à l'état sauvegardé).
+// Lots d'écriture : 400 documents au plus, et 3,5 Mio au plus en tout. Firestore refuse une requête de plus de
+// 10 Mio (et l'émulateur reste bloqué au-delà de 4 Mio environ), or un document peut peser près de 1 Mio (photo
+// en taille réelle posts/{id}/media/image, morceaux de vidéo de 700 000 caractères) : 400 documents de ce genre ne
+// passent pas en un seul commit. La taille est estimée d'après le JSON du document (plus grande que la taille
+// réelle : le base64 des octets compte 4/3). Un document seul plus gros que la limite part seul dans son lot.
+const MAX_DOCS_LOT = 400;
+const MAX_OCTETS_LOT = 3.5 * 1024 * 1024;
+const tailleEstimee = (d) => Buffer.byteLength(d.chemin) + Buffer.byteLength(JSON.stringify(d.donnees || {})) + 64;
+function lotsDEcriture(documents, { maxDocs = MAX_DOCS_LOT, maxOctets = MAX_OCTETS_LOT } = {}) {
+  const lots = [];
+  let lot = [];
+  let octets = 0;
+  for (const d of documents) {
+    const taille = tailleEstimee(d);
+    if (lot.length && (lot.length >= maxDocs || octets + taille > maxOctets)) {
+      lots.push(lot);
+      lot = [];
+      octets = 0;
+    }
+    lot.push(d);
+    octets += taille;
+  }
+  if (lot.length) lots.push(lot);
+  return lots;
+}
+
+// Réécrit chaque document tel qu'il était (set complet, par lots : lotsDEcriture). Les documents présents dans la
+// base et absents de la sauvegarde sont laissés tels quels, sauf avec effacer: true (remise exacte à l'état sauvegardé).
 async function restaurer({ db, auth = null, sauvegarde, effacer = false, progression = () => {} }) {
   if (sauvegarde.version !== VERSION) throw new Error(`Version de sauvegarde inconnue : ${sauvegarde.version}`);
   if (effacer) {
@@ -109,13 +141,24 @@ async function restaurer({ db, auth = null, sauvegarde, effacer = false, progres
       await lot.commit();
     }
   }
+  // Pendant l'écriture, les déclencheurs du serveur qui préviennent des humains ou réveillent des tablettes se
+  // taisent (functions/base.js restaurationEnCours) : drapeau interne/restauration, 2 h au plus, retiré à la fin.
+  const drapeau = db.doc('interne/restauration');
+  await drapeau.set({ enCours: true, jusque: Timestamp.fromMillis(Date.now() + 2 * 3600 * 1000), le: Timestamp.now() });
   let ecrits = 0;
-  for (let i = 0; i < sauvegarde.documents.length; i += 400) {
-    const lot = db.batch();
-    for (const d of sauvegarde.documents.slice(i, i + 400)) lot.set(db.doc(d.chemin), decoder(d.donnees, db));
-    await lot.commit();
-    ecrits += Math.min(400, sauvegarde.documents.length - i);
-    progression(ecrits);
+  try {
+    const documents = sauvegarde.documents.filter((d) => d.chemin !== 'interne/restauration');
+    for (const paquet of lotsDEcriture(documents)) {
+      const lot = db.batch();
+      for (const d of paquet) lot.set(db.doc(d.chemin), decoder(d.donnees, db));
+      await lot.commit();
+      ecrits += paquet.length;
+      progression(ecrits);
+    }
+    // Les déclencheurs tournent encore quelques secondes après la dernière écriture.
+    await new Promise((r) => setTimeout(r, 5000));
+  } finally {
+    await drapeau.delete();
   }
   let comptes = 0;
   if (auth && sauvegarde.comptes && sauvegarde.comptes.length) {
@@ -132,4 +175,85 @@ async function restaurer({ db, auth = null, sauvegarde, effacer = false, progres
   return { documents: ecrits, comptes };
 }
 
-module.exports = { encoder, decoder, toutLire, lireComptes, sauvegarder, restaurer, VERSION };
+// ---------- Photos et vidéos (Storage) ----------
+// Les fichiers du bucket sont copiés tels quels dans un dossier (fichiers/<chemin dans le bucket>), avec un index
+// (fichiers/index.json : chemin → { md5, taille, type }). Copie incrémentale : seul ce qui est nouveau ou a changé
+// est téléchargé ; rien n'est jamais effacé du dossier (une photo supprimée depuis reste dans la copie).
+const fsp = require('fs').promises;
+const pathLib = require('path');
+const crypto = require('crypto');
+
+const INDEX = 'index.json';
+const cheminLocal = (dossier, chemin) => pathLib.join(dossier, ...chemin.split('/'));
+
+async function lireIndex(dossier) {
+  try { return JSON.parse(await fsp.readFile(pathLib.join(dossier, INDEX), 'utf8')); } catch { return {}; }
+}
+
+async function sauvegarderFichiers({ bucket, dossier, progression = () => {}, parallele = 8 }) {
+  await fsp.mkdir(dossier, { recursive: true });
+  const index = await lireIndex(dossier);
+  const [fichiers] = await bucket.getFiles({ autoPaginate: true });
+  const aCopier = fichiers.filter((f) => !f.name.endsWith('/') && (!index[f.name] || index[f.name].md5 !== f.metadata.md5Hash));
+  let copies = 0;
+  let octets = 0;
+  for (let i = 0; i < aCopier.length; i += parallele) {
+    await Promise.all(aCopier.slice(i, i + parallele).map(async (f) => {
+      const destination = cheminLocal(dossier, f.name);
+      await fsp.mkdir(pathLib.dirname(destination), { recursive: true });
+      await f.download({ destination });
+      index[f.name] = { md5: f.metadata.md5Hash, taille: Number(f.metadata.size), type: f.metadata.contentType || null };
+      copies++;
+      octets += Number(f.metadata.size) || 0;
+      progression(copies, aCopier.length);
+    }));
+    await fsp.writeFile(pathLib.join(dossier, INDEX), JSON.stringify(index));
+  }
+  await fsp.writeFile(pathLib.join(dossier, INDEX), JSON.stringify(index));
+  return { total: fichiers.length, copies, octets, index };
+}
+
+// Vérifie la copie locale : chaque fichier de l'index existe et a bien le même contenu (md5). Rend les manquants
+// et les abîmés.
+async function verifierFichiers(dossier) {
+  const index = await lireIndex(dossier);
+  const manquants = [];
+  const abimes = [];
+  for (const [chemin, info] of Object.entries(index)) {
+    let contenu;
+    try { contenu = await fsp.readFile(cheminLocal(dossier, chemin)); } catch { manquants.push(chemin); continue; }
+    if (crypto.createHash('md5').update(contenu).digest('base64') !== info.md5) abimes.push(chemin);
+  }
+  return { total: Object.keys(index).length, manquants, abimes };
+}
+
+// Remet dans le bucket les fichiers de la copie qui n'y sont plus (ou qui ont changé). Ce qui est dans le bucket et
+// pas dans la copie est laissé.
+async function restaurerFichiers({ bucket, dossier, progression = () => {}, parallele = 8 }) {
+  const index = await lireIndex(dossier);
+  const [presents] = await bucket.getFiles({ autoPaginate: true });
+  const dejaLa = new Map(presents.map((f) => [f.name, f.metadata.md5Hash]));
+  const aRemettre = Object.entries(index).filter(([chemin, info]) => dejaLa.get(chemin) !== info.md5);
+  let remis = 0;
+  for (let i = 0; i < aRemettre.length; i += parallele) {
+    await Promise.all(aRemettre.slice(i, i + parallele).map(async ([chemin, info]) => {
+      await bucket.upload(cheminLocal(dossier, chemin), { destination: chemin, contentType: info.type || undefined, resumable: false });
+      remis++;
+      progression(remis, aRemettre.length);
+    }));
+  }
+  return { remis, total: aRemettre.length };
+}
+
+// Ne garde que les n sauvegardes de la base les plus récentes du dossier (papote-<date>.json, le nom porte la date).
+// Rend les noms effacés. n = 0 : rien n'est effacé.
+function garderDernieres(dossier, n = 4) {
+  if (!n || n < 1) return [];
+  const fs = require('fs');
+  const fichiers = fs.readdirSync(dossier).filter((f) => /^papote-\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}\.json$/.test(f)).sort();
+  const aEffacer = fichiers.slice(0, Math.max(0, fichiers.length - n));
+  for (const f of aEffacer) fs.unlinkSync(pathLib.join(dossier, f));
+  return aEffacer;
+}
+
+module.exports = { encoder, decoder, lotsDEcriture, MAX_OCTETS_LOT, toutLire, lireComptes, sauvegarder, restaurer, sauvegarderFichiers, verifierFichiers, restaurerFichiers, garderDernieres, VERSION };

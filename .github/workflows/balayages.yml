@@ -1,20 +1,23 @@
 # Balayages de la galerie (outils/galerie) sur le site vitrine et les e-mails, à chaque changement de vitrine/
 # ou du générateur d'e-mails : double toucher, appui long, gestes humains (paysage, zoom, texte agrandi, sombre),
-# accessibilité (WCAG, texte et cibles trop petits), e-mails dans les vraies boîtes, et la galerie elle-même
+# accessibilité (WCAG, texte et cibles trop petits), e-mails dans les vraies boîtes (Gmail sans styles, Outlook approché,
+# mode sombre, images bloquées : captures dans courriels.html), et la galerie elle-même
 # (erreurs de page, clavier ouvert, largeur). Chaque balayage échoue (code 1) dès qu'un souci est trouvé :
 # rien ne se fusionne en rouge. Gratuit (dépôt public), rien ne part en ligne. Rapports dans l'artefact « balayages ».
 name: Balayages site et e-mails
 
+# Une seule fois par changement : au push (les résultats s'affichent aussi sur la PR). Avant, push + pull_request
+# faisaient tourner tout deux fois et doublaient les e-mails d'échec (Tanguy, 3/11).
 on:
   push:
-    paths: ['vitrine/**', 'functions/mail.js', 'functions/mail/**', 'outils/galerie/**', '.github/workflows/balayages.yml']
-  pull_request:
     paths: ['vitrine/**', 'functions/mail.js', 'functions/mail/**', 'outils/galerie/**', '.github/workflows/balayages.yml']
   workflow_dispatch:
 
 jobs:
   balayage:
-    runs-on: ubuntu-latest
+    # Ubuntu 24.04 fixé : ubuntu-latest est passé en 26.04 le 06/11 et Playwright 1.56.1 (outils/galerie)
+    # n'y installe pas Chromium (« Playwright does not support chromium on ubuntu26.04-x64 »).
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -26,6 +29,8 @@ jobs:
           - '--accessibilite vitrine'
           - '--courriels'
           - 'vitrine emails'
+          # Site dans WebKit (moteur de Safari) en iPhone SE et iPhone 15 : simulé, pas un vrai iPhone.
+          - '--iphone vitrine'
     defaults:
       run:
         working-directory: outils/galerie
@@ -37,6 +42,8 @@ jobs:
       # Pas de package-lock.json dans outils/ (.gitignore) : npm install, pas npm ci.
       - run: npm install --no-audit --no-fund
       - run: npx playwright install --with-deps chromium
+      - if: contains(matrix.mode, '--iphone')
+        run: npx playwright install --with-deps webkit
       - name: Balayage ${{ matrix.mode }}
         run: node galerie.js ${{ matrix.mode }} --vitrine=ici --emails=ici
       - name: Rapports
@@ -47,4 +54,5 @@ jobs:
           path: |
             outils/galerie/sortie/*.txt
             outils/galerie/sortie/galerie.html
+            outils/galerie/sortie/courriels.html
           if-no-files-found: ignore

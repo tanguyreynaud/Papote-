@@ -130,8 +130,13 @@ mail.envoyer = async ({ a, contenu }) => {
 const notifications = [];
 const push = require('../push');
 // reglages.telephones = false : aucun téléphone n'a de notifications (appli pas installée, refusées).
-const reglages = { telephones: true };
+// reglages.pushEnPanne = n : les n prochains envois échouent (service de notifications injoignable).
+const reglages = { telephones: true, pushEnPanne: 0 };
 push.envoyer = async (db, fid, uids, data) => {
+  if (reglages.pushEnPanne > 0) {
+    reglages.pushEnPanne -= 1;
+    throw new Error('Simulation : service de notifications injoignable');
+  }
   notifications.push({ fid, uids: [...uids], ...data });
   return reglages.telephones ? uids.length : 0;
 };
@@ -140,12 +145,16 @@ require('../voix').voixDocument = async () => null;
 
 // Faux Sendcloud : offres Mondial Relay (dont le retour « QR » sans impression), annonce des retours,
 // étiquettes, suivi et annulation. sendcloud.colis : les colis créés, par id.
-const sendcloud = { colis: new Map(), prochain: 1, sansQr: false };
+// sendcloud.panne = true : toutes les requêtes reçoivent une erreur 503 (Sendcloud en panne).
+const sendcloud = { colis: new Map(), prochain: 1, sansQr: false, panne: false };
 const KG = { min: { value: '0', unit: 'kg' }, max: { value: '30', unit: 'kg' } };
 function fauxSendcloud(url, options = {}) {
   const chemin = new URL(url).pathname.replace(/^\/api\/v[23]/, '');
   const json = (corps, statut = 200) => new Response(JSON.stringify(corps), { status: statut, headers: { 'content-type': 'application/json' } });
   const corps = options.body ? JSON.parse(options.body) : null;
+  if (sendcloud.panne) {
+    return json({ error: { message: 'Service Unavailable' } }, 503);
+  }
   if (chemin === '/shipping-options') {
     const f = (corps && corps.functionalities) || {};
     const offres = [{ code: 'mondial_relay:retour', carrier: { code: 'mondial_relay' }, functionalities: { returns: true }, weight: KG }];
@@ -180,6 +189,11 @@ global.fetch = async (url, options) => {
   if (String(url).startsWith('https://panel.sendcloud.sc/')) return fauxSendcloud(String(url), options);
   if (String(url).startsWith('https://geo.api.gouv.fr/')) {
     return new Response(JSON.stringify([{ nom: 'Saint-Martin-de-Valamas', centre: { coordinates: [4.37, 44.94] } }]));
+  }
+  // Fichier de version des tablettes (installation par QR, installation-qr.js) ; le secours maj.mapapote.fr ne répond pas.
+  if (String(url) === 'https://papote-maj.web.app/version.json') {
+    return new Response(JSON.stringify({ versionCode: 120, versionName: '2.99.120', sha256: 'f'.repeat(64),
+      url: `https://raw.githubusercontent.com/tanguyreynaud/Papote-/${'c'.repeat(40)}/installation/Papote.apk` }));
   }
   if (/^https?:\/\/(127\.0\.0\.1|localhost)/.test(String(url))) return vraiFetch(url, options);
   throw new Error(`Simulation : pas d'internet (${url})`);
@@ -219,7 +233,7 @@ const DECLENCHEURS = [
   { chemin: 'families/{fid}/reminders/{rid}', ecriture: ['voixRappel'] },
   { chemin: 'families/{fid}/calls/{cid}', creation: ['appelsSonnerie'], modification: ['appelsManques'] },
   { chemin: 'commandes/{id}', modification: ['commandeModifiee'] },
-  { chemin: 'pairings/{code}', modification: ['gestionJumelage'] },
+  { chemin: 'pairings/{code}', creation: ['jumelageAutomatique'], modification: ['gestionJumelage'] },
 ];
 
 function correspond(modele, chemin) {
@@ -369,8 +383,11 @@ function appeler(nom, data, qui) {
   return enFonction(nom, () => fonctions[nom].run({ data, auth, rawRequest: { headers: {} } }));
 }
 
-// Tâche planifiée (onSchedule) lancée tout de suite.
-const tache = (nom) => enFonction(nom, () => fonctions[nom].run({ scheduleTime: new Date(Date.now()).toISOString() }));
+// Tâche planifiée lancée tout de suite : une fonction onSchedule (alertesTablettes, tachesHoraires) ou une des tâches
+// regroupées dans tachesHoraires (taches.js), lancée seule et comptée sous son propre nom.
+const tache = (nom) => enFonction(nom, () => (fonctions[nom]
+  ? fonctions[nom].run({ scheduleTime: new Date(Date.now()).toISOString() })
+  : fonctions.tachesHoraires.taches[nom]()));
 
 // ---------- Base ----------
 // Vidage complet par l'API de l'émulateur (plus sûr que recursiveDelete pendant que la simulation écoute).
@@ -410,8 +427,10 @@ async function remettreAZero() {
   fichiersEffaces.length = 0;
   sendcloud.colis.clear();
   sendcloud.sansQr = false;
+  sendcloud.panne = false;
   decalage = 0;
   reglages.telephones = true;
+  reglages.pushEnPanne = 0;
 }
 
 module.exports = {

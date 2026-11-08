@@ -26,7 +26,6 @@
 
 const { onCall, onRequest, HttpsError } = require('firebase-functions/v2/https');
 const { onDocumentUpdated } = require('firebase-functions/v2/firestore');
-const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { logger } = require('firebase-functions/v2');
 const { defineSecret, defineString } = require('firebase-functions/params');
 const admin = require('firebase-admin');
@@ -307,25 +306,45 @@ function alerteRecharge(l, maintenant) {
 
 // Fin du forfait après une recharge payée le jour « date » (ms) : jamais avant la fin déjà notée
 // (une facture reçue en retard ne recule pas la date).
+// Forfait mensuel (periode 'mois', le cas de presque tous les opérateurs, Tanguy 8/11) : un mois du calendrier,
+// le même jour (le dernier du mois s'il n'existe pas : 31 janvier → 28 ou 29 février). Sinon (periode 'jours',
+// ou ancienne ligne sans periode) un pass de dureeForfait jours, 30 par défaut (Lyca).
 const DUREE_FORFAIT = 30;
+function unMoisApres(t) {
+  const d = new Date(t + decalageParis(t));
+  const jour = d.getUTCDate();
+  const suivant = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1, d.getUTCHours(), d.getUTCMinutes()));
+  const dernier = new Date(Date.UTC(suivant.getUTCFullYear(), suivant.getUTCMonth() + 1, 0)).getUTCDate();
+  suivant.setUTCDate(Math.min(jour, dernier));
+  const local = suivant.getTime();
+  return local - decalageParis(local);
+}
 function finApresRecharge(l, date) {
-  const fin = date + (l.dureeForfait || DUREE_FORFAIT) * 24 * 3600 * 1000;
+  const fin = l.periode === 'mois' ? unMoisApres(date) : date + (l.dureeForfait || DUREE_FORFAIT) * 24 * 3600 * 1000;
   return Math.max(fin, l.prochaineRecharge || 0);
 }
 
-// Garde-fou du forfait sur la tablette (Forfait.java) : families/{fid}.forfaitSim = { mo, debut | jour }.
+// Garde-fou du forfait sur la tablette (Forfait.java) : families/{fid}.forfaitSim = { mo, debut | jour, finForfait }.
 // mo : Go du forfait noté sur la ligne (1 000 Mo sans réglage) ; debut : jour (à Paris) où le pass en cours a
 // commencé, d'après la fin du forfait notée (cycles de 30 jours ou de sa durée) ; sinon jour du mois d'activation.
+// finForfait : 'reduit' ou 'bloque' (champ de la ligne, 'reduit' sans réglage) : l'alerte de fin de forfait
+// (forfait-alerte.js) et l'app famille adaptent leur message ; la tablette l'ignore.
 function forfaitFamille(l) {
   const mo = Number.isFinite(l.go) ? Math.round(l.go * 1000) : 1000;
+  const finForfait = l.finForfait === 'bloque' ? 'bloque' : 'reduit';
+  // Forfait mensuel : la tablette repart le même jour chaque mois (pas de cycles de 30 jours qui glissent).
+  const repere = l.prochaineRecharge || l.derniereRecharge || l.activation;
+  if (l.periode === 'mois' && repere) {
+    return { mo, jour: Math.min(Math.max(new Date(repere + decalageParis(repere)).getUTCDate(), 1), 28), finForfait };
+  }
   const duree = (l.dureeForfait || DUREE_FORFAIT) * 24 * 3600 * 1000;
   const depart = l.prochaineRecharge ? l.prochaineRecharge - duree : l.derniereRecharge || null;
   if (depart) {
     const d = new Date(depart + decalageParis(depart));
-    return { mo, debut: `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}` };
+    return { mo, debut: `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`, finForfait };
   }
   const jour = l.activation ? new Date(l.activation + decalageParis(l.activation)).getUTCDate() : 1;
-  return { mo, jour: Math.min(Math.max(jour, 1), 28) };
+  return { mo, jour: Math.min(Math.max(jour, 1), 28), finForfait };
 }
 
 // Ligne SIM d'une facture de forfait : par le numéro de ligne ou l'ICCID imprimé, sinon la seule ligne active
@@ -378,6 +397,8 @@ function releveBatterie(membre) {
   return {
     niveau: val(b.level), enCharge: val(b.charging), sante: b.health || null, temperature: val(b.temperature),
     cycles: val(b.cycles), le: b.at || null, vueLe: (membre && membre.lastSeen) || null, enLigneLe: (membre && membre.lastOnline) || null,
+    // Fuseau horaire de la tablette (Sync.java) : la veille 21 h-6 h 30 et les rappels en dépendent.
+    fuseau: (membre && membre.fuseau) || null,
   };
 }
 
@@ -421,13 +442,72 @@ function stockAJour(tablette, commande) {
 }
 
 // Pièces jointes d'un e-mail à lire comme factures : PDF et photos, sans les petits logos de signature.
+// Chaque PDF envoyé à l'IA coûte ~3 000 jetons par page : une confirmation Sosh avec 5 PDF joints
+// (conditions générales, tarifs…) a coûté 330 000 jetons le 5/11. Décision de Tanguy (5/11) : un PDF
+// de plus de 2 pages, trop lourd ou dont le titre dit que ce n'est pas une facture n'est pas lu.
 const MAX_PIECES_MAIL = 10;
-function piecesFacture(pieces) {
+const MAX_PAGES_PDF = 2;
+const MAX_KO_PDF = 1024;
+const TITRES_PAS_FACTURE = /conditions?|cgv|cgu|cga|tarif|retract|offres?|notice|guide|brochure|catalogue|fiche.?d.?information|mentions.?legales|confidentialite|reglement|manuel|contrat|mandat/;
+// Titre d'une simple preuve de commande (« Justificatif d'achat.pdf » de Sosh, 7/11) : jamais la facture,
+// sauf si le titre dit aussi « facture ».
+const TITRES_CONFIRMATION = /justificatif|recapitulatif|confirmation|commande|bon.?de|recu.?d.?achat/;
+const TITRES_FACTURE = /factur|invoice/;
+function confirmationSelonTitre(r, nom) {
+  const t = titreSimple(nom);
+  return r && r.facture && !r.confirmation && TITRES_CONFIRMATION.test(t) && !TITRES_FACTURE.test(t)
+    ? { ...r, confirmation: true } : r;
+}
+
+// Nombre de pages d'un PDF, sans bibliothèque : objets « /Type /Page » en clair, puis dans les flux
+// compressés (PDF récents : objets rangés dans des flux /ObjStm). null si on ne sait pas les compter.
+function pagesPdf(contenu) {
+  if (!Buffer.isBuffer(contenu)) return null;
+  const PAGE = /\/Type\s*\/Page(?![A-Za-z])/g;
+  const brut = contenu.toString('latin1');
+  let n = (brut.match(PAGE) || []).length;
+  if (n) return n;
+  const zlib = require('node:zlib');
+  const flux = /\/ObjStm[\s\S]{0,400}?stream\r?\n/g;
+  let m;
+  while ((m = flux.exec(brut))) {
+    const debut = m.index + m[0].length;
+    const fin = brut.indexOf('endstream', debut);
+    if (fin < 0) break;
+    try {
+      n += (zlib.inflateSync(contenu.subarray(debut, fin), { finishFlush: zlib.constants.Z_SYNC_FLUSH })
+        .toString('latin1').match(PAGE) || []).length;
+    } catch { /* flux illisible : ignoré */ }
+  }
+  return n || null;
+}
+
+// Nom de fichier sans accents ni majuscules, pour le comparer aux titres connus.
+const titreSimple = (nom) => String(nom || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+// ignorees (facultatif) : reçoit la raison de chaque PDF écarté, affichée dans le relevé de l'admin.
+function piecesFacture(pieces, ignorees = []) {
   return (pieces || []).filter((p) => {
     const type = String(p.contentType || '').toLowerCase();
     const taille = p.size || (p.content && p.content.length) || 0;
     if (taille > 6 * 1024 * 1024 || !taille) return false;
-    if (type === 'application/pdf') return true;
+    if (type === 'application/pdf') {
+      const nom = p.filename || 'PDF';
+      if (TITRES_PAS_FACTURE.test(titreSimple(p.filename))) {
+        ignorees.push(`${nom} : pas une facture d'après son titre`);
+        return false;
+      }
+      if (taille > MAX_KO_PDF * 1024) {
+        ignorees.push(`${nom} : trop lourd pour une facture (${Math.round(taille / 1024)} Ko)`);
+        return false;
+      }
+      const pages = pagesPdf(p.content);
+      if (pages > MAX_PAGES_PDF) {
+        ignorees.push(`${nom} : ${pages} pages, trop long pour une facture`);
+        return false;
+      }
+      return true;
+    }
     return /^image\/(png|jpeg|webp|gif)$/.test(type) && taille > 40 * 1024 && p.contentDisposition !== 'inline';
   }).slice(0, MAX_PIECES_MAIL);
 }
@@ -561,6 +641,13 @@ function materielLu(o, enCentimes = false) {
       numeros: liste(c.numeros, quantite),
       prixCarte: prix(enCentimes ? c.prixCarte : c.prixCarteTTC),
       forfait: prix(enCentimes ? c.forfait : c.forfaitMensuelTTC),
+      go: Number.isFinite(c.goParMois) && c.goParMois > 0 && c.goParMois <= 1000 ? c.goParMois : null,
+      renouvellementAuto: typeof c.renouvellementAuto === 'boolean' ? c.renouvellementAuto : null,
+      // Mensuel par défaut (Tanguy, 8/11 : « 95 % des opérateurs ») ; en jours seulement si le document le dit.
+      periode: c.periodeForfait === 'jours' ? 'jours' : 'mois',
+      dureeForfait: c.periodeForfait === 'jours' && Number.isInteger(c.dureeForfaitJours) && c.dureeForfaitJours >= 1 && c.dureeForfaitJours <= 366 ? c.dureeForfaitJours : null,
+      finForfait: ['reduit', 'bloque'].includes(c.finForfait) ? c.finForfait : null,
+      identifiantClient: texte(c.identifiantClient, 120),
     } : null,
     accessoires: (Array.isArray(o.accessoires) ? o.accessoires : []).map((a) => ({
       nom: texte(a && a.nom, 80),
@@ -613,7 +700,8 @@ const SCHEMA_FACTURE = {
       anyOf: [{ type: 'null' }, {
         type: 'object',
         additionalProperties: false,
-        required: ['quantite', 'operateur', 'iccids', 'numeros', 'prixCarteTTC', 'forfaitMensuelTTC'],
+        required: ['quantite', 'operateur', 'iccids', 'numeros', 'prixCarteTTC', 'forfaitMensuelTTC', 'goParMois',
+          'renouvellementAuto', 'periodeForfait', 'dureeForfaitJours', 'finForfait', 'identifiantClient'],
         properties: {
           quantite: { type: 'integer' },
           operateur: nul('string'),
@@ -621,6 +709,17 @@ const SCHEMA_FACTURE = {
           numeros: { type: 'array', items: { type: 'string' }, description: 'Numéros de ligne attribués, dans le même ordre.' },
           prixCarteTTC: { ...nul('number'), description: 'Prix d\'une carte (kit SIM), en euros.' },
           forfaitMensuelTTC: { ...nul('number'), description: 'Prix mensuel du forfait de chaque ligne, en euros.' },
+          goParMois: { ...nul('number'), description: 'Données internet du forfait, en Go par période (1 pour « 1Go »).' },
+          renouvellementAuto: { ...nul('boolean'), description: 'Vrai pour un forfait reconduit et prélevé tout seul (abonnement mensuel, '
+            + 'sans engagement, prélèvement SEPA) ; faux pour une recharge prépayée payée à chaque fois ; null si le document ne permet pas de le dire.' },
+          periodeForfait: { anyOf: [{ type: 'null' }, { type: 'string', enum: ['mois', 'jours'] }],
+            description: '« jours » seulement si le document parle d\'un pass d\'un nombre de jours (« valable 30 jours », « 28 jours ») ; '
+              + '« mois » pour un forfait par mois (« /mois », mensuel, prélevé chaque mois) ; null si le document ne le dit pas (compté par mois).' },
+          dureeForfaitJours: { ...nul('integer'), description: 'Seulement pour un pass en jours : sa durée (30 pour « 30 jours »). null pour un forfait mensuel.' },
+          finForfait: { anyOf: [{ type: 'null' }, { type: 'string', enum: ['reduit', 'bloque'] }],
+            description: 'Au bout des Go : « reduit » (débit réduit) ou « bloque » (internet coupé), seulement si le document le dit, sinon null.' },
+          identifiantClient: { ...nul('string'), description: 'Identifiant ou numéro client chez l\'opérateur (pour se connecter à l\'espace client), '
+            + 'seulement s\'il est écrit ; sinon null. Jamais un n° de commande, de facture, de ligne ni une ICCID.' },
         },
       }],
       description: 'Seulement pour des cartes SIM physiques achetées (kits SIM, nouvelles lignes) : sinon null. '
@@ -649,6 +748,7 @@ function verifierAdmin(request) {
   const token = request.auth && request.auth.token;
   if (!token || token.admin !== true) throw new HttpsError('permission-denied', 'Réservé à l\'administrateur.');
 }
+exports.verifierAdmin = verifierAdmin;
 
 // La page admin réveille à l'ouverture les fonctions qu'elle appelle pour enregistrer ({ action: 'reveil' }) :
 // chacune démarre une fois en avance au lieu de faire attendre la première modification. Rien n'est lu ni écrit.
@@ -807,7 +907,7 @@ function familleResume(f) {
 const ETATS_A_RATTACHER = ['commandee', 'en-stock', 'preparee'];
 function fichesARattacher(sansAchat, numeros, quantite) {
   const restantes = sansAchat.slice().sort((a, b) => (a.creeLe || 0) - (b.creeLe || 0));
-  const libre = (t) => !t.commande && (!t.etat || ETATS_A_RATTACHER.includes(t.etat));
+  const libre = (t) => !t.commande && !t.fid && (!t.etat || ETATS_A_RATTACHER.includes(t.etat));
   const prendre = (i) => (i < 0 ? null : restantes.splice(i, 1)[0].id);
   const serie = (n) => String(n || '').replace(/\s/g, '').toUpperCase();
   const choix = Array.from({ length: quantite }, (_, i) => {
@@ -848,7 +948,8 @@ async function ajouterAchat(d, qui) {
     });
   }
   const sansAchat = (await db().collection('stock').where('acheteeLe', '==', null).get()).docs
-    .filter((x) => x.get('prixAchat') == null && !x.get('depense'))
+    // Tablette d'essai (installée par QR) : jamais complétée par un achat.
+    .filter((x) => x.get('prixAchat') == null && !x.get('depense') && x.get('essai') !== true)
     .map((x) => ({ id: x.id, numero: x.get('numero'), serieAndroid: x.get('serieAndroid'), modele: x.get('modele'),
       etat: x.get('etat'), commande: x.get('commande') || null, creeLe: ms(x.get('creeLe')) || 0 }));
   const rattachees = fichesARattacher(sansAchat, numeros, quantite);
@@ -887,6 +988,16 @@ async function ajouterAchat(d, qui) {
   return { ok: true, ajoutees: quantite - completees, completees, depense: depenseId };
 }
 
+// Carte SIM avec numéro obligatoire avant tout départ de tablette (Tanguy, 8/11) : '' ou la raison du refus.
+// Une ancienne commande Wi-Fi (sans carte) passe.
+async function refusSimAvantDepart(commande, fiche) {
+  const c = commande ? (await db().doc(`commandes/${commande}`).get()).data() : null;
+  if (c && c.formule === 'wifi') return '';
+  const simId = fiche && fiche.simId;
+  const ligne = simId ? (await db().doc(`sims/${simId}`).get()).data() : null;
+  return statuts.refusSimSansNumero(fiche, ligne);
+}
+
 // Remplacement d'un élément du kit chez un client : la tablette, la carte SIM ou un accessoire.
 // La tablette remplacée passe « en retour » (à récupérer) et laisse sa carte SIM à la nouvelle ;
 // la carte SIM remplacée passe « suspendue » (à résilier) ; l'accessoire sort du stock.
@@ -903,6 +1014,11 @@ async function remplacer(d, qui) {
     if (!neuve.exists || neuve.get('commande') || !['en-stock', 'preparee'].includes(neuve.get('etat'))) {
       throw new HttpsError('failed-precondition', 'Choisissez une tablette disponible du stock.');
     }
+    if (neuve.get('fid')) throw new HttpsError('failed-precondition', 'Cette tablette est dans une famille : pas à vendre. Choisissez-en une autre.');
+    // La remplaçante part avec sa propre carte SIM, sinon avec celle de l'ancienne : avec un numéro, toujours.
+    const avecSim = neuve.get('simId') ? neuve.data() : { ...neuve.data(), simId: kit.get('simId') || null };
+    const refusSim = await refusSimAvantDepart(commande, avecSim);
+    if (refusSim) throw new HttpsError('failed-precondition', refusSim);
     await kit.ref.update({
       etat: 'en-retour', commande: null, remplaceePour: commande, majLe: FieldValue.serverTimestamp(),
       historique: FieldValue.arrayUnion(trace('en-retour', { remplacement: true })),
@@ -911,7 +1027,7 @@ async function remplacer(d, qui) {
       etat: 'envoyee', commande, accessoires: kit.get('accessoires') || [], majLe: FieldValue.serverTimestamp(),
       historique: FieldValue.arrayUnion(trace('envoyee', { remplacement: true })),
     });
-    if (kit.get('simId')) await enregistrerSim(kit.get('simId'), { tablette: neuve.id }, qui);
+    if (kit.get('simId') && !neuve.get('simId')) await enregistrerSim(kit.get('simId'), { tablette: neuve.id }, qui);
     return { ok: true };
   }
 
@@ -1004,6 +1120,12 @@ exports.gestionStock = onCall(async (request) => {
       if ((await dep.get()).exists) await dep.update({ fournisseur: maj.fournisseur, majLe: FieldValue.serverTimestamp() });
     }
     if ('simCout' in champs) maj.simCout = centimes(champs.simCout);
+    // Installée par QR hors critères (installation-qr.js) : l'administrateur la garde quand même.
+    if (champs.horsCriteres === null && snap.get('horsCriteres')) {
+      maj.horsCriteres = null;
+      maj.simPin = false;
+      maj.horsCriteresAccepte = { le: Date.now(), par: qui, detail: snap.get('horsCriteres.detail') || [] };
+    }
     // Achat chez le vendeur (Tanguy, 2026-10-22 : chaque tablette, carte SIM ou accessoire a son achat).
     if ('depense' in champs) maj.depense = await depenseExistante(champs.depense);
     if ('commande' in champs) {
@@ -1040,6 +1162,8 @@ exports.gestionStock = onCall(async (request) => {
         const commande = maj.commande !== undefined ? maj.commande : snap.get('commande') || null;
         // Départ du colis : les accessoires qui partent avec cette formule sortent du stock.
         if (champs.etat === 'envoyee' && commande) {
+          const refusSim = await refusSimAvantDepart(commande, snap.data());
+          if (refusSim) throw new HttpsError('failed-precondition', refusSim);
           sortis = await sortirAccessoires(commande);
           // Le kit du client : ce qui est parti avec la tablette.
           maj.accessoires = sortis;
@@ -1103,17 +1227,33 @@ async function entrerMateriel(m, { depense, numeroFacture, source }, qui) {
   const fait = [];
   const c = m && m.cartesSim;
   if (c) {
+    // Jamais deux fois la même carte : une ICCID ou un numéro de ligne déjà connus ne créent pas de 2e fiche.
+    const connues = (await db().collection('sims').get()).docs.map((d) => d.data());
+    const sans = (x) => String(x || '').replace(/\s/g, '');
+    const dejaLa = (i) => (c.iccids[i] && connues.some((l) => sans(l.iccid) === sans(c.iccids[i])))
+      || (c.numeros[i] && connues.some((l) => sans(l.numero) === sans(c.numeros[i])));
     const batch = db().batch();
+    let nouvelles = 0;
     for (let i = 0; i < c.quantite; i++) {
+      if (dejaLa(i)) continue;
+      nouvelles += 1;
       batch.set(db().collection('sims').doc(), {
         statut: 'stock', operateur: c.operateur, iccid: c.iccids[i] || null, numero: c.numeros[i] || null,
         prix: c.forfait, tablette: null, depense: depense || null,
+        // Forfait lu sur la confirmation ou la facture (Tanguy, 8/11) : ce qui n'y est pas reste à remplir à la main.
+        ...(c.go != null ? { go: c.go } : {}),
+        ...(c.renouvellementAuto != null ? { renouvellementAuto: c.renouvellementAuto } : {}),
+        periode: c.periode === 'jours' ? 'jours' : 'mois',
+        ...(c.dureeForfait != null ? { dureeForfait: c.dureeForfait } : {}),
+        ...(c.finForfait ? { finForfait: c.finForfait } : {}),
+        // Identifiant client : celui de l'opérateur s'il est écrit, sinon l'adresse qui a reçu l'e-mail (Tanguy, 8/11).
+        client: c.identifiantClient || m.destinataire || null,
         note: [numeroFacture ? `Facture ${numeroFacture}` : null, source].filter(Boolean).join(' · ') || null,
         creeLe: FieldValue.serverTimestamp(), par: qui,
       });
     }
     await batch.commit();
-    fait.push(`${c.quantite} carte${c.quantite > 1 ? 's' : ''} SIM en stock`);
+    if (nouvelles) fait.push(`${nouvelles} carte${nouvelles > 1 ? 's' : ''} SIM en stock`);
   }
   const accessoires = m && m.accessoires && m.accessoires.length ? await db().collection('accessoires').get() : null;
   for (const a of (m && m.accessoires) || []) {
@@ -1156,8 +1296,12 @@ function champsSim(c) {
   for (const cle of ['prix', 'prixApres']) if (cle in c) champs[cle] = centimes(c[cle]);
   for (const cle of ['finPromo', 'activation', 'activerAvant', 'prochaineRecharge']) if (cle in c) champs[cle] = dateOuNull(c[cle]);
   // Forfait prépayé : sa durée en jours (30 par défaut) et s'il est renouvelé tout seul par l'opérateur.
+  if ('periode' in c) champs.periode = c.periode === 'jours' ? 'jours' : 'mois';
   if ('dureeForfait' in c) champs.dureeForfait = Number.isInteger(c.dureeForfait) && c.dureeForfait >= 1 && c.dureeForfait <= 366 ? c.dureeForfait : null;
   if ('renouvellementAuto' in c) champs.renouvellementAuto = c.renouvellementAuto === true;
+  // Ce que fait l'opérateur au bout du forfait (Tanguy, 5/11) : 'reduit' (débit réduit, Lyca, Bouygues) ou
+  // 'bloque' (internet coupé jusqu'au forfait suivant, Sosh 1 Go bloqué). Toute autre valeur : 'reduit'.
+  if ('finForfait' in c) champs.finForfait = c.finForfait === 'bloque' ? 'bloque' : 'reduit';
   // Achat de la carte (dépense), vérifié par enregistrerSim.
   if ('depense' in c) champs.depense = texte(c.depense, 100) || null;
   return champs;
@@ -1201,6 +1345,8 @@ async function enregistrerSim(id, c, qui) {
   const champs = champsSim(c);
   if ('depense' in champs) champs.depense = await depenseExistante(champs.depense);
   if (!id && !champs.statut) champs.statut = 'stock';
+  // Nouvelle carte : forfait mensuel sauf durée en jours donnée (les anciennes lignes sans « periode » restent en jours).
+  if (!id && !champs.periode) champs.periode = champs.dureeForfait ? 'jours' : 'mois';
   const ligne = { ...avant, ...champs };
   // Tablette : une seule ligne par tablette ; une ligne résiliée n'est plus sur aucune tablette.
   let tablette = 'tablette' in c ? texte(c.tablette, 100) : avant.tablette || null;
@@ -1502,6 +1648,13 @@ exports.gestionDepense = onCall(async (request) => {
     const moisTouches = [ms(snap.get('date')), maj.date ? maj.date.toMillis() : null].filter(Boolean).map(moisDeParis);
     return { ok: true, moisClos: [...new Set(moisTouches)].filter((m) => clos[m]) };
   }
+  // « Ce n'est pas la facture » : un justificatif pris pour la facture repasse en « facture pas encore reçue ».
+  if (d.action === 'attendreFacture') {
+    const ref = db().doc(`depenses/${d.id || '-'}`);
+    if (!(await ref.get()).exists) throw new HttpsError('not-found', 'Dépense introuvable.');
+    await ref.update({ confirmation: true, majLe: FieldValue.serverTimestamp(), majPar: request.auth.token.email || request.auth.uid });
+    return { ok: true };
+  }
   if (d.action === 'arreter') {
     const ref = db().doc(`depenses/${d.id || '-'}`);
     if (!(await ref.get()).exists) throw new HttpsError('not-found', 'Dépense introuvable.');
@@ -1765,6 +1918,28 @@ exports.gestionPiece = onCall({ memory: '512MiB' }, async (request) => {
 
 const TYPES_LECTURE = /^(application\/pdf|image\/(png|jpeg|webp|gif))$/;
 
+// Texte UTF-8 lu comme du windows-1252 (« AccÃ©der », « 2,99 â‚¬ ») : certains e-mails (Sosh, 5/11)
+// annoncent le mauvais jeu de caractères. Chaque suite cassée (« Ã© », « â‚¬ ») est remise en octets
+// et relue en UTF-8 ; une suite qui ne donne pas de l'UTF-8 valide reste telle quelle.
+const CP1252 = '€\u0081‚ƒ„…†‡ˆ‰Š‹Œ\u008DŽ\u008F\u0090‘’“”•–—˜™š›œ\u009DžŸ';
+const SUITE_CONTINUATION = `[\\u0080-\\u00BF${CP1252.replace(/[\u0080-\u009F]/g, '')}]`;
+const SUITE_CASSEE = new RegExp(`[\\u00C2-\\u00DF]${SUITE_CONTINUATION}|[\\u00E0-\\u00EF]${SUITE_CONTINUATION}{2}|[\\u00F0-\\u00F4]${SUITE_CONTINUATION}{3}`, 'g');
+const octet = (c) => {
+  const code = c.codePointAt(0);
+  return code <= 0xFF ? code : 0x80 + CP1252.indexOf(c);
+};
+function reparerAccents(t) {
+  return String(t).replace(SUITE_CASSEE, (suite) => {
+    try {
+      const c = new TextDecoder('utf-8', { fatal: true }).decode(Uint8Array.from([...suite].map(octet)));
+      // Seulement des lettres accentuées et la ponctuation courante (é, °, €, •, ’, ™) : rien d'exotique.
+      return /^[\u00A0-\u024F\u2000-\u20CF\u2122]$/.test(c) ? c : suite;
+    } catch {
+      return suite;
+    }
+  });
+}
+
 // Texte d'un e-mail sans facture jointe (confirmation de commande Cdiscount, Temu…), lu comme un justificatif.
 function corpsDuMail(m) {
   let t = m && m.text ? m.text : '';
@@ -1772,6 +1947,9 @@ function corpsDuMail(m) {
     t = m.html.replace(/<(style|script)[\s\S]*?<\/\1>/gi, ' ').replace(/<br\s*\/?>|<\/(p|div|tr|li|h\d)>/gi, '\n')
       .replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&euro;/g, '€');
   }
+  t = reparerAccents(t).replace(/&#(\d+);/g, (x, n) => String.fromCodePoint(Number(n)))
+    .replace(/&#x([0-9a-f]+);/gi, (x, n) => String.fromCodePoint(parseInt(n, 16)))
+    .replace(/&gt;/g, '>').replace(/&lt;/g, '<').replace(/&quot;/g, '"').replace(/\u00ad/g, '');
   t = t.replace(/[ \t]+/g, ' ').replace(/\n\s*\n+/g, '\n').trim();
   if (t.length < 150) return null;
   const entete = [`De : ${(m.from && m.from.text) || ''}`, `Objet : ${m.subject || ''}`,
@@ -1780,12 +1958,33 @@ function corpsDuMail(m) {
   return { filename: 'confirmation-commande.txt', contentType: 'text/plain', content: contenu, size: contenu.length };
 }
 
+// Même vendeur sous deux noms (« Sosh » sur la commande, « Sosh (Orange) » sur le justificatif, 8/11) :
+// l'un contient l'autre, sans accents, espaces ni ponctuation.
+function memeFournisseur(a, b) {
+  const norm = (x) => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const x = norm(a);
+  const y = norm(b);
+  if (!x || !y) return false;
+  return x === y || (Math.min(x.length, y.length) >= 3 && (x.includes(y) || y.includes(x)));
+}
+
 // Une facture qui arrive après la confirmation de commande du même achat (même vendeur, même montant, à 30 jours).
 function memeAchat(depense, r) {
-  const norm = (x) => String(x || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-  return !!depense.confirmation && !!r.fournisseur && norm(depense.fournisseur) === norm(r.fournisseur)
+  return !!depense.confirmation && !!r.fournisseur && memeFournisseur(depense.fournisseur, r.fournisseur)
     && depense.montant === r.montant && Math.abs((depense.date || 0) - (r.date || depense.date || 0)) <= 30 * 24 * 3600 * 1000;
 }
+// Confirmation de commande encore sans facture à laquelle rattacher une facture reçue : même montant d'abord ;
+// sinon la seule confirmation ouverte du même vendeur depuis 45 jours, si la facture est d'un montant au moins égal
+// (la 1re facture Sosh = 10 € d'activation + le forfait, 8/11). Renvoie { depense, montantDifferent } ou null.
+function confirmationARattacher(depenses, r) {
+  if (!r || r.confirmation || !r.fournisseur || r.montant == null) return null;
+  const meme = depenses.find((d) => memeAchat(d, r));
+  if (meme) return { depense: meme, montantDifferent: false };
+  const ouvertes = depenses.filter((d) => d.confirmation && memeFournisseur(d.fournisseur, r.fournisseur)
+    && Math.abs((d.date || 0) - (r.date || d.date || 0)) <= 45 * 864e5 && d.montant != null && r.montant >= d.montant);
+  return ouvertes.length === 1 ? { depense: ouvertes[0], montantDifferent: true } : null;
+}
+
 const CONSIGNE_LECTURE = `Tu lis une facture d'achat (ou un ticket) reçue par Papote, une petite entreprise française
 qui prête des tablettes à des personnes âgées et leur famille. Remplis chaque champ d'après le document seulement :
 null quand l'information n'y figure pas, jamais d'invention. Montants en euros, tels qu'imprimés.
@@ -1803,7 +2002,10 @@ est une facture : confirmationCommande faux. Le petit matériel qui part avec le
 tablettes (clé ou routeur 4G, prise, chargeur, câble, support) va dans « accessoires ».
 Une confirmation de commande d'un site marchand (Cdiscount, Temu, Amazon…) qui donne le montant payé compte comme
 justificatif : estUneFacture vrai et confirmationCommande vrai, numero = numéro de commande. Une publicité, une lettre
-d'information ou un avis d'expédition sans montant payé n'est pas une facture.`;
+d'information ou un avis d'expédition sans montant payé n'est pas une facture.
+Un « justificatif d'achat », un récapitulatif ou un bon de commande qui ne s'intitule pas « Facture » et n'a pas de
+numéro de facture est une confirmation de commande (confirmationCommande vrai), même s'il donne le montant payé.
+Pour des cartes SIM, relève aussi le forfait : Go par mois, renouvellement automatique, durée, fin de forfait, identifiant client.`;
 
 // contenu : fichier en base64. Erreur HttpsError lisible si la lecture échoue.
 async function lireDocument(contenu, type) {
@@ -1848,6 +2050,11 @@ exports.gestionLireFacture = onCall(
     if (!TYPES_LECTURE.test(d.type || '')) throw new HttpsError('invalid-argument', 'PDF, JPEG ou PNG seulement.');
     const contenu = String(d.contenu || '');
     if (!contenu || contenu.length > MAX_PIECE * 1.4) throw new HttpsError('invalid-argument', 'Fichier vide ou trop lourd.');
+    // Même règle que pour les e-mails : un long PDF n'est pas une facture et coûte cher à lire.
+    const pages = d.type === 'application/pdf' ? pagesPdf(Buffer.from(contenu, 'base64')) : null;
+    if (pages > MAX_PAGES_PDF) {
+      throw new HttpsError('failed-precondition', `Ce PDF fait ${pages} pages : il n'est pas lu automatiquement. Remplissez la fiche à la main.`);
+    }
     return lireDocument(contenu, d.type);
   });
 
@@ -2084,6 +2291,7 @@ async function automatiser(qui) {
   const maintenant = Date.now();
   const bilan = { factures: [], avoirs: [], depenses: 0, stock: [], erreurs: [] };
   await synchroniserStock(bilan);
+  await require('./stock').nettoyerReservations(db()).catch((e) => bilan.erreurs.push(`Réservations : ${e.message}`));
   await rattraperJumelages(bilan);
   await copierBatteries(bilan).catch((e) => bilan.erreurs.push(`Batteries : ${e.message}`));
   await depensesRecurrentes(maintenant, bilan);
@@ -2097,9 +2305,9 @@ async function automatiser(qui) {
   return bilan;
 }
 
-exports.gestionAutomatique = onSchedule(
-  { schedule: 'every day 04:00', timeZone: 'Europe/Paris', secrets: [STRIPE_SECRET, SENDCLOUD_API, MAIL_MOT_DE_PASSE], timeoutSeconds: 300 },
-  () => automatiser('automatique'));
+// Tâches planifiées : lancées par taches.js (tachesHoraires), chacune à son heure.
+// Chaque jour à 4 h.
+exports.gestionAutomatique = () => automatiser('automatique');
 
 exports.gestionAutomatiser = onCall({ secrets: [STRIPE_SECRET, SENDCLOUD_API, MAIL_MOT_DE_PASSE], timeoutSeconds: 300 }, async (request) => {
   verifierAdmin(request);
@@ -2179,6 +2387,14 @@ async function creerEtiquette(commande, sens, qui, { sansImpression = false } = 
   // Une étiquette payée existe déjà (double clic, vieil onglet) : pas une deuxième. Annuler l'ancienne pour refaire.
   const doublon = statuts.refusEtiquetteEnDouble(c, sens, Date.now());
   if (doublon) throw new HttpsError('already-exists', doublon);
+  if (sens === 'aller') {
+    // Pas d'étiquette d'envoi pour une tablette sans carte SIM avec numéro (Tanguy, 8/11).
+    const fiches = (await db().collection('stock').where('commande', '==', commande).get()).docs.map((d) => d.data());
+    const t = fiches.find((x) => ['en-stock', 'preparee', 'envoyee'].includes(x.etat));
+    if (!t && c.formule !== 'wifi') throw new HttpsError('failed-precondition', "Reliez d'abord la tablette à cette commande (Stock).");
+    const refusSim = t ? await refusSimAvantDepart(commande, t) : '';
+    if (refusSim) throw new HttpsError('failed-precondition', refusSim);
+  }
   const reglages = lireReglages(reglagesSnap.data());
   const papote = sendcloud.adressePapote(reglages.expediteur);
   if (!papote) throw new HttpsError('failed-precondition', "Renseignez l'adresse d'expédition de Papote (Réglages, Étiquettes Sendcloud).");
@@ -2338,8 +2554,10 @@ exports.gestionAnnulerCommande = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_P
       throw new HttpsError('already-exists', 'Annulation déjà en cours (autre onglet) : rechargez la page.');
     }
     if (colisRevenu) {
-      if (c.expedition !== 'envoyee' || c.fid) {
-        throw new HttpsError('failed-precondition', c.fid ? 'Cette tablette est reliée à une famille : arrêtez plutôt l\'abonnement.'
+      // Famille préparée à la commande : seule l'entrée de la tablette dans la famille compte (famille-preparee.js).
+      const installee = require('./famille-preparee').regles.tabletteDansLaFamille(c);
+      if (c.expedition !== 'envoyee' || installee) {
+        throw new HttpsError('failed-precondition', installee ? 'Cette tablette est reliée à une famille : arrêtez plutôt l\'abonnement.'
           : 'Seule une commande envoyée (colis revenu sans avoir été retiré) peut être annulée ainsi.');
       }
     } else if (!['a-preparer', 'paiement-en-attente'].includes(c.expedition)) {
@@ -2404,42 +2622,32 @@ exports.gestionAnnulerCommande = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_P
 const vitrine = {};
 exports.brancher = (f) => Object.assign(vitrine, f);
 
-// Tablette perdue ou hors service : retirée de sa famille, jamais plus jumelée.
-const ETATS_BLOQUES = ['perdue', 'hors-service'];
+// Tablette perdue ou hors service : retirée de sa famille, jamais plus jumelée (famille-preparee.js).
+const { ETATS_BLOQUES } = require('./famille-preparee').regles;
 // États où la tablette n'est plus chez un client : retirée de sa famille (gestionStock, changement d'état).
 const ETATS_RETIREES = [...ETATS_BLOQUES, 'revenue', 'en-stock', 'a-reparer'];
 
 // Que faire quand une tablette du stock est jumelée à une famille (pure, testée).
 // t : fiche stock ; commande : sa commande (ou null) ; fid : famille qui vient de la jumeler.
+// Jumelée sans commande (la tablette de test de Tanguy dans sa « famille test ») : rien à faire, pas d'alerte.
+// Sa fiche garde la famille (fid) et sort d'elle-même du stock à vendre (stock.js) ; l'admin l'affiche
+// « Dans la famille … : pas à vendre » (Tanguy, 5/11). L'ancienne alerte, encore sur de vieilles fiches, est ignorée.
 const ALERTE_SANS_COMMANDE = 'jumelée sans commande';
 function suiteJumelage(t, commande, fid) {
   if (ETATS_BLOQUES.includes(t.etat)) return { refuser: true };
-  if (!t.commande || !commande) return { alerte: ALERTE_SANS_COMMANDE };
+  if (!t.commande || !commande) return {};
   if (!commande.fid) return { relier: true };
-  if (commande.fid !== fid) return { alerte: 'jumelée à une autre famille que celle de sa commande' };
+  if (commande.fid !== fid) {
+    // Commande reliée d'office à l'ancienne famille d'un client qui recommande (index.js, paiementTermine) : sa
+    // tablette, jumelée ailleurs, dit quelle famille elle sert vraiment. L'ancienne famille est remise comme avant.
+    if (commande.relieeParEmail && commande.relieeParEmail.fid === commande.fid) return { relier: true, delier: commande.fid };
+    return { alerte: 'jumelée à une autre famille que celle de sa commande' };
+  }
   return {};
 }
 
-async function ficheDeLaTablette(p) {
-  const par = async (champ, valeur) => (valeur
-    ? (await db().collection('stock').where(champ, '==', valeur).limit(1).get()).docs[0] || null : null);
-  const connue = await par('tabletUid', p.tabletUid);
-  if (connue || !p.serie) return connue;
-  // Le n° de série est écrit par la tablette elle-même dans pairings/ : n'importe quel compte pourrait
-  // y mettre celui d'une tablette livrée et récupérer la commande. On ne le croit que si la clé
-  // App Check posée à l'installation de CE n° de série est reliée au même compte (jetonAppCheck).
-  if (!(await serieProuvee(p.serie, p.tabletUid))) {
-    logger.warn(`Jumelage : n° de série ${p.serie} non prouvé pour le compte ${p.tabletUid || '?'}, ignoré.`);
-    return null;
-  }
-  return par('serieAndroid', p.serie);
-}
-
-async function serieProuvee(serie, tabletUid) {
-  if (!tabletUid) return false;
-  const cles = await db().collection('clesTablettes').where('serie', '==', serie).get();
-  return cles.docs.some((d) => d.get('tabletUid') === tabletUid);
-}
+// Fiche stock de la tablette (compte, ou n° de série prouvé par sa clé App Check) : famille-preparee.js.
+const ficheDeLaTablette = (p) => require('./famille-preparee').ficheDeLaTablette(db(), p, logger);
 
 // Jumelage (pairings/{code}, écrit par la tablette et l'appli famille) : la tablette est reconnue par
 // son n° de série Android, noté à la préparation (outils/gestion/preparer-tablette).
@@ -2480,6 +2688,12 @@ async function appliquerJumelage(p, pairingRef) {
   // rejoint sa fiche dans la famille (l'app le montre aux proches, qui peuvent l'appeler par téléphone).
   if (t.simId) await ecrireForfaitFamille(t.simId).catch((e) => logger.warn('Forfait de la famille', e.message));
   // Tablette reliée : elle est forcément reçue (si le suivi du colis ne l'a pas déjà noté).
+  // Avant toute autre écriture sur la commande (qui pousse des messages Stripe) : elle quitte l'ancienne famille.
+  if (suite.delier) await delierAncienneFamille(suite.delier, p.fid, t.commande, commande.relieeParEmail.abonnementAvant);
+  // Tablette jumelée à la famille reliée d'office : le lien n'est plus provisoire.
+  if (t.commande && commande && commande.relieeParEmail && commande.fid === p.fid) {
+    await db().doc(`commandes/${t.commande}`).update({ relieeParEmail: FieldValue.delete() });
+  }
   if (t.commande && commande && commande.envoyeeLe && !(commande.preparation && commande.preparation.recuLe)) {
     await db().doc(`commandes/${t.commande}`).update({ 'preparation.recuLe': Date.now(), 'preparation.recuPar': 'tablette reliée' });
   }
@@ -2488,6 +2702,21 @@ async function appliquerJumelage(p, pairingRef) {
     logger.info(`Commande ${t.commande} reliée à la famille ${p.fid} par la tablette ${t.ref || fiche.id}.`);
   }
   return fiche;
+}
+
+// L'ancienne famille reliée d'office à la commande d'un client qui recommande retrouve son abonnement d'avant
+// (résilié, aucun…), si elle suit encore cette commande ; la commande passe à la nouvelle famille dans la même
+// écriture (les messages Stripe en route, qui portent encore l'ancienne famille, suivent commandes/{id}.fid).
+async function delierAncienneFamille(ancienne, nouvelle, abonnementId, abonnementAvant) {
+  const ref = db().doc(`families/${ancienne}`);
+  await db().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (snap.exists && snap.get('abonnement.stripeSubscriptionId') === abonnementId) {
+      tx.update(ref, { abonnement: abonnementAvant || { statut: 'aucun', majLe: FieldValue.serverTimestamp() }, rev: FieldValue.increment(1) });
+    }
+    tx.update(db().doc(`commandes/${abonnementId}`), { fid: nouvelle, relieeParEmail: FieldValue.delete() });
+  });
+  logger.info(`Commande ${abonnementId} : sa tablette est jumelée ailleurs, la famille ${ancienne} retrouve son abonnement d'avant.`);
 }
 
 // Rattrapage (chaque nuit et « Lancer maintenant ») : tablette préparée ou envoyée, jumelée (pairing
@@ -2640,7 +2869,8 @@ function aFaire({ commandes, stock, depenses, automatique, maintenant, sims = []
   const idsAEnvoyer = new Set(actives.filter((c) => c.expedition === 'a-preparer' && !retour(c)).map((c) => c.id));
   const aEnvoyer = idsAEnvoyer.size;
   // Une tablette réservée à une commande pas encore envoyée compte pour cette commande.
-  const dispo = stock.filter((t) => ['en-stock', 'preparee'].includes(t.etat) && (!t.commande || idsAEnvoyer.has(t.commande))).length;
+  // Une tablette jumelée à une famille sans commande (tablette de test) n'est pas à vendre : elle ne compte pas.
+  const dispo = stock.filter((t) => ['en-stock', 'preparee'].includes(t.etat) && (t.commande ? idsAEnvoyer.has(t.commande) : !t.fid)).length;
   ajouter(aEnvoyer, 'tablette(s) à envoyer');
   ajouter(Math.max(0, aEnvoyer - dispo), 'tablette(s) manquante(s) en stock pour les envoyer');
   ajouter(actives.filter((c) => c.expedition === 'envoyee' && !c.fid && ms(c.envoyeeLe)
@@ -2651,7 +2881,7 @@ function aFaire({ commandes, stock, depenses, automatique, maintenant, sims = []
     liste.push(`Tablette ${t.ref || t.numero || ''} revenue : ${usureBatterie(t.batterie, debutTablette(t), maintenant)}, à retirer du parc`);
   }
   ajouter(stock.filter((t) => t.etat === 'en-retour' && t.remplaceePour).length, 'tablette(s) remplacée(s) à récupérer chez le client');
-  for (const t of stock.filter((x) => x.alerteJumelage && !(x.alerteJumelage === ALERTE_SANS_COMMANDE && x.commande))) liste.push(`Tablette ${t.ref || t.numero || ''} ${t.alerteJumelage}`);
+  for (const t of stock.filter((x) => x.alerteJumelage && x.alerteJumelage !== ALERTE_SANS_COMMANDE)) liste.push(`Tablette ${t.ref || t.numero || ''} ${t.alerteJumelage}`);
   ajouter(actives.filter((c) => c.remboursement && c.remboursement.statut === 'echec').length, 'remboursement(s) échoué(s), à faire depuis Stripe');
   const parId = new Map(commandes.map((c) => [c.id, c]));
   const lignes = new Map(sims.map((l) => [l.id, l]));
@@ -2735,9 +2965,8 @@ async function recapitulatif() {
   return { ok: true, aFaire: liste.length };
 }
 
-exports.gestionRecap = onSchedule(
-  { schedule: 'every monday 08:00', timeZone: 'Europe/Paris', secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE], timeoutSeconds: 300 },
-  () => recapitulatif());
+// Le lundi à 8 h (taches.js).
+exports.gestionRecap = () => recapitulatif();
 
 exports.gestionRecapMaintenant = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE], timeoutSeconds: 300 }, async (request) => {
   verifierAdmin(request);
@@ -2882,9 +3111,8 @@ async function cloturer(maintenant, refaire) {
 
 const OPTIONS_CLOTURE = { secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE], memory: '512MiB', timeoutSeconds: 540 };
 
-exports.gestionCloture = onSchedule(
-  { ...OPTIONS_CLOTURE, schedule: '0 5 1 * *', timeZone: 'Europe/Paris' },
-  () => cloturer(Date.now()));
+// Le 1er du mois à 5 h (taches.js).
+exports.gestionCloture = () => cloturer(Date.now());
 
 exports.gestionCloturer = onCall(OPTIONS_CLOTURE, async (request) => {
   verifierAdmin(request);
@@ -2895,23 +3123,63 @@ exports.gestionCloturer = onCall(OPTIONS_CLOTURE, async (request) => {
 
 // Facture lue (lectureVersFormulaire) → achat de tablettes ou dépense « à vérifier », avec la pièce jointe,
 // et ses cartes SIM et accessoires dans le stock. Renvoie un texte si elle était déjà enregistrée.
+// Numéro de ligne lu sur un document suivant du même achat (« Bienvenue chez Sosh » : « N° de mobile : 06… ») :
+// donné aux cartes SIM de cet achat qui n'en ont pas encore.
+async function completerSims(depense, r) {
+  const client = (r.cartesSim && r.cartesSim.identifiantClient) || r.destinataire;
+  if (client) {
+    const sansClient = (await db().collection('sims').where('depense', '==', depense).get()).docs.filter((d) => !d.get('client'));
+    await Promise.all(sansClient.map((d) => d.ref.update({ client })));
+  }
+  const numeros = [...((r.cartesSim && r.cartesSim.numeros) || []), r.ligne]
+    .map((n) => String(n || '').replace(/\s/g, '')).filter((n) => /^0[67]\d{8}$/.test(n));
+  if (!numeros.length) return;
+  const toutes = (await db().collection('sims').get()).docs;
+  const libres = numeros.filter((n) => !toutes.some((d) => String(d.get('numero') || '').replace(/\s/g, '') === n));
+  const sims = toutes.filter((d) => d.get('depense') === depense && !d.get('numero'));
+  await Promise.all(sims.slice(0, libres.length).map((d, i) => d.ref.update({ numero: libres[i] })));
+}
+
 async function rangerFacture(r, piece, source) {
   if (r.numero) {
+    // Même n° (de commande ou de facture) chez le même vendeur : rien de nouveau, sauf la vraie facture d'une
+    // confirmation, qui la rejoint plus bas. Le numéro de ligne lu complète la carte SIM de l'achat.
     const memes = await db().collection('depenses').where('numero', '==', r.numero).get();
-    if (memes.docs.some((d) => (d.get('fournisseur') || '') === (r.fournisseur || ''))) {
+    const deja = memes.docs.find((d) => memeFournisseur(d.get('fournisseur'), r.fournisseur));
+    if (deja && !(deja.get('confirmation') && !r.confirmation)) {
+      await completerSims(deja.id, r);
       return `déjà enregistrée (${r.fournisseur || ''} n° ${r.numero})`;
     }
   }
-  if (r.montant != null) {
+  if (r.montant != null && r.confirmation) {
+    // Deuxième preuve du même achat (justificatif, récapitulatif) : rien de nouveau, le numéro de ligne complète la SIM.
     const memeMontant = await db().collection('depenses').where('montant', '==', r.montant).get();
-    const precedente = memeMontant.docs.find((d) => memeAchat({ ...d.data(), date: ms(d.get('date')) }, r)
-      || (r.confirmation && memeAchat({ ...d.data(), confirmation: true, date: ms(d.get('date')) }, r)));
-    if (precedente && r.confirmation) return `déjà enregistrée (${r.fournisseur || ''}, même montant)`;
+    const precedente = memeMontant.docs.find((d) => memeAchat({ ...d.data(), confirmation: true, date: ms(d.get('date')) }, r));
     if (precedente) {
+      await completerSims(precedente.id, r);
+      return `déjà enregistrée (${r.fournisseur || ''}, même montant)`;
+    }
+  }
+  if (r.montant != null && !r.confirmation) {
+    const ouvertes = (await db().collection('depenses').where('confirmation', '==', true).get()).docs
+      .map((d) => ({ ...d.data(), id: d.id, ref: d.ref, date: ms(d.get('date')) }));
+    const trouvee = confirmationARattacher(ouvertes, r);
+    if (trouvee) {
       // La vraie facture remplace la confirmation de commande : pièce jointe ajoutée, rien n'entre deux fois au stock.
-      await precedente.ref.update({ confirmation: false, numero: r.numero || precedente.get('numero') || null });
-      await enregistrerPiece('depenses', precedente.id, piece.filename || 'facture', piece.contentType, piece.content);
-      return { materiel: [], rattachee: true };
+      // Montant différent (activation + 1er mois) : la dépense prend celui de la facture et reste à vérifier.
+      const p = trouvee.depense;
+      await p.ref.update({
+        confirmation: false, numero: r.numero || p.numero || null,
+        ...(trouvee.montantDifferent ? {
+          montant: r.montant, tva: r.tva, aVerifier: true,
+          ...(r.date ? { date: Timestamp.fromMillis(r.date) } : {}),
+          remarque: `Montant de la facture (${(r.montant / 100).toFixed(2).replace('.', ',')} €) différent de la commande `
+            + `(${(p.montant / 100).toFixed(2).replace('.', ',')} €) : vérifiez qu'il s'agit bien du même achat.`,
+        } : {}),
+      });
+      await enregistrerPiece('depenses', p.id, piece.filename || 'facture', piece.contentType, piece.content);
+      await completerSims(p.id, r);
+      return { materiel: [], rattachee: true, montantDifferent: trouvee.montantDifferent };
     }
   }
   let id;
@@ -2942,6 +3210,24 @@ async function rangerFacture(r, piece, source) {
   const materiel = await entrerMateriel(r, { depense: id, numeroFacture: r.numero, source }, 'e-mail');
   if (ligneSim) return { materiel, sim: ligneSim.numero || ligneSim.operateur || 'SIM' };
   return materiel.length ? { materiel } : null;
+}
+
+// Adresse qui a reçu l'e-mail chez le vendeur : un destinataire autre que la boîte des factures, sinon le « À : »
+// de l'e-mail transféré (Gmail « ---------- Forwarded message ---------- », Outlook « De : … À : … »).
+const ADRESSE_MAIL = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/;
+function destinataireDuMail(mailLu, boite) {
+  const b = String(boite || '').toLowerCase();
+  const adresses = ['to', 'cc'].flatMap((k) => [].concat((mailLu && mailLu[k]) || []))
+    .flatMap((a) => (a && a.value) || []).map((v) => String(v.address || '').toLowerCase()).filter(Boolean);
+  const autre = adresses.find((a) => a !== b);
+  if (autre) return autre;
+  const texteMail = String((mailLu && (mailLu.text || String(mailLu.html || '').replace(/<[^>]+>/g, ' '))) || '');
+  for (const ligne of texteMail.split(/\r?\n/)) {
+    const m = /^\s*[>*\s]*(?:À|A|To|Pour)\s*:\s*(.*)$/i.exec(ligne);
+    const a = m && ADRESSE_MAIL.exec(m[1]);
+    if (a && a[0].toLowerCase() !== b) return a[0].toLowerCase();
+  }
+  return null;
 }
 
 async function releverFactures() {
@@ -2982,7 +3268,9 @@ async function releverFactures() {
           const mailLu = await simpleParser(content);
           const de = (mailLu.from && mailLu.from.text) || 'expéditeur inconnu';
           const sujet = mailLu.subject || '(sans objet)';
-          const pieces = piecesFacture(mailLu.attachments);
+          const ecartees = [];
+          const pieces = piecesFacture(mailLu.attachments, ecartees);
+          for (const x of ecartees) bilan.ignorees.push(`${x} (« ${sujet} »)`);
           // Le texte de l'e-mail (confirmation de commande) passe après les pièces jointes : lu seulement si
           // aucune pièce n'est une facture (images de produits d'un e-mail transféré, par exemple).
           const corps = corpsDuMail(mailLu);
@@ -2992,16 +3280,17 @@ async function releverFactures() {
           for (const piece of [...pieces, ...(corps ? [corps] : [])]) {
             if (piece === corps && trouvee) break;
             try {
-              const r = await lireDocument(piece.content.toString('base64'), piece.contentType);
+              const r = confirmationSelonTitre(await lireDocument(piece.content.toString('base64'), piece.contentType), piece.filename);
               if (!r.facture) {
                 bilan.ignorees.push(`${piece.filename || 'pièce'} (« ${sujet} ») : pas une facture`);
                 continue;
               }
               trouvee = true;
+              r.destinataire = destinataireDuMail(mailLu, adresse);
               const rangee = await rangerFacture(r, piece, `e-mail de ${de}`.slice(0, 200));
               if (typeof rangee === 'string') bilan.ignorees.push(`${piece.filename || 'pièce'} : ${rangee}`);
               else {
-                const plus = rangee && rangee.rattachee ? ' (facture ajoutée à la confirmation de commande)'
+                const plus = rangee && rangee.rattachee ? ` (facture ajoutée à la confirmation de commande${rangee.montantDifferent ? ', montant différent : à vérifier' : ''})`
                   : rangee && rangee.sim ? ` (recharge de la SIM ${rangee.sim})`
                   : rangee && rangee.materiel && rangee.materiel.length ? ` (+ ${rangee.materiel.join(', ')})` : '';
                 bilan.rangees.push(`${r.fournisseur || de} : ${r.libelle || sujet}${plus}`);
@@ -3042,9 +3331,8 @@ const OPTIONS_COURRIER = {
   secrets: [ANTHROPIC_API_KEY, FACTURES_MOT_DE_PASSE], memory: '512MiB', timeoutSeconds: 540,
 };
 
-exports.gestionCourrier = onSchedule(
-  { ...OPTIONS_COURRIER, schedule: 'every 60 minutes', timeZone: 'Europe/Paris' },
-  () => releverFactures());
+// Toutes les heures (taches.js).
+exports.gestionCourrier = () => releverFactures();
 
 exports.gestionCourrierMaintenant = onCall(OPTIONS_COURRIER, async (request) => {
   verifierAdmin(request);
@@ -3177,7 +3465,10 @@ exports.gestionCampagne = onCall({ secrets: [MAIL_MOT_DE_PASSE], timeoutSeconds:
   const voulus = new Set((Array.isArray(d.emails) ? d.emails : []).map(emailPropre).filter(Boolean));
   const destinataires = (await lireContacts()).filter((c) => voulus.has(c.email) && c.consentement && !c.desinscrit);
   if (!destinataires.length) throw new HttpsError('failed-precondition', "Personne dans cette liste n'a accepté les e-mails d'information.");
-  if (destinataires.length > ENVOIS_MAX) throw new HttpsError('failed-precondition', `${destinataires.length} destinataires : ${ENVOIS_MAX} au plus par jour avec Brevo. Réduisez la liste.`);
+  // Quota Brevo partagé avec tous les autres e-mails du jour (quota-courriels.js) : 100 gardés pour les urgents.
+  const quota = require('./quota-courriels');
+  const permis = quota.permisEnNombre(await quota.partisAujourdhui(db()), destinataires.length);
+  if (destinataires.length > permis) throw new HttpsError('failed-precondition', `${destinataires.length} destinataires : ${permis} au plus aujourd'hui avec Brevo (${ENVOIS_MAX} par jour pour tous les e-mails, dont ${quota.RESERVE_URGENTS} gardés pour les e-mails urgents). Réduisez la liste ou envoyez demain.`);
   const ref = db().collection('campagnes').doc();
   await ref.set({ objet, message, le: Date.now(), par: request.auth.token.email || request.auth.uid, prevus: destinataires.length, envoyes: 0, ignores: voulus.size - destinataires.length });
   let envoyes = 0;
@@ -3192,12 +3483,13 @@ exports.gestionCampagne = onCall({ secrets: [MAIL_MOT_DE_PASSE], timeoutSeconds:
         await cref.set({ email: c.email, jeton }, { merge: true });
       }
       const lien = `${URL_DESINSCRIPTION}?c=${cleContact(c.email)}&j=${jeton}`;
-      await mail.envoyer({ ...smtp, a: c.email, contenu: emailInformation({ objet, message, nom: c.nom, lienDesinscription: lien }) });
+      await mail.envoyer({ ...smtp, a: c.email, contenu: emailInformation({ objet, message, nom: c.nom, lienDesinscription: lien }), enNombre: true });
       envoyes++;
     } catch (e) {
       erreurs.push(`${c.email} : ${e.message}`);
     }
   }
+  if (envoyes) await quota.compter(db(), envoyes, logger);
   await ref.update({ envoyes, erreurs: erreurs.slice(0, 20), finiLe: Date.now() });
   return { envoyes, ignores: voulus.size - destinataires.length, erreurs: erreurs.slice(0, 5) };
 });
@@ -3352,6 +3644,18 @@ exports.gestionSupprimerFamille = onCall({ timeoutSeconds: 540, memory: '512MiB'
   if (parties.length && typeof recupere !== 'boolean') {
     throw new HttpsError('failed-precondition', 'Dites d\'abord si la tablette et les accessoires de la commande offerte sont récupérés.');
   }
+  const qui = request.auth.token.email || request.auth.uid;
+  const { membres } = await effacerFamille({ fid, snap, commandes: commandes.docs, par: qui });
+  await closOffertes(offertes, recupere === true, qui);
+  logger.info(`Famille ${fid} supprimée par ${request.auth.token.email}`);
+  return { ok: true, membres };
+});
+
+// Efface tout ce qui reste d'une famille : fichiers, base, jumelages ; les commandes gardent la trace de la
+// suppression (pièces comptables) et suppressions/ note qui l'a faite. Partagé avec la purge mensuelle
+// (purge.js) des familles résiliées depuis plus de 12 mois.
+async function effacerFamille({ fid, snap, commandes, par }) {
+  const ref = db().doc(`families/${fid}`);
   const membres = await ref.collection('members').get();
   // Fichiers d'abord : si la base échoue ensuite, un nouvel essai finit le travail.
   await stockage().deleteFiles({ prefix: `families/${fid}/`, force: true });
@@ -3359,13 +3663,16 @@ exports.gestionSupprimerFamille = onCall({ timeoutSeconds: 540, memory: '512MiB'
   // Jumelages de cette famille : sans eux, le rattrapage de nuit ne relie plus la tablette à une famille disparue.
   const jumelages = await db().collection('pairings').where('fid', '==', fid).get();
   await Promise.all(jumelages.docs.map((d) => d.ref.delete()));
-  await Promise.all(commandes.docs.map((d) => d.ref.update({ familleSupprimeeLe: Date.now() })));
-  await closOffertes(offertes, recupere === true, request.auth.token.email || request.auth.uid);
+  await Promise.all(commandes.map((d) => d.ref.update({ familleSupprimeeLe: Date.now() })));
   await db().collection('suppressions').add({
-    fid, nom: snap.get('name') || null, membres: membres.size, le: Date.now(), par: request.auth.token.email || request.auth.uid,
+    fid, nom: snap.get('name') || null, membres: membres.size, le: Date.now(), par,
   });
-  logger.info(`Famille ${fid} supprimée par ${request.auth.token.email}`);
-  return { ok: true, membres: membres.size };
+  return { membres: membres.size };
+}
+exports.effacerFamille = effacerFamille;
+// E-mail à un client depuis une tâche planifiée (purge : avertissement avant l'effacement).
+exports.envoyerAuClient = (a, contenu) => mail.envoyer({
+  smtp: MAIL_SMTP.value(), expediteur: MAIL_EXPEDITEUR.value(), motDePasse: MAIL_MOT_DE_PASSE.value(), a, contenu,
 });
 
 // Commandes offertes encore ouvertes (ni annulées ni closes), et celles dont la tablette est partie chez le proche.
@@ -3472,7 +3779,7 @@ exports.gestionParcours = onCall(async (request) => {
       await ref.update({ 'preparation.recuLe': Date.now(), 'preparation.recuPar': qui });
     }
     else {
-      const preparation = avancementPropre(d.preparation, ['tablette', 'sim', 'suivi', 'enceinte']);
+      const preparation = avancementPropre(d.preparation, ['tablette', 'sim', 'suivi', 'enceinte', 'tabletteLue']);
       // Date de réception déjà notée (suivi du colis, jumelage, « Le client a reçu le colis ») : gardée, car elle
       // fait partir les 30 jours pour changer d'avis et le premier prélèvement.
       const avant = snap.get('preparation') || {};
@@ -3500,6 +3807,6 @@ exports.gestionParcours = onCall(async (request) => {
 exports.regles = {
   ETATS, CATEGORIES, sansEssaisEffaces, natureMouvement, mensuel, centimes, lien, nomFichier, moisSuivant, lectureVersFormulaire, SCHEMA_FACTURE,
   lireReglages, transitionPermise, SUITES, simAResilier, fichesARattacher, sansFacture, stockAJour, releveBatterie, usureBatterie, incoherences, materielLu, memeAccessoire, coutLigne, alertesSim, finApresRecharge, simDeFacture, forfaitFamille, accessoiresAPrevoir, champsSim, aFaire, piecesFacture, debutMoisParis, moisPrecedent, csvTexte, livreDesRecettes,
-  registreDesAchats, corpsDuMail, memeAchat, suiteJumelage, descriptionNonRendu, refusSuppression, fusionnerContacts, emailInformation, cleContact,
+  registreDesAchats, corpsDuMail, pagesPdf, reparerAccents, confirmationSelonTitre, confirmationARattacher, rangerFacture, memeFournisseur, destinataireDuMail, memeAchat, suiteJumelage, descriptionNonRendu, refusSuppression, fusionnerContacts, emailInformation, cleContact,
   avancementPropre, gardeFous,
 };

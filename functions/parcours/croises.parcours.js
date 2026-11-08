@@ -177,8 +177,19 @@ test('messages Stripe reçus en double puis dans le désordre : rien n\'est refa
   const sansHorodatage = (fam) => ({ ...fam, rev: null, abonnement: { ...fam.abonnement, majLe: null } });
   const avant = { mails: s.boite.length, commande: await commande(id), famille: sansHorodatage(await famille(fid)), stock: await s.lire(`stock/${t.fiche}`) };
   assert.ok(vus.some((e) => e.type === 'checkout.session.completed') && vus.some((e) => e.type === 'invoice.paid'));
-  // Tout en double, dans l'ordre inverse.
-  for (const ev of [...vus].reverse()) assert.strictEqual((await rejouer(ev)).statut, 200, ev.type);
+  // Tout en double, dans l'ordre inverse. Chaque événement est inscrit au registre (interne/stripe/evenements) :
+  // rejoué, il est reconnu et renvoyé « déjà traité » sans rien refaire.
+  for (const ev of [...vus].reverse()) {
+    const r = await rejouer(ev);
+    assert.strictEqual(r.statut, 200, ev.type);
+    assert.strictEqual(r.json && r.json.deja, true, `${ev.type} ${ev.id} reconnu comme déjà traité`);
+  }
+  await s.calme();
+  const registre = await s.db.collection('interne/stripe/evenements').get();
+  assert.ok(registre.size >= vus.length, 'un registre par événement');
+  assert.ok(registre.docs.every((d) => d.get('fini') === true), 'tous finis');
+  // Un événement jamais vu avec un identifiant neuf passe, lui, normalement.
+  assert.strictEqual((await rejouer({ ...vus[0], id: 'evt_neuf_inconnu' })).json.deja, undefined, 'un identifiant neuf est traité');
   await s.calme();
   assert.strictEqual(s.boite.length, avant.mails, 'aucun e-mail renvoyé');
   assert.deepStrictEqual(await commande(id), avant.commande, 'la commande n\'a pas bougé');

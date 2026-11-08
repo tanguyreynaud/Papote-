@@ -25,4 +25,18 @@ function db() {
   return instance;
 }
 
-module.exports = { BASE_FIRESTORE, REGION_FIRESTORE, BUCKET_STORAGE, db };
+// Restauration d'une sauvegarde en cours (outils/admin/restaurer.js pose interne/restauration pendant l'écriture) :
+// les déclencheurs qui préviennent des humains ou réveillent des tablettes se taisent, sinon chaque proche restauré
+// recevrait « X a rejoint la famille », chaque appel restauré ferait sonner les téléphones (exercice du 4/11).
+// Une lecture par déclencheur concerné, et le drapeau s'éteint tout seul au bout de 2 h si la restauration a planté.
+async function restaurationEnCours() {
+  try {
+    const s = await db().doc('interne/restauration').get();
+    const jusque = s.exists ? s.get('jusque') : null;
+    return !!(s.exists && s.get('enCours') === true && jusque && jusque.toMillis && jusque.toMillis() > Date.now());
+  } catch (e) {
+    return false;
+  }
+}
+
+module.exports = { BASE_FIRESTORE, REGION_FIRESTORE, BUCKET_STORAGE, db, restaurationEnCours };

@@ -130,9 +130,14 @@ html { scroll-padding-bottom: 8.5rem; }
 /* Pas de soulignement des liens (Tanguy, 2026-10-22) : ils restent repérables par leur couleur et le gras. */
 a { text-decoration: none; }
 main a:not([class]) { color: var(--accent-strong); font-weight: 700; }
-/* Bulle du chat : au-dessus de la barre de paiement. */
+/* Bulle du chat : au-dessus de la barre de paiement. Sur téléphone, elle recouvrait « Autour de moi » et les
+   coches des étapes (relecture du 3/11) : elle prend place dans la barre, entre le prix et « Payer », en simple rond. */
 body .ps-bouton { bottom: 6.5rem; }
-@media (max-width: 760px) { body .ps-bouton span { display: none; } body .ps-bouton { padding: .95rem; } }
+@media (max-width: 760px) {
+  body .ps-bouton span { display: none; }
+  body .ps-bouton { padding: .95rem; }
+  .barre-in .ps-bouton { display: flex !important; position: static; flex: none; width: 3rem; height: 3rem; padding: 0; justify-content: center; box-shadow: none; }
+}
 </style>
 </head>
 <body>
@@ -373,8 +378,9 @@ body .ps-bouton { bottom: 6.5rem; }
   }
   function montrerVerdict() {
     if (proche.eligible) {
-      dire(true, proche.insee ? 'La 4G passe bien dans toute la commune.' : proche.niveau === 'TBC' ? 'La 4G passe très bien chez votre proche.' : 'La 4G passe bien chez votre proche.',
-        'La tablette s\'y connectera toute seule, sans box ni réglage.');
+      // Carte ARCEP : « bonne » = dehors, et seulement parfois dans la maison (couverture.js) : on le dit sans promettre.
+      dire(true, proche.insee ? 'D\'après la carte de l\'ARCEP, la 4G est bonne dans toute la commune.' : proche.niveau === 'TBC' ? 'D\'après la carte de l\'ARCEP, la 4G est très bonne chez votre proche.' : 'D\'après la carte de l\'ARCEP, la 4G est bonne chez votre proche.',
+        'La tablette s\'y connectera toute seule, sans box ni réglage. Si elle capte mal dans la maison, vous avez 30 jours pour la renvoyer.');
     } else {
       dire(false, 'Désolé, notre carte SIM ne capte pas assez bien à cette adresse pour l\'instant.',
         'Dans la maison, la tablette risquerait de rester sans internet : nous préférons ne pas vous la livrer. Une question ? contact@mapapote.fr');
@@ -382,6 +388,11 @@ body .ps-bouton { bottom: 6.5rem; }
   }
   var q = new URLSearchParams(location.search);
   var relais = null;
+  // Trop de pages de paiement ouvertes sans payer (garde-fou du serveur) : on le dit, sans rien bloquer d'autre.
+  if (q.get('trop') === '1') {
+    dire(false, 'Plusieurs paiements ont été ouverts sans aboutir depuis cette connexion.',
+      'Par sécurité, attendez une heure avant de réessayer. Une question ? contact@mapapote.fr');
+  }
 
   var payer = document.getElementById('payer');
   var manque = document.getElementById('manque');
@@ -782,5 +793,28 @@ body .ps-bouton { bottom: 6.5rem; }
 })();
 </script>
 <script src="chat-support.js" defer></script>
+<script>
+  // Téléphone : la bulle du chat rejoint la barre « Payer » (voir le style .barre-in .ps-bouton).
+  (function () {
+    function ranger() {
+      var b = document.querySelector('body > .ps-bouton');
+      var barre = document.querySelector('.barre-in');
+      if (!b || !barre) return;
+      var mq = window.matchMedia('(max-width: 760px)');
+      function placer() { if (mq.matches) barre.insertBefore(b, document.getElementById('payer')); else document.body.appendChild(b); }
+      placer();
+      mq.addEventListener ? mq.addEventListener('change', placer) : mq.addListener(placer);
+      // La barre grandit (message « il manque… », bulle du chat) : la marge de défilement suit sa hauteur,
+      // sinon le champ touché, clavier ouvert, finit caché sous elle.
+      var bas = document.querySelector('.barre');
+      if (bas && window.ResizeObserver) new ResizeObserver(function () {
+        var px = bas.offsetHeight + 16 + 'px';
+        document.documentElement.style.scrollPaddingBottom = px;
+      }).observe(bas);
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ranger);
+    else ranger();
+  })();
+</script>
 </body>
 </html>

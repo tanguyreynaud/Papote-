@@ -93,3 +93,45 @@ test('rien ne cite une ancienne formule, Linote, ni un essai gratuit', () => {
     assert.ok(s.contenu.html.length < 60000, s.titre);
   }
 });
+
+test('Outlook et Gmail sans styles : carte de 560 px [if mso], bouton à toute épreuve, ni flex ni <div> dimensionné', () => {
+  const m = mail.colisParti({ nom: 'Julie', suivi: '12345678', lien: 'https://x/s', relais: { nom: 'Tabac', adresse: '4 rue', cp: '69003', ville: 'Lyon' }, code: 'ABCD-1234' });
+  assert.match(m.html, /<!--\[if mso\]><table role="presentation" width="560"/);
+  assert.match(m.html, /mso-padding-alt:15px 28px"><a /);
+  assert.match(m.html, /<o:PixelsPerInch>96<\/o:PixelsPerInch>/);
+  assert.doesNotMatch(m.html, /display:(flex|grid)|position:/);
+  assert.doesNotMatch(m.html, /<div style="width:/);
+  assert.doesNotMatch(m.html, /<a href="[^"]*">/); // chaque lien a sa couleur en ligne
+  for (const t of m.html.match(/<table\b[^>]*>/g)) assert.match(t, /role="presentation"/);
+});
+
+test('premier jour : allumer la tablette expliqué, pas de « décroche toute seule » trompeur', () => {
+  // Audit premier jour (05/11) : la tablette décroche quand elle voit un visage, pas toute seule.
+  const colis = mail.colisParti({ nom: 'Julie', suivi: '1', lien: 'https://x', relais: null, code: 'AB' });
+  assert.match(colis.text, /bouton de marche/);
+  assert.match(colis.text, /laissez-la charger/);
+  for (const m of [mail.installationFinie({ prenom: 'Julie', famille: 'Mamie Jeanne' }), mail.demandeAcceptee({ prenom: 'Anne', famille: 'Mamie Jeanne' })]) {
+    assert.doesNotMatch(m.text, /décroche toute seule|n'a rien à faire/);
+    assert.match(m.text, /regarde l.écran/);
+  }
+});
+
+test('décès : e-mails de deuil, sans « Merci de nous avoir fait confiance », sans somme en gras, avec les photos à garder', () => {
+  const le = Date.UTC(2027, 0, 5);
+  const arret = mail.resiliationEnregistree({ nom: 'Paul', famille: 'Mamie Jeanne', le, tablettePretee: true, deces: true });
+  assert.strictEqual(arret.subject, 'Nous pensons bien à vous');
+  assert.match(arret.text, /condoléances/);
+  assert.match(arret.text, /Tout télécharger/);
+  assert.match(arret.text, /deux mois après l'arrêt/, 'après un décès : 60 jours pour rendre la tablette');
+  const avis = mail.avantEffacement({ nom: 'Paul', famille: 'Mamie Jeanne', le, deces: true });
+  assert.match(avis.text, /les photos, les vidéos et les messages s'enregistre/);
+  assert.doesNotMatch(arret.text, /Garder mon abonnement|Merci de nous avoir/);
+  const retour = mail.retourTablette({ nom: 'Paul', avant: le, retractation: null, montant: 14000, deces: true });
+  assert.doesNotMatch(retour.text, /Merci de nous avoir fait confiance|seront prélevés/);
+  assert.doesNotMatch(retour.html, /<b>140/);
+  assert.match(retour.text, /Rien ne presse/);
+  const rappel = mail.rappelRestitution({ nom: 'Paul', avant: le, lien: null, montant: 14000, deces: true });
+  assert.doesNotMatch(rappel.html, /<b>140|seront prélevés/);
+  // Sans décès : rien ne change.
+  assert.match(mail.retourTablette({ nom: 'Paul', avant: le, retractation: null, montant: 14000 }).text, /Merci de nous avoir fait confiance/);
+});

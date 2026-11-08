@@ -22,6 +22,34 @@ paiement abandonnée, stock épuisé, fausse signature Stripe, annulation par l'
 résiliation (dernier mois, rappel, 140 € si la tablette ne revient pas), installation reprise ou annulée, commande
 reliée par son code, commande offerte, SOS.
 
+`logique.parcours.js`, `croises.parcours.js`, `argent.parcours.js`, `temps.parcours.js` : remise en main propre,
+impayés et pause, reprise d'un abonnement résilié, deux commandes sur une famille, deux responsables ou deux onglets
+en même temps, messages Stripe en double ou dans le désordre, étiquettes et « Matériel reçu » en double, cinq mois
+jour par jour.
+
+Tâches planifiées : `s.tache('restitutions')` (et les autres tâches de `taches.js`) lance la tâche seule, comme
+`tachesHoraires` le fait à son heure ; `tachesHoraires` elle-même est lancée à 3 h et 10 h dans `logique.parcours.js`.
+
+Gestes humains côté serveur (tests de nuit, 03/11) : double appui, nouvel essai après une panne, gestes dans le
+désordre, appels ou tâches en même temps.
+
+- `resiliation.parcours.js` : « Résilier » deux fois, « Garder » deux fois, puis « Résilier » (un e-mail par vraie
+  demande) ; Stripe injoignable puis nouvel essai ; arrêt décidé par Papote que la famille ne peut pas reprendre, même
+  par un vieil onglet ; « Garder » refusé après la date d'arrêt.
+- `retour.parcours.js` : « Je renvoie la tablette » deux fois en même temps (un seul QR code payé) ; Sendcloud en
+  panne puis nouvel essai ; reprise par Papote pendant un retour anticipé (QR annulé si le colis n'est pas déposé,
+  refusée s'il l'est) ; tablette rendue avant la date d'arrêt ; main propre notée par Papote puis Mondial Relay quand
+  même ; tâche des restitutions relancée ou lancée deux fois (140 € et avis une seule fois, pas de remboursement).
+- `sos-reseau.parcours.js` : SOS décroché au 1er ou au 2e essai, « Refuser » sur l'app Android (faux jeton, deux
+  fois) ; tablette débranchée puis rebranchée ; notifications en panne puis revenues ; tâche des alertes lancée deux
+  fois en même temps ; plus d'alerte après la fin de l'abonnement. Le SMS du SOS part de la tablette elle-même
+  (`android/…/SmsAlert.java`) : il n'est pas testé ici.
+
+`installation-qr.parcours.js` : installation d'une tablette par QR code (installation-qr.js) : QR créé par
+l'admin, inscription de la tablette (fiche d'achat reprise, clé App Check jamais gardée en clair), nouvel essai de la
+même tablette, autre tablette refusée, QR expiré après 24 h ; hors critères noté sans refus, tablette d'essai à part,
+20 QR par heure au plus.
+
 Le refus du 31e proche lui-même est une règle Firestore : il est testé avec les règles, dans `tests/regles/`
 (branche de l'app web).
 
@@ -30,5 +58,8 @@ Le refus du 31e proche lui-même est une règle Firestore : il est testé avec l
 - `simulation.js` charge `functions/index.js` avec les faux services, rejoue les déclencheurs Firestore à chaque
   écriture, envoie les événements Stripe au webhook, et fait avancer l'horloge (`avancer(jours)`).
   Une erreur dans une fonction (déclencheur, webhook, `logger.error`) fait échouer le scénario.
+  Pannes à la demande : `sendcloud.panne = true` (Sendcloud répond 503), `reglages.pushEnPanne = n` (les n prochaines
+  notifications échouent).
 - `faux-stripe.js` : Stripe en mémoire, avec ce que font le client et sa banque (payer, refuser, fin du mois offert…).
+  Comme le vrai, une clé d'idempotence rend le même paiement ou remboursement.
 - `acteurs.js` : les gestes de Tanguy dans l'admin, du client sur le site, de la tablette et des proches.
