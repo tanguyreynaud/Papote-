@@ -300,6 +300,7 @@ test('cartes SIM et accessoires lus sur une facture', () => {
   });
   assert.deepStrictEqual(r.cartesSim, {
     quantite: 2, operateur: 'YouPrice', iccids: ['8933010000000000001', '8933010000000000002'], numeros: [], prixCarte: 1000, forfait: 299,
+    go: null, renouvellementAuto: null, dureeForfait: null, finForfait: null, // forfait pas détaillé sur la facture
   });
   assert.deepStrictEqual(r.accessoires, [{ nom: 'Clé 4G USB', quantite: 3, prixUnitaire: 990 }]);
   assert.strictEqual(g.lectureVersFormulaire({ cartesSim: null }).cartesSim, null);
@@ -730,4 +731,52 @@ test('accents cassés réparés (texte UTF-8 lu en windows-1252, Sosh 5/11)', ()
 
 test('accents : un texte correct mêlé à des suites cassées', () => {
   assert.strictEqual(g.reparerAccents('Un accès, puis accÃ©der et 2,99 â‚¬, NÂ° 3, payé à € 5'), 'Un accès, puis accéder et 2,99 €, N° 3, payé à € 5');
+});
+
+test('justificatif d\'achat pris pour une facture : le titre le remet en confirmation (Sosh, 7/11)', () => {
+  const lu = { facture: true, confirmation: false, fournisseur: 'Sosh', montant: 1000 };
+  assert.strictEqual(g.confirmationSelonTitre(lu, "Justificatif d'achat.pdf").confirmation, true);
+  assert.strictEqual(g.confirmationSelonTitre(lu, 'Récapitulatif de commande.pdf').confirmation, true);
+  assert.strictEqual(g.confirmationSelonTitre(lu, 'Facture commande 123.pdf').confirmation, false); // le titre dit « facture »
+  assert.strictEqual(g.confirmationSelonTitre(lu, 'FR2026-0042.pdf').confirmation, false);
+  assert.strictEqual(g.confirmationSelonTitre(lu, undefined).confirmation, false);
+  assert.strictEqual(g.confirmationSelonTitre({ ...lu, facture: false }, 'Justificatif.pdf').confirmation, false);
+  // Contrat et mandat joints au mail de bienvenue : pas lus du tout.
+  const ignorees = [];
+  assert.deepStrictEqual(g.piecesFacture([{ filename: 'Contrat.pdf', contentType: 'application/pdf', size: 90000 }], ignorees), []);
+  assert.match(ignorees[0], /Contrat\.pdf : pas une facture d'après son titre/);
+});
+
+test('la vraie facture rejoint la confirmation ouverte du même vendeur, même si le montant diffère', () => {
+  const jour = 864e5;
+  const sosh = { id: 'a', confirmation: true, fournisseur: 'Sosh', montant: 1000, date: Date.UTC(2026, 10, 5) };
+  const facture = { facture: true, confirmation: false, fournisseur: 'SOSH', montant: 1299, date: sosh.date + 15 * jour };
+  assert.deepStrictEqual(g.confirmationARattacher([sosh], facture), { depense: sosh, montantDifferent: true });
+  // Même montant : rattachée sans doute.
+  assert.deepStrictEqual(g.confirmationARattacher([sosh], { ...facture, montant: 1000 }), { depense: sosh, montantDifferent: false });
+  // Montant plus petit, autre vendeur, trop tard, ou déjà une confirmation : rien.
+  assert.strictEqual(g.confirmationARattacher([sosh], { ...facture, montant: 500 }), null);
+  assert.strictEqual(g.confirmationARattacher([sosh], { ...facture, fournisseur: 'Free' }), null);
+  assert.strictEqual(g.confirmationARattacher([sosh], { ...facture, date: sosh.date + 50 * jour }), null);
+  assert.strictEqual(g.confirmationARattacher([sosh], { ...facture, confirmation: true }), null);
+  // Deux commandes ouvertes chez le même vendeur et montant différent : on ne devine pas.
+  const autre = { ...sosh, id: 'b', montant: 800 };
+  assert.strictEqual(g.confirmationARattacher([sosh, autre], facture), null);
+  // … mais le même montant désigne la bonne.
+  assert.strictEqual(g.confirmationARattacher([sosh, autre], { ...facture, montant: 800 }).depense.id, 'b');
+});
+
+test('forfait d\'une carte SIM lu sur la confirmation', () => {
+  const lu = g.lectureVersFormulaire({
+    estUneFacture: true, confirmationCommande: true, fournisseur: 'Sosh', totalTTC: 10, categorie: 'sim',
+    cartesSim: { quantite: 1, operateur: 'Sosh', iccids: [], numeros: [], prixCarteTTC: 10, forfaitMensuelTTC: 2.99,
+      goParMois: 1, renouvellementAuto: true, dureeForfaitJours: 30, finForfait: null },
+  });
+  assert.deepStrictEqual(lu.cartesSim, { quantite: 1, operateur: 'Sosh', iccids: [], numeros: [], prixCarte: 1000, forfait: 299,
+    go: 1, renouvellementAuto: true, dureeForfait: 30, finForfait: null });
+  const bizarre = g.lectureVersFormulaire({ cartesSim: { quantite: 1, goParMois: -3, renouvellementAuto: 'oui', dureeForfaitJours: 9999, finForfait: 'coupe' } });
+  assert.strictEqual(bizarre.cartesSim.go, null);
+  assert.strictEqual(bizarre.cartesSim.renouvellementAuto, null);
+  assert.strictEqual(bizarre.cartesSim.dureeForfait, null);
+  assert.strictEqual(bizarre.cartesSim.finForfait, null);
 });

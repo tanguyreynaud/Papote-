@@ -431,7 +431,16 @@ function stockAJour(tablette, commande) {
 const MAX_PIECES_MAIL = 10;
 const MAX_PAGES_PDF = 2;
 const MAX_KO_PDF = 1024;
-const TITRES_PAS_FACTURE = /conditions?|cgv|cgu|cga|tarif|retract|offres?|notice|guide|brochure|catalogue|fiche.?d.?information|mentions.?legales|confidentialite|reglement|manuel/;
+const TITRES_PAS_FACTURE = /conditions?|cgv|cgu|cga|tarif|retract|offres?|notice|guide|brochure|catalogue|fiche.?d.?information|mentions.?legales|confidentialite|reglement|manuel|contrat|mandat/;
+// Titre d'une simple preuve de commande (« Justificatif d'achat.pdf » de Sosh, 7/11) : jamais la facture,
+// sauf si le titre dit aussi « facture ».
+const TITRES_CONFIRMATION = /justificatif|recapitulatif|confirmation|commande|bon.?de|recu.?d.?achat/;
+const TITRES_FACTURE = /factur|invoice/;
+function confirmationSelonTitre(r, nom) {
+  const t = titreSimple(nom);
+  return r && r.facture && !r.confirmation && TITRES_CONFIRMATION.test(t) && !TITRES_FACTURE.test(t)
+    ? { ...r, confirmation: true } : r;
+}
 
 // Nombre de pages d'un PDF, sans bibliothèque : objets « /Type /Page » en clair, puis dans les flux
 // compressés (PDF récents : objets rangés dans des flux /ObjStm). null si on ne sait pas les compter.
@@ -615,6 +624,10 @@ function materielLu(o, enCentimes = false) {
       numeros: liste(c.numeros, quantite),
       prixCarte: prix(enCentimes ? c.prixCarte : c.prixCarteTTC),
       forfait: prix(enCentimes ? c.forfait : c.forfaitMensuelTTC),
+      go: Number.isFinite(c.goParMois) && c.goParMois > 0 && c.goParMois <= 1000 ? c.goParMois : null,
+      renouvellementAuto: typeof c.renouvellementAuto === 'boolean' ? c.renouvellementAuto : null,
+      dureeForfait: Number.isInteger(c.dureeForfaitJours) && c.dureeForfaitJours >= 1 && c.dureeForfaitJours <= 366 ? c.dureeForfaitJours : null,
+      finForfait: ['reduit', 'bloque'].includes(c.finForfait) ? c.finForfait : null,
     } : null,
     accessoires: (Array.isArray(o.accessoires) ? o.accessoires : []).map((a) => ({
       nom: texte(a && a.nom, 80),
@@ -667,7 +680,8 @@ const SCHEMA_FACTURE = {
       anyOf: [{ type: 'null' }, {
         type: 'object',
         additionalProperties: false,
-        required: ['quantite', 'operateur', 'iccids', 'numeros', 'prixCarteTTC', 'forfaitMensuelTTC'],
+        required: ['quantite', 'operateur', 'iccids', 'numeros', 'prixCarteTTC', 'forfaitMensuelTTC', 'goParMois',
+          'renouvellementAuto', 'dureeForfaitJours', 'finForfait'],
         properties: {
           quantite: { type: 'integer' },
           operateur: nul('string'),
@@ -675,6 +689,12 @@ const SCHEMA_FACTURE = {
           numeros: { type: 'array', items: { type: 'string' }, description: 'Numéros de ligne attribués, dans le même ordre.' },
           prixCarteTTC: { ...nul('number'), description: 'Prix d\'une carte (kit SIM), en euros.' },
           forfaitMensuelTTC: { ...nul('number'), description: 'Prix mensuel du forfait de chaque ligne, en euros.' },
+          goParMois: { ...nul('number'), description: 'Données internet du forfait, en Go par période (1 pour « 1Go »).' },
+          renouvellementAuto: { ...nul('boolean'), description: 'Vrai pour un forfait reconduit et prélevé tout seul (abonnement mensuel, '
+            + 'sans engagement, prélèvement SEPA) ; faux pour une recharge prépayée payée à chaque fois ; null si le document ne permet pas de le dire.' },
+          dureeForfaitJours: { ...nul('integer'), description: 'Durée d\'une période du forfait en jours (30 pour « 30 jours » ou « par mois »).' },
+          finForfait: { anyOf: [{ type: 'null' }, { type: 'string', enum: ['reduit', 'bloque'] }],
+            description: 'Au bout des Go : « reduit » (débit réduit) ou « bloque » (internet coupé), seulement si le document le dit, sinon null.' },
         },
       }],
       description: 'Seulement pour des cartes SIM physiques achetées (kits SIM, nouvelles lignes) : sinon null. '
@@ -1171,6 +1191,11 @@ async function entrerMateriel(m, { depense, numeroFacture, source }, qui) {
       batch.set(db().collection('sims').doc(), {
         statut: 'stock', operateur: c.operateur, iccid: c.iccids[i] || null, numero: c.numeros[i] || null,
         prix: c.forfait, tablette: null, depense: depense || null,
+        // Forfait lu sur la confirmation ou la facture (Tanguy, 8/11) : ce qui n'y est pas reste à remplir à la main.
+        ...(c.go != null ? { go: c.go } : {}),
+        ...(c.renouvellementAuto != null ? { renouvellementAuto: c.renouvellementAuto } : {}),
+        ...(c.dureeForfait != null ? { dureeForfait: c.dureeForfait } : {}),
+        ...(c.finForfait ? { finForfait: c.finForfait } : {}),
         note: [numeroFacture ? `Facture ${numeroFacture}` : null, source].filter(Boolean).join(' · ') || null,
         creeLe: FieldValue.serverTimestamp(), par: qui,
       });
@@ -1568,6 +1593,13 @@ exports.gestionDepense = onCall(async (request) => {
     const moisTouches = [ms(snap.get('date')), maj.date ? maj.date.toMillis() : null].filter(Boolean).map(moisDeParis);
     return { ok: true, moisClos: [...new Set(moisTouches)].filter((m) => clos[m]) };
   }
+  // « Ce n'est pas la facture » : un justificatif pris pour la facture repasse en « facture pas encore reçue ».
+  if (d.action === 'attendreFacture') {
+    const ref = db().doc(`depenses/${d.id || '-'}`);
+    if (!(await ref.get()).exists) throw new HttpsError('not-found', 'Dépense introuvable.');
+    await ref.update({ confirmation: true, majLe: FieldValue.serverTimestamp(), majPar: request.auth.token.email || request.auth.uid });
+    return { ok: true };
+  }
   if (d.action === 'arreter') {
     const ref = db().doc(`depenses/${d.id || '-'}`);
     if (!(await ref.get()).exists) throw new HttpsError('not-found', 'Dépense introuvable.');
@@ -1877,6 +1909,19 @@ function memeAchat(depense, r) {
   return !!depense.confirmation && !!r.fournisseur && norm(depense.fournisseur) === norm(r.fournisseur)
     && depense.montant === r.montant && Math.abs((depense.date || 0) - (r.date || depense.date || 0)) <= 30 * 24 * 3600 * 1000;
 }
+// Confirmation de commande encore sans facture à laquelle rattacher une facture reçue : même montant d'abord ;
+// sinon la seule confirmation ouverte du même vendeur depuis 45 jours, si la facture est d'un montant au moins égal
+// (la 1re facture Sosh = 10 € d'activation + le forfait, 8/11). Renvoie { depense, montantDifferent } ou null.
+function confirmationARattacher(depenses, r) {
+  if (!r || r.confirmation || !r.fournisseur || r.montant == null) return null;
+  const meme = depenses.find((d) => memeAchat(d, r));
+  if (meme) return { depense: meme, montantDifferent: false };
+  const norm = (x) => String(x || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const ouvertes = depenses.filter((d) => d.confirmation && norm(d.fournisseur) === norm(r.fournisseur)
+    && Math.abs((d.date || 0) - (r.date || d.date || 0)) <= 45 * 864e5 && d.montant != null && r.montant >= d.montant);
+  return ouvertes.length === 1 ? { depense: ouvertes[0], montantDifferent: true } : null;
+}
+
 const CONSIGNE_LECTURE = `Tu lis une facture d'achat (ou un ticket) reçue par Papote, une petite entreprise française
 qui prête des tablettes à des personnes âgées et leur famille. Remplis chaque champ d'après le document seulement :
 null quand l'information n'y figure pas, jamais d'invention. Montants en euros, tels qu'imprimés.
@@ -1894,7 +1939,10 @@ est une facture : confirmationCommande faux. Le petit matériel qui part avec le
 tablettes (clé ou routeur 4G, prise, chargeur, câble, support) va dans « accessoires ».
 Une confirmation de commande d'un site marchand (Cdiscount, Temu, Amazon…) qui donne le montant payé compte comme
 justificatif : estUneFacture vrai et confirmationCommande vrai, numero = numéro de commande. Une publicité, une lettre
-d'information ou un avis d'expédition sans montant payé n'est pas une facture.`;
+d'information ou un avis d'expédition sans montant payé n'est pas une facture.
+Un « justificatif d'achat », un récapitulatif ou un bon de commande qui ne s'intitule pas « Facture » et n'a pas de
+numéro de facture est une confirmation de commande (confirmationCommande vrai), même s'il donne le montant payé.
+Pour des cartes SIM, relève aussi le forfait : Go par mois, renouvellement automatique, durée, fin de forfait.`;
 
 // contenu : fichier en base64. Erreur HttpsError lisible si la lecture échoue.
 async function lireDocument(contenu, type) {
@@ -3004,6 +3052,16 @@ exports.gestionCloturer = onCall(OPTIONS_CLOTURE, async (request) => {
 
 // Facture lue (lectureVersFormulaire) → achat de tablettes ou dépense « à vérifier », avec la pièce jointe,
 // et ses cartes SIM et accessoires dans le stock. Renvoie un texte si elle était déjà enregistrée.
+// Numéro de ligne lu sur un document suivant du même achat (« Bienvenue chez Sosh » : « N° de mobile : 06… ») :
+// donné aux cartes SIM de cet achat qui n'en ont pas encore.
+async function completerSims(depense, r) {
+  const numeros = [...((r.cartesSim && r.cartesSim.numeros) || []), r.ligne]
+    .map((n) => String(n || '').replace(/\s/g, '')).filter((n) => /^0[67]\d{8}$/.test(n));
+  if (!numeros.length) return;
+  const sims = (await db().collection('sims').where('depense', '==', depense).get()).docs.filter((d) => !d.get('numero'));
+  await Promise.all(sims.slice(0, numeros.length).map((d, i) => d.ref.update({ numero: numeros[i] })));
+}
+
 async function rangerFacture(r, piece, source) {
   if (r.numero) {
     const memes = await db().collection('depenses').where('numero', '==', r.numero).get();
@@ -3011,16 +3069,35 @@ async function rangerFacture(r, piece, source) {
       return `déjà enregistrée (${r.fournisseur || ''} n° ${r.numero})`;
     }
   }
-  if (r.montant != null) {
+  if (r.montant != null && r.confirmation) {
+    // Deuxième preuve du même achat (justificatif, récapitulatif) : rien de nouveau, le numéro de ligne complète la SIM.
     const memeMontant = await db().collection('depenses').where('montant', '==', r.montant).get();
-    const precedente = memeMontant.docs.find((d) => memeAchat({ ...d.data(), date: ms(d.get('date')) }, r)
-      || (r.confirmation && memeAchat({ ...d.data(), confirmation: true, date: ms(d.get('date')) }, r)));
-    if (precedente && r.confirmation) return `déjà enregistrée (${r.fournisseur || ''}, même montant)`;
+    const precedente = memeMontant.docs.find((d) => memeAchat({ ...d.data(), confirmation: true, date: ms(d.get('date')) }, r));
     if (precedente) {
+      await completerSims(precedente.id, r);
+      return `déjà enregistrée (${r.fournisseur || ''}, même montant)`;
+    }
+  }
+  if (r.montant != null && !r.confirmation) {
+    const ouvertes = (await db().collection('depenses').where('confirmation', '==', true).get()).docs
+      .map((d) => ({ ...d.data(), id: d.id, ref: d.ref, date: ms(d.get('date')) }));
+    const trouvee = confirmationARattacher(ouvertes, r);
+    if (trouvee) {
       // La vraie facture remplace la confirmation de commande : pièce jointe ajoutée, rien n'entre deux fois au stock.
-      await precedente.ref.update({ confirmation: false, numero: r.numero || precedente.get('numero') || null });
-      await enregistrerPiece('depenses', precedente.id, piece.filename || 'facture', piece.contentType, piece.content);
-      return { materiel: [], rattachee: true };
+      // Montant différent (activation + 1er mois) : la dépense prend celui de la facture et reste à vérifier.
+      const p = trouvee.depense;
+      await p.ref.update({
+        confirmation: false, numero: r.numero || p.numero || null,
+        ...(trouvee.montantDifferent ? {
+          montant: r.montant, tva: r.tva, aVerifier: true,
+          ...(r.date ? { date: Timestamp.fromMillis(r.date) } : {}),
+          remarque: `Montant de la facture (${(r.montant / 100).toFixed(2).replace('.', ',')} €) différent de la commande `
+            + `(${(p.montant / 100).toFixed(2).replace('.', ',')} €) : vérifiez qu'il s'agit bien du même achat.`,
+        } : {}),
+      });
+      await enregistrerPiece('depenses', p.id, piece.filename || 'facture', piece.contentType, piece.content);
+      await completerSims(p.id, r);
+      return { materiel: [], rattachee: true, montantDifferent: trouvee.montantDifferent };
     }
   }
   let id;
@@ -3103,7 +3180,7 @@ async function releverFactures() {
           for (const piece of [...pieces, ...(corps ? [corps] : [])]) {
             if (piece === corps && trouvee) break;
             try {
-              const r = await lireDocument(piece.content.toString('base64'), piece.contentType);
+              const r = confirmationSelonTitre(await lireDocument(piece.content.toString('base64'), piece.contentType), piece.filename);
               if (!r.facture) {
                 bilan.ignorees.push(`${piece.filename || 'pièce'} (« ${sujet} ») : pas une facture`);
                 continue;
@@ -3112,7 +3189,7 @@ async function releverFactures() {
               const rangee = await rangerFacture(r, piece, `e-mail de ${de}`.slice(0, 200));
               if (typeof rangee === 'string') bilan.ignorees.push(`${piece.filename || 'pièce'} : ${rangee}`);
               else {
-                const plus = rangee && rangee.rattachee ? ' (facture ajoutée à la confirmation de commande)'
+                const plus = rangee && rangee.rattachee ? ` (facture ajoutée à la confirmation de commande${rangee.montantDifferent ? ', montant différent : à vérifier' : ''})`
                   : rangee && rangee.sim ? ` (recharge de la SIM ${rangee.sim})`
                   : rangee && rangee.materiel && rangee.materiel.length ? ` (+ ${rangee.materiel.join(', ')})` : '';
                 bilan.rangees.push(`${r.fournisseur || de} : ${r.libelle || sujet}${plus}`);
@@ -3629,6 +3706,6 @@ exports.gestionParcours = onCall(async (request) => {
 exports.regles = {
   ETATS, CATEGORIES, sansEssaisEffaces, natureMouvement, mensuel, centimes, lien, nomFichier, moisSuivant, lectureVersFormulaire, SCHEMA_FACTURE,
   lireReglages, transitionPermise, SUITES, simAResilier, fichesARattacher, sansFacture, stockAJour, releveBatterie, usureBatterie, incoherences, materielLu, memeAccessoire, coutLigne, alertesSim, finApresRecharge, simDeFacture, forfaitFamille, accessoiresAPrevoir, champsSim, aFaire, piecesFacture, debutMoisParis, moisPrecedent, csvTexte, livreDesRecettes,
-  registreDesAchats, corpsDuMail, pagesPdf, reparerAccents, memeAchat, suiteJumelage, descriptionNonRendu, refusSuppression, fusionnerContacts, emailInformation, cleContact,
+  registreDesAchats, corpsDuMail, pagesPdf, reparerAccents, confirmationSelonTitre, confirmationARattacher, rangerFacture, memeAchat, suiteJumelage, descriptionNonRendu, refusSuppression, fusionnerContacts, emailInformation, cleContact,
   avancementPropre, gardeFous,
 };

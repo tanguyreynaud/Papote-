@@ -92,6 +92,13 @@ function gestionDonnees(o = {}) {
     { id: 'D-S4', date: il(3), categorie: 'sim', fournisseur: 'Lyca', libelle: 'Recharge du forfait Lyca 07 51 23 45 67', montant: 499, sim: 'S4', pieces: [] },
     { id: 'D-E1', date: il(10), categorie: 'envoi', fournisseur: 'Sendcloud', libelle: 'Étiquettes Mondial Relay', montant: 1490, pieces: [] },
     { id: 'D-L1', date: il(16), categorie: 'logiciel', fournisseur: 'OVH', libelle: 'Nom de domaine mapapote.fr', montant: 1199, recurrence: 'annuel', pieces: [] },
+    // Achat Sosh lu par e-mail (8/11) : un justificatif pris pour la facture, puis une facture d'un autre montant.
+    { id: 'D-S5', date: il(3), categorie: 'sim', fournisseur: 'Sosh', libelle: 'Activation d\'une carte SIM Sosh (forfait 1 Go à 2,99 €/mois)', montant: 1000, numero: 'X041532676',
+      source: 'e-mail de "votre boutique SOSH" <boutique@sosh.fr>', materiel: ['1 carte SIM en stock'],
+      pieces: [{ nom: 'confirmation-commande.txt', chemin: 'z1', type: 'text/plain', le: il(3) }, { nom: 'Justificatif d\'achat.pdf', chemin: 'z2', type: 'application/pdf', le: il(1) }] },
+    { id: 'D-S6', date: il(1), categorie: 'sim', fournisseur: 'Sosh', libelle: 'Activation d\'une carte SIM Sosh (forfait 1 Go à 2,99 €/mois)', montant: 1299, tva: 217, numero: 'FA-2026-11', aVerifier: true,
+      source: 'e-mail de "Sosh" <facture@sosh.fr>', remarque: 'Montant de la facture (12,99 €) différent de la commande (10,00 €) : vérifiez qu\'il s\'agit bien du même achat.',
+      pieces: [{ nom: 'confirmation-commande.txt', chemin: 'z3', type: 'text/plain', le: il(5) }, { nom: 'Facture.pdf', chemin: 'z4', type: 'application/pdf', le: il(1) }] },
     { id: 'D-M1', date: il(1), categorie: 'accessoires', fournisseur: 'Amazon', libelle: 'Supports de tablette', montant: 3596, aVerifier: true, pieces: [{ nom: 'facture-amazon.pdf', chemin: 'y', type: 'application/pdf', le: il(1) }] },
   ];
   const familles = [
@@ -429,6 +436,12 @@ const SCENES = [
     await p.waitForTimeout(500); // la fenêtre « Envoi… » finit de se fermer
   } },
   { groupe: 'Comptabilité', titre: 'Une dépense reçue par e-mail, à vérifier', page: '#depense/D-M1', tailles: ['pc'], plein: true, donnees: () => donnees() },
+  { groupe: 'Comptabilité', titre: 'Achat lu par e-mail : « Ce n\'est pas la facture »', page: '#depense/D-S5', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees() },
+  { groupe: 'Comptabilité', titre: 'Achat : « Ce n\'est pas la facture » touché', page: '#depense/D-S5', tailles: ['pc'], donnees: () => donnees({ fonctions: { gestionDepense: { ok: true } } }), faire: async (p) => {
+    await p.click('#dd-pas-la-facture');
+    await p.waitForSelector('.bulle-annonce.visible', { timeout: 5000 });
+  } },
+  { groupe: 'Comptabilité', titre: 'Achat : facture d\'un autre montant que la commande, à vérifier', page: '#depense/D-S6', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Comptabilité', titre: 'URSSAF et TVA', page: '#compta/urssaf', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Comptabilité', titre: 'Rentabilité', page: '#compta/rentabilite', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Comptabilité', titre: 'Registres', page: '#compta/registres', tailles: ['pc'], plein: true, donnees: () => donnees() },
