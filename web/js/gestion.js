@@ -628,7 +628,8 @@ const nomFamille = (fid) => ((donnees.familles || []).find((f) => f.id === fid) 
 const pasAVendre = (t) => `Dans la famille ${nomFamille(t.fid)} : pas à vendre`;
 // Libre pour un client : en stock ou préparée, sans commande, dans aucune famille,
 // ni d'essai ni hors critères pas gardée (installation par QR), comme functions/stock.js.
-const tabletteLibre = (t) => DISPONIBLES.includes(t.etat) && !t.commande && !t.fid && t.essai !== true && !t.horsCriteres;
+// Une tablette achetée pour remplacer une tablette perdue ou volée (reserveePour, functions/perte.js) non plus.
+const tabletteLibre = (t) => DISPONIBLES.includes(t.etat) && !t.commande && !t.fid && t.essai !== true && !t.horsCriteres && !t.reserveePour;
 // Alerte notée au jumelage. « Jumelée sans commande » n'en est plus une : la tablette n'est simplement pas à vendre.
 const alerteJumelage = (t) => (t.alerteJumelage === 'jumelée sans commande' ? null : t.alerteJumelage || null);
 // Tablettes du stock qui peuvent partir : libres, ou déjà réservées à une commande pas encore envoyée.
@@ -643,6 +644,7 @@ function badgesInstallation(t) {
     t.horsCriteres ? badge('hors critères', 'ko') : null,
     t.simPin ? badge('SIM avec code PIN', 'ko') : null,
     t.essai === true ? badge('tablette d\'essai', 'info') : null,
+    t.reserveePour ? badge('réservée : remplacement d\'une tablette perdue', 'info') : null,
   ].filter(Boolean);
 }
 
@@ -736,6 +738,13 @@ function afficherAccueil() {
       .map((c) => [1, `Dernier mois refusé par la banque : ${c.nom || c.email || 'client'}, le contacter`, versCommande(c), 'ko']),
     ...cmd.filter((c) => c.restitution && c.restitution.statut === 'echec')
       .map((c) => [1, `Prélèvement du matériel refusé : ${c.nom || c.email || 'client'}, le contacter`, versCommande(c), 'ko']),
+    // Tablette perdue ou volée (functions/perte.js) : mêmes textes que aFaire (functions/gestion.js).
+    ...cmd.filter((c) => c.perte && c.perte.statut === 'achat' && c.expedition !== 'annulee')
+      .map((c) => [1, `Tablette de remplacement achetée pour ${c.nom || c.email || 'un client'} (perte ou vol) : à envoyer dès sa réception`, versCommande(c), 'ko']),
+    ...cmd.filter((c) => c.perte && c.perte.statut === 'echec' && c.expedition !== 'annulee')
+      .map((c) => [1, `Tablette perdue ou volée, prélèvement refusé : ${c.nom || c.email || 'client'}, rien n'est parti, le contacter`, versCommande(c), 'ko']),
+    ...cmd.filter((c) => c.perte && ['payee', 'remplacement'].includes(c.perte.statut) && c.expedition !== 'annulee')
+      .map((c) => [1, `Tablette perdue déjà payée par ${c.nom || c.email || 'un client'} : remplacement à terminer`, versCommande(c), 'ko']),
     ...cmd.filter((c) => (c.contestations || []).some((x) => Date.now() - x.le < 60 * 864e5))
       .map((c) => [1, `Prélèvement contesté à la banque : ${c.nom || c.email || 'client'}, voir le litige dans Stripe`, versCommande(c), 'ko']),
     [simsAResilier, `${pluriel(simsAResilier, 'forfait SIM')} payé${simsAResilier > 1 ? 's' : ''} depuis 30 jours pour une tablette sans client : à résilier ou suspendre`, '#stock/sim', 'ko'],
@@ -1051,7 +1060,11 @@ async function remplirCommande(id) {
       ligne('Pause', c.pause && c.pause.jusqua > Date.now() ? `prélèvements en pause jusqu'au ${jour(c.pause.jusqua)} (hospitalisation)` : null),
       ligne('Dernier mois', c.dernierMois ? `${euros(c.dernierMois.montant)} ${DERNIER_MOIS[c.dernierMois.statut] || c.dernierMois.statut}${c.dernierMois.erreur ? ` : ${c.dernierMois.erreur}` : ''}` : null),
       ligne('Prélèvement refusé', c.restitution && c.restitution.statut === 'echec' ? `matériel non rendu${c.restitutionErreur ? ` : ${c.restitutionErreur}` : ''}` : null),
+      ligne('Perte ou vol', c.perte ? textePerte(c.perte) : null),
       ligne('Contesté', (c.contestations || []).length ? c.contestations.map((x) => `${euros(x.montant)} le ${jour(x.le)}`).join(', ') : null))),
+    // Tablette perdue ou volée à remplacer (achetée, prélèvement refusé, ou payée sans remplacement noté).
+    c.perte && ['achat', 'echec', 'payee'].includes(c.perte.statut) && c.perte.tablette
+      ? h('div', { class: 'card' }, h('h2', {}, 'Tablette perdue ou volée'), blocRemplacementPerte(c, c.perte.tablette)) : null,
     h('div', { class: 'card' }, h('h2', {}, 'Parcours'),
       // Frise : la date à gauche (vide pour une étape sans date), l'étape à droite ; la prochaine étape en dernier.
       h('ol', { class: 'frise' }, ...parcoursCommande(c).map(([le, texte, date]) => {
@@ -2379,10 +2392,152 @@ function rafraichirSousTitres() {
   });
 }
 
+// Dernière coupure « Tablette volée : tout couper » ({ id, texte }), réaffichée quand le bloc se redessine.
+let derniereCoupure = null;
+
+// Tablette perdue ou volée : texte de l'état du remplacement (comme functions/perte.js, texteStatut).
+function textePerte(p) {
+  if (!p) return '';
+  const m = p.montant != null ? euros(p.montant) : '';
+  return {
+    achat: 'tablette de remplacement achetée, à envoyer dès sa réception (le prélèvement se fait à l\'envoi)',
+    prelevement: `prélèvement de ${m} en cours`,
+    echec: `prélèvement de ${m} refusé${p.erreur ? ` (${String(p.erreur).replace(/\.$/, '')})` : ''} : rien n'est parti`,
+    payee: `${m} prélevés, remplacement à terminer`,
+    remplacement: `${m} prélevés, remplacement en cours`,
+    envoyee: `${m} prélevés, tablette de remplacement partie${p.envoyeeLe ? ` le ${jour(p.envoyeeLe)}` : ''}`,
+    offerte: 'commande offerte : tablette de remplacement partie, rien prélevé',
+  }[p.statut] || p.statut || '';
+}
+
+// Remplacement d'une tablette perdue ou volée (fonction tabletteRemplacement, functions/perte.js), après « Tablette
+// volée : tout couper » ou depuis la commande. Une tablette libre : « Envoyer une tablette de remplacement » (prélève
+// d'abord 140 €, 150 € avec l'enceinte, CGV ; elle ne part que si c'est payé). Stock vide : « Acheter une tablette de
+// remplacement » (fiche « Commandée » réservée à la commande, ligne dans « À faire » jusqu'à son envoi).
+// La carte SIM est remplacée dans le même geste (case cochée par défaut).
+function blocRemplacementPerte(c, ancienneId) {
+  const p = c.perte && c.perte.tablette === ancienneId ? c.perte : null;
+  const retour = h('div', { class: 'retour-ordre', role: 'status', hidden: true });
+  const montrer = (texte, classe) => { retour.hidden = false; retour.className = `retour-ordre ${classe || ''}`; retour.textContent = texte; };
+  const etat = p ? h('p', {}, h('strong', {}, 'Remplacement : '), textePerte(p)) : null;
+  const client = c.nom || c.email || 'le client';
+  if (p && ['envoyee', 'offerte', 'prelevement', 'remplacement'].includes(p.statut)) return h('div', { class: 'remplacement-perte' }, etat);
+  const montant = c.enceinteFournie ? 15000 : 14000;
+  const ancienne = donnees.stock.find((x) => x.id === ancienneId);
+  // Tablettes qui peuvent partir : libres, ou achetée pour ce remplacement et reçue.
+  const reservees = donnees.stock.filter((x) => x.reserveePour === c.id && DISPONIBLES.includes(x.etat) && !x.commande);
+  const choix = [...reservees, ...donnees.stock.filter(tabletteLibre)];
+  const nomFiche = (x) => [x.ref, x.numero || (x.ref ? null : 'sans n° de série'), x.modele, x.reserveePour ? 'achetée pour ce remplacement' : null].filter(Boolean).join(' · ');
+  // Carte SIM : une carte libre en stock remplace celle de la tablette perdue (qui passe « suspendue »). Déjà
+  // changée au moment de l'achat (activée après la perte) : rien à refaire.
+  const simActuelle = ancienne && ancienne.simId && donnees.sims.find((l) => l.id === ancienne.simId);
+  const simDejaChangee = !!(p && simActuelle && (simActuelle.activation || 0) >= (p.le || 0));
+  const simsLibres = donnees.sims.filter((l) => !l.tablette && ['stock', 'active'].includes(l.statut) && (l.numero || l.iccid));
+  const caseSim = h('input', { type: 'checkbox', checked: !simDejaChangee && simsLibres.length > 0, disabled: simDejaChangee || !simsLibres.length });
+  const choixSim = h('select', { 'aria-label': 'Nouvelle carte SIM', hidden: simDejaChangee || simsLibres.length < 2 },
+    ...simsLibres.map((l) => h('option', { value: l.id }, [l.numero || `ICCID ${fin4(l.iccid)}`, l.operateur].filter(Boolean).join(' · '))));
+  caseSim.addEventListener('change', () => { choixSim.disabled = !caseSim.checked; });
+  const ligneSim = h('label', { class: 'case-sim' }, caseSim, ' ', simDejaChangee ? 'Carte SIM déjà remplacée' : simsLibres.length
+    ? `Remplacer aussi la carte SIM${simsLibres.length === 1 ? ` (par ${[simsLibres[0].numero || `ICCID ${fin4(simsLibres[0].iccid)}`, simsLibres[0].operateur].filter(Boolean).join(' · ')})` : ' par :'}`
+    : 'Remplacer aussi la carte SIM : aucune carte SIM libre en stock', ' ', choixSim);
+  const simChoisie = () => (caseSim.checked && !caseSim.disabled && simsLibres.length ? choixSim.value || simsLibres[0].id : null);
+  const recharger = async () => {
+    donnees = await patienter('Mise à jour de la page…', () => lireDonnees(true));
+    afficherTout();
+  };
+  const morceaux = [h('h3', {}, 'Remplacer la tablette'), etat];
+
+  if (choix.length || (p && p.statut === 'payee')) {
+    const select = h('select', { 'aria-label': 'Tablette qui part' }, ...choix.map((x) => h('option', { value: x.id }, nomFiche(x))));
+    const payee = p && p.statut === 'payee';
+    const bouton = h('button', { type: 'button', class: 'secondary small-btn', 'data-perte': 'envoyer' },
+      payee ? 'Terminer le remplacement' : reservees.length ? 'Envoyer la tablette de remplacement' : 'Envoyer une tablette de remplacement');
+    bouton.addEventListener('click', async () => {
+      if (!select.value) { montrer('Aucune tablette disponible en stock.', 'ko'); return; }
+      const ok = payee || await demander(`Prélever ${euros(montant)} à ${client} (tablette perdue ou volée, prévu aux CGV), puis envoyer la tablette choisie ? Si le prélèvement est refusé, rien ne part.`, { oui: 'Prélever et envoyer' });
+      if (!ok) return;
+      // Ouverte avant l'attente (sinon bloquée) : elle recevra l'étiquette d'envoi.
+      const fenetre = window.open('', '_blank');
+      bouton.disabled = true;
+      boutonCharge(bouton, true);
+      montrer(`Un instant… ${payee ? 'remplacement' : `prélèvement de ${euros(montant)}`} demandé à ${heure()}.`, 'en-attente');
+      try {
+        const r = await appeler('tabletteRemplacement', { action: 'envoyer', commande: c.id, ancienne: ancienneId, nouveau: select.value, sim: simChoisie() });
+        if (!r.ok) {
+          if (fenetre) fenetre.close();
+          boutonCharge(bouton, false);
+          bouton.disabled = false;
+          montrer(`Prélèvement refusé${r.perte && r.perte.erreur ? ` : ${String(r.perte.erreur).replace(/\.$/, '')}` : ''}. Rien n'est parti, rien n'a été remplacé. ${client} a reçu un e-mail ; vous êtes prévenu par e-mail aussi. Réessayez une fois le moyen de paiement réglé.`, 'ko');
+          return;
+        }
+        if (r.deja) {
+          if (fenetre) fenetre.close();
+          boutonCharge(bouton, false);
+          montrer(`Déjà fait : ${textePerte(r.perte)}.`, 'ok');
+          await recharger();
+          return;
+        }
+        montrer(`✓ ${heure()} · ${textePerte(r.perte)}.${r.simErreur ? ` Carte SIM pas remplacée : ${r.simErreur}.` : ''} Création de l'étiquette d'envoi…`, 'ok');
+        let lien = null;
+        try {
+          lien = (await appeler('gestionEtiquette', { commande: c.id, sens: 'aller' })).url;
+        } catch (err) {
+          montrer(`✓ ${heure()} · ${textePerte(r.perte)}.${r.simErreur ? ` Carte SIM pas remplacée : ${r.simErreur}.` : ''} Étiquette d'envoi impossible (${messageErreur(err)}) : faites-la depuis la commande.`, 'ok');
+        }
+        if (fenetre) { if (lien) fenetre.location = lien; else fenetre.close(); }
+        boutonCharge(bouton, false);
+        derniereCoupure = null;
+        await recharger();
+      } catch (err) {
+        if (fenetre) fenetre.close();
+        boutonCharge(bouton, false);
+        bouton.disabled = false;
+        montrer(`Rien n'a été fait (${messageErreur(err)}).`, 'ko');
+      }
+    });
+    morceaux.push(h('p', { class: 'small muted' }, payee
+      ? 'Déjà payé : choisissez la tablette qui part, rien ne sera reprélevé.'
+      : `${euros(montant)} sont d'abord prélevés sur le compte de l'abonnement (perte ou vol, CGV${c.enceinteFournie ? ', enceinte fournie' : ''}) ; la tablette ne part que si c'est payé. L'étiquette d'envoi est faite ensuite.`),
+    h('div', { class: 'remplacement-choix' }, select, payee ? null : ligneSim, bouton));
+  } else if (p && p.statut === 'achat') {
+    morceaux.push(h('p', { class: 'small muted' }, 'Tablette achetée, pas encore reçue : notez sa réception dans Stock. Elle apparaîtra ici pour partir (le prélèvement se fera à ce moment-là).'));
+  } else {
+    const bouton = h('button', { type: 'button', class: 'secondary small-btn', 'data-perte': 'acheter' }, 'Acheter une tablette de remplacement');
+    bouton.addEventListener('click', async () => {
+      bouton.disabled = true;
+      boutonCharge(bouton, true);
+      montrer(`Un instant… achat noté à ${heure()}.`, 'en-attente');
+      try {
+        const r = await appeler('tabletteRemplacement', { action: 'acheter', commande: c.id, ancienne: ancienneId, sim: simChoisie() });
+        boutonCharge(bouton, false);
+        montrer(`✓ ${heure()} · ${r.deja ? 'Déjà noté : ' : ''}tablette de remplacement notée « Commandée » dans Stock, réservée à ${client}. Achetez-la chez le vendeur ; à sa réception, « Envoyer la tablette de remplacement » prélèvera ${euros(montant)} puis l'enverra. La ligne reste dans « À faire » jusque-là.${r.simErreur ? ` Carte SIM pas remplacée : ${r.simErreur}.` : ''}`, 'ok');
+        derniereCoupure = null;
+        await recharger();
+      } catch (err) {
+        boutonCharge(bouton, false);
+        bouton.disabled = false;
+        montrer(`Rien n'a été fait (${messageErreur(err)}).`, 'ko');
+      }
+    });
+    morceaux.push(h('p', { class: 'small muted' }, 'Aucune tablette libre en stock. Rien n\'est prélevé à l\'achat : seulement quand la tablette part.'),
+      h('div', { class: 'remplacement-choix' }, ligneSim, bouton));
+  }
+  return h('div', { class: 'remplacement-perte' }, ...morceaux, retour);
+}
+
 // Boutons d'action, chacun avec son retour visible : « Un instant… » puis le résultat daté (ou « pas de réponse »).
 function blocAgir(zone, t) {
   if (stopOrdre) { stopOrdre(); stopOrdre = null; }
   zone.hidden = false;
+  // Tablette perdue ou volée encore sur sa commande (« Tablette volée : tout couper ») : la remplaçante, ici même.
+  const cmdPerdue = t.etat === 'perdue' && t.commande && donnees.commandes.find((c) => c.id === t.commande && c.expedition !== 'annulee');
+  if (cmdPerdue) {
+    const coupure = derniereCoupure && derniereCoupure.id === t.id ? derniereCoupure : null;
+    zone.replaceChildren(...[h('h2', {}, 'Tablette perdue ou volée'),
+      coupure ? h('div', { class: 'retour-ordre ok', role: 'status' }, coupure.texte) : null,
+      blocRemplacementPerte(cmdPerdue, t.id)].filter(Boolean));
+    return;
+  }
   if (!relieeAUneFamille(t)) {
     zone.replaceChildren(h('h2', {}, 'Agir sur la tablette'),
       h('p', { class: 'muted small' }, 'Cette tablette n\'est pas reliée à une famille : les actions à distance (redémarrer, état, mise à jour…) seront possibles dès qu\'elle sera jumelée.'));
@@ -2464,7 +2619,15 @@ function blocAgir(zone, t) {
         'fiche passée en « Perdue »',
       ];
       boutonCharge(b, false);
-      montrer(`✓ ${heure()} · ${morceaux.join(', ')}.${r.attente ? ` ${r.attente}` : ''}${(r.erreurs || []).length ? ` À vérifier : ${r.erreurs.join(' ; ')}` : ''} Pensez à suspendre la carte SIM (Lyca).`, 'ok');
+      const texteCoupure = `✓ ${heure()} · ${morceaux.join(', ')}.${r.attente ? ` ${r.attente}` : ''}${(r.erreurs || []).length ? ` À vérifier : ${r.erreurs.join(' ; ')}` : ''} Pensez à suspendre la carte SIM (Lyca).`;
+      montrer(texteCoupure, 'ok');
+      // Gardé pour le bloc redessiné quand les données se relisent : la remplaçante s'y propose (blocRemplacementPerte).
+      derniereCoupure = { id: t.id, texte: texteCoupure };
+      const c = t.commande && donnees.commandes.find((x) => x.id === t.commande && x.expedition !== 'annulee');
+      if (c) {
+        detail.hidden = false;
+        detail.replaceChildren(blocRemplacementPerte(c, t.id));
+      }
       signalerChangement();
     } catch (err) {
       occuper(false);
@@ -2644,7 +2807,9 @@ function remplirTablette(id) {
   afficherDocumentsTablette(t);
   // Relevés en direct et actions à distance : redessinés seulement si on change de tablette (un ordre en
   // cours garde son retour affiché quand les données se relisent).
-  const cleAgir = [t.id, t.fid || '', t.tabletUid || '', t.etat || ''].join('|');
+  // Tablette perdue : redessiné aussi quand son remplacement avance (blocRemplacementPerte).
+  const perteDe = t.commande && t.etat === 'perdue' ? ((donnees.commandes.find((c) => c.id === t.commande) || {}).perte || {}).statut || '' : '';
+  const cleAgir = [t.id, t.fid || '', t.tabletUid || '', t.etat || '', t.commande || '', perteDe].join('|');
   if ($('dt-agir').dataset.id !== cleAgir) {
     $('dt-agir').dataset.id = cleAgir;
     blocReleves($('dt-releves'), t);

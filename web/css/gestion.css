@@ -243,6 +243,13 @@ body.depot-actif::after {
 .remplacement { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 .remplacement select, .remplacement input { flex: 1 1 180px; min-width: 0; margin: 0; padding: 8px 12px; }
 .remplacement p { flex-basis: 100%; margin: 0; }
+/* Tablette perdue ou volée : la remplaçante (blocRemplacementPerte). */
+.remplacement-perte { margin-top: 14px; }
+.remplacement-perte h3 { margin: 0 0 6px; }
+.remplacement-choix { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+.remplacement-choix select { flex: 1 1 200px; min-width: 0; margin: 0; padding: 8px 12px; }
+.remplacement-choix .case-sim { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.remplacement-choix .case-sim input { width: auto; margin: 0; }
 
 /* Clients et e-mails d'information */
 .campagne label { display: block; margin: 8px 0; font-size: 14px; }
