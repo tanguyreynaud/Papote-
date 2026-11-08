@@ -97,7 +97,8 @@
 .family dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; font-size: 14px; }
 .family dt { color: var(--muted); }
 .family dd { margin: 0; }
-.off dd:first-of-type { color: var(--danger); font-weight: 600; }
+/* Le rouge va sur l'état (« Hors ligne… »), jamais sur le nom (Tanguy 8/11). */
+.off dd.etat { color: var(--danger); font-weight: 600; }
 
 .log {
   max-height: 260px;
