@@ -11,7 +11,7 @@
 //
 // Disponibles = fiches du stock libres (en stock ou préparées, sans commande, ni d'essai ni hors critères, et pas
 //               jumelées à une famille : une tablette dans une famille, comme celle de la « famille test » de Tanguy,
-//               n'est jamais à vendre)
+//               n'est jamais à vendre ; ni réservées au remplacement d'une tablette perdue ou volée, perte.js)
 //             - commandes payées pas encore reliées à une fiche
 //             - paiements en cours (reservations/{id}, une tablette mise de côté pendant le paiement Stripe).
 // Une réservation naît à l'ouverture du paiement, disparaît au paiement réussi (la commande prend le relais)
@@ -35,7 +35,9 @@ const ms = (v) => (v == null ? null : typeof v === 'number' ? v : v.toMillis ? v
 // encore libres, négatif quand des commandes attendent une tablette pas encore achetée.
 function solde({ stock, commandes, reservations, maintenant }) {
   // Tablette d'essai, installée hors critères sans accord, ou jumelée à une famille : pas à vendre.
-  const libres = stock.filter((t) => ETATS_LIBRES.includes(t.etat) && !t.commande && !t.fid && t.essai !== true && !t.horsCriteres).length;
+  // Tablette achetée pour remplacer une tablette perdue ou volée (reserveePour : sa commande) : pas à vendre non plus.
+  const libres = stock.filter((t) => ETATS_LIBRES.includes(t.etat) && !t.commande && !t.fid && t.essai !== true && !t.horsCriteres
+    && !t.reserveePour).length;
   const reliees = new Set(stock.map((t) => t.commande).filter(Boolean));
   const enAttente = commandes.filter((c) => A_SERVIR.includes(c.expedition) && !reliees.has(c.id)).length;
   const enPaiement = reservations.filter((r) => (ms(r.expireLe) || 0) > maintenant).length;

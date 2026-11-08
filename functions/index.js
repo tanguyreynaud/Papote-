@@ -1366,6 +1366,15 @@ async function paiementAPart(type, objet) {
       'restitution.majLe': FieldValue.serverTimestamp(),
     });
     await prevenirPapote(`Prélèvement du matériel refusé : ${snap.get('nom') || snap.get('email') || snap.id}`, snap);
+  } else if (type === 'payment_intent.payment_failed' && /perdue ou volée/.test(objet.description || '')) {
+    // Tablette perdue ou volée (perte.js) payée par SEPA, refusée par la banque quelques jours après.
+    if (!snap.get('perte') || snap.get('perte.paiement') !== objet.id) return;
+    await ref.update({
+      'perte.statut': 'echec',
+      'perte.erreur': erreurPaiement(objet.last_payment_error) || 'Prélèvement refusé par la banque',
+      'perte.majLe': FieldValue.serverTimestamp(),
+    });
+    await prevenirPapote(`Prélèvement de la tablette perdue refusé : ${snap.get('nom') || snap.get('email') || snap.id}`, snap);
   }
 }
 
@@ -2298,6 +2307,151 @@ exports.gestionAnnulerCommande = gestion.gestionAnnulerCommande;
 exports.gestionParcours = gestion.gestionParcours;
 exports.gestionRenvoyerCode = gestion.gestionRenvoyerCode;
 exports.gestionJumelage = gestion.gestionJumelage;
+
+// Tablette perdue ou volée, après « Tablette volée : tout couper » : la famille paie le matériel perdu (140 € ou
+// 150 € avec l'enceinte, CGV), puis la remplaçante part. Prélever d'abord : rien ne part si le prélèvement est refusé.
+// Règles, états et idempotence : perte.js.
+// { action: 'envoyer', commande, ancienne, nouveau, sim? } : prélèvement, puis remplacement (gestion.js remplacer),
+//   carte SIM comprise si sim est donné ; l'étiquette d'envoi se fait ensuite (gestionEtiquette).
+// { action: 'acheter', commande, ancienne, sim? } : fiche « Commandée » réservée à la commande, ligne dans « À faire ».
+const perte = require('./perte');
+exports.tabletteRemplacement = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE], maxInstances: 1 }, async (request) => {
+  verifierAdmin(request);
+  const p = perte.verifierParams(request.data);
+  if (p.erreur) throw new HttpsError('invalid-argument', p.erreur);
+  const qui = request.auth.token.email || request.auth.uid;
+  const ref = db.doc(`commandes/${p.commande}`);
+  const ancienne = await db.doc(`stock/${p.ancienne}`).get();
+  const refus = perte.refusAncienne(ancienne.exists ? ancienne.data() : null, p.commande);
+  if (refus) throw new HttpsError('failed-precondition', refus);
+  // Déjà fait (vieil onglet, clic de trop) : la réponse d'avant, sans rien vérifier ni refaire.
+  const actuelle = await ref.get();
+  const d0 = perte.decision(actuelle.get('perte') || null, p);
+  if (d0.deja) return { ok: true, deja: true, perte: perte.resume(actuelle.get('perte')) };
+  if (p.action === 'envoyer' && d0.nouveau) {
+    // La tablette qui part est vérifiée AVANT de prélever : un prélèvement pour une tablette qui ne peut pas partir,
+    // jamais. (gestion.js remplacer revérifie au moment d'écrire.)
+    const neuve = await db.doc(`stock/${p.nouveau}`).get();
+    const n = neuve.exists ? neuve.data() : null;
+    if (!n || (n.commande && n.commande !== p.commande) || !['en-stock', 'preparee'].includes(n.etat) || n.fid
+      || (n.reserveePour && n.reserveePour !== p.commande) || n.essai === true || n.horsCriteres) {
+      throw new HttpsError('failed-precondition', 'Cette tablette ne peut pas partir (déjà prise, pas encore reçue, ou réservée) : choisissez-en une autre, rien n\'a été prélevé.');
+    }
+  }
+  const neuveAchat = p.action === 'acheter' ? db.collection('stock').doc() : null;
+  // Une seule demande à la fois par commande : la perte est notée (ou retrouvée) avant tout geste.
+  const pris = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new HttpsError('not-found', 'Commande introuvable.');
+    if (snap.get('expedition') === 'annulee') throw new HttpsError('failed-precondition', 'Cette commande est annulée.');
+    const avant = snap.get('perte') || null;
+    const d = perte.decision(avant, p);
+    if (d.refus) throw new HttpsError(d.code, d.refus);
+    if (d.deja) return { deja: true, perte: avant };
+    if (d.remplacer) return { remplacer: true, perte: avant };
+    const base = {
+      tablette: p.ancienne, montant: perte.montant(snap.data()), essai: d.essai, le: Date.now(), par: qui,
+      erreur: null, majLe: FieldValue.serverTimestamp(),
+    };
+    const maj = d.archiver ? { pertesPassees: FieldValue.arrayUnion(avant) } : {};
+    if (p.action === 'acheter') {
+      tx.set(neuveAchat, {
+        numero: null, modele: ancienne.get('modele') || null, fournisseur: null, prixAchat: null, acheteeLe: null,
+        etat: 'commandee', commande: null, sim: null, reserveePour: p.commande, remplacePerdue: p.ancienne,
+        notes: `Remplace la tablette perdue ou volée de ${snap.get('nom') || snap.get('email') || 'ce client'} : réservée à sa commande. Transférez la facture du vendeur à factures@mapapote.fr.`,
+        historique: [{ le: Date.now(), etat: 'commandee', par: qui, commande: p.commande, motif: 'remplacement d\'une tablette perdue ou volée' }],
+        creeLe: FieldValue.serverTimestamp(), majLe: FieldValue.serverTimestamp(),
+      });
+      tx.update(ref, { ...maj, perte: { ...base, statut: 'achat', remplacante: neuveAchat.id, achetee: neuveAchat.id } });
+      return { achat: true };
+    }
+    const offerte = snap.get('offerte') === true;
+    // achetee : la tablette achetée pour ce remplacement, libérée si une autre part à sa place.
+    tx.update(ref, { ...maj, perte: { ...base, statut: offerte ? 'payee' : 'prelevement', remplacante: p.nouveau,
+      achetee: (!d.archiver && avant && avant.achetee) || null,
+      ...(offerte ? { offerte: true } : { prelevementTenteLe: FieldValue.serverTimestamp() }) } });
+    return { prelever: !offerte, commande: snap.data(), montant: base.montant, essai: d.essai };
+  });
+  if (pris.deja) return { ok: true, deja: true, perte: perte.resume(pris.perte) };
+  const motif = 'tablette perdue ou volée';
+  // Carte SIM : la nouvelle va dans la tablette de la commande (la remplaçante, ou la fiche perdue en attendant
+  // l'achat : elle suivra la remplaçante), l'ancienne passe « suspendue » (à résilier chez l'opérateur).
+  const changerSim = async () => {
+    if (!p.sim) return null;
+    try {
+      await gestion.remplacerElement({ commande: p.commande, element: 'sim', nouveau: p.sim, motif }, qui);
+      return null;
+    } catch (e) {
+      return e.message;
+    }
+  };
+  if (pris.achat) {
+    const simErreur = await changerSim();
+    logger.info(`Commande ${p.commande} : tablette de remplacement achetée (${neuveAchat.id}) pour la tablette perdue ${p.ancienne}.`);
+    return { ok: true, perte: perte.resume((await ref.get()).get('perte')), achat: neuveAchat.id, simErreur };
+  }
+  if (pris.prelever) {
+    const paye = await prelever(p.commande, pris.commande, { montant: pris.montant, tablette: p.ancienne, essai: pris.essai });
+    // Refusé : rien n'est remplacé ni envoyé ; l'admin voit le motif.
+    if (!paye) return { ok: false, perte: perte.resume((await ref.get()).get('perte')) };
+  }
+  // Payé (ou commande offerte) : la remplaçante part. Un seul remplacement à la fois (deux clics, deux onglets).
+  const ap = await db.runTransaction(async (tx) => {
+    const q = (await tx.get(ref)).get('perte');
+    const bloque = q && q.statut === 'remplacement' && Date.now() - (q.remplacementLe || 0) > perte.BLOCAGE_MS;
+    if (!q || (q.statut !== 'payee' && !bloque)) return null;
+    tx.update(ref, { 'perte.statut': 'remplacement', 'perte.remplacementLe': Date.now() });
+    return q;
+  });
+  if (!ap) throw new HttpsError('already-exists', 'Remplacement déjà en cours (double clic ?) : rechargez la page.');
+  const nouveau = pris.remplacer ? (p.nouveau || ap.remplacante) : p.nouveau;
+  try {
+    await gestion.remplacerElement({ commande: p.commande, element: 'tablette', nouveau, motif }, qui);
+  } catch (e) {
+    // Déjà payé : la perte reste « payee », « Envoyer » le termine (sans reprélever) avec une tablette disponible.
+    await ref.update({ 'perte.statut': 'payee', 'perte.erreur': `Remplacement pas écrit : ${e.message}`, 'perte.majLe': FieldValue.serverTimestamp() });
+    throw new HttpsError('failed-precondition', `${mail.euros(ap.montant)} ont bien été prélevés, mais le remplacement n'a pas pu être noté (${e.message}). Choisissez une tablette disponible et recommencez : rien ne sera reprélevé.`);
+  }
+  const simErreur = await changerSim();
+  const liberer = ap.achetee && ap.achetee !== nouveau ? ap.achetee : null;
+  if (liberer) {
+    // La tablette achetée n'est plus réservée : une tablette du stock comme les autres.
+    await db.doc(`stock/${liberer}`).update({ reserveePour: FieldValue.delete(), majLe: FieldValue.serverTimestamp() }).catch(() => null);
+  }
+  await ref.update({
+    'perte.statut': ap.offerte ? 'offerte' : 'envoyee', 'perte.envoyeeLe': Date.now(), 'perte.remplacante': nouveau,
+    'perte.erreur': null, 'perte.majLe': FieldValue.serverTimestamp(),
+  });
+  logger.info(`Commande ${p.commande} : tablette perdue ${p.ancienne} remplacée par ${nouveau}.`);
+  return { ok: true, perte: perte.resume((await ref.get()).get('perte')), simErreur };
+});
+
+// Prélève la tablette perdue ou volée sur le compte de l'abonnement, comme le matériel non rendu (perte.statut
+// « prelevement », noté avant l'appel ; clé perte-<commande>-<tablette>-<essai>). E-mail à la famille dans les deux
+// cas ; Papote prévenu d'un refus. Renvoie true si c'est payé.
+async function prelever(commande, c, { montant, tablette, essai }) {
+  const ref = db.doc(`commandes/${commande}`);
+  try {
+    const paiement = await preleverMateriel(commande, montant, perte.LIBELLE, perte.cle(commande, tablette, essai));
+    await ref.update({ 'perte.statut': 'payee', 'perte.paiement': paiement.id, 'perte.majLe': FieldValue.serverTimestamp() });
+    logger.info(`Commande ${commande} : tablette perdue ou volée, ${mail.euros(montant)} prélevés.`);
+    if (c.email) {
+      await envoyerMail(c.email, mail.tablettePerdue({ nom: c.nom, montant }))
+        .catch((e) => logger.error(`Commande ${commande} : e-mail « tablette perdue » non parti`, e.message));
+    }
+    return true;
+  } catch (e) {
+    await ref.update({ 'perte.statut': 'echec', 'perte.erreur': e.message, 'perte.majLe': FieldValue.serverTimestamp() });
+    logger.warn(`Commande ${commande} : prélèvement de la tablette perdue refusé`, e.message);
+    if (c.email) {
+      await envoyerMail(c.email, mail.tablettePerdueRefus({ nom: c.nom, montant }))
+        .catch((e2) => logger.error(`Commande ${commande} : e-mail « paiement tablette perdue refusé » non parti`, e2.message));
+    }
+    await prevenirPapote(`Tablette perdue ou volée, prélèvement refusé : ${c.nom || c.email || commande}`, { id: commande },
+      `Le prélèvement de ${mail.euros(montant)} pour la tablette perdue ou volée a été refusé (${e.message}). Rien n'est parti. À voir avec le client, puis « Envoyer » à nouveau depuis l'admin.`);
+    return false;
+  }
+}
 
 // Installation d'une nouvelle tablette depuis le téléphone du premier proche (installation.js).
 const installation = require('./installation').brancher({

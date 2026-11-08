@@ -100,3 +100,13 @@ test('étiquette en double (double clic, vieil onglet) : refusée tant que l\'an
   permis(s.refusEtiquetteEnDouble({ etiquettes: { retour: { colis: 1, le: maintenant, livre: true } } }, 'retour', maintenant), 'colis arrivé : une nouvelle est possible');
   permis(s.refusEtiquetteEnDouble({ etiquettes: { retour: { colis: 1, le: maintenant - 31 * 864e5 } } }, 'retour', maintenant), 'vieille de 31 jours');
 });
+
+test('étiquette aller d\'une tablette de remplacement (perte, vol, casse) : permise sur une commande déjà envoyée', () => {
+  permis(s.refusEtiquette({ expedition: 'envoyee' }, 'aller', { remplacement: 1000 }));
+  refuse(s.refusEtiquette({ expedition: 'annulee' }, 'aller', { remplacement: 1000 }), /pas à envoyer/);
+  // L'étiquette du premier envoi, plus ancienne que le remplacement, n'est pas un doublon ; une étiquette faite après, si.
+  const c = { etiquettes: { aller: { colis: 1, le: 500 } } };
+  permis(s.refusEtiquetteEnDouble(c, 'aller', 2000, { depuis: 1000 }));
+  refuse(s.refusEtiquetteEnDouble({ etiquettes: { aller: { colis: 2, le: 1500 } } }, 'aller', 2000, { depuis: 1000 }), /existe déjà/);
+  refuse(s.refusEtiquetteEnDouble(c, 'aller', 2000), /existe déjà/);
+});

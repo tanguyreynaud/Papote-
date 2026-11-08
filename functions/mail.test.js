@@ -135,3 +135,14 @@ test('décès : e-mails de deuil, sans « Merci de nous avoir fait confiance »,
   // Sans décès : rien ne change.
   assert.match(mail.retourTablette({ nom: 'Paul', avant: le, retractation: null, montant: 14000 }).text, /Merci de nous avoir fait confiance/);
 });
+
+test('tablette perdue ou volée : e-mail à la famille, prélevé ou refusé', () => {
+  const ok = mail.tablettePerdue({ nom: 'Julie', montant: 15000 });
+  assert.match(ok.subject, /une nouvelle tablette part/);
+  assert.match(ok.text, /150 € ont été prélevés/);
+  assert.match(ok.text, /conditions générales/);
+  const ko = mail.tablettePerdueRefus({ nom: 'Julie', montant: 14000 });
+  assert.match(ko.subject, /le paiement n'a pas abouti/);
+  assert.match(ko.text, /140 €/);
+  assert.match(ko.text, /rien ne vous a été prélevé, et la nouvelle tablette ne part pas encore/);
+});

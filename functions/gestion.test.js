@@ -780,3 +780,23 @@ test('forfait d\'une carte SIM lu sur la confirmation', () => {
   assert.strictEqual(bizarre.cartesSim.dureeForfait, null);
   assert.strictEqual(bizarre.cartesSim.finForfait, null);
 });
+
+test('tablette perdue ou volée : encaissée et facturée comme un matériel non rendu, et dans « À faire »', () => {
+  assert.strictEqual(g.natureMouvement({ type: 'charge', source: { description: 'Papote : tablette perdue ou volée' } }), 'tablette-non-rendue');
+  assert.strictEqual(g.descriptionNonRendu({ description: 'Papote : tablette perdue ou volée' }), 'Papote : tablette perdue ou volée (indemnité prévue au contrat)');
+  const maintenant = Date.UTC(2026, 10, 8);
+  const liste = g.aFaire({
+    maintenant,
+    commandes: [
+      { id: 'a', nom: 'Paul Martin', expedition: 'envoyee', fid: 'f1', perte: { statut: 'achat' } },
+      { id: 'b', expedition: 'envoyee', fid: 'f2', perte: { statut: 'echec' } },
+      { id: 'c', expedition: 'envoyee', fid: 'f3', perte: { statut: 'envoyee' } },
+    ],
+    stock: [{ id: 'r', etat: 'en-stock', commande: null, reserveePour: 'a', prixAchat: 1, acheteeLe: 1 }],
+    depenses: [],
+    automatique: { erreurs: [] },
+  });
+  assert.ok(liste.includes("1 prélèvement d'une tablette perdue ou volée refusé : rien n'est parti, voir avec le client"), liste.join('\n'));
+  assert.ok(liste.some((l) => /Tablette de remplacement achetée pour Paul Martin \(perte ou vol\) : à envoyer dès sa réception/.test(l)));
+  assert.strictEqual(liste.filter((l) => /perdue|remplacement/.test(l)).length, 2);
+});

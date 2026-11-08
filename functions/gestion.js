@@ -146,7 +146,8 @@ function natureMouvement(bt) {
     case 'charge':
     case 'payment': {
       const desc = `${source.description || bt.description || ''}`.toLowerCase();
-      if (/non rendu/.test(desc)) return 'tablette-non-rendue';
+      // Tablette perdue ou volée (perte.js) : facturée comme un matériel non rendu.
+      if (/non rendu|perdue ou volée/.test(desc)) return 'tablette-non-rendue';
       return 'abonnement';
     }
     case 'refund':
@@ -811,6 +812,11 @@ exports.gestionDonnees = onCall(async (request) => {
           anticipe: c.restitution.anticipe === true } : null,
         remboursement: c.remboursement || null,
         restitutionErreur: c.restitution && c.restitution.erreur ? c.restitution.erreur : null,
+        // Enceinte dans le colis : la perte coûte 150 € au lieu de 140 € (affiché avant de prélever).
+        enceinteFournie: c.enceinteFournie === true,
+        // Tablette perdue ou volée : remplacement et prélèvement (perte.js, tabletteRemplacement).
+        perte: c.perte ? { statut: c.perte.statut || null, tablette: c.perte.tablette || null, remplacante: c.perte.remplacante || null,
+          montant: c.perte.montant ?? null, erreur: c.perte.erreur || null, le: c.perte.le || null, envoyeeLe: c.perte.envoyeeLe || null } : null,
         retractation: c.retractation || null,
         dernierMois: c.dernierMois || null,
         contestations: c.contestations || null,
@@ -966,6 +972,9 @@ async function ajouterAchat(d, qui) {
 // Remplacement d'un élément du kit chez un client : la tablette, la carte SIM ou un accessoire.
 // La tablette remplacée passe « en retour » (à récupérer) et laisse sa carte SIM à la nouvelle ;
 // la carte SIM remplacée passe « suspendue » (à résilier) ; l'accessoire sort du stock.
+// Tablette déjà « perdue » (volée, « Tablette volée : tout couper ») : rien à récupérer, elle reste perdue et quitte
+// la commande (perdueDe garde laquelle). La remplaçante peut être une tablette achetée pour ce remplacement
+// (reserveePour : cette commande, perte.js) ; une tablette réservée pour une autre commande est refusée.
 async function remplacer(d, qui) {
   const commande = texte(d.commande, 100);
   const motif = texte(d.motif, 200);
@@ -980,12 +989,17 @@ async function remplacer(d, qui) {
       throw new HttpsError('failed-precondition', 'Choisissez une tablette disponible du stock.');
     }
     if (neuve.get('fid')) throw new HttpsError('failed-precondition', 'Cette tablette est dans une famille : pas à vendre. Choisissez-en une autre.');
-    await kit.ref.update({
-      etat: 'en-retour', commande: null, remplaceePour: commande, majLe: FieldValue.serverTimestamp(),
-      historique: FieldValue.arrayUnion(trace('en-retour', { remplacement: true })),
-    });
+    if (neuve.get('reserveePour') && neuve.get('reserveePour') !== commande) {
+      throw new HttpsError('failed-precondition', 'Cette tablette est réservée pour remplacer la tablette perdue d\'un autre client. Choisissez-en une autre.');
+    }
+    await kit.ref.update(kit.get('etat') === 'perdue'
+      ? { commande: null, perdueDe: commande, majLe: FieldValue.serverTimestamp(),
+        historique: FieldValue.arrayUnion(trace('perdue', { remplacement: true })) }
+      : { etat: 'en-retour', commande: null, remplaceePour: commande, majLe: FieldValue.serverTimestamp(),
+        historique: FieldValue.arrayUnion(trace('en-retour', { remplacement: true })) });
     await neuve.ref.update({
       etat: 'envoyee', commande, accessoires: kit.get('accessoires') || [], majLe: FieldValue.serverTimestamp(),
+      ...(neuve.get('reserveePour') ? { reserveePour: FieldValue.delete() } : {}),
       historique: FieldValue.arrayUnion(trace('envoyee', { remplacement: true })),
     });
     if (kit.get('simId')) await enregistrerSim(kit.get('simId'), { tablette: neuve.id }, qui);
@@ -1071,6 +1085,11 @@ exports.gestionStock = onCall(async (request) => {
     const snap = await ref.get();
     if (!snap.exists) throw new HttpsError('not-found', 'Tablette introuvable.');
     const champs = d.champs || {};
+    // Tablette achetée pour remplacer une tablette perdue ou volée : elle part par « Envoyer la tablette de
+    // remplacement » (tabletteRemplacement, index.js), qui facture la perte ; jamais reliée à la main.
+    if (snap.get('reserveePour') && ((champs.commande && champs.commande !== snap.get('commande')) || champs.etat === 'envoyee')) {
+      throw new HttpsError('failed-precondition', 'Cette tablette est réservée au remplacement d\'une tablette perdue ou volée : envoyez-la depuis sa commande (« Envoyer la tablette de remplacement »).');
+    }
     const maj = { majLe: FieldValue.serverTimestamp() };
     for (const cle of ['numero', 'modele', 'fournisseur', 'sim', 'simOperateur', 'notes']) {
       if (cle in champs) maj[cle] = texte(champs[cle], cle === 'notes' ? 1000 : 80);
@@ -2005,7 +2024,7 @@ const FENETRE = 40 * JOUR; // ce qui s'est passé depuis 40 jours est revu chaqu
 // Ligne de facture : le détail (« tablette, routeur ») vient de la description du prélèvement quand il y est.
 function descriptionNonRendu(c) {
   const d = String(c.description || '').trim();
-  return d && /non rendu/i.test(d) ? `${d} (indemnité prévue au contrat)` : 'Matériel Papote non rendu (indemnité prévue au contrat)';
+  return d && /non rendu|perdue ou volée/i.test(d) ? `${d} (indemnité prévue au contrat)` : 'Matériel Papote non rendu (indemnité prévue au contrat)';
 }
 
 async function facturerPenalites(depuis, bilan) {
@@ -2309,6 +2328,20 @@ async function rangerEtiquette(commande, sens, colis, contenu, format = 'pdf') {
   return `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(chemin)}?alt=media&token=${jeton}`;
 }
 
+// Date du remplacement de la tablette de cette commande (dernière trace « envoyee » d'un remplacement sur la tablette
+// envoyée), ou null : la tablette de remplacement a besoin de son étiquette d'envoi.
+async function remplacementAEnvoyer(commande) {
+  const fiches = await db().collection('stock').where('commande', '==', commande).get();
+  for (const f of fiches.docs) {
+    if (f.get('etat') !== 'envoyee') continue;
+    // Les traces d'un changement de carte SIM ou d'accessoire (même état, avec sim ou accessoires) ne comptent pas.
+    const h = (f.get('historique') || []).filter((x) => x && x.etat === 'envoyee' && !x.sim && !x.accessoires);
+    const dernier = h[h.length - 1];
+    if (dernier && dernier.remplacement === true) return dernier.le || null;
+  }
+  return null;
+}
+
 // Crée l'étiquette Mondial Relay chez Sendcloud. Erreur à montrer telle quelle : HttpsError ; panne Sendcloud : Error.
 // sansImpression : retour par QR code à montrer au point relais (demandé par le client dans l'appli).
 async function creerEtiquette(commande, sens, qui, { sansImpression = false } = {}) {
@@ -2319,10 +2352,12 @@ async function creerEtiquette(commande, sens, qui, { sansImpression = false } = 
   // Retour pour un remplacement : l'ancienne tablette de cette commande est notée « en retour ».
   const remplacee = sens === 'retour' && !(await db().collection('stock').where('remplaceePour', '==', commande)
     .where('etat', '==', 'en-retour').limit(1).get()).empty;
-  const refus = statuts.refusEtiquette(c, sens, { remplacee });
+  // Tablette de remplacement partie (remplacer) pour une commande déjà envoyée : son étiquette d'envoi.
+  const remplacement = sens === 'aller' && c.expedition === 'envoyee' ? await remplacementAEnvoyer(commande) : null;
+  const refus = statuts.refusEtiquette(c, sens, { remplacee, remplacement });
   if (refus) throw new HttpsError('failed-precondition', refus);
   // Une étiquette payée existe déjà (double clic, vieil onglet) : pas une deuxième. Annuler l'ancienne pour refaire.
-  const doublon = statuts.refusEtiquetteEnDouble(c, sens, Date.now());
+  const doublon = statuts.refusEtiquetteEnDouble(c, sens, Date.now(), { depuis: remplacement });
   if (doublon) throw new HttpsError('already-exists', doublon);
   const reglages = lireReglages(reglagesSnap.data());
   const papote = sendcloud.adressePapote(reglages.expediteur);
@@ -2367,6 +2402,10 @@ async function creerEtiquette(commande, sens, qui, { sansImpression = false } = 
   }
   return { ok: true, url, qr, envoyee: !!c.email };
 }
+
+// Remplacement d'une tablette perdue ou volée (index.js, tabletteRemplacement) : le même remplacement que
+// « Remplacer un élément du kit ».
+exports.remplacerElement = remplacer;
 
 // « Je renvoie la tablette » dans l'appli (index.js, renvoyerTablette) : QR code de retour sans impression.
 exports.etiquetteRetourClient = (commande, qui) => creerEtiquette(commande, 'retour', qui, { sansImpression: true });
@@ -2790,6 +2829,12 @@ function aFaire({ commandes, stock, depenses, automatique, maintenant, sims = []
   }
   ajouter(actives.filter((c) => c.dernierMois && c.dernierMois.statut === 'echec').length, 'dernier mois refusé(s) par la banque, à relancer depuis Stripe');
   ajouter(actives.filter((c) => c.restitution && c.restitution.statut === 'echec').length, 'prélèvement(s) du matériel non rendu refusé(s), à relancer depuis Stripe');
+  // Tablette perdue ou volée (perte.js) : remplaçante achetée à envoyer, ou prélèvement refusé.
+  ajouter(actives.filter((c) => c.perte && c.perte.statut === 'echec').length, 'prélèvement(s) d\'une tablette perdue ou volée refusé(s) : rien n\'est parti, voir avec le client');
+  ajouter(actives.filter((c) => c.perte && ['payee', 'remplacement'].includes(c.perte.statut)).length, 'tablette(s) perdue(s) déjà payée(s) dont le remplacement est à terminer (« Envoyer la tablette de remplacement » sur la commande)');
+  for (const c of actives.filter((x) => x.perte && x.perte.statut === 'achat')) {
+    liste.push(`Tablette de remplacement achetée pour ${c.nom || c.email || c.id} (perte ou vol) : à envoyer dès sa réception (« Envoyer la tablette de remplacement » sur la commande)`);
+  }
   ajouter(actives.filter((c) => c.expedition === 'paiement-en-attente' && ms(c.creeLe) && maintenant - ms(c.creeLe) > JOURS(10)).length, 'paiement(s) SEPA en attente depuis plus de 10 jours');
   ajouter(commandes.filter((c) => (c.contestations || []).length).length, 'commande(s) avec un prélèvement contesté à la banque');
   const revenus = actives.filter((c) => c.expedition === 'envoyee' && !c.fid && c.etiquettes && c.etiquettes.aller && c.etiquettes.aller.retourExpediteur);
@@ -2799,7 +2844,8 @@ function aFaire({ commandes, stock, depenses, automatique, maintenant, sims = []
   const aEnvoyer = idsAEnvoyer.size;
   // Une tablette réservée à une commande pas encore envoyée compte pour cette commande.
   // Une tablette jumelée à une famille sans commande (tablette de test) n'est pas à vendre : elle ne compte pas.
-  const dispo = stock.filter((t) => ['en-stock', 'preparee'].includes(t.etat) && (t.commande ? idsAEnvoyer.has(t.commande) : !t.fid)).length;
+  // Une tablette achetée pour remplacer une tablette perdue (reserveePour, perte.js) non plus.
+  const dispo = stock.filter((t) => ['en-stock', 'preparee'].includes(t.etat) && (t.commande ? idsAEnvoyer.has(t.commande) : !t.fid && !t.reserveePour)).length;
   ajouter(aEnvoyer, 'tablette(s) à envoyer');
   ajouter(Math.max(0, aEnvoyer - dispo), 'tablette(s) manquante(s) en stock pour les envoyer');
   ajouter(actives.filter((c) => c.expedition === 'envoyee' && !c.fid && ms(c.envoyeeLe)

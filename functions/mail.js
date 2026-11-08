@@ -707,6 +707,28 @@ function materielNonRendu({ nom, montant, avant }) {
   ]);
 }
 
+// Tablette perdue ou volée remplacée (tabletteRemplacement, perte.js) : le matériel perdu est prélevé, comme prévu
+// dans les conditions générales (140 €, ou 150 € si une enceinte avait été fournie).
+function tablettePerdue({ nom, montant }) {
+  return message('Tablette perdue ou volée : une nouvelle tablette part chez vous', [
+    bonjour(nom),
+    'Nous sommes désolés pour la tablette perdue ou volée. Elle a été coupée à distance : plus personne ne peut voir vos photos ni vos messages avec.',
+    'Une nouvelle tablette Papote part chez vous. Elle s\'installe comme la première, avec l\'appli Papote, et votre abonnement continue sans changement.',
+    { encadre: `Comme prévu dans nos conditions générales, le matériel perdu ou volé est facturé comme un matériel non rendu : <b>${euros(montant)}</b> ont été prélevés sur votre compte.` },
+    'Si la tablette est retrouvée ou si vous pensez qu\'il y a une erreur, répondez à cet e-mail : nous regardons tout de suite.',
+  ]);
+}
+
+// Tablette perdue ou volée : le prélèvement du matériel perdu est refusé, la nouvelle tablette ne part pas encore.
+function tablettePerdueRefus({ nom, montant }) {
+  return message('Tablette perdue ou volée : le paiement n\'a pas abouti', [
+    bonjour(nom),
+    'Nous sommes désolés pour la tablette perdue ou volée. Elle a été coupée à distance : plus personne ne peut voir vos photos ni vos messages avec.',
+    { encadre: `Comme prévu dans nos conditions générales, le matériel perdu ou volé est facturé comme un matériel non rendu, soit <b>${euros(montant)}</b>. Ce prélèvement a été refusé par la banque : rien ne vous a été prélevé, et la nouvelle tablette ne part pas encore.` },
+    'Répondez simplement à cet e-mail : nous trouvons une solution ensemble, et la nouvelle tablette part dès que le paiement est passé.',
+  ]);
+}
+
 // Commande annulée avant l'envoi de la tablette.
 function commandeAnnulee({ nom, rembourse }) {
   return message('Votre commande Papote est annulée', [
@@ -881,7 +903,7 @@ module.exports = {
   // abonnement
   paiementEchoue, papoteEnPause, pausePrelevements, reprisePrelevements,
   // fin de contrat
-  retourTablette, etiquetteRetour, resiliationEnregistree, avantEffacement, resiliationAnnulee, rappelRestitution, tabletteRecue, materielNonRendu, commandeAnnulee, annulationAvantEnvoi, resiliation, alerteAdmin, alerteForfait,
+  retourTablette, etiquetteRetour, resiliationEnregistree, avantEffacement, resiliationAnnulee, rappelRestitution, tabletteRecue, materielNonRendu, tablettePerdue, tablettePerdueRefus, commandeAnnulee, annulationAvantEnvoi, resiliation, alerteAdmin, alerteForfait,
   // support et admin
   rappelConfirme, demandeRappel, bilanSupport, information, recapSemaine, livresComptables, budget,
   // outils

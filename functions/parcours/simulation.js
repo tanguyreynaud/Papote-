@@ -159,7 +159,14 @@ function fauxSendcloud(url, options = {}) {
     const f = (corps && corps.functionalities) || {};
     const offres = [{ code: 'mondial_relay:retour', carrier: { code: 'mondial_relay' }, functionalities: { returns: true }, weight: KG }];
     if (!sendcloud.sansQr) offres.push({ code: 'mondial_relay:retour-qr', carrier: { code: 'mondial_relay' }, functionalities: { returns: true, labelless: true }, weight: KG });
+    // Envoi vers un point relais (étiquette aller).
+    offres.push({ code: 'mondial_relay:relais', carrier: { code: 'mondial_relay' }, functionalities: { last_mile: 'service_point' }, weight: KG });
     return json({ data: offres.filter((o) => !f.labelless || o.functionalities.labelless) });
+  }
+  if (chemin === '/shipments/announce') {
+    const id = sendcloud.prochain++;
+    sendcloud.colis.set(id, { id, aller: true, vers: corps.to_address, relais: corps.to_service_point || null, offre: corps.ship_with.properties.shipping_option_code, statut: 1000, annule: false });
+    return json({ data: { parcels: [{ id, tracking_number: `MR${id}`, tracking_url: `https://suivi/MR${id}` }] } });
   }
   if (chemin === '/returns/announce-synchronously') {
     const id = sendcloud.prochain++;

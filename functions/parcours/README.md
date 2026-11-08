@@ -45,6 +45,11 @@ désordre, appels ou tâches en même temps.
   fois en même temps ; plus d'alerte après la fin de l'abonnement. Le SMS du SOS part de la tablette elle-même
   (`android/…/SmsAlert.java`) : il n'est pas testé ici.
 
+`perte.parcours.js` : tablette perdue ou volée, après « Tablette volée : tout couper » : prélevé d'abord (140 €, 150 €
+avec l'enceinte), puis remplaçante, carte SIM et étiquette d'envoi ; double clic (un seul prélèvement) ; prélèvement
+refusé (rien ne part, famille et Papote prévenus, nouvel essai) ; stock vide (tablette achetée réservée à la commande,
+pas à vendre, prélevée quand elle part).
+
 `installation-qr.parcours.js` : installation d'une tablette par QR code (installation-qr.js) : QR créé par
 l'admin, inscription de la tablette (fiche d'achat reprise, clé App Check jamais gardée en clair), nouvel essai de la
 même tablette, autre tablette refusée, QR expiré après 24 h ; hors critères noté sans refus, tablette d'essai à part,

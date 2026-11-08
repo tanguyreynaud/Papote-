@@ -44,6 +44,10 @@ function gestionDonnees(o = {}) {
     cmd('CMD-AN77', { nom: 'Bruno Lefèvre', email: 'bruno@exemple.fr', expedition: 'annulee', creeLe: il(15), extra: { annulation: { le: il(14), par: 'client' }, remboursement: { statut: 'fait', montant: 6000, le: il(14) } } }),
     cmd('CMD-RB10', { nom: 'Chantal Blanc', email: 'chantal@exemple.fr', expedition: 'envoyee', envoyeeLe: il(35), creeLe: il(37), fid: 'f-rose', famille: 'Mamie Rose', abonnement: 'resilie',
       extra: { restitution: { statut: 'rendue' }, remboursement: { statut: 'echec', montant: 6000, le: il(2) } } }),
+    // Tablettes perdues ou volées (functions/perte.js) : coupée, à remplacer ; et remplaçante achetée, pas encore reçue.
+    cmd('CMD-PV01', { nom: 'Lucien Roche', email: 'lucien@exemple.fr', expedition: 'envoyee', envoyeeLe: il(60), creeLe: il(62), fid: 'f-lucien', famille: 'Papi Lucien', abonnement: 'actif' }),
+    cmd('CMD-PV02', { nom: 'Odile Perrin', email: 'odile@exemple.fr', expedition: 'envoyee', envoyeeLe: il(50), creeLe: il(52), fid: 'f-gaby', famille: 'Mamie Gaby', abonnement: 'actif',
+      extra: { enceinteFournie: true, perte: { statut: 'achat', tablette: 'T-015', remplacante: 'T-016', montant: 15000, le: il(2) } } }),
   ];
   const stock = [
     { id: 'T-001', ref: 'T-001', numero: 'BV60P-0001', modele: 'Blackview Tab 60 Pro', etat: 'chez-client', commande: 'CMD-GH78', fid: FID, sim: '07 45 12 34 56', simId: 'S1', batterie: { niveau: 82, le: il(0.01) }, tabletUid: 'tab-jeanne',
@@ -70,6 +74,11 @@ function gestionDonnees(o = {}) {
       notes: 'Créée à l’installation par QR : aucun achat en stock à rattacher (ajoutez la facture).', creeLe: il(0.1) },
     { id: 'E-001', numero: 'R9TT0001', serieAndroid: 'R9TT0001', modele: 'Blackview Tab 60 Pro', android: '14', etat: 'en-stock', essai: true,
       horsCriteres: null, installation: { par: 'qr', le: il(1), criteres: [] }, notes: 'Tablette d’essai installée par QR : jamais pour un client.', creeLe: il(1) },
+    { id: 'T-014', ref: 'T-014', numero: 'BV60P-0014', serieAndroid: 'BV60P-0014', modele: 'Blackview Tab 60 Pro', etat: 'perdue', commande: 'CMD-PV01', fid: null, sim: '07 45 14 14 14', simId: 'S10',
+      revocation: { le: il(0.01), par: 'u-admin', fid: 'f-lucien' }, prixAchat: 12999, acheteeLe: il(70), depense: 'D-A0', creeLe: il(70) },
+    { id: 'T-015', ref: 'T-015', numero: 'BV60P-0015', serieAndroid: 'BV60P-0015', modele: 'Blackview Tab 60 Pro', etat: 'perdue', commande: 'CMD-PV02', fid: null, prixAchat: 12999, acheteeLe: il(60), depense: 'D-A0', creeLe: il(60) },
+    { id: 'T-016', numero: null, modele: 'Blackview Tab 60 Pro', etat: 'commandee', commande: null, reserveePour: 'CMD-PV02', remplacePerdue: 'T-015', prixAchat: null, acheteeLe: null,
+      notes: 'Remplace la tablette perdue ou volée de Odile Perrin : réservée à sa commande. Transférez la facture du vendeur à factures@mapapote.fr.', creeLe: il(2) },
   ];
   const sims = [
     { id: 'S1', operateur: 'Lyca', numero: '07 45 12 34 56', iccid: '8933150000000001', statut: 'active', prix: 499, go: 1, dureeForfait: 30, activation: il(25), prochaineRecharge: il(-5), tablette: 'T-001', depense: 'D-S1' },
@@ -82,6 +91,7 @@ function gestionDonnees(o = {}) {
     { id: 'S6', operateur: 'Cdiscount Mobile', iccid: '8933010000000006', statut: 'stock', prix: 199, go: 1, activerAvant: il(-20) },
     { id: 'S7', operateur: 'Lyca', numero: '07 00 00 00 07', iccid: '8933150000000007', statut: 'resiliee', prix: 499, go: 1, depense: 'D-S1' },
     { id: 'S8', operateur: 'Lyca', numero: '07 12 12 12 12', iccid: '8933150000000008', statut: 'active', prix: 499, go: 1, activation: il(3), prochaineRecharge: il(-27) },
+    { id: 'S10', operateur: 'Lyca', numero: '07 45 14 14 14', iccid: '8933150000000010', statut: 'active', prix: 499, go: 1, activation: il(58), tablette: 'T-014' },
   ];
   const depenses = [
     { id: 'D-A0', date: il(80), categorie: 'tablettes', fournisseur: 'Cdiscount', libelle: '8 Blackview Tab 60 Pro', montant: 103992, quantite: 8, pieces: [{ nom: 'facture.pdf', chemin: 'x', type: 'application/pdf', le: il(80) }] },
@@ -244,6 +254,7 @@ function donnees(o = {}) {
       gestionCommande: COMMANDE,
       gestionReglages: { ok: true, masquees: [] },
       stockDisponible: { disponible: 2 },
+      tabletteRemplacement: { ok: true, perte: { statut: 'envoyee', montant: 14000, erreur: null, remplacante: 'T-002' }, simErreur: null },
       ...(o.fonctions || {}),
     },
   };
@@ -400,6 +411,15 @@ const SCENES = [
     donnees: () => donnees({ fonctions: { jetonInstallation: { erreur: 'not-found', code: 'functions/not-found' } } }), faire: toucher('#btn-installer-qr', '#f-installer button[type="submit"]') },
   { groupe: 'Stock', titre: 'Tablette installée par QR, hors critères et SIM à code PIN', page: '#tablette/T-013', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees() },
   { groupe: 'Stock', titre: 'Tablette d’essai installée par QR', page: '#tablette/E-001', tailles: ['pc'], plein: true, donnees: () => donnees() },
+  // Tablette perdue ou volée (functions/perte.js) : après « Tablette volée : tout couper », la remplaçante sur le même écran.
+  { groupe: 'Stock', titre: 'Tablette volée, coupée : remplaçante à envoyer (prélevée d’abord)', page: '#tablette/T-014', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees() },
+  { groupe: 'Stock', titre: 'Tablette volée, stock vide : acheter une remplaçante', page: '#tablette/T-014', tailles: ['pc'], plein: true,
+    donnees: () => { const d = donnees(); d.fonctions.gestionDonnees.stock = d.fonctions.gestionDonnees.stock.filter((t) => !['T-002', 'T-010', 'T-013'].includes(t.id)); return d; } },
+  { groupe: 'Stock', titre: 'Tablette volée : prélèvement refusé, rien n’est parti', page: '#tablette/T-014', tailles: ['pc'], plein: true,
+    donnees: () => donnees({ fonctions: { tabletteRemplacement: { ok: false, perte: { statut: 'echec', montant: 14000, erreur: 'Your card has expired.' } } } }),
+    faire: async (p) => { await p.click('[data-perte="envoyer"]'); await p.click('.dialogue-papote[open] button.primary').catch(() => null); await p.waitForTimeout(400); } },
+  { groupe: 'Commandes', titre: 'Commande : tablette perdue, remplaçante achetée pas encore reçue', page: '#commande/CMD-PV02', tailles: ['pc'], plein: true, donnees: () => donnees() },
+  { groupe: 'Stock', titre: 'Tablette achetée pour remplacer une tablette perdue', page: '#tablette/T-016', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Stock', titre: 'Stock : cartes SIM', page: '#stock/sim', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees() },
   { groupe: 'Stock', titre: 'Carte SIM active, forfait Lyca (recharge dans 5 jours)', page: '#sim/S1', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees() },
   { groupe: 'Stock', titre: 'Carte SIM Sosh : internet coupé à la fin du forfait', page: '#sim/S9', tailles: ['pc', 'tel'], plein: true, note: 'Nouveau (5/11) : « À la fin du forfait ».', donnees: () => donnees() },

@@ -5,9 +5,9 @@ Chaque lien entre parenthèses est un écran de l'admin (#…) ou un site extér
 
 ## Tablette perdue ou volée
 
-1. Verrouillez-la à distance. Ouvrez la tablette dans le stock, puis « Verrouiller (perdue ou volée) » (il faut retaper son n° de série). Plus rien ne répond dessus ; les photos et données de la famille restent gardées. Si elle est éteinte, elle se verrouille dès qu'elle se reconnecte. Lien : [Ouvrir les tablettes](#stock/tablettes)
-2. Envoyez-en une autre. Sur la commande du client, menu ⋮ « Remplacer un élément du kit (cassé ou perdu)… » : d'abord la tablette, puis la carte SIM (l'ancienne carte passe « suspendue » : résiliez-la aussi chez l'opérateur). Prévenez la famille par téléphone : l'étiquette de retour qu'elle reçoit par e-mail ne sert pas si la tablette a disparu. Lien : [Ouvrir les commandes](#commandes)
-3. Rayez l'ancienne du stock. Sur sa page, menu ⋮ « Déclarer perdue ». Si elle réapparaît : ⋮ « Retrouvée », puis « Déverrouiller ». Lien : [Ouvrir les tablettes](#stock/tablettes)
+1. Coupez-la à distance. Ouvrez la tablette dans le stock, puis « Tablette volée : tout couper » (il faut retaper son n° de série) : elle se verrouille (ou s'efface), sort de sa famille (plus aucune photo ni message), ses comptes sont désactivés et sa fiche passe « Perdue ». Si elle est éteinte, elle se verrouille dès qu'elle se reconnecte. Lien : [Ouvrir les tablettes](#stock/tablettes)
+2. Envoyez-en une autre, sur le même écran. « Envoyer une tablette de remplacement » prélève d'abord 140 € (150 € si une enceinte a été fournie, prévu aux CGV) ; seulement si c'est payé, la tablette et la carte SIM (case cochée) sont remplacées et l'étiquette d'envoi est faite. Refusé : rien ne part, la famille reçoit un e-mail. Stock vide : « Acheter une tablette de remplacement » ; elle reste dans « À faire » jusqu'à son envoi. Lien : [Ouvrir les tablettes](#stock/tablettes)
+3. Résiliez l'ancienne carte SIM. Elle passe « suspendue » : résiliez-la aussi chez l'opérateur. Si la tablette réapparaît : sur sa page, ⋮ « Retrouvée », puis réinstallez-la. Lien : [Ouvrir les cartes SIM](#stock/sim)
 
 ## Paiement refusé (prélèvement SEPA ou carte)
 

@@ -68,3 +68,7 @@ test('vendable : seulement le stock réel au lancement, précommandes si on vend
   assert.strictEqual(vendable(-9, true), true);
   assert.strictEqual(vendable(-10, true), false);
 });
+
+test('une tablette achetée pour remplacer une tablette perdue ou volée n\'est pas à vendre', () => {
+  assert.strictEqual(compter({ stock: [{ etat: 'en-stock', reserveePour: 'sub_1' }, { etat: 'en-stock' }] }), 1);
+});

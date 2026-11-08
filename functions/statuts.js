@@ -15,11 +15,13 @@ const ETATS_PARTIS = ['envoyee', 'chez-client', 'en-retour'];
 // Une tablette dans ces états ne part chez aucun client.
 const ETATS_INUTILISABLES = ['perdue', 'hors-service', 'a-reparer'];
 
-// Étiquette Mondial Relay. Aller : seulement pour une commande à envoyer. Retour : seulement s'il y a quelque
-// chose à récupérer (fin de contrat, ou tablette remplacée encore chez le client : remplacee = true).
-function refusEtiquette(c, sens, { remplacee = false } = {}) {
+// Étiquette Mondial Relay. Aller : seulement pour une commande à envoyer, ou pour la tablette de remplacement d'une
+// commande déjà envoyée (remplacement : date du remplacement, gestion.js remplacer). Retour : seulement s'il y a
+// quelque chose à récupérer (fin de contrat, ou tablette remplacée encore chez le client : remplacee = true).
+function refusEtiquette(c, sens, { remplacee = false, remplacement = null } = {}) {
   if (sens === 'aller') {
     if (c.expedition === 'a-preparer') return '';
+    if (c.expedition === 'envoyee' && remplacement) return '';
     if (c.expedition === 'envoyee') return 'Cette commande est déjà envoyée.';
     if (c.expedition === 'paiement-en-attente') return 'Paiement en attente (SEPA) : la commande ne part pas encore.';
     return "Cette commande n'est pas à envoyer.";
@@ -33,9 +35,11 @@ function refusEtiquette(c, sens, { remplacee = false } = {}) {
 // Deuxième étiquette pour le même sens alors qu'une étiquette payée existe (double clic, vieil onglet) : refusée,
 // sauf si l'ancienne a servi (colis livré) ou date de plus de 30 jours (annulée par la nuit si pas déposée).
 const ETIQUETTE_JOURS = 30;
-function refusEtiquetteEnDouble(c, sens, maintenant) {
+// depuis : date d'un remplacement (étiquette aller) ; l'étiquette du premier envoi, plus ancienne, n'est pas un doublon.
+function refusEtiquetteEnDouble(c, sens, maintenant, { depuis = null } = {}) {
   const e = c && c.etiquettes && c.etiquettes[sens];
   if (!e || !e.colis || e.livre) return '';
+  if (depuis && (e.le || 0) < depuis) return '';
   if (e.le && maintenant - e.le >= ETIQUETTE_JOURS * 864e5) return '';
   return sens === 'aller'
     ? "Une étiquette d'envoi existe déjà pour cette commande : annulez-la d'abord pour en refaire une."
