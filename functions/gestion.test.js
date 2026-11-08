@@ -126,6 +126,22 @@ test('liste à faire du récapitulatif', () => {
   ]);
 });
 
+test('à faire : une tablette jumelée sans commande ne compte pas en stock et ne demande rien', () => {
+  const liste = g.aFaire({
+    maintenant: Date.UTC(2026, 10, 5),
+    commandes: [{ id: 'a', expedition: 'a-preparer' }],
+    stock: [{ etat: 'en-stock', commande: null, fid: 'famille-test', alerteJumelage: 'jumelée sans commande', ref: 'T-1' }],
+    depenses: [],
+    automatique: { erreurs: [] },
+  });
+  assert.deepStrictEqual(liste, ['1 tablette à envoyer', '1 tablette manquante en stock pour les envoyer']);
+});
+
+test('achat enregistré : une tablette jumelée à une famille n\'est pas complétée à la place d\'une libre', () => {
+  const sans = [{ id: 'a', etat: 'en-stock', creeLe: 1, fid: 'famille-test' }, { id: 'b', etat: 'en-stock', creeLe: 2 }];
+  assert.deepStrictEqual(g.fichesARattacher(sans, [], 1), ['b']);
+});
+
 test('pièces jointes lues comme factures', () => {
   const ko = 1024;
   const pieces = g.piecesFacture([
@@ -231,6 +247,9 @@ test('forfaits SIM prépayés : rappel de recharge et facture rangée sur sa lig
   assert.deepStrictEqual(g.champsSim({ prochaineRecharge: now, dureeForfait: 30, renouvellementAuto: true }),
     { prochaineRecharge: now, dureeForfait: 30, renouvellementAuto: true });
   assert.deepStrictEqual(g.champsSim({ dureeForfait: 0, renouvellementAuto: 'oui' }), { dureeForfait: null, renouvellementAuto: false });
+  assert.deepStrictEqual(g.champsSim({ finForfait: 'bloque' }), { finForfait: 'bloque' });
+  assert.deepStrictEqual(g.champsSim({ finForfait: 'coupe' }), { finForfait: 'reduit' });
+  assert.deepStrictEqual(g.champsSim({ finForfait: null }), { finForfait: 'reduit' });
 
   const sims = [
     { id: 'a', statut: 'active', operateur: 'Lyca', numero: '07 51 23 45 67', iccid: '8944110068251234567' },
@@ -249,13 +268,16 @@ test('forfaits SIM prépayés : rappel de recharge et facture rangée sur sa lig
 
 test('garde-fou du forfait recopié sur la famille', () => {
   // Pass de 30 jours qui finit le 27/11 à 10 h (Paris) : commencé le 28/10.
-  assert.deepStrictEqual(g.forfaitFamille({ go: 1, prochaineRecharge: Date.UTC(2026, 10, 27, 9) }), { mo: 1000, debut: '2026-10-28' });
-  assert.deepStrictEqual(g.forfaitFamille({ go: 2, dureeForfait: 28, prochaineRecharge: Date.UTC(2026, 10, 25, 9) }), { mo: 2000, debut: '2026-10-28' });
+  assert.deepStrictEqual(g.forfaitFamille({ go: 1, prochaineRecharge: Date.UTC(2026, 10, 27, 9) }), { mo: 1000, debut: '2026-10-28', finForfait: 'reduit' });
+  assert.deepStrictEqual(g.forfaitFamille({ go: 2, dureeForfait: 28, prochaineRecharge: Date.UTC(2026, 10, 25, 9) }), { mo: 2000, debut: '2026-10-28', finForfait: 'reduit' });
   // Juste avant minuit à Paris (23 h 30 en hiver = 22 h 30 UTC) : le jour de Paris.
-  assert.deepStrictEqual(g.forfaitFamille({ derniereRecharge: Date.UTC(2026, 9, 30, 23, 30) }), { mo: 1000, debut: '2026-10-31' });
-  assert.deepStrictEqual(g.forfaitFamille({ go: 0.5, activation: Date.UTC(2026, 9, 30, 12) }), { mo: 500, jour: 28 });
-  assert.deepStrictEqual(g.forfaitFamille({ activation: Date.UTC(2026, 9, 12, 12) }), { mo: 1000, jour: 12 });
-  assert.deepStrictEqual(g.forfaitFamille({}), { mo: 1000, jour: 1 });
+  assert.deepStrictEqual(g.forfaitFamille({ derniereRecharge: Date.UTC(2026, 9, 30, 23, 30) }), { mo: 1000, debut: '2026-10-31', finForfait: 'reduit' });
+  assert.deepStrictEqual(g.forfaitFamille({ go: 0.5, activation: Date.UTC(2026, 9, 30, 12) }), { mo: 500, jour: 28, finForfait: 'reduit' });
+  assert.deepStrictEqual(g.forfaitFamille({ activation: Date.UTC(2026, 9, 12, 12) }), { mo: 1000, jour: 12, finForfait: 'reduit' });
+  assert.deepStrictEqual(g.forfaitFamille({}), { mo: 1000, jour: 1, finForfait: 'reduit' });
+  // Forfait « internet coupé » au bout (Sosh 1 Go bloqué) : recopié pour l'alerte et l'app famille.
+  assert.deepStrictEqual(g.forfaitFamille({ go: 1, activation: Date.UTC(2026, 9, 12, 12), finForfait: 'bloque' }), { mo: 1000, jour: 12, finForfait: 'bloque' });
+  assert.deepStrictEqual(g.forfaitFamille({ finForfait: 'n\'importe' }).finForfait, 'reduit');
 });
 
 test('accessoires à prévoir pour les envois', () => {
@@ -392,7 +414,13 @@ test('suite du jumelage d\'une tablette du stock', () => {
   assert.deepStrictEqual(g.suiteJumelage({ etat: 'envoyee', commande: 'c' }, { fid: 'f' }, 'f'), {});
   assert.deepStrictEqual(g.suiteJumelage({ etat: 'envoyee', commande: 'c' }, { fid: 'autre' }, 'f'),
     { alerte: 'jumelée à une autre famille que celle de sa commande' });
-  assert.deepStrictEqual(g.suiteJumelage({ etat: 'preparee', commande: null }, null, 'f'), { alerte: 'jumelée sans commande' });
+  // Tablette de test jumelée sans commande : rien à cocher pour l'admin (elle n'est simplement pas à vendre).
+  assert.deepStrictEqual(g.suiteJumelage({ etat: 'preparee', commande: null }, null, 'f'), {});
+  // Commande reliée d'office (par l'e-mail) à l'ancienne famille d'un client qui recommande : suit sa tablette.
+  assert.deepStrictEqual(g.suiteJumelage({ etat: 'envoyee', commande: 'c' }, { fid: 'ancienne', relieeParEmail: { fid: 'ancienne' } }, 'f'),
+    { relier: true, delier: 'ancienne' });
+  assert.deepStrictEqual(g.suiteJumelage({ etat: 'envoyee', commande: 'c' }, { fid: 'ancienne', relieeParEmail: { fid: 'ancienne' } }, 'ancienne'), {});
+  assert.strictEqual(g.suiteJumelage({ etat: 'envoyee', commande: 'c' }, { fid: 'x', relieeParEmail: { fid: 'y' } }, 'f').relier, undefined);
 });
 
 test('clients : fusion par e-mail, statut et accord pour les e-mails', () => {

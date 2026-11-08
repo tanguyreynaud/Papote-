@@ -187,3 +187,43 @@ test('garderDernieres : seules les 4 sauvegardes les plus récentes restent, le 
   assert.deepStrictEqual(lib.garderDernieres(dossier, 0), [], '0 = tout garder');
   fs.rmSync(dossier, { recursive: true, force: true });
 });
+
+// Firestore refuse une requête (un commit) de plus de 10 Mio ; l'émulateur, lui, l'accepte. La base est donc
+// entourée d'un garde qui mesure chaque lot et refuse comme la vraie base. Photos en taille réelle
+// (posts/{id}/media/image, jusqu'à 900 000 caractères) : 150 envois de 100 Kio = 15 Mio.
+test('restauration de gros documents (photos) : aucun lot de plus de 10 Mio, tout est réécrit', { timeout: 120000 }, async () => {
+  await vider();
+  const LIMITE = 10 * 1024 * 1024;
+  const lots = [];
+  const garde = {
+    doc: (chemin) => db.doc(chemin),
+    batch: () => {
+      const vrai = db.batch();
+      let octets = 0;
+      let n = 0;
+      return {
+        set(ref, donnees) { octets += Buffer.byteLength(JSON.stringify(lib.encoder(donnees))); n++; vrai.set(ref, donnees); return this; },
+        delete(ref) { vrai.delete(ref); return this; },
+        async commit() {
+          lots.push({ n, octets });
+          if (octets > LIMITE) throw new Error(`3 INVALID_ARGUMENT: Request payload size exceeds the limit: ${LIMITE} bytes.`);
+          return vrai.commit();
+        },
+      };
+    },
+  };
+  const photo = 'data:image/jpeg;base64,' + 'A'.repeat(100 * 1024);
+  const documents = [];
+  for (let i = 0; i < 150; i++) {
+    const p = `families/famG/posts/p${String(i).padStart(3, '0')}`;
+    documents.push({ chemin: p, donnees: { type: 'photo', hearts: 0 } });
+    documents.push({ chemin: `${p}/media/image`, donnees: { data: photo } });
+  }
+  const r = await lib.restaurer({ db: garde, sauvegarde: { version: lib.VERSION, documents, comptes: [] } });
+  assert.strictEqual(r.documents, 300);
+  assert.ok(lots.length >= 2, `écrit en plusieurs lots (${lots.length})`);
+  assert.ok(lots.every((l) => l.octets <= LIMITE && l.n <= 400), JSON.stringify(lots));
+  assert.strictEqual((await db.collection('families/famG/posts').get()).size, 150);
+  assert.strictEqual((await db.doc('families/famG/posts/p149/media/image').get()).get('data'), photo);
+  assert.strictEqual((await db.doc('interne/restauration').get()).exists, false, 'drapeau retiré');
+});

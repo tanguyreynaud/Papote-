@@ -17,6 +17,7 @@ const ANCIEN = {
   restitutions: 'every day 09:00',
   rappelsJumelage: 'every day 10:00',
   alerteMatin: require('./alertes').HORAIRE_PAS_VUE,
+  alerteForfait: 'every 60 minutes', // nouvelle (5/11) : forfait SIM à 80 et 95 %
   gestionRecap: 'every monday 08:00',
   bilanSupport: 'every monday 09:00',
   purgeMensuelle: '1 of month 04:00',
@@ -46,7 +47,7 @@ function tournaitAvant(schedule, ms) {
 const avant = (ms) => Object.keys(ANCIEN).filter((nom) => tournaitAvant(ANCIEN[nom], ms)).sort();
 const maintenant = (ms) => aLancer(ms).sort();
 
-test('le planning couvre exactement les 11 anciennes tâches', () => {
+test('le planning couvre exactement les 11 anciennes tâches et l\'alerte de forfait', () => {
   assert.deepStrictEqual(Object.keys(taches.PLANNING).sort(), Object.keys(ANCIEN).sort());
 });
 
@@ -65,7 +66,7 @@ test('chaque heure pile de 2026 et 2027 (changements d\'heure compris) : les mê
 });
 
 test('table de dates à Paris, dont les changements d\'heure', () => {
-  const H = ['relancesPaniers', 'finDeGrace', 'gestionCourrier'];
+  const H = ['relancesPaniers', 'finDeGrace', 'gestionCourrier', 'alerteForfait'];
   const cas = [
     // [instant UTC, heure de Paris, tâches en plus des horaires]
     ['2026-03-29T00:00:00Z', 'dim. 29/03 1 h (avant le passage à l\'heure d\'été)', []],
@@ -128,8 +129,8 @@ test('tachesHoraires : toutes les heures pile à Paris, lance les tâches dues',
   assert.strictEqual(f.__endpoint.timeoutSeconds, 1800);
   // Lundi 1er février 2027, 4 h à Paris.
   const bilan = await f.run({ scheduleTime: '2027-02-01T03:00:00.000Z' });
-  assert.deepStrictEqual(lancees.sort(), ['finDeGrace', 'gestionAutomatique', 'gestionCourrier', 'purgeMensuelle', 'relancesPaniers']);
-  assert.deepStrictEqual(Object.values(bilan), ['ok', 'ok', 'ok', 'ok', 'ok']);
+  assert.deepStrictEqual(lancees.sort(), ['alerteForfait', 'finDeGrace', 'gestionAutomatique', 'gestionCourrier', 'purgeMensuelle', 'relancesPaniers']);
+  assert.deepStrictEqual(Object.values(bilan), ['ok', 'ok', 'ok', 'ok', 'ok', 'ok']);
 });
 
 test('une tâche en erreur n\'arrête pas les autres et reste visible (logger.error)', async (ctx) => {
@@ -140,9 +141,9 @@ test('une tâche en erreur n\'arrête pas les autres et reste visible (logger.er
   const f = taches.planifier(t);
   // Lundi 2 novembre 2026, 9 h à Paris.
   const bilan = await f.run({ scheduleTime: '2026-11-02T08:00:00.000Z' });
-  assert.deepStrictEqual(lancees.sort(), ['finDeGrace', 'gestionCourrier', 'relancesPaniers', 'restitutions']);
+  assert.deepStrictEqual(lancees.sort(), ['alerteForfait', 'finDeGrace', 'gestionCourrier', 'relancesPaniers', 'restitutions']);
   assert.deepStrictEqual(bilan, {
-    relancesPaniers: 'erreur', finDeGrace: 'ok', gestionCourrier: 'ok', restitutions: 'erreur', bilanSupport: 'erreur',
+    relancesPaniers: 'erreur', finDeGrace: 'ok', gestionCourrier: 'ok', alerteForfait: 'ok', restitutions: 'erreur', bilanSupport: 'erreur',
   });
   assert.deepStrictEqual(journal.map((j) => j[0]).sort(), [
     'Tâche planifiée bilanSupport en erreur', 'Tâche planifiée relancesPaniers en erreur', 'Tâche planifiée restitutions en erreur',
@@ -157,12 +158,13 @@ test('une tâche lente ne retarde pas le départ des autres', async () => {
     relancesPaniers: async () => { parties.push('relancesPaniers'); await new Promise((r) => { liberer = r; }); },
     finDeGrace: async () => { parties.push('finDeGrace'); },
     gestionCourrier: async () => { parties.push('gestionCourrier'); },
+    alerteForfait: async () => { parties.push('alerteForfait'); },
   };
   const course = taches._test.lancer(t, Date.parse('2026-11-04T22:00:00Z'));
   await new Promise((r) => setImmediate(r));
-  assert.deepStrictEqual(parties.sort(), ['finDeGrace', 'gestionCourrier', 'relancesPaniers']);
+  assert.deepStrictEqual(parties.sort(), ['alerteForfait', 'finDeGrace', 'gestionCourrier', 'relancesPaniers']);
   liberer();
-  assert.deepStrictEqual(await course, { relancesPaniers: 'ok', finDeGrace: 'ok', gestionCourrier: 'ok' });
+  assert.deepStrictEqual(await course, { relancesPaniers: 'ok', finDeGrace: 'ok', gestionCourrier: 'ok', alerteForfait: 'ok' });
 });
 
 test('index.js : deux fonctions planifiées seulement, alertesTablettes inchangée, toutes les tâches branchées', () => {

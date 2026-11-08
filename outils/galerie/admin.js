@@ -64,11 +64,19 @@ function gestionDonnees(o = {}) {
     { id: 'T-010', ref: 'T-010', numero: '', modele: 'Blackview Tab 60 Pro', etat: 'en-stock', creeLe: il(9) },
     { id: 'T-011', ref: 'T-011', numero: 'BV60P-0011', modele: 'Blackview Tab 60 Pro', etat: 'a-reparer', notes: 'Écran fissuré au retour', prixAchat: 12999, acheteeLe: il(90), depense: 'D-A0', creeLe: il(90) },
     { id: 'T-012', ref: 'T-012', numero: 'BV60P-0012', modele: 'Blackview Tab 60 Pro', etat: 'chez-client', commande: 'CMD-OF01', fid: 'f-mamies', prixAchat: 12999, acheteeLe: il(25), depense: 'D-A0', creeLe: il(25) },
+    // Installées par QR (functions/installation-qr.js) : hors critères avec une SIM à code PIN, et une tablette d'essai.
+    { id: 'T-013', ref: 'T-013', numero: 'TAB10X0042', serieAndroid: 'TAB10X0042', modele: 'Tab 10 X', android: '11', iccid: '89331500000000000013', etat: 'preparee', simPin: true,
+      horsCriteres: { detail: ['écran 8.0"', 'Android 11', 'carte SIM avec code PIN'], le: il(0.1) }, installation: { par: 'qr', le: il(0.1), criteres: [] },
+      notes: 'Créée à l’installation par QR : aucun achat en stock à rattacher (ajoutez la facture).', creeLe: il(0.1) },
+    { id: 'E-001', numero: 'R9TT0001', serieAndroid: 'R9TT0001', modele: 'Blackview Tab 60 Pro', android: '14', etat: 'en-stock', essai: true,
+      horsCriteres: null, installation: { par: 'qr', le: il(1), criteres: [] }, notes: 'Tablette d’essai installée par QR : jamais pour un client.', creeLe: il(1) },
   ];
   const sims = [
     { id: 'S1', operateur: 'Lyca', numero: '07 45 12 34 56', iccid: '8933150000000001', statut: 'active', prix: 499, go: 1, dureeForfait: 30, activation: il(25), prochaineRecharge: il(-5), tablette: 'T-001', depense: 'D-S1' },
     { id: 'S2', operateur: 'Lyca', numero: '07 45 98 76 54', iccid: '8933150000000002', statut: 'active', prix: 499, go: 1, dureeForfait: 30, activation: il(28), prochaineRecharge: il(-2), tablette: 'T-004', depense: 'D-S2' },
     { id: 'S3', operateur: 'NRJ Mobile', numero: '06 98 76 54 32', iccid: '8933010000000003', statut: 'active', prix: 299, prixApres: 799, finPromo: il(-12), go: 2, renouvellementAuto: true, activation: il(30), tablette: 'T-005' },
+    // finForfait 'bloque' : internet coupé au bout du forfait (Sosh 1 Go bloqué, 5/11) ; absent = débit réduit.
+    { id: 'S9', operateur: 'Sosh', numero: '06 31 41 59 26', iccid: '8933010000000009', statut: 'active', prix: 599, go: 1, renouvellementAuto: true, finForfait: 'bloque', activation: il(40), prochaineRecharge: il(-12) },
     { id: 'S4', operateur: 'Lyca', numero: '07 51 23 45 67', iccid: '8933150000000004', statut: 'active', prix: 499, go: 1, dureeForfait: 30, activation: il(33), prochaineRecharge: il(1), tablette: 'T-006', depense: 'D-S4', cb: 'Visa …4242', cbExp: '2026-11' },
     { id: 'S5', operateur: 'Lyca', numero: '07 51 00 11 22', iccid: '8933150000000005', statut: 'suspendue', prix: 499, go: 1, tablette: 'T-007', depense: 'D-S4' },
     { id: 'S6', operateur: 'Cdiscount Mobile', iccid: '8933010000000006', statut: 'stock', prix: 199, go: 1, activerAvant: il(-20) },
@@ -235,6 +243,19 @@ function donnees(o = {}) {
 }
 
 const pause = (p, ms = 700) => p.waitForTimeout(ms);
+// Réponse de jetonInstallation (functions/installation-qr.js) : le contenu du QR sans le wifi.
+const QR_INSTALLATION = {
+  jeton: 'GaLeRiEjEtOnFaCtIcE0123456789ab', expire: il(-1), versionName: '2.99.120',
+  provisionnement: {
+    'android.app.extra.PROVISIONING_DEVICE_ADMIN_COMPONENT_NAME': 'com.papote.tablette/.AdminReceiver',
+    'android.app.extra.PROVISIONING_DEVICE_ADMIN_PACKAGE_DOWNLOAD_LOCATION': `https://raw.githubusercontent.com/tanguyreynaud/Papote-/${'c'.repeat(40)}/installation/Papote.apk`,
+    'android.app.extra.PROVISIONING_DEVICE_ADMIN_SIGNATURE_CHECKSUM': '_yWAPegUjhtPlkspLstFmFlfmTSzn5Ywzxk_lFzSBZk',
+    'android.app.extra.PROVISIONING_LOCALE': 'fr_FR',
+    'android.app.extra.PROVISIONING_TIME_ZONE': 'Europe/Paris',
+    'android.app.extra.PROVISIONING_LEAVE_ALL_SYSTEM_APPS_ENABLED': false,
+    'android.app.extra.PROVISIONING_ADMIN_EXTRAS_BUNDLE': { papote_jeton: 'GaLeRiEjEtOnFaCtIcE0123456789ab', papote_canal: 'stable' },
+  },
+};
 const toucher = (...sels) => async (p) => { for (const sel of sels) { await p.locator(sel).first().click(); await pause(p); } };
 const onglet = (t) => async (p) => { await p.locator('#kpi-commandes .onglet').filter({ hasText: t }).first().click(); await pause(p); };
 
@@ -358,8 +379,23 @@ const SCENES = [
   { groupe: 'Stock', titre: 'Tablette reçue sans facture', page: '#tablette/T-010', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Stock', titre: 'Tablette à réparer', page: '#tablette/T-011', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Stock', titre: 'Tablette introuvable', page: '#tablette/T-999', tailles: ['pc'], donnees: () => donnees() },
+  { groupe: 'Stock', titre: 'Installer une tablette par QR : le formulaire', page: '#stock/tablettes', tailles: ['pc', 'tel'], donnees: () => donnees(), faire: toucher('#btn-installer-qr') },
+  { groupe: 'Stock', titre: 'Installer une tablette par QR : le QR code', page: '#stock/tablettes', tailles: ['pc', 'tel'], plein: true,
+    donnees: () => donnees({ fonctions: { jetonInstallation: QR_INSTALLATION } }), faire: async (p) => {
+      await p.click('#btn-installer-qr');
+      await p.fill('#f-installer [name="wifi"]', 'Livebox-Atelier');
+      await p.fill('#f-installer [name="motDePasse"]', 'mot-de-passe-factice');
+      await p.click('#f-installer button[type="submit"]');
+      await p.waitForSelector('#installer-qr-image svg', { timeout: 5000 });
+      await pause(p);
+    } },
+  { groupe: 'Stock', titre: 'Installer une tablette par QR : fonction pas encore publiée', page: '#stock/tablettes', tailles: ['pc'],
+    donnees: () => donnees({ fonctions: { jetonInstallation: { erreur: 'not-found', code: 'functions/not-found' } } }), faire: toucher('#btn-installer-qr', '#f-installer button[type="submit"]') },
+  { groupe: 'Stock', titre: 'Tablette installée par QR, hors critères et SIM à code PIN', page: '#tablette/T-013', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees() },
+  { groupe: 'Stock', titre: 'Tablette d’essai installée par QR', page: '#tablette/E-001', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Stock', titre: 'Stock : cartes SIM', page: '#stock/sim', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees() },
   { groupe: 'Stock', titre: 'Carte SIM active, forfait Lyca (recharge dans 5 jours)', page: '#sim/S1', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees() },
+  { groupe: 'Stock', titre: 'Carte SIM Sosh : internet coupé à la fin du forfait', page: '#sim/S9', tailles: ['pc', 'tel'], plein: true, note: 'Nouveau (5/11) : « À la fin du forfait ».', donnees: () => donnees() },
   { groupe: 'Stock', titre: 'Carte SIM : à recharger demain, carte bancaire qui expire', page: '#sim/S4', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Stock', titre: 'Carte SIM : promo qui finit dans 12 jours, renouvellement automatique', page: '#sim/S3', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Stock', titre: 'Carte SIM suspendue', page: '#sim/S5', tailles: ['pc'], plein: true, donnees: () => donnees() },

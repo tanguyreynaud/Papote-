@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const { nomVoix, cheminFichier, texteDe, texteAnnonce, motParDefaut, MOTS, VOIX, MAX } = require('./voix');
+const { sansEmojis, nomVoix, cheminFichier, texteDe, texteAnnonce, motParDefaut, MOTS, VOIX, MAX } = require('./voix');
 
 test('voix selon le genre du proche : Orus pour un homme, Kore sinon', () => {
   assert.strictEqual(nomVoix('homme'), VOIX.homme);
@@ -46,4 +46,15 @@ test('photo sans légende : même petit mot que la tablette (motParDefaut de tab
   assert.strictEqual(motParDefaut('0000000000000000000a'), 'Bonne journée !');
   assert.strictEqual(MOTS.length, 7);
   assert.ok(cheminFichier(null, VOIX.homme, MOTS[4]).startsWith('voix-annonces/'));
+});
+
+test('la voix ne lit pas les emojis, le reste du texte est gardé', () => {
+  assert.strictEqual(sansEmojis('Bisous ❤️ à demain 👋'), 'Bisous à demain');
+  assert.strictEqual(sansEmojis('Bravo 🎉🎉 !'), 'Bravo !');
+  assert.strictEqual(sansEmojis('La famille 👨‍👩‍👧 et 👍🏽 ok'), 'La famille et ok');
+  assert.strictEqual(sansEmojis('🇫🇷 Allez'), 'Allez');
+  assert.strictEqual(sansEmojis('Été, 15 €, « œuf » #2 1️⃣'), 'Été, 15 €, « œuf » #2 1');
+  assert.strictEqual(texteDe({ text: '❤️😘' }, 'text'), '');
+  assert.strictEqual(texteDe({ text: 'Coucou 😘' }, 'text'), 'Coucou');
+  assert.strictEqual(texteDe({ text: '𝒜'.repeat(300) }, 'text'), '𝒜'.repeat(MAX));
 });

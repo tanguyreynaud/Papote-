@@ -1,5 +1,6 @@
 // App Check pour les tablettes : pas de Play Store, donc pas de Play Integrity. Chaque tablette reçoit
-// à l'installation une clé secrète (outils\admin\cle-tablette.bat, appelé par installer-tablette.ps1) ;
+// à l'installation une clé secrète (outils\admin\cle-tablette.bat, appelé par installer-tablette.ps1,
+// ou inscrireTablette à l'installation par QR, installation-qr.js) ;
 // seule son empreinte SHA-256 est gardée dans clesTablettes/{empreinte}, illisible côté client.
 //
 //   jetonAppCheck  POST { cle } -> { token, expireTimeMillis } : jeton App Check valable 1 h ;
@@ -23,6 +24,13 @@ const empreinte = (cle) => crypto.createHash('sha256').update(cle).digest('hex')
 
 // Une clé : 43 caractères base64url (32 octets aléatoires).
 const cleValide = (cle) => typeof cle === 'string' && /^[A-Za-z0-9_-]{43}$/.test(cle);
+
+// Nouvelle clé, comme outils/admin/cle-tablette.js : la clé va à la tablette, seule l'empreinte est gardée
+// (clesTablettes/{empreinte}). Sert à l'installation par QR (installation-qr.js).
+function nouvelleCle() {
+  const cle = crypto.randomBytes(32).toString('base64url');
+  return { cle, empreinte: empreinte(cle) };
+}
 
 async function uidDuJeton(entete) {
   const m = /^Bearer (.+)$/.exec(entete || '');
@@ -59,4 +67,4 @@ const jetonAppCheck = onRequest({ maxInstances: 2, cors: true }, async (req, res
   res.json({ token, expireTimeMillis: Date.now() + ttlMillis });
 });
 
-module.exports = { jetonAppCheck, empreinte, cleValide, APP_ID };
+module.exports = { jetonAppCheck, empreinte, cleValide, nouvelleCle, APP_ID };

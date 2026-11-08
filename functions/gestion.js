@@ -312,19 +312,22 @@ function finApresRecharge(l, date) {
   return Math.max(fin, l.prochaineRecharge || 0);
 }
 
-// Garde-fou du forfait sur la tablette (Forfait.java) : families/{fid}.forfaitSim = { mo, debut | jour }.
+// Garde-fou du forfait sur la tablette (Forfait.java) : families/{fid}.forfaitSim = { mo, debut | jour, finForfait }.
 // mo : Go du forfait noté sur la ligne (1 000 Mo sans réglage) ; debut : jour (à Paris) où le pass en cours a
 // commencé, d'après la fin du forfait notée (cycles de 30 jours ou de sa durée) ; sinon jour du mois d'activation.
+// finForfait : 'reduit' ou 'bloque' (champ de la ligne, 'reduit' sans réglage) : l'alerte de fin de forfait
+// (forfait-alerte.js) et l'app famille adaptent leur message ; la tablette l'ignore.
 function forfaitFamille(l) {
   const mo = Number.isFinite(l.go) ? Math.round(l.go * 1000) : 1000;
+  const finForfait = l.finForfait === 'bloque' ? 'bloque' : 'reduit';
   const duree = (l.dureeForfait || DUREE_FORFAIT) * 24 * 3600 * 1000;
   const depart = l.prochaineRecharge ? l.prochaineRecharge - duree : l.derniereRecharge || null;
   if (depart) {
     const d = new Date(depart + decalageParis(depart));
-    return { mo, debut: `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}` };
+    return { mo, debut: `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`, finForfait };
   }
   const jour = l.activation ? new Date(l.activation + decalageParis(l.activation)).getUTCDate() : 1;
-  return { mo, jour: Math.min(Math.max(jour, 1), 28) };
+  return { mo, jour: Math.min(Math.max(jour, 1), 28), finForfait };
 }
 
 // Ligne SIM d'une facture de forfait : par le numéro de ligne ou l'ICCID imprimé, sinon la seule ligne active
@@ -700,6 +703,7 @@ function verifierAdmin(request) {
   const token = request.auth && request.auth.token;
   if (!token || token.admin !== true) throw new HttpsError('permission-denied', 'Réservé à l\'administrateur.');
 }
+exports.verifierAdmin = verifierAdmin;
 
 // La page admin réveille à l'ouverture les fonctions qu'elle appelle pour enregistrer ({ action: 'reveil' }) :
 // chacune démarre une fois en avance au lieu de faire attendre la première modification. Rien n'est lu ni écrit.
@@ -858,7 +862,7 @@ function familleResume(f) {
 const ETATS_A_RATTACHER = ['commandee', 'en-stock', 'preparee'];
 function fichesARattacher(sansAchat, numeros, quantite) {
   const restantes = sansAchat.slice().sort((a, b) => (a.creeLe || 0) - (b.creeLe || 0));
-  const libre = (t) => !t.commande && (!t.etat || ETATS_A_RATTACHER.includes(t.etat));
+  const libre = (t) => !t.commande && !t.fid && (!t.etat || ETATS_A_RATTACHER.includes(t.etat));
   const prendre = (i) => (i < 0 ? null : restantes.splice(i, 1)[0].id);
   const serie = (n) => String(n || '').replace(/\s/g, '').toUpperCase();
   const choix = Array.from({ length: quantite }, (_, i) => {
@@ -899,7 +903,8 @@ async function ajouterAchat(d, qui) {
     });
   }
   const sansAchat = (await db().collection('stock').where('acheteeLe', '==', null).get()).docs
-    .filter((x) => x.get('prixAchat') == null && !x.get('depense'))
+    // Tablette d'essai (installée par QR) : jamais complétée par un achat.
+    .filter((x) => x.get('prixAchat') == null && !x.get('depense') && x.get('essai') !== true)
     .map((x) => ({ id: x.id, numero: x.get('numero'), serieAndroid: x.get('serieAndroid'), modele: x.get('modele'),
       etat: x.get('etat'), commande: x.get('commande') || null, creeLe: ms(x.get('creeLe')) || 0 }));
   const rattachees = fichesARattacher(sansAchat, numeros, quantite);
@@ -954,6 +959,7 @@ async function remplacer(d, qui) {
     if (!neuve.exists || neuve.get('commande') || !['en-stock', 'preparee'].includes(neuve.get('etat'))) {
       throw new HttpsError('failed-precondition', 'Choisissez une tablette disponible du stock.');
     }
+    if (neuve.get('fid')) throw new HttpsError('failed-precondition', 'Cette tablette est dans une famille : pas à vendre. Choisissez-en une autre.');
     await kit.ref.update({
       etat: 'en-retour', commande: null, remplaceePour: commande, majLe: FieldValue.serverTimestamp(),
       historique: FieldValue.arrayUnion(trace('en-retour', { remplacement: true })),
@@ -1055,6 +1061,12 @@ exports.gestionStock = onCall(async (request) => {
       if ((await dep.get()).exists) await dep.update({ fournisseur: maj.fournisseur, majLe: FieldValue.serverTimestamp() });
     }
     if ('simCout' in champs) maj.simCout = centimes(champs.simCout);
+    // Installée par QR hors critères (installation-qr.js) : l'administrateur la garde quand même.
+    if (champs.horsCriteres === null && snap.get('horsCriteres')) {
+      maj.horsCriteres = null;
+      maj.simPin = false;
+      maj.horsCriteresAccepte = { le: Date.now(), par: qui, detail: snap.get('horsCriteres.detail') || [] };
+    }
     // Achat chez le vendeur (Tanguy, 2026-10-22 : chaque tablette, carte SIM ou accessoire a son achat).
     if ('depense' in champs) maj.depense = await depenseExistante(champs.depense);
     if ('commande' in champs) {
@@ -1209,6 +1221,9 @@ function champsSim(c) {
   // Forfait prépayé : sa durée en jours (30 par défaut) et s'il est renouvelé tout seul par l'opérateur.
   if ('dureeForfait' in c) champs.dureeForfait = Number.isInteger(c.dureeForfait) && c.dureeForfait >= 1 && c.dureeForfait <= 366 ? c.dureeForfait : null;
   if ('renouvellementAuto' in c) champs.renouvellementAuto = c.renouvellementAuto === true;
+  // Ce que fait l'opérateur au bout du forfait (Tanguy, 5/11) : 'reduit' (débit réduit, Lyca, Bouygues) ou
+  // 'bloque' (internet coupé jusqu'au forfait suivant, Sosh 1 Go bloqué). Toute autre valeur : 'reduit'.
+  if ('finForfait' in c) champs.finForfait = c.finForfait === 'bloque' ? 'bloque' : 'reduit';
   // Achat de la carte (dépense), vérifié par enregistrerSim.
   if ('depense' in c) champs.depense = texte(c.depense, 100) || null;
   return champs;
@@ -2420,8 +2435,10 @@ exports.gestionAnnulerCommande = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_P
       throw new HttpsError('already-exists', 'Annulation déjà en cours (autre onglet) : rechargez la page.');
     }
     if (colisRevenu) {
-      if (c.expedition !== 'envoyee' || c.fid) {
-        throw new HttpsError('failed-precondition', c.fid ? 'Cette tablette est reliée à une famille : arrêtez plutôt l\'abonnement.'
+      // Famille préparée à la commande : seule l'entrée de la tablette dans la famille compte (famille-preparee.js).
+      const installee = require('./famille-preparee').regles.tabletteDansLaFamille(c);
+      if (c.expedition !== 'envoyee' || installee) {
+        throw new HttpsError('failed-precondition', installee ? 'Cette tablette est reliée à une famille : arrêtez plutôt l\'abonnement.'
           : 'Seule une commande envoyée (colis revenu sans avoir été retiré) peut être annulée ainsi.');
       }
     } else if (!['a-preparer', 'paiement-en-attente'].includes(c.expedition)) {
@@ -2486,42 +2503,32 @@ exports.gestionAnnulerCommande = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_P
 const vitrine = {};
 exports.brancher = (f) => Object.assign(vitrine, f);
 
-// Tablette perdue ou hors service : retirée de sa famille, jamais plus jumelée.
-const ETATS_BLOQUES = ['perdue', 'hors-service'];
+// Tablette perdue ou hors service : retirée de sa famille, jamais plus jumelée (famille-preparee.js).
+const { ETATS_BLOQUES } = require('./famille-preparee').regles;
 // États où la tablette n'est plus chez un client : retirée de sa famille (gestionStock, changement d'état).
 const ETATS_RETIREES = [...ETATS_BLOQUES, 'revenue', 'en-stock', 'a-reparer'];
 
 // Que faire quand une tablette du stock est jumelée à une famille (pure, testée).
 // t : fiche stock ; commande : sa commande (ou null) ; fid : famille qui vient de la jumeler.
+// Jumelée sans commande (la tablette de test de Tanguy dans sa « famille test ») : rien à faire, pas d'alerte.
+// Sa fiche garde la famille (fid) et sort d'elle-même du stock à vendre (stock.js) ; l'admin l'affiche
+// « Dans la famille … : pas à vendre » (Tanguy, 5/11). L'ancienne alerte, encore sur de vieilles fiches, est ignorée.
 const ALERTE_SANS_COMMANDE = 'jumelée sans commande';
 function suiteJumelage(t, commande, fid) {
   if (ETATS_BLOQUES.includes(t.etat)) return { refuser: true };
-  if (!t.commande || !commande) return { alerte: ALERTE_SANS_COMMANDE };
+  if (!t.commande || !commande) return {};
   if (!commande.fid) return { relier: true };
-  if (commande.fid !== fid) return { alerte: 'jumelée à une autre famille que celle de sa commande' };
+  if (commande.fid !== fid) {
+    // Commande reliée d'office à l'ancienne famille d'un client qui recommande (index.js, paiementTermine) : sa
+    // tablette, jumelée ailleurs, dit quelle famille elle sert vraiment. L'ancienne famille est remise comme avant.
+    if (commande.relieeParEmail && commande.relieeParEmail.fid === commande.fid) return { relier: true, delier: commande.fid };
+    return { alerte: 'jumelée à une autre famille que celle de sa commande' };
+  }
   return {};
 }
 
-async function ficheDeLaTablette(p) {
-  const par = async (champ, valeur) => (valeur
-    ? (await db().collection('stock').where(champ, '==', valeur).limit(1).get()).docs[0] || null : null);
-  const connue = await par('tabletUid', p.tabletUid);
-  if (connue || !p.serie) return connue;
-  // Le n° de série est écrit par la tablette elle-même dans pairings/ : n'importe quel compte pourrait
-  // y mettre celui d'une tablette livrée et récupérer la commande. On ne le croit que si la clé
-  // App Check posée à l'installation de CE n° de série est reliée au même compte (jetonAppCheck).
-  if (!(await serieProuvee(p.serie, p.tabletUid))) {
-    logger.warn(`Jumelage : n° de série ${p.serie} non prouvé pour le compte ${p.tabletUid || '?'}, ignoré.`);
-    return null;
-  }
-  return par('serieAndroid', p.serie);
-}
-
-async function serieProuvee(serie, tabletUid) {
-  if (!tabletUid) return false;
-  const cles = await db().collection('clesTablettes').where('serie', '==', serie).get();
-  return cles.docs.some((d) => d.get('tabletUid') === tabletUid);
-}
+// Fiche stock de la tablette (compte, ou n° de série prouvé par sa clé App Check) : famille-preparee.js.
+const ficheDeLaTablette = (p) => require('./famille-preparee').ficheDeLaTablette(db(), p, logger);
 
 // Jumelage (pairings/{code}, écrit par la tablette et l'appli famille) : la tablette est reconnue par
 // son n° de série Android, noté à la préparation (outils/gestion/preparer-tablette).
@@ -2562,6 +2569,12 @@ async function appliquerJumelage(p, pairingRef) {
   // rejoint sa fiche dans la famille (l'app le montre aux proches, qui peuvent l'appeler par téléphone).
   if (t.simId) await ecrireForfaitFamille(t.simId).catch((e) => logger.warn('Forfait de la famille', e.message));
   // Tablette reliée : elle est forcément reçue (si le suivi du colis ne l'a pas déjà noté).
+  // Avant toute autre écriture sur la commande (qui pousse des messages Stripe) : elle quitte l'ancienne famille.
+  if (suite.delier) await delierAncienneFamille(suite.delier, p.fid, t.commande, commande.relieeParEmail.abonnementAvant);
+  // Tablette jumelée à la famille reliée d'office : le lien n'est plus provisoire.
+  if (t.commande && commande && commande.relieeParEmail && commande.fid === p.fid) {
+    await db().doc(`commandes/${t.commande}`).update({ relieeParEmail: FieldValue.delete() });
+  }
   if (t.commande && commande && commande.envoyeeLe && !(commande.preparation && commande.preparation.recuLe)) {
     await db().doc(`commandes/${t.commande}`).update({ 'preparation.recuLe': Date.now(), 'preparation.recuPar': 'tablette reliée' });
   }
@@ -2570,6 +2583,21 @@ async function appliquerJumelage(p, pairingRef) {
     logger.info(`Commande ${t.commande} reliée à la famille ${p.fid} par la tablette ${t.ref || fiche.id}.`);
   }
   return fiche;
+}
+
+// L'ancienne famille reliée d'office à la commande d'un client qui recommande retrouve son abonnement d'avant
+// (résilié, aucun…), si elle suit encore cette commande ; la commande passe à la nouvelle famille dans la même
+// écriture (les messages Stripe en route, qui portent encore l'ancienne famille, suivent commandes/{id}.fid).
+async function delierAncienneFamille(ancienne, nouvelle, abonnementId, abonnementAvant) {
+  const ref = db().doc(`families/${ancienne}`);
+  await db().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (snap.exists && snap.get('abonnement.stripeSubscriptionId') === abonnementId) {
+      tx.update(ref, { abonnement: abonnementAvant || { statut: 'aucun', majLe: FieldValue.serverTimestamp() }, rev: FieldValue.increment(1) });
+    }
+    tx.update(db().doc(`commandes/${abonnementId}`), { fid: nouvelle, relieeParEmail: FieldValue.delete() });
+  });
+  logger.info(`Commande ${abonnementId} : sa tablette est jumelée ailleurs, la famille ${ancienne} retrouve son abonnement d'avant.`);
 }
 
 // Rattrapage (chaque nuit et « Lancer maintenant ») : tablette préparée ou envoyée, jumelée (pairing
@@ -2722,7 +2750,8 @@ function aFaire({ commandes, stock, depenses, automatique, maintenant, sims = []
   const idsAEnvoyer = new Set(actives.filter((c) => c.expedition === 'a-preparer' && !retour(c)).map((c) => c.id));
   const aEnvoyer = idsAEnvoyer.size;
   // Une tablette réservée à une commande pas encore envoyée compte pour cette commande.
-  const dispo = stock.filter((t) => ['en-stock', 'preparee'].includes(t.etat) && (!t.commande || idsAEnvoyer.has(t.commande))).length;
+  // Une tablette jumelée à une famille sans commande (tablette de test) n'est pas à vendre : elle ne compte pas.
+  const dispo = stock.filter((t) => ['en-stock', 'preparee'].includes(t.etat) && (t.commande ? idsAEnvoyer.has(t.commande) : !t.fid)).length;
   ajouter(aEnvoyer, 'tablette(s) à envoyer');
   ajouter(Math.max(0, aEnvoyer - dispo), 'tablette(s) manquante(s) en stock pour les envoyer');
   ajouter(actives.filter((c) => c.expedition === 'envoyee' && !c.fid && ms(c.envoyeeLe)
@@ -2733,7 +2762,7 @@ function aFaire({ commandes, stock, depenses, automatique, maintenant, sims = []
     liste.push(`Tablette ${t.ref || t.numero || ''} revenue : ${usureBatterie(t.batterie, debutTablette(t), maintenant)}, à retirer du parc`);
   }
   ajouter(stock.filter((t) => t.etat === 'en-retour' && t.remplaceePour).length, 'tablette(s) remplacée(s) à récupérer chez le client');
-  for (const t of stock.filter((x) => x.alerteJumelage && !(x.alerteJumelage === ALERTE_SANS_COMMANDE && x.commande))) liste.push(`Tablette ${t.ref || t.numero || ''} ${t.alerteJumelage}`);
+  for (const t of stock.filter((x) => x.alerteJumelage && x.alerteJumelage !== ALERTE_SANS_COMMANDE)) liste.push(`Tablette ${t.ref || t.numero || ''} ${t.alerteJumelage}`);
   ajouter(actives.filter((c) => c.remboursement && c.remboursement.statut === 'echec').length, 'remboursement(s) échoué(s), à faire depuis Stripe');
   const parId = new Map(commandes.map((c) => [c.id, c]));
   const lignes = new Map(sims.map((l) => [l.id, l]));
@@ -3258,7 +3287,10 @@ exports.gestionCampagne = onCall({ secrets: [MAIL_MOT_DE_PASSE], timeoutSeconds:
   const voulus = new Set((Array.isArray(d.emails) ? d.emails : []).map(emailPropre).filter(Boolean));
   const destinataires = (await lireContacts()).filter((c) => voulus.has(c.email) && c.consentement && !c.desinscrit);
   if (!destinataires.length) throw new HttpsError('failed-precondition', "Personne dans cette liste n'a accepté les e-mails d'information.");
-  if (destinataires.length > ENVOIS_MAX) throw new HttpsError('failed-precondition', `${destinataires.length} destinataires : ${ENVOIS_MAX} au plus par jour avec Brevo. Réduisez la liste.`);
+  // Quota Brevo partagé avec tous les autres e-mails du jour (quota-courriels.js) : 100 gardés pour les urgents.
+  const quota = require('./quota-courriels');
+  const permis = quota.permisEnNombre(await quota.partisAujourdhui(db()), destinataires.length);
+  if (destinataires.length > permis) throw new HttpsError('failed-precondition', `${destinataires.length} destinataires : ${permis} au plus aujourd'hui avec Brevo (${ENVOIS_MAX} par jour pour tous les e-mails, dont ${quota.RESERVE_URGENTS} gardés pour les e-mails urgents). Réduisez la liste ou envoyez demain.`);
   const ref = db().collection('campagnes').doc();
   await ref.set({ objet, message, le: Date.now(), par: request.auth.token.email || request.auth.uid, prevus: destinataires.length, envoyes: 0, ignores: voulus.size - destinataires.length });
   let envoyes = 0;
@@ -3273,12 +3305,13 @@ exports.gestionCampagne = onCall({ secrets: [MAIL_MOT_DE_PASSE], timeoutSeconds:
         await cref.set({ email: c.email, jeton }, { merge: true });
       }
       const lien = `${URL_DESINSCRIPTION}?c=${cleContact(c.email)}&j=${jeton}`;
-      await mail.envoyer({ ...smtp, a: c.email, contenu: emailInformation({ objet, message, nom: c.nom, lienDesinscription: lien }) });
+      await mail.envoyer({ ...smtp, a: c.email, contenu: emailInformation({ objet, message, nom: c.nom, lienDesinscription: lien }), enNombre: true });
       envoyes++;
     } catch (e) {
       erreurs.push(`${c.email} : ${e.message}`);
     }
   }
+  if (envoyes) await quota.compter(db(), envoyes, logger);
   await ref.update({ envoyes, erreurs: erreurs.slice(0, 20), finiLe: Date.now() });
   return { envoyes, ignores: voulus.size - destinataires.length, erreurs: erreurs.slice(0, 5) };
 });
@@ -3568,7 +3601,7 @@ exports.gestionParcours = onCall(async (request) => {
       await ref.update({ 'preparation.recuLe': Date.now(), 'preparation.recuPar': qui });
     }
     else {
-      const preparation = avancementPropre(d.preparation, ['tablette', 'sim', 'suivi', 'enceinte']);
+      const preparation = avancementPropre(d.preparation, ['tablette', 'sim', 'suivi', 'enceinte', 'tabletteLue']);
       // Date de réception déjà notée (suivi du colis, jumelage, « Le client a reçu le colis ») : gardée, car elle
       // fait partir les 30 jours pour changer d'avis et le premier prélèvement.
       const avant = snap.get('preparation') || {};

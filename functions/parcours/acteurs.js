@@ -61,7 +61,8 @@ async function preparerEtEnvoyer(commande, tablette, suivi = '12345678') {
       type: 'envoi', commande, preparation: { etape: Object.keys(faits).length, faits, tablette: tablette.fiche, enceinte: 'non', suivi },
     }, TANGUY);
   }
-  await s.appeler('tabletteEnvoyee', { commande, suivi }, TANGUY);
+  // Numéro T-… lu sur la tablette mise dans le carton (A14-4).
+  await s.appeler('tabletteEnvoyee', { commande, suivi, tablette: tablette.ref }, TANGUY);
   await s.appeler('gestionStock', { action: 'modifier', id: tablette.fiche, champs: { etat: 'envoyee', commande } }, TANGUY);
   await s.calme();
 }
@@ -87,6 +88,36 @@ async function commanderEtPayer({ email, nom = 'Paul Martin', formule = 'sim', s
   return { session, abonnement };
 }
 
+// Commande payée avant la famille préparée (avant le 05/11/2026, il en reste en ligne) : pas de famille,
+// la tablette s'installe avec le QR code. Remet une commande neuve dans cet état-là.
+async function commandeDAvant(id) {
+  const c = await s.lire(`commandes/${id}`);
+  if (c.fid) {
+    const fam = await s.lire(`families/${c.fid}`);
+    // Pas de recursiveDelete : son limiteur de débit n'aime pas l'horloge simulée qui recule entre deux scénarios.
+    for (const d of (await s.db.collection(`families/${c.fid}/invitations`).get()).docs) await d.ref.delete();
+    await s.db.doc(`families/${c.fid}`).delete();
+    if (fam && fam.code) await s.db.doc(`invites/${fam.code}`).delete();
+  }
+  await s.db.doc(`commandes/${id}`).update({ fid: null, famillePreparee: s.FieldValue.delete() });
+  const abo = s.stripe.etat.abonnements.get(id);
+  if (abo && abo.metadata) delete abo.metadata.fid;
+  await s.calme();
+}
+
+// Celui qui a payé ouvre l'appli : il entre dans sa famille préparée par son invitation (web/js/compte.js,
+// acceptInvitation : fiche créée et invitation effacée d'un seul coup) et en devient responsable.
+async function entrerParInvitation(proche, fid) {
+  const lot = s.db.batch();
+  lot.set(s.db.doc(`families/${fid}/members/${proche.uid}`), {
+    name: proche.prenom, role: 'famille', code: '', joinedAt: s.FieldValue.serverTimestamp(),
+    uid: proche.uid, email: proche.email, status: 'active',
+  });
+  lot.delete(s.db.doc(`families/${fid}/invitations/${proche.email}`));
+  await lot.commit();
+  await s.calme();
+}
+
 // ---------- La tablette ----------
 
 // La tablette affiche son QR code (écran Bienvenue) : pairings/{code} « waiting ».
@@ -108,8 +139,9 @@ async function entrerDansLaFamille(t) {
   if (!p || p.status !== 'confirmed' || !p.fid) throw new Error(`La tablette n'est pas confirmée (${p && p.status})`);
   t.fid = p.fid;
   for (const uid of [t.tabletUid, t.callsUid]) {
+    // Sync.java (joinFamily) : le nom de la famille donné par le jumelage, sinon « Tablette ».
     await s.db.doc(`families/${p.fid}/members/${uid}`).create({
-      name: 'Tablette', role: 'tablette', pairing: t.code, canCall: true, joinedAt: s.FieldValue.serverTimestamp(),
+      name: p.familyName || 'Tablette', role: 'tablette', pairing: t.code, canCall: true, joinedAt: s.FieldValue.serverTimestamp(),
     });
   }
   await s.calme();
@@ -130,8 +162,31 @@ async function appelerDepuisLaTablette(t, { vers = null, sos = 0 } = {}) {
 
 // ---------- Les proches dans l'appli famille ----------
 
+// Famille préparée dès la commande (famille-preparee.js) : la tablette y est entrée seule (pairing « confirmed »
+// par le serveur). Le proche entre par son invitation (celui qui a payé) ou avec le code famille, puis donne le nom.
+async function entrerDansFamillePreparee(proche, t, { nom = 'Mamie Emma' } = {}) {
+  const p = await s.lire(`pairings/${t.code}`);
+  const fid = await entrerDansLaFamille(t);
+  const fam = await s.lire(`families/${fid}`);
+  if (!(await s.lire(`families/${fid}/members/${proche.uid}`))) {
+    if (await s.lire(`families/${fid}/invitations/${proche.email}`)) await entrerParInvitation(proche, fid);
+    else {
+      await rejoindre(proche, fid, { attente: true });
+      await s.calme();
+    }
+  }
+  if ((await s.lire(`families/${fid}`)).nomAChoisir) await s.appeler('nommerFamillePreparee', { fid, nom }, proche);
+  await envoyer(proche, fid, 'photo');
+  await s.calme();
+  if (!p.auto || !fam.installation.preparee) throw new Error('famille préparée attendue');
+  return fid;
+}
+
 // Installation complète depuis le téléphone (famille.js) : scan, prénom, nom, photo, son, « C'est parfait ».
+// Tablette entrée seule dans une famille préparée à la commande : le proche y entre et donne le nom.
 async function installer(proche, t, { nom = 'Mamie Emma' } = {}) {
+  const p = await s.lire(`pairings/${t.code}`);
+  if (p && p.status === 'confirmed' && p.auto) return entrerDansFamillePreparee(proche, t, { nom });
   const r = await s.appeler('reserverTablette', { code: t.code, prenom: proche.prenom }, proche);
   if (r.etat !== 'reserve') throw new Error(`Réservation refusée : ${JSON.stringify(r)}`);
   await s.appeler('nommerFamille', { reveil: true }, proche);
@@ -172,6 +227,6 @@ async function rejoindre(proche, fid, { attente = false } = {}) {
 }
 
 module.exports = {
-  RELAIS, TANGUY, tablettePreparee, simSurTablette, preparerEtEnvoyer, commanderSurLeSite, commanderEtPayer,
-  afficherCode, entrerDansLaFamille, appelerDepuisLaTablette, installer, envoyer, rejoindre,
+  RELAIS, TANGUY, tablettePreparee, simSurTablette, preparerEtEnvoyer, commanderSurLeSite, commanderEtPayer, commandeDAvant, entrerParInvitation,
+  afficherCode, entrerDansLaFamille, entrerDansFamillePreparee, appelerDepuisLaTablette, installer, envoyer, rejoindre,
 };

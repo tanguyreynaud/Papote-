@@ -120,6 +120,16 @@ const installation = (etape) => {
   d.fonctions = { nommerFamille: { __ecrire: docs, __si: 'code', resultat: { fid: FID } } };
   return d;
 };
+// Famille préparée à la commande, la tablette pas encore arrivée ; nomDonne : le faux serveur enregistre le nom.
+const preparee = (o = {}) => {
+  const avant = { famille: { name: 'Votre proche', nomAChoisir: true, installation: { etape: 'fini', preparee: true }, faceTablette: null }, vide: true, sansTablette: true };
+  const d = connecte({ ...avant, fonctions: o.fonctions });
+  if (o.nomDonne) {
+    const apres = famillePleine({ ...avant, famille: { ...avant.famille, name: 'Mamie Jeanne', nomAChoisir: null } })[`families/${FID}`];
+    d.fonctions = { nommerFamillePreparee: { __ecrire: { [`families/${FID}`]: apres }, resultat: { ok: true } } };
+  }
+  return d;
+};
 const nommer = async (p) => { await p.fill('#setup-nom-input', 'Mamie Jeanne'); await p.click('#setup-nom button[type="submit"]'); await pause(p, 1500); };
 const appelEntrant = (o = {}) => connecte({ ...o, docs: { [`families/${FID}/calls/c1`]: { callerUid: 'u-tablette', callerName: 'Mamie Jeanne', state: 'ringing', createdAt: ms('10:30'), endedAt: null } } });
 // Photos « de la galerie du téléphone » pour l'écran d'envoi (fabriquées au début de la capture).
@@ -201,6 +211,25 @@ const SCENES = [
     [`families/${FID}`]: { name: 'Mamie Jeanne', createdBy: 'u-thomas' },
     [`families/${FID}/invitations/julie@exemple.fr`]: { email: MOI.email, fid: FID, familyName: 'Mamie Jeanne', invitedBy: 'Thomas', createdAt: ilYa(1) },
   }) },
+  // Famille préparée dès la commande (functions/famille-preparee.js, 05/11) : celui qui a payé y est invité.
+  { groupe: 'Famille préparée à la commande', titre: 'Celui qui a payé : son espace famille l’attend', plein: true, donnees: () => sansFamille({
+    [`families/${FID}`]: { name: 'Votre proche', nomAChoisir: true, createdBy: null, installation: { etape: 'fini', preparee: true } },
+    [`families/${FID}/invitations/julie@exemple.fr`]: { email: MOI.email, fid: FID, familyName: 'Votre proche', invitedBy: 'Papote', preparee: true, createdAt: ilYa(0) },
+  }) },
+  { groupe: 'Famille préparée à la commande', titre: 'Le nom à donner (tablette pas encore arrivée)', plein: true, donnees: () => preparee() },
+  { groupe: 'Famille préparée à la commande', titre: 'Le nom à donner : vide', donnees: () => preparee(), faire: async (p) => {
+    await p.click('#nom-prepare-btn'); await pause(p);
+  } },
+  { groupe: 'Famille préparée à la commande', titre: 'Le nom à donner : enregistrement en cours', donnees: () => preparee(), faire: async (p) => {
+    await p.evaluate(() => { window.__fonctionsBloquees = true; });
+    await p.fill('#nom-prepare-input', 'Mamie Jeanne'); await p.click('#nom-prepare-btn'); await pause(p, 300);
+  } },
+  { groupe: 'Famille préparée à la commande', titre: 'Le nom à donner : pas de réseau', donnees: () => preparee({ fonctions: { nommerFamillePreparee: { erreur: 'hors ligne', code: 'functions/unavailable' } } }), faire: async (p) => {
+    await p.fill('#nom-prepare-input', 'Mamie Jeanne'); await p.click('#nom-prepare-btn'); await pause(p);
+  } },
+  { groupe: 'Famille préparée à la commande', titre: 'Nom donné : la tablette est en route', plein: true, donnees: () => preparee({ nomDonne: true }), faire: async (p) => {
+    await p.fill('#nom-prepare-input', 'Mamie Jeanne'); await p.click('#nom-prepare-btn'); await pause(p, 1200);
+  } },
   { groupe: 'Connexion', titre: 'En attente d’acceptation', plein: true, donnees: () => sansFamille({
     [`families/${FID}`]: { name: 'Mamie Jeanne', createdBy: 'u-thomas' },
     [`families/${FID}/members/${MOI.uid}`]: membre(MOI.uid, 'Julie', { email: MOI.email, status: 'pending' }),
@@ -239,6 +268,10 @@ const SCENES = [
   { groupe: 'Accueil', titre: 'Forfait SIM à 80 % (image réduite)', plein: true, donnees: () => sousTablette({ forfait: 80 }) },
   { groupe: 'Accueil', titre: 'Forfait SIM à 88 % (sans image, « Appeler par téléphone »)', plein: true, donnees: () => sousTablette({ forfait: 89 }) },
   { groupe: 'Accueil', titre: 'Forfait SIM à 95 % (vidéos en attente du Wi-Fi)', plein: true, donnees: () => sousTablette({ forfait: 96 }) },
+  // Forfait « internet coupé » au bout (Sosh 1 Go bloqué, families/{fid}.forfaitSim.finForfait, 5/11) : la date, calmement.
+  { groupe: 'Accueil', titre: 'Forfait SIM à 82 %, internet coupé au bout du forfait', plein: true, note: 'Nouveau (5/11).', donnees: () => sousTablette({ forfait: 82, famille: { forfaitSim: { mo: 1000, jour: 5, finForfait: 'bloque' } } }) },
+  { groupe: 'Accueil', titre: 'Forfait SIM à 96 %, internet coupé au bout du forfait', plein: true, note: 'Nouveau (5/11).', donnees: () => sousTablette({ forfait: 96, famille: { forfaitSim: { mo: 1000, jour: 5, finForfait: 'bloque' } } }) },
+  { groupe: 'Accueil', titre: 'Tablette muette : forfait « internet coupé » sans doute épuisé', plein: true, note: 'Nouveau (5/11) : pas de « ne répond plus ».', donnees: () => sousTablette({ forfait: 99, tabletteHorsLigne: true, famille: { forfaitSim: { mo: 1000, jour: 5, finForfait: 'bloque' } } }) },
   { groupe: 'Accueil', titre: 'Accueil d’un proche (pas propriétaire)', plein: true, donnees: () => connecte({ proprietaire: false }) },
   { groupe: 'Accueil', titre: 'Plusieurs familles', plein: true, donnees: () => connecte({ docs: {
     'families/autre': { name: 'Papi Henri', createdBy: 'u-thomas', abonnement: { statut: 'actif' } },

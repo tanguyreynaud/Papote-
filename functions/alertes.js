@@ -69,7 +69,13 @@ function etatAlerte(tablette, maintenant, veille) {
   return null;
 }
 
-function message(type, nom) {
+// coupee : jour où internet revient, quand le forfait « internet coupé » est sans doute épuisé (forfait-alerte.js) :
+// pas de « ne répond plus » inquiétant, la vraie raison et le geste utile.
+function message(type, nom, coupee) {
+  if (type === 'silence' && coupee) {
+    const fin = require('./forfait-alerte').jourTexte(coupee);
+    return { titre: `La tablette de ${nom} n'a sans doute plus internet`, texte: `Son forfait du mois est épuisé, internet revient le ${fin}. Branchez-la au wifi si vous pouvez.` };
+  }
   return type === 'silence'
     ? { titre: `La tablette de ${nom} ne répond plus`, texte: 'Est-elle branchée et connectée au Wi-Fi ?' }
     : { titre: `La tablette de ${nom} est débranchée`, texte: 'Pensez à rebrancher son chargeur.' };
@@ -82,26 +88,48 @@ async function famillesEnPause(db, maintenant) {
   return new Set(pauses.docs.map((d) => d.get('fid')).filter(Boolean));
 }
 
+// Tablettes à regarder à ce tour : seulement celles qui peuvent avoir une alerte à donner ou à retirer, par trois
+// requêtes sur toutes les familles à la fois (index COLLECTION_GROUP de firestore.indexes.json) :
+//   muettes depuis plus de SILENCE_MS (le seuil le plus court : la veille ne fait que l'allonger),
+//   débranchées (battery.charging == false), ou en alerte (alerteType posé, à remettre à zéro si tout est revenu).
+// Avant : la liste des familles puis une requête par famille, soit ~3 lectures par famille toutes les 5 minutes
+// (~90 000 lectures par jour à 100 familles, ~900 000 à 1 000). Maintenant : ~1 lecture par tablette à problème.
+async function tablettesARegarder(db, maintenant) {
+  const membres = db.collectionGroup('members').where('role', '==', 'tablette');
+  const [muettes, debranchees, enAlerte] = await Promise.all([
+    membres.where('lastOnline', '<', new Date(maintenant - SILENCE_MS)).get(),
+    membres.where('battery.charging', '==', false).get(),
+    membres.where('alerteType', 'in', ['silence', 'debranchee']).get(),
+  ]);
+  const parChemin = new Map();
+  for (const d of [...muettes.docs, ...debranchees.docs, ...enAlerte.docs]) parChemin.set(d.ref.path, d);
+  const parFamille = new Map();
+  for (const d of parChemin.values()) {
+    const fid = d.ref.parent.parent.id;
+    if (!parFamille.has(fid)) parFamille.set(fid, []);
+    parFamille.get(fid).push(d);
+  }
+  return parFamille;
+}
+
 exports.alertesTablettes = onSchedule({ schedule: 'every 5 minutes', timeZone: 'Europe/Paris' }, async () => {
   const db = base();
   const maintenant = Date.now();
-  const enPause = await famillesEnPause(db, maintenant).catch((e) => { logger.warn('Pauses illisibles', e.message); return new Set(); });
-  // Seulement les champs utiles des familles, et toutes les familles en même temps (et non l'une après l'autre) :
-  // la tâche, lancée 288 fois par jour, finit plus vite et coûte moins de temps de calcul.
-  const familles = await db.collection('families').select('abonnement', 'name', 'createdBy', 'admins', 'veille').get();
-  await Promise.all(familles.docs.map(async (fam) => {
+  const [enPause, parFamille] = await Promise.all([
+    famillesEnPause(db, maintenant).catch((e) => { logger.warn('Pauses illisibles', e.message); return new Set(); }),
+    tablettesARegarder(db, maintenant),
+  ]);
+  if (!parFamille.size) return;
+  // Seulement les familles concernées, et seulement les champs utiles.
+  const fids = [...parFamille.keys()];
+  const familles = await db.getAll(...fids.map((fid) => db.doc(`families/${fid}`)),
+    { fieldMask: ['abonnement', 'name', 'createdBy', 'admins', 'veille', 'forfaitSim'] });
+  await Promise.all(familles.map(async (fam) => {
+    if (!fam.exists) return;
     const famille = fam.data();
-    const tablettes = await fam.ref.collection('members').where('role', '==', 'tablette').get();
-    // Numéro de la tablette jamais écrit dans la famille (carte SIM reliée avant le 29/10/2026) : retrouvé ici,
-    // abonnement actif ou non.
-    for (const t of tablettes.docs) {
-      if (!numeroInconnu(t.data())) continue;
-      await require('./gestion').completerNumeroTablette(fam.id, t.id)
-        .catch((e) => logger.warn(`Famille ${fam.id}, tablette ${t.id} : numéro non retrouvé`, e.message));
-    }
     // Abonnement suspendu : la tablette est en pause, pas d'alerte. Hospitalisation : pas d'alerte non plus.
     if (!estActif(famille.abonnement) || enPause.has(fam.id)) return;
-    for (const t of tablettes.docs) {
+    for (const t of parFamille.get(fam.id)) {
       const tablette = t.data();
       const type = etatAlerte(tablette, maintenant, famille.veille);
       try {
@@ -118,7 +146,7 @@ exports.alertesTablettes = onSchedule({ schedule: 'every 5 minutes', timeZone: '
         });
         if (!pris) continue;
         const responsables = [...new Set([famille.createdBy, ...(famille.admins || [])].filter(Boolean))];
-        const { titre, texte } = message(type, famille.name || 'Mamie');
+        const { titre, texte } = message(type, famille.name || 'Mamie', type === 'silence' && require('./forfait-alerte').coupeeParForfait(tablette, famille.forfaitSim, maintenant));
         let n;
         try {
           n = await envoyer(db, fam.id, responsables, { type: 'alerte', titre, texte }, 6 * 3600);
@@ -183,8 +211,15 @@ exports.alerteMatin = async () => {
   const familles = await db.collection('families').get();
   for (const fam of familles.docs) {
     const famille = fam.data();
-    if (!estActif(famille.abonnement) || enPause.has(fam.id)) continue;
     const membres = await fam.ref.collection('members').get();
+    // Numéro de la tablette jamais écrit dans la famille (carte SIM reliée avant le 29/10/2026) : retrouvé ici, une
+    // fois par jour (avant : toutes les 5 minutes dans alertesTablettes), abonnement actif ou non.
+    for (const t of membres.docs) {
+      if (t.get('role') !== 'tablette' || !numeroInconnu(t.data())) continue;
+      await require('./gestion').completerNumeroTablette(fam.id, t.id)
+        .catch((e) => logger.warn(`Famille ${fam.id}, tablette ${t.id} : numéro non retrouvé`, e.message));
+    }
+    if (!estActif(famille.abonnement) || enPause.has(fam.id)) continue;
     const docsTablettes = membres.docs.filter((m) => m.get('role') === 'tablette');
     const idsTablettes = docsTablettes.map((t) => t.id);
     const tablettes = docsTablettes.map((t) => t.data());
@@ -210,6 +245,7 @@ exports.alerteMatin = async () => {
 };
 
 exports.etatAlerte = etatAlerte;
+exports.message = message;
 exports.enVeille = enVeille;
 exports.pasVueDepuisLongtemps = pasVueDepuisLongtemps;
 exports.alertePasVueDue = alertePasVueDue;

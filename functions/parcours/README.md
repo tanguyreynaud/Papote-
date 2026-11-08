@@ -45,6 +45,11 @@ désordre, appels ou tâches en même temps.
   fois en même temps ; plus d'alerte après la fin de l'abonnement. Le SMS du SOS part de la tablette elle-même
   (`android/…/SmsAlert.java`) : il n'est pas testé ici.
 
+`installation-qr.parcours.js` : installation d'une tablette par QR code (installation-qr.js) : QR créé par
+l'admin, inscription de la tablette (fiche d'achat reprise, clé App Check jamais gardée en clair), nouvel essai de la
+même tablette, autre tablette refusée, QR expiré après 24 h ; hors critères noté sans refus, tablette d'essai à part,
+20 QR par heure au plus.
+
 Le refus du 31e proche lui-même est une règle Firestore : il est testé avec les règles, dans `tests/regles/`
 (branche de l'app web).
 

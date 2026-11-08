@@ -100,22 +100,27 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: main/functions/package-lock.json
-      - name: Clé de publication et outil Firebase
+      # Tout ce qui s'installe depuis npm s'installe AVANT que la clé existe sur la machine (audit 4/11 C1, reprise
+      # après sinistre 5/11) : un paquet compromis ne peut plus la lire pendant son installation.
+      # Version exacte de firebase-tools (plus de « dernière 14.x » prise au hasard) ; scripts d'installation coupés.
+      - name: Outil Firebase et dépendances des fonctions (sans la clé)
+        run: |
+          npm install -g --ignore-scripts firebase-tools@14.27.0 >/dev/null
+          firebase --version
+          if [ "$FONCTIONS" = true ]; then (cd main/functions && npm ci --ignore-scripts); fi
+      - name: Clé de publication
         env:
           CLE: ${{ secrets.FIREBASE_CLE_PUBLICATION }}
         run: |
           if [ -z "$CLE" ]; then echo "::error::Secret FIREBASE_CLE_PUBLICATION absent (environnement production)."; exit 1; fi
           printf '%s' "$CLE" > "$RUNNER_TEMP/cle.json"
           echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/cle.json" >> "$GITHUB_ENV"
-          npm install -g firebase-tools@14 >/dev/null
-          firebase --version
       - name: Fonctions (main ${{ needs.verifier.outputs.main }})
         if: env.FONCTIONS == 'true'
         working-directory: main
         env:
           FUNCTIONS_DISCOVERY_TIMEOUT: 60
         run: |
-          (cd functions && npm ci)
           # --non-interactive : si une fonction devait être supprimée, firebase S'ARRÊTE (jamais de --force ici).
           # Quota Google (429) : on relance ; les fonctions déjà à jour sont passées.
           for essai in 1 2 3; do
@@ -123,6 +128,19 @@ jobs:
             echo "Essai $essai raté, nouvel essai dans 90 s"; sleep 90
           done
           exit 1
+      # Ménage des secrets (Tanguy, 7/11) : chaque nouvelle valeur d'un secret laisse l'ancienne version active,
+      # payée chaque mois (6 versions gratuites). Après la publication des fonctions, on détruit les versions
+      # qu'AUCUNE fonction en ligne n'utilise. Droit nécessaire au compte de publication : « Secret Manager Secret
+      # Version Manager » (rien d'autre). Sans ce droit, la publication continue et un avertissement le dit.
+      - name: Ménage des vieilles versions de secrets
+        if: env.FONCTIONS == 'true'
+        working-directory: main
+        continue-on-error: true
+        run: |
+          if ! firebase functions:secrets:prune --force --project "$PROJET" --non-interactive; then
+            echo "::warning::Ménage des secrets impossible (droit « Secret Manager Secret Version Manager » manquant ?). Rien n'est cassé."
+            exit 1
+          fi
       - name: Vitrine (main)
         if: env.FONCTIONS == 'true'
         working-directory: main

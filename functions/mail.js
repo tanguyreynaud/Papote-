@@ -196,6 +196,13 @@ const lienHtml = (lien, texte) => `<a href="${echapper(lien)}" style="color:${C.
 // Parcours d'installation du 21/10/2026 : la carte SIM est déjà dans la tablette (pas de wifi à régler), le QR code
 // se scanne avec l'appareil photo du téléphone (ou le code se tape sur app.mapapote.fr), puis l'appli demande le
 // nom du proche, une première photo et fait le test du son.
+// Famille préparée dès la commande (famille-preparee.js, 05/11) : la tablette retrouve sa famille toute seule.
+const GESTES_PREPAREE = { etapes: [
+  'Branchez la tablette et allumez-la. La carte SIM est déjà dedans : rien à régler.',
+  'Touchez « Commencer » sur l\'écran : la tablette retrouve votre famille toute seule, sans code à scanner.',
+  'Les photos déjà envoyées depuis l\'appli Papote s\'affichent. Invitez vos proches depuis l\'appli : ils pourront envoyer des photos et appeler en vidéo.',
+] };
+const gestes = (code, preparee) => (preparee ? GESTES_PREPAREE : GESTES_ARRIVEE(code));
 const GESTES_ARRIVEE = (code) => ({ etapes: [
   'Branchez la tablette sur une prise, puis appuyez 3 secondes sur le bouton de marche (sur la tranche). Elle démarre en une minute environ ; si l\'écran reste noir, laissez-la charger un quart d\'heure. La carte SIM est déjà dedans : rien à régler.',
   `Avec l'appareil photo de votre téléphone, scannez le QR code affiché sur la tablette (ou ${lienHtml(lienAppli(code), 'ouvrez app.mapapote.fr')} et tapez le code affiché).`,
@@ -204,22 +211,24 @@ const GESTES_ARRIVEE = (code) => ({ etapes: [
 
 // ---------- Commande et livraison ----------
 
-function colisParti({ nom, suivi, lien, relais, code }) {
+function colisParti({ nom, suivi, lien, relais, code, preparee }) {
   return message('Votre tablette Papote est en route', [
     bonjour(nom),
     `Votre tablette vient de partir. Vous recevrez un message de Mondial Relay dès qu'elle sera disponible${relais ? ' au point relais' : ' au point relais choisi'}.`,
     { fiche: [['Numéro de suivi', echapper(suivi)], ['Point relais', relais ? relaisEnTexte(relais) : null]] },
     'À son arrivée, trois gestes :',
-    GESTES_ARRIVEE(code),
+    gestes(code, preparee),
   ], { texte: 'Suivre mon colis', lien });
 }
 
 // Tablette remise en main propre par Tanguy (A1) : pas de colis à suivre, elle est déjà chez le client.
-function tabletteRemise({ nom, code }) {
+function tabletteRemise({ nom, code, preparee }) {
   return message('Votre tablette Papote est chez vous', [
     bonjour(nom),
-    'Votre tablette Papote vous a été remise en main propre : elle est prête. Trois gestes pour la relier à votre famille :',
-    GESTES_ARRIVEE(code),
+    preparee
+      ? 'Votre tablette Papote vous a été remise en main propre : elle est prête et déjà reliée à votre famille. Trois gestes :'
+      : 'Votre tablette Papote vous a été remise en main propre : elle est prête. Trois gestes pour la relier à votre famille :',
+    gestes(code, preparee),
     // Plus de « 30 jours pour changer d'avis » (Tanguy, 2026-10-29) : même règle que l'e-mail de commande, les CGV couvrent le droit.
   ], { texte: 'Ouvrir l\'appli Papote', lien: lienAppli(code) });
 }
@@ -239,7 +248,7 @@ const DELAI = 'Je prépare et vérifie votre tablette moi-même, avec sa carte S
 
 // reprise : abonnement repris après une résiliation, tablette restée chez le proche (C3) : pas de mise en service,
 // pas de délai pour changer d'avis.
-function commandeConfirmee({ nom, code, relais, formule, dejaInstallee, reprise }) {
+function commandeConfirmee({ nom, code, relais, formule, dejaInstallee, reprise, famille }) {
   // Offre unique (29/10/2026) : la formule n'est plus lue, les anciennes commandes Wi-Fi n'étaient que des essais.
   const mensuel = OFFRE;
   // Abonnement pris dans l'appli, tablette déjà installée : ni envoi ni installation à annoncer.
@@ -271,9 +280,12 @@ function commandeConfirmee({ nom, code, relais, formule, dejaInstallee, reprise 
       ['Abonnement', `${mensuel}, payés une fois chaque mois écoulé à partir de la réception, sans engagement`],
       ['Changer d\'avis', '30 jours après la réception : rien à payer et les 60 € remboursés'],
     ] },
-    '<b>En attendant, installez l\'appli Papote sur votre téléphone</b> avec le bouton ci-dessous. Vous n\'avez pas encore de code, c\'est normal : il s\'affichera sur l\'écran de la tablette quand vous l\'allumerez. Vous le scannerez avec votre téléphone, et l\'appli vous guidera.',
+    // Famille préparée (05/11) : l'espace famille existe dès le paiement, la tablette y entrera seule.
+    famille
+      ? '<b>Votre espace famille Papote est déjà prêt.</b> Ouvrez l\'appli Papote avec le bouton ci-dessous et connectez-vous avec cette adresse e-mail : vous pourrez donner le nom de votre proche, préparer les premières photos et inviter la famille avant même l\'arrivée de la tablette. À son arrivée, il suffira de la brancher : elle retrouvera votre famille toute seule.'
+      : '<b>En attendant, installez l\'appli Papote sur votre téléphone</b> avec le bouton ci-dessous. Vous n\'avez pas encore de code, c\'est normal : il s\'affichera sur l\'écran de la tablette quand vous l\'allumerez. Vous le scannerez avec votre téléphone, et l\'appli vous guidera.',
     { petit: 'La tablette est prêtée et configurée : vous n\'avez rien à installer.' },
-  ], { texte: 'Installer l\'appli Papote', lien: APPLI });
+  ], famille ? { texte: 'Ouvrir mon espace famille', lien: famille } : { texte: 'Installer l\'appli Papote', lien: APPLI });
 }
 
 // Panier abandonné (functions/relances.js) : etape 1 (une heure après), 2 (lendemain soir), 3 (une semaine après).
@@ -359,14 +371,14 @@ function nouvelleCommande({ nom, email, telephone, code, relais, proche, formule
   ], bouton, { interne: true });
 }
 
-function rappelJumelage({ nom, numero, code }) {
+function rappelJumelage({ nom, numero, code, preparee }) {
   const titre = numero === 1 ? 'Votre tablette Papote vous attend' : 'Besoin d\'un coup de main avec Papote ?';
   return message(titre, [
     bonjour(nom),
     numero === 1
       ? 'Votre tablette Papote devrait être arrivée au point relais, mais elle n\'est pas encore reliée à votre famille. Cela prend deux minutes :'
       : 'Votre tablette Papote n\'est toujours pas reliée à votre famille. Si quelque chose bloque, répondez à cet e-mail : nous vous aidons. Pour la relier :',
-    GESTES_ARRIVEE(code),
+    gestes(code, preparee),
   ], { texte: 'Ouvrir l\'appli Papote', lien: lienAppli(code) });
 }
 
@@ -438,6 +450,24 @@ function appelSansTelephone({ nom, sos, lien }) {
       'Donnez votre numéro de portable dans l\'appli (Profil, « Mon numéro de portable ») : la tablette vous appellera alors comme un téléphone.',
     ] },
   ], { texte: 'Ouvrir l\'appli Papote', lien });
+}
+
+// Forfait internet de la tablette presque épuisé (95 %, forfait-alerte.js) : aux responsables, une seule fois par
+// forfait. Ton calme (Tanguy, 5/11) : ce qui va changer, jusqu'à quand, et le seul geste utile (le wifi).
+// type : 'reduit' (débit réduit au bout du forfait) ou 'bloque' (internet coupé) ; fin : jour où le forfait repart (ms).
+function forfaitPresqueEpuise({ nom, type, fin, lien }) {
+  const qui = nom || 'votre proche';
+  const date = new Date(fin).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', timeZone: 'Europe/Paris' });
+  const suite = type === 'bloque'
+    ? `internet sera coupé jusqu'au <b>${date}</b>`
+    : `jusqu'au <b>${date}</b> les appels vidéo seront plus lents`;
+  return message(`La tablette de ${qui} a presque utilisé son forfait internet du mois`, [
+    'Bonjour,',
+    `La tablette de <b>${echapper(qui)}</b> a presque utilisé son forfait internet du mois : ${suite} ; branchez-la au wifi si vous pouvez.`,
+    type === 'bloque'
+      ? `Rien n'est cassé : le forfait repart le ${date} et internet revient tout seul. Vous n'avez rien d'autre à faire.`
+      : `Rien n'est cassé : photos et messages continuent d'arriver, et le forfait repart le ${date}. Vous n'avez rien d'autre à faire.`,
+  ], { texte: 'Ouvrir l\'appli Papote', lien: lien || APPLI });
 }
 
 // ---------- Abonnement ----------
@@ -712,6 +742,30 @@ function alerteAdmin({ titre, detail, commande }) {
     ? { texte: 'Ouvrir la commande', lien: lienCommandeAdmin(commande) } : null, { interne: true });
 }
 
+// Forfait SIM d'une tablette à 80 ou 95 %, ou forfait « internet coupé » sans doute épuisé (forfait-alerte.js).
+// debut, fin : jours du forfait en cours (ms) ; type : 'reduit' | 'bloque' ; seuil : 80 | 95 ; coupee : bool.
+function alerteForfait({ nom, famille, pourCent, conso, plafond, debut, fin, type, seuil, coupee, commande }) {
+  const jourMois = (ms) => new Date(ms).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', timeZone: 'Europe/Paris' });
+  const mo = (n) => (n >= 1000 ? `${(n / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 2 })} Go` : `${Math.round(n)} Mo`);
+  const qui = `${nom || 'Mamie'}${famille ? ` (famille ${famille})` : ''}`;
+  const utilise = `${mo(conso)} utilisés sur ${mo(plafond)} depuis le ${jourMois(debut)}.`;
+  if (coupee) {
+    return alerteAdmin({
+      titre: `Tablette de ${nom || 'Mamie'} : internet sans doute coupé par le forfait`,
+      detail: `La tablette de ${qui} avait utilisé ${pourCent} % de son forfait « internet coupé » et ne donne plus de nouvelles depuis plus de 2 heures : c'est sans doute l'opérateur qui a coupé internet au bout du forfait, pas une panne. Internet revient le ${jourMois(fin)} ; une recharge le rétablit plus tôt. ${utilise}`,
+      commande,
+    });
+  }
+  const auBout = type === 'bloque'
+    ? `Forfait « internet coupé » au bout : sans recharge, la tablette n'aura plus internet jusqu'au ${jourMois(fin)} (sauf en wifi).`
+    : `Forfait « débit réduit » au bout : les appels vidéo seront plus lents jusqu'au ${jourMois(fin)}.`;
+  return alerteAdmin({
+    titre: `Forfait SIM à ${seuil} % : tablette de ${nom || 'Mamie'}`,
+    detail: `La tablette de ${qui} a utilisé ${pourCent} % de son forfait internet. ${utilise} ${auBout}${seuil >= 95 ? ' La famille est prévenue par e-mail (en journée).' : ''} Recharger ou augmenter le forfait si besoin : admin, Stock, cartes SIM.`,
+    commande,
+  });
+}
+
 // ---------- Support du site ----------
 
 // Le visiteur a laissé ses coordonnées au chat du site (demande de rappel) : il sait que c'est bien parti.
@@ -802,7 +856,11 @@ function budget({ palier, montant, paliers, coupee = true }) {
 
 // smtp : « hote:port:utilisateur » (MAIL_SMTP), expediteur : adresse affichée (MAIL_EXPEDITEUR).
 let transport;
-async function envoyer({ smtp, motDePasse, expediteur, a, contenu }) {
+// Appelé après chaque e-mail parti (index.js y branche le compteur du quota Brevo, quota-courriels.js).
+// enNombre : l'appelant compte lui-même ses envois en une fois (campagne, liste d'attente).
+let apresEnvoi = null;
+function surChaqueEnvoi(f) { apresEnvoi = f; }
+async function envoyer({ smtp, motDePasse, expediteur, a, contenu, enNombre = false }) {
   if (!motDePasse || !expediteur) throw new Error('E-mails non configurés (MAIL_EXPEDITEUR, MAIL_MOT_DE_PASSE).');
   if (!transport) {
     const [hote, port, utilisateur] = smtp.split(':');
@@ -812,19 +870,20 @@ async function envoyer({ smtp, motDePasse, expediteur, a, contenu }) {
     });
   }
   await transport.sendMail({ from: `Papote <${expediteur}>`, replyTo: expediteur, to: a, ...contenu });
+  if (apresEnvoi && !enNombre) await Promise.resolve().then(() => apresEnvoi(1)).catch(() => null);
 }
 
 module.exports = {
   // commande et livraison
   colisParti, tabletteRemise, commandeConfirmee, nouvelleCommande, relancePanier, listeAttenteConfirmee, lancement, rappelJumelage, sepaRefuse,
   // famille
-  invitation, demandeRejoindre, demandeAcceptee, installationFinie, appelSansTelephone,
+  invitation, demandeRejoindre, demandeAcceptee, installationFinie, appelSansTelephone, forfaitPresqueEpuise,
   // abonnement
   paiementEchoue, papoteEnPause, pausePrelevements, reprisePrelevements,
   // fin de contrat
-  retourTablette, etiquetteRetour, resiliationEnregistree, avantEffacement, resiliationAnnulee, rappelRestitution, tabletteRecue, materielNonRendu, commandeAnnulee, annulationAvantEnvoi, resiliation, alerteAdmin,
+  retourTablette, etiquetteRetour, resiliationEnregistree, avantEffacement, resiliationAnnulee, rappelRestitution, tabletteRecue, materielNonRendu, commandeAnnulee, annulationAvantEnvoi, resiliation, alerteAdmin, alerteForfait,
   // support et admin
   rappelConfirme, demandeRappel, bilanSupport, information, recapSemaine, livresComptables, budget,
   // outils
-  message, envoyer, echapper, euros, dateEnClair, sansBalises,
+  message, envoyer, surChaqueEnvoi, echapper, euros, dateEnClair, sansBalises,
 };

@@ -16,6 +16,7 @@ const JOURS = 3;
 const CADENCE = {
   alertesTablettes: 288, relancesPaniers: 24, finDeGrace: 24, gestionCourrier: 24, restitutions: 1, rappelsJumelage: 1,
   alerteMatin: 1, gestionAutomatique: 1, gestionRecap: 1 / 7, gestionCloture: 1 / 30, bilanSupport: 1 / 7,
+  alerteForfait: 24,
 };
 
 // Prix Firestore (région Europe multi-régions eur3, base nommée « europe » : pas de quota gratuit, celui-ci ne vaut que

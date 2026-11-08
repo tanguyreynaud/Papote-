@@ -138,6 +138,7 @@ test('deux commandes pour la même famille : « Arrêter » et « Reprendre » d
   await premierMoisPasse(id);
   // Deuxième commande payée par Paul, reliée à la même famille (Tanguy, 30/10 : 8X9K-EB7T et EJ4N-DVBA).
   const { abonnement: id2 } = await a.commanderEtPayer({ email: paul.email });
+  await a.commandeDAvant(id2);
   await s.db.doc(`commandes/${id2}`).update({ fid });
   const ligne = async (x) => (await s.appeler('gestionDonnees', {}, a.TANGUY)).commandes.find((c) => c.id === x);
 
@@ -272,6 +273,7 @@ test('celui qui a payé rejoint la famille installée par un autre : responsable
 test('l\'acheteur installe lui-même une tablette pas reconnue : sa commande est reliée par son e-mail, sans code', async () => {
   const paul = await s.compte('Paul', 'paul@exemple.fr');
   const { abonnement: id } = await a.commanderEtPayer({ email: paul.email });
+  await a.commandeDAvant(id); // commande d'avant la famille préparée
   const t = { serie: 'INCONNUE2', tabletUid: 'tablette-inconnue2', callsUid: 'appels-inconnue2' };
   await a.afficherCode(t);
   s.boite.length = 0;
@@ -280,6 +282,82 @@ test('l\'acheteur installe lui-même une tablette pas reconnue : sa commande est
   assert.strictEqual(fam.abonnement.statut, 'actif');
   assert.strictEqual((await commande(id)).fid, fid);
   assert.deepStrictEqual(mailsA('contact@mapapote.fr'), [], 'rien à faire pour Tanguy');
+});
+
+test('famille préparée, tablette pas reconnue : celui qui a payé scanne, elle entre dans SA famille (pas une deuxième)', async () => {
+  const paul = await s.compte('Paul', 'paul@exemple.fr');
+  const { abonnement: id } = await a.commanderEtPayer({ email: paul.email });
+  const { fid } = await commande(id);
+  await a.entrerParInvitation(paul, fid);
+  const t = { serie: 'INCONNUE4', tabletUid: 'tablette-inconnue4', callsUid: 'appels-inconnue4' };
+  await a.afficherCode(t);
+  assert.strictEqual((await s.lire(`pairings/${t.code}`)).status, 'waiting', 'pas reconnue : pas de jumelage tout seul');
+  s.boite.length = 0;
+  const r = await s.appeler('reserverTablette', { code: t.code, prenom: 'Paul' }, paul);
+  assert.deepStrictEqual(r, { etat: 'reserve', fid }, 'l\'appli entre directement dans la famille');
+  await s.calme();
+  assert.strictEqual(await a.entrerDansLaFamille(t), fid);
+  assert.strictEqual((await famille(fid)).abonnement.statut, 'actif');
+  assert.ok((await commande(id)).tabletteRelieeLe, 'plus de rappel de jumelage');
+  assert.strictEqual((await s.db.collection('families').get()).size, 1, 'aucune deuxième famille');
+  assert.deepStrictEqual(mailsA('contact@mapapote.fr'), [], 'rien à faire pour Tanguy');
+  // Une deuxième tablette inconnue ne s'y ajoute pas d'office : la famille a déjà la sienne.
+  const t2 = { serie: 'INCONNUE5', tabletUid: 'tablette-inconnue5', callsUid: 'appels-inconnue5' };
+  await a.afficherCode(t2);
+  assert.deepStrictEqual(await s.appeler('reserverTablette', { code: t2.code, prenom: 'Paul' }, paul), { etat: 'reserve' });
+});
+
+test('famille préparée nommée pendant que la tablette entre : sa fiche prend quand même le nom de la famille', async () => {
+  const paul = await s.compte('Paul', 'paul@exemple.fr');
+  const t = await a.tablettePreparee();
+  const { abonnement: id } = await a.commanderEtPayer({ email: paul.email });
+  const { fid } = await commande(id);
+  await a.entrerParInvitation(paul, fid);
+  await a.preparerEtEnvoyer(id, t);
+  // La tablette affiche son code avant le nom : jumelage confirmé sans nom (« Tablette »)…
+  await a.afficherCode(t);
+  assert.strictEqual((await s.lire(`pairings/${t.code}`)).familyName, '');
+  // … Paul donne le nom, puis seulement la tablette écrit sa fiche (elle relit toutes les 4 s).
+  await s.appeler('nommerFamillePreparee', { fid, nom: 'Mamie Emma' }, paul);
+  await a.entrerDansLaFamille(t);
+  for (const uid of [t.tabletUid, t.callsUid]) {
+    assert.strictEqual((await s.lire(`families/${fid}/members/${uid}`)).name, 'Mamie Emma', 'pas « Tablette »');
+  }
+  // Nommée avant l'arrivée : la tablette prend le nom par le jumelage.
+  const julie = await s.compte('Julie', 'julie@exemple.fr');
+  const t2 = await a.tablettePreparee();
+  const { abonnement: id2 } = await a.commanderEtPayer({ email: julie.email });
+  const fid2 = (await commande(id2)).fid;
+  await a.entrerParInvitation(julie, fid2);
+  await s.appeler('nommerFamillePreparee', { fid: fid2, nom: 'Papi Jo' }, julie);
+  await a.preparerEtEnvoyer(id2, t2);
+  await a.afficherCode(t2);
+  assert.strictEqual((await s.lire(`pairings/${t2.code}`)).familyName, 'Papi Jo');
+  await a.entrerDansLaFamille(t2);
+  assert.strictEqual((await s.lire(`families/${fid2}/members/${t2.tabletUid}`)).name, 'Papi Jo');
+});
+
+test('famille préparée : tablette perdue en route refusée, la tablette de remplacement entre seule dans la même famille', async () => {
+  const paul = await s.compte('Paul', 'paul@exemple.fr');
+  const t1 = await a.tablettePreparee();
+  const { abonnement: id } = await a.commanderEtPayer({ email: paul.email });
+  const { fid } = await commande(id);
+  await a.preparerEtEnvoyer(id, t1);
+  // Colis perdu : Tanguy note la tablette « Perdue » et relie une autre tablette à la même commande.
+  await s.appeler('gestionStock', { action: 'modifier', id: t1.fiche, champs: { etat: 'perdue' } }, a.TANGUY);
+  const t2 = await a.tablettePreparee();
+  await s.appeler('gestionStock', { action: 'modifier', id: t2.fiche, champs: { commande: id, etat: 'envoyee' } }, a.TANGUY);
+  await s.calme();
+  // La tablette perdue, allumée par quelqu'un d'autre : aucune famille.
+  await a.afficherCode(t1);
+  assert.strictEqual((await s.lire(`pairings/${t1.code}`)).status, 'waiting', 'tablette perdue : pas de famille');
+  assert.ok(!(await s.lire(`pairings/${t1.code}`)).fid);
+  await a.afficherCode(t2);
+  const p = await s.lire(`pairings/${t2.code}`);
+  assert.strictEqual(p.status, 'confirmed');
+  assert.strictEqual(p.fid, fid, 'la remplaçante entre dans la famille de la commande');
+  await a.entrerDansLaFamille(t2);
+  assert.strictEqual((await s.lire(`stock/${t2.fiche}`)).fid, fid);
 });
 
 test('deux commandes en attente au même e-mail : rien n\'est relié tout seul, Tanguy est prévenu', async () => {
@@ -452,12 +530,12 @@ test('tâches regroupées (tachesHoraires) : l\'alerte « pas vue » part à 10 
   s.notifications.length = 0;
   // Mercredi 4 novembre 2026 à 3 h (Paris) : les tâches horaires seulement.
   const nuit = await s.fonctions.tachesHoraires.run({ scheduleTime: '2026-11-04T02:00:00.000Z' });
-  assert.deepStrictEqual(nuit, { relancesPaniers: 'ok', finDeGrace: 'ok', gestionCourrier: 'ok' });
+  assert.deepStrictEqual(nuit, { relancesPaniers: 'ok', finDeGrace: 'ok', gestionCourrier: 'ok', alerteForfait: 'ok' });
   await s.calme();
   assert.strictEqual(alertes().length, 0, '3 h : pas d\'alerte « pas vue »');
   // Le même jour à 10 h : en plus, rappels de jumelage et alerte du matin.
   const matin = await s.fonctions.tachesHoraires.run({ scheduleTime: '2026-11-04T09:00:00.000Z' });
-  assert.deepStrictEqual(matin, { relancesPaniers: 'ok', finDeGrace: 'ok', gestionCourrier: 'ok', rappelsJumelage: 'ok', alerteMatin: 'ok' });
+  assert.deepStrictEqual(matin, { relancesPaniers: 'ok', finDeGrace: 'ok', gestionCourrier: 'ok', alerteForfait: 'ok', rappelsJumelage: 'ok', alerteMatin: 'ok' });
   await s.calme();
   assert.strictEqual(alertes().length, 1, '10 h : alerte « pas vue »');
 });

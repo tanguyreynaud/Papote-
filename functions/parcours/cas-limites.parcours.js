@@ -52,7 +52,8 @@ test('abonnement pris depuis l\'appli avec la tablette déjà installée : rien 
   let fam = await s.lire(`families/${fid}`);
   assert.strictEqual(fam.abonnement.statut, 'installation', 'tablette hors commande : 48 h pour la relier, abonnement à prendre');
   let fiche = await s.lire(`stock/${tablette.fiche}`);
-  assert.strictEqual(fiche.alerteJumelage, 'jumelée sans commande');
+  assert.strictEqual(fiche.alerteJumelage, null, 'rien à cocher dans l\'admin : la tablette est dans sa famille, pas à vendre');
+  assert.strictEqual(fiche.fid, fid);
 
   const { url } = await s.appeler('creerPaiement', { fid, formule: 'wifi', tablette: 'incluse' }, julie);
   const session = url.split('/').pop();
@@ -83,6 +84,26 @@ test('abonnement pris depuis l\'appli avec la tablette déjà installée : rien 
   assert.ok(mailsA(julie.email).some((m) => /abonnement/i.test(m)), 'confirmation');
   const stock = await s.requete('stockDisponible');
   assert.strictEqual(stock.json.precommande, true, 'la tablette installée ne compte plus dans le stock');
+});
+
+test('tablette de test jumelée sans commande (famille test de Tanguy) : jamais à vendre, rien à cocher', async () => {
+  const tanguy = await s.compte('Tanguy', 'tanguy.test@exemple.fr');
+  const t = await a.tablettePreparee();
+  assert.strictEqual((await s.requete('stockDisponible')).json.disponible, true, 'une tablette préparée au stock : à vendre');
+  const { fid } = await familleInstallee(tanguy, { tablette: t });
+  const fiche = await s.lire(`stock/${t.fiche}`);
+  assert.strictEqual(fiche.fid, fid, 'la fiche garde sa famille');
+  assert.strictEqual(fiche.commande, null);
+  assert.strictEqual(fiche.etat, 'preparee', 'son état ne change pas : rien à faire');
+  assert.strictEqual(fiche.alerteJumelage, null, 'pas d\'alerte « jumelée sans commande » à cocher');
+  const stock = await s.requete('stockDisponible');
+  assert.strictEqual(stock.json.disponible, false, 'seule tablette du stock, mais dans une famille : le site ne la vend pas');
+
+  // Une commande d'un client ne peut pas la prendre, même à la main dans l'admin.
+  const { abonnement: id } = await a.commanderEtPayer({ email: 'paul@exemple.fr' });
+  await assert.rejects(s.appeler('gestionStock', { action: 'modifier', id: t.fiche, champs: { commande: id } }, a.TANGUY),
+    /dans une famille : pas à vendre/);
+  assert.strictEqual((await s.lire(`stock/${t.fiche}`)).commande, null);
 });
 
 test('31e proche : le compteur lu par les règles suit les arrivées (les demandes en attente ne comptent pas)', async () => {
@@ -194,11 +215,15 @@ test('client qui recommande et annule depuis l\'appli avant l\'envoi : rembours�
   await s.calme();
   const t = await a.tablettePreparee();
   const { abonnement: id } = await a.commanderEtPayer({ email: paul.email });
-  assert.strictEqual((await commande(id)).fid, fam.id, 'commande reliée à sa famille par son e-mail');
-  assert.strictEqual((await s.lire(`families/${fam.id}`)).abonnement.statut, 'actif');
+  // A14-1 : plus jamais reliée à l'ancienne famille par l'e-mail ; une famille neuve est préparée.
+  const fid = (await commande(id)).fid;
+  assert.ok(fid && fid !== fam.id, 'nouvelle famille préparée, pas l\'ancienne');
+  assert.strictEqual((await s.lire(`families/${fam.id}`)).abonnement.statut, 'resilie', 'l\'ancienne famille ne change pas');
+  assert.strictEqual((await s.lire(`families/${fid}`)).abonnement.statut, 'actif');
+  await a.entrerParInvitation(paul, fid);
   await s.appeler('gestionStock', { action: 'modifier', id: t.fiche, champs: { commande: id } }, a.TANGUY);
 
-  const r = await s.appeler('retracter', { fid: fam.id }, paul);
+  const r = await s.appeler('retracter', { fid }, paul);
   assert.deepStrictEqual(r, { ok: true, remboursement: 'fait', montant: 6000 });
   await s.calme();
   assert.strictEqual(s.stripe.rembourse(id), 6000);
@@ -208,6 +233,52 @@ test('client qui recommande et annule depuis l\'appli avant l\'envoi : rembours�
   assert.ok(mailsA('contact@mapapote.fr').some((m) => /annul/i.test(m)), 'Tanguy prévenu : ne pas envoyer');
   assert.strictEqual((await s.lire(`stock/${t.fiche}`)).commande, null, 'la tablette choisie revient au stock');
   assert.strictEqual((await s.requete('stockDisponible')).json.precommande, false);
+});
+
+test('client qui recommande pour une autre grand-mère : la commande suit la nouvelle tablette, l\'ancienne famille reste résiliée', async () => {
+  const paul = await s.compte('Paul', 'paul@exemple.fr');
+  const t1 = await a.tablettePreparee();
+  const { abonnement: id1 } = await a.commanderEtPayer({ email: paul.email });
+  await a.preparerEtEnvoyer(id1, t1);
+  s.avancer(2);
+  await a.afficherCode(t1);
+  const f1 = await a.installer(paul, t1, { nom: 'Mamie Emma' });
+  s.avancer(31);
+  s.stripe.finirEssai(id1);
+  await s.calme();
+  const { le } = await s.appeler('resilierAbonnement', { fid: f1 }, paul);
+  await s.calme();
+  s.avancer((le - Date.now()) / s.JOUR + 0.1);
+  s.stripe.arreterALaDate(id1);
+  await s.calme();
+  await s.appeler('tabletteRendue', { commande: id1, manquants: [] }, a.TANGUY);
+  await s.calme();
+  assert.strictEqual((await s.lire(`families/${f1}`)).abonnement.statut, 'resilie');
+
+  // Deux mois plus tard, même e-mail, une tablette pour Mamie Rose.
+  s.avancer(60);
+  const t2 = await a.tablettePreparee();
+  const { abonnement: id2 } = await a.commanderEtPayer({ email: paul.email });
+  // Famille préparée dès la commande : la nouvelle commande a sa propre famille, jamais l'ancienne (A14-1).
+  const preparee = (await commande(id2)).fid;
+  assert.ok(preparee && preparee !== f1, 'nouvelle famille préparée, pas l\'ancienne');
+  await a.preparerEtEnvoyer(id2, t2);
+  s.avancer(2);
+  await a.afficherCode(t2);
+  const f2 = await a.installer(paul, t2, { nom: 'Mamie Rose' });
+  await s.calme();
+  assert.strictEqual((await commande(id2)).fid, f2, 'la commande suit sa tablette');
+  assert.strictEqual((await s.lire(`families/${f2}`)).abonnement.statut, 'actif');
+  assert.strictEqual((await s.lire(`families/${f2}`)).abonnement.stripeSubscriptionId, id2);
+  const ancienne = (await s.lire(`families/${f1}`)).abonnement;
+  assert.strictEqual(ancienne.statut, 'resilie', 'l\'ancienne famille redevient résiliée');
+  assert.strictEqual(ancienne.stripeSubscriptionId, id1);
+  assert.strictEqual((await s.lire(`stock/${t2.fiche}`)).alerteJumelage, null, 'pas d\'alerte pour Tanguy');
+  assert.strictEqual(s.stripe.etat.abonnements.get(id2).metadata.fid, f2);
+  s.avancer(2.1);
+  await s.tache('finDeGrace');
+  await s.calme();
+  assert.strictEqual((await s.lire(`families/${f2}`)).abonnement.statut, 'actif', 'pas de pause 48 h plus tard');
 });
 
 test('résiliation après le premier mois : dernier mois prélevé, rappel de retour, 140 € si la tablette ne revient pas', async () => {
@@ -305,6 +376,7 @@ test('« Annuler l\'installation » refusée quand la commande payée est déjà
   const paul = await s.compte('Paul', 'paul@exemple.fr');
   const t = await a.tablettePreparee();
   const { abonnement: id } = await a.commanderEtPayer({ email: paul.email });
+  await a.commandeDAvant(id);
   await a.preparerEtEnvoyer(id, t);
   await a.afficherCode(t);
   await s.appeler('reserverTablette', { code: t.code, prenom: 'Paul' }, paul);
@@ -318,6 +390,7 @@ test('commande reliée à la main avec son code XXXX-XXXX (tablette pas reconnue
   const paul = await s.compte('Paul', 'paul@exemple.fr');
   const julie = await s.compte('Julie', 'julie@exemple.fr');
   const { abonnement: id } = await a.commanderEtPayer({ email: paul.email });
+  await a.commandeDAvant(id);
   // Tablette qui n'est pas dans le stock (n° de série inconnu) : rien ne relie la commande tout seul.
   const t = { serie: 'INCONNUE', tabletUid: 'tablette-inconnue', callsUid: 'appels-inconnue' };
   await a.afficherCode(t);

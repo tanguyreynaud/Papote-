@@ -42,3 +42,5 @@ jobs:
         env:
           NODE_PATH: ${{ github.workspace }}/functions/node_modules
         run: npx --yes firebase-tools@14 emulators:exec --only firestore,auth --project demo-papote --config parcours/firebase.json "node --test ../outils/admin/sauvegarde.test.js"
+      - name: Copie chiffrée des sauvegardes
+        run: node --test ../outils/admin/chiffrement.test.js
