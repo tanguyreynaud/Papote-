@@ -58,6 +58,12 @@
             <meta-data
                 android:name="android.support.customtabs.trusted.FILE_PROVIDER_AUTHORITY"
                 android:value="fr.mapapote.famille.fichiers" />
+            <!-- « Partager » d'Android (WhatsApp, Messenger, Galerie, Appareil photo…) → Papote : Chrome
+                 envoie les photos ou la vidéo au partage de l'app famille (web/sw.js, /partage), qui
+                 ouvre « Envoyer à la tablette » avec elles. -->
+            <meta-data
+                android:name="android.support.customtabs.trusted.METADATA_SHARE_TARGET"
+                android:resource="@string/partage_cible" />
 
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -68,6 +74,13 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" android:host="app.mapapote.fr" />
+            </intent-filter>
+            <intent-filter android:label="@string/partage_titre">
+                <action android:name="android.intent.action.SEND" />
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+                <data android:mimeType="video/*" />
             </intent-filter>
         </activity>
 

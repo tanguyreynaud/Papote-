@@ -5,6 +5,9 @@
     <!-- Lien de confiance avec app.mapapote.fr (le site publie /.well-known/assetlinks.json) :
          sans lui, Chrome afficherait une barre d'adresse en haut de l'app. -->
     <string name="asset_statements" translatable="false">[{\"relation\": [\"delegate_permission/common.handle_all_urls\"], \"target\": {\"namespace\": \"web\", \"site\": \"https://app.mapapote.fr\"}}]</string>
+    <!-- Même cible que le share_target de web/manifest.webmanifest -->
+    <string name="partage_cible" translatable="false">{\"action\": \"https://app.mapapote.fr/partage\", \"method\": \"POST\", \"enctype\": \"multipart/form-data\", \"params\": {\"title\": \"title\", \"text\": \"text\", \"files\": [{\"name\": \"media\", \"accept\": [\"image/*\", \"video/*\"]}]}}</string>
+    <string name="partage_titre">Envoyer sur la tablette</string>
     <string name="canal_appels">Appels de la tablette</string>
     <string name="canal_appels_texte">Sonnerie quand la tablette vous appelle</string>
     <string name="canal_infos">Appels manqués et alertes</string>
