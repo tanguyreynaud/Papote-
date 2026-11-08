@@ -1815,6 +1815,7 @@ function carteRecharges(l, modif, vue) {
   const recharges = donnees.depenses.filter((d) => d.sim === l.id).sort((a, b) => (b.date || 0) - (a.date || 0));
   if (l.statut === 'resiliee' && !recharges.length) return null;
   const duree = l.dureeForfait || 30;
+  const mensuel = l.periode === 'mois';
   const j = l.prochaineRecharge ? Math.ceil((l.prochaineRecharge - Date.now()) / JOUR_MS) : null;
   const fin = l.prochaineRecharge
     ? `${jour(l.prochaineRecharge)} (${j > 1 ? `dans ${j} jours` : j === 1 ? 'demain' : j === 0 ? 'aujourd\'hui' : `il y a ${-j} j`})` : null;
@@ -1827,8 +1828,12 @@ function carteRecharges(l, modif, vue) {
     h('dl', { class: 'fiche' },
       ...modif('Fin du forfait', fin, 'prochaineRecharge', { valeur: dateChamp(l.prochaineRecharge), type: 'date', vide: 'pas notée',
         convertir: (v) => (v ? dateSaisie(v) : null) }),
-      ...modif('Durée du forfait', `${duree} jours`, 'dureeForfait', { valeur: String(duree), mode: 'numeric', suffixe: 'jours',
-        convertir: (v) => { const n = Number(v); if (!Number.isInteger(n) || n < 1 || n > 366) throw new Error('Un nombre de jours, ex. 30.'); return n; } }),
+      // Mensuel par défaut (Tanguy, 8/11) : même date chaque mois, fin de mois gérée. En jours pour un pass (Lyca 30 jours).
+      // Une ligne notée avant le 8/11 sans période reste en jours, comme le compte le serveur.
+      ...modif('Durée du forfait', mensuel ? '1 mois (même date chaque mois)' : `${duree} jours`, 'periode', {
+        valeur: mensuel ? 'mois' : 'jours', options: [['mois', '1 mois (même date chaque mois)'], ['jours', 'En jours (pass)']] }),
+      ...(mensuel ? [] : modif('Nombre de jours', `${duree} jours`, 'dureeForfait', { valeur: String(duree), mode: 'numeric', suffixe: 'jours',
+        convertir: (v) => { const n = Number(v); if (!Number.isInteger(n) || n < 1 || n > 366) throw new Error('Un nombre de jours, ex. 30.'); return n; } })),
       ...modif('Renouvellement', l.renouvellementAuto ? 'automatique, par l\'opérateur' : 'à la main', 'renouvellementAuto', {
         valeur: l.renouvellementAuto ? 'oui' : '', options: [['', 'À la main'], ['oui', 'Automatique, par l\'opérateur']], convertir: (v) => v === 'oui' }),
       ...ligneFinForfait(l),
