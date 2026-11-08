@@ -346,6 +346,10 @@ test('famille préparée : tablette perdue en route refusée, la tablette de rem
   // Colis perdu : Tanguy note la tablette « Perdue » et relie une autre tablette à la même commande.
   await s.appeler('gestionStock', { action: 'modifier', id: t1.fiche, champs: { etat: 'perdue' } }, a.TANGUY);
   const t2 = await a.tablettePreparee();
+  // Pas de départ sans carte SIM avec numéro (Tanguy, 8/11) : refusé, puis accepté une fois la carte reliée.
+  await assert.rejects(s.appeler('gestionStock', { action: 'modifier', id: t2.fiche, champs: { commande: id, etat: 'envoyee' } }, a.TANGUY),
+    /Reliez d'abord une carte SIM/);
+  await a.simSurTablette(t2);
   await s.appeler('gestionStock', { action: 'modifier', id: t2.fiche, champs: { commande: id, etat: 'envoyee' } }, a.TANGUY);
   await s.calme();
   // La tablette perdue, allumée par quelqu'un d'autre : aucune famille.

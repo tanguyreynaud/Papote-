@@ -52,14 +52,25 @@ function refusEnvoi(c, { mainPropre = false } = {}) {
   return "Cette commande n'est pas à envoyer.";
 }
 
+// Une tablette ne part jamais sans carte SIM qui a son numéro de ligne (Tanguy, 8/11) : sans numéro, pas de fiche
+// contact pour la famille ni de ligne à retrouver. t : fiche stock ; ligne : la carte SIM (sims/{t.simId}) ou null.
+function refusSimSansNumero(t, ligne) {
+  const nom = `la tablette ${(t && t.ref) || ''}`.trim();
+  if (!t || !t.simId) return `Reliez d'abord une carte SIM à ${nom} (Stock, Cartes SIM).`;
+  if (!ligne || !String(ligne.numero || '').replace(/\s/g, '')) {
+    return `Notez d'abord le numéro de ligne de la carte SIM de ${nom} (Stock, Cartes SIM).`;
+  }
+  return '';
+}
+
 // Offre unique avec carte SIM (Tanguy, 2026-10-30) : un premier envoi part seulement avec sa tablette reliée
-// à la commande (Stock) et une carte SIM reliée à cette tablette. tablettes : fiches stock de la commande.
-function refusEnvoiSansSim(c, tablettes) {
-  if (c.expedition === 'envoyee' || c.formule !== 'sim') return '';
+// à la commande (Stock) et une carte SIM, avec son numéro, reliée à cette tablette. tablettes : fiches stock de la
+// commande ; lignes : cartes SIM par id.
+function refusEnvoiSansSim(c, tablettes, lignes = {}) {
+  if (c.expedition === 'envoyee' || c.formule === 'wifi') return '';
   const t = tablettes.find((x) => ['en-stock', 'preparee', 'envoyee'].includes(x.etat));
   if (!t) return "Reliez d'abord la tablette à cette commande (Stock).";
-  if (!t.simId) return `Reliez d'abord une carte SIM à la tablette ${t.ref || ''}`.trim() + ' (Stock, Cartes SIM).';
-  return '';
+  return refusSimSansNumero(t, t.simId ? lignes[t.simId] : null);
 }
 
 // « Colis déposé » avec le numéro T-… lu sur la tablette du carton (A14-4) : il doit être celui de la tablette
@@ -125,7 +136,7 @@ function refusSuppressionSim(ligne, tablette) {
 }
 
 module.exports = {
-  refusEnvoiSansSim, refusAutreTablette,
+  refusEnvoiSansSim, refusSimSansNumero, refusAutreTablette,
   refusEtiquette, refusEtiquetteEnDouble, refusEnvoi, refusReception, refusRetourMateriel, refusLienCommande,
   refusStatutSim, refusRecharge, refusSuppressionSim, SUITES_SIM, RESTITUTION_EN_COURS,
 };
