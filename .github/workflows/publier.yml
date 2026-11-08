@@ -124,15 +124,16 @@ jobs:
           # --non-interactive : si une fonction devait être supprimée, firebase S'ARRÊTE (jamais de --force ici).
           # Quota Google (429) : on relance. firebase peut aussi finir « réussi » en laissant des fonctions
           # « failed to update » (8/11 : gestionPiece, accueil, tachesHoraires) : on les republie une par une
-          # jusqu'à les voir « Successful », sinon la publication échoue.
+          # jusqu'à les voir « Successful », sinon la publication échoue. (« || true » : un grep sans résultat, normal
+          # quand tout est passé, arrêtait l'étape à cause de « bash -e » + pipefail, publication du 8/11 17 h.)
           set -o pipefail
           cible="functions"
           for essai in 1 2 3 4; do
             journal="$RUNNER_TEMP/fonctions-$essai.log"
             if firebase deploy --only "$cible" --config firebase.fonctions.json --project "$PROJET" --non-interactive 2>&1 | tee "$journal"; then
-              reussies=$(grep 'Successful' "$journal" | grep -oE 'functions\[[A-Za-z0-9_-]+\(' | sed -E 's/functions\[|\(//g' | sort -u)
-              ratees=$(grep -oE 'failed to update function [^ ]*/functions/[A-Za-z0-9_-]+' "$journal" | sed -E 's#.*/##' | sort -u)
-              restent=$(comm -23 <(echo "$ratees" | sed '/^$/d') <(echo "$reussies" | sed '/^$/d') | tr '\n' ' ')
+              reussies=$(grep 'Successful' "$journal" | grep -oE 'functions\[[A-Za-z0-9_-]+\(' | sed -E 's/functions\[|\(//g' | sort -u || true)
+              ratees=$(grep -oE 'failed to update function [^ ]*/functions/[A-Za-z0-9_-]+' "$journal" | sed -E 's#.*/##' | sort -u || true)
+              restent=$(comm -23 <(echo "$ratees" | sed '/^$/d') <(echo "$reussies" | sed '/^$/d') | tr '\n' ' ' || true)
               if [ -z "${restent// }" ]; then exit 0; fi
               echo "::warning::Fonctions pas à jour après l'essai $essai : $restent"
               cible=$(for f in $restent; do printf 'functions:%s,' "$f"; done | sed 's/,$//')
