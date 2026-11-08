@@ -614,7 +614,7 @@ async function load() {
     const tablets = {};
     for (const d of tabletSnap.docs) {
       const fid = d.ref.parent.parent.id;
-      (tablets[fid] = tablets[fid] || []).push(d.data());
+      (tablets[fid] = tablets[fid] || []).push({ ...d.data(), membreId: d.id });
     }
     families = await Promise.all(famSnap.docs.map(async (d) => {
       const posts = collection(db, 'families', d.id, 'posts');

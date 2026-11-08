@@ -7,7 +7,7 @@ name: App famille
 # faisaient tourner tout deux fois et doublaient les e-mails d'échec (Tanguy, 3/11).
 on:
   push:
-    paths: ['web/**', 'firestore.rules', 'storage-eu.rules', 'tests/app-famille/**', '.github/workflows/app-famille.yml']
+    paths: ['web/**', 'firestore.rules', 'storage-eu.rules', 'tests/app-famille/**', 'tests/reseau.test.mjs', '.github/workflows/app-famille.yml']
   workflow_dispatch:
 
 jobs:
@@ -34,6 +34,8 @@ jobs:
         with:
           path: ~/.cache/firebase/emulators
           key: emulateurs-firebase-14
+      # Tests sans navigateur ni émulateur : réseau mobile de l'admin (opérateur par fréquence, « Vu » sur l'alerte).
+      - run: node --test ../reseau.test.mjs
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm test

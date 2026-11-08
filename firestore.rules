@@ -371,6 +371,16 @@ service cloud.firestore {
         allow update: if isAdmin()
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
           && request.resource.data.status == 'active';
+        // L'administrateur note « Vu » sur l'alerte réseau mobile d'une tablette (gestion.js, marquerReseauVu) :
+        // { niveau, dbm, le }, rien d'autre sur la fiche.
+        allow update: if isAdmin()
+          && resource.data.get('role', '') == 'tablette'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reseauVu'])
+          && request.resource.data.reseauVu is map
+          && request.resource.data.reseauVu.keys().hasOnly(['niveau', 'dbm', 'le'])
+          && request.resource.data.reseauVu.niveau is int
+          && (request.resource.data.reseauVu.get('dbm', null) == null || request.resource.data.reseauVu.dbm is number)
+          && request.resource.data.reseauVu.le is int;
         // Un responsable accepte un membre en attente (s'il reste de la place).
         allow update: if isFamilyAdmin(fid)
           && familleAPlace(fid)

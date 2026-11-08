@@ -288,6 +288,22 @@ test('tableau de bord : ordres à la tablette (redémarrer, état, mise à jour,
   await assertFails(getDoc(doc(proche('paul'), `families/${FID}/commands/o2`)));
 });
 
+test('tableau de bord : « Vu » sur l\'alerte réseau mobile, sur la fiche de la tablette seulement', async () => {
+  await famille();
+  const vu = (extra) => ({ reseauVu: { niveau: 1, dbm: -112, le: Date.now(), ...extra } });
+  await assertSucceeds(updateDoc(doc(admin(), `families/${FID}/members/tab`), vu()));
+  await assertSucceeds(updateDoc(doc(admin(), `families/${FID}/members/tab`), vu({ niveau: 3, dbm: null })));
+  // La tablette continue d'écrire ses relevés sur sa fiche.
+  await assertSucceeds(updateDoc(doc(tablette('tab'), `families/${FID}/members/tab`), { battery: { level: 80, charging: true } }));
+  // Rien d'autre sur la fiche, pas sur la fiche d'un proche, pas par un proche, pas de champ en plus.
+  await assertFails(updateDoc(doc(admin(), `families/${FID}/members/tab`), { ...vu(), name: 'X' }));
+  await assertFails(updateDoc(doc(admin(), `families/${FID}/members/julie`), vu()));
+  await assertFails(updateDoc(doc(proche('julie'), `families/${FID}/members/tab`), vu()));
+  await assertFails(updateDoc(doc(admin(), `families/${FID}/members/tab`), vu({ note: 'x' })));
+  await assertFails(updateDoc(doc(admin(), `families/${FID}/members/tab`), vu({ niveau: 'faible' })));
+  await assertFails(updateDoc(doc(admin(), `families/${FID}/members/tab`), { reseauVu: 'vu' }));
+});
+
 test('tableau de bord : fiche de la tablette, journal et volumes', async () => {
   await famille();
   await assertSucceeds(getDoc(doc(admin(), `families/${FID}/members/tab`)));
