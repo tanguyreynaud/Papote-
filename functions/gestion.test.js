@@ -780,3 +780,12 @@ test('forfait d\'une carte SIM lu sur la confirmation', () => {
   assert.strictEqual(bizarre.cartesSim.dureeForfait, null);
   assert.strictEqual(bizarre.cartesSim.finForfait, null);
 });
+
+test('même vendeur sous deux noms', () => {
+  assert.ok(g.memeFournisseur('Sosh', 'Sosh (Orange)'));
+  assert.ok(g.memeFournisseur('CDISCOUNT', 'Cdiscount.com'));
+  assert.ok(g.memeFournisseur('Amazon EU S.à r.l.', 'amazon'));
+  assert.ok(!g.memeFournisseur('Sosh', 'Lycamobile'));
+  assert.ok(!g.memeFournisseur('', 'Sosh'));
+  assert.ok(!g.memeFournisseur('SA', 'Samsung')); // trop court pour conclure
+});

@@ -180,7 +180,7 @@ test('achat Sosh par e-mail : confirmation, justificatif, puis vraie facture d\'
   await g.rangerFacture({ ...lu, confirmation: true, montant: 1000, date: le5, numero: 'X041532676',
     cartesSim: { quantite: 1, operateur: 'Sosh', iccids: [], numeros: [], prixCarte: 1000, forfait: 299, go: 1, renouvellementAuto: true, dureeForfait: 30, finForfait: null },
   }, piece('confirmation-commande.txt'), 'e-mail de Sosh');
-  const achats = async () => (await s.db.collection('depenses').where('fournisseur', '==', 'Sosh').get()).docs;
+  const achats = async () => (await s.db.collection('depenses').get()).docs.filter((d) => /sosh/i.test(d.get('fournisseur')));
   const [achat] = await achats();
   assert.strictEqual(achat.get('confirmation'), true);
   const sims = async () => (await s.db.collection('sims').where('depense', '==', achat.id).get()).docs.map((d) => d.data());
@@ -188,11 +188,16 @@ test('achat Sosh par e-mail : confirmation, justificatif, puis vraie facture d\'
   assert.deepStrictEqual([sim.prix, sim.go, sim.renouvellementAuto, sim.dureeForfait, sim.numero], [299, 1, true, 30, null], 'fiche SIM préremplie');
   assert.strictEqual(sim.finForfait, undefined, 'fin de forfait pas écrite dans le mail : laissée vide');
 
-  // 2. « Bienvenue chez Sosh » : « Justificatif d'achat.pdf » lu comme une facture de 10 € par l'IA.
-  const justificatif = g.confirmationSelonTitre({ ...lu, confirmation: false, montant: 1000, date: le5 + 2 * s.JOUR, ligne: '06 08 99 16 12' }, "Justificatif d'achat.pdf");
+  // 2. « Bienvenue chez Sosh » : « Justificatif d'achat.pdf » lu comme une facture de 10 € par l'IA, au nom de
+  // « Sosh (Orange) », avec la carte SIM et son numéro (ce qui avait créé un 2e achat et une 2e carte le 7/11).
+  const justificatif = g.confirmationSelonTitre({ ...lu, fournisseur: 'Sosh (Orange)', confirmation: false, montant: 1000, date: le5 + 2 * s.JOUR, numero: 'X041532676',
+    cartesSim: { quantite: 1, operateur: 'Sosh', iccids: [], numeros: ['0608991612'], prixCarte: 1000, forfait: 300, go: 1, renouvellementAuto: true, dureeForfait: 30, finForfait: null },
+  }, "Justificatif d'achat.pdf");
   assert.match(await g.rangerFacture(justificatif, piece("Justificatif d'achat.pdf"), 'e-mail de Sosh'), /déjà enregistrée/);
   assert.strictEqual((await s.lire(`depenses/${achat.id}`)).confirmation, true, 'toujours « facture pas encore reçue »');
   assert.strictEqual((await sims())[0].numero, '0608991612', 'le numéro de la ligne complète la carte SIM');
+  assert.strictEqual((await achats()).length, 1, 'pas de 2e achat « Sosh (Orange) »');
+  assert.strictEqual((await s.db.collection('sims').where('operateur', '==', 'Sosh').get()).size, 1, 'pas de 2e carte SIM');
 
   // 3. 1re facture Sosh : 10 € d'activation + le forfait = 12,99 €. Rattachée à l'achat, pas de 2e dépense.
   const r = await g.rangerFacture({ ...lu, confirmation: false, montant: 1299, tva: 217, numero: 'FA-2026-11', date: le5 + 15 * s.JOUR }, piece('Facture.pdf'), 'e-mail de Sosh');
@@ -206,4 +211,16 @@ test('achat Sosh par e-mail : confirmation, justificatif, puis vraie facture d\'
   // 4. « Ce n'est pas la facture » depuis l'admin : l'achat repasse en « facture pas encore reçue ».
   await s.appeler('gestionDepense', { action: 'attendreFacture', id: achat.id }, TANGUY);
   assert.strictEqual((await s.lire(`depenses/${achat.id}`)).confirmation, true);
+});
+
+test('justificatif sans titre parlant, au nom « Sosh (Orange) » : rattaché à la commande, jamais une 2e carte SIM', async () => {
+  const piece = { filename: 'doc.pdf', contentType: 'application/pdf', content: Buffer.from('%PDF-1.4') };
+  const base = { facture: true, categorie: 'sim', libelle: 'Carte SIM', tva: null, ligne: null, accessoires: [], tablettes: null, date: Date.UTC(2026, 10, 5, 12) };
+  const carte = (numeros) => ({ quantite: 1, operateur: 'Free', iccids: ['8933150000000000017'], numeros, prixCarte: 1000, forfait: 200, go: null, renouvellementAuto: null, dureeForfait: null, finForfait: null });
+  await g.rangerFacture({ ...base, fournisseur: 'Free Mobile', confirmation: true, montant: 1000, numero: 'C-77', cartesSim: carte([]) }, piece, 'e-mail');
+  await g.rangerFacture({ ...base, fournisseur: 'Free', confirmation: false, montant: 1000, numero: 'C-77', cartesSim: carte(['0712345678']) }, piece, 'e-mail');
+  const cartes = (await s.db.collection('sims').where('operateur', '==', 'Free').get()).docs;
+  assert.strictEqual(cartes.length, 1, 'même ICCID : une seule carte');
+  const achats = (await s.db.collection('depenses').where('numero', '==', 'C-77').get()).docs;
+  assert.strictEqual(achats.length, 1, 'un seul achat');
 });

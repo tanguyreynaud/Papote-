@@ -1186,8 +1186,16 @@ async function entrerMateriel(m, { depense, numeroFacture, source }, qui) {
   const fait = [];
   const c = m && m.cartesSim;
   if (c) {
+    // Jamais deux fois la même carte : une ICCID ou un numéro de ligne déjà connus ne créent pas de 2e fiche.
+    const connues = (await db().collection('sims').get()).docs.map((d) => d.data());
+    const sans = (x) => String(x || '').replace(/\s/g, '');
+    const dejaLa = (i) => (c.iccids[i] && connues.some((l) => sans(l.iccid) === sans(c.iccids[i])))
+      || (c.numeros[i] && connues.some((l) => sans(l.numero) === sans(c.numeros[i])));
     const batch = db().batch();
+    let nouvelles = 0;
     for (let i = 0; i < c.quantite; i++) {
+      if (dejaLa(i)) continue;
+      nouvelles += 1;
       batch.set(db().collection('sims').doc(), {
         statut: 'stock', operateur: c.operateur, iccid: c.iccids[i] || null, numero: c.numeros[i] || null,
         prix: c.forfait, tablette: null, depense: depense || null,
@@ -1201,7 +1209,7 @@ async function entrerMateriel(m, { depense, numeroFacture, source }, qui) {
       });
     }
     await batch.commit();
-    fait.push(`${c.quantite} carte${c.quantite > 1 ? 's' : ''} SIM en stock`);
+    if (nouvelles) fait.push(`${nouvelles} carte${nouvelles > 1 ? 's' : ''} SIM en stock`);
   }
   const accessoires = m && m.accessoires && m.accessoires.length ? await db().collection('accessoires').get() : null;
   for (const a of (m && m.accessoires) || []) {
@@ -1903,10 +1911,19 @@ function corpsDuMail(m) {
   return { filename: 'confirmation-commande.txt', contentType: 'text/plain', content: contenu, size: contenu.length };
 }
 
+// Même vendeur sous deux noms (« Sosh » sur la commande, « Sosh (Orange) » sur le justificatif, 8/11) :
+// l'un contient l'autre, sans accents, espaces ni ponctuation.
+function memeFournisseur(a, b) {
+  const norm = (x) => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const x = norm(a);
+  const y = norm(b);
+  if (!x || !y) return false;
+  return x === y || (Math.min(x.length, y.length) >= 3 && (x.includes(y) || y.includes(x)));
+}
+
 // Une facture qui arrive après la confirmation de commande du même achat (même vendeur, même montant, à 30 jours).
 function memeAchat(depense, r) {
-  const norm = (x) => String(x || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-  return !!depense.confirmation && !!r.fournisseur && norm(depense.fournisseur) === norm(r.fournisseur)
+  return !!depense.confirmation && !!r.fournisseur && memeFournisseur(depense.fournisseur, r.fournisseur)
     && depense.montant === r.montant && Math.abs((depense.date || 0) - (r.date || depense.date || 0)) <= 30 * 24 * 3600 * 1000;
 }
 // Confirmation de commande encore sans facture à laquelle rattacher une facture reçue : même montant d'abord ;
@@ -1916,8 +1933,7 @@ function confirmationARattacher(depenses, r) {
   if (!r || r.confirmation || !r.fournisseur || r.montant == null) return null;
   const meme = depenses.find((d) => memeAchat(d, r));
   if (meme) return { depense: meme, montantDifferent: false };
-  const norm = (x) => String(x || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-  const ouvertes = depenses.filter((d) => d.confirmation && norm(d.fournisseur) === norm(r.fournisseur)
+  const ouvertes = depenses.filter((d) => d.confirmation && memeFournisseur(d.fournisseur, r.fournisseur)
     && Math.abs((d.date || 0) - (r.date || d.date || 0)) <= 45 * 864e5 && d.montant != null && r.montant >= d.montant);
   return ouvertes.length === 1 ? { depense: ouvertes[0], montantDifferent: true } : null;
 }
@@ -3058,14 +3074,20 @@ async function completerSims(depense, r) {
   const numeros = [...((r.cartesSim && r.cartesSim.numeros) || []), r.ligne]
     .map((n) => String(n || '').replace(/\s/g, '')).filter((n) => /^0[67]\d{8}$/.test(n));
   if (!numeros.length) return;
-  const sims = (await db().collection('sims').where('depense', '==', depense).get()).docs.filter((d) => !d.get('numero'));
-  await Promise.all(sims.slice(0, numeros.length).map((d, i) => d.ref.update({ numero: numeros[i] })));
+  const toutes = (await db().collection('sims').get()).docs;
+  const libres = numeros.filter((n) => !toutes.some((d) => String(d.get('numero') || '').replace(/\s/g, '') === n));
+  const sims = toutes.filter((d) => d.get('depense') === depense && !d.get('numero'));
+  await Promise.all(sims.slice(0, libres.length).map((d, i) => d.ref.update({ numero: libres[i] })));
 }
 
 async function rangerFacture(r, piece, source) {
   if (r.numero) {
+    // Même n° (de commande ou de facture) chez le même vendeur : rien de nouveau, sauf la vraie facture d'une
+    // confirmation, qui la rejoint plus bas. Le numéro de ligne lu complète la carte SIM de l'achat.
     const memes = await db().collection('depenses').where('numero', '==', r.numero).get();
-    if (memes.docs.some((d) => (d.get('fournisseur') || '') === (r.fournisseur || ''))) {
+    const deja = memes.docs.find((d) => memeFournisseur(d.get('fournisseur'), r.fournisseur));
+    if (deja && !(deja.get('confirmation') && !r.confirmation)) {
+      await completerSims(deja.id, r);
       return `déjà enregistrée (${r.fournisseur || ''} n° ${r.numero})`;
     }
   }
@@ -3706,6 +3728,6 @@ exports.gestionParcours = onCall(async (request) => {
 exports.regles = {
   ETATS, CATEGORIES, sansEssaisEffaces, natureMouvement, mensuel, centimes, lien, nomFichier, moisSuivant, lectureVersFormulaire, SCHEMA_FACTURE,
   lireReglages, transitionPermise, SUITES, simAResilier, fichesARattacher, sansFacture, stockAJour, releveBatterie, usureBatterie, incoherences, materielLu, memeAccessoire, coutLigne, alertesSim, finApresRecharge, simDeFacture, forfaitFamille, accessoiresAPrevoir, champsSim, aFaire, piecesFacture, debutMoisParis, moisPrecedent, csvTexte, livreDesRecettes,
-  registreDesAchats, corpsDuMail, pagesPdf, reparerAccents, confirmationSelonTitre, confirmationARattacher, rangerFacture, memeAchat, suiteJumelage, descriptionNonRendu, refusSuppression, fusionnerContacts, emailInformation, cleContact,
+  registreDesAchats, corpsDuMail, pagesPdf, reparerAccents, confirmationSelonTitre, confirmationARattacher, rangerFacture, memeFournisseur, memeAchat, suiteJumelage, descriptionNonRendu, refusSuppression, fusionnerContacts, emailInformation, cleContact,
   avancementPropre, gardeFous,
 };
