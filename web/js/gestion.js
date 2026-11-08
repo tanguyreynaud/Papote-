@@ -3200,10 +3200,35 @@ function ligneFacture(d, pieces) {
   const dd = h('dd', { class: 'modifiable' },
     h('span', { class: 'valeur' }, d.confirmation
       ? [badge('pas encore reçue', 'info'), ' ', h('span', { class: 'muted small' }, 'seule la confirmation de commande est arrivée : touchez le crayon pour ajouter la facture, ou transférez-la à factures@mapapote.fr')]
-      : pieces.length ? badge('reçue', 'ok') : h('span', { class: 'muted' }, 'aucun justificatif : touchez le crayon pour en ajouter un')),
+      : pieces.length ? [badge('reçue', 'ok'), ...(d.source ? [' ', boutonPasLaFacture(d)] : [])]
+        : h('span', { class: 'muted' }, 'aucun justificatif : touchez le crayon pour en ajouter un')),
     crayon);
   dd.addEventListener('click', (e) => { if (!e.target.closest('a, button')) ouvrir(); });
   return [h('dt', { class: 'modifiable' }, 'Facture'), dd];
+}
+
+// Pièce lue automatiquement par erreur comme la facture (« Justificatif d'achat » Sosh, 8/11) : l'achat repasse
+// en « facture pas encore reçue » (rappel, et la vraie facture reçue par e-mail le rejoindra).
+function boutonPasLaFacture(d) {
+  const b = h('button', { type: 'button', class: 'secondary small-btn no-print', id: 'dd-pas-la-facture' }, 'Ce n\'est pas la facture');
+  b.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    if (b.disabled) return;
+    b.disabled = true;
+    boutonCharge(b, true);
+    try {
+      await appeler('gestionDepense', { action: 'attendreFacture', id: d.id });
+      donnees = await lireDonnees(true);
+      afficherTout();
+      signalerChangement();
+      annoncer('Facture marquée « pas encore reçue »');
+    } catch (err) {
+      b.disabled = false;
+      boutonCharge(b, false);
+      prevenir(messageErreur(err));
+    }
+  });
+  return b;
 }
 
 // Lien vers la page de la carte SIM rechargée par une dépense.
@@ -3222,6 +3247,7 @@ function libelleDepense(d) {
     d.aVerifier ? h('div', { class: 'a-verifier' },
       h('p', { class: 'small' }, badge('à vérifier', 'ko'), ' ', sourceDepense(d),
         ' : vérifiez le montant, la date et le vendeur, puis validez.'),
+      d.remarque ? h('p', { class: 'small' }, d.remarque) : null,
       h('button', { type: 'button', class: 'secondary small-btn no-print', onclick: () => verifierDepense(d) }, 'Valider cette dépense')) : null);
 }
 
