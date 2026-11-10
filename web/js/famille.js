@@ -19,7 +19,7 @@ import {
 import { askConfirm, confirmerAvecCroix, notice, avantDePartir, chooseAction, fermerFenetre, demanderQuitter } from './ui.js';
 import { showGuideOnce } from './guide.js';
 import {
-  abonnementOk, FORMULES, LIBELLES, ouvrirPortail, payer, rattacherCommande, resilier, annulerResiliation,
+  abonnementOk, FORMULES, LIBELLES, ouvrirPortail, payer, inciterSepa, passerAuSepa, rattacherCommande, resilier, annulerResiliation,
   finDeContrat, facturesFamille, renvoyerTablette, retracter, inviterParEmail, reserverTablette, nommerFamille, finirInstallation,
   annulerInstallation, nommerFamillePreparee,
 } from './abonnement.js';
@@ -3130,6 +3130,53 @@ $('abo-banner-btn').addEventListener('click', () => {
   if (abo?.statut === 'impaye' || (abo?.statut === 'suspendu' && abo.stripeSubscriptionId && abo.stripeCustomerId)) return withAboError(() => ouvrirPortail(session.fid));
   return ouvrirAbonnement();
 });
+// Encart doré « Passer au prélèvement » (Tanguy, 10/11) : responsables d'une famille qui paie par carte, 15 jours
+// après le premier prélèvement. « Plus tard » le masque 7 jours sur ce téléphone ; il disparaît dès le SEPA actif.
+// Au retour de la page Stripe (?sepa=ok), il reste caché le temps que le serveur note le nouveau moyen.
+const SEPA_PLUS_TARD_KEY = 'papote.sepaPlusTard';
+const SEPA_ENVOYE_KEY = 'papote.sepaEnvoye';
+const SEPA_PLUS_TARD_MS = 7 * 24 * 3600 * 1000;
+function lireSepa(cle) {
+  try { return JSON.parse(localStorage.getItem(cle) || '{}') || {}; } catch (e) { return {}; }
+}
+function ecrireSepa(cle, fid, valeur) {
+  const v = lireSepa(cle);
+  if (valeur == null) delete v[fid]; else v[fid] = valeur;
+  try { localStorage.setItem(cle, JSON.stringify(v)); } catch (e) { /* rien : l'encart revient simplement */ }
+}
+function renderSepa() {
+  const fid = session.fid;
+  const fam = session.family;
+  const du = !!fid && amFamilyAdmin() && inciterSepa(fam);
+  // SEPA actif : on oublie les petits mots gardés sur ce téléphone.
+  if (fid && fam?.paiement?.moyen === 'sepa') ecrireSepa(SEPA_ENVOYE_KEY, fid, null);
+  const masqueJusqua = Number(lireSepa(SEPA_PLUS_TARD_KEY)[fid]) || 0;
+  const envoyeLe = Number(lireSepa(SEPA_ENVOYE_KEY)[fid]) || 0;
+  // Mandat signé il y a moins d'une heure : le serveur le note dans quelques secondes.
+  const enCours = envoyeLe && Date.now() - envoyeLe < 3600e3;
+  const voir = du && Date.now() >= masqueJusqua && !enCours;
+  $('sepa-encart').hidden = !voir;
+  if (!voir) return;
+  const nom = fam?.name;
+  $('sepa-texte').textContent = `Une carte expire ou change, et le paiement échoue : la tablette${nom ? ` de ${nom}` : ''} risque alors une pause. Avec le prélèvement sur votre compte, plus rien à mettre à jour. Même montant, même date.`;
+}
+$('sepa-oui').addEventListener('click', async () => {
+  $('sepa-erreur').hidden = true;
+  try {
+    // La page Stripe met quelques secondes à s'ouvrir : la promesse rendue fait tourner le bouton (retour.js).
+    await passerAuSepa(session.fid);
+  } catch (err) {
+    console.error(err);
+    $('sepa-erreur').textContent = messageServeur(err) || "La page n'a pas pu s'ouvrir. Réessayez dans un instant.";
+    $('sepa-erreur').hidden = false;
+  }
+});
+$('sepa-plus-tard').addEventListener('click', () => {
+  ecrireSepa(SEPA_PLUS_TARD_KEY, session.fid, Date.now() + SEPA_PLUS_TARD_MS);
+  renderSepa();
+  toast('D\'accord, nous vous le reproposerons dans quelques jours.');
+});
+
 // Essai de plus de 31 jours : la tablette n'est pas encore partie (le premier mois sera recalé à la réception).
 function enAttenteEnvoi(abo) {
   return !!(abo && abo.essaiJusqua && toDate(abo.essaiJusqua) - Date.now() > 31 * 24 * 3600 * 1000);
@@ -3479,6 +3526,7 @@ function renderAbonnement() {
   $('abo-banner-btn').hidden = !admin || ['aucun', 'installation', 'resilie'].includes(statut);
   // Après un arrêt (souvent un décès), pas de « Déjà commandé ? » sous le bandeau : la reprise reste dans Profil.
   $('abo-banner-paid').hidden = !sansAbo || statut === 'resilie';
+  renderSepa();
   // Retour de la page de paiement : on confirme dès que le serveur a activé l'abonnement.
   let waiting = false;
   try { waiting = localStorage.getItem(ABO_OK_KEY) === '1'; } catch (e) { /* rien */ }
@@ -5307,6 +5355,7 @@ let rappelerPending = false; // ouvert par « Rappeler » sur une notification d
 let appelerPending = false; // écran d'appel de l'app Android : l'appel vidéo part dès l'arrivée
 let reglagesPending = false; // rouvert par l'app Android après le réglage de mise en pause
 let abonnementPending = false; // notification d'abonnement (paiement en retard, pause) : ouvre l'abonnement
+let sepaOkPending = false; // retour de la page du mandat SEPA (?sepa=ok)
 
 function rememberInviteCode(code, pour) {
   try {
@@ -5628,6 +5677,13 @@ async function enterApp({ garderEcran = false } = {}) {
   flushOutbox();
   accueilPremiereFois();
   if (sharedPending) { sharedPending = false; openShared(); }
+  if (sepaOkPending) {
+    sepaOkPending = false;
+    try { history.replaceState(history.state, '', location.pathname); } catch (e) { /* rien */ }
+    ecrireSepa(SEPA_ENVOYE_KEY, session.fid, Date.now());
+    renderSepa();
+    notice('C\'est noté : les prochains mois seront prélevés sur votre compte. Merci !');
+  }
   chargerJetonNatif();
   if (appelerPending) { appelerPending = false; appelerDesQuePossible(); }
   else if (rappelerPending) { rappelerPending = false; offerCallBack(); }
@@ -5674,6 +5730,8 @@ async function start() {
   reglagesPending = params.has('reglages');
   appelerPending = params.get('appeler') === 'video';
   abonnementPending = params.get('abonnement') === '1';
+  // Retour de la page du mandat SEPA : merci, et l'encart reste caché le temps que le serveur note le compte.
+  sepaOkPending = params.get('sepa') === 'ok';
   if (params.get('appel')) answerOnArrival(params.get('appel'));
   // Notification d'une autre famille (« veut rejoindre », « a rejoint ») : l'appli s'ouvre sur cette famille.
   if (params.get('famille')) saveFamilyId(params.get('famille'));

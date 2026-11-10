@@ -37,6 +37,24 @@ export async function ouvrirPortail(fid) {
   location.href = url;
 }
 
+// « Passer au prélèvement » (Tanguy, 10/11) : même règle que le serveur (functions/abonnement.js sepaPropose).
+// 15 jours après le premier prélèvement mensuel réussi par carte, tant que l'abonnement est actif sans arrêt prévu.
+export const SEPA_APRES_JOURS = 15;
+const enMs = (t) => (t == null ? null : typeof t === 'number' ? t : typeof t.toMillis === 'function' ? t.toMillis() : (t.seconds != null ? t.seconds * 1000 : null));
+export function inciterSepa(family, maintenant = Date.now()) {
+  const p = family?.paiement;
+  const abo = family?.abonnement;
+  if (!p || p.moyen !== 'carte' || !abo || abo.statut !== 'actif' || abo.resiliationLe) return false;
+  const premier = enMs(p.premierLe);
+  return premier != null && maintenant >= premier + SEPA_APRES_JOURS * 24 * 3600 * 1000;
+}
+
+/** Page Stripe du mandat SEPA (aucun paiement) : au retour, l'appli s'ouvre avec ?sepa=ok. */
+export async function passerAuSepa(fid) {
+  const { url } = await call('passerAuSepa', { fid });
+  location.href = url;
+}
+
 export async function payer(fid, formule, tablette) {
   const { url } = await call('creerPaiement', { fid, formule, tablette });
   location.href = url;

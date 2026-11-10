@@ -19,6 +19,10 @@
   --c-message: #4f46e5;
   --c-agenda: #7c3aed;
   --c-settings: #5f5a6b;
+  /* Or de l'encart « Passer au prélèvement » (Tanguy 10/11) : jaune doré, jamais orange. */
+  --or-fond: #fdf6d8;
+  --or-bord: #c9a227;
+  --or-texte: #453606;
   --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
   --body: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   color-scheme: light dark;
@@ -44,10 +48,16 @@
     --c-message: #818cf8;
     --c-agenda: #a78bfa;
     --c-settings: #d6d3d1;
+    --or-fond: #2a2410;
+    --or-bord: #b8921c;
+    --or-texte: #fbe7a1;
   }
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
+  --or-fond: #2a2410;
+  --or-bord: #b8921c;
+  --or-texte: #fbe7a1;
   --bg: #121110;
   --surface: #1e1c1a;
   --text: #f5f5f4;
@@ -967,6 +977,13 @@ button:disabled { opacity: .45; cursor: default; }
 
 .abo-banner { display: flex; align-items: center; gap: 12px; margin: 0 0 16px; padding: 12px 14px; border-radius: 14px; background: color-mix(in srgb, var(--danger) 12%, var(--surface)); color: color-mix(in srgb, var(--danger) 80%, var(--text)); font-weight: 600; }
 .abo-banner p { margin: 0; flex: 1; font-size: 15px; }
+.sepa-encart { margin: 0 0 16px; padding: 16px; border-radius: 14px; border: 2px solid var(--or-bord); background: var(--or-fond); color: var(--or-texte); }
+.sepa-encart h2 { margin: 0 0 6px; font-size: 19px; color: var(--or-texte); }
+.sepa-encart p { margin: 0 0 14px; font-size: 16px; line-height: 1.45; }
+.sepa-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.sepa-actions button { flex: 1 1 140px; min-height: 54px; justify-content: center; font-size: 16px; font-weight: 700; }
+.sepa-actions .secondary { background: var(--surface); border-color: var(--or-bord); color: var(--or-texte); }
+.sepa-erreur { margin: 10px 0 0 !important; font-weight: 600; }
 .abo-status { margin: 4px 0; font-size: 18px; font-weight: 700; }
 #btn-portail { justify-content: center; min-height: 54px; margin-top: 14px; font-size: 17px; font-weight: 700; }
 #btn-portail:disabled { opacity: .8; }

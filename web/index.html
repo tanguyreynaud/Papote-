@@ -460,6 +460,16 @@
         </form>
         </div>
       </div>
+      <!-- Passer de la carte au prélèvement SEPA (Tanguy 10/11) : responsables, 15 jours après le premier prélèvement par carte. -->
+      <section id="sepa-encart" class="sepa-encart" aria-labelledby="sepa-titre" hidden>
+        <h2 id="sepa-titre">Plus jamais de souci de carte</h2>
+        <p id="sepa-texte"></p>
+        <div class="sepa-actions">
+          <button type="button" id="sepa-oui" class="primary">Passer au prélèvement</button>
+          <button type="button" id="sepa-plus-tard" class="secondary">Plus tard</button>
+        </div>
+        <p id="sepa-erreur" class="sepa-erreur" role="alert" hidden></p>
+      </section>
       <!-- Famille préparée dès la commande : le nom d'abord, puis la tablette arrive toute seule. -->
       <form id="nom-prepare" class="card" hidden novalidate>
         <p class="seen small">Votre espace famille est prêt</p>
