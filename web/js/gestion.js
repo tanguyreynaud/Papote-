@@ -773,6 +773,8 @@ function afficherAccueil() {
     [erreursMail, `${pluriel(erreursMail, 'problème')} au dernier relevé de factures@mapapote.fr (détail en bas de page)`, '#accueil', 'ko'],
     [tva && tva.alerte ? 1 : 0, tva ? tva.alerte : '', '#compta/urssaf', 'ko'],
     [problemes, `${pluriel(problemes, 'problème')} lors du dernier passage automatique`, '#outils/automatique', 'ko'],
+    // Contrôle des factures de vente à la clôture (Tanguy, 10/11) : une ligne par point, du mois le plus récent.
+    ...controleVentes().map((t) => [1, t, '#compta/registres', 'ko']),
   ].filter(([n]) => n > 0);
   // Lignes masquées 7 jours par l'admin (gestionReglages, masquer) : elles reviennent seules si rien n'est réglé.
   const cleTache = ([, texte, lien]) => `${lien}|${texte}`;
@@ -4166,6 +4168,21 @@ function afficherCourrier() {
 
 // ---------- Livres comptables archivés (clôture du mois) ----------
 
+// Points à vérifier dans les factures de vente du dernier mois clos (gestion/archives, fiche.controle).
+function controleVentes() {
+  const mois = Object.entries((donnees && donnees.archives && donnees.archives.mois) || {}).sort(([x], [y]) => y.localeCompare(x));
+  if (!mois.length) return [];
+  const [cle, f] = mois[0];
+  return (f.controle || []).slice(0, 8).map((t) => `${moisNom(cle)} : ${t}`);
+}
+
+// Colonne « Factures » : contrôle du mois (avant le 10/11, pas de contrôle : tiret).
+function controleCellule(f) {
+  if (!Array.isArray(f.controle)) return '—';
+  if (!f.controle.length) return badge('OK', 'ok');
+  return h('span', { title: f.controle.join('\n') }, badge(`${f.controle.length} à vérifier`, 'ko'));
+}
+
 function afficherArchives() {
   const a = (donnees && donnees.archives) || {};
   const mois = Object.entries(a.mois || {}).sort(([x], [y]) => y.localeCompare(x));
@@ -4180,8 +4197,8 @@ function afficherArchives() {
     onclick: (e) => { e.stopPropagation(); return cloturer(cle); }, // promesse rendue : pas de 2e clôture par double clic
   }, 'Refaire');
   remplirTable($('t-archives'), [
-    { titre: 'Mois' }, { titre: 'Recettes', n: 1 }, { titre: 'Achats', n: 1 }, { titre: 'Fichiers' }, { titre: 'Figé le' }, { titre: '' },
-  ], mois.map(([cle, f]) => [moisNom(cle), euros(f.recettes.total), euros(f.achats.total), fichiers(f), jour(f.le), refaire(cle)]),
+    { titre: 'Mois' }, { titre: 'Recettes', n: 1 }, { titre: 'Achats', n: 1 }, { titre: 'Factures' }, { titre: 'Fichiers' }, { titre: 'Figé le' }, { titre: '' },
+  ], mois.map(([cle, f]) => [moisNom(cle), euros(f.recettes.total), euros(f.achats.total), controleCellule(f), fichiers(f), jour(f.le), refaire(cle)]),
   { vide: 'Premier archivage le 1er du mois prochain.' });
   const annees = Object.entries(a.annees || {}).sort(([x], [y]) => y.localeCompare(x));
   $('t-impots').hidden = !annees.length;
