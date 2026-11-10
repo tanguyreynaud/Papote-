@@ -297,12 +297,48 @@ function factureClient(f) {
   };
 }
 
+// Passer de la carte au prélèvement SEPA (Tanguy, 10/11) : une carte expire ou change, le paiement échoue et la
+// tablette risque la pause. 15 jours après le premier prélèvement mensuel réussi par carte, le responsable voit un
+// encart doré sur l'accueil de l'appli et reçoit un e-mail ; une seule relance 30 jours plus tard. Rien pour une
+// famille déjà en SEPA, en retard de paiement, en pause ou dont l'arrêt est prévu.
+// families/{fid}.paiement = { moyen: 'carte'|'sepa'|autre, premierLe, sepaMailLe, sepaRelanceLe, sepaLe }.
+const SEPA_APRES_JOURS = 15;
+const SEPA_RELANCE_JOURS = 30;
+// Type du moyen de paiement Stripe → moyen noté sur la famille (Link = carte enregistrée chez Stripe).
+function moyenDe(typeStripe) {
+  if (typeStripe === 'sepa_debit') return 'sepa';
+  if (typeStripe === 'card' || typeStripe === 'link') return 'carte';
+  return typeStripe || null;
+}
+// L'encart et l'e-mail sont-ils dus ? (même règle que web/js/abonnement.js inciterSepa).
+function sepaPropose(famille, maintenant) {
+  const p = famille && famille.paiement;
+  const abo = famille && famille.abonnement;
+  if (!p || p.moyen !== 'carte' || !abo || abo.statut !== 'actif' || abo.resiliationLe) return false;
+  const premier = enMillis(p.premierLe);
+  return premier != null && maintenant >= premier + SEPA_APRES_JOURS * JOUR;
+}
+// E-mail à envoyer aujourd'hui : 'mail' (le premier), 'relance' (30 jours après, une seule fois) ou null.
+function mailSepaDu(famille, maintenant) {
+  if (!sepaPropose(famille, maintenant)) return null;
+  const p = famille.paiement;
+  if (!p.sepaMailLe) return 'mail';
+  const mailLe = enMillis(p.sepaMailLe);
+  if (!p.sepaRelanceLe && mailLe != null && maintenant >= mailLe + SEPA_RELANCE_JOURS * JOUR) return 'relance';
+  return null;
+}
+
 // Faut-il appliquer un événement Stripe à cette famille ? Une famille offerte ne change jamais.
 function peutModifier(actuel) {
   return !(actuel && actuel.statut === 'offert');
 }
 
 module.exports = {
+  SEPA_APRES_JOURS,
+  SEPA_RELANCE_JOURS,
+  moyenDe,
+  sepaPropose,
+  mailSepaDu,
   DELAI_GRACE_JOURS,
   ATTENTE_ENVOI,
   premierPrelevementMs,

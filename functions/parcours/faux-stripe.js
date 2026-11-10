@@ -20,7 +20,7 @@ function creerFauxStripe(horloge) {
   const secondes = () => Math.floor(horloge() / 1000);
   const etat = {
     sessions: new Map(), abonnements: new Map(), clients: new Map(), factures: new Map(),
-    paiements: new Map(), remboursements: [], lignes: [], evenements: [], avoirs: [],
+    paiements: new Map(), mandats: new Map(), remboursements: [], lignes: [], evenements: [], avoirs: [],
   };
   const charges = () => [...etat.paiements.values()].map((p) => p.latest_charge).filter(Boolean);
   const prix = new Map(Object.entries(TARIFS).map(([cle, t]) => [`price_${cle}`, {
@@ -58,11 +58,11 @@ function creerFauxStripe(horloge) {
     return pi;
   }
 
-  function nouvelleFacture(client, { lignes, abonnement = null, metadata = {}, description = null }) {
+  function nouvelleFacture(client, { lignes, abonnement = null, metadata = {}, description = null, raison = null }) {
     const f = {
       id: id('in'), customer: client.id, subscription: abonnement, status: 'draft', metadata, description,
       lines: { data: lignes }, amount_due: lignes.reduce((t, l) => t + l.amount, 0), amount_paid: 0, payment_intent: null,
-      created: secondes(),
+      created: secondes(), billing_reason: raison || 'manual',
     };
     etat.factures.set(f.id, f);
     return f;
@@ -99,7 +99,13 @@ function creerFauxStripe(horloge) {
       },
     },
     customers: {
-      update: async (x, maj) => Object.assign(lire('clients', 'customer', x), copie(maj)),
+      update: async (x, maj) => {
+        const c = lire('clients', 'customer', x);
+        // Moyen de paiement par défaut changé (mandat SEPA signé, passerAuSepa) : c'est lui qui sera prélevé.
+        const pm = maj.invoice_settings && maj.invoice_settings.default_payment_method;
+        if (pm && etat.mandats.has(pm)) c.moyen = copie(etat.mandats.get(pm).moyen);
+        return Object.assign(c, copie(maj));
+      },
       retrieve: async (x) => copie(lire('clients', 'customer', x)),
     },
     subscriptions: {
@@ -242,6 +248,13 @@ function creerFauxStripe(horloge) {
         return copie(r);
       },
     },
+    setupIntents: {
+      retrieve: async (x) => {
+        const m = [...etat.mandats.values()].find((v) => v.intention.id === x);
+        if (!m) throw introuvable('setup_intent', x);
+        return copie(m.intention);
+      },
+    },
     billingPortal: {
       configurations: { list: async () => ({ data: [{ id: 'bpc_test', metadata: { papote: '1' } }] }) },
       sessions: { create: async () => ({ url: 'https://billing.stripe.test/session' }) },
@@ -258,7 +271,7 @@ function creerFauxStripe(horloge) {
   // ---------- Ce que font le client et sa banque ----------
 
   // Le client remplit la page de paiement : IBAN, nom, e-mail. sepaEnAttente : la banque confirme plus tard.
-  function payerSession(sessionId, { email, nom = 'Julie Martin', telephone = '+33612345678', iban = 'FR76-1234', sepaEnAttente = false } = {}) {
+  function payerSession(sessionId, { email, nom = 'Julie Martin', telephone = '+33612345678', iban = 'FR76-1234', sepaEnAttente = false, carte = false } = {}) {
     const s = lire('sessions', 'checkout.session', sessionId);
     if (s.status !== 'open') throw new Error(`Session ${sessionId} déjà ${s.status}`);
     const p = s.params;
@@ -268,10 +281,10 @@ function creerFauxStripe(horloge) {
       client = { id: id('cus'), email: email || p.customer_email, name: nom, invoice_settings: {} };
       etat.clients.set(client.id, client);
     }
-    client.moyen = {
-      id: id('pm'), type: 'sepa_debit', billing_details: { name: nom },
-      sepa_debit: { fingerprint: `empreinte-${iban}`, last4: iban.slice(-4) },
-    };
+    // carte : payé par carte bancaire (le passage au SEPA se fait ensuite, signerMandatSepa).
+    client.moyen = carte
+      ? { id: id('pm'), type: 'card', billing_details: { name: nom }, card: { fingerprint: `carte-${email}`, last4: '4242' } }
+      : { id: id('pm'), type: 'sepa_debit', billing_details: { name: nom }, sepa_debit: { fingerprint: `empreinte-${iban}`, last4: iban.slice(-4) } };
     client.invoice_settings.default_payment_method = client.moyen.id;
     const lignes = p.line_items.map((l) => prix.get(l.price));
     const mensuel = lignes.find((l) => l.recurring);
@@ -290,7 +303,7 @@ function creerFauxStripe(horloge) {
     etat.abonnements.set(a.id, a);
     // Première facture : la mise en service (60 €), payée tout de suite (sauf SEPA en attente de la banque).
     const unique = lignes.filter((l) => !l.recurring);
-    const f = nouvelleFacture(client, { lignes: unique.map((l) => ({ amount: l.unit_amount, price: l.id })), abonnement: a.id });
+    const f = nouvelleFacture(client, { lignes: unique.map((l) => ({ amount: l.unit_amount, price: l.id })), abonnement: a.id, raison: 'subscription_create' });
     if (!sepaEnAttente) payer(f, client);
     else f.status = 'open';
     Object.assign(s, {
@@ -301,6 +314,19 @@ function creerFauxStripe(horloge) {
     evenement('customer.subscription.created', a);
     evenement('checkout.session.completed', s);
     return { session: copie(s), abonnement: a.id, client: client.id };
+  }
+
+  // Le client remplit la page Stripe du mandat SEPA (session « setup » de passerAuSepa) : le mandat est signé,
+  // rien n'est prélevé ; Stripe envoie checkout.session.completed (mode setup).
+  function signerMandatSepa(sessionId, { iban = 'FR76-9876', nom = 'Julie Martin' } = {}) {
+    const s = lire('sessions', 'checkout.session', sessionId);
+    if (s.status !== 'open' || s.mode !== 'setup') throw new Error(`Session ${sessionId} : pas une page de mandat ouverte`);
+    const moyen = { id: id('pm'), type: 'sepa_debit', billing_details: { name: nom }, sepa_debit: { fingerprint: `empreinte-${iban}`, last4: iban.slice(-4) } };
+    const intention = { id: id('seti'), object: 'setup_intent', status: 'succeeded', customer: s.customer, payment_method: moyen.id };
+    etat.mandats.set(moyen.id, { moyen, intention });
+    Object.assign(s, { status: 'complete', setup_intent: intention.id });
+    evenement('checkout.session.completed', s);
+    return copie(s);
   }
 
   // La banque confirme le prélèvement SEPA de la mise en service.
@@ -333,7 +359,7 @@ function creerFauxStripe(horloge) {
     a.billing_cycle_anchor = secondes();
     a.current_period_end = secondes() + 30 * 86400;
     a.items.data[0].current_period_end = a.current_period_end;
-    const f = nouvelleFacture(client, { lignes: [{ amount: mensuel.unit_amount, price: mensuel.id }], abonnement: a.id });
+    const f = nouvelleFacture(client, { lignes: [{ amount: mensuel.unit_amount, price: mensuel.id }], abonnement: a.id, raison: 'subscription_cycle' });
     payer(f, client);
     evenement('customer.subscription.updated', a);
     evenement('invoice.paid', f);
@@ -347,7 +373,7 @@ function creerFauxStripe(horloge) {
     const mensuel = a.items.data[0].price;
     a.current_period_end = Math.max(a.current_period_end || 0, secondes()) + 30 * 86400;
     a.items.data[0].current_period_end = a.current_period_end;
-    const f = nouvelleFacture(client, { lignes: [{ amount: mensuel.unit_amount, price: mensuel.id }], abonnement: a.id });
+    const f = nouvelleFacture(client, { lignes: [{ amount: mensuel.unit_amount, price: mensuel.id }], abonnement: a.id, raison: 'subscription_cycle' });
     payer(f, client);
     evenement('invoice.paid', f);
     evenement('customer.subscription.updated', a);
@@ -362,7 +388,7 @@ function creerFauxStripe(horloge) {
     // Comme Stripe : la nouvelle période commence quand même, sa facture reste ouverte.
     a.current_period_end = Math.max(a.current_period_end || 0, secondes()) + 30 * 86400;
     a.items.data[0].current_period_end = a.current_period_end;
-    const f = nouvelleFacture(client, { lignes: [{ amount: mensuel.unit_amount, price: mensuel.id }], abonnement: a.id });
+    const f = nouvelleFacture(client, { lignes: [{ amount: mensuel.unit_amount, price: mensuel.id }], abonnement: a.id, raison: 'subscription_cycle' });
     f.status = 'open';
     evenement('invoice.payment_failed', f);
     evenement('customer.subscription.updated', a);
@@ -416,7 +442,7 @@ function creerFauxStripe(horloge) {
       && (etat.factures.get(etat.paiements.get(r.payment_intent).invoice) || {}).subscription === abonnement)
     .reduce((t, r) => t + r.amount, 0);
 
-  return { api, etat, payerSession, banqueAccepte, banqueRefuse, prelevementMensuel, carteExpiree, banqueRefusePrelevement, banqueAccepteEnRetard, expirerSession, finirEssai, arreterALaDate, payerFacture, rembourse, vider };
+  return { api, etat, payerSession, signerMandatSepa, banqueAccepte, banqueRefuse, prelevementMensuel, carteExpiree, banqueRefusePrelevement, banqueAccepteEnRetard, expirerSession, finirEssai, arreterALaDate, payerFacture, rembourse, vider };
 }
 
 module.exports = { creerFauxStripe };

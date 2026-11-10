@@ -245,3 +245,46 @@ test('reprise malgré un retour : seulement Papote, retour anticipé encore atte
   assert.strictEqual(a.reprisePossible({ statut: 'echec', anticipe: true }, true), false);
   assert.strictEqual(a.reprisePossible({ statut: 'rendue', anticipe: true }, true), false);
 });
+
+test('SEPA : moyen noté depuis le type Stripe (Link = carte)', () => {
+  assert.strictEqual(a.moyenDe('card'), 'carte');
+  assert.strictEqual(a.moyenDe('link'), 'carte');
+  assert.strictEqual(a.moyenDe('sepa_debit'), 'sepa');
+  assert.strictEqual(a.moyenDe('paypal'), 'paypal');
+  assert.strictEqual(a.moyenDe(undefined), null);
+});
+
+test('SEPA : encart et e-mails 15 jours après le premier prélèvement par carte, relance unique à +30 jours (10/11)', () => {
+  const fam = (paiement, abonnement = { statut: 'actif' }) => ({ paiement, abonnement });
+  const carte = { moyen: 'carte', premierLe: T0 };
+  // Avant J+15 : rien.
+  assert.strictEqual(a.sepaPropose(fam(carte), T0 + 14 * JOUR), false);
+  assert.strictEqual(a.mailSepaDu(fam(carte), T0 + 14 * JOUR), null);
+  // J+15 : encart et premier e-mail.
+  assert.strictEqual(a.sepaPropose(fam(carte), T0 + 15 * JOUR), true);
+  assert.strictEqual(a.mailSepaDu(fam(carte), T0 + 15 * JOUR), 'mail');
+  // Premier e-mail parti : rien avant 30 jours, puis une seule relance.
+  const mail = { ...carte, sepaMailLe: T0 + 15 * JOUR };
+  assert.strictEqual(a.mailSepaDu(fam(mail), T0 + 44 * JOUR), null);
+  assert.strictEqual(a.mailSepaDu(fam(mail), T0 + 45 * JOUR), 'relance');
+  assert.strictEqual(a.mailSepaDu(fam({ ...mail, sepaRelanceLe: T0 + 45 * JOUR }), T0 + 400 * JOUR), null);
+  // L'encart reste tant que la famille paie par carte (il se masque 7 jours côté appli).
+  assert.strictEqual(a.sepaPropose(fam({ ...mail, sepaRelanceLe: T0 + 45 * JOUR }), T0 + 400 * JOUR), true);
+  // Firestore Timestamp accepté.
+  assert.strictEqual(a.mailSepaDu(fam({ moyen: 'carte', premierLe: { toMillis: () => T0 } }), T0 + 15 * JOUR), 'mail');
+});
+
+test('SEPA : rien pour le SEPA, sans premier prélèvement, en retard, en pause, arrêt prévu ou offerte', () => {
+  const tard = T0 + 100 * JOUR;
+  const carte = { moyen: 'carte', premierLe: T0 };
+  assert.strictEqual(a.sepaPropose({ paiement: { moyen: 'sepa', premierLe: T0 }, abonnement: { statut: 'actif' } }, tard), false);
+  assert.strictEqual(a.sepaPropose({ paiement: { moyen: 'carte' }, abonnement: { statut: 'actif' } }, tard), false);
+  assert.strictEqual(a.sepaPropose({ abonnement: { statut: 'actif' } }, tard), false);
+  for (const statut of ['impaye', 'suspendu', 'resilie', 'offert', 'aucun', 'installation']) {
+    assert.strictEqual(a.sepaPropose({ paiement: carte, abonnement: { statut } }, tard), false, statut);
+    assert.strictEqual(a.mailSepaDu({ paiement: carte, abonnement: { statut } }, tard), null, statut);
+  }
+  assert.strictEqual(a.sepaPropose({ paiement: carte, abonnement: { statut: 'actif', resiliationLe: tard } }, tard), false);
+  assert.strictEqual(a.sepaPropose({ paiement: carte }, tard), false);
+  assert.strictEqual(a.sepaPropose(null, tard), false);
+});

@@ -81,9 +81,9 @@ async function commanderSurLeSite({ formule = 'sim', email, accord = true, essai
 }
 
 // Commande + paiement : renvoie { session, abonnement } (abonnement = id de la commande).
-async function commanderEtPayer({ email, nom = 'Paul Martin', formule = 'sim', sepaEnAttente = false } = {}) {
+async function commanderEtPayer({ email, nom = 'Paul Martin', formule = 'sim', sepaEnAttente = false, carte = false } = {}) {
   const session = await commanderSurLeSite({ formule, email });
-  const { abonnement } = s.stripe.payerSession(session, { email, nom, sepaEnAttente });
+  const { abonnement } = s.stripe.payerSession(session, { email, nom, sepaEnAttente, carte });
   await s.calme();
   return { session, abonnement };
 }

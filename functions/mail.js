@@ -516,6 +516,25 @@ function reprisePrelevements({ nom, famille }) {
   ], { texte: 'Ouvrir l\'appli Papote', lien: `${APPLI}/?abonnement=1` });
 }
 
+// Passer de la carte au prélèvement SEPA (Tanguy, 10/11) : 15 jours après le premier prélèvement mensuel par carte,
+// puis une seule relance 30 jours plus tard (relance: true). Le geste se fait dans l'appli : encart doré de l'accueil.
+function passerAuSepa({ nom, famille, relance, lien }) {
+  const de = famille ? ` de <b>${echapper(famille)}</b>` : '';
+  return message(relance ? 'Un petit rappel : le prélèvement pour Papote' : 'Plus jamais de souci de carte pour Papote', [
+    bonjour(nom),
+    relance
+      ? `Il y a un mois, nous vous proposions de régler l'abonnement Papote${de} par prélèvement sur votre compte bancaire plutôt que par carte. Il est encore temps, en une minute.`
+      : `L'abonnement Papote${de} est réglé par carte bancaire. Une carte expire, se perd ou se renouvelle : le paiement échoue alors, et la tablette risque de se mettre en pause.`,
+    { encadre: 'Avec le prélèvement sur votre compte (SEPA), il n\'y a plus rien à mettre à jour, et plus de pause à cause d\'une carte expirée. Même montant, même date, toujours sans engagement.' },
+    'Pour passer au prélèvement :',
+    { etapes: [
+      'Ouvrez l\'appli Papote : l\'encart doré est sur l\'accueil.',
+      'Touchez « Passer au prélèvement » et entrez votre IBAN (il est sur votre RIB).',
+      'C\'est tout : rien n\'est prélevé en plus, les prochains mois partent de votre compte.',
+    ] },
+  ], { texte: 'Ouvrir l\'appli Papote', lien: lien || APPLI });
+}
+
 // Prélèvement SEPA de la commande refusé par la banque : commande annulée (papote : message pour Papote).
 function sepaRefuse({ nom, email, papote, commande }) {
   if (papote) {
@@ -879,7 +898,7 @@ module.exports = {
   // famille
   invitation, demandeRejoindre, demandeAcceptee, installationFinie, appelSansTelephone, forfaitPresqueEpuise,
   // abonnement
-  paiementEchoue, papoteEnPause, pausePrelevements, reprisePrelevements,
+  paiementEchoue, papoteEnPause, passerAuSepa, pausePrelevements, reprisePrelevements,
   // fin de contrat
   retourTablette, etiquetteRetour, resiliationEnregistree, avantEffacement, resiliationAnnulee, rappelRestitution, tabletteRecue, materielNonRendu, commandeAnnulee, annulationAvantEnvoi, resiliation, alerteAdmin, alerteForfait,
   // support et admin

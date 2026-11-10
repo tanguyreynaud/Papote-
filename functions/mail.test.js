@@ -135,3 +135,17 @@ test('décès : e-mails de deuil, sans « Merci de nous avoir fait confiance »,
   // Sans décès : rien ne change.
   assert.match(mail.retourTablette({ nom: 'Paul', avant: le, retractation: null, montant: 14000 }).text, /Merci de nous avoir fait confiance/);
 });
+
+test('passer au SEPA : premier e-mail et relance, sans promesse impossible (10/11)', () => {
+  const premier = mail.passerAuSepa({ nom: 'Julie', famille: 'Mamie Jeanne' });
+  const relance = mail.passerAuSepa({ nom: 'Julie', famille: 'Mamie Jeanne', relance: true });
+  assert.match(premier.subject, /Plus jamais de souci de carte/);
+  assert.match(relance.subject, /rappel/);
+  for (const m of [premier, relance]) {
+    assert.match(m.text, /Passer au prélèvement/);
+    assert.match(m.text, /IBAN/);
+    assert.match(m.text, /sans engagement/);
+    assert.doesNotMatch(m.text, /jamais coupée/);
+    assert.match(m.html, /Mamie(&nbsp;| )Jeanne/);
+  }
+});

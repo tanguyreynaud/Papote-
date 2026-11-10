@@ -18,6 +18,7 @@ const ANCIEN = {
   rappelsJumelage: 'every day 10:00',
   alerteMatin: require('./alertes').HORAIRE_PAS_VUE,
   alerteForfait: 'every 60 minutes', // nouvelle (5/11) : forfait SIM à 80 et 95 %
+  relancesSepa: 'every day 11:00', // nouvelle (10/11) : « passer au prélèvement »
   gestionRecap: 'every monday 08:00',
   bilanSupport: 'every monday 09:00',
   purgeMensuelle: '1 of month 04:00',
@@ -47,7 +48,7 @@ function tournaitAvant(schedule, ms) {
 const avant = (ms) => Object.keys(ANCIEN).filter((nom) => tournaitAvant(ANCIEN[nom], ms)).sort();
 const maintenant = (ms) => aLancer(ms).sort();
 
-test('le planning couvre exactement les 11 anciennes tâches et l\'alerte de forfait', () => {
+test('le planning couvre exactement les 11 anciennes tâches, l\'alerte de forfait et les e-mails SEPA', () => {
   assert.deepStrictEqual(Object.keys(taches.PLANNING).sort(), Object.keys(ANCIEN).sort());
 });
 
@@ -60,7 +61,7 @@ test('chaque heure pile de 2026 et 2027 (changements d\'heure compris) : les mê
     for (const nom of aLancer(t)) compte[nom] = (compte[nom] || 0) + 1;
   }
   // Deux ans : 730 jours, 104 lundis (2026 : 52, 2027 : 52), 24 premiers du mois.
-  for (const nom of ['gestionAutomatique', 'restitutions', 'rappelsJumelage', 'alerteMatin']) assert.strictEqual(compte[nom], 730, nom);
+  for (const nom of ['gestionAutomatique', 'restitutions', 'rappelsJumelage', 'alerteMatin', 'relancesSepa']) assert.strictEqual(compte[nom], 730, nom);
   for (const nom of ['gestionRecap', 'bilanSupport']) assert.strictEqual(compte[nom], 104, nom);
   for (const nom of ['purgeMensuelle', 'gestionCloture']) assert.strictEqual(compte[nom], 24, nom);
 });

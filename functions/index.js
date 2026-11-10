@@ -5,6 +5,7 @@
 //   couverture         GET  depuis le site vitrine : la 4G de la carte SIM passe-t-elle chez le proche ? (couverture.js)
 //   creerPaiement      appel depuis l'appli famille : paiement pour une famille existante
 //   portailClient      appel depuis l'appli famille : compte bancaire, factures
+//   passerAuSepa       appel depuis l'appli famille : mandat SEPA à la place de la carte (encart doré de l'accueil)
 //   facturesFamille    appel depuis l'appli famille : liste des factures, avec leur PDF
 //   renvoyerTablette   appel depuis l'appli famille : QR code de retour de la tablette, créé à la demande
 //   resilierAbonnement appel depuis l'appli famille : résilie à la fin du mois en cours, prélevé à l'arrêt
@@ -668,6 +669,27 @@ exports.portailClient = onCall({ secrets: [STRIPE_SECRET] }, async (request) => 
   return { url: session.url };
 });
 
+// « Passer au prélèvement » (encart doré de l'accueil, Tanguy 10/11) : page Stripe du mandat SEPA, sans paiement.
+// À la fin, le webhook (sepaEnregistre) fait de ce compte le moyen de paiement de l'abonnement.
+exports.passerAuSepa = onCall({ secrets: [STRIPE_SECRET], maxInstances: 2 }, async (request) => {
+  const { uid } = compteVerifie(request);
+  const { fid } = request.data || {};
+  const fam = await familleDuResponsable(fid, uid);
+  const abo = fam.abonnement || {};
+  if (!abo.stripeCustomerId || !abo.stripeSubscriptionId) throw new HttpsError('failed-precondition', "Cette famille n'a pas d'abonnement.");
+  const session = await stripe().checkout.sessions.create({
+    mode: 'setup',
+    currency: 'eur',
+    payment_method_types: ['sepa_debit'],
+    customer: abo.stripeCustomerId,
+    locale: 'fr',
+    metadata: { sepa: '1', fid, abonnement: abo.stripeSubscriptionId },
+    success_url: `${APPLI_FAMILLE}?sepa=ok`,
+    cancel_url: APPLI_FAMILLE,
+  });
+  return { url: session.url };
+});
+
 // Factures de la famille (page « Abonnement et paiement » de l'appli), les plus récentes d'abord.
 exports.facturesFamille = onCall({ secrets: [STRIPE_SECRET] }, async (request) => {
   const fam = await familleGeree((request.data || {}).fid, request);
@@ -1150,7 +1172,9 @@ exports.stripeWebhook = onRequest(
     }
 
     try {
-      if (event.type === 'checkout.session.completed' || event.type === 'checkout.session.async_payment_succeeded') {
+      if (event.type === 'checkout.session.completed' && event.data.object.mode === 'setup') {
+        await sepaEnregistre(event.data.object);
+      } else if (event.type === 'checkout.session.completed' || event.type === 'checkout.session.async_payment_succeeded') {
         await paiementTermine(event.data.object);
       } else if (event.type === 'checkout.session.async_payment_failed') {
         await paiementSepaRefuse(event.data.object);
@@ -1160,6 +1184,7 @@ exports.stripeWebhook = onRequest(
         await abonnementModifie(event.data.object);
       } else if (['invoice.paid', 'invoice.payment_failed', 'payment_intent.payment_failed'].includes(event.type)) {
         await paiementAPart(event.type, event.data.object);
+        if (event.type === 'invoice.paid') await noterMoyenPaiement(event.data.object);
       } else if (event.type === 'charge.dispute.created') {
         await contestation(event.data.object);
       }
@@ -1340,6 +1365,64 @@ async function paiementSepaRefuse(session) {
   if (snap.get('email')) envois.push(envoyerMail(snap.get('email'), mail.sepaRefuse({ nom: snap.get('nom') })));
   (await Promise.allSettled(envois)).filter((r) => r.status === 'rejected')
     .forEach((r) => logger.error(`E-mail SEPA refusé non envoyé (${ref.id})`, r.reason));
+}
+
+// Moyen de paiement de la famille (families/{fid}.paiement, encart « Passer au prélèvement ») : noté à chaque
+// prélèvement mensuel réussi (pas la mise en service payée à la commande), d'après le moyen que Stripe prélèvera
+// le mois suivant (celui de l'abonnement, sinon celui du client). premierLe : le premier, jamais déplacé.
+async function moyenStripe(abonnementId) {
+  const abo = await stripe().subscriptions.retrieve(abonnementId, { expand: ['default_payment_method', 'customer.invoice_settings.default_payment_method'] });
+  const pm = (abo.default_payment_method && typeof abo.default_payment_method === 'object' ? abo.default_payment_method : null)
+    || (abo.customer && typeof abo.customer === 'object' && abo.customer.invoice_settings
+      && typeof abo.customer.invoice_settings.default_payment_method === 'object' ? abo.customer.invoice_settings.default_payment_method : null);
+  return regles.moyenDe(pm && pm.type);
+}
+async function noterMoyenPaiement(facture) {
+  // Version d'API récente : l'abonnement est sous parent.subscription_details.
+  const abonnementId = facture.subscription
+    || (facture.parent && facture.parent.subscription_details && facture.parent.subscription_details.subscription);
+  const id = typeof abonnementId === 'object' && abonnementId ? abonnementId.id : abonnementId;
+  if (!id || facture.billing_reason !== 'subscription_cycle' || !(facture.amount_paid > 0) || (facture.metadata || {}).dernierMois === '1') return;
+  const commande = await db.doc(`commandes/${id}`).get();
+  const fid = commande.exists && commande.get('fid');
+  if (!fid) return;
+  const moyen = await moyenStripe(id);
+  const ref = db.doc(`families/${fid}`);
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists || snap.get('abonnement.stripeSubscriptionId') !== id) return;
+    tx.update(ref, {
+      'paiement.moyen': moyen,
+      'paiement.premierLe': snap.get('paiement.premierLe') || Timestamp.fromMillis(Date.now()),
+      'paiement.majLe': FieldValue.serverTimestamp(),
+    });
+  });
+}
+
+// Mandat SEPA signé depuis l'appli (passerAuSepa) : ce compte devient le moyen de paiement du client et de
+// l'abonnement ; l'encart disparaît (paiement.moyen « sepa »). Vérifie que l'abonnement est bien celui du client.
+async function sepaEnregistre(session) {
+  const meta = session.metadata || {};
+  if (meta.sepa !== '1' || !meta.abonnement || !meta.fid || !session.setup_intent) return;
+  const intention = await stripe().setupIntents.retrieve(typeof session.setup_intent === 'string' ? session.setup_intent : session.setup_intent.id);
+  const pm = typeof intention.payment_method === 'string' ? intention.payment_method : intention.payment_method && intention.payment_method.id;
+  if (intention.status !== 'succeeded' || !pm) {
+    logger.warn(`Mandat SEPA ${intention.id} : ${intention.status}, rien changé.`);
+    return;
+  }
+  const abo = await stripe().subscriptions.retrieve(meta.abonnement);
+  if (abo.customer !== session.customer) {
+    logger.error(`Mandat SEPA : l'abonnement ${meta.abonnement} n'est pas au client ${session.customer}, rien changé.`);
+    return;
+  }
+  await stripe().customers.update(session.customer, { invoice_settings: { default_payment_method: pm } });
+  await stripe().subscriptions.update(abo.id, { default_payment_method: pm });
+  const ref = db.doc(`families/${meta.fid}`);
+  const fam = await ref.get();
+  if (fam.exists && fam.get('abonnement.stripeCustomerId') === session.customer) {
+    await ref.update({ 'paiement.moyen': 'sepa', 'paiement.sepaLe': Timestamp.fromMillis(Date.now()), 'paiement.majLe': FieldValue.serverTimestamp() });
+  }
+  logger.info(`Famille ${meta.fid} : passée au prélèvement SEPA.`);
 }
 
 // Prélèvements faits hors de l'abonnement : le dernier mois (facture « dernierMois ») et le matériel non
@@ -1720,6 +1803,34 @@ async function finDeGrace() {
       rev: FieldValue.increment(1),
     });
     logger.warn(`Famille ${snap.id} : toujours aucune commande reliée ${pendant ? '72 h après le début de l\'installation' : '48 h après l\'installation'}, Papote en pause.`);
+  }
+}
+
+// E-mail « Passer au prélèvement » (abonnement.mailSepaDu) : 15 jours après le premier prélèvement mensuel par carte,
+// puis une seule relance 30 jours après. Le moyen est relu chez Stripe avant d'écrire (changé dans le portail ?).
+async function relancesSepa() {
+  const maintenant = Date.now();
+  const cartes = await db.collection('families').where('paiement.moyen', '==', 'carte').get();
+  for (const snap of cartes.docs) {
+    const quoi = regles.mailSepaDu(snap.data(), maintenant);
+    if (!quoi) continue;
+    const id = snap.get('abonnement.stripeSubscriptionId');
+    try {
+      const moyen = await moyenStripe(id);
+      if (moyen !== 'carte') {
+        await snap.ref.update({ 'paiement.moyen': moyen, 'paiement.majLe': FieldValue.serverTimestamp() });
+        continue;
+      }
+      const commande = await db.doc(`commandes/${id}`).get();
+      const email = commande.exists && commande.get('email');
+      if (email) {
+        await envoyerMail(email, mail.passerAuSepa({ nom: commande.get('nom'), famille: snap.get('name'), relance: quoi === 'relance', lien: APPLI_FAMILLE }));
+      }
+      // Noté même sans adresse : l'encart de l'accueil reste là.
+      await snap.ref.update({ [quoi === 'relance' ? 'paiement.sepaRelanceLe' : 'paiement.sepaMailLe']: Timestamp.fromMillis(Date.now()) });
+    } catch (e) {
+      logger.error(`Famille ${snap.id} : e-mail « passer au prélèvement » non parti`, e.message);
+    }
   }
 }
 
@@ -2402,7 +2513,7 @@ exports.alertesTablettes = require('./alertes').alertesTablettes;
 // Les autres tâches planifiées, regroupées dans une seule fonction lancée toutes les heures (taches.js : Cloud
 // Scheduler est gratuit jusqu'à 3 tâches). Chacune garde son heure : voir taches.PLANNING.
 exports.tachesHoraires = require('./taches').planifier({
-  relancesPaniers, finDeGrace, restitutions, rappelsJumelage,
+  relancesPaniers, finDeGrace, restitutions, rappelsJumelage, relancesSepa,
   gestionCourrier: gestion.gestionCourrier, gestionAutomatique: gestion.gestionAutomatique,
   gestionRecap: gestion.gestionRecap, gestionCloture: gestion.gestionCloture,
   bilanSupport: support.bilanSupport,

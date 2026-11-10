@@ -67,6 +67,8 @@ function scenes(mail) {
 
     { titre: 'Paiement de l\'abonnement refusé', groupe: G3, fonction: 'paiementEchoue', contenu: si('paiementEchoue', { nom: 'Julie', famille: 'Mamie Jeanne', pauseLe: dans(7), lien: APPLI }) },
     { titre: 'Papote en pause (impayé après 7 jours)', groupe: G3, fonction: 'papoteEnPause', contenu: si('papoteEnPause', { nom: 'Julie', famille: 'Mamie Jeanne', lien: APPLI }) },
+    { titre: 'Passer au prélèvement SEPA (15 jours après le 1er prélèvement par carte)', groupe: G3, fonction: 'passerAuSepa', note: 'Nouveau (10/11).', contenu: si('passerAuSepa', { nom: 'Julie', famille: 'Mamie Jeanne', lien: APPLI }) },
+    { titre: 'Passer au prélèvement SEPA : relance unique (30 jours après)', groupe: G3, fonction: 'passerAuSepa', note: 'Nouveau (10/11).', contenu: si('passerAuSepa', { nom: 'Julie', famille: 'Mamie Jeanne', relance: true, lien: APPLI }) },
     { titre: 'Résiliation enregistrée (par le client)', groupe: G3, fonction: 'resiliationEnregistree', note: 'Ajouté par le fil Gestion.', contenu: si('resiliationEnregistree', { nom: 'Julie', famille: 'Mamie Jeanne', le: dans(30), tablettePretee: true }) },
     { titre: 'Papote arrête votre abonnement (par l\'admin)', groupe: G3, fonction: 'resiliationEnregistree', note: 'Ajouté par le fil Gestion.', contenu: si('resiliationEnregistree', { nom: 'Julie', famille: 'Mamie Jeanne', le: dans(30), tablettePretee: true, parPapote: true }) },
     { titre: '« Garder mon abonnement » : l\'abonnement continue', groupe: G3, fonction: 'resiliationAnnulee', note: 'Ajouté par le fil Gestion.', contenu: si('resiliationAnnulee', { nom: 'Julie', famille: 'Mamie Jeanne' }) },

@@ -24,6 +24,7 @@ const PLANNING = {
   gestionCourrier: TOUTES_LES_HEURES, //       (every 60 minutes)
   gestionAutomatique: { heure: 4 }, //         (every day 04:00)
   restitutions: { heure: 9 }, //               (every day 09:00)
+  relancesSepa: { heure: 11 }, //              (nouvelle, 10/11 : « passer au prélèvement », index.js)
   rappelsJumelage: { heure: 10 }, //           (every day 10:00)
   alerteMatin: { heure: 10 }, //               (alertes.HORAIRE_PAS_VUE : every day 10:00)
   alerteForfait: TOUTES_LES_HEURES, //         (nouvelle, 5/11 : forfait SIM à 80 et 95 %, forfait-alerte.js)
