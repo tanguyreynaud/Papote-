@@ -54,6 +54,7 @@ function creerFauxStripe(horloge) {
       customer: client.id, invoice: facture.id, description: facture.description || null, metadata: {}, created: secondes(), refunded: false,
     };
     etat.paiements.set(pi.id, pi);
+    numeroter(facture);
     Object.assign(facture, { status: 'paid', amount_paid: facture.amount_due, payment_intent: pi.id });
     return pi;
   }
@@ -66,6 +67,15 @@ function creerFauxStripe(horloge) {
     };
     etat.factures.set(f.id, f);
     return f;
+  }
+
+  // Comme Stripe : une facture reçoit son numéro (suivi, sans trou) et son PDF quand elle est finalisée.
+  function numeroter(f) {
+    if (f.number) return;
+    const rang = [...etat.factures.values()].filter((x) => x.number).length + 1;
+    f.number = `PAP-${String(rang).padStart(4, '0')}`;
+    f.invoice_pdf = `https://pay.stripe.test/invoice/${f.id}/pdf`;
+    f.hosted_invoice_url = `https://pay.stripe.test/invoice/${f.id}`;
   }
 
   const api = {
@@ -154,7 +164,8 @@ function creerFauxStripe(horloge) {
     invoices: {
       list: ({ subscription, customer, status, created }) => liste([...etat.factures.values()]
         .filter((f) => (!subscription || f.subscription === subscription) && (!customer || f.customer === customer)
-          && (!status || f.status === status) && (!created || !created.gte || f.created >= created.gte))),
+          && (!status || f.status === status) && (!created || !created.gte || f.created >= created.gte)
+          && (!created || !created.lt || f.created < created.lt))),
       retrieve: async (x) => copie(lire('factures', 'invoice', x)),
       // Seule recherche utilisée : metadata['charge']:'ch_…' (facture déjà faite pour un prélèvement hors abonnement).
       search: async ({ query }) => {
@@ -170,6 +181,7 @@ function creerFauxStripe(horloge) {
       },
       finalizeInvoice: async (x) => {
         const f = lire('factures', 'invoice', x);
+        numeroter(f);
         f.status = 'open';
         return copie(f);
       },
@@ -222,9 +234,12 @@ function creerFauxStripe(horloge) {
       ].filter((bt) => !created || !created.gte || bt.created >= created.gte)),
     },
     creditNotes: {
-      list: ({ invoice }) => liste(etat.avoirs.filter((a) => !invoice || a.invoice === invoice)),
+      list: ({ invoice, created } = {}) => liste(etat.avoirs.filter((a) => (!invoice || a.invoice === invoice)
+        && (!created || ((!created.gte || a.created >= created.gte) && (!created.lt || a.created < created.lt))))),
       create: async ({ invoice, refund, lines }) => {
-        const a = { id: id('cn'), invoice, refund, lines, amount: (lines || []).reduce((t, l) => t + (l.unit_amount || 0) * (l.quantity || 1), 0), created: secondes() };
+        const a = { id: id('cn'), object: 'credit_note', status: 'issued', invoice, refund, lines, amount: (lines || []).reduce((t, l) => t + (l.unit_amount || 0) * (l.quantity || 1), 0), created: secondes() };
+        a.number = `AV-${String(etat.avoirs.length + 1).padStart(4, '0')}`;
+        a.pdf = `https://pay.stripe.test/credit_note/${a.id}/pdf`;
         etat.avoirs.push(a);
         return copie(a);
       },
@@ -305,7 +320,7 @@ function creerFauxStripe(horloge) {
     const unique = lignes.filter((l) => !l.recurring);
     const f = nouvelleFacture(client, { lignes: unique.map((l) => ({ amount: l.unit_amount, price: l.id })), abonnement: a.id, raison: 'subscription_create' });
     if (!sepaEnAttente) payer(f, client);
-    else f.status = 'open';
+    else { numeroter(f); f.status = 'open'; }
     Object.assign(s, {
       status: 'complete', payment_status: sepaEnAttente ? 'unpaid' : 'paid', subscription: a.id, customer: client.id,
       customer_details: { email: email || p.customer_email, name: nom, phone: telephone, address: adresse },
@@ -389,6 +404,7 @@ function creerFauxStripe(horloge) {
     a.current_period_end = Math.max(a.current_period_end || 0, secondes()) + 30 * 86400;
     a.items.data[0].current_period_end = a.current_period_end;
     const f = nouvelleFacture(client, { lignes: [{ amount: mensuel.unit_amount, price: mensuel.id }], abonnement: a.id, raison: 'subscription_cycle' });
+    numeroter(f);
     f.status = 'open';
     evenement('invoice.payment_failed', f);
     evenement('customer.subscription.updated', a);

@@ -16,6 +16,8 @@
 //                   (« à vérifier ») ; gestionCourrierMaintenant : tout de suite
 //   gestionCloture  le 1er du mois à 5 h : livre des recettes et registre des achats du mois écoulé, figés
 //                   (gestion/archives), rangés dans Storage et envoyés par e-mail ; gestionCloturer : tout de suite
+//                   (avec le contrôle des factures de vente du mois, fiche.controle)
+//   gestionCopieVentes chaque jour à 6 h : copie des PDF des factures et avoirs Stripe (factures-vente.js)
 //   gestionAutomatique  chaque nuit : factures du matériel non rendu (montant prélevé), avoirs des
 //                       remboursements, dépenses mensuelles récurrentes, états du stock suivant les
 //                       commandes (gestionAutomatiser : tout de suite)
@@ -2978,6 +2980,78 @@ exports.gestionRecapMaintenant = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_P
   }
 });
 
+// ---------- Factures de vente : copie des PDF chez Papote (10 ans) ----------
+// Tanguy, 10/11 : les PDF restaient seulement chez Stripe. Chaque facture et chaque avoir finalisés sont copiés dans
+// Storage (gestion/ventes/{année}/) avec leur fiche dans gestion/ventes/pieces/{id} (factures-vente.js). Lancé chaque
+// jour à 6 h (tachesHoraires, sur 40 jours) et à la clôture du mois (sur le mois clos). Une copie gardée n'est jamais refaite.
+const ventes = require('./factures-vente');
+const piecesVente = () => db().collection('gestion/ventes/pieces');
+
+// En mode test, seulement les factures d'une commande encore là (les essais effacés restent chez Stripe).
+async function facturesAGarder(liste, test) {
+  const garder = liste.filter(ventes.aGarder);
+  if (!test) return garder;
+  const ids = [...new Set(garder.map(ventes.idAbonnement).filter(Boolean))];
+  const vivantes = new Set();
+  for (const id of ids) if ((await db().doc(`commandes/${id}`).get()).exists) vivantes.add(id);
+  return garder.filter((f) => vivantes.has(ventes.idAbonnement(f)));
+}
+
+async function copierPiece(f) {
+  const ref = piecesVente().doc(f.id);
+  const deja = await ref.get();
+  if (deja.exists) {
+    if (deja.get('statut') !== (f.status || null)) await ref.update({ statut: f.status || null });
+    return false;
+  }
+  const lien = f.invoice_pdf || f.pdf;
+  const rep = await fetch(lien);
+  const contenu = Buffer.from(await rep.arrayBuffer());
+  if (!rep.ok || !ventes.estPdf(contenu)) throw new Error(`PDF illisible (${rep.status})`);
+  const chemin = ventes.cheminCopie(f);
+  const sha256 = require('crypto').createHash('sha256').update(contenu).digest('hex');
+  await stockage().file(chemin).save(contenu, {
+    contentType: 'application/pdf', resumable: false,
+    metadata: { metadata: { stripe: f.id, numero: String(f.number), sha256 } },
+  });
+  await ref.set(ventes.fiche(f, { chemin, octets: contenu.length, sha256, maintenant: Date.now() }));
+  return true;
+}
+
+// Copie les factures et avoirs émis depuis `depuis` (ms) [jusqu'à `jusqua`]. Une copie ratée est retentée le
+// lendemain ; le contrôle de la clôture la signale si elle manque encore.
+async function copierVentes(depuis, jusqua = null) {
+  const created = { gte: Math.floor(depuis / 1000), ...(jusqua ? { lt: Math.floor(jusqua / 1000) } : {}) };
+  const [factures, avoirs] = await Promise.all([
+    tout(stripe().invoices.list({ created, limit: 100 })),
+    tout(stripe().creditNotes.list({ created, limit: 100 })),
+  ]);
+  const test = [...factures, ...avoirs].some((f) => f.livemode === false);
+  const gardees = await facturesAGarder(factures, test);
+  // Avoir : gardé avec sa facture (en mode test, seulement celui d'une facture gardée ou déjà copiée).
+  const idsGardes = new Set(gardees.map((f) => f.id));
+  const avoirsGardes = [];
+  for (const a of avoirs.filter(ventes.aGarder)) {
+    const facture = typeof a.invoice === 'string' ? a.invoice : (a.invoice && a.invoice.id);
+    if (!test || idsGardes.has(facture) || (facture && (await piecesVente().doc(facture).get()).exists)) avoirsGardes.push(a);
+  }
+  const aCopier = [...gardees, ...avoirsGardes];
+  let copiees = 0;
+  let ratees = 0;
+  for (const f of aCopier.sort((a, b) => a.created - b.created)) {
+    try {
+      if (await copierPiece(f)) copiees += 1;
+    } catch (e) {
+      ratees += 1;
+      logger.warn(`Facture ${f.number} : copie du PDF ratée, nouvel essai demain`, e.message);
+    }
+  }
+  return { copiees, ratees, factures };
+}
+
+// Chaque jour à 6 h (taches.js) : les 40 derniers jours.
+exports.gestionCopieVentes = () => copierVentes(Date.now() - JOURS(40));
+
 // ---------- Clôture du mois : livres comptables figés, archivés et envoyés ----------
 
 const MOIS_NOMS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre',
@@ -3011,6 +3085,18 @@ async function livresDe(debut, fin, cle) {
       .where('date', '>=', Timestamp.fromMillis(debut)).where('date', '<', Timestamp.fromMillis(fin)).get(),
   ]);
   const recettes = livreDesRecettes(mouvements, await numerosFactures(mouvements, debut - JOURS(35)));
+  // Factures du mois copiées (rattrapage), puis contrôle « une facture = un PDF = un paiement ».
+  const { factures } = await copierVentes(debut, fin);
+  const [apres, pieces] = await Promise.all([
+    lireMouvements({ gte: Math.floor(fin / 1000), lt: Math.floor((fin + JOURS(10)) / 1000) }),
+    piecesVente().get(),
+  ]);
+  const test = factures.some((f) => f.livemode === false);
+  const controle = ventes.controleMois({
+    factures: await facturesAGarder(factures, test),
+    mouvements: [...mouvements, ...apres],
+    pieces: pieces.docs.map((d) => ({ id: d.id, ...d.data() })),
+  });
   const achats = registreDesAchats(depensesSnap.docs.map((d) => d.data()));
   const encaisse = mouvements.filter((m) => ENCAISSEMENTS.includes(m.nature)).reduce((s, m) => s + m.montant, 0);
   const fichiers = [
@@ -3029,6 +3115,7 @@ async function livresDe(debut, fin, cle) {
       fin,
       recettes: { nombre: recettes.nombre, total: recettes.total, encaisse, rembourse: encaisse - recettes.total },
       achats: { nombre: achats.nombre, total: achats.total },
+      controle,
       fichiers: fichiers.map(({ nom, chemin, type }) => ({ nom, chemin, type })),
     },
     pieces: fichiers.map((f) => ({ filename: f.nom, content: f.contenu, contentType: 'text/csv; charset=utf-8' })),
@@ -3076,6 +3163,7 @@ async function cloturer(maintenant, refaire) {
     resume.push([`${MOIS_NOMS[m.mois - 1]} ${m.annee}`, [
       `Recettes : ${fiche.recettes.nombre} ligne${fiche.recettes.nombre > 1 ? 's' : ''}, ${eurosTexte(fiche.recettes.total)}`,
       `Achats : ${fiche.achats.nombre} ligne${fiche.achats.nombre > 1 ? 's' : ''}, ${eurosTexte(fiche.achats.total)}`,
+      fiche.controle.length ? `Factures à vérifier : ${fiche.controle.join(' ; ')}` : 'Factures : chaque facture a sa copie PDF et son paiement',
     ]]);
     if (m.mois === 12) {
       const a = String(m.annee);

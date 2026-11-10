@@ -187,6 +187,11 @@ function fauxSendcloud(url, options = {}) {
 const vraiFetch = global.fetch;
 global.fetch = async (url, options) => {
   if (String(url).startsWith('https://panel.sendcloud.sc/')) return fauxSendcloud(String(url), options);
+  // PDF des factures et avoirs Stripe (copie chez Papote, factures-vente.js) ; pdfEnPanne : Stripe ne le donne pas.
+  if (String(url).startsWith('https://pay.stripe.test/')) {
+    if (reglages.pdfEnPanne > 0) { reglages.pdfEnPanne -= 1; return new Response('Erreur', { status: 502 }); }
+    return new Response(Buffer.from(`%PDF-1.4 faux PDF ${url}`), { headers: { 'content-type': 'application/pdf' } });
+  }
   if (String(url).startsWith('https://geo.api.gouv.fr/')) {
     return new Response(JSON.stringify([{ nom: 'Saint-Martin-de-Valamas', centre: { coordinates: [4.37, 44.94] } }]));
   }
@@ -201,10 +206,11 @@ global.fetch = async (url, options) => {
 
 const admin = require('firebase-admin');
 const fichiersEffaces = [];
+const fichiersGardes = []; // chemins enregistrés dans Storage (copies des factures…)
 const faussePoubelle = {
   deleteFiles: async ({ prefix }) => { fichiersEffaces.push(prefix); },
   getFiles: async () => [[]],
-  file: (nom) => ({ delete: async () => { fichiersEffaces.push(nom); }, save: async () => null, getSignedUrl: async () => ['https://simulation'] }),
+  file: (nom) => ({ delete: async () => { fichiersEffaces.push(nom); }, save: async () => { fichiersGardes.push(nom); }, getSignedUrl: async () => ['https://simulation'] }),
 };
 Object.defineProperty(admin, 'storage', { value: () => ({ bucket: () => faussePoubelle }), configurable: true });
 
@@ -431,10 +437,12 @@ async function remettreAZero() {
   decalage = 0;
   reglages.telephones = true;
   reglages.pushEnPanne = 0;
+  reglages.pdfEnPanne = 0;
+  fichiersGardes.length = 0;
 }
 
 module.exports = {
   demarrer, arreter, remettreAZero, calme, avancer, JOUR,
-  stripe, boite, notifications, erreurs, journal, fichiersEffaces, reglages, sendcloud,
+  stripe, boite, notifications, erreurs, journal, fichiersEffaces, fichiersGardes, reglages, sendcloud,
   fonctions, db, FieldValue, Timestamp, lire, compte, appeler, tache, requete, compteur,
 };

@@ -134,7 +134,7 @@ function gestionDonnees(o = {}) {
     automatique: { le: il(0.2), factures: ['PAP-0004'], avoirs: [], depenses: 1, stock: ['T-001 chez le client'], etiquettes: [], livres: ['Sophie Bernard'],
       erreurs: ['Relance du colis CMD-RT22 : Sendcloud n’a pas répondu'] },
     courrier: { le: il(0.1), boite: 'factures@mapapote.fr', recus: 5, pourFactures: 2, rangees: ['Lyca, recharge 4,99 €'], ignorees: ['Publicité Cdiscount'], erreurs: [], precedent: null },
-    archives: { mois: { '2026-09': { recettes: { total: 8500 }, achats: { total: 129980 }, le: il(25), fichiers: [{ nom: 'livre-des-recettes-2026-09.csv', chemin: 'a' }, { nom: 'registre-des-achats-2026-09.csv', chemin: 'b' }] } } },
+    archives: { mois: { '2026-10': { recettes: { total: 17500 }, achats: { total: 4200 }, le: il(9), controle: ['Facture PAP-0007 : pas de copie du PDF chez Papote', 'Numérotation : PAP-0007 manque (aucune copie gardée)'], fichiers: [{ nom: 'livre-des-recettes-2026-10.csv', chemin: 'c' }, { nom: 'registre-des-achats-2026-10.csv', chemin: 'd' }] }, '2026-09': { recettes: { total: 8500 }, achats: { total: 129980 }, le: il(25), controle: [], fichiers: [{ nom: 'livre-des-recettes-2026-09.csv', chemin: 'a' }, { nom: 'registre-des-achats-2026-09.csv', chemin: 'b' }] } } },
   };
   if (o.vide) {
     for (const k of ['commandes', 'stock', 'depenses', 'familles', 'sims', 'alertes', 'accessoires']) d[k] = [];

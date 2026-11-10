@@ -2516,6 +2516,7 @@ exports.tachesHoraires = require('./taches').planifier({
   relancesPaniers, finDeGrace, restitutions, rappelsJumelage, relancesSepa,
   gestionCourrier: gestion.gestionCourrier, gestionAutomatique: gestion.gestionAutomatique,
   gestionRecap: gestion.gestionRecap, gestionCloture: gestion.gestionCloture,
+  gestionCopieVentes: gestion.gestionCopieVentes,
   bilanSupport: support.bilanSupport,
   // « Pas vue depuis deux jours », chaque matin à 10 h (alertes.js).
   alerteMatin: require('./alertes').alerteMatin,
