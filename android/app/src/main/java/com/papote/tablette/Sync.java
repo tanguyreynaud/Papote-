@@ -981,7 +981,9 @@ final class Sync {
     }
 
     /** Télécharge une adresse https dans photos/{id}.{ext}, sans tout garder en mémoire. */
-    private static final long MAX_PHOTO = 20L << 20, MAX_VIDEO = 200L << 20;
+    // L'app envoie des vidéos d'environ 9 Mo au plus (60 s, 1,1 Mbit/s) : 30 Mo laisse de la marge sans
+    // qu'un fichier glissé hors de l'app vide le forfait de 1 Go (audit du 11/11).
+    private static final long MAX_PHOTO = 20L << 20, MAX_VIDEO = 30L << 20;
 
     private File downloadToFile(String url, String id, String ext) throws Exception {
         // Seulement le stockage Firebase (audit du 23/10) : pas d'adresse quelconque glissée dans un envoi.
@@ -999,6 +1001,8 @@ final class Sync {
         // Connexion gardée ouverte pour le fichier suivant (keep-alive), sauf en cas d'erreur.
         try {
             if (c.getResponseCode() != 200) throw new IOException("HTTP " + c.getResponseCode());
+            // Taille annoncée trop grosse : refus avant d'avoir téléchargé le moindre octet.
+            if (c.getContentLengthLong() > max) throw new IOException("Fichier trop gros (" + id + ")");
             java.io.InputStream in = c.getInputStream();
             FileOutputStream out = new FileOutputStream(tmp);
             try {

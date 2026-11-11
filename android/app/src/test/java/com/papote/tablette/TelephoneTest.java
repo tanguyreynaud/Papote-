@@ -53,4 +53,21 @@ public class TelephoneTest {
         assertEquals("", Telephone.composer(null));
         assertFalse(Telephone.portableFrancais("+44 7700 900123"));
     }
+
+    @Test
+    public void smsSeulementVersDesPortablesFrancais() {
+        // Numéro court surtaxé, 08, fixe, étranger : écartés. Doublon : une seule fois.
+        assertEquals(java.util.Arrays.asList("0612345678", "0712345678"),
+                Telephone.destinatairesSms("+33612345678,81212,0899123456,0145678901,+447911123456,06 12 34 56 78,0712345678"));
+        assertTrue(Telephone.destinatairesSms("81212,+12025550123").isEmpty());
+        assertTrue(Telephone.destinatairesSms(null).isEmpty());
+        assertTrue(Telephone.destinatairesSms("").isEmpty());
+    }
+
+    @Test
+    public void smsTrenteDestinatairesAuPlus() {
+        StringBuilder s = new StringBuilder();
+        for (int i = 0; i < 40; i++) s.append(String.format("06000000%02d,", i));
+        assertEquals(30, Telephone.destinatairesSms(s.toString()).size());
+    }
 }
