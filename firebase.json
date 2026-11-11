@@ -2,7 +2,7 @@
   "firestore": [
     {
       "database": "(default)",
-      "rules": "firestore.rules",
+      "rules": "firestore-origine.rules",
       "indexes": "firestore.indexes.json"
     },
     {

@@ -6,7 +6,7 @@ name: Règles Firestore
 # faisaient tourner tout deux fois et doublaient les e-mails d'échec (Tanguy, 3/11).
 on:
   push:
-    paths: ['firestore.rules', 'tests/regles/**', '.github/workflows/regles.yml']
+    paths: ['firestore.rules', 'firestore-origine.rules', 'storage.rules', 'storage-eu.rules', 'firebase.json', 'tests/regles/**', '.github/workflows/regles.yml']
   workflow_dispatch:
 
 jobs:

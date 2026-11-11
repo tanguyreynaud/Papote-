@@ -1,0 +1,29 @@
+rules_version = '2';
+// Base d'origine « (default) » : plus utilisée depuis la bascule en Europe (config/base.database = « eu »), aucune
+// fonction n'y veille. Fermée (audit 8, N3), sauf :
+//   - config/{name} : l'app, l'admin et la tablette y lisent config/base pour trouver la base et le bucket ;
+//   - pairings/{code} : une tablette neuve (APK d'avant la mise à jour du mois) crée son premier code de jumelage
+//     ici, avant de lire config/base ; elle part ensuite dans la base « europe » et efface ce code.
+// Règles des familles : firestore.rules (base « europe »). Rien n'est effacé dans cette base.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /config/{name} {
+      allow get: if request.auth != null;
+    }
+    match /pairings/{code} {
+      allow get: if request.auth != null && request.auth.uid == resource.data.tabletUid;
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasOnly(['tabletUid', 'callsUid', 'name', 'createdAt', 'expiresAt', 'status', 'serie'])
+        && (!('serie' in request.resource.data)
+            || (request.resource.data.serie is string && request.resource.data.serie.size() <= 64))
+        && request.resource.data.tabletUid == request.auth.uid
+        && request.resource.data.status == 'waiting'
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 40
+        && request.resource.data.expiresAt is timestamp
+        && request.resource.data.expiresAt <= request.time + duration.value(20, 'm');
+      allow delete: if request.auth != null && request.auth.uid == resource.data.tabletUid;
+    }
+  }
+}

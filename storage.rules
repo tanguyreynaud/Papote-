@@ -1,25 +1,12 @@
 rules_version = '2';
-
-// Photos et vidéos des familles : families/{fid}/media/{fichier}.
-// Seuls les membres de la famille lisent, ajoutent et effacent. La tablette lit par l'adresse de téléchargement.
+// Ancien bucket américain (papote-famille.firebasestorage.app) : plus utilisé depuis la bascule en Europe
+// (config/base.bucket = papote-famille-eu). Fermé à toute appli (audit 8, N3). Les adresses de téléchargement avec
+// jeton (captures de la galerie Validation) restent lisibles : elles ne passent pas par ces règles.
+// Règles des familles : storage-eu.rules.
 service firebase.storage {
   match /b/{bucket}/o {
-    match /families/{fid}/media/{file} {
-      function isMember() {
-        return request.auth != null
-          && firestore.exists(/databases/(default)/documents/families/$(fid)/members/$(request.auth.uid))
-          && firestore.get(/databases/(default)/documents/families/$(fid)/members/$(request.auth.uid)).data.get('status', 'active') != 'pending';
-      }
-      function isAdmin() {
-        return request.auth != null
-          && request.auth.token.get('admin', false) == true;
-      }
-      allow read: if isMember() || isAdmin();
-      allow create: if (isMember() || isAdmin())
-        && request.resource.size < 60 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*|video/.*|audio/.*');
-      allow update: if false;
-      allow delete: if isMember();
+    match /{tout=**} {
+      allow read, write: if false;
     }
   }
 }

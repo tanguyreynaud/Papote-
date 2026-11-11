@@ -49,12 +49,15 @@ service cloud.firestore {
     // Abonnement (écrit par le serveur seulement) : champ absent ou statut offert, actif ou impayé
     // = tout fonctionne ; suspendu, résilié ou aucun = envois, agenda et appels bloqués.
     // Pendant l'installation d'une nouvelle tablette, tout fonctionne : la commande est reliée
-    // à la famille juste après sa création (functions/gestion.js, gestionJumelage).
+    // à la famille juste après sa création (functions/gestion.js, gestionJumelage). Sauf statut « aucun »,
+    // « suspendu » ou « résilié » écrit par le serveur : une installation jamais finie (72 h) s'arrête vraiment
+    // (audit 8, R-F2).
     function abonnementOk(fid) {
       let fam = get(familyPath(fid)).data;
       let abo = fam.get('abonnement', null);
       return abo == null || abo.get('statut', '') in ['offert', 'actif', 'impaye', 'installation']
-        || fam.get('installation', {}).get('etape', 'fini') != 'fini';
+        || (fam.get('installation', {}).get('etape', 'fini') != 'fini'
+          && !(abo.get('statut', '') in ['aucun', 'suspendu', 'resilie']));
     }
 
     // 30 proches au plus par famille (la tablette ne compte pas). nbProches est tenu à jour
@@ -156,8 +159,10 @@ service cloud.firestore {
         && request.resource.data.status == 'cancelled';
       // Le proche retrouve l'installation qu'il a commencée (requête where claimedBy == uid).
       allow list: if signedIn() && resource.data.get('claimedBy', '') == request.auth.uid;
+      // Un jumelage confirmé reste : il prouve la tablette de la famille (audit 8, R8).
       allow delete: if signedIn()
-        && (request.auth.uid == resource.data.tabletUid || request.time > resource.data.expiresAt);
+        && (request.auth.uid == resource.data.tabletUid
+          || (request.time > resource.data.expiresAt && resource.data.status != 'confirmed'));
     }
 
     // Commandes reçues de Stripe (écrites par le serveur) : visibles de l'administrateur seulement.
@@ -303,9 +308,18 @@ service cloud.firestore {
       allow delete: if isAdmin();
 
       match /members/{uid} {
-        // Jeton de notification du téléphone (appels de la tablette) : visible de soi seul.
+        // Jeton de notification du téléphone (appels de la tablette) : visible de soi seul. Seulement « push »,
+        // seulement dans une famille dont on a la fiche, champs connus et listes courtes (audit 8, R7).
         match /private/{name} {
-          allow read, write: if signedIn() && uid == request.auth.uid;
+          allow read, delete: if signedIn() && uid == request.auth.uid;
+          allow create, update: if signedIn() && uid == request.auth.uid
+            && name == 'push'
+            && exists(/databases/$(database)/documents/families/$(fid)/members/$(request.auth.uid))
+            && request.resource.data.keys().hasOnly(['tokens', 'natifs', 'natifsV', 'majLe', 'tablette', 'pingDemande'])
+            && (!('tokens' in request.resource.data) || (request.resource.data.tokens is list && request.resource.data.tokens.size() <= 20))
+            && (!('natifs' in request.resource.data) || (request.resource.data.natifs is list && request.resource.data.natifs.size() <= 5))
+            && (!('tablette' in request.resource.data) || (request.resource.data.tablette is list && request.resource.data.tablette.size() <= 5)
+              || (request.resource.data.tablette is string && request.resource.data.tablette.size() <= 400));
         }
         allow read: if isMember(fid);
         // Fiche de la tablette (en ligne, batterie, carte SIM, version) sur la page de la tablette du tableau de bord.

@@ -58,7 +58,8 @@ test.before(async () => {
   env = await initializeTestEnvironment({
     projectId: 'demo-papote',
     firestore: { rules: fs.readFileSync(path.join(__dirname, '../../firestore.rules'), 'utf8') },
-    storage: { rules: fs.readFileSync(path.join(__dirname, '../../storage.rules'), 'utf8') },
+    // Règles du bucket Europe, lues dans la base de l'émulateur (une seule base ici, « (default) »).
+    storage: { rules: fs.readFileSync(path.join(__dirname, '../../storage-eu.rules'), 'utf8').replace(/\/databases\/europe\//g, '/databases/(default)/') },
   });
 });
 test.after(() => env.cleanup());
@@ -565,8 +566,69 @@ test('photos (Storage) : les membres de la famille seulement, pas une autre fami
   await assertFails(uploadString(ref(procheStockage('lea'), 'autre/x.png'), PNG, 'data_url', { contentType: 'image/png' }));
 });
 
-test('les règles du bucket Europe sont les mêmes, base « europe » au lieu de « (default) »', () => {
-  const normale = fs.readFileSync(path.join(__dirname, '../../storage.rules'), 'utf8').replace(/^\/\/.*\n/gm, '');
-  const europe = fs.readFileSync(path.join(__dirname, '../../storage-eu.rules'), 'utf8').replace(/^\/\/.*\n/gm, '');
-  assert.strictEqual(europe.replace(/\/databases\/europe\//g, '/databases/(default)/'), normale);
+test('règles publiées : base « europe » pour les familles, ancienne base et ancien bucket fermés (audit 8, N3)', () => {
+  const conf = JSON.parse(fs.readFileSync(path.join(__dirname, '../../firebase.json'), 'utf8'));
+  const regles = Object.fromEntries(conf.firestore.map((b) => [b.database, b.rules]));
+  assert.deepStrictEqual(regles, { '(default)': 'firestore-origine.rules', europe: 'firestore.rules' });
+  const buckets = Object.fromEntries(conf.storage.map((b) => [b.bucket, b.rules]));
+  assert.deepStrictEqual(buckets, { 'papote-famille.firebasestorage.app': 'storage.rules', 'papote-famille-eu': 'storage-eu.rules' });
+  const ancien = fs.readFileSync(path.join(__dirname, '../../storage.rules'), 'utf8').replace(/^\/\/.*\n/gm, '');
+  assert.match(ancien, /allow read, write: if false;/);
+  assert.doesNotMatch(ancien, /if (?!false)/);
+  // Le bucket Europe ne lit que la base « europe ».
+  assert.doesNotMatch(fs.readFileSync(path.join(__dirname, '../../storage-eu.rules'), 'utf8'), /databases\/\(default\)/);
+});
+
+// ---------- Audit 8 (11/11) ----------
+
+test('S4 : famille résiliée, suspendue ou jamais abonnée : plus aucun dépôt dans Storage ; 30 Mo au plus', async () => {
+  for (const statut of ['resilie', 'suspendu', 'aucun']) {
+    await env.clearFirestore();
+    await famille({ statut });
+    await assertFails(uploadString(ref(procheStockage('julie'), `families/${FID}/media/${statut}.png`), PNG, 'data_url', { contentType: 'image/png' }));
+  }
+  await env.clearFirestore();
+  await famille({ statut: 'aucun', etape: 'photo' });
+  await assertFails(uploadString(ref(procheStockage('julie'), `families/${FID}/media/b.png`), PNG, 'data_url', { contentType: 'image/png' }));
+  await env.clearFirestore();
+  await famille({ statut: 'installation', etape: 'photo' });
+  await assertSucceeds(uploadString(ref(procheStockage('julie'), `families/${FID}/media/c.png`), PNG, 'data_url', { contentType: 'image/png' }));
+  await env.clearFirestore();
+  await famille();
+  await assertSucceeds(uploadString(ref(procheStockage('julie'), `families/${FID}/media/d.mp4`), 'x'.repeat(29 * 1024 * 1024), 'raw', { contentType: 'video/mp4' }));
+  await assertFails(uploadString(ref(procheStockage('julie'), `families/${FID}/media/e.mp4`), 'x'.repeat(31 * 1024 * 1024), 'raw', { contentType: 'video/mp4' }));
+});
+
+test('R-F2 : installation jamais finie passée « aucun » par le serveur : plus d\'envoi ni d\'appel', async () => {
+  await famille({ statut: 'aucun', etape: 'photo' });
+  await assertFails(setDoc(doc(proche('julie'), `families/${FID}/posts/p1`), envoi('julie')));
+  await assertFails(setDoc(doc(proche('julie'), `families/${FID}/calls/c1`), appel('julie')));
+  await env.clearFirestore();
+  await famille({ statut: 'installation', etape: 'photo' });
+  await assertSucceeds(setDoc(doc(proche('julie'), `families/${FID}/posts/p1`), envoi('julie')));
+});
+
+test('R7 : jeton privé seulement « push », dans sa propre famille, champs connus et petits', async () => {
+  await famille();
+  const julie = proche('julie');
+  await assertSucceeds(setDoc(doc(julie, `families/${FID}/members/julie/private/push`), { tokens: ['a'], majLe: serverTimestamp() }, { merge: true }));
+  await assertSucceeds(setDoc(doc(julie, `families/${FID}/members/julie/private/push`), { natifs: ['n'], natifsV: 2, majLe: serverTimestamp() }, { merge: true }));
+  await assertSucceeds(setDoc(doc(tablette('tab'), `families/${FID}/members/tab/private/push`), { tablette: ['t'], pingDemande: serverTimestamp() }, { merge: true }));
+  await assertFails(setDoc(doc(julie, `families/${FID}/members/julie/private/nimporte`), { tokens: ['a'] }));
+  await assertFails(setDoc(doc(julie, `families/${FID}/members/julie/private/push`), { gros: 'z'.repeat(1000) }, { merge: true }));
+  await assertFails(setDoc(doc(julie, `families/${FID}/members/julie/private/push`), { tokens: Array.from({ length: 21 }, (_, i) => `j${i}`) }, { merge: true }));
+  // Compte sans fiche dans la famille, ou famille qui n'existe pas : refusé.
+  await assertFails(setDoc(doc(tablette('inconnu'), `families/${FID}/members/inconnu/private/push`), { tablette: ['x'] }));
+  await assertFails(setDoc(doc(tablette('inconnu'), 'families/aucune/members/inconnu/private/push'), { tablette: ['x'] }));
+});
+
+test('R8 : un jumelage confirmé ne s\'efface plus par un inconnu, même expiré', async () => {
+  await famille();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), `pairings/${PAIRING}`), { status: 'confirmed', fid: FID, tabletUid: 'tab', callsUid: 'tab-appels', name: 'Tablette', expiresAt: Timestamp.fromMillis(Date.now() - 60e3) });
+    await setDoc(doc(ctx.firestore(), 'pairings/VIEU2345'), { status: 'waiting', tabletUid: 'autre', callsUid: 'autre', name: 'T', expiresAt: Timestamp.fromMillis(Date.now() - 60e3) });
+  });
+  await assertFails(deleteDoc(doc(tablette('inconnu'), `pairings/${PAIRING}`)));
+  await assertSucceeds(deleteDoc(doc(tablette('inconnu'), 'pairings/VIEU2345')));
+  await assertSucceeds(deleteDoc(doc(tablette('tab'), `pairings/${PAIRING}`)));
 });

@@ -16,8 +16,18 @@ service firebase.storage {
           && request.auth.token.get('admin', false) == true;
       }
       allow read: if isMember() || isAdmin();
-      allow create: if (isMember() || isAdmin())
-        && request.resource.size < 60 * 1024 * 1024
+      // Abonnement en cours (comme abonnementOk de firestore.rules) : une famille résiliée, suspendue ou jamais
+      // abonnée ne dépose plus rien (audit 8, S4).
+      function abonnementOk() {
+        let fam = firestore.get(/databases/europe/documents/families/$(fid)).data;
+        let abo = fam.get('abonnement', null);
+        return abo == null || abo.get('statut', '') in ['offert', 'actif', 'impaye', 'installation']
+          || (fam.get('installation', {}).get('etape', 'fini') != 'fini'
+            && !(abo.get('statut', '') in ['aucun', 'suspendu', 'resilie']));
+      }
+      // 30 Mo au plus : l'app réduit les vidéos bien en dessous (fil tablette, 11/11).
+      allow create: if (isAdmin() || (isMember() && abonnementOk()))
+        && request.resource.size < 30 * 1024 * 1024
         && request.resource.contentType.matches('image/.*|video/.*|audio/.*');
       allow update: if false;
       allow delete: if isMember();
