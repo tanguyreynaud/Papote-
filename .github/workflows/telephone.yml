@@ -33,7 +33,9 @@ jobs:
         run: |
           chmod +x gradlew
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
-          ./gradlew --no-daemon assembleDebug lintDebug
+          ./gradlew --no-daemon assembleDebug
+          # En cas d'erreur, le rapport complet dans le journal (lisible sans télécharger l'artefact).
+          ./gradlew --no-daemon lintDebug || { cat app/build/intermediates/lint_intermediate_text_report/debug/lintReportDebug/lint-results-debug.txt; exit 1; }
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -110,6 +110,9 @@ public class AppelEnCours extends Activity {
         charger(getIntent());
     }
 
+    // Android 12 et moins seulement : à partir d'Android 13, le geste retour passe par le
+    // OnBackInvokedCallback posé dans onCreate (lint ne voit pas ce choix par écran).
+    @SuppressLint("GestureBackNavigation")
     @Override
     public void onBackPressed() {
         moveTaskToBack(true);
