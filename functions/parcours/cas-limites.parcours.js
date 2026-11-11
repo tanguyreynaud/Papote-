@@ -463,7 +463,7 @@ test('couverture 4G vérifiée par Papote : pas de paiement là où la carte SIM
   for (const proche of [{ plat: '45.4882', plon: '3.5141' }, { plat: '48.0501', plon: '5.694' }, { padr: '', plat: '', plon: '' }]) {
     const r = await essai({ ...proche, ...(proche.padr === '' ? {} : { padr: 'Quelque part' }) });
     assert.strictEqual(r.statut, 303);
-    assert.ok(/commande\.html$/.test(r.redirection), `pas de paiement : ${r.redirection}`);
+    assert.ok(/commande\.html\?refus=4g$/.test(r.redirection), `pas de paiement : ${r.redirection}`);
   }
   // Très bonne couverture : paiement, puis l'adresse et le niveau sont sur la commande et dans l'e-mail à Papote.
   const { abonnement } = await a.commanderEtPayer({ email: 'lucie@exemple.fr', nom: 'Lucie Morel' });

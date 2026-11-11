@@ -37,6 +37,7 @@ body { margin: 0; background: var(--bg); color: var(--text); font: 400 1.05rem/1
 main { max-width: 40rem; margin: 0 auto; padding: 1rem max(16px, env(safe-area-inset-right)) 8rem max(16px, env(safe-area-inset-left)); display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.1rem; }
 .haut { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 .top { display: inline-flex; align-items: center; gap: .5rem; font: 800 1.3rem "Bricolage Grotesque", "Bricolage repli", "Bricolage repli A", "Segoe UI", system-ui, sans-serif; color: var(--text); text-decoration: none; }
+.top { min-height: 2.75rem; }
 .top img { width: 2rem; height: 2rem; }
 .retour { color: var(--accent-strong); font-weight: 700; text-decoration: none; min-height: 2.75rem; display: inline-flex; align-items: center; }
 h1 { margin: 0; font: 800 clamp(1.7rem, 6vw, 2.4rem)/1.1 "Bricolage Grotesque", "Bricolage repli", "Bricolage repli A", "Segoe UI", system-ui, sans-serif; text-wrap: balance; }
@@ -70,7 +71,8 @@ p { margin: 0; }
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='M3 6l5 5 5-5' fill='none' stroke='%234f46e5' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat; background-position: right .9rem center; }
 .pays-ville select:focus, .pays-ville input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
-.lien { background: none; border: 0; padding: 0; font: inherit; color: var(--accent-strong); font-weight: 700; text-decoration: none; cursor: pointer; text-align: left; }
+/* 44 px de haut au moins : un lien d'une seule ligne de texte se rate au doigt (audit du 11/11). */
+.lien { min-height: 2.75rem; display: inline-flex; align-items: center; background: none; border: 0; padding: 0; font: inherit; color: var(--accent-strong); font-weight: 700; text-decoration: none; cursor: pointer; text-align: left; }
 .lien[hidden] { display: none; }
 .petit { font-size: .92rem; color: var(--muted); }
 .points { display: grid; gap: .5rem; }
@@ -114,6 +116,7 @@ p { margin: 0; }
 .verdict.oui { background: var(--accent-soft); color: var(--accent-strong); }
 .verdict.non { background: #fdecec; color: #8a1c1c; }
 .verdict[hidden], #suggestions[hidden] { display: none; }
+#avis { scroll-margin-top: 1rem; }
 .barre { position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; background: rgba(253, 250, 245, .96); border-top: 1px solid var(--line); padding: .7rem max(16px, env(safe-area-inset-right)) calc(.7rem + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
 .barre-in { max-width: 40rem; margin: 0 auto; display: flex; align-items: center; gap: .9rem; }
 .barre-in div { display: grid; grid-template-columns: minmax(0, 1fr); line-height: 1.2; min-width: 0; overflow-wrap: anywhere; }
@@ -121,6 +124,14 @@ p { margin: 0; }
 .barre-in small { color: var(--muted); }
 .barre .manque { margin: .4rem auto 0; max-width: 40rem; font-size: .9rem; color: var(--accent-strong); font-weight: 700; }
 .barre .manque[hidden] { display: none; }
+/* Petit téléphone (moins de 360 px) : le prix sur toute la largeur, la bulle du chat et « Payer » dessous. À côté
+   du bouton, il ne restait que 84 px au prix : « aujourd'h / ui » (audit du 11/11). */
+@media (max-width: 359px) {
+  main { padding-bottom: 11rem; }
+  .barre-in { flex-wrap: wrap; gap: .5rem .7rem; }
+  .barre-in > div { flex: 1 1 100%; }
+  .barre-in .btn { flex: 1 1 auto; margin-left: 0; }
+}
 /* Clavier ouvert : le champ tapé s'arrête au-dessus de la barre « Payer », qui reste au-dessus du clavier. */
 html { scroll-padding-bottom: 8.5rem; }
 .btn { margin-left: auto; display: inline-flex; align-items: center; justify-content: center; min-height: 3.25rem; padding: .75rem 1.4rem; border-radius: 999px; background: var(--accent); color: var(--accent-text); font: 700 1.05rem/1.2 inherit; text-decoration: none; border: 0; cursor: pointer; white-space: nowrap; flex: none; }
@@ -151,6 +162,7 @@ body .ps-bouton { bottom: 6.5rem; }
     <p class="sous">Trois étapes, deux minutes. Expédiée sous 3 à 5 jours ouvrés, livraison offerte, 30 jours pour changer d'avis.</p>
   </div>
   <p class="reprise" id="reprise" hidden>Votre commande vous attend : tout est déjà rempli, il ne reste que le paiement.</p>
+  <p class="verdict non" id="avis" role="alert" hidden></p>
 
   <section class="etape" id="etape-proche">
     <h2><span class="n">1</span>Où vit votre proche ?<span class="ok" id="ok1" hidden>✓</span></h2>
@@ -235,10 +247,15 @@ body .ps-bouton { bottom: 6.5rem; }
   // Clé PUBLIQUE de l'intégration Sendcloud « Papote » (points relais Mondial Relay). Pas un secret.
   var SENDCLOUD_CLE = 'f8875927-f7be-4ad7-ac24-22fd11c0efc5';
   var COMMANDER = 'https://europe-west1-papote-famille.cloudfunctions.net/commander';
+  // Le client revient de la page de paiement : la tablette « manquante » est la sienne, mise de côté 32 minutes
+  // pendant son paiement. Il n'est pas renvoyé vers « Être prévenu » ; « Payer » rouvre sa page (audit du 11/11).
+  function paiementOuvert() {
+    try { return Date.now() - Number(sessionStorage.getItem('papote-paiement') || 0) < 32 * 60000; } catch (_) { return false; }
+  }
   // On ne vend que le stock réel (Tanguy, 2026-10-30) : plus de tablette, l'accueil propose « Être prévenu ».
   fetch('https://europe-west1-papote-famille.cloudfunctions.net/stockDisponible')
     .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
-    .then(function (d) { if (d.disponible === false) location.replace('/?complet=1#prevenir'); })
+    .then(function (d) { if (d.disponible === false && !paiementOuvert()) location.replace('/?complet=1#prevenir'); })
     .catch(function () {});
   // Adresses : Base Adresse Nationale, servie par la Géoplateforme de l'IGN (l'ancienne api-adresse.data.gouv.fr
   // ne répond plus depuis 2026).
@@ -340,6 +357,7 @@ body .ps-bouton { bottom: 6.5rem; }
         verification.hidden = true;
         if (commune && !d.eligible) {
           demanderRue({ insee: p.citycode, nom: p.name || p.label });
+          lienPaiement(); // la barre dit « la rue », plus « la ville »
           champAdresse.focus();
           return;
         }
@@ -388,11 +406,6 @@ body .ps-bouton { bottom: 6.5rem; }
   }
   var q = new URLSearchParams(location.search);
   var relais = null;
-  // Trop de pages de paiement ouvertes sans payer (garde-fou du serveur) : on le dit, sans rien bloquer d'autre.
-  if (q.get('trop') === '1') {
-    dire(false, 'Plusieurs paiements ont été ouverts sans aboutir depuis cette connexion.',
-      'Par sécurité, attendez une heure avant de réessayer. Une question ? contact@mapapote.fr');
-  }
 
   var payer = document.getElementById('payer');
   var manque = document.getElementById('manque');
@@ -439,7 +452,12 @@ body .ps-bouton { bottom: 6.5rem; }
   }
   // Retour depuis Stripe avec le bouton Retour du navigateur : la page peut être restaurée telle quelle,
   // bouton encore sur « Un instant… ». On le remet d'aplomb.
-  window.addEventListener('pageshow', function () {
+  window.addEventListener('pageshow', function (e) {
+    // Page ressortie de la mémoire du navigateur après le paiement (Retour depuis « Merci ») : merci.html a effacé
+    // la commande gardée, la page est rechargée vide au lieu de proposer de payer une deuxième fois.
+    var gardee = true;
+    try { gardee = !!sessionStorage.getItem(CLE); } catch (_) {}
+    if (e.persisted && !gardee && (relais || proche)) { location.reload(); return; }
     if (!payer.classList.contains('attend')) return;
     payer.classList.remove('attend');
     payer.textContent = 'Payer 60 €';
@@ -457,6 +475,7 @@ body .ps-bouton { bottom: 6.5rem; }
       // La fonction crée la session Stripe puis redirige : 2 à 4 secondes sans rien à l'écran, on le dit.
       payer.textContent = 'Un instant…';
       payer.classList.add('attend');
+      try { sessionStorage.setItem('papote-paiement', String(Date.now())); } catch (_) {}
       compter('paiement');
       return;
     }
@@ -784,6 +803,32 @@ body .ps-bouton { bottom: 6.5rem; }
     }
   }
   reprendre();
+
+  // Renvoi par le serveur (functions/index.js, commander) : le motif est dit en haut de la page, APRÈS la remise en
+  // place de la commande. Avant, le message « trop de paiements » était aussitôt recouvert par le verdict de la 4G,
+  // et les autres refus ne disaient rien : la page revenait remplie, en boucle (audit du 11/11).
+  var MOTIFS = {
+    trop: ['Plusieurs paiements ont été ouverts sans aboutir depuis cette connexion.', 'Par sécurité, attendez une heure avant de réessayer. Une question ? contact@mapapote.fr'],
+    erreur: ['Le paiement n\'a pas pu s\'ouvrir.', 'Votre commande est toujours remplie : touchez « Payer » pour réessayer. Si cela continue, écrivez-nous à contact@mapapote.fr.'],
+    '4g': ['Nous n\'avons pas pu vérifier la 4G chez votre proche.', 'Indiquez à nouveau sa ville, à l\'étape 1. Le reste de votre commande est gardé.'],
+    relais: ['Le point relais n\'a pas été retenu.', 'Choisissez-le à nouveau, à l\'étape 2. Le reste de votre commande est gardé.']
+  };
+  var motif = q.get('trop') === '1' ? 'trop' : q.get('erreur') === '1' ? 'erreur' : q.get('refus');
+  if (MOTIFS[motif]) {
+    var avis = document.getElementById('avis');
+    avis.textContent = MOTIFS[motif][0];
+    var detailAvis = document.createElement('small');
+    detailAvis.textContent = MOTIFS[motif][1];
+    avis.append(detailAvis);
+    avis.hidden = false;
+    document.getElementById('reprise').hidden = true;
+    // L'étape refusée est à refaire : elle n'est plus cochée, « Payer » y ramène.
+    if (motif === '4g') { proche = null; verdict.hidden = true; demanderRue(null); }
+    if (motif === 'relais') { relais = null; document.getElementById('choisi').hidden = true; }
+    if (motif === '4g' || motif === 'relais') retenir();
+    // Le motif ne reste pas dans l'adresse : une page rechargée ne le répète pas.
+    try { history.replaceState(null, '', location.pathname); } catch (_) {}
+  }
 
   destinataire.addEventListener('input', function () { lienPaiement(); retenir(); });
   champEmail.addEventListener('input', function () { lienPaiement(); retenir(); });

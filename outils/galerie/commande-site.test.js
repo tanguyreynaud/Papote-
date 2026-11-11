@@ -3,9 +3,7 @@
 // ni les renvois du serveur (?trop=1, commande.html nu, erreur 500), ni le retour sur la page après avoir payé
 // n'étaient rejoués. Ici, un faux « commander » et une fausse page Stripe les rejouent ; rien ne part sur internet.
 //
-//   Tests ordinaires : ce qui marche aujourd'hui et doit continuer de marcher.
-//   Tests « todo »   : le comportement VOULU, pas encore en place (audit du 11/11, audit/commande-site-11-11.md).
-//                      Ils échouent sans faire rougir la CI ; retirer « todo » quand le correctif est fait.
+// S1 à S8 : les défauts de l'audit du 11/11 (audit/commande-site-11-11.md), corrigés le même jour.
 //
 // Lancer : node --test outils/galerie/commande-site.test.js   (playwright installé, NODE_PATH si global)
 //          CAPTURES=dossier pour garder une image de chaque constat.
@@ -170,9 +168,11 @@ test('E-mail ou nom incomplet : « Payer » reste éteint et dit ce qui manque',
   await ctx.close();
 });
 
-// ---------- Comportement voulu, pas encore en place (audit du 11/11) ----------
+// ---------- Défauts de l'audit du 11/11, corrigés ----------
 
-test('S1. Après avoir payé, la page de commande ne propose plus de payer la même commande', { todo: 'merci.html doit vider la commande gardée (sessionStorage papote-commande)' }, async () => {
+const MEME_PAGE = 'https://checkout.stripe.test/c/pay/cs_test_audit';
+
+test('S1. Après avoir payé, la page de commande ne propose plus de payer la même commande', async () => {
   const { ctx, page } = await ouvrir('commande.html');
   await remplir(page);
   await page.locator('#payer').tap();
@@ -186,33 +186,40 @@ test('S1. Après avoir payé, la page de commande ne propose plus de payer la m�
   await capture(page, 'S1-apres-paiement');
   assert.ok(!(await visible(page, '#reprise')), '« Votre commande vous attend : il ne reste que le paiement » affiché alors que la commande est payée');
   assert.strictEqual(await page.locator('#payer').getAttribute('aria-disabled'), 'true', '« Payer 60 € » actif pour une commande déjà payée');
+  assert.strictEqual(await page.inputValue('#email'), '', 'page de commande repartie de zéro');
   await ctx.close();
 });
 
-test('S2. Renvoyé par le serveur avec ?trop=1 : le client lit pourquoi le paiement ne s\'ouvre pas', { todo: 'le message est écrasé par le verdict 4G remis en place (reprendre → montrerVerdict)' }, async () => {
-  let n = 0;
-  const { ctx, page } = await ouvrir('commande.html', {
-    // Troisième ouverture en une heure pour le même e-mail : le serveur renvoie vers commande.html?trop=1.
-    commander: (r) => (++n < 3 ? versStripe(r) : r.fulfill({ status: 303, headers: { Location: `${srv.url}/commande.html?trop=1` } })),
+test('S1 bis. « Merci » ouverte sans paiement (pas de ?session) : la commande en cours reste gardée', async () => {
+  const { ctx, page } = await ouvrir('commande.html', { commander: 'attend' });
+  await remplir(page);
+  await page.goto(`${srv.url}/merci.html`);
+  await page.goto(`${srv.url}/commande.html`);
+  await page.waitForTimeout(600);
+  assert.ok(await visible(page, '#reprise'));
+  await ctx.close();
+});
+
+test('S2. Renvoyé par le serveur avec ?trop=1 : le client lit pourquoi le paiement ne s\'ouvre pas', async () => {
+  const { ctx, page, erreurs } = await ouvrir('commande.html', {
+    commander: (r) => r.fulfill({ status: 303, headers: { Location: `${srv.url}/commande.html?trop=1` } }),
   });
   await remplir(page);
-  for (let i = 0; i < 2; i++) {
-    await page.locator('#payer').tap();
-    await page.waitForURL(/checkout\.stripe\.test/);
-    await page.goBack();
-    await page.waitForFunction(() => document.getElementById('payer') && document.getElementById('payer').getAttribute('aria-disabled') === 'false');
-  }
   await page.locator('#payer').tap();
-  await page.waitForURL(/trop=1/);
-  await page.waitForTimeout(800);
+  await page.locator('#avis').waitFor({ state: 'visible' });
   await capture(page, 'S2-trop');
-  assert.match(await texte(page), /Plusieurs paiements ont été ouverts/, 'aucune explication à l\'écran');
+  assert.match(await page.locator('#avis').innerText(), /Plusieurs paiements ont été ouverts[\s\S]*attendez une heure/);
+  assert.ok(!(await visible(page, '#reprise')), '« il ne reste que le paiement » affiché en même temps que le refus');
+  // La commande reste remplie, et le motif ne reste pas dans l'adresse (une page rechargée ne le répète pas).
+  assert.strictEqual(await page.inputValue('#email'), 'marie@exemple.fr');
+  assert.ok(!/trop/.test(page.url()));
+  assert.deepStrictEqual(erreurs, []);
   await ctx.close();
 });
 
-test('S3. Le client revient de la page de paiement alors qu\'il tient la dernière tablette : il peut toujours payer', { todo: 'sa propre réservation (32 min) le renvoie vers « Être prévenu »' }, async () => {
+test('S3. Le client revient de la page de paiement alors qu\'il tient la dernière tablette : il peut toujours payer', async () => {
   let reservee = false;
-  const { ctx, page } = await ouvrir('commande.html', {
+  const { ctx, page, appels } = await ouvrir('commande.html', {
     stock: () => !reservee, // une seule tablette en stock : elle est mise de côté dès que le paiement s'ouvre
     commander: (r) => { reservee = true; return versStripe(r); },
   });
@@ -224,39 +231,66 @@ test('S3. Le client revient de la page de paiement alors qu\'il tient la derniè
   await page.waitForTimeout(1500);
   await capture(page, 'S3-derniere-tablette');
   assert.match(page.url(), /commande\.html/, `renvoyé vers ${page.url().replace(srv.url, '')}`);
+  assert.ok(await visible(page, '#reprise'));
+  // « Payer » repart vers le serveur, qui rouvre la même page (securite.parcours.js) ; même demande, mot pour mot.
+  await page.locator('#payer').tap();
+  await page.waitForURL(/checkout\.stripe\.test/);
+  assert.strictEqual(page.url(), MEME_PAGE);
+  assert.strictEqual(appels.length, 2);
+  assert.strictEqual(appels[1], appels[0], 'la demande rejouée doit être identique pour retrouver la même page de paiement');
+  // L'accueil non plus ne lui dit pas « Être prévenu » pendant son paiement.
+  await page.goto(`${srv.url}/accueil.html`);
+  await page.waitForTimeout(800);
+  assert.strictEqual((await page.locator('.hero .js-commander').innerText()).trim(), 'Commander');
   await ctx.close();
 });
 
-test('S4. Le serveur refuse d\'ouvrir le paiement (renvoi vers commande.html) : la page dit pourquoi', { todo: 'aucun message : la page revient remplie, « Payer » actif, en boucle' }, async () => {
+test('S3 bis. Plus de tablette et aucun paiement en cours : toujours renvoyé vers « Être prévenu »', async () => {
+  const { ctx, page } = await ouvrir('commande.html', { stock: () => false });
+  await page.waitForURL(/complet=1/);
+  assert.strictEqual((await page.locator('.hero .js-commander').innerText()).trim(), 'Être prévenu');
+  await ctx.close();
+});
+
+for (const [motif, attendu, etape] of [['4g', /pas pu vérifier la 4G/, '#ok1'], ['relais', /point relais n'a pas été retenu/, '#ok2']]) {
+  test(`S4. Le serveur refuse d'ouvrir le paiement (?refus=${motif}) : la page dit pourquoi et fait refaire l'étape`, async () => {
+    const { ctx, page, erreurs } = await ouvrir('commande.html', {
+      commander: (r) => r.fulfill({ status: 303, headers: { Location: `${srv.url}/commande.html?refus=${motif}` } }),
+    });
+    await remplir(page);
+    await page.locator('#payer').tap();
+    await page.locator('#avis').waitFor({ state: 'visible' });
+    await capture(page, `S4-refus-${motif}`);
+    assert.match(await page.locator('#avis').innerText(), attendu);
+    assert.ok(!(await visible(page, '#reprise')));
+    assert.ok(!(await visible(page, etape)), 'l\'étape refusée est encore cochée');
+    assert.strictEqual(await page.locator('#payer').getAttribute('aria-disabled'), 'true', '« Payer » actif : le client repartirait en boucle');
+    // Le reste est gardé.
+    assert.strictEqual(await page.inputValue('#destinataire'), 'Marie Dupont');
+    assert.deepStrictEqual(erreurs, []);
+    await ctx.close();
+  });
+}
+
+test('S5. Le paiement ne s\'ouvre pas (erreur du serveur) : le client revient sur sa commande remplie, « Payer » prêt', async () => {
+  let n = 0;
   const { ctx, page } = await ouvrir('commande.html', {
-    // commander n'a pas pu revérifier la 4G de la commune (contour demandé à data.geopf.fr) : renvoi sans motif.
-    commander: (r) => r.fulfill({ status: 303, headers: { Location: `${srv.url}/commande.html` } }),
+    commander: (r) => (++n === 1 ? r.fulfill({ status: 303, headers: { Location: `${srv.url}/commande.html?erreur=1` } }) : versStripe(r)),
   });
   await remplir(page);
   await page.locator('#payer').tap();
-  await page.waitForURL((u) => !u.search);
-  await page.waitForTimeout(1000);
-  await capture(page, 'S4-renvoi-muet');
-  // Un message d'erreur visible (cadre rouge de l'étape 1, ou ligne de la barre du bas), pas seulement « tout est déjà rempli ».
-  const dit = (await visible(page, '.verdict.non')) || (await visible(page, '#manque'));
-  assert.ok(dit, 'la page revient remplie, « Payer » actif, sans un mot sur le refus');
-  await ctx.close();
-});
-
-test('S5. Le paiement ne s\'ouvre pas (erreur du serveur) : le client reste sur une page Papote avec un bouton', { todo: 'texte brut sur fond blanc à l\'adresse cloudfunctions.net, sans bouton' }, async () => {
-  const { ctx, page } = await ouvrir('commande.html', {
-    commander: (r) => r.fulfill({ status: 500, contentType: 'text/html; charset=utf-8', body: "Le paiement n'a pas pu s'ouvrir. Réessayez dans un instant." }),
-  });
-  await remplir(page);
+  await page.locator('#avis').waitFor({ state: 'visible' });
+  await capture(page, 'S5-erreur');
+  assert.match(page.url(), /127\.0\.0\.1/);
+  assert.match(await page.locator('#avis').innerText(), /Le paiement n'a pas pu s'ouvrir[\s\S]*« Payer »/);
+  assert.strictEqual(await page.locator('#payer').innerText(), 'Payer 60 €');
+  // Deuxième essai : le paiement s'ouvre.
   await page.locator('#payer').tap();
-  await page.waitForTimeout(1200);
-  await capture(page, 'S5-erreur-500');
-  assert.match(page.url(), /127\.0\.0\.1/, `le client est laissé sur ${new URL(page.url()).host}`);
-  assert.ok(await page.locator('a, button').count() > 0, 'aucun bouton pour revenir');
+  await page.waitForURL(/checkout\.stripe\.test/);
   await ctx.close();
 });
 
-test('S6. Tous les liens et boutons de la page se touchent du doigt (44 px de haut au moins)', { todo: '« Changer de ville » fait 25 px de haut, le logo 32 px' }, async () => {
+test('S6. Tous les liens et boutons de la page se touchent du doigt (44 px de haut au moins)', async () => {
   const { ctx, page } = await ouvrir('commande.html', { commander: 'attend' });
   // Brousse : la 4G ne passe pas partout, la rue est demandée et « Changer de ville » apparaît.
   await page.fill('#adresse', 'lyon');
@@ -270,7 +304,7 @@ test('S6. Tous les liens et boutons de la page se touchent du doigt (44 px de ha
   await ctx.close();
 });
 
-test('S7. La rue est demandée : la barre du bas dit « la rue », pas « la ville »', { todo: 'demanderRue ne rafraîchit pas le message de la barre' }, async () => {
+test('S7. La rue est demandée : la barre du bas dit « la rue », pas « la ville »', async () => {
   const { ctx, page } = await ouvrir('commande.html', { commander: 'attend' });
   await page.fill('#adresse', 'lyon');
   await page.locator('#suggestions .point').nth(1).click();
@@ -280,10 +314,12 @@ test('S7. La rue est demandée : la barre du bas dit « la rue », pas « la vil
   await ctx.close();
 });
 
-test('S8. Petit téléphone (320 px) : le prix de la barre du bas n\'est pas coupé au milieu d\'un mot', { todo: '« aujourd\'h / ui » : la colonne du prix fait 3 lettres de large' }, async () => {
+test('S8. Petit téléphone (320 px) : le prix de la barre du bas n\'est pas coupé au milieu d\'un mot', async () => {
   const { ctx, page } = await ouvrir('commande.html', { taille: TELEPHONES[0], commander: 'attend' });
   const b = await page.locator('.barre-in b').boundingBox();
   const ligne = await page.evaluate(() => parseFloat(getComputedStyle(document.querySelector('.barre-in b')).lineHeight));
-  assert.ok(b.height <= ligne * 2 + 2, `« 60 € aujourd'hui » tient sur ${Math.round(b.height / ligne)} lignes`);
+  assert.ok(b.height <= ligne + 2, `« 60 € aujourd'hui » tient sur ${Math.round(b.height / ligne)} lignes`);
+  await page.locator('#payer').tap();
+  await capture(page, 'S8-barre-320');
   await ctx.close();
 });

@@ -45,6 +45,10 @@ async function tropLarge(page) {
   }).catch(() => '');
 }
 
+// Commande déjà remplie, gardée par le navigateur (retour depuis la page de paiement).
+const SESSION_REMPLIE = { 'papote-commande': { t: new Date('2026-10-26T10:10:00+01:00').getTime(), proche: { adresse: 'Lyon', lat: 45.758, lon: 4.835, cp: '69001', niveau: 'commune', eligible: true, insee: '69123' }, cp: '69001', pays: 'fr',
+      relais: { id: 102, name: 'Pressing des Terreaux', adresse: '3 Place des Terreaux', postal_code: '69001', city: 'Lyon' }, nom: 'Tanguy Reynaud', email: 'tanguy@exemple.fr', accord: true } };
+
 const pause = (p, ms = 700) => p.waitForTimeout(ms);
 // Ville du proche tapée, puis la n-ième proposition choisie (0 : Lyon, bien couverte ; 1 : Brousse, rue demandée),
 // puis, pour Brousse, la rue r (0 : 4G limitée ; 1 : bonne).
@@ -171,6 +175,9 @@ const SCENES = [
     note: 'Ce qui était rempli est gardé une heure dans le navigateur.',
     session: { 'papote-commande': { t: new Date('2026-10-26T10:10:00+01:00').getTime(), proche: { adresse: 'Lyon', lat: 45.758, lon: 4.835, cp: '69001', niveau: 'commune', eligible: true, insee: '69123' }, cp: '69001', pays: 'fr',
       relais: { id: 102, name: 'Pressing des Terreaux', adresse: '3 Place des Terreaux', postal_code: '69001', city: 'Lyon' }, nom: 'Tanguy Reynaud', email: 'tanguy@exemple.fr', accord: true } } },
+  // Renvois du serveur avec leur motif (audit du 11/11) : dits en haut de la page, la commande reste remplie.
+  ...[['?erreur=1', 'le paiement n’a pas pu s’ouvrir'], ['?trop=1', 'trop de paiements ouverts sans aboutir'], ['?refus=4g', 'la 4G n’a pas pu être revérifiée'], ['?refus=relais', 'le point relais n’a pas été retenu']]
+    .map(([q, quoi]) => ({ groupe: 'Commande', titre: `Commande : renvoyée par le serveur, ${quoi}`, fichier: 'commande.html' + q, plein: true, session: SESSION_REMPLIE })),
   { groupe: 'Commande', titre: 'Commande : point relais et coordonnées remplis, « Payer » actif', fichier: 'commande.html', plein: true, faire: commandeRemplie },
   { groupe: 'Commande', titre: 'Commande : « Payer » touché, « Un instant… »', fichier: 'commande.html', note: 'Le paiement s’ouvre chez Stripe (coupé ici) : la barre montre l’attente.', faire: async (p) => {
     await commandeRemplie(p);

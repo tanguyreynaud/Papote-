@@ -113,10 +113,13 @@ function partCouverte(geometrie) {
 
 // { part, eligible, trimestre } pour une commune (code INSEE), ou null si la commune est introuvable.
 const communes = new Map();
+const DELAI_CONTOUR_MS = 5000;
 async function verifierCommune(insee, { chercher = fetch } = {}) {
   if (typeof insee !== 'string' || !/^(\d{5}|2[AB]\d{3})$/.test(insee)) return null;
   if (!communes.has(insee)) {
-    const r = await chercher(CONTOURS + encodeURIComponent(`code_insee='${insee}'`));
+    // Délai maximum (audit du 11/11) : sans lui, un service de contours qui ne répond pas laissait le client
+    // devant « Un instant… » jusqu'à l'arrêt de la fonction.
+    const r = await chercher(CONTOURS + encodeURIComponent(`code_insee='${insee}'`), { signal: AbortSignal.timeout(DELAI_CONTOUR_MS) });
     if (!r.ok) throw new Error(`Contour de la commune ${insee} : ${r.status}`);
     const f = ((await r.json()).features || [])[0];
     communes.set(insee, f ? Math.floor(partCouverte(f.geometry) * 100) / 100 : null);
@@ -133,8 +136,12 @@ async function procheDepuisRequete(q, options) {
   const c = coordonnees(q.plat, q.plon);
   if (!adresse || !c) return null;
   if (q.pinsee) {
-    const v = await verifierCommune(String(q.pinsee), options).catch(() => null);
-    return v && { adresse, lat: c.lat, lon: c.lon, niveau: `commune:${Math.round(v.part * 100)}`, eligible: v.eligible };
+    // Contours indisponibles au moment de payer (panne ou lenteur de data.geopf.fr) : la page a déjà vérifié la
+    // commune quelques minutes plus tôt ; ici on vérifie au moins le point de la ville, au lieu de refuser tous les
+    // paiements tant que ce service extérieur est en panne (audit du 11/11).
+    let panne = false;
+    const v = await verifierCommune(String(q.pinsee), options).catch(() => { panne = true; return null; });
+    if (!panne) return v && { adresse, lat: c.lat, lon: c.lon, niveau: `commune:${Math.round(v.part * 100)}`, eligible: v.eligible };
   }
   const { niveau, eligible } = verifier(c.lat, c.lon);
   return { adresse, lat: c.lat, lon: c.lon, niveau, eligible };
