@@ -96,7 +96,7 @@ test('Retour : chaque écran ramène à celui d\'avant, une fenêtre se ferme sa
 test('App Android : retour depuis l\'accueil demande « Voulez-vous quitter Papote ? », dans la page', async () => {
   const lea = await banc.telephone('Léa');
   // Ouverte par l'app Android (Ouverture.java ajoute ?quitter=1 ; Chrome donne son referrer).
-  await g.ouvrirParApp(lea, '?quitter=1');
+  await g.ouvrirParApp(lea, '?quitter=1&cle=c1e5ecrete');
   await g.familleInstallee(lea, { email: 'lea.retour@exemple.fr', prenom: 'Léa' });
 
   // Un premier toucher sur l'accueil pose l'étape « sortie » sous l'accueil.
@@ -132,5 +132,6 @@ test('App Android : retour depuis l\'accueil demande « Voulez-vous quitter Papo
   cdp.on('Page.frameRequestedNavigation', (e) => demandes.push(e.url));
   await question(lea).locator('button', { hasText: 'Quitter' }).click();
   for (let i = 0; i < 50 && !demandes.length; i++) await lea.page.waitForTimeout(100);
-  assert.deepStrictEqual(demandes, ['intent://quitter#Intent;scheme=papote;package=fr.mapapote.famille;end']);
+  // Avec la clé du téléphone (Lien.java) : sans elle, l'app ne ferme rien (un lien d'une autre page, audit A2).
+  assert.deepStrictEqual(demandes, ['intent://quitter?cle=c1e5ecrete#Intent;scheme=papote;package=fr.mapapote.famille;end']);
 });

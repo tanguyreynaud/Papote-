@@ -22,7 +22,7 @@ async function espionnerNavigation(t) {
 test('App Android : « Appel vidéo » passe à l\'écran d\'appel de l\'app, qui se connecte et appelle tout seul', async () => {
   const julie = await banc.telephone('Julie');
   // Ouverte par l'app Android (Ouverture.java ajoute ?quitter=1 ; Chrome donne son referrer).
-  await g.ouvrirParApp(julie, '?quitter=1');
+  await g.ouvrirParApp(julie, '?quitter=1&cle=c1e5ecrete');
   // Le jeton est demandé dès l'arrivée sur l'accueil.
   const jeton = julie.page.waitForResponse((r) => r.url().includes('jetonAppelNatif'), { timeout: 60_000 });
   const { fid, tab } = await g.familleInstallee(julie, { email: 'julie.android@exemple.fr', prenom: 'Julie' });
@@ -42,6 +42,7 @@ test('App Android : « Appel vidéo » passe à l\'écran d\'appel de l\'app, qu
   const params = new URL(lien.replace(/^intent:/, 'https:').replace(/#Intent.*$/, '')).searchParams;
   assert.strictEqual(params.get('u'), `/?appeler=video&famille=${fid}`);
   assert.ok(params.get('connexion'), 'jeton de connexion');
+  assert.strictEqual(params.get('cle'), 'c1e5ecrete', 'clé du téléphone : sans elle l\'app n\'ouvre rien (audit A2)');
   assert.ok(await julie.page.locator('#call').isHidden(), 'pas d\'appel dans Chrome');
   assert.strictEqual((await g.liste(`families/${fid}/calls`)).length, 0);
 

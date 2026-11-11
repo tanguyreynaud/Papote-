@@ -354,6 +354,11 @@ document.addEventListener('click', () => {
   history.pushState(null, '');
 }, true);
 
+/** Clé de ce téléphone pour les liens vers l'app Android (vide pour une app d'avant la clé). */
+function cleApp() {
+  try { return sessionStorage.getItem('papote.cle') || ''; } catch (e) { return ''; }
+}
+
 function dansAppAndroid() {
   try { return sessionStorage.getItem('papote.app') === '1'; } catch (e) { return false; }
 }
@@ -375,7 +380,7 @@ function peutFermer() {
 }
 
 function quitterApp(surSortie) {
-  if (peutFermer()) { location.href = 'intent://quitter#Intent;scheme=papote;package=fr.mapapote.famille;end'; return; }
+  if (peutFermer()) { location.href = `intent://quitter${cleApp() ? `?cle=${encodeURIComponent(cleApp())}` : ''}#Intent;scheme=papote;package=fr.mapapote.famille;end`; return; }
   // Ancienne app Android, qui ne sait pas se fermer : un second retour quitte.
   if (surSortie) notice('Appuyez encore une fois sur retour pour quitter Papote.');
 }
@@ -2008,7 +2013,7 @@ setInterval(chargerJetonNatif, 50 * 60_000);
 /** Passe l'appel à l'écran d'appel de l'app Android ; false s'il doit rester dans cette page. */
 function appelDansApp(chemin) {
   if (!ouvertParAppAndroid() || !jetonNatif || Date.now() - jetonNatif.le > 55 * 60_000) return false;
-  location.href = `intent://appel?u=${encodeURIComponent(chemin)}&connexion=${encodeURIComponent(jetonNatif.connexion)}`
+  location.href = `intent://appel?u=${encodeURIComponent(chemin)}&connexion=${encodeURIComponent(jetonNatif.connexion)}${cleApp() ? `&cle=${encodeURIComponent(cleApp())}` : ''}`
     + '#Intent;scheme=papote;package=fr.mapapote.famille;end';
   return true;
 }
@@ -5467,6 +5472,9 @@ async function start() {
     try { sessionStorage.setItem('papote.app', '1'); } catch (e) { /* rien */ }
     // L'app Android sait se fermer (« Voulez-vous quitter Papote ? » puis « Quitter »).
     if (params.get('quitter')) try { sessionStorage.setItem('papote.quitter', '1'); } catch (e) { /* rien */ }
+    // Clé de ce téléphone (app Android, Lien.java) : remise dans les liens papote://appel et papote://quitter,
+    // sans elle l'app ne fait rien (un lien piégé d'une autre page ne peut ni appeler ni fermer, audit A2).
+    if (params.get('cle')) try { sessionStorage.setItem('papote.cle', params.get('cle')); } catch (e) { /* rien */ }
     try { sessionStorage.setItem('papote.pause', params.get('pause') === '1' ? '1' : '0'); } catch (e) { /* rien */ }
   }
   // Arrivé par le lien ou le QR code d'invitation : le code est gardé le temps de se connecter.
