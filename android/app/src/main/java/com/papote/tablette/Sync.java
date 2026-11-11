@@ -416,8 +416,10 @@ final class Sync {
             // Pendant l'appairage, on regarde souvent si quelqu'un a tapé le code. Hors ligne, Android
             // prévient du retour d'internet (watchNetwork) ; un essai par minute reste en secours.
             boolean offline = "offline".equals(lastState);
-            handler.postDelayed(this, pairingActive() ? 4_000
-                    : realtime ? (offline ? 60_000 : nuit() ? Math.min(NIGHT_POLL_MS, msAvantLeJour()) : tourDuJour()) : POLL_MS);
+            long delai = pairingActive() ? 4_000
+                    : realtime ? (offline ? 60_000 : nuit() ? Math.min(NIGHT_POLL_MS, msAvantLeJour()) : tourDuJour()) : POLL_MS;
+            // Jamais au-delà de l'échéance du signal « en ligne » (batterie à jour toutes les 30 min).
+            handler.postDelayed(this, Math.min(delai, avantSignal()));
         }
     };
 
@@ -1049,6 +1051,23 @@ final class Sync {
         return Push.pret(context) ? PUSH_POLL_MS : REALTIME_POLL_MS;
     }
 
+    /** Écart minimal entre deux signaux « en ligne » (batterie, carte SIM, version). */
+    private long intervalleSignal() {
+        return (nuit() ? NIGHT_POLL_MS : Push.pret(context) ? PUSH_POLL_MS : HEARTBEAT_MS) - 60_000;
+    }
+
+    /**
+     * Temps jusqu'au prochain signal « en ligne » dû. Un tour avancé (réveil par le serveur, retour au
+     * premier plan…) repousse le suivant de 30 min : s'il tombait juste avant l'échéance, le signal
+     * était sauté et la batterie n'était envoyée qu'une fois par heure (T-003, 11/11 : 17 h 12 puis 18 h 11).
+     */
+    private long avantSignal() {
+        Long last = lastHeartbeat.get("lastOnline");
+        // Page figée : le signal est retenu exprès, pas de tour chaque minute pour rien.
+        if (last == null || pageMorteNotee) return Long.MAX_VALUE;
+        return Math.max(60_000, last + intervalleSignal() - System.currentTimeMillis() + 5_000);
+    }
+
     /** Note sur la fiche de la tablette qu'elle est en ligne, ou que Mamie l'a touchée. */
     private void heartbeat(String fid, String field) {
         if ("lastOnline".equals(field)) journalUrgent(fid);
@@ -1057,7 +1076,7 @@ final class Sync {
         // « En ligne » toutes les 10 min ; « vue » et « touchée » à la minute près, pour que la famille
         // voie tout de suite que Mamie a regardé (écritures rares : seulement quand elle est là).
         // Petite marge : le tour de synchronisation arrive quelques millisecondes après le précédent.
-        long every = "lastOnline".equals(field) ? (nuit() ? NIGHT_POLL_MS : Push.pret(context) ? PUSH_POLL_MS : HEARTBEAT_MS) - 60_000 : 60_000;
+        long every = "lastOnline".equals(field) ? intervalleSignal() : 60_000;
         if (fid == null || (last != null && now - last < every)) return;
         boolean enLigne = "lastOnline".equals(field);
         // Page figée à l'écran (chien de garde) : pas de « en ligne », pour que l'alerte « ne répond
