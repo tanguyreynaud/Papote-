@@ -2995,9 +2995,10 @@ function actionsTablette(t, c) {
     // Le colis se coche sur la page de la commande (ce qui manque y est prélevé au client).
     principal = ['Tablette revenue', () => { location.hash = `#commande/${encodeURIComponent(c.id)}`; }];
   } else if (t.etat === 'revenue') {
-    principal = ['Vérifiée, remettre en stock', changer('en-stock', `${nom} est vérifiée et prête à repartir ? Elle redevient libre dans le stock.`, { commande: null })];
+    // Jamais de retour au stock sans remise à zéro (audit du départ, 11/11) : le serveur la refuse sans cette confirmation.
+    principal = ['Remise à zéro faite, remettre en stock', changer('en-stock', `Avez-vous remis ${nom} à zéro (réglages d'usine) et vérifié qu'elle est prête à repartir ? Sans remise à zéro, les photos de l'ancienne famille restent dessus. Elle redevient libre dans le stock.`, { commande: null, remiseAZero: true })];
   } else if (t.etat === 'a-reparer') {
-    principal = ['Réparée, remettre en stock', changer('en-stock', `${nom} est réparée ? Elle redevient libre dans le stock.`, { commande: null })];
+    principal = ['Réparée et remise à zéro, remettre en stock', changer('en-stock', `${nom} est réparée et remise à zéro (réglages d'usine) ? Elle redevient libre dans le stock.`, { commande: null, remiseAZero: true })];
   }
   const jamaisServi = t.etat === 'en-stock' && !t.commande && (t.historique || []).length <= 1;
   const peut = (etat) => t.etat !== etat && transitionPermise(t.etat, etat);
