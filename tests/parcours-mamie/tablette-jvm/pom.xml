@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  La vraie synchronisation de la tablette (Sync.java et ses voisines, prises telles quelles sur la branche de la
+  tablette) lancée sur l'ordinateur, sans tablette ni kit Android :
+    android-imite/  le peu d'Android dont elle a besoin (journal, fils de travail, horloge, fiche de l'appareil)
+    stubs/          les bibliothèques Google absentes de Maven Central (notifications push), vides
+    pont/           le pont avec le banc Node (PontTablette) et le réseau renvoyé vers les émulateurs
+  Aucun fichier de l'appli n'est modifié. Le reste d'Android (classes seulement, pour compiler) vient de
+  org.robolectric:android-all, sur Maven Central.
+  Les sources de la tablette sont attendues dans ${tablette.sources} (voir ../preparer.js).
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>fr.mapapote</groupId>
+  <artifactId>tablette-jvm</artifactId>
+  <version>1</version>
+  <packaging>jar</packaging>
+
+  <properties>
+    <maven.compiler.release>17</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <tablette.sources>${project.basedir}/../.tablette/android/app/src/main/java</tablette.sources>
+    <android.all>16-robolectric-13921718</android.all>
+  </properties>
+
+  <dependencies>
+    <!-- Android pour compiler (les classes sont remplacées à l'exécution par celles de Robolectric). -->
+    <dependency>
+      <groupId>org.robolectric</groupId>
+      <artifactId>android-all</artifactId>
+      <version>${android.all}</version>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.google.zxing</groupId>
+      <artifactId>core</artifactId>
+      <version>3.5.3</version>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>build-helper-maven-plugin</artifactId>
+        <version>3.6.0</version>
+        <executions>
+          <execution>
+            <id>sources-tablette</id>
+            <phase>generate-sources</phase>
+            <goals><goal>add-source</goal></goals>
+            <configuration>
+              <sources>
+                <source>${tablette.sources}</source>
+                <source>${project.basedir}/stubs</source>
+                <source>${project.basedir}/android-imite</source>
+                <source>${project.basedir}/pont</source>
+              </sources>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.13.0</version>
+        <configuration>
+          <showWarnings>false</showWarnings>
+          <compilerArgs><arg>-Xlint:none</arg></compilerArgs>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>
