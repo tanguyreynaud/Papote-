@@ -586,6 +586,7 @@ test('à faire : l\'argent d\'abord (familles impayées ou suspendues, prélève
       { id: 'f1', nom: 'Mamie Emma', statut: 'impaye', graceJusqua: maintenant + 3 * 864e5 },
       { id: 'f2', nom: 'Papi Jean', statut: 'suspendu', suspenduLe: j(12) },
       { id: 'f3', nom: 'Mamie B', statut: 'suspendu', suspenduLe: j(31) },
+      { id: 'f4', nom: 'Papi C', statut: 'suspendu', suspenduLe: j(40), resiliationLe: j(-5) },
       { id: 'f4', nom: 'Actif', statut: 'actif' },
     ],
     commandes: [
@@ -603,7 +604,8 @@ test('à faire : l\'argent d\'abord (familles impayées ou suspendues, prélève
   assert.deepStrictEqual(liste, [
     '1 famille en retard de paiement : Mamie Emma (pause le 30 octobre)',
     'Famille Papi Jean suspendue pour impayé depuis 12 jours',
-    'Famille Mamie B suspendue pour impayé depuis 31 jours : demander le retour de la tablette (« Arrêter l\'abonnement » sur la commande)',
+    'Famille Mamie B suspendue pour impayé depuis 31 jours : arrêt automatique de l\'abonnement à 9 h (sinon « Arrêter l\'abonnement » sur la commande)',
+    'Famille Papi C suspendue pour impayé depuis 40 jours : abonnement arrêté par Papote, la tablette doit revenir',
     '1 dernier mois refusé par la banque, à relancer depuis Stripe',
     '1 prélèvement du matériel non rendu refusé, à relancer depuis Stripe',
     '1 paiement SEPA en attente depuis plus de 10 jours',

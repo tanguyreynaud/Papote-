@@ -288,3 +288,23 @@ test('SEPA : rien pour le SEPA, sans premier prélèvement, en retard, en pause,
   assert.strictEqual(a.sepaPropose({ paiement: carte }, tard), false);
   assert.strictEqual(a.sepaPropose(null, tard), false);
 });
+
+test('arrêt automatique (Tanguy, 11/11) : suspendue depuis 30 jours, pas encore arrêtée, avec un abonnement Stripe', () => {
+  const base = { statut: 'suspendu', suspenduLe: T0 - 31 * JOUR, stripeSubscriptionId: 'sub_1' };
+  assert.strictEqual(a.arretAutomatiqueDu(base, T0), true);
+  assert.strictEqual(a.arretAutomatiqueDu({ ...base, suspenduLe: T0 - 29 * JOUR }, T0), false);
+  assert.strictEqual(a.arretAutomatiqueDu({ ...base, resiliationLe: T0 + 10 * JOUR }, T0), false, 'déjà arrêtée');
+  assert.strictEqual(a.arretAutomatiqueDu({ ...base, stripeSubscriptionId: null }, T0), false);
+  assert.strictEqual(a.arretAutomatiqueDu({ ...base, statut: 'offert' }, T0), false);
+});
+
+test('remplacement de la tablette (Tanguy, 11/11) : panne gratuite, casse 130 €, perte 140 € ou 150 €, offerte jamais', () => {
+  assert.strictEqual(a.montantRemplacement('panne', {}), 0);
+  assert.strictEqual(a.montantRemplacement('casse', {}), 13000);
+  assert.strictEqual(a.montantRemplacement('perte', {}), 14000);
+  assert.strictEqual(a.montantRemplacement('perte', { enceinteFournie: true }), 15000);
+  assert.strictEqual(a.montantRemplacement('casse', { offerte: true }), 0);
+  assert.strictEqual(a.montantRemplacement('autre', {}), null);
+  assert.strictEqual(a.montantRemplacement(undefined, {}), null);
+  assert.strictEqual(a.descriptionRemplacement('casse'), 'Papote : tablette cassée, remplacée');
+});

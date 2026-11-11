@@ -721,17 +721,31 @@ exports.resilierAbonnement = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE
   const { fid } = request.data || {};
   const fam = await familleGeree(fid, request);
   const id = await abonnementVise(fid, fam, request);
+  return arreterAbonnement({
+    fid, fam, id,
+    // Arrêté depuis l'admin (impayé, abus…) : le client ne peut pas le reprendre seul (Tanguy, 30/10).
+    parPapote: request.auth.token.admin === true && (request.data || {}).par === 'papote',
+    admin: request.auth.token.admin === true,
+    // Décès du proche (audit « mauvais jours », 5/11) : même arrêt (fin du mois, CGV), mais des e-mails de deuil
+    // (resiliationEnregistree, retourTablette, rappelRestitution) et plus aucune nouvelle de Papote à cette adresse.
+    deces: (request.data || {}).motif === 'deces',
+  });
+});
+
+// Arrêt de l'abonnement id de la famille fid à la fin du mois en cours : depuis l'appli, l'admin, ou tout seul après
+// 30 jours de pause pour impayé (arretsImpayes, impaye : true).
+async function arreterAbonnement({ fid, fam, id, parPapote, admin = false, deces = false, impaye = false }) {
   const abo = await stripe().subscriptions.retrieve(id);
   const maintenant = Date.now();
   const le = regles.premierPrelevementDe(abo, maintenant) || regles.dateResiliation(finDePeriodeMs(abo), maintenant);
-  // Arrêté depuis l'admin (impayé, abus…) : le client ne peut pas le reprendre seul (Tanguy, 30/10).
-  const parPapote = request.auth.token.admin === true && (request.data || {}).par === 'papote';
   // La famille qui touche encore « Résilier » (vieil onglet) après un arrêt de Papote ne le change pas en arrêt
   // « client », qu'elle pourrait ensuite reprendre seule.
-  const resteParPapote = request.auth.token.admin !== true && abo.cancel_at && abo.metadata.arretPar === 'papote';
-  // Décès du proche (audit « mauvais jours », 5/11) : même arrêt (fin du mois, CGV), mais des e-mails de deuil
-  // (resiliationEnregistree, retourTablette, rappelRestitution) et plus aucune nouvelle de Papote à cette adresse.
-  const deces = (request.data || {}).motif === 'deces';
+  const resteParPapote = !admin && abo.cancel_at && abo.metadata.arretPar === 'papote';
+  // Déjà arrêté chez Stripe (fin des relances de paiement) : la fiche de la famille est seulement remise à jour.
+  if (impaye && abo.status === 'canceled') {
+    await appliquer(fid, id);
+    return { le: maintenant };
+  }
   await stripe().subscriptions.update(id, {
     cancel_at: Math.ceil(le / 1000),
     proration_behavior: 'none',
@@ -741,10 +755,29 @@ exports.resilierAbonnement = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE
   await appliquer(fid, id);
   // Deux responsables (ou deux onglets) qui demandent l'arrêt en même temps : un seul e-mail.
   if (await premiereDemande(id, `arret-${Math.ceil(le / 1000)}`)) {
-    await mailArret(id, fam, (infos) => mail.resiliationEnregistree({ ...infos, le, parPapote, deces }));
+    const montant = impaye ? regles.penaliteRestitution((await db.doc(`commandes/${id}`).get()).data() || {}) : null;
+    await mailArret(id, fam, (infos) => mail.resiliationEnregistree({ ...infos, le, parPapote, deces, impaye, montant }));
   }
   return { le };
-});
+}
+
+// Famille suspendue pour impayé depuis 30 jours (Tanguy, 11/11) : l'abonnement est arrêté par Papote, comme
+// « Arrêter l'abonnement » dans l'admin. Le retour de la tablette suit ensuite son cours (rappel, 140 € à J+30).
+async function arretsImpayes() {
+  const maintenant = Date.now();
+  const suspendues = await db.collection('families').where('abonnement.statut', '==', 'suspendu').get();
+  for (const snap of suspendues.docs) {
+    if (!regles.arretAutomatiqueDu(snap.get('abonnement'), maintenant)) continue;
+    const id = snap.get('abonnement.stripeSubscriptionId');
+    try {
+      const { le } = await arreterAbonnement({ fid: snap.id, fam: snap.data(), id, parPapote: true, impaye: true });
+      logger.info(`Famille ${snap.id} : suspendue depuis 30 jours, abonnement arrêté le ${new Date(le).toISOString()}.`);
+    } catch (e) {
+      // Reste dans « À faire » (suspendue depuis 30 jours) : nouvel essai le lendemain.
+      logger.error(`Famille ${snap.id} : arrêt automatique pour impayé impossible`, e.message);
+    }
+  }
+}
 
 // Décès noté sur la commande (e-mails de retour adaptés) ; l'adresse de la commande ne reçoit plus de nouvelles.
 async function noterDeces(commandeId) {
@@ -1836,6 +1869,7 @@ async function relancesSepa() {
 
 // Tablette incluse non rendue dans les 30 jours : le matériel prêté (abonnement.js, penaliteRestitution) prélevé sur le compte de l'abonnement.
 async function restitutions() {
+  await arretsImpayes();
   const maintenant = Date.now();
   const attendues = await db.collection('commandes').where('restitution.statut', '==', 'attendue').get();
   for (const snap of attendues.docs) {
@@ -1915,30 +1949,21 @@ async function restitutions() {
         'restitution.majLe': FieldValue.serverTimestamp(),
       });
       logger.warn(`Commande ${snap.id} : prélèvement de la tablette non rendue refusé`, e.message);
+      // Mise en demeure au client (Tanguy, 11/11) : rendre la tablette ou régler sous 8 jours.
+      if (snap.get('email')) {
+        await envoyerMail(snap.get('email'), mail.miseEnDemeure({
+          nom: snap.get('nom'), montant: regles.penaliteRestitution(snap.data()),
+          impaye: (snap.get('dernierMois') || {}).statut === 'aucun' && /impayé/.test((snap.get('dernierMois') || {}).motif || ''),
+        })).catch((e2) => logger.error(`Commande ${snap.id} : mise en demeure non partie`, e2.message));
+      }
       await prevenirPapote(`Tablette non rendue, prélèvement refusé : ${snap.get('nom') || snap.get('email') || snap.id}`, snap,
         `La tablette n'a pas été rendue avant le ${mail.dateEnClair(r.avant.toMillis())} et le prélèvement de ${mail.euros(regles.penaliteRestitution(snap.data()))} a été refusé (${e.message}). À relancer à la main depuis Stripe, ou à voir avec le client.`);
     }
   }
 }
 
-// Prélève du matériel non rendu sur la carte de l'abonnement. La description contient « non rendu » :
-// gestion.js en fait une facture chaque nuit.
-async function preleverMateriel(abonnement, montant, description, cle) {
-  const abo = await stripe().subscriptions.retrieve(abonnement, { expand: ['customer'] });
-  const moyen = abo.default_payment_method
-    || (abo.customer.invoice_settings && abo.customer.invoice_settings.default_payment_method);
-  if (!moyen) throw new Error('Aucun moyen de paiement enregistré');
-  return stripe().paymentIntents.create({
-    amount: montant,
-    currency: 'eur',
-    customer: abo.customer.id,
-    payment_method: typeof moyen === 'string' ? moyen : moyen.id,
-    off_session: true,
-    confirm: true,
-    description,
-    metadata: { commande: abonnement },
-  }, { idempotencyKey: cle });
-}
+// Prélèvement du matériel sur le moyen de paiement de l'abonnement : gestion.js (aussi pour un remplacement payant).
+const preleverMateriel = (...args) => gestion.preleverMateriel(...args);
 
 // Le tableau de bord admin marque la tablette incluse comme revenue.
 // Même règle que isAdmin() des règles Firestore et que gestion.js : le badge admin seulement.

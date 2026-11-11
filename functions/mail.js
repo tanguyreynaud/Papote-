@@ -593,7 +593,19 @@ function retourTablette({ nom, avant, retractation, montant, deces }) {
 
 // Arrêt demandé (par le client dans l'appli, ou par Papote depuis l'admin) : confirmation écrite, avec la date
 // d'arrêt et la suite (la loi demande de confirmer une résiliation sur un support durable).
-function resiliationEnregistree({ nom, famille, le, tablettePretee, parPapote, deces }) {
+function resiliationEnregistree({ nom, famille, le, tablettePretee, parPapote, deces, impaye, montant }) {
+  // Arrêt automatique après 30 jours de pause pour impayé (Tanguy, 11/11) : plus rien ne marche déjà, pas de
+  // dernier mois, et le retour de la tablette est à faire.
+  if (impaye) {
+    return message('Papote arrête votre abonnement', [
+      bonjour(nom),
+      `Le paiement de l'abonnement Papote${famille ? ` de <b>${echapper(famille)}</b>` : ''} n'a pas pu être fait, et Papote est en pause depuis plus de 30 jours. Nous arrêtons donc l'abonnement : il prend fin le <b>${dateEnClair(le)}</b>, et aucun nouveau mois ne sera prélevé.`,
+      'Les mois déjà dus restent à régler.',
+      tablettePretee
+        ? { encadre: `La tablette est à nous renvoyer, sans frais : un QR code prépayé, rien à imprimer. Dans l'appli Papote, onglet Profil, touchez « Je renvoie la tablette ». Sans retour dans les 30 jours qui suivent la fin de l'abonnement, le matériel prêté (${euros(montant)}) sera prélevé.` }
+        : null,
+    ].filter(Boolean), APPLI_RETOUR);
+  }
   if (deces) {
     return message('Nous pensons bien à vous', [
       bonjour(nom),
@@ -724,6 +736,30 @@ function materielNonRendu({ nom, montant, avant }) {
     { encadre: `<b>${euros(montant)}</b> ont été prélevés sur votre compte pour le matériel prêté (tablette, chargeur et câble, enceinte si elle était dans le colis).` },
     'Si le colis est en route ou si vous pensez qu\'il y a une erreur, répondez à cet e-mail : nous regardons tout de suite.',
   ]);
+}
+
+// Prélèvement du matériel non rendu refusé par la banque (Tanguy, 11/11) : mise en demeure de rendre la tablette
+// ou de régler sous 8 jours. impaye : l'abonnement avait été arrêté pour impayé (les mois dus sont rappelés).
+function miseEnDemeure({ nom, montant, impaye }) {
+  return message('Mise en demeure : tablette Papote non rendue', [
+    bonjour(nom),
+    `Malgré nos e-mails, la tablette Papote prêtée ne nous a pas été rendue, et le prélèvement de <b>${euros(montant)}</b> pour le matériel a été refusé par votre banque.`,
+    { encadre: `Nous vous mettons en demeure, <b>sous 8 jours</b> à compter de cet e-mail :<br>• soit de nous renvoyer la tablette : dans l'appli Papote, onglet Profil, « Je renvoie la tablette » (QR code prépayé, rien à imprimer) ;<br>• soit de régler <b>${euros(montant)}</b>${impaye ? ', ainsi que les mois d\'abonnement restés impayés' : ''}, en répondant à cet e-mail.` },
+    'Sans retour ni règlement dans ce délai, nous engagerons le recouvrement de ces sommes.',
+    'Si le colis est déjà en route ou si vous pensez qu\'il y a une erreur, répondez à cet e-mail : nous regardons tout de suite.',
+  ]);
+}
+
+// Tablette remplacée chez le client (casse, perte ou vol) : ce qui a été prélevé et pourquoi (Tanguy, 11/11).
+function remplacementPreleve({ nom, montant, raison }) {
+  return message('Votre tablette Papote est remplacée', [
+    bonjour(nom),
+    raison === 'perte'
+      ? 'Une nouvelle tablette Papote part chez vous pour remplacer celle qui a été perdue ou volée.'
+      : 'Une nouvelle tablette Papote part chez vous pour remplacer celle qui est cassée.',
+    { encadre: `Comme prévu dans nos conditions, <b>${euros(montant)}</b> ont été prélevés sur votre compte pour ${raison === 'perte' ? 'le matériel prêté' : 'la tablette cassée'}.` },
+    raison === 'perte' ? null : 'Vous recevrez aussi un e-mail pour nous renvoyer l\'ancienne tablette, sans frais.',
+  ].filter(Boolean));
 }
 
 // Commande annulée avant l'envoi de la tablette.
@@ -900,7 +936,7 @@ module.exports = {
   // abonnement
   paiementEchoue, papoteEnPause, passerAuSepa, pausePrelevements, reprisePrelevements,
   // fin de contrat
-  retourTablette, etiquetteRetour, resiliationEnregistree, avantEffacement, resiliationAnnulee, rappelRestitution, tabletteRecue, materielNonRendu, commandeAnnulee, annulationAvantEnvoi, resiliation, alerteAdmin, alerteForfait,
+  retourTablette, etiquetteRetour, resiliationEnregistree, avantEffacement, resiliationAnnulee, rappelRestitution, tabletteRecue, materielNonRendu, miseEnDemeure, remplacementPreleve, commandeAnnulee, annulationAvantEnvoi, resiliation, alerteAdmin, alerteForfait,
   // support et admin
   rappelConfirme, demandeRappel, bilanSupport, information, recapSemaine, livresComptables, budget,
   // outils

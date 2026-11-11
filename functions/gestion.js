@@ -148,7 +148,7 @@ function natureMouvement(bt) {
     case 'charge':
     case 'payment': {
       const desc = `${source.description || bt.description || ''}`.toLowerCase();
-      if (/non rendu/.test(desc)) return 'tablette-non-rendue';
+      if (/non rendu|remplacée/.test(desc)) return 'tablette-non-rendue';
       return 'abonnement';
     }
     case 'refund':
@@ -895,6 +895,7 @@ function familleResume(f) {
     formule: f.get('abonnement.formule') || null,
     graceJusqua: f.get('abonnement.graceJusqua') || null,
     suspenduLe: f.get('abonnement.suspenduLe') || null,
+    resiliationLe: f.get('abonnement.resiliationLe') || null,
     toleranceJusqua: f.get('abonnement.toleranceJusqua') || null,
     majLe: f.get('abonnement.majLe') || null,
   };
@@ -1000,6 +1001,58 @@ async function refusSimAvantDepart(commande, fiche) {
   return statuts.refusSimSansNumero(fiche, ligne);
 }
 
+// Prélève du matériel sur la carte (ou le mandat SEPA) de l'abonnement : non rendu (index.js, restitutions et
+// tabletteRendue) ou remplacement payant (remplacer). La description contient « non rendu » ou « remplacée » :
+// facturerPenalites en fait une facture chaque nuit.
+async function preleverMateriel(abonnement, montant, description, cle) {
+  const abo = await stripe().subscriptions.retrieve(abonnement, { expand: ['customer'] });
+  const moyen = abo.default_payment_method
+    || (abo.customer.invoice_settings && abo.customer.invoice_settings.default_payment_method);
+  if (!moyen) throw new Error('Aucun moyen de paiement enregistré');
+  return stripe().paymentIntents.create({
+    amount: montant,
+    currency: 'eur',
+    customer: abo.customer.id,
+    payment_method: typeof moyen === 'string' ? moyen : moyen.id,
+    off_session: true,
+    confirm: true,
+    description,
+    metadata: { commande: abonnement },
+  }, { idempotencyKey: cle });
+}
+
+// Remplacement payant (casse, perte ou vol) : prélevé AVANT tout changement dans le stock ; refusé par la banque,
+// rien ne bouge et l'admin voit pourquoi. Une seule tentative à la fois (double clic, deux onglets) ; une tentative
+// réussie n'est jamais refaite si la suite (stock) doit être relancée.
+async function preleverRemplacement({ commande, kit, raison, montant, cmd, qui }) {
+  const ref = db().doc(`commandes/${commande}`);
+  const maintenant = Date.now();
+  const tentative = await db().runTransaction(async (tx) => {
+    const r = (await tx.get(ref)).get('remplacement') || {};
+    if (r.kit === kit && r.statut === 'preleve') return null;
+    if (r.kit === kit && r.statut === 'en-cours' && maintenant - r.le < 2 * 60e3) {
+      throw new HttpsError('already-exists', 'Le prélèvement est déjà en cours, un instant.');
+    }
+    tx.update(ref, { remplacement: { kit, raison, montant, statut: 'en-cours', le: maintenant, par: qui } });
+    return maintenant;
+  });
+  if (tentative == null) return;
+  let paiement;
+  try {
+    paiement = await preleverMateriel(commande, montant, regles.descriptionRemplacement(raison), `remplacement-${commande}-${kit}-${tentative}`);
+  } catch (e) {
+    await ref.update({ remplacement: { kit, raison, montant, statut: 'refuse', le: maintenant, par: qui, erreur: e.message } });
+    throw new HttpsError('failed-precondition', `Prélèvement de ${mail.euros(montant)} refusé (${e.message}) : rien n'a été remplacé. Voyez avec le client, puis recommencez.`);
+  }
+  await ref.update({ remplacement: { kit, raison, montant, statut: 'preleve', le: maintenant, par: qui, paiement: paiement.id } });
+  if (cmd.email) {
+    await mail.envoyer({
+      smtp: MAIL_SMTP.value(), expediteur: MAIL_EXPEDITEUR.value(), motDePasse: MAIL_MOT_DE_PASSE.value(),
+      a: cmd.email, contenu: mail.remplacementPreleve({ nom: cmd.nom, montant, raison }),
+    }).catch((e) => logger.error(`Commande ${commande} : e-mail du remplacement payant non parti`, e.message));
+  }
+}
+
 // Remplacement d'un élément du kit chez un client : la tablette, la carte SIM ou un accessoire.
 // La tablette remplacée passe « en retour » (à récupérer) et laisse sa carte SIM à la nouvelle ;
 // la carte SIM remplacée passe « suspendue » (à résilier) ; l'accessoire sort du stock.
@@ -1017,20 +1070,32 @@ async function remplacer(d, qui) {
       throw new HttpsError('failed-precondition', 'Choisissez une tablette disponible du stock.');
     }
     if (neuve.get('fid')) throw new HttpsError('failed-precondition', 'Cette tablette est dans une famille : pas à vendre. Choisissez-en une autre.');
+    // Raison (Tanguy, 11/11) : panne (gratuit), casse (130 €) ou perte/vol (140 €, 150 € avec l'enceinte).
+    const raison = d.raison;
+    const cmd = (await db().doc(`commandes/${commande}`).get()).data() || {};
+    const montant = regles.montantRemplacement(raison, cmd);
+    if (montant == null) throw new HttpsError('invalid-argument', 'Choisissez la raison du remplacement : panne, casse, ou perte et vol.');
+    const perdue = raison === 'perte';
     // La remplaçante part avec sa propre carte SIM, sinon avec celle de l'ancienne : avec un numéro, toujours.
-    const avecSim = neuve.get('simId') ? neuve.data() : { ...neuve.data(), simId: kit.get('simId') || null };
+    // Perte ou vol : la carte SIM est partie avec l'ancienne tablette, la remplaçante doit avoir la sienne.
+    const avecSim = neuve.get('simId') || perdue ? neuve.data() : { ...neuve.data(), simId: kit.get('simId') || null };
     const refusSim = await refusSimAvantDepart(commande, avecSim);
-    if (refusSim) throw new HttpsError('failed-precondition', refusSim);
-    await kit.ref.update({
+    if (refusSim) throw new HttpsError('failed-precondition', perdue && !neuve.get('simId') ? `${refusSim} (la carte SIM de la tablette perdue ne peut pas resservir).` : refusSim);
+    if (montant > 0) await preleverRemplacement({ commande, kit: kit.id, raison, montant, cmd, qui });
+    await kit.ref.update(perdue ? {
+      etat: 'perdue', commande: null, majLe: FieldValue.serverTimestamp(),
+      historique: FieldValue.arrayUnion(trace('perdue', { remplacement: true, raison })),
+    } : {
       etat: 'en-retour', commande: null, remplaceePour: commande, majLe: FieldValue.serverTimestamp(),
-      historique: FieldValue.arrayUnion(trace('en-retour', { remplacement: true })),
+      historique: FieldValue.arrayUnion(trace('en-retour', { remplacement: true, raison })),
     });
     await neuve.ref.update({
       etat: 'envoyee', commande, accessoires: kit.get('accessoires') || [], majLe: FieldValue.serverTimestamp(),
-      historique: FieldValue.arrayUnion(trace('envoyee', { remplacement: true })),
+      historique: FieldValue.arrayUnion(trace('envoyee', { remplacement: true, raison })),
     });
-    if (kit.get('simId') && !neuve.get('simId')) await enregistrerSim(kit.get('simId'), { tablette: neuve.id }, qui);
-    return { ok: true };
+    if (perdue && kit.get('simId')) await enregistrerSim(kit.get('simId'), { statut: 'suspendue', tablette: null }, qui);
+    else if (kit.get('simId') && !neuve.get('simId')) await enregistrerSim(kit.get('simId'), { tablette: neuve.id }, qui);
+    return { ok: true, montant, retour: !perdue };
   }
 
   if (d.element === 'sim') {
@@ -1060,7 +1125,7 @@ async function remplacer(d, qui) {
   throw new HttpsError('invalid-argument', 'Élément à remplacer inconnu.');
 }
 
-exports.gestionStock = onCall(async (request) => {
+exports.gestionStock = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE] }, async (request) => {
   verifierAdmin(request);
   if (reveil(request)) return { ok: true };
   const d = request.data || {};
@@ -2070,7 +2135,7 @@ const FENETRE = 40 * JOUR; // ce qui s'est passé depuis 40 jours est revu chaqu
 // Ligne de facture : le détail (« tablette, routeur ») vient de la description du prélèvement quand il y est.
 function descriptionNonRendu(c) {
   const d = String(c.description || '').trim();
-  return d && /non rendu/i.test(d) ? `${d} (indemnité prévue au contrat)` : 'Matériel Papote non rendu (indemnité prévue au contrat)';
+  return d && /non rendu|remplacée/i.test(d) ? `${d} (indemnité prévue au contrat)` : 'Matériel Papote non rendu (indemnité prévue au contrat)';
 }
 
 async function facturerPenalites(depuis, bilan) {
@@ -2442,6 +2507,7 @@ async function creerEtiquette(commande, sens, qui, { sansImpression = false } = 
 }
 
 // « Je renvoie la tablette » dans l'appli (index.js, renvoyerTablette) : QR code de retour sans impression.
+exports.preleverMateriel = preleverMateriel;
 exports.etiquetteRetourClient = (commande, qui) => creerEtiquette(commande, 'retour', qui, { sansImpression: true });
 
 // { commande, sens: 'aller' | 'retour' } : crée l'étiquette Mondial Relay chez Sendcloud.
@@ -2845,7 +2911,11 @@ async function argentDepuis(depuis) {
 const sansFacture = (t, maintenant) => t.prixAchat == null && !t.acheteeLe && !t.depense
   && !['perdue', 'hors-service'].includes(t.etat) && (ms(t.creeLe) || ms(t.preparee) || maintenant) < maintenant - JOURS(5);
 
-// familles : [{ id, nom, statut, graceJusqua, suspenduLe, majLe }] (gestionDonnees, recapitulatif).
+// Suspendue depuis 30 jours (Tanguy, 11/11) : l'abonnement s'arrête tout seul (index.js, arretsImpayes, à 9 h).
+// Même texte que l'admin (web/js/gestion.js).
+const suiteSuspendue = (f) => (f.resiliationLe ? ' : abonnement arrêté par Papote, la tablette doit revenir'
+  : ' : arrêt automatique de l\'abonnement à 9 h (sinon « Arrêter l\'abonnement » sur la commande)');
+// familles : [{ id, nom, statut, graceJusqua, suspenduLe, resiliationLe, majLe }] (gestionDonnees, recapitulatif).
 function aFaire({ commandes, stock, depenses, automatique, maintenant, sims = [], accessoires = [], familles = [] }) {
   const liste = [];
   // texte : « tablette(s) reçue(s) » → singulier ou pluriel selon n.
@@ -2859,7 +2929,7 @@ function aFaire({ commandes, stock, depenses, automatique, maintenant, sims = []
   for (const f of suspendues) {
     const depuis = ms(f.suspenduLe) || ms(f.majLe);
     const jours = depuis ? Math.floor((maintenant - depuis) / JOUR) : null;
-    liste.push(`Famille ${f.nom || f.id} suspendue pour impayé${jours != null ? ` depuis ${jours} jour${jours > 1 ? 's' : ''}` : ''}${regles.suspendueDepuisTrop({ statut: 'suspendu', suspenduLe: depuis }, maintenant) ? ' : demander le retour de la tablette (« Arrêter l\'abonnement » sur la commande)' : ''}`);
+    liste.push(`Famille ${f.nom || f.id} suspendue pour impayé${jours != null ? ` depuis ${jours} jour${jours > 1 ? 's' : ''}` : ''}${regles.suspendueDepuisTrop({ statut: 'suspendu', suspenduLe: depuis }, maintenant) ? suiteSuspendue(f) : ''}`);
   }
   ajouter(actives.filter((c) => c.dernierMois && c.dernierMois.statut === 'echec').length, 'dernier mois refusé(s) par la banque, à relancer depuis Stripe');
   ajouter(actives.filter((c) => c.restitution && c.restitution.statut === 'echec').length, 'prélèvement(s) du matériel non rendu refusé(s), à relancer depuis Stripe');

@@ -60,6 +60,22 @@ function montantManquants(commande, manquants) {
 const penaliteRestitution = (commande) => montantManquants(commande, materielPrete(commande));
 const PENALITE_NON_RESTITUTION = penaliteRestitution({});
 
+// Remplacement de la tablette chez un client (Tanguy, 11/11) : selon la raison, ce qui est prélevé avant l'envoi.
+//   panne : rien (défaut du matériel) ; casse : la tablette (130 €) ; perte ou vol : tout le matériel prêté
+//   (140 €, 150 € avec l'enceinte). Commande offerte : jamais rien.
+const RAISONS_REMPLACEMENT = {
+  panne: 'panne',
+  casse: 'tablette cassée',
+  perte: 'tablette perdue ou volée',
+};
+function montantRemplacement(raison, commande) {
+  if (!RAISONS_REMPLACEMENT[raison]) return null;
+  if ((commande && commande.offerte) || raison === 'panne') return 0;
+  return raison === 'casse' ? PRIX_MATERIEL.tablette : penaliteRestitution(commande);
+}
+// Libellé du prélèvement chez Stripe (et de sa facture, gestion.js natureMouvement : « remplac »).
+const descriptionRemplacement = (raison) => `Papote : ${RAISONS_REMPLACEMENT[raison]}, remplacée`;
+
 const STATUTS_OK = ['offert', 'actif', 'impaye'];
 
 // Famille suspendue (impayé au-delà du délai de grâce) depuis plus de 30 jours : le retour de la tablette est
@@ -69,6 +85,11 @@ function suspendueDepuisTrop(abonnement, maintenant) {
   if (!abonnement || abonnement.statut !== 'suspendu') return false;
   const depuis = enMillis(abonnement.suspenduLe != null ? abonnement.suspenduLe : abonnement.majLe);
   return depuis != null && maintenant - depuis >= SUSPENSION_RETOUR_JOURS * JOUR;
+}
+// Suspendue depuis 30 jours et pas encore arrêtée : Papote arrête l'abonnement tout seul (Tanguy, 11/11), comme
+// « Arrêter l'abonnement » dans l'admin. Jamais une famille offerte, jamais deux fois.
+function arretAutomatiqueDu(abonnement, maintenant) {
+  return suspendueDepuisTrop(abonnement, maintenant) && !abonnement.resiliationLe && Boolean(abonnement.stripeSubscriptionId);
 }
 
 // Fin d'installation sans commande reliée : 48 h de tolérance, tout fonctionne, pendant lesquelles Tanguy
@@ -350,6 +371,10 @@ module.exports = {
   penaliteRestitution,
   PRIX_MATERIEL,
   NOMS_MATERIEL,
+  RAISONS_REMPLACEMENT,
+  montantRemplacement,
+  descriptionRemplacement,
+  arretAutomatiqueDu,
   materielPrete,
   montantManquants,
   limiteRestitution,
