@@ -88,6 +88,12 @@ function scenes(mail) {
     { titre: 'Tablette reçue, chargeur manquant prélevé', groupe: G4, fonction: 'tabletteRecue', note: 'Avant, l\'e-mail disait « plus rien ne sera prélevé » même avec un élément manquant.', contenu: si('tabletteRecue', { nom: 'Julie', rembourse: 0, manquants: ['chargeur et câble'], montant: 1000 }) },
     { titre: 'Tablette reçue, élément manquant mais prélèvement refusé', groupe: G4, fonction: 'tabletteRecue', note: 'Nouveau : rien ne partait avant.', contenu: si('tabletteRecue', { nom: 'Julie', rembourse: 0, manquants: ['chargeur et câble', 'enceinte'], montant: 2000, echec: true }) },
     { titre: 'Tablette jamais rendue : matériel prélevé', groupe: G4, fonction: 'materielNonRendu', note: 'Nouveau : rien ne partait avant.', contenu: si('materielNonRendu', { nom: 'Julie', montant: 15000, avant: dans(-1) }) },
+    { titre: 'Mise en demeure : tablette non rendue, prélèvement refusé', groupe: G4, fonction: 'miseEnDemeure', note: 'Scène ajoutée par l\'audit des e-mails du 11/11.', contenu: si('miseEnDemeure', { nom: 'Julie', montant: 14000 }) },
+    { titre: 'Mise en demeure après un arrêt pour impayé', groupe: G4, fonction: 'miseEnDemeure', contenu: si('miseEnDemeure', { nom: 'Julie', montant: 14000, impaye: true }) },
+    { titre: 'Tablette remplacée (casse) : somme prélevée', groupe: G4, fonction: 'remplacementPreleve', contenu: si('remplacementPreleve', { nom: 'Julie', montant: 13000, raison: 'casse' }) },
+    { titre: 'Tablette remplacée (perte ou vol) : somme prélevée', groupe: G4, fonction: 'remplacementPreleve', contenu: si('remplacementPreleve', { nom: 'Julie', montant: 14000, raison: 'perte' }) },
+    { titre: 'Photos bientôt effacées (3 mois après l\'arrêt)', groupe: G4, fonction: 'avantEffacement', contenu: si('avantEffacement', { nom: 'Julie', famille: 'Mamie Jeanne', le: dans(30) }) },
+    { titre: 'Photos bientôt effacées (après un décès)', groupe: G4, fonction: 'avantEffacement', contenu: si('avantEffacement', { nom: 'Julie', famille: 'Mamie Jeanne', le: dans(30), deces: true }) },
 
     { titre: 'Demande de rappel : bien reçu (au visiteur)', groupe: G5, fonction: 'rappelConfirme', note: 'Nouveau : rien ne partait avant.', contenu: si('rappelConfirme', { nom: 'Julie Martin', telephone: '06 12 34 56 78' }) },
 
