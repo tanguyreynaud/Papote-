@@ -1030,12 +1030,14 @@ async function preleverMateriel(abonnement, montant, description, cle, metadata 
 // « remplacement » (commande + tablette remplacée), et avant chaque tentative on cherche chez Stripe un paiement déjà
 // passé avec cette marque (réponse perdue après le débit, serveur arrêté entre le débit et la note).
 const PAIEMENT_PASSE = ['succeeded', 'processing', 'requires_capture'];
-async function paiementDejaPasse(commande, marque) {
+async function paiementDejaPasse(commande, marque, cle = 'remplacement') {
   const abo = await stripe().subscriptions.retrieve(commande);
   const client = typeof abo.customer === 'string' ? abo.customer : abo.customer.id;
   const { data } = await stripe().paymentIntents.list({ customer: client, limit: 100 });
-  return data.find((p) => p.metadata && p.metadata.remplacement === marque && PAIEMENT_PASSE.includes(p.status)) || null;
+  return data.find((p) => p.metadata && p.metadata[cle] === marque && PAIEMENT_PASSE.includes(p.status)) || null;
 }
+// Refus net de la banque (rien n'est parti), par opposition à une réponse perdue (on ne sait pas).
+const refusNet = (e) => Boolean(e && (e.type === 'StripeCardError' || e.statusCode === 402 || /aucun moyen de paiement/i.test(e.message || '')));
 
 async function preleverRemplacement({ commande, kit, raison, montant, cmd, qui }) {
   const ref = db().doc(`commandes/${commande}`);
@@ -1061,7 +1063,7 @@ async function preleverRemplacement({ commande, kit, raison, montant, cmd, qui }
     } catch (e) {
       // Refus net de la banque : rien n'est parti. Toute autre erreur (réseau, délai) : on ne sait pas, et le prochain
       // essai regardera d'abord chez Stripe.
-      const refus = e && (e.type === 'StripeCardError' || e.statusCode === 402 || /aucun moyen de paiement/i.test(e.message || ''));
+      const refus = refusNet(e);
       await note(refus ? 'refuse' : 'incertain', { erreur: e.message });
       if (refus) throw new HttpsError('failed-precondition', `Prélèvement de ${mail.euros(montant)} refusé (${e.message}) : rien n'a été remplacé. Voyez avec le client, puis recommencez.`);
       throw new HttpsError('unavailable', `Pas de réponse claire de Stripe (${e.message}) : rien n'a été remplacé. Recommencez : Papote vérifie d'abord chez Stripe et ne prélève jamais deux fois.`);
@@ -1238,6 +1240,12 @@ exports.gestionStock = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE] }, a
         throw new HttpsError('failed-precondition', `Une tablette « ${ETATS[snap.get('etat')] || snap.get('etat')} » ne peut pas passer « ${ETATS[champs.etat]} ».`);
       }
       if (champs.etat !== snap.get('etat')) {
+        // Tablette revenue d'un client : pas de retour au stock sans remise à zéro (audit du départ, 11/11). Sinon les
+        // photos, le prénom et les numéros de l'ancienne famille restent dessus. La réinstallation par QR, possible
+        // seulement après une remise à zéro, la repasse « Préparée » d'elle-même (installation-qr.js).
+        if (['revenue', 'a-reparer'].includes(snap.get('etat')) && champs.etat === 'en-stock' && champs.remiseAZero !== true) {
+          throw new HttpsError('failed-precondition', 'Remettez d\'abord la tablette à zéro (réglages d\'usine), puis confirmez-le : sans cela, les photos de l\'ancienne famille restent dessus.', { remiseAZero: true });
+        }
         maj.etat = champs.etat;
         // Perdue (volée), hors service, ou de retour chez Papote (revenue, en stock, à réparer) : plus dans la famille,
         // plus d'accès à ses photos ; la fiche oublie la famille et les comptes de la tablette, pour que ses ordres,
@@ -1266,6 +1274,7 @@ exports.gestionStock = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE] }, a
         }
         maj.historique = FieldValue.arrayUnion({
           le: Date.now(), etat: champs.etat, par: qui, commande, ...(sortis.length ? { accessoires: sortis } : {}),
+          ...(['revenue', 'a-reparer'].includes(snap.get('etat')) && champs.etat === 'en-stock' ? { motif: 'remise à zéro faite' } : {}),
         });
       }
     }
@@ -2271,6 +2280,11 @@ async function synchroniserStock(bilan) {
     const maj = stockAJour(t.data(), parId.get(t.get('commande')));
     if (!maj) continue;
     try {
+      // Revenue chez Papote (« Matériel reçu » noté, fiche pas suivie) : elle sort aussi de sa famille, comme à la main.
+      if (maj.etat === 'revenue' && t.get('fid')) {
+        await retirerDeLaFamille(t.data(), t.ref);
+        Object.assign(maj, { fid: null, tabletUid: null, callsUid: null, jumeleeLe: FieldValue.delete() });
+      }
       await t.ref.update({
         ...maj,
         majLe: FieldValue.serverTimestamp(),
@@ -2531,6 +2545,8 @@ async function creerEtiquette(commande, sens, qui, { sansImpression = false } = 
 
 // « Je renvoie la tablette » dans l'appli (index.js, renvoyerTablette) : QR code de retour sans impression.
 exports.preleverMateriel = preleverMateriel;
+exports.paiementDejaPasse = paiementDejaPasse;
+exports.refusNet = refusNet;
 exports.etiquetteRetourClient = (commande, qui) => creerEtiquette(commande, 'retour', qui, { sansImpression: true });
 
 // { commande, sens: 'aller' | 'retour' } : crée l'étiquette Mondial Relay chez Sendcloud.
@@ -2821,7 +2837,10 @@ async function rattraperJumelages(bilan) {
         .filter((x) => x.get('status') === 'confirmed' && x.get('fid'))
         .sort((a, b) => (b.get('createdAt')?.toMillis?.() || 0) - (a.get('createdAt')?.toMillis?.() || 0));
       if (!pairings.length) continue;
-      if (await appliquerJumelage(pairings[0].data(), pairings[0].ref)) {
+      // Jamais un vieux jumelage (audit du départ, 11/11) : la tablette doit encore avoir sa fiche dans cette famille.
+      const p = pairings[0].data();
+      if (!p.tabletUid || !(await db().doc(`families/${p.fid}/members/${p.tabletUid}`).get()).exists) continue;
+      if (await appliquerJumelage(p, pairings[0].ref)) {
         bilan.stock.push(`${d.get('ref') || d.get('numero') || d.id} : jumelage rattrapé`);
       }
     } catch (e) {
@@ -2903,7 +2922,19 @@ async function retirerDeLaFamille(t, fiche) {
   }
   await Promise.all([t.tabletUid, t.callsUid].filter(Boolean)
     .map((uid) => db().doc(`families/${t.fid}/members/${uid}`).delete()));
+  await fermerJumelages(t);
   return true;
+}
+
+// Les jumelages de la tablette avec cette famille sont clos (audit du départ, 11/11) : restés « confirmed », ils
+// faisaient reprendre la tablette revenue par son ancienne famille la nuit suivante (rattraperJumelages), et
+// laissaient l'ancien client se réabonner « tablette déjà installée » (index.js, tabletteInstallee).
+async function fermerJumelages(t) {
+  if (!t.fid) return;
+  const jumelages = await db().collection('pairings').where('fid', '==', t.fid).get();
+  const siens = jumelages.docs.filter((d) => d.get('status') === 'confirmed'
+    && ((t.tabletUid && d.get('tabletUid') === t.tabletUid) || (t.serieAndroid && d.get('serie') === t.serieAndroid)));
+  await Promise.all(siens.map((d) => d.ref.update({ status: 'closed', closedAt: FieldValue.serverTimestamp() })));
 }
 
 // ---------- Récapitulatif du lundi ----------

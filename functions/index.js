@@ -256,9 +256,13 @@ async function repriseRefusee(fid, abonnement) {
 }
 
 // La famille a-t-elle déjà sa tablette (jumelage confirmé) ?
+// Un jumelage confirmé ne suffit pas (audit du départ, 11/11) : une famille qui a rendu sa tablette gardait le
+// sien et pouvait se réabonner « déjà installée », sans tablette. Il faut une tablette encore dans la famille.
 async function tabletteInstallee(fid) {
   const jumelages = await db.collection('pairings').where('fid', '==', fid).get();
-  return jumelages.docs.some((d) => d.get('status') === 'confirmed');
+  if (!jumelages.docs.some((d) => d.get('status') === 'confirmed')) return false;
+  const tablettes = await db.collection(`families/${fid}/members`).where('role', '==', 'tablette').limit(1).get();
+  return !tablettes.empty;
 }
 
 // La tablette du stock jumelée à cette famille (« jumelée sans commande ») prend la nouvelle commande,
@@ -1909,20 +1913,41 @@ async function restitutions() {
       }
     }
     // Une seule tentative de prélèvement par retour (Stripe oublie une clé d'idempotence au bout de 24 h) : la
-    // tentative est notée avant l'appel ; une tentative restée sans suite (arrêt en plein milieu) va à Tanguy.
+    // tentative est notée avant l'appel. Tentative restée sans résultat (arrêt en plein milieu, réponse de Stripe
+    // perdue ; audit du départ, 11/11) : reprise à partir d'une heure après, en regardant d'abord chez Stripe si le
+    // prélèvement est passé (marque « restitution »), pour ne jamais prélever deux fois ni conclure à tort à un refus.
     const tentative = await db.runTransaction(async (tx) => {
       const c = (await tx.get(snap.ref)).get('restitution') || {};
-      if (c.statut !== 'attendue' || c.prelevementTenteLe) return false;
+      if (c.statut !== 'attendue') return null;
+      if (c.prelevementTenteLe) {
+        return c.prelevementTenteLe.toMillis && maintenant - c.prelevementTenteLe.toMillis() >= 60 * 60e3 ? 'reprise' : null;
+      }
       tx.update(snap.ref, { 'restitution.prelevementTenteLe': FieldValue.serverTimestamp() });
-      return true;
+      return 'premiere';
     });
-    if (!tentative) {
-      if (snap.get('restitution.prelevementTenteLe')) logger.error(`Commande ${snap.id} : prélèvement du matériel déjà tenté sans résultat noté, à vérifier dans Stripe.`);
-      continue;
-    }
+    if (!tentative) continue;
     try {
-      const paiement = await preleverMateriel(snap.id, regles.penaliteRestitution(snap.data()),
-        'Papote : matériel non rendu', `restitution-${snap.id}`);
+      let paiement = null;
+      if (tentative === 'reprise') {
+        paiement = await gestion.paiementDejaPasse(snap.id, snap.id, 'restitution');
+        if (paiement) logger.warn(`Commande ${snap.id} : prélèvement du matériel retrouvé chez Stripe (${paiement.id}), noté.`);
+      }
+      if (!paiement) {
+        try {
+          paiement = await preleverMateriel(snap.id, regles.penaliteRestitution(snap.data()), 'Papote : matériel non rendu',
+            tentative === 'reprise' ? `restitution-${snap.id}-${new Date(maintenant).toISOString().slice(0, 10)}` : `restitution-${snap.id}`,
+            { restitution: snap.id });
+        } catch (e) {
+          // Stripe a répondu non (4xx : carte refusée, moyen de paiement retiré…) : rien n'est parti.
+          if (gestion.refusNet(e) || (e && e.statusCode >= 400 && e.statusCode < 500)) throw e;
+          // Pas de réponse claire : le prélèvement est peut-être passé. On regarde ; sinon nouvel essai demain.
+          paiement = await gestion.paiementDejaPasse(snap.id, snap.id, 'restitution').catch(() => null);
+          if (!paiement) {
+            logger.warn(`Commande ${snap.id} : pas de réponse claire de Stripe pour le matériel non rendu (${e.message}), nouvel essai demain.`);
+            continue;
+          }
+        }
+      }
       // Deux tâches en même temps : Stripe n'a prélevé qu'une fois (même clé), et seule la première note
       // « facturée » et prévient le client.
       const premiere = await db.runTransaction(async (tx) => {
@@ -1992,7 +2017,17 @@ exports.tabletteRendue = onCall({ secrets: [STRIPE_SECRET] }, async (request) =>
   const restitution = { statut: 'rendue', majLe: FieldValue.serverTimestamp() };
   // Tablette arrivée après le prélèvement des 140 € (colis en route à la date limite) : remboursés d'office.
   const avant = snap.get('restitution') || {};
-  if (avant.statut === 'facturee' && avant.paiement) {
+  // Prélèvement tenté sans résultat noté (coupure) ou noté refusé à tort : s'il est passé chez Stripe, il est rendu.
+  let dejaPreleve = avant.statut === 'facturee' ? avant.paiement : null;
+  if (!dejaPreleve && avant.prelevementTenteLe && snap.id.startsWith('sub_')) {
+    try {
+      dejaPreleve = ((await gestion.paiementDejaPasse(snap.id, snap.id, 'restitution')) || {}).id || null;
+    } catch (e) {
+      throw new HttpsError('unavailable', `Impossible de vérifier chez Stripe si le matériel a été prélevé (${e.message}) : réessayez.`);
+    }
+  }
+  if (dejaPreleve) {
+    avant.paiement = dejaPreleve;
     try {
       const r = await stripe().refunds.create({ payment_intent: avant.paiement, reason: 'requested_by_customer', metadata: { commande: snap.id } },
         { idempotencyKey: `restitution-rendue-${snap.id}` });
