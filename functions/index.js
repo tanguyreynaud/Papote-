@@ -973,28 +973,45 @@ exports.retracter = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE] }, asyn
   const cible = await commandeCiblee(request);
   const { id, ref } = cible;
   const fid = cible.fid || (request.data || {}).fid;
-  const montant = await montantPaye(id);
+  const dejaPaye = await montantPaye(id);
   const maintenant = Date.now();
-  const partie = await db.runTransaction(async (tx) => {
+  // La commande est notée annulée avant l'appel à Stripe (le message « abonnement supprimé » arrive en une seconde
+  // et ne doit pas prélever de dernier mois), avec retractation.enCours : si Stripe ne répond pas, la même demande
+  // se rejoue telle quelle au lieu d'être refusée « délai dépassé » (audit argent, 11/11, A1).
+  const { partie, montant } = await db.runTransaction(async (tx) => {
     const c = (await tx.get(ref)).data();
+    if (regles.retractationARefaire(c)) {
+      if (regles.retractationOccupee(c, maintenant)) throw new HttpsError('already-exists', 'L\'annulation est déjà en cours, un instant.');
+      tx.update(ref, { 'retractation.enCours': maintenant });
+      return { partie: c.expedition !== 'annulee', montant: c.retractation.montant || dejaPaye };
+    }
     if (!regles.retractationPossible(c, maintenant)) {
       throw new HttpsError('failed-precondition', 'Le délai de 30 jours pour annuler la commande est dépassé.');
     }
     // Paiement SEPA pas encore confirmé : la tablette n'est pas partie non plus, rien à rendre.
     const envoyee = regles.materielParti(c);
+    const retractation = { le: Timestamp.fromMillis(maintenant), montant: dejaPaye, enCours: maintenant };
     tx.update(ref, envoyee ? {
-      retractation: { le: Timestamp.fromMillis(maintenant), montant },
-      remboursement: { statut: 'au-retour', montant },
+      retractation,
+      remboursement: { statut: 'au-retour', montant: dejaPaye },
       restitution: { statut: 'attendue', motif: 'retractation', avant: versTimestamp(regles.limiteRestitution(maintenant)) },
     } : {
-      retractation: { le: Timestamp.fromMillis(maintenant), montant },
+      retractation,
       expedition: 'annulee',
-      remboursement: { statut: 'en-cours', montant },
+      remboursement: { statut: 'en-cours', montant: dejaPaye },
     });
-    return envoyee;
+    return { partie: envoyee, montant: dejaPaye };
   });
-  const abo = await stripe().subscriptions.retrieve(id);
-  if (abo.status !== 'canceled') await stripe().subscriptions.cancel(id, { prorate: false, invoice_now: false });
+  try {
+    const abo = await stripe().subscriptions.retrieve(id);
+    if (abo.status !== 'canceled') await stripe().subscriptions.cancel(id, { prorate: false, invoice_now: false });
+  } catch (e) {
+    // Stripe injoignable : le verrou est levé tout de suite, « Annuler » peut être retouché.
+    await ref.update({ 'retractation.enCours': 0 }).catch(() => null);
+    logger.error(`Commande ${id} : annulation, abonnement Stripe non arrêté`, e.message);
+    throw new HttpsError('unavailable', 'L\'annulation n\'a pas pu se terminer. Réessayez dans un instant : rien ne sera prélevé ni remboursé deux fois.');
+  }
+  await ref.update({ 'retractation.enCours': FieldValue.delete() });
   if (fid) await appliquer(fid, id);
   if (partie) return { ok: true, remboursement: 'au-retour', montant };
 
@@ -1019,6 +1036,9 @@ exports.retracter = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE] }, asyn
   } catch (e) {
     logger.error(`Commande ${id} : remboursement refusé`, e.message);
     await ref.update({ 'remboursement.statut': 'echec', 'remboursement.erreur': e.message });
+    // Papote est prévenu (audit argent, 11/11, A2) : le client vient de lire « nous le faisons à la main ».
+    await prevenirPapote(`Remboursement à faire à la main : ${c.nom || c.email || id}`, await ref.get(),
+      `La commande est annulée (avant l'envoi), mais le remboursement de ${mail.euros(montant)} a été refusé par Stripe (${e.message}). À faire depuis Stripe.`);
     throw new HttpsError('internal', 'La commande est annulée, mais le remboursement a échoué : nous le faisons à la main.');
   }
 });
@@ -1028,7 +1048,8 @@ exports.finDeContrat = onCall({ secrets: [STRIPE_SECRET] }, async (request) => {
   const { id, snap } = await commandeDeLaFamille((request.data || {}).fid, request);
   const c = snap.data();
   const ms = (t) => (t && typeof t.toMillis === 'function' ? t.toMillis() : null);
-  const possible = regles.retractationPossible(c, Date.now());
+  // Annulation restée en plan (Stripe injoignable, A1) : le bouton reste, la demande se rejoue.
+  const possible = regles.retractationPossible(c, Date.now()) || regles.retractationARefaire(c);
   const r = c.restitution;
   return {
     retractation: possible ? {
@@ -1474,6 +1495,18 @@ async function paiementAPart(type, objet) {
       'dernierMois.erreur': echec ? erreurPaiement(objet.last_finalization_error || null) || 'Prélèvement refusé par la banque' : FieldValue.delete(),
     });
     if (echec) await prevenirPapote(`Dernier mois non prélevé : ${snap.get('nom') || snap.get('email') || snap.id}`, snap);
+  } else if (type === 'payment_intent.payment_failed' && meta.remplacement) {
+    // Remplacement payant (casse, perte ou vol) prélevé en SEPA : la banque refuse quelques jours après, la tablette
+    // neuve est déjà partie (audit argent, 11/11, A3). Un refus immédiat (carte) est déjà noté « refuse » : rien ici.
+    const r = snap.get('remplacement') || {};
+    if (r.statut !== 'preleve' || r.paiement !== objet.id) return;
+    await ref.update({
+      'remplacement.statut': 'echec',
+      'remplacement.erreur': erreurPaiement(objet.last_payment_error) || 'Prélèvement refusé par la banque',
+      'remplacement.majLe': FieldValue.serverTimestamp(),
+    });
+    await prevenirPapote(`Remplacement payant refusé par la banque : ${snap.get('nom') || snap.get('email') || snap.id}`, snap,
+      `Le prélèvement de ${mail.euros(r.montant || objet.amount || 0)} (${regles.RAISONS_REMPLACEMENT[r.raison] || 'remplacement'}) a été refusé par la banque après le départ de la tablette de remplacement. À relancer depuis Stripe, ou à voir avec le client.`);
   } else if (type === 'payment_intent.payment_failed' && /non rendu/.test(objet.description || '')) {
     if (!snap.get('restitution')) return;
     await ref.update({
@@ -1867,9 +1900,30 @@ async function relancesSepa() {
   }
 }
 
+// Commande payée, tablette pas encore partie, premier prélèvement dans moins de 7 jours (A4) : repoussé, et Tanguy
+// le voit dans « À faire » (premierRepousseLe). Lancée chaque matin avec restitutions.
+async function premiersPrelevementsRepousses() {
+  const maintenant = Date.now();
+  const enAttente = await db.collection('commandes').where('expedition', 'in', ['a-preparer', 'paiement-en-attente']).get();
+  for (const snap of enAttente.docs) {
+    if (!snap.id.startsWith('sub_') || snap.get('offerte')) continue;
+    try {
+      const abo = await stripe().subscriptions.retrieve(snap.id);
+      const nouveau = regles.premierARepousser(snap.data(), regles.premierPrelevementDe(abo, maintenant), maintenant);
+      if (!nouveau) continue;
+      await stripe().subscriptions.update(snap.id, { trial_end: Math.ceil(nouveau / 1000), proration_behavior: 'none' });
+      await snap.ref.update({ premierRepousseLe: maintenant, premierRepousseAu: Timestamp.fromMillis(nouveau) });
+      logger.warn(`Commande ${snap.id} : pas encore partie, premier prélèvement repoussé au ${new Date(nouveau).toISOString()}.`);
+    } catch (e) {
+      logger.error(`Commande ${snap.id} : premier prélèvement non repoussé`, e.message);
+    }
+  }
+}
+
 // Tablette incluse non rendue dans les 30 jours : le matériel prêté (abonnement.js, penaliteRestitution) prélevé sur le compte de l'abonnement.
 async function restitutions() {
   await arretsImpayes();
+  await premiersPrelevementsRepousses();
   const maintenant = Date.now();
   const attendues = await db.collection('commandes').where('restitution.statut', '==', 'attendue').get();
   for (const snap of attendues.docs) {
@@ -2332,6 +2386,8 @@ async function suiviRetour(event, rAvant, r, c) {
       } catch (e) {
         logger.error(`Commande ${id} : remboursement refusé`, e.message);
         await ref.update({ 'remboursement.statut': 'echec', 'remboursement.erreur': e.message });
+        await prevenirPapote(`Remboursement à faire à la main : ${c.nom || c.email || id}`, event.data.after,
+          `La tablette est revenue, mais le remboursement de ${mail.euros(retractation)} a été refusé par Stripe (${e.message}). À faire depuis Stripe.`);
         return;
       }
     }

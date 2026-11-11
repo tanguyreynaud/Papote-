@@ -1019,6 +1019,9 @@ async function preleverMateriel(abonnement, montant, description, cle, metadata 
     payment_method: typeof moyen === 'string' ? moyen : moyen.id,
     off_session: true,
     confirm: true,
+    // Sans cela, Stripe exige une adresse de retour (return_url) pour un paiement confirmé côté serveur (audit
+    // argent, 11/11, B1) : jamais de moyen de paiement à redirection ici, seulement la carte ou le mandat enregistré.
+    automatic_payment_methods: { enabled: true, allow_redirects: 'never' },
     description,
     metadata: { ...metadata, commande: abonnement },
   }, { idempotencyKey: cle });
@@ -2380,6 +2383,24 @@ async function colisLivres(bilan) {
   }
 }
 
+// Contrôle de nuit Stripe ↔ base (audit argent, 11/11, B3-B4) : abonnement vivant sur une commande annulée, famille
+// active sans abonnement vivant, prélèvement ou remboursement resté en plan. Rien n'est corrigé : chaque écart
+// devient une ligne de « À faire » (gestion/automatique.rapprochement), refaite chaque nuit.
+async function rapprocherStripe(bilan, maintenant) {
+  const [abonnements, commandes, familles] = await Promise.all([
+    tout(stripe().subscriptions.list({ status: 'all', limit: 100 })),
+    db().collection('commandes').get(),
+    db().collection('families').select('name', 'abonnement').get(),
+  ]);
+  const vivants = new Set(abonnements.filter((a) => regles.STRIPE_VIVANTS.includes(a.status)).map((a) => a.id));
+  bilan.rapprochement = regles.ecartsStripe({
+    commandes: commandes.docs.map((d) => ({ id: d.id, ...d.data() })),
+    familles: familles.docs.map((f) => ({ id: f.id, nom: f.get('name') || null, abonnement: f.get('abonnement') || null })),
+    vivants, maintenant,
+  });
+  if (bilan.rapprochement.length) logger.warn('Contrôle Stripe ↔ base', bilan.rapprochement);
+}
+
 exports.retoursNonDeposes = retoursNonDeposes; // pour le parcours simulé (automatiser touche aussi Stripe)
 
 async function automatiser(qui) {
@@ -2392,6 +2413,7 @@ async function automatiser(qui) {
   await depensesRecurrentes(maintenant, bilan);
   await facturerPenalites(maintenant - FENETRE, bilan);
   await avoirsRemboursements(maintenant - FENETRE, bilan);
+  await rapprocherStripe(bilan, maintenant).catch((e) => bilan.erreurs.push(`Contrôle Stripe : ${e.message}`));
   await retoursNonDeposes(bilan, maintenant).catch((e) => bilan.erreurs.push(`Étiquettes de retour : ${e.message}`));
   await colisLivres(bilan).catch((e) => bilan.erreurs.push(`Suivi des colis : ${e.message}`));
   await retoursEnCours(bilan).catch((e) => bilan.erreurs.push(`Suivi des retours : ${e.message}`));
@@ -2982,7 +3004,14 @@ function aFaire({ commandes, stock, depenses, automatique, maintenant, sims = []
   }
   ajouter(stock.filter((t) => t.etat === 'en-retour' && t.remplaceePour).length, 'tablette(s) remplacée(s) à récupérer chez le client');
   for (const t of stock.filter((x) => x.alerteJumelage && x.alerteJumelage !== ALERTE_SANS_COMMANDE)) liste.push(`Tablette ${t.ref || t.numero || ''} ${t.alerteJumelage}`);
-  ajouter(actives.filter((c) => c.remboursement && c.remboursement.statut === 'echec').length, 'remboursement(s) échoué(s), à faire depuis Stripe');
+  // Toutes les commandes, annulées comprises : une annulation avant l'envoi dont le remboursement est refusé (A2).
+  ajouter(commandes.filter((c) => c.remboursement && c.remboursement.statut === 'echec').length, 'remboursement(s) échoué(s), à faire depuis Stripe');
+  ajouter(commandes.filter((c) => c.remplacement && c.remplacement.statut === 'echec').length, 'remplacement(s) payant(s) refusé(s) par la banque après l\'envoi, à relancer depuis Stripe');
+  for (const c of actives.filter((x) => x.premierRepousseLe && ['a-preparer', 'paiement-en-attente'].includes(x.expedition))) {
+    liste.push(`Commande de ${c.nom || c.email || c.id} payée mais toujours pas partie : premier prélèvement repoussé, à envoyer`);
+  }
+  // Contrôle de nuit Stripe ↔ base (rapprocherStripe).
+  liste.push(...((automatique && automatique.rapprochement) || []));
   const parId = new Map(commandes.map((c) => [c.id, c]));
   const lignes = new Map(sims.map((l) => [l.id, l]));
   ajouter(stock.filter((t) => simAResilier(t, parId.get(t.commande), lignes.get(t.simId), maintenant)).length,
