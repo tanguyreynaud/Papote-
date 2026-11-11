@@ -89,7 +89,11 @@ test('envoi : tablette reliée et carte SIM obligatoires pour l\'offre tout comp
   refuse(s.refusEnvoiSansSim(c, [{ etat: 'preparee', ref: 'T-004', simId: 'sim1' }]), /numéro de ligne de la carte SIM de la tablette T-004/);
   refuse(s.refusEnvoiSansSim(c, [{ etat: 'preparee', simId: 'sim1' }], { sim1: { iccid: '8933' } }), /numéro de ligne/);
   refuse(s.refusEnvoiSansSim(c, [{ etat: 'preparee', simId: 'sim1' }], { sim1: { numero: '  ' } }), /numéro de ligne/);
-  permis(s.refusEnvoiSansSim(c, [{ etat: 'preparee', simId: 'sim1' }], { sim1: { numero: '07 45 91 77 17' } }));
+  const tous = { surtaxes: true, smsPlus: true, internetPlus: true, etranger: true };
+  refuse(s.refusEnvoiSansSim(c, [{ etat: 'preparee', simId: 'sim1' }], { sim1: { numero: '07 45 91 77 17' } }),
+    /blocage : appels vers les numéros surtaxés, SMS\+, achats sur facture \(Internet\+\), appels et SMS vers l'étranger/);
+  refuse(s.refusEnvoiSansSim(c, [{ etat: 'preparee', simId: 'sim1' }], { sim1: { numero: '07 45 91 77 17', blocages: { ...tous, smsPlus: false } } }), /blocage : SMS\+\.$/);
+  permis(s.refusEnvoiSansSim(c, [{ etat: 'preparee', simId: 'sim1' }], { sim1: { numero: '07 45 91 77 17', blocages: tous } }));
   // Formule absente (commande récente) : la carte reste obligatoire.
   refuse(s.refusEnvoiSansSim({ expedition: 'a-preparer' }, [{ etat: 'preparee' }]), /carte SIM/);
   // Numéro de suivi corrigé après le départ, ancienne commande Wi-Fi : rien de plus demandé.
@@ -101,7 +105,8 @@ test('départ d\'une tablette (envoi, étiquette, remplacement) : carte SIM avec
   refuse(s.refusSimSansNumero({ ref: 'T-007' }, null), /Reliez d'abord une carte SIM à la tablette T-007/);
   refuse(s.refusSimSansNumero({ ref: 'T-007', simId: 'x' }, null), /numéro de ligne/);
   refuse(s.refusSimSansNumero({ simId: 'x' }, { iccid: '8933', numero: null }), /numéro de ligne/);
-  permis(s.refusSimSansNumero({ simId: 'x' }, { numero: '0608991612' }));
+  refuse(s.refusSimSansNumero({ simId: 'x' }, { numero: '0608991612' }), /blocage/);
+  permis(s.refusSimSansNumero({ simId: 'x' }, { numero: '0608991612', blocages: { surtaxes: true, smsPlus: true, internetPlus: true, etranger: true } }));
 });
 
 test('étiquette en double (double clic, vieil onglet) : refusée tant que l\'ancienne n\'a pas servi ou n\'est pas vieille de 30 jours', () => {

@@ -1394,6 +1394,11 @@ function champsSim(c) {
   if ('finForfait' in c) champs.finForfait = c.finForfait === 'bloque' ? 'bloque' : 'reduit';
   // Achat de la carte (dépense), vérifié par enregistrerSim.
   if ('depense' in c) champs.depense = texte(c.depense, 100) || null;
+  // Blocages activés chez l'opérateur (statuts.BLOCAGES_SIM) : vrai ou faux pour chacun, rien d'autre.
+  if ('blocages' in c) {
+    const b = c.blocages && typeof c.blocages === 'object' ? c.blocages : {};
+    champs.blocages = Object.fromEntries(Object.keys(statuts.BLOCAGES_SIM).map((k) => [k, b[k] === true]));
+  }
   return champs;
 }
 

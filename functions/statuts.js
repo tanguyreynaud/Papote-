@@ -54,11 +54,25 @@ function refusEnvoi(c, { mainPropre = false } = {}) {
 
 // Une tablette ne part jamais sans carte SIM qui a son numéro de ligne (Tanguy, 8/11) : sans numéro, pas de fiche
 // contact pour la famille ni de ligne à retrouver. t : fiche stock ; ligne : la carte SIM (sims/{t.simId}) ou null.
+// Blocages à demander à l'opérateur sur chaque carte SIM avant son premier départ (Tanguy, 11/11) : seule protection
+// qui tient si quelqu'un contourne l'appli de la tablette. Cochés une fois sur la fiche de la carte (sims/{id}.blocages).
+const BLOCAGES_SIM = {
+  surtaxes: 'appels vers les numéros surtaxés',
+  smsPlus: 'SMS+',
+  internetPlus: 'achats sur facture (Internet+)',
+  etranger: 'appels et SMS vers l\'étranger',
+};
+const blocagesManquants = (ligne) => Object.keys(BLOCAGES_SIM).filter((k) => !(ligne && ligne.blocages && ligne.blocages[k] === true));
+
 function refusSimSansNumero(t, ligne) {
   const nom = `la tablette ${(t && t.ref) || ''}`.trim();
   if (!t || !t.simId) return `Reliez d'abord une carte SIM à ${nom} (Stock, Cartes SIM).`;
   if (!ligne || !String(ligne.numero || '').replace(/\s/g, '')) {
     return `Notez d'abord le numéro de ligne de la carte SIM de ${nom} (Stock, Cartes SIM).`;
+  }
+  const manquants = blocagesManquants(ligne);
+  if (manquants.length) {
+    return `Activez d'abord chez l'opérateur, puis cochez sur la carte SIM de ${nom} (Stock, Cartes SIM), le blocage : ${manquants.map((k) => BLOCAGES_SIM[k]).join(', ')}.`;
   }
   return '';
 }
@@ -136,7 +150,7 @@ function refusSuppressionSim(ligne, tablette) {
 }
 
 module.exports = {
-  refusEnvoiSansSim, refusSimSansNumero, refusAutreTablette,
+  refusEnvoiSansSim, refusSimSansNumero, refusAutreTablette, BLOCAGES_SIM, blocagesManquants,
   refusEtiquette, refusEtiquetteEnDouble, refusEnvoi, refusReception, refusRetourMateriel, refusLienCommande,
   refusStatutSim, refusRecharge, refusSuppressionSim, SUITES_SIM, RESTITUTION_EN_COURS,
 };
