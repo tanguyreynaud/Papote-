@@ -1343,7 +1343,9 @@ async function openShared() {
     const cache = await caches.open('papote-partage');
     const meta = await cache.match('/partage/meta');
     if (!meta) return;
-    const { count, text } = await meta.json();
+    // Le texte joint par l'appli d'origine (titre, nom du fichier, « Photo de … ») n'est pas repris :
+    // il arrivait en légende sans qu'on l'ait écrit (Tanguy, 11/11). La légende reste vide.
+    const { count } = await meta.json();
     const files = [];
     for (let i = 0; i < count; i++) {
       const res = await cache.match(`/partage/${i}`);
@@ -1357,7 +1359,6 @@ async function openShared() {
     if (!video && !photos.length) return;
     openPage(video ? 'videos' : 'photos');
     openAdd(video ? 'video' : 'photo');
-    if (text) $('post-text').value = text.slice(0, LEGENDE_MAX);
     compterLegende();
     if (video) await addVideoFile(video);
     else await addPhotoFiles(photos);

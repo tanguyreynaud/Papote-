@@ -45,16 +45,17 @@ async function ouvrirPartage(t, r) {
   await t.page.goto(`${banc.origine}/?partage=1`);
 }
 
-test('Une photo partagée depuis WhatsApp, avec son texte : « Envoyer » s\'ouvre prêt, un appui et elle part', async () => {
+test('Une photo partagée depuis WhatsApp avec un texte joint : « Envoyer » s\'ouvre prêt, légende vide, un appui et elle part', async () => {
   const julie = await banc.telephone('Julie');
   const { fid } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
   const avant = (await postsDe(fid, 'photo')).length;
-  await ouvrirPartage(julie, await partager(julie, [await g.photo({ texte: 'Anniversaire', nom: 'IMG-20261108-WA0001.jpg' })], { text: 'Anniversaire de Léo' }));
+  await ouvrirPartage(julie, await partager(julie, [await g.photo({ texte: 'Anniversaire', nom: 'IMG-20261108-WA0001.jpg' })], { title: 'Photo de Tanguy', text: 'IMG-20261108-WA0001.jpg' }));
   await g.attendreVue(julie, 'view-photos');
   await julie.page.locator('#sheet-post').waitFor({ state: 'visible' });
   await julie.page.locator('#previews img').first().waitFor();
   assert.strictEqual(await julie.page.locator('#previews img').count(), 1);
-  assert.strictEqual(await julie.page.inputValue('#post-text'), 'Anniversaire de Léo', 'le texte partagé sert de légende');
+  assert.strictEqual(await julie.page.inputValue('#post-text'), '', 'le texte joint par l\'appli d\'origine n\'est pas repris en légende');
+  await julie.page.fill('#post-text', 'Anniversaire de Léo');
   await g.visible(julie, '#btn-send').waitFor();
   await julie.page.click('#btn-send');
   await g.toast(julie, 'Envoyé');
