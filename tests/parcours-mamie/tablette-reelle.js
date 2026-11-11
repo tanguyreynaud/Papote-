@@ -135,6 +135,8 @@ const allumees = [];
 async function allumer({ tab = null, etat = {}, heure = null } = {}) {
   const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'papote-tablette-'));
   const java = await lancerJava(dossier);
+  // Notée tout de suite : si la suite échoue, elle est quand même éteinte à la fin du scénario (sinon l'essai ne finit jamais).
+  allumees.push({ java, dossier });
   const t = await banc.telephone('Tablette', { largeur: 1280, hauteur: 800 });
   t.java = java;
   t.dossier = dossier;
@@ -183,6 +185,16 @@ async function allumer({ tab = null, etat = {}, heure = null } = {}) {
   // Sans réseau : plus rien ne sort de la page non plus (émulateurs compris).
   await t.context.route(/^https?:\/\/(127\.0\.0\.1|localhost)[:/]/, (route) => (t.horsLigne ? route.abort('internetdisconnected') : route.fallback()));
 
+  // Fonctions serveur appelées par la page (incident d'appel…) : en ligne elles acceptent toutes les origines ; le
+  // banc de l'app ne le dit qu'à l'app. On répond ici ce que répond Google (en-têtes CORS), l'appel lui-même est réel.
+  const CORS = { 'access-control-allow-origin': ORIGIN, 'access-control-allow-headers': '*', 'access-control-allow-methods': 'POST, OPTIONS' };
+  await t.context.route(new RegExp(`^http://localhost:\\d+/${banc.PROJET}/[a-z0-9-]+/[A-Za-z0-9_]+$`), async (route) => {
+    if (t.horsLigne) return route.abort('internetdisconnected');
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: CORS });
+    const r = await route.fetch();
+    return route.fulfill({ response: r, headers: { ...r.headers(), ...CORS } });
+  });
+
   // Chromium demande une permission avant de laisser une page https parler à l'ordinateur lui-même (les émulateurs).
   await t.context.grantPermissions(['local-network-access', 'camera', 'microphone'], { origin: ORIGIN })
     .catch(() => t.context.grantPermissions(['camera', 'microphone'], { origin: ORIGIN }));
@@ -195,9 +207,22 @@ async function allumer({ tab = null, etat = {}, heure = null } = {}) {
     visible: (sel) => t.page.evaluate((x) => { const e = document.querySelector(x); return !!e && !e.hidden && !e.closest('[hidden]') && getComputedStyle(e).display !== 'none'; }, sel),
     texte: (sel) => t.page.evaluate((x) => ((document.querySelector(x) || {}).textContent || '').replace(/ /g, ' '), sel),
     // Le doigt de Mamie : un vrai toucher au milieu du bouton (il doit être visible et pas recouvert).
-    toucher: (sel) => t.page.locator(sel).first().click(),
+    toucher: async (sel) => {
+      const l = t.page.locator(sel).first();
+      await l.waitFor({ state: 'visible', timeout: 30_000 });
+      const b = await l.boundingBox();
+      const [x, y] = [b.x + b.width / 2, b.y + b.height / 2];
+      // Un bouton qui bat (« Décrocher ») reste touchable ; un bouton recouvert par un autre écran ne l'est pas.
+      const dessus = await t.page.evaluate(([px, py, q]) => { const e = document.elementFromPoint(px, py); const but = document.querySelector(q); return e && (e === but || but.contains(e)) ? '' : (e ? e.id || String(e.className) || e.tagName : 'rien'); }, [x, y, sel]);
+      if (dessus) throw new Error(`Écran de Mamie : « ${sel} » est recouvert par « ${dessus} ».`);
+      await t.page.touchscreen.tap(x, y);
+    },
     appels: (nom) => t.page.evaluate((x) => window.__appels.filter((a) => !x || a.nom === x), nom),
-    etat: (e) => t.page.evaluate((x) => Object.assign(window.__etat, x), e),
+    // L'état d'Android (réseau, secteur…) survit à un redémarrage de la page, comme sur la tablette.
+    etat: async (e) => {
+      await t.context.addInitScript((x) => { if (window.__etat) Object.assign(window.__etat, x); }, e);
+      return t.page.evaluate((x) => Object.assign(window.__etat, x), e);
+    },
     /** Coupe ou rend le réseau : au code Java, à la page, et à ce qu'Android en dit (wifiStatus). */
     reseau: async (present) => {
       t.horsLigne = !present;
@@ -226,7 +251,6 @@ async function allumer({ tab = null, etat = {}, heure = null } = {}) {
     /** Les derniers envois donnés à la page par l'appli. */
     envois: () => { const l = java.evenements.filter((x) => x.nom === 'onPosts'); return l.length ? l[l.length - 1].data : null; },
   });
-  allumees.push(t);
   return t;
 }
 
