@@ -4,6 +4,7 @@
 // Une app Firebase à part (« admin ») : la connexion Google ne touche pas à la famille de ce navigateur.
 import './retour.js';
 import './clavier.js';
+import { BLOCAGES_SIM, blocagesFaits } from './sim.js';
 import { demander, saisir, prevenir, menuPoints, patienter, annoncer, boutonCharge, ligneModifiable } from './dialogue.js';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
 import {
@@ -284,6 +285,23 @@ function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
           statut: 'active', numero: e.simNumero, activation: Date.parse(`${e.simActivation}T12:00:00`),
           prix: Math.round(Number(e.simPrix.replace(',', '.')) * 100), tablette: e.tablette,
         } });
+      },
+    },
+    {
+      // Blocages demandés à l'opérateur (Tanguy, 11/11) : seule protection qui tient si quelqu'un contourne l'appli
+      // de la tablette. Notés une fois sur la carte SIM (sims/{id}.blocages) : pas redemandés au prochain envoi.
+      // Le serveur refuse l'étiquette et « Colis déposé » tant qu'ils ne sont pas tous notés.
+      cle: 'blocages',
+      titre: 'Blocages chez l\'opérateur',
+      texte: 'Dans l\'espace client de la ligne (ou au service client de l\'opérateur), activez ces blocages, puis cochez :',
+      saute: (e) => !internet || blocagesFaits(simDe(e)),
+      cases: BLOCAGES_SIM.map(([, texte]) => `Bloqué : ${texte}`),
+      async valider(e) {
+        const l = simDe(e);
+        if (!l) return;
+        const blocages = Object.fromEntries(BLOCAGES_SIM.map(([k]) => [k, true]));
+        await appeler('gestionSim', { action: 'modifier', id: l.id, champs: { blocages } });
+        l.blocages = blocages;
       },
     },
     {
