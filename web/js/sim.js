@@ -3,6 +3,16 @@
 // dans le registre « Cartes SIM » de l'onglet Stock.
 import { operateurParFrequence } from './frequences.js';
 
+// Blocages à demander à l'opérateur sur chaque carte SIM avant son départ (Tanguy, 11/11) : même liste que
+// functions/statuts.js (BLOCAGES_SIM). Notés sur la carte (sims/{id}.blocages), cochés une fois pour toutes.
+export const BLOCAGES_SIM = [
+  ['surtaxes', 'appels vers les numéros surtaxés'],
+  ['smsPlus', 'SMS+'],
+  ['internetPlus', 'achats sur facture (Internet+)'],
+  ['etranger', 'appels et SMS vers l\'étranger'],
+];
+export const blocagesFaits = (l) => !!l && BLOCAGES_SIM.every(([k]) => l.blocages && l.blocages[k] === true);
+
 const DATA_MAX_MO = 15 * 1024;
 const toDate = (v) => (v && v.toDate ? v.toDate() : v ? new Date(v) : null);
 export const go = (mo) => (mo == null || mo < 0 ? null : mo >= 1024 ? `${(mo / 1024).toFixed(1)} Go` : `${Math.round(mo)} Mo`);

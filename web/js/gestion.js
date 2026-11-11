@@ -14,7 +14,7 @@ import { ouvrirParcours, fermerParcours } from './parcours.js';
 import {
   getFirestore, doc, collection, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, increment,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
-import { simVue, reseauMobile, reseauAVoir, reseauVuDe, alerteReseau, noterReseauVu, go as enGo } from './sim.js';
+import { simVue, reseauMobile, reseauAVoir, reseauVuDe, alerteReseau, noterReseauVu, go as enGo, BLOCAGES_SIM, blocagesFaits } from './sim.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -1825,6 +1825,7 @@ function remplirPageSim(id) {
       ...modif('Carte bancaire', l.cb ? `…${l.cb}` : null, 'cb', { valeur: l.cb, mode: 'numeric', aide: '4 derniers chiffres' }),
       ...modif('Expiration de la carte', l.cbExp, 'cbExp', { valeur: l.cbExp, type: 'month' }),
       ...modif('Note', l.note, 'note', { valeur: l.note, long: true }))),
+    carteBlocages(l),
     carteRecharges(l, modif, vue),
     vue ? h('div', { class: 'card' }, h('h2', {}, 'Ce que dit la tablette'),
       h('dl', { class: 'fiche' },
@@ -1881,6 +1882,48 @@ function carteRecharges(l, modif, vue) {
       ' La tablette reçoit le forfait (Go notés plus haut, 1 Go sinon) et la date de recharge : à 70 % elle réduit l\'image des appels, à 88 % encore plus, à 95 % elle les passe sans image et les vidéos attendent le Wi-Fi.'),
     recharges.length ? h('div', { class: 'table cartes' }, tableRecharges(recharges)) : h('p', { class: 'muted small' }, 'Aucune recharge notée.'));
 }
+// Blocages demandés à l'opérateur (Tanguy, 11/11) : un bouton par blocage, appuyé = activé chez l'opérateur. Notés
+// une fois sur la carte : « Préparer l'envoi » ne les redemande plus, et le serveur refuse l'étiquette et « Colis
+// déposé » tant qu'il en manque un. Même comportement que « À la fin du forfait » : effet tout de suite, une roue
+// pendant l'envoi, un seul envoi même en touchant deux fois.
+function carteBlocages(l) {
+  if (l.statut === 'resiliee') return null;
+  const etat = Object.fromEntries(BLOCAGES_SIM.map(([k]) => [k, !!(l.blocages && l.blocages[k] === true)]));
+  let envoi = false;
+  const boutons = BLOCAGES_SIM.map(([k, texte]) => h('button', {
+    type: 'button', class: 'choix-fin-forfait no-print', 'data-blocage': k, 'aria-pressed': String(etat[k]),
+  }, texte));
+  const resume = h('p', { class: 'small' });
+  const afficher = () => {
+    boutons.forEach((b) => b.setAttribute('aria-pressed', String(etat[b.dataset.blocage])));
+    resume.textContent = blocagesFaits({ blocages: etat })
+      ? 'Tout est bloqué : la carte peut partir.'
+      : 'Il manque un blocage : pas d\'étiquette ni de « Colis déposé » pour cette carte.';
+    resume.className = blocagesFaits({ blocages: etat }) ? 'small muted' : 'small error';
+  };
+  for (const b of boutons) {
+    b.addEventListener('click', async () => {
+      if (envoi) return;
+      envoi = true;
+      const k = b.dataset.blocage;
+      etat[k] = !etat[k];
+      afficher();
+      b.classList.add('charge');
+      const texte = BLOCAGES_SIM.find(([x]) => x === k)[1];
+      const ok = await modifierChampsSim(l.id, { blocages: { ...etat } }, etat[k] ? `Noté : blocage activé (${texte})` : `Noté : blocage retiré (${texte})`);
+      b.classList.remove('charge');
+      if (!ok) { etat[k] = !etat[k]; afficher(); }
+      envoi = false;
+    });
+  }
+  afficher();
+  return h('div', { class: 'card' },
+    h('h2', {}, 'Blocages chez l\'opérateur'),
+    h('p', { class: 'muted small' }, 'Activez-les dans l\'espace client de la ligne (ou au service client), puis appuyez sur chacun ici. Seule protection qui tient si quelqu\'un sort de l\'appli de la tablette.'),
+    h('div', { class: 'fins-forfait', role: 'group', 'aria-label': 'Blocages chez l\'opérateur' }, ...boutons),
+    resume);
+}
+
 // Ce que fait l'opérateur au bout du forfait (Tanguy, 5/11) : débit réduit (Lyca, Bouygues) ou internet coupé
 // (Sosh 1 Go bloqué). Recopié sur la famille : l'alerte de fin de forfait et l'app famille adaptent leur message.
 // Deux boutons de même taille, sans confirmation : le choix s'affiche tout de suite, une roue pendant l'envoi,
