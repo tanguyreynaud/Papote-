@@ -8,6 +8,8 @@
     <!-- Même cible que le share_target de web/manifest.webmanifest -->
     <string name="partage_cible" translatable="false">{\"action\": \"https://app.mapapote.fr/partage\", \"method\": \"POST\", \"enctype\": \"multipart/form-data\", \"params\": {\"title\": \"title\", \"text\": \"text\", \"files\": [{\"name\": \"media\", \"accept\": [\"image/*\", \"video/*\"]}]}}</string>
     <string name="partage_titre">Envoyer sur la tablette</string>
+    <string name="raccourci_defaut">La tablette</string>
+    <string name="raccourci_long">Envoyer à %1$s</string>
     <string name="canal_appels">Appels de la tablette</string>
     <string name="canal_appels_texte">Sonnerie quand la tablette vous appelle</string>
     <string name="canal_infos">Appels manqués et alertes</string>

@@ -26,6 +26,7 @@ public class Sonnerie extends FirebaseMessagingService {
         if (nom == null || nom.isEmpty()) nom = "Mamie";
         if ("appel".equals(type) && cid != null) {
             Appels.sonner(this, cid, nom, d.get("fid"), d.get("jeton"));
+            Raccourci.nommer(this, nom);
         } else if ("connexion".equals(type) && cid != null && d.get("connexion") != null) {
             Appels.memoriserConnexion(this, cid, d.get("connexion"));
         } else if ("fin".equals(type)) {

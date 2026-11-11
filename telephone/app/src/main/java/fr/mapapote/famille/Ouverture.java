@@ -51,6 +51,7 @@ public class Ouverture extends LauncherActivity {
         super.onCreate(savedInstanceState);
         if (isFinishing()) return;
         Appels.creerCanaux(this);
+        Raccourci.verifier(this);
         // Ouverte depuis « Répondre » : la sonnerie a fait son travail.
         Uri data = getIntent().getData();
         if (data != null && data.getQueryParameter("appel") != null) {

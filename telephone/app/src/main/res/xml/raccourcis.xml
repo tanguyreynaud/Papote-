@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Le raccourci de partage « Mamie » (Raccourci.java) accepte photos et vidéos, envoyées à Ouverture. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <share-target android:targetClass="fr.mapapote.famille.Ouverture">
+        <data android:mimeType="image/*" />
+        <data android:mimeType="video/*" />
+        <category android:name="fr.mapapote.famille.PARTAGE" />
+    </share-target>
+</shortcuts>

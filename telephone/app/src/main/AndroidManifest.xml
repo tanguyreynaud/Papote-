@@ -64,6 +64,10 @@
             <meta-data
                 android:name="android.support.customtabs.trusted.METADATA_SHARE_TARGET"
                 android:resource="@string/partage_cible" />
+            <!-- Raccourci « Mamie » en tête du menu « Partager » (Raccourci.java) -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/raccourcis" />
 
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
