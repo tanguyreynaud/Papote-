@@ -1,0 +1,50 @@
+# Le parcours de Mamie de bout en bout, les trois branches ensemble : la vraie app famille (cette branche), les
+# vraies fonctions (main) et la vraie tablette (sa branche : son code Java compilé sur l'ordinateur et ses écrans),
+# sur les émulateurs Firebase. Gratuit, rien en ligne. Mode d'emploi : tests/parcours-mamie/README.md.
+name: Parcours de Mamie
+
+# Au push sur cette branche (app, règles, essais). Un changement sur main ou sur la branche de la tablette ne
+# le lance pas tout seul : bouton « Run workflow » avant une publication ou une mise à jour des tablettes.
+on:
+  push:
+    paths: ['web/**', 'firestore.rules', 'storage-eu.rules', 'tests/parcours-mamie/**', 'tests/app-famille/banc.js', 'tests/app-famille/gestes.js', '.github/workflows/parcours-mamie.yml']
+  workflow_dispatch:
+
+jobs:
+  parcours-mamie:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: tests/parcours-mamie
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tests/app-famille/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+          cache-dependency-path: tests/parcours-mamie/tablette-jvm/pom.xml
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: emulateurs-firebase-14
+      - run: npm ci
+        working-directory: tests/app-famille
+      - run: npx playwright install --with-deps chromium
+        working-directory: tests/app-famille
+      - run: npm test
+      - name: Captures en cas d'échec
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: captures-parcours-mamie
+          path: tests/app-famille/captures/
+          if-no-files-found: ignore
