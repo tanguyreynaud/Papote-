@@ -2,10 +2,12 @@
 //
 //   coupeCircuit  à chaque avis du budget Google Cloud (sujet Pub/Sub « budget-papote ») :
 //                 30 € : e-mail d'alerte ; 100 € : e-mail « attention, coupure à 150 € » ;
-//                 150 € : la facturation du projet est désactivée (tout s'arrête), puis e-mail.
+//                 150 € : e-mail « coupure en cours », puis la facturation du projet est désactivée (tout s'arrête),
+//                 puis e-mail de confirmation si les fonctions tournent encore.
 //
 // Google envoie l'avis du budget plusieurs fois par jour avec le coût du mois en cours (costAmount).
-// Chaque palier n'est prévenu qu'une fois par mois (interne/budget dans la base, illisible côté client). Le coût affiché
+// Chaque palier n'est prévenu qu'une fois par mois (interne/budget dans la base, illisible côté client), et seulement
+// compté quand l'e-mail est vraiment parti (traiterAvis). Le coût affiché
 // par Google a quelques heures de retard : la coupure arrive donc un peu après 150 €.
 //
 // Réglage dans la console (une seule fois) : budget « Papote » de 150 € relié au sujet Pub/Sub
@@ -59,39 +61,77 @@ async function couperFacturation(projet) {
   if (!r.ok) throw new Error(`Cloud Billing ${r.status} : ${await r.text()}`);
 }
 
+// Un avis du budget. Le palier est pris dans une transaction (deux avis en même temps : un seul agit), puis RENDU si
+// rien n'a pu partir (audit des alertes, 11/11) : avant, un e-mail refusé (Brevo en panne, quota) laissait le palier
+// noté, et plus rien ne repartait avant le palier suivant. Google renvoie l'avis plusieurs fois par jour : le tour
+// suivant réessaie.
+//   30 € et 100 €  e-mail ; s'il ne part pas, le palier est rendu et l'erreur remonte.
+//   150 €          e-mail « coupure en cours » AVANT de couper (après, les fonctions peuvent être arrêtées), puis la
+//                  coupure ; si elle échoue, e-mail urgent et palier rendu : chaque avis suivant réessaie de couper.
+// outils : { fiche (document interne/budget), transaction(f), envoyer(contenu), couper(), journal } pour les tests.
+async function traiterAvis(avis, outils) {
+  const { fiche, transaction, envoyer, couper, journal } = outils;
+  const cout = Number(avis.costAmount) || 0;
+  const periode = String(avis.costIntervalStart || '').slice(0, 7); // « 2026-10 »
+  const atteint = palierAtteint(cout);
+
+  const avant = await transaction(async (t) => {
+    const etat = (await t.get(fiche)).data() || {};
+    const deja = etat.periode === periode ? etat.palier : null;
+    if (!aPrevenir(atteint, deja)) return false;
+    t.set(fiche, { periode, palier: atteint, cout, le: new Date() });
+    return { etat };
+  });
+  if (!avant) return { fait: false };
+  // Rien n'est parti : la fiche redevient ce qu'elle était, le prochain avis réessaie.
+  const rendre = () => (Object.keys(avant.etat).length ? fiche.set(avant.etat) : fiche.delete());
+
+  journal.warn('Budget Google Cloud', { cout, palier: atteint, periode });
+  if (atteint !== 'coupure') {
+    try {
+      await envoyer(message(atteint, cout, avis.currencyCode));
+    } catch (e) {
+      await rendre();
+      throw e;
+    }
+    return { fait: true, palier: atteint };
+  }
+
+  let prevenu = true;
+  try {
+    await envoyer(message('coupure', cout, avis.currencyCode, null));
+  } catch (e) {
+    prevenu = false;
+    journal.error('Coupe-circuit : e-mail « coupure en cours » non parti', e.message);
+  }
+  try {
+    await couper();
+  } catch (e) {
+    journal.error('Coupe-circuit : la facturation n\'a pas pu être désactivée', e);
+    await rendre();
+    await envoyer(message('coupure', cout, avis.currencyCode, false));
+    return { fait: true, palier: atteint, coupee: false };
+  }
+  // Confirmation, si les fonctions tournent encore : sans elle, l'e-mail « en cours » a déjà tout dit.
+  await envoyer(message('coupure', cout, avis.currencyCode, true))
+    .catch((e) => journal.warn('Coupe-circuit : confirmation non partie', e.message));
+  return { fait: true, palier: atteint, coupee: true, prevenu };
+}
+
 const coupeCircuit = onMessagePublished(
   { topic: SUJET, secrets: [MAIL_MOT_DE_PASSE], maxInstances: 1, retry: false },
   async (event) => {
-    const avis = event.data.message.json || {};
-    const cout = Number(avis.costAmount) || 0;
-    const periode = String(avis.costIntervalStart || '').slice(0, 7); // « 2026-10 »
-    const atteint = palierAtteint(cout);
-    const fiche = base().doc('interne/budget');
-
-    const prevenir = await base().runTransaction(async (t) => {
-      const etat = (await t.get(fiche)).data() || {};
-      const deja = etat.periode === periode ? etat.palier : null;
-      if (!aPrevenir(atteint, deja)) return false;
-      t.set(fiche, { periode, palier: atteint, cout, le: new Date() });
-      return true;
-    });
-    if (!prevenir) return;
-
-    logger.warn('Budget Google Cloud', { cout, palier: atteint, periode });
-    let coupee = true;
-    if (atteint === 'coupure') {
-      const projet = process.env.GCLOUD_PROJECT || JSON.parse(process.env.FIREBASE_CONFIG || '{}').projectId;
-      try {
-        await couperFacturation(projet);
-      } catch (e) {
-        logger.error('Coupe-circuit : la facturation n\'a pas pu être désactivée', e);
-        coupee = false;
-      }
-    }
-    await mail.envoyer({
-      smtp: MAIL_SMTP.value(), expediteur: MAIL_EXPEDITEUR.value(), motDePasse: MAIL_MOT_DE_PASSE.value(),
-      a: EMAIL_PAPOTE, contenu: message(atteint, cout, avis.currencyCode, coupee),
+    const projet = process.env.GCLOUD_PROJECT || JSON.parse(process.env.FIREBASE_CONFIG || '{}').projectId;
+    await traiterAvis(event.data.message.json || {}, {
+      fiche: base().doc('interne/budget'),
+      transaction: (f) => base().runTransaction(f),
+      envoyer: (contenu) => mail.envoyer({
+        smtp: MAIL_SMTP.value(), expediteur: MAIL_EXPEDITEUR.value(), motDePasse: MAIL_MOT_DE_PASSE.value(),
+        a: EMAIL_PAPOTE, contenu,
+      }),
+      couper: () => couperFacturation(projet),
+      journal: logger,
     });
   });
 
-module.exports = { coupeCircuit, palierAtteint, aPrevenir, message, PALIERS };
+module.exports = { coupeCircuit, traiterAvis, palierAtteint, aPrevenir, message, PALIERS };
