@@ -1,6 +1,6 @@
 # Papote
 
-Une alternative maison et gratuite à Linote : une tablette Android simplifiée pour Mamie,
+Une tablette Android simplifiée pour Mamie,
 et une app pour que la famille lui envoie photos et messages depuis iPhone ou Android.
 
 ## Ce que ça fait
