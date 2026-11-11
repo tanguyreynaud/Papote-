@@ -38,7 +38,8 @@ function solde({ stock, commandes, reservations, maintenant }) {
   const libres = stock.filter((t) => ETATS_LIBRES.includes(t.etat) && !t.commande && !t.fid && t.essai !== true && !t.horsCriteres).length;
   const reliees = new Set(stock.map((t) => t.commande).filter(Boolean));
   const enAttente = commandes.filter((c) => A_SERVIR.includes(c.expedition) && !reliees.has(c.id)).length;
-  const enPaiement = reservations.filter((r) => (ms(r.expireLe) || 0) > maintenant).length;
+  // Essai noté sans tablette mise de côté (plafond RESERVATIONS_MAX atteint) : ne compte pas dans le stock.
+  const enPaiement = reservations.filter((r) => r.bloque !== false && (ms(r.expireLe) || 0) > maintenant).length;
   return libres - enAttente - enPaiement;
 }
 // Tablettes en stock pour une nouvelle commande (≥ 0).
@@ -80,23 +81,43 @@ function delai(n) {
 // ou null quand il n'y a plus rien à vendre (rien n'est écrit).
 // Le document gestion/stock est lu et écrit à chaque réservation : deux paiements simultanés passent
 // l'un après l'autre et ne peuvent pas prendre la même dernière tablette.
+// Plafond global (audit 8, N1, 11/11) : au plus 3 tablettes mises de côté en même temps pour des paiements en cours.
+// Au-delà, la commande reste possible mais ne met plus rien de côté (comme en mode test) : un script qui ouvre des
+// pages de paiement sans payer ne peut plus bloquer tout le stock, et un vrai client n'est jamais refusé pour ça.
+const RESERVATIONS_MAX = 3;
+
 async function reserver(db, { ip, email } = {}) {
   const maintenant = Date.now();
   const verrou = db.doc('gestion/stock');
   const ref = db.collection('reservations').doc();
+  let sansReservation = false;
   const d = await db.runTransaction(async (tx) => {
+    sansReservation = false;
     await tx.get(verrou);
     const n = await lireEtCompter(db, (q) => tx.get(q), maintenant);
     if (!vendable(n)) return null;
+    const enCours = await tx.get(db.collection('reservations').where('expireLe', '>', Timestamp.fromMillis(maintenant)));
+    sansReservation = enCours.docs.filter((x) => x.get('bloque') !== false).length >= RESERVATIONS_MAX;
+    // L'essai est toujours noté (limite par adresse et par e-mail, tropDEssais), même sans tablette mise de côté.
     tx.set(ref, {
       creeLe: Timestamp.fromMillis(maintenant), expireLe: Timestamp.fromMillis(maintenant + DUREE_PAIEMENT_MS + MARGE_MS),
-      ip: hacher(ip), email: email ? String(email).toLowerCase() : null,
+      ip: hacher(ip), email: email ? String(email).toLowerCase() : null, ...(sansReservation ? { bloque: false } : {}),
     });
     tx.set(verrou, { derniereReservation: FieldValue.serverTimestamp() }, { merge: true });
     return delai(n);
   });
   if (!d) return null;
+  if (sansReservation) return { id: null, expireA: null, delai: d };
   return { id: ref.id, expireA: Math.floor((maintenant + DUREE_PAIEMENT_MS) / 1000), delai: d };
+}
+
+// Adresse internet du visiteur (audit 8, N1 et N5, 11/11). Le premier élément de X-Forwarded-For est écrit par le
+// visiteur lui-même (il met ce qu'il veut) ; le DERNIER est celui que Google ajoute : l'adresse qui s'est vraiment
+// connectée. Les fonctions sont appelées en direct (…cloudfunctions.net), sans autre relais devant.
+function adresseVisiteur(req) {
+  const chaine = String((req.get ? req.get('x-forwarded-for') : req.headers && req.headers['x-forwarded-for']) || '')
+    .split(',').map((x) => x.trim()).filter(Boolean);
+  return chaine.length ? chaine[chaine.length - 1] : String(req.ip || '');
 }
 
 // Garde-fou (inspection 5, 3/11) : quelqu'un qui ouvre des pages de paiement sans jamais payer bloquerait tout le
@@ -160,4 +181,4 @@ function routeDisponible(db, logger) {
 const ERREUR_COMPLET = () => new HttpsError('resource-exhausted',
   "Toutes nos tablettes sont réservées pour le moment. Inscrivez-vous sur mapapote.fr pour être prévenu dès qu'il y en a.");
 
-module.exports = { tropDEssais, nettoyerReservations, ESSAIS_HEURE_IP, ESSAIS_HEURE_EMAIL, tablettesDisponibles, placesDisponibles, vendable, VENDRE_SANS_STOCK, delai, PRECOMMANDES, nombreDisponibles, reserver, liberer, routeDisponible, ERREUR_COMPLET, DUREE_PAIEMENT_MS };
+module.exports = { adresseVisiteur, RESERVATIONS_MAX, tropDEssais, nettoyerReservations, ESSAIS_HEURE_IP, ESSAIS_HEURE_EMAIL, tablettesDisponibles, placesDisponibles, vendable, VENDRE_SANS_STOCK, delai, PRECOMMANDES, nombreDisponibles, reserver, liberer, routeDisponible, ERREUR_COMPLET, DUREE_PAIEMENT_MS };

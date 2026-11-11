@@ -207,6 +207,7 @@ function creerFauxStripe(horloge) {
     },
     paymentIntents: {
       retrieve: async (x) => copie(lire('paiements', 'payment_intent', x)),
+      list: ({ customer } = {}) => liste([...etat.paiements.values()].filter((p) => !customer || p.customer === customer).reverse()),
       // Comme Stripe : une même clé d'idempotence rend le même paiement, sans prélever deux fois.
       create: async ({ amount, customer, description, metadata }, options = {}) => {
         const cle = options.idempotencyKey;

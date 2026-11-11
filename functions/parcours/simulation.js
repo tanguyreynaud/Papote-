@@ -332,11 +332,14 @@ function demarrerServeur() {
 }
 
 // GET ou POST vers une fonction « onRequest » ; les redirections ne sont pas suivies.
-async function requete(nom, { query = {}, corps, entetes = {} } = {}) {
+// depuis : adresse internet qui se connecte vraiment. Comme le frontal de Google, elle est AJOUTÉE à la fin de
+// X-Forwarded-For, après ce que le visiteur a pu écrire lui-même dans cet en-tête (audit 8, N1).
+async function requete(nom, { query = {}, corps, entetes = {}, depuis = '203.0.113.9' } = {}) {
   const url = `${adresse}/${nom}?${new URLSearchParams(query)}`;
+  const xff = [entetes['x-forwarded-for'], depuis].filter(Boolean).join(', ');
   const r = await vraiFetch(url, {
     method: corps ? 'POST' : 'GET', redirect: 'manual',
-    headers: { ...(corps ? { 'content-type': 'application/json' } : {}), ...entetes },
+    headers: { ...(corps ? { 'content-type': 'application/json' } : {}), ...entetes, 'x-forwarded-for': xff },
     body: corps ? JSON.stringify(corps) : undefined,
   });
   const texte = await r.text();

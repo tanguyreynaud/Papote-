@@ -147,3 +147,34 @@ test('impayé : suspendue depuis 30 jours, l\'abonnement s\'arrête tout seul ; 
   assert.strictEqual(demeure.length, 1);
   assert.match(demeure[0], /sous 8 jours[\s\S]*Je renvoie la tablette[\s\S]*140 €, ainsi que les mois d'abonnement restés impayés/);
 });
+
+// Audit 8 (N4, 11/11) : Stripe a prélevé mais sa réponse se perd. L'admin ne doit jamais faire prélever deux fois.
+test('remplacement payant : réponse de Stripe perdue après le débit, le 2e essai retrouve le paiement et ne prélève pas à nouveau', async () => {
+  const paul = await s.compte('Paul', 'paul@exemple.fr');
+  const { id, t } = await familleAbonnee(paul);
+  const neuve = await remplacante();
+  const api = s.stripe.api.paymentIntents;
+  const creer = api.create;
+  let perdu = false;
+  api.create = async (...args) => {
+    const r = await creer(...args);
+    if (!perdu) { perdu = true; throw Object.assign(new Error('socket hang up'), { type: 'StripeConnectionError' }); }
+    return r;
+  };
+  try {
+    await assert.rejects(remplacer(id, neuve, 'casse'), /Pas de réponse claire de Stripe.*ne prélève jamais deux fois/);
+    assert.strictEqual((await commande(id)).remplacement.statut, 'incertain');
+    assert.strictEqual((await fiche(t)).commande, id, 'rien remplacé tant que ce n\'est pas sûr');
+    assert.strictEqual(preleve(id).length, 1, 'Stripe a bien prélevé une fois');
+    const r = await remplacer(id, neuve, 'casse');
+    assert.strictEqual(r.montant, 13000);
+    assert.strictEqual(preleve(id).length, 1, 'pas de 2e prélèvement');
+    assert.strictEqual((await commande(id)).remplacement.statut, 'preleve');
+    assert.strictEqual((await fiche(neuve)).commande, id);
+    // Relancé encore (vieil onglet) : rien de plus.
+    await assert.rejects(remplacer(id, neuve, 'casse'), /disponible du stock/);
+    assert.strictEqual(preleve(id).length, 1);
+  } finally {
+    api.create = creer;
+  }
+});

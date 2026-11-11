@@ -41,6 +41,10 @@ const QUOTA_VISITEUR = 30;
 const QUOTA_TOTAL = 300; // tous visiteurs confondus : plafonne la facture Anthropic (non couverte par le coupe-circuit)
 const QUOTA_RAPPELS = 3;
 const QUOTA_INSCRIPTIONS = 5;
+// Tous visiteurs confondus, par jour : une adresse changée à chaque essai ne doit pas pouvoir
+// remplir la boîte de Papote (un e-mail par rappel) ni la liste des contacts (audit 8, N5).
+const QUOTA_RAPPELS_JOUR = 30;
+const QUOTA_INSCRIPTIONS_JOUR = 60;
 const MARQUE_CONTACT = '[CONTACT]';
 const CONNAISSANCES = fs.readFileSync(path.join(__dirname, 'support-connaissances.md'), 'utf8');
 const MAX_MESSAGES = 12;
@@ -135,8 +139,9 @@ function nettoyer(messages) {
 
 // Compte une question (n), une demande de rappel ou une inscription ; false si le quota du jour est dépassé.
 const QUOTAS = { n: QUOTA_VISITEUR, rappels: QUOTA_RAPPELS, inscriptions: QUOTA_INSCRIPTIONS };
+const QUOTAS_JOUR = { n: QUOTA_TOTAL, rappels: QUOTA_RAPPELS_JOUR, inscriptions: QUOTA_INSCRIPTIONS_JOUR };
 async function quotaOk(ip, champ = 'n') {
-  const jour = new Date().toISOString().slice(0, 10);
+  const jour = new Date(Date.now()).toISOString().slice(0, 10);
   const visiteur = crypto.createHash('sha256').update(jour + ip).digest('hex').slice(0, 24);
   const db = base();
   const refVisiteur = db.doc(`supportQuota/${jour}/visiteurs/${visiteur}`);
@@ -147,7 +152,7 @@ async function quotaOk(ip, champ = 'n') {
     const [v, j] = await Promise.all([t.get(refVisiteur), t.get(refJour)]);
     const nV = (v.get(champ) || 0) + 1;
     const nJ = (j.get(champ) || 0) + 1;
-    if (nV > QUOTAS[champ] || (champ === 'n' && nJ > QUOTA_TOTAL)) return false;
+    if (nV > QUOTAS[champ] || nJ > QUOTAS_JOUR[champ]) return false;
     t.set(refVisiteur, { [champ]: nV }, { merge: true });
     t.set(refJour, { [champ]: nJ, expire: new Date(Date.now() + 7 * 86400e3) }, { merge: true });
     return true;
@@ -249,7 +254,7 @@ exports.supportChat = onRequest(
   { secrets: [ANTHROPIC_API_KEY, MAIL_MOT_DE_PASSE], cors: ORIGINES, maxInstances: 3, timeoutSeconds: 60 },
   async (req, res) => {
     if (req.method !== 'POST') return res.status(405).json({ erreur: 'POST attendu' });
-    const ip = String(req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim() || 'inconnu';
+    const ip = require('./stock').adresseVisiteur(req) || 'inconnu';
     if (req.body && req.body.inscription) {
       const { status, corps } = await inscrire(ip, req.body.inscription);
       return res.status(status).json(corps);
@@ -324,4 +329,4 @@ exports.bilanSupport = async () => {
 };
 
 
-exports._test = { nettoyer, coordonneesValides, lireReponse, inscriptionValide, STOCK_DISPONIBLE, STOCK_EPUISE };
+exports._test = { QUOTAS, QUOTAS_JOUR, nettoyer, coordonneesValides, lireReponse, inscriptionValide, STOCK_DISPONIBLE, STOCK_EPUISE };

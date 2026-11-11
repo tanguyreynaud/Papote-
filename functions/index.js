@@ -586,7 +586,7 @@ exports.commander = onRequest({ secrets: [STRIPE_SECRET] }, async (req, res) => 
   const accord = req.query.accord === '1';
   try {
     // Trop de pages de paiement ouvertes sans payer (stock.js) : la page de commande le dit.
-    const ip = String(req.get('x-forwarded-for') || req.ip || '').split(',')[0].trim();
+    const ip = stock.adresseVisiteur(req);
     if (await stock.tropDEssais(db, { ip, email })) {
       logger.warn(`commander : trop d'essais${email ? ` pour ${email}` : ''}`);
       res.redirect(303, `${SITE_VITRINE.value()}/commande.html?trop=1`);

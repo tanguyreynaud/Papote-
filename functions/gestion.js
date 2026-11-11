@@ -921,7 +921,10 @@ function fichesARattacher(sansAchat, numeros, quantite) {
 }
 
 // Achat de tablettes : N fiches de stock et la dépense correspondante (sauf depense: false).
+// aRecevoir : tablettes d'une facture reçue par e-mail, « commandées » et donc pas vendables tant qu'elles ne sont
+// pas arrivées (réception dans l'admin ou installation) ; n'importe qui peut écrire à factures@ (audit 8, N2).
 async function ajouterAchat(d, qui) {
+  const etatNeuve = d.aRecevoir === true ? 'commandee' : 'en-stock';
   const quantite = Number(d.quantite);
   const prix = centimes(d.prixAchat);
   const achat = ms(d.acheteeLe) || Date.now();
@@ -977,12 +980,12 @@ async function ajouterAchat(d, qui) {
       fournisseur: texte(d.fournisseur),
       prixAchat: prix,
       acheteeLe: Timestamp.fromMillis(achat),
-      etat: 'en-stock',
+      etat: etatNeuve,
       commande: null,
       sim: null,
       notes: null,
       depense: depenseId,
-      historique: [{ le: Date.now(), etat: 'en-stock', par: qui }],
+      historique: [{ le: Date.now(), etat: etatNeuve, par: qui }],
       majLe: FieldValue.serverTimestamp(),
     });
   }
@@ -1004,7 +1007,7 @@ async function refusSimAvantDepart(commande, fiche) {
 // Prélève du matériel sur la carte (ou le mandat SEPA) de l'abonnement : non rendu (index.js, restitutions et
 // tabletteRendue) ou remplacement payant (remplacer). La description contient « non rendu » ou « remplacée » :
 // facturerPenalites en fait une facture chaque nuit.
-async function preleverMateriel(abonnement, montant, description, cle) {
+async function preleverMateriel(abonnement, montant, description, cle, metadata = {}) {
   const abo = await stripe().subscriptions.retrieve(abonnement, { expand: ['customer'] });
   const moyen = abo.default_payment_method
     || (abo.customer.invoice_settings && abo.customer.invoice_settings.default_payment_method);
@@ -1017,34 +1020,54 @@ async function preleverMateriel(abonnement, montant, description, cle) {
     off_session: true,
     confirm: true,
     description,
-    metadata: { commande: abonnement },
+    metadata: { ...metadata, commande: abonnement },
   }, { idempotencyKey: cle });
 }
 
 // Remplacement payant (casse, perte ou vol) : prélevé AVANT tout changement dans le stock ; refusé par la banque,
-// rien ne bouge et l'admin voit pourquoi. Une seule tentative à la fois (double clic, deux onglets) ; une tentative
-// réussie n'est jamais refaite si la suite (stock) doit être relancée.
+// rien ne bouge et l'admin voit pourquoi. Une seule tentative à la fois (double clic, deux onglets).
+// Jamais deux prélèvements pour le même remplacement (audit 8, N4, 11/11) : chaque paiement porte la marque
+// « remplacement » (commande + tablette remplacée), et avant chaque tentative on cherche chez Stripe un paiement déjà
+// passé avec cette marque (réponse perdue après le débit, serveur arrêté entre le débit et la note).
+const PAIEMENT_PASSE = ['succeeded', 'processing', 'requires_capture'];
+async function paiementDejaPasse(commande, marque) {
+  const abo = await stripe().subscriptions.retrieve(commande);
+  const client = typeof abo.customer === 'string' ? abo.customer : abo.customer.id;
+  const { data } = await stripe().paymentIntents.list({ customer: client, limit: 100 });
+  return data.find((p) => p.metadata && p.metadata.remplacement === marque && PAIEMENT_PASSE.includes(p.status)) || null;
+}
+
 async function preleverRemplacement({ commande, kit, raison, montant, cmd, qui }) {
   const ref = db().doc(`commandes/${commande}`);
   const maintenant = Date.now();
-  const tentative = await db().runTransaction(async (tx) => {
+  const marque = `${commande}-${kit}`;
+  const essai = await db().runTransaction(async (tx) => {
     const r = (await tx.get(ref)).get('remplacement') || {};
     if (r.kit === kit && r.statut === 'preleve') return null;
     if (r.kit === kit && r.statut === 'en-cours' && maintenant - r.le < 2 * 60e3) {
       throw new HttpsError('already-exists', 'Le prélèvement est déjà en cours, un instant.');
     }
-    tx.update(ref, { remplacement: { kit, raison, montant, statut: 'en-cours', le: maintenant, par: qui } });
-    return maintenant;
+    const n = r.kit === kit ? (r.essai || 0) + 1 : 1;
+    tx.update(ref, { remplacement: { kit, raison, montant, statut: 'en-cours', le: maintenant, par: qui, essai: n } });
+    return n;
   });
-  if (tentative == null) return;
-  let paiement;
-  try {
-    paiement = await preleverMateriel(commande, montant, regles.descriptionRemplacement(raison), `remplacement-${commande}-${kit}-${tentative}`);
-  } catch (e) {
-    await ref.update({ remplacement: { kit, raison, montant, statut: 'refuse', le: maintenant, par: qui, erreur: e.message } });
-    throw new HttpsError('failed-precondition', `Prélèvement de ${mail.euros(montant)} refusé (${e.message}) : rien n'a été remplacé. Voyez avec le client, puis recommencez.`);
+  if (essai == null) return;
+  const note = (statut, extra = {}) => ref.update({ remplacement: { kit, raison, montant, statut, le: maintenant, par: qui, essai, ...extra } });
+  let paiement = essai > 1 ? await paiementDejaPasse(commande, marque) : null;
+  if (!paiement) {
+    try {
+      // Clé propre à chaque essai : après un vrai refus, Stripe doit retenter (une clé reprise rendrait le même refus).
+      paiement = await preleverMateriel(commande, montant, regles.descriptionRemplacement(raison), `remplacement-${marque}-${essai}`, { remplacement: marque });
+    } catch (e) {
+      // Refus net de la banque : rien n'est parti. Toute autre erreur (réseau, délai) : on ne sait pas, et le prochain
+      // essai regardera d'abord chez Stripe.
+      const refus = e && (e.type === 'StripeCardError' || e.statusCode === 402 || /aucun moyen de paiement/i.test(e.message || ''));
+      await note(refus ? 'refuse' : 'incertain', { erreur: e.message });
+      if (refus) throw new HttpsError('failed-precondition', `Prélèvement de ${mail.euros(montant)} refusé (${e.message}) : rien n'a été remplacé. Voyez avec le client, puis recommencez.`);
+      throw new HttpsError('unavailable', `Pas de réponse claire de Stripe (${e.message}) : rien n'a été remplacé. Recommencez : Papote vérifie d'abord chez Stripe et ne prélève jamais deux fois.`);
+    }
   }
-  await ref.update({ remplacement: { kit, raison, montant, statut: 'preleve', le: maintenant, par: qui, paiement: paiement.id } });
+  await note('preleve', { paiement: paiement.id, ...(paiement.status === 'processing' ? { enAttenteBanque: true } : {}) });
   if (cmd.email) {
     await mail.envoyer({
       smtp: MAIL_SMTP.value(), expediteur: MAIL_EXPEDITEUR.value(), motDePasse: MAIL_MOT_DE_PASSE.value(),
@@ -3349,7 +3372,7 @@ async function rangerFacture(r, piece, source) {
     ({ depense: id } = await ajouterAchat({
       quantite: t.quantite, modele: t.modele, fournisseur: r.fournisseur, prixAchat: prix,
       tva: r.tva != null ? Math.round(r.tva / t.quantite) : null, acheteeLe: r.date, numeros: t.numeros,
-      numeroFacture: r.numero, aVerifier: true, source,
+      numeroFacture: r.numero, aVerifier: true, source, aRecevoir: true,
     }, 'e-mail'));
   } else {
     if (r.montant == null) throw new Error('montant illisible');
@@ -3388,6 +3411,7 @@ function destinataireDuMail(mailLu, boite) {
   return null;
 }
 
+const COURRIER_LUS_PAR_JOUR = 60;
 async function releverFactures() {
   const { ImapFlow } = require('imapflow');
   const { simpleParser } = require('mailparser');
@@ -3403,9 +3427,15 @@ async function releverFactures() {
     // E-mails des 4 derniers jours pas encore traités, lus ou non : un e-mail ouvert entre-temps dans la
     // messagerie (marqué « lu ») doit quand même être rangé. Les déjà traités sont notés par leur Message-ID.
     const vusRef = db().doc('gestion/courrierVus');
-    const vus = new Set((await vusRef.get()).get('ids') || []);
+    const vusSnap = await vusRef.get();
+    const vus = new Set(vusSnap.get('ids') || []);
     const traites = [];
     let lus = 0;
+    // Plafond par jour : chaque e-mail lu coûte une lecture par l'IA ; au-delà, la suite attend le lendemain
+    // (les e-mails restent non traités, repris pendant 4 jours).
+    const jour = new Date(Date.now()).toISOString().slice(0, 10);
+    let lusJour = vusSnap.get('jour') === jour ? Number(vusSnap.get('lusJour')) || 0 : 0;
+    let plafondAtteint = false;
     // Boîte de réception, puis courrier indésirable : un e-mail transféré peut y être classé par OVH.
     const dossiers = ['INBOX', ...(await client.list()).filter((b) => b.specialUse === '\\Junk').map((b) => b.path)];
     const depuis = new Date(Date.now() - 4 * 86400000);
@@ -3421,7 +3451,9 @@ async function releverFactures() {
           const entete = await client.fetchOne(String(uid), { envelope: true }, { uid: true });
           const cle = String((entete && entete.envelope && entete.envelope.messageId) || `uid-${uid}`).slice(0, 200);
           if (vus.has(cle)) continue;
+          if (lusJour >= COURRIER_LUS_PAR_JOUR) { plafondAtteint = true; break; }
           lus += 1;
+          lusJour += 1;
           const { content } = await client.download(String(uid), undefined, { uid: true });
           const mailLu = await simpleParser(content);
           const de = (mailLu.from && mailLu.from.text) || 'expéditeur inconnu';
@@ -3468,7 +3500,8 @@ async function releverFactures() {
         verrou.release();
       }
     }
-    if (traites.length) await vusRef.set({ ids: [...vus].slice(-500) });
+    if (plafondAtteint) bilan.ignorees.push(`Plus de ${COURRIER_LUS_PAR_JOUR} e-mails lus aujourd'hui : la suite sera lue demain.`);
+    if (traites.length || lus) await vusRef.set({ ids: [...vus].slice(-500), jour, lusJour });
     await client.logout();
   } catch (e) {
     bilan.erreurs.push(`Boîte ${utilisateur} : ${e.authenticationFailed ? 'mot de passe refusé' : e.message}`);
