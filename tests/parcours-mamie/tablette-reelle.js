@@ -165,8 +165,14 @@ async function allumer({ tab = null, etat = {}, heure = null } = {}) {
 
   // Ce que l'appli envoie à la page (MainActivity.callPage), dans l'ordre.
   let file = Promise.resolve();
+  const avantOuverture = [];
   const versPage = (e) => {
-    if (e.nom === 'onRecharger' || e.nom === 'onDatabaseChanged') { file = file.then(() => t.page.reload().catch(() => {})); return; }
+    if (e.nom === 'onRecharger' || e.nom === 'onDatabaseChanged') {
+      // Pas avant que la page soit ouverte : recharger pendant qu'elle s'ouvre peut la laisser figée (vu en CI le 11/11).
+      if (t.ouverte) file = file.then(() => t.page.reload({ waitUntil: 'domcontentloaded' }).catch(() => {}));
+      return;
+    }
+    if (!t.ouverte) { avantOuverture.push(e); return; } // donnés à la page dès qu'elle est ouverte, dans l'ordre
     if (!/^on(Status|Posts|Weather|Reminders|Family|FamilyLost)$/.test(e.nom)) return; // onNewArrival, onVolume : sons d'Android
     file = file.then(() => t.page.evaluate(([f, d]) => { if (window.Papote && window.Papote[f]) window.Papote[f](d); }, [e.nom, e.data]).catch(() => {}));
   };
@@ -214,11 +220,19 @@ async function allumer({ tab = null, etat = {}, heure = null } = {}) {
   // « domcontentloaded » : les scripts de la page ont tourné ; une image ou une police lente ne bloque pas l'essai.
   // Rare (3 démarrages sur 70 la nuit du 11/11, cause pas encore trouvée) : la page reste figée plus de 30 s au
   // démarrage. On note ce que faisait l'appli à ce moment-là (pour trouver la cause), puis on réessaie une fois.
+  // Ce que le navigateur a demandé et pas encore reçu : pour savoir sur quoi une page figée attend.
+  const enVol = new Map();
+  t.page.on('request', (r) => enVol.set(r, Date.now()));
+  t.page.on('requestfinished', (r) => enVol.delete(r));
+  t.page.on('requestfailed', (r) => enVol.delete(r));
+  const attendues = () => `Adresse de la page : ${t.page.url()}\nDemandes du navigateur sans réponse : ${[...enVol.entries()].map(([r, d]) => `${r.method()} ${r.url().slice(0, 120)} (${Math.round((Date.now() - d) / 1000)} s)`).join(' ; ') || 'aucune'}`;
   await t.page.goto(`${ORIGIN}/tablette.html`, { waitUntil: 'domcontentloaded' }).catch(async (e) => {
-    console.log(`PAGE DE LA TABLETTE FIGÉE AU DÉMARRAGE (${e.message.split('\n')[0]})\n${java.figee()}`);
+    console.log(`PAGE DE LA TABLETTE FIGÉE AU DÉMARRAGE (${e.message.split('\n')[0]})\n${attendues()}\n${java.figee()}`);
     await t.page.goto(`${ORIGIN}/tablette.html`, { waitUntil: 'domcontentloaded', timeout: 90_000 })
-      .catch((e2) => { throw new Error(`La page de la tablette ne démarre pas (figée) : ${e2.message.split('\n')[0]}\n${java.figee()}`); });
+      .catch((e2) => { throw new Error(`La page de la tablette ne démarre pas (figée) : ${e2.message.split('\n')[0]}\n${attendues()}\n${java.figee()}`); });
   });
+  t.ouverte = true;
+  avantOuverture.splice(0).forEach(versPage);
 
   Object.assign(t, {
     visible: (sel) => t.page.evaluate((x) => { const e = document.querySelector(x); return !!e && !e.hidden && !e.closest('[hidden]') && getComputedStyle(e).display !== 'none'; }, sel),

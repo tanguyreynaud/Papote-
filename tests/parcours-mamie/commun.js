@@ -61,7 +61,13 @@ async function brancherChezMamie(mamie) {
   await continuer.waitFor({ timeout: 15_000 });
   await continuer.click();
   try {
-    return await g.attendreBase(async () => (await mamie.pont('reglages')).fid, 'la tablette entre dans sa famille', 40_000);
+    const fid = await g.attendreBase(async () => (await mamie.pont('reglages')).fid, 'la tablette entre dans sa famille', 40_000);
+    // Les essais tournent à toute heure : la famille coupe la veille (sinon, lancés après 21 h, l'écran dort et
+    // recouvre tout). nuit.test.js la règle lui-même.
+    await s.db.doc(`families/${fid}`).update({ veille: { active: false, de: 21, a: 6, aMin: 30 } });
+    await mamie.pont('changed').catch(() => {});
+    await g.attendreBase(async () => (await mamie.pont('reglages')).veille_active === false, 'la tablette apprend que la veille est coupée', 150_000);
+    return fid;
   } catch (e) {
     throw new Error(`${e.message}\n${await diagnostic(mamie)}`);
   }
@@ -134,7 +140,7 @@ async function doubleAppui(mamie, selecteur) {
   const b = await mamie.page.locator(selecteur).first().boundingBox();
   if (!b) throw new Error(`Écran de Mamie : « ${selecteur} » introuvable pour le double appui.\n${await diagnostic(mamie)}`);
   const [x, y] = [b.x + b.width / 2, b.y + b.height / 2];
-  const dessus = await mamie.page.evaluate(([px, py, sel]) => { const e = document.elementFromPoint(px, py); const but = document.querySelector(sel); return !!e && (e === but || but.contains(e)) ? '' : (e ? e.id || e.className || e.tagName : 'rien'); }, [x, y, selecteur]);
+  const dessus = await mamie.page.evaluate(([px, py, sel]) => { const e = document.elementFromPoint(px, py); const but = document.querySelector(sel); return !!e && (e === but || but.contains(e)) ? '' : (e ? (e.id || e.className || e.tagName) + ' « ' + (e.textContent || '').replace(/\s+/g, ' ').slice(0, 80) + ' » dans ' + ((e.parentNode && (e.parentNode.id || e.parentNode.className)) || '?') : 'rien'); }, [x, y, selecteur]);
   if (dessus) throw new Error(`Écran de Mamie : « ${selecteur} » est recouvert par « ${dessus} ».`);
   await mamie.page.touchscreen.tap(x, y);
   await mamie.page.touchscreen.tap(x, y);
