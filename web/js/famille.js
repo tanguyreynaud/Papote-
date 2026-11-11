@@ -2232,6 +2232,9 @@ function showIncoming(call) {
   if (!call) { stopRingTone(); return; }
   const caller = call.callerName || session.family.name;
   $('incoming-name').textContent = caller;
+  // Bouton SOS de la tablette (calleeName « SOS » ou « SOS 2 ») : l'écran le dit, comme la notification
+  // (« SOS : Mamie vous appelle »). Avant, app ouverte, rien ne le distinguait d'un appel ordinaire.
+  $('incoming').querySelector('.incoming-kind').textContent = /^SOS\b/.test(call.calleeName || '') ? 'SOS' : 'Appel Papote';
   setCallFace($('incoming-face'), caller);
   warmUpCalls();
   if (!natif) startRingTone();
