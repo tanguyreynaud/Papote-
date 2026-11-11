@@ -85,6 +85,7 @@ test('Mamie appelle Julie : double appui sur son visage, un seul appel ; Julie r
 
   await julie.page.locator('#incoming').waitFor({ state: 'visible', timeout: 30_000 });
   assert.strictEqual(await julie.page.locator('#incoming-name').innerText(), 'Mamie Emma');
+  assert.match(await julie.page.locator('#incoming .incoming-kind').innerText(), /^Appel Papote$/i, 'un appel ordinaire ne dit pas SOS');
   await mamie.page.locator('.call-out .call-title', { hasText: /Ça sonne/ }).waitFor({ timeout: 15_000 })
     .catch(async () => assert.fail(`La tablette ne dit pas « Ça sonne ».\n${await diagnostic(mamie)}`));
   await julie.page.click('#incoming-answer');
