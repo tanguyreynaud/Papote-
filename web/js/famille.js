@@ -38,6 +38,21 @@ import {
 } from './notifs.js';
 
 const $ = (id) => document.getElementById(id);
+
+// ---------- Clavier ouvert ----------
+// Clavier ouvert = un champ à remplir a la main ET la page a rétréci (interactive-widget=resizes-content).
+// Le seul :focus ne suffit pas : refermé par le bouton retour d'Android, le clavier part mais le champ garde
+// la main, et la barre du bas restait cachée (Tanguy, 11/11). Classe .clavier-ouvert sur <html> (famille.css).
+const hauteurSansClavier = {};
+const CHAMP_A_CLAVIER = 'input:not([type=checkbox], [type=radio], [type=range], [type=file], [type=button], [type=submit]), textarea, [contenteditable=""], [contenteditable="true"]';
+function majClavier() {
+  const sens = innerWidth > innerHeight ? 'paysage' : 'portrait';
+  hauteurSansClavier[sens] = Math.max(hauteurSansClavier[sens] || 0, innerHeight);
+  const champ = document.activeElement && document.activeElement.matches && document.activeElement.matches(CHAMP_A_CLAVIER);
+  document.documentElement.classList.toggle('clavier-ouvert', !!champ && innerHeight < hauteurSansClavier[sens] - 120);
+}
+for (const evenement of ['resize', 'focusin', 'focusout']) addEventListener(evenement, () => setTimeout(majClavier, 0));
+majClavier();
 // Adresse publique de l'app pour les liens et QR codes partagés (la version test garde la sienne).
 const APP_URL = /--|localhost/.test(location.hostname) ? location.origin : 'https://app.mapapote.fr';
 // Réglages « Modifier / Enregistrer » : { fill, save } par carte (voir plus bas).

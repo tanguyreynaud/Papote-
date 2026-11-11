@@ -713,9 +713,14 @@ button:disabled { opacity: .45; cursor: default; }
   border-top: 1px solid var(--line);
 }
 /* Clavier ouvert (la page rétrécit, interactive-widget=resizes-content) : la barre du bas et « Installer l'app »
-   remonteraient au-dessus du clavier et cacheraient le champ tapé. Ils reviennent quand le clavier se ferme. */
+   remonteraient au-dessus du clavier et cacheraient le champ tapé. Ils reviennent quand le clavier se ferme.
+   .clavier-ouvert est posée par famille.js (champ actif ET page rétrécie) : avec le seul :focus, la barre restait
+   cachée quand on refermait le clavier par le bouton retour, le champ gardant la main (Tanguy, 11/11). */
 @media (hover: none) and (pointer: coarse) {
-  body:has(:is(input:not([type=checkbox], [type=radio], [type=range], [type=file], [type=button], [type=submit]), textarea):focus) :is(.nav, .install-fab) { display: none; }
+  .clavier-ouvert :is(.nav, .install-fab) { display: none; }
+  /* La barre cachée, la zone d'écriture des Messages (ouverts depuis la barre) redescend contre le clavier :
+     sinon elle restait à la place de la barre, avec un trou par où l'on voyait les messages (Tanguy, 11/11). */
+  .clavier-ouvert body.depuis-barre .chat-bar { bottom: 0; }
 }
 .nav-item {
   flex: 1;
