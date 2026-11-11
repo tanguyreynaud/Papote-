@@ -359,6 +359,9 @@ public class MainActivity extends Activity implements Sync.Listener {
         String ville = intent.getStringExtra("ville");
         // Cherchée par la synchronisation dès qu'internet est là (script d'installation : -Ville).
         if (ville != null && !ville.trim().isEmpty()) prefs.edit().putString("meteoAChercher", ville.trim()).apply();
+        // Numéro T-… du stock (script d'installation, ou la RC pour une tablette déjà installée).
+        String refStock = Installation.refValide(intent.getStringExtra("ref"));
+        if (refStock != null) prefs.edit().putString("refStock", refStock).apply();
         String code = intent.getStringExtra("code");
         if (code != null) {
             code = code.toUpperCase().replaceAll("[^A-Z0-9]", "");
@@ -539,6 +542,24 @@ public class MainActivity extends Activity implements Sync.Listener {
         @JavascriptInterface
         public String getCode() {
             return prefs.getString("code", null);
+        }
+
+        /**
+         * Identité montrée par l'appui de 5 s sur l'heure : numéro T-… du stock (donné par le serveur à
+         * l'installation par QR, ou par le script d'installation), n° de série Android et version, en JSON.
+         */
+        @JavascriptInterface
+        public String identite() {
+            try {
+                String serie = Sync.serialNumber();
+                return new JSONObject()
+                        .put("ref", prefs.getString("refStock", ""))
+                        .put("serie", serie == null ? "" : serie)
+                        .put("version", appVersionName())
+                        .toString();
+            } catch (Exception e) {
+                return "{}";
+            }
         }
 
         /** Compte e-mail et mot de passe réservé aux appels vidéo (appels.js), en JSON. */

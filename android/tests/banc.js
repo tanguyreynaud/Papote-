@@ -29,6 +29,7 @@ function imitation(etat) {
     ackReminder: note('ackReminder'), seenReminder: note('seenReminder'), alert: note('alert'),
     carillonStop: note('carillonStop'), carillonEnCours: () => false, fenetre: (o) => { window.__fenetre = o; },
     getCode: () => window.__etat.code || null,
+    identite: () => JSON.stringify(window.__etat.identite || {}),
     callsAccount: () => JSON.stringify(window.__etat.code ? { email: 'tablette-appels-essai@tablettes.papote-famille.web.app', password: 'secret' } : {}),
     setTabletName: note('setTabletName'),
     meteoSearch: () => '[]', meteoChoose: note('meteoChoose'), meteoSkip: note('meteoSkip'),
