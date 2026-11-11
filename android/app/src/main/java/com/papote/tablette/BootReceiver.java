@@ -8,6 +8,8 @@ import android.content.Intent;
 public class BootReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
+        if (Intent.ACTION_MY_PACKAGE_REPLACED.equals(intent == null ? null : intent.getAction())) Secours.nouvelleVersion(context);
+        MajTache.planifier(context);
         Intent launch = new Intent(context, MainActivity.class);
         launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         try {

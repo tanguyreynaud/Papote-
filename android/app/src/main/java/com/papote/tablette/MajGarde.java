@@ -34,4 +34,26 @@ final class MajGarde {
         if (sha256.equalsIgnoreCase(empreinteDejaRefusee)) return "empreinte déjà refusée, pas de nouveau téléchargement";
         return null;
     }
+
+    /**
+     * Parmi plusieurs fichiers de version, l'indice du plus récent qui est acceptable ; si aucun ne l'est,
+     * l'indice du plus récent tout court. Tableaux de même longueur, au moins un élément.
+     */
+    static int choisir(int[] codes, boolean[] acceptables) {
+        int meilleur = -1, recent = 0;
+        for (int i = 0; i < codes.length; i++) {
+            if (codes[i] > codes[recent]) recent = i;
+            if (acceptables[i] && (meilleur < 0 || codes[i] > codes[meilleur])) meilleur = i;
+        }
+        return meilleur >= 0 ? meilleur : recent;
+    }
+
+    /**
+     * Android a-t-il refusé l'APK pour une raison qui ne changera pas en réessayant ? (PackageInstaller :
+     * 4 fichier invalide, 5 conflit avec l'appli installée dont la signature, 7 incompatible avec la tablette.)
+     * Les autres échecs (place manquante, installation interrompue) sont passagers : nouvel essai le lendemain.
+     */
+    static boolean refusDefinitif(int statut) {
+        return statut == 4 || statut == 5 || statut == 7;
+    }
 }

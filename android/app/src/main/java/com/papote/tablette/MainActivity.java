@@ -83,12 +83,32 @@ public class MainActivity extends Activity implements Sync.Listener {
     private Wifi wifi;
     private SmsAlert smsAlert;
     private final Handler handler = new Handler(Looper.getMainLooper());
+    /** Cet écran s'est fermé tout de suite pour laisser la place à l'écran de secours. */
+    private boolean secours;
+
+    /** L'écran principal est-il ouvert ? (tâche de mise à jour de fond) */
+    static boolean ouverte() {
+        return courante != null;
+    }
 
     @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         prefs = getSharedPreferences("papote", MODE_PRIVATE);
+        MajTache.planifier(getApplicationContext());
+        // Mode secours (audit du 11/11) : après 3 démarrages ratés d'affilée, rien de l'écran habituel n'est
+        // chargé ; un écran tout simple cherche une mise à jour, puis Papote est réessayée.
+        if (Secours.auDemarrage(prefs)) {
+            secours = true;
+            try {
+                startActivity(new Intent(this, Secours.Ecran.class));
+            } catch (Exception e) {
+                Log.w(TAG, "Écran de secours", e);
+            }
+            finish();
+            return;
+        }
         courante = this;
         Journal.catchCrashes(this);
         Journal.log(this, "Démarrage de Papote " + appVersionName());
@@ -248,6 +268,7 @@ public class MainActivity extends Activity implements Sync.Listener {
         Gardien.demarrer(this, GARDIEN_PAGE);
         Updater.cleanup(this);
         handler.postDelayed(updateCheck, 60_000);
+        handler.postDelayed(() -> Secours.demarrageReussi(prefs), Secours.TENU_MS);
         Push.demarrer(this);
         new Thread(() -> AppCheck.current(getApplicationContext()), "papote-appcheck").start();
         // Appels de la carte SIM : la page sonne et décroche (AppelGsm).
@@ -1463,6 +1484,10 @@ public class MainActivity extends Activity implements Sync.Listener {
     @Override
     protected void onDestroy() {
         if (courante == this) courante = null;
+        if (secours) { // écran jamais construit : rien à défaire
+            super.onDestroy();
+            return;
+        }
         AppelGsm.oublier(this);
         if (tts != null) { try { tts.shutdown(); } catch (Exception ignored) { } }
         try { unregisterReceiver(screenOff); } catch (Exception ignored) { }

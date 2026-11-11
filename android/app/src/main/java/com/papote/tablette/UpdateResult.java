@@ -28,5 +28,11 @@ public class UpdateResult extends BroadcastReceiver {
         if (status == PackageInstaller.STATUS_SUCCESS) return; // Papote est relancée par BootReceiver
         Log.w("Papote", "Mise à jour refusée : " + status + " " + msg);
         Journal.log(context, "Mise à jour refusée (" + status + ") : " + msg);
+        // Refus qui ne changera pas (signature, fichier invalide) : cet APK n'est plus retéléchargé (forfait SIM).
+        if (MajGarde.refusDefinitif(status)) {
+            android.content.SharedPreferences prefs = context.getSharedPreferences("papote", Context.MODE_PRIVATE);
+            String enCours = prefs.getString("majEnCours", null);
+            if (enCours != null) prefs.edit().putString("majRefusee", enCours).remove("majEnCours").apply();
+        }
     }
 }

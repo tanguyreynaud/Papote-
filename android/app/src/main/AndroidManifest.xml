@@ -150,6 +150,21 @@
             </intent-filter>
         </service>
 
+        <!-- Mode secours (Secours.java) : écran tout simple après 3 démarrages ratés, le temps de chercher une mise à jour. -->
+        <activity
+            android:name=".Secours$Ecran"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:screenOrientation="sensorLandscape"
+            android:lockTaskMode="if_whitelisted"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density|fontScale|locale|layoutDirection" />
+
+        <!-- Recherche de mise à jour indépendante de l'écran (MajTache.java). -->
+        <service
+            android:name=".MajTache"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+
         <receiver
             android:name=".UpdateResult"
             android:exported="false" />
