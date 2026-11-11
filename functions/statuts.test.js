@@ -106,7 +106,12 @@ test('départ d\'une tablette (envoi, étiquette, remplacement) : carte SIM avec
   refuse(s.refusSimSansNumero({ ref: 'T-007', simId: 'x' }, null), /numéro de ligne/);
   refuse(s.refusSimSansNumero({ simId: 'x' }, { iccid: '8933', numero: null }), /numéro de ligne/);
   refuse(s.refusSimSansNumero({ simId: 'x' }, { numero: '0608991612' }), /blocage/);
-  permis(s.refusSimSansNumero({ simId: 'x' }, { numero: '0608991612', blocages: { surtaxes: true, smsPlus: true, internetPlus: true, etranger: true } }));
+  const tous = { surtaxes: true, smsPlus: true, internetPlus: true, etranger: true };
+  permis(s.refusSimSansNumero({ simId: 'x' }, { numero: '0608991612', blocages: tous }));
+  // Ligne coupée en attendant le client suivant : l'envoi attend sa réactivation (audit du départ, 11/11).
+  refuse(s.refusSimSansNumero({ ref: 'T-007', simId: 'x' }, { numero: '0608991612', statut: 'suspendue' }), /suspendue : réactivez-la/);
+  refuse(s.refusSimSansNumero({ ref: 'T-007', simId: 'x' }, { numero: '0608991612', statut: 'resiliee' }), /résiliée : mettez une autre carte/);
+  for (const statut of ['active', 'stock']) permis(s.refusSimSansNumero({ simId: 'x' }, { numero: '0608991612', statut, blocages: tous }));
 });
 
 test('étiquette en double (double clic, vieil onglet) : refusée tant que l\'ancienne n\'a pas servi ou n\'est pas vieille de 30 jours', () => {

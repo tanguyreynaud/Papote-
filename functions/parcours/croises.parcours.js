@@ -72,7 +72,7 @@ test('tablette revenue puis repartie chez un autre client : plus aucun lien avec
   assert.strictEqual(s.notifications.length, 0, 'aucun téléphone de l\'ancienne famille ne sonne');
   assert.deepStrictEqual(s.boite, []);
   // Vérifiée, remise en stock, préparée pour Marie. Remise à zéro : la tablette a de nouveaux comptes et une nouvelle clé.
-  await s.appeler('gestionStock', { action: 'modifier', id: t.fiche, champs: { etat: 'en-stock' } }, a.TANGUY);
+  await s.appeler('gestionStock', { action: 'modifier', id: t.fiche, champs: { etat: 'en-stock', remiseAZero: true } }, a.TANGUY);
   await s.appeler('gestionStock', { action: 'modifier', id: t.fiche, champs: { etat: 'preparee' } }, a.TANGUY);
   const marie = await s.compte('Marie', 'marie@exemple.fr');
   const { abonnement: B } = await a.commanderEtPayer({ email: marie.email, nom: 'Marie Durand' });

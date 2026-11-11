@@ -70,6 +70,11 @@ function refusSimSansNumero(t, ligne) {
   if (!ligne || !String(ligne.numero || '').replace(/\s/g, '')) {
     return `Notez d'abord le numéro de ligne de la carte SIM de ${nom} (Stock, Cartes SIM).`;
   }
+  // Ligne suspendue ou résiliée (tablette revenue, forfait coupé en attendant) : pas d'internet chez le client suivant
+  // (audit du départ, 11/11). « En stock » passe : la ligne est activée au départ du colis.
+  if (ligne.statut === 'suspendue' || ligne.statut === 'resiliee') {
+    return `La ligne de la carte SIM de ${nom} est ${ligne.statut === 'suspendue' ? 'suspendue' : 'résiliée'} : ${ligne.statut === 'suspendue' ? 'réactivez-la' : 'mettez une autre carte'} avant l'envoi (Stock, Cartes SIM).`;
+  }
   const manquants = blocagesManquants(ligne);
   if (manquants.length) {
     return `Activez d'abord chez l'opérateur, puis cochez sur la carte SIM de ${nom} (Stock, Cartes SIM), le blocage : ${manquants.map((k) => BLOCAGES_SIM[k]).join(', ')}.`;
