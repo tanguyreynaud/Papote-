@@ -48,4 +48,28 @@ public class MajGardeTest {
         // ~4 Mo aujourd'hui : de la marge, mais pas de quoi vider un forfait prépayé.
         assertEquals(30L * 1024 * 1024, MajGarde.TAILLE_MAX);
     }
+
+    @Test
+    public void laPlusRecenteAcceptableEstChoisie() {
+        // Cas normal : les deux adresses sont bonnes, la plus récente gagne.
+        assertEquals(1, MajGarde.choisir(new int[]{230, 231}, new boolean[]{true, true}));
+        // Une adresse détournée annonce un numéro énorme mais refusé : la vraie version reste prise.
+        assertEquals(0, MajGarde.choisir(new int[]{231, 999999}, new boolean[]{true, false}));
+        assertEquals(1, MajGarde.choisir(new int[]{999999, 231}, new boolean[]{false, true}));
+        // Tout est refusé : la plus récente, que la vérification ignorera en le notant.
+        assertEquals(1, MajGarde.choisir(new int[]{231, 999999}, new boolean[]{false, false}));
+        assertEquals(0, MajGarde.choisir(new int[]{230}, new boolean[]{true}));
+    }
+
+    @Test
+    public void seulsLesRefusDefinitifsSontMemorises() {
+        assertTrue(MajGarde.refusDefinitif(4));  // fichier invalide
+        assertTrue(MajGarde.refusDefinitif(5));  // conflit : autre signature
+        assertTrue(MajGarde.refusDefinitif(7));  // incompatible
+        org.junit.Assert.assertFalse(MajGarde.refusDefinitif(0));  // réussite
+        org.junit.Assert.assertFalse(MajGarde.refusDefinitif(1));  // échec sans précision
+        org.junit.Assert.assertFalse(MajGarde.refusDefinitif(3));  // interrompue
+        org.junit.Assert.assertFalse(MajGarde.refusDefinitif(6));  // place manquante
+        org.junit.Assert.assertFalse(MajGarde.refusDefinitif(-1)); // confirmation demandée
+    }
 }

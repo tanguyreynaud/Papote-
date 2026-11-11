@@ -65,7 +65,7 @@ final class Updater {
     static String maintenant(Context context) {
         try {
             boolean test = "test".equals(context.getSharedPreferences("papote", Context.MODE_PRIVATE).getString("canal", ""));
-            JSONObject feed = lireVersion(test);
+            JSONObject feed = choisir(context, lireVersions(test));
             int latest = feed.getInt("versionCode");
             long current = currentVersion(context);
             String nom = feed.optString("versionName", String.valueOf(latest));
@@ -80,7 +80,7 @@ final class Updater {
     private static boolean verifier(Context context) {
         try {
             boolean test = "test".equals(context.getSharedPreferences("papote", Context.MODE_PRIVATE).getString("canal", ""));
-            JSONObject feed = lireVersion(test);
+            JSONObject feed = choisir(context, lireVersions(test));
             int latest = feed.getInt("versionCode");
             long current = currentVersion(context);
             echecs = 0;
@@ -115,6 +115,9 @@ final class Updater {
                 // publication (autre empreinte) sera prise à la prochaine vérification ou annonce.
                 return true;
             }
+            // Empreinte en cours d'installation : si Android refuse cet APK pour de bon (mauvaise signature…),
+            // UpdateResult la range dans les refusées et elle n'est plus retéléchargée chaque jour.
+            prefs.edit().putString("majEnCours", feed.getString("sha256")).apply();
             install(context, apk);
             return true;
         } catch (Exception e) {
@@ -127,20 +130,39 @@ final class Updater {
         }
     }
 
-    /** Le fichier de version le plus récent entre l'adresse habituelle et celle de secours ; erreur si aucune ne répond. */
-    private static JSONObject lireVersion(boolean test) throws Exception {
-        JSONObject meilleur = null;
+    /** Les fichiers de version qui répondent (adresse habituelle, adresse de secours) ; erreur si aucun ne répond. */
+    private static java.util.List<JSONObject> lireVersions(boolean test) throws Exception {
+        java.util.List<JSONObject> lus = new java.util.ArrayList<>();
         Exception derniere = null;
         for (String url : test ? new String[]{FEED_TEST, FEED_SECOURS_TEST} : new String[]{FEED, FEED_SECOURS}) {
             try {
                 JSONObject f = new JSONObject(new String(download(url), "UTF-8"));
-                if (meilleur == null || f.getInt("versionCode") > meilleur.getInt("versionCode")) meilleur = f;
+                f.getInt("versionCode");
+                lus.add(f);
             } catch (Exception e) {
                 derniere = e;
             }
         }
-        if (meilleur == null) throw derniere != null ? derniere : new IOException("aucun fichier de version");
-        return meilleur;
+        if (lus.isEmpty()) throw derniere != null ? derniere : new IOException("aucun fichier de version");
+        return lus;
+    }
+
+    /**
+     * La version la plus récente parmi celles qui sont acceptables (MajGarde) : si l'une des deux adresses
+     * annonce une version refusée (adresse inattendue, APK déjà refusé), l'autre reste utilisable et les
+     * vraies mises à jour continuent (audit du 11/11, T-B). Si toutes sont refusées : la plus récente,
+     * que verifier() ignorera en le notant au journal.
+     */
+    private static JSONObject choisir(Context context, java.util.List<JSONObject> lus) throws Exception {
+        String dejaRefusee = context.getSharedPreferences("papote", Context.MODE_PRIVATE).getString("majRefusee", null);
+        int[] codes = new int[lus.size()];
+        boolean[] acceptables = new boolean[lus.size()];
+        for (int i = 0; i < lus.size(); i++) {
+            JSONObject f = lus.get(i);
+            codes[i] = f.getInt("versionCode");
+            acceptables[i] = MajGarde.refus(f.optString("url", null), f.optString("sha256", null), dejaRefusee) == null;
+        }
+        return lus.get(MajGarde.choisir(codes, acceptables));
     }
 
     private static long currentVersion(Context context) throws PackageManager.NameNotFoundException {
