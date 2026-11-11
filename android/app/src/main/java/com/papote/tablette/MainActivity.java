@@ -116,6 +116,11 @@ public class MainActivity extends Activity implements Sync.Listener {
         web.setLongClickable(false);
         web.setOnLongClickListener(v -> true);
         web.setHapticFeedbackEnabled(false);
+        // Pas de barre de défilement d'Android ni de lueur de bord : une fine barre blanche apparaissait
+        // parfois tout à droite de l'accueil, même en thème sombre (Tanguy, T-003, 11/11).
+        web.setVerticalScrollBarEnabled(false);
+        web.setHorizontalScrollBarEnabled(false);
+        web.setOverScrollMode(View.OVER_SCROLL_NEVER);
         web.addJavascriptInterface(new Bridge(), "PapoteAndroid");
         web.setWebViewClient(new WebViewClient() {
             @SuppressWarnings("deprecation")
