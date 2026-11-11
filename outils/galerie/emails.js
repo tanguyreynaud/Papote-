@@ -117,6 +117,7 @@ function scenes(mail) {
     { titre: 'Budget Google Cloud : alerte à 30 €', groupe: G6, fonction: 'budget', contenu: si('budget', { palier: 'alerte', montant: '31,20 €', paliers: { alerte: 30, avertissement: 100, coupure: 150 } }) },
     { titre: 'Budget Google Cloud : avertissement à 100 €', groupe: G6, fonction: 'budget', contenu: si('budget', { palier: 'avertissement', montant: '104,50 €', paliers: { alerte: 30, avertissement: 100, coupure: 150 } }) },
     { titre: 'Budget Google Cloud : coupe-circuit', groupe: G6, fonction: 'budget', contenu: si('budget', { palier: 'coupure', montant: '152,00 €', paliers: { alerte: 30, avertissement: 100, coupure: 150 } }) },
+    { titre: 'Budget Google Cloud : coupure en cours (part avant la coupure)', groupe: G6, fonction: 'budget', contenu: si('budget', { palier: 'coupure', montant: '152,00 €', paliers: { alerte: 30, avertissement: 100, coupure: 150 }, coupee: null }) },
     { titre: 'Budget Google Cloud : la coupure a échoué', groupe: G6, fonction: 'budget', contenu: si('budget', { palier: 'coupure', montant: '152,00 €', paliers: { alerte: 30, avertissement: 100, coupure: 150 }, coupee: false }) },
   ];
 }

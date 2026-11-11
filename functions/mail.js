@@ -877,7 +877,7 @@ function livresComptables({ resume, titres }) {
 }
 
 // Coupe-circuit de facturation Google Cloud (budget.js) : palier 'alerte' (30 €), 'avertissement' (100 €),
-// 'coupure' (150 €, facturation désactivée) ; coupee = false si la coupure a échoué.
+// 'coupure' (150 €, facturation désactivée) ; coupee = false si la coupure a échoué, null si elle est en cours.
 function budget({ palier, montant, paliers, coupee = true }) {
   const lien = 'https://console.cloud.google.com/billing';
   const bouton = { texte: 'Ouvrir la facturation Google Cloud', lien };
@@ -891,6 +891,17 @@ function budget({ palier, montant, paliers, coupee = true }) {
     return message(`Attention : coupe-circuit bientôt, facture Google Cloud à ${montant}`, [
       { encadre: `Attention, la facture Google Cloud de Papote atteint <b>${montant}</b> ce mois-ci. Le coupe-circuit coupera tout à ${paliers.coupure} € : l'app famille, les tablettes et le site ne marcheront plus.` },
       'Si Papote a grandi et que c\'est normal, montez le seuil (PALIERS dans functions/budget.js et le budget dans la console). Sinon, regardez ce qui coûte.',
+    ], bouton, { interne: true });
+  }
+  // coupee null : la coupure va être faite ; cet e-mail part avant, tant que les fonctions tournent encore.
+  if (coupee === null) {
+    return message(`COUPE-CIRCUIT : facture Google Cloud à ${montant}, coupure de la facturation en cours`, [
+      { encadre: `La facture Google Cloud de Papote a atteint <b>${montant}</b> ce mois-ci : le coupe-circuit désactive la facturation du projet maintenant.` },
+      'Les fonctions, l\'app famille et les tablettes vont s\'arrêter ou être limitées. Les données ne sont pas effacées. Si la coupure échoue, un second e-mail « URGENT » suit.',
+      { etapes: [
+        'Trouvez ce qui a coûté (Rapports de facturation).',
+        'Pour tout relancer : Facturation > Gestion des comptes > Papote > Associer un compte de facturation.',
+      ] },
     ], bouton, { interne: true });
   }
   if (!coupee) {
