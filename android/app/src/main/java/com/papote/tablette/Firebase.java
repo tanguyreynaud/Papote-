@@ -169,13 +169,21 @@ final class Firebase {
      * Second compte, pour les appels vidéo (appels.js a sa propre connexion Firebase) :
      * créé une fois sur Firebase, puis toujours le même. {"email": "...", "password": "..."}
      */
-    synchronized String callsAccount() {
-        String email = prefs.getString("callEmail", null);
-        String password = prefs.getString("callPassword", null);
-        if (email == null || password == null) {
-            email = "tablette-appels-" + randomString(20).toLowerCase() + ACCOUNT_DOMAIN;
-            password = randomString(32);
-            prefs.edit().putString("callEmail", email).putString("callPassword", password).apply();
+    // Verrou à part : appelée par la page (pont JavaScript, la page attend la réponse), elle ne doit pas
+    // attendre token() ou ensureCallsAccount(), qui gardent le verrou de l'objet pendant un appel réseau
+    // (jusqu'à 50 s sur un réseau lent : écran figé au démarrage, vu 3 fois sur 70, parcours de Mamie 11/11).
+    private final Object callsLock = new Object();
+
+    String callsAccount() {
+        String email, password;
+        synchronized (callsLock) {
+            email = prefs.getString("callEmail", null);
+            password = prefs.getString("callPassword", null);
+            if (email == null || password == null) {
+                email = "tablette-appels-" + randomString(20).toLowerCase() + ACCOUNT_DOMAIN;
+                password = randomString(32);
+                prefs.edit().putString("callEmail", email).putString("callPassword", password).apply();
+            }
         }
         try {
             return new JSONObject().put("email", email).put("password", password).toString();
