@@ -171,7 +171,7 @@ final class Firebase {
      */
     // Verrou à part : appelée par la page (pont JavaScript, la page attend la réponse), elle ne doit pas
     // attendre token() ou ensureCallsAccount(), qui gardent le verrou de l'objet pendant un appel réseau
-    // (jusqu'à 50 s sur un réseau lent : écran figé au démarrage, vu 3 fois sur 70, parcours de Mamie 11/11).
+    // (jusqu'à 50 s sur un réseau lent). Précaution : les gels vus le 11/11 venaient du banc d'essai, pas d'ici.
     private final Object callsLock = new Object();
 
     String callsAccount() {
