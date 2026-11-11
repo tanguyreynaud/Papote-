@@ -1,0 +1,9 @@
+{
+  "name": "papote-parcours-mamie",
+  "private": true,
+  "description": "Le parcours de Mamie de bout en bout, les trois branches ensemble : la vraie app famille (cette branche), les vraies fonctions serveur (main) et la vraie tablette (sa branche : son code Java de synchronisation et ses écrans), sur les émulateurs Firebase. Rien en ligne.",
+  "scripts": {
+    "pretest": "node preparer.js",
+    "test": "npx --yes firebase-tools@14 emulators:exec --only firestore,auth,storage --project demo-papote --config ../app-famille/firebase.json \"node --test --test-concurrency=1 --test-timeout=600000 --test-reporter=spec scenarios/*.test.js\""
+  }
+}
