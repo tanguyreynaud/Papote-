@@ -10,6 +10,10 @@
     <!-- Appel en cours dans l'app (AppelEnCours, AppelService) : micro et caméra, même en arrière-plan -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Micro et caméra servent aux appels, mais ne sont pas exigés : le Play Store ne doit pas
+         cacher l'appli aux appareils qui n'en ont pas (Chromebook…) -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
