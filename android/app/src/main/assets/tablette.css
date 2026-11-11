@@ -2033,3 +2033,16 @@ html .sans-reseau-texte { margin: 0; font-family: 'Atkinson Hyperlegible', sans-
    Volontairement inchangés : l'heure de veille (#4a4560 sur noir, 2,3:1 : l'écran doit rester sombre dans la chambre)
    et le blocage du zoom (kiosque). */
 /* Décrocher et Appeler du soir en vert foncé #166534 (Tanguy, 05/11) : 7,1:1 avec le texte blanc. */
+
+/* Identité de la tablette (appui de 5 s sur l'heure) : cadre indigo sur crème, au-dessus de tout. */
+.identite {
+  position: fixed; left: 50%; top: 50%; z-index: 9999;
+  -webkit-transform: translate(-50%, -50%); transform: translate(-50%, -50%);
+  min-width: 50vmin; max-width: 90vw; padding: 4vmin 6vmin; box-sizing: border-box;
+  background: #fdfaf5; color: #1f1b2e; border: 1vmin solid #4f46e5; border-radius: 3vmin;
+  box-shadow: 0 2vmin 6vmin rgba(31, 27, 46, 0.35);
+  font-family: 'Atkinson Hyperlegible', sans-serif; font-size: 4.5vmin; text-align: center;
+}
+.identite p { margin: 1vmin 0; }
+.identite .identite-ref { font-size: 12vmin; font-weight: bold; color: #4f46e5; margin: 0 0 2vmin; }
+.identite .identite-version { font-size: 3.5vmin; color: #5b5670; }

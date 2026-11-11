@@ -3198,5 +3198,96 @@
     }
   }
 
+  // ---------- Identité de la tablette (geste caché, Tanguy 11/11) ----------
+  // Appui de 5 s sur l'heure (accueil ou écran d'installation) : petit cadre « T-003 · n° de série ·
+  // famille · version », qui se ferme seul après 10 s ou d'un toucher. Pour Tanguy : retrouver une tablette
+  // revenue ou vérifier la bonne tablette avant de fermer le carton, même si l'autocollant est arraché.
+  // Rien ne change pour Mamie si elle le déclenche par hasard : rien n'est modifié, rien ne sort de l'écran.
+  var IDENTITE_APPUI_MS = 5000;
+  var IDENTITE_DUREE_MS = 10000;
+  var identiteTimer = null;
+  var identiteFermeture = null;
+  var identiteDepart = null;
+
+  function identiteTexte() {
+    var info = {};
+    try { info = JSON.parse((android() && android().identite && android().identite()) || '{}') || {}; } catch (e) { info = {}; }
+    return {
+      ref: info.ref || 'Numéro T- pas encore reçu',
+      serie: info.serie ? 'N° de série ' + info.serie : 'N° de série inconnu',
+      famille: familyName ? 'Famille : ' + familyName : 'Pas encore reliée à une famille',
+      version: info.version ? 'Papote ' + info.version : ''
+    };
+  }
+
+  function fermerIdentite() {
+    clearTimeout(identiteFermeture);
+    var cadre = $('identite');
+    if (cadre) cadre.parentNode.removeChild(cadre);
+  }
+
+  function ouvrirIdentite() {
+    fermerIdentite();
+    var t = identiteTexte();
+    var cadre = document.createElement('div');
+    cadre.id = 'identite';
+    cadre.className = 'identite';
+    cadre.setAttribute('role', 'status');
+    var lignes = [['identite-ref', t.ref], ['', t.serie], ['', t.famille], ['identite-version', t.version]];
+    for (var i = 0; i < lignes.length; i++) {
+      if (!lignes[i][1]) continue;
+      var p = document.createElement('p');
+      if (lignes[i][0]) p.className = lignes[i][0];
+      p.textContent = lignes[i][1];
+      cadre.appendChild(p);
+    }
+    cadre.addEventListener('click', function (e) { e.stopPropagation(); fermerIdentite(); });
+    document.body.appendChild(cadre);
+    identiteFermeture = setTimeout(fermerIdentite, IDENTITE_DUREE_MS);
+  }
+
+  function annulerAppuiIdentite() {
+    clearTimeout(identiteTimer);
+    identiteTimer = null;
+    identiteDepart = null;
+  }
+
+  function point(e) {
+    var t = e.touches && e.touches[0];
+    return t ? { x: t.clientX, y: t.clientY } : { x: e.clientX, y: e.clientY };
+  }
+
+  function debutAppuiIdentite(e) {
+    if (identiteTimer) return; // toucher puis souris imitée : un seul décompte
+    identiteDepart = point(e);
+    identiteTimer = setTimeout(function () { identiteTimer = null; identiteDepart = null; ouvrirIdentite(); }, IDENTITE_APPUI_MS);
+  }
+
+  function bougeIdentite(e) {
+    if (!identiteTimer || !identiteDepart) return;
+    var p = point(e);
+    if (Math.abs(p.x - identiteDepart.x) > 30 || Math.abs(p.y - identiteDepart.y) > 30) annulerAppuiIdentite();
+  }
+
+  // Zones du geste : l'heure de l'accueil et de l'écran d'installation ; sur l'écran « Bienvenue »
+  // (tablette en stock, pas encore reliée), qui n'a pas d'heure, le logo Papote en haut à gauche.
+  // Écoute sur tout le document : l'écran « Bienvenue » est reconstruit à chaque étape.
+  function zoneIdentite(el) {
+    for (; el && el.nodeType === 1; el = el.parentNode) {
+      if (el.id === 'clock' || el.id === 'setup-clock') return true;
+      var c = ' ' + (el.className && el.className.baseVal == null ? el.className : '') + ' ';
+      if (c.indexOf(' welcome-logo ') >= 0 || c.indexOf(' welcome-brand ') >= 0) return true;
+    }
+    return false;
+  }
+  function siZone(f) { return function (e) { if (zoneIdentite(e.target)) f(e); }; }
+  document.addEventListener('touchstart', siZone(debutAppuiIdentite), true);
+  document.addEventListener('mousedown', siZone(debutAppuiIdentite), true);
+  document.addEventListener('touchmove', bougeIdentite, true);
+  document.addEventListener('mousemove', bougeIdentite, true);
+  document.addEventListener('touchend', annulerAppuiIdentite, true);
+  document.addEventListener('touchcancel', annulerAppuiIdentite, true);
+  document.addEventListener('mouseup', annulerAppuiIdentite, true);
+
   start();
 })();

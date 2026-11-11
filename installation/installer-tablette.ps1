@@ -306,6 +306,10 @@ if ($refus.Count) {
             foreach ($ligne in ($sortie -split "`n")) {
                 if ($ligne -match '>>>') { Write-Host " $ligne " -ForegroundColor Black -BackgroundColor Yellow } else { Say $ligne 'Green' }
             }
+            # Le T-… est aussi gardé par la tablette : appui de 5 s sur l'heure pour le revoir (autocollant arraché).
+            if ($sortie -match '>>> .*?(T-\d{1,5})') {
+                Adb shell am start -n "$Package/.MainActivity" --es ref $Matches[1] | Out-Null
+            }
         }
     } catch {
         Say "`nStock : la tablette n'a pas pu être notée ($($_.Exception.Message))" 'Yellow'

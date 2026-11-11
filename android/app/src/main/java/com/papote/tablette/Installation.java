@@ -162,6 +162,9 @@ final class Installation {
             // Clé App Check propre à la tablette (avant : envoyée par adb, étape 8 du script d'installation).
             String cle = res == null ? "" : res.optString("appCheckKey", "");
             if (cle.matches("[A-Za-z0-9_-]{20,100}")) AppCheck.saveKey(c, cle);
+            // Numéro T-… du stock : montré par l'appui de 5 s sur l'heure (identité de la tablette).
+            String ref = refValide(res == null ? null : res.optString("ref", null));
+            if (ref != null) p.edit().putString("refStock", ref).apply();
             String code = res == null ? "" : res.optString("code", "");
             Journal.log(c, "Tablette inscrite (installation par QR)" + (code.isEmpty() ? "" : ", code reçu"));
             return code.isEmpty() ? null : code;
@@ -169,6 +172,14 @@ final class Installation {
             Log.w(TAG, "Inscription de la tablette", e);
             return null;
         }
+    }
+
+    /** Numéro T-… du stock (« T-003 ») normalisé, ou null s'il n'en a pas la forme. */
+    static String refValide(String ref) {
+        if (ref == null) return null;
+        String r = ref.trim().toUpperCase().replace(" ", "");
+        if (r.matches("T\\d{1,5}")) r = "T-" + r.substring(1);
+        return r.matches("T-\\d{1,5}") ? r : null;
     }
 
     /** android.app.action.GET_PROVISIONING_MODE : Papote gère toute la tablette. */
