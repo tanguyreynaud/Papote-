@@ -85,9 +85,12 @@ final class SmsAlert {
     @SuppressWarnings("deprecation")
     static boolean envoyer(Context context, String numbers, String text) {
         boolean sent = false;
-        for (String n : numbers.split(",")) {
-            String number = n.trim();
-            if (number.isEmpty()) continue;
+        java.util.List<String> destinataires = Telephone.destinatairesSms(numbers);
+        if (destinataires.isEmpty()) {
+            Journal.log(context, "SMS refusé : aucun portable français parmi les destinataires");
+            return false;
+        }
+        for (String number : destinataires) {
             try {
                 SmsManager sms = SmsManager.getDefault();
                 sms.sendMultipartTextMessage(number, null, sms.divideMessage(text), null, null);

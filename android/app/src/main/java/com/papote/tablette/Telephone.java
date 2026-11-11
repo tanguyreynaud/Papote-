@@ -74,6 +74,22 @@ final class Telephone {
         return !composer(numero).isEmpty();
     }
 
+    /**
+     * Destinataires d'un SMS : seulement des portables français (06, 07), sans doublon, 30 au plus.
+     * Numéro court, surtaxé, fixe ou étranger : écarté, jamais le moindre hors-forfait (audit du 11/11).
+     */
+    static java.util.List<String> destinatairesSms(String numeros) {
+        java.util.List<String> liste = new java.util.ArrayList<>();
+        if (numeros == null) return liste;
+        for (String brut : numeros.split(",")) {
+            String n = composer(brut);
+            if (n.isEmpty() || liste.contains(n)) continue;
+            liste.add(n);
+            if (liste.size() >= 30) break;
+        }
+        return liste;
+    }
+
     static void garderNumeros(Context c, JSONArray liste) {
         String avant = prefs(c).getString(PREF, "[]");
         String apres = liste == null ? "[]" : liste.toString();
