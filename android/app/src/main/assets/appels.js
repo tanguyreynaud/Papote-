@@ -1148,6 +1148,12 @@ window.papoteAppelsForget = () => {
   setTimeout(() => { forgetting = false; start(); }, 5_000);
 };
 
+// La tablette vient d'entrer dans sa famille (fin de l'installation chez Mamie) ou de retrouver le réseau :
+// on rejoint tout de suite, sans attendre le réessai de la minute. Avant (parcours de Mamie, 11/11), la
+// première photo envoyée juste après l'installation mettait jusqu'à 2 minutes à s'afficher, et un appel
+// passé dans la première minute ne sonnait pas.
+window.papoteAppelsRejoindre = () => { if (!fid && !forgetting) start(); };
+
 $('ring-answer').addEventListener('click', answer);
 $('call-out-hangup').addEventListener('click', () => { if (active && active.finish) active.finish('ended', 'ended'); });
 $('call-remote').addEventListener('playing', () => { if (active) $('call-wait').hidden = true; });
@@ -1179,16 +1185,27 @@ function watchFamily() {
   if (android() && android().realtime) android().realtime(true);
 }
 
+let starting = false;
+let startAgain = false;
+let startRetry = null;
 async function start() {
+  if (starting) { startAgain = true; return; }
+  starting = true;
+  clearTimeout(startRetry);
   try {
     fid = await joinFamily();
   } catch (e) {
     console.error('Appels : connexion impossible', e);
   }
+  starting = false;
   if (!fid) {
-    setTimeout(start, 60_000); // tablette pas encore reliée ou hors ligne : on réessaie
+    // Tablette pas encore reliée ou hors ligne : on réessaie dans une minute, ou tout de suite si
+    // l'app Android a annoncé entre-temps que la tablette est entrée dans sa famille.
+    startRetry = setTimeout(start, startAgain ? 0 : 60_000);
+    startAgain = false;
     return;
   }
+  startAgain = false;
   closeStaleCalls();
   modePush = pushPret();
   if (modePush) console.info('Appels : réveil par le serveur, pas d\'écoute ouverte');

@@ -1232,8 +1232,15 @@
     if (pret.photo && pret.meteo && pret.proches) hideBoot();
   }
 
+  var etatAvant = '';
   function onStatus(status) {
     if (status.state !== 'ok') hideBoot(); // accueil normal : on attend qu'il soit prêt (bootPret)
+    // Passage à « ok » (installation finie, réseau revenu) : la page des appels rejoint la famille tout de
+    // suite au lieu d'attendre son réessai de la minute (première photo et premier appel sans retard).
+    if (status.state === 'ok' && etatAvant && etatAvant !== 'ok' && window.papoteAppelsRejoindre) {
+      try { window.papoteAppelsRejoindre(); } catch (e) { }
+    }
+    etatAvant = status.state;
     // Première installation chez le client : nom, wifi, puis appairage (bienvenue.js).
     if (window.PapoteBienvenue) {
       // Pas encore de famille (ou remise sur Bienvenue) : pas d'écran « en pause » d'une famille d'avant.

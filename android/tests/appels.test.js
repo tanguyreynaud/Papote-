@@ -44,6 +44,33 @@ async function appelEntrant(b, id, champs = {}) {
   await b.avancer(500);
 }
 
+// Parcours de Mamie (11/11) : à la fin de l'installation, la page des appels attendait son réessai de la minute
+// pour rejoindre la famille ; la première photo mettait jusqu'à 2 minutes, un appel immédiat ne sonnait pas.
+test('fin de l\'installation : la page des appels rejoint la famille tout de suite, pas une minute plus tard', async () => {
+  const b = await ouvrir('2026-10-26T10:00:00', { ...FAMILLE, code: '' });
+  try {
+    await b.android('onStatus', { state: 'welcome', step: 'pair', name: 'Tablette', code: 'K7J7Q45B', expires: Date.now() + 900000 });
+    await b.avancer(3000);
+    assert.ok(!(await b.lire(`families/F1/members/${MOI}`)), 'pas encore reliée : pas dans la famille');
+    assert.deepStrictEqual((await b.appels('realtime')).map((a) => a.args[0]), [], 'aucune écoute avant la famille');
+    // L'app Android vient de relier la tablette (code reçu), et le dit à la page.
+    await b.page.evaluate(() => { window.__etat.code = 'ABCD2345'; });
+    await b.android('onStatus', { state: 'ok' });
+    await b.avancer(3000);
+    assert.ok(await b.lire(`families/F1/members/${MOI}`), 'dans la famille 3 s après, sans attendre la minute');
+    assert.deepStrictEqual((await b.appels('realtime')).map((a) => a.args[0]), [true], 'écoute en direct ouverte, une seule fois');
+    // Un appel passé aussitôt sonne.
+    await appelEntrant(b, 'c0');
+    assert.ok(await b.visible('#call-ring'), 'un appel juste après l\'installation sonne');
+    // « ok » répété (chaque tour de l'app) : rien n'est relancé.
+    await b.android('onStatus', { state: 'ok' });
+    await b.android('onStatus', { state: 'offline' });
+    await b.android('onStatus', { state: 'ok' });
+    await b.avancer(70000);
+    assert.deepStrictEqual((await b.appels('realtime')).map((a) => a.args[0]), [true], 'pas de deuxième écoute');
+  } finally { await b.fermer(); }
+});
+
 test('appel entrant : ça sonne, « Décrocher » répond, la famille raccroche', async () => {
   const b = await tablette();
   try {
