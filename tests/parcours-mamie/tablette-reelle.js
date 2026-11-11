@@ -110,10 +110,20 @@ function lancerJava(dossier) {
         echec(new Error(`Tablette (Java) arrêtée avant d'être prête (code ${code})\n${java.sortie}`));
       });
     });
+    /** Pour comprendre une page figée : les demandes restées sans réponse et ce que fait chaque fil de l'appli. */
+    java.figee = () => {
+      const enCours = [...attentes.values()].map((a) => `${a.cmd} (${Math.round((Date.now() - a.depuis) / 1000)} s)`).join(', ') || 'aucune';
+      let fils = '';
+      try {
+        fils = require('node:child_process').execFileSync('jstack', [String(java.proc.pid)], { encoding: 'utf8', timeout: 15_000 })
+          .split('\n\n').filter((b) => /com\.papote\.tablette/.test(b)).map((b) => b.split('\n').slice(0, 14).join('\n')).join('\n\n');
+      } catch (e) { fils = `(jstack : ${e.message})`; }
+      return `Demandes de la page restées sans réponse : ${enCours}\nFils de l'appli :\n${fils}`;
+    };
     java.commande = (cmd, ...args) => new Promise((ok, ko) => {
       if (java.fini) return ko(new Error('Tablette (Java) arrêtée'));
       n += 1;
-      attentes.set(n, { ok, echec: ko });
+      attentes.set(n, { ok, echec: ko, cmd, depuis: Date.now() });
       java.sock.write(`${JSON.stringify({ id: n, cmd, args })}\n`);
     });
     java.arreter = async () => {
@@ -201,7 +211,14 @@ async function allumer({ tab = null, etat = {}, heure = null } = {}) {
   if (heure) await t.page.clock.install({ time: new Date(`${heure}+01:00`) });
   await t.page.addInitScript(`(${IMITATION.trim()})(${JSON.stringify(etat)}); (${brancherPonts.toString()})(${JSON.stringify(PONTS)});`);
   await java.commande('demarrer');
-  await t.page.goto(`${ORIGIN}/tablette.html`);
+  // « domcontentloaded » : les scripts de la page ont tourné ; une image ou une police lente ne bloque pas l'essai.
+  // Rare (3 démarrages sur 70 la nuit du 11/11, cause pas encore trouvée) : la page reste figée plus de 30 s au
+  // démarrage. On note ce que faisait l'appli à ce moment-là (pour trouver la cause), puis on réessaie une fois.
+  await t.page.goto(`${ORIGIN}/tablette.html`, { waitUntil: 'domcontentloaded' }).catch(async (e) => {
+    console.log(`PAGE DE LA TABLETTE FIGÉE AU DÉMARRAGE (${e.message.split('\n')[0]})\n${java.figee()}`);
+    await t.page.goto(`${ORIGIN}/tablette.html`, { waitUntil: 'domcontentloaded', timeout: 90_000 })
+      .catch((e2) => { throw new Error(`La page de la tablette ne démarre pas (figée) : ${e2.message.split('\n')[0]}\n${java.figee()}`); });
+  });
 
   Object.assign(t, {
     visible: (sel) => t.page.evaluate((x) => { const e = document.querySelector(x); return !!e && !e.hidden && !e.closest('[hidden]') && getComputedStyle(e).display !== 'none'; }, sel),
@@ -234,7 +251,7 @@ async function allumer({ tab = null, etat = {}, heure = null } = {}) {
     /** Tablette éteinte puis rallumée (coupure de courant) : mêmes réglages, mêmes fichiers, appli et page relancées. */
     rallumer: async () => {
       await java.commande('redemarrer');
-      await t.page.goto(`${ORIGIN}/tablette.html`).catch(() => {});
+      await t.page.goto(`${ORIGIN}/tablette.html`, { waitUntil: 'domcontentloaded' }).catch(() => {});
     },
     /** Attend un message de l'appli vers la page (onPosts, onStatus…) qui convient. */
     attendre: async (nom, convient = () => true, delai = 30_000) => {
