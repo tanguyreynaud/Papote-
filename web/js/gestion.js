@@ -3719,23 +3719,43 @@ $('btn-automatiser').addEventListener('click', async () => {
 
 const normaliser = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
+// Commande d'une tablette : celle d'aujourd'hui, sinon la dernière de son historique (tablette revenue, commande
+// close) : pour un retour, on voit tout de suite à qui elle était.
+function derniereCommande(t) {
+  const id = t.commande || (t.historique || []).filter((x) => x.commande && x.le).sort((a, b) => b.le - a.le).map((x) => x.commande)[0];
+  return (id && donnees.commandes.find((c) => c.id === id)) || null;
+}
+
+// Suivis Mondial Relay d'une commande : aller, retour, et ceux des remplacements.
+const suivisCommande = (c) => [c.suivi, c.etiquettes?.aller?.suivi, c.etiquettes?.retour?.suivi, c.restitution?.suivi];
+
 function rechercher(q) {
   const n = normaliser(q).trim();
   if (n.length < 2 || !donnees) return [];
   const compact = n.replace(/[\s-]/g, '');
+  // Code scanné (étiquette Mondial Relay, code-barres du fabricant) : souvent plus long que le numéro noté,
+  // qu'il contient. On l'accepte dans ce sens aussi, seulement pour un numéro noté assez long (8 caractères).
   const trouve = (...champs) => champs.some((c) => {
     const x = normaliser(c);
-    return x.includes(n) || (compact.length >= 3 && x.replace(/[\s-]/g, '').includes(compact));
+    if (!x) return false;
+    const xc = x.replace(/[\s-]/g, '');
+    return x.includes(n) || (compact.length >= 3 && xc.includes(compact)) || (xc.length >= 8 && compact.includes(xc));
   });
   const res = [];
   for (const c of donnees.commandes) {
-    if (trouve(c.code, c.nom, c.email, c.telephone, c.famille, c.suivi)) {
+    const tablettes = donnees.stock.filter((t) => t.commande === c.id).map((t) => t.ref);
+    if (trouve(c.code, c.nom, c.email, c.telephone, c.famille, ...suivisCommande(c), c.preparation?.tabletteLue, ...tablettes)) {
       res.push({ texte: nomCommande(c), detail: `Commande · ${ETATS_COMMANDE[etatCommande(c)][0]}`, ouvrir: () => ouvrirCommande(c) });
     }
   }
   for (const t of donnees.stock) {
-    if (trouve(t.numero, t.modele, t.sim, t.notes)) {
-      res.push({ texte: `Tablette ${t.numero || t.modele || ''}`, detail: donnees.etats[etatTablette(t)] || t.etat, ouvrir: () => ouvrirTablette(t.id) });
+    if (trouve(t.ref, t.numero, t.serieAndroid, t.modele, t.sim, t.notes)) {
+      const c = derniereCommande(t);
+      res.push({
+        texte: `Tablette ${[t.ref, t.numero || t.serieAndroid || t.modele].filter(Boolean).join(' · ')}`,
+        detail: [donnees.etats[etatTablette(t)] || t.etat, c ? `${t.commande ? '' : 'était à '}${nomCommande(c)}` : null].filter(Boolean).join(' · '),
+        ouvrir: () => ouvrirTablette(t.id),
+      });
     }
   }
   for (const l of donnees.sims) {
@@ -3797,6 +3817,29 @@ $('recherche').addEventListener('keydown', (e) => {
 document.addEventListener('click', (e) => {
   if (!e.target.closest('.recherche')) $('resultats').hidden = true;
 });
+
+// Scanner depuis la recherche (téléphone) : code-barres du fabricant, étiquette Mondial Relay, n° écrit en QR.
+// Un seul résultat : il s'ouvre ; sinon la liste s'affiche comme si on avait tapé le code.
+if ('BarcodeDetector' in window) {
+  const bouton = h('button', { type: 'button', class: 'secondary small-btn scanner-recherche' }, 'Scanner');
+  $('recherche').after(bouton);
+  $('recherche').parentElement.classList.add('avec-scanner');
+  bouton.addEventListener('click', () => {
+    const champ = $('recherche');
+    champ.value = '';
+    scanner({ elements: { recherche: champ } }, 'recherche', 'Visez un code-barres : n° de série de la tablette, étiquette Mondial Relay…');
+    $('d-scan').addEventListener('close', () => {
+      const lu = champ.value.trim();
+      if (!lu) return;
+      // QR d'une adresse (…?code=ABCD-1234) : on cherche ce qui suit le dernier « = » ou « / ».
+      if (/^https?:\/\//i.test(lu)) champ.value = lu.split(/[=/]/).filter(Boolean).pop() || lu;
+      const r = rechercher(champ.value);
+      if (r.length === 1) { choisir(r[0]); return; }
+      champ.focus();
+      afficherResultats();
+    }, { once: true });
+  });
+}
 
 // ---------- Graphiques ----------
 
@@ -3922,12 +3965,12 @@ document.querySelectorAll('.scanner').forEach((b) => {
   b.addEventListener('click', () => scanner(b.closest('form'), b.dataset.cible));
 });
 
-async function scanner(form, nom) {
+async function scanner(form, nom, consigne) {
   const champ = form.elements[nom];
   const plusieurs = champ.tagName === 'TEXTAREA';
   const lus = new Set(plusieurs ? champ.value.split('\n').map((x) => x.trim()).filter(Boolean) : []);
   $('scan-lus').replaceChildren();
-  $('scan-msg').textContent = nom === 'iccid' ? 'Visez le code-barres de la carte SIM (sur son support en plastique).'
+  $('scan-msg').textContent = consigne ? consigne : nom === 'iccid' ? 'Visez le code-barres de la carte SIM (sur son support en plastique).'
     : 'Visez le code-barres du numéro de série (étiquette de la boîte ou au dos de la tablette).';
   $('scan-fin').hidden = !plusieurs;
   $('d-scan').showModal();
