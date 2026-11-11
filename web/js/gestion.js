@@ -724,8 +724,10 @@ function afficherAccueil() {
     ...donnees.familles.filter((f) => f.statut === 'suspendu').map((f) => {
       const depuis = f.suspenduLe || f.majLe;
       const jours = depuis ? Math.floor((Date.now() - depuis) / 864e5) : null;
+      // Arrêt automatique à 30 jours (Tanguy, 11/11) : même texte que aFaire (functions/gestion.js, suiteSuspendue).
       return [1, `Famille ${f.nom || 'sans nom'} suspendue pour impayé${jours != null ? ` depuis ${pluriel(jours, 'jour')}` : ''}${jours >= 30
-        ? ' : demander le retour de la tablette (« Arrêter l\'abonnement » sur la commande)' : ''}`, versFamille(f), 'ko'];
+        ? (f.resiliationLe ? ' : abonnement arrêté par Papote, la tablette doit revenir'
+          : ' : arrêt automatique de l\'abonnement à 9 h (sinon « Arrêter l\'abonnement » sur la commande)') : ''}`, versFamille(f), 'ko'];
     }),
     // Colis jamais retiré au relais, revenu à l'expéditeur d'après Sendcloud (A3).
     ...cmd.filter((c) => etatCommande(c) === 'en-route' && c.etiquettes && c.etiquettes.aller && c.etiquettes.aller.retourExpediteur)
@@ -1388,6 +1390,15 @@ function formulaireRemplacement(c, t) {
     h('option', { value: 'sim' }, 'la carte SIM'),
     h('option', { value: 'accessoire' }, 'un accessoire'));
   const nouveau = h('select', { 'aria-label': 'Remplacé par', hidden: true });
+  // Raison du remplacement de la tablette (Tanguy, 11/11) : même barème que functions/abonnement.js (montantRemplacement).
+  const prixPerte = c.enceinteFournie === true ? 150 : 140;
+  const RAISONS = { panne: 0, casse: 130, perte: prixPerte };
+  const gratuit = (r) => c.offerte || !RAISONS[r];
+  const raison = h('select', { 'aria-label': 'Raison du remplacement', hidden: true },
+    h('option', { value: '' }, 'Raison…'),
+    h('option', { value: 'panne' }, 'Panne (gratuit)'),
+    h('option', { value: 'casse' }, c.offerte ? 'Casse (offerte : gratuit)' : 'Casse (130 €)'),
+    h('option', { value: 'perte' }, c.offerte ? 'Perte ou vol (offerte : gratuit)' : `Perte ou vol (${prixPerte} €)`));
   const motif = h('input', { placeholder: 'Motif (ex. écran cassé)', hidden: true });
   const bouton = h('button', { type: 'submit', class: 'secondary small-btn', hidden: true }, 'Remplacer');
   const msg = h('p', { class: 'small muted', hidden: true });
@@ -1399,7 +1410,7 @@ function formulaireRemplacement(c, t) {
     accessoire: () => donnees.accessoires.map((a) => [a.id, `${a.nom} (${a.quantite || 0} en stock)`]),
   };
   const AIDE = {
-    tablette: 'La tablette actuelle passe « en retour » et garde sa place dans « À faire » jusqu\'à son retour. Sa carte SIM passe dans la nouvelle, à jumeler avec l\'appli famille.',
+    tablette: 'Panne ou casse : la tablette actuelle passe « en retour » et garde sa place dans « À faire » jusqu\'à son retour ; sa carte SIM passe dans la nouvelle. Perte ou vol : elle passe « perdue », et la nouvelle part avec sa propre carte SIM. Casse, perte ou vol : prélevé au client avant l\'envoi.',
     sim: 'L\'ancienne carte passe « suspendue » : pense à la résilier chez l\'opérateur.',
     accessoire: 'L\'accessoire sort du stock.',
   };
@@ -1409,23 +1420,41 @@ function formulaireRemplacement(c, t) {
     nouveau.replaceChildren(...(options.length ? options.map(([v, x]) => h('option', { value: v }, x))
       : [h('option', { value: '' }, 'Rien de disponible en stock')]));
     for (const el of [nouveau, motif, bouton, msg]) el.hidden = !k;
+    raison.hidden = k !== 'tablette';
     msg.className = 'small muted';
     msg.textContent = k ? AIDE[k] : '';
   });
-  const form = h('form', { class: 'remplacement no-print' }, choix, nouveau, motif, bouton, msg);
+  const form = h('form', { class: 'remplacement no-print' }, choix, raison, nouveau, motif, bouton, msg);
+  let enCours = false;
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    if (!nouveau.value) return;
+    if (enCours || !nouveau.value) return;
+    const tablette = choix.value === 'tablette';
+    if (tablette && !raison.value) {
+      msg.className = 'small error';
+      msg.textContent = 'Choisissez la raison : panne, casse, ou perte et vol.';
+      raison.focus();
+      return;
+    }
+    enCours = true;
     bouton.disabled = true;
+    if (tablette && !gratuit(raison.value) && !await demander(`Prélever ${RAISONS[raison.value]} € à ${c.email || 'ce client'} (${raison.value === 'casse' ? 'tablette cassée' : 'tablette perdue ou volée'}), puis envoyer la nouvelle tablette ?\n\nSi la banque refuse, rien n'est remplacé.`, { oui: `Prélever ${RAISONS[raison.value]} €` })) {
+      enCours = false;
+      bouton.disabled = false;
+      return;
+    }
     // Ouverte avant toute attente, sinon le navigateur la bloque : elle recevra l'étiquette d'envoi.
     const fenetre = window.open('', '_blank');
     try {
-      await patienter('Remplacement en cours…', () => appeler('gestionStock', { action: 'remplacer', commande: c.id, element: choix.value, nouveau: nouveau.value, motif: motif.value }));
+      await patienter(tablette && !gratuit(raison.value) ? 'Prélèvement puis remplacement…' : 'Remplacement en cours…', () => appeler('gestionStock', {
+        action: 'remplacer', commande: c.id, element: choix.value, nouveau: nouveau.value, motif: motif.value, ...(tablette ? { raison: raison.value } : {}),
+      }));
       // Étiquettes faites tout de suite : l'aller pour le colis de remplacement, le retour (envoyé au client par
       // e-mail) pour la tablette remplacée.
       msg.className = 'small muted';
       msg.textContent = 'Remplacement noté. Création des étiquettes chez Sendcloud…';
-      const sens = choix.value === 'tablette' ? ['aller', 'retour'] : ['aller'];
+      // Perte ou vol : rien à renvoyer.
+      const sens = tablette && raison.value !== 'perte' ? ['aller', 'retour'] : ['aller'];
       const faites = [];
       for (const s of sens) {
         try {
@@ -1446,6 +1475,8 @@ function formulaireRemplacement(c, t) {
       msg.className = 'small error';
       msg.textContent = messageErreur(err);
       bouton.disabled = false;
+    } finally {
+      enCours = false;
     }
   });
   return form;
