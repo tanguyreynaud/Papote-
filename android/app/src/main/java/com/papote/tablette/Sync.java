@@ -1254,11 +1254,14 @@ final class Sync {
         long now = System.currentTimeMillis();
         if (now - lastDatabaseCheck < DATABASE_CHECK_MS) return;
         if (prefs.getString("fid", null) == null && !pairingActive()) return;
-        lastDatabaseCheck = now;
         try {
             String target = firebase.targetDatabase();
+            // Lecture ratée (pas encore d'internet sur une tablette neuve) : on réessaie au tour suivant,
+            // pas dans 24 h ; sinon le premier code de jumelage partait dans l'ancienne base (audit 8, 11/11).
+            if (target == null) return;
+            lastDatabaseCheck = now;
             prefs.edit().putString("bucket", Firebase.bucket()).apply();
-            if (target == null || target.equals(Firebase.database())) return;
+            if (target.equals(Firebase.database())) return;
             Journal.log(context, "Base Firestore : " + Firebase.database() + " -> " + target);
             prefs.edit().putString("database", target).remove("pairing").remove("pairingExpires").apply();
             Firebase.setDatabase(target);
@@ -2658,7 +2661,9 @@ final class Sync {
         } else {
             // Annulé, refusé, expiré ou disparu : un nouveau code tout de suite.
             prefs.edit().remove("pairing").remove("pairingExpires").apply();
-            code = newPairing(name);
+            // Jamais de code avant d'avoir lu config/base : il doit être créé dans la bonne base.
+            if (lastDatabaseCheck == 0) checkDatabase();
+            code = lastDatabaseCheck == 0 ? null : newPairing(name);
             if (code == null) {
                 welcome(new JSONObject().put("step", "pair").put("name", name)
                         .put("error", "Impossible de créer le code. Vérifiez la connexion internet."));
