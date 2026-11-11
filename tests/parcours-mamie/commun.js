@@ -101,4 +101,46 @@ async function envoyerPhoto(t, { texte = 'Coucou', legende = '', fichiers = null
   await s.calme();
 }
 
-module.exports = { test, assert, banc, g, s, acteurs, tablette, brancher, diagnostic, chezMamie, commandeLivree, brancherChezMamie, entrerDansSaFamille, envoyerPhoto };
+/**
+ * Raccourci pour les scénarios d'après l'arrivée : tout le chemin du colis est refait pour de vrai (commande,
+ * envoi, « Commencer », le proche entre), puis la tablette est éteinte et rallumée : sa page des appels rejoint
+ * alors la famille tout de suite (sinon elle met jusqu'à une minute, voir arrivee.test.js).
+ */
+async function familleChezMamie({ email = 'julie@exemple.fr', prenom = 'Julie', etat = {}, heure = null } = {}) {
+  const julie = await banc.telephone(prenom);
+  await g.inscrire(julie, email, prenom, { genre: 'femme' });
+  const { mamie, commande, tab } = await commandeLivree({ email, etat, heure });
+  const fid = await brancherChezMamie(mamie);
+  await entrerDansSaFamille(julie, fid);
+  await mamie.rallumer();
+  await enDirect(mamie);
+  const uid = (await g.liste(`families/${fid}/members`)).find((m) => m.email === email).id;
+  return { julie, mamie, fid, tab, commande, uid };
+}
+
+/** La page des appels de la tablette écoute sa famille en direct (elle le dit à l'appli : realtime(true)). */
+async function enDirect(mamie, delai = 40_000) {
+  try {
+    await mamie.page.waitForFunction(() => (window.__appels || []).some((a) => a.nom === 'realtime' && a.args[0] === true), null, { timeout: delai });
+    // L'écran de démarrage (logo) est parti : Mamie voit son accueil.
+    await mamie.page.waitForFunction(() => !document.getElementById('boot'), null, { timeout: 30_000 });
+  } catch (e) {
+    throw new Error(`La tablette n'écoute pas sa famille en direct.\n${await diagnostic(mamie)}`);
+  }
+}
+
+/** Double appui du doigt de Mamie, au milieu d'un bouton (même s'il bouge : « Décrocher » bat comme un cœur). */
+async function doubleAppui(mamie, selecteur) {
+  const b = await mamie.page.locator(selecteur).first().boundingBox();
+  if (!b) throw new Error(`Écran de Mamie : « ${selecteur} » introuvable pour le double appui.\n${await diagnostic(mamie)}`);
+  const [x, y] = [b.x + b.width / 2, b.y + b.height / 2];
+  const dessus = await mamie.page.evaluate(([px, py, sel]) => { const e = document.elementFromPoint(px, py); const but = document.querySelector(sel); return !!e && (e === but || but.contains(e)) ? '' : (e ? e.id || e.className || e.tagName : 'rien'); }, [x, y, selecteur]);
+  if (dessus) throw new Error(`Écran de Mamie : « ${selecteur} » est recouvert par « ${dessus} ».`);
+  await mamie.page.touchscreen.tap(x, y);
+  await mamie.page.touchscreen.tap(x, y);
+}
+
+/** Le texte affiché en grand chez Mamie (nouvel envoi). */
+const enGrand = (mamie) => mamie.texte('#overlay');
+
+module.exports = { test, assert, banc, g, s, acteurs, tablette, brancher, diagnostic, chezMamie, commandeLivree, brancherChezMamie, entrerDansSaFamille, envoyerPhoto, familleChezMamie, enDirect, enGrand, doubleAppui };
