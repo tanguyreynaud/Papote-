@@ -1545,10 +1545,6 @@ html .call-out.picker .call-strip .call-person-face { width: 21vmin; height: 21v
 
 /* Photo de l'accueil : deux couches pour le fondu enchaîné, la légende toujours au-dessus */
 .home-frame #frame-img, .home-frame #frame-img-b { transform-origin: center; will-change: opacity, transform; }
-/* Le cadre fait 56 % de 1280 = 716,8 px : la couche de la photo, arrondie au pixel pendant le fondu,
-   laissait parfois voir une colonne du fond crème tout à droite (Tanguy, T-003, 11/11). La photo
-   déborde d'un pixel de chaque côté, coupé par le cadre (overflow: hidden). */
-.home-frame #frame-img, .home-frame #frame-img-b { top: -1px; left: -1px; width: calc(100% + 2px); height: calc(100% + 2px); }
 .home-frame .frame-caption { z-index: 3; }
 
 /* Nuit : l'heure en grand, très sombre (l'écran est aussi au minimum de luminosité) */
