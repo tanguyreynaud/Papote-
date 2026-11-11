@@ -64,6 +64,7 @@ public class AppelEnCours extends Activity {
         String url = "https://" + HOTE + chemin + (connexion != null ? "#connexion=" + Uri.encode(connexion) : "");
         return new Intent(ctx, AppelEnCours.class)
                 .putExtra(EXTRA_URL, url)
+                .putExtra(Lien.EXTRA_CLE, Lien.cle(ctx))
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
     }
 
@@ -85,7 +86,8 @@ public class AppelEnCours extends Activity {
             @Override
             public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest req) {
                 Uri u = req.getUrl();
-                if (HOTE.equals(u.getHost()) || String.valueOf(u.getHost()).endsWith("firebaseapp.com")) return false;
+                // Hôtes exacts : « nimportequoifirebaseapp.com » ne doit pas rester ici avec le pont PapoteNatif.
+                if (HOTE.equals(u.getHost()) || "papote-famille.firebaseapp.com".equals(u.getHost())) return false;
                 try {
                     startActivity(new Intent(Intent.ACTION_VIEW, u));
                 } catch (Exception e) {
@@ -122,29 +124,40 @@ public class AppelEnCours extends Activity {
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         // Touché sur la notification « Appel en cours » : on revient à l'appel, sans recharger.
-        if (intent.getStringExtra(EXTRA_URL) != null || intent.getData() != null) {
+        // Un lien sans la clé ne touche pas à l'appel en cours (ni rechargé, ni raccroché).
+        if (adresse(intent) != null) {
             setIntent(intent);
             charger(intent);
         }
     }
 
     private void charger(Intent intent) {
-        String url = intent.getStringExtra(EXTRA_URL);
-        // Lancé depuis l'app famille (bouton d'appel) : papote://appel?u=/chemin&connexion=jeton
+        String url = adresse(intent);
+        if (url == null) {
+            finish();
+            return;
+        }
+        fini = false;
+        page.loadUrl(url);
+    }
+
+    /** L'adresse de la page d'appel à ouvrir, ou null si l'intent n'en donne pas une valable. */
+    private String adresse(Intent intent) {
+        // Activité ouvrable par lien (donc par n'importe quelle page) : seuls nos propres lancements
+        // (extra) et les liens de l'app famille portent la clé de ce téléphone (Lien, audit A2).
+        // Sans elle : rien, ni connexion à un compte, ni appel lancé tout seul.
+        String url = Lien.valide(this, intent.getStringExtra(Lien.EXTRA_CLE)) ? intent.getStringExtra(EXTRA_URL) : null;
+        // Lancé depuis l'app famille (bouton d'appel) : papote://appel?u=/chemin&connexion=jeton&cle=…
         Uri lien = intent.getData();
-        if (url == null && lien != null && "papote".equals(lien.getScheme()) && "appel".equals(lien.getHost())) {
+        if (url == null && lien != null && "papote".equals(lien.getScheme()) && "appel".equals(lien.getHost())
+                && Lien.valide(this, lien)) {
             String chemin = lien.getQueryParameter("u");
             if (chemin != null && chemin.startsWith("/") && !chemin.startsWith("//")) {
                 url = pour(this, chemin, lien.getQueryParameter("connexion")).getStringExtra(EXTRA_URL);
             }
         }
         Uri u = url != null ? Uri.parse(url) : null;
-        if (u == null || !HOTE.equals(u.getHost())) {
-            finish();
-            return;
-        }
-        fini = false;
-        page.loadUrl(url);
+        return u != null && "https".equals(u.getScheme()) && HOTE.equals(u.getHost()) ? url : null;
     }
 
     // La page demande le micro (et la caméra en vidéo) : autorisation Android d'abord si besoin.

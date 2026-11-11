@@ -13,6 +13,7 @@ import android.net.Uri;
 import android.util.Log;
 
 import androidx.core.app.NotificationCompat;
+import androidx.core.app.NotificationManagerCompat;
 import androidx.core.app.Person;
 
 import java.io.OutputStream;
@@ -72,9 +73,21 @@ final class Appels {
                 ctx.getString(R.string.canal_infos), NotificationManager.IMPORTANCE_DEFAULT));
     }
 
+    /**
+     * Android laisse-t-il l'app sonner ? Non si ses notifications sont refusées (Android 13+) ou
+     * coupées, ou si le canal « Appels de la tablette » est désactivé : le message du serveur
+     * arrive quand même (Sonnerie), mais rien ne s'affiche ni ne sonne.
+     */
+    static boolean peutSonner(Context ctx) {
+        if (!NotificationManagerCompat.from(ctx).areNotificationsEnabled()) return false;
+        NotificationChannel c = ctx.getSystemService(NotificationManager.class).getNotificationChannel(CANAL_APPELS);
+        return c == null || c.getImportance() != NotificationManager.IMPORTANCE_NONE;
+    }
+
     /** La tablette appelle : le téléphone sonne (une seule fois par appel, malgré les renvois). */
     static void sonner(Context ctx, String cid, String nom, String fid, String jeton) {
         if (dejaTraite(ctx, cid)) return;
+        purger(ctx, cid);
         // Gardés pour « Refuser » : le serveur arrête l'appel pour la tablette sur ce jeton.
         if (fid != null && jeton != null) prefs(ctx).edit().putString("refus." + cid, fid + "/" + jeton).apply();
         // Gardée pour « Répondre » : l'écran d'appel s'ouvre sur cette famille (plusieurs possibles).
@@ -241,13 +254,34 @@ final class Appels {
         marquer(ctx, TRAITES, cid);
     }
 
+    /**
+     * Les clés gardées pour un appel (refus., fid., connexion.) des appels finis depuis : effacées à la
+     * sonnerie suivante, pour ne pas garder des jetons d'appel sans fin (audit 11/11). Pas celles de
+     * l'appel qui sonne, ni d'un autre qui sonnerait encore (pas dans TRAITES).
+     */
+    private static synchronized void purger(Context ctx, String cidActuel) {
+        Set<String> finis = prefs(ctx).getStringSet(TRAITES, new HashSet<>());
+        SharedPreferences.Editor e = prefs(ctx).edit();
+        for (String k : prefs(ctx).getAll().keySet()) {
+            int point = k.indexOf('.');
+            if (point < 0) continue;
+            String type = k.substring(0, point), cid = k.substring(point + 1);
+            if (!type.equals("refus") && !type.equals("fid") && !type.equals("connexion")) continue;
+            if (!cid.equals(cidActuel) && finis.contains(cid)) e.remove(k);
+        }
+        e.apply();
+    }
+
     private static synchronized boolean contient(Context ctx, String liste, String cid) {
         return prefs(ctx).getStringSet(liste, new HashSet<>()).contains(cid);
     }
 
     private static synchronized void marquer(Context ctx, String liste, String cid) {
         Set<String> ids = new HashSet<>(prefs(ctx).getStringSet(liste, new HashSet<>()));
-        if (ids.size() > 50) ids.clear();
+        if (ids.size() > 50) {
+            if (TRAITES.equals(liste)) purger(ctx, cid); // avant d'oublier quels appels sont finis
+            ids.clear();
+        }
         ids.add(cid);
         prefs(ctx).edit().putStringSet(liste, ids).apply();
     }

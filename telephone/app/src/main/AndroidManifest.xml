@@ -122,6 +122,20 @@
             </intent-filter>
         </activity>
 
+        <!-- Carte rouge « Votre téléphone ne sonnera pas » de l'app famille : réglage des notifications -->
+        <activity
+            android:name=".ReglageNotifs"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="papote" android:host="notifications" />
+            </intent-filter>
+        </activity>
+
         <!-- « Voulez-vous quitter Papote ? » puis « Quitter » dans l'app famille : ferme l'app -->
         <activity
             android:name=".Quitter"

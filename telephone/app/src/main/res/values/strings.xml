@@ -20,6 +20,9 @@
     <string name="appel_video">Appel Papote</string>
     <string name="appel_manque">Appel manqué de %1$s</string>
     <string name="appel_manque_texte">Touchez pour la rappeler</string>
+    <string name="notifs_titre">Pour que votre téléphone sonne</string>
+    <string name="notifs_pourquoi">Quand la tablette vous appelle, Papote fait sonner votre téléphone comme un vrai appel. Pour cela, Android va vous demander d\'autoriser les notifications de Papote : touchez « Autoriser ».</string>
+    <string name="notifs_continuer">Continuer</string>
     <string name="pause_titre">Ne manquez aucun appel</string>
     <string name="pause_pourquoi">Si vous n\'ouvrez pas Papote pendant quelques mois, Android peut le mettre en pause, et votre téléphone ne sonnerait plus. Ça se règle une fois pour toutes :</string>
     <string name="pause_etape1">Descendez tout en bas de la page.</string>
