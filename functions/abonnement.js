@@ -232,6 +232,69 @@ function materielParti(commande) {
   return !AVANT_ENVOI.includes(commande.expedition) && commande.expedition !== 'annulee';
 }
 
+// Commande payée mais pas encore partie (rupture, maladie, vacances) alors que le premier prélèvement approche
+// (audit argent, 11/11, A4) : la promesse est « rien n'est prélevé avant la réception ». À moins de 7 jours du
+// premier prélèvement, il est repoussé à dans 14 jours (la tâche du matin n'y revient donc qu'une semaine plus
+// tard) ; l'envoi le recale ensuite sur la réception + 30 jours (debutApresReception).
+const REPORT_AVANT_JOURS = 7;
+const REPORT_JOURS = 14;
+// → nouvelle date du premier prélèvement (ms), ou null s'il n'y a rien à repousser.
+function premierARepousser(commande, premierMs, maintenant) {
+  if (!commande || !AVANT_ENVOI.includes(commande.expedition) || commande.offerte) return null;
+  if (premierMs == null || premierMs - maintenant >= REPORT_AVANT_JOURS * JOUR) return null;
+  return maintenant + REPORT_JOURS * JOUR;
+}
+
+// « Annuler ma commande » commencé mais pas fini (audit argent, 11/11, A1) : la commande porte déjà
+// « retractation » quand Stripe est appelé ; si Stripe ne répond pas, retractation.enCours reste posé et la
+// demande se rejoue telle quelle. Pendant 2 minutes, un autre essai attend (double appui, deux onglets).
+const RETRACTATION_VERROU_MS = 2 * 60 * 1000;
+const retractationARefaire = (commande) => Boolean(commande && commande.retractation && commande.retractation.enCours != null);
+const retractationOccupee = (commande, maintenant) => retractationARefaire(commande)
+  && maintenant - commande.retractation.enCours < RETRACTATION_VERROU_MS;
+
+// Contrôle de nuit Stripe ↔ base (audit argent, 11/11, B3-B4) : ce qui ne devrait jamais rester en l'état.
+//   commandes : [{ id, ...commandes/{id} }] ; familles : [{ id, nom, abonnement }] ; vivants : Set des abonnements
+//   Stripe en cours (STRIPE_VIVANTS). Renvoie les lignes à montrer dans « À faire ».
+const ETAT_BLOQUE_MS = JOUR;
+function ecartsStripe({ commandes = [], familles = [], vivants, maintenant }) {
+  const lignes = [];
+  const qui = (c) => c.nom || c.email || c.id;
+  const vieux = (date) => { const d = enMillis(date); return d != null && maintenant - d > ETAT_BLOQUE_MS; };
+  for (const c of commandes) {
+    if (c.offerte) continue;
+    if (vivants.has(c.id)) {
+      const raison = c.expedition === 'annulee' ? 'annulée' : c.retractation ? 'annulée par le client'
+        : ['canceled', 'incomplete_expired'].includes(c.statutStripe) ? 'notée arrêtée' : null;
+      if (raison) lignes.push(`Commande de ${qui(c)} ${raison}, mais son abonnement Stripe tourne encore : à arrêter (et rembourser) depuis Stripe`);
+    }
+    if (c.retractation && c.retractation.enCours != null && vieux(c.retractation.enCours)) {
+      lignes.push(`Annulation de la commande de ${qui(c)} restée en plan : « Annuler la commande (30 jours) » la termine`);
+    } else if (c.remboursement && c.remboursement.statut === 'en-cours' && c.retractation && vieux(c.retractation.le)) {
+      lignes.push(`Remboursement de ${qui(c)} resté « en cours » : à vérifier dans Stripe`);
+    }
+    if (c.dernierMois && c.dernierMois.statut === 'en-cours' && vieux(c.dernierMois.le)) {
+      lignes.push(`Dernier mois de ${qui(c)} resté « en cours » : à vérifier dans Stripe`);
+    }
+    const r = c.restitution;
+    if (r && r.statut === 'attendue' && r.prelevementTenteLe && vieux(r.prelevementTenteLe)) {
+      lignes.push(`Matériel non rendu de ${qui(c)} : prélèvement tenté sans résultat noté, à vérifier dans Stripe`);
+    }
+    const p = c.remplacement;
+    if (p && ['en-cours', 'incertain'].includes(p.statut) && vieux(p.le)) {
+      lignes.push(`Remplacement payant de ${qui(c)} sans réponse claire de Stripe : à vérifier dans Stripe`);
+    }
+  }
+  for (const f of familles) {
+    const abo = f.abonnement || {};
+    if (!['actif', 'impaye'].includes(abo.statut) || !abo.stripeSubscriptionId) continue;
+    if (!vivants.has(abo.stripeSubscriptionId)) {
+      lignes.push(`Famille ${f.nom || f.id} notée « ${abo.statut === 'actif' ? 'active' : 'en retard de paiement'} », mais son abonnement Stripe est arrêté : à vérifier`);
+    }
+  }
+  return lignes;
+}
+
 // La commande peut-elle encore être annulée et remboursée ?
 // commande : commandes/{id} (expedition, creeLe, envoyeeLe, retractation).
 // Reprise d'un abonnement résilié (tablette restée chez le proche, pas de mise en service) : ce n'est pas
@@ -355,6 +418,10 @@ function peutModifier(actuel) {
 }
 
 module.exports = {
+  premierARepousser,
+  retractationARefaire,
+  retractationOccupee,
+  ecartsStripe,
   SEPA_APRES_JOURS,
   SEPA_RELANCE_JOURS,
   moyenDe,

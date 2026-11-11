@@ -308,3 +308,62 @@ test('remplacement de la tablette (Tanguy, 11/11) : panne gratuite, casse 130 �
   assert.strictEqual(a.montantRemplacement(undefined, {}), null);
   assert.strictEqual(a.descriptionRemplacement('casse'), 'Papote : tablette cassée, remplacée');
 });
+
+test('audit argent 11/11, A4 : premier prélèvement repoussé seulement pour une commande pas encore partie, à moins de 7 jours', () => {
+  const c = { expedition: 'a-preparer' };
+  assert.strictEqual(a.premierARepousser(c, T0 + 8 * JOUR, T0), null, 'encore loin');
+  assert.strictEqual(a.premierARepousser(c, T0 + 6 * JOUR, T0), T0 + 14 * JOUR);
+  assert.strictEqual(a.premierARepousser(c, T0 - JOUR, T0), T0 + 14 * JOUR, 'date déjà passée, abonnement encore en essai');
+  assert.strictEqual(a.premierARepousser({ expedition: 'paiement-en-attente' }, T0 + JOUR, T0), T0 + 14 * JOUR);
+  assert.strictEqual(a.premierARepousser(c, null, T0), null, 'un mois déjà prélevé : rien à repousser');
+  for (const expedition of ['envoyee', 'annulee']) assert.strictEqual(a.premierARepousser({ expedition }, T0 + JOUR, T0), null, expedition);
+  assert.strictEqual(a.premierARepousser({ ...c, offerte: true }, T0 + JOUR, T0), null);
+});
+
+test('audit argent 11/11, A1 : annulation restée en plan, rejouable, verrou de 2 minutes', () => {
+  assert.strictEqual(a.retractationARefaire({ retractation: { le: T0 } }), false, 'annulation finie');
+  assert.strictEqual(a.retractationARefaire({}), false);
+  assert.strictEqual(a.retractationARefaire({ retractation: { enCours: 0 } }), true, 'Stripe a refusé : verrou levé');
+  assert.strictEqual(a.retractationOccupee({ retractation: { enCours: 0 } }, T0), false);
+  assert.strictEqual(a.retractationOccupee({ retractation: { enCours: T0 - 60e3 } }, T0), true);
+  assert.strictEqual(a.retractationOccupee({ retractation: { enCours: T0 - 3 * 60e3 } }, T0), false);
+});
+
+test('audit argent 11/11, B3-B4 : contrôle de nuit Stripe ↔ base', () => {
+  const vivants = new Set(['sub_annulee', 'sub_retractee', 'sub_stale', 'sub_ok']);
+  const hier = T0 - 2 * JOUR;
+  const lignes = a.ecartsStripe({
+    maintenant: T0, vivants,
+    commandes: [
+      { id: 'sub_ok', nom: 'Sain', expedition: 'envoyee', statutStripe: 'active' },
+      { id: 'sub_annulee', nom: 'Anne', expedition: 'annulee' },
+      { id: 'sub_retractee', nom: 'René', expedition: 'envoyee', retractation: { le: hier, enCours: hier } },
+      { id: 'sub_stale', nom: 'Stan', expedition: 'envoyee', statutStripe: 'canceled' },
+      { id: 'sub_offerte', nom: 'Mamie', offerte: true, expedition: 'annulee' },
+      { id: 'sub_mois', nom: 'Moïse', dernierMois: { statut: 'en-cours', le: hier } },
+      { id: 'sub_mois2', nom: 'Frais', dernierMois: { statut: 'en-cours', le: T0 - 60e3 } },
+      { id: 'sub_140', nom: 'Rendu', restitution: { statut: 'attendue', prelevementTenteLe: hier } },
+      { id: 'sub_140ok', nom: 'Facturé', restitution: { statut: 'facturee', prelevementTenteLe: hier } },
+      { id: 'sub_casse', nom: 'Casse', remplacement: { statut: 'incertain', le: hier } },
+      { id: 'sub_remb', nom: 'Remb', expedition: 'annulee', retractation: { le: hier }, remboursement: { statut: 'en-cours' } },
+    ],
+    familles: [
+      { id: 'f1', nom: 'Mamie Emma', abonnement: { statut: 'actif', stripeSubscriptionId: 'sub_ok' } },
+      { id: 'f2', nom: 'Mamie Rose', abonnement: { statut: 'actif', stripeSubscriptionId: 'sub_morte' } },
+      { id: 'f3', nom: 'Offerte', abonnement: { statut: 'offert' } },
+      { id: 'f4', nom: 'Finie', abonnement: { statut: 'resilie', stripeSubscriptionId: 'sub_morte2' } },
+    ],
+  });
+  const trouve = (motif) => lignes.filter((l) => motif.test(l)).length;
+  assert.strictEqual(trouve(/Anne annulée, mais son abonnement Stripe tourne encore/), 1);
+  assert.strictEqual(trouve(/René annulée par le client, mais son abonnement Stripe tourne encore/), 1);
+  assert.strictEqual(trouve(/Annulation de la commande de René restée en plan/), 1);
+  assert.strictEqual(trouve(/Stan notée arrêtée/), 1);
+  assert.strictEqual(trouve(/Dernier mois de Moïse/), 1);
+  assert.strictEqual(trouve(/Matériel non rendu de Rendu/), 1);
+  assert.strictEqual(trouve(/Remplacement payant de Casse/), 1);
+  assert.strictEqual(trouve(/Remboursement de Remb resté « en cours »/), 1);
+  assert.strictEqual(trouve(/Famille Mamie Rose notée « active »/), 1);
+  assert.strictEqual(lignes.length, 9, JSON.stringify(lignes, null, 1));
+  assert.deepStrictEqual(a.ecartsStripe({ maintenant: T0, vivants: new Set(), commandes: [], familles: [] }), []);
+});
