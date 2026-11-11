@@ -558,6 +558,23 @@ async function attendreRestitution(abo) {
 
 // ---------- Site vitrine ----------
 
+// Empreinte d'une demande de paiement du site : tout ce que la page a envoyé, sauf le numéro de relance.
+function cleDemande(query) {
+  const champs = Object.entries(query).filter(([k, v]) => typeof v === 'string' && k !== 'relance').sort(([a], [b]) => (a < b ? -1 : 1));
+  return require('node:crypto').createHash('sha256').update(JSON.stringify(champs)).digest('hex').slice(0, 32);
+}
+
+// Page de paiement remplacée par une nouvelle : fermée chez Stripe (elle ne peut plus être payée), tablette rendue.
+// Si Stripe refuse de la fermer (déjà payée, déjà expirée), la tablette est rendue quand même : une page payée
+// devient une commande, comptée à part.
+async function fermerPaiement(r) {
+  if (r.session) {
+    await stripe().checkout.sessions.expire(r.session)
+      .catch((e) => logger.warn(`Page de paiement ${r.session} pas fermée`, e.message));
+  }
+  await stock.remplacer(db, r.doc);
+}
+
 exports.commander = onRequest({ secrets: [STRIPE_SECRET] }, async (req, res) => {
   if (!commandesOuvertes()) {
     res.redirect(303, `${SITE_VITRINE.value()}/#lancement`);
@@ -572,19 +589,30 @@ exports.commander = onRequest({ secrets: [STRIPE_SECRET] }, async (req, res) => 
   // Couverture 4G vérifiée par Papote à l'adresse du proche (Tanguy, 2026-10-29), à nouveau ici : la page ne
   // laisse payer que si elle passe, mais un lien ancien ou modifié ne doit pas ouvrir le paiement.
   const proche = await couverture.procheDepuisRequete(req.query);
+  // Chaque refus dit son motif à la page de commande (audit du 11/11) : avant, elle revenait remplie sans un mot.
   if (!proche || !proche.eligible) {
-    res.redirect(303, `${SITE_VITRINE.value()}/commande.html`);
+    res.redirect(303, `${SITE_VITRINE.value()}/commande.html?refus=4g`);
     return;
   }
   // Sans point relais, retour à la page de choix du point relais.
   const relais = livraison.relaisDepuisRequete(req.query);
   if (!relais) {
-    res.redirect(303, `${SITE_VITRINE.value()}/commande.html?formule=${formule}&tablette=${tablette}`);
+    res.redirect(303, `${SITE_VITRINE.value()}/commande.html?formule=${formule}&tablette=${tablette}&refus=relais`);
     return;
   }
   const email = emailValide(req.query.email);
   const accord = req.query.accord === '1';
   try {
+    // Une seule page de paiement ouverte par e-mail (stock.js, audit du 11/11) : la même demande rouvre la même
+    // page Stripe ; une demande modifiée (autre relais, autre nom) ferme l'ancienne page et rend sa tablette.
+    const cle = cleDemande(req.query);
+    const ouverts = await stock.paiementsOuverts(db, email);
+    const meme = ouverts.find((r) => r.url && r.cle === cle && r.resteMs > 60e3);
+    if (meme) {
+      res.redirect(303, meme.url);
+      return;
+    }
+    for (const r of ouverts) await fermerPaiement(r);
     // Trop de pages de paiement ouvertes sans payer (stock.js) : la page de commande le dit.
     const ip = stock.adresseVisiteur(req);
     if (await stock.tropDEssais(db, { ip, email })) {
@@ -592,13 +620,15 @@ exports.commander = onRequest({ secrets: [STRIPE_SECRET] }, async (req, res) => 
       res.redirect(303, `${SITE_VITRINE.value()}/commande.html?trop=1`);
       return;
     }
-    // Plus de tablette à vendre (stock.js) : retour à la page de commande, qui propose « Être prévenu ».
+    // Plus de tablette à vendre (stock.js) : l'accueil propose « Être prévenu ».
     const reservation = await reserverTablette({ ip, email });
     if (!reservation) {
-      res.redirect(303, `${SITE_VITRINE.value()}/commande.html`);
+      res.redirect(303, `${SITE_VITRINE.value()}/?complet=1#prevenir`);
       return;
     }
     const session = await sessionPaiement({ formule, tablette, relais, proche, email, accord, reservation });
+    await stock.noterSession(db, reservation.doc, { session: session.id, url: session.url, cle })
+      .catch((e) => logger.error('Page de paiement non notée sur la réservation', e.message));
     // Lien d'une relance : le panier d'origine est déjà noté.
     if (email && !req.query.relance) {
       await noterPanier(session.id, { email, accord, formule, relais, query: req.query })
@@ -606,8 +636,10 @@ exports.commander = onRequest({ secrets: [STRIPE_SECRET] }, async (req, res) => 
     }
     res.redirect(303, session.url);
   } catch (e) {
+    // Retour sur la page de commande, encore remplie, qui dit de réessayer (avant : une ligne de texte brut à
+    // l'adresse cloudfunctions.net, illisible sur un téléphone et sans bouton).
     logger.error('commander', e);
-    res.status(500).send("Le paiement n'a pas pu s'ouvrir. Réessayez dans un instant.");
+    res.redirect(303, `${SITE_VITRINE.value()}/commande.html?erreur=1`);
   }
 });
 

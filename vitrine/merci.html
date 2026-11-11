@@ -127,6 +127,9 @@ main a:not([class]), footer a:not([class]), .rassure a { font-weight: 700; }
   (function () {
     var session = new URLSearchParams(location.search).get('session');
     if (!session) return;
+    // Commande payée : la page de commande ne doit plus la garder en mémoire. Sinon, au retour sur cette page, elle
+    // affichait « il ne reste que le paiement » avec « Payer 60 € » allumé : un deuxième paiement (audit du 11/11).
+    try { sessionStorage.removeItem('papote-commande'); sessionStorage.removeItem('papote-paiement'); } catch (_) {}
     // La carte du code est affichée tout de suite, en attente : la page ne saute pas quand il arrive (Tanguy, 2/11).
     var carte = document.getElementById('code');
     carte.hidden = false;

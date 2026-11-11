@@ -106,6 +106,14 @@ function creerFauxStripe(horloge) {
           return copie(s);
         },
         retrieve: async (x) => copie(lire('sessions', 'checkout.session', x)),
+        // Comme Stripe : seule une page encore ouverte peut être fermée ; l'événement « expired » part ensuite.
+        expire: async (x) => {
+          const s = lire('sessions', 'checkout.session', x);
+          if (s.status !== 'open') throw new Error('Only Checkout Sessions with a status in ["open"] can be expired.');
+          s.status = 'expired';
+          evenement('checkout.session.expired', s);
+          return copie(s);
+        },
       },
     },
     customers: {

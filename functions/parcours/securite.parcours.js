@@ -62,8 +62,8 @@ test('pages de paiement ouvertes à la chaîne : 5 par adresse et 2 par e-mail e
   // Assez de tablettes pour que chaque page en mette une de côté (sans stock, une commande d'essai passerait sans réserver).
   for (let i = 0; i < 12; i++) await a.tablettePreparee();
   const stock = require('../stock');
-  const essai = (depuis, email) => s.requete('commander', {
-    query: { formule: 'sim', tablette: 'incluse', ...a.RELAIS, ...(email ? { email } : {}), essai: '' }, depuis,
+  const essai = (depuis, email, autre = {}) => s.requete('commander', {
+    query: { formule: 'sim', tablette: 'incluse', ...a.RELAIS, ...(email ? { email } : {}), essai: '', ...autre }, depuis,
   });
   const deA = '203.0.113.7';
   for (let i = 0; i < stock.ESSAIS_HEURE_IP; i++) {
@@ -76,9 +76,13 @@ test('pages de paiement ouvertes à la chaîne : 5 par adresse et 2 par e-mail e
   assert.match(refus.redirection, /commande\.html\?trop=1$/, 'la 6e page est refusée');
   // Une autre adresse passe encore ; le même e-mail, deux fois seulement.
   const deB = '198.51.100.9';
+  // Le même e-mail qui refait la même demande retrouve la même page (testé à part, ci-dessous) : ce n'est pas un
+  // essai de plus. Deux pages restées ouvertes pour un e-mail (anciennes réservations sans page notée) : la 3e est refusée.
   assert.match((await essai(deB, 'curieux@exemple.fr')).redirection, /checkout\.stripe\.test/);
-  assert.match((await essai(deB, 'curieux@exemple.fr')).redirection, /checkout\.stripe\.test/);
-  assert.match((await essai(deB, 'Curieux@exemple.fr')).redirection, /commande\.html\?trop=1$/, 'le 3e essai du même e-mail est refusé');
+  for (let i = 0; i < 2; i++) {
+    await s.db.collection('reservations').add({ email: 'curieux@exemple.fr', bloque: false, creeLe: new Date(Date.now()), expireLe: new Date(Date.now() - 1) });
+  }
+  assert.match((await essai(deB, 'Curieux@exemple.fr', { rdest: 'Autre Nom' })).redirection, /commande\.html\?trop=1$/, 'le 3e essai du même e-mail est refusé');
   assert.match((await essai(deB, 'autre@exemple.fr')).redirection, /checkout\.stripe\.test/, 'un autre e-mail passe');
   // Une heure plus tard, l'adresse peut recommencer.
   s.avancer(1 / 24 + 0.01);
@@ -89,6 +93,70 @@ test('pages de paiement ouvertes à la chaîne : 5 par adresse et 2 par e-mail e
   assert.ok(avant >= 3, `réservations gardées : ${avant}`);
   await stock.nettoyerReservations(s.db);
   assert.strictEqual((await s.db.collection('reservations').get()).size, 0, 'toutes effacées après un jour');
+});
+
+// Audit de la commande (11/11, Tanguy : « oui la 1 ») : une seule page de paiement ouverte par e-mail. Le client
+// qui revient de Stripe et retouche « Payer » retrouve la même page ; s'il a changé de relais, l'ancienne page est
+// fermée et sa tablette rendue. Avant : chaque « Payer » mettait une tablette de plus de côté, le client se
+// voyait « complet » à cause de sa propre réservation, et le 3e « Payer » de l'heure le bloquait une heure.
+test('même e-mail : « Payer » retouché rouvre la même page Stripe ; relais changé, l\'ancienne page est fermée ; jamais deux tablettes de côté', async () => {
+  await a.tablettePreparee(); // une seule tablette à vendre
+  const payer = (autre = {}) => s.requete('commander', {
+    query: { formule: 'sim', tablette: 'incluse', ...a.RELAIS, email: 'Marie@exemple.fr', accord: '0', ...autre }, depuis: '192.0.2.44',
+  });
+  const reservees = async () => (await s.db.collection('reservations').get()).docs.filter((d) => d.get('bloque') !== false && d.get('expireLe').toMillis() > Date.now()).length;
+  const premiere = (await payer()).redirection;
+  assert.match(premiere, /checkout\.stripe\.test\/cs_/);
+  assert.strictEqual((await s.requete('stockDisponible')).json.disponible, false, 'la seule tablette est de côté');
+  // Quatre allers-retours de plus (bien au-delà de l'ancienne limite de 2) : toujours la même page, la même tablette.
+  for (let i = 0; i < 4; i++) assert.strictEqual((await payer()).redirection, premiere, `retour n° ${i + 1} : même page`);
+  assert.strictEqual(await reservees(), 1);
+  assert.strictEqual(s.stripe.etat.sessions.size, 1, 'une seule page de paiement créée chez Stripe');
+  // Autre point relais : nouvelle page avec le nouveau relais, l'ancienne ne peut plus être payée.
+  const deuxieme = (await payer({ relais: 'FR-067890', rnom: 'Pressing du Centre' })).redirection;
+  assert.match(deuxieme, /checkout\.stripe\.test\/cs_/, `la tablette rendue est reprise par le même client : ${deuxieme}`);
+  assert.notStrictEqual(deuxieme, premiere);
+  await s.calme();
+  assert.strictEqual(s.stripe.etat.sessions.get(premiere.split('/').pop()).status, 'expired', 'ancienne page fermée chez Stripe');
+  const nouvelle = s.stripe.etat.sessions.get(deuxieme.split('/').pop());
+  assert.strictEqual(nouvelle.metadata.relais_nom, 'Pressing du Centre');
+  assert.ok(nouvelle.metadata.reservation, 'la nouvelle page tient la tablette');
+  assert.strictEqual(await reservees(), 1, 'toujours une seule tablette de côté');
+  // Encore deux changements : pas de « trop d'essais » pour un client qui hésite.
+  assert.match((await payer({ rdest: 'Marie Durand' })).redirection, /checkout\.stripe\.test\/cs_/);
+  const derniere = (await payer({ rdest: 'Marie Dupont' })).redirection;
+  assert.match(derniere, /checkout\.stripe\.test\/cs_/);
+  await s.calme();
+  assert.strictEqual(await reservees(), 1);
+  // Un autre client ne peut pas prendre la tablette pendant ce temps.
+  const autre = await s.requete('commander', { query: { formule: 'sim', tablette: 'incluse', ...a.RELAIS, email: 'paul@exemple.fr' }, depuis: '192.0.2.45' });
+  assert.strictEqual(s.stripe.etat.sessions.get(autre.redirection.split('/').pop()).metadata.reservation, undefined, 'clé de test : essai accepté, sans tablette');
+  // La page n'est plus rouverte quand il lui reste moins d'une minute : une nouvelle est créée.
+  s.avancer(29.5 / (24 * 60));
+  const apres = (await payer({ rdest: 'Marie Dupont' })).redirection;
+  assert.notStrictEqual(apres, derniere, 'page presque expirée : pas rouverte');
+  assert.match(apres, /checkout\.stripe\.test\/cs_/);
+});
+
+test('refus de commander : chaque renvoi vers la page de commande dit son motif', async () => {
+  await a.tablettePreparee();
+  const { relais, ...sansRelais } = a.RELAIS;
+  const r1 = await s.requete('commander', { query: { formule: 'sim', tablette: 'incluse', ...sansRelais } });
+  assert.match(r1.redirection, /commande\.html\?formule=sim&tablette=incluse&refus=relais$/);
+  const r2 = await s.requete('commander', { query: { formule: 'sim', tablette: 'incluse', ...a.RELAIS, plat: '48.0501', plon: '5.694' } });
+  assert.match(r2.redirection, /commande\.html\?refus=4g$/);
+  // Stripe en panne à l'ouverture du paiement : retour sur la page de commande, la tablette est rendue.
+  const creer = s.stripe.api.checkout.sessions.create;
+  s.stripe.api.checkout.sessions.create = async () => { throw new Error('Stripe indisponible'); };
+  try {
+    const r3 = await s.requete('commander', { query: { formule: 'sim', tablette: 'incluse', ...a.RELAIS, email: 'panne@exemple.fr' } });
+    assert.strictEqual(r3.statut, 303);
+    assert.match(r3.redirection, /commande\.html\?erreur=1$/);
+  } finally { s.stripe.api.checkout.sessions.create = creer; }
+  // La panne est bien écrite dans le journal (erreur attendue de ce scénario).
+  assert.ok(s.erreurs.some((e) => /commander/.test(e)), 'panne notée dans le journal');
+  s.erreurs.length = 0;
+  assert.strictEqual((await s.requete('stockDisponible')).json.disponible, true, 'tablette rendue après la panne');
 });
 
 // Audit 8 (N1, 11/11) : le visiteur écrit ce qu'il veut au début de X-Forwarded-For ; seule l'adresse ajoutée par

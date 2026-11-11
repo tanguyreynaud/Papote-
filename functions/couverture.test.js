@@ -51,7 +51,11 @@ test('commune seule : acceptée à partir de 95 % bien couverts, sinon la rue es
   assert.deepStrictEqual(p, { adresse: 'Lyon', lat: 45.76, lon: 4.83, niveau: 'commune:100', eligible: true }, 'résultat gardé en mémoire');
   const bof = { padr: 'Quelque part', plat: '48.05', plon: '5.69', pinsee: '52001' };
   const panne = async () => ({ ok: false, status: 500 });
-  assert.strictEqual(await c.procheDepuisRequete(bof, { chercher: panne }), null, 'contour introuvable : pas de paiement');
+  // Contours en panne au moment de payer : le point de la ville est vérifié à la place (audit du 11/11).
+  const { niveau, eligible } = c.verifier(48.05, 5.69);
+  assert.deepStrictEqual(await c.procheDepuisRequete(bof, { chercher: panne }), { adresse: 'Quelque part', lat: 48.05, lon: 5.69, niveau, eligible }, 'contours en panne : point de la ville');
+  const lent = async (url, o) => { assert.ok(o && o.signal, 'délai maximum posé sur la demande de contour'); throw new Error('délai dépassé'); };
+  assert.strictEqual((await c.procheDepuisRequete(bof, { chercher: lent })).niveau, niveau);
   const blanc = async () => ({ ok: true, json: async () => ({ features: [{ geometry: carre(48.0501, 5.694, 300) }] }) });
   assert.strictEqual((await c.procheDepuisRequete(bof, { chercher: blanc })).eligible, false);
 });

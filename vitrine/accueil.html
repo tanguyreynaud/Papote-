@@ -572,7 +572,13 @@ footer a { color: var(--muted); }
     if (q.get('complet') === '1') prevenir();
     fetch('https://europe-west1-papote-famille.cloudfunctions.net/stockDisponible')
       .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
-      .then(function (d) { if (d.disponible === false) { prevenir(); if (location.hash === '#prevenir') section.scrollIntoView(); } })
+      .then(function (d) {
+        // Paiement ouvert depuis moins de 32 minutes dans cet onglet : la tablette « manquante » est celle de ce
+        // client, mise de côté pendant son paiement (commande.html). « Commander » reste : il retrouve sa page.
+        var sienne = false;
+        try { sienne = Date.now() - Number(sessionStorage.getItem('papote-paiement') || 0) < 32 * 60000; } catch (_) {}
+        if (d.disponible === false && !sienne) { prevenir(); if (location.hash === '#prevenir') section.scrollIntoView(); }
+      })
       .catch(function () {});
 
     var form = document.getElementById('attente');

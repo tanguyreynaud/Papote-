@@ -107,8 +107,36 @@ async function reserver(db, { ip, email } = {}) {
     return delai(n);
   });
   if (!d) return null;
-  if (sansReservation) return { id: null, expireA: null, delai: d };
-  return { id: ref.id, expireA: Math.floor((maintenant + DUREE_PAIEMENT_MS) / 1000), delai: d };
+  // doc : le document reservations/{doc} de cet essai, même sans tablette mise de côté (noterSession).
+  if (sansReservation) return { id: null, expireA: null, delai: d, doc: ref.id };
+  return { id: ref.id, expireA: Math.floor((maintenant + DUREE_PAIEMENT_MS) / 1000), delai: d, doc: ref.id };
+}
+
+// Une seule page de paiement ouverte par e-mail (audit du 11/11, Tanguy : « oui la 1 »). Le client qui revient de
+// Stripe et retouche « Payer » retrouve la MÊME page au lieu d'en ouvrir une autre : une seule tablette mise de
+// côté quel que soit le nombre d'allers-retours, et il n'est plus jamais arrêté par la limite de 2 essais par heure.
+// S'il a changé quelque chose (relais, nom…), l'ancienne page est fermée et remplacée (index.js, commander).
+// noterSession : la page Stripe ouverte pour cette réservation, et l'empreinte de ce qui a été demandé.
+async function noterSession(db, doc, { session, url, cle }) {
+  if (!doc) return;
+  await db.doc(`reservations/${doc}`).set({ session, url, cle }, { merge: true });
+}
+// Pages de paiement encore ouvertes pour cet e-mail : [{ doc, session, url, cle, resteMs }], la plus récente d'abord.
+// resteMs : temps avant la fermeture de la page chez Stripe (la réservation dure 2 minutes de plus).
+async function paiementsOuverts(db, email, maintenant = Date.now()) {
+  if (!email) return [];
+  const snap = await db.collection('reservations').where('email', '==', String(email).toLowerCase()).get();
+  return snap.docs
+    .filter((d) => !d.get('remplacee') && (ms(d.get('expireLe')) || 0) > maintenant)
+    .sort((x, y) => (ms(y.get('creeLe')) || 0) - (ms(x.get('creeLe')) || 0))
+    .map((d) => ({ doc: d.id, session: d.get('session') || null, url: d.get('url') || null, cle: d.get('cle') || null,
+      resteMs: ms(d.get('expireLe')) - MARGE_MS - maintenant }));
+}
+// Page de paiement remplacée par une nouvelle : sa tablette est rendue tout de suite. Le document reste une heure
+// pour la limite par adresse internet, mais ne compte plus pour la limite par e-mail (tropDEssais).
+async function remplacer(db, doc) {
+  if (typeof doc !== 'string' || !/^[A-Za-z0-9]{10,40}$/.test(doc)) return;
+  await db.doc(`reservations/${doc}`).set({ remplacee: true, bloque: false, expireLe: Timestamp.fromMillis(Date.now()) }, { merge: true });
 }
 
 // Adresse internet du visiteur (audit 8, N1 et N5, 11/11). Le premier élément de X-Forwarded-For est écrit par le
@@ -133,10 +161,11 @@ function hacher(texte) {
 
 async function tropDEssais(db, { ip, email }) {
   const depuis = Date.now() - HEURE_MS;
+  // Une page remplacée par une autre pour le même e-mail (remplacer) n'est pas un essai de plus pour cet e-mail.
   const recentes = async (champ, valeur) => {
     if (!valeur) return 0;
     const snap = await db.collection('reservations').where(champ, '==', valeur).get();
-    return snap.docs.filter((d) => (ms(d.get('creeLe')) || 0) >= depuis).length;
+    return snap.docs.filter((d) => (ms(d.get('creeLe')) || 0) >= depuis && !(champ === 'email' && d.get('remplacee'))).length;
   };
   const [parIp, parEmail] = await Promise.all([recentes('ip', hacher(ip)), recentes('email', email ? String(email).toLowerCase() : null)]);
   return parIp >= ESSAIS_HEURE_IP || parEmail >= ESSAIS_HEURE_EMAIL;
@@ -181,4 +210,4 @@ function routeDisponible(db, logger) {
 const ERREUR_COMPLET = () => new HttpsError('resource-exhausted',
   "Toutes nos tablettes sont réservées pour le moment. Inscrivez-vous sur mapapote.fr pour être prévenu dès qu'il y en a.");
 
-module.exports = { adresseVisiteur, RESERVATIONS_MAX, tropDEssais, nettoyerReservations, ESSAIS_HEURE_IP, ESSAIS_HEURE_EMAIL, tablettesDisponibles, placesDisponibles, vendable, VENDRE_SANS_STOCK, delai, PRECOMMANDES, nombreDisponibles, reserver, liberer, routeDisponible, ERREUR_COMPLET, DUREE_PAIEMENT_MS };
+module.exports = { noterSession, paiementsOuverts, remplacer, adresseVisiteur, RESERVATIONS_MAX, tropDEssais, nettoyerReservations, ESSAIS_HEURE_IP, ESSAIS_HEURE_EMAIL, tablettesDisponibles, placesDisponibles, vendable, VENDRE_SANS_STOCK, delai, PRECOMMANDES, nombreDisponibles, reserver, liberer, routeDisponible, ERREUR_COMPLET, DUREE_PAIEMENT_MS };
