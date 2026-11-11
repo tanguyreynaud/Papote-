@@ -858,6 +858,7 @@
   function closeOverlayForCall() {
     if (!overlayPost) return;
     stopAudio();
+    arreterPhotosEnvoi();
     overlayQueue.unshift(overlayPost);
     unwatchSeen('overlay');
     overlayPost = null;
@@ -873,6 +874,7 @@
   }
 
   function nextOverlay() {
+    arreterPhotosEnvoi();
     unwatchSeen('overlay');
     stopSpeaking();
     // La nuit, écran en veille : l'envoi attend le réveil ou un toucher (pas de caméra allumée
@@ -946,18 +948,18 @@
     show($('ln-media'), papier && mode !== 'message');
     show($('overlay-media-play'), mode === 'video');
     if (mode === 'video') videoPoster(p);
+    $('overlay-close').textContent = 'OK';
     if (mode === 'photo') {
       photoOverlay(p, p.image);
       // Plusieurs photos dans le même envoi : elles passent l'une après l'autre en grand, toutes les
-      // 6 secondes et en boucle, jusqu'à OK (Tanguy, 29/10 : sur 3 photos, une seule s'affichait).
+      // 10 secondes et en boucle (Tanguy, 29/10 puis 11/11 : 6 s, c'était trop vite). Tant qu'une
+      // photo n'a pas été montrée, le bouton dit « Suivante » et passe à elle ; « OK » ne revient,
+      // et ne ferme, qu'une fois toutes vues (avant, OK sur la 1re fermait sans montrer les autres).
       var toutes = [p.image].concat(p.images || []);
       if (toutes.length > 1) {
-        var n = 0;
-        var tour = setInterval(function () {
-          if (overlayPost !== p) { clearInterval(tour); return; }
-          n = (n + 1) % toutes.length;
-          photoOverlay(p, toutes[n]);
-        }, OVERLAY_PHOTO_MS);
+        overlayPhotos = { post: p, liste: toutes, n: 0, vues: { 0: true }, nbVues: 1, tour: null, dernierOk: 0 };
+        relancerTourPhotos();
+        majBoutonPhotos();
       }
     }
     show($('ln-playzone'), media);
@@ -975,7 +977,52 @@
     }
   }
 
-  var OVERLAY_PHOTO_MS = 6000;
+  var OVERLAY_PHOTO_MS = 10000;
+  // Envoi de plusieurs photos affiché : la liste, celle montrée, celles déjà vues.
+  var overlayPhotos = null;
+
+  function arreterPhotosEnvoi() {
+    if (overlayPhotos) clearInterval(overlayPhotos.tour);
+    overlayPhotos = null;
+  }
+
+  function montrerPhotoEnvoi(i) {
+    var e = overlayPhotos;
+    if (!e || overlayPost !== e.post) return;
+    e.n = i;
+    if (!e.vues[i]) { e.vues[i] = true; e.nbVues++; }
+    photoOverlay(e.post, e.liste[i]);
+    majBoutonPhotos();
+  }
+
+  // Le défilement repart de zéro à chaque photo montrée (après « Suivante », 10 s pleines).
+  function relancerTourPhotos() {
+    var e = overlayPhotos;
+    if (!e) return;
+    clearInterval(e.tour);
+    e.tour = setInterval(function () {
+      if (overlayPhotos !== e || overlayPost !== e.post) { clearInterval(e.tour); return; }
+      montrerPhotoEnvoi((e.n + 1) % e.liste.length);
+    }, OVERLAY_PHOTO_MS);
+  }
+
+  function majBoutonPhotos() {
+    var e = overlayPhotos;
+    $('overlay-close').textContent = e && e.nbVues < e.liste.length ? 'Suivante' : 'OK';
+  }
+
+  // « Suivante » : la photo d'après ; renvoie false quand toutes ont été vues (OK ferme alors).
+  // Un double toucher ne saute pas une photo : un second appui dans la seconde est ignoré.
+  function photoSuivante() {
+    var e = overlayPhotos;
+    if (!e || overlayPost !== e.post || e.nbVues >= e.liste.length) return false;
+    var now = Date.now();
+    if (now - e.dernierOk < 1000) return true;
+    e.dernierOk = now;
+    montrerPhotoEnvoi((e.n + 1) % e.liste.length);
+    relancerTourPhotos();
+    return true;
+  }
   // Une photo de l'envoi affiché, en grand. En paysage : elle prend toute la largeur, le mot passe
   // dessous en bandeau ; en hauteur : la place de la photo suit ses proportions (entière, sans fond flou).
   function photoOverlay(p, src) {
@@ -3106,6 +3153,8 @@
     on($('photo-prev'), 'click', olderPhoto);
     on($('photo-next'), 'click', newerPhoto);
     on($('overlay-close'), 'click', function () {
+      if (photoSuivante()) return;
+      if (overlayPhotos && Date.now() - overlayPhotos.dernierOk < 1000) return; // double toucher sur la dernière « Suivante »
       stopAudio();
       if (overlayPost) markSeen(overlayPost);
       nextOverlay();

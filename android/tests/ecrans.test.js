@@ -535,18 +535,23 @@ test('carillon d\'un nouvel envoi : pas par-dessus une fenêtre ouverte, normal 
   } finally { await b.fermer(); }
 });
 
-test('envoi de 3 photos : elles passent l\'une après l\'autre en grand, toutes les 6 s, jusqu\'à OK', async () => {
+const affichee = (b) => b.page.evaluate(() => document.querySelector('#overlay-img').getAttribute('data-url') || document.querySelector('#overlay-img').getAttribute('src'));
+
+test('envoi de 3 photos : elles passent l\'une après l\'autre en grand, toutes les 10 s, en boucle', async () => {
   const b = await ouvrir();
   try {
     const e = envoi({ text: 'Trois photos' });
     e.images = [`${e.image}?2`, `${e.image}?3`];
     await b.android('onPosts', lot([e]));
     await b.avancer(500);
-    const affichee = () => b.page.evaluate(() => document.querySelector('#overlay-img').getAttribute('data-url') || document.querySelector('#overlay-img').getAttribute('src'));
-    const vues = [await affichee()];
-    await b.avancer(6000); vues.push(await affichee());
-    await b.avancer(6000); vues.push(await affichee());
-    await b.avancer(6000); vues.push(await affichee());
+    const vues = [await affichee(b)];
+    assert.strictEqual(await b.texte('#overlay-close'), 'Suivante', 'des photos restent à voir');
+    await b.avancer(6000);
+    assert.strictEqual(await affichee(b), e.image, 'pas avant 10 s (6 s, c\'était trop vite)');
+    await b.avancer(4000); vues.push(await affichee(b));
+    await b.avancer(10000); vues.push(await affichee(b));
+    assert.strictEqual(await b.texte('#overlay-close'), 'OK', 'toutes vues : OK');
+    await b.avancer(10000); vues.push(await affichee(b));
     assert.deepStrictEqual(vues, [e.image, e.images[0], e.images[1], e.image], 'les 3 photos, en boucle');
     await b.toucher('#overlay-close');
     await b.avancer(6500);
@@ -557,6 +562,37 @@ test('envoi de 3 photos : elles passent l\'une après l\'autre en grand, toutes 
       assert.strictEqual(await b.texte('#photo-text'), 'Trois photos');
       await b.toucher('#photo-next');
     }
+    await sansErreur(b);
+  } finally { await b.fermer(); }
+});
+
+// Tanguy (11/11) : OK touché sur la 1re photo fermait tout, les 2 autres jamais vues.
+test('envoi de 3 photos : « Suivante » montre la suivante, double toucher compris ; OK ne ferme qu\'une fois toutes vues', async () => {
+  const b = await ouvrir();
+  try {
+    const e = envoi({ text: 'Trois photos' });
+    e.images = [`${e.image}?2`, `${e.image}?3`];
+    await b.android('onPosts', lot([e]));
+    await b.avancer(500);
+    // Double toucher tout de suite : une seule photo passée, pas deux.
+    await b.page.evaluate(() => { const o = document.querySelector('#overlay-close'); o.click(); o.click(); });
+    await b.avancer(300);
+    assert.strictEqual(await affichee(b), e.images[0], '2e photo, pas la 3e');
+    assert.ok(await b.visible('#overlay'), 'pas fermé');
+    // Le défilement repart de zéro après « Suivante » : 9 s plus tard, toujours la 2e.
+    await b.avancer(9000);
+    assert.strictEqual(await affichee(b), e.images[0]);
+    await b.toucher('#overlay-close');
+    await b.avancer(300);
+    assert.strictEqual(await affichee(b), e.images[1], '3e photo');
+    assert.strictEqual(await b.texte('#overlay-close'), 'OK');
+    assert.ok(await b.visible('#overlay'), 'toujours ouvert sur la dernière');
+    assert.deepStrictEqual((await b.appels('markSeen')).map((a) => a.args[0]).filter((id) => id === e.id), [], 'pas compté vu avant OK… sauf par la caméra');
+    // Double toucher sur la dernière « Suivante » : le second toucher ne ferme pas aussitôt.
+    await b.avancer(1200);
+    await b.toucher('#overlay-close');
+    await b.avancer(6500);
+    assert.ok(!(await b.visible('#overlay')), 'OK ferme une fois toutes vues');
     await sansErreur(b);
   } finally { await b.fermer(); }
 });

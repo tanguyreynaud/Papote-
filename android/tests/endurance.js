@@ -178,7 +178,9 @@ async function journee(b, etat, jour) {
   if (jour % 2 === 0) posts.unshift(envoi({ type: 'video', image: null, video: `${ORIGIN}/photos/v${jour}.mp4` }));
   posts.splice(60);
   await b.android('onPosts', lot(posts));
-  for (let i = 0; i < 4; i++) { await b.avancer(3000); await b.toucher('#overlay-close').catch(() => {}); await b.avancer(4000); }
+  // 6 touchers : jusqu'à 5 envois, dont celui de 2 photos qui demande « Suivante » puis « OK » ;
+  // tout est fermé avant la mesure (un envoi resté ouvert garde sa minuterie de défilement).
+  for (let i = 0; i < 6; i++) { await b.avancer(3000); await b.toucher('#overlay-close').catch(() => {}); await b.avancer(4000); }
   await jusqua(b, 9);
   await b.avancer(60000);
   if (await b.visible('#reminder-alert')) await b.toucher('#reminder-done');
