@@ -1222,7 +1222,10 @@ function dateReprise(t) {
 }
 
 async function pauseHospitalisation(c) {
-  const saisie = await saisir(`Pause pour hospitalisation de ${c.famille || c.nom || 'ce client'} (justificatif reçu).\n\nRien ne sera prélevé jusqu'à la date de reprise ; la tablette continue de marcher. Date de reprise des prélèvements (JJ/MM/AAAA) :`, '', { oui: 'Mettre en pause' });
+  // Règle de Tanguy (11/11) : un mois offert si le proche a passé plus de la moitié du mois à l'hôpital. Pas de calcul
+  // automatique ni de prorata : les dates de la pause décident quel prélèvement est annulé (en entier).
+  const prochain = c.prochainPrelevement && c.prochainPrelevement > Date.now() ? `\nProchain prélèvement prévu : ${jour(c.prochainPrelevement)}.` : '';
+  const saisie = await saisir(`Pause pour hospitalisation de ${c.famille || c.nom || 'ce client'} (justificatif reçu).\n\nUn mois est offert si votre client a passé plus de la moitié du mois à l'hôpital. Le prélèvement dont la date tombe pendant la pause est annulé en entier ; la tablette continue de marcher.${prochain}\n\nDate de reprise des prélèvements (JJ/MM/AAAA) :`, '', { oui: 'Mettre en pause' });
   if (saisie == null || saisie === false) throw 'non';
   const jusqua = dateReprise(saisie);
   if (!jusqua) throw new Error('Date illisible : écrivez par exemple 15/12/2026.');
