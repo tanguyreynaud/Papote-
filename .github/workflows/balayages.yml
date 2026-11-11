@@ -56,3 +56,22 @@ jobs:
             outils/galerie/sortie/galerie.html
             outils/galerie/sortie/courriels.html
           if-no-files-found: ignore
+
+  # Parcours de commande après « Payer » (faux serveur, fausse page Stripe) : double appui, retour arrière,
+  # renvois du serveur, retour sur la page après avoir payé. Les tests « todo » décrivent ce qui reste à corriger
+  # (audit du 11/11) : ils n'arrêtent pas la fusion.
+  commande-site:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: outils/galerie
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - name: Parcours de commande sur téléphone
+        run: node --test commande-site.test.js
