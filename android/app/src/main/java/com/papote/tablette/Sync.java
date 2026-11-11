@@ -313,6 +313,17 @@ final class Sync {
         }
     }
 
+    /**
+     * La tablette sort de sa famille (tablette revenue chez Papote, famille supprimée) : les photos, vidéos et
+     * messages vocaux déjà téléchargés sont effacés du disque, et plus aucun numéro de l'ancienne famille ne peut
+     * l'appeler (audit du départ, 11/11 : ils restaient jusqu'à la remise à zéro).
+     */
+    private void oublierFamille() {
+        File[] files = imageDir.listFiles();
+        if (files != null) for (File f : files) f.delete();
+        Telephone.garderNumeros(context, null);
+    }
+
     private void dropCache() {
         cacheFile().delete();
         photosGardees.clear();
@@ -586,6 +597,7 @@ final class Sync {
                         .remove("installEnCours").remove("installPar").remove("installDepuis").apply();
                 posts.clear();
                 dropCache();
+                oublierFamille();
                 subscription = "";
                 lastPostsJson = null;
                 lastStatusJson = null;
@@ -1324,6 +1336,7 @@ final class Sync {
             prefs.edit().remove("fid").remove("code").apply();
             posts.clear();
             dropCache();
+            oublierFamille();
             lastPostsJson = null;
             status("setup", "Tablette retirée de la famille.");
         });
