@@ -90,6 +90,10 @@ async function entrerDansSaFamille(t, fid, { nom = 'Mamie Emma' } = {}) {
   await t.page.click('#nom-prepare-btn');
   await g.toast(t, 'Nom enregistré');
   await t.page.locator('#nom-prepare').waitFor({ state: 'hidden' });
+  // Famille préparée à la commande : le nom donné, « Réglons la tablette » puis le petit guide (A43). « Plus tard »
+  // et « Passer » : les scénarios règlent eux-mêmes ce dont ils ont besoin. (Fonctions d'avant M4 : ni l'un ni l'autre.)
+  await t.page.locator('.intro-back, .guide-back').first().waitFor({ timeout: 5_000 }).catch(() => {});
+  await g.fermerAccueil(t);
   await s.calme();
 }
 

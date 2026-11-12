@@ -33,8 +33,8 @@ const IMITATION = (() => {
 
 // Ce que la page demande à l'appli et qui arrive dans Sync.java (MainActivity, @JavascriptInterface).
 const PONTS = ['ready', 'markSeen', 'sendHeart', 'reply', 'realtime', 'changed', 'morePhotos', 'touched', 'seen',
-  'ackReminder', 'seenReminder', 'getCode', 'callsAccount', 'setTabletName', 'meteoChoose', 'meteoSkip', 'wifiDone',
-  'confirmPairing', 'welcomeBack', 'welcomeSeen', 'cancelPairing', 'getPairing', 'firestoreDatabase'];
+  'ackReminder', 'seenReminder', 'getCode', 'callsAccount', 'meteoChoose', 'meteoSkip', 'wifiDone',
+  'welcomeBack', 'welcomeSeen', 'getPairing', 'firestoreDatabase'];
 
 function brancherPonts(ponts) {
   const demander = (m, a) => {

@@ -1,7 +1,7 @@
 // Les appels entre la vraie app famille et la vraie page d'appels de la tablette (liaison WebRTC réelle entre les
 // deux navigateurs, caméras et micros simulés) : Julie appelle Mamie, Mamie appelle Julie, personne ne répond.
 
-const { test, assert, g, brancher, chezMamie, familleChezMamie, diagnostic, doubleAppui } = require('../commun');
+const { test, assert, g, brancher, chezMamie, familleChezMamie, diagnostic, doubleAppui, enDirect } = require('../commun');
 
 brancher();
 
@@ -125,5 +125,41 @@ test('Julie appelle, Mamie ne répond pas : au bout de 45 s Julie est prévenue,
   assert.ok(duree >= 40 && duree <= 50, `45 s (mesuré ${duree} s)`);
   await mamie.page.locator('#call-ring').waitFor({ state: 'hidden', timeout: 10_000 });
   assert.strictEqual(await mamie.visible('#view-home'), true);
-  console.log(`Écran de Mamie après l'appel manqué : ${(await mamie.page.evaluate(() => document.body.innerText.replace(/\s+/g, ' ').slice(0, 300)))}`);
+  console.log(`Écran de Mamie après l'appel manqué : ${(await mamie.page.evaluate(() => document.body.innerText.replace(/\s+/g, ' ').slice(0, 300)))}`);  // A49 : une carte calme à la place de la météo, sans le mot « manqué ».
+  await chezMamie(mamie, '#essai-appel', 10_000);
+  assert.match(await carteEssai(mamie), /^Julie a essayé de vous appeler à \d{1,2} h \d{2}$/);
+});
+
+const carteEssai = async (mamie) => ((await mamie.visible('#essai-appel')) ? (await mamie.texte('#essai-appel')).replace(/\s+/g, ' ').trim() : '');
+
+test('A49 : Julie raccroche avant que Mamie décroche : « Julie a essayé de vous appeler à … », gardée au redémarrage ; Julie rappelle, Mamie décroche : la carte s\'en va', { timeout: 200_000 }, async () => {
+  const { julie, mamie } = await familleChezMamie();
+  await julieAppelle(julie);
+  await chezMamie(mamie, '#call-ring:not([hidden])', 30_000);
+  await julie.page.waitForTimeout(3000);
+  await julie.page.click('#call-hangup');
+  await julie.page.locator('#call').waitFor({ state: 'hidden', timeout: 15_000 });
+  await mamie.page.locator('#call-ring').waitFor({ state: 'hidden', timeout: 20_000 })
+    .catch(async () => assert.fail(`La tablette sonne encore après que Julie a raccroché.\n${await diagnostic(mamie)}`));
+  await chezMamie(mamie, '#essai-appel', 10_000);
+  const carte = await carteEssai(mamie);
+  assert.match(carte, /^Julie a essayé de vous appeler à \d{1,2} h \d{2}$/);
+  assert.doesNotMatch(carte, /manqu/i);
+  assert.strictEqual(await mamie.page.locator('#essai-appel button').count(), 0, 'pas de bouton');
+  assert.ok(await mamie.visible('#sos-btn'), 'le SOS reste là');
+
+  // Tablette éteinte et rallumée : la carte est toujours là.
+  await mamie.rallumer();
+  await enDirect(mamie);
+  await chezMamie(mamie, '#essai-appel', 15_000);
+  assert.strictEqual(await carteEssai(mamie), carte);
+
+  // Julie rappelle, Mamie décroche : la carte s'en va.
+  await julieAppelle(julie);
+  await chezMamie(mamie, '#call-ring:not([hidden])', 30_000);
+  await mamie.toucher('#ring-answer');
+  await chezMamie(mamie, '#call-view:not([hidden])', 15_000);
+  await julie.page.click('#call-hangup');
+  await mamie.page.locator('#call-view').waitFor({ state: 'hidden', timeout: 20_000 });
+  assert.strictEqual(await carteEssai(mamie), '', 'appel abouti avec Julie : plus de carte');
 });

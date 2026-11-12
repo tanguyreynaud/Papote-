@@ -28,11 +28,11 @@ Durée : environ 10 minutes. En CI : `.github/workflows/parcours-mamie.yml` (pus
 
 | Fichier | Ce que vit la famille |
 | --- | --- |
-| `arrivee.test.js` | Commande payée, tablette reliée dans Stock, colis, « Commencer » : la tablette entre seule dans sa famille ; première photo, « Vu ». |
+| `arrivee.test.js` | Commande payée, tablette reliée dans Stock, colis, « Commencer » : la tablette entre seule dans sa famille (rien à scanner : seul Papote relie une tablette, le serveur la reconnaît à son n° de série) ; le proche entre, donne le nom, passe « Réglons la tablette » ; première photo, « Vu ». |
 | `envois.test.js` | 3 photos d'un coup (« Suivante », double appui), message avec emojis, vidéo. |
-| `appels.test.js` | Julie appelle (vraie vidéo dans les deux sens), Mamie appelle (internet, carte SIM), personne ne répond (45 s), coupure en plein appel. |
+| `appels.test.js` | Julie appelle (vraie vidéo dans les deux sens), Mamie appelle (internet, carte SIM), personne ne répond (45 s), coupure en plein appel ; carte « Julie a essayé de vous appeler à … » (A49) : gardée au redémarrage, partie quand Mamie décroche. |
 | `hors-ligne.test.js` | Box coupée, « OK » touché sans réseau, tablette éteinte et rallumée sans réseau, rattrapage au retour. |
-| `sos.test.js` | SOS par internet (annuler, double appui) et par la carte SIM (SMS puis appel). |
+| `sos.test.js` | SOS par internet (annuler, double appui) et par la carte SIM (SMS puis appel) ; appuis répétés : pas de 2e SMS en 10 min, même tablette rallumée, l'appel repart (A47). |
 | `nuit.test.js` | Veille : une photo du soir attend le matin, un appel sonne quand même. |
 
 ## Comment ça marche

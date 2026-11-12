@@ -24,7 +24,7 @@ import java.util.Set;
  * La tablette sans tablette : la vraie synchronisation de l'appli (Sync.java) tourne ici, sur l'ordinateur,
  * et parle aux émulateurs Firebase comme elle parle à Firebase sur la tablette. Le banc Node (tablette-reelle.js)
  * tient l'écran : il reçoit ce que l'appli envoie à la page (onStatus, onPosts…) et renvoie ce que la page
- * demande à l'appli (markSeen, reply, confirmPairing…), comme le fait MainActivity entre Sync et la WebView.
+ * demande à l'appli (markSeen, reply, welcomeSeen…), comme le fait MainActivity entre Sync et la WebView.
  *
  * Lancement : java … com.papote.tablette.PontTablette <port du banc> <dossier de la tablette>
  * Échanges : une ligne JSON par message. Banc → { id, cmd, args } ; ici → { id, res } ou { id, err } ;
@@ -179,14 +179,11 @@ public final class PontTablette implements Sync.Listener {
             case "seenReminder": sync.seenReminder(a.getString(0), a.getString(1)); return null;
             case "getCode": return prefs.getString("code", null);
             case "callsAccount": return sync.callsAccount();
-            case "setTabletName": sync.setTabletName(a.getString(0)); return null;
             case "meteoChoose": sync.setMeteo(a.getString(0), a.getDouble(1), a.getDouble(2)); return null;
             case "meteoSkip": sync.setMeteo(null, 0, 0); return null;
             case "wifiDone": sync.wifiDone(); return null;
-            case "confirmPairing": sync.confirmPairing(a.getBoolean(0)); return null;
             case "welcomeBack": sync.welcomeBack(a.getBoolean(0)); return null;
             case "welcomeSeen": sync.welcomeSeen(); return null;
-            case "cancelPairing": sync.cancelPairing(); return null;
             case "getPairing": return sync.pairingCode();
             case "firestoreDatabase": return Firebase.database();
             case "simBudget": return Forfait.etat(appareil).toString();
