@@ -548,17 +548,99 @@ test('tablette revenue (fiche retirée par Papote) : elle ne lit plus rien de la
   await assertSucceeds(deleteDoc(doc(admin(), `families/${FID}/members/lea`)));
 });
 
-test('code d\'installation d\'une tablette : ouvre la famille à une tablette seulement, et à la bonne', async () => {
+// Code de tablette de remplacement (audit 8, R2 ; Tanguy 12/11) : créé par le serveur (gestionCodeRemplacement),
+// une seule tablette, 7 jours. La tablette (Sync.java) prend le code dans la même écriture que sa fiche ; son compte
+// des appels (appels.js) entre ensuite avec le même code.
+const JOUR_MS = 24 * 3600 * 1000;
+async function codeTablette(code, { fid = FID, expire = Date.now() + 7 * JOUR_MS, extra = {} } = {}) {
+  await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), `invites/${code}`), {
+    fid, createdBy: 'tanguy', kind: 'tablette', creeLe: Timestamp.fromMillis(Date.now()),
+    ...(expire ? { expire: Timestamp.fromMillis(expire) } : {}), ...extra,
+  }));
+}
+const membreTablette = (code) => ({ name: 'Tablette', role: 'tablette', code, canCall: true, joinedAt: serverTimestamp() });
+// Écriture de la tablette (Sync.java, familyId) : sa fiche + le code pris, ensemble.
+function prendre(uid, code, { fid = FID, calls = `${uid}-appels` } = {}) {
+  const db = tablette(uid);
+  const b = writeBatch(db);
+  b.set(doc(db, `families/${fid}/members/${uid}`), membreTablette(code));
+  b.update(doc(db, `invites/${code}`), { usedBy: uid, callsUid: calls, usedAt: serverTimestamp() });
+  return b.commit();
+}
+
+test('code de tablette de remplacement : seul le serveur le crée, plus aucune appli (même admin)', async () => {
   await deuxFamilles();
-  await assertSucceeds(setDoc(doc(admin(), 'invites/TABL2345'), { fid: FID, createdBy: 'tanguy', kind: 'tablette' }));
-  await assertFails(setDoc(doc(proche('eve'), 'invites/TABL2346'), { fid: FID, createdBy: 'eve', kind: 'tablette' }));
-  const membre = (code) => ({ name: 'Tablette', role: 'tablette', code, canCall: true, joinedAt: serverTimestamp() });
-  await assertSucceeds(setDoc(doc(tablette('tab9'), `families/${FID}/members/tab9`), membre('TABL2345')));
-  await assertFails(setDoc(doc(tablette('tab8'), `families/${FID2}/members/tab8`), membre('TABL2345')));
-  await assertFails(setDoc(doc(tablette('tab7'), `families/${FID}/members/tab7`), membre(CODE)));
+  await assertFails(setDoc(doc(admin(), 'invites/TABL2345'), { fid: FID, createdBy: 'tanguy', kind: 'tablette' }));
+  await assertFails(setDoc(doc(admin(), 'invites/TABL2345'), { fid: FID, createdBy: 'tanguy', kind: 'tablette', expire: Timestamp.fromMillis(Date.now() + JOUR_MS) }));
+  await assertFails(setDoc(doc(proche('julie'), 'invites/TABL2346'), { fid: FID, createdBy: 'julie', kind: 'tablette' }));
+  await assertFails(setDoc(doc(proche('eve'), 'invites/TABL2347'), { fid: FID, createdBy: 'eve', kind: 'tablette' }));
+  // Le code famille, lui, se change toujours (responsable).
+  await assertSucceeds(setDoc(doc(proche('julie'), 'invites/NOUV2345'), { fid: FID, createdBy: 'julie' }));
+});
+
+test('code de tablette de remplacement : une seule tablette, et à la bonne famille', async () => {
+  await deuxFamilles();
+  await codeTablette('TABL2345');
+  // Sans prendre le code (ancienne façon), refusé ; une autre famille, refusé ; le code famille, refusé.
+  await assertFails(setDoc(doc(tablette('tab9'), `families/${FID}/members/tab9`), membreTablette('TABL2345')));
+  await assertFails(prendre('tab8', 'TABL2345', { fid: FID2 }));
+  await assertFails(setDoc(doc(tablette('tab7'), `families/${FID}/members/tab7`), membreTablette(CODE)));
   // Un téléphone avec ce code : ni actif, ni en attente.
   await assertFails(setDoc(doc(proche('x'), `families/${FID}/members/x`), fiche('x', { code: 'TABL2345', status: 'active' })));
   await assertFails(setDoc(doc(proche('x'), `families/${FID}/members/x`), fiche('x', { code: 'TABL2345', status: 'pending' })));
+  // Prendre le code sans entrer (ou entrer dans une autre famille) : refusé, le code reste libre.
+  await assertFails(updateDoc(doc(tablette('tab6'), 'invites/TABL2345'), { usedBy: 'tab6', callsUid: 'tab6-appels', usedAt: serverTimestamp() }));
+  // Première tablette : entre.
+  await assertSucceeds(prendre('tab9', 'TABL2345'));
+  await assertSucceeds(getDoc(doc(tablette('tab9'), `families/${FID}`)));
+  // Deuxième tablette avec le même code : refusée, de toutes les façons.
+  await assertFails(prendre('tab5', 'TABL2345'));
+  await assertFails(setDoc(doc(tablette('tab5'), `families/${FID}/members/tab5`), membreTablette('TABL2345')));
+  await assertFails(updateDoc(doc(tablette('tab5'), 'invites/TABL2345'), { usedBy: 'tab5' }));
+  await assertFails(getDoc(doc(tablette('tab5'), `families/${FID}`)));
+  // Même la tablette qui l'a pris ne le réécrit pas (ni l'appel d'un autre compte).
+  await assertFails(updateDoc(doc(tablette('tab9'), 'invites/TABL2345'), { callsUid: 'intrus' }));
+});
+
+test('code de tablette de remplacement : la même tablette qui réessaie repasse, son compte des appels aussi', async () => {
+  await deuxFamilles();
+  await codeTablette('TABL2345');
+  // Compte des appels trop tôt (avant que la tablette ait pris le code) : refusé, il réessaie (appels.js, 1 min).
+  await assertFails(setDoc(doc(tablette('tab9-appels'), `families/${FID}/members/tab9-appels`), membreTablette('TABL2345')));
+  await assertSucceeds(prendre('tab9', 'TABL2345'));
+  // Réponse perdue : la tablette relit sa fiche (présente) ; fiche retirée entre-temps : elle repasse sans reprendre.
+  await env.withSecurityRulesDisabled((ctx) => deleteDoc(doc(ctx.firestore(), `families/${FID}/members/tab9`)));
+  await assertFails(prendre('tab9', 'TABL2345'));
+  await assertSucceeds(setDoc(doc(tablette('tab9'), `families/${FID}/members/tab9`), membreTablette('TABL2345')));
+  // Compte des appels de cette tablette : entre avec le même code ; un autre compte, non.
+  await assertSucceeds(setDoc(doc(tablette('tab9-appels'), `families/${FID}/members/tab9-appels`), membreTablette('TABL2345')));
+  await assertFails(setDoc(doc(tablette('autre'), `families/${FID}/members/autre`), membreTablette('TABL2345')));
+  // Compte des appels qui revient après 7 jours (fiche perdue) : oui tant que la tablette est membre…
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await updateDoc(doc(ctx.firestore(), 'invites/TABL2345'), { expire: Timestamp.fromMillis(Date.now() - JOUR_MS) });
+    await deleteDoc(doc(ctx.firestore(), `families/${FID}/members/tab9-appels`));
+  });
+  await assertSucceeds(setDoc(doc(tablette('tab9-appels'), `families/${FID}/members/tab9-appels`), membreTablette('TABL2345')));
+  // … le compte principal, lui, plus après l'échéance ; et la tablette retirée, son compte des appels non plus.
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await deleteDoc(doc(ctx.firestore(), `families/${FID}/members/tab9`));
+    await deleteDoc(doc(ctx.firestore(), `families/${FID}/members/tab9-appels`));
+  });
+  await assertFails(setDoc(doc(tablette('tab9'), `families/${FID}/members/tab9`), membreTablette('TABL2345')));
+  await assertFails(setDoc(doc(tablette('tab9-appels'), `families/${FID}/members/tab9-appels`), membreTablette('TABL2345')));
+});
+
+test('code de tablette de remplacement : refusé après 7 jours, et un vieux code sans échéance aussi', async () => {
+  await deuxFamilles();
+  await codeTablette('EXPI2345', { expire: Date.now() - 60_000 });
+  await assertFails(prendre('tab9', 'EXPI2345'));
+  await assertFails(setDoc(doc(tablette('tab9'), `families/${FID}/members/tab9`), membreTablette('EXPI2345')));
+  await codeTablette('VIEU2345', { expire: null });
+  await assertFails(prendre('tab8', 'VIEU2345'));
+  await assertFails(setDoc(doc(tablette('tab8'), `families/${FID}/members/tab8`), membreTablette('VIEU2345')));
+  // Le compte des appels n'est pas noté par un intrus : sans fiche « usedBy », personne n'entre.
+  await codeTablette('FAUX2345', { extra: { callsUid: 'intrus' } });
+  await assertFails(setDoc(doc(tablette('intrus'), `families/${FID}/members/intrus`), membreTablette('FAUX2345')));
 });
 
 // ---------- Storage : photos et vidéos des familles ----------

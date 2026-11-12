@@ -2,7 +2,9 @@ rules_version = '2';
 
 // Modèle :
 //   invites/{code}                  -> { fid, createdBy, kind? }  code famille à 8 caractères ;
-//                                      kind 'tablette' : code d'installation d'une tablette
+//                                      kind 'tablette' : code d'une tablette de remplacement, créé par le serveur
+//                                      seul (gestionCodeRemplacement), { creeLe, expire } : 7 jours, une seule
+//                                      tablette, qui le prend en entrant { usedBy, callsUid, usedAt } (audit 8, R2)
 //   families/{fid}                  -> { name, code, createdBy, createdAt, admins?, installation? }
 //                                      installation { etape: photo|son|options|fini, pairing } : famille créée
 //                                      par le serveur au scan d'une nouvelle tablette (functions/installation.js)
@@ -76,6 +78,20 @@ service cloud.firestore {
 
     function invitePath(code) {
       return /databases/$(database)/documents/invites/$(code);
+    }
+
+    // Code de tablette de remplacement (audit 8, R2 ; Tanguy 12/11) : une seule tablette, dans les 7 jours.
+    // Son compte principal le prend dans la même écriture que sa fiche (usedBy, voir invites update) ; le même compte
+    // qui réessaie (réponse perdue, fiche retirée) repasse avant l'échéance. Son compte des appels (callsUid, noté par
+    // la tablette en prenant le code) entre sans limite de temps tant que le compte principal est membre, comme
+    // pour le jumelage. Un code sans échéance (d'avant le 12/11) ne fait plus entrer personne.
+    function codeTabletteOk(fid, code) {
+      let avant = get(invitePath(code)).data;
+      return avant.get('kind', '') == 'tablette' && avant.fid == fid
+        && ((getAfter(invitePath(code)).data.get('usedBy', '') == request.auth.uid
+            && request.time < avant.get('expire', timestamp.value(0)))
+          || (avant.get('callsUid', '') == request.auth.uid
+            && exists(/databases/$(database)/documents/families/$(fid)/members/$(avant.usedBy))));
     }
 
     // Tableau de bord : seul l'administrateur voit toutes les familles.
@@ -178,15 +194,27 @@ service cloud.firestore {
       // Lecture d'un code connu uniquement : impossible de lister les familles.
       allow get: if signedIn();
       allow list: if false;
-      // Code famille (à la création ou quand un responsable le change) ou code d'installation d'une tablette.
+      // Code famille (à la création ou quand un responsable le change). Le code d'une tablette de remplacement est
+      // créé par le serveur seul (gestionCodeRemplacement : échéance à 7 jours), jamais par une appli, même admin.
       allow create: if signedIn()
-        && request.resource.data.keys().hasOnly(['fid', 'createdBy', 'kind'])
+        && request.resource.data.keys().hasOnly(['fid', 'createdBy'])
         && request.resource.data.createdBy == request.auth.uid
-        && (!('kind' in request.resource.data) || request.resource.data.kind == 'tablette')
-        && (isCreatorAfter(request.resource.data.fid) || isFamilyAdmin(request.resource.data.fid)
-          // Tablette de remplacement préparée par l'administrateur depuis le tableau de bord.
-          || (isAdmin() && request.resource.data.kind == 'tablette'));
-      allow update: if false;
+        && (isCreatorAfter(request.resource.data.fid) || isFamilyAdmin(request.resource.data.fid));
+      // La tablette de remplacement prend son code en entrant : une seule fois, avant l'échéance, dans la même
+      // écriture que sa fiche membre (avec ce code), et note son compte des appels (audit 8, R2).
+      allow update: if signedIn()
+        && resource.data.get('kind', '') == 'tablette'
+        && !('usedBy' in resource.data)
+        && request.time < resource.data.get('expire', timestamp.value(0))
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usedBy', 'callsUid', 'usedAt'])
+        && request.resource.data.usedBy == request.auth.uid
+        && request.resource.data.callsUid is string
+        && request.resource.data.callsUid.size() > 0
+        && request.resource.data.callsUid.size() <= 128
+        && request.resource.data.callsUid != request.auth.uid
+        && request.resource.data.usedAt == request.time
+        && !exists(/databases/$(database)/documents/families/$(resource.data.fid)/members/$(request.auth.uid))
+        && getAfter(/databases/$(database)/documents/families/$(resource.data.fid)/members/$(request.auth.uid)).data.get('code', '') == code;
       allow delete: if isFamilyAdmin(resource.data.fid);
       // Retrouver les codes d'une famille pour la supprimer (requête where fid == …).
       allow list: if isFamilyAdmin(resource.data.fid);
@@ -318,12 +346,11 @@ service cloud.firestore {
           && request.resource.data.name.size() > 0
           && request.resource.data.name.size() <= 40
           && (
-            // Tablette : avec un code d'installation de tablette, active d'office…
+            // Tablette : avec un code de tablette de remplacement, une seule tablette, dans les 7 jours (R2)…
             (request.resource.data.role == 'tablette'
               && !('status' in request.resource.data)
               && !('pairing' in request.resource.data)
-              && get(invitePath(request.resource.data.code)).data.get('kind', '') == 'tablette'
-              && get(invitePath(request.resource.data.code)).data.fid == fid)
+              && codeTabletteOk(fid, request.resource.data.code))
             // … ou par jumelage confirmé sur la tablette (ses deux comptes). Dans les 24 h qui suivent, et
             // non plus l'heure : une tablette dont le wifi tombe juste après le nom de la famille ne
             // pouvait plus entrer (elle réessaie toutes les 4 s, refusée à chaque fois).

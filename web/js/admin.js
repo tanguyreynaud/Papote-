@@ -12,7 +12,7 @@ import {
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
 import {
   getFirestore, collection, collectionGroup, query, where, orderBy, limit,
-  getDocs, getDoc, doc, writeBatch, getCountFromServer, setDoc, deleteDoc, updateDoc,
+  getDocs, getDoc, doc, writeBatch, getCountFromServer, deleteDoc, updateDoc,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
 import {
   getStorage, ref, uploadBytes, getDownloadURL,
@@ -771,32 +771,79 @@ async function toggleMembers(f, li) {
   out.replaceChildren(...(rows.length ? rows : [Object.assign(document.createElement('p'), { className: 'small muted', textContent: 'Aucun proche.' })]));
 }
 
-// Tablette de remplacement : un code d'installation pour cette famille. Installée avec
-// installer-tablette.ps1 -Code, elle arrive déjà dans la famille, sans écran de bienvenue.
-const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+// Tablette de remplacement : un code d'installation pour cette famille, créé par le serveur (gestionCodeRemplacement).
+// Une seule tablette, pendant 7 jours (audit 8, R2 ; Tanguy 12/11) : une deuxième tablette avec le même code est
+// refusée. Installée avec installer-tablette.ps1 -Code, elle arrive déjà dans la famille, sans écran de bienvenue.
+const codeLisible = (c) => `${c.slice(0, 4)}-${c.slice(4)}`;
+const dateHeure = (t) => new Date(t).toLocaleString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
 async function prepareReplacement(f, li) {
   const out = li.querySelector('.replace-out');
-  if (!await demander(`Tablette cassée ou perdue : un code permet d'installer une nouvelle tablette directement dans la famille de ${f.name}, sans rien refaire.\n\nPréparer ce code ?`, { oui: 'Préparer' })) return;
-  const bytes = crypto.getRandomValues(new Uint8Array(8));
-  const code = Array.from(bytes, (b) => CODE_ALPHABET[b % CODE_ALPHABET.length]).join('');
+  let etat;
   try {
-    await setDoc(doc(db, 'invites', code), { fid: f.id, createdBy: auth.currentUser.uid, kind: 'tablette' });
+    etat = await patienter('Lecture du code de remplacement…', () => appeler('gestionCodeRemplacement', { fid: f.id, action: 'lire' }));
   } catch (err) {
     console.error(err);
-    prevenir("Le code n'a pas pu être créé.");
+    prevenir(`Le code de remplacement n'a pas pu être lu : ${err.message}`);
     return;
   }
-  const shown = `${code.slice(0, 4)}-${code.slice(4)}`;
+  // Pas encore de code : on le prépare tout de suite. Code en cours, déjà servi ou expiré : on l'affiche.
+  if (!etat || !etat.code) {
+    if (!await demander(`Tablette cassée ou perdue : un code permet d'installer une nouvelle tablette directement dans la famille de ${f.name}, sans rien refaire.\n\nIl sert pour une seule tablette, pendant 7 jours.\n\nPréparer ce code ?`, { oui: 'Préparer' })) return;
+    etat = await nouveauCode(f);
+    if (!etat) return;
+  }
+  if (!etat.code) { prevenir("Le code n'a pas pu être créé."); return; }
+  afficherCode(f, out, etat);
+}
+
+// Double clic sur « Nouveau code » : un seul appel à la fois ici, et le serveur rend le même code dans la minute.
+let codeEnCreation = false;
+async function nouveauCode(f, btn) {
+  if (codeEnCreation) return null;
+  codeEnCreation = true;
+  if (btn) { btn.disabled = true; boutonCharge(btn, true); }
+  try {
+    return await patienter('Création du code…', () => appeler('gestionCodeRemplacement', { fid: f.id, action: 'nouveau' }));
+  } catch (err) {
+    console.error(err);
+    prevenir(`Le code n'a pas pu être créé : ${err.message}`);
+    return null;
+  } finally {
+    codeEnCreation = false;
+    if (btn) { btn.disabled = false; boutonCharge(btn, false); }
+  }
+}
+
+function afficherCode(f, out, etat) {
   out.hidden = false;
-  out.innerHTML = '';
-  const p1 = document.createElement('p');
-  p1.textContent = `Tablette de remplacement : installez-la avec installer-tablette.ps1 -Code ${shown}`;
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'secondary small-btn danger';
-  btn.textContent = "Retirer l'ancienne tablette de la famille";
-  btn.addEventListener('click', () => removeOldTablets(f, btn));
-  out.append(p1, btn);
+  const lignes = [];
+  if (etat.etat === 'valable') {
+    lignes.push(el('p', 'code-remplacement', `Tablette de remplacement : installez-la avec installer-tablette.ps1 -Code ${codeLisible(etat.code)}`));
+    lignes.push(el('p', 'muted', `Pour une seule tablette, jusqu'au ${dateHeure(etat.expire)}.`));
+  } else if (etat.etat === 'utilise') {
+    lignes.push(el('p', 'code-remplacement', `Le code ${codeLisible(etat.code)} a servi${etat.utiliseLe ? ` le ${dateHeure(etat.utiliseLe)}` : ''} : la nouvelle tablette est entrée dans la famille. Il ne servira plus.`));
+  } else {
+    lignes.push(el('p', 'code-remplacement', `Le code ${codeLisible(etat.code)} a expiré${etat.expire ? ` le ${dateHeure(etat.expire)}` : ''} sans servir.`));
+  }
+  const nouveau = el('button', 'secondary small-btn', 'Nouveau code');
+  nouveau.type = 'button';
+  let enCours = false;
+  nouveau.addEventListener('click', async () => {
+    if (enCours) return; // double clic : une seule confirmation, un seul appel
+    enCours = true;
+    try {
+      if (etat.etat === 'valable' && !await demander(`Faire un nouveau code pour la famille de ${f.name} ?\n\nLe code ${codeLisible(etat.code)} ne marchera plus.`, { oui: 'Nouveau code' })) return;
+    } finally { enCours = false; }
+    const r = await nouveauCode(f, nouveau);
+    if (!r) return;
+    if (!r.code) { prevenir("Le code n'a pas pu être créé."); return; }
+    afficherCode(f, out, r);
+    annoncer(r.deja ? 'Code déjà créé à l\'instant' : 'Nouveau code créé');
+  });
+  const retirer = el('button', 'secondary small-btn danger', "Retirer l'ancienne tablette de la famille");
+  retirer.type = 'button';
+  retirer.addEventListener('click', () => removeOldTablets(f, retirer));
+  out.replaceChildren(...lignes, nouveau, retirer);
 }
 
 // À faire une fois la nouvelle tablette installée : l'ancienne ne reçoit plus rien.

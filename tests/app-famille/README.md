@@ -45,6 +45,7 @@ scénarios) ; utiliser plutôt
 | `sos` | SOS de la tablette : toute la famille sonne, retour d'Android pendant la sonnerie, double appui sur « Répondre », sonnerie arrêtée chez les autres, téléphone sans réseau pendant la sonnerie, page rechargée, 2e essai sans réponse ; ce qu'en disent les Notifications |
 | `admin-journee` | L'admin (`admin.html`) avec les vraies fonctions : le matin (« Préparer l'envoi » avec l'étiquette, mauvais numéro T-… refusé, doubles appuis), l'après-midi (retour complet, rien prélevé, remise à zéro puis stock), l'envoi sur téléphone (390 px) |
 | `admin-colis-en-route` | Famille préparée : colis parti, tablette pas entrée : « En route », liste « Envoyées, pas encore jumelées », « Colis revenu » dans le ⋮, ligne « À faire » après 20 jours (fonctions qui transmettent `tabletteRelieeLe`) |
+| `admin-remplacement` | Code de tablette de remplacement (R2) : valable 7 jours et pour une seule tablette (échéance affichée), rouvert sans en créer un autre, « Nouveau code » en double clic = un seul code (l'ancien ne marche plus), code servi, code expiré |
 
 Chaque test échoue aussi s'il y a une erreur dans la console, une fenêtre grise du navigateur
 (confirm/alert) ou une erreur dans une fonction serveur.
