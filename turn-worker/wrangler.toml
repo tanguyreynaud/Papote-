@@ -2,6 +2,10 @@ name = "papote-turn"
 main = "src/index.js"
 compatibility_date = "2026-10-01"
 
+# Base Firestore des familles : le relais n'est donné qu'à leurs membres (src/membre.js).
+[vars]
+FIRESTORE_DATABASE = "europe"
+
 # Secrets (à définir une fois) :
 #   npx wrangler secret put TURN_KEY_ID
 #   npx wrangler secret put TURN_KEY_API_TOKEN

@@ -1,7 +1,9 @@
 // Identifiants TURN Cloudflare pour les appels vidéo de Papote.
 // La clé TURN reste ici (secret du Worker) ; les apps reçoivent des identifiants
-// valables quelques heures, et seulement si elles sont connectées à Firebase.
+// valables quelques heures, et seulement si elles sont connectées à Firebase ET membres d'une famille
+// (proche actif ou tablette ; règles 2, R3). Un compte quelconque reçoit 403.
 import { createRemoteJWKSet, jwtVerify } from 'jose';
+import { estMembre } from './membre.js';
 
 const PROJECT = 'papote-famille';
 const GOOGLE_KEYS = createRemoteJWKSet(
@@ -29,13 +31,28 @@ export default {
     if (request.method !== 'GET') return json({ error: 'method' }, 405);
 
     const token = (request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
+    let payload;
     try {
-      await jwtVerify(token, GOOGLE_KEYS, {
+      ({ payload } = await jwtVerify(token, GOOGLE_KEYS, {
         issuer: `https://securetoken.google.com/${PROJECT}`,
         audience: PROJECT,
-      });
+      }));
     } catch (e) {
       return json({ error: 'auth' }, 401);
+    }
+
+    // Membre d'une famille (l'administrateur aussi, pour ses essais). Base « europe » (FIRESTORE_DATABASE).
+    if (payload.admin !== true) {
+      let membre = false;
+      try {
+        membre = await estMembre({
+          base: 'https://firestore.googleapis.com/v1', projet: PROJECT,
+          database: env.FIRESTORE_DATABASE || 'europe', uid: payload.sub, jeton: token,
+        });
+      } catch (e) {
+        return json({ error: 'membre' }, 503);
+      }
+      if (!membre) return json({ error: 'famille' }, 403);
     }
 
     const res = await fetch(

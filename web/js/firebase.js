@@ -88,9 +88,6 @@ export {
 
 const FID_KEY = 'papote.fid';
 
-// Sans 0/O/1/I/L pour éviter les confusions en le recopiant.
-const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
-
 export function normalizeCode(raw) {
   return (raw || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 }
@@ -98,11 +95,6 @@ export function normalizeCode(raw) {
 export function formatCode(code) {
   const c = normalizeCode(code);
   return c.length === 8 ? `${c.slice(0, 4)}-${c.slice(4)}` : c;
-}
-
-function randomCode() {
-  const bytes = crypto.getRandomValues(new Uint8Array(8));
-  return Array.from(bytes, (b) => CODE_ALPHABET[b % CODE_ALPHABET.length]).join('');
 }
 
 export function currentUser() {
@@ -155,24 +147,6 @@ export async function loadMembership() {
     console.warn('Adhésion illisible', e);
     return null;
   }
-}
-
-export async function createFamily(grandParentName, myName) {
-  const user = await ensureSignedIn();
-  const fid = doc(collection(db, 'families')).id;
-  const code = randomCode();
-  const batch = writeBatch(db);
-  batch.set(doc(db, 'families', fid), {
-    name: grandParentName, code, createdBy: user.uid, createdAt: serverTimestamp(),
-  });
-  batch.set(doc(db, 'invites', code), { fid, createdBy: user.uid });
-  batch.set(doc(db, 'families', fid, 'members', user.uid), {
-    name: myName, role: 'famille', code, joinedAt: serverTimestamp(),
-    uid: user.uid, email: (user.email || '').toLowerCase(), status: 'active',
-  });
-  await batch.commit();
-  saveFamilyId(fid);
-  return fid;
 }
 
 export class CodeInconnuError extends Error {}

@@ -12,7 +12,7 @@ import {
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-storage.js';
 import {
   db, doc, getDoc, setDoc, updateDoc, deleteDoc, collection, onSnapshot, writeBatch, serverTimestamp, bumpRev, increment, deleteField,
-  loadMembership, createFamily, joinFamily, leaveFamily, watchMembers, currentUser, savedFamilyId, saveFamilyId,
+  loadMembership, joinFamily, leaveFamily, watchMembers, currentUser, savedFamilyId, saveFamilyId,
   addPost, deletePost, loadMedia, formatCode, normalizeCode, toDate, CodeInconnuError,
   MAX_VIDEO_CHUNKS, VIDEO_CHUNK,
   choisirBase, bucketUrl, auth,
@@ -131,23 +131,6 @@ $('form-join').addEventListener('submit', async (e) => {
   } finally {
     button.disabled = false;
     button.textContent = libelle;
-  }
-});
-
-$('form-create').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const button = e.target.querySelector('button[type=submit]');
-  button.disabled = true;
-  showError($('create-error'), '');
-  try {
-    await createFamily($('create-grand').value.trim(), $('create-name').value.trim());
-    await enterApp();
-    openPage('settings');
-  } catch (err) {
-    console.error(err);
-    showError($('create-error'), 'Impossible de créer la famille. Vérifiez la connexion internet.');
-  } finally {
-    button.disabled = false;
   }
 });
 
@@ -1546,15 +1529,17 @@ try {
 } catch (e) { /* Storage indisponible */ }
 
 // avancement(0..1) : appelé pendant le transfert pour l'afficher (« Photo 1 sur 2 · 40 % »).
+// « auteur » : l'auteur peut effacer son fichier, comme un responsable (storage-eu.rules, règles 2, R4).
 async function upload(blob, ext, avancement) {
   const path = `families/${session.fid}/media/${doc(collection(db, 'families')).id}.${ext}`;
   const fileRef = ref(storage, path);
+  const meta = { contentType: blob.type, customMetadata: { auteur: session.uid } };
   if (avancement) {
-    const tache = uploadBytesResumable(fileRef, blob, { contentType: blob.type });
+    const tache = uploadBytesResumable(fileRef, blob, meta);
     const stop = tache.on('state_changed', (etat) => avancement(etat.totalBytes ? etat.bytesTransferred / etat.totalBytes : 0));
     try { await tache; } finally { stop(); }
   } else {
-    await uploadBytes(fileRef, blob, { contentType: blob.type });
+    await uploadBytes(fileRef, blob, meta);
   }
   return { path, url: await getDownloadURL(fileRef) };
 }
@@ -1806,12 +1791,13 @@ $('face-nudge').addEventListener('click', () => document.querySelector('.nav-ite
 // ---------- Nettoyage : rester dans le quota gratuit de Firebase ----------
 // On garde les dernières photos et vidéos ; au-delà, les plus anciennes (plus de 7 jours) sont effacées.
 // Environ 0,5 Mo par photo et 7 Mo au plus par vidéo : moins de 400 Mo sur le Go gratuit.
+// Depuis le téléphone d'un responsable seulement : lui seul efface l'envoi d'un autre (règles 2, R4).
 
 const KEEP = { photo: 200, video: 40 };
 const WEEK = 7 * 86_400_000;
 
 async function pruneOld(type) {
-  if (!KEEP[type]) return;
+  if (!KEEP[type] || !amFamilyAdmin()) return;
   try {
     const posts = collection(db, 'families', session.fid, 'posts');
     const count = (await getCountFromServer(query(posts, where('type', '==', type)))).data().count;

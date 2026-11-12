@@ -111,6 +111,7 @@ service cloud.firestore {
         && (fam.createdBy == request.auth.uid || request.auth.uid in fam.get('admins', []));
     }
 
+    // Propriétaire d'une famille existante (une appli ne crée plus de famille, R1 : getAfter lit la famille du serveur).
     function isCreatorAfter(fid) {
       return getAfter(familyPath(fid)).data.createdBy == request.auth.uid;
     }
@@ -120,7 +121,13 @@ service cloud.firestore {
     //   pairings/{code} -> { tabletUid, callsUid, name, createdAt, expiresAt, status,
     //                        fid?, familyName?, claimedBy?, claimedName? } (fid… écrits par le serveur seulement)
     match /pairings/{code} {
-      allow get: if signedIn();
+      // Lu par la tablette (ses deux comptes) et l'administrateur seulement : l'adresse e-mail de celui qui a
+      // réservé (claimedEmail, attente) n'est pas lisible par qui connaît le code (règles 2, R8). Un code absent
+      // reste « introuvable » pour tous : la tablette en recrée un.
+      allow get: if signedIn()
+        && (resource == null
+          || request.auth.uid in [resource.data.get('tabletUid', ''), resource.data.get('callsUid', '')]
+          || isAdmin());
       allow list: if false;
       allow create: if signedIn()
         && request.resource.data.keys().hasOnly(['tabletUid', 'callsUid', 'name', 'createdAt', 'expiresAt', 'status', 'serie'])
@@ -143,10 +150,11 @@ service cloud.firestore {
         && resource.data.status == 'reserved'
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
         && request.resource.data.status == 'cancelled';
-      // Un jumelage confirmé reste : il prouve la tablette de la famille (audit 8, R8).
+      // Seul un code encore en attente s'efface (par sa tablette, ou par n'importe qui une fois expiré) : un jumelage
+      // réservé, confirmé, refusé ou annulé reste, il prouve l'histoire de la tablette (audit 8 et règles 2, R8).
       allow delete: if signedIn()
-        && (request.auth.uid == resource.data.tabletUid
-          || (request.time > resource.data.expiresAt && resource.data.status != 'confirmed'));
+        && resource.data.status == 'waiting'
+        && (request.auth.uid == resource.data.tabletUid || request.time > resource.data.expiresAt);
     }
 
     // Commandes reçues de Stripe (écrites par le serveur) : visibles de l'administrateur seulement.
@@ -178,7 +186,7 @@ service cloud.firestore {
       // Lecture d'un code connu uniquement : impossible de lister les familles.
       allow get: if signedIn();
       allow list: if false;
-      // Code famille (à la création ou quand un responsable le change) ou code d'installation d'une tablette.
+      // Code famille (quand un responsable le change) ou code d'installation d'une tablette.
       allow create: if signedIn()
         && request.resource.data.keys().hasOnly(['fid', 'createdBy', 'kind'])
         && request.resource.data.createdBy == request.auth.uid
@@ -196,13 +204,9 @@ service cloud.firestore {
       allow get: if isMember(fid);
       allow list: if false;
       allow get, list: if isAdmin();
-      allow create: if isRealAccount()
-        && request.resource.data.keys().hasOnly(['name', 'code', 'createdBy', 'createdAt'])
-        && request.resource.data.createdBy == request.auth.uid
-        && request.resource.data.name is string
-        && request.resource.data.name.size() > 0
-        && request.resource.data.name.size() <= 40
-        && request.resource.data.code is string;
+      // Seul le serveur crée une famille : préparée au paiement (famille-preparee.js), ou offerte par Papote
+      // (gestionFamilleOfferte). Plus aucune famille créée depuis une appli (Tanguy 12/11, règles 2, R1).
+      allow create: if false;
       allow update: if isMember(fid)
         && (
           (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name'])
@@ -477,12 +481,10 @@ service cloud.firestore {
           && request.resource.data.hearts is int
           && request.resource.data.hearts >= resource.data.hearts
           && request.resource.data.hearts <= resource.data.hearts + 1;
-        // L'auteur supprime ses envois. Pour rester dans le quota gratuit, n'importe quel membre
-        // peut aussi effacer un envoi de plus de 7 jours (nettoyage des plus anciennes photos et vidéos).
+        // Un responsable de la famille, ou l'auteur de l'envoi : personne d'autre (Tanguy 12/11, règles 2, R4).
+        // Le nettoyage des plus anciennes photos et vidéos (quota gratuit) se fait depuis le téléphone d'un responsable.
         allow delete: if isFamilyAdmin(fid);
-        allow delete: if signedIn()
-          && (resource.data.authorUid == request.auth.uid
-              || (isMember(fid) && resource.data.createdAt < request.time - duration.value(7, 'd')));
+        allow delete: if signedIn() && resource.data.authorUid == request.auth.uid;
 
         // Photo ou son en taille réelle, chargé seulement à la demande.
         match /media/{kind} {
@@ -496,9 +498,7 @@ service cloud.firestore {
             && getAfter(/databases/$(database)/documents/families/$(fid)/posts/$(pid)).data.authorUid == request.auth.uid;
           allow update: if false;
           allow delete: if signedIn()
-            && (get(/databases/$(database)/documents/families/$(fid)/posts/$(pid)).data.authorUid == request.auth.uid
-                || (isMember(fid)
-                    && get(/databases/$(database)/documents/families/$(fid)/posts/$(pid)).data.createdAt < request.time - duration.value(7, 'd')));
+            && get(/databases/$(database)/documents/families/$(fid)/posts/$(pid)).data.authorUid == request.auth.uid;
         }
       }
 
