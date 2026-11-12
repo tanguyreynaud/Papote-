@@ -31,9 +31,14 @@ const cmd = (id, o) => ({
 // Toutes les situations à la fois : chaque ligne « À faire » et chaque état de commande, de tablette et de carte SIM.
 function gestionDonnees(o = {}) {
   const commandes = [
-    cmd('CMD-AB12', { nom: 'Claire Dupont', email: 'claire@exemple.fr', creeLe: il(1) }),
+    // Badge « Couverture à vérifier » (12/11) : petite commune près d'une zone sans 4G, pas encore vu.
+    cmd('CMD-AB12', { nom: 'Claire Dupont', email: 'claire@exemple.fr', creeLe: il(1), extra: {
+      proche: { adresse: 'Le Village 07160 Jaunac', lat: 44.93, lon: 4.39, couverture4g: 'TBC' },
+      couvertureAVerifier: { raisons: ['petite-commune', 'bord-de-zone'], commune: 'Jaunac', population: 125, carte: 'https://monreseaumobile.arcep.fr/' } } }),
     cmd('CMD-CD34', { nom: 'Marc Petit', email: 'marc@exemple.fr', creeLe: il(0.1), extra: { alerteDoublon: { mauvaisPayeur: false, raisons: ['même adresse'], commandes: [{ id: 'CMD-RB10', code: 'PAPO-RB10', nom: 'Chantal Blanc' }] } } }),
-    cmd('CMD-SE01', { nom: 'Hélène Roux', email: 'helene@exemple.fr', expedition: 'paiement-en-attente', creeLe: il(12) }),
+    cmd('CMD-SE01', { nom: 'Hélène Roux', email: 'helene@exemple.fr', expedition: 'paiement-en-attente', creeLe: il(12), extra: {
+      proche: { adresse: 'Brousse', lat: 45.7578, lon: 4.832, couverture4g: 'commune:96' }, couvertureVueLe: il(0.5),
+      couvertureAVerifier: { raisons: ['commune-seule', 'population-inconnue'], commune: null, population: null, carte: 'https://monreseaumobile.arcep.fr/' } } }),
     // Famille préparée (05/11) : la commande a sa famille dès le paiement ; la tablette n'y entre qu'à tabletteRelieeLe.
     // Colis partis, tablettes pas encore entrées : « En route » (audit de l'admin du 11/11, point 1).
     cmd('CMD-EF56', { nom: 'Sophie Bernard', email: 'sophie@exemple.fr', expedition: 'envoyee', envoyeeLe: il(3), suivi: '12345678', creeLe: il(5),
@@ -361,8 +366,8 @@ const SCENES = [
   { groupe: 'Commandes', titre: 'Commandes : à récupérer', page: '#commandes', tailles: ['pc'], plein: true, donnees: () => donnees(), faire: onglet('à récupérer') },
   { groupe: 'Commandes', titre: 'Commandes : toutes', page: '#commandes', tailles: ['pc'], plein: true, donnees: () => donnees(), faire: onglet('commandes au total') },
   { groupe: 'Commandes', titre: 'Commande à envoyer (2e commande du même client)', page: '#commande/CMD-CD34', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees() },
-  { groupe: 'Commandes', titre: 'Commande à envoyer, tablette préparée', page: '#commande/CMD-AB12', tailles: ['pc'], plein: true, donnees: () => donnees() },
-  { groupe: 'Commandes', titre: 'Commande : paiement SEPA en attente', page: '#commande/CMD-SE01', tailles: ['pc'], plein: true, donnees: () => donnees() },
+  { groupe: 'Commandes', titre: 'Commande à envoyer, tablette préparée, couverture 4G à vérifier', page: '#commande/CMD-AB12', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees() },
+  { groupe: 'Commandes', titre: 'Commande : paiement SEPA en attente, couverture déjà vue', page: '#commande/CMD-SE01', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Commandes', titre: 'Commande en route', page: '#commande/CMD-EF56', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Commandes', titre: 'Commande en route depuis 24 jours, pas jumelée', page: '#commande/CMD-RT22', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Commandes', titre: 'Commande en route, colis revenu jamais retiré : menu ⋮', page: '#commande/CMD-RX31', tailles: ['pc'], donnees: () => donnees(), faire: toucher('[aria-label^="Actions pour la commande"]') },

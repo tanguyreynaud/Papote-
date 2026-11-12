@@ -194,6 +194,10 @@ global.fetch = async (url, options) => {
     if (reglages.pdfEnPanne > 0) { reglages.pdfEnPanne -= 1; return new Response('Erreur', { status: 502 }); }
     return new Response(Buffer.from(`%PDF-1.4 faux PDF ${url}`), { headers: { 'content-type': 'application/pdf' } });
   }
+  // Commune du proche et sa population (badge « Couverture à vérifier », couverture.js communeDuPoint).
+  if (String(url).startsWith('https://data.geopf.fr/wfs/') && String(url).includes('population')) {
+    return new Response(JSON.stringify({ features: [{ properties: { code_insee: '07264', nom_officiel: 'Saint-Martin-de-Valamas', population: reglages.populationProche ?? 1150 } }] }));
+  }
   if (String(url).startsWith('https://geo.api.gouv.fr/')) {
     return new Response(JSON.stringify([{ nom: 'Saint-Martin-de-Valamas', centre: { coordinates: [4.37, 44.94] } }]));
   }
