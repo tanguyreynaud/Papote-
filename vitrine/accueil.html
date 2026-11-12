@@ -20,7 +20,7 @@
 <!-- Polices servies par le site lui-même et demandées tout de suite : elles arrivent avant l'affichage
      dans la plupart des cas. Sinon, le texte s'affiche d'abord en police du téléphone, agrandie ou réduite (« … repli »)
      pour prendre la même place : rien ne saute quand la vraie police arrive. -->
-<link rel="preload" href="ecran-accueil.webp" as="image" type="image/webp" fetchpriority="high">
+<link rel="preload" as="image" type="image/webp" imagesrcset="ecran-accueil-600.webp 600w, ecran-accueil-900.webp 900w, ecran-accueil.webp 1200w" imagesizes="(max-width: 900px) 80vw, 560px" fetchpriority="high">
 <link rel="preload" href="/polices/bricolage.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/polices/atkinson-400.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/polices/atkinson-700.woff2" as="font" type="font/woff2" crossorigin>
@@ -274,7 +274,7 @@ footer a { color: var(--muted); }
           </svg>
           <div class="appareil">
             <div class="tablet" role="img" aria-label="La tablette Papote sur son support : l'heure, la date, la météo, le bouton Appeler et la dernière photo reçue">
-              <picture><source type="image/webp" srcset="ecran-accueil.webp"><img class="screen" src="ecran-accueil.jpg" alt="" width="1200" height="750" fetchpriority="high"></picture>
+              <picture><source type="image/webp" srcset="ecran-accueil-600.webp 600w, ecran-accueil-900.webp 900w, ecran-accueil.webp 1200w" sizes="(max-width: 900px) 80vw, 560px"><img class="screen" src="ecran-accueil.jpg" alt="" width="1200" height="750" fetchpriority="high"></picture>
             </div>
             <div class="stand"></div>
           </div>
@@ -323,17 +323,17 @@ footer a { color: var(--muted); }
         <div class="step">
           <h3>Vous envoyez une photo</h3>
           <p>Depuis l'appli Papote sur votre téléphone, Android ou iPhone, sans rien installer depuis un magasin d'applis.</p>
-          <figure class="visuel"><div class="tel"><picture><source type="image/webp" srcset="ecran-envoi.webp"><img src="ecran-envoi.jpg" alt="L'appli famille : deux photos choisies, une légende, le bouton Envoyer" width="600" height="1298" loading="lazy"></picture></div></figure>
+          <figure class="visuel"><div class="tel"><picture><source type="image/webp" srcset="ecran-envoi-340.webp 340w, ecran-envoi-450.webp 450w, ecran-envoi.webp 600w" sizes="168px"><img src="ecran-envoi.jpg" alt="L'appli famille : deux photos choisies, une légende, le bouton Envoyer" width="600" height="1298" loading="lazy"></picture></div></figure>
         </div>
         <div class="step">
           <h3>Elle apparaît en grand sur la tablette</h3>
           <p>Avec votre prénom et votre mot. Le reste du temps, la tablette fait défiler les photos de la famille comme un cadre.</p>
-          <figure class="visuel"><div class="tab"><picture><source type="image/webp" srcset="ecran-reception.webp"><img src="ecran-reception.jpg" alt="La tablette affiche la photo et le mot reçus, avec un bouton OK" width="1000" height="625" loading="lazy"></picture></div></figure>
+          <figure class="visuel"><div class="tab"><picture><source type="image/webp" srcset="ecran-reception-500.webp 500w, ecran-reception-720.webp 720w, ecran-reception-900.webp 900w, ecran-reception.webp 1000w" sizes="(max-width: 420px) calc(100vw - 4.5rem), 22rem"><img src="ecran-reception.jpg" alt="La tablette affiche la photo et le mot reçus, avec un bouton OK" width="1000" height="625" loading="lazy"></picture></div></figure>
         </div>
         <div class="step">
           <h3>Vous l'appelez en vidéo</h3>
           <p>La tablette sonne, et l'appel démarre dès qu'elle regarde l'écran, sans rien toucher. Et elle peut vous appeler en touchant votre photo.</p>
-          <figure class="visuel"><div class="tab"><picture><source type="image/webp" srcset="ecran-appel.webp"><img src="ecran-appel.jpg" alt="La tablette en appel vidéo avec Tanguy, bouton Raccrocher" width="1000" height="625" loading="lazy"></picture></div></figure>
+          <figure class="visuel"><div class="tab"><picture><source type="image/webp" srcset="ecran-appel-500.webp 500w, ecran-appel-720.webp 720w, ecran-appel-900.webp 900w, ecran-appel.webp 1000w" sizes="(max-width: 420px) calc(100vw - 4.5rem), 22rem"><img src="ecran-appel.jpg" alt="La tablette en appel vidéo avec Tanguy, bouton Raccrocher" width="1000" height="625" loading="lazy"></picture></div></figure>
         </div>
       </div>
     </div>
@@ -371,7 +371,7 @@ footer a { color: var(--muted); }
         <h2>Une personne, pas une plateforme.</h2>
       </div>
       <div class="qui-carte">
-        <picture><source srcset="tanguy.webp" type="image/webp"><img class="portrait" src="tanguy.jpg" alt="Tanguy Reynaud" width="600" height="600"></picture>
+        <picture><source srcset="tanguy-300.webp 300w, tanguy-400.webp 400w, tanguy.webp 600w" sizes="144px" type="image/webp"><img class="portrait" src="tanguy.jpg" alt="Tanguy Reynaud" width="600" height="600"></picture>
         <div class="qui-texte">
           <blockquote>« Ma grand-mère a 93 ans et n'a jamais touché un ordinateur. Je voulais qu'elle voie les photos de la famille et nos visages, sans rien avoir à apprendre. Papote, c'est la tablette que j'ai faite pour elle. Aujourd'hui, je la propose à d'autres familles. »</blockquote>
           <p><b>Tanguy Reynaud</b>, fondateur de Papote, à Lyon</p>
