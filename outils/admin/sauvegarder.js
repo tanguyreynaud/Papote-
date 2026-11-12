@@ -1,31 +1,39 @@
-// Sauvegarde de la base Firestore de Papote (et de la liste des comptes) dans un fichier JSON, à garder hors du PC
-// (clé USB, disque). À faire au moins une fois par semaine, et avant toute manipulation risquée.
+// Sauvegarde de la base Firestore de Papote (et de la liste des comptes, et des pièces de gestion du stockage), à
+// garder hors du PC (clé USB, disque). Chaque dimanche par la tâche Windows, et avant toute manipulation risquée.
 //
-//   node sauvegarder.js                      : écrit sauvegardes\papote-<date>.json à côté de ce script
+//   node sauvegarder.js                      : écrit sauvegardes\papote-<date>\ à côté de ce script
 //   node sauvegarder.js --vers D:\sauvegardes : dans ce dossier
 //   node sauvegarder.js --base europe        : force la base (sinon config/base, comme les autres outils)
 //   node sauvegarder.js --photos             : copie aussi les photos et vidéos dans <dossier>\fichiers (seulement ce
-//                                              qui est nouveau ou a changé). Par défaut NON : la sauvegarde hebdo
-//                                              va sur Google Drive (15 Go), les fichiers sont protégés par la
-//                                              suppression douce du bucket (7 jours), voir RESTAURER-UN-FICHIER.md.
-//   node sauvegarder.js --garder 4           : nombre de sauvegardes de la base gardées dans le dossier (4 par défaut,
-//                                              les plus anciennes sont effacées ; 0 = tout garder)
+//                                              qui est nouveau ou a changé). Par défaut, seul le dossier gestion/ du
+//                                              stockage est copié (factures de vente, livres, pièces d'achat : quelques
+//                                              Mo) ; les photos sont protégées par la suppression douce du bucket
+//                                              (7 jours), voir RESTAURER-UN-FICHIER.md.
+//   node sauvegarder.js --garder 4           : nombre de sauvegardes complètes gardées (4 par défaut ; 0 = tout garder)
 //   node sauvegarder.js --auto               : lancé par la tâche planifiée (voir installer-sauvegarde-hebdo.bat)
-//   node sauvegarder.js --copie E:\Papote     : écrit AUSSI une copie chiffrée (.json.enc, AES-256) dans ce dossier,
-//                                              hors du compte Google (clé USB, disque, dossier d'un autre nuage) ;
-//                                              12 copies gardées. Phrase : PAPOTE_PHRASE_SAUVEGARDE ou
+//   node sauvegarder.js --copie E:\Papote     : écrit AUSSI une copie chiffrée (AES-256) dans ce dossier, hors du
+//                                              compte Google (clé USB, disque, dossier d'un autre nuage) ; 12 copies
+//                                              gardées. Phrase : PAPOTE_PHRASE_SAUVEGARDE ou
 //                                              %USERPROFILE%\.papote\phrase-sauvegarde.txt (voir chiffrement.js).
-//                                              Relire : dechiffrer-sauvegarde.bat <fichier.json.enc>
-// Coût : une lecture Firestore par document (quelques milliers pour dix familles) ; avec --photos, un téléchargement
-// par nouveau fichier Storage (sortie gratuite jusqu'à 1 Go par jour, puis 0,12 $/Go ; ~0,45 Go par famille pleine).
-// Taille : la base fait quelques Mo par sauvegarde ; 4 sauvegardes = quelques dizaines de Mo au plus.
+//                                              Relire : dechiffrer-sauvegarde.bat E:\Papote\papote-<date>
+//
+// Format (12/11, audit N2 et A15-3) : un dossier par sauvegarde, un document par ligne (sauvegarde-lib.js,
+// ecrireSauvegarde) : plus de limite de taille. Écrite d'abord en papote-<date>.en-cours, relue et contrôlée, puis
+// renommée ; les anciennes ne sont effacées qu'après ce contrôle, et jamais la dernière sauvegarde « pleine ».
+// Réussite : interne/sauvegarde (base) reçoit la date ; le serveur prévient Papote si elle a plus de 8 jours
+// (functions/sauvegarde-alerte.js, e-mail et ligne « À faire »). Échec : la date et le message de l'échec y sont notés.
+//
+// Coût : une lecture Firestore par document et une par document pour chercher ses sous-collections ; le dossier
+// gestion/ : une liste et un téléchargement par fichier nouveau. Taille : environ 24 Mo par famille pleine (aperçus
+// des photos dans la base) ; 4 sauvegardes gardées.
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const admin = require('firebase-admin');
+const { getFirestore, Timestamp } = require('firebase-admin/firestore');
 const { ouvrirBase } = require('./base');
-const { sauvegarder, sauvegarderFichiers, garderDernieres } = require('./sauvegarde-lib');
-const { chiffrer, phraseSecrete, garderCopies } = require('./chiffrement');
+const lib = require('./sauvegarde-lib');
+const { phraseSecrete } = require('./chiffrement');
 const BUCKET = process.env.BUCKET_STORAGE || 'papote-famille-eu';
 
 function option(name, fallback) {
@@ -40,26 +48,34 @@ if (!fs.existsSync(keyPath)) {
 }
 if (option('base', null)) process.env.PAPOTE_BASE = option('base', null);
 const dossier = option('vers', path.join(__dirname, 'sauvegardes'));
+const photos = process.argv.includes('--photos');
+let db = null;
 
 (async () => {
   const cle = require(keyPath);
   const app = admin.initializeApp({ credential: admin.credential.cert(cle) });
-  const db = await ouvrirBase(app);
-  const base = db.databaseId || process.env.PAPOTE_BASE || '(default)';
+  db = await ouvrirBase(app);
+  const base = db.databaseId || '(default)';
+  const config = await getFirestore(app).doc('config/base').get().catch(() => null);
   console.log(`Base « ${base} » du projet ${cle.project_id} : lecture…`);
-  const s = await sauvegarder({
-    db, auth: admin.auth(app), projet: cle.project_id, base,
+  const s = await lib.ecrireSauvegarde({
+    db, auth: admin.auth(app), bucket: admin.storage(app).bucket(BUCKET), dossier, projet: cle.project_id, base,
+    configBase: config && config.exists ? config.get('database') || null : null, photos,
+    garder: Number(option('garder', 4)),
     progression: (n) => process.stdout.write(`\r${n} documents lus`),
+    progressionFichiers: (n, total) => process.stdout.write(`\r${n} / ${total} fichiers copiés`),
   });
   process.stdout.write('\n');
-  fs.mkdirSync(dossier, { recursive: true });
-  const nom = `papote-${s.le.slice(0, 19).replace(/[:T]/g, '-')}.json`;
-  const fichier = path.join(dossier, nom);
-  fs.writeFileSync(fichier, JSON.stringify(s));
-  const ko = Math.round(fs.statSync(fichier).size / 1024);
-  console.log(`Sauvegarde écrite : ${fichier} (${s.documents.length} documents, ${s.comptes.length} comptes, ${ko} ko).`);
-  const effacees = garderDernieres(dossier, Number(option('garder', 4)));
-  if (effacees.length) console.log(`Anciennes sauvegardes effacées (on garde les ${option('garder', 4)} dernières) : ${effacees.join(', ')}.`);
+  const e = s.entete;
+  const mo = (o) => Math.round(o / 1024 / 1024);
+  console.log(`Sauvegarde écrite et relue : ${s.dossier} (${e.documents.lignes} documents, ${e.comptes.lignes} comptes, ${mo(e.documents.octets)} Mo).`);
+  console.log(`Stockage : ${e.gestion.fichiers} pièce(s) de gestion/ dans la copie (${e.gestion.nouveaux} nouvelle(s))${photos ? ', photos et vidéos comprises' : ''}, dans ${path.join(dossier, 'fichiers')}.`);
+  if (s.effacees.length) console.log(`Anciennes sauvegardes effacées : ${s.effacees.join(', ')}.`);
+  await db.doc('interne/sauvegarde').set({
+    derniereReussie: Timestamp.now(), nom: s.nom, base, documents: e.documents.lignes, comptes: e.comptes.lignes,
+    octets: e.documents.octets, fichiersGestion: e.gestion.fichiers, erreur: null,
+  }, { merge: true });
+
   const copie = option('copie', null);
   if (copie) {
     // Pas de phrase, ou dossier absent (clé USB débranchée) : la sauvegarde principale est faite, on le dit
@@ -67,25 +83,18 @@ const dossier = option('vers', path.join(__dirname, 'sauvegardes'));
     const phrase = phraseSecrete();
     if (!phrase) throw new Error('copie chiffrée NON faite : phrase secrète introuvable (PAPOTE_PHRASE_SAUVEGARDE ou .papote\\phrase-sauvegarde.txt).');
     if (!fs.existsSync(copie)) throw new Error(`copie chiffrée NON faite : dossier ${copie} introuvable (clé USB branchée ?).`);
-    const enc = path.join(copie, `${nom}.enc`);
-    fs.writeFileSync(enc, chiffrer(fs.readFileSync(fichier), phrase));
-    const parties = garderCopies(copie, 12);
-    console.log(`Copie chiffrée hors Google : ${enc}${parties.length ? ` (anciennes effacées : ${parties.join(', ')})` : ''}.`);
+    const c = await lib.copierChiffre({ source: s.dossier, racine: copie, phrase, fichiers: path.join(dossier, 'fichiers') });
+    await db.doc('interne/sauvegarde').set({ copieChiffree: Timestamp.now() }, { merge: true });
+    console.log(`Copie chiffrée hors Google, relue : ${c.dossier} (${c.fichiers} pièce(s) nouvelle(s))${c.effacees.length ? ` ; anciennes effacées : ${c.effacees.join(', ')}` : ''}.`);
   }
-  if (process.argv.includes('--photos')) {
-    const bucket = admin.storage(app).bucket(BUCKET);
-    const f = await sauvegarderFichiers({
-      bucket, dossier: path.join(dossier, 'fichiers'),
-      progression: (n, total) => process.stdout.write(`\r${n} / ${total} fichiers copiés`),
-    });
-    if (f.copies) process.stdout.write('\n');
-    console.log(`Photos et vidéos : ${f.total} fichiers dans ${BUCKET}, ${f.copies} nouveaux copiés (${Math.round(f.octets / 1024 / 1024)} Mo) dans ${path.join(dossier, 'fichiers')}.`);
-  } else {
-    console.log('Photos et vidéos : pas copiées (protégées 7 jours par la suppression douce du bucket ; --photos pour une copie).');
-  }
-  console.log('À garder hors du PC (clé USB, disque). Vérifier une fois par mois : verifier-sauvegarde.bat <fichier.json>.');
+  console.log('À garder hors du PC (clé USB, disque). Vérifier une fois par mois : verifier-sauvegarde.bat <dossier papote-date>.');
   process.exit(0);
-})().catch((e) => {
+})().catch(async (e) => {
   console.error('Sauvegarde impossible :', e.message);
+  // Noté dans la base quand c'est possible (l'admin et l'alerte des 8 jours le montrent) ; la date de la dernière
+  // réussie n'est pas touchée.
+  if (db) {
+    await db.doc('interne/sauvegarde').set({ dernierEchec: Timestamp.now(), erreur: String(e.message).slice(0, 300) }, { merge: true }).catch(() => null);
+  }
   process.exit(1);
 });

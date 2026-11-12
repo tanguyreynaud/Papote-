@@ -2,7 +2,9 @@
 // autre nuage) : si le compte Google est perdu ou piraté, la copie sur G:\Mon Drive part avec lui.
 // AES-256-GCM, clé tirée de la phrase secrète par scrypt (N=2^15, r=8, p=1). Sans dépendance (node:crypto).
 //
-// Format (.enc) : "PAPOTE-ENC1\n" | sel 16 o | iv 12 o | étiquette GCM 16 o | données chiffrées
+// Format 1 (.json.enc, tout en mémoire) : "PAPOTE-ENC1\n" | sel 16 o | iv 12 o | étiquette GCM 16 o | données chiffrées
+// Format 2 (fichiers de la sauvegarde en dossier, au fil de l'eau, sans limite de taille) :
+//   "PAPOTE-ENC2\n" | sel 16 o | iv 12 o | données chiffrées | étiquette GCM 16 o
 // La phrase secrète : variable PAPOTE_PHRASE_SAUVEGARDE, ou fichier %USERPROFILE%\.papote\phrase-sauvegarde.txt.
 // ELLE DOIT AUSSI ÊTRE ÉCRITE AILLEURS QUE SUR LE PC (papier au coffre, gestionnaire de mots de passe) :
 // sans elle, la copie est illisible, pour un voleur comme pour Tanguy.
@@ -67,4 +69,65 @@ function garderCopies(dossier, n = 12) {
   return aEffacer;
 }
 
-module.exports = { chiffrer, dechiffrer, phraseSecrete, garderCopies, ENTETE };
+// ---------- Format 2 : un fichier chiffré au fil de l'eau (aucune limite de taille, peu de mémoire) ----------
+const ENTETE2 = Buffer.from('PAPOTE-ENC2\n');
+
+async function ecrireFlux(flux, morceau) {
+  if (morceau.length && !flux.write(morceau)) await require('node:events').once(flux, 'drain');
+}
+async function fermerFlux(flux) {
+  await new Promise((ok, ko) => { flux.once('error', ko); flux.end(ok); });
+}
+
+async function chiffrerFichier(source, cible, phrase) {
+  const sel = crypto.randomBytes(16);
+  const iv = crypto.randomBytes(12);
+  const c = crypto.createCipheriv('aes-256-gcm', cle(phrase, sel), iv);
+  c.setAAD(ENTETE2);
+  const sortie = fs.createWriteStream(cible);
+  await ecrireFlux(sortie, Buffer.concat([ENTETE2, sel, iv]));
+  for await (const morceau of fs.createReadStream(source)) await ecrireFlux(sortie, c.update(morceau));
+  await ecrireFlux(sortie, c.final());
+  await ecrireFlux(sortie, c.getAuthTag());
+  await fermerFlux(sortie);
+}
+
+// Déchiffre vers cible (ou nulle part si cible est null : simple contrôle). Rend { octets, sha256 } du clair.
+// Mauvaise phrase ou fichier abîmé : erreur, et le fichier cible (incomplet) est effacé.
+async function dechiffrerFichier(source, cible, phrase) {
+  const taille = fs.statSync(source).size;
+  const debut = ENTETE2.length + 28;
+  const fd = fs.openSync(source, 'r');
+  const tete = Buffer.alloc(debut);
+  const etiquette = Buffer.alloc(16);
+  try {
+    fs.readSync(fd, tete, 0, debut, 0);
+    if (taille < debut + 16 || !tete.subarray(0, ENTETE2.length).equals(ENTETE2)) throw new Error('Ce fichier n\'est pas une copie chiffrée de Papote (format 2).');
+    fs.readSync(fd, etiquette, 0, 16, taille - 16);
+  } finally { fs.closeSync(fd); }
+  const d = crypto.createDecipheriv('aes-256-gcm', cle(phrase, tete.subarray(ENTETE2.length, ENTETE2.length + 16)), tete.subarray(ENTETE2.length + 16));
+  d.setAAD(ENTETE2);
+  d.setAuthTag(etiquette);
+  const hash = crypto.createHash('sha256');
+  const sortie = cible ? fs.createWriteStream(cible) : null;
+  let octets = 0;
+  const garder = async (morceau) => { hash.update(morceau); octets += morceau.length; if (sortie) await ecrireFlux(sortie, morceau); };
+  try {
+    if (taille > debut + 16) {
+      for await (const morceau of fs.createReadStream(source, { start: debut, end: taille - 17 })) await garder(d.update(morceau));
+    }
+    try { await garder(d.final()); } catch { throw new Error('Phrase secrète incorrecte, ou fichier abîmé.'); }
+    if (sortie) await fermerFlux(sortie);
+  } catch (e) {
+    if (sortie) {
+      const ferme = sortie.closed ? null : require('node:events').once(sortie, 'close');
+      sortie.destroy();
+      await ferme;
+      fs.rmSync(cible, { force: true });
+    }
+    throw e;
+  }
+  return { octets, sha256: hash.digest('hex') };
+}
+
+module.exports = { chiffrer, dechiffrer, phraseSecrete, garderCopies, ENTETE, chiffrerFichier, dechiffrerFichier, ENTETE2 };

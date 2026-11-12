@@ -1,5 +1,5 @@
 @echo off
-rem Restauration d'une sauvegarde : restaurer.bat <fichier.json> [--oui] [--effacer] [--comptes]
+rem Restauration d'une sauvegarde : restaurer.bat <dossier papote-date> [--oui] [--effacer] [--comptes] [--photos] [--autre-base]
 cd /d "%~dp0"
 if not exist node_modules\firebase-admin (
   echo Installation de firebase-admin...

@@ -21,6 +21,7 @@ const ANCIEN = {
   courrielsAReessayer: 'every 60 minutes', // nouvelle (12/11) : e-mail important non parti, un seul nouvel essai
   relancesSepa: 'every day 11:00', // nouvelle (10/11) : « passer au prélèvement »
   gestionCopieVentes: 'every day 06:00', // nouvelle (10/11) : copie des PDF des factures de vente
+  alerteSauvegarde: 'every day 09:00', // nouvelle (12/11) : sauvegarde du dimanche de plus de 8 jours
   gestionRecap: 'every monday 08:00',
   bilanSupport: 'every monday 09:00',
   purgeMensuelle: '1 of month 04:00',
@@ -50,7 +51,7 @@ function tournaitAvant(schedule, ms) {
 const avant = (ms) => Object.keys(ANCIEN).filter((nom) => tournaitAvant(ANCIEN[nom], ms)).sort();
 const maintenant = (ms) => aLancer(ms).sort();
 
-test('le planning couvre exactement les 11 anciennes tâches, l\'alerte de forfait, les e-mails SEPA, la copie des factures et le nouvel essai des e-mails', () => {
+test('le planning couvre exactement les 11 anciennes tâches, l\'alerte de forfait, les e-mails SEPA, la copie des factures, le nouvel essai des e-mails et l\'alerte de sauvegarde', () => {
   assert.deepStrictEqual(Object.keys(taches.PLANNING).sort(), Object.keys(ANCIEN).sort());
 });
 
@@ -63,7 +64,7 @@ test('chaque heure pile de 2026 et 2027 (changements d\'heure compris) : les mê
     for (const nom of aLancer(t)) compte[nom] = (compte[nom] || 0) + 1;
   }
   // Deux ans : 730 jours, 104 lundis (2026 : 52, 2027 : 52), 24 premiers du mois.
-  for (const nom of ['gestionAutomatique', 'restitutions', 'rappelsJumelage', 'alerteMatin', 'relancesSepa', 'gestionCopieVentes']) assert.strictEqual(compte[nom], 730, nom);
+  for (const nom of ['gestionAutomatique', 'restitutions', 'rappelsJumelage', 'alerteMatin', 'relancesSepa', 'gestionCopieVentes', 'alerteSauvegarde']) assert.strictEqual(compte[nom], 730, nom);
   for (const nom of ['gestionRecap', 'bilanSupport']) assert.strictEqual(compte[nom], 104, nom);
   for (const nom of ['purgeMensuelle', 'gestionCloture']) assert.strictEqual(compte[nom], 24, nom);
 });
@@ -77,7 +78,7 @@ test('table de dates à Paris, dont les changements d\'heure', () => {
     ['2026-03-29T02:00:00Z', 'dim. 29/03 4 h (heure d\'été)', ['gestionAutomatique']],
     ['2026-03-29T08:00:00Z', 'dim. 29/03 10 h (heure d\'été)', ['rappelsJumelage', 'alerteMatin']],
     ['2026-03-30T06:00:00Z', 'lun. 30/03 8 h', ['gestionRecap']],
-    ['2026-03-30T07:00:00Z', 'lun. 30/03 9 h', ['restitutions', 'bilanSupport']],
+    ['2026-03-30T07:00:00Z', 'lun. 30/03 9 h', ['restitutions', 'alerteSauvegarde', 'bilanSupport']],
     ['2026-10-25T00:00:00Z', 'dim. 25/10 2 h (heure d\'été)', []],
     ['2026-10-25T01:00:00Z', 'dim. 25/10 2 h (heure d\'hiver, deuxième fois)', []],
     ['2026-10-25T03:00:00Z', 'dim. 25/10 4 h (heure d\'hiver)', ['gestionAutomatique']],
@@ -85,9 +86,9 @@ test('table de dates à Paris, dont les changements d\'heure', () => {
     ['2026-11-01T03:00:00Z', 'dim. 1/11 4 h', ['gestionAutomatique', 'purgeMensuelle']],
     ['2026-11-01T04:00:00Z', 'dim. 1/11 5 h', ['gestionCloture']],
     ['2026-11-02T07:00:00Z', 'lun. 2/11 8 h', ['gestionRecap']],
-    ['2026-11-02T08:00:00Z', 'lun. 2/11 9 h', ['restitutions', 'bilanSupport']],
+    ['2026-11-02T08:00:00Z', 'lun. 2/11 9 h', ['restitutions', 'alerteSauvegarde', 'bilanSupport']],
     ['2026-11-02T09:00:00Z', 'lun. 2/11 10 h', ['rappelsJumelage', 'alerteMatin']],
-    ['2026-11-04T08:00:00Z', 'mer. 4/11 9 h', ['restitutions']],
+    ['2026-11-04T08:00:00Z', 'mer. 4/11 9 h', ['restitutions', 'alerteSauvegarde']],
     ['2026-11-04T22:00:00Z', 'mer. 4/11 23 h', []],
     ['2027-02-01T03:00:00Z', 'lun. 1/02 4 h', ['gestionAutomatique', 'purgeMensuelle']],
     ['2027-02-01T04:00:00Z', 'lun. 1/02 5 h', ['gestionCloture']],
@@ -144,9 +145,9 @@ test('une tâche en erreur n\'arrête pas les autres et reste visible (logger.er
   const f = taches.planifier(t);
   // Lundi 2 novembre 2026, 9 h à Paris.
   const bilan = await f.run({ scheduleTime: '2026-11-02T08:00:00.000Z' });
-  assert.deepStrictEqual(lancees.sort(), ['alerteForfait', 'courrielsAReessayer', 'finDeGrace', 'gestionCourrier', 'relancesPaniers', 'restitutions']);
+  assert.deepStrictEqual(lancees.sort(), ['alerteForfait', 'alerteSauvegarde', 'courrielsAReessayer', 'finDeGrace', 'gestionCourrier', 'relancesPaniers', 'restitutions']);
   assert.deepStrictEqual(bilan, {
-    relancesPaniers: 'erreur', finDeGrace: 'ok', gestionCourrier: 'ok', alerteForfait: 'ok', courrielsAReessayer: 'ok', restitutions: 'erreur', bilanSupport: 'erreur',
+    relancesPaniers: 'erreur', finDeGrace: 'ok', gestionCourrier: 'ok', alerteForfait: 'ok', courrielsAReessayer: 'ok', restitutions: 'erreur', alerteSauvegarde: 'ok', bilanSupport: 'erreur',
   });
   assert.deepStrictEqual(journal.map((j) => j[0]).sort(), [
     'Tâche planifiée bilanSupport en erreur', 'Tâche planifiée relancesPaniers en erreur', 'Tâche planifiée restitutions en erreur',
