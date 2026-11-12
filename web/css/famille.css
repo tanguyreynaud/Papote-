@@ -624,7 +624,7 @@ button:disabled { opacity: .45; cursor: default; }
 
 /* ---------- Appel vidéo ---------- */
 
-.call { position: fixed; inset: 0; z-index: 30; background: #000; }
+.call { position: fixed; inset: 0; z-index: 36; background: #000; } /* au-dessus du guide « Réglons la tablette » (35) : un appel ou un SOS qui arrive pendant le guide reste joignable */
 .call video { object-fit: cover; background: #000; }
 /* L'image du proche toujours entière et jamais déformée (la tablette envoie du 4:3, l'écran du
    téléphone couché est bien plus large). À la place des bandes noires, la même vidéo agrandie et
