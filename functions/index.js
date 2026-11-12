@@ -1356,6 +1356,7 @@ async function paiementTermine(session) {
     invoice_settings: { custom_fields: [{ name: 'Code de commande Papote', value: code }] },
   });
   await verifierDoublon(ref, session, email).catch((e) => logger.warn(`Commande ${ref.id} : doublon non vérifié`, e.message));
+  if (meta.dejaInstallee !== '1') await noterCouvertureAVerifier(ref).catch((e) => logger.warn(`Commande ${ref.id} : couverture à vérifier non calculée`, e.message));
   if (!paye) return;
   // Commande annulée pendant que la banque confirmait le prélèvement SEPA : remboursée, pas confirmée.
   if (existante.exists && existante.get('expedition') === 'annulee') {
@@ -1368,6 +1369,15 @@ async function paiementTermine(session) {
   if (fid) await appliquer(fid, session.subscription);
   if (fid && meta.dejaInstallee === '1') await relierTabletteInstallee(fid, session.subscription, { reprise: meta.reprise === '1' });
   await confirmerCommande(ref, email, code);
+}
+
+// Badge « Couverture à vérifier » de l'admin (Tanguy, 12/11) : petite commune, commande sans la rue ou adresse près
+// d'une zone sans 4G. Calculé une fois par commande ; Tanguy coche « Vu » dans l'admin (gestionCommande, couvertureVue).
+async function noterCouvertureAVerifier(ref) {
+  const snap = await ref.get();
+  if (!snap.exists || snap.get('couvertureAVerifier') !== undefined) return;
+  const fiche = await couverture.aVerifier(snap.get('proche'));
+  await ref.update({ couvertureAVerifier: fiche });
 }
 
 // Le prélèvement SEPA d'une commande annulée entre-temps (client ou admin) a fini par passer : l'argent

@@ -147,6 +147,78 @@ async function procheDepuisRequete(q, options) {
   return { adresse, lat: c.lat, lon: c.lon, niveau, eligible };
 }
 
+// « Couverture à vérifier » dans l'admin (proposé le 10/11, validé par Tanguy le 12/11, point 22) : la carte de l'ARCEP
+// est fiable à ~1 % près, sauf près des bords de zone et dans les petites communes. Dans ces cas, Tanguy regarde la
+// carte « Mon réseau mobile » de l'ARCEP à l'adresse avant d'envoyer la tablette, puis coche « Vu ».
+//   commune-seule  : commande acceptée sur la ville seule (≥ 95 % couverte), sans la rue ;
+//   petite-commune : moins de 2 000 habitants (population INSEE de l'IGN) ;
+//   bord-de-zone   : un carreau de 100 m à moins de 200 m n'a pas de 4G bonne ou très bonne.
+const SEUIL_HABITANTS = 2000;
+const RAYON_BORD_M = 200;
+const CARTE_ARCEP = 'https://monreseaumobile.arcep.fr/';
+
+// Vrai si un carreau dont le centre est à moins de rayon mètres du point n'est pas bien couvert (ou hors carte).
+function presDUnBord(lat, lon, rayon = RAYON_BORD_M) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false;
+  const { meta, octets } = charger();
+  const { x, y } = lambert93(lat, lon);
+  const pas = meta.pas;
+  const n = Math.ceil(rayon / pas);
+  const col0 = Math.floor((x - meta.x0) / pas);
+  const lig0 = Math.floor((meta.y1 - y) / pas);
+  for (let dl = -n; dl <= n; dl++) {
+    for (let dc = -n; dc <= n; dc++) {
+      const col = col0 + dc;
+      const lig = lig0 + dl;
+      const cx = meta.x0 + (col + 0.5) * pas;
+      const cy = meta.y1 - (lig + 0.5) * pas;
+      if (Math.hypot(cx - x, cy - y) > rayon + pas / 2) continue;
+      if (col < 0 || lig < 0 || col >= meta.largeur || lig >= meta.hauteur) return true;
+      const i = lig * meta.largeur + col;
+      if (!ELIGIBLES.includes(NIVEAUX[(octets[i >> 2] >> (6 - 2 * (i & 3))) & 3])) return true;
+    }
+  }
+  return false;
+}
+
+// Commune qui contient le point : { insee, nom, population }, ou null. Lève une erreur si le service ne répond pas.
+const COMMUNE_DU_POINT = 'https://data.geopf.fr/wfs/ows?service=WFS&version=2.0.0&request=GetFeature'
+  + '&typeNames=ADMINEXPRESS-COG-CARTO.LATEST:commune&outputFormat=application/json'
+  + '&propertyName=code_insee,nom_officiel,population&cql_filter=';
+async function communeDuPoint(lat, lon, { chercher = fetch } = {}) {
+  if (!coordonnees(lat, lon)) return null;
+  const r = await chercher(COMMUNE_DU_POINT + encodeURIComponent(`INTERSECTS(geometrie,POINT(${lat} ${lon}))`), { signal: AbortSignal.timeout(DELAI_CONTOUR_MS) });
+  if (!r.ok) throw new Error(`Commune du point ${lat},${lon} : ${r.status}`);
+  const p = (((await r.json()).features || [])[0] || {}).properties;
+  return p ? { insee: p.code_insee || null, nom: p.nom_officiel || null, population: Number.isFinite(p.population) ? p.population : null } : null;
+}
+
+// Raisons de regarder la couverture à la main, pour le proche d'une commande ({ adresse, lat, lon, couverture4g }).
+function raisonsAVerifier(proche, commune) {
+  if (!proche) return [];
+  const raisons = [];
+  if (String(proche.couverture4g || '').startsWith('commune:')) raisons.push('commune-seule');
+  if (commune && Number.isFinite(commune.population) && commune.population < SEUIL_HABITANTS) raisons.push('petite-commune');
+  if (presDUnBord(proche.lat, proche.lon)) raisons.push('bord-de-zone');
+  return raisons;
+}
+
+// Fiche « à vérifier » posée sur la commande, ou null si rien n'est à vérifier. Si la population est introuvable
+// (service de l'IGN en panne), on le dit plutôt que de taire une petite commune : « population inconnue ».
+async function aVerifier(proche, options) {
+  if (!proche || !coordonnees(proche.lat, proche.lon)) return null;
+  const commune = await communeDuPoint(proche.lat, proche.lon, options).catch(() => undefined);
+  const raisons = raisonsAVerifier(proche, commune);
+  if (commune === undefined) raisons.push('population-inconnue');
+  if (!raisons.length) return null;
+  return {
+    raisons,
+    commune: (commune && commune.nom) || null,
+    population: (commune && commune.population) ?? null,
+    carte: CARTE_ARCEP,
+  };
+}
+
 // L'adresse voyage dans les métadonnées Stripe (clés « proche_* »), comme le point relais.
 function procheVersMeta(p) {
   return { proche_adresse: p.adresse, proche_lat: String(p.lat), proche_lon: String(p.lon), proche_4g: p.niveau || '' };
@@ -156,4 +228,5 @@ function procheDepuisMeta(m) {
   return { adresse: m.proche_adresse, lat: Number(m.proche_lat), lon: Number(m.proche_lon), couverture4g: m.proche_4g || null };
 }
 
-module.exports = { lambert93, niveauA, coordonnees, verifier, partCouverte, verifierCommune, SEUIL_COMMUNE, procheDepuisRequete, procheVersMeta, procheDepuisMeta, ELIGIBLES };
+module.exports = { lambert93, niveauA, coordonnees, verifier, partCouverte, verifierCommune, SEUIL_COMMUNE, procheDepuisRequete, procheVersMeta, procheDepuisMeta, ELIGIBLES,
+  presDUnBord, communeDuPoint, raisonsAVerifier, aVerifier, SEUIL_HABITANTS, RAYON_BORD_M, CARTE_ARCEP };

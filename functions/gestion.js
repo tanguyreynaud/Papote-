@@ -845,6 +845,10 @@ exports.gestionDonnees = onCall(async (request) => {
         contestations: c.contestations || null,
         pause: c.pause || null,
         alerteDoublon: c.alerteDoublon || null,
+        // Adresse du proche (vérification 4G) et badge « Couverture à vérifier » (Tanguy, 12/11).
+        proche: c.proche ? { adresse: c.proche.adresse || null, lat: c.proche.lat ?? null, lon: c.proche.lon ?? null, couverture4g: c.proche.couverture4g || null } : null,
+        couvertureAVerifier: c.couvertureAVerifier || null,
+        couvertureVueLe: c.couvertureVueLe || null,
         titulaire: (c.empreinte && c.empreinte.titulaire) || null,
         etiquettes: c.etiquettes || null,
         preparation: c.preparation || null,
@@ -1920,6 +1924,14 @@ exports.gestionCommande = onCall({ secrets: [STRIPE_SECRET] }, async (request) =
     const main = request.data.main === true;
     await snap.ref.update({ 'restitution.mainPropreLe': main ? FieldValue.serverTimestamp() : FieldValue.delete() });
     return { ok: true, main };
+  }
+  // { action: 'couvertureVue', vu } : Tanguy a regardé la carte de l'ARCEP à l'adresse du proche (badge
+  // « Couverture à vérifier », 12/11). vu: false retire la coche.
+  if (request.data.action === 'couvertureVue') {
+    if (!snap.get('couvertureAVerifier')) throw new HttpsError('failed-precondition', 'Rien à vérifier pour cette commande.');
+    const vu = request.data.vu !== false;
+    await snap.ref.update({ couvertureVueLe: vu ? FieldValue.serverTimestamp() : FieldValue.delete() });
+    return { ok: true, vu };
   }
   // Commande offerte : ni facture ni paiement.
   if (snap.get('offerte')) return { factures: [], paiements: [] };
