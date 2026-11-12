@@ -1210,6 +1210,8 @@ async function remplacer(d, qui) {
     });
     if (perdue && kit.get('simId')) await enregistrerSim(kit.get('simId'), { statut: 'suspendue', tablette: null }, qui);
     else if (kit.get('simId') && !neuve.get('simId')) await enregistrerSim(kit.get('simId'), { tablette: neuve.id }, qui);
+    // La nouvelle tablette est notée sur la commande : son étiquette d'envoi est à part (etiquetteRemplacement).
+    await db().doc(`commandes/${commande}`).set({ remplacement: { kit: kit.id, nouvelle: neuve.id, raison, envoiLe: Date.now() } }, { merge: true });
     return { ok: true, montant, retour: !perdue };
   }
 
@@ -2678,6 +2680,57 @@ async function rangerEtiquette(commande, sens, colis, contenu, format = 'pdf') {
   return `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(chemin)}?alt=media&token=${jeton}`;
 }
 
+// Étiquette d'envoi de la tablette de remplacement (Tanguy, 12/11) : une par remplacement (remplacement.nouvelle),
+// rangée dans etiquettes.remplacement. Déjà faite : la même est rendue (double clic, vieil onglet). Une seule
+// création à la fois : la demande est notée (deux minutes) avant d'appeler Sendcloud, levée en cas d'échec.
+async function etiquetteRemplacement(ref, c, qui, reglagesSnap) {
+  const commande = ref.id;
+  const nouvelle = c.remplacement.nouvelle;
+  const maintenant = Date.now();
+  const deja = await db().runTransaction(async (tx) => {
+    const x = (await tx.get(ref)).data() || {};
+    const e = x.etiquettes && x.etiquettes.remplacement;
+    if (e && e.pour === nouvelle) return e;
+    const demande = x.remplacement && x.remplacement.etiquetteDemandeLe;
+    if (demande && maintenant - demande < 2 * 60e3) throw new HttpsError('already-exists', 'L\'étiquette de la tablette de remplacement est en cours de création, un instant.');
+    tx.update(ref, { 'remplacement.etiquetteDemandeLe': maintenant });
+    return null;
+  });
+  if (deja) return { ok: true, suivi: deja.suivi || null, url: deja.url, deja: true };
+  const lever = () => ref.update({ 'remplacement.etiquetteDemandeLe': FieldValue.delete() }).catch(() => null);
+  try {
+    const fiche = await db().doc(`stock/${nouvelle}`).get();
+    if (!fiche.exists || fiche.get('commande') !== commande) throw new HttpsError('failed-precondition', 'La tablette de remplacement n\'est plus reliée à cette commande : rechargez la page.');
+    const refusSim = await refusSimAvantDepart(commande, fiche.data());
+    if (refusSim) throw new HttpsError('failed-precondition', refusSim);
+    const reglages = lireReglages(reglagesSnap.data());
+    const papote = sendcloud.adressePapote(reglages.expediteur);
+    if (!papote) throw new HttpsError('failed-precondition', "Renseignez l'adresse d'expédition de Papote (Réglages, Étiquettes Sendcloud).");
+    const cl = sendcloud.adresseClient(c);
+    if (!cl) throw new HttpsError('failed-precondition', "Cette commande n'a pas d'adresse ni de point relais utilisable.");
+    let api;
+    try {
+      api = sendcloud.client(SENDCLOUD_API.value());
+    } catch (e) {
+      throw new HttpsError('failed-precondition', e.message);
+    }
+    const poids = Math.max(0.1, (reglages.poidsColis || 1500) / 1000);
+    const reference = `${c.code ? String(c.code) : commande.slice(-12)}-R`;
+    const r = await api.envoi({ de: papote, vers: cl.adresse, pointRelais: cl.pointRelais, poids, reference });
+    const url = await rangerEtiquette(commande, 'remplacement', r.colis, r.pdf);
+    const ancienne = c.etiquettes && c.etiquettes.remplacement;
+    await ref.update({
+      'etiquettes.remplacement': { colis: r.colis, suivi: r.suivi, url, le: Date.now(), par: qui, pour: nouvelle },
+      ...(ancienne ? { 'etiquettes.remplacementsPasses': FieldValue.arrayUnion(ancienne) } : {}),
+      'remplacement.etiquetteDemandeLe': FieldValue.delete(),
+    });
+    return { ok: true, suivi: r.suivi, url };
+  } catch (e) {
+    await lever();
+    throw e;
+  }
+}
+
 // Crée l'étiquette Mondial Relay chez Sendcloud. Erreur à montrer telle quelle : HttpsError ; panne Sendcloud : Error.
 // sansImpression : retour par QR code à montrer au point relais (demandé par le client dans l'appli).
 async function creerEtiquette(commande, sens, qui, { sansImpression = false } = {}) {
@@ -2685,6 +2738,8 @@ async function creerEtiquette(commande, sens, qui, { sansImpression = false } = 
   const [snap, reglagesSnap] = await Promise.all([ref.get(), db().doc('gestion/reglages').get()]);
   if (!snap.exists) throw new HttpsError('not-found', 'Commande introuvable.');
   const c = snap.data();
+  // Envoi d'une tablette de remplacement (commande déjà partie) : sa propre étiquette, une seule par remplacement.
+  if (sens === 'aller' && statuts.remplacementAEnvoyer(c)) return etiquetteRemplacement(ref, c, qui, reglagesSnap);
   // Retour pour un remplacement : l'ancienne tablette de cette commande est notée « en retour ».
   const remplacee = sens === 'retour' && !(await db().collection('stock').where('remplaceePour', '==', commande)
     .where('etat', '==', 'en-retour').limit(1).get()).empty;

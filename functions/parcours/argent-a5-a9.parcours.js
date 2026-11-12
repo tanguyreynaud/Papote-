@@ -422,3 +422,73 @@ test('A9 : « Rembourser un mois » après l\'arrêt : le dernier mois prélevé
   assert.strictEqual(r.montant, 2500);
   assert.deepStrictEqual(remboursements(), [2500]);
 });
+
+// ---------- Étiquette d'envoi de la tablette de remplacement (12/11) ----------
+
+const etiquetteAller = (id) => s.appeler('gestionEtiquette', { commande: id, sens: 'aller' }, a.TANGUY);
+
+// Remplacement fait (panne en deux temps, casse, perte) : l'étiquette d'envoi de la nouvelle se fait une fois, même en
+// double appui ; l'envoi d'origine n'a jamais de deuxième étiquette.
+async function verifierEtiquetteRemplacement(id, neuve) {
+  const avant = s.sendcloud.colis.size;
+  const [e1, e2] = await Promise.allSettled([etiquetteAller(id), etiquetteAller(id)]);
+  const ok = [e1, e2].filter((r) => r.status === 'fulfilled');
+  assert.ok(ok.length >= 1, JSON.stringify([e1, e2]));
+  assert.ok([e1, e2].every((r) => r.status === 'fulfilled' || /en cours de création/.test(r.reason.message)), JSON.stringify([e1, e2]));
+  assert.strictEqual(s.sendcloud.colis.size, avant + 1, 'une seule étiquette payée');
+  const e3 = await etiquetteAller(id);
+  assert.strictEqual(e3.url, ok[0].value.url, 'le même lien ensuite');
+  assert.strictEqual(e3.deja, true);
+  assert.strictEqual(s.sendcloud.colis.size, avant + 1);
+  const c = await commande(id);
+  assert.strictEqual(c.etiquettes.remplacement.pour, neuve.fiche);
+  return c;
+}
+
+test('étiquette d\'envoi : refusée pour une commande déjà partie sans remplacement ; panne (2e temps) : une étiquette pour la nouvelle, double appui compris', async () => {
+  const paul = await s.compte('Paul', 'paul@exemple.fr');
+  const { id } = await familleAbonnee(paul);
+  const originale = (await commande(id)).etiquettes && (await commande(id)).etiquettes.aller;
+  await assert.rejects(etiquetteAller(id), /déjà envoyée|existe déjà/);
+  const neuve = await a.tablettePreparee();
+  await a.simSurTablette(neuve);
+  await remplacer(id, null);
+  // 1er temps (ancienne pas reçue) : toujours pas d'étiquette d'envoi.
+  await assert.rejects(etiquetteAller(id), /déjà envoyée|existe déjà/);
+  await remplacer(id, neuve, { ancienneRecue: true });
+  const c = await verifierEtiquetteRemplacement(id, neuve);
+  assert.deepStrictEqual(c.etiquettes.aller, originale, 'l\'étiquette de l\'envoi d\'origine ne bouge pas');
+});
+
+test('étiquette d\'envoi : casse puis perte : une étiquette par tablette de remplacement, jamais deux pour la même', async () => {
+  const paul = await s.compte('Paul', 'paul@exemple.fr');
+  const { id } = await familleAbonnee(paul);
+  const n1 = await a.tablettePreparee();
+  await a.simSurTablette(n1);
+  await s.appeler('gestionStock', { action: 'remplacer', commande: id, element: 'tablette', nouveau: n1.fiche, raison: 'casse', motif: 'écran' }, a.TANGUY);
+  await s.calme();
+  const c1 = await verifierEtiquetteRemplacement(id, n1);
+  // Plus tard, la remplaçante est perdue : nouvelle tablette, nouvelle étiquette ; l'ancienne est gardée à l'historique.
+  const n2 = await a.tablettePreparee();
+  await a.simSurTablette(n2);
+  await s.appeler('gestionStock', { action: 'remplacer', commande: id, element: 'tablette', nouveau: n2.fiche, raison: 'perte', motif: 'volée' }, a.TANGUY);
+  await s.calme();
+  const c2 = await verifierEtiquetteRemplacement(id, n2);
+  assert.notStrictEqual(c2.etiquettes.remplacement.url, c1.etiquettes.remplacement.url);
+  assert.strictEqual(c2.etiquettes.remplacementsPasses.length, 1);
+  assert.strictEqual(c2.etiquettes.remplacementsPasses[0].pour, n1.fiche);
+});
+
+test('étiquette d\'envoi du remplacement : Sendcloud en panne puis nouvel essai : une étiquette, pas de blocage', async () => {
+  const paul = await s.compte('Paul', 'paul@exemple.fr');
+  const { id } = await familleAbonnee(paul);
+  const n1 = await a.tablettePreparee();
+  await a.simSurTablette(n1);
+  await s.appeler('gestionStock', { action: 'remplacer', commande: id, element: 'tablette', nouveau: n1.fiche, raison: 'casse', motif: 'écran' }, a.TANGUY);
+  await s.calme();
+  s.sendcloud.panne = true;
+  await assert.rejects(etiquetteAller(id));
+  s.sendcloud.panne = false;
+  s.erreurs.length = 0;
+  await verifierEtiquetteRemplacement(id, n1);
+});
