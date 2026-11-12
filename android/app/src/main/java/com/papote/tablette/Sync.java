@@ -2000,6 +2000,7 @@ final class Sync {
     }
 
     private void runCommands(String fid) {
+        repondreWifiEnAttente(2);
         try {
             JSONObject q = new JSONObject()
                     .put("from", new JSONArray().put(new JSONObject().put("collectionId", "commands")))
@@ -2034,9 +2035,8 @@ final class Sync {
         boolean reboot = false;
         boolean usine = false;
         if ("wifi".equals(type)) {
-            String ssid = nz(Firebase.str(f, "ssid"));
-            ok = !ssid.isEmpty() && wifi().connect(ssid, nz(Firebase.str(f, "password")));
-            result = ok ? "La tablette se connecte au wifi « " + ssid + " »." : "Le wifi « " + ssid + " » n'a pas pu être ajouté.";
+            changerWifi(doc, f);
+            return;
         } else if ("wifiScan".equals(type)) {
             // Réseaux autour de la tablette, pour que la famille choisisse le wifi à distance.
             JSONArray nets = new JSONArray(wifi().scan());
@@ -2144,6 +2144,83 @@ final class Sync {
                     prefs.edit().remove("ordreRedemarrage").apply();
                 }
             }, 3000);
+        }
+    }
+
+    // ---------- Changer le wifi depuis l'appli (A36, RM6, Tanguy 12/11) ----------
+
+    /**
+     * Ordre « wifi » : le mot de passe est lu dans commands/{id}/secret/wifi (lisible de la seule tablette visée,
+     * expiré au bout d'une heure : firestore.rules) puis effacé ; un ancien ordre le porte encore dans le champ
+     * password, effacé aussi. L'ordre passe « running » AVANT tout changement (jamais rejoué), puis la tablette
+     * essaie le nouveau réseau sans oublier l'ancien (Wifi.changer) et répond un vrai résultat (issue).
+     */
+    private void changerWifi(JSONObject doc, JSONObject f) throws IOException, JSONException {
+        String name = doc.getString("name");
+        String chemin = name.substring(name.indexOf("/documents/") + "/documents/".length());
+        String ssid = nz(Firebase.str(f, "ssid"));
+        String password = nz(Firebase.str(f, "password"));
+        boolean secret = false;
+        try {
+            JSONObject s = firebase.get(chemin + "/secret/wifi", "password");
+            JSONObject sf = s == null ? null : s.optJSONObject("fields");
+            if (sf != null) {
+                password = nz(Firebase.str(sf, "password"));
+                secret = true;
+            }
+        } catch (Firebase.ApiException e) {
+            // Règles d'avant (pas de « secret ») ou secret expiré : le champ de l'ordre, s'il y en a un.
+            Log.w(TAG, "Mot de passe du wifi", e);
+        }
+        JSONArray ecritures = new JSONArray().put(new JSONObject()
+                .put("update", new JSONObject().put("name", name).put("fields", new JSONObject()
+                        .put("state", Firebase.string("running"))
+                        .put("result", Firebase.string("La tablette essaie « " + ssid + " »…"))))
+                .put("updateMask", new JSONObject().put("fieldPaths", new JSONArray().put("state").put("result").put("password"))));
+        if (secret) ecritures.put(new JSONObject().put("delete", Firebase.docName(chemin + "/secret/wifi")));
+        firebase.commit(ecritures); // sans réponse : rien n'est changé, l'ordre sera repris au tour suivant
+        String[] ancien = {""};
+        WifiChangement.Issue issue = ssid.isEmpty() ? WifiChangement.Issue.INTROUVABLE : wifi().changer(ssid, password, ancien);
+        password = null;
+        String texte = WifiChangement.texte(issue, ssid, ancien[0], wifi().mobileValide());
+        Journal.log(context, "Ordre wifi : " + texte);
+        JSONObject reponse = new JSONObject().put("name", name)
+                .put("state", WifiChangement.reussi(issue) ? "done" : "failed").put("result", texte).put("issue", issue.code);
+        prefs.edit().putString("wifiReponse", reponse.toString()).commit();
+        repondreWifiEnAttente(6); // le réseau vient peut-être de changer : jusqu'à une minute
+        reportWifi(); // la fiche montre tout de suite le réseau en cours
+    }
+
+    /** Réponse de l'ordre wifi pas encore écrite (le réseau venait de changer) : réessayée ici, puis à chaque tour. */
+    private void repondreWifiEnAttente(int essais) {
+        String j = prefs.getString("wifiReponse", null);
+        if (j == null) return;
+        for (int essai = 0; essai < essais; essai++) {
+            try {
+                JSONObject r = new JSONObject(j);
+                JSONObject fields = new JSONObject().put("state", Firebase.string(r.getString("state")))
+                        .put("result", Firebase.string(r.getString("result")));
+                JSONArray masque = new JSONArray().put("state").put("result");
+                if (essai % 2 == 0) { fields.put("issue", Firebase.string(r.getString("issue"))); masque.put("issue"); }
+                JSONObject write = new JSONObject()
+                        .put("update", new JSONObject().put("name", r.getString("name")).put("fields", fields))
+                        .put("updateMask", new JSONObject().put("fieldPaths", masque))
+                        .put("currentDocument", new JSONObject().put("exists", true))
+                        .put("updateTransforms", new JSONArray().put(new JSONObject()
+                                .put("fieldPath", "doneAt").put("setToServerValue", "REQUEST_TIME")));
+                firebase.commit(new JSONArray().put(write));
+                prefs.edit().remove("wifiReponse").apply();
+                return;
+            } catch (Firebase.ApiException e) {
+                // 404 : l'ordre a été supprimé (la famille a fermé la fenêtre) ; 400 : rien à faire de plus.
+                if (e.code == 404 || e.code == 400) { prefs.edit().remove("wifiReponse").apply(); return; }
+                // 403 avec « issue » : règles d'avant ; l'essai suivant l'écrit sans.
+            } catch (Exception e) {
+                Log.w(TAG, "Réponse de l'ordre wifi", e);
+            }
+            if (essai + 1 < essais) {
+                try { Thread.sleep(essai % 2 == 0 ? 1_000 : 10_000); } catch (InterruptedException e) { return; }
+            }
         }
     }
 
