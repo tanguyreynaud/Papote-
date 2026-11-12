@@ -16,7 +16,7 @@
 // Quelques messages lancés en même temps peuvent passer avant le drapeau : ils n'ont pas de voix ; un rappel en trop
 // (11e du jour, 31e en cours) est effacé.
 //
-// Coût : une transaction (1 lecture, 1 écriture) par message écrit ou rappel CRÉÉ ; rien de plus quand un envoi ou un
+// Coût : une transaction (2 lectures : compteur et drapeau de restauration, 1 écriture) par message écrit ou rappel CRÉÉ ; rien de plus quand un envoi ou un
 // rappel existant est modifié (« vu », bisou, « c'est fait »), ce qui relance pourtant la fonction de la voix.
 
 const { FieldValue, Timestamp } = require('firebase-admin/firestore');
@@ -127,11 +127,20 @@ function versBase(c) {
 
 const refCompteur = (db, fid) => db.doc(`families/${fid}/compteurs/jour`);
 
-// Compte dans une transaction (un seul document par famille, écrit au plus ~70 fois par jour).
+// Restauration d'une sauvegarde en cours (drapeau interne/restauration, voir base.js) : les envois et rappels remis
+// ne sont pas comptés (ni effacés), le compteur du jour est lui-même restauré.
+function restaurationEnCours(snap, maintenant = Date.now()) {
+  const jusque = snap && snap.exists ? snap.get('jusque') : null;
+  return !!(snap && snap.exists && snap.get('enCours') === true && jusque && jusque.toMillis && jusque.toMillis() > maintenant);
+}
+
+// Compte dans une transaction (un seul document par famille, écrit au plus ~70 fois par jour). Lu en même temps que
+// le drapeau de restauration : 2 lectures, un seul aller-retour. { restauration: true } : rien compté.
 async function compter(db, fid, calcul) {
   const ref = refCompteur(db, fid);
   return db.runTransaction(async (t) => {
-    const snap = await t.get(ref);
+    const [snap, drapeau] = await t.getAll(ref, db.doc('interne/restauration'));
+    if (restaurationEnCours(drapeau)) return { restauration: true };
     const r = calcul(snap.exists ? snap.data() : null);
     // Set complet : un nouveau jour efface les compteurs et drapeaux d'hier.
     t.set(ref, versBase(r.compteur));

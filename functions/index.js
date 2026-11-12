@@ -2887,8 +2887,9 @@ exports.voixEnvoi = onDocumentWritten(
       if (creation && limites.estFrais(data.createdAt)) {
         try {
           const r = await limites.messageCree(db, event.params.fid, data.authorUid);
-          if (r.bloque) console.log(`Limites ${event.params.fid} : ${r.compteur.messages} messages aujourd'hui, les suivants sont refusés jusqu'à minuit`);
-          if (!r.voix) {
+          if (r.restauration) console.log(`Limites ${chemin} : restauration en cours, non compté`);
+          else if (r.bloque) console.log(`Limites ${event.params.fid} : ${r.compteur.messages} messages aujourd'hui, les suivants sont refusés jusqu'à minuit`);
+          if (!r.restauration && !r.voix) {
             console.log(`Voix ${chemin} : coupée (${r.compteur.parAuteur[data.authorUid || '?']}e message du jour de ce proche, ${r.compteur.messages} pour la famille)`);
             await apres.ref.update({ voixCoupee: true }).catch(() => null); // envoi effacé entre-temps : rien à faire
             return;
@@ -2921,8 +2922,9 @@ exports.voixRappel = onDocumentWritten(
       if (!avant) {
         // Rappel créé : 10 par jour et 30 en cours au plus (l'appli et les règles refusent avant ; ici le secours).
         const r = await limites.rappelCree(db, fid);
-        let enTrop = r.enTrop ? `${r.compteur.rappels}e rappel créé aujourd'hui` : '';
-        if (!enTrop) {
+        // Rappel remis par une restauration : ni compté, ni effacé.
+        let enTrop = !r.restauration && r.enTrop ? `${r.compteur.rappels}e rappel créé aujourd'hui` : '';
+        if (!enTrop && !r.restauration) {
           const n = await limites.rappelsEnCours(db, fid);
           if (n > limites.LIMITES.rappelsEnCours) enTrop = `${n} rappels en cours`;
         }
@@ -2935,7 +2937,7 @@ exports.voixRappel = onDocumentWritten(
       } else if (avant.title !== data.title) {
         // Texte changé : nouvelle voix, 20 fois par jour et par famille au plus.
         const r = await limites.rappelModifie(db, fid);
-        if (!r.voix) {
+        if (!r.restauration && !r.voix) {
           console.log(`Voix ${apres.ref.path} : coupée (${r.compteur.rappelsModifies}e rappel modifié aujourd'hui)`);
           // L'ancienne voix dirait l'ancien texte : retirée.
           await apres.ref.update({ voix: FieldValue.delete(), voixCoupee: true });

@@ -221,6 +221,7 @@ test('coût : une transaction par message créé, aucune lecture quand la tablet
   await message(julie, fid, 'Encore un');
   s.compteur.arreter();
   b = s.compteur.bilan();
-  // Compteur (1 lecture) ; la fiche de l'auteur (genre de la voix) est lue par la vraie voix, pas par la simulation.
-  assert.ok(b.voixEnvoi.lectures <= 1, JSON.stringify(b.voixEnvoi));
+  // Compteur et drapeau de restauration (2 lectures, une transaction) ; la fiche de l'auteur (genre de la voix) est
+  // lue par la vraie voix, pas par la simulation.
+  assert.ok(b.voixEnvoi.lectures <= 2, JSON.stringify(b.voixEnvoi));
 });
