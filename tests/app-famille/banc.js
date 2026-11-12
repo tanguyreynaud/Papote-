@@ -210,6 +210,9 @@ const TOLERE = [
   /Failed to load resource: net::ERR_FAILED/,
   // Internet coupé par le banc (Google, chat d'aide du site…) : voir sorties.
   /Failed to load resource: net::ERR_BLOCKED_BY_CLIENT/,
+  // Fermeture du canal d'écriture Firestore (TYPE=terminate) quand le banc ferme la page ou l'émulateur
+  // pendant un envoi : simple ménage du SDK, refusé (400) par l'émulateur. Vu 1 fois sur 4 dans mauvais-jours (12/11).
+  /status of 400 \(Bad Request\) \(http:\/\/127\.0\.0\.1:\d+\/google\.firestore\.v1\.Firestore\/Write\/channel\?[^)]*TYPE=terminate/,
 ];
 
 async function routerInternet(context) {
