@@ -2938,3 +2938,7 @@ exports.voixRappel = onDocumentWritten(
       console.error(`Voix ${apres.ref.path} : ÉCHEC ${e && e.message ? e.message : e}`);
     }
   });
+
+// Celui qui a payé, connecté avec une autre adresse que celle de la commande, entre dans sa famille préparée avec son
+// numéro de commande (A40, entrer-par-commande.js).
+exports.entrerParCommande = require('./entrer-par-commande').entrerParCommande;
