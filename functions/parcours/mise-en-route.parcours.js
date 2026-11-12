@@ -186,3 +186,14 @@ test('M7 : tablette branchée, personne dans l\'appli : relance à 2 jours, « �
   assert.deepStrictEqual(mailsA(paul.email).filter((m) => /envoyez la première photo/.test(m)).length, 1);
   assert.ok(!(await aFaire()).some((l) => /personne dans l'appli/.test(l)));
 });
+
+// A13 (Tanguy, 12/11) : les CGV partent en PDF avec la confirmation de commande ; Papote reçoit sa copie sans.
+test('commande payée : la confirmation arrive au client avec les CGV en PDF jointes', async () => {
+  await a.tablettePreparee();
+  await a.commanderEtPayer({ email: 'cgv@exemple.fr' });
+  await s.calme();
+  const conf = s.boite.filter((m) => m.a === 'cgv@exemple.fr' && /^Merci pour votre commande/.test(m.sujet));
+  assert.strictEqual(conf.length, 1);
+  assert.deepStrictEqual(conf[0].pieces, ['Conditions générales de vente Papote.pdf']);
+  assert.match(conf[0].texte, /conditions générales de vente sont jointes/);
+});
