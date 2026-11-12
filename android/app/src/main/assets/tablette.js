@@ -1803,6 +1803,103 @@
     document.body.classList.toggle('debranchee', !!showIt);
   }
 
+  // ---------- Quelqu'un a essayé d'appeler (A49, Tanguy 12/11) ----------
+  // Une sonnerie pas entendue (appareils auditifs retirés, autre pièce) ne laissait aucune trace. Une carte
+  // calme prend la place de la météo : « Julie a essayé de vous appeler à 10 h 01 ». Pas de bouton (Appeler
+  // est juste en dessous), jamais le mot « manqué ». Elle s'en va au premier de : un toucher sur la carte ;
+  // un appel abouti (décroché) avec cette personne, dans un sens ou dans l'autre, téléphone ou visio ; la
+  // mise en veille du soir, et au plus tard 21 h (minuit pour un appel arrivé après 21 h). Gardée dans la
+  // page (localStorage) : elle survit à une relance de Papote, et ne revient jamais le lendemain.
+  //   papote.essaisAppel  [{ uid, name, a }] : un par personne, du plus ancien au plus récent
+  var ESSAIS_CLE = 'papote.essaisAppel';
+  var ESSAIS_TEXTE_MAX = 46; // « Julie et Paul ont essayé de vous appeler » tient sur deux lignes
+  var essaisAppel = [];
+  try { essaisAppel = JSON.parse(localStorage.getItem(ESSAIS_CLE) || '[]'); } catch (e) { essaisAppel = []; }
+  if (!Array.isArray(essaisAppel)) essaisAppel = [];
+  var carteEssai = null;
+
+  function garderEssais() {
+    try { localStorage.setItem(ESSAIS_CLE, JSON.stringify(essaisAppel)); } catch (e) { }
+  }
+
+  // Fin de vie d'une carte : 21 h le jour de l'appel ; minuit pour un appel arrivé après 21 h.
+  function finEssai(a) {
+    var l = new Date(a);
+    if (l.getHours() < 21) l.setHours(21, 0, 0, 0); else l.setHours(24, 0, 0, 0);
+    return l.getTime();
+  }
+
+  function memePersonne(m, uid, name) {
+    if (uid && m.uid) return m.uid === uid;
+    return !!name && !!m.name && m.name === name;
+  }
+
+  function essaiAppel(uid, name) {
+    if (!name && uid) { var p = personOf(uid); name = p ? p.name : ''; }
+    if (!name) return;
+    var now = Date.now();
+    essaisAppel = essaisAppel.filter(function (m) { return !memePersonne(m, uid, name); });
+    essaisAppel.push({ uid: uid || null, name: String(name), a: now });
+    if (essaisAppel.length > 5) essaisAppel = essaisAppel.slice(-5);
+    garderEssais();
+    afficherEssais();
+  }
+
+  // Appel décroché avec cette personne (téléphone ou visio, dans un sens ou dans l'autre) : sa carte s'en va.
+  function appelAbouti(uid, name) {
+    if (!uid && !name) return;
+    var avant = essaisAppel.length;
+    essaisAppel = essaisAppel.filter(function (m) { return !memePersonne(m, uid, name); });
+    if (essaisAppel.length === avant) return;
+    garderEssais();
+    afficherEssais();
+  }
+
+  function oublierEssais(jusqua) {
+    var avant = essaisAppel.length;
+    essaisAppel = jusqua ? essaisAppel.filter(function (m) { return m.a > jusqua; }) : [];
+    if (essaisAppel.length === avant) return;
+    garderEssais();
+    afficherEssais();
+  }
+
+  function heureEssai(a) {
+    var d = new Date(a);
+    return d.getHours() + ' h ' + pad(d.getMinutes());
+  }
+
+  function afficherEssais() {
+    var now = Date.now();
+    var avant = essaisAppel.length;
+    // Horloge pas sûre : rien n'expire (une heure fausse effacerait tout) ; la carte reste jusqu'au toucher.
+    if (heureSure()) essaisAppel = essaisAppel.filter(function (m) { return now < finEssai(m.a) && m.a <= now + 60000; });
+    if (essaisAppel.length !== avant) garderEssais();
+    var actif = essaisAppel.length > 0 && !!$('weather');
+    document.body.classList.toggle('essai-appel-actif', actif);
+    if (!actif) { if (carteEssai) show(carteEssai, false); return; }
+    if (!carteEssai) {
+      carteEssai = el2('div', 'essai-appel');
+      carteEssai.id = 'essai-appel';
+      carteEssai.setAttribute('role', 'status');
+      on(carteEssai, 'click', function (e) { e.stopPropagation(); oublierEssais(0); });
+      $('weather').parentNode.insertBefore(carteEssai, $('weather').nextSibling);
+    }
+    var dernier = essaisAppel[essaisAppel.length - 1];
+    var texte = el2('p', 'essai-appel-texte');
+    var deux = essaisAppel.length === 2 ? essaisAppel[0].name + ' et ' + dernier.name + ' ont essayé de vous appeler' : '';
+    if (deux && deux.length <= ESSAIS_TEXTE_MAX) {
+      texte.textContent = deux;
+    } else {
+      // Une personne, trois ou plus, ou deux prénoms trop longs : la plus récente seule, avec l'heure.
+      texte.appendChild(document.createTextNode(dernier.name + ' a essayé de vous appeler' + (heureSure() ? ' à ' : '')));
+      if (heureSure()) texte.appendChild(el2('b', '', heureEssai(dernier.a)));
+    }
+    carteEssai.innerHTML = '';
+    carteEssai.appendChild(texte);
+    show(carteEssai, true);
+  }
+  setInterval(afficherEssais, 60000);
+
   // ---------- Appeler la famille (appel audio, sans vidéo) ----------
   // Un gros bouton « Appeler » sur l'accueil. CALL_MODE 'famille' : tout le monde sonne, le premier
   // qui décroche a l'appel. 'personne' : on choisit qui appeler, avec sa photo.
@@ -2044,6 +2141,8 @@
     // Double touche sur « Pas maintenant » : un seul raccrochage (le 2e disait à tort « plus d'appel »).
     if (Date.now() - raccrochage < 1500) return;
     raccrochage = Date.now();
+    // « Pas maintenant » : Mamie a vu qui appelait, pas de carte « a essayé de vous appeler ».
+    if (gsm && !gsm.sortant && !gsm.enLigne) gsm.refuse = true;
     var ok = false;
     if (android() && android().phoneHangup) { try { ok = android().phoneHangup() !== false; } catch (e) { ok = false; } }
     if (ok) return;
@@ -2194,6 +2293,7 @@
         if (gsm.sos) sosNoter({ enLigneDepuis: gsm.enLigneDepuis });
       }
       gsm.enLigne = true;
+      appelAbouti(gsm.uid, gsm.name);
       if (android() && android().ring) android().ring(false);
       renderCall('connected', 'En ligne avec ' + gsm.who, 'Parlez normalement, la tablette vous entend.', gsm.uid, gsm.name);
       gsmSurveiller();
@@ -2205,6 +2305,7 @@
       if (repondu) {
         gsmFinish('Appel terminé', '', false, true);
       } else if (!gsm.sortant) {
+        if (!gsm.refuse) essaiAppel(gsm.uid, gsm.name || etat.name);
         gsmFinish(who + ' a appelé', '', false, false);
       } else if (etat.cause === 'occupe') {
         gsmFinish(who + ' est déjà en ligne', 'Réessayez dans un moment.', true, false);
@@ -2261,6 +2362,7 @@
           if (state === 'ringing') {
             renderCall('ringing', 'Ça sonne…', uid ? 'Chez ' + who : (info.names && info.names.length ? 'Chez ' + info.names.join(', ') : 'Chez toute la famille'), uid, name);
           } else if (state === 'connected') {
+            appelAbouti(info.uid || uid, info.name || name);
             renderCall('connected', 'En ligne avec ' + (info.name || who), 'Parlez normalement, la tablette vous entend.', uid || null, info.name || name, info.face);
           } else if (state === 'ended') {
             finish('Appel terminé', '');
@@ -2492,6 +2594,7 @@
             connecte = true;
             arreter();
             sosFini();
+            appelAbouti(info.uid, info.name);
             renderCall('connected', 'En ligne avec ' + (info.name || 'la famille'), 'Parlez normalement, la tablette vous entend.', info.uid || null, info.name, info.face);
           } else if (state === 'ended') {
             sosFini();
@@ -3047,6 +3150,7 @@
     setInterval(lookForPresence, PRESENCE_EVERY_MS);
     setTimeout(lookForPresence, 60000);
     setupCallButton();
+    afficherEssais(); // carte « a essayé de vous appeler » gardée avant une relance
     setTimeout(resumeGsm, 1500);
     setInterval(checkConnection, 30000);
     // Sans internet, on regarde toutes les 3 s : « Pas d'internet » disparaît dès que le réseau revient
@@ -3238,6 +3342,8 @@
     onGsm: onGsm,
     gsmEnCours: function () { return !!gsm; },
     closeOverlayForCall: closeOverlayForCall,
+    essaiAppel: essaiAppel,
+    appelAbouti: appelAbouti,
     goHome: function () { showView('view-home'); }
   };
 
@@ -3299,6 +3405,8 @@
     if (should && radioAudio) stopRadio();
     if (should === asleep) return;
     asleep = should;
+    // Coucher du soir : la carte « a essayé de vous appeler » s'en va (A49), elle ne revient pas le lendemain.
+    if (should && !nuitDeja) oublierEssais(Date.now());
     // Extinction du soir en fondu de 2 s, comme une lampe qu'on baisse (Tanguy, 2/11) ; le réveil au
     // toucher reste immédiat. La luminosité d'Android baisse à la fin du fondu.
     clearTimeout(sleepFade);

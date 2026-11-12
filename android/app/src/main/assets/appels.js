@@ -392,6 +392,7 @@ function showRing(id, data) {
     if (!ringing || ringing.id !== id) return;
     hideRing();
     refuseCall(id);
+    noteEssai(data);
   }, Math.max(5_000, RING_MAX_MS - (Date.now() - created)));
   ringing = { id, data, timer, stop: null };
   // Réveil par le serveur : pas d'écoute des appels en permanence, mais le temps de la sonnerie on
@@ -399,7 +400,7 @@ function showRing(id, data) {
   if (modePush) {
     ringing.stop = onSnapshot(doc(db, 'families', fid, 'calls', id), (snap) => {
       const d = snap.data();
-      if (ringing && ringing.id === id && (!d || d.state !== 'ringing')) hideRing();
+      if (ringing && ringing.id === id && (!d || d.state !== 'ringing')) { hideRing(); noteEssai(data); }
     }, () => {});
   }
   if (window.Papote && window.Papote.closeOverlayForCall) window.Papote.closeOverlayForCall();
@@ -423,6 +424,15 @@ async function showCallerFace(callId, uid) {
   if (!face || typeof face !== 'string' || !face.startsWith('data:image/')) return;
   if (!(ringing && ringing.id === callId) && !(active && active.id === callId)) return;
   ['ring-caller', 'call-wait-face'].forEach((el) => { $(el).src = face; $(el).hidden = false; });
+}
+
+// Sonnerie finie sans réponse (personne n'a décroché, ou l'appelant a raccroché) : carte « Julie a essayé de
+// vous appeler » sur l'accueil (A49, tablette.js) ; Mamie décroche : celle de l'appelant s'en va.
+function noteEssai(data) {
+  try { if (data && window.Papote && window.Papote.essaiAppel) window.Papote.essaiAppel(data.callerUid || null, data.callerName || ''); } catch (e) { /* rien */ }
+}
+function noteAbouti(data) {
+  try { if (data && window.Papote && window.Papote.appelAbouti) window.Papote.appelAbouti(data.callerUid || null, data.callerName || ''); } catch (e) { /* rien */ }
 }
 
 // `keepStream` : la caméra déjà ouverte sert pour l'appel qu'on vient de décrocher.
@@ -750,7 +760,7 @@ function traiterAppels(snap) {
       return;
     }
     // L'appel qui sonnait a été annulé par l'appelant.
-    if (ringing && !fresh.some((d) => d.id === ringing.id)) hideRing();
+    if (ringing && !fresh.some((d) => d.id === ringing.id)) { const { data } = ringing; hideRing(); noteEssai(data); }
     // Déjà en communication : un deuxième appel est refusé tout de suite (« Pas de réponse »).
     const current = (active && active.id) || (ringing && ringing.id);
     if (current) fresh.filter((d) => d.id !== current).forEach((d) => refuseCall(d.id));
@@ -772,6 +782,7 @@ async function answer() {
   if (!ringing || paused()) return;
   const { id, data } = ringing;
   let stream = hideRing(true);
+  noteAbouti(data);
   const callRef = doc(db, 'families', fid, 'calls', id);
   $('call-wait-name').textContent = data.callerName;
   $('call-wait').hidden = false;
