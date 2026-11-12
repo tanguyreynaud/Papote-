@@ -5,7 +5,8 @@
     "ignore": ["README.md", "**/.*"],
     "rewrites": [
       { "source": "/", "function": { "functionId": "accueil", "region": "europe-west1" } },
-      { "source": "/index.html", "function": { "functionId": "accueil", "region": "europe-west1" } }
+      { "source": "/index.html", "function": { "functionId": "accueil", "region": "europe-west1" } },
+      { "source": "/desinscription", "function": { "functionId": "desinscription", "region": "europe-west1" } }
     ],
     "headers": [
       {
@@ -15,6 +16,10 @@
       {
         "source": "/polices/**",
         "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
+      },
+      {
+        "source": "/desinscription.html",
+        "headers": [{ "key": "X-Robots-Tag", "value": "noindex" }]
       },
       {
         "source": "/accueil.html",

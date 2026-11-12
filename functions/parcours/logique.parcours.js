@@ -80,6 +80,8 @@ test('prélèvement refusé : responsables prévenus, pause 7 jours plus tard, p
   assert.deepStrictEqual(avis.uids, [julie.uid], 'aux responsables de la famille');
   assert.strictEqual(avis.fid, fid, 'l\'appli ouvre la bonne famille');
   assert.deepStrictEqual(mailsA(paul.email), ['Le paiement de Papote n\'a pas abouti'], 'e-mail à l\'adresse de la commande');
+  // A4 (12/11) : le bouton ouvre la page Abonnement de l'appli, là où se trouve « Régler le paiement ».
+  assert.match(s.boite.find((m) => m.a === paul.email).texte, /Régler le paiement : https:\/\/app\.mapapote\.fr\/\?abonnement=1/);
 
   s.avancer(8);
   await s.tache('finDeGrace');
@@ -380,7 +382,7 @@ test('colis jamais retiré : Tanguy prévenu par e-mail à J+20, « Colis revenu
   const fiche = await s.lire(`stock/${t.fiche}`);
   assert.strictEqual(fiche.etat, 'revenue', 'à vérifier avant de repartir');
   assert.strictEqual(fiche.commande, null);
-  assert.ok(mailsA(paul.email).some((m) => /annul/i.test(m)), 'le client est prévenu');
+  assert.ok(mailsA(paul.email).includes('Votre colis Papote nous est revenu'), 'le client est prévenu (son propre e-mail, A4)');
 });
 
 test('appel ou SOS qui n\'atteint aucun téléphone : tous les proches prévenus par e-mail', async () => {

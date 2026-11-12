@@ -19,6 +19,15 @@ const ADMIN = 'https://app.mapapote.fr/admin.html';
 // Lien vers l'appli qui garde le code de commande : la famille créée s'y rattache toute seule.
 const lienAppli = (code) => (code ? `${APPLI}/?commande=${encodeURIComponent(code)}` : APPLI);
 const lienCommandeAdmin = (commande) => `${ADMIN}#commande/${encodeURIComponent(commande)}`;
+// Désinscription des e-mails d'information (A4, Tanguy 12/11/2026) : sur mapapote.fr, jamais sur cloudfunctions.net.
+// /desinscription est relié à la fonction desinscription (firebase.vitrine.json) : un GET mène à la page
+// desinscription.html du site, un POST (bouton de la page, ou « Se désabonner » de la messagerie) retire l'accord.
+const DESINSCRIPTION = `${SITE}/desinscription`;
+const lienDesinscription = (c, j) => `${DESINSCRIPTION}?c=${encodeURIComponent(c)}&j=${encodeURIComponent(j)}`;
+// Les seuls e-mails qui portent un lien et un en-tête de désinscription : ceux envoyés avec l'accord de la personne
+// (rappels de commande, « Être prévenu », ouverture des commandes, nouvelles de l'admin). Jamais un e-mail de service
+// (commande, livraison, facture, paiement, SOS…) : se désinscrire ne doit pas couper ceux-là (Tanguy 12/11/2026).
+const MARKETING = ['relancePanier', 'listeAttenteConfirmee', 'lancement', 'information'];
 
 function echapper(t) {
   return String(t == null ? '' : t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -110,7 +119,7 @@ function page(titre, blocs, bouton, options = {}) {
     : '';
   const question = options.interne ? '' : `<p style="margin:22px 0 0;font-size:15px;line-height:1.5;color:${C.doux}">Une question&nbsp;? Répondez simplement à cet e&#8209;mail, nous vous répondons personnellement.</p>`;
   const pourquoi = options.desinscription
-    ? `<p style="margin:12px 0 0;font-size:13px;line-height:1.5;color:${C.doux}">${insecables(echapper(options.pourquoi || 'Vous recevez cet e-mail car vous avez accepté les nouvelles de Papote.'))} <a href="${echapper(options.desinscription)}" style="color:${C.doux}">Se désinscrire</a>.</p>`
+    ? `<p style="margin:12px 0 0;font-size:13px;line-height:1.5;color:${C.doux}">${insecables(echapper(options.pourquoi || 'Vous recevez cet e-mail car vous avez accepté les nouvelles de Papote.'))} <a href="${echapper(options.desinscription)}" style="color:${C.doux}">Se désinscrire des e-mails d'information</a>.</p>`
     : '';
   const pied = options.interne
     ? `Message automatique de Papote pour l'administrateur · <a href="${ADMIN}" style="color:${C.doux}">Espace admin</a>`
@@ -166,13 +175,17 @@ ${question}
 function texteBrut(titre, blocs, bouton, options = {}) {
   return [titre, '', ...blocs.map(blocTexte).filter((t) => t != null).map((t) => `${t}\n`), bouton ? `${bouton.texte} : ${bouton.lien}` : '', '',
     ...(options.interne ? [`Espace admin : ${ADMIN}`] : ['Une question ? Répondez simplement à cet e-mail.']),
-    ...(options.desinscription ? ['', `${options.pourquoi || 'Vous recevez cet e-mail car vous avez accepté les nouvelles de Papote.'}`, `Se désinscrire : ${options.desinscription}`] : [])]
+    ...(options.desinscription ? ['', `${options.pourquoi || 'Vous recevez cet e-mail car vous avez accepté les nouvelles de Papote.'}`, `Se désinscrire des e-mails d'information : ${options.desinscription}`] : [])]
     .join('\n').replace(/\n{3,}/g, '\n\n');
 }
 
+// options.desinscription : aussi l'en-tête List-Unsubscribe (et le désabonnement en un clic, RFC 8058) que Gmail,
+// Outlook ou Apple Mail affichent en « Se désabonner » à côté de l'expéditeur.
 function message(titre, blocs, bouton, options = {}) {
   const b = blocs.filter((x) => x != null && x !== '');
-  return { subject: titre, html: page(titre, b, bouton, options), text: texteBrut(titre, b, bouton, options) };
+  const m = { subject: titre, html: page(titre, b, bouton, options), text: texteBrut(titre, b, bouton, options) };
+  if (options.desinscription) m.headers = { 'List-Unsubscribe': `<${options.desinscription}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' };
+  return m;
 }
 
 function relaisEnTexte(r) {
@@ -237,6 +250,10 @@ const FICHE_OFFRE = [
 
 // Un seul délai annoncé, quel que soit le stock (Tanguy, 29/10/2026 : « expédié sous 3 à 5 jours ouvrés ») :
 // Tanguy tient le stock de tablettes et de cartes SIM pour le respecter.
+// Règle de Tanguy (12/11/2026, A4) : le proche âgé n'a rien à installer ; la famille utilise l'appli Papote.
+// Jamais « rien à installer » adressé à un membre de la famille, jamais « chacun installe » non plus.
+const RIEN_A_INSTALLER = { petit: 'Votre proche n\'a rien à installer : la tablette est prêtée et arrive configurée, prête à brancher.' };
+
 const DELAI = 'Je prépare et vérifie votre tablette moi-même, avec sa carte SIM : elle est expédiée sous 3 à 5 jours ouvrés';
 
 // reprise : abonnement repris après une résiliation, tablette restée chez le proche (C3) : pas de mise en service,
@@ -286,10 +303,10 @@ function commandeConfirmeeTexte({ nom, code, relais, formule, dejaInstallee, rep
     // Famille préparée (05/11) : l'espace famille existe dès le paiement, la tablette y entrera seule.
     famille
       ? '<b>Votre espace famille Papote est déjà prêt.</b> Ouvrez l\'appli Papote avec le bouton ci-dessous et connectez-vous avec cette adresse e-mail : vous pourrez donner le nom de votre proche, préparer les premières photos et inviter la famille avant même l\'arrivée de la tablette. À son arrivée, il suffira de la brancher : elle retrouvera votre famille toute seule.'
-      : '<b>En attendant, installez l\'appli Papote sur votre téléphone</b> avec le bouton ci-dessous. À son arrivée, il suffira de brancher la tablette : elle retrouvera votre famille toute seule.',
-    { petit: 'La tablette est prêtée et configurée : vous n\'avez rien à installer.' },
+      : '<b>En attendant, ouvrez l\'appli Papote sur votre téléphone</b> avec le bouton ci-dessous : c\'est par elle que la famille envoie les photos et appelle. À son arrivée, il suffira de brancher la tablette : elle retrouvera votre famille toute seule.',
+    RIEN_A_INSTALLER,
     CGV_JOINTES,
-  ], famille ? { texte: 'Ouvrir mon espace famille', lien: famille } : { texte: 'Installer l\'appli Papote', lien: APPLI });
+  ], famille ? { texte: 'Ouvrir mon espace famille', lien: famille } : { texte: 'Ouvrir l\'appli Papote', lien: APPLI });
 }
 
 // Panier abandonné (functions/relances.js) : etape 1 (une heure après), 2 (lendemain soir), 3 (une semaine après).
@@ -298,7 +315,7 @@ function relancePanier({ etape = 1, nom, formule, lien, desinscription }) {
     1: ['Votre commande Papote vous attend', [
       'Vous avez commencé une commande Papote sans la terminer. Elle est gardée de côté : vous pouvez la reprendre en un clic, avec le même point relais.',
       { fiche: FICHE_OFFRE },
-      { petit: 'La tablette est prêtée et déjà configurée.' },
+      RIEN_A_INSTALLER,
     ]],
     2: ['Une question avant de vous décider ?', [
       'Vous avez regardé Papote hier. Si quelque chose vous fait hésiter, répondez simplement à cet e-mail : nous vous répondons personnellement.',
@@ -307,7 +324,7 @@ function relancePanier({ etape = 1, nom, formule, lien, desinscription }) {
     3: ['Dernier rappel pour votre commande Papote', [
       'Votre commande Papote est toujours prête. C\'est notre dernier rappel : nous ne vous écrirons plus à ce sujet.',
       { fiche: FICHE_OFFRE },
-      { petit: 'Rien à installer pour votre proche : la tablette arrive prête.' },
+      RIEN_A_INSTALLER,
     ]],
   };
   const [titre, corps] = textes[etape] || textes[1];
@@ -399,7 +416,7 @@ function invitation({ prenom, tablette, lien, email }) {
       `Connectez-vous avec cette adresse e-mail : <b>${echapper(email)}</b>.`,
       'C\'est tout : vous pouvez envoyer votre première photo.',
     ] },
-    { petit: 'Rien à installer : l\'appli s\'ouvre dans le navigateur de votre téléphone.' },
+    { petit: 'L\'appli Papote s\'ouvre directement dans le navigateur de votre téléphone.' },
   ], { texte: 'Rejoindre la famille', lien });
 }
 
@@ -431,7 +448,7 @@ function installationFinie({ prenom, famille, lien }) {
     { etapes: [
       `<b>Envoyer une photo ou un message</b> : dans l'appli, touchez « Photos » ou « Messages ». La tablette l'affiche tout de suite, avec un petit carillon.`,
       `<b>Appeler en vidéo</b> : touchez « Appel vidéo ». La tablette sonne ; dès que ${qui} regarde l'écran, l'appel démarre tout seul (ou elle touche « Décrocher »).`,
-      '<b>Inviter la famille</b> : bouton « Inviter », en haut de l\'accueil. Chacun installe l\'appli sur son téléphone, rien de plus.',
+      '<b>Inviter la famille</b> : bouton « Inviter », en haut de l\'accueil. Chacun reçoit un lien et utilise l\'appli Papote sur son téléphone.',
       `<b>Rester rassuré</b> : si la tablette est débranchée ou si ${qui} appuie sur SOS, vous êtes prévenu sur votre téléphone.`,
     ] },
     'Si quelque chose ne marche pas comme prévu, répondez à cet e-mail : nous vous aidons.',
@@ -501,8 +518,10 @@ function forfaitPresqueEpuise({ nom, type, fin, lien }) {
 // ---------- Abonnement ----------
 
 // Paiement de l'abonnement échoué (C1) : la famille est prévenue par Papote, pas seulement par Stripe.
-// pauseLe : date de la pause si rien n'est réglé (ms), lien : l'appli (Profil, Abonnement, « Régler le paiement »).
-function paiementEchoue({ nom, famille, pauseLe, lien }) {
+// pauseLe : date de la pause si rien n'est réglé (ms). Le bouton ouvre l'appli sur la page Abonnement (?abonnement=1,
+// A4, Tanguy 12/11/2026), là où se trouve « Régler le paiement ».
+const LIEN_ABONNEMENT = `${APPLI}/?abonnement=1`;
+function paiementEchoue({ nom, famille, pauseLe, lien = LIEN_ABONNEMENT }) {
   return message('Le paiement de Papote n\'a pas abouti', [
     bonjour(nom),
     `Le prélèvement de l'abonnement Papote${famille ? ` de <b>${echapper(famille)}</b>` : ''} a été refusé par la banque (carte expirée, compte insuffisant, prélèvement contesté…).`,
@@ -517,7 +536,7 @@ function paiementEchoue({ nom, famille, pauseLe, lien }) {
 }
 
 // Papote en pause (délai de grâce dépassé) : la tablette affiche « Papote est en pause, la famille a été prévenue ».
-function papoteEnPause({ nom, famille, lien }) {
+function papoteEnPause({ nom, famille, lien = LIEN_ABONNEMENT }) {
   return message('Papote est en pause', [
     bonjour(nom),
     `L'abonnement Papote${famille ? ` de <b>${echapper(famille)}</b>` : ''} n'a pas pu être prélevé, et le délai de sept jours est passé : la tablette est en pause. Elle n'affiche plus les photos ni les messages, et les appels sont coupés, bouton SOS compris.`,
@@ -587,7 +606,7 @@ const ETAPES_RETOUR_QR = [
   CARTON_ETAPE,
   'Déposez le colis dans n\'importe quel point relais Mondial Relay en montrant le QR code sur votre téléphone. Rien à payer, rien à imprimer.',
 ];
-const APPLI_RETOUR = { texte: 'Ouvrir l\'appli Papote', lien: `${APPLI}/?abonnement=1` };
+const APPLI_RETOUR = { texte: 'Ouvrir l\'appli Papote', lien: LIEN_ABONNEMENT };
 const MANQUANTS = 'Chaque élément manquant est facturé : tablette 130 €, chargeur et câble 10 €, enceinte 10 € si elle était dans le colis.';
 
 // Abonnement terminé ou commande annulée après l'envoi : la tablette prêtée est attendue.
@@ -799,6 +818,20 @@ function commandeAnnulee({ nom, rembourse }) {
   ]);
 }
 
+// Colis jamais retiré, revenu chez Papote (gestionAnnulerCommande, colisRevenu) : texte validé par Tanguy le 12/11/2026
+// (A4), à la place de « la tablette ne partira pas » de commandeAnnulee. rembourse : centimes remboursés.
+function colisRevenu({ nom, rembourse }) {
+  return message('Votre colis Papote nous est revenu', [
+    bonjour(nom),
+    'Votre colis n\'a pas été retiré et nous est revenu.',
+    rembourse
+      ? `Nous vous remboursons ${rembourse === 6000 ? 'les ' : ''}<b>${euros(rembourse)}</b>.`
+      : 'Il ne reste rien à vous rembourser.',
+    'Écrivez-nous si vous voulez un nouvel envoi.',
+    rembourse ? { petit: 'Le remboursement apparaît sur votre compte sous 5 à 10 jours.' } : null,
+  ]);
+}
+
 // Prévient Papote qu'une commande pas encore partie est annulée : ne pas envoyer la tablette.
 function annulationAvantEnvoi({ nom, email, code, commande }) {
   return message(`Commande annulée ${code || ''}`.trim(), [
@@ -885,8 +918,7 @@ function information({ objet, message: texte, nom, lienDesinscription }) {
   const prenom = nom ? String(nom).trim().split(/\s+/)[0] : '';
   const contenu = String(texte).replace(/\{prenom\}/g, prenom).replace(/ ,/g, ',');
   const paragraphes = contenu.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean).map((p) => echapper(p).replace(/\n/g, '<br>'));
-  const m = message(String(objet).trim(), paragraphes, null, { desinscription: lienDesinscription, apercu: sansBalises(paragraphes[0] || '') });
-  return { ...m, headers: { 'List-Unsubscribe': `<${lienDesinscription}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' } };
+  return message(String(objet).trim(), paragraphes, null, { desinscription: lienDesinscription, apercu: sansBalises(paragraphes[0] || '') });
 }
 
 // Récap du lundi pour Tanguy : lignes = [[titre, items], …] (Cette semaine, À faire, Franchise de TVA).
@@ -1014,10 +1046,18 @@ module.exports = {
   // abonnement
   paiementEchoue, papoteEnPause, passerAuSepa, pausePrelevements, reprisePrelevements,
   // fin de contrat
-  retourTablette, etiquetteRetour, resiliationEnregistree, avantEffacement, resiliationAnnulee, rappelRestitution, tabletteRecue, materielNonRendu, miseEnDemeure, remplacementPreleve, commandeAnnulee, annulationAvantEnvoi, resiliation, alerteAdmin, alerteForfait,
+  retourTablette, etiquetteRetour, resiliationEnregistree, avantEffacement, resiliationAnnulee, rappelRestitution, tabletteRecue, materielNonRendu, miseEnDemeure, remplacementPreleve, commandeAnnulee, colisRevenu, annulationAvantEnvoi, resiliation, alerteAdmin, alerteForfait,
   // support et admin
   rappelConfirme, demandeRappel, bilanSupport, information, recapSemaine, livresComptables, budget,
   // outils
-  message, envoyer, expedier, surChaqueEnvoi, surEnvoiDeConfort, surEchec, estConfort, CONFORT, echapper, euros, dateEnClair, sansBalises,
+  message, envoyer, expedier, surChaqueEnvoi, surEnvoiDeConfort, surEchec, estConfort, CONFORT, MARKETING, DESINSCRIPTION, lienDesinscription, echapper, euros, dateEnClair, sansBalises,
 };
 for (const nom of CONFORT) module.exports[nom] = marquerConfort(module.exports[nom]);
+// Marque non énumérable « marketing » (comme « confort ») : la simulation des parcours refuse tout e-mail sans elle qui
+// porterait un lien ou un en-tête de désinscription.
+for (const nom of MARKETING) {
+  const f = module.exports[nom];
+  module.exports[nom] = (...args) => Object.defineProperty(f(...args), 'marketing', { value: true });
+}
+const estMarketing = (contenu) => Boolean(contenu && contenu.marketing === true);
+module.exports.estMarketing = estMarketing;

@@ -21,7 +21,7 @@ const APPLI = 'https://app.mapapote.fr/';
 const SUIVI = 'https://www.mondialrelay.fr/suivi-de-colis/?numeroExpedition=12345678&codePostal=69003';
 const QR = 'https://app.mapapote.fr/?retour=1';
 const ETIQUETTE = 'https://panel.sendcloud.sc/etiquette/123.pdf';
-const DESINSCRIPTION = 'https://europe-west1-papote-famille.cloudfunctions.net/desinscription?c=abc&j=def';
+const DESINSCRIPTION = 'https://mapapote.fr/desinscription?c=0123456789abcdef0123456789abcdef&j=0123456789abcdef0123456789abcdef';
 const CHAT = [
   { role: 'user', content: 'Est-ce que ça marche sans internet chez ma mère ?' },
   { role: 'assistant', content: 'Oui : la tablette est livrée avec sa carte SIM 4G, incluse dans les 25 € par mois. Il n\'y a rien à installer.' },
@@ -55,6 +55,7 @@ function scenes(mail) {
     { titre: 'Rappel de jumelage 2 (J+12)', groupe: G1, fonction: 'rappelJumelage', contenu: si('rappelJumelage', { nom: 'Julie', numero: 2, code: 'ABCD-1234' }) },
     { titre: 'Commande annulée avant l\'envoi (remboursée)', groupe: G1, fonction: 'commandeAnnulee', contenu: si('commandeAnnulee', { nom: 'Julie', rembourse: 6000 }) },
     { titre: 'Commande annulée avant l\'envoi (rien prélevé)', groupe: G1, fonction: 'commandeAnnulee', contenu: si('commandeAnnulee', { nom: 'Julie', rembourse: 0 }) },
+    { titre: 'Colis jamais retiré, revenu chez Papote (remboursé)', groupe: G1, fonction: 'colisRevenu', note: 'Nouveau (A4, 12/11) : avant, « la tablette ne partira pas ».', contenu: si('colisRevenu', { nom: 'Julie', rembourse: 6000 }) },
 
     { titre: 'Invitation d\'un proche', groupe: G2, fonction: 'invitation', contenu: si('invitation', { prenom: 'Julie', tablette: 'Mamie Jeanne', lien: `${APPLI}?famille=abc`, email: 'thomas.martin@gmail.com' }) },
     { titre: 'Quelqu\'un veut rejoindre la famille (aux responsables)', groupe: G2, fonction: 'demandeRejoindre', contenu: si('demandeRejoindre', { prenom: 'Anne', email: 'anne.durand@gmail.com', famille: 'Mamie Jeanne' }) },
@@ -65,8 +66,8 @@ function scenes(mail) {
     { titre: 'Forfait internet presque épuisé : débit réduit ensuite (aux responsables, 95 %)', groupe: G2, fonction: 'forfaitPresqueEpuise', note: 'Nouveau (5/11).', contenu: si('forfaitPresqueEpuise', { nom: 'Mamie Jeanne', type: 'reduit', fin: dans(16), lien: APPLI }) },
     { titre: 'Forfait internet presque épuisé : internet coupé ensuite (aux responsables, 95 %)', groupe: G2, fonction: 'forfaitPresqueEpuise', note: 'Nouveau (5/11).', contenu: si('forfaitPresqueEpuise', { nom: 'Mamie Jeanne', type: 'bloque', fin: dans(16), lien: APPLI }) },
 
-    { titre: 'Paiement de l\'abonnement refusé', groupe: G3, fonction: 'paiementEchoue', contenu: si('paiementEchoue', { nom: 'Julie', famille: 'Mamie Jeanne', pauseLe: dans(7), lien: APPLI }) },
-    { titre: 'Papote en pause (impayé après 7 jours)', groupe: G3, fonction: 'papoteEnPause', contenu: si('papoteEnPause', { nom: 'Julie', famille: 'Mamie Jeanne', lien: APPLI }) },
+    { titre: 'Paiement de l\'abonnement refusé', groupe: G3, fonction: 'paiementEchoue', contenu: si('paiementEchoue', { nom: 'Julie', famille: 'Mamie Jeanne', pauseLe: dans(7), lien: `${APPLI}?abonnement=1` }) },
+    { titre: 'Papote en pause (impayé après 7 jours)', groupe: G3, fonction: 'papoteEnPause', contenu: si('papoteEnPause', { nom: 'Julie', famille: 'Mamie Jeanne', lien: `${APPLI}?abonnement=1` }) },
     { titre: 'Passer au prélèvement SEPA (15 jours après le 1er prélèvement par carte)', groupe: G3, fonction: 'passerAuSepa', note: 'Nouveau (10/11).', contenu: si('passerAuSepa', { nom: 'Julie', famille: 'Mamie Jeanne', lien: APPLI }) },
     { titre: 'Passer au prélèvement SEPA : relance unique (30 jours après)', groupe: G3, fonction: 'passerAuSepa', note: 'Nouveau (10/11).', contenu: si('passerAuSepa', { nom: 'Julie', famille: 'Mamie Jeanne', relance: true, lien: APPLI }) },
     { titre: 'Résiliation enregistrée (par le client)', groupe: G3, fonction: 'resiliationEnregistree', note: 'Ajouté par le fil Gestion.', contenu: si('resiliationEnregistree', { nom: 'Julie', famille: 'Mamie Jeanne', le: dans(30), tablettePretee: true }) },

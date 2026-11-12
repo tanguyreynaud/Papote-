@@ -62,4 +62,10 @@ test('colis jamais retiré, revenu chez Tanguy : le récap le dit et « Colis re
   assert.ok(r, 'annulation acceptée');
   await s.calme();
   assert.strictEqual((await commande(id)).expedition, 'annulee');
+  // Son propre e-mail (A4, Tanguy 12/11), plus « la tablette ne partira pas ».
+  const m = s.boite.filter((x) => x.a === lea.email).at(-1);
+  assert.strictEqual(m.sujet, 'Votre colis Papote nous est revenu');
+  assert.match(m.texte, /Votre colis n'a pas été retiré et nous est revenu\.\n\nNous vous remboursons les 60 €\.\n\nÉcrivez-nous si vous voulez un nouvel envoi\./);
+  assert.doesNotMatch(m.texte, /ne partira pas/);
+  assert.deepStrictEqual(m.entetes, {}, 'e-mail de service : pas de désinscription');
 });

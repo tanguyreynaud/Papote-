@@ -132,7 +132,13 @@ mail.expedier = async ({ a, contenu }) => {
     reglages.mailsEnPanne -= 1;
     throw new Error('Simulation : serveur SMTP injoignable');
   }
-  boite.push({ a, sujet: contenu.subject, texte: contenu.text, le: Date.now(), pieces: (contenu.attachments || []).map((p) => p.filename) });
+  // A4 (Tanguy 12/11/2026) : la désinscription n'est que sur les e-mails d'information (mail.MARKETING). Un e-mail de
+  // service (commande, paiement, livraison, SOS…) qui en porterait une est une erreur, dans chaque scénario.
+  const entetes = contenu.headers || {};
+  if (!mail.estMarketing(contenu) && (entetes['List-Unsubscribe'] || entetes['List-Unsubscribe-Post'] || /\/desinscription|Se désinscrire/.test(`${contenu.html}\n${contenu.text}`))) {
+    erreurs.push(`E-mail de service avec une désinscription : « ${contenu.subject} » à ${a}`);
+  }
+  boite.push({ a, sujet: contenu.subject, texte: contenu.text, le: Date.now(), entetes, pieces: (contenu.attachments || []).map((p) => p.filename) });
 };
 
 const notifications = [];
@@ -358,7 +364,7 @@ async function requete(nom, { query = {}, corps, entetes = {}, depuis = '203.0.1
   const r = await vraiFetch(url, {
     method: corps ? 'POST' : 'GET', redirect: 'manual',
     headers: { ...(corps ? { 'content-type': 'application/json' } : {}), ...entetes, 'x-forwarded-for': xff },
-    body: corps ? JSON.stringify(corps) : undefined,
+    body: corps == null ? undefined : typeof corps === 'string' ? corps : JSON.stringify(corps),
   });
   const texte = await r.text();
   let json = null;
