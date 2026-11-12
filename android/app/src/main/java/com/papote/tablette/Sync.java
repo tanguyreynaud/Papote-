@@ -501,14 +501,53 @@ final class Sync {
         return fid;
     }
 
-    /** La fiche de la tablette existe-t-elle encore ? En cas de doute (réseau), on garde la famille. */
-    private boolean stillMember(String fid) {
-        try {
-            return firebase.get("families/" + fid + "/members/" + firebase.uid()) != null;
-        } catch (Firebase.ApiException e) {
-            return e.code != 403 && e.code != 404;
-        } catch (Exception e) {
+    /**
+     * La tablette a-t-elle vraiment été retirée de sa famille ? Jamais sur un simple refus du serveur
+     * (SortieFamille, audit réseau du 11/11) : il faut que sa fiche soit refusée ou absente alors qu'une
+     * lecture témoin (config/base, ouverte à tout compte connecté) répond, et que cela dure. En attendant,
+     * la tablette garde sa famille, ses photos et ses numéros, et réessaie au tour suivant.
+     */
+    private boolean familleVraimentPerdue(String fid) {
+        int fiche = codeLecture("families/" + fid + "/members/" + firebase.uid(), "role");
+        int temoin = codeLecture("config/base", "database");
+        if (!SortieFamille.ficheDisparue(fiche, temoin)) {
+            if (temoin != 200 && temoin != 404 && !refusNote) {
+                refusNote = true;
+                Journal.log(context, "Serveur : accès refusé partout (fiche " + fiche + ", témoin " + temoin
+                        + "), la tablette garde sa famille et réessaie");
+            }
+            oublierDoutes();
+            return false;
+        }
+        long now = System.currentTimeMillis();
+        int doutes = prefs.getInt("sortieDoutes", 0) + 1;
+        long depuis = prefs.getLong("sortieDepuis", 0);
+        if (depuis == 0 || depuis > now) depuis = now;
+        if (SortieFamille.quitter(doutes, now - depuis, prefs.getBoolean("installEnCours", false))) {
+            oublierDoutes();
             return true;
+        }
+        prefs.edit().putInt("sortieDoutes", doutes).putLong("sortieDepuis", depuis).apply();
+        if (doutes == 1) Journal.log(context, "Fiche de la tablette introuvable : vérifications avant de quitter la famille");
+        return false;
+    }
+
+    private boolean refusNote;
+
+    private void oublierDoutes() {
+        if (prefs.contains("sortieDoutes") || prefs.contains("sortieDepuis")) {
+            prefs.edit().remove("sortieDoutes").remove("sortieDepuis").apply();
+        }
+    }
+
+    /** Code HTTP d'une lecture : 200 lue, 404 absente, sinon le code du refus ; 0 sans réponse (réseau). */
+    private int codeLecture(String path, String champ) {
+        try {
+            return firebase.get(path, champ) != null ? 200 : 404;
+        } catch (Firebase.ApiException e) {
+            return e.code;
+        } catch (Exception e) {
+            return 0;
         }
     }
 
@@ -534,6 +573,8 @@ final class Sync {
             long rev = 0;
             JSONObject ff = family == null ? null : family.optJSONObject("fields");
             if (ff != null) {
+                oublierDoutes(); // la famille se lit : aucun doute sur la fiche de la tablette
+                refusNote = false;
                 familyName = Firebase.str(ff, "name");
                 familyCode = Firebase.str(ff, "code");
                 reglerForfait(ff.optJSONObject("forfaitSim"));
@@ -589,7 +630,7 @@ final class Sync {
         } catch (Firebase.ApiException e) {
             // On n'oublie la famille que si la fiche de la tablette a vraiment disparu (famille
             // supprimée ou tablette retirée), jamais parce que le code famille a changé.
-            if ((e.code == 403 || e.code == 404) && !stillMember(fid)) {
+            if ((e.code == 403 || e.code == 404) && familleVraimentPerdue(fid)) {
                 // Famille supprimée (par l'admin) ou installation annulée sur le téléphone : la tablette
                 // revient d'elle-même sur l'écran du code, avec un nouveau code (l'ancien jumelage ne sert plus).
                 Journal.log(context, "Plus dans la famille : retour à l'écran du code");
@@ -1684,7 +1725,12 @@ final class Sync {
                 }
                 Telephone.garderNumeros(context, numeros);
             } catch (Exception e) {
-                Log.w(TAG, "Photos de profil", e);
+                // Lecture ratée (réseau faible, serveur occupé) : on garde les proches déjà connus et on
+                // relit au tour suivant. Avant (audit réseau du 11/11), une liste VIDE partait à l'écran
+                // et dans la copie gardée : plus personne dans « Appeler » ni pour le SOS pendant 6 h.
+                Log.w(TAG, "Proches", e);
+                lastFamilyExtras = 0;
+                return;
             }
             JSONArray birthdays = new JSONArray();
             try {
@@ -1708,8 +1754,9 @@ final class Sync {
                             .put("photo", photo != null && photo.startsWith("data:image/") ? photo : JSONObject.NULL));
                 }
             } catch (Exception e) {
-                // La règle Firestore des anniversaires n'est peut-être pas encore en ligne.
+                // Lecture ratée : les anniversaires déjà connus restent (même raison que les proches).
                 Log.w(TAG, "Anniversaires", e);
+                birthdays = anniversairesConnus();
             }
             oublierPhotosDisparues(people, birthdays);
             people = trierProches(fid, people);
@@ -1721,6 +1768,16 @@ final class Sync {
             saveCache();
         } catch (JSONException e) {
             Log.w(TAG, "Famille", e);
+        }
+    }
+
+    /** Les anniversaires du dernier envoi à la page (tableau vide si aucun). */
+    private JSONArray anniversairesConnus() {
+        try {
+            JSONArray connus = lastFamilyJson == null ? null : new JSONObject(lastFamilyJson).optJSONArray("birthdays");
+            return connus == null ? new JSONArray() : connus;
+        } catch (JSONException e) {
+            return new JSONArray();
         }
     }
 
