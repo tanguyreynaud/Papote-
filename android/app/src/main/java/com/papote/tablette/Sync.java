@@ -483,6 +483,17 @@ final class Sync {
             member = false;
         }
         if (!member) {
+            // Code de remplacement à usage unique, 7 jours (audit 8, R2) : la tablette le prend dans la même
+            // écriture que sa fiche, avec son compte des appels (qui entre ensuite avec le même code, appels.js).
+            // Déjà pris par ce compte (réponse perdue) : la fiche seule. Pris par une autre tablette : refusé.
+            String pris = Firebase.str(inviteFields, "usedBy");
+            if (pris != null && !pris.isEmpty() && !pris.equals(uid)) {
+                status("setup", "Le code tablette « " + codeLisible(code) + " » a déjà servi pour une autre tablette : demandez un nouveau code à Papote.");
+                return null;
+            }
+            firebase.ensureCallsAccount();
+            String calls = firebase.callsUid();
+            if (calls == null) return null; // compte des appels pas encore créé (réseau) : au tour suivant
             JSONObject fields = new JSONObject()
                     .put("name", Firebase.string("Tablette"))
                     .put("role", Firebase.string("tablette"))
@@ -495,7 +506,26 @@ final class Sync {
                     .put("updateTransforms", new JSONArray().put(new JSONObject()
                             .put("fieldPath", "joinedAt").put("setToServerValue", "REQUEST_TIME")))
                     .put("currentDocument", new JSONObject().put("exists", false));
-            firebase.commit(new JSONArray().put(write));
+            JSONArray writes = new JSONArray().put(write);
+            if (pris == null || pris.isEmpty()) {
+                writes.put(new JSONObject()
+                        .put("update", new JSONObject()
+                                .put("name", Firebase.docName("invites/" + code))
+                                .put("fields", new JSONObject()
+                                        .put("usedBy", Firebase.string(uid))
+                                        .put("callsUid", Firebase.string(calls))))
+                        .put("updateMask", new JSONObject().put("fieldPaths", new JSONArray().put("usedBy").put("callsUid")))
+                        .put("updateTransforms", new JSONArray().put(new JSONObject()
+                                .put("fieldPath", "usedAt").put("setToServerValue", "REQUEST_TIME")))
+                        .put("currentDocument", new JSONObject().put("exists", true)));
+            }
+            try {
+                firebase.commit(writes);
+            } catch (Firebase.ApiException e) {
+                if (e.code != 403) throw e;
+                status("setup", "Le code tablette « " + codeLisible(code) + " » a expiré ou a déjà servi : demandez un nouveau code à Papote.");
+                return null;
+            }
         }
         prefs.edit().putString("fid", fid).apply();
         return fid;
