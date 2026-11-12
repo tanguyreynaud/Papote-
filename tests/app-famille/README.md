@@ -43,6 +43,8 @@ scénarios) ; utiliser plutôt
 | `renvoi` | Renvoyer la tablette (Mondial Relay, QR code sans impression) : adresse demandée quand la commande n'en a pas (erreur de code postal, clavier ouvert), retour avant la date d'arrêt, réseau coupé, serveur muet puis page rechargée, un seul QR code ; tablette reçue et remboursée ; « main propre » jamais proposée |
 | `mauvais-jours` | Abonnement arrêté : jamais « doit être réglé » ni « Régler » ; « Votre proche est décédé ? » : une question, un seul appel au serveur, des mots justes |
 | `sos` | SOS de la tablette : toute la famille sonne, retour d'Android pendant la sonnerie, double appui sur « Répondre », sonnerie arrêtée chez les autres, téléphone sans réseau pendant la sonnerie, page rechargée, 2e essai sans réponse ; ce qu'en disent les Notifications |
+| `admin-journee` | L'admin (`admin.html`) avec les vraies fonctions : le matin (« Préparer l'envoi » avec l'étiquette, mauvais numéro T-… refusé, doubles appuis), l'après-midi (retour complet, rien prélevé, remise à zéro puis stock), l'envoi sur téléphone (390 px) |
+| `admin-colis-en-route` | Famille préparée : colis parti, tablette pas entrée : « En route », liste « Envoyées, pas encore jumelées », « Colis revenu » dans le ⋮, ligne « À faire » après 20 jours (fonctions qui transmettent `tabletteRelieeLe`) |
 
 Chaque test échoue aussi s'il y a une erreur dans la console, une fenêtre grise du navigateur
 (confirm/alert) ou une erreur dans une fonction serveur.
