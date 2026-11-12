@@ -312,6 +312,61 @@ function rappelRestitutionDu(restitution, maintenant) {
   return limite != null && limite - RAPPEL_RESTITUTION_JOURS * JOUR <= maintenant && maintenant < limite;
 }
 
+// « Laisser plus de temps » (Tanguy, 12/11, A7) : la date limite du retour, donc du prélèvement du matériel non
+// rendu, est repoussée de 15 jours, comptés depuis la date prévue (ou depuis aujourd'hui si elle est passée).
+// Seulement tant que rien n'est prélevé ni en cours de prélèvement.
+const PLUS_DE_TEMPS_JOURS = 15;
+function refusPlusDeTemps(restitution) {
+  if (!restitution || !['attendue', 'echec'].includes(restitution.statut)) return 'Aucune tablette attendue en retour pour cette commande.';
+  if (restitution.statut === 'echec') return 'Le prélèvement du matériel a déjà été tenté et refusé : voyez avec le client.';
+  if (restitution.prelevementTenteLe) return 'Le prélèvement du matériel est en cours : attendez son résultat.';
+  return '';
+}
+function limiteRepoussee(avantMs, maintenant, jours = PLUS_DE_TEMPS_JOURS) {
+  return Math.max(avantMs || 0, maintenant) + jours * JOUR;
+}
+
+// Pause hospitalisation (Tanguy, 12/11, A8) : un mois pendant lequel la tablette est en pause hospitalisation PLUS DE
+// 2 SEMAINES n'est pas prélevé, le dernier mois prélevé à l'arrêt compris. Le mois d'un prélèvement est le mois
+// écoulé qui finit à sa date (prélèvement à terme échu, voir prelevementDernierMois).
+const HOSPITALISATION_MIN_JOURS = 14;
+// Périodes d'hospitalisation de la commande, en ms : passées (hospitalisations[]) et en cours ou prévue (pause).
+function periodesHospitalisation(c) {
+  const liste = [];
+  const ajouter = (d, f) => { if (d != null && f != null && f > d) liste.push({ debut: d, fin: f }); };
+  for (const x of (c && Array.isArray(c.hospitalisations) ? c.hospitalisations : [])) ajouter(enMillis(x && x.debut), enMillis(x && x.fin));
+  const p = c && c.pause;
+  if (p && (p.motif || 'hospitalisation') === 'hospitalisation') ajouter(enMillis(p.debut != null ? p.debut : p.le), enMillis(p.jusqua));
+  return liste;
+}
+// Durée (ms) passée en hospitalisation entre debut et fin, périodes qui se chevauchent comptées une fois.
+function dureeHospitalisation(periodes, debut, fin) {
+  const coupees = (periodes || []).map((p) => [Math.max(p.debut, debut), Math.min(p.fin, fin)]).filter(([d, f]) => f > d)
+    .sort((x, y) => x[0] - y[0]);
+  let total = 0;
+  let courant = null;
+  for (const [d, f] of coupees) {
+    if (courant && d <= courant[1]) courant[1] = Math.max(courant[1], f);
+    else { if (courant) total += courant[1] - courant[0]; courant = [d, f]; }
+  }
+  return total + (courant ? courant[1] - courant[0] : 0);
+}
+// Même jour du mois précédent (31 mars → 28 ou 29 février), comme les mois de Stripe.
+function moisAvant(finMs) {
+  const d = new Date(finMs);
+  const jour = d.getUTCDate();
+  d.setUTCDate(1);
+  d.setUTCMonth(d.getUTCMonth() - 1);
+  const dernier = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
+  d.setUTCDate(Math.min(jour, dernier));
+  return d.getTime();
+}
+// Le mois qui finit à finMs (prélevé à cette date) est-il offert pour hospitalisation ?
+function moisOffertHospitalisation(c, finMs) {
+  if (finMs == null) return false;
+  return dureeHospitalisation(periodesHospitalisation(c), moisAvant(finMs), finMs) > HOSPITALISATION_MIN_JOURS * JOUR;
+}
+
 // Faut-il prélever la pénalité ? Seulement si la tablette est attendue et le délai dépassé.
 function restitutionEchue(restitution, maintenant) {
   if (!restitution || restitution.statut !== 'attendue') return false;
@@ -418,6 +473,15 @@ function peutModifier(actuel) {
 }
 
 module.exports = {
+  enMillis,
+  PLUS_DE_TEMPS_JOURS,
+  refusPlusDeTemps,
+  limiteRepoussee,
+  HOSPITALISATION_MIN_JOURS,
+  periodesHospitalisation,
+  dureeHospitalisation,
+  moisAvant,
+  moisOffertHospitalisation,
   premierARepousser,
   retractationARefaire,
   retractationOccupee,

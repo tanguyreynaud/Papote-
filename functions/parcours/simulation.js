@@ -179,12 +179,19 @@ function fauxSendcloud(url, options = {}) {
     const f = (corps && corps.functionalities) || {};
     const offres = [{ code: 'mondial_relay:retour', carrier: { code: 'mondial_relay' }, functionalities: { returns: true }, weight: KG }];
     if (!sendcloud.sansQr) offres.push({ code: 'mondial_relay:retour-qr', carrier: { code: 'mondial_relay' }, functionalities: { returns: true, labelless: true }, weight: KG });
+    // Envoi vers un point relais (étiquette d'envoi, tablette de remplacement).
+    offres.push({ code: 'mondial_relay:relais', carrier: { code: 'mondial_relay' }, functionalities: { last_mile: 'service_point' }, weight: KG });
     return json({ data: offres.filter((o) => !f.labelless || o.functionalities.labelless) });
   }
   if (chemin === '/returns/announce-synchronously') {
     const id = sendcloud.prochain++;
     sendcloud.colis.set(id, { id, de: corps.from_address, livraison: corps.delivery_option, offre: corps.ship_with.shipping_option_code, statut: 1000, annule: false });
     return json({ return_id: id, parcel_id: id });
+  }
+  if (chemin === '/shipments/announce') {
+    const id = sendcloud.prochain++;
+    sendcloud.colis.set(id, { id, vers: corps.to_address, relais: corps.to_service_point || null, sens: 'aller', statut: 1000, annule: false });
+    return json({ data: { parcels: [{ id, tracking_number: `MR${id}`, tracking_url: `https://suivi/MR${id}` }] } });
   }
   let m = chemin.match(/^\/parcels\/(\d+)\/documents\/label$/);
   if (m) return new Response(Buffer.from(`etiquette ${m[1]}`), { status: 200 });

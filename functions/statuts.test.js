@@ -10,6 +10,9 @@ test('étiquette aller : seulement une commande à envoyer', () => {
   refuse(s.refusEtiquette({ expedition: 'envoyee' }, 'aller'), /déjà envoyée/);
   refuse(s.refusEtiquette({ expedition: 'paiement-en-attente' }, 'aller'), /SEPA/);
   refuse(s.refusEtiquette({ expedition: 'annulee' }, 'aller'), /pas à envoyer/);
+  // A6 (12/11) : retour encore possible après le prélèvement du matériel non rendu.
+  permis(s.refusEtiquette({ expedition: 'envoyee', restitution: { statut: 'facturee' } }, 'retour'));
+  refuse(s.refusEtiquette({ expedition: 'envoyee', restitution: { statut: 'rendue' } }, 'retour'), /Rien à récupérer/);
 });
 
 test('étiquette retour : seulement s\'il y a du matériel à récupérer (Tanguy, 30/10)', () => {

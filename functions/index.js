@@ -201,9 +201,12 @@ async function sessionPaiement({ formule, tablette, fid, email, client, relais, 
 }
 
 // Une commande résiliée de la famille attend encore le retour de sa tablette : elle est toujours chez le proche.
+// Matériel non rendu déjà prélevé (« facturee ») : la tablette est toujours chez le proche aussi ; à la reprise, les
+// 140 € sont remboursés (Tanguy, 12/11, A5 ; relierTabletteInstallee).
+const RETOUR_CHEZ_LE_PROCHE = ['attendue', 'echec', 'facturee'];
 async function tabletteARendre(fid) {
   const attendues = await db.collection('commandes').where('fid', '==', fid)
-    .where('restitution.statut', 'in', ['attendue', 'echec']).get();
+    .where('restitution.statut', 'in', RETOUR_CHEZ_LE_PROCHE).get();
   return !attendues.empty;
 }
 
@@ -211,7 +214,7 @@ async function tabletteARendre(fid) {
 // pour le moment (« réessayez »), plutôt que de faire payer une reprise d'une tablette peut-être en route.
 async function colisRetourParti(fid) {
   const attendues = await db.collection('commandes').where('fid', '==', fid)
-    .where('restitution.statut', 'in', ['attendue', 'echec']).get();
+    .where('restitution.statut', 'in', RETOUR_CHEZ_LE_PROCHE).get();
   const colis = attendues.docs.map((d) => d.get('etiquettes.retour.colis')).filter(Boolean);
   if (!colis.length) return false;
   const api = sendcloud.client(SENDCLOUD_API.value());
@@ -277,14 +280,27 @@ async function tabletteInstallee(fid) {
 // La tablette du stock jumelée à cette famille (« jumelée sans commande ») prend la nouvelle commande,
 // et l'alerte de l'admin n'a plus lieu d'être. Reprise (C3) : la tablette de l'ancienne commande résiliée passe
 // sur la nouvelle, et le retour attendu de l'ancienne est annulé (plus de 140 € à prélever).
+// 140 € déjà prélevés (« facturee ») : remboursés (Tanguy, 12/11, A5). Si la famille arrête de nouveau sans rendre la
+// tablette, la nouvelle commande attend son retour et les 140 € redeviennent dus à J+30, comme toute résiliation.
 async function relierTabletteInstallee(fid, commande, { reprise = false } = {}) {
   if (reprise) {
     const anciennes = await db.collection('commandes').where('fid', '==', fid)
-      .where('restitution.statut', 'in', ['attendue', 'echec']).get();
-    await Promise.all(anciennes.docs.filter((d) => d.id !== commande).map((d) => d.ref.update({
-      'restitution.statut': 'annulee', 'restitution.motif': 'reprise', 'restitution.reprisePar': commande,
-      'restitution.majLe': FieldValue.serverTimestamp(),
-    })));
+      .where('restitution.statut', 'in', RETOUR_CHEZ_LE_PROCHE).get();
+    for (const d of anciennes.docs.filter((x) => x.id !== commande)) {
+      // Statut relu dans une transaction : un message Stripe rejoué ne note (et ne rembourse) qu'une fois.
+      const preleve = await db.runTransaction(async (tx) => {
+        const r = (await tx.get(d.ref)).get('restitution') || {};
+        if (!RETOUR_CHEZ_LE_PROCHE.includes(r.statut)) return null;
+        const paye = r.statut === 'facturee' && r.paiement ? r.paiement : null;
+        tx.update(d.ref, {
+          'restitution.statut': 'annulee', 'restitution.motif': 'reprise', 'restitution.reprisePar': commande,
+          'restitution.majLe': FieldValue.serverTimestamp(),
+          ...(paye ? { 'restitution.rembourse': { statut: 'a-faire', paiement: paye, motif: 'reprise' } } : {}),
+        });
+        return paye;
+      });
+      if (preleve) await rembourserMaterielRepris(d.ref);
+    }
   }
   const fiches = await db.collection('stock').where('fid', '==', fid).get();
   await Promise.all(fiches.docs.filter((d) => reprise || !d.get('commande'))
@@ -301,6 +317,37 @@ async function reserverTablette(qui = {}) {
   if (resa || !STRIPE_SECRET.value().startsWith('sk_test_')) return resa;
   logger.info("Stock à 0 : commande d'essai acceptée (clé Stripe de test).");
   return { id: null, expireA: null };
+}
+
+// Remboursement du matériel non rendu prélevé, après une reprise de l'abonnement (A5) ou un retour arrivé après le
+// prélèvement (A6, tabletteRendue). Une clé d'idempotence par paiement : jamais deux remboursements, même rejoué
+// (message Stripe en double, tâche du matin). Refusé par Stripe : reste « a-faire », la tâche du matin réessaie.
+async function rembourserMaterielRepris(ref) {
+  const r = (await ref.get()).get('restitution') || {};
+  const a = r.rembourse || {};
+  if (a.statut !== 'a-faire' || !a.paiement) return null;
+  try {
+    const remb = await stripe().refunds.create({
+      payment_intent: a.paiement, reason: 'requested_by_customer', metadata: { commande: ref.id, motif: a.motif || 'reprise' },
+    }, { idempotencyKey: `restitution-remboursee-${a.paiement}` });
+    await ref.update({ 'restitution.rembourse': { ...a, statut: 'fait', montant: remb.amount, remboursement: remb.id, le: Timestamp.now() } });
+    logger.info(`Commande ${ref.id} : matériel prélevé remboursé (${mail.euros(remb.amount)}), ${a.motif || 'reprise'}.`);
+    return remb.amount;
+  } catch (e) {
+    // Déjà remboursé chez Stripe (à la main) : noté, plus rien à faire.
+    if (/already been refunded/i.test(e.message || '')) {
+      await ref.update({ 'restitution.rembourse': { ...a, statut: 'fait', deja: true, le: Timestamp.now() } });
+      return 0;
+    }
+    await ref.update({ 'restitution.rembourse.erreur': e.message, 'restitution.rembourse.essaiLe': Timestamp.now() });
+    logger.warn(`Commande ${ref.id} : remboursement du matériel prélevé refusé (${e.message}), nouvel essai demain.`);
+    return null;
+  }
+}
+// Tâche du matin : remboursements du matériel restés à faire (Stripe injoignable au moment de la reprise).
+async function remboursementsMaterielAFaire() {
+  const aFaire = await db.collection('commandes').where('restitution.rembourse.statut', '==', 'a-faire').get();
+  for (const d of aFaire.docs) await rembourserMaterielRepris(d.ref);
 }
 
 // Réglages du portail client créés par outils/stripe/installer-stripe.js (metadata papote=1).
@@ -969,9 +1016,14 @@ exports.annulerResiliation = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE
   return { ok: true };
 });
 
-// Hospitalisation du proche (Tanguy, 2026-10-22) : sur justificatif, l'admin met les prélèvements en pause
-// jusqu'à une date (rien n'est prélevé pour les mois de pause, la tablette continue de marcher), ou les
-// reprend plus tôt. Un décès, lui, est une résiliation comme une autre.
+// Hospitalisation du proche (Tanguy, 2026-10-22) : sur justificatif, l'admin note l'hospitalisation jusqu'à une date
+// (la tablette continue de marcher, pas d'alerte « ne répond plus »), ou la finit plus tôt. Un décès, lui, est une
+// résiliation comme une autre.
+// Règle (Tanguy, 12/11, A8) : un mois pendant lequel la tablette est en pause hospitalisation plus de 2 semaines n'est
+// pas prélevé, le dernier mois à l'arrêt compris (abonnement.js, moisOffertHospitalisation). Les dates restent sur la
+// commande (pause en cours, hospitalisations[] passées) ; le prochain prélèvement est annulé chez Stripe
+// (pause_collection « void » jusqu'au lendemain de sa date) seulement si son mois compte plus de 2 semaines de pause.
+// ajusterPauseStripe le recalcule à chaque changement et chaque matin (restitutions).
 const PAUSE_MAX_JOURS = 186;
 exports.pauseHospitalisation = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE] }, async (request) => {
   verifierAdmin(request);
@@ -996,26 +1048,94 @@ exports.pauseHospitalisation = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PAS
     }
   };
   const famille = snap.get('fid') ? (await db.doc(`families/${snap.get('fid')}`).get()).get('name') : null;
+  const maintenant = Date.now();
+  const enCours = (p) => p && regles.enMillis(p.jusqua) > maintenant;
   if (jusqua == null) {
-    await stripe().subscriptions.update(commande, { pause_collection: '' });
-    await ref.update({ pause: FieldValue.delete() });
-    if (snap.get('pause')) await prevenir(mail.reprisePrelevements({ nom: snap.get('nom'), famille }));
+    // Fin de l'hospitalisation : la période passée est gardée (elle compte encore pour le mois en cours), une seule
+    // fois même si « Reprendre » est touché deux fois.
+    const fini = await db.runTransaction(async (tx) => {
+      const p = (await tx.get(ref)).get('pause');
+      if (!p) return false;
+      const debut = regles.enMillis(p.debut != null ? p.debut : p.le) || maintenant;
+      const fin = Math.min(regles.enMillis(p.jusqua) || maintenant, maintenant);
+      tx.update(ref, {
+        pause: FieldValue.delete(),
+        ...(fin > debut ? { hospitalisations: FieldValue.arrayUnion({ debut, fin }), hospitalisationJusqua: fin } : {}),
+      });
+      return enCours(p);
+    });
+    await ajusterPauseStripe(commande);
+    if (fini) await prevenir(mail.reprisePrelevements({ nom: snap.get('nom'), famille }));
     return { ok: true, reprise: true };
   }
   const fin = Number(jusqua);
-  if (!Number.isFinite(fin) || fin <= Date.now() || fin > Date.now() + PAUSE_MAX_JOURS * 24 * 3600e3) {
+  if (!Number.isFinite(fin) || fin <= maintenant || fin > maintenant + PAUSE_MAX_JOURS * 24 * 3600e3) {
     throw new HttpsError('invalid-argument', 'Choisissez une date de reprise dans les 6 prochains mois.');
   }
-  if (!['active', 'past_due'].includes(abo.status) || regles.premierPrelevementDe(abo, Date.now())) {
+  if (!['active', 'past_due'].includes(abo.status) || regles.premierPrelevementDe(abo, maintenant)) {
     throw new HttpsError('failed-precondition', 'Pause possible seulement pour un abonnement en cours (pas pendant les 30 premiers jours).');
   }
-  await stripe().subscriptions.update(commande, {
-    pause_collection: { behavior: 'void', resumes_at: Math.ceil(fin / 1000) },
+  // Pause déjà en cours : seule la date de fin change (prolongée ou raccourcie), le début reste. Pause finie : gardée
+  // dans hospitalisations[], une nouvelle commence aujourd'hui.
+  const nouvelle = await db.runTransaction(async (tx) => {
+    const p = (await tx.get(ref)).get('pause');
+    if (enCours(p)) {
+      tx.update(ref, { 'pause.jusqua': Timestamp.fromMillis(fin), hospitalisationJusqua: fin });
+      return false;
+    }
+    const ancienne = p && regles.periodesHospitalisation({ pause: p })[0];
+    tx.update(ref, {
+      pause: { motif: 'hospitalisation', debut: maintenant, jusqua: Timestamp.fromMillis(fin), le: FieldValue.serverTimestamp() },
+      hospitalisationJusqua: fin,
+      ...(ancienne ? { hospitalisations: FieldValue.arrayUnion(ancienne) } : {}),
+    });
+    return true;
   });
-  await ref.update({ pause: { motif: 'hospitalisation', jusqua: Timestamp.fromMillis(fin), le: FieldValue.serverTimestamp() } });
-  await prevenir(mail.pausePrelevements({ nom: snap.get('nom'), famille, jusqua: fin }));
-  return { ok: true, jusqua: fin };
+  const { offert } = await ajusterPauseStripe(commande);
+  if (nouvelle) await prevenir(mail.pausePrelevements({ nom: snap.get('nom'), famille, jusqua: fin }));
+  return { ok: true, jusqua: fin, prochainOffert: offert };
 });
+
+// Le prochain prélèvement de l'abonnement suit la règle des 2 semaines (A8) : annulé chez Stripe (pause_collection
+// « void », reprise le lendemain de sa date) si son mois compte plus de 2 semaines d'hospitalisation, sinon prélevé.
+// Rejouable : ne touche Stripe que si ce qui est en place diffère de ce qu'il faut. → { offert, date }.
+async function ajusterPauseStripe(commande) {
+  const abo = await stripe().subscriptions.retrieve(commande);
+  if (!['active', 'past_due'].includes(abo.status)) return { offert: false, date: null };
+  const date = finDePeriodeMs(abo);
+  const c = (await db.doc(`commandes/${commande}`).get()).data() || {};
+  // Abonnement qui s'arrête à cette date : pas de prélèvement chez Stripe, le dernier mois suit la même règle
+  // (prelevementDernierMois).
+  const offert = Boolean(date) && regles.moisOffertHospitalisation(c, date);
+  // Date déjà passée de plus d'un jour (prélèvement fait ou annulé, Stripe pas encore à jour) : rien à poser.
+  if (date && date + JOUR_MS <= Date.now()) return { offert, date };
+  const voulu = offert ? Math.ceil((date + JOUR_MS) / 1000) : null;
+  const pc = abo.pause_collection;
+  const actuel = pc && (!pc.resumes_at || pc.resumes_at * 1000 > Date.now()) ? (pc.resumes_at || -1) : null;
+  if (actuel !== voulu) {
+    await stripe().subscriptions.update(commande, { pause_collection: voulu ? { behavior: 'void', resumes_at: voulu } : '' });
+  }
+  if (offert) await db.doc(`commandes/${commande}`).update({ moisOffertsHospitalisation: FieldValue.arrayUnion(date) });
+  return { offert, date };
+}
+
+// Chaque matin : les commandes hospitalisées (ou sorties depuis moins de 40 jours, leur mois peut encore compter)
+// voient leur prochain prélèvement recalculé, le mois avançant.
+async function pausesHospitalisation() {
+  const [recentes, enCours] = await Promise.all([
+    db.collection('commandes').where('hospitalisationJusqua', '>=', Date.now() - 40 * JOUR_MS).get(),
+    // Pauses notées avant le 12/11 (sans hospitalisationJusqua) : reprises ici.
+    db.collection('commandes').where('pause.jusqua', '>', new Date()).get(),
+  ]);
+  const vues = new Map([...recentes.docs, ...enCours.docs].map((d) => [d.id, d]));
+  for (const d of vues.values()) {
+    try {
+      await ajusterPauseStripe(d.id);
+    } catch (e) {
+      logger.warn(`Commande ${d.id} : pause hospitalisation non recalculée (${e.message}), nouvel essai demain.`);
+    }
+  }
+}
 
 // ---------- Rétractation et fin de contrat ----------
 
@@ -1167,7 +1287,11 @@ exports.finDeContrat = onCall({ secrets: [STRIPE_SECRET] }, async (request) => {
       jusqua: c.expedition === 'a-preparer' ? null : regles.limiteRetractation(ms(c.creeLe), ms(c.envoyeeLe), regles.receptionDe(c)),
       montant: await montantPaye(id),
     } : null,
-    restitution: r ? { statut: r.statut, avant: ms(r.avant), etiquette: r.etiquette || null, qr: r.qr || null } : null,
+    restitution: r ? {
+      statut: r.statut, avant: ms(r.avant), etiquette: r.etiquette || null, qr: r.qr || null,
+      // Matériel non rendu prélevé : remboursé si la tablette revient ou si l'abonnement reprend (A5, A6).
+      ...(r.statut === 'facturee' ? { preleve: regles.penaliteRestitution(c) } : {}),
+    } : null,
     // Arrêt prévu : la famille peut renvoyer la tablette sans attendre la date d'arrêt (Tanguy, 30/10).
     retourAnticipe: !r && retourAnticipePossible(c, (await db.doc(`families/${c.fid}`).get()).get('abonnement')),
     remboursement: c.remboursement ? { statut: c.remboursement.statut, montant: c.remboursement.montant || 0 } : null,
@@ -1195,7 +1319,9 @@ exports.renvoyerTablette = onCall({ secrets: [SENDCLOUD_API, MAIL_MOT_DE_PASSE],
     r = { statut: 'attendue', avant: versTimestamp(regles.limiteRestitution(fin, { deces: c.motif === 'deces' })), anticipe: true, mailLe: Timestamp.now() };
     await ref.update({ restitution: r });
   }
-  if (!r || !['attendue', 'echec'].includes(r.statut)) throw new HttpsError('failed-precondition', "Il n'y a pas de tablette à nous renvoyer.");
+  // Matériel non rendu déjà prélevé (« facturee ») : le QR code reste possible, les 140 € sont remboursés à réception
+  // (Tanguy, 12/11, A6 ; tabletteRendue).
+  if (!r || !RETOUR_CHEZ_LE_PROCHE.includes(r.statut)) throw new HttpsError('failed-precondition', "Il n'y a pas de tablette à nous renvoyer.");
   if (r.etiquette) return { etiquette: r.etiquette, qr: r.qr || null };
   if (nouvelleAdresse) await ref.update({ retourAdresse: nouvelleAdresse });
   else if (!sendcloud.adresseRetour(c)) {
@@ -1950,6 +2076,12 @@ async function prelevementDernierMois(abo) {
     const snap = await tx.get(ref);
     const c = snap.exists ? snap.data() : {};
     if (c.dernierMois || c.retractation || c.offerte || ['a-preparer', 'paiement-en-attente', 'annulee'].includes(c.expedition)) return false;
+    // Hospitalisation de plus de 2 semaines pendant ce dernier mois (Tanguy, 12/11, A8) : il n'est pas prélevé.
+    const fin = (abo.ended_at || abo.canceled_at || Math.floor(Date.now() / 1000)) * 1000;
+    if (regles.moisOffertHospitalisation(c, fin)) {
+      tx.set(ref, { dernierMois: { statut: 'aucun', montant: 0, motif: 'hospitalisation de plus de 2 semaines dans le mois', le: FieldValue.serverTimestamp() } }, { merge: true });
+      return false;
+    }
     tx.set(ref, { dernierMois: { statut: 'en-cours', montant, le: FieldValue.serverTimestamp() } }, { merge: true });
     return true;
   });
@@ -2108,6 +2240,8 @@ async function premiersPrelevementsRepousses() {
 async function restitutions() {
   await arretsImpayes();
   await premiersPrelevementsRepousses();
+  await pausesHospitalisation();
+  await remboursementsMaterielAFaire();
   const maintenant = Date.now();
   const attendues = await db.collection('commandes').where('restitution.statut', '==', 'attendue').get();
   for (const snap of attendues.docs) {
@@ -2298,7 +2432,7 @@ exports.etiquetteRetour = onCall(async (request) => {
   const ref = db.doc(`commandes/${commande}`);
   const snap = await ref.get();
   if (!snap.exists) throw new HttpsError('not-found', 'Commande introuvable.');
-  if (!['attendue', 'echec'].includes(snap.get('restitution.statut'))) {
+  if (!RETOUR_CHEZ_LE_PROCHE.includes(snap.get('restitution.statut'))) {
     throw new HttpsError('failed-precondition', "Aucune tablette n'est attendue pour cette commande.");
   }
   await ref.update({ 'restitution.etiquette': lien.trim(), 'restitution.etiquetteLe': FieldValue.serverTimestamp() });
@@ -2593,7 +2727,7 @@ async function suiviRetour(event, rAvant, r, c) {
     }
   }
 
-  const finDeContrat = ['attendue', 'echec'].includes(r.statut);
+  const finDeContrat = ['attendue', 'echec', 'facturee'].includes(r.statut);
   if (r.etiquette && r.etiquette !== rAvant.etiquette && finDeContrat && !r.avisLe) {
     await ref.update({ 'restitution.avisLe': FieldValue.serverTimestamp() });
     await avisResiliation(id, c, retractation);
@@ -2603,7 +2737,8 @@ async function suiviRetour(event, rAvant, r, c) {
     try {
       await envoyerMail(c.email, mail.etiquetteRetour({
         nom: c.nom, lien: r.qr || r.etiquette, qr: !!r.qr, avant: r.avant ? r.avant.toMillis() : null,
-        fin: ['attendue', 'echec'].includes(r.statut), retractation, montant: regles.penaliteRestitution(c),
+        fin: finDeContrat, retractation, montant: regles.penaliteRestitution(c),
+        preleve: r.statut === 'facturee' ? regles.penaliteRestitution(c) : null,
       }));
     } catch (e) {
       logger.error(`Commande ${id} : étiquette de retour non envoyée`, e.message);

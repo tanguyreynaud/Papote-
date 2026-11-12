@@ -25,9 +25,18 @@ function refusEtiquette(c, sens, { remplacee = false } = {}) {
     return "Cette commande n'est pas à envoyer.";
   }
   if (remplacee || restitutionDe(c) === 'a-recuperer') return '';
+  // Matériel non rendu déjà prélevé : la tablette peut encore revenir, remboursée à réception (Tanguy, 12/11, A6).
+  if (restitutionDe(c) === 'facturee' && materielParti(c)) return '';
   // Retour attendu d'une tablette jamais partie (annulée avant l'envoi) : rien à renvoyer.
   if (aRecuperer(c) && materielParti(c)) return '';
   return "Rien à récupérer chez ce client : pas de fin de contrat ni de tablette remplacée. Pas d'étiquette de retour.";
+}
+
+// Tablette de remplacement à envoyer (panne une fois l'ancienne reçue, casse, perte ou vol ; gestion.js remplacer) :
+// commande déjà partie, remplacement noté avec sa nouvelle tablette. Son étiquette d'envoi est à part
+// (etiquettes.remplacement), une par tablette de remplacement : jamais une deuxième étiquette de l'envoi d'origine.
+function remplacementAEnvoyer(c) {
+  return Boolean(c && c.remplacement && c.remplacement.nouvelle && materielParti(c));
 }
 
 // Deuxième étiquette pour le même sens alors qu'une étiquette payée existe (double clic, vieil onglet) : refusée,
@@ -156,6 +165,6 @@ function refusSuppressionSim(ligne, tablette) {
 
 module.exports = {
   refusEnvoiSansSim, refusSimSansNumero, refusAutreTablette, BLOCAGES_SIM, blocagesManquants,
-  refusEtiquette, refusEtiquetteEnDouble, refusEnvoi, refusReception, refusRetourMateriel, refusLienCommande,
+  refusEtiquette, refusEtiquetteEnDouble, remplacementAEnvoyer, refusEnvoi, refusReception, refusRetourMateriel, refusLienCommande,
   refusStatutSim, refusRecharge, refusSuppressionSim, SUITES_SIM, RESTITUTION_EN_COURS,
 };

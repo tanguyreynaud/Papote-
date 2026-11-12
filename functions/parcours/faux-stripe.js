@@ -373,6 +373,22 @@ function creerFauxStripe(horloge) {
     evenement('checkout.session.expired', s);
   }
 
+  // Comme Stripe : prélèvements en pause (pause_collection « void ») : la facture du mois est créée puis annulée
+  // (« void »), rien n'est prélevé ; une fois la date de reprise passée, la pause disparaît d'elle-même.
+  function enPause(a) {
+    const p = a.pause_collection;
+    if (!p) return false;
+    if (p.resumes_at && p.resumes_at <= secondes()) { a.pause_collection = null; return false; }
+    return p.behavior === 'void';
+  }
+  function factureAnnulee(a, client, mensuel) {
+    const f = nouvelleFacture(client, { lignes: [{ amount: mensuel.unit_amount, price: mensuel.id }], abonnement: a.id, raison: 'subscription_cycle' });
+    numeroter(f);
+    f.status = 'void';
+    evenement('invoice.voided', f);
+    return f;
+  }
+
   // Fin du mois offert : Stripe prélève le premier mois (abonnement « active »).
   function finirEssai(abonnementId) {
     const a = lire('abonnements', 'subscription', abonnementId);
@@ -397,6 +413,11 @@ function creerFauxStripe(horloge) {
     const mensuel = a.items.data[0].price;
     a.current_period_end = Math.max(a.current_period_end || 0, secondes()) + 30 * 86400;
     a.items.data[0].current_period_end = a.current_period_end;
+    if (enPause(a)) {
+      factureAnnulee(a, client, mensuel);
+      evenement('customer.subscription.updated', a);
+      return;
+    }
     const f = nouvelleFacture(client, { lignes: [{ amount: mensuel.unit_amount, price: mensuel.id }], abonnement: a.id, raison: 'subscription_cycle' });
     payer(f, client);
     evenement('invoice.paid', f);
