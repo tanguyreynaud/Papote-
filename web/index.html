@@ -184,6 +184,8 @@
         <p class="genre-titre">Votre numéro de portable</p>
         <input id="moi-tel" type="tel" inputmode="tel" autocomplete="tel" maxlength="12" placeholder="0612345678" aria-label="Votre numéro de portable">
         <p class="muted small">Un portable français (06 ou 07) : votre proche vous appelle à ce numéro depuis sa tablette. Seule votre famille le voit.</p>
+        <!-- Proche sans portable français (Tanguy 12/11, M5) : la tablette l'appelle par internet, sur l'appli. -->
+        <label class="toggle-row moi-sans-tel"><span class="toggle-text"><strong>Je n'ai pas de numéro, ou je vis à l'étranger</strong><span>Votre proche vous appellera par internet, sur l'appli Papote. Vous ne recevrez pas les SMS de la tablette.</span></span><input type="checkbox" class="toggle" id="moi-sans-tel"></label>
         <p class="genre-titre">Votre anniversaire</p>
         <div class="moi-date">
           <select id="moi-jour" aria-label="Jour"><option value="">Jour</option></select>
@@ -488,6 +490,15 @@
         <span class="avatar photo-cta-icon" aria-hidden="true"><svg><use href="#i-camera"/></svg></span>
         <span><strong>Envoyer une photo</strong><br><span class="small">Elle s'affiche sur la tablette de <span class="grand-name"></span></span></span>
       </button>
+      <!-- Mamie appelle par la carte SIM (Tanguy 12/11, M8) : son numéro s'affiche, à enregistrer pour décrocher. -->
+      <section id="contact-encart" class="card contact-encart" aria-labelledby="contact-titre" hidden>
+        <h2 id="contact-titre"></h2>
+        <p id="contact-texte"></p>
+        <div class="contact-actions">
+          <button type="button" id="contact-oui" class="primary">Enregistrer le numéro</button>
+          <button type="button" id="contact-fait" class="secondary">C'est déjà fait</button>
+        </div>
+      </section>
       <button type="button" id="face-nudge" class="card nudge" hidden>
         <span class="avatar avatar-empty"><svg><use href="#i-user"/></svg></span>
         <span><strong>Ajoutez votre photo</strong><br><span class="muted small">Pour que <span class="grand-name"></span> vous reconnaisse</span></span>

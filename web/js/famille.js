@@ -4577,9 +4577,41 @@ function renderTuileTelephone() {
   $('tile-photo').hidden = !!tel;
 }
 
+// « Enregistrez le numéro de Mamie Emma » sur l'accueil (M8, Tanguy 12/11) : ses appels arrivent du numéro de la
+// carte SIM, que beaucoup ne décrochent pas s'il est inconnu. Fermé une fois sur ce téléphone, revient si le numéro change.
+const CONTACT_KEY = 'papote.contactTablette';
+function lireContact() { try { return JSON.parse(localStorage.getItem(CONTACT_KEY) || '{}') || {}; } catch (e) { return {}; } }
+function noterContact(fid, tel) {
+  const v = lireContact();
+  v[fid] = tel;
+  try { localStorage.setItem(CONTACT_KEY, JSON.stringify(v)); } catch (e) { /* rien : la carte reviendra simplement */ }
+}
+function renderContact() {
+  const tel = numeroTablette();
+  const voir = !!(session?.fid && tel && session.member && session.member.role !== 'tablette' && lireContact()[session.fid] !== tel);
+  $('contact-encart').hidden = !voir;
+  if (!voir) return;
+  const nom = session.family.name;
+  $('contact-titre').textContent = `Enregistrez le numéro de ${nom}`;
+  $('contact-texte').textContent = `Quand ${nom} vous appelle depuis sa tablette, votre téléphone affiche le ${tel}. Enregistrez-le dans vos contacts : vous saurez tout de suite que c'est ${nom}.`;
+}
+$('contact-oui').addEventListener('click', () => {
+  const tel = numeroTablette();
+  if (!tel) return;
+  enregistrerContact(session.family.name, tel, $('contact-oui'));
+  noterContact(session.fid, tel);
+  setTimeout(renderContact, 1500);
+});
+$('contact-fait').addEventListener('click', () => {
+  noterContact(session.fid, numeroTablette());
+  renderContact();
+  toast('C\'est noté.');
+});
+
 function renderActivity() {
   renderTabletChip();
   renderTuileTelephone();
+  renderContact();
   renderWifi();
   const el = $('activity');
   const latest = (field) => Math.max(0, ...tabletMembers.map((m) => (m[field] ? toDate(m[field]).getTime() : 0)));
@@ -4790,6 +4822,9 @@ const PRENOM_KEY = 'papote.prenom';
 // et n'accepte que les appels des numéros de la famille) : gardé sur ce téléphone puis écrit dans members/{uid}.telephone.
 const TEL_KEY = 'papote.telephone';
 function savedTel() { try { return localStorage.getItem(TEL_KEY) || ''; } catch (e) { return ''; } }
+// « Je n'ai pas de numéro, ou je vis à l'étranger » coché dans « Vos informations » (M5) : rien n'est écrit sur la fiche.
+const SANS_TEL = 'aucun';
+const telGarde = () => (savedTel() === SANS_TEL ? '' : savedTel());
 function rememberTel(t) { try { localStorage.setItem(TEL_KEY, t); } catch (e) { /* rien */ } }
 // « 06 12 34 56 78 », « +33 6 12 34 56 78 », « 0033 7… » : seulement un portable français, rendu « 06 12 34 56 78 ».
 // Rien d'autre (étranger, fixe, numéro spécial) : la tablette appelle et envoie ses SMS dans le forfait, jamais au-delà (Tanguy, 29/10).
@@ -4803,6 +4838,7 @@ function telPropre(v) {
 }
 const TEL_MANQUANT = 'Indiquez votre numéro de portable.';
 const TEL_INVALIDE = 'Numéro incomplet : 10 chiffres (06 ou 07), ou +33 suivi de 9 chiffres.';
+const TEL_ETRANGER = 'Pas de portable français ? Cochez « Je n\'ai pas de numéro, ou je vis à l\'étranger ».';
 // À la frappe : seulement des chiffres, avec « + » possible en tête ; 10 caractères (06…) ou 12 (+33…), rien d'autre.
 function telALaFrappe(el) {
   const plus = el.value.trimStart().startsWith('+');
@@ -4863,7 +4899,9 @@ function showMoi() {
   $('moi-jour').value = a ? String(a.day) : '';
   $('moi-mois').value = a ? String(a.month) : '';
   $('moi-annee').value = a?.year ? String(a.year) : '';
-  $('moi-tel').value = savedTel().replace(/ /g, '');
+  $('moi-tel').value = telGarde().replace(/ /g, '');
+  $('moi-sans-tel').checked = savedTel() === SANS_TEL;
+  sansTelAffiche();
   $('moi-error').hidden = true;
   moiComplet();
   show('view-moi');
@@ -4874,8 +4912,9 @@ $('form-moi').addEventListener('submit', (e) => {
   if (!/\p{L}/u.test(prenom)) { showError($('moi-error'), 'Indiquez votre prénom : la famille le verra.'); return; }
   if (!genreDe($('form-moi'))) { showError($('moi-error'), GENRE_MANQUANT); return; }
   if (!savedVisage()) { showError($('moi-error'), 'Ajoutez une photo de vous : votre proche vous reconnaîtra sur la tablette.'); return; }
-  if (!$('moi-tel').value.trim()) { showError($('moi-error'), TEL_MANQUANT); return; }
-  if (!telPropre($('moi-tel').value)) { showError($('moi-error'), TEL_INVALIDE); return; }
+  const sansTel = $('moi-sans-tel').checked;
+  if (!sansTel && !$('moi-tel').value.trim()) { showError($('moi-error'), `${TEL_MANQUANT} ${TEL_ETRANGER}`); return; }
+  if (!sansTel && !telPropre($('moi-tel').value)) { showError($('moi-error'), `${TEL_INVALIDE} ${TEL_ETRANGER}`); return; }
   if (!$('moi-jour').value || !$('moi-mois').value || !$('moi-annee').value) {
     showError($('moi-error'), 'Indiquez votre date de naissance : jour, mois et année.');
     return;
@@ -4883,7 +4922,7 @@ $('form-moi').addEventListener('submit', (e) => {
   rememberAnniv({ day: Number($('moi-jour').value), month: Number($('moi-mois').value), year: Number($('moi-annee').value) });
   rememberPrenom(prenom);
   rememberGenre(genreDe($('form-moi')));
-  rememberTel(telPropre($('moi-tel').value));
+  rememberTel(sansTel ? SANS_TEL : telPropre($('moi-tel').value));
   enterApp();
 });
 
@@ -4900,7 +4939,7 @@ $('form-moi').addEventListener('submit', (e) => {
 // « Continuer » reste grisé tant qu'il manque le prénom, le genre, la photo ou l'anniversaire.
 function moiComplet() {
   $('form-moi').querySelector('button[type=submit]').disabled = !($('moi-prenom').value.trim()
-    && genreDe($('form-moi')) && savedVisage() && $('moi-tel').value.trim() && $('moi-jour').value && $('moi-mois').value && $('moi-annee').value);
+    && genreDe($('form-moi')) && savedVisage() && ($('moi-tel').value.trim() || $('moi-sans-tel').checked) && $('moi-jour').value && $('moi-mois').value && $('moi-annee').value);
 }
 // Prénom : seulement des lettres (accents compris), espace, tiret et apostrophe.
 const HORS_PRENOM = /[^\p{L}\p{M} '’-]/gu;
@@ -4918,6 +4957,17 @@ for (const id of ['moi-prenom', 'moi-tel', 'moi-jour', 'moi-mois', 'moi-annee'])
   $(id).addEventListener('change', moiComplet);
 }
 $('form-moi').addEventListener('click', (e) => { if (e.target.closest('.genre-btn')) requestAnimationFrame(moiComplet); });
+// Case cochée : le champ du numéro est vidé et grisé, l'erreur éventuelle disparaît.
+function sansTelAffiche() {
+  const coche = $('moi-sans-tel').checked;
+  $('moi-tel').disabled = coche;
+  if (coche) $('moi-tel').value = '';
+}
+$('moi-sans-tel').addEventListener('change', () => {
+  sansTelAffiche();
+  $('moi-error').hidden = true;
+  moiComplet();
+});
 
 function montrerVisage(v) {
   $('moi-photo').hidden = !v;
@@ -4971,7 +5021,7 @@ function appliquerGenre() {
   }
   ajouterMonAnniversaire();
   // Mon numéro de téléphone, donné à l'inscription : il rejoint ma fiche s'il y manque.
-  const tel = savedTel();
+  const tel = telGarde();
   if (session?.member && session.member.role !== 'tablette' && !telPropre(session.member.telephone) && tel) {
     session.member.telephone = tel;
     updateDoc(doc(db, 'families', session.fid, 'members', session.uid), { telephone: tel })

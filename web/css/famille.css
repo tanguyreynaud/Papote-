@@ -1592,3 +1592,10 @@ a { text-decoration: none; }
 
 /* Texte lu par le lecteur d'écran seulement. */
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* « Je n'ai pas de numéro, ou je vis à l'étranger » dans « Vos informations » (M5). */
+.moi-sans-tel { padding: 12px 0; text-align: left; }
+/* « Enregistrez le numéro de Mamie » sur l'accueil (M8). */
+.contact-encart h2 { margin: 0 0 6px; font-size: 19px; }
+.contact-encart p { margin: 0 0 14px; font-size: 16px; line-height: 1.45; }
+.contact-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.contact-actions button { flex: 1 1 140px; min-height: 54px; justify-content: center; font-size: 16px; font-weight: 700; }
