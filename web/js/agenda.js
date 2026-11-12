@@ -1,7 +1,7 @@
 // Agenda côté famille : rappels (créer, lister, supprimer, voir quand Mamie a confirmé)
 // et anniversaires de la famille, que la tablette rappelle le jour J.
 import {
-  db, doc, collection, onSnapshot, serverTimestamp, writeBatch, bumpRev, deleteField,
+  db, doc, getDoc, collection, onSnapshot, serverTimestamp, writeBatch, bumpRev, deleteField,
 } from './firebase.js';
 import { askConfirm, notice, chooseAction } from './ui.js';
 
@@ -239,6 +239,8 @@ function setSeg(next) {
   $('bday-fields').hidden = seg !== 'birthday';
   $('btn-reminder').textContent = editing ? 'Enregistrer' : seg === 'reminder' ? 'Ajouter le rappel' : "Ajouter l'anniversaire";
   $('rem-error').hidden = true;
+  // Agenda plein (30 rappels en cours) : dit dès l'ouverture, avant d'écrire pour rien.
+  limite(seg === 'reminder' && !editing && rappelsEnCours() >= MAX_RAPPELS_EN_COURS ? TEXTE_RAPPELS_EN_COURS : '');
 }
 
 document.querySelectorAll('#agenda-seg .seg').forEach((b) => b.addEventListener('click', () => setSeg(b.dataset.seg)));
@@ -318,6 +320,35 @@ function toastAgenda(text) {
 function fail(message) {
   $('rem-error').textContent = message;
   $('rem-error').hidden = false;
+}
+
+// ---------- Limites du jour (A12, Tanguy 12/11 ; serveur : functions/limites.js) ----------
+// Le serveur tient families/{fid}/compteurs/jour et y note jusqu'à quand (minuit, heure de Paris) la famille ne crée
+// plus de messages écrits (bloqueJusqua, 50 par jour) ni de rappels (rappelsBloquesJusqua, 10 par jour) ; les règles
+// refusent alors l'écriture. Renvoie cette heure (Date) si elle n'est pas passée, sinon null. Illisible : null.
+export async function limiteDuJour(fid, champ) {
+  try {
+    const snap = await getDoc(doc(db, 'families', fid, 'compteurs', 'jour'));
+    const t = snap.exists() ? snap.get(champ) : null;
+    const fin = t && typeof t.toDate === 'function' ? t.toDate() : null;
+    return fin && fin > new Date() ? fin : null;
+  } catch (err) {
+    console.warn('Compteur du jour illisible', err);
+    return null;
+  }
+}
+export const MAX_RAPPELS_EN_COURS = 30;
+const TEXTE_RAPPELS_JOUR = "10 rappels ajoutés aujourd'hui : c'est le maximum pour la journée. Vous pourrez en ajouter de nouveau demain.";
+const TEXTE_RAPPELS_EN_COURS = `${MAX_RAPPELS_EN_COURS} rappels dans l'agenda : c'est le maximum. Supprimez un rappel qui ne sert plus pour en ajouter un nouveau.`;
+// Rappel en cours : « une fois » pas encore passé, ou qui se répète sans être terminé (en pause compris). Même
+// définition que le serveur (limites.js, rappelEnCours).
+function rappelsEnCours() {
+  const j = todayKey();
+  return reminders.filter((r) => (r.repeat === 'once' ? !r.date || r.date >= j : !r.finLe || r.finLe >= j)).length;
+}
+function limite(message) {
+  $('rem-limite').textContent = message;
+  $('rem-limite').hidden = !message;
 }
 
 function reminderData() {
@@ -401,9 +432,12 @@ function birthdayData() {
 $('form-reminder').addEventListener('submit', async (e) => {
   e.preventDefault();
   $('rem-error').hidden = true;
+  limite('');
   const data = seg === 'reminder' ? reminderData() : birthdayData();
   if (!data) return;
   if (seg === 'birthday' && prevenirDoublon(data)) return;
+  const nouveauRappel = seg === 'reminder' && !editing;
+  if (nouveauRappel && rappelsEnCours() >= MAX_RAPPELS_EN_COURS) { limite(TEXTE_RAPPELS_EN_COURS); return; }
   $('btn-reminder').disabled = true;
   try {
     const batch = writeBatch(db);
@@ -424,8 +458,14 @@ $('form-reminder').addEventListener('submit', async (e) => {
     bdayPhoto = null;
     history.back();
   } catch (error) {
-    console.error(error);
-    fail("L'enregistrement a échoué. Vérifiez la connexion.");
+    // Refusé par les règles : les 10 rappels du jour sont peut-être déjà ajoutés (le dire calmement).
+    if (nouveauRappel && error?.code === 'permission-denied' && await limiteDuJour(session.fid, 'rappelsBloquesJusqua')) {
+      console.warn('Rappel refusé : limite du jour', error);
+      limite(TEXTE_RAPPELS_JOUR);
+    } else {
+      console.error(error);
+      fail("L'enregistrement a échoué. Vérifiez la connexion.");
+    }
   } finally {
     $('btn-reminder').disabled = false;
   }

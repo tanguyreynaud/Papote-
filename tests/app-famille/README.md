@@ -34,6 +34,7 @@ scénarios) ; utiliser plutôt
 | `partage` | « Partager » d'Android vers Papote (WhatsApp, Galerie, appareil photo) : une photo (le texte joint par l'appli d'origine n'est pas repris en légende), trois photos en un envoi (double appui sur Envoyer), une vidéo, un partage sans photo ni vidéo, retour d'Android sur la fenêtre ouverte ; le partage n'est proposé qu'une fois |
 | `clavier-bas` | Clavier ouvert : la zone d'écriture touche le clavier (Messages depuis la barre du bas ou la tuile, légende d'une photo) ; clavier refermé par le retour d'Android, champ toujours actif : la barre du bas revient ; téléphone tourné : pas pris pour un clavier |
 | `agenda` | Rappels (erreurs, modification, pause, confirmation de Mamie), anniversaires |
+| `limites` | Limites du jour (A12) : le 50e message part, le suivant est refusé avec un mot calme à la place de la barre (texte gardé, rien en attente, double appui sur un message rapide), la barre revient après minuit ; rappels : 30 dans l'agenda (dit dès l'ouverture), 10 ajoutés par jour (double appui : un seul), modification toujours possible |
 | `appels` | Vidéo vers la tablette (vraie liaison WebRTC), refus, Mamie appelle un proche ou toute la famille |
 | `reglages` | Réglages de la tablette, profil, thème, quitter la famille, deux familles, déconnexion |
 | `abonnement` | Annulation sous 30 jours, résiliation puis « garder », relier une commande, payer depuis l'app, pause |

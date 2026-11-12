@@ -111,6 +111,15 @@ service cloud.firestore {
         && (fam.createdBy == request.auth.uid || request.auth.uid in fam.get('admins', []));
     }
 
+    // Limite du jour pas atteinte (A12) : pas de compteur, pas d'heure de blocage, ou heure passée (minuit à Paris).
+    // champ : 'bloqueJusqua' (50 messages écrits) ou 'rappelsBloquesJusqua' (10 rappels créés).
+    function limiteOuverte(fid, champ) {
+      let c = /databases/$(database)/documents/families/$(fid)/compteurs/jour;
+      return !exists(c)
+        || get(c).data.get(champ, null) == null
+        || request.time >= get(c).data.get(champ, null);
+    }
+
     function isCreatorAfter(fid) {
       return getAfter(familyPath(fid)).data.createdBy == request.auth.uid;
     }
@@ -346,8 +355,10 @@ service cloud.firestore {
               && request.auth.uid == get(/databases/$(database)/documents/pairings/$(request.resource.data.pairing)).data.callsUid
               && exists(/databases/$(database)/documents/families/$(fid)/members/$(get(/databases/$(database)/documents/pairings/$(request.resource.data.pairing)).data.tabletUid))
               && get(/databases/$(database)/documents/families/$(fid)/members/$(get(/databases/$(database)/documents/pairings/$(request.resource.data.pairing)).data.tabletUid)).data.get('pairing', '') == request.resource.data.pairing)
-            // Famille : compte Google ou e-mail, avec son uid et son adresse.
+            // Famille : compte Google ou e-mail, avec son uid et son adresse. Sans droit d'appeler (canCall) : seul
+            // un responsable le donne (R5, 12/11).
             || (request.resource.data.role == 'famille'
+              && !('canCall' in request.resource.data)
               && familleAPlace(fid)
               && isRealAccount()
               && request.resource.data.uid == request.auth.uid
@@ -392,8 +403,19 @@ service cloud.firestore {
           && resource.data.role == 'famille'
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['enTete'])
           && (!('enTete' in request.resource.data) || request.resource.data.enTete == request.time);
+        // Un responsable donne ou retire le droit d'appeler à un proche (R5, 12/11) : canCall seul, oui ou non.
+        allow update: if isFamilyAdmin(fid)
+          && resource.data.get('role', '') == 'famille'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['canCall'])
+          && request.resource.data.canCall is bool;
+        // Ma fiche. Un proche en attente n'y touche plus du tout (R5, 12/11) : il attend qu'un responsable l'accepte.
+        // canCall : seulement la tablette pour elle-même (ses appels) ; un proche peut s'ôter le droit, pas se le donner.
         allow update: if signedIn()
           && uid == request.auth.uid
+          && resource.data.get('status', 'active') != 'pending'
+          && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['canCall'])
+              || resource.data.get('role', '') == 'tablette'
+              || request.resource.data.canCall == false)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'canCall', 'lastActive', 'lastOnline', 'callable', 'face', 'appVersion', 'uid', 'email', 'battery', 'sim', 'fuseau', 'meteoVille', 'wifi', 'lastSeen', 'genre', 'telephone'])
           // Mon numéro de téléphone : la tablette m'appelle par la carte SIM et n'accepte que les numéros de la famille.
           && telephoneValide(request.resource.data)
@@ -470,7 +492,11 @@ service cloud.firestore {
           && (!(request.resource.data.type in ['photo', 'video']) || request.resource.data.text.size() <= 60)
           && (request.resource.data.image == null || request.resource.data.image is string)
           && request.resource.data.seenAt == null
-          && request.resource.data.hearts == 0;
+          && request.resource.data.hearts == 0
+          // Message écrit (A12, 12/11) : daté par le serveur (le compteur ne compte que les envois du moment), et
+          // refusé quand la famille a atteint ses 50 messages du jour (jusqu'à minuit, heure de Paris).
+          && (request.resource.data.type != 'message'
+            || (request.resource.data.createdAt == request.time && limiteOuverte(fid, 'bloqueJusqua')));
         // La tablette marque « vu » et envoie des bisous.
         allow update: if isMember(fid)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['seenAt', 'hearts'])
@@ -502,10 +528,18 @@ service cloud.firestore {
         }
       }
 
+      // Compteur du jour des limites (A12, functions/limites.js) : messages, rappels créés, et heure jusqu'à laquelle
+      // les nouveaux sont refusés. Lu par l'appli pour le dire calmement ; écrit par le serveur seulement.
+      match /compteurs/{nom} {
+        allow get: if isMember(fid);
+      }
+
       // Rappels et agenda : la famille les gère, la tablette note « c'est fait ».
       match /reminders/{rid} {
         allow read: if isMember(fid);
         allow create, update: if isMember(fid) && abonnementOk(fid)
+          // 10 rappels créés par jour et par famille (A12) : le serveur ferme la journée dans le compteur.
+          && (request.method != 'create' || limiteOuverte(fid, 'rappelsBloquesJusqua'))
           // lastSeen : « AAAA-MM-JJ HH:MM » quand un visage a regardé le rappel sur la tablette.
           && request.resource.data.keys().hasOnly(['title', 'kind', 'time', 'repeat', 'date', 'days', 'createdBy', 'createdAt', 'lastAck', 'lastSeen', 'avanceMin', 'finLe', 'enPauseJusquau'])
           // avanceMin : minutes d'annonce avant l'heure (absent = 15) ; finLe et enPauseJusquau : « AAAA-MM-JJ », jour compris.
