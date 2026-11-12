@@ -183,12 +183,16 @@ async function entrerDansFamillePreparee(proche, t, { nom = 'Mamie Emma' } = {})
   return fid;
 }
 
-// Installation complète depuis le téléphone (famille.js) : scan, prénom, nom, photo, son, « C'est parfait ».
+// Ancien parcours (scan du QR, nom, photo, son, « C'est parfait ») : retiré de l'appli des clients le 12/11 (A29),
+// seul un compte administrateur peut encore réserver une tablette par son code. Gardé ici pour les scénarios des
+// familles créées ainsi (tablette sans commande, commande d'avant la famille préparée).
+const commeAdmin = (p) => ({ ...p, admin: true });
+// Installation complète : scan, prénom, nom, photo, son, « C'est parfait ».
 // Tablette entrée seule dans une famille préparée à la commande : le proche y entre et donne le nom.
 async function installer(proche, t, { nom = 'Mamie Emma' } = {}) {
   const p = await s.lire(`pairings/${t.code}`);
   if (p && p.status === 'confirmed' && p.auto) return entrerDansFamillePreparee(proche, t, { nom });
-  const r = await s.appeler('reserverTablette', { code: t.code, prenom: proche.prenom }, proche);
+  const r = await s.appeler('reserverTablette', { code: t.code, prenom: proche.prenom }, commeAdmin(proche));
   if (r.etat !== 'reserve') throw new Error(`Réservation refusée : ${JSON.stringify(r)}`);
   await s.appeler('nommerFamille', { reveil: true }, proche);
   const { fid } = await s.appeler('nommerFamille', { code: t.code, nom }, proche);
@@ -228,6 +232,6 @@ async function rejoindre(proche, fid, { attente = false } = {}) {
 }
 
 module.exports = {
-  RELAIS, TANGUY, tablettePreparee, simSurTablette, preparerEtEnvoyer, commanderSurLeSite, commanderEtPayer, commandeDAvant, entrerParInvitation,
+  RELAIS, TANGUY, commeAdmin, tablettePreparee, simSurTablette, preparerEtEnvoyer, commanderSurLeSite, commanderEtPayer, commandeDAvant, entrerParInvitation,
   afficherCode, entrerDansLaFamille, entrerDansFamillePreparee, appelerDepuisLaTablette, installer, envoyer, rejoindre,
 };

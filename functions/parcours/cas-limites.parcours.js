@@ -328,14 +328,14 @@ test('installation abandonnée en route : un autre proche la reprend 30 minutes 
   const paul = await s.compte('Paul', 'paul@exemple.fr');
   const t = await a.tablettePreparee();
   await a.afficherCode(t);
-  await s.appeler('reserverTablette', { code: t.code, prenom: 'Julie' }, julie);
+  await s.appeler('reserverTablette', { code: t.code, prenom: 'Julie' }, a.commeAdmin(julie));
   const { fid } = await s.appeler('nommerFamille', { code: t.code, nom: 'Mamie Emma' }, julie);
   await s.calme();
   await a.entrerDansLaFamille(t);
-  assert.deepStrictEqual(await s.appeler('reserverTablette', { code: t.code, prenom: 'Paul' }, paul), { etat: 'occupe', par: 'Julie' });
+  assert.deepStrictEqual(await s.appeler('reserverTablette', { code: t.code, prenom: 'Paul' }, a.commeAdmin(paul)), { etat: 'occupe', par: 'Julie' });
 
   s.avancer(31 / 60 / 24);
-  const r = await s.appeler('reserverTablette', { code: t.code, prenom: 'Paul' }, paul);
+  const r = await s.appeler('reserverTablette', { code: t.code, prenom: 'Paul' }, a.commeAdmin(paul));
   assert.deepStrictEqual(r, { etat: 'reserve', fid });
   await s.calme();
   const fam = await s.lire(`families/${fid}`);
@@ -355,7 +355,7 @@ test('« Annuler l\'installation » : famille effacée, la tablette se réinstal
   const julie = await s.compte('Julie', 'julie@exemple.fr');
   const t = await a.tablettePreparee();
   await a.afficherCode(t);
-  await s.appeler('reserverTablette', { code: t.code, prenom: 'Julie' }, julie);
+  await s.appeler('reserverTablette', { code: t.code, prenom: 'Julie' }, a.commeAdmin(julie));
   const { fid } = await s.appeler('nommerFamille', { code: t.code, nom: 'Mamei Ema' }, julie);
   await s.calme();
   await a.entrerDansLaFamille(t);
@@ -379,7 +379,7 @@ test('« Annuler l\'installation » refusée quand la commande payée est déjà
   await a.commandeDAvant(id);
   await a.preparerEtEnvoyer(id, t);
   await a.afficherCode(t);
-  await s.appeler('reserverTablette', { code: t.code, prenom: 'Paul' }, paul);
+  await s.appeler('reserverTablette', { code: t.code, prenom: 'Paul' }, a.commeAdmin(paul));
   const { fid } = await s.appeler('nommerFamille', { code: t.code, nom: 'Mamie Emma' }, paul);
   await s.calme();
   await assert.rejects(s.appeler('annulerInstallation', { fid }, paul), /commande est déjà reliée/);
@@ -477,7 +477,7 @@ test('installation commencée mais jamais finie : pas gratuite pour toujours, «
   // Tablette hors du stock (n° de série inconnu) : aucune commande ne se relie toute seule.
   const t = { serie: 'INCONNUE-F2', tabletUid: 'tablette-f2', callsUid: 'appels-f2' };
   await a.afficherCode(t);
-  await s.appeler('reserverTablette', { code: t.code, prenom: 'Julie' }, julie);
+  await s.appeler('reserverTablette', { code: t.code, prenom: 'Julie' }, a.commeAdmin(julie));
   const { fid } = await s.appeler('nommerFamille', { code: t.code, nom: 'Mamie Emma' }, julie);
   await s.calme();
   await a.entrerDansLaFamille(t);

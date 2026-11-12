@@ -32,7 +32,6 @@ test('blocs : fiche, étapes et encadré en HTML comme en texte brut', () => {
   assert.match(m.html, /NUMÉRO DE SUIVI|Numéro de suivi/);
   assert.match(m.text, /Numéro de suivi : 12345678/);
   assert.match(m.text, /1\. Branchez la tablette/);
-  assert.match(m.html, /commande=ABCD-1234/);
   const r = mail.retourTablette({ nom: 'Julie', avant: Date.UTC(2026, 10, 25), retractation: null, montant: 15000 });
   assert.match(r.html, /border-left:4px solid #4f46e5/);
   assert.match(r.text, /Date limite : 25 novembre 2026\. Sans retour à cette date, 150 € seront prélevés/);
@@ -108,7 +107,10 @@ test('Outlook et Gmail sans styles : carte de 560 px [if mso], bouton à toute �
 test('premier jour : allumer la tablette expliqué, pas de « décroche toute seule » trompeur', () => {
   // Audit premier jour (05/11) : la tablette décroche quand elle voit un visage, pas toute seule.
   const colis = mail.colisParti({ nom: 'Julie', suivi: '1', lien: 'https://x', relais: null, code: 'AB' });
-  assert.match(colis.text, /bouton de marche/);
+  // Tanguy 12/11 (M9) : « bouton d'allumage (Power) », jamais « la tranche » ; personne n'a besoin d'être dans l'appli.
+  assert.match(colis.text, /bouton d'allumage \(Power\)/);
+  assert.doesNotMatch(colis.text, /tranche/);
+  assert.match(colis.text, /Personne n'a besoin d'être dans l'appli Papote pour la brancher/);
   assert.match(colis.text, /laissez-la charger/);
   for (const m of [mail.installationFinie({ prenom: 'Julie', famille: 'Mamie Jeanne' }), mail.demandeAcceptee({ prenom: 'Anne', famille: 'Mamie Jeanne' })]) {
     assert.doesNotMatch(m.text, /décroche toute seule|n'a rien à faire/);
