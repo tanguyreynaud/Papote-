@@ -94,7 +94,7 @@ test('150 € : l’e-mail part AVANT la coupure, puis la confirmation ; une seu
   const b = banc();
   const r = await b.avis(151);
   assert.deepStrictEqual(b.ordre, ['mail', 'coupure', 'mail']);
-  assert.match(b.mails[0], /coupure de la facturation en cours/);
+  assert.match(b.mails[0], /COUPE-CIRCUIT en cours/);
   assert.match(b.mails[1], /facturation Google Cloud désactivée/);
   assert.deepStrictEqual(r, { fait: true, palier: 'coupure', coupee: true, prevenu: true });
   await b.avis(155);

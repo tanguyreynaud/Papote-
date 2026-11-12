@@ -895,7 +895,7 @@ function budget({ palier, montant, paliers, coupee = true }) {
   }
   // coupee null : la coupure va être faite ; cet e-mail part avant, tant que les fonctions tournent encore.
   if (coupee === null) {
-    return message(`COUPE-CIRCUIT : facture Google Cloud à ${montant}, coupure de la facturation en cours`, [
+    return message(`COUPE-CIRCUIT en cours : facture Google Cloud à ${montant}`, [
       { encadre: `La facture Google Cloud de Papote a atteint <b>${montant}</b> ce mois-ci : le coupe-circuit désactive la facturation du projet maintenant.` },
       'Les fonctions, l\'app famille et les tablettes vont s\'arrêter ou être limitées. Les données ne sont pas effacées. Si la coupure échoue, un second e-mail « URGENT » suit.',
       { etapes: [

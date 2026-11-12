@@ -40,7 +40,7 @@ test('150 € : e-mail « coupure en cours » d\'abord ; coupure refusée : e-ma
   s.boite.length = 0;
   await avis(151);
   assert.strictEqual(mailsA(PAPOTE).length, 2);
-  assert.match(mailsA(PAPOTE)[0], /coupure de la facturation en cours/);
+  assert.match(mailsA(PAPOTE)[0], /COUPE-CIRCUIT en cours/);
   assert.match(mailsA(PAPOTE)[1], /URGENT.*n'a pas pu couper/);
   assert.ok(s.erreurs.length === 1 && /n'a pas pu être désactivée/.test(s.erreurs[0]), JSON.stringify(s.erreurs));
   s.erreurs.length = 0; // attendu : pas d'internet dans la simulation
