@@ -2014,7 +2014,9 @@ html .call-out .call-decline { border: 0; background: transparent; color: #5b579
 /* Redémarrage sans aucun réseau (04/11) : une carte calme à la place de l'heure, de la météo et des
    boutons, qui ne peuvent rien faire sans réseau. Les photos restent à droite. */
 .sans-reseau { display: none; }
-html body.sans-reseau-actif .home-left > *:not(.sans-reseau) { display: none !important; }
+/* Le bouton SOS reste toujours là, même sous la carte « Pas de réseau » (A47) : SMS et appels par la carte SIM
+   peuvent partir sans internet, et la chaîne attend le réseau téléphonique s'il manque. */
+html body.sans-reseau-actif .home-left > *:not(.sans-reseau):not(.sos-btn) { display: none !important; }
 html body.sans-reseau-actif .home-left > .sans-reseau {
   display: -webkit-flex; display: flex; -webkit-flex-direction: column; flex-direction: column;
   -webkit-align-items: center; align-items: center; text-align: center;

@@ -765,10 +765,10 @@ public class MainActivity extends Activity implements Sync.Listener {
 
         // ----- Appels par la carte SIM (Telephone, AppelGsm) -----
 
-        /** La tablette peut téléphoner (carte SIM prête, Papote application Téléphone). */
+        /** La tablette peut téléphoner (carte SIM prête, Papote application Téléphone, réseau téléphonique là). */
         @JavascriptInterface
         public boolean phoneReady() {
-            return Telephone.pret(MainActivity.this);
+            return Telephone.pret(MainActivity.this) && Telephone.reseauVoix(MainActivity.this);
         }
 
         /** Appelle ce numéro par la carte SIM ; la suite arrive par Papote.onGsm. false : l'appel n'est pas parti. */

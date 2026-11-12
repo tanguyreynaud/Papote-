@@ -1697,9 +1697,10 @@
   var dejaEnLigne = false;   // internet vu depuis le démarrage de la page
   var internetVu = true;     // dernier état connu d'internet (Android)
 
-  // Redémarrage sans aucun réseau : l'heure est inconnue et rien ne peut partir (ni météo, ni appel,
-  // ni SOS). Le bloc de gauche devient une seule carte calme, les photos restent à droite ; tout
-  // revient seul dès que le réseau ou l'heure reviennent (Tanguy, 04/11).
+  // Redémarrage sans aucun réseau : l'heure est inconnue, ni météo ni appel par internet. Le bloc de gauche
+  // devient une seule carte calme, les photos restent à droite ; tout revient seul dès que le réseau ou
+  // l'heure reviennent (Tanguy, 04/11). Le bouton SOS reste au-dessus de la carte (A47, tablette.css) :
+  // il attend le réseau téléphonique s'il le faut.
   var carteSansReseau = null;
   function majSansReseau() {
     var sans = !internetVu && !heureSure();
@@ -2173,6 +2174,8 @@
     if (!gsm) {
       // Appel lancé sans nous (page rechargée pendant l'appel) : on reprend l'écran.
       if (e === 'fin') return;
+      // Appel SIM d'un SOS en cours avant la relance : il reste un appel de SOS (A47).
+      if (reprendreAppelSos(etat)) return;
       gsm = { uid: etat.uid || null, name: etat.name || '', sortant: !!etat.sortant, enLigne: false, timer: null, who: etat.name || 'votre proche' };
     }
     if (e === 'fin' && gsm.sortant && gsm.tel && etat.numero && !memeNumero(etat.numero, gsm.tel)) {
@@ -2186,7 +2189,10 @@
       gsmSurveiller();
     } else if (e === 'enLigne') {
       clearTimeout(gsm.timer);
-      if (!gsm.enLigne) gsm.enLigneDepuis = Date.now();
+      if (!gsm.enLigne) {
+        gsm.enLigneDepuis = Date.now();
+        if (gsm.sos) sosNoter({ enLigneDepuis: gsm.enLigneDepuis });
+      }
       gsm.enLigne = true;
       if (android() && android().ring) android().ring(false);
       renderCall('connected', 'En ligne avec ' + gsm.who, 'Parlez normalement, la tablette vous entend.', gsm.uid, gsm.name);
@@ -2212,6 +2218,8 @@
 
   // La page vient de (re)démarrer pendant un appel téléphone : l'écran d'appel revient.
   function resumeGsm() {
+    // Un SOS en route avant la relance reprend là où il en était (A47), son appel SIM compris.
+    try { if (reprendreSos()) return; } catch (e) { }
     try {
       if (!android() || !android().phoneState) return;
       var etat = JSON.parse(android().phoneState() || '{}');
@@ -2317,9 +2325,74 @@
     afficherVerrou(); // le SOS de l'écran verrouillé suit le même réglage
   }
 
-  function showSosCountdown() {
+  // ---------- SOS qui survit à une relance (A47, décision de Tanguy 12/11) ----------
+  // La chaîne du SOS vit dans la page : un rechargement (chien de garde Gardien.java, onRenderProcessGone,
+  // relance de Papote) la perdait, et l'appel en cours redevenait un appel ordinaire. Où elle en est est
+  // donc gardé dans la page (localStorage, qui survit à une relance de Papote) et repris au démarrage
+  // s'il a bougé il y a moins de 5 minutes : décompte, proche en cours d'appel (proche suivant ensuite),
+  // appel par internet, attente du réseau téléphonique.
+  //   papote.sos    { debut, maj, phase: decompte|tel|internet|attente-gsm, liste, index, essai, sms,
+  //                   enLigneDepuis, attendreGsm, verrou }
+  //   papote.sosSms heure du dernier SMS de SOS parti : pas de deuxième SMS dans les 10 minutes
+  //                 (appuis répétés), mais les appels repartent quand même.
+  var SOS_CLE = 'papote.sos', SOS_SMS_CLE = 'papote.sosSms';
+  var SOS_REPRISE_MS = 5 * 60000;
+  var SOS_SMS_PAUSE_MS = 10 * 60000;
+  // Pas de réseau téléphonique (carte SIM présente) : l'appel par internet a 15 s pour être décroché,
+  // puis la tablette passe aux appels par la carte SIM dès que le réseau téléphonique revient, pendant
+  // 10 minutes au plus après l'appui.
+  var SOS_INTERNET_MS = 15000;
+  var SOS_ATTENTE_GSM_MS = 10 * 60000;
+  var SOS_VEILLE_GSM_MS = 3000;
+  var sosEtat = null;
+  var sosVeilleGsm = null;
+
+  function sosNoter(champs) {
+    if (!sosEtat) sosEtat = { debut: Date.now() };
+    for (var k in champs) if (Object.prototype.hasOwnProperty.call(champs, k)) sosEtat[k] = champs[k];
+    sosEtat.maj = Date.now();
+    try { localStorage.setItem(SOS_CLE, JSON.stringify(sosEtat)); } catch (e) { }
+  }
+
+  function sosFini() {
+    sosEtat = null;
+    clearInterval(sosVeilleGsm);
+    sosVeilleGsm = null;
+    try { localStorage.removeItem(SOS_CLE); } catch (e) { }
+  }
+
+  function sosLu() {
+    try { return JSON.parse(localStorage.getItem(SOS_CLE) || 'null'); } catch (e) { return null; }
+  }
+
+  // Un SOS gardé encore valable (horloge revenue en arrière : il ne compte plus).
+  function sosValable(e) {
+    if (!e || !e.phase || !e.maj || !e.debut) return false;
+    var now = Date.now();
+    if (e.maj > now + 60000) return false;
+    return e.phase === 'attente-gsm' ? now - e.debut < SOS_ATTENTE_GSM_MS : now - e.maj < SOS_REPRISE_MS;
+  }
+
+  function smsSosRecent() {
+    var t = 0;
+    try { t = Number(localStorage.getItem(SOS_SMS_CLE)) || 0; } catch (e) { t = 0; }
+    var now = Date.now();
+    return t > 0 && now >= t && now - t < SOS_SMS_PAUSE_MS;
+  }
+
+  // La tablette a une carte SIM (même sans réseau téléphonique pour le moment).
+  function simPresente() {
+    try { return !!(android() && android().wifiStatus && JSON.parse(android().wifiStatus()).sim); } catch (e) { return false; }
+  }
+
+  function showSosCountdown(reprise) {
     // Tablette verrouillée : seulement le SOS de son propre écran (Tanguy, 05/11), jamais celui de dessous.
     if (perdue && !window.papoteSosEnCours) return;
+    if (reprise !== true) {
+      // Nouvel appui : un SOS d'avant qui attendait le réseau téléphonique laisse la place.
+      sosFini();
+      sosNoter({ phase: 'decompte', verrou: window.papoteSosEnCours === true });
+    }
     leverPausePourSos(true); // même sans pause : une pause arrivée pendant le SOS ne le couvre pas
     stopRadio();
     ensureCallScreen();
@@ -2336,6 +2409,7 @@
     var cancel = el2('button', 'sos-cancel', 'Annuler');
     on(cancel, 'click', function () {
       clearInterval(sosTimer);
+      sosFini();
       closeCallScreen();
       leverPausePourSos(false); // appui par erreur : la pause revient (si l'abonnement est en pause)
     });
@@ -2352,67 +2426,153 @@
     }, 1000);
   }
 
+  // SOS repris après une relance : appels.js n'est peut-être pas encore connecté à Firebase ; quelques essais.
+  function sosRelancer(attempt) {
+    if (!sosEtat || !sosEtat.reprise || (sosEtat.relances || 0) >= 8) return false;
+    sosNoter({ relances: (sosEtat.relances || 0) + 1 });
+    renderCall('starting', 'On réessaie…', '');
+    setTimeout(function () { if (sosEtat && sosEtat.phase === 'internet') startSos(attempt); }, 4000);
+    return true;
+  }
+
   function startSos(attempt) {
     if (attempt === 1 && gsmReady() && phonePeople().length) { startSosTelephone(); return; }
+    // Carte SIM présente mais pas de réseau téléphonique : internet d'abord, la carte SIM dès qu'elle peut.
+    var attendreGsm = attempt === 1 ? (phonePeople().length > 0 && simPresente()) : !!(sosEtat && sosEtat.attendreGsm);
+    sosNoter({ phase: 'internet', essai: attempt, attendreGsm: attendreGsm });
     if (!callApiReady()) {
+      if (attendreGsm) { sosAttendreGsm(); return; }
+      if (sosRelancer(attempt)) return;
+      sosFini();
       renderCall('failed', 'L’appel n’est pas encore disponible', 'Réessayez dans un moment.');
       setTimeout(closeCallScreen, 4000);
       return;
     }
     renderCall('starting', attempt === 1 ? 'Appel de toute la famille…' : 'On réessaie…', '');
     var finished = false;
+    var connecte = false;
+    var appel = null;
+    var abandonTimer = null, veille = null;
+    function arreter() { clearTimeout(abandonTimer); clearInterval(veille); }
     function finish(title, sub, ms) {
       if (finished) return;
       finished = true;
+      arreter();
       renderCall('ended', title, sub);
       // Pas si un nouveau SOS a été lancé entre-temps : on fermerait son décompte.
       setTimeout(function () { if (/state-ended/.test(callScreen.className)) { outCall = null; closeCallScreen(); } }, ms || 4000);
     }
+    // L'appel par internet est laissé de côté : la carte SIM prend le relais (ou l'attendra).
+    function passerALaCarteSim() {
+      if (finished) return;
+      finished = true;
+      arreter();
+      try { if (appel && appel.abandon) appel.abandon(); else if (appel && appel.hangup) appel.hangup(); } catch (e) { }
+      outCall = null;
+      if (gsmReady()) { startSosTelephone(); return; }
+      if (attempt === 1) { startSos(2); return; }
+      sosAttendreGsm();
+    }
+    if (attendreGsm) {
+      if (attempt === 1) abandonTimer = setTimeout(function () { if (!connecte) passerALaCarteSim(); }, SOS_INTERNET_MS);
+      // Le réseau téléphonique revient pendant que ça sonne : les appels par la carte SIM partent aussitôt.
+      veille = setInterval(function () { if (!connecte && gsmReady()) passerALaCarteSim(); }, SOS_VEILLE_GSM_MS);
+    }
     try {
-      outCall = window.papoteCallFamily({
+      appel = window.papoteCallFamily({
         sos: attempt,
         onState: function (state, info) {
+          if (finished) return;
           info = info || {};
           if (state === 'ringing') {
             renderCall('ringing', attempt === 1 ? 'Ça sonne…' : 'Ça sonne encore…',
               info.names && info.names.length ? 'Chez ' + info.names.join(', ') : 'Chez toute la famille');
           } else if (state === 'connected') {
+            // Quelqu'un a décroché : le SOS est fini (une relance ne refait pas sonner la famille).
+            connecte = true;
+            arreter();
+            sosFini();
             renderCall('connected', 'En ligne avec ' + (info.name || 'la famille'), 'Parlez normalement, la tablette vous entend.', info.uid || null, info.name, info.face);
           } else if (state === 'ended') {
+            sosFini();
             finish('Appel terminé', '');
           } else if (state === 'missed' && attempt === 1) {
+            if (attendreGsm) { passerALaCarteSim(); return; }
             finished = true;
             startSos(2);
           } else if (state === 'missed') {
+            // La famille a reçu l'alerte du serveur ; sans réseau téléphonique, la carte SIM appellera dès son retour.
+            if (attendreGsm) { finish('La famille est prévenue', 'Votre SOS lui a été envoyé.', 8000); sosAttendreGsm(); return; }
+            sosFini();
             finish('La famille est prévenue', 'Votre SOS lui a été envoyé.', 8000);
           } else if (state === 'busy') {
+            sosFini();
             finish('Occupé', 'Réessayez dans un moment.');
           } else if (state === 'failed') {
+            if (attendreGsm) { passerALaCarteSim(); return; }
+            if (sosRelancer(attempt)) { finished = true; arreter(); outCall = null; return; }
+            sosFini();
             finish('L’appel n’a pas pu partir', 'Vérifiez qu’il y a internet, puis réessayez.');
           }
         }
       });
+      outCall = appel;
     } catch (e) {
+      if (attendreGsm) { passerALaCarteSim(); return; }
+      sosFini();
       finish('L’appel n’a pas pu partir', 'Réessayez dans un moment.');
     }
+  }
+
+  // Pas de réseau téléphonique, internet n'a rien donné : dès que le réseau téléphonique revient
+  // (gsmReady), le SMS et les appels par la carte SIM partent, 10 minutes au plus après l'appui.
+  function sosAttendreGsm() {
+    sosNoter({ phase: 'attente-gsm' });
+    clearInterval(sosVeilleGsm);
+    sosVeilleGsm = setInterval(function () {
+      if (!sosEtat || !sosValable(sosEtat)) { sosFini(); return; }
+      // Mamie déjà en communication (un proche a rappelé) : on attend la fin.
+      if (gsm || etatAppelsInternet() || !gsmReady()) return;
+      clearInterval(sosVeilleGsm);
+      sosVeilleGsm = null;
+      leverPausePourSos(true);
+      startSosTelephone();
+    }, SOS_VEILLE_GSM_MS);
   }
 
   // SOS par la carte SIM : un SMS à tous les numéros de la famille, puis un vrai appel au responsable,
   // puis aux autres un à un (45 s chacun) jusqu'à ce que quelqu'un décroche. Personne : l'appel par
   // internet d'avant (2e essai), qui fait prévenir toute la famille par le serveur.
   function startSosTelephone() {
-    var liste = phonePeople();
+    var gens = phonePeople();
+    if (!gens.length && sosEtat && sosEtat.liste) gens = sosEtat.liste;
+    var liste = [];
     var tels = [];
-    for (var i = 0; i < liste.length; i++) tels.push(liste[i].tel);
+    for (var i = 0; i < gens.length; i++) {
+      liste.push({ uid: gens[i].uid, name: gens[i].name, tel: gens[i].tel });
+      tels.push(gens[i].tel);
+    }
     // Ne jamais dire « la famille a reçu votre SOS » si le SMS n'est pas parti (audit Fable, 5/11).
-    sosSmsParti = false;
-    try {
-      sosSmsParti = android().sendSms(tels.join(','), 'SOS Papote : ' + (familyName || 'votre proche') + ' a appuyé sur le bouton SOS de sa tablette. Appelez-la vite.') === true;
-    } catch (e) { sosSmsParti = false; }
+    // Un SMS de SOS déjà parti il y a moins de 10 min (appuis répétés) : pas de deuxième, la famille l'a.
+    if (smsSosRecent()) {
+      sosSmsParti = true;
+    } else {
+      sosSmsParti = false;
+      try {
+        sosSmsParti = android().sendSms(tels.join(','), 'SOS Papote : ' + (familyName || 'votre proche') + ' a appuyé sur le bouton SOS de sa tablette. Appelez-la vite.') === true;
+      } catch (e) { sosSmsParti = false; }
+      if (sosSmsParti) { try { localStorage.setItem(SOS_SMS_CLE, String(Date.now())); } catch (e) { } }
+    }
+    sosNoter({ phase: 'tel', liste: liste, index: -1, sms: sosSmsParti, attendreGsm: false, enLigneDepuis: 0 });
     renderSos('starting', 'SOS : on prévient la famille…', null, null);
-    var n = 0;
+    sosChaine(liste, 0)(false);
+  }
+
+  // La suite de la chaîne à partir du proche n : chaque appel fini (sans vraie réponse) passe au suivant.
+  function sosChaine(liste, n) {
     var suivant = function (repondu) {
       if (repondu) {
+        sosFini();
         renderCall('ended', 'Appel terminé', '');
         setTimeout(function () { if (!gsm && /state-ended/.test(callScreen.className)) closeCallScreen(); }, 4000);
         return;
@@ -2420,15 +2580,88 @@
       if (n >= liste.length) {
         // Personne n'a décroché : la famille est prévenue par le serveur (appel internet, 2e essai).
         if (callApiReady()) { startSos(2); return; }
+        sosFini();
         renderCall('ended', sosSmsParti ? 'La famille a reçu votre SOS' : 'Personne n’a pu répondre',
           sosSmsParti ? 'Elle a reçu un message.' : 'Réessayez dans un moment.');
         setTimeout(function () { if (!gsm && /state-ended/.test(callScreen.className)) closeCallScreen(); }, 8000);
         return;
       }
+      sosNoter({ phase: 'tel', index: n, enLigneDepuis: 0 });
       var p = liste[n++];
       startGsmCall(p.uid, p.name, p.tel, suivant);
     };
-    suivant(false);
+    return suivant;
+  }
+
+  // Page rechargée pendant un appel SIM du SOS : l'appel reste un appel de SOS (écran SOS, puis le
+  // proche suivant s'il ne répond pas), jamais un appel ordinaire. true si l'appel a été repris ainsi.
+  function reprendreAppelSos(etat) {
+    if (gsm || !etat || !etat.sortant || etat.etat === 'fin') return false;
+    var e = sosEtat || sosLu();
+    if (!sosValable(e) || e.phase !== 'tel') return false;
+    sosEtat = e;
+    var liste = e.liste || [];
+    var idx = typeof e.index === 'number' ? e.index : -1;
+    for (var i = 0; i < liste.length; i++) if (etat.numero && memeNumero(etat.numero, liste[i].tel)) { idx = i; break; }
+    var p = liste[idx] || { uid: etat.uid || null, name: etat.name || '', tel: etat.numero || '' };
+    if (e.verrou) window.papoteSosEnCours = true;
+    leverPausePourSos(true);
+    sosSmsParti = !!e.sms;
+    stopRadio();
+    var who = p.name || etat.name || 'votre proche';
+    gsm = { uid: p.uid || etat.uid || null, name: p.name || etat.name || '', tel: p.tel || etat.numero || '', sortant: true, enLigne: false, timer: null, onEnd: sosChaine(liste, idx + 1), who: who, sos: true };
+    if (etat.etat === 'enLigne') {
+      gsm.enLigne = true;
+      gsm.enLigneDepuis = e.enLigneDepuis || Date.now();
+      if (!e.enLigneDepuis) sosNoter({ enLigneDepuis: gsm.enLigneDepuis });
+    } else {
+      renderSos('starting', 'SOS : on appelle ' + who + '…', gsm.uid, gsm.name);
+      gsm.timer = setTimeout(function () {
+        if (gsm && gsm.sortant && !gsm.enLigne) { gsm.sansReponse = true; gsmHangup(); }
+      }, GSM_RING_MS);
+    }
+    sosNoter({ index: idx });
+    onGsm(etat);
+    return true;
+  }
+
+  // Au démarrage de la page : un SOS gardé (moins de 5 min) reprend là où il en était. true s'il a repris.
+  function reprendreSos() {
+    if (sosEtat || gsm) return false; // déjà en route dans cette page
+    var e = sosLu();
+    if (!e) return false;
+    if (!sosValable(e)) { sosFini(); return false; }
+    var appel = null;
+    try { appel = JSON.parse((android() && android().phoneState) ? (android().phoneState() || '{}') : '{}'); } catch (x) { appel = null; }
+    var enCours = appel && appel.etat && appel.etat !== 'fin';
+    if (enCours && appel.sortant && e.phase === 'tel') return reprendreAppelSos(appel);
+    if (enCours) {
+      // Un proche rappelle (ou un appel sans rapport) : il est repris tel quel, le SOS a eu sa réponse.
+      sosFini();
+      return false;
+    }
+    sosEtat = e;
+    sosNoter({ reprise: true, relances: 0 });
+    if (e.verrou) window.papoteSosEnCours = true;
+    sosSmsParti = !!e.sms;
+    noteGardeFou('SOS repris après un redémarrage de la page (' + e.phase + ')', false);
+    if (e.phase === 'decompte') { showSosCountdown(true); return true; }
+    leverPausePourSos(true);
+    if (e.phase === 'tel') {
+      // L'appel du proche en cours s'est terminé pendant la relance : on passe au suivant.
+      ensureCallScreen();
+      renderSos('starting', 'SOS : on prévient la famille…', null, null);
+      sosChaine(e.liste || [], (typeof e.index === 'number' ? e.index : -1) + 1)(false);
+    } else if (e.phase === 'internet') {
+      ensureCallScreen();
+      startSos(e.essai === 2 ? 2 : 1);
+    } else if (e.phase === 'attente-gsm') {
+      sosAttendreGsm();
+    } else {
+      sosFini();
+      return false;
+    }
+    return true;
   }
 
   // ---------- Options réglées par la famille : Écouter, Radio ----------

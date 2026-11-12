@@ -1105,7 +1105,9 @@ window.papoteCallFamily = ({ to = null, toName = null, sos = 0, onState = () => 
     finish('failed', call && call.ref ? 'ended' : null);
   });
 
-  return { hangup: () => finish('ended', 'ended') };
+  // abandon : SOS par internet laissé de côté au profit de la carte SIM (A47) ; noté « missed », pas « ended »,
+  // pour que le serveur ne l'annonce pas comme un appel manqué ordinaire (essai 1 : rien ; essai 2 : l'alerte SOS).
+  return { hangup: () => finish('ended', 'ended'), abandon: () => finish('missed', 'missed') };
 };
 
 // ---------- Garde-fou (tablette.js, gardeFouEcrans) ----------
