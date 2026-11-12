@@ -84,6 +84,9 @@ async function destinataires(db, fid, appel) {
 
 // Bouton SOS de la tablette : toute la famille, calleeName 'SOS' (1er essai) ou 'SOS 2' (2e essai).
 // Pas de champ à part : les règles Firestore des appels restent les mêmes.
+// Champ des données FCM d'un SOS (« appel » des deux essais, « alerte » personne n'a répondu) : urgence = 'sos'.
+const URGENCE_SOS = 'sos';
+
 function essaiSos(appel) {
   if (appel.calleeUid) return 0;
   if (appel.calleeName === 'SOS') return 1;
@@ -111,6 +114,9 @@ exports.appelsSonnerie = onDocumentCreated({ document: DOC, region: REGION_FIRES
   await event.data.ref.collection('prive').doc('refus').set({ jeton });
   const nom = String(appel.callerName || 'Mamie');
   const data = { type: 'appel', cid, fid, jeton, nom: essaiSos(appel) ? `SOS : ${nom}` : nom };
+  // A47 : marqueur clair d'un SOS (1er et 2e essai), lu par l'appli Android pour sonner en urgence. Jamais sur un
+  // appel ordinaire. Seule une tablette de la famille peut le déclencher (destinataires, règles Firestore).
+  if (essaiSos(appel)) data.urgence = URGENCE_SOS;
   const n = await envoyer(db, fid, uids, data, 45);
   logger.info(`Appel ${cid} : ${n} téléphone(s) prévenu(s)`);
   if (essaiSos(appel) === 1) await journal.noter(db, { genre: 'sos', fid, tablette: appel.callerUid, telephones: n });
@@ -168,7 +174,7 @@ exports.appelsManques = onDocumentUpdated({ document: DOC, region: REGION_FIREST
   if (sos && ['missed', 'declined'].includes(apres.state) && !apres.answer) {
     // 1er essai sans réponse : la tablette rappelle tout de suite, rien à dire. Au 2e, l'alerte.
     if (sos === 2) {
-      const n = await envoyer(db, fid, uids, { type: 'alerte', titre: `${nom} a appuyé sur SOS`, texte: "Personne n'a pu répondre. Rappelez dès que possible." }, 24 * 3600);
+      const n = await envoyer(db, fid, uids, { type: 'alerte', urgence: URGENCE_SOS, titre: `${nom} a appuyé sur SOS`, texte: "Personne n'a pu répondre. Rappelez dès que possible." }, 24 * 3600);
       logger.warn(`SOS ${cid} : personne n'a répondu, famille alertée`);
       await journal.noter(db, { genre: 'sos-sans-reponse', fid, tablette: apres.callerUid, telephones: n });
       if (n === 0) await prevenirSansTelephone(db, fid, uids, { nom, sos: true });
