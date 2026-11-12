@@ -177,6 +177,8 @@ final class Appels {
                 .setStyle(NotificationCompat.CallStyle.forIncomingCall(appelant, refuser, repondre));
         if (sos) b.setColor(0xFFDC2626);
         Notification n = b.build();
+        // Le style appel de la bibliothèque remet « appel » avant Android 12 : l'alarme d'abord.
+        if (sos) n.category = Notification.CATEGORY_ALARM;
         // Sonne en boucle jusqu'à la réponse, au refus ou à la fin de l'appel.
         n.flags |= Notification.FLAG_INSISTENT;
         ctx.getSystemService(NotificationManager.class).notify(cid, ID_APPEL, n);
