@@ -14,6 +14,12 @@ banc.brancher();
 const jourParis = () => new Intl.DateTimeFormat('fr-CA', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 const compteur = (fid) => s.db.doc(`families/${fid}/compteurs/jour`);
 const postsDe = async (fid, type) => (await g.liste(`families/${fid}/posts`)).filter((p) => p.type === type);
+// Retour (flèche de la page), puis la tuile Messages de nouveau.
+async function rouvrirMessages(t) {
+  await t.page.click('#view-messages .back');
+  await g.attendreVue(t, 'view-home');
+  await g.ouvrirTuile(t, 'messages');
+}
 const TEXTE_MESSAGES = "50 messages aujourd'hui : c'est le maximum pour la journée. Vous pourrez écrire de nouveau demain.";
 
 test('Messages : le 50e part, le suivant est refusé calmement (texte gardé, rien en attente), la barre revient après minuit', async () => {
@@ -45,14 +51,12 @@ test('Messages : le 50e part, le suivant est refusé calmement (texte gardé, ri
   assert.deepStrictEqual((await postsDe(fid, 'message')).map((m) => m.text), ['Le cinquantième']);
 
   // Page rouverte : le mot est là tout de suite (compteur lu à l'ouverture).
-  await g.retourAccueil(julie);
-  await g.ouvrirTuile(julie, 'messages');
+  await rouvrirMessages(julie);
   await note.waitFor({ state: 'visible' });
 
   // Minuit passé (heure de blocage dépassée) : la barre revient à l'ouverture de la page, et l'envoi part.
   await compteur(fid).update({ bloqueJusqua: s.Timestamp.fromMillis(Date.now() - 1000) });
-  await g.retourAccueil(julie);
-  await g.ouvrirTuile(julie, 'messages');
+  await rouvrirMessages(julie);
   await julie.page.locator('#btn-message').waitFor({ state: 'visible' });
   assert.strictEqual(await note.isVisible(), false);
   await julie.page.fill('#message-text', 'Bonjour, nouveau jour');
