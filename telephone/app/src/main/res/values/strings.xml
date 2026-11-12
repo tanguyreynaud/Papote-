@@ -13,6 +13,11 @@
     <string name="canal_appels">Appels de la tablette</string>
     <string name="canal_appels_texte">Sonnerie quand la tablette vous appelle</string>
     <string name="canal_infos">Appels manqués et alertes</string>
+    <string name="canal_sos">SOS de la tablette</string>
+    <string name="canal_sos_texte">Alerte urgente quand la personne appuie sur SOS, même en mode Ne pas déranger</string>
+    <string name="sos_appelle">SOS : %1$s vous appelle</string>
+    <string name="sos_appelle_texte">%1$s a appuyé sur le bouton SOS</string>
+    <string name="sos_entete">SOS · Appel urgent</string>
     <string name="repondre">Répondre</string>
     <string name="refuser">Refuser</string>
     <string name="vous_appelle">%1$s vous appelle</string>

@@ -36,6 +36,9 @@ jobs:
           ./gradlew --no-daemon assembleDebug
           # En cas d'erreur, le rapport complet dans le journal (lisible sans télécharger l'artefact).
           ./gradlew --no-daemon lintDebug || { cat app/build/intermediates/lint_intermediate_text_report/debug/lintReportDebug/lint-results-debug.txt; exit 1; }
+      - name: Tests de la sonnerie et du SOS (Android simulé, Robolectric)
+        run: |
+          ./gradlew --no-daemon testDebugUnitTest || { for f in app/build/test-results/testDebugUnitTest/*.xml; do grep -B2 -A20 "<failure" "$f"; done; exit 1; }
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -39,14 +39,27 @@ final class Appels {
     static final String URL_APP = "https://app.mapapote.fr/";
     static final String CANAL_APPELS = "appels";
     static final String CANAL_INFOS = "infos";
+    /**
+     * SOS de la tablette (A47, 12/11) : canal à part, réglé en alarme (son d'alarme, vibration
+     * rapide, catégorie alarme) pour passer « Ne pas déranger » tant que les alarmes y sont permises,
+     * ce qui est le réglage d'Android par défaut.
+     */
+    static final String CANAL_SOS = "sos";
     /** Diffusé (dans l'app seulement) quand un appel ne sonne plus : l'écran d'appel se ferme. */
     static final String ACTION_FIN = "fr.mapapote.famille.FIN_APPEL";
     static final String EXTRA_CID = "cid";
     static final String EXTRA_NOM = "nom";
+    static final String EXTRA_SOS = "sos";
+    /** Préfixe que le serveur met devant le nom pour un appel SOS (functions/appels.js). */
+    static final String PREFIXE_SOS = "SOS : ";
+    static final long[] VIBRATION_SOS = {0, 300, 150, 300, 150, 300, 600};
 
     private static final int ID_APPEL = 1;
     private static final int ID_MANQUE = 2;
     private static final int ID_ALERTE = 3;
+    private static final int ID_SOS = 4;
+    /** Étiquette de l'alerte « a appuyé sur SOS » : une alerte ordinaire ne la remplace jamais. */
+    static final String TAG_SOS = "sos";
     /** Au-delà, la tablette a raccroché depuis longtemps (elle abandonne au bout de 45 s). */
     private static final long DUREE_MAX_MS = 60_000;
     private static final String PREFS = "appels";
@@ -71,6 +84,40 @@ final class Appels {
         nm.createNotificationChannel(appels);
         nm.createNotificationChannel(new NotificationChannel(CANAL_INFOS,
                 ctx.getString(R.string.canal_infos), NotificationManager.IMPORTANCE_DEFAULT));
+        NotificationChannel sos = new NotificationChannel(CANAL_SOS,
+                ctx.getString(R.string.canal_sos), NotificationManager.IMPORTANCE_HIGH);
+        sos.setDescription(ctx.getString(R.string.canal_sos_texte));
+        Uri alarme = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM);
+        sos.setSound(alarme != null ? alarme : RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE),
+                new AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_ALARM)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build());
+        sos.enableVibration(true);
+        sos.setVibrationPattern(VIBRATION_SOS);
+        sos.enableLights(true);
+        sos.setLightColor(0xFFDC2626);
+        // Pris en compte seulement si le proche a donné à Papote l'accès « Ne pas déranger » ;
+        // sinon c'est la catégorie alarme qui fait passer la notification.
+        sos.setBypassDnd(true);
+        sos.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
+        nm.createNotificationChannel(sos);
+    }
+
+    /**
+     * Le message du serveur est-il un SOS ? Le champ « urgence » (A47, ajouté côté serveur par
+     * Gestion) ou, pour les serveurs d'avant, le préfixe « SOS : » du nom (appel) ou du titre (alerte).
+     */
+    static boolean estSos(String urgence, String nom, String titre) {
+        if ("sos".equalsIgnoreCase(urgence)) return true;
+        if (nom != null && nom.startsWith(PREFIXE_SOS)) return true;
+        return titre != null && titre.endsWith("a appuyé sur SOS");
+    }
+
+    /** Le nom sans « SOS : » devant. */
+    static String sansSos(String nom) {
+        if (nom == null) return null;
+        return nom.startsWith(PREFIXE_SOS) ? nom.substring(PREFIXE_SOS.length()).trim() : nom;
     }
 
     /**
@@ -86,6 +133,16 @@ final class Appels {
 
     /** La tablette appelle : le téléphone sonne (une seule fois par appel, malgré les renvois). */
     static void sonner(Context ctx, String cid, String nom, String fid, String jeton) {
+        sonner(ctx, cid, nom, fid, jeton, estSos(null, nom, null));
+    }
+
+    /**
+     * Même chose ; pour un SOS, sonnerie d'alarme qui passe « Ne pas déranger » (canal SOS),
+     * titre « SOS : Mamie vous appelle » en rouge, écran d'appel marqué SOS.
+     */
+    static void sonner(Context ctx, String cid, String nom, String fid, String jeton, boolean sos) {
+        nom = sansSos(nom);
+        if (nom == null || nom.isEmpty()) nom = "Mamie";
         if (dejaTraite(ctx, cid)) return;
         purger(ctx, cid);
         // Gardés pour « Refuser » : le serveur arrête l'appel pour la tablette sur ce jeton.
@@ -95,18 +152,19 @@ final class Appels {
         creerCanaux(ctx);
         Person appelant = new Person.Builder().setName(nom).setImportant(true).build();
         PendingIntent ecran = PendingIntent.getActivity(ctx, code(cid, 0),
-                ecranAppel(ctx, cid, nom, null), PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+                ecranAppel(ctx, cid, nom, null).putExtra(EXTRA_SOS, sos), PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
         PendingIntent repondre = PendingIntent.getActivity(ctx, code(cid, 1),
-                ecranAppel(ctx, cid, nom, EcranAppel.REPONDRE), PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+                ecranAppel(ctx, cid, nom, EcranAppel.REPONDRE).putExtra(EXTRA_SOS, sos), PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
         PendingIntent refuser = PendingIntent.getBroadcast(ctx, code(cid, 2),
                 new Intent(ctx, Refus.class).putExtra(EXTRA_CID, cid),
                 PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
 
-        Notification n = new NotificationCompat.Builder(ctx, CANAL_APPELS)
+        NotificationCompat.Builder b = new NotificationCompat.Builder(ctx, sos ? CANAL_SOS : CANAL_APPELS)
                 .setSmallIcon(R.drawable.ic_notif)
-                .setContentTitle(ctx.getString(R.string.vous_appelle, nom))
-                .setContentText(ctx.getString(R.string.appel_video))
-                .setCategory(NotificationCompat.CATEGORY_CALL)
+                .setContentTitle(ctx.getString(sos ? R.string.sos_appelle : R.string.vous_appelle, nom))
+                .setContentText(sos ? ctx.getString(R.string.sos_appelle_texte, nom) : ctx.getString(R.string.appel_video))
+                // Alarme pour un SOS : c'est ce qui passe « Ne pas déranger » sans réglage.
+                .setCategory(sos ? NotificationCompat.CATEGORY_ALARM : NotificationCompat.CATEGORY_CALL)
                 .setPriority(NotificationCompat.PRIORITY_MAX)
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                 .setOngoing(true)
@@ -115,8 +173,9 @@ final class Appels {
                 .setContentIntent(ecran)
                 .setFullScreenIntent(ecran, true)
                 .addPerson(appelant)
-                .setStyle(NotificationCompat.CallStyle.forIncomingCall(appelant, refuser, repondre))
-                .build();
+                .setStyle(NotificationCompat.CallStyle.forIncomingCall(appelant, refuser, repondre));
+        if (sos) b.setColor(0xFFDC2626);
+        Notification n = b.build();
         // Sonne en boucle jusqu'à la réponse, au refus ou à la fin de l'appel.
         n.flags |= Notification.FLAG_INSISTENT;
         ctx.getSystemService(NotificationManager.class).notify(cid, ID_APPEL, n);
@@ -209,7 +268,30 @@ final class Appels {
 
     /** Alerte sur la tablette (débranchée, silencieuse…). */
     static void alerte(Context ctx, String titre, String texte) {
+        alerte(ctx, titre, texte, estSos(null, null, titre));
+    }
+
+    /**
+     * Pour un SOS sans réponse : canal SOS (alarme), en rouge, gardée jusqu'à ce que le proche la
+     * touche (pas de délai, et une alerte ordinaire qui suit ne la remplace pas : autre étiquette).
+     */
+    static void alerte(Context ctx, String titre, String texte, boolean sos) {
         creerCanaux(ctx);
+        if (sos) {
+            NotificationCompat.Builder b = new NotificationCompat.Builder(ctx, CANAL_SOS)
+                    .setSmallIcon(R.drawable.ic_notif)
+                    .setContentTitle(titre == null || titre.isEmpty() ? "SOS" : titre)
+                    .setContentText(texte == null ? "" : texte)
+                    .setStyle(new NotificationCompat.BigTextStyle().bigText(texte == null ? "" : texte))
+                    .setCategory(NotificationCompat.CATEGORY_ALARM)
+                    .setPriority(NotificationCompat.PRIORITY_MAX)
+                    .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                    .setColor(0xFFDC2626)
+                    .setAutoCancel(true)
+                    .setContentIntent(ouvrir(ctx, URL_APP + "?rappeler=1", 1));
+            ctx.getSystemService(NotificationManager.class).notify(TAG_SOS, ID_SOS, b.build());
+            return;
+        }
         Notification n = new NotificationCompat.Builder(ctx, CANAL_INFOS)
                 .setSmallIcon(R.drawable.ic_notif)
                 .setContentTitle(titre == null || titre.isEmpty() ? "Papote" : titre)

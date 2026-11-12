@@ -11,8 +11,10 @@
     android:paddingBottom="48dp">
 
     <TextView
+        android:id="@+id/entete"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:gravity="center"
         android:text="@string/appel_video"
         android:textColor="@color/indigo"
         android:textSize="18sp" />

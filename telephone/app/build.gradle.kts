@@ -73,6 +73,11 @@ android {
         resValues = true
     }
 
+    // Tests de la sonnerie et du SOS sur un Android simulé (Robolectric), lancés par la CI
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -92,4 +97,7 @@ dependencies {
     // Reçoit « Mamie vous appelle » même téléphone en veille
     implementation("com.google.firebase:firebase-messaging:24.1.0")
     implementation("androidx.core:core:1.13.1")
+
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.17")
 }
