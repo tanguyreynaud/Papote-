@@ -204,6 +204,34 @@ test('le stock suit les commandes', () => {
   assert.strictEqual(g.stockAJour({ etat: 'envoyee' }, { expedition: 'annulee' }), null);
 });
 
+test('famille préparée : la tablette partie n\'est « chez le client » qu\'une fois entrée dans la famille (audit 11/11)', () => {
+  const partie = { etat: 'envoyee', commande: 'sub_1' };
+  // La commande a sa famille dès le paiement : le colis dans le camion ne compte pas.
+  assert.strictEqual(g.stockAJour(partie, { expedition: 'envoyee', fid: 'f1', famillePreparee: true }), null);
+  assert.deepStrictEqual(g.stockAJour(partie, { expedition: 'envoyee', fid: 'f1', famillePreparee: true, tabletteRelieeLe: 1 }), { etat: 'chez-client' });
+});
+
+test('à faire : famille préparée, colis parti depuis 21 jours ou revenu, tablette pas entrée (audit 11/11)', () => {
+  const maintenant = Date.UTC(2026, 10, 12);
+  const j = (n) => maintenant - n * 864e5;
+  const liste = g.aFaire({
+    maintenant,
+    commandes: [
+      { id: 'a', nom: 'Paul', expedition: 'envoyee', fid: 'f1', famillePreparee: true, envoyeeLe: j(21) },
+      { id: 'b', nom: 'Léa', expedition: 'envoyee', fid: 'f2', famillePreparee: true, envoyeeLe: j(12), etiquettes: { aller: { retourExpediteur: true } } },
+      // Entrée dans la famille : plus rien à suivre.
+      { id: 'c', nom: 'Max', expedition: 'envoyee', fid: 'f3', famillePreparee: true, tabletteRelieeLe: j(1), envoyeeLe: j(30), etiquettes: { aller: { retourExpediteur: true } } },
+    ],
+    stock: [],
+    depenses: [],
+    automatique: { erreurs: [] },
+  });
+  assert.deepStrictEqual(liste, [
+    'Colis de Léa en retour chez vous (jamais retiré) : « Colis revenu » sur la commande l\'annule et rembourse',
+    '1 tablette reçue mais pas jumelée après 20 jours',
+  ]);
+});
+
 test('cartes SIM : coût et alertes', () => {
   const J = 24 * 3600 * 1000;
   const now = Date.parse('2026-10-13T12:00:00Z');

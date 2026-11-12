@@ -25,7 +25,7 @@ const cmd = (id, o) => ({
   envoyeeLe: o.envoyeeLe || null, creeLe: o.creeLe, fid: o.fid || null, famille: o.famille || null, abonnement: o.abonnement || null,
   resiliationLe: null, restitution: null, remboursement: null, retractation: null, dernierMois: null, contestations: null, pause: null,
   alerteDoublon: null, titulaire: o.nom, etiquettes: null, preparation: null, stripeCustomerId: 'cus_faux', offerte: false, remise: null,
-  annulation: null, reprise: false, ...o.extra,
+  annulation: null, reprise: false, famillePreparee: false, tabletteRelieeLe: null, ...o.extra,
 });
 
 // Toutes les situations à la fois : chaque ligne « À faire » et chaque état de commande, de tablette et de carte SIM.
@@ -34,10 +34,20 @@ function gestionDonnees(o = {}) {
     cmd('CMD-AB12', { nom: 'Claire Dupont', email: 'claire@exemple.fr', creeLe: il(1) }),
     cmd('CMD-CD34', { nom: 'Marc Petit', email: 'marc@exemple.fr', creeLe: il(0.1), extra: { alerteDoublon: { mauvaisPayeur: false, raisons: ['même adresse'], commandes: [{ id: 'CMD-RB10', code: 'PAPO-RB10', nom: 'Chantal Blanc' }] } } }),
     cmd('CMD-SE01', { nom: 'Hélène Roux', email: 'helene@exemple.fr', expedition: 'paiement-en-attente', creeLe: il(12) }),
-    cmd('CMD-EF56', { nom: 'Sophie Bernard', email: 'sophie@exemple.fr', expedition: 'envoyee', envoyeeLe: il(3), suivi: '12345678', creeLe: il(5) }),
-    cmd('CMD-RT22', { nom: 'Paul Garnier', email: 'paul@exemple.fr', expedition: 'envoyee', envoyeeLe: il(24), suivi: '87654321', creeLe: il(26) }),
-    cmd('CMD-GH78', { nom: 'Julie Martin', email: 'julie@exemple.fr', expedition: 'envoyee', envoyeeLe: il(28), creeLe: il(30), fid: FID, famille: 'Mamie Jeanne', abonnement: 'actif' }),
-    cmd('CMD-IM90', { nom: 'Nicolas Faure', email: 'nicolas@exemple.fr', expedition: 'envoyee', envoyeeLe: il(40), creeLe: il(42), fid: 'f-henri', famille: 'Papi Henri', abonnement: 'impaye' }),
+    // Famille préparée (05/11) : la commande a sa famille dès le paiement ; la tablette n'y entre qu'à tabletteRelieeLe.
+    // Colis partis, tablettes pas encore entrées : « En route » (audit de l'admin du 11/11, point 1).
+    cmd('CMD-EF56', { nom: 'Sophie Bernard', email: 'sophie@exemple.fr', expedition: 'envoyee', envoyeeLe: il(3), suivi: '12345678', creeLe: il(5),
+      fid: 'f-suzanne', famille: 'Mamie Suzanne', abonnement: 'actif', extra: { famillePreparee: true, tabletteRelieeLe: null } }),
+    cmd('CMD-RT22', { nom: 'Paul Garnier', email: 'paul@exemple.fr', expedition: 'envoyee', envoyeeLe: il(24), suivi: '87654321', creeLe: il(26),
+      fid: 'f-louis', famille: 'Papi Louis', abonnement: 'actif', extra: { famillePreparee: true, tabletteRelieeLe: null } }),
+    // Colis jamais retiré, revenu chez Papote d'après Sendcloud : « Colis revenu (jamais retiré) » dans le ⋮.
+    cmd('CMD-RX31', { nom: 'Gérard Lemoine', email: 'gerard@exemple.fr', expedition: 'envoyee', envoyeeLe: il(16), suivi: '55554444', creeLe: il(18),
+      fid: 'f-marcelle', famille: 'Mamie Marcelle', abonnement: 'actif',
+      extra: { famillePreparee: true, tabletteRelieeLe: null, etiquettes: { aller: { suivi: '55554444', colis: 1, retourExpediteur: true } } } }),
+    cmd('CMD-GH78', { nom: 'Julie Martin', email: 'julie@exemple.fr', expedition: 'envoyee', envoyeeLe: il(28), creeLe: il(30), fid: FID, famille: 'Mamie Jeanne', abonnement: 'actif',
+      extra: { famillePreparee: true, tabletteRelieeLe: il(26) } }),
+    cmd('CMD-IM90', { nom: 'Nicolas Faure', email: 'nicolas@exemple.fr', expedition: 'envoyee', envoyeeLe: il(40), creeLe: il(42), fid: 'f-henri', famille: 'Papi Henri', abonnement: 'impaye',
+      extra: { famillePreparee: true, tabletteRelieeLe: il(38) } }),
     cmd('CMD-RS45', { nom: 'Isabelle Morel', email: 'isabelle@exemple.fr', expedition: 'envoyee', envoyeeLe: il(70), creeLe: il(72), fid: 'f-odette', famille: 'Mamie Odette', abonnement: 'resilie',
       extra: { restitution: { statut: 'attendue', avant: il(-9) } } }),
     cmd('CMD-OF01', { nom: 'Tanguy Reynaud', email: 'tanguy@exemple.fr', formule: 'wifi', expedition: 'envoyee', envoyeeLe: il(20), creeLe: il(21), fid: 'f-mamies', famille: 'Mamie Lucette', abonnement: 'offert', extra: { offerte: true } }),
@@ -108,6 +118,10 @@ function gestionDonnees(o = {}) {
     { id: 'f-odette', nom: 'Mamie Odette', statut: 'resilie', formule: 'sim', majLe: il(10) },
     { id: 'f-mamies', nom: 'Mamie Lucette', statut: 'offert', formule: 'wifi', majLe: il(20) },
     { id: 'f-rose', nom: 'Mamie Rose', statut: 'resilie', formule: 'sim', majLe: il(30) },
+    // Familles préparées payées, tablette pas encore entrée : pas comptées dans les abonnés de l'accueil.
+    { id: 'f-suzanne', nom: 'Mamie Suzanne', statut: 'actif', formule: 'sim', majLe: il(5) },
+    { id: 'f-louis', nom: 'Papi Louis', statut: 'actif', formule: 'sim', majLe: il(26) },
+    { id: 'f-marcelle', nom: 'Mamie Marcelle', statut: 'actif', formule: 'sim', majLe: il(18) },
   ];
   const alertes = [
     { id: 'al1', genre: 'debranchee', le: il(0.05), fid: FID, famille: 'Mamie Jeanne', telephones: 3, fiche: 'T-001' },
@@ -351,6 +365,7 @@ const SCENES = [
   { groupe: 'Commandes', titre: 'Commande : paiement SEPA en attente', page: '#commande/CMD-SE01', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Commandes', titre: 'Commande en route', page: '#commande/CMD-EF56', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Commandes', titre: 'Commande en route depuis 24 jours, pas jumelée', page: '#commande/CMD-RT22', tailles: ['pc'], plein: true, donnees: () => donnees() },
+  { groupe: 'Commandes', titre: 'Commande en route, colis revenu jamais retiré : menu ⋮', page: '#commande/CMD-RX31', tailles: ['pc'], donnees: () => donnees(), faire: toucher('[aria-label^="Actions pour la commande"]') },
   { groupe: 'Commandes', titre: 'Commande en service', page: '#commande/CMD-GH78', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees() },
   { groupe: 'Commandes', titre: 'Commande en service, paiement en retard', page: '#commande/CMD-IM90', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Commandes', titre: 'Commande résiliée, tablette à récupérer', page: '#commande/CMD-RS45', tailles: ['pc'], plein: true, donnees: () => donnees() },

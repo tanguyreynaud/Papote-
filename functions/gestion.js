@@ -434,7 +434,9 @@ function stockAJour(tablette, commande) {
   if (ETATS_PARTIS.includes(tablette.etat)) {
     if (retour === 'facturee') return { etat: 'perdue' };
     if (retour === 'rendue') return { etat: 'revenue' };
-    if (tablette.etat === 'envoyee' && commande.fid) return { etat: 'chez-client' };
+    // Famille préparée : la commande a sa famille dès le paiement, la tablette n'est chez le client qu'une fois
+    // entrée dans la famille (tabletteRelieeLe, famille-preparee.js). Avant : la commande reliée.
+    if (tablette.etat === 'envoyee' && require('./famille-preparee').regles.tabletteDansLaFamille(commande)) return { etat: 'chez-client' };
   }
   // Commande annulée avant le départ : la tablette mise de côté redevient libre.
   if (commande.expedition === 'annulee' && ['en-stock', 'preparee'].includes(tablette.etat)) {
@@ -829,6 +831,10 @@ exports.gestionDonnees = onCall(async (request) => {
         envoyeeLe: c.envoyeeLe || null,
         creeLe: c.creeLe || null,
         fid: c.fid || null,
+        // Famille préparée : la commande a sa famille dès le paiement ; la tablette n'y est entrée qu'à tabletteRelieeLe.
+        // L'admin lit « installée » avec la même règle que le serveur (famille-preparee.js, tabletteDansLaFamille).
+        famillePreparee: c.famillePreparee === true,
+        tabletteRelieeLe: c.tabletteRelieeLe || null,
         famille: famille ? famille.name || null : null,
         // Commande dont l'abonnement est celui de la famille : l'état de la famille ; une autre (2e commande pour la
         // même famille) : son propre état chez Stripe et son propre arrêt prévu.
@@ -3018,7 +3024,9 @@ function aFaire({ commandes, stock, depenses, automatique, maintenant, sims = []
   ajouter(actives.filter((c) => c.restitution && c.restitution.statut === 'echec').length, 'prélèvement(s) du matériel non rendu refusé(s), à relancer depuis Stripe');
   ajouter(actives.filter((c) => c.expedition === 'paiement-en-attente' && ms(c.creeLe) && maintenant - ms(c.creeLe) > JOURS(10)).length, 'paiement(s) SEPA en attente depuis plus de 10 jours');
   ajouter(commandes.filter((c) => (c.contestations || []).length).length, 'commande(s) avec un prélèvement contesté à la banque');
-  const revenus = actives.filter((c) => c.expedition === 'envoyee' && !c.fid && c.etiquettes && c.etiquettes.aller && c.etiquettes.aller.retourExpediteur);
+  // Famille préparée : la commande a sa famille dès le paiement, c'est l'entrée de la tablette qui compte.
+  const horsFamille = (c) => c.expedition === 'envoyee' && !require('./famille-preparee').regles.tabletteDansLaFamille(c);
+  const revenus = actives.filter((c) => horsFamille(c) && c.etiquettes && c.etiquettes.aller && c.etiquettes.aller.retourExpediteur);
   for (const c of revenus) liste.push(`Colis de ${c.nom || c.email || c.id} en retour chez vous (jamais retiré) : « Colis revenu » sur la commande l'annule et rembourse`);
   const retour = (c) => c.restitution && ['attendue', 'echec'].includes(c.restitution.statut);
   const idsAEnvoyer = new Set(actives.filter((c) => c.expedition === 'a-preparer' && !retour(c)).map((c) => c.id));
@@ -3028,8 +3036,6 @@ function aFaire({ commandes, stock, depenses, automatique, maintenant, sims = []
   const dispo = stock.filter((t) => ['en-stock', 'preparee'].includes(t.etat) && (t.commande ? idsAEnvoyer.has(t.commande) : !t.fid)).length;
   ajouter(aEnvoyer, 'tablette(s) à envoyer');
   ajouter(Math.max(0, aEnvoyer - dispo), 'tablette(s) manquante(s) en stock pour les envoyer');
-  // Famille préparée : la commande a sa famille dès le paiement, c'est l'entrée de la tablette qui compte.
-  const horsFamille = (c) => c.expedition === 'envoyee' && !require('./famille-preparee').regles.tabletteDansLaFamille(c);
   ajouter(actives.filter((c) => horsFamille(c) && ms(c.envoyeeLe)
     && maintenant - ms(c.envoyeeLe) > JOURS(20)).length, 'tablette(s) reçue(s) mais pas jumelée(s) après 20 jours');
   for (const c of actives.filter((x) => x.alerteSansProche)) {
