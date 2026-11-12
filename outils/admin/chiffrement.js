@@ -130,4 +130,28 @@ async function dechiffrerFichier(source, cible, phrase) {
   return { octets, sha256: hash.digest('hex') };
 }
 
-module.exports = { chiffrer, dechiffrer, phraseSecrete, garderCopies, ENTETE, chiffrerFichier, dechiffrerFichier, ENTETE2 };
+// Format 2 en mémoire, pour de petits contenus jamais écrits en clair (mots de passe des comptes, sauvegarde-lib.js).
+function chiffrer2(donnees, phrase) {
+  const sel = crypto.randomBytes(16);
+  const iv = crypto.randomBytes(12);
+  const c = crypto.createCipheriv('aes-256-gcm', cle(phrase, sel), iv);
+  c.setAAD(ENTETE2);
+  const corps = Buffer.concat([c.update(donnees), c.final()]);
+  return Buffer.concat([ENTETE2, sel, iv, corps, c.getAuthTag()]);
+}
+function dechiffrer2(paquet, phrase) {
+  const debut = ENTETE2.length + 28;
+  if (!Buffer.isBuffer(paquet) || paquet.length < debut + 16 || !paquet.subarray(0, ENTETE2.length).equals(ENTETE2)) {
+    throw new Error('Ce fichier n\'est pas une copie chiffrée de Papote (format 2).');
+  }
+  const d = crypto.createDecipheriv('aes-256-gcm', cle(phrase, paquet.subarray(ENTETE2.length, ENTETE2.length + 16)), paquet.subarray(ENTETE2.length + 16, debut));
+  d.setAAD(ENTETE2);
+  d.setAuthTag(paquet.subarray(paquet.length - 16));
+  try {
+    return Buffer.concat([d.update(paquet.subarray(debut, paquet.length - 16)), d.final()]);
+  } catch (e) {
+    throw new Error('Phrase secrète incorrecte, ou fichier abîmé.');
+  }
+}
+
+module.exports = { chiffrer, dechiffrer, phraseSecrete, garderCopies, ENTETE, chiffrerFichier, dechiffrerFichier, ENTETE2, chiffrer2, dechiffrer2 };

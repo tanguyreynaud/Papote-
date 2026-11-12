@@ -11,7 +11,8 @@
 // stockage/{fid} = { octets, fichiers } n'est lisible par personne côté client (pas de règle).
 
 const { onObjectFinalized, onObjectDeleted } = require('firebase-functions/v2/storage');
-const { onDocumentCreated } = require('firebase-functions/v2/firestore');
+// Déclencheurs coupés pendant une restauration (base.js, sansRestauration).
+const { onDocumentCreated } = require('./base').declencheurs;
 const { logger } = require('firebase-functions/v2');
 const admin = require('firebase-admin');
 const { FieldValue } = require('firebase-admin/firestore');

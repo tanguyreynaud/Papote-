@@ -13,14 +13,15 @@
 // Jetons des téléphones : families/{fid}/members/{uid}/private/push (voir push.js).
 // Messages « data » seulement : web/sw.js ou l'app Android (telephone/) les affichent.
 
-const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore');
+// Déclencheurs coupés pendant une restauration (base.js, sansRestauration).
+const { onDocumentCreated, onDocumentUpdated } = require('./base').declencheurs;
 const { logger } = require('firebase-functions/v2');
 const { onCall, onRequest, HttpsError } = require('firebase-functions/v2/https');
 const { FieldValue } = require('firebase-admin/firestore');
 const { getAuth } = require('firebase-admin/auth');
 
 const { defineSecret, defineString } = require('firebase-functions/params');
-const { BASE_FIRESTORE, REGION_FIRESTORE, db: base, restaurationEnCours } = require('./base');
+const { BASE_FIRESTORE, REGION_FIRESTORE, db: base } = require('./base');
 const { envoyer } = require('./push');
 const mail = require('./mail');
 const journal = require('./journal-alertes');
@@ -98,7 +99,6 @@ const attendre = (ms) => new Promise((r) => setTimeout(r, ms));
 exports.appelsSonnerie = onDocumentCreated({ document: DOC, region: REGION_FIRESTORE, database: BASE_FIRESTORE, timeoutSeconds: 90, secrets: [MAIL_MOT_DE_PASSE] }, async (event) => {
   const appel = event.data.data();
   if (!appel || appel.state !== 'ringing') return;
-  if (await restaurationEnCours()) return; // appel d'hier remis par une restauration : personne ne doit sonner
   const db = base();
   const { fid, cid } = event.params;
   const uids = await destinataires(db, fid, appel);

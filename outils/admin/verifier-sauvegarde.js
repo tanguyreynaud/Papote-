@@ -26,7 +26,7 @@ const empreinte = (donnees) => crypto.createHash('sha1').update(JSON.stringify(d
   const soucis = [];
 
   // Émulateur : la base d'origine n'a pas d'importance ici (--autre-base).
-  const r = await lib.restaurer({ db, sauvegarde, autreBase: true, progression: (n) => process.stdout.write(`\r${n} documents restaurés dans l'émulateur`) });
+  const r = await lib.restaurer({ db, sauvegarde, autreBase: true, attenteDebut: 0, progression: (n) => process.stdout.write(`\r${n} documents restaurés dans l'émulateur`) });
   process.stdout.write('\n');
   const relus = new Map();
   await lib.parcourir(db, (d) => { relus.set(d.chemin, empreinte(d.donnees)); });

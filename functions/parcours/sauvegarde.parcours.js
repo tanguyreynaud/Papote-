@@ -66,12 +66,26 @@ test('restauration : 3 familles vivantes sauvegardées, tout effacé, tout revie
   const lu = await lib.lireSauvegarde(fichier);
   const mailsAvant = s.boite.length;
   const pushAvant = s.notifications.length;
+  // Chaque déclencheur lancé par la restauration ne lit que le drapeau et s'arrête (A34).
+  s.compteur.activer();
+  s.journal.length = 0;
   const r = await lib.restaurer({ db: s.db, auth, sauvegarde: lu });
   await s.calme();
+  s.compteur.arreter();
+  const lances = s.compteur.bilan();
+  assert.ok(Object.keys(lances).length >= 6, `déclencheurs lancés : ${Object.keys(lances).join(', ')}`);
+  for (const [nom, c] of Object.entries(lances)) {
+    // Une lecture au plus (le drapeau, parfois déjà en mémoire), aucune écriture.
+    assert.ok(c.lectures <= c.appels && !c.ecritures && !c.suppressions, `${nom} pendant la restauration : ${JSON.stringify(c)}`);
+  }
+  const total = Object.values(lances).reduce((n, c) => n + c.appels, 0);
+  assert.strictEqual(s.journal.filter((l) => /écriture d'une restauration, ignorée/.test(l)).length, total);
   // Les proches remis ne reçoivent pas « X a rejoint la famille », les appels remis ne font sonner personne.
   assert.strictEqual(s.boite.length - mailsAvant, 0, `e-mails envoyés pendant la restauration : ${s.boite.slice(mailsAvant).map((m) => m.sujet).join(' | ')}`);
   assert.strictEqual(s.notifications.length - pushAvant, 0, 'aucune notification pendant la restauration');
-  assert.ok(!(await s.db.doc('interne/restauration').get()).exists, 'drapeau retiré');
+  const drapeau = (await s.db.doc('interne/restauration').get()).data();
+  assert.strictEqual(drapeau.enCours, false, 'restauration finie');
+  assert.ok(drapeau.debut && drapeau.fin && drapeau.fin.toMillis() >= drapeau.debut.toMillis(), 'fenêtre debut-fin gardée pour les événements en retard');
   assert.strictEqual(r.documents, avant.documents.length);
   assert.strictEqual(r.comptes, avant.comptes.length);
 
@@ -85,7 +99,8 @@ test('restauration : 3 familles vivantes sauvegardées, tout effacé, tout revie
     const changees = [...cles].filter((k) => JSON.stringify(d.donnees[k]) !== JSON.stringify(r[k]));
     if (changees.length) differences.push(`${d.chemin} : ${changees.map((k) => `${k} ${JSON.stringify(d.donnees[k])} → ${JSON.stringify(r[k])}`).join(' ; ')}`);
   }
-  for (const d of apres.documents) if (!avant.documents.some((x) => x.chemin === d.chemin)) differences.push(`${d.chemin} : apparu après la restauration`);
+  // interne/restauration : le drapeau, gardé après la restauration (fenêtre debut-fin, vérifiée plus haut).
+  for (const d of apres.documents) if (d.chemin !== 'interne/restauration' && !avant.documents.some((x) => x.chemin === d.chemin)) differences.push(`${d.chemin} : apparu après la restauration`);
   if (differences.length) console.log(`Différences après restauration :\n  ${differences.join('\n  ')}`);
   assert.deepStrictEqual(differences, [], 'chaque document identique (types compris), rien d\'apparu');
   assert.deepStrictEqual(apres.comptes.map((c) => ({ ...c, creeLe: null })), avant.comptes.map((c) => ({ ...c, creeLe: null })), 'chaque compte revenu');
@@ -170,4 +185,48 @@ test('alerte : plus de 8 jours sans sauvegarde réussie, un seul e-mail à Papot
   assert.strictEqual(alertes().length, 2);
   assert.deepStrictEqual(s.erreurs, []);
   fs.rmSync(dossier, { recursive: true, force: true });
+});
+
+// commandeModifiee (Stripe, e-mails) pendant une restauration qui réécrit une commande existante (A34) : rien ne part.
+test('restauration par-dessus une base vivante : commandeModifiee et les autres déclencheurs se taisent, puis tout repart', async () => {
+  await s.remettreAZero();
+  const julie = await s.compte('JulieR', 'julie.r@exemple.fr');
+  const t = await a.tablettePreparee();
+  const { abonnement } = await a.commanderEtPayer({ email: 'paul.r@exemple.fr', nom: 'Paul Restau' });
+  await a.preparerEtEnvoyer(abonnement, t);
+  await a.afficherCode(t);
+  const fid = await a.installer(julie, t, { nom: 'Mamie Restau' });
+  await a.envoyer(julie, fid, 'photo');
+  await s.calme();
+  const sauvegarde = await lib.sauvegarder({ db: s.db, projet: 'demo-papote', base: 'europe' });
+  const commande = sauvegarde.documents.find((d) => /^commandes\/[^/]+$/.test(d.chemin));
+  assert.ok(commande, 'une commande dans la sauvegarde');
+
+  // La vie continue : la commande change (adresse corrigée), un envoi est supprimé.
+  await s.db.doc(commande.chemin).update({ nom: 'Paul Restau (corrigé)' });
+  await s.calme();
+  const mails = s.boite.length;
+  const pushs = s.notifications.length;
+  s.compteur.activer();
+  s.journal.length = 0;
+  await lib.restaurer({ db: s.db, sauvegarde: JSON.parse(JSON.stringify(sauvegarde)), effacer: true });
+  await s.calme();
+  s.compteur.arreter();
+  const lances = s.compteur.bilan();
+  assert.ok(lances.commandeModifiee && lances.commandeModifiee.appels >= 1, `commandeModifiee lancée : ${JSON.stringify(lances)}`);
+  for (const [nom, c] of Object.entries(lances)) assert.ok(c.lectures <= c.appels && !c.ecritures, `${nom} : ${JSON.stringify(c)}`);
+  assert.strictEqual(s.boite.length, mails, 'aucun e-mail');
+  assert.strictEqual(s.notifications.length, pushs, 'aucune notification');
+  assert.strictEqual((await s.lire(commande.chemin)).nom, commande.donnees.nom, 'la commande est revenue telle qu\'elle était');
+
+  // Après la restauration, un vrai changement déclenche de nouveau normalement (plus rien d'ignoré).
+  s.erreurs.length = 0;
+  s.journal.length = 0;
+  s.compteur.activer();
+  await a.envoyer(julie, fid, 'message', 'Après la restauration');
+  await s.calme();
+  s.compteur.arreter();
+  assert.ok(Object.keys(s.compteur.bilan()).includes('voixEnvoi'), JSON.stringify(s.compteur.bilan()));
+  assert.deepStrictEqual(s.journal.filter((l) => /ignorée/.test(l)), []);
+  assert.deepStrictEqual(s.erreurs, []);
 });

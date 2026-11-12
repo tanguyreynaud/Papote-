@@ -13,12 +13,13 @@
 // l'app Android (Push.java) réveille la page ou la synchronisation. Une tablette sans jeton (ancienne
 // version, services Google absents) garde son écoute en direct : rien à envoyer, rien de perdu.
 
-const { onDocumentCreated, onDocumentUpdated, onDocumentWritten } = require('firebase-functions/v2/firestore');
+// Déclencheurs coupés pendant une restauration (base.js, sansRestauration).
+const { onDocumentCreated, onDocumentUpdated, onDocumentWritten } = require('./base').declencheurs;
 const { logger } = require('firebase-functions/v2');
 const admin = require('firebase-admin');
 const { FieldValue } = require('firebase-admin/firestore');
 
-const { BASE_FIRESTORE, REGION_FIRESTORE, db: base, restaurationEnCours } = require('./base');
+const { BASE_FIRESTORE, REGION_FIRESTORE, db: base } = require('./base');
 
 const TOPIC = 'tablettes';
 const OPTIONS = { region: REGION_FIRESTORE, database: BASE_FIRESTORE, maxInstances: 5 };
@@ -57,7 +58,6 @@ async function reveiller(db, fid, data, ttlSecondes = 60, messagerie = () => adm
 exports.reveilAppel = onDocumentCreated({ ...OPTIONS, document: 'families/{fid}/calls/{cid}' }, async (event) => {
   const appel = event.data && event.data.data();
   if (!appel || appel.state !== 'ringing' || !appel.callerUid) return;
-  if (await restaurationEnCours()) return;
   const db = base();
   const { fid, cid } = event.params;
   const appelant = await db.doc(`families/${fid}/members/${appel.callerUid}`).get();
@@ -70,7 +70,6 @@ exports.reveilAppel = onDocumentCreated({ ...OPTIONS, document: 'families/{fid}/
 exports.reveilOrdre = onDocumentCreated({ ...OPTIONS, document: 'families/{fid}/commands/{id}' }, async (event) => {
   const ordre = event.data && event.data.data();
   if (!ordre || ordre.state !== 'pending') return;
-  if (await restaurationEnCours()) return;
   const n = await reveiller(base(), event.params.fid, { type: 'ordre', id: event.params.id }, 120);
   logger.info('Réveil ordre', { fid: event.params.fid, id: event.params.id, tablettes: n });
 });
