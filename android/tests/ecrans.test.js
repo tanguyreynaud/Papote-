@@ -272,28 +272,94 @@ test('SOS, « La famille est prévenue » avec deux visages : côte à côte sur
   } finally { await b.fermer(); }
 });
 
-test('installation : « Recommencer avec un autre téléphone » reste dans l\'écran (en haut, à la place de Retour)', async () => {
+// Seul Papote relie une tablette (décision de Tanguy, 12/11) : en attendant sa famille, la tablette ne demande
+// ni de scanner ni de taper un code, et ne lit rien à voix haute.
+test('attente de la famille : « On prépare votre tablette… », rien à scanner, aucun code, aucune voix', async () => {
   const b = await ouvrir();
   try {
-    for (const step of ['pair', 'prepare']) {
-      await b.page.evaluate((st) => window.PapoteBienvenue.show({ step: st, code: 'ABCDEFGH', restart: true }), step);
-      await b.avancer(300);
-      const bouton = await b.page.evaluate(() => {
-        const e = document.querySelector('.welcome .welcome-again');
-        const r = e.getBoundingClientRect();
-        return { texte: e.textContent, bas: r.bottom, haut: r.top, dansLeHaut: !!e.closest('.welcome-head') };
-      });
-      assert.strictEqual(bouton.texte, 'Recommencer avec un autre téléphone');
-      assert.ok(bouton.dansLeHaut, `${step} : dans l'en-tête`);
-      assert.ok(bouton.haut >= 0 && bouton.bas <= 800, `${step} : visible sans défiler (${bouton.haut}-${bouton.bas})`);
-      // Deux appuis pour recommencer, un seul ne fait rien.
-      await b.page.click('.welcome .welcome-again');
-      assert.strictEqual((await b.appels('cancelPairing')).length, 0);
-      await b.page.click('.welcome .welcome-again');
-      assert.strictEqual((await b.appels('cancelPairing')).length, 1);
+    for (const statut of [
+      { step: 'pair', code: 'ABCDEFGH' }, // code de jumelage écrit sur le serveur (interne)
+      { step: 'pair', code: 'ABCDEFGH', claimedName: 'Julie', restart: true }, // ancien état : même écran
+      { step: 'prepare', etape: 'son' }, // famille rejointe, réglages pas finis
+    ]) {
       await b.vider();
+      await b.android('onStatus', { state: 'welcome', ...statut });
+      await b.avancer(500);
+      assert.ok(await b.visible('.welcome'), `${statut.step} : écran d'attente`);
+      const t = await b.texte('.welcome');
+      assert.match(t, /On prépare votre tablette…/);
+      assert.match(t, /La tablette retrouve sa famille/);
+      assert.doesNotMatch(t, /scann|QR|code|app\.mapapote|téléphone|Recommencer|ABCD/i, `${statut.step} : rien à faire pour la famille`);
+      assert.strictEqual(await b.page.locator('.welcome img:not(.welcome-logo)').count(), 0, 'aucun QR code');
+      const voix = (await b.appels()).filter((a) => ['audio', 'speak', 'speakGuide'].includes(a.nom));
+      assert.deepStrictEqual(voix, [], 'rien de lu à voix haute');
       await b.page.evaluate(() => window.PapoteBienvenue.hide());
     }
+    // Pas encore d'internet pour écrire le code : on le dit doucement, avec le wifi à portée de main.
+    await b.android('onStatus', { state: 'welcome', step: 'pair', sansInternet: true });
+    await b.avancer(500);
+    const t = await b.texte('.welcome');
+    assert.match(t, /On prépare votre tablette…/);
+    assert.match(t, /attend internet/);
+    assert.doesNotMatch(t, /scann|code|Impossible/i);
+    await b.page.getByText('Choisir un wifi').click();
+    assert.deepStrictEqual((await b.appels('welcomeBack')).map((a) => a.args[0]), [false]);
+    await sansErreur(b);
+  } finally { await b.fermer(); }
+});
+
+test('accueil sans photo : à droite le QR code de la famille (app.mapapote.fr/?code=…) pour qu\'un proche la rejoigne', async () => {
+  const b = await ouvrir();
+  try {
+    await b.page.evaluate(() => {
+      const qr = window.PapoteAndroid.qrCode;
+      window.PapoteAndroid.qrCode = (url) => { window.__qr = url; return qr(url); };
+    });
+    await b.android('onPosts', lot([]));
+    await b.avancer(500);
+    assert.ok(await b.visible('#frame-empty .invite-qr'), 'QR code affiché');
+    assert.strictEqual(await b.page.evaluate(() => window.__qr), 'https://app.mapapote.fr/?code=ABCD2345', 'lien d\'invitation de la famille');
+    assert.match(await b.texte('#frame-empty'), /rejoindre la famille/);
+    // Le panneau de droite de l'accueil.
+    const droite = await b.page.evaluate(() => {
+      const r = document.querySelector('#frame-empty .invite-qr').getBoundingClientRect();
+      return r.left + r.width / 2 > window.innerWidth / 2;
+    });
+    assert.ok(droite, 'à droite de l\'écran');
+    // Une photo arrive : le QR code laisse sa place.
+    await b.android('onPosts', lot([envoi({ seen: true })]));
+    await b.avancer(2000);
+    assert.ok(!(await b.visible('#frame-empty')), 'plus de QR code avec une photo');
+    await sansErreur(b);
+  } finally { await b.fermer(); }
+});
+
+test('SOS : pas de bouton tant qu\'aucun proche n\'est dans la famille, il apparaît dès qu\'un proche arrive', async () => {
+  const b = await ouvrir();
+  try {
+    await b.android('onPosts', lot([]));
+    // La famille n'a encore personne (seule la tablette, et une demande en attente, que Sync.java ne donne pas).
+    await b.android('onFamily', { faces: {}, birthdays: [], people: [] });
+    await b.avancer(500);
+    assert.ok(!(await b.visible('#sos-btn')), 'pas de SOS sans proche');
+    // Même pendant une pause de l'abonnement.
+    await b.android('onPosts', lot([], { subscription: 'suspendu' }));
+    await b.avancer(500);
+    assert.ok(!(await b.visible('.pause-sos')), 'pas de SOS sur l\'écran de pause sans proche');
+    await b.android('onPosts', lot([]));
+    await b.avancer(500);
+    // Julie entre dans l'appli.
+    await b.android('onFamily', { faces: {}, birthdays: [], people: [{ uid: 'julie', name: 'Julie' }] });
+    await b.avancer(500);
+    assert.ok(await b.visible('#sos-btn'), 'SOS dès le premier proche');
+    // Sans l'option de la famille, toujours pas de bouton, même avec des proches.
+    await b.android('onPosts', lot([], { options: { lecture: true, sos: false } }));
+    assert.ok(!(await b.visible('#sos-btn')));
+    // Le dernier proche quitte la famille : le bouton repart.
+    await b.android('onPosts', lot([]));
+    assert.ok(await b.visible('#sos-btn'));
+    await b.android('onFamily', { faces: {}, birthdays: [], people: [] });
+    assert.ok(!(await b.visible('#sos-btn')), 'plus de proche : plus de SOS');
     await sansErreur(b);
   } finally { await b.fermer(); }
 });
@@ -632,6 +698,74 @@ test('message avec emojis 👍❤️🎉👨‍👩‍👧 : affiché en entier,
     // Rien ne déborde du cadre du message (pas de texte caché).
     const deborde = await b.page.evaluate(() => { const e = document.getElementById('overlay-text'); return e.scrollWidth > e.clientWidth + 1 || e.scrollHeight > e.clientHeight + 1; });
     assert.ok(!deborde, 'le message tient dans son cadre');
+    await sansErreur(b);
+  } finally { await b.fermer(); }
+});
+
+// M0 (audit premier jour 05/11, mise en route 12/11) : sans box, la carte SIM trouve internet 30 s à 2 min
+// après « Commencer ». Décision de Tanguy (12/11) : d'abord « Je cherche internet… », puis, si rien ne vient,
+// l'erreur dite clairement et le wifi à donner.
+test('installation sans box : « Je cherche internet… », puis la carte SIM arrive et l\'écran passe tout seul', async () => {
+  // Démarrage à froid : la 4G n'est pas encore là quand on touche « Commencer ».
+  const b = await ouvrir('2026-10-26T10:00:00', { reseau: { wifi: '', internet: false, mobile: false, sim: true } });
+  try {
+    await b.android('onStatus', { state: 'welcome', step: 'wifi' });
+    await b.avancer(500);
+    assert.ok(await b.visible('.welcome'), 'écran affiché');
+    assert.match(await b.texte('.welcome-title'), /Je cherche internet…/);
+    assert.doesNotMatch(await b.texte('.welcome'), /Choisissez le wifi|pas trouvé/, 'pas encore d\'erreur');
+    assert.deepStrictEqual(await b.appels('wifiDone'), [], 'pas encore d\'internet : on attend');
+    await b.avancer(40000);
+    assert.match(await b.texte('.welcome-title'), /Je cherche internet…/, 'toujours en recherche après 40 s');
+    await b.etat({ reseau: { wifi: '', internet: true, mobile: true, sim: true, via: 'mobile' } });
+    await b.avancer(3500);
+    assert.strictEqual((await b.appels('wifiDone')).length, 1, 'la 4G est là : étape suivante sans rien toucher');
+    await sansErreur(b);
+  } finally { await b.fermer(); }
+});
+
+test('installation sans internet : au bout de 90 s, l\'erreur claire et le wifi à donner ; la 4G arrivée plus tard passe quand même', async () => {
+  const b = await ouvrir('2026-10-26T10:00:00', { reseau: { wifi: '', internet: false, mobile: false, sim: true } });
+  try {
+    await b.android('onStatus', { state: 'welcome', step: 'wifi' });
+    await b.avancer(500);
+    assert.match(await b.texte('.welcome-title'), /Je cherche internet…/);
+    await b.avancer(91000);
+    assert.match(await b.texte('.welcome-error'), /La tablette n’a pas trouvé internet/);
+    assert.match(await b.texte('.welcome'), /Choisissez le wifi de votre box/);
+    assert.ok(await b.page.getByText('Choisir un réseau').isVisible(), 'le wifi peut être donné');
+    // Le proche ouvre la liste des réseaux : la 4G qui arrive ne la ferme pas sous ses doigts.
+    await b.page.getByText('Choisir un réseau').click();
+    await b.etat({ reseau: { wifi: '', internet: true, mobile: true, sim: true, via: 'mobile' } });
+    await b.avancer(6500);
+    assert.deepStrictEqual(await b.appels('wifiDone'), [], 'liste ouverte : on ne passe pas');
+    await b.page.getByText('Fermer').click();
+    await b.avancer(3500);
+    assert.strictEqual((await b.appels('wifiDone')).length, 1, 'liste fermée, 4G là : étape suivante');
+    await sansErreur(b);
+  } finally { await b.fermer(); }
+});
+
+test('installation avec une box qui répond pendant la recherche : « Connectée à … » et Continuer', async () => {
+  const b = await ouvrir('2026-10-26T10:00:00', { reseau: { wifi: '', internet: false, mobile: false, sim: true } });
+  try {
+    await b.android('onStatus', { state: 'welcome', step: 'wifi' });
+    await b.avancer(500);
+    await b.etat({ reseau: { wifi: 'Livebox', internet: true, mobile: false, sim: true, via: 'wifi' } });
+    await b.avancer(3500);
+    assert.match(await b.texte('.welcome'), /Connectée à « Livebox »/);
+    assert.ok(await b.page.getByText('Continuer').isVisible());
+    await sansErreur(b);
+  } finally { await b.fermer(); }
+});
+
+test('installation sans carte SIM ni internet : le choix du wifi tout de suite', async () => {
+  const b = await ouvrir('2026-10-26T10:00:00', { reseau: { wifi: '', internet: false, mobile: false, sim: false } });
+  try {
+    await b.android('onStatus', { state: 'welcome', step: 'wifi' });
+    await b.avancer(500);
+    assert.match(await b.texte('.welcome-title'), /Connexion à internet/);
+    assert.match(await b.texte('.welcome'), /Choisissez le wifi de votre box/);
     await sansErreur(b);
   } finally { await b.fermer(); }
 });

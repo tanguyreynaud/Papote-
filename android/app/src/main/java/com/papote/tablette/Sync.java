@@ -470,8 +470,7 @@ final class Sync {
         }
         JSONObject inviteFields = invite.getJSONObject("fields");
         if (!"tablette".equals(Firebase.str(inviteFields, "kind"))) {
-            status("setup", "Ce code est celui de la famille. Pour la tablette, créez un code dans "
-                    + "l'app famille : Réglages > Installer une tablette.");
+            status("setup", "Ce code d'installation n'est pas celui d'une tablette.");
             return null;
         }
         fid = Firebase.str(inviteFields, "fid");
@@ -2435,9 +2434,9 @@ final class Sync {
     }
 
     /**
-     * Installation par le téléphone du proche (parcours du 21/10) : la tablette quitte « On prépare
-     * votre tablette… » à la première photo, ou quand le proche a touché « C'est parfait »
-     * (installation.etape == 'fini'), même sans photo. Volume de la sonnerie choisi au test du son.
+     * Entrée dans la famille : la tablette quitte « On prépare votre tablette… » à la première photo, ou quand
+     * la famille est prête (installation.etape == 'fini', d'office pour une famille préparée), même sans photo.
+     * Volume de la sonnerie choisi au test du son.
      */
     private void readInstallation(JSONObject ff) {
         if (prefs.getBoolean("installEnCours", false)) {
@@ -2447,8 +2446,6 @@ final class Sync {
             String etape = inf == null ? "" : nz(Firebase.str(inf, "etape"));
             if ("fini".equals(etape)) finInstallation();
             else {
-                relireReprise();
-                // L'écran du code suit les étapes du téléphone (« Julie règle le son… », Tanguy 2/11).
                 if (!etape.equals(prefs.getString("installEtape", ""))) {
                     prefs.edit().putString("installEtape", etape).apply();
                     try { welcome(installScreen()); } catch (JSONException e) { Log.w(TAG, "Étape d'installation", e); }
@@ -2462,45 +2459,12 @@ final class Sync {
         }
     }
 
-    /** Pendant que le proche finit sur son téléphone : le même écran du code, sans « Recommencer ». */
-    private JSONObject installScreen() throws JSONException {
-        String code = prefs.getString("pairing", null);
-        JSONObject s = new JSONObject().put("step", "pair").put("name", "Tablette")
-                .put("claimedName", prefs.getString("installPar", "")).put("joined", true)
-                .put("etape", prefs.getString("installEtape", ""))
-                .put("reprendre", reprisePossible());
-        if (code != null) s.put("code", code);
-        return s;
-    }
-
     /**
-     * Installation pas finie 30 min après le scan : un autre proche peut la reprendre en scannant le
-     * même code, sans rien effacer (règle du serveur, 21/10). L'écran le dit sous le code.
+     * Famille rejointe, réglages pas encore finis : l'écran d'attente « On prépare votre tablette… »
+     * (rien à scanner ni à toucher : seul Papote relie une tablette, décision de Tanguy du 12/11).
      */
-    private static final long REPRISE_MS = 30 * 60_000;
-
-    private boolean reprisePossible() {
-        long depuis = prefs.getLong("installDepuis", 0);
-        return depuis > 0 && System.currentTimeMillis() - depuis > REPRISE_MS;
-    }
-
-    /** Un autre proche a peut-être repris l'installation : l'écran montre son prénom à lui. */
-    private void relireReprise() {
-        String code = prefs.getString("pairing", null);
-        if (code == null) return;
-        try {
-            JSONObject doc = firebase.get("pairings/" + code);
-            JSONObject f = doc == null ? null : doc.optJSONObject("fields");
-            if (f == null) return;
-            String par = nz(Firebase.str(f, "claimedName"));
-            long depuis = Firebase.timestamp(f, "reservedAt");
-            SharedPreferences.Editor e = prefs.edit();
-            if (!par.isEmpty()) e.putString("installPar", par);
-            if (depuis > 0) e.putLong("installDepuis", depuis);
-            e.apply();
-        } catch (Exception e) {
-            Log.w(TAG, "Reprise de l'installation", e);
-        }
+    private JSONObject installScreen() throws JSONException {
+        return new JSONObject().put("step", "prepare").put("etape", prefs.getString("installEtape", ""));
     }
 
     private void finInstallation() {
@@ -2581,13 +2545,6 @@ final class Sync {
 
     boolean pairingActive() {
         return prefs.getString("fid", null) == null && prefs.getString("code", null) == null;
-    }
-
-    void setTabletName(String name) {
-        handler.post(() -> {
-            prefs.edit().putString("tabletName", name.trim()).apply();
-            poke();
-        });
     }
 
     void wifiDone() {
@@ -2711,12 +2668,14 @@ final class Sync {
     }
 
     /**
-     * Écrans de la tablette avant la famille (parcours du 21/10) : Bienvenue, Internet (sauté avec une
-     * carte SIM), puis le code à scanner. Le nom et la météo se règlent sur le téléphone du proche.
-     *   waiting    code affiché (QR + code), renouvelé toutes les 15 min tant que personne ne l'a pris
-     *   reserved   « On prépare votre tablette… », « Julie s'en occupe », « Recommencer » (pas d'expiration)
-     *   confirmed  la famille est créée : la tablette y entre sans rien demander
-     *   claimed    ancien parcours (tablette de remplacement) : « C'est bien vous ? »
+     * Écrans de la tablette avant la famille : Bienvenue, Internet (sauté avec une carte SIM), puis l'écran
+     * d'attente « On prépare votre tablette… / La tablette retrouve sa famille ». Seul Papote relie une tablette
+     * (décision de Tanguy du 12/11, le serveur refuse tout scan d'un client) : le code de jumelage reste interne,
+     * le serveur le reconnaît (n° de série, famille préparée) et le confirme lui-même. Rien à scanner, rien à lire
+     * à voix haute.
+     *   waiting    code écrit sur le serveur, renouvelé toutes les 15 min tant qu'il n'est pas confirmé
+     *   confirmed  la famille est prête : la tablette y entre sans rien demander
+     *   autre      (reserved, claimed : plus jamais écrits par le serveur) même écran d'attente
      */
     private void pairingStep() throws IOException, JSONException {
         boolean ancienne = prefs.getString("tabletName", null) != null; // installation commencée avant le 21/10
@@ -2734,15 +2693,8 @@ final class Sync {
         String state = f == null ? "gone" : Firebase.str(f, "status");
         // Un code que personne n'a pris expire ; un code réservé, jamais.
         if ("waiting".equals(state) && System.currentTimeMillis() > prefs.getLong("pairingExpires", 0)) state = "gone";
-        if ("waiting".equals(state)) {
-            welcome(new JSONObject().put("step", "pair").put("name", name).put("code", code)
-                    .put("expires", prefs.getLong("pairingExpires", 0)));
-        } else if ("reserved".equals(state)) {
-            long reservedAt = Firebase.timestamp(f, "reservedAt");
-            if (reservedAt > 0) prefs.edit().putLong("installDepuis", reservedAt).apply();
-            welcome(new JSONObject().put("step", "pair").put("name", name).put("code", code)
-                    .put("claimedName", nz(Firebase.str(f, "claimedName"))).put("restart", true)
-                    .put("reprendre", reprisePossible()));
+        if ("waiting".equals(state) || "reserved".equals(state) || "claimed".equals(state)) {
+            welcome(new JSONObject().put("step", "pair").put("code", code));
         } else if ("confirmed".equals(state) && Firebase.str(f, "fid") != null) {
             String famille = nz(Firebase.str(f, "familyName"));
             if (joinFamily(code, Firebase.str(f, "fid"), famille.isEmpty() ? name : famille)) {
@@ -2754,23 +2706,15 @@ final class Sync {
                 welcome(installScreen());
                 poke();
             }
-        } else if ("claimed".equals(state)) {
-            welcome(new JSONObject().put("step", "confirm").put("name", name).put("code", code)
-                    .put("claimedName", nz(Firebase.str(f, "claimedName")))
-                    .put("familyName", nz(Firebase.str(f, "familyName"))));
         } else {
             // Annulé, refusé, expiré ou disparu : un nouveau code tout de suite.
             prefs.edit().remove("pairing").remove("pairingExpires").apply();
             // Jamais de code avant d'avoir lu config/base : il doit être créé dans la bonne base.
             if (lastDatabaseCheck == 0) checkDatabase();
             code = lastDatabaseCheck == 0 ? null : newPairing(name);
-            if (code == null) {
-                welcome(new JSONObject().put("step", "pair").put("name", name)
-                        .put("error", "Impossible de créer le code. Vérifiez la connexion internet."));
-            } else {
-                welcome(new JSONObject().put("step", "pair").put("name", name).put("code", code)
-                        .put("expires", prefs.getLong("pairingExpires", 0)));
-            }
+            // Pas de code (pas encore d'internet) : le même écran d'attente, qui le dit sans alarmer.
+            if (code == null) welcome(new JSONObject().put("step", "pair").put("sansInternet", true));
+            else welcome(new JSONObject().put("step", "pair").put("code", code));
         }
     }
 
@@ -2792,27 +2736,6 @@ final class Sync {
     void welcomeSeen() {
         handler.post(() -> {
             prefs.edit().putBoolean("bienvenueVue", true).apply();
-            poke();
-        });
-    }
-
-    /** « Recommencer avec un autre téléphone » : la réservation est annulée, un nouveau code s'affiche. */
-    void cancelPairing() {
-        handler.post(() -> {
-            String code = prefs.getString("pairing", null);
-            if (code == null) return;
-            try {
-                JSONObject update = new JSONObject()
-                        .put("update", new JSONObject()
-                                .put("name", Firebase.docName("pairings/" + code))
-                                .put("fields", new JSONObject().put("status", Firebase.string("cancelled"))))
-                        .put("updateMask", new JSONObject().put("fieldPaths", new JSONArray().put("status")));
-                firebase.commit(new JSONArray().put(update));
-                Journal.log(context, "Installation recommencée avec un autre téléphone");
-            } catch (Exception e) {
-                Log.w(TAG, "Annulation de la réservation", e);
-            }
-            prefs.edit().remove("pairing").remove("pairingExpires").apply();
             poke();
         });
     }
@@ -2881,37 +2804,6 @@ final class Sync {
             Log.w(TAG, "Entrée dans la famille", e);
             return false;
         }
-    }
-
-    /** Réponse sur la tablette : « C'est bien vous ? » Oui / Non. */
-    void confirmPairing(boolean yes) {
-        handler.post(() -> {
-            String code = prefs.getString("pairing", null);
-            if (code == null) return;
-            try {
-                JSONObject doc = firebase.get("pairings/" + code);
-                JSONObject f = doc == null ? null : doc.optJSONObject("fields");
-                if (f == null || !"claimed".equals(Firebase.str(f, "status"))) return;
-                String fid = Firebase.str(f, "fid");
-                JSONObject update = new JSONObject()
-                        .put("update", new JSONObject()
-                                .put("name", Firebase.docName("pairings/" + code))
-                                .put("fields", new JSONObject().put("status", Firebase.string(yes ? "confirmed" : "refused"))))
-                        .put("updateMask", new JSONObject().put("fieldPaths", new JSONArray().put("status")));
-                firebase.commit(new JSONArray().put(update));
-                if (!yes || fid == null) {
-                    prefs.edit().remove("pairing").remove("pairingExpires").apply();
-                    poke();
-                    return;
-                }
-                if (joinFamily(code, fid, prefs.getString("tabletName", "Tablette"))) {
-                    status("ok", null);
-                    poke();
-                }
-            } catch (Exception e) {
-                Log.w(TAG, "Confirmation de l'appairage", e);
-            }
-        });
     }
 
     private String lastState = "";

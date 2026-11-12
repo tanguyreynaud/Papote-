@@ -280,7 +280,7 @@
     if (perdueScreen) {
       perdueScreen.style.display = perdue && !sosEnCours ? 'flex' : 'none';
       var b = perdueScreen.querySelector('.perdue-sos');
-      if (b) show(b, !!options.sos);
+      if (b) show(b, sosVisible());
     }
     if (pauseScreen) pauseScreen.style.display = ((!!pausedStatut && Date.now() >= sosJusqua) || perdue) && !sosEnCours ? 'flex' : 'none';
   }
@@ -465,7 +465,7 @@
     titre.className = 'invite-titre';
     titre.textContent = 'Les photos de la famille arriveront ici.';
     var text = document.createElement('p');
-    text.textContent = 'Famille : scannez ce code avec votre téléphone.';
+    text.textContent = 'Pour rejoindre la famille, scannez ce code avec votre téléphone.';
     box.appendChild(titre);
     box.appendChild(img);
     box.appendChild(text);
@@ -2283,7 +2283,8 @@
   // Un seul appui : « J'appelle toute la famille… », et l'appel part de lui-même au bout de
   // 5 secondes ; « Annuler » rattrape un appui par erreur. Toute la famille sonne en même temps,
   // le premier qui décroche a l'appel. Personne ne répond : un 2e essai, puis la famille reçoit
-  // « Mamie a appuyé sur SOS » (serveur). Bouton affiché seulement si la famille l'a activé (options.sos).
+  // « Mamie a appuyé sur SOS » (serveur). Bouton affiché seulement si la famille l'a activé (options.sos)
+  // et qu'au moins un proche est dans la famille (sosVisible).
   var SOS_DELAY_S = 5;
   var sosTimer = null;
 
@@ -2299,11 +2300,20 @@
     left.insertBefore(b, left.firstChild);
   }
 
+  // Pas de SOS tant qu'aucun proche n'est dans la famille (audit mise en route 12/11, M6, décision de Tanguy) :
+  // personne ne serait prévenu, alors que l'écran finirait par dire « La famille est prévenue ». Le bouton
+  // apparaît dès qu'un proche arrive (people : proches actifs, ni tablette ni demande en attente, Sync.java).
+  // Avant la première liste des proches (démarrage), on suit le seul réglage de la famille.
+  var prochesLus = false;
+  function sosVisible() {
+    return !!options.sos && (!prochesLus || people.length > 0);
+  }
+
   function showSosButton() {
     var b = $('sos-btn');
-    if (b) show(b, !!options.sos);
+    if (b) show(b, sosVisible());
     var p = pauseScreen && pauseScreen.querySelector('.pause-sos');
-    if (p) show(p, !!options.sos);
+    if (p) show(p, sosVisible());
     afficherVerrou(); // le SOS de l'écran verrouillé suit le même réglage
   }
 
@@ -2871,6 +2881,8 @@
     bootPret('proches');
     faces = payload.faces || {};
     setPeople(payload.people);
+    prochesLus = true;
+    showSosButton(); // SOS caché tant que la famille n'a aucun proche, montré dès le premier
     // Les photos de profil arrivent parfois après l'envoi affiché : on le met à jour.
     if (overlayPost) fillHead(overlayPost);
     if (photos.length) renderFrame();

@@ -31,7 +31,6 @@ function imitation(etat) {
     getCode: () => window.__etat.code || null,
     identite: () => JSON.stringify(window.__etat.identite || {}),
     callsAccount: () => JSON.stringify(window.__etat.code ? { email: 'tablette-appels-essai@tablettes.papote-famille.web.app', password: 'secret' } : {}),
-    setTabletName: note('setTabletName'),
     meteoSearch: () => '[]', meteoChoose: note('meteoChoose'), meteoSkip: note('meteoSkip'),
     wifiScan: () => '[]', wifiConnect: () => true,
     speak: note('speak'), speakGuide: note('speakGuide'), stopSpeaking: note('stopSpeaking'),
@@ -40,8 +39,8 @@ function imitation(etat) {
     wifiStatus: () => JSON.stringify(window.__etat.reseau || { wifi: 'Box', internet: true, mobile: false, sim: false }),
     pushReady: () => !!window.__etat.push,
     simBudget: () => JSON.stringify(window.__etat.forfait || { plafondMo: 1000, consoMo: 0, niveau: 0, sim: false, cycleDebut: '2026-10-01' }),
-    logError: note('logError'), wifiDone: note('wifiDone'), confirmPairing: note('confirmPairing'),
-    welcomeBack: note('welcomeBack'), welcomeSeen: note('welcomeSeen'), cancelPairing: note('cancelPairing'),
+    logError: note('logError'), wifiDone: note('wifiDone'),
+    welcomeBack: note('welcomeBack'), welcomeSeen: note('welcomeSeen'),
     testSon: note('testSon'), getPairing: () => null, ring: note('ring'), inCall: note('inCall'),
     // Appels par la carte SIM (etat.telephone : la tablette sait téléphoner) ; phoneCall renvoie false avec etat.telephoneKo,
     // phoneHangup avec etat.raccrocherKo (plus d'appel côté Android) ; phoneState lit etat.appelGsm.

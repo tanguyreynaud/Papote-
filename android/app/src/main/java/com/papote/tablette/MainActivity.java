@@ -602,11 +602,6 @@ public class MainActivity extends Activity implements Sync.Listener {
 
         // ---------- Écran Bienvenue (première installation chez le client) ----------
 
-        @JavascriptInterface
-        public void setTabletName(String name) {
-            if (name != null && !name.trim().isEmpty()) sync.setTabletName(name.length() > 40 ? name.substring(0, 40) : name);
-        }
-
         /** Ville de la météo (écran Bienvenue) : communes trouvées pour ce nom. */
         @JavascriptInterface
         public String meteoSearch(String query) {
@@ -729,11 +724,6 @@ public class MainActivity extends Activity implements Sync.Listener {
             sync.wifiDone();
         }
 
-        @JavascriptInterface
-        public void confirmPairing(boolean yes) {
-            sync.confirmPairing(yes);
-        }
-
         /** « Retour » : écran d'installation précédent. */
         @JavascriptInterface
         public void welcomeBack(boolean toStart) {
@@ -744,12 +734,6 @@ public class MainActivity extends Activity implements Sync.Listener {
         @JavascriptInterface
         public void welcomeSeen() {
             sync.welcomeSeen();
-        }
-
-        /** « Recommencer avec un autre téléphone » pendant que le proche installe. */
-        @JavascriptInterface
-        public void cancelPairing() {
-            sync.cancelPairing();
         }
 
         /**
