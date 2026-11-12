@@ -19,6 +19,28 @@ function permisEnNombre(dejaPartis, voulus) {
   return Math.max(0, Math.min(voulus, PLAFOND_JOUR - RESERVE_URGENTS - dejaPartis));
 }
 
+// E-mails de confort (mail.js, CONFORT : « C'est noté », bienvenue, demande pour rejoindre, rappel confirmé, relances
+// de panier) : comme les envois en nombre, jamais dans les 100 derniers du jour (audit sécurité 11/11, L1 et L8).
+function confortPermis(dejaPartis) {
+  return permisEnNombre(dejaPartis, 1) === 1;
+}
+
+// Branché sur mail.surEnvoiDeConfort (index.js) : false retient l'e-mail, avec une ligne dans le journal (pas d'erreur).
+// Compteur illisible : l'e-mail part (best effort, comme compter).
+async function confortAutorise(db, { a, sujet } = {}, logger = console) {
+  let partis;
+  try {
+    partis = await partisAujourdhui(db);
+  } catch (e) {
+    logger.warn('Compteur d\'e-mails illisible, e-mail de confort envoyé quand même', e.message);
+    return true;
+  }
+  if (confortPermis(partis)) return true;
+  logger.warn(`Brevo : ${partis} e-mails partis aujourd'hui, les ${RESERVE_URGENTS} derniers sont gardés pour les urgents. `
+    + `E-mail de confort non envoyé à ${a || '?'} (« ${sujet || '?'} »).`);
+  return false;
+}
+
 async function partisAujourdhui(db) {
   const snap = await ref(db).get();
   return (snap.exists && snap.get('n')) || 0;
@@ -40,4 +62,4 @@ async function compter(db, n = 1, logger = console) {
   }
 }
 
-module.exports = { PLAFOND_JOUR, RESERVE_URGENTS, jourParis, permisEnNombre, partisAujourdhui, compter };
+module.exports = { PLAFOND_JOUR, RESERVE_URGENTS, jourParis, permisEnNombre, confortPermis, confortAutorise, partisAujourdhui, compter };
