@@ -129,6 +129,8 @@
 
 .welcome-ok { margin: 2vmin 0; font-size: 4.8vmin; font-weight: 600; color: var(--w-ok); }
 .welcome-error { margin: 2vmin 0; font-size: 4.6vmin; font-weight: 600; color: var(--w-danger); }
+/* « La tablette n'a pas trouvé internet » : dit clairement, sans rouge (rien d'inquiétant chez Mamie) */
+.welcome-notice { margin: 2vmin 0; font-size: 4.6vmin; font-weight: 600; color: #4f46e5; }
 
 .network-state { font-size: 3.6vmin; color: #15803d; font-weight: 700; }
 .welcome-sheet-actions { display: flex; justify-content: flex-end; gap: 2vmin; margin-top: 2vmin; }

@@ -221,7 +221,7 @@
     if (connected) sayGuide('wifi-ok', 'La tablette est connectée à internet. Appuyez sur Continuer.');
     else sayGuide('wifi-choisir', 'Choisissez le wifi de votre box.');
     if (echec) {
-      box.appendChild(el('p', 'welcome-error', 'La tablette n’a pas trouvé internet.'));
+      box.appendChild(el('p', 'welcome-notice', 'La tablette n’a pas trouvé internet.')); // calme, jamais en rouge
       box.appendChild(el('p', 'welcome-sub', 'Choisissez le wifi de votre box. Elle continue aussi de chercher le réseau de sa carte SIM.'));
     }
     if (connected) {

@@ -732,7 +732,9 @@ test('installation sans internet : au bout de 90 s, l\'erreur claire et le wifi 
     await b.avancer(500);
     assert.match(await b.texte('.welcome-title'), /Je cherche internet…/);
     await b.avancer(91000);
-    assert.match(await b.texte('.welcome-error'), /La tablette n’a pas trouvé internet/);
+    assert.match(await b.texte('.welcome-notice'), /La tablette n’a pas trouvé internet/);
+    assert.strictEqual(await b.page.locator('.welcome .welcome-error').count(), 0, 'pas de texte d\'erreur en rouge');
+    assert.strictEqual(await b.page.evaluate(() => getComputedStyle(document.querySelector('.welcome-notice')).color), 'rgb(79, 70, 229)', 'indigo, pas rouge');
     assert.match(await b.texte('.welcome'), /Choisissez le wifi de votre box/);
     assert.ok(await b.page.getByText('Choisir un réseau').isVisible(), 'le wifi peut être donné');
     // Le proche ouvre la liste des réseaux : la 4G qui arrive ne la ferme pas sous ses doigts.
