@@ -29,10 +29,19 @@ public class UpdateResult extends BroadcastReceiver {
         Log.w("Papote", "Mise à jour refusée : " + status + " " + msg);
         Journal.log(context, "Mise à jour refusée (" + status + ") : " + msg);
         // Refus qui ne changera pas (signature, fichier invalide) : cet APK n'est plus retéléchargé (forfait SIM).
-        if (MajGarde.refusDefinitif(status)) {
-            android.content.SharedPreferences prefs = context.getSharedPreferences("papote", Context.MODE_PRIVATE);
-            String enCours = prefs.getString("majEnCours", null);
-            if (enCours != null) prefs.edit().putString("majRefusee", enCours).remove("majEnCours").apply();
+        android.content.SharedPreferences prefs = context.getSharedPreferences("papote", Context.MODE_PRIVATE);
+        String enCours = prefs.getString("majEnCours", null);
+        if (enCours == null) return;
+        // Refus passager qui se répète (place manquante, vérification d'Android) : au bout de 3 fois pour le
+        // même APK, il n'est plus retéléchargé non plus (audit réseau du 11/11).
+        int rates = MajGarde.essaisPour(prefs.getString("majInstallRatees", null), enCours) + 1;
+        if (MajGarde.refusDefinitif(status) || MajGarde.abandonner(rates)) {
+            if (!MajGarde.refusDefinitif(status)) {
+                Journal.urgent(context, "Mise à jour abandonnée : " + rates + " installations ratées du même fichier (" + status + ")");
+            }
+            prefs.edit().putString("majRefusee", enCours).remove("majEnCours").remove("majInstallRatees").apply();
+        } else {
+            prefs.edit().putString("majInstallRatees", enCours + ":" + rates).apply();
         }
     }
 }

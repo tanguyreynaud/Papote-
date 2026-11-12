@@ -49,6 +49,44 @@ final class MajGarde {
     }
 
     /**
+     * Attente avant un nouvel essai après ce nombre d'échecs d'affilée (fichier de version injoignable,
+     * téléchargement de l'APK coupé) : 10 min, 30 min, 2 h, 6 h, puis une fois par jour. Avant (audit réseau
+     * du 11/11) : toutes les 10 min sans fin, et l'APK entier (4 Mo) repris de zéro à chaque fois, soit
+     * jusqu'à plusieurs centaines de Mo par jour sur une carte SIM qui capte mal.
+     */
+    static long attenteApresEchec(int echecs) {
+        if (echecs <= 1) return 10 * 60_000L;
+        if (echecs == 2) return 30 * 60_000L;
+        if (echecs == 3) return 2 * 3600_000L;
+        if (echecs == 4) return 6 * 3600_000L;
+        return 24 * 3600_000L;
+    }
+
+    /** Installations ratées d'affilée du même APK (place manquante, vérification d'Android) avant d'abandonner. */
+    static final int ESSAIS_INSTALLATION = 3;
+
+    /**
+     * Un refus « passager » d'Android qui se répète n'est plus passager : au bout de 3 installations ratées,
+     * cet APK n'est plus retéléchargé (4 Mo à chaque démarrage et chaque jour, sans fin, sur la carte SIM).
+     * Une nouvelle publication (autre empreinte) repart de zéro.
+     */
+    static boolean abandonner(int installationsRatees) {
+        return installationsRatees >= ESSAIS_INSTALLATION;
+    }
+
+    /** Compteur gardé sous la forme « empreinte:nombre » : le nombre pour cette empreinte, 0 pour une autre. */
+    static int essaisPour(String compteur, String sha256) {
+        if (compteur == null || sha256 == null) return 0;
+        int i = compteur.lastIndexOf(':');
+        if (i <= 0 || !compteur.substring(0, i).equalsIgnoreCase(sha256)) return 0;
+        try {
+            return Math.max(0, Integer.parseInt(compteur.substring(i + 1)));
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    /**
      * Android a-t-il refusé l'APK pour une raison qui ne changera pas en réessayant ? (PackageInstaller :
      * 4 fichier invalide, 5 conflit avec l'appli installée dont la signature, 7 incompatible avec la tablette.)
      * Les autres échecs (place manquante, installation interrompue) sont passagers : nouvel essai le lendemain.

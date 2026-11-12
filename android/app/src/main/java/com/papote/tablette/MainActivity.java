@@ -295,17 +295,28 @@ public class MainActivity extends Activity implements Sync.Listener {
                 handler.postDelayed(this, 24 * 3600_000L);
                 return;
             }
+            // Jamais pendant un appel, une sonnerie ou un SOS : l'installation ferme Papote (audit réseau du 11/11).
+            if (occupeePourMaj()) {
+                handler.postDelayed(this, 5 * 60_000L);
+                return;
+            }
             new Thread(() -> {
                 // Forfait SIM presque épuisé (palier 3) : les 3 Mo de l'appli attendent le Wi-Fi ou la recharge.
                 if (Forfait.economie(getApplicationContext(), 3)) {
                     handler.postDelayed(this, 6 * 3600_000L);
                     return;
                 }
-                boolean ok = Updater.check(getApplicationContext());
-                handler.postDelayed(this, ok ? 24 * 3600_000L : 10 * 60_000L);
+                boolean ok = Updater.check(getApplicationContext(), MainActivity.this::occupeePourMaj);
+                handler.postDelayed(this, ok ? 24 * 3600_000L : Updater.attenteMs());
             }, "papote-maj").start();
         }
     };
+
+    /** Appel vidéo ou téléphone en cours ou qui sonne, ou SOS lancé depuis moins de 30 min : pas d'installation. */
+    private boolean occupeePourMaj() {
+        CallAudio audio = callAudio;
+        return (audio != null && audio.busy()) || AppelGsm.enCours() || SystemClock.elapsedRealtime() < sosJusqua;
+    }
 
     @Override
     protected void onNewIntent(Intent intent) {

@@ -43,6 +43,34 @@ final class Updater {
     private static final String FEED_SECOURS_TEST = "https://maj.mapapote.fr/version-test.json";
 
     private static int echecs;
+    /** La dernière vérification a trouvé une version mais ne l'a pas installée : un appel ou un SOS était en cours. */
+    private static volatile boolean reportee;
+
+    /** Un appel, une sonnerie ou un SOS est-il en cours ? (demandé juste avant d'installer) */
+    interface Occupation {
+        boolean occupee();
+    }
+
+    /**
+     * Attend que la tablette soit libre avant d'installer (l'installation ferme Papote : elle couperait
+     * l'appel ou le SOS en cours). true dès qu'elle est libre ; false si elle est restée occupée jusqu'au bout.
+     */
+    static boolean attendreLibre(Occupation o, int tours, long pauseMs) {
+        for (int i = 0; i < tours; i++) {
+            if (o == null || !o.occupee()) return true;
+            try {
+                Thread.sleep(pauseMs);
+            } catch (InterruptedException e) {
+                return false;
+            }
+        }
+        return o == null || !o.occupee();
+    }
+
+    /** Délai avant la prochaine vérification après un échec : 5 min si un appel l'a reportée, sinon de plus en plus long. */
+    static long attenteMs() {
+        return reportee ? 5 * 60_000L : MajGarde.attenteApresEchec(echecs);
+    }
     /** Une seule vérification à la fois (une annonce peut arriver pendant un téléchargement). */
     private static final AtomicBoolean enCours = new AtomicBoolean(false);
 
@@ -50,9 +78,15 @@ final class Updater {
 
     /** À appeler hors du fil principal, seulement en mode kiosque. false : échec, à réessayer bientôt. */
     static boolean check(Context context) {
+        return check(context, null);
+    }
+
+    /** Même chose ; « occupation » retient l'installation tant qu'un appel ou un SOS est en cours. */
+    static boolean check(Context context, Occupation occupation) {
         if (!enCours.compareAndSet(false, true)) return true;
         try {
-            return verifier(context);
+            reportee = false;
+            return verifier(context, occupation);
         } finally {
             enCours.set(false);
         }
@@ -70,23 +104,23 @@ final class Updater {
             long current = currentVersion(context);
             String nom = feed.optString("versionName", String.valueOf(latest));
             if (latest <= current) return "Déjà à jour (version " + nom + (test ? ", canal test" : "") + ").";
-            if (!check(context)) return "Impossible de mettre à jour pour l'instant (téléchargement raté), nouvel essai dans 10 min.";
+            if (!check(context)) return "Impossible de mettre à jour pour l'instant (téléchargement raté), la tablette réessaiera toute seule.";
             return "Mise à jour vers la version " + nom + " lancée : Papote se relance toute seule dans une minute.";
         } catch (Exception e) {
             return "Impossible de vérifier la version : " + e.getMessage();
         }
     }
 
-    private static boolean verifier(Context context) {
+    private static boolean verifier(Context context, Occupation occupation) {
         try {
             boolean test = "test".equals(context.getSharedPreferences("papote", Context.MODE_PRIVATE).getString("canal", ""));
             JSONObject feed = choisir(context, lireVersions(test));
             int latest = feed.getInt("versionCode");
             long current = currentVersion(context);
-            echecs = 0;
-            if (latest <= current) return true;
+            if (latest <= current) { echecs = 0; return true; }
             Log.i(TAG, "Mise à jour " + current + " -> " + latest);
-            Journal.log(context, "Mise à jour " + current + " -> " + latest);
+            // Notée une fois, pas à chaque nouvel essai d'un téléchargement qui rate.
+            if (echecs == 0) Journal.log(context, "Mise à jour " + current + " -> " + latest);
             // L'APK est rangé sur GitHub (Firebase gratuit refuse les APK), la version sur Firebase.
             // Garde-fous (MajGarde) : seulement le dépôt Papote à un commit précis, taille plafonnée, et une
             // empreinte déjà refusée n'est plus retéléchargée (forfait SIM), même si version.json a été modifié.
@@ -96,6 +130,7 @@ final class Updater {
             if (refus != null) {
                 Log.w(TAG, "Mise à jour ignorée : " + refus);
                 Journal.log(context, "Mise à jour ignorée : " + refus);
+                echecs = 0;
                 return true;
             }
             byte[] apk;
@@ -105,6 +140,7 @@ final class Updater {
                 // Pas de nouvel essai dans 10 min pour un fichier trop gros : il serait retéléchargé sans fin.
                 prefs.edit().putString("majRefusee", feed.getString("sha256")).apply();
                 Journal.log(context, "Mise à jour ignorée : " + e.getMessage());
+                echecs = 0;
                 return true;
             }
             if (!sha256(apk).equalsIgnoreCase(feed.getString("sha256"))) {
@@ -113,19 +149,28 @@ final class Updater {
                 Journal.log(context, "Mise à jour ignorée : empreinte incorrecte");
                 // Pas de nouvel essai : ce serait l'APK entier retéléchargé sans fin (forfait SIM). Une nouvelle
                 // publication (autre empreinte) sera prise à la prochaine vérification ou annonce.
+                echecs = 0;
                 return true;
             }
             // Empreinte en cours d'installation : si Android refuse cet APK pour de bon (mauvaise signature…),
             // UpdateResult la range dans les refusées et elle n'est plus retéléchargée chaque jour.
+            // Jamais pendant un appel, une sonnerie ou un SOS : l'installation ferme Papote. Le fichier déjà
+            // téléchargé attend jusqu'à 30 min que la tablette soit libre ; au-delà, nouvel essai 5 min après.
+            echecs = 0;
+            if (!attendreLibre(occupation, 180, 10_000)) {
+                reportee = true;
+                Journal.log(context, "Mise à jour reportée : un appel ou un SOS est en cours");
+                return false;
+            }
             prefs.edit().putString("majEnCours", feed.getString("sha256")).apply();
             install(context, apk);
             return true;
         } catch (Exception e) {
             Log.w(TAG, "Vérification des mises à jour", e);
-            // Coupure passagère (wifi, DNS) : nouvel essai 10 min après, sans rien noter.
-            // Le journal ne le signale qu'au bout de 3 échecs d'affilée (30 min).
+            // Coupure passagère (wifi, DNS, téléchargement coupé) : nouvel essai 10 min après, puis de plus en
+            // plus tard (MajGarde.attenteApresEchec). Le journal le signale au 3e échec d'affilée.
             echecs++;
-            if (echecs == 3) Journal.log(context, "Mise à jour impossible depuis 30 min : " + e);
+            if (echecs == 3) Journal.log(context, "Mise à jour impossible après 3 essais : " + e);
             return false;
         }
     }

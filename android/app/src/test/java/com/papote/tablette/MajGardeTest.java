@@ -72,4 +72,50 @@ public class MajGardeTest {
         org.junit.Assert.assertFalse(MajGarde.refusDefinitif(6));  // place manquante
         org.junit.Assert.assertFalse(MajGarde.refusDefinitif(-1)); // confirmation demandée
     }
+
+    // ---------- Audit réseau du 11/11 ----------
+
+    @Test
+    public void lesEssaisSEspacentQuandLeTelechargementRate() {
+        assertEquals(10 * 60_000L, MajGarde.attenteApresEchec(0));
+        assertEquals(10 * 60_000L, MajGarde.attenteApresEchec(1));
+        assertEquals(30 * 60_000L, MajGarde.attenteApresEchec(2));
+        assertEquals(2 * 3600_000L, MajGarde.attenteApresEchec(3));
+        assertEquals(6 * 3600_000L, MajGarde.attenteApresEchec(4));
+        assertEquals(24 * 3600_000L, MajGarde.attenteApresEchec(5));
+        assertEquals(24 * 3600_000L, MajGarde.attenteApresEchec(500));
+        // Un téléchargement qui rate toujours : pas plus de 5 essais le premier jour, puis un par jour
+        // (avant : 144 par jour, l'APK entier à chaque fois sur la carte SIM).
+        long temps = 0;
+        int essais = 0;
+        for (int echecs = 1; temps < 24 * 3600_000L; echecs++) { essais++; temps += MajGarde.attenteApresEchec(echecs); }
+        assertTrue("essais le premier jour : " + essais, essais <= 5);
+    }
+
+    @Test
+    public void troisInstallationsRateesEtLApkNEstPlusRepris() {
+        org.junit.Assert.assertFalse(MajGarde.abandonner(1));
+        org.junit.Assert.assertFalse(MajGarde.abandonner(2));
+        assertTrue(MajGarde.abandonner(3));
+        assertEquals(0, MajGarde.essaisPour(null, SHA));
+        assertEquals(0, MajGarde.essaisPour("", SHA));
+        assertEquals(2, MajGarde.essaisPour(SHA + ":2", SHA));
+        assertEquals(2, MajGarde.essaisPour(SHA.toUpperCase() + ":2", SHA));
+        assertEquals(0, MajGarde.essaisPour("autre:2", SHA)); // nouvelle publication : on repart de zéro
+        assertEquals(0, MajGarde.essaisPour(SHA + ":x", SHA));
+        assertEquals(0, MajGarde.essaisPour(SHA + ":-4", SHA));
+    }
+
+    @Test
+    public void pasDInstallationPendantUnAppel() {
+        // Libre : on installe tout de suite, sans attendre.
+        assertTrue(Updater.attendreLibre(() -> false, 180, 0));
+        assertTrue(Updater.attendreLibre(null, 180, 0));
+        // L'appel se termine au 3e regard : on installe à ce moment-là.
+        final int[] regards = {0};
+        assertTrue(Updater.attendreLibre(() -> ++regards[0] < 3, 180, 0));
+        assertEquals(3, regards[0]);
+        // Toujours occupée (long appel, SOS) : on n'installe pas, la vérification reviendra.
+        org.junit.Assert.assertFalse(Updater.attendreLibre(() -> true, 5, 0));
+    }
 }
