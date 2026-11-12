@@ -2907,7 +2907,9 @@ exports.tachesHoraires = require('./taches').planifier({
 });
 
 // Voix des messages et des rappels sur la tablette : son créé une fois, rejoué autant qu'il faut (voix.js).
+// Limites contre les abus (limites.js, A12) : comptées à la création seulement, sans lecture de plus ensuite.
 const voix = require('./voix');
+const limites = require('./limites');
 exports.voixEnvoi = onDocumentWritten(
   { document: 'families/{fid}/posts/{pid}', database: BASE_FIRESTORE, region: REGION_FIRESTORE, maxInstances: 3 },
   async (event) => {
@@ -2916,6 +2918,29 @@ exports.voixEnvoi = onDocumentWritten(
     const data = apres.data();
     const chemin = apres.ref.path;
     if (data.type === 'reply') { console.log(`Voix ${chemin} : réponse de la tablette, rien à lire`); return; }
+    // Voix coupée par les limites : la tablette lit avec sa propre voix (rien à relire à chaque « vu »).
+    if (data.voixCoupee) return;
+    const creation = !(event.data.before && event.data.before.exists);
+    if (data.type === 'message') {
+      // Un message écrit n'a sa voix qu'à sa création : un « vu » ou un bisou arrivé avant la fin du comptage ne
+      // doit pas la créer quand même.
+      if (!creation && !data.voix) return;
+      if (creation && limites.estFrais(data.createdAt)) {
+        try {
+          const r = await limites.messageCree(db, event.params.fid, data.authorUid);
+          if (r.restauration) console.log(`Limites ${chemin} : restauration en cours, non compté`);
+          else if (r.bloque) console.log(`Limites ${event.params.fid} : ${r.compteur.messages} messages aujourd'hui, les suivants sont refusés jusqu'à minuit`);
+          if (!r.restauration && !r.voix) {
+            console.log(`Voix ${chemin} : coupée (${r.compteur.parAuteur[data.authorUid || '?']}e message du jour de ce proche, ${r.compteur.messages} pour la famille)`);
+            await apres.ref.update({ voixCoupee: true }).catch(() => null); // envoi effacé entre-temps : rien à faire
+            return;
+          }
+        } catch (e) {
+          // Compteur en panne : le message garde sa voix (comme avant), on le note.
+          console.error(`Limites ${chemin} : compteur illisible, ${e && e.message ? e.message : e}`);
+        }
+      }
+    }
     try {
       const fait = await voix.voixDocument(db, apres.ref, data, 'text', data.authorUid, data.authorName);
       // Journal en texte simple (lisible avec « firebase functions:log »), sauf les relectures sans changement.
@@ -2930,10 +2955,49 @@ exports.voixRappel = onDocumentWritten(
   async (event) => {
     const apres = event.data && event.data.after;
     if (!apres || !apres.exists) return;
+    const avant = event.data.before && event.data.before.exists ? event.data.before.data() : null;
+    const data = apres.data();
+    const fid = event.params.fid;
+    let retirerCoupee = false;
+    try {
+      if (!avant) {
+        // Rappel créé : 10 par jour et 30 en cours au plus (l'appli et les règles refusent avant ; ici le secours).
+        const r = await limites.rappelCree(db, fid);
+        // Rappel remis par une restauration : ni compté, ni effacé.
+        let enTrop = !r.restauration && r.enTrop ? `${r.compteur.rappels}e rappel créé aujourd'hui` : '';
+        if (!enTrop && !r.restauration) {
+          const n = await limites.rappelsEnCours(db, fid);
+          if (n > limites.LIMITES.rappelsEnCours) enTrop = `${n} rappels en cours`;
+        }
+        if (enTrop) {
+          console.warn(`Limites ${apres.ref.path} : rappel effacé (${enTrop})`);
+          await apres.ref.delete();
+          await db.doc(`families/${fid}`).update({ rev: FieldValue.increment(1) }).catch(() => null); // la tablette relit l'agenda
+          return;
+        }
+      } else if (avant.title !== data.title) {
+        // Texte changé : nouvelle voix, 20 fois par jour et par famille au plus.
+        const r = await limites.rappelModifie(db, fid);
+        if (!r.restauration && !r.voix) {
+          console.log(`Voix ${apres.ref.path} : coupée (${r.compteur.rappelsModifies}e rappel modifié aujourd'hui)`);
+          // L'ancienne voix dirait l'ancien texte : retirée.
+          await apres.ref.update({ voix: FieldValue.delete(), voixCoupee: true });
+          return;
+        }
+        retirerCoupee = !!data.voixCoupee;
+      } else if (data.voixCoupee) {
+        return;
+      }
+    } catch (e) {
+      // Compteur en panne : le rappel garde sa voix (comme avant), on le note.
+      console.error(`Limites ${apres.ref.path} : ${e && e.message ? e.message : e}`);
+    }
     try {
       // Rappels : l'auteur n'est noté que par son prénom, voix Kore.
-      const fait = await voix.voixDocument(db, apres.ref, apres.data(), 'title', null);
+      const fait = await voix.voixDocument(db, apres.ref, data, 'title', null);
       if (fait !== 'déjà lu') console.log(`Voix ${apres.ref.path} : ${fait}`);
+      // Voix revenue (le lendemain) : la marque de voix coupée est retirée, après la nouvelle voix.
+      if (retirerCoupee) await apres.ref.update({ voixCoupee: FieldValue.delete() });
     } catch (e) {
       console.error(`Voix ${apres.ref.path} : ÉCHEC ${e && e.message ? e.message : e}`);
     }

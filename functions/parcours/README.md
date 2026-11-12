@@ -60,6 +60,12 @@ appel de la famille), appels, ordres, alertes et incidents de plus de 90 jours e
 cours et ordre en attente gardés), comptes sans famille depuis plus de 3 mois effacés (membre, responsable, tablette,
 administrateur et commande en cours gardés).
 
+`limites.parcours.js` : limites contre les abus (limites.js, A12) : voix Google coupée au 10e message du jour du
+même proche (pas pour les autres, ni pour les légendes de photos), drapeau des 50 messages jusqu'à minuit (Paris) et
+messages passés en même temps sans voix, copie d'anciens messages non comptée, rappels 10 créés par jour et 30 en
+cours (le rappel en trop effacé), rappel modifié 20 fois par jour avec la voix, coût (aucune lecture sur un « vu »).
+Le refus lui-même (51e message, 11e rappel) est une règle Firestore, testé dans `tests/regles/` (branche de l'app).
+
 Le refus du 31e proche lui-même est une règle Firestore : il est testé avec les règles, dans `tests/regles/`
 (branche de l'app web).
 
