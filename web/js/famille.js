@@ -1157,6 +1157,7 @@ function closeSheets() {
   $('sheet-wifi').hidden = true;
   stopScan?.();
   stopScan = null;
+  arreterSuiviWifi();
   oublierApercuVideo();
   pendingPhotos = [];
   pendingVideo = null;
@@ -3697,10 +3698,91 @@ $('wifi-close').addEventListener('click', () => history.back());
 // Le 2e clic d'un double clic sur « Modifier » tombe sur le voile : il ne referme pas la fenêtre à peine ouverte.
 $('sheet-wifi').addEventListener('click', (e) => { if (e.target === $('sheet-wifi') && Date.now() - wifiOuvertLe > 500) history.back(); });
 
-async function connecter(r, password) {
-  await sendCommand('wifi', { ssid: r.ssid, security: r.security, ...(r.security === 'open' ? {} : { password }) });
-  toast(`La tablette se connecte à « ${r.ssid} »`);
-  history.back();
+// Changer le wifi (A36, Tanguy 12/11) : la tablette ne quitte son wifi que si le nouveau donne internet, et
+// n'oublie jamais l'ancien. La fenêtre reste ouverte et montre le vrai résultat qu'elle renvoie (issue).
+// Le mot de passe ne va pas dans l'ordre (lisible des autres responsables) mais dans commands/{id}/secret/wifi :
+// lisible de la seule tablette, effacé par elle dès qu'elle l'a lu, illisible au bout d'une heure (firestore.rules).
+const ISSUES_WIFI = {
+  connectee: { titre: 'Connectée', ok: true },
+  deja: { titre: 'Connectée', ok: true },
+  'mot-de-passe': { titre: 'Mot de passe refusé' },
+  introuvable: { titre: 'Réseau introuvable' },
+  'sans-internet': { titre: 'Pas d\'internet sur ce réseau' },
+  echec: { titre: 'Connexion impossible' },
+};
+const WIFI_ATTENTE_MS = 90_000; // l'ordre n'est pas pris (tablette hors ligne)
+const WIFI_ESSAI_MS = 180_000; // la tablette essaie (60 s au plus), revient sur l'ancien réseau (30 s), répond
+let stopWifi = null;
+
+function arreterSuiviWifi() {
+  stopWifi?.();
+  stopWifi = null;
+}
+
+async function connecter(r, password, statut) {
+  const tablet = targetTablet();
+  if (!tablet) throw new Error('Aucune tablette');
+  const cmdRef = doc(collection(db, 'families', session.fid, 'commands'));
+  const secretRef = doc(db, 'families', session.fid, 'commands', cmdRef.id, 'secret', 'wifi');
+  const batch = writeBatch(db);
+  batch.set(cmdRef, {
+    type: 'wifi', target: tablet.id, createdBy: session.uid, createdAt: serverTimestamp(), state: 'pending',
+    ssid: r.ssid, security: r.security,
+  });
+  if (r.security !== 'open') {
+    batch.set(secretRef, { password, createdBy: session.uid, expireAt: new Date(Date.now() + 3_600_000) });
+  }
+  bumpRev(batch, session.fid);
+  await batch.commit();
+  const dire = (texte, cls = '', titre = '') => {
+    statut.hidden = false;
+    statut.className = `wifi-statut ${cls}`;
+    statut.replaceChildren();
+    if (titre) {
+      const t = document.createElement('strong');
+      t.textContent = titre;
+      statut.append(t, document.createElement('br'));
+    }
+    statut.append(texte);
+  };
+  const effacer = () => {
+    deleteDoc(cmdRef).catch(() => {});
+    if (r.security !== 'open') deleteDoc(secretRef).catch(() => {}); // déjà effacé par la tablette, d'habitude
+  };
+  dire('Envoyé, en attente de la tablette…', 'attente');
+  arreterSuiviWifi();
+  let pris = false;
+  let timer = setTimeout(() => {
+    // Jamais prise : l'ordre est retiré (la tablette ne changera pas de réseau plus tard, à l'improviste).
+    arreterSuiviWifi();
+    effacer();
+    dire('La tablette n\'a pas reçu la demande. Rien n\'a changé : réessayez quand elle sera en ligne.', '', 'Pas de réponse');
+    statut.dispatchEvent(new CustomEvent('fini', { detail: { ok: false } }));
+  }, WIFI_ATTENTE_MS);
+  const unsub = onSnapshot(cmdRef, (snap) => {
+    const cmd = snap.data();
+    if (!cmd || cmd.state === 'pending') return;
+    if (cmd.state === 'running') {
+      if (pris) return;
+      pris = true;
+      dire(cmd.result || `La tablette essaie « ${r.ssid} »…`, 'attente');
+      clearTimeout(timer);
+      timer = setTimeout(() => dire(`La tablette n'a pas encore répondu. Elle reste sur son ancien wifi tant que « ${r.ssid} » ne marche pas.`, 'attente'), WIFI_ESSAI_MS);
+      return;
+    }
+    clearTimeout(timer);
+    arreterSuiviWifi();
+    const issue = ISSUES_WIFI[cmd.issue] || (cmd.state === 'done' ? ISSUES_WIFI.connectee : ISSUES_WIFI.echec);
+    dire(cmd.result || '', issue.ok ? 'ok' : 'refus', issue.titre);
+    effacer();
+    statut.dispatchEvent(new CustomEvent('fini', { detail: { ok: !!issue.ok } }));
+  }, (err) => console.warn('Ordre wifi illisible', err));
+  stopWifi = () => {
+    clearTimeout(timer);
+    unsub();
+    // Fenêtre fermée avant que la tablette prenne l'ordre : il est retiré avec le mot de passe.
+    if (!pris) effacer();
+  };
 }
 
 function ligneReseau(r, actuel) {
@@ -3724,15 +3806,24 @@ function ligneReseau(r, actuel) {
     form.innerHTML = (r.security === 'open'
       ? '<p class="muted small">Réseau ouvert, sans mot de passe.</p>'
       : '<input type="password" autocomplete="off" placeholder="Mot de passe" aria-label="Mot de passe du Wi-Fi" required>')
-      + '<button type="submit" class="primary wide">Se connecter</button><p class="error small" hidden></p>';
+      + '<button type="submit" class="primary wide">Se connecter</button><p class="error small" hidden></p>'
+      + '<p class="wifi-statut" role="status" aria-live="polite" hidden></p>';
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const input = form.querySelector('input');
       const err = form.querySelector('.error');
       if (input && input.value.length < 8) { showError(err, 'Le mot de passe Wi-Fi fait au moins 8 caractères.'); return; }
       form.querySelector('button').disabled = true;
+      err.hidden = true;
+      const statut = form.querySelector('.wifi-statut');
+      statut.addEventListener('fini', (ev) => {
+        // Refusé : on peut corriger le mot de passe et réessayer ; réussi : le mot de passe tapé est effacé.
+        if (input) input.value = '';
+        form.querySelector('button').disabled = ev.detail.ok;
+        if (!ev.detail.ok) input?.focus();
+      }, { once: true });
       try {
-        await connecter(r, input?.value || '');
+        await connecter(r, input?.value || '', statut);
       } catch (error) {
         console.error(error);
         showError(err, "L'envoi a échoué. Vérifiez la connexion.");

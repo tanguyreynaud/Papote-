@@ -548,7 +548,8 @@ service cloud.firestore {
       }
 
       // Commandes à distance pour la tablette (responsables) : Wi-Fi, redémarrage, état.
-      // La tablette les exécute, écrit le résultat et efface le mot de passe dans la même écriture.
+      // La tablette les exécute et écrit le résultat. Le mot de passe du wifi n'est jamais dans l'ordre (lisible
+      // de tous les responsables) : il va dans commands/{id}/secret/wifi, plus bas (A36, Tanguy 12/11).
       match /commands/{cid} {
         allow read: if isFamilyAdmin(fid) || (signedIn() && resource.data.target == request.auth.uid);
         // Tableau de bord (page de la tablette) : redémarrer, état, mise à jour, recharger l'écran, canal
@@ -564,7 +565,7 @@ service cloud.firestore {
           && request.resource.data.createdBy == request.auth.uid
           && request.resource.data.state == 'pending';
         allow create: if isFamilyAdmin(fid)
-          && request.resource.data.keys().hasOnly(['type', 'target', 'createdBy', 'createdAt', 'ssid', 'security', 'password', 'state', 'quoi', 'volume', 'parle'])
+          && request.resource.data.keys().hasOnly(['type', 'target', 'createdBy', 'createdAt', 'ssid', 'security', 'state', 'quoi', 'volume', 'parle'])
           && request.resource.data.type in ['wifi', 'restart', 'status', 'wifiScan', 'son']
           // Test du son à l'installation : la tablette sonne ou parle à ce volume.
           && (request.resource.data.type != 'son'
@@ -580,12 +581,36 @@ service cloud.firestore {
         allow update: if signedIn()
           && resource.data.target == request.auth.uid
           // reseaux : réponse à wifiScan, [{ ssid, security, signal }] (40 au plus).
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state', 'result', 'doneAt', 'password', 'reseaux'])
+          // issue : vrai résultat de l'ordre wifi, lu par l'appli (Connectée, Mot de passe refusé, Réseau introuvable…).
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state', 'result', 'doneAt', 'password', 'reseaux', 'issue'])
           && (!('reseaux' in request.resource.data) || (request.resource.data.reseaux is list && request.resource.data.reseaux.size() <= 40))
+          && (!('issue' in request.resource.data)
+            || request.resource.data.issue in ['connectee', 'deja', 'mot-de-passe', 'introuvable', 'sans-internet', 'echec'])
           && !('password' in request.resource.data)
           // running : la tablette redémarre, le résultat vient au retour (« revenue en 38 s »).
           && request.resource.data.state in ['done', 'failed', 'running'];
         allow delete: if isFamilyAdmin(fid);
+
+        // Mot de passe du wifi (A36) : écrit avec l'ordre (même lot), lisible de la seule tablette visée — pas des
+        // autres responsables, pas même de son auteur —, effacé par la tablette dès qu'elle l'a lu, illisible
+        // après expireAt (1 h, 2 h au plus) et supprimé ensuite par la TTL de Firestore (firestore.indexes.json).
+        match /secret/{sid} {
+          allow create: if sid == 'wifi' && isFamilyAdmin(fid)
+            && getAfter(/databases/$(database)/documents/families/$(fid)/commands/$(cid)).data.type == 'wifi'
+            && getAfter(/databases/$(database)/documents/families/$(fid)/commands/$(cid)).data.createdBy == request.auth.uid
+            && request.resource.data.keys().hasOnly(['password', 'createdBy', 'expireAt'])
+            && request.resource.data.password is string
+            && request.resource.data.password.size() >= 8 && request.resource.data.password.size() <= 63
+            && request.resource.data.createdBy == request.auth.uid
+            && request.resource.data.expireAt is timestamp
+            && request.resource.data.expireAt > request.time
+            && request.resource.data.expireAt <= request.time + duration.value(2, 'h');
+          allow get: if signedIn() && request.time < resource.data.expireAt
+            && get(/databases/$(database)/documents/families/$(fid)/commands/$(cid)).data.target == request.auth.uid;
+          // Effacé par la tablette (lu) ou par son auteur (fenêtre fermée, ordre annulé). Ni liste ni modification.
+          allow delete: if signedIn() && (resource.data.createdBy == request.auth.uid
+            || get(/databases/$(database)/documents/families/$(fid)/commands/$(cid)).data.target == request.auth.uid);
+        }
       }
 
       // Journal d'erreurs de la tablette (200 dernières lignes), lisible des responsables.
