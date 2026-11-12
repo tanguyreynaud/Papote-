@@ -331,7 +331,7 @@ test('moins de 100 envois Brevo restants : e-mails de confort retenus (journal),
   s.reglages.telephones = false;
   await a.appelerDepuisLaTablette(t, { sos: 1 });
   await s.calme();
-  assert.deepStrictEqual(mailsA(julie.email), ['SOS : Mamie Emma a appelé, aucun téléphone n\'a sonné']);
+  assert.deepStrictEqual(mailsA(julie.email), ['SOS : Mamie Emma a appuyé sur SOS, aucun téléphone n\'a sonné']);
   await s.appeler('inviterParEmail', { fid, email: 'cousin@exemple.fr' }, julie);
   assert.strictEqual(mailsA('cousin@exemple.fr').length, 1, 'l\'invitation part');
   await a.tablettePreparee();

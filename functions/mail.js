@@ -956,15 +956,28 @@ function surChaqueEnvoi(f) { apresEnvoi = f; }
 // le retenir. Une panne de ce contrôle laisse partir l'e-mail (comme le compteur, il n'empêche jamais un envoi).
 let avantConfort = null;
 function surEnvoiDeConfort(f) { avantConfort = f; }
+// Appelé quand l'envoi d'un e-mail important échoue (ni de confort, ni en nombre) : index.js le note pour un seul
+// nouvel essai à la tâche horaire suivante, puis une ligne « À faire » (courriels-perdus.js, audit des e-mails 11/11,
+// point 2). Une panne de cette note ne change rien pour l'appelant : il reçoit l'erreur de l'envoi, comme avant.
+let apresEchec = null;
+function surEchec(f) { apresEchec = f; }
 
 // Renvoie true si l'e-mail est parti, false s'il a été retenu (confort, quota presque vide) : jamais d'erreur pour ça,
-// l'appelant continue comme si l'e-mail était parti. Les envois en nombre ont leur propre plafond (permisEnNombre).
+// l'appelant continue comme si l'e-mail était parti. Un échec d'envoi lève l'erreur (l'e-mail important est noté
+// avant pour un nouvel essai, surEchec). Les envois en nombre ont leur propre plafond (permisEnNombre).
 async function envoyer(options) {
   if (avantConfort && !options.enNombre && estConfort(options.contenu)) {
     const permis = await Promise.resolve().then(() => avantConfort(options.a, options.contenu)).catch(() => true);
     if (permis === false) return false;
   }
-  await module.exports.expedier(options);
+  try {
+    await module.exports.expedier(options);
+  } catch (e) {
+    if (apresEchec && !options.enNombre && !estConfort(options.contenu)) {
+      await Promise.resolve().then(() => apresEchec(options, e)).catch(() => null);
+    }
+    throw e;
+  }
   return true;
 }
 
@@ -994,6 +1007,6 @@ module.exports = {
   // support et admin
   rappelConfirme, demandeRappel, bilanSupport, information, recapSemaine, livresComptables, budget,
   // outils
-  message, envoyer, expedier, surChaqueEnvoi, surEnvoiDeConfort, estConfort, CONFORT, echapper, euros, dateEnClair, sansBalises,
+  message, envoyer, expedier, surChaqueEnvoi, surEnvoiDeConfort, surEchec, estConfort, CONFORT, echapper, euros, dateEnClair, sansBalises,
 };
 for (const nom of CONFORT) module.exports[nom] = marquerConfort(module.exports[nom]);

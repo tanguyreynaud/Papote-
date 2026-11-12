@@ -787,7 +787,7 @@ exports.gestionDonnees = onCall(async (request) => {
   // Tout est lu en même temps : « à vendre » et les batteries (qui attendent seulement le stock) ne font plus
   // deux allers-retours de plus vers la base après les autres lectures.
   const lectureStock = db().collection('stock').get();
-  const [commandes, stock, depenses, familles, automatique, reglages, courrier, archives, sims, accessoires, aVendre, batteries, alertes, gardes] = await Promise.all([
+  const [commandes, stock, depenses, familles, automatique, reglages, courrier, archives, sims, accessoires, aVendre, batteries, alertes, gardes, courrielsPerdus] = await Promise.all([
     db().collection('commandes').get(),
     lectureStock,
     db().collection('depenses').get(),
@@ -806,6 +806,8 @@ exports.gestionDonnees = onCall(async (request) => {
     db().collection('alertes').where('le', '>', new Date(Date.now() - ALERTES_JOURS * 86400000)).orderBy('le', 'desc').limit(2000).get()
       .catch((e) => { logger.warn('Alertes', e.message); return { docs: [] }; }),
     lectureStock.then((s) => lireGardeFous(s.docs)).catch((e) => { logger.warn('Garde-fous', e.message); return new Map(); }),
+    // E-mails perdus (courriels-perdus.js) : en attente d'un nouvel essai, ou ligne « À faire ».
+    require('./courriels-perdus').enAttente(db()).catch((e) => { logger.warn('E-mails perdus', e.message); return []; }),
   ]);
   const parFid = new Map(familles.docs.map((f) => [f.id, f.data()]));
   // Compte de la tablette -> sa fiche de stock (T-…), pour compter les alertes sur la page de la tablette.
@@ -859,6 +861,9 @@ exports.gestionDonnees = onCall(async (request) => {
         remise: c.remise || null,
         annulation: c.annulation || null,
         reprise: c.reprise === true,
+        // E-mail perdu pour cette commande (colis parti, rejet signalé par Brevo, envoi raté : courriels-perdus.js).
+        mailErreur: c.mailErreur || null,
+        mailErreurLe: c.mailErreurLe || null,
       });
     }),
     stock: stock.docs.map((d) => {
@@ -890,6 +895,10 @@ exports.gestionDonnees = onCall(async (request) => {
     genresAlerte: require('./journal-alertes').GENRES,
     genresGardeFou: GARDE_FOUS,
     alertesJours: ALERTES_JOURS,
+    // E-mails perdus : [{ id, origine ('brevo' | 'smtp'), a, sujet, raison, erreur, statut, commande, nom, le }], et les
+    // lignes « À faire » qu'ils donnent (mêmes textes que le récap). « Réglé » : gestionCourrielTraite({ id }).
+    courrielsPerdus: courrielsPerdus.map(aplatir),
+    courrielsAFaire: require('./courriels-perdus').lignesAFaire(courrielsPerdus),
   };
 });
 const ALERTES_JOURS = 90;
@@ -2628,6 +2637,16 @@ exports.gestionAnnulerEtiquette = onCall({ secrets: [SENDCLOUD_API] }, async (re
 
 // { commande, email? } : renvoie au client le code de commande (rappel de jumelage), à l'e-mail de la commande
 // ou à une autre adresse donnée par téléphone.
+// Ligne « e-mail perdu » réglée par Tanguy (client appelé, adresse corrigée à la main…) : elle quitte « À faire ».
+exports.gestionCourrielTraite = onCall(async (request) => {
+  verifierAdmin(request);
+  if (reveil(request)) return { ok: true };
+  const { id } = request.data || {};
+  if (typeof id !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(id)) throw new HttpsError('invalid-argument', 'E-mail perdu manquant.');
+  if (!await require('./courriels-perdus').traiter(db(), id)) throw new HttpsError('not-found', 'E-mail perdu introuvable.');
+  return { ok: true };
+});
+
 exports.gestionRenvoyerCode = onCall({ secrets: [MAIL_MOT_DE_PASSE] }, async (request) => {
   verifierAdmin(request);
   const d = request.data || {};
@@ -3005,7 +3024,8 @@ const sansFacture = (t, maintenant) => t.prixAchat == null && !t.acheteeLe && !t
 const suiteSuspendue = (f) => (f.resiliationLe ? ' : abonnement arrêté par Papote, la tablette doit revenir'
   : ' : arrêt automatique de l\'abonnement à 9 h (sinon « Arrêter l\'abonnement » sur la commande)');
 // familles : [{ id, nom, statut, graceJusqua, suspenduLe, resiliationLe, majLe }] (gestionDonnees, recapitulatif).
-function aFaire({ commandes, stock, depenses, automatique, maintenant, sims = [], accessoires = [], familles = [] }) {
+// courriels : e-mails perdus (courriels-perdus.js, enAttente) ; seuls ceux « a-faire » font une ligne.
+function aFaire({ commandes, stock, depenses, automatique, maintenant, sims = [], accessoires = [], familles = [], courriels = [] }) {
   const liste = [];
   // texte : « tablette(s) reçue(s) » → singulier ou pluriel selon n.
   const ajouter = (n, texte) => { if (n > 0) liste.push(`${n} ${texte.replace(/\(s\)/g, n > 1 ? 's' : '')}`); };
@@ -3057,6 +3077,8 @@ function aFaire({ commandes, stock, depenses, automatique, maintenant, sims = []
   for (const c of actives.filter((x) => x.premierRepousseLe && ['a-preparer', 'paiement-en-attente'].includes(x.expedition))) {
     liste.push(`Commande de ${c.nom || c.email || c.id} payée mais toujours pas partie : premier prélèvement repoussé, à envoyer`);
   }
+  // E-mails perdus (audit des e-mails 11/11, point 2) : rejet signalé par Brevo, ou envoi raté deux fois.
+  liste.push(...require('./courriels-perdus').lignesAFaire(courriels));
   // Contrôle de nuit Stripe ↔ base (rapprocherStripe).
   liste.push(...((automatique && automatique.rapprochement) || []));
   const parId = new Map(commandes.map((c) => [c.id, c]));
@@ -3089,7 +3111,7 @@ async function recapitulatif() {
   const maintenant = Date.now();
   const debutAnnee = new Date(new Date(maintenant).getFullYear(), 0, 1).getTime();
   const [commandesSnap, stockSnap, depensesSnap, familles, automatique, reglagesSnap, semaine, annee, abonnes, simsSnap,
-    accessoiresSnap] = await Promise.all([
+    accessoiresSnap, courriels] = await Promise.all([
     db().collection('commandes').get(),
     db().collection('stock').get(),
     db().collection('depenses').get(),
@@ -3101,6 +3123,7 @@ async function recapitulatif() {
     tout(stripe().subscriptions.list({ status: 'active', limit: 100 })),
     db().collection('sims').get(),
     db().collection('accessoires').get(),
+    require('./courriels-perdus').enAttente(db()).catch((e) => { logger.warn('E-mails perdus illisibles', e.message); return []; }),
   ]);
   const statut = new Map(familles.docs.map((f) => [f.id, f.get('abonnement.statut') || null]));
   const commandes = commandesSnap.docs.map((d) => {
@@ -3116,6 +3139,7 @@ async function recapitulatif() {
     sims: simsSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
     accessoires: accessoiresSnap.docs.map((d) => d.data()),
     automatique: automatique.data(),
+    courriels,
     maintenant,
   });
   const nouvelles = commandes.filter((c) => ms(c.creeLe) > maintenant - JOURS(7)).length;

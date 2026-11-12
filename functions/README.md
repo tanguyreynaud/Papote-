@@ -15,7 +15,7 @@ Abonnements et paiements Stripe. Plan complet et état des familles : `abonnemen
 Deux fonctions planifiées seulement (Cloud Scheduler : 3 gratuites, puis 0,10 $/tâche/mois) :
 `alertesTablettes` toutes les 5 minutes (`alertes.js`), et `tachesHoraires` toutes les heures pile, heure de Paris
 (`taches.js`), qui lance à leur heure les autres tâches (`taches.PLANNING`) : `relancesPaniers`, `finDeGrace`,
-`gestionCourrier` et `alerteForfait` toutes les heures ; `gestionAutomatique` à 4 h, `restitutions` à 9 h, `rappelsJumelage` et
+`gestionCourrier`, `alerteForfait` et `courrielsAReessayer` toutes les heures ; `gestionAutomatique` à 4 h, `restitutions` à 9 h, `rappelsJumelage` et
 `alerteMatin` à 10 h chaque jour ; `gestionRecap` (8 h) et `bilanSupport` (9 h) le lundi ; `purgeMensuelle` (4 h) et
 `gestionCloture` (5 h) le 1er du mois. Une tâche en erreur est journalisée et n'arrête pas les autres.
 
@@ -38,3 +38,28 @@ sur les émulateurs Firebase, Stripe simulé. Lancé aussi par GitHub à chaque 
 - Colis parti : bouton du tableau de bord admin (fonction `tabletteEnvoyee`) ou `outils\admin\abonnements.bat envoyee <e-mail|code> <numéro de suivi>`. Le client reçoit l'e-mail avec le lien de suivi (`commandeModifiee`).
 - Tablette pas jumelée : rappels au client 5 et 12 jours après l'envoi (`rappelsJumelage`), puis `alerteJumelage: true` sur la commande à 20 jours.
 - E-mails envoyés par SMTP : `MAIL_SMTP` et `MAIL_EXPEDITEUR` dans `.env`, mot de passe rangé par `outils\mail\installer-mail.bat` (secret `MAIL_MOT_DE_PASSE`, à créer AVANT le déploiement).
+
+## E-mails perdus (rejets Brevo, envois ratés)
+
+`courriels-perdus.js` (audit des e-mails du 11/11, point 2). Chaque e-mail perdu va dans `courrielsPerdus/{id}`, sur la
+commande de l'adresse (`mailErreur`, lu par l'admin) et en ligne « À faire » (récap du lundi ; `gestionDonnees`
+renvoie `courrielsPerdus` et `courrielsAFaire` ; `gestionCourrielTraite({ id })` règle une ligne). Corriger l'adresse
+e-mail d'une commande règle aussi ses lignes.
+
+- **Rejet signalé par Brevo** (adresse inexistante ou mal écrite, boîte pleine, bloqué, indésirable, désinscrit) :
+  fonction `brevoWebhook`, protégée par le secret `BREVO_WEBHOOK_SECRET`.
+- **Envoi SMTP raté** pour un e-mail important (tout sauf les e-mails de confort `mail.CONFORT` et les envois en
+  nombre) : gardé, renvoyé **une seule fois** par la tâche horaire suivante (`courrielsAReessayer`, dans
+  `tachesHoraires` : aucune tâche Cloud Scheduler en plus), puis ligne « À faire ».
+
+Réglage, une fois (avant le prochain déploiement des fonctions, sinon il s'arrête ou demande la valeur) :
+
+1. `firebase functions:secrets:set BREVO_WEBHOOK_SECRET --project papote-famille` et coller une longue valeur au
+   hasard (`openssl rand -hex 32`). Jamais dans le dépôt.
+2. Déployer les fonctions.
+3. Brevo > Transactionnel > Paramètres > Webhook > « Ajouter un webhook » : URL
+   `https://europe-west1-papote-famille.cloudfunctions.net/brevoWebhook?cle=<la valeur du secret>`, événements
+   Hard bounce, Soft bounce, Bloqué, Adresse invalide, Plainte (spam), Désinscrit, Erreur. Si Brevo propose un jeton
+   « Bearer » ou un en-tête, la même valeur peut y aller à la place de `?cle=` (en-tête `Authorization: Bearer …` ou
+   `X-Papote-Cle`).
+4. Essai : un e-mail vers une adresse qui n'existe pas (`nimporte-quoi-1234@mapapote.fr`) donne une ligne « À faire ».
