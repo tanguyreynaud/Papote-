@@ -277,6 +277,34 @@ test('appels : la tablette appelle quand l\'abonnement est actif, pas quand il e
   await assertFails(setDoc(doc(tablette('tab'), `families/${FID}/calls/c2`), appel));
 });
 
+// A47 (Tanguy 12/11) : le SOS est lancé par la tablette seule. Un proche ne peut ni créer un appel marqué SOS
+// ('SOS', 'SOS 2' : functions/appels.js essaiSos), ni relancer un SOS fini (ringing → missed : l'alerte à toute la famille).
+test('appels SOS : seule la tablette en crée ; un proche ne relance pas un SOS fini', async () => {
+  await famille();
+  const sos = (uid, calleeName) => ({
+    callerUid: uid, callerName: 'Mamie Emma', calleeUid: null, calleeName,
+    state: 'ringing', offer: null, answer: null, createdAt: serverTimestamp(), endedAt: null,
+  });
+  await assertSucceeds(setDoc(doc(tablette('tab'), `families/${FID}/calls/s1`), sos('tab', 'SOS')));
+  await assertSucceeds(setDoc(doc(tablette('tab'), `families/${FID}/calls/s2`), sos('tab', 'SOS 2')));
+  await assertFails(setDoc(doc(proche('julie'), `families/${FID}/calls/s3`), sos('julie', 'SOS')));
+  await assertFails(setDoc(doc(proche('julie'), `families/${FID}/calls/s4`), sos('julie', 'SOS 2')));
+  // Un appel ordinaire du proche (vers la tablette, sans calleeName) reste possible.
+  await assertSucceeds(setDoc(doc(proche('julie'), `families/${FID}/calls/s5`), { ...sos('julie', null), calleeName: null }));
+  // Le proche répond à un SOS qui sonne, ou le refuse : permis.
+  await assertSucceeds(updateDoc(doc(proche('julie'), `families/${FID}/calls/s1`), { state: 'missed' }));
+  // … mais ne le remet pas à sonner, ni ne change son marquage.
+  await assertFails(updateDoc(doc(proche('julie'), `families/${FID}/calls/s1`), { state: 'ringing' }));
+  await assertFails(updateDoc(doc(tablette('tab'), `families/${FID}/calls/s1`), { state: 'ringing' }));
+  await assertFails(updateDoc(doc(proche('julie'), `families/${FID}/calls/s5`), { calleeName: 'SOS 2' }));
+  await assertSucceeds(updateDoc(doc(proche('julie'), `families/${FID}/calls/s2`), { state: 'accepted', answer: { type: 'answer', sdp: 'x' } }));
+  await assertSucceeds(updateDoc(doc(proche('julie'), `families/${FID}/calls/s2`), { state: 'ended' }));
+  await assertFails(updateDoc(doc(proche('julie'), `families/${FID}/calls/s2`), { state: 'ringing' }));
+  // Un appel ordinaire fini peut toujours être remis à sonner comme avant (rien d'autre ne change).
+  await assertSucceeds(updateDoc(doc(proche('julie'), `families/${FID}/calls/s5`), { state: 'ended' }));
+  await assertSucceeds(updateDoc(doc(proche('julie'), `families/${FID}/calls/s5`), { state: 'ringing' }));
+});
+
 // Tableau de bord (badge admin) : ordres à la tablette, fiche de membre, journal, volumes.
 const admin = (uid = 'tanguy') => env.authenticatedContext(uid, {
   email: `${uid}@exemple.fr`, email_verified: true, admin: true, firebase: { sign_in_provider: 'google.com' },
