@@ -241,7 +241,16 @@ const DELAI = 'Je prépare et vérifie votre tablette moi-même, avec sa carte S
 
 // reprise : abonnement repris après une résiliation, tablette restée chez le proche (C3) : pas de mise en service,
 // pas de délai pour changer d'avis.
-function commandeConfirmee({ nom, code, relais, formule, dejaInstallee, reprise, famille }) {
+// CGV en PDF jointes à chaque confirmation (A13, Tanguy 12/11/2026) : le client les garde (support durable).
+// Fichier fabriqué depuis vitrine/cgv.html par outils/cgv-pdf/generer.js.
+const CGV_PDF = { filename: 'Conditions générales de vente Papote.pdf', path: require('node:path').join(__dirname, 'documents', 'cgv.pdf'), contentType: 'application/pdf' };
+const CGV_JOINTES = { petit: 'Nos conditions générales de vente sont jointes à cet e-mail (PDF), à garder.' };
+
+function commandeConfirmee(infos) {
+  return { ...commandeConfirmeeTexte(infos), attachments: [CGV_PDF] };
+}
+
+function commandeConfirmeeTexte({ nom, code, relais, formule, dejaInstallee, reprise, famille }) {
   // Offre unique (29/10/2026) : la formule n'est plus lue, les anciennes commandes Wi-Fi n'étaient que des essais.
   const mensuel = OFFRE;
   // Abonnement pris dans l'appli, tablette déjà installée : ni envoi ni installation à annoncer.
@@ -256,6 +265,7 @@ function commandeConfirmee({ nom, code, relais, formule, dejaInstallee, reprise,
         ['Premier mois', 'prélevé dans 30 jours'],
       ] },
       reprise ? null : 'D\'ici là, vous pouvez changer d\'avis : rien à payer et les 60 € remboursés.',
+      CGV_JOINTES,
     ], { texte: 'Ouvrir l\'appli Papote', lien: APPLI });
   }
   return message('Merci pour votre commande Papote', [
@@ -278,6 +288,7 @@ function commandeConfirmee({ nom, code, relais, formule, dejaInstallee, reprise,
       ? '<b>Votre espace famille Papote est déjà prêt.</b> Ouvrez l\'appli Papote avec le bouton ci-dessous et connectez-vous avec cette adresse e-mail : vous pourrez donner le nom de votre proche, préparer les premières photos et inviter la famille avant même l\'arrivée de la tablette. À son arrivée, il suffira de la brancher : elle retrouvera votre famille toute seule.'
       : '<b>En attendant, installez l\'appli Papote sur votre téléphone</b> avec le bouton ci-dessous. À son arrivée, il suffira de brancher la tablette : elle retrouvera votre famille toute seule.',
     { petit: 'La tablette est prêtée et configurée : vous n\'avez rien à installer.' },
+    CGV_JOINTES,
   ], famille ? { texte: 'Ouvrir mon espace famille', lien: famille } : { texte: 'Installer l\'appli Papote', lien: APPLI });
 }
 

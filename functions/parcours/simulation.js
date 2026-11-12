@@ -126,7 +126,7 @@ const mail = require('../mail');
 // Seul l'envoi lui-même est remplacé : le tri des e-mails de confort (mail.envoyer, quota-courriels.js) tourne pour de vrai.
 // Le compteur du quota Brevo (interne/courriels-…) n'avance pas en simulation : un scénario le remplit lui-même.
 mail.expedier = async ({ a, contenu }) => {
-  boite.push({ a, sujet: contenu.subject, texte: contenu.text, le: Date.now() });
+  boite.push({ a, sujet: contenu.subject, texte: contenu.text, le: Date.now(), pieces: (contenu.attachments || []).map((p) => p.filename) });
 };
 
 const notifications = [];
@@ -327,7 +327,13 @@ function demarrerServeur() {
     }
     const f = fonctions[req.params.nom];
     if (!f) return res.status(404).send('fonction inconnue');
-    return enFonction(req.params.nom, () => f(req, res));
+    // Suivie comme un déclencheur : le travail fait APRÈS la réponse (e-mail « C'est noté »…) compte pour calme().
+    const p = Promise.resolve()
+      .then(() => enFonction(req.params.nom, () => f(req, res)))
+      .catch((e) => { if (!res.headersSent) res.status(500).send(String(e && e.message)); })
+      .finally(() => { enCours.delete(p); derniereActivite = vraiMaintenant(); });
+    enCours.add(p);
+    return p;
   });
   return new Promise((pret) => {
     serveur = http.createServer(app).listen(0, '127.0.0.1', () => {
