@@ -785,6 +785,10 @@ function afficherAccueil() {
     [problemes, `${pluriel(problemes, 'problème')} lors du dernier passage automatique`, '#outils/automatique', 'ko'],
     // Contrôle des factures de vente à la clôture (Tanguy, 10/11) : une ligne par point, du mois le plus récent.
     ...controleVentes().map((t) => [1, t, '#compta/registres', 'ko']),
+    // E-mails rejetés par Brevo ou non partis après un second essai (A3) : une ligne par adresse, mêmes textes que le
+    // récap du lundi ; « Réglé » dans le ⋮ la retire (corriger l'adresse sur la commande la retire aussi).
+    ...courrielsAFaire().map(({ texte, ids, commande }) => [1, texte, commande ? versCommande({ id: commande }) : '#commandes', 'ko',
+      { libelle: 'Réglé', faire: () => courrielsRegles(ids) }]),
   ].filter(([n]) => n > 0);
   // Lignes masquées 7 jours par l'admin (gestionReglages, masquer) : elles reviennent seules si rien n'est réglé.
   const cleTache = ([, texte, lien]) => `${lien}|${texte}`;
@@ -1039,6 +1043,10 @@ async function remplirCommande(id) {
   $('dc-corps').replaceChildren(...[
     annonce ? h('p', { class: 'annonce', role: 'status' }, annonce) : null,
     c.couvertureAVerifier && c.expedition !== 'annulee' ? blocCouverture(c) : null,
+    // E-mail au client rejeté par Brevo ou non parti (A3) : corriger l'adresse ci-dessous efface ce bandeau.
+    c.mailErreur ? h('div', { class: 'alerte-doublon', role: 'alert' },
+      h('strong', {}, 'Un e-mail à ce client n\'est pas arrivé'),
+      h('p', {}, `${c.mailErreur}${c.mailErreurLe ? ` (le ${jour(c.mailErreurLe)})` : ''}. Vérifier l'adresse avec le client.`)) : null,
     doublon ? h('div', { class: `alerte-doublon${doublon.mauvaisPayeur ? ' grave' : ''}`, role: 'alert' },
       h('strong', {}, doublon.mauvaisPayeur ? '⚠ Client déjà mauvais payeur : ne pas envoyer avant vérification' : 'Ce client a déjà commandé'),
       doublon.mauvaisPayeur ? h('p', {}, `Sur une commande précédente : ${doublon.raisons.join(', ')}.`) : null,
@@ -2475,6 +2483,37 @@ const nomTablette = (t) => (t.ref ? `la tablette ${t.ref}` : 'cette tablette');
 
 // « Vu » sur l'alerte réseau d'une tablette : gardé sur sa fiche de membre (reseauVu, firestore.rules), l'alerte quitte
 // l'accueil et ne revient que si le réseau empire (sim.js, reseauAVoir). Depuis l'accueil (menu ⋮) ou sa page.
+// Lignes « e-mail perdu » (functions/courriels-perdus.js, lignesAFaire) : mêmes groupes, même ordre que le serveur,
+// avec les fiches de chaque groupe pour « Réglé ».
+function courrielsAFaire() {
+  const textes = donnees.courrielsAFaire || [];
+  const groupes = new Map();
+  for (const c of (donnees.courrielsPerdus || []).filter((x) => x && x.statut === 'a-faire')) {
+    if (!groupes.has(c.a)) groupes.set(c.a, []);
+    groupes.get(c.a).push(c);
+  }
+  return [...groupes.values()].map((liste, i) => ({
+    texte: textes[i] || `E-mail non reçu par ${liste[0].a}`, ids: liste.map((c) => c.id),
+    commande: (liste.find((c) => c.commande) || {}).commande || null,
+  }));
+}
+
+async function courrielsRegles(ids) {
+  try {
+    await patienter('Ligne notée comme réglée…', async () => {
+      for (const id of ids) await appeler('gestionCourrielTraite', { id });
+    });
+    donnees.courrielsPerdus = (donnees.courrielsPerdus || []).filter((c) => !ids.includes(c.id));
+    const restants = courrielsAFaire().length;
+    donnees.courrielsAFaire = (donnees.courrielsAFaire || []).slice(0, restants);
+    afficherAccueil();
+    annoncer('Réglé');
+    chargerDonnees().catch(() => null);
+  } catch (e) {
+    prevenir(`La ligne n'a pas pu être notée comme réglée (${messageErreur(e)}).`);
+  }
+}
+
 async function marquerReseauVu(fid, uid, r, bouton = null) {
   if (bouton) { if (bouton.disabled) return; bouton.disabled = true; boutonCharge(bouton, true); }
   const vu = reseauVuDe(r);
