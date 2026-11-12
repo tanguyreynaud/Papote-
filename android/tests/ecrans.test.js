@@ -293,6 +293,7 @@ test('attente de la famille : « On prépare votre tablette… », rien à scann
       assert.strictEqual(await b.page.locator('.welcome img:not(.welcome-logo)').count(), 0, 'aucun QR code');
       const voix = (await b.appels()).filter((a) => ['audio', 'speak', 'speakGuide'].includes(a.nom));
       assert.deepStrictEqual(voix, [], 'rien de lu à voix haute');
+      assert.ok(!(await b.visible('.welcome .welcome-listen')), 'pas de haut-parleur « Réécouter »');
       await b.page.evaluate(() => window.PapoteBienvenue.hide());
     }
     // Pas encore d'internet pour écrire le code : on le dit doucement, avec le wifi à portée de main.

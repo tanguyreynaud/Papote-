@@ -72,7 +72,13 @@
   // Illustration de l'étape (bienvenue/<nom>.svg), dans le panneau de gauche ; vide = pas de panneau.
   var art = '';
 
+  // Écran d'attente (« Je cherche internet… », « On prépare votre tablette… ») : rien à lire à voix haute,
+  // donc pas de haut-parleur (il relisait la phrase de l'écran d'avant). Remis à false par chaque écran.
+  var muet = false;
+
   function screen(title, subtitle) {
+    var sansVoix = muet;
+    muet = false;
     root.innerHTML = '';
     var card = el('div', 'welcome-card' + (art ? ' with-art' : ''));
     if (art) {
@@ -97,7 +103,7 @@
       steps.appendChild(el('span', 'welcome-stepnum', 'Étape ' + stepNum + ' sur ' + STEPS));
       head.appendChild(steps);
     }
-    if (!repair) {
+    if (!repair && !sansVoix) {
       // Haut-parleur : réécouter la phrase du guide de cet écran.
       var listen = el('button', 'welcome-listen');
       listen.setAttribute('aria-label', 'Réécouter');
@@ -240,6 +246,7 @@
 
   // « Je cherche internet… » : rien à toucher, la tablette se connecte seule (carte SIM, ou wifi déjà connu).
   function showSearch() {
+    muet = true;
     var box = screen('Je cherche internet…', 'Un instant : la tablette se connecte toute seule.');
     box.className += ' welcome-prepare';
     box.appendChild(el('span', 'boot-spin welcome-spin', ''));
@@ -521,6 +528,7 @@
     preloadFaceDetector();
     stepNum = 0;
     art = '';
+    muet = true;
     var box = screen('On prépare votre tablette…', s.sansInternet
       ? 'La tablette attend internet pour retrouver sa famille.'
       : 'La tablette retrouve sa famille. Cela peut prendre quelques minutes.');
