@@ -28,6 +28,7 @@ const PLANNING = {
   relancesSepa: { heure: 11 }, //              (nouvelle, 10/11 : « passer au prélèvement », index.js)
   rappelsJumelage: { heure: 10 }, //           (every day 10:00)
   alerteMatin: { heure: 10 }, //               (alertes.HORAIRE_PAS_VUE : every day 10:00)
+  courrielsAReessayer: TOUTES_LES_HEURES, //   (nouvelle, 12/11 : e-mail important non parti, un seul nouvel essai)
   alerteForfait: TOUTES_LES_HEURES, //         (nouvelle, 5/11 : forfait SIM à 80 et 95 %, forfait-alerte.js)
   gestionRecap: { heure: 8, lundi: true }, //  (every monday 08:00)
   bilanSupport: { heure: 9, lundi: true }, //  (every monday 09:00)

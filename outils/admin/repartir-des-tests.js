@@ -17,6 +17,7 @@
 // Stripe (mode TEST seulement, clé demandée au clavier ou variable STRIPE_SECRET, jamais écrite) : les
 // abonnements des commandes sont arrêtés et leurs clients effacés, AVANT la base (le webhook pourrait
 // sinon recréer une commande). Entrée sans clé : Stripe n'est pas touché.
+// Refusé dès qu'une commande payée avec la clé réelle de Stripe existe (commandes-reelles.js) : rien n'est changé.
 // Gardé : achats, dépenses, stock (délié de ses commandes et familles), cartes SIM, accessoires, réglages,
 // clés des tablettes, comptes de connexion.
 // Clé d'administration : %USERPROFILE%\.papote\cle-admin-firebase.json (jamais dans le dépôt).
@@ -27,6 +28,7 @@ const readline = require('readline');
 const admin = require('firebase-admin');
 const { FieldValue } = require('firebase-admin/firestore');
 const { ouvrirBase } = require('./base');
+const { refuserSiCommandesReelles } = require('./commandes-reelles');
 
 function option(nom) {
   const i = process.argv.indexOf(`--${nom}`);
@@ -81,6 +83,8 @@ const sansAchat = (t) => t.prixAchat == null && !t.acheteeLe && !t.depense;
 
 async function main() {
   const db = await ouvrirBase(app);
+  // Jamais après la première vente : une commande payée en clé réelle de Stripe arrête tout (audit 12/11, N4).
+  if (await refuserSiCommandesReelles(db, 'repartir-des-tests')) process.exit(1);
   const [commandes, familles, invites, pairings, reservations, paniers, stock] = await Promise.all(
     ['commandes', 'families', 'invites', 'pairings', 'reservations', 'paniers', 'stock'].map((c) => db.collection(c).get()));
   const famillesAEffacer = familles.docs.filter((d) => !garder.has(d.id));

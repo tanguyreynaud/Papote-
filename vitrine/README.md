@@ -17,3 +17,7 @@ Ensuite, comme l'app famille :
 - `node outils/vitrine/publier.mjs en-ligne` : mise en ligne.
 
 La configuration est dans `firebase.vitrine.json` (site `papote` seul) : `firebase.json` et l'app famille ne sont pas concernés.
+
+## CGV en PDF
+
+Les CGV sont jointes en PDF à chaque e-mail de confirmation de commande (A13, 12/11/2026). Après tout changement de `cgv.html`, relancer `node outils/cgv-pdf/generer.js` et garder le nouveau `functions/documents/cgv.pdf` (sinon les tests des fonctions sont rouges), puis publier les fonctions.

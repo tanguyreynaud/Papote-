@@ -35,6 +35,7 @@
 //   jetonAppCheck      POST depuis la tablette : jeton App Check contre sa clé d'installation (appcheck.js)
 //   quota*             plafonds de stockage par famille appliqués par le serveur (quota.js)
 //   gestion*           page de gestion admin : stock, commandes, factures, comptabilité (gestion.js)
+//   brevoWebhook       Brevo prévient ici d'un e-mail perdu (adresse fausse, boîte pleine, bloqué…) : courriels-perdus.js
 //   iaAdmin            appel depuis l'admin (#aide) : « que faire si… » avec le guide et l'état du parc, sans rien faire (ia-admin.js)
 //
 // État écrit sur families/{fid}.abonnement (voir abonnement.js), avec rev + 1 pour que la
@@ -71,6 +72,10 @@ const quotaCourriels = require('./quota-courriels');
 mail.surChaqueEnvoi((n) => quotaCourriels.compter(db, n, logger));
 // E-mails de confort (mail.js, CONFORT) retenus quand il reste moins de 100 envois dans la journée (audit 11/11, L1 et L8).
 mail.surEnvoiDeConfort((a, contenu) => quotaCourriels.confortAutorise(db, { a, sujet: contenu && contenu.subject }, logger));
+// E-mail important non parti (Brevo en panne ou qui refuse) : noté, un seul nouvel essai à la tâche horaire suivante,
+// puis ligne « À faire » ; rejets signalés après coup par Brevo : brevoWebhook (audit des e-mails 11/11, point 2).
+const courrielsPerdus = require('./courriels-perdus');
+mail.surEchec((options, e) => courrielsPerdus.noterEchecEnvoi(db, options, e, logger));
 
 const STRIPE_SECRET = defineSecret('STRIPE_SECRET');
 const STRIPE_WEBHOOK_SECRET = defineSecret('STRIPE_WEBHOOK_SECRET');
@@ -88,6 +93,8 @@ const MAIL_SMTP = defineString('MAIL_SMTP', { default: 'smtp.gmail.com:465:' });
 const MAIL_EXPEDITEUR = defineString('MAIL_EXPEDITEUR', { default: '' });
 const MAIL_MOT_DE_PASSE = defineSecret('MAIL_MOT_DE_PASSE');
 const SENDCLOUD_API = defineSecret('SENDCLOUD_API');
+// Clé partagée avec Brevo pour son webhook (courriels-perdus.js : réglage chez Brevo et dans Secret Manager).
+const BREVO_WEBHOOK_SECRET = defineSecret('BREVO_WEBHOOK_SECRET');
 
 function envoyerMail(a, contenu) {
   return mail.envoyer({
@@ -1544,6 +1551,9 @@ async function paiementTermine(session) {
       ...(meta.reprise === '1' ? { reprise: true } : {}),
       delai: meta.delai || null,
       stripeCustomerId: session.customer,
+      // Payée avec la clé réelle de Stripe (pas une commande d'essai) : les outils qui vident la base refusent de
+      // tourner dès qu'une telle commande existe (outils/admin/commandes-reelles.js, audit du 12/11 N4).
+      livemode: session.livemode === true,
       fid: (existante.exists && existante.get('fid')) || null,
       creeLe: FieldValue.serverTimestamp(),
     }, { merge: true });
@@ -2616,9 +2626,22 @@ exports.commandeModifiee = onDocumentUpdated(
     const avant = event.data.before.data();
     const apres = event.data.after.data();
     await mailEnvoi(event, avant, apres);
+    await adresseCorrigee(event, avant, apres);
     await debutApresReception(event, avant, apres);
     await suiviRetour(event, avant.restitution || {}, apres.restitution || {}, apres);
   });
+
+// Adresse e-mail de la commande corrigée (faute de frappe à la commande) : les e-mails perdus de l'ancienne adresse
+// quittent « À faire » et mailErreur s'efface (courriels-perdus.js).
+async function adresseCorrigee(event, avant, apres) {
+  if (!avant.email || avant.email === apres.email) return;
+  try {
+    await courrielsPerdus.adresseCorrigee(db, event.params.id, avant.email, logger);
+    if (apres.mailErreur) await event.data.after.ref.update({ mailErreur: FieldValue.delete(), mailErreurLe: FieldValue.delete() });
+  } catch (e) {
+    logger.warn(`Commande ${event.params.id} : e-mails perdus de l'ancienne adresse non réglés`, e.message);
+  }
+}
 
 // Tablette partie : le premier mois commence à la réception (estimée à l'envoi + 3 jours, puis recalée sur
 // la vraie date dès qu'on la connaît : preparation.recuLe). Le premier prélèvement tombe à la fin des
@@ -2886,6 +2909,7 @@ exports.gestionAnnulerCommande = gestion.gestionAnnulerCommande;
 exports.gestionParcours = gestion.gestionParcours;
 exports.gestionRenvoyerCode = gestion.gestionRenvoyerCode;
 exports.gestionJumelage = gestion.gestionJumelage;
+exports.gestionCourrielTraite = gestion.gestionCourrielTraite;
 
 // Installation d'une nouvelle tablette depuis le téléphone du premier proche (installation.js).
 const installation = require('./installation').brancher({
@@ -2984,10 +3008,23 @@ Object.assign(exports, (({ quotaFichier, quotaFichierEfface, quotaEnvois }) => (
 // Alertes sur le téléphone des responsables : tablette débranchée ou qui ne répond plus.
 exports.alertesTablettes = require('./alertes').alertesTablettes;
 
+// E-mails perdus signalés par Brevo (rejet définitif, boîte pleine, bloqué, indésirable…) : noté sur la commande et
+// en « À faire ». Protégé par la clé BREVO_WEBHOOK_SECRET (?cle=… ou en-tête) : courriels-perdus.js.
+exports.brevoWebhook = onRequest({ secrets: [BREVO_WEBHOOK_SECRET], maxInstances: 2 },
+  courrielsPerdus.webhookBrevo(db, () => BREVO_WEBHOOK_SECRET.value(), logger));
+
 // Les autres tâches planifiées, regroupées dans une seule fonction lancée toutes les heures (taches.js : Cloud
 // Scheduler est gratuit jusqu'à 3 tâches). Chacune garde son heure : voir taches.PLANNING.
 exports.tachesHoraires = require('./taches').planifier({
-  relancesPaniers, finDeGrace, restitutions, rappelsJumelage, relancesSepa,
+  relancesPaniers, finDeGrace, restitutions, relancesSepa,
+  // Chaque jour à 10 h : rappels de jumelage, et dans le même créneau le ménage quotidien (menage.js : journaux de
+  // plus de 90 jours, comptes sans famille depuis 3 mois). Pas de nouvelle tâche planifiée (règle de coûts) ; une
+  // erreur du ménage est journalisée sans toucher aux rappels.
+  rappelsJumelage: async () => {
+    const [rappels, menage] = await Promise.allSettled([rappelsJumelage(), require('./menage').menageQuotidien()]);
+    if (menage.status === 'rejected') logger.error('Ménage quotidien en erreur', menage.reason);
+    if (rappels.status === 'rejected') throw rappels.reason;
+  },
   gestionCourrier: gestion.gestionCourrier, gestionAutomatique: gestion.gestionAutomatique,
   gestionRecap: gestion.gestionRecap, gestionCloture: gestion.gestionCloture,
   gestionCopieVentes: gestion.gestionCopieVentes,
@@ -2996,6 +3033,10 @@ exports.tachesHoraires = require('./taches').planifier({
   alerteMatin: require('./alertes').alerteMatin,
   // Forfait internet de la tablette à 80 et 95 % : Papote, puis la famille (forfait-alerte.js).
   alerteForfait: () => require('./forfait-alerte').alerteForfait(envoyerMail, { emailPapote: EMAIL_PAPOTE, auth: admin.auth(), estActif: require('./abonnement').estActif }),
+  // E-mails importants non partis : un seul nouvel essai, puis « À faire » (courriels-perdus.js).
+  courrielsAReessayer: () => courrielsPerdus.reessayer(db, (a, contenu) => mail.expedier({
+    smtp: MAIL_SMTP.value(), expediteur: MAIL_EXPEDITEUR.value(), motDePasse: MAIL_MOT_DE_PASSE.value(), a, contenu,
+  }), logger),
   // Purge mensuelle des données de plus de 12 mois (chat, paniers, familles résiliées) : purge.js.
   purgeMensuelle: require('./purge').purgeMensuelle,
 });
@@ -3032,3 +3073,7 @@ exports.voixRappel = onDocumentWritten(
       console.error(`Voix ${apres.ref.path} : ÉCHEC ${e && e.message ? e.message : e}`);
     }
   });
+
+// Celui qui a payé, connecté avec une autre adresse que celle de la commande, entre dans sa famille préparée avec son
+// numéro de commande (A40, entrer-par-commande.js).
+exports.entrerParCommande = require('./entrer-par-commande').entrerParCommande;

@@ -33,6 +33,7 @@ Object.assign(process.env, {
   ANTHROPIC_API_KEY: 'simulation',
   SENDCLOUD_API: 'simulation:simulation',
   FACTURES_MOT_DE_PASSE: 'simulation',
+  BREVO_WEBHOOK_SECRET: 'cle-brevo-simulation',
 });
 
 const erreurs = [];
@@ -125,15 +126,20 @@ const boite = [];
 const mail = require('../mail');
 // Seul l'envoi lui-même est remplacé : le tri des e-mails de confort (mail.envoyer, quota-courriels.js) tourne pour de vrai.
 // Le compteur du quota Brevo (interne/courriels-…) n'avance pas en simulation : un scénario le remplit lui-même.
+// reglages.mailsEnPanne = n : les n prochains envois échouent (Brevo en panne ou qui refuse, courriels-perdus.js).
 mail.expedier = async ({ a, contenu }) => {
-  boite.push({ a, sujet: contenu.subject, texte: contenu.text, le: Date.now() });
+  if (reglages.mailsEnPanne > 0) {
+    reglages.mailsEnPanne -= 1;
+    throw new Error('Simulation : serveur SMTP injoignable');
+  }
+  boite.push({ a, sujet: contenu.subject, texte: contenu.text, le: Date.now(), pieces: (contenu.attachments || []).map((p) => p.filename) });
 };
 
 const notifications = [];
 const push = require('../push');
 // reglages.telephones = false : aucun téléphone n'a de notifications (appli pas installée, refusées).
 // reglages.pushEnPanne = n : les n prochains envois échouent (service de notifications injoignable).
-const reglages = { telephones: true, pushEnPanne: 0 };
+const reglages = { telephones: true, pushEnPanne: 0, mailsEnPanne: 0 };
 push.envoyer = async (db, fid, uids, data) => {
   if (reglages.pushEnPanne > 0) {
     reglages.pushEnPanne -= 1;
@@ -327,7 +333,13 @@ function demarrerServeur() {
     }
     const f = fonctions[req.params.nom];
     if (!f) return res.status(404).send('fonction inconnue');
-    return enFonction(req.params.nom, () => f(req, res));
+    // Suivie comme un déclencheur : le travail fait APRÈS la réponse (e-mail « C'est noté »…) compte pour calme().
+    const p = Promise.resolve()
+      .then(() => enFonction(req.params.nom, () => f(req, res)))
+      .catch((e) => { if (!res.headersSent) res.status(500).send(String(e && e.message)); })
+      .finally(() => { enCours.delete(p); derniereActivite = vraiMaintenant(); });
+    enCours.add(p);
+    return p;
   });
   return new Promise((pret) => {
     serveur = http.createServer(app).listen(0, '127.0.0.1', () => {
@@ -446,6 +458,7 @@ async function remettreAZero() {
   decalage = 0;
   reglages.telephones = true;
   reglages.pushEnPanne = 0;
+  reglages.mailsEnPanne = 0;
   reglages.pdfEnPanne = 0;
   fichiersGardes.length = 0;
 }

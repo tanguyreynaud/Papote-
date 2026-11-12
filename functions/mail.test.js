@@ -182,3 +182,23 @@ test('e-mails de confort marqués (sans que la marque parte avec le contenu), le
     mail.surEnvoiDeConfort(null);
   }
 });
+
+test('A13 : les CGV en PDF sont jointes à chaque confirmation de commande, et le PDF suit vitrine/cgv.html', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const crypto = require('node:crypto');
+  for (const c of [mail.commandeConfirmee({ nom: 'Paul', code: 'AB-12' }), mail.commandeConfirmee({ nom: 'Paul', dejaInstallee: true }),
+    mail.commandeConfirmee({ nom: 'Paul', dejaInstallee: true, reprise: true })]) {
+    assert.strictEqual(c.attachments.length, 1, c.subject);
+    assert.strictEqual(c.attachments[0].contentType, 'application/pdf');
+    assert.match(c.attachments[0].filename, /^Conditions générales de vente Papote\.pdf$/);
+    assert.match(c.text, /conditions générales de vente sont jointes/);
+    assert.strictEqual(fs.readFileSync(c.attachments[0].path).subarray(0, 4).toString('latin1'), '%PDF');
+  }
+  assert.strictEqual(mail.estConfort(mail.commandeConfirmee({ nom: 'Paul' })), false, 'toujours urgent');
+  // cgv.html changée sans refaire le PDF : rouge. Relancer : node outils/cgv-pdf/generer.js
+  const page = path.join(__dirname, '..', 'vitrine', 'cgv.html');
+  const empreinte = crypto.createHash('sha256').update(fs.readFileSync(page)).digest('hex');
+  assert.strictEqual(fs.readFileSync(path.join(__dirname, 'documents', 'cgv.empreinte'), 'utf8').trim(), empreinte,
+    'vitrine/cgv.html a changé : relancer node outils/cgv-pdf/generer.js et garder le nouveau PDF');
+});
