@@ -133,17 +133,44 @@ final class Updater {
                 echecs = 0;
                 return true;
             }
+            // Au plus 3 essais par jour pour un même APK, et chaque essai reprend là où le précédent s'est arrêté
+            // (RM5, Tanguy 12/11 : Range sur raw.githubusercontent.com, vérifié 206 ; empreinte SHA-256 ensuite).
+            String sha = feed.getString("sha256");
+            String jour = new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ROOT).format(new java.util.Date());
+            if (!Reprise.essaiPermis(prefs.getString("majEssaisJour:" + sha, null), jour)) {
+                Log.i(TAG, "Mise à jour : 3 essais aujourd'hui, nouvel essai demain");
+                return false;
+            }
+            prefs.edit().putString("majEssaisJour:" + sha, Reprise.noterEssai(prefs.getString("majEssaisJour:" + sha, null), jour)).apply();
+            File fichier = new File(context.getFilesDir(), "maj-" + sha.substring(0, Math.min(16, sha.length())) + ".apk");
             byte[] apk;
+            boolean repris;
             try {
-                apk = download(feed.getString("url"), MajGarde.TAILLE_MAX);
-            } catch (TropGros e) {
+                Reprise.Resultat r = Reprise.telecharger(feed.getString("url"), fichier, MajGarde.TAILLE_MAX, (u) -> {
+                    HttpsURLConnection c = (HttpsURLConnection) u.openConnection();
+                    c.setConnectTimeout(20_000);
+                    c.setReadTimeout(60_000);
+                    c.setUseCaches(false);
+                    return c;
+                });
+                repris = r.repris;
+                apk = java.nio.file.Files.readAllBytes(r.fichier.toPath());
+                r.fichier.delete(); // gardé en mémoire pour l'installation, comme avant
+                if (repris) Journal.log(context, "Mise à jour : téléchargement repris là où il s'était arrêté");
+            } catch (Reprise.TropGros e) {
                 // Pas de nouvel essai dans 10 min pour un fichier trop gros : il serait retéléchargé sans fin.
                 prefs.edit().putString("majRefusee", feed.getString("sha256")).apply();
                 Journal.log(context, "Mise à jour ignorée : " + e.getMessage());
                 echecs = 0;
                 return true;
             }
-            if (!sha256(apk).equalsIgnoreCase(feed.getString("sha256"))) {
+            if (!sha256(apk).equalsIgnoreCase(sha) && repris) {
+                // Fichier recollé abîmé : redemandé en entier au prochain essai, pas refusé pour de bon.
+                Journal.log(context, "Mise à jour : fichier repris abîmé, redemandé en entier");
+                echecs++;
+                return false;
+            }
+            if (!sha256(apk).equalsIgnoreCase(sha)) {
                 prefs.edit().putString("majRefusee", feed.getString("sha256")).apply();
                 Log.w(TAG, "Mise à jour ignorée : empreinte incorrecte");
                 Journal.log(context, "Mise à jour ignorée : empreinte incorrecte");
@@ -162,7 +189,7 @@ final class Updater {
                 Journal.log(context, "Mise à jour reportée : un appel ou un SOS est en cours");
                 return false;
             }
-            prefs.edit().putString("majEnCours", feed.getString("sha256")).apply();
+            prefs.edit().putString("majEnCours", feed.getString("sha256")).remove("majEssaisJour:" + sha).apply();
             install(context, apk);
             return true;
         } catch (Exception e) {

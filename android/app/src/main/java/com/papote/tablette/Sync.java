@@ -1013,6 +1013,7 @@ final class Sync {
             // l'envoi n'est pas montré tant qu'elle n'est pas là (tablette.js), rien n'est perdu.
             if (existing(p.id) == null && Forfait.economie(context, 3)) continue;
             File file = existing(p.id);
+            if (file == null && p.videoUrl != null && !videoPermise(p.id)) continue; // 3 essais aujourd'hui : demain
             if (file == null && p.videoUrl != null) {
                 // Nouveau format : jusqu'à ~30 Mo, écrit directement dans un fichier.
                 try {
@@ -1070,46 +1071,42 @@ final class Sync {
             throw new IOException("Adresse refusée : " + u.getHost());
         }
         long max = "jpg".equals(ext) ? MAX_PHOTO : MAX_VIDEO;
-        javax.net.ssl.HttpsURLConnection c =
-                (javax.net.ssl.HttpsURLConnection) new java.net.URL(url).openConnection();
-        c.setConnectTimeout(20_000);
-        c.setReadTimeout(60_000);
-        AppCheck.addHeader(context, c, url);
-        File tmp = new File(imageDir, id + ".tmp");
-        // Connexion gardée ouverte pour le fichier suivant (keep-alive), sauf en cas d'erreur.
-        try {
-            if (c.getResponseCode() != 200) throw new IOException("HTTP " + c.getResponseCode());
-            // Taille annoncée trop grosse : refus avant d'avoir téléchargé le moindre octet.
-            if (c.getContentLengthLong() > max) throw new IOException("Fichier trop gros (" + id + ")");
-            java.io.InputStream in = c.getInputStream();
-            FileOutputStream out = new FileOutputStream(tmp);
-            try {
-                byte[] buf = new byte[64 * 1024];
-                int n;
-                long total = 0;
-                while ((n = in.read(buf)) > 0) {
-                    total += n;
-                    if (total > max) throw new IOException("Fichier trop gros (" + id + ")");
-                    out.write(buf, 0, n);
-                }
-            } finally {
-                out.close();
-                in.close();
-            }
-        } catch (IOException e) {
-            c.disconnect();
-            throw e;
+        // Vidéos (RM5, Tanguy 12/11) : au plus 3 essais par jour et par fichier, et chaque essai reprend
+        // là où le précédent s'est arrêté (Reprise : Range, taille et empreinte vérifiées avant l'usage).
+        boolean video = !"jpg".equals(ext) && !"mp3".equals(ext);
+        String cle = "essaisJour:" + id;
+        if (video) {
+            if (!videoPermise(id)) throw new IOException("3 essais aujourd'hui, nouvel essai demain");
+            prefs.edit().putString(cle, Reprise.noterEssai(prefs.getString(cle, null), aujourdhui())).apply();
         }
-        File file = new File(imageDir, id + "." + ext);
-        if (!tmp.renameTo(file)) throw new IOException("Renommage " + id);
-        return file;
+        File cible = new File(imageDir, id + "." + ext);
+        Reprise.Resultat r = Reprise.telecharger(url, cible, max, (adresse) -> {
+            javax.net.ssl.HttpsURLConnection c = (javax.net.ssl.HttpsURLConnection) adresse.openConnection();
+            c.setConnectTimeout(20_000);
+            c.setReadTimeout(60_000);
+            AppCheck.addHeader(context, c, url);
+            return c;
+        });
+        if (video) prefs.edit().remove(cle).apply();
+        if (r.repris) Journal.log(context, "Envoi " + id + " : téléchargement repris là où il s'était arrêté");
+        return r.fichier;
+    }
+
+    private static String aujourdhui() {
+        return new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ROOT).format(new java.util.Date());
+    }
+
+    /** Encore un essai permis aujourd'hui pour cette vidéo (3 par jour, RM5) ? */
+    private boolean videoPermise(String id) {
+        return Reprise.essaiPermis(prefs.getString("essaisJour:" + id, null), aujourdhui());
     }
 
     private File existing(String id) {
         File[] files = imageDir.listFiles();
         if (files != null) {
             for (File f : files) {
-                if (f.getName().startsWith(id + ".") && !f.getName().endsWith(".tmp")) return f;
+                if (f.getName().startsWith(id + ".") && !f.getName().endsWith(".tmp")
+                        && !f.getName().endsWith(".part") && !f.getName().endsWith(".part.info")) return f;
             }
         }
         return null;
