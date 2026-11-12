@@ -11,7 +11,7 @@ function charger(nom) {
     return require(require.resolve(nom, { paths: [require('path').join(__dirname, '..', '..', 'functions')] }));
   }
 }
-const { Timestamp, GeoPoint, DocumentReference } = charger('firebase-admin/firestore');
+const { Timestamp, GeoPoint, DocumentReference, FieldValue } = charger('firebase-admin/firestore');
 
 // Format 2 (12/11) : un dossier par sauvegarde, un document par ligne (ecrireSauvegarde). Le format 1 (un seul
 // fichier JSON) se relit toujours (lireSauvegarde).
@@ -88,9 +88,11 @@ async function toutLire(db, options = {}) {
   return documents;
 }
 
-// Les comptes (Firebase Auth) : identité et fournisseurs, pas les mots de passe (ceux des comptes « appels » des
-// tablettes sont recréés par la tablette elle-même au besoin).
-async function lireComptes(auth) {
+// Les comptes (Firebase Auth) : identité et fournisseurs. Les mots de passe (en fait leur empreinte scrypt calculée
+// par Google : seuls les comptes « appels » des tablettes en ont, un mot de passe tiré au hasard et gardé dans la
+// tablette) ne sont rendus qu'avec motsDePasse: true, dans un tableau à part : ils ne vont jamais dans comptes.jsonl
+// en clair, seulement dans mots-de-passe.jsonl.enc, chiffré avec la phrase des sauvegardes (A34).
+async function lireComptes(auth, { motsDePasse = null } = {}) {
   const comptes = [];
   let jeton;
   do {
@@ -102,6 +104,7 @@ async function lireComptes(auth) {
         providers: u.providerData.map((p) => ({ providerId: p.providerId, uid: p.uid, email: p.email || null, displayName: p.displayName || null })),
         creeLe: u.metadata.creationTime || null,
       });
+      if (motsDePasse && u.passwordHash) motsDePasse.push({ uid: u.uid, hash: u.passwordHash, sel: u.passwordSalt || null });
     }
     jeton = r.pageToken;
   } while (jeton);
@@ -156,44 +159,74 @@ function lotsDEcriture(documents, options) {
 
 // Documents qui ne sont jamais réécrits par une restauration : le drapeau de restauration lui-même, et le relevé
 // de la dernière sauvegarde réussie (interne/sauvegarde, lu par l'alerte des 8 jours) qui doit rester le vrai.
+const ATTENTE_DEBUT = process.env.PAPOTE_ATTENTE_DRAPEAU_MS != null ? Number(process.env.PAPOTE_ATTENTE_DRAPEAU_MS) : 70 * 1000;
 const JAMAIS_RESTAURES = new Set(['interne/restauration', 'interne/sauvegarde']);
+
+// Ce que --effacer effacerait : les documents de la base absents de la sauvegarde (relevé et drapeau exceptés).
+async function cheminsAEffacer(db, sauvegarde) {
+  const garder = new Set();
+  for await (const d of sauvegarde.documents) garder.add(d.chemin);
+  const aEffacer = [];
+  await parcourir(db, (d) => { if (!garder.has(d.chemin) && !JAMAIS_RESTAURES.has(d.chemin)) aEffacer.push(d.chemin); });
+  return aEffacer;
+}
 
 // Réécrit chaque document tel qu'il était (set complet, par lots : lotsDEcriture). Les documents présents dans la
 // base et absents de la sauvegarde sont laissés tels quels, sauf avec effacer: true (remise exacte à l'état sauvegardé).
 // sauvegarde.documents : un tableau (format 1) ou un itérable asynchrone relisible (format 2, lireSauvegarde).
 // Mauvaise base (audit A15-2) : la sauvegarde porte le nom de la base d'où elle vient ; la restaurer dans une autre
 // base est refusé, sauf autreBase: true (restaurer.bat --autre-base), par exemple vers une base « europe2 » neuve.
-async function restaurer({ db, auth = null, sauvegarde, effacer = false, autreBase = false, progression = () => {} }) {
+// attenteDebut, attenteFin : à 0 seulement dans les tests sans fonctions (outils/admin, vérification dans l'émulateur).
+async function restaurer({ db, auth = null, sauvegarde, effacer = false, autreBase = false, progression = () => {}, attenteFin = 5000,
+  attenteDebut = ATTENTE_DEBUT,
+  phrase = null, hachage = null }) {
   if (![1, VERSION].includes(sauvegarde.version)) throw new Error(`Version de sauvegarde inconnue : ${sauvegarde.version}`);
   const cible = nomBase(db);
   if (!autreBase && sauvegarde.base !== cible) {
     throw new Error(`cette sauvegarde vient de la base « ${sauvegarde.base || 'inconnue'} », pas de « ${cible} » : restauration refusée. `
       + 'Pour la mettre exprès dans une autre base, relancer avec --autre-base.');
   }
-  if (effacer) {
-    const garder = new Set();
-    for await (const d of sauvegarde.documents) garder.add(d.chemin);
-    const aEffacer = [];
-    await parcourir(db, (d) => { if (!garder.has(d.chemin) && !JAMAIS_RESTAURES.has(d.chemin)) aEffacer.push(d.chemin); });
-    for (let i = 0; i < aEffacer.length; i += 400) {
-      const lot = db.batch();
-      aEffacer.slice(i, i + 400).forEach((c) => lot.delete(db.doc(c)));
-      await lot.commit();
-    }
-  }
-  // Pendant l'écriture, les déclencheurs du serveur qui préviennent des humains ou réveillent des tablettes se
-  // taisent (functions/base.js restaurationEnCours) : drapeau interne/restauration, 2 h au plus, retiré à la fin.
+  // Mots de passe lus AVANT toute écriture : une phrase manquante ou fausse arrête tout de suite.
+  const mdp = auth && sauvegarde.comptes && sauvegarde.comptes.length ? await lireMotsDePasse(sauvegarde, phrase) : null;
+  const parametres = mdp ? hachage || mdp.hachage || null : null;
+  const options = parametres ? { hash: optionsHachage(parametres) } : undefined;
+  // Pendant TOUTE la restauration (effacement compris), les déclencheurs Firestore du serveur se taisent
+  // (functions/base.js, restaurationEnCours) : drapeau interne/restauration { enCours, debut, jusque } posé avant la
+  // première écriture, prolongé tant que l'écriture dure, puis { enCours: false, debut, fin } (gardé : un événement
+  // livré en retard par Google tombe encore dans la fenêtre debut-fin et reste ignoré). Heures du serveur.
   const drapeau = db.doc('interne/restauration');
-  await drapeau.set({ enCours: true, jusque: Timestamp.fromMillis(Date.now() + 2 * 3600 * 1000), le: Timestamp.now() });
+  const DUREE = 2 * 3600 * 1000;
+  let prolongeLe = Date.now();
+  await drapeau.set({ enCours: true, debut: FieldValue.serverTimestamp(), jusque: Timestamp.fromMillis(Date.now() + DUREE), fin: null });
+  // Les fonctions gardent le drapeau « pas de restauration » 60 s en mémoire (functions/base.js, CACHE_MS) : on attend
+  // qu'aucune ne puisse encore le croire avant la première écriture.
+  await new Promise((r) => setTimeout(r, attenteDebut));
+  const prolonger = async () => {
+    if (Date.now() - prolongeLe < 10 * 60 * 1000) return;
+    prolongeLe = Date.now();
+    await drapeau.update({ jusque: Timestamp.fromMillis(Date.now() + DUREE) });
+  };
   let ecrits = 0;
+  let effaces = 0;
   const ecrire = async (paquet) => {
     const lot = db.batch();
     for (const d of paquet) lot.set(db.doc(d.chemin), decoder(d.donnees, db));
     await lot.commit();
     ecrits += paquet.length;
     progression(ecrits);
+    await prolonger();
   };
   try {
+    if (effacer) {
+      const aEffacer = await cheminsAEffacer(db, sauvegarde);
+      for (let i = 0; i < aEffacer.length; i += 400) {
+        const lot = db.batch();
+        aEffacer.slice(i, i + 400).forEach((c) => lot.delete(db.doc(c)));
+        await lot.commit();
+        effaces += Math.min(400, aEffacer.length - i);
+        await prolonger();
+      }
+    }
     const lots = decoupeur();
     for await (const d of sauvegarde.documents) {
       if (JAMAIS_RESTAURES.has(d.chemin)) continue;
@@ -202,23 +235,47 @@ async function restaurer({ db, auth = null, sauvegarde, effacer = false, autreBa
     }
     if (lots.reste()) await ecrire(lots.reste());
     // Les déclencheurs tournent encore quelques secondes après la dernière écriture.
-    await new Promise((r) => setTimeout(r, 5000));
+    await new Promise((r) => setTimeout(r, attenteFin));
   } finally {
-    await drapeau.delete();
+    await drapeau.set({ enCours: false, fin: FieldValue.serverTimestamp() }, { merge: true });
   }
   let comptes = 0;
+  let avecMotDePasse = 0;
+  let sansMotDePasse = 0;
+  let dejaLa = 0;
   if (auth && sauvegarde.comptes && sauvegarde.comptes.length) {
-    for (let i = 0; i < sauvegarde.comptes.length; i += 1000) {
-      const r = await auth.importUsers(sauvegarde.comptes.slice(i, i + 1000).map((c) => ({
+    // Mots de passe des comptes « appels » (A34) : déchiffrés en mémoire seulement, puis remis avec les paramètres
+    // de hachage du projet (sans eux, Google ne peut pas relire les empreintes).
+    const fiche = (c) => {
+      const u = {
         uid: c.uid, email: c.email || undefined, emailVerified: c.emailVerified, displayName: c.displayName || undefined,
         photoURL: c.photoURL || undefined, disabled: c.disabled, customClaims: c.customClaims || undefined,
         providerData: c.providers.filter((p) => p.providerId !== 'password').map((p) => ({ providerId: p.providerId, uid: p.uid, email: p.email || undefined, displayName: p.displayName || undefined })),
-      })));
+      };
+      const m = mdp && mdp.parUid.get(c.uid);
+      if (m && options) {
+        u.passwordHash = Buffer.from(m.hash, 'base64');
+        if (m.sel) u.passwordSalt = Buffer.from(m.sel, 'base64');
+        avecMotDePasse++;
+      } else if (c.providers.some((p) => p.providerId === 'password')) sansMotDePasse++;
+      return u;
+    };
+    // Seuls les comptes absents sont remis : un compte encore là (avec son vrai mot de passe) n'est pas touché, et
+    // Firebase refuse d'ailleurs d'écraser un compte existant.
+    const absents = [];
+    for (let i = 0; i < sauvegarde.comptes.length; i += 100) {
+      const paquet = sauvegarde.comptes.slice(i, i + 100);
+      const r = await auth.getUsers(paquet.map((c) => ({ uid: c.uid })));
+      const la = new Set(r.users.map((u) => u.uid));
+      for (const c of paquet) if (la.has(c.uid)) dejaLa++; else absents.push(c);
+    }
+    for (let i = 0; i < absents.length; i += 1000) {
+      const r = await auth.importUsers(absents.slice(i, i + 1000).map(fiche), options);
       comptes += r.successCount;
       if (r.failureCount) throw new Error(`${r.failureCount} compte(s) non restauré(s) : ${r.errors.map((e) => `${e.index} ${e.error.message}`).join(' ; ')}`);
     }
   }
-  return { documents: ecrits, comptes };
+  return { documents: ecrits, comptes, dejaLa, avecMotDePasse, sansMotDePasse, effaces };
 }
 
 // ---------- Fichiers du stockage (Storage) ----------
@@ -310,6 +367,35 @@ const PREFIXE_GESTION = 'gestion/';
 const EN_COURS = '.en-cours';
 const ENTETE_FICHIER = 'entete.json';
 const DONNEES = { documents: 'documents.jsonl', comptes: 'comptes.jsonl' };
+const MOTS_DE_PASSE = 'mots-de-passe.jsonl.enc';
+
+// Paramètres de hachage des mots de passe du projet (console Firebase > Authentication > Utilisateurs > ⋮ >
+// « Paramètres de hachage des mots de passe ») : { algorithm: 'SCRYPT', base64_signer_key, base64_salt_separator,
+// rounds, mem_cost }, recopiés une fois par Tanguy dans %USERPROFILE%\.papote\hachage-mots-de-passe.json (jamais dans
+// le dépôt). Les noms de la console ou ceux du SDK sont acceptés.
+function optionsHachage(p) {
+  const cle = p.base64_signer_key || p.key;
+  const separateur = p.base64_salt_separator || p.saltSeparator;
+  const rounds = Number(p.rounds);
+  const memoire = Number(p.mem_cost || p.memoryCost);
+  if (String(p.algorithm || 'SCRYPT').toUpperCase() !== 'SCRYPT' || !cle || !separateur || !rounds || !memoire) {
+    throw new Error('paramètres de hachage des mots de passe incomplets (algorithm SCRYPT, base64_signer_key, base64_salt_separator, rounds, mem_cost)');
+  }
+  return { algorithm: 'SCRYPT', key: Buffer.from(cle, 'base64'), saltSeparator: Buffer.from(separateur, 'base64'), rounds, memoryCost: memoire };
+}
+function lireHachage(fichier) {
+  try { return JSON.parse(require('fs').readFileSync(fichier, 'utf8')); } catch { return null; }
+}
+
+// Déchiffre en mémoire le fichier des mots de passe d'une sauvegarde : { hachage, parUid } ou null (pas de fichier).
+// Fichier présent sans phrase : erreur claire (on ne restaure pas sans le dire).
+async function lireMotsDePasse(sauvegarde, phrase) {
+  if (!sauvegarde.fichierMotsDePasse) return null;
+  if (!phrase) throw new Error('cette sauvegarde contient les mots de passe des comptes des tablettes : phrase secrète nécessaire (PAPOTE_PHRASE_SAUVEGARDE ou .papote\\phrase-sauvegarde.txt)');
+  const { dechiffrer2 } = require('./chiffrement');
+  const lignesMdp = dechiffrer2(await fsp.readFile(sauvegarde.fichierMotsDePasse), phrase).toString('utf8').split('\n').map((l) => JSON.parse(l));
+  return { hachage: lignesMdp[0].hachage || null, parUid: new Map(lignesMdp.slice(1).map((m) => [m.uid, m])) };
+}
 const NOM = /^papote-\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}$/;
 const ANCIEN_FORMAT = /^papote-\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}\.json(\.enc)?$/;
 const nomSauvegarde = (date) => `papote-${date.toISOString().slice(0, 19).replace(/[:T]/g, '-')}`;
@@ -382,6 +468,10 @@ async function verifierDossier(chemin) {
       throw new Error(`${fichier} : ${m.lignes} lignes relues pour ${attendu.lignes} écrites, ou contenu différent`);
     }
   }
+  if (entete.motsDePasse && entete.motsDePasse.chiffres) {
+    const t = await fsp.stat(pathLib.join(chemin, MOTS_DE_PASSE)).then((x) => x.size, () => -1);
+    if (t !== entete.motsDePasse.octets) throw new Error(`${MOTS_DE_PASSE} : absent ou de taille différente`);
+  }
   return entete;
 }
 
@@ -390,7 +480,7 @@ async function verifierDossier(chemin) {
 // effacees }. Une erreur à n'importe quelle étape laisse papote-<date>.en-cours/ (effacé à la sauvegarde réussie
 // suivante) et ne touche à aucune sauvegarde d'avant.
 async function ecrireSauvegarde({ db, auth = null, bucket = null, dossier, projet = '', base = '', configBase = null, photos = false,
-  garder = 4, le = new Date(), progression = () => {}, progressionFichiers = () => {} }) {
+  garder = 4, le = new Date(), progression = () => {}, progressionFichiers = () => {}, phrase = null, hachage = null }) {
   await fsp.mkdir(dossier, { recursive: true });
   const nom = nomSauvegarde(le);
   const enCours = pathLib.join(dossier, nom + EN_COURS);
@@ -403,7 +493,23 @@ async function ecrireSauvegarde({ db, auth = null, bucket = null, dossier, proje
     return e.fermer();
   };
   const documents = await ecrire(DONNEES.documents, (ligne) => parcourir(db, ligne, { progression }));
-  const comptes = await ecrire(DONNEES.comptes, async (ligne) => { for (const c of auth ? await lireComptes(auth) : []) await ligne(c); });
+  const empreintes = [];
+  const comptes = await ecrire(DONNEES.comptes, async (ligne) => { for (const c of auth ? await lireComptes(auth, { motsDePasse: empreintes }) : []) await ligne(c); });
+  // Mots de passe des comptes « appels » : chiffrés tout de suite (jamais écrits en clair), relus pour contrôle.
+  // Sans phrase secrète, ils ne sont pas gardés : la restauration redonnera ces comptes sans mot de passe.
+  let motsDePasse = null;
+  if (empreintes.length) {
+    if (phrase) {
+      const { chiffrer2, dechiffrer2 } = require('./chiffrement');
+      const clair = Buffer.from([{ hachage: hachage || null }, ...empreintes].map((x) => JSON.stringify(x)).join('\n'));
+      const paquet = chiffrer2(clair, phrase);
+      if (!dechiffrer2(paquet, phrase).equals(clair)) throw new Error('mots de passe : relecture du chiffrement différente');
+      await fsp.writeFile(pathLib.join(enCours, MOTS_DE_PASSE), paquet);
+      motsDePasse = { comptes: empreintes.length, chiffres: true, hachage: !!hachage, octets: paquet.length };
+    } else {
+      motsDePasse = { comptes: empreintes.length, chiffres: false };
+    }
+  }
 
   let gestion = null;
   if (bucket) {
@@ -425,7 +531,7 @@ async function ecrireSauvegarde({ db, auth = null, bucket = null, dossier, proje
     gestion = { fichiers: v.total, nouveaux: f.copies, octets: f.octets };
   }
 
-  const entete = { version: VERSION, le: le.toISOString(), projet, base: base || nomBase(db), configBase, documents, comptes, gestion, photos: !!photos, complete: true };
+  const entete = { version: VERSION, le: le.toISOString(), projet, base: base || nomBase(db), configBase, documents, comptes, motsDePasse, gestion, photos: !!photos, complete: true };
   await fsp.writeFile(pathLib.join(enCours, ENTETE_FICHIER), JSON.stringify(entete, null, 1));
   await verifierDossier(enCours);
   const final = pathLib.join(dossier, nom);
@@ -449,6 +555,7 @@ async function lireSauvegarde(chemin) {
   return {
     version: entete.version, le: entete.le, projet: entete.projet, base: entete.base, configBase: entete.configBase || null,
     entete, nbDocuments: entete.documents.lignes, documents: { [Symbol.asyncIterator]: () => lignes(fichier) }, comptes, dossierFichiers,
+    fichierMotsDePasse: entete.motsDePasse && entete.motsDePasse.chiffres ? pathLib.join(chemin, MOTS_DE_PASSE) : null,
   };
 }
 
@@ -507,6 +614,8 @@ async function copierChiffre({ source, racine, phrase, fichiers = null, garder =
     const relu = await dechiffrerFichier(cible, null, phrase);
     if (relu.sha256 !== entete[cle].sha256) throw new Error(`copie chiffrée de ${fichier} : relecture différente`);
   }
+  // Les mots de passe sont déjà chiffrés avec la même phrase : copiés tels quels.
+  if (entete.motsDePasse && entete.motsDePasse.chiffres) await fsp.copyFile(pathLib.join(source, MOTS_DE_PASSE), pathLib.join(enCours, MOTS_DE_PASSE));
   await fsp.copyFile(pathLib.join(source, ENTETE_FICHIER), pathLib.join(enCours, ENTETE_FICHIER));
   const final = pathLib.join(racine, nom);
   await fsp.rename(enCours, final);
@@ -535,4 +644,5 @@ module.exports = {
   encoder, decoder, lotsDEcriture, MAX_OCTETS_LOT, parcourir, toutLire, lireComptes, sauvegarder, restaurer,
   sauvegarderFichiers, verifierFichiers, restaurerFichiers, garderDernieres, VERSION,
   ecrireSauvegarde, lireSauvegarde, verifierDossier, copierChiffre, nomSauvegarde, lignes, PREFIXE_GESTION, DONNEES, EN_COURS,
+  MOTS_DE_PASSE, optionsHachage, lireHachage, lireMotsDePasse, cheminsAEffacer,
 };

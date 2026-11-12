@@ -310,9 +310,12 @@ function changement(avant, apres, ref) {
     const params = correspond(d.chemin, chemin);
     if (!params) continue;
     const change = { before: avant || absent(ref), after: apres || absent(ref) };
-    if (!avant && apres) (d.creation || []).forEach((n) => lancer(n, { data: apres, params, chemin }));
-    if (avant && apres) (d.modification || []).forEach((n) => lancer(n, { data: change, params, chemin }));
-    (d.ecriture || []).forEach((n) => lancer(n, { data: change, params, chemin }));
+    // time : heure de l'écriture selon le serveur (horloge réelle, comme les heures serverTimestamp de l'émulateur),
+    // comme les événements en ligne (base.js, restaurationEnCours).
+    const time = new Date(vraiMaintenant()).toISOString();
+    if (!avant && apres) (d.creation || []).forEach((n) => lancer(n, { data: apres, params, chemin, time }));
+    if (avant && apres) (d.modification || []).forEach((n) => lancer(n, { data: change, params, chemin, time }));
+    (d.ecriture || []).forEach((n) => lancer(n, { data: change, params, chemin, time }));
   }
 }
 

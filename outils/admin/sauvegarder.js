@@ -23,6 +23,11 @@
 // Réussite : interne/sauvegarde (base) reçoit la date ; le serveur prévient Papote si elle a plus de 8 jours
 // (functions/sauvegarde-alerte.js, e-mail et ligne « À faire »). Échec : la date et le message de l'échec y sont notés.
 //
+// Mots de passe des comptes « appels » des tablettes (A34) : chiffrés avec la phrase secrète dans
+// papote-<date>\mots-de-passe.jsonl.enc (jamais en clair, ni dans le dépôt), avec les paramètres de hachage du projet
+// s'ils sont dans %USERPROFILE%\.papote\hachage-mots-de-passe.json (console Firebase > Authentication > Utilisateurs >
+// ⋮ > Paramètres de hachage des mots de passe). Sans phrase secrète : pas gardés, le journal le dit.
+//
 // Coût : une lecture Firestore par document et une par document pour chercher ses sous-collections ; le dossier
 // gestion/ : une liste et un téléchargement par fichier nouveau. Taille : environ 24 Mo par famille pleine (aperçus
 // des photos dans la base) ; 4 sauvegardes gardées.
@@ -58,7 +63,10 @@ let db = null;
   const base = db.databaseId || '(default)';
   const config = await getFirestore(app).doc('config/base').get().catch(() => null);
   console.log(`Base « ${base} » du projet ${cle.project_id} : lecture…`);
+  const phrase = phraseSecrete();
+  const hachage = lib.lireHachage(path.join(os.homedir(), '.papote', 'hachage-mots-de-passe.json'));
   const s = await lib.ecrireSauvegarde({
+    phrase, hachage,
     db, auth: admin.auth(app), bucket: admin.storage(app).bucket(BUCKET), dossier, projet: cle.project_id, base,
     configBase: config && config.exists ? config.get('database') || null : null, photos,
     garder: Number(option('garder', 4)),
@@ -70,6 +78,11 @@ let db = null;
   const mo = (o) => Math.round(o / 1024 / 1024);
   console.log(`Sauvegarde écrite et relue : ${s.dossier} (${e.documents.lignes} documents, ${e.comptes.lignes} comptes, ${mo(e.documents.octets)} Mo).`);
   console.log(`Stockage : ${e.gestion.fichiers} pièce(s) de gestion/ dans la copie (${e.gestion.nouveaux} nouvelle(s))${photos ? ', photos et vidéos comprises' : ''}, dans ${path.join(dossier, 'fichiers')}.`);
+  if (e.motsDePasse && e.motsDePasse.chiffres) {
+    console.log(`Mots de passe des comptes des tablettes : ${e.motsDePasse.comptes}, chiffrés.${e.motsDePasse.hachage ? '' : ' ATTENTION : paramètres de hachage absents (.papote\\hachage-mots-de-passe.json) : à recopier depuis la console Firebase, sinon ils ne pourront pas être remis.'}`);
+  } else if (e.motsDePasse) {
+    console.log(`ATTENTION : ${e.motsDePasse.comptes} mot(s) de passe de comptes des tablettes NON gardés : pas de phrase secrète (.papote\\phrase-sauvegarde.txt).`);
+  }
   if (s.effacees.length) console.log(`Anciennes sauvegardes effacées : ${s.effacees.join(', ')}.`);
   await db.doc('interne/sauvegarde').set({
     derniereReussie: Timestamp.now(), nom: s.nom, base, documents: e.documents.lignes, comptes: e.comptes.lignes,
@@ -80,7 +93,6 @@ let db = null;
   if (copie) {
     // Pas de phrase, ou dossier absent (clé USB débranchée) : la sauvegarde principale est faite, on le dit
     // clairement et on sort en erreur pour que le journal le montre.
-    const phrase = phraseSecrete();
     if (!phrase) throw new Error('copie chiffrée NON faite : phrase secrète introuvable (PAPOTE_PHRASE_SAUVEGARDE ou .papote\\phrase-sauvegarde.txt).');
     if (!fs.existsSync(copie)) throw new Error(`copie chiffrée NON faite : dossier ${copie} introuvable (clé USB branchée ?).`);
     const c = await lib.copierChiffre({ source: s.dossier, racine: copie, phrase, fichiers: path.join(dossier, 'fichiers') });

@@ -54,12 +54,12 @@ test('sauvegarde puis restauration : la base revient à l\'identique, types et s
   assert.strictEqual((await lib.toutLire(db)).length, 0, 'base vide avant restauration');
   await db.doc('families/intrus').set({ name: 'créée après la sauvegarde' });
 
-  const r = await lib.restaurer({ db, auth, sauvegarde: fichier });
+  const r = await lib.restaurer({ attenteDebut: 0, db, auth, sauvegarde: fichier });
   assert.strictEqual(r.documents, 1209);
   assert.strictEqual(r.comptes, 2);
   assert.ok((await db.doc('families/intrus').get()).exists, 'sans --effacer, le reste est gardé');
   const apres = await lib.sauvegarder({ db, auth, projet: 'demo-papote', base: 'europe' });
-  assert.deepStrictEqual(apres.documents.filter((d) => d.chemin !== 'families/intrus'), avant.documents);
+  assert.deepStrictEqual(apres.documents.filter((d) => !['families/intrus', 'interne/restauration'].includes(d.chemin)), avant.documents);
   assert.deepStrictEqual(apres.comptes.map((c) => ({ ...c, creeLe: null })), avant.comptes.map((c) => ({ ...c, creeLe: null })));
   const doc = (await fam.get()).data();
   assert.ok(doc.createdAt instanceof Timestamp && doc.createdAt.toMillis() === 1_761_800_000_123);
@@ -70,7 +70,7 @@ test('sauvegarde puis restauration : la base revient à l\'identique, types et s
   assert.strictEqual((await auth.getUser('julie')).customClaims.admin, true);
 
   // --effacer : remise exacte.
-  const r2 = await lib.restaurer({ db, sauvegarde: fichier, effacer: true });
+  const r2 = await lib.restaurer({ attenteDebut: 0, db, sauvegarde: fichier, effacer: true });
   assert.strictEqual(r2.documents, 1209);
   assert.ok(!(await db.doc('families/intrus').get()).exists, 'avec effacer, l\'intrus disparaît');
 });
@@ -208,13 +208,13 @@ test('restauration de gros documents (photos) : aucun lot de plus de 10 Mio, tou
     documents.push({ chemin: p, donnees: { type: 'photo', hearts: 0 } });
     documents.push({ chemin: `${p}/media/image`, donnees: { data: photo } });
   }
-  const r = await lib.restaurer({ db: garde, sauvegarde: { version: lib.VERSION, base: 'europe', documents, comptes: [] } });
+  const r = await lib.restaurer({ attenteDebut: 0, db: garde, sauvegarde: { version: lib.VERSION, base: 'europe', documents, comptes: [] } });
   assert.strictEqual(r.documents, 300);
   assert.ok(lots.length >= 2, `écrit en plusieurs lots (${lots.length})`);
   assert.ok(lots.every((l) => l.octets <= LIMITE && l.n <= 400), JSON.stringify(lots));
   assert.strictEqual((await db.collection('families/famG/posts').get()).size, 150);
   assert.strictEqual((await db.doc('families/famG/posts/p149/media/image').get()).get('data'), photo);
-  assert.strictEqual((await db.doc('interne/restauration').get()).exists, false, 'drapeau retiré');
+  assert.strictEqual((await db.doc('interne/restauration').get()).get('enCours'), false, 'restauration finie');
 });
 
 // ---------- Format 2 (A31, 12/11) : un document par ligne, contrôle, rotation sûre, mauvaise base, gestion/ ----------
@@ -343,20 +343,20 @@ test('S3 : une sauvegarde de « europe » est refusée dans « (default) », sau
   assert.strictEqual(s.entete.base, 'europe');
   const relue = await lib.lireSauvegarde(s.dossier);
   const defaut = getFirestore(app);
-  await assert.rejects(() => lib.restaurer({ db: defaut, sauvegarde: relue }), /vient de la base « europe », pas de « \(default\) » : restauration refusée/);
+  await assert.rejects(() => lib.restaurer({ attenteDebut: 0, db: defaut, sauvegarde: relue }), /vient de la base « europe », pas de « \(default\) » : restauration refusée/);
   assert.strictEqual((await defaut.collection('families').get()).size, 0, 'rien écrit dans (default)');
   assert.strictEqual((await defaut.doc('interne/restauration').get()).exists, false, 'pas même le drapeau');
   // Format 1 sans base notée : refusé aussi.
-  await assert.rejects(() => lib.restaurer({ db, sauvegarde: { version: 1, documents: [], comptes: [] } }), /base « inconnue »/);
+  await assert.rejects(() => lib.restaurer({ attenteDebut: 0, db, sauvegarde: { version: 1, documents: [], comptes: [] } }), /base « inconnue »/);
 
   // Exprès : accepté.
-  const r = await lib.restaurer({ db: defaut, sauvegarde: relue, autreBase: true });
+  const r = await lib.restaurer({ attenteDebut: 0, db: defaut, sauvegarde: relue, autreBase: true });
   assert.strictEqual(r.documents, 6, 'familles et envois, pas interne/sauvegarde');
   assert.strictEqual((await defaut.doc('interne/sauvegarde').get()).exists, false);
   // Dans la bonne base, depuis le disque : identique ; le relevé de sauvegarde reste celui du moment.
   await vider();
   await db.doc('interne/sauvegarde').set({ derniereReussie: Timestamp.fromMillis(2000) });
-  const r2 = await lib.restaurer({ db, sauvegarde: relue, effacer: true });
+  const r2 = await lib.restaurer({ attenteDebut: 0, db, sauvegarde: relue, effacer: true });
   assert.strictEqual(r2.documents, 6);
   assert.strictEqual((await db.doc('interne/sauvegarde').get()).get('derniereReussie').toMillis(), 2000, 'ni réécrit, ni effacé par --effacer');
   assert.strictEqual((await db.doc('families/fam2/posts/p1').get()).get('text'), 'Bisous 2');
@@ -447,4 +447,138 @@ test('copie chiffrée hors Google : dossier chiffré au fil de l\'eau, relu, rot
   assert.ok(!fs.existsSync(path.join(racine, 'faux', 'documents.jsonl')));
   fs.rmSync(dossier, { recursive: true, force: true });
   fs.rmSync(path.dirname(racine), { recursive: true, force: true });
+});
+
+// ---------- A34 : mots de passe des comptes « appels » des tablettes, confirmation de --effacer ----------
+
+const PROJET_A34 = process.env.GCLOUD_PROJECT || 'demo-papote';
+const PHRASE_A34 = 'cheval agrafe batterie correct';
+// Paramètres de hachage factices (les vrais sont dans la console Firebase, jamais dans le dépôt).
+const HACHAGE = { algorithm: 'SCRYPT', base64_signer_key: Buffer.alloc(64, 7).toString('base64'), base64_salt_separator: 'Bw==', rounds: 8, mem_cost: 14 };
+const TABLETTE = 'tablette-appels-abcdefghij0123456789@tablettes.papote-famille.web.app';
+
+test('mots de passe des tablettes : chiffrés à part (jamais en clair), copiés dans la copie chiffrée, remis avec les paramètres de hachage', async () => {
+  await vider();
+  await remplir(2);
+  await auth.createUser({ uid: 'tab1', email: TABLETTE, password: 'Mot2PasseTireAuHasardDe32Signes' });
+  await auth.createUser({ uid: 'julie', email: 'julie@exemple.fr', displayName: 'Julie' });
+  const empreinte = (await auth.getUser('tab1')).passwordHash;
+  assert.ok(empreinte, 'l\'émulateur rend l\'empreinte');
+  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'papote-mdp-'));
+
+  // Sans phrase : rien de gardé, et l'entête le dit.
+  const sans = await lib.ecrireSauvegarde({ db, auth, dossier, projet: 'demo-papote', le: date(1) });
+  assert.deepStrictEqual(sans.entete.motsDePasse, { comptes: 1, chiffres: false });
+  assert.ok(!fs.existsSync(path.join(sans.dossier, lib.MOTS_DE_PASSE)));
+
+  const s = await lib.ecrireSauvegarde({ db, auth, dossier, projet: 'demo-papote', le: date(8), phrase: PHRASE_A34, hachage: HACHAGE });
+  assert.strictEqual(s.entete.motsDePasse.comptes, 1);
+  assert.strictEqual(s.entete.motsDePasse.hachage, true);
+  const enClair = fs.readFileSync(path.join(s.dossier, 'comptes.jsonl'), 'utf8') + fs.readFileSync(path.join(s.dossier, 'entete.json'), 'utf8');
+  assert.ok(!enClair.includes(empreinte) && !/passwordHash|"hash"|signer_key/.test(enClair), 'aucune empreinte ni clé en clair');
+  const chiffre = fs.readFileSync(path.join(s.dossier, lib.MOTS_DE_PASSE));
+  assert.ok(!chiffre.includes(Buffer.from(empreinte)) && !chiffre.includes(Buffer.from(HACHAGE.base64_signer_key)));
+  const racine = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'papote-usb-')), 'Papote');
+  const c = await lib.copierChiffre({ source: s.dossier, racine, phrase: PHRASE_A34 });
+  assert.ok(fs.readFileSync(path.join(c.dossier, lib.MOTS_DE_PASSE)).equals(chiffre), 'copie chiffrée : le même fichier');
+
+  // Comptes perdus. Sans phrase, ou avec une fausse : refus AVANT toute écriture.
+  await auth.deleteUsers(['tab1', 'julie']);
+  const relue = await lib.lireSauvegarde(s.dossier);
+  await db.doc('interne/restauration').delete();
+  await assert.rejects(() => lib.restaurer({ attenteDebut: 0, db, auth, sauvegarde: relue, attenteFin: 0 }), /phrase secrète nécessaire/);
+  await assert.rejects(() => lib.restaurer({ attenteDebut: 0, db, auth, sauvegarde: relue, phrase: 'une autre phrase longue', attenteFin: 0 }), /Phrase secrète incorrecte/);
+  assert.strictEqual((await db.doc('interne/restauration').get()).exists, false, 'rien écrit');
+
+  // Avec la phrase : la tablette revient avec son empreinte, importée avec les paramètres de hachage du projet.
+  const imports = [];
+  const espion = { getUsers: (x) => auth.getUsers(x), importUsers: (u, o) => { imports.push({ u, o }); return auth.importUsers(u, o); } };
+  const r = await lib.restaurer({ attenteDebut: 0, db, auth: espion, sauvegarde: relue, phrase: PHRASE_A34, attenteFin: 0 });
+  assert.deepStrictEqual([r.comptes, r.avecMotDePasse, r.sansMotDePasse], [2, 1, 0]);
+  const o = imports[0].o.hash;
+  assert.deepStrictEqual([o.algorithm, o.rounds, o.memoryCost], ['SCRYPT', 8, 14]);
+  assert.ok(o.key.equals(Buffer.alloc(64, 7)) && o.saltSeparator.equals(Buffer.from([7])));
+  const tab = imports[0].u.find((u) => u.uid === 'tab1');
+  assert.ok(tab.passwordHash.equals(Buffer.from(empreinte, 'base64')), 'empreinte remise telle quelle');
+  assert.strictEqual(imports[0].u.find((u) => u.uid === 'julie').passwordHash, undefined);
+  assert.strictEqual((await auth.getUser('tab1')).email, TABLETTE);
+
+  // Sauvegarde sans paramètres de hachage : ils peuvent venir du PC au moment de la restauration ; sinon le compte
+  // revient sans mot de passe, et c'est compté (restaurer.js l'affiche).
+  const s2 = await lib.ecrireSauvegarde({ db, auth, dossier, projet: 'demo-papote', le: date(15), phrase: PHRASE_A34 });
+  assert.strictEqual(s2.entete.motsDePasse.hachage, false);
+  // Compte encore là : laissé tel quel.
+  const r1 = await lib.restaurer({ attenteDebut: 0, db, auth, sauvegarde: await lib.lireSauvegarde(s2.dossier), phrase: PHRASE_A34, attenteFin: 0 });
+  assert.deepStrictEqual([r1.comptes, r1.dejaLa], [0, 2]);
+  await auth.deleteUsers(['tab1', 'julie']);
+  const r2 = await lib.restaurer({ attenteDebut: 0, db, auth, sauvegarde: await lib.lireSauvegarde(s2.dossier), phrase: PHRASE_A34, attenteFin: 0 });
+  assert.deepStrictEqual([r2.avecMotDePasse, r2.sansMotDePasse], [0, 1]);
+  await auth.deleteUsers(['tab1', 'julie']);
+  const r3 = await lib.restaurer({ attenteDebut: 0, db, auth, sauvegarde: await lib.lireSauvegarde(s2.dossier), phrase: PHRASE_A34, hachage: HACHAGE, attenteFin: 0 });
+  assert.deepStrictEqual([r3.avecMotDePasse, r3.sansMotDePasse], [1, 0]);
+  const relue2 = await lib.lireSauvegarde(s2.dossier);
+  await assert.rejects(() => lib.restaurer({ attenteDebut: 0, db, auth, sauvegarde: relue2, phrase: PHRASE_A34, hachage: { rounds: 8 }, attenteFin: 0 }), /paramètres de hachage .* incomplets/);
+  fs.rmSync(dossier, { recursive: true, force: true });
+  fs.rmSync(path.dirname(racine), { recursive: true, force: true });
+});
+
+test('restaurer.js --effacer : liste de ce qui part, et il faut taper le nom de la base (rien par défaut)', { timeout: 180000 }, async () => {
+  await vider();
+  await remplir(2);
+  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'papote-effacer-'));
+  const s = await lib.ecrireSauvegarde({ db, dossier, projet: PROJET_A34, le: date(1) });
+  const cle = path.join(dossier, 'cle.json');
+  fs.writeFileSync(cle, JSON.stringify({
+    type: 'service_account', project_id: PROJET_A34, client_email: `outil@${PROJET_A34}.iam.gserviceaccount.com`,
+    private_key: crypto.generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey.export({ type: 'pkcs8', format: 'pem' }),
+  }));
+  const lancer = (args, input) => {
+    try {
+      return { code: 0, sortie: execFileSync(process.execPath, [path.join(__dirname, 'restaurer.js'), s.dossier, ...args], {
+        encoding: 'utf8', input, stdio: ['pipe', 'pipe', 'pipe'], timeout: 60_000,
+        env: { ...process.env, PAPOTE_CLE_ADMIN: cle, PAPOTE_BASE: 'europe', PAPOTE_ATTENTE_DRAPEAU_MS: '0' },
+      }) };
+    } catch (e) { return { code: e.status, sortie: `${e.stdout || ''}${e.stderr || ''}` }; }
+  };
+  const nouvelles = async () => {
+    await db.doc('families/nouvelle').set({ name: 'Créée après' });
+    await db.doc('commandes/sub_apres').set({ code: 'APRES1' });
+  };
+  await nouvelles();
+
+  // Sans --oui : la liste, rien de fait.
+  const voir = lancer(['--effacer'], '');
+  assert.strictEqual(voir.code, 0, voir.sortie);
+  assert.match(voir.sortie, /ATTENTION : --effacer/);
+  assert.match(voir.sortie, /2 document\(s\) de la base « europe » .* EFFACÉS/);
+  assert.match(voir.sortie, /dont 1 famille\(s\) et 1 commande\(s\)/);
+  assert.match(voir.sortie, /- families\/nouvelle/);
+
+  // Entrée seule, mauvaise réponse, fin de saisie, mauvaise base en option : annulé, rien n'a changé.
+  for (const [args, input] of [[[], '\n'], [[], 'oui\n'], [[], 'O\n'], [[], ''], [['--confirmer-base', '(default)'], '']]) {
+    const r = lancer(['--oui', '--effacer', ...args], input);
+    assert.strictEqual(r.code, 1, `${JSON.stringify(input)} : ${r.sortie}`);
+    assert.match(r.sortie, /restauration ANNULÉE, rien n'a été changé/);
+    assert.ok((await db.doc('families/nouvelle').get()).exists);
+    assert.strictEqual((await db.doc('interne/restauration').get()).exists, false, 'pas même le drapeau');
+  }
+
+  // Le nom tapé : effacé et restauré.
+  const ok = lancer(['--oui', '--effacer'], 'europe\n');
+  assert.strictEqual(ok.code, 0, ok.sortie);
+  assert.match(ok.sortie, /Pour confirmer, tapez le nom de la base \(europe\)/);
+  assert.match(ok.sortie, /Restauré : 4 documents, 2 effacé\(s\)/);
+  assert.strictEqual((await db.doc('families/nouvelle').get()).exists, false);
+  assert.strictEqual((await db.doc('families/fam1').get()).get('name'), 'Mamie 1');
+
+  // Sans clavier (tâche, script) : --confirmer-base europe.
+  await nouvelles();
+  const auto = lancer(['--oui', '--effacer', '--confirmer-base', 'europe'], '');
+  assert.strictEqual(auto.code, 0, auto.sortie);
+  assert.strictEqual((await db.doc('commandes/sub_apres').get()).exists, false);
+  // Sans --effacer : aucune question.
+  const simple = lancer(['--oui'], '');
+  assert.strictEqual(simple.code, 0, simple.sortie);
+  assert.doesNotMatch(simple.sortie, /tapez le nom/);
+  fs.rmSync(dossier, { recursive: true, force: true });
 });

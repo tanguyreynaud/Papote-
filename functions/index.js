@@ -43,7 +43,8 @@
 // Clés Stripe dans Secret Manager (outils/stripe/installer-stripe.bat), jamais dans le dépôt.
 
 const { onRequest, onCall, HttpsError } = require('firebase-functions/v2/https');
-const { onDocumentCreated, onDocumentUpdated, onDocumentWritten } = require('firebase-functions/v2/firestore');
+// Déclencheurs coupés pendant une restauration (base.js, sansRestauration).
+const { onDocumentCreated, onDocumentUpdated, onDocumentWritten } = require('./base').declencheurs;
 const { setGlobalOptions, logger } = require('firebase-functions/v2');
 const { defineSecret, defineString } = require('firebase-functions/params');
 const admin = require('firebase-admin');
@@ -2457,7 +2458,6 @@ exports.nouveauMembre = onDocumentCreated(
   async (event) => {
     const membre = event.data.data();
     const { fid, uid } = event.params;
-    if (await base.restaurationEnCours()) return; // membres remis par une restauration : aucun e-mail « a rejoint »
     // Famille préparée à la commande, encore sans responsable : ce premier proche le devient (famille-preparee.js).
     if (membre.role === 'famille' && await famillePreparee.proprietaire(fid, uid)) {
       logger.info(`Famille préparée ${fid} : ${uid} en devient responsable.`);

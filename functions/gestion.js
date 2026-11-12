@@ -27,7 +27,8 @@
 // refusées depuis les applis), pièces jointes dans Storage sous gestion/ (idem). Réservé au badge admin.
 
 const { onCall, onRequest, HttpsError } = require('firebase-functions/v2/https');
-const { onDocumentUpdated } = require('firebase-functions/v2/firestore');
+// Déclencheurs coupés pendant une restauration (base.js, sansRestauration).
+const { onDocumentUpdated } = require('./base').declencheurs;
 const { logger } = require('firebase-functions/v2');
 const { defineSecret, defineString } = require('firebase-functions/params');
 const admin = require('firebase-admin');
