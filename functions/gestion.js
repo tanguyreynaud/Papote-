@@ -3028,8 +3028,13 @@ function aFaire({ commandes, stock, depenses, automatique, maintenant, sims = []
   const dispo = stock.filter((t) => ['en-stock', 'preparee'].includes(t.etat) && (t.commande ? idsAEnvoyer.has(t.commande) : !t.fid)).length;
   ajouter(aEnvoyer, 'tablette(s) à envoyer');
   ajouter(Math.max(0, aEnvoyer - dispo), 'tablette(s) manquante(s) en stock pour les envoyer');
-  ajouter(actives.filter((c) => c.expedition === 'envoyee' && !c.fid && ms(c.envoyeeLe)
+  // Famille préparée : la commande a sa famille dès le paiement, c'est l'entrée de la tablette qui compte.
+  const horsFamille = (c) => c.expedition === 'envoyee' && !require('./famille-preparee').regles.tabletteDansLaFamille(c);
+  ajouter(actives.filter((c) => horsFamille(c) && ms(c.envoyeeLe)
     && maintenant - ms(c.envoyeeLe) > JOURS(20)).length, 'tablette(s) reçue(s) mais pas jumelée(s) après 20 jours');
+  for (const c of actives.filter((x) => horsFamille(x) && x.alerteConnexion && !(ms(x.envoyeeLe) && maintenant - ms(x.envoyeeLe) > JOURS(20)))) {
+    liste.push(`Tablette de ${c.nom || c.email || c.id} pas encore connectée, colis retiré : appeler le client`);
+  }
   ajouter(actives.filter(retour).length, 'tablette(s) à récupérer');
   ajouter(stock.filter((t) => t.etat === 'revenue').length, 'tablette(s) revenue(s) à vérifier');
   for (const t of stock.filter((x) => x.etat === 'revenue' && usureBatterie(x.batterie, debutTablette(x), maintenant))) {

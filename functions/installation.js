@@ -112,7 +112,8 @@ function brancher(deps) {
     if (!prenom) throw new HttpsError('invalid-argument', 'Votre prénom est demandé.');
     const ref = db.doc(`pairings/${code}`);
     // Famille préparée à la commande (famille-preparee.js) et tablette pas reconnue : elle y entre directement.
-    const preparee = familleDuScan ? await entrerFamillePreparee(ref, { uid, email, prenom }) : null;
+    const admin = !!(request.auth && request.auth.token && request.auth.token.admin === true);
+    const preparee = familleDuScan ? await entrerFamillePreparee(ref, { uid, email, prenom, admin }) : null;
     if (preparee) return preparee;
     const r = await reserver(ref, { uid, email, prenom });
     // Installation reprise : le premier proche est prévenu sur son téléphone (B2).
@@ -125,14 +126,35 @@ function brancher(deps) {
     return { etat: r.etat, ...(r.fid !== undefined ? { fid: r.fid } : {}), ...(r.par !== undefined ? { par: r.par } : {}) };
   }
 
-  async function entrerFamillePreparee(ref, { uid, email, prenom }) {
+  async function entrerFamillePreparee(ref, { uid, email, prenom, admin = false }) {
     const p = (await ref.get()).data();
     if (!p || p.status !== 'waiting' || (ms(p.expiresAt) || 0) <= Date.now()) return null;
-    const cible = await familleDuScan(uid, p);
+    const cible = await familleDuScan(uid, p, { admin });
     if (!cible) return null;
+    const adresse = email ? String(email).toLowerCase() : '';
+    const famRef = db.doc(`families/${cible.fid}`);
+    const membreRef = famRef.collection('members').doc(uid);
+    const invitRef = adresse ? famRef.collection('invitations').doc(adresse) : null;
     const fait = await db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       if (!snap.exists || snap.get('status') !== 'waiting') return false;
+      if (cible.entrer) {
+        const [fam, membre, invit] = await Promise.all([tx.get(famRef), tx.get(membreRef), invitRef ? tx.get(invitRef) : null]);
+        if (!fam.exists) return false;
+        if (!membre.exists) {
+          // Mêmes champs qu'en rejoignant avec le code famille (firebase.js, joinFamily).
+          const fiche = { name: prenom, role: 'famille', code: fam.get('code') || null, joinedAt: FieldValue.serverTimestamp(), uid, email: adresse };
+          const responsable = !fam.get('createdBy');
+          const invite = !!(invit && invit.exists);
+          tx.set(membreRef, { ...fiche, status: responsable || invite ? 'active' : 'pending' });
+          if (invite) tx.delete(invitRef);
+          if (responsable) {
+            // Comme proprietaire() (famille-preparee.js), dans la même écriture : personne d'autre ne peut l'accepter.
+            tx.update(famRef, { createdBy: uid, rev: FieldValue.increment(1) });
+            if (fam.get('code')) tx.set(db.doc(`invites/${fam.get('code')}`), { createdBy: uid }, { merge: true });
+          }
+        }
+      }
       tx.update(ref, {
         status: 'confirmed', fid: cible.fid, familyName: cible.nom, claimedBy: uid, claimedName: prenom, claimedEmail: email,
         reservedAt: FieldValue.serverTimestamp(), expiresAt: Timestamp.fromMillis(Date.now() + ENTREE_TABLETTE_MS),
@@ -141,7 +163,7 @@ function brancher(deps) {
       return true;
     });
     if (!fait) return null;
-    logger.info(`Installation ${ref.id} : tablette pas reconnue, entrée dans la famille préparée ${cible.fid} de ${uid}.`);
+    logger.info(`Installation ${ref.id} : ${cible.entrer ? 'QR scanné' : 'tablette pas reconnue'}, entrée dans la famille préparée ${cible.fid} (${uid}).`);
     return { etat: 'reserve', fid: cible.fid };
   }
 

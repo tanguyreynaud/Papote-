@@ -5,6 +5,9 @@ const JOUR = 24 * 60 * 60 * 1000;
 const RAPPELS_JOURS = [5, 12];
 // Au-delà, la commande est signalée à l'administrateur.
 const ALERTE_JOURS = 20;
+// Colis retiré au relais (suivi Mondial Relay) et tablette toujours hors famille : sans doute pas de connexion chez
+// la personne (pas de box, 4G faible). L'administrateur est prévenu (M0, Tanguy 12/11).
+const ALERTE_CONNEXION_JOURS = 2;
 // France seulement depuis l'offre unique (29/10/2026) : la carte SIM française n'est pas faite pour rester à l'étranger.
 const PAYS_RELAIS = ['FR'];
 
@@ -72,12 +75,18 @@ function rappelDu(envoyeeMs, dejaEnvoyes, maintenant) {
   return maintenant - envoyeeMs >= RAPPELS_JOURS[n] * JOUR ? n + 1 : null;
 }
 
+// recuMs : colis retiré (preparation.recuLe, nombre ou Timestamp).
+function alerteConnexionDue(recuMs, maintenant) {
+  const r = recuMs && typeof recuMs.toMillis === 'function' ? recuMs.toMillis() : recuMs;
+  return Number.isFinite(r) && maintenant - r >= ALERTE_CONNEXION_JOURS * JOUR;
+}
+
 function alerteDue(envoyeeMs, maintenant) {
   return envoyeeMs != null && maintenant - envoyeeMs >= ALERTE_JOURS * JOUR;
 }
 
 module.exports = {
-  RAPPELS_JOURS, ALERTE_JOURS, PAYS_RELAIS,
+  RAPPELS_JOURS, ALERTE_JOURS, ALERTE_CONNEXION_JOURS, PAYS_RELAIS,
   relaisDepuisRequete, relaisVersMeta, relaisDepuisMeta,
-  normaliserSuivi, lienSuivi, rappelDu, alerteDue,
+  normaliserSuivi, lienSuivi, rappelDu, alerteDue, alerteConnexionDue,
 };

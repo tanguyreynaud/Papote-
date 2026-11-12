@@ -46,14 +46,16 @@ function tabletteDansLaFamille(commande) {
 // Que faire du code qu'une tablette vient d'afficher (pure, testée).
 // fiche : sa fiche stock (ou null) ; commande : la commande de la fiche ; famille : la famille de la commande.
 // → { etat: 'jumeler', fid } ou { etat: <raison de ne rien faire> }.
-function decisionJumelage({ fiche, commande, famille }) {
+// scan : le QR a été scanné par un proche (pas le déclencheur du code) : le colis noté « déposé » n'est pas exigé,
+// la tablette est déjà entre ses mains (M2, audit du 12/11).
+function decisionJumelage({ fiche, commande, famille, scan = false }) {
   if (!fiche) return { etat: 'inconnue' };
   if (ETATS_BLOQUES.includes(fiche.etat)) return { etat: 'bloquee' };
   if (!fiche.commande || !commande) return { etat: 'sans-commande' };
   if (!commande.fid || !famille) return { etat: 'sans-famille' };
   if (!(famille.installation && famille.installation.preparee)) return { etat: 'pas-preparee' };
   // Pas avant le départ du colis : une tablette allumée chez Tanguy pendant la préparation reste hors famille.
-  if (commande.expedition !== 'envoyee') return { etat: 'pas-envoyee' };
+  if (commande.expedition !== 'envoyee' && !scan) return { etat: 'pas-envoyee' };
   if (fiche.fid && fiche.fid !== commande.fid) return { etat: 'autre-famille' };
   return { etat: 'jumeler', fid: commande.fid };
 }
@@ -185,9 +187,22 @@ function brancher({ db, logger, villeAvecCoordonnees = installation.villeAvecCoo
   // Secours : tablette pas reconnue (n° de série non prouvé, donc pas de jumelage tout seul) scannée par le
   // responsable d'une famille préparée encore sans tablette. Elle entre dans cette famille plutôt que d'en
   // créer une deuxième à côté de la commande. Une seule famille possible, sinon l'installation habituelle.
-  async function familleDuScan(uid, p) {
+  // Tablette du stock dont la commande a une famille préparée (M2, audit du 12/11, Tanguy 12/11) : son QR scanné
+  // (voix de la tablette, jumelage tout seul pas encore fait) ne crée jamais une deuxième famille. Elle entre dans
+  // celle de sa commande, et celui qui scanne aussi (entrer: true) : responsable si la famille n'en a pas encore,
+  // sinon directement s'il y est invité, sinon en demande à accepter. Jamais pour l'administrateur (essai chez Tanguy).
+  async function familleDuScan(uid, p, { admin = false } = {}) {
     if (!p || p.status !== 'waiting') return null;
-    if (await ficheDeLaTablette(db, p, null)) return null; // tablette du stock : jumeler() s'en occupe
+    const fiche = await ficheDeLaTablette(db, p, null);
+    if (fiche) {
+      if (admin) return null;
+      const t = fiche.data();
+      const commande = t.commande ? (await db.doc(`commandes/${t.commande}`).get()).data() || null : null;
+      const famille = commande && commande.fid ? (await db.doc(`families/${commande.fid}`).get()).data() || null : null;
+      const d = decisionJumelage({ fiche: t, commande, famille, scan: true });
+      if (d.etat !== 'jumeler') return null;
+      return { fid: d.fid, nom: famille.nomAChoisir ? '' : (famille.name || ''), commande: t.commande, entrer: true };
+    }
     const familles = await db.collection('families').where('createdBy', '==', uid).where('installation.preparee', '==', true).get();
     const libres = [];
     for (const f of familles.docs) {

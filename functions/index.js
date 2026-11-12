@@ -2480,6 +2480,14 @@ async function rappelsJumelage() {
     // Famille préparée : en attente tant que la tablette n'y est pas entrée (tabletteRelieeLe, famille-preparee.js).
     if (require('./famille-preparee').regles.tabletteDansLaFamille(c)) continue;
     const depart = c.envoyeeLe && c.envoyeeLe.toMillis();
+    // Colis retiré il y a 2 jours, tablette toujours pas entrée : sans doute pas de connexion chez la personne (M0).
+    const recu = c.preparation && c.preparation.recuLe;
+    if (!c.alerteConnexion && !c.alerteJumelage && livraison.alerteConnexionDue(recu, maintenant)) {
+      await snap.ref.update({ alerteConnexion: true });
+      logger.warn(`Commande ${snap.id} : colis retiré il y a ${livraison.ALERTE_CONNEXION_JOURS} jours, tablette toujours pas connectée.`);
+      await prevenirPapote(`Tablette pas encore connectée, colis retiré il y a 2 jours : ${c.nom || c.email || snap.id}`, snap,
+        'Le colis a été retiré il y a 2 jours et la tablette n\'est toujours pas entrée dans sa famille. Le plus souvent, elle n\'a pas de connexion chez la personne (pas de box, wifi à choisir, 4G faible). Appelez le client pour l\'aider.');
+    }
     if (livraison.alerteDue(depart, maintenant) && !c.alerteJumelage) {
       await snap.ref.update({ alerteJumelage: true });
       logger.warn(`Commande ${snap.id} : tablette toujours pas jumelée 20 jours après l'envoi.`);
