@@ -330,6 +330,7 @@ final class Sync {
         prefs.edit().remove("photosGardees").apply();
         prefs.edit().remove("ecrituresEnAttente").apply(); // écritures pour l'ancienne famille
         prefs.edit().remove("pushJetonEcrit").apply(); // le jeton push sera réécrit dans la nouvelle famille
+        prefs.edit().remove("sortieCumul").remove("sortieDernier").remove("sortieDoutes").remove("sortieDepuis").apply();
         lastRemindersJson = null;
         lastFamilyJson = null;
     }
@@ -502,41 +503,63 @@ final class Sync {
     }
 
     /**
-     * La tablette a-t-elle vraiment été retirée de sa famille ? Jamais sur un simple refus du serveur
-     * (SortieFamille, audit réseau du 11/11) : il faut que sa fiche soit refusée ou absente alors qu'une
-     * lecture témoin (config/base, ouverte à tout compte connecté) répond, et que cela dure. En attendant,
-     * la tablette garde sa famille, ses photos et ses numéros, et réessaie au tour suivant.
+     * La tablette a-t-elle vraiment été retirée de sa famille ? Seulement après 72 h de refus continu
+     * (SortieFamille, décision de Tanguy du 12/11) : sa fiche refusée ou absente alors qu'une lecture témoin
+     * (config/base, ouverte à tout compte connecté) répond. Sans réseau, ou si le serveur refuse tout, rien ne
+     * compte. Pendant une installation, tout de suite. En attendant, la tablette garde sa famille, ses photos et
+     * ses numéros, et réessaie au tour suivant.
      */
     private boolean familleVraimentPerdue(String fid) {
         int fiche = codeLecture("families/" + fid + "/members/" + firebase.uid(), "role");
-        int temoin = codeLecture("config/base", "database");
-        if (!SortieFamille.ficheDisparue(fiche, temoin)) {
-            if (temoin != 200 && temoin != 404 && !refusNote) {
-                refusNote = true;
-                Journal.log(context, "Serveur : accès refusé partout (fiche " + fiche + ", témoin " + temoin
-                        + "), la tablette garde sa famille et réessaie");
-            }
-            oublierDoutes();
-            return false;
+        int temoin = fiche == 200 ? 200 : codeLecture("config/base", "database");
+        SortieFamille.Constat constat = SortieFamille.constat(fiche, temoin);
+        if (constat == SortieFamille.Constat.INCERTAIN && temoin != 0 && fiche != 0 && !refusNote) {
+            refusNote = true;
+            Journal.log(context, "Serveur : accès refusé partout (fiche " + fiche + ", témoin " + temoin
+                    + "), la tablette garde sa famille et réessaie");
         }
-        long now = System.currentTimeMillis();
-        int doutes = prefs.getInt("sortieDoutes", 0) + 1;
-        long depuis = prefs.getLong("sortieDepuis", 0);
-        if (depuis == 0 || depuis > now) depuis = now;
-        if (SortieFamille.quitter(doutes, now - depuis, prefs.getBoolean("installEnCours", false))) {
-            oublierDoutes();
+        SortieFamille.Compteur c = compteurSortie();
+        boolean premier = c.vide();
+        c.noter(constat, System.currentTimeMillis());
+        boolean refus = constat == SortieFamille.Constat.REFUS;
+        if (SortieFamille.quitter(c, refus, prefs.getBoolean("installEnCours", false))) {
+            garderCompteurSortie(new SortieFamille.Compteur(0, 0));
             return true;
         }
-        prefs.edit().putInt("sortieDoutes", doutes).putLong("sortieDepuis", depuis).apply();
-        if (doutes == 1) Journal.log(context, "Fiche de la tablette introuvable : vérifications avant de quitter la famille");
+        garderCompteurSortie(c);
+        if (refus && premier) {
+            Journal.log(context, "Fiche de la tablette introuvable : la tablette garde sa famille, 72 h de vérifications avant de la quitter");
+        }
         return false;
     }
 
     private boolean refusNote;
 
+    /** Compteur du refus continu, gardé dans les réglages de la tablette (il survit à un redémarrage). */
+    private SortieFamille.Compteur compteurSortie() {
+        return SortieFamille.Compteur.relire(cle -> prefs.getLong(cle, 0));
+    }
+
+    private void garderCompteurSortie(SortieFamille.Compteur c) {
+        SharedPreferences.Editor e = prefs.edit().remove("sortieDoutes").remove("sortieDepuis"); // anciennes clés (A35)
+        c.garder((cle, valeur) -> { if (valeur == null) e.remove(cle); else e.putLong(cle, valeur); });
+        e.commit(); // écrit tout de suite : une coupure de courant ne remet pas le compteur en arrière
+    }
+
+    /** Une lecture a réussi : le compteur repart de zéro. */
     private void oublierDoutes() {
-        if (prefs.contains("sortieDoutes") || prefs.contains("sortieDepuis")) {
-            prefs.edit().remove("sortieDoutes").remove("sortieDepuis").apply();
+        if (prefs.contains("sortieCumul") || prefs.contains("sortieDernier")
+                || prefs.contains("sortieDoutes") || prefs.contains("sortieDepuis")) {
+            garderCompteurSortie(new SortieFamille.Compteur(0, 0));
+        }
+    }
+
+    /** Pas de réseau (ou serveur en panne) : le temps qui passe ne compte pas comme un refus. */
+    private void sortieIncertaine() {
+        if (prefs.getLong("sortieDernier", 0) > 0) {
+            SortieFamille.Compteur c = compteurSortie();
+            c.incertain();
+            garderCompteurSortie(c);
         }
     }
 
@@ -558,6 +581,7 @@ final class Sync {
         try {
             fid = familyId();
         } catch (IOException e) {
+            sortieIncertaine();
             status("offline", null);
             return;
         }
@@ -631,9 +655,9 @@ final class Sync {
             // On n'oublie la famille que si la fiche de la tablette a vraiment disparu (famille
             // supprimée ou tablette retirée), jamais parce que le code famille a changé.
             if ((e.code == 403 || e.code == 404) && familleVraimentPerdue(fid)) {
-                // Famille supprimée (par l'admin) ou installation annulée sur le téléphone : la tablette
-                // revient d'elle-même sur l'écran du code, avec un nouveau code (l'ancien jumelage ne sert plus).
-                Journal.log(context, "Plus dans la famille : retour à l'écran du code");
+                // Installation annulée, ou fiche refusée 72 h de suite alors que le serveur répond : la tablette
+                // revient d'elle-même sur l'écran d'attente, avec un nouveau code (l'ancien jumelage ne sert plus).
+                Journal.log(context, "Plus dans la famille : retour à l'écran d'attente");
                 prefs.edit().remove("fid").remove("pairing").remove("pairingExpires").remove("pairingFait")
                         .remove("installEnCours").remove("installPar").remove("installDepuis").apply();
                 posts.clear();
@@ -647,9 +671,11 @@ final class Sync {
                 poke();
                 return;
             }
+            if (e.code != 403 && e.code != 404) sortieIncertaine(); // serveur occupé ou en panne : rien ne compte
             status("offline", null);
             return;
         } catch (IOException e) {
+            sortieIncertaine(); // pas de réseau : jamais compté comme un refus
             status("offline", null);
             return;
         }
