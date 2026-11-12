@@ -689,13 +689,20 @@ service cloud.firestore {
       // Appels vidéo : la famille appelle la tablette (signalisation WebRTC).
       match /calls/{cid} {
         allow read: if isMember(fid);
+        // Appel marqué SOS (calleeName 'SOS' ou 'SOS 2', functions/appels.js essaiSos) : seule la tablette le lance
+        // (A47, Tanguy 12/11). Un proche ne peut ni en créer un, ni en relancer un déjà fini (le remettre à
+        // « ringing » puis à « missed » ferait partir l'alerte « Mamie a appuyé sur SOS » à toute la famille).
         allow create: if isMember(fid) && abonnementOk(fid)
           && request.resource.data.keys().hasOnly(['callerUid', 'callerName', 'calleeUid', 'calleeName', 'state', 'offer', 'answer', 'createdAt', 'endedAt'])
           && request.resource.data.callerUid == request.auth.uid
-          && request.resource.data.state == 'ringing';
+          && request.resource.data.state == 'ringing'
+          && (!(request.resource.data.get('calleeName', null) in ['SOS', 'SOS 2'])
+            || get(memberPath(fid)).data.get('role', '') == 'tablette');
         allow update: if isMember(fid)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state', 'answer', 'endedAt'])
-          && request.resource.data.state in ['ringing', 'accepted', 'declined', 'missed', 'ended'];
+          && request.resource.data.state in ['ringing', 'accepted', 'declined', 'missed', 'ended']
+          && (!(resource.data.get('calleeName', null) in ['SOS', 'SOS 2'])
+            || resource.data.state == 'ringing' || request.resource.data.state != 'ringing');
         // La tablette écrit l'appel tout de suite (sans offre, pour que les téléphones sonnent plus
         // tôt), puis y ajoute son offre une seule fois, avec son réseau (sim ou wifi : qualité de la vidéo)
         // et son régime si son forfait SIM est presque épuisé (eco, mini : image réduite ; audio : sans image).
