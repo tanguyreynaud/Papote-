@@ -920,13 +920,39 @@ function budget({ palier, montant, paliers, coupee = true }) {
   ], bouton, { interne: true });
 }
 
+// E-mails « de confort » (audit sécurité 11/11, L1 et L8, A28) : ils font plaisir mais peuvent attendre ou manquer.
+// Quand il reste moins de 100 envois Brevo dans la journée (quota-courriels.js), ils ne partent plus : les 100 derniers
+// restent aux e-mails urgents (SOS, commande, paiement, colis, connexion, alertes pour Papote). Tout e-mail qui n'est
+// pas dans cette liste est urgent : un oubli ici laisse passer un e-mail, il n'en bloque jamais un important.
+const CONFORT = ['listeAttenteConfirmee', 'demandeAcceptee', 'demandeRejoindre', 'rappelConfirme', 'relancePanier'];
+// La marque n'est pas énumérable : elle ne part pas vers nodemailer avec le reste du contenu (...contenu).
+const marquerConfort = (f) => (...args) => Object.defineProperty(f(...args), 'confort', { value: true });
+const estConfort = (contenu) => Boolean(contenu && contenu.confort === true);
+
 // smtp : « hote:port:utilisateur » (MAIL_SMTP), expediteur : adresse affichée (MAIL_EXPEDITEUR).
 let transport;
 // Appelé après chaque e-mail parti (index.js y branche le compteur du quota Brevo, quota-courriels.js).
 // enNombre : l'appelant compte lui-même ses envois en une fois (campagne, liste d'attente).
 let apresEnvoi = null;
 function surChaqueEnvoi(f) { apresEnvoi = f; }
-async function envoyer({ smtp, motDePasse, expediteur, a, contenu, enNombre = false }) {
+// Appelé avant chaque e-mail de confort (index.js : reste-t-il plus de 100 envois aujourd'hui ?). Répond false pour
+// le retenir. Une panne de ce contrôle laisse partir l'e-mail (comme le compteur, il n'empêche jamais un envoi).
+let avantConfort = null;
+function surEnvoiDeConfort(f) { avantConfort = f; }
+
+// Renvoie true si l'e-mail est parti, false s'il a été retenu (confort, quota presque vide) : jamais d'erreur pour ça,
+// l'appelant continue comme si l'e-mail était parti. Les envois en nombre ont leur propre plafond (permisEnNombre).
+async function envoyer(options) {
+  if (avantConfort && !options.enNombre && estConfort(options.contenu)) {
+    const permis = await Promise.resolve().then(() => avantConfort(options.a, options.contenu)).catch(() => true);
+    if (permis === false) return false;
+  }
+  await module.exports.expedier(options);
+  return true;
+}
+
+// L'envoi lui-même (la simulation des parcours le remplace : e-mails gardés dans boite[]).
+async function expedier({ smtp, motDePasse, expediteur, a, contenu, enNombre = false }) {
   if (!motDePasse || !expediteur) throw new Error('E-mails non configurés (MAIL_EXPEDITEUR, MAIL_MOT_DE_PASSE).');
   if (!transport) {
     const [hote, port, utilisateur] = smtp.split(':');
@@ -951,5 +977,6 @@ module.exports = {
   // support et admin
   rappelConfirme, demandeRappel, bilanSupport, information, recapSemaine, livresComptables, budget,
   // outils
-  message, envoyer, surChaqueEnvoi, echapper, euros, dateEnClair, sansBalises,
+  message, envoyer, expedier, surChaqueEnvoi, surEnvoiDeConfort, estConfort, CONFORT, echapper, euros, dateEnClair, sansBalises,
 };
+for (const nom of CONFORT) module.exports[nom] = marquerConfort(module.exports[nom]);

@@ -25,7 +25,7 @@ const mail = require('./mail');
 const journal = require('./journal-alertes');
 
 // Appel ou SOS qui ne fait sonner aucun téléphone (D1, Tanguy 2026-10-27) : tous les proches le savent par
-// e-mail (mêmes réglages que index.js ; en simulation, mail.envoyer est remplacé).
+// e-mail (mêmes réglages que index.js ; en simulation, l'envoi lui-même, mail.expedier, est remplacé).
 const MAIL_SMTP = defineString('MAIL_SMTP', { default: 'smtp.gmail.com:465:' });
 const MAIL_EXPEDITEUR = defineString('MAIL_EXPEDITEUR', { default: '' });
 const MAIL_MOT_DE_PASSE = defineSecret('MAIL_MOT_DE_PASSE');

@@ -69,6 +69,8 @@ setGlobalOptions({ region: 'europe-west1', maxInstances: 5 });
 // Chaque e-mail parti est compté pour le quota Brevo (300 par jour en offre gratuite) : quota-courriels.js.
 const quotaCourriels = require('./quota-courriels');
 mail.surChaqueEnvoi((n) => quotaCourriels.compter(db, n, logger));
+// E-mails de confort (mail.js, CONFORT) retenus quand il reste moins de 100 envois dans la journée (audit 11/11, L1 et L8).
+mail.surEnvoiDeConfort((a, contenu) => quotaCourriels.confortAutorise(db, { a, sujet: contenu && contenu.subject }, logger));
 
 const STRIPE_SECRET = defineSecret('STRIPE_SECRET');
 const STRIPE_WEBHOOK_SECRET = defineSecret('STRIPE_WEBHOOK_SECRET');
@@ -1664,8 +1666,51 @@ exports.couverture = onRequest({ cors: [/mapapote\.fr$/, /papote\.web\.app$/], m
 
 exports.stockDisponible = onRequest({ cors: [/mapapote\.fr$/, /papote\.web\.app$/], maxInstances: 2 }, stock.routeDisponible(db, logger));
 
+// Garde-fous de la liste d'attente (audit sécurité 11/11, L1, A28) : sans compte, n'importe qui pouvait y inscrire des
+// centaines d'adresses et vider le quota Brevo en une minute avec des « C'est noté ». Désormais :
+//  - 5 demandes par heure et par adresse internet (comme commander, stock.js) : au-delà, 429 et rien n'est noté ;
+//  - 50 « C'est noté » par jour pour tout le monde : au-delà, l'adresse est notée dans contacts/ mais sans e-mail
+//    (elle recevra quand même l'e-mail d'ouverture des commandes) ;
+//  - un champ piège (adresse2) rempli : réponse « réussi » sans rien noter ni envoyer (robots) ;
+//  - et, comme tout e-mail de confort, rien ne part quand il reste moins de 100 envois Brevo dans la journée.
+// L'adresse internet est gardée hachée (limites/attente-ip-…), avec les heures des demandes de la dernière heure.
+const ATTENTE_HEURE_IP = 5;
+const ATTENTE_MAILS_JOUR = 50;
+
+async function attenteTropDeDemandes(ip) {
+  const maintenant = Date.now();
+  const cle = require('node:crypto').createHash('sha256').update(`attente:${ip || '?'}`).digest('hex').slice(0, 32);
+  const ref = db.doc(`limites/attente-ip-${cle}`);
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const recentes = ((snap.exists && snap.get('essais')) || []).filter((t) => typeof t === 'number' && t > maintenant - 3600e3);
+    if (recentes.length >= ATTENTE_HEURE_IP) return true;
+    tx.set(ref, { essais: [...recentes, maintenant], expireLe: Timestamp.fromMillis(maintenant + 3600e3) });
+    return false;
+  });
+}
+
+// Un « C'est noté » de plus aujourd'hui (jour de Paris) ? false au-delà de 50 : l'adresse est notée sans e-mail.
+async function attenteMailPermis() {
+  const ref = db.doc(`limites/attente-mails-${quotaCourriels.jourParis(Date.now())}`);
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const n = (snap.exists && snap.get('n')) || 0;
+    if (n >= ATTENTE_MAILS_JOUR) return false;
+    tx.set(ref, { n: n + 1 }, { merge: true });
+    return true;
+  });
+}
+
 exports.listeAttente = onRequest({ cors: [/mapapote\.fr$/, /papote\.web\.app$/], maxInstances: 2, secrets: [MAIL_MOT_DE_PASSE] }, async (req, res) => {
   const d = req.method === 'POST' && req.body && typeof req.body === 'object' ? req.body : {};
+  // Champ piège (adresse2, caché hors de l'écran sur le site, A28) : seul un robot le remplit. Il croit avoir réussi,
+  // rien n'est noté ni envoyé.
+  if (d.adresse2 != null && String(d.adresse2).trim() !== '') {
+    logger.warn('Liste d\'attente : champ piège rempli, demande ignorée');
+    res.status(204).end();
+    return;
+  }
   const email = emailValide(d.email);
   if (!email || d.accord !== true) {
     res.status(400).json({ erreur: 'E-mail ou accord manquant.' });
@@ -1676,6 +1721,11 @@ exports.listeAttente = onRequest({ cors: [/mapapote\.fr$/, /papote\.web\.app$/],
   const telephone = relances.portableFrancais(d.telephone);
   if (telephone === false) {
     res.status(400).json({ erreur: 'Numéro de portable français (06 ou 07) seulement.' });
+    return;
+  }
+  if (await attenteTropDeDemandes(stock.adresseVisiteur(req))) {
+    logger.warn(`Liste d'attente : plus de ${ATTENTE_HEURE_IP} demandes en une heure depuis la même adresse internet, ${email} refusé`);
+    res.status(429).json({ erreur: 'Trop de demandes. Réessayez dans une heure.' });
     return;
   }
   const ref = db.doc(`contacts/${cleContact(email)}`);
@@ -1693,6 +1743,10 @@ exports.listeAttente = onRequest({ cors: [/mapapote\.fr$/, /papote\.web\.app$/],
   // « C'est noté » (2026-10-30) : une fois par inscription, après la réponse au site (un échec d'envoi ne la bloque pas).
   if (snap.exists && snap.get('listeAttente') === true && !snap.get('desinscritLe')) return;
   try {
+    if (!(await attenteMailPermis())) {
+      logger.warn(`Liste d'attente : plus de ${ATTENTE_MAILS_JOUR} « C'est noté » aujourd'hui, ${email} noté sans e-mail`);
+      return;
+    }
     await envoyerMail(email, mail.listeAttenteConfirmee({ prenom, telephone, desinscription: `${URL_DESINSCRIPTION}?c=${cleContact(email)}&j=${jeton}` }));
   } catch (e) {
     logger.error(`Liste d'attente ${email} : confirmation non envoyée`, e.message);
@@ -2241,6 +2295,21 @@ async function prevenirDemande(fid, uid, membre) {
     .forEach((r) => logger.error(`Demande ${fid}/${uid} : prévenir les responsables`, r.reason));
 }
 
+// « Bienvenue dans la famille de … » : 10 par jour et par famille (audit sécurité 11/11, L8, A28). Deux comptes complices
+// qui entrent, sortent et rentrent ne vident plus le quota Brevo ; au-delà, la personne entre quand même, sans e-mail.
+const BIENVENUES_PAR_JOUR = 10;
+async function bienvenuePermise(fid) {
+  const jour = quotaCourriels.jourParis(Date.now());
+  const ref = db.doc(`limites/bienvenue-${fid}`);
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const n = snap.exists && snap.get('jour') === jour ? snap.get('n') || 0 : 0;
+    if (n >= BIENVENUES_PAR_JOUR) return false;
+    tx.set(ref, { jour, n: n + 1 });
+    return true;
+  });
+}
+
 // Demande acceptée par un responsable (fiche « pending » → active) : la personne le sait par e-mail (2026-10-30),
 // car elle a pu fermer l'appli en attendant. Un refus supprime la fiche : rien n'est envoyé.
 exports.membreAccepte = onDocumentUpdated(
@@ -2252,6 +2321,10 @@ exports.membreAccepte = onDocumentUpdated(
     const fam = await db.doc(`families/${event.params.fid}`).get();
     if (!fam.exists) return;
     try {
+      if (!(await bienvenuePermise(event.params.fid))) {
+        logger.warn(`Famille ${event.params.fid} : plus de ${BIENVENUES_PAR_JOUR} « Bienvenue » aujourd'hui, pas d'e-mail pour ${event.params.uid}`);
+        return;
+      }
       await envoyerMail(apres.email, mail.demandeAcceptee({ prenom: apres.name, famille: fam.get('name'), lien: APPLI_FAMILLE }));
     } catch (e) {
       logger.error(`Demande ${event.params.fid}/${event.params.uid} : e-mail « acceptée » non parti`, e.message);
