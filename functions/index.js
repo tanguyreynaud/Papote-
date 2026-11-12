@@ -2840,6 +2840,7 @@ exports.telephoneAppels = onDocumentWritten(
     }
   });
 
+const { uidDesTablettes } = require('./uid-tablette');
 // Nombre de proches d'une famille (membres « famille » qui ont rejoint), lu par les règles
 // Firestore pour refuser un 31e proche. Recalculé seulement quand un proche arrive, part ou est accepté :
 // pas aux battements de la tablette (2 à 3 écritures toutes les 10 min), qui relisaient toute la famille.
@@ -2847,6 +2848,10 @@ const estProche = (snap) => Boolean(snap && snap.exists && snap.get('role') === 
 exports.compterProches = onDocumentWritten(
   { document: 'families/{fid}/members/{uid}', database: BASE_FIRESTORE, region: REGION_FIRESTORE },
   async (event) => {
+    // Fiche d'une tablette : son uid y est écrit, pour le relais des appels (règles 2, R3 ; uid-tablette.js).
+    const apres = event.data && event.data.after && event.data.after.exists ? event.data.after.data() : null;
+    await uidDesTablettes(db, event.params.fid, event.params.uid, apres)
+      .catch((e) => logger.warn(`Famille ${event.params.fid} : uid des tablettes non écrit`, e.message));
     if (estProche(event.data && event.data.before) === estProche(event.data && event.data.after)) return;
     const famille = db.doc(`families/${event.params.fid}`);
     const membres = await famille.collection('members').where('role', '==', 'famille').get();
