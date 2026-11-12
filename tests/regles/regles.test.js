@@ -508,14 +508,15 @@ test('responsables : désignés par un responsable, jamais au détriment du prop
 
 test('ordres à la tablette : un responsable de CETTE famille ; la tablette ne répond qu\'aux siens', async () => {
   await deuxFamilles();
-  const wifi = (par) => ordre(par, { type: 'wifi', ssid: 'Box', security: 'wpa2', password: 'secret' });
+  const wifi = (par) => ordre(par, { type: 'wifi', ssid: 'Box', security: 'wpa2' });
   await assertSucceeds(setDoc(doc(proche('paul'), `families/${FID}/commands/w1`), wifi('paul')));
   await assertFails(setDoc(doc(proche('lea'), `families/${FID}/commands/w2`), wifi('lea')));
   await assertFails(setDoc(doc(proche('paul'), `families/${FID}/commands/w3`), wifi('julie')));
   await assertFails(setDoc(doc(proche('eve'), `families/${FID}/commands/w4`), wifi('eve')));
   // La tablette lit et termine ses ordres (le mot de passe disparaît), pas ceux d'une autre tablette.
   await assertSucceeds(getDoc(doc(tablette('tab'), `families/${FID}/commands/w1`)));
-  await assertSucceeds(updateDoc(doc(tablette('tab'), `families/${FID}/commands/w1`), { state: 'done', result: 'ok', doneAt: serverTimestamp(), password: deleteField() }));
+  await assertSucceeds(updateDoc(doc(tablette('tab'), `families/${FID}/commands/w1`), { state: 'done', result: 'ok', issue: 'connectee', doneAt: serverTimestamp(), password: deleteField() }));
+  await assertFails(updateDoc(doc(tablette('tab'), `families/${FID}/commands/w1`), { state: 'failed', issue: 'peut-etre' }));
   await assertFails(updateDoc(doc(tablette('tab'), `families/${FID}/commands/w1`), { state: 'done', target: 'tab2' }));
   await assertFails(updateDoc(doc(tablette('tab2'), `families/${FID}/commands/o1`), { state: 'done', result: 'x', doneAt: serverTimestamp() }));
   await assertFails(getDoc(doc(tablette('tab2'), `families/${FID}/commands/o1`)));
@@ -524,6 +525,71 @@ test('ordres à la tablette : un responsable de CETTE famille ; la tablette ne r
   await assertFails(updateDoc(doc(tablette('tab'), `families/${FID}/commands/w5`), { state: 'done' }));
   await assertSucceeds(deleteDoc(doc(proche('paul'), `families/${FID}/commands/w5`)));
   await assertFails(deleteDoc(doc(proche('lea'), `families/${FID}/commands/w1`)));
+});
+
+test('wifi depuis l\'appli (A36) : mot de passe jamais dans l\'ordre, à part, lisible de la seule tablette, expiré', async () => {
+  await deuxFamilles();
+  const heure = (h) => Timestamp.fromMillis(Date.now() + h * 3_600_000);
+  const cmd = (id) => `families/${FID}/commands/${id}`;
+  const wifi = (par, extra = {}) => ordre(par, { type: 'wifi', ssid: 'Freebox-Jardin', security: 'wpa2', ...extra });
+  const secret = (par, extra = {}) => ({ password: 'bon-mot-de-passe', createdBy: par, expireAt: heure(1), ...extra });
+  const envoyer = (db, id, par, extraCmd = {}, extraSecret = {}) => {
+    const lot = writeBatch(db);
+    lot.set(doc(db, cmd(id)), wifi(par, extraCmd));
+    lot.set(doc(db, `${cmd(id)}/secret/wifi`), secret(par, extraSecret));
+    return lot.commit();
+  };
+  // L'ancienne façon (mot de passe dans l'ordre, lisible de tous les responsables) est refusée.
+  await assertFails(setDoc(doc(proche('paul'), cmd('v1')), wifi('paul', { password: 'bon-mot-de-passe' })));
+  // L'ordre et son secret, ensemble, par un responsable de la famille.
+  await assertSucceeds(envoyer(proche('paul'), 's1', 'paul'));
+  // Pas un proche sans badge, pas une autre famille, pas au nom d'un autre, pas sur un autre ordre que wifi.
+  await assertFails(envoyer(proche('lea'), 's2', 'lea'));
+  await assertFails(envoyer(proche('eve'), 's3', 'eve'));
+  await assertFails(envoyer(proche('paul'), 's4', 'paul', {}, { createdBy: 'julie' }));
+  await assertFails(setDoc(doc(proche('julie'), `${cmd('s1')}/secret/wifi`), secret('julie')));
+  await assertSucceeds(setDoc(doc(proche('paul'), cmd('r1')), ordre('paul')));
+  await assertFails(setDoc(doc(proche('paul'), `${cmd('r1')}/secret/wifi`), secret('paul')));
+  // Autre nom que « wifi », champ en plus, mot de passe trop court ou trop long, expiration absente, passée ou lointaine.
+  const lot = (id, nom, extra) => {
+    const db = proche('paul');
+    const b = writeBatch(db);
+    b.set(doc(db, cmd(id)), wifi('paul'));
+    b.set(doc(db, `${cmd(id)}/secret/${nom}`), { ...secret('paul'), ...extra });
+    return b.commit();
+  };
+  await assertFails(lot('x1', 'autre', {}));
+  await assertFails(lot('x2', 'wifi', { ssid: 'Box' }));
+  await assertFails(lot('x3', 'wifi', { password: 'court' }));
+  await assertFails(lot('x4', 'wifi', { password: 'x'.repeat(64) }));
+  await assertFails(lot('x5', 'wifi', { expireAt: null }));
+  await assertFails(lot('x6', 'wifi', { expireAt: heure(-0.1) }));
+  await assertFails(lot('x7', 'wifi', { expireAt: heure(3) }));
+  // Lisible de la seule tablette visée : ni l'auteur, ni les autres responsables, ni une autre tablette.
+  await assertSucceeds(getDoc(doc(tablette('tab'), `${cmd('s1')}/secret/wifi`)));
+  await assertFails(getDoc(doc(proche('paul'), `${cmd('s1')}/secret/wifi`)));
+  await assertFails(getDoc(doc(proche('julie'), `${cmd('s1')}/secret/wifi`)));
+  await assertFails(getDoc(doc(tablette('tab2'), `${cmd('s1')}/secret/wifi`)));
+  await assertFails(getDocs(collection(tablette('tab'), `${cmd('s1')}/secret`)));
+  await assertFails(updateDoc(doc(proche('paul'), `${cmd('s1')}/secret/wifi`), { password: 'autre-mot-de-passe' }));
+  // La tablette prend l'ordre (running, sans mot de passe) et efface le secret dans la même écriture.
+  const tab = tablette('tab');
+  const prise = writeBatch(tab);
+  prise.update(doc(tab, cmd('s1')), { state: 'running', result: 'La tablette essaie « Freebox-Jardin »…' });
+  prise.delete(doc(tab, `${cmd('s1')}/secret/wifi`));
+  await assertSucceeds(prise.commit());
+  await assertSucceeds(updateDoc(doc(tab, cmd('s1')), { state: 'failed', result: 'Mot de passe refusé', issue: 'mot-de-passe', doneAt: serverTimestamp() }));
+  // Expiré : plus lisible, même par la tablette (la TTL de Firestore l'efface ensuite).
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), cmd('e1')), { ...wifi('paul'), createdAt: Timestamp.now() });
+    await setDoc(doc(ctx.firestore(), `${cmd('e1')}/secret/wifi`), { ...secret('paul'), expireAt: heure(-0.01) });
+  });
+  await assertFails(getDoc(doc(tablette('tab'), `${cmd('e1')}/secret/wifi`)));
+  // L'auteur le retire (fenêtre fermée avant que la tablette le prenne) ; un autre responsable ne peut pas.
+  await assertSucceeds(envoyer(proche('paul'), 's5', 'paul'));
+  await assertFails(deleteDoc(doc(proche('julie'), `${cmd('s5')}/secret/wifi`)));
+  await assertFails(deleteDoc(doc(tablette('tab2'), `${cmd('s5')}/secret/wifi`)));
+  await assertSucceeds(deleteDoc(doc(proche('paul'), `${cmd('s5')}/secret/wifi`)));
 });
 
 test('jeton de notification (private) : lisible et modifiable de soi seul', async () => {
