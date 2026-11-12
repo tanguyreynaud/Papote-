@@ -1084,9 +1084,6 @@ body:has(#hors-ligne-bandeau:not([hidden])) .install-fab { display: none; }
 }
 .install-fab svg { width: 22px; height: 22px; }
 /* Fin de l'installation de la tablette et connexion : l'installation de l'app proposée aussi (27/10). */
-.setup-install { margin: 18px 0 12px; }
-.setup-install p { margin: 0 0 8px; }
-.setup-install .secondary { justify-content: center; }
 /* Photos et Messages ouverts depuis la barre du bas : pas de flèche retour, la barre reste en bas. */
 .depuis-barre .page-head .back { display: none; }
 .depuis-barre .chat-bar { bottom: calc(var(--barre-bas) + env(safe-area-inset-bottom)); }
@@ -1345,15 +1342,8 @@ body:not(.on-support) .ps-bouton, body:not(.on-support) .ps-panneau { display: n
 /* Réglages > Ce téléphone */
 .toggle:disabled { opacity: .45; cursor: default; }
 
-/* ---------- Installation d'une nouvelle tablette (view-setup) ---------- */
-.setup-dots { margin: 4px 0 14px; }
-.setup-step label:not(.toggle-row) { display: block; margin-top: 14px; }
-.setup-step .primary.wide { margin-top: 16px; }
-.setup-note { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; font-size: 15px; color: var(--text); margin: 12px 0 0; }
-.setup-preview { display: block; width: 100%; height: auto; margin-top: 14px; }
-#setup-photo-extra input { width: 100%; margin-top: 14px; }
-#setup-pickers { margin-top: 14px; }
-/* Étape « Le son » : une ligne par réglage (titre + valeur, puis barre + bouton « Écouter »). */
+/* ---------- Réglage du son de la tablette (Réglages) ---------- */
+/* Une ligne par réglage (titre + valeur, puis barre + bouton « Écouter »). */
 .setup-son-ligne { border-top: 1px solid var(--line); padding-top: 14px; margin-top: 14px; }
 .setup-son-tete { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
 .setup-son-tete strong { font-size: 17px; }
@@ -1370,7 +1360,6 @@ body:not(.on-support) .ps-bouton, body:not(.on-support) .ps-panneau { display: n
 .setup-essai:active svg { fill: var(--accent-text); }
 .volume-aide { margin: -4px 0 2px; }
 .setup-son-status { margin: 12px 0 0; padding: 10px 14px; border-radius: 12px; font-size: 15px; color: var(--text); background: var(--bg); border: 1px solid var(--line); }
-#setup-options .toggle-list { margin-top: 14px; }
 
 /* Aucun lien souligné, dans l'appli comme dans l'admin (demande de Tanguy, 22/10). */
 a { text-decoration: none; }
