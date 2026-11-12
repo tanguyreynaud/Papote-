@@ -294,7 +294,9 @@ function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
       cle: 'blocages',
       titre: 'Blocages chez l\'opérateur',
       texte: 'Dans l\'espace client de la ligne (ou au service client de l\'opérateur), activez ces blocages, puis cochez :',
-      saute: (e) => !internet || blocagesFaits(simDe(e)),
+      // Notés pendant CE parcours : l'étape reste dans la liste, sinon les étapes se décalent d'un cran et
+      // « La tablette dans le carton » était sautée (test admin-journee, 12/11).
+      saute: (e) => !internet || (blocagesFaits(simDe(e)) && !(e.faits && e.faits.blocages)),
       cases: BLOCAGES_SIM.map(([, texte]) => `Bloqué : ${texte}`),
       async valider(e) {
         const l = simDe(e);
@@ -502,11 +504,17 @@ async function preparerEnvoi(c, bouton) {
   if (fini) loadShipped();
 }
 
-// Envoyées mais pas encore reliées à une famille : suivi du colis, alerte au bout de 20 jours.
+// La tablette de cette commande est-elle chez sa famille ? Même règle que le serveur (functions/famille-preparee.js,
+// tabletteDansLaFamille) : famille préparée, la commande a sa famille dès le paiement, c'est l'entrée de la tablette
+// qui compte (tabletteRelieeLe) ; avant, la commande reliée (audit du 11/11, point 1).
+const tabletteDansLaFamille = (c) => !!c && (c.famillePreparee ? !!c.tabletteRelieeLe : !!c.fid);
+
+// Envoyées mais tablette pas encore entrée dans la famille : suivi du colis, alerte au bout de 20 jours.
 async function loadShipped() {
   try {
-    const snap = await getDocs(query(collection(db, 'commandes'), where('expedition', '==', 'envoyee'), where('fid', '==', null)));
+    const snap = await getDocs(query(collection(db, 'commandes'), where('expedition', '==', 'envoyee')));
     const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+      .filter((c) => !tabletteDansLaFamille(c) && !(c.restitution && c.restitution.statut))
       .sort((a, b) => (b.alerteJumelage === true) - (a.alerteJumelage === true)
         || (toDate(a.envoyeeLe)?.getTime() || 0) - (toDate(b.envoyeeLe)?.getTime() || 0));
     $('shipped-empty').hidden = list.length > 0;

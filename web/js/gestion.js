@@ -558,6 +558,11 @@ function bilanMensuel() {
   }));
 }
 
+// La tablette de cette commande est-elle chez sa famille ? Même règle que le serveur (functions/famille-preparee.js,
+// tabletteDansLaFamille) : depuis la « famille préparée » (05/11), la commande a sa famille dès le paiement, c'est
+// l'entrée de la tablette qui compte (tabletteRelieeLe) ; avant, la commande reliée (audit du 11/11, point 1).
+const tabletteDansLaFamille = (c) => !!c && (c.famillePreparee ? !!c.tabletteRelieeLe : !!c.fid);
+
 // État d'une commande pour le suivi.
 function etatCommande(c) {
   if (c.expedition === 'annulee') return 'annulee';
@@ -572,7 +577,7 @@ function etatCommande(c) {
   if (c.expedition === 'a-preparer') return 'a-envoyer';
   // Prélèvement SEPA pas encore confirmé par la banque : ne pas envoyer.
   if (c.expedition === 'paiement-en-attente') return 'paiement';
-  if (c.expedition === 'envoyee' && !c.fid) return 'en-route';
+  if (c.expedition === 'envoyee' && !tabletteDansLaFamille(c)) return 'en-route';
   // Résiliation demandée (par le client ou depuis l'admin) : encore en service jusqu'à la date d'arrêt.
   if (c.resiliationLe) return 'arret';
   return 'active';
@@ -604,10 +609,10 @@ const formuleTexte = (c) => [FORMULES[c.formule] || c.formule, c.tablette === 'a
   .filter(Boolean).join(', ');
 const nomCommande = (c) => [codeCommande(c.code), c.nom || c.email].filter(Boolean).join(' · ') || c.id;
 
-// État affiché d'une tablette : « Envoyée » devient « Chez le client » dès que la famille est jumelée.
+// État affiché d'une tablette : « Envoyée » devient « Chez le client » dès qu'elle est entrée dans la famille.
 function etatTablette(t) {
   const c = t.commande && donnees.commandes.find((x) => x.id === t.commande);
-  if (t.etat === 'envoyee' && c && c.fid) return 'chez-client';
+  if (t.etat === 'envoyee' && tabletteDansLaFamille(c)) return 'chez-client';
   return t.etat;
 }
 const ETATS_OK = ['chez-client'];
@@ -835,7 +840,15 @@ function afficherAccueil() {
     const t = totaux(stripeMois.mouvements, depensesDe(mois));
     const tTotal = stripeTotal ? totaux(stripeTotal.mouvements, donnees.depenses) : null;
     // Abonnés : d'après l'état des familles écrit par le serveur (les offertes à part).
-    const payants = donnees.familles.filter((f) => ['actif', 'impaye', 'suspendu'].includes(f.statut)).length;
+    // Famille préparée payée mais dont la tablette n'est pas encore entrée (à envoyer ou en route) : pas encore un
+    // abonné servi, comptée à part (audit du 11/11, point 1).
+    const enAttente = (f) => {
+      const siennes = cmd.filter((c) => c.fid === f.id && c.expedition !== 'annulee');
+      return siennes.length > 0 && siennes.every((c) => !tabletteDansLaFamille(c));
+    };
+    const abonnes = donnees.familles.filter((f) => ['actif', 'impaye', 'suspendu'].includes(f.statut));
+    const payants = abonnes.filter((f) => !enAttente(f)).length;
+    const attente = abonnes.length - payants;
     const offerts = donnees.familles.filter((f) => f.statut === 'offert').length;
     // Chaque chiffre du mois ouvre sa page, réglée sur « Ce mois-ci ».
     const argent = (onglet) => () => {
@@ -851,7 +864,9 @@ function afficherAccueil() {
       location.hash = '#compta/bilan';
     };
     $('kpi-mois').replaceChildren(
-      cliquable(stat(String(payants), payants > 1 ? 'abonnés' : 'abonné', offerts ? `+ ${offerts} offert${offerts > 1 ? 's' : ''}` : null), () => { location.hash = '#clients/familles'; }),
+      cliquable(stat(String(payants), payants > 1 ? 'abonnés' : 'abonné', [offerts ? `+ ${offerts} offert${offerts > 1 ? 's' : ''}` : null,
+        attente ? `+ ${attente} tablette${attente > 1 ? 's' : ''} pas encore installée${attente > 1 ? 's' : ''}` : null].filter(Boolean).join(', ') || null),
+      () => { location.hash = '#clients/familles'; }),
       cliquable(stat(String(cmd.filter((c) => dans(mois, c.creeLe)).length), 'nouvelles commandes ce mois'), () => {
         vueCommandes = 'toutes';
         $('filtre-commandes').value = '';
@@ -995,7 +1010,7 @@ async function remplirCommande(id) {
     return;
   }
   // Même commande déjà affichée : garder les factures déjà lues et ce qui est en cours de saisie.
-  const cle = JSON.stringify([c.id, etatCommande(c), c.preparation, c.fid, c.etiquettes]);
+  const cle = JSON.stringify([c.id, etatCommande(c), c.preparation, c.fid, c.tabletteRelieeLe || null, c.etiquettes]);
   if (commandeAffichee === cle && $('dc-corps').children.length) return;
   commandeAffichee = cle;
   const t = donnees.stock.find((x) => x.commande === c.id);
@@ -1054,7 +1069,7 @@ async function remplirCommande(id) {
       ligne('Étiquettes', etiquettesDe(c)),
       ligne('Remboursement', c.remboursement ? `${euros(c.remboursement.montant)} ${REMBOURSEMENTS[c.remboursement.statut] || c.remboursement.statut}` : null),
       ligne('Reçue le', c.preparation && c.preparation.recuLe ? `${jour(c.preparation.recuLe)}${c.preparation.recuPar ? ` (${c.preparation.recuPar})` : ''}` : null),
-      ligne('Annulation possible', c.fid && annulableApresEnvoi(c) ? `jusqu'au ${jour(limiteAnnulation(c))}` : null),
+      ligne('Annulation possible', tabletteDansLaFamille(c) && annulableApresEnvoi(c) ? `jusqu'au ${jour(limiteAnnulation(c))}` : null),
       ligne('Pause', c.pause && c.pause.jusqua > Date.now() ? `prélèvements en pause jusqu'au ${jour(c.pause.jusqua)} (hospitalisation)` : null),
       ligne('Dernier mois', c.dernierMois ? `${euros(c.dernierMois.montant)} ${DERNIER_MOIS[c.dernierMois.statut] || c.dernierMois.statut}${c.dernierMois.erreur ? ` : ${c.dernierMois.erreur}` : ''}` : null),
       ligne('Prélèvement refusé', c.restitution && c.restitution.statut === 'echec' ? `matériel non rendu${c.restitutionErreur ? ` : ${c.restitutionErreur}` : ''}` : null),
@@ -1124,7 +1139,8 @@ function menuCommande(c, zoneRemplacement, etiquette) {
       if (e !== 'non') prevenir(messageErreur(e));
     }
   };
-  const enCours = c.fid && !c.offerte && !c.resiliationLe && ['actif', 'impaye', 'suspendu', 'active', 'trialing', 'past_due'].includes(c.abonnement);
+  // Tablette entrée dans la famille : avant, le colis est en route (« Colis revenu » s'il revient jamais retiré).
+  const enCours = c.fid && tabletteDansLaFamille(c) && !c.offerte && !c.resiliationLe && ['actif', 'impaye', 'suspendu', 'active', 'trialing', 'past_due'].includes(c.abonnement);
   // Pendant les 30 jours après la réception : « Annuler la commande » (rien à payer, tout remboursé au
   // retour) ; ensuite seulement « Arrêter l'abonnement » (fin du mois, dernier mois prélevé).
   const annulable = enCours && annulableApresEnvoi(c);
@@ -1133,7 +1149,7 @@ function menuCommande(c, zoneRemplacement, etiquette) {
     ['a-preparer', 'paiement-en-attente'].includes(c.expedition)
       ? { libelle: 'Annuler la commande', danger: true, faire: () => lancer(() => annulerCommande(c)) } : null,
     annulable ? { libelle: 'Annuler la commande (30 jours)', danger: true, faire: () => lancer(() => annulerApresEnvoi(c)) } : null,
-    c.expedition === 'envoyee' && !c.fid && c.remise !== 'main-propre'
+    c.expedition === 'envoyee' && !tabletteDansLaFamille(c) && c.remise !== 'main-propre'
       ? { libelle: 'Colis revenu (jamais retiré)', danger: true, faire: () => lancer(() => colisRevenu(c)) } : null,
     enCours && !annulable
       ? { libelle: 'Arrêter l\'abonnement', danger: true, faire: () => lancer(() => arreterAbonnement(c)) } : null,
@@ -1502,7 +1518,8 @@ function prochaineEtape(c, t) {
       return [t ? 'préparer le colis : tablette, carte SIM, accessoires, étiquette Mondial Relay.'
         : 'choisir une tablette du stock pendant la préparation du colis.', preparer];
     }
-    case 'en-route': return ['attendre que la famille relie la tablette avec son code de commande.', c.code ? boutonRenvoyerCode(c) : null];
+    case 'en-route': return [c.famillePreparee ? 'attendre que la tablette entre dans sa famille (allumée chez le client, ou QR code scanné par un proche).'
+      : 'attendre que la famille relie la tablette avec son code de commande.', c.code ? boutonRenvoyerCode(c) : null];
     case 'active':
       if (c.resiliationLe) return [`l'abonnement s'arrête le ${jour(c.resiliationLe)}. Le client recevra alors l'étiquette pour rendre la tablette.`];
       if (t && !t.jumeleeLe && c.envoyeeLe) return ['attendre que la tablette soit reliée à la famille.', c.code ? boutonRenvoyerCode(c) : null];
