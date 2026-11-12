@@ -73,6 +73,12 @@
   ],
   "fieldOverrides": [
     {
+      "collectionGroup": "secret",
+      "fieldPath": "expireAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
       "collectionGroup": "members",
       "fieldPath": "role",
       "indexes": [
