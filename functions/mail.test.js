@@ -151,3 +151,34 @@ test('passer au SEPA : premier e-mail et relance, sans promesse impossible (10/1
     assert.match(m.html, /Mamie(&nbsp;| )Jeanne/);
   }
 });
+
+test('e-mails de confort marqués (sans que la marque parte avec le contenu), les autres urgents', async () => {
+  const confort = [
+    mail.listeAttenteConfirmee({ prenom: 'Léa' }), mail.demandeAcceptee({ prenom: 'Léa', famille: 'Mamie' }),
+    mail.demandeRejoindre({ prenom: 'Léa', famille: 'Mamie' }), mail.rappelConfirme({ nom: 'Léa' }), mail.relancePanier({ etape: 2 }),
+  ];
+  confort.forEach((c) => assert.strictEqual(mail.estConfort(c), true, c.subject));
+  assert.ok(confort.every((c) => !Object.keys(c).includes('confort')), 'marque non énumérable');
+  const urgents = [
+    mail.appelSansTelephone({ nom: 'Mamie', sos: true }), mail.commandeConfirmee({ nom: 'Paul' }), mail.paiementEchoue({ nom: 'Paul' }),
+    mail.colisParti({ nom: 'Paul' }), mail.invitation({ prenom: 'Paul', tablette: 'Mamie', lien: 'https://x' }), mail.alerteAdmin({ sujet: 'x' }),
+  ];
+  urgents.forEach((c) => assert.strictEqual(mail.estConfort(c), false, c.subject));
+
+  // envoyer : le contrôle n'est demandé que pour le confort ; false retient l'e-mail sans erreur ; une panne le laisse partir.
+  const partis = [];
+  const vrai = mail.expedier;
+  mail.expedier = async ({ a }) => { partis.push(a); };
+  const demandes = [];
+  try {
+    mail.surEnvoiDeConfort(async (a) => { demandes.push(a); if (a === 'panne@x.fr') throw new Error('panne'); return false; });
+    assert.strictEqual(await mail.envoyer({ a: 'confort@x.fr', contenu: confort[0] }), false);
+    assert.strictEqual(await mail.envoyer({ a: 'urgent@x.fr', contenu: urgents[0] }), true);
+    assert.strictEqual(await mail.envoyer({ a: 'panne@x.fr', contenu: confort[1] }), true);
+    assert.deepStrictEqual(partis, ['urgent@x.fr', 'panne@x.fr']);
+    assert.deepStrictEqual(demandes, ['confort@x.fr', 'panne@x.fr']);
+  } finally {
+    mail.expedier = vrai;
+    mail.surEnvoiDeConfort(null);
+  }
+});

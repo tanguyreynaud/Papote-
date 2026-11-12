@@ -123,7 +123,9 @@ require.cache[resoudre('stripe')] = {
 
 const boite = [];
 const mail = require('../mail');
-mail.envoyer = async ({ a, contenu }) => {
+// Seul l'envoi lui-même est remplacé : le tri des e-mails de confort (mail.envoyer, quota-courriels.js) tourne pour de vrai.
+// Le compteur du quota Brevo (interne/courriels-…) n'avance pas en simulation : un scénario le remplit lui-même.
+mail.expedier = async ({ a, contenu }) => {
   boite.push({ a, sujet: contenu.subject, texte: contenu.text, le: Date.now() });
 };
 
@@ -233,7 +235,7 @@ const { FieldValue, Timestamp } = require('firebase-admin/firestore');
 // ---------- Déclencheurs Firestore rejoués ----------
 const DECLENCHEURS = [
   { chemin: 'families/{fid}', creation: ['nouvelleFamille'] },
-  { chemin: 'families/{fid}/members/{uid}', creation: ['nouveauMembre'], ecriture: ['compterProches'] },
+  { chemin: 'families/{fid}/members/{uid}', creation: ['nouveauMembre'], modification: ['membreAccepte'], ecriture: ['compterProches'] },
   { chemin: 'families/{fid}/members/{uid}/private/push', ecriture: ['telephoneAppels'] },
   { chemin: 'families/{fid}/posts/{pid}', creation: ['quotaEnvois'], ecriture: ['voixEnvoi'] },
   { chemin: 'families/{fid}/reminders/{rid}', ecriture: ['voixRappel'] },

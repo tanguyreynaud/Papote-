@@ -199,6 +199,8 @@ section { padding-block: clamp(3rem, 7vw, 5rem); }
 .attente-accord input { width: 1.5rem; height: 1.5rem; margin-top: .2rem; flex: none; accent-color: var(--accent); }
 .attente-msg { margin: 0; font-weight: 700; }
 .attente [hidden] { display: none; }
+/* Champ piège anti-robot (audit sécurité 11/11, L1) : hors de l'écran, jamais vu ni atteint au clavier par une personne. */
+.attente-piege { position: absolute; left: -10000px; top: auto; width: 1px; height: 1px; overflow: hidden; }
 .plans-note { margin-top: 1.25rem; color: var(--muted); font-size: 1rem; max-width: 46rem; }
 /* FAQ : huit questions visibles, les autres sur demande. */
 .faq { display: grid; gap: .6rem; max-width: 48rem; }
@@ -433,6 +435,8 @@ footer a { color: var(--muted); }
           <input name="email" id="attente-email" type="email" autocomplete="email" required maxlength="120"></label>
         <label><span>Votre portable <span class="muted">(facultatif, pour que je vous appelle)</span></span>
           <input name="telephone" id="attente-tel" type="tel" inputmode="tel" autocomplete="tel" maxlength="20"></label>
+        <div class="attente-piege" aria-hidden="true"><label>Adresse (laissez vide)
+          <input name="adresse2" type="text" tabindex="-1" autocomplete="off"></label></div>
         <label class="attente-accord"><input type="checkbox" name="accord">
           <span>Être prévenu par e-mail ou par téléphone, puis recevoir les nouvelles de Papote</span></label>
         <button class="btn btn-primary" type="submit">Me prévenir</button>
@@ -529,7 +533,9 @@ footer a { color: var(--muted); }
     <p><b>Papote</b> · Tanguy Reynaud, Lyon · <a href="mailto:contact@mapapote.fr">contact@mapapote.fr</a></p>
     <div class="liens">
       <a href="cgv.html">Conditions de vente</a>
-      <a href="mentions.html">Mentions légales et confidentialité</a>
+      <a href="mentions.html">Mentions légales</a>
+      <a href="confidentialite.html">Confidentialité</a>
+      <a href="resilier.html">Résilier mon abonnement</a>
       <a href="https://app.mapapote.fr">Déjà client ? Ouvrir l'appli famille</a>
     </div>
     <span>© 2026 Papote</span>
@@ -597,7 +603,7 @@ footer a { color: var(--muted); }
       fetch('https://europe-west1-papote-famille.cloudfunctions.net/listeAttente', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email, telephone: tel, accord: true }),
+        body: JSON.stringify({ email: email, telephone: tel, accord: true, adresse2: form.adresse2.value }),
       }).then(function (r) {
         if (!r.ok) throw new Error(r.status);
         form.querySelectorAll('label').forEach(function (l) { l.hidden = true; });

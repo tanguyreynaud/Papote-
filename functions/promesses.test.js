@@ -16,6 +16,7 @@ const SOURCES = {
   'vitrine/accueil.html': texte(lire('vitrine/accueil.html')),
   'vitrine/cgv.html': texte(lire('vitrine/cgv.html')),
   'vitrine/mentions.html': texte(lire('vitrine/mentions.html')),
+  'vitrine/confidentialite.html': texte(lire('vitrine/confidentialite.html')),
   'vitrine/commande.html': texte(lire('vitrine/commande.html')),
   'vitrine/merci.html': texte(lire('vitrine/merci.html')),
   'functions/mail.js': texte(lire('functions/mail.js')),
@@ -68,8 +69,8 @@ test('l\'alerte « pas vue » annoncée a le délai du code', () => {
   assert.match(SOURCES['vitrine/accueil.html'], /depuis deux jours/);
 });
 
-test('les CGV et les mentions disent que seules les 200 dernières photos et 40 dernières vidéos sont gardées', () => {
-  for (const f of ['vitrine/cgv.html', 'vitrine/mentions.html']) {
+test('les CGV et la confidentialité disent que seules les 200 dernières photos et 40 dernières vidéos sont gardées', () => {
+  for (const f of ['vitrine/cgv.html', 'vitrine/confidentialite.html']) {
     assert.match(SOURCES[f], /200 dernières photos et les 40 dernières vidéos/, f);
   }
 });
@@ -83,4 +84,23 @@ test('e-mails rendus : bons noms de boutons de l\'appli, et la pause annonce que
   assert.match(sansTel, /écran d'accueil/);
   const pause = mail.papoteEnPause({ famille: 'Mamie Jeanne', lien: 'https://x' }).text;
   assert.match(pause, /SOS/);
+});
+
+// Audit données personnelles du 12/11 (P2, P3, P7) : la page de confidentialité doit dire ce que le code garde vraiment.
+test('confidentialité : adresse du proche, empreinte de paiement, panier et prestataires déclarés', () => {
+  const c = SOURCES['vitrine/confidentialite.html'];
+  assert.doesNotMatch(c, /Seule la ville est gardée/, 'P2 : la rue et les coordonnées sont gardées (couverture.js metaProche, commandes.proche, paniers.requete)');
+  assert.match(c, /adresse saisie .*gardés avec la commande, chez Stripe/);
+  assert.match(c, /empreinte de la carte ou de l'IBAN/, 'P3 : commandes.empreinte (index.js verifierDoublon)');
+  assert.match(c, /dès que vous ouvrez la page de paiement, nous notons/, 'P3 : panier noté même sans la case (index.js noterPanier)');
+  for (const p of [/OVHcloud/, /Gmail/, /reCAPTCHA/, /connexion à l'appli et notifications, traitées aux États-Unis/]) assert.match(c, p, 'P7');
+  assert.equal((c.match(/Vos droits/g) || []).length, 1, 'une seule partie « Vos droits »');
+});
+
+test('les pages du site renvoient vers la politique de confidentialité, plus vers mentions.html#confidentialite', () => {
+  for (const f of ['vitrine/accueil.html', 'vitrine/cgv.html', 'vitrine/mentions.html', 'vitrine/chat-support.js']) {
+    const s = lire(f);
+    assert.match(s, /confidentialite\.html/, f);
+    assert.doesNotMatch(s, /mentions\.html#confidentialite/, f);
+  }
 });
