@@ -703,6 +703,9 @@ function afficherAccueil() {
       .map((c) => (c.alerteDoublon.mauvaisPayeur
         ? [1, `⚠ Ne pas envoyer avant vérification : ${c.nom || c.email || 'client'} a déjà été mauvais payeur (${c.alerteDoublon.raisons.join(', ')})`, versCommande(c), 'ko']
         : [1, `2e commande du même client : ${c.nom || c.email || 'client'}, vérifier avant d'envoyer`, versCommande(c), ''])),
+    // Badge « Couverture à vérifier » (Tanguy, 12/11) : regarder la carte de l'ARCEP avant d'envoyer la tablette.
+    ...cmd.filter((c) => c.couvertureAVerifier && !c.couvertureVueLe && ['a-preparer', 'paiement-en-attente'].includes(c.expedition))
+      .map((c) => [1, `Couverture 4G à vérifier avant l'envoi : ${c.nom || c.email || 'client'}`, versCommande(c), '']),
     // Une seule : la ligne ouvre directement la commande.
     [aEnvoyer, pluriel(aEnvoyer, 'tablette') + ' à envoyer', aEnvoyer === 1 ? versCommande(cmd.find((c) => etatCommande(c) === 'a-envoyer')) : '#commandes', manque ? 'ko' : ''],
     [manque, `Il manque ${pluriel(manque, 'tablette')} en stock pour les envoyer`, '#stock', 'ko'],
@@ -1020,6 +1023,7 @@ async function remplirCommande(id) {
   const doublon = c.alerteDoublon;
   $('dc-corps').replaceChildren(...[
     annonce ? h('p', { class: 'annonce', role: 'status' }, annonce) : null,
+    c.couvertureAVerifier && c.expedition !== 'annulee' ? blocCouverture(c) : null,
     doublon ? h('div', { class: `alerte-doublon${doublon.mauvaisPayeur ? ' grave' : ''}`, role: 'alert' },
       h('strong', {}, doublon.mauvaisPayeur ? '⚠ Client déjà mauvais payeur : ne pas envoyer avant vérification' : 'Ce client a déjà commandé'),
       doublon.mauvaisPayeur ? h('p', {}, `Sur une commande précédente : ${doublon.raisons.join(', ')}.`) : null,
@@ -1165,6 +1169,56 @@ function menuCommande(c, zoneRemplacement, etiquette) {
 
 let zoneReceptionAffichee = null; // « Matériel reçu » de la commande affichée (aussi ouvert par « Reçue en main propre »)
 let annonceCommande = null; // Résultat de la dernière action, affiché en haut de la page commande rechargée.
+
+// « Couverture à vérifier » (proposé le 10/11, validé par Tanguy le 12/11) : petite commune, commande acceptée sur la
+// ville seule, ou adresse près d'une zone sans bonne 4G Bouygues. Tanguy regarde la carte de l'ARCEP « Mon réseau
+// mobile » à l'adresse du proche (copiée d'un appui), puis coche « Vu ». La carte ne se centre pas d'elle-même.
+const RAISONS_COUVERTURE = {
+  'commune-seule': () => 'commande acceptée sur la ville seule, sans la rue',
+  'petite-commune': (v) => `petite commune${v.commune ? ` (${v.commune}${Number.isFinite(v.population) ? `, ${v.population.toLocaleString('fr-FR')} habitants` : ''})` : ''}`,
+  'bord-de-zone': () => 'adresse à moins de 200 m d\'une zone sans bonne 4G Bouygues',
+  'population-inconnue': () => 'nombre d\'habitants inconnu (service de l\'IGN indisponible au paiement)',
+};
+function blocCouverture(c) {
+  const v = c.couvertureAVerifier;
+  const raisons = (v.raisons || []).map((r) => (RAISONS_COUVERTURE[r] ? RAISONS_COUVERTURE[r](v) : r));
+  const adresse = c.proche && c.proche.adresse;
+  const copier = adresse ? h('button', { type: 'button', class: 'secondary small-btn', onclick: async (e) => {
+    const b = e.currentTarget;
+    try { await navigator.clipboard.writeText(adresse); b.textContent = 'Adresse copiée'; } catch (_) { b.textContent = 'Copie impossible : sélectionnez l\'adresse'; }
+    setTimeout(() => { b.textContent = 'Copier l\'adresse'; }, 2500);
+  } }, 'Copier l\'adresse') : null;
+  const vu = !!c.couvertureVueLe;
+  const coche = h('input', { type: 'checkbox', checked: vu, 'aria-label': 'Couverture vérifiée sur la carte' });
+  const libelle = h('span', {}, vu ? `Vu le ${jour(c.couvertureVueLe)} : la couverture est bonne` : 'Vu : la couverture est bonne à cette adresse');
+  coche.addEventListener('change', async () => {
+    const voulu = coche.checked;
+    coche.disabled = true;
+    libelle.textContent = 'Enregistrement…';
+    try {
+      await appeler('gestionCommande', { commande: c.id, action: 'couvertureVue', vu: voulu });
+      commandeAffichee = null;
+      donnees = await lireDonnees(true);
+      afficherTout();
+      signalerChangement();
+    } catch (e) {
+      coche.checked = !voulu;
+      coche.disabled = false;
+      libelle.textContent = vu ? `Vu le ${jour(c.couvertureVueLe)} : la couverture est bonne` : 'Vu : la couverture est bonne à cette adresse';
+      prevenir(messageErreur(e));
+    }
+  });
+  return h('div', { class: `alerte-couverture${vu ? ' vue' : ''}`, role: vu ? null : 'status' },
+    h('strong', {}, vu ? 'Couverture 4G vérifiée' : 'Couverture 4G à vérifier avant l\'envoi'),
+    h('p', {}, `Pourquoi : ${raisons.join(' ; ')}.`),
+    adresse ? h('p', {}, 'Adresse du proche : ', h('b', { class: 'selectionnable' }, adresse)) : h('p', {}, 'Adresse du proche inconnue.'),
+    h('div', { class: 'boutons-couverture' },
+      h('a', { class: 'primary small-btn', href: v.carte || 'https://monreseaumobile.arcep.fr/', target: '_blank', rel: 'noopener' }, 'Ouvrir la carte de l\'ARCEP'),
+      copier,
+      h('a', { class: 'secondary small-btn', href: 'https://www.cartoradio.fr/', target: '_blank', rel: 'noopener' }, 'Antennes (Cartoradio)')),
+    h('p', { class: 'small' }, 'Sur la carte : opérateur Bouygues Telecom, 4G, puis collez l\'adresse dans la recherche.'),
+    h('label', { class: 'case' }, coche, ' ', libelle));
+}
 
 async function retourEnMain(c, main) {
   await patienter(main ? 'Retour en main propre…' : 'Retour par Mondial Relay…',
