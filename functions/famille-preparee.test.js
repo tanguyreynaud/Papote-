@@ -51,8 +51,9 @@ test('e-mails d\'une famille préparée : espace famille prêt, pas de code à s
   assert.match(conf.text, /espace famille Papote est déjà prêt/);
   assert.match(conf.text, /Ouvrir mon espace famille : https:\/\/app\.mapapote\.fr\/\?code=ABCD-EFGH/);
   assert.doesNotMatch(conf.text, /scanner|scannerez/);
+  // Plus aucun code à scanner, même sans famille préparée (Tanguy 12/11, A29).
   const ancien = mail.commandeConfirmee({ nom: 'Paul', code: 'WXYZ-2345' });
-  assert.match(ancien.text, /scannerez/, 'ancienne commande : le QR code comme avant');
+  assert.doesNotMatch(ancien.text, /scann/);
   for (const m of [
     mail.colisParti({ nom: 'Paul', suivi: '123', lien: 'https://x', code: 'WXYZ-2345', preparee: true }),
     mail.tabletteRemise({ nom: 'Paul', code: 'WXYZ-2345', preparee: true }),
@@ -61,5 +62,5 @@ test('e-mails d\'une famille préparée : espace famille prêt, pas de code à s
     assert.match(m.text, /retrouve votre famille toute seule/);
     assert.doesNotMatch(m.text, /scannez/i);
   }
-  assert.match(mail.colisParti({ nom: 'Paul', suivi: '123', lien: 'https://x', code: 'WXYZ-2345' }).text, /scannez/);
+  assert.doesNotMatch(mail.colisParti({ nom: 'Paul', suivi: '123', lien: 'https://x', code: 'WXYZ-2345' }).text, /scannez/i);
 });

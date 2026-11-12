@@ -100,21 +100,24 @@ function codeAuHasard() {
   return Array.from(bytes, (b) => CODE_ALPHABET[b % CODE_ALPHABET.length]).join('');
 }
 
-// deps : { db, compteVerifie, envoyerMail, mail, appli, logger, stockage, relierParEmail, prevenirPapote, notifier, familleDuScan }
+// deps : { db, compteVerifie, envoyerMail, mail, appli, logger, stockage, relierParEmail, prevenirPapote, notifier }
 function brancher(deps) {
-  const { db, compteVerifie, envoyerMail, mail, appli, logger, stockage, relierParEmail, prevenirPapote, notifier, familleDuScan } = deps;
+  const { db, compteVerifie, envoyerMail, mail, appli, logger, stockage, relierParEmail, prevenirPapote, notifier } = deps;
 
+  // Plus aucun lien entre une tablette et une famille depuis l'appli des clients (Tanguy 12/11, A29 : « il ne doit y
+  // avoir aucune trace de l'ancien parcours ») : la tablette entre seule dans la famille de sa commande (jumeler,
+  // famille-preparee.js), après que Papote l'a mise de côté pour cette commande. Ni QR scanné, ni code tapé, ni
+  // lien ?tablette= : un lien piégé ne peut plus faire entrer un inconnu (L2), ni un scan créer une deuxième famille (M2).
   async function reserverTablette(request) {
     const { uid, email } = compteVerifie(request);
+    if (!(request.auth && request.auth.token && request.auth.token.admin === true)) {
+      throw new HttpsError('permission-denied', 'La tablette retrouve sa famille toute seule : il n\'y a rien à scanner.');
+    }
     const code = normaliserCode(request.data && request.data.code);
     const prenom = texteCourt(request.data && request.data.prenom);
     if (!code) throw new HttpsError('invalid-argument', 'Le code de la tablette a 8 caractères.');
     if (!prenom) throw new HttpsError('invalid-argument', 'Votre prénom est demandé.');
     const ref = db.doc(`pairings/${code}`);
-    // Famille préparée à la commande (famille-preparee.js) et tablette pas reconnue : elle y entre directement.
-    const admin = !!(request.auth && request.auth.token && request.auth.token.admin === true);
-    const preparee = familleDuScan ? await entrerFamillePreparee(ref, { uid, email, prenom, admin }) : null;
-    if (preparee) return preparee;
     const r = await reserver(ref, { uid, email, prenom });
     // Installation reprise : le premier proche est prévenu sur son téléphone (B2).
     if (r.reprise && r.fid && notifier) {
@@ -124,47 +127,6 @@ function brancher(deps) {
       }).catch((e) => logger.error(`Installation ${code} : premier proche non prévenu`, e.message));
     }
     return { etat: r.etat, ...(r.fid !== undefined ? { fid: r.fid } : {}), ...(r.par !== undefined ? { par: r.par } : {}) };
-  }
-
-  async function entrerFamillePreparee(ref, { uid, email, prenom, admin = false }) {
-    const p = (await ref.get()).data();
-    if (!p || p.status !== 'waiting' || (ms(p.expiresAt) || 0) <= Date.now()) return null;
-    const cible = await familleDuScan(uid, p, { admin });
-    if (!cible) return null;
-    const adresse = email ? String(email).toLowerCase() : '';
-    const famRef = db.doc(`families/${cible.fid}`);
-    const membreRef = famRef.collection('members').doc(uid);
-    const invitRef = adresse ? famRef.collection('invitations').doc(adresse) : null;
-    const fait = await db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      if (!snap.exists || snap.get('status') !== 'waiting') return false;
-      if (cible.entrer) {
-        const [fam, membre, invit] = await Promise.all([tx.get(famRef), tx.get(membreRef), invitRef ? tx.get(invitRef) : null]);
-        if (!fam.exists) return false;
-        if (!membre.exists) {
-          // Mêmes champs qu'en rejoignant avec le code famille (firebase.js, joinFamily).
-          const fiche = { name: prenom, role: 'famille', code: fam.get('code') || null, joinedAt: FieldValue.serverTimestamp(), uid, email: adresse };
-          const responsable = !fam.get('createdBy');
-          const invite = !!(invit && invit.exists);
-          tx.set(membreRef, { ...fiche, status: responsable || invite ? 'active' : 'pending' });
-          if (invite) tx.delete(invitRef);
-          if (responsable) {
-            // Comme proprietaire() (famille-preparee.js), dans la même écriture : personne d'autre ne peut l'accepter.
-            tx.update(famRef, { createdBy: uid, rev: FieldValue.increment(1) });
-            if (fam.get('code')) tx.set(db.doc(`invites/${fam.get('code')}`), { createdBy: uid }, { merge: true });
-          }
-        }
-      }
-      tx.update(ref, {
-        status: 'confirmed', fid: cible.fid, familyName: cible.nom, claimedBy: uid, claimedName: prenom, claimedEmail: email,
-        reservedAt: FieldValue.serverTimestamp(), expiresAt: Timestamp.fromMillis(Date.now() + ENTREE_TABLETTE_MS),
-      });
-      if (cible.commande) tx.update(db.doc(`commandes/${cible.commande}`), { tabletteRelieeLe: FieldValue.serverTimestamp() });
-      return true;
-    });
-    if (!fait) return null;
-    logger.info(`Installation ${ref.id} : ${cible.entrer ? 'QR scanné' : 'tablette pas reconnue'}, entrée dans la famille préparée ${cible.fid} (${uid}).`);
-    return { etat: 'reserve', fid: cible.fid };
   }
 
   async function reserver(ref, { uid, email, prenom }) {

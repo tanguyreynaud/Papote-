@@ -284,28 +284,7 @@ test('l\'acheteur installe lui-même une tablette pas reconnue : sa commande est
   assert.deepStrictEqual(mailsA('contact@mapapote.fr'), [], 'rien à faire pour Tanguy');
 });
 
-test('famille préparée, tablette pas reconnue : celui qui a payé scanne, elle entre dans SA famille (pas une deuxième)', async () => {
-  const paul = await s.compte('Paul', 'paul@exemple.fr');
-  const { abonnement: id } = await a.commanderEtPayer({ email: paul.email });
-  const { fid } = await commande(id);
-  await a.entrerParInvitation(paul, fid);
-  const t = { serie: 'INCONNUE4', tabletUid: 'tablette-inconnue4', callsUid: 'appels-inconnue4' };
-  await a.afficherCode(t);
-  assert.strictEqual((await s.lire(`pairings/${t.code}`)).status, 'waiting', 'pas reconnue : pas de jumelage tout seul');
-  s.boite.length = 0;
-  const r = await s.appeler('reserverTablette', { code: t.code, prenom: 'Paul' }, paul);
-  assert.deepStrictEqual(r, { etat: 'reserve', fid }, 'l\'appli entre directement dans la famille');
-  await s.calme();
-  assert.strictEqual(await a.entrerDansLaFamille(t), fid);
-  assert.strictEqual((await famille(fid)).abonnement.statut, 'actif');
-  assert.ok((await commande(id)).tabletteRelieeLe, 'plus de rappel de jumelage');
-  assert.strictEqual((await s.db.collection('families').get()).size, 1, 'aucune deuxième famille');
-  assert.deepStrictEqual(mailsA('contact@mapapote.fr'), [], 'rien à faire pour Tanguy');
-  // Une deuxième tablette inconnue ne s'y ajoute pas d'office : la famille a déjà la sienne.
-  const t2 = { serie: 'INCONNUE5', tabletUid: 'tablette-inconnue5', callsUid: 'appels-inconnue5' };
-  await a.afficherCode(t2);
-  assert.deepStrictEqual(await s.appeler('reserverTablette', { code: t2.code, prenom: 'Paul' }, paul), { etat: 'reserve' });
-});
+// Secours « tablette pas reconnue scannée par celui qui a payé » retiré le 12/11 (A29) : voir mise-en-route.parcours.js (L2).
 
 test('famille préparée nommée pendant que la tablette entre : sa fiche prend quand même le nom de la famille', async () => {
   const paul = await s.compte('Paul', 'paul@exemple.fr');
@@ -418,8 +397,8 @@ test('appel ou SOS qui n\'atteint aucun téléphone : tous les proches prévenus
 
   const cid = await a.appelerDepuisLaTablette(t, { sos: 1 });
   await s.calme();
-  assert.deepStrictEqual(mailsA(julie.email), ['SOS : Mamie Emma a appelé, aucun téléphone n\'a sonné']);
-  assert.deepStrictEqual(mailsA(paul.email), ['SOS : Mamie Emma a appelé, aucun téléphone n\'a sonné']);
+  assert.deepStrictEqual(mailsA(julie.email), ['SOS : Mamie Emma a appuyé sur SOS, aucun téléphone n\'a sonné']);
+  assert.deepStrictEqual(mailsA(paul.email), ['SOS : Mamie Emma a appuyé sur SOS, aucun téléphone n\'a sonné']);
   await s.db.doc(`families/${fid}/calls/${cid}`).update({ state: 'missed' });
   await s.calme();
   const cid2 = await a.appelerDepuisLaTablette(t, { sos: 2 });

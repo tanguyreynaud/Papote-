@@ -6,7 +6,7 @@
 // aux couleurs du site, qui tient sur un téléphone et dans Gmail, Outlook et Apple Mail (tableaux et styles
 // en ligne, pas de police à charger). Un bloc est un paragraphe (texte HTML) ou un objet :
 //   { fiche: [[libellé, valeur], …] }   encadré clair avec les infos à retenir (numéro, date, montant)
-//   { etapes: ['…', '…'] }               liste numérotée (brancher, ouvrir l'appli, scanner…)
+//   { etapes: ['…', '…'] }               liste numérotée (brancher, ouvrir l'appli…)
 //   { encadre: '…' }                     phrase importante, mise en avant (date limite, somme prélevée)
 //   { section: { titre, items } }        titre + liste à puces (e-mails internes : récap, livres)
 //   { petit: '…' }                       ligne discrète
@@ -193,21 +193,14 @@ const bonjour = (nom) => `Bonjour${nom ? ` ${echapper(nom)}` : ''},`;
 const lienHtml = (lien, texte) => `<a href="${echapper(lien)}" style="color:${C.indigo}">${texte}</a>`;
 
 // Les trois gestes à l'arrivée de la tablette (colis parti, remise en main propre, rappels de jumelage).
-// Parcours d'installation du 21/10/2026 : la carte SIM est déjà dans la tablette (pas de wifi à régler), le QR code
-// se scanne avec l'appareil photo du téléphone (ou le code se tape sur app.mapapote.fr), puis l'appli demande le
-// nom du proche, une première photo et fait le test du son.
 // Famille préparée dès la commande (famille-preparee.js, 05/11) : la tablette retrouve sa famille toute seule.
-const GESTES_PREPAREE = { etapes: [
-  'Branchez la tablette et allumez-la. La carte SIM est déjà dedans : rien à régler.',
-  'Touchez « Commencer » sur l\'écran : la tablette retrouve votre famille toute seule, sans code à scanner.',
+// Plus aucun code à scanner (Tanguy 12/11, A29) ; « bouton d'allumage (Power) », jamais « bouton de la tranche » (M9).
+const GESTES = { etapes: [
+  'Branchez la tablette sur une prise, puis appuyez 3 secondes sur le bouton d\'allumage (Power). Elle démarre en une minute environ ; si l\'écran reste noir, laissez-la charger un quart d\'heure. La carte SIM est déjà dedans : rien à régler.',
+  'La tablette retrouve votre famille toute seule, sans code à scanner. Personne n\'a besoin d\'être dans l\'appli Papote pour la brancher.',
   'Les photos déjà envoyées depuis l\'appli Papote s\'affichent. Invitez vos proches depuis l\'appli : ils pourront envoyer des photos et appeler en vidéo.',
 ] };
-const gestes = (code, preparee) => (preparee ? GESTES_PREPAREE : GESTES_ARRIVEE(code));
-const GESTES_ARRIVEE = (code) => ({ etapes: [
-  'Branchez la tablette sur une prise, puis appuyez 3 secondes sur le bouton de marche (sur la tranche). Elle démarre en une minute environ ; si l\'écran reste noir, laissez-la charger un quart d\'heure. La carte SIM est déjà dedans : rien à régler.',
-  `Avec l'appareil photo de votre téléphone, scannez le QR code affiché sur la tablette (ou ${lienHtml(lienAppli(code), 'ouvrez app.mapapote.fr')} et tapez le code affiché).`,
-  'L\'appli vous guide ensuite : votre compte, le nom de votre proche, une première photo, le test du son. Cinq minutes environ, et la tablette est prête.',
-] });
+const gestes = () => GESTES;
 
 // ---------- Commande et livraison ----------
 
@@ -227,7 +220,7 @@ function tabletteRemise({ nom, code, preparee }) {
     bonjour(nom),
     preparee
       ? 'Votre tablette Papote vous a été remise en main propre : elle est prête et déjà reliée à votre famille. Trois gestes :'
-      : 'Votre tablette Papote vous a été remise en main propre : elle est prête. Trois gestes pour la relier à votre famille :',
+      : 'Votre tablette Papote vous a été remise en main propre : elle est prête. Trois gestes :',
     gestes(code, preparee),
     // Plus de « 30 jours pour changer d'avis » (Tanguy, 2026-10-29) : même règle que l'e-mail de commande, les CGV couvrent le droit.
   ], { texte: 'Ouvrir l\'appli Papote', lien: lienAppli(code) });
@@ -283,7 +276,7 @@ function commandeConfirmee({ nom, code, relais, formule, dejaInstallee, reprise,
     // Famille préparée (05/11) : l'espace famille existe dès le paiement, la tablette y entrera seule.
     famille
       ? '<b>Votre espace famille Papote est déjà prêt.</b> Ouvrez l\'appli Papote avec le bouton ci-dessous et connectez-vous avec cette adresse e-mail : vous pourrez donner le nom de votre proche, préparer les premières photos et inviter la famille avant même l\'arrivée de la tablette. À son arrivée, il suffira de la brancher : elle retrouvera votre famille toute seule.'
-      : '<b>En attendant, installez l\'appli Papote sur votre téléphone</b> avec le bouton ci-dessous. Vous n\'avez pas encore de code, c\'est normal : il s\'affichera sur l\'écran de la tablette quand vous l\'allumerez. Vous le scannerez avec votre téléphone, et l\'appli vous guidera.',
+      : '<b>En attendant, installez l\'appli Papote sur votre téléphone</b> avec le bouton ci-dessous. À son arrivée, il suffira de brancher la tablette : elle retrouvera votre famille toute seule.',
     { petit: 'La tablette est prêtée et configurée : vous n\'avez rien à installer.' },
   ], famille ? { texte: 'Ouvrir mon espace famille', lien: famille } : { texte: 'Installer l\'appli Papote', lien: APPLI });
 }
@@ -376,8 +369,8 @@ function rappelJumelage({ nom, numero, code, preparee }) {
   return message(titre, [
     bonjour(nom),
     numero === 1
-      ? 'Votre tablette Papote devrait être arrivée au point relais, mais elle n\'est pas encore reliée à votre famille. Cela prend deux minutes :'
-      : 'Votre tablette Papote n\'est toujours pas reliée à votre famille. Si quelque chose bloque, répondez à cet e-mail : nous vous aidons. Pour la relier :',
+      ? 'Votre tablette Papote devrait être arrivée au point relais, mais elle n\'est pas encore reliée à votre famille. Il suffit de la brancher :'
+      : 'Votre tablette Papote n\'est toujours pas reliée à votre famille. Si quelque chose bloque, répondez à cet e-mail : nous vous aidons. Pour rappel :',
     gestes(code, preparee),
   ], { texte: 'Ouvrir l\'appli Papote', lien: lienAppli(code) });
 }
@@ -437,10 +430,10 @@ function installationFinie({ prenom, famille, lien }) {
 // Appel ou SOS de la tablette qui n'a fait sonner aucun téléphone (D1) : tous les proches le savent par e-mail.
 function appelSansTelephone({ nom, sos, lien }) {
   const qui = echapper(nom || 'Votre proche');
-  return message(sos ? `SOS : ${nom || 'votre proche'} a appelé, aucun téléphone n'a sonné` : `${nom || 'Votre proche'} a appelé, aucun téléphone n'a sonné`, [
+  return message(sos ? `SOS : ${nom || 'votre proche'} a appuyé sur SOS, aucun téléphone n'a sonné` : `${nom || 'Votre proche'} a appelé, aucun téléphone n'a sonné`, [
     'Bonjour,',
     sos
-      ? { encadre: `<b>${qui} a appuyé sur le bouton SOS</b> de sa tablette, mais aucun téléphone de la famille n'a pu sonner. Rappelez votre proche dès que possible.` }
+      ? { encadre: `<b>${qui} a appuyé sur le bouton SOS</b> de sa tablette, mais aucun téléphone de la famille n'a pu sonner. Rappelez votre proche dès que possible. En cas d'urgence : 15 ou 112.` }
       : `${qui} a appelé depuis sa tablette, mais aucun téléphone de la famille n'a pu sonner.`,
     'Pour que les appels sonnent la prochaine fois :',
     { etapes: [
@@ -448,6 +441,30 @@ function appelSansTelephone({ nom, sos, lien }) {
       'Touchez Réglages puis, sous « Ce téléphone », activez « Notifications ».',
       'Sur iPhone, ajoutez d\'abord l\'appli à l\'écran d\'accueil (bouton Partager, « Sur l\'écran d\'accueil ») : sinon, les notifications n\'arrivent pas.',
       'Donnez votre numéro de portable dans l\'appli (Profil, « Mon numéro de portable ») : la tablette vous appellera alors comme un téléphone.',
+    ] },
+  ], { texte: 'Ouvrir l\'appli Papote', lien });
+}
+
+// SOS alors que personne n'est encore entré dans l'appli (M6, Tanguy 12/11) : à celui qui a payé.
+function sosSansProche({ nom, lien }) {
+  const qui = echapper(nom || 'Votre proche');
+  return message(`SOS : ${nom || 'votre proche'} a appuyé sur SOS, personne n'a pu être appelé`, [
+    'Bonjour,',
+    { encadre: `<b>${qui} a appuyé sur le bouton SOS</b> de sa tablette. Personne de la famille n'est encore entré dans l'appli Papote : personne n'a donc été appelé. Appelez votre proche dès que possible. En cas d'urgence : 15 ou 112.` },
+    'Pour que la tablette puisse vous appeler la prochaine fois, ouvrez l\'appli Papote et entrez dans la famille avec l\'adresse e-mail de la commande.',
+  ], { texte: 'Ouvrir l\'appli Papote', lien });
+}
+
+// Tablette entrée dans sa famille, toujours personne dans l'appli 2 jours plus tard (M7, Tanguy 12/11) : à celui qui a payé.
+function tabletteSansProche({ nom, lien }) {
+  const qui = nom && nom !== 'Votre proche' ? echapper(nom) : 'votre proche';
+  return message('La tablette est branchée : envoyez la première photo', [
+    'Bonjour,',
+    `La tablette de ${qui} est branchée et attend la famille, mais personne n'est encore entré dans l'appli Papote. Tant que personne n'y est, aucune photo n'arrive et la tablette ne peut appeler personne.`,
+    { etapes: [
+      'Ouvrez l\'appli Papote avec le bouton ci-dessous.',
+      'Connectez-vous avec l\'adresse e-mail de la commande.',
+      'Envoyez une première photo : elle s\'affiche tout de suite sur la tablette.',
     ] },
   ], { texte: 'Ouvrir l\'appli Papote', lien });
 }
@@ -943,7 +960,7 @@ module.exports = {
   // commande et livraison
   colisParti, tabletteRemise, commandeConfirmee, nouvelleCommande, relancePanier, listeAttenteConfirmee, lancement, rappelJumelage, sepaRefuse,
   // famille
-  invitation, demandeRejoindre, demandeAcceptee, installationFinie, appelSansTelephone, forfaitPresqueEpuise,
+  invitation, demandeRejoindre, demandeAcceptee, installationFinie, appelSansTelephone, sosSansProche, tabletteSansProche, forfaitPresqueEpuise,
   // abonnement
   paiementEchoue, papoteEnPause, passerAuSepa, pausePrelevements, reprisePrelevements,
   // fin de contrat

@@ -2472,13 +2472,40 @@ async function suiviRetour(event, rAvant, r, c) {
 
 // Chaque jour : rappel au client dont la tablette est partie mais pas encore jumelée (J+5, J+12),
 // puis signalement à l'administrateur (alerteJumelage) à J+20.
+// Tablette entrée dans sa famille préparée, mais toujours aucun proche dans l'appli (M7, Tanguy 12/11) : e-mail à
+// celui qui a payé à 2 jours, ligne « À faire » pour Papote à 5 jours (alerteSansProche, effacée dès qu'un proche
+// arrive). Regardé pendant 30 jours après l'entrée de la tablette seulement : une lecture par commande et par jour.
+const JOUR_MS = 24 * 60 * 60 * 1000;
+async function relancerSansProche(snap, c, maintenant) {
+  const entree = c.tabletteRelieeLe && c.tabletteRelieeLe.toMillis ? c.tabletteRelieeLe.toMillis() : null;
+  if (!c.famillePreparee || !c.fid || !entree) return;
+  const depuis = maintenant - entree;
+  if (depuis < 2 * JOUR_MS || depuis > 30 * JOUR_MS) return;
+  // Relance faite, pas encore 5 jours : rien à relire avant la ligne « À faire ».
+  if (c.relanceSansProche && !c.alerteSansProche && depuis < 5 * JOUR_MS) return;
+  const proches = await db.collection(`families/${c.fid}/members`).where('role', '==', 'famille').where('status', '==', 'active').limit(1).get();
+  if (!proches.empty) {
+    if (c.alerteSansProche) await snap.ref.update({ alerteSansProche: FieldValue.delete() });
+    return;
+  }
+  if (!c.relanceSansProche && c.email) {
+    const fam = (await db.doc(`families/${c.fid}`).get()).data() || {};
+    await envoyerMail(c.email, mail.tabletteSansProche({ nom: fam.nomAChoisir ? null : fam.name, lien: 'https://app.mapapote.fr/' }));
+    await snap.ref.update({ relanceSansProche: true });
+  }
+  if (depuis >= 5 * JOUR_MS && !c.alerteSansProche) await snap.ref.update({ alerteSansProche: true });
+}
+
 async function rappelsJumelage() {
   const maintenant = Date.now();
   const envoyees = await db.collection('commandes').where('expedition', '==', 'envoyee').get();
   for (const snap of envoyees.docs) {
     const c = snap.data();
     // Famille préparée : en attente tant que la tablette n'y est pas entrée (tabletteRelieeLe, famille-preparee.js).
-    if (require('./famille-preparee').regles.tabletteDansLaFamille(c)) continue;
+    if (require('./famille-preparee').regles.tabletteDansLaFamille(c)) {
+      await relancerSansProche(snap, c, maintenant).catch((e) => logger.error(`Commande ${snap.id} : relance « personne dans l'appli »`, e.message));
+      continue;
+    }
     const depart = c.envoyeeLe && c.envoyeeLe.toMillis();
     // Colis retiré il y a 2 jours, tablette toujours pas entrée : sans doute pas de connexion chez la personne (M0).
     const recu = c.preparation && c.preparation.recuLe;
@@ -2586,7 +2613,6 @@ const installation = require('./installation').brancher({
   },
   prevenirPapote: (titre, detail) => prevenirPapote(titre, null, detail),
   notifier: (fid, uids, data) => push.envoyer(db, fid, uids, data, 24 * 3600),
-  familleDuScan: famillePreparee.familleDuScan,
 });
 exports.reserverTablette = onCall({ maxInstances: 2 }, installation.reserverTablette);
 exports.nommerFamille = onCall({ secrets: [MAIL_MOT_DE_PASSE], maxInstances: 2 }, installation.nommerFamille);

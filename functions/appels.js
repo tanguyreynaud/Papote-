@@ -43,6 +43,29 @@ async function prevenirSansTelephone(db, fid, uids, { nom, sos }) {
     .forEach((r) => logger.error(`Famille ${fid} : e-mail « aucun téléphone n'a sonné » non parti`, r.reason));
 }
 
+// SOS d'une tablette alors qu'aucun proche n'est encore dans la famille (M6, Tanguy 12/11) : celui qui a payé et
+// Papote le savent par e-mail, une fois par SOS (1er essai). Plus rien sinon : personne ne pouvait sonner.
+const EMAIL_PAPOTE = 'contact@mapapote.fr';
+async function sosSansProche(db, fid, appel) {
+  const [tablette, fam] = await Promise.all([
+    db.doc(`families/${fid}/members/${appel.callerUid}`).get(), db.doc(`families/${fid}`).get(),
+  ]);
+  if (!tablette.exists || tablette.get('role') !== 'tablette' || !fam.exists) return;
+  const nom = fam.get('nomAChoisir') ? null : (fam.get('name') || null);
+  const reglages = { smtp: MAIL_SMTP.value(), expediteur: MAIL_EXPEDITEUR.value(), motDePasse: MAIL_MOT_DE_PASSE.value() };
+  const envois = [];
+  const payeur = fam.get('proprietaireEmail');
+  if (payeur) envois.push(mail.envoyer({ ...reglages, a: String(payeur).toLowerCase(), contenu: mail.sosSansProche({ nom, lien: APPLI }) }));
+  envois.push(mail.envoyer({ ...reglages, a: EMAIL_PAPOTE, contenu: mail.alerteAdmin({
+    titre: `SOS sans aucun proche dans la famille${nom ? ` de ${nom}` : ''}`,
+    detail: `La tablette a envoyé un SOS, mais personne n'est encore entré dans l'appli : personne n'a été appelé.${payeur ? ` Celui qui a payé (${payeur}) a reçu un e-mail.` : ''} Appelez le client.`,
+    commande: (fam.get('installation') || {}).commande || null,
+  }) }));
+  logger.warn(`Famille ${fid} : SOS sans aucun proche, ${envois.length} e-mail(s)`);
+  (await Promise.allSettled(envois)).filter((r) => r.status === 'rejected')
+    .forEach((r) => logger.error(`Famille ${fid} : e-mail « SOS sans proche » non parti`, r.reason));
+}
+
 const DOC = 'families/{fid}/calls/{cid}';
 
 // L'appel vient-il d'une tablette de la famille ? Renvoie les proches à prévenir.
@@ -77,7 +100,10 @@ exports.appelsSonnerie = onDocumentCreated({ document: DOC, region: REGION_FIRES
   const db = base();
   const { fid, cid } = event.params;
   const uids = await destinataires(db, fid, appel);
-  if (!uids.length) return;
+  if (!uids.length) {
+    if (essaiSos(appel) === 1) await sosSansProche(db, fid, appel);
+    return;
+  }
   // Jeton d'appel : seul un téléphone qui a reçu la sonnerie peut refuser sans se connecter.
   const jeton = require('node:crypto').randomBytes(16).toString('hex');
   await event.data.ref.collection('prive').doc('refus').set({ jeton });

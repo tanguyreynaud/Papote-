@@ -3032,6 +3032,9 @@ function aFaire({ commandes, stock, depenses, automatique, maintenant, sims = []
   const horsFamille = (c) => c.expedition === 'envoyee' && !require('./famille-preparee').regles.tabletteDansLaFamille(c);
   ajouter(actives.filter((c) => horsFamille(c) && ms(c.envoyeeLe)
     && maintenant - ms(c.envoyeeLe) > JOURS(20)).length, 'tablette(s) reçue(s) mais pas jumelée(s) après 20 jours');
+  for (const c of actives.filter((x) => x.alerteSansProche)) {
+    liste.push(`Tablette de ${c.nom || c.email || c.id} branchée depuis 5 jours, personne dans l'appli : appeler le client`);
+  }
   for (const c of actives.filter((x) => horsFamille(x) && x.alerteConnexion && !(ms(x.envoyeeLe) && maintenant - ms(x.envoyeeLe) > JOURS(20)))) {
     liste.push(`Tablette de ${c.nom || c.email || c.id} pas encore connectée, colis retiré : appeler le client`);
   }
