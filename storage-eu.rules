@@ -2,7 +2,9 @@ rules_version = '2';
 // Règles du bucket papote-famille-eu (bascule en Europe) : membres lus dans la base « europe ».
 
 // Photos et vidéos des familles : families/{fid}/media/{fichier}.
-// Seuls les membres de la famille lisent, ajoutent et effacent. La tablette lit par l'adresse de téléchargement.
+// Seuls les membres de la famille lisent et ajoutent. La tablette lit par l'adresse de téléchargement.
+// Effacer : un responsable de la famille, ou l'auteur du fichier (métadonnée « auteur », posée par l'appli à l'envoi)
+// (Tanguy 12/11, règles 2, R4).
 service firebase.storage {
   match /b/{bucket}/o {
     match /families/{fid}/media/{file} {
@@ -15,6 +17,12 @@ service firebase.storage {
         return request.auth != null
           && request.auth.token.get('admin', false) == true;
       }
+      // Responsable : le propriétaire (createdBy) ou un responsable désigné (admins), membre actif.
+      function isResponsable() {
+        let fam = firestore.get(/databases/europe/documents/families/$(fid)).data;
+        return isMember()
+          && (fam.get('createdBy', '') == request.auth.uid || request.auth.uid in fam.get('admins', []));
+      }
       allow read: if isMember() || isAdmin();
       // Abonnement en cours (comme abonnementOk de firestore.rules) : une famille résiliée, suspendue ou jamais
       // abonnée ne dépose plus rien (audit 8, S4).
@@ -26,11 +34,17 @@ service firebase.storage {
             && !(abo.get('statut', '') in ['aucun', 'suspendu', 'resilie']));
       }
       // 30 Mo au plus : l'app réduit les vidéos bien en dessous (fil tablette, 11/11).
+      // « auteur », s'il est donné, est le compte qui envoie (la tablette n'en met pas : ses réponses vocales
+      // sont effacées par un responsable).
       allow create: if (isAdmin() || (isMember() && abonnementOk()))
         && request.resource.size < 30 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*|video/.*|audio/.*');
+        && request.resource.contentType.matches('image/.*|video/.*|audio/.*')
+        && (request.resource.metadata == null
+          || request.resource.metadata.get('auteur', request.auth.uid) == request.auth.uid);
       allow update: if false;
-      allow delete: if isMember();
+      allow delete: if isResponsable()
+        || (request.auth != null && resource.metadata != null
+          && resource.metadata.get('auteur', '') == request.auth.uid);
     }
   }
 }

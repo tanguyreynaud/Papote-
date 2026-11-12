@@ -727,12 +727,13 @@ test('photos (Storage) : les membres de la famille seulement, pas une autre fami
   await assertSucceeds(uploadString(ref(procheStockage('lea'), `families/${FID}/media/b.png`), PNG, 'data_url', { contentType: 'image/png' }));
   await assertFails(uploadString(ref(procheStockage('eve'), `families/${FID}/media/c.png`), PNG, 'data_url', { contentType: 'image/png' }));
   await assertFails(uploadString(ref(procheStockage('marc'), `families/${FID}/media/d.png`), PNG, 'data_url', { contentType: 'image/png' }));
-  // Seulement des images, vidéos et sons ; effacé par un membre, pas par un étranger.
+  // Seulement des images, vidéos et sons ; effacé par un responsable, pas par un simple proche ni un étranger (R4).
   // (Le remplacement d'un fichier existant, interdit par « allow update: if false », n'est pas vérifiable ici :
   // l'émulateur Storage le traite comme une création.)
   await assertFails(uploadString(ref(procheStockage('lea'), `families/${FID}/media/e.txt`), 'coucou', 'raw', { contentType: 'text/plain' }));
   await assertFails(deleteObject(ref(procheStockage('eve'), `families/${FID}/media/a.png`)));
-  await assertSucceeds(deleteObject(ref(procheStockage('lea'), `families/${FID}/media/a.png`)));
+  await assertFails(deleteObject(ref(procheStockage('lea'), `families/${FID}/media/a.png`)));
+  await assertSucceeds(deleteObject(ref(procheStockage('paul'), `families/${FID}/media/a.png`)));
   // En dehors du dossier des familles : rien pour personne.
   await assertFails(uploadString(ref(procheStockage('lea'), 'autre/x.png'), PNG, 'data_url', { contentType: 'image/png' }));
 });
@@ -801,7 +802,141 @@ test('R8 : un jumelage confirmé ne s\'efface plus par un inconnu, même expiré
   });
   await assertFails(deleteDoc(doc(tablette('inconnu'), `pairings/${PAIRING}`)));
   await assertSucceeds(deleteDoc(doc(tablette('inconnu'), 'pairings/VIEU2345')));
-  await assertSucceeds(deleteDoc(doc(tablette('tab'), `pairings/${PAIRING}`)));
+  // Règles 2 : même sa propre tablette n'efface plus un jumelage confirmé.
+  await assertFails(deleteDoc(doc(tablette('tab'), `pairings/${PAIRING}`)));
+});
+
+// ---------- Règles 2 (Tanguy 12/11, 15 h 13) : R1, R3, R4, R8 ----------
+
+test('R1 : aucune appli ne crée de famille, même un compte Google vérifié ; le serveur seul', async () => {
+  const paul = proche('paul');
+  const lot = writeBatch(paul);
+  lot.set(doc(paul, 'families/nouvelle'), { name: 'Mamie', code: 'NOUV2345', createdBy: 'paul', createdAt: serverTimestamp() });
+  lot.set(doc(paul, 'invites/NOUV2345'), { fid: 'nouvelle', createdBy: 'paul' });
+  lot.set(doc(paul, 'families/nouvelle/members/paul'), fiche('paul', { code: 'NOUV2345', status: 'active' }));
+  await assertFails(lot.commit());
+  await assertFails(setDoc(doc(paul, 'families/nouvelle'), { name: 'Mamie', code: 'NOUV2345', createdBy: 'paul', createdAt: serverTimestamp() }));
+  await assertFails(setDoc(doc(tablette('anonyme'), 'families/autre'), { name: 'Mamie', code: 'AUTR2345', createdBy: 'anonyme', createdAt: serverTimestamp() }));
+  await assertFails(setDoc(doc(admin(), 'families/offerte'), { name: 'Mamie', code: 'OFFR2345', createdBy: 'tanguy', createdAt: serverTimestamp() }));
+  // Famille préparée par le serveur au paiement (sans responsable) : le payeur invité par e-mail y entre.
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, 'families/preparee'), { name: 'Votre proche', nomAChoisir: true, code: 'PREP2345', createdBy: null, installation: { preparee: true, etape: 'photo' }, abonnement: { statut: 'installation' } });
+    await setDoc(doc(db, 'invites/PREP2345'), { fid: 'preparee', createdBy: null });
+    await setDoc(doc(db, 'families/preparee/invitations/paul@exemple.fr'), { email: 'paul@exemple.fr', fid: 'preparee', familyName: 'Votre proche' });
+  });
+  const entree = writeBatch(paul);
+  entree.set(doc(paul, 'families/preparee/members/paul'), fiche('paul', { code: 'PREP2345', status: 'active' }));
+  entree.delete(doc(paul, 'families/preparee/invitations/paul@exemple.fr'));
+  await assertSucceeds(entree.commit());
+  // … ou un proche à qui il a passé le code famille : en attente (le serveur l'accepte, famille-preparee.js).
+  await assertSucceeds(setDoc(doc(proche('lea'), 'families/preparee/members/lea'), fiche('lea', { code: 'PREP2345', status: 'pending' })));
+});
+
+// Jeton d'émulateur non signé (accepté par l'émulateur Firestore seulement), pour l'API REST.
+function jetonEmulateur(uid, extra = {}) {
+  const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
+  const now = Math.floor(Date.now() / 1000);
+  return `${b64({ alg: 'none', typ: 'JWT' })}.${b64({
+    iss: 'https://securetoken.google.com/demo-papote', aud: 'demo-papote', iat: now, exp: now + 3600, auth_time: now,
+    sub: uid, user_id: uid, ...extra,
+  })}.`;
+}
+
+test('R3 : relais des appels (turn-worker) pour un proche actif ou une tablette, pas pour un autre compte', async () => {
+  const { estMembre } = await import('../../turn-worker/src/membre.js');
+  await deuxFamilles();
+  // Fiches des tablettes : uid écrit par le serveur (functions/uid-tablette.js).
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), `families/${FID}/members/tab`), { uid: 'tab' }, { merge: true });
+    await setDoc(doc(ctx.firestore(), `families/${FID}/members/tab-appels`), { name: 'Tablette', role: 'tablette', pairing: PAIRING, uid: 'tab-appels' });
+  });
+  const base = `http://${process.env.FIRESTORE_EMULATOR_HOST}/v1`;
+  const membre = (uid, extra) => estMembre({ base, projet: 'demo-papote', database: '(default)', uid, jeton: jetonEmulateur(uid, extra) });
+  const google = { email_verified: true, firebase: { sign_in_provider: 'google.com' } };
+  assert.strictEqual(await membre('julie', { email: 'julie@exemple.fr', ...google }), true);
+  assert.strictEqual(await membre('lea', { email: 'lea@exemple.fr', ...google }), true);
+  assert.strictEqual(await membre('tab', { firebase: { sign_in_provider: 'password' } }), true);
+  assert.strictEqual(await membre('tab-appels', { firebase: { sign_in_provider: 'password' } }), true);
+  // En attente, compte sans famille (anonyme ou Google) : pas de relais.
+  assert.strictEqual(await membre('marc', { email: 'marc@exemple.fr', ...google }), false);
+  assert.strictEqual(await membre('inconnu', { firebase: { sign_in_provider: 'anonymous' } }), false);
+  assert.strictEqual(await membre('curieux', { email: 'curieux@exemple.fr', ...google }), false);
+  // Demander pour un autre uid avec son propre jeton : refusé par les règles.
+  await assert.rejects(estMembre({ base, projet: 'demo-papote', database: '(default)', uid: 'julie', jeton: jetonEmulateur('curieux', google) }), /firestore 403/);
+  // Sans jeton : non.
+  assert.strictEqual(await estMembre({ base, projet: 'demo-papote', database: '(default)', uid: 'julie', jeton: '' }), false);
+});
+
+test('R4 : un envoi (et ses fichiers) s\'efface par un responsable ou son auteur, jamais par un autre proche', async () => {
+  await deuxFamilles();
+  const vieux = Timestamp.fromMillis(Date.now() - 30 * 86_400_000);
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    for (const id of ['v1', 'v2', 'v3']) {
+      await setDoc(doc(db, `families/${FID}/posts/${id}`), { ...envoi('julie'), createdAt: vieux });
+      await setDoc(doc(db, `families/${FID}/posts/${id}/media/image`), { data: 'x' });
+    }
+    await setDoc(doc(db, `families/${FID}/posts/l1`), { ...envoi('lea'), createdAt: vieux });
+  });
+  const lea = proche('lea');
+  // Léa, simple proche : ni l'envoi de Julie (même vieux de 30 jours), ni son image en taille réelle.
+  await assertFails(deleteDoc(doc(lea, `families/${FID}/posts/v1`)));
+  await assertFails(deleteDoc(doc(lea, `families/${FID}/posts/v1/media/image`)));
+  await assertFails(deleteDoc(doc(tablette('tab'), `families/${FID}/posts/v1`)));
+  // Ses propres envois : oui.
+  await assertSucceeds(deleteDoc(doc(lea, `families/${FID}/posts/l1`)));
+  // Julie (autrice) et Paul (responsable désigné) : oui.
+  await assertSucceeds(deleteDoc(doc(proche('julie'), `families/${FID}/posts/v1/media/image`)));
+  await assertSucceeds(deleteDoc(doc(proche('julie'), `families/${FID}/posts/v1`)));
+  await assertSucceeds(deleteDoc(doc(proche('paul'), `families/${FID}/posts/v2/media/image`)));
+  await assertSucceeds(deleteDoc(doc(proche('paul'), `families/${FID}/posts/v2`)));
+
+  // Storage : le fichier porte son auteur (métadonnée « auteur », posée par l'appli).
+  const photo = (uid, nom, auteur = uid) => uploadString(ref(procheStockage(uid), `families/${FID}/media/${nom}`), PNG, 'data_url',
+    { contentType: 'image/png', customMetadata: { auteur } });
+  await assertSucceeds(photo('lea', 'lea.png'));
+  await assertSucceeds(photo('julie', 'julie.png'));
+  await assertSucceeds(photo('julie', 'julie2.png'));
+  // On ne se fait pas passer pour un autre auteur.
+  await assertFails(photo('lea', 'faux.png', 'julie'));
+  // Sans métadonnée (réponse vocale de la tablette, ancien fichier) : un responsable seulement.
+  await assertSucceeds(uploadString(ref(procheStockage('lea'), `families/${FID}/media/sans.png`), PNG, 'data_url', { contentType: 'image/png' }));
+  await assertFails(deleteObject(ref(procheStockage('lea'), `families/${FID}/media/julie.png`)));
+  await assertFails(deleteObject(ref(procheStockage('lea'), `families/${FID}/media/sans.png`)));
+  await assertFails(deleteObject(ref(procheStockage('marc'), `families/${FID}/media/lea.png`)));
+  await assertSucceeds(deleteObject(ref(procheStockage('lea'), `families/${FID}/media/lea.png`)));
+  await assertSucceeds(deleteObject(ref(procheStockage('julie'), `families/${FID}/media/julie.png`)));
+  await assertSucceeds(deleteObject(ref(procheStockage('paul'), `families/${FID}/media/julie2.png`)));
+  await assertSucceeds(deleteObject(ref(procheStockage('paul'), `families/${FID}/media/sans.png`)));
+});
+
+test('R8 : un jumelage n\'est lu que par sa tablette (e-mail de réservation caché), effacé seulement en attente', async () => {
+  await famille();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), `pairings/${PAIRING}`), {
+      status: 'confirmed', fid: FID, tabletUid: 'tab', callsUid: 'tab-appels', name: 'Tablette', claimedBy: 'tanguy',
+      claimedName: 'Tanguy', claimedEmail: 'tanguy@exemple.fr', attente: [{ uid: 'x', email: 'x@exemple.fr', prenom: 'X' }],
+      expiresAt: Timestamp.fromMillis(Date.now() + 60e3),
+    });
+    await setDoc(doc(ctx.firestore(), 'pairings/ATTE2345'), { status: 'waiting', tabletUid: 'tab4', callsUid: 'tab4-appels', name: 'T', expiresAt: Timestamp.fromMillis(Date.now() + 60e3) });
+    await setDoc(doc(ctx.firestore(), 'pairings/RESA2345'), { status: 'reserved', tabletUid: 'tab4', callsUid: 'tab4-appels', name: 'T', expiresAt: Timestamp.fromMillis(Date.now() - 60e3) });
+  });
+  // Qui connaît le code ne lit rien (ni l'e-mail, ni la famille) ; la tablette et son compte des appels oui.
+  await assertFails(getDoc(doc(tablette('inconnu'), `pairings/${PAIRING}`)));
+  await assertFails(getDoc(doc(proche('julie'), `pairings/${PAIRING}`)));
+  await assertSucceeds(getDoc(doc(tablette('tab'), `pairings/${PAIRING}`)));
+  await assertSucceeds(getDoc(doc(tablette('tab-appels'), `pairings/${PAIRING}`)));
+  await assertSucceeds(getDoc(doc(admin(), `pairings/${PAIRING}`)));
+  // Code disparu : « introuvable » pour la tablette, qui en recrée un (Sync.java pairingStep).
+  const absent = await assertSucceeds(getDoc(doc(tablette('tab'), 'pairings/ABSE2345')));
+  assert.strictEqual(absent.exists(), false);
+  // Effacer : seulement un code en attente.
+  await assertFails(deleteDoc(doc(tablette('tab4'), 'pairings/RESA2345')));
+  await assertFails(deleteDoc(doc(tablette('inconnu'), 'pairings/RESA2345')));
+  await assertFails(deleteDoc(doc(tablette('inconnu'), 'pairings/ATTE2345')));
+  await assertSucceeds(deleteDoc(doc(tablette('tab4'), 'pairings/ATTE2345')));
+  await assertFails(deleteDoc(doc(tablette('tab'), `pairings/${PAIRING}`)));
 });
 
 // A12 (Tanguy 12/11) : 50 messages écrits par jour et par famille, 10 rappels créés par jour. Le serveur (functions/limites.js)

@@ -29,6 +29,14 @@ async function fichiers(fid) {
   return ((await r.json()).items || []).map((f) => f.name);
 }
 
+/** Métadonnées personnelles d'un fichier dans Storage (émulateur). */
+async function metadonnees(chemin) {
+  const [h, p] = process.env.FIREBASE_STORAGE_EMULATOR_HOST.split(':');
+  const r = await fetch(`http://${h}:${p}/v0/b/papote-famille-eu/o/${encodeURIComponent(chemin)}`, { headers: { Authorization: 'Bearer owner' } });
+  assert.strictEqual(r.status, 200, `fichier Storage : ${r.status}`);
+  return (await r.json()).metadata || {};
+}
+
 /** Largeur réelle de chaque photo d'un envoi, lue par le navigateur. */
 function largeurs(t, post) {
   return t.page.evaluate((urls) => Promise.all(urls.map((u) => new Promise((ok, ko) => {
@@ -71,6 +79,8 @@ test('5 photos, transfert coupé à la 3e (réseau toujours là), double appui :
   assert.deepStrictEqual(await largeurs(julie, posts[0]), LARGEURS, 'dans l\'ordre choisi');
   // Aucun fichier orphelin : la photo de l'installation + 5.
   assert.strictEqual((await fichiers(fid)).length, 6, 'pas de fichier en trop dans Storage');
+  // Chaque fichier porte son auteur : Julie peut l'effacer sans être responsable (storage-eu.rules, règles 2, R4).
+  for (const p of posts[0].photos) assert.strictEqual((await metadonnees(p.storagePath)).auteur, posts[0].authorUid, `auteur de ${p.storagePath}`);
   // L'écran : 1 (installation) + 1 envoi de 5, avec son compteur.
   await julie.page.locator('#photos li.shot').nth(1).waitFor();
   await julie.page.locator('#photos .shot-count', { hasText: '5' }).waitFor();
