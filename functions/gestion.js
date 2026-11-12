@@ -843,7 +843,12 @@ exports.gestionDonnees = onCall(async (request) => {
         // Date du prochain prélèvement (fin de la période Stripe), affichée dans « Pause hospitalisation… ».
         prochainPrelevement: estCourante(famille, d.id) ? ms(famille.abonnement.finPeriode) || null : null,
         restitution: c.restitution ? { statut: c.restitution.statut || null, avant: c.restitution.avant || null, mainPropreLe: c.restitution.mainPropreLe || null,
-          anticipe: c.restitution.anticipe === true } : null,
+          anticipe: c.restitution.anticipe === true, prolongations: (c.restitution.prolongations || []).length,
+          rembourse: c.restitution.rembourse ? { statut: c.restitution.rembourse.statut || null, montant: c.restitution.rembourse.montant || null } : null } : null,
+        // Tablette en panne en attente de retour (A9), mois remboursés (A9), hospitalisations passées (A8).
+        remplacement: c.remplacement ? { statut: c.remplacement.statut || null, raison: c.remplacement.raison || null, le: c.remplacement.le || null, kit: c.remplacement.kit || null } : null,
+        moisRembourses: c.moisRembourses || null,
+        hospitalisations: c.hospitalisations || null,
         remboursement: c.remboursement || null,
         restitutionErreur: c.restitution && c.restitution.erreur ? c.restitution.erreur : null,
         retractation: c.retractation || null,
@@ -1093,6 +1098,66 @@ async function preleverRemplacement({ commande, kit, raison, montant, cmd, qui }
   }
 }
 
+// Tablette en panne (Tanguy, 12/11, A9) : la nouvelle ne part qu'une fois l'ancienne REÇUE chez Papote.
+//   1er temps (sans ancienneRecue) : la panne est notée (remplacement « attente-retour »), l'ancienne passe « en retour »
+//     mais reste la tablette prêtée de la commande : jamais reçue, elle compte dans les 140 € à l'arrêt, comme avant.
+//     L'étiquette de retour se fait ensuite (gestionEtiquette). Rejoué (double clic) : rien de plus.
+//   2e temps ({ ancienneRecue: true, nouveau }) : l'ancienne est notée « revenue » (à vérifier) et quitte la commande,
+//     la nouvelle part avec la carte SIM de l'ancienne. Rejoué juste après : la même réponse, rien ne bouge deux fois.
+//   Tablette déjà dans les mains de Papote (rapportée en main propre) : le 2e temps directement.
+async function remplacerPanne(d, qui, kit, commande, motif) {
+  const ref = db().doc(`commandes/${commande}`);
+  const trace = (etat, extra = {}) => ({ le: Date.now(), etat, par: qui, commande, motif, remplacement: true, raison: 'panne', ...extra });
+  if (d.ancienneRecue !== true) {
+    const deja = await db().runTransaction(async (tx) => {
+      const [c, k] = await Promise.all([tx.get(ref), tx.get(kit.ref)]);
+      const r = c.get('remplacement') || {};
+      if (r.statut === 'attente-retour' && r.kit === kit.id) return true;
+      tx.update(ref, { remplacement: { kit: kit.id, raison: 'panne', montant: 0, statut: 'attente-retour', le: Date.now(), par: qui, motif: motif || null } });
+      tx.update(kit.ref, {
+        etat: 'en-retour', remplaceePour: commande, majLe: FieldValue.serverTimestamp(),
+        historique: FieldValue.arrayUnion(trace('en-retour', { attenteRetour: true, avant: k.get('etat') || null })),
+      });
+      return false;
+    });
+    return { ok: true, montant: 0, retour: true, attente: true, deja };
+  }
+  const neuve = await db().doc(`stock/${d.nouveau || '-'}`).get();
+  // Rejoué (double clic) : la nouvelle est déjà partie pour cette commande, et l'ancienne n'y est plus.
+  const fait = await ref.get().then((c) => c.get('remplacement') || {});
+  if (fait.statut === 'fait' && fait.nouvelle === kit.id && kit.id === d.nouveau) return { ok: true, montant: 0, retour: false, deja: true };
+  if (!neuve.exists || neuve.get('commande') || !['en-stock', 'preparee'].includes(neuve.get('etat'))) {
+    throw new HttpsError('failed-precondition', 'Choisissez une tablette disponible du stock.');
+  }
+  if (neuve.get('fid')) throw new HttpsError('failed-precondition', 'Cette tablette est dans une famille : pas à vendre. Choisissez-en une autre.');
+  const avecSim = neuve.get('simId') ? neuve.data() : { ...neuve.data(), simId: kit.get('simId') || null };
+  const refusSim = await refusSimAvantDepart(commande, avecSim);
+  if (refusSim) throw new HttpsError('failed-precondition', refusSim);
+  await db().runTransaction(async (tx) => {
+    const [c, k, n] = await Promise.all([tx.get(ref), tx.get(kit.ref), tx.get(neuve.ref)]);
+    if (k.get('commande') !== commande) throw new HttpsError('already-exists', 'Le remplacement est déjà fait : rechargez la page.');
+    if (n.get('commande') || !['en-stock', 'preparee'].includes(n.get('etat'))) throw new HttpsError('failed-precondition', 'Choisissez une tablette disponible du stock.');
+    const r = c.get('remplacement') || {};
+    tx.update(ref, { remplacement: { kit: kit.id, nouvelle: neuve.id, raison: 'panne', montant: 0, statut: 'fait', le: Date.now(), par: qui,
+      motif: motif || r.motif || null, demandeLe: r.statut === 'attente-retour' ? r.le || null : null } });
+    tx.update(kit.ref, {
+      etat: 'revenue', commande: null, remplaceePour: commande, majLe: FieldValue.serverTimestamp(),
+      historique: FieldValue.arrayUnion(trace('revenue', { ancienneRecue: true })),
+    });
+    tx.update(neuve.ref, {
+      etat: 'envoyee', commande, accessoires: kit.get('accessoires') || [], majLe: FieldValue.serverTimestamp(),
+      historique: FieldValue.arrayUnion(trace('envoyee')),
+    });
+  });
+  // Revenue chez Papote : elle sort de la famille, comme une tablette notée « Revenue » à la main.
+  if (kit.get('fid')) {
+    await retirerDeLaFamille(kit.data(), kit.ref);
+    await kit.ref.update({ fid: null, tabletUid: null, callsUid: null, jumeleeLe: FieldValue.delete() });
+  }
+  if (kit.get('simId') && !neuve.get('simId')) await enregistrerSim(kit.get('simId'), { tablette: neuve.id }, qui);
+  return { ok: true, montant: 0, retour: false };
+}
+
 // Remplacement d'un élément du kit chez un client : la tablette, la carte SIM ou un accessoire.
 // La tablette remplacée passe « en retour » (à récupérer) et laisse sa carte SIM à la nouvelle ;
 // la carte SIM remplacée passe « suspendue » (à résilier) ; l'accessoire sort du stock.
@@ -1104,6 +1169,7 @@ async function remplacer(d, qui) {
   if (!kit) throw new HttpsError('failed-precondition', 'Aucune tablette n\'est notée chez ce client.');
   const trace = (etat, extra = {}) => ({ le: Date.now(), etat, par: qui, commande, motif, ...extra });
 
+  if (d.element === 'tablette' && d.raison === 'panne') return remplacerPanne(d, qui, kit, commande, motif);
   if (d.element === 'tablette') {
     const neuve = await db().doc(`stock/${d.nouveau || '-'}`).get();
     if (!neuve.exists || neuve.get('commande') || !['en-stock', 'preparee'].includes(neuve.get('etat'))) {
@@ -1914,6 +1980,55 @@ exports.gestionStripe = onCall({ secrets: [STRIPE_SECRET], timeoutSeconds: 120 }
   };
 });
 
+// Dernier mois payé de la commande : facture d'un mois d'abonnement (pas la mise en service de 60 €), ou celle du
+// dernier mois prélevé à l'arrêt (metadata.dernierMois). → la facture Stripe, ou null.
+async function dernierMoisPaye(commande, client) {
+  const factures = client ? await tout(stripe().invoices.list({ customer: client, status: 'paid', limit: 100 }))
+    : await tout(stripe().invoices.list({ subscription: commande, status: 'paid', limit: 100 }));
+  return factures
+    .filter((f) => (f.subscription === commande || (f.metadata && f.metadata.commande === commande)) && f.amount_paid > 0 && f.payment_intent
+      && (f.billing_reason === 'subscription_cycle' || (f.metadata && f.metadata.dernierMois === '1')))
+    .sort((x, y) => y.created - x.created)[0] || null;
+}
+const MOIS_CENTIMES = 2500;
+async function rembourserMois(snap, qui) {
+  const commande = snap.id;
+  if (snap.get('offerte')) throw new HttpsError('failed-precondition', 'Commande offerte : rien n\'a été payé.');
+  if (!commande.startsWith('sub_')) throw new HttpsError('failed-precondition', 'Pas d\'abonnement Stripe pour cette commande.');
+  let facture;
+  try {
+    facture = await dernierMoisPaye(commande, snap.get('stripeCustomerId'));
+  } catch (e) {
+    throw new HttpsError('unavailable', `Stripe ne répond pas (${e.message}) : réessayez.`);
+  }
+  if (!facture) throw new HttpsError('failed-precondition', 'Aucun mois payé à rembourser pour cette commande.');
+  const deja = (snap.get('moisRembourses') || []).find((m) => m.facture === facture.id);
+  if (deja) return { ok: true, deja: true, montant: deja.montant, facture: facture.id, le: deja.le };
+  const pi = typeof facture.payment_intent === 'string' ? facture.payment_intent : facture.payment_intent.id;
+  let remb;
+  try {
+    // Toujours le même montant pour la même facture : avec la même clé, Stripe rend le même remboursement (double
+    // appui, deux onglets) au lieu d'en faire un second.
+    const montant = Math.min(MOIS_CENTIMES, facture.amount_paid);
+    remb = await stripe().refunds.create({
+      payment_intent: pi, amount: montant, reason: 'requested_by_customer', metadata: { commande, motif: 'un mois remboursé' },
+    }, { idempotencyKey: `mois-rembourse-${facture.id}` });
+  } catch (e) {
+    if (e instanceof HttpsError) throw e;
+    if (/already been refunded|exceeds/i.test(e.message || '')) {
+      throw new HttpsError('failed-precondition', 'Le dernier mois payé est déjà remboursé (depuis Stripe).');
+    }
+    throw new HttpsError('unavailable', `Remboursement refusé par Stripe (${e.message}) : rien n'a été remboursé deux fois, réessayez.`);
+  }
+  const note = { facture: facture.id, montant: remb.amount, remboursement: remb.id, le: Date.now(), par: qui };
+  await db().runTransaction(async (tx) => {
+    const liste = (await tx.get(snap.ref)).get('moisRembourses') || [];
+    if (!liste.some((m) => m.facture === facture.id)) tx.update(snap.ref, { moisRembourses: [...liste, note] });
+  });
+  logger.info(`Commande ${commande} : un mois remboursé (${mail.euros(remb.amount)}, facture ${facture.id}).`);
+  return { ok: true, montant: remb.amount, facture: facture.id, le: note.le };
+}
+
 // Factures (créées par Stripe à chaque paiement de l'abonnement) et autres paiements d'une commande.
 exports.gestionCommande = onCall({ secrets: [STRIPE_SECRET] }, async (request) => {
   verifierAdmin(request);
@@ -1930,6 +2045,37 @@ exports.gestionCommande = onCall({ secrets: [STRIPE_SECRET] }, async (request) =
     const main = request.data.main === true;
     await snap.ref.update({ 'restitution.mainPropreLe': main ? FieldValue.serverTimestamp() : FieldValue.delete() });
     return { ok: true, main };
+  }
+  // { action: 'plusDeTemps', avant } : « Laisser plus de temps » (Tanguy, 12/11, A7) : la date limite du retour (et du
+  // prélèvement du matériel non rendu) recule de 15 jours. avant : la date limite que l'admin a vue ; si elle a déjà
+  // changé (double clic, deux onglets), rien ne recule une deuxième fois et la date actuelle est rendue.
+  if (request.data.action === 'plusDeTemps') {
+    const vue = Number(request.data.avant);
+    const qui = request.auth.token.email || request.auth.uid;
+    return db().runTransaction(async (tx) => {
+      const r = (await tx.get(snap.ref)).get('restitution');
+      const actuelle = r && regles.enMillis(r.avant);
+      const refus = regles.refusPlusDeTemps(r);
+      if (refus) throw new HttpsError('failed-precondition', refus);
+      if (Number.isFinite(vue) && actuelle != null && actuelle !== vue && (r.prolongations || []).length) {
+        return { ok: true, avant: actuelle, deja: true };
+      }
+      const nouvelle = regles.limiteRepoussee(actuelle, Date.now());
+      tx.update(snap.ref, {
+        'restitution.avant': Timestamp.fromMillis(nouvelle),
+        // Le rappel « 7 jours avant » repartira avant la nouvelle date.
+        'restitution.rappelLe': FieldValue.delete(),
+        'restitution.prolongations': FieldValue.arrayUnion({ le: Date.now(), par: qui, de: actuelle, a: nouvelle }),
+        'restitution.majLe': FieldValue.serverTimestamp(),
+      });
+      return { ok: true, avant: nouvelle, jours: regles.PLUS_DE_TEMPS_JOURS };
+    });
+  }
+  // { action: 'rembourserMois' } : « Rembourser un mois » (Tanguy, 12/11, A9) : 25 € rendus sur le dernier mois payé
+  // de cette commande (remplacement trop long d'une tablette vraiment en panne, par exemple). Un seul remboursement par
+  // facture : clé d'idempotence Stripe et note sur la commande, le double clic ne rembourse pas deux fois.
+  if (request.data.action === 'rembourserMois') {
+    return rembourserMois(snap, request.auth.token.email || request.auth.uid);
   }
   // { action: 'couvertureVue', vu } : Tanguy a regardé la carte de l'ARCEP à l'adresse du proche (badge
   // « Couverture à vérifier », 12/11). vu: false retire la coche.
@@ -2572,7 +2718,8 @@ async function creerEtiquette(commande, sens, qui, { sansImpression = false } = 
   const suivi = await api.suivi(r.colis).catch(() => ({}));
   const maj = { 'etiquettes.retour': { colis: r.colis, url, qr, le: Date.now(), par: qui,
     suivi: suivi.suivi || null, lienSuivi: suivi.lien || null, etape: suivi.etape || null } };
-  const attendue = c.restitution && ['attendue', 'echec'].includes(c.restitution.statut);
+  // Matériel non rendu déjà prélevé (« facturee ») : le retour reste possible (Tanguy, 12/11, A6), remboursé à réception.
+  const attendue = c.restitution && ['attendue', 'echec', 'facturee'].includes(c.restitution.statut);
   if (attendue) {
     // Fin de contrat : l'e-mail au client part avec commandeModifiee, comme une étiquette collée à la main.
     maj['restitution.etiquette'] = url;
@@ -2584,7 +2731,8 @@ async function creerEtiquette(commande, sens, qui, { sansImpression = false } = 
     // Remplacement d'un élément du kit : l'étiquette part tout de suite.
     await mail.envoyer({
       smtp: MAIL_SMTP.value(), expediteur: MAIL_EXPEDITEUR.value(), motDePasse: MAIL_MOT_DE_PASSE.value(),
-      a: c.email, contenu: mail.etiquetteRetour({ nom: c.nom, lien: url, avant: null }),
+      a: c.email, contenu: mail.etiquetteRetour({ nom: c.nom, lien: url, avant: null,
+        panne: (c.remplacement || {}).statut === 'attente-retour' }),
     });
   }
   return { ok: true, url, qr, envoyee: !!c.email };

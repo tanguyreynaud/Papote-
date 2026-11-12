@@ -25,6 +25,8 @@ function refusEtiquette(c, sens, { remplacee = false } = {}) {
     return "Cette commande n'est pas à envoyer.";
   }
   if (remplacee || restitutionDe(c) === 'a-recuperer') return '';
+  // Matériel non rendu déjà prélevé : la tablette peut encore revenir, remboursée à réception (Tanguy, 12/11, A6).
+  if (restitutionDe(c) === 'facturee' && materielParti(c)) return '';
   // Retour attendu d'une tablette jamais partie (annulée avant l'envoi) : rien à renvoyer.
   if (aRecuperer(c) && materielParti(c)) return '';
   return "Rien à récupérer chez ce client : pas de fin de contrat ni de tablette remplacée. Pas d'étiquette de retour.";

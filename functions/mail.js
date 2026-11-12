@@ -658,9 +658,13 @@ function resiliationAnnulee({ nom, famille }) {
 
 // fin : abonnement terminé ou commande annulée (le seul e-mail de retour, avec le mode d'emploi) ;
 // sinon remplacement d'un élément du kit. qr : lien vers le QR code à montrer au point relais (sans impression).
-function etiquetteRetour({ nom, lien, qr, avant, fin, retractation, montant }) {
-  const rembourse = fin && retractation != null && retractation > 0
-    ? `Dès que la tablette nous parvient, nous vous remboursons <b>${euros(retractation)}</b> sur votre compte.` : '';
+// preleve : matériel non rendu déjà prélevé (A6) : remboursé dès que la tablette revient.
+// panne : tablette en panne à renvoyer d'abord, la nouvelle part à sa réception (A9).
+function etiquetteRetour({ nom, lien, qr, avant, fin, retractation, montant, preleve = null, panne = false }) {
+  const rembourse = fin && preleve
+    ? `Dès que la tablette nous parvient, nous vous remboursons les <b>${euros(preleve)}</b> prélevés pour le matériel non rendu.`
+    : fin && retractation != null && retractation > 0
+      ? `Dès que la tablette nous parvient, nous vous remboursons <b>${euros(retractation)}</b> sur votre compte.` : '';
   if (qr) {
     return message('Votre QR code pour nous rendre la tablette', [
       bonjour(nom),
@@ -669,7 +673,7 @@ function etiquetteRetour({ nom, lien, qr, avant, fin, retractation, montant }) {
         CARTON_ETAPE,
         'Déposez le colis dans n\'importe quel point relais Mondial Relay en montrant ce QR code sur votre téléphone (pas besoin d\'imprimer).',
       ] },
-      avant ? { encadre: `Date limite : <b>${dateEnClair(avant)}</b>.${rembourse ? ` ${rembourse}` : ''}` } : (rembourse || null),
+      avant && !preleve ? { encadre: `Date limite : <b>${dateEnClair(avant)}</b>.${rembourse ? ` ${rembourse}` : ''}` } : (rembourse || null),
     ], { texte: 'Afficher le QR code', lien });
   }
   return message(fin ? 'Comment nous rendre la tablette Papote' : 'Votre étiquette de retour Papote', [
@@ -677,16 +681,20 @@ function etiquetteRetour({ nom, lien, qr, avant, fin, retractation, montant }) {
     fin ? (retractation != null
       ? 'Votre commande est bien annulée. Il reste à nous renvoyer la tablette.'
       : 'Votre abonnement Papote est terminé. Merci de nous avoir fait confiance ! La tablette est prêtée : il reste à nous la renvoyer.') : null,
-    `Voici l'étiquette prépayée pour nous renvoyer ${fin ? 'la tablette' : 'l\'élément à remplacer'} : vous n'avez rien à payer. Imprimez-la avec le bouton ci-dessous (un point relais peut aussi l'imprimer pour vous si vous montrez cet e-mail).`,
+    `Voici l'étiquette prépayée pour nous renvoyer ${fin || panne ? 'la tablette' : 'l\'élément à remplacer'} : vous n'avez rien à payer. Imprimez-la avec le bouton ci-dessous (un point relais peut aussi l'imprimer pour vous si vous montrez cet e-mail).`,
     { etapes: fin ? [
       CARTON_ETAPE,
       'Collez l\'étiquette dessus et déposez le colis dans n\'importe quel point relais Mondial Relay.',
+    ] : panne ? [
+      CARTON_ETAPE,
+      'Collez l\'étiquette dessus et déposez le colis dans n\'importe quel point relais Mondial Relay.',
+      'Dès que la tablette en panne nous parvient, nous vous envoyons la nouvelle.',
     ] : [
       'Mettez l\'élément à remplacer dans un carton et collez l\'étiquette dessus.',
       'Déposez le colis dans n\'importe quel point relais Mondial Relay.',
       'Gardez la tablette : elle continue de fonctionner.',
     ] },
-    fin && avant ? { encadre: `Date limite : <b>${dateEnClair(avant)}</b>.${rembourse ? ` ${rembourse}` : (montant ? ` Sans retour à cette date, ${euros(montant)} seront prélevés sur votre compte.` : '')}` } : (rembourse || null),
+    fin && avant && !preleve ? { encadre: `Date limite : <b>${dateEnClair(avant)}</b>.${rembourse ? ` ${rembourse}` : (montant ? ` Sans retour à cette date, ${euros(montant)} seront prélevés sur votre compte.` : '')}` } : (rembourse || null),
     fin && !rembourse && montant ? { petit: MANQUANTS } : null,
   ], { texte: 'Imprimer l\'étiquette', lien });
 }

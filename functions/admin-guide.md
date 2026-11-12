@@ -18,7 +18,7 @@ Chaque lien entre parenthèses est un écran de l'admin (#…) ou un site extér
 ## Mamie à l'hôpital (absence longue)
 
 1. Demandez un justificatif. Un bulletin d'hospitalisation, envoyé par la famille (e-mail ou photo).
-2. Mettez en pause. Sur la commande, menu ⋮ « Pause hospitalisation… », puis la date de reprise. Plus aucun prélèvement ni alerte « ne répond plus » jusque-là ; la famille reçoit un e-mail. La tablette continue de marcher. Le menu ne la propose qu'après les 30 premiers jours de l'abonnement : avant, appelez la famille. Lien : [Ouvrir les commandes](#commandes)
+2. Mettez en pause. Sur la commande, menu ⋮ « Pause hospitalisation… », puis la date de sortie prévue. Un mois qui compte plus de 2 semaines d'hospitalisation n'est pas prélevé (le dernier mois à l'arrêt compris), et plus d'alerte « ne répond plus » jusque-là ; la famille reçoit un e-mail. La tablette continue de marcher. Le menu ne la propose qu'après les 30 premiers jours de l'abonnement : avant, appelez la famille. Lien : [Ouvrir les commandes](#commandes)
 3. Au retour. À la date choisie, les prélèvements reprennent seuls. Retour plus tôt : menu ⋮ « Reprendre les prélèvements » sur la commande. Lien : [Ouvrir les commandes](#commandes)
 
 ## Panne Firebase ou Google (le service ne répond plus)
