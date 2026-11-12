@@ -68,6 +68,11 @@ test('Messages : journée déjà pleine à l\'ouverture, double appui sur un mes
   const julie = await banc.telephone('Julie');
   const { fid } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
   await g.ouvrirTuile(julie, 'messages');
+  // La page lit le compteur une fois à l'ouverture : on attend que cette lecture (journée encore libre) soit faite,
+  // sinon elle peut voir la journée déjà pleine et cacher les messages rapides avant l'appui (course du test).
+  await julie.page.locator('.quick-msg').first().waitFor({ state: 'visible' });
+  await julie.page.waitForTimeout(1500);
+  assert.strictEqual(await julie.page.locator('#messages-limite').isVisible(), false);
   // Un autre proche vient de remplir la journée pendant que Julie a la page ouverte.
   await compteur(fid).set({ jour: jourParis(), messages: 50, parAuteur: { autre: 50 }, rappels: 0, bloqueJusqua: s.Timestamp.fromMillis(Date.now() + 3600e3) });
   await g.doubleAppui(julie, '.quick-msg');
