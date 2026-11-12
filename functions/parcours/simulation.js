@@ -4,7 +4,7 @@
 //   Stripe      simulé en mémoire (faux-stripe.js) : rien n'est payé, aucune clé n'est utilisée
 //   e-mails     gardés dans boite[] au lieu de partir
 //   push        notifications gardées dans notifications[]
-//   voix        lecture des messages désactivée (elle appellerait Google)
+//   voix        jamais Google : voixFaites[] note ce qui aurait été lu (limites des messages et rappels, A12)
 //   Storage     fichiers simulés (seules les suppressions comptent ici)
 //   horloge     avancer(jours) fait passer le temps pour Date.now() (rappels, 30 jours, restitution…)
 //
@@ -133,7 +133,7 @@ const notifications = [];
 const push = require('../push');
 // reglages.telephones = false : aucun téléphone n'a de notifications (appli pas installée, refusées).
 // reglages.pushEnPanne = n : les n prochains envois échouent (service de notifications injoignable).
-const reglages = { telephones: true, pushEnPanne: 0 };
+const reglages = { telephones: true, pushEnPanne: 0, voixEcrite: false };
 push.envoyer = async (db, fid, uids, data) => {
   if (reglages.pushEnPanne > 0) {
     reglages.pushEnPanne -= 1;
@@ -143,7 +143,19 @@ push.envoyer = async (db, fid, uids, data) => {
   return reglages.telephones ? uids.length : 0;
 };
 
-require('../voix').voixDocument = async () => null;
+// Voix : jamais Google. voixFaites[] garde le chemin de chaque document qui aurait reçu sa voix (limites.js, A12).
+// reglages.voixEcrite = true : la fausse voix est aussi écrite sur le document, comme en ligne (« déjà lu » ensuite).
+const voixFaites = [];
+const vraieVoix = require('../voix');
+vraieVoix.voixDocument = async (db, ref, data, champ) => {
+  let texte = vraieVoix.texteDe(data, champ);
+  if (!texte && data.type === 'photo') texte = vraieVoix.motParDefaut(ref.id);
+  if (!texte) return 'rien à lire';
+  if (data.voix && data.voix.texte === texte) return 'déjà lu';
+  voixFaites.push(ref.path);
+  if (reglages.voixEcrite) await ref.update({ voix: { url: 'https://simulation/voix.mp3', texte, nom: 'simulation' } });
+  return null;
+};
 
 // Faux Sendcloud : offres Mondial Relay (dont le retour « QR » sans impression), annonce des retours,
 // étiquettes, suivi et annulation. sendcloud.colis : les colis créés, par id.
@@ -446,12 +458,14 @@ async function remettreAZero() {
   decalage = 0;
   reglages.telephones = true;
   reglages.pushEnPanne = 0;
+  reglages.voixEcrite = false;
+  voixFaites.length = 0;
   reglages.pdfEnPanne = 0;
   fichiersGardes.length = 0;
 }
 
 module.exports = {
   demarrer, arreter, remettreAZero, calme, avancer, JOUR,
-  stripe, boite, notifications, erreurs, journal, fichiersEffaces, fichiersGardes, reglages, sendcloud,
+  stripe, boite, notifications, erreurs, journal, voixFaites, fichiersEffaces, fichiersGardes, reglages, sendcloud,
   fonctions, db, FieldValue, Timestamp, lire, compte, appeler, tache, requete, compteur,
 };
