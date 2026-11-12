@@ -135,6 +135,11 @@ const SCENES = [
   { groupe: 'Être prévenu', titre: 'Être prévenu : e-mail manquant', fichier: 'accueil.html', routes: (p) => stockVide(p), faire: (p) => prevenir(p) },
   { groupe: 'Être prévenu', titre: 'Être prévenu : numéro qui n’est pas un portable français', fichier: 'accueil.html', routes: (p) => stockVide(p), faire: (p) => prevenir(p, { email: 'jeanne@exemple.fr', tel: '04 78 12 34 56' }) },
   { groupe: 'Être prévenu', titre: 'Être prévenu : case pas cochée', fichier: 'accueil.html', routes: (p) => stockVide(p), faire: (p) => prevenir(p, { email: 'jeanne@exemple.fr', accord: false }) },
+  { groupe: 'Être prévenu', titre: 'Être prévenu : faute de frappe dans l’e-mail, « Vouliez-vous dire … ? »', fichier: 'accueil.html', routes: (p) => stockVide(p), faire: async (p) => {
+    await p.locator('.hero .js-commander').click(); await p.locator('#attente-email').waitFor({ state: 'visible' });
+    await p.fill('#attente-email', 'jeanne@hotmial.fr'); await p.locator('#attente-tel').focus();
+    await p.locator('.mel-suggestion').waitFor({ state: 'visible' }); await pause(p);
+  } },
   { groupe: 'Être prévenu', titre: 'Être prévenu : inscription envoyée', fichier: 'accueil.html', routes: (p) => stockVide(p), faire: (p) => prevenir(p, { email: 'jeanne@exemple.fr', tel: '06 12 34 56 78' }) },
   { groupe: 'Être prévenu', titre: 'Être prévenu : l’inscription n’a pas abouti', fichier: 'accueil.html', routes: (p) => stockVide(p, 500), faire: (p) => prevenir(p, { email: 'jeanne@exemple.fr' }) },
   { groupe: 'Être prévenu', titre: 'Être prévenu : menu ☰ (téléphone)', fichier: 'accueil.html', routes: (p) => stockVide(p), faire: async (p) => {
@@ -199,6 +204,11 @@ const SCENES = [
   } },
   { groupe: 'Commande', titre: 'Commande : code postal à plusieurs villes, choix de la ville', fichier: 'commande.html', faire: async (p) => {
     await p.fill('#cp', '63490'); await p.dispatchEvent('#cp', 'input'); await p.locator('#ville').waitFor({ timeout: 5000 }); await pause(p, 500);
+  } },
+  { groupe: 'Commande', titre: 'Commande : faute de frappe dans l’e-mail, « Vouliez-vous dire … ? »', fichier: 'commande.html', faire: async (p) => {
+    await commandeRemplie(p);
+    await p.fill('#email', 'tanguy.reynaud@gmial.con'); await p.dispatchEvent('#email', 'input'); await p.locator('#email').blur();
+    await p.locator('.mel-suggestion').waitFor({ state: 'visible' }); await p.locator('.mel-suggestion').scrollIntoViewIfNeeded(); await pause(p);
   } },
   { groupe: 'Commande', titre: 'Commande : il manque le point relais', fichier: 'commande.html', faire: async (p) => {
     await p.fill('#destinataire', 'Tanguy Reynaud'); await p.fill('#email', 'tanguy@exemple.fr'); await p.dispatchEvent('#email', 'input');

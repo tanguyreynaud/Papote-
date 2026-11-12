@@ -101,6 +101,10 @@ p { margin: 0; }
 .champ input { font: inherit; font-weight: 400; color: var(--text); min-height: 3.25rem; padding: .5rem .9rem; border: 2px solid var(--line); border-radius: 14px; background: var(--bg); min-width: 0; }
 .champ input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 .champ small { color: var(--muted); font-weight: 400; }
+/* « Vouliez-vous dire … ? » sous l'e-mail (email-correcteur.js, Tanguy 12/11). */
+.mel-suggestion { margin: .4rem 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: .3rem .6rem; font-size: 1rem; color: var(--text); }
+.mel-suggestion[hidden] { display: none; }
+.mel-suggestion button { font: inherit; font-weight: 700; color: var(--accent); background: none; border: 1px solid var(--accent); border-radius: 999px; padding: .25rem .9rem; min-height: 2.5rem; cursor: pointer; }
 .accord { display: flex; gap: .6rem; align-items: flex-start; color: var(--muted); font-size: .95rem; cursor: pointer; }
 .accord input { width: 1.5rem; height: 1.5rem; margin-top: .15rem; flex: none; accent-color: var(--accent); }
 .resume { display: grid; gap: .45rem; }
@@ -837,6 +841,8 @@ body .ps-bouton { bottom: 6.5rem; }
   lienPaiement();
 })();
 </script>
+<script src="email-correcteur.js"></script>
+<script>papoteEmail.brancher(document.getElementById('email'));</script>
 <script src="chat-support.js" defer></script>
 <script>
   // Téléphone : la bulle du chat rejoint la barre « Payer » (voir le style .barre-in .ps-bouton).
