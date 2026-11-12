@@ -64,3 +64,29 @@ test('e-mails d\'une famille préparée : espace famille prêt, pas de code à s
   }
   assert.doesNotMatch(mail.colisParti({ nom: 'Paul', suivi: '123', lien: 'https://x', code: 'WXYZ-2345' }).text, /scannez/i);
 });
+
+// M0 (Tanguy 12/11) : une tablette qui a internet mais ne trouve pas sa famille prévient Papote tout de suite.
+test('tablette connectée sans famille : Papote prévenu sauf si elle entre, ou si elle est encore chez lui', () => {
+  const { alerteSansFamille } = regles;
+  const p = { serie: 'R9XN', tabletUid: 'tab1' };
+  const envoyee = { nom: 'Paul Martin', expedition: 'envoyee', fid: 'F1' };
+  assert.strictEqual(alerteSansFamille({ decision: { etat: 'jumeler', fid: 'F1' }, p }), null);
+  assert.strictEqual(alerteSansFamille({ decision: { etat: 'pas-envoyee' }, p }), null, 'allumée pendant la préparation');
+  assert.strictEqual(alerteSansFamille({ decision: { etat: 'sans-commande' }, p, fiche: { etat: 'preparee', commande: null } }), null);
+  assert.strictEqual(alerteSansFamille({ decision: { etat: 'pas-preparee' }, p, fiche: { commande: 'sub_1' }, commande: { expedition: 'a-preparer' } }), null);
+  const inconnue = alerteSansFamille({ decision: { etat: 'inconnue' }, p });
+  assert.strictEqual(inconnue.cle, 'R9XN_sans-commande');
+  assert.strictEqual(inconnue.titre, 'Tablette connectée mais sans famille : n° de série R9XN');
+  assert.match(inconnue.detail, /aucune tablette du stock n'a le n° de série R9XN.*Papote est prévenu/);
+  assert.match(alerteSansFamille({ decision: { etat: 'inconnue' }, p, serieConnue: true }).detail, /pas prouvé/);
+  const sansCommande = alerteSansFamille({ decision: { etat: 'sans-commande' }, p, fiche: { ref: 'T-007', etat: 'envoyee', commande: null } });
+  assert.match(sansCommande.titre, /T-007$/);
+  assert.match(sansCommande.detail, /n° de série R9XN.*aucune commande.*Reliez sa fiche/);
+  const ancienne = alerteSansFamille({ decision: { etat: 'pas-preparee' }, p, fiche: { ref: 'T-008', commande: 'sub_1' }, commande: envoyee });
+  assert.strictEqual(ancienne.cle, 'R9XN_sub_1');
+  assert.match(ancienne.titre, /T-008 \(commande de Paul Martin\)/);
+  assert.match(alerteSansFamille({ decision: { etat: 'bloquee' }, p, fiche: { ref: 'T-9', etat: 'perdue' } }).detail, /« perdue »/);
+  assert.match(alerteSansFamille({ decision: { etat: 'autre-famille' }, p, fiche: { ref: 'T-9', commande: 'sub_2' }, commande: envoyee }).detail, /autre famille/);
+  // Ni n° de série ni compte : rien pour reconnaître la tablette, pas d'alerte.
+  assert.strictEqual(alerteSansFamille({ decision: { etat: 'inconnue' }, p: {} }), null);
+});

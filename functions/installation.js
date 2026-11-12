@@ -198,10 +198,20 @@ function brancher(deps) {
     if (!avant || avant.claimedBy !== uid || !['reserved', 'confirmed'].includes(avant.status)) {
       throw new HttpsError('failed-precondition', "Cette tablette n'est plus réservée pour vous. Scannez à nouveau son code.");
     }
+    // M2 (Tanguy 12/11) : seul Papote relie une tablette. Ce vieux chemin (code scanné → « Comment l'appelez-vous ? »)
+    // ne crée plus de famille pour un compte client, même avec une réservation d'avant A29 restée ouverte ; et jamais
+    // une deuxième famille pour une tablette dont la commande a déjà la sienne (famille préparée au paiement).
+    const admin = !!(request.auth && request.auth.token && request.auth.token.admin === true);
+    if (!avant.fid && !admin) {
+      throw new HttpsError('permission-denied', 'La tablette retrouve sa famille toute seule : il n\'y a rien à installer.');
+    }
     const commande = await commandeDeLaTablette(avant).catch((e) => {
       logger.warn(`Installation ${code} : commande illisible`, e.message);
       return null;
     });
+    if (!avant.fid && commande && commande.fid) {
+      throw new HttpsError('failed-precondition', 'Cette tablette a déjà sa famille (celle de sa commande) : elle y entre toute seule une fois le colis noté parti.');
+    }
     const ville = await villeAvecCoordonnees(villeDuRelais(commande), commande && commande.livraison && commande.livraison.cp);
     const r = await db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);

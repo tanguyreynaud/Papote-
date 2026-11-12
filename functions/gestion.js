@@ -34,6 +34,7 @@ const { defineSecret, defineString } = require('firebase-functions/params');
 const admin = require('firebase-admin');
 const mail = require('./mail');
 const sendcloud = require('./sendcloud');
+const livraison = require('./livraison');
 
 const STRIPE_SECRET = defineSecret('STRIPE_SECRET');
 const regles = require('./abonnement');
@@ -3283,7 +3284,8 @@ function aFaire({ commandes, stock, depenses, automatique, maintenant, sims = []
     liste.push(`Tablette de ${c.nom || c.email || c.id} branchée depuis 5 jours, personne dans l'appli : appeler le client`);
   }
   for (const c of actives.filter((x) => horsFamille(x) && x.alerteConnexion && !(ms(x.envoyeeLe) && maintenant - ms(x.envoyeeLe) > JOURS(20)))) {
-    liste.push(`Tablette de ${c.nom || c.email || c.id} pas encore connectée, colis retiré : appeler le client`);
+    const arrivee = livraison.arriveeTablette(c);
+    liste.push(livraison.alerteConnexion(c, arrivee ? arrivee.comment : 'retrait').aFaire);
   }
   ajouter(actives.filter(retour).length, 'tablette(s) à récupérer');
   ajouter(stock.filter((t) => t.etat === 'revenue').length, 'tablette(s) revenue(s) à vérifier');

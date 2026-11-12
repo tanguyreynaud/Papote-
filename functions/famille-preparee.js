@@ -58,6 +58,49 @@ function decisionJumelage({ fiche, commande, famille }) {
   return { etat: 'jumeler', fid: commande.fid };
 }
 
+// Tablette qui a internet (elle vient d'écrire son code) mais ne trouve pas sa famille (pure, testée) : ce qui manque,
+// pour prévenir Papote tout de suite (M0 : son écran dit « Papote est prévenu et s'en occupe » au bout de 2 min).
+// null : rien d'anormal, elle entre dans sa famille, ou elle est encore chez Papote (fiche du stock sans commande,
+// commande pas encore partie : allumée pendant la préparation).
+// → { cle (anti-doublon : une alerte par tablette et par commande), titre, detail } ou null.
+const CHEZ_PAPOTE = ['en-stock', 'preparee', 'a-reparer', 'revenue'];
+function alerteSansFamille({ decision, p = {}, fiche = null, commande = null, serieConnue = false }) {
+  const etat = decision && decision.etat;
+  if (!etat || etat === 'jumeler' || etat === 'deja-pris' || etat === 'pas-envoyee') return null;
+  if (etat === 'sans-commande' && CHEZ_PAPOTE.includes(fiche && fiche.etat)) return null;
+  if (['sans-famille', 'pas-preparee'].includes(etat) && commande && commande.expedition !== 'envoyee') return null;
+  const ident = String(p.serie || p.tabletUid || '').replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 80);
+  if (!ident) return null;
+  const nom = (fiche && fiche.ref) || (p.serie ? `n° de série ${p.serie}` : `compte ${p.tabletUid}`);
+  const client = commande ? ` (commande de ${commande.nom || commande.email || fiche.commande})` : '';
+  const manques = {
+    inconnue: serieConnue
+      ? `son n° de série ${p.serie} est bien dans le stock, mais il n'est pas prouvé : la clé d'installation de la tablette n'est pas reliée à ce compte`
+      : `aucune tablette du stock n'a le n° de série ${p.serie || '(non lu)'}`,
+    bloquee: `elle est notée « ${fiche && fiche.etat} » dans le stock : elle n'entre plus dans aucune famille`,
+    'sans-commande': 'sa fiche du stock n\'est reliée à aucune commande',
+    'sans-famille': 'sa commande n\'a pas de famille (commande d\'avant la famille préparée au paiement)',
+    'pas-preparee': 'la famille de sa commande n\'a pas été préparée à la commande (ancienne commande)',
+    'autre-famille': 'sa fiche du stock la dit dans une autre famille que celle de sa commande',
+  };
+  const gestes = {
+    inconnue: serieConnue
+      ? 'Refaites sa clé (outils\\admin\\cle-tablette.bat) ou réinstallez-la par QR (Stock › Installer).'
+      : 'Vérifiez le n° de série sur sa fiche dans Stock (ou ajoutez la tablette au stock).',
+    bloquee: 'Retrouvée ? Changez son état dans Stock. Sinon, elle est peut-être entre de mauvaises mains.',
+    'sans-commande': 'Reliez sa fiche à la commande du client dans Stock : elle entrera seule dans sa famille à son prochain code (15 min au plus).',
+    'sans-famille': 'Appelez le client : seul Papote peut relier cette tablette à une famille.',
+    'pas-preparee': 'Appelez le client : seul Papote peut relier cette tablette à une famille.',
+    'autre-famille': 'Vérifiez dans Stock et sur la commande quelle famille elle doit servir.',
+  };
+  const manque = manques[etat] || etat;
+  return {
+    cle: `${ident}_${(fiche && fiche.commande) || 'sans-commande'}`.slice(0, 200),
+    titre: `Tablette connectée mais sans famille : ${nom}${client}`,
+    detail: `La tablette ${nom}${p.serie && fiche && fiche.ref ? ` (n° de série ${p.serie})` : ''} a internet et affiche son code, mais elle ne trouve pas sa famille : ${manque}. Son écran dit à la personne que Papote est prévenu et s'en occupe. ${gestes[etat] || ''}`.trim(),
+  };
+}
+
 // La fiche stock de la tablette qui a écrit ce jumelage : par son compte, ou par son n° de série prouvé.
 // Le n° de série est écrit par la tablette elle-même dans pairings/ : n'importe quel compte pourrait y mettre
 // celui d'une tablette livrée et récupérer la famille. On ne le croit que si la clé App Check posée à
@@ -81,7 +124,8 @@ async function serieProuvee(db, serie, tabletUid) {
 }
 
 // deps : { db, logger, villeAvecCoordonnees? }
-function brancher({ db, logger, villeAvecCoordonnees = installation.villeAvecCoordonnees }) {
+// prevenirPapote(titre, commandeId, detail) : e-mail à Papote (index.js) ; absent, la tablette sans famille n'alerte pas.
+function brancher({ db, logger, villeAvecCoordonnees = installation.villeAvecCoordonnees, prevenirPapote = null }) {
   // Famille créée au paiement, dans la même transaction que la commande qui la reçoit : un message Stripe
   // reçu deux fois ne crée jamais deux familles. Renvoie le fid (le même au deuxième passage), ou null.
   async function creer(commandeRef, meta = {}) {
@@ -127,6 +171,8 @@ function brancher({ db, logger, villeAvecCoordonnees = installation.villeAvecCoo
     const d = decisionJumelage({ fiche: t, commande, famille });
     if (d.etat !== 'jumeler') {
       if (d.etat === 'bloquee') logger.warn(`Jumelage ${ref.id} : tablette ${t.ref || fiche.id} ${t.etat}, pas de famille.`);
+      await signalerSansFamille(ref, p, { decision: d, fiche: t, commande })
+        .catch((e) => logger.error(`Jumelage ${ref.id} : Papote non prévenu`, e.message));
       return d;
     }
     const fait = await db.runTransaction(async (tx) => {
@@ -144,6 +190,32 @@ function brancher({ db, logger, villeAvecCoordonnees = installation.villeAvecCoo
     });
     if (fait) logger.info(`Jumelage ${ref.id} : tablette ${t.ref || fiche.id} entrée seule dans la famille ${d.fid}.`);
     return fait ? d : { etat: 'deja-pris' };
+  }
+
+  // Tablette sans famille (alerteSansFamille) : Papote prévenu une seule fois par tablette et par commande, même si
+  // elle refait un code tous les quarts d'heure (alertesJumelage/{cle}, créé une fois, serveur seulement).
+  async function signalerSansFamille(ref, p, contexte) {
+    if (!prevenirPapote) return false;
+    const premier = alerteSansFamille({ ...contexte, p });
+    if (!premier) return false;
+    const marque = db.doc(`alertesJumelage/${premier.cle}`);
+    if ((await marque.get()).exists) return false;
+    // Tablette inconnue : son n° de série est-il au moins dans le stock (clé d'installation à refaire) ?
+    const serieConnue = contexte.decision.etat === 'inconnue' && !!p.serie
+      && !(await db.collection('stock').where('serieAndroid', '==', p.serie).limit(1).get()).empty;
+    const a = alerteSansFamille({ ...contexte, p, serieConnue });
+    try {
+      await marque.create({
+        serie: p.serie || null, tabletUid: p.tabletUid || null, code: ref.id, etat: contexte.decision.etat,
+        commande: (contexte.fiche && contexte.fiche.commande) || null, le: FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      if (e.code === 6) return false; // ALREADY_EXISTS : un autre code de la même tablette est passé juste avant
+      throw e;
+    }
+    logger.warn(`Jumelage ${ref.id} : ${a.titre}`);
+    await prevenirPapote(a.titre, (contexte.fiche && contexte.fiche.commande) || null, a.detail);
+    return true;
   }
 
   // Le premier proche qui entre dans une famille préparée sans responsable en devient le responsable :
@@ -202,5 +274,5 @@ function brancher({ db, logger, villeAvecCoordonnees = installation.villeAvecCoo
 
 module.exports = {
   brancher, ficheDeLaTablette, serieProuvee,
-  regles: { prepareePour, tabletteDansLaFamille, decisionJumelage, ETATS_BLOQUES, NOM_D_ATTENTE },
+  regles: { prepareePour, tabletteDansLaFamille, decisionJumelage, alerteSansFamille, ETATS_BLOQUES, NOM_D_ATTENTE },
 };
