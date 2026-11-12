@@ -74,7 +74,11 @@
     function verifier() {
       propose = suggestion(champ.value);
       if (!propose) { bulle.hidden = true; return; }
-      texte.textContent = 'Vouliez-vous dire ' + propose + ' ? ';
+      var adresse = document.createElement('b');
+      adresse.textContent = propose;
+      adresse.style.overflowWrap = 'anywhere';
+      // Le « ? » reste collé à l'adresse (espace insécable) : jamais seul sur une ligne.
+      texte.replaceChildren('Vouliez-vous dire ', adresse, '\u00a0?');
       bulle.hidden = false;
     }
     champ.addEventListener('input', function () {
