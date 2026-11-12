@@ -159,9 +159,6 @@ const SCENES = [
   { groupe: 'Démarrage et installation', titre: 'Logo du démarrage', note: 'Avant les premières nouvelles de l’app Android.',
     faire: async (t) => { await t.attendre(300); } },
   { groupe: 'Démarrage et installation', titre: 'Bienvenue (étape 1)', faire: async (t) => { await t.statut({ state: 'welcome', step: 'start' }); await t.attendre(1600); } },
-  { groupe: 'Démarrage et installation', titre: 'Nom de la personne (ancienne étape)', note: 'Étape « name » encore dans bienvenue.js, si Android la demande.', faire: async (t) => {
-    await t.statut({ state: 'welcome', step: 'name' }); await t.attendre(1600);
-  } },
   { groupe: 'Démarrage et installation', titre: 'Choisir le wifi (étape 2)', faire: async (t) => {
     await t.faux({ wifi: { wifi: '', internet: false } });
     await t.statut({ state: 'welcome', step: 'wifi' }); await t.attendre(1600);
@@ -226,31 +223,21 @@ const SCENES = [
     await t.page.getByText('Choisir la ville').click(); await t.attendre(600);
     await taper(t, '07160'); await t.page.locator('.network').first().click(); await t.attendre(600);
   } },
-  { groupe: 'Démarrage et installation', titre: 'QR code et code à taper (étape 3)', faire: async (t) => {
+  // Seul Papote relie une tablette (Tanguy, 12/11) : plus de QR code ni de code à taper avant la famille.
+  { groupe: 'Démarrage et installation', titre: 'Je cherche internet (carte SIM, sans box)', faire: async (t) => {
+    await t.faux({ wifi: { wifi: '', internet: false, sim: true } });
+    await t.statut({ state: 'welcome', step: 'wifi' }); await t.attendre(1600);
+  } },
+  { groupe: 'Démarrage et installation', titre: 'Pas d’internet trouvé : choisir le wifi', note: 'Au bout de 90 s de recherche.', faire: async (t) => {
+    await t.faux({ wifi: { wifi: '', internet: false, sim: true } });
+    await t.statut({ state: 'welcome', step: 'wifi' }); await t.attendre(1600);
+    await t.avancer(91000);
+  } },
+  { groupe: 'Démarrage et installation', titre: 'On prépare votre tablette (elle retrouve sa famille)', faire: async (t) => {
     await t.statut({ state: 'welcome', step: 'pair', code: 'K7PM2Q' }); await t.attendre(1600);
   } },
-  { groupe: 'Démarrage et installation', titre: 'Code faux ou expiré', faire: async (t) => {
-    await t.statut({ state: 'welcome', step: 'pair', code: 'K7PM2Q', error: 'Ce code a expiré. Un nouveau code est affiché.' }); await t.attendre(1600);
-  } },
-  { groupe: 'Démarrage et installation', titre: 'Un proche termine sur son téléphone', faire: async (t) => {
-    await t.statut({ state: 'welcome', step: 'pair', code: 'K7PM2Q', claimedName: 'Julie', reprendre: true }); await t.attendre(1600);
-  } },
-  { groupe: 'Démarrage et installation', titre: 'Recommencer avec un autre téléphone', faire: async (t) => {
-    await t.statut({ state: 'welcome', step: 'pair', code: 'K7PM2Q', restart: true }); await t.attendre(1600);
-  } },
-  { groupe: 'Démarrage et installation', titre: 'Recommencer : touchez encore', faire: async (t) => {
-    await t.statut({ state: 'welcome', step: 'pair', code: 'K7PM2Q', restart: true }); await t.attendre(1600);
-    await t.page.getByText('Recommencer avec un autre téléphone').click(); await t.attendre(400);
-  } },
-  { groupe: 'Démarrage et installation', titre: 'On prépare votre tablette', faire: async (t) => {
-    await t.statut({ state: 'welcome', step: 'prepare', claimedName: 'Julie' }); await t.attendre(1600);
-  } },
-  { groupe: 'Démarrage et installation', titre: 'Tablette de remplacement : c’est bien vous ?', faire: async (t) => {
-    await t.statut({ state: 'welcome', step: 'confirm', claimedName: 'Julie', familyName: 'Mamie Jeanne' }); await t.attendre(1600);
-  } },
-  { groupe: 'Démarrage et installation', titre: 'Placez la tablette (caméra)', note: 'Caméra simulée (mire de test) : pas de vrai visage à trouver.', faire: async (t) => {
-    await t.statut({ state: 'welcome', step: 'confirm', claimedName: 'Julie', familyName: 'Mamie Jeanne' }); await t.attendre(1600);
-    await t.page.getByText('Oui', { exact: true }).click(); await t.attendre(2500);
+  { groupe: 'Démarrage et installation', titre: 'On prépare votre tablette : elle attend internet', faire: async (t) => {
+    await t.statut({ state: 'welcome', step: 'pair', sansInternet: true }); await t.attendre(1600);
   } },
   { groupe: 'Démarrage et installation', titre: 'Tablette pas encore reliée', faire: async (t) => {
     await t.statut({ state: 'setup', message: 'Code tablette : K7PM2Q' }); await t.attendre(1600);
