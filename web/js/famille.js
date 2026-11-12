@@ -17,12 +17,11 @@ import {
   MAX_VIDEO_CHUNKS, VIDEO_CHUNK,
   choisirBase, bucketUrl, auth,
 } from './firebase.js';
-import { askConfirm, confirmerAvecCroix, notice, avantDePartir, chooseAction, fermerFenetre, demanderQuitter } from './ui.js';
+import { askConfirm, notice, avantDePartir, chooseAction, fermerFenetre, demanderQuitter } from './ui.js';
 import { showGuideOnce } from './guide.js';
 import {
   abonnementOk, FORMULES, LIBELLES, ouvrirPortail, payer, inciterSepa, passerAuSepa, rattacherCommande, resilier, annulerResiliation,
-  finDeContrat, facturesFamille, renvoyerTablette, retracter, inviterParEmail, reserverTablette, nommerFamille, finirInstallation,
-  annulerInstallation, nommerFamillePreparee,
+  finDeContrat, facturesFamille, renvoyerTablette, retracter, inviterParEmail, nommerFamillePreparee, entrerParCommande,
 } from './abonnement.js';
 import { startCall, watchTabletBusy, watchIncomingCalls, answerIncoming, warmUpCalls, declineIncoming, reportCallIncident } from './appel.js';
 import { pushSupported, pushAllowed, pushRefused, enablePush, closeCallNotification, rememberNativeToken, inNativeApp, launchFromAndroidApp, nativeNotificationsOff } from './push.js';
@@ -51,7 +50,7 @@ let stopMembers = null;
 let stopTabletBusy = null;
 let stopIncoming = null;
 
-const VIEWS = ['view-moi', 'view-sans-abo', 'view-invite', 'view-abonnement', 'view-profile', 'view-pair', 'view-setup', 'loading', 'view-login', 'view-link-email', 'view-invited', 'view-pending', 'view-join', 'view-home', 'view-photos', 'view-videos', 'view-messages', 'view-agenda', 'view-settings', 'view-notifs', 'view-support'];
+const VIEWS = ['view-moi', 'view-sans-abo', 'view-invite', 'view-abonnement', 'view-profile', 'loading', 'view-login', 'view-link-email', 'view-invited', 'view-pending', 'view-join', 'view-home', 'view-photos', 'view-videos', 'view-messages', 'view-agenda', 'view-settings', 'view-notifs', 'view-support'];
 
 let splashNoteTimer = null;
 function show(view) {
@@ -94,24 +93,44 @@ function toast(text) {
 
 // ---------- Rejoindre / créer ----------
 
+// Code famille d'abord ; s'il n'en est pas un, numéro de commande (A40) : celui qui a payé entre tout de suite dans
+// la famille de sa commande, même connecté avec une autre adresse. Un seul appel à la fois (double appui).
+const ERREURS_COMMANDE = {
+  'not-found': 'Ce code ne correspond à aucune famille ni à aucune commande. Vérifiez-le : il est dans l\'e-mail de commande et sur la facture.',
+  'resource-exhausted': 'Trop d\'essais pour aujourd\'hui. Réessayez demain, ou demandez à un responsable de vous inviter avec votre adresse e-mail.',
+};
 $('form-join').addEventListener('submit', async (e) => {
   e.preventDefault();
   const button = e.target.querySelector('button[type=submit]');
+  if (button.disabled) return;
   button.disabled = true;
+  const libelle = button.textContent;
+  button.textContent = 'Un instant…';
   showError($('join-error'), '');
+  const code = normalizeCode($('join-code').value);
   try {
-    const fidRejoint = await joinFamily($('join-code').value, savedPrenom());
+    let fidRejoint;
+    try {
+      fidRejoint = await joinFamily(code, savedPrenom());
+    } catch (err) {
+      if (!(err instanceof CodeInconnuError) || code.length !== 8) throw err;
+      ({ fid: fidRejoint } = await entrerParCommande(code, savedPrenom()));
+      saveFamilyId(fidRejoint);
+    }
     // Invité aussi par e-mail : l'invitation est remplie, on l'efface.
     if (myEmail()) deleteDoc(doc(db, 'families', fidRejoint, 'invitations', myEmail())).catch(() => {});
     forgetInviteCode();
     await enterApp();
   } catch (err) {
-    console.error(err);
-    showError($('join-error'), err instanceof CodeInconnuError
-      ? 'Ce code ne correspond à aucune famille. Vérifiez-le.'
-      : 'Impossible de rejoindre pour le moment. Vérifiez la connexion internet.');
+    const raison = (err.code || '').replace(/^functions\//, '');
+    if (err instanceof CodeInconnuError || ERREURS_COMMANDE[raison]) console.warn('Code refusé', raison || err);
+    else console.error(err);
+    showError($('join-error'), err instanceof CodeInconnuError ? ERREURS_COMMANDE['not-found']
+      : ERREURS_COMMANDE[raison] || (raison === 'failed-precondition' && err.message)
+      || 'Impossible de rejoindre pour le moment. Vérifiez la connexion internet.');
   } finally {
     button.disabled = false;
+    button.textContent = libelle;
   }
 });
 
@@ -204,14 +223,23 @@ function goHome() {
 }
 
 function sansAbonnement() {
-  return session?.family?.abonnement?.statut === 'aucun' && !installationEnCours();
+  return session?.family?.abonnement?.statut === 'aucun';
 }
 
-// Famille toute neuve : d'abord régler la tablette ; sinon le petit guide habituel.
+// Première ouverture d'une famille, dans l'ordre (A43, Tanguy 12/11) : « Comment appelez-vous la personne ? » (carte
+// de l'accueil, famille préparée), puis « Réglons la tablette » pour un responsable, puis le petit guide.
+// Rien tant que le nom n'est pas donné : le guide dirait « Votre proche » (renderPreparee relance à l'arrivée du nom).
 // Pas tant que la tablette attend son abonnement : le guide parlerait de choses encore impossibles.
 function accueilPremiereFois() {
-  if (sansAbonnement() || document.querySelector('.guide-back') || window.PapoteNatif) return;
-  if (!showIntroTablette()) showGuideOnce(session.family.name);
+  if (!session || sansAbonnement() || document.querySelector('.guide-back') || window.PapoteNatif) return;
+  if (session.family.nomAChoisir) return;
+  if (!showIntroTablette()) montrerGuide();
+}
+
+function montrerGuide() {
+  if (!session || document.querySelector('.guide-back')) return;
+  // Famille préparée dont la tablette n'est pas encore arrivée : le guide ne promet pas qu'elle voit déjà tout.
+  showGuideOnce(session.family.name, { enRoute: !!session.family.installation?.preparee && !tabletMembers.length });
 }
 
 function renderSansAbo() {
@@ -321,17 +349,13 @@ window.addEventListener('popstate', (e) => {
   else goHome();
 });
 
-const VUES_PARCOURS = ['view-login', 'view-link-email', 'view-moi', 'view-invited', 'view-pending', 'view-join', 'view-setup'];
+const VUES_PARCOURS = ['view-login', 'view-link-email', 'view-moi', 'view-invited', 'view-pending', 'view-join'];
 
 // « Retour » sur un écran de parcours : son propre bouton Retour s'il en a un, sinon « Voulez-vous quitter ? »
 // (app Android). false : rien de prévu, l'historique suit son cours.
 function retourParcours(vue) {
-  const bouton = ['btn-join-back', 'setup-back', 'setup-check-back'].map($).find((b) => !b.hidden && b.offsetParent);
-  if (bouton) { bouton.click(); return true; }
-  // Le code de la tablette, venu de « Rejoindre une famille » : on y revient.
-  if (vue === 'view-setup' && setup.step === 'setup-code' && !session) { showJoin(myFamilies.length > 0); return true; }
-  // Vérification du code en cours : on attend sa réponse.
-  if (vue === 'view-setup' && setup.step === 'setup-check') return true;
+  const bouton = $('btn-join-back');
+  if (!bouton.hidden && bouton.offsetParent) { bouton.click(); return true; }
   if (!dansAppAndroid() || !peutFermer()) return false;
   proposerDeQuitter(false);
   return true;
@@ -789,15 +813,16 @@ function serveurMuet(promesse) {
   return Promise.race([promesse.then(() => false), new Promise((r) => setTimeout(() => r(true), SERVEUR_MUET_MS))]);
 }
 
-// ---------- Première installation : régler la tablette pas à pas (propriétaire) ----------
-// Une famille toute neuve (ni veille, ni options) : on propose de tout régler d'un coup.
-// La ville de la météo est choisie sur la tablette à son installation.
-// Tout reste modifiable ensuite dans Réglages > La tablette.
+// ---------- Première ouverture : régler la tablette pas à pas (responsable) ----------
+// La nuit (21 h – 6 h 30), le son, le SOS : proposé une fois à chaque responsable, sur ce téléphone, tant qu'il ne
+// l'a jamais vu. Famille préparée à la commande : toujours (elle naît avec ses options, M4 du 12/11) ; famille d'avant
+// toute neuve (ni veille, ni options) aussi. Tout reste modifiable ensuite dans Réglages > La tablette.
 const INTRO_KEY = 'papote.introTablette.';
 
 function introAFaire() {
   const f = session.family;
-  if (!amOwner() || f.veille || f.options) return false;
+  if (!amFamilyAdmin() || f.nomAChoisir) return false;
+  if (!f.installation?.preparee && (f.veille || f.options)) return false;
   try { return localStorage.getItem(INTRO_KEY + session.fid) !== '1'; } catch (e) { return false; }
 }
 
@@ -808,8 +833,10 @@ function introVue() {
 function showIntroTablette() {
   if (!introAFaire()) return false;
   const nom = session.family.name;
-  const choix = { veille: { ...VEILLE_DEFAUT }, volume: 80,
-    options: { lecture: true, sos: true, radio: { active: false, nom: RADIOS[0].nom, url: RADIOS[0].url } } };
+  // Les réglages déjà en place (famille préparée : SOS allumé, lecture…) ; sinon ceux de départ.
+  const o = session.family.options || {};
+  const choix = { veille: { ...VEILLE_DEFAUT, ...(session.family.veille || {}) }, volume: volumeActuel(),
+    options: { lecture: o.lecture !== false, sos: o.sos !== false, radio: { active: false, nom: RADIOS[0].nom, url: RADIOS[0].url } } };
   const back = document.createElement('div');
   back.className = 'guide-back intro-back';
   back.innerHTML = `<form class="guide intro" role="dialog" aria-modal="true" novalidate>
@@ -859,8 +886,10 @@ function showIntroTablette() {
   $i('[data-step="0"] p').textContent = `Quelques questions pour que la tablette de ${nom} soit prête : nuit, son, options. Une minute, et tout reste modifiable dans Réglages.`;
   $i('[data-step="5"] p').textContent = `La tablette de ${nom} est réglée. Invitez maintenant la famille pour qu'elle envoie des photos.`;
   back.querySelectorAll('.intro-nom').forEach((e) => { e.textContent = nom; });
-  $i('#intro-de').value = valeurHeure(VEILLE_DEFAUT.de, VEILLE_DEFAUT.deMin);
-  $i('#intro-a').value = valeurHeure(VEILLE_DEFAUT.a, VEILLE_DEFAUT.aMin);
+  $i('#intro-veille').checked = choix.veille.active !== false;
+  $i('#intro-heures').hidden = !$i('#intro-veille').checked;
+  $i('#intro-de').value = valeurHeure(choix.veille.de, choix.veille.deMin);
+  $i('#intro-a').value = valeurHeure(choix.veille.a, choix.veille.aMin);
   $i('#intro-volume').value = String(choix.volume);
   $i('#intro-volume-val').textContent = `${choix.volume} %`;
   $i('#intro-lecture').checked = choix.options.lecture;
@@ -883,7 +912,8 @@ function showIntroTablette() {
     $i('.intro-prev').textContent = i === 0 ? 'Plus tard' : i === steps.length - 1 ? 'Terminer' : 'Retour';
     $i('.intro-error').hidden = true;
   };
-  const close = () => { introVue(); back.remove(); };
+  // Fermée : le petit guide vient ensuite (sauf vers « Inviter la famille » : il attendra la prochaine ouverture).
+  const close = (guide = true) => { introVue(); back.remove(); if (guide) montrerGuide(); };
 
   async function enregistrer() {
     choix.veille = veilleChoisie($i('#intro-veille').checked, $i('#intro-de'), $i('#intro-a'));
@@ -929,7 +959,7 @@ function showIntroTablette() {
         $i('.intro-next').disabled = false;
       }
     }
-    if (i === steps.length - 1) { close(); openPage('invite'); return; }
+    if (i === steps.length - 1) { close(false); openPage('invite'); return; }
     i++;
     render();
   });
@@ -2666,7 +2696,6 @@ function renderMembers(all) {
   renderRequests(pending);
   tabletMembers = members.filter((m) => m.role === 'tablette');
   renderPreparee();
-  if (!$('view-setup').hidden) renderSetupTablet();
   renderTabletFace();
   renderMeteo();
   renderWifi();
@@ -2727,6 +2756,14 @@ function renderMembers(all) {
         badge.className = 'badge';
         badge.textContent = 'Responsable';
         name.append(badge);
+      }
+      // L'adresse de chaque proche, pour les responsables seulement (A43) : deux fiches au même prénom (entré avec
+      // deux adresses), on voit laquelle retirer.
+      if (amFamilyAdmin() && m.email) {
+        const mail = document.createElement('span');
+        mail.className = 'member-email';
+        mail.textContent = m.email;
+        name.append(mail);
       }
       // Mis en tête par le propriétaire : proposé d'abord dans « Qui voulez-vous appeler ? » sur la tablette.
       if (m.enTete) {
@@ -4269,8 +4306,14 @@ function applyFamily() {
 
 // Famille préparée dès la commande (functions/famille-preparee.js) : le nom à donner, puis « tablette en route »
 // tant qu'elle n'est pas entrée dans la famille.
+let nomAttendu = false; // famille ouverte sans nom : la première ouverture reprend dès qu'il arrive
 function renderPreparee() {
   const fam = session?.family || {};
+  if (fam.nomAChoisir) nomAttendu = true;
+  else if (nomAttendu && session) {
+    nomAttendu = false;
+    if (!$('view-home').hidden) setTimeout(accueilPremiereFois, 0);
+  }
   const nomADonner = !!fam.nomAChoisir && amFamilyAdmin();
   if ($('nom-prepare').hidden && nomADonner) $('nom-prepare-error').hidden = true;
   $('nom-prepare').hidden = !nomADonner;
@@ -4307,7 +4350,6 @@ function watchFamily() {
     // nom de la famille préparée est donné ; gardé par une fusion, « Comment appelez-vous la personne ? » restait).
     session.family = snap.data();
     applyFamily();
-    repriseParUnAutre();
   }, (err) => {
     // Retiré de la famille : la lecture est refusée, l'écoute des membres s'occupe de la sortie.
     if (err?.code === 'permission-denied') console.warn('Famille illisible', err);
@@ -4329,7 +4371,7 @@ function launchedFromHomeScreen() {
 }
 
 // Les endroits qui proposent l'installation : bouton de l'accueil, fin de l'installation de la tablette, connexion.
-const PROPOSITIONS_INSTALL = ['btn-install', 'setup-install-box', 'login-install'];
+const PROPOSITIONS_INSTALL = ['btn-install', 'login-install'];
 function rememberInstalled() {
   for (const id of PROPOSITIONS_INSTALL) $(id).hidden = true;
 }
@@ -4377,7 +4419,7 @@ async function installerApp() {
     ? "Sur iPhone, dans Safari : touchez le bouton Partager (le carré avec une flèche vers le haut), choisissez « Sur l'écran d'accueil », puis « Ajouter »."
     : "Dans Chrome : touchez le menu ⋮ en haut à droite, puis « Installer l'application » ou « Ajouter à l'écran d'accueil ».");
 }
-for (const id of ['btn-install', 'setup-install', 'login-install']) $(id).addEventListener('click', installerApp);
+for (const id of ['btn-install', 'login-install']) $(id).addEventListener('click', installerApp);
 // Dès l'ouverture : la connexion et la fin de l'installation le proposent aussi (Tanguy, 27/10).
 renderInstallCard();
 
@@ -4681,142 +4723,10 @@ setInterval(() => { if (session) renderActivity(); }, 60_000);
 
 // ---------- Démarrage ----------
 
-// ---------- Ajouter ma tablette : jumelage par code ou QR code ----------
-// La tablette crée pairings/{code} ; un responsable la réclame pour une famille, la tablette confirme.
+// ---------- Vos informations : prénom, genre, photo, numéro, anniversaire ----------
+// Une seule fois, juste après l'inscription ; gardées sur ce téléphone puis écrites sur ma fiche dans chaque famille.
+// Aucune tablette ne se relie depuis l'appli (Tanguy 12/11, A29) : elle entre seule dans la famille de sa commande.
 
-const PAIR_KEY = 'papote.codeTablette';
-let pairing = null; // { code, data }
-let stopPair = null;
-let adminFamilies = [];
-
-function rememberPairCode(code) { try { localStorage.setItem(PAIR_KEY, code); } catch (e) { /* rien */ } }
-function pairCode() { try { return localStorage.getItem(PAIR_KEY); } catch (e) { return null; } }
-function forgetPairCode() { try { localStorage.removeItem(PAIR_KEY); } catch (e) { /* rien */ } }
-
-function pairStep(step) {
-  for (const id of ['form-pair-code', 'form-pair-claim', 'pair-wait', 'pair-done']) $(id).hidden = id !== step;
-}
-
-function resetPairing() {
-  pairing = null;
-  $('pair-error').hidden = true;
-  const code = pairCode();
-  $('pair-code').value = code ? formatCode(normalizeCode(code)) : '';
-  pairStep('form-pair-code');
-  if (code) $('form-pair-code').requestSubmit();
-}
-
-// La famille se crée avec la première tablette : le client qui scanne le QR code n'a rien d'autre à faire.
-const NEW_FAMILY = '__nouvelle__';
-
-async function loadAdminFamilies() {
-  const list = [];
-  for (const f of myFamilies) {
-    try {
-      const snap = await getDoc(doc(db, 'families', f.fid));
-      const data = snap.data();
-      if (data && (data.createdBy === authUser.uid || (data.admins || []).includes(authUser.uid))) list.push({ fid: f.fid, name: data.name });
-    } catch (e) { /* famille illisible */ }
-  }
-  return list;
-}
-
-$('btn-join-pair').addEventListener('click', () => showSetupScan(null));
-$('pair-back').addEventListener('click', () => { if (page === 'pair') history.back(); else showJoin(myFamilies.length > 0); });
-// Retour : dans la famille qui vient d'être reliée (ou créée), sinon à l'accueil.
-$('btn-pair-home').addEventListener('click', () => enterApp());
-
-$('form-pair-code').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const code = normalizeCode($('pair-code').value);
-  const fail = (msg) => { $('pair-error').textContent = msg; $('pair-error').hidden = false; };
-  $('pair-error').hidden = true;
-  try {
-    const snap = await getDoc(doc(db, 'pairings', code));
-    const data = snap.data();
-    if (!data) return fail("Aucune tablette allumée n'affiche ce code. Vérifiez les 8 caractères sur l'écran de la tablette : elle doit être allumée et connectée à Internet.");
-    if (toDate(data.expiresAt) < new Date()) return fail('Ce code a expiré. La tablette en affichera un nouveau.');
-    if (data.status !== 'waiting') return fail('Cette tablette est déjà en cours d\'installation.');
-    adminFamilies = await loadAdminFamilies();
-    pairing = { code, data };
-    forgetPairCode();
-    $('pair-name').textContent = `Tablette « ${data.name} »`;
-    // Responsable d'une ou plusieurs familles : la tablette rejoint l'une d'elles (la famille ouverte
-    // d'abord). Une nouvelle famille seulement pour qui n'en a aucune.
-    const ordered = [...adminFamilies].sort((x, y) => (y.fid === session?.fid) - (x.fid === session?.fid));
-    $('pair-family').replaceChildren(...(ordered.length
-      ? ordered.map((f, i) => new Option(`Famille de ${f.name}`, f.fid, false, i === 0))
-      : [new Option('Une nouvelle famille', NEW_FAMILY, false, true)]));
-    $('pair-family-wrap').hidden = ordered.length < 2;
-    $('pair-grand').value = data.name || '';
-    // Première tablette : la famille porte le nom donné sur la tablette, il ne reste que son prénom.
-    $('pair-grand-wrap').hidden = !!data.name;
-    $('pair-myname').value = session?.member.name || (authUser.displayName || '').split(' ')[0];
-    syncClaimLabel();
-    pairStep('form-pair-claim');
-  } catch (err) {
-    console.error(err);
-    fail('Impossible de lire ce code. Vérifiez la connexion internet.');
-  }
-});
-
-function syncClaimLabel() {
-  const isNew = $('pair-family').value === NEW_FAMILY;
-  $('pair-new').hidden = !isNew;
-  const fam = adminFamilies.find((f) => f.fid === $('pair-family').value);
-  $('btn-pair-claim').textContent = isNew ? 'Valider' : `Relier à la famille de ${fam.name}`;
-}
-$('pair-family').addEventListener('change', syncClaimLabel);
-
-$('form-pair-claim').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  let fam = adminFamilies.find((f) => f.fid === $('pair-family').value);
-  let myName = session?.member.name;
-  const ref2 = doc(db, 'pairings', pairing.code);
-  try {
-    if ($('pair-family').value === NEW_FAMILY) {
-      const grand = $('pair-grand').value.trim();
-      myName = $('pair-myname').value.trim();
-      if (!grand || !myName) { notice('Indiquez le prénom de la personne qui aura la tablette, et le vôtre.'); return; }
-      const fid = await createFamily(grand, myName);
-      fam = { fid, name: grand };
-      adminFamilies.push(fam);
-    }
-    await updateDoc(ref2, {
-      status: 'claimed', fid: fam.fid, familyName: fam.name, claimedBy: authUser.uid, claimedName: myName,
-    });
-  } catch (err) {
-    console.error(err);
-    $('pair-error').textContent = "La tablette n'a pas pu être réclamée. Le code a peut-être expiré.";
-    $('pair-error').hidden = false;
-    pairStep('form-pair-code');
-    return;
-  }
-  $('pair-wait-text').textContent = `La tablette « ${pairing.data.name} » affiche « ${myName} veut relier cette tablette à la famille de ${fam.name} ». Touchez Accepter sur la tablette.`;
-  pairStep('pair-wait');
-  stopPair?.();
-  stopPair = onSnapshot(ref2, (snap) => {
-    const status = snap.data()?.status;
-    if (status !== 'confirmed' && status !== 'refused') return;
-    stopPair?.();
-    stopPair = null;
-    $('pair-done-title').textContent = status === 'confirmed' ? 'Tablette reliée' : 'Tablette non reliée';
-    if (status === 'confirmed') saveFamilyId(fam.fid);
-    $('pair-done-text').textContent = status === 'confirmed'
-      ? `La tablette « ${pairing.data.name} » fait maintenant partie de la famille de ${fam.name}. Elle affichera les photos et messages dans un instant.`
-      : 'La tablette a refusé. Si ce n\'était pas une erreur, recommencez avec le nouveau code affiché.';
-    pairStep('pair-done');
-  }, (err) => console.warn('Jumelage illisible', err));
-});
-
-
-// ---------- Installation d'une nouvelle tablette (parcours du 21/10) ----------
-// Obligatoire pour le premier proche, avant l'accueil : scan + vérification, nom, photo, son, options.
-// Avant la famille : la réservation (pairings/{code}, claimedBy) ; après : families/{fid}.installation.etape.
-// Fermer l'app ne perd rien : on reprend à l'étape notée sur le serveur.
-
-const SETUP_STEPS = ['setup-code', 'setup-check', 'setup-nom', 'setup-photo', 'setup-son', 'setup-options'];
-const SETUP_DOT = { 'setup-code': 0, 'setup-check': 0, 'setup-nom': 1, 'setup-photo': 2, 'setup-son': 3, 'setup-options': 4 };
 const PRENOM_KEY = 'papote.prenom';
 // Mon numéro de téléphone (obligatoire depuis le 29/10 : la tablette appelle ses proches par la carte SIM,
 // et n'accepte que les appels des numéros de la famille) : gardé sur ce téléphone puis écrit dans members/{uid}.telephone.
@@ -4849,10 +4759,6 @@ function telALaFrappe(el) {
 document.addEventListener('input', (e) => {
   if (e.target.type === 'tel' && e.target.autocomplete === 'tel') telALaFrappe(e.target);
 }, true);
-let setup = { code: null, step: null }; // code de la tablette réservée
-let stopSetupPairing = null;
-let setupPhoto = null;
-
 function rememberPrenom(p) { try { localStorage.setItem(PRENOM_KEY, p); } catch (e) { /* rien */ } }
 function savedPrenom() { try { return localStorage.getItem(PRENOM_KEY) || ''; } catch (e) { return ''; } }
 
@@ -5040,365 +4946,13 @@ function bumpFamilyRev() {
   return updateDoc(doc(db, 'families', session.fid), { rev: increment(1) }).catch(() => null);
 }
 
-function setupStep(step) {
-  setup.step = step;
-  for (const id of SETUP_STEPS) $(id).hidden = id !== step;
-  document.querySelectorAll('#setup-dots span').forEach((d, k) => d.classList.toggle('on', k === SETUP_DOT[step]));
-  const qui = session?.family?.name || '';
-  document.querySelectorAll('.setup-qui').forEach((e) => { e.textContent = qui || 'votre proche'; });
-  // Se déconnecter seulement avant la réservation : ensuite, l'installation est à finir.
-  $('setup-logout').hidden = step !== 'setup-code' || myFamilies.length > 0;
-  $('setup-back').hidden = step !== 'setup-code' || !myFamilies.length;
-  // Après le scan, on peut toujours tout annuler (accord de Tanguy) : rien ne reste bloqué.
-  $('setup-cancel').hidden = !['setup-nom', 'setup-photo', 'setup-son', 'setup-options'].includes(step);
-  $('setup-cancel-error').hidden = true;
-  show('view-setup');
-}
-
-$('setup-cancel').addEventListener('click', async () => {
-  const famille = installationEnCours();
-  const texte = famille
-    ? `Annuler l'installation ? La famille « ${session.family.name} » et ce qui a été envoyé seront effacés. La tablette affichera de nouveau son code pour recommencer.`
-    : 'Annuler l\'installation ? La tablette affichera de nouveau son code pour recommencer.';
-  if (!await confirmerAvecCroix(texte, 'Annuler l\'installation')) return;
-  const btn = $('setup-cancel');
-  btn.disabled = true;
-  try {
-    await annulerInstallation(famille ? { fid: session.fid } : { code: setup.code });
-    if (famille && savedFamilyId() === session.fid) saveFamilyId(null);
-    stopSetupPairing?.();
-    stopSetupPairing = null;
-    setup = { code: null, step: null };
-    forgetPairCode();
-    await enterApp();
-  } catch (err) {
-    console.error(err);
-    showError($('setup-cancel-error'), (err.code || '').endsWith('failed-precondition') && err.message
-      ? err.message : 'L\'annulation a échoué. Vérifiez la connexion internet et réessayez.');
-  } finally {
-    btn.disabled = false;
-  }
-});
-
-// Une famille dont j'ai commencé l'installation et que je n'ai pas finie.
-function installationEnCours() {
-  const inst = session?.family?.installation;
-  return !!inst && inst.etape !== 'fini' && amOwner();
-}
-
-const SETUP_ETAPES = { photo: 'setup-photo', son: 'setup-son', options: 'setup-options' };
-
-function showSetupFamily() {
-  const etape = session.family.installation.etape;
-  setup.code = session.family.installation.pairing || null;
-  stopSetupPairing?.();
-  stopSetupPairing = null;
-  if (etape === 'son') fillSon();
-  if (etape === 'options') fillOptions();
-  setupStep(SETUP_ETAPES[etape] || 'setup-photo');
-  renderSetupTablet();
-}
-
-// Sans famille : le scan, avec le code du QR code s'il y en a un, ou la réservation déjà faite.
-async function showSetupScan(code) {
-  stopSession();
-  $('setup-code-input').value = code ? formatCode(normalizeCode(code)) : '';
-  $('setup-code-error').hidden = true;
-  setupStep('setup-code');
-  // Venu par le QR code : le code est déjà là, on vérifie tout de suite.
-  if (code) $('setup-code').requestSubmit();
-}
-
-// Réservation déjà faite par ce compte (app fermée après le scan, ou autre téléphone) : on la reprend.
-async function maReservation() {
-  try {
-    const snap = await getDocs(query(collection(db, 'pairings'), where('claimedBy', '==', authUser.uid)));
-    const resa = snap.docs.find((d) => d.data().status === 'reserved');
-    return resa ? resa.id : null;
-  } catch (err) {
-    console.warn('Réservation illisible', err);
-    return null;
-  }
-}
-
-function setupCheck(title, text, back) {
-  $('setup-check-title').textContent = title;
-  $('setup-check-text').textContent = text;
-  $('setup-check-spin').hidden = !!back;
-  $('setup-check-back').hidden = !back;
-  setupStep('setup-check');
-}
-$('setup-check-back').addEventListener('click', () => setupStep('setup-code'));
-$('setup-back').addEventListener('click', () => { forgetPairCode(); enterApp(); });
-
-// La tablette a touché « Recommencer avec un autre téléphone » : retour au scan.
-function watchSetupPairing(code) {
-  stopSetupPairing?.();
-  stopSetupPairing = onSnapshot(doc(db, 'pairings', code), (snap) => {
-    const p = snap.data();
-    const st = p?.status;
-    const repris = p?.claimedBy && p.claimedBy !== authUser?.uid;
-    if ((st === 'reserved' || st === 'confirmed') && !repris) return;
-    stopSetupPairing?.();
-    stopSetupPairing = null;
-    if (session) return;
-    setup.code = null;
-    $('setup-code-input').value = '';
-    showError($('setup-code-error'), repris
-      ? `${p.claimedName || 'Un autre proche'} a repris l'installation de la tablette.`
-      : 'La tablette a recommencé l\'installation. Scannez le nouveau code affiché sur son écran.');
-    setupStep('setup-code');
-  }, () => {});
-}
-
-// Installation reprise par un autre proche (30 minutes après le scan) : ce téléphone quitte ses écrans.
-function repriseParUnAutre() {
-  if ($('view-setup').hidden || !['setup-photo', 'setup-son', 'setup-options'].includes(setup.step)) return;
-  // Installation finie (« C'est parfait » sur ce téléphone : le serveur note « fini » juste avant la
-  // réponse) ou toujours à moi : rien à dire. Seule une reprise change le propriétaire de la famille.
-  if (installationEnCours() || amOwner()) return;
-  setup = { code: null, step: null };
-  goHome();
-  notice('Un autre proche a repris l\'installation de la tablette. Vous restez dans la famille.');
-}
-
-const SETUP_ERREURS = {
-  inconnu: "Aucune tablette allumée n'affiche ce code. Vérifiez les 8 caractères sur l'écran de la tablette : elle doit être allumée et connectée à internet.",
-  expire: 'Ce code a expiré. Scannez le nouveau code affiché sur la tablette.',
-};
-
-// Le tiret se met tout seul pendant la frappe (ABCD-1234), comme sur la tablette.
-for (const input of [$('setup-code-input'), ...document.querySelectorAll('.order-code')]) {
+// Le tiret se met tout seul pendant la frappe (ABCD-1234), comme sur la tablette et dans l'e-mail de commande.
+for (const input of [$('join-code'), ...document.querySelectorAll('.order-code')]) {
   input.addEventListener('input', () => {
     const c = normalizeCode(input.value).slice(0, 8);
     input.value = c.length > 4 ? `${c.slice(0, 4)}-${c.slice(4)}` : c;
   });
 }
-
-$('setup-code').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const prenom = savedPrenom();
-  const code = normalizeCode($('setup-code-input').value);
-  $('setup-code-error').hidden = true;
-  if (code.length !== 8) { showError($('setup-code-error'), 'Le code affiché sur la tablette a 8 caractères.'); return; }
-  setupCheck('Vérification de la tablette…', 'Un instant, nous vérifions le code.');
-  let r;
-  try {
-    r = await reserverTablette(code, prenom);
-  } catch (err) {
-    console.error(err);
-    showError($('setup-code-error'), 'La vérification a échoué. Vérifiez la connexion internet et réessayez.');
-    setupStep('setup-code');
-    return;
-  }
-  forgetPairCode();
-  if (r.etat === 'occupe') {
-    setupCheck('Installation déjà en cours',
-      `Cette tablette est déjà en cours d'installation par ${r.par || 'un proche'} : vous recevrez une invitation par e-mail dès qu'elle aura fini. Si ce n'est pas fini dans 30 minutes, scannez à nouveau pour reprendre l'installation.`, true);
-    return;
-  }
-  if (r.etat !== 'reserve') {
-    showError($('setup-code-error'), SETUP_ERREURS[r.etat] || SETUP_ERREURS.inconnu);
-    setupStep('setup-code');
-    return;
-  }
-  setup.code = code;
-  // Famille déjà créée avec ce compte (installation reprise) : on y entre.
-  if (r.fid) { saveFamilyId(r.fid); enterApp(); return; }
-  watchSetupPairing(code);
-  reveillerNommer();
-  $('setup-nom-error').hidden = true;
-  setupStep('setup-nom');
-  $('setup-nom-input').focus();
-});
-
-$('setup-nom').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const nom = $('setup-nom-input').value.trim();
-  $('setup-nom-error').hidden = true;
-  if (!nom) { showError($('setup-nom-error'), 'Indiquez comment vous l\'appelez, par exemple « Mamie Emma ».'); return; }
-  // Tout de suite un écran d'attente : la création prend quelques secondes.
-  setupCheck(`Création de la famille de ${nom}…`, 'Un instant, nous préparons la tablette.');
-  try {
-    const { fid } = await nommerFamille(setup.code, nom);
-    stopSetupPairing?.();
-    stopSetupPairing = null;
-    saveFamilyId(fid);
-    // L'écran « Création de la famille… » reste jusqu'à l'étape suivante : pas de retour au logo
-    // de démarrage entre les deux (Tanguy, 2/11 : « c'est pas logique »).
-    await enterApp({ garderEcran: true });
-  } catch (err) {
-    console.error(err);
-    setupStep('setup-nom');
-    showError($('setup-nom-error'), err.code?.endsWith('failed-precondition')
-      ? 'Cette tablette n\'est plus réservée pour vous. Scannez à nouveau son code.'
-      : 'L\'enregistrement a échoué. Vérifiez la connexion internet et réessayez.');
-  }
-});
-
-// Le serveur dort quand personne ne l'a appelé depuis un moment : on le réveille pendant que
-// le proche tape le nom, pour que « Continuer » réponde vite.
-function reveillerNommer() {
-  nommerFamille(null, null, true).catch(() => {});
-}
-
-async function setupEtape(etape) {
-  await updateDoc(doc(db, 'families', session.fid), { 'installation.etape': etape });
-}
-
-// Photo : la tablette passe à l'accueil dès qu'elle la reçoit.
-function renderSetupTablet() {
-  if (!$('setup-tablet-wait')) return;
-  $('setup-tablet-wait').hidden = tabletMembers.length > 0;
-}
-$('setup-pick-camera').addEventListener('click', () => $('setup-in-camera').click());
-$('setup-pick-gallery').addEventListener('click', () => $('setup-in-gallery').click());
-$('setup-photo-other').addEventListener('click', () => $('setup-in-gallery').click());
-['setup-in-camera', 'setup-in-gallery'].forEach((id) => $(id).addEventListener('change', async (e) => {
-  const file = e.target.files && e.target.files[0];
-  e.target.value = '';
-  if (!file) return;
-  $('setup-photo-error').hidden = true;
-  try {
-    setupPhoto = await compressPhoto(file);
-  } catch (err) {
-    console.error(err);
-    showError($('setup-photo-error'), 'Cette photo n\'a pas pu être lue. Essayez-en une autre.');
-    return;
-  }
-  $('setup-photo-preview').src = setupPhoto.thumb;
-  $('setup-photo-preview').hidden = false;
-  $('setup-pickers').hidden = true;
-  $('setup-photo-extra').hidden = false;
-}));
-$('setup-photo-send').addEventListener('click', async () => {
-  if (!setupPhoto) return;
-  const btn = $('setup-photo-send');
-  btn.disabled = true;
-  btn.textContent = 'Envoi…';
-  $('setup-photo-error').hidden = true;
-  try {
-    await sendPhoto(setupPhoto, $('setup-photo-text').value.trim(), { authorUid: session.uid, authorName: session.member.name }, true);
-    await setupEtape('son');
-    setupPhoto = null;
-    fillSon();
-    setupStep('setup-son');
-  } catch (err) {
-    console.error(err);
-    showError($('setup-photo-error'), 'L\'envoi a échoué. Vérifiez la connexion internet et réessayez.');
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Envoyer sur la tablette';
-  }
-});
-
-// Son : la tablette sonne ou parle au volume choisi (commande « son » écoutée en direct par la tablette).
-function fillSon() {
-  const f = session.family;
-  $('setup-sonnerie').value = String(Number.isInteger(f.volumeSonnerie) ? f.volumeSonnerie : 100);
-  $('setup-voix').value = String(Number.isInteger(f.volume) ? f.volume : 80);
-  syncSon();
-  $('setup-son-status').hidden = true;
-}
-function syncSon() {
-  $('setup-sonnerie-val').textContent = `${$('setup-sonnerie').value} %`;
-  $('setup-voix-val').textContent = `${$('setup-voix').value} %`;
-}
-
-// Compte « appels » de la tablette (celui qui écoute les commandes de son), lu sur la réservation.
-let setupCallsUid = null;
-async function tabletteAppels() {
-  if (setupCallsUid) return setupCallsUid;
-  try {
-    const p = setup.code ? (await getDoc(doc(db, 'pairings', setup.code))).data() : null;
-    setupCallsUid = p?.callsUid || null;
-  } catch (e) { /* lecture impossible */ }
-  return setupCallsUid || targetTablet()?.id || null;
-}
-
-async function essaiSon(quoi) {
-  const target = await tabletteAppels();
-  const status = (t) => { $('setup-son-status').textContent = t; $('setup-son-status').hidden = !t; };
-  if (!target || !tabletMembers.length) { status('La tablette se prépare encore. Réessayez dans quelques secondes.'); return; }
-  const volume = Number($(quoi === 'sonnerie' ? 'setup-sonnerie' : 'setup-voix').value);
-  const data = {
-    type: 'son', quoi, volume, target, createdBy: session.uid, createdAt: serverTimestamp(), state: 'pending',
-  };
-  if (quoi === 'voix') data.parle = `Bonjour ${session.family.name}, c'est ${session.member.name}. Vous m'entendez bien ?`.slice(0, 200);
-  try {
-    await setDoc(doc(collection(db, 'families', session.fid, 'commands')), data);
-    status(quoi === 'sonnerie' ? `La tablette sonne à ${volume} %.` : `La tablette parle à ${volume} %.`);
-  } catch (err) {
-    console.error(err);
-    status('La tablette n\'a pas pu être prévenue. Vérifiez la connexion internet.');
-  }
-}
-$('setup-sonnerie').addEventListener('input', syncSon);
-$('setup-voix').addEventListener('input', syncSon);
-// Barre lâchée : on refait l'essai tout de suite, au nouveau volume.
-$('setup-sonnerie').addEventListener('change', () => essaiSon('sonnerie'));
-$('setup-voix').addEventListener('change', () => essaiSon('voix'));
-document.querySelectorAll('.setup-essai:not(.volume-essai)').forEach((b) => b.addEventListener('click', () => essaiSon(b.dataset.essai)));
-
-$('setup-son-ok').addEventListener('click', async () => {
-  const btn = $('setup-son-ok');
-  btn.disabled = true;
-  $('setup-son-error').hidden = true;
-  try {
-    await updateDoc(doc(db, 'families', session.fid), {
-      volume: Number($('setup-voix').value), volumeSonnerie: Number($('setup-sonnerie').value), rev: increment(1),
-    });
-    await setupEtape('options');
-    fillOptions();
-    setupStep('setup-options');
-  } catch (err) {
-    console.error(err);
-    showError($('setup-son-error'), 'L\'enregistrement a échoué. Vérifiez la connexion internet et réessayez.');
-  } finally {
-    btn.disabled = false;
-  }
-});
-
-// Options : réglées par le serveur à la création de la famille, modifiables ici.
-function fillOptions() {
-  const o = session.family.options || {};
-  $('setup-opt-sos').checked = !!o.sos;
-  $('setup-opt-lecture').checked = o.lecture !== false;
-  $('setup-opt-rappels').checked = o.rappelsAccueil !== false;
-  $('setup-opt-meteo').checked = o.meteo !== false;
-  $('setup-opt-radio').checked = !!o.radio?.active;
-  const ville = session.family.meteoVille?.nom;
-  $('setup-opt-meteo-ville').textContent = ville
-    ? `L'accueil affiche le temps qu'il fait à ${ville}, la ville du point relais. Vous pourrez la changer dans Réglages.`
-    : 'L\'accueil affiche le temps qu\'il fait. La ville se choisit dans Réglages.';
-}
-
-$('setup-fin').addEventListener('click', async () => {
-  const btn = $('setup-fin');
-  btn.disabled = true;
-  $('setup-fin-error').hidden = true;
-  const o = session.family.options || {};
-  const r = o.radio?.url ? o.radio : { nom: RADIOS[0].nom, url: RADIOS[0].url };
-  const options = {
-    ...o,
-    sos: $('setup-opt-sos').checked,
-    lecture: $('setup-opt-lecture').checked,
-    rappelsAccueil: $('setup-opt-rappels').checked,
-    meteo: $('setup-opt-meteo').checked,
-    radio: { ...r, active: $('setup-opt-radio').checked },
-  };
-  try {
-    await updateDoc(doc(db, 'families', session.fid), { options, rev: increment(1) });
-    await finirInstallation(session.fid);
-    session.family.installation = { ...session.family.installation, etape: 'fini' };
-    await enterApp();
-  } catch (err) {
-    console.error(err);
-    showError($('setup-fin-error'), 'L\'enregistrement a échoué. Vérifiez la connexion internet et réessayez.');
-  } finally {
-    btn.disabled = false;
-  }
-});
 
 // ---------- Connexion et choix de la famille ----------
 
@@ -5445,6 +4999,7 @@ function stopSession() {
   stopInvitations = null;
   stopPending?.();
   stopPending = null;
+  nomAttendu = false;
   stopAgenda();
   stopNotifs();
   session = null;
@@ -5558,8 +5113,6 @@ $('family-switch').addEventListener('click', async () => {
 
 function showLogin(legacy) {
   $('login-legacy').hidden = !legacy;
-  // QR code de la tablette scanné (?tablette=…) : on le dit, sinon l'écran ressemble à une première ouverture quelconque.
-  $('login-tablette').hidden = legacy || !pairCode();
   $('email-sent').hidden = true;
   // iPhone, app installée, rouverte après être allée chercher le lien dans l'e-mail : on peut le coller.
   const attendu = isIos() && launchedFromHomeScreen() ? pendingEmail() : '';
@@ -5569,6 +5122,10 @@ function showLogin(legacy) {
   show('view-login');
 }
 
+// Code famille (un responsable accepte) ou numéro de commande (celui qui a payé, connecté avec une autre adresse
+// que celle de la commande : il entre tout de suite, A40).
+const JOIN_AIDE = "Entrez le code famille qu'on vous a envoyé : un responsable acceptera votre arrivée. Vous avez commandé Papote ? Entrez votre numéro de commande (dans l'e-mail de commande et sur la facture) : vous entrez tout de suite dans votre famille.";
+
 function showJoin(canGoBack) {
   $('join-account').textContent = `Connecté avec ${myEmail()}`;
   $('btn-join-back').hidden = !canGoBack;
@@ -5577,15 +5134,14 @@ function showJoin(canGoBack) {
   const code = inviteCode();
   const pour = code ? invitePour() : null;
   if (code) $('join-code').value = formatCode(normalizeCode(code));
-  // Lien d'invitation d'un proche : seulement le prénom à donner, pas l'installation de la tablette.
-  $('join-pair-card').hidden = !!code;
+  // Lien d'invitation d'un proche : le code est déjà là, il n'y a qu'à toucher « Rejoindre ».
   $('join-code-wrap').hidden = !!code;
   $('join-title').textContent = code
     ? (pour ? `Rejoindre la famille de ${pour}` : 'Rejoindre la famille')
     : 'Vous êtes invité dans une famille';
   $('join-help').textContent = code
     ? 'Touchez « Rejoindre » : un responsable de la famille acceptera votre arrivée.'
-    : "Pour les proches. Entrez le code famille qu'on vous a envoyé ; un responsable acceptera votre arrivée. Le plus simple : demandez-lui de vous inviter avec votre adresse e-mail.";
+    : JOIN_AIDE;
   show('view-join');
 }
 
@@ -5646,9 +5202,9 @@ function showPending(fid) {
   show('view-pending');
 }
 
-async function enterApp({ garderEcran = false } = {}) {
+async function enterApp() {
   stopSession();
-  if (!garderEcran) show('loading');
+  show('loading');
   authUser = await currentUser();
   if (!isRealAccount(authUser)) { showLogin(!!savedFamilyId()); return; }
   // Bascule en Europe : la bonne base et le bon bucket avant toute lecture.
@@ -5673,15 +5229,7 @@ async function enterApp({ garderEcran = false } = {}) {
     const active = memberships.filter((m) => m.status !== 'pending');
     if (!active.length) {
       const pending = memberships.find((m) => m.status === 'pending');
-      if (pairCode()) { showSetupScan(pairCode()); return; }
-      // Tablette réservée par ce compte, famille pas encore nommée : on reprend au nom.
-      const resa = await maReservation();
-      if (resa) {
-        setup.code = resa;
-        watchSetupPairing(resa);
-        reveillerNommer();
-        setupStep('setup-nom');
-      } else if (pending) showPending(pending.fid);
+      if (pending) showPending(pending.fid);
       else showJoin(false);
       return;
     }
@@ -5715,14 +5263,6 @@ async function enterApp({ garderEcran = false } = {}) {
   const install = renderInstallCard();
   renderAccount();
   appliquerGenre();
-  // Installation en cours sur cet écran (nom tout juste donné, reprise) : on continue ses étapes.
-  if (installationEnCours() && setup.step) { showSetupFamily(); return; }
-  // Appli relancée en route (accord de Tanguy, 22/10) : pas de retour en boucle, l'accueil ;
-  // l'installation est close et le reste se règle dans Réglages.
-  if (installationEnCours()) {
-    session.family.installation = { ...session.family.installation, etape: 'fini' };
-    finirInstallation(session.fid).catch((err) => console.warn('Fin d\'installation', err));
-  }
   // L'accueil s'affiche une fois complet (état de la tablette, cartes, bouton « Installer l'app ») :
   // rien ne s'ajoute ensuite au-dessus des tuiles. 1,5 s au plus, même sans réseau.
   const ouverte = session;
@@ -5745,7 +5285,6 @@ async function enterApp({ garderEcran = false } = {}) {
   else if (rappelerPending) { rappelerPending = false; offerCallBack(); }
   else if (reglagesPending) { reglagesPending = false; openPage('settings'); }
   else if (abonnementPending) { abonnementPending = false; ouvrirAbonnement(); }
-  else if (pairCode()) showSetupScan(pairCode());
 }
 
 function renderFamilySwitch(current) {
@@ -5764,10 +5303,13 @@ function renderAccount() {
 
 // Écran d'appel de l'app Android (#connexion=<jeton>) : connecté au compte du proche par le jeton
 // du serveur, avant de choisir entre connexion et accueil. Le jeton ne reste pas dans l'adresse.
+// Seulement dans l'écran d'appel de l'app Android (window.PapoteNatif) : ailleurs, un lien piégé connecterait la
+// page au compte de quelqu'un d'autre sans qu'on le voie (audit sécurité du 11/11, L3). Le jeton est ignoré.
 async function connexionAppAndroid() {
   const jeton = new URLSearchParams(location.hash.slice(1)).get('connexion');
   if (!jeton) return;
   history.replaceState(null, '', location.pathname + location.search);
+  if (!window.PapoteNatif) return;
   try {
     const b64 = jeton.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
     const uid = JSON.parse(atob(b64)).uid;
@@ -5811,8 +5353,9 @@ async function start() {
   if (params.get('abonnement') === 'ok') {
     try { localStorage.setItem('papote.retourPaiement', '1'); } catch (e) { /* rien */ }
   }
-  // QR code affiché par une nouvelle tablette : on ouvre « Ajouter ma tablette » après la connexion.
-  if (params.get('tablette')) rememberPairCode(params.get('tablette'));
+  // Ancienne installation par le QR de la tablette (?tablette=…) : retirée le 12/11 (A29), le paramètre ne fait plus
+  // rien. Un code gardé sur ce téléphone par une version d'avant est oublié.
+  try { localStorage.removeItem('papote.codeTablette'); } catch (e) { /* rien */ }
   try {
     await finishRedirect();
   } catch (err) {

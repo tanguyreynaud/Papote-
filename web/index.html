@@ -120,8 +120,6 @@
         <p class="muted">Les photos et les messages de la famille, en sécurité.</p>
       </div>
       <p id="login-legacy" class="card small" hidden>Pour protéger les photos de la famille, connectez-vous une fois. Vous gardez votre profil et votre famille.</p>
-      <!-- QR code de la tablette scanné : la personne sait qu'elle est au bon endroit et ce qui vient après. -->
-      <p id="login-tablette" class="card small" hidden><strong>Tablette repérée.</strong> Connectez-vous : l'installation démarre juste après.</p>
       <div class="card">
         <button type="button" id="btn-google" class="google-btn wide"><svg><use href="#i-google"/></svg>Continuer avec Google</button>
         <div class="or"><span>ou</span></div>
@@ -213,156 +211,8 @@
         <p class="muted">Un responsable de la famille doit accepter votre arrivée. Cette page s'ouvrira toute seule dès qu'il l'aura fait.</p>
         <span class="spinner pending-spin"></span>
       </div>
-      <button type="button" class="link wide" data-action="other-family">Rejoindre une autre famille ou installer une tablette</button>
+      <button type="button" class="link wide" data-action="other-family">Rejoindre une autre famille</button>
       <button type="button" class="link wide" data-action="logout">Se déconnecter</button>
-    </section>
-
-    <!-- Ajouter ma tablette (jumelage) -->
-    <section id="view-pair" class="page" hidden>
-      <header class="page-head">
-        <button type="button" class="icon-btn" id="pair-back" aria-label="Retour"><svg><use href="#i-back"/></svg></button>
-        <h1>Installer la tablette</h1>
-      </header>
-      <div class="page-pad">
-        <form id="form-pair-code" class="card">
-          <p class="muted">Allumez la tablette : elle affiche un QR code et un code à 8 caractères. Scannez le QR code avec l'appareil photo du téléphone, ou tapez le code ici.</p>
-          <label>Code affiché sur la tablette
-            <input id="pair-code" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABCD-1234" required>
-          </label>
-          <button type="submit" class="primary wide">Continuer</button>
-          <p id="pair-error" class="error" hidden></p>
-        </form>
-        <form id="form-pair-claim" class="card" hidden>
-          <h2 id="pair-name"></h2>
-          <label id="pair-family-wrap">Famille
-            <select id="pair-family"></select>
-          </label>
-          <div id="pair-new" hidden>
-            <label id="pair-grand-wrap">Prénom de la personne qui aura la tablette
-              <input id="pair-grand" maxlength="40" placeholder="Mamie">
-            </label>
-            <label>Votre prénom
-              <input id="pair-myname" maxlength="40" autocomplete="given-name">
-            </label>
-          </div>
-          <button type="submit" class="primary wide" id="btn-pair-claim"></button>
-          <p class="muted small">La tablette vous demandera ensuite de confirmer, pour être sûr que c'est bien elle.</p>
-        </form>
-        <div id="pair-wait" class="card center" hidden>
-          <h2>Confirmez sur la tablette</h2>
-          <p class="muted" id="pair-wait-text"></p>
-          <span class="spinner pending-spin"></span>
-        </div>
-        <div id="pair-done" class="card center" hidden>
-          <h2 id="pair-done-title"></h2>
-          <p class="muted" id="pair-done-text"></p>
-          <button type="button" class="primary wide" id="btn-pair-home">Retour à l'accueil</button>
-        </div>
-      </div>
-    </section>
-
-    <!-- Installation d'une nouvelle tablette : 5 écrans obligatoires avant l'accueil de l'app -->
-    <section id="view-setup" class="page-pad" hidden>
-      <h1 class="brand">Papote</h1>
-      <div class="guide-dots setup-dots" id="setup-dots" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
-
-      <form id="setup-code" class="card setup-step" novalidate>
-        <h2>Installer la tablette</h2>
-        <p class="muted">Tapez le code affiché sur l'écran de la tablette.</p>
-        <label>Code affiché sur la tablette
-          <input id="setup-code-input" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABCD-1234" required>
-        </label>
-        <button type="submit" class="primary wide">Continuer</button>
-        <p id="setup-code-error" class="error" hidden></p>
-      </form>
-
-      <div id="setup-check" class="card center setup-step" hidden>
-        <h2 id="setup-check-title">Vérification de la tablette…</h2>
-        <p class="muted" id="setup-check-text">Un instant, nous vérifions le code.</p>
-        <span class="spinner pending-spin" id="setup-check-spin"></span>
-        <button type="button" class="primary wide" id="setup-check-back" hidden>Retour</button>
-      </div>
-
-      <form id="setup-nom" class="card setup-step" hidden novalidate>
-        <p class="seen small">Tablette trouvée</p>
-        <h2>Comment l'appelez-vous ?</h2>
-        <p class="muted">Le nom que toute la famille utilise, par exemple « Mamie Emma ». Il s'affichera partout : sur la tablette, pour les appels et les alertes.</p>
-        <label>Son nom
-          <input id="setup-nom-input" maxlength="40" placeholder="Mamie Emma" required>
-        </label>
-        <button type="submit" class="primary wide">Continuer</button>
-        <p id="setup-nom-error" class="error" hidden></p>
-      </form>
-
-      <div id="setup-photo" class="card setup-step" hidden>
-        <h2>Une première photo pour <span class="setup-qui"></span></h2>
-        <p class="muted">Elle s'affichera tout de suite sur la tablette.</p>
-        <p id="setup-tablet-wait" class="setup-note"><span class="spinner-inline"></span>La tablette se prépare…</p>
-        <div class="pickers" id="setup-pickers">
-          <button type="button" class="picker" id="setup-pick-camera"><svg><use href="#i-camera"/></svg><span>Prendre une photo</span></button>
-          <button type="button" class="picker" id="setup-pick-gallery"><svg><use href="#i-gallery"/></svg><span>Choisir dans la galerie</span></button>
-        </div>
-        <img id="setup-photo-preview" class="setup-preview" alt="" hidden>
-        <div id="setup-photo-extra" hidden>
-          <input id="setup-photo-text" maxlength="30" placeholder="Un petit mot (facultatif)">
-          <button type="button" class="primary wide" id="setup-photo-send">Envoyer sur la tablette</button>
-          <button type="button" class="link wide" id="setup-photo-other">Choisir une autre photo</button>
-        </div>
-        <p id="setup-photo-error" class="error" hidden></p>
-        <input id="setup-in-camera" type="file" accept="image/*" capture="environment" hidden>
-        <input id="setup-in-gallery" type="file" accept="image/*" hidden>
-      </div>
-
-      <div id="setup-son" class="card setup-step" hidden>
-        <h2>Le son</h2>
-        <p class="muted">Glissez une barre : la tablette joue le son tout de suite. Réglez jusqu'à ce que <span class="setup-qui"></span> entende bien.</p>
-        <div class="setup-son-ligne">
-          <div class="setup-son-tete">
-            <strong>Sonnerie des appels</strong>
-            <span id="setup-sonnerie-val" class="setup-son-val"></span>
-          </div>
-          <div class="setup-son-ctrl">
-            <input id="setup-sonnerie" type="range" min="10" max="100" step="10" aria-label="Volume de la sonnerie">
-            <button type="button" class="setup-essai" data-essai="sonnerie" aria-label="Écouter la sonnerie"><svg><use href="#i-play"/></svg><span>Écouter</span></button>
-          </div>
-        </div>
-        <div class="setup-son-ligne">
-          <div class="setup-son-tete">
-            <strong>Voix pendant les appels</strong>
-            <span id="setup-voix-val" class="setup-son-val"></span>
-          </div>
-          <div class="setup-son-ctrl">
-            <input id="setup-voix" type="range" min="10" max="100" step="10" aria-label="Volume de la voix">
-            <button type="button" class="setup-essai" data-essai="voix" aria-label="Écouter la voix"><svg><use href="#i-play"/></svg><span>Écouter</span></button>
-          </div>
-        </div>
-        <p id="setup-son-status" class="setup-son-status" aria-live="polite" hidden></p>
-        <button type="button" class="primary wide" id="setup-son-ok">C'est bien réglé</button>
-        <p id="setup-son-error" class="error" hidden></p>
-      </div>
-
-      <div id="setup-options" class="card setup-step" hidden>
-        <h2>Les options de la tablette</h2>
-        <p class="muted">Voici ce que fera la tablette. Tout est déjà réglé : touchez un interrupteur pour changer. Vous pourrez aussi changer plus tard dans Réglages.</p>
-        <div class="toggle-list">
-          <label class="toggle-row"><span class="toggle-text"><strong>Bouton SOS</strong><span><span class="setup-qui"></span> appuie sur «&nbsp;SOS&nbsp;» en haut de l'écran : 5 secondes plus tard (elle peut annuler pendant ce temps), un SMS part à toute la famille et la tablette appelle les proches un par un. Ce n'est pas un service d'urgence : 15 ou 112.</span></span><input type="checkbox" class="toggle" id="setup-opt-sos"></label>
-          <label class="toggle-row"><span class="toggle-text"><strong>Lire les messages à voix haute</strong><span>Quand un message arrive, la tablette le lit dès qu'elle voit <span class="setup-qui"></span> devant l'écran. Le bouton «&nbsp;Écouter&nbsp;» permet de le réentendre.</span></span><input type="checkbox" class="toggle" id="setup-opt-lecture"></label>
-          <label class="toggle-row"><span class="toggle-text"><strong>Prochain rappel</strong><span>L'accueil affiche le prochain rappel de la journée : un médicament, un rendez-vous…</span></span><input type="checkbox" class="toggle" id="setup-opt-rappels"></label>
-          <label class="toggle-row"><span class="toggle-text"><strong>Météo</strong><span id="setup-opt-meteo-ville">L'accueil affiche le temps qu'il fait. La ville se choisit dans Réglages.</span></span><input type="checkbox" class="toggle" id="setup-opt-meteo"></label>
-          <label class="toggle-row"><span class="toggle-text"><strong>Radio</strong><span>Un bouton «&nbsp;Radio&nbsp;» pour écouter sa station. Éteint au départ, pour garder un écran simple.</span></span><input type="checkbox" class="toggle" id="setup-opt-radio"></label>
-        </div>
-        <div id="setup-install-box" class="setup-install" hidden>
-          <p class="muted small">Pour que ce téléphone sonne quand <span class="setup-qui"></span> appelle, installez l'app Papote.</p>
-          <button type="button" class="secondary wide" id="setup-install"><svg><use href="#i-download"/></svg>Installer l'app sur ce téléphone</button>
-        </div>
-        <button type="button" class="primary wide" id="setup-fin">C'est parfait</button>
-        <p id="setup-fin-error" class="error" hidden></p>
-      </div>
-
-      <button type="button" class="link wide" id="setup-cancel" hidden>Annuler l'installation</button>
-      <p id="setup-cancel-error" class="error" hidden></p>
-      <button type="button" class="link wide" id="setup-back" hidden>Retour à l'accueil</button>
-      <button type="button" class="link wide" id="setup-logout" data-action="logout">Se déconnecter</button>
     </section>
 
     <!-- Famille sans abonnement (tablette installée sans commande reliée) : à la place de l'accueil -->
@@ -396,7 +246,7 @@
         <p class="muted small">L'assistant Papote vous répond tout de suite.</p>
         <button type="button" class="primary wide" id="sans-abo-aide">Poser une question</button>
       </div>
-      <button type="button" class="link wide" data-action="other-family">Rejoindre une autre famille ou installer une tablette</button>
+      <button type="button" class="link wide" data-action="other-family">Rejoindre une autre famille</button>
       <button type="button" class="link wide" data-action="logout">Se déconnecter</button>
     </section>
 
@@ -407,17 +257,11 @@
         <button type="button" id="btn-join-back" class="back-pill" hidden><svg><use href="#i-back"/></svg>Retour</button>
       </div>
       <p id="join-account" class="muted small"></p>
-      <div id="join-pair-card" class="card">
-        <h2>Vous installez la tablette chez votre proche</h2>
-        <p class="muted">Pour la personne qui a commandé Papote. Allumez la tablette : elle affiche un QR code. Scannez-le avec l'appareil photo de ce téléphone, ou tapez le code affiché. La famille se crée à ce moment-là.</p>
-        <p class="setup-note">La tablette n'est pas encore arrivée ? C'est normal de ne pas avoir de code : il s'affichera sur son écran quand vous l'allumerez.</p>
-        <button type="button" id="btn-join-pair" class="primary wide">Installer la tablette</button>
-      </div>
       <div class="card">
         <h2 id="join-title">Vous êtes invité dans une famille</h2>
-        <p id="join-help" class="muted">Pour les proches. Entrez le code famille qu'on vous a envoyé ; un responsable acceptera votre arrivée. Le plus simple : demandez-lui de vous inviter avec votre adresse e-mail.</p>
+        <p id="join-help" class="muted">Entrez le code famille qu'on vous a envoyé : un responsable acceptera votre arrivée. Vous avez commandé Papote ? Entrez votre numéro de commande (dans l'e-mail de commande et sur la facture) : vous entrez tout de suite dans votre famille.</p>
         <form id="form-join">
-          <label id="join-code-wrap">Code famille
+          <label id="join-code-wrap">Code famille ou numéro de commande
             <input id="join-code" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABCD-1234" required>
           </label>
           <button type="submit" class="primary wide">Rejoindre</button>
@@ -966,7 +810,7 @@
         <div class="card">
           <h2>Mon compte</h2>
           <p id="account-email" class="muted"></p>
-          <button type="button" class="primary wide" data-action="other-family">Rejoindre une autre famille ou installer une tablette</button>
+          <button type="button" class="primary wide" data-action="other-family">Rejoindre une autre famille</button>
           <button type="button" class="link wide" data-action="logout">Se déconnecter</button>
         </div>
         <button id="btn-leave" class="link danger wide">Quitter cette famille</button>

@@ -25,7 +25,9 @@ scénarios) ; utiliser plutôt
 
 | Fichier | Parcours |
 | --- | --- |
-| `installation` | Inscription ; commande du site : famille préparée (invitation « Entrer dans ma famille », nom de la personne, tablette entrée seule) ; commande d'avant ou sans commande : code de la tablette, réglages de départ, accueil |
+| `installation` | Inscription ; commande du site : famille préparée (invitation « Entrer dans ma famille », nom de la personne, tablette entrée seule) |
+| `mise-en-route` | Audit du 12/11 : `?tablette=` sans aucun effet (seul Papote relie une tablette, A29) ; numéro de commande pour celui qui a payé avec une autre adresse (A40 : entrée directe et responsable, double appui, code inconnu, trop d'essais) ; le nom, puis « Réglons la tablette », puis le guide, et e-mails des proches pour les responsables (A43) ; proche à l'étranger (M5) ; numéro de Mamie à enregistrer (M8) |
+| `natif` | Liens piégés : `?natif=` d'un autre, et `#connexion=` ignoré hors de l'app Android (L3) |
 | `proches` | Invitation par e-mail, code famille (accepté, refusé, faux), responsable, retrait d'un proche |
 | `envois` | Photos (légende, 5 max, suppression, « Tout télécharger » : photos, vidéos et messages dans un .zip), vidéo, aperçu avant envoi (forme gardée, plein écran qui reste ouvert, Refilmer / Galerie, debout et couchée), filmer dans Papote (caméra, Filmer / Arrêter, retour, caméra refusée), messages (rapides, vu, réponse de Mamie), droits |
 | `photos-multiples` | 5 photos en un envoi : transfert coupé à la 3e (réseau gardé, ou coupé net puis revenu), double appui sur Envoyer, ordre des photos, aucun fichier orphelin dans Storage ; limite des 200 derniers envois de photos |
@@ -59,7 +61,8 @@ Chaque test échoue aussi s'il y a une erreur dans la console, une fenêtre gris
   pas (`serveurMuet`), nombre d'appels au serveur (`nbAppels`), « main propre » jamais affichée (`jamaisMainPropre`).
 - **Serveur en panne** : `banc.pannes.set('nomDeLaFonction', { status: 'UNAVAILABLE' })` fait répondre 503 à la fonction.
 
-Ports des émulateurs : Firestore 8087, Auth 9097, Storage 9197 (voir `firebase.json`).
+Ports des émulateurs : Firestore 8087, Auth 9097, Storage 9197 (voir `firebase.json`). Le banc lit les adresses posées par
+`emulators:exec` (`FIRESTORE_EMULATOR_HOST`…) : une copie de `firebase.json` avec d'autres ports (`--config`) marche telle quelle.
 
 Sur GitHub, `.github/workflows/app-famille.yml` lance ces tests à chaque changement de `web/`, des
 règles ou des tests.

@@ -116,10 +116,9 @@ service cloud.firestore {
     }
 
     // Réglages communs (relais TURN des appels), écrits seulement depuis la console Firebase.
-    // Jumelage d'une nouvelle tablette : elle affiche un code (et un QR code), un responsable
-    // le réclame pour sa famille depuis l'app, puis la tablette confirme à l'écran.
+    // Jumelage d'une nouvelle tablette : elle affiche un code, le serveur la fait entrer dans la famille de sa commande.
     //   pairings/{code} -> { tabletUid, callsUid, name, createdAt, expiresAt, status,
-    //                        fid?, familyName?, claimedBy?, claimedName? }
+    //                        fid?, familyName?, claimedBy?, claimedName? } (fid… écrits par le serveur seulement)
     match /pairings/{code} {
       allow get: if signedIn();
       allow list: if false;
@@ -135,30 +134,15 @@ service cloud.firestore {
         && request.resource.data.name.size() <= 40
         && request.resource.data.expiresAt is timestamp
         && request.resource.data.expiresAt <= request.time + duration.value(20, 'm');
-      // Un responsable réclame la tablette pour sa famille, avant l'expiration du code.
-      allow update: if isRealAccount()
-        && resource.data.status == 'waiting'
-        && request.time < resource.data.expiresAt
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'fid', 'familyName', 'claimedBy', 'claimedName'])
-        && request.resource.data.status == 'claimed'
-        && request.resource.data.claimedBy == request.auth.uid
-        && isFamilyAdmin(request.resource.data.fid);
-      // La tablette accepte ou refuse la famille qui l'a réclamée.
-      allow update: if signedIn()
-        && request.auth.uid == resource.data.tabletUid
-        && resource.data.status == 'claimed'
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
-        && request.resource.data.status in ['confirmed', 'refused'];
-      // Nouveau parcours (21/10) : le serveur réserve la tablette au premier qui scanne ('reserved'),
-      // puis crée la famille ('confirmed'). La tablette peut annuler une réservation
-      // (« Recommencer avec un autre téléphone ») : il faut être devant elle, cela suffit comme preuve.
+      // Aucune appli de client ne relie une tablette (Tanguy 12/11, A29) : seul le serveur confirme un jumelage, pour
+      // la famille de la commande (famille-preparee.js jumeler) ou à la demande de Papote (compte administrateur).
+      // Plus de réclamation par un responsable ('claimed'), ni de liste des réservations d'un proche.
+      // La tablette peut annuler une réservation faite par Papote (« Recommencer ») : il faut être devant elle.
       allow update: if signedIn()
         && request.auth.uid == resource.data.tabletUid
         && resource.data.status == 'reserved'
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
         && request.resource.data.status == 'cancelled';
-      // Le proche retrouve l'installation qu'il a commencée (requête where claimedBy == uid).
-      allow list: if signedIn() && resource.data.get('claimedBy', '') == request.auth.uid;
       // Un jumelage confirmé reste : il prouve la tablette de la famille (audit 8, R8).
       allow delete: if signedIn()
         && (request.auth.uid == resource.data.tabletUid

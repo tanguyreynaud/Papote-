@@ -1,5 +1,6 @@
 // Abonnement dans l'app : annulation de la commande dans les 30 jours, résiliation puis « garder »,
-// tablette installée sans commande (relier par code, ou payer depuis l'app), pause et retard de paiement.
+// tablette reliée sans commande (avant le 12/11 ou par Papote : relier par code, ou payer depuis l'app), pause et
+// retard de paiement.
 
 const test = require('node:test');
 const assert = require('node:assert');
@@ -113,9 +114,8 @@ test('Après 30 jours : résilier (avec l\'étape « Avant de partir »), puis g
 test('Tablette installée sans commande : 48 h pour relier la commande payée par quelqu\'un d\'autre avec son code', async () => {
   const julie = await banc.telephone('Julie');
   await g.inscrire(julie, 'julie@exemple.fr', 'Julie');
-  const tab = await g.tabletteAllumee();
-  const fid = await g.installer(julie, tab);
-  await g.fermerAccueil(julie);
+  // Tablette reliée sans commande (avant le 12/11, ou par Papote) : l'appli ne relie plus de tablette (A29).
+  const fid = await g.familleRelieeParPapote(julie, await g.tabletteAllumee());
   const abo = (await famille(fid)).abonnement;
   assert.strictEqual(abo.statut, 'installation');
   assert.ok(abo.toleranceJusqua, 'fin de la tolérance notée');
@@ -146,9 +146,8 @@ test('Tablette installée sans commande : 48 h pour relier la commande payée pa
 test('Tablette installée sans commande : prendre l\'abonnement depuis l\'app (page de paiement), retour « activé »', async () => {
   const julie = await banc.telephone('Julie');
   await g.inscrire(julie, 'julie@exemple.fr', 'Julie');
-  const tab = await g.tabletteAllumee();
-  const fid = await g.installer(julie, tab);
-  await g.fermerAccueil(julie);
+  // Tablette reliée sans commande (avant le 12/11, ou par Papote) : l'appli ne relie plus de tablette (A29).
+  const fid = await g.familleRelieeParPapote(julie, await g.tabletteAllumee());
   assert.strictEqual((await famille(fid)).abonnement.statut, 'installation');
   await julie.page.click('.nav-item[data-tab="profile"]');
   const formule = julie.page.locator('#abo-formules .abo-formule', { hasText: 'tout compris' });

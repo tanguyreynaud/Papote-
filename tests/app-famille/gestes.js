@@ -189,16 +189,14 @@ async function inscrire(t, email, prenom, options = {}) {
 /**
  * Une tablette préparée par Tanguy, allumée chez la mamie : elle affiche son code.
  * commande : { email } = commandée et payée sur le site avec cette adresse, puis envoyée (sinon, sans commande).
- * Depuis la famille préparée dès la commande (functions/famille-preparee.js, main 042bc31) : la famille est créée
- * au paiement, celui qui a payé y est invité, et la tablette envoyée y entre seule dès qu'elle affiche son code.
- * commande.avant : commande payée avant la famille préparée (il en reste en ligne) : pas de famille, la tablette
- * s'installe avec son code comme avant.
+ * Famille préparée dès la commande (functions/famille-preparee.js) : la famille est créée au paiement, celui qui a
+ * payé y est invité, et la tablette envoyée y entre seule dès qu'elle affiche son code. Seul Papote relie une
+ * tablette (Tanguy 12/11, A29) : l'appli n'a plus d'écran d'installation.
  */
 async function tabletteAllumee({ commande = null } = {}) {
   const tab = await acteurs.tablettePreparee();
   if (commande) {
     const { abonnement } = await acteurs.commanderEtPayer({ email: commande.email, formule: commande.formule || 'sim' });
-    if (commande.avant) await acteurs.commandeDAvant(abonnement);
     await acteurs.preparerEtEnvoyer(abonnement, tab);
     tab.commande = abonnement;
   }
@@ -207,22 +205,38 @@ async function tabletteAllumee({ commande = null } = {}) {
 }
 
 /**
- * La tablette est prête pour le proche, renvoie l'id de la famille.
- * Commande du site (famille préparée) : la tablette est déjà entrée seule dans la famille ; celui qui a payé ouvre
- * l'appli (entrerFamillePreparee). Sinon (sans commande, commande d'avant) : installation par le code (installerParCode).
+ * La tablette d'une commande du site est entrée seule dans sa famille préparée ; celui qui a payé ouvre l'appli
+ * (entrerFamillePreparee). Renvoie l'id de la famille.
  */
 async function installer(t, tab, options = {}) {
   const p = tab.code ? await lire(`pairings/${tab.code}`) : null;
-  if (p && p.status === 'confirmed' && p.auto) return entrerFamillePreparee(t, tab, options);
-  return installerParCode(t, tab, options);
+  if (!(p && p.status === 'confirmed' && p.auto)) {
+    throw new Error('Tablette sans famille préparée : l\'appli ne relie plus de tablette (A29), voir familleRelieeParPapote');
+  }
+  return entrerFamillePreparee(t, tab, options);
+}
+
+/**
+ * Famille d'une tablette reliée sans commande (installée avant le 12/11, ou reliée par Papote) : tout est fait côté
+ * serveur avec le compte du proche (functions/parcours/acteurs.js installer), l'appli n'a qu'à s'ouvrir.
+ * Abonnement « installation » : 48 h pour relier une commande. Renvoie l'id de la famille.
+ */
+async function familleRelieeParPapote(t, tab, { nom = 'Mamie Emma' } = {}) {
+  const compte = await banc.admin.auth().getUserByEmail(t.email);
+  const fid = await acteurs.installer({ uid: compte.uid, email: t.email, prenom: t.prenom || 'Julie' }, tab, { nom });
+  await t.page.reload();
+  await attendreVue(t, 'view-home', 30_000);
+  await fermerAccueil(t);
+  return fid;
 }
 
 /**
  * Famille préparée dès la commande, comme un client qui a payé sur le site : il ouvre l'appli par le lien de
  * l'e-mail de confirmation, entre dans « Votre espace famille Papote » (son invitation), donne le nom de la
- * personne ; la tablette, branchée à son arrivée, entre dans la famille ; il envoie la première photo.
+ * personne ; puis « Réglons la tablette » et le petit guide (fermés ici, sauf accueil: false) ; la tablette, branchée
+ * à son arrivée, entre dans la famille ; il envoie la première photo.
  */
-async function entrerFamillePreparee(t, tab, { nom = 'Mamie Emma' } = {}) {
+async function entrerFamillePreparee(t, tab, { nom = 'Mamie Emma', accueil = true } = {}) {
   const { fid: attendu } = await lire(`pairings/${tab.code}`);
   const famille = await lire(`families/${attendu}`);
   assert.ok(famille.installation && famille.installation.preparee, 'famille préparée à la commande');
@@ -244,6 +258,10 @@ async function entrerFamillePreparee(t, tab, { nom = 'Mamie Emma' } = {}) {
   // En haut de l'accueil : le titre, ou le bouton pour changer de famille quand il y en a plusieurs.
   await t.page.locator('#family-title, #family-switch').filter({ visible: true, hasText: `Pour ${nom}` }).first().waitFor();
   await s.calme();
+  // Le nom donné : « Réglons la tablette » puis le petit guide (A43).
+  if (!accueil) return attendu;
+  await t.page.locator('.intro-back').waitFor({ timeout: 10_000 });
+  await fermerAccueil(t);
   // La tablette arrive et est branchée : elle entre seule dans la famille (jumelage confirmé par le serveur).
   await acteurs.entrerDansLaFamille(tab);
   await t.page.locator('#tablette-en-route').waitFor({ state: 'hidden' });
@@ -259,42 +277,6 @@ async function entrerFamillePreparee(t, tab, { nom = 'Mamie Emma' } = {}) {
   await t.page.locator('#sheet-post').waitFor({ state: 'hidden' });
   await t.page.click('#view-photos .page-head .back');
   await attendreVue(t, 'view-home');
-  await s.calme();
-  return fid;
-}
-
-/**
- * Installation complète depuis le téléphone (écran « Installer la tablette ») : tablette sans commande ou
- * commande d'avant la famille préparée. Code, nom, photo, son, options. Renvoie l'id de la famille.
- */
-async function installerParCode(t, tab, { nom = 'Mamie Emma', sos = null } = {}) {
-  await attendreVue(t, 'view-join');
-  await t.page.click('#btn-join-pair');
-  await attendreVue(t, 'view-setup');
-  await t.page.fill('#setup-code-input', tab.code);
-  await t.page.click('#setup-code button[type=submit]');
-  await visible(t, '#setup-nom-input').waitFor();
-  await t.page.fill('#setup-nom-input', nom);
-  await t.page.click('#setup-nom button[type=submit]');
-  await visible(t, '#setup-photo').waitFor({ timeout: 20_000 });
-  const fid = await t.page.evaluate(() => localStorage.getItem('papote.fid'));
-  // La tablette reçoit la confirmation et entre dans la famille.
-  await s.calme();
-  tab.code = tab.code || null;
-  await acteurs.entrerDansLaFamille(tab);
-  await t.page.locator('#setup-tablet-wait').waitFor({ state: 'hidden' });
-  await t.page.setInputFiles('#setup-in-gallery', await photo({ texte: 'Coucou' }));
-  await visible(t, '#setup-photo-send').waitFor();
-  await t.page.fill('#setup-photo-text', 'Bonjour Mamie');
-  await t.page.click('#setup-photo-send');
-  await visible(t, '#setup-son').waitFor({ timeout: 20_000 });
-  await t.page.click('.setup-essai[data-essai="sonnerie"]');
-  await visible(t, '#setup-son-status').waitFor();
-  await t.page.click('#setup-son-ok');
-  await visible(t, '#setup-options').waitFor();
-  if (sos !== null) await t.page.locator('#setup-opt-sos').setChecked(sos);
-  await t.page.click('#setup-fin');
-  await attendreVue(t, 'view-home', 30_000);
   await s.calme();
   return fid;
 }
@@ -459,6 +441,6 @@ module.exports = {
   centre, doubleAppui, appuiLong, clavier, fenetresOuvertes, attendreRetourVisible, nbAppels, serveurMuet, jamaisMainPropre,
   verifierLargeur,
   vue, attendreVue, visible, repondre, texteFenetre, photo, video,
-  ouvrir, ouvrirParApp, seConnecter, remplirMoi, inscrire, tabletteAllumee, installer, entrerFamillePreparee, installerParCode, fermerAccueil, familleInstallee, rejoindre, dernierMail, toast,
+  ouvrir, ouvrirParApp, seConnecter, remplirMoi, inscrire, tabletteAllumee, installer, entrerFamillePreparee, familleRelieeParPapote, fermerAccueil, familleInstallee, rejoindre, dernierMail, toast,
   ouvrirTuile, retourAccueil, lire, liste, attendreBase, codesEmail,
 };

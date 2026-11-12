@@ -1,8 +1,11 @@
 // Premier lancement : trois écrans courts pour un nouveau membre (une seule fois par téléphone).
 const KEY = 'papote.guideVu';
 
+// enRoute : famille préparée à la commande, tablette pas encore arrivée (A43) : rien n'est promis « tout de suite ».
 const STEPS = [
-  { icon: 'photo', title: 'Envoyer une photo', text: (n) => `Touchez « Photos », puis le bouton + en bas. ${n} la voit tout de suite sur sa tablette.` },
+  { icon: 'photo', title: 'Envoyer une photo', text: (n, enRoute) => (enRoute
+    ? `Touchez « Photos », puis le bouton + en bas. ${n} la verra sur sa tablette dès son arrivée.`
+    : `Touchez « Photos », puis le bouton + en bas. ${n} la voit tout de suite sur sa tablette.`) },
   { icon: 'message', title: 'Écrire un message', text: (n) => `Touchez « Messages », écrivez en bas et envoyez. Les réponses de ${n} s'affichent ici.` },
   { icon: 'call', title: 'Appeler en vidéo', text: (n) => `Touchez « Appel vidéo » : la tablette de ${n} sonne et l'image s'affiche en grand.` },
 ];
@@ -11,7 +14,7 @@ function seen() {
   try { return localStorage.getItem(KEY) === '1'; } catch (e) { return true; }
 }
 
-export function showGuideOnce(name) {
+export function showGuideOnce(name, { enRoute = false } = {}) {
   if (seen()) return;
   let i = 0;
   const back = document.createElement('div');
@@ -29,7 +32,7 @@ export function showGuideOnce(name) {
     const step = STEPS[i];
     back.querySelector('use').setAttribute('href', `#i-${step.icon}`);
     back.querySelector('h2').textContent = step.title;
-    back.querySelector('p').textContent = step.text(name);
+    back.querySelector('p').textContent = step.text(name, enRoute);
     back.querySelectorAll('.guide-dots span').forEach((d, k) => d.classList.toggle('on', k === i));
     back.querySelector('.guide-next').textContent = i === STEPS.length - 1 ? "C'est parti" : 'Suivant';
     back.querySelector('.guide-skip').hidden = i === STEPS.length - 1;

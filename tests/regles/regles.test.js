@@ -204,6 +204,28 @@ test('la tablette crée son code ; seul le serveur réserve et confirme', async 
   await assertFails(updateDoc(doc(proche('paul'), 'pairings/NEWC0DE2'), { status: 'reserved', claimedBy: 'paul', claimedName: 'Paul' }));
 });
 
+// A29 (Tanguy 12/11) : « il ne doit y avoir aucune trace de l'ancien parcours », seul Papote relie une tablette.
+// Un responsable ne réclame plus une tablette pour sa famille, la tablette n'accepte plus de réclamation, et un proche
+// ne liste plus les réservations faites à son nom. La tablette garde « Recommencer » sur une réservation de Papote.
+test('A29 : aucune appli de client ne relie une tablette, même un responsable pour sa propre famille', async () => {
+  await famille();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    const base = { tabletUid: 'tab9', callsUid: 'tab9-appels', name: 'Tablette', createdAt: Timestamp.now(), expiresAt: Timestamp.fromMillis(Date.now() + 10 * 60 * 1000) };
+    await setDoc(doc(db, 'pairings/ATTE2345'), { ...base, status: 'waiting' });
+    await setDoc(doc(db, 'pairings/RECL2345'), { ...base, status: 'claimed', fid: FID, familyName: 'Mamie Emma', claimedBy: 'julie', claimedName: 'Julie' });
+    await setDoc(doc(db, 'pairings/RESA2345'), { ...base, status: 'reserved', claimedBy: 'julie', claimedName: 'Julie' });
+  });
+  const julie = proche('julie');
+  await assertFails(updateDoc(doc(julie, 'pairings/ATTE2345'), { status: 'claimed', fid: FID, familyName: 'Mamie Emma', claimedBy: 'julie', claimedName: 'Julie' }));
+  await assertFails(updateDoc(doc(julie, 'pairings/ATTE2345'), { status: 'confirmed', fid: FID }));
+  await assertFails(updateDoc(doc(tablette('tab9'), 'pairings/RECL2345'), { status: 'confirmed' }));
+  await assertFails(updateDoc(doc(tablette('tab9'), 'pairings/RECL2345'), { status: 'refused' }));
+  await assertFails(getDocs(query(collection(julie, 'pairings'), where('claimedBy', '==', 'julie'))));
+  // La tablette, devant soi, peut toujours recommencer une réservation faite par Papote.
+  await assertSucceeds(updateDoc(doc(tablette('tab9'), 'pairings/RESA2345'), { status: 'cancelled' }));
+});
+
 test('envois : autorisés pendant l\'installation et avec un abonnement actif, bloqués une fois résilié', async () => {
   await famille({ statut: 'installation', etape: 'photo' });
   await assertSucceeds(setDoc(doc(proche('julie'), `families/${FID}/posts/p1`), envoi('julie')));
@@ -405,7 +427,8 @@ test('une autre famille : Ève (responsable chez Rose) ne voit ni n\'écrit rien
     status: 'waiting', tabletUid: 'tab3', callsUid: 'tab3-appels', name: 'Tablette', createdAt: Timestamp.now(), expiresAt: Timestamp.fromMillis(Date.now() + 10 * 60 * 1000),
   }));
   await assertFails(updateDoc(doc(eve, 'pairings/LIBRE123'), { status: 'claimed', fid: FID, familyName: 'Mamie Emma', claimedBy: 'eve', claimedName: 'Ève' }));
-  await assertSucceeds(updateDoc(doc(eve, 'pairings/LIBRE123'), { status: 'claimed', fid: FID2, familyName: 'Mamie Rose', claimedBy: 'eve', claimedName: 'Ève' }));
+  // Même pour sa propre famille : plus aucune appli ne relie une tablette (A29, voir le test dédié).
+  await assertFails(updateDoc(doc(eve, 'pairings/LIBRE123'), { status: 'claimed', fid: FID2, familyName: 'Mamie Rose', claimedBy: 'eve', claimedName: 'Ève' }));
   // La requête « mes familles » (fiches membres qui portent mon uid) ne rend que les siennes.
   const miennes = await assertSucceeds(getDocs(query(collectionGroup(eve, 'members'), where('uid', '==', 'eve'))));
   assert.deepStrictEqual(miennes.docs.map((d) => d.ref.path), [`families/${FID2}/members/eve`]);

@@ -101,27 +101,13 @@ export function annulerResiliation(fid) {
   return call('annulerResiliation', { fid });
 }
 
-// Installation d'une nouvelle tablette (functions/installation.js).
-// reserverTablette → { etat: 'reserve' | 'occupe' | 'inconnu' | 'expire', par?, fid? }
-export function reserverTablette(code, prenom) {
-  return call('reserverTablette', { code, prenom });
-}
-
-// reveil : appel à vide qui démarre le serveur avant le vrai appel.
-export function nommerFamille(code, nom, reveil = false) {
-  return call('nommerFamille', reveil ? { reveil: true } : { code, nom });
-}
-
 // Famille préparée dès la commande (functions/famille-preparee.js) : le responsable donne le nom.
 export function nommerFamillePreparee(fid, nom) {
   return call('nommerFamillePreparee', { fid, nom });
 }
 
-export function finirInstallation(fid) {
-  return call('finirInstallation', { fid });
-}
-
-// { code } avant le nom (réservation rendue), { fid } après (famille effacée).
-export function annulerInstallation(data) {
-  return call('annulerInstallation', data);
+// Celui qui a payé, connecté avec une autre adresse que celle de la commande : il entre dans la famille de sa
+// commande avec son numéro de commande (functions/entrer-par-commande.js, A40) → { fid, nom }.
+export function entrerParCommande(code, prenom) {
+  return call('entrerParCommande', { code, prenom });
 }
