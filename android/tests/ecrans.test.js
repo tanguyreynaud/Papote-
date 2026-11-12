@@ -272,28 +272,54 @@ test('SOS, « La famille est prévenue » avec deux visages : côte à côte sur
   } finally { await b.fermer(); }
 });
 
-test('installation : « Recommencer avec un autre téléphone » reste dans l\'écran (en haut, à la place de Retour)', async () => {
+// Tanguy (12/11) : plus d'ancien parcours. À l'installation, la tablette ne montre ni QR code ni code à
+// taper : elle se relie seule à la famille de la commande. Le seul QR est celui de la famille, sur l'accueil.
+test('installation : jamais de QR code ni de code à taper, « On prépare votre tablette… » à la place', async () => {
   const b = await ouvrir();
   try {
-    for (const step of ['pair', 'prepare']) {
-      await b.page.evaluate((st) => window.PapoteBienvenue.show({ step: st, code: 'ABCDEFGH', restart: true }), step);
+    for (const s of [{ step: 'pair', code: 'ABCDEFGH' }, { step: 'pair', code: 'ABCDEFGH', joined: true, claimedName: 'Julie', etape: 'son' },
+      { step: 'confirm', code: 'ABCDEFGH', claimedName: 'Julie' }, { step: 'prepare', restart: true }]) {
+      await b.page.evaluate((st) => window.PapoteBienvenue.show(st), s);
       await b.avancer(300);
-      const bouton = await b.page.evaluate(() => {
-        const e = document.querySelector('.welcome .welcome-again');
-        const r = e.getBoundingClientRect();
-        return { texte: e.textContent, bas: r.bottom, haut: r.top, dansLeHaut: !!e.closest('.welcome-head') };
-      });
-      assert.strictEqual(bouton.texte, 'Recommencer avec un autre téléphone');
-      assert.ok(bouton.dansLeHaut, `${step} : dans l'en-tête`);
-      assert.ok(bouton.haut >= 0 && bouton.bas <= 800, `${step} : visible sans défiler (${bouton.haut}-${bouton.bas})`);
-      // Deux appuis pour recommencer, un seul ne fait rien.
-      await b.page.click('.welcome .welcome-again');
-      assert.strictEqual((await b.appels('cancelPairing')).length, 0);
-      await b.page.click('.welcome .welcome-again');
-      assert.strictEqual((await b.appels('cancelPairing')).length, 1);
-      await b.vider();
+      const texte = await b.texte('.welcome');
+      assert.ok(!(await b.page.locator('.welcome img.welcome-qr, .welcome .pair-card').count()), `${s.step} : pas de QR code`);
+      assert.ok(!/ABCD|scannez|Recommencer|C'est bien vous/i.test(texte), `${s.step} : ni code, ni scan, ni ancien parcours : ${texte}`);
+      assert.match(texte, /On prépare votre tablette/);
       await b.page.evaluate(() => window.PapoteBienvenue.hide());
     }
+    await sansErreur(b);
+  } finally { await b.fermer(); }
+});
+
+test('installation : pas reliée au bout de 2 min, l\'écran le dit sans rien demander', async () => {
+  const b = await ouvrir();
+  try {
+    await b.page.evaluate(() => window.PapoteBienvenue.show({ step: 'pair', code: 'ABCDEFGH' }));
+    await b.avancer(1000);
+    assert.match(await b.texte('.welcome-sub'), /quelques instants/);
+    await b.avancer(125000);
+    assert.match(await b.texte('.welcome-sub'), /pas encore reliée.*Papote est prévenu/);
+    assert.ok((await b.appels('logError')).some((a) => /pas reliée/.test(a.args[0])), 'noté dans le journal pour Papote');
+    await sansErreur(b);
+  } finally { await b.fermer(); }
+});
+
+// Audit mise en route M0 (12/11) : la 4G arrive souvent 30 s à 2 min après « Commencer ».
+test('installation sans internet : « la tablette cherche internet », puis l\'erreur et le wifi, puis la suite toute seule', async () => {
+  const b = await ouvrir('2026-10-26T10:00:00', { reseau: { wifi: '', internet: false, mobile: false, sim: true } });
+  try {
+    await b.android('onStatus', { state: 'welcome', step: 'wifi' });
+    await b.avancer(500);
+    assert.match(await b.texte('.welcome-title'), /cherche internet/);
+    assert.ok(await b.visible('.welcome .welcome-spin'), 'on voit qu\'elle cherche');
+    await b.avancer(62000);
+    assert.match(await b.texte('.welcome-title'), /Pas encore d.internet/);
+    assert.match(await b.texte('.welcome'), /Choisir un wifi/);
+    assert.match(await b.texte('.welcome'), /Papote est prévenu/);
+    assert.deepStrictEqual(await b.appels('wifiDone'), [], 'toujours pas d\'internet : on attend');
+    await b.etat({ reseau: { wifi: '', internet: true, mobile: true, sim: true, via: 'mobile' } });
+    await b.avancer(3500);
+    assert.strictEqual((await b.appels('wifiDone')).length, 1, 'la 4G est là : étape suivante sans rien toucher');
     await sansErreur(b);
   } finally { await b.fermer(); }
 });

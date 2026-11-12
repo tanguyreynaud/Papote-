@@ -130,22 +130,9 @@
 .welcome-ok { margin: 2vmin 0; font-size: 4.8vmin; font-weight: 600; color: var(--w-ok); }
 .welcome-error { margin: 2vmin 0; font-size: 4.6vmin; font-weight: 600; color: var(--w-danger); }
 
-.welcome-pair { display: flex; align-items: center; justify-content: center; gap: 6vmin; text-align: left; }
-.welcome-qr { width: 44vmin; height: 44vmin; padding: 2vmin; border: .4vmin solid var(--w-line); border-radius: 3vmin; background: #fff; }
 .welcome-steps { max-width: 72vmin; }
 .welcome-step { margin: 0; font-size: 4.4vmin; line-height: 1.35; }
 .welcome-or { margin: 2vmin 0; font-size: 3.8vmin; font-weight: 600; color: var(--w-muted); text-transform: uppercase; letter-spacing: .3vmin; }
-.welcome-code {
-  display: inline-block;
-  margin: 2vmin 0 1.5vmin;
-  padding: 1.5vmin 4vmin;
-  border-radius: 2.5vmin;
-  background: var(--w-accent-soft);
-  color: var(--w-accent);
-  font-size: 8vmin;
-  font-weight: 700;
-  letter-spacing: .6vmin;
-}
 .welcome-steps .welcome-sub { margin: 0; font-size: 3.6vmin; }
 
 .welcome-actions { display: flex; justify-content: center; gap: 3vmin; margin-top: 2vmin; }
@@ -362,14 +349,4 @@
 .welcome-link { margin: 3vmin 0 0; font-size: 4.8vmin; line-height: 1.3; font-weight: 600; color: var(--w-text); }
 .welcome-link strong { color: var(--w-accent); font-size: 5.6vmin; white-space: nowrap; }
 
-/* Écran du code : deux cartes à égalité, « Scannez le QR code » et « Tapez dans le téléphone » */
-.welcome-pair { align-items: stretch; gap: 3vmin; margin-top: 5vmin; text-align: center; }
-.pair-card { flex: 1; min-width: 0; max-width: 64vmin; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  padding: 2.5vmin 4vmin; border: .4vmin solid var(--w-line); border-radius: 4vmin; background: #fff; }
-.pair-card-title { margin: 0 0 1.5vmin; font-size: 5.4vmin; font-weight: 700; color: var(--w-text); }
-.pair-card-hint { margin: 2vmin 0 0; font-size: 4vmin; color: var(--w-muted); }
-.pair-card .welcome-qr { width: 44vmin; height: 44vmin; border: 0; padding: 0; }
-.pair-site { margin: 4vmin 0 0; font-size: 7vmin; font-weight: 700; color: var(--w-accent); white-space: nowrap; }
-.pair-card .welcome-code { margin: 2vmin 0 0; padding: 1.5vmin 3vmin; font-size: 7vmin; white-space: nowrap; }
-.pair-or { align-self: center; font-size: 4vmin; font-weight: 700; color: var(--w-muted); text-transform: uppercase; letter-spacing: .3vmin; }
 .welcome-box > .welcome-busy { justify-content: center; margin-top: 3vmin; }
