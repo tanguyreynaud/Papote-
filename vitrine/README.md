@@ -21,3 +21,12 @@ La configuration est dans `firebase.vitrine.json` (site `papote` seul) : `fireba
 ## CGV en PDF
 
 Les CGV sont jointes en PDF à chaque e-mail de confirmation de commande (A13, 12/11/2026). Après tout changement de `cgv.html`, relancer `node outils/cgv-pdf/generer.js` et garder le nouveau `functions/documents/cgv.pdf` (sinon les tests des fonctions sont rouges), puis publier les fonctions.
+
+## Se désinscrire
+
+`desinscription.html` : page du lien « Se désinscrire des e-mails d'information » (A4, 12/11/2026), qui n'est que sur
+les rappels de commande, « Être prévenu », l'ouverture des commandes et les nouvelles de l'admin, jamais sur un e-mail
+de service. Le lien des e-mails est `https://mapapote.fr/desinscription?c=…&j=…` : `firebase.vitrine.json` le relie à la
+fonction `desinscription`, qui renvoie vers cette page (GET, rien ne change) ou retire l'accord (POST : le bouton de la
+page, ou « Se désabonner » de la messagerie grâce à l'en-tête List-Unsubscribe-Post). Publier les fonctions avant le
+site : sinon `/desinscription` n'existe pas encore.

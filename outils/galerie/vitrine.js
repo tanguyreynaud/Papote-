@@ -101,6 +101,9 @@ async function commandeRemplie(p) {
 }
 
 // plein : toute la page (qui défile) ; sinon le premier écran seulement.
+// Jeton de désinscription factice (32 caractères hexadécimaux, comme les vrais).
+const DESINSCRIT = '0123456789abcdef0123456789abcdef';
+
 const SCENES = [
   { groupe: 'Accueil', titre: 'Page d’accueil', fichier: 'accueil.html', plein: true },
   { groupe: 'Accueil', titre: 'Accueil : chat de support ouvert', fichier: 'accueil.html', faire: async (p) => {
@@ -223,6 +226,12 @@ const SCENES = [
   { groupe: 'Résilier', titre: 'Résilier : numéro qui ne correspond pas', fichier: 'resilier.html?code=ABCD-EFGH', plein: true, routes: (p) => p.route('**/resilierSansCompte**', (r) => r.fulfill({ status: 404, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify({ erreur: "Aucune commande ne correspond à cette adresse e-mail et à ce numéro. Vérifiez-les sur l'e-mail de confirmation de commande, ou écrivez à contact@mapapote.fr." }) })), faire: (p) => p.fill('#email', 'marie@exemple.fr').then(() => p.click('#verifier')).then(() => p.waitForSelector('#erreur:not([hidden])')) },
   { groupe: 'Résilier', titre: 'Résilier : date d\'arrêt à confirmer', fichier: 'resilier.html?code=ABCD-EFGH', plein: true, routes: (p) => p.route('**/resilierSansCompte**', (r) => r.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify({ etat: 'a-confirmer', le: Date.UTC(2026, 11, 26), famille: 'Mamie Jeanne' }) })), faire: (p) => p.fill('#email', 'marie@exemple.fr').then(() => p.click('#verifier')).then(() => p.waitForSelector('#confirmer:not([hidden])')) },
   { groupe: 'Résilier', titre: 'Résilier : c\'est fait', fichier: 'resilier.html?code=ABCD-EFGH', plein: true, routes: (p) => p.route('**/resilierSansCompte**', (r) => r.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify({ etat: 'resilie', le: Date.UTC(2026, 11, 26), famille: 'Mamie Jeanne' }) })), faire: (p) => p.fill('#email', 'marie@exemple.fr').then(() => p.click('#verifier')).then(() => p.waitForSelector('#fait:not([hidden])')) },
+  // Désinscription des e-mails d'information (A4, 12/11) : lien en bas des rappels de commande, « Être prévenu »,
+  // ouverture des commandes et nouvelles. Fausse réponse de la fonction desinscription (POST /desinscription).
+  { groupe: 'Se désinscrire', titre: 'Se désinscrire : ce qu\'on quitte, ce qui continue', fichier: `desinscription.html?c=${DESINSCRIT}&j=${DESINSCRIT}`, plein: true },
+  { groupe: 'Se désinscrire', titre: 'Se désinscrire : c\'est fait', fichier: `desinscription.html?c=${DESINSCRIT}&j=${DESINSCRIT}`, plein: true, faire: (p) => p.click('#valider').then(() => p.waitForSelector('#fait:not([hidden])')) },
+  { groupe: 'Se désinscrire', titre: 'Se désinscrire : pas de connexion', fichier: `desinscription.html?c=${DESINSCRIT}&j=${DESINSCRIT}`, plein: true, routes: (p) => p.route('**/desinscription', (r) => r.abort()), faire: (p) => p.click('#valider').then(() => p.waitForSelector('#erreur:not([hidden])')) },
+  { groupe: 'Se désinscrire', titre: 'Se désinscrire : lien pas valable', fichier: 'desinscription.html?c=abc', plein: true },
   { groupe: 'Textes', titre: 'Page introuvable (404)', fichier: '404.html', plein: true },
 ];
 
@@ -245,6 +254,7 @@ async function ouvrir(browser, base, scene, taille) {
   // « Payer » part vers la fonction commander (puis Stripe) : ici une réponse 204, que le navigateur ignore,
   // la page reste donc affichée avec « Un instant… ».
   await page.route('**/commander**', (r) => r.fulfill({ status: 204 }));
+  await page.route('**/desinscription', (r) => r.fulfill({ contentType: 'application/json', body: '{"ok":true}' }));
   await page.route('**/codeCommande**', (r) => r.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(RECAP) }));
   // 63490 : un code postal à plusieurs villes, pour voir le choix de la ville.
   await page.route(/geo\.api\.gouv\.fr/, (r) => r.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' },

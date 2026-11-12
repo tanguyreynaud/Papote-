@@ -495,7 +495,7 @@ test('e-mail d\'information : prénom, paragraphes échappés, lien de désinscr
   assert.equal(m.subject, 'Nouveauté');
   assert.match(m.html, /Bonjour Jeanne,/);
   assert.match(m.html, /&lt;b&gt;Une/);
-  assert.match(m.text, /Se désinscrire : https:\/\/x\/d\?c=1/);
+  assert.match(m.text, /Se désinscrire des e-mails d'information : https:\/\/x\/d\?c=1/);
   assert.equal(m.headers['List-Unsubscribe'], '<https://x/d?c=1>');
   assert.equal(g.cleContact('A@x.fr'), g.cleContact(' a@x.fr '));
 });

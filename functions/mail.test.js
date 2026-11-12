@@ -46,7 +46,7 @@ test('aperçu dans la boîte de réception : la première vraie phrase, jamais �
 test('nouveaux e-mails : liste d\'attente, pause, matériel non rendu, demande acceptée, installation, rappel', () => {
   const l = mail.listeAttenteConfirmee({ prenom: 'Julie', telephone: '06 12 34 56 78', desinscription: 'https://x/d' });
   assert.match(l.text, /06 12 34 56 78/);
-  assert.match(l.text, /Se désinscrire : https:\/\/x\/d/);
+  assert.match(l.text, /Se désinscrire des e-mails d'information : https:\/\/x\/d/);
   assert.match(l.html, /demandé à être prévenu/);
   const p = mail.pausePrelevements({ nom: 'Julie', famille: 'Mamie Jeanne', jusqua: Date.UTC(2026, 11, 20) });
   assert.match(p.text, /reprennent le 20 décembre 2026/);
@@ -201,4 +201,79 @@ test('A13 : les CGV en PDF sont jointes à chaque confirmation de commande, et l
   const empreinte = crypto.createHash('sha256').update(fs.readFileSync(page)).digest('hex');
   assert.strictEqual(fs.readFileSync(path.join(__dirname, 'documents', 'cgv.empreinte'), 'utf8').trim(), empreinte,
     'vitrine/cgv.html a changé : relancer node outils/cgv-pdf/generer.js et garder le nouveau PDF');
+});
+
+// A4 (Tanguy 12/11/2026) : désinscription sur les e-mails d'information seulement, sur mapapote.fr.
+const { scenes } = require('../outils/galerie/emails');
+const SCENES = scenes(mail);
+const LIEN_DESINSCRIPTION = /\/desinscription|Se désinscrire/;
+
+test('e-mails de service : jamais d\'en-tête ni de lien de désinscription', () => {
+  const service = SCENES.filter((sc) => sc.contenu && !mail.MARKETING.includes(sc.fonction));
+  assert.ok(service.length > 60, `${service.length} e-mails de service`);
+  for (const sc of service) {
+    const h = sc.contenu.headers || {};
+    assert.ok(!h['List-Unsubscribe'] && !h['List-Unsubscribe-Post'], `en-tête de désinscription sur « ${sc.titre} »`);
+    assert.doesNotMatch(sc.contenu.html, LIEN_DESINSCRIPTION, `lien de désinscription dans « ${sc.titre} »`);
+    assert.doesNotMatch(sc.contenu.text, LIEN_DESINSCRIPTION, `lien de désinscription dans « ${sc.titre} » (texte)`);
+    assert.ok(!mail.estMarketing(sc.contenu), sc.titre);
+  }
+  // Même si on lui passe un lien par erreur, un e-mail de service l'ignore (relance d'impayé, SOS, colis revenu…).
+  for (const m of [
+    mail.paiementEchoue({ nom: 'Paul', pauseLe: Date.now(), desinscription: 'https://mapapote.fr/desinscription?c=1&j=2' }),
+    mail.passerAuSepa({ nom: 'Paul', relance: true, lien: 'https://x', desinscription: 'https://mapapote.fr/desinscription?c=1&j=2' }),
+    mail.colisRevenu({ nom: 'Paul', rembourse: 6000, desinscription: 'https://mapapote.fr/desinscription?c=1&j=2' }),
+  ]) {
+    assert.strictEqual(m.headers, undefined);
+    assert.doesNotMatch(m.html + m.text, LIEN_DESINSCRIPTION);
+  }
+});
+
+test('e-mails d\'information : en-tête un clic et lien tout en bas, sur mapapote.fr', () => {
+  const lien = mail.lienDesinscription('0123456789abcdef0123456789abcdef', 'fedcba9876543210fedcba9876543210');
+  assert.strictEqual(lien, 'https://mapapote.fr/desinscription?c=0123456789abcdef0123456789abcdef&j=fedcba9876543210fedcba9876543210');
+  const marketing = [
+    mail.relancePanier({ etape: 1, nom: 'Paul', lien: 'https://x/c', desinscription: lien }),
+    mail.relancePanier({ etape: 3, nom: 'Paul', lien: 'https://x/c', desinscription: lien }),
+    mail.listeAttenteConfirmee({ prenom: 'Julie', desinscription: lien }),
+    mail.lancement({ prenom: 'Julie', desinscription: lien }),
+    mail.information({ objet: 'Nouvelles', message: 'Bonjour', lienDesinscription: lien }),
+  ];
+  for (const m of marketing) {
+    assert.ok(mail.estMarketing(m), m.subject);
+    assert.strictEqual(m.headers['List-Unsubscribe'], `<${lien}>`);
+    assert.strictEqual(m.headers['List-Unsubscribe-Post'], 'List-Unsubscribe=One-Click');
+    assert.doesNotMatch(m.html + m.text, /cloudfunctions\.net/);
+    // Tout en bas : plus rien d'écrit après le lien.
+    const apres = m.html.slice(m.html.lastIndexOf('Se désinscrire'));
+    assert.doesNotMatch(apres.replace(/<[^>]+>/g, ''), /[A-Za-zÀ-ÿ]{3,}.*\n.*[A-Za-zÀ-ÿ]{3,}/s, m.subject);
+    assert.ok(m.text.trim().endsWith(lien), m.subject);
+  }
+  // Sans jeton (contact inconnu) : ni lien ni en-tête.
+  assert.strictEqual(mail.lancement({ prenom: 'Julie' }).headers, undefined);
+});
+
+test('colis revenu : son propre e-mail, plus « la tablette ne partira pas »', () => {
+  const m = mail.colisRevenu({ nom: 'Paul', rembourse: 6000 });
+  assert.strictEqual(m.subject, 'Votre colis Papote nous est revenu');
+  assert.match(m.text, /Votre colis n'a pas été retiré et nous est revenu\.\n\nNous vous remboursons les 60 €\.\n\nÉcrivez-nous si vous voulez un nouvel envoi\./);
+  assert.doesNotMatch(m.text, /ne partira pas/);
+  assert.match(mail.colisRevenu({ nom: 'Paul', rembourse: 8500 }).text, /Nous vous remboursons 85 €\./);
+});
+
+test('paiement échoué et pause : le bouton ouvre la page Abonnement de l\'appli', () => {
+  assert.match(mail.paiementEchoue({ nom: 'Paul', pauseLe: Date.now() }).text, /Régler le paiement : https:\/\/app\.mapapote\.fr\/\?abonnement=1/);
+  assert.match(mail.papoteEnPause({ nom: 'Paul' }).text, /Régler le paiement : https:\/\/app\.mapapote\.fr\/\?abonnement=1/);
+});
+
+test('installer : rien pour le proche âgé, l\'appli Papote pour la famille, jamais l\'un contre l\'autre', () => {
+  // E-mails aux familles (les e-mails internes citent le chat du site tel quel).
+  for (const sc of SCENES.filter((x) => x.contenu && !/internes/.test(x.groupe))) {
+    const t = sc.contenu.text;
+    assert.doesNotMatch(t, /Chacun installe|vous n'avez rien à installer|^Rien à installer/m, sc.titre);
+    for (const ligne of t.split('\n').filter((l) => /rien à installer/i.test(l))) {
+      assert.match(ligne, /Votre proche n'a rien à installer|n'a rien à installer/, `${sc.titre} : « ${ligne} »`);
+    }
+  }
+  assert.match(mail.installationFinie({ prenom: 'Julie', famille: 'Mamie' }).text, /Chacun reçoit un lien et utilise l'appli Papote sur son téléphone/);
 });

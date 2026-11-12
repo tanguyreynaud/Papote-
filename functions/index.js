@@ -564,7 +564,7 @@ async function prevenirPaiement(fid, commandeId, avis, graceJusqua) {
     const envois = [push.envoyer(db, fid, responsables, { type: 'alerte', ...notification, fid, abonnement: '1' }, 24 * 3600)];
     const email = commande.exists && commande.get('email');
     if (email) {
-      const infos = { nom: commande.get('nom'), famille: fam.get('name'), pauseLe, lien: APPLI_FAMILLE };
+      const infos = { nom: commande.get('nom'), famille: fam.get('name'), pauseLe, lien: `${APPLI_FAMILLE}?abonnement=1` };
       envois.push(envoyerMail(email, avis === 'impaye' ? mail.paiementEchoue(infos) : mail.papoteEnPause(infos)));
     }
     (await Promise.allSettled(envois)).filter((r) => r.status === 'rejected')
@@ -1839,7 +1839,6 @@ async function confirmerCommande(ref, email, code) {
 
 // ---------- Paniers abandonnés (functions/relances.js) ----------
 const URL_COMMANDER = 'https://europe-west1-papote-famille.cloudfunctions.net/commander';
-const URL_DESINSCRIPTION = 'https://europe-west1-papote-famille.cloudfunctions.net/desinscription';
 const emailValide = (e) => (typeof e === 'string' && e.length <= 120 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim())
   ? e.trim().toLowerCase() : null);
 // Même clé que contacts/ dans gestion.js (onglet Clients, désinscription).
@@ -1967,7 +1966,7 @@ exports.listeAttente = onRequest({ cors: [/mapapote\.fr$/, /papote\.web\.app$/],
       logger.warn(`Liste d'attente : plus de ${ATTENTE_MAILS_JOUR} « C'est noté » aujourd'hui, ${email} noté sans e-mail`);
       return;
     }
-    await envoyerMail(email, mail.listeAttenteConfirmee({ prenom, telephone, desinscription: `${URL_DESINSCRIPTION}?c=${cleContact(email)}&j=${jeton}` }));
+    await envoyerMail(email, mail.listeAttenteConfirmee({ prenom, telephone, desinscription: mail.lienDesinscription(cleContact(email), jeton) }));
   } catch (e) {
     logger.error(`Liste d'attente ${email} : confirmation non envoyée`, e.message);
   }
@@ -1992,7 +1991,7 @@ async function relancesPaniers() {
         continue;
       }
       const desinscription = contact.exists && contact.get('jeton')
-        ? `${URL_DESINSCRIPTION}?c=${contact.id}&j=${contact.get('jeton')}` : null;
+        ? mail.lienDesinscription(contact.id, contact.get('jeton')) : null;
       const lien = `${URL_COMMANDER}?${d.requete}&email=${encodeURIComponent(d.email)}&relance=${p.id}`;
       await envoyerMail(d.email, mail.relancePanier({ etape, nom: d.nom, formule: d.formule, lien, desinscription }));
       await p.ref.update({ relances: etape, [`relance${etape}Le`]: FieldValue.serverTimestamp() });
@@ -2009,7 +2008,7 @@ exports.lancementListeAttente = onCall({ secrets: [MAIL_MOT_DE_PASSE], timeoutSe
   if (request.data && request.data.test === true) {
     const email = request.auth.token.email;
     if (!email) throw new HttpsError('failed-precondition', 'Compte sans e-mail.');
-    await envoyerMail(email, mail.lancement({ prenom: 'Tanguy', desinscription: `${URL_DESINSCRIPTION}?test=1` }));
+    await envoyerMail(email, mail.lancement({ prenom: 'Tanguy', desinscription: `${mail.DESINSCRIPTION}?test=1` }));
     return { envoyes: 1, test: true };
   }
   const contacts = await db.collection('contacts').where('listeAttente', '==', true).get();
@@ -2025,7 +2024,7 @@ exports.lancementListeAttente = onCall({ secrets: [MAIL_MOT_DE_PASSE], timeoutSe
   for (const c of aPrevenir.slice(0, permis)) {
     const d = c.data();
     try {
-      const desinscription = d.jeton ? `${URL_DESINSCRIPTION}?c=${c.id}&j=${d.jeton}` : null;
+      const desinscription = d.jeton ? mail.lienDesinscription(c.id, d.jeton) : null;
       await mail.envoyer({
         smtp: MAIL_SMTP.value(), expediteur: MAIL_EXPEDITEUR.value(), motDePasse: MAIL_MOT_DE_PASSE.value(),
         a: d.email, contenu: mail.lancement({ prenom: d.prenom, desinscription }), enNombre: true,

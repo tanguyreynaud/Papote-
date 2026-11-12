@@ -2986,7 +2986,7 @@ exports.gestionAnnulerCommande = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_P
     try {
       await mail.envoyer({
         smtp: MAIL_SMTP.value(), expediteur: MAIL_EXPEDITEUR.value(), motDePasse: MAIL_MOT_DE_PASSE.value(),
-        a: c.email, contenu: mail.commandeAnnulee({ nom: c.nom, rembourse }),
+        a: c.email, contenu: colisRevenu ? mail.colisRevenu({ nom: c.nom, rembourse }) : mail.commandeAnnulee({ nom: c.nom, rembourse }),
       });
       mailEnvoye = true;
     } catch (e) {
@@ -3866,7 +3866,6 @@ exports.gestionCourrierMaintenant = onCall(OPTIONS_COURRIER, async (request) => 
 // champ marketing, ou accord noté par l'admin) et pas désinscrites. Chaque e-mail porte un lien de désinscription.
 // contacts/{cle} : { email, consentement, source, desinscritLe, jeton } ; campagnes/{id} : historique des envois.
 
-const URL_DESINSCRIPTION = 'https://europe-west1-papote-famille.cloudfunctions.net/desinscription';
 const ENVOIS_MAX = 300; // limite quotidienne de Brevo en offre gratuite
 const STATUTS_ACTIFS = ['actif', 'offert', 'impaye', 'suspendu'];
 
@@ -3979,7 +3978,7 @@ exports.gestionCampagne = onCall({ secrets: [MAIL_MOT_DE_PASSE], timeoutSeconds:
   if (d.test) {
     const moi = emailPropre(request.auth.token.email);
     if (!moi) throw new HttpsError('failed-precondition', 'Votre compte admin n\'a pas d\'e-mail.');
-    await mail.envoyer({ ...smtp, a: moi, contenu: emailInformation({ objet: `[Test] ${objet}`, message, nom: 'Tanguy', lienDesinscription: `${URL_DESINSCRIPTION}?test=1` }) });
+    await mail.envoyer({ ...smtp, a: moi, contenu: emailInformation({ objet: `[Test] ${objet}`, message, nom: 'Tanguy', lienDesinscription: `${mail.DESINSCRIPTION}?test=1` }) });
     return { envoyes: 1, a: moi };
   }
   const voulus = new Set((Array.isArray(d.emails) ? d.emails : []).map(emailPropre).filter(Boolean));
@@ -4002,7 +4001,7 @@ exports.gestionCampagne = onCall({ secrets: [MAIL_MOT_DE_PASSE], timeoutSeconds:
         jeton = require('node:crypto').randomBytes(16).toString('hex');
         await cref.set({ email: c.email, jeton }, { merge: true });
       }
-      const lien = `${URL_DESINSCRIPTION}?c=${cleContact(c.email)}&j=${jeton}`;
+      const lien = mail.lienDesinscription(cleContact(c.email), jeton);
       await mail.envoyer({ ...smtp, a: c.email, contenu: emailInformation({ objet, message, nom: c.nom, lienDesinscription: lien }), enNombre: true });
       envoyes++;
     } catch (e) {
@@ -4014,33 +4013,42 @@ exports.gestionCampagne = onCall({ secrets: [MAIL_MOT_DE_PASSE], timeoutSeconds:
   return { envoyes, ignores: voulus.size - destinataires.length, erreurs: erreurs.slice(0, 5) };
 });
 
-// Lien « Se désinscrire » : la page demande une confirmation (les antivirus ouvrent les liens) ;
-// le bouton, ou le désabonnement en un clic des messageries (POST), retire l'accord.
+// Désinscription des e-mails d'information (A4, Tanguy 12/11/2026), sur mapapote.fr/desinscription (réécrit vers
+// cette fonction par firebase.vitrine.json ; les anciens liens …cloudfunctions.net/desinscription marchent encore).
+//  - GET (lien de l'e-mail, ou antivirus qui ouvre les liens) : rien ne change, renvoi vers la page du site
+//    desinscription.html, qui dit ce qu'on quitte et porte le bouton.
+//  - POST : retire l'accord. Le bouton de la page (JSON, { ok }) ou le « Se désabonner » de la messagerie
+//    (List-Unsubscribe-Post, RFC 8058 : corps « List-Unsubscribe=One-Click », c et j dans l'adresse).
+// Seuls les e-mails d'information portent ce lien (mail.MARKETING) : les e-mails de service continuent d'arriver.
+const PAGE_DESINSCRIPTION = 'https://mapapote.fr/desinscription.html';
 exports.desinscription = onRequest(async (req, res) => {
   const p = { ...(req.query || {}), ...(typeof req.body === 'object' && req.body ? req.body : {}) };
-  const pageHtml = (titre, texte, formulaire) => `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>${titre}</title></head>
-<body style="margin:0;background:#fdfaf5;color:#24212f;font:18px/1.6 Arial,sans-serif"><div style="max-width:520px;margin:0 auto;padding:40px 20px">
-<p style="font-weight:bold;font-size:22px;color:#4f46e5">Papote</p><h1 style="font-size:26px">${titre}</h1><p>${texte}</p>${formulaire || ''}</div></body></html>`;
   res.set('Cache-Control', 'no-store');
-  if (p.test) { res.send(pageHtml('Lien de test', "C'est ici que vos clients se désinscriront.")); return; }
   const c = typeof p.c === 'string' && /^[0-9a-f]{32}$/.test(p.c) ? p.c : null;
   const j = typeof p.j === 'string' && /^[0-9a-f]{32}$/.test(p.j) ? p.j : null;
+  if (req.method === 'GET' || req.method === 'HEAD') {
+    const q = p.test ? '?test=1' : c && j ? `?c=${c}&j=${j}` : '';
+    res.redirect(303, `${PAGE_DESINSCRIPTION}${q}`);
+    return;
+  }
+  if (req.method !== 'POST') { res.status(405).set('Allow', 'GET, POST').end(); return; }
+  const json = /json/.test(String(req.get('accept') || '')) || /json/.test(String(req.get('content-type') || ''));
+  const repondre = (statut, corps, texte) => {
+    if (json) { res.status(statut).json(corps); return; }
+    res.status(statut).type('text/plain; charset=utf-8').send(texte);
+  };
+  if (p.test) { repondre(200, { ok: true, test: true }, 'Lien de test : rien n\'a changé.'); return; }
   const ref = c && db().doc(`contacts/${c}`);
   const snap = ref && j ? await ref.get() : null;
   if (!snap || !snap.exists || snap.get('jeton') !== j) {
-    res.status(404).send(pageHtml('Lien inconnu', 'Ce lien de désinscription n\'est pas valable. Répondez simplement à notre e-mail et nous vous retirerons de la liste.'));
+    repondre(404, { ok: false, erreur: 'lien-inconnu' }, 'Lien de désinscription inconnu.');
     return;
   }
-  if (req.method === 'POST') {
-    await ref.set({ consentement: false, desinscritLe: Date.now() }, { merge: true });
-    res.send(pageHtml('C\'est fait', 'Vous ne recevrez plus nos e-mails d\'information. Les messages liés à votre abonnement (livraison, facture) continuent d\'arriver.'));
-    return;
-  }
-  res.send(pageHtml('Se désinscrire', 'Vous ne recevrez plus les e-mails d\'information de Papote.',
-    `<form method="post" action="?c=${c}&j=${j}"><button type="submit" style="font:inherit;font-weight:bold;background:#4f46e5;color:#fff;border:0;border-radius:999px;padding:14px 26px;cursor:pointer">Me désinscrire</button></form>`));
+  // Deux clics, ou la page puis la messagerie : une seule désinscription, la première date reste.
+  if (!snap.get('desinscritLe')) await ref.set({ consentement: false, desinscritLe: Date.now() }, { merge: true });
+  else if (snap.get('consentement') !== false) await ref.set({ consentement: false }, { merge: true });
+  repondre(200, { ok: true }, 'Désinscription faite : plus d\'e-mails d\'information de Papote.');
 });
-
-
 
 // { fid, offerte } : famille offerte (celle de Tanguy) : jamais en pause, jamais supprimable ; ou retour à « aucun ».
 exports.gestionFamilleOfferte = onCall(async (request) => {
