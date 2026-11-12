@@ -66,6 +66,10 @@ test('commande, famille préparée au paiement, envoi, la tablette entre seule d
   // merci.html affiche le code de commande.
   const merci = await s.requete('codeCommande', { query: { session } });
   assert.strictEqual(merci.json.code.replace('-', ''), c.code);
+  // A40 (12/11) : le bouton « Ouvrir l'appli » de merci.html porte le code de la famille préparée, comme l'e-mail.
+  const codeFamille = (await s.lire(`families/${fid}`)).code;
+  assert.strictEqual(merci.json.famille.replace('-', ''), `https://app.mapapote.fr/?code=${codeFamille}`);
+  assert.match(JSON.stringify(confirmation), new RegExp(merci.json.famille.replace(/[.?]/g, '\\$&')), 'même lien que l\'e-mail');
 
   // 3. Avant l'arrivée de la tablette, Paul ouvre l'appli : il entre par son invitation, devient responsable,
   //    donne le nom et envoie une première photo.

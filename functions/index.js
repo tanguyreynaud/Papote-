@@ -770,6 +770,72 @@ exports.resilierAbonnement = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE
   });
 });
 
+// Résiliation sans compte depuis le site (resilier.html, audit A13 validé par Tanguy le 12/11 : obligation légale de
+// résilier « en trois clics » sans se connecter). Le client donne l'adresse e-mail de la commande et son numéro de
+// commande ; une première demande montre la date d'arrêt, la seconde (confirmer: true) arrête l'abonnement comme
+// « Résilier » dans l'appli (fin du mois en cours, e-mail de confirmation à l'adresse de la commande).
+// Réponse identique quand l'adresse ou le numéro ne correspondent pas : rien n'apprend qu'une commande existe.
+// 20 essais par jour et par adresse IP (limites/resiliation-{ip haché}).
+const RESILIATIONS_PAR_JOUR = 20;
+exports.resilierSansCompte = onRequest({ cors: [/mapapote\.fr$/, /papote\.web\.app$/], maxInstances: 2, secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE] }, async (req, res) => {
+  const d = req.method === 'POST' && req.body && typeof req.body === 'object' ? req.body : {};
+  const email = emailValide(d.email);
+  const code = regles.normaliserCode(typeof d.code === 'string' ? d.code : '');
+  if (!email || !code) {
+    res.status(400).json({ erreur: "Indiquez l'adresse e-mail de la commande et son numéro (XXXX-XXXX)." });
+    return;
+  }
+  const jour = new Date().toISOString().slice(0, 10);
+  // Dernier élément de X-Forwarded-For, celui ajouté par Google (le premier est écrit par le visiteur).
+  const ip = stock.adresseVisiteur(req);
+  const limite = db.doc(`limites/resiliation-${cleContact(ip || 'inconnue')}`);
+  const trop = await db.runTransaction(async (tx) => {
+    const l = await tx.get(limite);
+    const n = l.exists && l.get('jour') === jour ? l.get('n') : 0;
+    if (n >= RESILIATIONS_PAR_JOUR) return true;
+    tx.set(limite, { jour, n: n + 1 });
+    return false;
+  });
+  if (trop) {
+    res.status(429).json({ erreur: 'Trop d\'essais aujourd\'hui. Réessayez demain, ou écrivez à contact@mapapote.fr.' });
+    return;
+  }
+  const inconnue = () => res.status(404).json({ erreur: "Aucune commande ne correspond à cette adresse e-mail et à ce numéro. Vérifiez-les sur l'e-mail de confirmation de commande, ou écrivez à contact@mapapote.fr." });
+  const trouvees = await db.collection('commandes').where('code', '==', code).limit(1).get();
+  const commande = trouvees.empty ? null : trouvees.docs[0];
+  if (!commande || String(commande.get('email') || '').trim().toLowerCase() !== email) { inconnue(); return; }
+  const fid = commande.get('fid');
+  const fam = fid ? (await db.doc(`families/${fid}`).get()).data() : null;
+  if (!fam) {
+    // Commande pas encore reliée à une famille (paiement en cours) : rien à arrêter en ligne pour l'instant.
+    res.status(409).json({ erreur: 'Votre commande est encore en cours d\'enregistrement. Réessayez dans quelques minutes, ou écrivez à contact@mapapote.fr : nous l\'arrêtons pour vous.' });
+    return;
+  }
+  try {
+    const abo = await stripe().subscriptions.retrieve(commande.id);
+    if (abo.status === 'canceled') {
+      res.json({ etat: 'termine', famille: fam.name || null });
+      return;
+    }
+    if (abo.cancel_at) {
+      res.json({ etat: 'deja', le: abo.cancel_at * 1000, famille: fam.name || null });
+      return;
+    }
+    if (d.confirmer !== true) {
+      const maintenant = Date.now();
+      const le = regles.premierPrelevementDe(abo, maintenant) || regles.dateResiliation(finDePeriodeMs(abo), maintenant);
+      res.json({ etat: 'a-confirmer', le, famille: fam.name || null });
+      return;
+    }
+    const { le } = await arreterAbonnement({ fid, fam, id: commande.id, parPapote: false });
+    logger.info(`Commande ${commande.id} : résiliée depuis le site, sans compte.`);
+    res.json({ etat: 'resilie', le, famille: fam.name || null });
+  } catch (e) {
+    logger.error(`Commande ${commande.id} : résiliation depuis le site impossible`, e.message);
+    res.status(500).json({ erreur: 'La résiliation n\'a pas pu être enregistrée. Réessayez, ou écrivez à contact@mapapote.fr : nous l\'arrêtons pour vous.' });
+  }
+});
+
 // Arrêt de l'abonnement id de la famille fid à la fin du mois en cours : depuis l'appli, l'admin, ou tout seul après
 // 30 jours de pause pour impayé (arretsImpayes, impaye : true).
 async function arreterAbonnement({ fid, fam, id, parPapote, admin = false, deces = false, impaye = false }) {
@@ -1163,6 +1229,14 @@ function adresseDonnee(a) {
 }
 
 // Code de commande d'un abonnement : créé une seule fois, à la première demande.
+// Famille préparée à la commande : lien qui ouvre l'appli avec le code famille (e-mail de commande, bouton de la
+// page « Merci »). Il fait entrer celui qui a payé même s'il se connecte avec une autre adresse (audit A40, 12/11).
+async function lienFamille(commande) {
+  if (!commande || !commande.famillePreparee || !commande.fid) return null;
+  const fam = (await db.doc(`families/${commande.fid}`).get()).data();
+  return fam && fam.code ? `${APPLI_FAMILLE}?code=${regles.afficherCode(fam.code)}` : null;
+}
+
 async function codeDe(abonnementId) {
   const ref = db.doc(`commandes/${abonnementId}`);
   return db.runTransaction(async (tx) => {
@@ -1200,6 +1274,8 @@ exports.codeCommande = onRequest({ secrets: [STRIPE_SECRET], cors: true }, async
       formule: meta.formule || null,
       payeCentimes: s.amount_total,
       relais: livraison.relaisDepuisMeta(meta),
+      // null tant que le paiement n'a pas encore créé la famille : la page redemande quelques secondes plus tard.
+      famille: await lienFamille((await db.doc(`commandes/${s.subscription}`).get()).data()).catch(() => null),
     });
   } catch (e) {
     logger.warn('codeCommande', e.message);
@@ -1606,10 +1682,8 @@ async function confirmerCommande(ref, email, code) {
   const infos = { nom: premier.nom, code, relais: premier.livraison, proche: premier.proche || null, formule: premier.formule, delai: premier.delai,
     dejaInstallee: !!(premier.preparation && premier.preparation.recuPar === 'déjà installée'), reprise: premier.reprise === true };
   // Famille préparée : le lien de l'e-mail ouvre l'appli avec le code famille (l'invitation à son e-mail suffit d'habitude).
-  if (premier.famillePreparee && premier.fid) {
-    const fam = (await db.doc(`families/${premier.fid}`).get()).data();
-    if (fam && fam.code) infos.famille = `${APPLI_FAMILLE}?code=${regles.afficherCode(fam.code)}`;
-  }
+  const lien = await lienFamille(premier);
+  if (lien) infos.famille = lien;
   const envois = [envoyerMail(EMAIL_PAPOTE, mail.nouvelleCommande({ ...infos, email, telephone: premier.telephone, commande: ref.id }))];
   if (email) envois.push(envoyerMail(email, mail.commandeConfirmee(infos)));
   const resultats = await Promise.allSettled(envois);

@@ -81,12 +81,12 @@ main a:not([class]), footer a:not([class]), .rassure a { font-weight: 700; }
     <span>Notez-le : il figure aussi sur vos factures, et nous vous le demanderons si vous nous écrivez.</span>
   </div>
   <ol>
-    <li>Votre espace famille est déjà prêt : ouvrez l'appli Papote sur votre téléphone et connectez-vous avec la même adresse e-mail que pour le paiement. Donnez le nom de votre proche, envoyez les premières photos et invitez la famille.</li>
+    <li>Votre espace famille est déjà prêt : ouvrez l'appli Papote avec le bouton ci-dessous, ou celui de l'e-mail de confirmation. Il vous fait entrer dans votre famille, même si vous vous connectez avec une autre adresse e-mail que celle du paiement. Donnez le nom de votre proche, envoyez les premières photos et invitez la famille.</li>
     <li>Dès que la tablette part, vous recevez un e-mail avec le suivi du colis. Retirez-la au point relais choisi quand Mondial Relay vous prévient.</li>
     <li>Branchez-la et touchez « Commencer » : elle se connecte toute seule grâce à sa carte SIM et retrouve votre famille, sans code à scanner. Les photos déjà envoyées s'affichent.</li>
   </ol>
   <p class="ecran">Vous avez votre téléphone en main ? Ouvrez l'appli dès maintenant : votre famille vous y attend.</p>
-  <a class="btn" href="https://app.mapapote.fr">Ouvrir l'appli Papote</a>
+  <a class="btn" id="ouvrir-appli" href="https://app.mapapote.fr">Ouvrir l'appli Papote</a>
   <section class="recap" id="recap" hidden>
     <h2>Récapitulatif de votre commande</h2>
     <dl id="recap-liste"></dl>
@@ -133,10 +133,23 @@ main a:not([class]), footer a:not([class]), .rassure a { font-weight: 700; }
     // La carte du code est affichée tout de suite, en attente : la page ne saute pas quand il arrive (Tanguy, 2/11).
     var carte = document.getElementById('code');
     carte.hidden = false;
-    fetch('https://europe-west1-papote-famille.cloudfunctions.net/codeCommande?session=' + encodeURIComponent(session))
+    var adresse = 'https://europe-west1-papote-famille.cloudfunctions.net/codeCommande?session=' + encodeURIComponent(session);
+    // « Ouvrir l'appli » porte le code de la famille préparée : celui qui a payé y entre même avec une autre adresse
+    // (audit A40, 12/11). La famille est créée par le paiement, parfois quelques secondes après l'arrivée sur cette
+    // page : on redemande alors toutes les 4 s, 8 fois au plus. Le bouton marche dans tous les cas (appli seule).
+    function lienFamille(d, essai) {
+      if (d && d.famille) { document.getElementById('ouvrir-appli').href = d.famille; return; }
+      if (essai >= 8) return;
+      setTimeout(function () {
+        fetch(adresse).then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (n) { lienFamille(n, essai + 1); }, function () { lienFamille(null, essai + 1); });
+      }, 4000);
+    }
+    fetch(adresse)
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) {
         if (!d || !d.code) { carte.hidden = true; return; }
+        lienFamille(d, 0);
         document.getElementById('code-valeur').textContent = d.code;
         carte.classList.remove('attend');
         recap(d);

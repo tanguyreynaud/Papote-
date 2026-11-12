@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<title>Résilier mon abonnement · Papote</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#fdfaf5">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<!-- Polices servies par le site lui-même et demandées tout de suite : elles arrivent avant l'affichage
+     dans la plupart des cas. Sinon, le texte s'affiche d'abord en police du téléphone, agrandie ou réduite (« … repli »)
+     pour prendre la même place : rien ne saute quand la vraie police arrive. -->
+<link rel="preload" href="/polices/bricolage.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/polices/atkinson-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/polices/atkinson-700.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+@font-face { font-family: "Bricolage Grotesque"; src: url(/polices/bricolage.woff2) format("woff2"); font-weight: 200 800; font-display: swap; }
+@font-face { font-family: "Atkinson Hyperlegible"; src: url(/polices/atkinson-400.woff2) format("woff2"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "Atkinson Hyperlegible"; src: url(/polices/atkinson-700.woff2) format("woff2"); font-weight: 700; font-display: swap; }
+@font-face { font-family: "Atkinson repli"; src: local("Roboto"), local("Roboto-Regular"); font-weight: 400; size-adjust: 100%; }
+@font-face { font-family: "Atkinson repli"; src: local("Roboto Bold"), local("Roboto-Bold"); font-weight: 700; size-adjust: 108%; }
+@font-face { font-family: "Atkinson repli A"; src: local("Arial"), local("ArialMT"); font-weight: 400; size-adjust: 99.5%; }
+@font-face { font-family: "Atkinson repli A"; src: local("Arial Bold"), local("Arial-BoldMT"); font-weight: 700; size-adjust: 101.5%; }
+@font-face { font-family: "Bricolage repli"; src: local("Roboto SemiBold"), local("Roboto-SemiBold"); font-weight: 600; size-adjust: 105.5%; }
+@font-face { font-family: "Bricolage repli"; src: local("Roboto ExtraBold"), local("Roboto-ExtraBold"), local("Roboto Bold"), local("Roboto-Bold"); font-weight: 800; size-adjust: 106.5%; }
+@font-face { font-family: "Bricolage repli A"; src: local("Arial Bold"), local("Arial-BoldMT"); font-weight: 600 800; size-adjust: 100.5%; }
+</style>
+<style>
+:root { --bg: #fdfaf5; --text: #1b1a2e; --muted: #5d5b74; --accent: #4f46e5; --accent-text: #ffffff; --line: #e9e1d4; --erreur: #b4233c; color-scheme: light; }
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px 20px 7rem; background: var(--bg); color: var(--text); font: 400 1.125rem/1.6 "Atkinson Hyperlegible", "Atkinson repli", "Atkinson repli A", "Segoe UI", system-ui, sans-serif; }
+main { width: 100%; max-width: 32rem; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.25rem; overflow-wrap: anywhere; }
+.haut { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+.haut a { color: var(--muted); font-weight: 700; display: inline-flex; align-items: center; gap: .5rem; }
+.haut img { width: 2.2rem; height: 2.2rem; }
+h1 { margin: 0; font: 800 clamp(2rem, 6vw, 2.6rem)/1.1 "Bricolage Grotesque", "Bricolage repli", "Bricolage repli A", "Segoe UI", system-ui, sans-serif; text-wrap: balance; }
+p { margin: 0; color: var(--muted); }
+p b { color: var(--text); }
+form, .etape { display: grid; gap: 1rem; }
+[hidden] { display: none !important; }
+label { display: grid; gap: .35rem; font-weight: 700; }
+label span { font-weight: 400; font-size: 1rem; color: var(--muted); }
+input { font: inherit; min-height: 3.25rem; padding: .6rem 1rem; border: 2px solid var(--line); border-radius: 12px; background: #fff; color: var(--text); width: 100%; }
+input:focus { outline: 3px solid var(--accent); outline-offset: 1px; border-color: var(--accent); }
+.btn { justify-self: start; font: inherit; font-weight: 700; min-height: 3.25rem; padding: .7rem 1.5rem; border-radius: 999px; border: 2px solid var(--accent); background: var(--accent); color: var(--accent-text); cursor: pointer; }
+.btn.second { background: transparent; color: var(--accent); }
+.btn:disabled { opacity: .6; cursor: progress; }
+.boutons { display: flex; flex-wrap: wrap; gap: .75rem; }
+/* Les deux choix ont la même taille (règle du site) : côte à côte sur ordinateur, l'un sous l'autre sur téléphone. */
+.boutons .btn { flex: 1 1 14rem; display: inline-flex; align-items: center; justify-content: center; text-align: center; }
+.erreur { color: var(--erreur); font-weight: 700; }
+.carte { display: grid; gap: .6rem; padding: 1rem 1.25rem; background: #fff; border: 1px solid var(--line); border-radius: 14px; }
+a { color: var(--accent); text-decoration: none; }
+main a:not([class]) { font-weight: 700; }
+</style>
+</head>
+<body>
+<main>
+  <div class="haut">
+    <a href="/"><img src="icon.svg" alt="">Papote</a>
+    <a href="javascript:history.length > 1 ? history.back() : location.assign('/')">← Retour</a>
+  </div>
+  <h1>Résilier mon abonnement</h1>
+
+  <form id="identifier" novalidate>
+    <p>Pas besoin de vous connecter. Indiquez l'adresse e-mail utilisée pour la commande et son numéro : ils figurent sur l'e-mail de confirmation et sur vos factures.</p>
+    <label>Adresse e-mail de la commande
+      <input id="email" type="email" autocomplete="email" inputmode="email" required>
+    </label>
+    <label>Numéro de commande <span>8 lettres et chiffres, par exemple ABCD-EFGH</span>
+      <input id="code" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="12" required>
+    </label>
+    <p class="erreur" id="erreur" role="alert" hidden></p>
+    <button class="btn" type="submit" id="verifier">Continuer</button>
+  </form>
+
+  <section class="etape" id="confirmer" hidden>
+    <div class="carte">
+      <p>Abonnement <b id="pour"></b></p>
+      <p>Il s'arrêtera le <b id="date"></b>. Jusque-là, tout continue de marcher, et aucun mois n'est prélevé après cette date.</p>
+      <p>Le retour de la tablette prêtée est offert : la marche à suivre arrive par e-mail.</p>
+    </div>
+    <p class="erreur" id="erreur2" role="alert" hidden></p>
+    <div class="boutons">
+      <button class="btn" type="button" id="valider">Confirmer la résiliation</button>
+      <a class="btn second" href="/">Garder mon abonnement</a>
+    </div>
+  </section>
+
+  <section class="etape" id="fait" hidden>
+    <div class="carte">
+      <p><b id="fait-titre">Votre résiliation est enregistrée.</b></p>
+      <p id="fait-texte"></p>
+    </div>
+    <p>Vous changez d'avis ? Dans l'appli Papote, onglet Profil, « Garder mon abonnement », ou écrivez à <a href="mailto:contact@mapapote.fr">contact@mapapote.fr</a>.</p>
+  </section>
+
+  <p>Une question ? <a href="mailto:contact@mapapote.fr">contact@mapapote.fr</a>. Les conditions sont dans les <a href="cgv.html">conditions de vente</a>.</p>
+</main>
+<script>
+  // Résiliation sans compte (audit A13, Tanguy 12/11) : resilierSansCompte vérifie l'adresse et le numéro, montre la
+  // date d'arrêt, puis arrête l'abonnement sur « Confirmer ». Chaque bouton change tout de suite (texte, grisé) et ne
+  // peut pas envoyer deux demandes à la fois.
+  (function () {
+    var ADRESSE = 'https://europe-west1-papote-famille.cloudfunctions.net/resilierSansCompte';
+    var $ = function (id) { return document.getElementById(id); };
+    var saisie = null;
+    var code = new URLSearchParams(location.search).get('code');
+    if (code) $('code').value = code;
+
+    function dateFr(ms) { return new Date(ms).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }); }
+    function erreur(id, texte) { $(id).textContent = texte; $(id).hidden = !texte; }
+    function demander(corps) {
+      return fetch(ADRESSE, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(corps) })
+        .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { d.statut = r.status; return d; }); });
+    }
+    function fini(d) {
+      $('identifier').hidden = true; $('confirmer').hidden = true; $('fait').hidden = false;
+      if (d.etat === 'termine') {
+        $('fait-titre').textContent = 'Cet abonnement est déjà terminé.';
+        $('fait-texte').textContent = 'Rien ne sera plus prélevé.';
+      } else {
+        if (d.etat === 'deja') $('fait-titre').textContent = 'La résiliation était déjà enregistrée.';
+        $('fait-texte').textContent = 'L\'abonnement s\'arrête le ' + dateFr(d.le) + '. Un e-mail de confirmation a été envoyé à l\'adresse de la commande.';
+      }
+      window.scrollTo(0, 0);
+    }
+
+    $('identifier').addEventListener('submit', function (e) {
+      e.preventDefault();
+      var b = $('verifier');
+      if (b.disabled) return;
+      var email = $('email').value.trim();
+      var numero = $('code').value.trim();
+      if (!email || !numero) { erreur('erreur', 'Indiquez l\'adresse e-mail et le numéro de commande.'); return; }
+      erreur('erreur', '');
+      b.disabled = true; b.textContent = 'Vérification…';
+      demander({ email: email, code: numero })
+        .then(function (d) {
+          if (d.etat === 'a-confirmer') {
+            saisie = { email: email, code: numero };
+            $('pour').textContent = d.famille ? '« ' + d.famille + ' »' : 'Papote';
+            $('date').textContent = dateFr(d.le);
+            $('identifier').hidden = true; $('confirmer').hidden = false;
+            $('valider').focus();
+          } else if (d.etat) {
+            fini(d);
+          } else {
+            erreur('erreur', d.erreur || 'La demande n\'a pas abouti. Réessayez.');
+          }
+        }, function () { erreur('erreur', 'Pas de connexion internet. Réessayez dans un instant.'); })
+        .then(function () { b.disabled = false; b.textContent = 'Continuer'; });
+    });
+
+    $('valider').addEventListener('click', function () {
+      var b = $('valider');
+      if (b.disabled || !saisie) return;
+      erreur('erreur2', '');
+      b.disabled = true; b.textContent = 'Enregistrement…';
+      demander({ email: saisie.email, code: saisie.code, confirmer: true })
+        .then(function (d) {
+          if (d.etat) fini(d);
+          else erreur('erreur2', d.erreur || 'La résiliation n\'a pas abouti. Réessayez.');
+        }, function () { erreur('erreur2', 'Pas de connexion internet. Réessayez dans un instant.'); })
+        .then(function () { b.disabled = false; b.textContent = 'Confirmer la résiliation'; });
+    });
+  })();
+</script>
+<script src="chat-support.js" defer></script>
+</body>
+</html>
