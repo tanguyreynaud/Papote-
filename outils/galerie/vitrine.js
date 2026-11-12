@@ -85,7 +85,7 @@ async function prevenir(p, { email = '', tel = '', accord = true } = {}) {
   if (email) await p.fill('#attente-email', email);
   if (tel) await p.fill('#attente-tel', tel);
   if (accord) await p.check('#attente input[name="accord"]');
-  await p.locator('#attente button').click();
+  await p.locator('#attente button[type="submit"]').click();
   await pause(p, 400);
 }
 

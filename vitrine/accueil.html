@@ -595,7 +595,7 @@ footer a { color: var(--muted); }
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { dire('Indiquez votre e-mail.'); form.email.focus(); return; }
       if (tel && !/^0[67]\d{8}$/.test(tel)) { dire('Un numéro de portable français, en 06 ou 07.'); form.telephone.focus(); return; }
       if (!form.accord.checked) { dire('Cochez la case pour être prévenu.'); form.accord.focus(); return; }
-      var bouton = form.querySelector('button');
+      var bouton = form.querySelector('button[type="submit"]');
       bouton.disabled = true;
       msg.hidden = true;
       fetch('https://europe-west1-papote-famille.cloudfunctions.net/listeAttente', {
@@ -604,7 +604,7 @@ footer a { color: var(--muted); }
         body: JSON.stringify({ email: email, telephone: tel, accord: true }),
       }).then(function (r) {
         if (!r.ok) throw new Error(r.status);
-        form.querySelectorAll('label').forEach(function (l) { l.hidden = true; });
+        form.querySelectorAll('label, .mel-suggestion').forEach(function (l) { l.hidden = true; });
         bouton.hidden = true;
         dire('C\u2019est noté, merci ! Vous serez prévenu dès qu\u2019une tablette est prête.');
         section.scrollIntoView({ block: 'start' });
