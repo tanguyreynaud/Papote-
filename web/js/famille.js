@@ -27,7 +27,7 @@ import { startCall, watchTabletBusy, watchIncomingCalls, answerIncoming, warmUpC
 import { pushSupported, pushAllowed, pushRefused, enablePush, closeCallNotification, rememberNativeToken, inNativeApp, launchFromAndroidApp, nativeNotificationsOff } from './push.js';
 import { prepareVideo, unlockVideo } from './video.js';
 import { filmerPossible, filmerOuvert, ouvrirFilmer, fermerFilmer } from './filmer.js';
-import { startAgenda, stopAgenda } from './agenda.js';
+import { startAgenda, stopAgenda, limiteDuJour } from './agenda.js';
 import {
   isRealAccount, myEmail, signInGoogle, finishRedirect, sendEmailLink, isEmailLink, completeEmailLink, pendingEmail, logOut,
   myMemberships, familyName, tagLegacyMember, myInvitations, acceptInvitation,
@@ -186,7 +186,7 @@ function watchFeed(type, render) {
 const PAGES = {
   photos: () => watchFeed('photo', renderPhotos),
   videos: () => watchFeed('video', renderVideos),
-  messages: () => watchType(['message', 'reply'], 60, renderMessages),
+  messages: () => { verifierLimiteMessages(); return watchType(['message', 'reply'], 60, renderMessages); },
   agenda: () => null,
   pair: () => { resetPairing(); return () => { stopPair?.(); stopPair = null; }; },
   settings: () => { renderSettings(); return null; },
@@ -770,8 +770,32 @@ function retirerBulleEnRoute(b) {
   if (i >= 0) bullesEnRoute.splice(i, 1);
   b.li.remove();
 }
+// 50 messages écrits par jour et par famille (A12, Tanguy 12/11 ; serveur : functions/limites.js) : au-delà, les règles
+// refusent jusqu'à minuit (heure de Paris). La barre d'écriture laisse place à un mot calme, qui s'en va à minuit.
+const TEXTE_LIMITE_MESSAGES = "50 messages aujourd'hui : c'est le maximum pour la journée. Vous pourrez écrire de nouveau demain.";
+let finLimiteMessages = null;
+function montrerLimiteMessages(fin) {
+  finLimiteMessages = fin;
+  $('form-message').classList.toggle('limite', !!fin);
+  $('messages-limite').textContent = fin ? TEXTE_LIMITE_MESSAGES : '';
+  $('messages-limite').hidden = !fin;
+  clearTimeout(montrerLimiteMessages.minuit);
+  if (fin) montrerLimiteMessages.minuit = setTimeout(() => montrerLimiteMessages(null), Math.min(Math.max(0, fin - Date.now()) + 1000, 2 ** 31 - 1));
+}
+// Lit le compteur du jour (une lecture) : true si la journée est pleine.
+async function verifierLimiteMessages() {
+  if (!session) return false;
+  const fid = session.fid;
+  const fin = await limiteDuJour(fid, 'bloqueJusqua');
+  if (session?.fid === fid) montrerLimiteMessages(fin);
+  return !!fin;
+}
+// Écriture refusée : est-ce la limite du jour ?
+const refusParLimite = async (err) => err?.code === 'permission-denied' && verifierLimiteMessages();
+
 async function envoyerMessage(text) {
   if (paused()) return;
+  if (finLimiteMessages && finLimiteMessages > new Date()) { montrerLimiteMessages(finLimiteMessages); return; }
   messagesEnRoute++;
   $('btn-message').disabled = true;
   const item = { kind: 'message', text, author: { authorUid: session.uid, authorName: session.member.name } };
@@ -789,12 +813,23 @@ async function envoyerMessage(text) {
       // attente (ce serait envoyé deux fois).
       retirerBulleEnRoute(bulle);
       toast(TOAST_SERVEUR_MUET);
-      envoi.catch((err) => { console.warn('Message mis en attente', err); queue(item); });
+      envoi.catch(async (err) => {
+        if (await refusParLimite(err)) return;
+        console.warn('Message mis en attente', err);
+        queue(item);
+      });
       return;
     }
     // La base renvoie le message tout de suite après : la vraie bulle prend la place de celle-ci.
     setTimeout(() => retirerBulleEnRoute(bulle), 1500);
   } catch (err) {
+    // Journée pleine : le message n'est pas mis en attente (il serait refusé à chaque essai) ; son texte revient
+    // dans le champ, rien n'est perdu.
+    if (await refusParLimite(err)) {
+      retirerBulleEnRoute(bulle);
+      if (!$('message-text').value) { $('message-text').value = text; updateCount(); }
+      return;
+    }
     console.warn('Message mis en attente', err);
     bulle.li.querySelector('.bubble-foot').textContent = 'En attente de réseau';
     await queue(item);
@@ -1510,6 +1545,13 @@ async function flushOutbox() {
       try {
         await sendItem(item);
       } catch (err) {
+        // Message écrit refusé parce que la journée est pleine (50) : retiré de l'attente (il serait refusé à chaque
+        // essai), et on le dit une fois.
+        if (item.kind === 'message' && await refusParLimite(err)) {
+          await outbox('readwrite', (store) => store.delete(item.id)).catch(() => {});
+          notice(`Votre message « ${item.text} » n'est pas parti : ${TEXTE_LIMITE_MESSAGES.charAt(0).toLowerCase()}${TEXTE_LIMITE_MESSAGES.slice(1)}`);
+          continue;
+        }
         // Ce qui est déjà fait (photos transférées ou parties) est gardé pour le prochain essai.
         await outbox('readwrite', (store) => store.put(item)).catch(() => {});
         throw err;

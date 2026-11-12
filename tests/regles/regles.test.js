@@ -655,3 +655,94 @@ test('R8 : un jumelage confirmé ne s\'efface plus par un inconnu, même expiré
   await assertSucceeds(deleteDoc(doc(tablette('inconnu'), 'pairings/VIEU2345')));
   await assertSucceeds(deleteDoc(doc(tablette('tab'), `pairings/${PAIRING}`)));
 });
+
+// A12 (Tanguy 12/11) : 50 messages écrits par jour et par famille, 10 rappels créés par jour. Le serveur (functions/limites.js)
+// tient families/{fid}/compteurs/jour et y met l'heure de minuit (Paris) quand la limite est atteinte.
+test('A12 : messages refusés jusqu\'à minuit une fois la journée pleine ; photos, réponses et « vu » toujours permis', async () => {
+  await famille();
+  const julie = proche('julie');
+  const message = (extra = {}) => envoi('julie', { type: 'message', text: 'Coucou', image: null, imageUrl: null, storagePath: null, ...extra });
+  // Sans compteur, ou compteur sans blocage : permis.
+  await assertSucceeds(setDoc(doc(julie, `families/${FID}/posts/m1`), message()));
+  await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), `families/${FID}/compteurs/jour`), { jour: '2026-11-12', messages: 12 }));
+  await assertSucceeds(setDoc(doc(julie, `families/${FID}/posts/m2`), message()));
+  // Un message daté par l'appli (et non par le serveur) n'est pas accepté : le compteur ne le compterait pas.
+  await assertFails(setDoc(doc(julie, `families/${FID}/posts/m3`), message({ createdAt: Timestamp.fromMillis(Date.now() - 86400e3) })));
+  // Les membres lisent le compteur (message calme dans l'appli) ; personne ne l'écrit à part le serveur.
+  await assertSucceeds(getDoc(doc(julie, `families/${FID}/compteurs/jour`)));
+  await assertFails(getDoc(doc(proche('inconnu'), `families/${FID}/compteurs/jour`)));
+  await assertFails(setDoc(doc(julie, `families/${FID}/compteurs/jour`), { jour: '2026-11-12', messages: 0 }));
+  await assertFails(deleteDoc(doc(julie, `families/${FID}/compteurs/jour`)));
+
+  // 50 atteints : bloqué jusqu'à minuit.
+  await env.withSecurityRulesDisabled((ctx) => updateDoc(doc(ctx.firestore(), `families/${FID}/compteurs/jour`), {
+    messages: 50, bloqueJusqua: Timestamp.fromMillis(Date.now() + 3600e3),
+  }));
+  await assertFails(setDoc(doc(julie, `families/${FID}/posts/m4`), message()));
+  await assertFails(updateDoc(doc(julie, `families/${FID}/compteurs/jour`), { bloqueJusqua: null }));
+  // Les photos (quota mensuel), les réponses de la tablette, « vu » et bisous continuent.
+  await assertSucceeds(setDoc(doc(julie, `families/${FID}/posts/p1`), envoi('julie', { text: 'Plage' })));
+  await assertSucceeds(setDoc(doc(tablette('tab'), `families/${FID}/posts/r1`), envoi('tab', { type: 'reply', text: 'Merci', image: null, imageUrl: null, storagePath: null })));
+  await assertSucceeds(updateDoc(doc(tablette('tab'), `families/${FID}/posts/m1`), { seenAt: serverTimestamp(), hearts: 1 }));
+  // Minuit passé : de nouveau permis (sans attendre que le serveur remette le compteur à zéro).
+  await env.withSecurityRulesDisabled((ctx) => updateDoc(doc(ctx.firestore(), `families/${FID}/compteurs/jour`), {
+    bloqueJusqua: Timestamp.fromMillis(Date.now() - 1000),
+  }));
+  await assertSucceeds(setDoc(doc(julie, `families/${FID}/posts/m5`), message()));
+});
+
+test('A12 : rappels — création refusée après les 10 du jour, modifications et « c\'est fait » toujours permis', async () => {
+  await famille();
+  const julie = proche('julie');
+  const r = { title: 'Cachet', kind: 'medicament', time: '12:00', repeat: 'daily', createdBy: 'Julie', createdAt: serverTimestamp() };
+  await assertSucceeds(setDoc(doc(julie, `families/${FID}/reminders/r1`), r));
+  await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), `families/${FID}/compteurs/jour`), {
+    jour: '2026-11-12', rappels: 10, rappelsBloquesJusqua: Timestamp.fromMillis(Date.now() + 3600e3),
+  }));
+  await assertFails(setDoc(doc(julie, `families/${FID}/reminders/r2`), r));
+  await assertSucceeds(updateDoc(doc(julie, `families/${FID}/reminders/r1`), { title: 'Cachet du midi' }));
+  await assertSucceeds(updateDoc(doc(tablette('tab'), `families/${FID}/reminders/r1`), { lastAck: '2026-11-12 12:01' }));
+  await assertSucceeds(deleteDoc(doc(julie, `families/${FID}/reminders/r1`)));
+  // Les messages ne sont pas bloqués par les rappels.
+  await assertSucceeds(setDoc(doc(julie, `families/${FID}/posts/m1`), envoi('julie', { type: 'message', text: 'Coucou', image: null, imageUrl: null, storagePath: null })));
+});
+
+// R5 (Tanguy 12/11) : seul un responsable donne le droit d'appeler ; un proche en attente ne touche plus à sa fiche.
+test('R5 : canCall donné par un responsable seulement ; la tablette garde le sien', async () => {
+  await famille();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), `families/${FID}/members/paul`), fiche('paul', { status: 'active' }));
+    await setDoc(doc(ctx.firestore(), `families/${FID}/members/lea`), fiche('lea', { name: 'Léa', status: 'active', canCall: true }));
+  });
+  // Un proche ne se donne pas le droit, ni à l'inscription, ni après ; il peut se l'ôter.
+  await assertFails(setDoc(doc(proche('marc'), `families/${FID}/members/marc`), fiche('marc', { status: 'pending', canCall: true })));
+  await assertFails(setDoc(doc(proche('marc'), `families/${FID}/members/marc`), fiche('marc', { status: 'pending', canCall: false })));
+  await assertSucceeds(setDoc(doc(proche('marc'), `families/${FID}/members/marc`), fiche('marc', { status: 'pending' })));
+  await assertFails(updateDoc(doc(proche('paul'), `families/${FID}/members/paul`), { canCall: true }));
+  await assertFails(updateDoc(doc(proche('paul'), `families/${FID}/members/paul`), { name: 'Paulo', canCall: true }));
+  await assertSucceeds(updateDoc(doc(proche('lea'), `families/${FID}/members/lea`), { canCall: false }));
+  // Un autre proche (pas responsable) ne le donne pas non plus.
+  await assertFails(updateDoc(doc(proche('lea'), `families/${FID}/members/paul`), { canCall: true }));
+  // Le responsable le donne et le retire, et rien d'autre dans la même écriture.
+  await assertSucceeds(updateDoc(doc(proche('julie'), `families/${FID}/members/paul`), { canCall: true }));
+  await assertSucceeds(updateDoc(doc(proche('julie'), `families/${FID}/members/paul`), { canCall: false }));
+  await assertFails(updateDoc(doc(proche('julie'), `families/${FID}/members/paul`), { canCall: true, name: 'Paulo' }));
+  await assertFails(updateDoc(doc(proche('julie'), `families/${FID}/members/paul`), { canCall: 'oui' }));
+  // La tablette se déclare joignable pour ses appels (appels.js), comme avant.
+  await assertSucceeds(updateDoc(doc(tablette('tab'), `families/${FID}/members/tab`), { canCall: true }));
+});
+
+test('R5 : un proche en attente ne modifie plus sa fiche, mais peut partir', async () => {
+  await famille();
+  const marc = proche('marc');
+  await assertSucceeds(setDoc(doc(marc, `families/${FID}/members/marc`), fiche('marc', { status: 'pending' })));
+  await assertSucceeds(getDoc(doc(marc, `families/${FID}/members/marc`)));
+  for (const champs of [{ name: 'Marco' }, { telephone: '06 12 34 56 78' }, { genre: 'homme' }, { face: null }, { lastActive: serverTimestamp() }]) {
+    await assertFails(updateDoc(doc(marc, `families/${FID}/members/marc`), champs), JSON.stringify(champs));
+  }
+  await assertSucceeds(deleteDoc(doc(marc, `families/${FID}/members/marc`)));
+  // Accepté par un responsable : il retrouve sa fiche.
+  await assertSucceeds(setDoc(doc(marc, `families/${FID}/members/marc`), fiche('marc', { status: 'pending' })));
+  await assertSucceeds(updateDoc(doc(proche('julie'), `families/${FID}/members/marc`), { status: 'active' }));
+  await assertSucceeds(updateDoc(doc(marc, `families/${FID}/members/marc`), { name: 'Marco' }));
+});
