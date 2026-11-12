@@ -331,7 +331,7 @@ test('installation abandonnée en route : un autre proche la reprend 30 minutes 
   const t = await a.tablettePreparee();
   await a.afficherCode(t);
   await s.appeler('reserverTablette', { code: t.code, prenom: 'Julie' }, a.commeAdmin(julie));
-  const { fid } = await s.appeler('nommerFamille', { code: t.code, nom: 'Mamie Emma' }, julie);
+  const { fid } = await s.appeler('nommerFamille', { code: t.code, nom: 'Mamie Emma' }, a.commeAdmin(julie));
   await s.calme();
   await a.entrerDansLaFamille(t);
   assert.deepStrictEqual(await s.appeler('reserverTablette', { code: t.code, prenom: 'Paul' }, a.commeAdmin(paul)), { etat: 'occupe', par: 'Julie' });
@@ -358,7 +358,7 @@ test('« Annuler l\'installation » : famille effacée, la tablette se réinstal
   const t = await a.tablettePreparee();
   await a.afficherCode(t);
   await s.appeler('reserverTablette', { code: t.code, prenom: 'Julie' }, a.commeAdmin(julie));
-  const { fid } = await s.appeler('nommerFamille', { code: t.code, nom: 'Mamei Ema' }, julie);
+  const { fid } = await s.appeler('nommerFamille', { code: t.code, nom: 'Mamei Ema' }, a.commeAdmin(julie));
   await s.calme();
   await a.entrerDansLaFamille(t);
   await s.appeler('annulerInstallation', { fid }, julie);
@@ -382,7 +382,7 @@ test('« Annuler l\'installation » refusée quand la commande payée est déjà
   await a.preparerEtEnvoyer(id, t);
   await a.afficherCode(t);
   await s.appeler('reserverTablette', { code: t.code, prenom: 'Paul' }, a.commeAdmin(paul));
-  const { fid } = await s.appeler('nommerFamille', { code: t.code, nom: 'Mamie Emma' }, paul);
+  const { fid } = await s.appeler('nommerFamille', { code: t.code, nom: 'Mamie Emma' }, a.commeAdmin(paul));
   await s.calme();
   await assert.rejects(s.appeler('annulerInstallation', { fid }, paul), /commande est déjà reliée/);
   assert.ok(await s.lire(`families/${fid}`));
@@ -480,7 +480,7 @@ test('installation commencée mais jamais finie : pas gratuite pour toujours, «
   const t = { serie: 'INCONNUE-F2', tabletUid: 'tablette-f2', callsUid: 'appels-f2' };
   await a.afficherCode(t);
   await s.appeler('reserverTablette', { code: t.code, prenom: 'Julie' }, a.commeAdmin(julie));
-  const { fid } = await s.appeler('nommerFamille', { code: t.code, nom: 'Mamie Emma' }, julie);
+  const { fid } = await s.appeler('nommerFamille', { code: t.code, nom: 'Mamie Emma' }, a.commeAdmin(julie));
   await s.calme();
   await a.entrerDansLaFamille(t);
   let fam = await s.lire(`families/${fid}`);

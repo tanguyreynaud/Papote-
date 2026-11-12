@@ -194,8 +194,8 @@ async function installer(proche, t, { nom = 'Mamie Emma' } = {}) {
   if (p && p.status === 'confirmed' && p.auto) return entrerDansFamillePreparee(proche, t, { nom });
   const r = await s.appeler('reserverTablette', { code: t.code, prenom: proche.prenom }, commeAdmin(proche));
   if (r.etat !== 'reserve') throw new Error(`Réservation refusée : ${JSON.stringify(r)}`);
-  await s.appeler('nommerFamille', { reveil: true }, proche);
-  const { fid } = await s.appeler('nommerFamille', { code: t.code, nom }, proche);
+  await s.appeler('nommerFamille', { reveil: true }, commeAdmin(proche));
+  const { fid } = await s.appeler('nommerFamille', { code: t.code, nom }, commeAdmin(proche));
   await s.calme();
   await entrerDansLaFamille(t);
   await envoyer(proche, fid, 'photo');

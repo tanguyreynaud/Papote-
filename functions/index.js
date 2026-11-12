@@ -88,7 +88,10 @@ const COMMANDES_OUVERTES = defineString('COMMANDES_OUVERTES', { default: 'non' }
 const commandesOuvertes = () => COMMANDES_OUVERTES.value() === 'oui' || STRIPE_SECRET.value().startsWith('sk_test_');
 const APPLI_FAMILLE = 'https://app.mapapote.fr/';
 // Famille préparée dès la commande (famille-preparee.js) : créée au paiement, la tablette y entre seule.
-const famillePreparee = require('./famille-preparee').brancher({ db, logger });
+// Tablette qui a internet mais ne trouve pas sa famille : Papote prévenu tout de suite, une fois (M0).
+const famillePreparee = require('./famille-preparee').brancher({
+  db, logger, prevenirPapote: (titre, commande, detail) => prevenirPapote(titre, commande ? { id: commande } : null, detail),
+});
 // E-mails : MAIL_SMTP (« hote:port:utilisateur ») et MAIL_EXPEDITEUR dans .env, mot de passe en secret.
 const MAIL_SMTP = defineString('MAIL_SMTP', { default: 'smtp.gmail.com:465:' });
 const MAIL_EXPEDITEUR = defineString('MAIL_EXPEDITEUR', { default: '' });
@@ -2821,13 +2824,16 @@ async function rappelsJumelage() {
       continue;
     }
     const depart = c.envoyeeLe && c.envoyeeLe.toMillis();
-    // Colis retiré il y a 2 jours, tablette toujours pas entrée : sans doute pas de connexion chez la personne (M0).
-    const recu = c.preparation && c.preparation.recuLe;
-    if (!c.alerteConnexion && !c.alerteJumelage && livraison.alerteConnexionDue(recu, maintenant)) {
+    // Tablette arrivée il y a 48 h (colis retiré, remise en main propre par Papote, ou colis sans suivi compté arrivé)
+    // et toujours pas entrée : sans doute pas de connexion chez la personne (M0). Une seule fois (alerteConnexion).
+    const arrivee = livraison.arriveeTablette(c);
+    // Déjà 20 jours (tâche manquée, vieille commande) : seule l'alerte des 20 jours ci-dessous part.
+    if (!c.alerteConnexion && !c.alerteJumelage && arrivee && livraison.alerteConnexionDue(arrivee.le, maintenant)
+      && !livraison.alerteDue(depart, maintenant)) {
       await snap.ref.update({ alerteConnexion: true });
-      logger.warn(`Commande ${snap.id} : colis retiré il y a ${livraison.ALERTE_CONNEXION_JOURS} jours, tablette toujours pas connectée.`);
-      await prevenirPapote(`Tablette pas encore connectée, colis retiré il y a 2 jours : ${c.nom || c.email || snap.id}`, snap,
-        'Le colis a été retiré il y a 2 jours et la tablette n\'est toujours pas entrée dans sa famille. Le plus souvent, elle n\'a pas de connexion chez la personne (pas de box, wifi à choisir, 4G faible). Appelez le client pour l\'aider.');
+      const a = livraison.alerteConnexion({ ...c, id: snap.id }, arrivee.comment);
+      logger.warn(`Commande ${snap.id} : ${a.titre}`);
+      await prevenirPapote(a.titre, snap, a.detail);
     }
     if (livraison.alerteDue(depart, maintenant) && !c.alerteJumelage) {
       await snap.ref.update({ alerteJumelage: true });
