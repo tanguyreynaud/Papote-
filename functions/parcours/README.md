@@ -50,6 +50,9 @@ l'admin, inscription de la tablette (fiche d'achat reprise, clé App Check jamai
 même tablette, autre tablette refusée, QR expiré après 24 h ; hors critères noté sans refus, tablette d'essai à part,
 20 QR par heure au plus.
 
+`code-remplacement.parcours.js` : code de tablette de remplacement (R2) : réservé à l'admin, 7 jours, double clic = un
+seul code, nouveau code qui efface l'ancien libre (et un vieux code sans échéance), code pris gardé, famille supprimée.
+
 `courriels-rejetes.parcours.js` : e-mails perdus (courriels-perdus.js) : webhook Brevo refusé sans la clé ; rejet
 noté sur la bonne commande et en « À faire », une seule fois ; envoi groupé, adresse sans commande, adresse corrigée ;
 « colis parti » ou mise en demeure non partis (`reglages.mailsEnPanne = n`) : un seul nouvel essai à la tâche

@@ -3861,6 +3861,25 @@ exports.gestionFamilleOfferte = onCall(async (request) => {
   return { ok: true };
 });
 
+// Tablette de remplacement (famille, ⋮ « Préparer une tablette de remplacement ») : code d'installation à usage
+// unique, valable 7 jours (audit 8, R2 ; Tanguy 12/11). { fid, action: 'lire' | 'nouveau' }
+// -> { code, etat: 'valable' | 'utilise' | 'expire' | 'absent', creeLe, expire, utiliseLe, deja? }
+// Double appui sur « Nouveau code » : un seul code (le même est rendu dans la minute tant qu'il n'a pas servi).
+const codeRemplacement = require('./code-remplacement').brancher({ db, codeAuHasard: require('./installation').regles.codeAuHasard });
+exports.gestionCodeRemplacement = onCall(async (request) => {
+  verifierAdmin(request);
+  if (reveil(request)) return { ok: true };
+  const { fid, action } = request.data || {};
+  if (typeof fid !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(fid) || !['lire', 'nouveau'].includes(action)) {
+    throw new HttpsError('invalid-argument', 'Famille ou action manquante.');
+  }
+  if (action === 'lire') return codeRemplacement.lire(fid);
+  const r = await codeRemplacement.nouveau(fid, { uid: request.auth.uid, qui: request.auth.token.email || request.auth.uid });
+  if (!r) throw new HttpsError('not-found', 'Famille introuvable.');
+  if (!r.deja) logger.info(`Famille ${fid} : code de tablette de remplacement créé (7 jours, une seule tablette)`);
+  return r;
+});
+
 // Commande offerte (les mamies de Tanguy) : une vraie commande, sans Stripe, avec son code de commande.
 // La famille choisie passe « offerte » (jamais en pause) ; la tablette choisie est rattachée à la commande.
 // { nom, email?, telephone?, fid?, tablette?, dejaInstallee? } (formule ignorée : toujours 'sim')
@@ -3971,6 +3990,8 @@ async function effacerFamille({ fid, snap, commandes, par }) {
   // Jumelages de cette famille : sans eux, le rattrapage de nuit ne relie plus la tablette à une famille disparue.
   const jumelages = await db().collection('pairings').where('fid', '==', fid).get();
   await Promise.all(jumelages.docs.map((d) => d.ref.delete()));
+  // Codes de tablette de remplacement de cette famille (invites/, hors de la fiche).
+  await codeRemplacement.effacer(fid);
   await Promise.all(commandes.map((d) => d.ref.update({ familleSupprimeeLe: Date.now() })));
   await db().collection('suppressions').add({
     fid, nom: snap.get('name') || null, membres: membres.size, le: Date.now(), par,

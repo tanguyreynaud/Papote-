@@ -46,6 +46,15 @@ sur les émulateurs Firebase, Stripe simulé. Lancé aussi par GitHub à chaque 
 - Tablette pas jumelée : rappels au client 5 et 12 jours après l'envoi (`rappelsJumelage`), puis `alerteJumelage: true` sur la commande à 20 jours.
 - E-mails envoyés par SMTP : `MAIL_SMTP` et `MAIL_EXPEDITEUR` dans `.env`, mot de passe rangé par `outils\mail\installer-mail.bat` (secret `MAIL_MOT_DE_PASSE`, à créer AVANT le déploiement).
 
+## Tablette de remplacement : code à usage unique
+
+`code-remplacement.js` (audit 8, R2 ; Tanguy 12/11). L'admin prépare le code depuis la famille (⋮ « Préparer une
+tablette de remplacement ») : `gestionCodeRemplacement({ fid, action: 'lire' | 'nouveau' })`. Le code (`invites/{code}`,
+`kind: 'tablette'`, `expire` à 7 jours) sert à **une seule tablette** : elle le prend en entrant (`usedBy`, `callsUid`,
+`usedAt`, dans la même écriture que sa fiche ; voir `firestore.rules` de l'appli), son compte des appels entre ensuite
+avec le même code. Un nouveau code efface l'ancien s'il n'a pas servi ; double clic : le même code dans la minute.
+Suivi du dernier code : `codesRemplacement/{fid}` (serveur seulement), effacé avec la famille.
+
 ## E-mails perdus (rejets Brevo, envois ratés)
 
 `courriels-perdus.js` (audit des e-mails du 11/11, point 2). Chaque e-mail perdu va dans `courrielsPerdus/{id}`, sur la
