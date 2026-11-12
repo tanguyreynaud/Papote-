@@ -1425,6 +1425,9 @@ async function paiementTermine(session) {
       ...(meta.reprise === '1' ? { reprise: true } : {}),
       delai: meta.delai || null,
       stripeCustomerId: session.customer,
+      // Payée avec la clé réelle de Stripe (pas une commande d'essai) : les outils qui vident la base refusent de
+      // tourner dès qu'une telle commande existe (outils/admin/commandes-reelles.js, audit du 12/11 N4).
+      livemode: session.livemode === true,
       fid: (existante.exists && existante.get('fid')) || null,
       creeLe: FieldValue.serverTimestamp(),
     }, { merge: true });
@@ -2878,7 +2881,15 @@ exports.brevoWebhook = onRequest({ secrets: [BREVO_WEBHOOK_SECRET], maxInstances
 // Les autres tâches planifiées, regroupées dans une seule fonction lancée toutes les heures (taches.js : Cloud
 // Scheduler est gratuit jusqu'à 3 tâches). Chacune garde son heure : voir taches.PLANNING.
 exports.tachesHoraires = require('./taches').planifier({
-  relancesPaniers, finDeGrace, restitutions, rappelsJumelage, relancesSepa,
+  relancesPaniers, finDeGrace, restitutions, relancesSepa,
+  // Chaque jour à 10 h : rappels de jumelage, et dans le même créneau le ménage quotidien (menage.js : journaux de
+  // plus de 90 jours, comptes sans famille depuis 3 mois). Pas de nouvelle tâche planifiée (règle de coûts) ; une
+  // erreur du ménage est journalisée sans toucher aux rappels.
+  rappelsJumelage: async () => {
+    const [rappels, menage] = await Promise.allSettled([rappelsJumelage(), require('./menage').menageQuotidien()]);
+    if (menage.status === 'rejected') logger.error('Ménage quotidien en erreur', menage.reason);
+    if (rappels.status === 'rejected') throw rappels.reason;
+  },
   gestionCourrier: gestion.gestionCourrier, gestionAutomatique: gestion.gestionAutomatique,
   gestionRecap: gestion.gestionRecap, gestionCloture: gestion.gestionCloture,
   gestionCopieVentes: gestion.gestionCopieVentes,

@@ -175,11 +175,29 @@ function webhookBrevo(db, secret, logger = console) {
 
 // Contenu gardé pour le nouvel essai : objet, HTML, texte, en-têtes. Pas les pièces jointes (livres comptables :
 // rangés dans l'admin de toute façon) ni un contenu trop gros pour un document : ligne « À faire » tout de suite.
+// Exception : les documents de Papote (functions/documents/, CGV en PDF jointes à la confirmation de commande, A13)
+// sont gardés par leur nom de fichier et rejoints au nouvel essai.
+const DOCUMENTS = require('node:path').join(__dirname, 'documents');
+function documentDePapote(p) {
+  return Boolean(p && typeof p.path === 'string' && require('node:path').dirname(p.path) === DOCUMENTS && !p.content);
+}
 function contenuGardable(contenu) {
-  if (!contenu || contenu.attachments) return null;
+  if (!contenu) return null;
+  const pieces = contenu.attachments || [];
+  if (!pieces.every(documentDePapote)) return null;
   const garde = { subject: texte(contenu.subject, 500), html: contenu.html || null, text: contenu.text || null };
+  if (pieces.length) {
+    garde.documents = pieces.map((p) => ({ filename: p.filename, fichier: require('node:path').basename(p.path), contentType: p.contentType || null }));
+  }
   if (contenu.headers && typeof contenu.headers === 'object') garde.headers = contenu.headers;
   return Buffer.byteLength(JSON.stringify(garde)) <= TAILLE_MAX ? garde : null;
+}
+
+// Contenu gardé → contenu à envoyer : les documents de Papote redeviennent des pièces jointes.
+function contenuARenvoyer(garde) {
+  if (!garde || !garde.documents) return garde;
+  const { documents, ...reste } = garde;
+  return { ...reste, attachments: documents.map((x) => ({ filename: x.filename, path: require('node:path').join(DOCUMENTS, require('node:path').basename(x.fichier)), ...(x.contentType ? { contentType: x.contentType } : {}) })) };
 }
 
 // Branché sur mail.surEchec (index.js) : appelé par mail.envoyer quand l'envoi d'un e-mail important échoue.
@@ -236,7 +254,7 @@ async function reessayer(db, expedier, logger = console) {
     const commande = d.commande ? db.doc(`commandes/${d.commande}`) : null;
     const notes = [texteCommande({ ...d, leMs: le }), d.erreur];
     try {
-      await expedier(d.a, d.contenu);
+      await expedier(d.a, contenuARenvoyer(d.contenu));
       await doc.ref.delete();
       bilan.repartis += 1;
       logger.log(`E-mail « ${d.sujet} » à ${d.a} reparti au second essai`);
@@ -321,5 +339,5 @@ async function adresseCorrigee(db, commande, ancienne, logger = console) {
 module.exports = {
   COLLECTION, EVENEMENTS, DELAI_REESSAI,
   cleValide, evenementsDe, idEvenement, noterRejet, webhookBrevo,
-  contenuGardable, noterEchecEnvoi, reessayer, lignesAFaire, enAttente, traiter, adresseCorrigee, texteCommande,
+  contenuGardable, contenuARenvoyer, noterEchecEnvoi, reessayer, lignesAFaire, enAttente, traiter, adresseCorrigee, texteCommande,
 };

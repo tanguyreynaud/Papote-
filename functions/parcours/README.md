@@ -55,6 +55,11 @@ noté sur la bonne commande et en « À faire », une seule fois ; envoi groupé
 « colis parti » ou mise en demeure non partis (`reglages.mailsEnPanne = n`) : un seul nouvel essai à la tâche
 horaire suivante, puis « À faire » ; rien pour un e-mail de confort.
 
+`menage.parcours.js` : ménage des données (menage.js) : adresses IP d'un appel effacées à sa fin (décroché, manqué,
+appel de la famille), appels, ordres, alertes et incidents de plus de 90 jours effacés par lots (récents, appel en
+cours et ordre en attente gardés), comptes sans famille depuis plus de 3 mois effacés (membre, responsable, tablette,
+administrateur et commande en cours gardés).
+
 Le refus du 31e proche lui-même est une règle Firestore : il est testé avec les règles, dans `tests/regles/`
 (branche de l'app web).
 

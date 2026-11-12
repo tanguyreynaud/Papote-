@@ -73,3 +73,18 @@ test('mail.envoyer : l\'échec d\'un e-mail important est noté puis l\'erreur r
     mail.surEchec(null);
   }
 });
+
+test('A13 : la confirmation de commande (CGV en PDF jointes) est gardée et renvoyée avec ses CGV', () => {
+  const mail = require('./mail');
+  const c = mail.commandeConfirmee({ nom: 'Paul', code: 'AB-12' });
+  const garde = cp.contenuGardable(c);
+  assert.ok(garde, 'gardée pour le nouvel essai');
+  assert.deepStrictEqual(garde.documents, [{ filename: 'Conditions générales de vente Papote.pdf', fichier: 'cgv.pdf', contentType: 'application/pdf' }]);
+  assert.ok(JSON.stringify(garde).length < 200000, 'le PDF lui-même n\'est pas copié dans la base');
+  const renvoi = cp.contenuARenvoyer(garde);
+  assert.deepStrictEqual(renvoi.attachments, c.attachments);
+  assert.strictEqual(renvoi.subject, c.subject);
+  // Un fichier hors de functions/documents/ n'est jamais rejoint.
+  assert.strictEqual(cp.contenuGardable({ ...c, attachments: [{ filename: 'x', path: '/etc/passwd' }] }), null);
+  assert.ok(!cp.contenuARenvoyer({ subject: 's', documents: [{ filename: 'x', fichier: '../../index.js' }] }).attachments[0].path.includes('..'));
+});
