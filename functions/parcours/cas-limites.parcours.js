@@ -84,6 +84,8 @@ test('abonnement pris depuis l\'appli avec la tablette déjà installée : rien 
   assert.ok(mailsA(julie.email).some((m) => /abonnement/i.test(m)), 'confirmation');
   const stock = await s.requete('stockDisponible');
   assert.strictEqual(stock.json.precommande, true, 'la tablette installée ne compte plus dans le stock');
+  // Gardé 60 s par le cache du site (/api/stock), pour que l'accueil affiche tout de suite le bon bouton (12/11).
+  assert.strictEqual(stock.entetes['cache-control'], 'public, max-age=60, s-maxage=60');
 });
 
 test('tablette de test jumelée sans commande (famille test de Tanguy) : jamais à vendre, rien à cocher', async () => {

@@ -70,7 +70,7 @@ const CORS = { 'Access-Control-Allow-Origin': '*' };
 async function stockVide(p, listeAttente = 204) {
   // Défilement immédiat vers « Être prévenu » : la capture ne tombe pas au milieu du défilement doux.
   await p.emulateMedia({ reducedMotion: 'reduce' });
-  await p.route('**/stockDisponible', (r) => r.fulfill({ contentType: 'application/json', headers: CORS, body: '{"disponible":false,"precommande":true,"attenteLongue":false}' }));
+  await p.route(/\/(stockDisponible|api\/stock)/, (r) => r.fulfill({ contentType: 'application/json', headers: CORS, body: '{"disponible":false,"precommande":true,"attenteLongue":false}' }));
   await p.route('**/listeAttente', (r) => r.fulfill({ status: listeAttente, headers: { ...CORS, 'Access-Control-Allow-Headers': 'Content-Type' }, body: '' }));
   // commande.html renvoie vers « / » : ici, pas de fonction accueil, la page elle-même.
   // WebKit (--iphone) refuse une redirection simulée : la page renvoie alors elle-même vers la bonne adresse.
@@ -225,7 +225,7 @@ async function ouvrir(browser, base, scene, taille) {
   await page.clock.install({ time: new Date('2026-10-26T10:30:00+01:00') });
   // Internet coupé (sauf les polices), puis les faux services : Playwright regarde les routes de la dernière à la première.
   await page.route(/^https?:\/\/(?!127\.0\.0\.1|fonts\.googleapis\.com|fonts\.gstatic\.com)/, (r) => r.abort());
-  await page.route('**/stockDisponible', (r) => r.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: '{"disponible":4}' }));
+  await page.route(/\/(stockDisponible|api\/stock)/, (r) => r.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: '{"disponible":4}' }));
   await page.route('**/compter**', (r) => r.fulfill({ status: 204, headers: { 'Access-Control-Allow-Origin': '*' } }));
   // « Payer » part vers la fonction commander (puis Stripe) : ici une réponse 204, que le navigateur ignore,
   // la page reste donc affichée avec « Un instant… ».

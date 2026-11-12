@@ -253,7 +253,7 @@ body .ps-bouton { bottom: 6.5rem; }
     try { return Date.now() - Number(sessionStorage.getItem('papote-paiement') || 0) < 32 * 60000; } catch (_) { return false; }
   }
   // On ne vend que le stock réel (Tanguy, 2026-10-30) : plus de tablette, l'accueil propose « Être prévenu ».
-  fetch('https://europe-west1-papote-famille.cloudfunctions.net/stockDisponible')
+  fetch('/api/stock')
     .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
     .then(function (d) { if (d.disponible === false && !paiementOuvert()) location.replace('/?complet=1#prevenir'); })
     .catch(function () {});

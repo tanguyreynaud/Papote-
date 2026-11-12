@@ -345,7 +345,7 @@ async function requete(nom, { query = {}, corps, entetes = {}, depuis = '203.0.1
   const texte = await r.text();
   let json = null;
   try { json = JSON.parse(texte); } catch (e) { /* page ou texte */ }
-  return { statut: r.status, redirection: r.headers.get('location'), texte, json };
+  return { statut: r.status, redirection: r.headers.get('location'), texte, json, entetes: Object.fromEntries(r.headers) };
 }
 
 // Événements Stripe en attente : envoyés au webhook, un par un, comme Stripe.
