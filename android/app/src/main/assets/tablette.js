@@ -1754,6 +1754,17 @@
     }
     if (showIt) wifiCard.papoteWifi = !(st.sim && !st.wifi);
     show(wifiCard, !!showIt);
+    placerBandeaux();
+  }
+
+  // « Pas d'internet » se pose sous « Tablette débranchée », quelle que soit la taille de celle-ci : la
+  // grande version (« Pensez à rebrancher la tablette », après 5 min) passait par-dessus un décalage fixe
+  // et les deux étiquettes se chevauchaient (Tanguy, T-003, 12/11).
+  function placerBandeaux() {
+    if (!wifiCard) return;
+    var dessus = powerBanner && !powerBanner.hasAttribute('hidden') && powerBanner.offsetHeight;
+    var vmin = Math.min(window.innerWidth, window.innerHeight) / 100;
+    wifiCard.style.top = dessus ? Math.round(powerBanner.offsetTop + powerBanner.offsetHeight + 2 * vmin) + 'px' : '';
   }
 
   // Une fois toutes les 30 minutes au plus : si internet ne laisse pas passer Firebase, pas de rechargements en boucle.
@@ -1800,6 +1811,7 @@
       powerBanner.querySelector('span').textContent = longtemps ? 'Pensez à rebrancher la tablette' : 'Tablette débranchée';
     }
     document.body.classList.toggle('debranchee', !!showIt);
+    placerBandeaux();
   }
 
   // ---------- Appeler la famille (appel audio, sans vidéo) ----------

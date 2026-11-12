@@ -435,6 +435,27 @@ test('tablette débranchée depuis une minute : bandeau « rebranchez son charge
   } finally { await b.fermer(); }
 });
 
+// Tanguy (T-003, 12/11) : débranchée depuis plus de 5 min et sans internet, « Pensez à rebrancher la
+// tablette » (grande version) recouvrait « Pas d'internet ». Le test d'avant ne regardait qu'une étiquette.
+test('débranchée longtemps et sans internet : les deux étiquettes se lisent, sans se chevaucher', async () => {
+  const b = await ouvrir('2026-10-26T10:00:00', { secteur: false, reseau: { wifi: '', internet: false, mobile: false, sim: true } });
+  try {
+    await b.android('onPosts', lot([envoi({ seen: true })]));
+    for (const attente of [80000, 300000]) {   // petite étiquette, puis la grande après 5 min
+      await b.avancer(attente);
+      const boites = await b.page.evaluate(() => [...document.querySelectorAll('.power-banner')]
+        .filter((e) => !e.hasAttribute('hidden'))
+        .map((e) => { const r = e.getBoundingClientRect(); return { net: e.classList.contains('net-banner'), haut: r.top, bas: r.bottom }; }));
+      assert.strictEqual(boites.length, 2, 'les deux étiquettes affichées');
+      const prise = boites.find((x) => !x.net);
+      const net = boites.find((x) => x.net);
+      assert.ok(net.haut >= prise.bas, `« Pas d'internet » sous « débranchée » (${net.haut} >= ${prise.bas})`);
+    }
+    assert.match(await b.texte('.power-banner.longtemps'), /rebrancher/);
+    await sansErreur(b);
+  } finally { await b.fermer(); }
+});
+
 test('diaporama : la photo de l\'accueil l\'ouvre, défilement toutes les 10 s, retour seul à l\'accueil', async () => {
   const b = await ouvrir();
   try {
