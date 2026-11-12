@@ -150,7 +150,8 @@ final class Appels {
         // Gardée pour « Répondre » : l'écran d'appel s'ouvre sur cette famille (plusieurs possibles).
         if (fid != null) prefs(ctx).edit().putString("fid." + cid, fid).apply();
         creerCanaux(ctx);
-        Person appelant = new Person.Builder().setName(nom).setImportant(true).build();
+        // Le style appel affiche le nom de l'appelant en titre : « SOS : Mamie » pour un SOS.
+        Person appelant = new Person.Builder().setName(sos ? PREFIXE_SOS + nom : nom).setImportant(true).build();
         PendingIntent ecran = PendingIntent.getActivity(ctx, code(cid, 0),
                 ecranAppel(ctx, cid, nom, null).putExtra(EXTRA_SOS, sos), PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
         PendingIntent repondre = PendingIntent.getActivity(ctx, code(cid, 1),

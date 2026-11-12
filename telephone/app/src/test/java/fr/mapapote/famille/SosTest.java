@@ -88,7 +88,7 @@ public class SosTest {
         List<Notification> l = surCanal(Appels.CANAL_SOS);
         assertEquals(1, l.size());
         Notification n = l.get(0);
-        assertEquals("SOS : Mamie Emma vous appelle", titre(n));
+        assertEquals("le style appel montre le nom de l'appelant, précédé de SOS", "SOS : Mamie Emma", titre(n));
         assertEquals(Notification.CATEGORY_ALARM, n.category);
         assertTrue("sonne en boucle", (n.flags & Notification.FLAG_INSISTENT) != 0);
         assertNotNull("plein écran, téléphone verrouillé", n.fullScreenIntent);
@@ -100,7 +100,7 @@ public class SosTest {
         Sonnerie.recevoir(ctx, msg("type", "appel", "cid", "c2", "nom", "SOS : Mamie"));
         List<Notification> l = surCanal(Appels.CANAL_SOS);
         assertEquals(1, l.size());
-        assertEquals("pas « SOS : SOS : »", "SOS : Mamie vous appelle", titre(l.get(0)));
+        assertEquals("pas « SOS : SOS : »", "SOS : Mamie", titre(l.get(0)));
     }
 
     @Test
@@ -109,7 +109,7 @@ public class SosTest {
         assertEquals(0, surCanal(Appels.CANAL_SOS).size());
         List<Notification> l = surCanal(Appels.CANAL_APPELS);
         assertEquals(1, l.size());
-        assertEquals("Mamie vous appelle", titre(l.get(0)));
+        assertEquals("Mamie", titre(l.get(0)));
         assertEquals(Notification.CATEGORY_CALL, l.get(0).category);
     }
 
