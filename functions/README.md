@@ -25,6 +25,13 @@ famille (en journée), une fois par forfait (`members/{uid}.alerteForfait`). Le 
 `families/{fid}.forfaitSim.finForfait` (« débit réduit » ou « internet coupé », choisi sur la carte SIM dans l'admin).
 Forfait « internet coupé » épuisé puis tablette muette : « internet sans doute coupé par le forfait », pas une panne.
 
+Ménage quotidien (`menage.js`, lancé avec `rappelsJumelage` à 10 h, sans tâche planifiée de plus) : appels finis,
+ordres exécutés ou refusés (`families/{fid}/calls`, `commands`), `alertes/` et `incidentsAppels/` de plus de 90 jours,
+par lots de 300 (jamais un appel qui sonne ou en cours, jamais un ordre qui attend sa tablette) ; comptes de connexion
+membres d'aucune famille et sans connexion depuis 3 mois (jamais une tablette, l'administrateur, un responsable ou
+un e-mail dont une commande est en cours). À la fin de chaque appel, `appelsManques` efface ses adresses IP
+(`offer.sdp`, `answer.sdp`, candidats réseau).
+
 ## Tests
 
 `npm test` : règles de passage entre statuts (actif, impayé, suspendu...).

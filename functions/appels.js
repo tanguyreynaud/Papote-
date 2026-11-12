@@ -3,6 +3,7 @@
 //   appelsSonnerie  appel créé par la tablette : notification push « Mamie vous appelle »
 //   appelsManques   l'appel de la tablette s'arrête sans réponse : « Appel manqué de Mamie » ;
 //                   s'il a été décroché, les autres téléphones arrêtent de sonner (« fin »)
+//                   et à la fin de tout appel (décroché ou non), ses adresses IP sont effacées (menage.js)
 //   jetonAppelNatif connexion de l'écran d'appel de l'app Android (voir envoyerConnexions)
 //                   SOS (bouton « SOS famille ») : « SOS : Mamie vous appelle » ; sans réponse au
 //                   2e essai, « Mamie a appuyé sur SOS » à toute la famille
@@ -23,6 +24,7 @@ const { BASE_FIRESTORE, REGION_FIRESTORE, db: base, restaurationEnCours } = requ
 const { envoyer } = require('./push');
 const mail = require('./mail');
 const journal = require('./journal-alertes');
+const menage = require('./menage');
 
 // Appel ou SOS qui ne fait sonner aucun téléphone (D1, Tanguy 2026-10-27) : tous les proches le savent par
 // e-mail (mêmes réglages que index.js ; en simulation, l'envoi lui-même, mail.expedier, est remplacé).
@@ -147,6 +149,15 @@ exports.jetonAppelNatif = onCall(async (request) => {
 exports.appelsManques = onDocumentUpdated({ document: DOC, region: REGION_FIRESTORE, database: BASE_FIRESTORE, secrets: [MAIL_MOT_DE_PASSE] }, async (event) => {
   const avant = event.data.before.data();
   const apres = event.data.after.data();
+  // Appel fini (décroché ou non) : ses adresses IP sont effacées tout de suite (A26, menage.js). Une erreur est
+  // journalisée sans empêcher « Appel manqué » ; le ménage des 90 jours efface l'appel entier plus tard.
+  if (menage.vientDeFinir(avant, apres)) {
+    try {
+      await menage.effacerTracesAppel(event.data.after.ref, apres);
+    } catch (e) {
+      logger.error(`Appel ${event.params.cid} : adresses IP non effacées`, e);
+    }
+  }
   if (!avant || !apres || avant.state !== 'ringing' || apres.state === 'ringing') return;
   const db = base();
   const { fid, cid } = event.params;
