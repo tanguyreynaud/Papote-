@@ -2902,6 +2902,8 @@ exports.tachesHoraires = require('./taches').planifier({
   courrielsAReessayer: () => courrielsPerdus.reessayer(db, (a, contenu) => mail.expedier({
     smtp: MAIL_SMTP.value(), expediteur: MAIL_EXPEDITEUR.value(), motDePasse: MAIL_MOT_DE_PASSE.value(), a, contenu,
   }), logger),
+  // Sauvegarde du dimanche (PC de Tanguy) sans réussite depuis plus de 8 jours : un e-mail, une fois (sauvegarde-alerte.js).
+  alerteSauvegarde: () => require('./sauvegarde-alerte').alerteSauvegarde({ db, prevenir: (titre, detail) => prevenirPapote(titre, null, detail) }),
   // Purge mensuelle des données de plus de 12 mois (chat, paniers, familles résiliées) : purge.js.
   purgeMensuelle: require('./purge').purgeMensuelle,
 });

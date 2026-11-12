@@ -568,6 +568,8 @@ function afficherAccueil() {
     [erreursMail, `${pluriel(erreursMail, 'problème')} au dernier relevé de factures@mapapote.fr (détail en bas de page)`, '#accueil', 'ko'],
     [tva && tva.alerte ? 1 : 0, tva ? tva.alerte : '', '#compta/urssaf', 'ko'],
     [problemes, `${pluriel(problemes, 'problème')} lors du dernier passage automatique`, '#outils/automatique', 'ko'],
+    // Sauvegarde du dimanche sans réussite depuis plus de 8 jours (texte calculé par le serveur, sauvegarde-alerte.js).
+    [donnees.sauvegardeAFaire ? 1 : 0, donnees.sauvegardeAFaire || '', '#accueil', 'ko'],
   ].filter(([n]) => n > 0);
   $('a-faire').replaceChildren(...(taches.length
     ? taches.map(([, texte, lien, classe]) => h('li', {}, h('a', { href: lien, class: classe }, texte, h('span', { 'aria-hidden': 'true' }, '›'))))

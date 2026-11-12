@@ -787,7 +787,7 @@ exports.gestionDonnees = onCall(async (request) => {
   // Tout est lu en même temps : « à vendre » et les batteries (qui attendent seulement le stock) ne font plus
   // deux allers-retours de plus vers la base après les autres lectures.
   const lectureStock = db().collection('stock').get();
-  const [commandes, stock, depenses, familles, automatique, reglages, courrier, archives, sims, accessoires, aVendre, batteries, alertes, gardes, courrielsPerdus] = await Promise.all([
+  const [commandes, stock, depenses, familles, automatique, reglages, courrier, archives, sims, accessoires, aVendre, batteries, alertes, gardes, courrielsPerdus, sauvegarde] = await Promise.all([
     db().collection('commandes').get(),
     lectureStock,
     db().collection('depenses').get(),
@@ -808,6 +808,8 @@ exports.gestionDonnees = onCall(async (request) => {
     lectureStock.then((s) => lireGardeFous(s.docs)).catch((e) => { logger.warn('Garde-fous', e.message); return new Map(); }),
     // E-mails perdus (courriels-perdus.js) : en attente d'un nouvel essai, ou ligne « À faire ».
     require('./courriels-perdus').enAttente(db()).catch((e) => { logger.warn('E-mails perdus', e.message); return []; }),
+    // Sauvegarde du dimanche (sauvegarde-alerte.js) : une lecture.
+    db().doc(require('./sauvegarde-alerte').DOCUMENT).get().catch((e) => { logger.warn('Sauvegarde', e.message); return null; }),
   ]);
   const parFid = new Map(familles.docs.map((f) => [f.id, f.data()]));
   // Compte de la tablette -> sa fiche de stock (T-…), pour compter les alertes sur la page de la tablette.
@@ -903,6 +905,8 @@ exports.gestionDonnees = onCall(async (request) => {
     // lignes « À faire » qu'ils donnent (mêmes textes que le récap). « Réglé » : gestionCourrielTraite({ id }).
     courrielsPerdus: courrielsPerdus.map(aplatir),
     courrielsAFaire: require('./courriels-perdus').lignesAFaire(courrielsPerdus),
+    // Plus de 8 jours sans sauvegarde réussie : la ligne « À faire » (même texte que le récap), sinon null.
+    sauvegardeAFaire: require('./sauvegarde-alerte').ligneAFaire(sauvegarde && sauvegarde.exists ? sauvegarde.data() : null, Date.now()),
   };
 });
 const ALERTES_JOURS = 90;
@@ -3037,7 +3041,8 @@ const suiteSuspendue = (f) => (f.resiliationLe ? ' : abonnement arrêté par Pap
   : ' : arrêt automatique de l\'abonnement à 9 h (sinon « Arrêter l\'abonnement » sur la commande)');
 // familles : [{ id, nom, statut, graceJusqua, suspenduLe, resiliationLe, majLe }] (gestionDonnees, recapitulatif).
 // courriels : e-mails perdus (courriels-perdus.js, enAttente) ; seuls ceux « a-faire » font une ligne.
-function aFaire({ commandes, stock, depenses, automatique, maintenant, sims = [], accessoires = [], familles = [], courriels = [] }) {
+// sauvegarde : le relevé interne/sauvegarde (sauvegarde-alerte.js) ; plus de 8 jours sans sauvegarde réussie = une ligne.
+function aFaire({ commandes, stock, depenses, automatique, maintenant, sims = [], accessoires = [], familles = [], courriels = [], sauvegarde = null }) {
   const liste = [];
   // texte : « tablette(s) reçue(s) » → singulier ou pluriel selon n.
   const ajouter = (n, texte) => { if (n > 0) liste.push(`${n} ${texte.replace(/\(s\)/g, n > 1 ? 's' : '')}`); };
@@ -3114,6 +3119,8 @@ function aFaire({ commandes, stock, depenses, automatique, maintenant, sims = []
     liste.push(a.manque ? `${a.nom} : il en manque ${a.manque} pour les envois` : `${a.nom} : plus que ${a.quantite || 0} en stock`);
   }
   ajouter(automatique && automatique.erreurs ? automatique.erreurs.length : 0, 'problème(s) lors du dernier passage automatique');
+  const ligneSauvegarde = require('./sauvegarde-alerte').ligneAFaire(sauvegarde, maintenant);
+  if (ligneSauvegarde) liste.push(ligneSauvegarde);
   return liste;
 }
 
@@ -3123,7 +3130,7 @@ async function recapitulatif() {
   const maintenant = Date.now();
   const debutAnnee = new Date(new Date(maintenant).getFullYear(), 0, 1).getTime();
   const [commandesSnap, stockSnap, depensesSnap, familles, automatique, reglagesSnap, semaine, annee, abonnes, simsSnap,
-    accessoiresSnap, courriels] = await Promise.all([
+    accessoiresSnap, courriels, sauvegarde] = await Promise.all([
     db().collection('commandes').get(),
     db().collection('stock').get(),
     db().collection('depenses').get(),
@@ -3136,6 +3143,7 @@ async function recapitulatif() {
     db().collection('sims').get(),
     db().collection('accessoires').get(),
     require('./courriels-perdus').enAttente(db()).catch((e) => { logger.warn('E-mails perdus illisibles', e.message); return []; }),
+    db().doc(require('./sauvegarde-alerte').DOCUMENT).get(),
   ]);
   const statut = new Map(familles.docs.map((f) => [f.id, f.get('abonnement.statut') || null]));
   const commandes = commandesSnap.docs.map((d) => {
@@ -3152,6 +3160,7 @@ async function recapitulatif() {
     accessoires: accessoiresSnap.docs.map((d) => d.data()),
     automatique: automatique.data(),
     courriels,
+    sauvegarde: sauvegarde.exists ? sauvegarde.data() : null,
     maintenant,
   });
   const nouvelles = commandes.filter((c) => ms(c.creeLe) > maintenant - JOURS(7)).length;

@@ -25,6 +25,7 @@ const PLANNING = {
   gestionAutomatique: { heure: 4 }, //         (every day 04:00)
   gestionCopieVentes: { heure: 6 }, //         (nouvelle, 10/11 : copie des PDF des factures de vente)
   restitutions: { heure: 9 }, //               (every day 09:00)
+  alerteSauvegarde: { heure: 9 }, //           (nouvelle, 12/11 : sauvegarde du dimanche de plus de 8 jours)
   relancesSepa: { heure: 11 }, //              (nouvelle, 10/11 : « passer au prélèvement », index.js)
   rappelsJumelage: { heure: 10 }, //           (every day 10:00)
   alerteMatin: { heure: 10 }, //               (alertes.HORAIRE_PAS_VUE : every day 10:00)

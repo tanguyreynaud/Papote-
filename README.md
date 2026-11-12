@@ -39,11 +39,11 @@ Outils `node` : depuis le dossier du projet, `node <chemin>`.
 | Vérifier l'app famille | Contrôle l'app famille avant sa mise en ligne | `node outils/web/verifier.mjs` (branche de l'app famille) |
 | Publier le site vitrine | Met en ligne mapapote.fr : d'abord `test`, puis `en-ligne` | `node outils/vitrine/publier.mjs test` |
 | Abonnements | Liste les familles et leur abonnement ; famille offerte | `node outils/admin/abonnements.js` |
-| Sauvegarder | Copie la base et la liste des comptes dans `outils/admin/sauvegardes\` (les 4 dernières gardées) ; `--photos` pour copier aussi les fichiers | `.\outils\admin\sauvegarder.bat` |
+| Sauvegarder | Copie la base (un document par ligne, sans limite de taille), la liste des comptes et le dossier `gestion/` du stockage dans `outils/admin/sauvegardes\papote-<date>\` ; relue et contrôlée avant d'effacer une ancienne (4 gardées, jamais la dernière « pleine ») ; la date de réussite part dans la base, et Papote est prévenu par e-mail et « À faire » après 8 jours sans réussite ; `--photos` pour copier aussi les photos | `.\outils\admin\sauvegarder.bat` |
 | Sauvegarde automatique | Installe la sauvegarde chaque dimanche 3 h (tâche Windows, journal.txt dans le dossier, Google Drive conseillé) | `.\outils\admin\installer-sauvegarde-hebdo.bat "G:\Mon Drive\PapoteSauvegardes"` |
-| Vérifier une sauvegarde | Restaure à blanc dans l'émulateur (Java requis) et contrôle chaque document ; une fois par mois | `.\outils\admin\verifier-sauvegarde.bat sauvegardes\papote-<date>.json` |
+| Vérifier une sauvegarde | Restaure à blanc dans l'émulateur (Java requis) et contrôle chaque document ; une fois par mois | `.\outils\admin\verifier-sauvegarde.bat sauvegardes\papote-<date>` |
 | Photo effacée | Les fichiers Storage sont gardés 7 jours par le bucket (suppression douce) : commandes gcloud | `outils/admin/RESTAURER-UN-FICHIER.md` |
-| Restaurer la base | Réécrit une sauvegarde dans la base (`--oui` pour faire, `--effacer` pour remettre exactement, `--comptes` pour les comptes, `--photos` pour les photos et vidéos) | `.\outils\admin\restaurer.bat sauvegardes\papote-….json` |
+| Restaurer la base | Réécrit une sauvegarde dans la base (`--oui` pour faire, `--effacer` pour remettre exactement, `--comptes` pour les comptes, `--photos` pour les fichiers du stockage) ; refusée si la base visée n'est pas celle d'où vient la sauvegarde (`--autre-base` pour le faire exprès) | `.\outils\admin\restaurer.bat sauvegardes\papote-<date>` |
 | Badge administrateur | Donne ou retire l'accès admin à un compte Google | `node outils/admin/badge-admin.js` |
 | Statistiques | Visites et commandes des 30 derniers jours | `node outils/admin/statistiques.js [jours]` |
 | Nettoyer les comptes anonymes | Supprime les comptes anonymes qui ne sont dans aucune famille | `node outils/admin/nettoyer-comptes-anonymes.js` |
