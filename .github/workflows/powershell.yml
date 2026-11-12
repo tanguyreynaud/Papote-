@@ -28,3 +28,34 @@ jobs:
           }
           if ($ko) { exit 1 }
           Write-Host 'Tous les .ps1 passent le parseur.'
+
+  # Garde-fous du canal de mise à jour (A37) : lecture ratée, fichier mal formé, version plus ancienne,
+  # étiquettes, retour en arrière en essai. Sous PowerShell 7 (Linux) et sous Windows PowerShell 5.1, celui du
+  # PC de Tanguy. Sans réseau ni Android SDK : tout est simulé (installation/tests).
+  essais-canal-maj:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            shell: pwsh
+          - os: windows-2022
+            shell: powershell
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: ${{ matrix.shell }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: installation/tests
+        run: |
+          $ko = 0
+          foreach ($f in Get-ChildItem installation/tests -Filter *.tests.ps1) {
+            Write-Host "== $($f.Name)"
+            & $f.FullName
+            if ($LASTEXITCODE) { $ko++ }
+          }
+          if (-not (Get-ChildItem installation/tests -Filter *.tests.ps1)) { Write-Host 'Aucun essai trouvé'; exit 1 }
+          if ($ko) { exit 1 }
+
