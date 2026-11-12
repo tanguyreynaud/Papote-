@@ -212,6 +212,7 @@ const TOLERE = [
   /Failed to load resource: net::ERR_BLOCKED_BY_CLIENT/,
   // Fermeture du canal d'écriture Firestore (TYPE=terminate) quand le banc ferme la page ou l'émulateur
   // pendant un envoi : simple ménage du SDK, refusé (400) par l'émulateur. Vu 1 fois sur 4 dans mauvais-jours (12/11).
+  // (le motif est essayé sur « message (adresse) »)
   /status of 400 \(Bad Request\) \(http:\/\/127\.0\.0\.1:\d+\/google\.firestore\.v1\.Firestore\/Write\/channel\?[^)]*TYPE=terminate/,
 ];
 
@@ -284,8 +285,9 @@ async function telephone(nom, { largeur = 390, hauteur = 844 } = {}) {
     t.console.push(`${m.type()} : ${texte}`);
     // Refus prévus d'une fonction (HttpsError) : le navigateur note la réponse 4xx, l'app l'affiche.
     const refusPrevu = /status of 4\d\d/.test(texte) && new RegExp(`/${PROJET}/`).test(m.location().url || '');
-    if (m.type() === 'error' && !refusPrevu && !TOLERE.some((r) => r.test(texte))) {
-      t.erreurs.push(`[${nom}] console.error : ${texte} (${m.location().url || ''})`);
+    const complet = `${texte} (${m.location().url || ''})`;
+    if (m.type() === 'error' && !refusPrevu && !TOLERE.some((r) => r.test(complet))) {
+      t.erreurs.push(`[${nom}] console.error : ${complet}`);
     }
   });
   page.on('dialog', (d) => {
