@@ -1049,13 +1049,17 @@ async function remplirCommande(id) {
         [t.ref, t.numero || (t.ref ? null : 'sans n° de série'), t.modele, donnees.etats[etatTablette(t)]].filter(Boolean).join(' · ')) : null),
       ligne('Carte SIM', simDuKit(t)),
       ligne('Accessoires', t && (t.accessoires || []).length ? t.accessoires.join(', ') : null),
-      ligne('Retour', c.restitution ? `${RETOURS[c.restitution.statut] || c.restitution.statut}${c.restitution.avant && c.restitution.statut === 'attendue' ? ` avant le ${jour(c.restitution.avant)}` : ''}` : null),
+      ligne('Retour', c.restitution ? `${RETOURS[c.restitution.statut] || c.restitution.statut}${c.restitution.avant && c.restitution.statut === 'attendue' ? ` avant le ${jour(c.restitution.avant)}${c.restitution.prolongations ? ' (délai prolongé)' : ''}` : ''}` : null),
       ligne('Suivi du retour', suiviRetourDe(c)),
       ligne('Étiquettes', etiquettesDe(c)),
       ligne('Remboursement', c.remboursement ? `${euros(c.remboursement.montant)} ${REMBOURSEMENTS[c.remboursement.statut] || c.remboursement.statut}` : null),
       ligne('Reçue le', c.preparation && c.preparation.recuLe ? `${jour(c.preparation.recuLe)}${c.preparation.recuPar ? ` (${c.preparation.recuPar})` : ''}` : null),
       ligne('Annulation possible', c.fid && annulableApresEnvoi(c) ? `jusqu'au ${jour(limiteAnnulation(c))}` : null),
-      ligne('Pause', c.pause && c.pause.jusqua > Date.now() ? `prélèvements en pause jusqu'au ${jour(c.pause.jusqua)} (hospitalisation)` : null),
+      ligne('Pause', c.pause && c.pause.jusqua > Date.now() ? `hospitalisation jusqu'au ${jour(c.pause.jusqua)} (mois offert au-delà de 2 semaines)` : null),
+      ligne('Remplacement', c.remplacement && c.remplacement.statut === 'attente-retour'
+        ? `tablette en panne attendue en retour (depuis le ${jour(c.remplacement.le)}) : à sa réception, « Remplacer » → la tablette → Panne → « Ancienne reçue : envoyer la nouvelle »` : null),
+      ligne('Mois remboursés', (c.moisRembourses || []).length ? c.moisRembourses.map((m) => `${euros(m.montant)} le ${jour(m.le)}`).join(', ') : null),
+      ligne('140 € remboursés', c.restitution && c.restitution.rembourse ? (c.restitution.rembourse.statut === 'fait' ? `oui (${euros(c.restitution.rembourse.montant)}, abonnement repris)` : 'à faire (Stripe a refusé, nouvel essai chaque matin)') : null),
       ligne('Dernier mois', c.dernierMois ? `${euros(c.dernierMois.montant)} ${DERNIER_MOIS[c.dernierMois.statut] || c.dernierMois.statut}${c.dernierMois.erreur ? ` : ${c.dernierMois.erreur}` : ''}` : null),
       ligne('Prélèvement refusé', c.restitution && c.restitution.statut === 'echec' ? `matériel non rendu${c.restitutionErreur ? ` : ${c.restitutionErreur}` : ''}` : null),
       ligne('Contesté', (c.contestations || []).length ? c.contestations.map((x) => `${euros(x.montant)} le ${jour(x.le)}`).join(', ') : null))),
@@ -1112,8 +1116,11 @@ async function remplirCommande(id) {
 }
 
 // Actions rares ou définitives de la commande, rangées dans le ⋮ ; chacune s'explique dans sa confirmation.
+let actionCommandeEnCours = false; // une action du ⋮ à la fois : un double appui ne lance pas deux appels
 function menuCommande(c, zoneRemplacement, etiquette) {
   const lancer = async (faire) => {
+    if (actionCommandeEnCours) return;
+    actionCommandeEnCours = true;
     try {
       annonceCommande = await faire();
       commandeAffichee = null;
@@ -1122,6 +1129,8 @@ function menuCommande(c, zoneRemplacement, etiquette) {
       signalerChangement();
     } catch (e) {
       if (e !== 'non') prevenir(messageErreur(e));
+    } finally {
+      actionCommandeEnCours = false;
     }
   };
   const enCours = c.fid && !c.offerte && !c.resiliationLe && ['actif', 'impaye', 'suspendu', 'active', 'trialing', 'past_due'].includes(c.abonnement);
@@ -1143,6 +1152,12 @@ function menuCommande(c, zoneRemplacement, etiquette) {
       ? { libelle: 'Reprendre l\'abonnement', faire: () => lancer(() => reprendreAbonnement(c)) } : null,
     enCours && !annulable && !enPause ? { libelle: 'Pause hospitalisation…', faire: () => lancer(() => pauseHospitalisation(c)) } : null,
     enPause ? { libelle: 'Reprendre les prélèvements', faire: () => lancer(() => reprendrePrelevements(c)) } : null,
+    // A7 (Tanguy, 12/11) : la tablette n'est pas encore revenue, le client a besoin de quelques jours de plus.
+    c.restitution && c.restitution.statut === 'attendue' && c.restitution.avant && !c.offerte
+      ? { libelle: 'Laisser plus de temps (15 jours)', faire: () => lancer(() => plusDeTemps(c)) } : null,
+    // A9 (Tanguy, 12/11) : un mois rendu au client (remplacement trop long d'une tablette vraiment en panne…).
+    !c.offerte && String(c.id).startsWith('sub_') && c.expedition === 'envoyee'
+      ? { libelle: 'Rembourser un mois (25 €)', faire: () => lancer(() => rembourserMois(c)) } : null,
     zoneRemplacement ? { libelle: 'Remplacer un élément du kit (cassé ou perdu)…', faire: () => {
       zoneRemplacement.hidden = false;
       zoneRemplacement.querySelector('select').focus();
@@ -1222,21 +1237,35 @@ function dateReprise(t) {
 }
 
 async function pauseHospitalisation(c) {
-  // Règle de Tanguy (11/11) : un mois offert si le proche a passé plus de la moitié du mois à l'hôpital. Pas de calcul
-  // automatique ni de prorata : les dates de la pause décident quel prélèvement est annulé (en entier).
+  // Règle de Tanguy (12/11, A8) : un mois pendant lequel la tablette est en pause hospitalisation plus de 2 semaines
+  // n'est pas prélevé, le dernier mois à l'arrêt compris. Le serveur fait le calcul (pauseHospitalisation).
   const prochain = c.prochainPrelevement && c.prochainPrelevement > Date.now() ? `\nProchain prélèvement prévu : ${jour(c.prochainPrelevement)}.` : '';
-  const saisie = await saisir(`Pause pour hospitalisation de ${c.famille || c.nom || 'ce client'} (justificatif reçu).\n\nUn mois est offert si votre client a passé plus de la moitié du mois à l'hôpital. Le prélèvement dont la date tombe pendant la pause est annulé en entier ; la tablette continue de marcher.${prochain}\n\nDate de reprise des prélèvements (JJ/MM/AAAA) :`, '', { oui: 'Mettre en pause' });
+  const saisie = await saisir(`Pause pour hospitalisation de ${c.famille || c.nom || 'ce client'} (justificatif reçu).\n\nUn mois qui compte plus de 2 semaines d'hospitalisation n'est pas prélevé (le dernier mois à l'arrêt compris). Papote fait le calcul ; la tablette continue de marcher.${prochain}\n\nDate de sortie prévue (JJ/MM/AAAA) :`, '', { oui: 'Mettre en pause' });
   if (saisie == null || saisie === false) throw 'non';
   const jusqua = dateReprise(saisie);
   if (!jusqua) throw new Error('Date illisible : écrivez par exemple 15/12/2026.');
-  await patienter('Mise en pause des prélèvements…', () => appeler('pauseHospitalisation', { commande: c.id, jusqua }));
-  return `Prélèvements en pause jusqu'au ${jour(jusqua)}.`;
+  const r = await patienter('Hospitalisation notée…', () => appeler('pauseHospitalisation', { commande: c.id, jusqua }));
+  return `Hospitalisation notée jusqu'au ${jour(jusqua)}. ${r && r.prochainOffert ? 'Le prochain prélèvement est annulé (plus de 2 semaines dans le mois).' : 'Le prochain prélèvement reste dû pour l\'instant (moins de 2 semaines dans le mois) ; Papote recalcule chaque matin.'}`;
+}
+
+// A7 : 15 jours de plus pour rendre la tablette. La date vue est envoyée : un double appui ne repousse qu'une fois.
+async function plusDeTemps(c) {
+  if (!await demander(`Laisser 15 jours de plus à ${c.nom || c.email || 'ce client'} pour renvoyer la tablette ?\n\nDate limite actuelle : ${jour(c.restitution.avant)}. Le matériel non rendu ne sera prélevé qu'après la nouvelle date ; le rappel repart 7 jours avant.`, { oui: 'Laisser 15 jours de plus' })) throw 'non';
+  const r = await patienter('Nouvelle date limite…', () => appeler('gestionCommande', { commande: c.id, action: 'plusDeTemps', avant: c.restitution.avant }));
+  return `Nouvelle date limite du retour : ${jour(r.avant)}.`;
+}
+
+// A9 : 25 € remboursés sur le dernier mois payé (une seule fois par mois payé, même en double appui).
+async function rembourserMois(c) {
+  if (!await demander(`Rembourser un mois (25 €) à ${c.nom || c.email || 'ce client'} ?\n\nLe remboursement est fait sur son dernier mois payé, par Stripe, sur le même moyen de paiement.`, { oui: 'Rembourser 25 €' })) throw 'non';
+  const r = await patienter('Remboursement en cours…', () => appeler('gestionCommande', { commande: c.id, action: 'rembourserMois' }));
+  return r.deja ? `Ce mois était déjà remboursé (${euros(r.montant)}) : rien de plus.` : `${euros(r.montant)} remboursés sur le dernier mois payé.`;
 }
 
 async function reprendrePrelevements(c) {
-  if (!await demander(`Reprendre les prélèvements de ${c.famille || c.nom || 'ce client'} dès maintenant ?`, { oui: 'Reprendre' })) throw 'non';
+  if (!await demander(`Fin de l'hospitalisation de ${c.famille || c.nom || 'ce client'} aujourd'hui ?\n\nLes jours déjà passés à l'hôpital comptent encore pour le mois en cours.`, { oui: 'Reprendre' })) throw 'non';
   await patienter('Reprise des prélèvements…', () => appeler('pauseHospitalisation', { commande: c.id, jusqua: null }));
-  return 'Prélèvements repris.';
+  return 'Hospitalisation finie : les prélèvements reprennent.';
 }
 
 async function arreterAbonnement(c) {
@@ -1413,7 +1442,7 @@ function formulaireRemplacement(c, t) {
     accessoire: () => donnees.accessoires.map((a) => [a.id, `${a.nom} (${a.quantite || 0} en stock)`]),
   };
   const AIDE = {
-    tablette: 'Panne ou casse : la tablette actuelle passe « en retour » et garde sa place dans « À faire » jusqu\'à son retour ; sa carte SIM passe dans la nouvelle. Perte ou vol : elle passe « perdue », et la nouvelle part avec sa propre carte SIM. Casse, perte ou vol : prélevé au client avant l\'envoi.',
+    tablette: 'Panne : d\'abord le retour de la tablette en panne (étiquette envoyée au client) ; la nouvelle ne part qu\'une fois l\'ancienne reçue. Casse : la tablette actuelle passe « en retour » et sa carte SIM passe dans la nouvelle. Perte ou vol : elle passe « perdue », et la nouvelle part avec sa propre carte SIM. Casse, perte ou vol : prélevé au client avant l\'envoi.',
     sim: 'L\'ancienne carte passe « suspendue » : pense à la résilier chez l\'opérateur.',
     accessoire: 'L\'accessoire sort du stock.',
   };
@@ -1427,12 +1456,31 @@ function formulaireRemplacement(c, t) {
     msg.className = 'small muted';
     msg.textContent = k ? AIDE[k] : '';
   });
+  // Panne (Tanguy, 12/11, A9) : 1er temps « Demander le retour » (pas de nouvelle tablette à choisir), puis, l'ancienne
+  // reçue, « Ancienne reçue : envoyer la nouvelle ».
+  const attenteRetour = !!(c.remplacement && c.remplacement.statut === 'attente-retour');
+  const panneSansNouvelle = () => choix.value === 'tablette' && raison.value === 'panne' && !attenteRetour;
+  const majPanne = () => {
+    if (choix.value !== 'tablette') { bouton.textContent = 'Remplacer'; return; }
+    nouveau.hidden = panneSansNouvelle();
+    bouton.textContent = raison.value !== 'panne' ? 'Remplacer' : attenteRetour ? 'Ancienne reçue : envoyer la nouvelle' : 'Demander le retour (panne)';
+  };
+  raison.addEventListener('change', majPanne);
+  choix.addEventListener('change', majPanne);
   const form = h('form', { class: 'remplacement no-print' }, choix, raison, nouveau, motif, bouton, msg);
+  // Tablette en panne déjà attendue : le formulaire s'ouvre sur le 2e temps.
+  if (attenteRetour) {
+    choix.value = 'tablette';
+    choix.dispatchEvent(new Event('change'));
+    raison.value = 'panne';
+    majPanne();
+  }
   let enCours = false;
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    if (enCours || !nouveau.value) return;
+    if (enCours || (!nouveau.value && !panneSansNouvelle())) return;
     const tablette = choix.value === 'tablette';
+    const panne = tablette && raison.value === 'panne';
     if (tablette && !raison.value) {
       msg.className = 'small error';
       msg.textContent = 'Choisissez la raison : panne, casse, ou perte et vol.';
@@ -1447,17 +1495,21 @@ function formulaireRemplacement(c, t) {
       return;
     }
     // Ouverte avant toute attente, sinon le navigateur la bloque : elle recevra l'étiquette d'envoi.
-    const fenetre = window.open('', '_blank');
+    const fenetre = panne && !attenteRetour ? null : window.open('', '_blank');
+    msg.className = 'small muted';
+    msg.textContent = panne && !attenteRetour ? 'Retour de la tablette en panne demandé…' : 'Remplacement en cours…';
     try {
-      await patienter(tablette && !gratuit(raison.value) ? 'Prélèvement puis remplacement…' : 'Remplacement en cours…', () => appeler('gestionStock', {
-        action: 'remplacer', commande: c.id, element: choix.value, nouveau: nouveau.value, motif: motif.value, ...(tablette ? { raison: raison.value } : {}),
+      await patienter(tablette && !gratuit(raison.value) ? 'Prélèvement puis remplacement…' : panne && !attenteRetour ? 'Retour de la tablette en panne…' : 'Remplacement en cours…', () => appeler('gestionStock', {
+        action: 'remplacer', commande: c.id, element: choix.value, nouveau: nouveau.value || null, motif: motif.value, ...(tablette ? { raison: raison.value } : {}),
+        ...(panne && attenteRetour ? { ancienneRecue: true } : {}),
       }));
       // Étiquettes faites tout de suite : l'aller pour le colis de remplacement, le retour (envoyé au client par
       // e-mail) pour la tablette remplacée.
       msg.className = 'small muted';
       msg.textContent = 'Remplacement noté. Création des étiquettes chez Sendcloud…';
       // Perte ou vol : rien à renvoyer.
-      const sens = tablette && raison.value !== 'perte' ? ['aller', 'retour'] : ['aller'];
+      // Panne : le retour d'abord (1er temps), l'envoi une fois l'ancienne reçue (2e temps).
+      const sens = panne ? [attenteRetour ? 'aller' : 'retour'] : tablette && raison.value !== 'perte' ? ['aller', 'retour'] : ['aller'];
       const faites = [];
       for (const s of sens) {
         try {

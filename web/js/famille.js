@@ -3396,9 +3396,12 @@ async function renderFinDeContrat(abo) {
   $('retour-aide').hidden = true;
   $('btn-renvoyer').hidden = true;
   $('retour-qr-box').hidden = true;
-  if (rest && ['attendue', 'echec'].includes(rest.statut)) {
+  // Matériel non rendu déjà prélevé (Tanguy, 12/11, A6) : la tablette peut encore revenir, et c'est remboursé.
+  const preleve = rest?.statut === 'facturee';
+  if (rest && (['attendue', 'echec'].includes(rest.statut) || preleve)) {
     box.hidden = false;
-    $('retour-text').textContent = rest.avant ? `Tablette à nous rendre avant le ${jourMois(rest.avant)}` : 'Tablette à nous rendre';
+    $('retour-text').textContent = preleve ? 'Tablette pas encore rendue'
+      : rest.avant ? `Tablette à nous rendre avant le ${jourMois(rest.avant)}` : 'Tablette à nous rendre';
     // Le QR code n'est créé qu'au moment de déposer le colis (« Je renvoie la tablette »).
     if (rest.qr) {
       $('retour-qr').src = rest.qr;
@@ -3411,6 +3414,7 @@ async function renderFinDeContrat(abo) {
     }
     const infos = [];
     if (remb?.statut === 'au-retour') infos.push(`${euros(remb.montant)} remboursés dès réception de la tablette.`);
+    if (preleve && rest.preleve) infos.push(`${euros(rest.preleve)} ont été prélevés pour le matériel non rendu : ils vous sont remboursés dès que la tablette nous parvient, ou si vous reprenez l'abonnement.`);
     $('retour-info').textContent = infos.join(' ');
     $('retour-info').hidden = !infos.length;
   } else if (finInfo?.retourAnticipe && amFamilyAdmin()) {
@@ -3468,12 +3472,14 @@ $('btn-renvoyer').addEventListener('click', async () => {
 
 function reprisePossible() {
   return session?.family?.abonnement?.statut === 'resilie' && amFamilyAdmin()
-    && ['attendue', 'echec'].includes(finInfo?.restitution?.statut);
+    && ['attendue', 'echec', 'facturee'].includes(finInfo?.restitution?.statut);
 }
 $('btn-reprendre').addEventListener('click', async () => {
   const abo = session.family.abonnement || {};
   const formule = 'sim'; // offre unique (29/10/2026)
-  if (!await askConfirm(`Garder la tablette et reprendre l'abonnement (25 € par mois, tout compris) ? Pas de nouvelle mise en service à payer, et plus besoin de nous la renvoyer.`, 'Reprendre')) return;
+  const rembourse = finInfo?.restitution?.statut === 'facturee' && finInfo.restitution.preleve
+    ? ` Les ${euros(finInfo.restitution.preleve)} prélevés pour le matériel vous sont remboursés.` : '';
+  if (!await askConfirm(`Garder la tablette et reprendre l'abonnement (25 € par mois, tout compris) ? Pas de nouvelle mise en service à payer, et plus besoin de nous la renvoyer.${rembourse}`, 'Reprendre')) return;
   await withAboError(() => payer(session.fid, formule, abo.tablette || 'incluse'));
 });
 
