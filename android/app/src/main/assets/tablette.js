@@ -78,8 +78,15 @@
     clearTimeout(idleTimer);
     if (!isShown('view-home') && !isShown('view-setup')) {
       // Diaporama : retour à l'accueil après 5 minutes sans toucher l'écran.
-      idleTimer = setTimeout(function () { showView('view-home'); },
-        isShown('view-photos') ? 5 * 60000 : IDLE_MS);
+      // Une vidéo du diaporama en cours de lecture n'est pas coupée : on attend sa fin (au plus 10 min de plus).
+      var depuis = Date.now();
+      var retour = function () {
+        var v = document.querySelector('#view-photos video.slide-vid');
+        var enCours = v && isShown('view-photos') && v.style.display !== 'none' && !v.paused && !v.ended;
+        if (enCours && Date.now() - depuis < 15 * 60000) { idleTimer = setTimeout(retour, 15000); return; }
+        showView('view-home');
+      };
+      idleTimer = setTimeout(retour, isShown('view-photos') ? 5 * 60000 : IDLE_MS);
     }
   }
 
@@ -633,7 +640,9 @@
     var bgDone = false;
     var next = function () {
       if (token !== fadeToken || !isShown('view-photos')) return;
-      resetIdle();
+      // La fin d'une vidéo n'est pas un toucher : avant (reste de 0f2d950), resetIdle() ici relançait les
+      // 5 min à chaque vidéo, et un diaporama avec des vidéos ne revenait jamais seul à l'accueil
+      // (relevé de l'essai d'endurance, 13/11).
       if (slides.length > 1) { photoIndex = (photoIndex + 1) % slides.length; renderPhoto(); }
       else { v.currentTime = 0; v.play().catch(function () { }); }
     };
@@ -650,7 +659,7 @@
       v.classList.toggle('paysage', !portrait);
     };
     setTimeout(reveal, 3000); // au pire, au bout de 3 s
-    v.onerror = function () { reveal(); slideTimer = setTimeout(next, SLIDE_MS); }; // vidéo illisible : on passe
+    v.onerror = function () { reveal(); clearTimeout(slideTimer); slideTimer = setTimeout(next, SLIDE_MS); }; // vidéo illisible : on passe
     v.onloadeddata = function () {
       if (bgDone || token !== fadeToken) return;
       bgDone = true;
