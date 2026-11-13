@@ -166,25 +166,25 @@ const SCENES = [
   { groupe: 'Démarrage et installation', titre: 'Liste des wifi', faire: async (t) => {
     await t.faux({ wifi: { wifi: '', internet: false } });
     await t.statut({ state: 'welcome', step: 'wifi' }); await t.attendre(1600);
-    await t.page.getByText('Choisir un réseau').click(); await t.attendre(3500);
+    await t.page.getByRole('button', { name: /^Choisir un (réseau|wifi)$/ }).first().click(); await t.attendre(3500);
   } },
   { groupe: 'Démarrage et installation', titre: 'Mot de passe du wifi', faire: async (t) => {
     await t.faux({ wifi: { wifi: '', internet: false } });
     await t.statut({ state: 'welcome', step: 'wifi' }); await t.attendre(1600);
-    await t.page.getByText('Choisir un réseau').click(); await t.attendre(3500);
+    await t.page.getByRole('button', { name: /^Choisir un (réseau|wifi)$/ }).first().click(); await t.attendre(3500);
     await t.page.locator('.network').first().click(); await t.attendre(600);
   } },
   { groupe: 'Démarrage et installation', titre: 'Wifi : connexion en cours', faire: async (t) => {
     await t.faux({ wifi: { wifi: '', internet: false } });
     await t.statut({ state: 'welcome', step: 'wifi' }); await t.attendre(1600);
-    await t.page.getByText('Choisir un réseau').click(); await t.attendre(3500);
+    await t.page.getByRole('button', { name: /^Choisir un (réseau|wifi)$/ }).first().click(); await t.attendre(3500);
     await t.page.locator('.network').first().click(); await t.attendre(600);
     await t.page.locator('input').first().fill('motdepasse'); await t.page.getByText('Se connecter').click(); await t.attendre(800);
   } },
   { groupe: 'Démarrage et installation', titre: 'Wifi : mauvais mot de passe', note: 'Au bout de 30 s sans internet.', faire: async (t) => {
     await t.faux({ wifi: { wifi: '', internet: false, mobile: true } }); // mobile : l'écran du wifi « réparation » ne s'ouvre pas par-dessus
     await t.statut({ state: 'welcome', step: 'wifi' }); await t.attendre(1600);
-    await t.page.getByText('Choisir un réseau').click(); await t.attendre(3500);
+    await t.page.getByRole('button', { name: /^Choisir un (réseau|wifi)$/ }).first().click(); await t.attendre(3500);
     await t.page.locator('.network').first().click(); await t.attendre(600);
     await t.page.locator('input').first().fill('motdepasse'); await t.page.getByText('Se connecter').click();
     await t.avancer(33000);
@@ -192,7 +192,7 @@ const SCENES = [
   { groupe: 'Démarrage et installation', titre: 'Wifi : c’est bon, la tablette a internet', faire: async (t) => {
     await t.faux({ wifi: { wifi: '', internet: false } });
     await t.statut({ state: 'welcome', step: 'wifi' }); await t.attendre(1600);
-    await t.page.getByText('Choisir un réseau').click(); await t.attendre(3500);
+    await t.page.getByRole('button', { name: /^Choisir un (réseau|wifi)$/ }).first().click(); await t.attendre(3500);
     await t.page.locator('.network').first().click(); await t.attendre(600);
     await t.page.locator('input').first().fill('motdepasse'); await t.page.getByText('Se connecter').click();
     await t.faux({ wifi: { wifi: 'Livebox-6A2F', internet: true } }); await t.page.clock.runFor(1600); await t.attendre(300);
