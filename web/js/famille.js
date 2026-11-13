@@ -2703,7 +2703,7 @@ $('tile-call').addEventListener('click', async () => {
 async function offerCallBack() {
   try { history.replaceState(history.state, '', location.pathname); } catch (e) { /* rien */ }
   if (!session || currentCall || callStarting) return;
-  if (numeroTablette()) {
+  if (numeroTablette() && !$('tile-phone').classList.contains('tile-off')) {
     if (!await askConfirm(`Rappeler ${session.family.name} par téléphone ?`, 'Appeler')) return;
     $('tile-phone').click();
     return;
@@ -4198,6 +4198,8 @@ SETTINGS['my-tel-card'] = {
     if (pris) { showError($('my-tel-error'), telDouble(pris)); return false; }
     await updateDoc(doc(db, 'families', session.fid, 'members', session.uid), { telephone: tel });
     session.member.telephone = tel;
+    renderTuileTelephone();
+    renderContact();
     rememberTel(tel);
     await bumpFamilyRev();
     renderTel();
@@ -4891,12 +4893,26 @@ function enregistrerContact(nom, tel, bouton) {
 
 // Dès que la tablette a un numéro (carte SIM), la tuile Photos laisse la place à
 // « Appeler » (par téléphone, à gauche ; Photos reste dans la barre du bas) : six tuiles, jamais cinq.
+// Proche sans numéro (« Je n'ai pas de numéro, ou un numéro étranger ») : la tablette ne décroche que les numéros
+// de la famille, son appel serait refusé. La tuile reste à sa place, grisée ; la toucher mène au numéro dans Profil
+// (Tanguy, 13/11).
 function renderTuileTelephone() {
   const tel = numeroTablette();
-  $('tile-phone').href = tel ? `tel:${tel.replace(/\s/g, '')}` : 'tel:';
-  $('tile-phone').hidden = !tel;
+  const sansMonNumero = !!tel && !!session?.member && !telPropre(session.member.telephone);
+  const tuile = $('tile-phone');
+  tuile.href = tel && !sansMonNumero ? `tel:${tel.replace(/\s/g, '')}` : 'tel:';
+  tuile.hidden = !tel;
+  tuile.classList.toggle('tile-off', sansMonNumero);
+  tuile.querySelector('.tile-note').hidden = !sansMonNumero;
   $('tile-photo').hidden = !!tel;
 }
+$('tile-phone').addEventListener('click', (e) => {
+  if (!$('tile-phone').classList.contains('tile-off')) return;
+  e.preventDefault();
+  toast(`Ajoutez votre numéro de portable : la tablette de ${session?.family?.name || 'votre proche'} ne répond qu'aux numéros de la famille.`);
+  document.querySelector('.nav-item[data-tab="profile"]').click();
+  setTimeout(() => { const carte = $('my-tel-card'); if (carte && !carte.classList.contains('editing')) openSetting(carte); }, 300);
+});
 
 // « Enregistrez le numéro de Mamie Emma » sur l'accueil (M8, Tanguy 12/11) : ses appels arrivent du numéro de la
 // carte SIM, que beaucoup ne décrochent pas s'il est inconnu. Fermé une fois sur ce téléphone, revient si le numéro change.
@@ -4909,7 +4925,9 @@ function noterContact(fid, tel) {
 }
 function renderContact() {
   const tel = numeroTablette();
-  const voir = !!(session?.fid && tel && session.member && session.member.role !== 'tablette' && lireContact()[session.fid] !== tel);
+  // Proche sans numéro : la tablette ne l'appellera jamais, la carte n'a pas de sens pour lui.
+  const voir = !!(session?.fid && tel && session.member && session.member.role !== 'tablette'
+    && telPropre(session.member.telephone) && lireContact()[session.fid] !== tel);
   badgeDu('contact-encart', voir);
   if (!voir) return;
   const nom = session.family.name;
@@ -5071,7 +5089,7 @@ async function telALEntree() {
   return true;
 }
 const TEL_INVALIDE = 'Numéro incomplet : 10 chiffres (06 ou 07), ou +33 suivi de 9 chiffres.';
-const TEL_ETRANGER = 'Pas de portable français ? Cochez « Je n\'ai pas de numéro, ou je vis à l\'étranger ».';
+const TEL_ETRANGER = 'Pas de portable français ? Cochez « Je n\'ai pas de numéro, ou un numéro étranger ».';
 // À la frappe : seulement des chiffres, avec « + » possible en tête ; 10 caractères (06…) ou 12 (+33…), rien d'autre.
 function telALaFrappe(el) {
   const plus = el.value.trimStart().startsWith('+');

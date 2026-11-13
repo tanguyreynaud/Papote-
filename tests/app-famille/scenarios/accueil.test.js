@@ -47,3 +47,37 @@ test('Accueil : « Envoyer une photo » en haut ; tuile Photos remplacée par «
   await julie.page.locator('#tile-photo').waitFor({ state: 'visible' });
   assert.ok(await julie.page.locator('#tile-phone').isHidden());
 });
+
+// Proche sans numéro (« Je n'ai pas de numéro, ou un numéro étranger ») : la tablette refuserait son appel.
+// « Appeler » reste à sa place mais grisée ; la toucher n'appelle pas et mène au numéro dans Profil (Tanguy, 13/11).
+test('Accueil : proche sans numéro : « Appeler » grisée, la toucher mène au numéro, puis elle redevient normale', async () => {
+  const julie = await banc.telephone('Julie');
+  const { fid, tab } = await g.familleInstallee(julie, { email: 'julie2@exemple.fr', prenom: 'Julie' });
+  await banc.s.db.doc(`families/${fid}/members/${tab.tabletUid}`).update({ telephone: '06 98 76 54 32' });
+  const membres = await banc.s.db.collection(`families/${fid}/members`).get();
+  const fiche = membres.docs.find((d) => d.get('email') === 'julie2@exemple.fr');
+  // Comme si Julie avait coché « Je n'ai pas de numéro, ou un numéro étranger » (rien n'est réécrit sur sa fiche).
+  await julie.page.evaluate(() => localStorage.setItem('papote.telephone', 'aucun'));
+  await fiche.ref.update({ telephone: '' });
+  await julie.page.reload();
+  await g.attendreVue(julie, 'view-home');
+  const tuile = julie.page.locator('#tile-phone');
+  await tuile.waitFor({ state: 'visible' });
+  await julie.page.waitForFunction(() => document.querySelector('#tile-phone').classList.contains('tile-off'));
+  assert.strictEqual(await tuile.getAttribute('href'), 'tel:', 'aucun numéro composé');
+  assert.ok(await julie.page.locator('#tile-phone .tile-note').isVisible());
+  assert.strictEqual(await julie.page.locator('.tiles .tile:visible').count(), 6, 'six tuiles, rien ne bouge');
+  assert.ok(await julie.page.locator('#contact-encart').isHidden(), 'la tablette ne l\'appellera pas : pas de « Enregistrez le numéro »');
+  await capture(julie, 'appeler-grisee');
+  // Double toucher : une seule ouverture du numéro, aucun appel.
+  await tuile.dblclick();
+  await julie.page.locator('#my-tel-card.editing').waitFor({ state: 'visible' });
+  assert.ok(await julie.page.locator('#my-tel').isVisible());
+  await julie.page.fill('#my-tel', '0611223344');
+  await julie.page.locator('#form-my-tel button[type=submit]').click();
+  await julie.page.locator('#my-tel-card:not(.editing)').waitFor();
+  await g.retourAccueil(julie);
+  await julie.page.waitForFunction(() => !document.querySelector('#tile-phone').classList.contains('tile-off'));
+  assert.strictEqual(await tuile.getAttribute('href'), 'tel:0698765432');
+  assert.ok(await julie.page.locator('#tile-phone .tile-note').isHidden());
+});

@@ -183,7 +183,7 @@
         <input id="moi-tel" type="tel" inputmode="tel" autocomplete="tel" maxlength="12" placeholder="0612345678" aria-label="Votre numéro de portable">
         <p class="muted small">Un portable français (06 ou 07) : votre proche vous appelle à ce numéro depuis sa tablette. Seule votre famille le voit.</p>
         <!-- Proche sans portable français (Tanguy 12/11, M5) : la tablette l'appelle par internet, sur l'appli. -->
-        <label class="toggle-row moi-sans-tel"><span class="toggle-text"><strong>Je n'ai pas de numéro, ou je vis à l'étranger</strong><span>Votre proche vous appellera par internet, sur l'appli Papote. Vous ne recevrez pas les SMS de la tablette.</span></span><input type="checkbox" class="toggle" id="moi-sans-tel"></label>
+        <label class="toggle-row moi-sans-tel"><span class="toggle-text"><strong>Je n'ai pas de numéro, ou un numéro étranger</strong><span>Vous pourrez appeler votre proche en vidéo avec l'appli Papote. Sa tablette ne pourra pas vous appeler, ni vous envoyer de SMS.</span></span><input type="checkbox" class="toggle" id="moi-sans-tel"></label>
         <p class="genre-titre">Votre anniversaire</p>
         <div class="moi-date">
           <select id="moi-jour" aria-label="Jour"><option value="">Jour</option></select>
@@ -353,7 +353,7 @@
       </div>
       <div class="tiles">
         <a class="tile t-phone" id="tile-phone" href="tel:" hidden>
-          <svg class="tile-icon"><use href="#i-phone"/></svg><span>Appeler</span>
+          <svg class="tile-icon"><use href="#i-phone"/></svg><span>Appeler<small class="tile-note" hidden>Ajoutez votre numéro</small></span>
         </a>
         <button type="button" class="tile t-call" id="tile-call">
           <svg class="tile-icon"><use href="#i-call"/></svg><span>Appel vidéo</span>

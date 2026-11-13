@@ -26,7 +26,7 @@ test('M5 : proche à l\'étranger : la case « pas de numéro, ou à l\'étrange
   await lea.page.selectOption('#moi-annee', '1995');
   await lea.page.click('#form-moi button[type=submit]');
   await lea.page.locator('#moi-error').waitFor({ state: 'visible' });
-  assert.match(await lea.page.locator('#moi-error').innerText(), /Cochez « Je n'ai pas de numéro, ou je vis à l'étranger »/);
+  assert.match(await lea.page.locator('#moi-error').innerText(), /Cochez « Je n'ai pas de numéro, ou un numéro étranger »/);
   assert.strictEqual(await g.vue(lea), 'view-moi');
   // La case : le numéro est vidé et grisé, l'erreur part, « Continuer » reste possible.
   await lea.page.click('label.moi-sans-tel');
