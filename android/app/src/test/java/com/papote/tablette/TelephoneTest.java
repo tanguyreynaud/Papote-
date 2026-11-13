@@ -70,4 +70,19 @@ public class TelephoneTest {
         for (int i = 0; i < 40; i++) s.append(String.format("06000000%02d,", i));
         assertEquals(30, Telephone.destinatairesSms(s.toString()).size());
     }
+
+    // Tanguy (13/11) : deux proches avec le même numéro, le responsable passe toujours devant.
+    @Test
+    public void leResponsableDAbordPuisParUid() {
+        assertTrue(Telephone.ordre(true, "zz", false, "aa") < 0);
+        assertTrue(Telephone.ordre(false, "aa", true, "zz") > 0);
+        assertTrue("à égalité : par uid", Telephone.ordre(false, "aa", false, "bb") < 0);
+        assertEquals(0, Telephone.ordre(true, "aa", true, "aa"));
+        java.util.List<String[]> l = new java.util.ArrayList<>(java.util.Arrays.asList(
+                new String[]{"u3", "0"}, new String[]{"u2", "1"}, new String[]{"u1", "0"}));
+        java.util.Collections.sort(l, (a, b) -> Telephone.ordre("1".equals(a[1]), a[0], "1".equals(b[1]), b[0]));
+        assertEquals("u2", l.get(0)[0]);
+        assertEquals("u1", l.get(1)[0]);
+        assertEquals("u3", l.get(2)[0]);
+    }
 }

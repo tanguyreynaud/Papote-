@@ -90,7 +90,28 @@ final class Telephone {
         return liste;
     }
 
+    /**
+     * Ordre des proches (Tanguy, 13/11 : deux proches avec le même numéro) : le responsable d'abord, puis
+     * par uid, pour que l'appel affiche toujours le même nom, celui du responsable.
+     */
+    static int ordre(boolean respA, String uidA, boolean respB, String uidB) {
+        if (respA != respB) return respA ? -1 : 1;
+        return String.valueOf(uidA).compareTo(String.valueOf(uidB));
+    }
+
+    static JSONArray trier(JSONArray liste) {
+        if (liste == null) return null;
+        java.util.List<JSONObject> l = new java.util.ArrayList<>();
+        for (int i = 0; i < liste.length(); i++) { JSONObject p = liste.optJSONObject(i); if (p != null) l.add(p); }
+        java.util.Collections.sort(l, (a, b) -> ordre(a.optBoolean("responsable"), a.optString("uid"),
+                b.optBoolean("responsable"), b.optString("uid")));
+        JSONArray out = new JSONArray();
+        for (JSONObject p : l) out.put(p);
+        return out;
+    }
+
     static void garderNumeros(Context c, JSONArray liste) {
+        liste = trier(liste);
         String avant = prefs(c).getString(PREF, "[]");
         String apres = liste == null ? "[]" : liste.toString();
         if (apres.equals(avant)) return;
