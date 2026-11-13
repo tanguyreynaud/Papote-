@@ -2,7 +2,7 @@
 // Lancement : node --test android/tests/   (Playwright et Chromium nécessaires)
 const test = require('node:test');
 const assert = require('node:assert');
-const { ouvrir, envoi, lot } = require('./banc');
+const { ouvrir, envoi, lot, ORIGIN } = require('./banc');
 
 // Chaque essai vérifie aussi qu'aucune erreur JavaScript n'est passée.
 // attendus : notes voulues dans le journal (logError) que l'essai vérifie lui-même (ex. « Papote est prévenu »).
@@ -513,6 +513,60 @@ test('diaporama : la photo de l\'accueil l\'ouvre, défilement toutes les 10 s, 
     assert.notStrictEqual(await b.texte('#photo-text'), avant, 'photo suivante');
     await b.avancer(5 * 60000);
     assert.ok(await b.visible('#view-home'), 'retour à l\'accueil');
+    await sansErreur(b);
+  } finally { await b.fermer(); }
+});
+
+// Relevé de l'essai d'endurance (13/11) : resetIdle() à chaque fin de vidéo, le diaporama avec des vidéos
+// ne revenait jamais seul à l'accueil. Une vidéo qui se lit n'est pas coupée (retour à sa fin, 15 min au plus).
+const videoEnLecture = (b, enCours) => b.page.evaluate((oui) => {
+  const v = document.querySelector('#view-photos video.slide-vid');
+  Object.defineProperty(v, 'paused', { configurable: true, get: () => !oui });
+  Object.defineProperty(v, 'ended', { configurable: true, get: () => false });
+  v.style.display = '';
+}, enCours);
+
+test('diaporama avec des vidéos : retour seul à l\'accueil après 5 min sans toucher', async () => {
+  const b = await ouvrir();
+  try {
+    const posts = [
+      envoi({ seen: true, type: 'video', image: null, video: `${ORIGIN}/photos/v1.mp4` }),
+      envoi({ seen: true, text: 'Photo' }),
+      envoi({ seen: true, type: 'video', image: null, video: `${ORIGIN}/photos/v2.mp4` }),
+    ];
+    await b.android('onPosts', lot(recentsDabord(posts)));
+    await b.avancer(500);
+    await b.toucher('#home-frame');
+    assert.ok(await b.visible('#view-photos'));
+    await b.avancer(4 * 60000);
+    assert.ok(await b.visible('#view-photos'), 'toujours le diaporama à 4 min');
+    await b.avancer(60000 + 16000);
+    assert.ok(await b.visible('#view-home'), 'retour à l\'accueil malgré les vidéos');
+    await sansErreur(b);
+  } finally { await b.fermer(); }
+});
+
+test('diaporama : une vidéo en cours de lecture n\'est pas coupée, retour à l\'accueil à sa fin (15 min au plus)', async () => {
+  const b = await ouvrir();
+  try {
+    await b.android('onPosts', lot([envoi({ seen: true, type: 'video', image: null, video: `${ORIGIN}/photos/v1.mp4` })]));
+    await b.avancer(500);
+    await b.toucher('#home-frame');
+    await b.avancer(4000);
+    await videoEnLecture(b, true);
+    await b.avancer(5 * 60000 + 20000);
+    assert.ok(await b.visible('#view-photos'), 'vidéo en cours : pas coupée à 5 min');
+    await videoEnLecture(b, false); // la vidéo se termine
+    await b.avancer(16000);
+    assert.ok(await b.visible('#view-home'), 'retour à l\'accueil à la fin de la vidéo');
+    // Une vidéo qui ne finit jamais (lecture en boucle) : retour quand même au bout de 15 min.
+    await b.toucher('#home-frame');
+    await b.avancer(4000);
+    await videoEnLecture(b, true);
+    await b.avancer(14 * 60000);
+    assert.ok(await b.visible('#view-photos'), 'toujours la vidéo à 14 min');
+    await b.avancer(2 * 60000);
+    assert.ok(await b.visible('#view-home'), 'retour au plus tard après 15 min');
     await sansErreur(b);
   } finally { await b.fermer(); }
 });
