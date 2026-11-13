@@ -125,11 +125,40 @@ public class AppelGsm extends InCallService {
         public void onStateChanged(Call call, int state) {
             // Un appel déjà remplacé (raccroché puis rappel aussitôt, Tanguy 13/11) ne parle plus à l'écran :
             // son « fin » tardif fermait l'écran du nouvel appel, qui continuait en fond.
+            noterDiag(call, "état " + state);
             if (!estLAppelSuivi(call, courant)) return;
             if (state == Call.STATE_ACTIVE) hautParleur();
             publier(call);
         }
+
+        // Essai (fil SOS, 13/11) : le réseau dit-il « appel renvoyé » (messagerie) ? Journal seulement.
+        @Override
+        public void onConnectionEvent(Call call, String event, android.os.Bundle extras) {
+            noterDiag(call, "événement " + event + " " + texte(extras));
+        }
     };
+
+    /** Diagnostic des appels (journal seulement, aucun changement de comportement). */
+    private void noterDiag(Call call, String quoi) {
+        try {
+            Call.Details d = call.getDetails();
+            String ext = d == null ? "" : texte(d.getExtras()) + " intent=" + texte(d.getIntentExtras());
+            Journal.log(this, "DIAG appel " + System.currentTimeMillis() + " " + quoi + " " + ext);
+        } catch (Exception e) {
+            Log.w(TAG, "Diagnostic d'appel", e);
+        }
+    }
+
+    private static String texte(android.os.Bundle b) {
+        if (b == null) return "{}";
+        StringBuilder sb = new StringBuilder("{");
+        for (String k : b.keySet()) {
+            Object v = b.get(k);
+            if (k.toLowerCase().contains("number") || k.toLowerCase().contains("handle")) v = "…";
+            sb.append(k).append('=').append(v).append(", ");
+        }
+        return sb.append('}').toString();
+    }
 
     /** Seul l'appel suivi (le plus récent) met l'écran à jour. */
     static boolean estLAppelSuivi(Object appel, Object suivi) {
@@ -139,6 +168,7 @@ public class AppelGsm extends InCallService {
     @Override
     public void onCallAdded(Call call) {
         super.onCallAdded(call);
+        noterDiag(call, "ajouté, état " + call.getState());
         if (courant != null && courant != call && !encoreOuvert(courant.getState())) {
             // L'appel d'avant se termine encore (raccroché juste avant de rappeler) : ce n'est pas « déjà
             // en ligne ». On le lâche, le nouvel appel devient l'appel suivi.
