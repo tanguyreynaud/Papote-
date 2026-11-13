@@ -14,7 +14,7 @@ import { ouvrirParcours, fermerParcours } from './parcours.js';
 import {
   getFirestore, doc, collection, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, increment,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
-import { simVue, reseauMobile, reseauAVoir, reseauVuDe, alerteReseau, noterReseauVu, go as enGo, BLOCAGES_SIM, blocagesFaits } from './sim.js';
+import { simVue, texteBloquee, reseauMobile, reseauAVoir, reseauVuDe, alerteReseau, noterReseauVu, go as enGo, BLOCAGES_SIM, blocagesFaits } from './sim.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -2602,7 +2602,8 @@ function blocReseau(r, { vu = null, fid = null, uid = null } = {}) {
     r.service ? h('p', { class: 'small' }, `Carte SIM : ${r.service}`) : null,
     r.antennes.length
       ? h('ul', { class: 'small' }, ...r.antennes.map((a) => h('li', {}, a.texte, a.utilisee ? h('span', { class: 'muted' }, ' · utilisée') : null)))
-      : h('p', { class: 'muted small' }, 'Aucune antenne listée (position coupée sur la tablette, ou pas encore relevé).'));
+      // Carte bloquée : la tablette ne lit plus ses antennes, rien à dire de plus.
+      : r.bloquee ? null : h('p', { class: 'muted small' }, 'Aucune antenne listée (position coupée sur la tablette, ou pas encore relevé).'));
 }
 
 // Fiche de membre de la tablette, en direct : en ligne, batterie, carte SIM, version.
@@ -2626,7 +2627,7 @@ function blocReleves(zone, t) {
       h('div', { class: 'stats compact' },
         stat(enLigne ? ilYA(enLigne) : '—', 'En ligne', enLigne && Date.now() - enLigne > 70 * 60_000 ? 'ne répond plus ?' : null, enLigne && Date.now() - enLigne > 70 * 60_000 ? 'warn' : null),
         stat(b.level != null ? `${b.level} %` : '—', b.charging ? 'Batterie, sur le chargeur' : 'Batterie, débranchée', null, b.charging === false ? 'warn' : null),
-        stat(sim ? (sim.reseau || sim.operateur || 'Carte SIM') : 'Wi-Fi', sim ? [sim.operateur !== sim.reseau ? sim.operateur : null, signal ? `signal ${signal}` : null].filter(Boolean).join(' · ') || 'carte SIM' : 'pas de carte SIM', mo),
+        sim && sim.bloquee ? stat('Carte SIM', texteBloquee(sim).replace('Carte SIM ', ''), null, 'warn') : stat(sim ? (sim.reseau || sim.operateur || 'Carte SIM') : 'Wi-Fi', sim ? [sim.operateur !== sim.reseau ? sim.operateur : null, signal ? `signal ${signal}` : null].filter(Boolean).join(' · ') || 'carte SIM' : 'pas de carte SIM', mo),
         stat(m.appVersion || '—', 'Version de Papote')),
       blocReseau(reseauMobile(sim), { vu: m.reseauVu || null, fid: t.fid, uid: t.tabletUid }),
       h('p', { class: 'muted small' }, 'Fiche de la tablette lue en direct : la page se met à jour toute seule quand elle donne de ses nouvelles.'),

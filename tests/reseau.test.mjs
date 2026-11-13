@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { BLOCS, mhzLte, mhzNr, mhzUmts, mhzGsm, operateurDeMhz, operateurParFrequence } from '../web/js/frequences.js';
-import { reseauMobile, reseauAVoir, reseauVuDe } from '../web/js/sim.js';
+import { reseauMobile, reseauAVoir, reseauVuDe, texteBloquee } from '../web/js/sim.js';
 
 const lte = (earfcn) => operateurParFrequence({ type: '4G', earfcn });
 
@@ -153,4 +153,17 @@ test('« Vu » : l\'alerte part, et ne revient que si c\'est pire (10 dB de moin
   assert.equal(reseauAVoir(faible(-90), vu), false);
   assert.equal(reseauAVoir(faible(-112), { niveau: 0 }), true);
   assert.equal(reseauAVoir(faible(-112), {}), true);
+});
+
+test('reseauMobile : carte SIM bloquée par un code (tablette 2bfc17b), en mots simples', () => {
+  const pin = reseauMobile({ bloquee: 'pin', service: 'code pin', vuLe: '2026-11-13T09:00:00Z' });
+  assert.equal(pin.alerte, 'Carte SIM bloquée : code PIN demandé');
+  assert.equal(pin.niveau, 3);
+  assert.equal(pin.service, 'bloquée (code PIN demandé)');
+  assert.equal(pin.bloquee, 'pin');
+  assert.equal(reseauMobile({ bloquee: 'puk', service: 'code puk' }).alerte, 'Carte SIM bloquée : code PUK demandé');
+  assert.equal(reseauMobile({ bloquee: 'verrouillee', service: 'code verrouillee' }).alerte, 'Carte SIM bloquée : verrouillée');
+  assert.equal(reseauMobile({ service: 'hors service' }).bloquee, null);
+  assert.equal(texteBloquee(null), null);
+  assert.equal(texteBloquee({ service: 'ok' }), null);
 });

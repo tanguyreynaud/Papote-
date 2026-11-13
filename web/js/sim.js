@@ -68,6 +68,10 @@ const operateurDe = (code) => Object.keys(RESEAUX).find((n) => RESEAUX[n].includ
 const INCONNU = 'opérateur inconnu';
 const FAIBLE_DBM = -110;
 const SERVICES = { ok: 'en service', urgences: 'urgences seulement', 'hors service': 'hors service', eteint: 'réseau mobile coupé' };
+// Carte bloquée par un code (tablette 2bfc17b : sim = { bloquee: 'pin' | 'puk' | 'verrouillee', service: 'code …', vuLe }).
+// Le serveur prévient Tanguy (functions/sim-hors-service.js) ; ici, les mêmes mots sur la page de la tablette.
+export const BLOQUEE = { pin: 'code PIN demandé', puk: 'code PUK demandé', verrouillee: 'verrouillée' };
+export const texteBloquee = (sim) => (sim && sim.bloquee ? `Carte SIM bloquée : ${BLOQUEE[sim.bloquee] || 'à vérifier'}` : null);
 
 /**
  * { service, antennes: [{ operateur, texte, utilisee }], alerte, niveau, dbm } ou null si la tablette n'envoie pas encore
@@ -92,7 +96,8 @@ export function reseauMobile(sim) {
   const mieux = autre ? ` (${autre.operateur} capte ici à ${autre.dbm} dBm)` : '';
   let alerte = null;
   let niveau = 0;
-  if (sim.service === 'urgences') { alerte = `Aucune antenne de l'opérateur de la carte chez le client${mieux} : changer de carte SIM`; niveau = 3; }
+  if (sim.bloquee) { alerte = texteBloquee(sim); niveau = 3; }
+  else if (sim.service === 'urgences') { alerte = `Aucune antenne de l'opérateur de la carte chez le client${mieux} : changer de carte SIM`; niveau = 3; }
   else if (sim.service === 'hors service') { alerte = `Tablette sans réseau mobile${mieux}`; niveau = 3; }
   else if (sim.service === 'eteint') { alerte = 'Réseau mobile coupé sur la tablette (mode avion ?)'; niveau = 3; }
   else if (utilisee && ['2G', '3G'].includes(utilisee.type)) { alerte = `Seulement en ${utilisee.type} chez le client : appels vidéo difficiles${mieux}`; niveau = 2; }
@@ -100,7 +105,8 @@ export function reseauMobile(sim) {
     alerte = `Réseau faible chez le client (${utilisee.operateur}, ${utilisee.dbm} dBm)${autre && autre.dbm >= utilisee.dbm + 10 ? mieux : ''}`;
     niveau = 1;
   }
-  return { service: SERVICES[sim.service] || null, antennes, alerte, niveau, dbm: utilisee ? utilisee.dbm : null };
+  const service = sim.bloquee ? `bloquée (${BLOQUEE[sim.bloquee] || 'à vérifier'})` : SERVICES[sim.service] || null;
+  return { service, bloquee: sim.bloquee || null, antennes, alerte, niveau, dbm: utilisee ? utilisee.dbm : null };
 }
 
 // « Vu » sur l'alerte réseau (Tanguy, 08/11 : « Réseau faible » restait affiché alors qu'il n'y peut parfois rien).

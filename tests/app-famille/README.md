@@ -47,6 +47,7 @@ scénarios) ; utiliser plutôt
 | `admin-journee` | L'admin (`admin.html`) avec les vraies fonctions : le matin (« Préparer l'envoi » avec l'étiquette, mauvais numéro T-… refusé, doubles appuis), l'après-midi (retour complet, rien prélevé, remise à zéro puis stock), l'envoi sur téléphone (390 px) |
 | `admin-colis-en-route` | Famille préparée : colis parti, tablette pas entrée : « En route », liste « Envoyées, pas encore jumelées », « Colis revenu » dans le ⋮, ligne « À faire » après 20 jours (fonctions qui transmettent `tabletteRelieeLe`) |
 | `admin-remplacement` | Code de tablette de remplacement (R2) : valable 7 jours et pour une seule tablette (échéance affichée), rouvert sans en créer un autre, « Nouveau code » en double clic = un seul code (l'ancien ne marche plus), code servi, code expiré |
+| `admin-sim-bloquee` | Carte SIM bloquée par un code (tablette 2bfc17b) : « Carte SIM bloquée : code PIN demandé » / « code PUK demandé » / « verrouillée » sur la page de la tablette, même mise en forme que « hors service », parti tout seul une fois débloquée |
 
 Chaque test échoue aussi s'il y a une erreur dans la console, une fenêtre grise du navigateur
 (confirm/alert) ou une erreur dans une fonction serveur.
