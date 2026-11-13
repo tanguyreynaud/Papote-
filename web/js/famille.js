@@ -24,7 +24,7 @@ import {
   finDeContrat, facturesFamille, renvoyerTablette, retracter, inviterParEmail, nommerFamillePreparee, entrerParCommande,
 } from './abonnement.js';
 import { startCall, watchTabletBusy, watchIncomingCalls, answerIncoming, warmUpCalls, declineIncoming, reportCallIncident } from './appel.js';
-import { pushSupported, pushAllowed, pushRefused, enablePush, closeCallNotification, rememberNativeToken, inNativeApp, launchFromAndroidApp, nativeNotificationsOff } from './push.js';
+import { pushSupported, pushAllowed, pushRefused, enablePush, closeCallNotification, rememberNativeToken, inNativeApp, launchFromAndroidApp, nativeNotificationsOff, forgetThisPhone } from './push.js';
 import { prepareVideo, unlockVideo } from './video.js';
 import { filmerPossible, filmerOuvert, ouvrirFilmer, fermerFilmer } from './filmer.js';
 import { startAgenda, stopAgenda, limiteDuJour } from './agenda.js';
@@ -5426,11 +5426,28 @@ $('form-link-email').addEventListener('submit', async (e) => {
   }
 });
 
+// Avant de se déconnecter, ce téléphone est retiré des sonneries du compte, dans chacune de ses familles
+// (sinon il sonnerait encore pour lui après un changement de compte). Au plus 3 s : hors ligne, on se
+// déconnecte quand même (le serveur rattrape, functions/jeton-unique.js). Un double appui ne fait qu'une
+// déconnexion (retour.js bloque déjà le même bouton ; ce verrou couvre aussi les « Se déconnecter » des autres
+// écrans pendant l'attente).
+let deconnexionEnCours = false;
 document.querySelectorAll('[data-action=logout]').forEach((btn) => btn.addEventListener('click', async () => {
-  if (!await askConfirm('Se déconnecter de Papote sur ce téléphone ?')) return;
-  stopSession();
-  await logOut();
-  showLogin(false);
+  if (deconnexionEnCours) return;
+  deconnexionEnCours = true;
+  try {
+    if (!await askConfirm('Se déconnecter de Papote sur ce téléphone ?')) return;
+    const uid = session?.uid || authUser?.uid;
+    const fids = [...new Set([...myFamilies.map((f) => f.fid), session?.fid].filter(Boolean))];
+    stopSession();
+    show('loading');
+    await forgetThisPhone(fids, uid);
+    await logOut();
+    myFamilies = [];
+    showLogin(false);
+  } finally {
+    deconnexionEnCours = false;
+  }
 }));
 
 document.querySelectorAll('[data-action=other-family]').forEach((btn) => btn.addEventListener('click', () => {

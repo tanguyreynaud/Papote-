@@ -5,7 +5,7 @@
 import { getApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
 import { getMessaging, getToken, isSupported } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-messaging.js';
 import { arrayRemove, arrayUnion } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
-import { db, doc, setDoc, serverTimestamp } from './firebase.js';
+import { db, doc, setDoc, updateDoc, serverTimestamp } from './firebase.js';
 
 // App Android Papote (dossier telephone/ du dépôt) : elle ouvre l'app famille avec ?natif=<jeton>.
 // Ce téléphone sonne alors comme un vrai appel par elle, plus par les notifications du navigateur.
@@ -126,6 +126,34 @@ async function enableNativePush(fid, uid) {
     }
   } catch (e) { /* pas de jeton navigateur sur ce téléphone */ }
   return true;
+}
+
+// Déconnexion : ce téléphone ne doit plus sonner pour ce compte (bug 2026-11 : après un changement de compte,
+// le téléphone sonnait pour les deux). Les jetons de ce téléphone (app Android et navigateur) sont retirés de
+// la fiche de chaque famille du compte. Jamais plus de `delaiMs` : hors ligne, la déconnexion se fait quand
+// même, et le serveur retire le jeton de l'ancien compte dès qu'un autre compte l'inscrit
+// (functions/jeton-unique.js). Ne lève jamais d'erreur.
+export async function forgetThisPhone(fids, uid, delaiMs = 3000) {
+  if (!uid || !fids?.length) return;
+  const retirer = (champ, jeton) => Promise.all(fids.map((fid) => updateDoc(
+    doc(db, 'families', fid, 'members', uid, 'private', 'push'), { [champ]: arrayRemove(jeton) },
+  ).catch(() => { /* pas de fiche, pas le droit : rien à retirer */ })));
+  const natif = nativeToken();
+  const travail = Promise.all([
+    natif ? retirer('natifs', natif) : null,
+    (async () => {
+      // Jeton du navigateur seulement si l'autorisation est déjà donnée et le service worker inscrit :
+      // getToken relit alors le jeton de ce navigateur sans rien demander à la personne.
+      if (!('Notification' in window) || Notification.permission !== 'granted' || !('serviceWorker' in navigator)) return;
+      if (!await isSupported()) return;
+      const registration = await navigator.serviceWorker.getRegistration();
+      const web = registration && await getToken(getMessaging(getApp()), { serviceWorkerRegistration: registration });
+      if (web) await retirer('tokens', web);
+    })().catch(() => { /* pas de jeton navigateur */ }),
+  ]);
+  let minuterie;
+  await Promise.race([travail, new Promise((fin) => { minuterie = setTimeout(fin, delaiMs); })]);
+  clearTimeout(minuterie);
 }
 
 // La sonnerie d'un appel a été prise en compte dans l'app : la notification n'a plus lieu d'être.

@@ -37,6 +37,7 @@ scénarios) ; utiliser plutôt
 | `limites` | Limites du jour (A12) : le 50e message part, le suivant est refusé avec un mot calme à la place de la barre (texte gardé, rien en attente, double appui sur un message rapide), la barre revient après minuit ; rappels : 30 dans l'agenda (dit dès l'ouverture), 10 ajoutés par jour (double appui : un seul), modification toujours possible |
 | `appels` | Vidéo vers la tablette (vraie liaison WebRTC), refus, Mamie appelle un proche ou toute la famille |
 | `reglages` | Réglages de la tablette, profil, thème, quitter la famille, deux familles, déconnexion |
+| `deconnexion` | « Se déconnecter » retire le jeton de l'app Android de ce téléphone ; double appui = une seule déconnexion ; Annuler ne retire rien ; hors ligne, la déconnexion se fait quand même |
 | `abonnement` | Annulation sous 30 jours, résiliation puis « garder », relier une commande, payer depuis l'app, pause |
 | `horsligne` | Envois gardés sans réseau, partis au retour du réseau ou à la prochaine ouverture |
 | `retour` | Bouton retour d'Android : chaque écran revient à celui d'avant, une fenêtre se ferme, « Voulez-vous quitter Papote ? » dans l'app Android |
