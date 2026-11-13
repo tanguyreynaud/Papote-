@@ -47,6 +47,7 @@
     <string name="canal_appel_en_cours">Appel en cours</string>
     <string name="appel_avec">Appel avec %1$s</string>
     <string name="appel_connexion">Connexion…</string>
+    <string name="raccrocher">Raccrocher</string>
     <string name="appel_audio_en_cours">Appel en cours</string>
     <string name="appel_video_en_cours">Appel vidéo en cours</string>
 </resources>

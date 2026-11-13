@@ -42,6 +42,11 @@ final class Raccourci {
                 .getString(NOM, ctx.getString(R.string.raccourci_defaut)));
     }
 
+    /** Le nom de la personne de la tablette, s'il est déjà connu (sinon null). */
+    static String nomConnu(Context ctx) {
+        return ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(NOM, null);
+    }
+
     /** La tablette appelle : le raccourci prend le nom de la personne (sans « SOS : »). */
     static void nommer(Context ctx, String nom) {
         if (nom == null) return;
