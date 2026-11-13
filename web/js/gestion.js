@@ -793,6 +793,8 @@ function afficherAccueil() {
     [donnees.sauvegardeAFaire ? 1 : 0, donnees.sauvegardeAFaire || '', '#accueil', 'ko'],
     // Carte SIM d'une tablette sans réseau depuis plus de 2 h (texte du serveur, sim-hors-service.js), levée au retour.
     ...(donnees.simAFaire || []).map((texte) => [1, texte, '#stock', 'ko']),
+    // Même numéro de portable pour deux proches d'une famille (texte du serveur, tel-unique.js) : ouvre la famille.
+    ...(donnees.telDoubles || []).map((d) => [1, d.texte, `#clients/familles/${encodeURIComponent(d.fid)}`, '']),
   ].filter(([n]) => n > 0);
   // Lignes masquées 7 jours par l'admin (gestionReglages, masquer) : elles reviennent seules si rien n'est réglé.
   const cleTache = ([, texte, lien]) => `${lien}|${texte}`;
@@ -4628,7 +4630,11 @@ function remplirLiensFamille(fid) {
   const finies = commandes.filter(finie);
   // Tablette de la famille sans commande rattachée (jumelée à la main, ancienne fiche).
   const seules = tablettes.filter((t) => !commandes.some((c) => c.id === t.commande));
+  // Même numéro de portable pour deux proches de cette famille (functions/tel-unique.js) : dit en haut de la page.
+  const doubles = (donnees.telDoubles || []).filter((d) => d.fid === fid);
   $('famille-liens').replaceChildren(...[
+    ...doubles.map((d) => h('p', { class: 'tel-double' }, `Numéro en double : ${d.numero} (${d.prenoms.join(', ')}). `
+      + 'Chaque proche doit avoir son propre numéro : demandez à l\'un d\'eux de corriger le sien dans Profil.')),
     h('h2', {}, 'Commande, client et tablette'),
     ...enCours.map((c) => h('ul', { class: 'liste-liens groupe-commande' }, ...blocCommande(c))),
     seules.length ? h('ul', { class: 'liste-liens groupe-commande' }, ...seules.map((t) => ligneLien('Tablette', `#tablette/${encodeURIComponent(t.id)}`,

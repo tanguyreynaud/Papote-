@@ -48,6 +48,7 @@ scénarios) ; utiliser plutôt
 | `admin-colis-en-route` | Famille préparée : colis parti, tablette pas entrée : « En route », liste « Envoyées, pas encore jumelées », « Colis revenu » dans le ⋮, ligne « À faire » après 20 jours (fonctions qui transmettent `tabletteRelieeLe`) |
 | `admin-remplacement` | Code de tablette de remplacement (R2) : valable 7 jours et pour une seule tablette (échéance affichée), rouvert sans en créer un autre, « Nouveau code » en double clic = un seul code (l'ancien ne marche plus), code servi, code expiré |
 | `admin-sim-bloquee` | Carte SIM bloquée par un code (tablette 2bfc17b) : « Carte SIM bloquée : code PIN demandé » / « code PUK demandé » / « verrouillée » sur la page de la tablette, même mise en forme que « hors service », parti tout seul une fois débloquée |
+| `tel-unique` | Un numéro de portable par proche dans la famille (Tanguy, 13/11) : numéro d'un autre proche refusé à l'entrée dans la famille (« Vos informations » revient avec « Ce numéro est déjà celui de Julie dans la famille. », rien d'écrit) et dans Profil ; son propre numéro accepté ; celui de la tablette ne compte pas ; double appui sur Enregistrer = une écriture ; admin : ligne « Numéro en double dans la famille … » dans « À faire » (numéro masqué) et mot sur la page de la famille |
 
 Chaque test échoue aussi s'il y a une erreur dans la console, une fenêtre grise du navigateur
 (confirm/alert) ou une erreur dans une fonction serveur.

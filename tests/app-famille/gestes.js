@@ -163,8 +163,16 @@ async function seConnecter(t, email, suite = '') {
   t.email = email;
 }
 
+/** Numéro de portable propre à chaque prénom (06 + 8 chiffres) : deux proches d'une famille n'ont jamais le même
+ *  (Tanguy, 13/11 : un numéro déjà pris dans la famille est refusé). */
+function telDe(prenom) {
+  let h = 7;
+  for (const c of String(prenom)) h = (h * 31 + c.codePointAt(0)) % 100_000_000;
+  return `06${String(h).padStart(8, '0')}`;
+}
+
 /** « Vos informations » : prénom, femme/homme, photo, numéro de téléphone, anniversaire. */
-async function remplirMoi(t, { prenom, genre = 'femme', tel = '0612345678', jour = '12', mois = '5', annee = '1985' }) {
+async function remplirMoi(t, { prenom, genre = 'femme', tel = telDe(prenom), jour = '12', mois = '5', annee = '1985' }) {
   await attendreVue(t, 'view-moi');
   await t.page.fill('#moi-prenom', prenom);
   await t.page.fill('#moi-tel', tel);
@@ -442,5 +450,5 @@ module.exports = {
   verifierLargeur,
   vue, attendreVue, visible, repondre, texteFenetre, photo, video,
   ouvrir, ouvrirParApp, seConnecter, remplirMoi, inscrire, tabletteAllumee, installer, entrerFamillePreparee, familleRelieeParPapote, fermerAccueil, familleInstallee, rejoindre, dernierMail, toast,
-  ouvrirTuile, retourAccueil, lire, liste, attendreBase, codesEmail,
+  ouvrirTuile, retourAccueil, lire, liste, attendreBase, codesEmail, telDe,
 };
