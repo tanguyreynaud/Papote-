@@ -4051,6 +4051,9 @@ SETTINGS['my-tel-card'] = {
     showError($('my-tel-error'), tel ? '' : $('my-tel').value.trim() ? TEL_INVALIDE : TEL_MANQUANT);
     if (!tel) return false;
     if (tel === telPropre(session.member.telephone)) return true;
+    // Un numéro par proche dans la famille (Tanguy, 13/11) : déjà celui d'un autre proche → refusé, rien n'est écrit.
+    const pris = await telPrisPar(tel);
+    if (pris) { showError($('my-tel-error'), telDouble(pris)); return false; }
     await updateDoc(doc(db, 'families', session.fid, 'members', session.uid), { telephone: tel });
     session.member.telephone = tel;
     rememberTel(tel);
@@ -4877,6 +4880,50 @@ function telPropre(v) {
   return t.replace(/(\d{2})(?=\d)/g, '$1 ');
 }
 const TEL_MANQUANT = 'Indiquez votre numéro de portable.';
+// Deux proches d'une même famille n'ont jamais le même numéro (Tanguy, 13/11) : la tablette reconnaît chacun par le sien.
+// Les règles Firestore ne peuvent pas le vérifier : l'appli lit les fiches de la famille avant d'écrire un numéro
+// (Profil, et juste après l'entrée dans la famille) ; l'admin montre un doublon resté (functions/tel-unique.js).
+const telDouble = (prenom) => `Ce numéro est déjà celui de ${prenom} dans la famille.`;
+// Prénom de l'autre proche (pas la tablette, pas moi) qui a déjà ce numéro, sinon ''.
+function telPrisDans(membres, tel, uid) {
+  const t = telPropre(tel);
+  const autre = t && membres.find((m) => m.id !== uid && m.role !== 'tablette' && telPropre(m.telephone) === t);
+  return autre ? (String(autre.name || '').trim() || 'quelqu\'un d\'autre') : '';
+}
+// Lu dans la base au moment d'écrire (pas la liste affichée, qui peut dater ou venir d'une autre famille).
+async function telPrisPar(tel) {
+  const snap = await getDocs(collection(db, 'families', session.fid, 'members'));
+  return telPrisDans(snap.docs.map((d) => ({ id: d.id, ...d.data() })), tel, session.uid);
+}
+// Juste après l'entrée dans la famille (code famille, invitation, numéro de commande, demande acceptée) : le numéro
+// donné dans « Vos informations » n'est écrit sur ma fiche que s'il n'est celui d'aucun autre proche. Sinon
+// « Vos informations » revient, le numéro refusé et le message affichés, pour en donner un autre (ou cocher
+// « Je n'ai pas de numéro »). true si c'est le cas : l'ouverture de la famille s'arrête là.
+async function telALEntree() {
+  const tel = telGarde();
+  if (!session?.member || session.member.role === 'tablette' || telPropre(session.member.telephone) || !tel) return false;
+  let pris;
+  try {
+    pris = await telPrisPar(tel);
+  } catch (err) {
+    console.warn('Numéros de la famille illisibles : numéro écrit à la prochaine ouverture', err);
+    return false;
+  }
+  if (!pris) {
+    session.member.telephone = tel;
+    updateDoc(doc(db, 'families', session.fid, 'members', session.uid), { telephone: tel })
+      .then(() => bumpFamilyRev()).catch((err) => console.warn('Numéro non enregistré', err));
+    return false;
+  }
+  // Écran d'appel de l'app Android (sans « Vos informations ») : rien n'est écrit, la famille s'ouvre quand même.
+  if (window.PapoteNatif) return false;
+  stopSession();
+  showMoi();
+  $('moi-tel').value = tel.replace(/ /g, '');
+  showError($('moi-error'), telDouble(pris));
+  moiComplet();
+  return true;
+}
 const TEL_INVALIDE = 'Numéro incomplet : 10 chiffres (06 ou 07), ou +33 suivi de 9 chiffres.';
 const TEL_ETRANGER = 'Pas de portable français ? Cochez « Je n\'ai pas de numéro, ou je vis à l\'étranger ».';
 // À la frappe : seulement des chiffres, avec « + » possible en tête ; 10 caractères (06…) ou 12 (+33…), rien d'autre.
@@ -5056,13 +5103,7 @@ function appliquerGenre() {
     saveFace(v).catch((err) => console.warn('Photo non enregistrée', err));
   }
   ajouterMonAnniversaire();
-  // Mon numéro de téléphone, donné à l'inscription : il rejoint ma fiche s'il y manque.
-  const tel = telGarde();
-  if (session?.member && session.member.role !== 'tablette' && !telPropre(session.member.telephone) && tel) {
-    session.member.telephone = tel;
-    updateDoc(doc(db, 'families', session.fid, 'members', session.uid), { telephone: tel })
-      .then(() => bumpFamilyRev()).catch((err) => console.warn('Numéro non enregistré', err));
-  }
+  // Mon numéro de téléphone, donné à l'inscription : déjà rejoint ma fiche s'il y manquait (telALEntree).
   renderTel();
   const g = savedGenre();
   if (!session?.member || session.member.genre || !['femme', 'homme'].includes(g)) return;
@@ -5373,6 +5414,8 @@ async function enterApp() {
   }
   session = await (lectureSession || loadMembership());
   if (!session) { showJoin(false); return; }
+  // Mon numéro, s'il manque à ma fiche : écrit seulement s'il n'est celui d'aucun autre proche de la famille.
+  if (await telALEntree()) return;
   forgetInviteCode();
   applyFamily();
   watchFamily();
