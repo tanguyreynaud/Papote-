@@ -56,6 +56,15 @@ public class GardeReseauTest {
     }
 
     @Test
+    public void seuleUneAntenneDuReseauDeLaCarteCompte() {
+        // Tanguy (13/11) : à Poissy, rien que des antennes Orange pour une carte portée par Bouygues :
+        // redémarrer n'y change rien.
+        assertFalse(GardeReseau.memeReseau("20801", "20820"));
+        assertTrue(GardeReseau.memeReseau("20820", "20820"));
+        assertTrue("réseau de la carte jamais vu : toute antenne compte", GardeReseau.memeReseau("20801", ""));
+    }
+
+    @Test
     public void horsServiceEtUrgencesSeulementComptent() {
         assertTrue(GardeReseau.hors(ServiceState.STATE_OUT_OF_SERVICE));
         assertTrue(GardeReseau.hors(ServiceState.STATE_EMERGENCY_ONLY));

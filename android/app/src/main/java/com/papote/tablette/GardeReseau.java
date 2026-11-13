@@ -49,6 +49,41 @@ final class GardeReseau {
         return etat == ServiceState.STATE_OUT_OF_SERVICE || etat == ServiceState.STATE_EMERGENCY_ONLY;
     }
 
+    /** Une antenne du réseau qui porte la carte est-elle à portée ? Réseau jamais vu : n'importe laquelle. */
+    static boolean antenneDuReseau(List<CellInfo> cellules, String hote) {
+        if (cellules == null || cellules.isEmpty()) return false;
+        for (CellInfo c : cellules) {
+            if (memeReseau(plmn(c), hote)) return true;
+        }
+        return false;
+    }
+
+    static boolean memeReseau(String plmnAntenne, String hote) {
+        return hote == null || hote.isEmpty() || hote.equals(plmnAntenne);
+    }
+
+    private static String plmn(CellInfo c) {
+        try {
+            String mcc = null, mnc = null;
+            if (c instanceof android.telephony.CellInfoLte) {
+                android.telephony.CellIdentityLte i = ((android.telephony.CellInfoLte) c).getCellIdentity();
+                mcc = i.getMccString(); mnc = i.getMncString();
+            } else if (c instanceof android.telephony.CellInfoNr) {
+                android.telephony.CellIdentityNr i = (android.telephony.CellIdentityNr) ((android.telephony.CellInfoNr) c).getCellIdentity();
+                mcc = i.getMccString(); mnc = i.getMncString();
+            } else if (c instanceof android.telephony.CellInfoWcdma) {
+                android.telephony.CellIdentityWcdma i = ((android.telephony.CellInfoWcdma) c).getCellIdentity();
+                mcc = i.getMccString(); mnc = i.getMncString();
+            } else if (c instanceof android.telephony.CellInfoGsm) {
+                android.telephony.CellIdentityGsm i = ((android.telephony.CellInfoGsm) c).getCellIdentity();
+                mcc = i.getMccString(); mnc = i.getMncString();
+            }
+            return mcc == null || mnc == null ? "" : mcc + mnc;
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
     // ---------- Lien avec Android (appelé par le chien de garde) ----------
 
     private static long derniereVerif;
@@ -64,6 +99,12 @@ final class GardeReseau {
             TelephonyManager tm = (TelephonyManager) app.getSystemService(Context.TELEPHONY_SERVICE);
             boolean simPrete = tm != null && tm.getSimState() == TelephonyManager.SIM_STATE_READY;
             ServiceState ss = simPrete ? tm.getServiceState() : null;
+            if (ss != null && ss.getState() == ServiceState.STATE_IN_SERVICE && ss.getOperatorNumeric() != null
+                    && !ss.getOperatorNumeric().isEmpty()) {
+                // Réseau qui porte vraiment la carte (Bouygues 20820 pour Lyca 20825) : seule une de ses
+                // antennes à portée justifie un redémarrage (Tanguy, 13/11 : à Poissy, rien que de l'Orange).
+                prefs.edit().putString("reseauHote", ss.getOperatorNumeric()).apply();
+            }
             if (ss == null || !hors(ss.getState())) {
                 if (prefs.getLong("reseauHorsDepuis", 0) != 0) {
                     if (ss != null) Journal.urgent(app, "GARDE-FOU : réseau mobile revenu");
@@ -79,7 +120,7 @@ final class GardeReseau {
             }
             List<CellInfo> cellules = null;
             try { cellules = tm.getAllCellInfo(); } catch (SecurityException ignored) { }
-            boolean antenne = cellules != null && !cellules.isEmpty();
+            boolean antenne = antenneDuReseau(cellules, prefs.getString("reseauHote", ""));
             int faits = prefs.getInt("reseauRedemarrages", 0);
             if (!fautRedemarrer(mur, depuis, antenne, AppelGsm.enCours(), maintenance,
                     prefs.getLong("reseauDernierRedemarrage", 0), faits)) return;
