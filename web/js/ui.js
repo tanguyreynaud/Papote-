@@ -2,7 +2,6 @@
 
 // Fenêtres ouvertes, la plus récente en dernier : le bouton retour d'Android ferme la dernière.
 const ouvertes = [];
-const DOUBLE_APPUI_MS = 400;
 
 function dialog(message, buttons, extra = null) {
   return new Promise((resolve) => {
@@ -31,13 +30,7 @@ function dialog(message, buttons, extra = null) {
       b.addEventListener('click', () => close(value));
       row.append(b);
     }
-    // Juste après l'ouverture, un appui est le 2e d'un double appui sur le bouton qui l'a ouverte (ex. « Enregistrer
-    // le numéro ») : il ne doit ni la fermer avant qu'on l'ait lue, ni toucher un de ses boutons. La fenêtre ne reçoit
-    // donc rien pendant un court instant (l'appui tombe sur le fond, qui l'ignore).
-    const ouverteLe = performance.now();
-    box.style.pointerEvents = 'none';
-    setTimeout(() => { box.style.pointerEvents = ''; }, DOUBLE_APPUI_MS);
-    back.addEventListener('click', (e) => { if (e.target === back && performance.now() - ouverteLe > DOUBLE_APPUI_MS) close(false); });
+    back.addEventListener('click', (e) => { if (e.target === back) close(false); });
     // Croix en haut à droite : ferme sans rien faire (à la place d'un bouton « Annuler »).
     if (extra?.croix) {
       box.classList.add('avec-croix');

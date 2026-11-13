@@ -4845,7 +4845,9 @@ function enregistrerContact(nom, tel, bouton) {
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
-    notice(`Fiche contact de ${nom} prête : ouvrez-la pour l'ajouter à vos contacts.`);
+    // Un instant après l'appui (le bouton dit « Un instant… ») : le 2e appui d'un double appui tombe sur le bouton
+    // désactivé, pas sur la fenêtre, qu'il refermait avant qu'on ait pu la lire.
+    setTimeout(() => notice(`Fiche contact de ${nom} prête : ouvrez-la pour l'ajouter à vos contacts.`), 450);
   } catch (e) {
     console.error(e);
     notice("La fiche contact n'a pas pu être créée. Notez le numéro : " + tel);
