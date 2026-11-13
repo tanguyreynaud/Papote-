@@ -2208,7 +2208,15 @@ final class Sync {
             JSONObject info = SimInfo.read(context);
             JSONObject forfait = Forfait.etat(context);
             JSONObject value;
-            if (info == null) {
+            String bloquee = Wifi.simBloquee(context);
+            if (info == null && !bloquee.isEmpty()) {
+                // Carte présente mais bloquée par un code : l'admin et la famille doivent le savoir
+                // (T-003, 13/11 : rien ne le signalait, la fiche disait « pas de carte SIM »).
+                value = new JSONObject().put("mapValue", new JSONObject().put("fields", new JSONObject()
+                        .put("bloquee", Firebase.string(bloquee))
+                        .put("service", Firebase.string("code " + bloquee))
+                        .put("vuLe", new JSONObject().put("timestampValue", isoNow()))));
+            } else if (info == null) {
                 value = new JSONObject().put("nullValue", JSONObject.NULL);
             } else {
                 JSONObject fields = new JSONObject()

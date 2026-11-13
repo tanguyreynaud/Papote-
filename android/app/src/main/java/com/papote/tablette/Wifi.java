@@ -155,7 +155,8 @@ final class Wifi {
                 else if (active.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) via = "wifi";
                 else via = "autre";
             }
-            j.put("internet", internet).put("mobile", mobile).put("sim", hasSim()).put("via", via);
+            j.put("internet", internet).put("mobile", mobile).put("sim", hasSim()).put("via", via)
+                    .put("simBloquee", simBloquee(context));
             if (ssid.isEmpty()) relancerConnexion();
         } catch (Exception e) {
             Log.w(TAG, "État du réseau", e);
@@ -207,5 +208,21 @@ final class Wifi {
     boolean hasSim() {
         TelephonyManager tm = (TelephonyManager) context.getSystemService(Context.TELEPHONY_SERVICE);
         return tm != null && tm.getSimState() == TelephonyManager.SIM_STATE_READY;
+    }
+
+    /**
+     * Carte SIM bloquée par un code (PIN, PUK) ou verrouillée par un opérateur : en kiosque, Android ne
+     * montre pas la demande et la tablette reste sans réseau mobile sans rien dire (T-003, 13/11).
+     * « pin », « puk », « verrouillee », ou "" quand la carte est prête ou absente.
+     */
+    static String simBloquee(Context context) {
+        TelephonyManager tm = (TelephonyManager) context.getSystemService(Context.TELEPHONY_SERVICE);
+        if (tm == null) return "";
+        switch (tm.getSimState()) {
+            case TelephonyManager.SIM_STATE_PIN_REQUIRED: return "pin";
+            case TelephonyManager.SIM_STATE_PUK_REQUIRED: return "puk";
+            case TelephonyManager.SIM_STATE_NETWORK_LOCKED: return "verrouillee";
+            default: return "";
+        }
     }
 }

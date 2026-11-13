@@ -399,6 +399,21 @@ test('plus d\'internet depuis une minute : la carte « Pas d\'internet » rempla
   } finally { await b.fermer(); }
 });
 
+// T-003 (13/11) : carte SIM avec code PIN, le kiosque cache la demande d'Android ; rien ne le disait.
+test('carte SIM bloquée par un code, sans internet : l\'étiquette le dit simplement', async () => {
+  const b = await ouvrir('2026-10-26T10:00:00', { reseau: { wifi: '', internet: false, mobile: false, sim: false, simBloquee: 'pin' } });
+  try {
+    await b.android('onPosts', lot([envoi({ seen: true })]));
+    await b.avancer(17000);
+    assert.ok(await b.visible('.net-banner'));
+    assert.match(await b.texte('.net-banner'), /carte SIM à vérifier/);
+    await b.etat({ reseau: { wifi: '', internet: false, mobile: false, sim: false, simBloquee: '' } });
+    await b.avancer(4000);
+    assert.doesNotMatch(await b.texte('.net-banner'), /carte SIM/, 'carte débloquée : texte habituel');
+    await sansErreur(b);
+  } finally { await b.fermer(); }
+});
+
 test('démarrage sans internet avec des envois : la carte « Pas d\'internet » vient en moins de 20 s', async () => {
   const b = await ouvrir('2026-10-26T10:00:00', { reseau: { wifi: '', internet: false, mobile: false, sim: true } });
   try {

@@ -1753,6 +1753,11 @@
       $('view-home').appendChild(wifiCard);
     }
     if (showIt) wifiCard.papoteWifi = !(st.sim && !st.wifi);
+    // Carte SIM bloquée par un code (le kiosque cache la demande d'Android) : dit simplement, pour le
+    // proche qui passe ; Papote et la famille sont prévenus par la fiche de la tablette (T-003, 13/11).
+    var texteNet = st.simBloquee ? 'Pas d’internet : carte SIM à vérifier' : 'Pas d’internet';
+    var span = wifiCard.querySelector('span');
+    if (span && span.textContent !== texteNet) span.textContent = texteNet;
     show(wifiCard, !!showIt);
     placerBandeaux();
   }
