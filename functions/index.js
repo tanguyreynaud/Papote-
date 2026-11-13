@@ -59,6 +59,7 @@ const relances = require('./relances');
 const base = require('./base');
 const stock = require('./stock');
 const couverture = require('./couverture');
+const simHorsService = require('./sim-hors-service');
 const push = require('./push');
 
 // Bucket Europe après la migration (BUCKET_STORAGE dans .env), sinon celui du projet.
@@ -2986,13 +2987,20 @@ const { uidDesTablettes } = require('./uid-tablette');
 // Firestore pour refuser un 31e proche. Recalculé seulement quand un proche arrive, part ou est accepté :
 // pas aux battements de la tablette (2 à 3 écritures toutes les 10 min), qui relisaient toute la famille.
 const estProche = (snap) => Boolean(snap && snap.exists && snap.get('role') === 'famille' && snap.get('status') !== 'pending');
+// Le même déclencheur suit aussi la carte SIM des tablettes (sim-hors-service.js : sans réseau depuis 2 h, Tanguy seul
+// prévenu ; aucune lecture pour un rapport normal) : pas de tâche planifiée en plus, d'où le secret des e-mails.
 exports.compterProches = onDocumentWritten(
-  { document: 'families/{fid}/members/{uid}', database: BASE_FIRESTORE, region: REGION_FIRESTORE },
+  { document: 'families/{fid}/members/{uid}', database: BASE_FIRESTORE, region: REGION_FIRESTORE, secrets: [MAIL_MOT_DE_PASSE] },
   async (event) => {
     // Fiche d'une tablette : son uid y est écrit, pour le relais des appels (règles 2, R3 ; uid-tablette.js).
     const apres = event.data && event.data.after && event.data.after.exists ? event.data.after.data() : null;
     await uidDesTablettes(db, event.params.fid, event.params.uid, apres)
       .catch((e) => logger.warn(`Famille ${event.params.fid} : uid des tablettes non écrit`, e.message));
+    const avant = event.data && event.data.before && event.data.before.exists ? event.data.before.data() : null;
+    await simHorsService.surEcriture({
+      db, fid: event.params.fid, uid: event.params.uid, avant, apres, logger,
+      prevenir: (contenu) => envoyerMail(EMAIL_PAPOTE, contenu).catch((e) => logger.error(`Alerte SIM non envoyée : ${contenu.subject}`, e.message)),
+    }).catch((e) => logger.error(`Famille ${event.params.fid}, tablette ${event.params.uid} : suivi de la carte SIM`, e.message));
     if (estProche(event.data && event.data.before) === estProche(event.data && event.data.after)) return;
     const famille = db.doc(`families/${event.params.fid}`);
     const membres = await famille.collection('members').where('role', '==', 'famille').get();

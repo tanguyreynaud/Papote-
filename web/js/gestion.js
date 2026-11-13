@@ -570,6 +570,8 @@ function afficherAccueil() {
     [problemes, `${pluriel(problemes, 'problème')} lors du dernier passage automatique`, '#outils/automatique', 'ko'],
     // Sauvegarde du dimanche sans réussite depuis plus de 8 jours (texte calculé par le serveur, sauvegarde-alerte.js).
     [donnees.sauvegardeAFaire ? 1 : 0, donnees.sauvegardeAFaire || '', '#accueil', 'ko'],
+    // Carte SIM d'une tablette sans réseau depuis plus de 2 h (texte du serveur, sim-hors-service.js), levée au retour.
+    ...(donnees.simAFaire || []).map((texte) => [1, texte, '#stock', 'ko']),
   ].filter(([n]) => n > 0);
   $('a-faire').replaceChildren(...(taches.length
     ? taches.map(([, texte, lien, classe]) => h('li', {}, h('a', { href: lien, class: classe }, texte, h('span', { 'aria-hidden': 'true' }, '›'))))

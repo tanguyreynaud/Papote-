@@ -890,6 +890,31 @@ function alerteForfait({ nom, famille, pourCent, conso, plafond, debut, fin, typ
   });
 }
 
+// Carte SIM d'une tablette sans réseau depuis plus de 2 h, puis revenue (sim-hors-service.js) : Tanguy seul.
+// motif : 'service' (« hors service ») | 'antennes' (aucune antenne du réseau qui porte la carte, hote = MCC-MNC) ;
+// depuis : début de la panne (ms) ; duree : texte (« 2 h 10 ») ; revenu : le mot de fin.
+function alerteSimHorsService({ nom, famille, ref, operateur, motif, hote, service, depuis, duree, revenu, commande }) {
+  const quand = new Date(depuis).toLocaleString('fr-FR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' }).replace(':', ' h ');
+  const tablette = `tablette ${ref ? `${ref} ` : ''}de ${nom || 'Mamie'}`;
+  const qui = `La ${tablette}${famille ? ` (famille ${famille})` : ''}${operateur ? `, carte ${operateur}` : ''}`;
+  const cas = motif === 'antennes' ? `aucune antenne de son réseau${hote ? ` (${hote})` : ''}` : 'hors service';
+  if (revenu) {
+    return alerteAdmin({
+      titre: `Carte SIM revenue : ${tablette}`,
+      detail: `${qui} a de nouveau ${motif === 'antennes' ? 'une antenne de son réseau' : 'du réseau mobile'}, après ${duree} (${cas} depuis le ${quand}). La ligne « À faire » est levée, rien d'autre à faire.`,
+      commande,
+    });
+  }
+  const geste = motif === 'antennes'
+    ? `La tablette n'entend que des antennes d'autres réseaux : la carte ne peut pas s'y accrocher et redémarrer n'y change rien. Changer de carte SIM pour un opérateur présent chez le client (voir les antennes dans l'admin, page de la tablette).${service && service !== 'ok' ? ` Réseau mobile : ${service}.` : ''}`
+    : `Elle a déjà redémarré seule (au bout de 20 min) sans retrouver le réseau. Appeler le client : retirer puis remettre la carte SIM règle souvent le problème (T-003, 12/11) ; sinon, changer de carte.`;
+  return alerteAdmin({
+    titre: `Carte SIM ${motif === 'antennes' ? 'sans antenne de son réseau' : 'hors service'} depuis ${duree} : ${tablette}`,
+    detail: `${qui} est ${cas} depuis le ${quand}. Plus d'appels par la carte SIM ni d'internet mobile : la tablette ne passe plus que par le wifi, s'il y en a un. ${geste} La famille n'est pas prévenue. Un seul e-mail pour cette panne ; un autre quand le réseau revient.`,
+    commande,
+  });
+}
+
 // ---------- Support du site ----------
 
 // Le visiteur a laissé ses coordonnées au chat du site (demande de rappel) : il sait que c'est bien parti.
@@ -1054,7 +1079,7 @@ module.exports = {
   // abonnement
   paiementEchoue, papoteEnPause, passerAuSepa, pausePrelevements, reprisePrelevements,
   // fin de contrat
-  retourTablette, etiquetteRetour, resiliationEnregistree, avantEffacement, resiliationAnnulee, rappelRestitution, tabletteRecue, materielNonRendu, miseEnDemeure, remplacementPreleve, commandeAnnulee, colisRevenu, annulationAvantEnvoi, resiliation, alerteAdmin, alerteForfait,
+  retourTablette, etiquetteRetour, resiliationEnregistree, avantEffacement, resiliationAnnulee, rappelRestitution, tabletteRecue, materielNonRendu, miseEnDemeure, remplacementPreleve, commandeAnnulee, colisRevenu, annulationAvantEnvoi, resiliation, alerteAdmin, alerteForfait, alerteSimHorsService,
   // support et admin
   rappelConfirme, demandeRappel, bilanSupport, information, recapSemaine, livresComptables, budget,
   // outils
