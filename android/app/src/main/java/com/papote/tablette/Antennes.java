@@ -101,25 +101,32 @@ final class Antennes {
 
     private static JSONObject antenne(CellInfo c) throws Exception {
         String mcc = null, mnc = null, type, nom = null;
-        int bande = -1;
+        int bande = -1, frequence = -1, pci = -1;
         if (c instanceof CellInfoLte) {
             CellIdentityLte id = ((CellInfoLte) c).getCellIdentity();
             mcc = id.getMccString(); mnc = id.getMncString(); type = "4G";
             nom = String.valueOf(id.getOperatorAlphaShort() == null ? "" : id.getOperatorAlphaShort());
             if (Build.VERSION.SDK_INT >= 30 && id.getBands().length > 0) bande = id.getBands()[0];
+            frequence = id.getEarfcn();
+            pci = id.getPci();
         } else if (c instanceof CellInfoNr) {
             CellIdentityNr id = (CellIdentityNr) ((CellInfoNr) c).getCellIdentity();
             mcc = id.getMccString(); mnc = id.getMncString(); type = "5G";
             nom = String.valueOf(id.getOperatorAlphaShort() == null ? "" : id.getOperatorAlphaShort());
             if (Build.VERSION.SDK_INT >= 30 && id.getBands().length > 0) bande = id.getBands()[0];
+            frequence = id.getNrarfcn();
+            pci = id.getPci();
         } else if (c instanceof CellInfoWcdma) {
             CellIdentityWcdma id = ((CellInfoWcdma) c).getCellIdentity();
             mcc = id.getMccString(); mnc = id.getMncString(); type = "3G";
             nom = String.valueOf(id.getOperatorAlphaShort() == null ? "" : id.getOperatorAlphaShort());
+            frequence = id.getUarfcn();
+            pci = id.getPsc();
         } else if (c instanceof CellInfoGsm) {
             CellIdentityGsm id = ((CellInfoGsm) c).getCellIdentity();
             mcc = id.getMccString(); mnc = id.getMncString(); type = "2G";
             nom = String.valueOf(id.getOperatorAlphaShort() == null ? "" : id.getOperatorAlphaShort());
+            frequence = id.getArfcn();
         } else {
             return null;
         }
@@ -129,8 +136,17 @@ final class Antennes {
                 .put("nom", nom == null ? "" : nom)
                 .put("type", type)
                 .put("bande", bande)
+                // Fréquence (EARFCN, NR-ARFCN, UARFCN ou ARFCN) et identifiant de cellule (PCI, PSC) : l'admin en
+                // déduit l'opérateur des antennes voisines, que la tablette ne nomme pas (Tanguy, 08/11). -1 : inconnu.
+                .put("earfcn", valide(frequence))
+                .put("pci", valide(pci))
                 .put("dbm", d == Integer.MIN_VALUE ? 0 : d)
                 .put("utilisee", c.isRegistered());
+    }
+
+    /** Android rend Integer.MAX_VALUE (CellInfo.UNAVAILABLE) quand il ne sait pas. */
+    private static long valide(long v) {
+        return v == Integer.MAX_VALUE || v == Long.MAX_VALUE || v < 0 ? -1 : v;
     }
 
     /** Pour l'écriture Firestore (REST) de « sim » : la liste en arrayValue de mapValue. */
@@ -143,6 +159,8 @@ final class Antennes {
                     .put("nom", Firebase.string(a.optString("nom")))
                     .put("type", Firebase.string(a.optString("type")))
                     .put("bande", new JSONObject().put("integerValue", String.valueOf(a.optInt("bande", -1))))
+                    .put("earfcn", new JSONObject().put("integerValue", String.valueOf(a.optLong("earfcn", -1))))
+                    .put("pci", new JSONObject().put("integerValue", String.valueOf(a.optLong("pci", -1))))
                     .put("dbm", new JSONObject().put("integerValue", String.valueOf(a.optInt("dbm", 0))))
                     .put("utilisee", new JSONObject().put("booleanValue", a.optBoolean("utilisee")));
             valeurs.put(new JSONObject().put("mapValue", new JSONObject().put("fields", f)));
