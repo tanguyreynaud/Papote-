@@ -63,6 +63,33 @@ test('Une conversation téléphone de 20 min, écran immobile, n’est jamais co
   } finally { await b.fermer(); }
 });
 
+// « Appeler » ne propose plus de visio sortante (920cdf6) : le garde-fou des 3 min reste vérifié sur
+// ce qui passe encore par internet, le SOS d'une tablette sans carte SIM dont la visio ne répond jamais.
+test('SOS par internet (sans carte SIM), visio qui ne répond jamais : l\'écran se ferme tout seul, noté dans le journal', async () => {
+  const b = await ouvrir('2026-10-26T10:00:00', { telephone: false });
+  try {
+    await b.page.evaluate(visioImitee);
+    await b.android('onPosts', lot([]));
+    await b.android('onFamily', PROCHES);
+    await b.avancer(500);
+    await b.toucher('#sos-btn');
+    await b.avancer(6000);
+    assert.ok(await b.page.evaluate(() => window.__visio.appels) >= 1, 'le SOS appelle par internet');
+    assert.ok(await ecranAppel(b) || !(await b.visible('#view-home')), 'un écran de SOS est ouvert');
+    let revenu = false;
+    for (let i = 0; i < 10 && !revenu; i++) { // 5 min au plus : 3 min sans changement, puis le tour de 15 s
+      await b.avancer(30000);
+      revenu = await b.visible('#view-home') && !(await ecranAppel(b));
+    }
+    assert.ok(revenu, 'l\'accueil revient tout seul');
+    const notes = await b.appels('gardeFou');
+    assert.strictEqual(notes.length, 1, 'garde-fou noté une fois');
+    assert.match(String(notes[0].args[0]), /écran bloqué 3 min/);
+    assert.ok(await b.page.evaluate(() => window.__visio.remises) >= 1, 'visio remise à zéro');
+    await sansErreur(b);
+  } finally { await b.fermer(); }
+});
+
 test('Le pouls part au démarrage puis toutes les 20 s (chien de garde Android)', async () => {
   const b = await tablette();
   try {
