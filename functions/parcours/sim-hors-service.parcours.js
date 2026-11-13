@@ -157,3 +157,57 @@ test('antennes absentes du rapport (vieille tablette) ou liste vide : pas de cas
   assert.deepStrictEqual(emails(), []);
   assert.strictEqual((await s.lire(fiche)).simHorsService, undefined);
 });
+
+test('carte bloquée (PIN) : alerte dès le premier rapport, une seule ; débloquée : un mot ; jamais la famille', async () => {
+  const { julie, t, fiche, rapport, emails } = await familleAvecTablette();
+  const bloquee = (code) => ({ bloquee: code, service: `code ${code}`, iccid: undefined, operateur: undefined, reseau: undefined, signal: undefined, simReseau: undefined });
+  await rapport(0, { service: 'ok' });
+  await rapport(30, bloquee('pin'));
+  assert.deepStrictEqual(emails(), [`Carte SIM bloquée (code PIN demandé) : tablette ${t.ref} de Mamie Jeanne`]);
+  assert.match(s.boite.filter((m) => m.a === PAPOTE).at(-1).texte, /saisir le code PIN/);
+  assert.match((await ligneAFaire())[0], new RegExp(`^Carte SIM bloquée depuis le .* : tablette ${t.ref} de Mamie Jeanne\\. Code PIN demandé`));
+  for (let m = 60; m <= 300; m += 30) await rapport(m, bloquee('pin'));
+  assert.strictEqual(emails().length, 1, 'une alerte par blocage, pas d\'alerte 2 h en plus');
+  assert.strictEqual((await s.lire(fiche)).simHorsService, undefined);
+  // PIN saisi : la carte est lue, en service.
+  await rapport(330, { service: 'ok' });
+  assert.deepStrictEqual(emails().slice(1), [`Carte SIM débloquée : tablette ${t.ref} de Mamie Jeanne`]);
+  assert.match(s.boite.filter((m) => m.a === PAPOTE).at(-1).texte, /après 5 h/);
+  assert.deepStrictEqual(await ligneAFaire(), []);
+  assert.strictEqual((await s.lire(fiche)).simBloquee, undefined);
+  assert.deepStrictEqual(s.boite.filter((m) => m.a === julie.email && /SIM/.test(m.sujet)), [], 'la famille ne reçoit rien');
+});
+
+test('hors service signalé puis carte bloquée (PUK) : l\'alerte « bloquée » prime, sans « revenue » ni 2e alerte 2 h', async () => {
+  const { t, fiche, rapport, emails } = await familleAvecTablette();
+  const bloquee = (code) => ({ bloquee: code, service: `code ${code}`, iccid: undefined, operateur: undefined, reseau: undefined, signal: undefined, simReseau: undefined });
+  for (let m = 0; m <= 120; m += 30) await rapport(m, { service: 'hors service' });
+  assert.deepStrictEqual(emails(), [`Carte SIM hors service depuis 2 h : tablette ${t.ref} de Mamie Jeanne`]);
+  await rapport(150, bloquee('puk'));
+  assert.deepStrictEqual(emails().slice(1), [`Carte SIM bloquée (code PUK demandé) : tablette ${t.ref} de Mamie Jeanne`]);
+  assert.match(s.boite.filter((m) => m.a === PAPOTE).at(-1).texte, /demander le code PUK|Le demander à l'opérateur/i);
+  const lignes = await ligneAFaire();
+  assert.strictEqual(lignes.length, 1, 'une seule ligne : le blocage remplace la panne');
+  assert.match(lignes[0], /^Carte SIM bloquée .*Code PUK demandé/);
+  assert.strictEqual((await s.lire(fiche)).simHorsService, undefined);
+  for (let m = 180; m <= 400; m += 30) await rapport(m, bloquee('puk'));
+  assert.strictEqual(emails().length, 2);
+  // Débloquée mais toujours hors service : le mot de fin, puis le compte des 2 h repart de zéro.
+  await rapport(430, { service: 'hors service' });
+  assert.deepStrictEqual(emails().slice(2), [`Carte SIM débloquée : tablette ${t.ref} de Mamie Jeanne`]);
+  assert.ok((await s.lire(fiche)).simHorsService.depuis, 'nouvelle panne comptée');
+  for (let m = 460; m <= 549; m += 30) await rapport(m, { service: 'hors service' });
+  assert.strictEqual(emails().length, 3, '1 h 59 après le déblocage : rien');
+  await rapport(550, { service: 'hors service' });
+  assert.strictEqual(emails().length, 4, '2 h après : l\'alerte « hors service »');
+});
+
+test('carte verrouillée puis retirée : alerte « verrouillée », puis ligne levée sans e-mail', async () => {
+  const { rapport, emails } = await familleAvecTablette();
+  await rapport(0, { bloquee: 'verrouillee', service: 'code verrouillee' });
+  assert.strictEqual(emails().length, 1);
+  assert.match(emails()[0], /Carte SIM bloquée \(verrouillée par l'opérateur\)/);
+  await rapport(30, null);
+  assert.strictEqual(emails().length, 1);
+  assert.deepStrictEqual(await ligneAFaire(), []);
+});

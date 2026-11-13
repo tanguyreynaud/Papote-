@@ -70,3 +70,21 @@ test('lignes « À faire » et e-mails : le cas est dit', () => {
   assert.match(mail.alerteSimHorsService({ nom: 'Mamie', motif: 'service', depuis: T0, duree: '2 h' }).subject, /hors service depuis 2 h/);
   assert.match(mail.alerteSimHorsService({ nom: 'Mamie', motif: 'service', depuis: T0, duree: '3 h', revenu: true }).subject, /^Carte SIM revenue/);
 });
+
+test('deciderBlocage : tout de suite, une fois par blocage, débloquée, carte retirée', () => {
+  const { deciderBlocage } = require('./sim-hors-service');
+  const bloq = (code, minutes) => ({ bloquee: code, service: `code ${code}`, vuLe: Timestamp.fromMillis(T0 + minutes * MIN) });
+  assert.deepStrictEqual(deciderBlocage(fiche(bloq('pin', 0))), { quoi: 'bloquee', code: 'pin', quand: T0 });
+  assert.strictEqual(deciderBlocage(fiche(bloq('pin', 30), { simBloquee: { code: 'pin' } })), null, 'déjà prévenu');
+  assert.strictEqual(deciderBlocage(fiche(bloq('puk', 30), { simBloquee: { code: 'pin' } })).quoi, 'bloquee', 'PIN devenu PUK : nouvelle alerte');
+  assert.strictEqual(deciderBlocage(fiche(sim('ok', 60), { simBloquee: { code: 'pin', depuis: Timestamp.fromMillis(T0) } })).quoi, 'debloquee');
+  assert.strictEqual(deciderBlocage(fiche(null, { simBloquee: { code: 'pin' } })).quoi, 'oublier');
+  assert.strictEqual(deciderBlocage(fiche(sim('hors service', 0))), null);
+  assert.strictEqual(deciderBlocage({ role: 'famille', sim: bloq('pin', 0) }), null);
+  // Le rapport bloqué (service « code pin ») ne compte pas dans les 2 h.
+  assert.strictEqual(decider(fiche(sim('hors service', 0)), fiche(bloq('pin', 30))), null);
+  assert.match(lignesAFaire({ pannes: { a: { nom: 'Mamie', motif: 'bloquee', code: 'puk', depuis: Timestamp.fromMillis(T0) } } })[0], /^Carte SIM bloquée depuis .*Code PUK demandé/);
+  assert.match(mail.alerteSimBloquee({ nom: 'Mamie', code: 'pin', depuis: T0 }).subject, /bloquée \(code PIN demandé\)/);
+  assert.match(mail.alerteSimBloquee({ nom: 'Mamie', code: 'verrouillee', depuis: T0 }).text, /verrouillée par l'opérateur/);
+  assert.match(mail.alerteSimBloquee({ nom: 'Mamie', code: 'pin', depuis: T0, duree: '1 h', debloquee: true }).subject, /^Carte SIM débloquée/);
+});

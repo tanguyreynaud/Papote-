@@ -915,6 +915,32 @@ function alerteSimHorsService({ nom, famille, ref, operateur, motif, hote, servi
   });
 }
 
+// Carte SIM d'une tablette bloquée par un code (sim.bloquee, tablette 2bfc17b ; sim-hors-service.js) : Tanguy seul,
+// dès le premier rapport, puis un mot quand elle est débloquée. code : 'pin' | 'puk' | 'verrouillee'.
+function alerteSimBloquee({ nom, famille, ref, code, depuis, duree, debloquee, commande }) {
+  const quand = new Date(depuis).toLocaleString('fr-FR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' }).replace(':', ' h ');
+  const tablette = `tablette ${ref ? `${ref} ` : ''}de ${nom || 'Mamie'}`;
+  const qui = `La ${tablette}${famille ? ` (famille ${famille})` : ''}`;
+  const quoi = { pin: 'code PIN demandé', puk: 'code PUK demandé', verrouillee: 'verrouillée par l\'opérateur' }[code] || 'bloquée';
+  if (debloquee) {
+    return alerteAdmin({
+      titre: `Carte SIM débloquée : ${tablette}`,
+      detail: `${qui} lit de nouveau sa carte SIM, après ${duree} (bloquée depuis le ${quand} : ${quoi}). La ligne « À faire » est levée. Si le réseau mobile ne revient pas, l'alerte « hors service » prendra le relais au bout de 2 h.`,
+      commande,
+    });
+  }
+  const geste = {
+    pin: 'La carte demande son code PIN, et l\'écran de Papote cache cette demande : la personne ne peut pas le saisir. Récupérer la carte (ou passer chez le client), la mettre dans un téléphone, saisir le code PIN (sur le support de la carte) et désactiver la demande de code PIN, puis la remettre dans la tablette. Ou envoyer une carte sans code PIN.',
+    puk: 'Trois codes PIN faux ont été saisis : la carte demande son code PUK. Le demander à l\'opérateur (espace client ou service client, avec le numéro de la ligne), le saisir dans un téléphone avec un nouveau code PIN, désactiver la demande de code PIN, puis remettre la carte. Dix codes PUK faux détruisent la carte : sinon, changer de carte.',
+    verrouillee: 'La carte est verrouillée par l\'opérateur (carte refusée par le réseau ou par la tablette). Appeler l\'opérateur pour la faire déverrouiller, sinon changer de carte.',
+  }[code] || 'Regarder la carte dans un téléphone, sinon la changer.';
+  return alerteAdmin({
+    titre: `Carte SIM bloquée (${quoi}) : ${tablette}`,
+    detail: `${qui} a sa carte SIM bloquée depuis le ${quand} : ${quoi}. Une carte bloquée ne se débloque pas seule : plus d'appels par la carte ni d'internet mobile, la tablette ne passe plus que par le wifi. ${geste} La famille n'est pas prévenue. Un seul e-mail pour ce blocage ; un autre quand la carte est débloquée.`,
+    commande,
+  });
+}
+
 // ---------- Support du site ----------
 
 // Le visiteur a laissé ses coordonnées au chat du site (demande de rappel) : il sait que c'est bien parti.
@@ -1079,7 +1105,7 @@ module.exports = {
   // abonnement
   paiementEchoue, papoteEnPause, passerAuSepa, pausePrelevements, reprisePrelevements,
   // fin de contrat
-  retourTablette, etiquetteRetour, resiliationEnregistree, avantEffacement, resiliationAnnulee, rappelRestitution, tabletteRecue, materielNonRendu, miseEnDemeure, remplacementPreleve, commandeAnnulee, colisRevenu, annulationAvantEnvoi, resiliation, alerteAdmin, alerteForfait, alerteSimHorsService,
+  retourTablette, etiquetteRetour, resiliationEnregistree, avantEffacement, resiliationAnnulee, rappelRestitution, tabletteRecue, materielNonRendu, miseEnDemeure, remplacementPreleve, commandeAnnulee, colisRevenu, annulationAvantEnvoi, resiliation, alerteAdmin, alerteForfait, alerteSimHorsService, alerteSimBloquee,
   // support et admin
   rappelConfirme, demandeRappel, bilanSupport, information, recapSemaine, livresComptables, budget,
   // outils

@@ -17,6 +17,11 @@
 // quand la carte est en service) mais ne l'envoie PAS dans le rapport. Le serveur le lit donc dans sim.reseauHote si
 // une tablette l'envoie un jour, sinon il l'apprend lui-même : rapport « ok » avec l'antenne utilisée (utilisee: true)
 // → son réseau est noté sur la fiche (simReseauHote, une écriture seulement quand il change). Inconnu : pas de cas 'antennes'.
+// Carte SIM bloquée par un code (tablette 2bfc17b : sim = { bloquee: 'pin' | 'puk' | 'verrouillee', service: 'code …',
+// vuLe } au lieu de null) : une carte bloquée ne se débloque pas seule, Tanguy est prévenu DÈS le premier rapport, une
+// fois par blocage (état simBloquee = { code, depuis, alerteLe } sur la fiche), et un mot quand sim.bloquee disparaît.
+// Elle prime sur l'alerte 2 h : une panne « hors service » en cours est oubliée sans e-mail, sa ligne « À faire » est
+// remplacée par celle du blocage, et rien n'est compté tant que la carte reste bloquée.
 // La tablette redémarre seule après 20 min hors service (GardeReseau, cmnwxy 539360e) : 2 h, c'est que ça n'a pas suffi.
 //
 // Mécanisme : pas de tâche planifiée. compterProches (index.js) tourne déjà à chaque écriture d'une fiche membre ; il
@@ -65,6 +70,20 @@ function etatReseau(sim, hote) {
   return { panne: null, fin: sim.service === 'ok' || hoteEntendu === true };
 }
 
+// Blocage, sans dépendance : null ou { quoi: 'bloquee' | 'debloquee' | 'oublier', code, quand, depuis }.
+// Selon l'état noté sur la fiche (simBloquee), pas selon le rapport précédent : un rapport manqué ne fait rien rater.
+function deciderBlocage(apres, maintenant = Date.now()) {
+  if (!apres || apres.role !== 'tablette') return null;
+  const sim = apres.sim || null;
+  const etat = apres.simBloquee || null;
+  const quand = (sim && ms(sim.vuLe)) || maintenant;
+  const code = sim && sim.bloquee ? String(sim.bloquee) : null;
+  if (code) return etat && etat.code === code ? null : { quoi: 'bloquee', code, quand };
+  if (!etat) return null;
+  // Plus de carte du tout (retirée) : oubliée sans e-mail ; une carte lue sans blocage : débloquée.
+  return { quoi: sim ? 'debloquee' : 'oublier', code: etat.code, quand, depuis: ms(etat.depuis) };
+}
+
 // Décision, sans dépendance. avant, apres : données de la fiche (ou null) ; maintenant : repli si le rapport n'a
 // pas d'heure. Renvoie null (rien à faire) ou { quoi: 'debut' | 'alerte' | 'revenu' | 'oublier' | 'hote', depuis,
 // quand, motif, hote } ; hote : réseau hôte à noter sur la fiche en même temps (ou seul : quoi 'hote').
@@ -107,12 +126,20 @@ const cle = (fid, uid) => `${fid}_${uid}`;
 function lignesAFaire(doc) {
   const pannes = Object.values((doc && doc.pannes) || {}).filter((p) => p && ms(p.depuis));
   return pannes.sort((a, b) => ms(a.depuis) - ms(b.depuis)).map((p) => {
+    if (p.motif === 'bloquee') return `Carte SIM bloquée depuis le ${heure(ms(p.depuis))} : tablette ${p.ref ? `${p.ref} ` : ''}de ${p.nom || 'Mamie'}. ${CONSIGNE[p.code] || CONSIGNE.verrouillee}`;
     const qui = `tablette ${p.ref ? `${p.ref} ` : ''}de ${p.nom || 'Mamie'}${p.operateur ? ` (${p.operateur})` : ''}`;
     return p.motif === 'antennes'
       ? `Carte SIM sans antenne de son réseau depuis le ${heure(ms(p.depuis))} : ${qui}. Aucune antenne ${p.hote || ''} chez le client, redémarrer n'y fera rien : changer de carte SIM (autre réseau)`
       : `Carte SIM hors service depuis le ${heure(ms(p.depuis))} : ${qui}. Elle a déjà redémarré seule : appeler le client (retirer et remettre la carte), sinon changer de carte`;
   });
 }
+
+// Que faire, selon le blocage (lignes « À faire » ; l'e-mail en dit plus : mail.alerteSimBloquee).
+const CONSIGNE = {
+  pin: 'Code PIN demandé : mettre la carte dans un téléphone, saisir le code PIN et désactiver la demande de code, puis la remettre',
+  puk: 'Code PUK demandé (3 codes PIN faux) : demander le code PUK à l\'opérateur, le saisir dans un téléphone, sinon changer de carte',
+  verrouillee: 'Carte verrouillée par l\'opérateur : appeler l\'opérateur pour la déverrouiller, sinon changer de carte',
+};
 
 // Qui est la tablette : nom de la famille, fiche de stock (référence T-00x) et commande, lus seulement à l'alerte.
 async function contexte(db, fid, uid) {
@@ -132,9 +159,13 @@ async function contexte(db, fid, uid) {
 // Appelé par compterProches à chaque écriture d'une fiche membre. prevenir(contenu) : e-mail à Papote (index.js).
 // Renvoie la décision prise ('debut', 'alerte', 'revenu', 'oublier', 'hote') ou null.
 async function surEcriture({ db, fid, uid, avant, apres, prevenir, logger, maintenant = Date.now() }) {
-  const d = decider(avant, apres, maintenant);
-  if (!d) return null;
   const ref = db.doc(`families/${fid}/members/${uid}`);
+  const b = deciderBlocage(apres, maintenant);
+  const fait = b ? await surBlocage({ db, fid, uid, ref, b, prevenir, logger }) : null;
+  // Carte bloquée : l'alerte « bloquée » prime, pas de compte des 2 h (la panne en cours a été oubliée par surBlocage).
+  if (apres && apres.sim && apres.sim.bloquee) return fait;
+  const d = decider(avant, apres, maintenant);
+  if (!d) return fait;
   const noterHote = d.hote ? { simReseauHote: d.hote } : {};
   if (d.quoi === 'hote') {
     await ref.update(noterHote);
@@ -187,4 +218,43 @@ async function surEcriture({ db, fid, uid, avant, apres, prevenir, logger, maint
   return d.quoi;
 }
 
-module.exports = { surEcriture, decider, etatReseau, lignesAFaire, duree, DELAI_MS, DOCUMENT };
+// Blocage : alerte tout de suite (une fois par blocage, transaction), ou mot de fin quand la carte est débloquée.
+async function surBlocage({ db, fid, uid, ref, b, prevenir, logger }) {
+  const k = cle(fid, uid);
+  if (b.quoi === 'bloquee') {
+    const pris = await db.runTransaction(async (t) => {
+      const s = await t.get(ref);
+      if (!s.exists || (s.get('simBloquee') && s.get('simBloquee').code === b.code)) return false;
+      // La panne « hors service » en cours est remplacée par le blocage : pas de 2e alerte, pas de « revenue ».
+      t.update(ref, { simBloquee: { code: b.code, depuis: Timestamp.fromMillis(b.quand), alerteLe: Timestamp.fromMillis(b.quand) }, simHorsService: FieldValue.delete() });
+      return true;
+    });
+    if (!pris) return null;
+    const c = await contexte(db, fid, uid);
+    await db.doc(DOCUMENT).set({ pannes: { [k]: {
+      fid, uid, nom: c.nom, ref: c.ref, motif: 'bloquee', code: b.code, depuis: Timestamp.fromMillis(b.quand), alerteLe: Timestamp.fromMillis(b.quand),
+    } } }, { merge: true });
+    await prevenir(mail.alerteSimBloquee({ nom: c.nom, famille: fid, ref: c.ref, code: b.code, depuis: b.quand, commande: c.commande }));
+    logger.info(`Famille ${fid}, tablette ${uid} : carte SIM bloquée (${b.code}), Papote prévenu`);
+    return 'bloquee';
+  }
+  const etait = await db.runTransaction(async (t) => {
+    const s = await t.get(ref);
+    const e = s.exists ? s.get('simBloquee') : null;
+    if (!e) return null;
+    t.update(ref, { simBloquee: FieldValue.delete() });
+    return e;
+  });
+  if (!etait) return null;
+  await db.doc(DOCUMENT).update(new FieldPath('pannes', k), FieldValue.delete()).catch((e) => {
+    if (e.code !== 5) throw e;
+  });
+  if (b.quoi === 'debloquee') {
+    const c = await contexte(db, fid, uid);
+    await prevenir(mail.alerteSimBloquee({ nom: c.nom, famille: fid, ref: c.ref, code: etait.code, depuis: ms(etait.depuis), duree: duree(b.quand - ms(etait.depuis)), debloquee: true, commande: c.commande }));
+  }
+  logger.info(`Famille ${fid}, tablette ${uid} : carte SIM ${b.quoi === 'debloquee' ? 'débloquée' : 'retirée'}, ligne « À faire » levée`);
+  return b.quoi;
+}
+
+module.exports = { surEcriture, decider, deciderBlocage, CONSIGNE, etatReseau, lignesAFaire, duree, DELAI_MS, DOCUMENT };
