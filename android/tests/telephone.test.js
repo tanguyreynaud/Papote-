@@ -91,17 +91,29 @@ test('Paul est déjà en ligne : « occupé » ; l’appel qui ne part pas : « 
   } finally { await b.fermer(); }
 });
 
-test('Anne n’a pas de numéro : l’appel passe par internet comme avant (pas de téléphone)', async () => {
+test('Anne n’a pas de numéro : elle n’est pas dans « Appeler » (Tanguy, 13/11 : pas d’appel par internet depuis la liste)', async () => {
   const b = await tablette({ appelsKo: true });
   try {
     await b.toucher('#view-home .call-btn');
-    await choisir(b, 'Anne');
-    assert.strictEqual((await b.appels('phoneCall')).length, 0, 'pas d’appel téléphone');
-    assert.match(await b.texte('.call-out'), /pas encore disponible|Appel vers Anne/);
+    const noms = await b.page.evaluate(() => [...document.querySelectorAll('.call-person')].map((e) => e.textContent));
+    assert.ok(noms.some((n) => /Julie/.test(n)) && noms.some((n) => /Paul/.test(n)), 'les proches avec un numéro');
+    assert.ok(!noms.some((n) => /Anne/.test(n)), 'Anne, sans numéro, n’est pas proposée');
     await sansErreur(b);
   } finally { await b.fermer(); }
 });
 
+test('Aucun proche avec un numéro : pas de bouton « Appeler » (le SOS reste)', async () => {
+  const b = await tablette();
+  try {
+    await b.android('onFamily', { faces: {}, birthdays: [], people: [{ uid: 'anne', name: 'Anne', tel: '' }] });
+    await b.avancer(500);
+    assert.ok(!(await b.visible('#view-home .call-btn')), 'bouton caché');
+    await b.android('onFamily', { faces: {}, birthdays: [], people: [{ uid: 'julie', name: 'Julie', tel: '0612345678' }] });
+    await b.avancer(500);
+    assert.ok(await b.visible('#view-home .call-btn'), 'bouton revenu dès qu’un proche a un numéro');
+    await sansErreur(b);
+  } finally { await b.fermer(); }
+});
 test('Julie appelle par téléphone : ça sonne avec sa photo, « Décrocher » répond, Julie raccroche', async () => {
   const b = await tablette();
   try {

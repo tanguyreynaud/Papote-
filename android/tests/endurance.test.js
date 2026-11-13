@@ -80,7 +80,7 @@ const total = (m) => Object.values(m).reduce((a, c) => a + c, 0);
 async function accueil(heure) {
   const b = await ouvrir(heure);
   await b.android('onPosts', lot([envoi({ seen: true }), envoi({ seen: true }), envoi({ seen: true })]));
-  await b.android('onFamily', { faces: {}, birthdays: [], people: [{ uid: 'julie', name: 'Julie' }] });
+  await b.android('onFamily', { faces: {}, birthdays: [], people: [{ uid: 'julie', name: 'Julie', tel: '0612345678' }] });
   await b.android('onReminders', { reminders: [] });
   await b.avancer(15000);
   return b;

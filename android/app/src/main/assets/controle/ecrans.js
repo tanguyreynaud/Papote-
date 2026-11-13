@@ -64,8 +64,10 @@
   var JOUR = '2026-10-26';
   function heure(hm, jour) { return new Date((jour || JOUR) + 'T' + hm + ':00+01:00').getTime(); }
   var PROCHES = [
-    { uid: 'u-julie', name: 'Julie' }, { uid: 'u-thomas', name: 'Thomas' }, { uid: 'u-anne', name: 'Anne' },
-    { uid: 'u-lucas', name: 'Lucas' }, { uid: 'u-emma', name: 'Emma' }
+    // Un numéro chacun : « Appeler » ne montre que les proches qui en ont un (13/11).
+    { uid: 'u-julie', name: 'Julie', tel: '0600000001' }, { uid: 'u-thomas', name: 'Thomas', tel: '0600000002' },
+    { uid: 'u-anne', name: 'Anne', tel: '0600000003' }, { uid: 'u-lucas', name: 'Lucas', tel: '0600000004' },
+    { uid: 'u-emma', name: 'Emma', tel: '0600000005' }
   ];
   var VISAGES = {};
   PROCHES.forEach(function (p, i) { VISAGES[p.uid] = fauxVisage(p.name, i); });

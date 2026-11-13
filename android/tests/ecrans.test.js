@@ -636,7 +636,7 @@ test('carillon d\'un nouvel envoi : pas par-dessus une fenêtre ouverte, normal 
     await b.toucher('#reminder-done');
     assert.strictEqual(await fenetre(), false, 'rappel fermé');
     // « Appeler » (choix de la personne) : lié à l'accueil, le carillon reste normal.
-    await b.android('onFamily', { faces: {}, birthdays: [], people: [{ uid: 'julie', name: 'Julie' }] });
+    await b.android('onFamily', { faces: {}, birthdays: [], people: [{ uid: 'julie', name: 'Julie', tel: '0612345678' }] });
     await b.toucher('#view-home .call-btn');
     assert.match(await b.texte('.call-out'), /Qui voulez-vous appeler/);
     assert.strictEqual(await fenetre(), false, '« Appeler »');

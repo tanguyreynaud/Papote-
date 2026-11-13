@@ -174,26 +174,17 @@ test('écoute des appels coupée par une erreur : elle repart, les appels sonnen
   } finally { await b.fermer(); }
 });
 
-test('Mamie appelle Julie : ça sonne chez elle, puis « n\'a pas pu répondre » au bout d\'une minute', async () => {
+// Tanguy (13/11) : plus d'appel sortant par internet depuis « Appeler » ; un proche sans numéro n'y est pas.
+test('Julie sans numéro : pas de bouton « Appeler », aucun appel internet lancé', async () => {
   const b = await tablette();
   try {
     await b.android('onFamily', { faces: {}, birthdays: [], people: [{ uid: 'julie', name: 'Julie' }] });
-    await b.toucher('#view-home .call-btn');
-    assert.match(await b.texte('.call-out'), /Qui voulez-vous appeler/);
-    await b.page.evaluate(() => [...document.querySelectorAll('.call-person')].find((e) => /Julie/.test(e.textContent)).click());
-    await b.patienter(2000);
-    const id = (await b.page.evaluate(() => [...window.__fs.docs.keys()].filter((k) => /^families\/F1\/calls\/[^/]+$/.test(k))))[0];
-    const appel = await b.lire(id);
-    assert.strictEqual(appel.calleeUid, 'julie');
-    assert.strictEqual(appel.state, 'ringing');
-    assert.ok(appel.offer && appel.offer.sdp, 'offre écrite');
-    assert.match(await b.texte('.call-out'), /Ça sonne/);
-    await b.avancer(60000);
-    assert.match(await b.texte('.call-out'), /Julie n’a pas pu répondre/);
-    assert.strictEqual((await b.lire(id)).state, 'missed');
+    await b.avancer(500);
+    assert.ok(!(await b.visible('#view-home .call-btn')), 'pas de bouton');
+    const ids = await b.page.evaluate(() => [...window.__fs.docs.keys()].filter((k) => /^families\/F1\/calls\/[^/]+$/.test(k)));
+    assert.strictEqual(ids.length, 0, 'aucun appel écrit');
   } finally { await b.fermer(); }
 });
-
 test('test du son demandé par le téléphone du proche : la tablette joue, puis répond « fait »', async () => {
   const b = await tablette();
   try {

@@ -47,26 +47,6 @@ const ecranAppel = (b) => b.page.evaluate(() => {
 
 const choisir = (b, prenom) => b.page.evaluate((p) => [...document.querySelectorAll('.call-person')].find((e) => e.textContent.includes(p)).click(), prenom);
 
-test('Visio qui ne répond jamais : « Appel vers Anne… » se ferme tout seul après 3 min, noté dans le journal', async () => {
-  const b = await tablette();
-  try {
-    await b.toucher('#view-home .call-btn');
-    await choisir(b, 'Anne');
-    assert.match(await b.texte('.call-out'), /Appel vers Anne/);
-    await b.avancer(2 * MIN);
-    assert.ok(await ecranAppel(b), 'encore là après 2 min');
-    await b.avancer(2 * MIN);
-    assert.ok(!(await ecranAppel(b)), 'retour à l’accueil');
-    assert.ok(await b.visible('#view-home'));
-    const notes = await b.appels('gardeFou');
-    assert.strictEqual(notes.length, 1);
-    assert.match(notes[0].args[0], /GARDE-FOU : écran bloqué 3 min/);
-    assert.strictEqual(notes[0].args[1], true, 'journal envoyé tout de suite');
-    assert.strictEqual(await b.page.evaluate(() => window.__visio.remises), 1, 'appels internet refermés');
-    await sansErreur(b);
-  } finally { await b.fermer(); }
-});
-
 test('Une conversation téléphone de 20 min, écran immobile, n’est jamais coupée', async () => {
   const b = await tablette();
   try {
@@ -79,20 +59,6 @@ test('Une conversation téléphone de 20 min, écran immobile, n’est jamais co
     assert.match(await b.texte('.call-out'), /En ligne avec Julie/);
     assert.strictEqual((await b.appels('gardeFou')).length, 0);
     assert.strictEqual((await b.appels('phoneHangup')).length, 0, 'jamais raccroché');
-    await sansErreur(b);
-  } finally { await b.fermer(); }
-});
-
-test('Une visio en conversation depuis 20 min n’est jamais coupée', async () => {
-  const b = await tablette();
-  try {
-    await b.toucher('#view-home .call-btn');
-    await choisir(b, 'Anne');
-    await b.page.evaluate(() => { window.__visio.etat = 'connecte'; window.__visio.onState('connected', { uid: 'anne', name: 'Anne' }); });
-    await b.avancer(20 * MIN);
-    assert.match(await b.texte('.call-out'), /En ligne avec Anne/);
-    assert.strictEqual((await b.appels('gardeFou')).length, 0);
-    assert.strictEqual(await b.page.evaluate(() => window.__visio.remises), 0);
     await sansErreur(b);
   } finally { await b.fermer(); }
 });

@@ -1840,7 +1840,20 @@
   var callScreen = null;
   var outCall = null;
 
-  function setPeople(list) { people = list || []; }
+  function setPeople(list) { people = list || []; majBoutonAppeler(); }
+
+  // « Appeler » : seulement les proches qui ont un portable (appel par la carte SIM ; toute tablette en a
+  // une). Plus d'appel par internet depuis cette liste : un proche sans numéro sonnait une minute dans
+  // l'appli, sans messagerie ni « pas de réponse » rapide (Tanguy, 13/11). Personne : pas de bouton.
+  function appelables() {
+    var out = [];
+    for (var i = 0; i < people.length; i++) if (people[i].tel) out.push(people[i]);
+    return out;
+  }
+  function majBoutonAppeler() {
+    var b = document.querySelector('#view-home .call-btn');
+    if (b) show(b, appelables().length > 0);
+  }
 
   function callApiReady() { return typeof window.papoteCallFamily === 'function'; }
 
@@ -1939,11 +1952,12 @@
     callScreen.className = 'call-out picker';
     callScreen.removeAttribute('hidden');
     callScreen.appendChild(el2('h1', 'call-title', 'Qui voulez-vous appeler ?'));
-    if (!people.length) callScreen.appendChild(el2('p', 'call-sub', 'Personne à appeler pour le moment.'));
-    var pages = Math.max(1, Math.ceil(people.length / PER_PAGE));
+    var tous = appelables();
+    if (!tous.length) callScreen.appendChild(el2('p', 'call-sub', 'Personne à appeler pour le moment.'));
+    var pages = Math.max(1, Math.ceil(tous.length / PER_PAGE));
     if (pickerPage >= pages) pickerPage = 0;
     var grid = el2('div', 'call-people');
-    var list = people.slice(pickerPage * PER_PAGE, pickerPage * PER_PAGE + PER_PAGE);
+    var list = tous.slice(pickerPage * PER_PAGE, pickerPage * PER_PAGE + PER_PAGE);
     for (var i = 0; i < list.length; i++) {
       (function (p) {
         var b = el2('button', 'call-person');
@@ -2302,6 +2316,7 @@
       '<span>Appeler</span>';
     on(b, 'click', onCallButton);
     document.querySelector('#view-home .home-left').appendChild(b);
+    majBoutonAppeler();
     setupSosButton();
   }
 
