@@ -149,6 +149,8 @@ final class Gardien {
 
     private static void verifier(Context app, Handler principal) {
         Page p = page;
+        // Carte SIM restée hors service (une fois par minute) : voir GardeReseau.
+        GardeReseau.verifier(app, p != null && p.maintenance());
         long maintenant = SystemClock.uptimeMillis();
         Geste g = decider(maintenant, p == null || p.maintenance(), dernierTic, premierPlanDepuis != 0,
                 premierPlanDepuis, dernierPouls, dernierRechargement, rechargements, AppelGsm.enCours());
