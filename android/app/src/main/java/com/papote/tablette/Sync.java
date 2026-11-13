@@ -47,6 +47,8 @@ final class Sync {
         default void onDatabaseChanged(String database) { }
         /** Ordre « recharger » (tableau de bord) : la page se recharge, comme si l'écran était figé. */
         default void onRecharger() { }
+        /** Ordre « simPin » : kiosque en pause, réglage du verrou de la carte SIM ouvert. */
+        default void onSimPin() { }
     }
 
     private static final String TAG = "PapoteSync";
@@ -2712,6 +2714,7 @@ final class Sync {
         if (code != null) {
             JSONObject doc = firebase.get("pairings/" + code);
             f = doc == null ? null : doc.optJSONObject("fields");
+            ordreSim(code, f);
         }
         String state = f == null ? "gone" : Firebase.str(f, "status");
         // Un code que personne n'a pris expire ; un code réservé, jamais.
@@ -2797,6 +2800,77 @@ final class Sync {
             prefs.edit().remove("pairing").remove("pairingExpires").apply();
             poke();
         });
+    }
+
+    // ---------- « Installer la carte SIM » (admin, préparation de l'envoi, 13/11) ----------
+    // Le serveur pose pairings/{code}.ordre = {id, type: simTest | simPin} ; la tablette, qui relit son
+    // pairing toutes les 4 s, l'exécute une fois par id et répond dans pairings/{code}.simTest.
+
+    private void ordreSim(String code, JSONObject f) {
+        try {
+            JSONObject o = f == null ? null : f.optJSONObject("ordre");
+            JSONObject of = o == null || o.optJSONObject("mapValue") == null ? null : o.getJSONObject("mapValue").optJSONObject("fields");
+            String id = of == null ? null : Firebase.str(of, "id");
+            String type = of == null ? null : Firebase.str(of, "type");
+            if (id == null || id.isEmpty() || id.equals(prefs.getString("simOrdreFait", ""))) return;
+            prefs.edit().putString("simOrdreFait", id).apply();
+            Journal.log(context, "Installer la carte SIM : ordre " + type + " (" + id + ")");
+            if ("simPin".equals(type)) {
+                prefs.edit().putString("simPinOrdre", id).putString("simPinCode", code)
+                        .putLong("simPinDepuis", System.currentTimeMillis()).apply();
+                listener.onSimPin();
+            } else if ("simTest".equals(type)) {
+                ecrireSimTest(code, id);
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "Ordre carte SIM", e);
+        }
+    }
+
+    /** Retour de l'écran du code PIN (Papote de nouveau devant, ou 10 min passées) : essai de la carte. */
+    void apresSimPin() {
+        handler.post(() -> {
+            String id = prefs.getString("simPinOrdre", null);
+            String code = prefs.getString("simPinCode", null);
+            if (id == null || code == null) return;
+            prefs.edit().remove("simPinOrdre").remove("simPinCode").remove("simPinDepuis").apply();
+            ecrireSimTest(code, id + "-apres-pin");
+        });
+    }
+
+    private void ecrireSimTest(String code, String id) {
+        try {
+            SimTest.Resultat r = SimTest.mesurer(context);
+            JSONObject nul = new JSONObject().put("nullValue", JSONObject.NULL);
+            JSONObject donnees = new JSONObject().put("mapValue", new JSONObject().put("fields", new JSONObject()
+                    .put("ok", new JSONObject().put("booleanValue", r.donneesOk))
+                    .put("ms", new JSONObject().put("integerValue", String.valueOf(r.donneesMs)))));
+            JSONObject fields = new JSONObject()
+                    .put("id", Firebase.string(id))
+                    .put("iccid", r.iccid == null || r.iccid.isEmpty() ? nul : Firebase.string(r.iccid))
+                    .put("mcc", Firebase.string(r.mcc == null ? "" : r.mcc))
+                    .put("mnc", Firebase.string(r.mnc == null ? "" : r.mnc))
+                    .put("operateur", r.operateur == null || r.operateur.isEmpty() ? nul : Firebase.string(r.operateur))
+                    .put("etat", Firebase.string(r.etat))
+                    .put("inscrite", new JSONObject().put("booleanValue", r.inscrite))
+                    .put("itinerance", new JSONObject().put("booleanValue", r.itinerance))
+                    .put("donnees", donnees);
+            JSONObject write = new JSONObject()
+                    .put("update", new JSONObject()
+                            .put("name", Firebase.docName("pairings/" + code))
+                            .put("fields", new JSONObject().put("simTest", new JSONObject().put("mapValue",
+                                    new JSONObject().put("fields", fields)))))
+                    .put("updateMask", new JSONObject().put("fieldPaths", new JSONArray().put("simTest")))
+                    // « le » : heure du serveur (règle : simTest.le == request.time).
+                    .put("updateTransforms", new JSONArray().put(new JSONObject()
+                            .put("fieldPath", "simTest.le").put("setToServerValue", "REQUEST_TIME")))
+                    .put("currentDocument", new JSONObject().put("exists", true));
+            firebase.commit(new JSONArray().put(write));
+            Journal.log(context, "Installer la carte SIM : essai " + r.etat + " (" + id + ")");
+        } catch (Exception e) {
+            Log.w(TAG, "Essai de la carte SIM", e);
+            Journal.log(context, "Installer la carte SIM : essai pas envoyé (" + e.getMessage() + ")");
+        }
     }
 
     private String newPairing(String name) {

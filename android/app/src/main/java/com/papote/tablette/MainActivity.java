@@ -936,6 +936,43 @@ public class MainActivity extends Activity implements Sync.Listener {
         handler.post(() -> { if (web != null) web.reload(); });
     }
 
+    // « Installer la carte SIM » : ordre simPin (Papote ne peut pas retirer le code lui-même : réservé au
+    // système). Kiosque en pause et réglage du verrou de la carte ouvert ; dès que Papote revient devant,
+    // ou au bout de 10 min, le kiosque revient et la carte est essayée (simTest « -apres-pin »).
+    private static final long SIM_PIN_MAX_MS = 10 * 60_000;
+    private boolean simPinOuvert;
+    private final Runnable finSimPin = () -> terminerSimPin();
+
+    @Override public void onSimPin() {
+        handler.post(() -> {
+            simPinOuvert = true;
+            setKioskPaused(true);
+            handler.removeCallbacks(finSimPin);
+            handler.postDelayed(finSimPin, SIM_PIN_MAX_MS);
+            Intent i = new Intent().setClassName("com.android.settings", "com.android.settings.Settings$IccLockSettingsActivity")
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            try {
+                startActivity(i);
+            } catch (Exception e) {
+                // Pas cet écran sur cette tablette : les réglages de sécurité, d'où on y arrive.
+                try {
+                    startActivity(new Intent(Settings.ACTION_SECURITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                } catch (Exception e2) {
+                    Log.w(TAG, "Réglage du code de la carte SIM", e2);
+                    terminerSimPin();
+                }
+            }
+        });
+    }
+
+    private void terminerSimPin() {
+        if (!simPinOuvert) return;
+        simPinOuvert = false;
+        handler.removeCallbacks(finSimPin);
+        setKioskPaused(false);
+        if (sync != null) sync.apresSimPin();
+    }
+
     /** Migration de la base : la page (appels compris) repart sur la nouvelle base. */
     @Override public void onDatabaseChanged(String database) {
         handler.post(() -> { if (web != null) web.reload(); });
@@ -1492,6 +1529,7 @@ public class MainActivity extends Activity implements Sync.Listener {
         Gardien.aLEcran(true);
         handler.removeCallbacks(rehideBars);
         handler.post(rehideBars);
+        if (simPinOuvert) terminerSimPin(); // retour du réglage du code de la carte SIM
         enterKiosk();
     }
 
