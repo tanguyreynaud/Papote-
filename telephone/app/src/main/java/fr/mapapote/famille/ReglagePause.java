@@ -100,7 +100,9 @@ public class ReglagePause extends Activity {
                 .setData(Uri.parse(getString(R.string.url_app) + "?reglages=1&pause=0")));
     }
 
+    // Avant Android 11, aucune mise en pause des applis : rien à régler (et la méthode n'existe
+    // pas : elle faisait planter cet écran sur Android 9 et 10).
     private boolean reglee() {
-        return getPackageManager().isAutoRevokeWhitelisted();
+        return Build.VERSION.SDK_INT < 30 || getPackageManager().isAutoRevokeWhitelisted();
     }
 }

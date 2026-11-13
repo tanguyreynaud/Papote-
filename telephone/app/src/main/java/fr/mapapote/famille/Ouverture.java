@@ -1,6 +1,7 @@
 package fr.mapapote.famille;
 
 import android.Manifest;
+import android.app.AlertDialog;
 import android.app.NotificationManager;
 import android.content.Context;
 import android.content.Intent;
@@ -16,6 +17,9 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import androidx.browser.customtabs.CustomTabsCallback;
+
+import java.util.Arrays;
+import java.util.List;
 
 import com.google.androidbrowserhelper.trusted.LauncherActivity;
 import com.google.firebase.messaging.FirebaseMessaging;
@@ -34,6 +38,12 @@ public class Ouverture extends LauncherActivity {
     private static final String JETON = "jeton";
     private static final String NOTIFS_DEMANDEES = "notifsDemandees";
     private static final String PLEIN_ECRAN_DEMANDE = "pleinEcranDemande";
+    /**
+     * Paramètres que seule l'app donne à la page. Retirés de l'adresse reçue (lien
+     * https://app.mapapote.fr/?natif=… ouvert par l'app) avant d'ajouter les siens : un lien ne doit
+     * pas pouvoir donner à la page le jeton d'un autre téléphone.
+     */
+    private static final List<String> PARAMS_APP = Arrays.asList("natif", "notifs", "cle");
     /** Sans réseau, le jeton peut ne jamais arriver : on ouvre quand même l'app. */
     private static final long ATTENTE_JETON_MS = 4000;
 
@@ -51,6 +61,7 @@ public class Ouverture extends LauncherActivity {
         super.onCreate(savedInstanceState);
         if (isFinishing()) return;
         Appels.creerCanaux(this);
+        Raccourci.verifier(this);
         // Ouverte depuis « Répondre » : la sonnerie a fait son travail.
         Uri data = getIntent().getData();
         if (data != null && data.getQueryParameter("appel") != null) {
@@ -67,7 +78,15 @@ public class Ouverture extends LauncherActivity {
                 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
                 && !prefs(this).getBoolean(NOTIFS_DEMANDEES, false)) {
             prefs(this).edit().putBoolean(NOTIFS_DEMANDEES, true).apply();
-            requestPermissions(new String[] {Manifest.permission.POST_NOTIFICATIONS}, 1);
+            // Une seule demande d'Android (refusée deux fois, il ne la montre plus) : on dit
+            // d'abord pourquoi. Refusée quand même : carte rouge dans l'app famille (?notifs=0).
+            new AlertDialog.Builder(this)
+                    .setTitle(R.string.notifs_titre)
+                    .setMessage(R.string.notifs_pourquoi)
+                    .setCancelable(false)
+                    .setPositiveButton(R.string.notifs_continuer, (d, w) ->
+                            requestPermissions(new String[] {Manifest.permission.POST_NOTIFICATIONS}, 1))
+                    .show();
             return;
         }
         demanderPleinEcran();
@@ -157,11 +176,16 @@ public class Ouverture extends LauncherActivity {
 
     @Override
     protected Uri getLaunchingUrl() {
-        Uri.Builder url = super.getLaunchingUrl().buildUpon();
+        Uri.Builder url = sansParamsApp(super.getLaunchingUrl());
         String jeton = prefs(this).getString(JETON, null);
         if (jeton != null) url.appendQueryParameter("natif", jeton);
+        // Notifications bloquées : le téléphone ne sonnera pas. L'app famille le dit (carte rouge
+        // vers ReglageNotifs) et ne compte plus ce jeton comme un téléphone prévenu.
+        if (!Appels.peutSonner(this)) url.appendQueryParameter("notifs", "0");
         // L'app famille peut demander « Voulez-vous quitter Papote ? » puis fermer l'app (Quitter).
         url.appendQueryParameter("quitter", "1");
+        // Clé de ce téléphone : la page la remet dans ses liens papote://appel et papote://quitter (Lien).
+        url.appendQueryParameter("cle", Lien.cle(this));
         // Android 11+ met en pause une app pas ouverte depuis quelques mois : elle ne recevrait
         // plus les appels. Tant que ce n'est pas réglé, l'app famille affiche une carte qui mène
         // au bon réglage (ReglagePause).
@@ -169,6 +193,16 @@ public class Ouverture extends LauncherActivity {
             url.appendQueryParameter("pause", "1");
         }
         return url.build();
+    }
+
+    /** L'adresse reçue, sans les paramètres que seule l'app donne (PARAMS_APP), les autres gardés. */
+    static Uri.Builder sansParamsApp(Uri recue) {
+        Uri.Builder url = recue.buildUpon().clearQuery();
+        for (String nom : recue.getQueryParameterNames()) {
+            if (PARAMS_APP.contains(nom)) continue;
+            for (String valeur : recue.getQueryParameters(nom)) url.appendQueryParameter(nom, valeur);
+        }
+        return url;
     }
 
     static void memoriserJeton(Context ctx, String jeton) {

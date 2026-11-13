@@ -6,4 +6,12 @@
         <item name="android:navigationBarColor">@color/barre_boutons</item>
         <item name="android:windowLightNavigationBar">true</item>
     </style>
+    <!-- Écran d'appel : crème dès la première image (plus de blanc avant la page). -->
+    <style name="Papote.Appel" parent="@android:style/Theme.DeviceDefault.Light.NoActionBar">
+        <item name="android:windowBackground">@color/creme</item>
+        <item name="android:statusBarColor">@color/creme</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:navigationBarColor">@color/creme</item>
+        <item name="android:windowLightNavigationBar">true</item>
+    </style>
 </resources>

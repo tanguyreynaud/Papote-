@@ -5,9 +5,19 @@
     <!-- Lien de confiance avec app.mapapote.fr (le site publie /.well-known/assetlinks.json) :
          sans lui, Chrome afficherait une barre d'adresse en haut de l'app. -->
     <string name="asset_statements" translatable="false">[{\"relation\": [\"delegate_permission/common.handle_all_urls\"], \"target\": {\"namespace\": \"web\", \"site\": \"https://app.mapapote.fr\"}}]</string>
+    <!-- Même cible que le share_target de web/manifest.webmanifest -->
+    <string name="partage_cible" translatable="false">{\"action\": \"https://app.mapapote.fr/partage\", \"method\": \"POST\", \"enctype\": \"multipart/form-data\", \"params\": {\"title\": \"title\", \"text\": \"text\", \"files\": [{\"name\": \"media\", \"accept\": [\"image/*\", \"video/*\"]}]}}</string>
+    <string name="partage_titre">Envoyer sur la tablette</string>
+    <string name="raccourci_defaut">La tablette</string>
+    <string name="raccourci_long">Envoyer à %1$s</string>
     <string name="canal_appels">Appels de la tablette</string>
     <string name="canal_appels_texte">Sonnerie quand la tablette vous appelle</string>
     <string name="canal_infos">Appels manqués et alertes</string>
+    <string name="canal_sos">SOS de la tablette</string>
+    <string name="canal_sos_texte">Alerte urgente quand la personne appuie sur SOS, même en mode Ne pas déranger</string>
+    <string name="sos_appelle">SOS : %1$s vous appelle</string>
+    <string name="sos_appelle_texte">%1$s a appuyé sur le bouton SOS</string>
+    <string name="sos_entete">SOS · Appel urgent</string>
     <string name="repondre">Répondre</string>
     <string name="refuser">Refuser</string>
     <string name="vous_appelle">%1$s vous appelle</string>
@@ -15,6 +25,9 @@
     <string name="appel_video">Appel Papote</string>
     <string name="appel_manque">Appel manqué de %1$s</string>
     <string name="appel_manque_texte">Touchez pour la rappeler</string>
+    <string name="notifs_titre">Pour que votre téléphone sonne</string>
+    <string name="notifs_pourquoi">Quand la tablette vous appelle, Papote fait sonner votre téléphone comme un vrai appel. Pour cela, Android va vous demander d\'autoriser les notifications de Papote : touchez « Autoriser ».</string>
+    <string name="notifs_continuer">Continuer</string>
     <string name="pause_titre">Ne manquez aucun appel</string>
     <string name="pause_pourquoi">Si vous n\'ouvrez pas Papote pendant quelques mois, Android peut le mettre en pause, et votre téléphone ne sonnerait plus. Ça se règle une fois pour toutes :</string>
     <string name="pause_etape1">Descendez tout en bas de la page.</string>
@@ -34,6 +47,7 @@
     <string name="canal_appel_en_cours">Appel en cours</string>
     <string name="appel_avec">Appel avec %1$s</string>
     <string name="appel_connexion">Connexion…</string>
+    <string name="raccrocher">Raccrocher</string>
     <string name="appel_audio_en_cours">Appel en cours</string>
     <string name="appel_video_en_cours">Appel vidéo en cours</string>
 </resources>

@@ -17,6 +17,11 @@ public class Quitter extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        // Lien venu d'une autre page que l'app famille (sans la clé de ce téléphone) : on ne ferme rien.
+        if (!Lien.valide(this, getIntent().getData())) {
+            finish();
+            return;
+        }
         for (ActivityManager.AppTask tache : getSystemService(ActivityManager.class).getAppTasks()) {
             try {
                 ComponentName base = tache.getTaskInfo().baseIntent.getComponent();
