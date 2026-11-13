@@ -5,8 +5,10 @@ const assert = require('node:assert');
 const { ouvrir, envoi, lot } = require('./banc');
 
 // Chaque essai vérifie aussi qu'aucune erreur JavaScript n'est passée.
-async function sansErreur(b) {
-  const erreurs = (await b.appels('erreurJS')).concat(await b.appels('logError'));
+// attendus : notes voulues dans le journal (logError) que l'essai vérifie lui-même (ex. « Papote est prévenu »).
+async function sansErreur(b, attendus = []) {
+  const erreurs = (await b.appels('erreurJS')).concat((await b.appels('logError'))
+    .filter((a) => !attendus.some((m) => m.test(String(a.args && a.args[0])))));
   assert.deepStrictEqual(erreurs, [], 'erreurs JavaScript');
 }
 
@@ -300,7 +302,7 @@ test('installation : pas reliée au bout de 2 min, l\'écran le dit sans rien de
     await b.avancer(125000);
     assert.match(await b.texte('.welcome-sub'), /pas encore reliée.*Papote est prévenu/);
     assert.ok((await b.appels('logError')).some((a) => /pas reliée/.test(a.args[0])), 'noté dans le journal pour Papote');
-    await sansErreur(b);
+    await sansErreur(b, [/^Installation : tablette pas reliée à une famille après 2 min$/]);
   } finally { await b.fermer(); }
 });
 
@@ -320,7 +322,8 @@ test('installation sans internet : « la tablette cherche internet », puis l\'e
     await b.etat({ reseau: { wifi: '', internet: true, mobile: true, sim: true, via: 'mobile' } });
     await b.avancer(3500);
     assert.strictEqual((await b.appels('wifiDone')).length, 1, 'la 4G est là : étape suivante sans rien toucher');
-    await sansErreur(b);
+    assert.ok((await b.appels('logError')).some((a) => /pas d.internet après 1 min/.test(a.args[0])), 'noté dans le journal pour Papote');
+    await sansErreur(b, [/^Installation : pas d’internet après 1 min de recherche$/]);
   } finally { await b.fermer(); }
 });
 
