@@ -35,6 +35,9 @@ public class AttenteAppelTest {
     @Before
     public void preparer() {
         ctx = RuntimeEnvironment.getApplication();
+        // Avant Android 13, androidx vérifie cette permission (déclarée par androidx.core dans le
+        // manifeste fusionné de l'APK, que l'Android simulé ne relit pas).
+        shadowOf(ctx).grantPermissions(ctx.getPackageName() + ".DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION");
     }
 
     private ActivityController<AppelEnCours> ouvrir() {
