@@ -1355,6 +1355,18 @@ public class MainActivity extends Activity implements Sync.Listener {
                 Log.w(TAG, "Masquage de " + pkg, e);
             }
         }
+        // Enregistreur d'appels de Blackview : son bouton « magnéto » s'affichait par-dessus Papote à chaque
+        // appel téléphone (Tanguy, T-003, 13/11). Masqué de la même façon, remis par removeDeviceOwner.
+        for (String pkg : new String[]{"com.blackview.call.recorder"}) {
+            try {
+                if (dpm.setApplicationHidden(admin, pkg, true)) {
+                    hidden.add(pkg);
+                    Journal.log(this, "Enregistreur d'appels masqué : " + pkg);
+                }
+            } catch (Exception e) {
+                Log.w(TAG, "Masquage de " + pkg, e);
+            }
+        }
         prefs.edit().putStringSet("launchersMasques", hidden).apply();
     }
 
