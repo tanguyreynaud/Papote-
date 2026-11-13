@@ -271,7 +271,7 @@ const { FieldValue, Timestamp } = require('firebase-admin/firestore');
 const DECLENCHEURS = [
   { chemin: 'families/{fid}', creation: ['nouvelleFamille'] },
   { chemin: 'families/{fid}/members/{uid}', creation: ['nouveauMembre'], modification: ['membreAccepte'], ecriture: ['compterProches'] },
-  { chemin: 'families/{fid}/members/{uid}/private/push', ecriture: ['telephoneAppels'] },
+  { chemin: 'families/{fid}/members/{uid}/private/push', ecriture: ['telephoneAppels', 'jetonUnique'] },
   { chemin: 'families/{fid}/posts/{pid}', creation: ['quotaEnvois'], ecriture: ['voixEnvoi'] },
   { chemin: 'families/{fid}/reminders/{rid}', ecriture: ['voixRappel'] },
   { chemin: 'families/{fid}/calls/{cid}', creation: ['appelsSonnerie'], modification: ['appelsManques'] },

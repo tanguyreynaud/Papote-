@@ -3002,6 +3002,20 @@ exports.telephoneAppels = onDocumentWritten(
     }
   });
 
+// Un téléphone ne sonne que pour le dernier compte connecté dessus (jeton-unique.js) : chaque jeton ajouté
+// à une fiche est retiré des fiches des autres comptes, toutes familles.
+exports.jetonUnique = onDocumentWritten(
+  { document: 'families/{fid}/members/{uid}/private/push', database: BASE_FIRESTORE, region: REGION_FIRESTORE },
+  async (event) => {
+    const lire = (s) => (s && s.exists ? s.data() : null);
+    const n = await require('./jeton-unique').retirerAilleurs(db, {
+      uid: event.params.uid,
+      avant: lire(event.data && event.data.before),
+      apres: lire(event.data && event.data.after),
+    });
+    if (n) logger.info('Jeton de téléphone retiré d\'autres comptes', { fid: event.params.fid, uid: event.params.uid, n });
+  });
+
 const { uidDesTablettes } = require('./uid-tablette');
 // Nombre de proches d'une famille (membres « famille » qui ont rejoint), lu par les règles
 // Firestore pour refuser un 31e proche. Recalculé seulement quand un proche arrive, part ou est accepté :

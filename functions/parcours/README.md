@@ -63,6 +63,10 @@ appel de la famille), appels, ordres, alertes et incidents de plus de 90 jours e
 cours et ordre en attente gardés), comptes sans famille depuis plus de 3 mois effacés (membre, responsable, tablette,
 administrateur et commande en cours gardés).
 
+`jeton-unique.parcours.js` : un téléphone ne sonne que pour le dernier compte connecté dessus (jeton-unique.js) :
+deux comptes sur le même téléphone (jeton de l'app Android puis du navigateur), seul le dernier inscrit garde le
+jeton ; même compte dans deux familles, gardé dans les deux, retiré de l'autre compte partout.
+
 `limites.parcours.js` : limites contre les abus (limites.js, A12) : voix Google coupée au 10e message du jour du
 même proche (pas pour les autres, ni pour les légendes de photos), drapeau des 50 messages jusqu'à minuit (Paris) et
 messages passés en même temps sans voix, copie d'anciens messages non comptée, rappels 10 créés par jour et 30 en
