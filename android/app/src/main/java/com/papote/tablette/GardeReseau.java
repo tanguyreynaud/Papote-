@@ -58,6 +58,11 @@ final class GardeReseau {
         return false;
     }
 
+    /** La carte se présente sous une autre identité que celle qu'elle avait en service. */
+    static boolean identiteChangee(String connue, String actuelle) {
+        return connue != null && !connue.isEmpty() && actuelle != null && !actuelle.isEmpty() && !connue.equals(actuelle);
+    }
+
     static boolean memeReseau(String plmnAntenne, String hote) {
         return hote == null || hote.isEmpty() || hote.equals(plmnAntenne);
     }
@@ -103,7 +108,8 @@ final class GardeReseau {
                     && !ss.getOperatorNumeric().isEmpty()) {
                 // Réseau qui porte vraiment la carte (Bouygues 20820 pour Lyca 20825) : seule une de ses
                 // antennes à portée justifie un redémarrage (Tanguy, 13/11 : à Poissy, rien que de l'Orange).
-                prefs.edit().putString("reseauHote", ss.getOperatorNumeric()).apply();
+                prefs.edit().putString("reseauHote", ss.getOperatorNumeric())
+                        .putString("simIdentite", tm.getSimOperator() == null ? "" : tm.getSimOperator()).apply();
             }
             if (ss == null || !hors(ss.getState())) {
                 if (prefs.getLong("reseauHorsDepuis", 0) != 0) {
@@ -120,7 +126,11 @@ final class GardeReseau {
             }
             List<CellInfo> cellules = null;
             try { cellules = tm.getAllCellInfo(); } catch (SecurityException ignored) { }
-            boolean antenne = antenneDuReseau(cellules, prefs.getString("reseauHote", ""));
+            // Carte passée sur une autre identité (Lyca 20825 → 26001, T-003 le 12/11) : coincée sur ce
+            // profil, elle ne voit plus les antennes de son réseau (seulement Orange dans les relevés, alors
+            // que Bouygues était là le lendemain matin au même endroit). Ce signe suffit.
+            boolean autreIdentite = identiteChangee(prefs.getString("simIdentite", ""), tm.getSimOperator());
+            boolean antenne = autreIdentite || antenneDuReseau(cellules, prefs.getString("reseauHote", ""));
             int faits = prefs.getInt("reseauRedemarrages", 0);
             if (!fautRedemarrer(mur, depuis, antenne, AppelGsm.enCours(), maintenance,
                     prefs.getLong("reseauDernierRedemarrage", 0), faits)) return;

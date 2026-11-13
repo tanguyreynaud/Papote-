@@ -65,6 +65,15 @@ public class GardeReseauTest {
     }
 
     @Test
+    public void carteSurUneAutreIdentiteCompteMemeSansAntenneDeSonReseau() {
+        // T-003, 12/11 : Lyca 20825 passée en 26001, seule une antenne Orange dans les relevés.
+        assertTrue(GardeReseau.identiteChangee("20825", "26001"));
+        assertFalse(GardeReseau.identiteChangee("20825", "20825"));
+        assertFalse("identité jamais vue en service : pas de conclusion", GardeReseau.identiteChangee("", "26001"));
+        assertFalse(GardeReseau.identiteChangee("20825", ""));
+    }
+
+    @Test
     public void horsServiceEtUrgencesSeulementComptent() {
         assertTrue(GardeReseau.hors(ServiceState.STATE_OUT_OF_SERVICE));
         assertTrue(GardeReseau.hors(ServiceState.STATE_EMERGENCY_ONLY));
