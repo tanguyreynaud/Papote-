@@ -76,8 +76,9 @@ test('carte SIM : code renouvelé avant la réponse (ordre reporté), retrait du
   s.avancer(15 / 1440);
   const second = await a.afficherCode(t);
   const reporte = (await s.lire(`pairings/${second}`)).ordre;
-  assert.strictEqual(reporte.id, r.id);
-  assert.strictEqual(reporte.type, 'simPin');
+  // Un « Retirer le code PIN » déjà parti est reporté comme le test qui le suit (la tablette exécute un id une fois).
+  assert.strictEqual(reporte.id, `${r.id}-apres-pin`);
+  assert.strictEqual(reporte.type, 'simTest');
   assert.strictEqual((await s.lire(`stock/${t.fiche}`)).simOrdre.code, second);
   // Une autre tablette qui recopie ce n° de série ne reçoit rien.
   await s.db.doc('pairings/INTRUS22').set({
