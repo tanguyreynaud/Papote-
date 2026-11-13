@@ -144,7 +144,30 @@ service cloud.firestore {
     // Réglages communs (relais TURN des appels), écrits seulement depuis la console Firebase.
     // Jumelage d'une nouvelle tablette : elle affiche un code, le serveur la fait entrer dans la famille de sa commande.
     //   pairings/{code} -> { tabletUid, callsUid, name, createdAt, expiresAt, status,
-    //                        fid?, familyName?, claimedBy?, claimedName? } (fid… écrits par le serveur seulement)
+    //                        fid?, familyName?, claimedBy?, claimedName?, ordre? } (fid…, ordre : serveur seulement)
+    //                        simTest? (résultat du test de la carte SIM : la tablette seulement)
+    // Résultat du test de la carte SIM écrit par la tablette dans son code (sim-installation.js) :
+    // { id, le (heure du serveur), iccid, mcc, mnc, operateur, etat, inscrite, itinerance, donnees: { ok, ms } }.
+    function texteOuRien(v, n) {
+      return v == null || (v is string && v.size() <= n);
+    }
+    function simTestValide(t) {
+      return t is map
+        && t.keys().hasOnly(['id', 'le', 'iccid', 'mcc', 'mnc', 'operateur', 'etat', 'inscrite', 'itinerance', 'donnees'])
+        && t.id is string && t.id.size() > 0 && t.id.size() <= 80
+        && t.le == request.time
+        && t.etat in ['ok', 'absente', 'pin', 'puk', 'verrouillee', 'etrangere', 'sans-reseau', 'donnees-ko']
+        && texteOuRien(t.get('iccid', null), 32)
+        && (texteOuRien(t.get('mcc', null), 3) || t.mcc is int)
+        && (texteOuRien(t.get('mnc', null), 3) || t.mnc is int)
+        && texteOuRien(t.get('operateur', null), 60)
+        && t.get('inscrite', false) is bool
+        && t.get('itinerance', false) is bool
+        && (t.get('donnees', null) == null
+          || (t.donnees is map && t.donnees.keys().hasOnly(['ok', 'ms'])
+            && t.donnees.get('ok', false) is bool
+            && (t.donnees.get('ms', null) == null || t.donnees.ms is int)));
+    }
     match /pairings/{code} {
       // Lu par la tablette (ses deux comptes) et l'administrateur seulement : l'adresse e-mail de celui qui a
       // réservé (claimedEmail, attente) n'est pas lisible par qui connaît le code (règles 2, R8). Un code absent
@@ -172,9 +195,14 @@ service cloud.firestore {
       // La tablette peut annuler une réservation faite par Papote (« Recommencer ») : il faut être devant elle.
       allow update: if signedIn()
         && request.auth.uid == resource.data.tabletUid
-        && resource.data.status == 'reserved'
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
-        && request.resource.data.status == 'cancelled';
+        && ((resource.data.status == 'reserved'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+            && request.resource.data.status == 'cancelled')
+          // « Installer la carte SIM » (13/11) : la tablette répond à l'ordre du serveur (champ ordre, écrit par le
+          // serveur seulement) par le résultat de son test, et rien d'autre. Recopié sur sa fiche du stock par
+          // functions/sim-installation.js.
+          || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['simTest'])
+            && simTestValide(request.resource.data.simTest)));
       // Seul un code encore en attente s'efface (par sa tablette, ou par n'importe qui une fois expiré) : un jumelage
       // réservé, confirmé, refusé ou annulé reste, il prouve l'histoire de la tablette (audit 8 et règles 2, R8).
       allow delete: if signedIn()

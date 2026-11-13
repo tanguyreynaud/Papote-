@@ -226,6 +226,44 @@ test('A29 : aucune appli de client ne relie une tablette, même un responsable p
   await assertSucceeds(updateDoc(doc(tablette('tab9'), 'pairings/RESA2345'), { status: 'cancelled' }));
 });
 
+// « Installer la carte SIM » (13/11) : le serveur écrit l'ordre dans le code de la tablette, la tablette y répond par
+// simTest (ce seul champ, bien formé, à l'heure du serveur). L'ordre reste au serveur.
+test('carte SIM : la tablette écrit simTest dans son code, rien d\'autre ; l\'ordre et les autres comptes refusés', async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), 'pairings/SIMT2345'), {
+      status: 'waiting', tabletUid: 'tab7', callsUid: 'tab7-appels', name: 'Tablette', serie: 'S7', createdAt: Timestamp.now(),
+      expiresAt: Timestamp.fromMillis(Date.now() + 10 * 60 * 1000), ordre: { id: 'o1', type: 'simTest', demandeLe: Timestamp.now(), simAttendue: '8933150000000001234' },
+    });
+  });
+  const ref = (db) => doc(db, 'pairings/SIMT2345');
+  const ok = () => ({
+    id: 'o1', le: serverTimestamp(), iccid: '8933150000000001234', mcc: '208', mnc: '01', operateur: 'Orange', etat: 'ok',
+    inscrite: true, itinerance: false, donnees: { ok: true, ms: 230 },
+  });
+  await assertSucceeds(updateDoc(ref(tablette('tab7')), { simTest: ok() }));
+  await assertSucceeds(updateDoc(ref(tablette('tab7')), { simTest: { id: 'o1-apres-pin', le: serverTimestamp(), etat: 'absente', iccid: null, mcc: null, mnc: null, operateur: null, inscrite: false, itinerance: false, donnees: { ok: false, ms: null } } }));
+  await assertSucceeds(updateDoc(ref(tablette('tab7')), { simTest: { ...ok(), mcc: 208, mnc: 1 } }), 'mcc et mnc en nombres');
+  // Pas un autre compte, ni la deuxième session de la tablette, ni un proche.
+  await assertFails(updateDoc(ref(tablette('tab7-appels')), { simTest: ok() }));
+  await assertFails(updateDoc(ref(tablette('intrus')), { simTest: ok() }));
+  await assertFails(updateDoc(ref(proche('julie')), { simTest: ok() }));
+  // L'ordre, le statut ou la famille ne s'écrivent pas avec.
+  await assertFails(updateDoc(ref(tablette('tab7')), { ordre: { id: 'o2', type: 'simPin', demandeLe: serverTimestamp(), simAttendue: '1' } }));
+  await assertFails(updateDoc(ref(tablette('tab7')), { simTest: ok(), status: 'confirmed' }));
+  await assertFails(updateDoc(ref(tablette('tab7')), { simTest: ok(), fid: 'f' }));
+  // Champs vérifiés un par un.
+  await assertFails(updateDoc(ref(tablette('tab7')), { simTest: { ...ok(), etat: 'super' } }));
+  await assertFails(updateDoc(ref(tablette('tab7')), { simTest: { ...ok(), le: Timestamp.fromMillis(Date.now() - 3600e3) } }), 'heure de la tablette');
+  await assertFails(updateDoc(ref(tablette('tab7')), { simTest: { ...ok(), id: '' } }));
+  await assertFails(updateDoc(ref(tablette('tab7')), { simTest: { ...ok(), iccid: 'x'.repeat(33) } }));
+  await assertFails(updateDoc(ref(tablette('tab7')), { simTest: { ...ok(), inscrite: 'oui' } }));
+  await assertFails(updateDoc(ref(tablette('tab7')), { simTest: { ...ok(), itinerance: 1 } }));
+  await assertFails(updateDoc(ref(tablette('tab7')), { simTest: { ...ok(), donnees: { ok: true, ms: 'vite' } } }));
+  await assertFails(updateDoc(ref(tablette('tab7')), { simTest: { ...ok(), donnees: { ok: true, ms: 1, plus: 1 } } }));
+  await assertFails(updateDoc(ref(tablette('tab7')), { simTest: { ...ok(), ok: true } }), 'pas de champ en plus (le verdict est au serveur)');
+  await assertFails(updateDoc(ref(tablette('tab7')), { simTest: 'ok' }));
+});
+
 test('envois : autorisés pendant l\'installation et avec un abonnement actif, bloqués une fois résilié', async () => {
   await famille({ statut: 'installation', etape: 'photo' });
   await assertSucceeds(setDoc(doc(proche('julie'), `families/${FID}/posts/p1`), envoi('julie')));

@@ -185,6 +185,8 @@ function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
   const option = (valeur, texte, choisi) => creer('option', { value: valeur, selected: choisi }, texte);
   // Remise en main propre (A1, 2026-10-27) : ni étiquette ni relais, la commande est reçue le jour même.
   const enMain = (e) => e.mode === 'main';
+  // Dernier verdict du serveur sur la carte SIM (« Installer la carte SIM »), relu par l'étape.
+  let simVerdict = null;
   const sortirDuStock = async (e) => {
     try {
       if (e.sim) await appeler('gestionSim', { action: 'modifier', id: e.sim, champs: { tablette: e.tablette } });
@@ -218,11 +220,12 @@ function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
       texte: 'Prenez une tablette déjà installée : elle a un numéro T-… écrit dessus.',
       contenu(zone, e, maj) {
         // Une tablette jumelée à une autre famille (tablette de test) n'est jamais proposée : pas à vendre.
-        const dispo = stock.filter((t) => t.commande === c.id || (['en-stock', 'preparee'].includes(t.etat) && !t.commande && (!t.fid || t.fid === c.fid)))
-          .sort((a, b) => !!b.ref - !!a.ref);
+        // Seulement les tablettes préparées, avec leur numéro T-… (Tanguy, 13/11) : une tablette pas encore installée
+        // n'apparaît plus.
+        const dispo = stock.filter((t) => t.ref && (t.commande === c.id || (['en-stock', 'preparee'].includes(t.etat) && !t.commande && (!t.fid || t.fid === c.fid))));
         const choix = creer('select', { ariaLabel: 'Tablette' });
-        choix.append(option('', dispo.length ? 'Choisir la tablette…' : 'Aucune tablette en stock', !e.tablette),
-          ...dispo.map((t) => option(t.id, [t.ref || 'pas encore installée', t.numero, t.modele, t.sim ? `SIM ${t.sim}` : null].filter(Boolean).join(' · '), t.id === e.tablette)));
+        choix.append(option('', dispo.length ? 'Choisir la tablette…' : 'Aucune tablette préparée', !e.tablette),
+          ...dispo.map((t) => option(t.id, [t.ref, t.numero, t.modele, t.sim ? `SIM ${t.sim}` : null].filter(Boolean).join(' · '), t.id === e.tablette)));
         const libres = sims.filter((l) => (!l.tablette || l.id === e.sim) && ['stock', 'active'].includes(l.statut));
         const choixSim = creer('select', { ariaLabel: 'Carte SIM' });
         choixSim.append(option('', libres.length ? 'Carte SIM…' : 'Aucune carte SIM libre', !e.sim),
@@ -231,7 +234,7 @@ function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
         const majChoix = () => {
           e.tablette = choix.value || null;
           const t = tablette(e);
-          alerte.textContent = t && !t.ref ? 'Cette tablette n\'est pas encore installée : faites d\'abord sa réception (Stock > Recevoir une tablette).' : '';
+          alerte.textContent = dispo.length ? '' : 'Installez d\'abord une tablette : Stock > Recevoir une tablette.';
           choixSim.hidden = !internet || !t || !!t.simId;
           e.sim = choixSim.hidden ? null : choixSim.value || null;
           maj();
@@ -275,7 +278,6 @@ function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
           champ('Activée le', 'simActivation', { type: 'date' }),
           champ('Prix par mois (€)', 'simPrix', { inputMode: 'decimal', placeholder: 'ex. 2,99' }));
       },
-      cases: ['Code PIN de la carte retiré (sinon la tablette reste sans internet au démarrage)'],
       pret: (e) => /^[\d +.]{6,}$/.test(e.simNumero || '') && /^\d{4}-\d{2}-\d{2}$/.test(e.simActivation || '')
         && /^\d+([.,]\d{1,2})?$/.test(e.simPrix || ''),
       async valider(e) {
@@ -285,6 +287,98 @@ function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
           statut: 'active', numero: e.simNumero, activation: Date.parse(`${e.simActivation}T12:00:00`),
           prix: Math.round(Number(e.simPrix.replace(',', '.')) * 100), tablette: e.tablette,
         } });
+      },
+    },
+    {
+      // Carte testée par la tablette elle-même (Tanguy, 13/11 ; functions/sim-installation.js) : l'admin envoie un
+      // ordre par le code que la tablette affiche (écran Bienvenue), la tablette répond, le serveur donne le verdict.
+      // « C'est fait » seulement avec un verdict réussi et récent ; le serveur refuse aussi l'envoi sans lui.
+      cle: 'sim-installer',
+      titre: 'Installer la carte SIM',
+      texte: 'Mettez la carte dans la tablette, puis redémarrez-la. Si elle demande un code PIN, tapez 0000.',
+      saute: () => !internet,
+      contenu(zone, e, maj) {
+        simVerdict = null;
+        const nomT = nom(e) || 'la tablette';
+        const tester = creer('button', { type: 'button', className: 'primary' }, 'Tester la carte');
+        const pin = creer('button', { type: 'button', className: 'secondary' }, 'Retirer le code PIN sur la tablette');
+        const boutons = creer('div', { className: 'pc-sim-boutons' });
+        boutons.append(tester, pin);
+        const info = creer('p', { className: 'pc-sim-info', role: 'status' });
+        const coches = creer('ul', { className: 'pc-sim-coches', ariaLabel: 'Vérifications de la carte' });
+        const message = creer('p', { className: 'pc-sim-message', hidden: true });
+        zone.append(boutons, info, coches, message);
+        let attendue = '';
+        const ligne = (fait, texte) => {
+          const li = creer('li', { className: fait ? 'ok' : '' });
+          li.append(creer('span', { ariaHidden: 'true' }, fait ? '✓' : ''), creer('em', {}, texte));
+          return li;
+        };
+        const afficher = (r) => {
+          const v = r.verdict || {};
+          const c = v.coches || {};
+          attendue = r.attendue || attendue;
+          simVerdict = v;
+          coches.replaceChildren(
+            ligne(c.carte, `Bonne carte${attendue ? ` (…${attendue})` : ''}`),
+            ligne(c.reseau, `Réseau français (${v.operateur && c.reseau ? v.operateur : 'Orange, SFR, Bouygues, Free…'})`),
+            ligne(c.inscrite, 'Inscrite au réseau'),
+            ligne(c.internet, `Internet par la carte${c.internet && v.ms != null ? ` (${v.ms} ms)` : ''}`));
+          message.hidden = !v.message;
+          message.textContent = v.message || '';
+          message.classList.toggle('ok', !!v.ok);
+          message.classList.toggle('attente', !!v.attente);
+          maj();
+        };
+        // Relue toutes les 3 s tant que l'étape est affichée (fiche du stock, par le serveur).
+        let lecture = false;
+        const relire = async () => {
+          if (lecture || !e.tablette) return;
+          lecture = true;
+          try {
+            const r = await httpsCallable(functions, 'gestionStock')({ action: 'simEtat', stock: e.tablette });
+            if (affichee()) afficher(r.data);
+          } catch (err) {
+            console.warn('Carte SIM : état illisible', err);
+          }
+          lecture = false;
+        };
+        // Arrêtée quand l'étape change ou que la fenêtre se ferme.
+        const affichee = () => zone.isConnected && !!zone.closest('dialog[open]');
+        const minuterie = setInterval(() => { if (!affichee()) clearInterval(minuterie); else relire(); }, 3000);
+        // Un seul ordre à la fois : le bouton touché dit tout de suite ce qui se passe, le deuxième appui ne fait rien.
+        let envoi = false;
+        const ordonner = async (type, bouton) => {
+          if (envoi) return;
+          envoi = true;
+          tester.disabled = true;
+          pin.disabled = true;
+          boutonCharge(bouton, true);
+          info.textContent = `Envoi de l'ordre à ${nomT}…`;
+          try {
+            const r = await appeler('gestionStock', { action: 'simOrdre', stock: e.tablette, type });
+            info.textContent = `Ordre envoyé à ${r.ref || nomT} : ${type === 'simPin' ? 'retrait du code PIN, puis test de la carte' : 'test de la carte'}.`;
+            afficher({ verdict: { attente: true, coches: {}, message: 'La tablette teste la carte, quelques secondes…' } });
+          } catch (err) {
+            info.textContent = err.message;
+          }
+          boutonCharge(bouton, false);
+          tester.disabled = false;
+          pin.disabled = false;
+          envoi = false;
+          relire();
+        };
+        tester.addEventListener('click', () => ordonner('simTest', tester));
+        pin.addEventListener('click', () => ordonner('simPin', pin));
+        afficher({ verdict: {} });
+        message.hidden = true;
+        relire();
+      },
+      pret: () => !!(simVerdict && simVerdict.ok),
+      async valider(e) {
+        // Vérifié encore une fois au moment du clic : un résultat de plus de 10 minutes ne compte plus.
+        const r = await appeler('gestionStock', { action: 'simEtat', stock: e.tablette });
+        if (!r.verdict || !r.verdict.ok) throw new Error((r.verdict && r.verdict.message) || 'Testez d\'abord la carte.');
       },
     },
     {
@@ -459,7 +553,7 @@ function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
         try {
           await httpsCallable(functions, 'tabletteEnvoyee')({ commande: c.id, mainPropre: true });
         } catch (err) {
-          throw new Error(err.code?.endsWith('failed-precondition') ? 'Cette commande est déjà notée comme envoyée.' : 'L\'enregistrement a échoué. Réessayez.');
+          throw new Error(err.code?.endsWith('failed-precondition') ? err.message : 'L\'enregistrement a échoué. Réessayez.');
         }
         await sortirDuStock(e);
       },

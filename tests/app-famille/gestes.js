@@ -445,7 +445,61 @@ async function jamaisMainPropre(t) {
   assert.doesNotMatch(texte, /main[\s ]+propre/i, `[${t.nom}] « main propre » apparaît dans l'app famille`);
 }
 
+// ---------- La tablette répond à un ordre « carte SIM » (Installer la carte SIM, admin) ----------
+
+// Le compte principal de la tablette, connecté avec le SDK Firebase sur les émulateurs : ses écritures passent par
+// les vraies règles (firestore.rules), comme l'appli Android (simTest, ce seul champ de son code).
+const comptesTablette = new Map();
+async function baseDeLaTablette(uid) {
+  if (comptesTablette.has(uid)) return comptesTablette.get(uid);
+  const { initializeApp } = require('firebase/app');
+  const { getAuth, connectAuthEmulator, signInWithCustomToken } = require('firebase/auth');
+  const { getFirestore, connectFirestoreEmulator } = require('firebase/firestore');
+  const app = initializeApp({ projectId: banc.PROJET, apiKey: 'cle-de-test' }, `tablette-${uid}`);
+  const au = banc.hote('FIREBASE_AUTH_EMULATOR_HOST');
+  const fs_ = banc.hote('FIRESTORE_EMULATOR_HOST');
+  const auth = getAuth(app);
+  connectAuthEmulator(auth, `http://${au.h}:${au.p}`, { disableWarnings: true });
+  // La base des fonctions (functions/base.js : « europe », sauf BASE_FIRESTORE), celle que lit l'admin.
+  const db = getFirestore(app, process.env.BASE_FIRESTORE || 'europe');
+  connectFirestoreEmulator(db, fs_.h, fs_.p);
+  await signInWithCustomToken(auth, await banc.admin.auth().createCustomToken(uid));
+  comptesTablette.set(uid, db);
+  return db;
+}
+
+/** Ferme les connexions des comptes de tablette (sinon le processus de test ne se termine pas). */
+async function fermerTablettes() {
+  const { getApp, deleteApp } = require('firebase/app');
+  for (const uid of comptesTablette.keys()) await deleteApp(getApp(`tablette-${uid}`)).catch(() => {});
+  comptesTablette.clear();
+}
+
+/** L'ordre écrit dans le code de la tablette (attendu jusqu'à 10 s). */
+async function ordreSim(code, { autreQue = null } = {}) {
+  for (let i = 0; i < 100; i++) {
+    const p = await s.lire(`pairings/${code}`);
+    if (p && p.ordre && p.ordre.id !== autreQue) return p.ordre;
+    await new Promise((ok) => setTimeout(ok, 100));
+  }
+  throw new Error(`Aucun ordre sur le code ${code}`);
+}
+
+/** La tablette (tablette d'acteurs.js) écrit le résultat de l'ordre dans son code. */
+async function repondreSim(tablette, resultat = {}, { code = tablette.code, id = null } = {}) {
+  const ordre = await ordreSim(code);
+  const { doc, updateDoc, serverTimestamp } = require('firebase/firestore');
+  const db = await baseDeLaTablette(tablette.tabletUid);
+  await updateDoc(doc(db, `pairings/${code}`), { simTest: {
+    id: id || ordre.id, le: serverTimestamp(), iccid: ordre.simAttendue, mcc: '208', mnc: '01', operateur: 'Orange',
+    etat: 'ok', inscrite: true, itinerance: false, donnees: { ok: true, ms: 230 }, ...resultat,
+  } });
+  await s.calme();
+  return ordre;
+}
+
 module.exports = {
+  ordreSim, repondreSim, fermerTablettes,
   centre, doubleAppui, appuiLong, clavier, fenetresOuvertes, attendreRetourVisible, nbAppels, serveurMuet, jamaisMainPropre,
   verifierLargeur,
   vue, attendreVue, visible, repondre, texteFenetre, photo, video,
