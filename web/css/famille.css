@@ -274,6 +274,11 @@ button:disabled { opacity: .45; cursor: default; }
   transition: transform .12s;
 }
 .tile:active { transform: scale(.97); }
+/* « Appeler » pour un proche sans numéro : grisée, à sa place (la toucher mène au numéro dans Profil). */
+.tile.tile-off { opacity: .5; filter: grayscale(1); box-shadow: none; }
+.tile.tile-off:active { transform: none; }
+.tile-note { display: block; margin-top: 4px; font-family: var(--body, inherit); font-size: 14px; font-weight: 500; color: var(--muted, #6b6b6b); }
+.tile-note[hidden] { display: none; }
 .tile-icon {
   width: 52px;
   height: 52px;
