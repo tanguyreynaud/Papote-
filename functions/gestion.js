@@ -789,7 +789,7 @@ exports.gestionDonnees = onCall(async (request) => {
   // Tout est lu en même temps : « à vendre » et les batteries (qui attendent seulement le stock) ne font plus
   // deux allers-retours de plus vers la base après les autres lectures.
   const lectureStock = db().collection('stock').get();
-  const [commandes, stock, depenses, familles, automatique, reglages, courrier, archives, sims, accessoires, aVendre, batteries, alertes, gardes, courrielsPerdus, sauvegarde, pannesSim] = await Promise.all([
+  const [commandes, stock, depenses, familles, automatique, reglages, courrier, archives, sims, accessoires, aVendre, batteries, alertes, gardes, courrielsPerdus, sauvegarde, pannesSim, membres] = await Promise.all([
     db().collection('commandes').get(),
     lectureStock,
     db().collection('depenses').get(),
@@ -814,6 +814,8 @@ exports.gestionDonnees = onCall(async (request) => {
     db().doc(require('./sauvegarde-alerte').DOCUMENT).get().catch((e) => { logger.warn('Sauvegarde', e.message); return null; }),
     // Cartes SIM sans réseau depuis plus de 2 h, déjà signalées (sim-hors-service.js) : une lecture.
     db().doc(require('./sim-hors-service').DOCUMENT).get().catch((e) => { logger.warn('Cartes SIM sans réseau', e.message); return null; }),
+    // Fiches des membres de toutes les familles, trois champs seulement (tel-unique.js : numéro en double).
+    db().collectionGroup('members').select('name', 'role', 'telephone').get().catch((e) => { logger.warn('Numéros en double', e.message); return { docs: [] }; }),
   ]);
   const parFid = new Map(familles.docs.map((f) => [f.id, f.data()]));
   // Compte de la tablette -> sa fiche de stock (T-…), pour compter les alertes sur la page de la tablette.
@@ -918,6 +920,12 @@ exports.gestionDonnees = onCall(async (request) => {
     sauvegardeAFaire: require('./sauvegarde-alerte').ligneAFaire(sauvegarde && sauvegarde.exists ? sauvegarde.data() : null, Date.now()),
     // Cartes SIM sans réseau depuis plus de 2 h (sim-hors-service.js) : une ligne par panne, levée au retour du réseau.
     simAFaire: require('./sim-hors-service').lignesAFaire(pannesSim && pannesSim.exists ? pannesSim.data() : null),
+    // Même numéro de portable pour deux proches d'une famille (tel-unique.js) : [{ fid, numero (masqué), prenoms, texte }],
+    // une ligne « À faire » chacun et un mot sur la page de la famille.
+    telDoubles: (() => {
+      const tu = require('./tel-unique');
+      return tu.doublons(tu.membresDe(membres.docs)).map((d) => ({ ...d, texte: tu.texte(d, (parFid.get(d.fid) || {}).name) }));
+    })(),
   };
 });
 const ALERTES_JOURS = 90;
