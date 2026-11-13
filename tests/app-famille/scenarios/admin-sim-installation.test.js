@@ -158,7 +158,8 @@ test('carte SIM : « Retirer le code PIN », le code de la tablette change avant
   await a.afficherCode(tablette);
   assert.notStrictEqual(tablette.code, premier);
   const reporte = await g.ordreSim(tablette.code);
-  assert.deepStrictEqual([reporte.id, reporte.type, reporte.simAttendue], [ordre.id, 'simPin', ICCID]);
+  // Reporté comme le test qui suit le retrait du code PIN (la tablette exécute un id une seule fois).
+  assert.deepStrictEqual([reporte.id, reporte.type, reporte.simAttendue], [`${ordre.id}-apres-pin`, 'simTest', ICCID]);
   assert.strictEqual(nbOrdres(), 1, 'reporté par le serveur, sans nouvel appui');
 
   // Code PIN retiré, test enchaîné par la tablette (id « -apres-pin ») sur son nouveau code.
