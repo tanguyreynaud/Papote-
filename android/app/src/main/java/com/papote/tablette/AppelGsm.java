@@ -123,14 +123,28 @@ public class AppelGsm extends InCallService {
     private final Call.Callback callback = new Call.Callback() {
         @Override
         public void onStateChanged(Call call, int state) {
+            // Un appel déjà remplacé (raccroché puis rappel aussitôt, Tanguy 13/11) ne parle plus à l'écran :
+            // son « fin » tardif fermait l'écran du nouvel appel, qui continuait en fond.
+            if (!estLAppelSuivi(call, courant)) return;
             if (state == Call.STATE_ACTIVE) hautParleur();
             publier(call);
         }
     };
 
+    /** Seul l'appel suivi (le plus récent) met l'écran à jour. */
+    static boolean estLAppelSuivi(Object appel, Object suivi) {
+        return appel != null && appel == suivi;
+    }
+
     @Override
     public void onCallAdded(Call call) {
         super.onCallAdded(call);
+        if (courant != null && courant != call && !encoreOuvert(courant.getState())) {
+            // L'appel d'avant se termine encore (raccroché juste avant de rappeler) : ce n'est pas « déjà
+            // en ligne ». On le lâche, le nouvel appel devient l'appel suivi.
+            try { courant.unregisterCallback(callback); } catch (Exception ignored) { }
+            courant = null;
+        }
         if (courant != null && courant != call) {
             // Déjà en ligne : le deuxième appel est refusé (l'appelant entend « occupé »).
             Journal.log(this, "Appel téléphone pendant un appel : refusé");
@@ -155,6 +169,7 @@ public class AppelGsm extends InCallService {
     @Override
     public void onCallRemoved(Call call) {
         super.onCallRemoved(call);
+        try { call.unregisterCallback(callback); } catch (Exception ignored) { }
         if (call != courant) return;
         call.unregisterCallback(callback);
         courant = null;

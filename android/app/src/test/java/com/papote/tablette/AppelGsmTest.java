@@ -50,4 +50,13 @@ public class AppelGsmTest {
         org.junit.Assert.assertFalse(AppelGsm.encoreOuvert(android.telecom.Call.STATE_DISCONNECTING));
         org.junit.Assert.assertFalse(AppelGsm.encoreOuvert(android.telecom.Call.STATE_DISCONNECTED));
     }
+
+    // T-003, 13/11 : raccroché puis rappel aussitôt, le « fin » tardif de l'ancien appel fermait l'écran du nouveau.
+    @Test
+    public void seulLAppelLePlusRecentMetLEcranAJour() {
+        Object ancien = new Object(), nouveau = new Object();
+        org.junit.Assert.assertTrue(AppelGsm.estLAppelSuivi(nouveau, nouveau));
+        org.junit.Assert.assertFalse("ancien appel remplacé : ignoré", AppelGsm.estLAppelSuivi(ancien, nouveau));
+        org.junit.Assert.assertFalse("plus d'appel suivi : ignoré", AppelGsm.estLAppelSuivi(ancien, null));
+    }
 }
