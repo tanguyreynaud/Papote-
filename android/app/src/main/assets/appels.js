@@ -82,11 +82,15 @@ async function loadIceServers() {
       relays = [{ urls: relayUrls, username: conf.username, credential: conf.credential }];
     }
     if (serviceUrl) {
+      // Le jeton est demandé AVANT le compte à rebours, et 8 s au lieu de 5 : en 4G, le jeton plus la
+      // première connexion au service dépassaient 5 s et l'appel partait sur le relais de secours
+      // (T-003, 13/11, carte SIM seule).
+      // Le service des identifiants (Cloudflare) n'en donne qu'aux apps connectées.
+      let token = '';
+      try { token = auth.currentUser ? await auth.currentUser.getIdToken() : ''; } catch (e) { token = ''; }
       const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 5000);
+      const timer = setTimeout(() => ctrl.abort(), 8000);
       try {
-        // Le service des identifiants (Cloudflare) n'en donne qu'aux apps connectées.
-        const token = auth.currentUser ? await auth.currentUser.getIdToken() : '';
         const res = await fetch(serviceUrl, { signal: ctrl.signal, headers: { Authorization: `Bearer ${token}` } });
         if (res.ok) {
           const list = await res.json();
