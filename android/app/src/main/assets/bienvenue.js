@@ -125,12 +125,18 @@
   var guideAudio = null;
   function playGuide(g) {
     if (guideAudio) guideAudio.pause();
-    guideAudio = new Audio('bienvenue/voix/' + g.id + '.mp3');
+    var audio = new Audio('bienvenue/voix/' + g.id + '.mp3');
+    guideAudio = audio;
+    // Fichier de voix absent ou illisible : onerror ET le refus de play() arrivent tous les deux ; la voix
+    // d'Android ne doit parler qu'une fois (balayage --double / --appui, 13/11 : « wifi-cherche » dit deux fois).
+    var dite = false;
     var fallback = function () {
+      if (dite || guideAudio !== audio) return;
+      dite = true;
       try { (android().speakGuide ? android().speakGuide(g.text) : android().speak(g.text)); } catch (e) {}
     };
-    guideAudio.onerror = fallback;
-    var p = guideAudio.play();
+    audio.onerror = fallback;
+    var p = audio.play();
     if (p && p.catch) p.catch(fallback);
   }
   function sayGuide(id, text) {
