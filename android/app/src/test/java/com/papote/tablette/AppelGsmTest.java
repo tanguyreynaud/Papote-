@@ -40,4 +40,14 @@ public class AppelGsmTest {
         assertEquals(3, recuNouvelle.size());
         AppelGsm.ecouter(null, null);
     }
+
+    // T-003, 13/11 : une ligne ne doit jamais rester ouverte après « Raccrocher ».
+    @Test
+    public void unAppelQuiNEstNiFiniNiEnTrainDeFinirEstEncoreOuvert() {
+        org.junit.Assert.assertTrue(AppelGsm.encoreOuvert(android.telecom.Call.STATE_ACTIVE));
+        org.junit.Assert.assertTrue(AppelGsm.encoreOuvert(android.telecom.Call.STATE_HOLDING));
+        org.junit.Assert.assertTrue(AppelGsm.encoreOuvert(android.telecom.Call.STATE_RINGING));
+        org.junit.Assert.assertFalse(AppelGsm.encoreOuvert(android.telecom.Call.STATE_DISCONNECTING));
+        org.junit.Assert.assertFalse(AppelGsm.encoreOuvert(android.telecom.Call.STATE_DISCONNECTED));
+    }
 }

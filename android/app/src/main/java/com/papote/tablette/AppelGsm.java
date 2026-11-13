@@ -79,7 +79,45 @@ public class AppelGsm extends InCallService {
         if (c == null) return false;
         if (c.getState() == Call.STATE_RINGING) c.reject(false, null);
         else c.disconnect();
+        verifierRaccroche(c, 1);
         return true;
+    }
+
+    // Garde-fou (Tanguy, T-003, 13/11 : « le son de mon téléphone sortait encore après avoir raccroché sur
+    // la tablette », non reproduit, Android disait l'appel fini en 1 s) : 3 s après « Raccrocher », un appel
+    // pas encore terminé est raccroché de nouveau, et c'est noté pour Papote. Chez Mamie, une ligne ne doit
+    // jamais rester ouverte.
+    static final long VERIF_RACCROCHE_MS = 3_000;
+    static boolean encoreOuvert(int etat) {
+        return etat != Call.STATE_DISCONNECTED && etat != Call.STATE_DISCONNECTING;
+    }
+
+    private static void verifierRaccroche(Call c, int essai) {
+        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+            try {
+                if (!encoreOuvert(c.getState())) return;
+                Log.w(TAG, "Appel toujours ouvert " + VERIF_RACCROCHE_MS / 1000 + " s après Raccrocher (essai " + essai + ")");
+                if (instance != null) Journal.urgent(instance, "GARDE-FOU : appel téléphone toujours ouvert après « Raccrocher », raccroché de nouveau (" + essai + ")");
+                c.disconnect();
+                if (essai < 3) verifierRaccroche(c, essai + 1);
+            } catch (Exception e) {
+                Log.w(TAG, "Vérification du raccroché", e);
+            }
+        }, VERIF_RACCROCHE_MS);
+    }
+
+    private static AppelGsm instance;
+
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        instance = this;
+    }
+
+    @Override
+    public void onDestroy() {
+        if (instance == this) instance = null;
+        super.onDestroy();
     }
 
     private final Call.Callback callback = new Call.Callback() {
