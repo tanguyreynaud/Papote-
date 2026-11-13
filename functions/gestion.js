@@ -39,6 +39,7 @@ const livraison = require('./livraison');
 const STRIPE_SECRET = defineSecret('STRIPE_SECRET');
 const regles = require('./abonnement');
 const statuts = require('./statuts');
+const simInstallation = require('./sim-installation');
 // Même clé que le chat de support (outils/support/installer-support.bat), jamais dans le dépôt.
 const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
 // Sonnet : recopier montant, date et vendeur d'une facture est simple, et chaque fiche reste « à vérifier ».
@@ -1266,6 +1267,11 @@ exports.gestionStock = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE] }, a
   const d = request.data || {};
   const qui = request.auth.token.email || request.auth.uid;
 
+  // « Installer la carte SIM » (Préparer l'envoi) : ordre à la tablette (tester la carte, retirer le code PIN), puis
+  // relecture du résultat toutes les 3 s (sim-installation.js).
+  if (d.action === 'simOrdre') return simTablette().ordonner({ stock: d.stock || d.id, type: d.type }, qui);
+  if (d.action === 'simEtat') return simTablette().etat({ stock: d.stock || d.id });
+
   // Tablette reçue avant sa facture (« Pas dans la liste » à la réception) : fiche sans achat, que l'installation
   // reprend et que la facture complétera (fichesARattacher).
   if (d.action === 'recue') {
@@ -1641,6 +1647,10 @@ async function completerNumeroTablette(fid, uid) {
   await numeroSurLaFamille({ fid, tabletUid: uid }, fiche ? await numeroDeLaTablette(fiche) : null);
 }
 exports.completerNumeroTablette = completerNumeroTablette;
+
+let simBranche = null;
+const simTablette = () => (simBranche = simBranche || simInstallation.brancher({ db, logger }));
+exports.simTablette = simTablette;
 
 exports.gestionSim = onCall(async (request) => {
   verifierAdmin(request);
@@ -2773,6 +2783,10 @@ async function creerEtiquette(commande, sens, qui, { sansImpression = false } = 
     if (!t && c.formule !== 'wifi') throw new HttpsError('failed-precondition', "Reliez d'abord la tablette à cette commande (Stock).");
     const refusSim = t ? await refusSimAvantDepart(commande, t) : '';
     if (refusSim) throw new HttpsError('failed-precondition', refusSim);
+    // Carte testée dans la tablette (« Installer la carte SIM », 13/11).
+    const ligne = t && t.simId && c.formule !== 'wifi' ? (await db().doc(`sims/${t.simId}`).get()).data() : null;
+    const refusTest = ligne ? simInstallation.refusSimNonTestee(t, ligne) : '';
+    if (refusTest) throw new HttpsError('failed-precondition', refusTest);
   }
   const reglages = lireReglages(reglagesSnap.data());
   const papote = sendcloud.adressePapote(reglages.expediteur);

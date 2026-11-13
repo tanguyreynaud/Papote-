@@ -17,7 +17,7 @@ test('liste des déclencheurs Firestore : tous connus (un nouveau doit être ajo
   assert.deepStrictEqual(declencheurs.map(([n]) => n).sort(), [
     'appelsManques', 'appelsSonnerie', 'commandeModifiee', 'compterProches', 'gestionJumelage', 'jumelageAutomatique',
     'membreAccepte', 'nouveauMembre', 'nouvelleFamille', 'quotaEnvois', 'reveilAppel', 'reveilFamille', 'reveilOrdre',
-    'reveilPing', 'reveilVersion', 'tabletteVoleeSuite', 'telephoneAppels', 'voixEnvoi', 'voixRappel',
+    'reveilPing', 'reveilVersion', 'simInstallation', 'tabletteVoleeSuite', 'telephoneAppels', 'voixEnvoi', 'voixRappel',
   ]);
   // Aucun fichier ne prend les déclencheurs directement chez firebase-functions (sauf base.js qui les enveloppe).
   const directs = fs.readdirSync(__dirname).filter((f) => f.endsWith('.js') && !f.endsWith('.test.js') && f !== 'base.js')

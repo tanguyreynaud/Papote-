@@ -42,13 +42,38 @@ async function tablettePreparee() {
 }
 
 // Carte SIM Lyca reliée à la tablette dans Stock, Cartes SIM : obligatoire avant le premier envoi (offre tout compris).
-async function simSurTablette(tablette) {
+// Puis « Installer la carte SIM » réussi (testee: false pour s'en passer) : le résultat que le déclencheur
+// simInstallation recopie sur la fiche (le vrai aller-retour avec la tablette : sim-installation.parcours.js).
+async function simSurTablette(tablette, { testee = true } = {}) {
   numero += 1;
+  const iccid = `893320${String(numero).padStart(4, '0')}${randomBytes(4).readUInt32BE(0).toString().padStart(10, '0').slice(0, 9)}`;
   const { id } = await s.appeler('gestionSim', { action: 'ajouter', champs: {
     statut: 'active', operateur: 'Lyca', periode: 'jours', numero: `07 45 ${String(numero).padStart(2, '0')} 77 17`, prix: 499, tablette: tablette.fiche,
-    blocages: { surtaxes: true, smsPlus: true, internetPlus: true, etranger: true },
+    iccid, blocages: { surtaxes: true, smsPlus: true, internetPlus: true, etranger: true },
   } }, TANGUY);
+  if (testee) await simTestee(tablette, iccid);
   return id;
+}
+
+// Carte de la tablette testée avec succès (stock/{id}.simTest, comme le recopie simInstallation).
+async function simTestee(tablette, iccid) {
+  await s.db.doc(`stock/${tablette.fiche}`).update({ simTest: {
+    id: `essai-${randomBytes(4).toString('hex')}`, le: Date.now(), etat: 'ok', iccid, mcc: '208', mnc: '20', operateur: 'Lyca',
+    inscrite: true, itinerance: false, donnees: { ok: true, ms: 180 }, simAttendue: iccid, ok: true, copieLe: Date.now(),
+  } });
+}
+
+// La tablette exécute l'ordre de son code (écran Bienvenue) et écrit son résultat (pairings/{code}.simTest).
+async function repondreOrdreSim(t, resultat = {}, { code = t.code, id = null } = {}) {
+  const p = await s.lire(`pairings/${code}`);
+  if (!p || !p.ordre) throw new Error(`Pas d'ordre sur le code ${code}`);
+  await s.db.doc(`pairings/${code}`).update({ simTest: {
+    // Heure du serveur, prise sur l'horloge de la simulation (avancer() ne touche pas aux serverTimestamp de l'émulateur).
+    id: id || p.ordre.id, le: s.Timestamp.fromMillis(Date.now()), iccid: p.ordre.simAttendue, mcc: '208', mnc: '01', operateur: 'Orange',
+    etat: 'ok', inscrite: true, itinerance: false, donnees: { ok: true, ms: 210 }, ...resultat,
+  } });
+  await s.calme();
+  return p.ordre;
 }
 
 // « Préparer l'envoi » dans l'admin (web/js/admin.js, etapesEnvoi), étape par étape, puis « Colis déposé ».
@@ -232,6 +257,6 @@ async function rejoindre(proche, fid, { attente = false } = {}) {
 }
 
 module.exports = {
-  RELAIS, TANGUY, commeAdmin, tablettePreparee, simSurTablette, preparerEtEnvoyer, commanderSurLeSite, commanderEtPayer, commandeDAvant, entrerParInvitation,
+  RELAIS, TANGUY, commeAdmin, tablettePreparee, simSurTablette, simTestee, repondreOrdreSim, preparerEtEnvoyer, commanderSurLeSite, commanderEtPayer, commandeDAvant, entrerParInvitation,
   afficherCode, entrerDansLaFamille, entrerDansFamillePreparee, appelerDepuisLaTablette, installer, envoyer, rejoindre,
 };

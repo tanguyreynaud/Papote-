@@ -276,7 +276,7 @@ const DECLENCHEURS = [
   { chemin: 'families/{fid}/reminders/{rid}', ecriture: ['voixRappel'] },
   { chemin: 'families/{fid}/calls/{cid}', creation: ['appelsSonnerie'], modification: ['appelsManques'] },
   { chemin: 'commandes/{id}', modification: ['commandeModifiee'] },
-  { chemin: 'pairings/{code}', creation: ['jumelageAutomatique'], modification: ['gestionJumelage'] },
+  { chemin: 'pairings/{code}', creation: ['jumelageAutomatique'], modification: ['gestionJumelage', 'simInstallation'] },
 ];
 
 function correspond(modele, chemin) {

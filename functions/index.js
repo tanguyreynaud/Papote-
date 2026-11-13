@@ -50,6 +50,7 @@ const { defineSecret, defineString } = require('firebase-functions/params');
 const admin = require('firebase-admin');
 const regles = require('./abonnement');
 const statuts = require('./statuts');
+const simInstallation = require('./sim-installation');
 const livraison = require('./livraison');
 const mail = require('./mail');
 const sendcloud = require('./sendcloud');
@@ -2598,6 +2599,12 @@ exports.tabletteEnvoyee = onCall(async (request) => {
   const lignes = Object.fromEntries(await Promise.all(simIds.map(async (id) => [id, (await db.doc(`sims/${id}`).get()).data() || null])));
   const refusSim = statuts.refusEnvoiSansSim(snap.data(), fiches.docs.map((d) => d.data()), lignes);
   if (refusSim) throw new HttpsError('failed-precondition', refusSim);
+  // Carte testée par la tablette elle-même (« Installer la carte SIM », 13/11) : sinon la famille la reçoit sans internet.
+  if (snap.get('formule') !== 'wifi') {
+    const t = fiches.docs.map((d) => d.data()).find((x) => ['en-stock', 'preparee', 'envoyee'].includes(x.etat));
+    const refusTest = t ? simInstallation.refusSimNonTestee(t, t.simId ? lignes[t.simId] : null) : '';
+    if (refusTest) throw new HttpsError('failed-precondition', refusTest);
+  }
   // Numéro T-… lu sur la tablette mise dans le carton (A14-4) : deux colis préparés en même temps ne
   // s'échangent pas (la tablette entre seule dans la famille de SA commande).
   const refusTablette = statuts.refusAutreTablette((request.data || {}).tablette, fiches.docs.map((d) => d.data()));
@@ -2953,6 +2960,19 @@ exports.jumelageAutomatique = onDocumentCreated(
   { document: 'pairings/{code}', database: BASE_FIRESTORE, region: REGION_FIRESTORE },
   async (event) => {
     await famillePreparee.jumeler(event.data.ref, event.data.data());
+    // Nouveau code d'une tablette à qui un ordre « carte SIM » n'a pas encore été exécuté : l'ordre y est recopié.
+    await gestion.simTablette().reporter(event.data.ref, event.data.data())
+      .catch((e) => logger.error(`Carte SIM : ordre non reporté sur ${event.params.code}`, e.message));
+  });
+
+// Résultat du test de la carte SIM écrit par la tablette dans son code (pairings/{code}.simTest) : recopié sur sa
+// fiche du stock (stock/{id}.simTest, avec le verdict), que l'admin relit (sim-installation.js).
+exports.simInstallation = onDocumentUpdated(
+  { document: 'pairings/{code}', database: BASE_FIRESTORE, region: REGION_FIRESTORE },
+  async (event) => {
+    const apres = event.data.after.data();
+    if (!apres || !apres.simTest) return;
+    await gestion.simTablette().copier(event.params.code, event.data.before.data(), apres);
   });
 
 // « Comment appelez-vous la personne ? » dans l'appli, la première fois qu'un responsable ouvre une famille préparée.
