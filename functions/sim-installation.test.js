@@ -124,3 +124,15 @@ test('refusSimNonTestee : sans carte, pas testée, test raté, carte changée de
   assert.match(m.refusSimNonTestee({ ref: 'T-003', simId: 's', simTest: { ok: true, simAttendue: '8933150000000005678' } }, ligne), /a changé depuis son test/);
   assert.strictEqual(m.refusSimNonTestee({ ref: 'T-003', simId: 's', simTest: { ok: true, simAttendue: ICCID } }, ligne), '');
 });
+
+test('ordreReporte : un « Retirer le code PIN » reporté devient le test qui le suit (-apres-pin)', () => {
+  const T0 = Date.parse('2026-11-13T10:00:00Z');
+  const pin = m.ordreReporte({ id: 'abc', type: 'simPin', demandeLe: T0, simAttendue: '8933' });
+  assert.strictEqual(pin.id, 'abc-apres-pin');
+  assert.strictEqual(pin.type, 'simTest');
+  assert.strictEqual(pin.simAttendue, '8933');
+  assert.ok(m.repondA({ id: 'abc', type: 'simPin' }, { id: pin.id }), 'le résultat répond à l\'ordre en cours');
+  const test = m.ordreReporte({ id: 'xyz', type: 'simTest', demandeLe: T0, simAttendue: '8933' });
+  assert.strictEqual(test.id, 'xyz');
+  assert.strictEqual(test.type, 'simTest');
+});

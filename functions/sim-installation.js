@@ -80,6 +80,15 @@ function ordreAReporter(simOrdre, code, maintenant) {
     && maintenant - (ms(simOrdre.demandeLe) || 0) < REPORT_MS);
 }
 
+// Ordre tel qu'il est reporté sur un nouveau code. Un « Retirer le code PIN » déjà parti devient le test qui le
+// suit (id « -apres-pin ») : la tablette exécute un ordre une seule fois par id, et son test d'après le PIN échoue
+// s'il vise l'ancien code (fil tablette, 13/11). Si le PIN n'était pas encore retiré, le test le dit (« pin »).
+function ordreReporte(o) {
+  const base = { demandeLe: Timestamp.fromMillis(ms(o.demandeLe) || 0), simAttendue: o.simAttendue };
+  if (o.type === 'simPin') return { id: `${idDeBase(o.id)}${SUFFIXE_PIN}`, type: 'simTest', ...base };
+  return { id: o.id, type: o.type, ...base };
+}
+
 // Résultat écrit par la tablette, gardé champ par champ (les règles l'ont déjà vérifié).
 function resultatPropre(t) {
   if (!t || typeof t !== 'object' || typeof t.id !== 'string' || !ETATS.includes(t.etat)) return null;
@@ -242,7 +251,7 @@ function brancher({ db, logger }) {
       const [snap, f] = await Promise.all([tx.get(ref), tx.get(fiche.ref)]);
       const encore = f.get('simOrdre');
       if (!snap.exists || snap.get('status') !== 'waiting' || !encore || encore.id !== o.id || encore.repondu) return false;
-      tx.update(ref, { ordre: { id: o.id, type: o.type, demandeLe: Timestamp.fromMillis(ms(o.demandeLe)), simAttendue: o.simAttendue } });
+      tx.update(ref, { ordre: ordreReporte(o) });
       tx.update(fiche.ref, { 'simOrdre.code': ref.id, 'simOrdre.codes': FieldValue.arrayUnion(ref.id) });
       return true;
     });
@@ -284,6 +293,6 @@ function brancher({ db, logger }) {
 }
 
 module.exports = {
-  brancher, verdict, memeCarte, pairingPourOrdre, ordreDejaParti, ordreAReporter, resultatPropre, refusSimNonTestee,
+  brancher, verdict, memeCarte, pairingPourOrdre, ordreDejaParti, ordreAReporter, ordreReporte, resultatPropre, refusSimNonTestee,
   idDeBase, repondA, TYPES, ETATS, FRAIS_MS, DOUBLON_MS, REPORT_MS, SUFFIXE_PIN,
 };
