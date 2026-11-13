@@ -19,7 +19,6 @@ import org.robolectric.RobolectricTestRunner;
 import org.robolectric.RuntimeEnvironment;
 import org.robolectric.android.controller.ActivityController;
 import org.robolectric.annotation.Config;
-import org.robolectric.shadows.ShadowLooper;
 
 import java.lang.reflect.Method;
 import java.time.Duration;
@@ -65,7 +64,7 @@ public class AttenteAppelTest {
         Method m = pont.getClass().getMethod("etat", String.class, String.class, boolean.class);
         m.setAccessible(true);
         m.invoke(pont, etat, nom, true);
-        ShadowLooper.idleMainLooper(Duration.ofSeconds(1));
+        shadowOf(android.os.Looper.getMainLooper()).idleFor(Duration.ofSeconds(1));
     }
 
     private static String texte(AppelEnCours a, int id) {
@@ -120,9 +119,9 @@ public class AttenteAppelTest {
     @Test
     public void pageQuiNeRepondPasOnLaMontreApres20s() {
         AppelEnCours a = ouvrir().get();
-        ShadowLooper.idleMainLooper(Duration.ofMillis(AppelEnCours.ATTENTE_MAX_MS - 1000));
+        shadowOf(android.os.Looper.getMainLooper()).idleFor(Duration.ofMillis(AppelEnCours.ATTENTE_MAX_MS - 1000));
         assertTrue("encore l'écran d'appel pendant le chargement normal", a.attenteVisible());
-        ShadowLooper.idleMainLooper(Duration.ofSeconds(2));
+        shadowOf(android.os.Looper.getMainLooper()).idleFor(Duration.ofSeconds(2));
         assertFalse("puis la page (son écran « Pas d'internet » par exemple)", a.attenteVisible());
     }
 
