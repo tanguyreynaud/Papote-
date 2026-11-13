@@ -52,6 +52,95 @@ let stopIncoming = null;
 
 const VIEWS = ['view-moi', 'view-sans-abo', 'view-invite', 'view-abonnement', 'view-profile', 'loading', 'view-login', 'view-link-email', 'view-invited', 'view-pending', 'view-join', 'view-home', 'view-photos', 'view-videos', 'view-messages', 'view-agenda', 'view-settings', 'view-notifs', 'view-support'];
 
+// ---------- Invitations de l'accueil : une seule à la fois ----------
+// Tanguy (13/11) : les cartes « à faire » de l'accueil ne s'empilent plus. Chacune dit seulement si elle est due
+// (badgeDu) ; majBadges montre la plus importante, les autres attendent leur tour (posées invisibles dans la même case,
+// voir .badges dans famille.css). Une carte faite, ou repoussée par « Plus tard », laisse la place à la suivante, mais
+// jamais sous le doigt : la case garde sa hauteur, et la suivante n'arrive qu'une fois le doigt levé depuis un instant.
+// Hors de la file : demandes pour rejoindre, bandeau d'abonnement, nom à donner, tablette en route, « Envoyer une photo ».
+const BADGES = ['notifs-nudge', 'push-nudge', 'pause-nudge', 'contact-encart', 'face-nudge', 'sepa-encart'];
+const BADGE_PAUSE_MS = 700;
+const badgesDus = new Set();
+let badgeMontre = null; // la carte visible
+let badgeEnAttente = false; // une carte vient de partir : la suivante attend que le doigt soit levé
+let badgeTimer = null;
+let badgeDepuis = 0;
+let doigtSurBadges = false;
+let dernierGeste = 0;
+
+function badgeDu(id, du) {
+  if (du) badgesDus.add(id); else badgesDus.delete(id);
+  majBadges();
+}
+
+function poserBadges(visible, dus) {
+  for (const id of BADGES) {
+    $(id).hidden = !dus.includes(id);
+    $(id).classList.toggle('badge-attente', id !== visible);
+  }
+  const compte = $('badges-compte');
+  compte.hidden = !visible || dus.length < 2;
+  compte.textContent = `${dus.indexOf(visible) + 1} / ${dus.length}`;
+  $('badges').classList.toggle('prioritaire', visible === 'notifs-nudge');
+}
+
+function majBadges() {
+  const slot = $('badges');
+  const dus = session?.member?.role === 'tablette' ? [] : BADGES.filter((id) => badgesDus.has(id));
+  const premier = dus[0] || null;
+  // Accueil pas à l'écran : on range tout de suite, sans attente.
+  if ($('view-home').hidden) {
+    clearTimeout(badgeTimer);
+    badgeTimer = null;
+    badgeEnAttente = false;
+    slot.style.minHeight = '';
+    badgeMontre = premier;
+    poserBadges(premier, dus);
+    return;
+  }
+  if (!badgeEnAttente && badgeMontre && premier !== badgeMontre) {
+    const doigt = doigtSurBadges || performance.now() - dernierGeste < BADGE_PAUSE_MS;
+    if (badgesDus.has(badgeMontre) && doigt) {
+      // Une plus importante arrive pendant qu'on touche celle-ci : elle attend que le doigt soit levé.
+      poserBadges(badgeMontre, dus);
+      if (!badgeTimer) badgeTimer = setTimeout(attendreDoigtLeve, 120);
+      return;
+    }
+    // La case garde sa hauteur : les tuiles ne bougent pas quand une carte en remplace une autre.
+    slot.style.minHeight = `${Math.max(slot.offsetHeight, parseFloat(slot.style.minHeight) || 0)}px`;
+    if (!badgesDus.has(badgeMontre)) {
+      // Faite ou « Plus tard » : elle s'en va tout de suite, la suivante attend que le doigt soit levé.
+      badgeMontre = null;
+      badgeEnAttente = true;
+      badgeDepuis = performance.now();
+    }
+  }
+  if (badgeEnAttente) {
+    poserBadges(null, dus);
+    if (!badgeTimer) badgeTimer = setTimeout(attendreDoigtLeve, 120);
+    return;
+  }
+  badgeMontre = premier;
+  poserBadges(premier, dus);
+  // Plus rien à montrer : la case se referme en douceur (une suivante, elle, garde la hauteur jusqu'au départ de l'accueil).
+  if (!premier && slot.style.minHeight) slot.style.minHeight = '0px';
+}
+
+function attendreDoigtLeve() {
+  badgeTimer = null;
+  if (doigtSurBadges || performance.now() - Math.max(badgeDepuis, dernierGeste) < BADGE_PAUSE_MS) {
+    badgeTimer = setTimeout(attendreDoigtLeve, 120);
+    return;
+  }
+  badgeEnAttente = false;
+  majBadges();
+}
+
+$('badges').addEventListener('pointerdown', () => { doigtSurBadges = true; dernierGeste = performance.now(); });
+for (const type of ['pointerup', 'pointercancel']) {
+  window.addEventListener(type, () => { doigtSurBadges = false; dernierGeste = performance.now(); }, true);
+}
+
 let splashNoteTimer = null;
 function show(view) {
   // L'accueil ou un écran de parcours (connexion, rejoindre…) : on redescend sur l'entrée de l'accueil,
@@ -69,6 +158,8 @@ function show(view) {
   document.querySelectorAll('.nav-item').forEach((b) => b.classList.toggle('active', `view-${b.dataset.tab}` === view));
   if (view === 'view-notifs') markNotifsRead();
   window.scrollTo(0, 0);
+  // Retour sur l'accueil : la file repart à neuf (hauteur libérée, la carte du moment tout de suite).
+  majBadges();
 }
 
 function showError(el, message) {
@@ -1736,7 +1827,7 @@ function renderFace() {
   $('face-empty').hidden = !!myFace;
   $('face-remove').hidden = !myFace;
   if (myFace) $('face-img').src = myFace;
-  $('face-nudge').hidden = !!myFace;
+  badgeDu('face-nudge', !myFace);
 }
 
 async function saveFace(face) {
@@ -1834,7 +1925,12 @@ $('face-remove').addEventListener('click', async () => {
   renderFace();
   try { await saveFace(null); } catch (err) { console.error(err); }
 });
-$('face-nudge').addEventListener('click', () => document.querySelector('.nav-item[data-tab="profile"]').click());
+// Le Profil s'ouvre sous le doigt : le 2e appui d'un double appui n'y touche rien (sinon « Galerie » s'ouvrait).
+$('face-nudge').addEventListener('click', () => {
+  document.documentElement.classList.add('sans-appui');
+  setTimeout(() => document.documentElement.classList.remove('sans-appui'), 400);
+  document.querySelector('.nav-item[data-tab="profile"]').click();
+});
 
 // ---------- Nettoyage : rester dans le quota gratuit de Firebase ----------
 // On garde les dernières photos et vidéos ; au-delà, les plus anciennes (plus de 7 jours) sont effacées.
@@ -1889,7 +1985,7 @@ async function renderPhoneCard() {
   push.checked = pushAllowed();
   push.disabled = false;
   if (nativeNotificationsOff()) {
-    $('phone-push-text').textContent = "Votre téléphone ne sonnera pas : Android bloque les notifications de l'app Papote. Touchez la carte rouge de l'accueil pour les autoriser.";
+    $('phone-push-text').textContent = "Votre téléphone ne sonnera pas : Android bloque les notifications de l'app Papote. Touchez la carte indigo de l'accueil pour les autoriser.";
     push.disabled = true;
   } else if (pushAllowed()) {
     $('phone-push-text').textContent = isIos()
@@ -2434,17 +2530,27 @@ $('call-video').addEventListener('click', async () => {
 
 // Notifications : sans elles, la tablette ne peut faire sonner le téléphone que si l'app est ouverte.
 async function renderPushNudge() {
-  const card = $('push-nudge');
-  card.hidden = !session || pushAllowed() || pushRefused() || !await pushSupported();
+  badgeDu('push-nudge', !!session && !pushAllowed() && !pushRefused() && await pushSupported());
   // iPhone : une notification avec un seul son, pas une sonnerie qui dure comme sur Android.
   if (isIos()) $('push-nudge-text').textContent = 'Une notification vous prévient même app fermée, et si la tablette est débranchée';
 }
+let pushEnCours = false;
 $('push-nudge').addEventListener('click', async () => {
+  // Un seul appel à la fois (double appui) ; la carte pâlit pendant que le téléphone demande l'autorisation.
+  if (pushEnCours) return;
+  pushEnCours = true;
+  $('push-nudge').setAttribute('aria-busy', 'true');
   // La carte disparaît dès l'autorisation donnée ; le jeton s'enregistre ensuite en arrière-plan.
-  const ok = await enablePush(session.fid, session.uid, () => {
-    $('push-nudge').hidden = true;
-    toast(`Notifications activées : ${session.family.name} pourra vous appeler`);
-  });
+  let ok = false;
+  try {
+    ok = await enablePush(session.fid, session.uid, () => {
+      badgeDu('push-nudge', false);
+      toast(`Notifications activées : ${session.family.name} pourra vous appeler`);
+    });
+  } finally {
+    pushEnCours = false;
+    $('push-nudge').removeAttribute('aria-busy');
+  }
   renderPushNudge();
   renderPhoneCard();
   if (!ok && pushRefused()) {
@@ -2456,7 +2562,7 @@ $('push-nudge').addEventListener('click', async () => {
 function renderPauseNudge() {
   let pausable = false;
   try { pausable = sessionStorage.getItem('papote.pause') === '1'; } catch (e) { /* rien */ }
-  $('pause-nudge').hidden = !session || !pausable;
+  badgeDu('pause-nudge', !!session && pausable);
 }
 // depuis=reglages : une fois réglé, l'app rouvre Réglages avec ?pause=0 (interrupteur activé).
 function ouvrirReglagePause(depuis) {
@@ -2465,13 +2571,21 @@ function ouvrirReglagePause(depuis) {
   location.href = `intent://sans-pause?depuis=${depuis}#Intent;scheme=papote;package=fr.mapapote.famille;end`;
 }
 $('pause-nudge').addEventListener('click', () => ouvrirReglagePause('accueil'));
-// App Android aux notifications bloquées (?notifs=0) : elle ne peut pas sonner. La carte rouge
+// App Android aux notifications bloquées (?notifs=0) : elle ne peut pas sonner. La carte indigo
 // (un lien intent://notifications, voir telephone/ReglageNotifs) ouvre leur réglage dans Android.
 function renderNotifsNudge() {
   let ouvertParApp = false;
   try { ouvertParApp = sessionStorage.getItem('papote.app') === '1'; } catch (e) { /* rien */ }
-  $('notifs-nudge').hidden = !session || !ouvertParApp || !nativeNotificationsOff();
+  badgeDu('notifs-nudge', !!session && ouvertParApp && nativeNotificationsOff());
 }
+// Elle reste là tant qu'Android n'a pas rouvert l'app avec les notifications permises ; l'appui la fait pâlir
+// 3 secondes, le temps qu'Android ouvre son réglage, et un 2e appui pendant ce temps n'ouvre rien de plus.
+$('notifs-nudge').addEventListener('click', (e) => {
+  const carte = $('notifs-nudge');
+  if (carte.getAttribute('aria-busy') === 'true') { e.preventDefault(); return; }
+  carte.setAttribute('aria-busy', 'true');
+  setTimeout(() => carte.removeAttribute('aria-busy'), 3000);
+});
 // « Plus tard » : la sonnerie s'arrête ici, les autres proches peuvent encore répondre.
 // « Refuser » : l'appel s'arrête tout de suite, la tablette affiche que vous n'avez pas pu répondre.
 $('incoming-decline').addEventListener('click', () => {
@@ -3232,7 +3346,7 @@ function renderSepa() {
   // Mandat signé il y a moins d'une heure : le serveur le note dans quelques secondes.
   const enCours = envoyeLe && Date.now() - envoyeLe < 3600e3;
   const voir = du && Date.now() >= masqueJusqua && !enCours;
-  $('sepa-encart').hidden = !voir;
+  badgeDu('sepa-encart', voir);
   if (!voir) return;
   const nom = fam?.name;
   $('sepa-texte').textContent = `Une carte expire ou change, et le paiement échoue : la tablette${nom ? ` de ${nom}` : ''} risque alors une pause. Avec le prélèvement sur votre compte, plus rien à mettre à jour. Même montant, même date.`;
@@ -4761,7 +4875,7 @@ function noterContact(fid, tel) {
 function renderContact() {
   const tel = numeroTablette();
   const voir = !!(session?.fid && tel && session.member && session.member.role !== 'tablette' && lireContact()[session.fid] !== tel);
-  $('contact-encart').hidden = !voir;
+  badgeDu('contact-encart', voir);
   if (!voir) return;
   const nom = session.family.name;
   $('contact-titre').textContent = `Enregistrez le numéro de ${nom}`;
@@ -5133,6 +5247,9 @@ function stopSession() {
   stopAgenda();
   stopNotifs();
   session = null;
+  // Autre compte ou autre famille ensuite : ses invitations seront recalculées.
+  badgesDus.clear();
+  majBadges();
 }
 
 function showLoginError(message) {

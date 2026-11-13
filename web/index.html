@@ -293,16 +293,6 @@
         </form>
         </div>
       </div>
-      <!-- Passer de la carte au prélèvement SEPA (Tanguy 10/11) : responsables, 15 jours après le premier prélèvement par carte. -->
-      <section id="sepa-encart" class="sepa-encart" aria-labelledby="sepa-titre" hidden>
-        <h2 id="sepa-titre">Plus jamais de souci de carte</h2>
-        <p id="sepa-texte"></p>
-        <div class="sepa-actions">
-          <button type="button" id="sepa-oui" class="primary">Passer au prélèvement</button>
-          <button type="button" id="sepa-plus-tard" class="secondary">Plus tard</button>
-        </div>
-        <p id="sepa-erreur" class="sepa-erreur" role="alert" hidden></p>
-      </section>
       <!-- Famille préparée dès la commande : le nom d'abord, puis la tablette arrive toute seule. -->
       <form id="nom-prepare" class="card" hidden novalidate>
         <p class="seen small">Votre espace famille est prêt</p>
@@ -321,31 +311,46 @@
         <span class="avatar photo-cta-icon" aria-hidden="true"><svg><use href="#i-camera"/></svg></span>
         <span><strong>Envoyer une photo</strong><br><span class="small">Elle s'affiche sur la tablette de <span class="grand-name"></span></span></span>
       </button>
-      <!-- Mamie appelle par la carte SIM (Tanguy 12/11, M8) : son numéro s'affiche, à enregistrer pour décrocher. -->
-      <section id="contact-encart" class="card contact-encart" aria-labelledby="contact-titre" hidden>
-        <h2 id="contact-titre"></h2>
-        <p id="contact-texte"></p>
-        <div class="contact-actions">
-          <button type="button" id="contact-oui" class="primary">Enregistrer le numéro</button>
-          <button type="button" id="contact-fait" class="secondary">C'est déjà fait</button>
-        </div>
-      </section>
-      <button type="button" id="face-nudge" class="card nudge" hidden>
-        <span class="avatar avatar-empty"><svg><use href="#i-user"/></svg></span>
-        <span><strong>Ajoutez votre photo</strong><br><span class="muted small">Pour que <span class="grand-name"></span> vous reconnaisse</span></span>
-      </button>
-      <a id="notifs-nudge" class="card nudge alerte" href="intent://notifications#Intent;scheme=papote;package=fr.mapapote.famille;end" hidden>
-        <span class="avatar avatar-empty" aria-hidden="true">&#128277;</span>
-        <span><strong>Votre téléphone ne sonnera pas</strong><br><span class="small">Android bloque les notifications de Papote : <span class="grand-name"></span> ne pourra pas vous appeler. Touchez ici pour les autoriser.</span></span>
-      </a>
-      <button type="button" id="push-nudge" class="card nudge" hidden>
-        <span class="avatar avatar-empty" aria-hidden="true">&#128276;</span>
-        <span><strong>Recevoir les appels de <span class="grand-name"></span></strong><br><span class="muted small" id="push-nudge-text">Votre téléphone sonnera même app fermée, et vous serez prévenu si la tablette est débranchée</span></span>
-      </button>
-      <button type="button" id="pause-nudge" class="card nudge" hidden>
-        <span class="avatar avatar-empty" aria-hidden="true">&#128241;</span>
-        <span><strong>Empêcher Android de mettre Papote en pause</strong><br><span class="muted small">Sinon, votre téléphone pourrait ne plus sonner. Touchez ici, puis tout en bas, désactivez « Suspendre l'activité… »</span></span>
-      </button>
+      <!-- Invitations de l'accueil (Tanguy 13/11) : une seule visible à la fois, la plus importante d'abord ;
+           l'ordre ici est celui de la file (famille.js, majBadges). -->
+      <div id="badges" class="badges">
+        <span id="badges-compte" class="badges-compte" hidden></span>
+        <a id="notifs-nudge" class="card nudge prioritaire" data-badge href="intent://notifications#Intent;scheme=papote;package=fr.mapapote.famille;end" hidden>
+          <span class="avatar avatar-empty" aria-hidden="true">&#128277;</span>
+          <span><strong>Votre téléphone ne sonnera pas</strong><br><span class="small">Android bloque les notifications de Papote : <span class="grand-name"></span> ne pourra pas vous appeler. Touchez ici pour les autoriser.</span></span>
+        </a>
+        <button type="button" id="push-nudge" class="card nudge" data-badge hidden>
+          <span class="avatar avatar-empty" aria-hidden="true">&#128276;</span>
+          <span><strong>Recevoir les appels de <span class="grand-name"></span></strong><br><span class="muted small" id="push-nudge-text">Votre téléphone sonnera même app fermée, et vous serez prévenu si la tablette est débranchée</span></span>
+        </button>
+        <button type="button" id="pause-nudge" class="card nudge" data-badge hidden>
+          <span class="avatar avatar-empty" aria-hidden="true">&#128241;</span>
+          <span><strong>Empêcher Android de mettre Papote en pause</strong><br><span class="muted small">Sinon, votre téléphone pourrait ne plus sonner. Touchez ici, puis tout en bas, désactivez « Suspendre l'activité… »</span></span>
+        </button>
+        <!-- Mamie appelle par la carte SIM (Tanguy 12/11, M8) : son numéro s'affiche, à enregistrer pour décrocher. -->
+        <section id="contact-encart" class="card contact-encart" data-badge aria-labelledby="contact-titre" hidden>
+          <h2 id="contact-titre"></h2>
+          <p id="contact-texte"></p>
+          <div class="contact-actions">
+            <button type="button" id="contact-oui" class="primary">Enregistrer le numéro</button>
+            <button type="button" id="contact-fait" class="secondary">C'est déjà fait</button>
+          </div>
+        </section>
+        <button type="button" id="face-nudge" class="card nudge" data-badge hidden>
+          <span class="avatar avatar-empty"><svg><use href="#i-user"/></svg></span>
+          <span><strong>Ajoutez votre photo</strong><br><span class="muted small">Pour que <span class="grand-name"></span> vous reconnaisse</span></span>
+        </button>
+        <!-- Passer de la carte au prélèvement SEPA (Tanguy 10/11) : responsables, 15 jours après le premier prélèvement par carte. -->
+        <section id="sepa-encart" class="sepa-encart" data-badge aria-labelledby="sepa-titre" hidden>
+          <h2 id="sepa-titre">Plus jamais de souci de carte</h2>
+          <p id="sepa-texte"></p>
+          <div class="sepa-actions">
+            <button type="button" id="sepa-oui" class="primary">Passer au prélèvement</button>
+            <button type="button" id="sepa-plus-tard" class="secondary">Plus tard</button>
+          </div>
+          <p id="sepa-erreur" class="sepa-erreur" role="alert" hidden></p>
+        </section>
+      </div>
       <div class="tiles">
         <a class="tile t-phone" id="tile-phone" href="tel:" hidden>
           <svg class="tile-icon"><use href="#i-phone"/></svg><span>Appeler</span>
