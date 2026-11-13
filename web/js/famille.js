@@ -54,16 +54,18 @@ const VIEWS = ['view-moi', 'view-sans-abo', 'view-invite', 'view-abonnement', 'v
 
 // ---------- Invitations de l'accueil : une seule à la fois ----------
 // Tanguy (13/11) : les cartes « à faire » de l'accueil ne s'empilent plus. Chacune dit seulement si elle est due
-// (badgeDu) ; majBadges montre la plus importante, les autres attendent leur tour (posées invisibles dans la même case,
-// voir .badges dans famille.css). Une carte faite, ou repoussée par « Plus tard », laisse la place à la suivante, mais
-// jamais sous le doigt : la case garde sa hauteur, et la suivante n'arrive qu'une fois le doigt levé depuis un instant.
+// (badgeDu) ; majBadges montre la plus importante, chacune à sa taille. Une carte faite, ou repoussée par « Plus tard »,
+// part tout de suite ; sa place reste vide, à sa hauteur, tant que le doigt est posé et un instant après (700 ms). Puis
+// la suivante arrive et la place passe en douceur (250 ms) à sa hauteur : les tuiles glissent, jamais sous le doigt.
 // Hors de la file : demandes pour rejoindre, bandeau d'abonnement, nom à donner, tablette en route, « Envoyer une photo ».
 const BADGES = ['notifs-nudge', 'push-nudge', 'pause-nudge', 'contact-encart', 'face-nudge', 'sepa-encart'];
 const BADGE_PAUSE_MS = 700;
+const BADGE_GLISSE_MS = 250;
 const badgesDus = new Set();
 let badgeMontre = null; // la carte visible
 let badgeEnAttente = false; // une carte vient de partir : la suivante attend que le doigt soit levé
 let badgeTimer = null;
+let badgeGlisse = null;
 let badgeDepuis = 0;
 let doigtSurBadges = false;
 let dernierGeste = 0;
@@ -74,42 +76,66 @@ function badgeDu(id, du) {
 }
 
 function poserBadges(visible, dus) {
-  for (const id of BADGES) {
-    $(id).hidden = !dus.includes(id);
-    $(id).classList.toggle('badge-attente', id !== visible);
-  }
+  for (const id of BADGES) $(id).hidden = id !== visible;
   const compte = $('badges-compte');
   compte.hidden = !visible || dus.length < 2;
   compte.textContent = `${dus.indexOf(visible) + 1} / ${dus.length}`;
   $('badges').classList.toggle('prioritaire', visible === 'notifs-nudge');
 }
 
+// La place des cartes tenue à cette hauteur (vide, ou la carte rognée par le bas pendant qu'elle glisse).
+function figerCase(hauteur) {
+  clearTimeout(badgeGlisse);
+  const slot = $('badges');
+  slot.style.transition = 'none';
+  slot.style.height = `${hauteur}px`;
+  slot.classList.add('figee');
+}
+function libererCase() {
+  clearTimeout(badgeGlisse);
+  const slot = $('badges');
+  slot.style.transition = '';
+  slot.style.height = '';
+  slot.classList.remove('figee');
+}
+// De la hauteur d'avant à celle de la carte qui vient d'arriver (ou à rien), en douceur.
+function glisserCase(depart) {
+  const slot = $('badges');
+  libererCase();
+  const arrivee = slot.offsetHeight;
+  if (Math.abs(arrivee - depart) < 1) return;
+  figerCase(depart);
+  void slot.offsetHeight;
+  slot.style.transition = `height ${BADGE_GLISSE_MS}ms ease-in-out`;
+  slot.style.height = `${arrivee}px`;
+  badgeGlisse = setTimeout(libererCase, BADGE_GLISSE_MS + 50);
+}
+
 function majBadges() {
   const slot = $('badges');
   const dus = session?.member?.role === 'tablette' ? [] : BADGES.filter((id) => badgesDus.has(id));
   const premier = dus[0] || null;
-  // Accueil pas à l'écran : on range tout de suite, sans attente.
+  // Accueil pas à l'écran : on range tout de suite, sans attente ni glissement.
   if ($('view-home').hidden) {
     clearTimeout(badgeTimer);
     badgeTimer = null;
     badgeEnAttente = false;
-    slot.style.minHeight = '';
+    libererCase();
     badgeMontre = premier;
     poserBadges(premier, dus);
     return;
   }
   if (!badgeEnAttente && badgeMontre && premier !== badgeMontre) {
     const doigt = doigtSurBadges || performance.now() - dernierGeste < BADGE_PAUSE_MS;
-    if (badgesDus.has(badgeMontre) && doigt) {
-      // Une plus importante arrive pendant qu'on touche celle-ci : elle attend que le doigt soit levé.
-      poserBadges(badgeMontre, dus);
-      if (!badgeTimer) badgeTimer = setTimeout(attendreDoigtLeve, 120);
-      return;
-    }
-    // La case garde sa hauteur : les tuiles ne bougent pas quand une carte en remplace une autre.
-    slot.style.minHeight = `${Math.max(slot.offsetHeight, parseFloat(slot.style.minHeight) || 0)}px`;
-    if (!badgesDus.has(badgeMontre)) {
-      // Faite ou « Plus tard » : elle s'en va tout de suite, la suivante attend que le doigt soit levé.
+    if (doigt) {
+      if (badgesDus.has(badgeMontre)) {
+        // Une plus importante arrive pendant qu'on touche celle-ci : rien ne change avant que le doigt soit levé.
+        poserBadges(badgeMontre, dus);
+        if (!badgeTimer) badgeTimer = setTimeout(attendreDoigtLeve, 120);
+        return;
+      }
+      // Faite ou « Plus tard » : elle s'en va tout de suite, sa place reste à sa hauteur le temps de lever le doigt.
+      figerCase(slot.offsetHeight);
       badgeMontre = null;
       badgeEnAttente = true;
       badgeDepuis = performance.now();
@@ -120,10 +146,12 @@ function majBadges() {
     if (!badgeTimer) badgeTimer = setTimeout(attendreDoigtLeve, 120);
     return;
   }
+  const depart = slot.offsetHeight;
+  // Autre carte, ou fin d'une attente (place tenue vide) : on glisse vers la nouvelle hauteur.
+  const change = premier !== badgeMontre || slot.classList.contains('figee');
   badgeMontre = premier;
   poserBadges(premier, dus);
-  // Plus rien à montrer : la case se referme en douceur (une suivante, elle, garde la hauteur jusqu'au départ de l'accueil).
-  if (!premier && slot.style.minHeight) slot.style.minHeight = '0px';
+  if (change) glisserCase(depart);
 }
 
 function attendreDoigtLeve() {
@@ -158,7 +186,7 @@ function show(view) {
   document.querySelectorAll('.nav-item').forEach((b) => b.classList.toggle('active', `view-${b.dataset.tab}` === view));
   if (view === 'view-notifs') markNotifsRead();
   window.scrollTo(0, 0);
-  // Retour sur l'accueil : la file repart à neuf (hauteur libérée, la carte du moment tout de suite).
+  // Retour sur l'accueil : la file repart à neuf (la carte du moment tout de suite, à sa taille).
   majBadges();
 }
 
@@ -4835,6 +4863,8 @@ export function vcardTablette(nom, tel) {
 function enregistrerContact(nom, tel, bouton) {
   bouton.disabled = true;
   const texte = bouton.textContent;
+  // « Un instant… » tient sur une ligne : le bouton garde sa hauteur, rien ne bouge en dessous.
+  bouton.style.minHeight = `${bouton.offsetHeight}px`;
   bouton.textContent = 'Un instant…';
   try {
     const url = URL.createObjectURL(new Blob([vcardTablette(nom, tel)], { type: 'text/vcard' }));
@@ -4852,7 +4882,7 @@ function enregistrerContact(nom, tel, bouton) {
     console.error(e);
     notice("La fiche contact n'a pas pu être créée. Notez le numéro : " + tel);
   } finally {
-    setTimeout(() => { bouton.disabled = false; bouton.textContent = texte; }, 1500);
+    setTimeout(() => { bouton.disabled = false; bouton.textContent = texte; bouton.style.minHeight = ''; }, 1500);
   }
 }
 

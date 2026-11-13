@@ -844,15 +844,14 @@ button:disabled { opacity: .45; cursor: default; }
 .nudge.prioritaire .avatar-empty { background: rgba(255, 255, 255, .16); border-color: rgba(255, 255, 255, .5); color: #fff; }
 /* Appui pris en compte (réglage d'Android en train de s'ouvrir) : la carte pâlit, un 2e appui ne fait rien. */
 .nudge[aria-busy="true"] { opacity: .6; }
-/* Invitations de l'accueil (Tanguy 13/11) : une seule visible ; celles qui attendent leur tour sont posées dans la
-   même case, invisibles, pour que la case ait déjà la hauteur de la plus grande et que les tuiles ne bougent pas
-   quand l'une remplace l'autre (famille.js, majBadges). */
-.badges { position: relative; display: grid; transition: min-height .3s ease; }
-.badges > [data-badge] { grid-area: 1 / 1; margin: 0 0 16px; }
-.badges > .badge-attente { visibility: hidden; pointer-events: none; }
+/* Invitations de l'accueil (Tanguy 13/11) : une seule visible, à sa taille. Pendant un remplacement, la place est tenue
+   à une hauteur (famille.js, figerCase) qui glisse ensuite vers celle de la suivante ; ce qui dépasse en bas est rogné
+   (le petit compteur du haut et l'ombre restent visibles). */
+.badges { position: relative; display: grid; }
+.badges > [data-badge] { margin: 0 0 16px; }
+.badges.figee { clip-path: inset(-24px -24px 0 -24px); }
 /* Page ouverte par une carte : le 2e appui d'un double appui ne touche rien dessous (famille.js, face-nudge). */
 .sans-appui body { pointer-events: none; }
-.badges > .contact-encart, .badges > .sepa-encart { display: flex; flex-direction: column; justify-content: center; }
 /* « 1 / 3 » : petit compteur posé sur le bord haut de la carte visible, quand d'autres attendent. */
 .badges-compte { position: absolute; top: -10px; right: 16px; z-index: 1; padding: 1px 9px; border-radius: 999px; border: 1px solid var(--line); background: var(--bg); color: var(--muted); font-size: 12px; font-weight: 700; line-height: 17px; font-variant-numeric: tabular-nums; pointer-events: none; }
 .badges.prioritaire .badges-compte { background: #fdfaf5; color: #4f46e5; border-color: #4f46e5; }

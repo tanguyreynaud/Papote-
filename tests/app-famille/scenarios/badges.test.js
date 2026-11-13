@@ -4,7 +4,8 @@
 // Dans la vraie vie, les deux premières et la 3e ne se croisent pas : « Recevoir les appels » est pour le navigateur,
 // les notifications bloquées et la mise en pause pour l'app Android. D'où deux enchaînements : 1 → 3 → 4 → 5 → 6
 // (app Android) et 2 → 4 → 6 (navigateur). À chaque fois : une seule carte visible à tout moment (relevé à chaque image),
-// le compteur « 1 / N », le double appui qui ne fait qu'une chose, les tuiles qui ne bougent pas d'un pixel.
+// le compteur « 1 / N », le double appui qui ne fait qu'une chose. Chaque carte garde sa taille : les tuiles ne bougent
+// jamais pendant un toucher ni dans l'instant qui suit (700 ms), puis glissent en douceur (au plus PAS_MAX px par image).
 
 const test = require('node:test');
 const assert = require('node:assert');
@@ -19,12 +20,17 @@ banc.brancher();
 const BADGES = ['notifs-nudge', 'push-nudge', 'pause-nudge', 'contact-encart', 'face-nudge', 'sepa-encart'];
 const JETON = 'cJetonBadges:APA91b' + 'B'.repeat(140);
 const JOUR = 24 * 3600 * 1000;
+// Glissement de 250 ms : jusqu'à ~200 px de différence entre deux cartes, soit ~15 px par image en moyenne (60 images/s),
+// davantage au milieu (ease-in-out) ; au-delà de 40 px d'une image à l'autre, c'est un saut.
+const PAS_MAX = 40;
+const ATTENTE_MIN_MS = 600; // la place ne bouge pas avant (700 ms après le doigt levé, moins la marge du relevé)
 const capture = (t, nom) => t.page.screenshot({ path: path.join(__dirname, '..', 'captures', 'badges', `${nom}.png`) });
 
-// Relevé à chaque image : le plus grand nombre de cartes visibles en même temps, et la position des tuiles.
+// Relevé à chaque image : le plus grand nombre de cartes visibles en même temps, et le mouvement des tuiles (plus grand
+// pas d'une image à l'autre, nombre d'images où elles bougent, premier mouvement depuis le début du relevé).
 async function surveiller(t) {
   await t.page.evaluate((ids) => {
-    window.__releve = { max: 0, tMin: Infinity, tMax: -Infinity, images: 0 };
+    window.__releve = { max: 0, tMin: Infinity, tMax: -Infinity, images: 0, pasMax: 0, imagesMvt: 0, premier: null, debut: performance.now(), y: null };
     if (window.__surveille) return;
     window.__surveille = true;
     const vu = (e) => !!e && e.checkVisibility({ visibilityProperty: true, checkVisibilityCSS: true });
@@ -34,12 +40,28 @@ async function surveiller(t) {
         r.images++;
         r.max = Math.max(r.max, ids.filter((id) => vu(document.getElementById(id))).length);
         const y = document.querySelector('.tiles').getBoundingClientRect().top + window.scrollY;
+        if (r.y !== null && Math.abs(y - r.y) >= 0.5) {
+          r.pasMax = Math.max(r.pasMax, Math.abs(y - r.y));
+          r.imagesMvt++;
+          if (r.premier === null) r.premier = performance.now() - r.debut;
+        }
+        r.y = y;
         r.tMin = Math.min(r.tMin, y);
         r.tMax = Math.max(r.tMax, y);
       }
       requestAnimationFrame(image);
     })();
   }, BADGES);
+}
+/** Les tuiles n'ont bougé qu'après l'attente, et en glissant (pas de saut). */
+function glissement(r, nom) {
+  assert.ok(r.images > 5, 'relevé actif');
+  assert.ok(r.pasMax <= PAS_MAX, `tuiles : saut de ${r.pasMax.toFixed(1)} px en une image (${nom})`);
+  const course = r.tMax - r.tMin;
+  if (course >= 0.5) {
+    assert.ok(r.premier >= ATTENTE_MIN_MS, `tuiles parties ${Math.round(r.premier)} ms après le geste, avant le doigt levé (${nom})`);
+    if (course > PAS_MAX) assert.ok(r.imagesMvt >= 3, `glissement en ${r.imagesMvt} images (${nom})`);
+  }
 }
 const releve = (t) => t.page.evaluate(() => window.__releve);
 
@@ -61,13 +83,13 @@ async function seule(t, id, compte) {
   assert.deepStrictEqual(await visibles(t), [id], `seule ${id} est visible`);
 }
 
-/** Après un geste qui fait partir une carte : aucune carte, puis la suivante une fois le doigt levé ; tuiles immobiles. */
+/** Après un geste qui fait partir une carte : aucune carte, puis la suivante une fois le doigt levé, les tuiles qui glissent. */
 async function remplacee(t, id, compte, nom) {
   await seule(t, id, compte);
+  await t.page.waitForTimeout(400); // fin du glissement
   const r = await releve(t);
   assert.strictEqual(r.max, 1, `jamais deux cartes à la fois (${nom})`);
-  assert.ok(r.images > 5, 'relevé actif');
-  assert.ok(r.tMax - r.tMin < 0.5, `tuiles immobiles (${nom}) : ${r.tMin} → ${r.tMax}`);
+  glissement(r, nom);
 }
 
 async function famillePayee(t) {
@@ -163,9 +185,12 @@ test('App Android : notifications bloquées → pause → numéro → photo → 
   assert.deepStrictEqual(await visibles(julie), []);
   assert.strictEqual(await julie.page.locator('#badges-compte').isVisible(), false);
   assert.strictEqual(g.nbAppels('passerAuSepa'), 0, 'le 2e appui n\'a pas touché « Passer au prélèvement »');
-  assert.strictEqual((await releve(julie)).max, 1);
-  // Plus rien de dû : la case se referme (en douceur), rien ne reste réservé.
+  // Plus rien de dû : la place se referme en glissant, rien ne reste réservé.
   await julie.page.waitForFunction(() => document.getElementById('badges').offsetHeight === 0);
+  const fin = await releve(julie);
+  assert.strictEqual(fin.max, 1);
+  glissement(fin, 'prélèvement → rien');
+  assert.ok(fin.tMax - fin.tMin > 50, 'les tuiles sont remontées');
   await capture(julie, '6-plus-rien');
 });
 
@@ -201,6 +226,7 @@ test('Navigateur : « Recevoir les appels » → numéro → prélèvement ; dou
   // 2. « Recevoir les appels de Mamie Emma » : une seule demande d'autorisation, la carte pâlit pendant la question.
   await seule(julie, 'push-nudge', '1 / 3');
   await capture(julie, '2-push');
+  await surveiller(julie);
   await g.doubleAppui(julie, '#push-nudge');
   assert.strictEqual(await julie.page.locator('#push-nudge').getAttribute('aria-busy'), 'true');
   await g.toast(julie, 'Notifications activées');
@@ -241,8 +267,10 @@ test('Rien de dû : aucune carte ; une plus importante qui arrive sous le doigt 
   // La photo retirée : « Ajoutez votre photo », seule, sans compteur.
   await sansPhoto(fid, uid);
   await seule(julie, 'face-nudge', null);
+  await julie.page.waitForTimeout(400); // la place a fini de s'ouvrir
 
   // Le doigt posé sur la carte, la tablette reçoit son numéro (plus important) : rien ne change sous le doigt.
+  await surveiller(julie);
   const { x, y } = await g.centre(julie, '#face-nudge');
   const cdp = await julie.context.newCDPSession(julie.page);
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
@@ -250,8 +278,10 @@ test('Rien de dû : aucune carte ; une plus importante qui arrive sous le doigt 
   await julie.page.locator('#badges-compte', { hasText: '/ 2' }).waitFor();
   await julie.page.waitForTimeout(1500);
   assert.deepStrictEqual(await visibles(julie), ['face-nudge'], 'toujours la même carte sous le doigt');
+  const pendant = await releve(julie);
+  assert.ok(pendant.images > 5 && pendant.tMax - pendant.tMin < 0.5, `tuiles immobiles sous le doigt : ${pendant.tMin} → ${pendant.tMax}`);
   await surveiller(julie);
-  // Le doigt glisse et se lève sans toucher (pas de clic) : le numéro prend la place, tuiles immobiles.
+  // Le doigt glisse et se lève sans toucher (pas de clic) : le numéro prend la place, les tuiles glissent ensuite.
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
   await cdp.detach().catch(() => {});
   await remplacee(julie, 'contact-encart', '1 / 2', 'photo → numéro (plus important)');
