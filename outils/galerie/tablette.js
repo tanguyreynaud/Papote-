@@ -103,10 +103,11 @@ const RAPPEL_RDV = { id: 'r2', kind: 'rdv', title: 'Docteur Martin', time: '11:0
 
 // Les proches avec leur numéro de téléphone (members/{uid}.telephone) : la tablette à carte SIM les appelle par la ligne.
 const AVEC_TEL = PROCHES.map((p, i) => ({ ...p, tel: ['0612345678', '0687654321', '0756781234', '0611223344', '0622334455'][i], responsable: i === 0 }));
+const BEAUCOUP_TEL = BEAUCOUP.map((p, i) => ({ ...p, tel: `06${String(12000000 + i * 1111).padStart(8, '0')}`, responsable: i === 0 }));
 const BDAY_LEO = [{ id: 'b1', name: 'Léo', day: 26, month: 10, year: 2019 }];
 const RADIO = { radio: { nom: 'France Bleu', url: 'http://127.0.0.1/radio-fausse.webm' } };
 
-// Mamie appelle Julie (choix de la personne), par internet ou par la carte SIM selon la scène.
+// Mamie appelle Julie (choix de la personne), par la carte SIM.
 async function appelerJulie(t, extra) {
   await accueil(t, photosVues(), extra); await t.cliquer('.call-btn.big-btn');
   await t.page.locator('.call-person').first().click(); await t.attendre(300);
@@ -436,35 +437,24 @@ const SCENES = [
     await accueil(t, photosVues(), { birthdays: [{ id: 'b3', name: 'Léo', day: 26, month: 10, year: 2019, photo: fauxVisage('Léo', 3) }] }); await t.attendre(400);
   } },
 
-  // Appels de Mamie par internet (tablette Wi-Fi, ou proche sans numéro)
-  { groupe: 'Appeler par internet', titre: 'Qui voulez-vous appeler ?', faire: async (t) => {
-    await accueil(t, photosVues()); await t.cliquer('.call-btn.big-btn'); await t.attendre(400);
+  // Choisir qui appeler. Décision du 13/11 : toute tablette a une carte SIM, « Appeler » ne propose que les
+  // proches qui ont un numéro (plus d'appel sortant par internet) ; sans aucun, le bouton est caché (le SOS reste).
+  { groupe: 'Qui appeler', titre: 'Qui voulez-vous appeler ?', faire: async (t) => {
+    await parTelephone(t); await accueil(t, photosVues(), { people: AVEC_TEL }); await t.cliquer('.call-btn.big-btn'); await t.attendre(400);
   } },
-  { groupe: 'Appeler par internet', titre: 'Qui appeler : famille de 20 proches (page 1, flèches)', faire: async (t) => {
-    await accueil(t, photosVues(), { people: BEAUCOUP }); await t.cliquer('.call-btn.big-btn'); await t.attendre(400);
+  { groupe: 'Qui appeler', titre: 'Qui appeler : famille de 20 proches (page 1, flèches)', faire: async (t) => {
+    await parTelephone(t); await accueil(t, photosVues(), { people: BEAUCOUP_TEL }); await t.cliquer('.call-btn.big-btn'); await t.attendre(400);
   } },
-  { groupe: 'Appeler par internet', titre: 'Qui appeler : famille de 20 proches (dernière page)', faire: async (t) => {
-    await accueil(t, photosVues(), { people: BEAUCOUP }); await t.cliquer('.call-btn.big-btn'); await t.attendre(400);
+  { groupe: 'Qui appeler', titre: 'Qui appeler : famille de 20 proches (dernière page)', faire: async (t) => {
+    await parTelephone(t); await accueil(t, photosVues(), { people: BEAUCOUP_TEL }); await t.cliquer('.call-btn.big-btn'); await t.attendre(400);
     for (let i = 0; i < 6; i++) await t.cliquer('.call-arrow.right').catch(() => {});
     await t.attendre(300);
   } },
-  { groupe: 'Appeler par internet', titre: 'Qui appeler : une seule personne', faire: async (t) => {
-    await accueil(t, photosVues(), { people: PROCHES.slice(0, 1) }); await t.cliquer('.call-btn.big-btn'); await t.attendre(400);
+  { groupe: 'Qui appeler', titre: 'Qui appeler : une seule personne', faire: async (t) => {
+    await parTelephone(t); await accueil(t, photosVues(), { people: AVEC_TEL.slice(0, 1) }); await t.cliquer('.call-btn.big-btn'); await t.attendre(400);
   } },
-  { groupe: 'Appeler par internet', titre: 'Qui appeler : personne à appeler', faire: async (t) => {
-    await accueil(t, photosVues(), { people: [] }); await t.cliquer('.call-btn.big-btn'); await t.attendre(400);
-  } },
-  { groupe: 'Appeler par internet', titre: 'Appel vers Julie : ça part', faire: async (t) => { await appelerJulie(t); } },
-  { groupe: 'Appeler par internet', titre: 'Appel vers Julie : ça sonne', faire: async (t) => { await appelerJulie(t); await t.appel('ringing'); await t.attendre(400); } },
-  { groupe: 'Appeler par internet', titre: 'Appel en cours avec Julie', faire: async (t) => { await appelerJulie(t); await t.appel('connected', { name: 'Julie' }); await t.attendre(400); } },
-  { groupe: 'Appeler par internet', titre: 'Julie passe en vidéo (Mamie peut raccrocher)', faire: async (t) => { await appelerJulie(t); await t.appel('connected', { name: 'Julie' }); await visio(t, 'video-mamie'); } },
-  { groupe: 'Appeler par internet', titre: 'Appel terminé', faire: async (t) => { await appelerJulie(t); await t.appel('connected', { name: 'Julie' }); await t.appel('ended'); await t.attendre(400); } },
-  { groupe: 'Appeler par internet', titre: 'Julie n’a pas pu répondre', faire: async (t) => { await appelerJulie(t); await t.appel('missed'); await t.attendre(400); } },
-  { groupe: 'Appeler par internet', titre: 'Julie est déjà en ligne', faire: async (t) => { await appelerJulie(t); await t.appel('busy'); await t.attendre(400); } },
-  { groupe: 'Appeler par internet', titre: 'L’appel n’a pas pu partir', faire: async (t) => { await appelerJulie(t); await t.appel('failed'); await t.attendre(400); } },
-  { groupe: 'Appeler par internet', titre: 'L’appel n’est pas encore disponible', note: 'Les appels ne sont pas encore chargés (démarrage sans internet).', faire: async (t) => {
-    await accueil(t, photosVues()); await t.page.evaluate(() => { delete window.papoteCallFamily; });
-    await t.cliquer('.call-btn.big-btn'); await t.page.locator('.call-person').first().click(); await t.attendre(400);
+  { groupe: 'Qui appeler', titre: 'Aucun proche avec un numéro : pas de bouton « Appeler »', note: 'Le SOS reste.', faire: async (t) => {
+    await parTelephone(t); await accueil(t, photosVues()); await t.attendre(400);
   } },
 
   // Appels de Mamie par la carte SIM (chantier téléphone, 29/10)
