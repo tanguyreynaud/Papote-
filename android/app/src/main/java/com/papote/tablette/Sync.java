@@ -332,6 +332,7 @@ final class Sync {
         prefs.edit().remove("photosGardees").apply();
         prefs.edit().remove("ecrituresEnAttente").apply(); // écritures pour l'ancienne famille
         prefs.edit().remove("pushJetonEcrit").apply(); // le jeton push sera réécrit dans la nouvelle famille
+        prefs.edit().remove("sortieCumul").remove("sortieDernier").remove("sortieDoutes").remove("sortieDepuis").apply();
         lastRemindersJson = null;
         lastFamilyJson = null;
     }
@@ -471,8 +472,7 @@ final class Sync {
         }
         JSONObject inviteFields = invite.getJSONObject("fields");
         if (!"tablette".equals(Firebase.str(inviteFields, "kind"))) {
-            status("setup", "Ce code est celui de la famille. Pour la tablette, créez un code dans "
-                    + "l'app famille : Réglages > Installer une tablette.");
+            status("setup", "Ce code d'installation n'est pas celui d'une tablette.");
             return null;
         }
         fid = Firebase.str(inviteFields, "fid");
@@ -485,6 +485,17 @@ final class Sync {
             member = false;
         }
         if (!member) {
+            // Code de remplacement à usage unique, 7 jours (audit 8, R2) : la tablette le prend dans la même
+            // écriture que sa fiche, avec son compte des appels (qui entre ensuite avec le même code, appels.js).
+            // Déjà pris par ce compte (réponse perdue) : la fiche seule. Pris par une autre tablette : refusé.
+            String pris = Firebase.str(inviteFields, "usedBy");
+            if (pris != null && !pris.isEmpty() && !pris.equals(uid)) {
+                status("setup", "Le code tablette « " + codeLisible(code) + " » a déjà servi pour une autre tablette : demandez un nouveau code à Papote.");
+                return null;
+            }
+            firebase.ensureCallsAccount();
+            String calls = firebase.callsUid();
+            if (calls == null) return null; // compte des appels pas encore créé (réseau) : au tour suivant
             JSONObject fields = new JSONObject()
                     .put("name", Firebase.string("Tablette"))
                     .put("role", Firebase.string("tablette"))
@@ -497,48 +508,89 @@ final class Sync {
                     .put("updateTransforms", new JSONArray().put(new JSONObject()
                             .put("fieldPath", "joinedAt").put("setToServerValue", "REQUEST_TIME")))
                     .put("currentDocument", new JSONObject().put("exists", false));
-            firebase.commit(new JSONArray().put(write));
+            JSONArray writes = new JSONArray().put(write);
+            if (pris == null || pris.isEmpty()) {
+                writes.put(new JSONObject()
+                        .put("update", new JSONObject()
+                                .put("name", Firebase.docName("invites/" + code))
+                                .put("fields", new JSONObject()
+                                        .put("usedBy", Firebase.string(uid))
+                                        .put("callsUid", Firebase.string(calls))))
+                        .put("updateMask", new JSONObject().put("fieldPaths", new JSONArray().put("usedBy").put("callsUid")))
+                        .put("updateTransforms", new JSONArray().put(new JSONObject()
+                                .put("fieldPath", "usedAt").put("setToServerValue", "REQUEST_TIME")))
+                        .put("currentDocument", new JSONObject().put("exists", true)));
+            }
+            try {
+                firebase.commit(writes);
+            } catch (Firebase.ApiException e) {
+                if (e.code != 403) throw e;
+                status("setup", "Le code tablette « " + codeLisible(code) + " » a expiré ou a déjà servi : demandez un nouveau code à Papote.");
+                return null;
+            }
         }
         prefs.edit().putString("fid", fid).apply();
         return fid;
     }
 
     /**
-     * La tablette a-t-elle vraiment été retirée de sa famille ? Jamais sur un simple refus du serveur
-     * (SortieFamille, audit réseau du 11/11) : il faut que sa fiche soit refusée ou absente alors qu'une
-     * lecture témoin (config/base, ouverte à tout compte connecté) répond, et que cela dure. En attendant,
-     * la tablette garde sa famille, ses photos et ses numéros, et réessaie au tour suivant.
+     * La tablette a-t-elle vraiment été retirée de sa famille ? Seulement après 72 h de refus continu
+     * (SortieFamille, décision de Tanguy du 12/11) : sa fiche refusée ou absente alors qu'une lecture témoin
+     * (config/base, ouverte à tout compte connecté) répond. Sans réseau, ou si le serveur refuse tout, rien ne
+     * compte. Pendant une installation, tout de suite. En attendant, la tablette garde sa famille, ses photos et
+     * ses numéros, et réessaie au tour suivant.
      */
     private boolean familleVraimentPerdue(String fid) {
         int fiche = codeLecture("families/" + fid + "/members/" + firebase.uid(), "role");
-        int temoin = codeLecture("config/base", "database");
-        if (!SortieFamille.ficheDisparue(fiche, temoin)) {
-            if (temoin != 200 && temoin != 404 && !refusNote) {
-                refusNote = true;
-                Journal.log(context, "Serveur : accès refusé partout (fiche " + fiche + ", témoin " + temoin
-                        + "), la tablette garde sa famille et réessaie");
-            }
-            oublierDoutes();
-            return false;
+        int temoin = fiche == 200 ? 200 : codeLecture("config/base", "database");
+        SortieFamille.Constat constat = SortieFamille.constat(fiche, temoin);
+        if (constat == SortieFamille.Constat.INCERTAIN && temoin != 0 && fiche != 0 && !refusNote) {
+            refusNote = true;
+            Journal.log(context, "Serveur : accès refusé partout (fiche " + fiche + ", témoin " + temoin
+                    + "), la tablette garde sa famille et réessaie");
         }
-        long now = System.currentTimeMillis();
-        int doutes = prefs.getInt("sortieDoutes", 0) + 1;
-        long depuis = prefs.getLong("sortieDepuis", 0);
-        if (depuis == 0 || depuis > now) depuis = now;
-        if (SortieFamille.quitter(doutes, now - depuis, prefs.getBoolean("installEnCours", false))) {
-            oublierDoutes();
+        SortieFamille.Compteur c = compteurSortie();
+        boolean premier = c.vide();
+        c.noter(constat, System.currentTimeMillis());
+        boolean refus = constat == SortieFamille.Constat.REFUS;
+        if (SortieFamille.quitter(c, refus, prefs.getBoolean("installEnCours", false))) {
+            garderCompteurSortie(new SortieFamille.Compteur(0, 0));
             return true;
         }
-        prefs.edit().putInt("sortieDoutes", doutes).putLong("sortieDepuis", depuis).apply();
-        if (doutes == 1) Journal.log(context, "Fiche de la tablette introuvable : vérifications avant de quitter la famille");
+        garderCompteurSortie(c);
+        if (refus && premier) {
+            Journal.log(context, "Fiche de la tablette introuvable : la tablette garde sa famille, 72 h de vérifications avant de la quitter");
+        }
         return false;
     }
 
     private boolean refusNote;
 
+    /** Compteur du refus continu, gardé dans les réglages de la tablette (il survit à un redémarrage). */
+    private SortieFamille.Compteur compteurSortie() {
+        return SortieFamille.Compteur.relire(cle -> prefs.getLong(cle, 0));
+    }
+
+    private void garderCompteurSortie(SortieFamille.Compteur c) {
+        SharedPreferences.Editor e = prefs.edit().remove("sortieDoutes").remove("sortieDepuis"); // anciennes clés (A35)
+        c.garder((cle, valeur) -> { if (valeur == null) e.remove(cle); else e.putLong(cle, valeur); });
+        e.commit(); // écrit tout de suite : une coupure de courant ne remet pas le compteur en arrière
+    }
+
+    /** Une lecture a réussi : le compteur repart de zéro. */
     private void oublierDoutes() {
-        if (prefs.contains("sortieDoutes") || prefs.contains("sortieDepuis")) {
-            prefs.edit().remove("sortieDoutes").remove("sortieDepuis").apply();
+        if (prefs.contains("sortieCumul") || prefs.contains("sortieDernier")
+                || prefs.contains("sortieDoutes") || prefs.contains("sortieDepuis")) {
+            garderCompteurSortie(new SortieFamille.Compteur(0, 0));
+        }
+    }
+
+    /** Pas de réseau (ou serveur en panne) : le temps qui passe ne compte pas comme un refus. */
+    private void sortieIncertaine() {
+        if (prefs.getLong("sortieDernier", 0) > 0) {
+            SortieFamille.Compteur c = compteurSortie();
+            c.incertain();
+            garderCompteurSortie(c);
         }
     }
 
@@ -560,6 +612,7 @@ final class Sync {
         try {
             fid = familyId();
         } catch (IOException e) {
+            sortieIncertaine();
             status("offline", null);
             return;
         }
@@ -633,9 +686,9 @@ final class Sync {
             // On n'oublie la famille que si la fiche de la tablette a vraiment disparu (famille
             // supprimée ou tablette retirée), jamais parce que le code famille a changé.
             if ((e.code == 403 || e.code == 404) && familleVraimentPerdue(fid)) {
-                // Famille supprimée (par l'admin) ou installation annulée sur le téléphone : la tablette
-                // revient d'elle-même sur l'écran du code, avec un nouveau code (l'ancien jumelage ne sert plus).
-                Journal.log(context, "Plus dans la famille : retour à l'écran du code");
+                // Installation annulée, ou fiche refusée 72 h de suite alors que le serveur répond : la tablette
+                // revient d'elle-même sur l'écran d'attente, avec un nouveau code (l'ancien jumelage ne sert plus).
+                Journal.log(context, "Plus dans la famille : retour à l'écran d'attente");
                 prefs.edit().remove("fid").remove("pairing").remove("pairingExpires").remove("pairingFait")
                         .remove("installEnCours").remove("installPar").remove("installDepuis").apply();
                 posts.clear();
@@ -649,9 +702,11 @@ final class Sync {
                 poke();
                 return;
             }
+            if (e.code != 403 && e.code != 404) sortieIncertaine(); // serveur occupé ou en panne : rien ne compte
             status("offline", null);
             return;
         } catch (IOException e) {
+            sortieIncertaine(); // pas de réseau : jamais compté comme un refus
             status("offline", null);
             return;
         }
@@ -990,6 +1045,7 @@ final class Sync {
             // l'envoi n'est pas montré tant qu'elle n'est pas là (tablette.js), rien n'est perdu.
             if (existing(p.id) == null && Forfait.economie(context, 3)) continue;
             File file = existing(p.id);
+            if (file == null && p.videoUrl != null && !videoPermise(p.id)) continue; // 3 essais aujourd'hui : demain
             if (file == null && p.videoUrl != null) {
                 // Nouveau format : jusqu'à ~30 Mo, écrit directement dans un fichier.
                 try {
@@ -1047,46 +1103,42 @@ final class Sync {
             throw new IOException("Adresse refusée : " + u.getHost());
         }
         long max = "jpg".equals(ext) ? MAX_PHOTO : MAX_VIDEO;
-        javax.net.ssl.HttpsURLConnection c =
-                (javax.net.ssl.HttpsURLConnection) new java.net.URL(url).openConnection();
-        c.setConnectTimeout(20_000);
-        c.setReadTimeout(60_000);
-        AppCheck.addHeader(context, c, url);
-        File tmp = new File(imageDir, id + ".tmp");
-        // Connexion gardée ouverte pour le fichier suivant (keep-alive), sauf en cas d'erreur.
-        try {
-            if (c.getResponseCode() != 200) throw new IOException("HTTP " + c.getResponseCode());
-            // Taille annoncée trop grosse : refus avant d'avoir téléchargé le moindre octet.
-            if (c.getContentLengthLong() > max) throw new IOException("Fichier trop gros (" + id + ")");
-            java.io.InputStream in = c.getInputStream();
-            FileOutputStream out = new FileOutputStream(tmp);
-            try {
-                byte[] buf = new byte[64 * 1024];
-                int n;
-                long total = 0;
-                while ((n = in.read(buf)) > 0) {
-                    total += n;
-                    if (total > max) throw new IOException("Fichier trop gros (" + id + ")");
-                    out.write(buf, 0, n);
-                }
-            } finally {
-                out.close();
-                in.close();
-            }
-        } catch (IOException e) {
-            c.disconnect();
-            throw e;
+        // Vidéos (RM5, Tanguy 12/11) : au plus 3 essais par jour et par fichier, et chaque essai reprend
+        // là où le précédent s'est arrêté (Reprise : Range, taille et empreinte vérifiées avant l'usage).
+        boolean video = !"jpg".equals(ext) && !"mp3".equals(ext);
+        String cle = "essaisJour:" + id;
+        if (video) {
+            if (!videoPermise(id)) throw new IOException("3 essais aujourd'hui, nouvel essai demain");
+            prefs.edit().putString(cle, Reprise.noterEssai(prefs.getString(cle, null), aujourdhui())).apply();
         }
-        File file = new File(imageDir, id + "." + ext);
-        if (!tmp.renameTo(file)) throw new IOException("Renommage " + id);
-        return file;
+        File cible = new File(imageDir, id + "." + ext);
+        Reprise.Resultat r = Reprise.telecharger(url, cible, max, (adresse) -> {
+            javax.net.ssl.HttpsURLConnection c = (javax.net.ssl.HttpsURLConnection) adresse.openConnection();
+            c.setConnectTimeout(20_000);
+            c.setReadTimeout(60_000);
+            AppCheck.addHeader(context, c, url);
+            return c;
+        });
+        if (video) prefs.edit().remove(cle).apply();
+        if (r.repris) Journal.log(context, "Envoi " + id + " : téléchargement repris là où il s'était arrêté");
+        return r.fichier;
+    }
+
+    private static String aujourdhui() {
+        return new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ROOT).format(new java.util.Date());
+    }
+
+    /** Encore un essai permis aujourd'hui pour cette vidéo (3 par jour, RM5) ? */
+    private boolean videoPermise(String id) {
+        return Reprise.essaiPermis(prefs.getString("essaisJour:" + id, null), aujourdhui());
     }
 
     private File existing(String id) {
         File[] files = imageDir.listFiles();
         if (files != null) {
             for (File f : files) {
-                if (f.getName().startsWith(id + ".") && !f.getName().endsWith(".tmp")) return f;
+                if (f.getName().startsWith(id + ".") && !f.getName().endsWith(".tmp")
+                        && !f.getName().endsWith(".part") && !f.getName().endsWith(".part.info")) return f;
             }
         }
         return null;
@@ -1980,6 +2032,7 @@ final class Sync {
     }
 
     private void runCommands(String fid) {
+        repondreWifiEnAttente(2);
         try {
             JSONObject q = new JSONObject()
                     .put("from", new JSONArray().put(new JSONObject().put("collectionId", "commands")))
@@ -2014,9 +2067,8 @@ final class Sync {
         boolean reboot = false;
         boolean usine = false;
         if ("wifi".equals(type)) {
-            String ssid = nz(Firebase.str(f, "ssid"));
-            ok = !ssid.isEmpty() && wifi().connect(ssid, nz(Firebase.str(f, "password")));
-            result = ok ? "La tablette se connecte au wifi « " + ssid + " »." : "Le wifi « " + ssid + " » n'a pas pu être ajouté.";
+            changerWifi(doc, f);
+            return;
         } else if ("wifiScan".equals(type)) {
             // Réseaux autour de la tablette, pour que la famille choisisse le wifi à distance.
             JSONArray nets = new JSONArray(wifi().scan());
@@ -2124,6 +2176,83 @@ final class Sync {
                     prefs.edit().remove("ordreRedemarrage").apply();
                 }
             }, 3000);
+        }
+    }
+
+    // ---------- Changer le wifi depuis l'appli (A36, RM6, Tanguy 12/11) ----------
+
+    /**
+     * Ordre « wifi » : le mot de passe est lu dans commands/{id}/secret/wifi (lisible de la seule tablette visée,
+     * expiré au bout d'une heure : firestore.rules) puis effacé ; un ancien ordre le porte encore dans le champ
+     * password, effacé aussi. L'ordre passe « running » AVANT tout changement (jamais rejoué), puis la tablette
+     * essaie le nouveau réseau sans oublier l'ancien (Wifi.changer) et répond un vrai résultat (issue).
+     */
+    private void changerWifi(JSONObject doc, JSONObject f) throws IOException, JSONException {
+        String name = doc.getString("name");
+        String chemin = name.substring(name.indexOf("/documents/") + "/documents/".length());
+        String ssid = nz(Firebase.str(f, "ssid"));
+        String password = nz(Firebase.str(f, "password"));
+        boolean secret = false;
+        try {
+            JSONObject s = firebase.get(chemin + "/secret/wifi", "password");
+            JSONObject sf = s == null ? null : s.optJSONObject("fields");
+            if (sf != null) {
+                password = nz(Firebase.str(sf, "password"));
+                secret = true;
+            }
+        } catch (Firebase.ApiException e) {
+            // Règles d'avant (pas de « secret ») ou secret expiré : le champ de l'ordre, s'il y en a un.
+            Log.w(TAG, "Mot de passe du wifi", e);
+        }
+        JSONArray ecritures = new JSONArray().put(new JSONObject()
+                .put("update", new JSONObject().put("name", name).put("fields", new JSONObject()
+                        .put("state", Firebase.string("running"))
+                        .put("result", Firebase.string("La tablette essaie « " + ssid + " »…"))))
+                .put("updateMask", new JSONObject().put("fieldPaths", new JSONArray().put("state").put("result").put("password"))));
+        if (secret) ecritures.put(new JSONObject().put("delete", Firebase.docName(chemin + "/secret/wifi")));
+        firebase.commit(ecritures); // sans réponse : rien n'est changé, l'ordre sera repris au tour suivant
+        String[] ancien = {""};
+        WifiChangement.Issue issue = ssid.isEmpty() ? WifiChangement.Issue.INTROUVABLE : wifi().changer(ssid, password, ancien);
+        password = null;
+        String texte = WifiChangement.texte(issue, ssid, ancien[0], wifi().mobileValide());
+        Journal.log(context, "Ordre wifi : " + texte);
+        JSONObject reponse = new JSONObject().put("name", name)
+                .put("state", WifiChangement.reussi(issue) ? "done" : "failed").put("result", texte).put("issue", issue.code);
+        prefs.edit().putString("wifiReponse", reponse.toString()).commit();
+        repondreWifiEnAttente(6); // le réseau vient peut-être de changer : jusqu'à une minute
+        reportWifi(); // la fiche montre tout de suite le réseau en cours
+    }
+
+    /** Réponse de l'ordre wifi pas encore écrite (le réseau venait de changer) : réessayée ici, puis à chaque tour. */
+    private void repondreWifiEnAttente(int essais) {
+        String j = prefs.getString("wifiReponse", null);
+        if (j == null) return;
+        for (int essai = 0; essai < essais; essai++) {
+            try {
+                JSONObject r = new JSONObject(j);
+                JSONObject fields = new JSONObject().put("state", Firebase.string(r.getString("state")))
+                        .put("result", Firebase.string(r.getString("result")));
+                JSONArray masque = new JSONArray().put("state").put("result");
+                if (essai % 2 == 0) { fields.put("issue", Firebase.string(r.getString("issue"))); masque.put("issue"); }
+                JSONObject write = new JSONObject()
+                        .put("update", new JSONObject().put("name", r.getString("name")).put("fields", fields))
+                        .put("updateMask", new JSONObject().put("fieldPaths", masque))
+                        .put("currentDocument", new JSONObject().put("exists", true))
+                        .put("updateTransforms", new JSONArray().put(new JSONObject()
+                                .put("fieldPath", "doneAt").put("setToServerValue", "REQUEST_TIME")));
+                firebase.commit(new JSONArray().put(write));
+                prefs.edit().remove("wifiReponse").apply();
+                return;
+            } catch (Firebase.ApiException e) {
+                // 404 : l'ordre a été supprimé (la famille a fermé la fenêtre) ; 400 : rien à faire de plus.
+                if (e.code == 404 || e.code == 400) { prefs.edit().remove("wifiReponse").apply(); return; }
+                // 403 avec « issue » : règles d'avant ; l'essai suivant l'écrit sans.
+            } catch (Exception e) {
+                Log.w(TAG, "Réponse de l'ordre wifi", e);
+            }
+            if (essai + 1 < essais) {
+                try { Thread.sleep(essai % 2 == 0 ? 1_000 : 10_000); } catch (InterruptedException e) { return; }
+            }
         }
     }
 
@@ -2419,9 +2548,9 @@ final class Sync {
     }
 
     /**
-     * Installation par le téléphone du proche (parcours du 21/10) : la tablette quitte « On prépare
-     * votre tablette… » à la première photo, ou quand le proche a touché « C'est parfait »
-     * (installation.etape == 'fini'), même sans photo. Volume de la sonnerie choisi au test du son.
+     * Entrée dans la famille : la tablette quitte « On prépare votre tablette… » à la première photo, ou quand
+     * la famille est prête (installation.etape == 'fini', d'office pour une famille préparée), même sans photo.
+     * Volume de la sonnerie choisi au test du son.
      */
     private void readInstallation(JSONObject ff) {
         if (prefs.getBoolean("installEnCours", false)) {
@@ -2431,8 +2560,6 @@ final class Sync {
             String etape = inf == null ? "" : nz(Firebase.str(inf, "etape"));
             if ("fini".equals(etape)) finInstallation();
             else {
-                relireReprise();
-                // L'écran du code suit les étapes du téléphone (« Julie règle le son… », Tanguy 2/11).
                 if (!etape.equals(prefs.getString("installEtape", ""))) {
                     prefs.edit().putString("installEtape", etape).apply();
                     try { welcome(installScreen()); } catch (JSONException e) { Log.w(TAG, "Étape d'installation", e); }
@@ -2446,45 +2573,12 @@ final class Sync {
         }
     }
 
-    /** Pendant que le proche finit sur son téléphone : le même écran du code, sans « Recommencer ». */
-    private JSONObject installScreen() throws JSONException {
-        String code = prefs.getString("pairing", null);
-        JSONObject s = new JSONObject().put("step", "pair").put("name", "Tablette")
-                .put("claimedName", prefs.getString("installPar", "")).put("joined", true)
-                .put("etape", prefs.getString("installEtape", ""))
-                .put("reprendre", reprisePossible());
-        if (code != null) s.put("code", code);
-        return s;
-    }
-
     /**
-     * Installation pas finie 30 min après le scan : un autre proche peut la reprendre en scannant le
-     * même code, sans rien effacer (règle du serveur, 21/10). L'écran le dit sous le code.
+     * Famille rejointe, réglages pas encore finis : l'écran d'attente « On prépare votre tablette… »
+     * (rien à scanner ni à toucher : seul Papote relie une tablette, décision de Tanguy du 12/11).
      */
-    private static final long REPRISE_MS = 30 * 60_000;
-
-    private boolean reprisePossible() {
-        long depuis = prefs.getLong("installDepuis", 0);
-        return depuis > 0 && System.currentTimeMillis() - depuis > REPRISE_MS;
-    }
-
-    /** Un autre proche a peut-être repris l'installation : l'écran montre son prénom à lui. */
-    private void relireReprise() {
-        String code = prefs.getString("pairing", null);
-        if (code == null) return;
-        try {
-            JSONObject doc = firebase.get("pairings/" + code);
-            JSONObject f = doc == null ? null : doc.optJSONObject("fields");
-            if (f == null) return;
-            String par = nz(Firebase.str(f, "claimedName"));
-            long depuis = Firebase.timestamp(f, "reservedAt");
-            SharedPreferences.Editor e = prefs.edit();
-            if (!par.isEmpty()) e.putString("installPar", par);
-            if (depuis > 0) e.putLong("installDepuis", depuis);
-            e.apply();
-        } catch (Exception e) {
-            Log.w(TAG, "Reprise de l'installation", e);
-        }
+    private JSONObject installScreen() throws JSONException {
+        return new JSONObject().put("step", "prepare").put("etape", prefs.getString("installEtape", ""));
     }
 
     private void finInstallation() {
@@ -2565,13 +2659,6 @@ final class Sync {
 
     boolean pairingActive() {
         return prefs.getString("fid", null) == null && prefs.getString("code", null) == null;
-    }
-
-    void setTabletName(String name) {
-        handler.post(() -> {
-            prefs.edit().putString("tabletName", name.trim()).apply();
-            poke();
-        });
     }
 
     void wifiDone() {
@@ -2695,12 +2782,14 @@ final class Sync {
     }
 
     /**
-     * Écrans de la tablette avant la famille (parcours du 21/10) : Bienvenue, Internet (sauté avec une
-     * carte SIM), puis le code à scanner. Le nom et la météo se règlent sur le téléphone du proche.
-     *   waiting    code affiché (QR + code), renouvelé toutes les 15 min tant que personne ne l'a pris
-     *   reserved   « On prépare votre tablette… », « Julie s'en occupe », « Recommencer » (pas d'expiration)
-     *   confirmed  la famille est créée : la tablette y entre sans rien demander
-     *   claimed    ancien parcours (tablette de remplacement) : « C'est bien vous ? »
+     * Écrans de la tablette avant la famille : Bienvenue, Internet (sauté avec une carte SIM), puis l'écran
+     * d'attente « On prépare votre tablette… / La tablette retrouve sa famille ». Seul Papote relie une tablette
+     * (décision de Tanguy du 12/11, le serveur refuse tout scan d'un client) : le code de jumelage reste interne,
+     * le serveur le reconnaît (n° de série, famille préparée) et le confirme lui-même. Rien à scanner, rien à lire
+     * à voix haute.
+     *   waiting    code écrit sur le serveur, renouvelé toutes les 15 min tant qu'il n'est pas confirmé
+     *   confirmed  la famille est prête : la tablette y entre sans rien demander
+     *   autre      (reserved, claimed : plus jamais écrits par le serveur) même écran d'attente
      */
     private void pairingStep() throws IOException, JSONException {
         boolean ancienne = prefs.getString("tabletName", null) != null; // installation commencée avant le 21/10
@@ -2719,15 +2808,8 @@ final class Sync {
         String state = f == null ? "gone" : Firebase.str(f, "status");
         // Un code que personne n'a pris expire ; un code réservé, jamais.
         if ("waiting".equals(state) && System.currentTimeMillis() > prefs.getLong("pairingExpires", 0)) state = "gone";
-        if ("waiting".equals(state)) {
-            welcome(new JSONObject().put("step", "pair").put("name", name).put("code", code)
-                    .put("expires", prefs.getLong("pairingExpires", 0)));
-        } else if ("reserved".equals(state)) {
-            long reservedAt = Firebase.timestamp(f, "reservedAt");
-            if (reservedAt > 0) prefs.edit().putLong("installDepuis", reservedAt).apply();
-            welcome(new JSONObject().put("step", "pair").put("name", name).put("code", code)
-                    .put("claimedName", nz(Firebase.str(f, "claimedName"))).put("restart", true)
-                    .put("reprendre", reprisePossible()));
+        if ("waiting".equals(state) || "reserved".equals(state) || "claimed".equals(state)) {
+            welcome(new JSONObject().put("step", "pair").put("code", code));
         } else if ("confirmed".equals(state) && Firebase.str(f, "fid") != null) {
             String famille = nz(Firebase.str(f, "familyName"));
             if (joinFamily(code, Firebase.str(f, "fid"), famille.isEmpty() ? name : famille)) {
@@ -2739,23 +2821,15 @@ final class Sync {
                 welcome(installScreen());
                 poke();
             }
-        } else if ("claimed".equals(state)) {
-            welcome(new JSONObject().put("step", "confirm").put("name", name).put("code", code)
-                    .put("claimedName", nz(Firebase.str(f, "claimedName")))
-                    .put("familyName", nz(Firebase.str(f, "familyName"))));
         } else {
             // Annulé, refusé, expiré ou disparu : un nouveau code tout de suite.
             prefs.edit().remove("pairing").remove("pairingExpires").apply();
             // Jamais de code avant d'avoir lu config/base : il doit être créé dans la bonne base.
             if (lastDatabaseCheck == 0) checkDatabase();
             code = lastDatabaseCheck == 0 ? null : newPairing(name);
-            if (code == null) {
-                welcome(new JSONObject().put("step", "pair").put("name", name)
-                        .put("error", "Impossible de créer le code. Vérifiez la connexion internet."));
-            } else {
-                welcome(new JSONObject().put("step", "pair").put("name", name).put("code", code)
-                        .put("expires", prefs.getLong("pairingExpires", 0)));
-            }
+            // Pas de code (pas encore d'internet) : le même écran d'attente, qui le dit sans alarmer.
+            if (code == null) welcome(new JSONObject().put("step", "pair").put("sansInternet", true));
+            else welcome(new JSONObject().put("step", "pair").put("code", code));
         }
     }
 
@@ -2777,27 +2851,6 @@ final class Sync {
     void welcomeSeen() {
         handler.post(() -> {
             prefs.edit().putBoolean("bienvenueVue", true).apply();
-            poke();
-        });
-    }
-
-    /** « Recommencer avec un autre téléphone » : la réservation est annulée, un nouveau code s'affiche. */
-    void cancelPairing() {
-        handler.post(() -> {
-            String code = prefs.getString("pairing", null);
-            if (code == null) return;
-            try {
-                JSONObject update = new JSONObject()
-                        .put("update", new JSONObject()
-                                .put("name", Firebase.docName("pairings/" + code))
-                                .put("fields", new JSONObject().put("status", Firebase.string("cancelled"))))
-                        .put("updateMask", new JSONObject().put("fieldPaths", new JSONArray().put("status")));
-                firebase.commit(new JSONArray().put(update));
-                Journal.log(context, "Installation recommencée avec un autre téléphone");
-            } catch (Exception e) {
-                Log.w(TAG, "Annulation de la réservation", e);
-            }
-            prefs.edit().remove("pairing").remove("pairingExpires").apply();
             poke();
         });
     }
@@ -2937,37 +2990,6 @@ final class Sync {
             Log.w(TAG, "Entrée dans la famille", e);
             return false;
         }
-    }
-
-    /** Réponse sur la tablette : « C'est bien vous ? » Oui / Non. */
-    void confirmPairing(boolean yes) {
-        handler.post(() -> {
-            String code = prefs.getString("pairing", null);
-            if (code == null) return;
-            try {
-                JSONObject doc = firebase.get("pairings/" + code);
-                JSONObject f = doc == null ? null : doc.optJSONObject("fields");
-                if (f == null || !"claimed".equals(Firebase.str(f, "status"))) return;
-                String fid = Firebase.str(f, "fid");
-                JSONObject update = new JSONObject()
-                        .put("update", new JSONObject()
-                                .put("name", Firebase.docName("pairings/" + code))
-                                .put("fields", new JSONObject().put("status", Firebase.string(yes ? "confirmed" : "refused"))))
-                        .put("updateMask", new JSONObject().put("fieldPaths", new JSONArray().put("status")));
-                firebase.commit(new JSONArray().put(update));
-                if (!yes || fid == null) {
-                    prefs.edit().remove("pairing").remove("pairingExpires").apply();
-                    poke();
-                    return;
-                }
-                if (joinFamily(code, fid, prefs.getString("tabletName", "Tablette"))) {
-                    status("ok", null);
-                    poke();
-                }
-            } catch (Exception e) {
-                Log.w(TAG, "Confirmation de l'appairage", e);
-            }
-        });
     }
 
     private String lastState = "";

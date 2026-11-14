@@ -2014,7 +2014,9 @@ html .call-out .call-decline { border: 0; background: transparent; color: #5b579
 /* Redémarrage sans aucun réseau (04/11) : une carte calme à la place de l'heure, de la météo et des
    boutons, qui ne peuvent rien faire sans réseau. Les photos restent à droite. */
 .sans-reseau { display: none; }
-html body.sans-reseau-actif .home-left > *:not(.sans-reseau) { display: none !important; }
+/* Le bouton SOS reste toujours là, même sous la carte « Pas de réseau » (A47) : SMS et appels par la carte SIM
+   peuvent partir sans internet, et la chaîne attend le réseau téléphonique s'il manque. */
+html body.sans-reseau-actif .home-left > *:not(.sans-reseau):not(.sos-btn) { display: none !important; }
 html body.sans-reseau-actif .home-left > .sans-reseau {
   display: -webkit-flex; display: flex; -webkit-flex-direction: column; flex-direction: column;
   -webkit-align-items: center; align-items: center; text-align: center;
@@ -2046,3 +2048,20 @@ html .sans-reseau-texte { margin: 0; font-family: 'Atkinson Hyperlegible', sans-
 .identite p { margin: 1vmin 0; }
 .identite .identite-ref { font-size: 12vmin; font-weight: bold; color: #4f46e5; margin: 0 0 2vmin; }
 .identite .identite-version { font-size: 3.5vmin; color: #5b5670; }
+
+/* Quelqu'un a essayé d'appeler (A49, maquette validée 12/11) : carte calme indigo pâle à la place de la météo,
+   l'heure en indigo. SOS, heure, date et Appeler gardent leur taille. Texte #24212f sur #eef2ff : 14,6:1 ;
+   heure #4f46e5 sur #eef2ff : 5,6:1. */
+html body.essai-appel-actif #weather { display: none !important; }
+html .essai-appel {
+  margin-top: 2.5vmin; padding: 2vmin 3.5vmin; border-radius: 4vmin; background: #eef2ff; text-align: left;
+  cursor: pointer;
+}
+html .essai-appel[hidden] { display: none; }
+html .essai-appel-texte {
+  margin: 0; font-family: 'Atkinson Hyperlegible', sans-serif; font-size: 4.3vmin; font-weight: 700; line-height: 1.18; color: #24212f;
+}
+html .essai-appel-texte b { color: #4f46e5; white-space: nowrap; }
+html body.night .essai-appel { background: #252238; }
+html body.night .essai-appel-texte { color: #e8e6f3; }
+html body.night .essai-appel-texte b { color: #c7d2fe; }

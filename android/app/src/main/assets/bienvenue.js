@@ -1,9 +1,11 @@
 /*
- * Écran « Bienvenue » : première installation chez le client, sans PC (parcours du 21/10).
- * 1. Bienvenue, 2. internet (« la tablette cherche internet », sauté si la carte SIM en donne),
- * 3. « On prépare votre tablette… » : le serveur la relie seul à la famille de la commande.
- * Plus de QR code ni de code à taper, plus d'ancien parcours (Tanguy, 12/11) : le seul QR code est
- * celui de la famille, sur l'accueil, tant qu'aucune photo n'est arrivée.
+ * Écran « Bienvenue » : première mise en route chez le client, sans PC.
+ * 1. Bienvenue, 2. internet (« Je cherche internet… » avec une carte SIM, puis le wifi de la box si besoin),
+ * puis « On prépare votre tablette… / La tablette retrouve sa famille » jusqu'à ce que le serveur la relie
+ * à sa famille. Rien à scanner, aucun code à taper : seul Papote relie une tablette (décision de Tanguy du
+ * 12/11). Le QR code de la famille n'apparaît qu'ensuite, sur l'accueil sans photo (tablette.js).
+ * Pas d'internet au bout de 90 s, ou pas reliée au bout de 2 min : l'écran le dit sans rien demander, et
+ * c'est noté dans le journal pour Papote.
  * Les étapes viennent d'Android (Sync.java, état « welcome »).
  */
 (function () {
@@ -64,15 +66,21 @@
     return update;
   }
 
-  // Étape en cours (1 bienvenue, 2 internet, 3 téléphone), affichée en haut ; 0 = pas d'étapes
-  // (wifi plus tard, préparation, ancien parcours).
-  var STEPS = 3;
+  // Étape en cours (1 bienvenue, 2 internet), affichée en haut ; 0 = pas d'étapes (wifi plus tard,
+  // attente de la famille).
+  var STEPS = 2;
   var stepNum = 0;
 
   // Illustration de l'étape (bienvenue/<nom>.svg), dans le panneau de gauche ; vide = pas de panneau.
   var art = '';
 
+  // Écran d'attente (« Je cherche internet… », « On prépare votre tablette… ») : rien à lire à voix haute,
+  // donc pas de haut-parleur (il relisait la phrase de l'écran d'avant). Remis à false par chaque écran.
+  var muet = false;
+
   function screen(title, subtitle) {
+    var sansVoix = muet;
+    muet = false;
     root.innerHTML = '';
     var card = el('div', 'welcome-card' + (art ? ' with-art' : ''));
     if (art) {
@@ -97,7 +105,7 @@
       steps.appendChild(el('span', 'welcome-stepnum', 'Étape ' + stepNum + ' sur ' + STEPS));
       head.appendChild(steps);
     }
-    if (!repair) {
+    if (!repair && !sansVoix) {
       // Haut-parleur : réécouter la phrase du guide de cet écran.
       var listen = el('button', 'welcome-listen');
       listen.setAttribute('aria-label', 'Réécouter');
@@ -196,18 +204,35 @@
     try { return JSON.parse(android().wifiStatus()); } catch (e) { return {}; }
   }
 
+  // Démarrage à froid : la carte SIM met souvent 30 s à 2 min à trouver internet après « Commencer ». Chez
+  // une personne sans box, l'écran du wifi restait figé (audit premier jour 05/11, M0 du 12/11). Décision de
+  // Tanguy (12/11) : d'abord « Je cherche internet… » ; si rien ne vient, l'erreur dite clairement et le wifi
+  // à donner. La tablette continue de chercher derrière : la 4G arrivée, elle passe à la suite toute seule.
+  var CHERCHE_MS = 90000;
+  var chercheDepuis = 0;
+  var chercheFini = false;
+
+  // La carte SIM donne internet (sans wifi) : étape suivante, sauf pendant le choix d'un réseau.
+  function simPrete(s) { return !repair && s.mobile && s.internet && !s.wifi; }
+
   function showWifi() {
     stepNum = repair ? 0 : 2;
     art = 'wifi';
+    clearInterval(wifiTimer);
     var st = wifiState();
     // Carte SIM avec internet : pas besoin de wifi.
-    if (!repair && st.mobile && st.internet && !st.wifi) { finishWifi(); return; }
+    if (simPrete(st)) { finishWifi(); return; }
     var connected = st.wifi && st.internet;
-    // Pas encore d'internet à l'installation : d'abord « la tablette cherche internet » (Tanguy, 12/11).
-    if (!repair && !connected) { showSearch(); return; }
-    var box = screen('Connexion à internet', connected ? '' : 'Choisissez le wifi de votre box.');
+    if (!repair && !connected && st.sim && !chercheFini) { showSearch(); return; }
+    var echec = !repair && !connected && chercheFini;
+    var box = screen('Connexion à internet', connected || echec ? '' : 'Choisissez le wifi de votre box.');
     if (connected) sayGuide('wifi-ok', 'La tablette est connectée à internet. Appuyez sur Continuer.');
     else sayGuide('wifi-choisir', 'Choisissez le wifi de votre box.');
+    if (echec) {
+      box.appendChild(el('p', 'welcome-notice', 'La tablette n’a pas trouvé internet.')); // calme, jamais en rouge
+      box.appendChild(el('p', 'welcome-sub', 'Choisissez le wifi de votre box. Elle continue aussi de chercher le réseau de sa carte SIM.'));
+      box.appendChild(el('p', 'welcome-sub', 'Si ça dure, Papote est prévenu et vous recontacte.'));
+    }
     if (connected) {
       box.appendChild(el('p', 'welcome-ok', 'Connectée à « ' + st.wifi + ' »'));
       box.appendChild(button('Continuer', 'primary', finishWifi));
@@ -218,50 +243,45 @@
     if (repair) box.appendChild(button('Fermer', 'no', closeRepair));
     else addBack(box, false);
     // La fenêtre des réseaux ne s'ouvre que sur « Choisir un réseau » : la personne a le temps de lire.
+    if (!repair && !connected && st.sim) {
+      wifiTimer = setInterval(function () {
+        if (simPrete(wifiState()) && !(root && root.querySelector('.welcome-modal'))) {
+          clearInterval(wifiTimer);
+          finishWifi();
+        }
+      }, 3000);
+    }
   }
 
-  // Installation sans internet (Tanguy, 12/11 ; audit mise en route M0) : le proche comprend d'abord que
-  // la tablette cherche internet (la 4G met souvent 30 s à 2 min à venir après un démarrage à froid).
-  // Au bout d'une minute, l'écran le dit franchement et propose le wifi d'une box en attendant ; il
-  // continue de chercher et passe tout seul à la suite dès qu'internet arrive (carte SIM ou wifi).
-  var SEARCH_MS = 60000;
-  var searchSince = 0;
-  var searchLogged = false;
+  // « Je cherche internet… » : rien à lire, la tablette se connecte seule (carte SIM, ou wifi déjà connu).
+  // « Choisir un wifi » reste à portée de main pour qui a une box (Tanguy, 12/11) ; pendant le choix d'un
+  // réseau ou la saisie du mot de passe, l'écran ne change pas sous les doigts.
   function showSearch() {
-    if (!searchSince) searchSince = Date.now();
-    var longtemps = Date.now() - searchSince >= SEARCH_MS;
-    var box;
-    if (!longtemps) {
-      box = screen('La tablette cherche internet…', 'Patientez un instant : elle continue toute seule dès qu’elle l’a trouvé.');
-      box.className += ' welcome-prepare';
-      sayGuide('wifi-cherche', 'La tablette cherche internet. Patientez un instant.');
-      box.appendChild(el('span', 'boot-spin welcome-spin', ''));
-      box.appendChild(button('Choisir un wifi', '', openNetworks));
-    } else {
-      box = screen('Pas encore d’internet', 'La tablette ne trouve ni le réseau de sa carte SIM ni de wifi. Elle continue de chercher toute seule.');
-      sayGuide('wifi-introuvable', 'La tablette ne trouve pas internet. Vous avez une box ? Choisissez son wifi.');
-      box.appendChild(el('p', 'welcome-sub', 'Vous avez une box ? Choisissez son wifi en attendant. Si ça dure, Papote est prévenu et vous recontacte.'));
-      box.appendChild(button('Choisir un wifi', 'primary', openNetworks));
-      if (!searchLogged) {
-        searchLogged = true;
-        // Gardé dans le journal de la tablette : il part vers Papote dès qu'internet revient.
-        try { android().logError('Installation : pas d’internet après 1 min de recherche'); } catch (e) { }
-      }
-    }
+    muet = true;
+    var box = screen('Je cherche internet…', 'Un instant : la tablette se connecte toute seule.');
+    box.className += ' welcome-prepare';
+    box.appendChild(el('span', 'boot-spin welcome-spin', ''));
+    box.appendChild(button('Choisir un wifi', '', openNetworks));
     addBack(box, false);
-    clearInterval(wifiTimer);
+    if (!chercheDepuis) chercheDepuis = Date.now();
     wifiTimer = setInterval(function () {
       if (root && root.querySelector('.welcome-modal')) return; // liste des wifi ou mot de passe ouverts
       var s = wifiState();
-      if (s.internet) {
+      if (simPrete(s)) { clearInterval(wifiTimer); finishWifi(); return; }
+      var trouve = s.wifi && s.internet;
+      if (trouve || Date.now() - chercheDepuis >= CHERCHE_MS) {
         clearInterval(wifiTimer);
-        searchSince = 0;
-        finishWifi();
-        return;
+        chercheFini = true;
+        if (!trouve && !searchLogged) {
+          searchLogged = true;
+          // Gardé dans le journal de la tablette : il part vers Papote dès qu'internet revient.
+          try { android().logError('Installation : pas d’internet après 90 s de recherche'); } catch (e) { }
+        }
+        showWifi(); // wifi trouvé : « Connectée à … », sinon l'erreur et le choix du wifi
       }
-      if (!longtemps && Date.now() - searchSince >= SEARCH_MS) showSearch();
     }, 3000);
   }
+  var searchLogged = false;
 
   // Icône wifi comme sur Android : un éventail plein jusqu'à la force du signal (0 à 3), cadenas si protégé.
   var FAN = 'M12 21L23.5 6.5C23.05 6.16 18.57 2.5 12 2.5S.95 6.16.5 6.5L12 21z';
@@ -328,6 +348,7 @@
   }
 
   function askPassword(net) {
+    clearInterval(wifiTimer); // mot de passe en cours : la carte SIM ne coupe pas la saisie
     chosen = net;
     if (!net.secure) { connect(''); return; }
     var box = screen('« ' + net.ssid + ' »', 'Tapez le mot de passe du wifi. Il est souvent écrit sous la box.');
@@ -516,198 +537,83 @@
     }
   }
 
-  // ---------- 3. La tablette se relie à sa famille ----------
-  // Plus de QR code ni de code à taper à l'installation (Tanguy, 12/11) : la tablette arrive préparée,
-  // le serveur la relie seul à la famille de la commande (numéro de série). Le seul QR code que la
-  // famille voit est celui de sa famille, sur l'accueil, tant qu'aucune photo n'est arrivée.
-  // Si personne ne la relie au bout de 2 minutes, l'écran le dit, sans rien demander au proche.
+  // ---------- 3. Attente de la famille ----------
+  // La tablette a écrit son code de jumelage sur le serveur (interne, jamais montré) ; le serveur la reconnaît
+  // et la relie à sa famille. Rien à scanner ni à taper, et rien de lu à voix haute (décision de Tanguy, 12/11).
+  // sansInternet : le code n'a pas pu être écrit (internet pas encore là) ; on le dit sans alarmer, avec le
+  // wifi à portée de main.
+  // Si personne ne la relie au bout de 2 minutes, l'écran le dit, sans rien demander au proche, et c'est noté
+  // dans le journal pour Papote (Tanguy, 12/11).
 
   var ATTENTE_MS = 2 * 60000;
   var pairSince = 0;
   var pairTimer = null;
-
-  function showPair(s) {
-    preloadFaceDetector();
-    stepNum = 3;
-    art = '';
-    clearTimeout(pairTimer);
-    if (s.error) {
-      var err = screen('La tablette n’arrive pas à joindre Papote', 'Elle réessaie toute seule. Laissez-la allumée.');
-      err.className += ' welcome-prepare';
-      err.appendChild(el('span', 'boot-spin welcome-spin', ''));
-      addBack(err, false);
-      return;
-    }
-    // Le proche règle la tablette sur son téléphone : le sous-titre suit ses étapes (Tanguy, 2/11).
-    var sousTitre = 'Elle se relie à votre famille. Encore quelques instants.';
-    if (s.joined) {
-      var qui = s.claimedName || '';
-      var etapes = { son: qui ? qui + ' règle le son…' : 'Réglage du son…', options: qui ? qui + ' choisit les options…' : 'Choix des options…', fini: 'Presque prêt…' };
-      sousTitre = etapes[s.etape] || 'Encore quelques instants.';
-    }
-    if (!s.joined && !pairSince) pairSince = Date.now();
-    var attendLongtemps = !s.joined && Date.now() - pairSince >= ATTENTE_MS;
-    var box = screen('On prépare votre tablette…', attendLongtemps
-      ? 'Elle n’est pas encore reliée à votre famille. Laissez-la allumée : Papote est prévenu et s’en occupe.'
-      : sousTitre);
-    box.className += ' welcome-prepare';
-    box.appendChild(el('span', 'boot-spin welcome-spin', ''));
-    if (!s.joined) {
-      sayGuide('prepare', 'On prépare votre tablette. Encore quelques instants.');
-      var st = wifiState();
-      addBack(box, !!(st.mobile && st.internet && !st.wifi));
-      if (!attendLongtemps) {
-        var cle = current;
-        pairTimer = setTimeout(function () { if (current === cle) showPair(s); }, ATTENTE_MS - (Date.now() - pairSince) + 100);
-      } else if (!pairLogged) {
-        pairLogged = true;
-        try { android().logError('Installation : tablette pas reliée à une famille après 2 min'); } catch (e) { }
-      }
-    }
-  }
   var pairLogged = false;
 
-  // ---------- Préparation : le proche règle tout sur son téléphone ----------
-
-  function showPrepare(s) {
+  function showWaiting(s) {
+    preloadFaceDetector();
     stepNum = 0;
     art = '';
-    var sub = s.claimedName ? s.claimedName + ' s’en occupe sur son téléphone.' : 'Encore quelques instants.';
-    var box = screen('On prépare votre tablette…', sub);
+    muet = true;
+    clearTimeout(pairTimer);
+    // Pas de code écrit (pas encore d'internet, ou Papote injoignable) : le même écran, qui le dit sans alarmer.
+    var horsLigne = !!(s.sansInternet || s.error);
+    // Code écrit, la famille ne l'a pas encore pris : au bout de 2 min, on le dit (et Papote est prévenu).
+    var attendFamille = s.step === 'pair' && !horsLigne;
+    if (attendFamille && !pairSince) pairSince = Date.now();
+    var longtemps = attendFamille && Date.now() - pairSince >= ATTENTE_MS;
+    var box = screen('On prépare votre tablette…', horsLigne
+      ? 'La tablette attend internet pour retrouver sa famille.'
+      : longtemps
+        ? 'La tablette retrouve sa famille. Elle n’est pas encore reliée : laissez-la allumée, Papote est prévenu et s’en occupe.'
+        : 'La tablette retrouve sa famille. Cela peut prendre quelques minutes.');
     box.className += ' welcome-prepare';
     box.appendChild(el('span', 'boot-spin welcome-spin', ''));
-  }
-
-  // ---------- 5. Placement de la tablette ----------
-  // La caméra décroche les appels et sait qu'un envoi a été vu : la personne qui installe s'assoit à
-  // la place habituelle et tourne la tablette jusqu'à voir son visage dans le rond. Le guidage utilise
-  // le détecteur des appels (appels.js, window.papoteFaceDetector) ; sans lui, l'image seule.
-
-  var placing = false;
-  var placeStream = null;
-  var placeTimer = null;
-
-  function showPlacement() {
-    placing = true;
-    current = 'place';
-    stepNum = 0;
-    art = '';
-    var box = screen('Placez la tablette', 'Asseyez-vous là où la personne s’installe d’habitude, puis tournez doucement la tablette.');
-    sayGuide('placer', 'Asseyez-vous là où la personne s’installe d’habitude, puis tournez doucement la tablette.');
-    // L'image de la caméra prend la place de l'illustration, à gauche.
-    var card = box.parentNode;
-    card.className = 'welcome-card with-art';
-    var panel = el('div', 'welcome-art');
-    var view = el('div', 'place-view');
-    var video = el('video', 'place-video');
-    video.muted = true;
-    video.autoplay = true;
-    video.setAttribute('playsinline', '');
-    view.appendChild(video);
-    view.appendChild(el('span', 'place-ring'));
-    panel.appendChild(view);
-    card.insertBefore(panel, box);
-    var hint = el('p', 'place-hint', 'Ouverture de la caméra…');
-    box.appendChild(hint);
-    box.appendChild(button('C’est bon', 'primary', finishPlacement));
-    box.appendChild(button('Passer cette étape', 'no', finishPlacement));
-    startPlacementCamera(video, hint);
-  }
-
-  function startPlacementCamera(video, hint) {
-    var none = 'Caméra indisponible : vous pouvez passer cette étape.';
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { hint.textContent = none; return; }
-    navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'user', width: { ideal: 960 }, height: { ideal: 720 }, aspectRatio: { ideal: 4 / 3 } },
-      audio: false
-    }).then(function (stream) {
-      if (!placing) { stream.getTracks().forEach(function (t) { t.stop(); }); return; }
-      placeStream = stream;
-      video.srcObject = stream;
-      hint.textContent = 'Préparation de la caméra…';
-      if (typeof window.papoteLocateFace === 'function') guide(video, hint);
-      else hint.textContent = 'Tournez la tablette jusqu’à voir votre visage dans le rond.';
-    }, function () { hint.textContent = none; });
-  }
-
-  // Le visage est-il au milieu de l'image ? window.papoteLocateFace(video) (appels.js) donne le plus
-  // grand visage en fractions de l'image, ou null. Le premier appel charge le modèle (quelques s).
-  function guide(video, hint) {
-    var good = 0;
-    var busy = false;
-    clearInterval(placeTimer);
-    placeTimer = setInterval(function () {
-      if (!placing || busy || !video.videoWidth) return;
-      busy = true;
-      Promise.resolve(window.papoteLocateFace(video)).then(function (f) {
-        busy = false;
-        if (placing) showFace(f);
-      }, function () { busy = false; });
-    }, 350);
-
-    function showFace(f) {
-      var view = video.parentNode;
-      if (!f) {
-        good = 0;
-        view.className = 'place-view';
-        hint.textContent = 'Votre visage n’est pas visible : tournez doucement la tablette vers vous.';
-        return;
-      }
-      var cx = f.x + f.width / 2;
-      var cy = f.y + f.height / 2;
-      // Assez au centre, sans exiger la perfection : un quart de l'image de marge sur les côtés,
-      // un peu plus en hauteur (le visage est souvent dans le haut). Une fois bien placé, on
-      // tolère un petit écart pour que le vert ne clignote pas au moindre mouvement.
-      var marge = good > 0 ? 0.08 : 0;
-      if (Math.abs(cx - 0.5) < 0.25 + marge && Math.abs(cy - 0.5) < 0.3 + marge) {
-        good++;
-        view.className = 'place-view ok';
-        hint.textContent = good > 2 ? 'C’est parfait : la tablette est bien placée.' : 'Presque… ne bougez plus.';
-      } else {
-        good = 0;
-        view.className = 'place-view';
-        hint.textContent = 'On vous voit, mais pas au centre : tournez encore un peu la tablette.';
-      }
+    if (horsLigne) {
+      box.appendChild(button('Choisir un wifi', '', function () { android().welcomeBack(false); }));
     }
-  }
-
-  function finishPlacement() {
-    placing = false;
-    clearInterval(placeTimer);
-    if (placeStream) placeStream.getTracks().forEach(function (t) { t.stop(); });
-    placeStream = null;
-    current = '';
-    if (root) {
-      root.innerHTML = '';
-      root.setAttribute('hidden', '');
+    if (attendFamille) {
+      // « Retour » : vers le wifi, ou vers Bienvenue si le wifi a été sauté (carte SIM).
+      var st = wifiState();
+      addBack(box, !!(st.mobile && st.internet && !st.wifi));
+      if (!longtemps) {
+        var cle = current;
+        pairTimer = setTimeout(function () { if (current === cle) showWaiting(s); }, ATTENTE_MS - (Date.now() - pairSince) + 100);
+      } else if (!pairLogged) {
+        pairLogged = true;
+        // Gardé dans le journal de la tablette : il part vers Papote.
+        try { android().logError('Installation : tablette pas reliée à une famille après 2 min'); } catch (e) { }
+      }
     }
   }
 
   window.PapoteBienvenue = {
     show: function (s) {
-      if (placing) return; // la tablette est reliée : on finit le placement avant tout le reste
       ensureRoot();
       root.removeAttribute('hidden');
-      var key = s.step + '|' + (s.code || '') + '|' + (s.error || '') + '|' + (s.claimedName || '') + '|' + (s.familyName || '') + '|' + (s.restart ? 1 : 0) + '|' + (s.joined ? 1 : 0) + '|' + (s.reprendre ? 1 : 0) + '|' + (s.etape || '');
+      // L'attente de la famille ne dépend que de « internet ou pas » : un nouveau code (toutes les 15 min)
+      // ne redessine pas l'écran.
+      // « confirm » (ancien parcours, plus jamais écrit) : le même écran d'attente, plus de « C'est bien vous ? ».
+      var attente = s.step === 'pair' || s.step === 'prepare' || s.step === 'confirm';
+      var key = attente ? 'attente|' + (s.sansInternet || s.error ? 1 : 0) + '|' + (s.step === 'pair' ? 'pair' : 'prepare') : s.step;
       if (key === current) return; // déjà affiché (et la saisie en cours n'est pas effacée)
       current = key;
       clearInterval(wifiTimer);
-      if (s.step === 'start') showStart();
-      else if (s.step === 'prepare') showPrepare(s);
+      if (s.step === 'start') { chercheDepuis = 0; chercheFini = false; showStart(); }
       else if (s.step === 'name') showStart(); // ancien parcours retiré (12/11)
       else if (s.step === 'wifi') showWifi();
       else if (s.step === 'meteo') showMeteo();
-      else if (s.step === 'pair') showPair(s);
-      else if (s.step === 'confirm') showPrepare(s); // ancien parcours retiré : plus de « C'est bien vous ? »
+      else if (attente) showWaiting(s);
     },
     openWifi: openRepair,
     hide: function () {
-      if (repair || placing) return; // le réglage du wifi ou le placement en cours reste affiché
+      if (repair) return; // le réglage du wifi en cours reste affiché
       if (guideAudio) guideAudio.pause();
       if (!root) return;
       root.setAttribute('hidden', '');
       current = '';
       clearInterval(wifiTimer);
+      clearTimeout(pairTimer);
     }
   };
 })();

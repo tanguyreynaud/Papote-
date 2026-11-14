@@ -129,6 +129,112 @@ final class Wifi {
         }
     }
 
+    /**
+     * Changement de wifi demandé par la famille (A36, Tanguy 12/11) : la tablette ne quitte son réseau que si le
+     * nouveau donne internet, sinon elle y revient ; aucun réseau déjà enregistré n'est oublié (WifiChangement).
+     * Bloquant (60 s au plus, + 30 s pour revenir) : appelé hors du fil de l'écran. ancien[0] reçoit le réseau
+     * d'avant.
+     */
+    @SuppressWarnings({"deprecation", "MissingPermission"})
+    WifiChangement.Issue changer(String ssid, String password, String[] ancien) {
+        WifiManager wm = wm();
+        if (!wm.isWifiEnabled()) wm.setWifiEnabled(true);
+        WifiInfo info = wm.getConnectionInfo();
+        String avant = info == null || info.getSSID() == null ? "" : info.getSSID().replace("\"", "");
+        if ("<unknown ssid>".equals(avant)) avant = "";
+        int ancienId = info == null ? -1 : info.getNetworkId();
+        ancien[0] = avant;
+        if (ssid.equals(avant) && wifiValide()) return WifiChangement.Issue.DEJA;
+        // Réseau absent de la recherche : rien n'est touché.
+        boolean vu = false;
+        try {
+            JSONArray nets = new JSONArray(scan());
+            for (int i = 0; i < nets.length() && !vu; i++) vu = ssid.equals(nets.getJSONObject(i).optString("ssid"));
+        } catch (Exception e) {
+            Log.w(TAG, "Recherche avant changement de wifi", e);
+        }
+        if (!vu) return WifiChangement.Issue.INTROUVABLE;
+        java.util.Set<Integer> enregistres = new java.util.HashSet<>();
+        List<WifiConfiguration> confs = wm.getConfiguredNetworks();
+        if (confs != null) for (WifiConfiguration c : confs) enregistres.add(c.networkId);
+        WifiConfiguration c = new WifiConfiguration();
+        c.SSID = "\"" + ssid + "\"";
+        if (password == null || password.isEmpty()) c.allowedKeyManagement.set(WifiConfiguration.KeyMgmt.NONE);
+        else c.preSharedKey = "\"" + password + "\"";
+        int id = wm.addNetwork(c);
+        if (id < 0) return WifiChangement.Issue.ECHEC;
+        if (enregistres.contains(id)) {
+            // Même nom qu'un réseau déjà enregistré : Android remplace son mot de passe (à voir sur T-003).
+            Journal.log(context, "Wifi : « " + ssid + " » était déjà enregistré, son mot de passe est remplacé");
+        }
+        final java.util.concurrent.atomic.AtomicBoolean auth = new java.util.concurrent.atomic.AtomicBoolean();
+        android.content.BroadcastReceiver recepteur = new android.content.BroadcastReceiver() {
+            @Override
+            public void onReceive(Context ctx, android.content.Intent intent) {
+                if (intent.getIntExtra(WifiManager.EXTRA_SUPPLICANT_ERROR, -1) == WifiManager.ERROR_AUTHENTICATING) auth.set(true);
+            }
+        };
+        android.content.IntentFilter filtre = new android.content.IntentFilter(WifiManager.SUPPLICANT_STATE_CHANGED_ACTION);
+        if (Build.VERSION.SDK_INT >= 33) context.registerReceiver(recepteur, filtre, Context.RECEIVER_NOT_EXPORTED);
+        else context.registerReceiver(recepteur, filtre);
+        boolean associe = false;
+        boolean internet = false;
+        try {
+            // Pas de disconnect() : Android passe au nouveau réseau ; l'ancien reste enregistré.
+            wm.enableNetwork(id, true);
+            wm.reconnect();
+            long fin = android.os.SystemClock.elapsedRealtime() + WifiChangement.ATTENTE_MS;
+            while (android.os.SystemClock.elapsedRealtime() < fin && !auth.get()) {
+                try { Thread.sleep(1000); } catch (InterruptedException e) { break; }
+                WifiInfo i = wm.getConnectionInfo();
+                String maintenant = i == null || i.getSSID() == null ? "" : i.getSSID().replace("\"", "");
+                if (ssid.equals(maintenant)) {
+                    associe = true;
+                    if (wifiValide()) { internet = true; break; }
+                }
+            }
+        } finally {
+            try { context.unregisterReceiver(recepteur); } catch (Exception ignored) { }
+        }
+        // enableNetwork(id, true) peut mettre les autres réseaux de côté : ils redeviennent tous utilisables.
+        for (int x : enregistres) wm.enableNetwork(x, false);
+        if (internet) return WifiChangement.Issue.CONNECTEE;
+        if (WifiChangement.retirerApresEchec(id, enregistres)) wm.removeNetwork(id); // seulement le réseau essayé
+        else wm.enableNetwork(id, false);
+        if (ancienId >= 0) {
+            wm.enableNetwork(ancienId, true);
+            wm.reconnect();
+            long fin = android.os.SystemClock.elapsedRealtime() + WifiChangement.RETOUR_MS;
+            while (android.os.SystemClock.elapsedRealtime() < fin && !wifiValide()) {
+                try { Thread.sleep(1000); } catch (InterruptedException e) { break; }
+            }
+            for (int x : enregistres) wm.enableNetwork(x, false);
+        }
+        return WifiChangement.issue(true, auth.get(), associe, false);
+    }
+
+    /** Un wifi avec internet validé par Android ? */
+    private boolean wifiValide() {
+        ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+        for (Network n : cm.getAllNetworks()) {
+            NetworkCapabilities caps = cm.getNetworkCapabilities(n);
+            if (caps != null && caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+                    && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) return true;
+        }
+        return false;
+    }
+
+    /** Données mobiles avec internet ? */
+    boolean mobileValide() {
+        ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+        for (Network n : cm.getAllNetworks()) {
+            NetworkCapabilities caps = cm.getNetworkCapabilities(n);
+            if (caps != null && caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
+                    && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) return true;
+        }
+        return false;
+    }
+
     /** {wifi: nom du réseau ou "", internet, mobile: données mobiles disponibles, via: wifi|mobile|autre|aucun} */
     @SuppressWarnings("deprecation")
     String status() {

@@ -1,0 +1,31 @@
+# Canal de mise à jour des tablettes (A37, audit RM7), vérifié chaque jour, gratuitement : fait comme une
+# tablette (version.json et version-test.json sur papote-maj.web.app, puis l'APK annoncé sur GitHub) et
+# vérifie que tout répond, que les empreintes sont les bonnes, que chaque APK annoncé porte une étiquette
+# tablette-* et qu'aucune version annoncée n'est plus ancienne que la dernière étiquetée.
+# Échec = exécution rouge = e-mail « Run failed » de GitHub. Que faire : installation/LISEZMOI-MISES-A-JOUR.md.
+# Les horaires (schedule) ne tournent que depuis la branche par défaut (main) : ce fichier doit être sur main.
+name: Canal de mise à jour
+
+on:
+  schedule:
+    # Chaque jour à 6 h 17 UTC (7 h 17 l'hiver, 8 h 17 l'été à Paris).
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+  # Et à chaque changement du vérificateur lui-même.
+  push:
+    paths: ['installation/canal-maj.ps1', 'installation/verifier-canal-maj.ps1', '.github/workflows/canal-maj.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  verifier:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: installation
+      - name: Fichiers de version, APK, empreintes et étiquettes
+        shell: pwsh
+        run: ./installation/verifier-canal-maj.ps1

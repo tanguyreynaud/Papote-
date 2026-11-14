@@ -159,6 +159,27 @@ final class Telephone {
     }
 
     /**
+     * Le réseau téléphonique est là (A47) : sinon le SOS part d'abord par internet, puis par la carte SIM
+     * dès qu'il revient (tablette.js lit phoneReady toutes les 3 s). État inconnu (droit refusé, Android
+     * qui ne répond pas) : on fait comme s'il était là, comme avant.
+     */
+    static boolean reseauVoix(Context c) {
+        try {
+            TelephonyManager tm = (TelephonyManager) c.getSystemService(Context.TELEPHONY_SERVICE);
+            android.telephony.ServiceState s = tm == null ? null : tm.getServiceState();
+            return voixPossible(s == null ? null : s.getState());
+        } catch (Exception e) {
+            return true;
+        }
+    }
+
+    /** ServiceState.getState() : 0 en service ; 1 hors service, 2 urgences seulement, 3 radio coupée (mode avion). */
+    static boolean voixPossible(Integer etat) {
+        if (etat == null) return true;
+        return etat != 1 && etat != 2 && etat != 3;
+    }
+
+    /**
      * Au démarrage, par le propriétaire de l'appareil : droits d'appel et rôle Téléphone (Android 14+ ;
      * avant, seulement par installer-tablette.ps1 : cmd role add-role-holder android.app.role.DIALER).
      */

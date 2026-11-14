@@ -85,4 +85,14 @@ public class TelephoneTest {
         assertEquals("u1", l.get(1)[0]);
         assertEquals("u3", l.get(2)[0]);
     }
+
+    /** A47 : sans réseau téléphonique, phoneReady est faux (le SOS attend la carte SIM) ; état inconnu : comme avant. */
+    @Test
+    public void reseauVoixSelonLEtatDuService() {
+        assertTrue(Telephone.voixPossible(0));
+        assertFalse(Telephone.voixPossible(1));
+        assertFalse(Telephone.voixPossible(2));
+        assertFalse(Telephone.voixPossible(3));
+        assertTrue(Telephone.voixPossible(null));
+    }
 }
