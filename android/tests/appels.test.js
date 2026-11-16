@@ -117,6 +117,34 @@ test('l\'appelant raccroche avant la réponse : la sonnerie s\'arrête tout de s
   } finally { await b.fermer(); }
 });
 
+// Parcours de Mamie (A49, 16/11) : Julie raccroche au moment où Mamie décroche. Son « ended » arrivait avant la
+// réponse de la tablette, qui l'écrasait par « accepted » : l'appel restait ouvert dans la base, et l'écran d'appel
+// de Mamie (caméra et micro allumés) ne se refermait plus.
+test('la famille raccroche pendant que Mamie décroche : l\'appel reste terminé, l\'écran d\'appel se referme', async () => {
+  const b = await tablette();
+  try {
+    await appelEntrant(b, 'c9');
+    // Julie raccroche juste après le toucher de Mamie, pendant que la tablette prépare sa réponse WebRTC.
+    await b.page.evaluate(() => {
+      const createAnswer = RTCPeerConnection.prototype.createAnswer;
+      RTCPeerConnection.prototype.createAnswer = async function (...a) {
+        const r = await createAnswer.apply(this, a);
+        const c = 'families/F1/calls/c9';
+        window.__fs.ecrire(c, { ...window.__fs.lire(c), state: 'ended', endedAt: { __serverTimestamp: true } });
+        return r;
+      };
+    });
+    await b.toucher('#ring-answer');
+    await b.patienter(4000);
+    const appel = await b.lire('families/F1/calls/c9');
+    assert.strictEqual(appel.state, 'ended', 'l\'appel raccroché par Julie n\'est pas rouvert par la tablette');
+    assert.ok(!appel.answer, 'pas de réponse écrite sur un appel terminé');
+    assert.ok(!(await b.visible('#call-view')), 'écran d\'appel refermé');
+    assert.deepStrictEqual((await b.appels('inCall')).map((a) => a.args[0]), [true, false], 'mode appel quitté');
+    assert.strictEqual(await b.page.evaluate(() => { const v = document.getElementById('call-local'); return !!(v.srcObject && v.srcObject.getTracks().some((t) => t.readyState === 'live')); }), false, 'caméra éteinte');
+  } finally { await b.fermer(); }
+});
+
 test('réponse impossible (offre illisible) : pas d\'écran bloqué sur « Connexion… »', async () => {
   const b = await tablette();
   try {

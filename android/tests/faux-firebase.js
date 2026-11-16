@@ -146,6 +146,19 @@ export async function updateDoc(ref, data) { fs.modifier(ref.path, data); }
 export async function addDoc(coll, data) { const ref = doc(coll); fs.ecrire(ref.path, data); return ref; }
 export async function deleteDoc(ref) { fs.effacer(ref.path); }
 export function onSnapshot(cible, suivant, erreur) { return fs.ecouter(cible, suivant, erreur); }
+// Transaction : lectures puis écritures d'un coup (une seule page, rien en concurrence ici).
+export async function runTransaction(db, fn) {
+  const ecritures = [];
+  const tx = {
+    get: async (ref) => fs.resultat(ref),
+    set: (ref, data) => { ecritures.push(() => fs.ecrire(ref.path, data)); return tx; },
+    update: (ref, data) => { ecritures.push(() => fs.modifier(ref.path, data)); return tx; },
+    delete: (ref) => { ecritures.push(() => fs.effacer(ref.path)); return tx; },
+  };
+  const r = await fn(tx);
+  ecritures.forEach((e) => e());
+  return r;
+}
 
 // ---------- Functions ----------
 export function getFunctions() { return {}; }

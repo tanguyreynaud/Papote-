@@ -9,7 +9,7 @@ import {
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
 import {
   getFirestore, doc, getDoc, getDocs, setDoc, updateDoc, addDoc, deleteDoc, collection, query, where,
-  onSnapshot, serverTimestamp,
+  onSnapshot, serverTimestamp, runTransaction,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
 
 const app = initializeApp({
@@ -871,7 +871,18 @@ async function connectAnswer(id, data, callRef, stream) {
   const r = regime();
   const answer = { type: reply.type, sdp: limitReceive(reply.sdp), reseau: r === 'wifi' ? 'wifi' : 'sim' };
   if (r !== 'wifi' && r !== 'sim') answer.regime = r; // eco | mini | audio (un ancien téléphone traite « mini » comme « eco »)
-  await updateDoc(callRef, { answer, state: 'accepted' });
+  // Seulement si l'appel sonne encore : la famille peut raccrocher pendant que Mamie décroche (A49, 16/11). Écrire
+  // « accepted » sans regarder écrasait son « ended » : l'appel restait ouvert et l'écran d'appel de Mamie aussi.
+  const pris = await runTransaction(db, async (tx) => {
+    const snap = await tx.get(callRef);
+    if (!snap.exists() || snap.data().state !== 'ringing') return false;
+    tx.update(callRef, { answer, state: 'accepted' });
+    return true;
+  });
+  if (!pris) {
+    hangup('Appel terminé', true);
+    return;
+  }
 
   active.stops.push(onSnapshot(collection(callRef, 'callerCandidates'), (snap) => {
     snap.docChanges().forEach((c) => {
