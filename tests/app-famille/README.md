@@ -26,7 +26,7 @@ scénarios) ; utiliser plutôt
 | Fichier | Parcours |
 | --- | --- |
 | `installation` | Inscription ; commande du site : famille préparée (invitation « Entrer dans ma famille », nom de la personne, tablette entrée seule) |
-| `mise-en-route` | Audit du 12/11 : `?tablette=` sans aucun effet (seul Papote relie une tablette, A29) ; numéro de commande pour celui qui a payé avec une autre adresse (A40 : entrée directe et responsable, double appui, code inconnu, trop d'essais) ; le nom, puis « Réglons la tablette », puis le guide, et e-mails des proches pour les responsables (A43) ; proche à l'étranger (M5) ; numéro de Mamie à enregistrer (M8) |
+| `mise-en-route` | Audit du 12/11 : `?tablette=` sans aucun effet (seul Papote relie une tablette, A29) ; numéro de commande tapé dans « Rejoindre une famille » : refusé sans appel au serveur, une seule tentative au double appui (A53, qui retire l'entrée par le numéro de commande d'A40) ; le nom, puis « Réglons la tablette », puis le guide, et e-mails des proches pour les responsables (A43) ; proche à l'étranger (M5) ; numéro de Mamie à enregistrer (M8) |
 | `natif` | Liens piégés : `?natif=` d'un autre, et `#connexion=` ignoré hors de l'app Android (L3) |
 | `proches` | Invitation par e-mail, code famille (accepté, refusé, faux), responsable, retrait d'un proche |
 | `envois` | Photos (légende, 5 max, suppression, « Tout télécharger » : photos, vidéos et messages dans un .zip), vidéo, aperçu avant envoi (forme gardée, plein écran qui reste ouvert, Refilmer / Galerie, debout et couchée), filmer dans Papote (caméra, Filmer / Arrêter, retour, caméra refusée), messages (rapides, vu, réponse de Mamie), droits |

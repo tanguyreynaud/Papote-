@@ -105,9 +105,3 @@ export function annulerResiliation(fid) {
 export function nommerFamillePreparee(fid, nom) {
   return call('nommerFamillePreparee', { fid, nom });
 }
-
-// Celui qui a payé, connecté avec une autre adresse que celle de la commande : il entre dans la famille de sa
-// commande avec son numéro de commande (functions/entrer-par-commande.js, A40) → { fid, nom }.
-export function entrerParCommande(code, prenom) {
-  return call('entrerParCommande', { code, prenom });
-}

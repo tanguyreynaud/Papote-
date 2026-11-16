@@ -1,5 +1,6 @@
 // Première mise en route par une famille (audit du 12/11/2026, décisions de Tanguy du 12/11), dans la vraie appli.
 // Rapport : /mnt/project-files/audit/mise-en-route-12-11/rapport.md (M1 = A40, M2 = A29, M4 = A43, M5, M8).
+// A40 (entrée par le numéro de commande) est retiré depuis A53 (Tanguy 16/11) : il ne fait plus entrer.
 
 const test = require('node:test');
 const assert = require('node:assert');
@@ -134,63 +135,39 @@ test('A29 : ?tablette= n\'a plus aucun effet : ni écran d\'installation, ni fam
   assert.strictEqual((await g.liste(`families/${fid}/members`)).length, 0, 'personne n\'est entré dans la famille de la commande');
 });
 
-// A40 (M1) : Paul a payé avec son adresse du travail et ouvre l'appli avec son adresse perso : aucune invitation ne
-// l'attend. Il tape son numéro de commande (page « Merci », e-mail, facture) dans « Vous êtes invité dans une famille » :
-// il entre tout de suite et devient responsable. Double appui : un seul appel au serveur.
-test('A40 : numéro de commande dans « Code famille ou numéro de commande » : entrée directe, responsable', async () => {
+// A53 (Tanguy 16/11) : le numéro de commande ne fait plus entrer dans une famille (il est sur la facture et les
+// e-mails, et rendait n'importe qui responsable). Tapé dans « Rejoindre une famille », un numéro de commande valide est
+// refusé comme un code inconnu, sans appel au serveur ; un double appui ne fait qu'une tentative.
+test('A53 : numéro de commande dans « Rejoindre une famille » : refusé, sans appel au serveur, une seule tentative', async () => {
   const { abonnement: id } = await acteurs.commanderEtPayer({ email: 'paul@travail.fr' });
   const { fid, code } = await g.lire(`commandes/${id}`);
   const paul = await banc.telephone('Paul');
   await g.inscrire(paul, 'paul.perso@exemple.fr', 'Paul');
   await g.attendreVue(paul, 'view-join', 30_000);
-  assert.match(await paul.page.locator('#join-code-wrap').innerText(), /Code famille ou numéro de commande/);
-  assert.match(await paul.page.locator('#join-help').innerText(), /numéro de commande/);
+  assert.doesNotMatch(await paul.page.locator('#join-code-wrap').innerText(), /commande/i);
+  assert.doesNotMatch(await paul.page.locator('#join-help').innerText(), /commande/i);
   await paul.page.fill('#join-code', code.toLowerCase());
-  assert.strictEqual(await paul.page.inputValue('#join-code'), `${code.slice(0, 4)}-${code.slice(4)}`, 'tiret ajouté tout seul');
+  // Ce que montre le bouton dès le toucher, même si la réponse arrive très vite.
+  await paul.page.evaluate(() => {
+    const b = document.querySelector('#form-join button[type=submit]');
+    window.__textes = [];
+    new MutationObserver(() => window.__textes.push(b.textContent)).observe(b, { childList: true, characterData: true, subtree: true });
+  });
+  const appelsAvant = banc.appels.length;
+  const refus = () => paul.console.filter((l) => /Code refusé/.test(l)).length;
   await g.doubleAppui(paul, '#form-join button[type=submit]');
-  await g.attendreVue(paul, 'view-home', 30_000);
-  assert.strictEqual(g.nbAppels('entrerParCommande'), 1, 'double appui : un seul appel');
-  assert.strictEqual(await paul.page.evaluate(() => localStorage.getItem('papote.fid')), fid);
+  await paul.page.locator('#join-error').waitFor({ state: 'visible' });
+  await paul.page.locator('#form-join button[type=submit]:not([disabled])', { hasText: 'Rejoindre' }).waitFor();
+  assert.strictEqual(await paul.page.locator('#join-error').innerText(),
+    'Ce code ne correspond à aucune famille. Vérifiez-le, ou demandez à un responsable de vous inviter.');
+  assert.strictEqual((await paul.page.evaluate(() => window.__textes))[0], 'Un instant…', 'réaction visible tout de suite');
+  await paul.page.waitForTimeout(500);
+  assert.strictEqual(refus(), 1, 'double appui : une seule tentative');
+  assert.deepStrictEqual(banc.appels.slice(appelsAvant).map((a) => a.nom), [], 'aucun appel au serveur');
+  assert.strictEqual(await g.vue(paul), 'view-join');
+  assert.strictEqual(await paul.page.evaluate(() => localStorage.getItem('papote.fid')), null);
   await s.calme();
-  const fam = await g.lire(`families/${fid}`);
-  const fiche = await g.lire(`families/${fid}/members/${fam.createdBy}`);
-  assert.strictEqual(fiche && fiche.email, 'paul.perso@exemple.fr', 'Paul responsable de sa famille');
-  assert.strictEqual(fiche.status, 'active');
-  // Responsable : « Comment appelez-vous la personne ? » l'attend, rien ne passe devant (A43).
-  await paul.page.locator('#nom-prepare').waitFor({ state: 'visible' });
-  assert.strictEqual(await paul.page.locator('.guide-back').count(), 0);
-  assert.strictEqual((await s.db.collection('families').get()).size, 1, 'jamais une deuxième famille');
-});
-
-test('A40 : code inconnu, puis trop d\'essais dans la journée : un message clair, on reste sur la page', async () => {
-  const { abonnement: id } = await acteurs.commanderEtPayer({ email: 'paul@travail.fr' });
-  const { code } = await g.lire(`commandes/${id}`);
-  const eve = await banc.telephone('Ève');
-  await g.inscrire(eve, 'eve@exemple.fr', 'Ève');
-  await g.attendreVue(eve, 'view-join', 30_000);
-  const essayer = async (saisie) => {
-    const avant = g.nbAppels('entrerParCommande');
-    await eve.page.fill('#join-code', saisie);
-    // Ce que montre le bouton dès le toucher, même si la réponse arrive très vite.
-    await eve.page.evaluate(() => {
-      const b = document.querySelector('#form-join button[type=submit]');
-      window.__textes = [];
-      new MutationObserver(() => window.__textes.push(b.textContent)).observe(b, { childList: true, characterData: true, subtree: true });
-    });
-    await eve.page.click('#form-join button[type=submit]');
-    await g.attendreBase(async () => g.nbAppels('entrerParCommande') > avant, 'appel au serveur');
-    await eve.page.locator('#form-join button[type=submit]:not([disabled])', { hasText: 'Rejoindre' }).waitFor();
-    assert.strictEqual((await eve.page.evaluate(() => window.__textes))[0], 'Un instant…', 'réaction visible tout de suite');
-    return eve.page.locator('#join-error').innerText();
-  };
-  const faux = code === 'ZZZZ2222' ? 'ZZZZ3333' : 'ZZZZ2222';
-  for (let i = 0; i < 5; i++) {
-    assert.match(await essayer(faux), /aucune famille ni à aucune commande/);
-  }
-  // Même le bon code : la limite du jour est atteinte.
-  assert.match(await essayer(code), /Trop d'essais pour aujourd'hui\. Réessayez demain/);
-  assert.strictEqual(await g.vue(eve), 'view-join');
-  assert.strictEqual(await eve.page.evaluate(() => localStorage.getItem('papote.fid')), null);
+  assert.strictEqual((await g.liste(`families/${fid}/members`)).length, 0, 'personne n\'est entré dans la famille de la commande');
 });
 
 // A43 (M4) : pour le premier qui entre dans une famille préparée, dans l'ordre : le nom, puis « Réglons la tablette »

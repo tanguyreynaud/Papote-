@@ -21,7 +21,7 @@ import { askConfirm, notice, avantDePartir, chooseAction, fermerFenetre, demande
 import { showGuideOnce } from './guide.js';
 import {
   abonnementOk, FORMULES, LIBELLES, ouvrirPortail, payer, inciterSepa, passerAuSepa, rattacherCommande, resilier, annulerResiliation,
-  finDeContrat, facturesFamille, renvoyerTablette, retracter, inviterParEmail, nommerFamillePreparee, entrerParCommande,
+  finDeContrat, facturesFamille, renvoyerTablette, retracter, inviterParEmail, nommerFamillePreparee,
 } from './abonnement.js';
 import { startCall, watchTabletBusy, watchIncomingCalls, answerIncoming, warmUpCalls, declineIncoming, reportCallIncident } from './appel.js';
 import { pushSupported, pushAllowed, pushRefused, enablePush, closeCallNotification, rememberNativeToken, inNativeApp, launchFromAndroidApp, nativeNotificationsOff, forgetThisPhone } from './push.js';
@@ -212,12 +212,9 @@ function toast(text) {
 
 // ---------- Rejoindre / créer ----------
 
-// Code famille d'abord ; s'il n'en est pas un, numéro de commande (A40) : celui qui a payé entre tout de suite dans
-// la famille de sa commande, même connecté avec une autre adresse. Un seul appel à la fois (double appui).
-const ERREURS_COMMANDE = {
-  'not-found': 'Ce code ne correspond à aucune famille ni à aucune commande. Vérifiez-le : il est dans l\'e-mail de commande et sur la facture.',
-  'resource-exhausted': 'Trop d\'essais pour aujourd\'hui. Réessayez demain, ou demandez à un responsable de vous inviter avec votre adresse e-mail.',
-};
+// Seul le code famille fait entrer ici (le numéro de commande ne sert plus à entrer : A53, Tanguy 16/11 ; celui qui a
+// payé entre par son invitation ou le lien de l'e-mail de confirmation). Un seul appel à la fois (double appui).
+const CODE_INCONNU = 'Ce code ne correspond à aucune famille. Vérifiez-le, ou demandez à un responsable de vous inviter.';
 $('form-join').addEventListener('submit', async (e) => {
   e.preventDefault();
   const button = e.target.querySelector('button[type=submit]');
@@ -228,25 +225,16 @@ $('form-join').addEventListener('submit', async (e) => {
   showError($('join-error'), '');
   const code = normalizeCode($('join-code').value);
   try {
-    let fidRejoint;
-    try {
-      fidRejoint = await joinFamily(code, savedPrenom());
-    } catch (err) {
-      if (!(err instanceof CodeInconnuError) || code.length !== 8) throw err;
-      ({ fid: fidRejoint } = await entrerParCommande(code, savedPrenom()));
-      saveFamilyId(fidRejoint);
-    }
+    const fidRejoint = await joinFamily(code, savedPrenom());
     // Invité aussi par e-mail : l'invitation est remplie, on l'efface.
     if (myEmail()) deleteDoc(doc(db, 'families', fidRejoint, 'invitations', myEmail())).catch(() => {});
     forgetInviteCode();
     await enterApp();
   } catch (err) {
-    const raison = (err.code || '').replace(/^functions\//, '');
-    if (err instanceof CodeInconnuError || ERREURS_COMMANDE[raison]) console.warn('Code refusé', raison || err);
+    if (err instanceof CodeInconnuError) console.warn('Code refusé');
     else console.error(err);
-    showError($('join-error'), err instanceof CodeInconnuError ? ERREURS_COMMANDE['not-found']
-      : ERREURS_COMMANDE[raison] || (raison === 'failed-precondition' && err.message)
-      || 'Impossible de rejoindre pour le moment. Vérifiez la connexion internet.');
+    showError($('join-error'), err instanceof CodeInconnuError ? CODE_INCONNU
+      : 'Impossible de rejoindre pour le moment. Vérifiez la connexion internet.');
   } finally {
     button.disabled = false;
     button.textContent = libelle;
@@ -5059,7 +5047,7 @@ async function telPrisPar(tel) {
   const snap = await getDocs(collection(db, 'families', session.fid, 'members'));
   return telPrisDans(snap.docs.map((d) => ({ id: d.id, ...d.data() })), tel, session.uid);
 }
-// Juste après l'entrée dans la famille (code famille, invitation, numéro de commande, demande acceptée) : le numéro
+// Juste après l'entrée dans la famille (code famille, invitation, demande acceptée) : le numéro
 // donné dans « Vos informations » n'est écrit sur ma fiche que s'il n'est celui d'aucun autre proche. Sinon
 // « Vos informations » revient, le numéro refusé et le message affichés, pour en donner un autre (ou cocher
 // « Je n'ai pas de numéro »). true si c'est le cas : l'ouverture de la famille s'arrête là.
@@ -5477,9 +5465,8 @@ function showLogin(legacy) {
   show('view-login');
 }
 
-// Code famille (un responsable accepte) ou numéro de commande (celui qui a payé, connecté avec une autre adresse
-// que celle de la commande : il entre tout de suite, A40).
-const JOIN_AIDE = "Entrez le code famille qu'on vous a envoyé : un responsable acceptera votre arrivée. Vous avez commandé Papote ? Entrez votre numéro de commande (dans l'e-mail de commande et sur la facture) : vous entrez tout de suite dans votre famille.";
+// Code famille : un responsable accepte l'arrivée.
+const JOIN_AIDE = "Entrez le code famille qu'on vous a envoyé : un responsable acceptera votre arrivée. Le plus simple : demandez-lui de vous inviter avec votre adresse e-mail.";
 
 function showJoin(canGoBack) {
   $('join-account').textContent = `Connecté avec ${myEmail()}`;
