@@ -98,12 +98,12 @@ test('M0 : colis retiré il y a 2 jours, tablette toujours pas connectée : Tang
   s.boite.length = 0;
   s.avancer(1);
   await s.tache('rappelsJumelage');
-  assert.deepStrictEqual(mailsA('contact@mapapote.fr').filter((m) => /pas encore connectée/.test(m)), [], 'pas avant 2 jours');
+  assert.deepStrictEqual(mailsA('contact@mapapote.fr').filter((m) => /Tablette non connectée/.test(m)), [], 'pas avant 2 jours');
   s.avancer(1.1);
   await s.tache('rappelsJumelage');
   s.avancer(1);
   await s.tache('rappelsJumelage');
-  assert.strictEqual(mailsA('contact@mapapote.fr').filter((m) => /pas encore connectée/.test(m)).length, 1);
+  assert.strictEqual(mailsA('contact@mapapote.fr').filter((m) => /Tablette non connectée/.test(m)).length, 1);
   assert.strictEqual((await commande(id)).alerteConnexion, true);
   assert.ok((await aFaire()).some((l) => /pas encore connectée, colis retiré : appeler le client/.test(l)), JSON.stringify(await aFaire()));
 });
@@ -118,7 +118,7 @@ test('M0 : tablette entrée seule dans sa famille : aucune alerte de connexion',
   s.boite.length = 0;
   s.avancer(4);
   await s.tache('rappelsJumelage');
-  assert.deepStrictEqual(mailsA('contact@mapapote.fr').filter((m) => /pas encore connectée/.test(m)), []);
+  assert.deepStrictEqual(mailsA('contact@mapapote.fr').filter((m) => /Tablette non connectée/.test(m)), []);
   assert.strictEqual((await commande(id)).alerteConnexion, undefined);
 });
 

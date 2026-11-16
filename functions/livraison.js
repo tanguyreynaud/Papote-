@@ -116,7 +116,7 @@ function alerteConnexion(c, comment) {
     ? `Colis parti il y a ${ALERTE_CONNEXION_JOURS + ACHEMINEMENT_ESTIME_JOURS} jours sans suivi Sendcloud (compté arrivé ${ACHEMINEMENT_ESTIME_JOURS} jours après l'envoi)`
     : comment === 'main-propre' ? `Remise en main propre il y a ${delaiConnexion()}` : `Colis retiré il y a ${delaiConnexion()}`;
   return {
-    titre: `Tablette pas encore connectée, ${quoi} il y a ${comment === 'estimee' ? `${ALERTE_CONNEXION_JOURS + ACHEMINEMENT_ESTIME_JOURS} jours` : delaiConnexion()} : ${qui}`,
+    titre: `Tablette non connectée, ${quoi} il y a ${comment === 'estimee' ? `${ALERTE_CONNEXION_JOURS + ACHEMINEMENT_ESTIME_JOURS} jours` : delaiConnexion()} : ${qui}`,
     detail: `${depuis} : la tablette n'est toujours pas entrée dans sa famille. L'écran de la tablette dit à la personne que Papote est prévenu et s'en occupe. Le plus souvent, elle n'a pas de connexion chez la personne (pas de box, wifi à choisir, 4G faible). Appelez le client pour l'aider.`,
     aFaire: `Tablette de ${qui} pas encore connectée, ${quoi} : appeler le client`,
   };

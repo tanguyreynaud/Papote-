@@ -25,7 +25,7 @@ async function aFaire() {
     commandes: commandes.docs.map((d) => ({ id: d.id, ...d.data() })), stock: [], depenses: [], maintenant: Date.now(), automatique: {},
   });
 }
-const alertesConnexion = () => mailsA(PAPOTE).filter((m) => /pas encore connectée/.test(m));
+const alertesConnexion = () => mailsA(PAPOTE).filter((m) => /Tablette non connectée/.test(m));
 const alertesSansFamille = () => mailsA(PAPOTE).filter((m) => /connectée mais sans famille/.test(m));
 
 // « Remis en main propre » dans l'admin (tabletteEnvoyee, mainPropre) : même préparation qu'un colis, sans suivi.
@@ -54,7 +54,7 @@ test('(a) tablette remise en main propre par Papote, pas connectée 48 h après 
   await s.tache('rappelsJumelage');
   s.avancer(1);
   await s.tache('rappelsJumelage');
-  assert.deepStrictEqual(alertesConnexion(), ['Tablette pas encore connectée, remise en main propre il y a 48 h : Paul Martin']);
+  assert.deepStrictEqual(alertesConnexion(), ['Tablette non connectée, remise en main propre il y a 48 h : Paul Martin']);
   assert.strictEqual((await commande(id)).alerteConnexion, true);
   assert.ok((await aFaire()).includes('Tablette de Paul Martin pas encore connectée, remise en main propre : appeler le client'), JSON.stringify(await aFaire()));
 });
@@ -75,7 +75,7 @@ test('(a) colis parti avec un n° de suivi tapé à la main (sans Sendcloud) : a
   await s.tache('rappelsJumelage');
   s.avancer(1);
   await s.tache('rappelsJumelage');
-  assert.deepStrictEqual(alertesConnexion(), ['Tablette pas encore connectée, colis parti sans suivi il y a 5 jours : Paul Martin']);
+  assert.deepStrictEqual(alertesConnexion(), ['Tablette non connectée, colis parti sans suivi il y a 5 jours : Paul Martin']);
   assert.ok((await aFaire()).some((l) => /Paul Martin pas encore connectée, colis parti sans suivi : appeler le client/.test(l)));
 });
 

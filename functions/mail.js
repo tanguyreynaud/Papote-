@@ -909,7 +909,7 @@ function alerteSimHorsService({ nom, famille, ref, operateur, motif, hote, servi
     ? `La tablette n'entend que des antennes d'autres réseaux : la carte ne peut pas s'y accrocher et redémarrer n'y change rien. Changer de carte SIM pour un opérateur présent chez le client (voir les antennes dans l'admin, page de la tablette).${service && service !== 'ok' ? ` Réseau mobile : ${service}.` : ''}`
     : `Elle a déjà redémarré seule (au bout de 20 min) sans retrouver le réseau. Appeler le client : retirer puis remettre la carte SIM règle souvent le problème (T-003, 12/11) ; sinon, changer de carte.`;
   return alerteAdmin({
-    titre: `Carte SIM ${motif === 'antennes' ? 'sans antenne de son réseau' : 'hors service'} depuis ${duree} : ${tablette}`,
+    titre: `Carte SIM ${motif === 'antennes' ? 'sans son réseau' : 'hors service'} depuis ${duree} : ${tablette}`,
     detail: `${qui} est ${cas} depuis le ${quand}. Plus d'appels par la carte SIM ni d'internet mobile : la tablette ne passe plus que par le wifi, s'il y en a un. ${geste} La famille n'est pas prévenue. Un seul e-mail pour cette panne ; un autre quand le réseau revient.`,
     commande,
   });
@@ -935,7 +935,7 @@ function alerteSimBloquee({ nom, famille, ref, code, depuis, duree, debloquee, c
     verrouillee: 'La carte est verrouillée par l\'opérateur (carte refusée par le réseau ou par la tablette). Appeler l\'opérateur pour la faire déverrouiller, sinon changer de carte.',
   }[code] || 'Regarder la carte dans un téléphone, sinon la changer.';
   return alerteAdmin({
-    titre: `Carte SIM bloquée (${quoi}) : ${tablette}`,
+    titre: `Carte SIM bloquée (${code === 'verrouillee' ? 'verrouillée' : quoi}) : ${tablette}`,
     detail: `${qui} a sa carte SIM bloquée depuis le ${quand} : ${quoi}. Une carte bloquée ne se débloque pas seule : plus d'appels par la carte ni d'internet mobile, la tablette ne passe plus que par le wifi. ${geste} La famille n'est pas prévenue. Un seul e-mail pour ce blocage ; un autre quand la carte est débloquée.`,
     commande,
   });

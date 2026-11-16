@@ -66,7 +66,7 @@ test('lignes « À faire » et e-mails : le cas est dit', () => {
   assert.strictEqual(duree(2 * 3600_000 + 10 * MIN), '2 h 10');
   assert.strictEqual(duree(2 * 3600_000), '2 h');
   const e = mail.alerteSimHorsService({ nom: 'Mamie', motif: 'antennes', hote: '20820', depuis: T0, duree: '2 h' });
-  assert.match(e.subject, /sans antenne de son réseau depuis 2 h/);
+  assert.match(e.subject, /sans son réseau depuis 2 h/);
   assert.match(mail.alerteSimHorsService({ nom: 'Mamie', motif: 'service', depuis: T0, duree: '2 h' }).subject, /hors service depuis 2 h/);
   assert.match(mail.alerteSimHorsService({ nom: 'Mamie', motif: 'service', depuis: T0, duree: '3 h', revenu: true }).subject, /^Carte SIM revenue/);
 });

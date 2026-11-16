@@ -135,7 +135,7 @@ test('aucune antenne du réseau qui porte la carte pendant 2 h : alerte « sans 
   for (const m of [90, 120, 150, 180, 209]) await rapport(m, { service: 'urgences', antennes: [antenne(ORANGE), antenne(ORANGE)] });
   assert.deepStrictEqual(emails(), [], '1 h 59 : rien');
   await rapport(210, { service: 'urgences', antennes: [antenne(ORANGE)] });
-  assert.deepStrictEqual(emails(), [`Carte SIM sans antenne de son réseau depuis 2 h : tablette ${t.ref} de Mamie Jeanne`]);
+  assert.deepStrictEqual(emails(), [`Carte SIM sans son réseau depuis 2 h : tablette ${t.ref} de Mamie Jeanne`]);
   const mail = s.boite.filter((m) => m.a === PAPOTE).at(-1);
   assert.match(mail.texte, /aucune antenne de son réseau \(20820\)/);
   assert.match(mail.texte, /Changer de carte SIM/);
@@ -206,7 +206,7 @@ test('carte verrouillée puis retirée : alerte « verrouillée », puis ligne l
   const { rapport, emails } = await familleAvecTablette();
   await rapport(0, { bloquee: 'verrouillee', service: 'code verrouillee' });
   assert.strictEqual(emails().length, 1);
-  assert.match(emails()[0], /Carte SIM bloquée \(verrouillée par l'opérateur\)/);
+  assert.match(emails()[0], /Carte SIM bloquée \(verrouillée\)/);
   await rapport(30, null);
   assert.strictEqual(emails().length, 1);
   assert.deepStrictEqual(await ligneAFaire(), []);
