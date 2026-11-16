@@ -27,10 +27,15 @@ const ATTENTE_MIN_MS = 600; // la place ne bouge pas avant (700 ms après le doi
 const capture = (t, nom) => t.page.screenshot({ path: path.join(__dirname, '..', 'captures', 'badges', `${nom}.png`) });
 
 // Relevé à chaque image : le plus grand nombre de cartes visibles en même temps, et le mouvement des tuiles (plus grand
-// pas d'une image à l'autre, nombre d'images où elles bougent, premier mouvement depuis le début du relevé).
+// pas d'une image à l'autre, nombre d'images où elles bougent, plus grand écart à leur place du début, et premier
+// instant où elles s'en sont écartées d'un demi-pixel). Le départ se lit à l'écart, pas au pas d'une image à l'autre :
+// un glissement court (deux cartes de tailles proches, selon les polices de la machine) avance de moins d'un
+// demi-pixel par image, et ne « partait » jamais pour le relevé alors que les tuiles avaient bougé.
 async function surveiller(t) {
   await t.page.evaluate((ids) => {
-    window.__releve = { max: 0, tMin: Infinity, tMax: -Infinity, images: 0, pasMax: 0, imagesMvt: 0, premier: null, debut: performance.now(), y: null };
+    window.__releve = {
+      max: 0, tMin: Infinity, tMax: -Infinity, images: 0, pasMax: 0, imagesMvt: 0, premier: null, debut: performance.now(), y: null, y0: null, ecart: 0,
+    };
     if (window.__surveille) return;
     window.__surveille = true;
     const vu = (e) => !!e && e.checkVisibility({ visibilityProperty: true, checkVisibilityCSS: true });
@@ -40,10 +45,12 @@ async function surveiller(t) {
         r.images++;
         r.max = Math.max(r.max, ids.filter((id) => vu(document.getElementById(id))).length);
         const y = document.querySelector('.tiles').getBoundingClientRect().top + window.scrollY;
+        if (r.y0 === null) r.y0 = y;
+        r.ecart = Math.max(r.ecart, Math.abs(y - r.y0));
+        if (r.premier === null && r.ecart >= 0.5) r.premier = performance.now() - r.debut;
         if (r.y !== null && Math.abs(y - r.y) >= 0.5) {
           r.pasMax = Math.max(r.pasMax, Math.abs(y - r.y));
           r.imagesMvt++;
-          if (r.premier === null) r.premier = performance.now() - r.debut;
         }
         r.y = y;
         r.tMin = Math.min(r.tMin, y);
@@ -58,7 +65,7 @@ function glissement(r, nom) {
   assert.ok(r.images > 5, 'relevé actif');
   assert.ok(r.pasMax <= PAS_MAX, `tuiles : saut de ${r.pasMax.toFixed(1)} px en une image (${nom})`);
   const course = r.tMax - r.tMin;
-  if (course >= 0.5) {
+  if (r.ecart >= 0.5) {
     assert.ok(r.premier >= ATTENTE_MIN_MS, `tuiles parties ${Math.round(r.premier)} ms après le geste, avant le doigt levé (${nom})`);
     if (course > PAS_MAX) assert.ok(r.imagesMvt >= 3, `glissement en ${r.imagesMvt} images (${nom})`);
   }

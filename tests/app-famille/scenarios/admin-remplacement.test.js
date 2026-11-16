@@ -84,9 +84,12 @@ test('admin : code de remplacement valable 7 jours, une seule tablette, double c
   assert.strictEqual(codes.length, 1, 'l\'ancien code libre est effacé, un seul nouveau');
   assert.notStrictEqual(codes[0].id, code.replace('-', ''));
   const nouveau = codes[0].id;
-  // Dans la minute, un nouveau clic rend le même code.
+  // Dans la minute, un nouveau clic rend le même code. On attend la réponse du serveur (« Code déjà créé à
+  // l'instant ») : la carte montre encore ce code pendant l'appel, et la tablette qui le prendrait avant que l'appel
+  // arrive au serveur le rendrait « servi », d'où un autre code (ce qui est juste, mais pas ce qu'on essaie ici).
   await carte(t).locator('button', { hasText: 'Nouveau code' }).click();
   await oui(t, 'Nouveau code');
+  await t.page.locator('.bulle-annonce', { hasText: 'Code déjà créé à l\'instant' }).waitFor({ state: 'attached' });
   await carte(t).locator('.code-remplacement', { hasText: `${nouveau.slice(0, 4)}-${nouveau.slice(4)}` }).waitFor();
   assert.strictEqual((await codesDeLaFamille()).length, 1);
 

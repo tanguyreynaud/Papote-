@@ -83,6 +83,10 @@ function poserBadges(visible, dus) {
   $('badges').classList.toggle('prioritaire', visible === 'notifs-nudge');
 }
 
+// Hauteur exacte : offsetHeight l'arrondit au pixel ; figer la place (ou le bouton « Un instant… ») à cet entier
+// faisait bouger les tuiles d'un demi-pixel sous le doigt.
+const hauteurExacte = (e) => e.getBoundingClientRect().height;
+
 // La place des cartes tenue à cette hauteur (vide, ou la carte rognée par le bas pendant qu'elle glisse).
 function figerCase(hauteur) {
   clearTimeout(badgeGlisse);
@@ -102,7 +106,7 @@ function libererCase() {
 function glisserCase(depart) {
   const slot = $('badges');
   libererCase();
-  const arrivee = slot.offsetHeight;
+  const arrivee = hauteurExacte(slot);
   if (Math.abs(arrivee - depart) < 1) return;
   figerCase(depart);
   void slot.offsetHeight;
@@ -135,7 +139,7 @@ function majBadges() {
         return;
       }
       // Faite ou « Plus tard » : elle s'en va tout de suite, sa place reste à sa hauteur le temps de lever le doigt.
-      figerCase(slot.offsetHeight);
+      figerCase(hauteurExacte(slot));
       badgeMontre = null;
       badgeEnAttente = true;
       badgeDepuis = performance.now();
@@ -146,7 +150,7 @@ function majBadges() {
     if (!badgeTimer) badgeTimer = setTimeout(attendreDoigtLeve, 120);
     return;
   }
-  const depart = slot.offsetHeight;
+  const depart = hauteurExacte(slot);
   // Autre carte, ou fin d'une attente (place tenue vide) : on glisse vers la nouvelle hauteur.
   const change = premier !== badgeMontre || slot.classList.contains('figee');
   badgeMontre = premier;
@@ -4857,7 +4861,7 @@ function enregistrerContact(nom, tel, bouton) {
   bouton.disabled = true;
   const texte = bouton.textContent;
   // « Un instant… » tient sur une ligne : le bouton garde sa hauteur, rien ne bouge en dessous.
-  bouton.style.minHeight = `${bouton.offsetHeight}px`;
+  bouton.style.minHeight = `${hauteurExacte(bouton)}px`;
   bouton.textContent = 'Un instant…';
   try {
     const url = URL.createObjectURL(new Blob([vcardTablette(nom, tel)], { type: 'text/vcard' }));
