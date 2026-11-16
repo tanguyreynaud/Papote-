@@ -110,16 +110,7 @@ const onglet = (nom) => `.nav-item[data-tab="${nom}"]`;
 // Cloche des notifications en haut de l'accueil (ou l'ancien onglet, selon la version de l'app).
 const cloche = '#btn-bell, .nav-item[data-tab="notifs"]';
 const modifier = (carte) => `#${carte} .setting-modify`;
-const RESA = { status: 'reserved', claimedBy: MOI.uid, claimedName: 'Julie', createdAt: ms('10:20') };
 const sansFamille = (docs = {}) => ({ user: MOI, docs: { 'config/base': {}, ...docs }, local: { ...TELEPHONE_CONNU, 'papote.fid': '' } });
-// Installation : on part de « Comment l'appelez-vous ? » ; le faux serveur crée la famille, arrêtée à l'étape voulue.
-const installation = (etape) => {
-  const d = sansFamille({ 'pairings/K7PM2Q': RESA });
-  const docs = famillePleine({ installation: { etape, pairing: 'K7PM2Q' }, abonnement: { statut: 'installation' }, vide: true, sansTablette: etape === 'photo' });
-  delete docs['config/base'];
-  d.fonctions = { nommerFamille: { __ecrire: docs, __si: 'code', resultat: { fid: FID } } };
-  return d;
-};
 // Famille préparée à la commande, la tablette pas encore arrivée ; nomDonne : le faux serveur enregistre le nom.
 const preparee = (o = {}) => {
   const avant = { famille: { name: 'Votre proche', nomAChoisir: true, installation: { etape: 'fini', preparee: true }, faceTablette: null }, vide: true, sansTablette: true };
@@ -130,7 +121,6 @@ const preparee = (o = {}) => {
   }
   return d;
 };
-const nommer = async (p) => { await p.fill('#setup-nom-input', 'Mamie Jeanne'); await p.click('#setup-nom button[type="submit"]'); await pause(p, 1500); };
 const appelEntrant = (o = {}) => connecte({ ...o, docs: { [`families/${FID}/calls/c1`]: { callerUid: 'u-tablette', callerName: 'Mamie Jeanne', state: 'ringing', createdAt: ms('10:30'), endedAt: null } } });
 // Photos « de la galerie du téléphone » pour l'écran d'envoi (fabriquées au début de la capture).
 const EXEMPLE = (i) => path.join(__dirname, 'sortie', `exemple-${i}.png`);
@@ -239,15 +229,8 @@ const SCENES = [
     await p.locator('.guide-next').click(); await p.locator('.guide-next').click(); await pause(p);
   } },
 
-  { groupe: 'Installation de la tablette', titre: 'Scanner le code de la tablette', plein: true, donnees: () => sansFamille(), faire: toucher('#btn-join-pair') },
-  { groupe: 'Installation de la tablette', titre: 'Nom de la personne', plein: true, donnees: () => sansFamille({ 'pairings/K7PM2Q': RESA }) },
-  { groupe: 'Installation de la tablette', titre: 'Nom de la personne : vide', plein: true, donnees: () => sansFamille({ 'pairings/K7PM2Q': RESA }), faire: async (p) => {
-    await p.click('#setup-nom button[type="submit"]'); await pause(p);
-  } },
-  { groupe: 'Installation de la tablette', titre: 'Photo pour la tablette', plein: true, donnees: () => installation('photo'), faire: nommer },
-  { groupe: 'Installation de la tablette', titre: 'Réglage du son', plein: true, donnees: () => installation('son'), faire: nommer },
-  { groupe: 'Installation de la tablette', titre: 'Options', plein: true, donnees: () => installation('options'), faire: nommer },
-  { groupe: 'Installation de la tablette', titre: 'Annuler l’installation ?', donnees: () => installation('photo'), faire: async (p) => { await nommer(p); await toucher('#setup-cancel')(p); } },
+  // Plus d'installation depuis le téléphone (A29, 12/11) : seul Papote relie une tablette, les écrans view-pair et
+  // view-setup (code de la tablette, nom, photo, son, options, annuler) ont quitté l'app. Reste « Réglons la tablette ».
   { groupe: 'Installation de la tablette', titre: 'Réglons la tablette (famille toute neuve)', note: 'Propriétaire, famille sans veille ni options : réglages proposés d’un coup.', donnees: () => connecte({ famille: { veille: null, options: null } }) },
   { groupe: 'Installation de la tablette', titre: 'Réglons la tablette : la nuit', donnees: () => connecte({ famille: { veille: null, options: null } }), faire: async (p) => { await p.locator('.intro-next').click(); await pause(p); } },
   { groupe: 'Installation de la tablette', titre: 'Réglons la tablette : le son', donnees: () => connecte({ famille: { veille: null, options: null } }), faire: async (p) => { for (let i = 0; i < 2; i++) await p.locator('.intro-next').click(); await pause(p); } },
