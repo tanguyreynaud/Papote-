@@ -111,7 +111,7 @@ test('Tablette avec carte SIM : Mamie touche Julie deux fois, un seul appel tél
   await mamie.page.waitForTimeout(1500);
   const partis = await mamie.appels('phoneCall');
   assert.strictEqual(partis.length, 1, `un seul appel téléphone (${JSON.stringify(partis)})`);
-  assert.match(String(partis[0].args[0]).replace(/\s/g, ''), /^(\+33|0)612345678$/, 'le numéro de Julie');
+  assert.match(String(partis[0].args[0]).replace(/\s/g, ''), new RegExp(`^(\\+33|0)${g.telDe('Julie').slice(1)}$`), 'le numéro de Julie');
 });
 
 test('Julie appelle, Mamie ne répond pas : au bout de 45 s Julie est prévenue, la tablette cesse de sonner et garde la trace', { timeout: 150_000 }, async () => {

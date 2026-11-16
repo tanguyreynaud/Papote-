@@ -48,11 +48,11 @@ test('SOS avec carte SIM : un SMS à la famille (le numéro donné par Julie), p
     .catch(async () => assert.fail(`Aucun appel téléphone après le décompte.\n${await diagnostic(mamie)}`));
   const sms = await mamie.appels('sendSms');
   assert.strictEqual(sms.length, 1, `un seul SMS (${JSON.stringify(sms)})`);
-  assert.match(String(sms[0].args[0]).replace(/\s/g, ''), /^(\+33|0)612345678$/);
+  assert.match(String(sms[0].args[0]).replace(/\s/g, ''), new RegExp(`^(\\+33|0)${g.telDe('Julie').slice(1)}$`));
   assert.match(sms[0].args[1], /^SOS Papote : Mamie Emma a appuyé sur le bouton SOS de sa tablette\. Appelez-la vite\.$/);
   const tel = await mamie.appels('phoneCall');
   assert.strictEqual(tel.length, 1, 'un seul appel téléphone');
-  assert.match(String(tel[0].args[0]).replace(/\s/g, ''), /^(\+33|0)612345678$/);
+  assert.match(String(tel[0].args[0]).replace(/\s/g, ''), new RegExp(`^(\\+33|0)${g.telDe('Julie').slice(1)}$`));
   assert.match(await mamie.texte('.call-out .call-title'), /SOS/);
 });
 
